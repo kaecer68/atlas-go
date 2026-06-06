@@ -147,7 +147,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now),
 		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now),
 		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, config.GetReplayDataPath(s.WorkDir), now),
-		buildChannelInfo("jpy_yahoo", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
+		buildChannelInfo("frankfurter_fx", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
 		buildChannelInfo("twse_margin", "TWSE 融資融券", checkMarginHealth, filepath.Join(s.WorkDir, "data/state/margin"), now),
 		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, "data/state/export"), now),
 		buildChannelInfo("tsmc_revenue", "台積電月營收", checkTSMCRevenueHealth, filepath.Join(s.WorkDir, "data/state/tsmc_revenue"), now),
@@ -214,6 +214,26 @@ func buildAPIKeyChannel(id, label, primaryKey, fallbackKey string) DataChannelIn
 
 // Health check functions
 
+// isWeekendGap returns true if the data age is primarily explained by weekend,
+// meaning the last trading day was Friday and markets are closed Sat+Sun.
+// For US macro data, the gap from Friday close to Monday open is ~52 hours.
+func isWeekendGap(dataTime, now time.Time, maxWeekendHours int) bool {
+	if maxWeekendHours <= 0 {
+		maxWeekendHours = 72
+	}
+	age := now.Sub(dataTime)
+	if age <= 24*time.Hour {
+		return false
+	}
+	dataWeekday := dataTime.Weekday()
+	nowWeekday := now.Weekday()
+	if (dataWeekday == time.Friday || dataWeekday == time.Saturday) &&
+		(nowWeekday == time.Monday || nowWeekday == time.Tuesday || nowWeekday == time.Sunday) {
+		return age < time.Duration(maxWeekendHours)*time.Hour
+	}
+	return false
+}
+
 func checkMacroHealth(path string, now time.Time) (string, string) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -231,9 +251,35 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 		Oil struct {
 			Timestamp int64 `json:"timestamp"`
 		} `json:"oil"`
+		USD_TWD struct {
+			Symbol    string  `json:"symbol"`
+			ChangePct float64 `json:"change_pct"`
+			Timestamp int64   `json:"timestamp"`
+		} `json:"usd_twd"`
+		JPY struct {
+			Symbol    string  `json:"symbol"`
+			ChangePct float64 `json:"change_pct"`
+			Timestamp int64   `json:"timestamp"`
+		} `json:"jpy"`
 	}
 	if err := json.Unmarshal(data, &snap); err != nil {
 		logging.Warn("system_service", "parse_macro_health", logging.Err(err))
+	}
+
+	// Check data validity: forex pairs with symbol but zero change_pct
+	// indicate a data pipeline issue (e.g., Yahoo returning only 1 data point).
+	// Only flag when the data timestamp is also missing or older than 24h,
+	// since a zero change on recent data is legitimate (first run or flat market).
+	var staleIndicators []string
+	if snap.USD_TWD.Symbol != "" && snap.USD_TWD.ChangePct == 0 {
+		if snap.USD_TWD.Timestamp == 0 || now.Sub(time.Unix(snap.USD_TWD.Timestamp, 0)) > 24*time.Hour {
+			staleIndicators = append(staleIndicators, "USD/TWD")
+		}
+	}
+	if snap.JPY.Symbol != "" && snap.JPY.ChangePct == 0 {
+		if snap.JPY.Timestamp == 0 || now.Sub(time.Unix(snap.JPY.Timestamp, 0)) > 24*time.Hour {
+			staleIndicators = append(staleIndicators, "JPY")
+		}
 	}
 
 	latest := info.ModTime()
@@ -252,15 +298,24 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 			latest = oilTime
 		}
 	}
+	detail := latest.Format("2006-01-02 15:04:05")
+
+	// Data validity check overrides timestamp-only status when indicators are stale.
+	if len(staleIndicators) > 0 {
+		return "warn", detail + " | 資料異常: " + strings.Join(staleIndicators, ", ") + " 日變動率為0"
+	}
 
 	age := now.Sub(latest)
 	if age < 24*time.Hour {
-		return "ok", latest.Format("2006-01-02 15:04:05")
+		return "ok", detail
 	}
 	if age < 7*24*time.Hour {
-		return "warn", latest.Format("2006-01-02 15:04:05")
+		if isWeekendGap(latest, now, 72) {
+			return "expected_delay", detail
+		}
+		return "warn", detail
 	}
-	return "error", latest.Format("2006-01-02 15:04:05")
+	return "error", detail
 }
 
 func checkGeopoliticalHealth(path string, now time.Time) (string, string) {
@@ -540,7 +595,7 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		logging.Warn("system_service", "parse_jpy_health", logging.Err(err))
 	}
 	if snap.JPY.Timestamp == 0 {
-		return "error", "無 JPY 資料 — Yahoo Finance JPY=X 尚未成功獲取，或 Frankfurter API 未提供 JPY 匯率"
+		return "error", "無 JPY 資料 — Frankfurter API (USD/JPY) 尚未成功獲取"
 	}
 	t := time.Unix(snap.JPY.Timestamp, 0)
 	age := now.Sub(t)
@@ -548,9 +603,12 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		return "ok", t.Format("2006-01-02 15:04:05")
 	}
 	if age < 7*24*time.Hour {
+		if isWeekendGap(t, now, 72) {
+			return "expected_delay", fmt.Sprintf("%s（%d 天前，週末非交易日）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+		}
 		return "warn", fmt.Sprintf("%s（%d 天前）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
 	}
-	return "error", fmt.Sprintf("%s（%d 天前，已超過 7 天閾值）— Yahoo Finance API 連線失敗", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+	return "error", fmt.Sprintf("%s（%d 天前，已超過 7 天閾值）— Frankfurter API 連線失敗", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
 }
 
 func checkJanusHealth(engine *janus.Engine, now time.Time) (string, string) {

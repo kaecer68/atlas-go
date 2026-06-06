@@ -1,10 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"time"
 )
 
@@ -12,11 +14,12 @@ import (
 type ParameterSource string
 
 const (
-	SourceLiterature ParameterSource = "literature" // from academic/practitioner literature
-	SourceEmpirical  ParameterSource = "empirical"  // from historical data analysis
-	SourceHeuristic  ParameterSource = "heuristic"  // from domain expert judgment
-	SourceInferred   ParameterSource = "inferred"   // from automated inference/calibration
-	SourceCalibrated ParameterSource = "calibrated" // from backtest optimization
+	SourceLiterature   ParameterSource = "literature"   // from academic/practitioner literature
+	SourceEmpirical    ParameterSource = "empirical"    // from historical data analysis
+	SourceHeuristic    ParameterSource = "heuristic"    // from domain expert judgment
+	SourceInferred     ParameterSource = "inferred"     // from automated inference/calibration
+	SourceCalibrated   ParameterSource = "calibrated"   // from backtest optimization
+	SourceExperimental ParameterSource = "experimental" // from ML experiment / not yet validated
 )
 
 // ParameterMetadata holds the value and provenance of a tunable parameter.
@@ -182,6 +185,7 @@ type BaselineParameters struct {
 	RequireCROPass              ParameterMetadata[bool]    `json:"require_cro_pass"`
 	TransactionCostBPS          ParameterMetadata[float64] `json:"transaction_cost_bps"`
 	SlippageBPS                 ParameterMetadata[float64] `json:"slippage_bps"`
+	AvgTradingCost              ParameterMetadata[float64] `json:"avg_trading_cost"`
 	ReserveCashFraction         ParameterMetadata[float64] `json:"reserve_cash_fraction"`
 }
 
@@ -190,6 +194,7 @@ type BaselineParameters struct {
 type OrchestratorParameters struct {
 	ConvictionFloorDefault           ParameterMetadata[int]                           `json:"conviction_floor_default"`
 	SuperinvestorMinConviction       ParameterMetadata[int]                           `json:"superinvestor_min_conviction"`
+	SuperinvestorConvictionBase      ParameterMetadata[int]                           `json:"superinvestor_conviction_base"`
 	CROZScoreThreshold               ParameterMetadata[float64]                       `json:"cro_zscore_threshold"`
 	SectorConcentrationThreshold     ParameterMetadata[float64]                       `json:"sector_concentration_threshold"`
 	SectorConcentrationThresholdHigh ParameterMetadata[float64]                       `json:"sector_concentration_threshold_high"`
@@ -210,6 +215,7 @@ type OrchestratorParameters struct {
 	SectorRotationBaseAllocations    ParameterMetadata[map[string]float64]            `json:"sector_rotation_base_allocations"`
 	SectorRotationMacroAdjustments   ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_macro_adjustments,omitempty"`
 	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments,omitempty"`
+	UseMLScoring                     ParameterMetadata[bool]                          `json:"use_ml_scoring"`
 }
 
 // RiskParameters holds tunable values for risk management.
@@ -321,6 +327,13 @@ type NarrativeParameters struct {
 	TaiwanStressHighThreshold   ParameterMetadata[float64] `json:"taiwan_stress_high_threshold"`
 	TaiwanStressAlertThreshold  ParameterMetadata[float64] `json:"taiwan_stress_alert_threshold"`
 
+	// --- Rolling Calibration Framework Parameters ---
+	CalibrationBaselineWindow ParameterMetadata[int]     `json:"calibration_baseline_window"`
+	CalibrationTargetMedian   ParameterMetadata[float64] `json:"calibration_target_median"`
+	CalibrationValidationPct  ParameterMetadata[float64] `json:"calibration_validation_pct"`
+	CalibrationMinRecords     ParameterMetadata[int]     `json:"calibration_min_records"`
+	CalibrationEnabled        ParameterMetadata[bool]    `json:"calibration_enabled"`
+
 	// Event lifecycle TTL multipliers (days per theme)
 	EventTTLMultiplier ParameterMetadata[map[string]float64] `json:"event_ttl_multiplier"`
 
@@ -333,6 +346,17 @@ type NarrativeParameters struct {
 	RetailFearPercentileThreshold   ParameterMetadata[float64] `json:"retail_fear_percentile_threshold"`
 	RetailAccelerationWindowDays    ParameterMetadata[int]     `json:"retail_acceleration_window_days"`
 	InflationEstimate               ParameterMetadata[float64] `json:"inflation_estimate,omitempty"`
+
+	// Seasonal event detection confidence values (calendar-based events)
+	SpringFestivalConfidence        ParameterMetadata[float64] `json:"spring_festival_confidence"`
+	ElectionCycleConfidence         ParameterMetadata[float64] `json:"election_cycle_confidence"`
+	EarningsBlackoutConfidence      ParameterMetadata[float64] `json:"earnings_blackout_confidence"`
+	TechPeakSeasonConfidence        ParameterMetadata[float64] `json:"tech_peak_season_confidence"`
+	YearEndWindowDressingConfidence ParameterMetadata[float64] `json:"year_end_window_dressing_confidence"`
+
+	// Externally-triggered event confidence baselines (not calendar-based; consumed by ingestor/swarm detectors)
+	EarningsSurpriseConfidence ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
+	EarningsSurpriseThreshold  ParameterMetadata[float64] `json:"earnings_surprise_threshold"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.
@@ -378,8 +402,32 @@ type MarketdataParameters struct {
 	TEJAPITimeoutSec     ParameterMetadata[int]     `json:"tej_api_timeout_sec"`
 	FugleRateLimit       ParameterMetadata[int]     `json:"fugle_rate_limit"`
 	FugleAPITimeoutSec   ParameterMetadata[int]     `json:"fugle_api_timeout_sec"`
+	BDIAPITimeoutSec     ParameterMetadata[int]     `json:"bdi_api_timeout_sec"`
+	BDIEndpoint          ParameterMetadata[string]  `json:"bdi_endpoint"`
 	MaxRetryAttempts     ParameterMetadata[int]     `json:"max_retry_attempts"`
 	RetryBackoffMs       ParameterMetadata[int]     `json:"retry_backoff_ms"`
+}
+
+// IndustrySegmentConfig holds a single industry segment definition for the classification tree.
+// This is the ParameterConfig-compatible version of industry.IndustrySegment.
+type IndustrySegmentConfig struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	NameEN               string   `json:"name_en"`
+	Level                int      `json:"level"`
+	ParentID             string   `json:"parent_id,omitempty"`
+	Weight               float64  `json:"weight,omitempty"`
+	GeographicExposure   string   `json:"geographic_exposure"`
+	Cyclicality          string   `json:"cyclicality"`
+	TechnologyIntensity  string   `json:"technology_intensity"`
+	CapitalIntensity     string   `json:"capital_intensity"`
+	RepresentativeStocks []string `json:"representative_stocks,omitempty"`
+	Description          string   `json:"description,omitempty"`
+}
+
+// ClassificationTreeConfig holds the complete industry classification tree.
+type ClassificationTreeConfig struct {
+	Segments []IndustrySegmentConfig `json:"segments"`
 }
 
 // IndustryParameters holds tunable values for industry analysis, seasonality,
@@ -422,13 +470,20 @@ type IndustryParameters struct {
 
 	SeasonalPatterns ParameterMetadata[[]SeasonalPatternConfig] `json:"seasonal_patterns"`
 
-	AsymmetricRisk    ParameterMetadata[AsymmetricRiskConfig]    `json:"asymmetric_risk"`
-	NewsLatencyRisk   ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
-	FreshnessScores   ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
-	PhaseScores       ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
-	SkillToIndustry   ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
-	SkillToIndustries ParameterMetadata[map[string][]string]     `json:"skill_to_industries,omitempty"`
-	CycleTransitions  ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
+	AsymmetricRisk  ParameterMetadata[AsymmetricRiskConfig] `json:"asymmetric_risk"`
+	NewsLatencyRisk ParameterMetadata[NewsLatencyConfig]    `json:"news_latency_risk"`
+
+	AsymmetricDropCritical ParameterMetadata[float64]                 `json:"asymmetric_drop_critical"` // was 0.10 in risk.go:298
+	AsymmetricDropHigh     ParameterMetadata[float64]                 `json:"asymmetric_drop_high"`     // was 0.07 in risk.go:300
+	AsymmetricDropMedium   ParameterMetadata[float64]                 `json:"asymmetric_drop_medium"`   // was 0.05 in risk.go:302
+	NewsImpactMultiplier   ParameterMetadata[float64]                 `json:"news_impact_multiplier"`   // was 0.05 in risk.go:275
+	BoundaryFallback       ParameterMetadata[float64]                 `json:"boundary_fallback"`        // was 0.25 in cycle.go:602
+	AdjustmentFloor        ParameterMetadata[float64]                 `json:"adjustment_floor"`         // was 0.01 in seasonality.go:270
+	FreshnessScores        ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
+	PhaseScores            ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
+	SkillToIndustry        ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
+	SkillToIndustries      ParameterMetadata[map[string][]string]     `json:"skill_to_industries,omitempty"`
+	CycleTransitions       ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
 	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
 	LinkageWeightImpact    ParameterMetadata[float64]                      `json:"linkage_weight_impact"`
@@ -439,8 +494,124 @@ type IndustryParameters struct {
 
 	DynamicEnv ParameterMetadata[DynamicEnvConfig] `json:"dynamic_env"`
 
+	// Cycle compass calibration parameters for per-layer accuracy tracking.
+	CycleCalibration ParameterMetadata[CycleCalibrationConfig] `json:"cycle_calibration"`
+
 	// Cycle tracking operational parameters
 	HistoryRetentionDays ParameterMetadata[int] `json:"history_retention_days"`
+
+	// Bootstrap seed values for CycleTracker initialization, used before
+	// real FinMind data becomes available (replaced within 6h by auto_cycle_update).
+	DefaultMetrics ParameterMetadata[map[string]IndustryDefaultMetrics] `json:"default_metrics"`
+
+	SiliconCycle       ParameterMetadata[SiliconCycleParameters] `json:"silicon_cycle"`
+	EventCalendarRules ParameterMetadata[[]EventCalendarRule]    `json:"event_calendar_rules"`
+
+	// EventSentimentCap limits the per-event sentiment adjustment to prevent
+	// any single calendar event from dominating the composite signal.
+	EventSentimentCap ParameterMetadata[float64] `json:"event_sentiment_cap"`
+
+	// CompositeCard holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+	CompositeCard ParameterMetadata[CompositeCardConfig] `json:"composite_card"`
+
+	// SeasonalMultipliers holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+	SeasonalMultipliers ParameterMetadata[SeasonalMultiplierConfig] `json:"seasonal_multipliers"`
+
+	// ClassificationTree defines the complete industry hierarchy (L1/L2/L3).
+	// Previously hardcoded in internal/industry/types.go; now parameter-managed.
+	ClassificationTree ParameterMetadata[ClassificationTreeConfig] `json:"classification_tree"`
+}
+
+// CompositeCardConfig holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+type CompositeCardConfig struct {
+	LayerWeights        map[string]float64         `json:"layer_weights"`
+	SentimentThresholds map[string]SentimentBounds `json:"sentiment_thresholds"`
+	ClampMin            float64                    `json:"clamp_min"`
+	ClampMax            float64                    `json:"clamp_max"`
+}
+
+// SentimentBounds defines the value range for a sentiment label.
+type SentimentBounds struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// SeasonalMultiplierConfig holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+type SeasonalMultiplierConfig struct {
+	ThemeMultipliers  map[string]IndustryMultiplierMap `json:"theme_multipliers"`
+	ThemeCorrelations map[string]map[string]float64    `json:"theme_correlations"`
+}
+
+// IndustryMultiplierMap holds bull/bear multipliers per industry for a theme.
+type IndustryMultiplierMap struct {
+	BullMultiplier map[string]float64 `json:"bull_multiplier"`
+	BearMultiplier map[string]float64 `json:"bear_multiplier"`
+}
+
+// MarshalJSON implements json.Marshaler. When Max is +Inf, it serializes as the
+// string "+Inf"; otherwise it uses the standard numeric representation.
+func (s SentimentBounds) MarshalJSON() ([]byte, error) {
+	enc := struct {
+		Min float64 `json:"min"`
+		Max any     `json:"max"`
+	}{Min: s.Min}
+	if math.IsInf(s.Max, 1) {
+		enc.Max = "+Inf"
+	} else {
+		enc.Max = s.Max
+	}
+	return json.Marshal(enc)
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting "+Inf" string for Max
+// in addition to standard numeric values.
+func (s *SentimentBounds) UnmarshalJSON(data []byte) error {
+	var num struct {
+		Min float64 `json:"min"`
+		Max float64 `json:"max"`
+	}
+	if err := json.Unmarshal(data, &num); err == nil {
+		s.Min = num.Min
+		s.Max = num.Max
+		return nil
+	}
+	var str struct {
+		Min float64 `json:"min"`
+		Max string  `json:"max"`
+	}
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	s.Min = str.Min
+	if str.Max == "+Inf" {
+		s.Max = math.Inf(1)
+		return nil
+	}
+	return fmt.Errorf("unknown max value: %q (expected \"+Inf\" or number)", str.Max)
+}
+
+// IndustryDefaultMetrics holds bootstrap seed values for CycleTracker initialization.
+// These replace the previously hardcoded defaults in initializeDefaultPositions(),
+// allowing operators to tune seed values without recompiling. Replaced by real
+// FinMind data within 6h (auto_cycle_update background task).
+type IndustryDefaultMetrics struct {
+	RevenueGrowthYoY    float64 `json:"revenue_growth_yoy"`
+	ProfitGrowthYoY     float64 `json:"profit_growth_yoy"`
+	InventoryTurnover   float64 `json:"inventory_turnover"`
+	CapacityUtilization float64 `json:"capacity_utilization"`
+}
+
+// CycleCalibrationConfig holds calibration parameters for the cycle compass
+// layer weight self-calibration loop. Each layer's hit rate is tracked over
+// a rolling window and weights are adjusted up/down based on accuracy.
+type CycleCalibrationConfig struct {
+	MinSamples     int     `json:"min_samples"`
+	LearningRate   float64 `json:"learning_rate"`
+	HitRateHigh    float64 `json:"hit_rate_high"`
+	HitRateLow     float64 `json:"hit_rate_low"`
+	WeightClampMin float64 `json:"weight_clamp_min"`
+	WeightClampMax float64 `json:"weight_clamp_max"`
+	WindowSize     int     `json:"window_size"`
 }
 
 // CycleThresholdConfig holds business cycle thresholds for a specific industry.
@@ -539,6 +710,7 @@ type LinkageConfig struct {
 	CorrelationWindowDays     int                `json:"correlation_window_days"`
 	CorrelationMatrix         map[string]float64 `json:"correlation_matrix"`
 	RecessionCorrelationBoost float64            `json:"recession_correlation_boost"`
+	RecessionShockAmplifier   float64            `json:"recession_shock_amplifier"`
 }
 
 // AsymmetricRiskConfig holds thresholds for asymmetric (bad news) risk detection.
@@ -595,21 +767,56 @@ type CycleTransitionConfig struct {
 }
 
 type DynamicEnvConfig struct {
-	OilHighThreshold     float64 `json:"oil_high_threshold"`
-	OilLowThreshold      float64 `json:"oil_low_threshold"`
-	OilEnergyMult        float64 `json:"oil_energy_mult"`
-	OilShippingPenalty   float64 `json:"oil_shipping_penalty"`
-	OilShippingBenefit   float64 `json:"oil_shipping_benefit"`
-	OilIndustrialPenalty float64 `json:"oil_industrial_penalty"`
-	OilIndustrialBenefit float64 `json:"oil_industrial_benefit"`
-	BDIHighThreshold     float64 `json:"bdi_high_threshold"`
-	BDILowThreshold      float64 `json:"bdi_low_threshold"`
-	BDIShippingBoost     float64 `json:"bdi_shipping_boost"`
-	BDICostPenalty       float64 `json:"bdi_cost_penalty"`
-	DXYHighThreshold     float64 `json:"dxy_high_threshold"`
-	DXYLowThreshold      float64 `json:"dxy_low_threshold"`
-	DXYExportPenalty     float64 `json:"dxy_export_penalty"`
-	DXYExportBenefit     float64 `json:"dxy_export_benefit"`
+	OilHighThreshold       float64 `json:"oil_high_threshold"`
+	OilLowThreshold        float64 `json:"oil_low_threshold"`
+	OilEnergyMult          float64 `json:"oil_energy_mult"`
+	OilShippingPenalty     float64 `json:"oil_shipping_penalty"`
+	OilShippingBenefit     float64 `json:"oil_shipping_benefit"`
+	OilIndustrialPenalty   float64 `json:"oil_industrial_penalty"`
+	OilIndustrialBenefit   float64 `json:"oil_industrial_benefit"`
+	BDIHighThreshold       float64 `json:"bdi_high_threshold"`
+	BDILowThreshold        float64 `json:"bdi_low_threshold"`
+	BDIShippingBoost       float64 `json:"bdi_shipping_boost"`
+	BDICostPenalty         float64 `json:"bdi_cost_penalty"`
+	DXYHighThreshold       float64 `json:"dxy_high_threshold"`
+	DXYLowThreshold        float64 `json:"dxy_low_threshold"`
+	DXYExportPenalty       float64 `json:"dxy_export_penalty"`
+	DXYExportBenefit       float64 `json:"dxy_export_benefit"`
+	HistoryWindowDays      int     `json:"history_window_days"`
+	HistoryCapMultiplier   int     `json:"history_cap_multiplier"`
+	OilPriceShockThreshold float64 `json:"oil_price_shock_threshold"`
+	UsRatesDxyThreshold    float64 `json:"us_rates_dxy_threshold"`
+	JpyCarryDxyThreshold   float64 `json:"jpy_carry_dxy_threshold"`
+}
+
+// SiliconCycleParameters holds thresholds for semiconductor silicon cycle phase detection.
+// Field names correspond 1:1 with SiliconCycleParams in internal/industry/silicon_cycle.go,
+// plus two forward-looking fields (InventoryDaysThreshold, UtilizationThreshold) reserved
+// for future inventory-based and capacity-utilization-based cycle detection layers.
+type SiliconCycleParameters struct {
+	RevenueYoYThreshold            float64 `json:"revenue_yoy_threshold"`
+	BillingsYoYThreshold           float64 `json:"billings_yoy_threshold"`
+	DRAMStabilizationThreshold     float64 `json:"dram_stabilization_threshold"`
+	BillingsStabilizationThreshold float64 `json:"billings_stabilization_threshold"`
+	InventoryDaysThreshold         float64 `json:"inventory_days_threshold"`
+	UtilizationThreshold           float64 `json:"utilization_threshold"`
+	IndexMAPercentThreshold        float64 `json:"index_ma_percent_threshold"`
+	SOXExtremeThreshold            float64 `json:"sox_extreme_threshold"`
+	CapexCutThreshold              float64 `json:"capex_cut_threshold"`
+	MinConfidence                  float64 `json:"min_confidence"`
+	HistoryWindowSize              int     `json:"history_window_size"`
+}
+
+// EventCalendarRule defines a Taiwan market calendar event rule
+// configurable via ParametersConfig.Industry.EventCalendarRules.
+// EventType is the canonical key used to match this rule to the corresponding
+// entry in defaultEventRules(). If EventType is empty, Name is used as fallback.
+type EventCalendarRule struct {
+	EventType  string  `json:"event_type"`
+	Name       string  `json:"name"`
+	BaseWeight float64 `json:"base_weight"`
+	DecayDays  int     `json:"decay_days"`
+	Direction  string  `json:"direction"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.
@@ -671,6 +878,46 @@ type SectorExecutorParameters struct {
 	ValueYield        ValueYieldExecutorParameters        `json:"value_yield,omitempty"`
 	EarningsQuality   EarningsQualityExecutorParameters   `json:"earnings_quality,omitempty"`
 	TechnicalBreakout TechnicalBreakoutExecutorParameters `json:"technical_breakout,omitempty"`
+	GrowthMomentum    GrowthMomentumExecutorParameters    `json:"growth_momentum,omitempty"`
+	FactorConviction  FactorConvictionParams              `json:"factor_conviction,omitempty"`
+}
+
+// FactorConvictionParams holds all factor-score thresholds and conviction deltas
+// used by layer-sector and layer-style executors for factor-driven conviction
+// adjustments (Waves 2-3 of the factor-driven conviction migration).
+// All executors share this single struct to avoid duplicating 15+ parameters
+// across each executor's parameter block.
+// Zero-default behavior: when no config file is loaded, the ParameterMetadata
+// zero-value (Value=0) causes executors to look up the globally defined
+// hard-coded constants instead (see internal/orchestrator/plugin_sector.go).
+type FactorConvictionParams struct {
+	// --- Momentum factor ---
+	MomentumHighThreshold ParameterMetadata[float64] `json:"momentum_high_threshold"`
+	MomentumHighDelta     ParameterMetadata[int]     `json:"momentum_high_delta"`
+	MomentumModThreshold  ParameterMetadata[float64] `json:"momentum_mod_threshold"`
+	MomentumModDelta      ParameterMetadata[int]     `json:"momentum_mod_delta"`
+	MomentumWeakThreshold ParameterMetadata[float64] `json:"momentum_weak_threshold"`
+	MomentumWeakDelta     ParameterMetadata[int]     `json:"momentum_weak_delta"`
+
+	// --- Value factor ---
+	ValueHighThreshold ParameterMetadata[float64] `json:"value_high_threshold"`
+	ValueHighDelta     ParameterMetadata[int]     `json:"value_high_delta"`
+	ValueModThreshold  ParameterMetadata[float64] `json:"value_mod_threshold"`
+	ValueModDelta      ParameterMetadata[int]     `json:"value_mod_delta"`
+	ValueWeakThreshold ParameterMetadata[float64] `json:"value_weak_threshold"`
+	ValueWeakDelta     ParameterMetadata[int]     `json:"value_weak_delta"`
+
+	// --- Quality factor ---
+	QualityThreshold ParameterMetadata[float64] `json:"quality_threshold"`
+	QualityDelta     ParameterMetadata[int]     `json:"quality_delta"`
+
+	// --- Liquidity factor ---
+	LiquidityHighThreshold ParameterMetadata[float64] `json:"liquidity_high_threshold"`
+	LiquidityHighDelta     ParameterMetadata[int]     `json:"liquidity_high_delta"`
+	LiquidityGoodThreshold ParameterMetadata[float64] `json:"liquidity_good_threshold"`
+	LiquidityGoodDelta     ParameterMetadata[int]     `json:"liquidity_good_delta"`
+	LiquidityLowThreshold  ParameterMetadata[float64] `json:"liquidity_low_threshold"`
+	LiquidityLowDelta      ParameterMetadata[int]     `json:"liquidity_low_delta"`
 }
 
 // LEOSatelliteExecutorParameters holds all tunable values for the
@@ -731,6 +978,16 @@ type TechnicalBreakoutExecutorParameters struct {
 	CatchUpLowerThreshold  ParameterMetadata[float64] `json:"catch_up_lower_threshold"`
 	CatchUpUpperThreshold  ParameterMetadata[float64] `json:"catch_up_upper_threshold"`
 }
+type GrowthMomentumExecutorParameters struct {
+	ConvictionBase           ParameterMetadata[int]     `json:"conviction_base"`
+	PricePenalty             ParameterMetadata[int]     `json:"price_penalty"`
+	TrendConfirmationPenalty ParameterMetadata[int]     `json:"trend_confirmation_penalty"`
+	DowngradePricePenalty    ParameterMetadata[int]     `json:"downgrade_price_penalty"`
+	DowngradeOpenPenalty     ParameterMetadata[int]     `json:"downgrade_open_penalty"`
+	ExploratoryPricePenalty  ParameterMetadata[int]     `json:"exploratory_price_penalty"`
+	ExploratoryOpenPenalty   ParameterMetadata[int]     `json:"exploratory_open_penalty"`
+	DowngradeThreshold       ParameterMetadata[float64] `json:"downgrade_threshold"`
+}
 
 // PreciousMetalsParameters holds tunable values for precious metals factor scoring.
 type PreciousMetalsParameters struct {
@@ -772,6 +1029,7 @@ type PreTradeGateParameters struct {
 	MinCashBufferPct     ParameterMetadata[float64] `json:"min_cash_buffer_pct"`
 	MaxCorrelation       ParameterMetadata[float64] `json:"max_correlation"`
 	MinADVRatio          ParameterMetadata[float64] `json:"min_adv_ratio"`
+	MaxOpenPositions     ParameterMetadata[int]     `json:"max_open_positions"`
 }
 
 // InTradeGateParameters holds in-trade monitoring parameters.
@@ -784,6 +1042,86 @@ type InTradeGateParameters struct {
 	CircuitBreakerDailyLossPct ParameterMetadata[float64] `json:"circuit_breaker_daily_loss_pct"`
 }
 
+// EngineConfig type definitions — migrated from engine_config.go, retained as
+// output types for EngineParameters.ToConfig() conversion methods.
+
+type MacroRiskConfig struct {
+	CarryTradeUnwindThreshold float64 `json:"carry_trade_unwind_threshold"`
+	VIXThreshold              float64 `json:"vix_threshold"`
+	US10YThreshold            float64 `json:"us10y_threshold"`
+	OilShockThresholdPct      float64 `json:"oil_shock_threshold_pct"`
+	GoldSurgeThresholdPct     float64 `json:"gold_surge_threshold_pct"`
+	DXYSurgeThresholdPct      float64 `json:"dxy_surge_threshold_pct"`
+	TWDStressThresholdPct     float64 `json:"twd_stress_threshold_pct"`
+	OutflowProbBase           float64 `json:"outflow_prob_base"`
+	OutflowProbMax            float64 `json:"outflow_prob_max"`
+}
+
+type StructuralTrendConfig struct {
+	MinTrendStrength            float64 `json:"min_trend_strength"`
+	MinConfidence               float64 `json:"min_confidence"`
+	MinHitRate                  float64 `json:"min_hit_rate"`
+	OverrideThreshold           float64 `json:"override_threshold"`
+	AIRevenueGrowthThreshold    float64 `json:"ai_revenue_growth_threshold"`
+	CoWoSUtilizationThreshold   float64 `json:"cowos_utilization_threshold"`
+	CapexGrowthThreshold        float64 `json:"capex_growth_threshold"`
+	SemiconductorIndexThreshold float64 `json:"semiconductor_index_threshold"`
+}
+
+type DrawdownLevel struct {
+	Percentage  float64 `json:"percentage"`
+	MaxExposure float64 `json:"max_exposure"`
+}
+
+type DrawdownConfig struct {
+	Levels                            map[string]DrawdownLevel `json:"levels"`
+	OrangeOverrideMinScore            float64                  `json:"orange_override_min_score"`
+	RedOverrideMinScore               float64                  `json:"red_override_min_score"`
+	SectorConstraintsRiskOff          map[string]float64       `json:"sector_constraints_risk_off"`
+	SectorConstraintsCarryTradeUnwind map[string]float64       `json:"sector_constraints_carry_trade_unwind"`
+	SectorConstraintsSectorRotation   map[string]float64       `json:"sector_constraints_sector_rotation"`
+}
+
+type SectorRotationConfig struct {
+	BaseAllocations    map[string]float64 `json:"base_allocations"`
+	MinAllocation      float64            `json:"min_allocation"`
+	MaxAllocation      float64            `json:"max_allocation"`
+	RebalanceThreshold float64            `json:"rebalance_threshold"`
+}
+
+type StrategyStateConfig struct {
+	MaxPositionSize    float64 `json:"max_position_size"`
+	MaxSectorExposure  float64 `json:"max_sector_exposure"`
+	MinCashReserve     float64 `json:"min_cash_reserve"`
+	HedgeRatio         float64 `json:"hedge_ratio"`
+	AllowNewPositions  bool    `json:"allow_new_positions"`
+	AllowConcentration bool    `json:"allow_concentration"`
+}
+
+type StrategyEvolutionConfig struct {
+	CooldownPeriodHours int                            `json:"cooldown_period_hours"`
+	Configs             map[string]StrategyStateConfig `json:"configs"`
+}
+
+func (c StrategyEvolutionConfig) GetCooldownDuration() time.Duration {
+	return time.Duration(c.CooldownPeriodHours) * time.Hour
+}
+
+type ExecutorsConfig struct {
+	VIXMomentumCrashThreshold float64 `json:"vix_momentum_crash_threshold"`
+	CrowdingPenaltyAgents3    float64 `json:"crowding_penalty_agents_3"`
+	CrowdingPenaltyAgents4    float64 `json:"crowding_penalty_agents_4"`
+	MinTradeAmount            float64 `json:"min_trade_amount"`
+	MaxStocksDefault          int     `json:"max_stocks_default"`
+	MaxStocksMin              int     `json:"max_stocks_min"`
+	MaxStocksMax              int     `json:"max_stocks_max"`
+	ConvictionFloorDefault    int     `json:"conviction_floor_default"`
+}
+
+type SimulationConfig struct {
+	NeutralRegimeSizingFactor float64 `json:"neutral_regime_sizing_factor"`
+}
+
 // PostTradeGateParameters holds post-trade evaluation parameters.
 type PostTradeGateParameters struct {
 	MaxDrawdownHaltPct      ParameterMetadata[float64] `json:"max_drawdown_halt_pct"`
@@ -793,33 +1131,242 @@ type PostTradeGateParameters struct {
 	EvaluationIntervalHours ParameterMetadata[int]     `json:"evaluation_interval_hours"`
 }
 
-// ParametersConfig is the top-level configuration for all investment model parameters.
+// RSITwParameters holds tunable values for the RSI-tw retail sentiment calculator.
+type RSITwParameters struct {
+	// Part A — Retail Sentiment (40% overall weight)
+	A1Weight    ParameterMetadata[float64] `json:"a1_weight"`     // Margin Balance Δ Z-score (default 0.25)
+	A2Weight    ParameterMetadata[float64] `json:"a2_weight"`     // Day Trading Ratio (default 0.20)
+	A3Weight    ParameterMetadata[float64] `json:"a3_weight"`     // Margin Maintenance Proxy (default 0.20)
+	A4Weight    ParameterMetadata[float64] `json:"a4_weight"`     // VIX Nonlinear Mapping (default 0.15)
+	A5Weight    ParameterMetadata[float64] `json:"a5_weight"`     // Weekly PCR Proxy (default 0.10)
+	A6Weight    ParameterMetadata[float64] `json:"a6_weight"`     // Odd-Lot Trading (default 0.10)
+	APartWeight ParameterMetadata[float64] `json:"a_part_weight"` // Part A overall weight (default 0.40)
+	CPartWeight ParameterMetadata[float64] `json:"c_part_weight"` // Part C overall weight (default 0.25)
+
+	// A3: Margin Maintenance formula (z = (p - midpoint) * scale)
+	A3Midpoint ParameterMetadata[float64] `json:"a3_midpoint"` // neutral midpoint (default 0.5)
+	A3Scale    ParameterMetadata[float64] `json:"a3_scale"`    // Z-score scaling factor (default 2.0)
+
+	// A4: VIX piecewise mapping — thresholds are lower bounds (exclusive), scores are the mapping result.
+	// thresholds[0]=15, thresholds[1]=20, ...; scores[0]=0.1 (vix<15), scores[5]=1.0 (vix>=35)
+	A4VixThresholds ParameterMetadata[[]float64] `json:"a4_vix_thresholds"` // [15, 20, 25, 30, 35]
+	A4VixScores     ParameterMetadata[[]float64] `json:"a4_vix_scores"`     // [0.1, 0.3, 0.5, 0.7, 0.85, 1.0]
+
+	// A5: PCR piecewise mapping — thresholds are compared with > (strict), scores in order
+	A5PcrThresholds ParameterMetadata[[]float64] `json:"a5_pcr_thresholds"` // [1.5, 1.0, 0.8]
+	A5PcrScores     ParameterMetadata[[]float64] `json:"a5_pcr_scores"`     // [0.9, 0.7, 0.5, 0.1]
+	A5PcrFallback   ParameterMetadata[float64]   `json:"a5_pcr_fallback"`   // score when pcr==0 (default 0.5)
+
+	// A6: Odd-lot imbalance mapping — thresholds with > (strict), scores in order
+	A6OddLotThresholds ParameterMetadata[[]float64] `json:"a6_oddlot_thresholds"` // [0.2, 0.1, -0.1, -0.2]
+	A6OddLotScores     ParameterMetadata[[]float64] `json:"a6_oddlot_scores"`     // [0.85, 0.65, 0.5, 0.35, 0.15]
+	A6OddLotFallback   ParameterMetadata[float64]   `json:"a6_oddlot_fallback"`   // score when imb==0 (default 0.5)
+
+	// Part C — Institutional / Derivative Flow (25% weight)
+	C1Weight               ParameterMetadata[float64] `json:"c1_weight"`                 // Small TAIEX Futures OI (default 0.40)
+	C2Weight               ParameterMetadata[float64] `json:"c2_weight"`                 // Foreign/Inst Net Flow (default 0.35)
+	C3Weight               ParameterMetadata[float64] `json:"c3_weight"`                 // ETF Net Subscription (default 0.25)
+	C1VeryBullishThreshold ParameterMetadata[float64] `json:"c1_very_bullish_threshold"` // futures OI pct above this → 0.9
+	C1BullishThreshold     ParameterMetadata[float64] `json:"c1_bullish_threshold"`      // futures OI pct above this → 0.7
+	C1BearishThreshold     ParameterMetadata[float64] `json:"c1_bearish_threshold"`      // futures OI pct below this → 0.5
+	C1VeryBearishThreshold ParameterMetadata[float64] `json:"c1_very_bearish_threshold"` // futures OI pct below this → 0.25
+	C2NeutralMidpoint      ParameterMetadata[float64] `json:"c2_neutral_midpoint"`       // base score when netFlow ≈ 0 (0.5)
+	C2NetflowScalingFactor ParameterMetadata[float64] `json:"c2_netflow_scaling_factor"` // divisor for continuous scoring
+	C3VeryBullishThreshold ParameterMetadata[float64] `json:"c3_very_bullish_threshold"` // ETF net sub above this → 0.9
+	C3BullishThreshold     ParameterMetadata[float64] `json:"c3_bullish_threshold"`      // ETF net sub above this → 0.7
+	C3BearishThreshold     ParameterMetadata[float64] `json:"c3_bearish_threshold"`      // ETF net sub below this → 0.45
+
+	// Part D — Event-Driven Adjustment Factors
+	DGeoPoliticalRiskThreshold  ParameterMetadata[float64] `json:"d_geopolitical_risk_threshold"`  // geopolitical risk above this → 0.85
+	DGeoPoliticalRiskMultiplier ParameterMetadata[float64] `json:"d_geopolitical_risk_multiplier"` // 0.85
+	DVIXSpikeThreshold          ParameterMetadata[float64] `json:"d_vix_spike_threshold"`          // VIX above this → 0.90
+	DVIXSpikeMultiplier         ParameterMetadata[float64] `json:"d_vix_spike_multiplier"`         // 0.90
+	DCreditTighteningMultiplier ParameterMetadata[float64] `json:"d_credit_tightening_multiplier"` // 0.80
+
+	// LastCalibratedScore records the most recent autonomous calibration score,
+	// loaded at startup so PreTradeGate does not start with a blind 0.0.
+	LastCalibratedScore ParameterMetadata[float64] `json:"last_calibrated_score,omitempty"`
+}
+
+// FallbackPriceTarget holds per-skill target and stop-loss multipliers
+// used by the monitoring service when price targets are not explicitly set.
+type FallbackPriceTarget struct {
+	TargetMultiplier   ParameterMetadata[float64] `json:"target_multiplier"`
+	StopLossMultiplier ParameterMetadata[float64] `json:"stop_loss_multiplier"`
+}
+
 type ParametersConfig struct {
-	Version             string                        `json:"version"`
-	UpdatedAt           time.Time                     `json:"updated_at"`
-	Darwinian           DarwinianParameters           `json:"darwinian"`
-	Factor              FactorParameters              `json:"factor"`
-	FactorWeight        FactorWeightParameters        `json:"factor_weight,omitempty"`
-	Optimizer           OptimizerParameters           `json:"optimizer"`
-	Sizing              SizingParameters              `json:"sizing"`
-	Health              HealthParameters              `json:"health"`
-	GARCH               GARCHParameters               `json:"garch"`
-	Experiment          ExperimentParameters          `json:"experiment"`
-	Baseline            BaselineParameters            `json:"baseline"`
-	Orchestrator        OrchestratorParameters        `json:"orchestrator"`
-	Risk                RiskParameters                `json:"risk"`
-	Drawdown            DrawdownParameters            `json:"drawdown"`
-	Realtime            RealtimeParameters            `json:"realtime"`
-	Janus               JanusParameters               `json:"janus"`
-	Narrative           NarrativeParameters           `json:"narrative"`
-	NarrativeConviction NarrativeConvictionParameters `json:"narrative_conviction,omitempty"`
-	Marketdata          MarketdataParameters          `json:"marketdata"`
-	Industry            IndustryParameters            `json:"industry"`
-	Strategy            StrategyParameters            `json:"strategy"`
-	PreciousMetals      PreciousMetalsParameters      `json:"precious_metals"`
-	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
-	Alert               AlertParameters               `json:"alert"`
-	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`
+	Version              string                         `json:"version"`
+	UpdatedAt            time.Time                      `json:"updated_at"`
+	FallbackPriceTargets map[string]FallbackPriceTarget `json:"fallback_price_targets,omitempty"`
+	Darwinian            DarwinianParameters            `json:"darwinian"`
+	Factor               FactorParameters               `json:"factor"`
+	FactorWeight         FactorWeightParameters         `json:"factor_weight,omitempty"`
+	Optimizer            OptimizerParameters            `json:"optimizer"`
+	Sizing               SizingParameters               `json:"sizing"`
+	Health               HealthParameters               `json:"health"`
+	GARCH                GARCHParameters                `json:"garch"`
+	Experiment           ExperimentParameters           `json:"experiment"`
+	Baseline             BaselineParameters             `json:"baseline"`
+	Orchestrator         OrchestratorParameters         `json:"orchestrator"`
+	Risk                 RiskParameters                 `json:"risk"`
+	Drawdown             DrawdownParameters             `json:"drawdown"`
+	Realtime             RealtimeParameters             `json:"realtime"`
+	Janus                JanusParameters                `json:"janus"`
+	Narrative            NarrativeParameters            `json:"narrative"`
+	NarrativeConviction  NarrativeConvictionParameters  `json:"narrative_conviction,omitempty"`
+	Marketdata           MarketdataParameters           `json:"marketdata"`
+	Industry             IndustryParameters             `json:"industry"`
+	Strategy             StrategyParameters             `json:"strategy"`
+	PreciousMetals       PreciousMetalsParameters       `json:"precious_metals"`
+	SectorExecutor       SectorExecutorParameters       `json:"sector_executor,omitempty"`
+	Alert                AlertParameters                `json:"alert"`
+	RiskGate             RiskGateParameters             `json:"risk_gate,omitempty"`
+	Engine               EngineParameters               `json:"engine,omitempty"`
+	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
+}
+
+// EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.
+type EngineParameters struct {
+	MacroRisk         EngineMacroRiskParameters         `json:"macro_risk"`
+	StructuralTrend   EngineStructuralTrendParameters   `json:"structural_trend"`
+	Drawdown          EngineDrawdownParameters          `json:"drawdown"`
+	SectorRotation    EngineSectorRotationParameters    `json:"sector_rotation"`
+	StrategyEvolution EngineStrategyEvolutionParameters `json:"strategy_evolution"`
+	Executors         EngineExecutorsParameters         `json:"executors"`
+	Simulation        EngineSimulationParameters        `json:"simulation"`
+}
+
+type EngineMacroRiskParameters struct {
+	CarryTradeUnwindThreshold ParameterMetadata[float64] `json:"carry_trade_unwind_threshold"`
+	VIXThreshold              ParameterMetadata[float64] `json:"vix_threshold"`
+	US10YThreshold            ParameterMetadata[float64] `json:"us10y_threshold"`
+	OilShockThresholdPct      ParameterMetadata[float64] `json:"oil_shock_threshold_pct"`
+	GoldSurgeThresholdPct     ParameterMetadata[float64] `json:"gold_surge_threshold_pct"`
+	DXYSurgeThresholdPct      ParameterMetadata[float64] `json:"dxy_surge_threshold_pct"`
+	TWDStressThresholdPct     ParameterMetadata[float64] `json:"twd_stress_threshold_pct"`
+	OutflowProbBase           ParameterMetadata[float64] `json:"outflow_prob_base"`
+	OutflowProbMax            ParameterMetadata[float64] `json:"outflow_prob_max"`
+}
+
+func (p EngineMacroRiskParameters) ToConfig() MacroRiskConfig {
+	return MacroRiskConfig{
+		CarryTradeUnwindThreshold: p.CarryTradeUnwindThreshold.Value,
+		VIXThreshold:              p.VIXThreshold.Value,
+		US10YThreshold:            p.US10YThreshold.Value,
+		OilShockThresholdPct:      p.OilShockThresholdPct.Value,
+		GoldSurgeThresholdPct:     p.GoldSurgeThresholdPct.Value,
+		DXYSurgeThresholdPct:      p.DXYSurgeThresholdPct.Value,
+		TWDStressThresholdPct:     p.TWDStressThresholdPct.Value,
+		OutflowProbBase:           p.OutflowProbBase.Value,
+		OutflowProbMax:            p.OutflowProbMax.Value,
+	}
+}
+
+type EngineStructuralTrendParameters struct {
+	MinTrendStrength            ParameterMetadata[float64] `json:"min_trend_strength"`
+	MinConfidence               ParameterMetadata[float64] `json:"min_confidence"`
+	MinHitRate                  ParameterMetadata[float64] `json:"min_hit_rate"`
+	OverrideThreshold           ParameterMetadata[float64] `json:"override_threshold"`
+	AIRevenueGrowthThreshold    ParameterMetadata[float64] `json:"ai_revenue_growth_threshold"`
+	CoWoSUtilizationThreshold   ParameterMetadata[float64] `json:"cowos_utilization_threshold"`
+	CapexGrowthThreshold        ParameterMetadata[float64] `json:"capex_growth_threshold"`
+	SemiconductorIndexThreshold ParameterMetadata[float64] `json:"semiconductor_index_threshold"`
+}
+
+func (p EngineStructuralTrendParameters) ToConfig() StructuralTrendConfig {
+	return StructuralTrendConfig{
+		MinTrendStrength:            p.MinTrendStrength.Value,
+		MinConfidence:               p.MinConfidence.Value,
+		MinHitRate:                  p.MinHitRate.Value,
+		OverrideThreshold:           p.OverrideThreshold.Value,
+		AIRevenueGrowthThreshold:    p.AIRevenueGrowthThreshold.Value,
+		CoWoSUtilizationThreshold:   p.CoWoSUtilizationThreshold.Value,
+		CapexGrowthThreshold:        p.CapexGrowthThreshold.Value,
+		SemiconductorIndexThreshold: p.SemiconductorIndexThreshold.Value,
+	}
+}
+
+type EngineDrawdownParameters struct {
+	Levels                        ParameterMetadata[map[string]DrawdownLevel] `json:"levels"`
+	OrangeOverrideMinScore        ParameterMetadata[float64]                  `json:"orange_override_min_score"`
+	RedOverrideMinScore           ParameterMetadata[float64]                  `json:"red_override_min_score"`
+	SectorConstraintsRiskOff      ParameterMetadata[map[string]float64]       `json:"sector_constraints_risk_off"`
+	SectorConstraintsCarryUnwind  ParameterMetadata[map[string]float64]       `json:"sector_constraints_carry_trade_unwind"`
+	SectorConstraintsSectorRotate ParameterMetadata[map[string]float64]       `json:"sector_constraints_sector_rotation"`
+}
+
+func (p EngineDrawdownParameters) ToConfig() DrawdownConfig {
+	return DrawdownConfig{
+		Levels:                            p.Levels.Value,
+		OrangeOverrideMinScore:            p.OrangeOverrideMinScore.Value,
+		RedOverrideMinScore:               p.RedOverrideMinScore.Value,
+		SectorConstraintsRiskOff:          p.SectorConstraintsRiskOff.Value,
+		SectorConstraintsCarryTradeUnwind: p.SectorConstraintsCarryUnwind.Value,
+		SectorConstraintsSectorRotation:   p.SectorConstraintsSectorRotate.Value,
+	}
+}
+
+type EngineSectorRotationParameters struct {
+	BaseAllocations    ParameterMetadata[map[string]float64] `json:"base_allocations"`
+	MinAllocation      ParameterMetadata[float64]            `json:"min_allocation"`
+	MaxAllocation      ParameterMetadata[float64]            `json:"max_allocation"`
+	RebalanceThreshold ParameterMetadata[float64]            `json:"rebalance_threshold"`
+}
+
+func (p EngineSectorRotationParameters) ToConfig() SectorRotationConfig {
+	return SectorRotationConfig{
+		BaseAllocations:    p.BaseAllocations.Value,
+		MinAllocation:      p.MinAllocation.Value,
+		MaxAllocation:      p.MaxAllocation.Value,
+		RebalanceThreshold: p.RebalanceThreshold.Value,
+	}
+}
+
+type EngineStrategyEvolutionParameters struct {
+	CooldownPeriodHours ParameterMetadata[int]                            `json:"cooldown_period_hours"`
+	Configs             ParameterMetadata[map[string]StrategyStateConfig] `json:"configs"`
+}
+
+func (p EngineStrategyEvolutionParameters) ToConfig() StrategyEvolutionConfig {
+	return StrategyEvolutionConfig{
+		CooldownPeriodHours: p.CooldownPeriodHours.Value,
+		Configs:             p.Configs.Value,
+	}
+}
+
+type EngineExecutorsParameters struct {
+	VIXMomentumCrashThreshold ParameterMetadata[float64] `json:"vix_momentum_crash_threshold"`
+	CrowdingPenaltyAgents3    ParameterMetadata[float64] `json:"crowding_penalty_agents_3"`
+	CrowdingPenaltyAgents4    ParameterMetadata[float64] `json:"crowding_penalty_agents_4"`
+	MinTradeAmount            ParameterMetadata[float64] `json:"min_trade_amount"`
+	MaxStocksDefault          ParameterMetadata[int]     `json:"max_stocks_default"`
+	MaxStocksMin              ParameterMetadata[int]     `json:"max_stocks_min"`
+	MaxStocksMax              ParameterMetadata[int]     `json:"max_stocks_max"`
+	ConvictionFloorDefault    ParameterMetadata[int]     `json:"conviction_floor_default"`
+}
+
+func (p EngineExecutorsParameters) ToConfig() ExecutorsConfig {
+	return ExecutorsConfig{
+		VIXMomentumCrashThreshold: p.VIXMomentumCrashThreshold.Value,
+		CrowdingPenaltyAgents3:    p.CrowdingPenaltyAgents3.Value,
+		CrowdingPenaltyAgents4:    p.CrowdingPenaltyAgents4.Value,
+		MinTradeAmount:            p.MinTradeAmount.Value,
+		MaxStocksDefault:          p.MaxStocksDefault.Value,
+		MaxStocksMin:              p.MaxStocksMin.Value,
+		MaxStocksMax:              p.MaxStocksMax.Value,
+		ConvictionFloorDefault:    p.ConvictionFloorDefault.Value,
+	}
+}
+
+type EngineSimulationParameters struct {
+	NeutralRegimeSizingFactor ParameterMetadata[float64] `json:"neutral_regime_sizing_factor"`
+}
+
+func (p EngineSimulationParameters) ToConfig() SimulationConfig {
+	return SimulationConfig{
+		NeutralRegimeSizingFactor: p.NeutralRegimeSizingFactor.Value,
+	}
 }
 
 func (p *ParametersConfig) validateAlert() error {
@@ -1007,6 +1554,9 @@ func (p *ParametersConfig) Validate() error {
 	if p.RiskGate.PreTrade.VaRConfidenceLevel.Value <= 0 || p.RiskGate.PreTrade.VaRConfidenceLevel.Value > 1 {
 		return fmt.Errorf("risk_gate.pre_trade.var_confidence_level (%.3f) must be in (0,1]", p.RiskGate.PreTrade.VaRConfidenceLevel.Value)
 	}
+	if p.RiskGate.PreTrade.MaxOpenPositions.Value < 1 {
+		return fmt.Errorf("risk_gate.pre_trade.max_open_positions (%d) must be >= 1", p.RiskGate.PreTrade.MaxOpenPositions.Value)
+	}
 
 	// Drawdown constraints
 	if p.Drawdown.NonePercentage.Value < 0 || p.Drawdown.NonePercentage.Value > 1 {
@@ -1153,6 +1703,27 @@ func (p *ParametersConfig) Validate() error {
 	if p.Narrative.RetailAccelerationWindowDays.Value < 1 {
 		return fmt.Errorf("narrative.retail_acceleration_window_days (%d) must be >= 1", p.Narrative.RetailAccelerationWindowDays.Value)
 	}
+	if p.Narrative.SpringFestivalConfidence.Value < 0 || p.Narrative.SpringFestivalConfidence.Value > 1 {
+		return fmt.Errorf("narrative.spring_festival_confidence (%.3f) must be in [0,1]", p.Narrative.SpringFestivalConfidence.Value)
+	}
+	if p.Narrative.ElectionCycleConfidence.Value < 0 || p.Narrative.ElectionCycleConfidence.Value > 1 {
+		return fmt.Errorf("narrative.election_cycle_confidence (%.3f) must be in [0,1]", p.Narrative.ElectionCycleConfidence.Value)
+	}
+	if p.Narrative.EarningsBlackoutConfidence.Value < 0 || p.Narrative.EarningsBlackoutConfidence.Value > 1 {
+		return fmt.Errorf("narrative.earnings_blackout_confidence (%.3f) must be in [0,1]", p.Narrative.EarningsBlackoutConfidence.Value)
+	}
+	if p.Narrative.TechPeakSeasonConfidence.Value < 0 || p.Narrative.TechPeakSeasonConfidence.Value > 1 {
+		return fmt.Errorf("narrative.tech_peak_season_confidence (%.3f) must be in [0,1]", p.Narrative.TechPeakSeasonConfidence.Value)
+	}
+	if p.Narrative.YearEndWindowDressingConfidence.Value < 0 || p.Narrative.YearEndWindowDressingConfidence.Value > 1 {
+		return fmt.Errorf("narrative.year_end_window_dressing_confidence (%.3f) must be in [0,1]", p.Narrative.YearEndWindowDressingConfidence.Value)
+	}
+	if !(p.Narrative.EarningsSurpriseConfidence.Value >= 0 && p.Narrative.EarningsSurpriseConfidence.Value <= 1) {
+		return fmt.Errorf("narrative.earnings_surprise_confidence (%.3f) must be in [0,1]", p.Narrative.EarningsSurpriseConfidence.Value)
+	}
+	if p.Narrative.EarningsSurpriseThreshold.Value <= 0 {
+		return fmt.Errorf("narrative.earnings_surprise_threshold (%.3f) must be > 0", p.Narrative.EarningsSurpriseThreshold.Value)
+	}
 
 	if p.Janus.ShortWindowDays.Value < 1 {
 		return fmt.Errorf("janus.short_window_days (%d) must be >= 1", p.Janus.ShortWindowDays.Value)
@@ -1291,8 +1862,8 @@ func (p *ParametersConfig) Validate() error {
 		if sp.StartMonth < 1 || sp.StartMonth > 12 || sp.EndMonth < 1 || sp.EndMonth > 12 {
 			return fmt.Errorf("industry.seasonal_patterns[%d] invalid month: start=%d end=%d", i, sp.StartMonth, sp.EndMonth)
 		}
-		if sp.AdjustmentFactor <= 0 {
-			return fmt.Errorf("industry.seasonal_patterns[%d].adjustment_factor (%.3f) must be > 0", i, sp.AdjustmentFactor)
+		if sp.AdjustmentFactor == 0 {
+			return fmt.Errorf("industry.seasonal_patterns[%d].adjustment_factor (%.3f) must not be zero", i, sp.AdjustmentFactor)
 		}
 		if sp.HistoricalAccuracy < 0 || sp.HistoricalAccuracy > 1 {
 			return fmt.Errorf("industry.seasonal_patterns[%d].historical_accuracy (%.3f) must be in [0,1]", i, sp.HistoricalAccuracy)
@@ -1317,6 +1888,52 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if lp.MinCorrelationThreshold < 0 || lp.MinCorrelationThreshold > 1 {
 		return fmt.Errorf("industry.linkage_params.min_correlation_threshold (%.3f) must be in [0,1]", lp.MinCorrelationThreshold)
+	}
+	if lp.RecessionShockAmplifier < 0.5 || lp.RecessionShockAmplifier > 5.0 {
+		return fmt.Errorf("industry.linkage_params.recession_shock_amplifier (%.3f) must be in [0.5, 5.0]", lp.RecessionShockAmplifier)
+	}
+
+	de := p.Industry.DynamicEnv.Value
+	if de.HistoryWindowDays < 7 || de.HistoryWindowDays > 365 {
+		return fmt.Errorf("industry.dynamic_env.history_window_days (%d) must be in [7, 365]", de.HistoryWindowDays)
+	}
+	if de.HistoryCapMultiplier < 1 || de.HistoryCapMultiplier > 10 {
+		return fmt.Errorf("industry.dynamic_env.history_cap_multiplier (%d) must be in [1, 10]", de.HistoryCapMultiplier)
+	}
+	if de.OilPriceShockThreshold < 0 || de.OilPriceShockThreshold > 1 {
+		return fmt.Errorf("industry.dynamic_env.oil_price_shock_threshold (%.3f) must be in [0, 1]", de.OilPriceShockThreshold)
+	}
+	if de.UsRatesDxyThreshold < 0 || de.UsRatesDxyThreshold > 1 {
+		return fmt.Errorf("industry.dynamic_env.us_rates_dxy_threshold (%.3f) must be in [0, 1]", de.UsRatesDxyThreshold)
+	}
+	if de.JpyCarryDxyThreshold < 0 || de.JpyCarryDxyThreshold > 1 {
+		return fmt.Errorf("industry.dynamic_env.jpy_carry_dxy_threshold (%.3f) must be in [0, 1]", de.JpyCarryDxyThreshold)
+	}
+
+	// New asymmetric risk parameterized thresholds
+	if p.Industry.AsymmetricDropCritical.Value <= 0 || p.Industry.AsymmetricDropCritical.Value > 1 {
+		return fmt.Errorf("industry.asymmetric_drop_critical (%.3f) must be in (0,1]", p.Industry.AsymmetricDropCritical.Value)
+	}
+	if p.Industry.AsymmetricDropHigh.Value <= 0 || p.Industry.AsymmetricDropHigh.Value > 1 {
+		return fmt.Errorf("industry.asymmetric_drop_high (%.3f) must be in (0,1]", p.Industry.AsymmetricDropHigh.Value)
+	}
+	if p.Industry.AsymmetricDropMedium.Value <= 0 || p.Industry.AsymmetricDropMedium.Value > 1 {
+		return fmt.Errorf("industry.asymmetric_drop_medium (%.3f) must be in (0,1]", p.Industry.AsymmetricDropMedium.Value)
+	}
+	if p.Industry.AsymmetricDropMedium.Value >= p.Industry.AsymmetricDropHigh.Value {
+		return fmt.Errorf("industry.asymmetric_drop_medium (%.3f) must be < asymmetric_drop_high (%.3f)", p.Industry.AsymmetricDropMedium.Value, p.Industry.AsymmetricDropHigh.Value)
+	}
+	if p.Industry.AsymmetricDropHigh.Value >= p.Industry.AsymmetricDropCritical.Value {
+		return fmt.Errorf("industry.asymmetric_drop_high (%.3f) must be < asymmetric_drop_critical (%.3f)", p.Industry.AsymmetricDropHigh.Value, p.Industry.AsymmetricDropCritical.Value)
+	}
+	if p.Industry.NewsImpactMultiplier.Value < 0 || p.Industry.NewsImpactMultiplier.Value > 1 {
+		return fmt.Errorf("industry.news_impact_multiplier (%.3f) must be in [0,1]", p.Industry.NewsImpactMultiplier.Value)
+	}
+	if p.Industry.BoundaryFallback.Value <= 0 {
+		return fmt.Errorf("industry.boundary_fallback (%.3f) must be positive", p.Industry.BoundaryFallback.Value)
+	}
+	if p.Industry.AdjustmentFloor.Value < 0 || p.Industry.AdjustmentFloor.Value > 1 {
+		return fmt.Errorf("industry.adjustment_floor (%.3f) must be in [0,1]", p.Industry.AdjustmentFloor.Value)
 	}
 
 	// FactorWeight constraints
@@ -1442,8 +2059,116 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("sector_executor.technical_breakout.default_volume_floor (%d) must be non-negative", tp.DefaultVolumeFloor.Value)
 	}
 
+	if gm := p.SectorExecutor.GrowthMomentum; gm.DowngradeThreshold.Value != 0 && (gm.DowngradeThreshold.Value <= 0 || gm.DowngradeThreshold.Value >= 1) {
+		return fmt.Errorf("sector_executor.growth_momentum.downgrade_threshold (%.3f) must be in (0,1)", gm.DowngradeThreshold.Value)
+	}
+
 	if err := p.validateAlert(); err != nil {
 		return err
+	}
+
+	if err := p.validateEngine(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *ParametersConfig) validateEngine() error {
+	e := p.Engine
+	if e.MacroRisk.VIXThreshold.Value <= 0 {
+		return fmt.Errorf("engine.macro_risk.vix_threshold (%.1f) must be positive", e.MacroRisk.VIXThreshold.Value)
+	}
+	if e.MacroRisk.CarryTradeUnwindThreshold.Value <= 0 {
+		return fmt.Errorf("engine.macro_risk.carry_trade_unwind_threshold (%.1f) must be positive", e.MacroRisk.CarryTradeUnwindThreshold.Value)
+	}
+	if e.MacroRisk.US10YThreshold.Value < 0 {
+		return fmt.Errorf("engine.macro_risk.us10y_threshold (%.1f) must be non-negative", e.MacroRisk.US10YThreshold.Value)
+	}
+	if e.MacroRisk.OutflowProbBase.Value < 0 || e.MacroRisk.OutflowProbBase.Value > 100 {
+		return fmt.Errorf("engine.macro_risk.outflow_prob_base (%.1f) must be in [0,100]", e.MacroRisk.OutflowProbBase.Value)
+	}
+	if e.MacroRisk.OutflowProbMax.Value < 0 || e.MacroRisk.OutflowProbMax.Value > 100 {
+		return fmt.Errorf("engine.macro_risk.outflow_prob_max (%.1f) must be in [0,100]", e.MacroRisk.OutflowProbMax.Value)
+	}
+
+	for name, level := range e.Drawdown.Levels.Value {
+		if level.Percentage < 0 || level.Percentage > 1 {
+			return fmt.Errorf("engine.drawdown.levels.%s.percentage (%.3f) must be in [0,1]", name, level.Percentage)
+		}
+		if level.MaxExposure < 0 || level.MaxExposure > 1 {
+			return fmt.Errorf("engine.drawdown.levels.%s.max_exposure (%.3f) must be in [0,1]", name, level.MaxExposure)
+		}
+	}
+	if e.Drawdown.OrangeOverrideMinScore.Value >= e.Drawdown.RedOverrideMinScore.Value {
+		return fmt.Errorf("engine.drawdown.orange_override_min_score (%.3f) must be < red_override_min_score (%.3f)", e.Drawdown.OrangeOverrideMinScore.Value, e.Drawdown.RedOverrideMinScore.Value)
+	}
+
+	total := 0.0
+	for _, alloc := range e.SectorRotation.BaseAllocations.Value {
+		total += alloc
+	}
+	if total < 0.99 || total > 1.01 {
+		return fmt.Errorf("engine.sector_rotation.base_allocations sum (%.4f) must be 1.0±0.01", total)
+	}
+	if e.SectorRotation.MinAllocation.Value >= e.SectorRotation.MaxAllocation.Value {
+		return fmt.Errorf("engine.sector_rotation.min_allocation (%.3f) must be < max_allocation (%.3f)", e.SectorRotation.MinAllocation.Value, e.SectorRotation.MaxAllocation.Value)
+	}
+
+	if e.Executors.MaxStocksMin.Value > e.Executors.MaxStocksDefault.Value {
+		return fmt.Errorf("engine.executors.max_stocks_min (%d) must be <= max_stocks_default (%d)", e.Executors.MaxStocksMin.Value, e.Executors.MaxStocksDefault.Value)
+	}
+	if e.Executors.MaxStocksDefault.Value > e.Executors.MaxStocksMax.Value {
+		return fmt.Errorf("engine.executors.max_stocks_default (%d) must be <= max_stocks_max (%d)", e.Executors.MaxStocksDefault.Value, e.Executors.MaxStocksMax.Value)
+	}
+	if e.Executors.ConvictionFloorDefault.Value < 0 || e.Executors.ConvictionFloorDefault.Value > 100 {
+		return fmt.Errorf("engine.executors.conviction_floor_default (%d) must be in [0,100]", e.Executors.ConvictionFloorDefault.Value)
+	}
+	if e.Executors.MinTradeAmount.Value <= 0 {
+		return fmt.Errorf("engine.executors.min_trade_amount (%.0f) must be positive", e.Executors.MinTradeAmount.Value)
+	}
+	if e.Executors.CrowdingPenaltyAgents3.Value <= 0 || e.Executors.CrowdingPenaltyAgents3.Value > 1 {
+		return fmt.Errorf("engine.executors.crowding_penalty_agents_3 (%.3f) must be in (0,1]", e.Executors.CrowdingPenaltyAgents3.Value)
+	}
+	if e.Executors.CrowdingPenaltyAgents4.Value <= 0 || e.Executors.CrowdingPenaltyAgents4.Value > 1 {
+		return fmt.Errorf("engine.executors.crowding_penalty_agents_4 (%.3f) must be in (0,1]", e.Executors.CrowdingPenaltyAgents4.Value)
+	}
+
+	if e.Simulation.NeutralRegimeSizingFactor.Value <= 0 || e.Simulation.NeutralRegimeSizingFactor.Value > 1 {
+		return fmt.Errorf("engine.simulation.neutral_regime_sizing_factor (%.3f) must be in (0,1]", e.Simulation.NeutralRegimeSizingFactor.Value)
+	}
+
+	if e.StrategyEvolution.CooldownPeriodHours.Value <= 0 {
+		return fmt.Errorf("engine.strategy_evolution.cooldown_period_hours (%d) must be positive", e.StrategyEvolution.CooldownPeriodHours.Value)
+	}
+
+	if e.StructuralTrend.MinConfidence.Value < 0 || e.StructuralTrend.MinConfidence.Value > 1 {
+		return fmt.Errorf("engine.structural_trend.min_confidence (%.3f) must be in [0,1]", e.StructuralTrend.MinConfidence.Value)
+	}
+	if e.StructuralTrend.MinHitRate.Value < 0 || e.StructuralTrend.MinHitRate.Value > 1 {
+		return fmt.Errorf("engine.structural_trend.min_hit_rate (%.3f) must be in [0,1]", e.StructuralTrend.MinHitRate.Value)
+	}
+	if e.StructuralTrend.MinTrendStrength.Value < 0 || e.StructuralTrend.MinTrendStrength.Value > 1 {
+		return fmt.Errorf("engine.structural_trend.min_trend_strength (%.3f) must be in [0,1]", e.StructuralTrend.MinTrendStrength.Value)
+	}
+
+	// RSITw threshold ordering — C1 (futures OI) thresholds must be monotonically non-decreasing
+	if p.RSITw.C1VeryBullishThreshold.Value < p.RSITw.C1BullishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_very_bullish_threshold (%.0f) must be >= c1_bullish_threshold (%.0f)", p.RSITw.C1VeryBullishThreshold.Value, p.RSITw.C1BullishThreshold.Value)
+	}
+	if p.RSITw.C1BullishThreshold.Value < p.RSITw.C1BearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_bullish_threshold (%.0f) must be >= c1_bearish_threshold (%.0f)", p.RSITw.C1BullishThreshold.Value, p.RSITw.C1BearishThreshold.Value)
+	}
+	if p.RSITw.C1BearishThreshold.Value < p.RSITw.C1VeryBearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_bearish_threshold (%.0f) must be >= c1_very_bearish_threshold (%.0f)", p.RSITw.C1BearishThreshold.Value, p.RSITw.C1VeryBearishThreshold.Value)
+	}
+
+	// C3 (ETF net subscription) thresholds must be monotonically non-decreasing
+	if p.RSITw.C3VeryBullishThreshold.Value < p.RSITw.C3BullishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c3_very_bullish_threshold (%.0f) must be >= c3_bullish_threshold (%.0f)", p.RSITw.C3VeryBullishThreshold.Value, p.RSITw.C3BullishThreshold.Value)
+	}
+	if p.RSITw.C3BullishThreshold.Value < p.RSITw.C3BearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c3_bullish_threshold (%.0f) must be >= c3_bearish_threshold (%.0f)", p.RSITw.C3BullishThreshold.Value, p.RSITw.C3BearishThreshold.Value)
 	}
 
 	return nil
@@ -1476,6 +2201,10 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeDrawdownDefaults(&cfg)
 	mergeAlertDefaults(&cfg)
 	mergeRiskGateDefaults(&cfg)
+	mergeEngineDefaults(&cfg)
+	mergeSectorExecutorDefaults(&cfg)
+	mergeIndustryDefaults(&cfg)
+	mergeRSITwDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -1571,6 +2300,73 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	if n.RetailAccelerationWindowDays.Value == 0 {
 		n.RetailAccelerationWindowDays = def.RetailAccelerationWindowDays
 	}
+	if n.SpringFestivalConfidence.Value == 0 {
+		n.SpringFestivalConfidence = def.SpringFestivalConfidence
+	}
+	if n.ElectionCycleConfidence.Value == 0 {
+		n.ElectionCycleConfidence = def.ElectionCycleConfidence
+	}
+	if n.EarningsBlackoutConfidence.Value == 0 {
+		n.EarningsBlackoutConfidence = def.EarningsBlackoutConfidence
+	}
+	if n.TechPeakSeasonConfidence.Value == 0 {
+		n.TechPeakSeasonConfidence = def.TechPeakSeasonConfidence
+	}
+	if n.YearEndWindowDressingConfidence.Value == 0 {
+		n.YearEndWindowDressingConfidence = def.YearEndWindowDressingConfidence
+	}
+	if n.EarningsSurpriseConfidence.Value == 0 {
+		n.EarningsSurpriseConfidence = def.EarningsSurpriseConfidence
+	}
+	if n.EarningsSurpriseThreshold.Value == 0 {
+		n.EarningsSurpriseThreshold = def.EarningsSurpriseThreshold
+	}
+	if n.TaiwanStressDXYScale.Value == 0 {
+		n.TaiwanStressDXYScale = def.TaiwanStressDXYScale
+	}
+	if n.TaiwanStressUS10YScale.Value == 0 {
+		n.TaiwanStressUS10YScale = def.TaiwanStressUS10YScale
+	}
+	if n.TaiwanStressForeignScale.Value == 0 {
+		n.TaiwanStressForeignScale = def.TaiwanStressForeignScale
+	}
+	if n.TaiwanStressVIXScale.Value == 0 {
+		n.TaiwanStressVIXScale = def.TaiwanStressVIXScale
+	}
+	if n.TaiwanStressJPYScale.Value == 0 {
+		n.TaiwanStressJPYScale = def.TaiwanStressJPYScale
+	}
+	if n.TaiwanStressGeoScale.Value == 0 {
+		n.TaiwanStressGeoScale = def.TaiwanStressGeoScale
+	}
+	if n.TaiwanStressOilScale.Value == 0 {
+		n.TaiwanStressOilScale = def.TaiwanStressOilScale
+	}
+	if n.TaiwanStressGoldScale.Value == 0 {
+		n.TaiwanStressGoldScale = def.TaiwanStressGoldScale
+	}
+	if n.TaiwanStressAlertThreshold.Value == 0 {
+		n.TaiwanStressAlertThreshold = def.TaiwanStressAlertThreshold
+	}
+	if n.TaiwanStressHighThreshold.Value == 0 {
+		n.TaiwanStressHighThreshold = def.TaiwanStressHighThreshold
+	}
+	if n.TaiwanStressCrisisThreshold.Value == 0 {
+		n.TaiwanStressCrisisThreshold = def.TaiwanStressCrisisThreshold
+	}
+	if n.CalibrationBaselineWindow.Value == 0 {
+		n.CalibrationBaselineWindow = def.CalibrationBaselineWindow
+	}
+	if n.CalibrationTargetMedian.Value == 0 {
+		n.CalibrationTargetMedian = def.CalibrationTargetMedian
+	}
+	if n.CalibrationValidationPct.Value == 0 {
+		n.CalibrationValidationPct = def.CalibrationValidationPct
+	}
+	if n.CalibrationMinRecords.Value == 0 {
+		n.CalibrationMinRecords = def.CalibrationMinRecords
+	}
+	n.CalibrationEnabled = def.CalibrationEnabled
 }
 
 // mergeDrawdownDefaults fills zero-valued drawdown fields with defaults.
@@ -1692,16 +2488,105 @@ func GetParametersConfigPath() string {
 	return parametersPath
 }
 
-// Save writes the configuration to the given JSON file.
+// mirrorCalibrationTimestamp injects a sibling `calibration_timestamp` field
+// after every `last_calibrated` field found in the marshaled JSON, copying
+// the same value. This keeps the two timestamp fields — one written by the
+// Go struct (ParameterMetadata.LastCalibrated) and one written by raw-JSON
+// consumers (cmd/calibrate-seasonal) — in sync after every Save() call.
+//
+// The injection operates line by line on the indented output, preserving
+// the surrounding indentation. The original `last_calibrated` line is
+// rewritten with a guaranteed trailing comma (the injected sibling requires
+// it), and the mirror inherits a trailing comma only when the original
+// line had one — preserving valid JSON when `last_calibrated` was the
+// final field of its object. The function is a no-op when no
+// `last_calibrated` field is present.
+var calibrationTimestampLineRe = regexp.MustCompile(`^(\s*)"last_calibrated":\s*"([^"]*)"(,?)\s*$`)
+
+func mirrorCalibrationTimestamp(data []byte) []byte {
+	lines := bytes.Split(data, []byte("\n"))
+	out := make([][]byte, 0, len(lines)+4)
+	for _, line := range lines {
+		m := calibrationTimestampLineRe.FindSubmatch(line)
+		if m == nil {
+			out = append(out, line)
+			continue
+		}
+		indent := m[1]
+		value := m[2]
+		hadTrailingComma := len(m) >= 4 && len(m[3]) > 0
+		rewritten := append([]byte{}, indent...)
+		rewritten = append(rewritten, []byte(`"last_calibrated": "`)...)
+		rewritten = append(rewritten, value...)
+		rewritten = append(rewritten, '"', ',')
+		out = append(out, rewritten)
+		injected := append([]byte{}, indent...)
+		injected = append(injected, []byte(`"calibration_timestamp": "`)...)
+		injected = append(injected, value...)
+		injected = append(injected, '"')
+		if hadTrailingComma {
+			injected = append(injected, ',')
+		}
+		out = append(out, injected)
+	}
+	return bytes.Join(out, []byte("\n"))
+}
+
+// Save writes the configuration to the given JSON file (non-atomic).
 func (p *ParametersConfig) Save(path string) error {
 	p.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal parameters config: %w", err)
 	}
+	data = mirrorCalibrationTimestamp(data)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write parameters config: %w", err)
 	}
+	return nil
+}
+
+// SaveWithRollback atomically writes the configuration with automatic rollback.
+// Write pattern: .tmp → fsync → rename existing → .bak → rename .tmp → target.
+// If any step after the .bak fails, the original file is restored from .bak.
+func (p *ParametersConfig) SaveWithRollback(path string) error {
+	tmpPath := path + ".tmp"
+	bakPath := path + ".bak"
+
+	p.UpdatedAt = time.Now()
+	data, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal parameters config: %w", err)
+	}
+	data = mirrorCalibrationTimestamp(data)
+
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write temp parameters config: %w", err)
+	}
+
+	f, err := os.OpenFile(tmpPath, os.O_RDONLY, 0)
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("open temp file for sync: %w", err)
+	}
+	_ = f.Sync()
+	_ = f.Close()
+
+	if _, statErr := os.Stat(path); statErr == nil {
+		if err := os.Rename(path, bakPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return fmt.Errorf("backup existing config: %w", err)
+		}
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		if _, bakErr := os.Stat(bakPath); bakErr == nil {
+			_ = os.Rename(bakPath, path)
+		}
+		return fmt.Errorf("promote temp config: %w", err)
+	}
+
+	_ = os.Remove(bakPath)
 	return nil
 }
 
@@ -1729,6 +2614,9 @@ func mergeRiskGateDefaults(cfg *ParametersConfig) {
 	}
 	if r.PreTrade.MinADVRatio.Value == 0 {
 		r.PreTrade.MinADVRatio = def.PreTrade.MinADVRatio
+	}
+	if r.PreTrade.MaxOpenPositions.Value == 0 {
+		r.PreTrade.MaxOpenPositions = def.PreTrade.MaxOpenPositions
 	}
 	if r.InTrade.MonitorIntervalSec.Value == 0 {
 		r.InTrade.MonitorIntervalSec = def.InTrade.MonitorIntervalSec
@@ -1762,5 +2650,228 @@ func mergeRiskGateDefaults(cfg *ParametersConfig) {
 	}
 	if r.PostTrade.EvaluationIntervalHours.Value == 0 {
 		r.PostTrade.EvaluationIntervalHours = def.PostTrade.EvaluationIntervalHours
+	}
+}
+
+func mergeEngineDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Engine
+	e := &cfg.Engine
+
+	if e.MacroRisk.VIXThreshold.Value == 0 {
+		e.MacroRisk = def.MacroRisk
+	}
+	if e.StructuralTrend.MinConfidence.Value == 0 {
+		e.StructuralTrend = def.StructuralTrend
+	}
+	if len(e.Drawdown.Levels.Value) == 0 {
+		e.Drawdown = def.Drawdown
+	}
+	if len(e.SectorRotation.BaseAllocations.Value) == 0 {
+		e.SectorRotation = def.SectorRotation
+	}
+	if e.StrategyEvolution.CooldownPeriodHours.Value == 0 {
+		e.StrategyEvolution = def.StrategyEvolution
+	}
+	if e.Executors.VIXMomentumCrashThreshold.Value == 0 {
+		e.Executors = def.Executors
+	}
+	if e.Simulation.NeutralRegimeSizingFactor.Value == 0 {
+		e.Simulation = def.Simulation
+	}
+}
+
+func mergeSectorExecutorDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().SectorExecutor
+	s := &cfg.SectorExecutor
+
+	if s.LEOSatellite.ConvictionBase.Value == 0 {
+		s.LEOSatellite = def.LEOSatellite
+	}
+	if s.Financials.DividendBoost.Value == 0 {
+		s.Financials = def.Financials
+	}
+	if s.Shipping.TacticalBoost.Value == 0 {
+		s.Shipping = def.Shipping
+	}
+	if s.ValueYield.CashFlowBoost.Value == 0 {
+		s.ValueYield = def.ValueYield
+	}
+	if s.EarningsQuality.RepeatableBoost.Value == 0 {
+		s.EarningsQuality = def.EarningsQuality
+	}
+	if s.TechnicalBreakout.DefaultVolumeFloor.Value == 0 {
+		s.TechnicalBreakout = def.TechnicalBreakout
+	}
+	if s.GrowthMomentum.ConvictionBase.Value == 0 {
+		s.GrowthMomentum = def.GrowthMomentum
+	}
+	if s.FactorConviction.MomentumHighThreshold.Value == 0 {
+		s.FactorConviction = def.FactorConviction
+	}
+}
+
+func mergeIndustryDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Industry
+	i := &cfg.Industry
+
+	if i.AsymmetricDropCritical.Value == 0 {
+		i.AsymmetricDropCritical = def.AsymmetricDropCritical
+	}
+	if i.AsymmetricDropHigh.Value == 0 {
+		i.AsymmetricDropHigh = def.AsymmetricDropHigh
+	}
+	if i.AsymmetricDropMedium.Value == 0 {
+		i.AsymmetricDropMedium = def.AsymmetricDropMedium
+	}
+	if i.NewsImpactMultiplier.Value == 0 {
+		i.NewsImpactMultiplier = def.NewsImpactMultiplier
+	}
+	if i.BoundaryFallback.Value == 0 {
+		i.BoundaryFallback = def.BoundaryFallback
+	}
+	if i.AdjustmentFloor.Value == 0 {
+		i.AdjustmentFloor = def.AdjustmentFloor
+	}
+	if i.DynamicEnv.Value.HistoryWindowDays == 0 {
+		i.DynamicEnv = def.DynamicEnv
+	}
+	if i.HistoryRetentionDays.Value == 0 {
+		i.HistoryRetentionDays = def.HistoryRetentionDays
+	}
+	if i.SiliconCycle.Value.RevenueYoYThreshold == 0 &&
+		i.SiliconCycle.Value.BillingsYoYThreshold == 0 &&
+		i.SiliconCycle.Value.IndexMAPercentThreshold == 0 {
+		i.SiliconCycle = def.SiliconCycle
+	}
+	if i.EventSentimentCap.Value == 0 {
+		i.EventSentimentCap = def.EventSentimentCap
+	}
+	if len(i.ClassificationTree.Value.Segments) == 0 {
+		i.ClassificationTree = def.ClassificationTree
+	}
+}
+
+// mergeRSITwDefaults fills zero-valued RSITwParameters fields with defaults.
+func mergeRSITwDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().RSITw
+	r := &cfg.RSITw
+
+	// Part A weights
+	if r.A1Weight.Value == 0 {
+		r.A1Weight = def.A1Weight
+	}
+	if r.A2Weight.Value == 0 {
+		r.A2Weight = def.A2Weight
+	}
+	if r.A3Weight.Value == 0 {
+		r.A3Weight = def.A3Weight
+	}
+	if r.A4Weight.Value == 0 {
+		r.A4Weight = def.A4Weight
+	}
+	if r.A5Weight.Value == 0 {
+		r.A5Weight = def.A5Weight
+	}
+	if r.A6Weight.Value == 0 {
+		r.A6Weight = def.A6Weight
+	}
+	if r.APartWeight.Value == 0 {
+		r.APartWeight = def.APartWeight
+	}
+	if r.CPartWeight.Value == 0 {
+		r.CPartWeight = def.CPartWeight
+	}
+
+	// A3 formula
+	if r.A3Midpoint.Value == 0 {
+		r.A3Midpoint = def.A3Midpoint
+	}
+	if r.A3Scale.Value == 0 {
+		r.A3Scale = def.A3Scale
+	}
+
+	// A4 VIX mapping
+	if len(r.A4VixThresholds.Value) == 0 {
+		r.A4VixThresholds = def.A4VixThresholds
+	}
+	if len(r.A4VixScores.Value) == 0 {
+		r.A4VixScores = def.A4VixScores
+	}
+
+	// A5 PCR mapping
+	if len(r.A5PcrThresholds.Value) == 0 {
+		r.A5PcrThresholds = def.A5PcrThresholds
+	}
+	if len(r.A5PcrScores.Value) == 0 {
+		r.A5PcrScores = def.A5PcrScores
+	}
+	if r.A5PcrFallback.Value == 0 {
+		r.A5PcrFallback = def.A5PcrFallback
+	}
+
+	// A6 Odd-lot mapping
+	if len(r.A6OddLotThresholds.Value) == 0 {
+		r.A6OddLotThresholds = def.A6OddLotThresholds
+	}
+	if len(r.A6OddLotScores.Value) == 0 {
+		r.A6OddLotScores = def.A6OddLotScores
+	}
+	if r.A6OddLotFallback.Value == 0 {
+		r.A6OddLotFallback = def.A6OddLotFallback
+	}
+
+	// Part C sub-weights
+	if r.C1Weight.Value == 0 {
+		r.C1Weight = def.C1Weight
+	}
+	if r.C2Weight.Value == 0 {
+		r.C2Weight = def.C2Weight
+	}
+	if r.C3Weight.Value == 0 {
+		r.C3Weight = def.C3Weight
+	}
+
+	// Part C thresholds (existing)
+	if r.C1VeryBullishThreshold.Value == 0 {
+		r.C1VeryBullishThreshold = def.C1VeryBullishThreshold
+	}
+	if r.C1BullishThreshold.Value == 0 {
+		r.C1BullishThreshold = def.C1BullishThreshold
+	}
+	if r.C1BearishThreshold.Value == 0 {
+		r.C1BearishThreshold = def.C1BearishThreshold
+	}
+	if r.C1VeryBearishThreshold.Value == 0 {
+		r.C1VeryBearishThreshold = def.C1VeryBearishThreshold
+	}
+	if r.C2NeutralMidpoint.Value == 0 {
+		r.C2NeutralMidpoint = def.C2NeutralMidpoint
+	}
+	if r.C2NetflowScalingFactor.Value == 0 {
+		r.C2NetflowScalingFactor = def.C2NetflowScalingFactor
+	}
+	if r.C3VeryBullishThreshold.Value == 0 {
+		r.C3VeryBullishThreshold = def.C3VeryBullishThreshold
+	}
+	if r.C3BullishThreshold.Value == 0 {
+		r.C3BullishThreshold = def.C3BullishThreshold
+	}
+	if r.C3BearishThreshold.Value == 0 {
+		r.C3BearishThreshold = def.C3BearishThreshold
+	}
+	if r.DGeoPoliticalRiskThreshold.Value == 0 {
+		r.DGeoPoliticalRiskThreshold = def.DGeoPoliticalRiskThreshold
+	}
+	if r.DGeoPoliticalRiskMultiplier.Value == 0 {
+		r.DGeoPoliticalRiskMultiplier = def.DGeoPoliticalRiskMultiplier
+	}
+	if r.DVIXSpikeThreshold.Value == 0 {
+		r.DVIXSpikeThreshold = def.DVIXSpikeThreshold
+	}
+	if r.DVIXSpikeMultiplier.Value == 0 {
+		r.DVIXSpikeMultiplier = def.DVIXSpikeMultiplier
+	}
+	if r.DCreditTighteningMultiplier.Value == 0 {
+		r.DCreditTighteningMultiplier = def.DCreditTighteningMultiplier
 	}
 }

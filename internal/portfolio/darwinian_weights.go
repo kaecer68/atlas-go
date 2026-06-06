@@ -92,18 +92,20 @@ type DarwinianAgentWeight struct {
 	AvgReturn         float64   `json:"avg_return"`
 	LastAdjustedAt    time.Time `json:"last_adjusted_at"`
 	LastUpdatedAt     time.Time `json:"last_updated_at"`
-	DailyReturns      []float64 `json:"daily_returns"` // Last 20 days returns for Sharpe calc
+	DailyReturns      []float64 `json:"daily_returns"`      // Last 20 days returns for Sharpe calc
+	ConsecutiveAtMin  int       `json:"consecutive_at_min"` // Days stuck at weight minimum
 }
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system
 type DarwinianWeightManager struct {
-	weights      map[string]*DarwinianAgentWeight
-	configPath   string
-	historyPath  string
-	lookbackDays int
-	params       *RuntimeParameters
-	mu           sync.RWMutex
-	eventBus     *eventbus.ChannelEventBus
+	weights         map[string]*DarwinianAgentWeight
+	configPath      string
+	historyPath     string
+	lookbackDays    int
+	params          *RuntimeParameters
+	mu              sync.RWMutex
+	eventBus        *eventbus.ChannelEventBus
+	maturityTracker *domain.MaturityTracker
 }
 
 // NewDarwinianWeightManager creates a new Darwinian weight manager
@@ -217,6 +219,14 @@ func (m *DarwinianWeightManager) WithEventBus(eb *eventbus.ChannelEventBus) *Dar
 	return m
 }
 
+// WithMaturityTracker attaches a maturity tracker for burn-in gating.
+func (m *DarwinianWeightManager) WithMaturityTracker(mt *domain.MaturityTracker) *DarwinianWeightManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maturityTracker = mt
+	return m
+}
+
 // InitializeFromRegistry initializes weights from agent registry
 func (m *DarwinianWeightManager) InitializeFromRegistry(registry domain.AgentRegistry) {
 	m.mu.Lock()
@@ -226,9 +236,8 @@ func (m *DarwinianWeightManager) InitializeFromRegistry(registry domain.AgentReg
 		if !agent.Enabled {
 			continue
 		}
-		// Only initialize for Sector, Style, and Superinvestor layers
-		if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle {
-			// Will add LayerSuperinvestor later
+		// Initialize for Sector, Style, and Superinvestor layers
+		if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle && agent.Layer != domain.LayerSuperinvestor {
 			continue
 		}
 
@@ -319,12 +328,13 @@ func (m *DarwinianWeightManager) updateRollingMetrics(w *DarwinianAgentWeight) {
 	for _, r := range recentReturns {
 		variance += (r - mean) * (r - mean)
 	}
-	w.RollingVolatility = math.Sqrt(variance / float64(len(recentReturns)))
+	w.RollingVolatility = math.Sqrt(variance / float64(len(recentReturns)-1))
 }
 
 // calculateSharpe calculates Sharpe ratio for a series of returns.
-// Returns 0 if the series has insufficient data, near-zero variance (IEEE 754
-// precision edge case), or negative mean (upside-down risk profile).
+// Returns 0 if the series has insufficient data or near-zero variance (IEEE 754
+// precision edge case). Negative Sharpe is valid and indicates below-risk-free-rate
+// returns.
 func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 	if len(returns) < m.params.Darwinian.SharpeMinSampleSize {
 		return 0.0
@@ -337,11 +347,6 @@ func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 	}
 	mean := sum / float64(len(returns))
 
-	// Guard: negative mean means upside-down risk profile, not a good signal
-	if mean <= 0 {
-		return 0.0
-	}
-
 	// Calculate standard deviation
 	var variance float64
 	for _, r := range returns {
@@ -352,8 +357,8 @@ func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 
 	// Guard: near-zero stdDev catches IEEE 754 precision edge case where
 	// identical values produce non-zero variance (e.g. all 0.02 returns).
-	// Use relative threshold: stdDev/mean < 0.001 means effectively zero variance.
-	if stdDev == 0 || stdDev/mean < m.params.Darwinian.StdDevMeanRatioThreshold {
+	// Use relative threshold: |stdDev/mean| < 0.001 means effectively zero variance.
+	if stdDev == 0 || (mean != 0 && math.Abs(stdDev/mean) < m.params.Darwinian.StdDevMeanRatioThreshold) {
 		return 0.0
 	}
 
@@ -371,18 +376,52 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 	adjustments := make(map[string]float64)
 	var clampingEvents []ClampingEvent
 
+	burnIn := m.maturityTracker != nil && m.maturityTracker.Current() == domain.MaturityBurnIn
+
 	// Check cooldown and collect eligible agents
 	now := time.Now()
 	eligible := make([]*DarwinianAgentWeight, 0)
+	cooldown := m.params.Darwinian.DailyAdjustmentCooldown
+	if burnIn {
+		cooldown = cooldown * 2 // Double cooldown during burn-in
+	}
 
 	for _, w := range m.weights {
-		if now.Sub(w.LastAdjustedAt) >= m.params.Darwinian.DailyAdjustmentCooldown {
+		if now.Sub(w.LastAdjustedAt) >= cooldown {
 			eligible = append(eligible, w)
 		}
 	}
 
 	if len(eligible) < 2 {
 		return adjustments, clampingEvents
+	}
+
+	if burnIn {
+		logging.Info("darwinian_weights", "burn_in_conservative",
+			"days_until_calibrating", m.maturityTracker.DaysUntil(domain.MaturityCalibrating),
+			"eligible_agents", len(eligible))
+	}
+
+	// Auto-reset stuck agents: agents at minimum weight for consecutive cycles
+	// get a fresh start. This prevents agents from being permanently trapped at
+	// the floor when market regimes shift and their strategy becomes relevant again.
+	const autoResetThreshold = 5
+	for _, w := range m.weights {
+		if math.Abs(w.Weight-m.params.Darwinian.WeightMin) < 0.001 {
+			w.ConsecutiveAtMin++
+			if w.ConsecutiveAtMin >= autoResetThreshold && w.TotalSignals > 10 {
+				w.Weight = m.params.Darwinian.WeightNeutral
+				w.RollingSharpe = 0
+				w.DailyReturns = w.DailyReturns[:0]
+				w.ConsecutiveAtMin = 0
+				w.LastAdjustedAt = now
+				logging.Info("darwinian_weights", "auto_reset_stuck_agent",
+					logging.AgentID(w.AgentID),
+					logging.FFloat64("reset_to", m.params.Darwinian.WeightNeutral))
+			}
+		} else {
+			w.ConsecutiveAtMin = 0
+		}
 	}
 
 	// Calculate performance metrics for all eligible agents
@@ -405,15 +444,16 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		w := eligible[i]
 		oldWeight := w.Weight
 
-		// Normalize Sharpe to [0,1] before using in bonus.
-		// Using sigmoid-like: sharpe/(sharpe+2.0) ensures:
-		//   Sharpe 0 → 0 (no bonus)
-		//   Sharpe 2 → ~0.5 (moderate bonus)
-		//   Sharpe 4+ → →1.0 (capped bonus)
-		// This prevents overflow from IEEE 754 edge cases in calculateSharpe.
-		denom := m.params.Darwinian.SharpeNormalizeDenom
-		normalizedSharpe := w.RollingSharpe / (w.RollingSharpe + denom)
-		performanceBonus := 1.0 + normalizedSharpe*m.params.Darwinian.MaxPerformanceBonusPct
+		// During burn-in, disable performance bonus (Sharpe is unstable).
+		// Use a conservative multiplier to allow slow evolution.
+		var performanceBonus float64
+		if burnIn {
+			performanceBonus = 1.0 // No bonus during burn-in
+		} else {
+			denom := m.params.Darwinian.SharpeNormalizeDenom
+			normalizedSharpe := w.RollingSharpe / (w.RollingSharpe + denom)
+			performanceBonus = 1.0 + normalizedSharpe*m.params.Darwinian.MaxPerformanceBonusPct
+		}
 
 		volatilityPenalty := 1.0
 		if w.RollingVolatility > m.params.Darwinian.VolatilityPenaltyThreshold {
@@ -421,6 +461,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		}
 
 		multiplier := m.params.Darwinian.TopQuartileMultiplier * performanceBonus * volatilityPenalty
+		if burnIn {
+			multiplier = math.Sqrt(multiplier) // Reduce adjustment magnitude by ~50%
+		}
 		clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
 		w.Weight = clamped
 		if event != nil {
@@ -437,14 +480,19 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		oldWeight := w.Weight
 
 		// Slight adjustment based on hit rate
+		var multiplier float64
 		if w.HitRate > m.params.Darwinian.HitRateHighThreshold {
-			clamped, event := m.constrainWeight(w.AgentID, oldWeight*m.params.Darwinian.MiddleTierBoostMultiplier)
-			w.Weight = clamped
-			if event != nil {
-				clampingEvents = append(clampingEvents, *event)
-			}
+			multiplier = m.params.Darwinian.MiddleTierBoostMultiplier
 		} else if w.HitRate < m.params.Darwinian.HitRateLowThreshold {
-			clamped, event := m.constrainWeight(w.AgentID, oldWeight*m.params.Darwinian.MiddleTierCutMultiplier)
+			multiplier = m.params.Darwinian.MiddleTierCutMultiplier
+		} else {
+			multiplier = 1.0
+		}
+		if burnIn {
+			multiplier = math.Sqrt(multiplier)
+		}
+		if multiplier != 1.0 {
+			clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
 			w.Weight = clamped
 			if event != nil {
 				clampingEvents = append(clampingEvents, *event)
@@ -467,6 +515,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		}
 
 		multiplier := m.params.Darwinian.BottomQuartileMultiplier * riskMultiplier
+		if burnIn {
+			multiplier = math.Sqrt(multiplier)
+		}
 		clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
 		w.Weight = clamped
 		if event != nil {

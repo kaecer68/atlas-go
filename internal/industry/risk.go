@@ -56,33 +56,25 @@ type RiskEvent struct {
 	RecommendedAction string    `json:"recommended_action,omitempty"`
 }
 
+// AsymmetricRiskConfig is a type alias for backward compatibility with tests.
+type AsymmetricRiskConfig = config.AsymmetricRiskConfig
+
 // RiskMonitor monitors industry-specific risks.
 type RiskMonitor struct {
-	mu               sync.RWMutex
-	customerData     map[string][]CustomerConcentration // symbol -> customers
-	newsSources      []NewsSource
-	asymmetricConfig AsymmetricRiskConfig
-}
-
-// AsymmetricRiskConfig configures asymmetric risk detection.
-type AsymmetricRiskConfig struct {
-	BadNewsThreshold      float64 `json:"bad_news_threshold"`      // Price drop threshold
-	GoodNewsThreshold     float64 `json:"good_news_threshold"`     // Price rise threshold
-	ReactionTimeMinutes   int     `json:"reaction_time_minutes"`   // Time to react
-	VolumeSpikeMultiplier float64 `json:"volume_spike_multiplier"` // Volume increase threshold
+	mu                 sync.RWMutex
+	customerData       map[string][]CustomerConcentration // symbol -> customers
+	newsSources        []NewsSource
+	asymmetricConfig   config.AsymmetricRiskConfig
+	classificationTree *ClassificationTree
 }
 
 // NewRiskMonitor creates a new risk monitor with default customer concentration data loaded.
 func NewRiskMonitor() *RiskMonitor {
 	rm := &RiskMonitor{
-		customerData: make(map[string][]CustomerConcentration),
-		newsSources:  DefaultNewsSources(),
-		asymmetricConfig: AsymmetricRiskConfig{
-			BadNewsThreshold:      -0.03, // 3% drop
-			GoodNewsThreshold:     0.05,  // 5% rise
-			ReactionTimeMinutes:   30,    // 30 minutes
-			VolumeSpikeMultiplier: 2.0,   // 2x average volume
-		},
+		customerData:       make(map[string][]CustomerConcentration),
+		newsSources:        DefaultNewsSources(),
+		asymmetricConfig:   config.GetParametersConfig().Industry.AsymmetricRisk.Value,
+		classificationTree: DefaultClassification(),
 	}
 
 	// Load default customer concentration data during initialization
@@ -177,11 +169,14 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 		severity = RiskLevelMedium
 	}
 
+	// Resolve industry from classification tree
+	industryID := rm.industryForSymbol(symbol)
+
 	return &RiskEvent{
 		ID:                fmt.Sprintf("risk-customer-%s-%d", symbol, time.Now().Unix()),
 		Type:              "customer_concentration",
 		Severity:          severity,
-		IndustryID:        "semiconductor", // Default, should be parameterized
+		IndustryID:        industryID,
 		Symbol:            symbol,
 		Description:       fmt.Sprintf("Top customer %s accounts for %.0f%% of revenue; US exposure %.0f%%", topCustomerName, topCustomerShare, usExposure),
 		ImpactEstimate:    -riskScore * params.ImpactMultiplier.Value,
@@ -190,6 +185,31 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 		Source:            "internal_analysis",
 		RecommendedAction: rm.getCustomerConcentrationAction(riskScore),
 	}
+}
+
+// industryForSymbol resolves the L1 industry ID for a symbol by scanning the classification tree.
+func (rm *RiskMonitor) industryForSymbol(symbol string) string {
+	if rm.classificationTree == nil {
+		return ""
+	}
+	for _, seg := range rm.classificationTree.GetAllSegments() {
+		for _, s := range seg.RepresentativeStocks {
+			if s == symbol {
+				// Return the top-level parent
+				if seg.Level == Level1 {
+					return seg.ID
+				}
+				if seg.ParentID != "" {
+					if parent, ok := rm.classificationTree.GetSegment(seg.ParentID); ok && parent.Level == Level1 {
+						return parent.ID
+					}
+					return seg.ParentID
+				}
+				return seg.ID
+			}
+		}
+	}
+	return ""
 }
 
 func (rm *RiskMonitor) getCustomerConcentrationAction(riskScore float64) string {
@@ -256,12 +276,27 @@ func (rm *RiskMonitor) CalculateNewsLatencyRisk(symbol string, industryID string
 	}
 
 	// Risk increases with latency gap
-	riskScore := math.Min(1.0, latencyGap/24.0) // Max risk at 24h gap
+	divisor := 24.0
+	criticalMin := 0.8
+	highMin := 0.5
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		nlr := cfg.Industry.NewsLatencyRisk.Value
+		if d := nlr.MaxLatencyHours; d > 0 {
+			divisor = d
+		}
+		if cm := nlr.SeverityCriticalMin; cm > 0 {
+			criticalMin = cm
+		}
+		if hm := nlr.SeverityHighMin; hm > 0 {
+			highMin = hm
+		}
+	}
+	riskScore := math.Min(1.0, latencyGap/divisor)
 
 	severity := RiskLevelLow
-	if riskScore > 0.8 {
+	if riskScore > criticalMin {
 		severity = RiskLevelHigh
-	} else if riskScore > 0.5 {
+	} else if riskScore > highMin {
 		severity = RiskLevelMedium
 	}
 
@@ -272,7 +307,7 @@ func (rm *RiskMonitor) CalculateNewsLatencyRisk(symbol string, industryID string
 		IndustryID:        industryID,
 		Symbol:            symbol,
 		Description:       fmt.Sprintf("台灣新聞延遲 %.0f 小時，美國Tier 1消息先到", latencyGap),
-		ImpactEstimate:    -riskScore * 0.05,
+		ImpactEstimate:    -riskScore * config.GetParametersConfig().Industry.NewsImpactMultiplier.Value,
 		Confidence:        0.80,
 		DetectedAt:        time.Now(),
 		Source:            "news_source_analysis",
@@ -295,11 +330,12 @@ func (rm *RiskMonitor) CalculateAsymmetricRisk(symbol string, priceChangePct flo
 	// Calculate severity based on price drop
 	severity := RiskLevelLow
 	dropPct := math.Abs(priceChangePct)
-	if dropPct > 0.10 {
+	params := config.GetParametersConfig().Industry
+	if dropPct > params.AsymmetricDropCritical.Value {
 		severity = RiskLevelCritical
-	} else if dropPct > 0.07 {
+	} else if dropPct > params.AsymmetricDropHigh.Value {
 		severity = RiskLevelHigh
-	} else if dropPct > 0.05 {
+	} else if dropPct > params.AsymmetricDropMedium.Value {
 		severity = RiskLevelMedium
 	}
 
@@ -319,19 +355,20 @@ func (rm *RiskMonitor) CalculateAsymmetricRisk(symbol string, priceChangePct flo
 }
 
 func (rm *RiskMonitor) getAsymmetricAction(dropPct float64) string {
+	params := config.GetParametersConfig().Industry
 	switch {
-	case dropPct > 0.10:
+	case dropPct > params.AsymmetricDropCritical.Value:
 		return "立即停損，評估基本面是否惡化"
-	case dropPct > 0.07:
+	case dropPct > params.AsymmetricDropHigh.Value:
 		return "減碼避險，等待市場穩定"
-	case dropPct > 0.05:
+	case dropPct > params.AsymmetricDropMedium.Value:
 		return "觀察支撐，設定緊密停損"
 	default:
 		return "正常監控"
 	}
 }
 
-// GetAllRisks returns all risks for a symbol.
+// GetAllRisks returns all risks for a single symbol.
 func (rm *RiskMonitor) GetAllRisks(symbol string, industryID string, priceChangePct float64, volumeMultiplier float64) []RiskEvent {
 	var risks []RiskEvent
 
@@ -348,6 +385,44 @@ func (rm *RiskMonitor) GetAllRisks(symbol string, industryID string, priceChange
 	}
 
 	return risks
+}
+
+// GetAllRisksForIndustry aggregates risks across all representative stocks in an industry.
+// If industryID is "ALL", aggregates across all L1 industries.
+func (rm *RiskMonitor) GetAllRisksForIndustry(industryID string, priceChangePct float64, volumeMultiplier float64) []RiskEvent {
+	var symbols []string
+	if industryID == "ALL" {
+		if rm.classificationTree != nil {
+			for _, seg := range rm.classificationTree.GetLevel1() {
+				symbols = append(symbols, seg.RepresentativeStocks...)
+			}
+		}
+	} else {
+		if rm.classificationTree != nil {
+			if seg, ok := rm.classificationTree.GetSegment(industryID); ok {
+				symbols = append(symbols, seg.RepresentativeStocks...)
+				for _, child := range rm.classificationTree.GetChildren(industryID) {
+					symbols = append(symbols, child.RepresentativeStocks...)
+				}
+			}
+		}
+	}
+
+	var allRisks []RiskEvent
+	seen := make(map[string]bool)
+	for _, symbol := range symbols {
+		if seen[symbol] {
+			continue
+		}
+		seen[symbol] = true
+		symIndustry := rm.industryForSymbol(symbol)
+		if symIndustry == "" {
+			symIndustry = industryID
+		}
+		risks := rm.GetAllRisks(symbol, symIndustry, priceChangePct, volumeMultiplier)
+		allRisks = append(allRisks, risks...)
+	}
+	return allRisks
 }
 
 // GetHighestRisk returns the highest severity risk.
@@ -403,7 +478,8 @@ func DefaultCustomerConcentrations() map[string][]CustomerConcentration {
 
 // String returns a human-readable summary of the risk event.
 func (re *RiskEvent) String() string {
-	return fmt.Sprintf("[%s] %s: %s (Impact: %.1f%%, Confidence: %.0f%%)",
+	return fmt.Sprintf(
+		"[%s] %s: %s (Impact: %.1f%%, Confidence: %.0f%%)",
 		re.Severity,
 		re.Type,
 		re.Description,

@@ -56,7 +56,7 @@ type StrategyEvolver struct {
 
 // NewStrategyEvolver creates a new strategy evolver
 func NewStrategyEvolver() *StrategyEvolver {
-	return NewStrategyEvolverWithConfig(config.GetEngineConfig().StrategyEvolution)
+	return NewStrategyEvolverWithConfig(config.GetParametersConfig().Engine.StrategyEvolution.ToConfig())
 }
 
 // NewStrategyEvolverWithConfig creates a new strategy evolver with custom config

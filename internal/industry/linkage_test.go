@@ -2,6 +2,7 @@ package industry
 
 import (
 	"math"
+	"os"
 	"slices"
 	"testing"
 )
@@ -498,7 +499,69 @@ func TestShockPropagation_CyclePlusNarrativeCombo(t *testing.T) {
 	}
 }
 
-// mockCycleProvider for testing
+// TestNewLinkageAnalyzer_IncludesLeoAndMining verifies that leo_satellite (低軌衛星)
+// and mining (礦業/貴金屬) get non-zero linkage scores when loaded from the JSON config.
+func TestNewLinkageAnalyzer_IncludesLeoAndMining(t *testing.T) {
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir("../.."); err != nil {
+		t.Skipf("cannot chdir to project root: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	la := NewLinkageAnalyzer()
+
+	leoScore := la.CalculateLinkageScore("leo_satellite")
+	if leoScore == nil {
+		t.Fatal("leo_satellite linkage score is nil")
+	}
+	if leoScore.SystemicImportance == 0 {
+		t.Errorf("leo_satellite systemic_importance = 0, want > 0")
+	}
+	if leoScore.ShockPropagationSpeed == 0 {
+		t.Errorf("leo_satellite shock_propagation_speed = 0, want > 0")
+	}
+	if leoScore.UpstreamCount == 0 && leoScore.DownstreamCount == 0 {
+		t.Error("leo_satellite has no upstream or downstream connections")
+	}
+	t.Logf("leo_satellite: systemic=%.4f propagation=%.4f up=%d down=%d avg_corr=%.4f",
+		leoScore.SystemicImportance, leoScore.ShockPropagationSpeed,
+		leoScore.UpstreamCount, leoScore.DownstreamCount, leoScore.AvgCorrelation)
+
+	miningScore := la.CalculateLinkageScore("mining")
+	if miningScore == nil {
+		t.Fatal("mining linkage score is nil")
+	}
+	if miningScore.SystemicImportance == 0 {
+		t.Errorf("mining systemic_importance = 0, want > 0")
+	}
+	if miningScore.ShockPropagationSpeed == 0 {
+		t.Errorf("mining shock_propagation_speed = 0, want > 0")
+	}
+	t.Logf("mining: systemic=%.4f propagation=%.4f up=%d down=%d avg_corr=%.4f",
+		miningScore.SystemicImportance, miningScore.ShockPropagationSpeed,
+		miningScore.UpstreamCount, miningScore.DownstreamCount, miningScore.AvgCorrelation)
+}
+
+// TestNewLinkageAnalyzer_FallbackWhenConfigMissing verifies graceful fallback to
+// DefaultSupplyChainGraph when the JSON config file is not found.
+func TestNewLinkageAnalyzer_FallbackWhenConfigMissing(t *testing.T) {
+	la := NewLinkageAnalyzer()
+	if la == nil {
+		t.Fatal("NewLinkageAnalyzer returned nil")
+	}
+
+	score := la.CalculateLinkageScore("semiconductor")
+	if score == nil {
+		t.Fatal("semiconductor linkage score is nil")
+	}
+	if score.SystemicImportance == 0 {
+		t.Error("semiconductor systemic_importance = 0 from defaults")
+	}
+}
+
 type mockCycleProvider struct {
 	phases map[string]CyclePhase
 }

@@ -51,3 +51,15 @@
 此閘門依賴實驗執行時產生的 `ParameterSnapshotID`。`computeWeightDrift()` 比較快照中的 `FactorWeight.BaseWeights` 與當前 `ParametersConfig`。
 
 **所有實驗 brief 的 `acceptance_gates` 均已包含此閘門。**
+
+## preserve_downside_protection Gate — Sign Convention
+
+`preserve_downside_protection` 閘門使用 `candidateDD > baselineDD * ratio` 而非 `baselineDD / ratio`。
+這是刻意設計的語義：`ratio` 代表「可承受的最大回撤比例」，而非「放寬倍數」。
+
+- `ratio = 0.8` → candidateDD 必須 ≤ baseline 回撤的 80%（比 baseline 少 20%）
+- `ratio = 1.2` → candidateDD 可以到 baseline 回撤的 120%（比 baseline 多 20%，較寬鬆）
+- 若用 `baselineDD / ratio` 會反轉語義：`/ 0.8 = 1.25×`，ratio 越小反而越寬鬆（違反直覺）
+
+實作位置: `internal/experiment/judge.go:405-411`
+預設值: `DrawdownProtectionRatio = 0.8`（見 `internal/config/parameters_defaults.go:602`）

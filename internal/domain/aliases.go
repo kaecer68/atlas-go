@@ -19,8 +19,9 @@ const (
 type Side = shared.Side
 
 const (
-	SideBuy  = shared.SideBuy
-	SideSell = shared.SideSell
+	SideBuy    = shared.SideBuy
+	SideSell   = shared.SideSell
+	SideReduce = shared.SideReduce
 )
 
 type (
@@ -30,6 +31,7 @@ type (
 	FactorScores             = shared.FactorScores
 	NarrativeFactorScore     = shared.NarrativeFactorScore
 	IndustryCycleFactorScore = shared.IndustryCycleFactorScore
+	LinkageFactorScore       = shared.LinkageFactorScore
 	ConvictionStep           = shared.ConvictionStep
 	ConvictionBreakdown      = shared.ConvictionBreakdown
 	AgentLayer               = shared.AgentLayer

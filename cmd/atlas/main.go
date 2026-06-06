@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
@@ -14,8 +15,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/experiment"
+	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -47,9 +47,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
+	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/swarm"
+	"github.com/kaecer68/atlas-go/web"
 )
 
 // experimentMonitorAdapter wraps *monitoring.Monitor to match experiment.AutoExperimentMonitor interface.
@@ -77,6 +80,7 @@ type appDeps struct {
 	newDashboardAPI func(string, string, *monitoring.MetricsCollector) *monitoring.DashboardAPI
 	listenAndServe  func(*http.Server) error
 	shutdown        chan struct{}
+	dataFetcher     monitoring.DataFetcher // when non-nil, skips Gateway init and uses this fetcher
 }
 
 func defaultAppDeps() appDeps {
@@ -146,12 +150,12 @@ func publishBootstrapEvents(bus eventbus.EventBus, replayPath, baselinePath stri
 		ID:        "bootstrap-" + now.Format("150405"),
 		Type:      eventbus.EventSystemStart,
 		Timestamp: now,
-		Description: "Atlas 系統啟動完成 · replay 資料 " + replayStatus + (func() string {
+		Description: "Atlas 系統啟動完成 · replay 資料 " + replayStatus + func() string {
 			if replayDate != "" {
 				return "（" + replayDate + "）"
 			}
 			return ""
-		}()) + " · 基線策略 " + baselineStatus,
+		}() + " · 基線策略 " + baselineStatus,
 		Severity: "info",
 		Payload: map[string]any{
 			"replay_status":   replayStatus,
@@ -255,6 +259,14 @@ func run(args []string, deps appDeps) error {
 		janusEngine.EnsureAllRegimes()
 		janusEngine.Update()
 
+		// Initialize MaturityTracker for burn-in / calibrating / full-auto gating.
+		maturityTracker, _ := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
+		if maturityTracker != nil {
+			logging.Info("bootstrap", "maturity_tracker_ready",
+				"maturity", string(maturityTracker.Current()),
+				"days_since_start", maturityTracker.DaysSinceStart())
+		}
+
 		var elDetector *eventlogic.PatternDetector
 		var elCorrector *eventlogic.SelfCorrector
 		var elRulesPath string
@@ -263,23 +275,38 @@ func run(args []string, deps appDeps) error {
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
 		var gateway *apigateway.Gateway
 		var gatewayFetcher monitoring.DataFetcher
-		gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
-		if gwErr != nil {
-			log.Printf("[Gateway] initialization failed: %v", gwErr)
-		} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine); err != nil {
-			log.Printf("[Gateway] adapter registration failed: %v", err)
+		if deps.dataFetcher != nil {
+			// Test override: skip real Gateway initialization, use injected fetcher.
+			gatewayFetcher = deps.dataFetcher
+			log.Printf("[Gateway] using injected data fetcher (test mode)")
 		} else {
-			gateway = gw
-			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
-			gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, error) {
-				result, err := gateway.Fetch(ctx, channelID)
-				if err != nil {
-					return nil, err
+			gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
+			if gwErr != nil {
+				log.Printf("[Gateway] initialization failed: %v", gwErr)
+			} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine); err != nil {
+				log.Printf("[Gateway] adapter registration failed: %v", err)
+			} else {
+				gateway = gw
+				log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
+				gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, error) {
+					result, err := gateway.Fetch(ctx, channelID)
+					if err != nil {
+						return nil, err
+					}
+					return result.Data, nil
 				}
-				return result.Data, nil
+				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
-			log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 		}
+
+		// Start fubon-proxy process manager (non-fatal on failure).
+		fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
+		if err := fubonMgr.Start(context.Background()); err != nil {
+			log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
+		} else {
+			log.Printf("[FubonProxy] process manager started")
+		}
+		defer fubonMgr.Stop()
 
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
@@ -403,11 +430,11 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			cfg, err := config.ReloadEngineConfig()
-			if err != nil {
+			if err := config.ReloadParametersConfig(); err != nil {
 				http.Error(w, fmt.Sprintf("Failed to reload config: %v", err), http.StatusInternalServerError)
 				return
 			}
+			cfg := config.GetParametersConfig()
 			w.Header().Set("Content-Type", "application/json")
 			//nolint:errcheck
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
@@ -436,7 +463,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+			system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -503,6 +530,11 @@ func run(args []string, deps appDeps) error {
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
 		monitor = monitoring.NewMonitor()
 		if alertStore != nil {
 			monitor.SetAlertStore(alertStore)
@@ -525,14 +557,13 @@ func run(args []string, deps appDeps) error {
 				params.RuleEngineIntervalSec.Value)
 		}
 
-		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-			w.Header().Set("Pragma", "no-cache")
-			w.Header().Set("Expires", "0")
-			fs.ServeHTTP(w, r)
-		}))
-		mux.Handle("/static/", http.StripPrefix("/static/", fs))
+		subFS, err := fs.Sub(web.DistFS, "dist")
+		if err != nil {
+			log.Fatalf("failed to get dist sub FS: %v", err)
+		}
+		handler := staticHandler(subFS)
+		mux.Handle("/", handler)
+		mux.Handle("/static/", http.StripPrefix("/static/", handler))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
 		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.
@@ -542,6 +573,10 @@ func run(args []string, deps appDeps) error {
 		var taskMgr *apigateway.BackgroundTaskManager
 		if gateway != nil {
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
+		} else {
+			taskMgr = apigateway.NewBackgroundTaskManager(nil)
+		}
+		if gateway != nil {
 
 			// Wire failure alerts for background tasks.
 			taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
@@ -566,6 +601,54 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
 			}
 
+			// Register seasonal_calibration background task. Guard: skip silently if
+			// the calibrate-seasonal binary is not co-located with the current binary
+			// (production deploys without it stay clean; no live-trading impact).
+			exePath, exeErr := os.Executable()
+			if exeErr == nil {
+				seasonalBin := filepath.Join(filepath.Dir(exePath), "calibrate-seasonal")
+				if _, statErr := os.Stat(seasonalBin); statErr == nil {
+					_ = taskMgr.Register(&apigateway.ScheduledTask{
+						Name:     "seasonal_calibration",
+						Interval: scheduler.SeasonalCalibrationDefaults.Interval,
+						Jitter:   30 * time.Minute,
+						Enabled:  true,
+						Task:     scheduler.SeasonalCalibrationTaskFunc(seasonalBin),
+					})
+					log.Printf("[Gateway] registered seasonal_calibration background task (7d interval)")
+				} else {
+					log.Printf("[Gateway] seasonal_calibration skipped: binary not found at %s", seasonalBin)
+				}
+			} else {
+				log.Printf("[Gateway] seasonal_calibration skipped: os.Executable failed: %v", exeErr)
+			}
+
+			// Register calibration_cycle background task (rolling calibration framework).
+			// Maturity-gated: BackgroundCalibrationScheduler.RunDaily checks maturityTracker
+			// and skips gracefully in BURN_IN mode (no validation, no false signals).
+			if maturityTracker != nil {
+				calTask := narrative.NewCalibrationTask(cfg.WorkDir)
+				calScheduler := scheduler.NewBackgroundCalibrationScheduler(maturityTracker)
+				calScheduler.Register(&scheduler.CalibrationTask{
+					Name:        "narrative_weight_calibration",
+					MinMaturity: domain.MaturityCalibrating,
+					Run: func(_ context.Context) error {
+						_, err := calTask.RunCalibrationCycle()
+						return err
+					},
+				})
+				dashboard.SetCalibrationTask(calTask)
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "calibration_cycle",
+					Interval: 24 * time.Hour,
+					Jitter:   30 * time.Minute,
+					Enabled:  paramsCfg.Narrative.CalibrationEnabled.Value,
+					Task:     calScheduler.RunDaily,
+				})
+				log.Printf("[Gateway] registered calibration_cycle background task (24h interval, maturity-gated)")
+			} else {
+				log.Printf("[Gateway] calibration_cycle skipped: maturity tracker is nil")
+			}
 			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
 			if monitor != nil {
 				healthChecker := monitoring.NewHealthChecker(monitor, nil)
@@ -872,7 +955,7 @@ func run(args []string, deps appDeps) error {
 			if svc := dashboard.GetIndustryService(); svc != nil {
 				var finmindClient *marketdata.FinMindClient
 				if cfg.FinMindAPIKey != "" {
-					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+					finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 				}
 				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
@@ -886,6 +969,22 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
+
+				calendarProvider := marketdata.NewTWSECalendarProvider()
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_calendar_refresh",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						bgCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+						defer cancel()
+						svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
+						svc.EventCalendar.RefreshEvents(time.Now())
+						logging.Info("calendar", "auto_calendar_refresh completed")
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered auto_calendar_refresh background task (24h interval)")
 			}
 
 			{
@@ -924,11 +1023,53 @@ func run(args []string, deps appDeps) error {
 						_, _, err := dashRef.IngestAndUpdateMacro(ingestCtx)
 						if err != nil {
 							logging.Warn("main", "macro_ingest_failed", "err", err)
+							return err
 						}
 						return nil
 					},
 				})
 				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
+			}
+
+			// Silicon cycle indicator update (10m, offset from macro_ingest 5m
+			// to ensure fresh TSMC/SOX data). Uses the macro data pipeline already
+			// maintained by macro_ingest — no additional external API calls.
+			if industrySvc := dashboard.GetIndustryService(); industrySvc != nil && industrySvc.SiliconTracker != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "silicon_cycle_update",
+					Interval: 10 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return industrySvc.UpdateSiliconIndicators(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered silicon_cycle_update background task (10m interval)")
+			}
+
+			// Narrative model + template hit-rate self-calibration (24h).
+			{
+				dashRef := dashboard
+				replayCSV := cfg.ReplayDataPath
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "narrative_calibrate",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						report, err := dashRef.CalibrateNarrative(replayCSV)
+						if err != nil {
+							logging.Warn("main", "narrative_calibrate_failed", "err", err)
+							return nil
+						}
+						logging.Info(
+							"main", "narrative_calibrate_ok",
+							"verdict", report.Verdict,
+							"models_updated", report.ModelsUpdated,
+							"templates_updated", report.TemplatesUpdated,
+						)
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
 			}
 
 			if repo != nil {
@@ -973,7 +1114,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1015,7 +1156,27 @@ func run(args []string, deps appDeps) error {
 						return fmt.Errorf("record session: %w", err)
 					}
 
-					logging.Info("simulation", "completed",
+					// Record cycle calibration outcome for layer accuracy tracking.
+					// Uses the composite card sentiment signals against the actual
+					// portfolio return to measure which layers were directionally correct.
+					if dashboard != nil && dashboard.GetIndustryService() != nil {
+						card, cardErr := dashboard.GetIndustryService().BuildCycleStatusCard(nextClose)
+						if cardErr == nil && card != nil {
+							signals := map[string]float64{
+								"silicon":        card.SiliconScore,
+								"business_cycle": card.CycleConfidence,
+								"seasonal":       card.SeasonalAdjustment,
+								"events":         card.EventSentiment,
+								"supply_chain":   card.SupplyChainSignal,
+							}
+							dashboard.RecordCycleCalibrationOutcome(
+								system.Session().ID, nextClose, signals, result.BeforeTaxPnL,
+							)
+						}
+					}
+
+					logging.Info(
+						"simulation", "completed",
 						"session", system.Session().ID,
 						"regime", result.Regime,
 						"orders", len(result.Orders),
@@ -1038,13 +1199,40 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_daily_simulation background task (24h interval)")
 
+			// Register etf_nav_refresh — verify ETF data freshness in replay after daily sync.
+			// ETF NAV calibration from replay data happens automatically at each system startup
+			// (see orchestrator/system.go). This task ensures replay data stays fresh and alerts
+			// if ETF symbols are missing from the dataset.
+			// Data source priority: TWSE OpenAPI (primary) → Fubon → Fugle → FinMind.
+			// Compliance: CONSTITUTION.md Article 4 — BackgroundTaskManager registration.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "etf_nav_refresh",
+				ChannelID: "twse_replay",
+				Interval:  24 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					_, err := gateway.Fetch(ctx, "twse_replay")
+					if err != nil {
+						monitor.Alert(monitoring.AlertLevelWarning, "etf_nav",
+							fmt.Sprintf("TWSE replay data fetch failed: %v", err),
+							map[string]any{"channel": "twse_replay"})
+						return fmt.Errorf("etf_nav_refresh fetch: %w", err)
+					}
+					logging.Info("etf_nav_refresh", "completed",
+						"etf_symbols", len(orchestrator.DefaultSymbols()),
+						"hint", "ETF NAV is calibrated at next system startup from replay close prices")
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered etf_nav_refresh background task (24h interval)")
+
 			// Register stress_test_daily — run multi-day stress scenarios after market close (P3-5).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "stress_test_daily",
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for stress test: %w", err)
 					}
@@ -1082,7 +1270,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1147,8 +1335,30 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
 			}
 
+			{
+				mlScheduler := scheduler.NewMLRetrainScheduler(cfg.ReplayDataPath)
+				mlScheduler.SetWorkDir(cfg.WorkDir)
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "ml_retrain",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return mlScheduler.RetrainAll(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
+			}
+
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+			if maturityTracker != nil {
+				riskGate.WithMaturityTracker(maturityTracker)
+			}
 			dashboard.SetRiskGate(riskGate)
+
+			if params := config.GetParametersConfig(); params != nil && params.RSITw.LastCalibratedScore.Value > 0 {
+				riskGate.SetPreTradeRSITwScore(params.RSITw.LastCalibratedScore.Value)
+				log.Printf("[RiskGate] restored RSI-tw calibration score: %.4f", params.RSITw.LastCalibratedScore.Value)
+			}
 
 			elRulesPath = filepath.Join(cfg.WorkDir, "data/state/eventlogic", "rules.json")
 			elHistoryRecorder = eventlogic.NewHistoryRecorder(filepath.Join(cfg.WorkDir, "data/state/eventlogic", "history.jsonl"))
@@ -1170,15 +1380,25 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[EventLogic] subscribed to EventSimulationComplete")
 
 				dashEventBus.Subscribe(eventbus.EventRegimeChange, func(ctx context.Context, ev eventbus.BusEvent) error {
-					logging.Info("monitor", "regime_change_event", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					if p, ok := ev.Payload.(eventbus.RegimeEventPayload); ok {
+						logging.Info("monitor", "regime_change",
+							"old", string(p.OldRegime), "new", string(p.NewRegime),
+							"confidence", fmt.Sprintf("%.2f", p.Confidence), "by", p.DeterminedBy)
+					} else {
+						logging.Info("monitor", "regime_change_event", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					}
 					return nil
 				})
 				dashEventBus.Subscribe(eventbus.EventSharpeDegradation, func(ctx context.Context, ev eventbus.BusEvent) error {
-					logging.Warn("monitor", "sharpe_degradation", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					logging.Warn("monitor", "sharpe_degradation",
+						"id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload),
+						"description", ev.Description)
 					return nil
 				})
 				dashEventBus.Subscribe(eventbus.EventDrawdownBreach, func(ctx context.Context, ev eventbus.BusEvent) error {
-					logging.Error("monitor", "drawdown_breach", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					logging.Error("monitor", "drawdown_breach",
+						"id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload),
+						"description", ev.Description)
 					return nil
 				})
 				log.Printf("[Monitor] subscribed to regime/sharpe/drawdown events")
@@ -1230,6 +1450,39 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered risk_gate_calibrate background task (24h interval)")
+
+			if svc := dashboard.GetIndustryService(); svc != nil && svc.CycleCalibration != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "cycle_calibrate",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						defaultCfg := industry.CardConfig{
+							LayerWeights: map[string]float64{
+								"silicon":        0.25,
+								"business_cycle": 0.20,
+								"seasonal":       0.15,
+								"events":         0.15,
+								"supply_chain":   0.10,
+							},
+						}
+						calibrated := svc.CycleCalibration.CalibrateWeights(defaultCfg.LayerWeights)
+						metrics := svc.CycleCalibration.GetMetrics()
+
+						logging.Info("cycle_calibrate", "completed",
+							"outcomes", svc.CycleCalibration.GetOutcomeCount(),
+							"layers", len(calibrated))
+						for layer, m := range metrics {
+							logging.Info("cycle_calibrate", "layer_accuracy",
+								"layer", layer,
+								"accuracy", m.Accuracy,
+								"signals", m.TotalSignals)
+						}
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered cycle_calibrate background task (24h interval)")
+			}
 
 			if janusEngine != nil {
 				var prevRegime string
@@ -1304,6 +1557,224 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered factor_weight_calibrate background task (24h interval)")
 
+			// Register conviction_calibrate — optimizes factor-driven conviction
+			// thresholds and deltas (FactorConvictionParams) using historical
+			// recommendation outcomes with forward returns.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "conviction_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					return orchestrator.RunConvictionCalibration(
+						cfg.WorkDir,
+						orchestrator.SemiconductorExecutor{},
+						orchestrator.AISupplyChainExecutor{},
+						orchestrator.LEOSatelliteExecutor{},
+						orchestrator.ETFRotationExecutor{},
+						orchestrator.FinancialsExecutor{},
+						orchestrator.ShippingExecutor{},
+						orchestrator.ValueYieldExecutor{},
+						orchestrator.EarningsQualityExecutor{},
+						orchestrator.TechnicalBreakoutExecutor{},
+						orchestrator.GrowthMomentumExecutor{},
+					)
+				},
+			})
+			log.Printf("[Gateway] registered conviction_calibrate background task (24h interval)")
+
+			// Register macro_risk_calibrate — calibrates Engine MacroRisk thresholds
+			// (carry_trade, VIX, US10Y, oil, gold, DXY, TWD, outflow probabilities).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "macro_risk_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cal := config.NewMacroRiskCalibrator()
+					evaluator := cal.BuildEvaluator()
+					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("macro_risk_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("macro_risk_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("macro_risk_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered macro_risk_calibrate background task (24h interval)")
+
+			// Register structural_trend_calibrate — calibrates Engine StructuralTrend
+			// thresholds (trend strength, confidence, override, AI/capex/utilization).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "structural_trend_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cal := &config.StructuralTrendCalibrator{}
+					evaluator := cal.BuildEvaluator()
+					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("structural_trend_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("structural_trend_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("structural_trend_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered structural_trend_calibrate background task (24h interval)")
+
+			// Register narrative_calibrate — calibrates Narrative event detection
+			// thresholds (AI revenue, CoWoS, capex, US10Y, DXY, GPR, oil, JPY, VIX).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "narrative_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					nc := &config.NarrativeCalibrator{}
+					evaluator := config.NewNarrativeEvaluator()
+					result, err := config.CalibrateParameters(ctx, nc, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("narrative_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("narrative_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("narrative_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "seasonal_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-seasonal",
+						"--replay", "data/replay/finmind_2020_2024.jsonl",
+						"--start", "2020", "--end", "2024", "--update", "--update-threshold", "1")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						logging.Error("seasonal_calibrate", "failed", "err", err.Error(), "output", string(output))
+						return err
+					}
+					logging.Info("seasonal_calibrate", "completed", "output", string(output))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered seasonal_calibrate background task (24h interval)")
+
+			// Register linkage_calibrate — calibrates RecessionShockAmplifier
+			// for shock propagation amplification during recession regimes.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "linkage_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					calibrator := &config.LinkageAmplifierCalibrator{}
+					evaluator := func(cfg *config.ParametersConfig) (float64, error) {
+						// TODO: Implement proper recession shock accuracy scoring
+						// using historical session data. For now, return a
+						// neutral score so the calibration infrastructure runs
+						// end-to-end without changing the amplifier value.
+						return 0.0, nil
+					}
+					result, err := config.CalibrateParameters(ctx, calibrator, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("linkage_calibrate", "calibration_failed", "err", err.Error())
+						return err
+					}
+					logging.Info("linkage_calibrate", "completed",
+						"baseline", fmt.Sprintf("%.3f", result.BaselineScore),
+						"optimized", fmt.Sprintf("%.3f", result.OptimizedScore))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered linkage_calibrate background task (24h interval)")
+
+			// Register factor_weight_strategy_calibrate — calibrates FactorWeight
+			// strategy deltas (conservative/aggressive/risk-on/risk-off adjustments).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "factor_weight_strategy_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					result, err := config.CalibrateStrategyDeltas(ctx, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("fw_strategy_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("fw_strategy_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("fw_strategy_calibrate", "delta_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered factor_weight_strategy_calibrate background task (24h interval)")
+
+			// Register auto_calibrate — runs Darwinian parameter calibration from
+			// historical session outcome data (7-day interval).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_calibrate",
+				Interval: 7 * 24 * time.Hour,
+				Jitter:   4 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-parameters",
+						"--module=darwinian")
+					cmd.Dir = cfg.WorkDir
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						logging.Warn("auto_calibrate", "failed",
+							logging.Err(err),
+							logging.FStr("output", string(out)))
+						return nil
+					}
+					logging.Info("auto_calibrate", "completed")
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_calibrate background task (7-day interval)")
+
 			// Register auto_swarm_simulation — periodic swarm simulation
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
@@ -1312,7 +1783,7 @@ func run(args []string, deps appDeps) error {
 				Jitter:   3 * time.Minute,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for swarm: %w", err)
 					}
@@ -1345,6 +1816,25 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
+
+			// RSI-tw autonomous calibration — runs every 24h at market close
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "rsi_tw_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := retail.CalibrateRSITw(cfg.WorkDir)
+					if err != nil {
+						log.Printf("[RSITw] calibration failed: %v", err)
+						return err
+					}
+					riskGate.SetPreTradeRSITwScore(report.Score)
+					log.Printf("[RSITw] calibration complete: %s (score=%.4f, samples=%d, changes=%d)",
+						report.Verdict, report.Score, report.SampleCount, len(report.Changes))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered rsi_tw_calibrate background task (24h interval)")
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
@@ -1383,7 +1873,7 @@ func run(args []string, deps appDeps) error {
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			if r.URL.Path == "/metrics" || strings.HasPrefix(r.URL.Path, "/static/") {
+			if r.URL.Path == "/metrics" || r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/static/") {
 				mux.ServeHTTP(w, r)
 				return
 			}
@@ -1427,10 +1917,34 @@ func run(args []string, deps appDeps) error {
 	if *liveMode {
 		return runLiveTrading(cfg, deps, collector, repo)
 	}
-	return runSimulation(cfg, false, collector, repo)
+	return runSimulation(cfg, false, collector, repo, deps.shutdown)
 }
 
-func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+// staticHandler returns an http.Handler that serves static assets from the given fs.FS.
+// It applies Cache-Control headers (immutable for hashed assets, no-cache for others)
+// and implements SPA fallback (serves index.html for paths not matching any file).
+func staticHandler(assets fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(assets))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		cleanPath := filepath.Clean(r.URL.Path)
+		// Serve hashed assets with long-lived cache
+		if strings.Contains(cleanPath, "-") && (strings.HasSuffix(cleanPath, ".js") || strings.HasSuffix(cleanPath, ".css")) {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.Header().Del("Pragma")
+			w.Header().Del("Expires")
+		}
+		// SPA fallback: serve index.html for paths that don't match static files
+		if _, err := fs.Stat(assets, strings.TrimPrefix(cleanPath, "/")); err != nil {
+			r.URL.Path = "/"
+		}
+		fileServer.ServeHTTP(w, r)
+	})
+}
+
+func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, shutdown <-chan struct{}) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -1454,86 +1968,100 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 	}
 	system.WithCapitalManagement(controller, allocator, workflow)
 
-	result, err := system.RunDailySimulation(time.Now())
-	if err != nil {
-		return fmt.Errorf("simulation failed: %w", err)
-	}
+	// Run simulation in a goroutine so we can listen for shutdown signals.
+	done := make(chan error, 1)
+	go func() {
+		result, simErr := system.RunDailySimulation(time.Now())
+		if simErr != nil {
+			done <- fmt.Errorf("simulation failed: %w", simErr)
+			return
+		}
 
-	registry := system.Registry()
-	session := system.Session()
+		registry := system.Registry()
+		session := system.Session()
 
-	fmt.Printf("atlas-go daily simulation\n")
-	fmt.Printf("provider: %s\n", cfg.MarketDataProvider)
-	fmt.Printf("broker_mode: %s\n", cfg.BrokerMode)
-	fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
-	fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
-	fmt.Printf("broker_key_id: %s\n", cfg.BrokerKeyID)
-	fmt.Printf("broker_retry_status_codes: %v\n", cfg.BrokerHTTPRetryStatusCodes)
-	fmt.Printf("broker_max_clock_skew_sec: %d\n", cfg.BrokerMaxClockSkewS)
-	fmt.Printf("broker_nonce_ttl_sec: %d\n", cfg.BrokerNonceTTLS)
-	fmt.Printf("broker_nonce_store: %s\n", cfg.BrokerNonceStore)
-	fmt.Printf("broker_nonce_store_path: %s\n", cfg.BrokerNonceStorePath)
-	fmt.Printf("broker_nonce_redis_url: %s\n", cfg.BrokerNonceRedisURL)
-	fmt.Printf("broker_nonce_redis_key_prefix: %s\n", cfg.BrokerNonceRedisKeyPrefix)
-	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
-	fmt.Printf("session: %s\n", session.ID)
-	fmt.Printf("agents: %d\n", len(registry.Agents))
-	fmt.Printf("regime: %s\n", result.Regime)
-	fmt.Printf("orders: %d\n", len(result.Orders))
-	fmt.Printf("cash: %.2f\n", result.EndingCash)
-	fmt.Printf("positions: %d\n", len(result.Positions))
+		fmt.Printf("atlas-go daily simulation\n")
+		fmt.Printf("provider: %s\n", cfg.MarketDataProvider)
+		fmt.Printf("broker_mode: %s\n", cfg.BrokerMode)
+		fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
+		fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
+		fmt.Printf("broker_key_id: %s\n", cfg.BrokerKeyID)
+		fmt.Printf("broker_retry_status_codes: %v\n", cfg.BrokerHTTPRetryStatusCodes)
+		fmt.Printf("broker_max_clock_skew_sec: %d\n", cfg.BrokerMaxClockSkewS)
+		fmt.Printf("broker_nonce_ttl_sec: %d\n", cfg.BrokerNonceTTLS)
+		fmt.Printf("broker_nonce_store: %s\n", cfg.BrokerNonceStore)
+		fmt.Printf("broker_nonce_store_path: %s\n", cfg.BrokerNonceStorePath)
+		fmt.Printf("broker_nonce_redis_url: %s\n", cfg.BrokerNonceRedisURL)
+		fmt.Printf("broker_nonce_redis_key_prefix: %s\n", cfg.BrokerNonceRedisKeyPrefix)
+		fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
+		fmt.Printf("session: %s\n", session.ID)
+		fmt.Printf("agents: %d\n", len(registry.Agents))
+		fmt.Printf("regime: %s\n", result.Regime)
+		fmt.Printf("orders: %d\n", len(result.Orders))
+		fmt.Printf("cash: %.2f\n", result.EndingCash)
+		fmt.Printf("positions: %d\n", len(result.Positions))
 
-	candidate, err := system.NextExperimentCandidate()
-	if err != nil {
-		return fmt.Errorf("candidate selection failed: %w", err)
-	}
-	if candidate != nil {
-		fmt.Printf("next_experiment_agent: %s\n", candidate.Agent.ID)
-		fmt.Printf("next_experiment_skill: %s\n", candidate.Agent.Skill)
-		fmt.Printf("baseline_sharpe_like: %.6f\n", candidate.Scorecard.SharpeLike)
-	}
+		candidate, err := system.NextExperimentCandidate()
+		if err != nil {
+			done <- fmt.Errorf("candidate selection failed: %w", err)
+			return
+		}
+		if candidate != nil {
+			fmt.Printf("next_experiment_agent: %s\n", candidate.Agent.ID)
+			fmt.Printf("next_experiment_skill: %s\n", candidate.Agent.Skill)
+			fmt.Printf("baseline_sharpe_like: %.6f\n", candidate.Scorecard.SharpeLike)
+		}
 
-	if err := system.RecordSessionSummary(result, candidate); err != nil {
-		return fmt.Errorf("record session summary failed: %w", err)
-	}
+		if err := system.RecordSessionSummary(result, candidate); err != nil {
+			done <- fmt.Errorf("record session summary failed: %w", err)
+			return
+		}
 
-	stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
-	if err := stateStore.Load(); err != nil {
-		logging.Warn("main", "load_live_state_failed", "err", err.Error())
-	}
-	for symbol := range stateStore.GetPositions() {
-		stateStore.RemovePosition(symbol)
-	}
-	var totalExposure, totalUnrealizedPnL float64
-	for _, pos := range result.Positions {
-		totalExposure += pos.MarketValue
-		totalUnrealizedPnL += pos.UnrealizedPnL
-		stateStore.UpdatePosition(pos)
-	}
-	stateStore.UpdatePortfolio(livestore.PortfolioState{
-		Cash:          result.EndingCash,
-		TotalExposure: totalExposure,
-		AvailableCash: result.EndingCash,
-		DayPnL:        result.BeforeTaxPnL,
-		UnrealizedPnL: totalUnrealizedPnL,
-		LastUpdated:   time.Now(),
-	})
-	stateStore.UpdateRegime(result.Regime, 0.5, "simulation")
-	if err := stateStore.Save(); err != nil {
-		logging.Warn("main", "sync_live_state_failed", "err", err.Error())
-	} else {
-		logging.Info("main", "synced_simulation_to_live_store",
-			"positions", len(result.Positions),
-			"exposure", totalExposure,
-			"cash", result.EndingCash)
-	}
+		stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
+		if err := stateStore.Load(); err != nil {
+			logging.Warn("main", "load_live_state_failed", "err", err.Error())
+		}
+		for symbol := range stateStore.GetPositions() {
+			stateStore.RemovePosition(symbol)
+		}
+		var totalExposure, totalUnrealizedPnL float64
+		for _, pos := range result.Positions {
+			totalExposure += pos.MarketValue
+			totalUnrealizedPnL += pos.UnrealizedPnL
+			stateStore.UpdatePosition(pos)
+		}
+		stateStore.UpdatePortfolio(livestore.PortfolioState{
+			Cash:          result.EndingCash,
+			TotalExposure: totalExposure,
+			AvailableCash: result.EndingCash,
+			DayPnL:        result.BeforeTaxPnL,
+			UnrealizedPnL: totalUnrealizedPnL,
+			LastUpdated:   time.Now(),
+		})
+		stateStore.UpdateRegime(result.Regime, 0.5, "simulation")
+		if err := stateStore.Save(); err != nil {
+			logging.Warn("main", "sync_live_state_failed", "err", err.Error())
+		} else {
+			logging.Info("main", "synced_simulation_to_live_store",
+				"positions", len(result.Positions),
+				"exposure", totalExposure,
+				"cash", result.EndingCash)
+		}
 
-	return nil
+		done <- nil
+	}()
+
+	select {
+	case <-shutdown:
+		return fmt.Errorf("simulation: shutdown")
+	case err := <-done:
+		return err
+	}
 }
 
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	eventBus := live.NewChannelEventBus(64)
-	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus)
+	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
 	}
@@ -1616,7 +2144,11 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		monitor.SetAlertStore(alertStore)
 	}
 
-	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
+	subFS, err := fs.Sub(web.DistFS, "dist")
+	if err != nil {
+		log.Fatalf("failed to get dist sub FS: %v", err)
+	}
+	mux.Handle("/", staticHandler(subFS))
 	apiAddr := ":8080"
 	srv := &http.Server{
 		Addr:              apiAddr,
@@ -1680,7 +2212,7 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	collector := rt.MetricsCollector
 	repo := rt.Repository
 
-	if err := runSimulation(cfg, verbose, collector, repo); err != nil {
+	if err := runSimulation(cfg, verbose, collector, repo, nil); err != nil {
 		return fmt.Errorf("simulation failed: %w", err)
 	}
 
@@ -1689,43 +2221,6 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	}
 
 	return nil
-}
-
-// findLatestExperiment auto-discovers the most recent experiment JSON file
-// by sorting filenames by embedded timestamp (same as judge-experiment CLI).
-func findLatestExperiment(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var files []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if filepath.Ext(name) == ".json" && name != "test-experiment.json" {
-			files = append(files, name)
-		}
-	}
-	if len(files) == 0 {
-		return ""
-	}
-	sort.Slice(files, func(i, j int) bool {
-		return extractTimestamp(files[i]) > extractTimestamp(files[j])
-	})
-	return filepath.Join(dir, files[0])
-}
-
-func extractTimestamp(filename string) int64 {
-	base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
-	parts := strings.Split(base, "-")
-	if len(parts) > 0 {
-		if ts, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err == nil {
-			return ts
-		}
-	}
-	return 0
 }
 
 func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) {

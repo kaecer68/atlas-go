@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -51,7 +52,36 @@ type TWSEDailyResponse struct {
 	Data   [][]string `json:"data"`
 }
 
+var (
+	sharedTWSEClient     *TWSEClient
+	sharedTWSEClientOnce sync.Once
+	sharedTWSEClientMu   sync.RWMutex
+)
+
+// GetSharedTWSEClient returns a singleton TWSEClient that all components share.
+// Using a single client ensures one rate limiter enforces the rate limit across
+// all call sites (hybrid provider, gateway adapters, daily-replay-sync, etc.).
+func GetSharedTWSEClient() *TWSEClient {
+	sharedTWSEClientOnce.Do(func() {
+		sharedTWSEClient = &TWSEClient{
+			httpClient:  httpclient.NewFactory().NewClient(time.Duration(config.GetParametersConfig().Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
+			baseURL:     twseAPIBaseURL,
+			rateLimiter: rate.NewLimiter(rate.Limit(config.GetParametersConfig().Marketdata.TWSEAPIRateLimit.Value), config.GetParametersConfig().Marketdata.TWSEAPIRateBurst.Value),
+		}
+	})
+	return sharedTWSEClient
+}
+
+// ResetSharedTWSEClient clears the singleton (for tests).
+func ResetSharedTWSEClient() {
+	sharedTWSEClientMu.Lock()
+	defer sharedTWSEClientMu.Unlock()
+	sharedTWSEClient = nil
+	sharedTWSEClientOnce = sync.Once{}
+}
+
 // NewTWSEClient 创建 TWSE OpenAPI 客户端
+// Deprecated: Prefer GetSharedTWSEClient() to share one rate-limited client across all call sites.
 func NewTWSEClient() *TWSEClient {
 	params := config.GetParametersConfig()
 	return &TWSEClient{
@@ -281,7 +311,7 @@ type TWSEOpenAPIProvider struct {
 // NewTWSEOpenAPIProvider 创建 TWSE OpenAPI Provider
 func NewTWSEOpenAPIProvider() *TWSEOpenAPIProvider {
 	return &TWSEOpenAPIProvider{
-		client: NewTWSEClient(),
+		client: GetSharedTWSEClient(),
 	}
 }
 

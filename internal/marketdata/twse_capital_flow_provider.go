@@ -149,7 +149,7 @@ func (t *TWSECapitalFlowProvider) saveFlow(flow TWSECapitalFlow) error {
 	if err := os.MkdirAll(t.storageDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
-	path := filepath.Join(t.storageDir, flow.Date+".json")
+	path := filepath.Join(t.storageDir, flow.Date+"_capital_flow.json")
 	data, err := json.MarshalIndent(flow, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal flow: %w", err)

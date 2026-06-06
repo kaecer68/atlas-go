@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -20,6 +21,7 @@ import (
 type Handlers struct {
 	LedgerDir         string
 	correlationMatrix *industry.CorrelationMatrix
+	RiskGate          *risk.RiskGate // optional, set via WithRiskGate()
 }
 
 func NewHandlers(ledgerDir string) *Handlers {
@@ -36,6 +38,9 @@ func (h *Handlers) WithCorrelationMatrix(cm *industry.CorrelationMatrix) *Handle
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/risk", shared.Get(h.HandleRiskMetrics))
 	mux.Handle("GET /api/dashboard/correlation-matrix", shared.Get(h.HandleCorrelationMatrix))
+	if h.RiskGate != nil {
+		mux.Handle("GET /api/dashboard/risk-calibration", shared.Get(h.HandleRiskCalibration))
+	}
 }
 
 func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
@@ -165,6 +170,28 @@ func (h *Handlers) HandleCorrelationMatrix(r *http.Request) (int, any) {
 	}
 }
 
+// WithRiskGate sets an optional RiskGate for serving calibration reports.
+func (h *Handlers) WithRiskGate(rg *risk.RiskGate) *Handlers {
+	h.RiskGate = rg
+	return h
+}
+
+// HandleRiskCalibration serves the latest risk gate calibration report.
+func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
+	report := h.RiskGate.LastCalibrationReport()
+	if report == nil {
+		return http.StatusOK, map[string]any{
+			"status":    "not_available",
+			"message":   "no calibration report available yet",
+			"generated": time.Now().Format(time.RFC3339),
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"report":    report,
+		"generated": time.Now().Format(time.RFC3339),
+	}
+}
+
 func industryLabel(id string) string {
 	m := map[string]string{
 		"semiconductor":   "半導體",
@@ -179,6 +206,7 @@ func industryLabel(id string) string {
 		"consumer":        "消費",
 		"cooling":         "散熱",
 		"server_assembly": "伺服器組裝",
+		"mining":          "礦業/貴金屬",
 	}
 	if l, ok := m[id]; ok {
 		return l

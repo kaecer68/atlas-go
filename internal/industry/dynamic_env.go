@@ -22,10 +22,16 @@ type DynamicEnvModulator struct {
 // NewDynamicEnvModulator creates a modulator with the given baseline
 // (typically a long-term average snapshot) and current snapshot.
 func NewDynamicEnvModulator(baseline, current marketdata.MacroDataSnapshot) *DynamicEnvModulator {
+	windowDays := 90
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if wd := cfg.Industry.DynamicEnv.Value.HistoryWindowDays; wd > 0 {
+			windowDays = wd
+		}
+	}
 	return &DynamicEnvModulator{
 		baseline:   baseline,
 		current:    current,
-		windowDays: 90,
+		windowDays: windowDays,
 	}
 }
 
@@ -56,6 +62,11 @@ func (dem *DynamicEnvModulator) UpdateRollingBaseline() {
 	window := dem.windowDays
 	if window <= 0 {
 		window = 90
+		if cfg := config.GetParametersConfig(); cfg != nil {
+			if wd := cfg.Industry.DynamicEnv.Value.HistoryWindowDays; wd > 0 {
+				window = wd
+			}
+		}
 	}
 	start := 0
 	if len(dem.history) > window {
@@ -85,8 +96,19 @@ func (dem *DynamicEnvModulator) RecordSnapshot(snap marketdata.MacroDataSnapshot
 	// Cap history at 2x window to prevent unbounded growth
 	if dem.windowDays <= 0 {
 		dem.windowDays = 90
+		if cfg := config.GetParametersConfig(); cfg != nil {
+			if wd := cfg.Industry.DynamicEnv.Value.HistoryWindowDays; wd > 0 {
+				dem.windowDays = wd
+			}
+		}
 	}
-	maxHistory := dem.windowDays * 2
+	multiplier := 2
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if m := cfg.Industry.DynamicEnv.Value.HistoryCapMultiplier; m > 0 {
+			multiplier = m
+		}
+	}
+	maxHistory := dem.windowDays * multiplier
 	if len(dem.history) > maxHistory {
 		dem.history = dem.history[len(dem.history)-maxHistory:]
 	}
@@ -139,7 +161,18 @@ func (dem *DynamicEnvModulator) BDIDeviation() float64 {
 // BDI deviations affect shipping demand and downstream logistics costs.
 // Returns a multiplier: 1.0 = no change, >1.0 = amplify seasonal effect.
 func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
-	cfg := config.GetParametersConfig().Industry.DynamicEnv.Value
+	cfg := config.DynamicEnvConfig{
+		OilHighThreshold: 0.10, OilLowThreshold: 0.10, OilEnergyMult: 0.50,
+		OilShippingPenalty: 0.05, OilShippingBenefit: 0.05,
+		OilIndustrialPenalty: 0.06, OilIndustrialBenefit: 0.04,
+		BDIHighThreshold: 0.10, BDILowThreshold: 0.10,
+		BDIShippingBoost: 0.30, BDICostPenalty: 0.04,
+		DXYHighThreshold: 0.05, DXYLowThreshold: 0.03,
+		DXYExportPenalty: 0.05, DXYExportBenefit: 0.04,
+	}
+	if c := config.GetParametersConfig(); c != nil {
+		cfg = c.Industry.DynamicEnv.Value
+	}
 	oilDev := dem.OilDeviation()
 	dxyDev := dem.DXYDeviation()
 
@@ -177,6 +210,23 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		}
 		if oilDev < -cfg.OilLowThreshold {
 			mod *= 1.0 + cfg.OilIndustrialBenefit
+		}
+		return mod
+
+	case "mining", "precious_metals_recycling", "copper_industry", "rare_earth_specialty", "metal_processing":
+		mod := 1.0
+		if oilDev > cfg.OilHighThreshold {
+			mod *= 1.0 - cfg.OilIndustrialPenalty // mining costs rise with fuel
+		}
+		if oilDev < -cfg.OilLowThreshold {
+			mod *= 1.0 + cfg.OilIndustrialBenefit // mining benefits from low energy
+		}
+		bdiDev := dem.BDIDeviation()
+		if bdiDev > cfg.BDIHighThreshold {
+			mod *= 1.0 + cfg.BDIShippingBoost // shipping demand proxies mining demand
+		}
+		if bdiDev < -cfg.BDILowThreshold {
+			mod *= 1.0 - cfg.BDICostPenalty
 		}
 		return mod
 

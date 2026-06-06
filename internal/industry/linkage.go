@@ -6,6 +6,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -287,7 +288,7 @@ func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][
 			if len(returnsB) < n {
 				n = len(returnsB)
 			}
-			if n < 15 {
+			if n < 30 {
 				continue
 			}
 			corr := pearsonCorrelation(returnsA[:n], returnsB[:n])
@@ -372,6 +373,30 @@ func (sp *ShockPropagation) SetDecayFactors(downstream, upstream float64) {
 	sp.upstreamDecay = upstream
 }
 
+// regimeAmplifiedMagnitude returns amplified shock magnitude when the source
+// industry is in recession. The amplification factor is read from
+// Industry.LinkageParams.RecessionShockAmplifier config (default 1.30).
+// This is orthogonal to RegimeAdjustedCorrelation which boosts correlation
+// during recession — both effects compound.
+func (sp *ShockPropagation) regimeAmplifiedMagnitude(sourceIndustry string, magnitude float64) float64 {
+	if sp.correlation == nil || sp.correlation.cycleProvider == nil {
+		return magnitude
+	}
+
+	phase, ok := sp.correlation.cycleProvider.GetPhase(sourceIndustry)
+	if !ok || phase != CycleRecession {
+		return magnitude
+	}
+
+	amplifier := 1.0
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if a := cfg.Industry.LinkageParams.Value.RecessionShockAmplifier; a > 0 {
+			amplifier = a
+		}
+	}
+	return magnitude * amplifier
+}
+
 // getNarrativeAdjustedCorrelation returns the correlation between two industries,
 // adjusted by any active narrative themes.
 func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB string) float64 {
@@ -386,13 +411,14 @@ func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB
 		multiplier := sp.narrativeProvider.CorrelationMultiplier(theme, industryA, industryB)
 		adjusted *= multiplier
 	}
-	return math.Max(0, math.Min(1.0, adjusted))
+	return math.Max(-1.0, math.Min(1.0, adjusted))
 }
 
 // PropagateShock calculates the impact of a shock on an industry, with
 // narrative-aware correlation when a narrative provider is set.
 func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude float64, maxDepth int) map[string]float64 {
 	impacts := make(map[string]float64)
+	amplified := sp.regimeAmplifiedMagnitude(sourceIndustry, shockMagnitude)
 	impacts[sourceIndustry] = shockMagnitude
 
 	// Propagate downstream (customers affected)
@@ -401,9 +427,14 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
 		decay := sp.downstreamDecay
 		if decay == 0 {
-			decay = 0.8
+			if cfg := config.GetParametersConfig(); cfg != nil {
+				decay = cfg.Industry.LinkageParams.Value.DownstreamDecayFactor
+			}
+			if decay == 0 {
+				decay = 0.80
+			}
 		}
-		impacts[industry] = shockMagnitude * correlation * decay
+		impacts[industry] = amplified * correlation * decay
 	}
 
 	// Propagate upstream (suppliers affected)
@@ -412,9 +443,14 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
 		decay := sp.upstreamDecay
 		if decay == 0 {
-			decay = 0.6
+			if cfg := config.GetParametersConfig(); cfg != nil {
+				decay = cfg.Industry.LinkageParams.Value.UpstreamDecayFactor
+			}
+			if decay == 0 {
+				decay = 0.60
+			}
 		}
-		impacts[industry] = shockMagnitude * correlation * decay
+		impacts[industry] = amplified * correlation * decay
 	}
 
 	return impacts
@@ -592,56 +628,26 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		KeyMaterials: []string{"gold", "silver", "copper", "rare_earth", "platinum"},
 	})
 
+	graph.AddNode(&SupplyChainNode{
+		IndustryID:   "etf_rotation",
+		Tier:         0,
+		UpstreamOf:   []string{},
+		DownstreamOf: []string{"financials"},
+		KeyMaterials: []string{"capital_flow", "liquidity", "market_sentiment"},
+	})
+
 	return graph
 }
 
-// DefaultCorrelationMatrix returns a sample correlation matrix for Taiwan industries.
+// DefaultCorrelationMatrix returns the correlation matrix loaded from ParametersConfig.
+// Falls back to a minimal safe matrix if config is unavailable.
 func DefaultCorrelationMatrix() *CorrelationMatrix {
-	cm := NewCorrelationMatrix(30)
-
-	// Semiconductor correlations
-	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.85)
-	cm.UpdateCorrelation("semiconductor", "electronics", 0.72)
-	cm.UpdateCorrelation("semiconductor", "robotics", 0.45)
-	cm.UpdateCorrelation("semiconductor", "financials", 0.15)
-	cm.UpdateCorrelation("semiconductor", "shipping", -0.10)
-
-	// AI supply chain correlations
-	cm.UpdateCorrelation("ai_supply_chain", "electronics", 0.65)
-	cm.UpdateCorrelation("ai_supply_chain", "robotics", 0.55)
-	cm.UpdateCorrelation("ai_supply_chain", "financials", 0.20)
-	cm.UpdateCorrelation("ai_supply_chain", "shipping", 0.05)
-
-	// Robotics correlations
-	cm.UpdateCorrelation("robotics", "electronics", 0.48)
-	cm.UpdateCorrelation("robotics", "industrial", 0.60)
-	cm.UpdateCorrelation("robotics", "financials", 0.10)
-
-	// Financials correlations
-	cm.UpdateCorrelation("financials", "consumer", 0.35)
-	cm.UpdateCorrelation("financials", "industrial", 0.25)
-	cm.UpdateCorrelation("financials", "shipping", 0.05)
-	cm.UpdateCorrelation("financials", "energy", 0.10)
-
-	// Shipping correlations
-	cm.UpdateCorrelation("shipping", "energy", 0.40)
-	cm.UpdateCorrelation("shipping", "industrial", 0.30)
-
-	// Consumer correlations
-	cm.UpdateCorrelation("consumer", "industrial", 0.20)
-	cm.UpdateCorrelation("consumer", "energy", 0.15)
-
-	cm.UpdateCorrelation("mining", "semiconductor", 0.55)
-	cm.UpdateCorrelation("mining", "ai_supply_chain", 0.50)
-	cm.UpdateCorrelation("mining", "electronics", 0.60)
-	cm.UpdateCorrelation("mining", "robotics", 0.45)
-	cm.UpdateCorrelation("mining", "industrial", 0.40)
-	cm.UpdateCorrelation("mining", "energy", 0.35)
-	cm.UpdateCorrelation("mining", "financials", 0.30)
-	cm.UpdateCorrelation("mining", "shipping", 0.25)
-	cm.UpdateCorrelation("mining", "consumer", 0.10)
-
-	return cm
+	cfg := config.GetParametersConfig()
+	if cfg != nil {
+		return LoadCorrelationMatrixFromConfig(&cfg.Industry.LinkageParams.Value)
+	}
+	// Minimal safe fallback: empty matrix with default correlation handled by GetCorrelation
+	return NewCorrelationMatrix(30)
 }
 
 // LoadCorrelationMatrixFromConfig parses the config's CorrelationMatrix map
@@ -666,7 +672,8 @@ func LoadCorrelationMatrixFromConfig(cfg *config.LinkageConfig) *CorrelationMatr
 }
 
 func (ls *IndustryLinkageScore) String() string {
-	return fmt.Sprintf("%s: Upstream=%d, Downstream=%d, AvgCorr=%.2f, Systemic=%.0f%%",
+	return fmt.Sprintf(
+		"%s: Upstream=%d, Downstream=%d, AvgCorr=%.2f, Systemic=%.0f%%",
 		ls.IndustryID,
 		ls.UpstreamCount,
 		ls.DownstreamCount,
@@ -682,8 +689,7 @@ type LinkageAnalyzer struct {
 }
 
 func NewLinkageAnalyzer() *LinkageAnalyzer {
-	graph := DefaultSupplyChainGraph()
-	cm := loadCorrelationMatrixWithFallback()
+	graph, cm := loadGraphWithFallback()
 	propagation := NewShockPropagation(graph, cm)
 
 	cfg := config.GetParametersConfig()
@@ -698,6 +704,38 @@ func NewLinkageAnalyzer() *LinkageAnalyzer {
 		graph:       graph,
 		correlation: cm,
 		propagation: propagation,
+	}
+}
+
+// loadGraphWithFallback attempts to load the supply chain graph and correlation
+// matrix from configs/supply_chain_graph.json. If the file cannot be read (e.g.
+// when running from a package directory in tests), it falls back to the hardcoded
+// DefaultSupplyChainGraph and DefaultCorrelationMatrix.
+func loadGraphWithFallback() (*SupplyChainGraph, *CorrelationMatrix) {
+	// Try multiple paths to handle different working directories:
+	//   project root: configs/supply_chain_graph.json
+	//   cmd/ subdir:  ../configs/supply_chain_graph.json
+	//   go test:      ../../configs/supply_chain_graph.json (from internal/industry/)
+	for _, p := range supplyChainGraphCandidates() {
+		if g, c, err := LoadSupplyChainGraph(p); err == nil {
+			return g, c
+		}
+	}
+	// If ATLAS_WORK_DIR is set, also try that.
+	if wd := os.Getenv("ATLAS_WORK_DIR"); wd != "" {
+		p := filepath.Join(wd, "configs", "supply_chain_graph.json")
+		if g, c, err := LoadSupplyChainGraph(p); err == nil {
+			return g, c
+		}
+	}
+	return DefaultSupplyChainGraph(), loadCorrelationMatrixWithFallback()
+}
+
+func supplyChainGraphCandidates() []string {
+	return []string{
+		"configs/supply_chain_graph.json",
+		"../configs/supply_chain_graph.json",
+		"../../configs/supply_chain_graph.json",
 	}
 }
 

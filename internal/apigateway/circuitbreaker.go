@@ -32,13 +32,20 @@ type CircuitBreaker struct {
 	lastFailure   time.Time
 	halfOpenCalls int
 	channelID     string
+	maxFailures   int
 }
 
 // NewCircuitBreaker creates a breaker for a channel.
-func NewCircuitBreaker(channelID string) *CircuitBreaker {
+// maxFailures is optional; defaults to CircuitBreakerFailureThreshold.
+func NewCircuitBreaker(channelID string, maxFailures ...int) *CircuitBreaker {
+	threshold := CircuitBreakerFailureThreshold
+	if len(maxFailures) > 0 && maxFailures[0] > 0 {
+		threshold = maxFailures[0]
+	}
 	return &CircuitBreaker{
-		channelID: channelID,
-		state:     StateClosed,
+		channelID:   channelID,
+		state:       StateClosed,
+		maxFailures: threshold,
 	}
 }
 
@@ -74,7 +81,7 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 	if err != nil {
 		cb.failures++
 		cb.lastFailure = time.Now()
-		if cb.failures >= CircuitBreakerFailureThreshold {
+		if cb.failures >= cb.maxFailures {
 			cb.state = StateOpen
 		}
 		return err
@@ -104,13 +111,25 @@ type CircuitBreakerManager struct {
 	mu       sync.RWMutex
 }
 
-// NewCircuitBreakerManager creates a manager with breakers for all channels.
+// NewCircuitBreakerManager creates a manager with breakers for all channels
+// using the default failure threshold.
 func NewCircuitBreakerManager(channelIDs []string) *CircuitBreakerManager {
+	return NewCircuitBreakerManagerWithThresholds(nil, CircuitBreakerFailureThreshold, channelIDs)
+}
+
+// NewCircuitBreakerManagerWithThresholds creates a manager with per-channel
+// failure thresholds. channelThresholds maps channel ID to its maxFailures.
+// Channels not in the map use defaultThreshold.
+func NewCircuitBreakerManagerWithThresholds(channelThresholds map[string]int, defaultThreshold int, channelIDs []string) *CircuitBreakerManager {
 	m := &CircuitBreakerManager{
 		breakers: make(map[string]*CircuitBreaker),
 	}
 	for _, id := range channelIDs {
-		m.breakers[id] = NewCircuitBreaker(id)
+		threshold := defaultThreshold
+		if t, ok := channelThresholds[id]; ok {
+			threshold = t
+		}
+		m.breakers[id] = NewCircuitBreaker(id, threshold)
 	}
 	return m
 }

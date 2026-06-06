@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // RiskGateMode represents the current operational mode of the risk gate.
@@ -44,6 +46,10 @@ func (g *RiskGate) PreTradeCheck(ctx context.Context, order OrderIntent, pf Port
 	g.mu.RLock()
 	mode := g.mode
 	g.mu.RUnlock()
+
+	if g.preTrade == nil {
+		return nil, fmt.Errorf("pre_trade gate not initialized")
+	}
 
 	if mode == ModeSuspended {
 		dec := &RiskDecision{
@@ -166,6 +172,26 @@ func (g *RiskGate) Subscribe(fn func(RiskDecision)) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.subs = append(g.subs, fn)
+}
+
+// SetPreTradeRSITwScore pushes the RSI-tw retail sentiment score to the
+// underlying PreTradeGate. Scores near ±0.7 or beyond trigger the
+// ruleRetailSentiment check.
+func (g *RiskGate) SetPreTradeRSITwScore(score float64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.preTrade.SetRSITwScore(score)
+}
+
+// WithMaturityTracker injects a maturity tracker into the pre-trade gate
+// for burn-in / calibrating phase gating of VaR checks.
+func (g *RiskGate) WithMaturityTracker(mt *domain.MaturityTracker) *RiskGate {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.preTrade != nil {
+		g.preTrade.WithMaturityTracker(mt)
+	}
+	return g
 }
 
 // SetLastCalibration stores the most recent calibration run result.

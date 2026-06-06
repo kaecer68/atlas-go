@@ -2,19 +2,14 @@ package marketdata
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -35,14 +30,13 @@ var yahooSharedLimiter = rate.NewLimiter(rate.Every(500*time.Millisecond), 2)
 
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
-	client  *http.Client
-	baseURL string
+	session *yahooSession
 	limiter *rate.Limiter
 }
 
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
-		client:  httpclient.NewFactory().NewClient(15 * time.Second),
+		session: getYahooSession(),
 		limiter: yahooSharedLimiter,
 	}
 }
@@ -52,15 +46,19 @@ func (y *YahooFinanceMacroProvider) Name() string {
 }
 
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	// ^BDIY (Baltic Dry Index) is not available on Yahoo Finance.
+	// See https://github.com/ranaroussi/yfinance/issues/1667
+	// JPY=X has been removed from this provider — frankfurter_fx channel
+	// is now the sole authoritative source for USD/JPY via api.frankfurter.app.
 	symbols := map[string]string{
 		"DX-Y.NYB": "dxy",
 		"^TNX":     "us10y",
 		"^VIX":     "vix",
 		"CL=F":     "oil",
 		"GC=F":     "gold",
-		"JPY=X":    "jpy",
 		"USDTWD=X": "usd_twd",
-		"^BDIY":    "bdi",
+		"SI=F":     "silver",
+		"HG=F":     "copper",
 	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
@@ -68,10 +66,16 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 	var errs []error
 	var wg sync.WaitGroup
 
+	// Use a semaphore to limit concurrency and avoid Yahoo rate limiting.
+	sem := make(chan struct{}, 3) // max 3 concurrent requests
+
 	for ticker, key := range symbols {
 		wg.Add(1)
 		go func(ticker, key string) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
 			point, err := y.fetchIndicator(ctx, ticker)
 			if err != nil {
 				mu.Lock()
@@ -95,8 +99,10 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 				snap.JPY = point
 			case "usd_twd":
 				snap.USD_TWD = point
-			case "bdi":
-				snap.Bdi = point
+			case "silver":
+				snap.Silver = point
+			case "copper":
+				snap.Copper = point
 			}
 			mu.Unlock()
 		}(ticker, key)
@@ -105,7 +111,8 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 	wg.Wait()
 
 	if len(errs) > 0 {
-		logging.Warn("yahoo_macro_provider", "partial_fetch_failures", "errors", fmt.Sprintf("%v", errs))
+		logging.Warn("yahoo_macro_provider", "partial_fetch_failures",
+			"errors", fmt.Sprintf("%v", errs))
 		if len(errs) == len(symbols) {
 			return snap, fmt.Errorf("all indicators failed: %w", errors.Join(errs...))
 		}
@@ -118,70 +125,35 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 	if err := y.limiter.Wait(ctx); err != nil {
 		return MacroDataPoint{}, fmt.Errorf("rate limit: %w", err)
 	}
-	var lastErr error
-	for _, host := range yahooHosts {
-		point, err := y.fetchFromHost(ctx, host, ticker)
-		if err == nil {
-			return point, nil
-		}
-		lastErr = err
-		logging.Warn("yahoo_macro_provider", "host_failed", "host", host, "error", err)
-	}
-	return MacroDataPoint{}, fmt.Errorf("all hosts failed for %s: %w", ticker, lastErr)
-}
 
-func (y *YahooFinanceMacroProvider) fetchFromHost(ctx context.Context, host, ticker string) (MacroDataPoint, error) {
-	var u string
-	if y.baseURL != "" {
-		u = fmt.Sprintf("%s/v8/finance/chart/%s?interval=1d&range=2d", y.baseURL, ticker)
-	} else {
-		u = fmt.Sprintf("https://%s/v8/finance/chart/%s?interval=1d&range=2d", host, ticker)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return MacroDataPoint{}, err
-	}
-	ua := modernUserAgents[time.Now().UnixNano()%int64(len(modernUserAgents))]
-	req.Header.Set("User-Agent", ua)
-
-	resp, err := y.client.Do(req)
-	if err != nil {
-		return MacroDataPoint{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return MacroDataPoint{}, fmt.Errorf("http status %d from %s", resp.StatusCode, host)
+	params := map[string]string{
+		"interval": "1d",
+		"range":    "5d",
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := y.session.fetchWithFallback(ctx, ticker, params)
 	if err != nil {
 		return MacroDataPoint{}, err
 	}
 
-	if len(body) > 0 && body[0] == '<' {
-		return MacroDataPoint{}, fmt.Errorf("HTML response from %s", host)
-	}
-
-	var chartResp yahooChartResponse
-	if err := json.Unmarshal(body, &chartResp); err != nil {
-		return MacroDataPoint{}, fmt.Errorf("unmarshal: %w", err)
+	chartResp, err := UnmarshalYahooChart(body)
+	if err != nil {
+		return MacroDataPoint{}, fmt.Errorf("%s: %w", ticker, err)
 	}
 
 	result := chartResp.Chart.Result
 	if len(result) == 0 {
-		return MacroDataPoint{}, fmt.Errorf("no chart result")
+		return MacroDataPoint{}, fmt.Errorf("no chart result for %s", ticker)
 	}
 
-	meta := result[0].Meta
 	closes := result[0].Indicators.Quote[0].Close
 	if len(closes) == 0 {
-		return MacroDataPoint{}, fmt.Errorf("no close prices")
+		return MacroDataPoint{}, fmt.Errorf("no close prices for %s", ticker)
 	}
 
 	latest := closes[len(closes)-1]
 	if math.IsNaN(latest) || math.IsInf(latest, 0) {
-		return MacroDataPoint{}, fmt.Errorf("invalid latest price: %v", latest)
+		return MacroDataPoint{}, fmt.Errorf("invalid latest price for %s: %v", ticker, latest)
 	}
 
 	prev := latest
@@ -198,38 +170,17 @@ func (y *YahooFinanceMacroProvider) fetchFromHost(ctx context.Context, host, tic
 	}
 
 	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
-		return MacroDataPoint{}, fmt.Errorf("invalid change percentage: %v", changePct)
+		return MacroDataPoint{}, fmt.Errorf("invalid change percentage for %s: %v", ticker, changePct)
 	}
 
 	point := MacroDataPoint{
 		Symbol:    ticker,
 		Value:     latest,
 		ChangePct: changePct,
-		Timestamp: meta.RegularMarketTime,
-	}
-
-	if strings.Contains(ticker, "TNX") {
-		// ^TNX is yield in percent; treat change as bps proxy.
-		point.Value = changePct * 10 // rough proxy: 1% move = 100bps
+		Timestamp: result[0].Meta.RegularMarketTime,
 	}
 
 	return point, nil
-}
-
-type yahooChartResponse struct {
-	Chart struct {
-		Result []struct {
-			Meta struct {
-				RegularMarketTime  int64   `json:"regularMarketTime"`
-				RegularMarketPrice float64 `json:"regularMarketPrice"`
-			} `json:"meta"`
-			Indicators struct {
-				Quote []struct {
-					Close []float64 `json:"close"`
-				} `json:"quote"`
-			} `json:"indicators"`
-		} `json:"result"`
-	} `json:"chart"`
 }
 
 // MockMacroProvider returns deterministic mock data for tests.

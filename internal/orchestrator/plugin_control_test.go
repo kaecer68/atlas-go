@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -144,4 +145,146 @@ func TestCIOPortfolioExecutorDeterministicTieBreak(t *testing.T) {
 	if out[0].Symbol != "2317.TW" || out[1].Symbol != "2330.TW" {
 		t.Fatalf("expected deterministic symbol ordering for tie conviction, got %s then %s", out[0].Symbol, out[1].Symbol)
 	}
+}
+
+func TestSuperinvestorExecutorApply(t *testing.T) {
+	executor := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "si-01", Skill: "superinvestor_quality", Layer: domain.LayerSuperinvestor}
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2330.TW", Conviction: 80, Side: domain.SideBuy, Reason: "strong"},
+		{Agent: "b", Skill: "semiconductor", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "medium"},
+		{Agent: "c", Skill: "value_yield", Symbol: "2884.TW", Conviction: 40, Side: domain.SideBuy, Reason: "weak"},
+	}
+
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	if len(out) != 2 {
+		t.Fatalf("expected 2 recommendations above SuperinvestorMinConviction(50), got %d", len(out))
+	}
+	if out[0].Symbol != "2330.TW" {
+		t.Fatalf("expected 2330.TW to survive, got %s", out[0].Symbol)
+	}
+	if out[1].Symbol != "2317.TW" {
+		t.Fatalf("expected 2317.TW to survive, got %s", out[1].Symbol)
+	}
+	if !strings.Contains(out[0].Reason, "[Superinvestor:") {
+		t.Fatalf("expected reason to be tagged with [Superinvestor:...], got %q", out[0].Reason)
+	}
+}
+
+func TestSuperinvestorExecutorIntegrationInControlLayer(t *testing.T) {
+	registry := domain.AgentRegistry{
+		Version: 1,
+		Agents: []domain.AgentSpec{
+			{ID: "si-01", Name: "Superinvestor", Layer: domain.LayerSuperinvestor, Skill: "superinvestor_quality", Enabled: true},
+			{ID: "cro-01", Name: "CRO", Layer: domain.LayerControl, Skill: "cro_risk", Enabled: true},
+		},
+	}
+	plugins := NewPluginRegistry()
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2330.TW", Conviction: 80, Side: domain.SideBuy, Reason: "strong"},
+		{Agent: "b", Skill: "semiconductor", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "medium"},
+	}
+
+	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "")
+
+	found := false
+	for _, o := range outcomes {
+		if o.GuardSkill == "superinvestor_quality" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected guard outcome for superinvestor agent, got %d outcomes", len(outcomes))
+	}
+}
+
+func TestSeverityForSuperinvestorIsSoft(t *testing.T) {
+	agent := domain.AgentSpec{ID: "si-01", Skill: "superinvestor_quality", Layer: domain.LayerSuperinvestor}
+	severity := severityForControlAgent(agent)
+	if severity != domain.GuardSeveritySoft {
+		t.Fatalf("expected soft severity for superinvestor, got %s", severity)
+	}
+}
+
+func TestSuperinvestorRecommendDruckenmiller(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2330.TW", Last: 600, Open: 590, High: 610, Volume: 15_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "momentum macro asymmetric", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Druckenmiller")
+	}
+	if rec.Agent != "super-dru-01" {
+		t.Fatalf("expected agent super-dru-01, got %s", rec.Agent)
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65 (SuperinvestorMinConviction), got %d", rec.Conviction)
+	}
+	if rec.ConvictionBreakdown == nil {
+		t.Fatal("expected conviction breakdown for transparency")
+	}
+}
+
+func TestSuperinvestorRecommendAschenbrenner(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-asc-01", Skill: "aschenbrenner_ai_compute", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2382.TW", Last: 700, Open: 690, High: 710, Volume: 12_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "ai_capex compute datacenter", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Aschenbrenner")
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65, got %d", rec.Conviction)
+	}
+}
+
+func TestSuperinvestorRecommendBaker(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-bak-01", Skill: "baker_deep_tech", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2454.TW", Last: 500, Open: 495, High: 505, Volume: 8_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "ip_moat patent differentiation", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Baker")
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65, got %d", rec.Conviction)
+	}
+}
+
+func TestSuperinvestorRecommendAckman(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-ack-01", Skill: "ackman_quality", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2881.TW", Last: 80, Open: 79, High: 81, Volume: 10_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "quality catalyst compounder", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Ackman")
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65, got %d", rec.Conviction)
+	}
+}
+
+func TestSuperinvestorRecommendRejectsWeakSignal(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor}
+	// Weak signal: down day, far from high, low volume, no keywords, risk_off.
+	// With floor=50: dynamicSignalStrength(60) + premium(5) - weak_close(-10) - far_from_high(-8) = 47 < 50 = REJECTED.
+	quote := domain.Quote{Symbol: "2330.TW", Last: 560, Open: 590, High: 595, Volume: 100_000, IsTradable: true}
+
+	_, ok := exec.Recommend(agent, quote, "", "risk_off", &FactorSnapshot{})
+	if ok {
+		t.Fatal("expected rejection for weak signal on down day with no keywords")
+	}
+}
+
+func TestSuperinvestorDualRole(t *testing.T) {
+	var _ AgentExecutor = SuperinvestorExecutor{}
+	var _ ControlExecutor = SuperinvestorExecutor{}
 }

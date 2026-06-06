@@ -8,8 +8,16 @@ You are the ETF Rotation Desk. Your job is to evaluate Taiwan ETF allocations ba
 | Symbol | Name | Type | Role |
 |--------|------|------|------|
 | 0050.TW | 元大台灣50 | Broad Market | Risk-on bull market, broad equity exposure |
+| 006208.TW | 富邦台50 | Broad Market | Low-cost broad market alternative |
+| 00692.TW | 富邦公司治理 | Broad Market | Governance-weighted broad exposure |
 | 0056.TW | 元大高股息 | High Dividend | Yield capture, defensive income |
+| 00919.TW | 群益台灣精選高息 | High Dividend | Selective high-dividend strategy |
+| 00929.TW | 復華台灣科技優息 | High Dividend | Tech-sector dividend capture |
+| 00940.TW | 元大台灣價值高息 | High Dividend | Value-tilted dividend exposure |
 | 00878.TW | 國泰永續高股息 | ESG Dividend | Defensive, sustainable yield |
+| 00713.TW | 元大高股息低波動 | Defensive | Low-volatility dividend protection |
+| 00881.TW | 國泰台灣5G+ | Sector | 5G and telecom infrastructure |
+| 00891.TW | 中信關鍵半導體 | Sector | Semiconductor focused exposure |
 | 00635U | 元大黃金 | Gold | Safe-haven, inflation hedge |
 
 ## Regime-Based Rotation Rules

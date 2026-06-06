@@ -9,7 +9,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
-// Gateway is the unified entry point for all 14 data channels.
+// Gateway is the unified entry point for all data channels.
 type Gateway struct {
 	registry *ChannelRegistry
 	limiters *RateLimitManager
@@ -31,7 +31,15 @@ func NewGateway(workDir string, pool *pgxpool.Pool) (*Gateway, error) {
 	cache := NewCacheLayer()
 	health := NewUnifiedHealthStore(filepath.Join(workDir, "data/state"), pool)
 	limiters := NewRateLimitManager()
-	breakers := NewCircuitBreakerManager(channelIDs())
+	breakers := NewCircuitBreakerManagerWithThresholds(map[string]int{
+		"twse_capital_flow": 5,
+		"twse_margin":       5,
+		"twse_replay":       5,
+		"twse_oddlot":       5,
+		"twse_etf":          5,
+		"export_statistics": 5,
+		"tsmc_revenue":      5,
+	}, CircuitBreakerFailureThreshold, channelIDs())
 	registry := NewChannelRegistry(limiters, breakers)
 
 	return &Gateway{
@@ -148,7 +156,7 @@ func channelIDs() []string {
 		"fugle",
 		"fubon",
 		"finmind",
-		"jpy_yahoo",
+		"frankfurter_fx",
 		"geopolitical",
 		"twse_margin",
 		"export_statistics",
@@ -158,7 +166,13 @@ func channelIDs() []string {
 		"tej",
 		"exchange_rate",
 		"sox_index",
+		"dram_spot_price",
+		"twse_sector_index",
 		"sector_data",
 		"day_trading",
+		"bdi",
+		"taifex_daily",
+		"twse_oddlot",
+		"twse_etf",
 	}
 }

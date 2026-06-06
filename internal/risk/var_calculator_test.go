@@ -7,11 +7,10 @@ import (
 )
 
 func TestCalculateVaR(t *testing.T) {
-	returns := []float64{
-		0.01, 0.02, -0.01, 0.015, -0.005,
-		0.008, -0.02, 0.012, -0.015, 0.005,
-		-0.008, 0.003, -0.012, 0.007, -0.003,
-		0.004, -0.006, 0.009, -0.009, 0.011,
+	// 252 samples required for VaR calculation (1 year of daily data)
+	returns := make([]float64, 252)
+	for i := range returns {
+		returns[i] = []float64{0.01, 0.02, -0.01, 0.015, -0.005, 0.008, -0.02, 0.012, -0.015, 0.005}[i%10]
 	}
 
 	var95 := CalculateVaR(returns, 0.95)
@@ -33,11 +32,10 @@ func TestCalculateVaREmpty(t *testing.T) {
 }
 
 func TestCalculateCVaR(t *testing.T) {
-	returns := []float64{
-		0.01, 0.02, -0.01, 0.015, -0.005,
-		0.008, -0.02, 0.012, -0.015, 0.005,
-		-0.008, 0.003, -0.012, 0.007, -0.003,
-		0.004, -0.006, 0.009, -0.009, 0.011,
+	// 252 samples required for CVaR calculation
+	returns := make([]float64, 252)
+	for i := range returns {
+		returns[i] = []float64{0.01, 0.02, -0.01, 0.015, -0.005, 0.008, -0.02, 0.012, -0.015, 0.005}[i%10]
 	}
 
 	cvar95 := CalculateCVaR(returns, 0.95)
@@ -66,9 +64,10 @@ func TestCalculateMaxDrawdownNoDecline(t *testing.T) {
 }
 
 func TestComputeRiskSnapshot(t *testing.T) {
-	returns := []float64{
-		0.01, 0.02, -0.01, 0.015, -0.005,
-		0.008, -0.02, 0.012, -0.015, 0.005,
+	// 252 samples required for VaR/CVaR calculation
+	returns := make([]float64, 252)
+	for i := range returns {
+		returns[i] = []float64{0.01, 0.02, -0.01, 0.015, -0.005, 0.008, -0.02, 0.012, -0.015, 0.005}[i%10]
 	}
 	values := []float64{100, 101, 103, 102, 104, 103, 104, 102, 103, 104, 105}
 
@@ -89,10 +88,20 @@ func TestComputeRiskSnapshot(t *testing.T) {
 }
 
 func TestCalculateComponentVaR(t *testing.T) {
+	// 252 samples required per asset for ComponentVaR
+	baseReturns := []float64{0.01, -0.02, 0.015, 0.005, -0.01, 0.02, -0.015, 0.008, -0.005, 0.012}
+	a := make([]float64, 252)
+	b := make([]float64, 252)
+	c := make([]float64, 252)
+	for i := 0; i < 252; i++ {
+		a[i] = baseReturns[i%10]
+		b[i] = baseReturns[(i+3)%10]
+		c[i] = baseReturns[(i+7)%10]
+	}
 	returns := map[string][]float64{
-		"2330": {0.01, -0.02, 0.015, 0.005, -0.01, 0.02, -0.015, 0.008, -0.005, 0.012},
-		"2454": {-0.005, 0.01, 0.008, -0.01, 0.015, -0.008, 0.012, -0.02, 0.005, 0.01},
-		"2317": {0.02, -0.01, 0.005, 0.012, -0.008, 0.015, -0.01, 0.008, -0.015, 0.005},
+		"2330": a,
+		"2454": b,
+		"2317": c,
 	}
 	weights := map[string]float64{
 		"2330": 0.5,
@@ -131,9 +140,18 @@ func TestCalculateComponentVaR_Empty(t *testing.T) {
 }
 
 func TestCalculateComponentVaR_EqualWeights(t *testing.T) {
+	// 252 samples required per asset for ComponentVaR
+	baseA := []float64{0.01, -0.01, 0.02, -0.02, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01}
+	baseB := []float64{0.02, -0.02, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01, 0.02, -0.02}
+	a := make([]float64, 252)
+	b := make([]float64, 252)
+	for i := 0; i < 252; i++ {
+		a[i] = baseA[i%10]
+		b[i] = baseB[i%10]
+	}
 	returns := map[string][]float64{
-		"A": {0.01, -0.01, 0.02, -0.02, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01},
-		"B": {0.02, -0.02, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01, 0.02, -0.02},
+		"A": a,
+		"B": b,
 	}
 	weights := map[string]float64{
 		"A": 0.5,
@@ -157,19 +175,19 @@ func TestCalculateComponentVaR_ShortSeries(t *testing.T) {
 
 	items := CalculateComponentVaR(returns, weights)
 	if len(items) != 0 {
-		t.Errorf("expected 0 items for short series (<2), got %d", len(items))
+		t.Errorf("expected 0 items for short series (<252), got %d", len(items))
 	}
 }
 
 func TestVaRPercentileAccuracy(t *testing.T) {
-	returns := make([]float64, 100)
+	returns := make([]float64, 252)
 	for i := range returns {
-		returns[i] = float64(i-50) / 1000.0
+		returns[i] = float64(i-126) / 1000.0
 	}
 	sort.Float64s(returns)
 
 	var95 := CalculateVaR(returns, 0.95)
-	expectedIndex := int(math.Floor(0.05 * 100))
+	expectedIndex := int(math.Floor(0.05 * 252))
 	expected := returns[expectedIndex]
 
 	if math.Abs(var95-expected) > 0.0001 {

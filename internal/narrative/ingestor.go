@@ -64,6 +64,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		if hasValidYahooData(snap) {
 			prev, _ := m.loadLatestSnapshot() //nolint:errcheck
 			snap = mergeWithPrev(snap, prev)
+			snap = computeChangePct(snap, prev)
 			if saveErr := m.saveSnapshot(snap); saveErr != nil {
 				logging.Warn("ingestor", "partial_save_failed", logging.Err(saveErr))
 			}
@@ -74,6 +75,16 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		prev, prevErr := m.loadLatestSnapshot()
 		if prevErr == nil {
 			prevPrev, _ := m.loadPreviousSnapshot(prev) //nolint:errcheck
+			// Repair ChangePct from prevPrev if the previous run left it at zero
+			// (first-run or all-providers-fail scenario).
+			if prev.JPY.ChangePct == 0 && prev.JPY.Symbol != "" && prev.JPY.Value != 0 &&
+				prevPrev.JPY.Symbol != "" && prevPrev.JPY.Value != 0 {
+				prev.JPY.ChangePct = (prev.JPY.Value - prevPrev.JPY.Value) / prevPrev.JPY.Value * 100
+			}
+			if prev.USD_TWD.ChangePct == 0 && prev.USD_TWD.Symbol != "" && prev.USD_TWD.Value != 0 &&
+				prevPrev.USD_TWD.Symbol != "" && prevPrev.USD_TWD.Value != 0 {
+				prev.USD_TWD.ChangePct = (prev.USD_TWD.Value - prevPrev.USD_TWD.Value) / prevPrev.USD_TWD.Value * 100
+			}
 			events := detectEventsFromSnapshot(prev, prevPrev, m.divergenceDetect)
 			m.publishEvents(events)
 			return events, prev, nil
@@ -82,6 +93,20 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	}
 
 	prev, _ := m.loadLatestSnapshot() //nolint:errcheck
+
+	// Fallback: if prev has zero values for JPY or USD_TWD, try a deeper snapshot
+	// so computeChangePct can calculate meaningful deltas (first-run or corrupted-data scenario).
+	if prev.JPY.Value == 0 || prev.JPY.Symbol == "" || prev.USD_TWD.Value == 0 || prev.USD_TWD.Symbol == "" {
+		if prevPrev, err := m.loadPreviousSnapshot(prev); err == nil {
+			if prev.JPY.Value == 0 || prev.JPY.Symbol == "" {
+				prev.JPY = prevPrev.JPY
+			}
+			if prev.USD_TWD.Value == 0 || prev.USD_TWD.Symbol == "" {
+				prev.USD_TWD = prevPrev.USD_TWD
+			}
+		}
+	}
+
 	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
 	m.publishEvents(events)
 
@@ -183,6 +208,9 @@ func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroData
 	}
 	if curr.RetailShortBalance.Symbol == "" {
 		curr.RetailShortBalance = prev.RetailShortBalance
+	}
+	if curr.Bdi.Symbol == "" {
+		curr.Bdi = prev.Bdi
 	}
 	return curr
 }
@@ -323,6 +351,7 @@ func hitRateForTheme(theme string) float64 {
 func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *DivergenceDetector) []NarrativeEvent {
 	var events []NarrativeEvent
 	now := time.Now().UTC()
+	params := config.GetParametersConfig().Narrative
 
 	if event := detectUSRatesEventFromSnapshot(curr.US10Y, prev.US10Y, now); event != nil {
 		events = append(events, *event)
@@ -356,13 +385,18 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 		if event := detectAICapexEventFromSnapshot(sentiment, prev.TSMCRevenue, now); event != nil {
 			events = append(events, *event)
 		}
+		if math.Abs(curr.TSMCRevenue.ChangePct) > params.EarningsSurpriseThreshold.Value {
+			if event := NewEarningsSurpriseEvent(curr.TSMCRevenue.ChangePct); event != nil {
+				events = append(events, *event)
+			}
+		}
 	}
 
 	if curr.RetailMarginBalance.Symbol != "" {
-		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, DefaultMarginHistoryDir, now); event != nil {
 			events = append(events, *event)
 		}
-		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, DefaultMarginHistoryDir, now); event != nil {
 			events = append(events, *event)
 		}
 	}
@@ -445,7 +479,6 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 	if currJPY.Symbol == "" {
 		return nil
 	}
-	params := config.GetParametersConfig().Narrative
 	jpyChange := currJPY.ChangePct
 	if prevJPY.Symbol != "" && prevJPY.Value != 0 {
 		jpyChange = (currJPY.Value - prevJPY.Value) / prevJPY.Value * 100
@@ -454,31 +487,7 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 	if currVIX.Symbol != "" {
 		vixLevel = currVIX.Value
 	}
-	if jpyChange > params.JPYChangePctThreshold.Value || vixLevel > params.VIXLevelThreshold.Value {
-		confidenceJPY := computeDeviationConfidence(jpyChange, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
-		confidenceVIX := computeDeviationConfidence(vixLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
-		confidence := confidenceJPY
-		if confidenceVIX > confidence {
-			confidence = confidenceVIX
-		}
-		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-jpy-%d", now.UnixNano()),
-			Theme:            "JPY_carry_unwind",
-			Region:           "JP",
-			Sentiment:        -0.6,
-			Confidence:       confidence,
-			ConfidenceSource: "deviation_based_v1",
-			HitRate:          hitRateForTheme("JPY_carry_unwind"),
-			CapitalFlow:      "global_liquidity_drain",
-			TimeWindow:       "immediate",
-			Timestamp:        now,
-			SourceData: map[string]float64{
-				"jpy_change_pct": jpyChange,
-				"vix_level":      vixLevel,
-			},
-		}
-	}
-	return nil
+	return buildJPYCarryUnwindEvent(jpyChange, vixLevel, now)
 }
 
 func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX, currUSDTWD marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
@@ -535,35 +544,15 @@ func detectUSDTWDEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now tim
 	if curr.Symbol == "" {
 		return nil
 	}
-	params := config.GetParametersConfig().Narrative
 	changePct := curr.ChangePct
 	if prev.Symbol != "" && prev.Value != 0 {
 		changePct = (curr.Value - prev.Value) / prev.Value * 100
 	}
-	if math.Abs(changePct) > params.USDTWDChangePctThreshold.Value {
-		sentiment := -0.5
-		if changePct > 0 {
-			sentiment = -0.7 // USD strengthening against TWD is negative for Taiwan exports
-		}
-		confidence := computeDeviationConfidence(changePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
-		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-usd-twd-%d", now.UnixNano()),
-			Theme:            "USD_TWD_volatility",
-			Region:           "TW",
-			Sentiment:        sentiment,
-			Confidence:       confidence,
-			ConfidenceSource: "deviation_based_v1",
-			HitRate:          hitRateForTheme("USD_TWD_volatility"),
-			CapitalFlow:      "fx_driven_outflow",
-			TimeWindow:       "1_week",
-			Timestamp:        now,
-			SourceData: map[string]float64{
-				"usd_twd_change_pct": changePct,
-				"usd_twd_level":      curr.Value,
-			},
-		}
+	event := buildUSDTWDVolatilityEvent(changePct, now)
+	if event != nil {
+		event.SourceData["usd_twd_level"] = curr.Value
 	}
-	return nil
+	return event
 }
 
 func detectSemiconductorEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
@@ -602,46 +591,34 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 	if currOil.Symbol == "" {
 		return nil
 	}
-	params := config.GetParametersConfig().Narrative
-	threshold := params.OilChangePctThreshold.Value
-	if currOil.ChangePct > threshold || currOil.ChangePct < -threshold {
-		confidence := computeDeviationConfidence(currOil.ChangePct, threshold, params.ConfidenceBaseOilShock.Value, params.ConfidenceDeviationCeiling.Value)
-		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-oil-%d", now.UnixNano()),
-			Theme:            "oil_price_shock",
-			Region:           "Global",
-			Sentiment:        -0.5,
-			Confidence:       confidence,
-			ConfidenceSource: "deviation_based_v1",
-			HitRate:          hitRateForTheme("oil_price_shock"),
-			CapitalFlow:      "inflation_reprice",
-			TimeWindow:       "1_week",
-			Timestamp:        now,
-			SourceData: map[string]float64{
-				"oil_change_pct": currOil.ChangePct,
-			},
-		}
-	}
-	return nil
+	return buildOilShockEvent(currOil.ChangePct, now)
 }
 
 func computeAICapexSentiment(tsmcYoYChangePct float64) float64 {
 	params := config.GetParametersConfig().Narrative
-	if tsmcYoYChangePct > params.TSMCRevenueYoYThreshold.Value {
-		return 0.8
+	yoyThreshold := params.TSMCRevenueYoYThreshold.Value
+	posThreshold := params.TSMCRevenuePositiveThreshold.Value
+	fallback := params.AICapexFallbackSentiment.Value
+
+	if tsmcYoYChangePct >= yoyThreshold {
+		// Above YoY threshold: scale from 0.8 toward 1.0, capped at 1.0
+		extra := min((tsmcYoYChangePct-yoyThreshold)/yoyThreshold, 1.0)
+		return 0.8 + (0.2 * extra)
 	}
-	if tsmcYoYChangePct > params.TSMCRevenuePositiveThreshold.Value {
-		return 0.5
+	if tsmcYoYChangePct >= posThreshold {
+		// Between thresholds: linear interpolation from 0.5 to 0.8
+		ratio := (tsmcYoYChangePct - posThreshold) / (yoyThreshold - posThreshold)
+		return 0.5 + (0.3 * ratio)
 	}
-	return params.AICapexFallbackSentiment.Value
+	return fallback
 }
 
-func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, marginDir string, now time.Time) *NarrativeEvent {
 	if marginBalance.Symbol == "" {
 		return nil
 	}
 	params := config.GetParametersConfig().Narrative
-	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	history, err := LoadMarginHistory(marginDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
 		if ok && percentile >= params.RetailFrenzyPercentileThreshold.Value {
@@ -679,12 +656,12 @@ func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint
 	return nil
 }
 
-func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, marginDir string, now time.Time) *NarrativeEvent {
 	if marginBalance.Symbol == "" {
 		return nil
 	}
 	params := config.GetParametersConfig().Narrative
-	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	history, err := LoadMarginHistory(marginDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
 		if ok && percentile <= params.RetailFearPercentileThreshold.Value {
@@ -723,33 +700,18 @@ func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, 
 }
 
 func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
-	params := config.GetParametersConfig().Narrative
-	if sentiment <= params.AICapexSentimentThreshold.Value {
+	event := buildAICapexSurgeEvent(sentiment, now)
+	if event == nil {
 		return nil
 	}
-	confidence := computeDeviationConfidence(sentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value)
 	if prevTSMC.Symbol != "" && prevTSMC.ChangePct > 0 {
-		boosted := confidence + 0.05
+		boosted := event.Confidence + 0.05
 		if boosted > 0.95 {
 			boosted = 0.95
 		}
-		confidence = boosted
+		event.Confidence = boosted
 	}
-	return &NarrativeEvent{
-		ID:               fmt.Sprintf("evt-ai-capex-%d", now.UnixNano()),
-		Theme:            "AI_capex_surge",
-		Region:           "US",
-		Sentiment:        0.8,
-		Confidence:       confidence,
-		ConfidenceSource: "deviation_based_v1",
-		HitRate:          hitRateForTheme("AI_capex_surge"),
-		CapitalFlow:      "tech_capex_inflow",
-		TimeWindow:       "1_month",
-		Timestamp:        now,
-		SourceData: map[string]float64{
-			"ai_capex_sentiment": sentiment,
-		},
-	}
+	return event
 }
 
 // detectGoldRallyEventFromSnapshot triggers gold_rally when gold price surges above threshold.

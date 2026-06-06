@@ -8,21 +8,6 @@ import (
 	"testing"
 )
 
-// repoRoot finds the repo root from the test environment.
-func repoRoot(t *testing.T) string {
-	t.Helper()
-	// Start from the test file's directory and walk up.
-	// Try several starting points to handle different test invocation modes.
-	for _, start := range []string{".", "..", "../.."} {
-		root, err := FindRepoRoot(start)
-		if err == nil {
-			return root
-		}
-	}
-	t.Fatal("could not find repo root from any starting point")
-	return ""
-}
-
 func TestFindRepoRoot(t *testing.T) {
 	// Try multiple starting points since test working dir varies by runner.
 	var root string

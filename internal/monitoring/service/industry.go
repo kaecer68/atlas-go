@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -10,11 +11,16 @@ import (
 )
 
 type IndustryService struct {
-	Classifier      *industry.ClassificationTree
-	SeasonalEngine  *industry.SeasonalEngine
-	CycleTracker    *industry.CycleTracker
-	LinkageAnalyzer *industry.LinkageAnalyzer
-	RiskMonitor     *industry.RiskMonitor
+	Classifier        *industry.ClassificationTree
+	SeasonalEngine    *industry.SeasonalEngine
+	CycleTracker      *industry.CycleTracker
+	LinkageAnalyzer   *industry.LinkageAnalyzer
+	RiskMonitor       *industry.RiskMonitor
+	SiliconTracker    *industry.SiliconCycleTracker
+	EventCalendar     *industry.EventCalendar
+	CardBuilder       *industry.CycleStatusCardBuilder
+	CycleCalibration  *industry.CycleCalibration
+	siliconAggregator *industry.SiliconDataAggregator
 }
 
 func NewIndustryService(
@@ -23,16 +29,24 @@ func NewIndustryService(
 	cycleTracker *industry.CycleTracker,
 	linkageAnalyzer *industry.LinkageAnalyzer,
 	riskMonitor *industry.RiskMonitor,
+	siliconTracker *industry.SiliconCycleTracker,
+	eventCalendar *industry.EventCalendar,
 ) *IndustryService {
 	if seasonalEngine != nil && linkageAnalyzer != nil {
 		seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
 	}
+	cardBuilder := industry.NewCycleStatusCardBuilder(
+		siliconTracker, cycleTracker, seasonalEngine, eventCalendar, linkageAnalyzer,
+	)
 	return &IndustryService{
 		Classifier:      classifier,
 		SeasonalEngine:  seasonalEngine,
 		CycleTracker:    cycleTracker,
 		LinkageAnalyzer: linkageAnalyzer,
 		RiskMonitor:     riskMonitor,
+		SiliconTracker:  siliconTracker,
+		EventCalendar:   eventCalendar,
+		CardBuilder:     cardBuilder,
 	}
 }
 
@@ -84,7 +98,7 @@ type SeasonalPattern struct {
 	EndMonth           int      `json:"end_month"`
 	EndDay             int      `json:"end_day"`
 	HistoricalAccuracy float64  `json:"historical_accuracy"`
-	TypicalReturn      float64  `json:"typical_return"`
+	AvgMarketReturn    float64  `json:"avg_market_return"`
 	AdjustmentFactor   float64  `json:"adjustment_factor"`
 	FavoredIndustries  []string `json:"favored_industries,omitempty"`
 	AvoidedIndustries  []string `json:"avoided_industries,omitempty"`
@@ -102,7 +116,15 @@ func (s *IndustryService) GetAdjustmentBreakdown(industryID string, now time.Tim
 
 // GetActiveNarrativeThemes returns the narrative themes currently active for an industry.
 func (s *IndustryService) GetActiveNarrativeThemes(industryID string) []string {
-	return nil
+	if s.SeasonalEngine == nil {
+		return []string{}
+	}
+
+	patterns := s.SeasonalEngine.GetActivePatternNames(time.Now())
+	if patterns == nil {
+		return []string{}
+	}
+	return patterns
 }
 
 // UpdateDynamicEnv pushes a fresh macro snapshot into the seasonal engine's environment modulator.
@@ -139,7 +161,7 @@ func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) 
 				EndMonth:           p.EndMonth,
 				EndDay:             p.EndDay,
 				HistoricalAccuracy: p.HistoricalAccuracy,
-				TypicalReturn:      p.AvgMarketReturn,
+				AvgMarketReturn:    p.AvgMarketReturn,
 				AffectedIndustries: p.AffectedIndustries(),
 			})
 		}
@@ -166,7 +188,7 @@ func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) 
 				EndMonth:           p.EndMonth,
 				EndDay:             p.EndDay,
 				HistoricalAccuracy: p.HistoricalAccuracy,
-				TypicalReturn:      p.TypicalReturn(),
+				AvgMarketReturn:    p.AvgMarketReturn,
 				AdjustmentFactor:   p.AdjustmentFactor,
 				FavoredIndustries:  p.FavoredIndustries,
 				AvoidedIndustries:  p.AvoidedIndustries,
@@ -189,8 +211,10 @@ func (s *IndustryService) GetSeasonalCalendar(industryID string, year int) []map
 					"id":                  p.ID,
 					"name":                p.Name,
 					"historical_accuracy": p.HistoricalAccuracy,
-					"typical_return":      p.TypicalReturn(),
-					"adjustment_factor":   p.AdjustmentFactor,
+					"avg_market_return":   p.AvgMarketReturn,
+					// Deprecated: remove after 2026-Q3 migration window.
+					"typical_return":    p.AvgMarketReturn,
+					"adjustment_factor": p.AdjustmentFactor,
 				})
 			}
 		}
@@ -224,14 +248,6 @@ type CyclePosition struct {
 }
 
 func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition, bool) {
-	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
-	breakdown := map[string]float64{
-		"boundary":  mix.WeightBoundary,
-		"freshness": mix.WeightFreshness,
-		"seasonal":  mix.WeightSeasonal,
-		"linkage":   mix.WeightLinkage,
-		"narrative": mix.WeightNarrative,
-	}
 	ev := map[string]string{
 		"source_type":       "heuristic",
 		"evidence_quality":  "low",
@@ -240,10 +256,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 	}
 
 	buildCyclePosition := func(pos *industry.CyclePosition, name string) CyclePosition {
-		evidence := "insufficient"
-		if s.CycleTracker.HasEmpiricalData(pos.IndustryID) {
-			evidence = "empirical"
-		}
+		evidence := s.CycleTracker.EvidenceTier(pos.IndustryID)
 		narrativeTheme := s.CycleTracker.NarrativeTheme(pos.IndustryID)
 		return CyclePosition{
 			Industry:            pos.IndustryID,
@@ -256,7 +269,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 			IsFavorable:         pos.IsFavorable(),
 			PhaseScore:          pos.GetPhaseScore(),
 			Trend:               pos.GetTrend(),
-			ConfidenceBreakdown: breakdown,
+			ConfidenceBreakdown: s.CycleTracker.BuildConfidenceBreakdown(pos.IndustryID),
 			NarrativeTheme:      narrativeTheme,
 			ThresholdEvidence:   ev,
 			Evidence:            evidence,
@@ -726,6 +739,39 @@ func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegmen
 		wd.RiskFactors = []string{"中國基建投資放緩", "原物料價格上漲", "環保法規趨嚴"}
 		wd.Opportunities = []string{"半導體廠建設需求", "綠能基礎設施", "前瞻軌道建設"}
 
+	case "mining":
+		wd.DerivationFactors = []WeightFactor{
+			{Factor: "大宗商品價格", Weight: 0.35, Source: "LME/COMEX", Evidence: "銅、金價格與全球景氣高度相關"},
+			{Factor: "地緣政治避險", Weight: 0.25, Source: "地緣政治", Evidence: "貴金屬與稀土為戰略物資"},
+			{Factor: "半導體上游", Weight: 0.25, Source: "供應鏈分析", Evidence: "銅、稀土為半導體與電子工業關鍵材料"},
+			{Factor: "循環週期", Weight: 0.15, Source: "歷史統計", Evidence: "採礦與金屬景氣與全球製造業PMI同步"},
+		}
+		wd.Interpretation = "採礦與基本金屬权重反映其作為工業上游與地緣政治避險資產的雙重屬性"
+		wd.RiskFactors = []string{"國際金屬價格波動", "中國大陸產能過剩", "ESG採礦標準趨嚴"}
+		wd.Opportunities = []string{"電動車銅需求", "再生能源稀土需求", "貴金屬避險配置"}
+
+	case "leo_satellite":
+		wd.DerivationFactors = []WeightFactor{
+			{Factor: "衛星通訊需求", Weight: 0.35, Source: "NSR", Evidence: "全球低軌衛星市場CAGR>15%"},
+			{Factor: "台灣供應鏈", Weight: 0.25, Source: "內部分析", Evidence: "台灣PCB與射頻元件全球領先"},
+			{Factor: "政府政策", Weight: 0.20, Source: "國科會", Evidence: "台灣太空發展法與國家太空中心"},
+			{Factor: "軍事應用", Weight: 0.20, Source: "國防部", Evidence: "衛星通訊為現代戰爭關鍵基礎設施"},
+		}
+		wd.Interpretation = "低軌衛星权重反映台灣在衛星通訊供應鏈的戰略地位與長期成長潛力"
+		wd.RiskFactors = []string{"SpaceX垂直整合競爭", "頻譜分配不確定性", "發射成本波動"}
+		wd.Opportunities = []string{"國防通訊現代化", "偏遠地區網路覆蓋", "衛星物聯網應用"}
+
+	case "etf_rotation":
+		wd.DerivationFactors = []WeightFactor{
+			{Factor: "策略配置", Weight: 0.40, Source: "投資策略", Evidence: "ETF輪動為跨產業資產配置工具"},
+			{Factor: "流動性", Weight: 0.30, Source: "證交所", Evidence: "台灣ETF日均成交金額持續成長"},
+			{Factor: "分散效果", Weight: 0.20, Source: "投資組合理論", Evidence: "跨產業配置降低單一產業風險"},
+			{Factor: "股息收益", Weight: 0.10, Source: "配息紀錄", Evidence: "高股息ETF為退休理財主流"},
+		}
+		wd.Interpretation = "ETF輪動权重反映其作為跨產業策略配置工具的流動性與分散價值"
+		wd.RiskFactors = []string{"追蹤誤差", "流動性風險", "管理費用侵蝕報酬"}
+		wd.Opportunities = []string{"主動型ETF創新", "ESG主題配置", "量化策略ETF"}
+
 	default:
 		wd.Interpretation = fmt.Sprintf("權重 %.1f%% 基於該產業在台灣經濟中的綜合重要性評估", wd.BaseWeight*100)
 		wd.DerivationFactors = []WeightFactor{
@@ -923,4 +969,67 @@ func (s *IndustryService) GetIndustryGraph() ([]GraphNode, []GraphEdge) {
 		}
 	}
 	return nodes, edges
+}
+
+// BuildCycleStatusCard produces a market-wide composite cycle status card.
+func (s *IndustryService) BuildCycleStatusCard(now time.Time) (*industry.CycleStatusCard, error) {
+	if s.CardBuilder == nil {
+		return nil, fmt.Errorf("card builder not initialized")
+	}
+	return s.CardBuilder.BuildCompositeCard(now)
+}
+
+// BuildIndustryCycleStatusCard produces a single-industry cycle status card.
+func (s *IndustryService) BuildIndustryCycleStatusCard(now time.Time, industryID string) (*industry.CycleStatusCard, error) {
+	if s.CardBuilder == nil {
+		return nil, fmt.Errorf("card builder not initialized")
+	}
+	return s.CardBuilder.BuildCard(now, industryID)
+}
+
+// SetMacroProvider wires a MacroDataProvider into the silicon cycle aggregator
+// so that scheduled silicon indicator updates can pull real TSMC/SOX data.
+// Safe to call multiple times; each call rebuilds the aggregator with the
+// latest provider.
+func (s *IndustryService) SetMacroProvider(mp marketdata.MacroDataProvider) {
+	if s.SiliconTracker != nil {
+		s.siliconAggregator = industry.NewSiliconDataAggregator(s.SiliconTracker, mp)
+	}
+}
+
+// UpdateSiliconIndicators triggers a refresh of silicon cycle indicators
+// from the configured macro provider. When no aggregator is initialized
+// (SetMacroProvider not yet called), it returns nil (no-op).
+func (s *IndustryService) UpdateSiliconIndicators(ctx context.Context) error {
+	if s.siliconAggregator == nil {
+		return nil // no-op: aggregator not wired
+	}
+	return s.siliconAggregator.AggregateSiliconIndicators(ctx)
+}
+
+// SetCycleCalibration injects the calibration tracker and wires it into
+// the global card builder state so resolveCardConfig picks up calibrated weights.
+func (s *IndustryService) SetCycleCalibration(cal *industry.CycleCalibration) {
+	s.CycleCalibration = cal
+	industry.SetGlobalCycleCalibration(cal)
+}
+
+// GetCalibrationMetrics returns per-layer accuracy metrics from the
+// cycle calibration tracker, or nil if no calibration is active.
+func (s *IndustryService) GetCalibrationMetrics() map[string]industry.LayerMetrics {
+	if s.CycleCalibration == nil {
+		return nil
+	}
+	return s.CycleCalibration.GetMetrics()
+}
+
+// RecordCycleCalibrationOutcome stores one calibration data point.
+// layerSignals should map the layer name to its raw signal value from the
+// CycleStatusCard (e.g., silicon score, business_cycle confidence, etc.).
+func (s *IndustryService) RecordCycleCalibrationOutcome(
+	sessionID string, date time.Time, layerSignals map[string]float64, actualReturn float64,
+) {
+	if s.CycleCalibration != nil {
+		s.CycleCalibration.RecordOutcome(sessionID, date, layerSignals, actualReturn)
+	}
 }

@@ -1,0 +1,104 @@
+# Generated data — 6GB+, never needed by Claude
+data/
+
+# Code graph indices
+.codegraph/
+.gitnexus/
+
+# Graphify output
+graphify-out/
+
+# Build artifacts
+bin/
+*.out
+*.test
+
+# Logs and traces
+log/
+logs/
+traces/
+tmp/
+
+# Coverage files
+cov*.out
+refactor_cov.out
+verify_cov.out
+
+# Go vendor cache
+.gocache/
+
+# Git worktrees
+.worktrees/
+
+# Top-level binary/script artifacts
+atlas
+atlas-staging
+atlas.test
+backfill-replay
+backtest-*
+calibrate-*
+check-*
+convert-*
+daily-*
+geo-ingest
+import-replay
+janus-*
+judge-*
+macro-ingest
+migrate-*
+monitoring/
+optimize-*
+promote-*
+realtime-quote
+rewrite-state
+staging-*
+stress-test
+validate-*
+verify-*
+archive-state
+enhanced_experiment_runner
+
+# Large generated files
+channel_health.json
+complexity_top20.txt
+*.db
+*.sqlite
+
+# Generated graph JSON
+.graphify_*.json
+.graphify_*.txt
+
+# Session/state artifacts
+.sisyphus/
+.omo/
+.gstack/
+.playwright-mcp/
+.opencode/
+.env/
+
+# 歷史計畫與設計文檔（不影響運行）
+docs/superpowers/plans/
+docs/superpowers/*-plan.md
+
+# 配置檔案（不應被 Claude 讀取）
+configs/parameters.json
+configs/settings.local.json
+
+# field_types generated files
+web/static/js/field_types.d.ts
+web/static/js/field_names.js
+
+# Claude 技能目錄本身
+.claude/
+
+# Python 快取
+__pycache__/
+*.pyc
+
+# Python virtual environment
+venv/
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db

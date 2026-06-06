@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -15,6 +17,7 @@ import (
 
 type Store struct {
 	baseDir string
+	mu      sync.Mutex
 }
 
 func NewStore(baseDir string) OutcomeStore {
@@ -22,20 +25,22 @@ func NewStore(baseDir string) OutcomeStore {
 }
 
 func (s *Store) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir all: %w", err)
 	}
 
 	path := filepath.Join(s.baseDir, "recommendation_outcomes.jsonl")
-	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := outcome.Validate(); err != nil {
-			logging.Warn("ledger", "outcome_validation_failed",
+			logging.Warn(
+				"ledger", "outcome_validation_failed",
 				logging.AgentID(outcome.AgentID),
 				"symbol", outcome.Symbol,
 				"error", err.Error(),
@@ -43,18 +48,15 @@ func (s *Store) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 		}
 		if err := enc.Encode(outcome); err != nil {
 			_ = f.Close()
-			_ = os.Remove(tmp)
 			return fmt.Errorf("encode outcome: %w", err)
 		}
 	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("close file: %w", err)
-	}
-	return os.Rename(tmp, path)
+	return f.Close()
 }
 
 func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {
 		return fmt.Errorf("mkdir session dir: %w", err)
 	}
@@ -68,7 +70,8 @@ func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []d
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := outcome.Validate(); err != nil {
-			logging.Warn("ledger", "outcome_validation_failed",
+			logging.Warn(
+				"ledger", "outcome_validation_failed",
 				logging.AgentID(outcome.AgentID),
 				"symbol", outcome.Symbol,
 				"error", err.Error(),
@@ -89,6 +92,8 @@ func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []d
 
 // LoadSessionOutcomes reads per-session recommendation outcomes from the session directory.
 func (s *Store) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.sessionDir(sessionID), "recommendation_outcomes.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -111,7 +116,42 @@ func (s *Store) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOu
 	return outcomes, scanner.Err()
 }
 
+// LoadOutcomesFromSessions aggregates outcomes from all session directories.
+// This is the richest data source with per-agent, per-symbol forward returns.
+// Prefer this over LoadOutcomes() which reads from the sparse global file.
+func (s *Store) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := os.ReadDir(s.baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("read sessions dir: %w", err)
+	}
+	var allOutcomes []domain.RecommendationOutcome
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "session-") {
+			continue
+		}
+		outcomePath := filepath.Join(s.baseDir, entry.Name(), "recommendation_outcomes.jsonl")
+		f, err := os.Open(outcomePath)
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			var outcome domain.RecommendationOutcome
+			if err := json.Unmarshal(scanner.Bytes(), &outcome); err != nil {
+				continue
+			}
+			allOutcomes = append(allOutcomes, outcome)
+		}
+		_ = f.Close()
+	}
+	return allOutcomes, nil
+}
+
 func (s *Store) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.baseDir, "recommendation_outcomes.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -135,6 +175,8 @@ func (s *Store) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 }
 
 func (s *Store) RecordExperiment(record domain.ExperimentRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir all: %w", err)
 	}
@@ -151,6 +193,8 @@ func (s *Store) RecordExperiment(record domain.ExperimentRecord) error {
 
 // LoadExperiments reads all experiment records from experiments.jsonl.
 func (s *Store) LoadExperiments() ([]domain.ExperimentRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.baseDir, "experiments.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -174,6 +218,8 @@ func (s *Store) LoadExperiments() ([]domain.ExperimentRecord, error) {
 }
 
 func (s *Store) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {
 		return fmt.Errorf("mkdir session dir: %w", err)
 	}
@@ -189,6 +235,8 @@ func (s *Store) RecordSessionExperiment(session domain.ReplaySession, record dom
 }
 
 func (s *Store) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {
 		return fmt.Errorf("mkdir session dir: %w", err)
 	}
@@ -207,6 +255,8 @@ func (s *Store) RecordSessionSummary(session domain.ReplaySession, summary domai
 }
 
 func (s *Store) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	root := filepath.Join(s.baseDir, "sessions")
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -233,6 +283,8 @@ func (s *Store) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.Recomme
 }
 
 func (s *Store) RecordWindowSummary(summary domain.BacktestWindowSummary) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	dir := filepath.Join(s.baseDir, "windows")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir window dir: %w", err)
@@ -251,6 +303,8 @@ func (s *Store) RecordWindowSummary(summary domain.BacktestWindowSummary) error 
 }
 
 func (s *Store) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	dir := filepath.Join(s.baseDir, "windows")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir window dir: %w", err)
@@ -283,6 +337,8 @@ type SpawnRecord struct {
 }
 
 func (s *Store) RecordSpawnRecord(record SpawnRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir all: %w", err)
 	}
@@ -297,6 +353,8 @@ func (s *Store) RecordSpawnRecord(record SpawnRecord) error {
 }
 
 func (s *Store) LoadSpawnRecords() ([]SpawnRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.baseDir, "spawn_records.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -319,6 +377,8 @@ func (s *Store) LoadSpawnRecords() ([]SpawnRecord, error) {
 }
 
 func (s *Store) RecordHumanIntervention(intervention domain.HumanIntervention) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir all: %w", err)
 	}
@@ -332,6 +392,8 @@ func (s *Store) RecordHumanIntervention(intervention domain.HumanIntervention) e
 }
 
 func (s *Store) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.baseDir, "human_interventions.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -354,6 +416,8 @@ func (s *Store) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 }
 
 func (s *Store) RecordPromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	dir := filepath.Join(s.baseDir, "experiments")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir experiment dir: %w", err)
@@ -503,6 +567,8 @@ func maxDrawdown(values []float64) float64 {
 }
 
 func (s *Store) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.sessionDir(sessionID), 0o755); err != nil {
 		return fmt.Errorf("mkdir session dir: %w", err)
 	}
@@ -522,6 +588,8 @@ func (s *Store) RecordSessionScreeningRejects(sessionID string, rejects []domain
 }
 
 func (s *Store) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.sessionDir(sessionID), "screened_symbols.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -547,6 +615,8 @@ func (s *Store) RecordSessionTrades(sessionID string, trades []domain.TradeRecor
 	if len(trades) == 0 {
 		return nil
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.sessionDir(sessionID), 0o755); err != nil {
 		return fmt.Errorf("mkdir session dir: %w", err)
 	}
@@ -566,6 +636,8 @@ func (s *Store) RecordSessionTrades(sessionID string, trades []domain.TradeRecor
 }
 
 func (s *Store) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.sessionDir(sessionID), "trades.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -619,6 +691,8 @@ func (s *Store) sessionDir(sessionID string) string {
 
 // LoadSessionSummaries reads all session summaries stored in the ledger.
 func (s *Store) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	root := filepath.Join(s.baseDir, "sessions")
 	entries, err := os.ReadDir(root)
 	if err != nil {

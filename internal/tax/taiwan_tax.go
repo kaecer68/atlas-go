@@ -9,9 +9,20 @@ import (
 // Tax rates:
 //   - Dividend income tax: 28% (included in comprehensive income tax)
 //   - Securities transaction tax (sell side only): 0.3% of sell notional
+//
+// The default DividendTaxRate (0.28) already bakes in the NHI supplementary
+// premium (二代健保補充保費) at NHISurchargeRate (2%). Set TaxConfig.IncludeNHI
+// to false to compute dividend tax at the NHI-exclusive rate (28% − 2% = 26%),
+// modeling scenarios where the supplementary premium is waived (e.g. non-
+// resident accounts, employer-paid dividends, or counterfactual analysis).
 type TaiwanTaxCalculator struct {
 	cfg domain.TaxConfig
 }
+
+// NHISurchargeRate is the NHI supplementary premium portion embedded in
+// domain.DefaultTaiwanTaxConfig().DividendTaxRate (0.28). It is subtracted
+// from the dividend tax rate when TaxConfig.IncludeNHI is false.
+const NHISurchargeRate = 0.02
 
 // NewTaiwanTaxCalculator creates a calculator with the given config.
 // Use domain.DefaultTaiwanTaxConfig() for standard Taiwan rates.
@@ -24,12 +35,29 @@ func (c *TaiwanTaxCalculator) Config() domain.TaxConfig {
 	return c.cfg
 }
 
+// effectiveDividendTaxRate returns the dividend tax rate actually applied to
+// calculations, gating out the NHI surcharge when cfg.IncludeNHI is false.
+func (c *TaiwanTaxCalculator) effectiveDividendTaxRate() float64 {
+	if c.cfg.IncludeNHI {
+		return c.cfg.DividendTaxRate
+	}
+	// Defensive floor: never go below zero even if a caller misconfigures
+	// DividendTaxRate below the NHI surcharge.
+	rate := c.cfg.DividendTaxRate - NHISurchargeRate
+	if rate < 0 {
+		return 0
+	}
+	return rate
+}
+
 // CalculateDividendTax returns the tax owed on a dividend amount.
+// When TaxConfig.IncludeNHI is false, the NHI surcharge (NHISurchargeRate)
+// is excluded from the effective rate.
 func (c *TaiwanTaxCalculator) CalculateDividendTax(dividendAmount float64) float64 {
 	if dividendAmount <= 0 {
 		return 0
 	}
-	return dividendAmount * c.cfg.DividendTaxRate
+	return dividendAmount * c.effectiveDividendTaxRate()
 }
 
 // CalculateTransactionTax returns the securities transaction tax on a sell notional.
@@ -47,7 +75,7 @@ func (c *TaiwanTaxCalculator) CalculatePositionTax(pos domain.Position, sellPric
 	if pos.Quantity <= 0 || sellPrice <= 0 {
 		return domain.TaxSnapshot{
 			Symbol:             pos.Symbol,
-			DividendTaxRate:    c.cfg.DividendTaxRate,
+			DividendTaxRate:    c.effectiveDividendTaxRate(),
 			TransactionTaxRate: c.cfg.TransactionTaxRate,
 		}
 	}
@@ -62,7 +90,7 @@ func (c *TaiwanTaxCalculator) CalculatePositionTax(pos domain.Position, sellPric
 
 	return domain.TaxSnapshot{
 		Symbol:             pos.Symbol,
-		DividendTaxRate:    c.cfg.DividendTaxRate,
+		DividendTaxRate:    c.effectiveDividendTaxRate(),
 		TransactionTaxRate: c.cfg.TransactionTaxRate,
 		DividendTax:        divTax,
 		TransactionTax:     txnTax,
@@ -89,4 +117,56 @@ func (c *TaiwanTaxCalculator) CalculatePortfolioTax(
 		snapshots = append(snapshots, snap)
 	}
 	return snapshots
+}
+
+// TaiwanCostModel computes round-trip trading costs for Taiwan equities.
+//
+// Based on Taiwan empirical data:
+//   - AvgTradingCost: 0.00654 (~0.654%) — aggregate of commission
+//     (0.1425% × broker_discount ~0.6) + slippage
+//   - TaxRate: 0.003 (0.3%) — securities transaction tax (sell side only)
+type TaiwanCostModel struct {
+	AvgTradingCost float64
+	TaxRate        float64
+}
+
+// NewTaiwanCostModel creates a cost model with the given rates.
+//
+// avgTradingCost should be sourced from ParametersConfig.Baseline.AvgTradingCost
+// (default 0.00654). taxRate should be the securities transaction tax rate
+// (typically domain.DefaultTaiwanTaxConfig().TransactionTaxRate = 0.003).
+func NewTaiwanCostModel(avgTradingCost, taxRate float64) *TaiwanCostModel {
+	return &TaiwanCostModel{
+		AvgTradingCost: avgTradingCost,
+		TaxRate:        taxRate,
+	}
+}
+
+// RoundTripCost returns the total round-trip cost as a fraction of turnover.
+// RoundTripCost = turnover * (AvgTradingCost + TaxRate)
+func (cm *TaiwanCostModel) RoundTripCost(turnover float64) float64 {
+	if turnover <= 0 {
+		return 0
+	}
+	return turnover * (cm.AvgTradingCost + cm.TaxRate)
+}
+
+// NetReturn returns the net return after deducting round-trip trading costs.
+func (cm *TaiwanCostModel) NetReturn(rawReturn, turnover float64) float64 {
+	return rawReturn - cm.RoundTripCost(turnover)
+}
+
+// ApplyToSeries applies round-trip cost adjustments to a series of raw returns
+// paired with corresponding turnover rates.
+// Returns a new slice; does not mutate the input.
+func (cm *TaiwanCostModel) ApplyToSeries(rawReturns, turnovers []float64) []float64 {
+	n := len(rawReturns)
+	if len(turnovers) < n {
+		n = len(turnovers)
+	}
+	result := make([]float64, n)
+	for i := 0; i < n; i++ {
+		result[i] = cm.NetReturn(rawReturns[i], turnovers[i])
+	}
+	return result
 }

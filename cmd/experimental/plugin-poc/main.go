@@ -26,7 +26,7 @@ func (demoExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "demo_plugin_strategy"
 }
 
-func (demoExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
+func (demoExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq orchestrator.FactorQuery) (domain.Recommendation, bool) {
 	return domain.Recommendation{}, false
 }
 

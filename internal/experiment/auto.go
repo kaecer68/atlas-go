@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -27,6 +28,21 @@ type AutoExperimentConfig struct {
 }
 
 func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
+	if cfg.System == nil {
+		return fmt.Errorf("AutoExperiment: System must not be nil")
+	}
+
+	// First, check if there are pending experiments from the daily pipeline that
+	// haven't been tested yet. Process the oldest one to close the feedback loop.
+	if pending := loadOldestPendingExperiment(cfg.Config.LedgerDir); pending != nil {
+		candidate := pending.toCandidate(cfg.System.GetRegistry())
+		if candidate != nil {
+			logging.Info("experiment", "processing_pending",
+				"agent", candidate.Agent.ID, "experiment_id", pending.ID)
+			return runExperimentForCandidate(ctx, cfg, candidate)
+		}
+	}
+
 	candidate, err := cfg.System.NextExperimentCandidate()
 	if err != nil {
 		return fmt.Errorf("identify candidate: %w", err)
@@ -41,6 +57,12 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 		"skill", candidate.Agent.Skill,
 		"sharpe", fmt.Sprintf("%.3f", candidate.Scorecard.SharpeLike))
 
+	return runExperimentForCandidate(ctx, cfg, candidate)
+}
+
+// runExperimentForCandidate executes the full experiment pipeline for a candidate:
+// build brief → run executor → judge → update ledger → promote if accepted.
+func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, candidate *domain.Candidate) error {
 	windowID := "window-" + time.Now().Add(-7*24*time.Hour).Format("20060102") + "-" + time.Now().Format("20060102")
 	brief := domain.BuildMutationBrief(windowID, candidate)
 
@@ -64,7 +86,7 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 		return fmt.Errorf("run experiment: %w", runErr)
 	}
 
-	expPath := findLatestExperiment(filepath.Join(cfg.Config.WorkDir, "data", "state", "experiments"))
+	expPath := FindLatestExperiment(filepath.Join(cfg.Config.WorkDir, "data", "state", "experiments"))
 	if expPath == "" {
 		return fmt.Errorf("experiment result not found for %s", result.Experiment.ID)
 	}
@@ -82,6 +104,24 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 		"baseline", fmt.Sprintf("%.3f", judged.Experiment.BaselineValue),
 		"candidate", fmt.Sprintf("%.3f", judged.Experiment.CandidateValue))
 
+	// Close the planned→tested feedback loop: append the actual experiment result
+	// to the ledger so the inbox shows real values instead of "待測試".
+	resultRec := domain.ExperimentRecord{
+		ID:                   candidate.Experiment.ID,
+		TargetAgentID:        candidate.Agent.ID,
+		Skill:                candidate.Agent.Skill,
+		MutationType:         candidate.Experiment.MutationType,
+		Status:               status,
+		BaselineValue:        judged.Experiment.BaselineValue,
+		CandidateValue:       judged.Experiment.CandidateValue,
+		BaselineMonetaryNTD:  judged.Experiment.BaselineMonetaryNTD,
+		CandidateMonetaryNTD: judged.Experiment.CandidateMonetaryNTD,
+		AcceptanceMetric:     candidate.Experiment.AcceptanceMetric,
+	}
+	if err := store.RecordExperiment(resultRec); err != nil {
+		logging.Warn("experiment", "ledger_update_failed", logging.Err(err))
+	}
+
 	if status == domain.ExperimentAccepted {
 		mgr := baseline.NewManager(cfg.Config.BaselinePolicyPath)
 		if _, err := mgr.PromoteResult(expPath); err != nil {
@@ -96,10 +136,10 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 			cfg.Monitor.Alert("info", "experiment",
 				fmt.Sprintf("strategy promoted: agent=%s (%s)", candidate.Agent.ID, candidate.Agent.Skill),
 				map[string]any{
-					"agent":    candidate.Agent.ID,
-					"skill":    candidate.Agent.Skill,
-					"status":   string(status),
-					"baseline": judged.Experiment.BaselineValue,
+					"agent":     candidate.Agent.ID,
+					"skill":     candidate.Agent.Skill,
+					"status":    string(status),
+					"baseline":  judged.Experiment.BaselineValue,
 					"candidate": judged.Experiment.CandidateValue,
 				})
 		}
@@ -108,10 +148,10 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 			cfg.Monitor.Alert("info", "experiment",
 				fmt.Sprintf("experiment rejected: agent=%s (%s)", candidate.Agent.ID, candidate.Agent.Skill),
 				map[string]any{
-					"agent":    candidate.Agent.ID,
-					"skill":    candidate.Agent.Skill,
-					"status":   string(status),
-					"baseline": judged.Experiment.BaselineValue,
+					"agent":     candidate.Agent.ID,
+					"skill":     candidate.Agent.Skill,
+					"status":    string(status),
+					"baseline":  judged.Experiment.BaselineValue,
 					"candidate": judged.Experiment.CandidateValue,
 				})
 		}
@@ -119,29 +159,73 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 	return nil
 }
 
-func findLatestExperiment(dir string) string {
-	entries, err := os.ReadDir(dir)
+// pendingExperiment is a lightweight experiment record loaded from the ledger.
+type pendingExperiment struct {
+	ID            string
+	TargetAgentID string
+	Skill         string
+	MutationType  string
+	BaselineValue float64
+}
+
+func (p *pendingExperiment) toCandidate(registry domain.AgentRegistry) *domain.Candidate {
+	for _, a := range registry.Agents {
+		if a.ID == p.TargetAgentID && a.Enabled {
+			return &domain.Candidate{
+				Agent: a,
+				Scorecard: domain.Scorecard{
+					AgentID:     a.ID,
+					SharpeLike:  p.BaselineValue,
+					WindowCount: 1,
+				},
+				Experiment: domain.ExperimentRecord{
+					ID:               p.ID,
+					TargetAgentID:    a.ID,
+					Skill:            a.Skill,
+					MutationType:     p.MutationType,
+					Status:           domain.ExperimentPlanned,
+					BaselineValue:    p.BaselineValue,
+					AcceptanceMetric: "sharpe_like",
+				},
+			}
+		}
+	}
+	return nil
+}
+
+// loadOldestPendingExperiment reads the experiments ledger to find the oldest
+// planned experiment that hasn't been tested yet.
+func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
+	path := filepath.Join(ledgerDir, "experiments.jsonl")
+	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return nil
 	}
-	var newest string
-	var newestTime time.Time
-	for _, entry := range entries {
-		if entry.IsDir() {
+	defer func() { _ = f.Close() }()
+
+	var oldest *pendingExperiment
+	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 1024*1024)
+	scanner.Buffer(buf, 1024*1024)
+	for scanner.Scan() {
+		var rec domain.ExperimentRecord
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
 			continue
 		}
-		name := entry.Name()
-		if filepath.Ext(name) != ".json" || name == "test-experiment.json" {
+		if rec.Status != domain.ExperimentPlanned || rec.TargetAgentID == "" {
 			continue
 		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		if info.ModTime().After(newestTime) {
-			newestTime = info.ModTime()
-			newest = filepath.Join(dir, name)
+		// Only pick the FIRST matching record (oldest, since file is chronological)
+		if oldest == nil {
+			oldest = &pendingExperiment{
+				ID:            rec.ID,
+				TargetAgentID: rec.TargetAgentID,
+				Skill:         rec.Skill,
+				MutationType:  rec.MutationType,
+				BaselineValue: rec.BaselineValue,
+			}
+			break
 		}
 	}
-	return newest
+	return oldest
 }

@@ -42,7 +42,7 @@ type SectorRotator struct {
 func NewSectorRotator() *SectorRotator {
 	params := config.GetParametersConfig()
 	ba := params.Orchestrator.SectorRotationBaseAllocations.Value
-	engineCfg := config.GetEngineConfig().SectorRotation
+	engineCfg := config.GetParametersConfig().Engine.SectorRotation.ToConfig()
 	return &SectorRotator{
 		baseAllocations:    ba,
 		minAllocation:      engineCfg.MinAllocation,

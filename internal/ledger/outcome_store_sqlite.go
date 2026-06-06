@@ -139,7 +139,25 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 	return tx.Commit()
 }
 
-// LoadOutcomes reads all global outcomes (session_id = "").
+// LoadOutcomesFromSessions 聚合所有 session 的 outcomes，包含 session_id != ” 的列。
+// 與 LoadOutcomes()（僅 session_id = ”，稀疏的全域檔）不同，
+// 此方法符合 internal/ledger/AGENTS.md 規範：「richest data source with
+// per-agent, per-symbol forward returns」。
+func (s *SQLiteOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	rows, err := s.db.Query(`
+		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
+			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
+		FROM outcomes WHERE session_id != '' ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("query outcomes from sessions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanOutcomes(rows)
+}
+
+// LoadOutcomes 讀取全域 sparse outcomes（session_id = ”），對應
+// baseDir/recommendation_outcomes.jsonl。Per-AGENTS.md 規範，請勿用此方法
+// 計算單場 OutcomeCount。
 func (s *SQLiteOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
@@ -330,7 +348,8 @@ func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) er
 		return fmt.Errorf("marshal mutation brief: %w", err)
 	}
 
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
 		VALUES (?, ?, ?, ?)`,
 		record.ID,
@@ -352,7 +371,8 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 		return fmt.Errorf("marshal mutation brief: %w", err)
 	}
 
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO experiments (experiment_id, session_id, mutation_brief_json, accepted, timestamp)
 		VALUES (?, ?, ?, ?, ?)`,
 		record.ID,
@@ -370,7 +390,8 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 
 // RecordSessionSummary persists a session summary.
 func (s *SQLiteOutcomeStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
-	_, err := s.db.Exec(`
+	_, err := s.db.Exec(
+		`
 		INSERT INTO session_summaries (session_id, total_recs, passed_guards, rejected, timestamp)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
@@ -447,7 +468,8 @@ func (s *SQLiteOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []d
 // RecordHumanIntervention persists a human intervention record.
 func (s *SQLiteOutcomeStore) RecordHumanIntervention(intervention domain.HumanIntervention) error {
 	ts := intervention.RecordedAt.Format("2006-01-02T15:04:05Z07:00")
-	_, err := s.db.Exec(`
+	_, err := s.db.Exec(
+		`
 		INSERT INTO human_interventions (session_id, symbol, agent_id, action, timestamp)
 		VALUES (?, ?, ?, ?, ?)`,
 		intervention.SessionID,

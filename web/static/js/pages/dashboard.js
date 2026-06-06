@@ -1,5 +1,5 @@
 import { agentName, stockName, regimeLabel, eventName, stressLabel, sectorName } from '../names.js';
-import { getJSON, notify } from '../shared/app-utils.js';
+import { getJSON, notify, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 
@@ -27,12 +27,8 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : (regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
 
   const nev = (narrativeEvents && narrativeEvents.events) || [];
-  // 以「情緒絕對值 × 信心度」排序，取最強烈的事件作為代表
-  const sortedEvents = nev.slice().sort((a, b) => {
-    const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
-    const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
-    return strengthB - strengthA;
-  });
+  // 以「情緒絕對值 × 信心度 × 命中率」排序，取最強烈的事件作為代表
+  const sortedEvents = sortNarrativeEvents(nev.slice());
   const topEvent = sortedEvents[0];
   const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
   const stressRegime = stress ? stressLabel(stress.regime || '-') : '-';
@@ -57,7 +53,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const alertHtml = errorChannels.length > 0
     ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
     : (warnChannels.length > 0
-      ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料延遲</div>`
+      ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料待更新</div>`
       : '<div class="my-xs text-sm text-up">✓ 所有通道正常</div>');
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
@@ -73,7 +69,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   gridRisk.innerHTML = `
     <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：<span style="${parseFloat(weakSharpe) < 0 ? 'color:#ff6b6b;font-weight:600' : ''}">${weakSharpe}</span></div></div>
     <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''} clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value text-lg">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
-    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
+    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆待更新' : '正常')}</div>${alertHtml}</div>
   `;
   gridSystem.innerHTML = `
     <div class="kpi-card ${!health.replay_data_path_ok ? 'alert-err' : ''} clickable" onclick="${!health.replay_data_path_ok ? "openKpiHelp('replay-missing')" : "switchPage('datachannels')"}"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '未匯入'}</div><div class="kpi-hint">${health.replay_data_path_ok ? `最新回放數據<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}` : '⚠️ 回放資料尚未匯入<br><small style="color:var(--down)">點此查看匯入方式 →</small>'}</div></div>

@@ -218,8 +218,10 @@ func (rm *RiskManager) UpdatePosition(symbol string, currentPrice float64) {
 	position.Unrealized = (currentPrice - position.EntryPrice) * position.Size
 
 	// Check for stop loss or take profit
+	// StopLoss 預設為 -0.05（5% 損失），因此 stopLossThreshold 為負值。
+	// Unrealized 在虧損時為負數，< stopLossThreshold 表示虧損幅度 >= 設定值。
 	stopLossThreshold := position.EntryPrice * position.Size * rm.runtimeParams.Risk.StopLoss
-	if rm.stopLossEnabled && position.Unrealized < stopLossThreshold {
+	if rm.stopLossEnabled && position.Unrealized <= stopLossThreshold {
 		alert := rm.createAlert(AlertPositionSize, LevelWarning,
 			fmt.Sprintf("Stop loss triggered for %s at %.2f", symbol, currentPrice),
 			symbol, currentPrice, position.EntryPrice*(1+rm.runtimeParams.Risk.StopLoss))

@@ -92,7 +92,7 @@ type MacroAwareDrawdownEngine struct {
 
 // NewMacroAwareDrawdownEngine creates a new drawdown engine with default levels
 func NewMacroAwareDrawdownEngine() *MacroAwareDrawdownEngine {
-	return NewMacroAwareDrawdownEngineWithConfig(config.GetEngineConfig().Drawdown)
+	return NewMacroAwareDrawdownEngineWithConfig(config.GetParametersConfig().Engine.Drawdown.ToConfig())
 }
 
 // NewMacroAwareDrawdownEngineWithConfig creates a new drawdown engine with custom config

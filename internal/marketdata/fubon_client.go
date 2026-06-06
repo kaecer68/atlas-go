@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -58,7 +59,40 @@ type FubonMarketStatus struct {
 	Timestamp int    `json:"timestamp"`
 }
 
+var (
+	sharedFubonClient     *FubonClient
+	sharedFubonClientOnce sync.Once
+	sharedFubonClientMu   sync.RWMutex
+)
+
+// GetSharedFubonClient returns a singleton FubonClient that all components
+// share. Using a single client ensures consistent proxy URL, shared HTTP
+// client, and one intraday rate-limiter token bucket across all call sites
+// (gateway channels, hybrid provider).
+// The authToken is used only on first call; subsequent calls ignore it.
+func GetSharedFubonClient(authToken string) *FubonClient {
+	sharedFubonClientOnce.Do(func() {
+		sharedFubonClient = newFubonClient(authToken)
+	})
+	return sharedFubonClient
+}
+
+// ResetSharedFubonClient clears the singleton (for tests).
+func ResetSharedFubonClient() {
+	sharedFubonClientMu.Lock()
+	defer sharedFubonClientMu.Unlock()
+	sharedFubonClient = nil
+	sharedFubonClientOnce = sync.Once{}
+}
+
+// NewFubonClient creates a standalone FubonClient with its own rate limiter.
+// Prefer GetSharedFubonClient in production to avoid multiple independent
+// token buckets that can collectively exceed the rate limit.
 func NewFubonClient(authToken string) *FubonClient {
+	return newFubonClient(authToken)
+}
+
+func newFubonClient(authToken string) *FubonClient {
 	proxyURL := os.Getenv("FUBON_PROXY_URL")
 	if proxyURL == "" {
 		proxyURL = fubonProxyBaseURL

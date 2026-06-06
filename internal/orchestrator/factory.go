@@ -2,12 +2,15 @@ package orchestrator
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/spawning"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
@@ -15,16 +18,47 @@ import (
 // NewProductionSystem builds a fully-wired System for dependency-graph visibility
 // with an internally-created EventBus.
 func NewProductionSystem(cfg config.Config, opts ...SystemOption) (*System, error) {
-	return NewProductionSystemWithEventBus(cfg, nil, opts...)
+	return NewProductionSystemWithJANUS(cfg, nil, nil, opts...)
+}
+
+// NewProductionSystemWithJANUS builds a fully-wired System using the provided
+// EventBus and JANUS engine. If janusEngine is nil, a new internal engine is
+// created for backward compatibility.
+func NewProductionSystemWithJANUS(
+	cfg config.Config,
+	eventBus *eventbus.ChannelEventBus,
+	janusEngine *janus.Engine,
+	opts ...SystemOption,
+) (*System, error) {
+	return NewProductionSystemWithEventBus(cfg, eventBus, janusEngine, opts...)
 }
 
 // NewProductionSystemWithEventBus builds a fully-wired System, passing the
 // provided EventBus to NewSystemWithEventBus. If eventBus is nil, an internal
 // EventBus is created (backward-compatible).
-func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus, opts ...SystemOption) (*System, error) {
+func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus, janusEngine *janus.Engine, opts ...SystemOption) (*System, error) {
 	system, err := NewSystemWithEventBus(cfg, eventBus, opts...)
 	if err != nil {
 		return nil, err
+	}
+
+	// Create and wire MaturityTracker.
+	maturityTracker, err := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
+	if err != nil {
+		// Non-fatal: system can run without maturity tracking.
+		// Log and continue.
+		maturityTracker = domain.NewMaturityTrackerWithStart(time.Now().UTC())
+	}
+	system.WithMaturityTracker(maturityTracker)
+
+	// Inject maturity tracker into DarwinianWeightManager.
+	if system.Port().darwinian != nil {
+		system.Port().darwinian.WithMaturityTracker(maturityTracker)
+	}
+
+	// Inject maturity tracker into sim engine's PreTradeGate.
+	if system.Sim().engine != nil && maturityTracker != nil {
+		system.Sim().engine.WithPreTradeGate(risk.NewPreTradeGate().WithMaturityTracker(maturityTracker))
 	}
 
 	system.WithDarwinian(system.Port().darwinian)
@@ -35,8 +69,10 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	sw := swarm.NewMiroFishSwarm(swarm.DefaultSwarmConfig())
 	system.WithSwarm(sw)
 
-	je := janus.NewEngineWithConfig(janus.DefaultJANUSConfig())
-	system.WithJANUS(je)
+	if janusEngine == nil {
+		janusEngine = janus.NewEngineWithConfig(janus.DefaultJANUSConfig())
+	}
+	system.WithJANUS(janusEngine, pm)
 
 	spawnCfg := spawning.DefaultSpawningConfig()
 	spawnCfg.PromptsDir = filepath.Join(cfg.WorkDir, "prompts")
@@ -46,6 +82,9 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	re := reflexivity.NewReflexivityEngine()
 	ctrl := NewPhase3Controller(&system.Sim().registry, pm, sw, sm, re, system.Sim().ledger)
 	system.WithPhase3Controller(ctrl)
+
+	system.WithStrategyEvolver(NewStrategyEvolver())
+	pm.Start()
 
 	return system, nil
 }

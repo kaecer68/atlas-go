@@ -472,6 +472,10 @@ func (o *Orchestrator) fetchAndProcessQuotes() {
 	}
 
 	for _, quote := range quotes {
+		o.stateStore.UpdatePositionPrices([]domain.Quote{quote})
+		if o.config.StopLossEnabled || o.config.TakeProfitEnabled {
+			o.checkRiskTriggers(quote.Symbol, quote.Last)
+		}
 		o.publishMarketSnapshot(quote)
 	}
 }

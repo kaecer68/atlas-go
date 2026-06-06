@@ -185,7 +185,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	var sb strings.Builder
 
 	sb.WriteString("# Performance Report\n\n")
-	fmt.Fprintf(&sb, "**Period:** %s (%s to %s)\n\n",
+	fmt.Fprintf(
+		&sb, "**Period:** %s (%s to %s)\n\n",
 		report.Period,
 		report.StartDate.Format("2006-01-02"),
 		report.EndDate.Format("2006-01-02"),
@@ -217,7 +218,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Agent | Skill | Layer | Trades | Win Rate | Avg Return | Total Return |\n")
 		sb.WriteString("|-------|-------|-------|--------|----------|------------|-------------|\n")
 		for _, a := range report.TopAgents {
-			fmt.Fprintf(&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
+			fmt.Fprintf(
+				&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
 				truncate(a.AgentID, 20),
 				a.Skill,
 				a.Layer,
@@ -237,7 +239,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Regime | Sessions | Total Return | Win Rate | Avg Return |\n")
 		sb.WriteString("|--------|----------|--------------|----------|------------|\n")
 		for _, r := range report.RegimeBreakdown.Regimes {
-			fmt.Fprintf(&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
+			fmt.Fprintf(
+				&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
 				r.Regime,
 				r.SessionCount,
 				r.TotalReturn*100,
@@ -507,7 +510,7 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome) []AgentContribu
 }
 
 func calculateSharpeLike(returns []float64) float64 {
-	if len(returns) == 0 {
+	if len(returns) < 60 {
 		return 0
 	}
 	m := mean(returns)
@@ -522,7 +525,7 @@ func calculateSharpeLike(returns []float64) float64 {
 // Uses the ratio of portfolio volatility to benchmark return magnitude,
 // consistent with benchmark.go's simplified approach.
 func CalculateBeta(portfolioReturns []float64, benchmarkReturn float64) float64 {
-	if len(portfolioReturns) < 2 || benchmarkReturn == 0 {
+	if len(portfolioReturns) < 60 || benchmarkReturn == 0 {
 		return 1.0
 	}
 	portVol := stdDev(portfolioReturns)

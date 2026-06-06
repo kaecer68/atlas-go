@@ -288,7 +288,8 @@ func WithSymbolsProcessed(n int) RecordOption {
 
 // RecordChannelFetch is a convenience helper for CLI tools.
 func RecordChannelFetch(stateDir, channelID, status, errMsg string, rateRemaining int, latencyMs int64) {
-	RecordChannelFetchWithPool(stateDir, channelID, status, errMsg, nil,
+	RecordChannelFetchWithPool(
+		stateDir, channelID, status, errMsg, nil,
 		WithRateLimitRemaining(rateRemaining),
 		WithLatencyMs(latencyMs),
 	)

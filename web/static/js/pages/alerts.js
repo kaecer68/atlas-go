@@ -10,7 +10,7 @@ export function renderAlerts(data) {
       '<div style="font-size:14px;margin-bottom:8px">目前沒有警報</div>' +
       '<div style="font-size:12px;color:var(--muted)">' +
       '警報由系統監控模組觸發，當以下條件發生時會產生警報：<br>' +
-      '• 資料通道延遲超過閾值<br>' +
+      '• 資料通道待更新超過閾值<br>' +
       '• 系統健康度異常<br>' +
       '• 交易風險超過限制<br>' +
       '目前系統運行正常，暫無需要關注的警報。' +

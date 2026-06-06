@@ -9,20 +9,38 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
-	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
 // DayTradingFetcher fetches day trading statistics. Set by the constructor when Gateway is available.
 type DayTradingFetcher func(ctx context.Context) (*marketdata.DayTradingStats, error)
 
+// TaifexFetcher fetches TAIFEX PCR and retail futures OI data in a single call.
+type TaifexFetcher func(ctx context.Context) (pcr *marketdata.PCRStats, futuresOI *marketdata.RetailFuturesOI, err error)
+
+// OddLotFetcher fetches TWSE odd-lot trading statistics.
+type OddLotFetcher func(ctx context.Context) (*marketdata.OddLotStats, error)
+
+// ETFFetcher fetches TWSE ETF subscription/redemption data.
+type ETFFetcher func(ctx context.Context) (*marketdata.ETFStats, error)
+
+// GeopoliticalRiskFetcher fetches the current geopolitical risk reading
+// normalized to [0, 1]. Returns 0 on error (defense-first).
+type GeopoliticalRiskFetcher func(ctx context.Context) float64
+
 type Handlers struct {
-	Svc               *service.SystemService
-	DayTradingFetcher DayTradingFetcher
+	Svc                     *service.SystemService
+	DayTradingFetcher       DayTradingFetcher
+	TaifexFetcher           TaifexFetcher
+	OddLotFetcher           OddLotFetcher
+	ETFFetcher              ETFFetcher
+	GeopoliticalRiskFetcher GeopoliticalRiskFetcher
 }
 
 func NewHandlers(svc *service.SystemService) *Handlers {
@@ -104,17 +122,30 @@ func (h *Handlers) HandleCapitalPhase(r *http.Request) (int, any) {
 }
 
 type RetailSentimentResponse struct {
-	SentimentScore   float64 `json:"sentiment_score"`
-	MarginChangePct  float64 `json:"margin_change_pct"`
-	MarginBalance    float64 `json:"margin_balance"`
-	ShortBalance     float64 `json:"short_balance"`
-	ShortChangePct   float64 `json:"short_change_pct"`
-	DayTradingRatio  float64 `json:"day_trading_ratio"`
-	MarginPercentile float64 `json:"margin_percentile"`
-	ExtremeReading   string  `json:"extreme_reading"`
-	Score            float64 `json:"score"`
-	ChangePct        float64 `json:"change_pct"`
-	Interpretation   string  `json:"interpretation"`
+	SentimentScore         float64                    `json:"sentiment_score"`
+	MarginChangePct        float64                    `json:"margin_change_pct"`
+	MarginBalance          float64                    `json:"margin_balance"`
+	ShortBalance           float64                    `json:"short_balance"`
+	ShortChangePct         float64                    `json:"short_change_pct"`
+	DayTradingRatio        float64                    `json:"day_trading_ratio"`
+	MarginPercentile       float64                    `json:"margin_percentile"`
+	ExtremeReading         string                     `json:"extreme_reading"`
+	Score                  float64                    `json:"score"`
+	ChangePct              float64                    `json:"change_pct"`
+	Interpretation         string                     `json:"interpretation"`
+	CompositeSentiment     float64                    `json:"composite_sentiment"`
+	RetailFuturesOI        float64                    `json:"retail_futures_oi,omitempty"`
+	ETFNetSubscription     float64                    `json:"etf_net_subscription,omitempty"`
+	SentimentSubIndicators *domain.RSITwSubIndicators `json:"sentiment_sub_indicators,omitempty"`
+	FetcherStatus          FetcherStatus              `json:"fetcher_status"`
+}
+
+type FetcherStatus struct {
+	DayTrading       string `json:"day_trading"`
+	Taifex           string `json:"taifex"`
+	OddLot           string `json:"odd_lot"`
+	ETF              string `json:"etf"`
+	GeopoliticalRisk string `json:"geopolitical_risk"`
 }
 
 func extremeReadingFromScore(score float64) string {
@@ -143,34 +174,195 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 			Score:            0,
 			ChangePct:        0,
 			Interpretation:   "no macro snapshot available",
+			FetcherStatus:    FetcherStatus{DayTrading: "no_data", Taifex: "no_data", OddLot: "no_data", ETF: "no_data", GeopoliticalRisk: "no_data"},
 		}
 	}
-
-	fb := portfolio.NewFactorBridge()
-	input := fb.Convert(snap)
 
 	marginPercentile := calculateMarginPercentile(h.Svc.WorkDir, snap.RetailMarginBalance.Value)
 
 	dayTradingRatio := 0.0
+	var dtStats *retail.DayTradingStats
+	fetcherStatus := FetcherStatus{DayTrading: "not_available", Taifex: "not_available", OddLot: "not_available", ETF: "not_available", GeopoliticalRisk: "not_available"}
 	if h.DayTradingFetcher != nil {
 		if stats, err := h.DayTradingFetcher(r.Context()); err == nil {
 			dayTradingRatio = stats.VolumeRatio
+			dtStats = &retail.DayTradingStats{
+				Volume:      float64(stats.DayTradingVolume),
+				VolumeRatio: stats.VolumeRatio,
+			}
+			fetcherStatus.DayTrading = "ok"
+		} else {
+			fetcherStatus.DayTrading = "error"
 		}
 	}
 
-	interpretation := interpretRetailSentiment(input.RetailSentimentScore)
+	var pcrData *marketdata.PCRStats
+	var futuresOIData *marketdata.RetailFuturesOI
+	var oddLotData *marketdata.OddLotStats
+	var etfData *marketdata.ETFStats
+
+	if h.TaifexFetcher != nil {
+		if pcr, futures, err := h.TaifexFetcher(r.Context()); err == nil {
+			pcrData = pcr
+			futuresOIData = futures
+			fetcherStatus.Taifex = "ok"
+		} else {
+			fetcherStatus.Taifex = "error"
+		}
+	}
+	if h.OddLotFetcher != nil {
+		if data, err := h.OddLotFetcher(r.Context()); err == nil {
+			oddLotData = data
+			fetcherStatus.OddLot = "ok"
+		} else {
+			fetcherStatus.OddLot = "error"
+		}
+	}
+	if h.ETFFetcher != nil {
+		if data, err := h.ETFFetcher(r.Context()); err == nil {
+			etfData = data
+			fetcherStatus.ETF = "ok"
+		} else {
+			fetcherStatus.ETF = "error"
+		}
+	}
+
+	calc := retail.GetCalculator()
+	calc.SetParams(config.GetParametersConfig().RSITw)
+
+	// Geopolitical risk: use live provider if available, fallback to 0 (defense-first).
+	geoRisk := 0.0
+	if h.GeopoliticalRiskFetcher != nil {
+		geoRisk = h.GeopoliticalRiskFetcher(r.Context())
+		if geoRisk > 0 {
+			fetcherStatus.GeopoliticalRisk = "ok"
+		} else {
+			fetcherStatus.GeopoliticalRisk = "no_data"
+		}
+	} else {
+		fetcherStatus.GeopoliticalRisk = "not_available"
+	}
+
+	rsiInput := retail.RSITwInput{
+		MarginBalance:      snap.RetailMarginBalance.Value,
+		MarginPercentile:   marginPercentile,
+		DayTrading:         dtStats,
+		VIXLevel:           snap.VIX.Value,
+		ForeignInvestorNet: snap.ForeignInvestorNet.Value,
+		DomesticFundNet:    snap.DomesticFundNet.Value,
+		GeopoliticalRisk:   geoRisk,
+		PutCallRatio:       getFloatOrZero(pcrData, func(p *marketdata.PCRStats) float64 { return p.PutCallVolumeRatio }),
+		OddLotImbalance:    getFloatOrZero(oddLotData, func(o *marketdata.OddLotStats) float64 { return o.ImbalanceRatio }),
+		RetailFuturesPct:   getFloatOrZero(futuresOIData, func(f *marketdata.RetailFuturesOI) float64 { return f.RetailLongPct - f.RetailShortPct }),
+		ETFNetSubscription: getFloatOrZero(etfData, func(e *marketdata.ETFStats) float64 { return float64(e.NetSubscription) }),
+	}
+
+	rsiResult := calc.ComputeFinal(rsiInput)
+	calc.UpdateHistory(rsiInput)
+
+	interpretation := interpretRetailSentiment(rsiResult.Score)
 	return http.StatusOK, RetailSentimentResponse{
-		SentimentScore:   input.RetailSentimentScore,
-		MarginChangePct:  snap.RetailMarginBalance.ChangePct / 100,
-		MarginBalance:    snap.RetailMarginBalance.Value,
-		ShortBalance:     snap.RetailShortBalance.Value,
-		ShortChangePct:   snap.RetailShortBalance.ChangePct,
-		DayTradingRatio:  dayTradingRatio,
-		MarginPercentile: marginPercentile,
-		ExtremeReading:   extremeReadingFromScore(input.RetailSentimentScore),
-		Score:            input.RetailSentimentScore,
-		ChangePct:        snap.RetailMarginBalance.ChangePct,
-		Interpretation:   interpretation,
+		SentimentScore:         rsiResult.Score,
+		MarginChangePct:        snap.RetailMarginBalance.ChangePct / 100,
+		MarginBalance:          snap.RetailMarginBalance.Value,
+		ShortBalance:           snap.RetailShortBalance.Value,
+		ShortChangePct:         snap.RetailShortBalance.ChangePct,
+		DayTradingRatio:        dayTradingRatio,
+		MarginPercentile:       marginPercentile,
+		ExtremeReading:         extremeReadingFromScore(rsiResult.Score),
+		Score:                  rsiResult.Score,
+		ChangePct:              snap.RetailMarginBalance.ChangePct,
+		Interpretation:         interpretation,
+		CompositeSentiment:     rsiResult.Score,
+		SentimentSubIndicators: convertRSITwSubIndicators(rsiResult),
+		FetcherStatus:          fetcherStatus,
+	}
+}
+
+// convertRSITwSubIndicators maps the retail calculator's flat sub-indicator map
+// into the structured domain types for the API response.
+func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndicators {
+	subs := result.SubIndicators
+	if len(subs) == 0 {
+		return nil
+	}
+
+	catA := &domain.RSITwCategoryA{AScore: result.PartAScore}
+	if v, ok := subs["a3_margin_maint"]; ok {
+		catA.MarginMaintenanceZ = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
+	}
+	if v, ok := subs["a2_day_trading"]; ok {
+		catA.DayTradingZ = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
+	}
+	if v, ok := subs["a1_margin_z"]; ok {
+		catA.MarginBalanceZ = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
+	}
+	if v, ok := subs["a4_vix_map"]; ok {
+		catA.VIXRiskScore = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
+	}
+	if v, ok := subs["a5_pcr_proxy"]; ok {
+		catA.WeeklyPCR = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
+	}
+	if v, ok := subs["a6_odd_lot"]; ok {
+		catA.OddLotImbalance = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
+	}
+
+	catC := &domain.RSITwCategoryC{CScore: result.PartCScore}
+	if v, ok := subs["c1_futures_oi"]; ok {
+		catC.FuturesRetailOI = v.ZScore
+		if v.IsFallback {
+			catC.IsFallback = true
+		}
+	}
+	if v, ok := subs["c2_inst_flow"]; ok {
+		catC.BrokerFlowScore = v.ZScore
+		if v.IsFallback {
+			catC.IsFallback = true
+		}
+	}
+	if v, ok := subs["c3_etf_sub"]; ok {
+		catC.ETFSubscriptionScore = v.ZScore
+		if v.IsFallback {
+			catC.IsFallback = true
+		}
+	}
+
+	catD := &domain.RSITwCategoryD{
+		AdjustmentFactor: result.AdjustmentFactor,
+		DMultiplier:      result.AdjustmentFactor,
+	}
+	if v, ok := subs["d1_geopolitical"]; ok && v.IsFallback {
+		catD.IsFallback = true
+	}
+	if v, ok := subs["d3_credit_control"]; ok && v.IsFallback {
+		catD.IsFallback = true
+	}
+	if v, ok := subs["d4_flash_crash"]; ok && v.IsFallback {
+		catD.IsFallback = true
+	}
+
+	return &domain.RSITwSubIndicators{
+		CategoryA: catA,
+		CategoryC: catC,
+		CategoryD: catD,
 	}
 }
 
@@ -247,4 +439,11 @@ func interpretRetailSentiment(score float64) string {
 	default:
 		return "extremely bearish retail sentiment"
 	}
+}
+
+func getFloatOrZero[T any](data *T, fn func(*T) float64) float64 {
+	if data == nil {
+		return 0
+	}
+	return fn(data)
 }

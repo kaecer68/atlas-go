@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../../schemas/data_metadata.schema.json",
+  "name": "macro",
+  "description": "每日總經指標快照（原油、BDI、DXY、台幣匯率、台灣加權指數、VIX 等）。驅動宏觀敘事事件偵測與產業週期評分。",
+  "maturity": "evolving",
+  "data_type": "directory",
+  "format": "YYYY-MM-DD.json（每日獨立檔案）",
+  "producer_module": "internal/globalmarket",
+  "producer_function": "FetchDailyMacro",
+  "consumer_modules": [
+    "internal/narrative",
+    "internal/industry"
+  ],
+  "schema_ref": null,
+  "catalog_ref": "docs/DATA_CATALOG.md#macro",
+  "created_date": "2026-04-01",
+  "last_modified": "continuous",
+  "estimated_size": {
+    "files": 38,
+    "growth_rate": "~1/day"
+  },
+  "retention_policy": "indefinite",
+  "tags": ["macro", "economic", "oil", "bdi", "dxy", "vix"],
+  "notes": "指標仍在迭代新增。日期格式為 YYYY-MM-DD（與 margin 的 YYYYMMDD_margin 格式不同，見 P1.1 已知問題）。"
+}

@@ -39,8 +39,8 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Error("Expected weights map to be initialized")
 		}
 
-		if m.lookbackDays != 20 {
-			t.Errorf("Expected lookbackDays=20, got %d", m.lookbackDays)
+		if m.lookbackDays != 60 {
+			t.Errorf("Expected lookbackDays=60, got %d", m.lookbackDays)
 		}
 	})
 
@@ -53,12 +53,13 @@ func TestDarwinianWeightManager(t *testing.T) {
 				{ID: "agent_002", Skill: "growth", Layer: domain.LayerStyle, Enabled: true},
 				{ID: "agent_003", Skill: "risk", Layer: domain.LayerControl, Enabled: true},   // should be skipped
 				{ID: "agent_004", Skill: "macro", Layer: domain.LayerContext, Enabled: false}, // disabled
+				{ID: "agent_005", Skill: "macro_momentum", Layer: domain.LayerSuperinvestor, Enabled: true},
 			},
 		}
 
 		m.InitializeFromRegistry(registry)
 
-		// Only sector and style agents should be initialized
+		// Sector, style, and superinvestor agents should be initialized
 		w1 := m.GetWeight("agent_001")
 		if w1 != DarwinianNeutralWeight {
 			t.Errorf("Expected neutral weight for agent_001, got %f", w1)
@@ -67,6 +68,19 @@ func TestDarwinianWeightManager(t *testing.T) {
 		w2 := m.GetWeight("agent_002")
 		if w2 != DarwinianNeutralWeight {
 			t.Errorf("Expected neutral weight for agent_002, got %f", w2)
+		}
+
+		// Superinvestor layer should be tracked
+		w5 := m.GetWeight("agent_005")
+		if w5 != DarwinianNeutralWeight {
+			t.Errorf("Expected neutral weight for superinvestor agent_005, got %f", w5)
+		}
+
+		data, ok := m.GetAgentWeightData("agent_005")
+		if !ok {
+			t.Error("Expected superinvestor agent_005 to have weight data after InitializeFromRegistry")
+		} else if data.Layer != "superinvestor" {
+			t.Errorf("Expected layer=superinvestor for agent_005, got %s", data.Layer)
 		}
 
 		// Control layer should not be tracked
@@ -116,9 +130,9 @@ func TestDarwinianWeightManager(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 		seedAgent(m, "agent_001", "tech", "sector", 1.0)
 
-		// Add returns with known positive mean
-		returns := []float64{0.01, 0.02, -0.01, 0.015, 0.005, -0.005, 0.01, 0.02}
-		for _, r := range returns {
+		// Add 60 returns with known positive mean and realistic variance
+		for i := 0; i < 60; i++ {
+			r := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025}[i%5]
 			m.RecordOutcome("agent_001", r, r > 0)
 		}
 
@@ -127,10 +141,32 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Fatal("Expected agent data")
 		}
 
-		// With 8 returns (>5 threshold), Sharpe should be calculated
-		if data.RollingSharpe == 0 && len(returns) >= 5 {
-			t.Log("Sharpe is zero, may need more data points")
+		// With 60 returns (>=60 threshold), Sharpe should be calculated and positive
+		if data.RollingSharpe <= 0 {
+			t.Errorf("Expected positive Sharpe for positive-mean returns, got %f", data.RollingSharpe)
 		}
+	})
+
+	t.Run("RollingSharpeCalculationNegative", func(t *testing.T) {
+		m := NewDarwinianWeightManager("/tmp/test_dw.json")
+		seedAgent(m, "agent_neg", "financials", "sector", 1.0)
+
+		// Add 60 returns with known negative mean and realistic variance
+		for i := 0; i < 60; i++ {
+			r := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025}[i%5]
+			m.RecordOutcome("agent_neg", r, r > 0)
+		}
+
+		data, ok := m.GetAgentWeightData("agent_neg")
+		if !ok {
+			t.Fatal("Expected agent data")
+		}
+
+		// With 60 negative-mean returns, Sharpe should be negative (not zero)
+		if data.RollingSharpe >= 0 {
+			t.Errorf("Expected negative Sharpe for negative-mean returns, got %f", data.RollingSharpe)
+		}
+		t.Logf("Negative Sharpe: %.4f (avg_return=%.4f)", data.RollingSharpe, data.AvgReturn)
 	})
 
 	t.Run("PerformDailyAdjustment", func(t *testing.T) {
@@ -594,5 +630,62 @@ func TestApplyDarwinianWeightsWithEvents_ConvictionSteps(t *testing.T) {
 	}
 	if len(events) > 0 && len(out.ConvictionBreakdown.Steps) > 0 {
 		t.Logf("created %d clamping events and %d ConvictionSteps with weight=0.5", len(events), len(out.ConvictionBreakdown.Steps))
+	}
+}
+
+func TestLoadThenInitializeFromRegistry(t *testing.T) {
+	// Setup: Create a saved weights file with agent_saved_01 (weight 1.5) and agent_saved_02 (weight 2.0)
+	testFile := "/tmp/test_darwinian_load_init.json"
+	defer os.Remove(testFile)
+
+	m1 := NewDarwinianWeightManager(testFile)
+	m1.WithParameters(DefaultRuntimeParameters())
+	seedAgent(m1, "agent_saved_01", "tech", "sector", 1.5)
+	seedAgent(m1, "agent_saved_02", "growth", "style", 2.0)
+	if err := m1.Save(); err != nil {
+		t.Fatalf("Setup Save failed: %v", err)
+	}
+
+	// Test: Create new manager, Load() first, then InitializeFromRegistry()
+	m2 := NewDarwinianWeightManager(testFile)
+	m2.WithParameters(DefaultRuntimeParameters())
+	if err := m2.Load(); err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Registry has agent_saved_02 (same as saved) and agent_new_03 (brand new)
+	registry := domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{ID: "agent_saved_02", Skill: "growth", Layer: domain.LayerStyle, Enabled: true},
+			{ID: "agent_new_03", Skill: "value", Layer: domain.LayerSector, Enabled: true},
+		},
+	}
+	m2.InitializeFromRegistry(registry)
+
+	// agent_saved_01: from file only, not in registry — should retain saved weight
+	w1 := m2.GetWeight("agent_saved_01")
+	if math.Abs(w1-1.5) > 0.001 {
+		t.Errorf("agent_saved_01: expected weight 1.5 (preserved from file), got %f", w1)
+	}
+
+	// agent_saved_02: in both file and registry — should retain saved weight, not be re-initialized to neutral
+	w2 := m2.GetWeight("agent_saved_02")
+	if math.Abs(w2-2.0) > 0.001 {
+		t.Errorf("agent_saved_02: expected weight 2.0 (preserved from file, NOT overwritten), got %f", w2)
+	}
+
+	// agent_new_03: only in registry — should be initialized with neutral weight
+	w3 := m2.GetWeight("agent_new_03")
+	if math.Abs(w3-DarwinianNeutralWeight) > 0.001 {
+		t.Errorf("agent_new_03: expected neutral weight %f (newly initialized), got %f", DarwinianNeutralWeight, w3)
+	}
+
+	// agent_new_03 should be retrievable with full data
+	data, ok := m2.GetAgentWeightData("agent_new_03")
+	if !ok {
+		t.Fatal("agent_new_03: expected to exist after InitializeFromRegistry")
+	}
+	if data.TotalSignals != 0 || data.WinCount != 0 || data.LossCount != 0 {
+		t.Error("agent_new_03: expected zero signals for newly initialized agent")
 	}
 }

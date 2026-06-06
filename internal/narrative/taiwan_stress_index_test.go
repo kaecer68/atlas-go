@@ -167,3 +167,308 @@ func TestLoadWeightsConfigIntegratesWithCalculator(t *testing.T) {
 		t.Fatal("expected positive score with parameters config")
 	}
 }
+
+func TestGetCurrentStressIndex(t *testing.T) {
+	eng := NewNarrativeEngine()
+
+	snap := marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
+		Oil:                marketdata.MacroDataPoint{ChangePct: 1.5},
+		Gold:               marketdata.MacroDataPoint{ChangePct: 0.8},
+		JPY:                marketdata.MacroDataPoint{ChangePct: -0.3},
+		RecordedAt:         time.Now().Unix(),
+	}
+	geo := GeopoliticalRiskScore{Intensity: 30}
+	eng.UpdateMacro(snap, geo)
+
+	idx := eng.GetCurrentStressIndex()
+
+	if idx.Score < 0 || idx.Score > 100 {
+		t.Fatalf("score out of range [0,100]: got %v", idx.Score)
+	}
+	if idx.Regime == "" {
+		t.Fatal("expected non-empty regime")
+	}
+	expectedKeys := []string{"dxy", "us10y", "foreign_flow", "vix", "jpy", "geopolitical", "oil", "gold"}
+	for _, k := range expectedKeys {
+		if _, ok := idx.Components[k]; !ok {
+			t.Fatalf("missing component %s", k)
+		}
+	}
+	if idx.Timestamp == 0 {
+		t.Fatal("expected non-zero timestamp")
+	}
+}
+
+func TestGetStressIndexHistory(t *testing.T) {
+	eng := NewNarrativeEngine()
+	baseTime := time.Now().Unix()
+
+	for i := range int64(3) {
+		snap := marketdata.MacroDataSnapshot{
+			DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: float64(i) * 0.5},
+			US10Y:              marketdata.MacroDataPoint{Value: 4.5 + float64(i)*0.1},
+			VIX:                marketdata.MacroDataPoint{Value: 20 + float64(i)*2},
+			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5 - float64(i)},
+			RecordedAt:         baseTime + i,
+		}
+		eng.UpdateMacro(snap, GeopoliticalRiskScore{Intensity: 30})
+		eng.GetCurrentStressIndex()
+	}
+
+	t.Run("returns exact limit", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(2)
+		if len(hist) != 2 {
+			t.Fatalf("expected 2 entries, got %d", len(hist))
+		}
+	})
+
+	t.Run("returns min of history and limit", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(10)
+		if len(hist) != 3 {
+			t.Fatalf("expected 3 entries (history has 3), got %d", len(hist))
+		}
+	})
+
+	t.Run("limit zero defaults to 30", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(0)
+		if len(hist) != 3 {
+			t.Fatalf("expected 3 entries (default 30, history has 3), got %d", len(hist))
+		}
+	})
+
+	t.Run("negative limit defaults to 30", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(-1)
+		if len(hist) != 3 {
+			t.Fatalf("expected 3 entries (default 30 for negative, history has 3), got %d", len(hist))
+		}
+	})
+
+	t.Run("empty history returns empty slice", func(t *testing.T) {
+		eng2 := NewNarrativeEngine()
+		hist := eng2.GetStressIndexHistory(10)
+		if len(hist) != 0 {
+			t.Fatalf("expected 0 entries for empty history, got %d", len(hist))
+		}
+	})
+}
+
+func TestGetStressIndexThresholds(t *testing.T) {
+	eng := NewNarrativeEngine()
+	th := eng.GetStressIndexThresholds()
+
+	if th.Crisis <= th.High {
+		t.Fatalf("expected Crisis > High, got Crisis=%v High=%v", th.Crisis, th.High)
+	}
+	if th.High <= th.Alert {
+		t.Fatalf("expected High > Alert, got High=%v Alert=%v", th.High, th.Alert)
+	}
+	if th.Alert <= 0 {
+		t.Fatalf("expected Alert > 0, got Alert=%v", th.Alert)
+	}
+	if th.Crisis == 0 || th.High == 0 || th.Alert == 0 {
+		t.Fatal("expected non-zero threshold values")
+	}
+
+	t.Run("nil stressCalc returns empty struct", func(t *testing.T) {
+		eng2 := NewNarrativeEngine()
+		eng2.stressCalc = nil
+		th := eng2.GetStressIndexThresholds()
+		if th.Crisis != 0 || th.High != 0 || th.Alert != 0 {
+			t.Fatalf("expected zero thresholds for nil stressCalc, got %+v", th)
+		}
+	})
+}
+
+func TestCalculateFromSnapshotWithStore_FallbackToPersistedGeo(t *testing.T) {
+	calc := NewTaiwanStressCalculator(nil, "")
+
+	dir := t.TempDir()
+	store := NewGeopoliticalStore(dir)
+	if err := store.Save(GeopoliticalRiskScore{
+		Region:    "Global",
+		Intensity: 30,
+		Timestamp: time.Now(),
+	}); err != nil {
+		t.Fatalf("save geo score: %v", err)
+	}
+
+	snap := marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
+		RecordedAt:         time.Now().Unix(),
+	}
+	ctx := context.Background()
+	idx, err := calc.CalculateFromSnapshotWithStore(ctx, snap, marketdata.MacroDataSnapshot{}, store)
+	if err != nil {
+		t.Fatalf("CalculateFromSnapshotWithStore: %v", err)
+	}
+	if idx.Score < 0 || idx.Score > 100 {
+		t.Fatalf("score out of range: %v", idx.Score)
+	}
+	if idx.Regime == "" {
+		t.Fatal("expected non-empty regime")
+	}
+	if _, ok := idx.Components["geopolitical"]; !ok {
+		t.Fatal("expected geopolitical component from persisted store")
+	}
+}
+
+func TestCalculateFromSnapshotWithStore_NoProviderNoStoreFallsBack(t *testing.T) {
+	calc := NewTaiwanStressCalculator(nil, "")
+	snap := marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
+		RecordedAt:         time.Now().Unix(),
+	}
+	idx, err := calc.CalculateFromSnapshotWithStore(context.Background(), snap, marketdata.MacroDataSnapshot{}, nil)
+	if err != nil {
+		t.Fatalf("expected partial index when geo provider and store are both nil, got error: %v", err)
+	}
+	if idx.Score < 0 || idx.Score > 100 {
+		t.Fatalf("score out of range: %v", idx.Score)
+	}
+	if idx.Regime == "" {
+		t.Fatal("expected non-empty regime")
+	}
+	if v, ok := idx.Components["geopolitical"]; !ok {
+		t.Fatal("expected geopolitical component (set to 0)")
+	} else if v != 0 {
+		t.Fatalf("expected geopolitical=0, got %v", v)
+	}
+}
+
+func TestNewTaiwanStressCalculator_AutoLoadsBaselines(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	bl := &BaselineConfig{
+		Window: 30,
+		Baselines: map[string]*FactorBaseline{
+			"dxy": {Factor: "dxy", Mean: 0.0, StdDev: 0.5, Count: 30},
+		},
+	}
+	if err := SaveBaselines(dir, bl); err != nil {
+		t.Fatalf("SaveBaselines: %v", err)
+	}
+
+	calc := NewTaiwanStressCalculator(nil, dir)
+	if calc.baselines == nil {
+		t.Fatal("expected baselines to be auto-loaded from workDir, got nil")
+	}
+	if calc.signalStrategy != SignalHybrid {
+		t.Errorf("expected SignalHybrid after auto-load, got %d", calc.signalStrategy)
+	}
+	if !calc.useHybridSignal() {
+		t.Error("expected useHybridSignal() to be true after auto-load")
+	}
+}
+
+func TestNewTaiwanStressCalculator_FallsBackWithoutBaselines(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	calc := NewTaiwanStressCalculator(nil, dir)
+	if calc.baselines != nil {
+		t.Errorf("expected nil baselines when no file exists, got %+v", calc.baselines)
+	}
+	if calc.useHybridSignal() {
+		t.Error("expected useHybridSignal() to be false on first run (no baselines file)")
+	}
+}
+
+func TestNewTaiwanStressCalculator_EmptyWorkDirNoHybrid(t *testing.T) {
+	t.Parallel()
+
+	calc := NewTaiwanStressCalculator(nil, "")
+	if calc.baselines != nil {
+		t.Error("expected nil baselines for empty workDir")
+	}
+	if calc.useHybridSignal() {
+		t.Error("expected useHybridSignal() to be false for empty workDir")
+	}
+}
+
+func TestCalculate_US10YHybridSignal_OnFlatDay(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	bl := &BaselineConfig{
+		Window: 30,
+		Baselines: map[string]*FactorBaseline{
+			"us10y": {Factor: "us10y", Mean: 4.0, StdDev: 0.3, Count: 30},
+		},
+	}
+	if err := SaveBaselines(dir, bl); err != nil {
+		t.Fatalf("SaveBaselines: %v", err)
+	}
+
+	calc := NewTaiwanStressCalculator(nil, dir)
+	if !calc.useHybridSignal() {
+		t.Fatal("expected hybrid signal to be enabled after auto-load")
+	}
+
+	// US10Y flat day: ChangePct=0, but value=4.8 deviates from baseline mean 4.0.
+	// z-score = (4.8 - 4.0) / 0.3 = 2.67. Hybrid path should pick this up
+	// even though ChangePct=0.
+	snap := marketdata.MacroDataSnapshot{
+		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.8, ChangePct: 0},
+		RecordedAt: 1713000000,
+	}
+	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+
+	us10yComponent, ok := idx.Components["us10y"]
+	if !ok {
+		t.Fatal("expected us10y component in result")
+	}
+	if us10yComponent <= 0 {
+		t.Fatalf("expected non-zero us10y component on flat day with high level deviation, got %v", us10yComponent)
+	}
+}
+
+func TestCalculate_US10YHybridSignal_CompareWithLegacy(t *testing.T) {
+	t.Parallel()
+
+	// Legacy constructor (empty workDir) uses raw yield * scale.
+	legacyCalc := NewTaiwanStressCalculator(nil, "")
+
+	// Hybrid constructor (with baselines) uses z-score for level signal.
+	dir := t.TempDir()
+	bl := &BaselineConfig{
+		Window: 30,
+		Baselines: map[string]*FactorBaseline{
+			"us10y": {Factor: "us10y", Mean: 4.0, StdDev: 0.3, Count: 30},
+		},
+	}
+	if err := SaveBaselines(dir, bl); err != nil {
+		t.Fatalf("SaveBaselines: %v", err)
+	}
+	hybridCalc := NewTaiwanStressCalculator(nil, dir)
+
+	// Flat day (ChangePct=0): legacy uses raw Value*scale, hybrid uses |level_dev|*scale.
+	// Both should give non-zero for US10Y=4.8 vs baseline mean 4.0.
+	snap := marketdata.MacroDataSnapshot{
+		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.8, ChangePct: 0},
+		RecordedAt: 1713000000,
+	}
+	legacyIdx := legacyCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+	hybridIdx := hybridCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+
+	legacyUS10Y := legacyIdx.Components["us10y"]
+	hybridUS10Y := hybridIdx.Components["us10y"]
+
+	if legacyUS10Y <= 0 {
+		t.Fatalf("legacy US10Y should be non-zero (raw yield 4.8 * scale), got %v", legacyUS10Y)
+	}
+	if hybridUS10Y <= 0 {
+		t.Fatalf("hybrid US10Y should be non-zero (z-score), got %v", hybridUS10Y)
+	}
+	t.Logf("legacy=%.4f hybrid=%.4f (both non-zero confirms US10Y coverage)", legacyUS10Y, hybridUS10Y)
+}

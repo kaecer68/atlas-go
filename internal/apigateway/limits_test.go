@@ -11,7 +11,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 
 	expectedChannels := map[string]bool{
 		"us_yahoo":            false,
-		"jpy_yahoo":           false,
+		"frankfurter_fx":      false,
 		"twse_replay":         false,
 		"twse_capital_flow":   false,
 		"fugle":               false,
@@ -26,8 +26,14 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"tej":                 false,
 		"exchange_rate":       false,
 		"sox_index":           false,
+		"dram_spot_price":     false,
+		"twse_sector_index":   false,
 		"sector_data":         false,
 		"day_trading":         false,
+		"twse_etf":            false,
+		"taifex_daily":        false,
+		"twse_oddlot":         false,
+		"bdi":                 false,
 	}
 
 	for id := range m.limiters {
@@ -70,10 +76,10 @@ func TestNewRateLimitManager_NonInfiniteRateChannels(t *testing.T) {
 	m := NewRateLimitManager()
 
 	nonInfiniteChannels := []string{
-		"us_yahoo", "jpy_yahoo", "twse_capital_flow", "fugle", "fubon",
+		"us_yahoo", "frankfurter_fx", "twse_capital_flow", "fugle", "fubon",
 		"finmind", "geopolitical", "geopolitical_taiwan", "twse_margin",
 		"export_statistics", "tsmc_revenue", "tej", "exchange_rate",
-		"sox_index", "day_trading",
+		"sox_index", "dram_spot_price", "twse_sector_index", "day_trading", "twse_etf", "taifex_daily", "twse_oddlot", "bdi",
 	}
 	for _, channel := range nonInfiniteChannels {
 		t.Run(channel, func(t *testing.T) {
@@ -88,40 +94,45 @@ func TestNewRateLimitManager_NonInfiniteRateChannels(t *testing.T) {
 	}
 }
 
-func TestNewRateLimitManager_SharedLimiter(t *testing.T) {
+func TestNewRateLimitManager_IndependentLimiters(t *testing.T) {
 	m := NewRateLimitManager()
 
 	usLimiter, err := m.Get("us_yahoo")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	jpyLimiter, err := m.Get("jpy_yahoo")
+	fxLimiter, err := m.Get("frankfurter_fx")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify same instance (pointer equality)
-	if usLimiter != jpyLimiter {
-		t.Error("us_yahoo and jpy_yahoo should share the same limiter instance")
+	// frankfurter_fx hits api.frankfurter.app, NOT Yahoo Finance.
+	// It must have its own independent limiter — no longer sharing with us_yahoo.
+	if usLimiter == fxLimiter {
+		t.Error("us_yahoo and frankfurter_fx should have independent limiters (different API endpoints)")
 	}
 
-	// Verify shared limiter is the package-level yahooSharedLimiter
+	// Verify us_yahoo still uses the package-level yahooSharedLimiter
 	if usLimiter != yahooSharedLimiter {
 		t.Error("us_yahoo should use the yahooSharedLimiter instance")
 	}
+
+	// Verify frankfurter_fx does NOT use yahooSharedLimiter
+	if fxLimiter == yahooSharedLimiter {
+		t.Error("frankfurter_fx should NOT use yahooSharedLimiter (hits Frankfurter API, not Yahoo)")
+	}
 }
 
-func TestNewRateLimitManager_SharedLimitersDrainTogether(t *testing.T) {
+func TestNewRateLimitManager_IndependentLimitersDrainIndependently(t *testing.T) {
 	m := NewRateLimitManager()
 
 	usLimiter, _ := m.Get("us_yahoo")
-	jpyLimiter, _ := m.Get("jpy_yahoo")
+	fxLimiter, _ := m.Get("frankfurter_fx")
 
-	// Verify shared limiter: draining us_yahoo should affect jpy_yahoo.
-	// Use Allow() return value — jpy_yahoo should also see exhaustion.
+	// Draining us_yahoo should NOT affect frankfurter_fx (independent limiters).
 	_ = usLimiter.Allow() // consume the single burst token
-	if jpyLimiter.Allow() {
-		t.Error("jpy_yahoo should have been drained after consuming from us_yahoo (shared limiter)")
+	if !fxLimiter.Allow() {
+		t.Error("frankfurter_fx should NOT be affected by us_yahoo drain (independent limiters)")
 	}
 }
 
@@ -313,7 +324,7 @@ func TestStatus_BurstMatchesConfig(t *testing.T) {
 		burst   int
 	}{
 		{"us_yahoo", YahooFinanceBurst},
-		{"jpy_yahoo", YahooFinanceBurst},
+		{"frankfurter_fx", FrankfurterFXBurst},
 		{"twse_replay", 0},
 		{"twse_capital_flow", TWSECapitalFlowBurst},
 		{"fugle", FugleBasicBurst},
@@ -330,6 +341,9 @@ func TestStatus_BurstMatchesConfig(t *testing.T) {
 		{"sox_index", ExportStatisticsBurst},
 		{"sector_data", 0},
 		{"day_trading", TWSEMarginBurst},
+		{"dram_spot_price", ExportStatisticsBurst},
+		{"twse_sector_index", ExportStatisticsBurst},
+		{"bdi", ExportStatisticsBurst},
 	}
 
 	for _, tt := range tests {

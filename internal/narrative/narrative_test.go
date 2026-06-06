@@ -213,15 +213,16 @@ func TestNarrativeEngineDetectEvents(t *testing.T) {
 		VIXLevel:         30,
 	}
 	events := ne.DetectEvents(data)
-	if len(events) != 6 {
-		t.Fatalf("expected 6 events, got %d", len(events))
+	// 11 events: 9 original + semiconductor_downturn (relaxed 2/3 logic) + dividend_season (Jun calendar)
+	if len(events) != 11 {
+		t.Fatalf("expected 11 events, got %d", len(events))
 	}
 
 	themeCount := make(map[string]int)
 	for _, e := range events {
 		themeCount[e.Theme]++
 	}
-	expected := []string{"US_rates_up", "AI_capex_surge", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind", "taiwan_political_risk"}
+	expected := []string{"US_rates_up", "AI_capex_surge", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind", "taiwan_political_risk", "dollar_surge", "earnings_surprise", "inflation_spike", "semiconductor_downturn", "dividend_season"}
 	for _, theme := range expected {
 		if themeCount[theme] != 1 {
 			t.Fatalf("expected 1 event for theme %s, got %d", theme, themeCount[theme])
@@ -286,7 +287,244 @@ func TestDetectEventsNoTrigger(t *testing.T) {
 		VIXLevel:         15,  // below 25 threshold
 	}
 	events := ne.DetectEvents(data)
-	if len(events) != 0 {
-		t.Fatalf("expected 0 events, got %d", len(events))
+	// Exclude calendar-driven seasonal events (data-independent) from the count.
+	var nonSeasonal int
+	for _, e := range events {
+		if e.ConfidenceSource != "calendar_seasonal" && e.ConfidenceSource != "calendar_political" {
+			nonSeasonal++
+		}
+	}
+	if nonSeasonal != 0 {
+		t.Fatalf("expected 0 non-seasonal events, got %d (total %d)", nonSeasonal, len(events))
+	}
+}
+
+func TestTemplateHitRatesUpdatedAfterEvaluation(t *testing.T) {
+	// Scenario 1: model with RecentError <= 0.5 triggers template hit rate update.
+	ne := NewNarrativeEngine()
+	tmpl, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("expected US_rates_up template to exist")
+	}
+	tmpl.HistoricalHitRate = 0.70
+	ne.kb.RegisterTemplate(tmpl)
+
+	// hawkish_fed_model (index 0) has ActiveThemes=["US_rates_up", "JPY_carry_unwind"]
+	// HitRate = 1.0 - 0.2 = 0.8
+	ne.models[0].RecentError = 0.2
+	ne.models[0].HitRate = 0.8
+
+	ne.updateTemplateHitRates()
+
+	tmpl, ok = ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("template should still exist after update")
+	}
+	// new = 0.8*0.70 + 0.2*0.8 = 0.56 + 0.16 = 0.72
+	expected := 0.8*0.70 + 0.2*0.8
+	if tmpl.HistoricalHitRate != expected {
+		t.Fatalf("expected HistoricalHitRate %f, got %f", expected, tmpl.HistoricalHitRate)
+	}
+
+	// Scenario 2: model with RecentError > 0.5 is skipped (no update).
+	ne2 := NewNarrativeEngine()
+	tmpl2, _ := ne2.kb.GetTemplateByTheme("US_rates_up")
+	tmpl2.HistoricalHitRate = 0.70
+	ne2.kb.RegisterTemplate(tmpl2)
+	ne2.models[0].RecentError = 0.6
+	ne2.models[0].HitRate = 0.4 // 1.0 - 0.6
+
+	ne2.updateTemplateHitRates()
+
+	tmpl2, _ = ne2.kb.GetTemplateByTheme("US_rates_up")
+	if tmpl2.HistoricalHitRate != 0.70 {
+		t.Fatalf("expected no update when RecentError > 0.5, got %f", tmpl2.HistoricalHitRate)
+	}
+
+	// Scenario 3: GetTemplateByTheme returns false for non-existent theme.
+	if _, ok := ne.kb.GetTemplateByTheme("NONEXISTENT_THEME"); ok {
+		t.Fatalf("expected false for non-existent theme")
+	}
+}
+
+func TestSeasonalEventUsesParametersConfig(t *testing.T) {
+	config.ResetParametersConfig()
+	params := config.GetParametersConfig().Narrative
+
+	if params.SpringFestivalConfidence.Value == 0 {
+		t.Fatalf("expected non-zero SpringFestivalConfidence default")
+	}
+	if params.ElectionCycleConfidence.Value == 0 {
+		t.Fatalf("expected non-zero ElectionCycleConfidence default")
+	}
+	if params.EarningsBlackoutConfidence.Value == 0 {
+		t.Fatalf("expected non-zero EarningsBlackoutConfidence default")
+	}
+	if params.TechPeakSeasonConfidence.Value == 0 {
+		t.Fatalf("expected non-zero TechPeakSeasonConfidence default")
+	}
+	if params.YearEndWindowDressingConfidence.Value == 0 {
+		t.Fatalf("expected non-zero YearEndWindowDressingConfidence default")
+	}
+
+	event := detectSeasonalEvent()
+	if event == nil {
+		t.Log("no seasonal event matched current date — parameter defaults verified above")
+		return
+	}
+
+	if event.ConfidenceSource == "" {
+		t.Fatalf("expected non-empty ConfidenceSource, got %q", event.ConfidenceSource)
+	}
+	if event.Theme == "" {
+		t.Fatalf("expected non-empty Theme")
+	}
+	if event.Region != "TW" {
+		t.Fatalf("expected Region=TW, got %q", event.Region)
+	}
+
+	switch event.Theme {
+	case "spring_festival_season":
+		if event.Confidence != params.SpringFestivalConfidence.Value {
+			t.Fatalf("spring_festival_season: expected confidence %f from ParametersConfig, got %f",
+				params.SpringFestivalConfidence.Value, event.Confidence)
+		}
+	case "election_cycle":
+		if event.Confidence != params.ElectionCycleConfidence.Value {
+			t.Fatalf("election_cycle: expected confidence %f from ParametersConfig, got %f",
+				params.ElectionCycleConfidence.Value, event.Confidence)
+		}
+	case "earnings_blackout":
+		if event.Confidence != params.EarningsBlackoutConfidence.Value {
+			t.Fatalf("earnings_blackout: expected confidence %f from ParametersConfig, got %f",
+				params.EarningsBlackoutConfidence.Value, event.Confidence)
+		}
+	case "tech_peak_season":
+		if event.Confidence != params.TechPeakSeasonConfidence.Value {
+			t.Fatalf("tech_peak_season: expected confidence %f from ParametersConfig, got %f",
+				params.TechPeakSeasonConfidence.Value, event.Confidence)
+		}
+	case "year_end_window_dressing":
+		if event.Confidence != params.YearEndWindowDressingConfidence.Value {
+			t.Fatalf("year_end_window_dressing: expected confidence %f from ParametersConfig, got %f",
+				params.YearEndWindowDressingConfidence.Value, event.Confidence)
+		}
+	case "dividend_season":
+		// dividend_season uses a hardcoded confidence (not in ParametersConfig).
+		if event.Confidence != 0.60 {
+			t.Fatalf("dividend_season: expected confidence 0.60, got %f", event.Confidence)
+		}
+	default:
+		t.Fatalf("unexpected seasonal event theme: %s", event.Theme)
+	}
+}
+
+func TestSelfCalibrate_InvalidReplayPath(t *testing.T) {
+	ne := NewNarrativeEngine()
+	report, err := ne.SelfCalibrate("/nonexistent/replay.csv")
+	if err == nil {
+		t.Fatal("expected error for nonexistent replay path")
+	}
+	if report != nil {
+		t.Fatal("expected nil report on error")
+	}
+}
+
+func TestNarrativeCalibrationReport_Structure(t *testing.T) {
+	ne := NewNarrativeEngine()
+	models := ne.ListModels()
+
+	report := &NarrativeCalibrationReport{
+		Timestamp:     time.Now(),
+		ModelsUpdated: len(models),
+		Models:        models,
+		Verdict:       "calibrated",
+		Summary:       "all models updated",
+	}
+
+	if report.ModelsUpdated != len(models) {
+		t.Fatalf("expected %d models updated, got %d", len(models), report.ModelsUpdated)
+	}
+	if report.Verdict != "calibrated" {
+		t.Fatalf("expected verdict calibrated, got %s", report.Verdict)
+	}
+	if len(report.Models) == 0 {
+		t.Fatal("expected non-empty models list")
+	}
+}
+
+func TestNewEarningsSurpriseEvent_Positive(t *testing.T) {
+	config.ResetParametersConfig()
+	event := NewEarningsSurpriseEvent(15.0)
+	if event == nil {
+		t.Fatal("expected non-nil event for positive surprise")
+	}
+	if event.Theme != "earnings_surprise" {
+		t.Fatalf("expected theme earnings_surprise, got %s", event.Theme)
+	}
+	if event.Sentiment != 0.7 {
+		t.Fatalf("expected sentiment 0.7, got %f", event.Sentiment)
+	}
+	if event.CapitalFlow != "earnings_beat" {
+		t.Fatalf("expected earnings_beat, got %s", event.CapitalFlow)
+	}
+	if event.Severity != "high" {
+		t.Fatalf("expected severity high, got %s", event.Severity)
+	}
+	if event.Duration != 10*24*time.Hour {
+		t.Fatalf("expected 10-day duration, got %v", event.Duration)
+	}
+	if event.Region != "TW" {
+		t.Fatalf("expected region TW, got %s", event.Region)
+	}
+	if event.SourceData["surprise_pct"] != 15.0 {
+		t.Fatalf("expected source surprise_pct=15.0, got %f", event.SourceData["surprise_pct"])
+	}
+	if event.ConfidenceSource != "deviation_based_v1" {
+		t.Fatalf("expected deviation_based_v1, got %s", event.ConfidenceSource)
+	}
+	if event.HitRate == 0 {
+		t.Fatalf("expected non-zero HitRate from template, got %f", event.HitRate)
+	}
+}
+
+func TestNewEarningsSurpriseEvent_Negative(t *testing.T) {
+	config.ResetParametersConfig()
+	event := NewEarningsSurpriseEvent(-8.0)
+	if event == nil {
+		t.Fatal("expected non-nil event for negative surprise")
+	}
+	if event.Sentiment != -0.7 {
+		t.Fatalf("expected sentiment -0.7, got %f", event.Sentiment)
+	}
+	if event.CapitalFlow != "earnings_miss" {
+		t.Fatalf("expected earnings_miss, got %s", event.CapitalFlow)
+	}
+}
+
+func TestNewEarningsSurpriseEvent_UsesParametersConfig(t *testing.T) {
+	config.ResetParametersConfig()
+	params := config.GetParametersConfig().Narrative
+	if params.EarningsSurpriseConfidence.Value <= 0 {
+		t.Fatalf("expected non-zero EarningsSurpriseConfidence, got %f", params.EarningsSurpriseConfidence.Value)
+	}
+	event := NewEarningsSurpriseEvent(20.0)
+	if event.Confidence <= 0 {
+		t.Fatalf("expected confidence > 0, got %f", event.Confidence)
+	}
+}
+
+func TestEarningsSurpriseEvent_MatchesCausalChains(t *testing.T) {
+	config.ResetParametersConfig()
+	ne := NewNarrativeEngine()
+
+	event := NewEarningsSurpriseEvent(15.0)
+	chains := ne.kb.MatchChains(*event)
+
+	if len(chains) == 0 {
+		t.Fatal("expected at least one causal chain for earnings_surprise")
+	}
+	if chains[0].Score <= 0 {
+		t.Fatalf("expected positive score, got %f", chains[0].Score)
 	}
 }

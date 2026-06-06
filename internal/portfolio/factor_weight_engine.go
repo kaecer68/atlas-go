@@ -50,6 +50,7 @@ func defaultBaseWeights() map[FactorType]float64 {
 		FactorIndustryCycle:  0.00,
 		FactorPreciousMetals: 0.00,
 		FactorETF:            0.00,
+		FactorLinkage:        0.00,
 	}
 }
 

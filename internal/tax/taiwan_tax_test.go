@@ -31,6 +31,68 @@ func TestCalculateDividendTax(t *testing.T) {
 	}
 }
 
+// TestCalculateDividendTax_IncludeNHIGate verifies that TaxConfig.IncludeNHI
+// actually gates the NHI surcharge out of the dividend tax calculation.
+// IncludeNHI=true (default) uses the full DividendTaxRate (0.28).
+// IncludeNHI=false subtracts NHISurchargeRate (0.02), yielding an effective
+// rate of 0.26.
+func TestCalculateDividendTax_IncludeNHIGate(t *testing.T) {
+	const dividend = 10000.0
+
+	cfgWithNHI := domain.TaxConfig{
+		DividendTaxRate:    0.28,
+		TransactionTaxRate: 0.003,
+		IncludeNHI:         true,
+	}
+	cfgWithoutNHI := domain.TaxConfig{
+		DividendTaxRate:    0.28,
+		TransactionTaxRate: 0.003,
+		IncludeNHI:         false,
+	}
+
+	withNHI := NewTaiwanTaxCalculator(cfgWithNHI).CalculateDividendTax(dividend)
+	withoutNHI := NewTaiwanTaxCalculator(cfgWithoutNHI).CalculateDividendTax(dividend)
+
+	wantWithNHI := 0.28 * dividend
+	wantWithoutNHI := (0.28 - NHISurchargeRate) * dividend
+
+	if math.Abs(withNHI-wantWithNHI) > 0.01 {
+		t.Errorf("IncludeNHI=true: got %v, want %v", withNHI, wantWithNHI)
+	}
+	if math.Abs(withoutNHI-wantWithoutNHI) > 0.01 {
+		t.Errorf("IncludeNHI=false: got %v, want %v", withoutNHI, wantWithoutNHI)
+	}
+	if withoutNHI >= withNHI {
+		t.Errorf("IncludeNHI=false should produce strictly less tax than IncludeNHI=true (got %v vs %v)", withoutNHI, withNHI)
+	}
+}
+
+// TestCalculatePositionTax_IncludeNHI verifies the gate is wired through the
+// full position-level snapshot (DividendTax amount AND reported DividendTaxRate).
+func TestCalculatePositionTax_IncludeNHI(t *testing.T) {
+	pos := domain.Position{Symbol: "2330", Quantity: 1000, AverageCost: 500}
+	sellPrice := 600.0
+	dividend := 15000.0
+
+	cfgWithoutNHI := domain.TaxConfig{
+		DividendTaxRate:    0.28,
+		TransactionTaxRate: 0.003,
+		IncludeNHI:         false,
+	}
+	calc := NewTaiwanTaxCalculator(cfgWithoutNHI)
+
+	snap := calc.CalculatePositionTax(pos, sellPrice, dividend)
+
+	wantDivTax := (0.28 - NHISurchargeRate) * dividend
+	if math.Abs(snap.DividendTax-wantDivTax) > 0.01 {
+		t.Errorf("DividendTax = %v, want %v (NHI excluded)", snap.DividendTax, wantDivTax)
+	}
+	wantRate := 0.28 - NHISurchargeRate
+	if math.Abs(snap.DividendTaxRate-wantRate) > 0.0001 {
+		t.Errorf("DividendTaxRate = %v, want %v (snapshot should reflect effective rate)", snap.DividendTaxRate, wantRate)
+	}
+}
+
 func TestCalculateTransactionTax(t *testing.T) {
 	calc := NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
 

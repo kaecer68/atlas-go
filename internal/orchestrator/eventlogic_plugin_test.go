@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -129,7 +130,7 @@ func TestEventLogicPlugin_PostSimulationPersistsOnPromotion(t *testing.T) {
 		saveRulesPath:   rulesPath,
 		historyRecorder: hr,
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		p.evtBuf = append(p.evtBuf, eventlogic.NarrativeEventSnapshot{
 			Theme: "US_rates_up", DetectedAt: time.Now().Add(-24 * time.Duration(i) * time.Hour),
 		})
@@ -141,9 +142,62 @@ func TestEventLogicPlugin_PostSimulationPersistsOnPromotion(t *testing.T) {
 	}
 }
 
+func TestEventLogicPlugin_PostSimulationCorrectorEvaluated(t *testing.T) {
+	reg := eventlogic.NewRegistry()
+	det := eventlogic.NewDetector(reg)
+	cor := eventlogic.NewCorrector(reg)
+
+	out := []domain.RecommendationOutcome{
+		{Symbol: "2330.TW", ForwardReturn: 3.0, RecordedAt: time.Now()},
+	}
+	p := &eventlogicPlugin{
+		detector:  det,
+		corrector: cor,
+		core:      &mockSvc{outcomes: out},
+	}
+	for i := range 10 {
+		p.evtBuf = append(p.evtBuf, eventlogic.NarrativeEventSnapshot{
+			Theme: "AI_capex_surge", DetectedAt: time.Now().Add(-24 * time.Duration(i) * time.Hour),
+		})
+	}
+	p.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
+
+	rule, ok := reg.GetByID("AI_capex_surge-")
+	if !ok {
+		t.Fatal("expected promoted rule for AI_capex_surge pattern")
+	}
+	fails, hits := cor.GetStreak(rule.ID)
+	if hits != 1 {
+		t.Errorf("corrector.GetStreak(%q) hits=%d, want 1 (rule should be evaluated as hit since candidate confidence > 0.5)", rule.ID, hits)
+	}
+	if fails != 0 {
+		t.Errorf("corrector.GetStreak(%q) fails=%d, want 0", rule.ID, fails)
+	}
+}
+
+func TestEventLogicPlugin_PostSimulationCorrectorNilSafe(t *testing.T) {
+	reg := eventlogic.NewRegistry()
+	det := eventlogic.NewDetector(reg)
+
+	out := []domain.RecommendationOutcome{
+		{Symbol: "2330.TW", ForwardReturn: 3.0, RecordedAt: time.Now()},
+	}
+	p := &eventlogicPlugin{
+		detector:  det,
+		corrector: nil, // nil corrector should not panic
+		core:      &mockSvc{outcomes: out},
+	}
+	for i := range 10 {
+		p.evtBuf = append(p.evtBuf, eventlogic.NarrativeEventSnapshot{
+			Theme: "US_rates_up", DetectedAt: time.Now().Add(-24 * time.Duration(i) * time.Hour),
+		})
+	}
+	p.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
+}
+
 func TestEventLogicPlugin_onNarrativeEventSkipsEmptyTheme(t *testing.T) {
 	p := newTestPlugin()
-	err := p.onNarrativeEvent(nil, eventbus.BusEvent{
+	err := p.onNarrativeEvent(context.TODO(), eventbus.BusEvent{
 		Type:      eventbus.EventNarrative,
 		Timestamp: time.Now(),
 		Payload:   eventbus.NarrativeEventPayload{Theme: ""},

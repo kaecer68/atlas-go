@@ -81,11 +81,15 @@ func (p *eventlogicPlugin) PostSimulation(_ []domain.Quote, _ domain.Regime, _ t
 			continue
 		}
 		promoted++
-		logging.Info("eventlogic_plugin", "rule_promoted",
+		logging.Info(
+			"eventlogic_plugin", "rule_promoted",
 			logging.FStr("rule_id", rule.ID),
 			logging.FFloat64("hit_rate", rule.HitRate),
 			logging.FInt("total_tests", rule.TotalTests),
 		)
+		if p.corrector != nil {
+			p.corrector.Evaluate(rule.ID, candidates[i].HitRate > 0.5)
+		}
 	}
 	if promoted > 0 && p.saveRulesPath != "" {
 		p.detector.Registry.MustSave(p.saveRulesPath)
