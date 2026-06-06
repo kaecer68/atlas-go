@@ -5,8 +5,6 @@ import (
 	"math"
 	"sync"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SiliconIndicatorSnapshot captures key silicon cycle indicators at a point in time,
@@ -76,7 +74,11 @@ func defaultCardConfig() CardConfig {
 	}
 }
 
-// globalCycleCalibration holds the active calibration tracker, set by the
+func resolveCardConfig() CardConfig {
+	return defaultCardConfig()
+}
+
+// globalCycleCalibration is the singleton calibration tracker injected at
 // application bootstrap. If nil, resolveCardConfig returns defaults.
 var globalCycleCalibration *CycleCalibration
 
@@ -90,32 +92,6 @@ func SetGlobalCycleCalibration(cal *CycleCalibration) {
 // GetGlobalCycleCalibration returns the current calibration tracker or nil.
 func GetGlobalCycleCalibration() *CycleCalibration {
 	return globalCycleCalibration
-}
-
-func resolveCardConfig() CardConfig {
-	// Prefer ParametersConfig when available; fall back to hardcoded defaults.
-	cfg := defaultCardConfig()
-	if params := config.GetParametersConfig(); params != nil {
-		cc := params.Industry.CompositeCard.Value
-		thresholds := make(map[string]SentimentBounds, len(cc.SentimentThresholds))
-		for k, v := range cc.SentimentThresholds {
-			thresholds[k] = SentimentBounds{Min: v.Min, Max: v.Max}
-		}
-		cfg = CardConfig{
-			LayerWeights:        cc.LayerWeights,
-			SentimentThresholds: thresholds,
-			ClampMin:            cc.ClampMin,
-			ClampMax:            cc.ClampMax,
-		}
-	}
-
-	// Overlay runtime calibration on top of the base config (from whichever source).
-	if globalCycleCalibration != nil && globalCycleCalibration.GetOutcomeCount() > 0 {
-		calibrated := globalCycleCalibration.CalibrateWeights(cfg.LayerWeights)
-		cfg.LayerWeights = calibrated
-	}
-
-	return cfg
 }
 
 // CycleStatusCard is the daily composite sentiment card that combines all
@@ -301,9 +277,6 @@ func (b *CycleStatusCardBuilder) resolveSiliconLayer(card *CycleStatusCard) floa
 	card.SiliconPhaseName = GetPhaseName(phase)
 	card.SiliconScore = GetPhaseScore(phase)
 
-	// Populate indicators: prefer the most recent transition event for full
-	// context, but fall back to the latest indicators (stored on every
-	// DetectPhase call) so the frontend always shows live values.
 	history := b.siliconTracker.GetHistory()
 	if len(history) > 0 {
 		latest := history[len(history)-1]
@@ -314,15 +287,6 @@ func (b *CycleStatusCardBuilder) resolveSiliconLayer(card *CycleStatusCard) floa
 			TaiwanSemiconductorIndexMA:     latest.Indicators.TaiwanSemiconductorIndexMA,
 			TSMCCapexGuidance:              latest.Indicators.TSMCCapexGuidance,
 			PhiladelphiaSOXIndexYoY:        latest.Indicators.PhiladelphiaSOXIndexYoY,
-		}
-	} else if latestInd, ok := b.siliconTracker.GetLatestIndicators(); ok {
-		card.SiliconIndicators = &SiliconIndicatorSnapshot{
-			TSMCMonthlyRevenueYoY:          latestInd.TSMCMonthlyRevenueYoY,
-			GlobalSemiconductorBillingsYoY: latestInd.GlobalSemiconductorBillingsYoY,
-			DRAMSpotPriceTrend:             latestInd.DRAMSpotPriceTrend,
-			TaiwanSemiconductorIndexMA:     latestInd.TaiwanSemiconductorIndexMA,
-			TSMCCapexGuidance:              latestInd.TSMCCapexGuidance,
-			PhiladelphiaSOXIndexYoY:        latestInd.PhiladelphiaSOXIndexYoY,
 		}
 	}
 
@@ -390,15 +354,9 @@ func (b *CycleStatusCardBuilder) resolveEventLayer(card *CycleStatusCard, now ti
 	events := b.eventCalendar.DetectActiveEvents(now)
 	card.ActiveEvents = events
 	if len(events) == 0 {
-		card.EventSentiment = 1.0
 		return 1.0
 	}
-	// ST-3 fix: actually assign the computed sentiment to the card field.
-	// Previously this value was only returned for composite coefficient calculation
-	// but card.EventSentiment remained at zero value (0.0).
-	sentiment := b.eventCalendar.GetCompositeEventSentiment(now)
-	card.EventSentiment = sentiment
-	return sentiment
+	return b.eventCalendar.GetCompositeEventSentiment(now)
 }
 
 func computeCompositeCoefficient(

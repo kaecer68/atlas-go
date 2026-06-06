@@ -178,7 +178,6 @@ export function renderCycleStatusCard(card) {
     tsmc_capex_guidance: "台積電資本支出指引",
     philadelphia_sox_index_yoy: "費城半導體指數年增率",
   };
-
   let html = `<div style="display:flex;flex-direction:column;gap:12px">`;
 
   html += `<div style="position:relative;overflow:hidden;background:linear-gradient(135deg,${sentimentColor},rgba(255,255,255,0.04));border:1px solid ${sentimentColor};border-radius:14px;padding:18px;color:#fff;box-shadow:0 12px 32px rgba(0,0,0,0.18)">`;

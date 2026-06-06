@@ -1291,41 +1291,34 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 // Reason: The KB version uses GoldChangePct from MarketNarrativeData directly, while the
 // ingestor version uses a MacroDataPoint with ChangePct. Different input shapes, same theme.
 func detectGoldRallyKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	params := config.GetParametersConfig().Narrative
-	// Hybrid: gold change > threshold OR absolute level > 2300 (structural safe-haven demand).
-	const goldLevelThreshold = 2300.0
-	triggered := data.GoldChangePct > params.GoldChangePctThreshold.Value || data.GoldLevel > goldLevelThreshold
-	if !triggered {
-		return nil
+	if data.GoldChangePct > 3.0 {
+		confidence := data.GoldChangePct / 5.0
+		if confidence > 1.0 {
+			confidence = 1.0
+		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("gold_rally")
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-gold-rally-%d", nowUnix()),
+			Theme:            "gold_rally",
+			Region:           "COM",
+			Sentiment:        0.6,
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
+			HitRate:          hitRateForTheme("gold_rally"),
+			CapitalFlow:      "flight_to_gold",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
+			SourceData: map[string]float64{
+				"gold_change_pct": data.GoldChangePct,
+			},
+		}
 	}
-	confidenceChange := computeDeviationConfidence(data.GoldChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
-	confidenceLevel := computeDeviationConfidence(data.GoldLevel, goldLevelThreshold, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
-	confidence := confidenceChange
-	if confidenceLevel > confidence {
-		confidence = confidenceLevel
-	}
-	now := time.Now().UTC()
-	dur := getThemeDuration("gold_rally")
-	return &NarrativeEvent{
-		ID:               fmt.Sprintf("evt-gold-rally-%d", nowUnix()),
-		Theme:            "gold_rally",
-		Region:           "COM",
-		Sentiment:        0.6,
-		Confidence:       confidence,
-		ConfidenceSource: "deviation_based_v1",
-		HitRate:          hitRateForTheme("gold_rally"),
-		CapitalFlow:      "flight_to_gold",
-		TimeWindow:       "1_week",
-		Timestamp:        now,
-		Duration:         dur,
-		ExpiresAt:        now.Add(dur),
-		Severity:         "medium",
-		Status:           "active",
-		SourceData: map[string]float64{
-			"gold_change_pct": data.GoldChangePct,
-			"gold_level":      data.GoldLevel,
-		},
-	}
+	return nil
 }
 
 // detectDollarSurgeKBEvent is the KB-pipeline detector for dollar_surge (DXYChangePct input).
@@ -1333,9 +1326,11 @@ func detectGoldRallyKBEvent(data MarketNarrativeData) *NarrativeEvent {
 // Reason: The KB version uses DXYChangePct from MarketNarrativeData directly, while the
 // ingestor version uses a MacroDataPoint with ChangePct. Different input shapes, same theme.
 func detectDollarSurgeKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	params := config.GetParametersConfig().Narrative
-	if data.DXYChangePct > params.DXYChangePctThreshold.Value {
-		confidence := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
+	if data.DXYChangePct > 1.5 {
+		confidence := data.DXYChangePct / 3.0
+		if confidence > 1.0 {
+			confidence = 1.0
+		}
 		now := time.Now().UTC()
 		dur := getThemeDuration("dollar_surge")
 		return &NarrativeEvent{
@@ -1362,48 +1357,12 @@ func detectDollarSurgeKBEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 // detectEarningsSurpriseKBEvent is the KB-pipeline detector for earnings_surprise.
-// Uses EarningsSurprisePct directly when available (query-param overlay or external feed).
-// Falls back to AICapexSentiment only when EarningsSurprisePct is zero.
+// Uses AICapexSentiment as a proxy: strong AI capex sentiment correlates with earnings strength.
+// INTENTIONALLY NOT MERGED with NewEarningsSurpriseEvent (which takes surprisePct).
+// Reason: The KB version uses AICapexSentiment (sentiment proxy) while
+// NewEarningsSurpriseEvent uses actual earnings surprise percentage. Different signal sources.
 func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	params := config.GetParametersConfig().Narrative
-
-	// Primary: actual earnings surprise percentage
-	if data.EarningsSurprisePct != 0 {
-		threshold := params.EarningsSurpriseThreshold.Value
-		if math.Abs(data.EarningsSurprisePct) >= threshold {
-			now := time.Now().UTC()
-			dur := getThemeDuration("earnings_surprise")
-			sentiment := 0.7
-			capitalFlow := "earnings_beat"
-			if data.EarningsSurprisePct < 0 {
-				sentiment = -0.7
-				capitalFlow = "earnings_miss"
-			}
-			return &NarrativeEvent{
-				ID:               fmt.Sprintf("evt-earn-%d", nowUnix()),
-				Theme:            "earnings_surprise",
-				Region:           "TW",
-				Sentiment:        sentiment,
-				Confidence:       computeDeviationConfidence(math.Abs(data.EarningsSurprisePct), threshold, params.EarningsSurpriseConfidence.Value, params.ConfidenceDeviationCeiling.Value),
-				ConfidenceSource: "deviation_based_v1",
-				HitRate:          hitRateForTheme("earnings_surprise"),
-				CapitalFlow:      capitalFlow,
-				TimeWindow:       "1_week",
-				Timestamp:        now,
-				Duration:         dur,
-				ExpiresAt:        now.Add(dur),
-				Severity:         "high",
-				Status:           "active",
-				SourceData: map[string]float64{
-					"earnings_surprise_pct": data.EarningsSurprisePct,
-				},
-			}
-		}
-		return nil
-	}
-
-	// Fallback: AICapexSentiment proxy when actual earnings data is unavailable
-	if data.AICapexSentiment > params.AICapexSentimentThreshold.Value {
+	if data.AICapexSentiment > 0.7 {
 		now := time.Now().UTC()
 		dur := getThemeDuration("earnings_surprise")
 		return &NarrativeEvent{
@@ -1411,7 +1370,7 @@ func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
 			Theme:            "earnings_surprise",
 			Region:           "TW",
 			Sentiment:        0.7,
-			Confidence:       computeDeviationConfidence(data.AICapexSentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value),
+			Confidence:       data.AICapexSentiment,
 			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("earnings_surprise"),
 			CapitalFlow:      "earnings_beat",
@@ -1436,20 +1395,15 @@ func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
 // Reason: The KB version uses VIXLevel + DXYChangePct from MarketNarrativeData directly,
 // while the ingestor version uses MacroDataPoint structs. Different input shapes, same theme.
 func detectInflationSpikeKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	params := config.GetParametersConfig().Narrative
-	if data.VIXLevel > params.VIXLevelThreshold.Value && data.DXYChangePct > params.DXYChangePctThreshold.Value {
+	if data.VIXLevel > 25 && data.DXYChangePct > 1.0 {
 		now := time.Now().UTC()
 		dur := getThemeDuration("inflation_spike")
-		confidence := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
-		if data.DXYChangePct > params.DXYChangePctThreshold.Value {
-			confidence = clampConfidence(confidence + 0.05)
-		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-inflation-spike-%d", nowUnix()),
 			Theme:            "inflation_spike",
 			Region:           "US",
 			Sentiment:        -0.6,
-			Confidence:       confidence,
+			Confidence:       (data.VIXLevel-25)/15.0 + 0.5, // scales 25→0.5, 40→1.0
 			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("inflation_spike"),
 			CapitalFlow:      "inflation_reprice",
@@ -1718,12 +1672,20 @@ func computeDeviationConfidence(observed, threshold, base, ceiling float64) floa
 }
 
 // getThemeDuration returns the typical duration for a narrative event theme.
-// Delegates to DefaultThemeDurations for a single source of truth.
+// Uses the same durations as EventLifecycleManager.defaultDurations().
 func getThemeDuration(theme string) time.Duration {
-	if d, ok := DefaultThemeDurations()[theme]; ok {
-		return d
+	switch theme {
+	case "gold_rally":
+		return 7 * 24 * time.Hour
+	case "dollar_surge":
+		return 7 * 24 * time.Hour
+	case "earnings_surprise":
+		return 10 * 24 * time.Hour
+	case "inflation_spike":
+		return 15 * 24 * time.Hour
+	default:
+		return 7 * 24 * time.Hour
 	}
-	return 7 * 24 * time.Hour
 }
 
 var nowUnix = func() int64 {
