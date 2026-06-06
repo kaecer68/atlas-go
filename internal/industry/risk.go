@@ -61,19 +61,19 @@ type AsymmetricRiskConfig = config.AsymmetricRiskConfig
 
 // RiskMonitor monitors industry-specific risks.
 type RiskMonitor struct {
-	mu               sync.RWMutex
-	customerData     map[string][]CustomerConcentration // symbol -> customers
-	newsSources      []NewsSource
-	asymmetricConfig config.AsymmetricRiskConfig
+	mu                 sync.RWMutex
+	customerData       map[string][]CustomerConcentration // symbol -> customers
+	newsSources        []NewsSource
+	asymmetricConfig   config.AsymmetricRiskConfig
 	classificationTree *ClassificationTree
 }
 
 // NewRiskMonitor creates a new risk monitor with default customer concentration data loaded.
 func NewRiskMonitor() *RiskMonitor {
 	rm := &RiskMonitor{
-		customerData:     make(map[string][]CustomerConcentration),
-		newsSources:      DefaultNewsSources(),
-		asymmetricConfig: config.GetParametersConfig().Industry.AsymmetricRisk.Value,
+		customerData:       make(map[string][]CustomerConcentration),
+		newsSources:        DefaultNewsSources(),
+		asymmetricConfig:   config.GetParametersConfig().Industry.AsymmetricRisk.Value,
 		classificationTree: DefaultClassification(),
 	}
 

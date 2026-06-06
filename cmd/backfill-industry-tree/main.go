@@ -11,9 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-var (
-	dryRun = flag.Bool("dry-run", false, "print computed weights without saving")
-)
+var dryRun = flag.Bool("dry-run", false, "print computed weights without saving")
 
 func main() {
 	flag.Parse()

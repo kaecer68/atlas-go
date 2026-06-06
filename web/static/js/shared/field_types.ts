@@ -361,6 +361,10 @@ export interface CircuitBreakerStatus {
   day_start_value: number;
 }
 
+export interface ClassificationTreeConfig {
+  segments: string[];
+}
+
 export interface CompositeCardConfig {
   layer_weights: Record<string, number>;
   sentiment_thresholds: Record<string, string>;
@@ -1404,6 +1408,7 @@ export interface IndustryParameters {
   event_sentiment_cap: string;
   composite_card: string;
   seasonal_multipliers: string;
+  classification_tree: string;
 }
 
 export interface IndustryRecommendation {
@@ -1422,6 +1427,21 @@ export interface IndustrySegment {
   name: string;
   name_en: string;
   level: string;
+  parent_id?: string;
+  weight?: number;
+  geographic_exposure: string;
+  cyclicality: string;
+  technology_intensity: string;
+  capital_intensity: string;
+  representative_stocks?: string[];
+  description?: string;
+}
+
+export interface IndustrySegmentConfig {
+  id: string;
+  name: string;
+  name_en: string;
+  level: number;
   parent_id?: string;
   weight?: number;
   geographic_exposure: string;

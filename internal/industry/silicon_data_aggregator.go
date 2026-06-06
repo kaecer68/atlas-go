@@ -49,7 +49,8 @@ func (a *SiliconDataAggregator) AggregateSiliconIndicators(ctx context.Context) 
 	indicators := ExtractSiliconIndicators(snap)
 	phase := a.tracker.DetectPhase(time.Now(), indicators)
 
-	logging.Info("silicon_data_aggregator", "phase_detected",
+	logging.Info(
+		"silicon_data_aggregator", "phase_detected",
 		"phase", int(phase),
 		"phase_name", GetPhaseName(phase),
 		"tsmc_revenue_yoy_pct", fmt.Sprintf("%.1f%%", indicators.TSMCMonthlyRevenueYoY*100),
