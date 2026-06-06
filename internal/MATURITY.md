@@ -28,7 +28,7 @@
 | `eventbus` | 事件匯流排 — Publish/Subscribe | `ChannelEventBus` |
 | `eventlogic` | 事件邏輯 — 系統事件處理規則 | — |
 | `experiment` | 實驗生命週期 — mutation → execute → judge → promote/revert | `Executor`, `Judge`, `Candidate` |
-| `industry` | 產業生態系 — 供應鏈連動、季節性模式、週期羅盤 | `SupplyChainGraph`, `SeasonalEngine`, `CycleTracker` |
+| `industry` | 產業生態系 — 參數化分類樹、供應鏈連動、季節性模式、週期羅盤、風險聚合、農曆自動化事件日曆 | `ClassificationTree`, `SupplyChainGraph`, `SeasonalEngine`, `CycleTracker`, `EventCalendar`, `GetAllRisksForIndustry` |
 | `janus` | JANUS 跨 cohort regime 偵測與 PRISM 權重動態調整 | `Detector` |
 | `ledger` | JSONL append-only 持久化 — outcomes/scorecard | `LoadOutcomes()`, `RecordSessionSummary()` |
 | `live` | 即時交易 — broker execution、context 統一、原子寫入（需 flag 啟用） | `Orchestrator` |

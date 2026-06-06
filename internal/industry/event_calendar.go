@@ -363,12 +363,36 @@ var tombSweepingDates = map[int]time.Time{
 }
 
 // getLunarDate looks up a date from a lunar calendar table. If the year is not
-// covered, it logs a warning and returns the fallback date. This makes fallback
-// usage visible rather than silently producing inaccurate dates.
+// covered by the hardcoded table, it attempts automatic lunar-to-solar computation
+// via lunar-go. The hardcoded table serves as a fast-path cache and verification
+// benchmark; automatic computation removes the 2023-2030 coverage ceiling (ST-8).
+// Only if automatic computation also fails does it return the fallback date.
 func getLunarDate(year int, table map[int]time.Time, fallback time.Time, holidayName string) time.Time {
 	if d, ok := table[year]; ok {
 		return d
 	}
+
+	var computed time.Time
+	switch holidayName {
+	case "春節":
+		computed = computeLunarNewYear(year)
+	case "端午節":
+		computed = computeDragonBoat(year)
+	case "中秋節":
+		computed = computeMidAutumn(year)
+	case "清明節":
+		computed = computeQingming(year)
+	}
+
+	if !computed.IsZero() {
+		logging.Info("event_calendar", "lunar_date_auto_computed",
+			logging.FStr("holiday", holidayName),
+			logging.FInt("year", year),
+			logging.FStr("date", computed.Format("2006-01-02")),
+		)
+		return computed
+	}
+
 	logging.Warn("event_calendar", "lunar_date_fallback",
 		logging.FStr("holiday", holidayName),
 		logging.FInt("year", year),
@@ -377,8 +401,10 @@ func getLunarDate(year int, table map[int]time.Time, fallback time.Time, holiday
 	return fallback
 }
 
-// GetLunarCoverageYears returns the min and max year covered by the lunar
-// calendar lookup tables. Years outside this range use approximate fallbacks.
+// GetLunarCoverageYears returns the effective coverage range of the lunar calendar
+// system. Since ST-8 (lunar automation), the range is effectively unbounded;
+// the returned values indicate the verified hardcoded cache range (2023-2030).
+// Callers should treat any year as computable.
 func GetLunarCoverageYears() (int, int) {
 	return 2023, 2030
 }
