@@ -139,11 +139,25 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 	return tx.Commit()
 }
 
-// LoadOutcomes reads all global outcomes (session_id = "").
+// LoadOutcomesFromSessions 聚合所有 session 的 outcomes，包含 session_id != ” 的列。
+// 與 LoadOutcomes()（僅 session_id = ”，稀疏的全域檔）不同，
+// 此方法符合 internal/ledger/AGENTS.md 規範：「richest data source with
+// per-agent, per-symbol forward returns」。
 func (s *SQLiteOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
-	return s.LoadOutcomes()
+	rows, err := s.db.Query(`
+		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
+			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
+		FROM outcomes WHERE session_id != '' ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("query outcomes from sessions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanOutcomes(rows)
 }
 
+// LoadOutcomes 讀取全域 sparse outcomes（session_id = ”），對應
+// baseDir/recommendation_outcomes.jsonl。Per-AGENTS.md 規範，請勿用此方法
+// 計算單場 OutcomeCount。
 func (s *SQLiteOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
