@@ -251,6 +251,37 @@ AI review 提供第二雙眼睛。CI 閘門（governance、operations、coverage
 
 ---
 
+## Smoke Gate 前端驗證（CI 強制）
+
+`frontend-smoke` job（`quality.yml`）在每次 PR 自動啟動 Playwright-based smoke test，確保關鍵頁面渲染無 `NaN`、`undefined` 假陽性。
+
+### Allowlist 機制
+
+`web/smoke/run.mjs` 在掃描 console error 時，會先載入 `web/smoke/known-issues.json`，將其 pattern 歸為 **known**（不影響 gate），其餘歸為 **unknown**（gate fail）。
+
+- **known** → stdout `⚠ Console error (known: <reason>)`，記錄但不觸發 fail
+- **unknown** → stdout `✗ Console error (UNKNOWN — gate fail)`，exit 1
+
+### 維護規則
+
+| 情境 | 動作 |
+|------|------|
+| 新增 known pattern | 在 `known-issues.json` 的 `patterns` 陣列加一筆，必填 `pattern`（regex string）、`reason`、`ticket`（issue/PR 編號） |
+| 後端修好對應 API | 從 `known-issues.json` **移除**該 pattern，讓未來回歸被 gate 抓出 |
+| 減少 allowlist | 每個 sprint review 檢討已知問題，目標為零 known |
+| 禁止行為 | 不可把通用 pattern（如 `/500/`）加入 allowlist — 會遮蔽真的新 bug |
+
+### 相關檔案
+
+| 檔案 | 用途 |
+|------|------|
+| `web/smoke/run.mjs` | Playwright runner |
+| `web/smoke/known-issues.json` | Known console error allowlist |
+| `scripts/ci/frontend_smoke.sh` | Bash gate：diff 解析 → 啟動 atlas → 跑 smoke |
+| `.github/workflows/quality.yml` | `frontend-smoke` job（含 JSON 結構驗證） |
+
+---
+
 ## 統一架構規範（強制）
 
 ### 背景任務統一排程

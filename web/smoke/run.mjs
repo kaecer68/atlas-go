@@ -4,8 +4,10 @@
 // 用途：在 CI 內由 scripts/ci/frontend_smoke.sh 啟動的 Playwright smoke test。
 // 設計：根據 SMOKE_PAGES env（逗號分隔的 page id 清單）逐一切換 SPA page，
 //       等待 3 秒給 fetch/JS 完成，掃描 #page-X 內文有無 NaN/undefined/null。
+//       Console error 會先過 allowlist（web/smoke/known-issues.json），
+//       known → warn only, unknown → gate fail.
 //
-// 退出碼：0 = 全部通過；1 = 任一 page 抓出 bad pattern 或 fetch timeout。
+// 退出碼：0 = 全部通過；1 = 任一 page 抓出 bad pattern 或 fetch timeout，或 unknown console error。
 //
 // 環境變數：
 //   ATLAS_PORT     — atlas server port（預設 18080）
@@ -13,6 +15,35 @@
 //   SMOKE_TIMEOUT  — 每個 page 切換後等待 fetch 完成的秒數（預設 5）
 
 import { chromium } from "playwright";
+import { readFileSync, existsSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// 載入 known-issue allowlist
+function loadKnownIssues() {
+  const p = join(__dirname, "known-issues.json");
+  if (!existsSync(p)) {
+    console.warn("⚠ known-issues.json not found — all console errors will fail the gate");
+    return [];
+  }
+  try {
+    const raw = JSON.parse(readFileSync(p, "utf-8"));
+    const list = raw.patterns || raw;
+    return list.map((e) => ({ re: new RegExp(e.pattern, "i"), reason: e.reason }));
+  } catch (e) {
+    console.warn(`⚠ failed to parse known-issues.json: ${e.message}`);
+    return [];
+  }
+}
+
+function classifyError(msg, knownIssues) {
+  for (const { re, reason } of knownIssues) {
+    if (re.test(msg)) return { known: true, reason };
+  }
+  return { known: false, reason: null };
+}
 
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}`;
@@ -110,11 +141,26 @@ async function run() {
     }
 
     if (consoleErrors.length > 0) {
-      console.error(`\n⚠ Captured ${consoleErrors.length} console error(s):`);
-      for (const err of consoleErrors.slice(0, 10)) {
-        console.error(`    ${err}`);
+      const knownIssues = loadKnownIssues();
+      let knownCount = 0;
+      let unknownCount = 0;
+      console.error(`\n⚠ Captured ${consoleErrors.length} console error(s) (${knownIssues.length} known pattern(s) loaded):`);
+      for (const err of consoleErrors.slice(0, 20)) {
+        const { known, reason } = classifyError(err, knownIssues);
+        if (known) {
+          knownCount++;
+          console.error(`    ⚠ Console error (known: ${reason}): ${err}`);
+        } else {
+          unknownCount++;
+          console.error(`    ✗ Console error (UNKNOWN — gate fail): ${err}`);
+        }
       }
-      // console error 不一定 fail（很多是 fetch 404 not found 之類），但記下來供 review
+      if (unknownCount > 0) {
+        failures.push({ pageId: "console", reason: `unknown-console-errors`, hits: [unknownCount] });
+      }
+      if (knownCount > 0) {
+        console.error(`    → ${knownCount} known, ${unknownCount} unknown`);
+      }
     }
   } finally {
     await browser.close();
