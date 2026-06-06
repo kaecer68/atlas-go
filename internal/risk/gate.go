@@ -47,6 +47,10 @@ func (g *RiskGate) PreTradeCheck(ctx context.Context, order OrderIntent, pf Port
 	mode := g.mode
 	g.mu.RUnlock()
 
+	if g.preTrade == nil {
+		return nil, fmt.Errorf("pre_trade gate not initialized")
+	}
+
 	if mode == ModeSuspended {
 		dec := &RiskDecision{
 			Phase:   PhasePreTrade,

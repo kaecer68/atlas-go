@@ -14,6 +14,11 @@ const (
 // Verdict represents the risk gate ruling on an order or position.
 type Verdict string
 
+// VerdictLevel orders Verdicts by escalating severity. Comparing via
+// Level() avoids lexicographic surprises when new Verdict values are added
+// or string ordering shifts.
+type VerdictLevel uint8
+
 const (
 	VerdictAllow     Verdict = "ALLOW"
 	VerdictReduce    Verdict = "REDUCE"
@@ -21,6 +26,33 @@ const (
 	VerdictHalt      Verdict = "HALT"
 	VerdictAlertOnly Verdict = "ALERT_ONLY"
 )
+
+const (
+	LevelAllow VerdictLevel = iota
+	LevelAlertOnly
+	LevelReduce
+	LevelBlock
+	LevelHalt
+)
+
+// Level returns the severity rank of the Verdict, used for ordering
+// comparisons (e.g. "escalate to a stricter Verdict").
+func (v Verdict) Level() VerdictLevel {
+	switch v {
+	case VerdictAllow:
+		return LevelAllow
+	case VerdictAlertOnly:
+		return LevelAlertOnly
+	case VerdictReduce:
+		return LevelReduce
+	case VerdictBlock:
+		return LevelBlock
+	case VerdictHalt:
+		return LevelHalt
+	default:
+		return LevelAllow
+	}
+}
 
 // ActionType categorizes the concrete corrective action taken by the risk gate.
 type ActionType string
