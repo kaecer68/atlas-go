@@ -408,6 +408,28 @@ type MarketdataParameters struct {
 	RetryBackoffMs       ParameterMetadata[int]     `json:"retry_backoff_ms"`
 }
 
+// IndustrySegmentConfig holds a single industry segment definition for the classification tree.
+// This is the ParameterConfig-compatible version of industry.IndustrySegment.
+type IndustrySegmentConfig struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	NameEN               string   `json:"name_en"`
+	Level                int      `json:"level"`
+	ParentID             string   `json:"parent_id,omitempty"`
+	Weight               float64  `json:"weight,omitempty"`
+	GeographicExposure   string   `json:"geographic_exposure"`
+	Cyclicality          string   `json:"cyclicality"`
+	TechnologyIntensity  string   `json:"technology_intensity"`
+	CapitalIntensity     string   `json:"capital_intensity"`
+	RepresentativeStocks []string `json:"representative_stocks,omitempty"`
+	Description          string   `json:"description,omitempty"`
+}
+
+// ClassificationTreeConfig holds the complete industry classification tree.
+type ClassificationTreeConfig struct {
+	Segments []IndustrySegmentConfig `json:"segments"`
+}
+
 // IndustryParameters holds tunable values for industry analysis, seasonality,
 // business cycle detection, and risk scoring.
 type IndustryParameters struct {
@@ -494,6 +516,10 @@ type IndustryParameters struct {
 
 	// SeasonalMultipliers holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
 	SeasonalMultipliers ParameterMetadata[SeasonalMultiplierConfig] `json:"seasonal_multipliers"`
+
+	// ClassificationTree defines the complete industry hierarchy (L1/L2/L3).
+	// Previously hardcoded in internal/industry/types.go; now parameter-managed.
+	ClassificationTree ParameterMetadata[ClassificationTreeConfig] `json:"classification_tree"`
 }
 
 // CompositeCardConfig holds tunable parameters for building the CycleStatusCard composite sentiment gauge.

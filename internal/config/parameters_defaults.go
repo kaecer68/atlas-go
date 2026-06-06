@@ -2281,6 +2281,42 @@ func defaultIndustryParameters() IndustryParameters {
 			Source:    "heuristic; validated against 2024 TWSE daily returns",
 			Todo:      "Backtest layer weights against actual forward returns from ledger data. Calibrate sentiment thresholds using historical composite coefficient distribution.",
 		},
+		ClassificationTree: ParameterMetadata[ClassificationTreeConfig]{
+			Value: ClassificationTreeConfig{
+				Segments: []IndustrySegmentConfig{
+					// L1 industries
+					{ID: "semiconductor", Name: "半導體產業", NameEN: "Semiconductor", Level: 1, Weight: 0.30, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2330.TW", "2303.TW", "2454.TW"}, Description: "台灣經濟支柱，包含晶圓代工、IC設計、封測"},
+					{ID: "shipping", Name: "航運產業", NameEN: "Shipping & Logistics", Level: 1, Weight: 0.08, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2603.TW", "2609.TW", "2615.TW"}, Description: "受全球貿易週期影響顯著"},
+					{ID: "financials", Name: "金融保險", NameEN: "Financials", Level: 1, Weight: 0.12, GeographicExposure: "Domestic", Cyclicality: "Hybrid", TechnologyIntensity: "LowTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2881.TW", "2882.TW", "2886.TW"}, Description: "利率敏感，獲利受央行政策影響"},
+					{ID: "electronics", Name: "電子零組件", NameEN: "Electronics Components", Level: 1, Weight: 0.15, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2317.TW", "2382.TW", "2357.TW"}, Description: "連結全球科技供應鏈"},
+					{ID: "ai_supply_chain", Name: "AI 供應鏈", NameEN: "AI Supply Chain", Level: 1, Weight: 0.10, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2383.TW", "3661.TW", "4938.TW"}, Description: "新興高成長領域"},
+					{ID: "industrial", Name: "傳產機械", NameEN: "Industrial Machinery", Level: 1, Weight: 0.08, GeographicExposure: "Domestic", Cyclicality: "Cyclical", TechnologyIntensity: "MediumTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"1513.TW", "1590.TW"}, Description: "經濟週期後段受益者"},
+					{ID: "energy", Name: "能源電力", NameEN: "Energy & Power", Level: 1, Weight: 0.05, GeographicExposure: "Domestic", Cyclicality: "Hybrid", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"6505.TW", "9917.TW"}, Description: "基礎設施，需求穩定"},
+					{ID: "consumer", Name: "消費零售", NameEN: "Consumer Retail", Level: 1, Weight: 0.05, GeographicExposure: "Domestic", Cyclicality: "Defensive", TechnologyIntensity: "LowTech", CapitalIntensity: "LowCapital", RepresentativeStocks: []string{"2912.TW", "9927.TW"}, Description: "內需導向，經濟下行相對穩定"},
+					{ID: "robotics", Name: "機器人產業", NameEN: "Robotics", Level: 1, Weight: 0.03, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2356.TW", "2049.TW"}, Description: "新興自動化領域"},
+					{ID: "mining", Name: "採礦與基本金屬", NameEN: "Mining & Metals", Level: 1, Weight: 0.02, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"1605.TW", "1707.TW"}, Description: "大宗商品週期"},
+					{ID: "leo_satellite", Name: "低軌衛星", NameEN: "LEO Satellite", Level: 1, Weight: 0.02, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"6271.TW", "3426.TW"}, Description: "衛星通訊新興供應鏈"},
+					{ID: "etf_rotation", Name: "ETF 輪動", NameEN: "ETF Rotation", Level: 1, Weight: 0.00, GeographicExposure: "Domestic", Cyclicality: "Hybrid", TechnologyIntensity: "LowTech", CapitalIntensity: "LowCapital", RepresentativeStocks: []string{}, Description: "跨產業策略配置"},
+					// Semiconductor L2
+					{ID: "foundry", Name: "晶圓代工", NameEN: "Foundry", Level: 2, ParentID: "semiconductor", Weight: 0.50, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2330.TW", "2303.TW"}, Description: "TSMC, UMC"},
+					{ID: "server_assembly", Name: "伺服器組裝", NameEN: "Server Assembly", Level: 2, ParentID: "semiconductor", Weight: 0.25, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2324.TW", "2356.TW"}, Description: "AI server assembly"},
+					{ID: "cooling", Name: "散熱方案", NameEN: "Cooling Solutions", Level: 2, ParentID: "semiconductor", Weight: 0.25, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"3324.TW", "6230.TW"}, Description: "Liquid/air cooling"},
+					// Mining L2
+					{ID: "precious_metals_recycling", Name: "貴金屬回收", NameEN: "Precious Metals Recycling", Level: 2, ParentID: "mining", Weight: 0.30, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "MediumTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"3550.TW", "8936.TW"}, Description: "Gold/silver recovery"},
+					{ID: "copper_industry", Name: "銅工業", NameEN: "Copper Industry", Level: 2, ParentID: "mining", Weight: 0.25, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"1605.TW", "8930.TW"}, Description: "Copper mining/refining"},
+					{ID: "rare_earth_specialty", Name: "稀土及特殊材料", NameEN: "Rare Earth & Specialty", Level: 2, ParentID: "mining", Weight: 0.20, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2031.TW", "1815.TW"}, Description: "Rare earth elements"},
+					{ID: "metal_processing", Name: "金屬加工", NameEN: "Metal Processing", Level: 2, ParentID: "mining", Weight: 0.25, GeographicExposure: "Domestic", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2015.TW", "5007.TW"}, Description: "Metal fabrication"},
+					// LEO Satellite L2
+					{ID: "satellite_rf_components", Name: "衛星射頻元件", NameEN: "Satellite RF Components", Level: 2, ParentID: "leo_satellite", Weight: 0.35, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"6271.TW", "4958.TW"}, Description: "RF front-end modules"},
+					{ID: "satellite_pcb", Name: "衛星用 PCB", NameEN: "Satellite PCB", Level: 2, ParentID: "leo_satellite", Weight: 0.25, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2355.TW", "8046.TW"}, Description: "High-frequency PCB"},
+					{ID: "ground_equipment", Name: "地面設備", NameEN: "Ground Equipment", Level: 2, ParentID: "leo_satellite", Weight: 0.25, GeographicExposure: "Domestic", Cyclicality: "Cyclical", TechnologyIntensity: "MediumTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2314.TW", "2353.TW"}, Description: "Ground stations & terminals"},
+					{ID: "laser_communication", Name: "雷射通訊", NameEN: "Laser Communication", Level: 2, ParentID: "leo_satellite", Weight: 0.15, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"3426.TW", "6533.TW"}, Description: "Optical inter-satellite links"},
+				},
+			},
+			Rationale: "Complete industry classification hierarchy migrated from hardcoded types.go to ParametersConfig. L1 weights sum to 1.0, L2 weights within each parent sum to 1.0. Representative stocks and attributes serve as initialization seeds; auto_tree_update pipeline refreshes weights quarterly from market-cap data.",
+			Source:    "heuristic",
+			Todo:      "Auto-update: run cmd/backfill-industry-tree after each quarter close to recompute weights from TWSE market cap data. Validate: ensure L1 weights sum to 1.0 and L2 weights per parent sum to 1.0.",
+		},
 	}
 }
 

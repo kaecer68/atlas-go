@@ -5,6 +5,8 @@ package industry
 import (
 	"fmt"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // IndustryLevel represents the granularity level of industry classification.
@@ -210,791 +212,105 @@ func (t *ClassificationTree) Validate() error {
 	return nil
 }
 
-// DefaultClassification returns the built-in Taiwan stock industry classification.
+// DefaultClassification returns the industry classification tree, loaded from
+// ParametersConfig with a minimal safe fallback if config is unavailable.
 func DefaultClassification() *ClassificationTree {
 	tree := NewClassificationTree()
 
-	// Level 1: Broad sectors
-	// 1. Semiconductor
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "semiconductor",
-		Name:                 "半導體",
-		NameEN:               "Semiconductor",
-		Level:                Level1,
-		Weight:               0.22,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2330.TW", "2303.TW", "2454.TW"},
-		Description:          "台灣核心產業，佔出口比重超過35%",
-	})
+	cfg := config.GetParametersConfig()
+	if cfg == nil || cfg.Industry.ClassificationTree.Value.Segments == nil {
+		// Minimal safe fallback: single placeholder segment to avoid nil-tree panics.
+		// This should never happen in production because config initializes on boot.
+		tree.AddSegment(&IndustrySegment{
+			ID:     "unknown",
+			Name:   "未分類",
+			NameEN: "Uncategorized",
+			Level:  Level1,
+		})
+		return tree
+	}
 
-	// 2. AI Supply Chain
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "ai_supply_chain",
-		Name:                 "AI供應鏈",
-		NameEN:               "AI Supply Chain",
-		Level:                Level1,
-		Weight:               0.17,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2382.TW", "6669.TW", "2317.TW"},
-		Description:          "AI伺服器、散熱、電源等AI基礎設施",
-	})
-
-	// 3. Robotics
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "robotics",
-		Name:                 "機器人",
-		NameEN:               "Robotics",
-		Level:                Level1,
-		Weight:               0.06,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"2308.TW", "2395.TW", "6669.TW"},
-		Description:          "工業自動化與智慧製造",
-	})
-
-	// 4. Financials
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "financials",
-		Name:                 "金融",
-		NameEN:               "Financials",
-		Level:                Level1,
-		Weight:               0.14,
-		GeographicExposure:   ExposureDomestic,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2881.TW", "2882.TW", "2886.TW"},
-		Description:          "金融控股與銀行保險",
-	})
-
-	// 5. Shipping
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "shipping",
-		Name:                 "航運",
-		NameEN:               "Shipping",
-		Level:                Level1,
-		Weight:               0.08,
-		GeographicExposure:   ExposureMixed,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityLow,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2603.TW", "2609.TW", "2615.TW"},
-		Description:          "國際海運與物流",
-	})
-
-	// 6. Energy
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "energy",
-		Name:                 "能源",
-		NameEN:               "Energy",
-		Level:                Level1,
-		Weight:               0.05,
-		GeographicExposure:   ExposureMixed,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"6505.TW", "1328.TW"},
-		Description:          "石油天然氣、再生能源、公用事業",
-	})
-
-	// 7. Electronics Components
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "electronics",
-		Name:                 "電子零組件",
-		NameEN:               "Electronics Components",
-		Level:                Level1,
-		Weight:               0.06,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"2327.TW", "3533.TW", "3324.TW"},
-		Description:          "被動元件、連接器、散熱模組、機殼",
-	})
-
-	// 8. Consumer
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "consumer",
-		Name:                 "傳產/消費",
-		NameEN:               "Consumer & Traditional",
-		Level:                Level1,
-		Weight:               0.06,
-		GeographicExposure:   ExposureDomestic,
-		Cyclicality:          CyclicalityLow,
-		TechnologyIntensity:  TechIntensityLow,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"1216.TW", "1476.TW", "2903.TW"},
-		Description:          "食品飲料、紡織成衣、百貨零售、觀光旅遊",
-	})
-
-	// 9. Mining & Precious Metals
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "mining",
-		Name:                 "礦業/貴金屬",
-		NameEN:               "Mining & Precious Metals",
-		Level:                Level1,
-		Weight:               0.05,
-		GeographicExposure:   ExposureMixed,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2009.TW", "8390.TW", "9955.TW", "1608.TW"},
-		Description:          "貴金屬回收、銅工業、稀土與特殊金屬，半導體與電子工業上游關鍵材料，地緣政治避險資產",
-	})
-
-	// 10. Industrial
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "industrial",
-		Name:                 "工業/製造",
-		NameEN:               "Industrial & Manufacturing",
-		Level:                Level1,
-		Weight:               0.06,
-		GeographicExposure:   ExposureMixed,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2002.TW", "1301.TW", "1101.TW"},
-		Description:          "鋼鐵、塑化、水泥、工具機",
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "leo_satellite",
-		Name:                 "低軌衛星",
-		NameEN:               "LEO Satellite",
-		Level:                Level1,
-		Weight:               0.05,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"3491.TW", "2313.TW", "6285.TW"},
-		Description:          "低軌道衛星通訊與地面設備",
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                  "etf_rotation",
-		Name:                "ETF輪動",
-		NameEN:              "ETF Rotation",
-		Description:         "台灣ETF輪動策略，涵蓋台灣50、高股息、ESG、5G、半導體等主題型ETF",
-		Level:               Level1,
-		ParentID:            "",
-		Weight:              0.05,
-		GeographicExposure:  ExposureDomestic,
-		Cyclicality:         CyclicalityMedium,
-		TechnologyIntensity: TechIntensityLow,
-		CapitalIntensity:    CapIntensityLow,
-		RepresentativeStocks: []string{
-			"0050.TW", "0056.TW", "00878.TW", "006208.TW",
-			"00692.TW", "00713.TW", "00881.TW", "00891.TW",
-			"00919.TW", "00929.TW", "00940.TW",
-		},
-	})
-
-	// Level 2 & 3: Semiconductor sub-industries
-	addSemiconductorSubIndustries(tree)
-	addAISupplyChainSubIndustries(tree)
-	addRoboticsSubIndustries(tree)
-	addFinancialsSubIndustries(tree)
-	addShippingSubIndustries(tree)
-	addEnergySubIndustries(tree)
-	addElectronicsSubIndustries(tree)
-	addConsumerSubIndustries(tree)
-	addMiningSubIndustries(tree)
-	addIndustrialSubIndustries(tree)
-	addLEOSatelliteSubIndustries(tree)
+	for _, seg := range cfg.Industry.ClassificationTree.Value.Segments {
+		tree.AddSegment(segmentFromConfig(seg))
+	}
 
 	return tree
 }
 
-func addSemiconductorSubIndustries(tree *ClassificationTree) {
-	// Level 2
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "foundry",
-		Name:                 "晶圓代工",
-		NameEN:               "Foundry",
-		Level:                Level2,
-		ParentID:             "semiconductor",
-		Weight:               0.40,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2330.TW", "2303.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "memory",
-		Name:                 "記憶體",
-		NameEN:               "Memory",
-		Level:                Level2,
-		ParentID:             "semiconductor",
-		Weight:               0.20,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2408.TW", "2344.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "ic_design",
-		Name:                 "IC設計",
-		NameEN:               "IC Design",
-		Level:                Level2,
-		ParentID:             "semiconductor",
-		Weight:               0.25,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityLow,
-		RepresentativeStocks: []string{"2454.TW", "3034.TW", "3661.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "packaging",
-		Name:                 "封裝測試",
-		NameEN:               "Packaging & Testing",
-		Level:                Level2,
-		ParentID:             "semiconductor",
-		Weight:               0.10,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"2311.TW", "2449.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "pcb",
-		Name:                 "PCB",
-		NameEN:               "Printed Circuit Board",
-		Level:                Level2,
-		ParentID:             "semiconductor",
-		Weight:               0.03,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"3037.TW", "4958.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "semi_equipment",
-		Name:                 "半導體設備",
-		NameEN:               "Semiconductor Equipment",
-		Level:                Level2,
-		ParentID:             "semiconductor",
-		Weight:               0.02,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"3658.TW"},
-	})
-
-	// Level 3: Foundry sub-categories
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "advanced_process",
-		Name:                 "先進製程",
-		NameEN:               "Advanced Process",
-		Level:                Level3,
-		ParentID:             "foundry",
-		RepresentativeStocks: []string{"2330.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "mature_process",
-		Name:                 "成熟製程",
-		NameEN:               "Mature Process",
-		Level:                Level3,
-		ParentID:             "foundry",
-		RepresentativeStocks: []string{"2303.TW"},
-	})
-
-	// Level 3: Memory sub-categories
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "dram",
-		Name:                 "DRAM",
-		NameEN:               "DRAM",
-		Level:                Level3,
-		ParentID:             "memory",
-		RepresentativeStocks: []string{"2408.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "nand",
-		Name:                 "NAND Flash",
-		NameEN:               "NAND Flash",
-		Level:                Level3,
-		ParentID:             "memory",
-		RepresentativeStocks: []string{"2344.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "hbm",
-		Name:                 "HBM",
-		NameEN:               "High Bandwidth Memory",
-		Level:                Level3,
-		ParentID:             "memory",
-		RepresentativeStocks: []string{"3661.TW"},
-	})
-
-	// Level 3: IC Design sub-categories
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "mobile_chip",
-		Name:                 "手機晶片",
-		NameEN:               "Mobile Chip",
-		Level:                Level3,
-		ParentID:             "ic_design",
-		RepresentativeStocks: []string{"2454.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "ai_chip",
-		Name:                 "AI晶片",
-		NameEN:               "AI Chip",
-		Level:                Level3,
-		ParentID:             "ic_design",
-		RepresentativeStocks: []string{"3661.TW", "3034.TW"},
-	})
+func segmentFromConfig(seg config.IndustrySegmentConfig) *IndustrySegment {
+	return &IndustrySegment{
+		ID:                   seg.ID,
+		Name:                 seg.Name,
+		NameEN:               seg.NameEN,
+		Level:                IndustryLevel(seg.Level),
+		ParentID:             seg.ParentID,
+		Weight:               seg.Weight,
+		GeographicExposure:   parseGeographicExposure(seg.GeographicExposure),
+		Cyclicality:          parseCyclicality(seg.Cyclicality),
+		TechnologyIntensity:  parseTechnologyIntensity(seg.TechnologyIntensity),
+		CapitalIntensity:     parseCapitalIntensity(seg.CapitalIntensity),
+		RepresentativeStocks: seg.RepresentativeStocks,
+		Description:          seg.Description,
+	}
 }
 
-func addAISupplyChainSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "server_assembly",
-		Name:                 "伺服器組裝",
-		NameEN:               "Server Assembly",
-		Level:                Level2,
-		ParentID:             "ai_supply_chain",
-		Weight:               0.50,
-		RepresentativeStocks: []string{"2382.TW", "6669.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "cooling",
-		Name:                 "散熱",
-		NameEN:               "Cooling Solutions",
-		Level:                Level2,
-		ParentID:             "ai_supply_chain",
-		Weight:               0.30,
-		RepresentativeStocks: []string{"3017.TW", "3665.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "power_supply",
-		Name:                 "電源",
-		NameEN:               "Power Supply",
-		Level:                Level2,
-		ParentID:             "ai_supply_chain",
-		Weight:               0.20,
-		RepresentativeStocks: []string{"2308.TW"},
-	})
+func parseGeographicExposure(s string) GeographicExposure {
+	switch s {
+	case "Domestic":
+		return ExposureDomestic
+	case "Export":
+		return ExposureExport
+	case "Global", "Mixed":
+		return ExposureMixed
+	default:
+		return ExposureMixed
+	}
 }
 
-func addRoboticsSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "reducer",
-		Name:                 "減速機",
-		NameEN:               "Reducer/Gearbox",
-		Level:                Level2,
-		ParentID:             "robotics",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"4540.TW", "1598.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "servo_motor",
-		Name:                 "伺服馬達",
-		NameEN:               "Servo Motor",
-		Level:                Level2,
-		ParentID:             "robotics",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"2049.TW", "4551.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "robot_controller",
-		Name:                 "控制器",
-		NameEN:               "Robot Controller",
-		Level:                Level2,
-		ParentID:             "robotics",
-		Weight:               0.20,
-		RepresentativeStocks: []string{"2395.TW", "2049.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "sensor_vision",
-		Name:                 "感測器/視覺",
-		NameEN:               "Sensor & Vision",
-		Level:                Level2,
-		ParentID:             "robotics",
-		Weight:               0.15,
-		RepresentativeStocks: []string{"3008.TW", "6732.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "robot_body",
-		Name:                 "機器人本體",
-		NameEN:               "Robot Body",
-		Level:                Level2,
-		ParentID:             "robotics",
-		Weight:               0.15,
-		RepresentativeStocks: []string{"2049.TW", "4552.TW"},
-	})
+func parseCyclicality(s string) Cyclicality {
+	switch s {
+	case "Cyclical":
+		return CyclicalityHigh
+	case "Defensive":
+		return CyclicalityLow
+	case "Hybrid":
+		return CyclicalityMedium
+	default:
+		return CyclicalityMedium
+	}
 }
 
-func addFinancialsSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "banking",
-		Name:                 "銀行",
-		NameEN:               "Banking",
-		Level:                Level2,
-		ParentID:             "financials",
-		Weight:               0.50,
-		RepresentativeStocks: []string{"2881.TW", "2882.TW", "2886.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "insurance",
-		Name:                 "保險",
-		NameEN:               "Insurance",
-		Level:                Level2,
-		ParentID:             "financials",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"2881.TW", "2882.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "securities",
-		Name:                 "證券",
-		NameEN:               "Securities",
-		Level:                Level2,
-		ParentID:             "financials",
-		Weight:               0.15,
-		RepresentativeStocks: []string{"2891.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "fintech",
-		Name:                 "金融科技",
-		NameEN:               "Fintech",
-		Level:                Level2,
-		ParentID:             "financials",
-		Weight:               0.10,
-		RepresentativeStocks: []string{},
-	})
+func parseTechnologyIntensity(s string) TechnologyIntensity {
+	switch s {
+	case "HighTech":
+		return TechIntensityHigh
+	case "MediumTech":
+		return TechIntensityMedium
+	case "LowTech":
+		return TechIntensityLow
+	default:
+		return TechIntensityMedium
+	}
 }
 
-func addShippingSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "container_shipping",
-		Name:                 "貨櫃航運",
-		NameEN:               "Container Shipping",
-		Level:                Level2,
-		ParentID:             "shipping",
-		Weight:               0.60,
-		RepresentativeStocks: []string{"2603.TW", "2609.TW", "2615.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "bulk_shipping",
-		Name:                 "散裝航運",
-		NameEN:               "Bulk Shipping",
-		Level:                Level2,
-		ParentID:             "shipping",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"2606.TW", "2637.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "port_logistics",
-		Name:                 "港口物流",
-		NameEN:               "Port & Logistics",
-		Level:                Level2,
-		ParentID:             "shipping",
-		Weight:               0.15,
-		RepresentativeStocks: []string{"5607.TW"},
-	})
+func parseCapitalIntensity(s string) CapitalIntensity {
+	switch s {
+	case "HighCapital":
+		return CapIntensityHigh
+	case "MediumCapital":
+		return CapIntensityMedium
+	case "LowCapital":
+		return CapIntensityLow
+	default:
+		return CapIntensityMedium
+	}
 }
 
-func addEnergySubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "oil_gas",
-		Name:                 "石油天然氣",
-		NameEN:               "Oil & Gas",
-		Level:                Level2,
-		ParentID:             "energy",
-		Weight:               0.50,
-		RepresentativeStocks: []string{"6505.TW", "1328.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "renewable",
-		Name:                 "再生能源",
-		NameEN:               "Renewable Energy",
-		Level:                Level2,
-		ParentID:             "energy",
-		Weight:               0.30,
-		RepresentativeStocks: []string{},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "utilities",
-		Name:                 "公用事業",
-		NameEN:               "Utilities",
-		Level:                Level2,
-		ParentID:             "energy",
-		Weight:               0.20,
-		RepresentativeStocks: []string{},
-	})
-}
-
-func addElectronicsSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "passive_components",
-		Name:                 "被動元件",
-		NameEN:               "Passive Components",
-		Level:                Level2,
-		ParentID:             "electronics",
-		Weight:               0.35,
-		RepresentativeStocks: []string{"2327.TW", "2492.TW", "3026.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "connectors",
-		Name:                 "連接器",
-		NameEN:               "Connectors",
-		Level:                Level2,
-		ParentID:             "electronics",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"3533.TW", "3665.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "thermal_modules",
-		Name:                 "散熱模組",
-		NameEN:               "Thermal Modules",
-		Level:                Level2,
-		ParentID:             "electronics",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"3324.TW", "3017.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "chassis",
-		Name:                 "機殼/機構件",
-		NameEN:               "Chassis & Mechanical",
-		Level:                Level2,
-		ParentID:             "electronics",
-		Weight:               0.15,
-		RepresentativeStocks: []string{"8210.TW"},
-	})
-}
-
-func addConsumerSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "food_beverage",
-		Name:                 "食品飲料",
-		NameEN:               "Food & Beverage",
-		Level:                Level2,
-		ParentID:             "consumer",
-		Weight:               0.35,
-		RepresentativeStocks: []string{"1216.TW", "1227.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "textile",
-		Name:                 "紡織成衣",
-		NameEN:               "Textile & Apparel",
-		Level:                Level2,
-		ParentID:             "consumer",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"1476.TW", "4401.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "retail",
-		Name:                 "百貨零售",
-		NameEN:               "Retail",
-		Level:                Level2,
-		ParentID:             "consumer",
-		Weight:               0.25,
-		RepresentativeStocks: []string{"2903.TW", "2912.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "tourism",
-		Name:                 "觀光旅遊",
-		NameEN:               "Tourism",
-		Level:                Level2,
-		ParentID:             "consumer",
-		Weight:               0.15,
-		RepresentativeStocks: []string{"2731.TW"},
-	})
-}
-
-func addLEOSatelliteSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "satellite_rf_components",
-		Name:                 "衛星射頻元件",
-		NameEN:               "Satellite RF Components",
-		Level:                Level2,
-		ParentID:             "leo_satellite",
-		Weight:               0.30,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"3491.TW", "3105.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "satellite_pcb",
-		Name:                 "衛星PCB",
-		NameEN:               "Satellite PCB",
-		Level:                Level2,
-		ParentID:             "leo_satellite",
-		Weight:               0.25,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2313.TW", "2367.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "ground_equipment",
-		Name:                 "地面設備",
-		NameEN:               "Ground Equipment",
-		Level:                Level2,
-		ParentID:             "leo_satellite",
-		Weight:               0.25,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"6285.TW", "3022.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "laser_communication",
-		Name:                 "雷射通訊",
-		NameEN:               "Laser Communication",
-		Level:                Level2,
-		ParentID:             "leo_satellite",
-		Weight:               0.20,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"7717.TW", "3138.TW"},
-	})
-}
-
-func addMiningSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "precious_metals_recycling",
-		Name:                 "貴金屬回收",
-		NameEN:               "Precious Metals Recycling",
-		Level:                Level2,
-		ParentID:             "mining",
-		Weight:               0.30,
-		GeographicExposure:   ExposureMixed,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"8390.TW", "9955.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "copper_industry",
-		Name:                 "銅工業",
-		NameEN:               "Copper Industry",
-		Level:                Level2,
-		ParentID:             "mining",
-		Weight:               0.30,
-		GeographicExposure:   ExposureMixed,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{"2009.TW", "1608.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "rare_earth_specialty",
-		Name:                 "稀土/特殊金屬",
-		NameEN:               "Rare Earth & Specialty Metals",
-		Level:                Level2,
-		ParentID:             "mining",
-		Weight:               0.20,
-		GeographicExposure:   ExposureMixed,
-		Cyclicality:          CyclicalityHigh,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{}, // No pure-play rare earth specialty companies listed on TWSE; tracked via mining parent
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "metal_processing",
-		Name:                 "金屬加工",
-		NameEN:               "Metal Processing",
-		Level:                Level2,
-		ParentID:             "mining",
-		Weight:               0.20,
-		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityMedium,
-		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{}, // No pure-play metal processing companies listed on TWSE; tracked via mining parent
-	})
-}
-
-func addIndustrialSubIndustries(tree *ClassificationTree) {
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "steel",
-		Name:                 "鋼鐵",
-		NameEN:               "Steel",
-		Level:                Level2,
-		ParentID:             "industrial",
-		Weight:               0.30,
-		RepresentativeStocks: []string{"2002.TW", "2006.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "petrochemicals",
-		Name:                 "塑化",
-		NameEN:               "Petrochemicals",
-		Level:                Level2,
-		ParentID:             "industrial",
-		Weight:               0.30,
-		RepresentativeStocks: []string{"1301.TW", "1303.TW", "1326.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "cement",
-		Name:                 "水泥",
-		NameEN:               "Cement",
-		Level:                Level2,
-		ParentID:             "industrial",
-		Weight:               0.20,
-		RepresentativeStocks: []string{"1101.TW", "1102.TW"},
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "machine_tools",
-		Name:                 "工具機",
-		NameEN:               "Machine Tools",
-		Level:                Level2,
-		ParentID:             "industrial",
-		Weight:               0.20,
-		RepresentativeStocks: []string{"1590.TW", "2049.TW"},
-	})
+// ClassificationTreeAccess is a simple interface for looking up industry segments.
+// It allows the config package to remain decoupled from the full tree implementation.
+type ClassificationTreeAccess interface {
+	GetSegment(id string) (*IndustrySegment, bool)
+	GetChildren(parentID string) []*IndustrySegment
+	GetLevel1() []*IndustrySegment
+	GetPath(segmentID string) []*IndustrySegment
 }
