@@ -80,35 +80,35 @@ func (g *PreTradeGate) Check(_ context.Context, order OrderIntent, pf PortfolioS
 
 	r := g.ruleMaxPosition(order, pf)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictBlock {
+	if !r.Passed && decision.Verdict.Level() < LevelBlock {
 		decision.Verdict = VerdictBlock
 		decision.Reason = r.Message
 	}
 
 	r = g.ruleSectorExposure(order, pf)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictBlock {
+	if !r.Passed && decision.Verdict.Level() < LevelBlock {
 		decision.Verdict = VerdictBlock
 		decision.Reason = r.Message
 	}
 
 	r = g.ruleVaRLimit(order, pf)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictBlock {
+	if !r.Passed && decision.Verdict.Level() < LevelBlock {
 		decision.Verdict = VerdictBlock
 		decision.Reason = r.Message
 	}
 
 	r = g.ruleCashBuffer(order, pf)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictBlock {
+	if !r.Passed && decision.Verdict.Level() < LevelBlock {
 		decision.Verdict = VerdictBlock
 		decision.Reason = r.Message
 	}
 
 	r = g.ruleMaxOpenPositions(order, pf)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictBlock {
+	if !r.Passed && decision.Verdict.Level() < LevelBlock {
 		decision.Verdict = VerdictBlock
 		decision.Reason = r.Message
 	}
@@ -117,10 +117,10 @@ func (g *PreTradeGate) Check(_ context.Context, order OrderIntent, pf PortfolioS
 	details = append(details, r)
 	if !r.Passed {
 		switch {
-		case r.Severity == "REDUCE" && decision.Verdict < VerdictReduce:
+		case r.Severity == "REDUCE" && decision.Verdict.Level() < LevelReduce:
 			decision.Verdict = VerdictReduce
 			decision.Reason = r.Message
-		case decision.Verdict < VerdictBlock:
+		case decision.Verdict.Level() < LevelBlock:
 			decision.Verdict = VerdictBlock
 			decision.Reason = r.Message
 		}
