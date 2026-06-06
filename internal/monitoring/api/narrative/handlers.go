@@ -1,12 +1,14 @@
 package narrative
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -30,61 +32,66 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/narrative/stress-index/thresholds", shared.Get(h.HandleStressIndexThresholds))
 }
 
-func parseFloatQuery(r *http.Request, key string, defaultVal float64) float64 {
+func parseFloatQuery(r *http.Request, key string) float64 {
 	if v := r.URL.Query().Get(key); v != "" {
 		var f float64
 		if _, err := fmt.Sscanf(v, "%f", &f); err == nil {
 			return f
 		}
 	}
-	return defaultVal
+	return 0
+}
+
+// buildNarrativeData fetches real-time macro snapshot data and overlays
+// query-param overrides.  Fields not available in the snapshot
+// (GeopoliticalGPR, RetailInstitutionalDivergence, MarginZScore) remain
+// at their query-param values (defaulting to 0).
+func (h *Handlers) buildNarrativeData(ctx context.Context, r *http.Request) narrative.MarketNarrativeData {
+	data := narrative.MarketNarrativeData{
+		GeopoliticalGPR:               parseFloatQuery(r, "geopolitical_gpr"),
+		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence"),
+		MarginZScore:                  parseFloatQuery(r, "margin_zscore"),
+	}
+
+	if snapData, err := h.Svc.BuildMarketNarrativeData(ctx); err == nil {
+		data.US10YChangeBps = snapData.US10YChangeBps
+		data.DXYChangePct = snapData.DXYChangePct
+		data.VIXLevel = snapData.VIXLevel
+		data.USD_TWD_ChangePct = snapData.USD_TWD_ChangePct
+		data.OilChangePct = snapData.OilChangePct
+		data.GoldChangePct = snapData.GoldChangePct
+		data.JPY_ChangePct = snapData.JPY_ChangePct
+		data.AICapexSentiment = snapData.AICapexSentiment
+		// GeopoliticalGPR, RetailInstitutionalDivergence, MarginZScore
+		// remain from query params (can be overridden manually).
+	} else {
+		logging.Warn("narrative_handlers", "snapshot_fallback", logging.Err(err))
+		// Graceful degradation: use query-param defaults for missing fields.
+		data.US10YChangeBps = parseFloatQuery(r, "us10y_change_bps")
+		data.DXYChangePct = parseFloatQuery(r, "dxy_change_pct")
+		data.VIXLevel = parseFloatQuery(r, "vix_level")
+		data.USD_TWD_ChangePct = parseFloatQuery(r, "usd_twd_change_pct")
+		data.OilChangePct = parseFloatQuery(r, "oil_change_pct")
+		data.GoldChangePct = parseFloatQuery(r, "gold_change_pct")
+		data.JPY_ChangePct = parseFloatQuery(r, "jpy_change_pct")
+		data.AICapexSentiment = parseFloatQuery(r, "ai_capex_sentiment")
+	}
+	return data
 }
 
 func (h *Handlers) HandleNarrativeEvents(r *http.Request) (int, any) {
-	data := narrative.MarketNarrativeData{
-		US10YChangeBps:                parseFloatQuery(r, "us10y_change_bps", 15),
-		DXYChangePct:                  parseFloatQuery(r, "dxy_change_pct", 2.0),
-		VIXLevel:                      parseFloatQuery(r, "vix_level", 30),
-		USD_TWD_ChangePct:             parseFloatQuery(r, "usd_twd_change_pct", 0),
-		OilChangePct:                  parseFloatQuery(r, "oil_change_pct", 6.0),
-		GoldChangePct:                 parseFloatQuery(r, "gold_change_pct", 2.5),
-		JPY_ChangePct:                 parseFloatQuery(r, "jpy_change_pct", 3.0),
-		AICapexSentiment:              parseFloatQuery(r, "ai_capex_sentiment", 0.8),
-		GeopoliticalGPR:               parseFloatQuery(r, "geopolitical_gpr", 160),
-		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence", 0),
-		MarginZScore:                  parseFloatQuery(r, "margin_zscore", 0),
-	}
+	data := h.buildNarrativeData(r.Context(), r)
 	return http.StatusOK, map[string]any{"events": h.Svc.DetectEvents(data)}
 }
 
 func (h *Handlers) HandleNarrativeChains(r *http.Request) (int, any) {
-	data := narrative.MarketNarrativeData{
-		US10YChangeBps:    parseFloatQuery(r, "us10y_change_bps", 15),
-		DXYChangePct:      parseFloatQuery(r, "dxy_change_pct", 2.0),
-		VIXLevel:          parseFloatQuery(r, "vix_level", 30),
-		USD_TWD_ChangePct: parseFloatQuery(r, "usd_twd_change_pct", 0),
-		OilChangePct:      parseFloatQuery(r, "oil_change_pct", 6.0),
-		GoldChangePct:     parseFloatQuery(r, "gold_change_pct", 2.5),
-		JPY_ChangePct:     parseFloatQuery(r, "jpy_change_pct", 3.0),
-		AICapexSentiment:  parseFloatQuery(r, "ai_capex_sentiment", 0.8),
-		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
-	}
+	data := h.buildNarrativeData(r.Context(), r)
 	events := h.Svc.DetectEvents(data)
 	return http.StatusOK, map[string]any{"chains": h.Svc.MatchChains(events)}
 }
 
 func (h *Handlers) HandleNarrativeModels(r *http.Request) (int, any) {
-	data := narrative.MarketNarrativeData{
-		US10YChangeBps:    parseFloatQuery(r, "us10y_change_bps", 15),
-		DXYChangePct:      parseFloatQuery(r, "dxy_change_pct", 2.0),
-		VIXLevel:          parseFloatQuery(r, "vix_level", 30),
-		USD_TWD_ChangePct: parseFloatQuery(r, "usd_twd_change_pct", 0),
-		OilChangePct:      parseFloatQuery(r, "oil_change_pct", 6.0),
-		GoldChangePct:     parseFloatQuery(r, "gold_change_pct", 2.5),
-		JPY_ChangePct:     parseFloatQuery(r, "jpy_change_pct", 3.0),
-		AICapexSentiment:  parseFloatQuery(r, "ai_capex_sentiment", 0.8),
-		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
-	}
+	data := h.buildNarrativeData(r.Context(), r)
 	events := h.Svc.DetectEvents(data)
 	themes := make([]string, len(events))
 	for i, e := range events {
@@ -105,19 +112,41 @@ type SeasonalExpectation struct {
 	AlreadyPricedIn     bool    `json:"already_priced_in"`
 }
 
+// approxPatternDays returns the approximate duration in days for a seasonal
+// pattern, using its start/end month/day fields.  This lets us match the
+// current TAIEX return window to the pattern's historical window.
+func approxPatternDays(p service.SeasonalPattern) int {
+	start := p.StartMonth*30 + p.StartDay
+	end := p.EndMonth*30 + p.EndDay
+	days := end - start
+	if days <= 0 {
+		days += 365 // cross-year wrap
+	}
+	return days
+}
+
+// getPatternReturn fetches the TAIEX return for a duration matching the
+// seasonal pattern's typical window.
+func getPatternReturn(ctx context.Context, calc *marketdata.TAIEXReturnCalculator, p service.SeasonalPattern) float64 {
+	days := approxPatternDays(p)
+	if days <= 0 {
+		days = 30
+	}
+	if ret, err := calc.GetNDayReturn(ctx, days); err == nil {
+		return ret
+	}
+	return 0
+}
+
 func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 	now := time.Now()
 
-	currentReturn := 0.0
-	calc := marketdata.NewTAIEXReturnCalculator()
-	if ret, err := calc.Get1MonthReturn(r.Context()); err == nil {
-		currentReturn = ret
-	}
-
 	if h.IndustryService != nil {
 		active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
+		calc := marketdata.NewTAIEXReturnCalculator()
 		expectations := make([]SeasonalExpectation, len(active))
 		for i, p := range active {
+			currentReturn := getPatternReturn(r.Context(), calc, p)
 			gap := currentReturn - p.AvgMarketReturn
 			expectations[i] = SeasonalExpectation{
 				Theme:               p.Name,
@@ -146,19 +175,7 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 // seasonal analysis into a single response. Events are computed first (needed
 // by chains/models), then the dependent calls run in parallel via errgroup.
 func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
-	data := narrative.MarketNarrativeData{
-		US10YChangeBps:                15,
-		DXYChangePct:                  2.0,
-		VIXLevel:                      30,
-		USD_TWD_ChangePct:             0,
-		OilChangePct:                  6.0,
-		GoldChangePct:                 2.5,
-		JPY_ChangePct:                 3.0,
-		AICapexSentiment:              0.8,
-		GeopoliticalGPR:               160,
-		RetailInstitutionalDivergence: 0,
-		MarginZScore:                  0,
-	}
+	data := h.buildNarrativeData(r.Context(), r)
 
 	// Compute events first — needed by chains and models.
 	events := h.Svc.DetectEvents(data)
@@ -200,15 +217,12 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 	// Seasonal: independent computation.
 	g.Go(func() error {
 		now := time.Now()
-		currentReturn := 0.0
-		calc := marketdata.NewTAIEXReturnCalculator()
-		if ret, err := calc.Get1MonthReturn(ctx); err == nil {
-			currentReturn = ret
-		}
 		if h.IndustryService != nil {
 			active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
+			calc := marketdata.NewTAIEXReturnCalculator()
 			expectations := make([]SeasonalExpectation, len(active))
 			for i, p := range active {
+				currentReturn := getPatternReturn(ctx, calc, p)
 				gap := currentReturn - p.AvgMarketReturn
 				expectations[i] = SeasonalExpectation{
 					Theme:               p.Name,

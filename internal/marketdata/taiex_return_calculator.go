@@ -21,6 +21,11 @@ func NewTAIEXReturnCalculator() *TAIEXReturnCalculator {
 
 // Get1MonthReturn fetches the 1-month return of TAIEX (^TWII).
 func (t *TAIEXReturnCalculator) Get1MonthReturn(ctx context.Context) (float64, error) {
+	return t.GetNDayReturn(ctx, 30)
+}
+
+// GetNDayReturn fetches the N-day return of TAIEX (^TWII).
+func (t *TAIEXReturnCalculator) GetNDayReturn(ctx context.Context, days int) (float64, error) {
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {
 		return 0, fmt.Errorf("rate limit: %w", err)
 	}
@@ -30,7 +35,7 @@ func (t *TAIEXReturnCalculator) Get1MonthReturn(ctx context.Context) (float64, e
 		return 0, fmt.Errorf("fetch current price: %w", err)
 	}
 
-	past := t.fetchPastPrice(ctx, 30)
+	past := t.fetchPastPrice(ctx, days)
 	if past <= 0 {
 		return 0, fmt.Errorf("unable to fetch historical price")
 	}

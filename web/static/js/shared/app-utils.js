@@ -34,3 +34,13 @@ export function renderEmptyState(msg, hint) {
 export function renderSkeleton(lines) {
   return Array(lines || 4).fill('<div class="skeleton-line"></div>').join('');
 }
+
+// Sort narrative events by composite strength (|sentiment| * confidence * hit_rate).
+// Higher values indicate more significant events.  Mutates the input array.
+export function sortNarrativeEvents(events) {
+  return events.sort(function(a, b) {
+    var strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1) * (a.hit_rate || 0.5);
+    var strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1) * (b.hit_rate || 0.5);
+    return strengthB - strengthA;
+  });
+}

@@ -1,9 +1,13 @@
 package service
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -11,6 +15,7 @@ type NarrativeService struct {
 	WorkDir         string
 	NarrativeEngine *narrative.NarrativeEngine
 	ReportGenerator *narrative.ReportGenerator
+	macroProvider   marketdata.MacroDataProvider
 }
 
 func NewNarrativeService(workDir string, narrativeEngine *narrative.NarrativeEngine, reportGenerator *narrative.ReportGenerator) *NarrativeService {
@@ -19,6 +24,25 @@ func NewNarrativeService(workDir string, narrativeEngine *narrative.NarrativeEng
 		NarrativeEngine: narrativeEngine,
 		ReportGenerator: reportGenerator,
 	}
+}
+
+func (s *NarrativeService) SetMacroProvider(p marketdata.MacroDataProvider) {
+	s.macroProvider = p
+}
+
+// BuildMarketNarrativeData fetches the latest macro snapshot and converts it
+// into the narrative detection input struct.  Fields not available in the
+// snapshot (GeopoliticalGPR, RetailInstitutionalDivergence, MarginZScore)
+// are zeroed; the caller should overlay query-param overrides if desired.
+func (s *NarrativeService) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
+	if s.macroProvider == nil {
+		return narrative.MarketNarrativeData{}, fmt.Errorf("macro provider not set")
+	}
+	snap, err := s.macroProvider.FetchSnapshot(ctx)
+	if err != nil {
+		return narrative.MarketNarrativeData{}, fmt.Errorf("fetch snapshot: %w", err)
+	}
+	return narrative.MarketNarrativeDataFromSnapshot(snap), nil
 }
 
 func (s *NarrativeService) DetectEvents(data narrative.MarketNarrativeData) []narrative.NarrativeEvent {

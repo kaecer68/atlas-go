@@ -1,5 +1,5 @@
 import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName } from '../names.js';
-import { renderEmptyState } from '../shared/app-utils.js';
+import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 let templateAccordionState = { openTemplateId: null };
@@ -60,11 +60,7 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
   if (!el) return;
   el.classList.remove('loading');
   const eventList = (events && events.events) || [];
-  const sortedEvents = eventList.slice().sort((a, b) => {
-    const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
-    const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
-    return strengthB - strengthA;
-  });
+  const sortedEvents = sortNarrativeEvents(eventList.slice());
   const topEvent = sortedEvents[0];
   const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
   const sLabel = stress ? stressLabel(stress.regime || '-') : '-';
@@ -88,7 +84,8 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
       favored = matchedModel.favored_sectors || [];
       avoided = matchedModel.avoided_sectors || [];
     } else if (matchedChain) {
-      favored = matchedChain.affected_sectors || [];
+      favored = matchedChain.favored_sectors || [];
+      avoided = matchedChain.avoided_sectors || [];
     }
   }
 
@@ -265,11 +262,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     eventsEl.classList.remove('loading');
     const list = (events && events.events) || [];
     // 同樣按強度排序，讓最劇烈的事件優先呈現
-    const sortedList = list.slice().sort((a, b) => {
-      const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
-      const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
-      return strengthB - strengthA;
-    });
+    const sortedList = sortNarrativeEvents(list.slice());
     if (!sortedList.length) { eventsEl.innerHTML = renderEmptyState('目前無觸發的宏觀敘事', ''); }
     else {
       eventsEl.innerHTML = sortedList.map(e => {

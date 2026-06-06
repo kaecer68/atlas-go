@@ -18,16 +18,34 @@ func NewEventLifecycleManager() *EventLifecycleManager {
 	}
 }
 
-func defaultDurations() map[string]time.Duration {
+// DefaultThemeDurations returns the canonical duration for each narrative theme.
+// It is used by both EventLifecycleManager and KB detectors.
+func DefaultThemeDurations() map[string]time.Duration {
 	return map[string]time.Duration{
-		"AI_capex_surge":          90 * 24 * time.Hour,
-		"US_rates_up":             7 * 24 * time.Hour,
-		"JPY_carry_unwind":        14 * 24 * time.Hour,
-		"geopolitical_risk_spike": 30 * 24 * time.Hour,
-		"oil_price_shock":         15 * 24 * time.Hour,
-		"Fed_emergency_cut":       3 * 24 * time.Hour,
-		"earnings_surprise":       10 * 24 * time.Hour,
+		"AI_capex_surge":                  90 * 24 * time.Hour,
+		"US_rates_up":                     7 * 24 * time.Hour,
+		"JPY_carry_unwind":                14 * 24 * time.Hour,
+		"geopolitical_risk_spike":         30 * 24 * time.Hour,
+		"oil_price_shock":                 15 * 24 * time.Hour,
+		"Fed_emergency_cut":               3 * 24 * time.Hour,
+		"earnings_surprise":               10 * 24 * time.Hour,
+		"taiwan_political_risk":           30 * 24 * time.Hour,
+		"semiconductor_downturn":          90 * 24 * time.Hour,
+		"USD_TWD_volatility":              7 * 24 * time.Hour,
+		"retail_institutional_divergence": 7 * 24 * time.Hour,
+		"spring_festival_season":          30 * 24 * time.Hour,
+		"election_cycle":                  30 * 24 * time.Hour,
+		"earnings_blackout":               30 * 24 * time.Hour,
+		"tech_peak_season":                60 * 24 * time.Hour,
+		"year_end_window_dressing":        60 * 24 * time.Hour,
+		"gold_rally":                      7 * 24 * time.Hour,
+		"dollar_surge":                    7 * 24 * time.Hour,
+		"inflation_spike":                 15 * 24 * time.Hour,
 	}
+}
+
+func defaultDurations() map[string]time.Duration {
+	return DefaultThemeDurations()
 }
 
 func (m *EventLifecycleManager) AddEvent(event *NarrativeEvent) {
