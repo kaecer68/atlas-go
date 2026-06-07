@@ -269,6 +269,7 @@ func run(args []string, deps appDeps) error {
 
 		var elDetector *eventlogic.PatternDetector
 		var elCorrector *eventlogic.SelfCorrector
+		var elValidator *eventlogic.RuleValidator
 		var elRulesPath string
 		var elHistoryRecorder *eventlogic.HistoryRecorder
 
@@ -1020,10 +1021,28 @@ func run(args []string, deps appDeps) error {
 					Task: func(ctx context.Context) error {
 						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 						defer cancel()
-						_, _, err := dashRef.IngestAndUpdateMacro(ingestCtx)
+						_, snap, err := dashRef.IngestAndUpdateMacro(ingestCtx)
 						if err != nil {
 							logging.Warn("main", "macro_ingest_failed", "err", err)
 							return err
+						}
+						// Crisis circuit break: VIX >= 35 triggers force-open on live channels.
+						if gateway != nil && snap.VIX.Value >= 35.0 {
+							liveChannels := []string{"fugle", "fubon", "finmind"}
+							for _, ch := range liveChannels {
+								if err := gateway.ForceOpenChannel(ch); err != nil {
+									logging.Warn("main", "crisis_force_open_failed", "channel", ch, "err", err)
+								} else {
+									logging.Info("main", "crisis_force_open", "channel", ch, "vix", snap.VIX.Value)
+								}
+							}
+						}
+						// EventLogic cross-market rule evaluation against live data.
+						if elValidator != nil && snap.RecordedAt > 0 {
+							fired := eventlogic.EvaluateActiveRules(elValidator, snap)
+							if len(fired) > 0 {
+								logging.Info("main", "eventlogic_fired", "count", len(fired), "rules", fired)
+							}
 						}
 						return nil
 					},
@@ -1363,7 +1382,7 @@ func run(args []string, deps appDeps) error {
 			elRulesPath = filepath.Join(cfg.WorkDir, "data/state/eventlogic", "rules.json")
 			elHistoryRecorder = eventlogic.NewHistoryRecorder(filepath.Join(cfg.WorkDir, "data/state/eventlogic", "history.jsonl"))
 			elRegistry := eventlogic.LoadOrDefault(elRulesPath)
-			elValidator := eventlogic.NewValidator(elRegistry)
+			elValidator = eventlogic.NewValidator(elRegistry)
 			elDetector = eventlogic.NewDetector(elRegistry)
 			elCorrector = eventlogic.NewCorrector(elRegistry)
 			elHandlers := apieventlogic.NewHandlers(elRegistry, elValidator, elDetector)

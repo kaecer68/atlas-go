@@ -41,6 +41,7 @@ type MacroRiskAssessment struct {
 	StructuralOverride bool           `json:"structural_override"`
 	Confidence         float64        `json:"confidence"`
 	Rationale          string         `json:"rationale"`
+	CrisisActive       bool           `json:"crisis_active"`
 	Timestamp          time.Time      `json:"timestamp"`
 }
 
@@ -63,7 +64,17 @@ func (e *MacroRiskAssessmentEngine) Assess(data MacroDataSnapshot) *MacroRiskAss
 
 	riskFactors := e.evaluateRiskFactors(data)
 
-	assessment.Level = e.determineRiskLevel(riskFactors)
+	// Crisis detection: VIX >= 35 triggers emergency regime propagation
+	// to all downstream systems (Optimizer, RiskGate, StrategyEvolver).
+	if data.VIX.Value >= 35.0 {
+		assessment.CrisisActive = true
+		assessment.Level = MacroRiskRed
+	} else {
+		assessment.Level = e.determineRiskLevel(riskFactors)
+	}
+	if !assessment.CrisisActive {
+		assessment.Level = e.determineRiskLevel(riskFactors)
+	}
 	assessment.ForeignOutflowProb = e.calculateOutflowProbability(riskFactors)
 	assessment.PrimaryFlow = e.determinePrimaryFlow(riskFactors)
 	assessment.FavoredSectors, assessment.AvoidedSectors = e.determineSectorRotation(riskFactors)

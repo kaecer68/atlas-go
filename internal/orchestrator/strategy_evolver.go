@@ -80,8 +80,8 @@ func (e *StrategyEvolver) Evaluate(
 		return nil // No change needed
 	}
 
-	// Check cooldown period
-	if time.Since(e.lastEvolutionTime) < e.cooldownPeriod {
+	// Check cooldown period — bypass for emergency escalations
+	if time.Since(e.lastEvolutionTime) < e.cooldownPeriod && !e.isEmergencyEscalation(newState, drawdownDecision) {
 		return nil // Too soon to evolve
 	}
 
@@ -98,6 +98,26 @@ func (e *StrategyEvolver) Evaluate(
 	e.lastEvolutionTime = time.Now()
 
 	return evolution
+}
+
+// isEmergencyEscalation returns true when the strategy transition is urgent enough
+// to bypass the cooldown period. This covers:
+//   - Any transition to Suspended (drawdown >= severe)
+//   - Jump of 2+ levels (e.g., Normal → Defensive or Cautious → Suspended)
+func (e *StrategyEvolver) isEmergencyEscalation(newState StrategyState, drawdown *risk.MacroAwareDrawdownDecision) bool {
+	if newState == StrategySuspended {
+		return true
+	}
+	// On drawdown severe or above, always treat as emergency
+	if drawdown.Action >= risk.DrawdownSevere {
+		return true
+	}
+	// Jump of 2 or more levels is an emergency
+	delta := int(newState) - int(e.currentState)
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta >= 2
 }
 
 func (e *StrategyEvolver) determineState(

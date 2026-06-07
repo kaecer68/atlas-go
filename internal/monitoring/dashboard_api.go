@@ -96,6 +96,10 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 		providers = append(providers, marketdata.NewSOXIndexProvider())
 		providers = append(providers, marketdata.NewDRAMSpotPriceProvider())
+		providers = append(providers, marketdata.NewSPXIndexProvider())
+		providers = append(providers, marketdata.NewNDXIndexProvider())
+		providers = append(providers, marketdata.NewDJIIndexProvider())
+		providers = append(providers, marketdata.NewTSMADRProvider())
 	}
 
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())

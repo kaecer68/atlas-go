@@ -39,6 +39,10 @@ type MacroDataSnapshot struct {
 	Bdi                 MacroDataPoint `json:"bdi"`
 	Silver              MacroDataPoint `json:"silver"`
 	Copper              MacroDataPoint `json:"copper"`
+	TSMADR              MacroDataPoint `json:"tsm_adr"`
+	SPXIndex            MacroDataPoint `json:"spx_index"`
+	NDXIndex            MacroDataPoint `json:"ndx_index"`
+	DJIIndex            MacroDataPoint `json:"dji_index"`
 	RecordedAt          int64          `json:"recorded_at"`
 }
 
@@ -138,6 +142,18 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		}
 		if snap.Copper.Symbol != "" {
 			merged.Copper = snap.Copper
+		}
+		if snap.TSMADR.Symbol != "" {
+			merged.TSMADR = snap.TSMADR
+		}
+		if snap.SPXIndex.Symbol != "" {
+			merged.SPXIndex = snap.SPXIndex
+		}
+		if snap.NDXIndex.Symbol != "" {
+			merged.NDXIndex = snap.NDXIndex
+		}
+		if snap.DJIIndex.Symbol != "" {
+			merged.DJIIndex = snap.DJIIndex
 		}
 		if snap.RecordedAt > merged.RecordedAt {
 			merged.RecordedAt = snap.RecordedAt

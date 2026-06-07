@@ -64,5 +64,9 @@ func MarketNarrativeDataFromSnapshot(snap marketdata.MacroDataSnapshot) MarketNa
 		ExportElectronicsChangePct: snap.ExportElectronics.ChangePct,
 		SOXIndexChangePct:          snap.SOXIndex.ChangePct,
 		DRAMSpotPriceChangePct:     snap.DRAMSpotPrice.ChangePct,
+		SPXIndexChangePct:          snap.SPXIndex.ChangePct,
+		NDXIndexChangePct:          snap.NDXIndex.ChangePct,
+		DJIIndexChangePct:          snap.DJIIndex.ChangePct,
+		TSMADRChangePct:            snap.TSMADR.ChangePct,
 	}
 }

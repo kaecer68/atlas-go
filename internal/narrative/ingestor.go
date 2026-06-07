@@ -212,6 +212,18 @@ func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroData
 	if curr.Bdi.Symbol == "" {
 		curr.Bdi = prev.Bdi
 	}
+	if curr.TSMADR.Symbol == "" {
+		curr.TSMADR = prev.TSMADR
+	}
+	if curr.SPXIndex.Symbol == "" {
+		curr.SPXIndex = prev.SPXIndex
+	}
+	if curr.NDXIndex.Symbol == "" {
+		curr.NDXIndex = prev.NDXIndex
+	}
+	if curr.DJIIndex.Symbol == "" {
+		curr.DJIIndex = prev.DJIIndex
+	}
 	return curr
 }
 
@@ -409,6 +421,9 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 		events = append(events, *event)
 	}
 	if event := detectInflationSpikeEventFromSnapshot(curr.VIX, curr.DXY, now); event != nil {
+		events = append(events, *event)
+	}
+	if event := detectTariffShockEventFromSnapshot(curr.VIX, curr.DXY, curr.SPXIndex, now); event != nil {
 		events = append(events, *event)
 	}
 
@@ -809,6 +824,77 @@ func detectInflationSpikeEventFromSnapshot(currVIX, currDXY marketdata.MacroData
 			"vix_level":      currVIX.Value,
 			"dxy_change_pct": currDXY.ChangePct,
 			"dxy_confirming": dxySignal,
+		},
+	}
+}
+
+func detectTariffShockEventFromSnapshot(currVIX, currDXY, currSPX marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	params := config.GetParametersConfig().Narrative
+	if currVIX.Symbol == "" {
+		return nil
+	}
+
+	vixThreshold := params.VIXLevelThreshold.Value
+	if vixThreshold <= 0 {
+		vixThreshold = 20.0
+	}
+	vixSpike := currVIX.Value > vixThreshold
+
+	dxyChange := currDXY.ChangePct
+	if dxyChange < 0 {
+		dxyChange = -dxyChange
+	}
+	dxyThreshold := params.DXYChangePctThreshold.Value
+	if dxyThreshold <= 0 {
+		dxyThreshold = 1.5
+	}
+	dxyVolatile := currDXY.Symbol != "" && dxyChange > dxyThreshold
+
+	spxSelloff := currSPX.Symbol != "" && currSPX.ChangePct < -2.0
+
+	if !vixSpike && !dxyVolatile && !spxSelloff {
+		return nil
+	}
+
+	confBase := params.ConfidenceBaseGeopolitical.Value
+	confCeil := params.ConfidenceDeviationCeiling.Value
+	vixConf := computeDeviationConfidence(currVIX.Value, vixThreshold, confBase, confCeil)
+	dxyConf := computeDeviationConfidence(dxyChange, dxyThreshold, confBase, confCeil)
+
+	confidence := vixConf
+	if dxyConf > confidence {
+		confidence = dxyConf
+	}
+	if spxSelloff {
+		spxConf := computeDeviationConfidence(-currSPX.ChangePct, 2.0, confBase, confCeil)
+		if spxConf > confidence {
+			confidence = spxConf
+		}
+	}
+
+	td := DefaultThemeDurations()
+	dur, ok := td["tariff_shock"]
+	if !ok {
+		dur = 14 * 24 * time.Hour
+	}
+
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-tariff-shock-%d", now.UnixNano()),
+		Theme:            "tariff_shock",
+		Region:           "US",
+		Sentiment:        -0.9,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("tariff_shock"),
+		CapitalFlow:      "risk_off",
+		TimeWindow:       "immediate",
+		Duration:         dur,
+		Severity:         "critical",
+		Timestamp:        now,
+		SourceData: map[string]float64{
+			"vix_level":      currVIX.Value,
+			"dxy_change_pct": dxyChange,
+			"spx_change_pct": currSPX.ChangePct,
 		},
 	}
 }
