@@ -110,10 +110,15 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		providers = append(providers, marketdata.NewMSFTProvider())
 	}
 
-	providers = append(providers, marketdata.NewFrankfurterFXProvider())
 	providers = append(providers, marketdata.NewBDIProvider())
 	// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
 	providers = append(providers, marketdata.NewExchangeRateProvider())
+	// FrankfurterFXProvider MUST come after ExchangeRateProvider; both
+	// provide JPY, but Frankfurter computes a real daily ChangePct while
+	// ExchangeRate always writes ChangePct=0 (free-tier limitation).
+	// The last-write-wins mergeSnapshot would otherwise discard the real
+	// ChangePct from Frankfurter.
+	providers = append(providers, marketdata.NewFrankfurterFXProvider())
 	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")))
 	providers = append(providers, marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")))
 	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")))
