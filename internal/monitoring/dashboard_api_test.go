@@ -111,8 +111,8 @@ func TestHandleRiskCalibration_NoGate(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 when no risk gate, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 OK when no risk gate (returns not_available), got %d", w.Code)
 	}
 }
 

@@ -170,47 +170,6 @@ var tombSweepingDates = map[int]time.Time{
 	2030: time.Date(2030, 4, 5, 0, 0, 0, 0, time.UTC),
 }
 
-// getLunarDate looks up a date from a lunar calendar table. If the year is not
-// covered by the hardcoded table, it attempts automatic lunar-to-solar computation
-// via lunar-go. The hardcoded table serves as a fast-path cache and verification
-// benchmark; automatic computation removes the 2023-2030 coverage ceiling (ST-8).
-// Only if automatic computation also fails does it return the fallback date.
-func getLunarDate(year int, table map[int]time.Time, fallback time.Time, holidayName string) time.Time {
-	if d, ok := table[year]; ok {
-		return d
-	}
-
-	var computed time.Time
-	switch holidayName {
-	case "春節":
-		computed = computeLunarNewYear(year)
-	case "端午節":
-		computed = computeDragonBoat(year)
-	case "中秋節":
-		computed = computeMidAutumn(year)
-	case "清明節":
-		computed = computeQingming(year)
-	}
-
-	if !computed.IsZero() {
-		logging.Info(
-			"event_calendar", "lunar_date_auto_computed",
-			logging.FStr("holiday", holidayName),
-			logging.FInt("year", year),
-			logging.FStr("date", computed.Format("2006-01-02")),
-		)
-		return computed
-	}
-
-	logging.Warn(
-		"event_calendar", "lunar_date_fallback",
-		logging.FStr("holiday", holidayName),
-		logging.FInt("year", year),
-		logging.FStr("fallback", fallback.Format("2006-01-02")),
-	)
-	return fallback
-}
-
 // GetLunarCoverageYears returns the effective coverage range of the lunar calendar
 // system. Since ST-8 (lunar automation), the range is effectively unbounded;
 // the returned values indicate the verified hardcoded cache range (2023-2030).
@@ -612,28 +571,6 @@ func defaultEventRules() map[string]EventRule {
 }
 
 // ---------------------------------------------------------------------------
-// newDefaultEvent creates a CalendarEvent with default evidence markers for
-// hardcoded-rule-generated events. All build*Event methods should use this.
-// Uses tec.generatedAt which is set once per RefreshEvents/UpdateFromProvider call
-// to avoid calling time.Now() per-event during bulk generation.
-func (tec *EventCalendar) newDefaultEvent() CalendarEvent {
-	return CalendarEvent{
-		DataSource:      DataSourceDefaultRules,
-		EvidenceQuality: EvidenceUnverified,
-		GeneratedAt:     tec.generatedAt,
-	}
-}
-
-// newProviderEvent creates a CalendarEvent with evidence markers for
-// externally-sourced provider events.
-func (tec *EventCalendar) newProviderEvent(source EventDataSource) CalendarEvent {
-	return CalendarEvent{
-		DataSource:      source,
-		EvidenceQuality: EvidenceEstimated,
-		GeneratedAt:     tec.generatedAt,
-	}
-}
-
 // EventCalendar methods
 // ---------------------------------------------------------------------------
 
@@ -1208,23 +1145,4 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		logging.FStr("provider", provider.Name()),
 		logging.FInt("added_events", len(events)),
 	)
-}
-
-// validateProviderEvent validates a CalendarProviderData entry from an external
-// provider. It checks for known event types, valid direction values, reasonable
-// date ranges, and weight bounds.
-func validateProviderEvent(e marketdata.CalendarProviderData) error {
-	if e.EventType == "" || e.Date == "" {
-		return fmt.Errorf("empty type or date")
-	}
-	if _, err := time.Parse("2006-01-02", e.Date); err != nil {
-		return fmt.Errorf("unparseable date %q", e.Date)
-	}
-	if e.Direction != "" && e.Direction != "bullish" && e.Direction != "bearish" && e.Direction != "mixed" && e.Direction != "neutral" {
-		return fmt.Errorf("invalid direction %q", e.Direction)
-	}
-	if e.Weight < 0 || e.Weight > 1.0 {
-		return fmt.Errorf("weight out of range: %f", e.Weight)
-	}
-	return nil
 }

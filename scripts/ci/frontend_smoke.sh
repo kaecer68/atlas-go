@@ -143,10 +143,10 @@ ATLAS_PORT="$PORT" \
 ATLAS_PID=$!
 log "Atlas pid=$ATLAS_PID"
 
-# 6. 輪詢 /health 等就緒（deadline 60s 涵蓋 macro ingest timeout）
-log "Waiting for /health (deadline 60s)"
+# 6. 輪詢 /health 等就緒（deadline 120s 涵蓋 macro ingest + 外部 API 啟動）
+log "Waiting for /health (deadline 120s)"
 HEALTH_URL="http://localhost:$PORT/health"
-DEADLINE=$(( $(date +%s) + 60 ))
+DEADLINE=$(( $(date +%s) + 120 ))
 READY=0
 while [[ $(date +%s) -lt $DEADLINE ]]; do
   if curl -sf -m 2 "$HEALTH_URL" >/dev/null 2>&1; then
