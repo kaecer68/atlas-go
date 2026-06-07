@@ -89,7 +89,7 @@ type Optimizer struct {
 	lookbackDays       int     // covariance estimation window
 	riskFreeRate       float64 // annualized risk-free rate
 	bridgeInput        FactorBridgeInput
-	crisisMode         bool // when true, inflate covariance diagonal + halve position limits
+	crisisMode         bool    // when true, inflate covariance diagonal + halve position limits
 	crossMarketRho     float64 // SPX-TWSE dynamic correlation (default 0.5)
 }
 

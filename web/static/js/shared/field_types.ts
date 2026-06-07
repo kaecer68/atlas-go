@@ -439,11 +439,45 @@ export interface CorrelationMatrixResponse {
   matrix: number[][];
 }
 
+export interface CorrelationResponse {
+  correlation: number;
+  window_size: number;
+  observations: number;
+  computed_at: string;
+  is_fallback: boolean;
+}
+
 export interface CrossFootCheck {
   is_balanced: boolean;
   portfolio_unrealized: number;
   sum_positions_unrealized: number;
   difference: number;
+}
+
+export interface CrossMarketIndex {
+  symbol: string;
+  value: number;
+  change_pct: number;
+  timestamp: number;
+}
+
+export interface CrossMarketStatus {
+  recorded_at: number;
+  generated_at: string;
+  spx: string;
+  ndx: string;
+  dji: string;
+  sox: string;
+  nvda: string;
+  aapl: string;
+  msft: string;
+  tsm_adr: string;
+  vix: string;
+  dxy: string;
+  usd_twd: string;
+  us10y: string;
+  crisis_active: boolean;
+  correlation_spx_twse: number;
 }
 
 export interface CustomerConcentration {
@@ -1602,6 +1636,7 @@ export interface MacroRiskAssessment {
   structural_override: boolean;
   confidence: number;
   rationale: string;
+  crisis_active: boolean;
   timestamp: string;
 }
 
@@ -3065,6 +3100,13 @@ export interface TradeRecord {
 export interface TrendPoint {
   timestamp: string;
   value: number;
+}
+
+export interface USIndicesResponse {
+  recorded_at: number;
+  generated_at: string;
+  indices: string[];
+  tech_stocks: string[];
 }
 
 export interface UniverseOverlapResponse {
