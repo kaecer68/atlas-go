@@ -407,6 +407,7 @@ func FormatReport(report Report) string {
 		fmt.Fprintf(&output, "  VaR95:      %.2f%%\n", r.VaR95*100)
 		fmt.Fprintf(&output, "  Recov Days: %d\n", r.RecoveryDays)
 		fmt.Fprintf(&output, "  Consec Loss: %d days\n", r.MaxConsecutiveLossDays)
+		fmt.Fprintf(&output, "  TradeCount: %d\n", r.TradeCount)
 		fmt.Fprintf(&output, "  Regime:     %s\n", r.FinalRegime)
 		if r.MomentumDisabled {
 			output.WriteString("  Momentum:   DISABLED (VIX > 30)\n")

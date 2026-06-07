@@ -7,8 +7,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-func TestAllScenariosReturnsFive(t *testing.T) {
+func TestAllScenariosCount(t *testing.T) {
 	scenarios := AllScenarios()
+<<<<<<< HEAD
 	if len(scenarios) != 11 {
 		t.Errorf("expected 11 scenarios, got %d", len(scenarios))
 	}
