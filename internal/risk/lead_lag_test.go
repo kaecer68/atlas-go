@@ -13,13 +13,19 @@ func init() {
 
 // TestGranger_IndependentSeries verifies that two independent random series
 // do not show significant Granger causality in either direction.
+//
+// Uses a fixed seed to avoid the ~5% false-positive rate that the
+// p <= 0.05 threshold produces under random sampling (n=200, lag=5).
+// A pre-vetted seed (1) was chosen so the generated data deterministically
+// shows no causal structure.
 func TestGranger_IndependentSeries(t *testing.T) {
 	n := 200
+	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	y := make([]float64, n)
 	for i := 0; i < n; i++ {
-		x[i] = rand.NormFloat64()
-		y[i] = rand.NormFloat64()
+		x[i] = r.NormFloat64()
+		y[i] = r.NormFloat64()
 	}
 
 	res, err := TestGrangerCausality(x, y, 5)
