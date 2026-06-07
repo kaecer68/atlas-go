@@ -130,6 +130,51 @@ var (
 			{Symbol: "OIL", Last: 36.0, Open: 90.0, IsTradable: true},
 		},
 	}
+
+	ScenarioHualienEarthquake = Scenario{
+		ID:          "hualien_earthquake_2024",
+		Name:        "Hualien Earthquake 2024",
+		Description: "April 2024: 7.2 magnitude earthquake, TSMC production impact, localized market shock",
+		Date:        time.Date(2024, 4, 3, 0, 0, 0, 0, time.UTC),
+		Regime:      domain.RegimeRiskOff,
+		WindowDays:  10,
+		Quotes: []domain.Quote{
+			{Symbol: "VIX", Last: 13.5, IsTradable: true},
+			{Symbol: "DXY", Last: 104.2, Open: 104.0, IsTradable: true},
+			{Symbol: "US10Y", Last: 4.35, IsTradable: true},
+			{Symbol: "OIL", Last: 86.22, Open: 85.0, IsTradable: true},
+		},
+	}
+
+	ScenarioChinaLockdown = Scenario{
+		ID:          "china_lockdown_2022",
+		Name:        "China Lockdown 2022",
+		Description: "April 2022: Shanghai lockdown, supply chain disruption, TWSE fell 6.2% in April",
+		Date:        time.Date(2022, 4, 5, 0, 0, 0, 0, time.UTC),
+		Regime:      domain.RegimeRiskOff,
+		WindowDays:  90,
+		Quotes: []domain.Quote{
+			{Symbol: "VIX", Last: 27.0, IsTradable: true},
+			{Symbol: "DXY", Last: 101.3, Open: 100.0, IsTradable: true},
+			{Symbol: "US10Y", Last: 2.90, IsTradable: true},
+			{Symbol: "OIL", Last: 109.55, Open: 110.0, IsTradable: true},
+		},
+	}
+
+	ScenarioLevel3Alert = Scenario{
+		ID:          "level3_alert_2021",
+		Name:        "Taiwan Level 3 Alert 2021",
+		Description: "May 2021: COVID-19 Level 3 alert, TWSE intraday -8.55%, localized crash",
+		Date:        time.Date(2021, 5, 15, 0, 0, 0, 0, time.UTC),
+		Regime:      domain.RegimeRiskOff,
+		WindowDays:  90,
+		Quotes: []domain.Quote{
+			{Symbol: "VIX", Last: 19.5, IsTradable: true},
+			{Symbol: "DXY", Last: 90.0, Open: 89.5, IsTradable: true},
+			{Symbol: "US10Y", Last: 1.62, IsTradable: true},
+			{Symbol: "OIL", Last: 63.50, Open: 65.0, IsTradable: true},
+		},
+	}
 )
 
 // AllScenarios returns all built-in stress test scenarios.
@@ -143,6 +188,9 @@ func AllScenarios() []Scenario {
 		ScenarioStagflation,
 		ScenarioEMContagion,
 		ScenarioLiquidityCrunch,
+		ScenarioHualienEarthquake,
+		ScenarioChinaLockdown,
+		ScenarioLevel3Alert,
 	}
 }
 

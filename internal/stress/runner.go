@@ -44,8 +44,10 @@ type Runner struct {
 	portWeights map[string]float64
 }
 
-func (r *Runner) SetCovariance(matrix [][]float64, symbols []string)       { r.covMatrix, r.covSymbols = matrix, symbols }
-func (r *Runner) SetPortfolioWeights(weights map[string]float64)            { r.portWeights = weights }
+func (r *Runner) SetCovariance(matrix [][]float64, symbols []string) {
+	r.covMatrix, r.covSymbols = matrix, symbols
+}
+func (r *Runner) SetPortfolioWeights(weights map[string]float64) { r.portWeights = weights }
 
 // NewRunner creates a stress test runner.
 func NewRunner(registry domain.AgentRegistry, policy domain.ExecutionPolicy) *Runner {
