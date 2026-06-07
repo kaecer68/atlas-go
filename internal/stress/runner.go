@@ -92,7 +92,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 	}
 
 	if r.covMatrix != nil && len(r.covSymbols) > 0 && r.portWeights != nil {
-		return r.runScenarioCov(scenario, vix, volScale, recs)
+		return r.runScenarioCov(scenario, vix, volScale)
 	}
 
 	goldSyms := map[string]bool{"GLD": true, "IAU": true, "00635U": true, "SLV": true}
@@ -151,7 +151,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 	}
 }
 
-func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64, recs []domain.Recommendation) ScenarioResult {
+func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) ScenarioResult {
 	W := max(scenario.WindowDays, 1)
 	N := len(r.covSymbols)
 	weightSlice := make([]float64, N)
@@ -197,7 +197,7 @@ func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64, recs [
 	totalRet := values[W] - 1.0
 	return ScenarioResult{
 		ScenarioID: scenario.ID, ScenarioName: scenario.Name, TotalReturn: totalRet,
-		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: len(recs),
+		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: 0,
 		FinalRegime: scenario.Regime, MomentumDisabled: vix > 30,
 		RecoveryDays: recovery, MaxConsecutiveLossDays: consecutive, DailyValues: values,
 	}
