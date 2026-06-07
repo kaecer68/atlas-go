@@ -164,8 +164,8 @@ var (
 	ScenarioLevel3Alert = Scenario{
 		ID:          "level3_alert_2021",
 		Name:        "Taiwan Level 3 Alert 2021",
-		Description: "May 2021: COVID-19 Level 3 alert, TWSE intraday -8.55%, localized crash",
-		Date:        time.Date(2021, 5, 15, 0, 0, 0, 0, time.UTC),
+		Description: "May 2021: COVID-19 outbreak, TWSE intraday -8.55% on May 12, Level 3 alert announced May 15",
+		Date:        time.Date(2021, 5, 12, 0, 0, 0, 0, time.UTC),
 		Regime:      domain.RegimeRiskOff,
 		WindowDays:  90,
 		Quotes: []domain.Quote{
