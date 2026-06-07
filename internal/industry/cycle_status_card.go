@@ -165,7 +165,7 @@ func (b *CycleStatusCardBuilder) BuildCard(now time.Time, industryID string) (*C
 	card := &CycleStatusCard{
 		Date:              now,
 		GeneratedAt:       time.Now(),
-		SiliconIndicators: &SiliconIndicatorSnapshot{},
+		SiliconIndicators: nil,
 		ActivePatterns:    []SeasonalPatternSnapshot{},
 		ActiveEvents:      []CalendarEvent{},
 		Breakdown:         []LayerAdjustment{},
@@ -210,7 +210,7 @@ func (b *CycleStatusCardBuilder) BuildCompositeCard(now time.Time) (*CycleStatus
 	card := &CycleStatusCard{
 		Date:              now,
 		GeneratedAt:       time.Now(),
-		SiliconIndicators: &SiliconIndicatorSnapshot{},
+		SiliconIndicators: nil,
 		ActivePatterns:    []SeasonalPatternSnapshot{},
 		ActiveEvents:      []CalendarEvent{},
 		Breakdown:         []LayerAdjustment{},
