@@ -385,9 +385,21 @@ func (a *DashboardAPI) GetMacroIngestor() *narrative.MacroIngestor {
 func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
 	events, snap, err := a.macroIngestor.Ingest(ctx)
 	if err != nil {
-		// Even if ingestion fails, try to load existing snapshot for stress index
-		if a.narrativeEngine != nil {
-			a.loadSnapshotIntoNarrativeEngine()
+		// On ingest failure, also feed silicon tracker from the on-disk snapshot
+		// (regression: otherwise the 矽循環時鐘 panel renders all zeros).
+		if diskSnap, ok := a.loadLatestSnapshotFromDisk(); ok {
+			if a.narrativeEngine != nil {
+				geoScore := narrative.GeopoliticalRiskScore{}
+				if a.geoProvider != nil {
+					geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
+					defer geoCancel()
+					if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
+						geoScore = score
+					}
+				}
+				a.narrativeEngine.UpdateMacro(diskSnap, geoScore)
+			}
+			a.feedSiliconTracker(diskSnap)
 		}
 		return events, snap, err
 	}
@@ -428,28 +440,35 @@ func (a *DashboardAPI) CalibrateNarrative(replayPath string) (*narrative.Narrati
 	return a.narrativeEngine.SelfCalibrate(replayPath)
 }
 
-// loadSnapshotIntoNarrativeEngine loads the latest snapshot from disk into the narrative engine.
-// Used as fallback when live ingestion fails to ensure stress index has data.
-func (a *DashboardAPI) loadSnapshotIntoNarrativeEngine() {
+// loadLatestSnapshotFromDisk reads the macro ingestor's latest.json from disk
+// and returns the parsed snapshot. Returns (zero, false) when the file is
+// missing, unparseable, or the macro ingestor is not configured.
+func (a *DashboardAPI) loadLatestSnapshotFromDisk() (marketdata.MacroDataSnapshot, bool) {
+	if a.macroIngestor == nil {
+		return marketdata.MacroDataSnapshot{}, false
+	}
 	snapDir := filepath.Clean(a.macroIngestor.SnapshotDir())
 	latestPath := filepath.Join(snapDir, "latest.json")
 	data, err := os.ReadFile(latestPath)
 	if err != nil {
-		return
+		return marketdata.MacroDataSnapshot{}, false
 	}
 	var snap marketdata.MacroDataSnapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
+		return marketdata.MacroDataSnapshot{}, false
+	}
+	return snap, true
+}
+
+// feedSiliconTracker extracts silicon indicators from a snapshot and feeds
+// them to the silicon cycle tracker. Safe to call with a nil
+// industryService or SiliconTracker; no-op in that case.
+func (a *DashboardAPI) feedSiliconTracker(snap marketdata.MacroDataSnapshot) {
+	if a.industryService == nil || a.industryService.SiliconTracker == nil {
 		return
 	}
-	geoScore := narrative.GeopoliticalRiskScore{}
-	if a.geoProvider != nil {
-		geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer geoCancel()
-		if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
-			geoScore = score
-		}
-	}
-	a.narrativeEngine.UpdateMacro(snap, geoScore)
+	indicators := industry.ExtractSiliconIndicators(snap)
+	a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
 }
 
 func (a *DashboardAPI) SetContext(ctx context.Context) {
