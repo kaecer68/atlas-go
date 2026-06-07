@@ -1353,6 +1353,31 @@ func boxMuller(rng *rand.Rand) float64 {
 	return math.Sqrt(-2*math.Log(max(u1, 1e-10))) * math.Cos(2*math.Pi*u2)
 }
 
+// GetCovarianceMatrix returns the Ledoit-Wolf shrunken covariance matrix for the
+// given symbols as a plain [][]float64, plus the subset of symbols with sufficient
+// history. Returns nil if fewer than 2 symbols have data. Designed for the stress
+// test runner (P1) to enable correlated noise generation.
+func (o *Optimizer) GetCovarianceMatrix(symbols []string) ([][]float64, []string) {
+	rm := o.extractReturnMatrix(symbols)
+	if rm == nil || len(rm.assets) < 2 {
+		return nil, nil
+	}
+	sample := o.sampleCov(rm)
+	if sample == nil {
+		return nil, nil
+	}
+	sigma := o.ledoitWolfShrink(rm, sample)
+	N := len(rm.assets)
+	mat := make([][]float64, N)
+	for i := 0; i < N; i++ {
+		mat[i] = make([]float64, N)
+		for j := 0; j < N; j++ {
+			mat[i][j] = sigma.At(i, j)
+		}
+	}
+	return mat, rm.assets
+}
+
 // SimulateDrawdownForMonitoring converts domain.Position to weightInfo and runs
 // a standard 21-day, 1000-path Monte Carlo drawdown simulation. Used by the
 // orchestrator's session-end hook for monitoring (P3-4).

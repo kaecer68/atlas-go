@@ -37,9 +37,15 @@ type Report struct {
 
 // Runner executes stress test scenarios.
 type Runner struct {
-	registry domain.AgentRegistry
-	policy   domain.ExecutionPolicy
+	registry    domain.AgentRegistry
+	policy      domain.ExecutionPolicy
+	covMatrix   [][]float64
+	covSymbols  []string
+	portWeights map[string]float64
 }
+
+func (r *Runner) SetCovariance(matrix [][]float64, symbols []string)       { r.covMatrix, r.covSymbols = matrix, symbols }
+func (r *Runner) SetPortfolioWeights(weights map[string]float64)            { r.portWeights = weights }
 
 // NewRunner creates a stress test runner.
 func NewRunner(registry domain.AgentRegistry, policy domain.ExecutionPolicy) *Runner {
@@ -77,12 +83,17 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 		}
 	}
 
-	goldSyms := map[string]bool{"GLD": true, "IAU": true, "00635U": true, "SLV": true}
 	vix := scenario.VIXLevel()
 	volScale := vix / 20.0
 	if volScale < 0.5 {
 		volScale = 0.5
 	}
+
+	if r.covMatrix != nil && len(r.covSymbols) > 0 && r.portWeights != nil {
+		return r.runScenarioCov(scenario, vix, volScale)
+	}
+
+	goldSyms := map[string]bool{"GLD": true, "IAU": true, "00635U": true, "SLV": true}
 
 	n := len(stockQuotes)
 	values := make([]float64, W+1)
@@ -92,7 +103,6 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 	for t := 0; t < W; t++ {
 		decay := decayFactor(t, W)
 		dailyVol := volScale * decay * 0.06
-		// Base drift: risk-off → negative, risk-on → mild positive
 		baseDrift := -dailyVol * 0.5
 		if vix < 20 {
 			baseDrift = dailyVol * 0.1
@@ -103,9 +113,9 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 			sym := stockQuotes[i].Symbol
 			sign := symbolSign[sym]
 			if goldSyms[sym] {
-				sign = 1.0 // gold is safe-haven: inverted correlation
+				sign = 1.0
 				if vix < 25 {
-					sign = -0.5 // calm markets: gold drifts sideways
+					sign = -0.5
 				}
 			}
 			noise := boxMullerStress(rng) * dailyVol
@@ -137,6 +147,87 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 		MaxConsecutiveLossDays: consecutive,
 		DailyValues:            values,
 	}
+}
+
+func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) ScenarioResult {
+	W := max(scenario.WindowDays, 1)
+	N := len(r.covSymbols)
+	weightSlice := make([]float64, N)
+	var wSum float64
+	for i, sym := range r.covSymbols {
+		weightSlice[i] = r.portWeights[sym]
+		wSum += weightSlice[i]
+	}
+	if wSum > 0 {
+		for i := range weightSlice {
+			weightSlice[i] /= wSum
+		}
+	}
+	L := choleskyDecompose(r.covMatrix)
+	rng := rand.New(rand.NewPCG(42, 0))
+	values := make([]float64, W+1)
+	values[0] = 1.0
+	baseDrift := -volScale * 0.015
+	if vix < 20 {
+		baseDrift = volScale * 0.005
+	}
+	for t := 0; t < W; t++ {
+		z := make([]float64, N)
+		for i := 0; i < N; i++ {
+			z[i] = boxMullerStress(rng)
+		}
+		var portRet float64
+		for i := 0; i < N; i++ {
+			var ri float64
+			for j := 0; j <= i; j++ {
+				ri += L[i][j] * z[j]
+			}
+			portRet += weightSlice[i] * ri * volScale * 0.02
+		}
+		portRet += baseDrift
+		values[t+1] = values[t] * (1 + portRet)
+	}
+	mdd, troughDay := maxDrawdown(values)
+	sharpe := sharpeRatio(values)
+	vaR95 := historicalVaR(values, 0.95)
+	recovery := recoveryDays(values, troughDay)
+	consecutive := maxConsecutiveLossDays(values)
+	totalRet := values[W] - 1.0
+	return ScenarioResult{
+		ScenarioID: scenario.ID, ScenarioName: scenario.Name, TotalReturn: totalRet,
+		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: 0,
+		FinalRegime: scenario.Regime, MomentumDisabled: vix > 30,
+		RecoveryDays: recovery, MaxConsecutiveLossDays: consecutive, DailyValues: values,
+	}
+}
+
+func choleskyDecompose(a [][]float64) [][]float64 {
+	n := len(a)
+	if n == 0 {
+		return nil
+	}
+	L := make([][]float64, n)
+	for i := range L {
+		L[i] = make([]float64, n)
+	}
+	for i := 0; i < n; i++ {
+		for j := 0; j <= i; j++ {
+			sum := 0.0
+			for k := 0; k < j; k++ {
+				sum += L[i][k] * L[j][k]
+			}
+			if i == j {
+				val := a[i][i] - sum
+				if val <= 0 {
+					val = 1e-10
+				}
+				L[i][j] = math.Sqrt(val)
+			} else {
+				L[i][j] = (a[i][j] - sum) / L[j][j]
+			}
+		}
+	}
+	return L
 }
 
 // VIXLevel extracts the VIX value from scenario macro quotes.

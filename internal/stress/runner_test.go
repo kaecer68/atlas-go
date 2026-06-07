@@ -232,6 +232,61 @@ func TestMultiDayStress_FedHiking(t *testing.T) {
 	}
 }
 
+func TestCholeskyDecompose(t *testing.T) {
+	A := [][]float64{
+		{4.0, 2.0, 1.0},
+		{2.0, 5.0, 3.0},
+		{1.0, 3.0, 6.0},
+	}
+	L := choleskyDecompose(A)
+	if L == nil {
+		t.Fatal("cholesky returned nil")
+	}
+	n := len(A)
+	for i := 0; i < n; i++ {
+		for j := 0; j < n; j++ {
+			var sum float64
+			for k := 0; k < n; k++ {
+				sum += L[i][k] * L[j][k]
+			}
+			if math.Abs(sum-A[i][j]) > 1e-10 {
+				t.Errorf("L·L' mismatch at (%d,%d): got %.6f, want %.6f", i, j, sum, A[i][j])
+			}
+		}
+	}
+}
+
+func TestCovarianceDrivenScenarios(t *testing.T) {
+	runner := NewRunner(domain.AgentRegistry{}, domain.ExecutionPolicy{})
+	// 2×2 covariance: strong positive correlation
+	cov := [][]float64{
+		{0.04, 0.035},
+		{0.035, 0.04},
+	}
+	symbols := []string{"2330.TW", "0050.TW"}
+	runner.SetCovariance(cov, symbols)
+	runner.SetPortfolioWeights(map[string]float64{"2330.TW": 0.6, "0050.TW": 0.4})
+
+	stockQuotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 300, IsTradable: true},
+		{Symbol: "0050.TW", Last: 120, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50},
+		{Symbol: "0050.TW", Side: domain.SideBuy, Conviction: 50},
+	}
+
+	result := runner.RunScenario(ScenarioCOVIDCrash, stockQuotes, recs)
+	if result.MaxDrawdown < 0.05 {
+		t.Errorf("cov-driven COVID crash: MDD = %.2f%%, expected > 5%%", result.MaxDrawdown*100)
+	}
+	if len(result.DailyValues) < 2 {
+		t.Error("cov-driven: expected daily values path")
+	}
+	t.Logf("cov-driven COVID crash: MDD=%.2f%%, VaR95=%.4f, Sharpe=%.3f",
+		result.MaxDrawdown*100, result.VaR95, result.SharpeRatio)
+}
+
 func TestMultiDayStress_AllScenarios(t *testing.T) {
 	runner := NewRunner(domain.AgentRegistry{}, domain.ExecutionPolicy{})
 

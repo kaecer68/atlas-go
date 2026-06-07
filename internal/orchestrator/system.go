@@ -1699,6 +1699,25 @@ func (s *System) RunDailyStressTests() error {
 		return fmt.Errorf("stress_test: no quotes available — run a simulation first")
 	}
 	runner := stress.NewRunner(s.Sim().registry, s.Sim().policy.ExecutionPolicy)
+
+	if opt := s.Sim().engine.Optimizer(); opt != nil && len(quotes) > 5 {
+		symbols := make([]string, 0, len(quotes))
+		for _, q := range quotes {
+			if q.IsTradable {
+				symbols = append(symbols, q.Symbol)
+			}
+		}
+		covMatrix, covSymbols := opt.GetCovarianceMatrix(symbols)
+		if covMatrix != nil && len(covSymbols) > 0 {
+			runner.SetCovariance(covMatrix, covSymbols)
+			weights := make(map[string]float64, len(covSymbols))
+			for _, sym := range covSymbols {
+				weights[sym] = 1.0
+			}
+			runner.SetPortfolioWeights(weights)
+		}
+	}
+
 	scenarios := stress.AllScenarios()
 	report := stress.Report{ScenarioResults: make([]stress.ScenarioResult, 0, len(scenarios))}
 
