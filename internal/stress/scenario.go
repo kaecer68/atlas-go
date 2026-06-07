@@ -96,9 +96,11 @@ var (
 	}
 
 	ScenarioStagflation = Scenario{
-		ID:         "stagflation_2023",
-		Regime:     domain.RegimeRiskOff,
-		WindowDays: 20,
+		ID:          "stagflation_2023",
+		Name:        "Stagflation",
+		Description: "2023: High inflation + high rates + stagnant growth",
+		Regime:      domain.RegimeRiskOff,
+		WindowDays:  20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 22.0, IsTradable: true},
 			{Symbol: "DXY", Last: 106.5, Open: 106.0, IsTradable: true},

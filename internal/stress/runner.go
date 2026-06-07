@@ -44,8 +44,10 @@ type Runner struct {
 	portWeights map[string]float64
 }
 
-func (r *Runner) SetCovariance(matrix [][]float64, symbols []string)       { r.covMatrix, r.covSymbols = matrix, symbols }
-func (r *Runner) SetPortfolioWeights(weights map[string]float64)            { r.portWeights = weights }
+func (r *Runner) SetCovariance(matrix [][]float64, symbols []string) {
+	r.covMatrix, r.covSymbols = matrix, symbols
+}
+func (r *Runner) SetPortfolioWeights(weights map[string]float64) { r.portWeights = weights }
 
 // NewRunner creates a stress test runner.
 func NewRunner(registry domain.AgentRegistry, policy domain.ExecutionPolicy) *Runner {
@@ -90,7 +92,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 	}
 
 	if r.covMatrix != nil && len(r.covSymbols) > 0 && r.portWeights != nil {
-		return r.runScenarioCov(scenario, vix, volScale)
+		return r.runScenarioCov(scenario, vix, volScale, recs)
 	}
 
 	goldSyms := map[string]bool{"GLD": true, "IAU": true, "00635U": true, "SLV": true}
@@ -149,7 +151,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 	}
 }
 
-func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) ScenarioResult {
+func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64, recs []domain.Recommendation) ScenarioResult {
 	W := max(scenario.WindowDays, 1)
 	N := len(r.covSymbols)
 	weightSlice := make([]float64, N)
@@ -195,7 +197,7 @@ func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) Scenar
 	totalRet := values[W] - 1.0
 	return ScenarioResult{
 		ScenarioID: scenario.ID, ScenarioName: scenario.Name, TotalReturn: totalRet,
-		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: 0,
+		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: len(recs),
 		FinalRegime: scenario.Regime, MomentumDisabled: vix > 30,
 		RecoveryDays: recovery, MaxConsecutiveLossDays: consecutive, DailyValues: values,
 	}
@@ -405,6 +407,7 @@ func FormatReport(report Report) string {
 		fmt.Fprintf(&output, "  VaR95:      %.2f%%\n", r.VaR95*100)
 		fmt.Fprintf(&output, "  Recov Days: %d\n", r.RecoveryDays)
 		fmt.Fprintf(&output, "  Consec Loss: %d days\n", r.MaxConsecutiveLossDays)
+		fmt.Fprintf(&output, "  TradeCount: %d\n", r.TradeCount)
 		fmt.Fprintf(&output, "  Regime:     %s\n", r.FinalRegime)
 		if r.MomentumDisabled {
 			output.WriteString("  Momentum:   DISABLED (VIX > 30)\n")
