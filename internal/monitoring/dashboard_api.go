@@ -406,7 +406,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 	if err != nil {
 		// On ingest failure, also feed silicon tracker from the on-disk snapshot
 		// (regression: otherwise the 矽循環時鐘 panel renders all zeros).
-		if diskSnap, ok := a.loadLatestSnapshotFromDisk(); ok {
+		if diskSnap, ok := a.GetLatestMacroSnapshot(); ok {
 			if a.narrativeEngine != nil {
 				geoScore := narrative.GeopoliticalRiskScore{}
 				if a.geoProvider != nil {
@@ -418,7 +418,10 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 				}
 				a.narrativeEngine.UpdateMacro(diskSnap, geoScore)
 			}
-			a.feedSiliconTracker(diskSnap)
+			if a.industryService != nil && a.industryService.SiliconTracker != nil {
+				indicators := industry.ExtractSiliconIndicators(diskSnap)
+				a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
+			}
 		}
 		return events, snap, err
 	}

@@ -411,57 +411,9 @@ func TestBuildAdj(t *testing.T) {
 	}
 }
 
-func TestGetLatestIndicators(t *testing.T) {
-	tracker := NewSiliconCycleTracker()
-	_, ok := tracker.GetLatestIndicators()
-	if ok {
-		t.Error("fresh tracker should have hasIndicators=false")
-	}
-	indicators := SiliconIndicators{
-		TSMCMonthlyRevenueYoY:          0.15,
-		GlobalSemiconductorBillingsYoY: 0.08,
-		DRAMSpotPriceTrend:             0.02,
-		TaiwanSemiconductorIndexMA:     0.05,
-		TSMCCapexGuidance:              0.10,
-		PhiladelphiaSOXIndexYoY:        0.12,
-	}
-	tracker.DetectPhase(time.Now(), indicators)
-	latest, ok := tracker.GetLatestIndicators()
-	if !ok {
-		t.Fatal("expected hasIndicators=true after DetectPhase")
-	}
-	if latest.TSMCMonthlyRevenueYoY != 0.15 {
-		t.Errorf("TSMCMonthlyRevenueYoY: got %.2f, want 0.15", latest.TSMCMonthlyRevenueYoY)
-	}
-}
-
-func TestBuildCard_NoPhaseTransition_PopulatesIndicators(t *testing.T) {
-	tracker := NewSiliconCycleTracker()
-	indicators := SiliconIndicators{
-		TSMCMonthlyRevenueYoY:          0.15,
-		GlobalSemiconductorBillingsYoY: 0.08,
-		DRAMSpotPriceTrend:             0.02,
-		TaiwanSemiconductorIndexMA:     0.05,
-		TSMCCapexGuidance:              0.10,
-		PhiladelphiaSOXIndexYoY:        0.12,
-	}
-	tracker.DetectPhase(time.Now(), indicators)
-	builder := NewCycleStatusCardBuilder(tracker, nil, nil, nil, nil)
-	card, err := builder.BuildCard(time.Now(), "semiconductor")
-	if err != nil {
-		t.Fatalf("BuildCard failed: %v", err)
-	}
-	if card.SiliconIndicators == nil {
-		t.Fatal("SiliconIndicators should be populated even without phase transition")
-	}
-	if card.SiliconIndicators.TSMCMonthlyRevenueYoY != 0.15 {
-		t.Errorf("TSMCMonthlyRevenueYoY: got %.2f, want 0.15", card.SiliconIndicators.TSMCMonthlyRevenueYoY)
-	}
-}
-
 func TestBuildCard_FreshTracker_SiliconIndicatorsNil(t *testing.T) {
-	tracker := NewSiliconCycleTracker()
-	builder := NewCycleStatusCardBuilder(tracker, nil, nil, nil, nil)
+	st := NewSiliconCycleTracker()
+	builder := NewCycleStatusCardBuilder(st, nil, nil, nil, nil)
 	card, err := builder.BuildCard(time.Now(), "semiconductor")
 	if err != nil {
 		t.Fatalf("BuildCard failed: %v", err)
@@ -472,8 +424,8 @@ func TestBuildCard_FreshTracker_SiliconIndicatorsNil(t *testing.T) {
 }
 
 func TestBuildCompositeCard_FreshTracker_SiliconIndicatorsNil(t *testing.T) {
-	tracker := NewSiliconCycleTracker()
-	builder := NewCycleStatusCardBuilder(tracker, nil, nil, nil, nil)
+	st := NewSiliconCycleTracker()
+	builder := NewCycleStatusCardBuilder(st, nil, nil, nil, nil)
 	card, err := builder.BuildCompositeCard(time.Now())
 	if err != nil {
 		t.Fatalf("BuildCompositeCard failed: %v", err)

@@ -346,18 +346,6 @@ func (e *SiliconCycleTracker) GetTransitionCount() int {
 	return len(e.history)
 }
 
-// GetLatestIndicators returns the most recent silicon indicators, even when
-// no phase transition has occurred. Returns (SiliconIndicators, true) after
-// at least one DetectPhase call, or (SiliconIndicators{}, false) if never called.
-func (e *SiliconCycleTracker) GetLatestIndicators() (SiliconIndicators, bool) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if !e.hasIndicators {
-		return SiliconIndicators{}, false
-	}
-	return e.latestIndicators, true
-}
-
 // Reset resets the engine to PhaseBottomRecovery with an empty history.
 func (e *SiliconCycleTracker) Reset() {
 	e.mu.Lock()
