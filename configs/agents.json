@@ -809,6 +809,80 @@
           "min": 500000
         }
       }
+    },
+    {
+      "id": "us-macro-spx-01",
+      "name": "美股 S&P 500 宏觀監控",
+      "layer": "macro",
+      "skill": "us_macro_spx",
+      "promptFile": "prompts/agents/us_macro_spx.md",
+      "enabled": true,
+      "universe": [],
+      "primaryMetrics": [
+        "regime_accuracy",
+        "correlation_timing"
+      ],
+      "requiredSkills": [
+        "us_macro_spx",
+        "globalmarket"
+      ],
+      "forbiddenActions": [
+        "single_stock_orders",
+        "position_sizing_override"
+      ],
+      "operatingNotes": [
+        "Monitor S&P 500 trends, VIX thresholds, and Fed policy impact on Taiwan risk appetite."
+      ]
+    },
+    {
+      "id": "us-macro-tech-01",
+      "name": "美股科技/半導體宏觀監控",
+      "layer": "macro",
+      "skill": "us_macro_tech",
+      "promptFile": "prompts/agents/us_macro_tech.md",
+      "enabled": true,
+      "universe": [],
+      "primaryMetrics": [
+        "sector_rotation_timing",
+        "ai_capex_alpha"
+      ],
+      "requiredSkills": [
+        "us_macro_tech",
+        "semiconductor_desk",
+        "globalmarket"
+      ],
+      "forbiddenActions": [
+        "single_stock_orders",
+        "tw_only_bias"
+      ],
+      "operatingNotes": [
+        "Track Nasdaq, SOX, NVDA/AAPL/MSFT for AI capex cycle impact on Taiwan ODM and foundry supply chain."
+      ]
+    },
+    {
+      "id": "us-crossmarket-01",
+      "name": "美台跨市場傳導監控",
+      "layer": "macro",
+      "skill": "us_tw_crossmarket",
+      "promptFile": "prompts/agents/us_tw_crossmarket.md",
+      "enabled": true,
+      "universe": [],
+      "primaryMetrics": [
+        "transmission_capture",
+        "lead_lag_accuracy"
+      ],
+      "requiredSkills": [
+        "us_tw_crossmarket",
+        "globalmarket",
+        "foreign_flow"
+      ],
+      "forbiddenActions": [
+        "single_market_bias",
+        "ignoring_taifex_night_session"
+      ],
+      "operatingNotes": [
+        "Detect US→TW spillover: after-hours futures, TSM ADR premium, foreign flow direction, tariff shock triggers. Propagate crisis signals to optimizer and risk gate."
+      ]
     }
   ]
 }

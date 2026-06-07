@@ -22,6 +22,7 @@ import (
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicircuitbreaker "github.com/kaecer68/atlas-go/internal/monitoring/api/circuitbreaker"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apicrossmarket "github.com/kaecer68/atlas-go/internal/monitoring/api/crossmarket"
 	apidashboard "github.com/kaecer68/atlas-go/internal/monitoring/api/dashboard"
 	apidecision "github.com/kaecer68/atlas-go/internal/monitoring/api/decision"
 	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
@@ -102,6 +103,9 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		providers = append(providers, marketdata.NewNDXIndexProvider())
 		providers = append(providers, marketdata.NewDJIIndexProvider())
 		providers = append(providers, marketdata.NewTSMADRProvider())
+		providers = append(providers, marketdata.NewNVDAProvider())
+		providers = append(providers, marketdata.NewAAPLProvider())
+		providers = append(providers, marketdata.NewMSFTProvider())
 	}
 
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
@@ -784,6 +788,14 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 	handlers.RegisterRoutes(mux)
 }
 
+func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
+	svc := service.NewCrossMarketService(a.macroProvider)
+	handlers := &apicrossmarket.Handlers{
+		Svc: svc,
+	}
+	handlers.RegisterRoutes(mux)
+}
+
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	svc := service.NewLiveService(a.workDir, a.ledgerDir)
 	handlers := &apilive.Handlers{
@@ -959,6 +971,7 @@ func (a *DashboardAPI) RegisterAllRoutes(mux *http.ServeMux, opts RouteOptions) 
 	a.RegisterNarrativeRoutes(mux)
 	a.RegisterControlRoutes(mux)
 	a.RegisterMacroRoutes(mux)
+	a.RegisterCrossMarketRoutes(mux)
 	a.RegisterExperimentRoutes(mux)
 	a.RegisterIndustryRoutes(mux)
 	a.RegisterEventLogicRoutes(mux)
