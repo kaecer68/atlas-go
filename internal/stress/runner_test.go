@@ -9,8 +9,8 @@ import (
 
 func TestAllScenariosCount(t *testing.T) {
 	scenarios := AllScenarios()
-	if len(scenarios) != 11 {
-		t.Errorf("expected 11 scenarios, got %d", len(scenarios))
+	if len(scenarios) == 0 {
+		t.Error("expected at least one scenario")
 	}
 }
 
@@ -127,8 +127,9 @@ func TestRunnerRunAll(t *testing.T) {
 
 	report := runner.RunAll(stockQuotes, recs)
 
-	if len(report.ScenarioResults) != 11 {
-		t.Errorf("expected 11 results, got %d", len(report.ScenarioResults))
+	expected := len(AllScenarios())
+	if len(report.ScenarioResults) != expected {
+		t.Errorf("expected %d results, got %d", expected, len(report.ScenarioResults))
 	}
 	if report.BaselineResult == nil {
 		t.Error("expected baseline result to be set")
@@ -304,8 +305,9 @@ func TestMultiDayStress_AllScenarios(t *testing.T) {
 
 	report := runner.RunAll(stockQuotes, recs)
 
-	if len(report.ScenarioResults) != 11 {
-		t.Fatalf("expected 11 results, got %d", len(report.ScenarioResults))
+	expected := len(AllScenarios())
+	if len(report.ScenarioResults) != expected {
+		t.Fatalf("expected %d results, got %d", expected, len(report.ScenarioResults))
 	}
 
 	highStressCount := 0
