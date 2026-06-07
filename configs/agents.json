@@ -883,6 +883,54 @@
       "operatingNotes": [
         "Detect US→TW spillover: after-hours futures, TSM ADR premium, foreign flow direction, tariff shock triggers. Propagate crisis signals to optimizer and risk gate."
       ]
+    },
+    {
+      "id": "odm-channel-01",
+      "name": "ODM Channel Monitor",
+      "layer": "context",
+      "skill": "odm_channel",
+      "promptFile": "prompts/agents/odm_channel.md",
+      "enabled": true,
+      "universe": ["2317", "2382", "6669"],
+      "primaryMetrics": [
+        "transmission_accuracy",
+        "revenue_forecast_error"
+      ],
+      "requiredSkills": [
+        "odm_channel",
+        "supply_chain"
+      ],
+      "forbiddenActions": [
+        "direct_order",
+        "single_stock_override"
+      ],
+      "operatingNotes": [
+        "Track ODM revenue transmission: US CSP capex → Nvidia → CoWoS → TSMC → ODM → Taiwan supply chain. Monitor Foxconn (2317), Quanta (2382), Wiwynn (6669) monthly revenue and CoWoS capacity quotas."
+      ]
+    },
+    {
+      "id": "odm-data-01",
+      "name": "ODM Data Provider",
+      "layer": "context",
+      "skill": "odm_data",
+      "promptFile": "prompts/agents/odm_data.md",
+      "enabled": true,
+      "universe": ["2317", "2382", "6669"],
+      "primaryMetrics": [
+        "data_freshness",
+        "yoy_correlation"
+      ],
+      "requiredSkills": [
+        "odm_data",
+        "finmind_api"
+      ],
+      "forbiddenActions": [
+        "live_trading",
+        "position_sizing"
+      ],
+      "operatingNotes": [
+        "Fetch monthly revenue for ODM stocks via FinMind TaiwanStockMonthRevenue. Compute YoY growth. Cache results in storage directory when configured."
+      ]
     }
   ]
 }
