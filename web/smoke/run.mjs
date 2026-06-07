@@ -89,6 +89,17 @@ async function run() {
       consoleErrors.push(`console.error: ${msg.text()}`);
     }
   });
+  // 捕捉 404 回應的 URL（Chrome console 不會在 text() 中顯示 URL）
+  const notFoundUrls = new Set();
+  page.on("response", (resp) => {
+    if (resp.status() === 404) {
+      const url = resp.url();
+      if (!notFoundUrls.has(url)) {
+        notFoundUrls.add(url);
+        console.warn(`[404] ${url} (from ${resp.request().resourceType()})`);
+      }
+    }
+  });
 
   try {
     await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 30000 });

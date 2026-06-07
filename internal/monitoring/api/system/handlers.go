@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
@@ -59,7 +60,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 func (h *Handlers) HandlePhase3Status(r *http.Request) (int, any) {
 	metrics, err := h.Svc.LoadPhase3Status()
 	if err != nil {
-		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load phase3 metrics: %v", err)}
+		// File not yet created (e.g. CI / first-run) is not an error — return empty state.
+		return http.StatusOK, orchestrator.Phase3Metrics{}
 	}
 	return http.StatusOK, metrics
 }

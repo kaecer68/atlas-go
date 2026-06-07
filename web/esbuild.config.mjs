@@ -25,7 +25,7 @@ const result = await esbuild.build({
   entryNames: "[dir]/[name]",
   assetNames: "assets/[name]-[hash]",
   minify: true,
-  sourcemap: true,
+  sourcemap: false,
   target: ["es2020"],
   loader: {
     ".js": "jsx", // allow JSX in .js files if any
