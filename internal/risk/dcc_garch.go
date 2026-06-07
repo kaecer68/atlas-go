@@ -28,8 +28,10 @@ import (
 	"math"
 )
 
-const dccEpsilon = 1e-8
-const dccMinObservations = 30
+const (
+	dccEpsilon         = 1e-8
+	dccMinObservations = 30
+)
 const nelderMeadMaxIter = 600
 
 const (
@@ -401,7 +403,7 @@ func sampleCorrelationMatrix(zA, zB []float64) ([2][2]float64, error) {
 	return q, nil
 }
 
-func nelderMead(x0 []float64, objective func([]float64) float64, tolX, tolFun float64, maxIter int) ([]float64, float64, error) {
+func nelderMead(x0 []float64, objective func([]float64) float64, tolX, tolFun float64, maxIter int) ([]float64, float64, error) { //nolint:unparam
 	n := len(x0)
 	if n < 2 {
 		return nil, 0, errors.New("nelder-mead: need at least 2 dimensions")

@@ -90,7 +90,7 @@ func resolveHedgeParams(h HedgeRatio) HedgeRatio {
 
 // regimeMultiplier returns the regime multiplier for the given VIX regime
 // label. Unknown values (including the empty string) fall back to 1.0 so
-// that unrecognised regimes do not silently reduce the hedge.
+// that unrecognized regimes do not silently reduce the hedge.
 func regimeMultiplier(regime string, h HedgeRatio) float64 {
 	switch regime {
 	case "stress":
