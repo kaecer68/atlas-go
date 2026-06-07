@@ -1,16 +1,6 @@
 {
   "patterns": [
     {
-      "pattern": "risk-exposure.*Failed to fetch",
-      "reason": "Risk exposure fetch fails when no live session data or ledger is empty — expected in dry-run mode",
-      "ticket": "atlas-go#0"
-    },
-    {
-      "pattern": "ERR_EMPTY_RESPONSE",
-      "reason": "Empty response from server — known intermittent issue with in-memory state during smoke test",
-      "ticket": "atlas-go#0"
-    },
-    {
       "pattern": "Unexpected token.*is not valid JSON",
       "reason": "JSON parse error when API returns non-JSON response — expected in dry-run mode for some endpoints",
       "ticket": "atlas-go#0"
@@ -19,11 +9,6 @@
       "pattern": "phase3-status.*500",
       "reason": "Phase3 metrics file not created yet in CI environment — no prior simulation has run",
       "ticket": "atlas-go#390"
-    },
-    {
-      "pattern": "Failed to load resource.*404.*",
-      "reason": "SimTrace handler returns 404 when no trace files exist — frontend handles it gracefully but Chrome logs it. TODO: remove after handler fix (200+empty) is verified in CI",
-      "ticket": "atlas-go#391"
     }
   ]
 }
