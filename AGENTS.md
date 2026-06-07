@@ -191,16 +191,3 @@ This project is indexed by GitNexus as **atlas-go** (38002 symbols, 87949 relati
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
-
-<!-- graphify:start -->
-## graphify
-
-This project has a graphify knowledge graph at graphify-out/.
-
-Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
-- **子圖譜更新**：執行 `bash scripts/regenerate-subgraphs.sh`，會依序跑 `graphify update .` + `python3 scripts/slice-graph.py`，將 master graph 切成 4 個子圖譜（core / analysis / research / infra）並產生互動式 HTML，每個子圖譜 < 700 節點
-- 子圖譜導覽入口：`graphify-out/subgraphs/index.html`
-<!-- graphify:end -->
