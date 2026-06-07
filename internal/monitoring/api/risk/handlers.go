@@ -82,7 +82,7 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 		portfolioValues[i] = s.value
 	}
 
-	dailyReturns := make([]float64, 0, len(portfolioValues)-1)
+	dailyReturns := make([]float64, 0, max(0, len(portfolioValues)-1))
 	for i := 1; i < len(portfolioValues); i++ {
 		if portfolioValues[i-1] > 0 {
 			dailyReturns = append(dailyReturns, (portfolioValues[i]-portfolioValues[i-1])/portfolioValues[i-1])

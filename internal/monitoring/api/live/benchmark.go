@@ -96,7 +96,7 @@ func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
 		portfolioReturn = (lastValue - firstValue) / firstValue
 	}
 
-	dailyReturns := make([]float64, 0, len(points)-1)
+	dailyReturns := make([]float64, 0, max(0, len(points)-1))
 	for i := 1; i < len(points); i++ {
 		if points[i-1].value > 0 {
 			dailyReturns = append(dailyReturns, (points[i].value-points[i-1].value)/points[i-1].value)

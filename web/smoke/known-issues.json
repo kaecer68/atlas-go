@@ -4,11 +4,6 @@
       "pattern": "Unexpected token.*is not valid JSON",
       "reason": "JSON parse error when API returns non-JSON response — expected in dry-run mode for some endpoints",
       "ticket": "atlas-go#0"
-    },
-    {
-      "pattern": "phase3-status.*500",
-      "reason": "Phase3 metrics file not created yet in CI environment — no prior simulation has run",
-      "ticket": "atlas-go#390"
     }
   ]
 }
