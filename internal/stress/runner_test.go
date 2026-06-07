@@ -9,7 +9,6 @@ import (
 
 func TestAllScenariosCount(t *testing.T) {
 	scenarios := AllScenarios()
-<<<<<<< HEAD
 	if len(scenarios) != 11 {
 		t.Errorf("expected 11 scenarios, got %d", len(scenarios))
 	}
