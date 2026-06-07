@@ -40,8 +40,8 @@ const (
 type DCCGARCH struct {
 	omegaA, alphaA, betaA float64
 	omegaB, alphaB, betaB float64
-	dccA, dccB             float64
-	meanA, meanB           float64
+	dccA, dccB            float64
+	meanA, meanB          float64
 }
 
 type DCCResult struct {

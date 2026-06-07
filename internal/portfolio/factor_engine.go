@@ -770,7 +770,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		Narrative:              nar,
 		IndustryCycle:          icl,
 		Linkage:                link,
-		TSMC: domain.FactorScoreItem{},
+		TSMC:                   domain.FactorScoreItem{},
 	}
 
 	// Precious Metals: compute PM score when symbol is a known PM instrument.
