@@ -178,7 +178,7 @@ jobs:
 
       - name: Check AGENTS.md human-written line count
         run: |
-          HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/{exit} {count++} END{print count}' AGENTS.md)
+          HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/,/^<!-- gitnexus:end -->/{next} /^<!-- graphify:start -->/,/^<!-- graphify:end -->/{next} {count++} END{print count}' AGENTS.md)
           echo "Human-written AGENTS.md lines: $HUMAN_LINES"
           if [ "$HUMAN_LINES" -gt 150 ]; then
             echo "ERROR: AGENTS.md has $HUMAN_LINES lines (limit: 150)."
