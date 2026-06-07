@@ -72,9 +72,6 @@ func (e *MacroRiskAssessmentEngine) Assess(data MacroDataSnapshot) *MacroRiskAss
 	} else {
 		assessment.Level = e.determineRiskLevel(riskFactors)
 	}
-	if !assessment.CrisisActive {
-		assessment.Level = e.determineRiskLevel(riskFactors)
-	}
 	assessment.ForeignOutflowProb = e.calculateOutflowProbability(riskFactors)
 	assessment.PrimaryFlow = e.determinePrimaryFlow(riskFactors)
 	assessment.FavoredSectors, assessment.AvoidedSectors = e.determineSectorRotation(riskFactors)

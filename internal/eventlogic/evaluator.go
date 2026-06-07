@@ -1,11 +1,16 @@
 package eventlogic
 
-import "github.com/kaecer68/atlas-go/internal/marketdata"
+import (
+	"strings"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+)
 
 // SnapshotToValidationContext converts a MacroDataSnapshot into a ValidationContext
-// suitable for evaluating cross-market event rules. Fields are keyed by the
-// dotted paths used in seed rule Conditions (e.g., "SOXIndex.ChangePct").
-func SnapshotToValidationContext(snap marketdata.MacroDataSnapshot) *ValidationContext {
+// suitable for evaluating cross-market event rules. activeThemes is the current
+// set of active narrative themes from the lifecycle manager, used to populate
+// the NarrativeTheme string field for rule matching.
+func SnapshotToValidationContext(snap marketdata.MacroDataSnapshot, activeThemes []string) *ValidationContext {
 	ctx := &ValidationContext{
 		NumericFields: make(map[string]float64),
 		StringFields:  make(map[string]string),
@@ -27,18 +32,15 @@ func SnapshotToValidationContext(snap marketdata.MacroDataSnapshot) *ValidationC
 	ctx.NumericFields["ForeignInvestorNet.Value"] = snap.ForeignInvestorNet.Value
 	ctx.NumericFields["TSMCRevenue.ChangePct"] = snap.TSMCRevenue.ChangePct
 
-	// Narrative theme detection: set to non-zero if any active theme matches.
-	// This is a stub placeholder for future NarrativeEvent→ValidationContext integration.
-	ctx.NumericFields["NarrativeTheme"] = 0.0
-
+	ctx.StringFields["NarrativeTheme"] = strings.Join(activeThemes, ",")
 	return ctx
 }
 
 // EvaluateActiveRules evaluates all active rules against a snapshot and returns
-// which rules fired. Unlike ValidateAll, this does not record hit/miss outcomes
-// since we don't know the actual market direction yet.
-func EvaluateActiveRules(v *RuleValidator, snap marketdata.MacroDataSnapshot) []string {
-	ctx := SnapshotToValidationContext(snap)
+// which rules fired. activeThemes are the current narrative themes that should
+// be considered for rule matching.
+func EvaluateActiveRules(v *RuleValidator, snap marketdata.MacroDataSnapshot, activeThemes []string) []string {
+	ctx := SnapshotToValidationContext(snap, activeThemes)
 	var fired []string
 	for _, r := range v.registry.ListActive() {
 		if v.EvaluateRule(r, ctx) {

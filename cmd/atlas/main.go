@@ -192,6 +192,7 @@ func run(args []string, deps appDeps) error {
 	brokerNonceRedisURL := flags.String("broker-nonce-redis-url", "", "override nonce replay redis url (required when store=redis)")
 	brokerNonceRedisKeyPrefix := flags.String("broker-nonce-redis-key-prefix", "", "override nonce replay redis key prefix")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
+	allowRealtime := flags.Bool("allow-realtime", false, "enable real-time regime detection adapter (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
 	liveMode := flags.Bool("live", false, "start live trading orchestrator")
@@ -271,6 +272,8 @@ func run(args []string, deps appDeps) error {
 		var elDetector *eventlogic.PatternDetector
 		var elCorrector *eventlogic.SelfCorrector
 		var elValidator *eventlogic.RuleValidator
+		var narLifecycleMgr *narrative.EventLifecycleManager
+		var lifecycleMgr *storage.LifecycleManager
 		var elRulesPath string
 		var elHistoryRecorder *eventlogic.HistoryRecorder
 
@@ -351,18 +354,6 @@ func run(args []string, deps appDeps) error {
 		})
 		risk.NewAuditSubscriber(dashEventBus)
 		log.Printf("[Risk] audit subscriber registered on shared event bus")
-
-		// Wire RealTimeAdapter: sub-second regime detection for automated
-		// agent weight adjustment during live market sessions.
-		rtAdapter := realtime.NewRealTimeAdapter(nil)
-		rtAdapter.Start(context.Background())
-		log.Printf("[Realtime] adapter started (100ms cadence)")
-		go func() {
-			<-deps.shutdown
-			rtAdapter.Stop()
-			log.Printf("[Realtime] adapter stopped")
-		}()
-
 		// Initial macro ingestion on startup to populate snapshot and publish events.
 		ingestCtx, ingestCancel := context.WithTimeout(context.Background(), 60*time.Second)
 		// Cancel ingest early if shutdown is signaled to avoid blocking
@@ -383,9 +374,10 @@ func run(args []string, deps appDeps) error {
 			logging.Info("main", "initial_macro_ingest_ok")
 		}
 
-		lifecycleMgr := storage.NewLifecycleManager(filepath.Join(cfg.WorkDir, "data/state"))
+		lifecycleMgr = storage.NewLifecycleManager(filepath.Join(cfg.WorkDir, "data/state"))
 		dashboard.SetStorageReporter(lifecycleMgr)
 		log.Printf("[Storage] reporter injected into dashboard API")
+		narLifecycleMgr = dashboard.GetEventLifecycleManager()
 
 		// Startup health check: verify critical data files exist and warn if missing.
 		replayPath := config.GetReplayDataPath(cfg.WorkDir)
@@ -585,6 +577,7 @@ func run(args []string, deps appDeps) error {
 
 		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
 		var taskMgr *apigateway.BackgroundTaskManager
+		var realtimeAdapter *realtime.RealTimeAdapter
 		if gateway != nil {
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
 		} else {
@@ -600,6 +593,15 @@ func run(args []string, deps appDeps) error {
 						map[string]any{"task": name, "consecutive_failures": consecutiveFailures})
 				}
 			})
+
+			// RealTimeAdapter: sub-second regime detection and agent weight
+			// adaptation during live market sessions. Gated behind -allow-realtime
+			// (mirrors -allow-live-broker pattern).
+			if *allowRealtime {
+				realtimeAdapter = realtime.NewRealTimeAdapter(&paramsCfg.Realtime)
+				log.Printf("[RealTime] adapter created (cadence=%dms, window=%d)",
+					paramsCfg.Realtime.UpdateIntervalMs.Value, 60)
+			}
 
 			// Register channel_health_sync task (DB sync, not a data fetcher).
 			if pool != nil {
@@ -1054,7 +1056,8 @@ func run(args []string, deps appDeps) error {
 						dashRef.InvokeCrisisModeSetter(snap.VIX.Value >= 35.0)
 						// EventLogic cross-market rule evaluation against live data.
 						if elValidator != nil && snap.RecordedAt > 0 {
-							fired := eventlogic.EvaluateActiveRules(elValidator, snap)
+							themes := narrativeActiveThemes(narLifecycleMgr)
+							fired := eventlogic.EvaluateActiveRules(elValidator, snap, themes)
 							if len(fired) > 0 {
 								logging.Info("main", "eventlogic_fired", "count", len(fired), "rules", fired)
 							}
@@ -1063,6 +1066,41 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
+			}
+
+			// RealTimeAdapter feed: periodically ingest market data points from
+			// the latest macro snapshot for sub-second regime detection.
+			if realtimeAdapter != nil {
+				dashRef := dashboard
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "realtime_feed",
+					Interval: 30 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						snap, ok := dashRef.GetLatestMacroSnapshot()
+						if !ok {
+							return nil
+						}
+						now := time.Now()
+						points := []realtime.MarketDataPoint{
+							{Symbol: "SOX", Price: snap.SOXIndex.Value, Timestamp: now},
+							{Symbol: "VIX", Price: snap.VIX.Value, Timestamp: now},
+						}
+						if snap.SPXIndex.Value > 0 {
+							points = append(points,
+								realtime.MarketDataPoint{Symbol: "SPX", Price: snap.SPXIndex.Value, Timestamp: now},
+								realtime.MarketDataPoint{Symbol: "NDX", Price: snap.NDXIndex.Value, Timestamp: now},
+							)
+						}
+						for _, p := range points {
+							if p.Price > 0 {
+								realtimeAdapter.IngestData(p)
+							}
+						}
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered realtime_feed background task (30s interval)")
 			}
 
 			// Silicon cycle indicator update (10m, offset from macro_ingest 5m
@@ -1870,6 +1908,11 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered rsi_tw_calibrate background task (24h interval)")
 
+			if realtimeAdapter != nil {
+				go realtimeAdapter.Start(sysCtx)
+				log.Printf("[RealTime] adapter started (cadence=%dms)", paramsCfg.Realtime.UpdateIntervalMs.Value)
+			}
+
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 			dashEventBus.Publish(eventbus.BusEvent{
@@ -1938,6 +1981,10 @@ func run(args []string, deps appDeps) error {
 		}
 
 		sysCancel()
+		if realtimeAdapter != nil {
+			realtimeAdapter.Stop()
+			log.Printf("[RealTime] adapter stopped")
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
@@ -2275,4 +2322,18 @@ func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) 
 		all = append(all, orders...)
 	}
 	return all, nil
+}
+
+// narrativeActiveThemes returns the active narrative themes from the lifecycle
+// manager. Returns nil when the manager is not initialized.
+func narrativeActiveThemes(mgr *narrative.EventLifecycleManager) []string {
+	if mgr == nil {
+		return nil
+	}
+	events := mgr.GetActiveEvents()
+	themes := make([]string, len(events))
+	for i, ev := range events {
+		themes[i] = string(ev.Theme)
+	}
+	return themes
 }

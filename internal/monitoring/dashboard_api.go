@@ -62,6 +62,7 @@ type DashboardAPI struct {
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
 	macroProvider      marketdata.MacroDataProvider
+	lifecycleMgr        *narrative.EventLifecycleManager
 	geoProvider        narrative.GeopoliticalRiskProvider
 	taiwanGeoProvider  narrative.GeopoliticalRiskProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
@@ -146,6 +147,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
 		macroProvider:      provider,
+		lifecycleMgr:      lifecycle,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
@@ -184,6 +186,7 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
 		macroProvider:      macroProvider,
+		lifecycleMgr:      lifecycle,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
@@ -390,6 +393,11 @@ func (a *DashboardAPI) GetMacroIngestor() *narrative.MacroIngestor {
 	return a.macroIngestor
 }
 
+// GetEventLifecycleManager returns the narrative event lifecycle manager.
+func (a *DashboardAPI) GetEventLifecycleManager() *narrative.EventLifecycleManager {
+	return a.lifecycleMgr
+}
+
 // IngestAndUpdateMacro performs macro ingestion and updates the narrative engine state.
 // This ensures GetCurrentStressIndex() has valid data instead of zero values.
 func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
@@ -438,17 +446,31 @@ func (a *DashboardAPI) CalibrateNarrative(replayPath string) (*narrative.Narrati
 	return a.narrativeEngine.SelfCalibrate(replayPath)
 }
 
-// loadSnapshotIntoNarrativeEngine loads the latest snapshot from disk into the narrative engine.
-// Used as fallback when live ingestion fails to ensure stress index has data.
-func (a *DashboardAPI) loadSnapshotIntoNarrativeEngine() {
+// GetLatestMacroSnapshot reads the macro ingestor's latest.json from disk.
+// Returns (zero, false) when unavailable. Public accessor for consumers that
+// need the raw snapshot without triggering a full ingestion (e.g. RealTimeAdapter).
+func (a *DashboardAPI) GetLatestMacroSnapshot() (marketdata.MacroDataSnapshot, bool) {
+	if a.macroIngestor == nil {
+		return marketdata.MacroDataSnapshot{}, false
+	}
 	snapDir := filepath.Clean(a.macroIngestor.SnapshotDir())
 	latestPath := filepath.Join(snapDir, "latest.json")
 	data, err := os.ReadFile(latestPath)
 	if err != nil {
-		return
+		return marketdata.MacroDataSnapshot{}, false
 	}
 	var snap marketdata.MacroDataSnapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
+		return marketdata.MacroDataSnapshot{}, false
+	}
+	return snap, true
+}
+
+// loadSnapshotIntoNarrativeEngine loads the latest snapshot from disk into the narrative engine.
+// Used as fallback when live ingestion fails to ensure stress index has data.
+func (a *DashboardAPI) loadSnapshotIntoNarrativeEngine() {
+	snap, ok := a.GetLatestMacroSnapshot()
+	if !ok {
 		return
 	}
 	geoScore := narrative.GeopoliticalRiskScore{}
