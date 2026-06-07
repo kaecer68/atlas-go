@@ -77,6 +77,8 @@ go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | g
 
 > 沒有 `AGENTS.md` 的模組為共享基礎設施，直接讀碼即可。
 > `superinvestor` 不是獨立 executor，而是 sector/style agent 的角色型別。
+>
+> **進入 `internal/*/` 目錄修改程式碼前，強制先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。** 模組特有陷阱寫在裡面，跳過會踩坑。
 
 ## Git 工作流（強制）
 
