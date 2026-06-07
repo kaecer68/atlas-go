@@ -136,6 +136,43 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("sox_index", soxAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "sox_index")
 
+	// --- US Indexes (S&P 500, Nasdaq Composite, Dow Jones) ---
+	if cfg.YahooEnabled {
+		spxProvider := marketdata.NewSPXIndexProvider()
+		g.registry.Register("us_spx", NewUSSPXIndexChannelAdapter(spxProvider))
+		logging.Info("apigateway", "adapter_registered", "channel", "us_spx")
+
+		ndxProvider := marketdata.NewNDXIndexProvider()
+		g.registry.Register("us_ndx", NewUSNDXIndexChannelAdapter(ndxProvider))
+		logging.Info("apigateway", "adapter_registered", "channel", "us_ndx")
+
+		djiProvider := marketdata.NewDJIIndexProvider()
+		g.registry.Register("us_dji", NewUSDJIIndexChannelAdapter(djiProvider))
+		logging.Info("apigateway", "adapter_registered", "channel", "us_dji")
+	}
+
+	// --- US Tech Stocks (NVDA, AAPL, MSFT) ---
+	if cfg.YahooEnabled {
+		nvdaProvider := marketdata.NewNVDAProvider()
+		g.registry.Register("us_nvda", NewUSNVDAChannelAdapter(nvdaProvider))
+		logging.Info("apigateway", "adapter_registered", "channel", "us_nvda")
+
+		aaplProvider := marketdata.NewAAPLProvider()
+		g.registry.Register("us_aapl", NewUSAAPLChannelAdapter(aaplProvider))
+		logging.Info("apigateway", "adapter_registered", "channel", "us_aapl")
+
+		msftProvider := marketdata.NewMSFTProvider()
+		g.registry.Register("us_msft", NewUSMSFTChannelAdapter(msftProvider))
+		logging.Info("apigateway", "adapter_registered", "channel", "us_msft")
+	}
+
+	// --- TSM ADR (TSMC NYSE-listed American Depositary Receipt) ---
+	if cfg.YahooEnabled {
+		tsmProvider := marketdata.NewTSMADRProvider()
+		g.registry.Register("tsm_adr", NewTSMADRChannelAdapter(tsmProvider))
+		logging.Info("apigateway", "adapter_registered", "channel", "tsm_adr")
+	}
+
 	// --- DRAM Spot Price (Micron MU stock proxy) ---
 	dramProvider := marketdata.NewDRAMSpotPriceProvider()
 	dramAdapter := NewDRAMSpotPriceChannelAdapter(dramProvider)

@@ -49,6 +49,13 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "bdi", apply: a.applyBDI},
 		{channelID: "dram_spot_price", apply: a.applyDRAMSpotPrice},
 		{channelID: "twse_sector_index", apply: a.applyTWSESectorIndex},
+		{channelID: "us_spx", apply: a.applyUSSPX},
+		{channelID: "us_ndx", apply: a.applyUSNDX},
+		{channelID: "us_dji", apply: a.applyUSDJI},
+		{channelID: "us_nvda", apply: a.applyUSNVDA},
+		{channelID: "us_aapl", apply: a.applyUSAAPL},
+		{channelID: "us_msft", apply: a.applyUSMSFT},
+		{channelID: "tsm_adr", apply: a.applyTSMADR},
 	}
 
 	var (
@@ -251,6 +258,76 @@ func (a *macroDataGatewayAdapter) applyBDI(snap *marketdata.MacroDataSnapshot, d
 	}
 	if s.Bdi.Symbol != "" {
 		snap.Bdi = s.Bdi
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyUSSPX(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.SPXIndex.Symbol != "" {
+		snap.SPXIndex = s.SPXIndex
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyUSNDX(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.NDXIndex.Symbol != "" {
+		snap.NDXIndex = s.NDXIndex
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyUSDJI(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.DJIIndex.Symbol != "" {
+		snap.DJIIndex = s.DJIIndex
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyUSNVDA(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.NVDA.Symbol != "" {
+		snap.NVDA = s.NVDA
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyUSAAPL(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.AAPL.Symbol != "" {
+		snap.AAPL = s.AAPL
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyUSMSFT(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.MSFT.Symbol != "" {
+		snap.MSFT = s.MSFT
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyTSMADR(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.TSMADR.Symbol != "" {
+		snap.TSMADR = s.TSMADR
 	}
 }
 

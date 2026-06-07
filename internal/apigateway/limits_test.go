@@ -34,6 +34,13 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"taifex_daily":        false,
 		"twse_oddlot":         false,
 		"bdi":                 false,
+		"us_spx":              false,
+		"us_ndx":              false,
+		"us_dji":              false,
+		"us_nvda":             false,
+		"us_aapl":             false,
+		"us_msft":             false,
+		"tsm_adr":             false,
 	}
 
 	for id := range m.limiters {
@@ -80,6 +87,7 @@ func TestNewRateLimitManager_NonInfiniteRateChannels(t *testing.T) {
 		"finmind", "geopolitical", "geopolitical_taiwan", "twse_margin",
 		"export_statistics", "tsmc_revenue", "tej", "exchange_rate",
 		"sox_index", "dram_spot_price", "twse_sector_index", "day_trading", "twse_etf", "taifex_daily", "twse_oddlot", "bdi",
+		"us_spx", "us_ndx", "us_dji", "us_nvda", "us_aapl", "us_msft", "tsm_adr",
 	}
 	for _, channel := range nonInfiniteChannels {
 		t.Run(channel, func(t *testing.T) {
@@ -344,6 +352,13 @@ func TestStatus_BurstMatchesConfig(t *testing.T) {
 		{"dram_spot_price", ExportStatisticsBurst},
 		{"twse_sector_index", ExportStatisticsBurst},
 		{"bdi", ExportStatisticsBurst},
+		{"us_spx", YahooFinanceBurst},
+		{"us_ndx", YahooFinanceBurst},
+		{"us_dji", YahooFinanceBurst},
+		{"us_nvda", YahooFinanceBurst},
+		{"us_aapl", YahooFinanceBurst},
+		{"us_msft", YahooFinanceBurst},
+		{"tsm_adr", YahooFinanceBurst},
 	}
 
 	for _, tt := range tests {
