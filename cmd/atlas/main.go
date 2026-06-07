@@ -1054,6 +1054,10 @@ func run(args []string, deps appDeps) error {
 						}
 						// Propagate VIX signal to optimizer crisis mode.
 						dashRef.InvokeCrisisModeSetter(snap.VIX.Value >= 35.0)
+						// Feed SPX/SOX daily returns into rolling correlation engine.
+						if svc := dashRef.GetCrossMarketService(); svc != nil {
+							svc.UpdateCorrelation(snap.SPXIndex.ChangePct, snap.SOXIndex.ChangePct)
+						}
 						// EventLogic cross-market rule evaluation against live data.
 						if elValidator != nil && snap.RecordedAt > 0 {
 							themes := narrativeActiveThemes(narLifecycleMgr)

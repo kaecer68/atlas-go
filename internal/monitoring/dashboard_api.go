@@ -87,6 +87,7 @@ type DashboardAPI struct {
 	calibrationTask    *narrative.CalibrationTask
 	crisisModeSetter   func(active bool) // callback: VIX>=35 → optimizer crisis mode
 	correlationSetter  func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
+	crossMarketSvc     *service.CrossMarketService
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -811,11 +812,16 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
-	svc := service.NewCrossMarketService(a.macroProvider)
+	a.crossMarketSvc = service.NewCrossMarketService(a.macroProvider)
 	handlers := &apicrossmarket.Handlers{
-		Svc: svc,
+		Svc: a.crossMarketSvc,
 	}
 	handlers.RegisterRoutes(mux)
+}
+
+// GetCrossMarketService returns the cross-market service for live correlation updates.
+func (a *DashboardAPI) GetCrossMarketService() *service.CrossMarketService {
+	return a.crossMarketSvc
 }
 
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {

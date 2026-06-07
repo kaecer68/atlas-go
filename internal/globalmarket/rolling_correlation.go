@@ -81,3 +81,10 @@ func (rc *RollingCorrelation) GetCurrent() float64 {
 	defer rc.mu.RUnlock()
 	return rc.currentRho
 }
+
+// Observations returns the number of paired observations collected so far.
+func (rc *RollingCorrelation) Observations() int {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
+	return rc.count
+}

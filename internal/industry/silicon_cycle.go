@@ -140,9 +140,11 @@ type PhaseTransition struct {
 // SiliconCycleTracker monitors and tracks the semiconductor industry cycle
 // using a 4-phase state machine driven by key silicon industry indicators.
 type SiliconCycleTracker struct {
-	currentPhase SiliconCyclePhase
-	mu           sync.RWMutex
-	history      []PhaseTransition
+	currentPhase      SiliconCyclePhase
+	mu                sync.RWMutex
+	history           []PhaseTransition
+	latestIndicators SiliconIndicators
+	hasIndicators     bool
 }
 
 // NewSiliconCycleTracker creates a new silicon cycle engine initialized to
@@ -165,6 +167,9 @@ func (e *SiliconCycleTracker) DetectPhase(now time.Time, indicators SiliconIndic
 	params := getSiliconParams()
 	prevPhase := e.currentPhase
 	newPhase := e.evaluateTransition(prevPhase, indicators, params)
+
+	e.latestIndicators = indicators
+	e.hasIndicators = true
 
 	if newPhase != prevPhase {
 		e.history = append(e.history, PhaseTransition{
@@ -318,6 +323,14 @@ func (e *SiliconCycleTracker) GetHistory() []PhaseTransition {
 	result := make([]PhaseTransition, len(e.history))
 	copy(result, e.history)
 	return result
+}
+
+// GetLatestIndicators returns the most recently observed silicon indicators
+// and whether any have been recorded (false for a fresh tracker).
+func (e *SiliconCycleTracker) GetLatestIndicators() (SiliconIndicators, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.latestIndicators, e.hasIndicators
 }
 
 // GetTransitionCount returns the number of recorded phase transitions.

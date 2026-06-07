@@ -165,7 +165,7 @@ func (b *CycleStatusCardBuilder) BuildCard(now time.Time, industryID string) (*C
 	card := &CycleStatusCard{
 		Date:              now,
 		GeneratedAt:       time.Now(),
-		SiliconIndicators: &SiliconIndicatorSnapshot{},
+		SiliconIndicators: nil, // nil → frontend renders "尚無矽循環指標明細"
 		ActivePatterns:    []SeasonalPatternSnapshot{},
 		ActiveEvents:      []CalendarEvent{},
 		Breakdown:         []LayerAdjustment{},
@@ -210,7 +210,7 @@ func (b *CycleStatusCardBuilder) BuildCompositeCard(now time.Time) (*CycleStatus
 	card := &CycleStatusCard{
 		Date:              now,
 		GeneratedAt:       time.Now(),
-		SiliconIndicators: &SiliconIndicatorSnapshot{},
+		SiliconIndicators: nil, // nil → frontend renders "尚無矽循環指標明細"
 		ActivePatterns:    []SeasonalPatternSnapshot{},
 		ActiveEvents:      []CalendarEvent{},
 		Breakdown:         []LayerAdjustment{},
@@ -278,7 +278,17 @@ func (b *CycleStatusCardBuilder) resolveSiliconLayer(card *CycleStatusCard) floa
 	card.SiliconScore = GetPhaseScore(phase)
 
 	history := b.siliconTracker.GetHistory()
-	if len(history) > 0 {
+	// Prefer latest indicators (updated every macro ingestion) over history.
+	if latest, ok := b.siliconTracker.GetLatestIndicators(); ok {
+		card.SiliconIndicators = &SiliconIndicatorSnapshot{
+			TSMCMonthlyRevenueYoY:          latest.TSMCMonthlyRevenueYoY,
+			GlobalSemiconductorBillingsYoY: latest.GlobalSemiconductorBillingsYoY,
+			DRAMSpotPriceTrend:             latest.DRAMSpotPriceTrend,
+			TaiwanSemiconductorIndexMA:     latest.TaiwanSemiconductorIndexMA,
+			TSMCCapexGuidance:              latest.TSMCCapexGuidance,
+			PhiladelphiaSOXIndexYoY:        latest.PhiladelphiaSOXIndexYoY,
+		}
+	} else if len(history) > 0 {
 		latest := history[len(history)-1]
 		card.SiliconIndicators = &SiliconIndicatorSnapshot{
 			TSMCMonthlyRevenueYoY:          latest.Indicators.TSMCMonthlyRevenueYoY,

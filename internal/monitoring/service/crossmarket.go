@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/globalmarket"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -65,12 +66,22 @@ type USIndicesResponse struct {
 
 // CrossMarketService provides cross-market data from the composite macro provider.
 type CrossMarketService struct {
-	provider marketdata.MacroDataProvider
+	provider          marketdata.MacroDataProvider
+	rollingCorrelation *globalmarket.RollingCorrelation
 }
 
 // NewCrossMarketService creates a cross-market service backed by the composite provider.
 func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketService {
-	return &CrossMarketService{provider: provider}
+	return &CrossMarketService{
+		provider:           provider,
+		rollingCorrelation: globalmarket.NewRollingCorrelation(20),
+	}
+}
+
+// UpdateCorrelation pushes a new daily return pair (SPX, TWSE proxy = SOX)
+// into the rolling correlation engine.
+func (s *CrossMarketService) UpdateCorrelation(spxReturn, soxReturn float64) {
+	s.rollingCorrelation.Update(spxReturn, soxReturn)
 }
 
 // GetStatus returns the full cross-market status snapshot.
@@ -99,26 +110,25 @@ func (s *CrossMarketService) GetStatus(ctx context.Context) (*CrossMarketStatus,
 	status.USD_TWD = toIndex(snap.USD_TWD)
 	status.US10Y = toIndex(snap.US10Y)
 
-	// Derive correlation from available data paths — fallback to 0.5.
-	// The real correlation is maintained by GlobalMarketManager at runtime;
-	// this endpoint reports the latest macro snapshot which is the best
-	// available read from the composite provider.
-	status.CorrelationSPXTWSE = 0.5
+	// Use the live rolling correlation from GlobalMarketManager.
+	// The correlation is maintained by the realtime_feed task which
+	// pushes SPX/SOX daily returns on each macro ingestion cycle.
+	rho := s.rollingCorrelation.GetCurrent()
+	status.CorrelationSPXTWSE = rho
 
 	return status, nil
 }
 
 // GetCorrelation returns the current SPX-TWSE correlation estimate.
 func (s *CrossMarketService) GetCorrelation() (*CorrelationResponse, error) {
-	// Default fallback — the live correlation is maintained by
-	// the GlobalMarketManager and pushed via DashboardAPI.SetCorrelationSetter.
-	// This is the static read path for dashboard consumption.
+	rho := s.rollingCorrelation.GetCurrent()
+	obs := s.rollingCorrelation.Observations()
 	return &CorrelationResponse{
-		Correlation:  0.5,
+		Correlation:  rho,
 		WindowSize:   20,
-		Observations: 0,
+		Observations: obs,
 		ComputedAt:   time.Now().Format(time.RFC3339),
-		IsFallback:   true,
+		IsFallback:   rho == 0.5 && obs < 3,
 	}, nil
 }
 
