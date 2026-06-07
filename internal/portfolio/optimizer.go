@@ -28,6 +28,7 @@ const (
 	FactorPreciousMetals FactorType = "precious_metals"
 	FactorETF            FactorType = "etf"
 	FactorLinkage        FactorType = "linkage"
+	FactorTSMC           FactorType = "tsmc"
 )
 
 // FactorScore 因子评分
@@ -298,6 +299,7 @@ type symbolScore struct {
 	PreciousMetals         float64
 	ETF                    float64
 	Linkage                float64
+	TSMC                   float64
 	Total                  float64
 	Agents                 []string
 }
@@ -351,7 +353,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 			liqScore = o.factorEngine.CalculateLiquidityScore(symbol, quotes).Score
 		}
 
-		var narrativeScore, industryCycleScore, linkageScore, instSentScore float64
+		var narrativeScore, industryCycleScore, linkageScore, instSentScore, tsmcScore float64
 		o.mu.RLock()
 		fe := o.factorEngine
 		bridge := o.bridgeInput
@@ -364,6 +366,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 			narProv := fe.narrativeProv
 			iclProv := fe.cycleProv
 			linkProv := fe.linkageProv
+			tsmcProv := fe.tsmcProv
 			fe.mu.RUnlock()
 			if narProv != nil {
 				if nfs := narProv(symbol); nfs != nil {
@@ -383,6 +386,11 @@ func (o *Optimizer) calculateMultiFactorScores(
 					if lfs := linkProv(symbol); lfs != nil {
 						linkageScore = lfs.Score
 					}
+				}
+			}
+			if tsmcProv != nil {
+				if tfs := tsmcProv(symbol); tfs != nil {
+					tsmcScore = tfs.Score
 				}
 			}
 		}
@@ -412,6 +420,9 @@ func (o *Optimizer) calculateMultiFactorScores(
 		if linkageScore != 0 {
 			totalScore += linkageScore * factorWeights[FactorLinkage]
 		}
+		if tsmcScore != 0 {
+			totalScore += tsmcScore * factorWeights[FactorTSMC]
+		}
 
 		scores[key] = &symbolScore{
 			Symbol:                 symbol,
@@ -427,6 +438,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 			PreciousMetals:         pmScore,
 			ETF:                    etfScore,
 			Linkage:                linkageScore,
+			TSMC:                   tsmcScore,
 			Total:                  totalScore,
 			Agents:                 agents,
 		}

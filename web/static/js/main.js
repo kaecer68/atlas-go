@@ -33,7 +33,7 @@ export function switchPage(id, silent) {
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
     metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理', config: '部署配置',
     evolution_panel: '演化透視', 'eventlogic-rules': '事件邏輯',
-  swarm: 'Swarm 模擬'
+  swarm: 'Swarm 模擬', crossmarket: '美台連動監控'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -100,9 +100,10 @@ async function loadModules() {
     import('./pages/decision-chain.js'),
     import('./pages/eventlogic-rules.js'),
   import('./pages/swarm.js'),
+    import('./pages/crossmarket.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'eventlogic', 'swarm'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'eventlogic', 'swarm', 'crossmarket'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -371,6 +372,9 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'swarm') {
     try { if (m.swarm && m.swarm.loadSwarmData) m.swarm.loadSwarmData(); } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'crossmarket') {
+    try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'evolution_panel') {
     try {

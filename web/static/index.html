@@ -41,6 +41,7 @@
    <a data-page="config" tabindex="0" title="部署配置">⚙️ 部署配置</a>
     <a data-page="eventlogic-rules" tabindex="0" title="事件邏輯規則">🧠 事件邏輯</a>
     <a data-page="swarm" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
+    <a data-page="crossmarket" tabindex="0" title="美台連動監控">🇺🇸 美台連動</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -354,8 +355,36 @@
               <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
               <input id="revertReason" type="text" placeholder="原因" class="input-w-md">
                <button class="danger" data-action="revert-experiment">回滾</button>
-        </div>
-     </div>
+    </div>
+
+    <!-- 美台連動監控 -->
+    <div class="page" id="page-crossmarket">
+      <div class="page-header">
+        <h1>🇺🇸 美台連動監控</h1>
+        <p class="page-desc">美股對台股傳導通道即時觀測 — 指數、科技股、波動率、相關性、危機信號</p>
+      </div>
+      <div class="section">
+        <h3>📊 美國主要指數</h3>
+        <div class="kpi-grid" id="cm-us-indices"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>💻 半導體與科技股</h3>
+        <div class="kpi-grid" id="cm-tech-stocks"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>🌐 跨市場宏觀指標</h3>
+        <div class="kpi-grid" id="cm-macro"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>📈 動態相關性</h3>
+        <div class="panel" id="cm-correlation"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>🚨 危機信號</h3>
+        <div class="panel" id="cm-crisis"></div>
+      </div>
+    </div>
+  </div>
    </div>
 </div>
       <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>

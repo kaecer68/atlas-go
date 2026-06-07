@@ -56,6 +56,7 @@ type FactorEngine struct {
 	narrativeProv func(symbol string) *domain.NarrativeFactorScore
 	cycleProv     func(symbol string) *domain.IndustryCycleFactorScore
 	linkageProv   func(symbol string) *domain.LinkageFactorScore
+	tsmcProv      func(symbol string) *domain.FactorScoreItem
 	pmCtxProv     PMContextProvider
 	etfAnalyzer   *ETFAnalyzer
 	mu            sync.RWMutex
@@ -769,6 +770,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		Narrative:              nar,
 		IndustryCycle:          icl,
 		Linkage:                link,
+		TSMC: domain.FactorScoreItem{},
 	}
 
 	// Precious Metals: compute PM score when symbol is a known PM instrument.
