@@ -10,5 +10,5 @@
 //
 // 此模組不會阻擋 atlas 啟動：若 proxy 啟動失敗，僅記錄警告後繼續。
 //
-// # Maturity: evolving
+// Maturity: evolving
 package fubonproxy

@@ -5,6 +5,16 @@
 
 全局規則仍遵循 `~/.claude/CLAUDE.md`。
 
+## 快速路由
+
+| 需求 | 文件 |
+|------|------|
+| 完整模組索引（34 個） | `internal/AGENTS_INDEX.md` |
+| 模組成熟度對照 | `internal/MATURITY.md` |
+| 跨模組陷阱詳細參考 | `docs/TRAPS.md` |
+| 根規則與全域禁令 | `AGENTS.md` |
+| 架構憲法 | `internal/apigateway/CONSTITUTION.md` |
+
 ## Token Efficiency Rules
 
 - **Scoped reads**: Use targeted file paths (e.g. `web/static/css/main.css`) instead of directory reads. Never read `data/`, `.codegraph/`, `.gitnexus/`, or `graphify-out/`.
