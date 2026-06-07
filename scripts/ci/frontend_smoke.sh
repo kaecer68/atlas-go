@@ -133,6 +133,11 @@ log "Building atlas binary"
 go build -o atlas-go ./cmd/atlas
 ok "Atlas binary built: $(ls -lh atlas-go | awk '{print $5}')"
 
+# 4.5 預先建立空資料檔案（避免 API 因檔案不存在而回傳 500）
+log "Pre-seeding data directory with empty state files"
+bash "$REPO_ROOT/scripts/ci/seed_smoke_data.sh"
+ok "Data directory seeded"
+
 # 5. 啟動 atlas server（背景）
 log "Starting atlas server on :$PORT (log: /tmp/atlas-smoke.log)"
 ATLAS_PORT="$PORT" \
