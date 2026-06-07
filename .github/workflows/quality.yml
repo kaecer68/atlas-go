@@ -169,6 +169,24 @@ jobs:
     - name: Check markdown links
       run: bash scripts/ci/check_markdown_links.sh
 
+  # AGENTS.md line count gate — prevents token bloat by enforcing
+  # ≤ 150 lines of human-written content (before auto-injected blocks).
+  agents-md-lines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Check AGENTS.md human-written line count
+        run: |
+          HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/{exit} {count++} END{print count}' AGENTS.md)
+          echo "Human-written AGENTS.md lines: $HUMAN_LINES"
+          if [ "$HUMAN_LINES" -gt 150 ]; then
+            echo "ERROR: AGENTS.md has $HUMAN_LINES lines (limit: 150)."
+            echo "Move content to internal/<mod>/AGENTS.md or docs/ before re-expansion."
+            exit 1
+          fi
+          echo "OK: AGENTS.md is within 150-line budget."
+
   # License check
   license:
     runs-on: ubuntu-latest
