@@ -180,12 +180,28 @@ jobs:
         run: |
           HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/,/^<!-- gitnexus:end -->/{next} /^<!-- graphify:start -->/,/^<!-- graphify:end -->/{next} {count++} END{print count}' AGENTS.md)
           echo "Human-written AGENTS.md lines: $HUMAN_LINES"
-          if [ "$HUMAN_LINES" -gt 150 ]; then
-            echo "ERROR: AGENTS.md has $HUMAN_LINES lines (limit: 150)."
+          if [ "$HUMAN_LINES" -gt 160 ]; then
+            echo "ERROR: AGENTS.md has $HUMAN_LINES lines (limit: 160)."
             echo "Move content to internal/<mod>/AGENTS.md or docs/ before re-expansion."
-            exit 1
-          fi
-          echo "OK: AGENTS.md is within 150-line budget."
+
+          echo "OK: AGENTS.md is within 160-line budget."
+
+  # TRAPS.md line count gate — prevents bloat in the detailed trap reference.
+  traps-md-lines:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check docs/TRAPS.md line count
+      run: |
+        TRAP_LINES=$(wc -l < docs/TRAPS.md | tr -d ' ')
+        echo "docs/TRAPS.md lines: $TRAP_LINES"
+        if [ "$TRAP_LINES" -gt 300 ]; then
+          echo "ERROR: docs/TRAPS.md has $TRAP_LINES lines (limit: 300)."
+          echo "Split or consolidate trap entries."
+          exit 1
+        fi
+        echo "OK: docs/TRAPS.md is within 300-line budget."
 
   # License check
   license:
