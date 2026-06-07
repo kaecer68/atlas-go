@@ -90,7 +90,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 	}
 
 	if r.covMatrix != nil && len(r.covSymbols) > 0 && r.portWeights != nil {
-		return r.runScenarioCov(scenario, vix, volScale)
+		return r.runScenarioCov(scenario, recs, vix, volScale)
 	}
 
 	goldSyms := map[string]bool{"GLD": true, "IAU": true, "00635U": true, "SLV": true}
@@ -149,7 +149,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 	}
 }
 
-func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) ScenarioResult {
+func (r *Runner) runScenarioCov(scenario Scenario, recs []domain.Recommendation, vix, volScale float64) ScenarioResult {
 	W := max(scenario.WindowDays, 1)
 	N := len(r.covSymbols)
 	weightSlice := make([]float64, N)
@@ -172,6 +172,7 @@ func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) Scenar
 		baseDrift = volScale * 0.005
 	}
 	for t := 0; t < W; t++ {
+		decay := decayFactor(t, W)
 		z := make([]float64, N)
 		for i := 0; i < N; i++ {
 			z[i] = boxMullerStress(rng)
@@ -182,7 +183,7 @@ func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) Scenar
 			for j := 0; j <= i; j++ {
 				ri += L[i][j] * z[j]
 			}
-			portRet += weightSlice[i] * ri * volScale * 0.02
+			portRet += weightSlice[i] * ri * volScale * 0.02 * decay
 		}
 		portRet += baseDrift
 		values[t+1] = values[t] * (1 + portRet)
@@ -195,7 +196,7 @@ func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) Scenar
 	totalRet := values[W] - 1.0
 	return ScenarioResult{
 		ScenarioID: scenario.ID, ScenarioName: scenario.Name, TotalReturn: totalRet,
-		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: 0,
+		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: len(recs),
 		FinalRegime: scenario.Regime, MomentumDisabled: vix > 30,
 		RecoveryDays: recovery, MaxConsecutiveLossDays: consecutive, DailyValues: values,
 	}
