@@ -57,6 +57,7 @@ type FactorScoreBreakdown struct {
 	PreciousMetals         FactorScoreItem `json:"precious_metals,omitempty"`
 	ETF                    FactorScoreItem `json:"etf,omitempty"`
 	Linkage                FactorScoreItem `json:"linkage,omitempty"`
+	TSMC                   FactorScoreItem `json:"tsmc,omitempty"`
 	Total                  FactorScoreItem `json:"total"`
 }
 
@@ -72,6 +73,7 @@ type FactorScores struct {
 	PreciousMetals         float64               `json:"precious_metals,omitempty"`
 	ETF                    float64               `json:"etf,omitempty"`
 	Linkage                float64               `json:"linkage,omitempty"`
+	TSMC                   float64               `json:"tsmc,omitempty"`
 	Total                  float64               `json:"total"`
 	Breakdown              *FactorScoreBreakdown `json:"breakdown,omitempty"`
 }
