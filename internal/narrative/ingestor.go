@@ -983,9 +983,9 @@ func detectDeepSeekEventFromSnapshot(currSOX, currNVDA, currTSMADR marketdata.Ma
 		TimeWindow:       "immediate",
 		Timestamp:        now,
 		SourceData: map[string]float64{
-			"sox_change_pct":     currSOX.ChangePct,
-			"nvda_change_pct":    currNVDA.ChangePct,
-			"tsmadr_change_pct":  currTSMADR.ChangePct,
+			"sox_change_pct":    currSOX.ChangePct,
+			"nvda_change_pct":   currNVDA.ChangePct,
+			"tsmadr_change_pct": currTSMADR.ChangePct,
 		},
 	}
 }

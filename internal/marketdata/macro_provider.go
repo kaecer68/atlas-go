@@ -49,6 +49,7 @@ type MacroDataSnapshot struct {
 	NVDA                MacroDataPoint `json:"nvda"`
 	AAPL                MacroDataPoint `json:"aapl"`
 	MSFT                MacroDataPoint `json:"msft"`
+	TAIEX               MacroDataPoint `json:"taiex"`
 	RecordedAt          int64          `json:"recorded_at"`
 }
 
@@ -208,6 +209,9 @@ func mergeSnapshot(dst *MacroDataSnapshot, src MacroDataSnapshot) {
 	}
 	if src.MSFT.Symbol != "" {
 		dst.MSFT = src.MSFT
+	}
+	if src.TAIEX.Symbol != "" {
+		dst.TAIEX = src.TAIEX
 	}
 	if src.RecordedAt > dst.RecordedAt {
 		dst.RecordedAt = src.RecordedAt

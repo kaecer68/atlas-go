@@ -250,6 +250,75 @@ func equalWeights() StressIndexWeights {
 	}
 }
 
+// RegimeCorrelation holds the 4-tier regime-dependent correlation coefficients
+// between US and Taiwan equity markets, as empirically observed in 2024-2025 data.
+// These replace any hardcoded constant-correlation assumptions in cross-market
+// risk models with empirically grounded regime-switching values.
+type RegimeCorrelation struct {
+	// Calm market (VIX < 15): ρ ≈ 0.35-0.40 — normal trading, no systemic shock
+	Calm float64 `json:"calm"`
+	// AI-driven positive cycle (VIX 15-25, SOX/NVDA trending up): ρ ≈ 0.55-0.70
+	// TSMC heavily benefits from AI capex, creating concentrated US-TW linkage
+	AIBoom float64 `json:"ai_boom"`
+	// Systemic stress (VIX 25-35, risk-off): ρ ≈ 0.80-0.93
+	// Foreign capital accelerates withdrawal, correlations surge globally
+	SystemicStress float64 `json:"systemic_stress"`
+	// Tariff/geopolitical shock (VIX ≥ 35, Taiwan-specific policy risk): ρ ≈ 0.85-0.95
+	// Direct trade-policy impact on Taiwan creates near-perfect correlation
+	TariffGeopolitical float64 `json:"tariff_geopolitical"`
+}
+
+// DefaultRegimeCorrelation returns empirically calibrated regime correlation
+// coefficients based on the 2024-2025 US-TW equity market study.
+// Values are midpoints of the observed ranges:
+//
+//	Calm:             0.375  (observed range 0.35–0.40)
+//	AIBoom:           0.625  (observed range 0.55–0.70)
+//	SystemicStress:   0.865  (observed range 0.80–0.93)
+//	TariffGeopolitical: 0.90  (observed range 0.85–0.95)
+func DefaultRegimeCorrelation() RegimeCorrelation {
+	return RegimeCorrelation{
+		Calm:               0.375,
+		AIBoom:             0.625,
+		SystemicStress:     0.865,
+		TariffGeopolitical: 0.90,
+	}
+}
+
+// GetRegimeCorrelation returns the appropriate correlation coefficient for the
+// current VIX level. The mapping uses the same VIX thresholds as classifyRegime:
+//
+//	VIX < 15          → Calm (0.375)
+//	VIX [15, 25)      → AIBoom (0.625)
+//	VIX [25, 35)      → SystemicStress (0.865)
+//	VIX ≥ 35           → TariffGeopolitical (0.90)
+//
+// An optional aiBoomOverride flag can force AIBoom regime when VIX levels are
+// normal but AI/tech sentiment is driving concentrated US-TW linkage (e.g.,
+// NVDA earnings season, TSMC capex announcements).
+func GetRegimeCorrelation(vix float64, aiBoomOverride bool) float64 {
+	rc := DefaultRegimeCorrelation()
+	regime := classifyRegime(vix)
+	switch regime {
+	case RegimeBull:
+		if aiBoomOverride {
+			return rc.AIBoom
+		}
+		return rc.Calm
+	case RegimeNormal:
+		if aiBoomOverride {
+			return rc.AIBoom
+		}
+		return rc.AIBoom // Normal VIX + AI cycle → AIBoom regime
+	case RegimeBear:
+		return rc.SystemicStress
+	case RegimeCrisis:
+		return rc.TariffGeopolitical
+	default:
+		return rc.AIBoom
+	}
+}
+
 // filterByRegime filters calibration records to only those whose VIX value
 // falls within the specified regime's range.
 func filterByRegime(records []CalibrationRecord, regime MarketRegime) []CalibrationRecord {
