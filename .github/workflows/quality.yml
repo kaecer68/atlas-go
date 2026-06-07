@@ -170,7 +170,8 @@ jobs:
       run: bash scripts/ci/check_markdown_links.sh
 
   # AGENTS.md line count gate — prevents token bloat by enforcing
-  # ≤ 150 lines of human-written content (before auto-injected blocks).
+  # ≤ 160 lines of human-written content (before auto-injected blocks).
+  # Warning at 155 lines, hard fail at 160.
   agents-md-lines:
     runs-on: ubuntu-latest
     steps:
@@ -181,9 +182,14 @@ jobs:
           HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/,/^<!-- gitnexus:end -->/{next} /^<!-- graphify:start -->/,/^<!-- graphify:end -->/{next} {count++} END{print count}' AGENTS.md)
           echo "Human-written AGENTS.md lines: $HUMAN_LINES"
           if [ "$HUMAN_LINES" -gt 160 ]; then
-            echo "ERROR: AGENTS.md has $HUMAN_LINES lines (limit: 160)."
+            echo "ERROR: AGENTS.md has $HUMAN_LINES lines (hard limit: 160)."
             echo "Move content to internal/<mod>/AGENTS.md or docs/ before re-expansion."
-
+            exit 1
+          fi
+          if [ "$HUMAN_LINES" -gt 155 ]; then
+            echo "WARNING: AGENTS.md has $HUMAN_LINES lines (soft limit: 155, hard limit: 160)."
+            echo "Consider moving content to internal/<mod>/AGENTS.md or docs/."
+          fi
           echo "OK: AGENTS.md is within 160-line budget."
 
   # TRAPS.md line count gate — prevents bloat in the detailed trap reference.
@@ -202,6 +208,64 @@ jobs:
           exit 1
         fi
         echo "OK: docs/TRAPS.md is within 300-line budget."
+
+    - name: Check docs/TRAPS.md module attribution
+      run: |
+        echo "Checking TRAPS.md module column..."
+        # Count table rows that are missing module attribution
+        # A valid row should have: | trap | module | description |
+        MISSING=0
+        # Extract table rows (lines starting with | but not the header separator |---|)
+        while IFS= read -r line; do
+          # Skip header separator lines
+          if echo "$line" | grep -qE '^\|[-\s|]+\|$'; then
+            continue
+          fi
+          # Count pipe-delimited fields
+          FIELDS=$(echo "$line" | awk -F'|' '{print NF-1}')
+          if [ "$FIELDS" -lt 3 ]; then
+            echo "❌ Missing module column: $line"
+            MISSING=$((MISSING + 1))
+          fi
+        done < <(grep '^|' docs/TRAPS.md)
+        if [ "$MISSING" -gt 0 ]; then
+          echo "ERROR: $MISSING trap row(s) missing module attribution."
+          exit 1
+        fi
+        echo "OK: All traps have module attribution."
+
+  # Agents consistency check — ensures all referenced AGENTS.md files exist
+  # and the module routing table is synchronized with reality.
+  agents-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Verify AGENTS.md references exist
+        run: |
+          echo "Checking AGENTS.md module references..."
+          MISSING=0
+          # Extract all internal/*/AGENTS.md and internal/*/CONSTITUTION.md paths
+          for ref in $(grep -oE 'internal/[a-zA-Z0-9_-]+/(AGENTS|CONSTITUTION)\.md' AGENTS.md | sort -u); do
+            if [ ! -f "$ref" ]; then
+              echo "❌ Missing: $ref (referenced in AGENTS.md but not found)"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✅ $ref"
+            fi
+          done
+          # Also verify internal/AGENTS_INDEX.md exists
+          if [ ! -f "internal/AGENTS_INDEX.md" ]; then
+            echo "❌ Missing: internal/AGENTS_INDEX.md"
+            MISSING=$((MISSING + 1))
+          else
+            echo "✅ internal/AGENTS_INDEX.md"
+          fi
+          if [ "$MISSING" -gt 0 ]; then
+            echo "ERROR: $MISSING referenced file(s) missing."
+            exit 1
+          fi
+          echo "All AGENTS.md references are consistent."
 
   # License check
   license:
