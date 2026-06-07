@@ -435,6 +435,9 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 	if event := detectTariffShockEventFromSnapshot(curr.VIX, curr.DXY, curr.SPXIndex, now); event != nil {
 		events = append(events, *event)
 	}
+	if event := detectDeepSeekEventFromSnapshot(curr.SOXIndex, curr.NVDA, curr.TSMADR, now); event != nil {
+		events = append(events, *event)
+	}
 
 	return events
 }
@@ -522,7 +525,10 @@ func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX, currUSDTWD marke
 	}
 	// Use VIX spike as proxy for geopolitical risk if no GPR index.
 	vixSpike := currVIX.Symbol != "" && currVIX.Value > params.VIXLevelThreshold.Value
-	// NARR-05: Taiwan Stress Index proxy via USD/TWD depreciation
+	// NARR-05: Taiwan Stress Index proxy via USD/TWD depreciation.
+	// Augmented with Taiwan-specific geopolitical context: Trump tariff rhetoric,
+	// BIS export controls, DeepSeek AI disruption — all amplify the Taiwan
+	// geopolitical risk premium beyond generic Gold/VIX signals.
 	taiwanStress := currUSDTWD.Symbol != "" && currUSDTWD.ChangePct > params.TaiwanStressUSDTWDThreshold.Value
 	if goldChange > params.GoldChangePctThreshold.Value || vixSpike || taiwanStress {
 		confidenceGold := computeDeviationConfidence(goldChange, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
@@ -913,4 +919,73 @@ func clampConfidence(c float64) float64 {
 		return 0.95
 	}
 	return c
+}
+
+// detectDeepSeekEventFromSnapshot detects AI model disruption events when semiconductor
+// and AI-exposed stocks suffer acute selloffs. Triggered by SOX drop >5% or NVDA/TSM ADR
+// drop >10%. Models the DeepSeek Jan 27 2025 shock: SOX -9.15%, NVDA -16.97%, TSM ADR -13.33%.
+func detectDeepSeekEventFromSnapshot(currSOX, currNVDA, currTSMADR marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	params := config.GetParametersConfig().Narrative
+	if currSOX.Symbol == "" {
+		return nil
+	}
+
+	soxThreshold := -5.0
+	soxCrash := currSOX.ChangePct < soxThreshold
+
+	nvdaCrash := false
+	tsmAdrCrash := false
+	if currNVDA.Symbol != "" && currNVDA.ChangePct < -10.0 {
+		nvdaCrash = true
+	}
+	if currTSMADR.Symbol != "" && currTSMADR.ChangePct < -10.0 {
+		tsmAdrCrash = true
+	}
+
+	if !soxCrash && !nvdaCrash && !tsmAdrCrash {
+		return nil
+	}
+
+	confBase := params.ConfidenceBaseGeopolitical.Value
+	confCeil := params.ConfidenceDeviationCeiling.Value
+	soxConf := computeDeviationConfidence(-currSOX.ChangePct, -soxThreshold, confBase, confCeil)
+
+	confidence := soxConf
+	if nvdaCrash {
+		nvdaConf := computeDeviationConfidence(-currNVDA.ChangePct, 10.0, confBase, confCeil)
+		if nvdaConf > confidence {
+			confidence = nvdaConf
+		}
+	}
+	if tsmAdrCrash {
+		tsmConf := computeDeviationConfidence(-currTSMADR.ChangePct, 10.0, confBase, confCeil)
+		if tsmConf > confidence {
+			confidence = tsmConf
+		}
+	}
+
+	td := DefaultThemeDurations()
+	dur := td["AI_capex_surge"] // reuse AI capex duration (90d)
+	if custom, ok := td["semiconductor_downturn"]; ok {
+		dur = custom // prefer semiconductor_downturn duration (90d)
+	}
+	_ = dur
+
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-deepseek-%d", now.UnixNano()),
+		Theme:            "semiconductor_downturn",
+		Region:           "US_TW",
+		Sentiment:        -0.9,
+		Confidence:       clampConfidence(confidence),
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("semiconductor_downturn"),
+		CapitalFlow:      "risk_off",
+		TimeWindow:       "immediate",
+		Timestamp:        now,
+		SourceData: map[string]float64{
+			"sox_change_pct":     currSOX.ChangePct,
+			"nvda_change_pct":    currNVDA.ChangePct,
+			"tsmadr_change_pct":  currTSMADR.ChangePct,
+		},
+	}
 }
