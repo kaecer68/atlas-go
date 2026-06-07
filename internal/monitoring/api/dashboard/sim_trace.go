@@ -25,9 +25,8 @@ func (h *Handlers) HandleSimLatest(r *http.Request) (int, any) {
 	}
 
 	if len(matches) == 0 {
-		return http.StatusNotFound, map[string]string{
-			"error": "no simulation trace files found",
-		}
+		// No traces yet — not an error, return empty state.
+		return http.StatusOK, []orchestrator.SimTraceRecord{}
 	}
 
 	sort.Slice(matches, func(i, j int) bool {

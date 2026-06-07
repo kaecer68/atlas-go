@@ -21,9 +21,9 @@
       "ticket": "atlas-go#390"
     },
     {
-      "pattern": "Failed to load resource.*404",
-      "reason": "Intermittent 404 for browser-internal requests — only in CI, not local. TODO: narrow after next CI run reveals exact URLs via new [404] logging in run.mjs",
-      "ticket": "atlas-go#390"
+      "pattern": "Failed to load resource.*404.*",
+      "reason": "SimTrace handler returns 404 when no trace files exist — frontend handles it gracefully but Chrome logs it. TODO: remove after handler fix (200+empty) is verified in CI",
+      "ticket": "atlas-go#391"
     }
   ]
 }
