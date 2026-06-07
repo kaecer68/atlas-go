@@ -93,13 +93,13 @@ func NewRateLimitManager() *RateLimitManager {
 			// US indexes + tech stocks + TSM ADR all share the Yahoo Finance v8 chart
 			// API endpoint with the existing us_yahoo macro channel. Per Constitution
 			// Art. 2.3, shared endpoints must use a single rate.Limiter instance.
-			"us_spx":              yahooSharedLimiter,
-			"us_ndx":              yahooSharedLimiter,
-			"us_dji":              yahooSharedLimiter,
-			"us_nvda":             yahooSharedLimiter,
-			"us_aapl":             yahooSharedLimiter,
-			"us_msft":             yahooSharedLimiter,
-			"tsm_adr":             yahooSharedLimiter,
+			"us_spx":  yahooSharedLimiter,
+			"us_ndx":  yahooSharedLimiter,
+			"us_dji":  yahooSharedLimiter,
+			"us_nvda": yahooSharedLimiter,
+			"us_aapl": yahooSharedLimiter,
+			"us_msft": yahooSharedLimiter,
+			"tsm_adr": yahooSharedLimiter,
 		},
 	}
 }
