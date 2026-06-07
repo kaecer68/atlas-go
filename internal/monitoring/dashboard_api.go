@@ -484,15 +484,6 @@ func (a *DashboardAPI) GetLatestMacroSnapshot() (marketdata.MacroDataSnapshot, b
 
 // loadSnapshotIntoNarrativeEngine loads the latest snapshot from disk into the narrative engine.
 // Used as fallback when live ingestion fails to ensure stress index has data.
-func (a *DashboardAPI) loadSnapshotIntoNarrativeEngine() {
-	snap, ok := a.GetLatestMacroSnapshot()
-	if !ok {
-		return
-	}
-	indicators := industry.ExtractSiliconIndicators(snap)
-	a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
-}
-
 func (a *DashboardAPI) SetContext(ctx context.Context) {
 	if a.outcomeStore != nil && ctx != nil {
 		a.outcomeStore.SetContext(ctx)

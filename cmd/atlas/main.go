@@ -2337,7 +2337,7 @@ func narrativeActiveThemes(mgr *narrative.EventLifecycleManager) []string {
 	events := mgr.GetActiveEvents()
 	themes := make([]string, len(events))
 	for i, ev := range events {
-		themes[i] = string(ev.Theme)
+		themes[i] = ev.Theme
 	}
 	return themes
 }
