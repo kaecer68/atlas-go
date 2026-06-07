@@ -1,0 +1,83 @@
+package globalmarket
+
+import (
+	"math"
+	"sync"
+)
+
+// RollingCorrelation computes a rolling Pearson correlation between two return
+// series using a ring buffer. Default window is 20 observations (~1 trading month).
+type RollingCorrelation struct {
+	mu         sync.RWMutex
+	window     int
+	xs         []float64
+	ys         []float64
+	pos        int
+	count      int
+	currentRho float64
+}
+
+// NewRollingCorrelation creates a rolling correlation tracker with the given
+// window size. Default 20 if window <= 0.
+func NewRollingCorrelation(window int) *RollingCorrelation {
+	if window <= 0 {
+		window = 20
+	}
+	return &RollingCorrelation{
+		window: window,
+		xs:     make([]float64, window),
+		ys:     make([]float64, window),
+	}
+}
+
+// Update pushes a new observation pair and recomputes the correlation.
+func (rc *RollingCorrelation) Update(x, y float64) float64 {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	rc.xs[rc.pos] = x
+	rc.ys[rc.pos] = y
+	rc.pos = (rc.pos + 1) % rc.window
+	if rc.count < rc.window {
+		rc.count++
+	}
+
+	n := rc.count
+	if n < 3 {
+		rc.currentRho = 0.5
+		return rc.currentRho
+	}
+
+	var sumX, sumY, sumXY, sumX2, sumY2 float64
+	for i := 0; i < n; i++ {
+		xi := rc.xs[i]
+		yi := rc.ys[i]
+		sumX += xi
+		sumY += yi
+		sumXY += xi * yi
+		sumX2 += xi * xi
+		sumY2 += yi * yi
+	}
+
+	num := float64(n)*sumXY - sumX*sumY
+	denX := float64(n)*sumX2 - sumX*sumX
+	denY := float64(n)*sumY2 - sumY*sumY
+
+	if denX <= 0 || denY <= 0 {
+		rc.currentRho = 0.5
+		return rc.currentRho
+	}
+
+	rc.currentRho = num / math.Sqrt(denX*denY)
+	if math.IsNaN(rc.currentRho) || math.IsInf(rc.currentRho, 0) {
+		rc.currentRho = 0.5
+	}
+	return rc.currentRho
+}
+
+// GetCurrent returns the latest rolling correlation value.
+func (rc *RollingCorrelation) GetCurrent() float64 {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
+	return rc.currentRho
+}

@@ -83,6 +83,7 @@ type DashboardAPI struct {
 	drawdownMu         sync.RWMutex
 	eventLogicHandlers *apieventlogic.Handlers
 	calibrationTask    *narrative.CalibrationTask
+	crisisModeSetter   func(active bool) // callback: VIX>=35 → optimizer crisis mode
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -880,6 +881,20 @@ func (a *DashboardAPI) SetLatestDrawdown(d *portfolio.DrawdownResult) {
 	a.drawdownMu.Lock()
 	defer a.drawdownMu.Unlock()
 	a.latestDrawdown = d
+}
+
+// SetCrisisModeSetter registers a callback invoked when macro ingest detects
+// VIX >= 35 so the optimizer can enable crisis mode (covariance inflation).
+func (a *DashboardAPI) SetCrisisModeSetter(fn func(active bool)) {
+	a.crisisModeSetter = fn
+}
+
+// InvokeCrisisModeSetter calls the registered crisis mode setter with the given
+// active flag. Safe no-op if no setter is registered.
+func (a *DashboardAPI) InvokeCrisisModeSetter(active bool) {
+	if a.crisisModeSetter != nil {
+		a.crisisModeSetter(active)
+	}
 }
 
 // GetLatestDrawdown returns the latest drawdown result, or nil.

@@ -51,6 +51,9 @@ func main() {
 		marketdata.NewNDXIndexProvider(),
 		marketdata.NewDJIIndexProvider(),
 		marketdata.NewTSMADRProvider(),
+		marketdata.NewNVDAProvider(),
+		marketdata.NewAAPLProvider(),
+		marketdata.NewMSFTProvider(),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)

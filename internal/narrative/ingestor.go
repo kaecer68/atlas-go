@@ -224,6 +224,15 @@ func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroData
 	if curr.DJIIndex.Symbol == "" {
 		curr.DJIIndex = prev.DJIIndex
 	}
+	if curr.NVDA.Symbol == "" {
+		curr.NVDA = prev.NVDA
+	}
+	if curr.AAPL.Symbol == "" {
+		curr.AAPL = prev.AAPL
+	}
+	if curr.MSFT.Symbol == "" {
+		curr.MSFT = prev.MSFT
+	}
 	return curr
 }
 

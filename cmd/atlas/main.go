@@ -1037,6 +1037,8 @@ func run(args []string, deps appDeps) error {
 								}
 							}
 						}
+						// Propagate VIX signal to optimizer crisis mode.
+						dashRef.InvokeCrisisModeSetter(snap.VIX.Value >= 35.0)
 						// EventLogic cross-market rule evaluation against live data.
 						if elValidator != nil && snap.RecordedAt > 0 {
 							fired := eventlogic.EvaluateActiveRules(elValidator, snap)
