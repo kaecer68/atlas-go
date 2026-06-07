@@ -86,7 +86,7 @@ func (e *ExchangeRateProvider) FetchSnapshot(ctx context.Context) (MacroDataSnap
 			ChangePct: 0,
 			Timestamp: time.Now().Unix(),
 		}
-		logging.Warn("exchangerate_provider", "jpy_change_pct_unavailable",
+		logging.Info("exchangerate_provider", "jpy_change_pct_unavailable",
 			"reason", "free tier lacks historical endpoint",
 			"recommendation", "use FrankfurterFXProvider for daily change tracking")
 	}

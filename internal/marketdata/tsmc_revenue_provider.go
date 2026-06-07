@@ -40,7 +40,7 @@ func (p *TSMCRevenueProvider) FetchSnapshot(ctx context.Context) (MacroDataSnaps
 
 	current, prior, err := p.fetchWithFallback(ctx, year, month)
 	if err != nil {
-		logging.Warn("tsmc_revenue_provider", "fetch_failed", logging.Err(err))
+		logging.Info("tsmc_revenue_provider", "fetch_failed_falling_back_to_cache", logging.Err(err))
 		return p.loadLatestSnapshot()
 	}
 

@@ -3,7 +3,10 @@ package marketdata
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // MacroDataPoint represents a single macro indicator reading.
@@ -71,104 +74,41 @@ func (c *CompositeMacroProvider) Name() string {
 }
 
 // FetchSnapshot merges snapshots from all providers (last write wins).
+// Each provider is given a 10-second timeout via a goroutine wrapper to prevent
+// any single provider from hanging the entire bootstrap sequence.
 func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	var merged MacroDataSnapshot
 	var errs []error
+	providerTimeout := 10 * time.Second
+
 	for _, p := range c.providers {
-		snap, err := p.FetchSnapshot(ctx)
-		if err != nil {
-			errs = append(errs, err)
+		type res struct {
+			snap MacroDataSnapshot
+			err  error
+		}
+		ch := make(chan res, 1)
+		go func(prov MacroDataProvider) {
+			s, e := prov.FetchSnapshot(ctx)
+			ch <- res{s, e}
+		}(p)
+
+		select {
+		case <-ctx.Done():
+			errs = append(errs, ctx.Err())
 			continue
-		}
-		if snap.US10Y.Symbol != "" {
-			merged.US10Y = snap.US10Y
-		}
-		if snap.DXY.Symbol != "" {
-			merged.DXY = snap.DXY
-		}
-		if snap.VIX.Symbol != "" {
-			merged.VIX = snap.VIX
-		}
-		if snap.USD_TWD.Symbol != "" {
-			merged.USD_TWD = snap.USD_TWD
-		}
-		if snap.Oil.Symbol != "" {
-			merged.Oil = snap.Oil
-		}
-		if snap.Gold.Symbol != "" {
-			merged.Gold = snap.Gold
-		}
-		if snap.JPY.Symbol != "" {
-			merged.JPY = snap.JPY
-		}
-		if snap.ForeignInvestorNet.Symbol != "" {
-			merged.ForeignInvestorNet = snap.ForeignInvestorNet
-		}
-		if snap.DomesticFundNet.Symbol != "" {
-			merged.DomesticFundNet = snap.DomesticFundNet
-		}
-		if snap.DealerNet.Symbol != "" {
-			merged.DealerNet = snap.DealerNet
-		}
-		if snap.ExportElectronics.Symbol != "" {
-			merged.ExportElectronics = snap.ExportElectronics
-		}
-		if snap.RetailMarginBalance.Symbol != "" {
-			merged.RetailMarginBalance = snap.RetailMarginBalance
-		}
-		if snap.RetailShortBalance.Symbol != "" {
-			merged.RetailShortBalance = snap.RetailShortBalance
-		}
-		if snap.TSMCRevenue.Symbol != "" {
-			merged.TSMCRevenue = snap.TSMCRevenue
-		}
-		if snap.SOXIndex.Symbol != "" {
-			merged.SOXIndex = snap.SOXIndex
-		}
-		if snap.DRAMSpotPrice.Symbol != "" {
-			merged.DRAMSpotPrice = snap.DRAMSpotPrice
-		}
-		if snap.CoWoSUtilization.Symbol != "" {
-			merged.CoWoSUtilization = snap.CoWoSUtilization
-		}
-		if snap.CapexGrowth.Symbol != "" {
-			merged.CapexGrowth = snap.CapexGrowth
-		}
-		if snap.CPIYoY.Symbol != "" {
-			merged.CPIYoY = snap.CPIYoY
-		}
-		if snap.Bdi.Symbol != "" {
-			merged.Bdi = snap.Bdi
-		}
-		if snap.Silver.Symbol != "" {
-			merged.Silver = snap.Silver
-		}
-		if snap.Copper.Symbol != "" {
-			merged.Copper = snap.Copper
-		}
-		if snap.TSMADR.Symbol != "" {
-			merged.TSMADR = snap.TSMADR
-		}
-		if snap.SPXIndex.Symbol != "" {
-			merged.SPXIndex = snap.SPXIndex
-		}
-		if snap.NDXIndex.Symbol != "" {
-			merged.NDXIndex = snap.NDXIndex
-		}
-		if snap.DJIIndex.Symbol != "" {
-			merged.DJIIndex = snap.DJIIndex
-		}
-		if snap.NVDA.Symbol != "" {
-			merged.NVDA = snap.NVDA
-		}
-		if snap.AAPL.Symbol != "" {
-			merged.AAPL = snap.AAPL
-		}
-		if snap.MSFT.Symbol != "" {
-			merged.MSFT = snap.MSFT
-		}
-		if snap.RecordedAt > merged.RecordedAt {
-			merged.RecordedAt = snap.RecordedAt
+		case <-time.After(providerTimeout):
+			errs = append(errs, fmt.Errorf("%s: timed out after %v", p.Name(), providerTimeout))
+			logging.Warn("marketdata", "provider_timeout",
+				"provider", p.Name(),
+				"timeout", providerTimeout.String(),
+			)
+			continue
+		case r := <-ch:
+			if r.err != nil {
+				errs = append(errs, r.err)
+				continue
+			}
+			mergeSnapshot(&merged, r.snap)
 		}
 	}
 	if merged.RecordedAt == 0 {
@@ -178,4 +118,98 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		return merged, errors.Join(errs...)
 	}
 	return merged, nil
+}
+
+// mergeSnapshot copies non-zero fields from src into dst (last-write-wins).
+func mergeSnapshot(dst *MacroDataSnapshot, src MacroDataSnapshot) {
+	if src.US10Y.Symbol != "" {
+		dst.US10Y = src.US10Y
+	}
+	if src.DXY.Symbol != "" {
+		dst.DXY = src.DXY
+	}
+	if src.VIX.Symbol != "" {
+		dst.VIX = src.VIX
+	}
+	if src.USD_TWD.Symbol != "" {
+		dst.USD_TWD = src.USD_TWD
+	}
+	if src.Oil.Symbol != "" {
+		dst.Oil = src.Oil
+	}
+	if src.Gold.Symbol != "" {
+		dst.Gold = src.Gold
+	}
+	if src.JPY.Symbol != "" {
+		dst.JPY = src.JPY
+	}
+	if src.ForeignInvestorNet.Symbol != "" {
+		dst.ForeignInvestorNet = src.ForeignInvestorNet
+	}
+	if src.DomesticFundNet.Symbol != "" {
+		dst.DomesticFundNet = src.DomesticFundNet
+	}
+	if src.DealerNet.Symbol != "" {
+		dst.DealerNet = src.DealerNet
+	}
+	if src.ExportElectronics.Symbol != "" {
+		dst.ExportElectronics = src.ExportElectronics
+	}
+	if src.RetailMarginBalance.Symbol != "" {
+		dst.RetailMarginBalance = src.RetailMarginBalance
+	}
+	if src.RetailShortBalance.Symbol != "" {
+		dst.RetailShortBalance = src.RetailShortBalance
+	}
+	if src.TSMCRevenue.Symbol != "" {
+		dst.TSMCRevenue = src.TSMCRevenue
+	}
+	if src.SOXIndex.Symbol != "" {
+		dst.SOXIndex = src.SOXIndex
+	}
+	if src.DRAMSpotPrice.Symbol != "" {
+		dst.DRAMSpotPrice = src.DRAMSpotPrice
+	}
+	if src.CoWoSUtilization.Symbol != "" {
+		dst.CoWoSUtilization = src.CoWoSUtilization
+	}
+	if src.CapexGrowth.Symbol != "" {
+		dst.CapexGrowth = src.CapexGrowth
+	}
+	if src.CPIYoY.Symbol != "" {
+		dst.CPIYoY = src.CPIYoY
+	}
+	if src.Bdi.Symbol != "" {
+		dst.Bdi = src.Bdi
+	}
+	if src.Silver.Symbol != "" {
+		dst.Silver = src.Silver
+	}
+	if src.Copper.Symbol != "" {
+		dst.Copper = src.Copper
+	}
+	if src.TSMADR.Symbol != "" {
+		dst.TSMADR = src.TSMADR
+	}
+	if src.SPXIndex.Symbol != "" {
+		dst.SPXIndex = src.SPXIndex
+	}
+	if src.NDXIndex.Symbol != "" {
+		dst.NDXIndex = src.NDXIndex
+	}
+	if src.DJIIndex.Symbol != "" {
+		dst.DJIIndex = src.DJIIndex
+	}
+	if src.NVDA.Symbol != "" {
+		dst.NVDA = src.NVDA
+	}
+	if src.AAPL.Symbol != "" {
+		dst.AAPL = src.AAPL
+	}
+	if src.MSFT.Symbol != "" {
+		dst.MSFT = src.MSFT
+	}
+	if src.RecordedAt > dst.RecordedAt {
+		dst.RecordedAt = src.RecordedAt
+	}
 }

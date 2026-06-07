@@ -305,13 +305,16 @@ func run(args []string, deps appDeps) error {
 		}
 
 		// Start fubon-proxy process manager (non-fatal on failure).
-		fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
-		if err := fubonMgr.Start(context.Background()); err != nil {
-			log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
-		} else {
-			log.Printf("[FubonProxy] process manager started")
+		// In dry-run mode, fubon-proxy is skipped — it requires live broker credentials.
+		if *brokerMode != "dry-run" {
+			fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
+			if err := fubonMgr.Start(context.Background()); err != nil {
+				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
+			} else {
+				log.Printf("[FubonProxy] process manager started")
+			}
+			defer fubonMgr.Stop()
 		}
-		defer fubonMgr.Stop()
 
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
