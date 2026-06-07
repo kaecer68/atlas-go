@@ -210,6 +210,7 @@ type RealTimeAdapter struct {
 	params         *config.RealtimeParameters
 	stopChan       chan struct{}
 	mu             sync.RWMutex
+	stopOnce       sync.Once
 	onRegimeChange func(symbol string, oldRegime, newRegime RegimeType)
 }
 
@@ -279,9 +280,11 @@ func (rta *RealTimeAdapter) Start(ctx context.Context) {
 	}
 }
 
-// Stop halts real-time monitoring
+// Stop halts real-time monitoring. Safe to call multiple times (idempotent via sync.Once).
 func (rta *RealTimeAdapter) Stop() {
-	close(rta.stopChan)
+	rta.stopOnce.Do(func() {
+		close(rta.stopChan)
+	})
 }
 
 // IngestData adds new market data point

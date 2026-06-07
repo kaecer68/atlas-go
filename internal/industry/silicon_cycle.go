@@ -140,11 +140,11 @@ type PhaseTransition struct {
 // SiliconCycleTracker monitors and tracks the semiconductor industry cycle
 // using a 4-phase state machine driven by key silicon industry indicators.
 type SiliconCycleTracker struct {
-	currentPhase     SiliconCyclePhase
-	mu               sync.RWMutex
-	history          []PhaseTransition
-	latestIndicators SiliconIndicators // most recent indicators (updated on every DetectPhase)
-	hasIndicators    bool              // true after at least one DetectPhase call
+	currentPhase      SiliconCyclePhase
+	mu                sync.RWMutex
+	history           []PhaseTransition
+	latestIndicators SiliconIndicators
+	hasIndicators     bool
 }
 
 // NewSiliconCycleTracker creates a new silicon cycle engine initialized to
@@ -173,6 +173,9 @@ func (e *SiliconCycleTracker) DetectPhase(now time.Time, indicators SiliconIndic
 	params := getSiliconParams()
 	prevPhase := e.currentPhase
 	newPhase := e.evaluateTransition(prevPhase, indicators, params)
+
+	e.latestIndicators = indicators
+	e.hasIndicators = true
 
 	if newPhase != prevPhase {
 		e.history = append(e.history, PhaseTransition{
@@ -328,23 +331,19 @@ func (e *SiliconCycleTracker) GetHistory() []PhaseTransition {
 	return result
 }
 
+// GetLatestIndicators returns the most recently observed silicon indicators
+// and whether any have been recorded (false for a fresh tracker).
+func (e *SiliconCycleTracker) GetLatestIndicators() (SiliconIndicators, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.latestIndicators, e.hasIndicators
+}
+
 // GetTransitionCount returns the number of recorded phase transitions.
 func (e *SiliconCycleTracker) GetTransitionCount() int {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return len(e.history)
-}
-
-// GetLatestIndicators returns the most recent silicon indicators, even when
-// no phase transition has occurred. Returns (SiliconIndicators, true) after
-// at least one DetectPhase call, or (SiliconIndicators{}, false) if never called.
-func (e *SiliconCycleTracker) GetLatestIndicators() (SiliconIndicators, bool) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if !e.hasIndicators {
-		return SiliconIndicators{}, false
-	}
-	return e.latestIndicators, true
 }
 
 // Reset resets the engine to PhaseBottomRecovery with an empty history.

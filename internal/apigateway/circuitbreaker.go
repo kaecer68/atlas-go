@@ -105,6 +105,16 @@ func (cb *CircuitBreaker) IsOpen() bool {
 	return cb.State() == StateOpen
 }
 
+// ForceOpen manually opens the circuit breaker regardless of failure count.
+// Used for crisis-driven override (e.g., VIX ≥ 35 detected by MacroRiskAssessment).
+func (cb *CircuitBreaker) ForceOpen() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.state = StateOpen
+	cb.lastFailure = time.Now()
+	cb.failures = cb.maxFailures
+}
+
 // CircuitBreakerManager manages breakers for all channels.
 type CircuitBreakerManager struct {
 	breakers map[string]*CircuitBreaker
@@ -143,6 +153,18 @@ func (m *CircuitBreakerManager) Get(channelID string) (*CircuitBreaker, error) {
 		return nil, fmt.Errorf("unknown channel: %s", channelID)
 	}
 	return cb, nil
+}
+
+// ForceOpen forces a breaker open by channel ID. Returns error if channel unknown.
+func (m *CircuitBreakerManager) ForceOpen(channelID string) error {
+	m.mu.RLock()
+	cb, ok := m.breakers[channelID]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("unknown channel: %s", channelID)
+	}
+	cb.ForceOpen()
+	return nil
 }
 
 // Status returns breaker states for all channels.

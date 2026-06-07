@@ -46,6 +46,14 @@ func main() {
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
 		marketdata.NewExportStatisticsProvider(exportDir),
 		marketdata.NewTWSEMarginBalanceProvider(""),
+		marketdata.NewSOXIndexProvider(),
+		marketdata.NewSPXIndexProvider(),
+		marketdata.NewNDXIndexProvider(),
+		marketdata.NewDJIIndexProvider(),
+		marketdata.NewTSMADRProvider(),
+		marketdata.NewNVDAProvider(),
+		marketdata.NewAAPLProvider(),
+		marketdata.NewMSFTProvider(),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)

@@ -260,3 +260,97 @@ func safePercent(part, total int64) float64 {
 	}
 	return float64(part) / float64(total) * 100
 }
+
+// TAIFEXFutures holds daily TX futures session data including night session.
+type TAIFEXFutures struct {
+	Date       string  `json:"date"`
+	Open       float64 `json:"open"`
+	High       float64 `json:"high"`
+	Low        float64 `json:"low"`
+	Close      float64 `json:"close"`
+	Volume     int64   `json:"volume"`
+	Settlement float64 `json:"settlement"`
+	ChangePct  float64 `json:"change_pct"`
+}
+
+// FetchFutures retrieves the most recent TX futures daily data.
+func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, error) {
+	if err := t.rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limit wait: %w", err)
+	}
+
+	url := t.baseURL + "/DailyMarketReportFutures"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("taifex futures http request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read futures body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("taifex futures api error: status %d, body=%s", resp.StatusCode, string(body))
+	}
+
+	var rawList []taifexFuturesRaw
+	if err := json.Unmarshal(body, &rawList); err != nil {
+		return nil, fmt.Errorf("unmarshal futures response: %w", err)
+	}
+
+	var latest *taifexFuturesRaw
+	var latestDate string
+	for i := range rawList {
+		r := &rawList[i]
+		if r.Contract != "TX" {
+			continue
+		}
+		if r.Date > latestDate {
+			latestDate = r.Date
+			latest = r
+		}
+	}
+
+	if latest == nil {
+		return nil, fmt.Errorf("taifex futures api: no TX contract found")
+	}
+
+	prevClose := parseFloat64(latest.PreviousSettlementPrice)
+	closePrice := parseFloat64(latest.LastPrice)
+	changePct := 0.0
+	if prevClose > 0 {
+		changePct = (closePrice - prevClose) / prevClose * 100
+	}
+
+	return &TAIFEXFutures{
+		Date:       latest.Date,
+		Open:       parseFloat64(latest.Open),
+		High:       parseFloat64(latest.High),
+		Low:        parseFloat64(latest.Low),
+		Close:      closePrice,
+		Volume:     parseInt64(latest.Volume),
+		Settlement: parseFloat64(latest.SettlementPrice),
+		ChangePct:  changePct,
+	}, nil
+}
+
+type taifexFuturesRaw struct {
+	Date                    string `json:"Date"`
+	Contract                string `json:"Contract"`
+	Open                    string `json:"Open"`
+	High                    string `json:"High"`
+	Low                     string `json:"Low"`
+	LastPrice               string `json:"LastPrice"`
+	Volume                  string `json:"Volume"`
+	SettlementPrice         string `json:"SettlementPrice"`
+	PreviousSettlementPrice string `json:"PreviousSettlementPrice"`
+}

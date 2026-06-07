@@ -122,6 +122,12 @@ func (g *Gateway) BreakerStatus() map[string]CircuitBreakerStatus {
 	return g.breakers.Status()
 }
 
+// ForceOpenChannel manually opens a channel's circuit breaker.
+// Used for crisis-driven emergency halt (e.g., MacroRiskAssessment.CrisisActive).
+func (g *Gateway) ForceOpenChannel(channelID string) error {
+	return g.breakers.ForceOpen(channelID)
+}
+
 // Health returns the unified health store.
 func (g *Gateway) Health() *UnifiedHealthStore {
 	return g.health

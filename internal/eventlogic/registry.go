@@ -198,7 +198,7 @@ func (r *RuleRegistry) seedRules() {
 			ID:      "nvidia-earnings-ai-chain",
 			Pattern: "NVIDIA earnings beat → AI supply chain linkage",
 			Conditions: []Condition{
-				{Field: "NarrativeTheme", Operator: "eq", Value: 0.0},
+				{Field: "NarrativeTheme", Operator: "eq", StringValue: "AI_capex_surge"},
 			},
 			AffectedSectors:  []string{"ai_supply_chain", "semiconductor", "electronics"},
 			Direction:        DirUp,

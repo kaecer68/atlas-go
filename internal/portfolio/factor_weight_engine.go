@@ -348,6 +348,15 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorMomentum: delta, FactorLiquidity: delta, FactorNarrative: delta,
 		}
+	case "tariff_shock":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorMomentum:       -delta,
+			FactorQuality:        -delta,
+			FactorNarrative:      delta * 1.5,
+			FactorPreciousMetals: delta,
+			FactorETF:            -delta,
+			FactorAgent:          -delta,
+		}
 	default:
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorInstSent:  delta,

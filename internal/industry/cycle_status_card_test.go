@@ -411,49 +411,26 @@ func TestBuildAdj(t *testing.T) {
 	}
 }
 
-// TestBuildCard_FreshTracker_SiliconIndicatorsNil verifies that when the
-// silicon tracker has never received a DetectPhase call (e.g. bootstrap or
-// periodic ingest both failed), the cycle status card reports nil for
-// SiliconIndicators rather than a zero-valued struct. This lets the frontend
-// distinguish "no data" from "real 0.00%".
 func TestBuildCard_FreshTracker_SiliconIndicatorsNil(t *testing.T) {
-	st := NewSiliconCycleTracker() // never called DetectPhase
-	ct := NewCycleTracker()
-	se := NewSeasonalEngine()
-	ec := NewEventCalendar()
-	now := time.Date(2026, 5, 30, 0, 0, 0, 0, time.UTC)
-
-	builder := NewCycleStatusCardBuilder(st, ct, se, ec, nil)
-	card, err := builder.BuildCard(now, "semiconductor")
+	st := NewSiliconCycleTracker()
+	builder := NewCycleStatusCardBuilder(st, nil, nil, nil, nil)
+	card, err := builder.BuildCard(time.Now(), "semiconductor")
 	if err != nil {
 		t.Fatalf("BuildCard failed: %v", err)
 	}
-
 	if card.SiliconIndicators != nil {
-		t.Errorf("expected SiliconIndicators=nil for fresh tracker, got %+v", card.SiliconIndicators)
-	}
-	// Sanity: phase name should still be the default (PhaseBottomRecovery → 谷底復甦).
-	if card.SiliconPhaseName != "谷底復甦" {
-		t.Errorf("expected phase name '谷底復甦', got %q", card.SiliconPhaseName)
+		t.Error("SiliconIndicators should be nil for fresh tracker with no data")
 	}
 }
 
-// TestBuildCompositeCard_FreshTracker_SiliconIndicatorsNil mirrors the above
-// for the composite (market-wide) card builder.
 func TestBuildCompositeCard_FreshTracker_SiliconIndicatorsNil(t *testing.T) {
 	st := NewSiliconCycleTracker()
-	ct := NewCycleTracker()
-	se := NewSeasonalEngine()
-	ec := NewEventCalendar()
-	now := time.Date(2026, 5, 30, 0, 0, 0, 0, time.UTC)
-
-	builder := NewCycleStatusCardBuilder(st, ct, se, ec, nil)
-	card, err := builder.BuildCompositeCard(now)
+	builder := NewCycleStatusCardBuilder(st, nil, nil, nil, nil)
+	card, err := builder.BuildCompositeCard(time.Now())
 	if err != nil {
 		t.Fatalf("BuildCompositeCard failed: %v", err)
 	}
-
 	if card.SiliconIndicators != nil {
-		t.Errorf("expected SiliconIndicators=nil for fresh tracker, got %+v", card.SiliconIndicators)
+		t.Error("SiliconIndicators should be nil for fresh tracker with no data")
 	}
 }

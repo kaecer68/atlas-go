@@ -658,6 +658,10 @@ type MarketNarrativeData struct {
 	ExportElectronicsChangePct float64 // Taiwan electronics export change %
 	SOXIndexChangePct          float64 // Philadelphia Semiconductor Index change %
 	DRAMSpotPriceChangePct     float64 // DRAM spot price change %
+	SPXIndexChangePct          float64 // S&P 500 index change %
+	NDXIndexChangePct          float64 // Nasdaq Composite index change %
+	DJIIndexChangePct          float64 // Dow Jones index change %
+	TSMADRChangePct            float64 // TSMC ADR (TSM) change %
 }
 
 // detectUSRatesEvent is the KB-pipeline detector (MarketNarrativeData input).

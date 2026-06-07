@@ -33,7 +33,7 @@ func TestMacroRiskAssessmentEngine_HistoricalScenarios(t *testing.T) {
 				Gold:    MacroDataPoint{Value: 1950, ChangePct: 3.5},
 				JPY:     MacroDataPoint{Value: 115.0, ChangePct: -0.2},
 			},
-			wantLevel:   MacroRiskOrange,
+			wantLevel:   MacroRiskRed, // VIX≥35 triggers crisis detection → force RED
 			wantMinProb: 25.0,
 			wantFlow:    "carry_trade_unwind",
 			wantFavored: []string{"cash", "short_term_bonds", "jpy"},

@@ -47,6 +47,7 @@ func DefaultThemeDurations() map[string]time.Duration {
 		"china_slowdown":                  30 * 24 * time.Hour,
 		"taiwan_export_boom":              30 * 24 * time.Hour,
 		"semiconductor_cycle_peak":        60 * 24 * time.Hour,
+		"tariff_shock":                    14 * 24 * time.Hour,
 	}
 }
 

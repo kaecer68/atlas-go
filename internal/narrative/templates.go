@@ -465,25 +465,29 @@ func DefaultTemplates() []CausalTemplate {
 • 【押注】台股大盤ETF（0050）：外資流入推升整體市場`,
 		},
 		{
-			ID:             "半導體週期高峰",
-			Name:           "半導體週期高峰",
-			TriggerTheme:   "semiconductor_cycle_peak",
-			RequiredRegion: "Global",
+			ID:             "關稅衝擊",
+			Name:           "關稅衝擊",
+			TriggerTheme:   "tariff_shock",
+			RequiredRegion: "US",
 			Steps: []CausalStep{
-				{Description: "費城半導體指數（SOX）或DRAM價格急升 → 半導體週期高點確認", Affected: []string{"半導體", "晶圓代工"}, Impact: 0.7},
-				{Description: "產能滿載、價格上漲 → 獲利大幅改善", Affected: []string{"半導體", "記憶體"}, Impact: 0.6},
-				{Description: "資本支出擴張 → 設備與材料股受惠", Affected: []string{"半導體設備", "材料"}, Impact: 0.5},
+				{Description: "美國對外關稅政策升級 → 貿易不確定性急升", Affected: []string{"VIX", "DXY", "全球貿易"}, Impact: -0.9},
+				{Description: "全球供應鏈中斷風險 → 外資撤離新興市場", Affected: []string{"外資流向_台股", "台股大盤"}, Impact: -0.8},
+				{Description: "台幣貶壓加劇 → 出口競爭力短期受損", Affected: []string{"USD/TWD", "出口導向"}, Impact: -0.6},
+				{Description: "防禦型板塊相對抗跌 → 資金湧向內需與高股息", Affected: []string{"金融", "高股息", "內需"}, Impact: 0.4},
+				{Description: "科技股與高Beta板塊面臨估值壓縮", Affected: []string{"AI供應鏈", "半導體", "中小型股"}, Impact: -0.7},
 			},
-			HistoricalHitRate: 0.68,
-			SourceReferences:  []string{"WSTS Semiconductor Market Forecast", "DRAMeXchange Spot Price"},
-			Rationale: `當費城半導體指數（SOX）或DRAM現貨價格大幅上漲時，通常確認半導體週期處於上升階段：
-1. 產能供不應求，晶圓代工與記憶體價格上漲
-2. 上游設備與材料廠商訂單滿載
-3. 台灣作為全球半導體製造中心，相關供應鏈全面受惠
+			HistoricalHitRate: 0.62,
+			SourceReferences:  []string{"Peterson Institute Trade Policy Analysis", "BIS Trade Disruption Research"},
+			Rationale: `關稅衝擊是近年全球市場最強的系統性風險之一。當美國宣布對主要貿易夥伴加徵關稅時（如2025年4月對台灣加徵32%關稅），會引發多層傳導：
+1. 貿易不確定性急升 → VIX飆升，市場全面避險
+2. 外資恐慌撤離新興市場 → 台股資金面瞬間緊縮
+3. 台幣急貶 → 進口成本上升，出口商短期競爭力受損
+4. 供應鏈重組預期 → 台灣科技股提前反應去庫存風險
 
+2025年4月關稅危機（TAIEX -9.7%單日）證明：關稅事件的市場衝擊超過傳統地緣政治風險。
 配置建議：
-• 【押注】半導體、晶圓代工、記憶體、設備：週期上升的直接受益者
-• 【押注】AI供應鏈：在半導體週期高峰時，AI相關需求提供額外動能`,
+• 【押注】金融、高股息、內需：資金避風港
+• 【迴避】AI供應鏈、半導體、中小型股：外資持股比重高，關稅衝擊首當其衝`,
 		},
 	}
 }

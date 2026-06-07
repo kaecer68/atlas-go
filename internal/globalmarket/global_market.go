@@ -64,6 +64,7 @@ type GlobalMarketManager struct {
 	correlation *CorrelationMatrix
 	config      *GlobalExpansionConfig
 	mu          sync.RWMutex
+	spxTWSE     *RollingCorrelation // dynamic SPX-TWSE rolling correlation, 20-day window
 }
 
 // GlobalExpansionConfig configures the expansion
@@ -105,6 +106,7 @@ func NewGlobalMarketManager(config *GlobalExpansionConfig) *GlobalMarketManager 
 		agents:      make(map[string]*GlobalAgent),
 		correlation: NewCorrelationMatrix(),
 		config:      config,
+		spxTWSE:     NewRollingCorrelation(20),
 	}
 
 	gmm.initializeDefaultMarkets()
@@ -523,6 +525,22 @@ type GlobalAgent struct {
 	Enabled     bool         `json:"enabled"`
 	CreatedAt   time.Time    `json:"created_at"`
 	LastActive  time.Time    `json:"last_active"`
+}
+
+// UpdateSPXTWSECorrelation updates the rolling SPX-TWSE correlation with
+// daily returns. Returns the current correlation value or 0.5 if insufficient data.
+func (gmm *GlobalMarketManager) UpdateSPXTWSECorrelation(spxDailyReturn, twseDailyReturn float64) float64 {
+	gmm.mu.Lock()
+	defer gmm.mu.Unlock()
+	return gmm.spxTWSE.Update(spxDailyReturn, twseDailyReturn)
+}
+
+// GetDynamicSPXTWSECorrelation returns the current rolling correlation between
+// SPX and TWSE. Returns 0.5 default when fewer than 3 observations or NaN/Inf.
+func (gmm *GlobalMarketManager) GetDynamicSPXTWSECorrelation() float64 {
+	gmm.mu.RLock()
+	defer gmm.mu.RUnlock()
+	return gmm.spxTWSE.GetCurrent()
 }
 
 // CorrelationMatrix tracks cross-market correlations

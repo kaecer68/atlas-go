@@ -22,6 +22,7 @@ import (
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicircuitbreaker "github.com/kaecer68/atlas-go/internal/monitoring/api/circuitbreaker"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apicrossmarket "github.com/kaecer68/atlas-go/internal/monitoring/api/crossmarket"
 	apidashboard "github.com/kaecer68/atlas-go/internal/monitoring/api/dashboard"
 	apidecision "github.com/kaecer68/atlas-go/internal/monitoring/api/decision"
 	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
@@ -61,6 +62,7 @@ type DashboardAPI struct {
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
 	macroProvider      marketdata.MacroDataProvider
+	lifecycleMgr        *narrative.EventLifecycleManager
 	geoProvider        narrative.GeopoliticalRiskProvider
 	taiwanGeoProvider  narrative.GeopoliticalRiskProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
@@ -83,6 +85,9 @@ type DashboardAPI struct {
 	drawdownMu         sync.RWMutex
 	eventLogicHandlers *apieventlogic.Handlers
 	calibrationTask    *narrative.CalibrationTask
+	crisisModeSetter   func(active bool) // callback: VIX>=35 → optimizer crisis mode
+	correlationSetter  func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
+	crossMarketSvc     *service.CrossMarketService
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -96,6 +101,13 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 		providers = append(providers, marketdata.NewSOXIndexProvider())
 		providers = append(providers, marketdata.NewDRAMSpotPriceProvider())
+		providers = append(providers, marketdata.NewSPXIndexProvider())
+		providers = append(providers, marketdata.NewNDXIndexProvider())
+		providers = append(providers, marketdata.NewDJIIndexProvider())
+		providers = append(providers, marketdata.NewTSMADRProvider())
+		providers = append(providers, marketdata.NewNVDAProvider())
+		providers = append(providers, marketdata.NewAAPLProvider())
+		providers = append(providers, marketdata.NewMSFTProvider())
 	}
 
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
@@ -136,6 +148,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
 		macroProvider:      provider,
+		lifecycleMgr:      lifecycle,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
@@ -174,6 +187,7 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
 		macroProvider:      macroProvider,
+		lifecycleMgr:      lifecycle,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
@@ -380,6 +394,11 @@ func (a *DashboardAPI) GetMacroIngestor() *narrative.MacroIngestor {
 	return a.macroIngestor
 }
 
+// GetEventLifecycleManager returns the narrative event lifecycle manager.
+func (a *DashboardAPI) GetEventLifecycleManager() *narrative.EventLifecycleManager {
+	return a.lifecycleMgr
+}
+
 // IngestAndUpdateMacro performs macro ingestion and updates the narrative engine state.
 // This ensures GetCurrentStressIndex() has valid data instead of zero values.
 func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
@@ -387,7 +406,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 	if err != nil {
 		// On ingest failure, also feed silicon tracker from the on-disk snapshot
 		// (regression: otherwise the 矽循環時鐘 panel renders all zeros).
-		if diskSnap, ok := a.loadLatestSnapshotFromDisk(); ok {
+		if diskSnap, ok := a.GetLatestMacroSnapshot(); ok {
 			if a.narrativeEngine != nil {
 				geoScore := narrative.GeopoliticalRiskScore{}
 				if a.geoProvider != nil {
@@ -399,7 +418,10 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 				}
 				a.narrativeEngine.UpdateMacro(diskSnap, geoScore)
 			}
-			a.feedSiliconTracker(diskSnap)
+			if a.industryService != nil && a.industryService.SiliconTracker != nil {
+				indicators := industry.ExtractSiliconIndicators(diskSnap)
+				a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
+			}
 		}
 		return events, snap, err
 	}
@@ -440,10 +462,10 @@ func (a *DashboardAPI) CalibrateNarrative(replayPath string) (*narrative.Narrati
 	return a.narrativeEngine.SelfCalibrate(replayPath)
 }
 
-// loadLatestSnapshotFromDisk reads the macro ingestor's latest.json from disk
-// and returns the parsed snapshot. Returns (zero, false) when the file is
-// missing, unparseable, or the macro ingestor is not configured.
-func (a *DashboardAPI) loadLatestSnapshotFromDisk() (marketdata.MacroDataSnapshot, bool) {
+// GetLatestMacroSnapshot reads the macro ingestor's latest.json from disk.
+// Returns (zero, false) when unavailable. Public accessor for consumers that
+// need the raw snapshot without triggering a full ingestion (e.g. RealTimeAdapter).
+func (a *DashboardAPI) GetLatestMacroSnapshot() (marketdata.MacroDataSnapshot, bool) {
 	if a.macroIngestor == nil {
 		return marketdata.MacroDataSnapshot{}, false
 	}
@@ -460,11 +482,11 @@ func (a *DashboardAPI) loadLatestSnapshotFromDisk() (marketdata.MacroDataSnapsho
 	return snap, true
 }
 
-// feedSiliconTracker extracts silicon indicators from a snapshot and feeds
-// them to the silicon cycle tracker. Safe to call with a nil
-// industryService or SiliconTracker; no-op in that case.
-func (a *DashboardAPI) feedSiliconTracker(snap marketdata.MacroDataSnapshot) {
-	if a.industryService == nil || a.industryService.SiliconTracker == nil {
+// loadSnapshotIntoNarrativeEngine loads the latest snapshot from disk into the narrative engine.
+// Used as fallback when live ingestion fails to ensure stress index has data.
+func (a *DashboardAPI) loadSnapshotIntoNarrativeEngine() {
+	snap, ok := a.GetLatestMacroSnapshot()
+	if !ok {
 		return
 	}
 	indicators := industry.ExtractSiliconIndicators(snap)
@@ -797,6 +819,19 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 	handlers.RegisterRoutes(mux)
 }
 
+func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
+	a.crossMarketSvc = service.NewCrossMarketService(a.macroProvider)
+	handlers := &apicrossmarket.Handlers{
+		Svc: a.crossMarketSvc,
+	}
+	handlers.RegisterRoutes(mux)
+}
+
+// GetCrossMarketService returns the cross-market service for live correlation updates.
+func (a *DashboardAPI) GetCrossMarketService() *service.CrossMarketService {
+	return a.crossMarketSvc
+}
+
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	svc := service.NewLiveService(a.workDir, a.ledgerDir)
 	handlers := &apilive.Handlers{
@@ -897,6 +932,33 @@ func (a *DashboardAPI) SetLatestDrawdown(d *portfolio.DrawdownResult) {
 	a.latestDrawdown = d
 }
 
+// SetCrisisModeSetter registers a callback invoked when macro ingest detects
+// VIX >= 35 so the optimizer can enable crisis mode (covariance inflation).
+func (a *DashboardAPI) SetCrisisModeSetter(fn func(active bool)) {
+	a.crisisModeSetter = fn
+}
+
+// InvokeCrisisModeSetter calls the registered crisis mode setter with the given
+// active flag. Safe no-op if no setter is registered.
+func (a *DashboardAPI) InvokeCrisisModeSetter(active bool) {
+	if a.crisisModeSetter != nil {
+		a.crisisModeSetter(active)
+	}
+}
+
+// SetCorrelationSetter registers a callback invoked by macro ingest to update
+// the optimizer's SPX-TWSE dynamic correlation for covariance inflation.
+func (a *DashboardAPI) SetCorrelationSetter(fn func(rho float64)) {
+	a.correlationSetter = fn
+}
+
+// InvokeCorrelationSetter calls the registered correlation setter. No-op if none.
+func (a *DashboardAPI) InvokeCorrelationSetter(rho float64) {
+	if a.correlationSetter != nil {
+		a.correlationSetter(rho)
+	}
+}
+
 // GetLatestDrawdown returns the latest drawdown result, or nil.
 func (a *DashboardAPI) GetLatestDrawdown() *portfolio.DrawdownResult {
 	a.drawdownMu.RLock()
@@ -945,6 +1007,7 @@ func (a *DashboardAPI) RegisterAllRoutes(mux *http.ServeMux, opts RouteOptions) 
 	a.RegisterNarrativeRoutes(mux)
 	a.RegisterControlRoutes(mux)
 	a.RegisterMacroRoutes(mux)
+	a.RegisterCrossMarketRoutes(mux)
 	a.RegisterExperimentRoutes(mux)
 	a.RegisterIndustryRoutes(mux)
 	a.RegisterEventLogicRoutes(mux)
