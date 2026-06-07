@@ -46,6 +46,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/realtime"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -350,6 +351,18 @@ func run(args []string, deps appDeps) error {
 		})
 		risk.NewAuditSubscriber(dashEventBus)
 		log.Printf("[Risk] audit subscriber registered on shared event bus")
+
+		// Wire RealTimeAdapter: sub-second regime detection for automated
+		// agent weight adjustment during live market sessions.
+		rtAdapter := realtime.NewRealTimeAdapter(nil)
+		rtAdapter.Start(context.Background())
+		log.Printf("[Realtime] adapter started (100ms cadence)")
+		go func() {
+			<-deps.shutdown
+			rtAdapter.Stop()
+			log.Printf("[Realtime] adapter stopped")
+		}()
+
 		// Initial macro ingestion on startup to populate snapshot and publish events.
 		ingestCtx, ingestCancel := context.WithTimeout(context.Background(), 60*time.Second)
 		// Cancel ingest early if shutdown is signaled to avoid blocking

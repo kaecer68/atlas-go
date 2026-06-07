@@ -84,6 +84,7 @@ type DashboardAPI struct {
 	eventLogicHandlers *apieventlogic.Handlers
 	calibrationTask    *narrative.CalibrationTask
 	crisisModeSetter   func(active bool) // callback: VIX>=35 → optimizer crisis mode
+	correlationSetter  func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -894,6 +895,19 @@ func (a *DashboardAPI) SetCrisisModeSetter(fn func(active bool)) {
 func (a *DashboardAPI) InvokeCrisisModeSetter(active bool) {
 	if a.crisisModeSetter != nil {
 		a.crisisModeSetter(active)
+	}
+}
+
+// SetCorrelationSetter registers a callback invoked by macro ingest to update
+// the optimizer's SPX-TWSE dynamic correlation for covariance inflation.
+func (a *DashboardAPI) SetCorrelationSetter(fn func(rho float64)) {
+	a.correlationSetter = fn
+}
+
+// InvokeCorrelationSetter calls the registered correlation setter. No-op if none.
+func (a *DashboardAPI) InvokeCorrelationSetter(rho float64) {
+	if a.correlationSetter != nil {
+		a.correlationSetter(rho)
 	}
 }
 

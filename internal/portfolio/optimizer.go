@@ -90,6 +90,7 @@ type Optimizer struct {
 	riskFreeRate       float64 // annualized risk-free rate
 	bridgeInput        FactorBridgeInput
 	crisisMode         bool // when true, inflate covariance diagonal + halve position limits
+	crossMarketRho     float64 // SPX-TWSE dynamic correlation (default 0.5)
 }
 
 // NewOptimizer 创建优化器
@@ -199,6 +200,13 @@ func (o *Optimizer) WithBridgeInput(input FactorBridgeInput) *Optimizer {
 	return o
 }
 
+func (o *Optimizer) WithCrossMarketCorrelation(rho float64) *Optimizer {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.crossMarketRho = rho
+	return o
+}
+
 // SetCrisisMode activates or deactivates crisis mode.
 // In crisis mode (e.g. VIX >= 35), covariance diagonal is inflated by 150% and
 // MaxPositionPct is halved to force diversification during extreme market stress.
@@ -213,6 +221,21 @@ func (o *Optimizer) IsCrisisMode() bool {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.crisisMode
+}
+
+// SetCrossMarketCorrelation updates the dynamic SPX-TWSE correlation used
+// to inflate off-diagonal covariance entries during extreme cross-market stress.
+func (o *Optimizer) SetCrossMarketCorrelation(rho float64) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.crossMarketRho = rho
+}
+
+// GetCrossMarketCorrelation returns the current cross-market correlation value.
+func (o *Optimizer) GetCrossMarketCorrelation() float64 {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.crossMarketRho
 }
 
 // Optimize 执行组合优化
@@ -469,6 +492,24 @@ func (o *Optimizer) allocateInitialWeights(
 		wMax = wMax / 2.0
 		if wMax < 0.05 {
 			wMax = 0.05
+		}
+	}
+
+	// Cross-market correlation inflation: when SPX-TWSE correlation exceeds
+	// 0.5, scale all off-diagonal entries proportionally. This captures the
+	// "one market" effect — during global risk events, US and TW equities
+	// move together, so diversification benefits shrink.
+	o.mu.RLock()
+	crossRho := o.crossMarketRho
+	o.mu.RUnlock()
+	if crossRho > 0.5 {
+		scale := 1.0 + (crossRho-0.5)/0.5 // maps [0.5, 1.0] → [1.0, 2.0]
+		for i := 0; i < N; i++ {
+			for j := 0; j < N; j++ {
+				if i != j {
+					sigma.SetSym(i, j, sigma.At(i, j)*scale)
+				}
+			}
 		}
 	}
 
