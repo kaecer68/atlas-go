@@ -203,7 +203,7 @@ func (p *TWSESectorIndexProvider) CalculateReturns(data map[string][]SectorIndex
 			continue
 		}
 
-		industryReturns := make([]float64, 0, len(indices)-1)
+		industryReturns := make([]float64, 0, max(0, len(indices)-1))
 		for i := 1; i < len(indices); i++ {
 			prev := indices[i-1].Index
 			curr := indices[i].Index
