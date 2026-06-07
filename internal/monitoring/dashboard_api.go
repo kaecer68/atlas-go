@@ -404,9 +404,21 @@ func (a *DashboardAPI) GetEventLifecycleManager() *narrative.EventLifecycleManag
 func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
 	events, snap, err := a.macroIngestor.Ingest(ctx)
 	if err != nil {
-		// Even if ingestion fails, try to load existing snapshot for stress index
-		if a.narrativeEngine != nil {
-			a.loadSnapshotIntoNarrativeEngine()
+		// On ingest failure, also feed silicon tracker from the on-disk snapshot
+		// (regression: otherwise the 矽循環時鐘 panel renders all zeros).
+		if diskSnap, ok := a.loadLatestSnapshotFromDisk(); ok {
+			if a.narrativeEngine != nil {
+				geoScore := narrative.GeopoliticalRiskScore{}
+				if a.geoProvider != nil {
+					geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
+					defer geoCancel()
+					if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
+						geoScore = score
+					}
+				}
+				a.narrativeEngine.UpdateMacro(diskSnap, geoScore)
+			}
+			a.feedSiliconTracker(diskSnap)
 		}
 		return events, snap, err
 	}
@@ -474,15 +486,8 @@ func (a *DashboardAPI) loadSnapshotIntoNarrativeEngine() {
 	if !ok {
 		return
 	}
-	geoScore := narrative.GeopoliticalRiskScore{}
-	if a.geoProvider != nil {
-		geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer geoCancel()
-		if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
-			geoScore = score
-		}
-	}
-	a.narrativeEngine.UpdateMacro(snap, geoScore)
+	indicators := industry.ExtractSiliconIndicators(snap)
+	a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
 }
 
 func (a *DashboardAPI) SetContext(ctx context.Context) {

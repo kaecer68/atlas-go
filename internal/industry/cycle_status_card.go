@@ -277,6 +277,9 @@ func (b *CycleStatusCardBuilder) resolveSiliconLayer(card *CycleStatusCard) floa
 	card.SiliconPhaseName = GetPhaseName(phase)
 	card.SiliconScore = GetPhaseScore(phase)
 
+	// Populate indicators: prefer the most recent transition event for full
+	// context, but fall back to the latest indicators (stored on every
+	// DetectPhase call) so the frontend always shows live values.
 	history := b.siliconTracker.GetHistory()
 	// Prefer latest indicators (updated every macro ingestion) over history.
 	if latest, ok := b.siliconTracker.GetLatestIndicators(); ok {
@@ -297,6 +300,15 @@ func (b *CycleStatusCardBuilder) resolveSiliconLayer(card *CycleStatusCard) floa
 			TaiwanSemiconductorIndexMA:     latest.Indicators.TaiwanSemiconductorIndexMA,
 			TSMCCapexGuidance:              latest.Indicators.TSMCCapexGuidance,
 			PhiladelphiaSOXIndexYoY:        latest.Indicators.PhiladelphiaSOXIndexYoY,
+		}
+	} else if latestInd, ok := b.siliconTracker.GetLatestIndicators(); ok {
+		card.SiliconIndicators = &SiliconIndicatorSnapshot{
+			TSMCMonthlyRevenueYoY:          latestInd.TSMCMonthlyRevenueYoY,
+			GlobalSemiconductorBillingsYoY: latestInd.GlobalSemiconductorBillingsYoY,
+			DRAMSpotPriceTrend:             latestInd.DRAMSpotPriceTrend,
+			TaiwanSemiconductorIndexMA:     latestInd.TaiwanSemiconductorIndexMA,
+			TSMCCapexGuidance:              latestInd.TSMCCapexGuidance,
+			PhiladelphiaSOXIndexYoY:        latestInd.PhiladelphiaSOXIndexYoY,
 		}
 	}
 
