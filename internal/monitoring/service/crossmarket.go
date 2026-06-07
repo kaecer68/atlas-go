@@ -66,7 +66,7 @@ type USIndicesResponse struct {
 
 // CrossMarketService provides cross-market data from the composite macro provider.
 type CrossMarketService struct {
-	provider          marketdata.MacroDataProvider
+	provider           marketdata.MacroDataProvider
 	rollingCorrelation *globalmarket.RollingCorrelation
 }
 

@@ -140,11 +140,11 @@ type PhaseTransition struct {
 // SiliconCycleTracker monitors and tracks the semiconductor industry cycle
 // using a 4-phase state machine driven by key silicon industry indicators.
 type SiliconCycleTracker struct {
-	currentPhase      SiliconCyclePhase
-	mu                sync.RWMutex
-	history           []PhaseTransition
+	currentPhase     SiliconCyclePhase
+	mu               sync.RWMutex
+	history          []PhaseTransition
 	latestIndicators SiliconIndicators
-	hasIndicators     bool
+	hasIndicators    bool
 }
 
 // NewSiliconCycleTracker creates a new silicon cycle engine initialized to

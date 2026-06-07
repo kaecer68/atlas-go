@@ -62,7 +62,7 @@ type DashboardAPI struct {
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
 	macroProvider      marketdata.MacroDataProvider
-	lifecycleMgr        *narrative.EventLifecycleManager
+	lifecycleMgr       *narrative.EventLifecycleManager
 	geoProvider        narrative.GeopoliticalRiskProvider
 	taiwanGeoProvider  narrative.GeopoliticalRiskProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
@@ -148,7 +148,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
 		macroProvider:      provider,
-		lifecycleMgr:      lifecycle,
+		lifecycleMgr:       lifecycle,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
@@ -187,7 +187,7 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
 		macroProvider:      macroProvider,
-		lifecycleMgr:      lifecycle,
+		lifecycleMgr:       lifecycle,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
