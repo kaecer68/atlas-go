@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,7 +101,7 @@ func TestGetStatus_PopulatesAllFiveNewCorrelationsAfterMinObs(t *testing.T) {
 
 	// Push minObservationsForReport observations to make the new
 	// correlation fields reportable (not null).
-	for i := 0; i < minObservationsForReport; i++ {
+	for range minObservationsForReport {
 		svc.UpdateAllCorrelations(prov.snap)
 	}
 
@@ -185,7 +186,7 @@ func TestGetStatus_NullEncodedAsJSONNull(t *testing.T) {
 		// Look for the field with a null value (not the default-fallback 0.5).
 		// Acceptable forms:  "field":null  or  "field":0.5  (latter is wrong
 		// because we marked it omitempty on *float64).
-		if !containsJSONField(jsonStr, `"`+field+`":null`) {
+		if !strings.Contains(jsonStr, `"`+field+`":null`) {
 			t.Errorf("expected %q to be JSON null when insufficient data; full response: %s", field, jsonStr)
 		}
 	}
@@ -325,15 +326,34 @@ func TestSPXVIXInverselyCorrelated(t *testing.T) {
 	}
 }
 
-func containsJSONField(s, substr string) bool {
-	return len(s) >= len(substr) && stringIndex(s, substr) >= 0
-}
+func TestGetCorrelation_LegacyEndpoint(t *testing.T) {
+	prov := &fakeMacroProvider{snap: makeSnapshot()}
+	svc := NewCrossMarketService(prov)
 
-func stringIndex(s, substr string) int {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
+	// Push correlated returns into the legacy engine.
+	svc.UpdateCorrelation(1.0, 0.8)
+	svc.UpdateCorrelation(1.1, 0.9)
+	svc.UpdateCorrelation(0.9, 0.7)
+
+	resp, err := svc.GetCorrelation()
+	if err != nil {
+		t.Fatalf("GetCorrelation: %v", err)
 	}
-	return -1
+
+	if resp.Correlation == 0.0 {
+		t.Error("expected non-zero correlation after 3 updates")
+	}
+	if resp.WindowSize != correlationWindow {
+		t.Errorf("WindowSize = %d, expected %d", resp.WindowSize, correlationWindow)
+	}
+	if resp.Observations != 3 {
+		t.Errorf("Observations = %d, expected 3", resp.Observations)
+	}
+	if resp.ComputedAt == "" {
+		t.Error("expected non-empty ComputedAt timestamp")
+	}
+	// With 3 correlated observations, IsFallback should be false.
+	if resp.IsFallback {
+		t.Error("IsFallback should be false with 3 observations")
+	}
 }

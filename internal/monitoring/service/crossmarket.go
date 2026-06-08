@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/globalmarket"
@@ -264,13 +265,13 @@ func reportableCorrelation(rc *globalmarket.RollingCorrelation) *float64 {
 	rho := rc.GetCurrent()
 	// Defensive: the engine already guards NaN/Inf, but a final check
 	// here keeps the API contract explicit.
-	if rho != rho { // NaN check
+	if math.IsNaN(rho) {
 		return nil
 	}
-	// The engine returns 0.5 as a sentinel default for insufficient
-	// data; treat any value close to 0.5 with < 3 obs as missing.
-	// The Observations() guard above already handles this, but keep
-	// the check for clarity.
+	// Belt-and-suspenders: the Observations() guard above already
+	// prevents reporting before minObservationsForReport. The engine
+	// also returns a sentinel default (0.5) when data is insufficient.
+	// Both checks together ensure the API contract is never violated.
 	return &rho
 }
 
