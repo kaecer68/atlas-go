@@ -4,22 +4,23 @@ import (
 	"math"
 	"math/rand"
 	"testing"
-	"time"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // TestGranger_IndependentSeries verifies that two independent random series
 // do not show significant Granger causality in either direction.
+//
+// Uses a fixed seed to avoid the ~5% false-positive rate that the
+// p <= 0.05 threshold produces under random sampling (n=200, lag=5).
+// A pre-vetted seed (1) was chosen so the generated data deterministically
+// shows no causal structure.
 func TestGranger_IndependentSeries(t *testing.T) {
 	n := 200
+	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	y := make([]float64, n)
 	for i := 0; i < n; i++ {
-		x[i] = rand.NormFloat64()
-		y[i] = rand.NormFloat64()
+		x[i] = r.NormFloat64()
+		y[i] = r.NormFloat64()
 	}
 
 	res, err := TestGrangerCausality(x, y, 5)
@@ -42,16 +43,17 @@ func TestGranger_IndependentSeries(t *testing.T) {
 // and verifies the test detects "X→Y".
 func TestGranger_KnownCausality(t *testing.T) {
 	n := 200
+	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	y := make([]float64, n)
 
 	for i := 0; i < n; i++ {
-		x[i] = rand.NormFloat64()
+		x[i] = r.NormFloat64()
 	}
 
-	y[0] = rand.NormFloat64()
+	y[0] = r.NormFloat64()
 	for i := 1; i < n; i++ {
-		y[i] = 0.8*x[i-1] + rand.NormFloat64()
+		y[i] = 0.8*x[i-1] + r.NormFloat64()
 	}
 
 	res, err := TestGrangerCausality(x, y, 5)
@@ -74,15 +76,16 @@ func TestGranger_KnownCausality(t *testing.T) {
 // the test detects bidirectional causality.
 func TestGranger_Bidirectional(t *testing.T) {
 	n := 300
+	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	y := make([]float64, n)
 
 	// Strong mutual influence: x[t] depends on y[t-1] and y[t] depends on x[t-1]
-	x[0] = rand.NormFloat64()
-	y[0] = rand.NormFloat64()
+	x[0] = r.NormFloat64()
+	y[0] = r.NormFloat64()
 	for i := 1; i < n; i++ {
-		x[i] = 0.6*y[i-1] + rand.NormFloat64()
-		y[i] = 0.6*x[i-1] + rand.NormFloat64()
+		x[i] = 0.6*y[i-1] + r.NormFloat64()
+		y[i] = 0.6*x[i-1] + r.NormFloat64()
 	}
 
 	res, err := TestGrangerCausality(x, y, 5)
@@ -118,18 +121,19 @@ func TestGranger_InsufficientData(t *testing.T) {
 // when the true causal lag is known.
 func TestGranger_LagSelection(t *testing.T) {
 	n := 300
+	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	y := make([]float64, n)
 
 	for i := 0; i < n; i++ {
-		x[i] = rand.NormFloat64()
+		x[i] = r.NormFloat64()
 	}
 
 	// y[t] = 0.4·x[t-2] + ε[t]  (true lag is 2)
-	y[0] = rand.NormFloat64()
-	y[1] = rand.NormFloat64()
+	y[0] = r.NormFloat64()
+	y[1] = r.NormFloat64()
 	for i := 2; i < n; i++ {
-		y[i] = 0.4*x[i-2] + rand.NormFloat64()
+		y[i] = 0.4*x[i-2] + r.NormFloat64()
 	}
 
 	res, err := TestGrangerCausality(x, y, 5)
@@ -171,14 +175,15 @@ func TestGranger_ZeroVariance(t *testing.T) {
 // causal direction label while maintaining the same significance pattern.
 func TestGranger_SymmetricCausality(t *testing.T) {
 	n := 200
+	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	y := make([]float64, n)
 
 	for i := 0; i < n; i++ {
-		x[i] = rand.NormFloat64()
+		x[i] = r.NormFloat64()
 	}
 	for i := 1; i < n; i++ {
-		y[i] = 0.8*x[i-1] + rand.NormFloat64()
+		y[i] = 0.8*x[i-1] + r.NormFloat64()
 	}
 
 	resXY, err := TestGrangerCausality(x, y, 5)
@@ -228,9 +233,10 @@ func TestGranger_UnitRootLikeSeries(t *testing.T) {
 // TestGranger_IdenticalSeries verifies behavior when both series are identical.
 func TestGranger_IdenticalSeries(t *testing.T) {
 	n := 200
+	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	for i := 0; i < n; i++ {
-		x[i] = rand.NormFloat64()
+		x[i] = r.NormFloat64()
 	}
 
 	// y is a copy of x

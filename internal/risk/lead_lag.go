@@ -93,7 +93,7 @@ type directionResult struct {
 }
 
 // testDirection tests whether cause Granger-causes effect.
-func testDirection(cause, effect []float64, maxLag int) (directionResult, error) {
+func testDirection(cause, effect []float64, maxLag int) (directionResult, error) { //nolint:unparam
 	bestLag := 1
 	bestBIC := math.Inf(1)
 	var bestFStat, bestPVal float64
@@ -173,7 +173,7 @@ func testDirection(cause, effect []float64, maxLag int) (directionResult, error)
 
 // olsFit performs ordinary least squares regression using the normal equations.
 // Returns coefficients, residual sum of squares, and error.
-func olsFit(X [][]float64, y []float64) ([]float64, float64, error) {
+func olsFit(X [][]float64, y []float64) ([]float64, float64, error) { //nolint:unparam
 	n := len(X)
 	if n == 0 || len(y) != n {
 		return nil, 0, fmt.Errorf("invalid dimensions")
