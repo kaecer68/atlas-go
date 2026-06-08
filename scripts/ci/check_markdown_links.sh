@@ -37,7 +37,11 @@ done < <(find . \
     -not -path './vendor/*' \
     -not -path './.gocache/*' \
     -not -path './.opencode/*' \
-    -not -path './node_modules/*' \
+    -not -path '*/node_modules/*' \
+    -not -path '*/.git/*' \
+    -not -path './graphify-out/*' \
+    -not -path './web/static/css/*' \
+    -not -path './web/static/js/*' \
     -print0)
 
 ERRORS=$(cat "$ERRORS_FILE")

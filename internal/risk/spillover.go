@@ -379,9 +379,9 @@ func ComputeSpillover(returns [][]float64, vars []string, horizon int) (*Spillov
 
 	// Validate equal length and compute T
 	T := len(returns[0])
-	for i := 1; i < K; i++ {
-		if len(returns[i]) != T {
-			return nil, fmt.Errorf("spillover: unequal series lengths: series[0]=%d, series[%d]=%d", T, i, len(returns[i]))
+	for i, series := range returns[1:] {
+		if len(series) != T {
+			return nil, fmt.Errorf("spillover: unequal series lengths: series[0]=%d, series[%d]=%d", T, i+1, len(series))
 		}
 	}
 	if T < 30 {

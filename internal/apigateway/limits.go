@@ -90,6 +90,16 @@ func NewRateLimitManager() *RateLimitManager {
 			"taifex_daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_etf":            rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
+			// US indexes + tech stocks + TSM ADR all share the Yahoo Finance v8 chart
+			// API endpoint with the existing us_yahoo macro channel. Per Constitution
+			// Art. 2.3, shared endpoints must use a single rate.Limiter instance.
+			"us_spx":  yahooSharedLimiter,
+			"us_ndx":  yahooSharedLimiter,
+			"us_dji":  yahooSharedLimiter,
+			"us_nvda": yahooSharedLimiter,
+			"us_aapl": yahooSharedLimiter,
+			"us_msft": yahooSharedLimiter,
+			"tsm_adr": yahooSharedLimiter,
 		},
 	}
 }

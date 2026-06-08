@@ -180,5 +180,12 @@ func channelIDs() []string {
 		"taifex_daily",
 		"twse_oddlot",
 		"twse_etf",
+		"us_spx",
+		"us_ndx",
+		"us_dji",
+		"us_nvda",
+		"us_aapl",
+		"us_msft",
+		"tsm_adr",
 	}
 }

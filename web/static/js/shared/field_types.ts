@@ -1066,6 +1066,7 @@ export interface FactorScoreBreakdown {
   precious_metals?: string;
   etf?: string;
   linkage?: string;
+  tsmc?: string;
   total: string;
 }
 
@@ -1089,6 +1090,7 @@ export interface FactorScores {
   precious_metals?: number;
   etf?: number;
   linkage?: number;
+  tsmc?: number;
   total: number;
   breakdown?: string | null;
 }
@@ -2400,6 +2402,13 @@ export interface RegimeCalibratedConfig {
   normal: string;
   bear: string;
   crisis: string;
+}
+
+export interface RegimeCorrelation {
+  calm: number;
+  ai_boom: number;
+  systemic_stress: number;
+  tariff_geopolitical: number;
 }
 
 export interface RegimeHistoryData {

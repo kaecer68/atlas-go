@@ -435,18 +435,17 @@ if (typeof window !== 'undefined') {
   loadAll();
   startAutoRefresh();
   initEventStream();
-  history.replaceState({page: 'overview'}, '', '/overview');
+  var initialPath = window.location.pathname.replace(/^\//, '');
+  if (!initialPath) {
+    history.replaceState({page: 'overview'}, '', '/overview');
+  }
   // Redirect old hash URLs to clean URLs
   if (window.location.hash && window.location.hash.startsWith('#page-')) {
     var pageId = window.location.hash.replace('#page-', '');
     window.location.replace('/' + pageId);
-  } else {
-    // Parse initial route from URL pathname
-    var path = window.location.pathname.replace(/^\//, '');
-    if (path && path !== 'overview') {
-      history.replaceState({page: path}, '', '/' + path);
-      switchPage(path, true);
-    }
+  } else if (initialPath && initialPath !== 'overview') {
+    history.replaceState({page: initialPath}, '', '/' + initialPath);
+    switchPage(initialPath, true);
   }
 }
 
