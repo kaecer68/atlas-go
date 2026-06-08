@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -486,17 +487,35 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 				daily = append(daily, entry.dailyReturns[w]/float64(c))
 			}
 		}
+		sharpe := sharpeRatio(entry.returns)
+		n := len(entry.returns)
+		hitRate := ratio(entry.hits, n)
+		var tStat, hitRateTStat, confLow, confHigh float64
+		if n >= 2 {
+			tStat = sharpe * math.Sqrt(float64(n))
+			if hitRate > 0 && hitRate < 1 {
+				hitRateTStat = (hitRate - 0.5) / math.Sqrt(hitRate*(1-hitRate)/float64(n))
+			}
+			se := 1.96 / math.Sqrt(float64(n))
+			confLow = sharpe - se
+			confHigh = sharpe + se
+		}
 		scorecards = append(scorecards, domain.Scorecard{
-			AgentID:       entry.agentID,
-			Skill:         entry.skill,
-			Layer:         domain.AgentLayer(entry.layer),
-			WindowCount:   len(entry.windows),
-			Observations:  len(entry.returns),
-			HitRate:       ratio(entry.hits, len(entry.returns)),
-			AverageReturn: avg,
-			SharpeLike:    sharpeLike(entry.returns),
-			MaxDrawdown:   maxDrawdown(daily),
-			LastUpdatedAt: time.Now(),
+			AgentID:                  entry.agentID,
+			Skill:                    entry.skill,
+			Layer:                    domain.AgentLayer(entry.layer),
+			WindowCount:              len(entry.windows),
+			Observations:             n,
+			HitRate:                  hitRate,
+			AverageReturn:            avg,
+			SharpeLike:               sharpe,
+			MaxDrawdown:              maxDrawdown(daily),
+			TStat:                    tStat,
+			HitRateTStat:             hitRateTStat,
+			ConfidenceLow:            confLow,
+			ConfidenceHigh:           confHigh,
+			StatisticallySignificant: len(entry.windows) >= 20,
+			LastUpdatedAt:            time.Now(),
 		})
 	}
 
@@ -532,21 +551,22 @@ func ratio(hitCount, total int) float64 {
 	return float64(hitCount) / float64(total)
 }
 
-func sharpeLike(values []float64) float64 {
-	if len(values) == 0 {
+func sharpeRatio(returns []float64) float64 {
+	if len(returns) < 2 {
 		return 0
 	}
-	avg := mean(values)
-	var variance float64
-	for _, v := range values {
-		diff := v - avg
-		variance += diff * diff
+	avg := mean(returns)
+	var sumSq float64
+	for _, r := range returns {
+		diff := r - avg
+		sumSq += diff * diff
 	}
-	variance /= float64(len(values))
-	if variance == 0 {
-		return avg
+	variance := sumSq / float64(len(returns)-1)
+	stdDev := math.Sqrt(variance)
+	if stdDev == 0 {
+		return 0
 	}
-	return avg / (variance + 1e-9)
+	return avg / stdDev
 }
 
 func maxDrawdown(values []float64) float64 {

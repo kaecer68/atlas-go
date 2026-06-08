@@ -127,10 +127,15 @@ type Scorecard struct {
 	WindowCount           int               `json:"windows"`
 	HitRate               float64           `json:"hit_rate"`
 	AverageReturn         float64           `json:"average_return"`
-	SharpeLike            float64           `json:"sharpe"`
-	MaxDrawdown           float64           `json:"max_drawdown"`
-	ConcentrationWarnings int               `json:"concentration_warnings"`
-	LastUpdatedAt         time.Time         `json:"last_updated_at"`
+	SharpeLike               float64           `json:"sharpe"`
+	MaxDrawdown              float64           `json:"max_drawdown"`
+	TStat                    float64           `json:"t_stat"`
+	HitRateTStat             float64           `json:"hit_rate_t_stat"`
+	ConfidenceLow            float64           `json:"confidence_low"`
+	ConfidenceHigh           float64           `json:"confidence_high"`
+	StatisticallySignificant bool              `json:"statistically_significant"`
+	ConcentrationWarnings    int               `json:"concentration_warnings"`
+	LastUpdatedAt            time.Time         `json:"last_updated_at"`
 }
 
 // GuardSeverity classifies a control guard's enforcement level.
