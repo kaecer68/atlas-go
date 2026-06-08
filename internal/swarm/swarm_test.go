@@ -447,6 +447,111 @@ func TestJumpProcess(t *testing.T) {
 	}
 }
 
+func TestSimulateFishValidatesPredictions(t *testing.T) {
+	config := DefaultSwarmConfig()
+	config.FishCount = 1
+	config.SimulationHorizon = 12 * time.Hour
+	config.TimeStep = time.Hour
+
+	sw := NewMiroFishSwarm(config)
+	baseState := MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0, "B": 50.0},
+		Volumes:   map[string]float64{"A": 1000000, "B": 500000},
+	}
+	sw.InitializeScenarios(baseState)
+	sw.Start()
+
+	for _, fish := range sw.fish {
+		if fish.Performance.TotalPredictions <= 0 {
+			t.Errorf("expected TotalPredictions > 0, got %d", fish.Performance.TotalPredictions)
+		}
+		if fish.Performance.Accuracy < 0 || fish.Performance.Accuracy > 1 {
+			t.Errorf("expected Accuracy in [0,1], got %.4f", fish.Performance.Accuracy)
+		}
+		if fish.Performance.PnL == 0 {
+			t.Errorf("expected non-zero PnL, got %.4f", fish.Performance.PnL)
+		}
+	}
+}
+
+func TestGeneratePredictionDeterministic(t *testing.T) {
+	config := DefaultSwarmConfig()
+	sw := NewMiroFishSwarm(config)
+	baseState := MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"Z": 100.0, "A": 50.0, "M": 75.0},
+		Volumes:   map[string]float64{"Z": 1000000, "A": 500000, "M": 750000},
+	}
+	sw.InitializeScenarios(baseState)
+
+	fish := sw.fish[0]
+	pred1 := sw.generatePrediction(fish, baseState)
+	pred2 := sw.generatePrediction(fish, baseState)
+
+	if pred1.Symbol != pred2.Symbol {
+		t.Errorf("expected same symbol for deterministic prediction, got %s vs %s", pred1.Symbol, pred2.Symbol)
+	}
+	if pred1.Symbol != "A" {
+		t.Errorf("expected first alphabetical symbol A, got %s", pred1.Symbol)
+	}
+}
+
+func TestApplyEventScope(t *testing.T) {
+	config := DefaultSwarmConfig()
+	sw := NewMiroFishSwarm(config)
+
+	t.Run("flash_crash affects all symbols", func(t *testing.T) {
+		state := MarketState{
+			Prices:  map[string]float64{"A": 100.0, "B": 200.0, "C": 300.0},
+			Volumes: map[string]float64{"A": 1, "B": 1, "C": 1},
+		}
+		original := map[string]float64{"A": 100.0, "B": 200.0, "C": 300.0}
+		sw.applyEvent(&state, MarketEvent{Type: "flash_crash", Magnitude: 0.10})
+		for sym, orig := range original {
+			if state.Prices[sym] >= orig {
+				t.Errorf("expected %s price to drop after flash_crash, got %.4f (was %.4f)", sym, state.Prices[sym], orig)
+			}
+		}
+	})
+
+	t.Run("rally affects all symbols", func(t *testing.T) {
+		state := MarketState{
+			Prices:  map[string]float64{"A": 100.0, "B": 200.0, "C": 300.0},
+			Volumes: map[string]float64{"A": 1, "B": 1, "C": 1},
+		}
+		original := map[string]float64{"A": 100.0, "B": 200.0, "C": 300.0}
+		sw.applyEvent(&state, MarketEvent{Type: "rally", Magnitude: 0.10})
+		for sym, orig := range original {
+			if state.Prices[sym] <= orig {
+				t.Errorf("expected %s price to rise after rally, got %.4f (was %.4f)", sym, state.Prices[sym], orig)
+			}
+		}
+	})
+
+	t.Run("earnings_surprise affects only one symbol", func(t *testing.T) {
+		state := MarketState{
+			Prices:  map[string]float64{"A": 100.0, "B": 200.0, "C": 300.0},
+			Volumes: map[string]float64{"A": 1, "B": 1, "C": 1},
+		}
+		original := map[string]float64{"A": 100.0, "B": 200.0, "C": 300.0}
+		sw.applyEvent(&state, MarketEvent{Type: "earnings_surprise", Magnitude: 0.10})
+
+		changed := 0
+		for sym, orig := range original {
+			if state.Prices[sym] != orig {
+				changed++
+				if sym != "A" {
+					t.Errorf("expected only symbol A to change, but %s changed", sym)
+				}
+			}
+		}
+		if changed != 1 {
+			t.Errorf("expected exactly 1 symbol changed, got %d", changed)
+		}
+	})
+}
+
 func TestGenerationsCounter(t *testing.T) {
 	config := DefaultSwarmConfig()
 	config.FishCount = 10
