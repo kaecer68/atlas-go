@@ -1,3 +1,4 @@
 /* Atlas Dashboard - Typography */
 .panel h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+.section h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 /* .text-caption, .text-body, .text-heading removed — unused semantic classes */

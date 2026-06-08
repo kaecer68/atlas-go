@@ -92,12 +92,12 @@
       "format": "esm"
     },
     "static/js/names.js": {
-      "bytes": 8368,
+      "bytes": 9621,
       "imports": [],
       "format": "esm"
     },
     "static/js/pages/dashboard.js": {
-      "bytes": 32909,
+      "bytes": 33925,
       "imports": [
         {
           "path": "static/js/names.js",
@@ -160,7 +160,7 @@
       "format": "esm"
     },
     "static/js/pages/narrative.js": {
-      "bytes": 41861,
+      "bytes": 43078,
       "imports": [
         {
           "path": "static/js/names.js",
@@ -213,7 +213,7 @@
       "format": "esm"
     },
     "static/js/pages/experiments.js": {
-      "bytes": 16880,
+      "bytes": 26740,
       "imports": [
         {
           "path": "static/js/names.js",
@@ -396,7 +396,7 @@
       "format": "esm"
     },
     "static/js/pages/crossmarket.js": {
-      "bytes": 8501,
+      "bytes": 9623,
       "imports": [
         {
           "path": "static/js/shared/utils.js",
@@ -458,7 +458,7 @@
       "format": "esm"
     },
     "static/js/main.js": {
-      "bytes": 26003,
+      "bytes": 25980,
       "imports": [
         {
           "path": "static/js/components/reasoning-trace.js",
@@ -774,7 +774,7 @@
       "imports": []
     },
     "static/css/base/typography.css": {
-      "bytes": 184,
+      "bytes": 323,
       "imports": []
     },
     "static/css/components/filter-panel.css": {
@@ -1121,14 +1121,14 @@
       },
       "bytes": 2053
     },
-    "dist/chunks/synergy-ZI3SA5RO.js": {
+    "dist/chunks/synergy-PDAH5UGR.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-DQKTUY5V.js",
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-GSJOUOZD.js",
+          "path": "dist/chunks/chunk-YHTXNUOS.js",
           "kind": "import-statement"
         },
         {
@@ -1155,14 +1155,14 @@
       },
       "bytes": 9185
     },
-    "dist/chunks/evolution_panel-R7JKB4HT.js": {
+    "dist/chunks/evolution_panel-6YCIHPXO.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-RBRLONW2.js",
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1245,7 +1245,7 @@
       },
       "bytes": 6859
     },
-    "dist/chunks/crossmarket-VR3ZVPIC.js": {
+    "dist/chunks/crossmarket-JXRHNLS7.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-35S32YAS.js",
@@ -1258,19 +1258,19 @@
       "entryPoint": "static/js/pages/crossmarket.js",
       "inputs": {
         "static/js/pages/crossmarket.js": {
-          "bytesInOutput": 6033
+          "bytesInOutput": 7610
         }
       },
-      "bytes": 6107
+      "bytes": 7684
     },
-    "dist/chunks/narrative-ZRIEMGZW.js": {
+    "dist/chunks/narrative-XNYA2IMO.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-RBRLONW2.js",
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1285,10 +1285,10 @@
       "entryPoint": "static/js/pages/narrative.js",
       "inputs": {
         "static/js/pages/narrative.js": {
-          "bytesInOutput": 39355
+          "bytesInOutput": 40500
         }
       },
-      "bytes": 39628
+      "bytes": 40773
     },
     "dist/chunks/backtest-GONGZ74B.js": {
       "imports": [
@@ -1318,14 +1318,14 @@
       },
       "bytes": 6421
     },
-    "dist/chunks/inbox-U3HUOSA2.js": {
+    "dist/chunks/inbox-4G6L6VIX.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-RBRLONW2.js",
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1344,14 +1344,14 @@
       },
       "bytes": 2939
     },
-    "dist/chunks/experiments-5J2TIMOP.js": {
+    "dist/chunks/experiments-H3UXK2GO.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-RBRLONW2.js",
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1386,10 +1386,10 @@
       "entryPoint": "static/js/pages/experiments.js",
       "inputs": {
         "static/js/pages/experiments.js": {
-          "bytesInOutput": 19624
+          "bytesInOutput": 35984
         }
       },
-      "bytes": 20194
+      "bytes": 36554
     },
     "dist/chunks/alerts-OZDUN3XT.js": {
       "imports": [
@@ -1439,14 +1439,14 @@
       },
       "bytes": 3163
     },
-    "dist/chunks/industry-3K77D4OD.js": {
+    "dist/chunks/industry-QHYQTN6F.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-RBRLONW2.js",
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1564,7 +1564,7 @@
     "dist/js/main.js": {
       "imports": [
         {
-          "path": "dist/chunks/chunk-GSJOUOZD.js",
+          "path": "dist/chunks/chunk-YHTXNUOS.js",
           "kind": "import-statement"
         },
         {
@@ -1590,7 +1590,7 @@
       "inputs": {},
       "bytes": 260
     },
-    "dist/chunks/chunk-GSJOUOZD.js": {
+    "dist/chunks/chunk-YHTXNUOS.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-LBHFRSEK.js",
@@ -1605,19 +1605,19 @@
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/dashboard-SAJW3SAW.js",
+          "path": "dist/chunks/dashboard-ZYD65Y5V.js",
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/pipeline-KKERHV6R.js",
+          "path": "dist/chunks/pipeline-Z3FCIGM2.js",
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/risk-YFOITEY4.js",
+          "path": "dist/chunks/risk-5ZIRBP7P.js",
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/narrative-ZRIEMGZW.js",
+          "path": "dist/chunks/narrative-XNYA2IMO.js",
           "kind": "dynamic-import"
         },
         {
@@ -1625,11 +1625,11 @@
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/inbox-U3HUOSA2.js",
+          "path": "dist/chunks/inbox-4G6L6VIX.js",
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/experiments-5J2TIMOP.js",
+          "path": "dist/chunks/experiments-H3UXK2GO.js",
           "kind": "dynamic-import"
         },
         {
@@ -1641,7 +1641,7 @@
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/industry-3K77D4OD.js",
+          "path": "dist/chunks/industry-QHYQTN6F.js",
           "kind": "dynamic-import"
         },
         {
@@ -1657,11 +1657,11 @@
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/synergy-ZI3SA5RO.js",
+          "path": "dist/chunks/synergy-PDAH5UGR.js",
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/evolution_panel-R7JKB4HT.js",
+          "path": "dist/chunks/evolution_panel-6YCIHPXO.js",
           "kind": "dynamic-import"
         },
         {
@@ -1677,7 +1677,7 @@
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/crossmarket-VR3ZVPIC.js",
+          "path": "dist/chunks/crossmarket-JXRHNLS7.js",
           "kind": "dynamic-import"
         },
         {
@@ -1685,7 +1685,7 @@
           "kind": "dynamic-import"
         },
         {
-          "path": "dist/chunks/evolution_panel-R7JKB4HT.js",
+          "path": "dist/chunks/evolution_panel-6YCIHPXO.js",
           "kind": "dynamic-import"
         },
         {
@@ -1708,10 +1708,10 @@
           "bytesInOutput": 3023
         },
         "static/js/main.js": {
-          "bytesInOutput": 16598
+          "bytesInOutput": 16576
         }
       },
-      "bytes": 26926
+      "bytes": 26904
     },
     "dist/js/component-init.js": {
       "imports": [
@@ -1761,10 +1761,10 @@
       },
       "bytes": 5218
     },
-    "dist/chunks/dashboard-SAJW3SAW.js": {
+    "dist/chunks/dashboard-ZYD65Y5V.js": {
       "imports": [
         {
-          "path": "dist/chunks/chunk-KRUITZ6D.js",
+          "path": "dist/chunks/chunk-IX2ULF6R.js",
           "kind": "import-statement"
         },
         {
@@ -1772,7 +1772,7 @@
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1798,10 +1798,10 @@
       "inputs": {},
       "bytes": 425
     },
-    "dist/chunks/pipeline-KKERHV6R.js": {
+    "dist/chunks/pipeline-Z3FCIGM2.js": {
       "imports": [
         {
-          "path": "dist/chunks/chunk-KRUITZ6D.js",
+          "path": "dist/chunks/chunk-IX2ULF6R.js",
           "kind": "import-statement"
         },
         {
@@ -1809,7 +1809,7 @@
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1841,14 +1841,14 @@
       },
       "bytes": 24050
     },
-    "dist/chunks/chunk-KRUITZ6D.js": {
+    "dist/chunks/chunk-IX2ULF6R.js": {
       "imports": [
         {
           "path": "dist/chunks/chunk-RBRLONW2.js",
           "kind": "import-statement"
         },
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1872,10 +1872,10 @@
       ],
       "inputs": {
         "static/js/pages/dashboard.js": {
-          "bytesInOutput": 29456
+          "bytesInOutput": 30411
         }
       },
-      "bytes": 29708
+      "bytes": 30663
     },
     "dist/chunks/chunk-RBRLONW2.js": {
       "imports": [
@@ -1900,10 +1900,10 @@
       },
       "bytes": 949
     },
-    "dist/chunks/risk-YFOITEY4.js": {
+    "dist/chunks/risk-5ZIRBP7P.js": {
       "imports": [
         {
-          "path": "dist/chunks/chunk-OU7I3ZGZ.js",
+          "path": "dist/chunks/chunk-2YFHBTPP.js",
           "kind": "import-statement"
         },
         {
@@ -1925,7 +1925,7 @@
       },
       "bytes": 11742
     },
-    "dist/chunks/chunk-OU7I3ZGZ.js": {
+    "dist/chunks/chunk-2YFHBTPP.js": {
       "imports": [],
       "exports": [
         "a",
@@ -1945,10 +1945,10 @@
       ],
       "inputs": {
         "static/js/names.js": {
-          "bytesInOutput": 8301
+          "bytesInOutput": 10190
         }
       },
-      "bytes": 8408
+      "bytes": 10297
     },
     "dist/chunks/chunk-35S32YAS.js": {
       "imports": [],
@@ -2069,7 +2069,7 @@
           "bytesInOutput": 688
         },
         "static/css/base/typography.css": {
-          "bytesInOutput": 56
+          "bytesInOutput": 178
         },
         "static/css/components/filter-panel.css": {
           "bytesInOutput": 2007
@@ -2108,7 +2108,7 @@
           "bytesInOutput": 0
         }
       },
-      "bytes": 48235
+      "bytes": 48357
     }
   }
 }
