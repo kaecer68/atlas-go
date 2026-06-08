@@ -380,10 +380,13 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
             <span>歷史命中率</span>
             <span style="color:${(m.hit_rate || 0) >= 0.7 ? '#10b981' : ((m.hit_rate || 0) >= 0.5 ? '#f59e0b' : '#ef4444')};font-weight:700">${((m.hit_rate || 0) * 100).toFixed(1)}%</span>
           </div>
+<<<<<<< HEAD
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>近期預測報酬差</span>
             <span style="color:${(m.recent_prediction || 0) > 0 ? '#10b981' : ((m.recent_prediction || 0) < 0 ? '#ef4444' : 'var(--muted)')};font-weight:700">${(m.recent_prediction || 0).toFixed(4)}</span>
           </div>
+=======
+>>>>>>> origin/main
           <div class="text-muted text-sm mt-xs">${escapeHtml(m.description || '')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
             ${(m.favored_sectors || []).map(s => `<span class="badge ok">+ ${escapeHtml(sectorName(s))}</span>`).join('')}
