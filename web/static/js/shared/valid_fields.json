@@ -103,6 +103,8 @@
   "avg_score",
   "avg_trading_cost",
   "avg_win",
+  "auto_discovered_count",
+  "auto_discovered_rules",
   "avoided_industries",
   "avoided_sectors",
   "backtest_return",
