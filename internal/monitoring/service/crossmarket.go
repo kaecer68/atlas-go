@@ -3,11 +3,23 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/globalmarket"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
+
+// correlationWindow is the rolling window for all cross-market correlation
+// estimates. 20 observations corresponds to ~1 trading month at daily
+// granularity, matching the original SPX-TWSE pair.
+const correlationWindow = 20
+
+// minObservationsForReport is the minimum number of paired observations
+// before a correlation is reported as a non-default value. Below this
+// threshold the field is reported as NaN (which the JSON encoder emits as
+// `null` via the `omitempty` contract on `*float64`).
+const minObservationsForReport = 3
 
 // CrossMarketStatus represents the current US-Taiwan cross-market state.
 type CrossMarketStatus struct {
@@ -37,6 +49,17 @@ type CrossMarketStatus struct {
 	// Derived
 	CrisisActive       bool    `json:"crisis_active"`
 	CorrelationSPXTWSE float64 `json:"correlation_spx_twse"`
+
+	// Expanded cross-market correlations (2026 correlation expansion).
+	// Each is the Pearson correlation over a rolling 20-observation window
+	// of daily returns. Nil means insufficient observations (encoded as
+	// JSON `null`). TAIEX is the canonical TWSE proxy for the new pairs
+	// (SPX-TWSE retains SOXIndex to preserve existing behaviour).
+	CorrelationNDXTWSE  *float64 `json:"correlation_ndx_twse"`
+	CorrelationDJITWSE  *float64 `json:"correlation_dji_twse"`
+	CorrelationTSMTWSE  *float64 `json:"correlation_tsm_twse"`
+	CorrelationNVDATWSE *float64 `json:"correlation_nvda_twse"`
+	CorrelationSPXVIX   *float64 `json:"correlation_spx_vix"`
 }
 
 // CrossMarketIndex bundles an index/stock value with its metadata.
@@ -65,23 +88,85 @@ type USIndicesResponse struct {
 }
 
 // CrossMarketService provides cross-market data from the composite macro provider.
+//
+// It owns six independent RollingCorrelation engines:
+//   - rollingSPXTWSE  : SPX vs SOX (legacy, retained for back-compat)
+//   - rollingNDXTWSE  : NDX vs TAIEX
+//   - rollingDJITWSE  : DJI vs TAIEX
+//   - rollingTSMTWSE  : TSM ADR vs TAIEX  (the strongest leading indicator)
+//   - rollingNVDATWSE : NVDA vs TAIEX
+//   - rollingSPXVIX   : SPX vs VIX (inverse, panic gauge)
 type CrossMarketService struct {
-	provider           marketdata.MacroDataProvider
-	rollingCorrelation *globalmarket.RollingCorrelation
+	provider marketdata.MacroDataProvider
+
+	// rollingSPXTWSE is the legacy SPX-SOX engine. Retained for
+	// back-compat with existing consumers and the /api/cross-market/correlation
+	// endpoint contract.
+	rollingSPXTWSE *globalmarket.RollingCorrelation
+
+	// rollingNDXTWSE / DJI / TSM / NVDA use TAIEX as the TWSE proxy.
+	// TAIEX is the Taiwan Stock Exchange Weighted Index — the canonical
+	// broad-market benchmark for Taiwan.
+	rollingNDXTWSE  *globalmarket.RollingCorrelation
+	rollingDJITWSE  *globalmarket.RollingCorrelation
+	rollingTSMTWSE  *globalmarket.RollingCorrelation
+	rollingNVDATWSE *globalmarket.RollingCorrelation
+
+	// rollingSPXVIX tracks the SPX-VIX inverse relationship.
+	rollingSPXVIX *globalmarket.RollingCorrelation
 }
 
 // NewCrossMarketService creates a cross-market service backed by the composite provider.
 func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketService {
 	return &CrossMarketService{
-		provider:           provider,
-		rollingCorrelation: globalmarket.NewRollingCorrelation(20),
+		provider:        provider,
+		rollingSPXTWSE:  globalmarket.NewRollingCorrelation(correlationWindow),
+		rollingNDXTWSE:  globalmarket.NewRollingCorrelation(correlationWindow),
+		rollingDJITWSE:  globalmarket.NewRollingCorrelation(correlationWindow),
+		rollingTSMTWSE:  globalmarket.NewRollingCorrelation(correlationWindow),
+		rollingNVDATWSE: globalmarket.NewRollingCorrelation(correlationWindow),
+		rollingSPXVIX:   globalmarket.NewRollingCorrelation(correlationWindow),
 	}
 }
 
 // UpdateCorrelation pushes a new daily return pair (SPX, TWSE proxy = SOX)
-// into the rolling correlation engine.
+// into the legacy SPX-TWSE rolling correlation engine. Preserved for
+// back-compat; new callers should use UpdateAllCorrelations.
 func (s *CrossMarketService) UpdateCorrelation(spxReturn, soxReturn float64) {
-	s.rollingCorrelation.Update(spxReturn, soxReturn)
+	s.rollingSPXTWSE.Update(spxReturn, soxReturn)
+}
+
+// UpdateAllCorrelations ingests a MacroDataSnapshot and pushes the relevant
+// return pairs into all six rolling correlation engines. This is the
+// canonical entry point for the realtime_feed / macro_ingest BTM task.
+//
+// Pairs updated:
+//   - SPX × SOX   (legacy, retained)
+//   - NDX × TAIEX
+//   - DJI × TAIEX
+//   - TSM ADR × TAIEX
+//   - NVDA × TAIEX
+//   - SPX × VIX
+//
+// Engines whose source has a zero `ChangePct` are still updated (the
+// RollingCorrelation engine handles zero observations gracefully and
+// returns the default 0.5 with insufficient data flag).
+func (s *CrossMarketService) UpdateAllCorrelations(snap marketdata.MacroDataSnapshot) {
+	if s == nil {
+		return
+	}
+	// Legacy: SPX-SOX (preserved for back-compat)
+	s.rollingSPXTWSE.Update(snap.SPXIndex.ChangePct, snap.SOXIndex.ChangePct)
+
+	// TAIEX-anchored Taiwan correlations
+	taiex := snap.TAIEX.ChangePct
+	s.rollingNDXTWSE.Update(snap.NDXIndex.ChangePct, taiex)
+	s.rollingDJITWSE.Update(snap.DJIIndex.ChangePct, taiex)
+	s.rollingTSMTWSE.Update(snap.TSMADR.ChangePct, taiex)
+	s.rollingNVDATWSE.Update(snap.NVDA.ChangePct, taiex)
+
+	// SPX-VIX inverse (panic gauge)
+	s.rollingSPXVIX.Update(snap.SPXIndex.ChangePct, snap.VIX.ChangePct)
 }
 
 // GetStatus returns the full cross-market status snapshot.
@@ -110,22 +195,27 @@ func (s *CrossMarketService) GetStatus(ctx context.Context) (*CrossMarketStatus,
 	status.USD_TWD = toIndex(snap.USD_TWD)
 	status.US10Y = toIndex(snap.US10Y)
 
-	// Use the live rolling correlation from GlobalMarketManager.
-	// The correlation is maintained by the realtime_feed task which
-	// pushes SPX/SOX daily returns on each macro ingestion cycle.
-	rho := s.rollingCorrelation.GetCurrent()
-	status.CorrelationSPXTWSE = rho
+	// Legacy: SPX-TWSE (always populated; uses SOX as TWSE proxy).
+	status.CorrelationSPXTWSE = s.rollingSPXTWSE.GetCurrent()
+
+	// Expanded pairs: only populate when the engine has at least
+	// minObservationsForReport paired observations. Otherwise emit `null`.
+	status.CorrelationNDXTWSE = reportableCorrelation(s.rollingNDXTWSE)
+	status.CorrelationDJITWSE = reportableCorrelation(s.rollingDJITWSE)
+	status.CorrelationTSMTWSE = reportableCorrelation(s.rollingTSMTWSE)
+	status.CorrelationNVDATWSE = reportableCorrelation(s.rollingNVDATWSE)
+	status.CorrelationSPXVIX = reportableCorrelation(s.rollingSPXVIX)
 
 	return status, nil
 }
 
-// GetCorrelation returns the current SPX-TWSE correlation estimate.
+// GetCorrelation returns the current SPX-TWSE correlation estimate (legacy).
 func (s *CrossMarketService) GetCorrelation() (*CorrelationResponse, error) {
-	rho := s.rollingCorrelation.GetCurrent()
-	obs := s.rollingCorrelation.Observations()
+	rho := s.rollingSPXTWSE.GetCurrent()
+	obs := s.rollingSPXTWSE.Observations()
 	return &CorrelationResponse{
 		Correlation:  rho,
-		WindowSize:   20,
+		WindowSize:   correlationWindow,
 		Observations: obs,
 		ComputedAt:   time.Now().Format(time.RFC3339),
 		IsFallback:   rho == 0.5 && obs < 3,
@@ -159,6 +249,30 @@ func (s *CrossMarketService) GetUSIndices(ctx context.Context) (*USIndicesRespon
 	}
 
 	return resp, nil
+}
+
+// reportableCorrelation returns the current correlation value only when
+// the engine has accumulated at least minObservationsForReport observations
+// and the result is a finite number. Otherwise returns nil so the JSON
+// field is emitted as `null` (per the user's "缺資料時回傳 null" contract).
+func reportableCorrelation(rc *globalmarket.RollingCorrelation) *float64 {
+	if rc == nil {
+		return nil
+	}
+	if rc.Observations() < minObservationsForReport {
+		return nil
+	}
+	rho := rc.GetCurrent()
+	// Defensive: the engine already guards NaN/Inf, but a final check
+	// here keeps the API contract explicit.
+	if math.IsNaN(rho) {
+		return nil
+	}
+	// Belt-and-suspenders: the Observations() guard above already
+	// prevents reporting before minObservationsForReport. The engine
+	// also returns a sentinel default (0.5) when data is insufficient.
+	// Both checks together ensure the API contract is never violated.
+	return &rho
 }
 
 // toIndex converts a MacroDataPoint to a CrossMarketIndex.
