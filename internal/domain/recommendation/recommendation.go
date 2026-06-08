@@ -119,6 +119,10 @@ func (h HumanIntervention) IsExpired() bool {
 }
 
 // Scorecard aggregates an agent's historical performance.
+//
+// Phase 1 (Observatory Agent Capability Framework) — see internal/domain/AGENTS.md
+// for zero-value semantics. Pointer-typed optional fields use omitempty to
+// distinguish "no data" from zero.
 type Scorecard struct {
 	AgentID                  string            `json:"agent_id"`
 	Skill                    string            `json:"skill"`
@@ -136,6 +140,61 @@ type Scorecard struct {
 	StatisticallySignificant bool              `json:"statistically_significant"`
 	ConcentrationWarnings    int               `json:"concentration_warnings"`
 	LastUpdatedAt            time.Time         `json:"last_updated_at"`
+	// DarwinianWeight is the dynamic weight from DarwinianWeightManager,
+	// clamped to [0.3, 2.5]. Sourced from data/state/darwinian_weights.json.
+	DarwinianWeight float64 `json:"darwinian_weight"`
+	// DarwinianSharpe is the per-day rolling Sharpe (mean/stdDev*sqrt(252)).
+	// Pointer to distinguish "agent not tracked" (nil) from "sharpe=0".
+	DarwinianSharpe *float64 `json:"darwinian_sharpe,omitempty"`
+	// RegimeBreakdown is the per-agent stratification of session outcomes
+	// by regime. Nil when no regime data is available.
+	RegimeBreakdown *RegimeBreakdown `json:"regime_breakdown,omitempty"`
+	// RegimeStability is stddev of per-regime AvgReturn. Nil when fewer
+	// than 2 regimes have data (statistically insufficient).
+	RegimeStability *float64 `json:"regime_stability,omitempty"`
+	// DataConsistencyWarning is set when scorecard.sharpe (per-outcome
+	// formula) diverges from darwinian.sharpe (per-day formula).
+	DataConsistencyWarning string `json:"data_consistency_warning,omitempty"`
+
+	// IsSharpe uses the first 80% of outcomes chronologically (per-outcome
+	// frequency, no annualization). Same formula as SharpeLike but on a
+	// restricted sample, making the comparison with OosSharpe meaningful.
+	IsSharpe float64 `json:"is_sharpe"`
+	// OosSharpe uses the last 20% of outcomes chronologically.
+	OosSharpe float64 `json:"oos_sharpe"`
+	// IsOosRatio is |IsSharpe| / max(|OosSharpe|, 0.01). Zero when OOS
+	// is the denominator. 0 when OosSharpe is zero (avoid div-by-zero).
+	IsOosRatio float64 `json:"is_oos_ratio"`
+	// OverfitWarning is true when IS/OOS diverges (ratio > 2.0 OR IS>0+OOS<=0).
+	OverfitWarning bool `json:"overfit_warning"`
+	// OverfitReason gives the human-readable reason for the warning.
+	OverfitReason string `json:"overfit_reason,omitempty"`
+	// RollingSharpeTrend is the linear regression slope of per-window
+	// Sharpe across the chronological order. Positive = improving,
+	// negative = degrading. 0 when fewer than 2 windows.
+	RollingSharpeTrend float64 `json:"rolling_sharpe_trend"`
+	// OosSampleWarning is set when train or test split has insufficient
+	// samples (e.g. "insufficient_test_samples: 3 < 5").
+	OosSampleWarning string `json:"oos_sample_warning,omitempty"`
+}
+
+// RegimeBreakdown is the per-agent stratification of performance metrics
+// by market regime. The map key is the regime label (RISK_ON / RISK_OFF /
+// NEUTRAL / unknown) as recorded in SessionSummary.Regime. Canonical
+// definition lives in domain (not reporting) to avoid the package-private
+// trap of internal/reporting.calculateRegimeBreakdown.
+type RegimeBreakdown struct {
+	Regimes map[string]RegimePerformance `json:"regimes"`
+}
+
+// RegimePerformance is the per-regime aggregate of session outcomes for
+// a single agent.
+type RegimePerformance struct {
+	Regime       string  `json:"regime"`
+	SessionCount int     `json:"session_count"`
+	TotalReturn  float64 `json:"total_return"`
+	WinRate      float64 `json:"win_rate"`
+	AvgReturn    float64 `json:"avg_return"`
 }
 
 // GuardSeverity classifies a control guard's enforcement level.

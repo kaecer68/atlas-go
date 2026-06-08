@@ -62,6 +62,8 @@ type (
 	MinFilter             = recommendation.MinFilter
 	ScreeningReject       = recommendation.ScreeningReject
 	GuardSeverity         = recommendation.GuardSeverity
+	RegimeBreakdown       = recommendation.RegimeBreakdown
+	RegimePerformance     = recommendation.RegimePerformance
 )
 
 const (

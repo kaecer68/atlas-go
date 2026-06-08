@@ -6,11 +6,13 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 func TestBuildScorecards(t *testing.T) {
@@ -238,9 +240,12 @@ func TestSharpeRatio(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sharpeRatio(tt.returns)
+			got := portfolio.ComputeSharpe(tt.returns, portfolio.SharpeConfig{
+				Frequency:  portfolio.FrequencyPerOutcome,
+				MinSamples: 2,
+			})
 			if diff := math.Abs(got - tt.expected); diff > 0.001 {
-				t.Errorf("sharpeRatio() = %v, want %v", got, tt.expected)
+				t.Errorf("sharpe via ComputeSharpe = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -336,5 +341,117 @@ func TestBuildScorecardsNewFields(t *testing.T) {
 	}
 	if scSmall.TStat != 0 {
 		t.Errorf("expected TStat=0 for n<2, got %v", scSmall.TStat)
+	}
+}
+
+func TestBuildScorecards_OOS_InsufficientTestSamples(t *testing.T) {
+	// 12 outcomes → 80/20 split → 9 train / 3 test → test < 5 → warning
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	outcomes := make([]domain.RecommendationOutcome, 12)
+	for i := range 12 {
+		outcomes[i] = domain.RecommendationOutcome{
+			AgentID:       "oos-agent",
+			Skill:         "alpha",
+			ForwardReturn: 0.01,
+			Hit:           true,
+			RecordedAt:    now.Add(time.Duration(i) * time.Hour),
+		}
+	}
+	sc := BuildScorecards(outcomes)
+	if len(sc) != 1 {
+		t.Fatalf("expected 1 scorecard, got %d", len(sc))
+	}
+	s := sc[0]
+	if s.OosSampleWarning == "" {
+		t.Fatal("expected oos_sample_warning for insufficient test samples (< 5)")
+	}
+	if !strings.Contains(s.OosSampleWarning, "insufficient_test_samples") {
+		t.Errorf("warning should mention insufficient_test_samples, got: %s", s.OosSampleWarning)
+	}
+	if s.OosSharpe != 0 {
+		t.Errorf("expected OosSharpe=0 when test < 5, got %v", s.OosSharpe)
+	}
+	if s.IsSharpe != 0 {
+		t.Errorf("expected IsSharpe=0 when train < 10, got %v", s.IsSharpe)
+	}
+}
+
+func TestBuildScorecards_OOS_NormalCase(t *testing.T) {
+	// 25 outcomes across 25 windows → 20 train / 5 test → IS & OOS computed
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	outcomes := make([]domain.RecommendationOutcome, 25)
+	oosReturns := []float64{-0.02, -0.03, 0.01, -0.04, -0.01} // variance so ComputeSharpe works
+	for i := range 25 {
+		r := 0.01
+		if i >= 20 {
+			r = oosReturns[i-20]
+		}
+		outcomes[i] = domain.RecommendationOutcome{
+			AgentID:       "oos-agent-2",
+			Skill:         "beta",
+			Window:        fmt.Sprintf("w%d", i),
+			ForwardReturn: r,
+			Hit:           r > 0,
+			RecordedAt:    now.Add(time.Duration(i) * time.Hour),
+		}
+	}
+	sc := BuildScorecards(outcomes)
+	if len(sc) != 1 {
+		t.Fatalf("expected 1 scorecard, got %d", len(sc))
+	}
+	s := sc[0]
+	if s.OosSampleWarning != "" {
+		t.Errorf("expected no sample warning for 20/5 split, got: %s", s.OosSampleWarning)
+	}
+	if s.IsSharpe == 0 {
+		t.Errorf("expected non-zero IsSharpe for 20 train samples")
+	}
+	if s.OosSharpe == 0 {
+		t.Errorf("expected non-zero OosSharpe for 5 test samples")
+	}
+	if !s.OverfitWarning {
+		t.Errorf("expected overfit_warning for IS positive + OOS negative, got false")
+	}
+	if s.IsOosRatio <= 0 {
+		t.Errorf("expected positive IsOosRatio, got %v", s.IsOosRatio)
+	}
+	if s.RollingSharpeTrend == 0 {
+		t.Errorf("expected non-zero RollingSharpeTrend for 25 windows with increasing returns")
+	}
+}
+
+func TestBuildScorecards_OOS_ChronologicalOrder(t *testing.T) {
+	// 25 outcomes (20 train / 5 test); earliest 20 positive, latest 5 negative
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	outcomes := make([]domain.RecommendationOutcome, 25)
+	for i := range 20 {
+		outcomes[i] = domain.RecommendationOutcome{
+			AgentID:       "chrono-agent",
+			Skill:         "gamma",
+			ForwardReturn: 0.01,
+			Hit:           true,
+			RecordedAt:    now.Add(time.Duration(i) * time.Hour),
+		}
+	}
+	oosReturns := []float64{-0.10, -0.12, 0.02, -0.08, -0.09}
+	for i := 20; i < 25; i++ {
+		outcomes[i] = domain.RecommendationOutcome{
+			AgentID:       "chrono-agent",
+			Skill:         "gamma",
+			ForwardReturn: oosReturns[i-20],
+			Hit:           false,
+			RecordedAt:    now.Add(time.Duration(100+i) * time.Hour),
+		}
+	}
+	sc := BuildScorecards(outcomes)
+	if len(sc) != 1 {
+		t.Fatalf("expected 1 scorecard, got %d", len(sc))
+	}
+	s := sc[0]
+	if s.OosSharpe >= 0 {
+		t.Errorf("expected negative OosSharpe for negative OOS returns, got %v", s.OosSharpe)
+	}
+	if s.OverfitWarning != true {
+		t.Errorf("expected overfit_warning when OOS negative and IS positive")
 	}
 }

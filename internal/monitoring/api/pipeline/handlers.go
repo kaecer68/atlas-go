@@ -115,6 +115,14 @@ func (h *Handlers) HandleAgentObservatory(r *http.Request) (int, any) {
 		if math.IsNaN(sc.AverageReturn) || math.IsInf(sc.AverageReturn, 0) {
 			sc.AverageReturn = 0
 		}
+		// Phase 1: sanitize the new Darwinian-weight fields. A NaN/Inf
+		// DarwinianWeight would poison the UI's "current allocation" view.
+		if math.IsNaN(sc.DarwinianWeight) || math.IsInf(sc.DarwinianWeight, 0) {
+			sc.DarwinianWeight = 0
+		}
+		if sc.DarwinianSharpe != nil && (math.IsNaN(*sc.DarwinianSharpe) || math.IsInf(*sc.DarwinianSharpe, 0)) {
+			sc.DarwinianSharpe = nil
+		}
 	}
 
 	resp := AgentObservatoryResponse{

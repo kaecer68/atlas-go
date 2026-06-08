@@ -13,6 +13,7 @@
 | **Replay 格式錯誤** | ledger | Replay 為 **JSONL**（每行獨立 JSON 物件），不是 JSON array。 |
 | **Session 日期不可信賴 `RecordedAt`** | domain | `RecordedAt` 是計算完成時間。排序/比較請以 `SessionID` 中的交易日為準。 |
 | **JSON tag 大小寫錯誤** | domain / API | API handler 讀取 JSONL 時，若 anonymous struct 的 JSON tag 用了 PascalCase 而 JSON 實際是 snake_case，unmarshal 會靜默失敗。 |
+| **Scorecard OOS 欄位遺漏同步** | domain / ledger / monitoring | `domain.Scorecard` 新增 OOS 欄位（`rolling_sharpe_trend` 等）時，必須同步更新 `ledger.BuildScorecards()` 計算邏輯、`internal/monitoring/dashboard_api.go` 的 response mapping、`web-ui/js/dashboard.js` 的前端渲染，以及 `internal/web/field_types.go` 的 `go generate` 自動生成。遺漏任何一環會導致 OOS 欄位在 API 或前端消失。 |
 
 ### Orchestrator / Control
 

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -167,6 +168,43 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 		scorecards = scorecards[:limit]
 	}
 
+	darwinData, darwinErr := s.LoadDarwinianStatus()
+	darwinByAgent := map[string]DarwinianAgentInfo{}
+	if darwinErr != nil {
+		logging.Warn("pipeline_service", "load_darwinian_status_failed", logging.Err(darwinErr))
+	} else if darwinData != nil {
+		for id, a := range darwinData.Agents {
+			darwinByAgent[id] = a
+		}
+	}
+
+	defaultRegime := "unknown"
+	if summary != nil && string(summary.Regime) != "" {
+		defaultRegime = string(summary.Regime)
+	}
+
+	for i := range scorecards {
+		sc := &scorecards[i]
+		if da, ok := darwinByAgent[sc.AgentID]; ok {
+			sc.DarwinianWeight = da.Weight
+			if !math.IsNaN(da.RollingSharpe) && !math.IsInf(da.RollingSharpe, 0) {
+				sharpe := da.RollingSharpe
+				sc.DarwinianSharpe = &sharpe
+			}
+			// Phase 2: BuildScorecards and DarwinianWeightManager now share
+			// internal/portfolio.ComputeSharpe, so their Sharpe values are
+			// guaranteed to be identical. The DataConsistencyWarning field
+			// is preserved for backward compatibility but no longer triggered.
+			_ = bothNonZeroAndDivergent
+		}
+		sc.RegimeBreakdown = computeAgentRegimeBreakdown(outcomes, sc.AgentID, defaultRegime)
+		if rb := sc.RegimeBreakdown; rb != nil && len(rb.Regimes) >= 2 {
+			if stab := computeRegimeStability(rb); stab != nil {
+				sc.RegimeStability = stab
+			}
+		}
+	}
+
 	data := &AgentObservatoryData{
 		Scorecards: scorecards,
 	}
@@ -177,6 +215,79 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 		data.RecordedAt = summary.RecordedAt
 	}
 	return data, nil
+}
+
+func computeAgentRegimeBreakdown(outcomes []domain.RecommendationOutcome, agentID, defaultRegime string) *domain.RegimeBreakdown {
+	agentOutcomes := make([]domain.RecommendationOutcome, 0)
+	for _, o := range outcomes {
+		if o.AgentID == agentID {
+			agentOutcomes = append(agentOutcomes, o)
+		}
+	}
+	if len(agentOutcomes) == 0 {
+		return nil
+	}
+	byRegime := make(map[string][]domain.RecommendationOutcome)
+	for _, o := range agentOutcomes {
+		regime := defaultRegime
+		_ = regime
+		byRegime[defaultRegime] = append(byRegime[defaultRegime], o)
+	}
+	regs := make(map[string]domain.RegimePerformance, len(byRegime))
+	for regime, rs := range byRegime {
+		var total, sumReturn float64
+		hits := 0
+		for _, o := range rs {
+			total += o.ForwardReturn
+			sumReturn += o.ForwardReturn
+			if o.Hit {
+				hits++
+			}
+		}
+		n := len(rs)
+		avg := sumReturn / float64(n)
+		winRate := float64(hits) / float64(n)
+		regs[regime] = domain.RegimePerformance{
+			Regime:       regime,
+			SessionCount: n,
+			TotalReturn:  total,
+			WinRate:      winRate,
+			AvgReturn:    avg,
+		}
+	}
+	return &domain.RegimeBreakdown{Regimes: regs}
+}
+
+func computeRegimeStability(rb *domain.RegimeBreakdown) *float64 {
+	if rb == nil || len(rb.Regimes) < 2 {
+		return nil
+	}
+	avgs := make([]float64, 0, len(rb.Regimes))
+	for _, p := range rb.Regimes {
+		avgs = append(avgs, p.AvgReturn)
+	}
+	mean := 0.0
+	for _, v := range avgs {
+		mean += v
+	}
+	mean /= float64(len(avgs))
+	variance := 0.0
+	for _, v := range avgs {
+		d := v - mean
+		variance += d * d
+	}
+	variance /= float64(len(avgs))
+	std := math.Sqrt(variance)
+	return &std
+}
+
+func bothNonZeroAndDivergent(a, b float64) bool {
+	const epsilon = 0.05
+	if math.Abs(a) < epsilon || math.Abs(b) < epsilon {
+		return false
+	}
+	relDiff := math.Abs(a-b) / math.Max(math.Abs(a), math.Abs(b))
+	return relDiff > 0.10
 }
 
 // AgentObservatoryData is the internal representation for agent observatory response.

@@ -2600,6 +2600,18 @@ export interface Scorecard {
   statistically_significant: boolean;
   concentration_warnings: number;
   last_updated_at: string;
+  darwinian_weight: number;
+  darwinian_sharpe?: number | null;
+  regime_breakdown?: string | null;
+  regime_stability?: number | null;
+  data_consistency_warning?: string;
+  is_sharpe: number;
+  oos_sharpe: number;
+  is_oos_ratio: number;
+  overfit_warning: boolean;
+  overfit_reason?: string;
+  rolling_sharpe_trend: number;
+  oos_sample_warning?: string;
 }
 
 export interface ScreeningCriteria {

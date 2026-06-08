@@ -244,15 +244,31 @@ export function renderAgentObservatory(data, overlapData) {
   }
 
   el.innerHTML = `<table>
-    <thead><tr><th>策略來源</th><th>層級</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>觀察數</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。基於標準差計算，已修正先前使用 variance 的錯誤。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>95% CI</th><th>平均報酬</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th></tr></thead>
+    <thead><tr><th>策略來源</th><th>層級</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>觀察數</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th>        <th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。基於標準差計算，已修正先前使用 variance 的錯誤。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>95% CI</th><th>平均報酬</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th><th>IS Sharpe ${helpIcon('IS Sharpe 說明', '<p>樣本內 (In-Sample) 風險調整後報酬，使用前 80% 的時間序列計算。</p><p>與 OOS Sharpe 比較可判斷策略是否過度擬合。</p>')}</th><th>OOS Sharpe ${helpIcon('OOS Sharpe 說明', '<p>樣本外 (Out-of-Sample) 風險調整後報酬，使用後 20% 的時間序列計算。</p><p>若 IS 為正但 OOS 為負，可能存在過度擬合風險。</p>')}</th><th>IS/OOS ${helpIcon('IS/OOS 說明', '<p>IS Sharpe 與 OOS Sharpe 的絕對值比率。</p><p>比率 > 2.0 或 IS>0 但 OOS≤0 時觸發過適度 (Overfit) 警告。</p>')}</th></tr></thead>
     <tbody>
       ${cards.map(c => {
         const isWeak = c.agent_id === weakest;
         const sigWarn = (c.windows || 0) < 20 ? '<span title="窗口數不足，統計信心有限" style="color:var(--warn);font-size:10px">⚠️</span>' : '';
         const ciLow = (c.confidence_low != null && c.confidence_low !== 0) ? c.confidence_low.toFixed(3) : '-';
         const ciHigh = (c.confidence_high != null && c.confidence_high !== 0) ? c.confidence_high.toFixed(3) : '-';
+        const trendVal = c.rolling_sharpe_trend;
+        let trendIcon = '';
+        if (trendVal != null && Math.abs(trendVal) > 0.001) {
+          if (trendVal > 0) {
+            trendIcon = `<span title="趨勢向上 (rolling_sharpe_trend=${trendVal.toFixed(4)})" style="color:var(--up);font-size:12px">↗</span>`;
+          } else {
+            trendIcon = `<span title="趨勢向下 (rolling_sharpe_trend=${trendVal.toFixed(4)})" style="color:var(--down);font-size:12px">↘</span>`;
+          }
+        } else if (trendVal != null) {
+          trendIcon = `<span title="趨勢平穩 (rolling_sharpe_trend=${trendVal.toFixed(4)})" style="color:var(--muted);font-size:12px">→</span>`;
+        }
+        const oosWarn = c.oos_sample_warning ? `<span title="${escapeHtml(c.oos_sample_warning)}" style="color:var(--warn);font-size:10px">⚠️</span>` : '';
+        const overfitBadge = c.overfit_warning ? `<span title="${escapeHtml(c.overfit_reason || '')}" style="color:var(--down);font-size:10px;margin-left:4px">⚠️</span>` : '';
+        const isSharpeStr = c.is_sharpe != null ? c.is_sharpe.toFixed(3) : '-';
+        const oosSharpeStr = c.oos_sharpe != null ? c.oos_sharpe.toFixed(3) : '-';
+        const isOosStr = c.is_oos_ratio != null && c.is_oos_ratio > 0 ? c.is_oos_ratio.toFixed(2) : '-';
         return `<tr class="${isWeak ? 'weak' : ''}">
-          <td>${agentName(c.agent_id) || ''} ${sigWarn}</td>
+          <td>${agentName(c.agent_id) || ''} ${trendIcon} ${sigWarn}</td>
           <td>${c.layer || '-'}</td>
           <td>${c.windows || 0}</td>
           <td>${c.observations || 0}</td>
@@ -261,6 +277,9 @@ export function renderAgentObservatory(data, overlapData) {
           <td class="text-muted text-xs">[${ciLow}, ${ciHigh}]</td>
           <td>${((c.average_return || 0) * 100).toFixed(2)}%</td>
           <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
+          <td style="${(c.is_sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${isSharpeStr}${oosWarn}</td>
+          <td style="${(c.oos_sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${oosSharpeStr}${overfitBadge}</td>
+          <td>${isOosStr}</td>
         </tr>`;
       }).join('')}
     </tbody>
