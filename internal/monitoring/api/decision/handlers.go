@@ -6,6 +6,7 @@ package decision
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -16,6 +17,64 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
+
+// symbolNameMap resolves common TW stock symbols to Chinese names.
+// Keep in sync with web/static/js/names.js STOCK_NAME_MAP.
+var symbolNameMap = map[string]string{
+	"0050.TW":  "元大台灣50",
+	"0056.TW":  "元大高股息",
+	"00878.TW": "國泰永續高股息",
+	"1101.TW":  "台泥",
+	"1216.TW":  "統一",
+	"1301.TW":  "台塑",
+	"1303.TW":  "南亞",
+	"1326.TW":  "台化",
+	"1402.TW":  "遠東新",
+	"2002.TW":  "中鋼",
+	"2105.TW":  "正新",
+	"2207.TW":  "和泰車",
+	"2303.TW":  "聯電",
+	"2308.TW":  "台達電",
+	"2317.TW":  "鴻海",
+	"2327.TW":  "國巨",
+	"2330.TW":  "台積電",
+	"2357.TW":  "華碩",
+	"2379.TW":  "瑞昱",
+	"2382.TW":  "廣達",
+	"2395.TW":  "研華",
+	"2408.TW":  "南亞科",
+	"2412.TW":  "中華電",
+	"2454.TW":  "聯發科",
+	"2880.TW":  "華南金",
+	"2881.TW":  "富邦金",
+	"2882.TW":  "國泰金",
+	"2883.TW":  "開發金",
+	"2884.TW":  "玉山金",
+	"2885.TW":  "元大金",
+	"2886.TW":  "兆豐金",
+	"2887.TW":  "台新金",
+	"2891.TW":  "中信金",
+	"2892.TW":  "第一金",
+	"3008.TW":  "大立光",
+	"3045.TW":  "台灣大",
+	"3711.TW":  "日月光投控",
+	"4904.TW":  "遠傳",
+	"5880.TW":  "台灣金控",
+	"6505.TW":  "台塑化",
+}
+
+func resolveSymbolName(symbol string) string {
+	if name, ok := symbolNameMap[symbol]; ok {
+		return name
+	}
+	// Try adding .TW suffix if missing.
+	if !strings.HasSuffix(symbol, ".TW") {
+		if name, ok := symbolNameMap[symbol+".TW"]; ok {
+			return name
+		}
+	}
+	return symbol
+}
 
 // Handlers provides HTTP handlers for the decision-chain aggregation API.
 type Handlers struct {
@@ -73,17 +132,81 @@ type HeatmapEntry struct {
 
 // RecEntry is a simplified recommendation for the decision chain view.
 type RecEntry struct {
-	Symbol     string   `json:"symbol"`
-	Name       string   `json:"name"`
-	Action     string   `json:"action"`
-	Shares     int      `json:"shares,omitempty"`
-	Confidence float64  `json:"confidence"`
-	Reasons    []string `json:"reasons"`
+	Symbol        string   `json:"symbol"`
+	Name          string   `json:"name"`
+	Action        string   `json:"action"`
+	Price         float64  `json:"price"`
+	TargetPrice   float64  `json:"target_price"`
+	StopLossPrice float64  `json:"stop_loss_price"`
+	Confidence    float64  `json:"confidence"`
+	Reasons       []string `json:"reasons"`
 }
 
 // RegisterRoutes registers the decision-chain endpoint on the given mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/decision-chain", shared.Get(h.HandleDecisionChain))
+}
+
+// buildMarketNarrativeData maps a MacroDataSnapshot to MarketNarrativeData.
+func buildMarketNarrativeData(snap *marketdata.MacroDataSnapshot) narrative.MarketNarrativeData {
+	if snap == nil {
+		return narrative.MarketNarrativeData{}
+	}
+	return narrative.MarketNarrativeData{
+		US10YChangeBps:             snap.US10Y.ChangePct * 100,
+		DXYChangePct:               snap.DXY.ChangePct,
+		VIXLevel:                   snap.VIX.Value,
+		USD_TWD_ChangePct:          snap.USD_TWD.ChangePct,
+		OilChangePct:               snap.Oil.ChangePct,
+		GoldChangePct:              snap.Gold.ChangePct,
+		GoldLevel:                  snap.Gold.Value,
+		JPY_ChangePct:              snap.JPY.ChangePct,
+		JPYLevel:                   snap.JPY.Value,
+		CPIYoY:                     snap.CPIYoY.Value,
+		BDIChangePct:               snap.Bdi.ChangePct,
+		CopperChangePct:            snap.Copper.ChangePct,
+		ExportElectronicsChangePct: snap.ExportElectronics.ChangePct,
+		SOXIndexChangePct:          snap.SOXIndex.ChangePct,
+		DRAMSpotPriceChangePct:     snap.DRAMSpotPrice.ChangePct,
+		SPXIndexChangePct:          snap.SPXIndex.ChangePct,
+		NDXIndexChangePct:          snap.NDXIndex.ChangePct,
+		DJIIndexChangePct:          snap.DJIIndex.ChangePct,
+		TSMADRChangePct:            snap.TSMADR.ChangePct,
+	}
+}
+
+// buildPremarketData builds the PremarketData block from a MacroDataSnapshot.
+func buildPremarketData(snap *marketdata.MacroDataSnapshot) *PremarketData {
+	if snap == nil {
+		return nil
+	}
+	return &PremarketData{
+		USMarket: map[string]any{
+			"sox_pct": snap.SOXIndex.ChangePct,
+		},
+		ForeignFlow: map[string]any{
+			"net_buy_twd": snap.ForeignInvestorNet.Value,
+		},
+		FX: map[string]any{
+			"usd_twd":    snap.USD_TWD.Value,
+			"change_pct": snap.USD_TWD.ChangePct,
+		},
+		BDI: map[string]any{
+			"value":         snap.Bdi.Value,
+			"deviation_pct": snap.Bdi.ChangePct,
+		},
+		VIX: map[string]any{
+			"value":      snap.VIX.Value,
+			"change_pct": snap.VIX.ChangePct,
+		},
+		StressIndex: map[string]any{
+			"dxy":       snap.DXY.Value,
+			"dxy_pct":   snap.DXY.ChangePct,
+			"oil":       snap.Oil.Value,
+			"oil_pct":   snap.Oil.ChangePct,
+			"vix_level": snap.VIX.Value,
+		},
+	}
 }
 
 // HandleDecisionChain aggregates narrative events, event logic rules, sector
@@ -95,23 +218,24 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 		industries   []service.IndustryOverview
 		pipelineData *service.RecommendationPipelineData
 		exitAlerts   []ExitAlert
-		premarket    *PremarketData
 	)
+
+	// Fetch macro snapshot FIRST — it is required for accurate narrative detection.
+	var macroSnap *marketdata.MacroDataSnapshot
+	if h.MacroProvider != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if snap, err := h.MacroProvider.FetchSnapshot(ctx); err == nil {
+			macroSnap = &snap
+		}
+	}
 
 	g, ctx := errgroup.WithContext(r.Context())
 
-	// 1. Narrative events — detect from current market data snapshot.
+	// 1. Narrative events — detect from ACTUAL market data snapshot.
 	g.Go(func() error {
-		_ = ctx // unused; DetectEvents is synchronous
-		data := narrative.MarketNarrativeData{
-			US10YChangeBps:    0,
-			DXYChangePct:      0,
-			VIXLevel:          0,
-			USD_TWD_ChangePct: 0,
-			OilChangePct:      0,
-			GoldChangePct:     0,
-			JPY_ChangePct:     0,
-		}
+		_ = ctx
+		data := buildMarketNarrativeData(macroSnap)
 		if h.NarrativeEng != nil {
 			events = h.NarrativeEng.DetectEvents(data)
 		}
@@ -147,47 +271,7 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 		})
 	}
 
-	// 5. Premarket data — macro snapshot for pre-market indicators.
-	if h.MacroProvider != nil {
-		g.Go(func() error {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			snap, err := h.MacroProvider.FetchSnapshot(ctx)
-			if err != nil {
-				return nil // non-fatal
-			}
-			premarket = &PremarketData{
-				USMarket: map[string]any{
-					"sox_pct": snap.SOXIndex.ChangePct,
-				},
-				ForeignFlow: map[string]any{
-					"net_buy_twd": snap.ForeignInvestorNet.Value,
-				},
-				FX: map[string]any{
-					"usd_twd":    snap.USD_TWD.Value,
-					"change_pct": snap.USD_TWD.ChangePct,
-				},
-				BDI: map[string]any{
-					"value":         snap.Bdi.Value,
-					"deviation_pct": snap.Bdi.ChangePct,
-				},
-				VIX: map[string]any{
-					"value":      snap.VIX.Value,
-					"change_pct": snap.VIX.ChangePct,
-				},
-				StressIndex: map[string]any{
-					"dxy":       snap.DXY.Value,
-					"dxy_pct":   snap.DXY.ChangePct,
-					"oil":       snap.Oil.Value,
-					"oil_pct":   snap.Oil.ChangePct,
-					"vix_level": snap.VIX.Value,
-				},
-			}
-			return nil
-		})
-	}
-
-	// 6. Exit alerts — computed from live portfolio state.
+	// 5. Exit alerts — computed from live portfolio state.
 	g.Go(func() error {
 		exitAlerts = h.computeExitAlerts()
 		return nil
@@ -198,11 +282,13 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 
 	// --- Build response ---
 
-	// Events: split today vs recent.
+	// Events: split by calendar day (not rolling 24h window).
 	now := time.Now()
+	nowYear, nowMonth, nowDay := now.Date()
 	var todayEvents, recentEvents []narrative.NarrativeEvent
 	for _, e := range events {
-		if e.Timestamp.After(now.Add(-24 * time.Hour)) {
+		eYear, eMonth, eDay := e.Timestamp.Date()
+		if eYear == nowYear && eMonth == nowMonth && eDay == nowDay {
 			todayEvents = append(todayEvents, e)
 		} else if e.Timestamp.After(now.Add(-7 * 24 * time.Hour)) {
 			recentEvents = append(recentEvents, e)
@@ -222,16 +308,25 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 		})
 	}
 
-	// Sector heatmap: determine confidence from cycle phase and favorability.
-	heatmap := make([]HeatmapEntry, 0, len(industries))
+	// Sector heatmap: pass numeric confidence alongside label.
+	type heatmapEntry struct {
+		Sector          string   `json:"sector"`
+		Confidence      string   `json:"confidence"`
+		ConfidenceScore float64  `json:"confidence_score"`
+		Reasons         []string `json:"reasons"`
+	}
+	heatmap := make([]heatmapEntry, 0, len(industries))
 	for _, ind := range industries {
 		confidence := "low"
-		reasons := make([]string, 0, 3)
+		score := ind.CycleConfidence
 		if ind.IsFavorable {
 			confidence = "high"
-			reasons = append(reasons, "產業處於有利階段")
 		} else if ind.CycleConfidence >= 0.5 {
 			confidence = "medium"
+		}
+		reasons := make([]string, 0, 3)
+		if ind.IsFavorable {
+			reasons = append(reasons, "產業處於有利階段")
 		}
 		if ind.CyclePhase != "" {
 			reasons = append(reasons, "週期: "+ind.CyclePhase)
@@ -239,28 +334,28 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 		if len(ind.SeasonalPatterns) > 0 {
 			reasons = append(reasons, "季節性: "+ind.SeasonalPatterns[0])
 		}
-		heatmap = append(heatmap, HeatmapEntry{
-			Sector:     ind.Name,
-			Confidence: confidence,
-			Reasons:    reasons,
+		heatmap = append(heatmap, heatmapEntry{
+			Sector:          ind.Name,
+			Confidence:      confidence,
+			ConfidenceScore: score,
+			Reasons:         reasons,
 		})
 	}
 
-	// Recommendations: extract buy-side items from pipeline.
+	// Recommendations: include all directions (buy / sell / short).
 	recs := make([]RecEntry, 0)
 	if pipelineData != nil {
 		for _, item := range pipelineData.Items {
-			if item.Side != "buy" {
-				continue
-			}
 			entry := RecEntry{
-				Symbol:     item.Symbol,
-				Action:     item.Side,
-				Confidence: float64(item.Conviction) / 100.0,
-				Reasons:    []string{item.Reason},
+				Symbol:        item.Symbol,
+				Name:          resolveSymbolName(item.Symbol),
+				Action:        item.Side,
+				Price:         item.Price,
+				TargetPrice:   item.TargetPrice,
+				StopLossPrice: item.StopLossPrice,
+				Confidence:    float64(item.Conviction) / 100.0,
+				Reasons:       []string{item.Reason},
 			}
-			// Shares: extract from reason or use default.
-			entry.Shares = 0
 			if entry.Confidence > 1.0 {
 				entry.Confidence = 1.0
 			}
@@ -272,7 +367,7 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 		"events": EventBlock{
 			Today:     todayEvents,
 			Recent:    recentEvents,
-			Premarket: premarket,
+			Premarket: buildPremarketData(macroSnap),
 		},
 		"logic_rules":     ruleSummaries,
 		"sector_heatmap":  heatmap,
@@ -314,8 +409,8 @@ func (h *Handlers) computeExitAlerts() []ExitAlert {
 
 		alerts = append(alerts, ExitAlert{
 			Symbol:     pos.Symbol,
-			Name:       pos.Symbol, // name resolution needs symbol mapping
-			DaysHeld:   0,          // not tracked in current position DTO
+			Name:       resolveSymbolName(pos.Symbol),
+			DaysHeld:   -1, // TODO: not tracked in current position DTO; derive from ledger/trade history
 			PnlPct:     pos.PnlPct,
 			Suggestion: suggestion,
 		})

@@ -1,4 +1,5 @@
-import { getJSON, escapeHtml } from '../main.js';
+import { getJSON } from '../shared/app-utils.js';
+import { escapeHtml } from '../shared/utils.js';
 
 function renderSessionBar(sessions, currentId) {
   if (!sessions.length) {
@@ -16,21 +17,21 @@ function renderSessionBar(sessions, currentId) {
     var latestDate = new Date(latest.recorded_at);
     var today = new Date();
     var diffDays = Math.floor((today - latestDate) / (1000 * 60 * 60 * 24));
-    if (diffDays > 1) {
-      syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#fef3cd;border:1px solid #fde68a;color:#854d0e">' +
+    if (diffDays > 0) {
+      syncHtml = '<div class="rt-sync-warn">' +
         '\u26A0\uFE0F 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
         '</div>';
     } else {
-      syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46">' +
+      syncHtml = '<div class="rt-sync-ok">' +
         '\u2705 場次已同步（' + latestDate.toLocaleDateString('zh-TW') + '）' +
         '</div>';
     }
   }
 
   return syncHtml +
-    '<div style="margin-bottom:16px;font-size:12px;display:flex;align-items:center;gap:8px">' +
+    '<div class="rt-session-bar">' +
     '<span>場次：</span>' +
-    '<select id="reasoningTraceSessionSelect" style="font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--text)" onchange="toggleReasoningTraceSession(this)">' +
+    '<select id="reasoningTraceSessionSelect" class="rt-session-select" onchange="toggleReasoningTraceSession(this)">' +
     opts +
     '</select>' +
     '</div>' +
@@ -111,37 +112,56 @@ export function renderReasoningTimeline(data, timelineEl) {
   var html = '<div><h2 style="font-size: 18px; margin-bottom: 20px;">決策追蹤 (Session: ' + escapeHtml(data.session_id) + ')</h2>';
   html += '<div style="position: relative; border-left: 2px solid var(--border); margin-left: 10px; padding-left: 20px;">';
 
-  data.traces.forEach(function(trace) {
+  data.traces.forEach(function(trace, idx) {
     var p = phases[trace.phase] || { label: trace.phase, color: '#9ca3af' };
     var pct = Math.round((trace.confidence || 0) * 100);
-    var fb = trace.is_fallback ? '<span style="margin-left:8px;padding:2px 6px;font-size:11px;font-weight:bold;background:#facc15;color:#854d0e;border-radius:4px">備援</span>' : '';
+    var fb = trace.is_fallback ? '<span class="rt-fallback-badge">備援</span>' : '';
+    var rawId = 'rt-raw-' + idx;
 
     html +=
-      '<div style="position:relative;margin-bottom:24px">' +
-        '<div style="position:absolute;width:12px;height:12px;border-radius:50%;left:-27px;top:4px;background:' + p.color + ';box-shadow:0 0 0 3px var(--bg)"></div>' +
-        '<div class="card" style="padding:16px">' +
+      '<div class="rt-trace-node">' +
+        '<div class="rt-trace-dot" style="background:' + p.color + '"></div>' +
+        '<div class="card rt-trace-card">' +
           '<div class="flex-between mb-sm">' +
-            '<h3 style="margin:0;font-size:15px;color:' + p.color + '">' + escapeHtml(p.label) + ' ' + fb + '</h3>' +
+            '<h3 class="rt-trace-title" style="color:' + p.color + '">' + escapeHtml(p.label) + ' ' + fb + '</h3>' +
             '<span class="text-sm text-muted">' + escapeHtml(trace.component) + ' / ' + escapeHtml(trace.action) + '</span>' +
           '</div>' +
-          '<div class="mb-sm" style="display:flex;align-items:center;gap:10px">' +
+          '<div class="rt-confidence-bar">' +
             '<span class="text-sm text-muted" style="min-width:60px">信心水準</span>' +
-            '<div style="flex-grow:1;height:6px;background:var(--panel-l3);border-radius:3px;overflow:hidden">' +
-              '<div style="height:100%;width:' + pct + '%;background:' + p.color + '"></div>' +
+            '<div class="rt-confidence-track">' +
+              '<div class="rt-confidence-fill" style="width:' + pct + '%;background:' + p.color + '"></div>' +
             '</div>' +
             '<span class="text-sm text-muted" style="min-width:40px;text-align:right">' + pct + '%</span>' +
           '</div>' +
           (trace.explanation ?
-            '<div class="mb-md" style="padding:12px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:4px;font-size:13px;color:var(--text);white-space:pre-line;line-height:1.5">' +
+            '<div class="rt-explanation">' +
               escapeHtml(trace.explanation) +
             '</div>' : '') +
-          '<details>' +
-            '<summary style="cursor:pointer;font-size:12px;color:var(--muted);user-select:none">原始資料 (Raw JSON)</summary>' +
-            '<pre style="margin-top:8px;padding:10px;background:var(--panel-l2);border-radius:4px;overflow-x:auto;font-size:11px;font-family:var(--font-mono);color:var(--muted)">' + escapeHtml(JSON.stringify(trace.raw_data || {}, null, 2)) + '</pre>' +
+          '<details class="rt-raw-details" data-raw="' + escapeHtml(JSON.stringify(trace.raw_data || {})) + '">' +
+            '<summary class="rt-raw-summary">原始資料 (Raw JSON)</summary>' +
+            '<pre class="rt-raw-pre" id="' + rawId + '"></pre>' +
           '</details>' +
         '</div>' +
       '</div>';
   });
+
+  // Lazy-load raw JSON on expand to avoid DOM bloat.
+  setTimeout(function() {
+    timeline.querySelectorAll('.rt-raw-details').forEach(function(details) {
+      details.addEventListener('toggle', function() {
+        if (details.open) {
+          var pre = details.querySelector('.rt-raw-pre');
+          if (pre && !pre.textContent) {
+            try {
+              pre.textContent = JSON.stringify(JSON.parse(details.dataset.raw), null, 2);
+            } catch (e) {
+              pre.textContent = details.dataset.raw;
+            }
+          }
+        }
+      });
+    });
+  }, 0);
 
   html += '</div></div>';
   timeline.innerHTML = html;

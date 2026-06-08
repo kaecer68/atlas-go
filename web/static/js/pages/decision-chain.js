@@ -5,6 +5,7 @@ import { escapeHtml } from '../shared/utils.js';
 
 let lastData = null;
 let currentTime = '--:--';
+let refreshInterval = null;
 
 export async function loadDecisionChain() {
   const el = document.getElementById('decisionChain');
@@ -21,6 +22,25 @@ export async function loadDecisionChain() {
     console.error('Decision chain load failed:', err);
     el.innerHTML = '<div class="error-box" style="padding:20px;color:var(--err);text-align:center">載入失敗：' + escapeHtml(String(err.message || err)) + '</div>';
     el.classList.remove('loading');
+  }
+
+  // Auto-refresh every 30 seconds while on this page.
+  if (!refreshInterval) {
+    refreshInterval = setInterval(() => {
+      if (document.getElementById('page-decision')?.classList.contains('active')) {
+        refreshDecisionChain();
+      }
+    }, 30000);
+  }
+}
+
+async function refreshDecisionChain() {
+  try {
+    lastData = await getJSON('/api/dashboard/decision-chain');
+    currentTime = new Date().toLocaleTimeString('zh-TW');
+    renderDecisionChain(lastData);
+  } catch (err) {
+    console.error('Auto-refresh failed:', err);
   }
 }
 
@@ -75,6 +95,14 @@ function renderEventsRadar(data) {
     if (pm.bdi && pm.bdi.value) {
       const bdiCl = pm.bdi.deviation_pct >= 0 ? 'color:var(--color-success);font-weight:600' : 'color:var(--color-danger);font-weight:600';
       kvs.push(`<span>BDI ${pm.bdi.value} <span style="${bdiCl}">${fmtPct(pm.bdi.deviation_pct)}</span></span>`);
+    }
+    if (pm.vix && pm.vix.value !== undefined) {
+      const vixCl = pm.vix.value >= 25 ? 'color:var(--color-danger);font-weight:600' : pm.vix.value >= 20 ? 'color:var(--color-warning);font-weight:600' : 'color:var(--color-success)';
+      kvs.push(`<span>VIX ${pm.vix.value.toFixed(1)} <span style="${vixCl}">${fmtPct(pm.vix.change_pct)}</span></span>`);
+    }
+    if (pm.stress_index && pm.stress_index.dxy !== undefined) {
+      const stressCl = pm.stress_index.vix_level >= 25 ? 'color:var(--color-danger)' : 'color:var(--muted)';
+      kvs.push(`<span title="DXY ${pm.stress_index.dxy.toFixed(2)} · Oil ${pm.stress_index.oil_pct ? fmtPct(pm.stress_index.oil_pct) : '-'}" style="cursor:help;${stressCl}">壓力指數</span>`);
     }
     if (kvs.length) {
       premarketHtml = `<div class="dc-badge-row" style="margin-bottom:10px">${kvs.map(k => `<span class="badge info" style="font-size:11px">${k}</span>`).join(' ')}</div>`;
@@ -140,6 +168,7 @@ function renderSectorHeatmap(data) {
   if (!sectors || !sectors.length) return empty('尚無產業數據');
 
   const badges = sectors.map(s => {
+    const score = typeof s.confidence_score === 'number' ? s.confidence_score : (s.confidence === 'high' ? 0.8 : s.confidence === 'medium' ? 0.5 : 0.2);
     const bg = s.confidence === 'high' ? 'rgba(34,197,94,0.15)' : s.confidence === 'medium' ? 'rgba(251,191,36,0.15)' : 'rgba(156,163,175,0.1)';
     const border = s.confidence === 'high' ? 'var(--color-success)' : s.confidence === 'medium' ? 'var(--color-warning)' : 'var(--muted)';
     const emoji = s.confidence === 'high' ? '🔥' : s.confidence === 'medium' ? '🟡' : '⚪';
@@ -148,8 +177,11 @@ function renderSectorHeatmap(data) {
       <div style="flex:1">
         <div style="font-size:12px;font-weight:600">${escapeHtml(s.sector)}</div>
         <div style="font-size:10px;color:var(--muted)">${(s.reasons || []).map(escapeHtml).join(' · ')}</div>
+        <div style="margin-top:4px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+          <div style="width:${Math.round(score * 100)}%;height:100%;background:${border}"></div>
+        </div>
       </div>
-      <span class="badge ${s.confidence === 'high' ? 'ok' : s.confidence === 'medium' ? 'warn' : 'muted'}">${s.confidence}</span>
+      <span class="badge ${s.confidence === 'high' ? 'ok' : s.confidence === 'medium' ? 'warn' : 'muted'}" title="信心度 ${(score * 100).toFixed(0)}%">${s.confidence}</span>
     </div>`;
   }).join('');
 
@@ -164,18 +196,24 @@ function renderRecommendations(data) {
   const rows = recs.map(r => {
     const confPct = Math.round(r.confidence * 100);
     const confColor = confPct >= 80 ? 'var(--color-success)' : confPct >= 60 ? 'var(--color-warning)' : 'var(--muted)';
+    const actionBadge = r.action === 'buy' ? 'ok' : r.action === 'sell' || r.action === 'short' ? 'err' : 'warn';
+    const price = typeof r.price === 'number' && r.price > 0 ? r.price.toFixed(2) : '-';
+    const target = typeof r.target_price === 'number' && r.target_price > 0 ? r.target_price.toFixed(2) : '-';
+    const stop = typeof r.stop_loss_price === 'number' && r.stop_loss_price > 0 ? r.stop_loss_price.toFixed(2) : '-';
     return `<tr>
       <td><span class="badge muted">${escapeHtml(r.symbol)}</span></td>
       <td>${escapeHtml(r.name || r.symbol)}</td>
-      <td><span class="badge ${r.action === 'buy' ? 'ok' : r.action === 'sell' ? 'err' : 'warn'}">${escapeHtml(r.action)}</span></td>
-      <td>${r.shares || '-'}</td>
+      <td><span class="badge ${actionBadge}">${escapeHtml(r.action)}</span></td>
+      <td style="font-size:11px;text-align:right">${price}</td>
+      <td style="font-size:11px;text-align:right">${target}</td>
+      <td style="font-size:11px;text-align:right">${stop}</td>
       <td><span style="color:${confColor};font-weight:600">${confPct}%</span></td>
       <td style="font-size:11px;color:var(--muted)">${(r.reasons || []).map(escapeHtml).join(', ')}</td>
     </tr>`;
   }).join('');
 
   return `<div class="dc-table-wrap"><table class="dc-table">
-    <thead><tr><th>代號</th><th>名稱</th><th>方向</th><th>股數</th><th>置信度</th><th>原因</th></tr></thead>
+    <thead><tr><th>代號</th><th>名稱</th><th>方向</th><th>參考價</th><th>目標價</th><th>止損價</th><th>置信度</th><th>原因</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -208,8 +246,8 @@ function fmtPct(v) {
 function fmtNTD(v) {
   if (v === undefined || v === null) return '-';
   const abs = Math.abs(v);
-  if (abs >= 1e8) return (v / 1e8).toFixed(1) + '億';
-  if (abs >= 1e4) return (v / 1e4).toFixed(1) + '萬';
+  if (abs >= 1e8) return (v / 1e8).toFixed(2) + '億';
+  if (abs >= 1e4) return (v / 1e4).toFixed(2) + '萬';
   return v.toFixed(0);
 }
 

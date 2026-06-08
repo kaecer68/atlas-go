@@ -17,6 +17,63 @@ import (
 	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
+// symbolNameMap resolves common TW stock symbols to Chinese names.
+// Keep in sync with web/static/js/names.js STOCK_NAME_MAP.
+var symbolNameMap = map[string]string{
+	"0050.TW":  "元大台灣50",
+	"0056.TW":  "元大高股息",
+	"00878.TW": "國泰永續高股息",
+	"1101.TW":  "台泥",
+	"1216.TW":  "統一",
+	"1301.TW":  "台塑",
+	"1303.TW":  "南亞",
+	"1326.TW":  "台化",
+	"1402.TW":  "遠東新",
+	"2002.TW":  "中鋼",
+	"2105.TW":  "正新",
+	"2207.TW":  "和泰車",
+	"2303.TW":  "聯電",
+	"2308.TW":  "台達電",
+	"2317.TW":  "鴻海",
+	"2327.TW":  "國巨",
+	"2330.TW":  "台積電",
+	"2357.TW":  "華碩",
+	"2379.TW":  "瑞昱",
+	"2382.TW":  "廣達",
+	"2395.TW":  "研華",
+	"2408.TW":  "南亞科",
+	"2412.TW":  "中華電",
+	"2454.TW":  "聯發科",
+	"2880.TW":  "華南金",
+	"2881.TW":  "富邦金",
+	"2882.TW":  "國泰金",
+	"2883.TW":  "開發金",
+	"2884.TW":  "玉山金",
+	"2885.TW":  "元大金",
+	"2886.TW":  "兆豐金",
+	"2887.TW":  "台新金",
+	"2891.TW":  "中信金",
+	"2892.TW":  "第一金",
+	"3008.TW":  "大立光",
+	"3045.TW":  "台灣大",
+	"3711.TW":  "日月光投控",
+	"4904.TW":  "遠傳",
+	"5880.TW":  "台灣金控",
+	"6505.TW":  "台塑化",
+}
+
+func resolveSymbolName(symbol string) string {
+	if name, ok := symbolNameMap[symbol]; ok {
+		return name
+	}
+	if !strings.HasSuffix(symbol, ".TW") {
+		if name, ok := symbolNameMap[symbol+".TW"]; ok {
+			return name
+		}
+	}
+	return symbol
+}
+
 // LiveService provides live trading status and portfolio state operations.
 type LiveService struct {
 	WorkDir    string
@@ -119,6 +176,7 @@ type PortfolioStateResponse struct {
 // PositionDTO represents a single position with computed P&L percentage.
 type PositionDTO struct {
 	Symbol        string  `json:"symbol"`
+	Name          string  `json:"name"`
 	Quantity      int     `json:"quantity"`
 	AverageCost   float64 `json:"average_cost"`
 	CurrentPrice  float64 `json:"current_price"`
@@ -171,6 +229,7 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		totalUnrealizedPnL += pos.UnrealizedPnL
 		positions = append(positions, PositionDTO{
 			Symbol:        pos.Symbol,
+			Name:          resolveSymbolName(pos.Symbol),
 			Quantity:      pos.Quantity,
 			AverageCost:   pos.AverageCost,
 			CurrentPrice:  pos.CurrentPrice,

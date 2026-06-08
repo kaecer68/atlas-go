@@ -28,11 +28,24 @@ func NewScratchpad(sessionID, baseDir string) *Scratchpad {
 	}
 }
 
-// Record appends a reasoning trace in a thread-safe manner.
+// Record appends a reasoning trace in a thread-safe manner and synchronously
+// writes it to the JSONL file (WAL). This ensures trace durability even if
+// the process crashes before ExportJSONL is called.
 func (s *Scratchpad) Record(trace ReasoningTrace) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.traces = append(s.traces, trace)
+
+	// WAL: append trace to JSONL immediately.
+	tracesDir := filepath.Join(s.baseDir, "traces")
+	_ = os.MkdirAll(tracesDir, 0o755)
+	filePath := filepath.Join(tracesDir, s.sessionID+".jsonl")
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+	_ = json.NewEncoder(f).Encode(trace)
 }
 
 // MarkAllAsFallback sets IsFallback=true on every recorded trace.
