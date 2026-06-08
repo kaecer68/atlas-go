@@ -13,13 +13,14 @@ export async function loadCrossMarketData() {
   renderCrisis(status);
 }
 
-function kpiCard(label, value, fmt, color, borderColor, symbol) {
+function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey) {
   const c = color || 'var(--text)';
   const bc = borderColor || 'transparent';
   const borderStyle = bc !== 'transparent' ? `border-left:3px solid ${bc};` : '';
   const display = fmt ? fmt(value) : (value != null ? String(value) : '—');
   const symbolHtml = symbol ? `<span style="font-size:11px;color:var(--muted);margin-left:6px">${escapeHtml(symbol)}</span>` : '';
-  return `<div class="kpi-card" style="${borderStyle}"><div class="kpi-label">${label}${symbolHtml}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
+  const clickable = helpKey ? ` clickable" onclick="openKpiHelp('${helpKey}')` : '';
+  return `<div class="kpi-card${clickable}" style="${borderStyle}"><div class="kpi-label">${label}${symbolHtml}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
 }
 
 function fmtPct(v) {
@@ -65,10 +66,10 @@ function renderUSIndices(status) {
   const djiColor = parseFloat(dji.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
   const soxColor = parseFloat(sox.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
   el.innerHTML =
-    kpiCard('S&P 500', spx.value, fmtNum, spxColor, null, spx.symbol) +
-    kpiCard('Nasdaq', ndx.value, fmtNum, ndxColor, null, ndx.symbol) +
-    kpiCard('Dow Jones', dji.value, fmtNum, djiColor, null, dji.symbol) +
-    kpiCard('SOX 半導體', sox.value, fmtNum, soxColor, null, sox.symbol);
+    kpiCard('S&P 500', spx.value, fmtNum, spxColor, null, spx.symbol, 'cm_spx') +
+    kpiCard('Nasdaq', ndx.value, fmtNum, ndxColor, null, ndx.symbol, 'cm_ndx') +
+    kpiCard('Dow Jones', dji.value, fmtNum, djiColor, null, dji.symbol, 'cm_dji') +
+    kpiCard('SOX 半導體', sox.value, fmtNum, soxColor, null, sox.symbol, 'cm_sox');
 }
 
 function renderTechStocks(status) {
@@ -87,10 +88,10 @@ function renderTechStocks(status) {
   const msftColor = parseFloat(msft.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
   const tsmColor = parseFloat(tsm.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
   el.innerHTML =
-    kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol) +
-    kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol) +
-    kpiCard('MSFT', msft.value, fmtNum, msftColor, null, msft.symbol) +
-    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'rgba(79,193,255,0.3)', tsm.symbol);
+    kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol, 'cm_nvda') +
+    kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol, 'cm_aapl') +
+    kpiCard('MSFT', msft.value, fmtNum, msftColor, null, msft.symbol, 'cm_msft') +
+    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'rgba(79,193,255,0.3)', tsm.symbol, 'cm_tsm');
 }
 
 function renderMacro(status) {
@@ -105,10 +106,10 @@ function renderMacro(status) {
   const usdTwd = getField(status, 'usd_twd');
   const us10y = getField(status, 'us10y');
   el.innerHTML =
-    kpiCard('VIX 恐慌指數', vix.value, fmtNum, null, null, vix.symbol) +
-    kpiCard('DXY 美元指數', dxy.value, fmtNum, null, null, dxy.symbol) +
-    kpiCard('USD/TWD 匯率', usdTwd.value, fmtNum, null, null, usdTwd.symbol) +
-    kpiCard('US 10Y 殖利率', us10y.value, fmtPct, null, null, us10y.symbol);
+    kpiCard('VIX 恐慌指數', vix.value, fmtNum, null, null, vix.symbol, 'cm_vix') +
+    kpiCard('DXY 美元指數', dxy.value, fmtNum, null, null, dxy.symbol, 'cm_dxy') +
+    kpiCard('USD/TWD 匯率', usdTwd.value, fmtNum, null, null, usdTwd.symbol, 'cm_usd_twd') +
+    kpiCard('US 10Y 殖利率', us10y.value, fmtPct, null, null, us10y.symbol, 'cm_us10y');
 }
 
 function renderCorrelation(correlation, status) {
@@ -132,12 +133,12 @@ function renderCorrelation(correlation, status) {
   if (fallback) rhoColor = 'var(--muted)';
 
   el.innerHTML = `<div class="table-wrapper"><table>
-    <thead><tr><th>指標</th><th>數值</th></tr></thead>
+    <thead><tr><th>指標</th><th>數值</th><th>說明</th></tr></thead>
     <tbody>
-      <tr><td>SPX-TWSE 動態相關性 ρ</td><td style="color:${rhoColor};font-weight:700;font-family:var(--font-mono)">${rhoLabel}${fallback ? ' <span style="font-size:11px;color:var(--muted)">(fallback)</span>' : ''}</td></tr>
-      <tr><td>觀測筆數</td><td style="font-family:var(--font-mono)">${observations}</td></tr>
-      <tr><td>滾動視窗</td><td style="font-family:var(--font-mono)">${windowSize} 日</td></tr>
-      <tr><td>資料時間</td><td style="font-size:13px;color:var(--muted)">${escapeHtml(generatedAt)}</td></tr>
+      <tr><td>SPX-TWSE 動態相關性 ρ</td><td style="color:${rhoColor};font-weight:700;font-family:var(--font-mono)">${rhoLabel}${fallback ? ' <span style="font-size:11px;color:var(--muted)">(fallback)</span>' : ''}</td><td>ρ 範圍 −1 到 +1：≥ 0.7 強正相關（美股跌台股跟跌）、0.3–0.7 中度相關、≤ 0.3 弱相關。當 ρ &gt; 0.8 系統視為「傳導放大」會自動降倉。</td></tr>
+      <tr><td>觀測筆數</td><td style="font-family:var(--font-mono)">${observations}</td><td>計算 ρ 使用的歷史交易日數。少於 30 筆時 ρ 採 fallback（預設 0.5），不宜作為交易依據。</td></tr>
+      <tr><td>滾動視窗</td><td style="font-family:var(--font-mono)">${windowSize} 日</td><td>計算相關性時回看的歷史天數（pearson correlation 的 window size）。視窗越長反應越平滑、越短反應越即時但雜訊多。</td></tr>
+      <tr><td>資料時間</td><td style="font-size:13px;color:var(--muted)">${escapeHtml(generatedAt)}</td><td>此 ρ 值的計算時間（後端排程每 ${windowSize} 分鐘更新一次）。若超過 1 小時未更新請檢查 correlation 排程狀態。</td></tr>
     </tbody>
   </table></div>`;
 }
@@ -167,12 +168,13 @@ function renderCrisis(status) {
     desc = `VIX 指數 ${vixLabel} < 35，系統以標準參數運作。`;
   }
 
-  el.innerHTML = `<div style="padding:16px 20px;background:${bg};border-radius:8px;border:1px solid ${active ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.15)'}">
+  el.innerHTML = `<div class="kpi-card clickable" onclick="openKpiHelp('cm_crisis')" style="padding:var(--space-md);background:${bg};border-radius:8px;border:1px solid ${active ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.15)'}">
     <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:8px">
-      <span style="font-size:24px">${icon}</span>
-      <span style="font-weight:700;font-size:16px;color:${active ? 'var(--color-danger)' : 'var(--color-success)'}">${title}</span>
+      <span style="font-size:var(--text-xl)">${icon}</span>
+      <span style="font-weight:var(--font-semibold);font-size:var(--text-base);color:${active ? 'var(--color-danger)' : 'var(--color-success)'}">${title}</span>
     </div>
-    <div style="font-size:14px;color:var(--text);line-height:1.6">${desc}</div>
+    <div style="font-size:var(--text-sm);color:var(--text);line-height:1.6">${desc}</div>
+    <div style="font-size:var(--text-xs);color:var(--muted);margin-top:8px">點擊查看完整風險分級說明 →</div>
   </div>`;
 }
 
