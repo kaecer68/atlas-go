@@ -120,14 +120,76 @@ func TestNewRateLimitManager_IndependentLimiters(t *testing.T) {
 		t.Error("us_yahoo and frankfurter_fx should have independent limiters (different API endpoints)")
 	}
 
-	// Verify us_yahoo still uses the package-level yahooSharedLimiter
-	if usLimiter != yahooSharedLimiter {
-		t.Error("us_yahoo should use the yahooSharedLimiter instance")
+	if usLimiter != yahooMacroLimiter {
+		t.Error("us_yahoo should use the yahooMacroLimiter instance")
 	}
 
-	// Verify frankfurter_fx does NOT use yahooSharedLimiter
-	if fxLimiter == yahooSharedLimiter {
-		t.Error("frankfurter_fx should NOT use yahooSharedLimiter (hits Frankfurter API, not Yahoo)")
+	if fxLimiter == yahooMacroLimiter || fxLimiter == yahooIndexLimiter || fxLimiter == yahooTechLimiter {
+		t.Error("frankfurter_fx should NOT use any Yahoo group limiter (hits Frankfurter API)")
+	}
+}
+
+// TestNewRateLimitManager_YahooGroupSplit asserts the 3-way grouping:
+//
+//	macro: us_yahoo                          → yahooMacroLimiter
+//	index: us_spx / us_ndx / us_dji          → yahooIndexLimiter
+//	tech:  us_nvda / us_aapl / us_msft / tsm_adr → yahooTechLimiter
+//
+// Within a group the channels share a limiter; across groups they must not.
+func TestNewRateLimitManager_YahooGroupSplit(t *testing.T) {
+	m := NewRateLimitManager()
+
+	macroChans := []string{"us_yahoo"}
+	indexChans := []string{"us_spx", "us_ndx", "us_dji"}
+	techChans := []string{"us_nvda", "us_aapl", "us_msft", "tsm_adr"}
+
+	groupExpectations := []struct {
+		name     string
+		channels []string
+		want     *rate.Limiter
+	}{
+		{"macro", macroChans, yahooMacroLimiter},
+		{"index", indexChans, yahooIndexLimiter},
+		{"tech", techChans, yahooTechLimiter},
+	}
+	for _, g := range groupExpectations {
+		for _, ch := range g.channels {
+			got, err := m.Get(ch)
+			if err != nil {
+				t.Fatalf("group %s: unexpected error for %s: %v", g.name, ch, err)
+			}
+			if got != g.want {
+				t.Errorf("group %s: channel %s should use %s instance, got different pointer", g.name, ch, g.name)
+			}
+		}
+	}
+
+	groups := []*rate.Limiter{yahooMacroLimiter, yahooIndexLimiter, yahooTechLimiter}
+	for i := 0; i < len(groups); i++ {
+		for j := i + 1; j < len(groups); j++ {
+			if groups[i] == groups[j] {
+				t.Errorf("group limiters %d and %d should be distinct instances", i, j)
+			}
+		}
+	}
+}
+
+// TestNewRateLimitManager_YahooGroupsDrainIndependently verifies that
+// draining one Yahoo group does not block traffic on a different group.
+func TestNewRateLimitManager_YahooGroupsDrainIndependently(t *testing.T) {
+	m := NewRateLimitManager()
+
+	indexLim, _ := m.Get("us_spx")
+	techLim, _ := m.Get("us_nvda")
+	macroLim, _ := m.Get("us_yahoo")
+
+	_ = indexLim.Allow()
+
+	if !techLim.Allow() {
+		t.Error("tech group should be unaffected by index group drain (independent limiters)")
+	}
+	if !macroLim.Allow() {
+		t.Error("macro group should be unaffected by index group drain (independent limiters)")
 	}
 }
 
@@ -352,13 +414,13 @@ func TestStatus_BurstMatchesConfig(t *testing.T) {
 		{"dram_spot_price", ExportStatisticsBurst},
 		{"twse_sector_index", ExportStatisticsBurst},
 		{"bdi", ExportStatisticsBurst},
-		{"us_spx", YahooFinanceBurst},
-		{"us_ndx", YahooFinanceBurst},
-		{"us_dji", YahooFinanceBurst},
-		{"us_nvda", YahooFinanceBurst},
-		{"us_aapl", YahooFinanceBurst},
-		{"us_msft", YahooFinanceBurst},
-		{"tsm_adr", YahooFinanceBurst},
+		{"us_spx", YahooIndexBurst},
+		{"us_ndx", YahooIndexBurst},
+		{"us_dji", YahooIndexBurst},
+		{"us_nvda", YahooTechBurst},
+		{"us_aapl", YahooTechBurst},
+		{"us_msft", YahooTechBurst},
+		{"tsm_adr", YahooTechBurst},
 	}
 
 	for _, tt := range tests {

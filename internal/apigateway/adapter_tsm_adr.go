@@ -12,8 +12,9 @@ import (
 )
 
 // TSMADRChannelAdapter adapts TSMADRProvider (TSMC ADR, NYSE:TSM) to the
-// DataProvider interface. Shares the Yahoo Finance v8 chart API endpoint
-// and therefore uses yahooSharedLimiter per Constitution Art. 2.3.
+// DataProvider interface. Uses yahooTechLimiter (1 req/1.5s) — grouped with
+// NVDA / AAPL / MSFT to parallelize with the macro and index groups during
+// us_market_refresh.
 type TSMADRChannelAdapter struct {
 	provider *marketdata.TSMADRProvider
 	limiter  *rate.Limiter
@@ -22,7 +23,7 @@ type TSMADRChannelAdapter struct {
 func NewTSMADRChannelAdapter(p *marketdata.TSMADRProvider) *TSMADRChannelAdapter {
 	return &TSMADRChannelAdapter{
 		provider: p,
-		limiter:  yahooSharedLimiter,
+		limiter:  yahooTechLimiter,
 	}
 }
 

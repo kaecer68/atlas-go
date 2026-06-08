@@ -11,9 +11,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// US tech stock adapters (NVDA, AAPL, MSFT) all hit Yahoo Finance v8 chart API
-// and therefore MUST share a single rate.Limiter per Constitution Art. 2.3
-// (shared limiter for same API endpoint).
+// US tech stock adapters (NVDA, AAPL, MSFT) hit Yahoo Finance v8 chart API.
+// The 3 tech channels (plus tsm_adr) share yahooTechLimiter (1 req/1.5s) so
+// they parallelize with the macro and index groups during us_market_refresh.
 
 // USNVDAChannelAdapter adapts NVDAProvider to the DataProvider interface.
 type USNVDAChannelAdapter struct {
@@ -24,7 +24,7 @@ type USNVDAChannelAdapter struct {
 func NewUSNVDAChannelAdapter(p *marketdata.NVDAProvider) *USNVDAChannelAdapter {
 	return &USNVDAChannelAdapter{
 		provider: p,
-		limiter:  yahooSharedLimiter,
+		limiter:  yahooTechLimiter,
 	}
 }
 
@@ -82,7 +82,7 @@ type USAAPLChannelAdapter struct {
 func NewUSAAPLChannelAdapter(p *marketdata.AAPLProvider) *USAAPLChannelAdapter {
 	return &USAAPLChannelAdapter{
 		provider: p,
-		limiter:  yahooSharedLimiter,
+		limiter:  yahooTechLimiter,
 	}
 }
 
@@ -140,7 +140,7 @@ type USMSFTChannelAdapter struct {
 func NewUSMSFTChannelAdapter(p *marketdata.MSFTProvider) *USMSFTChannelAdapter {
 	return &USMSFTChannelAdapter{
 		provider: p,
-		limiter:  yahooSharedLimiter,
+		limiter:  yahooTechLimiter,
 	}
 }
 

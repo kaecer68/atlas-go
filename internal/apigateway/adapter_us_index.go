@@ -11,9 +11,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// US index adapters (S&P 500, Nasdaq Composite, Dow Jones) all hit Yahoo Finance
-// v8 chart API and therefore MUST share a single rate.Limiter per Constitution
-// Art. 2.3 (shared limiter for same API endpoint).
+// US index adapters (S&P 500, Nasdaq Composite, Dow Jones) hit Yahoo Finance
+// v8 chart API. The 3 index channels share yahooIndexLimiter (1 req/1.5s) so
+// they parallelize with the macro and tech groups during us_market_refresh.
 
 // USSPXIndexChannelAdapter adapts SPXIndexProvider to the DataProvider interface.
 type USSPXIndexChannelAdapter struct {
@@ -24,7 +24,7 @@ type USSPXIndexChannelAdapter struct {
 func NewUSSPXIndexChannelAdapter(p *marketdata.SPXIndexProvider) *USSPXIndexChannelAdapter {
 	return &USSPXIndexChannelAdapter{
 		provider: p,
-		limiter:  yahooSharedLimiter,
+		limiter:  yahooIndexLimiter,
 	}
 }
 
@@ -82,7 +82,7 @@ type USNDXIndexChannelAdapter struct {
 func NewUSNDXIndexChannelAdapter(p *marketdata.NDXIndexProvider) *USNDXIndexChannelAdapter {
 	return &USNDXIndexChannelAdapter{
 		provider: p,
-		limiter:  yahooSharedLimiter,
+		limiter:  yahooIndexLimiter,
 	}
 }
 
@@ -140,7 +140,7 @@ type USDJIIndexChannelAdapter struct {
 func NewUSDJIIndexChannelAdapter(p *marketdata.DJIIndexProvider) *USDJIIndexChannelAdapter {
 	return &USDJIIndexChannelAdapter{
 		provider: p,
-		limiter:  yahooSharedLimiter,
+		limiter:  yahooIndexLimiter,
 	}
 }
 

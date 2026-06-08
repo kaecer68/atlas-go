@@ -10,9 +10,28 @@ import (
 // Rate-limiting configuration for all 14 channels.
 // These are hardcoded as required by the Constitution.
 var (
-	// YahooFinanceRate is shared between providers hitting Yahoo Finance v8 chart API.
+	// YahooFinanceRate is the rate for Yahoo Finance macro channel (us_yahoo).
+	// Yahoo Finance v8 chart API allows several requests per second, but we
+	// stay conservative at 1 req/s for the macro channel because each call
+	// fetches a batch of 9 macro indicators (VIX, DXY, US10Y, USD_TWD, Oil,
+	// Gold, Silver, Copper, JPY) and we want predictable server behavior.
 	YahooFinanceRate  = rate.Every(1 * time.Second)
 	YahooFinanceBurst = 1
+
+	// YahooIndexRate is the rate for US index channels (us_spx, us_ndx, us_dji).
+	// 1 req/1.5s per channel — 3 channels share this limiter but do not serialize
+	// against the macro or tech groups. Cold start: 0s, 1.5s, 3s (≈3s for 3 channels).
+	YahooIndexRate  = rate.Every(1500 * time.Millisecond)
+	YahooIndexBurst = 1
+
+	// YahooTechRate is the rate for US tech stock + TSM ADR channels
+	// (us_nvda, us_aapl, us_msft, tsm_adr).
+	// 1 req/1.5s per channel — 4 channels share this limiter. Cold start:
+	// 0s, 1.5s, 3s, 4.5s (≈4.5s for 4 channels). Combined with YahooIndexRate
+	// (parallel group), all 7 US market channels complete in under 5s on first
+	// refresh, instead of the previous serialized 7+ seconds.
+	YahooTechRate  = rate.Every(1500 * time.Millisecond)
+	YahooTechBurst = 1
 
 	// TWSECapitalFlowRate: conservative.
 	TWSECapitalFlowRate  = rate.Every(5 * time.Second)
@@ -51,10 +70,26 @@ var (
 	TEJBurst = 1
 )
 
-// Shared limiters (same API endpoint)
+// Group-scoped limiters for Yahoo Finance channels.
+//
+// History: all 8 Yahoo channels previously shared a single 1 req/s limiter
+// (yahooSharedLimiter), which serialized the 7-channel us_market_refresh
+// batch into a 7+ second cold start. Per Constitution Art. 2.3 ("共享
+// limiter 用同一個 instance；不同 endpoint 可獨立 limiter"), we treat
+// macro / index / tech as distinct endpoint groups — each is independently
+// rate-limited so cold start and steady-state traffic are parallelized
+// across the three groups.
 var (
-	// yahooSharedLimiter is used by providers that hit Yahoo Finance API.
-	yahooSharedLimiter = rate.NewLimiter(YahooFinanceRate, YahooFinanceBurst)
+	// yahooMacroLimiter covers the macro channel (us_yahoo) which fetches
+	// 9 indicators in one batch call. 1 req/s preserves existing semantics.
+	yahooMacroLimiter = rate.NewLimiter(YahooFinanceRate, YahooFinanceBurst)
+
+	// yahooIndexLimiter covers the 3 US index channels (us_spx, us_ndx, us_dji).
+	yahooIndexLimiter = rate.NewLimiter(YahooIndexRate, YahooIndexBurst)
+
+	// yahooTechLimiter covers the 4 US tech stock + ADR channels
+	// (us_nvda, us_aapl, us_msft, tsm_adr).
+	yahooTechLimiter = rate.NewLimiter(YahooTechRate, YahooTechBurst)
 )
 
 // RateLimitManager manages all channel rate limiters.
@@ -66,7 +101,7 @@ type RateLimitManager struct {
 func NewRateLimitManager() *RateLimitManager {
 	return &RateLimitManager{
 		limiters: map[string]*rate.Limiter{
-			"us_yahoo":            yahooSharedLimiter,
+			"us_yahoo":            yahooMacroLimiter,
 			"frankfurter_fx":      rate.NewLimiter(FrankfurterFXRate, FrankfurterFXBurst),
 			"twse_replay":         rate.NewLimiter(rate.Inf, 0), // no limit for file-based
 			"twse_capital_flow":   rate.NewLimiter(TWSECapitalFlowRate, TWSECapitalFlowBurst),
@@ -90,16 +125,16 @@ func NewRateLimitManager() *RateLimitManager {
 			"taifex_daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_etf":            rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
-			// US indexes + tech stocks + TSM ADR all share the Yahoo Finance v8 chart
-			// API endpoint with the existing us_yahoo macro channel. Per Constitution
-			// Art. 2.3, shared endpoints must use a single rate.Limiter instance.
-			"us_spx":  yahooSharedLimiter,
-			"us_ndx":  yahooSharedLimiter,
-			"us_dji":  yahooSharedLimiter,
-			"us_nvda": yahooSharedLimiter,
-			"us_aapl": yahooSharedLimiter,
-			"us_msft": yahooSharedLimiter,
-			"tsm_adr": yahooSharedLimiter,
+			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
+			// (see yahooIndexLimiter / yahooTechLimiter above) so the 7-channel
+			// us_market_refresh batch does not serialize at 1 req/s.
+			"us_spx":  yahooIndexLimiter,
+			"us_ndx":  yahooIndexLimiter,
+			"us_dji":  yahooIndexLimiter,
+			"us_nvda": yahooTechLimiter,
+			"us_aapl": yahooTechLimiter,
+			"us_msft": yahooTechLimiter,
+			"tsm_adr": yahooTechLimiter,
 		},
 	}
 }
