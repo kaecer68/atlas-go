@@ -45,6 +45,22 @@ Fetches global macro indicators every 5 minutes via Yahoo Finance API.
 
 Note: `^BDIY` is not available on Yahoo Finance. BDI is a separate channel from Yahoo macro data.
 
+### US Market Indexes & Tech Stocks (`internal/marketdata/us_index_provider.go`, `us_tech_provider.go`, `tsm_adr_provider.go`)
+
+Fetches US market indexes and large-cap tech stocks on-demand via Yahoo Finance v8 chart API. All channels share `yahooSharedLimiter` (1 burst, 1s) per `internal/apigateway/CONSTITUTION.md` Art. 2.3.
+
+| Symbol | Ticker | Provider | Channel ID | Gateway Adapter |
+|--------|--------|----------|------------|-----------------|
+| S&P 500 | ^GSPC | `SPXIndexProvider` | `us_spx` | `adapter_us_index.go` |
+| Nasdaq Composite | ^IXIC | `NDXIndexProvider` | `us_ndx` | `adapter_us_index.go` |
+| Dow Jones | ^DJI | `DJIIndexProvider` | `us_dji` | `adapter_us_index.go` |
+| NVIDIA | NVDA | `NVDAProvider` | `us_nvda` | `adapter_us_tech.go` |
+| Apple | AAPL | `AAPLProvider` | `us_aapl` | `adapter_us_tech.go` |
+| Microsoft | MSFT | `MSFTProvider` | `us_msft` | `adapter_us_tech.go` |
+| TSMC ADR | TSM | `TSMADRProvider` | `tsm_adr` | `adapter_tsm_adr.go` |
+
+Gated by `ATLAS_YAHOO_ENABLED=true` env var. Consumed by `/api/cross-market/status` via `MacroDataGatewayAdapter` → `gateway.Fetch(channelID)`.
+
 ### ETF NAV (`internal/marketdata/etf_nav_provider.go`)
 
 | Attribute | Detail |
