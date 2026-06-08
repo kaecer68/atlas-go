@@ -620,6 +620,20 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
 			}
 
+			// Register us_market_refresh — batch-refresh 7 US market channels
+			// (spx, ndx, dji, nvda, aapl, msft, tsm_adr) every 5 minutes.
+			// These channels share yahooSharedLimiter; Gateway.Fetch handles
+			// both rate limiting and circuit breaking per channel. Per-channel
+			// errors are logged but do not fail the batch (transient errors on
+			// one channel should not block the others).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "us_market_refresh",
+				Interval: 5 * time.Minute,
+				Enabled:  true,
+				Task:     apigateway.NewUSMarketRefreshTask(gateway),
+			})
+			log.Printf("[Gateway] registered us_market_refresh background task (5m interval)")
+
 			// Register seasonal_calibration background task. Guard: skip silently if
 			// the calibrate-seasonal binary is not co-located with the current binary
 			// (production deploys without it stay clean; no live-trading impact).
