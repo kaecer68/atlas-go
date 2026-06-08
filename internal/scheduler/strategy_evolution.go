@@ -12,7 +12,7 @@
 //   - 本任務提供「每日主動觸發」路徑,即使 macro/structural 沒有變化也會
 //     重新評估一次,確保 cooldown 倒數與 history 持續推進。
 //   - 任務本質是「審計式觸發」,實際決策仍由 system pipeline 主導,故
-//     結果僅寫入 logging,不下達任何 portoflio 變更。
+//     結果僅寫入 logging,不下達任何 portfolio 變更。
 //
 // 成熟度閘門 (maturity gate):
 //   - BURN_IN: 跳過(避免冷啟動期的 false signal 污染 history)。

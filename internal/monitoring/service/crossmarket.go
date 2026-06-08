@@ -54,7 +54,7 @@ type CrossMarketStatus struct {
 	// Each is the Pearson correlation over a rolling 20-observation window
 	// of daily returns. Nil means insufficient observations (encoded as
 	// JSON `null`). TAIEX is the canonical TWSE proxy for the new pairs
-	// (SPX-TWSE retains SOXIndex to preserve existing behaviour).
+	// (SPX-TWSE retains SOXIndex to preserve existing behavior).
 	CorrelationNDXTWSE  *float64 `json:"correlation_ndx_twse"`
 	CorrelationDJITWSE  *float64 `json:"correlation_dji_twse"`
 	CorrelationTSMTWSE  *float64 `json:"correlation_tsm_twse"`
