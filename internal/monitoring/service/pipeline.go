@@ -150,17 +150,27 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 
 	store := s.store
 	var outcomes []domain.RecommendationOutcome
-	if summary != nil {
-		if o, err := store.LoadSessionOutcomes(summary.SessionID); err != nil {
-			logging.Warn("pipeline_service", "load_session_outcomes_failed", logging.Err(err))
-		} else {
-			outcomes = o
-		}
-	}
-	if outcomes == nil {
-		outcomes, err = store.LoadOutcomes()
+	if sessionID == "" {
+		// Full historical view: load outcomes from ALL sessions for proper
+		// OOS validation (IS/OOS split needs ≥10 train / ≥5 test per agent).
+		// A single session yields only 1-10 outcomes per agent.
+		outcomes, err = store.LoadOutcomesFromSessions()
 		if err != nil {
-			return nil, fmt.Errorf("load recommendation outcomes: %w", err)
+			return nil, fmt.Errorf("load outcomes from sessions: %w", err)
+		}
+	} else {
+		if summary != nil {
+			if o, err := store.LoadSessionOutcomes(summary.SessionID); err != nil {
+				logging.Warn("pipeline_service", "load_session_outcomes_failed", logging.Err(err))
+			} else {
+				outcomes = o
+			}
+		}
+		if outcomes == nil {
+			outcomes, err = store.LoadOutcomes()
+			if err != nil {
+				return nil, fmt.Errorf("load recommendation outcomes: %w", err)
+			}
 		}
 	}
 	scorecards := ledger.BuildScorecards(outcomes)

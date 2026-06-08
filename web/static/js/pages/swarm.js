@@ -1,4 +1,5 @@
 import { escapeHtml } from '../shared/utils.js';
+import { renderStockCell } from '../names.js';
 
 export async function loadSwarmData() {
   const [status, consensus, anomalies, scenarios, strategies] = await Promise.all([
@@ -61,7 +62,7 @@ function renderConsensus(consensus) {
     const dirLabel = dir === 'bullish' ? '看多' : dir === 'bearish' ? '看空' : '中立';
     const conf = item.average_confidence != null ? (item.average_confidence * 100).toFixed(1) + '%' : '—';
     rows += `<tr>
-      <td style="font-family:var(--font-mono)">${escapeHtml(item.symbol || '')}</td>
+      <td>${item.symbol ? renderStockCell(item.symbol) : '—'}</td>
       <td><span style="color:${dirColor};font-weight:600">${dirIcon} ${dirLabel}</span></td>
       <td>${conf}</td>
       <td>${item.bullish_count || 0}</td>

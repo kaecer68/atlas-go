@@ -45,3 +45,10 @@
 .mt-8 { margin-top: 8px; }
 .ml-auto { margin-left: auto; }
 .justify-end { justify-content: flex-end; }
+
+/* Stock cell：統一股票代號表格渲染 */
+.stock-cell { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.stock-cell-symbol { font-family: var(--font-mono); font-weight: var(--font-semibold); color: var(--text); }
+.stock-cell-name { color: var(--muted); font-size: var(--text-sm); }
+.stock-cell-stacked { flex-direction: column; align-items: flex-start; gap: 1px; }
+.stock-cell-stacked .stock-cell-name { font-size: 11px; }

@@ -61,10 +61,10 @@ function renderUSIndices(status) {
   const ndx = getField(status, 'ndx');
   const dji = getField(status, 'dji');
   const sox = getField(status, 'sox');
-  const spxColor = parseFloat(spx.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const ndxColor = parseFloat(ndx.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const djiColor = parseFloat(dji.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const soxColor = parseFloat(sox.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const spxColor = parseFloat(spx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const ndxColor = parseFloat(ndx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const djiColor = parseFloat(dji.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const soxColor = parseFloat(sox.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
   el.innerHTML =
     kpiCard('S&P 500', spx.value, fmtNum, spxColor, null, spx.symbol, 'cm_spx') +
     kpiCard('Nasdaq', ndx.value, fmtNum, ndxColor, null, ndx.symbol, 'cm_ndx') +
@@ -83,10 +83,10 @@ function renderTechStocks(status) {
   const aapl = getField(status, 'aapl');
   const msft = getField(status, 'msft');
   const tsm = getField(status, 'tsm_adr');
-  const nvdaColor = parseFloat(nvda.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const aaplColor = parseFloat(aapl.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const msftColor = parseFloat(msft.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const tsmColor = parseFloat(tsm.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const nvdaColor = parseFloat(nvda.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const aaplColor = parseFloat(aapl.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const msftColor = parseFloat(msft.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const tsmColor = parseFloat(tsm.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
   el.innerHTML =
     kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol, 'cm_nvda') +
     kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol, 'cm_aapl') +

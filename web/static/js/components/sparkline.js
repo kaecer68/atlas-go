@@ -609,10 +609,10 @@ export function renderRegimeVolumeChart(containerId, sessions, volumes = []) {
   
   ctx.clearRect(0, 0, W, H);
   
-  const colors = { 
-    RISK_ON: getCssVar('--up', '#10b981'), 
-    RISK_OFF: getCssVar('--down', '#ef4444'), 
-    NEUTRAL: getCssVar('--warn', '#f59e0b') 
+  const colors = {
+    RISK_ON: getCssVar('--up', '#ef4444'),
+    RISK_OFF: getCssVar('--down', '#10b981'),
+    NEUTRAL: getCssVar('--warn', '#f59e0b')
   };
   
   const barW = chartW / sessions.length;

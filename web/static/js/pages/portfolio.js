@@ -5,6 +5,8 @@ import { renderBenchmarkComparison } from '../components/benchmark.js';
 import { renderRiskPanel } from '../components/risk-panel.js';
 import { renderRiskGatePanel } from '../components/risk-gate-panel.js';
 
+import { renderStockCell } from '../names.js';
+
 export async function loadPortfolioPage(getJSON, agentNameFn) {
   const kpis = document.getElementById('portfolioKPIs');
   const tableEl = document.getElementById('positionsTable');
@@ -106,7 +108,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
 
         return `
           <tr>
-            <td style="font-weight:600">${pos.symbol}</td>
+            <td>${renderStockCell(pos.symbol)}</td>
             <td>${sectorLabels[pos.sector] || pos.sector || '—'}</td>
             <td style="text-align:right">${fmtI(pos.quantity)}</td>
             <td style="text-align:right">${fmtF(pos.average_cost)}</td>
@@ -153,7 +155,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
         return `
           <tr>
             <td>${ts}</td>
-            <td style="font-weight:600">${trade.symbol || '—'}</td>
+            <td>${trade.symbol ? renderStockCell(trade.symbol) : '—'}</td>
             <td class="${sideClass}">${sideLabel}</td>
             <td style="text-align:right">${fmtI(trade.quantity || 0)}</td>
             <td style="text-align:right">${window.fmtFloat ? window.fmtFloat(trade.price || 0) : (trade.price || 0).toFixed(2)}</td>
