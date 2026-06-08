@@ -621,9 +621,15 @@ func (sw *MiroFishSwarm) applyEvent(state *MarketState, event MarketEvent) {
 		}
 		state.Sentiment = 0.8
 	case "earnings_surprise":
-		// Affects all symbols with individual random magnitudes
+		// Affects only the first symbol alphabetically
+		var firstSym string
 		for sym := range state.Prices {
-			state.Prices[sym] *= (1 + event.Magnitude*(rand.Float64()-0.5))
+			if firstSym == "" || sym < firstSym {
+				firstSym = sym
+			}
+		}
+		if firstSym != "" {
+			state.Prices[firstSym] *= (1 + event.Magnitude*(rand.Float64()-0.5))
 		}
 	default:
 	}

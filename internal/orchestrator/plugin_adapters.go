@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"math"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -274,12 +275,24 @@ func (p *phase3Plugin) PostSimulation(quotes []domain.Quote, regime domain.Regim
 		Timestamp: asOf,
 		Prices:    make(map[string]float64, len(quotes)),
 		Volumes:   make(map[string]float64, len(quotes)),
-		// TODO: populate RealizedVolatility from market data if available.
-		// Currently no easy source in this context; falls back to scenario.Volatility.
+		// RealizedVolatility is approximated from intraday High/Low ranges.
+		// This is a coarse proxy since only current quotes (no historical series)
+		// are available in this context. Falls back to scenario.Volatility when
+		// no valid quotes are present.
 	}
+	var totalRange float64
+	var validQuotes int
 	for _, q := range quotes {
 		baseState.Prices[q.Symbol] = q.Last
 		baseState.Volumes[q.Symbol] = float64(q.Volume)
+		if q.Last > 0 && q.High > q.Low {
+			totalRange += (q.High - q.Low) / q.Last
+			validQuotes++
+		}
+	}
+	if validQuotes > 0 {
+		avgRange := totalRange / float64(validQuotes)
+		baseState.RealizedVolatility = avgRange * math.Sqrt(252.0)
 	}
 	p.controller.RunParallelOptimization(baseState, regime)
 }

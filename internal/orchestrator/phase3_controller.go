@@ -1,9 +1,11 @@
 package orchestrator
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
+	"os"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/adversarial"
@@ -15,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/spawning"
+	"github.com/kaecer68/atlas-go/internal/stress"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
@@ -35,6 +38,7 @@ type Phase3Controller struct {
 	snapshotPath    string
 	metaLearner     *metalearning.MetaLearner
 	metaLearnPath   string
+	calibrationPath string
 
 	mu               sync.RWMutex
 	prismWeightCache map[string]float64 // agentID -> weight multiplier
@@ -92,6 +96,11 @@ func (c *Phase3Controller) SetMetaLearner(ml *metalearning.MetaLearner, persistP
 	}
 }
 
+// SetCalibrationPath sets the file path where swarm calibration reports are persisted.
+func (c *Phase3Controller) SetCalibrationPath(path string) {
+	c.calibrationPath = path
+}
+
 // RunSwarmCycle runs one complete swarm simulation cycle synchronously:
 //  1. Apply reflexivity mutations to scenarios
 //  2. Initialize and run swarm simulation
@@ -107,9 +116,30 @@ func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
 	c.syncReflexivityToSwarmUnsafe()
 	c.mu.Unlock()
 
-	c.swarm.InitializeScenarios(baseState)
+	// Using stress scenarios derived from historical market data.
+	// Revert to InitializeScenarios(baseState) to restore hardcoded defaults.
+	c.swarm.InitializeScenariosFromStress(baseState, stress.AllScenarios())
 	c.swarm.Start()
 	c.swarm.EvolveGeneration()
+
+	// Calibrate simulation statistics against market targets.
+	targetStats := swarm.SimulationStatistics{
+		Volatility:  0.20,
+		MeanReturn:  0.0002,
+		Skewness:    -0.3,
+		Kurtosis:    3.5,
+		MaxDrawdown: 0.15,
+	}
+	calReport := c.swarm.CalibrateAgainstTarget(targetStats)
+	logging.Info("phase3_controller", "swarm_calibrated",
+		"error", calReport.CalibrationError,
+		"adjustments", len(calReport.ParameterAdjustments))
+
+	if c.calibrationPath != "" {
+		if err := c.saveCalibrationReport(calReport); err != nil {
+			logging.Warn("phase3_controller", "calibration_save_failed", "err", err)
+		}
+	}
 
 	// Export training data for downstream consumption
 	if c.trainingStore != nil {
@@ -412,4 +442,19 @@ func (c *Phase3Controller) GetLastAdversarialResult() *adversarial.StressTestRes
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastAdvResult
+}
+
+// saveCalibrationReport persists a calibration report as JSON to calibrationPath.
+func (c *Phase3Controller) saveCalibrationReport(report swarm.CalibrationReport) error {
+	f, err := os.Create(c.calibrationPath)
+	if err != nil {
+		return fmt.Errorf("save calibration report: %w", err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(report); err != nil {
+		return fmt.Errorf("encode calibration report: %w", err)
+	}
+	return nil
 }
