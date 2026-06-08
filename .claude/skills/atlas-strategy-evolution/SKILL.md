@@ -56,6 +56,25 @@ func EvolveModelWeights(macro MacroRiskAssessment, trends []StructuralTrend) {
 
 ---
 
+## MetaLearner 與 MiroFish Swarm 的連結
+
+策略進化系統透過 `SubmitTrainingScenarios` 接收 Swarm 模擬產生的訓練情境，將魚群表現轉化為學習策略的演化素材：
+
+```
+MiroFish Swarm 模擬
+  └── ExportTrainingData() → []TrainingScenario
+        └── MetaLearner.SubmitTrainingScenarios(scenarios)
+              └── scenarioToLearningData() → SwarmLearningData
+                    └── SubmitSwarmData() → swarmData channel
+                          └── processSwarmData() 更新策略績效
+                                └── evolvePopulation() 執行遺傳演算法
+```
+
+- 每條魚的 `TrainingScenario` 包含其歷史狀態、預測、表現（Accuracy、SharpeRatio、MaxDrawdown）與預測規則
+- `scenarioToLearningData` 將魚的準確率映射為學習率參數（accuracy>0.8 → 0.001；>0.6 → 0.01；否則 0.1）
+- 批次提交後自動觸發一次 `evolvePopulation()`，執行 elite 選擇、crossover、mutation
+- 頂級策略可透過 `GET /api/dashboard/swarm-strategies` 查詢
+
 ## 績效回饋機制
 
 ### 評估維度
@@ -70,6 +89,8 @@ type ModelPerformance struct {
     PnLImpact     float64   // 對組合損益的影響
 }
 ```
+
+> 注意：`ModelPerformance` 是投資模型層級的績效追蹤（用於 Darwinian 權重調整）。MetaLearner 內部使用 `StrategyPerformance`（SuccessCount、FailureCount、AvgImprovement、ConvergenceRate、StabilityScore）追蹤學習策略的表現。兩者位於不同抽象層級。
 
 ### 自動調整規則
 
@@ -116,5 +137,5 @@ Propose → Execute → Judge → Promote/Revert
 
 ---
 
-*技能版本: 1.0*  
-*最後更新: 2026-04-23*
+*技能版本: 1.1*  
+*最後更新: 2026-06-08*

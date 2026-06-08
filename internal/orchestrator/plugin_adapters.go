@@ -274,6 +274,8 @@ func (p *phase3Plugin) PostSimulation(quotes []domain.Quote, regime domain.Regim
 		Timestamp: asOf,
 		Prices:    make(map[string]float64, len(quotes)),
 		Volumes:   make(map[string]float64, len(quotes)),
+		// TODO: populate RealizedVolatility from market data if available.
+		// Currently no easy source in this context; falls back to scenario.Volatility.
 	}
 	for _, q := range quotes {
 		baseState.Prices[q.Symbol] = q.Last
