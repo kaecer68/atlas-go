@@ -110,7 +110,7 @@ func TestHandleSetModelWeight_MissingAgentID(t *testing.T) {
 func TestHandleApproveRecommendation_Success(t *testing.T) {
 	h := newTestHandlers(t)
 	req := postJSON(t, "/api/control/approve-recommendation", map[string]string{
-		"symbol": "2330", "agent_id": "growth-01", "operator": "admin",
+		"symbol": "2330", "agent_id": "growth-01", "operator": "admin", "reason": "manual override",
 	})
 	status, body := h.HandleApproveRecommendation(req)
 	assertStatus(t, status, http.StatusOK)
