@@ -65,6 +65,10 @@ while IFS= read -r file; do
       sox_pct|net_buy_twd|deviation_pct|change_pct|\
       exit_alerts|logic_rules|sector_heatmap|\
       confidence_breakdown) continue ;;  # TODO: planned substructure, not yet in Go struct
+      # Fields from map[string]any or packages not scanned by gentags
+      auto_discovered_count|auto_discovered_rules|\
+      avg_improvement|convergence_rate|success_rate|\
+      confidence_score|oil_pct|vix_level) continue ;;
     esac
 
     echo "$field" >> "$FOUND_FIELDS"
