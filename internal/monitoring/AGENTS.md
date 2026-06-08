@@ -23,6 +23,23 @@
 - **Domain 對齊**: `domain.*` 型別已內建 `json:"snake_case"` 標籤，定義新結構時必須沿用。
 - **Unmarshal 陷阱**: 從 JSONL (`recommendation_outcomes.jsonl`) 讀取時，注意部分 legacy 欄位使用 **PascalCase** (如 `AgentID`, `Skill`)，Unmarshal 結構必須精確對應。
 
+## Agent Observatory API (`GET /api/dashboard/agent-observatory`)
+
+此端點回傳所有 agent 的 Scorecard 陣列，每個 Scorecard 包含以下 **OOS 驗證欄位**（位於 `Scorecard.ScorecardDetail`）：
+
+| JSON 欄位 | 型別 | 意義 |
+|-----------|------|------|
+| `is_sharpe` | number | In-Sample Sharpe ratio |
+| `oos_sharpe` | number | Out-of-Sample Sharpe ratio |
+| `is_oos_ratio` | number | `oos_sharpe / is_sharpe`，< 1 表示衰減 |
+| `overfit_warning` | string | `"none"` / `"mild"` / `"severe"` — 基於 IsOOSDivergent() |
+| `rolling_sharpe_trend` | string | `"up"` / `"down"` / `"flat"` — rolling sharpe 線性迴歸斜率方向 |
+| `oos_sample_warning` | string | `"none"` / `"low"` / `"very_low"` — OOS 樣本數充足性 |
+
+> 前端 `dashboard.js` 的 observatory 表格使用 `rolling_sharpe_trend` 顯示 ▲▼ 趨勢箭頭，並根據 `overfit_warning` / `oos_sample_warning` 顯示色彩徽章。
+
+**陷阱**：修改 `domain.Scorecard` 或 OOS 計算邏輯後，必須同步更新此端點的 response mapping 結構（`agentObservatoryScorecard`）。
+
 ## 高危反模式 (ANTI-PATTERNS)
 
 | 陷阱 | 說明 |

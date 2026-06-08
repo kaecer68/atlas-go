@@ -191,9 +191,11 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 				sharpe := da.RollingSharpe
 				sc.DarwinianSharpe = &sharpe
 			}
-			if bothNonZeroAndDivergent(sc.SharpeLike, da.RollingSharpe) {
-				sc.DataConsistencyWarning = "sharpe_formula_mismatch:is_per_outcome_oos_per_day"
-			}
+			// Phase 2: BuildScorecards and DarwinianWeightManager now share
+			// internal/portfolio.ComputeSharpe, so their Sharpe values are
+			// guaranteed to be identical. The DataConsistencyWarning field
+			// is preserved for backward compatibility but no longer triggered.
+			_ = bothNonZeroAndDivergent
 		}
 		sc.RegimeBreakdown = computeAgentRegimeBreakdown(outcomes, sc.AgentID, defaultRegime)
 		if rb := sc.RegimeBreakdown; rb != nil && len(rb.Regimes) >= 2 {

@@ -155,6 +155,27 @@ type Scorecard struct {
 	// DataConsistencyWarning is set when scorecard.sharpe (per-outcome
 	// formula) diverges from darwinian.sharpe (per-day formula).
 	DataConsistencyWarning string `json:"data_consistency_warning,omitempty"`
+
+	// IsSharpe uses the first 80% of outcomes chronologically (per-outcome
+	// frequency, no annualization). Same formula as SharpeLike but on a
+	// restricted sample, making the comparison with OosSharpe meaningful.
+	IsSharpe float64 `json:"is_sharpe"`
+	// OosSharpe uses the last 20% of outcomes chronologically.
+	OosSharpe float64 `json:"oos_sharpe"`
+	// IsOosRatio is |IsSharpe| / max(|OosSharpe|, 0.01). Zero when OOS
+	// is the denominator. 0 when OosSharpe is zero (avoid div-by-zero).
+	IsOosRatio float64 `json:"is_oos_ratio"`
+	// OverfitWarning is true when IS/OOS diverges (ratio > 2.0 OR IS>0+OOS<=0).
+	OverfitWarning bool `json:"overfit_warning"`
+	// OverfitReason gives the human-readable reason for the warning.
+	OverfitReason string `json:"overfit_reason,omitempty"`
+	// RollingSharpeTrend is the linear regression slope of per-window
+	// Sharpe across the chronological order. Positive = improving,
+	// negative = degrading. 0 when fewer than 2 windows.
+	RollingSharpeTrend float64 `json:"rolling_sharpe_trend"`
+	// OosSampleWarning is set when train or test split has insufficient
+	// samples (e.g. "insufficient_test_samples: 3 < 5").
+	OosSampleWarning string `json:"oos_sample_warning,omitempty"`
 }
 
 // RegimeBreakdown is the per-agent stratification of performance metrics

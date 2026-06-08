@@ -315,7 +315,11 @@ func (m *DarwinianWeightManager) updateRollingMetrics(w *DarwinianAgentWeight) {
 	}
 
 	// Calculate rolling Sharpe
-	w.RollingSharpe = m.calculateSharpe(recentReturns)
+	w.RollingSharpe = ComputeSharpe(recentReturns, SharpeConfig{
+		Frequency:                FrequencyPerDay,
+		MinSamples:               m.params.Darwinian.SharpeMinSampleSize,
+		StdDevMeanRatioThreshold: m.params.Darwinian.StdDevMeanRatioThreshold,
+	})
 
 	// Calculate rolling volatility
 	mean := 0.0
@@ -329,41 +333,6 @@ func (m *DarwinianWeightManager) updateRollingMetrics(w *DarwinianAgentWeight) {
 		variance += (r - mean) * (r - mean)
 	}
 	w.RollingVolatility = math.Sqrt(variance / float64(len(recentReturns)-1))
-}
-
-// calculateSharpe calculates Sharpe ratio for a series of returns.
-// Returns 0 if the series has insufficient data or near-zero variance (IEEE 754
-// precision edge case). Negative Sharpe is valid and indicates below-risk-free-rate
-// returns.
-func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
-	if len(returns) < m.params.Darwinian.SharpeMinSampleSize {
-		return 0.0
-	}
-
-	// Calculate mean
-	var sum float64
-	for _, r := range returns {
-		sum += r
-	}
-	mean := sum / float64(len(returns))
-
-	// Calculate standard deviation
-	var variance float64
-	for _, r := range returns {
-		diff := r - mean
-		variance += diff * diff
-	}
-	stdDev := math.Sqrt(variance / float64(len(returns)-1))
-
-	// Guard: near-zero stdDev catches IEEE 754 precision edge case where
-	// identical values produce non-zero variance (e.g. all 0.02 returns).
-	// Use relative threshold: |stdDev/mean| < 0.001 means effectively zero variance.
-	if stdDev == 0 || (mean != 0 && math.Abs(stdDev/mean) < m.params.Darwinian.StdDevMeanRatioThreshold) {
-		return 0.0
-	}
-
-	// Sharpe = mean / stdDev (assuming risk-free rate = 0 for simplicity)
-	return (mean / stdDev) * math.Sqrt(252)
 }
 
 // PerformDailyAdjustment performs the daily Darwinian weight adjustment.

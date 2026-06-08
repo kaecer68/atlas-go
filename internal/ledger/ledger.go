@@ -14,6 +14,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 type Store struct {
@@ -450,6 +451,7 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 		windows      map[string]struct{}
 		dailyReturns map[string]float64
 		dailyCounts  map[string]int
+		outcomes     []domain.RecommendationOutcome
 	}
 
 	byAgent := map[string]*agg{}
@@ -468,6 +470,7 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 			byAgent[key] = entry
 		}
 		entry.returns = append(entry.returns, outcome.ForwardReturn)
+		entry.outcomes = append(entry.outcomes, outcome)
 		if outcome.Hit {
 			entry.hits++
 		}
@@ -487,7 +490,10 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 				daily = append(daily, entry.dailyReturns[w]/float64(c))
 			}
 		}
-		sharpe := sharpeRatio(entry.returns)
+		sharpe := portfolio.ComputeSharpe(entry.returns, portfolio.SharpeConfig{
+			Frequency:  portfolio.FrequencyPerOutcome,
+			MinSamples: 2,
+		})
 		n := len(entry.returns)
 		hitRate := ratio(entry.hits, n)
 		var tStat, hitRateTStat, confLow, confHigh float64
@@ -500,6 +506,65 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 			confLow = sharpe - se
 			confHigh = sharpe + se
 		}
+
+		// Phase 3: IS/OOS split. Per-agent outcomes sorted by RecordedAt
+		// before splitting so chronological order is enforced even when
+		// callers pass unsorted input.
+		sortedOutcomes := portfolio.SortOutcomesByTime(entry.outcomes)
+		isTrainOut, isTestOut := portfolio.Split(sortedOutcomes, portfolio.SplitConfig{
+			Method:     portfolio.SplitChronological,
+			TrainRatio: 0.8,
+		})
+		trainReturns := make([]float64, len(isTrainOut))
+		for i, o := range isTrainOut {
+			trainReturns[i] = o.ForwardReturn
+		}
+		testReturns := make([]float64, len(isTestOut))
+		for i, o := range isTestOut {
+			testReturns[i] = o.ForwardReturn
+		}
+		var isSharpe, oosSharpe, oosRatio float64
+		var overfitWarning bool
+		var overfitReason, oosSampleWarning string
+		if len(testReturns) < 5 {
+			oosSampleWarning = fmt.Sprintf("insufficient_test_samples: %d < 5", len(testReturns))
+			oosSharpe = 0
+		} else {
+			oosSharpe = portfolio.ComputeSharpe(testReturns, portfolio.SharpeConfig{
+				Frequency:  portfolio.FrequencyPerOutcome,
+				MinSamples: 2,
+			})
+		}
+		if len(trainReturns) < 10 {
+			if oosSampleWarning != "" {
+				oosSampleWarning += "; "
+			}
+			oosSampleWarning += fmt.Sprintf("insufficient_train_samples: %d < 10", len(trainReturns))
+			isSharpe = 0
+		} else {
+			isSharpe = portfolio.ComputeSharpe(trainReturns, portfolio.SharpeConfig{
+				Frequency:  portfolio.FrequencyPerOutcome,
+				MinSamples: 2,
+			})
+		}
+		if isSharpe != 0 || oosSharpe != 0 {
+			oosRatio = math.Abs(isSharpe) / math.Max(math.Abs(oosSharpe), 0.01)
+			if portfolio.IsOOSDivergent(isSharpe, oosSharpe, 2.0) {
+				overfitWarning = true
+				if oosSharpe <= 0 && isSharpe > 0 {
+					overfitReason = fmt.Sprintf("is_positive_oos_non_positive:is=%.3f oos=%.3f", isSharpe, oosSharpe)
+				} else {
+					overfitReason = fmt.Sprintf("is_oos_ratio=%.2f>2.0:is=%.3f oos=%.3f", oosRatio, isSharpe, oosSharpe)
+				}
+			}
+		}
+
+		// Phase 3: rolling Sharpe trend (per-window Sharpe linear slope).
+		var trendSlope float64
+		if len(daily) >= 2 {
+			trendSlope = sharpeTrendSlope(daily)
+		}
+
 		scorecards = append(scorecards, domain.Scorecard{
 			AgentID:                  entry.agentID,
 			Skill:                    entry.skill,
@@ -516,6 +581,13 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 			ConfidenceHigh:           confHigh,
 			StatisticallySignificant: len(entry.windows) >= 20,
 			LastUpdatedAt:            time.Now(),
+			IsSharpe:                 isSharpe,
+			OosSharpe:                oosSharpe,
+			IsOosRatio:               oosRatio,
+			OverfitWarning:           overfitWarning,
+			OverfitReason:            overfitReason,
+			RollingSharpeTrend:       trendSlope,
+			OosSampleWarning:         oosSampleWarning,
 		})
 	}
 
@@ -551,22 +623,24 @@ func ratio(hitCount, total int) float64 {
 	return float64(hitCount) / float64(total)
 }
 
-func sharpeRatio(returns []float64) float64 {
-	if len(returns) < 2 {
+func sharpeTrendSlope(values []float64) float64 {
+	n := len(values)
+	if n < 2 {
 		return 0
 	}
-	avg := mean(returns)
-	var sumSq float64
-	for _, r := range returns {
-		diff := r - avg
-		sumSq += diff * diff
+	var sumX, sumY, sumXY, sumXX float64
+	for i, v := range values {
+		x := float64(i)
+		sumX += x
+		sumY += v
+		sumXY += x * v
+		sumXX += x * x
 	}
-	variance := sumSq / float64(len(returns)-1)
-	stdDev := math.Sqrt(variance)
-	if stdDev == 0 {
+	denom := float64(n)*sumXX - sumX*sumX
+	if denom == 0 {
 		return 0
 	}
-	return avg / stdDev
+	return (float64(n)*sumXY - sumX*sumY) / denom
 }
 
 func maxDrawdown(values []float64) float64 {
