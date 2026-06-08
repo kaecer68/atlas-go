@@ -1165,6 +1165,24 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
 			}
 
+			// StrategyEvolver daily re-evaluation (24h, audit-style trigger).
+			{
+				dashRef := dashboard
+				maturityRef := maturityTracker
+				sectorDir := cfg.WorkDir
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_strategy_evolution",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: scheduler.StrategyEvolutionTaskFunc(scheduler.StrategyEvolutionDeps{
+						Dashboard:       dashRef,
+						SectorDataDir:   sectorDir,
+						MaturityTracker: maturityRef,
+					}),
+				})
+				log.Printf("[Gateway] registered auto_strategy_evolution background task (24h interval)")
+			}
+
 			if repo != nil {
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "metrics_snapshot",
