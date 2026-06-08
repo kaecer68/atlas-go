@@ -171,6 +171,77 @@ func TestHandleAuditLog_AfterInterventions(t *testing.T) {
 	assertStatus(t, status, http.StatusOK)
 }
 
+func TestHandlePauseAgent_EmptyReason(t *testing.T) {
+	h := newTestHandlers(t)
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{
+		"agent_id": "growth-01", "reason": "", "operator": "admin",
+	})
+	status, _ := h.HandlePauseAgent(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
+func TestHandlePauseAgent_WhitespaceOnlyReason(t *testing.T) {
+	h := newTestHandlers(t)
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{
+		"agent_id": "growth-01", "reason": "   \u3000\t", "operator": "admin",
+	})
+	status, _ := h.HandlePauseAgent(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
+func TestHandlePauseAgent_ShortReason(t *testing.T) {
+	h := newTestHandlers(t)
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{
+		"agent_id": "growth-01", "reason": "ab", "operator": "admin",
+	})
+	status, _ := h.HandlePauseAgent(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
+func TestHandlePauseAgent_ChineseShortReason(t *testing.T) {
+	h := newTestHandlers(t)
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{
+		"agent_id": "growth-01", "reason": "驗證", "operator": "admin",
+	})
+	status, _ := h.HandlePauseAgent(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
+func TestHandlePauseAgent_ChineseValidReason(t *testing.T) {
+	h := newTestHandlers(t)
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{
+		"agent_id": "growth-01", "reason": "驗證測試", "operator": "admin",
+	})
+	status, body := h.HandlePauseAgent(req)
+	assertStatus(t, status, http.StatusOK)
+	m := assertJSONKey(t, body, "intervention")
+	iv, ok := m["intervention"].(map[string]any)
+	if !ok {
+		t.Fatalf("intervention is %T, want map[string]any", m["intervention"])
+	}
+	if got := iv["reason"]; got != "驗證測試" {
+		t.Errorf("intervention.reason = %v, want 驗證測試", got)
+	}
+}
+
+func TestHandleApproveRecommendation_EmptyReason(t *testing.T) {
+	h := newTestHandlers(t)
+	req := postJSON(t, "/api/control/approve-recommendation", map[string]string{
+		"symbol": "2330", "agent_id": "growth-01", "reason": "", "operator": "admin",
+	})
+	status, _ := h.HandleApproveRecommendation(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
+func TestHandleSectorBan_ShortReason(t *testing.T) {
+	h := newTestHandlers(t)
+	req := postJSON(t, "/api/control/sector-ban", map[string]string{
+		"sector": "semiconductor", "banned": "true", "reason": "x", "operator": "admin",
+	})
+	status, _ := h.HandleSectorBan(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
 func TestRegisterRoutes(t *testing.T) {
 	h := newTestHandlers(t)
 	mux := http.NewServeMux()
