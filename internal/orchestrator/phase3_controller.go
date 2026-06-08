@@ -450,7 +450,7 @@ func (c *Phase3Controller) saveCalibrationReport(report swarm.CalibrationReport)
 	if err != nil {
 		return fmt.Errorf("save calibration report: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(report); err != nil {

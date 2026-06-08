@@ -3,6 +3,7 @@ package ledger
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -217,5 +218,123 @@ func TestStore_ConcurrentMixedReadWrite(t *testing.T) {
 	close(errCh)
 	for err := range errCh {
 		t.Fatalf("concurrent mixed read/write failed: %v", err)
+	}
+}
+
+// ==== Audit remediation tests for AI Observatory ====
+
+func TestSharpeRatio(t *testing.T) {
+	tests := []struct {
+		name     string
+		returns  []float64
+		expected float64
+	}{
+		{"empty", []float64{}, 0},
+		{"single element", []float64{0.01}, 0},
+		{"all same", []float64{0.01, 0.01, 0.01}, 0},
+		{"two elements positive", []float64{0.01, 0.02}, 2.121},
+		{"two elements negative", []float64{-0.01, -0.02}, -2.121},
+		{"known values", []float64{0.01, -0.02, 0.015, -0.005, 0.02}, 0.245},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sharpeRatio(tt.returns)
+			if diff := math.Abs(got - tt.expected); diff > 0.001 {
+				t.Errorf("sharpeRatio() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMaxDrawdown(t *testing.T) {
+	tests := []struct {
+		name     string
+		values   []float64
+		expected float64
+	}{
+		{"empty", []float64{}, 0},
+		{"all positive", []float64{0.01, 0.02, 0.01}, 0},
+		{"single large drop", []float64{-0.5}, 0.5},
+		{"known sequence", []float64{0.1, -0.05, 0.03, -0.08, 0.02}, 0.0998},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := maxDrawdown(tt.values)
+			if diff := math.Abs(got - tt.expected); diff > 0.001 {
+				t.Errorf("maxDrawdown() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRatio(t *testing.T) {
+	if ratio(0, 0) != 0 {
+		t.Errorf("ratio(0,0) = %v, want 0", ratio(0, 0))
+	}
+	if ratio(3, 5) != 0.6 {
+		t.Errorf("ratio(3,5) = %v, want 0.6", ratio(3, 5))
+	}
+}
+
+func TestMean(t *testing.T) {
+	if mean([]float64{}) != 0 {
+		t.Errorf("mean(empty) = %v, want 0", mean([]float64{}))
+	}
+	if mean([]float64{1, 2, 3}) != 2 {
+		t.Errorf("mean([1,2,3]) = %v, want 2", mean([]float64{1, 2, 3}))
+	}
+}
+
+func TestBuildScorecardsNewFields(t *testing.T) {
+	// Create outcomes with enough windows for statistical significance
+	outcomes := []domain.RecommendationOutcome{}
+	for i := 0; i < 25; i++ {
+		outcomes = append(outcomes, domain.RecommendationOutcome{
+			AgentID:       "sig-agent",
+			Skill:         "alpha",
+			Window:        fmt.Sprintf("w%d", i),
+			ForwardReturn: 0.01,
+			Hit:           true,
+			RecordedAt:    time.Now(),
+		})
+	}
+	// Add some negative returns for variance
+	outcomes = append(outcomes, domain.RecommendationOutcome{
+		AgentID:       "sig-agent",
+		Skill:         "alpha",
+		Window:        "w25",
+		ForwardReturn: -0.02,
+		Hit:           false,
+		RecordedAt:    time.Now(),
+	})
+
+	scorecards := BuildScorecards(outcomes)
+	if len(scorecards) != 1 {
+		t.Fatalf("expected 1 scorecard, got %d", len(scorecards))
+	}
+	sc := scorecards[0]
+	if !sc.StatisticallySignificant {
+		t.Errorf("expected StatisticallySignificant=true for 26 windows, got false")
+	}
+	if sc.TStat <= 0 {
+		t.Errorf("expected positive TStat, got %v", sc.TStat)
+	}
+	if sc.ConfidenceLow >= sc.ConfidenceHigh {
+		t.Errorf("expected ConfidenceLow < ConfidenceHigh, got %v >= %v", sc.ConfidenceLow, sc.ConfidenceHigh)
+	}
+	if sc.HitRateTStat <= 0 {
+		t.Errorf("expected positive HitRateTStat, got %v", sc.HitRateTStat)
+	}
+
+	// Test non-significant case
+	outcomesSmall := []domain.RecommendationOutcome{
+		{AgentID: "small", Skill: "beta", Window: "w1", ForwardReturn: 0.01, Hit: true, RecordedAt: time.Now()},
+	}
+	scSmall := BuildScorecards(outcomesSmall)[0]
+	if scSmall.StatisticallySignificant {
+		t.Errorf("expected StatisticallySignificant=false for 1 window, got true")
+	}
+	if scSmall.TStat != 0 {
+		t.Errorf("expected TStat=0 for n<2, got %v", scSmall.TStat)
 	}
 }

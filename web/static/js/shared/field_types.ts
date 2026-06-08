@@ -37,7 +37,6 @@ export interface AgentObservatoryResponse {
   session_id: string;
   next_experiment_agent_id: string;
   scorecards: Scorecard[];
-  broker_runtime: BrokerRuntimeAudit;
   recorded_at: string;
 }
 
@@ -2594,6 +2593,11 @@ export interface Scorecard {
   average_return: number;
   sharpe: number;
   max_drawdown: number;
+  t_stat: number;
+  hit_rate_t_stat: number;
+  confidence_low: number;
+  confidence_high: number;
+  statistically_significant: boolean;
   concentration_warnings: number;
   last_updated_at: string;
 }

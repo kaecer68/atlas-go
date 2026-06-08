@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -99,11 +100,27 @@ func (h *Handlers) HandleAgentObservatory(r *http.Request) (int, any) {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load agent observatory: %v", err)}
 	}
 
+	// Sanitize scorecards: replace NaN/Inf values with 0
+	for i := range data.Scorecards {
+		sc := &data.Scorecards[i]
+		if math.IsNaN(sc.SharpeLike) || math.IsInf(sc.SharpeLike, 0) {
+			sc.SharpeLike = 0
+		}
+		if math.IsNaN(sc.HitRate) || math.IsInf(sc.HitRate, 0) {
+			sc.HitRate = 0
+		}
+		if math.IsNaN(sc.MaxDrawdown) || math.IsInf(sc.MaxDrawdown, 0) {
+			sc.MaxDrawdown = 0
+		}
+		if math.IsNaN(sc.AverageReturn) || math.IsInf(sc.AverageReturn, 0) {
+			sc.AverageReturn = 0
+		}
+	}
+
 	resp := AgentObservatoryResponse{
 		Scorecards:            data.Scorecards,
 		SessionID:             data.SessionID,
 		NextExperimentAgentID: data.NextExperimentAgentID,
-		BrokerRuntime:         data.BrokerRuntime,
 		RecordedAt:            data.RecordedAt,
 	}
 	return http.StatusOK, resp
@@ -111,11 +128,10 @@ func (h *Handlers) HandleAgentObservatory(r *http.Request) (int, any) {
 
 // AgentObservatoryResponse is the API response for agent observatory.
 type AgentObservatoryResponse struct {
-	SessionID             string                    `json:"session_id"`
-	NextExperimentAgentID string                    `json:"next_experiment_agent_id"`
-	Scorecards            []domain.Scorecard        `json:"scorecards"`
-	BrokerRuntime         domain.BrokerRuntimeAudit `json:"broker_runtime"`
-	RecordedAt            time.Time                 `json:"recorded_at"`
+	SessionID             string             `json:"session_id"`
+	NextExperimentAgentID string             `json:"next_experiment_agent_id"`
+	Scorecards            []domain.Scorecard `json:"scorecards"`
+	RecordedAt            time.Time          `json:"recorded_at"`
 }
 
 // HandleForecastVsReality handles GET /api/dashboard/forecast-vs-reality.
@@ -372,6 +388,9 @@ func (h *Handlers) HandleUniverseOverlap(r *http.Request) (int, any) {
 	data, err := h.Svc.LoadUniverseOverlap()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load universe overlap: %v", err)}
+	}
+	if data == nil {
+		return http.StatusOK, UniverseOverlapResponse{Agents: []AgentUniverseView{}, Matrix: map[string]map[string]int{}, Warnings: []string{}}
 	}
 
 	agents := make([]AgentUniverseView, len(data.Agents))
