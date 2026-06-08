@@ -324,6 +324,12 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <div style="margin:12px 0;padding:12px;background:var(--panel-l2);border-radius:10px;border:1px solid var(--border)">
           <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--text)">${escapeHtml(templateName(c.template_id))}</div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:12px">匹配分數 <span style="color:var(--accent);font-weight:600">${(c.score || 0).toFixed(3)}</span></div>
+          ${(c.favored_sectors || []).length || (c.avoided_sectors || []).length ? `
+            <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+              ${(c.favored_sectors || []).map(s => '<span class="badge ok">+ ' + escapeHtml(sectorName(s) || s) + '</span>').join('')}
+              ${(c.avoided_sectors || []).map(s => '<span class="badge err">- ' + escapeHtml(sectorName(s) || s) + '</span>').join('')}
+            </div>
+          ` : ''}
           ${(c.steps || []).map((s, i) => {
             const impClass = s.impact > 0 ? 'positive' : 'negative';
             const impLabel = s.impact > 0 ? '+' + s.impact : s.impact;
@@ -369,6 +375,10 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
               </div>
               <span class="min-w-40 text-right">${w.toFixed(3)}</span>
             </div>
+          </div>
+          <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+            <span>歷史命中率</span>
+            <span style="color:${(m.hit_rate || 0) >= 0.7 ? '#10b981' : ((m.hit_rate || 0) >= 0.5 ? '#f59e0b' : '#ef4444')};font-weight:700">${((m.hit_rate || 0) * 100).toFixed(1)}%</span>
           </div>
           <div class="text-muted text-sm mt-xs">${escapeHtml(m.description || '')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">

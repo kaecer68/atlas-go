@@ -2071,6 +2071,30 @@ func (p *ParametersConfig) Validate() error {
 		return err
 	}
 
+	// Narrative parameters validation
+	if p.Narrative.ModelLookbackDays.Value < 1 {
+		return fmt.Errorf("narrative.model_lookback_days (%d) must be >= 1", p.Narrative.ModelLookbackDays.Value)
+	}
+	if p.Narrative.ModelHoldWindowDays.Value < 1 {
+		return fmt.Errorf("narrative.model_hold_window_days (%d) must be >= 1", p.Narrative.ModelHoldWindowDays.Value)
+	}
+	if p.Narrative.ConfidenceDeviationCeiling.Value <= 0 || p.Narrative.ConfidenceDeviationCeiling.Value > 1 {
+		return fmt.Errorf("narrative.confidence_deviation_ceiling (%.3f) must be in (0,1]", p.Narrative.ConfidenceDeviationCeiling.Value)
+	}
+
+	// Taiwan stress index weights should sum to 1.0
+	stressWeights := p.Narrative.TaiwanStressDXYWeight.Value +
+		p.Narrative.TaiwanStressUS10YWeight.Value +
+		p.Narrative.TaiwanStressForeignWeight.Value +
+		p.Narrative.TaiwanStressVIXWeight.Value +
+		p.Narrative.TaiwanStressJPYWeight.Value +
+		p.Narrative.TaiwanStressGeoWeight.Value +
+		p.Narrative.TaiwanStressOilWeight.Value +
+		p.Narrative.TaiwanStressGoldWeight.Value
+	if math.Abs(stressWeights-1.0) > 0.01 {
+		return fmt.Errorf("narrative taiwan stress weights must sum to 1.0, got %.3f", stressWeights)
+	}
+
 	return nil
 }
 
