@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -41,11 +44,34 @@ func (h *Handlers) recordIntervention(interventionType, targetID, reason, operat
 	if h.Svc == nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": "control service unavailable"}
 	}
-	intervention := h.Svc.CreateIntervention(interventionType, targetID, reason, operator, 0)
+	cleanedReason, status, errResp := validateReason(reason)
+	if status != 0 {
+		return status, errResp
+	}
+	intervention := h.Svc.CreateIntervention(interventionType, targetID, cleanedReason, operator, 0)
 	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("record intervention: %v", err)}
 	}
 	return http.StatusOK, map[string]any{"success": true, "intervention": intervention}
+}
+
+func validateReason(reason string) (string, int, any) {
+	trimmed := trimReasonWhitespace(reason)
+	if trimmed == "" {
+		return "", http.StatusBadRequest, map[string]string{"error": "reason required"}
+	}
+	if utf8.RuneCountInString(trimmed) < 4 {
+		return "", http.StatusBadRequest, map[string]string{
+			"error": "reason must be at least 4 characters (got " + strconv.Itoa(utf8.RuneCountInString(trimmed)) + ")",
+		}
+	}
+	return trimmed, 0, nil
+}
+
+func trimReasonWhitespace(s string) string {
+	return strings.TrimFunc(s, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\u3000'
+	})
 }
 
 func (h *Handlers) HandlePauseAgent(r *http.Request) (int, any) {
