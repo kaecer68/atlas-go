@@ -1,6 +1,6 @@
 // Risk Control Page - Enhanced Risk Indicators
 // Extracted from index.html - DO NOT EDIT inline
-import { sectorName } from '../names.js';
+import { sectorName, renderStockCell } from '../names.js';
 import { escapeHtml } from '../shared/utils.js';
 
 export function renderLiveStatus(data) {
@@ -82,7 +82,7 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
 
     const rows = conc.map((c, idx) => {
       const w = ((c.weight || 0) * 100).toFixed(1);
-      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${escapeHtml(c.symbol)}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${w}%</td><td style="padding:3px 8px;font-size:12px;text-align:right">${(c.market_value || 0).toLocaleString()}</td></tr>`;
+      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${c.symbol ? renderStockCell(c.symbol) : '—'}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${w}%</td><td style="padding:3px 8px;font-size:12px;text-align:right">${(c.market_value || 0).toLocaleString()}</td></tr>`;
     }).join('');
 
     concentrationHtml = `
