@@ -169,11 +169,10 @@ MiroFish Swarm 是 Atlas 系統的平行市場模擬引擎。同時執行 100 �
 
 Swarm 模組包含參數校準框架（`internal/swarm/calibration.go`），用於比對模擬統計量與真實市場數據：
 
-- `ComputeSimulationStats(results)` — 從模擬結果計算均值、波動率、偏度、峰度、最大回撤、Sharpe ratio、相關矩陣
-- `CalibrateParameters(current, simStats, targetStats)` — 產生參數調整建議（GARCH omega/alpha/beta、跳躍過程 lambda/mu/sigma、趨勢 drift）
-- `MiroFishSwarm.CalibrateAgainstTarget(target)` — 對當前魚群歷史路徑執行完整校準
+- `CalibrateParameters(simStats, targetStats)` — 比對模擬與目標統計量，產生參數調整建議（GARCH omega/alpha/beta、跳躍過程 lambda/mu/sigma、趨勢 drift）
+- `MiroFishSwarm.CalibrateAgainstTarget(target)` — 從當前魚群歷史路徑計算統計量，並產生完整校準報告
 
-校準誤差以均方根（RMS）計算，調整量採比例修正：`adjustment = error * learningRate`（預設 learningRate = 0.1）。
+校準誤差以均方根（RMS）計算，調整量採比例修正：`adjustment = error * learningRate`（預設 learningRate = 0.1）。當目標統計量接近 0 時，誤差會被限制在 [-1, 1] 區間以避免調整量爆炸。
 
 ## 相關指令
 

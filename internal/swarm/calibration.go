@@ -31,24 +31,6 @@ type CalibrationReport struct {
 // defaultLearningRate controls the aggressiveness of proportional parameter adjustments.
 const defaultLearningRate = 0.1
 
-// ComputeSimulationStats aggregates all fish histories from the given simulation results
-// and computes return statistics, risk metrics, and cross-asset correlations.
-//
-// Returns are computed as log-returns across consecutive price observations
-// for every symbol present in the fish histories.
-func ComputeSimulationStats(results []SimulationResult) SimulationStatistics {
-	if len(results) == 0 {
-		return SimulationStatistics{}
-	}
-
-	// SimulationResult does not embed fish histories; they live on MiroFish.
-	// This function is a placeholder that delegates to computeStatsFromFish.
-	// Callers needing full path-based statistics should use CalibrateAgainstTarget
-	// on the swarm, which has access to sw.fish.
-	_ = results
-	return computeStatsFromFish(nil)
-}
-
 // computeStatsFromFish computes statistics directly from fish histories.
 // Exported consumers should use CalibrateAgainstTarget on the swarm.
 func computeStatsFromFish(fish []*MiroFish) SimulationStatistics {
@@ -125,7 +107,8 @@ func computeStatsFromFish(fish []*MiroFish) SimulationStatistics {
 //
 //	adjustment = error * learningRate
 //
-// where error is (target - simulated) / |target| for normalised comparison.
+// where error is (target - simulated) / |target|. When the target statistic is
+// near zero, the raw difference is clamped to [-1, 1] to avoid exploding adjustments.
 // Supported adjustment keys:
 //   - "garch_omega": increase if simulated vol is too low
 //   - "garch_alpha": increase if simulated kurtosis is too low (more shock sensitivity)
@@ -134,7 +117,7 @@ func computeStatsFromFish(fish []*MiroFish) SimulationStatistics {
 //   - "jump_mu":     shift if simulated mean return is off
 //   - "jump_sigma":  increase if simulated jump volatility is too low
 //   - "trend":       shift if simulated mean return is off
-func CalibrateParameters(current SwarmConfig, simStats, targetStats SimulationStatistics) CalibrationReport {
+func CalibrateParameters(simStats, targetStats SimulationStatistics) CalibrationReport {
 	errVol := relativeError(targetStats.Volatility, simStats.Volatility)
 	errMean := relativeError(targetStats.MeanReturn, simStats.MeanReturn)
 	errSkew := relativeError(targetStats.Skewness, simStats.Skewness)
@@ -182,7 +165,7 @@ func (sw *MiroFishSwarm) CalibrateAgainstTarget(target SimulationStatistics) Cal
 	defer sw.mu.RUnlock()
 
 	simStats := computeStatsFromFish(sw.fish)
-	return CalibrateParameters(sw.config, simStats, target)
+	return CalibrateParameters(simStats, target)
 }
 
 // --- helpers ---
@@ -236,15 +219,23 @@ func kurtosis64(xs []float64, mean, stdDev float64) float64 {
 	return (sum / n) / (stdDev * stdDev * stdDev * stdDev)
 }
 
-// relativeError returns (target - actual) / max(|target|, epsilon).
-// When target is near zero, falls back to raw difference.
+// relativeError returns (target - actual) / |target|. When the target is near
+// zero, the raw difference is clamped to [-1, 1] so calibration adjustments do
+// not explode.
 func relativeError(target, actual float64) float64 {
 	const eps = 1e-8
+	diff := target - actual
 	denom := math.Abs(target)
 	if denom < eps {
-		denom = eps
+		if diff > 1.0 {
+			return 1.0
+		}
+		if diff < -1.0 {
+			return -1.0
+		}
+		return diff
 	}
-	return (target - actual) / denom
+	return diff / denom
 }
 
 // computeMaxDrawdownFromFish estimates the worst peak-to-trough decline
