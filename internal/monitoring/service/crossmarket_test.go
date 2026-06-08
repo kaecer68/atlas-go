@@ -210,7 +210,8 @@ func TestGetStatus_LegacyCorrelationStillPopulated(t *testing.T) {
 	if status.CorrelationSPXTWSE == 0.0 {
 		t.Error("CorrelationSPXTWSE should have a value after 3 updates, got 0")
 	}
-	if status.CorrelationSPXTWSE < 0.5 || status.CorrelationSPXTWSE > 1.0 {
+	const epsilon = 1e-9
+	if status.CorrelationSPXTWSE < 0.5 || status.CorrelationSPXTWSE > 1.0+epsilon {
 		t.Errorf("CorrelationSPXTWSE out of expected range, got %v", status.CorrelationSPXTWSE)
 	}
 }

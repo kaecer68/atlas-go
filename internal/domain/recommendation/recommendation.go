@@ -120,13 +120,13 @@ func (h HumanIntervention) IsExpired() bool {
 
 // Scorecard aggregates an agent's historical performance.
 type Scorecard struct {
-	AgentID               string            `json:"agent_id"`
-	Skill                 string            `json:"skill"`
-	Layer                 shared.AgentLayer `json:"layer"`
-	Observations          int               `json:"observations"`
-	WindowCount           int               `json:"windows"`
-	HitRate               float64           `json:"hit_rate"`
-	AverageReturn         float64           `json:"average_return"`
+	AgentID                  string            `json:"agent_id"`
+	Skill                    string            `json:"skill"`
+	Layer                    shared.AgentLayer `json:"layer"`
+	Observations             int               `json:"observations"`
+	WindowCount              int               `json:"windows"`
+	HitRate                  float64           `json:"hit_rate"`
+	AverageReturn            float64           `json:"average_return"`
 	SharpeLike               float64           `json:"sharpe"`
 	MaxDrawdown              float64           `json:"max_drawdown"`
 	TStat                    float64           `json:"t_stat"`
