@@ -163,11 +163,35 @@ var defaultSectorSymbolMap = map[string][]string{
 	"shipping":        {"2603.TW", "2609.TW", "2615.TW"},
 	"small_cap":       {"3008.TW", "3034.TW", "6669.TW", "3711.TW"},
 	"consumer":        {"1301.TW", "1303.TW", "1326.TW", "1216.TW"},
-	"tourism":         {},
+	"tourism":         {"2707.TW", "2731.TW", "2739.TW", "2748.TW", "5706.TW"},
 	"tech":            {"2330.TW", "2317.TW", "2382.TW", "3231.TW"},
 	"defensive":       {"2881.TW", "0056.TW", "1301.TW"},
 	"technology":      {"2330.TW", "2317.TW", "2382.TW", "2454.TW", "2303.TW", "3034.TW"},
 	"traditional":     {"1301.TW", "1303.TW", "1326.TW", "1216.TW", "1101.TW", "2002.TW"},
+}
+
+// sectorAliasMap translates Chinese sector names used in causal templates
+// to the English keys expected by sectorSymbolMap.
+var sectorAliasMap = map[string]string{
+	"金融":       "financials",
+	"高股息":     "high_dividend",
+	"ETF輪動":    "etf_rotation",
+	"AI供應鏈":   "ai_supply_chain",
+	"半導體":     "semiconductor",
+	"晶圓代工":   "semiconductor",
+	"PCB":        "pcb",
+	"散熱":       "thermal",
+	"航運":       "shipping",
+	"貨櫃航運":   "shipping",
+	"散裝航運":   "shipping",
+	"小型股":     "small_cap",
+	"中小型股":   "small_cap",
+	"消費":       "consumer",
+	"內需":       "consumer",
+	"觀光":       "tourism",
+	"科技板塊":   "technology",
+	"防禦性板塊": "defensive",
+	"傳產":       "traditional",
 }
 
 var sectorSymbolMap map[string][]string
@@ -200,7 +224,7 @@ func copySectorMap(src map[string][]string) map[string][]string {
 
 // NewNarrativeEngine creates a narrative engine with default templates and models.
 func NewNarrativeEngine() *NarrativeEngine {
-	return &NarrativeEngine{
+	ne := &NarrativeEngine{
 		kb:         NewKnowledgeBase(),
 		stressCalc: NewTaiwanStressCalculator(nil, ""),
 		models: []InvestmentModel{
@@ -212,6 +236,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"US_rates_up", "JPY_carry_unwind"},
 				FavoredSectors: []string{"financials", "high_dividend", "etf_rotation"},
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
+				RecentError:    0.28,
+				HitRate:        0.72,
 				Weight:         1.0,
 			},
 			{
@@ -222,6 +248,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"AI_capex_surge"},
 				FavoredSectors: []string{"ai_supply_chain", "semiconductor", "pcb", "thermal"},
 				AvoidedSectors: []string{"consumer", "tourism"},
+				RecentError:    0.19,
+				HitRate:        0.81,
 				Weight:         1.0,
 			},
 			{
@@ -232,6 +260,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"geopolitical_risk_spike", "oil_price_shock", "taiwan_political_risk"},
 				FavoredSectors: []string{"financials", "high_dividend", "shipping"},
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
+				RecentError:    0.35,
+				HitRate:        0.65,
 				Weight:         1.0,
 			},
 			{
@@ -242,6 +272,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"taiwan_political_risk", "USD_TWD_volatility"},
 				FavoredSectors: []string{"financials", "high_dividend", "consumer"},
 				AvoidedSectors: []string{"ai_supply_chain", "semiconductor", "small_cap"},
+				RecentError:    0.35,
+				HitRate:        0.65,
 				Weight:         1.0,
 			},
 			{
@@ -252,6 +284,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"semiconductor_downturn", "USD_TWD_volatility"},
 				FavoredSectors: []string{"high_dividend", "consumer", "financials"},
 				AvoidedSectors: []string{"ai_supply_chain", "semiconductor", "pcb"},
+				RecentError:    0.40,
+				HitRate:        0.60,
 				Weight:         1.0,
 			},
 			{
@@ -262,6 +296,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"spring_festival_season"},
 				FavoredSectors: []string{"high_dividend", "financials", "small_cap"},
 				AvoidedSectors: []string{"ai_supply_chain", "semiconductor"},
+				RecentError:    0.30,
+				HitRate:        0.70,
 				Weight:         1.0,
 			},
 			{
@@ -272,6 +308,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"election_cycle"},
 				FavoredSectors: []string{"high_dividend", "financials", "consumer"},
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
+				RecentError:    0.35,
+				HitRate:        0.65,
 				Weight:         1.0,
 			},
 			{
@@ -282,6 +320,8 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"retail_institutional_divergence"},
 				FavoredSectors: []string{"defensive"},
 				AvoidedSectors: []string{"technology", "semiconductor"},
+				RecentError:    0.40,
+				HitRate:        0.60,
 				Weight:         0.60,
 			},
 			{
@@ -292,10 +332,14 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ActiveThemes:   []string{"earnings_surprise"},
 				FavoredSectors: []string{"semiconductor", "ai_supply_chain"},
 				AvoidedSectors: []string{"traditional"},
+				RecentError:    0.25,
+				HitRate:        0.75,
 				Weight:         0.75,
 			},
 		},
 	}
+	ne.UpdateModelWeights()
+	return ne
 }
 
 // DetectEvents accepts raw market/narrative data and returns events.
@@ -573,6 +617,10 @@ func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, w
 	var totalReturn float64
 	var count int
 	for _, sector := range sectors {
+		// Resolve Chinese aliases to English keys.
+		if alias, ok := sectorAliasMap[sector]; ok {
+			sector = alias
+		}
 		symbols, ok := sectorSymbolMap[sector]
 		if !ok {
 			continue
@@ -1702,6 +1750,42 @@ func getThemeDuration(theme string) time.Duration {
 		return 10 * 24 * time.Hour
 	case "inflation_spike":
 		return 15 * 24 * time.Hour
+	case "election_cycle":
+		return 45 * 24 * time.Hour
+	case "spring_festival_season":
+		return 30 * 24 * time.Hour
+	case "tech_peak_season":
+		return 60 * 24 * time.Hour
+	case "US_rates_up":
+		return 14 * 24 * time.Hour
+	case "US_rates_down":
+		return 14 * 24 * time.Hour
+	case "JPY_carry_unwind":
+		return 5 * 24 * time.Hour
+	case "geopolitical_risk_spike":
+		return 10 * 24 * time.Hour
+	case "semiconductor_downturn":
+		return 30 * 24 * time.Hour
+	case "taiwan_political_risk":
+		return 10 * 24 * time.Hour
+	case "USD_TWD_volatility":
+		return 14 * 24 * time.Hour
+	case "oil_price_shock":
+		return 10 * 24 * time.Hour
+	case "retail_institutional_divergence":
+		return 7 * 24 * time.Hour
+	case "dividend_season":
+		return 60 * 24 * time.Hour
+	case "year_end_window_dressing":
+		return 45 * 24 * time.Hour
+	case "shipping_rate_spike":
+		return 14 * 24 * time.Hour
+	case "china_slowdown":
+		return 21 * 24 * time.Hour
+	case "taiwan_export_boom":
+		return 30 * 24 * time.Hour
+	case "tariff_shock":
+		return 14 * 24 * time.Hour
 	default:
 		return 7 * 24 * time.Hour
 	}

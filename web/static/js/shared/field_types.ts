@@ -37,7 +37,6 @@ export interface AgentObservatoryResponse {
   session_id: string;
   next_experiment_agent_id: string;
   scorecards: Scorecard[];
-  broker_runtime: BrokerRuntimeAudit;
   recorded_at: string;
 }
 
@@ -478,6 +477,11 @@ export interface CrossMarketStatus {
   us10y: string;
   crisis_active: boolean;
   correlation_spx_twse: number;
+  correlation_ndx_twse: number | null;
+  correlation_dji_twse: number | null;
+  correlation_tsm_twse: number | null;
+  correlation_nvda_twse: number | null;
+  correlation_spx_vix: number | null;
 }
 
 export interface CustomerConcentration {
@@ -2135,6 +2139,7 @@ export interface PositionConcentration {
 
 export interface PositionDTO {
   symbol: string;
+  name: string;
   quantity: number;
   average_cost: number;
   current_price: number;
@@ -2343,7 +2348,9 @@ export interface RecEntry {
   symbol: string;
   name: string;
   action: string;
-  shares?: number;
+  price: number;
+  target_price: number;
+  stop_loss_price: number;
   confidence: number;
   reasons: string[];
 }
@@ -2586,6 +2593,11 @@ export interface Scorecard {
   average_return: number;
   sharpe: number;
   max_drawdown: number;
+  t_stat: number;
+  hit_rate_t_stat: number;
+  confidence_low: number;
+  confidence_high: number;
+  statistically_significant: boolean;
   concentration_warnings: number;
   last_updated_at: string;
 }

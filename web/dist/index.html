@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas-Go 交易與實驗控制塔</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<div id="loadingBar"></div>
+
+<aside id="sidebar" role="complementary" aria-label="側邊導航">
+  <div class="brand">
+    <h1>Atlas-Go</h1>
+    <p>人機協作控制塔</p>
+    <button class="theme-toggle" title="切換主題">🌓</button>
+  </div>
+  <nav role="navigation" aria-label="主要導航">
+    <a class="active" data-page="overview" tabindex="0" title="總覽">📊 總覽</a>
+    <a data-page="crossmarket" tabindex="0" title="美台連動監控">🇺🇸 美台連動</a>
+    <a data-page="evolution_panel" tabindex="0" title="演化透視">🧬 演化透視</a>
+    <a data-page="synergy" tabindex="0" title="人機協同">🤝 人機協同</a>
+    <a data-page="narrative" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
+    <a data-page="industry" tabindex="0" title="產業生態系">🏭 產業生態系</a>
+    <a data-page="pipeline" tabindex="0" title="投資管線">📋 投資管線</a>
+    <a data-page="decision" tabindex="0" title="決策鏈">🔗 決策鏈</a>
+    <a data-page="reasoning-trace" tabindex="0" title="決策追蹤">🔍 決策追蹤</a>
+    <a data-page="live" tabindex="0" title="風控結果">🛡️ 風控結果</a>
+    <a data-page="portfolio" tabindex="0" title="組合持倉">📂 組合持倉</a>
+    <a data-page="performance-report" tabindex="0" title="績效報告">📊 績效報告</a>
+
+    <a data-page="agents" tabindex="0" title="AI 觀測台">🤖 AI 觀測台</a>
+    <a data-page="experiments" tabindex="0" title="模擬交易">🧪 模擬交易</a>
+    <a data-page="reports" tabindex="0" title="最新回測">📈 最新回測</a>
+    <a data-page="controls" tabindex="0" title="控制與稽核">⚙️ 控制與稽核</a>
+    <div class="nav-divider"></div>
+    <a data-page="datachannels" tabindex="0" title="信息通道">📡 信息通道</a>
+    <a data-page="alerts" tabindex="0" title="系統警報">🚨 系統警報</a>
+    <a data-page="metrics" tabindex="0" title="指標監控">📉 指標監控</a>
+    <a data-page="parameters" tabindex="0" title="參數管理">🎛️ 參數管理</a>
+   <a data-page="config" tabindex="0" title="部署配置">⚙️ 部署配置</a>
+    <a data-page="eventlogic-rules" tabindex="0" title="事件邏輯規則">🧠 事件邏輯</a>
+    <a data-page="swarm" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
+  </nav>
+  <div class="foot">
+    <span class="text-muted">v8 · 統一介面</span>
+  </div>
+</aside>
+
+<main id="main" role="main">
+  <div id="topbar">
+    <div class="flex-center-gap">
+      <button id="menuToggle">☰</button>
+      <h2 id="pageTitle">總覽</h2>
+    </div>
+    <div class="refresh-pill" id="refreshPill">
+      <span class="dot"></span>
+      <span id="refreshTime">等待更新…</span>
+      <button id="refreshToggle" title="暫停/恢復自動刷新" style="margin-left:6px;background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px">⏸</button>
+    </div>
+  </div>
+
+  <div id="content">
+    <!-- 總覽 -->
+    <div class="page active" id="page-overview">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現的是基於最新回測窗口計算出的<strong>系統狀態快照</strong>。這不是即時行情，而是 Atlas 在指定 replay 資料區間內，透過多層 AI Agent 模擬與風控後匯總出的「當前體制判斷」。
+        下方的每一張卡片都是一個獨立指標；點擊卡片（除資料時間與基線版本外）可查看該指標的詳細解讀與操作建議。
+      </details>
+
+      <div class="panel wide mt-sm" id="liveEventPanel">
+        <h2>📡 即時事件流</h2>
+        <div id="liveProgress"></div>
+        <div id="liveStatusHint" class="live-status-hint hint-box"></div>
+        <div id="toolEvents" class="mt-sm"></div>
+      </div>
+
+      <div class="kpi-group-title">🌍 市場環境</div>
+      <div class="kpi-grid" id="overviewMarket">
+        <div class="kpi-card clickable" data-kpi="narrative"><div class="kpi-label">敘事脈絡</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="regime"><div class="kpi-label">市場狀態</div><div class="kpi-value">-</div></div>
+      </div>
+      <div class="kpi-group-title">⚠️ 風險信號</div>
+      <div class="kpi-grid" id="overviewRisk">
+        <div class="kpi-card clickable" data-kpi="weakest"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="crowding"><div class="kpi-label">擁擠標的</div><div class="kpi-value">-</div></div>
+      </div>
+      <div class="kpi-group-title">🔧 系統狀態</div>
+      <div class="kpi-grid" id="overviewSystem">
+        <div class="kpi-card clickable" data-kpi="data_time"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="experiment"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
+      </div>
+
+      
+      <div class="cb-panel" id="circuitBreakerPanel">
+        <div class="cb-header">
+            <h2 class="cb-title m-0">⚡ 熔斷機制 (Circuit Breaker)</h2>
+            <div class="cb-status-indicator" id="cbStatusBadge">
+                <div class="cb-status-dot normal" id="cbStatusDot"></div>
+                <span id="cbStatusText">Normal</span>
+            </div>
+        </div>
+        <div class="cb-metrics">
+            <div class="cb-metric-box">
+                <div class="cb-metric-label">日內回撤</div>
+                <div class="cb-metric-value" id="cbIntradayPeak">-</div>
+            </div>
+            <div class="cb-metric-box">
+                <div class="cb-metric-label">連續停損</div>
+                <div class="cb-metric-value" id="cbConsecutiveSL">-</div>
+            </div>
+            <div class="cb-metric-box">
+                <div class="cb-metric-label">冷卻解鎖</div>
+                <div class="cb-metric-value" id="cbCooldown">-</div>
+            </div>
+        </div>
+        <div class="cb-hint hint-box" style="line-height: 1.5;">
+            💡 熔斷機制僅在實盤交易（Live Mode）時啟用。狀態顯示「正常」表示未觸發任何熔斷條件，此時無事件記錄為預期行為。
+        </div>
+        <div class="cb-events-container mt-sm">
+            <ul class="cb-event-list" id="cbEventList">
+                <li class="cb-event-item empty text-center">No events yet.</li>
+            </ul>
+        </div>
+        <div class="cb-actions mt-sm">
+            <button class="cb-btn-reset" id="cbResetBtn" disabled>手動重置 (Reset)</button>
+        </div>
+      </div>
+
+
+    </div>
+
+    <!-- 宏觀敘事 -->
+    <div class="page" id="page-narrative">
+      <div class="narrative-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
+        <div class="panel" style="border-color:rgba(79,193,255,0.2);"><h2 style="color:var(--accent)">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
+        <div class="panel" style="border-color:rgba(239,68,68,0.2);"><h2 style="color:var(--down)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
+      </div>
+      <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
+        <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>季節性分析</h2><div id="narrativeSeasonal" class="empty loading">載入中…</div></div>
+      </div>
+      <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);">
+        <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>投資模型</h2><div id="narrativeModels" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>因果模板庫</h2><div id="narrativeTemplates" class="empty loading">載入中…</div></div>
+      </div>
+    </div>
+
+    <!-- 風控結果 -->
+    <div class="page" id="page-live">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現<strong>風控層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
+        若風控長阻擋率高，請檢查【宏觀敘事】的外資出逃指數是否飆升（紅燈）；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
+      </details>
+      <div class="panel wide mb-sm" style="padding:10px var(--space-md);"><h2 style="margin-bottom:4px;">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading" style="padding:4px 0;">載入中…</div></div>
+      <div class="live-grid">
+        <div class="panel panel--compact"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
+        <div class="panel panel--compact"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
+      </div>
+      <div class="panel wide" id="riskCardsPanel" style="display:none;">
+        <h2>風險指標</h2>
+        <div id="riskCards" class="kpi-grid"></div>
+        <div id="riskPositionConcentration"></div>
+        <div id="riskSectorDistribution"></div>
+      </div>
+      <div class="panel wide" id="riskCalibrationPanel" style="display:none;">
+        <h2>自主校準</h2>
+        <div id="riskCalibration" class="empty loading">載入中…</div>
+      </div>
+    </div>
+
+    <!-- 投資管線 -->
+    <div class="page" id="page-pipeline">
+      <div class="workflow mb-sm">
+        <div class="step">AI 推薦</div><span class="arrow">→</span>
+        <div class="step clickable" id="workflowScreening" title="點擊顯示/隱藏被篩選層排除的標的">篩選層</div><span class="arrow">→</span>
+        <div class="step">控制層</div><span class="arrow">→</span>
+        <div class="step">模擬投組</div>
+      </div>
+      <button class="filter-toggle" id="filterToggle" title="點擊展開/收合進階篩選">
+        <span class="icon">⚙</span> 進階篩選
+        <span id="filterBadge"></span>
+      </button>
+      <div class="filter-panel" id="filterPanel">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label>P/E 比（最小～最大）</label>
+            <div class="flex-gap-6">
+              <input type="number" id="peMin" placeholder="0" min="0" step="0.1" aria-label="P/E 最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="peMax" placeholder="無上限" min="0" step="0.1" aria-label="P/E 最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>P/B 比（最小～最大）</label>
+            <div class="flex-gap-6">
+              <input type="number" id="pbMin" placeholder="0" min="0" step="0.1" aria-label="P/B 最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="pbMax" placeholder="無上限" min="0" step="0.1" aria-label="P/B 最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>股息率（最小～最大）%</label>
+            <div class="flex-gap-6">
+              <input type="number" id="dyMin" placeholder="0" min="0" step="0.1" aria-label="股息率最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="dyMax" placeholder="無上限" min="0" step="0.1" aria-label="股息率最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>報酬率範圍 %</label>
+            <div class="flex-gap-6">
+              <input type="number" id="retMin" placeholder="-100" step="0.1" aria-label="報酬率最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="retMax" placeholder="100" step="0.1" aria-label="報酬率最大值">
+            </div>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button class="primary">套用篩選</button>
+          <button>清除條件</button>
+          <span id="filterResultCount" class="ml-auto text-xs-muted"></span>
+        </div>
+      </div>
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
+        若勾選「顯示全部被過濾項目」，<span class="text-down">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
+        <br><span class="text-muted">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
+      </details>
+      <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
+    </div>
+
+    <!-- 決策鏈 -->
+    <div class="page" id="page-decision">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁將 Atlas 的完整決策過程攤開在陽光下，從<strong>宏觀環境 → 行業趨勢 → 個股篩選 → 控制決策 → 實際績效</strong>一路追蹤。
+        每一層的參數、條件與結果都必須可被稽核。若推薦虧損，你可以在這裡直接看到是哪一層的判斷出了問題。
+      </details>
+      <div class="panel wide mb-md"><h2>AI 自我進化狀態</h2><div id="aiEvolution" class="empty loading">載入中…</div></div>
+      <div id="decisionChain" class="empty loading">載入中…</div>
+    </div>
+
+    <!-- 決策追蹤 -->
+    <div class="page" id="page-reasoning-trace">
+    </div>
+
+    <!-- 組合持倉 -->
+    <div id="page-portfolio" class="page">
+      <h1 id="portfolioPageTitle">📂 組合持倉</h1>
+      <div class="kpi-grid" id="portfolioKPIs"></div>
+      <div class="panel wide" id="equityCurvePanel" style="display:none">
+        <h2>淨值趨勢</h2>
+        <canvas id="equityChart" height="200"></canvas>
+      </div>
+      <div class="panel wide" id="positionsPanel">
+        <h2>持倉明細</h2>
+        <div id="positionsTable"></div>
+      </div>
+      <div class="panel wide" id="tradeHistoryPanel">
+        <h2>交易時間軸</h2>
+        <div id="tradeHistoryContainer"></div>
+      </div>
+      <div class="panel wide" id="pnlAttributionPanel">
+        <h2>損益歸因 (PnL Attribution)</h2>
+        <div id="pnlAttribution" class="empty loading">載入中…</div>
+      </div>
+      <div class="panel wide"><h2>基準比較</h2><div id="benchmarkComparison" class="loading">載入中…</div></div>
+<div class="panel wide"><h2>風控閘道</h2><div id="riskGatePanel" class="loading">載入中…</div></div>
+      <div class="panel wide"><h2>風險分析</h2><div id="riskPanel" class="loading">載入中…</div></div>
+      <details class="help-details">
+        <summary><strong>📖 如何解讀本頁</strong></summary>
+        <p><strong>投組稅前淨值</strong> = 可用現金 + 所有持倉市值（未扣除稅負）</p>
+        <p><strong>投組稅後淨值</strong> = 稅前淨值 - 累積稅負（已實現獲利所產生的稅負）</p>
+        <p><strong>淨值趨勢</strong> = 每日回測的投組總值變化曲線（含稅前與稅後）</p>
+        <p>損益為未實現損益，實際損益需待部位平倉後確認。</p>
+        <p class="text-muted text-sm">資料來源：live state store（data/state/live/）。若無持倉資料，代表尚未執行模擬或所有部位已平倉。</p>
+      </details>
+    </div>
+
+    <!-- AI 觀測台 -->
+    <div class="page" id="page-agents">
+      <div class="panel wide"><h2>績效評估</h2><div id="agentObservatory" class="empty loading">載入中…</div></div>
+      <div class="panel wide"><h2>AI 標的池重疊</h2><div id="universeOverlap" class="empty loading">載入中…</div></div>
+    </div>
+
+    <!-- 模擬交易 -->
+    <div class="page" id="page-experiments">
+      <div class="panel wide">
+        <h2>收件匣</h2>
+        <div class="workflow">
+          <div class="step">回測窗口</div><span class="arrow">→</span>
+          <div class="step">突變簡報</div><span class="arrow">→</span>
+          <div class="step">執行</div><span class="arrow">→</span>
+          <div class="step active">評判 / 晉升</div><span class="arrow">→</span>
+          <div class="step">基線政策</div>
+        </div>
+        <div class="inbox-grid" id="experimentInbox" class="empty loading">載入中…</div>
+      </div>
+      <div class="panel wide"><h2>晉升歷史</h2><div id="experimentHistory" class="empty loading">載入中…</div></div>
+    </div>
+
+    <!-- 最新回測 -->
+    <div class="page" id="page-reports">
+      <div class="panel wide">
+        <h2>啟動回測</h2>
+        <div class="control-group">
+          <label class="label-muted" for="backtestStart">開始</label>
+          <input type="date" id="backtestStart" aria-label="回測開始日期">
+          <label class="label-muted" for="backtestEnd">結束</label>
+          <input type="date" id="backtestEnd" aria-label="回測結束日期">
+          <button class="primary">啟動回測</button>
+          <span id="backtestStatusText" class="text-muted text-sm"></span>
+        </div>
+        <div id="backtestStatusDetail" class="mt-8 text-12-muted"></div>
+      </div>
+      <div class="panel wide"><h2>回測報告</h2><div id="backtestReport" class="empty loading">載入中…</div></div>
+    </div>
+
+    <!-- 控制與稽核 -->
+    <div class="page" id="page-controls">
+      <div class="panel wide">
+        <h2>人工控制</h2>
+        <div class="two-col-grid">
+          <div>
+            <div class="mb-xs text-sm"><strong>AI 覆寫</strong> <span id="overrideBadges"></span></div>
+            <div class="control-group">
+              <select id="agentSelect"></select>
+              <button data-action="pause-agent">暫停</button>
+              <button data-action="resume-agent">恢復</button>
+            </div>
+            <div style="margin-top:8px;font-size:13px"><strong>產業封鎖</strong></div>
+            <div class="control-group">
+              <select id="sectorSelect">
+                <option value="semiconductor">半導體</option>
+                <option value="ai_supply_chain">AI 供應鏈</option>
+                <option value="shipping">航運</option>
+                <option value="high_dividend">高股息</option>
+                <option value="etf_rotation">ETF 輪動</option>
+              </select>
+              <button data-action="ban-sector">封鎖</button>
+              <button data-action="unban-sector">解除</button>
+            </div>
+          </div>
+          <div>
+            <div class="mb-xs text-sm"><strong>基線管理</strong></div>
+            <div class="control-group">
+              <select id="promoteSelect"><option value="">-- 選擇已接受的實驗 --</option></select>
+              <button class="primary" data-action="promote-experiment">晉升</button>
+            </div>
+            <div class="control-group">
+              <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
+              <input id="revertReason" type="text" placeholder="原因" class="input-w-md">
+               <button class="danger" data-action="revert-experiment">回滾</button>
+     </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 美台連動監控 -->
+    <div class="page" id="page-crossmarket">
+      <div class="page-header">
+        <h1>🇺🇸 美台連動監控</h1>
+        <p class="page-desc">美股對台股傳導通道即時觀測 — 指數、科技股、波動率、相關性、危機信號</p>
+      </div>
+      <div class="section">
+        <h3>📊 美國主要指數</h3>
+        <div class="kpi-grid" id="cm-us-indices"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>💻 半導體與科技股</h3>
+        <div class="kpi-grid" id="cm-tech-stocks"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>🌐 跨市場宏觀指標</h3>
+        <div class="kpi-grid" id="cm-macro"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>📈 動態相關性</h3>
+        <div class="panel" id="cm-correlation"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>🚨 危機信號</h3>
+        <div class="panel" id="cm-crisis"></div>
+      </div>
+    </div>
+  </div>
+   </div>
+</div>
+      <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
+    </div>
+    <div class="page" id="page-evolution_panel">
+      <div class="panel wide" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap" id="evolutionViews">
+           <span style="font-size:13px;font-weight:700">視覺圖：</span>
+           <button class="view-btn active" id="evView-compact">總覽儀表板</button>
+           <button class="view-btn" id="evView-detailed">詳細分析</button>
+           <button class="view-btn" id="evView-categorical">分類視覺圖</button>
+        </div>
+      </div>
+      <div id="evolutionContent" class="empty loading">載入中…</div>
+      <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>
+      <div class="panel wide" id="evolutionEquityCurvePanel" style="display:none;margin-top:12px">
+        <h3>權益曲線</h3>
+        <canvas id="evolutionEquityChart" style="width:100%"></canvas>
+      </div>
+    </div>
+    <!-- 信息通道 -->
+    <div class="page" id="page-datachannels">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。
+        若某個通道顯示 <span class="text-down">🔴 異常</span>，表示連線失敗或資料缺失，需立即檢查。
+        <span class="text-warn">🟡 待更新</span> 表示資料超過 24 小時未刷新，<span class="text-muted">🔵 正常延遲</span> 則表示因週末／非交易日，延遲屬正常現象。
+      </details>
+      <div class="panel wide">
+        <div class="flex-between">
+          <h2 class="m-0">資料通道管理中心</h2>
+          <div class="control-group m-0">
+            <button class="primary" id="btnIngestChannels">立即更新 Macro + Geo 資料</button>
+          </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div id="dcControlPanel" class="rc-summary mt-md">
+          <div class="rc-summary__left">
+            <button class="primary" data-action="dc-enable-all">全部啟用</button>
+            <button class="danger" data-action="dc-disable-all">全部停用</button>
+            <button data-action="dc-refresh">刷新狀態</button>
+          </div>
+          <div class="rc-summary__gauge">
+            <div class="rc-summary__bar"><div class="rc-summary__fill" id="dcTotalBar" style="width:100%;background:var(--accent)"></div></div>
+            <span class="rc-summary__score" id="dcTotalScore">- / -</span>
+            <span class="text-muted text-sm" style="margin-left:8px">總通道</span>
+          </div>
+          <div class="flex" style="gap:16px;margin-top:8px">
+            <div class="text-sm"><span class="text-up">●</span> 正常 <span id="dcOkCount">-</span></div>
+            <div class="text-sm"><span class="text-warn">●</span> 異常 <span id="dcWarnCount">-</span></div>
+            <div class="text-sm"><span class="text-down">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
+          </div>
+        </div>
+
+        <div id="macroDataHealth" class="empty loading mt-sm">載入中…</div>
+
+        <div id="dataChannels" class="empty loading mt-sm">載入中…</div>
+      </div>
+
+      <!-- API Key 管理 -->
+      <details class="help-details mt-md">
+        <summary><strong>🔑 API Key 管理</strong></summary>
+        <div style="padding:10px 0;display:flex;flex-direction:column;gap:10px">
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">Yahoo Finance:</label>
+            <input type="password" id="dcApiKeyYahoo" class="input-w-md" placeholder="API Key">
+            <button data-provider="yahoo">更新</button>
+          </div>
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">FinMind:</label>
+            <input type="password" id="dcApiKeyFinmind" class="input-w-md" placeholder="API Key">
+            <button data-provider="finmind">更新</button>
+          </div>
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">Fugle:</label>
+            <input type="password" id="dcApiKeyFugle" class="input-w-md" placeholder="API Key">
+            <button data-provider="fugle">更新</button>
+          </div>
+           <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">Fubon (富邦):</label>
+            <input type="password" id="dcApiKeyFubon" class="input-w-md" placeholder="API Key">
+            <button data-provider="fubon">更新</button>
+          </div>
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">TEJ:</label>
+            <input type="password" id="dcApiKeyTej" class="input-w-md" placeholder="API Key">
+            <button data-provider="tej">更新</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- 抓取日誌 -->
+      <details class="help-details mt-md">
+        <summary><strong>📋 抓取日誌（最近 10 筆）</strong></summary>
+        <div id="dcFetchLog" class="mt-sm text-muted text-sm">尚無記錄</div>
+      </details>
+    </div>
+
+    
+    <div class="page" id="page-alerts">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現 Atlas 系統產生的所有<strong>風險警報與系統通知</strong>。每條警報都有嚴重程度標記，你可以確認已處理的警報。
+        未確認的警報會持續提醒，直到人工介入處理。
+      </details>
+      <div class="panel wide">
+        <div class="flex-between mb-sm">
+          <h2 class="m-0">系統警報</h2>
+          <div class="control-group m-0">
+            <button data-action="load-alerts">🔄 重新整理</button>
+            <button data-action="show-unacknowledged">僅顯示未確認</button>
+          </div>
+        </div>
+        <div id="alertsPanel" class="empty loading">載入中…</div>
+      </div>
+    </div>
+
+    <div class="page" id="page-industry">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現 Atlas 對台灣產業的<strong>多維度分析</strong>，包含產業分類樹、週期定位、供應鏈連動與季節性模式。
+        點擊產業卡片可查看詳細的週期羅盤與衝擊傳導分析。
+      </details>
+      <div class="two-col-grid">
+        <div class="panel"><h2>產業地圖</h2><div id="industryMap" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" title="週期燈號計算說明" style="font-size:14px">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
+      </div>
+      <div class="panel wide mt-16">
+        <h2>供應鏈網路圖</h2>
+        <div id="industryGraph" class="empty loading" style="height: 400px;">載入中…</div>
+      </div>
+      <div class="panel mt-16"><h2>衝擊模擬</h2>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+          <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
+          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
+          <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
+          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
+        </div>
+        <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
+      </div>
+    </div>
+
+    <!-- 人機協同 -->
+    <div class="page" id="page-synergy">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁顯示 AI Agent 的 Darwinian 權重（權重越大代表影響力越高），以及新實驗的候選者。
+        如果某個 Agent 表現持續優異，權重會逐漸上升（最高 2.5）；表現不佳則會下降（最低 0.3）。
+      </details>
+      <div class="panel wide mb-md">
+        <h2>Darwinian 權重排行</h2>
+        <div id="synergyLeaderboard" class="empty loading">載入中…</div>
+      </div>
+      <div class="panel wide">
+        <h2>實驗收件匣（新候選者）</h2>
+        <div class="inbox-grid" id="synergyInbox">載入中…</div>
+      </div>
+      <div class="panel wide mt-md" style="border-color:var(--warn)">
+        <h2>🔧 產業週期閾值校正</h2>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+          閾值校正根據歷史營收數據重新計算各產業的擴張/復甦/成熟/衰退門檻。<br>
+          系統<strong>每月自動執行一次</strong>。若需手動校正，可使用以下按鈕或 CLI：<br>
+          <code class="code-inline">go run ./cmd/calibrate-thresholds</code>
+          （需先執行 <code class="code-inline">backfill-month-revenue</code> 累積歷史數據）
+        </div>
+        <div class="flex-gap-8">
+          <button id="btnCalibrateThresholds" style="background:var(--warn);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600">🔄 手動校正閾值</button>
+          <button data-page="parameters" style="background:var(--bg);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer">📋 查看參數管理</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 指標監控 -->
+    <div class="page" id="page-metrics">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現 Atlas 系統的<strong>即時運行指標</strong>，包含篩選率、警報觸發率、資金階段等關鍵數據。
+        這些指標幫助你了解系統運行狀態，及時發現異常。
+        <span style="color:var(--muted);font-size:12px;display:block;margin-top:6px">
+          注意：篩選統計與警報計數為記憶體內累計值，系統重啟後歸零。當系統持續運行並處理資料時，指標將自動累積。
+        </span>
+      </details>
+      <div class="panel wide" id="simHealthPanel">
+        <div id="simHealthContainer"></div>
+      </div>
+      <div class="grid cols-3" id="metricsKPI">
+        <div class="panel">
+          <h3>篩選率</h3>
+          <div class="kpi-value" id="screeningRate">-</div>
+          <div class="kpi-label">通過篩選的標的比例</div>
+        </div>
+        <div class="panel">
+          <h3>警報觸發</h3>
+          <div class="kpi-value" id="alertsTriggered">-</div>
+          <div class="kpi-label">今日觸發的警報數</div>
+        </div>
+        <div class="panel">
+          <h3>資金階段</h3>
+          <div class="kpi-value" id="capitalPhase">-</div>
+          <div class="kpi-label">當前資金管理階段</div>
+        </div>
+        <div class="panel">
+          <h3>存儲清理</h3>
+          <div class="kpi-value" id="storageDeleted">-</div>
+          <div class="kpi-label">最近清理刪除的檔案數</div>
+        </div>
+      </div>
+      <div class="panel wide" id="storageCleanupPanel" style="display:none">
+        <h2>存儲清理詳情</h2>
+        <div id="storageCleanupDetail" class="empty">載入中…</div>
+      </div>
+      <div class="panel wide">
+        <h2>指標趨勢</h2>
+        <div id="metricsTrend" class="empty">載入中…</div>
+      </div>
+    </div>
+
+    <div class="page" id="page-performance-report">
+      <div id="performanceReportContainer"></div>
+    </div>
+
+    <div class="page" id="page-parameters">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        參數配置為唯讀檢視。修改請使用 CLI 或 API。
+      </details>
+      <div id="parametersContent" class="empty loading">載入中…</div>
+      <div class="panel wide mt-md">
+        <h2>變更紀錄 (Audit Log)</h2>
+        <div id="parametersAuditLog" class="empty loading">載入中…</div>
+      </div>
+    </div>
+
+    <div class="page" id="page-config">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        部署配置來自環境變數（.env 檔），在服務啟動時載入，無法經由本頁修改。請直接編輯 .env 後重啟服務。
+      </details>
+      <div id="configContent" class="empty loading">載入中…</div>
+    </div>
+
+    <div class="page" id="page-eventlogic-rules">
+      <details class="help-details"><summary><strong>💡 什麼是事件邏輯規則？</strong></summary>
+        事件邏輯規則是系統自動發現或人工定義的「事件→價格」因果規則。系統會根據實際命中率自動升降級，你也可以手動新增、編輯或刪除規則。
+      </details>
+      <div id="eventlogicRulesContent" class="empty loading">載入中…</div>
+    </div>
+
+    <div class="page" id="page-swarm">
+      <div class="page-header">
+        <h1>🐟 Swarm 模擬</h1>
+        <p class="page-desc">MiroFish 平行市場模擬引擎 — 情境探索與共識分析</p>
+      </div>
+      <div class="kpi-grid" id="swarm-status"></div>
+      <div class="section mt-16">
+        <h3>📊 共識分析</h3>
+        <div class="panel" id="swarm-consensus"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>⚠️ 異常偵測</h3>
+        <div class="panel" id="swarm-anomalies"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>📈 情境參數</h3>
+        <div class="panel" id="swarm-scenarios"></div>
+      </div>
+      <div class="section mt-16">
+        <h3>🧠 策略推薦</h3>
+        <div class="panel" id="swarm-strategies"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="refresh" title="手動重新整理">🔄 重新整理</button>
+
+<div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
+
+<!-- Modal: Prompt Diff -->
+<div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3>提示詞差異比對</h3>
+    <div class="diff" id="diffContent">
+      <div><strong>基線</strong><pre id="diffBaseline"></pre></div>
+      <div><strong>候選</strong><pre id="diffCandidate"></pre></div>
+    </div>
+    <div class="control-group mt-10 justify-end">
+      <button>關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Promote Confirm -->
+<div class="modal-overlay" id="promoteModal" role="dialog" aria-modal="true">
+  <div class="modal" style="width:min(520px,94vw)">
+    <h3>確認晉升 Baseline Policy</h3>
+    <p class="text-muted-md">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
+    <div id="promotePreview" style="font-size:12px;margin:10px 0"></div>
+    <div class="control-group justify-end">
+      <button>取消</button>
+      <button class="primary">確認晉升</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: KPI Help -->
+<div class="modal-overlay" id="infoModal" role="dialog" aria-modal="true">
+  <div class="modal" style="width:min(560px,94vw)">
+    <h3 id="infoTitle">說明</h3>
+    <div id="infoContent" style="font-size:13px;line-height:1.7"></div>
+    <div class="control-group mt-14 justify-end">
+      <button>關閉</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/bootstrap-utils.js"></script>
+
+<div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true">
+  <div class="modal" style="width:min(720px,94vw)">
+    <h3 id="industryModalTitle">產業詳細分析</h3>
+    <div class="industry-tabs" id="industryTabs">
+      <button class="tab-btn active" data-tab="cycle">週期定位</button>
+      <button class="tab-btn" data-tab="linkage">供應鏈</button>
+      <button class="tab-btn" data-tab="seasonality">季節性</button>
+      <button class="tab-btn" data-tab="risk">風險</button>
+    </div>
+    <div id="industryModalContent"><div class="empty">載入中…</div></div>
+    <div class="control-group mt-14 justify-end">
+      <button>關閉</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cycleLegendModal" role="dialog" aria-modal="true">
+  <div class="modal" style="width:min(600px,94vw);max-height:85vh;overflow-y:auto">
+    <h3>📊 週期羅盤 — 燈號計算說明</h3>
+
+    <div class="mb-14">
+      <h4 class="h4-section-title">🟢 燈號顏色</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:13px">
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#10b981;margin-right:6px"></span>復甦 (綠)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#3b82f6;margin-right:6px"></span>擴張 (藍)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f59e0b;margin-right:6px"></span>成熟 (橙)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444;margin-right:6px"></span>衰退 (紅)</div>
+      </div>
+    </div>
+
+    <div class="mb-14">
+      <h4 class="h4-section-title">🔍 週期判定</h4>
+      <p class="text-muted-md" style="margin:0 0 6px">
+        用 <b>營收年增率</b> 和 <b>獲利年增率</b> 與產業閾值比較：
+      </p>
+      <table style="font-size:12px;width:100%">
+        <thead><tr><th>判定</th><th>營收閾值</th><th>獲利閾值</th><th>範例</th></tr></thead>
+        <tbody>
+          <tr><td>擴張</td><td>&gt; 20%</td><td>&gt; 20%</td><td>AI供應鏈 rev 45%</td></tr>
+          <tr><td>復甦</td><td>&gt; 5%</td><td>&gt; 5%</td><td>電子零組件 rev 12%</td></tr>
+          <tr><td>成熟</td><td>&gt; -5%</td><td>&gt; -5%</td><td>傳產/消費 rev 3%</td></tr>
+          <tr><td>衰退</td><td>其餘</td><td>其餘</td><td>航運 rev -5%</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:11px;color:var(--muted);margin:4px 0 0">
+        半導體 / 金融 / 航運 有獨立閾值（高波動產業閾值更高）
+      </p>
+    </div>
+
+    <div class="mb-14">
+      <h4 class="h4-section-title">📈 信心度 — 週期判斷可靠度</h4>
+      <p class="text-muted-md" style="margin:0 0 6px">
+        <b>信心度不是「產業強弱」，而是「週期定位的可信程度」</b>（0%～100%）。<br>
+        數值越高，代表當前產業處於該週期階段的證據越充分。
+      </p>
+      <p class="text-muted-md" style="margin:6px 0 6px">
+        <b>信心度 = 邊界距離 × 45% + 訊號新鮮度 × 20% + 季節性契合 × 15% + 供應鏈穩定度 × 10% + 敘事事件吻合 × 10%</b>
+      </p>
+      <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
+        <li><b>邊界距離（45%）</b>：營收/獲利離週期閾值多遠。越遠越確定</li>
+        <li><b>訊號新鮮度（20%）</b>：指標更新時間。數據越新越可靠</li>
+        <li><b>季節性契合（15%）</b>：當前月份與歷史季節模式匹配程度</li>
+        <li><b>供應鏈穩定度（10%）</b>：產業上下游集中度與相關性結構。連動越少、集中度越低 → 週期判斷越可靠</li>
+        <li><b>敘事事件吻合（10%）</b>：宏觀敘事（如 AI 資本支出、地緣政治）與週期定位的一致性</li>
+      </ul>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 0">
+        🎨 <b>燈號顏色深淺 = 信心度</b>。深 = 高信心（數據強烈支持）；淺 = 邊界搖擺（需謹慎解讀）。<br>
+        💡 例：半導體顯示「擴張」但信心度僅 35%，代表雖然營收>20%，但供應鏈波動大或季節性異常，實際可能處於擴張末期。
+      </p>
+    </div>
+
+    <div class="mb-14">
+      <h4 class="h4-section-title">🔗 進階機制</h4>
+      <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
+        <li><b>衰退期相關性提升</b>：當系統偵測到「衰退」時，產業間的衝擊傳導相關性自動提升 30%（Ang & Chen 2002 實證），反映系統性風險主導下「同漲同跌」現象</li>
+        <li><b>動態環境調變</b>：原油、美元指數、BDI 的 90 日滾動中位數基準，自動適應市場結構變化，消除靜態基準漂移</li>
+        <li><b>方向性感知敘事</b>：油價暴漲 vs 暴跌對能源股的影響相反；系統依據實際 macro 數據偏差方向動態調整</li>
+      </ul>
+    </div>
+
+    <div class="mb-14">
+      <h4 class="h4-section-title">⚠️ 使用須知</h4>
+      <p style="font-size:12px;color:var(--down);margin:0">
+        週期羅盤是<b>輔助判斷工具</b>，非買賣建議。低信心度（&lt;40%）的燈號僅供參考，建議搭配產業詳情頁的供應鏈連動、季節性模式與風險指標綜合評估。
+        產業週期具有慣性，單一月份數據異常不一定代表階段轉換。
+      </p>
+    </div>
+
+    <div class="control-group mt-14 justify-end">
+      <button>關閉</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">import "./js/main.js";</script>
+
+<script type="module" src="js/component-init.js"></script>
+<script type="module" src="js/event-listeners.js"></script>
+</body>
+</html>
