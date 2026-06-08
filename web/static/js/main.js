@@ -274,7 +274,7 @@ async function loadPageData(pageId) {
         silentGetJSON('/api/dashboard/agent-observatory'),
         silentGetJSON('/api/dashboard/universe-overlap'),
       ]);
-      if (m.dash.renderAgentObservatory) m.dash.renderAgentObservatory(a[0], a[1], window.darwinianTrend);
+      if (m.dash.renderAgentObservatory) m.dash.renderAgentObservatory(a[0], a[1]);
       if (m.dash.renderUniverseOverlap) m.dash.renderUniverseOverlap(a[1]);
     } catch(e) { console.error(e); }
   }

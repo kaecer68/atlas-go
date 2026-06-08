@@ -216,7 +216,8 @@ export function renderAgentObservatory(data, overlapData) {
   const cards = data.scorecards || [];
   if (!cards.length) { el.innerHTML = renderEmptyState('尚無 Agent 績效資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
-  const weakest = cards[0] ? cards[0].agent_id : '';
+  // cards are sorted by Sharpe ascending (weakest first) by BuildScorecards
+  const weakest = (cards[0] && cards[0].sharpe != null) ? cards[0].agent_id : '';
   const helpIcon = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
 
   let criteriaHtml = '';
@@ -237,27 +238,35 @@ export function renderAgentObservatory(data, overlapData) {
           if (sc.momentum_20d && sc.momentum_20d.min != null) badges.push(`動能≥${sc.momentum_20d.min}`);
           if (sc.min_total_factor_score != null) badges.push(`因子≥${sc.min_total_factor_score}`);
           if (!badges.length) return '';
-          return `<div style="margin:6px 0;font-size:12px"><strong>${escapeHtml(agentName(a.agent_id))}</strong> <span class="text-muted">${badges.map(b => `<span class="badge info" class="cursor-help" title="${escapeHtml(b)}">${escapeHtml(b)}</span>`).join(' ')}</span></div>`;
+          return `<div style="margin:6px 0;font-size:12px"><strong>${escapeHtml(agentName(a.agent_id))}</strong> <span class="text-muted">${badges.map(b => `<span class="badge info cursor-help" title="${escapeHtml(b)}">${escapeHtml(b)}</span>`).join(' ')}</span></div>`;
         }).filter(s => s).join('') + '</div>';
     }
   }
 
   el.innerHTML = `<table>
-    <thead><tr><th>策略來源</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th></tr></thead>
+    <thead><tr><th>策略來源</th><th>層級</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>觀察數</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。基於標準差計算，已修正先前使用 variance 的錯誤。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>95% CI</th><th>平均報酬</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th></tr></thead>
     <tbody>
       ${cards.map(c => {
         const isWeak = c.agent_id === weakest;
+        const sigWarn = (c.windows || 0) < 20 ? '<span title="窗口數不足，統計信心有限" style="color:var(--warn);font-size:10px">⚠️</span>' : '';
+        const ciLow = (c.confidence_low != null && c.confidence_low !== 0) ? c.confidence_low.toFixed(3) : '-';
+        const ciHigh = (c.confidence_high != null && c.confidence_high !== 0) ? c.confidence_high.toFixed(3) : '-';
         return `<tr class="${isWeak ? 'weak' : ''}">
-          <td>${agentName(c.agent_id) || ''}</td>
+          <td>${agentName(c.agent_id) || ''} ${sigWarn}</td>
+          <td>${c.layer || '-'}</td>
           <td>${c.windows || 0}</td>
+          <td>${c.observations || 0}</td>
           <td>${((c.hit_rate || 0) * 100).toFixed(1)}%</td>
           <td style="${(c.sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
+          <td class="text-muted text-xs">[${ciLow}, ${ciHigh}]</td>
+          <td>${((c.average_return || 0) * 100).toFixed(2)}%</td>
           <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
         </tr>`;
       }).join('')}
     </tbody>
   </table>
   ${weakest ? `<div style="margin-top:8px;font-size:12px;color:var(--down)">待改進策略來源：<strong>${agentName(weakest)}</strong></div>` : ''}
+  ${data.recorded_at ? `<div style="margin-top:4px;font-size:11px;color:var(--muted)">數據時間：${new Date(data.recorded_at).toLocaleString('zh-TW')}</div>` : ''}
   ${criteriaHtml}`;
 }
 
