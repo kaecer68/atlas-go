@@ -107,6 +107,10 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		case r := <-ch:
 			if r.err != nil {
 				errs = append(errs, r.err)
+				logging.Warn("marketdata", "provider_fetch_failed",
+					"provider", p.Name(),
+					"err", r.err.Error(),
+				)
 				continue
 			}
 			mergeSnapshot(&merged, r.snap)
