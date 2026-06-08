@@ -13,12 +13,13 @@ export async function loadCrossMarketData() {
   renderCrisis(status);
 }
 
-function kpiCard(label, value, fmt, color, borderColor) {
+function kpiCard(label, value, fmt, color, borderColor, symbol) {
   const c = color || 'var(--text)';
   const bc = borderColor || 'transparent';
   const borderStyle = bc !== 'transparent' ? `border-left:3px solid ${bc};` : '';
   const display = fmt ? fmt(value) : (value != null ? String(value) : '—');
-  return `<div class="kpi-card" style="${borderStyle}"><div class="kpi-label">${label}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
+  const symbolHtml = symbol ? `<span style="font-size:11px;color:var(--muted);margin-left:6px">${escapeHtml(symbol)}</span>` : '';
+  return `<div class="kpi-card" style="${borderStyle}"><div class="kpi-label">${label}${symbolHtml}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
 }
 
 function fmtPct(v) {
@@ -40,6 +41,14 @@ function fmtTs(v) {
   return new Date(v).toLocaleString();
 }
 
+function getField(status, key) {
+  const raw = status[key];
+  if (raw && typeof raw === 'object') {
+    return { value: raw.value, changePct: raw.change_pct, symbol: raw.symbol, timestamp: raw.timestamp };
+  }
+  return { value: raw, changePct: raw, symbol: null, timestamp: null };
+}
+
 function renderUSIndices(status) {
   const el = document.getElementById('cm-us-indices');
   if (!el) return;
@@ -47,15 +56,19 @@ function renderUSIndices(status) {
     el.innerHTML = emptyState('等待美台連動監控資料');
     return;
   }
-  const spxColor = parseFloat(status.spx) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const ndxColor = parseFloat(status.ndx) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const djiColor = parseFloat(status.dji) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const soxColor = parseFloat(status.sox) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const spx = getField(status, 'spx');
+  const ndx = getField(status, 'ndx');
+  const dji = getField(status, 'dji');
+  const sox = getField(status, 'sox');
+  const spxColor = parseFloat(spx.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const ndxColor = parseFloat(ndx.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const djiColor = parseFloat(dji.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const soxColor = parseFloat(sox.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
   el.innerHTML =
-    kpiCard('S&P 500', status.spx, fmtNum, spxColor) +
-    kpiCard('Nasdaq', status.ndx, fmtNum, ndxColor) +
-    kpiCard('Dow Jones', status.dji, fmtNum, djiColor) +
-    kpiCard('SOX 半導體', status.sox, fmtNum, soxColor);
+    kpiCard('S&P 500', spx.value, fmtNum, spxColor, null, spx.symbol) +
+    kpiCard('Nasdaq', ndx.value, fmtNum, ndxColor, null, ndx.symbol) +
+    kpiCard('Dow Jones', dji.value, fmtNum, djiColor, null, dji.symbol) +
+    kpiCard('SOX 半導體', sox.value, fmtNum, soxColor, null, sox.symbol);
 }
 
 function renderTechStocks(status) {
@@ -65,15 +78,19 @@ function renderTechStocks(status) {
     el.innerHTML = emptyState('等待科技股資料');
     return;
   }
-  const nvdaColor = parseFloat(status.nvda) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const aaplColor = parseFloat(status.aapl) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const msftColor = parseFloat(status.msft) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  const tsmColor = parseFloat(status.tsm_adr) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const nvda = getField(status, 'nvda');
+  const aapl = getField(status, 'aapl');
+  const msft = getField(status, 'msft');
+  const tsm = getField(status, 'tsm_adr');
+  const nvdaColor = parseFloat(nvda.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const aaplColor = parseFloat(aapl.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const msftColor = parseFloat(msft.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  const tsmColor = parseFloat(tsm.changePct) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
   el.innerHTML =
-    kpiCard('NVDA', status.nvda, fmtNum, nvdaColor) +
-    kpiCard('AAPL', status.aapl, fmtNum, aaplColor) +
-    kpiCard('MSFT', status.msft, fmtNum, msftColor) +
-    kpiCard('TSM ADR', status.tsm_adr, fmtNum, tsmColor, 'rgba(79,193,255,0.3)');
+    kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol) +
+    kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol) +
+    kpiCard('MSFT', msft.value, fmtNum, msftColor, null, msft.symbol) +
+    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'rgba(79,193,255,0.3)', tsm.symbol);
 }
 
 function renderMacro(status) {
@@ -83,11 +100,15 @@ function renderMacro(status) {
     el.innerHTML = emptyState('等待宏觀指標');
     return;
   }
+  const vix = getField(status, 'vix');
+  const dxy = getField(status, 'dxy');
+  const usdTwd = getField(status, 'usd_twd');
+  const us10y = getField(status, 'us10y');
   el.innerHTML =
-    kpiCard('VIX 恐慌指數', status.vix, fmtNum) +
-    kpiCard('DXY 美元指數', status.dxy, fmtNum) +
-    kpiCard('USD/TWD 匯率', status.usd_twd, fmtNum) +
-    kpiCard('US 10Y 殖利率', status.us10y, fmtPct);
+    kpiCard('VIX 恐慌指數', vix.value, fmtNum, null, null, vix.symbol) +
+    kpiCard('DXY 美元指數', dxy.value, fmtNum, null, null, dxy.symbol) +
+    kpiCard('USD/TWD 匯率', usdTwd.value, fmtNum, null, null, usdTwd.symbol) +
+    kpiCard('US 10Y 殖利率', us10y.value, fmtPct, null, null, us10y.symbol);
 }
 
 function renderCorrelation(correlation, status) {
@@ -129,7 +150,8 @@ function renderCrisis(status) {
     return;
   }
   const active = status.crisis_active;
-  const vix = status.vix != null ? parseFloat(status.vix) : null;
+  const vixField = getField(status, 'vix');
+  const vix = vixField.value != null ? parseFloat(vixField.value) : null;
   const vixLabel = vix != null ? vix.toFixed(2) : '—';
 
   let bg, icon, title, desc;
