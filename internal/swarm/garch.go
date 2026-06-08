@@ -57,8 +57,15 @@ func GARCHParamsForRegime(regime string) (omega, alpha, beta float64) {
 
 // NewGARCHProcess creates a GARCH process initialized from annualized volatility.
 // annualVol is the initial annualized volatility (e.g., 0.15 for 15%).
-func NewGARCHProcess(omega, alpha, beta, annualVol float64) *GARCHProcess {
-	dailyVol := annualVol / math.Sqrt(252.0)
+// If initialSigma is provided and > 0, it is used as the initial daily volatility
+// instead of deriving it from annualVol.
+func NewGARCHProcess(omega, alpha, beta, annualVol float64, initialSigma ...float64) *GARCHProcess {
+	var dailyVol float64
+	if len(initialSigma) > 0 && initialSigma[0] > 0 {
+		dailyVol = initialSigma[0]
+	} else {
+		dailyVol = annualVol / math.Sqrt(252.0)
+	}
 	return &GARCHProcess{
 		Omega:   omega,
 		Alpha:   alpha,

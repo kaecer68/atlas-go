@@ -181,8 +181,8 @@
 |------|-----|
 | **類型** | JSON（覆蓋寫入） |
 | **生產者** | `internal/swarm/`（MiroFish swarm 模擬） |
-| **消費者** | Dashboard API |
-| **描述** | 最新一次 swarm 模擬結果 |
+| **消費者** | Dashboard API、`internal/metalearning/`（策略進化） |
+| **描述** | 最新一次 swarm 模擬結果；透過 `ExportTrainingData()` 餵入 MetaLearner 進行策略演化 |
 
 ---
 
@@ -279,8 +279,8 @@
 |------|-----|
 | **類型** | Directory（5 個 JSONL） |
 | **生產者** | `internal/swarm/` |
-| **消費者** | `internal/swarm/`（訓練回放） |
-| **描述** | Swarm 訓練過程記錄，用於回放分析 |
+| **消費者** | `internal/swarm/`（訓練回放）、`internal/metalearning/`（策略進化） |
+| **描述** | Swarm 訓練過程記錄，用於回放分析與 MetaLearner 策略演化 |
 
 ### traces `data/state/traces/`
 

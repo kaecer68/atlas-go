@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/stress"
 )
 
 // MiroFishSwarm manages parallel market simulations.
@@ -59,12 +63,13 @@ type MarketEvent struct {
 
 // MarketState captures market conditions at a point in time
 type MarketState struct {
-	Timestamp   time.Time
-	Prices      map[string]float64
-	Volumes     map[string]float64
-	Sentiment   float64
-	Volatility  float64
-	Correlation float64
+	Timestamp          time.Time
+	Prices             map[string]float64
+	Volumes            map[string]float64
+	Sentiment          float64
+	Volatility         float64
+	Correlation        float64
+	RealizedVolatility float64 // optional: actual realized vol from market data
 }
 
 // Prediction represents a fish's prediction at a moment
@@ -158,7 +163,9 @@ func (sw *MiroFishSwarm) UpdateScenario(id string, volatilityDelta, trendDelta f
 	}
 }
 
-// InitializeScenarios sets up diverse market scenarios
+// InitializeScenarios sets up diverse market scenarios using hardcoded parameters.
+// For production use, prefer InitializeScenariosFromStress which derives parameters
+// from historical stress test scenarios based on real market data.
 func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
@@ -226,7 +233,7 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 				History:      make([]MarketState, 0),
 				Predictions:  make([]Prediction, 0),
 				Rule:         RandomPredictionRule(),
-				GARCH:        NewGARCHProcess(omega, alpha, beta, scenario.Volatility),
+				GARCH:        NewGARCHProcess(omega, alpha, beta, scenario.Volatility, baseState.RealizedVolatility/math.Sqrt(252.0)),
 				isAlive:      true,
 				spawnedAt:    time.Now(),
 			}
@@ -235,6 +242,166 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 	}
 
 	logging.Info("mirofish_swarm", "initialized", "fish_count", len(sw.fish), "scenario_count", len(sw.scenarios))
+}
+
+// InitializeScenariosFromStress creates MarketScenario entries by mapping
+// stress.Scenario data. It derives volatility from VIX quotes (when available)
+// or from price range, maps stress.Regime to swarm regime strings, and creates
+// events from the scenario's description and date.
+//
+// This avoids duplicating hardcoded scenario definitions between the swarm and
+// stress modules. The stress scenarios are based on real historical market data.
+func (sw *MiroFishSwarm) InitializeScenariosFromStress(baseState MarketState, stressScenarios []stress.Scenario) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	baseTime := baseState.Timestamp
+
+	sw.scenarios = make([]MarketScenario, 0, len(stressScenarios))
+	for _, s := range stressScenarios {
+		vol := estimateVolatilityFromStress(s)
+		regime := mapStressRegimeToSwarm(s.Regime)
+		trend := estimateTrendFromStress(s)
+		events := buildEventsFromStress(s, baseTime)
+
+		sw.scenarios = append(sw.scenarios, MarketScenario{
+			ID:         s.ID,
+			Name:       s.Name,
+			Regime:     regime,
+			Volatility: vol,
+			Trend:      trend,
+			Duration:   time.Duration(s.WindowDays) * 24 * time.Hour,
+			Events:     events,
+		})
+	}
+
+	// Spawn fish for each scenario
+	if len(sw.scenarios) == 0 {
+		logging.Warn("mirofish_swarm", "no_scenarios_from_stress", "fish_count", 0)
+		return
+	}
+
+	fishPerScenario := sw.config.FishCount / len(sw.scenarios)
+	for _, scenario := range sw.scenarios {
+		omega, alpha, beta := GARCHParamsForRegime(scenario.Regime)
+		for i := range fishPerScenario {
+			fish := &MiroFish{
+				ID:           fmt.Sprintf("fish_%s_%d", scenario.ID, i),
+				Scenario:     scenario,
+				CurrentState: baseState,
+				History:      make([]MarketState, 0),
+				Predictions:  make([]Prediction, 0),
+				Rule:         RandomPredictionRule(),
+				GARCH:        NewGARCHProcess(omega, alpha, beta, scenario.Volatility, baseState.RealizedVolatility/math.Sqrt(252.0)),
+				isAlive:      true,
+				spawnedAt:    time.Now(),
+			}
+			sw.fish = append(sw.fish, fish)
+		}
+	}
+
+	logging.Info("mirofish_swarm", "initialized_from_stress",
+		"fish_count", len(sw.fish),
+		"scenario_count", len(sw.scenarios),
+		"source", "stress_module")
+}
+
+// estimateVolatilityFromStress derives an annualized volatility estimate from
+// a stress scenario. It prefers the VIX quote when available; otherwise it
+// falls back to the maximum price-range ratio across all quoted assets.
+func estimateVolatilityFromStress(s stress.Scenario) float64 {
+	for _, q := range s.Quotes {
+		if strings.EqualFold(q.Symbol, "VIX") && q.Last > 0 {
+			return q.Last / 100.0
+		}
+	}
+
+	maxRange := 0.0
+	for _, q := range s.Quotes {
+		if q.Open > 0 && q.Last > 0 {
+			r := math.Abs(q.Last-q.Open) / q.Open
+			if r > maxRange {
+				maxRange = r
+			}
+		}
+	}
+	if maxRange > 0 {
+		return maxRange * math.Sqrt(252.0)
+	}
+	return 0.20
+}
+
+// mapStressRegimeToSwarm converts a domain.Regime to the string regime
+// identifiers used by the swarm module.
+func mapStressRegimeToSwarm(r domain.Regime) string {
+	switch r {
+	case domain.RegimeRiskOn:
+		return "risk_on"
+	case domain.RegimeRiskOff:
+		return "risk_off"
+	case domain.RegimeNeutral:
+		return "complacent"
+	default:
+		return "transition"
+	}
+}
+
+// estimateTrendFromStress infers a daily trend from the scenario's quotes.
+// A positive gap between last and open price suggests an upward trend;
+// a negative gap suggests a downward trend. The magnitude is scaled to a
+// reasonable daily drift range.
+func estimateTrendFromStress(s stress.Scenario) float64 {
+	var totalReturn, count float64
+	for _, q := range s.Quotes {
+		if q.Open > 0 && q.Last > 0 {
+			totalReturn += (q.Last - q.Open) / q.Open
+			count++
+		}
+	}
+	if count == 0 {
+		return 0.0
+	}
+	avgReturn := totalReturn / count
+	return math.Max(-0.005, math.Min(0.005, avgReturn/100.0))
+}
+
+// buildEventsFromStress creates MarketEvent entries from a stress scenario's
+// metadata. The scenario date is used as the event time; the description is
+// mapped to an event type based on keywords.
+func buildEventsFromStress(s stress.Scenario, baseTime time.Time) []MarketEvent {
+	if s.Description == "" {
+		return nil
+	}
+
+	eventType := "earnings_surprise"
+	descLower := strings.ToLower(s.Description)
+	switch {
+	case strings.Contains(descLower, "crash") || strings.Contains(descLower, "spike") || strings.Contains(descLower, "freeze"):
+		eventType = "flash_crash"
+	case strings.Contains(descLower, "rally") || strings.Contains(descLower, "surge") || strings.Contains(descLower, "euphoria"):
+		eventType = "rally"
+	}
+
+	magnitude := 0.02
+	if strings.Contains(descLower, "crash") || strings.Contains(descLower, "spike") {
+		magnitude = 0.05
+	} else if strings.Contains(descLower, "rally") || strings.Contains(descLower, "surge") {
+		magnitude = 0.03
+	}
+
+	eventTime := baseTime.Add(24 * time.Hour)
+	if !s.Date.IsZero() {
+		eventTime = s.Date
+	}
+
+	return []MarketEvent{
+		{
+			Time:        eventTime,
+			Type:        eventType,
+			Magnitude:   magnitude,
+			Description: s.Description,
+		},
+	}
 }
 
 // Start runs the swarm simulation synchronously.
@@ -283,15 +450,44 @@ func (sw *MiroFishSwarm) runBatch(fish []*MiroFish) {
 func (sw *MiroFishSwarm) simulateFish(fish *MiroFish) {
 	steps := int(fish.Scenario.Duration / sw.config.TimeStep)
 
+	var prevState MarketState
+	var prevPred Prediction
 	for i := 0; i < steps && fish.isAlive; i++ {
 		newState := sw.evolveState(fish, fish.CurrentState, fish.Scenario, i)
 		fish.History = append(fish.History, newState)
+
+		if i > 0 {
+			fish.Performance.TotalPredictions++
+			if prevState.Prices != nil {
+				actualReturn := newState.Prices[prevPred.Symbol] - prevState.Prices[prevPred.Symbol]
+				var actualDir string
+				switch {
+				case actualReturn > 0:
+					actualDir = "up"
+				case actualReturn < 0:
+					actualDir = "down"
+				default:
+					actualDir = "neutral"
+				}
+				if prevPred.Direction == actualDir {
+					fish.Performance.CorrectPredictions++
+				}
+				if actualDir == "up" || actualDir == "down" {
+					fish.Performance.PnL += actualReturn * float64(prevPred.Conviction) / 100.0
+				}
+			}
+			if fish.Performance.TotalPredictions > 0 {
+				fish.Performance.Accuracy = float64(fish.Performance.CorrectPredictions) / float64(fish.Performance.TotalPredictions)
+			}
+		}
+
 		fish.CurrentState = newState
 
 		pred := sw.generatePrediction(fish, newState)
 		fish.Predictions = append(fish.Predictions, pred)
 
-		sw.updatePerformance(fish, pred)
+		prevState = newState
+		prevPred = pred
 	}
 }
 
@@ -354,9 +550,14 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 	var targetSymbol string
 	var targetPrice float64
 
-	for sym, price := range state.Prices {
+	symbols := make([]string, 0, len(state.Prices))
+	for sym := range state.Prices {
+		symbols = append(symbols, sym)
+	}
+	sort.Strings(symbols)
+	for _, sym := range symbols {
 		targetSymbol = sym
-		targetPrice = price
+		targetPrice = state.Prices[sym]
 		break
 	}
 
@@ -405,19 +606,6 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 	}
 }
 
-// updatePerformance tracks fish prediction accuracy
-func (sw *MiroFishSwarm) updatePerformance(fish *MiroFish, pred Prediction) {
-	fish.Performance.TotalPredictions++
-
-	if rand.Float64() < pred.Confidence {
-		fish.Performance.CorrectPredictions++
-	}
-
-	if fish.Performance.TotalPredictions > 0 {
-		fish.Performance.Accuracy = float64(fish.Performance.CorrectPredictions) / float64(fish.Performance.TotalPredictions)
-	}
-}
-
 // applyEvent modifies state based on market event
 func (sw *MiroFishSwarm) applyEvent(state *MarketState, event MarketEvent) {
 	switch event.Type {
@@ -433,9 +621,9 @@ func (sw *MiroFishSwarm) applyEvent(state *MarketState, event MarketEvent) {
 		}
 		state.Sentiment = 0.8
 	case "earnings_surprise":
+		// Affects all symbols with individual random magnitudes
 		for sym := range state.Prices {
 			state.Prices[sym] *= (1 + event.Magnitude*(rand.Float64()-0.5))
-			break
 		}
 	default:
 	}
@@ -596,7 +784,7 @@ func (sw *MiroFishSwarm) EvolveGeneration() {
 	}
 
 	replaceCount := totalFish * 4 / 10
-	for i := 0; i < replaceCount; i++ {
+	for i := range replaceCount {
 		bottomIdx := totalFish - 1 - i
 		if bottomIdx < eliteCount {
 			break

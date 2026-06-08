@@ -43,7 +43,7 @@ MiroFish Swarm 是 Atlas 系統的平行市場模擬引擎。同時執行 100 �
 | 欄位 | 意義 |
 |------|------|
 | `consensus_confidence` | 整體共識信心度 [0,1] |
-| `top_accuracy` | 最佳魚的準確率 [0,1] |
+| `top_accuracy` | 最佳魚的準確率 [0,1]；基於模擬價格路徑的實際漲跌方向計算（非隨機） |
 | `anomaly_count` | 異常偵測數量 |
 | `generations_evolved` | 已演化世代數 |
 
@@ -95,6 +95,28 @@ MiroFish Swarm 是 Atlas 系統的平行市場模擬引擎。同時執行 100 �
 ]
 ```
 
+### `GET /api/dashboard/swarm-strategies`
+
+回傳 MetaLearner 推薦的學習策略清單（最多 5 條）。
+
+```json
+[
+  {
+    "id": "strategy_momentum_0",
+    "name": "Conservative Momentum",
+    "type": "momentum",
+    "score": 0.75
+  }
+]
+```
+
+| 欄位 | 意義 |
+|------|------|
+| `id` | 策略唯一識別碼 |
+| `name` | 策略名稱 |
+| `type` | 策略類型（momentum / adaptive / curriculum / ensemble / evolutionary） |
+| `score` | 策略成功率（SuccessCount / TotalApplications） |
+
 ---
 
 ## Agent 使用指南
@@ -142,6 +164,16 @@ MiroFish Swarm 是 Atlas 系統的平行市場模擬引擎。同時執行 100 �
 ```
 
 ---
+
+## 校準框架
+
+Swarm 模組包含參數校準框架（`internal/swarm/calibration.go`），用於比對模擬統計量與真實市場數據：
+
+- `ComputeSimulationStats(results)` — 從模擬結果計算均值、波動率、偏度、峰度、最大回撤、Sharpe ratio、相關矩陣
+- `CalibrateParameters(current, simStats, targetStats)` — 產生參數調整建議（GARCH omega/alpha/beta、跳躍過程 lambda/mu/sigma、趨勢 drift）
+- `MiroFishSwarm.CalibrateAgainstTarget(target)` — 對當前魚群歷史路徑執行完整校準
+
+校準誤差以均方根（RMS）計算，調整量採比例修正：`adjustment = error * learningRate`（預設 learningRate = 0.1）。
 
 ## 相關指令
 

@@ -1,16 +1,18 @@
 import { escapeHtml } from '../shared/utils.js';
 
 export async function loadSwarmData() {
-  const [status, consensus, anomalies, scenarios] = await Promise.all([
+  const [status, consensus, anomalies, scenarios, strategies] = await Promise.all([
     fetch('/api/dashboard/swarm-status').then(r => r.json()).catch(() => null),
     fetch('/api/dashboard/swarm-consensus').then(r => r.json()).catch(() => null),
     fetch('/api/dashboard/swarm-anomalies').then(r => r.json()).catch(() => null),
     fetch('/api/dashboard/swarm-scenarios').then(r => r.json()).catch(() => null),
+    fetch('/api/dashboard/swarm-strategies').then(r => r.json()).catch(() => null),
   ]);
   renderStatus(status);
   renderConsensus(consensus);
   renderAnomalies(anomalies);
   renderScenarios(scenarios);
+  renderStrategies(strategies);
 }
 
 function renderStatus(status) {
@@ -113,6 +115,31 @@ function renderScenarios(scenarios) {
     </tr>`;
   }
   el.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>情境</th><th>盤勢</th><th>波動率</th><th>趨勢</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderStrategies(strategies) {
+  const el = document.getElementById('swarm-strategies');
+  if (!el) return;
+  if (!strategies || !Array.isArray(strategies) || strategies.length === 0) {
+    el.innerHTML = '<div class="empty" style="padding:20px;text-align:center;color:var(--muted)">尚無策略推薦資料</div>';
+    return;
+  }
+  let rows = '';
+  for (const s of strategies) {
+    const perf = s.performance || {};
+    const successRate = perf.success_rate != null ? (perf.success_rate * 100).toFixed(1) + '%' : '—';
+    const avgImprovement = perf.avg_improvement != null ? perf.avg_improvement.toFixed(4) : '—';
+    const convergenceRate = perf.convergence_rate != null ? (perf.convergence_rate * 100).toFixed(1) + '%' : '—';
+    rows += `<tr>
+      <td style="font-weight:600">${escapeHtml(s.name || '')}</td>
+      <td><span class="badge">${escapeHtml(s.type || '—')}</span></td>
+      <td>${s.score != null ? s.score.toFixed(4) : '—'}</td>
+      <td>${successRate}</td>
+      <td>${avgImprovement}</td>
+      <td>${convergenceRate}</td>
+    </tr>`;
+  }
+  el.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>策略名稱</th><th>類型</th><th>分數</th><th>成功率</th><th>平均改善</th><th>收斂率</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 window.loadSwarmData = loadSwarmData;
