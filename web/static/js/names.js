@@ -204,7 +204,13 @@ export function capitalFlowName(cf) { return CAPITAL_FLOW_NAME_MAP[cf] || cf; }
 export const MODEL_NAME_MAP = {
   '鷹派聯準會模型': '鷹派聯準會模型',
   'AI 超級週期模型': 'AI 超級週期模型',
-  '地緣政治避險模型': '地緣政治避險模型'
+  '地緣政治避險模型': '地緣政治避險模型',
+  '台灣地緣風險模型': '台灣地緣風險模型',
+  '半導體週期模型': '半導體週期模型',
+  '季節性輪動模型': '季節性輪動模型',
+  '選舉週期模型': '選舉週期模型',
+  '散戶與法人背離': '散戶與法人背離',
+  '財報驚喜驅動': '財報驚喜驅動'
 };
 
 export function modelName(m) { return MODEL_NAME_MAP[m] || m; }

@@ -166,6 +166,8 @@ var defaultSectorSymbolMap = map[string][]string{
 	"tourism":         {},
 	"tech":            {"2330.TW", "2317.TW", "2382.TW", "3231.TW"},
 	"defensive":       {"2881.TW", "0056.TW", "1301.TW"},
+	"technology":      {"2330.TW", "2317.TW", "2382.TW", "2454.TW", "2303.TW", "3034.TW"},
+	"traditional":     {"1301.TW", "1303.TW", "1326.TW", "1216.TW", "1101.TW", "2002.TW"},
 }
 
 var sectorSymbolMap map[string][]string
@@ -459,8 +461,15 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		return fmt.Errorf("load replay: %w", err)
 	}
 
-	const lookback = 30
-	const holdWindow = 5
+	params := config.GetParametersConfig().Narrative
+	lookback := params.ModelLookbackDays.Value
+	if lookback <= 0 {
+		lookback = 30
+	}
+	holdWindow := params.ModelHoldWindowDays.Value
+	if holdWindow <= 0 {
+		holdWindow = 5
+	}
 	if len(ds.Dates) < lookback+holdWindow {
 		return fmt.Errorf("insufficient replay data: %d dates", len(ds.Dates))
 	}
@@ -472,6 +481,7 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		correct := 0
 		total := 0
 		nanSectorSet := make(map[string]bool)
+		var lastFavored, lastAvoided float64
 
 		for d := startIdx; d < startIdx+lookback && d < len(ds.Dates)-holdWindow; d++ {
 			date := ds.Dates[d]
@@ -491,6 +501,8 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 				}
 				continue
 			}
+			lastFavored = favored
+			lastAvoided = avoided
 			total++
 			if favored > avoided {
 				correct++
@@ -499,6 +511,9 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 
 		if total > 0 {
 			m.RecentError = 1.0 - (float64(correct) / float64(total))
+			if !math.IsNaN(lastFavored) && !math.IsNaN(lastAvoided) {
+				m.RecentPrediction = lastFavored - lastAvoided
+			}
 		} else {
 			logging.Warn("narrative", "model_eval_no_data",
 				logging.FStr("model", m.Name),
