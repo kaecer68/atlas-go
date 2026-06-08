@@ -95,8 +95,8 @@
   font-weight: 600;
   margin-left: auto;
 }
-.ev-current-regime.risk-on { background: rgba(16,185,129,.15); color: var(--up); border: 1px solid rgba(16,185,129,.3); }
-.ev-current-regime.risk-off { background: rgba(239,68,68,.15); color: var(--down); border: 1px solid rgba(239,68,68,.3); }
+.ev-current-regime.risk-on { background: rgba(239,68,68,.15); color: var(--up); border: 1px solid rgba(239,68,68,.3); }
+.ev-current-regime.risk-off { background: rgba(16,185,129,.15); color: var(--down); border: 1px solid rgba(16,185,129,.3); }
 .ev-current-regime.neutral { background: rgba(245,158,11,.15); color: var(--warn); border: 1px solid rgba(245,158,11,.3); }
 .ev-current-regime.transitional { background: rgba(139,92,246,.15); color: var(--accent-secondary); border: 1px solid rgba(139,92,246,.3); }
 .ev-current-regime::before {
@@ -529,12 +529,12 @@
   border-radius: 3px;
   display: inline-block;
 }
-.ev-summary-card.ev-summary-good .ev-summary-value { color: var(--up); }
-.ev-summary-card.ev-summary-good .ev-summary-tag { background: rgba(16,185,129,.12); color: var(--up); }
+.ev-summary-card.ev-summary-good .ev-summary-value { color: var(--color-success); }
+.ev-summary-card.ev-summary-good .ev-summary-tag { background: rgba(16,185,129,.12); color: var(--color-success); }
 .ev-summary-card.ev-summary-warn .ev-summary-value { color: var(--warn); }
 .ev-summary-card.ev-summary-warn .ev-summary-tag { background: rgba(245,158,11,.12); color: var(--warn); }
-.ev-summary-card.ev-summary-bad .ev-summary-value { color: var(--down); }
-.ev-summary-card.ev-summary-bad .ev-summary-tag { background: rgba(239,68,68,.12); color: var(--down); }
+.ev-summary-card.ev-summary-bad .ev-summary-value { color: var(--color-danger); }
+.ev-summary-card.ev-summary-bad .ev-summary-tag { background: rgba(239,68,68,.12); color: var(--color-danger); }
 
 .ev-summary-footer {
   font-size: 10px;

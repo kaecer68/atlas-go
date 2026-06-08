@@ -479,13 +479,13 @@ const maxEvents = 20;
       hintEl.style.color = 'var(--warn)';
     } else if (status === 'error') {
       hintEl.innerHTML = `🔴 連線中斷 <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--down)';
+      hintEl.style.color = 'var(--color-danger)';
     } else if (status === 'connected' && eventCount === 0) {
       hintEl.innerHTML = `🟢 已連線 · 等待事件 <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--up)';
+      hintEl.style.color = 'var(--color-success)';
     } else if (status === 'connected') {
       hintEl.innerHTML = `🟢 已連線 · ${eventCount} 個事件 <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--up)';
+      hintEl.style.color = 'var(--color-success)';
     } else {
       hintEl.innerHTML = `⚪ 未連線 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--muted)';

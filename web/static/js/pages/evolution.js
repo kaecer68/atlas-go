@@ -231,7 +231,7 @@ function renderDetailed() {
       '<td style="padding:6px;text-align:right">' + (a.observations || 0) + '</td>' +
       '<td style="padding:6px;text-align:right;color:' + hitColor + '">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</td>' +
       '<td style="padding:6px;text-align:right;color:' + sharpeColor + '">' + (a.sharpe || 0).toFixed(2) + '</td>' +
-      '<td style="padding:6px;text-align:right;color:var(--down)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
+      '<td style="padding:6px;text-align:right;color:var(--color-danger)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
       '</tr>';
   }
   scoreboardHtml += '</tbody></table>';
@@ -243,7 +243,7 @@ function renderDetailed() {
     for (let j = 0; j < allExps.length; j++) {
       let e = allExps[j];
       let statusBadge = e.status === 'running' ? '<span style="color:var(--warn)">● 進行中</span>' :
-        (e.status === 'completed' ? '<span style="color:var(--up)">✓ 完成</span>' : '<span style="color:var(--muted)">○ ' + e.status + '</span>');
+        (e.status === 'completed' ? '<span style="color:var(--color-success)">✓ 完成</span>' : '<span style="color:var(--muted)">○ ' + e.status + '</span>');
       expLogHtml += '<div style="padding:6px 0;border-bottom:1px solid var(--border)">' +
         '<div><strong>' + agentName(e.target_agent_id) + '</strong> · ' + (e.mutation_type || '實驗') + '</div>' +
         '<div style="color:var(--muted);font-size:11px">' + (e.mutation_summary || '') + '</div>' +
@@ -442,8 +442,8 @@ function renderRegimeTimeline(sessions, maxBars) {
   html += '</div>';
 
   html += '<div style="display:flex;gap:16px;font-size:10px;color:var(--muted)">' +
-    '<span style="color:var(--up)">🟢 多頭</span>' +
-    '<span style="color:var(--down)">🔴 空頭</span>' +
+    '<span style="color:var(--up)">🔴 多頭</span>' +
+    '<span style="color:var(--down)">🟢 空頭</span>' +
     '<span style="color:var(--warn)">🟡 盤整</span>' +
     '<span style="margin-left:auto">' + display[0].session_id.split('-')[1] + ' → ' + display[display.length - 1].session_id.split('-')[1] + '</span>' +
     '</div>';

@@ -86,6 +86,34 @@ export const STOCK_NAME_MAP = {
 
 export function stockName(symbol) { return STOCK_NAME_MAP[symbol] || (STOCK_NAME_MAP[(symbol || '').replace('.TW','')] || ''); }
 
+/**
+ * 統一股票代號表格 cell 渲染：<td>{symbol} {companyName}</td>
+ * 自動處理 .TW 後綴、有/無簡稱的 fallback、XSS 防護。
+ *
+ * @param {string} symbol - 股票代號（可含/不含 .TW）
+ * @param {object} [opts]
+ * @param {string} [opts.variant='inline'] - 'inline'（同行）或 'stacked'（兩行）
+ * @param {string} [opts.className=''] - 額外 class
+ * @param {boolean} [opts.escape=true] - 自動 escape symbol（防 XSS）
+ * @returns {string} HTML 片段
+ */
+export function renderStockCell(symbol, opts = {}) {
+  const { variant = 'inline', className = '', escape = true } = opts;
+  if (symbol == null) return '';
+  const sym = String(symbol);
+  const safeSym = escape ? sym.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) : sym;
+  const name = stockName(sym);
+  const cls = ['stock-cell', className].filter(Boolean).join(' ');
+  if (!name) return `<span class="${cls}"><span class="stock-cell-symbol">${safeSym}</span></span>`;
+  if (variant === 'stacked') {
+    return `<span class="${cls} stock-cell-stacked">
+      <span class="stock-cell-symbol">${safeSym}</span>
+      <span class="stock-cell-name">${name}</span>
+    </span>`;
+  }
+  return `<span class="${cls}"><span class="stock-cell-symbol">${safeSym}</span> <span class="stock-cell-name">${name}</span></span>`;
+}
+
 // Regime name mapping
 export const REGIME_NAME_MAP = {
   'NEUTRAL': '中性',

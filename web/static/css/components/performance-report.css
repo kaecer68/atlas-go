@@ -99,11 +99,11 @@
 }
 
 .pr-card-value.positive {
-  color: var(--up);
+  color: var(--color-success);
 }
 
 .pr-card-value.negative {
-  color: var(--down);
+  color: var(--color-danger);
 }
 
 .pr-card-hint {

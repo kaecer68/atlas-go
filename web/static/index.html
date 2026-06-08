@@ -136,7 +136,7 @@
     <div class="page" id="page-narrative">
       <div class="narrative-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
         <div class="panel" style="border-color:rgba(79,193,255,0.2);"><h2 style="color:var(--accent)">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
-        <div class="panel" style="border-color:rgba(239,68,68,0.2);"><h2 style="color:var(--down)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
+        <div class="panel" style="border-color:rgba(239,68,68,0.2);"><h2 style="color:var(--color-danger)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
       </div>
       <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
         <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
@@ -520,7 +520,7 @@
           <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
           <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
           <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
+          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--accent);cursor:pointer">▶ 執行模擬</button>
         </div>
         <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
       </div>
@@ -785,7 +785,7 @@
 
     <div class="mb-14">
       <h4 class="h4-section-title">⚠️ 使用須知</h4>
-      <p style="font-size:12px;color:var(--down);margin:0">
+      <p style="font-size:12px;color:var(--color-warning);margin:0">
         週期羅盤是<b>輔助判斷工具</b>，非買賣建議。低信心度（&lt;40%）的燈號僅供參考，建議搭配產業詳情頁的供應鏈連動、季節性模式與風險指標綜合評估。
         產業週期具有慣性，單一月份數據異常不一定代表階段轉換。
       </p>

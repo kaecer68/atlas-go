@@ -101,7 +101,7 @@ async function fetchPerformanceReport(period) {
     const data = await res.json();
     renderReportData(data);
   } catch (err) {
-    kpiGrid.innerHTML = `<div class="pr-loading" style="color:var(--down)">錯誤：${err.message}</div>`;
+    kpiGrid.innerHTML = `<div class="pr-loading" style="color:var(--color-danger)">錯誤：${err.message}</div>`;
   }
 }
 

@@ -1,6 +1,6 @@
 {
   "version": "1.2",
-  "updated_at": "2026-06-08T20:26:41.613353+08:00",
+  "updated_at": "2026-06-09T00:07:14.987095+08:00",
   "darwinian": {
     "weight_min": {
       "value": 0.3,
@@ -3127,8 +3127,8 @@
       "value": 39.285714285714285,
       "rationale": "AI revenue YoY growth % threshold to detect AI capex surge (TSMC revenue proxy)",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3144,8 +3144,8 @@
       "value": 78,
       "rationale": "CoWoS capacity utilization % threshold indicating structural AI demand",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3161,8 +3161,8 @@
       "value": 21.428571428571427,
       "rationale": "25% YoY capex growth threshold for AI infrastructure expansion detection (captures early-cycle signals; 40% only in peak buildout phases)",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3178,8 +3178,8 @@
       "value": 9.285714285714285,
       "rationale": "US 10Y yield change in basis points to trigger US_rates_up event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3195,8 +3195,8 @@
       "value": 1.5,
       "rationale": "DXY change % threshold to trigger US_rates_up event alongside yield move",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3212,8 +3212,8 @@
       "value": 120,
       "rationale": "Geopolitical risk index (GPR) threshold to trigger geopolitical_risk_spike event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3226,11 +3226,11 @@
       }
     },
     "oil_change_pct_threshold": {
-      "value": 3,
+      "value": 4.857142857142857,
       "rationale": "Oil price change % threshold (absolute) to trigger oil_price_shock event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3246,8 +3246,8 @@
       "value": 1.7857142857142856,
       "rationale": "JPY change % threshold to trigger JPY_carry_unwind event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3263,8 +3263,8 @@
       "value": 22.142857142857142,
       "rationale": "VIX level threshold to trigger JPY_carry_unwind and geopolitical events",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
-      "calibration_timestamp": "2026-05-28T22:31:32.042963+08:00",
+      "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+      "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",

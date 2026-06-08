@@ -2,6 +2,7 @@
 // Each panel shows progressive insight: event radar → rules → sectors → stocks → exits.
 import { getJSON } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
+import { renderStockCell, stockName } from '../names.js';
 
 let lastData = null;
 let currentTime = '--:--';
@@ -82,21 +83,23 @@ function renderEventsRadar(data) {
   if (pm) {
     const kvs = [];
     if (pm.us_market && pm.us_market.sox_pct !== undefined) {
-      const cl = pm.us_market.sox_pct >= 0 ? 'color:var(--color-success);font-weight:600' : 'color:var(--color-danger);font-weight:600';
+      const cl = pm.us_market.sox_pct >= 0 ? 'color:var(--bullish);font-weight:600' : 'color:var(--bearish);font-weight:600';
       kvs.push(`<span>SOX <span style="${cl}">${fmtPct(pm.us_market.sox_pct)}</span></span>`);
     }
     if (pm.fx && pm.fx.usd_twd) {
-      const fxCl = pm.fx.change_pct >= 0 ? 'color:var(--color-danger)' : 'color:var(--color-success)';
+      // USD/TWD 對台股而言是反向：USD 漲 (=TWD 貶) 對台灣不利 → bearish
+      const fxCl = pm.fx.change_pct >= 0 ? 'color:var(--bearish)' : 'color:var(--bullish)';
       kvs.push(`<span>USD/TWD ${pm.fx.usd_twd.toFixed(2)} <span style="${fxCl}">${fmtPct(pm.fx.change_pct)}</span></span>`);
     }
     if (pm.foreign_flow && pm.foreign_flow.net_buy_twd !== undefined) {
       kvs.push(`<span>外資淨買超 ${fmtNTD(pm.foreign_flow.net_buy_twd)}</span>`);
     }
     if (pm.bdi && pm.bdi.value) {
-      const bdiCl = pm.bdi.deviation_pct >= 0 ? 'color:var(--color-success);font-weight:600' : 'color:var(--color-danger);font-weight:600';
+      const bdiCl = pm.bdi.deviation_pct >= 0 ? 'color:var(--bullish);font-weight:600' : 'color:var(--bearish);font-weight:600';
       kvs.push(`<span>BDI ${pm.bdi.value} <span style="${bdiCl}">${fmtPct(pm.bdi.deviation_pct)}</span></span>`);
     }
     if (pm.vix && pm.vix.value !== undefined) {
+      // VIX 漲=恐慌=風險升高=對台股負面 → 維持系統狀態語意（紅=danger）
       const vixCl = pm.vix.value >= 25 ? 'color:var(--color-danger);font-weight:600' : pm.vix.value >= 20 ? 'color:var(--color-warning);font-weight:600' : 'color:var(--color-success)';
       kvs.push(`<span>VIX ${pm.vix.value.toFixed(1)} <span style="${vixCl}">${fmtPct(pm.vix.change_pct)}</span></span>`);
     }
@@ -201,8 +204,8 @@ function renderRecommendations(data) {
     const target = typeof r.target_price === 'number' && r.target_price > 0 ? r.target_price.toFixed(2) : '-';
     const stop = typeof r.stop_loss_price === 'number' && r.stop_loss_price > 0 ? r.stop_loss_price.toFixed(2) : '-';
     return `<tr>
-      <td><span class="badge muted">${escapeHtml(r.symbol)}</span></td>
-      <td>${escapeHtml(r.name || r.symbol)}</td>
+      <td>${renderStockCell(r.symbol)}</td>
+      <td>${escapeHtml(r.name || stockName(r.symbol))}</td>
       <td><span class="badge ${actionBadge}">${escapeHtml(r.action)}</span></td>
       <td style="font-size:11px;text-align:right">${price}</td>
       <td style="font-size:11px;text-align:right">${target}</td>
@@ -226,7 +229,7 @@ function renderExitAlerts(data) {
   const rows = alerts.map(a => {
     const pnlSign = a.pnl_pct >= 0 ? '+' : '';
     return `<div class="dc-exit-row">
-      <span>🔔 <strong>${escapeHtml(a.symbol)}</strong> ${escapeHtml(a.name !== a.symbol ? a.name : '')}</span>
+      <span>🔔 ${renderStockCell(a.symbol)} ${escapeHtml(a.name && a.name !== a.symbol ? a.name : '')}</span>
       <span class="badge ${a.pnl_pct >= 10 ? 'ok' : a.pnl_pct <= -5 ? 'err' : 'warn'}">
         ${pnlSign}${a.pnl_pct.toFixed(1)}%
       </span>

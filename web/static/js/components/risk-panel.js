@@ -17,9 +17,9 @@ export async function renderRiskPanel(container, getJSON) {
       const cells = row.map((v, j) => {
         let color = 'inherit';
         if (i === j) color = '#666';
-        else if (v > 0.7) color = 'var(--down)';
+        else if (v > 0.7) color = 'var(--color-danger)';
         else if (v > 0.4) color = 'var(--warn)';
-        else if (v < 0) color = 'var(--up)';
+        else if (v < 0) color = 'var(--color-success)';
         return `<td class="corr-cell" style="color:${color}">${v.toFixed(2)}</td>`;
       }).join('');
       return `<tr><td class="corr-header">${labels[i]}</td>${cells}</tr>`;
@@ -31,7 +31,7 @@ export async function renderRiskPanel(container, getJSON) {
     <div class="panel-content">
       <div class="section-title">風險指標</div>
       <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-        <div class="kpi-card"><div class="kpi-label">最大回撤</div><div class="kpi-value text-down">${fmtP(dd)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--color-danger)">${fmtP(dd)}</div></div>
         <div class="kpi-card"><div class="kpi-label">持倉集中度</div><div class="kpi-value">${fmtP(conc)}</div><div class="kpi-hint">HHI 指數</div></div>
         <div class="kpi-card"><div class="kpi-label">部位數</div><div class="kpi-value">${state.positions_count || 0}</div></div>
         <div class="kpi-card"><div class="kpi-label">槓桿率</div><div class="kpi-value">${fmtP((state.portfolio_value || 0) > 0 ? (state.portfolio_value - state.cash) / state.cash : 0)}</div></div>

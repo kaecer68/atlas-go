@@ -129,11 +129,11 @@ async function submitEdit(td, key, oldVal, bodyVal) {
       td.dataset.val = String(bodyVal);
     } else {
       const err = await resp.json().catch(() => ({}));
-      td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--down);font-size:10px">' + escapeHtml(err.error || '失敗') + '</span>';
+      td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--color-danger);font-size:10px">' + escapeHtml(err.error || '失敗') + '</span>';
       td.classList.add('param-val-editable');
     }
   } catch {
-    td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--down);font-size:10px">錯誤</span>';
+    td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--color-danger);font-size:10px">錯誤</span>';
     td.classList.add('param-val-editable');
   }
 }
@@ -174,11 +174,11 @@ window._paramMapEdit = function(btn) {
   save.onclick = async function() {
     let newMap;
     try { newMap = JSON.parse(ta.value); } catch(e) {
-      td.innerHTML = '<span style="color:var(--down)">JSON 格式錯誤</span>';
+      td.innerHTML = '<span style="color:var(--color-danger)">JSON 格式錯誤</span>';
       return;
     }
     if (typeof newMap !== 'object' || Array.isArray(newMap)) {
-      td.innerHTML = '<span style="color:var(--down)">必須是物件格式</span>';
+      td.innerHTML = '<span style="color:var(--color-danger)">必須是物件格式</span>';
       return;
     }
     td.innerHTML = ' <span style="color:var(--warn);font-size:10px">儲存中…</span>';
@@ -192,10 +192,10 @@ window._paramMapEdit = function(btn) {
         td.innerHTML = html;
       } else {
         const err = await resp.json().catch(() => ({}));
-        td.innerHTML = '<span style="color:var(--down)">' + escapeHtml(err.error || '儲存失敗') + '</span>';
+        td.innerHTML = '<span style="color:var(--color-danger)">' + escapeHtml(err.error || '儲存失敗') + '</span>';
       }
     } catch {
-      td.innerHTML = '<span style="color:var(--down)">網路錯誤</span>';
+      td.innerHTML = '<span style="color:var(--color-danger)">網路錯誤</span>';
     }
   };
 

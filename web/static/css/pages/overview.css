@@ -42,5 +42,5 @@
 .kpi-card .kpi-hint { font-size: var(--text-xs); color: var(--muted); margin-top: 6px; }
 .kpi-card .kpi-value.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .kpi-card.wide { grid-column: 1 / -1; }
-.kpi-card.alert-err { border-color: var(--down); }
+.kpi-card.alert-err { border-color: var(--color-danger); }
 .kpi-card.clickable { cursor: pointer; }

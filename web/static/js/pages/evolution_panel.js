@@ -411,7 +411,7 @@ function renderDetailed() {
       '<td style="text-align:right">' + (a.observations || 0) + '</td>' +
       '<td style="text-align:right;color:' + hColor + '">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</td>' +
       '<td style="text-align:right"><span class="' + sClass + '">' + (a.sharpe || 0).toFixed(2) + '</span></td>' +
-      '<td style="text-align:right;color:var(--down)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
+      '<td style="text-align:right;color:var(--color-danger)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
       '</tr>';
   }
   tableHtml += '</tbody></table>';

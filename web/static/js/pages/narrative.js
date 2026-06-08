@@ -64,7 +64,7 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const topEvent = sortedEvents[0];
   const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
   const sLabel = stress ? stressLabel(stress.regime || '-') : '-';
-  const stressColor = stress && stress.regime === 'crisis' ? 'var(--down)' : (stress && stress.regime === 'high' ? 'var(--warn)' : 'var(--up)');
+  const stressColor = stress && stress.regime === 'crisis' ? 'var(--color-danger)' : (stress && stress.regime === 'high' ? 'var(--warn)' : 'var(--color-success)');
 
   // 根據外資出逃等級產生具體說明
   let stressAdvice = '外資流出壓力小，資金面寬鬆，適合正常操作。';
@@ -100,10 +100,10 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const stressHelpHtml = `<p><strong>外商出逃指數是什麼？</strong><br>這是追蹤<strong>外商及國際資金撤離台灣市場壓力</strong>的綜合指標，範圍 <strong>0 ~ 100</strong>。分數越高，代表外商賣超壓力越大，台股面臨資金流出風險。</p>
 <p><strong>燈號說明：</strong></p>
 <ul style='margin:6px 0;padding-left:18px;line-height:1.8'>
-  <li><span style='color:var(--up)'><strong>🟢 綠燈（0~29分）</strong></span>：外商流出壓力小。資金面寬鬆，台股上漲機率高。</li>
+  <li><span style='color:var(--color-success)'><strong>🟢 綠燈（0~29分）</strong></span>：外商流出壓力小。資金面寬鬆，台股上漲機率高。</li>
   <li><span style='color:var(--warn)'><strong>🟡 黃燈（30~49分）</strong></span>：外商開始流出。可能伴隨台股波動增加，建議觀察。</li>
   <li><span style='color:var(--warn)'><strong>🟠 橙燈（50~69分）</strong></span>：外商明顯出逃。台股下跌機率高，建議降低持股。</li>
-  <li><span style='color:var(--down)'><strong>🔴 紅燈（70~100分）</strong></span>：外商大量出逃。台股急跌風險高，建議空倉觀望。</li>
+  <li><span style='color:var(--color-danger)'><strong>🔴 紅燈（70~100分）</strong></span>：外商大量出逃。台股急跌風險高，建議空倉觀望。</li>
 </ul>
 <p><strong>計算組成：</strong><br>指數由六項因子加權構成，核心為外商淨流向（權重25%），輔以美元指數、美債殖利率、VIX、日圓、地緣政治風險。</p>
 <p><strong>重要提醒：</strong><br>此指數僅追蹤<strong>資金面壓力</strong>，不代表台股一定漲跌。外商流出時，內資或散戶可能承接，形成「價跌量縮」或「價穩量縮」等不同走勢。</p>`;
@@ -172,11 +172,11 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const isFresh = latestTs && (Date.now()/1000 - latestTs) < 86400;
       const allPresent = validRows.length === rows.length;
       const channelStatus = hasData
-        ? (isFresh && allPresent ? {color:'var(--up)',text:'🟢 資料通道正常'} 
-           : isFresh ? {color:'var(--warn)',text:'🟡 部分指標待更新'} 
+        ? (isFresh && allPresent ? {color:'var(--color-success)',text:'🟢 資料通道正常'}
+           : isFresh ? {color:'var(--warn)',text:'🟡 部分指標待更新'}
            : allPresent ? {color:'var(--warn)',text:'🟡 資料待更新'}
            : {color:'var(--warn)',text:'🟡 部分資料待更新'})
-        : {color:'var(--down)',text:'🔴 資料通道異常'};
+        : {color:'var(--color-danger)',text:'🔴 資料通道異常'};
       let html = `<div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
         <span style="font-size:12px;color:${channelStatus.color};font-weight:700">${channelStatus.text}</span>
         <span class="text-muted text-sm">更新於 ${updateTime}</span>
@@ -195,8 +195,8 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const capitalIsFresh = capitalLatestTs && (Date.now()/1000 - capitalLatestTs) < 86400;
       const capitalAllPresent = capitalValidRows.length === capitalRows.length;
       const capitalStatus = capitalHasData
-        ? (capitalIsFresh && capitalAllPresent ? {color:'var(--up)',text:'🟢 正常'} : {color:'var(--warn)',text:'🟡 待更新'})
-        : {color:'var(--down)',text:'🔴 缺失'};
+        ? (capitalIsFresh && capitalAllPresent ? {color:'var(--color-success)',text:'🟢 正常'} : {color:'var(--warn)',text:'🟡 待更新'})
+        : {color:'var(--color-danger)',text:'🔴 缺失'};
       const capitalTimeStr = capitalLatestTs ? new Date(capitalLatestTs * 1000).toLocaleString('zh-TW') : '-';
       if (capitalRows.some(([_, pt]) => pt && typeof pt.value === 'number')) {
         html += `<div class="mt-sm flex-center-gap">
@@ -229,7 +229,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     else {
       const score = typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
       const sLabel = stressLabel(stress.regime || '-');
-      const regimeColor = stress.regime === 'crisis' ? 'var(--down)' : (stress.regime === 'high' ? 'var(--warn)' : 'var(--up)');
+      const regimeColor = stress.regime === 'crisis' ? 'var(--color-danger)' : (stress.regime === 'high' ? 'var(--warn)' : 'var(--color-success)');
       const comps = stress.components || {};
       const stressTime = stress.timestamp ? new Date(stress.timestamp * 1000).toLocaleString('zh-TW') : new Date().toLocaleString('zh-TW');
       let html = `<div class="mb-sm text-muted text-sm">資料更新時間：${stressTime}</div>`;
@@ -413,7 +413,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <tbody>
           ${items.map((t, idx) => `<tr>
             <td><span style="font-weight:600;color:var(--text)">${escapeHtml(templateName(t.name))}</span></td>
-            <td><span style="font-weight:500;color:var(--up)">${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</span></td>
+            <td><span style="font-weight:500;color:var(--color-success)">${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</span></td>
             <td class="text-muted text-xs">${escapeHtml((t.source_references || []).join(', '))}</td>
             <td><button id="tmpl-btn-${idx}" onclick="toggleTemplateAccordion(${idx})" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
           </tr>

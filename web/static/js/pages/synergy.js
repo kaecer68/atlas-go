@@ -244,7 +244,7 @@ function renderCandidates(inbox) {
 
     let rejectHtml = '';
     if (status === 'rejected' && item.reject_reason) {
-      rejectHtml = `<div style="font-size:10px;color:var(--down);margin-top:2px">拒絕原因：${escapeHtml(item.reject_reason)}</div>`;
+      rejectHtml = `<div style="font-size:10px;color:var(--color-danger);margin-top:2px">拒絕原因：${escapeHtml(item.reject_reason)}</div>`;
     }
 
     html += `
@@ -266,7 +266,7 @@ function renderCandidates(inbox) {
     planned.forEach(renderCard);
   }
   if (tested.length) {
-    html += sectionHeader(`✅ 已測試（${tested.length}）`, 'var(--up)');
+    html += sectionHeader(`✅ 已測試（${tested.length}）`, 'var(--color-success)');
     tested.forEach(renderCard);
   }
   if (history.length) {

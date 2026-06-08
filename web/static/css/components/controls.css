@@ -2,7 +2,7 @@
 .control-group { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0; align-items: center; }
 .control-group input, .control-group select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12px; transition: border-color .15s, box-shadow .15s; }
 .control-group input:focus, .control-group select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,193,255,.15); }
-.control-group input:invalid, .control-group select:invalid { border-color: var(--down); }
+.control-group input:invalid, .control-group select:invalid { border-color: var(--color-danger); }
 .control-group input:invalid:focus, .control-group select:invalid:focus { box-shadow: 0 0 0 2px rgba(217,58,58,.15); }
 .control-group button { background: var(--border); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; font-size: 12px; cursor: pointer; transition: opacity .15s, transform .1s, box-shadow .15s; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
 .control-group button.primary { background: var(--primary); border-color: var(--primary); }
