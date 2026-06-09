@@ -136,7 +136,7 @@
     <div class="page" id="page-narrative">
       <div class="narrative-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
         <div class="panel" style="border-color:rgba(79,193,255,0.2);"><h2 style="color:var(--accent)">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
-        <div class="panel" style="border-color:rgba(239,68,68,0.2);"><h2 style="color:var(--down)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
+        <div class="panel" style="border-color:rgba(239,68,68,0.2);"><h2 style="color:var(--color-danger)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
       </div>
       <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
         <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
@@ -228,7 +228,7 @@
       </div>
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
-        若勾選「顯示全部被過濾項目」，<span class="text-down">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
+        若勾選「顯示全部被過濾項目」，<span class="text-up">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
         <br><span class="text-muted">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
       </details>
       <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
@@ -408,7 +408,7 @@
     <div class="page" id="page-datachannels">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。
-        若某個通道顯示 <span class="text-down">🔴 異常</span>，表示連線失敗或資料缺失，需立即檢查。
+        若某個通道顯示 <span class="text-danger">🔴 異常</span>，表示連線失敗或資料缺失，需立即檢查。
         <span class="text-warn">🟡 待更新</span> 表示資料超過 24 小時未刷新，<span class="text-muted">🔵 正常延遲</span> 則表示因週末／非交易日，延遲屬正常現象。
       </details>
       <div class="panel wide">
@@ -432,9 +432,9 @@
             <span class="text-muted text-sm" style="margin-left:8px">總通道</span>
           </div>
           <div class="flex" style="gap:16px;margin-top:8px">
-            <div class="text-sm"><span class="text-up">●</span> 正常 <span id="dcOkCount">-</span></div>
+            <div class="text-sm"><span class="text-success">●</span> 正常 <span id="dcOkCount">-</span></div>
             <div class="text-sm"><span class="text-warn">●</span> 異常 <span id="dcWarnCount">-</span></div>
-            <div class="text-sm"><span class="text-down">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
+            <div class="text-sm"><span class="text-warn">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
           </div>
         </div>
 
@@ -520,7 +520,7 @@
           <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
           <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
           <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
+          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--accent);cursor:pointer">▶ 執行模擬</button>
         </div>
         <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
       </div>
@@ -785,7 +785,7 @@
 
     <div class="mb-14">
       <h4 class="h4-section-title">⚠️ 使用須知</h4>
-      <p style="font-size:12px;color:var(--down);margin:0">
+      <p style="font-size:12px;color:var(--color-warning);margin:0">
         週期羅盤是<b>輔助判斷工具</b>，非買賣建議。低信心度（&lt;40%）的燈號僅供參考，建議搭配產業詳情頁的供應鏈連動、季節性模式與風險指標綜合評估。
         產業週期具有慣性，單一月份數據異常不一定代表階段轉換。
       </p>

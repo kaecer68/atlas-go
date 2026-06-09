@@ -358,8 +358,8 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         const w = m.weight || 0;
         const e = m.recent_error || 0;
         const weightPct = Math.min(100, Math.max(0, w * 100)).toFixed(1);
-        const weightColor = w >= 0.5 ? '#10b981' : (w >= 0.25 ? '#f59e0b' : '#ef4444');
-        const errColor = e <= 0.3 ? '#10b981' : (e <= 0.5 ? '#f59e0b' : '#ef4444');
+        const weightColor = w >= 0.5 ? 'var(--color-success)' : (w >= 0.25 ? 'var(--color-warning)' : 'var(--color-danger)');
+        const errColor = e <= 0.3 ? 'var(--color-success)' : (e <= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)');
         const errText = e <= 0.3 ? '優秀' : (e <= 0.5 ? '一般' : '偏高');
         return `
         <div class="weight-panel" style="border-left-color:${weightColor}">
@@ -378,15 +378,12 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           </div>
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>歷史命中率</span>
-            <span style="color:${(m.hit_rate || 0) >= 0.7 ? '#10b981' : ((m.hit_rate || 0) >= 0.5 ? '#f59e0b' : '#ef4444')};font-weight:700">${((m.hit_rate || 0) * 100).toFixed(1)}%</span>
+            <span style="color:${(m.hit_rate || 0) >= 0.7 ? 'var(--color-success)' : ((m.hit_rate || 0) >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)')};font-weight:700">${((m.hit_rate || 0) * 100).toFixed(1)}%</span>
           </div>
-<<<<<<< HEAD
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>近期預測報酬差</span>
-            <span style="color:${(m.recent_prediction || 0) > 0 ? '#10b981' : ((m.recent_prediction || 0) < 0 ? '#ef4444' : 'var(--muted)')};font-weight:700">${(m.recent_prediction || 0).toFixed(4)}</span>
+            <span style="color:${(m.recent_prediction || 0) > 0 ? 'var(--up)' : ((m.recent_prediction || 0) < 0 ? 'var(--down)' : 'var(--muted)')};font-weight:700">${(m.recent_prediction || 0).toFixed(4)}</span>
           </div>
-=======
->>>>>>> origin/main
           <div class="text-muted text-sm mt-xs">${escapeHtml(m.description || '')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
             ${(m.favored_sectors || []).map(s => `<span class="badge ok">+ ${escapeHtml(sectorName(s))}</span>`).join('')}

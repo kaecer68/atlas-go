@@ -157,9 +157,9 @@ export function renderMacroRadar(data, pipelineData) {
       const inputCount = g.input_count || 0;
       const outputCount = g.output_count || 0;
       const filtered = inputCount - outputCount;
-      if (!g.passed) return `<span class="text-down">● ${agentName(g.guard_id)} 強制阻擋全部推薦（${inputCount} → 0）</span>`;
+      if (!g.passed) return `<span class="text-danger">● ${agentName(g.guard_id)} 強制阻擋全部推薦（${inputCount} → 0）</span>`;
       if (filtered > 0) return `<span class="text-warn">● ${agentName(g.guard_id)} 過濾了 ${filtered} 筆推薦（${inputCount} → ${outputCount}）</span>`;
-      return `<span class="text-up">● ${agentName(g.guard_id)} 未過濾任何推薦，全部放行</span>`;
+      return `<span class="text-success">● ${agentName(g.guard_id)} 未過濾任何推薦，全部放行</span>`;
     });
     controlSummary = `<div style="margin:8px 0;font-size:12px;line-height:1.6;background:var(--bg);padding:8px 10px;border-radius:6px">${lines.join('<br>')}</div>`;
   }
