@@ -4,11 +4,18 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/globalmarket"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
+
+// cacheTTL controls how long a FetchSnapshot result is reused across
+// concurrent API calls (GetStatus + GetUSIndices are both called via
+// Promise.all). 30 seconds balances freshness against the ~15-20s
+// cost of a full CompositeMacroProvider.FetchSnapshot cycle.
+const cacheTTL = 30 * time.Second
 
 // correlationWindow is the rolling window for all cross-market correlation
 // estimates. 20 observations corresponds to ~1 trading month at daily
@@ -99,6 +106,13 @@ type USIndicesResponse struct {
 type CrossMarketService struct {
 	provider marketdata.MacroDataProvider
 
+	// cacheMu + cachedSnapshot + cacheTime implement a TTL cache for
+	// FetchSnapshot, preventing the 2x redundant ~15-20s HTTP cascade
+	// when GetStatus and GetUSIndices are called concurrently.
+	cacheMu        sync.Mutex
+	cachedSnapshot *marketdata.MacroDataSnapshot
+	cacheTime      time.Time
+
 	// rollingSPXTWSE is the legacy SPX-SOX engine. Retained for
 	// back-compat with existing consumers and the /api/cross-market/correlation
 	// endpoint contract.
@@ -136,6 +150,30 @@ func (s *CrossMarketService) UpdateCorrelation(spxReturn, soxReturn float64) {
 	s.rollingSPXTWSE.Update(spxReturn, soxReturn)
 }
 
+// getCachedSnapshot returns a cached FetchSnapshot result if it is newer
+// than cacheTTL. Concurrent callers that arrive during a stale cache each
+// fetch independently (no coalescing), but subsequent requests within the
+// TTL window hit the cache instantly. This eliminates the ~15-20s redundant
+// FetchSnapshot cascade when GetStatus and GetUSIndices are both called.
+func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.MacroDataSnapshot, error) {
+	s.cacheMu.Lock()
+	if s.cachedSnapshot != nil && time.Since(s.cacheTime) < cacheTTL {
+		snap := *s.cachedSnapshot
+		s.cacheMu.Unlock()
+		return snap, nil
+	}
+	s.cacheMu.Unlock()
+
+	snap, err := s.provider.FetchSnapshot(ctx)
+	if err == nil {
+		s.cacheMu.Lock()
+		s.cachedSnapshot = &snap
+		s.cacheTime = time.Now()
+		s.cacheMu.Unlock()
+	}
+	return snap, err
+}
+
 // UpdateAllCorrelations ingests a MacroDataSnapshot and pushes the relevant
 // return pairs into all six rolling correlation engines. This is the
 // canonical entry point for the realtime_feed / macro_ingest BTM task.
@@ -171,7 +209,7 @@ func (s *CrossMarketService) UpdateAllCorrelations(snap marketdata.MacroDataSnap
 
 // GetStatus returns the full cross-market status snapshot.
 func (s *CrossMarketService) GetStatus(ctx context.Context) (*CrossMarketStatus, error) {
-	snap, err := s.provider.FetchSnapshot(ctx)
+	snap, err := s.getCachedSnapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch macro snapshot: %w", err)
 	}
@@ -224,7 +262,7 @@ func (s *CrossMarketService) GetCorrelation() (*CorrelationResponse, error) {
 
 // GetUSIndices returns the current US market indices snapshot.
 func (s *CrossMarketService) GetUSIndices(ctx context.Context) (*USIndicesResponse, error) {
-	snap, err := s.provider.FetchSnapshot(ctx)
+	snap, err := s.getCachedSnapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch macro snapshot: %w", err)
 	}
