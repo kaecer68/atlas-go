@@ -253,7 +253,7 @@ export function renderDataChannels(data) {
   if (data.alerts && data.alerts.length) {
     const statusLabel = s => s === 'error' ? '異常' : (s === 'warn' ? '待更新' : '異常');
     const statusColor = s => s === 'error' ? 'var(--color-danger)' : 'var(--warn)';
-    html += `<div style="margin-top:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border-left:3px solid var(--color-danger);border-radius:6px">
+    html += `<div style="margin-top:14px;padding:10px 12px;background:color-mix(in srgb, var(--color-danger) 8%, transparent);border-left:3px solid var(--color-danger);border-radius:6px">
       <div style="font-size:13px;font-weight:700;color:var(--color-danger);margin-bottom:6px">需要關注的通道</div>
       ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${a.error || statusLabel(a.status)}</span></div>`).join('')}
     </div>`;

@@ -17,12 +17,12 @@ export function renderIndustrySeasonality(data) {
     const ts = calibEvidence.timestamp ? new Date(calibEvidence.timestamp).toLocaleString("zh-TW") : "未知";
     const src = calibEvidence.data_source || "未知";
     evidenceBanner =
-      `<div style="font-size:11px;color:var(--ok);margin-bottom:8px;padding:6px 10px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.2);border-radius:6px">` +
+      `<div style="font-size:11px;color:var(--ok);margin-bottom:8px;padding:6px 10px;background:color-mix(in srgb, var(--accent) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent) 20%, transparent);border-radius:6px">` +
       `✓ <strong>已校準：</strong>季節性模式數值已透過回測校準（校準時間：${ts}，資料來源：${src}）。校準結果已更新 HistoricalAccuracy 與 AdjustmentFactor。` +
       `</div>`;
   } else {
     evidenceBanner =
-      '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px">' +
+      '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:color-mix(in srgb, var(--warn) 8%, transparent);border:1px solid color-mix(in srgb, var(--warn) 20%, transparent);border-radius:6px">' +
       '⚠️ <strong>證據品質提示：</strong>以下季節性模式數值基於經驗法則（heuristic），尚未經過回測校準（evidence_quality: low）。請勿將 HistoricalAccuracy 與 AdjustmentFactor 視為實證數據。' +
       '</div>';
   }
@@ -69,12 +69,12 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
     const adjColor = adjustment < 0 ? 'var(--down)' : adjustment > 0 ? 'var(--up)' : '';
     const period = `${p.start_month}/${p.start_day} ~ ${p.end_month}/${p.end_day}`;
 
-    html += `<tr style="${isActive ? "background:rgba(79,193,255,0.05)" : ""}">`;
+    html += `<tr style="${isActive ? "background:color-mix(in srgb, var(--accent) 5%, transparent)" : ""}">`;
     html += `<td><strong>${p.name}</strong><br><span style="font-size:11px;color:var(--muted)">${p.description || ""}</span></td>`;
     html += `<td>${period}</td>`;
     const evidenceBadge = calibEvidence && calibEvidence.calibrated
-      ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px" title="已透過回測校準">已校準</span>`
-      : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span>`;
+      ? `<span style="font-size:10px;color:var(--ok);background:color-mix(in srgb, var(--accent) 10%, transparent);padding:1px 4px;border-radius:3px" title="已透過回測校準">已校準</span>`
+      : `<span style="font-size:10px;color:var(--warn);background:color-mix(in srgb, var(--warn) 10%, transparent);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span>`;
     html += `<td>${accuracy}% ${evidenceBadge}</td>`;
     html += `<td style="color:${returnColor}">${returnPct}%</td>`;
     html += `<td style="color:${adjColor}">${adjustment}x</td>`;
@@ -102,7 +102,7 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
       const direction = val >= 1 ? "+" : "";
       html += '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px">';
       html += '<span style="width:80px;color:var(--muted)">' + layer.label + '</span>';
-      html += '<div style="flex:1;height:16px;background:rgba(0,0,0,0.05);border-radius:3px;overflow:hidden">';
+      html += '<div style="flex:1;height:16px;background:var(--border);border-radius:3px;overflow:hidden">';
       html += '<div style="width:' + barW + '%;height:100%;background:' + color + ';opacity:0.6;border-radius:3px"></div></div>';
       html += '<span style="width:60px;text-align:right;font-weight:600;color:' + color + '">' + direction + ((val - 1) * 100).toFixed(1) + '%</span>';
       html += '</div>';
@@ -113,7 +113,7 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
   // Narrative themes overlay
   const themes = data && data.narrative_themes;
   if (themes && themes.length > 0) {
-    html += '<div style="margin-top:8px;font-size:11px;color:var(--muted);padding:6px 10px;background:rgba(79,193,255,0.06);border:1px solid rgba(79,193,255,0.2);border-radius:6px">';
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--muted);padding:6px 10px;background:color-mix(in srgb, var(--accent) 6%, transparent);border:1px solid color-mix(in srgb, var(--accent) 20%, transparent);border-radius:6px">';
     html += '<strong>活躍敘事主題：</strong>' + themes.join(", ");
     html += '</div>';
   }
@@ -145,7 +145,7 @@ export function renderSeasonalityCalendar(data) {
     const name = monthNames[monthIdx] || `M${m.month}`;
     const hasPatterns = m.patterns && m.patterns.length > 0;
     const bgColor = hasPatterns
-      ? "rgba(79,193,255,0.06)"
+      ? "color-mix(in srgb, var(--accent) 6%, transparent)"
       : "var(--bg)";
 
     html +=

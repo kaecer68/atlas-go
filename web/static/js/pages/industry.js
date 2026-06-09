@@ -7,6 +7,7 @@ import {
   renderEmptyState,
 } from "../shared/app-utils.js";
 import { renderIndustrySeasonality, renderSeasonalityList, renderSeasonalityCalendar } from '../shared/components/seasonality-panel.js';
+import { getThemeColor } from "../shared/utils.js";
 
 export async function loadIndustryData() {
   try {
@@ -55,6 +56,14 @@ export function renderIndustryMap(data) {
   });
   html += "</div>";
   el.innerHTML = html;
+}
+
+function hexToRgba(hex, alpha) {
+  if (!hex || !hex.startsWith("#")) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function confidenceColor(hex, confidence) {
@@ -156,11 +165,11 @@ export function renderCycleStatusCard(card) {
     { key: "supply_chain", label: "供應鏈" },
   ];
   const sentimentColors = {
-    強烈看多: "#10b981",
-    偏多: "#34d399",
-    中性: "#6b7280",
-    偏空: "#f59e0b",
-    強烈看空: "#ef4444",
+    強烈看多: "var(--trend-bullish)",
+    偏多: "color-mix(in srgb, var(--trend-bullish) 65%, transparent)",
+    中性: "var(--muted)",
+    偏空: "color-mix(in srgb, var(--trend-bearish) 65%, transparent)",
+    強烈看空: "var(--trend-bearish)",
   };
   const sentiment = card.sentiment_label || "中性";
   const sentimentColor = sentimentColors[sentiment] || sentimentColors["中性"];
@@ -207,7 +216,8 @@ export function renderCycleStatusCard(card) {
   html += `<div style="display:flex;gap:5px;margin:8px 0 12px">`;
   [0, 1, 2, 3].forEach((idx) => {
     const active = idx <= phaseIndex;
-    const color = active ? confidenceColor("#10b981", 0.55 + idx * 0.1) : "var(--border)";
+    const successColor = getThemeColor("--color-success") || "#10b981";
+    const color = active ? confidenceColor(successColor, 0.55 + idx * 0.1) : "var(--border)";
     html += `<div style="flex:1;height:12px;border-radius:999px;background:${color};border:1px solid var(--border)"></div>`;
   });
   html += `</div>`;
@@ -459,13 +469,16 @@ export function renderIndustryGraph(data) {
 
   ctx.clearRect(0, 0, width, height);
 
+  const upColor = getThemeColor("--up") || "#ef4444";
+  const downColor = getThemeColor("--down") || "#10b981";
+
   for (const edge of edges) {
     const corr = edge.correlation || 0;
     ctx.beginPath();
     ctx.moveTo(edge.sourceNode.x, edge.sourceNode.y);
     ctx.lineTo(edge.targetNode.x, edge.targetNode.y);
     ctx.lineWidth = 1 + Math.abs(corr) * 3;
-    ctx.strokeStyle = corr > 0 ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)";
+    ctx.strokeStyle = corr > 0 ? hexToRgba(upColor, 0.3) : hexToRgba(downColor, 0.3);
     ctx.stroke();
   }
 
@@ -485,7 +498,7 @@ export function renderIndustryGraph(data) {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = "var(--text, #e2e8f0)";
+    ctx.fillStyle = getThemeColor("--text") || "#e2e8f0";
     const name = sectorName(n.id) || n.id;
     ctx.fillText(name, n.x, n.y + n.radius + 12);
   }
@@ -716,10 +729,10 @@ function renderRiskTab(detail) {
       severity === "high" ? "高" : severity === "medium" ? "中" : "低";
     const impactColor =
       severity === "high"
-        ? "var(--down)"
+        ? "var(--risk-high)"
         : severity === "medium"
           ? "var(--warn)"
-          : "var(--up)";
+          : "var(--risk-low)";
 
     html += '<div class="risk-item">';
     html += '<div class="risk-header">';

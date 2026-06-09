@@ -11,7 +11,7 @@ export async function renderPnLAttribution(container, getJSON) {
   const agentRows = (data.agent_attribution || [])
     .sort((a, b) => (b.avg_return || 0) - (a.avg_return || 0))
     .map(a => {
-      const layerColors = { macro: '#5b9bd5', sector: '#70ad47', style: '#ed7d31' };
+      const layerColors = { macro: 'var(--layer-4)', sector: 'var(--layer-1)', style: 'var(--layer-2)' };
       const color = layerColors[a.layer] || 'var(--muted)';
       return `<tr><td>${a.agent_name || a.agent_id}</td><td style="color:${color}">${a.layer || '-'}</td><td style="text-align:right">${fmtP(a.avg_return || 0)}</td><td style="text-align:right">${a.count || 0}</td></tr>`;
     }).join('');

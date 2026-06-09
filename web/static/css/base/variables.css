@@ -24,6 +24,16 @@
   --bullish: #ef4444; --bearish: #10b981;
   --up: var(--bullish); --down: var(--bearish); --warn: var(--color-warning);
   --primary: #1f6feb; --danger: #da3633;
+  
+  /* 金融語意 Token */
+  --pnl-profit: var(--bullish);
+  --pnl-loss: var(--bearish);
+  --trend-bullish: var(--bullish);
+  --trend-bearish: var(--bearish);
+  --metric-good: var(--bullish);
+  --metric-bad: var(--bearish);
+  --risk-high: var(--color-danger);
+  --risk-low: var(--color-success);
   /* 系統狀態：國際通用綠OK紅ERR */
   --color-success: #10b981; --color-danger: #ef4444; --color-warning: #f59e0b; --color-info: #3b82f6;
   --space-xs: 4px; --space-sm: 8px; --space-md: 14px; --space-lg: 20px; --space-xl: 32px;

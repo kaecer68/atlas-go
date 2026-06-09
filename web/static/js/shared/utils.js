@@ -16,7 +16,7 @@ export function fmtInt(v) {
 }
 
 export function pnlColor(v) {
-  return typeof v === 'number' ? (v >= 0 ? 'var(--up)' : 'var(--down)') : '';
+  return typeof v === 'number' ? (v >= 0 ? 'var(--pnl-profit)' : 'var(--pnl-loss)') : '';
 }
 
 export function pnlSign(v) {
@@ -24,7 +24,11 @@ export function pnlSign(v) {
 }
 
 export function convColor(v) {
-  return typeof v === 'number' ? (v >= 0.7 ? 'var(--up)' : (v >= 0.4 ? 'var(--warn)' : 'var(--muted)')) : 'var(--muted)';
+  return typeof v === 'number' ? (v >= 0.7 ? 'var(--metric-good)' : (v >= 0.4 ? 'var(--warn)' : 'var(--muted)')) : 'var(--muted)';
+}
+
+export function getThemeColor(varName) {
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
 }
 
 export function escapeHtml(str) {

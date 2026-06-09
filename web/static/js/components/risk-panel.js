@@ -16,7 +16,7 @@ export async function renderRiskPanel(container, getJSON) {
     const rows = corr.matrix.map((row, i) => {
       const cells = row.map((v, j) => {
         let color = 'inherit';
-        if (i === j) color = '#666';
+        if (i === j) color = 'var(--muted)';
         else if (v > 0.7) color = 'var(--color-danger)';
         else if (v > 0.4) color = 'var(--warn)';
         else if (v < 0) color = 'var(--color-success)';

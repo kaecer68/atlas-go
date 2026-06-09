@@ -103,17 +103,17 @@ export function renderReasoningTimeline(data, timelineEl) {
   }
 
   var phases = {
-    'regime_detection': { label: '盤勢判定', color: '#3b82f6' },
-    'agent_recommendation': { label: '代理推薦', color: '#22c55e' },
-    'control_filter': { label: '控制層過濾', color: '#f97316' },
-    'portfolio_build': { label: '組合構建', color: '#a855f7' }
+    'regime_detection': { label: '盤勢判定', color: 'var(--color-info)' },
+    'agent_recommendation': { label: '代理推薦', color: 'var(--color-success)' },
+    'control_filter': { label: '控制層過濾', color: 'var(--color-warning)' },
+    'portfolio_build': { label: '組合構建', color: 'var(--accent-secondary)' }
   };
 
   var html = '<div><h2 style="font-size: 18px; margin-bottom: 20px;">決策追蹤 (Session: ' + escapeHtml(data.session_id) + ')</h2>';
   html += '<div style="position: relative; border-left: 2px solid var(--border); margin-left: 10px; padding-left: 20px;">';
 
   data.traces.forEach(function(trace, idx) {
-    var p = phases[trace.phase] || { label: trace.phase, color: '#9ca3af' };
+    var p = phases[trace.phase] || { label: trace.phase, color: 'var(--muted)' };
     var pct = Math.round((trace.confidence || 0) * 100);
     var fb = trace.is_fallback ? '<span class="rt-fallback-badge">備援</span>' : '';
     var rawId = 'rt-raw-' + idx;

@@ -91,7 +91,7 @@ function renderTechStocks(status) {
     kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol, 'cm_nvda') +
     kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol, 'cm_aapl') +
     kpiCard('MSFT', msft.value, fmtNum, msftColor, null, msft.symbol, 'cm_msft') +
-    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'rgba(79,193,255,0.3)', tsm.symbol, 'cm_tsm');
+    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'color-mix(in srgb, var(--accent) 30%, transparent)', tsm.symbol, 'cm_tsm');
 }
 
 function renderMacro(status) {
@@ -157,18 +157,18 @@ function renderCrisis(status) {
 
   let bg, icon, title, desc;
   if (active) {
-    bg = 'rgba(239,68,68,0.12)';
+    bg = 'color-mix(in srgb, var(--color-danger) 12%, transparent)';
     icon = '🔴';
     title = '危機模式 — 啟動中';
     desc = `VIX 指數 ${vixLabel} ≥ 35，系統已觸發危機保護：電路熔斷器強制開啟、最佳化器協方差矩陣對角膨脹 1.5x、最大持倉比例減半。`;
   } else {
-    bg = 'rgba(34,197,94,0.08)';
+    bg = 'color-mix(in srgb, var(--color-success) 8%, transparent)';
     icon = '🟢';
     title = '正常模式';
     desc = `VIX 指數 ${vixLabel} < 35，系統以標準參數運作。`;
   }
 
-  el.innerHTML = `<div class="kpi-card clickable" onclick="openKpiHelp('cm_crisis')" style="padding:var(--space-md);background:${bg};border-radius:8px;border:1px solid ${active ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.15)'}">
+  el.innerHTML = `<div class="kpi-card clickable" onclick="openKpiHelp('cm_crisis')" style="padding:var(--space-md);background:${bg};border-radius:8px;border:1px solid ${active ? 'color-mix(in srgb, var(--color-danger) 30%, transparent)' : 'color-mix(in srgb, var(--color-success) 15%, transparent)'}">
     <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:8px">
       <span style="font-size:var(--text-xl)">${icon}</span>
       <span style="font-weight:var(--font-semibold);font-size:var(--text-base);color:${active ? 'var(--color-danger)' : 'var(--color-success)'}">${title}</span>

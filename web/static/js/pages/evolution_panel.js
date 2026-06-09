@@ -1,5 +1,23 @@
 import { agentName, regimeLabel } from '../names.js';
 import { silentGetJSON } from '../shared/app-utils.js';
+import { getThemeColor } from '../shared/utils.js';
+
+function hexToRgba(hex, alpha = 1) {
+  if (!hex) return `rgba(0, 0, 0, ${alpha})`;
+  if (hex.startsWith('rgba')) return hex;
+  if (hex.startsWith('rgb')) {
+    return hex.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+  }
+  if (!hex.startsWith('#')) return hex;
+  let h = hex.slice(1);
+  if (h.length === 3) {
+    h = h.split('').map(c => c + c).join('');
+  }
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 let evolutionData = null;
 let currentView = 'compact';
@@ -544,9 +562,9 @@ function renderScatterPlot(scorecards) {
   ctx.font = '8px sans-serif';
   ctx.fillText('60%', x60 + 2, pad.top + 10);
 
-  ctx.fillStyle = 'rgba(16,185,129,0.04)';
+  ctx.fillStyle = hexToRgba(upColor, 0.04);
   ctx.fillRect(toX(0), toY(3), plotW * (1 / (xMax - xMin)), plotH * ((3 - 0) / (yMax - yMin)));
-  ctx.fillStyle = 'rgba(239,68,68,0.04)';
+  ctx.fillStyle = hexToRgba(downColor, 0.04);
   ctx.fillRect(pad.left, toY(0), plotW, plotH * ((0 - yMin) / (yMax - yMin)));
 
   for (const a of scorecards) {
@@ -559,7 +577,7 @@ function renderScatterPlot(scorecards) {
 
     ctx.beginPath();
     ctx.arc(x, y, 10, 0, Math.PI * 2);
-    ctx.fillStyle = color.replace(')', ',0.15)').replace('rgb', 'rgba');
+    ctx.fillStyle = hexToRgba(color, 0.15);
     ctx.fill();
 
     ctx.beginPath();

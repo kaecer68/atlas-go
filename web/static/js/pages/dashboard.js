@@ -67,7 +67,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
   `;
   gridRisk.innerHTML = `
-    <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：<span style="${parseFloat(weakSharpe) < 0 ? 'color:#ff6b6b;font-weight:600' : ''}">${weakSharpe}</span></div></div>
+    <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：<span style="${parseFloat(weakSharpe) < 0 ? 'color:var(--color-danger);font-weight:600' : ''}">${weakSharpe}</span></div></div>
     <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''} clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value text-lg">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
     <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆待更新' : '正常')}</div>${alertHtml}</div>
   `;
@@ -94,14 +94,14 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     var today = new Date();
     var diffDays = Math.floor((today - latestDate) / (1000 * 60 * 60 * 24));
     if (diffDays > 1) {
-      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:#fef3cd;border:1px solid #fde68a;color:#854d0e;display:flex;align-items:center;gap:8px">' +
+      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:rgba(245,158,11,0.15);border:1px solid var(--color-warning);color:var(--color-warning);display:flex;align-items:center;gap:8px">' +
         '⚠️ 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
-        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:#854d0e;font-weight:600">查看決策追蹤 →</a>' +
+        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:var(--color-warning);font-weight:600">查看決策追蹤 →</a>' +
         '</div>';
     } else {
-      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;display:flex;align-items:center;gap:8px">' +
+      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:rgba(16,185,129,0.15);border:1px solid var(--color-success);color:var(--color-success);display:flex;align-items:center;gap:8px">' +
         '✅ 場次已同步 · 最新：' + latestDate.toLocaleDateString('zh-TW') +
-        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:#065f46;font-weight:600">查看決策追蹤 →</a>' +
+        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:var(--color-success);font-weight:600">查看決策追蹤 →</a>' +
         '</div>';
     }
   }
@@ -273,12 +273,12 @@ export function renderAgentObservatory(data, overlapData) {
           <td>${c.windows || 0}</td>
           <td>${c.observations || 0}</td>
           <td>${((c.hit_rate || 0) * 100).toFixed(1)}%</td>
-          <td style="${(c.sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
+          <td style="${(c.sharpe || 0) < 0 ? 'color:var(--color-danger)' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
           <td class="text-muted text-xs">[${ciLow}, ${ciHigh}]</td>
           <td>${((c.average_return || 0) * 100).toFixed(2)}%</td>
           <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
-          <td style="${(c.is_sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${isSharpeStr}${oosWarn}</td>
-          <td style="${(c.oos_sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${oosSharpeStr}${overfitBadge}</td>
+          <td style="${(c.is_sharpe || 0) < 0 ? 'color:var(--color-danger)' : ''}">${isSharpeStr}${oosWarn}</td>
+          <td style="${(c.oos_sharpe || 0) < 0 ? 'color:var(--color-danger)' : ''}">${oosSharpeStr}${overfitBadge}</td>
           <td>${isOosStr}</td>
         </tr>`;
       }).join('')}
