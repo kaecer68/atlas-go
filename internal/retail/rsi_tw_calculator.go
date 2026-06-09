@@ -456,24 +456,6 @@ func vixMapParam(v float64, params *config.RSITwParameters) float64 {
 	return ss[len(ss)-1]
 }
 
-// vixMap applies the piecewise VIX → sentiment mapping. Kept for backward compatibility.
-func vixMap(v float64) float64 {
-	switch {
-	case v < 15:
-		return 0.1
-	case v < 20:
-		return 0.3
-	case v < 25:
-		return 0.5
-	case v < 30:
-		return 0.7
-	case v < 35:
-		return 0.85
-	default:
-		return 1.0
-	}
-}
-
 func mean(vs []float64) float64 {
 	var sum float64
 	for _, v := range vs {

@@ -17,7 +17,7 @@ func TestControlLayerAppliesCROAndCIO(t *testing.T) {
 		{Agent: "c", Skill: "ai_supply_chain_desk", Symbol: "2382.TW", Conviction: 70, Side: domain.SideBuy, Reason: "good"},
 	}
 
-	out := applyControlLayer(registry, plugins, recs, DefaultExecutionPolicy())
+	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "")
 	if len(out) != 2 {
 		t.Fatalf("expected 2 aggregated control outputs, got %d", len(out))
 	}
@@ -42,10 +42,10 @@ func TestControlLayerCanBypassCROWhenPolicyAllows(t *testing.T) {
 		{Agent: "a", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 40, Side: domain.SideBuy, Reason: "weak"},
 	}
 
-	out := applyControlLayer(registry, plugins, recs, domain.ExecutionPolicy{
+	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, domain.ExecutionPolicy{
 		ConvictionFloor: 50,
 		RequireCROPass:  false,
-	})
+	}, nil, "")
 	if len(out) != 1 {
 		t.Fatalf("expected raw recommendation to bypass control when CRO pass is disabled")
 	}

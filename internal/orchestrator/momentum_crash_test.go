@@ -159,7 +159,7 @@ func TestExecuteRegistryResearchWithMomentumCrashProtection(t *testing.T) {
 		MomentumCrashProtection: true,
 	}
 
-	_, raw, _, _, _ := executeRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, map[string]string{}, policy, NewPluginRegistry(), "")
+	_, raw, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, map[string]string{}, policy)
 
 	for _, r := range raw {
 		if r.FactorScores.Momentum != 0 {

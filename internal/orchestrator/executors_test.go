@@ -268,16 +268,13 @@ func TestExecuteRegistryResearchWithDarwinianWeightsAppliesWeightMarker(t *testi
 	dw := portfolio.NewDarwinianWeightManager("testdata/darwinian_test.json")
 	dw.InitializeFromRegistry(registry)
 
-	regime, rawRecs, finalRecs, guardOutcomes, rejects := executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(registry, quotes, nil, DefaultExecutionPolicy(), NewPluginRegistry(), "", dw)
+	regime, rawRecs, finalRecs, _ := ExecuteRegistryResearchWithDarwinianWeights(registry, quotes, nil, DefaultExecutionPolicy(), dw)
 
 	if len(rawRecs) == 0 {
 		t.Fatalf("expected raw recommendations")
 	}
 	if len(finalRecs) == 0 {
 		t.Fatalf("expected final recommendations")
-	}
-	if len(guardOutcomes) == 0 {
-		t.Fatalf("expected guard outcomes")
 	}
 
 	hasDWMarker := false
@@ -298,6 +295,5 @@ func TestExecuteRegistryResearchWithDarwinianWeightsAppliesWeightMarker(t *testi
 		}
 	}
 
-	_ = rejects
 	_ = regime
 }

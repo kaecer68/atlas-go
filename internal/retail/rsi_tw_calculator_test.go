@@ -207,6 +207,7 @@ func TestSubA3_MarginPercentile(t *testing.T) {
 }
 
 func TestVixMap(t *testing.T) {
+	params := config.DefaultParametersConfig().RSITw
 	tests := []struct {
 		vix  float64
 		want float64
@@ -219,9 +220,9 @@ func TestVixMap(t *testing.T) {
 		{40, 1.0},
 	}
 	for _, tt := range tests {
-		got := vixMap(tt.vix)
+		got := vixMapParam(tt.vix, &params)
 		if got != tt.want {
-			t.Errorf("vixMap(%f) = %f, want %f", tt.vix, got, tt.want)
+			t.Errorf("vixMapParam(%f) = %f, want %f", tt.vix, got, tt.want)
 		}
 	}
 }

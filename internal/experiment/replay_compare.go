@@ -48,14 +48,6 @@ func (fs FallbackStats) IsHighFallback(maxRatio float64) bool {
 	return fs.Ratio() > maxRatio
 }
 
-func comparePromptPerformance(replayDataPath, baselinePolicyPath string, brief domain.MutationBrief, window domain.BacktestWindowSummary, candidatePromptPath string) (float64, float64, error) {
-	summary, err := comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath, brief, window, candidatePromptPath)
-	if err != nil {
-		return 0, 0, err
-	}
-	return summary.BaselineScore, summary.CandidateScore, nil
-}
-
 func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string, brief domain.MutationBrief, window domain.BacktestWindowSummary, candidatePromptPath string) (replayScoreSummary, error) {
 	ds, err := replay.LoadTWSEOpenDataCSV(replayDataPath)
 	if err != nil {

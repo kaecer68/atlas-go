@@ -247,46 +247,6 @@ func filterMutedAgents(registry domain.AgentRegistry, plugins *PluginRegistry) d
 	}
 }
 
-func executeRegistryResearchDetailedWithPolicyAndGuards(
-	registry domain.AgentRegistry,
-	quotes []domain.Quote,
-	overrides map[string]string,
-	policy domain.ExecutionPolicy,
-	plugins *PluginRegistry,
-	sessionID string,
-) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome, []domain.ScreeningReject) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:  registry,
-		Quotes:    quotes,
-		Overrides: overrides,
-		Policy:    policy,
-		Plugins:   plugins,
-		SessionID: sessionID,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes, result.ScreeningRejects
-}
-
-func executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(
-	registry domain.AgentRegistry,
-	quotes []domain.Quote,
-	overrides map[string]string,
-	policy domain.ExecutionPolicy,
-	plugins *PluginRegistry,
-	sessionID string,
-	weightManager *portfolio.DarwinianWeightManager,
-) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome, []domain.ScreeningReject) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:      registry,
-		Quotes:        quotes,
-		Overrides:     overrides,
-		Policy:        policy,
-		Plugins:       plugins,
-		SessionID:     sessionID,
-		WeightManager: weightManager,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes, result.ScreeningRejects
-}
-
 // ExecuteRegistryResearchWithDarwinianWeights executes research with Darwinian weight application
 // This applies Atlas-GIC style weight multipliers (0.3-2.5) to agent recommendations
 func ExecuteRegistryResearchWithDarwinianWeights(
@@ -782,11 +742,6 @@ func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[strin
 		}
 	}
 	return recs
-}
-
-func applyControlLayer(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
-	final, _ := applyControlLayerWithOutcomes(registry, plugins, recs, policy, nil, "")
-	return final
 }
 
 func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string) ([]domain.Recommendation, []domain.GuardOutcome) {

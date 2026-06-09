@@ -24,8 +24,3 @@ type SharpeConfig = shared.SharpeConfig
 func ComputeSharpe(returns []float64, cfg SharpeConfig) float64 {
 	return shared.ComputeSharpe(returns, cfg)
 }
-
-// meanSampleVariance delegates to the canonical implementation in domain/shared.
-func meanSampleVariance(values []float64) (float64, float64) {
-	return shared.MeanSampleVariance(values)
-}
