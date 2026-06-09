@@ -10,9 +10,17 @@
 //     returns inherit this bias.
 //
 // The full fix — corporate-action adjustment via
-// AdjustForCorporateActions(actions []CorporateAction) error — is deferred to
-// a separate iteration (tracked as P1-2 in the fineng coverage audit). Until
-// that lands, callers MUST treat these returns as PRICE-ONLY, not total-return.
+// AdjustForCorporateActions(actions []CorporateAction) error — is tracked
+// across two follow-up iterations:
+//   - P1-2-α (this branch, wt/p1-2a-domain-provider): the `CorporateAction`
+//     canonical type is now landed at `internal/domain/corporate_action.go`
+//     and the upstream provider integration is at
+//     `internal/marketdata.AggregatedCorporateActionProvider`.
+//   - P1-2-β (branch wt/p1-2b-adjust-algorithm): implements the
+//     `AdjustForCorporateActions` algorithm consuming the type above.
+//
+// Until β lands, callers MUST treat these returns as PRICE-ONLY, not
+// total-return.
 package portfolio
 
 import (

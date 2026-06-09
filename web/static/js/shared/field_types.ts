@@ -434,6 +434,16 @@ export interface ConvictionStep {
   sensitivity?: number | null;
 }
 
+export interface CorporateAction {
+  symbol: string;
+  ex_date: string;
+  cash_dividend: number;
+  stock_dividend: number;
+  capital_reduction_ratio: number;
+  reference_price: number;
+  source: string;
+}
+
 export interface CorrelationMatrixResponse {
   symbols: string[];
   labels: string[];

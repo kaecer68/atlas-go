@@ -31,6 +31,22 @@
    - 範例：`shared.ComputeSharpe(returns, shared.SharpeConfig{Frequency: shared.FrequencyTWSE, RiskFreeRate: 0.015})`。
    - `portfolio.ComputeSharpe` 為保留 API 的薄 wrapper（type alias），canonical 在 `shared`。若發現新的 duplicate 計算，請合併至 `shared/` 而非保留本地版本。
 
+6. **CorporateAction canonical 類型（P1-2-α 引入）**：
+   - `domain.CorporateAction` 是法人事件（除息、除權、減資）的 canonical 型別。所有跨模組傳遞的法人事件必須用此型別，不得繞道使用 `domain.DividendRecord` 或 marketdata 內部型別。
+   - 範例：
+     ```go
+     ca := domain.CorporateAction{
+         Symbol:         "2330",
+         ExDate:         time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC),
+         CashDividend:   12.0,
+         ReferencePrice: 938.0,
+         Source:         "twse_calendar",
+     }
+     ```
+   - 下游消費介面（給 β 工作區的 `AdjustForCorporateActions` 用）：`internal/domain/shared/corporate_action.go` 的 `ActionEffect{Type, ExDate, Adjustment}`，由演算法把 `CorporateAction` 轉成 `ActionEffect`。
+   - 資料來源整合層：`internal/marketdata.CorporateActionProvider` interface，首選實作為 `internal/marketdata.AggregatedCorporateActionProvider`（TWSE 為主、FinMind 補缺、Symbol+ExDate 去重）。
+   - JSON tag 為 snake_case；前端型別由 `cmd/gentags` 自動同步（見 `internal/domain/types.go` 的 `go:generate` directive）。
+
 5. **禁止**：
    - 禁止在 domain 中實作任何 I/O 或全域變數修改。
    - 禁止定義資料庫特定標籤（如 `gorm`）。
