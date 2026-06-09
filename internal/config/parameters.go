@@ -173,6 +173,7 @@ type ExperimentParameters struct {
 	SharpeStabilityThreshold   ParameterMetadata[float64] `json:"sharpe_stability_threshold"`
 	MaxFallbackRatio           ParameterMetadata[float64] `json:"max_fallback_ratio"`
 	FactorWeightDriftThreshold ParameterMetadata[float64] `json:"factor_weight_drift_threshold"`
+	WalkForwardEmbargoDays     ParameterMetadata[int]     `json:"walk_forward_embargo_days"`
 }
 
 // BaselineParameters holds tunable values for baseline policy defaults.

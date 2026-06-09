@@ -421,6 +421,10 @@ var parameterTable = map[string]paramAccessor{
 		get: func(cfg *ParametersConfig) float64 { return cfg.Experiment.MaxFallbackRatio.Value },
 		set: func(cfg *ParametersConfig, v float64) { cfg.Experiment.MaxFallbackRatio.Value = v },
 	},
+	"experiment_walk_forward_embargo_days": {
+		get: func(cfg *ParametersConfig) float64 { return float64(cfg.Experiment.WalkForwardEmbargoDays.Value) },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Experiment.WalkForwardEmbargoDays.Value = int(v) },
+	},
 
 	// ===== Baseline parameters =====
 	"baseline_starting_cash": {

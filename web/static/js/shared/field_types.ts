@@ -962,6 +962,7 @@ export interface ExperimentParameters {
   sharpe_stability_threshold: string;
   max_fallback_ratio: string;
   factor_weight_drift_threshold: string;
+  walk_forward_embargo_days: string;
 }
 
 export interface ExperimentRecord {

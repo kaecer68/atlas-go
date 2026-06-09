@@ -632,6 +632,12 @@ func defaultExperimentParameters() ExperimentParameters {
 			Rationale: "Maximum allowed factor weight drift (15%) before rejecting experiment as regime-confounded",
 			Source:    SourceHeuristic,
 		},
+		WalkForwardEmbargoDays: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "5-trading-day embargo gap between walk-forward train/test folds and between primary training window and OOS window. Prevents data leakage from corporate-event reorgs and event-driven labeling lag.",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from leakage-sensitive backtest: test [3, 7, 10] range vs hit rate stability",
+		},
 	}
 }
 
