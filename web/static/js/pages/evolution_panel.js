@@ -320,7 +320,7 @@ function renderCompact() {
     '<div class="ev-section-title">實驗活動 <span class="ev-section-count">' + expCount + ' active</span></div>' +
     '<div class="ev-kpi-grid">' +
       '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (judges.length > 0 ? 'var(--warn)' : 'var(--muted)') + '">' + judges.length + '</div><div class="ev-kpi-label">待評判</div><div class="ev-kpi-hint">需人工確認</div></div>' +
-      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (promotes.length > 0 ? 'var(--up)' : 'var(--muted)') + '">' + promotes.length + '</div><div class="ev-kpi-label">待晉升</div><div class="ev-kpi-hint">可升級為基線</div></div>' +
+      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (promotes.length > 0 ? 'var(--color-success)' : 'var(--muted)') + '">' + promotes.length + '</div><div class="ev-kpi-label">待晉升</div><div class="ev-kpi-hint">可升級為基線</div></div>' +
       '<div class="ev-kpi-card"><div class="ev-kpi-value">' + scorecards.length + '</div><div class="ev-kpi-label">活躍 Agent</div><div class="ev-kpi-hint">策略總數</div></div>' +
     '</div>' +
 stateHtml +
@@ -411,7 +411,7 @@ function renderDetailed() {
       '<td style="text-align:right">' + (a.observations || 0) + '</td>' +
       '<td style="text-align:right;color:' + hColor + '">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</td>' +
       '<td style="text-align:right"><span class="' + sClass + '">' + (a.sharpe || 0).toFixed(2) + '</span></td>' +
-      '<td style="text-align:right;color:var(--down)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
+      '<td style="text-align:right;color:var(--color-danger)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
       '</tr>';
   }
   tableHtml += '</tbody></table>';

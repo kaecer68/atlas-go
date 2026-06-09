@@ -172,7 +172,7 @@ export function loadFetchLogs() {
   let html = '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-20">時間</th><th class="w-35">通道</th><th class="w-20">結果</th><th class="w-25">延遲</th></tr></thead><tbody>';
   fetchLogs.forEach(log => {
     const resultIcon = log.result === 'ok' ? '✓' : (log.result === 'warn' ? '⚠' : '✗');
-    const resultColor = log.result === 'ok' ? 'var(--up)' : (log.result === 'warn' ? 'var(--warn)' : 'var(--down)');
+    const resultColor = log.result === 'ok' ? 'var(--color-success)' : (log.result === 'warn' ? 'var(--warn)' : 'var(--color-danger)');
     html += `<tr>
       <td class="text-muted text-xs">${log.time}</td>
       <td>${log.channel}</td>
@@ -217,7 +217,7 @@ export function renderDataChannels(data) {
     </div>
     <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
       <div class="label">異常</div>
-      <div class="value" style="color:var(--down)">${errorCount}</div>
+      <div class="value" style="color:var(--color-danger)">${errorCount}</div>
     </div>
     <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
       <div class="label">待更新</div>
@@ -225,7 +225,7 @@ export function renderDataChannels(data) {
     </div>
     <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
       <div class="label">正常</div>
-      <div class="value" style="color:var(--up)">${total - errorCount - warnCount}</div>
+      <div class="value" style="color:var(--color-success)">${total - errorCount - warnCount}</div>
     </div>
   </div>`;
 
@@ -233,7 +233,7 @@ export function renderDataChannels(data) {
     html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
     html += '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-8">燈號</th><th class="w-12">平台名稱</th><th class="w-10">API 格式</th><th class="w-20">資料路徑</th><th class="w-12">本地儲存</th><th class="w-15">狀態</th><th class="w-13">操作</th><th class="w-10">最後更新</th></tr></thead><tbody>';
     byCountry[country].forEach(c => {
-      const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--down);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
+      const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--color-danger);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
       const toggleBtn = `<button class="text-xs" onclick="toggleChannel('${c.channel_id}', this.dataset.enabled !== 'true')" data-enabled="${c.status !== 'inactive'}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${c.status === 'inactive' ? '啟用' : '停用'}</button>`;
       const triggerBtn = `<button class="text-xs" onclick="triggerChannelFetch('${c.channel_id}')" style="padding:2px 8px;border-radius:4px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;margin-left:4px">觸發</button>`;
       html += `<tr>
@@ -252,9 +252,9 @@ export function renderDataChannels(data) {
 
   if (data.alerts && data.alerts.length) {
     const statusLabel = s => s === 'error' ? '異常' : (s === 'warn' ? '待更新' : '異常');
-    const statusColor = s => s === 'error' ? 'var(--down)' : 'var(--warn)';
-    html += `<div style="margin-top:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border-left:3px solid var(--down);border-radius:6px">
-      <div style="font-size:13px;font-weight:700;color:var(--down);margin-bottom:6px">需要關注的通道</div>
+    const statusColor = s => s === 'error' ? 'var(--color-danger)' : 'var(--warn)';
+    html += `<div style="margin-top:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border-left:3px solid var(--color-danger);border-radius:6px">
+      <div style="font-size:13px;font-weight:700;color:var(--color-danger);margin-bottom:6px">需要關注的通道</div>
       ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${a.error || statusLabel(a.status)}</span></div>`).join('')}
     </div>`;
   }
@@ -283,7 +283,7 @@ export function renderMacroDataHealth(data) {
   const warnCount = indicators.filter(i => i.status === 'warn').length;
   const errCount = indicators.filter(i => i.status === 'error').length;
 
-  const headerColor = errCount > 0 ? 'var(--down)' : (warnCount > 0 ? 'var(--warn)' : 'var(--up)');
+  const headerColor = errCount > 0 ? 'var(--color-danger)' : (warnCount > 0 ? 'var(--warn)' : 'var(--color-success)');
   const headerText = errCount > 0 ? '有資料異常需處理' : (warnCount > 0 ? '部分指標待更新' : '全部指標正常');
 
   let html = `<div style="margin:16px 0;padding:12px 16px;background:var(--panel);border-radius:8px;border:1px solid var(--border)">
@@ -293,9 +293,9 @@ export function renderMacroDataHealth(data) {
         <span style="font-size:12px;color:var(--muted);margin-left:8px">${headerText}</span>
       </div>
       <div style="display:flex;gap:12px;font-size:12px">
-        <span style="color:var(--up)">🟢 ${okCount} 正常</span>
+        <span style="color:var(--color-success)">🟢 ${okCount} 正常</span>
         <span style="color:var(--warn)">🟡 ${warnCount} 待更新</span>
-        <span style="color:var(--down)">🔴 ${errCount} 異常</span>
+        <span style="color:var(--color-danger)">🔴 ${errCount} 異常</span>
       </div>
     </div>
     <div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr>
@@ -305,7 +305,7 @@ export function renderMacroDataHealth(data) {
   indicators.forEach(ind => {
     const valStr = typeof ind.value === 'number' ? ind.value.toFixed(3) : '-';
     const chgStr = typeof ind.change_pct === 'number' ? ind.change_pct.toFixed(4) + '%' : '-';
-    const statusColor = ind.status === 'ok' ? 'var(--up)' : (ind.status === 'warn' ? 'var(--warn)' : 'var(--down)');
+    const statusColor = ind.status === 'ok' ? 'var(--color-success)' : (ind.status === 'warn' ? 'var(--warn)' : 'var(--color-danger)');
     const symbolHint = ind.symbol ? '' : ' <span class="text-muted text-xs">(無來源)</span>';
     html += `<tr>
       <td>${ind.name}${symbolHint}</td>

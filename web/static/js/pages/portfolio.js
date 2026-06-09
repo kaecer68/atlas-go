@@ -195,9 +195,9 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     if (riskGateContainer) { renderRiskGatePanel(riskGateContainer, getJSON); }
   } catch (e) {
     console.error(e);
-    kpis.innerHTML = '<div style="padding:20px;text-align:center;color:var(--down)">載入失敗</div>';
-    tableEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--down)">載入失敗</div>';
-    historyEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--down)">載入失敗</div>';
+    kpis.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-danger)">載入失敗</div>';
+    tableEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-danger)">載入失敗</div>';
+    historyEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-danger)">載入失敗</div>';
   }
 }
 

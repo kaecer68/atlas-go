@@ -243,7 +243,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
 
   const buildTableRows = (itemList) => itemList.map(it => {
     const cls = it.forward_return > 0 ? 'positive' : (it.forward_return < 0 ? 'negative' : '');
-    const rowStyle = !it.passed_guards ? 'background:rgba(239,68,68,0.06);border-left:3px solid var(--down)' : 'border-left:3px solid var(--up)';
+    const rowStyle = !it.passed_guards ? 'background:rgba(239,68,68,0.06);border-left:3px solid var(--color-danger)' : 'border-left:3px solid var(--color-success)';
     const crowded = (it.reason || '').includes('[crowded:');
     const badge = crowded ? `<span class="badge warn">擁擠</span> ` : '';
     const sideLabel = it.side === 'BUY' ? '<span style="color:var(--up);font-weight:700">買入</span>' : (it.side === 'SELL' ? '<span style="color:var(--down);font-weight:700">賣出</span>' : '-');

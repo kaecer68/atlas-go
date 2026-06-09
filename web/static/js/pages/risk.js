@@ -89,7 +89,7 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:180px">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">持倉集中度（市值）</div>
-          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--down)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--up)')}">${(top5Weight * 100).toFixed(1)}%</div>
+          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--color-danger)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--color-success)')}">${(top5Weight * 100).toFixed(1)}%</div>
           <div style="font-size:11px;color:var(--muted);margin-top:4px">前 3 大 ${(top3Weight * 100).toFixed(1)}% · 最大 ${(top1Weight * 100).toFixed(1)}%</div>
         </div>
         <div style="flex:2;min-width:300px">
@@ -148,17 +148,17 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
   el.innerHTML = `
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 95%</div>
-      <div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(re.var_95)}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtPct(re.var_95)}</div>
       <div class="kpi-hint">日頻 · 95% 信賴水準</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 99%</div>
-      <div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(re.var_99)}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtPct(re.var_99)}</div>
       <div class="kpi-hint">日頻 · 極端事件壓力</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">CVaR 95%</div>
-      <div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(re.cvar_95)}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtPct(re.cvar_95)}</div>
       <div class="kpi-hint">95% 條件期望虧損</div>
     </div>
     <div class="panel" style="text-align:center">

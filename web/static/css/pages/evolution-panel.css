@@ -529,12 +529,12 @@
   border-radius: 3px;
   display: inline-block;
 }
-.ev-summary-card.ev-summary-good .ev-summary-value { color: var(--up); }
-.ev-summary-card.ev-summary-good .ev-summary-tag { background: rgba(239,68,68,.12); color: var(--up); }
+.ev-summary-card.ev-summary-good .ev-summary-value { color: var(--color-success); }
+.ev-summary-card.ev-summary-good .ev-summary-tag { background: rgba(16,185,129,.12); color: var(--color-success); }
 .ev-summary-card.ev-summary-warn .ev-summary-value { color: var(--warn); }
 .ev-summary-card.ev-summary-warn .ev-summary-tag { background: rgba(245,158,11,.12); color: var(--warn); }
-.ev-summary-card.ev-summary-bad .ev-summary-value { color: var(--down); }
-.ev-summary-card.ev-summary-bad .ev-summary-tag { background: rgba(16,185,129,.12); color: var(--down); }
+.ev-summary-card.ev-summary-bad .ev-summary-value { color: var(--color-danger); }
+.ev-summary-card.ev-summary-bad .ev-summary-tag { background: rgba(239,68,68,.12); color: var(--color-danger); }
 
 .ev-summary-footer {
   font-size: 10px;

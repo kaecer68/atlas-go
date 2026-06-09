@@ -51,13 +51,13 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const warnChannels = sysChannels.filter(c => c.status === 'warn');
   const totalAlerts = errorChannels.length + warnChannels.length;
   const alertHtml = errorChannels.length > 0
-    ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
+    ? `<div style="margin:4px 0;font-size:13px;color:var(--color-danger)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
     : (warnChannels.length > 0
       ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料待更新</div>`
       : '<div class="my-xs text-sm text-up">✓ 所有通道正常</div>');
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
-  const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--up)' : 'var(--warn)') : 'inherit';
+  const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--color-success)' : 'var(--warn)') : 'inherit';
   const phaseHtml = capitalPhase
     ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${(capitalPhase.rolling_sharpe || 0).toFixed(2)}</div>`
     : '<div class="my-xs text-sm text-muted">-</div>';
@@ -72,7 +72,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆待更新' : '正常')}</div>${alertHtml}</div>
   `;
   gridSystem.innerHTML = `
-    <div class="kpi-card ${!health.replay_data_path_ok ? 'alert-err' : ''} clickable" onclick="${!health.replay_data_path_ok ? "openKpiHelp('replay-missing')" : "switchPage('datachannels')"}"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '未匯入'}</div><div class="kpi-hint">${health.replay_data_path_ok ? `最新回放數據<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}` : '⚠️ 回放資料尚未匯入<br><small style="color:var(--down)">點此查看匯入方式 →</small>'}</div></div>
+    <div class="kpi-card ${!health.replay_data_path_ok ? 'alert-err' : ''} clickable" onclick="${!health.replay_data_path_ok ? "openKpiHelp('replay-missing')" : "switchPage('datachannels')"}"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '未匯入'}</div><div class="kpi-hint">${health.replay_data_path_ok ? `最新回放數據<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}` : '⚠️ 回放資料尚未匯入<br><small style="color:var(--color-danger)">點此查看匯入方式 →</small>'}</div></div>
     <div class="kpi-card ${health.baseline_version === '未知' ? 'alert-err' : ''}"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">${health.baseline_version === '未知' ? '⚠️ 基線策略未載入<br><small style="color:var(--muted)">確認 baseline_policy.json 存在</small>' : '目前生效的政策'}</div></div>
     <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
     <div class="kpi-card clickable" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
@@ -263,7 +263,7 @@ export function renderAgentObservatory(data, overlapData) {
           trendIcon = `<span title="趨勢平穩 (rolling_sharpe_trend=${trendVal.toFixed(4)})" style="color:var(--muted);font-size:12px">→</span>`;
         }
         const oosWarn = c.oos_sample_warning ? `<span title="${escapeHtml(c.oos_sample_warning)}" style="color:var(--warn);font-size:10px">⚠️</span>` : '';
-        const overfitBadge = c.overfit_warning ? `<span title="${escapeHtml(c.overfit_reason || '')}" style="color:var(--down);font-size:10px;margin-left:4px">⚠️</span>` : '';
+        const overfitBadge = c.overfit_warning ? `<span title="${escapeHtml(c.overfit_reason || '')}" style="color:var(--color-danger);font-size:10px;margin-left:4px">⚠️</span>` : '';
         const isSharpeStr = c.is_sharpe != null ? c.is_sharpe.toFixed(3) : '-';
         const oosSharpeStr = c.oos_sharpe != null ? c.oos_sharpe.toFixed(3) : '-';
         const isOosStr = c.is_oos_ratio != null && c.is_oos_ratio > 0 ? c.is_oos_ratio.toFixed(2) : '-';
@@ -284,7 +284,7 @@ export function renderAgentObservatory(data, overlapData) {
       }).join('')}
     </tbody>
   </table>
-  ${weakest ? `<div style="margin-top:8px;font-size:12px;color:var(--down)">待改進策略來源：<strong>${agentName(weakest)}</strong></div>` : ''}
+  ${weakest ? `<div style="margin-top:8px;font-size:12px;color:var(--color-danger)">待改進策略來源：<strong>${agentName(weakest)}</strong></div>` : ''}
   ${data.recorded_at ? `<div style="margin-top:4px;font-size:11px;color:var(--muted)">數據時間：${new Date(data.recorded_at).toLocaleString('zh-TW')}</div>` : ''}
   ${criteriaHtml}`;
 }
@@ -405,12 +405,12 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
 
   const stressVal = (stress && typeof stress.score === 'number') ? stress.score : null;
   const stressLabel = stressVal >= 70 ? '危機' : (stressVal >= 50 ? '高壓' : (stressVal >= 30 ? '警戒' : '低壓'));
-  const stressColor = stressVal >= 70 ? 'var(--down)' : (stressVal >= 50 ? 'var(--warn)' : 'var(--up)');
+  const stressColor = stressVal >= 70 ? 'var(--color-danger)' : (stressVal >= 50 ? 'var(--warn)' : 'var(--color-success)');
 
   const scorecards = (agents && agents.scorecards) ? agents.scorecards : [];
   const healthyCount = scorecards.filter(a => (a.sharpe || 0) > 0.5 && (a.hit_rate || 0) > 0.3).length;
   const healthPct = scorecards.length > 0 ? Math.round(healthyCount / scorecards.length * 100) : 0;
-  const healthColor = healthPct > 70 ? 'var(--up)' : (healthPct > 40 ? 'var(--warn)' : 'var(--down)');
+  const healthColor = healthPct > 70 ? 'var(--color-success)' : (healthPct > 40 ? 'var(--warn)' : 'var(--color-danger)');
 
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px">

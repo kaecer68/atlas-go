@@ -130,6 +130,6 @@ window.loadSchedulerPage = function() {
   fetch('/api/scheduler/status').then(function(r) { return r.json(); }).then(function(tasks) {
     renderSchedulerPage(tasks);
   }).catch(function(err) {
-    if (el) el.innerHTML = '<div class="empty" style="color:var(--down)">載入失敗: ' + err.message + '</div>';
+    if (el) el.innerHTML = '<div class="empty" style="color:var(--color-danger)">載入失敗: ' + err.message + '</div>';
   });
 };
