@@ -18,7 +18,7 @@ function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey) {
   const bc = borderColor || 'transparent';
   const borderStyle = bc !== 'transparent' ? `border-left:3px solid ${bc};` : '';
   const display = fmt ? fmt(value) : (value != null ? String(value) : '—');
-  const symbolHtml = symbol ? `<span style="font-size:11px;color:var(--muted);margin-left:6px">${escapeHtml(symbol)}</span>` : '';
+  const symbolHtml = symbol ? `<span style="font-size:var(--text-sm);color:var(--muted);margin-left:6px">${escapeHtml(symbol)}</span>` : '';
   const clickable = helpKey ? ` clickable" onclick="openKpiHelp('${helpKey}')` : '';
   return `<div class="kpi-card${clickable}" style="${borderStyle}"><div class="kpi-label">${label}${symbolHtml}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
 }
@@ -135,10 +135,10 @@ function renderCorrelation(correlation, status) {
   el.innerHTML = `<div class="table-wrapper"><table>
     <thead><tr><th>指標</th><th>數值</th><th>說明</th></tr></thead>
     <tbody>
-      <tr><td>SPX-TWSE 動態相關性 ρ</td><td style="color:${rhoColor};font-weight:700;font-family:var(--font-mono)">${rhoLabel}${fallback ? ' <span style="font-size:11px;color:var(--muted)">(fallback)</span>' : ''}</td><td>ρ 範圍 −1 到 +1：≥ 0.7 強正相關（美股跌台股跟跌）、0.3–0.7 中度相關、≤ 0.3 弱相關。當 ρ &gt; 0.8 系統視為「傳導放大」會自動降倉。</td></tr>
+      <tr><td>SPX-TWSE 動態相關性 ρ</td><td style="color:${rhoColor};font-weight:700;font-family:var(--font-mono)">${rhoLabel}${fallback ? ' <span style="font-size:var(--text-sm);color:var(--muted)">(fallback)</span>' : ''}</td><td>ρ 範圍 −1 到 +1：≥ 0.7 強正相關（美股跌台股跟跌）、0.3–0.7 中度相關、≤ 0.3 弱相關。當 ρ &gt; 0.8 系統視為「傳導放大」會自動降倉。</td></tr>
       <tr><td>觀測筆數</td><td style="font-family:var(--font-mono)">${observations}</td><td>計算 ρ 使用的歷史交易日數。少於 30 筆時 ρ 採 fallback（預設 0.5），不宜作為交易依據。</td></tr>
       <tr><td>滾動視窗</td><td style="font-family:var(--font-mono)">${windowSize} 日</td><td>計算相關性時回看的歷史天數（pearson correlation 的 window size）。視窗越長反應越平滑、越短反應越即時但雜訊多。</td></tr>
-      <tr><td>資料時間</td><td style="font-size:13px;color:var(--muted)">${escapeHtml(generatedAt)}</td><td>此 ρ 值的計算時間（後端排程每 ${windowSize} 分鐘更新一次）。若超過 1 小時未更新請檢查 correlation 排程狀態。</td></tr>
+      <tr><td>資料時間</td><td style="font-size:var(--text-base);color:var(--muted)">${escapeHtml(generatedAt)}</td><td>此 ρ 值的計算時間（後端排程每 ${windowSize} 分鐘更新一次）。若超過 1 小時未更新請檢查 correlation 排程狀態。</td></tr>
     </tbody>
   </table></div>`;
 }
@@ -182,7 +182,7 @@ function emptyState(msg) {
   return '<div class="empty" style="padding:24px;text-align:center;background:var(--panel-l2);border-radius:8px">' +
     '<div style="font-size:32px;margin-bottom:8px">📡</div>' +
     '<div style="color:var(--text);font-weight:600;margin-bottom:4px">' + escapeHtml(msg || '等待資料') + '</div>' +
-    '<div style="color:var(--muted);font-size:13px">美台連動監控資料每 5 分鐘自動更新一次。</div>' +
+    '<div style="color:var(--muted);font-size:var(--text-base)">美台連動監控資料每 5 分鐘自動更新一次。</div>' +
     '</div>';
 }
 

@@ -70,19 +70,48 @@ func (r *PostgresRepository) SaveExportStats(ctx context.Context, year, month in
 	gregorianYear := year + 1911
 	ts := time.Date(gregorianYear, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 
-	// Use CTE to atomically delete-then-insert, avoiding the need for
-	// a unique index on (year, month) which is incompatible with the
-	// TimescaleDB hypertable (unique indexes must include the partition
-	// key "time" on hypertables).
-	_, err := r.pool.Exec(ctx, `
-		WITH deleted AS (
-			DELETE FROM export_statistics WHERE year = $2 AND month = $3
-		)
-		INSERT INTO export_statistics (time, year, month, export_total, import_total, trade_balance)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, ts, year, month, exportTotal, importTotal, tradeBalance)
+	// Use explicit transaction rather than a single CTE.
+	//
+	// A CTE that mixes DELETE and INSERT against a TimescaleDB hypertable
+	// can fail to expose the newly inserted row to a subsequent
+	// `WHERE year=$ AND month=$` SELECT in TimescaleDB 2.14.x (CI image
+	// timescale/timescaledb:2.14.2-pg15). The DELETE/INSERT are planned
+	// independently on the access node and the just-inserted row is not
+	// visible to a same-transaction read that scans by non-partition
+	// columns. Splitting into a real transaction with separate DELETE
+	// and INSERT statements forces a single execution context, which
+	// is what subsequent same-tx reads expect.
+	//
+	// A unique index on (year, month) is not an option here because
+	// unique indexes on a hypertable must include the partition key
+	// `time`, and (time, year, month) is not naturally unique (multiple
+	// writes to the same month are upserts).
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("save export stats: %w", err)
+		return fmt.Errorf("begin save export stats: %w", err)
+	}
+	// Rollback is a no-op after a successful Commit; error is not
+	// actionable at this point.
+	//nolint:errcheck
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM export_statistics WHERE year = $1 AND month = $2`,
+		year, month,
+	); err != nil {
+		return fmt.Errorf("delete export stats: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO export_statistics (time, year, month, export_total, import_total, trade_balance)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		ts, year, month, exportTotal, importTotal, tradeBalance,
+	); err != nil {
+		return fmt.Errorf("insert export stats: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit save export stats: %w", err)
 	}
 	return nil
 }
