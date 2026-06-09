@@ -44,13 +44,14 @@
 
 ---
 
-## E · Evolving（演進中）— 14 packages
+## E · Evolving（演進中）— 15 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
 | Package | 描述 | 關鍵型別/介面 | 備註 |
 |---------|------|--------------|------|
 | `autobacktest` | 自動回測 — 定時背景回測任務 | `Runner` | 由 daily monitor pipeline 使用 |
+| `domain/shared` | 跨模組純計算函式（Sharpe、Sortino、頻率常數）— canonical 位置，呼叫模組以 type alias re-export 維持向後相容 | `ComputeSharpe`, `ComputeSortino`, `Frequency` | 由 `domain/AGENTS.md:30` 規範；`portfolio`/`reporting` 為薄 wrapper |
 | `backtest` | 視窗回測 — `Window.Run()` | `Runner` | 由 autobacktest 使用 |
 | `db` | PostgreSQL 連線管理 | `DB` | 基礎設施，穩定但未直接出現於 main.go |
 | `eval` | 模型評估指標與可解釋性工具（SK-12~15） — OOS R²、Sharpe、PermutationImportance、PDP | `EvalResult`, `Predictor` | 由 robustness 使用，Fin-Skills 驅動 |

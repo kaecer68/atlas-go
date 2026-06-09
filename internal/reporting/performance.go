@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -135,7 +136,10 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 	}
 
 	sharpeRatio := CalculateSharpeRatio(dailyReturns)
-	sortinoRatio := calculateSortinoRatio(dailyReturns, 0.0)
+	sortinoRatio := shared.ComputeSortino(dailyReturns, shared.SortinoConfig{
+		Frequency:  shared.FrequencyPerDay,
+		MinSamples: 2,
+	})
 	maxDD := risk.CalculateMaxDrawdown(portfolioValues)
 	calmarRatio := calculateCalmarRatio(annualizedReturn, maxDD)
 
@@ -355,26 +359,11 @@ func CalculateSharpeRatio(dailyReturns []float64) float64 {
 }
 
 func calculateSortinoRatio(dailyReturns []float64, targetReturn float64) float64 {
-	if len(dailyReturns) == 0 {
-		return 0
-	}
-	var excessSum, downsideSum float64
-	for _, r := range dailyReturns {
-		excess := r - targetReturn
-		excessSum += excess
-		if r < targetReturn {
-			downsideSum += (r - targetReturn) * (r - targetReturn)
-		}
-	}
-	meanExcess := excessSum / float64(len(dailyReturns))
-	downsideDev := 0.0
-	if downsideSum > 0 {
-		downsideDev = math.Sqrt(downsideSum / float64(len(dailyReturns)))
-	}
-	if downsideDev == 0 {
-		return 0
-	}
-	return (meanExcess / downsideDev) * math.Sqrt(252)
+	_ = targetReturn
+	return shared.ComputeSortino(dailyReturns, shared.SortinoConfig{
+		Frequency:  shared.FrequencyPerDay,
+		MinSamples: 2,
+	})
 }
 
 func calculateCalmarRatio(annualizedReturn, maxDrawdown float64) float64 {
