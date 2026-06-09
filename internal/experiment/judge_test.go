@@ -837,3 +837,76 @@ func TestPreserveDownsideProtectionGate_ExcessiveDrawdown(t *testing.T) {
 		t.Fatalf("expected excessive drawdown to be rejected, got: %s", note)
 	}
 }
+
+// TestPassesAcceptanceRejectsFallbackWindowWhenNotInBurnIn verifies that
+// experiments which relied on the fallback backtest window are rejected once
+// the system has matured past burn-in. The fallback window can overlap the
+// OOS window, so accepting such results in calibrating/full-auto maturity
+// would contaminate the promotion path.
+func TestPassesAcceptanceRejectsFallbackWindowWhenNotInBurnIn(t *testing.T) {
+	result := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			AcceptanceGates: []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+			BaselineValue:   0.0100,
+			CandidateValue:  0.0120,
+			MutationType:    "prompt_tightening",
+		},
+		Brief: domain.MutationBrief{
+			MaturityLevel: "level_2_window_validated",
+		},
+		BaselineObservations:  8,
+		CandidateObservations: 8,
+		JudgeChecks:           []string{"a", "b", "c"},
+		UsedFallbackWindow:    true,
+	}
+
+	judge := testJudge()
+	// Simulate calibrating maturity: tracker present, but past burn-in
+	// (backdate start by 60 days so computeMaturity returns Calibrating).
+	judge.maturityTracker = domain.NewMaturityTrackerWithStart(time.Now().AddDate(0, 0, -60))
+
+	accepted, note := judge.passesAcceptance(result)
+	if accepted {
+		t.Fatalf("expected rejection for fallback-window experiment in calibrating maturity, got accepted")
+	}
+	if !strings.Contains(note, "fallback") {
+		t.Fatalf("expected rejection note to mention fallback, got %q", note)
+	}
+}
+
+// TestPassesAcceptanceAllowsFallbackWindowDuringBurnIn verifies that
+// during the burn-in phase, when no real replay data exists, the system
+// permits fallback-window experiments. This unblocks early iteration before
+// the system has accumulated its own window history.
+func TestPassesAcceptanceAllowsFallbackWindowDuringBurnIn(t *testing.T) {
+	result := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			AcceptanceGates: []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+			BaselineValue:   0.0100,
+			CandidateValue:  0.0120,
+			MutationType:    "prompt_tightening",
+		},
+		Brief: domain.MutationBrief{
+			MaturityLevel: "level_1_exploratory",
+		},
+		BaselineObservations:  8,
+		CandidateObservations: 8,
+		JudgeChecks:           []string{"a", "b", "c"},
+		UsedFallbackWindow:    true,
+	}
+
+	judge := testJudge()
+	// In burn-in: gate is the very first check, so this experiment is
+	// rejected by burn-in (not the fallback gate). The fallback gate must
+	// not run first.
+	// Start 3 days ago so computeMaturity returns BurnIn (threshold = 0).
+	judge.maturityTracker = domain.NewMaturityTrackerWithStart(time.Now().AddDate(0, 0, -3))
+
+	accepted, note := judge.passesAcceptance(result)
+	if accepted {
+		t.Fatalf("expected burn-in rejection (not fallback gate), got accepted")
+	}
+	if !strings.Contains(note, "burn_in") {
+		t.Fatalf("expected rejection note to mention burn_in, got %q", note)
+	}
+}

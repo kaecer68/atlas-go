@@ -338,6 +338,14 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 			j.maturityTracker.DaysUntil(domain.MaturityCalibrating))
 	}
 
+	// Fallback window gate: once the system has its own replay history, the
+	// fallback window can overlap the OOS window and contaminate the result.
+	// Permitted only while in burn-in (when no alternative data exists).
+	if result.UsedFallbackWindow && j.maturityTracker != nil &&
+		j.maturityTracker.Current() != domain.MaturityBurnIn {
+		return false, "rejected: experiment used fallback backtest window after burn-in; results may overlap OOS window"
+	}
+
 	gates := result.Experiment.AcceptanceGates
 	baseline := result.Experiment.BaselineValue
 	candidate := result.Experiment.CandidateValue
