@@ -304,7 +304,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           }).join(' · ');
           sourceDataHtml = `<div class="text-muted text-sm mt-xs" style="font-size:11px">觸發條件：${escapeHtml(sdItems)}</div>`;
         }
-        return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:#0d1015;border-radius:8px">
+        return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:var(--panel-l2);border-radius:8px">
           <div class="font-bold">${escapeHtml(eventName(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
           <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confidence || 0) * 100).toFixed(0)}% · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
           <div class="text-muted text-sm mt-xs">資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)} · 信心來源：${escapeHtml(cs)}</div>
@@ -370,7 +370,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           <div style="margin:8px 0">
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
               <span>模型權重</span>
-              <div style="flex:1;height:6px;background:#1f2937;border-radius:3px;overflow:hidden">
+              <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
                 <div style="width:${weightPct}%;height:100%;background:${weightColor}"></div>
               </div>
               <span class="min-w-40 text-right">${w.toFixed(3)}</span>

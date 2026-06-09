@@ -223,7 +223,7 @@ export function renderRiskCalibration(data) {
   var isCalibrated = report.verdict === 'calibrated';
   var statusIcon = isCalibrated ? '🔵' : '🟢';
   var statusLabel = isCalibrated ? '已校準' : '閾值穩定';
-  var statusColor = isCalibrated ? '#3b82f6' : '#10b981';
+  var statusColor = isCalibrated ? 'var(--color-info)' : 'var(--color-success)';
 
   var changesHtml = '';
   if (report.changes && report.changes.length > 0) {
@@ -234,7 +234,7 @@ export function renderRiskCalibration(data) {
         '<td style="padding:4px 8px;font-size:12px;text-align:right">' + c.before.toFixed(4) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;text-align:right;color:var(--up)">' + c.after.toFixed(4) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;color:var(--muted)">' + escapeHtml(c.rationale) + '</td>' +
-        '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:' + confidenceColor + '22;color:' + confidenceColor + '">' + c.confidence + '</span></td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:color-mix(in srgb, ' + confidenceColor + ' 13%, transparent);color:' + confidenceColor + '">' + c.confidence + '</span></td>' +
         '</tr>';
     }).join('');
     changesHtml =

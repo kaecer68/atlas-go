@@ -39,7 +39,7 @@ export function renderConvictionBreakdown(cb) {
   const steps = (cb.steps || []).map(s => {
     const deltaCls = s.delta > 0 ? 'color:var(--up)' : (s.delta < 0 ? 'color:var(--down)' : 'color:var(--muted)');
     const deltaLabel = s.delta > 0 ? '+' + s.delta : String(s.delta);
-    const prov = s.source ? `<span class="badge" style="font-size:9px;padding:1px 4px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#3b82f6;margin-left:4px">${s.source}${s.param_ref ? ':' + s.param_ref.split('.').pop() : ''}</span>` : '';
+    const prov = s.source ? `<span class="badge" style="font-size:9px;padding:1px 4px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:var(--color-info);margin-left:4px">${s.source}${s.param_ref ? ':' + s.param_ref.split('.').pop() : ''}</span>` : '';
     return `<div style="display:flex;gap:8px;align-items:flex-start;margin:3px 0;padding:3px 6px;background:var(--bg);border-radius:4px">
       <div class="w-90 text-xs text-muted">${s.rule}${prov}</div>
       <div class="w-40 text-xs font-semibold" style="${deltaCls}">${deltaLabel}</div>
@@ -214,7 +214,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
         <table class="text-sm">
           <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th><th>因子分數</th></tr></thead>
           <tbody>
-            ${screenedItems.map(s => `<tr style="border-left:3px solid #666;color:var(--muted)">
+            ${screenedItems.map(s => `<tr style="border-left:3px solid var(--border);color:var(--muted)">
               <td>${escapeHtml(s.symbol)}</td>
               <td>${escapeHtml(stockName(s.symbol)) || '-'}</td>
               <td>${escapeHtml(agentName(s.agent_id))}</td>
@@ -265,12 +265,12 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     const narrativeCtx = it.narrative_context;
     const hasNarrative = narrativeEvents.length > 0 || narrativeCtx;
     const narrativeBadge = hasNarrative
-      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:#3b82f6">${narrativeCtx ? escapeHtml(narrativeCtx.primary_theme || narrativeCtx.theme || '敘事') : '敘事'} ${narrativeEvents.length > 0 ? narrativeEvents.length : ''}</span>`
+      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:var(--color-info)">${narrativeCtx ? escapeHtml(narrativeCtx.primary_theme || narrativeCtx.theme || '敘事') : '敘事'} ${narrativeEvents.length > 0 ? narrativeEvents.length : ''}</span>`
       : '<span class="text-muted text-xs">-</span>';
     const industryCtx = it.industry_context;
     const hasIndustry = industryCtx && industryCtx.business_cycle;
     const industryBadge = hasIndustry
-      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:#8b5cf6">${escapeHtml(industryCtx.business_cycle)} ${industryCtx.cycle_confidence != null ? (industryCtx.cycle_confidence * 100).toFixed(0) + '%' : ''}</span>`
+      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:var(--accent-secondary)">${escapeHtml(industryCtx.business_cycle)} ${industryCtx.cycle_confidence != null ? (industryCtx.cycle_confidence * 100).toFixed(0) + '%' : ''}</span>`
       : '';
     return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}（${escapeHtml(it.skill)}）</td><td>${escapeHtml(layerName)}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction != null ? it.conviction : '-'}</td><td>${narrativeBadge}${industryBadge ? ' ' + industryBadge : ''}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason ? escapeHtml(it.reason) : '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + escapeHtml(it.guard_reason) + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
   }).join('');

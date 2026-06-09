@@ -1,8 +1,21 @@
 // sparkline.js — Darwinian weight sparkline + equity curve + agent scoreboard
 // Standalone component, importable into dashboard.js or portfolio pages.
-import { fmt, fmtPct, fmtFloat, fmtNTD } from '../shared/utils.js';
+import { fmt, fmtPct, fmtFloat, fmtNTD, getThemeColor } from '../shared/utils.js';
 
 export { renderEquityCurve, renderDualEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance };
+
+function hexToRgba(hex, alpha = 1) {
+  if (!hex) return `rgba(0, 0, 0, ${alpha})`;
+  if (!hex.startsWith('#')) return hex;
+  let h = hex.slice(1);
+  if (h.length === 3) {
+    h = h.split('').map(c => c + c).join('');
+  }
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 /**
  * Renders a canvas-based equity curve sparkline.
@@ -29,18 +42,18 @@ function renderEquityCurve(points) {
   ctx.clearRect(0, 0, W, H);
 
   // Background
-  ctx.fillStyle = 'rgba(19,22,28,0.6)';
+  ctx.fillStyle = hexToRgba(getThemeColor('--panel') || '#13161c', 0.6);
   ctx.beginPath(); ctx.roundRect(pad.left, pad.top, chartW, chartH, 6); ctx.fill();
 
   // Subtle grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5;
+  ctx.strokeStyle = hexToRgba(getThemeColor('--text') || '#f0f4f8', 0.05); ctx.lineWidth = 0.5;
   for (let i = 1; i <= 3; i++) {
     const y = pad.top + (chartH / 4) * i;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
   }
 
   // Y-axis labels
-  ctx.fillStyle = 'rgba(184,196,208,0.6)'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.6); ctx.font = '10px system-ui'; ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + (chartH / 4) * i;
     ctx.fillText((maxV - (range / 4) * i).toFixed(0), pad.left - 8, y + 3);
@@ -52,10 +65,12 @@ function renderEquityCurve(points) {
     y: pad.top + (1 - (p.value - minV) / range) * chartH
   }));
 
+  const accentColor = getThemeColor('--accent') || '#4fc1ff';
+
   // Gradient fill under curve
   const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-  gradient.addColorStop(0, 'rgba(79,193,255,0.25)');
-  gradient.addColorStop(1, 'rgba(79,193,255,0.02)');
+  gradient.addColorStop(0, hexToRgba(accentColor, 0.25));
+  gradient.addColorStop(1, hexToRgba(accentColor, 0.02));
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pad.top + chartH);
   for (let i = 0; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
@@ -65,8 +80,8 @@ function renderEquityCurve(points) {
 
   // Glow
   ctx.save();
-  ctx.shadowColor = 'rgba(79,193,255,0.4)'; ctx.shadowBlur = 6;
-  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#4fc1ff';
+  ctx.shadowColor = hexToRgba(accentColor, 0.4); ctx.shadowBlur = 6;
+  ctx.strokeStyle = accentColor;
   ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath();
   pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
   ctx.stroke();
@@ -74,12 +89,12 @@ function renderEquityCurve(points) {
 
   // Dots on data points
   if (pts.length <= 30) {
-    ctx.fillStyle = '#4fc1ff';
+    ctx.fillStyle = accentColor;
     pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); });
   }
 
   // X-axis labels
-  ctx.fillStyle = 'rgba(184,196,208,0.5)'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.5); ctx.font = '9px system-ui'; ctx.textAlign = 'center';
   const step = Math.max(1, Math.floor(points.length / 6));
   points.forEach((p, i) => {
     if (i % step === 0 || i === points.length - 1) {
@@ -119,23 +134,23 @@ function renderDualEquityCurve(preTaxPoints, afterTaxPoints) {
   const minV = Math.min(...allValues), maxV = Math.max(...allValues), range = maxV - minV || 1;
   ctx.clearRect(0, 0, W, H);
 
-  ctx.fillStyle = 'rgba(19,22,28,0.6)';
+  ctx.fillStyle = hexToRgba(getThemeColor('--panel') || '#13161c', 0.6);
   ctx.beginPath(); ctx.roundRect(pad.left, pad.top, chartW, chartH, 6); ctx.fill();
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5;
+  ctx.strokeStyle = hexToRgba(getThemeColor('--text') || '#f0f4f8', 0.05); ctx.lineWidth = 0.5;
   for (let i = 1; i <= 3; i++) {
     const y = pad.top + (chartH / 4) * i;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
   }
 
-  ctx.fillStyle = 'rgba(184,196,208,0.6)'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.6); ctx.font = '10px system-ui'; ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + (chartH / 4) * i;
     const val = maxV - (range / 4) * i;
     ctx.fillText(fmtNTD(val), pad.left - 8, y + 3);
   }
 
-  function drawCurve(points, colorRGB, glowColor) {
+  function drawCurve(points, colorHex) {
     if (!points || points.length === 0) return;
     const pts = points.map((p, i) => ({
       x: pad.left + (i / (points.length - 1)) * chartW,
@@ -143,8 +158,8 @@ function renderDualEquityCurve(preTaxPoints, afterTaxPoints) {
     }));
 
     const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-    gradient.addColorStop(0, `rgba(${colorRGB},0.25)`);
-    gradient.addColorStop(1, `rgba(${colorRGB},0.02)`);
+    gradient.addColorStop(0, hexToRgba(colorHex, 0.25));
+    gradient.addColorStop(1, hexToRgba(colorHex, 0.02));
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pad.top + chartH);
     for (let i = 0; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
@@ -153,25 +168,28 @@ function renderDualEquityCurve(preTaxPoints, afterTaxPoints) {
     ctx.fillStyle = gradient; ctx.fill();
 
     ctx.save();
-    ctx.shadowColor = `rgba(${colorRGB},0.4)`; ctx.shadowBlur = 6;
-    ctx.strokeStyle = glowColor;
+    ctx.shadowColor = hexToRgba(colorHex, 0.4); ctx.shadowBlur = 6;
+    ctx.strokeStyle = colorHex;
     ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath();
     pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
     ctx.stroke();
     ctx.restore();
 
     if (pts.length <= 30) {
-      ctx.fillStyle = glowColor;
+      ctx.fillStyle = colorHex;
       pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); });
     }
   }
 
-  if (hasAfterTax) {
-    drawCurve(afterTaxPoints, '255,165,0', '#ffa500'); 
-  }
-  drawCurve(preTaxPoints, '79,193,255', '#4fc1ff'); 
+  const preTaxColor = getThemeColor('--accent') || '#4fc1ff';
+  const afterTaxColor = getThemeColor('--color-warning') || '#f59e0b';
 
-  ctx.fillStyle = 'rgba(184,196,208,0.5)'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+  if (hasAfterTax) {
+    drawCurve(afterTaxPoints, afterTaxColor); 
+  }
+  drawCurve(preTaxPoints, preTaxColor); 
+
+  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.5); ctx.font = '9px system-ui'; ctx.textAlign = 'center';
   const step = Math.max(1, Math.floor(preTaxPoints.length / 6));
   preTaxPoints.forEach((p, i) => {
     if (i % step === 0 || i === preTaxPoints.length - 1) {
@@ -183,14 +201,14 @@ function renderDualEquityCurve(preTaxPoints, afterTaxPoints) {
     ctx.font = '10px system-ui';
     ctx.textAlign = 'left';
     
-    ctx.fillStyle = '#4fc1ff';
+    ctx.fillStyle = preTaxColor;
     ctx.fillRect(pad.left + 10, pad.top + 10, 10, 10);
-    ctx.fillStyle = 'rgba(184,196,208,0.8)';
+    ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.8);
     ctx.fillText('稅前淨值 (Pre-tax)', pad.left + 25, pad.top + 19);
     
-    ctx.fillStyle = '#ffa500';
+    ctx.fillStyle = afterTaxColor;
     ctx.fillRect(pad.left + 130, pad.top + 10, 10, 10);
-    ctx.fillStyle = 'rgba(184,196,208,0.8)';
+    ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.8);
     ctx.fillText('稅後淨值 (After-tax)', pad.left + 145, pad.top + 19);
   }
 }
@@ -356,18 +374,18 @@ export function renderComparisonChart(containerId, datasets, options = {}) {
   ctx.clearRect(0, 0, W, H);
 
   // Background
-  ctx.fillStyle = 'rgba(19,22,28,0.6)';
+  ctx.fillStyle = hexToRgba(getThemeColor('--panel') || '#13161c', 0.6);
   ctx.beginPath(); ctx.roundRect(pad.left, pad.top, chartW, chartH, 6); ctx.fill();
 
   // Subtle grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5;
+  ctx.strokeStyle = hexToRgba(getThemeColor('--text') || '#f0f4f8', 0.05); ctx.lineWidth = 0.5;
   for (let i = 1; i <= 3; i++) {
     const y = pad.top + (chartH / 4) * i;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
   }
 
   // Y-axis labels
-  ctx.fillStyle = 'rgba(184,196,208,0.6)'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.6); ctx.font = '10px system-ui'; ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + (chartH / 4) * i;
     const val = maxV - (range / 4) * i;
@@ -389,11 +407,14 @@ export function renderComparisonChart(containerId, datasets, options = {}) {
     const ds = datasets[idx];
     if (pts.length === 0) return;
     
+    const rawColor = ds.color.startsWith('var(') ? getThemeColor(ds.color.slice(4, -1)) : ds.color;
+    const rawGlow = ds.glow ? (ds.glow.startsWith('var(') ? getThemeColor(ds.glow.slice(4, -1)) : ds.glow) : rawColor;
+    
     // Line & Glow
     ctx.save();
-    ctx.shadowColor = ds.glow || ds.color; 
+    ctx.shadowColor = hexToRgba(rawGlow, 0.4); 
     ctx.shadowBlur = 6;
-    ctx.strokeStyle = ds.color;
+    ctx.strokeStyle = rawColor;
     ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath();
     pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
     ctx.stroke();
@@ -401,13 +422,13 @@ export function renderComparisonChart(containerId, datasets, options = {}) {
 
     // Dots
     if (pts.length <= 30) {
-      ctx.fillStyle = ds.color;
+      ctx.fillStyle = rawColor;
       pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); });
     }
   });
 
   // X-axis labels
-  ctx.fillStyle = 'rgba(184,196,208,0.5)'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.5); ctx.font = '9px system-ui'; ctx.textAlign = 'center';
   const mainDs = datasets[0].data;
   const step = Math.max(1, Math.floor(mainDs.length / 6));
   mainDs.forEach((p, i) => {
@@ -421,9 +442,10 @@ export function renderComparisonChart(containerId, datasets, options = {}) {
   ctx.textAlign = 'left';
   let lx = pad.left + 10;
   datasets.forEach(ds => {
-    ctx.fillStyle = ds.color;
+    const rawColor = ds.color.startsWith('var(') ? getThemeColor(ds.color.slice(4, -1)) : ds.color;
+    ctx.fillStyle = rawColor;
     ctx.fillRect(lx, pad.top + 10, 10, 10);
-    ctx.fillStyle = 'rgba(184,196,208,0.8)';
+    ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.8);
     ctx.fillText(ds.label, lx + 15, pad.top + 19);
     lx += ctx.measureText(ds.label).width + 30;
   });
@@ -496,7 +518,7 @@ export function renderRadarChart(containerId, metrics, labels) {
   const angleStep = (Math.PI * 2) / numAxis;
   
   // Draw grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.strokeStyle = hexToRgba(getThemeColor('--text') || '#f0f4f8', 0.1);
   ctx.lineWidth = 1;
   for (let r = 1; r <= 4; r++) {
     ctx.beginPath();
@@ -511,7 +533,7 @@ export function renderRadarChart(containerId, metrics, labels) {
   }
   
   // Draw axes
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.strokeStyle = hexToRgba(getThemeColor('--text') || '#f0f4f8', 0.05);
   for (let i = 0; i < numAxis; i++) {
     const a = i * angleStep - Math.PI / 2;
     ctx.beginPath();
@@ -544,7 +566,7 @@ export function renderRadarChart(containerId, metrics, labels) {
   }
   ctx.closePath();
   
-  ctx.fillStyle = 'rgba(79,193,255,0.2)';
+  ctx.fillStyle = hexToRgba(accent, 0.2);
   ctx.fill();
   
   ctx.save();

@@ -172,7 +172,7 @@ function renderSectorHeatmap(data) {
 
   const badges = sectors.map(s => {
     const score = typeof s.confidence_score === 'number' ? s.confidence_score : (s.confidence === 'high' ? 0.8 : s.confidence === 'medium' ? 0.5 : 0.2);
-    const bg = s.confidence === 'high' ? 'rgba(34,197,94,0.15)' : s.confidence === 'medium' ? 'rgba(251,191,36,0.15)' : 'rgba(156,163,175,0.1)';
+    const bg = s.confidence === 'high' ? 'color-mix(in srgb, var(--color-success) 15%, transparent)' : s.confidence === 'medium' ? 'color-mix(in srgb, var(--color-warning) 15%, transparent)' : 'color-mix(in srgb, var(--muted) 10%, transparent)';
     const border = s.confidence === 'high' ? 'var(--color-success)' : s.confidence === 'medium' ? 'var(--color-warning)' : 'var(--muted)';
     const emoji = s.confidence === 'high' ? '🔥' : s.confidence === 'medium' ? '🟡' : '⚪';
     return `<div class="dc-heat-badge" style="background:${bg};border:1px solid ${border};border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px">

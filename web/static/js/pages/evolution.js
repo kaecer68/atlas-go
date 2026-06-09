@@ -2,9 +2,23 @@
 import { agentName, sectorName, regimeLabel } from '../names.js';
 
 import { silentGetJSON, formatDate, notify } from '../shared/app-utils.js';
+import { getThemeColor } from '../shared/utils.js';
 
 
 import { renderEquityCurve, renderComparisonChart, renderRadarChart, renderRegimeVolumeChart } from '../components/sparkline.js';
+
+function hexToRgba(hex, alpha = 1) {
+  if (!hex) return `rgba(0, 0, 0, ${alpha})`;
+  if (!hex.startsWith('#')) return hex;
+  let h = hex.slice(1);
+  if (h.length === 3) {
+    h = h.split('').map(c => c + c).join('');
+  }
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 let evolutionData = null;
 let currentView = 'compact';
@@ -75,18 +89,19 @@ function renderInlineEquityCurve(containerId, points) {
   ctx.clearRect(0, 0, W, H);
 
   // Background
-  ctx.fillStyle = '#0d1015';
+  const panelBg = getThemeColor('--panel-l2') || getThemeColor('--panel') || '#0d1015';
+  ctx.fillStyle = panelBg;
   ctx.beginPath(); ctx.roundRect(pad.left, pad.top, chartW, chartH, 6); ctx.fill();
 
   // Grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5;
+  ctx.strokeStyle = hexToRgba(getThemeColor('--text') || '#f0f4f8', 0.04); ctx.lineWidth = 0.5;
   for (let i = 1; i <= 3; i++) {
     let gy = pad.top + (chartH / 4) * i;
     ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(pad.left + chartW, gy); ctx.stroke();
   }
 
   // Y-axis
-  ctx.fillStyle = 'rgba(184,196,208,0.5)'; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
+  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.5); ctx.font = '9px system-ui'; ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     let ly = pad.top + (chartH / 4) * i;
     ctx.fillText((maxV - (range / 4) * i).toFixed(3), pad.left - 6, ly + 3);
@@ -98,9 +113,10 @@ function renderInlineEquityCurve(containerId, points) {
   });
 
   // Gradient fill
+  const accentColor = getThemeColor('--accent') || '#4fc1ff';
   let grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-  grad.addColorStop(0, 'rgba(79,193,255,0.22)');
-  grad.addColorStop(1, 'rgba(79,193,255,0.01)');
+  grad.addColorStop(0, hexToRgba(accentColor, 0.22));
+  grad.addColorStop(1, hexToRgba(accentColor, 0.01));
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pad.top + chartH);
   for (let j = 0; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
@@ -110,8 +126,8 @@ function renderInlineEquityCurve(containerId, points) {
 
   // Line with glow
   ctx.save();
-  ctx.shadowColor = 'rgba(79,193,255,0.5)'; ctx.shadowBlur = 5;
-  ctx.strokeStyle = '#4fc1ff'; ctx.lineWidth = 2;
+  ctx.shadowColor = hexToRgba(accentColor, 0.5); ctx.shadowBlur = 5;
+  ctx.strokeStyle = accentColor; ctx.lineWidth = 2;
   ctx.lineJoin = 'round'; ctx.beginPath();
   pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
   ctx.stroke();
@@ -119,7 +135,7 @@ function renderInlineEquityCurve(containerId, points) {
 
   // Dots
   if (pts.length <= 20) {
-    ctx.fillStyle = '#4fc1ff';
+    ctx.fillStyle = accentColor;
     pts.forEach(function(p) { ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill(); });
   }
 }

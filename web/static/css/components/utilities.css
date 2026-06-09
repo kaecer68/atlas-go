@@ -5,6 +5,14 @@
 .text-muted { color: var(--muted); }
 .text-down { color: var(--down); }
 .text-up { color: var(--up); }
+.text-pnl-profit { color: var(--pnl-profit); }
+.text-pnl-loss { color: var(--pnl-loss); }
+.text-trend-bullish { color: var(--trend-bullish); }
+.text-trend-bearish { color: var(--trend-bearish); }
+.text-metric-good { color: var(--metric-good); }
+.text-metric-bad { color: var(--metric-bad); }
+.text-risk-high { color: var(--risk-high); }
+.text-risk-low { color: var(--risk-low); }
 .text-success { color: var(--color-success); }
 .text-danger { color: var(--color-danger); }
 .text-warn { color: var(--warn); }
