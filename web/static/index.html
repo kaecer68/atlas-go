@@ -228,7 +228,7 @@
       </div>
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
-        若勾選「顯示全部被過濾項目」，<span class="text-down">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
+        若勾選「顯示全部被過濾項目」，<span class="text-up">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
         <br><span class="text-muted">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
       </details>
       <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
@@ -408,7 +408,7 @@
     <div class="page" id="page-datachannels">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。
-        若某個通道顯示 <span class="text-down">🔴 異常</span>，表示連線失敗或資料缺失，需立即檢查。
+        若某個通道顯示 <span class="text-danger">🔴 異常</span>，表示連線失敗或資料缺失，需立即檢查。
         <span class="text-warn">🟡 待更新</span> 表示資料超過 24 小時未刷新，<span class="text-muted">🔵 正常延遲</span> 則表示因週末／非交易日，延遲屬正常現象。
       </details>
       <div class="panel wide">
@@ -432,9 +432,9 @@
             <span class="text-muted text-sm" style="margin-left:8px">總通道</span>
           </div>
           <div class="flex" style="gap:16px;margin-top:8px">
-            <div class="text-sm"><span class="text-up">●</span> 正常 <span id="dcOkCount">-</span></div>
+            <div class="text-sm"><span class="text-success">●</span> 正常 <span id="dcOkCount">-</span></div>
             <div class="text-sm"><span class="text-warn">●</span> 異常 <span id="dcWarnCount">-</span></div>
-            <div class="text-sm"><span class="text-down">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
+            <div class="text-sm"><span class="text-warn">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
           </div>
         </div>
 

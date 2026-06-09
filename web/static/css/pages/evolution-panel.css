@@ -439,8 +439,8 @@
 .ev-legend-swatch.high { background: var(--up); }
 .ev-legend-swatch.mid { background: var(--warn); }
 .ev-legend-swatch.low { background: var(--muted); opacity: .4; }
-.ev-legend-swatch.good { background: var(--up); }
-.ev-legend-swatch.bad { background: var(--down); }
+.ev-legend-swatch.good { background: var(--color-success); }
+.ev-legend-swatch.bad { background: var(--color-danger); }
 .ev-legend-swatch.warn { background: var(--warn); }
 
 /* Experiment delta explanation */
@@ -480,9 +480,9 @@
   border-radius: 4px;
   background: var(--panel);
 }
-.ev-quad.good { border-left: 2px solid var(--up); }
+.ev-quad.good { border-left: 2px solid var(--color-success); }
 .ev-quad.warn { border-left: 2px solid var(--warn); }
-.ev-quad.bad { border-left: 2px solid var(--down); }
+.ev-quad.bad { border-left: 2px solid var(--color-danger); }
 
 /* Trend Summary */
 .ev-trend-summary {

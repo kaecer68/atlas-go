@@ -135,47 +135,47 @@ export function openKpiHelp(key) {
 <tr><td>③ 與 ② 差距過大（>1 天）</td><td>模擬任務阻塞或佇列積壓</td><td>檢查 taskexec 管理器是否有卡住任務</td></tr>
 </tbody>
 </table>`,
-    cm_spx: `<p><strong>這是什麼？</strong><br>S&P 500 指數，覆蓋美國 500 家大型企業的市值加權指數，被視為美國整體股市表現的基準。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝當日漲幅 ≥ 0、<span class="text-down">紅色</span>＝當日跌幅。數值旁顯示的是即時點位（last price）。</p>
+     cm_spx: `<p><strong>這是什麼？</strong><br>S&P 500 指數，覆蓋美國 500 家大型企業的市值加權指數，被視為美國整體股市表現的基準。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝當日漲幅 ≥ 0、<span class="text-success">綠色</span>＝當日跌幅。數值旁顯示的是即時點位（last price）。<br>（本系統遵循台股紅漲綠跌慣例。）</p>
 <p><strong>該注意什麼？</strong><br>S&P 500 與台股加權指數（TWSE）有 0.4–0.6 的滾動相關性。若 SPX 單日跌幅 &gt; 1.5%，隔日台股開盤常見 0.5–1% 的補跌壓力。請同步檢視【動態相關性】表格的 ρ 值，若 ρ &gt; 0.7 警示傳導效應已放大。</p>`,
-    cm_ndx: `<p><strong>這是什麼？</strong><br>Nasdaq 指數（NASDAQ-100），由納斯達克交易所上市的 100 家最大非金融類公司組成，科技股權重高。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝當日上漲、<span class="text-down">紅色</span>＝當日下跌。對台股的傳導集中在半導體與 AI 概念股。</p>
+     cm_ndx: `<p><strong>這是什麼？</strong><br>Nasdaq 指數（NASDAQ-100），由納斯達克交易所上市的 100 家最大非金融類公司組成，科技股權重高。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝當日上漲、<span class="text-success">綠色</span>＝當日下跌。對台股的傳導集中在半導體與 AI 概念股。</p>
 <p><strong>該注意什麼？</strong><br>NDX 對台股的影響主要透過台積電 ADR（TSM）。若 NDX 與 TSM ADR 同步下跌超過 1%，預期隔日台積電現貨有顯著負面反應。注意與 SOX 指數的同向性，作為「半導體週期」領先指標。</p>`,
-    cm_dji: `<p><strong>這是什麼？</strong><br>道瓊工業指數（Dow Jones Industrial Average），由 30 家美國藍籌股組成，價格加權指數。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝當日上漲、<span class="text-down">紅色</span>＝當日下跌。DJI 偏重傳產、金融、工業，對台股塑膠、紡織、航運等傳產股有間接傳導。</p>
+     cm_dji: `<p><strong>這是什麼？</strong><br>道瓊工業指數（Dow Jones Industrial Average），由 30 家美國藍籌股組成，價格加權指數。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝當日上漲、<span class="text-success">綠色</span>＝當日下跌。DJI 偏重傳產、金融、工業，對台股塑膠、紡織、航運等傳產股有間接傳導。</p>
 <p><strong>該注意什麼？</strong><br>DJI 對台股的傳導較 SPX/NDX 弱（相關性通常 0.3–0.5），但若 DJI 大跌常反映總體景氣轉弱訊號，應同步檢視 DXY 與 US 10Y 殖利率變化以判斷是否為「risk-off」環境。</p>`,
-    cm_sox: `<p><strong>這是什麼？</strong><br>費城半導體指數（PHLX Semiconductor Index, SOX），追蹤 30 家半導體設計、製造、設備公司的股價，被視為全球半導體景氣的領先指標。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝半導體類股上漲、<span class="text-down">紅色</span>＝下跌。SOX 對台股的傳導最強（台股加權指數約 65% 與半導體相關）。</p>
+     cm_sox: `<p><strong>這是什麼？</strong><br>費城半導體指數（PHLX Semiconductor Index, SOX），追蹤 30 家半導體設計、製造、設備公司的股價，被視為全球半導體景氣的領先指標。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝半導體類股上漲、<span class="text-success">綠色</span>＝下跌。SOX 對台股的傳導最強（台股加權指數約 65% 與半導體相關）。</p>
 <p><strong>該注意什麼？</strong><br>SOX 與台股加權的滾動相關性常達 0.7 以上，是判斷台股半導體族群強弱的最重要外部參考。若 SOX 單週跌幅 &gt; 3%，且 NDX、TSM ADR 同步走弱，建議降低半導體持倉比重並啟動更嚴格的個股風控。</p>`,
-    cm_nvda: `<p><strong>這是什麼？</strong><br>NVIDIA Corporation 股價。GPU 龍頭，AI 晶片需求核心受惠者，也是費城半導體指數最大權值股之一。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝上漲、<span class="text-down">紅色</span>＝下跌。對台股的傳導鏈：NVDA → 供應鏈（台積電、ABF 載板、CoWoS 設備）→ 台股加權指數。</p>
+     cm_nvda: `<p><strong>這是什麼？</strong><br>NVIDIA Corporation 股價。GPU 龍頭，AI 晶片需求核心受惠者，也是費城半導體指數最大權值股之一。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝上漲、<span class="text-success">綠色</span>＝下跌。對台股的傳導鏈：NVDA → 供應鏈（台積電、ABF 載板、CoWoS 設備）→ 台股加權指數。</p>
 <p><strong>該注意什麼？</strong><br>NVDA 對台積電的營收與股價有 1–2 個月的領先性。當 NVDA 月線跌破 -10%，常預示台積電下季展望下修風險。注意 NVDA 與 TSM ADR 的價差/比值變化，可作為套利與避險參考。</p>`,
-    cm_aapl: `<p><strong>這是什麼？</strong><br>Apple Inc. 股價。全球最大市值公司之一，產品線涵蓋 iPhone、Mac、服務。對台股的傳導集中在 PCB、組裝、相機模組供應鏈。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝上漲、<span class="text-down">紅色</span>＝下跌。AAPL 對台股的傳導鏈：AAPL 銷售 → 鴻海/和碩/大立光/玉晶光 → 台股消費電子族群。</p>
+     cm_aapl: `<p><strong>這是什麼？</strong><br>Apple Inc. 股價。全球最大市值公司之一，產品線涵蓋 iPhone、Mac、服務。對台股的傳導集中在 PCB、組裝、相機模組供應鏈。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝上漲、<span class="text-success">綠色</span>＝下跌。AAPL 對台股的傳導鏈：AAPL 銷售 → 鴻海/和碩/大立光/玉晶光 → 台股消費電子族群。</p>
 <p><strong>該注意什麼？</strong><br>AAPL 財報週（每年 1/4/7/10 月）前後 5 個交易日，台股蘋果供應鏈波動放大。當 AAPL 跌破 200 日均線且月線連 2 黑，需重新評估台股蘋概股持倉。</p>`,
-    cm_msft: `<p><strong>這是什麼？</strong><br>Microsoft Corporation 股價。雲端（Azure）與企業軟體龍頭。對台股的傳導主要在 AI 伺服器供應鏈（緯創、廣達、英業達）。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝上漲、<span class="text-down">紅色</span>＝下跌。MSFT 資本支出指引是台股 AI 伺服器族群最重要的領先指標。</p>
+     cm_msft: `<p><strong>這是什麼？</strong><br>Microsoft Corporation 股價。雲端（Azure）與企業軟體龍頭。對台股的傳導主要在 AI 伺服器供應鏈（緯創、廣達、英業達）。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝上漲、<span class="text-success">綠色</span>＝下跌。MSFT 資本支出指引是台股 AI 伺服器族群最重要的領先指標。</p>
 <p><strong>該注意什麼？</strong><br>MSFT 季報中 Azure 營收增速若 &lt; 30% YoY，常引發 AI 伺服器供應鏈評價修正。當 MSFT 與 NVDA 同步走弱，是 AI 敘事退潮的早期訊號，建議啟動 AI 概念股風控（Darwinian 權重下修）。</p>`,
-    cm_tsm: `<p><strong>這是什麼？</strong><br>台積電 ADR（TSM）在紐約交易所的價格，代表台積電在美國市場的估值。1 ADR = 5 股台股現貨。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝ADR 上漲、<span class="text-down">紅色</span>＝下跌。TSM ADR 對台股加權指數的傳導力最高（單一個股權重約 25-30%）。</p>
+     cm_tsm: `<p><strong>這是什麼？</strong><br>台積電 ADR（TSM）在紐約交易所的價格，代表台積電在美國市場的估值。1 ADR = 5 股台股現貨。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝ADR 上漲、<span class="text-success">綠色</span>＝下跌。TSM ADR 對台股加權指數的傳導力最高（單一個股權重約 25-30%）。</p>
 <p><strong>該注意什麼？</strong><br>TSM ADR 與台股 2330 現貨之間有 T+1 套利關係，但匯率與手續費會吃掉 0.3% 左右價差。當 TSM ADR 隔夜大跌 &gt; 2%，台積電現貨幾乎必定開低；建議在重大事件（如法說、Blackwell 量產）前降低 TSM 曝險。</p>`,
-    cm_vix: `<p><strong>這是什麼？</strong><br>CBOE 波動率指數（VIX），又稱「恐慌指數」，衡量 S&P 500 未來 30 天隱含波動率。市場預期波動越大，VIX 越高。</p>
-<p><strong>顏色意義：</strong><br>VIX 本身沒有漲跌顏色標記（中性指標）。但 VIX &lt; 15 視為<span class="text-up">市場冷靜</span>、&gt; 25 為<span class="text-warn">警戒</span>、&gt; 35 觸發<span class="text-down">危機模式</span>。</p>
+     cm_vix: `<p><strong>這是什麼？</strong><br>CBOE 波動率指數（VIX），又稱「恐慌指數」，衡量 S&P 500 未來 30 天隱含波動率。市場預期波動越大，VIX 越高。</p>
+<p><strong>顏色意義：</strong><br>VIX 本身沒有漲跌顏色標記（中性指標）。但 VIX &lt; 15 視為<span class="text-success">市場冷靜</span>、&gt; 25 為<span class="text-warn">警戒</span>、&gt; 35 觸發<span class="text-danger">危機模式</span>。</p>
 <p><strong>該注意什麼？</strong><br>VIX ≥ 35 時，系統自動觸發【危機模式】：電路熔斷器強制開啟、最佳化器協方差矩陣對角膨脹 1.5x、最大持倉比例減半。VIX 從 12 飆升到 25 以上通常預示單週內有重大事件，建議檢視避險部位並降低曝險。</p>`,
-    cm_dxy: `<p><strong>這是什麼？</strong><br>美元指數（DXY），衡量美元兌一籃子六種主要貨幣（EUR、JPY、GBP、CAD、SEK、CHF）的強弱。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝美元走強、<span class="text-down">紅色</span>＝美元走弱。對台股的影響：強美元 → 新興市場資金外流 → 台股壓力。</p>
+     cm_dxy: `<p><strong>這是什麼？</strong><br>美元指數（DXY），衡量美元兌一籃子六種主要貨幣（EUR、JPY、GBP、CAD、SEK、CHF）的強弱。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝美元走強、<span class="text-success">綠色</span>＝美元走弱。對台股的影響：強美元 → 新興市場資金外流 → 台股壓力。</p>
 <p><strong>該注意什麼？</strong><br>DXY 突破 105 視為「強勢美元」訊號，常伴隨美債殖利率走高與新興市場下修。當 DXY 與 US 10Y 同向走強，是全球資金回流美國的訊號，建議降低新興市場（含台股）曝險。DXY 與 USD/TWD 高度正相關，可交叉驗證。</p>`,
-    cm_usd_twd: `<p><strong>這是什麼？</strong><br>美元兌新台幣匯率（USD/TWD）。直接影響台股上市櫃公司（特別是外銷股）的匯兌損益與競爭力。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝台幣升值（數字變小）、<span class="text-down">紅色</span>＝台幣貶值（數字變大）。</p>
+     cm_usd_twd: `<p><strong>這是什麼？</strong><br>美元兌新台幣匯率（USD/TWD）。直接影響台股上市櫃公司（特別是外銷股）的匯兌損益與競爭力。</p>
+<p><strong>顏色意義：</strong><br><span class="text-success">綠色</span>＝台幣升值（數字變小）、<span class="text-danger">紅色</span>＝台幣貶值（數字變大）。</p>
 <p><strong>該注意什麼？</strong><br>USD/TWD 快速突破 32.0 視為台幣貶值加速，外銷股（台積電、鴻海、出口導向電子）短期受惠但長期不利。央行通常會在 32.5 以上進場調節。當 USD/TWD 與 DXY 走勢分歧（亞幣集體走弱但台幣獨強），常預示央行干預。</p>`,
-    cm_us10y: `<p><strong>這是什麼？</strong><br>美國 10 年期公債殖利率，被視為「無風險利率」基準。影響全球資產估值（DCF 模型折現率）、股票本益比、與資金流向。</p>
-<p><strong>顏色意義：</strong><br><span class="text-up">綠色</span>＝殖利率上漲（債價下跌）、<span class="text-down">紅色</span>＝殖利率下跌（債價上漲）。對股市而言，殖利率上漲 = 估值壓力。</p>
+     cm_us10y: `<p><strong>這是什麼？</strong><br>美國 10 年期公債殖利率，被視為「無風險利率」基準。影響全球資產估值（DCF 模型折現率）、股票本益比、與資金流向。</p>
+<p><strong>顏色意義：</strong><br><span class="text-danger">紅色</span>＝殖利率上漲（債價下跌）、<span class="text-success">綠色</span>＝殖利率下跌（債價上漲）。對股市而言，殖利率上漲 = 估值壓力。</p>
 <p><strong>該注意什麼？</strong><br>US 10Y 突破 4.5% 通常對全球股市（尤其成長股）形成估值壓力。當 US 10Y 與 DXY 同步走強，是「risk-off」訊號；當 US 10Y 下跌但 DXY 走強（stagflation 訊號），成長股受壓最重。建議與 DXY 交叉解讀。</p>`,
-    cm_crisis: `<p><strong>這是什麼？</strong><br>危機信號是基於 VIX 指數閾值的全系統風險開關：</p>
+     cm_crisis: `<p><strong>這是什麼？</strong><br>危機信號是基於 VIX 指數閾值的全系統風險開關：</p>
 <ul style="margin:6px 0;padding-left:18px;line-height:1.8">
-<li><span class="text-up">綠燈</span>（正常模式）：VIX &lt; 25，系統以標準參數運作</li>
+<li><span class="text-success">綠燈</span>（正常模式）：VIX &lt; 25，系統以標準參數運作</li>
 <li><span class="text-warn">黃燈</span>（警戒模式）：25 ≤ VIX &lt; 35，系統自動降低最大持倉比例</li>
-<li><span class="text-down">紅燈</span>（危機模式）：VIX ≥ 35，電路熔斷器強制開啟、協方差矩陣對角膨脹 1.5x、最大持倉比例減半</li>
+<li><span class="text-danger">紅燈</span>（危機模式）：VIX ≥ 35，電路熔斷器強制開啟、協方差矩陣對角膨脹 1.5x、最大持倉比例減半</li>
 </ul>
 <p><strong>為什麼重要？</strong><br>危機模式是「系統最後防線」。即使所有 AI Agent 與控制層都同意某個高曝險建議，危機模式仍會以硬規則強制降倉，防止模型失效（model failure）導致災難性虧損。</p>
 <p><strong>該注意什麼？</strong><br>從綠燈直接跳到紅燈通常預示市場發生 shock event（央行緊急決策、地緣衝突、流動性危機）。VIX 從 35 快速回落至 25 以下後，需觀察 3 個交易日確認危機解除，避免過早解除風控。危機模式下，所有新增推薦都會被自動降低 conviction 30%。</p>`

@@ -86,7 +86,7 @@ export async function loadReasoningTrace(sessionId) {
     var html2 = renderSessionBar(sessions, sessionId);
     container.innerHTML = html2;
     timeline = document.getElementById('reasoningTraceTimeline');
-    if (timeline) timeline.innerHTML = '<div class="help-panel text-down">載入失敗: ' + escapeHtml(e.message) + '</div>';
+    if (timeline) timeline.innerHTML = '<div class="help-panel text-danger">載入失敗: ' + escapeHtml(e.message) + '</div>';
   }
 }
 

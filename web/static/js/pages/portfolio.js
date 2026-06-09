@@ -69,7 +69,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
       </div>
       <div class="kpi-card">
         <div class="kpi-label">累積稅負</div>
-        <div class="kpi-value text-down">${window.fmtNTD ? window.fmtNTD(totalTaxPaid) : totalTaxPaid.toFixed(0)}</div>
+        <div class="kpi-value text-danger">${window.fmtNTD ? window.fmtNTD(totalTaxPaid) : totalTaxPaid.toFixed(0)}</div>
         <div class="kpi-hint">持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '-'}</div>
       </div>
       <div class="kpi-card">
@@ -84,7 +84,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
       </div>
       <div class="kpi-card">
         <div class="kpi-label">最大回撤</div>
-        <div class="kpi-value text-down">${window.fmtPct ? window.fmtPct(currentDrawdown) : (currentDrawdown * 100).toFixed(2) + '%'}</div>
+        <div class="kpi-value text-danger">${window.fmtPct ? window.fmtPct(currentDrawdown) : (currentDrawdown * 100).toFixed(2) + '%'}</div>
         <div class="kpi-hint">歷史最大回撤</div>
       </div>
     `;

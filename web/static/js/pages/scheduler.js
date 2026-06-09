@@ -58,7 +58,7 @@ export function renderSchedulerPage(tasks, getJSON) {
         '<span class="text-muted text-sm" style="margin-left:8px">總任務</span>' +
       '</div>' +
       '<div class="flex" style="gap:16px;margin-top:8px">' +
-        '<div class="text-sm"><span class="text-up">●</span> 正常 <span>' + ok + '</span></div>' +
+        '<div class="text-sm"><span class="text-success">●</span> 正常 <span>' + ok + '</span></div>' +
         '<div class="text-sm"><span class="text-warn">●</span> 異常 <span>' + err + '</span></div>' +
         '<div class="text-sm"><span class="text-muted">●</span> 已停用 <span>' + disabled + '</span></div>' +
       '</div>' +

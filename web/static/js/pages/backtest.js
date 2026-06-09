@@ -176,12 +176,12 @@ export async function pollBacktestStatus() {
       if (!st.running) {
         if (st.error) {
           statusEl.textContent = '失敗';
-          detailEl.innerHTML = `<span class="text-down">錯誤：${escapeHtml(st.error)}</span>`;
+          detailEl.innerHTML = `<span class="text-danger">錯誤：${escapeHtml(st.error)}</span>`;
           notify('回測執行失敗: ' + st.error, 'err');
         } else {
           const totalElapsed = Math.round((Date.now() - startTime) / 1000);
           statusEl.textContent = '完成';
-          detailEl.innerHTML = `<span class="text-up">完成：window ${escapeHtml(st.window_id || '')} · sessions ${st.sessions || 0} · outcomes ${st.outcomes || 0}（耗時 ${totalElapsed} 秒）</span>`;
+          detailEl.innerHTML = `<span class="text-success">完成：window ${escapeHtml(st.window_id || '')} · sessions ${st.sessions || 0} · outcomes ${st.outcomes || 0}（耗時 ${totalElapsed} 秒）</span>`;
           notify('回測已完成', 'info');
           await renderBacktestReport();
         }
