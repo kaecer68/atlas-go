@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
@@ -18,6 +19,7 @@ type ScenarioResult struct {
 	TotalReturn            float64
 	MaxDrawdown            float64
 	SharpeRatio            float64
+	SortinoRatio           float64
 	VaR95                  float64
 	TradeCount             int
 	FinalRegime            domain.Regime
@@ -130,6 +132,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 
 	mdd, troughDay := maxDrawdown(values)
 	sharpe := sharpeRatio(values)
+	sortino := sortinoRatio(values)
 	vaR95 := historicalVaR(values, 0.95)
 	recovery := recoveryDays(values, troughDay)
 	consecutive := maxConsecutiveLossDays(values)
@@ -142,6 +145,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 		TotalReturn:            totalRet,
 		MaxDrawdown:            mdd,
 		SharpeRatio:            sharpe,
+		SortinoRatio:           sortino,
 		VaR95:                  vaR95,
 		TradeCount:             len(recs),
 		FinalRegime:            scenario.Regime,
@@ -193,13 +197,14 @@ func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) Scenar
 	}
 	mdd, troughDay := maxDrawdown(values)
 	sharpe := sharpeRatio(values)
+	sortino := sortinoRatio(values)
 	vaR95 := historicalVaR(values, 0.95)
 	recovery := recoveryDays(values, troughDay)
 	consecutive := maxConsecutiveLossDays(values)
 	totalRet := values[W] - 1.0
 	return ScenarioResult{
 		ScenarioID: scenario.ID, ScenarioName: scenario.Name, TotalReturn: totalRet,
-		MaxDrawdown: mdd, SharpeRatio: sharpe, VaR95: vaR95, TradeCount: 0,
+		MaxDrawdown: mdd, SharpeRatio: sharpe, SortinoRatio: sortino, VaR95: vaR95, TradeCount: 0,
 		FinalRegime: scenario.Regime, MomentumDisabled: vix > 30,
 		RecoveryDays: recovery, MaxConsecutiveLossDays: consecutive, DailyValues: values,
 	}
@@ -284,6 +289,20 @@ func sharpeRatio(values []float64) float64 {
 	}
 	return portfolio.ComputeSharpe(returns, portfolio.SharpeConfig{
 		Frequency:  portfolio.FrequencyPerDay,
+		MinSamples: 2,
+	})
+}
+
+func sortinoRatio(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	returns := make([]float64, len(values)-1)
+	for i := 1; i < len(values); i++ {
+		returns[i-1] = (values[i] - values[i-1]) / values[i-1]
+	}
+	return shared.ComputeSortino(returns, shared.SortinoConfig{
+		Frequency:  shared.FrequencyPerDay,
 		MinSamples: 2,
 	})
 }

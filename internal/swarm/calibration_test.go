@@ -277,6 +277,16 @@ func TestComputeStatsFromFish(t *testing.T) {
 		t.Error("expected non-zero Sharpe ratio")
 	}
 
+	t.Run("Sharpe computed via shared function", func(t *testing.T) {
+		// Verify shared.ComputeSharpe produced a valid (non-NaN, non-zero) Sharpe ratio.
+		if math.IsNaN(stats.SharpeRatio) {
+			t.Error("expected valid Sharpe ratio from shared.ComputeSharpe, got NaN")
+		}
+		if stats.SharpeRatio == 0 {
+			t.Error("expected non-zero Sharpe ratio from shared.ComputeSharpe")
+		}
+	})
+
 	t.Run("empty fish returns zero stats", func(t *testing.T) {
 		stats := computeStatsFromFish(nil)
 		if stats.Volatility != 0 {
