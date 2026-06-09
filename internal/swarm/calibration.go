@@ -3,6 +3,8 @@ package swarm
 import (
 	"math"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 // SimulationStatistics holds aggregate statistics computed from simulated price paths.
@@ -80,11 +82,11 @@ func computeStatsFromFish(fish []*MiroFish) SimulationStatistics {
 	// Max drawdown from aggregated PnL path.
 	maxDD := computeMaxDrawdownFromFish(fish)
 
-	// Sharpe ratio: use mean return over volatility, annualized assuming daily steps.
-	sharpe := 0.0
-	if vol > 1e-12 {
-		sharpe = mean / vol * math.Sqrt(252.0)
-	}
+	// Sharpe ratio via canonical shared function.
+	sharpe := shared.ComputeSharpe(allReturns, shared.SharpeConfig{
+		Frequency:  shared.FrequencyPerDay,
+		MinSamples: 2,
+	})
 
 	// Cross-asset correlation matrix.
 	corrMatrix := computeCorrelationMatrix(symbolReturns)
