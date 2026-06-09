@@ -183,6 +183,17 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **職責**：提供歷史價格與基本面資料，用於 FactorEngine 的因子計算。
 - **主要檔案**：`historical_prices.go`、`fundamental_loader.go`
 
+#### 10.1 Corporate Action Adjustment (P1-2-β)
+- `AdjustForCorporateActions(actions []domain.CorporateAction) error`: 對歷史價格進行除權息/減資的向後調整。運算為冪等（調用兩次結果一致）。
+- `ActionEffects(symbol string) []shared.ActionEffect`: 回傳已套用的調整清單供下游（FactorEngine、reporters）使用。
+- **調整因子計算**：
+  - ReferencePrice > 0: factor = ReferencePrice / postEventRawPrice（優先）
+  - CashDividend > 0: factor = (postEventPrice - CashDividend) / postEventPrice
+  - StockDividend > 0: factor = (10.0 - StockDividend) / 10.0（面額 10 元）
+  - CapitalReductionRatio > 0: factor = 1.0 - CapitalReductionRatio
+- **冪等性**: 偵測 pre-event price 已符合調整後數值時跳過。
+- **行動排序**: caller 負責按 ExDate 升序排序；未知 symbol 靜默忽略。
+
 ### 11. Conviction Normalizer & Regime/Style (信念正規化)
 - **Conviction Normalizer**：將不同來源的信念分數正規化至統一尺度。
 - **Regime/Style**：市場體制識別 (Bull/Bear/Neutral/HighVol) 與風格標籤 (Growth/Value/Quality)。

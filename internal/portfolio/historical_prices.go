@@ -1,5 +1,6 @@
-// Package-internal note: prices in HistoricalPrices are RAW and UNADJUSTED for
-// corporate actions (cash dividends, stock splits, capital reductions).
+// Package-internal note: prices in HistoricalPrices are stored RAW and
+// UNADJUSTED by default. Call AdjustForCorporateActions to backward-adjust
+// historical prices for dividends, stock splits, and capital reductions.
 //
 // Implications for downstream consumers:
 //   - MomentumReturn (and any other simple price-difference return) UNDERSTATES
@@ -9,18 +10,15 @@
 //   - Sharpe and other risk-adjusted metrics that depend on mean/stddev of
 //     returns inherit this bias.
 //
-// The full fix — corporate-action adjustment via
-// AdjustForCorporateActions(actions []CorporateAction) error — is tracked
-// across two follow-up iterations:
-//   - P1-2-α (this branch, wt/p1-2a-domain-provider): the `CorporateAction`
-//     canonical type is now landed at `internal/domain/corporate_action.go`
-//     and the upstream provider integration is at
-//     `internal/marketdata.AggregatedCorporateActionProvider`.
-//   - P1-2-β (branch wt/p1-2b-adjust-algorithm): implements the
-//     `AdjustForCorporateActions` algorithm consuming the type above.
+// AdjustForCorporateActions (landed β): backward-adjusts pre-event prices
+// using TWSE-published ReferencePrice when available, falling back to cash
+// dividend, stock dividend, and capital reduction fields. The operation is
+// idempotent. Call ActionEffects(symbol) to retrieve the list of applied
+// adjustments.
 //
-// Until β lands, callers MUST treat these returns as PRICE-ONLY, not
-// total-return.
+// Historical:
+//   - P1-2-α: CorporateAction domain type and upstream provider integration.
+//   - P1-2-β: AdjustForCorporateActions algorithm (this branch).
 package portfolio
 
 import (
@@ -31,11 +29,15 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 // HistoricalPrices stores closing prices by symbol and date.
 type HistoricalPrices struct {
-	prices map[string][]pricePoint // symbol -> sorted by date
+	prices  map[string][]pricePoint          // symbol -> sorted by date
+	effects map[string][]shared.ActionEffect // symbol -> applied adjustments
 }
 
 type pricePoint struct {
@@ -46,7 +48,8 @@ type pricePoint struct {
 // NewHistoricalPrices creates an empty repository.
 func NewHistoricalPrices() *HistoricalPrices {
 	return &HistoricalPrices{
-		prices: make(map[string][]pricePoint),
+		prices:  make(map[string][]pricePoint),
+		effects: make(map[string][]shared.ActionEffect),
 	}
 }
 
@@ -128,6 +131,114 @@ func (hp *HistoricalPrices) MomentumReturn(symbol string, days int) float64 {
 		return 0
 	}
 	return latest/past - 1
+}
+
+// AdjustForCorporateActions rewrites the internal price points so that all
+// prices BEFORE each corporate action are backward-adjusted.
+//
+// The implementation is idempotent (calling twice produces the same result).
+// Returns nil if no actions are supplied (no-op).
+//
+// actions must be sorted by ExDate ascending; caller is responsible.
+// actions must be for symbols present in the HistoricalPrices instance;
+// unknown symbols are silently ignored.
+func (hp *HistoricalPrices) AdjustForCorporateActions(actions []domain.CorporateAction) error {
+	if len(actions) == 0 {
+		return nil
+	}
+	for _, action := range actions {
+		pts, ok := hp.prices[action.Symbol]
+		if !ok {
+			continue
+		}
+		splitIdx := -1
+		for i, p := range pts {
+			if !p.Date.Before(action.ExDate) {
+				splitIdx = i
+				break
+			}
+		}
+		if splitIdx <= 0 {
+			continue
+		}
+		postEventPrice := pts[splitIdx].Close
+		if postEventPrice <= 0 {
+			return fmt.Errorf("adjust corporate actions: symbol %s post-event price at %s is %f (non-positive)",
+				action.Symbol, action.ExDate.Format("2006-01-02"), postEventPrice)
+		}
+		factor, err := computeBackwardAdjustmentFactor(action, postEventPrice)
+		if err != nil {
+			return fmt.Errorf("adjust corporate actions: symbol %s: %w", action.Symbol, err)
+		}
+		if factor <= 0 {
+			return fmt.Errorf("adjust corporate actions: symbol %s computed adjustment factor %f is non-positive",
+				action.Symbol, factor)
+		}
+		if math.Abs(pts[splitIdx-1].Close-postEventPrice*factor) < 1e-9 {
+			continue
+		}
+		for i := 0; i < splitIdx; i++ {
+			hp.prices[action.Symbol][i].Close *= factor
+		}
+		hp.recordEffect(action, factor)
+	}
+	return nil
+}
+
+// computeBackwardAdjustmentFactor returns the multiplier for pre-event prices.
+// ReferencePrice > 0: factor = ReferencePrice / postEventRawPrice
+// ReferencePrice == 0: factor derived from cash/stock/reduction fields.
+func computeBackwardAdjustmentFactor(action domain.CorporateAction, postEventRawPrice float64) (float64, error) {
+	if action.ReferencePrice > 0 {
+		return action.ReferencePrice / postEventRawPrice, nil
+	}
+	factor := 1.0
+	if action.CashDividend > 0 {
+		subFactor := (postEventRawPrice - action.CashDividend) / postEventRawPrice
+		if subFactor <= 0 {
+			return 0, fmt.Errorf("cash dividend %f exceeds post-event price %f", action.CashDividend, postEventRawPrice)
+		}
+		factor *= subFactor
+	}
+	if action.StockDividend > 0 {
+		subFactor := (10.0 - action.StockDividend) / 10.0
+		factor *= subFactor
+	}
+	if action.CapitalReductionRatio > 0 {
+		subFactor := 1.0 - action.CapitalReductionRatio
+		factor *= subFactor
+	}
+	return factor, nil
+}
+
+func adjustTypeFromAction(action domain.CorporateAction) shared.AdjustType {
+	if action.CashDividend > 0 {
+		return shared.AdjustCashDividend
+	}
+	if action.StockDividend > 0 {
+		return shared.AdjustStockDividend
+	}
+	if action.CapitalReductionRatio > 0 {
+		return shared.AdjustCapitalReduction
+	}
+	return shared.AdjustCashDividend
+}
+
+func (hp *HistoricalPrices) recordEffect(action domain.CorporateAction, factor float64) {
+	eff := shared.ActionEffect{
+		Type:       adjustTypeFromAction(action),
+		ExDate:     action.ExDate,
+		Adjustment: factor,
+	}
+	hp.effects[action.Symbol] = append(hp.effects[action.Symbol], eff)
+}
+
+// ActionEffects returns the list of corporate actions as ActionEffect records
+// for downstream consumers (FactorEngine, reporters).
+// The Adjustment field is the cumulative backward adjustment factor for
+// pre-event prices (1.0 means no adjustment).
+func (hp *HistoricalPrices) ActionEffects(symbol string) []shared.ActionEffect {
+	return hp.effects[symbol]
 }
 
 // Volatility computes the standard deviation of daily returns over the last N days.
