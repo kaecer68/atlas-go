@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -638,6 +639,130 @@ func TestMaxDrawdownSignConversion(t *testing.T) {
 	}
 	if dd > 1.0 {
 		t.Errorf("eval.MaxDrawdown should be <= 1.0 for reasonable inputs, got %f", dd)
+	}
+}
+
+// TestEvaluateNoDrawdownSpikeGateRunsOOSBeforePassesAcceptance verifies that
+// OOS validation runs BEFORE passesAcceptance, so the no_drawdown_spike gate
+// can inspect the populated OOSResult.
+// Before fix: OOSResult is nil (OOS runs only if passesAcceptance returns true).
+// After fix: OOSResult is populated (OOS runs unconditionally before passesAcceptance).
+func TestEvaluateNoDrawdownSpikeGateRunsOOSBeforePassesAcceptance(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	root := filepath.Clean(filepath.Join(wd, "../.."))
+	stateDir := t.TempDir()
+	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
+	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))
+	resultPath := filepath.Join(stateDir, "experiments", "test-ood-reorder.json")
+	promptPath := filepath.Join(t.TempDir(), "v2.md")
+	baselinePromptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
+	windowPath := filepath.Join(stateDir, "windows", "window-ood-reorder.json")
+
+	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
+		t.Fatalf("mkdir prompt dir: %v", err)
+	}
+	if err := os.WriteFile(promptPath, []byte("require trend confirmation\ndowngrade conviction\nreject setups\n"), 0o644); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(resultPath), 0o755); err != nil {
+		t.Fatalf("mkdir result dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(windowPath), 0o755); err != nil {
+		t.Fatalf("mkdir window dir: %v", err)
+	}
+
+	window := domain.BacktestWindowSummary{
+		WindowID:             "window-ood-reorder",
+		StartDate:            time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC),
+		EndDate:              time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC),
+		WorstAgentSharpeLike: -100,
+	}
+	windowBytes, err := json.Marshal(window)
+	if err != nil {
+		t.Fatalf("marshal window: %v", err)
+	}
+	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
+		t.Fatalf("write window: %v", err)
+	}
+
+	resultFixture := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			ID:               "test-ood-reorder",
+			TargetAgentID:    "growth-momentum-01",
+			Skill:            "growth_momentum",
+			MutationType:     "prompt_tightening",
+			AcceptanceMetric: "sharpe_like",
+			AcceptanceGates:  []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_drawdown_spike", "no_constraint_bypass"},
+			Status:           domain.ExperimentRunning,
+		},
+		Brief: domain.MutationBrief{
+			WindowID:            "window-ood-reorder",
+			TargetAgentID:       "growth-momentum-01",
+			TargetSkill:         "growth_momentum",
+			TargetLayer:         domain.LayerStyle,
+			PromptFile:          baselinePromptPath,
+			MutationType:        "prompt_tightening",
+			AcceptanceMetric:    "sharpe_like",
+			AcceptanceGates:     []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_drawdown_spike", "no_constraint_bypass"},
+			ForbiddenActions:    []string{"illiquid_breakout_chasing"},
+			RequiredSkills:      []string{"growth_momentum"},
+			ObservedWindowCount: 2,
+			MaturityLevel:       "level_1_exploratory",
+		},
+		CandidatePrompt: promptPath,
+		EvaluationMode:  "policy_checked_pending_replay",
+		PolicyChecks:    []string{"required skill preserved: growth_momentum"},
+	}
+	resultBytes, err := json.Marshal(resultFixture)
+	if err != nil {
+		t.Fatalf("marshal result fixture: %v", err)
+	}
+	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
+		t.Fatalf("write result fixture: %v", err)
+	}
+
+	result, err := judge.Evaluate(resultPath)
+	if err != nil {
+		t.Fatalf("judge evaluate: %v", err)
+	}
+
+	if result.OOSResult == nil {
+		t.Fatal("Evaluate did not populate OOSResult — OOS validation must run before passesAcceptance")
+	}
+}
+
+// TestNoDrawdownSpikeGateRejectsWhenOOSFails verifies the gate logic itself:
+// the no_drawdown_spike gate in passesAcceptance rejects the experiment when
+// OOSResult is populated with Passed=false.
+func TestNoDrawdownSpikeGateRejectsWhenOOSFails(t *testing.T) {
+	result := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			AcceptanceGates: []string{"improve_sharpe_like", "no_drawdown_spike"},
+			BaselineValue:   0.0100,
+			CandidateValue:  0.0150,
+			MutationType:    "prompt_tightening",
+		},
+		Brief: domain.MutationBrief{
+			MaturityLevel: "level_1_exploratory",
+		},
+		BaselineObservations:  5,
+		CandidateObservations: 5,
+		JudgeChecks:           []string{"a", "b"},
+		OOSResult: &domain.OOSResult{
+			Passed: false,
+			Reason: "OOS drawdown spike detected",
+		},
+	}
+
+	accepted, note := testJudge().passesAcceptance(result)
+	if accepted {
+		t.Fatal("expected no_drawdown_spike to reject when OOSResult.Passed=false")
+	}
+	if !strings.Contains(note, "rejected") {
+		t.Fatalf("expected rejection note, got: %s", note)
 	}
 }
 

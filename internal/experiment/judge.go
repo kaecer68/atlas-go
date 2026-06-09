@@ -169,16 +169,17 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	}
 	result.JudgeChecks = checks
 
+	// OOS validation: run BEFORE passesAcceptance so the no_drawdown_spike
+	// gate can inspect the populated OOSResult rather than always seeing nil.
+	oosResult, oosErr := j.oosValidator.ValidateWithBrief(candidatePromptPath, j.baselinePath, result.Brief, windowSummary.EndDate)
+	result.OOSResult = oosResult
+
 	accepted, acceptanceNote := j.passesAcceptance(result)
 	result.JudgeChecks = append(result.JudgeChecks, acceptanceNote)
 	if result.Experiment.ApprovalID == "" {
 		result.Experiment.ApprovalID = "approval-" + result.Experiment.ID
 	}
 	if accepted {
-		// OOS validation: hard gate after passesAcceptance().
-		// Run on the window immediately following the primary backtest window.
-		oosResult, oosErr := j.oosValidator.ValidateWithBrief(candidatePromptPath, j.baselinePath, result.Brief, windowSummary.EndDate)
-		result.OOSResult = oosResult
 		if oosErr != nil {
 			// OOS validation error — reject conservatively.
 			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
