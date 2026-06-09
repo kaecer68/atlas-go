@@ -22,9 +22,10 @@ type AutoExperimentMonitor interface {
 }
 
 type AutoExperimentConfig struct {
-	System  *orchestrator.System
-	Config  config.Config
-	Monitor AutoExperimentMonitor
+	System   *orchestrator.System
+	Config   config.Config
+	Monitor  AutoExperimentMonitor
+	Promoter *AutoJudgePromoter
 }
 
 func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
@@ -123,14 +124,37 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 	}
 
 	if status == domain.ExperimentAccepted {
-		mgr := baseline.NewManager(cfg.Config.BaselinePolicyPath)
-		if _, err := mgr.PromoteResult(expPath); err != nil {
-			if cfg.Monitor != nil {
-				cfg.Monitor.Alert("error", "experiment",
-					fmt.Sprintf("promote failed: agent=%s err=%v", candidate.Agent.ID, err),
-					map[string]any{"agent": candidate.Agent.ID, "error": err.Error()})
+		if cfg.Promoter != nil {
+			promoted, note, err := cfg.Promoter.TryPromoteFromPath(expPath)
+			if err != nil {
+				if cfg.Monitor != nil {
+					cfg.Monitor.Alert("error", "experiment",
+						fmt.Sprintf("promote failed: agent=%s err=%v", candidate.Agent.ID, err),
+						map[string]any{"agent": candidate.Agent.ID, "error": err.Error()})
+				}
+				return fmt.Errorf("promote result: %w", err)
 			}
-			return fmt.Errorf("promote result: %w", err)
+			if !promoted {
+				logging.Info("experiment", "promote_deferred",
+					"agent", candidate.Agent.ID,
+					"reason", note)
+				if cfg.Monitor != nil {
+					cfg.Monitor.Alert("info", "experiment",
+						fmt.Sprintf("promote deferred: agent=%s reason=%s", candidate.Agent.ID, note),
+						map[string]any{"agent": candidate.Agent.ID, "reason": note})
+				}
+				return nil
+			}
+		} else {
+			mgr := baseline.NewManager(cfg.Config.BaselinePolicyPath)
+			if _, err := mgr.PromoteResult(expPath); err != nil {
+				if cfg.Monitor != nil {
+					cfg.Monitor.Alert("error", "experiment",
+						fmt.Sprintf("promote failed: agent=%s err=%v", candidate.Agent.ID, err),
+						map[string]any{"agent": candidate.Agent.ID, "error": err.Error()})
+				}
+				return fmt.Errorf("promote result: %w", err)
+			}
 		}
 		if cfg.Monitor != nil {
 			cfg.Monitor.Alert("info", "experiment",

@@ -180,9 +180,34 @@ func (p *AutoJudgePromoter) autoPromote(result experiment.PromptExperimentResult
 }
 
 func (p *AutoJudgePromoter) autoRevert(result experiment.PromptExperimentResult, reason string) {
-	logging.Info("auto_judge", "revert_intent",
-		"experiment_id", result.Experiment.ID,
-		"reason", reason)
+	if p.baselineMgr == nil {
+		logging.Warn("auto_judge", "revert_skipped",
+			"experiment_id", result.Experiment.ID,
+			"reason", "baseline manager is nil")
+		return
+	}
+	if _, err := p.baselineMgr.Revert(baseline.RevertTarget{Type: baseline.RevertLast}, reason, false); err != nil {
+		logging.Error("auto_judge", "revert_failed",
+			"experiment_id", result.Experiment.ID,
+			"err", err)
+	}
+}
+
+// TryPromoteFromPath checks the 7-day auto-promote cooldown and promotes if allowed.
+// Returns (promoted bool, note string, error).
+func (p *AutoJudgePromoter) TryPromoteFromPath(expPath string) (bool, string, error) {
+	if p.baselineMgr == nil {
+		return false, "", fmt.Errorf("baseline manager is nil")
+	}
+	if time.Since(p.lastPromote) < p.promoteCooldown {
+		remaining := p.promoteCooldown - time.Since(p.lastPromote)
+		return false, fmt.Sprintf("cooldown active (%.1f hours remaining)", remaining.Hours()), nil
+	}
+	if _, err := p.baselineMgr.PromoteResult(expPath); err != nil {
+		return false, "", fmt.Errorf("promote: %w", err)
+	}
+	p.lastPromote = time.Now()
+	return true, "promoted", nil
 }
 
 func countPromoted(results []EvaluationResult) int {

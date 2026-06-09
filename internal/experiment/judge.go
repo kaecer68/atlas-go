@@ -169,16 +169,17 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	}
 	result.JudgeChecks = checks
 
+	// OOS validation: run BEFORE passesAcceptance so the no_drawdown_spike
+	// gate can inspect the populated OOSResult rather than always seeing nil.
+	oosResult, oosErr := j.oosValidator.ValidateWithBrief(candidatePromptPath, j.baselinePath, result.Brief, windowSummary.EndDate)
+	result.OOSResult = oosResult
+
 	accepted, acceptanceNote := j.passesAcceptance(result)
 	result.JudgeChecks = append(result.JudgeChecks, acceptanceNote)
 	if result.Experiment.ApprovalID == "" {
 		result.Experiment.ApprovalID = "approval-" + result.Experiment.ID
 	}
 	if accepted {
-		// OOS validation: hard gate after passesAcceptance().
-		// Run on the window immediately following the primary backtest window.
-		oosResult, oosErr := j.oosValidator.ValidateWithBrief(candidatePromptPath, j.baselinePath, result.Brief, windowSummary.EndDate)
-		result.OOSResult = oosResult
 		if oosErr != nil {
 			// OOS validation error — reject conservatively.
 			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
@@ -335,6 +336,14 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 	if j.maturityTracker != nil && j.maturityTracker.Current() == domain.MaturityBurnIn {
 		return false, fmt.Sprintf("rejected: burn_in mode (%d days until calibrating)",
 			j.maturityTracker.DaysUntil(domain.MaturityCalibrating))
+	}
+
+	// Fallback window gate: once the system has its own replay history, the
+	// fallback window can overlap the OOS window and contaminate the result.
+	// Permitted only while in burn-in (when no alternative data exists).
+	if result.UsedFallbackWindow && j.maturityTracker != nil &&
+		j.maturityTracker.Current() != domain.MaturityBurnIn {
+		return false, "rejected: experiment used fallback backtest window after burn-in; results may overlap OOS window"
 	}
 
 	gates := result.Experiment.AcceptanceGates

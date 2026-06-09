@@ -63,3 +63,23 @@
 
 實作位置: `internal/experiment/judge.go:405-411`
 預設值: `DrawdownProtectionRatio = 0.8`（見 `internal/config/parameters_defaults.go:602`）
+
+## Fallback Window Gate (UsedFallbackWindow)
+
+當實驗使用了 fallback backtest window（`result.UsedFallbackWindow == true`）時，會有資料洩漏風險：fallback 視窗可能與 OOS 視窗重疊，使得驗證結果被訓練資料污染。
+
+- **Burn-in 期間允許**：burn-in 階段系統尚無自有 replay 資料，必須使用 fallback。
+- **Burn-in 之後拒絕**：一旦系統進入 calibrating 或 full_auto 成熟度，fallback window 實驗一律拒絕。
+
+實作位置: `internal/experiment/judge.go:340-347`（緊接在 burn-in gate 之後）。
+這是**資料完整性 gate**，不接受「稍後手動審查」的替代方案。
+
+## OOS Gate Ordering (passesAcceptance vs OOSValidation)
+
+`Evaluate()` 內部的執行順序為：
+
+1. **OOS validation 先跑**（`runOOSValidation`）— 填入 `result.OOSResult`
+2. **OOS 硬失敗時直接拒絕**（error 或 !Passed）
+3. **才跑 `passesAcceptance()`** — 此時 `result.OOSResult` 已填，`no_drawdown_spike` gate 才能正確檢查
+
+若反過來（先 passesAcceptance 再 OOS），`no_drawdown_spike` gate 會看到 nil 的 `OOSResult`，形同關閉。**不可重排順序**。

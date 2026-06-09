@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -347,27 +348,10 @@ func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
 
 // CalculateSharpeRatio computes the annualized Sharpe ratio from daily returns.
 func CalculateSharpeRatio(dailyReturns []float64) float64 {
-	if len(dailyReturns) == 0 {
-		return 0
-	}
-	mean := 0.0
-	for _, r := range dailyReturns {
-		mean += r
-	}
-	mean /= float64(len(dailyReturns))
-
-	var variance float64
-	for _, r := range dailyReturns {
-		diff := r - mean
-		variance += diff * diff
-	}
-	variance /= float64(len(dailyReturns))
-	stdDev := math.Sqrt(variance)
-
-	if stdDev == 0 {
-		return 0
-	}
-	return (mean / stdDev) * math.Sqrt(252)
+	return portfolio.ComputeSharpe(dailyReturns, portfolio.SharpeConfig{
+		Frequency:  portfolio.FrequencyPerDay,
+		MinSamples: 2,
+	})
 }
 
 func calculateSortinoRatio(dailyReturns []float64, targetReturn float64) float64 {

@@ -755,25 +755,10 @@ func totalCost(orders []domain.Order) float64 {
 }
 
 func calculateSharpe(returns []float64) float64 {
-	if len(returns) < 60 {
-		return 0
-	}
-	mean := 0.0
-	for _, r := range returns {
-		mean += r
-	}
-	mean /= float64(len(returns))
-	variance := 0.0
-	for _, r := range returns {
-		diff := r - mean
-		variance += diff * diff
-	}
-	variance /= float64(len(returns) - 1)
-	std := math.Sqrt(variance)
-	if std == 0 {
-		return 0
-	}
-	return mean / std * math.Sqrt(252) // annualized
+	return portfolio.ComputeSharpe(returns, portfolio.SharpeConfig{
+		Frequency:  portfolio.FrequencyPerDay,
+		MinSamples: 60,
+	})
 }
 
 func applyBPS(price, bps float64) float64 {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 // ScenarioResult holds the simulation outcome for a single scenario.
@@ -272,28 +273,19 @@ func maxDrawdown(values []float64) (float64, int) {
 	return mdd, troughDay
 }
 
-// sharpeRatio computes annualized Sharpe from daily returns.
+// sharpeRatio computes annualized Sharpe from a price series.
 func sharpeRatio(values []float64) float64 {
 	if len(values) < 2 {
 		return 0
 	}
 	returns := make([]float64, len(values)-1)
-	sum := 0.0
 	for i := 1; i < len(values); i++ {
-		r := (values[i] - values[i-1]) / values[i-1]
-		returns[i-1] = r
-		sum += r
+		returns[i-1] = (values[i] - values[i-1]) / values[i-1]
 	}
-	mean := sum / float64(len(returns))
-	var ssq float64
-	for _, r := range returns {
-		ssq += (r - mean) * (r - mean)
-	}
-	std := math.Sqrt(ssq / float64(len(returns)))
-	if std < 1e-15 {
-		return 0
-	}
-	return (mean * 252) / (std * math.Sqrt(252))
+	return portfolio.ComputeSharpe(returns, portfolio.SharpeConfig{
+		Frequency:  portfolio.FrequencyPerDay,
+		MinSamples: 2,
+	})
 }
 
 // historicalVaR computes Value-at-Risk from the return distribution.
