@@ -35,22 +35,24 @@ technical_breakout`
 		t.Fatalf("write candidate prompt: %v", err)
 	}
 
-	baseline, candidate, err := comparePromptPerformance(replayPath, "", brief, window, candidatePath)
+	summary, err := comparePromptPerformanceDetailed(replayPath, "", brief, window, candidatePath)
 	if err != nil {
 		t.Fatalf("compare prompt performance: %v", err)
 	}
-	if candidate > 1 || baseline > 1 {
-		t.Fatalf("unexpected replay score magnitude, baseline=%f candidate=%f", baseline, candidate)
+	baselineScore := summary.BaselineScore
+	candidateScore := summary.CandidateScore
+	if candidateScore > 1 || baselineScore > 1 {
+		t.Fatalf("unexpected replay score magnitude, baseline=%f candidate=%f", baselineScore, candidateScore)
 	}
-	if baseline == 0 || candidate == 0 {
-		t.Fatalf("expected non-zero scores, baseline=%f candidate=%f", baseline, candidate)
+	if baselineScore == 0 || candidateScore == 0 {
+		t.Fatalf("expected non-zero scores, baseline=%f candidate=%f", baselineScore, candidateScore)
 	}
 	// Baseline and candidate may be equal when the sample replay data is too
 	// sparse for prompt differences to produce observable score deltas. This is
 	// expected with the 54-line samples/replay CSV. Real experiment comparison
 	// uses full ATLAS_REPLAY_DATA_PATH datasets with hundreds of observations.
-	if baseline == candidate {
-		t.Logf("baseline == candidate = %f (expected with sparse sample replay data)", baseline)
+	if baselineScore == candidateScore {
+		t.Logf("baseline == candidate = %f (expected with sparse sample replay data)", baselineScore)
 	}
 }
 

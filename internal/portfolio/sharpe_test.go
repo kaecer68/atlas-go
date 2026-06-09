@@ -3,6 +3,8 @@ package portfolio
 import (
 	"math"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 // TestComputeSharpe_PerOutcome_NoAnnualization verifies per-outcome mode
@@ -13,7 +15,7 @@ func TestComputeSharpe_PerOutcome_NoAnnualization(t *testing.T) {
 	returns := []float64{0.01, 0.02, -0.01, 0.03, -0.02, 0.01, 0.04, -0.01, 0.02, 0.01}
 	cfg := SharpeConfig{Frequency: FrequencyPerOutcome, MinSamples: 2}
 	got := ComputeSharpe(returns, cfg)
-	mean, stdDev := meanSampleVariance(returns)
+	mean, stdDev := shared.MeanSampleVariance(returns)
 	want := mean / stdDev
 	if math.Abs(got-want) > 1e-9 {
 		t.Fatalf("per-outcome Sharpe = %v, want %v (no annualization)", got, want)
@@ -30,7 +32,7 @@ func TestComputeSharpe_PerDay_Annualized(t *testing.T) {
 	}
 	cfg := SharpeConfig{Frequency: FrequencyPerDay, MinSamples: 60}
 	got := ComputeSharpe(returns, cfg)
-	mean, stdDev := meanSampleVariance(returns)
+	mean, stdDev := shared.MeanSampleVariance(returns)
 	want := (mean / stdDev) * math.Sqrt(252)
 	if math.Abs(got-want) > 1e-9 {
 		t.Fatalf("per-day Sharpe = %v, want %v (annualized)", got, want)
@@ -134,7 +136,7 @@ func TestComputeSharpeTWSEFrequency(t *testing.T) {
 // This is the convention both old implementations used.
 func TestMeanSampleVariance(t *testing.T) {
 	v := []float64{1, 2, 3, 4, 5}
-	m, sd := meanSampleVariance(v)
+	m, sd := shared.MeanSampleVariance(v)
 	if math.Abs(m-3.0) > 1e-9 {
 		t.Fatalf("mean = %v, want 3.0", m)
 	}
