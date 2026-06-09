@@ -26,7 +26,12 @@
      4. **`internal/web/field_types.go`** / **`valid_fields.json`** — `go generate` 自動同步
    - 遺漏任一環節會導致 OOS 欄位在 API response 中遺失或前端顯示 `undefined`。
 
-4. **禁止**：
+5. **純計算函式的歸屬**：
+   - 跨模組共用的純函式（如 Sharpe、Sortino、Calmar、Calmar-like、波動率等）應放在 `internal/domain/shared/` 子套件，並由各呼叫模組以 type alias re-export 維持向後相容。
+   - 範例：`shared.ComputeSharpe(returns, shared.SharpeConfig{Frequency: shared.FrequencyTWSE, RiskFreeRate: 0.015})`。
+   - `portfolio.ComputeSharpe` 為保留 API 的薄 wrapper（type alias），canonical 在 `shared`。若發現新的 duplicate 計算，請合併至 `shared/` 而非保留本地版本。
+
+5. **禁止**：
    - 禁止在 domain 中實作任何 I/O 或全域變數修改。
    - 禁止定義資料庫特定標籤（如 `gorm`）。
 

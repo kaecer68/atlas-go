@@ -96,6 +96,40 @@ func TestComputeSharpe_IEEEGuard(t *testing.T) {
 	}
 }
 
+// TestComputeSharpeWithRiskFreeRate verifies that a non-zero RiskFreeRate
+// reduces Sharpe and that rfr=0 preserves existing behavior.
+func TestComputeSharpeWithRiskFreeRate(t *testing.T) {
+	returns := []float64{0.01, 0.02, -0.01, 0.015, 0.005}
+	cfg := SharpeConfig{Frequency: FrequencyPerDay, MinSamples: 2}
+	sharpeZeroRFR := ComputeSharpe(returns, cfg)
+	cfg.RiskFreeRate = 0.005
+	sharpeWithRFR := ComputeSharpe(returns, cfg)
+	if sharpeWithRFR >= sharpeZeroRFR {
+		t.Fatalf("Sharpe with rfr=0.005 (%f) should be < Sharpe with rfr=0.0 (%f)", sharpeWithRFR, sharpeZeroRFR)
+	}
+}
+
+// TestComputeSharpeTWSEFrequency verifies that FrequencyTWSE uses sqrt(243)
+// instead of sqrt(252), producing a measurably smaller ratio.
+func TestComputeSharpeTWSEFrequency(t *testing.T) {
+	returns := make([]float64, 60)
+	for i := range returns {
+		returns[i] = 0.001 * float64(i%5-1) // positive bias: -1, 0, 1, 2, 3 pattern
+	}
+	cfgDay := SharpeConfig{Frequency: FrequencyPerDay, MinSamples: 2}
+	cfgTWSE := SharpeConfig{Frequency: FrequencyTWSE, MinSamples: 2}
+	daySharpe := ComputeSharpe(returns, cfgDay)
+	twseSharpe := ComputeSharpe(returns, cfgTWSE)
+	if twseSharpe >= daySharpe {
+		t.Fatalf("TWSE Sharpe (%f) should be < PerDay Sharpe (%f) since sqrt(243) < sqrt(252)", twseSharpe, daySharpe)
+	}
+	ratio := twseSharpe / daySharpe
+	expectedRatio := math.Sqrt(243) / math.Sqrt(252)
+	if math.Abs(ratio-expectedRatio) > 1e-9 {
+		t.Fatalf("TWSE/PerDay ratio = %f, want %f (sqrt(243)/sqrt(252))", ratio, expectedRatio)
+	}
+}
+
 // TestMeanSampleVariance verifies sample stddev (N-1 denominator).
 // This is the convention both old implementations used.
 func TestMeanSampleVariance(t *testing.T) {

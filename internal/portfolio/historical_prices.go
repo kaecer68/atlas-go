@@ -1,3 +1,18 @@
+// Package-internal note: prices in HistoricalPrices are RAW and UNADJUSTED for
+// corporate actions (cash dividends, stock splits, capital reductions).
+//
+// Implications for downstream consumers:
+//   - MomentumReturn (and any other simple price-difference return) UNDERSTATES
+//     true total return across ex-dividend dates by the dividend amount.
+//   - Volatility computed from unadjusted daily returns is INFLATED around
+//     ex-dividend / split events.
+//   - Sharpe and other risk-adjusted metrics that depend on mean/stddev of
+//     returns inherit this bias.
+//
+// The full fix — corporate-action adjustment via
+// AdjustForCorporateActions(actions []CorporateAction) error — is deferred to
+// a separate iteration (tracked as P1-2 in the fineng coverage audit). Until
+// that lands, callers MUST treat these returns as PRICE-ONLY, not total-return.
 package portfolio
 
 import (
@@ -91,6 +106,9 @@ func (hp *HistoricalPrices) SMA(symbol string, days int) float64 {
 }
 
 // MomentumReturn computes (latest / price N days ago - 1).
+//
+// CAUTION: computed from UNADJUSTED prices — see package doc for bias.
+// This UNDERSTATES true total return across ex-dividend dates.
 func (hp *HistoricalPrices) MomentumReturn(symbol string, days int) float64 {
 	series := hp.GetCloseSeries(symbol)
 	if len(series) < days+1 {
@@ -105,6 +123,9 @@ func (hp *HistoricalPrices) MomentumReturn(symbol string, days int) float64 {
 }
 
 // Volatility computes the standard deviation of daily returns over the last N days.
+//
+// CAUTION: inherits the same unadjusted-price bias as MomentumReturn; do not
+// interpret as ex-corporate-action volatility.
 func (hp *HistoricalPrices) Volatility(symbol string, days int) float64 {
 	series := hp.GetCloseSeries(symbol)
 	if len(series) < days+1 {
