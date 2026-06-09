@@ -184,6 +184,8 @@ type BaselineParameters struct {
 	MinRecommendationConviction ParameterMetadata[int]     `json:"min_recommendation_conviction"`
 	RequireCROPass              ParameterMetadata[bool]    `json:"require_cro_pass"`
 	TransactionCostBPS          ParameterMetadata[float64] `json:"transaction_cost_bps"`
+	DiscountedCommissionBps     ParameterMetadata[float64] `json:"discounted_commission_bps"`
+	CommissionDiscountThreshold ParameterMetadata[float64] `json:"commission_discount_threshold"`
 	SlippageBPS                 ParameterMetadata[float64] `json:"slippage_bps"`
 	AvgTradingCost              ParameterMetadata[float64] `json:"avg_trading_cost"`
 	ReserveCashFraction         ParameterMetadata[float64] `json:"reserve_cash_fraction"`
