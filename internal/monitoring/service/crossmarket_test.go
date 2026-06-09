@@ -358,3 +358,95 @@ func TestGetCorrelation_LegacyEndpoint(t *testing.T) {
 		t.Error("IsFallback should be false with 3 observations")
 	}
 }
+
+// counterProvider wraps a MacroDataProvider and counts FetchSnapshot calls
+// so cache tests can assert the provider is bypassed within the TTL window.
+type counterProvider struct {
+	snap   marketdata.MacroDataSnapshot
+	err    error
+	calls  int
+	lastAt time.Time
+}
+
+func (c *counterProvider) Name() string { return "counter" }
+func (c *counterProvider) FetchSnapshot(_ context.Context) (marketdata.MacroDataSnapshot, error) {
+	c.calls++
+	c.lastAt = time.Now()
+	if c.err != nil {
+		return marketdata.MacroDataSnapshot{}, c.err
+	}
+	return c.snap, nil
+}
+
+func TestGetCachedSnapshot_CacheHit_AvoidsProviderCall(t *testing.T) {
+	prov := &counterProvider{snap: makeSnapshot()}
+	svc := NewCrossMarketService(prov)
+
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("GetStatus (warm): %v", err)
+	}
+	for i := 0; i < 5; i++ {
+		if _, err := svc.GetUSIndices(context.Background()); err != nil {
+			t.Fatalf("GetUSIndices[%d]: %v", i, err)
+		}
+	}
+	if prov.calls != 1 {
+		t.Errorf("expected 1 provider call (cache hit on subsequent), got %d", prov.calls)
+	}
+}
+
+func TestGetCachedSnapshot_StaleAfterTTL_Refetches(t *testing.T) {
+	prov := &counterProvider{snap: makeSnapshot()}
+	svc := NewCrossMarketService(prov)
+
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("GetStatus (seed): %v", err)
+	}
+	if prov.calls != 1 {
+		t.Fatalf("expected 1 provider call after seed, got %d", prov.calls)
+	}
+
+	// Rewind cacheTime past the TTL rather than sleeping 30s.
+	svc.cacheMu.Lock()
+	svc.cacheTime = time.Now().Add(-cacheTTL - time.Second)
+	svc.cacheMu.Unlock()
+
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("GetStatus (after expiry): %v", err)
+	}
+	if prov.calls != 2 {
+		t.Errorf("expected 2 provider calls (1 seed + 1 after stale), got %d", prov.calls)
+	}
+}
+
+func TestGetCachedSnapshot_ProviderError_DoesNotPoisonCache(t *testing.T) {
+	// Provider fails from the start. The cache must stay empty so a later
+	// successful call can populate it (a poisoned cache would freeze the
+	// service on the first error).
+	prov := &counterProvider{err: context.DeadlineExceeded}
+	svc := NewCrossMarketService(prov)
+
+	_, err := svc.GetStatus(context.Background())
+	if err == nil {
+		t.Fatal("expected error from failing provider, got nil")
+	}
+	if prov.calls != 1 {
+		t.Errorf("expected 1 provider call, got %d", prov.calls)
+	}
+	svc.cacheMu.Lock()
+	cached := svc.cachedSnapshot
+	svc.cacheMu.Unlock()
+	if cached != nil {
+		t.Error("cache must remain empty after provider error (would poison next caller)")
+	}
+
+	// Recover the provider and verify the next call populates the cache
+	// instead of returning the stale error.
+	prov.err = nil
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("GetStatus after recovery: %v", err)
+	}
+	if prov.calls != 2 {
+		t.Errorf("expected 2 provider calls after recovery, got %d", prov.calls)
+	}
+}
