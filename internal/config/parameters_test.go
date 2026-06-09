@@ -38,8 +38,8 @@ func TestDefaultParametersConfig(t *testing.T) {
 	}
 
 	// Sizing
-	if cfg.Sizing.KellyFraction.Value != 0.25 {
-		t.Errorf("expected kelly_fraction 0.25, got %f", cfg.Sizing.KellyFraction.Value)
+	if cfg.Sizing.KellyFraction.Value != 0.5 {
+		t.Errorf("expected kelly_fraction 0.5, got %f", cfg.Sizing.KellyFraction.Value)
 	}
 
 	// Health

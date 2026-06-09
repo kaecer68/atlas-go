@@ -163,7 +163,7 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 
 ### 8. Sizer (倉位規模計算器)
 - **核心類型**：`Signal` (交易信號)、`RiskParameters` (風險參數)、`PositionSizingResult` (計算結果)。
-- **Kelly Criterion**：`f* = (p*b - q) / b`，套用 `KellyFraction=0.25` 保守係數。
+- **Kelly Criterion**：`f* = (p*b - q) / b`，套用半 Kelly 係數 `KellyFraction=0.5`（Thorp, 2006）。波動率估計不穩定時，half-Kelly 比 quarter-Kelly 提供更好的成長-回撤權衡。
 - **波動率調整**：目標波動率 20%，實際波動率越高調整越大 (調整範圍 0.25x - 2.0x)。
 - **ATR 止損**：每筆交易承擔組合 1% 風險，`RiskAmount = Shares * ATR * ATRMultiplier(2.0)`。
 - **流動性限制**：`MaxPositionByADV = 0.01` (日成交量的 1%)。

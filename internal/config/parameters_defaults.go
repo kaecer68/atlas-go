@@ -325,8 +325,8 @@ func defaultOptimizerParameters() OptimizerParameters {
 func defaultSizingParameters() SizingParameters {
 	return SizingParameters{
 		KellyFraction: ParameterMetadata[float64]{
-			Value:     0.25,
-			Rationale: "Half-Kelly for safety; literature recommends 0.2-0.5",
+			Value:     0.5,
+			Rationale: "Half-Kelly (0.5) per Thorp (2006) — balances growth and drawdown under parameter uncertainty.",
 			Source:    SourceLiterature,
 		},
 		VolLookbackDays: ParameterMetadata[int]{

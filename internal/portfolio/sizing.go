@@ -23,7 +23,7 @@ type RiskParameters struct {
 // DefaultRiskParameters 默认风险参数
 func DefaultRiskParameters() RiskParameters {
 	return RiskParameters{
-		KellyFraction:      0.25,
+		KellyFraction:      0.5, // half-Kelly per Thorp (2006)
 		VolLookback:        20,
 		MaxPositionByADV:   0.01,
 		MaxDrawdownLimit:   0.10,
