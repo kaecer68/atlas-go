@@ -57,7 +57,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
       : '<div class="my-xs text-sm text-up">✓ 所有通道正常</div>');
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
-  const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--up)' : 'var(--warn)') : 'inherit';
+  const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--color-success)' : 'var(--warn)') : 'inherit';
   const phaseHtml = capitalPhase
     ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${(capitalPhase.rolling_sharpe || 0).toFixed(2)}</div>`
     : '<div class="my-xs text-sm text-muted">-</div>';
@@ -405,12 +405,12 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
 
   const stressVal = (stress && typeof stress.score === 'number') ? stress.score : null;
   const stressLabel = stressVal >= 70 ? '危機' : (stressVal >= 50 ? '高壓' : (stressVal >= 30 ? '警戒' : '低壓'));
-  const stressColor = stressVal >= 70 ? 'var(--down)' : (stressVal >= 50 ? 'var(--warn)' : 'var(--up)');
+  const stressColor = stressVal >= 70 ? 'var(--color-danger)' : (stressVal >= 50 ? 'var(--warn)' : 'var(--color-success)');
 
   const scorecards = (agents && agents.scorecards) ? agents.scorecards : [];
   const healthyCount = scorecards.filter(a => (a.sharpe || 0) > 0.5 && (a.hit_rate || 0) > 0.3).length;
   const healthPct = scorecards.length > 0 ? Math.round(healthyCount / scorecards.length * 100) : 0;
-  const healthColor = healthPct > 70 ? 'var(--up)' : (healthPct > 40 ? 'var(--warn)' : 'var(--down)');
+  const healthColor = healthPct > 70 ? 'var(--color-success)' : (healthPct > 40 ? 'var(--warn)' : 'var(--color-danger)');
 
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px">

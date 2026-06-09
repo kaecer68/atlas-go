@@ -157,7 +157,7 @@ function renderCompact() {
   let expCount = judges.length + promotes.length;
   let expHtml = '<div style="display:flex;gap:24px;margin-top:4px">' +
     '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:' + (judges.length > 0 ? 'var(--warn)' : 'var(--muted)') + '">' + judges.length + '</div><div style="font-size:11px;color:var(--muted)">待評判</div></div>' +
-    '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:' + (promotes.length > 0 ? 'var(--up)' : 'var(--muted)') + '">' + promotes.length + '</div><div style="font-size:11px;color:var(--muted)">待晉升</div></div>' +
+    '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:' + (promotes.length > 0 ? 'var(--color-success)' : 'var(--muted)') + '">' + promotes.length + '</div><div style="font-size:11px;color:var(--muted)">待晉升</div></div>' +
     '<div style="text-align:center"><div style="font-size:20px;font-weight:700">' + scorecards.length + '</div><div style="font-size:11px;color:var(--muted)">活躍 Agent</div></div>' +
     '</div>';
 
@@ -386,7 +386,7 @@ function renderCatTabContent(tab, scorecards, sessions, judges, promotes) {
         html += '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
           '<div style="display:flex;justify-content:space-between;align-items:center">' +
             '<div><strong>' + agentName(e.target_agent_id) + '</strong> · ' + (e.mutation_type || '') + '</div>' +
-            '<span style="font-size:11px;color:' + (isJudge ? 'var(--warn)' : 'var(--up)') + '">' + (isJudge ? '待評判' : '待晉升') + '</span>' +
+            '<span style="font-size:11px;color:' + (isJudge ? 'var(--warn)' : 'var(--color-success)') + '">' + (isJudge ? '待評判' : '待晉升') + '</span>' +
           '</div>' +
           '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + (e.mutation_summary || '') + '</div>' +
           '<div style="display:flex;gap:16px;margin-top:2px;font-size:11px">' +
