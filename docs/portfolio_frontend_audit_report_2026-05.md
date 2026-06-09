@@ -200,8 +200,12 @@ if portfolio.Cash > 0 {
 
 **建議**: 
 - 在 `internal/reporting/performance.go` 增加 `calculateSortinoRatio()`, `calculateCalmarRatio()` 函數
+  - ✅ 已實作（May 2026）
+  - 🔄 後續演化（Jun 2026, PR #452, commit `79499c92`）：`calculateSortinoRatio()` 改為 thin wrapper 呼叫 `internal/domain/shared/sortino.go:ComputeSortino`，因 wrapper 沉默丟棄 `targetReturn` 參數，最終在 code review 中連 wrapper 一併刪除。目前唯一生產呼叫端直接使用 `shared.ComputeSortino(dailyReturns, {Frequency: PerDay, MinSamples: 2})`。
 - 在 `PerformanceReport` struct 增加對應欄位
+  - ✅ 已完成（`report.SortinoRatio` 賦值於 `GenerateReport` 內）
 - 前端 `performance-report.js` 新增對應 KPI 卡片
+  - ✅ 已完成
 
 ### 🟡 MEDIUM #4: AI 觀測台僅顯示最弱 agent，缺少全面觀測視圖
 
