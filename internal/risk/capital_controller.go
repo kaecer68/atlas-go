@@ -3,12 +3,12 @@ package risk
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 // CapitalPhaseController manages capital phase transitions and limits.
@@ -202,26 +202,8 @@ func (c *CapitalPhaseController) LoadState() (*PersistedState, error) {
 }
 
 func CalculateSharpeRatio(dailyReturns []float64) float64 {
-	if len(dailyReturns) < 2 {
-		return 0.0
-	}
-
-	var sum float64
-	for _, r := range dailyReturns {
-		sum += r
-	}
-	mean := sum / float64(len(dailyReturns))
-
-	var variance float64
-	for _, r := range dailyReturns {
-		diff := r - mean
-		variance += diff * diff
-	}
-	stdDev := math.Sqrt(variance / float64(len(dailyReturns)-1))
-
-	if stdDev == 0 {
-		return 0.0
-	}
-
-	return (mean / stdDev) * math.Sqrt(252)
+	return shared.ComputeSharpe(dailyReturns, shared.SharpeConfig{
+		Frequency:  shared.FrequencyPerDay,
+		MinSamples: 2,
+	})
 }

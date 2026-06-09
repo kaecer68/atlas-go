@@ -156,7 +156,7 @@ func TestCalculateSharpeRatio(t *testing.T) {
 	}{
 		{"empty", []float64{}, 0},
 		{"zero variance", []float64{0.01, 0.01, 0.01}, 0},
-		{"normal", []float64{0.01, -0.005, 0.02, -0.01, 0.015}, 8.228},
+		{"normal", []float64{0.01, -0.005, 0.02, -0.01, 0.015}, 7.360},
 	}
 
 	for _, tt := range tests {
