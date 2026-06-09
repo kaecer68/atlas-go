@@ -29,6 +29,8 @@ type SimulationConstraints struct {
 	MinRecommendationConviction int     `json:"min_recommendation_conviction"`
 	RequireCROPass              bool    `json:"require_cro_pass"`
 	TransactionCostBPS          float64 `json:"transaction_cost_bps"`
+	DiscountedCommissionBps     float64 `json:"discounted_commission_bps"`
+	CommissionDiscountThreshold float64 `json:"commission_discount_threshold"`
 	SlippageBPS                 float64 `json:"slippage_bps"`
 	ReserveCashFraction         float64 `json:"reserve_cash_fraction"`
 	StopLossPct                 float64 `json:"stop_loss_pct"`   // sell when price drops below avgCost*(1+StopLossPct)

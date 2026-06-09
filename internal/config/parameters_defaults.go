@@ -1063,6 +1063,16 @@ func defaultBaselineParameters() BaselineParameters {
 			Rationale: "TW stock minimum brokerage fee: 0.1425% = 14.25 bps (tax calculated separately)",
 			Source:    SourceEmpirical,
 		},
+		DiscountedCommissionBps: ParameterMetadata[float64]{
+			Value:     8.5,
+			Rationale: "Discounted electronic trading commission rate: 0.085% = 8.5 bps",
+			Source:    SourceEmpirical,
+		},
+		CommissionDiscountThreshold: ParameterMetadata[float64]{
+			Value:     500000,
+			Rationale: "Minimum order notional (NTD) to qualify for discounted commission rate",
+			Source:    SourceHeuristic,
+		},
 		SlippageBPS: ParameterMetadata[float64]{
 			Value:     4.0,
 			Rationale: "4 bps estimated slippage for market orders",

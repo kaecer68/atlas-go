@@ -329,8 +329,9 @@ func (e *Engine) RunDay(
 				reduceQty := int(excessValue / q.Last)
 				if reduceQty > 0 && reduceQty < state.Positions[i].Quantity {
 					slippageBPS := e.getSlippageBPS(state.Positions[i].Symbol, quoteBySymbol, &fallbackEvents)
-					price := applyBPS(q.Last, -(slippageBPS + e.constraints.TransactionCostBPS))
-					proceeds := float64(reduceQty) * price
+					proceeds := float64(reduceQty) * q.Last
+					price := applyBPS(q.Last, -(slippageBPS + e.transactionCostBPS(proceeds)))
+					proceeds = float64(reduceQty) * price
 					state.Cash += proceeds
 					state.Positions[i].Quantity -= reduceQty
 					state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * q.Last
@@ -413,6 +414,15 @@ func (e *Engine) getSlippageBPS(symbol string, quotes map[string]domain.Quote, f
 	return e.constraints.SlippageBPS
 }
 
+// transactionCostBPS returns the applicable commission rate in basis points.
+// Uses the discounted rate for orders meeting the notional threshold.
+func (e *Engine) transactionCostBPS(notional float64) float64 {
+	if IsEligibleForDiscountedCommission(notional, e.constraints.CommissionDiscountThreshold) {
+		return e.constraints.DiscountedCommissionBps
+	}
+	return e.constraints.TransactionCostBPS
+}
+
 func (e *Engine) executeSells(
 	state *domain.SimulationState,
 	quoteBySymbol map[string]domain.Quote,
@@ -433,7 +443,8 @@ func (e *Engine) executeSells(
 		shouldSell, reason := e.shouldSellPosition(pos, quote, recs)
 		if shouldSell {
 			slippageBPS := e.getSlippageBPS(pos.Symbol, quoteBySymbol, fallbackEvents)
-			price := applyBPS(quote.Last, -(slippageBPS + e.constraints.TransactionCostBPS))
+			notional := float64(pos.Quantity) * quote.Last
+			price := applyBPS(quote.Last, -(slippageBPS + e.transactionCostBPS(notional)))
 			proceeds := float64(pos.Quantity) * price
 			state.Cash += proceeds
 			orders = append(orders, domain.Order{
@@ -603,7 +614,8 @@ func (e *Engine) executeOptimizerBuys(
 		}
 
 		slippageBPS := e.getSlippageBPS(order.Symbol, quoteBySymbol, fallbackEvents)
-		price := applyBPS(quote.Last, slippageBPS+e.constraints.TransactionCostBPS)
+		notional := float64(order.Quantity) * quote.Last
+		price := applyBPS(quote.Last, slippageBPS+e.transactionCostBPS(notional))
 		quantity := order.Quantity
 		if quantity <= 0 {
 			continue
@@ -690,7 +702,8 @@ func (e *Engine) executeLegacyBuys(
 		}
 
 		slippageBPS := e.getSlippageBPS(rec.Symbol, quoteBySymbol, fallbackEvents)
-		price := applyBPS(quote.Last, slippageBPS+e.constraints.TransactionCostBPS)
+		notional := maxPerPosition
+		price := applyBPS(quote.Last, slippageBPS+e.transactionCostBPS(notional))
 		quantity := int(math.Floor(maxPerPosition/price/100.0) * 100)
 		if quantity <= 0 {
 			continue

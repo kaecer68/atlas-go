@@ -151,6 +151,8 @@ export interface BaselineParameters {
   min_recommendation_conviction: string;
   require_cro_pass: string;
   transaction_cost_bps: string;
+  discounted_commission_bps: string;
+  commission_discount_threshold: string;
   slippage_bps: string;
   avg_trading_cost: string;
   reserve_cash_fraction: string;
@@ -2825,6 +2827,8 @@ export interface SimulationConstraints {
   min_recommendation_conviction: number;
   require_cro_pass: boolean;
   transaction_cost_bps: number;
+  discounted_commission_bps: number;
+  commission_discount_threshold: number;
   slippage_bps: number;
   reserve_cash_fraction: number;
   stop_loss_pct: number;

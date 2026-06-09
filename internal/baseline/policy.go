@@ -179,6 +179,8 @@ func DefaultPolicy() Policy {
 		MinRecommendationConviction: cfg.MinRecommendationConviction.Value,
 		RequireCROPass:              cfg.RequireCROPass.Value,
 		TransactionCostBPS:          cfg.TransactionCostBPS.Value,
+		DiscountedCommissionBps:     cfg.DiscountedCommissionBps.Value,
+		CommissionDiscountThreshold: cfg.CommissionDiscountThreshold.Value,
 		SlippageBPS:                 cfg.SlippageBPS.Value,
 		ReserveCashFraction:         cfg.ReserveCashFraction.Value,
 	}

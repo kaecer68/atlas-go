@@ -264,6 +264,15 @@ type CostBreakdown struct {
 // DefaultCommissionBPS is the standard TWSE broker commission rate (0.1425%).
 const DefaultCommissionBPS = 14.25
 
+// DiscountedCommissionBPS is the discounted rate for electronic trading (0.085%).
+const DiscountedCommissionBPS = 8.5
+
+// IsEligibleForDiscountedCommission determines if an order qualifies for the
+// discounted electronic trading commission rate based on its notional value.
+func IsEligibleForDiscountedCommission(orderNotional float64, threshold float64) bool {
+	return orderNotional >= threshold
+}
+
 // CalculateCosts computes the all-in transaction cost for an order.
 func CalculateCosts(orderNotional float64, slippageBPS float64, impact ImpactResult, commissionBPS float64) CostBreakdown {
 	if commissionBPS <= 0 {

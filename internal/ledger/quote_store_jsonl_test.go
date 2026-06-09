@@ -219,12 +219,15 @@ func TestJSONLQuoteStoreNoDuplicates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadQuotes failed: %v", err)
 	}
-	// RecordQuotes uses O_TRUNC so only the latest batch survives
-	if len(loaded) != 1 {
-		t.Fatalf("expected 1 quote after O_TRUNC, got %d", len(loaded))
+	// RecordQuotes uses O_APPEND so all batches are preserved
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 quotes after O_APPEND, got %d", len(loaded))
 	}
-	if loaded[0].Date.Day() != 2 {
-		t.Errorf("expected date day 2, got %d", loaded[0].Date.Day())
+	if loaded[0].Date.Day() != 1 {
+		t.Errorf("expected first date day 1, got %d", loaded[0].Date.Day())
+	}
+	if loaded[1].Date.Day() != 2 {
+		t.Errorf("expected second date day 2, got %d", loaded[1].Date.Day())
 	}
 }
 
@@ -265,8 +268,8 @@ func TestJSONLQuoteStoreConcurrentWrites(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadQuotes(%s) failed: %v", sym, err)
 		}
-		if len(loaded) > 1 {
-			t.Errorf("symbol %s: expected at most 1 bar, got %d (O_TRUNC collision)", sym, len(loaded))
+		if len(loaded) != 1 {
+			t.Errorf("symbol %s: expected exactly 1 bar, got %d", sym, len(loaded))
 		}
 		if len(loaded) == 1 {
 			if loaded[0].Symbol != sym {
@@ -275,7 +278,7 @@ func TestJSONLQuoteStoreConcurrentWrites(t *testing.T) {
 			seen[sym] = true
 		}
 	}
-	if len(seen) != 1 {
-		t.Errorf("expected exactly one writer to win O_TRUNC race, got %d winners: %v", len(seen), seen)
+	if len(seen) != goroutines {
+		t.Errorf("expected all %d goroutines to succeed, got %d winners: %v", goroutines, len(seen), seen)
 	}
 }
