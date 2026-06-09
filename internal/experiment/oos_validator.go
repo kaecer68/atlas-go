@@ -33,7 +33,18 @@ func (v *OOSValidator) WithParameters(p *config.ParametersConfig) *OOSValidator 
 }
 
 func (v *OOSValidator) oosWindow(primaryWindowEnd time.Time) (start, end time.Time) {
-	start = primaryWindowEnd.AddDate(0, 0, 1)
+	// Embargo gap prevents OOS data leakage: the OOS window must start
+	// strictly after an embargo period (default 5 days) following the
+	// primary (in-sample) window, so that any settlement / corporate
+	// actions / price discovery overlap is excluded.
+	//   start = primaryWindowEnd + (1 + embargoDays)
+	// When WalkForwardEmbargoDays is unset or non-positive, fall back
+	// to a 5-day embargo to preserve the no-leakage invariant.
+	embargoDays := 5
+	if v.params != nil && v.params.Experiment.WalkForwardEmbargoDays.Value > 0 {
+		embargoDays = v.params.Experiment.WalkForwardEmbargoDays.Value
+	}
+	start = primaryWindowEnd.AddDate(0, 0, 1+embargoDays)
 	days := 30
 	if v.params != nil {
 		days = v.params.Experiment.OOSWindowDays.Value

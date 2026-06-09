@@ -23,10 +23,11 @@ const (
 // SplitConfig parameterizes the train/test split. Only the fields
 // relevant to the chosen Method are read.
 type SplitConfig struct {
-	Method     SplitMethod
-	TrainRatio float64 // for SplitChronological (default 0.8)
-	TrainSize  int     // for SplitWalkForward
-	TestSize   int     // for SplitWalkForward
+	Method      SplitMethod
+	TrainRatio  float64 // for SplitChronological (default 0.8)
+	TrainSize   int     // for SplitWalkForward
+	TestSize    int     // for SplitWalkForward
+	EmbargoDays int     // for SplitWalkForward: non-overlap gap (trading days) between train end and test start of next fold. 0 = no embargo. Consumers that want a safety default (e.g. oosWindow) should apply it at their read site, not via the zero value.
 }
 
 // Split returns (train, test) outcomes according to cfg. Returns nil
@@ -57,6 +58,15 @@ func Split(outcomes []domain.RecommendationOutcome, cfg SplitConfig) ([]domain.R
 
 // WalkForwardFolds produces sequential (train, test) folds. Each fold
 // has cfg.TrainSize train outcomes followed by cfg.TestSize test outcomes.
+// cfg.EmbargoDays controls the non-overlap gap (trading days) between the
+// train end and the test start of the *next* fold, and is reserved between
+// the train end and test start of the same fold. This prevents data leakage
+// from corporate-event reorgs and event-driven labeling lag.
+//   - EmbargoDays <= 0  → no gap (preserves pre-embargo behavior; the
+//     zero value is a no-op so existing callers are unaffected).
+//   - Folds whose test window would extend beyond the available data after
+//     the embargo gap are skipped (no partial folds).
+//
 // Returns nil if total outcomes < TrainSize (cannot form even one fold).
 func WalkForwardFolds(outcomes []domain.RecommendationOutcome, cfg SplitConfig) []Fold {
 	if len(outcomes) < cfg.TrainSize {
@@ -66,16 +76,21 @@ func WalkForwardFolds(outcomes []domain.RecommendationOutcome, cfg SplitConfig) 
 	if step < 1 {
 		step = 1
 	}
+	embargo := cfg.EmbargoDays
+	if embargo < 0 {
+		embargo = 0
+	}
 	var folds []Fold
-	for start := 0; start+cfg.TrainSize+step <= len(outcomes); start += step {
+	for start := 0; start+cfg.TrainSize <= len(outcomes); start += step {
 		end := start + cfg.TrainSize
-		testEnd := end + cfg.TestSize
+		testStart := end + embargo
+		testEnd := testStart + cfg.TestSize
 		if testEnd > len(outcomes) {
-			testEnd = len(outcomes)
+			break // skip partial folds when embargo + test size overflows
 		}
 		folds = append(folds, Fold{
 			Train: outcomes[start:end],
-			Test:  outcomes[end:testEnd],
+			Test:  outcomes[testStart:testEnd],
 		})
 	}
 	return folds

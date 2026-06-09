@@ -1532,6 +1532,7 @@
   "volume_intraday",
   "volume_spike_multiplier",
   "volume_spike_threshold",
+  "walk_forward_embargo_days",
   "warnings",
   "weak_close_penalty",
   "weak_close_threshold",
