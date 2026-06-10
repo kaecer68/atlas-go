@@ -31,10 +31,70 @@ export async function loadMetrics() {
   }
 }
 
-export function updateMetricsTrend(data) {
+export async function updateMetricsTrend(data) {
   const trendDiv = document.getElementById('metricsTrend');
   if (!trendDiv) return;
-  let html = '<div class="grid cols-2">';
+
+  let trendData = null;
+  try {
+    trendData = await silentGetJSON('/api/dashboard/metrics/trend?metric=screening_rate&period=24h');
+  } catch (e) {
+    console.error('Failed to fetch trend data', e);
+  }
+
+  let html = '';
+
+  html += '<div class="panel mb-md"><h3>指標趨勢 (24h)</h3>';
+  if (!trendData || !trendData.trend || trendData.trend.length === 0) {
+    html += '<div class="empty" style="font-size:12px;color:var(--muted);padding:20px 0;text-align:center;">目前尚無 24 小時內的趨勢資料，請稍後再查看。</div>';
+  } else {
+    const points = trendData.trend;
+    const width = 800;
+    const height = 120;
+    const padding = { top: 10, right: 10, bottom: 20, left: 40 };
+    const innerWidth = width - padding.left - padding.right;
+    const innerHeight = height - padding.top - padding.bottom;
+
+    const values = points.map(p => p.value * 100);
+    const minVal = Math.min(...values, 0);
+    const maxVal = Math.max(...values, 100);
+    const range = maxVal - minVal || 1;
+
+    const firstVal = values[0];
+    const lastVal = values[values.length - 1];
+    let strokeColor = 'var(--muted)';
+    if (lastVal > firstVal) strokeColor = 'var(--trend-bullish)';
+    else if (lastVal < firstVal) strokeColor = 'var(--trend-bearish)';
+
+    let pathD = '';
+    points.forEach((p, i) => {
+      const x = padding.left + (i / (points.length - 1 || 1)) * innerWidth;
+      const y = padding.top + innerHeight - ((values[i] - minVal) / range) * innerHeight;
+      if (i === 0) pathD += `M ${x} ${y}`;
+      else pathD += ` L ${x} ${y}`;
+    });
+
+    html += `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:120px;display:block;overflow:visible;">`;
+    
+    html += `<text x="${padding.left - 5}" y="${padding.top + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${maxVal.toFixed(0)}%</text>`;
+    html += `<text x="${padding.left - 5}" y="${padding.top + innerHeight + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${minVal.toFixed(0)}%</text>`;
+    
+    const tickCount = Math.min(6, points.length);
+    for (let i = 0; i < tickCount; i++) {
+      const idx = Math.floor(i * (points.length - 1) / (tickCount - 1 || 1));
+      const p = points[idx];
+      const x = padding.left + (idx / (points.length - 1 || 1)) * innerWidth;
+      const date = new Date(p.timestamp);
+      const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      html += `<text x="${x}" y="${height - 2}" fill="var(--muted)" font-size="10" text-anchor="middle">${timeStr}</text>`;
+    }
+    
+    html += `<path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
+    html += `</svg>`;
+  }
+  html += '</div>';
+
+  html += '<div class="grid cols-2">';
   if (data && data.alerts_by_type && Object.keys(data.alerts_by_type).length > 0) {
     html += '<div class="panel"><h3>警報類型分佈</h3><table><thead><tr><th>類型</th><th>次數</th></tr></thead><tbody>';
     for (const [type, count] of Object.entries(data.alerts_by_type)) {
