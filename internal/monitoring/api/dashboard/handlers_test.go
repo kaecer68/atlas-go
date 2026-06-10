@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 // newTestHandlers builds a Handlers backed by a temp work directory.
@@ -55,9 +57,16 @@ func TestHandleDataChannels_HappyPath(t *testing.T) {
 			t.Errorf("missing required key %q in response: %v", key, resp)
 		}
 	}
-	channels, ok := resp["channels"]
-	_ = ok
-	_ = channels
+	channels, ok := resp["channels"].([]service.DataChannel)
+	if !ok {
+		t.Fatalf("expected channels to be []service.DataChannel, got %T", resp["channels"])
+	}
+	if len(channels) == 0 {
+		t.Error("expected at least one channel (real service builds 14 stubs)")
+	}
+	if channels[0].ChannelID == "" {
+		t.Error("expected first channel to have non-empty ChannelID")
+	}
 }
 
 func TestHandleDataChannels_IncludesAlertsSliceEvenWhenEmpty(t *testing.T) {

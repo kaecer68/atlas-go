@@ -32,6 +32,8 @@ type AlertStore interface {
 	LoadAll() ([]domain.AlertRecord, error)
 	LoadUnacknowledged() ([]domain.AlertRecord, error)
 	Acknowledge(alertID string, user string) error
+	FindByDedupKey(dedupKey string) (*domain.AlertRecord, error)
+	Update(id string, fn func(*domain.AlertRecord)) error
 }
 
 // MetricsStore defines the interface for the existing metrics store
@@ -207,6 +209,24 @@ func (r *DualWriteRepository) AcknowledgeAlert(ctx context.Context, alertID stri
 	_ = r.jsonl.alertStore.Acknowledge(alertID, user)
 	if r.pg != nil {
 		return r.pg.AcknowledgeAlert(ctx, alertID, user)
+	}
+	return nil
+}
+
+func (r *DualWriteRepository) FindAlertByDedupKey(ctx context.Context, dedupKey string) (*domain.AlertRecord, error) {
+	if r.pg != nil {
+		rec, err := r.pg.FindAlertByDedupKey(ctx, dedupKey)
+		if err == nil && rec != nil {
+			return rec, nil
+		}
+	}
+	return r.jsonl.alertStore.FindByDedupKey(dedupKey)
+}
+
+func (r *DualWriteRepository) UpdateAlert(ctx context.Context, id string, fn func(*domain.AlertRecord)) error {
+	_ = r.jsonl.alertStore.Update(id, fn)
+	if r.pg != nil {
+		return r.pg.UpdateAlertByID(ctx, id, fn)
 	}
 	return nil
 }

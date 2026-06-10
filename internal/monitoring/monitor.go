@@ -58,6 +58,11 @@ type Monitor struct {
 
 	alertStore *AlertStore
 	notifiers  []Notifier
+
+	// Phase 2A: dedup, auto-handler, regime suppression
+	deduplicator  *AlertDeduplicator
+	autoHandler   *AutoHandler
+	currentRegime domain.Regime
 }
 
 // NewMonitor 创建监控系统
@@ -104,6 +109,9 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 	store := m.alertStore
 	notifiers := make([]Notifier, len(m.notifiers))
 	copy(notifiers, m.notifiers)
+	dedup := m.deduplicator
+	ah := m.autoHandler
+	regime := m.currentRegime
 	m.mu.Unlock()
 
 	go func() {
@@ -112,6 +120,14 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 		}
 	}()
 
+	// RISK_OFF suppression: skip save and notify for INFO/WARNING
+	if regime == domain.RegimeRiskOff && (level == AlertLevelInfo || level == AlertLevelWarning) {
+		if ah != nil {
+			ah.Handle(alert)
+		}
+		return
+	}
+
 	record := domain.AlertRecord{
 		ID:        alert.ID,
 		Timestamp: alert.Timestamp,
@@ -119,11 +135,34 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 		Severity:  level.String(),
 		Message:   message,
 		Breakdown: breakdown,
+		Status:    domain.AlertStatusTriggered,
+		Count:     1,
 	}
+
+	// Dedup check: skip save+notify if duplicate within window
+	if dedup != nil {
+		dedupKey := category + ":" + level.String()
+		record.DedupKey = dedupKey
+		result, err := dedup.Check(dedupKey)
+		if err == nil && result.Skip {
+			if result.ExistingAlertID != "" && store != nil {
+				store.Update(result.ExistingAlertID, func(r *domain.AlertRecord) {
+					r.Count = result.NewCount
+					r.LastSeen = &record.Timestamp
+				})
+			}
+			return
+		}
+	}
+
 	if store != nil {
 		go func() {
 			if err := store.Save(record); err != nil {
 				logging.Warn("monitor", "alert_save_failed", logging.Err(err))
+				return
+			}
+			if dedup != nil && record.DedupKey != "" {
+				dedup.Track(record.DedupKey)
 			}
 		}()
 	}
@@ -136,6 +175,10 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 				logging.Warn("monitor", "notify_failed", logging.FStr("notifier", notif.Name()), logging.Err(err))
 			}
 		}(n)
+	}
+
+	if ah != nil {
+		ah.Handle(alert)
 	}
 }
 
@@ -164,6 +207,34 @@ func (m *Monitor) SetAlertStore(store *AlertStore) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.alertStore = store
+}
+
+// SetDeduplicator sets the alert deduplicator for 5-min window dedup.
+func (m *Monitor) SetDeduplicator(d *AlertDeduplicator) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deduplicator = d
+}
+
+// SetAutoHandler sets the auto-handler for severity-based routing.
+func (m *Monitor) SetAutoHandler(h *AutoHandler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.autoHandler = h
+}
+
+// SetRegime sets the current market regime for suppression logic.
+func (m *Monitor) SetRegime(r domain.Regime) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.currentRegime = r
+}
+
+// CurrentRegime returns the current market regime.
+func (m *Monitor) CurrentRegime() domain.Regime {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.currentRegime
 }
 
 // AddNotifier adds a notification dispatcher.

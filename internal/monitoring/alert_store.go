@@ -149,6 +149,31 @@ func (s *AlertStore) Update(id string, fn func(*domain.AlertRecord)) error {
 	return s.rewriteAll(all)
 }
 
+// DeleteWhere removes all alerts matching the predicate and returns the count removed.
+func (s *AlertStore) DeleteWhere(predicate func(*domain.AlertRecord) bool) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	all, err := s.loadFromFile()
+	if err != nil {
+		return 0, fmt.Errorf("load alerts: %w", err)
+	}
+
+	var remaining []domain.AlertRecord
+	for i := range all {
+		if !predicate(&all[i]) {
+			remaining = append(remaining, all[i])
+		}
+	}
+
+	deleted := len(all) - len(remaining)
+	if deleted == 0 {
+		return 0, nil
+	}
+
+	return deleted, s.rewriteAll(remaining)
+}
+
 // loadFromFile reads all records from the JSONL file.
 // Caller must hold at least a read lock.
 func (s *AlertStore) loadFromFile() ([]domain.AlertRecord, error) {
