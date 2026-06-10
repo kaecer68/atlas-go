@@ -29,6 +29,12 @@ export async function loadMetrics() {
   } catch (err) {
     console.error('loadStorageMetrics error:', err);
   }
+
+  try {
+    await loadDataQuality();
+  } catch (err) {
+    console.error('loadDataQuality error:', err);
+  }
 }
 
 export async function updateMetricsTrend(data) {
@@ -131,4 +137,69 @@ export function renderStorageCleanup(data) {
   html += '</tbody></table>';
   html += `<div style="margin-top:8px;font-size:12px;color:var(--muted)">總計：刪除 ${data.total_deleted != null ? data.total_deleted : '-'} 個檔案，保留 ${data.total_kept != null ? data.total_kept : '-'} 個檔案</div>`;
   detail.innerHTML = html;
+}
+
+export async function loadDataQuality() {
+  const scoreEl = document.getElementById('dataQualityScore');
+  const detailEl = document.getElementById('dataQualityDetail');
+  if (!scoreEl || !detailEl) return;
+
+  const report = await silentGetJSON('/api/dashboard/data-quality');
+  if (!report) {
+    detailEl.className = 'empty';
+    detailEl.textContent = '無法載入資料品質檢查';
+    scoreEl.textContent = '-';
+    return;
+  }
+
+  // Backend serializes time.Duration as nanoseconds despite the duration_ms JSON tag.
+  // Convert ns → ms/µs/ns for human-readable display.
+  const dataQualityDuration = (v) => {
+    if (v == null) return '-';
+    const ns = Number(v);
+    if (!Number.isFinite(ns)) return '-';
+    if (ns >= 1000000) return (ns / 1000000).toFixed(2) + ' ms';
+    if (ns >= 1000) return (ns / 1000).toFixed(2) + ' µs';
+    return ns + ' ns';
+  };
+
+  // CheckStatus enum → system-status color (per web/AGENTS.md).
+  const statusColor = (status) => {
+    if (status === 'ok') return 'var(--color-success)';
+    if (status === 'warning') return 'var(--color-warning)';
+    if (status === 'critical') return 'var(--color-danger)';
+    return 'var(--muted)';
+  };
+  const statusLabel = (status) => {
+    if (status === 'ok') return '正常';
+    if (status === 'warning') return '警告';
+    if (status === 'critical') return '嚴重';
+    return '略過';
+  };
+
+  const overall = report.overall || 'unknown';
+  const score = report.score != null ? report.score : '-';
+  scoreEl.textContent = `整體：${statusLabel(overall)} · 評分：${score}`;
+  scoreEl.style.color = statusColor(overall);
+
+  const checks = Array.isArray(report.checks) ? report.checks : [];
+  if (checks.length === 0) {
+    detailEl.className = 'empty';
+    detailEl.textContent = '目前沒有資料品質檢查記錄';
+    return;
+  }
+
+  let html = '<table class="data-table"><thead><tr><th>檢查項目</th><th>狀態</th><th>訊息</th><th>耗時</th></tr></thead><tbody>';
+  for (const c of checks) {
+    const name = c && c.name ? c.name : '-';
+    const status = c && c.status ? c.status : 'skipped';
+    const message = c && c.message ? c.message : '';
+    const duration = dataQualityDuration(c && c.duration);
+    const color = statusColor(status);
+    const label = statusLabel(status);
+    html += `<tr><td>${name}</td><td style="color:${color};font-weight:600">${label}</td><td>${message}</td><td>${duration}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  detailEl.className = '';
+  detailEl.innerHTML = html;
 }
