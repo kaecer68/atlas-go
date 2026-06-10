@@ -27,13 +27,12 @@
 | `seasonality.go` | 季節性引擎（`SeasonalEngine`）、模式偵測（`DetectCurrentPatterns`）、調整係數計算（`GetPatternAdjustment`）、四層分解（`GetAdjustmentBreakdown`） |
 | `seasonal_calibrator.go` | 季節性模式校準（`CalibratePatterns`）、產業報酬聚合器（`IndustryReturnAggregator`） |
 | `cycle.go` | 商業週期追蹤器（`CycleTracker`）、階段評分（`GetPhaseScore`）、信賴度計算 |
+| `cycle_status_card.go` | 五層複合週期狀態卡（`CycleStatusCard` + `CycleStatusCardBuilder`），聚合矽循環、商業週期、季節性、事件、供應鏈五個 layer |
+| `silicon_cycle.go` | 矽循環追蹤器（`SiliconCycleTracker`）、相位偵測、指標快照（`SiliconIndicators`） |
 | `dynamic_env.go` | 動態環境調變器（`DynamicEnvModulator`）、將宏觀數據納入週期評分 |
 | `risk.go` | 產業風險監控（客戶集中度、新聞延遲、不對稱風險） |
+| `event_calendar.go` | 台股日曆事件偵測（`EventCalendar`）與情緒乘數（`CalendarEvent`） |
 | `types.go` / `classification.go` | 產業分類樹結構 |
-| `cycle_status_card.go` | 週期狀態卡建構器（`CycleStatusCardBuilder`）、整合所有子引擎輸出 |
-| `silicon_cycle.go` | 半導體供需週期追蹤（`SiliconCycleTracker`）、SOX 指數相關性分析 |
-| `data_aggregator.go` | FinMind 財務數據聚合（`DataAggregator`）、產業級營收/獲利成長率計算 |
-| `odm_channel.go` | ODM 出貨通道監測（`ODMChannel`）、衝擊傳導模型 |
 
 ---
 
@@ -62,16 +61,30 @@ Replay Data (cmd/calibrate-seasonal --replay)
 
 | 端點 | Handler 檔案 | 回傳內容 |
 |------|-------------|---------|
-| `GET /api/industry/linkage` | `monitoring/api/industry/handlers.go` | 供應鏈圖 + 相關矩陣 + 連動分數 |
-| `GET /api/industry/seasonality` | 同上 | 季節性模式列表（含 `GetAdjustmentBreakdown`）|
-| `GET /api/industry/seasonality/calendar` | 同上 | 年度季節性行事曆 |
-| `GET /api/industry/cycles` | 同上 | 各產業週期位置與趨勢 |
-| `GET /api/industry/classification` | 同上 | 產業分類樹 |
-| `GET /api/industry/detail` | 同上 | 單一產業完整資訊（連動 + 季節 + 週期 + 風險） |
-| `GET /api/industry/cycles/odm-channel` | 同上 | ODM 通道即時快照（4 個資料平面：出貨/庫存/營收/傳導） |
-| `GET /api/industry/cycles/data-aggregator` | 同上 | 數據聚合摘要（各產業最新營收與獲利成長率 + 資料品質） |
-| `GET /api/industry/cycles/seasonal-health` | 同上 | 季節性校準健康狀態（參數完整性與校準時間戳） |
-| `GET /api/industry/cycles/correlation-loader` | 同上 | 相關矩陣載入器元資料（樣本數、產業覆蓋、最後重建時間） |
+| `GET /api/dashboard/industry-classification` | `monitoring/api/industry/handlers.go` | 產業分類樹（`industries` 陣列 + `count`） |
+| `GET /api/dashboard/industry-overview` | 同上 | 聚合 cycle + linkage + risk 的每產業總覽（含 `adjusted_weight`） |
+| `GET /api/dashboard/industry-seasonality` | 同上 | 季節性模式列表（含 `GetAdjustmentBreakdown`）|
+| `GET /api/dashboard/industry-seasonality-calendar` | 同上 | 年度季節性行事曆（12 個月） |
+| `GET /api/dashboard/industry-graph` | 同上 | 供應鏈圖（nodes + edges + 相關矩陣） |
+| `GET /api/dashboard/cycle-status-card` | 同上 | 五層複合週期狀態卡（`card` 物件含 `breakdown`、`silicon_phase`、`composite_coefficient`） |
+| `GET /api/dashboard/industry-detail` | 同上 | 單一產業完整資訊（連動 + 季節 + 週期 + 風險） |
+
+> ⚠️ **歷史路徑**：本表為 2026-Q3 後生效的新路徑，舊 `/api/industry/*` 路徑已棄用。前端 `web/static/js/pages/industry.js` 的 `loadIndustryData()` 在 `Promise.all` 中呼叫新路徑。
+
+---
+
+## Experimental Files
+
+以下檔案**尚未進入穩定層**——目前無生產端點依賴、也無 `core/` 模組 import，僅作為隔離測試或 Stage 3 評估中保留：
+
+| 檔案 | 職責 | 狀態 |
+|------|------|------|
+| `odm_channel.go` | `ODMChannel` 出貨通道監測、CoWoS 產能追蹤、衝擊傳導模型（`ODMTransmissionModel`） | 待評估，僅 dashboard_api smoke test 引用 |
+| `data_aggregator.go` | `DataAggregator` 從 FinMind 拉取個股財務數據，聚合成產業級營收/獲利成長率 | 待評估，僅服務 `GetDataAggregatorSummary` 內部呼叫 |
+| `seasonal_health.go` | 季節性校準健康狀態摘要（`SummarizeCalibrationHealth`，讀 `parameters.json` 完整性） | 待評估，僅 `GetSeasonalHealth` 內部呼叫 |
+| `correlation_loader.go` | 相關矩陣載入器元資料（樣本數、產業覆蓋、最後重建時間） | 待評估，僅 `GetCorrelationLoaderMetadata` 內部呼叫 |
+
+> **處理原則**：Stage 3 之前不得修改這些檔案的邏輯。`handlers.go` 內已有對應的 `HandleODMChannel` / `HandleDataAggregator` / `HandleSeasonalHealth` / `HandleCorrelationLoader` 路由（覆蓋率 75–100%），但**目前未在 `RegisterRoutes` 註冊**——這是預期狀態而非 dead code。
 
 ---
 

@@ -270,7 +270,6 @@ func TestHandleAPIKeyUpdate_EnvLeakPrevented(t *testing.T) {
 // ---------- HandleRSITwCalibration ----------
 
 func TestHandleRSITwCalibration_NotAvailable(t *testing.T) {
-	// WorkDir has no .retail/rsi_tw_calibration.json — expected fresh-state path.
 	h := newTestHandlers(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/rsi-tw-calibration", nil)
 	status, body := h.HandleRSITwCalibration(req)
@@ -285,15 +284,11 @@ func TestHandleRSITwCalibration_NotAvailable(t *testing.T) {
 }
 
 func TestHandleRSITwCalibration_ReportLoaded(t *testing.T) {
-	// Seed a valid calibration report and verify the handler returns it.
 	h := newTestHandlers(t)
-	// Calibration report lives at <workDir>/data/state/rsi_tw_calibration.json
-	retailDir := filepath.Join(h.WorkDir, "data", "state")
-	if err := os.MkdirAll(retailDir, 0o755); err != nil {
-		t.Fatalf("mkdir .retail: %v", err)
+	stateDir := filepath.Join(h.WorkDir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir data/state: %v", err)
 	}
-	// The exact file format: array of CalibrationReport.
-	// We just need a parseable JSON array — the loader reads most-recent.
 	report := map[string]any{
 		"timestamp":    "2026-01-15T00:00:00Z",
 		"sample_count": 42,
@@ -304,7 +299,7 @@ func TestHandleRSITwCalibration_ReportLoaded(t *testing.T) {
 	}
 	arr := []any{report}
 	b, _ := json.Marshal(arr)
-	path := filepath.Join(retailDir, "rsi_tw_calibration.json")
+	path := filepath.Join(stateDir, "rsi_tw_calibration.json")
 	if err := os.WriteFile(path, b, 0o644); err != nil {
 		t.Fatalf("write report: %v", err)
 	}
@@ -313,12 +308,30 @@ func TestHandleRSITwCalibration_ReportLoaded(t *testing.T) {
 	status, body := h.HandleRSITwCalibration(req)
 
 	resp := doRequest(t, status, body, http.StatusOK)
-	// When the report is found, the response wraps it under "report".
 	if _, ok := resp["report"]; !ok {
 		t.Errorf("expected 'report' key in response, got %v", resp)
 	}
 }
 
-// ---------- HandleChannelsIngest (STUB-LOCK) ----------
-// STUB-LOCK: current behavior is geo_ok: false. Fix tracked separately.
-// The following test lives in the macro package — see macro/handlers_stub_test.go.
+func TestHandleRSITwCalibration_InternalError(t *testing.T) {
+	h := newTestHandlers(t)
+	stateDir := filepath.Join(h.WorkDir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir data/state: %v", err)
+	}
+	path := filepath.Join(stateDir, "rsi_tw_calibration.json")
+	if err := os.WriteFile(path, []byte("{not valid json at all"), 0o644); err != nil {
+		t.Fatalf("write malformed report: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/rsi-tw-calibration", nil)
+	status, body := h.HandleRSITwCalibration(req)
+
+	resp := doRequest(t, status, body, http.StatusInternalServerError)
+	if resp["status"] != "error" {
+		t.Errorf("expected status=error, got %v", resp["status"])
+	}
+	if errMsg, _ := resp["error"].(string); errMsg == "" {
+		t.Error("expected non-empty error message on internal error")
+	}
+}
