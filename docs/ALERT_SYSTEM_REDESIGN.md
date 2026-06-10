@@ -1,7 +1,7 @@
 # Alert System Redesign — Phase 1 Design Document
 
 **Status**: ✅ Approved by user (2026-06-10)  
-**PR**: #459 (design + alert config)  
+**PR**: #459 (design document)  
 **Target**: 3–5 PRs across 8–10 work days  
 **Epic**: Full 4-phase implementation (backend → API → Dashboard → automation)
 
@@ -313,6 +313,60 @@ New `configs/parameters.json` section (already added in this PR):
 | Auto-ack hides real problems | Low | Only INFO auto-acked; WARNING+ require manual |
 | Migration locks table | Medium | Add columns as nullable; backfill in batches |
 | Frontend bundle size | Low | Reuse existing CSS/JS patterns; no new deps |
+
+### Rollback Plan (One-Time Cleanup)
+
+Before deleting 16,806 `channel_health_summary` records:
+
+```bash
+# Step 1: Export backup
+psql $DATABASE_URL -c "\copy (SELECT * FROM alerts WHERE rule = 'channel_health_summary' AND timestamp < NOW() - INTERVAL '24 hours') TO '/tmp/heartbeat_alerts_backup.csv' CSV HEADER"
+
+# Step 2: Verify count
+echo "Records to delete: $(psql $DATABASE_URL -t -c "SELECT COUNT(*) FROM alerts WHERE rule = 'channel_health_summary' AND timestamp < NOW() - INTERVAL '24 hours'")"
+
+# Step 3: Dry-run (show first 5)
+psql $DATABASE_URL -c "SELECT id, timestamp, rule FROM alerts WHERE rule = 'channel_health_summary' AND timestamp < NOW() - INTERVAL '24 hours' LIMIT 5"
+
+# Step 4: Execute delete
+psql $DATABASE_URL -c "DELETE FROM alerts WHERE rule = 'channel_health_summary' AND timestamp < NOW() - INTERVAL '24 hours'"
+
+# Step 5: Verify
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM alerts WHERE rule = 'channel_health_summary'"
+
+# Rollback (if needed):
+# psql $DATABASE_URL -c "\copy alerts FROM '/tmp/heartbeat_alerts_backup.csv' CSV HEADER"
+```
+
+### Index Design (Phase 2A Migration)
+
+```sql
+-- Dedup lookup (core path)
+CREATE INDEX idx_alerts_dedup_key ON alerts(dedup_key);
+
+-- Active alerts filter (dashboard default view)
+CREATE INDEX idx_alerts_status ON alerts(status) WHERE status != 'resolved';
+
+-- Time-series queries (trend/history)
+CREATE INDEX idx_alerts_last_seen ON alerts(last_seen DESC);
+
+-- Rule-based filtering (automation rules)
+CREATE INDEX idx_alerts_rule ON alerts(rule, status);
+
+-- Severity dashboard (KPI cards)
+CREATE INDEX idx_alerts_severity ON alerts(severity) WHERE status = 'triggered';
+```
+
+### Observability Metrics
+
+| Metric | Type | Threshold | Alert On |
+|--------|------|-----------|----------|
+| `alert_ingestion_rate` | Counter | N/A | Spike > 100/min |
+| `alert_dedup_hit_rate` | Gauge | Target > 95% | Drop < 90% |
+| `alert_auto_ack_rate` | Gauge | Target < 5% | Spike > 20% |
+| `alert_resolution_time_sec` | Histogram | P95 < 3600 | P95 > 7200 |
+| `alert_active_count` | Gauge | Target < 20 | > 50 |
+| `heartbeat_lag_sec` | Gauge | Target < 60 | > 300 |
 
 ---
 
