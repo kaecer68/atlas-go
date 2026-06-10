@@ -46,6 +46,9 @@ func TestIndustryHandlersSmoke(t *testing.T) {
 		riskMonitor,
 		siliconTracker,
 		calendar,
+		nil, // ODMChannel (lazy wiring)
+		nil, // DataAggregator (lazy wiring)
+		"",  // ParamsPath (resolved lazily)
 	)
 
 	handlers := &Handlers{Svc: svc}
@@ -61,6 +64,10 @@ func TestIndustryHandlersSmoke(t *testing.T) {
 		{"seasonality-calendar", httptest.NewRequest(http.MethodGet, "/api/dashboard/industry-seasonality-calendar", nil), handlers.HandleIndustrySeasonalityCalendar},
 		{"graph", httptest.NewRequest(http.MethodGet, "/api/dashboard/industry-graph", nil), handlers.HandleIndustryGraph},
 		{"cycle-status-card", httptest.NewRequest(http.MethodGet, "/api/dashboard/cycle-status-card", nil), handlers.HandleCycleStatusCard},
+		{"industry-odm-channel", httptest.NewRequest(http.MethodGet, "/api/dashboard/industry-odm-channel", nil), handlers.HandleODMChannel},
+		{"industry-data-aggregator", httptest.NewRequest(http.MethodGet, "/api/dashboard/industry-data-aggregator", nil), handlers.HandleDataAggregator},
+		{"industry-seasonal-health", httptest.NewRequest(http.MethodGet, "/api/dashboard/industry-seasonal-health", nil), handlers.HandleSeasonalHealth},
+		{"industry-correlation-loader", httptest.NewRequest(http.MethodGet, "/api/dashboard/industry-correlation-loader", nil), handlers.HandleCorrelationLoader},
 	}
 
 	for _, api := range apis {

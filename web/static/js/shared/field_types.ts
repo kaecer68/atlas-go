@@ -101,6 +101,14 @@ export interface AlertRecord {
   acknowledged: boolean;
   acknowledged_at?: string | null;
   acknowledged_by?: string;
+  status: string;
+  dedup_key?: string;
+  first_seen?: string | null;
+  last_seen?: string | null;
+  count: number;
+  resolved_at?: string | null;
+  resolved_by?: string;
+  silenced_until?: string | null;
 }
 
 export interface AsymmetricRiskConfig {
@@ -444,6 +452,15 @@ export interface CorporateAction {
   source: string;
 }
 
+export interface CorrelationLoaderMetadata {
+  replay_path: string;
+  sector_symbols_path: string;
+  sectors: string[];
+  sector_count: number;
+  min_observations: number;
+  last_updated: string;
+}
+
 export interface CorrelationMatrixResponse {
   symbols: string[];
   labels: string[];
@@ -540,6 +557,8 @@ export interface CyclePosition {
   continuous_phase_score: number;
   leading_indicators: string[];
   lagging_indicators: string[];
+  revenue_growth_yoy: number;
+  profit_growth_yoy: number;
   cycle_duration_days: number;
   expected_phase_change?: string | null;
   updated_at: string;
@@ -671,6 +690,20 @@ export interface DarwinianStatusData {
   last_computed?: string;
   agent_count: number;
   agents: Record<string, string>;
+}
+
+export interface DataAggregatorIndustry {
+  industry_id: string;
+  revenue_growth_yoy: number;
+  profit_growth_yoy: number;
+  updated_at: string;
+  has_data: boolean;
+}
+
+export interface DataAggregatorSummary {
+  industries: string[];
+  count: number;
+  fetched_at: string;
 }
 
 export interface DataChannel {
@@ -2012,6 +2045,7 @@ export interface ParametersConfig {
   risk_gate?: string;
   engine?: string;
   rsi_tw?: string;
+  tax?: string;
 }
 
 export interface PerformanceReport {
@@ -3097,7 +3131,14 @@ export interface TaskExecutionEvent {
 export interface TaxConfig {
   dividend_tax_rate: number;
   transaction_tax_rate: number;
+  nhi_surcharge_rate: number;
   include_nhi: boolean;
+}
+
+export interface TaxParameters {
+  dividend_tax_rate: string;
+  transaction_tax_rate: string;
+  nhi_surcharge_rate: string;
 }
 
 export interface TaxSnapshot {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
@@ -27,6 +28,10 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/cycle-status-card", shared.Get(h.HandleCycleStatusCard))
 	mux.Handle("GET /api/dashboard/industry-calibration", shared.Get(h.HandleIndustryCalibration))
 	mux.Handle("GET /api/dashboard/calendar-events", shared.Get(h.HandleCalendarEvents))
+	mux.Handle("GET /api/dashboard/industry-odm-channel", shared.Get(h.HandleODMChannel))
+	mux.Handle("GET /api/dashboard/industry-data-aggregator", shared.Get(h.HandleDataAggregator))
+	mux.Handle("GET /api/dashboard/industry-seasonal-health", shared.Get(h.HandleSeasonalHealth))
+	mux.Handle("GET /api/dashboard/industry-correlation-loader", shared.Get(h.HandleCorrelationLoader))
 }
 
 func (h *Handlers) HandleIndustryClassification(r *http.Request) (int, any) {
@@ -440,4 +445,31 @@ func (h *Handlers) HandleCalendarEvents(r *http.Request) (int, any) {
 		"events": result,
 		"count":  len(result),
 	}
+}
+
+func (h *Handlers) HandleODMChannel(r *http.Request) (int, any) {
+	snap := h.Svc.GetODMChannelSnapshot(r.Context())
+	return http.StatusOK, snap
+}
+
+func (h *Handlers) HandleDataAggregator(r *http.Request) (int, any) {
+	summary := h.Svc.GetDataAggregatorSummary()
+	return http.StatusOK, summary
+}
+
+func (h *Handlers) HandleSeasonalHealth(r *http.Request) (int, any) {
+	health, err := h.Svc.GetSeasonalHealth()
+	if err != nil {
+		return http.StatusOK, map[string]any{
+			"error": err.Error(),
+		}
+	}
+	return http.StatusOK, health
+}
+
+func (h *Handlers) HandleCorrelationLoader(r *http.Request) (int, any) {
+	replayPath := config.Load().ReplayDataPath
+	sectorSymbolsPath := ""
+	meta := h.Svc.GetCorrelationLoaderMetadata(replayPath, sectorSymbolsPath)
+	return http.StatusOK, meta
 }

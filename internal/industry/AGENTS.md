@@ -12,6 +12,10 @@
 - **商業週期偵測**：產業生命週期階段（expansion/recovery/mature/recession）判定
 - **衝擊傳導**：從來源產業出發的上下游衝擊影響計算
 - **產業分類樹**：多層次產業分類結構
+- **半導體週期**：`SiliconCycleTracker` 追蹤半導體供需週期（矽循環）對台股產業的影響
+- **ODM 通道**：`ODMChannel` 監測 ODM 廠商出貨資料與供應鏈傳導模型
+- **數據聚合器**：`DataAggregator` 從 FinMind 拉取個股財務數據，聚合成產業級營收/獲利成長率
+- **週期狀態卡**：`CycleStatusCardBuilder` 整合所有子引擎輸出為單一狀態卡片（供前端 Pipeline Health 頁面使用）
 
 ---
 
@@ -26,6 +30,10 @@
 | `dynamic_env.go` | 動態環境調變器（`DynamicEnvModulator`）、將宏觀數據納入週期評分 |
 | `risk.go` | 產業風險監控（客戶集中度、新聞延遲、不對稱風險） |
 | `types.go` / `classification.go` | 產業分類樹結構 |
+| `cycle_status_card.go` | 週期狀態卡建構器（`CycleStatusCardBuilder`）、整合所有子引擎輸出 |
+| `silicon_cycle.go` | 半導體供需週期追蹤（`SiliconCycleTracker`）、SOX 指數相關性分析 |
+| `data_aggregator.go` | FinMind 財務數據聚合（`DataAggregator`）、產業級營收/獲利成長率計算 |
+| `odm_channel.go` | ODM 出貨通道監測（`ODMChannel`）、衝擊傳導模型 |
 
 ---
 
@@ -60,6 +68,10 @@ Replay Data (cmd/calibrate-seasonal --replay)
 | `GET /api/industry/cycles` | 同上 | 各產業週期位置與趨勢 |
 | `GET /api/industry/classification` | 同上 | 產業分類樹 |
 | `GET /api/industry/detail` | 同上 | 單一產業完整資訊（連動 + 季節 + 週期 + 風險） |
+| `GET /api/industry/cycles/odm-channel` | 同上 | ODM 通道即時快照（4 個資料平面：出貨/庫存/營收/傳導） |
+| `GET /api/industry/cycles/data-aggregator` | 同上 | 數據聚合摘要（各產業最新營收與獲利成長率 + 資料品質） |
+| `GET /api/industry/cycles/seasonal-health` | 同上 | 季節性校準健康狀態（參數完整性與校準時間戳） |
+| `GET /api/industry/cycles/correlation-loader` | 同上 | 相關矩陣載入器元資料（樣本數、產業覆蓋、最後重建時間） |
 
 ---
 

@@ -49,6 +49,8 @@ type CyclePosition struct {
 	ContinuousPhaseScore float64        `json:"continuous_phase_score"` // -1.0 to 1.0, probability-weighted
 	LeadingIndicators    []Indicator    `json:"leading_indicators"`
 	LaggingIndicators    []Indicator    `json:"lagging_indicators"`
+	RevenueGrowthYoY     float64        `json:"revenue_growth_yoy"`
+	ProfitGrowthYoY      float64        `json:"profit_growth_yoy"`
 	CycleDurationDays    int            `json:"cycle_duration_days"` // Days in current phase
 	ExpectedPhaseChange  *time.Time     `json:"expected_phase_change,omitempty"`
 	UpdatedAt            time.Time      `json:"updated_at"`
@@ -259,6 +261,8 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 	position.CapexCycle = ct.detectCapexCycle(metrics)
 
 	position.Confidence = ct.calculateConfidence(industryID, metrics)
+	position.RevenueGrowthYoY = metrics.RevenueGrowthYoY
+	position.ProfitGrowthYoY = metrics.ProfitGrowthYoY
 
 	// Calculate continuous phase score (probability-weighted blend)
 	position.ContinuousPhaseScore = ct.GetContinuousPhaseScore(industryID)

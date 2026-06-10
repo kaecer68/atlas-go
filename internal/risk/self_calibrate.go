@@ -147,6 +147,12 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		current, _ := ie.GetParameter(name)
 		best := result.ParamValues[name]
 
+		if !validateCalibrationBounds(current, best) {
+			fmt.Printf("self_calibrate: %s value %.6f rejected (outside [%.6f, %.6f])\n",
+				name, best, current*0.3, current*3.0)
+			continue
+		}
+
 		if math.Abs(best-current) < current*0.01 {
 			continue
 		}
@@ -321,4 +327,18 @@ func classifyDelta(deltaPct float64, nSessions int) string {
 	default:
 		return "low"
 	}
+}
+
+// validateCalibrationBounds checks whether the proposed value is within
+// [current*0.3, current*3.0]. When current is zero the check is skipped
+// (no meaningful bound to compare against). This prevents the bug class
+// where repeated Bayesian optimization converges to near-zero values that
+// are 20× outside any sane operating range.
+func validateCalibrationBounds(current, proposed float64) bool {
+	if current == 0 {
+		return true
+	}
+	lower := current * 0.3
+	upper := current * 3.0
+	return proposed >= lower && proposed <= upper
 }

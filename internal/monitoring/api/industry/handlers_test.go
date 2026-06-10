@@ -20,6 +20,7 @@ func setupHandlers() *Handlers {
 
 	svc := service.NewIndustryService(
 		classifier, seasonal, cycleTracker, linkage, riskMonitor, silicon, events,
+		nil, nil, "",
 	)
 
 	return &Handlers{Svc: svc}
