@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -129,7 +130,7 @@ func (h *Handlers) HandleTaxSnapshot(r *http.Request) (int, any) {
 		}
 	}
 
-	calc := tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
+	calc := tax.NewTaiwanTaxCalculator(config.GetParametersConfig().Tax.ToConfig())
 
 	sellPrices := make(map[string]float64)
 	dividends := make(map[string]float64)
