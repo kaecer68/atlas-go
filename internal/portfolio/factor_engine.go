@@ -17,6 +17,13 @@ type QuoteProvider interface {
 	GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error)
 }
 
+// CorporateActionProvider fetches corporate action data for a symbol within a date range.
+// It abstracts the data source for events such as cash dividends, stock dividends,
+// and capital reductions that require historical price back-adjustment.
+type CorporateActionProvider interface {
+	GetCorporateActions(ctx context.Context, symbol string, start, end time.Time) ([]domain.CorporateAction, error)
+}
+
 func isFinite(f float64) bool {
 	return !math.IsInf(f, 0) && !math.IsNaN(f)
 }
@@ -50,16 +57,20 @@ func (fe *FactorEngine) IsPreciousMetal(symbol string) bool {
 }
 
 type FactorEngine struct {
-	history       *HistoricalPrices
-	fundamentals  *FundamentalProvider
-	params        *RuntimeParameters
-	narrativeProv func(symbol string) *domain.NarrativeFactorScore
-	cycleProv     func(symbol string) *domain.IndustryCycleFactorScore
-	linkageProv   func(symbol string) *domain.LinkageFactorScore
-	tsmcProv      func(symbol string) *domain.FactorScoreItem
-	pmCtxProv     PMContextProvider
-	etfAnalyzer   *ETFAnalyzer
-	mu            sync.RWMutex
+	history         *HistoricalPrices
+	fundamentals    *FundamentalProvider
+	params          *RuntimeParameters
+	narrativeProv   func(symbol string) *domain.NarrativeFactorScore
+	cycleProv       func(symbol string) *domain.IndustryCycleFactorScore
+	linkageProv     func(symbol string) *domain.LinkageFactorScore
+	tsmcProv        func(symbol string) *domain.FactorScoreItem
+	pmCtxProv       PMContextProvider
+	corpActions     CorporateActionProvider
+	etfAnalyzer     *ETFAnalyzer
+	mu              sync.RWMutex
+	adjustedMu      sync.Mutex
+	adjustedSymbols map[string]time.Time
+	adjustmentTTL   time.Duration
 }
 
 // PreciousMetalsContext provides macro inputs for precious metals factor scoring.
@@ -127,6 +138,19 @@ func (fe *FactorEngine) WithLinkageProvider(fn func(symbol string) *domain.Linka
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.linkageProv = fn
+	return fe
+}
+
+func (fe *FactorEngine) WithCorporateActionProvider(p CorporateActionProvider) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.corpActions = p
+	if fe.adjustedSymbols == nil {
+		fe.adjustedSymbols = make(map[string]time.Time)
+	}
+	if fe.adjustmentTTL == 0 {
+		fe.adjustmentTTL = 24 * time.Hour
+	}
 	return fe
 }
 
@@ -249,19 +273,60 @@ func (fe *FactorEngine) RefreshETFNAV(ctx context.Context, provider QuoteProvide
 	return ea.UpdateNAVFromQuotes(quotes)
 }
 
+// ensureAdjusted fetches corporate actions for the symbol and applies price adjustments
+// if not already adjusted within the adjustmentTTL window. If no corporate action provider
+// is configured, returns nil without error. The latest adjustment time is tracked internally
+// via adjustedSymbols and is not part of the public signature.
+func (fe *FactorEngine) ensureAdjusted(ctx context.Context, symbol string) error {
+	if fe.corpActions == nil {
+		return nil
+	}
+
+	fe.adjustedMu.Lock()
+	lastAdj, exists := fe.adjustedSymbols[symbol]
+	fe.adjustedMu.Unlock()
+
+	if exists && time.Since(lastAdj) < fe.adjustmentTTL {
+		return nil
+	}
+
+	end := time.Now()
+	start := end.Add(-365 * 24 * time.Hour)
+	actions, err := fe.corpActions.GetCorporateActions(ctx, symbol, start, end)
+	if err != nil {
+		return err
+	}
+
+	if len(actions) > 0 && fe.history != nil {
+		if adjErr := fe.history.AdjustForCorporateActions(actions); adjErr != nil {
+			logging.Warn("factor_engine", "adjust_for_actions_failed", "symbol", symbol, logging.Err(adjErr))
+		}
+	}
+
+	now := time.Now()
+	fe.adjustedMu.Lock()
+	fe.adjustedSymbols[symbol] = now
+	fe.adjustedMu.Unlock()
+
+	return nil
+}
+
 // CalculateMomentumScore computes momentum based on price change over the configured lookback period.
 // Falls back to intraday return when no historical data is available.
 func (fe *FactorEngine) CalculateMomentumScore(symbol string, quotes map[string]domain.Quote) float64 {
-	return fe.calculateMomentumDetail(symbol, quotes).Score
+	return fe.calculateMomentumDetail(context.Background(), symbol, quotes).Score
 }
 
 // calculateMomentumDetail returns the full breakdown for momentum calculation.
-func (fe *FactorEngine) calculateMomentumDetail(symbol string, quotes map[string]domain.Quote) domain.FactorScoreItem {
+func (fe *FactorEngine) calculateMomentumDetail(ctx context.Context, symbol string, quotes map[string]domain.Quote) domain.FactorScoreItem {
 	fe.mu.RLock()
 	hp := fe.history
 	fe.mu.RUnlock()
 
 	if hp != nil {
+		if err := fe.ensureAdjusted(ctx, symbol); err != nil {
+			logging.Warn("factor_engine", "ensure_adjusted_failed", logging.Symbol(symbol), logging.Err(err))
+		}
 		ret := hp.MomentumReturn(symbol, fe.params.Factor.MomentumLookbackDays)
 		if ret != 0 {
 			score := ret / fe.params.Factor.MomentumStdDevDivisor
@@ -450,12 +515,12 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 // CalculateQualityScore computes quality based on dividend yield and price stability.
 // Falls back to a mild positive constant when no data is available.
 func (fe *FactorEngine) CalculateQualityScore(symbol string, quotes map[string]domain.Quote) float64 {
-	return fe.calculateQualityDetail(symbol).Score
+	return fe.calculateQualityDetail(context.Background(), symbol).Score
 }
 
 // calculateQualityDetail returns the full breakdown for quality calculation.
 // Precious metals (gold, silver) have no ROE/profit-margin — returns 0.
-func (fe *FactorEngine) calculateQualityDetail(symbol string) domain.FactorScoreItem {
+func (fe *FactorEngine) calculateQualityDetail(ctx context.Context, symbol string) domain.FactorScoreItem {
 	if isPM, _ := isPreciousMetal(symbol); isPM {
 		return domain.FactorScoreItem{
 			Score:      0.0,
@@ -488,6 +553,9 @@ func (fe *FactorEngine) calculateQualityDetail(symbol string) domain.FactorScore
 	}
 
 	if hp != nil {
+		if err := fe.ensureAdjusted(ctx, symbol); err != nil {
+			logging.Warn("factor_engine", "ensure_adjusted_failed", logging.Symbol(symbol), logging.Err(err))
+		}
 		vol := hp.Volatility(symbol, fe.params.Factor.MomentumLookbackDays)
 		if vol > 0 {
 			volScore := 1.0 - vol/fe.params.Factor.QualityVolatilityStd
@@ -638,7 +706,7 @@ func (fe *FactorEngine) CalculateAllScores(
 
 	// Precious Metals factor
 	if isPM, _ := isPreciousMetal(symbol); isPM {
-		pmScore := fe.CalculatePreciousMetalsScore(symbol, quotes)
+		pmScore := fe.CalculatePreciousMetalsScore(context.Background(), symbol, quotes)
 		result[FactorPreciousMetals] = pmScore.Score
 	}
 
@@ -678,9 +746,9 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 	factorWeights map[FactorType]float64,
 	bridgeInputs ...FactorBridgeInput,
 ) (*domain.FactorScoreBreakdown, map[FactorType]float64) {
-	mom := fe.calculateMomentumDetail(symbol, quotes)
+	mom := fe.calculateMomentumDetail(context.Background(), symbol, quotes)
 	val := fe.calculateValueDetail(symbol, quotes)
-	qly := fe.calculateQualityDetail(symbol)
+	qly := fe.calculateQualityDetail(context.Background(), symbol)
 
 	var agentScore float64
 	var totalWeight float64
@@ -776,7 +844,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 	// Precious Metals: compute PM score when symbol is a known PM instrument.
 	var pm domain.FactorScoreItem
 	if isPM, _ := isPreciousMetal(symbol); isPM {
-		pm = fe.CalculatePreciousMetalsScore(symbol, quotes)
+		pm = fe.CalculatePreciousMetalsScore(context.Background(), symbol, quotes)
 		result[FactorPreciousMetals] = pm.Score
 		breakdown.PreciousMetals = pm
 	}
@@ -907,22 +975,22 @@ func (fe *FactorEngine) CalculateETFScore(symbol string, quote domain.Quote) dom
 
 // CalculatePreciousMetalsScore returns the composite precious metals factor score.
 // Returns 0 if symbol is not a known precious metal instrument.
-func (fe *FactorEngine) CalculatePreciousMetalsScore(symbol string, quotes map[string]domain.Quote) domain.FactorScoreItem {
+func (fe *FactorEngine) CalculatePreciousMetalsScore(ctx context.Context, symbol string, quotes map[string]domain.Quote) domain.FactorScoreItem {
 	isPM, subtype := isPreciousMetal(symbol)
 	if !isPM {
 		return domain.FactorScoreItem{Score: 0.0, Formula: "not_precious_metal"}
 	}
 
-	ctx := fe.getPMContext(symbol)
+	pmCtx := fe.getPMContext(symbol)
 
-	realRate := fe.pmRealRateScore(ctx)
-	dxy := fe.pmDXYScore(ctx)
-	inflExp := fe.pmInflationExpectScore(ctx)
-	cbBuy := fe.pmCentralBankScore(ctx)
-	etfFlow := fe.pmETFFlowScore()
-	riskOff := fe.pmRiskOffScore(ctx)
-	physDemand := fe.pmPhysicalDemandScore(ctx)
-	comex := fe.pmCOMEXScore(ctx)
+	realRate := fe.pmRealRateScore(pmCtx)
+	dxy := fe.pmDXYScore(pmCtx)
+	inflExp := fe.pmInflationExpectScore(pmCtx)
+	cbBuy := fe.pmCentralBankScore(pmCtx)
+	etfFlow := fe.pmETFFlowScore(ctx)
+	riskOff := fe.pmRiskOffScore(pmCtx)
+	physDemand := fe.pmPhysicalDemandScore(pmCtx)
+	comex := fe.pmCOMEXScore(pmCtx)
 
 	goldScore := 0.16*realRate + 0.10*dxy + 0.10*inflExp + 0.12*cbBuy + 0.08*etfFlow + 0.06*physDemand + 0.10*comex + 0.28*riskOff
 
@@ -934,8 +1002,8 @@ func (fe *FactorEngine) CalculatePreciousMetalsScore(symbol string, quotes map[s
 	formula := "gold: 0.16*RR + 0.10*DXY + 0.10*Inf + 0.12*CB + 0.08*Flow + 0.06*PhyDem + 0.10*COMEX + 0.28*RiskOff"
 
 	if subtype == "silver" {
-		indDemand := fe.pmIndustrialDemandScore(ctx)
-		gsRatio := fe.pmGoldSilverRatioScore(ctx)
+		indDemand := fe.pmIndustrialDemandScore(pmCtx)
+		gsRatio := fe.pmGoldSilverRatioScore(pmCtx)
 		score = 0.60*goldScore + 0.15*indDemand + 0.10*gsRatio + 0.15*comex
 		formula = "silver: 0.60*PM_gold + 0.15*Ind + 0.10*GS + 0.15*COMEX"
 	}
@@ -1046,11 +1114,14 @@ func (fe *FactorEngine) pmCentralBankScore(ctx *PreciousMetalsContext) float64 {
 // pmETFFlowScore: uses GLD 20d momentum as ETF flow proxy.
 // GLD > 5% → +0.5 (strong inflows), > 0 → +0.2, < −5% → −0.3, else 0.
 // Falls back to 0 if GLD price history unavailable.
-func (fe *FactorEngine) pmETFFlowScore() float64 {
+func (fe *FactorEngine) pmETFFlowScore(ctx context.Context) float64 {
 	fe.mu.RLock()
 	defer fe.mu.RUnlock()
 	if fe.history == nil {
 		return 0
+	}
+	if err := fe.ensureAdjusted(ctx, "GLD"); err != nil {
+		logging.Warn("factor_engine", "ensure_adjusted_failed", logging.Symbol("GLD"), logging.Err(err))
 	}
 	ret20d := fe.history.MomentumReturn("GLD", 20)
 	switch {

@@ -1,7 +1,9 @@
 package portfolio
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
@@ -177,7 +179,7 @@ func TestMomentumFallbackProducesLowerScore(t *testing.T) {
 		"TEST.TW": {Symbol: "TEST.TW", Open: 100, Last: 110, IsTradable: true},
 	}
 
-	momFallback := fe.calculateMomentumDetail("TEST.TW", quotes)
+	momFallback := fe.calculateMomentumDetail(context.Background(), "TEST.TW", quotes)
 
 	// Verify it's a fallback
 	if !momFallback.IsFallback {
@@ -206,7 +208,7 @@ func TestMomentumFallbackZeroQuote(t *testing.T) {
 	// Empty quotes - should return fallback with zero score
 	quotes := map[string]domain.Quote{}
 
-	momDetail := fe.calculateMomentumDetail("UNKNOWN.TW", quotes)
+	momDetail := fe.calculateMomentumDetail(context.Background(), "UNKNOWN.TW", quotes)
 
 	if !momDetail.IsFallback {
 		t.Error("expected fallback when quote is missing")
@@ -230,7 +232,7 @@ func TestValueFallbackFlag(t *testing.T) {
 func TestQualityFallbackFlag(t *testing.T) {
 	fe := NewFactorEngine()
 
-	qlyDetail := fe.calculateQualityDetail("TEST.TW")
+	qlyDetail := fe.calculateQualityDetail(context.Background(), "TEST.TW")
 
 	if !qlyDetail.IsFallback {
 		t.Error("expected quality to be fallback")
@@ -460,7 +462,7 @@ func TestPreciousMetals_ScenarioA_NoStockPollution(t *testing.T) {
 
 	val := fe.CalculateValueScore("00635U", quotes)
 	qly := fe.CalculateQualityScore("00635U", quotes)
-	pm := fe.CalculatePreciousMetalsScore("00635U", quotes)
+	pm := fe.CalculatePreciousMetalsScore(context.Background(), "00635U", quotes)
 
 	if val != 0 {
 		t.Errorf("Scenario A fail: Value for 00635U = %f, expected 0 (P/E not applicable)", val)
@@ -492,7 +494,7 @@ func TestPreciousMetals_ScenarioB_FedHiking(t *testing.T) {
 		}
 	})
 
-	pm := fe.CalculatePreciousMetalsScore("00635U", nil)
+	pm := fe.CalculatePreciousMetalsScore(context.Background(), "00635U", nil)
 
 	if pm.Score >= 0 {
 		t.Errorf("Scenario B fail: PM = %f, expected negative (hiking cycle)", pm.Score)
@@ -522,7 +524,7 @@ func TestPreciousMetals_ScenarioC_RiskOff(t *testing.T) {
 		}
 	})
 
-	pm := fe.CalculatePreciousMetalsScore("GLD", nil)
+	pm := fe.CalculatePreciousMetalsScore(context.Background(), "GLD", nil)
 
 	if pm.Score < 0.5 {
 		t.Errorf("Scenario C fail: PM = %f, expected > 0.5 (risk-off surge)", pm.Score)
@@ -534,7 +536,7 @@ func TestPreciousMetals_ScenarioC_RiskOff(t *testing.T) {
 	}
 
 	// Silver subtype also tested.
-	pmSilver := fe.CalculatePreciousMetalsScore("SLV", nil)
+	pmSilver := fe.CalculatePreciousMetalsScore(context.Background(), "SLV", nil)
 	if pmSilver.Score <= 0 {
 		t.Errorf("Scenario C fail: silver PM = %f, expected positive", pmSilver.Score)
 	}
@@ -543,8 +545,98 @@ func TestPreciousMetals_ScenarioC_RiskOff(t *testing.T) {
 // TestPreciousMetals_UnknownSymbol returns zero for non-PM symbols.
 func TestPreciousMetals_UnknownSymbol(t *testing.T) {
 	fe := NewFactorEngine()
-	pm := fe.CalculatePreciousMetalsScore("2330.TW", nil)
+	pm := fe.CalculatePreciousMetalsScore(context.Background(), "2330.TW", nil)
 	if pm.Score != 0 {
 		t.Errorf("expected 0 for non-PM symbol, got %f", pm.Score)
+	}
+}
+
+type mockCorporateActionProvider struct {
+	actions map[string][]domain.CorporateAction
+	calls   int
+}
+
+func (m *mockCorporateActionProvider) GetCorporateActions(_ context.Context, symbol string, _, _ time.Time) ([]domain.CorporateAction, error) {
+	m.calls++
+	return m.actions[symbol], nil
+}
+
+func TestFactorEngineWithCorporateActionProvider(t *testing.T) {
+	fe := NewFactorEngine()
+	if fe.corpActions != nil {
+		t.Fatal("expected nil corpActions before setter")
+	}
+	if fe.adjustedSymbols != nil {
+		t.Fatal("expected nil adjustedSymbols before setter")
+	}
+
+	provider := &mockCorporateActionProvider{}
+	fe.WithCorporateActionProvider(provider)
+
+	if fe.corpActions != provider {
+		t.Error("WithCorporateActionProvider did not attach provider")
+	}
+	if fe.adjustedSymbols == nil {
+		t.Error("WithCorporateActionProvider did not initialize adjustedSymbols map")
+	}
+	if fe.adjustmentTTL != 24*time.Hour {
+		t.Errorf("expected adjustmentTTL=24h, got %v", fe.adjustmentTTL)
+	}
+}
+
+func TestEnsureAdjustedNoOpWithoutProvider(t *testing.T) {
+	fe := NewFactorEngine()
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+}
+
+func TestEnsureAdjustedCachesWithinTTL(t *testing.T) {
+	fe := NewFactorEngine()
+	provider := &mockCorporateActionProvider{
+		actions: map[string][]domain.CorporateAction{
+			"2330.TW": {{Symbol: "2330.TW", CashDividend: 5.0}},
+		},
+	}
+	fe.WithCorporateActionProvider(provider)
+
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+
+	if provider.calls != 1 {
+		t.Errorf("expected 1 provider call (cached), got %d", provider.calls)
+	}
+}
+
+func TestEnsureAdjustedRefetchesAfterTTL(t *testing.T) {
+	fe := NewFactorEngine()
+	fe.adjustmentTTL = 10 * time.Millisecond
+	provider := &mockCorporateActionProvider{}
+	fe.WithCorporateActionProvider(provider)
+
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+	time.Sleep(20 * time.Millisecond)
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+
+	if provider.calls != 2 {
+		t.Errorf("expected 2 provider calls after TTL expiry, got %d", provider.calls)
+	}
+}
+
+func TestEnsureAdjustedDifferentSymbols(t *testing.T) {
+	fe := NewFactorEngine()
+	provider := &mockCorporateActionProvider{
+		actions: map[string][]domain.CorporateAction{
+			"2330.TW": {{Symbol: "2330.TW", CashDividend: 5.0}},
+			"2317.TW": {{Symbol: "2317.TW", CashDividend: 3.0}},
+		},
+	}
+	fe.WithCorporateActionProvider(provider)
+
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+	fe.ensureAdjusted(context.Background(), "2317.TW")
+	fe.ensureAdjusted(context.Background(), "2330.TW")
+
+	if provider.calls != 2 {
+		t.Errorf("expected 2 provider calls (one per symbol), got %d", provider.calls)
 	}
 }

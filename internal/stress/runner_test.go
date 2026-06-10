@@ -291,6 +291,35 @@ func TestCovarianceDrivenScenarios(t *testing.T) {
 		result.MaxDrawdown*100, result.VaR95, result.SharpeRatio)
 }
 
+func TestStressSortinoComputed(t *testing.T) {
+	runner := NewRunner(domain.AgentRegistry{}, domain.ExecutionPolicy{})
+
+	stockQuotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 300, IsTradable: true},
+		{Symbol: "0050.TW", Last: 120, IsTradable: true},
+		{Symbol: "GLD", Last: 150, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50},
+		{Symbol: "0050.TW", Side: domain.SideBuy, Conviction: 50},
+		{Symbol: "GLD", Side: domain.SideBuy, Conviction: 90},
+	}
+
+	result := runner.RunScenario(ScenarioCOVIDCrash, stockQuotes, recs)
+
+	if math.IsNaN(result.SortinoRatio) {
+		t.Error("SortinoRatio is NaN")
+	}
+	if result.SortinoRatio == 0 {
+		t.Error("SortinoRatio should be non-zero for multi-day scenario with returns")
+	}
+
+	// Sortino should generally be >= Sharpe (downside deviation <= total deviation)
+	if result.SortinoRatio < result.SharpeRatio {
+		t.Logf("SortinoRatio %.4f < SharpeRatio %.4f (possible if no downside)", result.SortinoRatio, result.SharpeRatio)
+	}
+}
+
 func TestMultiDayStress_AllScenarios(t *testing.T) {
 	runner := NewRunner(domain.AgentRegistry{}, domain.ExecutionPolicy{})
 

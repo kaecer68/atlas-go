@@ -315,6 +315,9 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		industry.NewRiskMonitor(),
 		siliconTracker,
 		newWiredEventCalendar(marketdata.NewTWSECalendarProvider()), // eventCalendar with TWSE provider
+		nil,                                // odmChannel (optional, not wired in default dashboard)
+		nil,                                // dataAggregator (optional, not wired in default dashboard)
+		config.Load().ParametersConfigPath, // paramsPath
 	)
 
 	// Wire the macro provider into the silicon cycle aggregator so that

@@ -11,8 +11,18 @@
 - **核心介面**：
     - `Provider` (`provider.go`)：個股行情介面，要求實作 `GetQuotes`。
     - `MacroDataProvider` (`macro_provider.go`)：總經指標介面，要求實作 `FetchSnapshot`。
+    - `CorporateActionProvider` (`corporate_action_provider.go`)：法人事件介面（P1-2-α 引入），要求實作 `GetCorporateActions(ctx, symbol, start, end)`。
 - **資料流**：
     `External API (Fugle/TWSE) → Client → Provider/Adapter → domain.Quote / MacroDataSnapshot`
+
+### CorporateAction 整合層
+
+`AggregatedCorporateActionProvider`（`aggregated_corporate_action_provider.go`）是 `CorporateActionProvider` 的首選實作：
+
+- 優先級：TWSE（包含除權息參考價）為主，FinMind 為備援
+- Dedup：同一 `(symbol, ex_date)` 事件以 TWSE 為準；若 TWSE 缺漏該筆欄位但 FinMind 有，會回填 `CashDividend` / `StockDividend`
+- Partial failure：兩 provider 中任一失敗仍要回傳另一個 provider 的結果，**不要**因為一邊失敗就 return error；只有「兩邊都失敗」才回傳 error
+- 輸出排序：`ExDate` 升冪
 
 ---
 

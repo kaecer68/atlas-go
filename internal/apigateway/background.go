@@ -80,14 +80,18 @@ func (t *ScheduledTask) RecordFailure() {
 // TaskFailureHandler is called when a task fails, receiving the task name and error.
 type TaskFailureHandler func(taskName string, consecutiveFailures int, err error)
 
+// TaskRecoveryHandler is called when a task recovers after consecutive failures.
+type TaskRecoveryHandler func(taskName string, recoveredFrom int)
+
 // BackgroundTaskManager coordinates all background data fetch tasks.
 type BackgroundTaskManager struct {
-	gateway        *Gateway
-	registry       map[string]*ScheduledTask
-	mu             sync.RWMutex
-	wg             sync.WaitGroup
-	cancel         context.CancelFunc
-	failureHandler TaskFailureHandler
+	gateway         *Gateway
+	registry        map[string]*ScheduledTask
+	mu              sync.RWMutex
+	wg              sync.WaitGroup
+	cancel          context.CancelFunc
+	failureHandler  TaskFailureHandler
+	recoveryHandler TaskRecoveryHandler
 }
 
 // NewBackgroundTaskManager creates a task manager.
@@ -154,6 +158,11 @@ func (m *BackgroundTaskManager) Start(ctx context.Context) {
 // SetFailureHandler sets a callback invoked when any task fails.
 func (m *BackgroundTaskManager) SetFailureHandler(h TaskFailureHandler) {
 	m.failureHandler = h
+}
+
+// SetRecoveryHandler sets a callback invoked when a task recovers from failures.
+func (m *BackgroundTaskManager) SetRecoveryHandler(h TaskRecoveryHandler) {
+	m.recoveryHandler = h
 }
 
 // Stop gracefully shuts down all tasks.
@@ -229,7 +238,11 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 			m.failureHandler(task.Name, task.Failures(), err)
 		}
 	} else {
+		prev := task.Failures()
 		task.RecordSuccess()
+		if prev > 0 && m.recoveryHandler != nil {
+			m.recoveryHandler(task.Name, prev)
+		}
 	}
 }
 

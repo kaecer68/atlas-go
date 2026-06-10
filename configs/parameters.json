@@ -1,6 +1,6 @@
 {
   "version": "1.2",
-  "updated_at": "2026-06-09T00:07:14.987095+08:00",
+  "updated_at": "2026-06-10T11:49:27.146061+08:00",
   "darwinian": {
     "weight_min": {
       "value": 0.3,
@@ -202,8 +202,8 @@
       "value": 0.5116279069767442,
       "rationale": "60% hit rate is good in TW equity market",
       "source": "calibrated",
-      "last_calibrated": "2026-06-06T00:08:19.24046+08:00",
-      "calibration_timestamp": "2026-06-06T00:08:19.24046+08:00",
+      "last_calibrated": "2026-06-10T11:49:27.14606+08:00",
+      "calibration_timestamp": "2026-06-10T11:49:27.14606+08:00",
       "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
@@ -219,8 +219,8 @@
       "value": 0,
       "rationale": "40% hit rate is poor and warrants reduction",
       "source": "calibrated",
-      "last_calibrated": "2026-06-06T00:08:19.240461+08:00",
-      "calibration_timestamp": "2026-06-06T00:08:19.240461+08:00",
+      "last_calibrated": "2026-06-10T11:49:27.14606+08:00",
+      "calibration_timestamp": "2026-06-10T11:49:27.14606+08:00",
       "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
@@ -1913,8 +1913,13 @@
     },
     "factor_weight_drift_threshold": {
       "value": 0,
-      "rationale": "",
-      "source": ""
+      "rationale": "Threshold for trigger-based factor weight updates via FactorWeightEngine; 0 means drift detection is disabled",
+      "source": "heuristic"
+    },
+    "walk_forward_embargo_days": {
+      "value": 0,
+      "rationale": "Calendar embargo to prevent look-ahead bias in walk-forward validation; 0 = disabled",
+      "source": "heuristic"
     }
   },
   "baseline": {
@@ -2016,6 +2021,16 @@
         "last_validated": "2026-05-04T00:00:00Z"
       }
     },
+    "discounted_commission_bps": {
+      "value": 0,
+      "rationale": "Discounted commission rate for high-volume brokers; 0 = use standard commission",
+      "source": "heuristic"
+    },
+    "commission_discount_threshold": {
+      "value": 0,
+      "rationale": "Monthly volume threshold (NTD) for commission discount eligibility; 0 = no discount tier",
+      "source": "heuristic"
+    },
     "slippage_bps": {
       "value": 4,
       "rationale": "4 bps estimated slippage for market orders",
@@ -2032,8 +2047,8 @@
     },
     "avg_trading_cost": {
       "value": 0,
-      "rationale": "",
-      "source": ""
+      "rationale": "Average per-trade cost in bps including commission and slippage; 0 = use per-skill cost model",
+      "source": "heuristic"
     },
     "reserve_cash_fraction": {
       "value": 0.1,
@@ -2081,8 +2096,8 @@
     },
     "superinvestor_conviction_base": {
       "value": 0,
-      "rationale": "",
-      "source": ""
+      "rationale": "Base conviction floor for superinvestor agents; 0 = use agent-specific conviction",
+      "source": "heuristic"
     },
     "cro_zscore_threshold": {
       "value": -1.5,
@@ -2418,8 +2433,8 @@
     },
     "use_ml_scoring": {
       "value": false,
-      "rationale": "",
-      "source": ""
+      "rationale": "Flag to enable ML-based scoring for agent recommendations; disabled by default",
+      "source": "heuristic"
     }
   },
   "risk": {
@@ -3635,8 +3650,8 @@
     },
     "inflation_estimate": {
       "value": 0,
-      "rationale": "",
-      "source": ""
+      "rationale": "Inflation rate estimate for real-return calculations; 0 = use CPI fallback from marketdata",
+      "source": "heuristic"
     },
     "spring_festival_confidence": {
       "value": 0.65,
@@ -3874,13 +3889,13 @@
     },
     "bdi_api_timeout_sec": {
       "value": 0,
-      "rationale": "",
-      "source": ""
+      "rationale": "BDI (Baltic Dry Index) API timeout; 0 = use default client timeout",
+      "source": "heuristic"
     },
     "bdi_endpoint": {
       "value": "",
-      "rationale": "",
-      "source": ""
+      "rationale": "BDI API endpoint URL; empty = use default endpoint from marketdata provider",
+      "source": "heuristic"
     },
     "max_retry_attempts": {
       "value": 3,
@@ -4781,8 +4796,8 @@
     },
     "skill_to_industries": {
       "value": null,
-      "rationale": "",
-      "source": ""
+      "rationale": "Mapping of agent skills to industry sectors for sector-aware routing; null = not yet configured",
+      "source": "heuristic"
     },
     "cycle_transitions": {
       "value": [
@@ -4976,7 +4991,7 @@
       "rationale": "Downstream decay (0.80) \u003e upstream (0.60) reflects asymmetric shock propagation; systemic divisor (10.0) normalizes connection count to 0-1; min threshold (0.30) filters noise",
       "source": "heuristic",
       "citation": {
-        "source_type": "supply_chain_graph_json",
+        "source_type": "heuristic",
         "source_reference": "configs/supply_chain_graph.json (auto-synced)",
         "evidence_quality": "heuristic_awaiting_data",
         "update_policy": "",
@@ -5024,8 +5039,8 @@
         "weight_clamp_max": 0,
         "window_size": 0
       },
-      "rationale": "",
-      "source": ""
+      "rationale": "Cycle calibration hyper-parameters for business cycle detection; all 0 means use default values from CycleCalibrationConfig",
+      "source": "heuristic"
     },
     "history_retention_days": {
       "value": 90,
@@ -6033,7 +6048,7 @@
       "source": "literature",
       "todo": "Update quarterly from WGC Gold Demand Trends report",
       "citation": {
-        "source_type": "report",
+        "source_type": "literature",
         "source_reference": "World Gold Council, Gold Demand Trends Q1 2026",
         "evidence_quality": "medium",
         "update_policy": "quarterly",
@@ -7269,8 +7284,25 @@
     },
     "last_calibrated_score": {
       "value": 0,
-      "rationale": "",
-      "source": ""
+      "rationale": "Stored score from last calibration run; 0 = calibration not yet performed",
+      "source": "heuristic"
+    }
+  },
+  "tax": {
+    "dividend_tax_rate": {
+      "value": 0,
+      "rationale": "Taiwan dividend withholding tax rate for foreign-invested ETFs; 0 = use statutory 21%",
+      "source": "literature"
+    },
+    "transaction_tax_rate": {
+      "value": 0,
+      "rationale": "Taiwan securities transaction tax rate; 0 = use statutory 0.3% for stocks",
+      "source": "literature"
+    },
+    "nhi_surcharge_rate": {
+      "value": 0,
+      "rationale": "Taiwan National Health Insurance surcharge on investment income; 0 = use statutory 2.11%",
+      "source": "literature"
     }
   }
 }

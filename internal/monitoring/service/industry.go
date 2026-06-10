@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -21,6 +22,9 @@ type IndustryService struct {
 	CardBuilder       *industry.CycleStatusCardBuilder
 	CycleCalibration  *industry.CycleCalibration
 	siliconAggregator *industry.SiliconDataAggregator
+	ODMChannel        *industry.ODMChannel
+	DataAggregator    *industry.DataAggregator
+	ParamsPath        string
 }
 
 func NewIndustryService(
@@ -31,6 +35,9 @@ func NewIndustryService(
 	riskMonitor *industry.RiskMonitor,
 	siliconTracker *industry.SiliconCycleTracker,
 	eventCalendar *industry.EventCalendar,
+	odmChannel *industry.ODMChannel,
+	dataAggregator *industry.DataAggregator,
+	paramsPath string,
 ) *IndustryService {
 	if seasonalEngine != nil && linkageAnalyzer != nil {
 		seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
@@ -47,6 +54,9 @@ func NewIndustryService(
 		SiliconTracker:  siliconTracker,
 		EventCalendar:   eventCalendar,
 		CardBuilder:     cardBuilder,
+		ODMChannel:      odmChannel,
+		DataAggregator:  dataAggregator,
+		ParamsPath:      paramsPath,
 	}
 }
 
@@ -1032,4 +1042,144 @@ func (s *IndustryService) RecordCycleCalibrationOutcome(
 	if s.CycleCalibration != nil {
 		s.CycleCalibration.RecordOutcome(sessionID, date, layerSignals, actualReturn)
 	}
+}
+
+// ODMChannelSnapshot is the dashboard-facing view of ODMChannel state.
+type ODMChannelSnapshot struct {
+	RegisteredSymbols []string
+	Revenues          map[string]float64
+	FetchedAt         time.Time
+	FetchErrors       []string
+	CowosCurrent      float64
+	CowosBaseline     float64
+	CowosDelta        float64
+	CowosTrend        string
+	CowosLastUpdate   time.Time
+	Transmission      *industry.ODMTransmissionModel
+	TransmissionAt    time.Time
+}
+
+// GetODMChannelSnapshot returns the current state of the ODM channel.
+// Returns a zero-value snapshot when s.ODMChannel is nil.
+func (s *IndustryService) GetODMChannelSnapshot(ctx context.Context) ODMChannelSnapshot {
+	snap := ODMChannelSnapshot{
+		Revenues: make(map[string]float64),
+	}
+	if s.ODMChannel == nil {
+		return snap
+	}
+
+	symSnapshot := s.ODMChannel.CowosTracker().Snapshot()
+	snap.CowosCurrent = symSnapshot.CurrentUtilization
+	snap.CowosBaseline = 0.75
+	snap.CowosDelta = symSnapshot.CurrentUtilization - snap.CowosBaseline
+	snap.CowosTrend = symSnapshot.TrendDirection
+	snap.CowosLastUpdate = symSnapshot.LastUpdated
+
+	revs, err := s.ODMChannel.GetAllRevenues(ctx)
+	snap.Revenues = revs
+	snap.FetchedAt = time.Now()
+	if err != nil {
+		snap.FetchErrors = append(snap.FetchErrors, err.Error())
+	}
+
+	for sym := range revs {
+		snap.RegisteredSymbols = append(snap.RegisteredSymbols, sym)
+	}
+	sort.Strings(snap.RegisteredSymbols)
+
+	model, terr := s.ODMChannel.CalculateTransmission(ctx)
+	if terr == nil {
+		snap.Transmission = model
+		snap.TransmissionAt = time.Now()
+	}
+	return snap
+}
+
+// DataAggregatorSummary is the dashboard-facing summary of a data
+// aggregator run over all Level-1 industries.
+type DataAggregatorSummary struct {
+	Industries []DataAggregatorIndustry `json:"industries"`
+	Count      int                      `json:"count"`
+	FetchedAt  time.Time                `json:"fetched_at"`
+}
+
+// DataAggregatorIndustry is a per-industry snapshot of the latest
+// aggregated growth metrics plus evidence quality.
+type DataAggregatorIndustry struct {
+	IndustryID       string    `json:"industry_id"`
+	RevenueGrowthYoY float64   `json:"revenue_growth_yoy"`
+	ProfitGrowthYoY  float64   `json:"profit_growth_yoy"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	HasData          bool      `json:"has_data"`
+}
+
+// GetDataAggregatorSummary reads CycleTracker state for every Level-1
+// industry and returns the aggregate snapshot. Returns an empty summary
+// when s.DataAggregator or s.Classifier is nil.
+func (s *IndustryService) GetDataAggregatorSummary() DataAggregatorSummary {
+	summary := DataAggregatorSummary{
+		Industries: []DataAggregatorIndustry{},
+		FetchedAt:  time.Now(),
+	}
+	if s.DataAggregator == nil || s.Classifier == nil || s.CycleTracker == nil {
+		return summary
+	}
+	for _, seg := range s.Classifier.GetAllSegments() {
+		if seg.ParentID != "" {
+			continue
+		}
+		item := DataAggregatorIndustry{IndustryID: seg.ID}
+		if pos, ok := s.CycleTracker.GetPosition(seg.ID); ok {
+			item.RevenueGrowthYoY = pos.RevenueGrowthYoY
+			item.ProfitGrowthYoY = pos.ProfitGrowthYoY
+			item.UpdatedAt = pos.UpdatedAt
+			item.HasData = pos.RevenueGrowthYoY != 0 || pos.ProfitGrowthYoY != 0
+		}
+		summary.Industries = append(summary.Industries, item)
+	}
+	summary.Count = len(summary.Industries)
+	return summary
+}
+
+// GetSeasonalHealth returns the calibration health summary for the
+// configured parameters.json path. Returns nil when s.ParamsPath is empty.
+func (s *IndustryService) GetSeasonalHealth() (*industry.CalibrationHealthSummary, error) {
+	if s.ParamsPath == "" {
+		return nil, fmt.Errorf("seasonal health: params path not configured")
+	}
+	return industry.SummarizeCalibrationHealth(s.ParamsPath)
+}
+
+// CorrelationLoaderMetadata is the dashboard-facing metadata for the
+// correlation loader (sample size, sector coverage, last rebuild time).
+type CorrelationLoaderMetadata struct {
+	ReplayPath        string    `json:"replay_path"`
+	SectorSymbolsPath string    `json:"sector_symbols_path"`
+	Sectors           []string  `json:"sectors"`
+	SectorCount       int       `json:"sector_count"`
+	MinObservations   int       `json:"min_observations"`
+	LastUpdated       time.Time `json:"last_updated"`
+}
+
+// GetCorrelationLoaderMetadata returns metadata about the configured
+// replay/sector-symbols paths and the linkage analyzer's correlation
+// matrix. Returns empty metadata when s.LinkageAnalyzer is nil.
+func (s *IndustryService) GetCorrelationLoaderMetadata(replayPath, sectorSymbolsPath string) CorrelationLoaderMetadata {
+	meta := CorrelationLoaderMetadata{
+		ReplayPath:        replayPath,
+		SectorSymbolsPath: sectorSymbolsPath,
+		LastUpdated:       time.Now(),
+		MinObservations:   15,
+	}
+	if s.LinkageAnalyzer == nil {
+		return meta
+	}
+	cm := s.LinkageAnalyzer.GetCorrelationMatrix()
+	for industryID := range cm.GetAllCorrelations() {
+		meta.Sectors = append(meta.Sectors, industryID)
+	}
+	sort.Strings(meta.Sectors)
+	meta.SectorCount = len(meta.Sectors)
+	return meta
 }

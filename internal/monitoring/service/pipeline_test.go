@@ -1,0 +1,837 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/recommendation"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/ledger"
+)
+
+// =============================================================================
+// Pure helpers (no I/O, no dependencies)
+// =============================================================================
+
+func TestComputeRegimeStability_NilBreakdown(t *testing.T) {
+	if got := computeRegimeStability(nil); got != nil {
+		t.Errorf("nil breakdown: got %v, want nil", got)
+	}
+}
+
+func TestComputeRegimeStability_SingleRegime(t *testing.T) {
+	rb := &recommendation.RegimeBreakdown{Regimes: map[string]recommendation.RegimePerformance{
+		"bull": {AvgReturn: 0.05},
+	}}
+	if got := computeRegimeStability(rb); got != nil {
+		t.Errorf("single regime: got %v, want nil (need >= 2 regimes)", got)
+	}
+}
+
+func TestComputeRegimeStability_TwoRegimes(t *testing.T) {
+	rb := &recommendation.RegimeBreakdown{Regimes: map[string]recommendation.RegimePerformance{
+		"bull": {AvgReturn: 0.05},
+		"bear": {AvgReturn: -0.03},
+	}}
+	got := computeRegimeStability(rb)
+	if got == nil {
+		t.Fatal("expected non-nil std deviation for 2 regimes")
+	}
+	// Mean = 0.01, variance = ((0.05-0.01)^2 + (-0.03-0.01)^2) / 2 = (0.0016+0.0016)/2 = 0.0016
+	// std = sqrt(0.0016) = 0.04
+	want := 0.04
+	if *got < want-1e-6 || *got > want+1e-6 {
+		t.Errorf("std = %v, want %v", *got, want)
+	}
+}
+
+func TestComputeRegimeStability_ManyRegimes(t *testing.T) {
+	rb := &recommendation.RegimeBreakdown{Regimes: map[string]recommendation.RegimePerformance{
+		"r1": {AvgReturn: 1.0},
+		"r2": {AvgReturn: 2.0},
+		"r3": {AvgReturn: 3.0},
+		"r4": {AvgReturn: 4.0},
+	}}
+	got := computeRegimeStability(rb)
+	if got == nil {
+		t.Fatal("expected non-nil std")
+	}
+	// Mean=2.5, variance = ((1-2.5)^2 + (2-2.5)^2 + (3-2.5)^2 + (4-2.5)^2)/4 = 5/4 = 1.25
+	// std = sqrt(1.25) ≈ 1.118
+	if *got < 1.11 || *got > 1.12 {
+		t.Errorf("std ≈ %v, want ≈ 1.118", *got)
+	}
+}
+
+func TestBothNonZeroAndDivergent(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b float64
+		want bool
+	}{
+		{"both zero", 0, 0, false},
+		{"one zero", 0, 1.0, false},
+		{"near zero (< epsilon)", 0.01, 1.0, false},
+		{"equal non-zero", 1.0, 1.0, false},
+		{"small relative diff (5%)", 1.0, 1.05, false},
+		{"large relative diff (50%)", 1.0, 1.5, true},
+		{"negative large diff", 1.0, -1.5, true},
+		{"very small but non-zero (boundary)", 0.05, 1.0, true}, // 0.05 == epsilon, NOT below → proceeds; relDiff = 0.95/1.0 = 0.95 > 0.10
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := bothNonZeroAndDivergent(tt.a, tt.b); got != tt.want {
+				t.Errorf("bothNonZeroAndDivergent(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// LoadMacroRadar: disk + session provider
+// =============================================================================
+
+func TestLoadMacroRadar_NoSession_NoDir(t *testing.T) {
+	// Sessions dir doesn't exist → FindLatestSessionSummary returns nil, no error.
+	baseDir := t.TempDir()
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	data, err := svc.LoadMacroRadar("")
+	if err != nil {
+		t.Fatalf("expected nil error for empty ledger, got %v", err)
+	}
+	if data != nil {
+		t.Errorf("expected nil data when no sessions exist, got %+v", data)
+	}
+}
+
+func TestLoadMacroRadar_ExplicitSession_Missing(t *testing.T) {
+	baseDir := t.TempDir()
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	data, err := svc.LoadMacroRadar("session-20990101-daily")
+	if err != nil {
+		t.Fatalf("missing session: expected nil error (LoadSessionSummary returns nil for missing), got %v", err)
+	}
+	if data != nil {
+		t.Errorf("expected nil data, got %+v", data)
+	}
+}
+
+func TestLoadMacroRadar_ExplicitSession_Found(t *testing.T) {
+	baseDir := t.TempDir()
+	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
+	sessionID := "session-20260422-daily"
+	writeTestSessionSummaryOnly(t, baseDir, sessionID, domain.SessionSummary{
+		SessionID:    sessionID,
+		Regime:       domain.RegimeRiskOn,
+		RecordedAt:   recordedAt,
+		OutcomeCount: 3,
+		GuardOutcomes: []domain.GuardOutcome{
+			{GuardID: "g1", Passed: true, InputCount: 10, OutputCount: 5},
+		},
+	})
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	data, err := svc.LoadMacroRadar(sessionID)
+	if err != nil {
+		t.Fatalf("LoadMacroRadar: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data")
+	}
+	if data.SessionID != sessionID {
+		t.Errorf("SessionID = %q, want %q", data.SessionID, sessionID)
+	}
+	if data.Regime != domain.RegimeRiskOn {
+		t.Errorf("Regime = %q, want %q", data.Regime, domain.RegimeRiskOn)
+	}
+	if len(data.GuardOutcomes) != 1 {
+		t.Errorf("GuardOutcomes len = %d, want 1", len(data.GuardOutcomes))
+	}
+	if data.GuardOutcomes[0].GuardID != "g1" {
+		t.Errorf("GuardID = %q, want g1", data.GuardOutcomes[0].GuardID)
+	}
+}
+
+// =============================================================================
+// LoadSessions
+// =============================================================================
+
+func TestLoadSessions_NoDir(t *testing.T) {
+	baseDir := t.TempDir()
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	sessions, err := svc.LoadSessions()
+	if err != nil {
+		t.Fatalf("LoadSessions with no dir: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected empty, got %d sessions", len(sessions))
+	}
+}
+
+func TestLoadSessions_EmptyDir(t *testing.T) {
+	baseDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(baseDir, "sessions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	sessions, err := svc.LoadSessions()
+	if err != nil {
+		t.Fatalf("LoadSessions: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected empty, got %d", len(sessions))
+	}
+}
+
+func TestLoadSessions_MultipleSessions(t *testing.T) {
+	baseDir := t.TempDir()
+	dates := []time.Time{
+		time.Date(2026, 4, 20, 4, 0, 0, 0, time.UTC),
+		time.Date(2026, 4, 22, 4, 0, 0, 0, time.UTC),
+		time.Date(2026, 4, 21, 4, 0, 0, 0, time.UTC),
+	}
+	sessionIDs := []string{"session-20260420-daily", "session-20260422-daily", "session-20260421-daily"}
+	for i, id := range sessionIDs {
+		writeTestSessionSummaryOnly(t, baseDir, id, domain.SessionSummary{
+			SessionID:    id,
+			Regime:       domain.RegimeRiskOn,
+			RecordedAt:   dates[i],
+			OutcomeCount: i + 1,
+		})
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	sessions, err := svc.LoadSessions()
+	if err != nil {
+		t.Fatalf("LoadSessions: %v", err)
+	}
+	if len(sessions) != 3 {
+		t.Fatalf("expected 3 sessions, got %d", len(sessions))
+	}
+	// Sorted by trading date DESC: 22, 21, 20. Input written in order [20, 22, 21] → sorted OutcomeCount [2, 3, 1].
+	wantOrder := []string{"session-20260422-daily", "session-20260421-daily", "session-20260420-daily"}
+	wantOCs := []int{2, 3, 1}
+	for i, s := range sessions {
+		if s.SessionID != wantOrder[i] {
+			t.Errorf("position %d: got %q, want %q", i, s.SessionID, wantOrder[i])
+		}
+		if s.OutcomeCount != wantOCs[i] {
+			t.Errorf("position %d: OutcomeCount = %d, want %d", i, s.OutcomeCount, wantOCs[i])
+		}
+	}
+}
+
+func TestLoadSessions_FallbackToSessionIDDate(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260422-daily"
+	// Write a session dir without a summary.json → RecordedAt falls back to sessionID date.
+	if err := os.MkdirAll(filepath.Join(baseDir, "sessions", sessionID), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	sessions, err := svc.LoadSessions()
+	if err != nil {
+		t.Fatalf("LoadSessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].SessionID != sessionID {
+		t.Errorf("SessionID = %q", sessions[0].SessionID)
+	}
+	if sessions[0].RecordedAt.IsZero() {
+		t.Error("RecordedAt should fall back to sessionID date, not zero")
+	}
+}
+
+// =============================================================================
+// LoadDarwinianHistory
+// =============================================================================
+
+func TestLoadDarwinianHistory_NoFile(t *testing.T) {
+	baseDir := t.TempDir()
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	points, err := svc.LoadDarwinianHistory(10)
+	if err != nil {
+		t.Fatalf("LoadDarwinianHistory with no file: %v", err)
+	}
+	if points == nil {
+		t.Error("expected non-nil empty slice on missing file, got nil")
+	}
+	if len(points) != 0 {
+		t.Errorf("expected 0 points, got %d", len(points))
+	}
+}
+
+func TestLoadDarwinianHistory_ReadsAndLimits(t *testing.T) {
+	baseDir := t.TempDir()
+	stateDir := filepath.Join(baseDir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Write 3 history lines, oldest first (file order); reader iterates reverse.
+	lines := []string{
+		`{"timestamp":"2026-04-20T04:00:00Z","weights":{"agent-a":{"weight":0.9,"rolling_sharpe":1.0,"hit_rate":0.5}}}`,
+		`{"timestamp":"2026-04-21T04:00:00Z","weights":{"agent-a":{"weight":0.95,"rolling_sharpe":1.1,"hit_rate":0.55},"agent-b":{"weight":1.0,"rolling_sharpe":0.8,"hit_rate":0.45}}}`,
+		`{"timestamp":"2026-04-22T04:00:00Z","weights":{"agent-b":{"weight":1.1,"rolling_sharpe":0.9,"hit_rate":0.5}}}`,
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"),
+		[]byte(lines[0]+"\n"+lines[1]+"\n"+lines[2]+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	points, err := svc.LoadDarwinianHistory(10)
+	if err != nil {
+		t.Fatalf("LoadDarwinianHistory: %v", err)
+	}
+	if len(points) != 4 {
+		t.Fatalf("expected 4 points (3 entries: 1+2+1 weights), got %d", len(points))
+	}
+	// First point should be the latest (reverse iteration).
+	if points[0].Timestamp != "2026-04-22T04:00:00Z" {
+		t.Errorf("first point timestamp = %q, want latest", points[0].Timestamp)
+	}
+	if points[0].AgentID != "agent-b" {
+		t.Errorf("first point agent = %q, want agent-b", points[0].AgentID)
+	}
+}
+
+func TestLoadDarwinianHistory_LimitRespected(t *testing.T) {
+	baseDir := t.TempDir()
+	stateDir := filepath.Join(baseDir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 5 lines × 1 weight each = 5 points; limit=2 → only 2 returned.
+	var lines []string
+	for i := 0; i < 5; i++ {
+		lines = append(lines,
+			`{"timestamp":"2026-04-2`+string(rune('0'+i))+`T04:00:00Z","weights":{"a":{"weight":1.0,"rolling_sharpe":1.0,"hit_rate":0.5}}}`)
+	}
+	content := ""
+	for _, l := range lines {
+		content += l + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	points, err := svc.LoadDarwinianHistory(2)
+	if err != nil {
+		t.Fatalf("LoadDarwinianHistory: %v", err)
+	}
+	if len(points) != 2 {
+		t.Errorf("expected 2 points (limit), got %d", len(points))
+	}
+}
+
+func TestLoadDarwinianHistory_CorruptedLinesSkipped(t *testing.T) {
+	baseDir := t.TempDir()
+	stateDir := filepath.Join(baseDir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := `not valid json
+{"timestamp":"2026-04-22T04:00:00Z","weights":{"agent-a":{"weight":1.0,"rolling_sharpe":1.0,"hit_rate":0.5}}}
+also not valid
+`
+	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	points, err := svc.LoadDarwinianHistory(10)
+	if err != nil {
+		t.Fatalf("LoadDarwinianHistory: %v", err)
+	}
+	if len(points) != 1 {
+		t.Errorf("expected 1 valid point, got %d", len(points))
+	}
+	if len(points) > 0 && points[0].AgentID != "agent-a" {
+		t.Errorf("AgentID = %q", points[0].AgentID)
+	}
+}
+
+// =============================================================================
+// LoadDarwinianStatus
+// =============================================================================
+
+func TestLoadDarwinianStatus_NoFile(t *testing.T) {
+	baseDir := t.TempDir()
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	data, err := svc.LoadDarwinianStatus()
+	if err != nil {
+		t.Fatalf("LoadDarwinianStatus with no file: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data")
+	}
+	if data.Status != "not_found" {
+		t.Errorf("Status = %q, want not_found", data.Status)
+	}
+	if data.AgentCount != 0 {
+		t.Errorf("AgentCount = %d, want 0", data.AgentCount)
+	}
+}
+
+func TestLoadDarwinianStatus_Valid(t *testing.T) {
+	baseDir := t.TempDir()
+	stateDir := filepath.Join(baseDir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	payload := map[string]any{
+		"saved_at": "2026-04-22T04:00:00Z",
+		"weights": map[string]any{
+			"agent-a": map[string]any{
+				"weight": 1.2, "rolling_sharpe": 1.5, "hit_rate": 0.6,
+				"total_signals": 100, "win_count": 60, "loss_count": 40,
+				"avg_return": 0.02, "last_updated_at": "2026-04-22T03:55:00Z",
+			},
+		},
+	}
+	data, _ := json.Marshal(payload)
+	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	status, err := svc.LoadDarwinianStatus()
+	if err != nil {
+		t.Fatalf("LoadDarwinianStatus: %v", err)
+	}
+	if status == nil {
+		t.Fatal("expected non-nil status")
+	}
+	if status.Status != "ok" {
+		t.Errorf("Status = %q, want ok", status.Status)
+	}
+	if status.LastComputed != "2026-04-22T04:00:00Z" {
+		t.Errorf("LastComputed = %q", status.LastComputed)
+	}
+	if status.AgentCount != 1 {
+		t.Errorf("AgentCount = %d, want 1", status.AgentCount)
+	}
+	agent, ok := status.Agents["agent-a"]
+	if !ok {
+		t.Fatal("agent-a missing from Agents")
+	}
+	if agent.Weight != 1.2 {
+		t.Errorf("Weight = %v, want 1.2", agent.Weight)
+	}
+	if agent.RollingSharpe != 1.5 {
+		t.Errorf("RollingSharpe = %v, want 1.5", agent.RollingSharpe)
+	}
+	if agent.HitRate != 0.6 {
+		t.Errorf("HitRate = %v, want 0.6", agent.HitRate)
+	}
+	if agent.TotalSignals != 100 {
+		t.Errorf("TotalSignals = %d, want 100", agent.TotalSignals)
+	}
+	if agent.WinCount != 60 {
+		t.Errorf("WinCount = %d, want 60", agent.WinCount)
+	}
+	if agent.LastUpdated != "2026-04-22T03:55:00Z" {
+		t.Errorf("LastUpdated = %q", agent.LastUpdated)
+	}
+}
+
+func TestLoadDarwinianStatus_MalformedJSON(t *testing.T) {
+	baseDir := t.TempDir()
+	stateDir := filepath.Join(baseDir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"),
+		[]byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	_, err := svc.LoadDarwinianStatus()
+	if err == nil {
+		t.Fatal("expected error for malformed JSON, got nil")
+	}
+}
+
+// =============================================================================
+// LoadRegimeHistory: uses OutcomeStore.LoadSessionSummaries
+// =============================================================================
+
+// mockOutcomeStore implements ledger.OutcomeStore minimally for LoadRegimeHistory.
+type mockOutcomeStore struct {
+	summaries []domain.SessionSummary
+	err       error
+}
+
+func (m *mockOutcomeStore) RecordOutcomes(_ []domain.RecommendationOutcome) error {
+	return nil
+}
+func (m *mockOutcomeStore) RecordSessionOutcomes(_ domain.ReplaySession, _ []domain.RecommendationOutcome) error {
+	return nil
+}
+func (m *mockOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
+	return nil, nil
+}
+func (m *mockOutcomeStore) LoadSessionOutcomes(_ string) ([]domain.RecommendationOutcome, error) {
+	return nil, nil
+}
+func (m *mockOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	return nil, nil
+}
+func (m *mockOutcomeStore) RecordSessionScreeningRejects(_ string, _ []domain.ScreeningReject) error {
+	return nil
+}
+func (m *mockOutcomeStore) LoadSessionScreeningRejects(_ string) ([]domain.ScreeningReject, error) {
+	return nil, nil
+}
+func (m *mockOutcomeStore) RecordSessionTrades(_ string, _ []domain.TradeRecord) error {
+	return nil
+}
+func (m *mockOutcomeStore) LoadSessionTrades(_ string) ([]domain.TradeRecord, error) {
+	return nil, nil
+}
+func (m *mockOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	return nil, nil
+}
+func (m *mockOutcomeStore) RecordExperiment(_ domain.ExperimentRecord) error { return nil }
+func (m *mockOutcomeStore) RecordSessionExperiment(_ domain.ReplaySession, _ domain.ExperimentRecord) error {
+	return nil
+}
+func (m *mockOutcomeStore) RecordSessionSummary(_ domain.ReplaySession, _ domain.SessionSummary) error {
+	return nil
+}
+func (m *mockOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return m.summaries, m.err
+}
+func (m *mockOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return nil, nil, nil
+}
+func (m *mockOutcomeStore) RecordHumanIntervention(_ domain.HumanIntervention) error { return nil }
+func (m *mockOutcomeStore) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
+	return nil, nil
+}
+
+func TestLoadRegimeHistory_StoreError(t *testing.T) {
+	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{
+		err: errors.New("ledger unavailable"),
+	})
+	_, err := svc.LoadRegimeHistory(10)
+	if err == nil {
+		t.Fatal("expected error from store, got nil")
+	}
+}
+
+func TestLoadRegimeHistory_Empty(t *testing.T) {
+	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{})
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data")
+	}
+	if len(data.Sessions) != 0 {
+		t.Errorf("Sessions len = %d, want 0", len(data.Sessions))
+	}
+	if len(data.Transitions) != 0 {
+		t.Errorf("Transitions len = %d, want 0", len(data.Transitions))
+	}
+	if data.Current != "" {
+		t.Errorf("Current = %q, want empty", data.Current)
+	}
+}
+
+func TestLoadRegimeHistory_DetectsTransitions(t *testing.T) {
+	now := time.Date(2026, 4, 22, 4, 0, 0, 0, time.UTC)
+	summaries := []domain.SessionSummary{
+		{SessionID: "session-20260420-daily", Regime: domain.RegimeRiskOn, RecordedAt: now.AddDate(0, 0, -2)},
+		{SessionID: "session-20260421-daily", Regime: domain.RegimeRiskOn, RecordedAt: now.AddDate(0, 0, -1)},
+		{SessionID: "session-20260422-daily", Regime: domain.RegimeRiskOff, RecordedAt: now},
+		{SessionID: "session-20260423-daily", Regime: domain.RegimeNeutral, RecordedAt: now.AddDate(0, 0, 1)},
+	}
+	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{summaries: summaries})
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if len(data.Sessions) != 4 {
+		t.Errorf("Sessions len = %d, want 4", len(data.Sessions))
+	}
+	// 3 transitions: 21→22 (risk_on→risk_off), 22→23 (risk_off→transition).
+	// (20→21 same regime, no transition.)
+	if len(data.Transitions) != 2 {
+		t.Fatalf("Transitions len = %d, want 2 (got: %+v)", len(data.Transitions), data.Transitions)
+	}
+	if data.Transitions[0].From != string(domain.RegimeRiskOn) || data.Transitions[0].To != string(domain.RegimeRiskOff) {
+		t.Errorf("first transition: %+v", data.Transitions[0])
+	}
+	if data.Current != string(domain.RegimeNeutral) {
+		t.Errorf("Current = %q, want %q", data.Current, domain.RegimeNeutral)
+	}
+}
+
+func TestLoadRegimeHistory_LimitRespected(t *testing.T) {
+	now := time.Date(2026, 4, 22, 4, 0, 0, 0, time.UTC)
+	summaries := []domain.SessionSummary{
+		{SessionID: "session-20260420-daily", Regime: domain.RegimeRiskOn, RecordedAt: now.AddDate(0, 0, -2)},
+		{SessionID: "session-20260421-daily", Regime: domain.RegimeRiskOn, RecordedAt: now.AddDate(0, 0, -1)},
+		{SessionID: "session-20260422-daily", Regime: domain.RegimeRiskOn, RecordedAt: now},
+	}
+	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{summaries: summaries})
+	data, err := svc.LoadRegimeHistory(2)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if len(data.Sessions) != 2 {
+		t.Errorf("Sessions len = %d, want 2 (limit)", len(data.Sessions))
+	}
+	// Last 2 summaries kept: 20260421, 20260422.
+	if data.Sessions[0].SessionID != "session-20260421-daily" {
+		t.Errorf("first session = %q", data.Sessions[0].SessionID)
+	}
+	if data.Sessions[1].SessionID != "session-20260422-daily" {
+		t.Errorf("second session = %q", data.Sessions[1].SessionID)
+	}
+}
+
+// =============================================================================
+// extractPipelineMetrics (pure helper)
+// =============================================================================
+
+func TestExtractPipelineMetrics_AllFieldsPresent(t *testing.T) {
+	pe, pb, dy := 12.5, 1.8, 3.2
+	bt := 0.045
+	outcome := domain.RecommendationOutcome{
+		ForwardReturn: bt,
+		FactorScores: shared.FactorScores{
+			Breakdown: &shared.FactorScoreBreakdown{
+				Value:   shared.FactorScoreItem{RawInputs: map[string]float64{"pe": pe, "pb": pb}},
+				Quality: shared.FactorScoreItem{RawInputs: map[string]float64{"dividend_yield": dy}},
+			},
+		},
+	}
+	m := extractPipelineMetrics(outcome)
+	if m.PriceToEarnings == nil || *m.PriceToEarnings != pe {
+		t.Errorf("P/E = %v, want %v", m.PriceToEarnings, pe)
+	}
+	if m.PriceToBook == nil || *m.PriceToBook != pb {
+		t.Errorf("P/B = %v, want %v", m.PriceToBook, pb)
+	}
+	if m.DividendYield == nil || *m.DividendYield != dy {
+		t.Errorf("DividendYield = %v, want %v", m.DividendYield, dy)
+	}
+	if m.BacktestReturn == nil || *m.BacktestReturn != bt {
+		t.Errorf("BacktestReturn = %v, want %v", m.BacktestReturn, bt)
+	}
+}
+
+func TestExtractPipelineMetrics_MissingBreakdown(t *testing.T) {
+	outcome := domain.RecommendationOutcome{ForwardReturn: 0.05}
+	m := extractPipelineMetrics(outcome)
+	if m.PriceToEarnings != nil || m.PriceToBook != nil || m.DividendYield != nil {
+		t.Errorf("expected nil financial fields when Breakdown is nil, got %+v", m)
+	}
+	if m.BacktestReturn == nil || *m.BacktestReturn != 0.05 {
+		t.Errorf("BacktestReturn = %v, want 0.05", m.BacktestReturn)
+	}
+}
+
+func TestExtractPipelineMetrics_PartialInputs(t *testing.T) {
+	pe := 15.0
+	outcome := domain.RecommendationOutcome{
+		ForwardReturn: 0.01,
+		FactorScores: shared.FactorScores{
+			Breakdown: &shared.FactorScoreBreakdown{
+				Value: shared.FactorScoreItem{RawInputs: map[string]float64{"pe": pe}},
+			},
+		},
+	}
+	m := extractPipelineMetrics(outcome)
+	if m.PriceToEarnings == nil || *m.PriceToEarnings != pe {
+		t.Errorf("P/E = %v", m.PriceToEarnings)
+	}
+	if m.PriceToBook != nil {
+		t.Errorf("P/B should be nil, got %v", *m.PriceToBook)
+	}
+	if m.DividendYield != nil {
+		t.Errorf("DividendYield should be nil, got %v", *m.DividendYield)
+	}
+}
+
+// =============================================================================
+// readOutcomeFile (pure JSONL reader)
+// =============================================================================
+
+func TestReadOutcomeFile_NoFile(t *testing.T) {
+	_, err := readOutcomeFile(filepath.Join(t.TempDir(), "missing.jsonl"))
+	if err != nil {
+		t.Errorf("missing file: expected nil error, got %v", err)
+	}
+}
+
+func TestReadOutcomeFile_ValidAndCorrupt(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "outcomes.jsonl")
+	content := `{"agent_id":"a1","symbol":"2330","side":"buy","forward_return":0.05,"hit":true}
+not json
+{"agent_id":"a2","symbol":"2317","side":"sell","forward_return":-0.02,"hit":false}
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readOutcomeFile(path)
+	if err != nil {
+		t.Fatalf("readOutcomeFile: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 valid outcomes, got %d", len(got))
+	}
+	if len(got) > 0 && got[0].AgentID != "a1" {
+		t.Errorf("first = %q", got[0].AgentID)
+	}
+}
+
+// =============================================================================
+// loadRegistry: graceful degradation when registry missing
+// =============================================================================
+
+func TestLoadRegistry_ProviderTakesPrecedence(t *testing.T) {
+	svc := NewPipelineService("/tmp", "/tmp", nil)
+	called := false
+	svc.WithRegistryProvider(func() (domain.AgentRegistry, error) {
+		called = true
+		return domain.AgentRegistry{}, nil
+	})
+	_, err := svc.loadRegistry()
+	if err != nil {
+		t.Fatalf("provider-based load: %v", err)
+	}
+	if !called {
+		t.Error("expected custom provider to be called")
+	}
+}
+
+func TestLoadRegistry_FallbackSeedsOnMissingConfig(t *testing.T) {
+	baseDir := t.TempDir()
+	configsDir := filepath.Join(baseDir, "configs")
+	if err := os.MkdirAll(configsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configsDir, "agents.json"),
+		[]byte(`{"version":1,"agents":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	reg, err := svc.loadRegistry()
+	if err != nil {
+		t.Fatalf("loadRegistry with empty seed file: %v", err)
+	}
+	if len(reg.Agents) != 0 {
+		t.Errorf("expected empty Agents from empty seed file, got %d", len(reg.Agents))
+	}
+}
+
+func TestLoadRegistry_ProviderReturnsError(t *testing.T) {
+	svc := NewPipelineService("/tmp", "/tmp", nil)
+	wantErr := errors.New("provider failed")
+	svc.WithRegistryProvider(func() (domain.AgentRegistry, error) {
+		return domain.AgentRegistry{}, wantErr
+	})
+	_, err := svc.loadRegistry()
+	if err == nil || !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped provider error, got %v", err)
+	}
+}
+
+// =============================================================================
+// ComputeScorecardMetrics + Provider injection (set/get)
+// =============================================================================
+
+func TestPipelineService_ProviderSetters(t *testing.T) {
+	svc := NewPipelineService("/tmp", "/tmp", nil)
+	if svc.WithRegistryProvider(func() (domain.AgentRegistry, error) { return domain.AgentRegistry{}, nil }) != svc {
+		t.Error("WithRegistryProvider should return svc for chaining")
+	}
+	if svc.WithNarrativeProvider(func(_ []string) *NarrativeContextData { return nil }) != svc {
+		t.Error("WithNarrativeProvider should return svc for chaining")
+	}
+	if svc.WithCycleProvider(func(_ string) *IndustryContextData { return nil }) != svc {
+		t.Error("WithCycleProvider should return svc for chaining")
+	}
+	if svc.WithCycleCardProvider(func() *industry.CycleStatusCard { return nil }) != svc {
+		t.Error("WithCycleCardProvider should return svc for chaining")
+	}
+}
+
+// =============================================================================
+// computeAgentRegimeBreakdown (regression + edge cases)
+// =============================================================================
+
+func TestComputeAgentRegimeBreakdown_NoOutcomes(t *testing.T) {
+	got := computeAgentRegimeBreakdown(nil, "agent-x", "bull")
+	if got != nil {
+		t.Errorf("empty outcomes: got %+v, want nil", got)
+	}
+}
+
+func TestComputeAgentRegimeBreakdown_OtherAgentsIgnored(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "other-agent", ForwardReturn: 0.05, Hit: true},
+	}
+	got := computeAgentRegimeBreakdown(outcomes, "target-agent", "bull")
+	if got != nil {
+		t.Errorf("no matching outcomes: got %+v, want nil", got)
+	}
+}
+
+func TestComputeAgentRegimeBreakdown_AgentOutcomesAggregated(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "target", ForwardReturn: 0.10, Hit: true},
+		{AgentID: "target", ForwardReturn: -0.05, Hit: false},
+		{AgentID: "target", ForwardReturn: 0.03, Hit: true},
+		{AgentID: "other", ForwardReturn: 0.99, Hit: true}, // ignored
+	}
+	got := computeAgentRegimeBreakdown(outcomes, "target", "bull")
+	if got == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+	perf, ok := got.Regimes["bull"]
+	if !ok {
+		t.Fatal("expected 'bull' regime entry")
+	}
+	if perf.SessionCount != 3 {
+		t.Errorf("SessionCount = %d, want 3", perf.SessionCount)
+	}
+	wantReturn := 0.10 - 0.05 + 0.03
+	if perf.TotalReturn < wantReturn-1e-9 || perf.TotalReturn > wantReturn+1e-9 {
+		t.Errorf("TotalReturn = %v, want %v", perf.TotalReturn, wantReturn)
+	}
+	wantWinRate := 2.0 / 3.0
+	if perf.WinRate < wantWinRate-1e-9 || perf.WinRate > wantWinRate+1e-9 {
+		t.Errorf("WinRate = %v, want %v", perf.WinRate, wantWinRate)
+	}
+	wantAvg := wantReturn / 3.0
+	if perf.AvgReturn < wantAvg-1e-9 || perf.AvgReturn > wantAvg+1e-9 {
+		t.Errorf("AvgReturn = %v, want %v", perf.AvgReturn, wantAvg)
+	}
+}
+
+// =============================================================================
+// Smoke test: ensure coverage tools see the new tests run.
+// (No assertions; this is a marker that the test file was compiled and run.)
+// =============================================================================
+
+func TestPipelineTier2TestFileCompiles(t *testing.T) {
+	_ = context.TODO()
+	_ = ledger.NewStore
+}

@@ -8,6 +8,8 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // ParameterSource indicates how a parameter value was determined.
@@ -173,6 +175,7 @@ type ExperimentParameters struct {
 	SharpeStabilityThreshold   ParameterMetadata[float64] `json:"sharpe_stability_threshold"`
 	MaxFallbackRatio           ParameterMetadata[float64] `json:"max_fallback_ratio"`
 	FactorWeightDriftThreshold ParameterMetadata[float64] `json:"factor_weight_drift_threshold"`
+	WalkForwardEmbargoDays     ParameterMetadata[int]     `json:"walk_forward_embargo_days"`
 }
 
 // BaselineParameters holds tunable values for baseline policy defaults.
@@ -184,6 +187,8 @@ type BaselineParameters struct {
 	MinRecommendationConviction ParameterMetadata[int]     `json:"min_recommendation_conviction"`
 	RequireCROPass              ParameterMetadata[bool]    `json:"require_cro_pass"`
 	TransactionCostBPS          ParameterMetadata[float64] `json:"transaction_cost_bps"`
+	DiscountedCommissionBps     ParameterMetadata[float64] `json:"discounted_commission_bps"`
+	CommissionDiscountThreshold ParameterMetadata[float64] `json:"commission_discount_threshold"`
 	SlippageBPS                 ParameterMetadata[float64] `json:"slippage_bps"`
 	AvgTradingCost              ParameterMetadata[float64] `json:"avg_trading_cost"`
 	ReserveCashFraction         ParameterMetadata[float64] `json:"reserve_cash_fraction"`
@@ -1224,6 +1229,24 @@ type ParametersConfig struct {
 	RiskGate             RiskGateParameters             `json:"risk_gate,omitempty"`
 	Engine               EngineParameters               `json:"engine,omitempty"`
 	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
+	Tax                  TaxParameters                  `json:"tax,omitempty"`
+}
+
+// TaxParameters holds tunable Taiwan tax rates with full provenance tracking.
+type TaxParameters struct {
+	DividendTaxRate    ParameterMetadata[float64] `json:"dividend_tax_rate"`
+	TransactionTaxRate ParameterMetadata[float64] `json:"transaction_tax_rate"`
+	NHISurchargeRate   ParameterMetadata[float64] `json:"nhi_surcharge_rate"`
+}
+
+// ToConfig converts TaxParameters to a domain.TaxConfig for use by tax calculators.
+func (p TaxParameters) ToConfig() domain.TaxConfig {
+	return domain.TaxConfig{
+		DividendTaxRate:    p.DividendTaxRate.Value,
+		TransactionTaxRate: p.TransactionTaxRate.Value,
+		NHISurchargeRate:   p.NHISurchargeRate.Value,
+		IncludeNHI:         true, // NHI inclusion is a policy flag, not a tunable rate
+	}
 }
 
 // EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.

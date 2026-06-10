@@ -39,6 +39,27 @@ func DefaultParametersConfig() *ParametersConfig {
 		RiskGate:             defaultRiskGateParameters(),
 		Engine:               defaultEngineParameters(),
 		RSITw:                defaultRSITwParameters(),
+		Tax:                  defaultTaxParameters(),
+	}
+}
+
+func defaultTaxParameters() TaxParameters {
+	return TaxParameters{
+		DividendTaxRate: ParameterMetadata[float64]{
+			Value:     0.28,
+			Rationale: "Taiwan individual income tax rate on dividend income (28% bracket)",
+			Source:    SourceLiterature,
+		},
+		TransactionTaxRate: ParameterMetadata[float64]{
+			Value:     0.003,
+			Rationale: "Taiwan securities transaction tax (0.3%, sell-side only)",
+			Source:    SourceLiterature,
+		},
+		NHISurchargeRate: ParameterMetadata[float64]{
+			Value:     0.0211,
+			Rationale: "Taiwan NHI supplementary premium (二代健保補充保費) rate 2.11% effective 2021",
+			Source:    SourceLiterature,
+		},
 	}
 }
 
@@ -632,6 +653,12 @@ func defaultExperimentParameters() ExperimentParameters {
 			Rationale: "Maximum allowed factor weight drift (15%) before rejecting experiment as regime-confounded",
 			Source:    SourceHeuristic,
 		},
+		WalkForwardEmbargoDays: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "5-trading-day embargo gap between walk-forward train/test folds and between primary training window and OOS window. Prevents data leakage from corporate-event reorgs and event-driven labeling lag.",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from leakage-sensitive backtest: test [3, 7, 10] range vs hit rate stability",
+		},
 	}
 }
 
@@ -1062,6 +1089,16 @@ func defaultBaselineParameters() BaselineParameters {
 			Value:     14.25,
 			Rationale: "TW stock minimum brokerage fee: 0.1425% = 14.25 bps (tax calculated separately)",
 			Source:    SourceEmpirical,
+		},
+		DiscountedCommissionBps: ParameterMetadata[float64]{
+			Value:     8.5,
+			Rationale: "Discounted electronic trading commission rate: 0.085% = 8.5 bps",
+			Source:    SourceEmpirical,
+		},
+		CommissionDiscountThreshold: ParameterMetadata[float64]{
+			Value:     500000,
+			Rationale: "Minimum order notional (NTD) to qualify for discounted commission rate",
+			Source:    SourceHeuristic,
 		},
 		SlippageBPS: ParameterMetadata[float64]{
 			Value:     4.0,

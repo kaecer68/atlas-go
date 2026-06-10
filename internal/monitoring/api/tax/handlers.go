@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -30,6 +31,18 @@ func NewHandlers(ledgerDir string, dividendProvider DividendProvider) *Handlers 
 	}
 }
 
+func readPositionsFromFile(path string) []domain.Position {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) <= 2 {
+		return nil
+	}
+	var positions []domain.Position
+	if err := json.Unmarshal(data, &positions); err != nil || len(positions) == 0 {
+		return nil
+	}
+	return positions
+}
+
 func (h *Handlers) loadPositions() []domain.Position {
 	ledgerDir := h.LedgerDir
 	if !filepath.IsAbs(ledgerDir) {
@@ -37,24 +50,15 @@ func (h *Handlers) loadPositions() []domain.Position {
 			ledgerDir = filepath.Join(wd, ledgerDir)
 		}
 	}
+
 	livePath := filepath.Join(ledgerDir, "live", "state", "positions_current.json")
-	data, err := os.ReadFile(livePath)
-	if err == nil && len(data) > 2 {
-		var positions []domain.Position
-		if err := json.Unmarshal(data, &positions); err == nil && len(positions) > 0 {
-			return positions
-		}
-	} else if err != nil {
-		logging.Warn("tax_handler", "read_live_positions_failed", "path", livePath, logging.Err(err))
+	if positions := readPositionsFromFile(livePath); positions != nil {
+		return positions
 	}
 
 	livePathJSONL := filepath.Join(h.LedgerDir, "live", "state", "positions_current.jsonl")
-	data, err = os.ReadFile(livePathJSONL)
-	if err == nil && len(data) > 2 {
-		var positions []domain.Position
-		if err := json.Unmarshal(data, &positions); err == nil && len(positions) > 0 {
-			return positions
-		}
+	if positions := readPositionsFromFile(livePathJSONL); positions != nil {
+		return positions
 	}
 
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
@@ -126,7 +130,7 @@ func (h *Handlers) HandleTaxSnapshot(r *http.Request) (int, any) {
 		}
 	}
 
-	calc := tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
+	calc := tax.NewTaiwanTaxCalculator(config.GetParametersConfig().Tax.ToConfig())
 
 	sellPrices := make(map[string]float64)
 	dividends := make(map[string]float64)

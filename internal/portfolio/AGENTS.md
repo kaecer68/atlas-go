@@ -183,6 +183,40 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **職責**：提供歷史價格與基本面資料，用於 FactorEngine 的因子計算。
 - **主要檔案**：`historical_prices.go`、`fundamental_loader.go`
 
+#### 10.1 Corporate Action Adjustment (P1-2-β)
+- `AdjustForCorporateActions(actions []domain.CorporateAction) error`: 對歷史價格進行除權息/減資的向後調整。運算為冪等（調用兩次結果一致）。
+- `ActionEffects(symbol string) []shared.ActionEffect`: 回傳已套用的調整清單供下游（FactorEngine、reporters）使用。
+- **調整因子計算**：
+  - ReferencePrice > 0: factor = ReferencePrice / postEventRawPrice（優先）
+  - CashDividend > 0: factor = (postEventPrice - CashDividend) / postEventPrice
+  - StockDividend > 0: factor = (10.0 - StockDividend) / 10.0（面額 10 元）
+  - CapitalReductionRatio > 0: factor = 1.0 - CapitalReductionRatio
+- **冪等性**: 偵測 pre-event price 已符合調整後數值時跳過。
+- **行動排序**: caller 負責按 ExDate 升序排序；未知 symbol 靜默忽略。
+
+#### 10.2 Corporate Action Integration in FactorEngine (P1-2-γ)
+- **Interface**: `CorporateActionProvider` defined in `factor_engine.go:43-47` — single method `GetCorporateActions(ctx, symbols, from, to) ([]domain.CorporateAction, error)`.
+- **Injection**: `WithCorporateActionProvider(CorporateActionProvider)` setter attaches a provider to `FactorEngine`.
+- **Internal state**:
+  - `corpActions CorporateActionProvider` — the attached provider (nil = skip adjustment)
+  - `adjustedMu sync.RWMutex` — protects the cache maps
+  - `adjustedSymbols map[string]time.Time` — tracks which symbols have been adjusted + when
+  - `adjustmentTTL 24 * time.Hour` — TTL after which a symbol is re-adjusted
+- **`ensureAdjusted(ctx, symbol string) error`**:
+  1. If `corpActions` is nil → skip (no-op)
+  2. Check `adjustedSymbols[symbol]`: if exists and `time.Since(lastAdjusted) < adjustmentTTL` → skip (fresh)
+  3. Otherwise, use a 365-day lookback window (`now-365d` → `now`)
+  4. Call `corpActions.GetCorporateActions(ctx, [symbol], from, to)`
+  5. If actions found and `>0`, call `hp.AdjustForCorporateActions(actions)`
+  6. On success: store `adjustedSymbols[symbol] = time.Now()`
+  7. On fetch failure: log `logging.Warn(...)` with the error (non-fatal)
+- **Integration points**:
+  - `calculateMomentumDetail()` calls `ensureAdjusted(ctx, symbol)` at the top
+  - `calculateQualityDetail()` calls `ensureAdjusted(ctx, symbol)` at the top
+  - Uses `ctx` from caller (now propagated through detail methods)
+- **Failure mode**: If corporate action fetch fails, the symbol is NOT marked adjusted. Next cycle retries. If no provider attached, adjustment is silently skipped.
+- **Dependency**: Uses `HistoricalPrices` (`hp` field) which must have `AdjustForCorporateActions` method.
+
 ### 11. Conviction Normalizer & Regime/Style (信念正規化)
 - **Conviction Normalizer**：將不同來源的信念分數正規化至統一尺度。
 - **Regime/Style**：市場體制識別 (Bull/Bear/Neutral/HighVol) 與風格標籤 (Growth/Value/Quality)。
