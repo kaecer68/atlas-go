@@ -345,7 +345,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 		momentumScore := o.factorEngine.CalculateMomentumScore(symbol, quotes)
 		valueScore := o.factorEngine.CalculateValueScore(symbol, quotes)
 		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
-		pmScore := o.factorEngine.CalculatePreciousMetalsScore(symbol, quotes).Score
+		pmScore := o.factorEngine.CalculatePreciousMetalsScore(context.Background(), symbol, quotes).Score
 		etfScore := 0.0
 		liqScore := 0.0
 		if quote, ok := quotes[symbol]; ok {
