@@ -1,7 +1,6 @@
 // Alert management page
-import { getJSON, postJSON, notify } from '../shared/app-utils.js';
+import { getJSON } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
-import { exportTableToCSV } from './backtest.js';
 
 export function renderAlerts(data) {
   const el = document.getElementById('alertsPanel');
@@ -24,7 +23,7 @@ export function renderAlerts(data) {
   const rows = data.alerts.map(a => {
     const sevClass = a.severity === 'critical' ? 'err' : a.severity === 'warning' ? 'warn' : 'info';
     const ackBtn = a.acknowledged ? '<span class="badge ok">已確認</span>' : `<button class="pipeline-action" onclick="acknowledgeAlert('${escapeHtml(a.id)}')">確認</button>`;
-    return `<tr><td>${new Date(a.timestamp).toLocaleString('zh-TW')}</td><td><span class="badge ${sevClass}">${escapeHtml(severityMap[a.severity]) || escapeHtml(a.severity)}</span></td><td>${escapeHtml(a.rule)}</td><td>${escapeHtml(a.message)}</td><td>${typeof a.value === 'number' ? a.value.toFixed(2) : '-'}</td><td>${ackBtn}</td></tr>`;
+    return `<tr><td>${new Date(a.timestamp).toLocaleString('zh-TW')}</td><td><span class="badge ${sevClass}">${escapeHtml(severityMap[a.severity]) || escapeHtml(a.severity)}</span></td><td>${escapeHtml(a.rule)}</td><td>${escapeHtml(a.message)}</td><td>${a.value !== undefined ? a.value.toFixed(2) : '-'}</td><td>${ackBtn}</td></tr>`;
   }).join('');
   el.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button onclick="exportTableToCSV('alertsTable','alerts_export.csv')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer">📥 匯出 CSV</button></div><table id="alertsTable"><thead><tr><th>時間</th><th>嚴重度</th><th>規則</th><th>訊息</th><th>數值</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -48,13 +47,4 @@ export async function loadAlerts() {
   }
 }
 
-export async function showUnacknowledgedOnly() {
-  try {
-    const data = await getJSON('/api/alerts/unacknowledged');
-    renderAlerts(data);
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-if (typeof window !== "undefined") Object.assign(window, { loadAlerts, acknowledgeAlert, showUnacknowledgedOnly });
+if (typeof window !== "undefined") Object.assign(window, { loadAlerts });

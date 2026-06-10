@@ -133,8 +133,6 @@ async function loadModules() {
   }
   if (modules.alerts) {
     if (modules.alerts.loadAlerts) window.loadAlerts = modules.alerts.loadAlerts;
-    if (modules.alerts.acknowledgeAlert) window.acknowledgeAlert = modules.alerts.acknowledgeAlert;
-    if (modules.alerts.showUnacknowledgedOnly) window.showUnacknowledgedOnly = modules.alerts.showUnacknowledgedOnly;
   }
   return modules;
 }
@@ -552,7 +550,7 @@ if (typeof window !== "undefined") window.toggleTheme = function() {
   var r = document.documentElement;
   r.setAttribute('data-theme', r.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
 };
-
+if (typeof window !== "undefined") window.showUnacknowledgedOnly = function() { console.log('showUnacknowledgedOnly: not yet reimplemented'); };
 
 // datachannels globals
 import('./pages/datachannels.js').then(function(m) {
