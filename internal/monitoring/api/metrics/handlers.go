@@ -30,6 +30,7 @@ func (h *Handlers) WithStorageReporter(r StorageReporter) *Handlers {
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/metrics", shared.Get(h.HandleMetrics))
 	mux.Handle("GET /api/dashboard/metrics/trend", shared.Get(h.HandleMetricsTrend))
+	mux.Handle("GET /api/dashboard/metrics/thresholds", shared.Get(h.HandleThresholds))
 	mux.Handle("GET /api/dashboard/data-quality", shared.Get(h.HandleDataQuality))
 	if h.storageReport != nil {
 		mux.Handle("GET /api/metrics/storage", shared.Get(h.HandleStorage))
@@ -55,6 +56,10 @@ func (h *Handlers) HandleMetricsTrend(r *http.Request) (int, any) {
 
 func (h *Handlers) HandleDataQuality(r *http.Request) (int, any) {
 	return http.StatusOK, h.svc.CheckDataQuality(nil)
+}
+
+func (h *Handlers) HandleThresholds(r *http.Request) (int, any) {
+	return http.StatusOK, h.svc.GetThresholds()
 }
 
 func (h *Handlers) HandleStorage(r *http.Request) (int, any) {

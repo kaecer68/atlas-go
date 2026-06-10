@@ -325,3 +325,73 @@ func (m *mockDataQualityChecker) RunAll(ctx context.Context) *DataQualityReport 
 	}
 	return m.report
 }
+
+func TestMetricsService_GetThresholds(t *testing.T) {
+	violations := []ThresholdViolation{
+		{Metric: "screening_rate", Current: 0.05, Threshold: 0.1, Severity: "warning", Message: "x"},
+		{Metric: "alert_trigger_rate", Current: 150, Threshold: 100, Severity: "critical", Message: "y"},
+	}
+	collector := &MetricsCollectorAdapter{
+		CheckThresholdsFunc: func(t AlertThreshold) []ThresholdViolation { return violations },
+	}
+	svc := NewMetricsService(collector, nil)
+	report := svc.GetThresholds()
+	if report == nil {
+		t.Fatal("expected non-nil report")
+	}
+	if report.Count != 2 {
+		t.Errorf("count = %d, want 2", report.Count)
+	}
+	if len(report.Violations) != 2 {
+		t.Errorf("len(violations) = %d, want 2", len(report.Violations))
+	}
+	if report.Threshold.MinScreeningRate != 0.1 {
+		t.Errorf("threshold.min_screening_rate = %v, want 0.1", report.Threshold.MinScreeningRate)
+	}
+	if report.Threshold.MaxAlertTriggerRate != 100 {
+		t.Errorf("threshold.max_alert_trigger_rate = %v, want 100", report.Threshold.MaxAlertTriggerRate)
+	}
+	if report.Threshold.MaxUnacknowledgedAlerts != 10 {
+		t.Errorf("threshold.max_unacknowledged_alerts = %v, want 10", report.Threshold.MaxUnacknowledgedAlerts)
+	}
+	if report.CheckedAt.IsZero() {
+		t.Error("checked_at should be populated")
+	}
+}
+
+func TestMetricsService_GetThresholds_NilCollector(t *testing.T) {
+	svc := NewMetricsService(nil, nil)
+	report := svc.GetThresholds()
+	if report == nil {
+		t.Fatal("expected non-nil report")
+	}
+	if report.Count != 0 {
+		t.Errorf("count = %d, want 0", report.Count)
+	}
+	if report.Violations == nil {
+		t.Error("violations should be non-nil empty slice, got nil")
+	}
+	if len(report.Violations) != 0 {
+		t.Errorf("len(violations) = %d, want 0", len(report.Violations))
+	}
+	if report.Threshold.MinScreeningRate != 0.1 {
+		t.Error("default threshold should still be populated")
+	}
+}
+
+func TestMetricsService_GetThresholds_EmptyViolations(t *testing.T) {
+	collector := &MetricsCollectorAdapter{
+		CheckThresholdsFunc: func(t AlertThreshold) []ThresholdViolation { return nil },
+	}
+	svc := NewMetricsService(collector, nil)
+	report := svc.GetThresholds()
+	if report == nil {
+		t.Fatal("expected non-nil report")
+	}
+	if report.Violations == nil {
+		t.Error("violations should be non-nil empty slice, got nil")
+	}
+	if report.Count != 0 {
+		t.Errorf("count = %d, want 0", report.Count)
+	}
+}

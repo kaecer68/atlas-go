@@ -647,6 +647,25 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 					Timestamp:          snap.Timestamp,
 				}
 			},
+			CheckThresholdsFunc: func(threshold service.AlertThreshold) []service.ThresholdViolation {
+				mt := AlertThreshold{
+					MinScreeningRate:        threshold.MinScreeningRate,
+					MaxAlertTriggerRate:     threshold.MaxAlertTriggerRate,
+					MaxUnacknowledgedAlerts: threshold.MaxUnacknowledgedAlerts,
+				}
+				raw := a.metricsCollector.CheckThresholds(mt)
+				out := make([]service.ThresholdViolation, len(raw))
+				for i, v := range raw {
+					out[i] = service.ThresholdViolation{
+						Metric:    v.Metric,
+						Current:   v.Current,
+						Threshold: v.Threshold,
+						Severity:  v.Severity,
+						Message:   v.Message,
+					}
+				}
+				return out
+			},
 		},
 		&service.MetricsHistoryAdapter{
 			GetTrendFunc: func(metric string) []service.TrendPoint {
