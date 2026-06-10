@@ -42,6 +42,15 @@ export async function loadMetrics() {
   } catch (err) {
     console.error('loadDataQuality error:', err);
   }
+
+  const updatedEl = document.getElementById('metricsLastUpdated');
+  if (updatedEl) {
+    const now = new Date();
+    const hh = now.getHours().toString().padStart(2, '0');
+    const mm = now.getMinutes().toString().padStart(2, '0');
+    const ss = now.getSeconds().toString().padStart(2, '0');
+    updatedEl.textContent = `最後更新 ${hh}:${mm}:${ss}`;
+  }
 }
 
 export function updateDerivedKpis(data) {
@@ -300,4 +309,10 @@ export async function loadDataQuality() {
   html += '</tbody></table>';
   detailEl.className = '';
   detailEl.innerHTML = html;
+}
+
+const metricsRefreshBtn = document.getElementById('metricsRefreshBtn');
+if (metricsRefreshBtn && !metricsRefreshBtn.dataset.metricsWired) {
+  metricsRefreshBtn.addEventListener('click', () => { loadMetrics(); });
+  metricsRefreshBtn.dataset.metricsWired = '1';
 }

@@ -603,6 +603,10 @@
           注意：篩選統計與警報計數為記憶體內累計值，系統重啟後歸零。當系統持續運行並處理資料時，指標將自動累積。
         </span>
       </details>
+      <div style="display:flex;align-items:center;gap:12px;margin:0 0 12px">
+        <button class="refresh" id="metricsRefreshBtn" title="手動重新整理" style="padding:6px 14px">🔄 重新整理</button>
+        <span class="kpi-label" id="metricsLastUpdated" style="color:var(--muted)">尚未載入</span>
+      </div>
       <div class="panel wide" id="simHealthPanel">
         <div id="simHealthContainer"></div>
       </div>
