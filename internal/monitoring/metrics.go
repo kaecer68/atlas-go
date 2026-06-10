@@ -1,9 +1,14 @@
 package monitoring
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,15 +50,33 @@ type MetricsCollector struct {
 	alertsTriggered    int64
 	alertsAcknowledged int64
 	alertsByType       map[string]int64
+
+	// JSONL persistence
+	persistencePath string
+	persistMu       sync.Mutex
 }
 
-// NewMetricsCollector 建立新的指標收集器
+// NewMetricsCollector 建立 in-memory only 指標收集器
 func NewMetricsCollector() *MetricsCollector {
-	return &MetricsCollector{
-		metrics:      make(map[string]Metric),
-		histograms:   make(map[string][]float64),
-		alertsByType: make(map[string]int64),
+	m, _ := NewMetricsCollectorWithPath("")
+	return m
+}
+
+// NewMetricsCollectorWithPath 建立持久化指標收集器（path 空字串 = in-memory）
+func NewMetricsCollectorWithPath(path string) (*MetricsCollector, error) {
+	m := &MetricsCollector{
+		metrics:         make(map[string]Metric),
+		histograms:      make(map[string][]float64),
+		alertsByType:    make(map[string]int64),
+		persistencePath: path,
 	}
+	if path == "" {
+		return m, nil
+	}
+	if err := m.replayFromFile(path); err != nil {
+		return nil, fmt.Errorf("replay metrics from %s: %w", path, err)
+	}
+	return m, nil
 }
 
 // RecordCounter 記錄計數器（累加）
@@ -74,6 +97,10 @@ func (m *MetricsCollector) RecordCounter(name string, value float64, labels map[
 			Labels: labels,
 		}
 	}
+
+	m.appendRecord(persistenceRecord{
+		Type: "counter", Name: name, Value: value, Labels: labels, Timestamp: time.Now(),
+	})
 }
 
 // RecordGauge 記錄儀表（覆蓋）
@@ -88,6 +115,10 @@ func (m *MetricsCollector) RecordGauge(name string, value float64, labels map[st
 		Type:   MetricTypeGauge,
 		Labels: labels,
 	}
+
+	m.appendRecord(persistenceRecord{
+		Type: "gauge", Name: name, Value: value, Labels: labels, Timestamp: time.Now(),
+	})
 }
 
 // RecordHistogram 記錄直方圖
@@ -127,6 +158,10 @@ func (m *MetricsCollector) RecordScreening(passed, rejected int64) {
 	m.screeningTotal += passed + rejected
 	m.screeningPassed += passed
 	m.screeningRejected += rejected
+
+	m.appendRecord(persistenceRecord{
+		Type: "screening", Passed: passed, Rejected: rejected, Timestamp: time.Now(),
+	})
 }
 
 // GetScreeningRate 取得篩選率
@@ -145,6 +180,10 @@ func (m *MetricsCollector) RecordAlert(alertType string) {
 	defer m.mu.Unlock()
 	m.alertsTriggered++
 	m.alertsByType[alertType]++
+
+	m.appendRecord(persistenceRecord{
+		Type: "alert", AlertType: alertType, Timestamp: time.Now(),
+	})
 }
 
 // RecordAlertAcknowledged 記錄警報確認
@@ -152,10 +191,14 @@ func (m *MetricsCollector) RecordAlertAcknowledged() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.alertsAcknowledged++
+
+	m.appendRecord(persistenceRecord{
+		Type: "ack", Timestamp: time.Now(),
+	})
 }
 
-// GetAlertTriggerRate 取得警報觸發率
-func (m *MetricsCollector) GetAlertTriggerRate() float64 {
+// GetAlertTriggerCount 取得警報觸發總數
+func (m *MetricsCollector) GetAlertTriggerCount() float64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return float64(m.alertsTriggered)
@@ -191,13 +234,100 @@ type MetricsSnapshot struct {
 	Timestamp          time.Time        `json:"timestamp"`
 }
 
-// metricKey 生成指標鍵
+// metricKey 生成指標鍵（包含 sorted labels，避免同 name 不同 labels 互相覆蓋）
 func metricKey(name string, labels map[string]string) string {
 	if len(labels) == 0 {
 		return name
 	}
-	// 簡單實現，實際應排序 labels
-	return name
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString(name)
+	b.WriteByte('{')
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(labels[k])
+	}
+	b.WriteByte('}')
+	return b.String()
+}
+
+type persistenceRecord struct {
+	Type      string            `json:"type"`
+	Passed    int64             `json:"passed,omitempty"`
+	Rejected  int64             `json:"rejected,omitempty"`
+	AlertType string            `json:"alert_type,omitempty"`
+	Name      string            `json:"name,omitempty"`
+	Value     float64           `json:"value,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+	Timestamp time.Time         `json:"timestamp"`
+}
+
+func (m *MetricsCollector) appendRecord(rec persistenceRecord) {
+	if m.persistencePath == "" {
+		return
+	}
+	m.persistMu.Lock()
+	defer m.persistMu.Unlock()
+	f, err := os.OpenFile(m.persistencePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+	_ = json.NewEncoder(f).Encode(rec)
+}
+
+func (m *MetricsCollector) replayFromFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		var rec persistenceRecord
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			continue
+		}
+		m.applyRecord(rec)
+	}
+	return sc.Err()
+}
+
+func (m *MetricsCollector) applyRecord(rec persistenceRecord) {
+	switch rec.Type {
+	case "screening":
+		m.screeningTotal += rec.Passed + rec.Rejected
+		m.screeningPassed += rec.Passed
+		m.screeningRejected += rec.Rejected
+	case "alert":
+		m.alertsTriggered++
+		m.alertsByType[rec.AlertType]++
+	case "ack":
+		m.alertsAcknowledged++
+	case "counter":
+		key := metricKey(rec.Name, rec.Labels)
+		existing, ok := m.metrics[key]
+		if ok {
+			existing.Value += rec.Value
+			m.metrics[key] = existing
+		} else {
+			m.metrics[key] = Metric{Name: rec.Name, Value: rec.Value, Type: MetricTypeCounter, Labels: rec.Labels}
+		}
+	case "gauge":
+		key := metricKey(rec.Name, rec.Labels)
+		m.metrics[key] = Metric{Name: rec.Name, Value: rec.Value, Type: MetricTypeGauge, Labels: rec.Labels}
+	}
 }
 
 // TradingMetrics 交易指標
@@ -215,14 +345,12 @@ func NewTradingMetrics(collector *MetricsCollector, monitor *Monitor) *TradingMe
 }
 
 func (tm *TradingMetrics) RecordOrder(order domain.Order, status string) {
-	// 記錄訂單總數
 	tm.collector.RecordCounter("orders_total", 1, map[string]string{
 		"symbol": order.Symbol,
 		"side":   string(order.Side),
 		"status": status,
 	})
 
-	// 記錄訂單價值
 	orderValue := float64(order.Quantity) * order.Price
 	tm.collector.RecordGauge("order_value", orderValue, map[string]string{
 		"symbol": order.Symbol,
@@ -321,13 +449,15 @@ func (m *MetricsCollector) CheckThresholds(threshold AlertThreshold) []Threshold
 		}
 	}
 
+	// TODO(fix/monitoring-page-p0p1 follow-up): replace with time-windowed rate (alerts in last hour).
+	// Currently compares raw count to a count-style threshold.
 	if m.alertsTriggered > int64(threshold.MaxAlertTriggerRate) {
 		violations = append(violations, ThresholdViolation{
 			Metric:    "alert_trigger_rate",
 			Current:   float64(m.alertsTriggered),
 			Threshold: threshold.MaxAlertTriggerRate,
 			Severity:  "critical",
-			Message:   fmt.Sprintf("警報觸發率過高: %d (閾值: %.0f)", m.alertsTriggered, threshold.MaxAlertTriggerRate),
+			Message:   fmt.Sprintf("警報觸發總數過高: %d (閾值: %.0f)", m.alertsTriggered, threshold.MaxAlertTriggerRate),
 		})
 	}
 
