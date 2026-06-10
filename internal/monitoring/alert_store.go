@@ -203,6 +203,33 @@ func (s *AlertStore) DeleteWhere(predicate func(*domain.AlertRecord) bool) (int,
 	return deleted, s.rewriteAll(remaining)
 }
 
+// AcknowledgeWhere acknowledges all alerts matching the predicate and returns the count acknowledged.
+func (s *AlertStore) AcknowledgeWhere(predicate func(*domain.AlertRecord) bool, user string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	all, err := s.loadFromFile()
+	if err != nil {
+		return 0, fmt.Errorf("load alerts: %w", err)
+	}
+
+	now := time.Now()
+	acknowledged := 0
+	for i := range all {
+		if predicate(&all[i]) {
+			all[i].Acknowledged = true
+			all[i].AcknowledgedAt = &now
+			all[i].AcknowledgedBy = user
+			acknowledged++
+		}
+	}
+	if acknowledged == 0 {
+		return 0, nil
+	}
+
+	return acknowledged, s.rewriteAll(all)
+}
+
 // ResolveWhere resolves all alerts matching the predicate and returns the count resolved.
 func (s *AlertStore) ResolveWhere(predicate func(*domain.AlertRecord) bool, user string) (int, error) {
 	s.mu.Lock()
