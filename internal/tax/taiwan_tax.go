@@ -11,8 +11,8 @@ import (
 //   - Securities transaction tax (sell side only): 0.3% of sell notional
 //
 // The default DividendTaxRate (0.28) already bakes in the NHI supplementary
-// premium (二代健保補充保費) at NHISurchargeRate (2%). Set TaxConfig.IncludeNHI
-// to false to compute dividend tax at the NHI-exclusive rate (28% − 2% = 26%),
+// premium (二代健保補充保費) at NHISurchargeRate (2.11%). Set TaxConfig.IncludeNHI
+// to false to compute dividend tax at the NHI-exclusive rate (28% − 2.11% = 25.89%),
 // modeling scenarios where the supplementary premium is waived (e.g. non-
 // resident accounts, employer-paid dividends, or counterfactual analysis).
 type TaiwanTaxCalculator struct {
@@ -22,7 +22,7 @@ type TaiwanTaxCalculator struct {
 // NHISurchargeRate is the NHI supplementary premium portion embedded in
 // domain.DefaultTaiwanTaxConfig().DividendTaxRate (0.28). It is subtracted
 // from the dividend tax rate when TaxConfig.IncludeNHI is false.
-const NHISurchargeRate = 0.02
+const NHISurchargeRate = 0.0211
 
 // NewTaiwanTaxCalculator creates a calculator with the given config.
 // Use domain.DefaultTaiwanTaxConfig() for standard Taiwan rates.
