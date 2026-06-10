@@ -11,7 +11,7 @@
 |------|------|------|
 | `TaiwanTaxCalculator` | `taiwan_tax.go` | 計算股息稅（28%）與證交稅（賣出方 0.3%） |
 | `TaxAwareSizer` | `tax_aware_sizing.go` | 以稅率調整後的資本計算買入股數，確保總成本在預算內 |
-| `TaxConfig` | `internal/domain` | 稅率配置（DividendTaxRate、TransactionTaxRate、IncludeNHI） |
+| `TaxConfig` | `internal/domain` | 稅率配置（DividendTaxRate、TransactionTaxRate、NHISurchargeRate、IncludeNHI） |
 | `NHISurchargeRate` | `taiwan_tax.go` | 常數 0.0211，從預設 `DividendTaxRate` (0.28) 拆分出的二代健保補充保費（實際費率 2.11%） |
 | `TaxSnapshot` | `internal/domain` | 單一標的稅務快照（含稅後損益） |
 
@@ -27,6 +27,7 @@
 | **有效資本公式** | `effectiveCapital = capital / (1 + transactionTaxRate)`，預留證交稅空間。 |
 | **PortfolioTax fallback 到 CurrentPrice** | `CalculatePortfolioTax()` 在 sellPrices 缺少某標的時，使用 `pos.CurrentPrice` 作為賣出價。 |
 | **IncludeNHI 控制 NHI 補充費** | `effectiveDividendTaxRate()` 在 `cfg.IncludeNHI=false` 時回傳 `DividendTaxRate - NHISurchargeRate`（預設 0.28−0.0211≈0.2589）。`CalculateDividendTax` 與 `TaxSnapshot` 共用此 helper。預設 `IncludeNHI=true` 行為不變。 |
+| **稅率參數透過 ParametersConfig** | `config.GetParametersConfig().Tax.ToConfig()` 是 production 中 tax config 的權威來源，禁止在 composition.go 或 handlers.go 硬編碼 `domain.DefaultTaiwanTaxConfig()`（已被 P2-7 移除）。 |
 
 ---
 
