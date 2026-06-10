@@ -782,3 +782,83 @@ func TestBackgroundTaskManager_ConcurrentListAndRegister(t *testing.T) {
 	wg.Wait()
 	// If we get here without a panic/race, the test passes.
 }
+
+func TestBackgroundTaskManager_Status_NextRun_ZeroLastRun(t *testing.T) {
+	mgr := NewBackgroundTaskManager(nil)
+	mgr.Register(&ScheduledTask{
+		Name:     "never_run",
+		Interval: time.Hour,
+		Task:     func(_ context.Context) error { return nil },
+	})
+
+	statuses := mgr.Status()
+	if len(statuses) != 1 {
+		t.Fatalf("got %d statuses, want 1", len(statuses))
+	}
+	if !statuses[0].NextRun.IsZero() {
+		t.Errorf("NextRun = %v, want zero value (task has never run)", statuses[0].NextRun)
+	}
+}
+
+func TestBackgroundTaskManager_Status_NextRun_WithLastRun(t *testing.T) {
+	mgr := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:     "ran",
+		Interval: time.Hour,
+		Task:     func(_ context.Context) error { return nil },
+	}
+	knownRun := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	task.SetLastRun(knownRun)
+	mgr.Register(task)
+
+	statuses := mgr.Status()
+	if len(statuses) != 1 {
+		t.Fatalf("got %d statuses, want 1", len(statuses))
+	}
+	want := knownRun.Add(time.Hour)
+	if !statuses[0].NextRun.Equal(want) {
+		t.Errorf("NextRun = %v, want %v", statuses[0].NextRun, want)
+	}
+}
+
+func TestBackgroundTaskManager_Status_AllFieldsPopulated(t *testing.T) {
+	mgr := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:      "full",
+		ChannelID: "ch1",
+		Interval:  5 * time.Minute,
+		Task:      func(_ context.Context) error { return nil },
+	}
+	task.SetEnabled(true)
+	knownRun := time.Date(2026, 1, 15, 8, 30, 0, 0, time.UTC)
+	task.SetLastRun(knownRun)
+	mgr.Register(task)
+
+	statuses := mgr.Status()
+	if len(statuses) != 1 {
+		t.Fatalf("got %d statuses, want 1", len(statuses))
+	}
+	s := statuses[0]
+	if s.Name != "full" {
+		t.Errorf("Name = %q, want %q", s.Name, "full")
+	}
+	if s.ChannelID != "ch1" {
+		t.Errorf("ChannelID = %q, want %q", s.ChannelID, "ch1")
+	}
+	if !s.Enabled {
+		t.Errorf("Enabled = false, want true")
+	}
+	if s.Interval != 5*time.Minute {
+		t.Errorf("Interval = %v, want %v", s.Interval, 5*time.Minute)
+	}
+	if !s.LastRun.Equal(knownRun) {
+		t.Errorf("LastRun = %v, want %v", s.LastRun, knownRun)
+	}
+	wantNext := knownRun.Add(5 * time.Minute)
+	if !s.NextRun.Equal(wantNext) {
+		t.Errorf("NextRun = %v, want %v", s.NextRun, wantNext)
+	}
+	if s.ConsecutiveFailures != 0 {
+		t.Errorf("ConsecutiveFailures = %d, want 0", s.ConsecutiveFailures)
+	}
+}

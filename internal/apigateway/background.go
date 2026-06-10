@@ -253,6 +253,7 @@ type TaskStatus struct {
 	Enabled             bool          `json:"enabled"`
 	Interval            time.Duration `json:"interval"`
 	LastRun             time.Time     `json:"last_run"`
+	NextRun             time.Time     `json:"next_run"`
 	ConsecutiveFailures int           `json:"consecutive_failures"`
 }
 
@@ -263,12 +264,17 @@ func (m *BackgroundTaskManager) Status() []TaskStatus {
 
 	result := make([]TaskStatus, 0, len(m.registry))
 	for _, t := range m.registry {
+		var nextRun time.Time
+		if !t.LastRun().IsZero() {
+			nextRun = t.LastRun().Add(t.Interval)
+		}
 		result = append(result, TaskStatus{
 			Name:                t.Name,
 			ChannelID:           t.ChannelID,
 			Enabled:             t.IsEnabled(),
 			Interval:            t.Interval,
 			LastRun:             t.LastRun(),
+			NextRun:             nextRun,
 			ConsecutiveFailures: t.Failures(),
 		})
 	}

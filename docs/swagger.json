@@ -1304,15 +1304,20 @@
           "interval": {
             "type": "string"
           },
-          "last_run": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "consecutive_failures": {
-            "type": "integer"
-          }
+        "last_run": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "next_run": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "consecutive_failures": {
+          "type": "integer"
         }
-      },
+      }
+    },
       "ToggleRequest": {
         "type": "object",
         "properties": {

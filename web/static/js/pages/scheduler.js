@@ -30,6 +30,7 @@ export function renderSchedulerPage(tasks, getJSON) {
 
     var intervalStr = formatDuration(t.interval);
     var lastRunStr = t.last_run ? formatTime(t.last_run) : '—';
+    var nextRunStr = t.next_run ? formatTime(t.next_run) : '—';
     var marketInfo = t.market_hours_only ? '<span class="badge warn">盤中限定</span>' : '';
     if (t.market_open_time) marketInfo += ' <span class="text-muted" style="font-size:11px">' + t.market_open_time + '-' + t.market_close_time + '</span>';
 
@@ -38,6 +39,7 @@ export function renderSchedulerPage(tasks, getJSON) {
       '<td>' + (t.channel_id ? '<span class="badge info">' + escapeHtml(t.channel_id) + '</span>' : '<span class="text-muted">—</span>') + '</td>' +
       '<td>' + intervalStr + '</td>' +
       '<td>' + lastRunStr + '</td>' +
+      '<td>' + nextRunStr + '</td>' +
       '<td><span class="badge ' + statusClass + '">' + statusText + '</span></td>' +
       '<td>' + marketInfo + '</td>' +
       '<td><button class="' + (t.enabled ? 'danger' : 'primary') + '" style="font-size:11px;padding:3px 10px" onclick="toggleSchedulerTask(\'' + escapeHtml(t.name) + '\',' + (!t.enabled) + ')">' +
@@ -70,6 +72,7 @@ export function renderSchedulerPage(tasks, getJSON) {
         '<th>通道</th>' +
         '<th>間隔</th>' +
         '<th>最後執行</th>' +
+      '<th>下次執行</th>' +
         '<th>狀態</th>' +
         '<th>設定</th>' +
         '<th style="width:80px">操作</th>' +
