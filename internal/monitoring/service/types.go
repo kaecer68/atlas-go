@@ -48,3 +48,27 @@ type DataQualityReport struct {
 	Score       float64            `json:"score"`
 	GeneratedAt time.Time          `json:"generated_at"`
 }
+
+// AlertThreshold mirrors monitoring.AlertThreshold to break the service<->monitoring import cycle.
+type AlertThreshold struct {
+	MinScreeningRate        float64 `json:"min_screening_rate"`
+	MaxAlertTriggerRate     float64 `json:"max_alert_trigger_rate"`
+	MaxUnacknowledgedAlerts int64   `json:"max_unacknowledged_alerts"`
+}
+
+// ThresholdViolation mirrors monitoring.ThresholdViolation for the same reason.
+type ThresholdViolation struct {
+	Metric    string  `json:"metric"`
+	Current   float64 `json:"current"`
+	Threshold float64 `json:"threshold"`
+	Severity  string  `json:"severity"`
+	Message   string  `json:"message"`
+}
+
+// ThresholdReport bundles violations with the threshold that produced them and the check time.
+type ThresholdReport struct {
+	Violations []ThresholdViolation `json:"violations"`
+	Count      int                  `json:"count"`
+	Threshold  AlertThreshold       `json:"threshold"`
+	CheckedAt  time.Time            `json:"checked_at"`
+}
