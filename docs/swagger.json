@@ -1305,17 +1305,17 @@
             "type": "string"
           },
         "last_run": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "next_run": {
-          "type": "string",
-          "format": "date-time",
-          "nullable": true
-        },
-        "consecutive_failures": {
-          "type": "integer"
-        }
+            "type": "string",
+            "format": "date-time"
+          },
+          "next_run": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "consecutive_failures": {
+            "type": "integer"
+          }
       }
     },
       "ToggleRequest": {
