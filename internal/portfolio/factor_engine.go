@@ -274,11 +274,12 @@ func (fe *FactorEngine) RefreshETFNAV(ctx context.Context, provider QuoteProvide
 }
 
 // ensureAdjusted fetches corporate actions for the symbol and applies price adjustments
-// if not already adjusted within the adjustmentTTL window. Returns the latest adjustment
-// time on success. If no corporate action provider is configured, returns zero time without error.
-func (fe *FactorEngine) ensureAdjusted(ctx context.Context, symbol string) (time.Time, error) {
+// if not already adjusted within the adjustmentTTL window. If no corporate action provider
+// is configured, returns nil without error. The latest adjustment time is tracked internally
+// via adjustedSymbols and is not part of the public signature.
+func (fe *FactorEngine) ensureAdjusted(ctx context.Context, symbol string) error {
 	if fe.corpActions == nil {
-		return time.Time{}, nil
+		return nil
 	}
 
 	fe.adjustedMu.Lock()
@@ -286,18 +287,20 @@ func (fe *FactorEngine) ensureAdjusted(ctx context.Context, symbol string) (time
 	fe.adjustedMu.Unlock()
 
 	if exists && time.Since(lastAdj) < fe.adjustmentTTL {
-		return lastAdj, nil
+		return nil
 	}
 
 	end := time.Now()
 	start := end.Add(-365 * 24 * time.Hour)
 	actions, err := fe.corpActions.GetCorporateActions(ctx, symbol, start, end)
 	if err != nil {
-		return time.Time{}, err
+		return err
 	}
 
 	if len(actions) > 0 && fe.history != nil {
-		fe.history.AdjustForCorporateActions(actions)
+		if adjErr := fe.history.AdjustForCorporateActions(actions); adjErr != nil {
+			logging.Warn("factor_engine", "adjust_for_actions_failed", "symbol", symbol, logging.Err(adjErr))
+		}
 	}
 
 	now := time.Now()
@@ -305,7 +308,7 @@ func (fe *FactorEngine) ensureAdjusted(ctx context.Context, symbol string) (time
 	fe.adjustedSymbols[symbol] = now
 	fe.adjustedMu.Unlock()
 
-	return now, nil
+	return nil
 }
 
 // CalculateMomentumScore computes momentum based on price change over the configured lookback period.
@@ -321,7 +324,7 @@ func (fe *FactorEngine) calculateMomentumDetail(ctx context.Context, symbol stri
 	fe.mu.RUnlock()
 
 	if hp != nil {
-		if _, err := fe.ensureAdjusted(ctx, symbol); err != nil {
+		if err := fe.ensureAdjusted(ctx, symbol); err != nil {
 			logging.Warn("factor_engine", "ensure_adjusted_failed", logging.Symbol(symbol), logging.Err(err))
 		}
 		ret := hp.MomentumReturn(symbol, fe.params.Factor.MomentumLookbackDays)
@@ -550,7 +553,7 @@ func (fe *FactorEngine) calculateQualityDetail(ctx context.Context, symbol strin
 	}
 
 	if hp != nil {
-		if _, err := fe.ensureAdjusted(ctx, symbol); err != nil {
+		if err := fe.ensureAdjusted(ctx, symbol); err != nil {
 			logging.Warn("factor_engine", "ensure_adjusted_failed", logging.Symbol(symbol), logging.Err(err))
 		}
 		vol := hp.Volatility(symbol, fe.params.Factor.MomentumLookbackDays)
@@ -1117,7 +1120,7 @@ func (fe *FactorEngine) pmETFFlowScore(ctx context.Context) float64 {
 	if fe.history == nil {
 		return 0
 	}
-	if _, err := fe.ensureAdjusted(ctx, "GLD"); err != nil {
+	if err := fe.ensureAdjusted(ctx, "GLD"); err != nil {
 		logging.Warn("factor_engine", "ensure_adjusted_failed", logging.Symbol("GLD"), logging.Err(err))
 	}
 	ret20d := fe.history.MomentumReturn("GLD", 20)
