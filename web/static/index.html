@@ -484,14 +484,24 @@
     
     <div class="page" id="page-alerts">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁呈現 Atlas 系統產生的所有<strong>風險警報與系統通知</strong>。每條警報都有狀態與嚴重程度標記。
-        <br><strong>狀態說明</strong>：
-        <span class="badge err">觸發中</span> = 尚未處理；
-        <span class="badge warn">已確認</span> = 已看過但未修復；
-        <span class="badge ok">已解決</span> = 問題已修復；
-        <span class="badge muted">已抑制</span> = 被 regime 或 auto-handler 攔截。
-        <br>「重複 ×N」表示該警報在 5 分鐘內重複觸發 N 次。
+        本頁呈現<strong>機器無法自動處理、需要人類決策的警報</strong>。
+        <br>系統已自動過濾掉已知噪音（gateway heartbeat、RISK_OFF 0-orders 等）。
+        <br>每筆警報附帶「機器建議行動」，維護人員只需做決策：
+        <span class="badge ok">✓ 已知悉</span> = 確認收到，繼續觀察；
+        <span class="badge err">🔧 已修復</span> = 問題已解決。
+        <br>上方的「資料通道健康」面板顯示所有 14 個通道狀態，替代了之前的 heartbeat 警報。
       </details>
+
+      <!-- 資料通道健康摘要 -->
+      <div class="panel wide" style="padding:10px var(--space-md);margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 class="m-0" style="font-size:14px">📡 資料通道健康</h3>
+          <a data-page="datachannels" style="font-size:12px;color:var(--accent);cursor:pointer">查看詳情 →</a>
+        </div>
+        <div id="alertHealthSummary">
+          <span style="color:var(--muted);font-size:12px">載入中…</span>
+        </div>
+      </div>
 
       <!-- 統計摘要 -->
       <div class="panel wide" style="padding:10px var(--space-md);margin-bottom:8px">
@@ -502,9 +512,10 @@
 
       <div class="panel wide">
         <div class="flex-between mb-sm">
-          <h2 class="m-0">系統警報</h2>
+          <h2 class="m-0">🚨 需人類決策的警報</h2>
           <div class="control-group m-0">
             <button data-action="load-alerts">🔄 重新整理</button>
+            <button data-action="load-all-alerts">📋 查看全部</button>
             <button data-action="show-unacknowledged">僅顯示未確認</button>
           </div>
         </div>
@@ -512,8 +523,8 @@
         <!-- 狀態過濾器 -->
         <div id="alertFilters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
           <span style="font-size:12px;color:var(--muted);margin-right:4px">狀態過濾：</span>
-          <button class="view-btn active" data-filter="all">全部</button>
-          <button class="view-btn" data-filter="triggered">觸發中</button>
+          <button class="view-btn" data-filter="all">全部</button>
+          <button class="view-btn active" data-filter="triggered">觸發中</button>
           <button class="view-btn" data-filter="acknowledged">已確認</button>
           <button class="view-btn" data-filter="resolved">已解決</button>
           <button class="view-btn" data-filter="silenced">已抑制</button>

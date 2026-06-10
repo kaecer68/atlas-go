@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // === Page: alerts ===
   document.querySelector('#page-alerts [data-action="load-alerts"]').addEventListener('click', () => window.loadAlerts());
+  document.querySelector('#page-alerts [data-action="load-all-alerts"]').addEventListener('click', () => window.loadAllAlerts());
   document.querySelector('#page-alerts [data-action="show-unacknowledged"]').addEventListener('click', () => window.showUnacknowledgedOnly());
   document.querySelectorAll('#alertFilters .view-btn').forEach(btn => {
     btn.addEventListener('click', () => {
