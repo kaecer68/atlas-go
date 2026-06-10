@@ -20,6 +20,12 @@ export async function loadMetrics() {
   }
 
   try {
+    await loadThresholdViolations();
+  } catch (err) {
+    console.error('loadThresholdViolations error:', err);
+  }
+
+  try {
     const storageData = await silentGetJSON('/api/metrics/storage');
     if (storageData && storageData.total_deleted != null) {
       const storageDeletedEl = document.getElementById('storageDeleted');
@@ -111,6 +117,37 @@ export async function updateMetricsTrend(data) {
   html += '</tbody></table></div>';
   html += '</div>';
   trendDiv.innerHTML = html;
+}
+
+export async function loadThresholdViolations() {
+  const panel = document.getElementById('thresholdViolationsKpi');
+  const countEl = document.getElementById('thresholdViolationsCount');
+  const labelEl = document.getElementById('thresholdViolationsLabel');
+  if (!panel || !countEl || !labelEl) return;
+
+  try {
+    const data = await silentGetJSON('/api/dashboard/metrics/thresholds');
+    const violations = data && Array.isArray(data.violations) ? data.violations : [];
+    const count = violations.length;
+
+    let severity = 'success';
+    if (violations.some(v => v.severity === 'critical')) severity = 'critical';
+    else if (violations.some(v => v.severity === 'warning')) severity = 'warning';
+
+    countEl.textContent = String(count);
+    labelEl.textContent = severity === 'critical' ? '嚴重違規' :
+                          severity === 'warning' ? '需要關注' : '全部正常';
+    panel.dataset.severity = severity;
+    countEl.style.color = severity === 'critical' ? 'var(--color-danger)' :
+                          severity === 'warning' ? 'var(--color-warning)' :
+                          'var(--color-success)';
+  } catch (err) {
+    console.error('[metrics] threshold violations load failed:', err);
+    countEl.textContent = '—';
+    labelEl.textContent = '載入失敗';
+    panel.dataset.severity = 'unknown';
+    countEl.style.color = 'var(--muted)';
+  }
 }
 
 export function renderStorageCleanup(data) {
