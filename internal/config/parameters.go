@@ -1004,18 +1004,19 @@ type PreciousMetalsParameters struct {
 }
 
 type AlertParameters struct {
-	MinCashThreshold         ParameterMetadata[float64] `json:"min_cash_threshold"`
-	MaxPositionsCount        ParameterMetadata[int]     `json:"max_positions_count"`
-	MaxPositionWeightPct     ParameterMetadata[float64] `json:"max_position_weight_pct"`
-	MaxUnrealizedLossPct     ParameterMetadata[float64] `json:"max_unrealized_loss_pct"`
-	DailyLossWarningPct      ParameterMetadata[float64] `json:"daily_loss_warning_pct"`
-	DailyLossCriticalPct     ParameterMetadata[float64] `json:"daily_loss_critical_pct"`
-	RuleEngineIntervalSec    ParameterMetadata[int]     `json:"rule_engine_interval_sec"`
-	RuleEngineCooldownSec    ParameterMetadata[int]     `json:"rule_engine_cooldown_sec"`
-	SystemMetricsIntervalSec ParameterMetadata[int]     `json:"system_metrics_interval_sec"`
-	MinScreeningRate         ParameterMetadata[float64] `json:"min_screening_rate"`
-	MaxAlertTriggerRate      ParameterMetadata[float64] `json:"max_alert_trigger_rate"`
-	MaxUnacknowledgedAlerts  ParameterMetadata[int]     `json:"max_unacknowledged_alerts"`
+	MinCashThreshold         ParameterMetadata[float64]  `json:"min_cash_threshold"`
+	MaxPositionsCount        ParameterMetadata[int]      `json:"max_positions_count"`
+	MaxPositionWeightPct     ParameterMetadata[float64]  `json:"max_position_weight_pct"`
+	MaxUnrealizedLossPct     ParameterMetadata[float64]  `json:"max_unrealized_loss_pct"`
+	DailyLossWarningPct      ParameterMetadata[float64]  `json:"daily_loss_warning_pct"`
+	DailyLossCriticalPct     ParameterMetadata[float64]  `json:"daily_loss_critical_pct"`
+	RuleEngineIntervalSec    ParameterMetadata[int]      `json:"rule_engine_interval_sec"`
+	RuleEngineCooldownSec    ParameterMetadata[int]      `json:"rule_engine_cooldown_sec"`
+	SystemMetricsIntervalSec ParameterMetadata[int]      `json:"system_metrics_interval_sec"`
+	MinScreeningRate         ParameterMetadata[float64]  `json:"min_screening_rate"`
+	MaxAlertTriggerRate      ParameterMetadata[float64]  `json:"max_alert_trigger_rate"`
+	MaxUnacknowledgedAlerts  ParameterMetadata[int]      `json:"max_unacknowledged_alerts"`
+	SuppressCategories       ParameterMetadata[[]string] `json:"suppress_categories"`
 }
 
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.

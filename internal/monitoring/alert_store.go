@@ -203,6 +203,33 @@ func (s *AlertStore) DeleteWhere(predicate func(*domain.AlertRecord) bool) (int,
 	return deleted, s.rewriteAll(remaining)
 }
 
+// ResolveWhere resolves all alerts matching the predicate and returns the count resolved.
+func (s *AlertStore) ResolveWhere(predicate func(*domain.AlertRecord) bool, user string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	all, err := s.loadFromFile()
+	if err != nil {
+		return 0, fmt.Errorf("load alerts: %w", err)
+	}
+
+	now := time.Now()
+	resolved := 0
+	for i := range all {
+		if predicate(&all[i]) {
+			all[i].Status = domain.AlertStatusResolved
+			all[i].ResolvedAt = &now
+			all[i].ResolvedBy = user
+			resolved++
+		}
+	}
+	if resolved == 0 {
+		return 0, nil
+	}
+
+	return resolved, s.rewriteAll(all)
+}
+
 // loadFromFile reads all records from the JSONL file.
 // Caller must hold at least a read lock.
 func (s *AlertStore) loadFromFile() ([]domain.AlertRecord, error) {

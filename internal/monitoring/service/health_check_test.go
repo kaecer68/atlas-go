@@ -91,16 +91,11 @@ func TestHealthChecker_RunOnce_GatewayHealthy(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
+	// Gateway heartbeat no longer creates alerts — channel health is tracked
+	// by ChannelHealthStore. Only state_store alerts (if any) should exist.
 	alerts := pollHistory(mon, 1, 100*time.Millisecond)
-	if !hasCategory(alerts, "gateway") {
-		t.Errorf("expected gateway alert, got categories: %v", historyCategories(alerts))
-	}
-	alert := findAlert(alerts, "gateway", "channel_health_summary")
-	if alert == nil {
-		t.Fatal("expected channel_health_summary alert")
-	}
-	if alert.Level != monitoring.AlertLevelInfo {
-		t.Errorf("expected info level for healthy gateway, got %v", alert.Level)
+	if hasCategory(alerts, "gateway") {
+		t.Errorf("gateway heartbeat should NOT create alerts anymore, got: %v", historyCategories(alerts))
 	}
 }
 
@@ -118,13 +113,11 @@ func TestHealthChecker_RunOnce_GatewayUnhealthy(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
+	// Gateway heartbeat no longer creates alerts — channel health is tracked
+	// by ChannelHealthStore.
 	alerts := pollHistory(mon, 1, 100*time.Millisecond)
-	alert := findAlert(alerts, "gateway", "channel_health_summary")
-	if alert == nil {
-		t.Fatal("expected channel_health_summary alert")
-	}
-	if alert.Level != monitoring.AlertLevelInfo {
-		t.Errorf("expected info level for gateway summary, got %v", alert.Level)
+	if hasCategory(alerts, "gateway") {
+		t.Errorf("gateway heartbeat should NOT create alerts anymore, got: %v", historyCategories(alerts))
 	}
 }
 
@@ -198,9 +191,10 @@ func TestHealthChecker_RunOnce_ContextTimeout(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
+	// Gateway heartbeat no longer creates alerts.
 	alerts := pollHistory(mon, 1, 100*time.Millisecond)
-	if !hasCategory(alerts, "gateway") {
-		t.Error("expected gateway alert even with timeout context")
+	if hasCategory(alerts, "gateway") {
+		t.Error("gateway heartbeat should NOT create alerts anymore")
 	}
 }
 
@@ -235,15 +229,12 @@ func TestHealthChecker_RunOnce_AllDependencies(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	alerts := pollHistory(mon, 2, 100*time.Millisecond)
-	if !hasCategory(alerts, "gateway") {
-		t.Error("expected gateway alert")
+	// Gateway heartbeat no longer creates alerts — only state_store.
+	alerts := pollHistory(mon, 1, 100*time.Millisecond)
+	if hasCategory(alerts, "gateway") {
+		t.Error("gateway heartbeat should NOT create alerts anymore")
 	}
 	if !hasCategory(alerts, "state_store") {
 		t.Error("expected state_store alert")
-	}
-	alert := findAlert(alerts, "gateway", "channel_health_summary")
-	if alert == nil {
-		t.Fatal("expected gateway summary alert")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // GatewayHealthChecker is the minimal interface HealthChecker needs from the Gateway
@@ -49,15 +50,16 @@ func (h *HealthChecker) RunOnce(ctx context.Context) error {
 }
 
 // checkGateway verifies the API Gateway's channel health records.
-// Logs a summary of all channel statuses when the gateway is wired.
+// Logs a structured summary to the logging system — does NOT create alerts
+// (channel health is tracked by ChannelHealthStore, not the alert stream).
 func (h *HealthChecker) checkGateway() {
 	if h.gateway == nil {
 		return
 	}
 	summary := h.gateway.Summary()
-	h.monitor.Info("gateway", "channel_health_summary", map[string]any{
-		"channels": summary,
-	})
+	logging.Info("health", "channel_health_summary",
+		"channels", summary,
+	)
 }
 
 // checkStateStore verifies the live state store is operational.
