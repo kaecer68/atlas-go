@@ -510,12 +510,13 @@
         </div>
 
         <!-- 狀態過濾器 -->
-        <div id="alertFilters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-          <button class="alert-filter-btn active" data-filter="all">全部</button>
-          <button class="alert-filter-btn" data-filter="triggered">🔴 觸發中</button>
-          <button class="alert-filter-btn" data-filter="acknowledged">🟡 已確認</button>
-          <button class="alert-filter-btn" data-filter="resolved">🟢 已解決</button>
-          <button class="alert-filter-btn" data-filter="silenced">⚫ 已抑制</button>
+        <div id="alertFilters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:12px;color:var(--muted);margin-right:4px">狀態過濾：</span>
+          <button class="view-btn active" data-filter="all">全部</button>
+          <button class="view-btn" data-filter="triggered">觸發中</button>
+          <button class="view-btn" data-filter="acknowledged">已確認</button>
+          <button class="view-btn" data-filter="resolved">已解決</button>
+          <button class="view-btn" data-filter="silenced">已抑制</button>
         </div>
 
         <div id="alertsPanel" class="empty loading">載入中…</div>
