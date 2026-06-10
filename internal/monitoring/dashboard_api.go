@@ -689,6 +689,50 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	handlers := &apisystem.HealthHandlers{}
 	handlers.RegisterRoutes(mux)
 
+	// Channel health summary endpoint for the alerts page dashboard.
+	mux.HandleFunc("/api/dashboard/channel-health", func(w http.ResponseWriter, r *http.Request) {
+		healthPath := filepath.Join(a.workDir, "data/state", "channel_health.json")
+		b, err := os.ReadFile(healthPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"channels":[],"updated_at":""}`))
+				return
+			}
+			http.Error(w, fmt.Sprintf("read channel health: %v", err), http.StatusInternalServerError)
+			return
+		}
+		var wrapper struct {
+			Channels  map[string]*ChannelHealthRecord `json:"channels"`
+			UpdatedAt string                          `json:"updated_at,omitempty"`
+		}
+		if err := json.Unmarshal(b, &wrapper); err != nil {
+			http.Error(w, fmt.Sprintf("parse channel health: %v", err), http.StatusInternalServerError)
+			return
+		}
+		// Build channels array for frontend
+		type channelHealthResp struct {
+			ChannelID string `json:"channel_id"`
+			Status    string `json:"status"`
+			UpdatedAt string `json:"updated_at,omitempty"`
+		}
+		var channels []channelHealthResp
+		for id, rec := range wrapper.Channels {
+			channels = append(channels, channelHealthResp{
+				ChannelID: id,
+				Status:    rec.Status,
+				UpdatedAt: rec.LastFetchAt,
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"channels":   channels,
+			"updated_at": wrapper.UpdatedAt,
+		})
+	})
+
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
 
 	swarmSvc := service.NewSwarmService(filepath.Join(a.workDir, "data/state/swarm_latest.json"))

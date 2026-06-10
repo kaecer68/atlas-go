@@ -259,6 +259,16 @@ func run(args []string, deps appDeps) error {
 		} else if deleted > 0 {
 			log.Printf("[AlertCleanup] deleted %d stale gateway heartbeats (>24h)", deleted)
 		}
+
+		// Auto-acknowledge existing gateway INFO alerts (noise — humans should never see them).
+		acked, err := alertStore.AcknowledgeWhere(func(r *domain.AlertRecord) bool {
+			return r.Rule == "gateway" && r.Severity == "INFO" && !r.Acknowledged
+		}, "auto-handler-startup")
+		if err != nil {
+			log.Printf("[AlertCleanup] auto-acknowledge failed: %v", err)
+		} else if acked > 0 {
+			log.Printf("[AlertCleanup] auto-acknowledged %d gateway INFO alerts", acked)
+		}
 	}
 
 	var janusEngine *janus.Engine

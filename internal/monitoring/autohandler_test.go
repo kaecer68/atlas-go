@@ -122,6 +122,10 @@ func TestAutoHandler_HandleSuppressed(t *testing.T) {
 	store := newTestStore(t)
 
 	alertID := "suppressed-alert-1"
+	rec := makeAlert(alertID)
+	if err := store.Save(rec); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
 
 	// Manually set a suppression entry for "test-category" that is still active.
 	h := NewAutoHandler(store, nil)
@@ -133,20 +137,20 @@ func TestAutoHandler_HandleSuppressed(t *testing.T) {
 		ID:        alertID,
 		Level:     AlertLevelInfo,
 		Category:  "test-category",
-		Message:   "should be suppressed",
+		Message:   "INFO alerts are always auto-acknowledged even when suppressed",
 		Timestamp: time.Now(),
 	})
 
-	// Alert was suppressed: autoAcknowledge should never have run.
-	// Since we did NOT pre-save the record, if Acknowledge had been called
-	// it would error silently (the store has no record). Verify the store
-	// remains empty as proof no write occurred.
+	// INFO alerts are auto-acknowledged regardless of suppression.
 	records, err := store.LoadAll()
 	if err != nil {
 		t.Fatalf("LoadAll: %v", err)
 	}
-	if len(records) != 0 {
-		t.Errorf("LoadAll len = %d, want 0 (alert should have been suppressed)", len(records))
+	if len(records) != 1 {
+		t.Fatalf("LoadAll len = %d, want 1", len(records))
+	}
+	if !records[0].Acknowledged {
+		t.Error("INFO alert should be auto-acknowledged even when category is suppressed")
 	}
 }
 

@@ -8,6 +8,15 @@ document.addEventListener('DOMContentLoaded', () => {
     a.addEventListener('click', () => window.switchPage(a.dataset.page));
   });
 
+  // === Global page navigation (inline links with data-page, e.g. alert health panel)
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[data-page]');
+    if (link && !link.closest('#sidebar nav')) {
+      e.preventDefault();
+      window.switchPage(link.dataset.page);
+    }
+  });
+
   // === Global/Core ===
   document.querySelector('.theme-toggle').addEventListener('click', () => window.toggleTheme());
   document.getElementById('menuToggle').addEventListener('click', () => window.toggleSidebar());
