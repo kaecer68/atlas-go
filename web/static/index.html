@@ -484,9 +484,22 @@
     
     <div class="page" id="page-alerts">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁呈現 Atlas 系統產生的所有<strong>風險警報與系統通知</strong>。每條警報都有嚴重程度標記，你可以確認已處理的警報。
-        未確認的警報會持續提醒，直到人工介入處理。
+        本頁呈現 Atlas 系統產生的所有<strong>風險警報與系統通知</strong>。每條警報都有狀態與嚴重程度標記。
+        <br><strong>狀態說明</strong>：
+        <span class="badge err">觸發中</span> = 尚未處理；
+        <span class="badge warn">已確認</span> = 已看過但未修復；
+        <span class="badge ok">已解決</span> = 問題已修復；
+        <span class="badge muted">已抑制</span> = 被 regime 或 auto-handler 攔截。
+        <br>「重複 ×N」表示該警報在 5 分鐘內重複觸發 N 次。
       </details>
+
+      <!-- 統計摘要 -->
+      <div class="panel wide" style="padding:10px var(--space-md);margin-bottom:8px">
+        <div id="alertSummary" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span class="badge" style="background:var(--bg);color:var(--muted);border:1px solid var(--border)">載入中…</span>
+        </div>
+      </div>
+
       <div class="panel wide">
         <div class="flex-between mb-sm">
           <h2 class="m-0">系統警報</h2>
@@ -495,6 +508,16 @@
             <button data-action="show-unacknowledged">僅顯示未確認</button>
           </div>
         </div>
+
+        <!-- 狀態過濾器 -->
+        <div id="alertFilters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="alert-filter-btn active" data-filter="all">全部</button>
+          <button class="alert-filter-btn" data-filter="triggered">🔴 觸發中</button>
+          <button class="alert-filter-btn" data-filter="acknowledged">🟡 已確認</button>
+          <button class="alert-filter-btn" data-filter="resolved">🟢 已解決</button>
+          <button class="alert-filter-btn" data-filter="silenced">⚫ 已抑制</button>
+        </div>
+
         <div id="alertsPanel" class="empty loading">載入中…</div>
       </div>
     </div>

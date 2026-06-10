@@ -21,6 +21,7 @@ func (a *AlertAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/alerts", a.handleListAlerts)
 	mux.HandleFunc("/api/alerts/unacknowledged", a.handleUnacknowledged)
 	mux.Handle("POST /api/alerts/acknowledge", shared.Post(a.handleAcknowledge))
+	mux.Handle("POST /api/alerts/resolve", shared.Post(a.handleResolve))
 }
 
 func (a *AlertAPI) handleListAlerts(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +75,27 @@ func (a *AlertAPI) handleAcknowledge(r *http.Request) (int, any) {
 
 	if err := a.store.Acknowledge(req.AlertID, req.User); err != nil {
 		return http.StatusNotFound, map[string]string{"error": fmt.Sprintf("acknowledge: %v", err)}
+	}
+	return http.StatusOK, map[string]any{"success": true, "alert_id": req.AlertID}
+}
+
+func (a *AlertAPI) handleResolve(r *http.Request) (int, any) {
+	var req struct {
+		AlertID string `json:"alert_id"`
+		User    string `json:"user"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
+	}
+	if req.AlertID == "" {
+		return http.StatusBadRequest, map[string]string{"error": "alert_id required"}
+	}
+	if req.User == "" {
+		return http.StatusBadRequest, map[string]string{"error": "user required"}
+	}
+
+	if err := a.store.Resolve(req.AlertID, req.User); err != nil {
+		return http.StatusNotFound, map[string]string{"error": fmt.Sprintf("resolve: %v", err)}
 	}
 	return http.StatusOK, map[string]any{"success": true, "alert_id": req.AlertID}
 }

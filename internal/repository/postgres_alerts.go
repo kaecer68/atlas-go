@@ -91,6 +91,23 @@ func (r *PostgresRepository) AcknowledgeAlert(ctx context.Context, alertID strin
 	return nil
 }
 
+func (r *PostgresRepository) ResolveAlert(ctx context.Context, alertID string, user string) error {
+	result, err := r.pool.Exec(ctx, `
+		UPDATE alerts
+		SET status = 'resolved', resolved_at = NOW(), resolved_by = $2
+		WHERE id = $1
+	`, alertID, user)
+	if err != nil {
+		return fmt.Errorf("resolve alert: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("alert %q not found", alertID)
+	}
+
+	return nil
+}
+
 func (r *PostgresRepository) LoadAlertsBySeverity(ctx context.Context, severity string, limit int) ([]domain.AlertRecord, error) {
 	query := `
 		SELECT ` + alertColumns + `

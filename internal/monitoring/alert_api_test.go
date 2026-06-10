@@ -237,6 +237,68 @@ func TestAlertAPI_Acknowledge_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestAlertAPI_Resolve(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	body, _ := json.Marshal(map[string]string{"alert_id": "alert-1", "user": "admin"})
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/resolve", bytes.NewReader(body))
+	status, respBody := api.handleResolve(req)
+
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	resp, ok := respBody.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected response type: %T", respBody)
+	}
+	if resp["success"] != true {
+		t.Errorf("success = %v, want true", resp["success"])
+	}
+
+	records, _ := store.LoadAll()
+	for _, r := range records {
+		if r.ID == "alert-1" {
+			if r.Status != domain.AlertStatusResolved {
+				t.Errorf("Status = %q, want resolved", r.Status)
+			}
+			if r.ResolvedBy != "admin" {
+				t.Errorf("ResolvedBy = %q, want admin", r.ResolvedBy)
+			}
+			if r.ResolvedAt == nil {
+				t.Error("ResolvedAt should not be nil")
+			}
+			return
+		}
+	}
+	t.Fatal("alert-1 not found in store")
+}
+
+func TestAlertAPI_Resolve_NotFound(t *testing.T) {
+	api, _ := newTestAlertAPI(t)
+
+	body, _ := json.Marshal(map[string]string{"alert_id": "nonexistent", "user": "admin"})
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/resolve", bytes.NewReader(body))
+	status, _ := api.handleResolve(req)
+
+	if status != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", status)
+	}
+}
+
+func TestAlertAPI_Resolve_MissingAlertID(t *testing.T) {
+	api, _ := newTestAlertAPI(t)
+
+	body, _ := json.Marshal(map[string]string{"user": "admin"})
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/resolve", bytes.NewReader(body))
+	status, _ := api.handleResolve(req)
+
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", status)
+	}
+}
+
 func TestAlertAPI_RegisterRoutes(t *testing.T) {
 	api, _ := newTestAlertAPI(t)
 	mux := http.NewServeMux()
@@ -249,6 +311,7 @@ func TestAlertAPI_RegisterRoutes(t *testing.T) {
 		{"/api/alerts", http.MethodGet},
 		{"/api/alerts/unacknowledged", http.MethodGet},
 		{"/api/alerts/acknowledge", http.MethodPost},
+		{"/api/alerts/resolve", http.MethodPost},
 	}
 	for _, tt := range tests {
 		req := httptest.NewRequest(tt.method, tt.path, nil)

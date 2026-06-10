@@ -54,6 +54,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // === Page: alerts ===
   document.querySelector('#page-alerts [data-action="load-alerts"]').addEventListener('click', () => window.loadAlerts());
   document.querySelector('#page-alerts [data-action="show-unacknowledged"]').addEventListener('click', () => window.showUnacknowledgedOnly());
+  document.querySelectorAll('#alertFilters .alert-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.setAlertFilter) window.setAlertFilter(btn.dataset.filter);
+    });
+  });
 
   // === Page: industry ===
   document.querySelector('#page-industry .cursor-pointer').addEventListener('click', () => window.toggleCycleLegend());
