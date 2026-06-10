@@ -8,6 +8,8 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // ParameterSource indicates how a parameter value was determined.
@@ -1227,6 +1229,24 @@ type ParametersConfig struct {
 	RiskGate             RiskGateParameters             `json:"risk_gate,omitempty"`
 	Engine               EngineParameters               `json:"engine,omitempty"`
 	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
+	Tax                  TaxParameters                  `json:"tax,omitempty"`
+}
+
+// TaxParameters holds tunable Taiwan tax rates with full provenance tracking.
+type TaxParameters struct {
+	DividendTaxRate    ParameterMetadata[float64] `json:"dividend_tax_rate"`
+	TransactionTaxRate ParameterMetadata[float64] `json:"transaction_tax_rate"`
+	NHISurchargeRate   ParameterMetadata[float64] `json:"nhi_surcharge_rate"`
+}
+
+// ToConfig converts TaxParameters to a domain.TaxConfig for use by tax calculators.
+func (p TaxParameters) ToConfig() domain.TaxConfig {
+	return domain.TaxConfig{
+		DividendTaxRate:    p.DividendTaxRate.Value,
+		TransactionTaxRate: p.TransactionTaxRate.Value,
+		NHISurchargeRate:   p.NHISurchargeRate.Value,
+		IncludeNHI:         true, // NHI inclusion is a policy flag, not a tunable rate
+	}
 }
 
 // EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.

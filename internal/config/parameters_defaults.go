@@ -39,6 +39,27 @@ func DefaultParametersConfig() *ParametersConfig {
 		RiskGate:             defaultRiskGateParameters(),
 		Engine:               defaultEngineParameters(),
 		RSITw:                defaultRSITwParameters(),
+		Tax:                  defaultTaxParameters(),
+	}
+}
+
+func defaultTaxParameters() TaxParameters {
+	return TaxParameters{
+		DividendTaxRate: ParameterMetadata[float64]{
+			Value:     0.28,
+			Rationale: "Taiwan individual income tax rate on dividend income (28% bracket)",
+			Source:    SourceLiterature,
+		},
+		TransactionTaxRate: ParameterMetadata[float64]{
+			Value:     0.003,
+			Rationale: "Taiwan securities transaction tax (0.3%, sell-side only)",
+			Source:    SourceLiterature,
+		},
+		NHISurchargeRate: ParameterMetadata[float64]{
+			Value:     0.0211,
+			Rationale: "Taiwan NHI supplementary premium (二代健保補充保費) rate 2.11% effective 2021",
+			Source:    SourceLiterature,
+		},
 	}
 }
 
