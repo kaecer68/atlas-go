@@ -9,6 +9,7 @@ export async function loadMetrics() {
     if (screeningRateEl) screeningRateEl.textContent = screeningRate;
     const alertsTriggeredEl = document.getElementById('alertsTriggered');
     if (alertsTriggeredEl) alertsTriggeredEl.textContent = data && data.alerts_triggered != null ? data.alerts_triggered : '-';
+    updateDerivedKpis(data);
     const capitalPhaseEl = document.getElementById('capitalPhase');
     if (capitalPhaseEl) {
       const cp = await silentGetJSON('/api/dashboard/capital-phase');
@@ -34,6 +35,66 @@ export async function loadMetrics() {
     await loadDataQuality();
   } catch (err) {
     console.error('loadDataQuality error:', err);
+  }
+}
+
+export function updateDerivedKpis(data) {
+  updateScreeningTotal(data);
+  updatePendingAlerts(data);
+  updateAckRate(data);
+}
+
+function updateScreeningTotal(data) {
+  const countEl = document.getElementById('screeningTotalCount');
+  const labelEl = document.getElementById('screeningTotalLabel');
+  if (!countEl || !labelEl) return;
+  const total = data && data.screening_total != null ? data.screening_total : null;
+  if (total == null) {
+    countEl.textContent = '-';
+    labelEl.textContent = '尚無資料';
+    countEl.style.color = 'var(--muted)';
+    return;
+  }
+  countEl.textContent = String(total);
+  labelEl.textContent = total > 0 ? '已執行' : '尚無紀錄';
+  countEl.style.color = total > 0 ? 'var(--color-success)' : 'var(--muted)';
+}
+
+function updatePendingAlerts(data) {
+  const countEl = document.getElementById('pendingAlertsCount');
+  const labelEl = document.getElementById('pendingAlertsLabel');
+  if (!countEl || !labelEl) return;
+  const triggered = data && data.alerts_triggered != null ? data.alerts_triggered : 0;
+  const acknowledged = data && data.alerts_acknowledged != null ? data.alerts_acknowledged : 0;
+  const pending = Math.max(0, triggered - acknowledged);
+  countEl.textContent = String(pending);
+  labelEl.textContent = pending > 0 ? '待處理警報' : '已全數處理';
+  countEl.style.color = pending > 0 ? 'var(--risk-high)' : 'var(--risk-low)';
+}
+
+function updateAckRate(data) {
+  const countEl = document.getElementById('ackRateCount');
+  const labelEl = document.getElementById('ackRateLabel');
+  if (!countEl || !labelEl) return;
+  const triggered = data && data.alerts_triggered != null ? data.alerts_triggered : 0;
+  const acknowledged = data && data.alerts_acknowledged != null ? data.alerts_acknowledged : 0;
+  if (triggered <= 0) {
+    countEl.textContent = '—';
+    labelEl.textContent = '尚無警報';
+    countEl.style.color = 'var(--muted)';
+    return;
+  }
+  const rate = (acknowledged / triggered) * 100;
+  countEl.textContent = rate.toFixed(1) + '%';
+  if (rate >= 80) {
+    labelEl.textContent = '回應良好';
+    countEl.style.color = 'var(--metric-good)';
+  } else if (rate < 50) {
+    labelEl.textContent = '回應不足';
+    countEl.style.color = 'var(--metric-bad)';
+  } else {
+    labelEl.textContent = '待加強';
+    countEl.style.color = 'var(--color-warning)';
   }
 }
 
