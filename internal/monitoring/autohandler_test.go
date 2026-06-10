@@ -24,7 +24,7 @@ func TestNewAutoHandler(t *testing.T) {
 
 	t.Run("with store and rules", func(t *testing.T) {
 		store := newTestStore(t)
-		rules := []suppressRule{
+		rules := []SuppressRule{
 			{Category: "db", Duration: 5 * time.Minute},
 			{Category: "network", Duration: 10 * time.Minute},
 		}

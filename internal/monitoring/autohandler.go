@@ -3,10 +3,13 @@ package monitoring
 import (
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-// suppressRule represents a suppression rule matched by alert category.
-type suppressRule struct {
+// SuppressRule represents a suppression rule matched by alert category.
+type SuppressRule struct {
 	Category string // If empty, matches all
 	Duration time.Duration
 }
@@ -17,19 +20,50 @@ type suppressRule struct {
 type AutoHandler struct {
 	mu            sync.Mutex
 	suppressUntil map[string]time.Time // category → expiry
-	rules         []suppressRule
+	rules         []SuppressRule
 	alertStore    *AlertStore
 }
 
 // NewAutoHandler creates an AutoHandler with the given suppression rules.
-func NewAutoHandler(store *AlertStore, rules []suppressRule) *AutoHandler {
+// Static rules are immediately applied to suppressUntil so they take effect
+// without requiring a separate Suppress() call.
+func NewAutoHandler(store *AlertStore, rules []SuppressRule) *AutoHandler {
 	if rules == nil {
-		rules = make([]suppressRule, 0)
+		rules = make([]SuppressRule, 0)
+	}
+	suppressUntil := make(map[string]time.Time)
+	now := time.Now()
+	for _, rule := range rules {
+		suppressUntil[rule.Category] = now.Add(rule.Duration)
 	}
 	return &AutoHandler{
-		suppressUntil: make(map[string]time.Time),
+		suppressUntil: suppressUntil,
 		rules:         rules,
 		alertStore:    store,
+	}
+}
+
+// Suppress dynamically suppresses alerts matching the given category for the
+// specified duration. This overrides any existing suppression for the category.
+func (h *AutoHandler) Suppress(category string, duration time.Duration) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.suppressUntil[category] = time.Now().Add(duration)
+}
+
+// Recover resolves all triggered alerts matching the given category.
+// Called when a system recovers from a failure state.
+func (h *AutoHandler) Recover(category string) {
+	if h.alertStore == nil {
+		return
+	}
+	resolved, _ := h.alertStore.ResolveWhere(func(r *domain.AlertRecord) bool {
+		return r.Rule == category && r.Status == domain.AlertStatusTriggered
+	}, "auto-recovery")
+	if resolved > 0 {
+		logging.Info("autohandler", "auto_recovered",
+			"category", category,
+			"resolved", resolved)
 	}
 }
 

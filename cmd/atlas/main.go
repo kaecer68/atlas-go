@@ -248,6 +248,19 @@ func run(args []string, deps appDeps) error {
 	repo := rt.Repository
 	taskManager := rt.TaskManager
 
+	// Phase A3: Clean up stale gateway heartbeat alerts on startup.
+	if alertStore != nil {
+		cutoff := time.Now().Add(-24 * time.Hour)
+		deleted, err := alertStore.DeleteWhere(func(r *domain.AlertRecord) bool {
+			return r.Rule == "gateway" && r.Timestamp.Before(cutoff)
+		})
+		if err != nil {
+			log.Printf("[AlertCleanup] cleanup failed: %v", err)
+		} else if deleted > 0 {
+			log.Printf("[AlertCleanup] deleted %d stale gateway heartbeats (>24h)", deleted)
+		}
+	}
+
 	var janusEngine *janus.Engine
 
 	// Handle --simulate mode: run one-shot daily simulation and exit
@@ -550,7 +563,14 @@ func run(args []string, deps appDeps) error {
 		}
 		// Phase 2A: dedup, auto-handler, console output
 		alertDeduplicator := monitoring.NewAlertDeduplicator(5*time.Minute, alertStore)
-		autoHandler := monitoring.NewAutoHandler(alertStore, nil)
+		var suppressRules []monitoring.SuppressRule
+		for _, cat := range paramsCfg.Alert.SuppressCategories.Value {
+			suppressRules = append(suppressRules, monitoring.SuppressRule{
+				Category: cat,
+				Duration: 24 * time.Hour,
+			})
+		}
+		autoHandler := monitoring.NewAutoHandler(alertStore, suppressRules)
 		monitor.SetDeduplicator(alertDeduplicator)
 		monitor.SetAutoHandler(autoHandler)
 		monitor.RegisterHandler(monitoring.ConsoleHandler)
@@ -601,6 +621,14 @@ func run(args []string, deps appDeps) error {
 						fmt.Sprintf("Task %s failed %d consecutive times: %v", name, consecutiveFailures, err),
 						map[string]any{"task": name, "consecutive_failures": consecutiveFailures})
 				}
+			})
+			taskMgr.SetRecoveryHandler(func(name string, recoveredFrom int) {
+				if autoHandler != nil {
+					autoHandler.Recover("background_task")
+				}
+				logging.Info("main", "task_recovered",
+					"task", name,
+					"recovered_from", recoveredFrom)
 			})
 
 			// RealTimeAdapter: sub-second regime detection and agent weight
@@ -2271,7 +2299,16 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		monitor.SetAlertStore(alertStore)
 		// Phase 2A: dedup, auto-handler, console output
 		alertDeduplicator := monitoring.NewAlertDeduplicator(5*time.Minute, alertStore)
-		autoHandler := monitoring.NewAutoHandler(alertStore, nil)
+		var suppressRules []monitoring.SuppressRule
+		if p := config.GetParametersConfig(); p != nil {
+			for _, cat := range p.Alert.SuppressCategories.Value {
+				suppressRules = append(suppressRules, monitoring.SuppressRule{
+					Category: cat,
+					Duration: 24 * time.Hour,
+				})
+			}
+		}
+		autoHandler := monitoring.NewAutoHandler(alertStore, suppressRules)
 		monitor.SetDeduplicator(alertDeduplicator)
 		monitor.SetAutoHandler(autoHandler)
 		monitor.RegisterHandler(monitoring.ConsoleHandler)

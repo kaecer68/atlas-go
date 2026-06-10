@@ -6578,6 +6578,11 @@
       "rationale": "System metrics collection interval (30 seconds)",
       "source": "heuristic"
     },
+    "suppress_categories": {
+      "value": ["gateway", "simulation:risk_off"],
+      "rationale": "Alert categories that should be auto-suppressed (not saved to alert stream). Gateway heartbeat and simulation RISK_OFF are expected behavior.",
+      "source": "heuristic"
+    },
     "min_screening_rate": {
       "value": 0.1,
       "rationale": "Minimum screening rate (10%) before warning",

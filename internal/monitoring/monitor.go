@@ -164,21 +164,39 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 			if dedup != nil && record.DedupKey != "" {
 				dedup.Track(record.DedupKey)
 			}
-		}()
-	}
-	for _, n := range notifiers {
-		if !n.IsConfigured() {
-			continue
-		}
-		go func(notif Notifier) {
-			if err := notif.Notify(record); err != nil {
-				logging.Warn("monitor", "notify_failed", logging.FStr("notifier", notif.Name()), logging.Err(err))
+			// Auto-handler MUST run AFTER save completes, otherwise
+			// auto-acknowledge will race with the save goroutine.
+			if ah != nil {
+				ah.Handle(alert)
 			}
-		}(n)
-	}
-
-	if ah != nil {
-		ah.Handle(alert)
+			// Notifiers run after save so the alert exists before
+			// external systems try to query it.
+			for _, n := range notifiers {
+				if !n.IsConfigured() {
+					continue
+				}
+				go func(notif Notifier) {
+					if err := notif.Notify(record); err != nil {
+						logging.Warn("monitor", "notify_failed", logging.FStr("notifier", notif.Name()), logging.Err(err))
+					}
+				}(n)
+			}
+		}()
+	} else {
+		// No persistent store: run auto-handler inline.
+		if ah != nil {
+			ah.Handle(alert)
+		}
+		for _, n := range notifiers {
+			if !n.IsConfigured() {
+				continue
+			}
+			go func(notif Notifier) {
+				if err := notif.Notify(record); err != nil {
+					logging.Warn("monitor", "notify_failed", logging.FStr("notifier", notif.Name()), logging.Err(err))
+				}
+			}(n)
+		}
 	}
 }
 
