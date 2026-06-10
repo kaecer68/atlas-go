@@ -94,6 +94,7 @@ type TaxSnapshot struct {
 type TaxConfig struct {
 	DividendTaxRate    float64 `json:"dividend_tax_rate"`
 	TransactionTaxRate float64 `json:"transaction_tax_rate"`
+	NHISurchargeRate   float64 `json:"nhi_surcharge_rate"`
 	IncludeNHI         bool    `json:"include_nhi"`
 }
 
@@ -101,6 +102,7 @@ func DefaultTaiwanTaxConfig() TaxConfig {
 	return TaxConfig{
 		DividendTaxRate:    0.28,
 		TransactionTaxRate: 0.003,
+		NHISurchargeRate:   0.0211,
 		IncludeNHI:         true,
 	}
 }

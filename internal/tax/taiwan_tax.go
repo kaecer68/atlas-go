@@ -41,9 +41,15 @@ func (c *TaiwanTaxCalculator) effectiveDividendTaxRate() float64 {
 	if c.cfg.IncludeNHI {
 		return c.cfg.DividendTaxRate
 	}
+	// Use the config's NHISurchargeRate if set; fall back to the package
+	// constant for backwards compatibility with zero-value NHISurchargeRate.
+	surcharge := c.cfg.NHISurchargeRate
+	if surcharge == 0 {
+		surcharge = NHISurchargeRate
+	}
 	// Defensive floor: never go below zero even if a caller misconfigures
 	// DividendTaxRate below the NHI surcharge.
-	rate := c.cfg.DividendTaxRate - NHISurchargeRate
+	rate := c.cfg.DividendTaxRate - surcharge
 	if rate < 0 {
 		return 0
 	}
