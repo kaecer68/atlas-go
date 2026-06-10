@@ -50,11 +50,15 @@ type MetricsCollector struct {
 	alertsTriggered    int64
 	alertsAcknowledged int64
 	alertsByType       map[string]int64
+	alertTimestamps    []time.Time // 時間序列用於計算 rate (per hour)；每次 RecordAlert 自動 prune 至 24h 內
 
 	// JSONL persistence
 	persistencePath string
 	persistMu       sync.Mutex
 }
+
+// alertRetentionWindow 保留 alert 時間戳的最大窗口，超過則在 RecordAlert / replayFromFile 階段被 prune。
+const alertRetentionWindow = 24 * time.Hour
 
 // NewMetricsCollector 建立 in-memory only 指標收集器
 func NewMetricsCollector() *MetricsCollector {
@@ -181,9 +185,56 @@ func (m *MetricsCollector) RecordAlert(alertType string) {
 	m.alertsTriggered++
 	m.alertsByType[alertType]++
 
+	now := time.Now()
+	m.alertTimestamps = append(m.alertTimestamps, now)
+	m.pruneAlertTimestamps(now)
+
 	m.appendRecord(persistenceRecord{
-		Type: "alert", AlertType: alertType, Timestamp: time.Now(),
+		Type: "alert", AlertType: alertType, Timestamp: now,
 	})
+}
+
+// pruneAlertTimestamps 移除早於 cutoff 的時間戳（callers 必須持有 m.mu 寫鎖）
+func (m *MetricsCollector) pruneAlertTimestamps(now time.Time) {
+	cutoff := now.Add(-alertRetentionWindow)
+	idx := 0
+	for idx < len(m.alertTimestamps) && m.alertTimestamps[idx].Before(cutoff) {
+		idx++
+	}
+	if idx > 0 {
+		m.alertTimestamps = m.alertTimestamps[idx:]
+	}
+}
+
+// GetAlertTriggerCountInWindow 取得指定時間窗口內的警報觸發數
+func (m *MetricsCollector) GetAlertTriggerCountInWindow(window time.Duration) int64 {
+	if window <= 0 {
+		return 0
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cutoff := time.Now().Add(-window)
+	count := int64(0)
+	for _, ts := range m.alertTimestamps {
+		if !ts.Before(cutoff) {
+			count++
+		}
+	}
+	return count
+}
+
+// GetAlertTriggerRate 取得警報觸發率（每小時），window 為時間窗口。
+// 若 window <= 0，回傳 0；若 window 跨越 < 1 秒，視為 1 秒避免除零
+func (m *MetricsCollector) GetAlertTriggerRate(window time.Duration) float64 {
+	count := m.GetAlertTriggerCountInWindow(window)
+	if window <= time.Second {
+		return float64(count)
+	}
+	hours := window.Hours()
+	if hours == 0 {
+		return 0
+	}
+	return float64(count) / hours
 }
 
 // RecordAlertAcknowledged 記錄警報確認
@@ -301,7 +352,11 @@ func (m *MetricsCollector) replayFromFile(path string) error {
 		}
 		m.applyRecord(rec)
 	}
-	return sc.Err()
+	if err := sc.Err(); err != nil {
+		return err
+	}
+	m.pruneAlertTimestamps(time.Now())
+	return nil
 }
 
 func (m *MetricsCollector) applyRecord(rec persistenceRecord) {
@@ -313,6 +368,7 @@ func (m *MetricsCollector) applyRecord(rec persistenceRecord) {
 	case "alert":
 		m.alertsTriggered++
 		m.alertsByType[rec.AlertType]++
+		m.alertTimestamps = append(m.alertTimestamps, rec.Timestamp)
 	case "ack":
 		m.alertsAcknowledged++
 	case "counter":
@@ -449,15 +505,21 @@ func (m *MetricsCollector) CheckThresholds(threshold AlertThreshold) []Threshold
 		}
 	}
 
-	// TODO(fix/monitoring-page-p0p1 follow-up): replace with time-windowed rate (alerts in last hour).
-	// Currently compares raw count to a count-style threshold.
-	if m.alertsTriggered > int64(threshold.MaxAlertTriggerRate) {
+	// Per-hour rate 計算必須 inlined（已持有 RLock，避免從 GetAlertTriggerRate 內部再次 RLock 死鎖）
+	rateWindowStart := time.Now().Add(-time.Hour)
+	rateCount := int64(0)
+	for _, ts := range m.alertTimestamps {
+		if !ts.Before(rateWindowStart) {
+			rateCount++
+		}
+	}
+	if rateCount > int64(threshold.MaxAlertTriggerRate) {
 		violations = append(violations, ThresholdViolation{
 			Metric:    "alert_trigger_rate",
-			Current:   float64(m.alertsTriggered),
+			Current:   float64(rateCount),
 			Threshold: threshold.MaxAlertTriggerRate,
 			Severity:  "critical",
-			Message:   fmt.Sprintf("警報觸發總數過高: %d (閾值: %.0f)", m.alertsTriggered, threshold.MaxAlertTriggerRate),
+			Message:   fmt.Sprintf("警報觸發率過高: %d/hr (閾值: %.0f/hr)", rateCount, threshold.MaxAlertTriggerRate),
 		})
 	}
 
