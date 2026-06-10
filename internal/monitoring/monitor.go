@@ -146,7 +146,7 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 		result, err := dedup.Check(dedupKey)
 		if err == nil && result.Skip {
 			if result.ExistingAlertID != "" && store != nil {
-				store.Update(result.ExistingAlertID, func(r *domain.AlertRecord) {
+				_ = store.Update(result.ExistingAlertID, func(r *domain.AlertRecord) {
 					r.Count = result.NewCount
 					r.LastSeen = &record.Timestamp
 				})
