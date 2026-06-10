@@ -32,6 +32,9 @@ func newTestIndustryService(opts ...func(*industryServiceOptions)) *IndustryServ
 		o.riskMonitor,
 		o.siliconTracker,
 		o.eventCalendar,
+		nil,
+		nil,
+		"",
 	)
 }
 
@@ -151,7 +154,7 @@ func TestNewIndustryService_WiresCardBuilder(t *testing.T) {
 func TestNewIndustryService_AllowsNilSubEngines(t *testing.T) {
 	// nil-safe constructor: pass only the seasonal engine
 	se := industry.NewSeasonalEngine()
-	s := NewIndustryService(nil, se, nil, nil, nil, nil, nil)
+	s := NewIndustryService(nil, se, nil, nil, nil, nil, nil, nil, nil, "")
 	if s == nil {
 		t.Fatal("expected non-nil service even with mostly nil engines")
 	}
@@ -186,7 +189,7 @@ func TestGetClassificationTree_BuildsHierarchicalTree(t *testing.T) {
 	classifier.AddSegment(child)
 	classifier.AddSegment(gc)
 
-	s := NewIndustryService(classifier, nil, nil, nil, nil, nil, nil)
+	s := NewIndustryService(classifier, nil, nil, nil, nil, nil, nil, nil, nil, "")
 	tree := s.GetClassificationTree()
 
 	if len(tree) != 1 {
@@ -355,7 +358,7 @@ func TestGetCalibrationEvidence_NoTimestamp(t *testing.T) {
 // =============================================================================
 
 func TestRebuildCorrelations_NilLinkageAnalyzer(t *testing.T) {
-	s := NewIndustryService(nil, nil, nil, nil, nil, nil, nil)
+	s := NewIndustryService(nil, nil, nil, nil, nil, nil, nil, nil, nil, "")
 	// Should not panic
 	s.RebuildCorrelations(map[string][]float64{
 		"semiconductor": {0.1, 0.2, 0.15},
@@ -367,7 +370,7 @@ func TestRebuildCorrelations_NilLinkageAnalyzer(t *testing.T) {
 // =============================================================================
 
 func TestSetMacroProvider_NilSiliconTracker(t *testing.T) {
-	s := NewIndustryService(nil, nil, nil, nil, nil, nil, nil)
+	s := NewIndustryService(nil, nil, nil, nil, nil, nil, nil, nil, nil, "")
 	// Should not panic when SiliconTracker is nil
 	s.SetMacroProvider(nil)
 	if s.siliconAggregator != nil {

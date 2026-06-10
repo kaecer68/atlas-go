@@ -44,6 +44,25 @@ func (m *mockAlertStore) Acknowledge(alertID string, user string) error {
 	return nil
 }
 
+func (m *mockAlertStore) FindByDedupKey(dedupKey string) (*domain.AlertRecord, error) {
+	for i := range m.alerts {
+		if m.alerts[i].DedupKey == dedupKey {
+			return &m.alerts[i], nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockAlertStore) Update(id string, fn func(*domain.AlertRecord)) error {
+	for i := range m.alerts {
+		if m.alerts[i].ID == id {
+			fn(&m.alerts[i])
+			return nil
+		}
+	}
+	return nil
+}
+
 // mockMetricsStore implements MetricsStore for testing.
 type mockMetricsStore struct {
 	snapshots []MetricsSnapshot

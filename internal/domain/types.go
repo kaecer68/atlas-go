@@ -125,6 +125,16 @@ type AlertBreakdown struct {
 	Formula     string  `json:"formula"`
 }
 
+// AlertStatus represents the lifecycle state of an alert.
+type AlertStatus string
+
+const (
+	AlertStatusTriggered    AlertStatus = "triggered"
+	AlertStatusAcknowledged AlertStatus = "acknowledged"
+	AlertStatusResolved     AlertStatus = "resolved"
+	AlertStatusSilenced     AlertStatus = "silenced"
+)
+
 type AlertRecord struct {
 	ID             string          `json:"id"`
 	Timestamp      time.Time       `json:"timestamp"`
@@ -137,6 +147,16 @@ type AlertRecord struct {
 	Acknowledged   bool            `json:"acknowledged"`
 	AcknowledgedAt *time.Time      `json:"acknowledged_at,omitempty"`
 	AcknowledgedBy string          `json:"acknowledged_by,omitempty"`
+
+	// Lifecycle fields (Phase 2A)
+	Status        AlertStatus `json:"status"`
+	DedupKey      string      `json:"dedup_key,omitempty"`
+	FirstSeen     *time.Time  `json:"first_seen,omitempty"`
+	LastSeen      *time.Time  `json:"last_seen,omitempty"`
+	Count         int         `json:"count"`
+	ResolvedAt    *time.Time  `json:"resolved_at,omitempty"`
+	ResolvedBy    string      `json:"resolved_by,omitempty"`
+	SilencedUntil *time.Time  `json:"silenced_until,omitempty"`
 }
 
 type AlertChannelConfig struct {

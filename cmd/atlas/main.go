@@ -548,6 +548,12 @@ func run(args []string, deps appDeps) error {
 		if alertStore != nil {
 			monitor.SetAlertStore(alertStore)
 		}
+		// Phase 2A: dedup, auto-handler, console output
+		alertDeduplicator := monitoring.NewAlertDeduplicator(5*time.Minute, alertStore)
+		autoHandler := monitoring.NewAutoHandler(alertStore, nil)
+		monitor.SetDeduplicator(alertDeduplicator)
+		monitor.SetAutoHandler(autoHandler)
+		monitor.RegisterHandler(monitoring.ConsoleHandler)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 
 		var ruleEngine *monitoring.RuleEngine
@@ -2263,6 +2269,12 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		alertAPI := monitoring.NewAlertAPI(alertStore)
 		alertAPI.RegisterRoutes(mux)
 		monitor.SetAlertStore(alertStore)
+		// Phase 2A: dedup, auto-handler, console output
+		alertDeduplicator := monitoring.NewAlertDeduplicator(5*time.Minute, alertStore)
+		autoHandler := monitoring.NewAutoHandler(alertStore, nil)
+		monitor.SetDeduplicator(alertDeduplicator)
+		monitor.SetAutoHandler(autoHandler)
+		monitor.RegisterHandler(monitoring.ConsoleHandler)
 	}
 
 	subFS, err := fs.Sub(web.DistFS, "dist")

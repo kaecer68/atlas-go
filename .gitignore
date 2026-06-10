@@ -178,3 +178,4 @@ web/dist/
 calibrate-rsi-tw
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+cmd/cleanup-channel-health/cleanup-channel-health

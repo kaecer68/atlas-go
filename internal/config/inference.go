@@ -26,6 +26,11 @@ func (ie *InferenceEngine) WithParameters(params *ParametersConfig) *InferenceEn
 	return ie
 }
 
+// Parameters returns the current parameter config held by the engine.
+func (ie *InferenceEngine) Parameters() *ParametersConfig {
+	return ie.params
+}
+
 // InferredGARCH holds inferred GARCH(1,1) coefficients.
 type InferredGARCH struct {
 	Omega float64

@@ -20,6 +20,9 @@ func setupHandlers() *Handlers {
 
 	svc := service.NewIndustryService(
 		classifier, seasonal, cycleTracker, linkage, riskMonitor, silicon, events,
+		nil, // odmChannel
+		nil, // dataAggregator
+		"",  // paramsPath
 	)
 
 	return &Handlers{Svc: svc}

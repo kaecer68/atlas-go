@@ -215,3 +215,112 @@ func TestSetLastCalibration(t *testing.T) {
 		t.Error("SetLastCalibration should return a copy, not the original")
 	}
 }
+
+// TestSelfCalibrateBounds verifies the post-optimize unit guard rejects values
+// that fall outside the documented [val*0.3, val*3.0] bounds. The bug class is
+// the optimizer returning near-zero values (e.g. 0.000181, 0.000906) that pass
+// through to persistence and corrupt risk thresholds.
+func TestSelfCalibrateBounds(t *testing.T) {
+	tests := []struct {
+		name        string
+		current     float64
+		proposed    float64
+		wantAccept  bool
+		description string
+	}{
+		{
+			name:        "accepts value within bounds",
+			current:     0.12,
+			proposed:    0.10,
+			wantAccept:  true,
+			description: "0.10 is within [0.036, 0.36]",
+		},
+		{
+			name:        "accepts upper bound",
+			current:     0.12,
+			proposed:    0.35,
+			wantAccept:  true,
+			description: "0.35 is within [0.036, 0.36]",
+		},
+		{
+			name:        "accepts lower bound",
+			current:     0.12,
+			proposed:    0.04,
+			wantAccept:  true,
+			description: "0.04 is within [0.036, 0.36]",
+		},
+		{
+			name:        "rejects value below lower bound (current bug value)",
+			current:     0.12,
+			proposed:    0.0009069926399999993,
+			wantAccept:  false,
+			description: "0.000906 is far below [0.036, 0.36] — 20x below lower bound",
+		},
+		{
+			name:        "rejects daily loss bug value",
+			current:     0.03,
+			proposed:    0.00018139852799999994,
+			wantAccept:  false,
+			description: "0.000181 is far below [0.009, 0.09] — 50x below lower bound",
+		},
+		{
+			name:        "rejects value above upper bound",
+			current:     0.10,
+			proposed:    0.50,
+			wantAccept:  false,
+			description: "0.50 is above [0.03, 0.30]",
+		},
+		{
+			name:        "accepts identical value",
+			current:     0.05,
+			proposed:    0.05,
+			wantAccept:  true,
+			description: "no-op should pass",
+		},
+		{
+			name:        "handles zero current gracefully",
+			current:     0,
+			proposed:    0.05,
+			wantAccept:  true,
+			description: "zero current falls back to absolute check, accepts sane value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			accept := validateCalibrationBounds(tt.current, tt.proposed)
+			if accept != tt.wantAccept {
+				t.Errorf("validateCalibrationBounds(current=%v, proposed=%v) = %v, want %v (%s)",
+					tt.current, tt.proposed, accept, tt.wantAccept, tt.description)
+			}
+		})
+	}
+}
+
+// TestSelfCalibrateBoundsCurrentBuggyValues is the regression test for the
+// exact bug class observed in production: max_position_size=0.000906 and
+// max_daily_loss_pct=0.000181 surviving the optimizer and being persisted.
+func TestSelfCalibrateBoundsCurrentBuggyValues(t *testing.T) {
+	buggyValues := []struct {
+		name  string
+		value float64
+	}{
+		{"max_position_size", 0.0009069926399999993},
+		{"max_daily_loss_pct", 0.00018139852799999994},
+	}
+
+	// These are the historical "sane" values that should have been the
+	// floor for the bounds check: max_position_size=0.12, max_daily_loss_pct=0.03.
+	saneValues := map[string]float64{
+		"max_position_size":  0.12,
+		"max_daily_loss_pct": 0.03,
+	}
+
+	for _, v := range buggyValues {
+		current := saneValues[v.name]
+		if validateCalibrationBounds(current, v.value) {
+			t.Errorf("BUG: %s proposed value %v accepted, but it falls 20x+ outside [val*0.3, val*3.0]",
+				v.name, v.value)
+		}
+	}
+}

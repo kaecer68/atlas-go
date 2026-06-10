@@ -93,6 +93,14 @@ func (a *AlertStoreAdapter) Acknowledge(alertID string, user string) error {
 	return a.store.Acknowledge(alertID, user)
 }
 
+func (a *AlertStoreAdapter) FindByDedupKey(dedupKey string) (*domain.AlertRecord, error) {
+	return a.store.FindByDedupKey(dedupKey)
+}
+
+func (a *AlertStoreAdapter) Update(id string, fn func(*domain.AlertRecord)) error {
+	return a.store.Update(id, fn)
+}
+
 // OutcomeStoreAdapter adapts ledger.OutcomeStore to repository.OutcomeStore interface.
 type OutcomeStoreAdapter struct {
 	store ledger.OutcomeStore

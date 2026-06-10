@@ -1,0 +1,11 @@
+DROP INDEX IF EXISTS idx_alerts_dedup_key;
+DROP INDEX IF EXISTS idx_alerts_status;
+
+ALTER TABLE alerts DROP COLUMN IF EXISTS status;
+ALTER TABLE alerts DROP COLUMN IF EXISTS dedup_key;
+ALTER TABLE alerts DROP COLUMN IF EXISTS count;
+ALTER TABLE alerts DROP COLUMN IF EXISTS first_seen;
+ALTER TABLE alerts DROP COLUMN IF EXISTS last_seen;
+ALTER TABLE alerts DROP COLUMN IF EXISTS resolved_at;
+ALTER TABLE alerts DROP COLUMN IF EXISTS resolved_by;
+ALTER TABLE alerts DROP COLUMN IF EXISTS silenced_until;

@@ -217,6 +217,89 @@ func TestAlertStore_DirCreation(t *testing.T) {
 	}
 }
 
+func TestAlertStore_FindByDedupKey(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	a1.DedupKey = "dedup-abc"
+	a2 := makeAlert("alert-2")
+	a2.DedupKey = "dedup-xyz"
+
+	if err := store.Save(a1); err != nil {
+		t.Fatalf("Save(a1): %v", err)
+	}
+	if err := store.Save(a2); err != nil {
+		t.Fatalf("Save(a2): %v", err)
+	}
+
+	found, err := store.FindByDedupKey("dedup-xyz")
+	if err != nil {
+		t.Fatalf("FindByDedupKey: %v", err)
+	}
+	if found == nil {
+		t.Fatal("FindByDedupKey: expected match, got nil")
+	}
+	if found.ID != "alert-2" {
+		t.Errorf("found.ID = %q, want alert-2", found.ID)
+	}
+}
+
+func TestAlertStore_FindByDedupKey_NotFound(t *testing.T) {
+	store := newTestStore(t)
+
+	found, err := store.FindByDedupKey("nonexistent")
+	if err != nil {
+		t.Fatalf("FindByDedupKey: %v", err)
+	}
+	if found != nil {
+		t.Errorf("FindByDedupKey = %v, want nil", found)
+	}
+}
+
+func TestAlertStore_Update(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	if err := store.Save(a1); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	now := time.Now()
+	err := store.Update("alert-1", func(rec *domain.AlertRecord) {
+		rec.Acknowledged = true
+		rec.AcknowledgedAt = &now
+		rec.AcknowledgedBy = "tester"
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("LoadAll len = %d, want 1", len(records))
+	}
+	if !records[0].Acknowledged {
+		t.Error("record should be acknowledged")
+	}
+	if records[0].AcknowledgedBy != "tester" {
+		t.Errorf("AcknowledgedBy = %q, want tester", records[0].AcknowledgedBy)
+	}
+}
+
+func TestAlertStore_Update_NotFound(t *testing.T) {
+	store := newTestStore(t)
+
+	err := store.Update("nonexistent", func(rec *domain.AlertRecord) {
+		rec.Acknowledged = true
+	})
+	if err == nil {
+		t.Fatal("Update nonexistent: expected error, got nil")
+	}
+}
+
 func TestAlertStore_DirCreationError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("skipping as root")
