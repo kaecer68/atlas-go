@@ -316,3 +316,31 @@ if (metricsRefreshBtn && !metricsRefreshBtn.dataset.metricsWired) {
   metricsRefreshBtn.addEventListener('click', () => { loadMetrics(); });
   metricsRefreshBtn.dataset.metricsWired = '1';
 }
+
+const METRICS_AUTO_REFRESH_MS = 30000;
+let metricsAutoRefreshTimer = null;
+function stopMetricsAutoRefresh() {
+  if (metricsAutoRefreshTimer) {
+    clearInterval(metricsAutoRefreshTimer);
+    metricsAutoRefreshTimer = null;
+  }
+}
+function startMetricsAutoRefresh() {
+  stopMetricsAutoRefresh();
+  if (document.hidden) return;
+  metricsAutoRefreshTimer = setInterval(() => {
+    if (!document.hidden) loadMetrics();
+  }, METRICS_AUTO_REFRESH_MS);
+}
+if (!document.documentElement.dataset.metricsAutoRefreshWired) {
+  document.documentElement.dataset.metricsAutoRefreshWired = '1';
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopMetricsAutoRefresh();
+    } else {
+      startMetricsAutoRefresh();
+      loadMetrics();
+    }
+  });
+  startMetricsAutoRefresh();
+}
