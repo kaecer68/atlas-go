@@ -377,16 +377,26 @@ func TestDualWriteNilPG_Audit_NoPanic(t *testing.T) {
 	if err != nil {
 		t.Errorf("LoadSessionSummary with nil PG: %v", err)
 	}
-	if loadedSummary != nil {
-		t.Error("Expected nil from LoadSessionSummary with nil PG")
+	// JSONL fallback returns the recorded summary (PG was nil, so we read from JSONL).
+	if loadedSummary == nil {
+		t.Fatal("Expected non-nil from LoadSessionSummary with nil PG (JSONL fallback)")
+	}
+	if loadedSummary.SessionID != "jsonl-sess-4" {
+		t.Errorf("SessionID = %q, want %q", loadedSummary.SessionID, "jsonl-sess-4")
+	}
+	if loadedSummary.OrderCount != 30 {
+		t.Errorf("OrderCount = %d, want 30 (from JSONL record)", loadedSummary.OrderCount)
 	}
 
 	allSummaries, err := repo.LoadAllSessionSummaries(ctx)
 	if err != nil {
 		t.Errorf("LoadAllSessionSummaries with nil PG: %v", err)
 	}
-	if allSummaries != nil {
-		t.Error("Expected nil from LoadAllSessionSummaries with nil PG")
+	if len(allSummaries) != 1 {
+		t.Fatalf("Expected 1 summary from JSONL fallback, got %d", len(allSummaries))
+	}
+	if allSummaries[0].SessionID != "jsonl-sess-4" {
+		t.Errorf("allSummaries[0].SessionID = %q, want %q", allSummaries[0].SessionID, "jsonl-sess-4")
 	}
 
 	// HumanInterventions
