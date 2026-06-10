@@ -300,6 +300,45 @@ func TestAlertStore_Update_NotFound(t *testing.T) {
 	}
 }
 
+func TestAlertStore_Resolve(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	if err := store.Save(a1); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	if err := store.Resolve("alert-1", "user1"); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("LoadAll len = %d, want 1", len(records))
+	}
+	if records[0].Status != domain.AlertStatusResolved {
+		t.Errorf("Status = %q, want resolved", records[0].Status)
+	}
+	if records[0].ResolvedBy != "user1" {
+		t.Errorf("ResolvedBy = %q, want user1", records[0].ResolvedBy)
+	}
+	if records[0].ResolvedAt == nil {
+		t.Error("ResolvedAt should not be nil")
+	}
+}
+
+func TestAlertStore_Resolve_NotFound(t *testing.T) {
+	store := newTestStore(t)
+
+	err := store.Resolve("nonexistent", "user1")
+	if err == nil {
+		t.Fatal("Resolve nonexistent: expected error, got nil")
+	}
+}
+
 func TestAlertStore_DirCreationError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("skipping as root")

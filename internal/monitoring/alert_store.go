@@ -104,6 +104,35 @@ func (s *AlertStore) Acknowledge(alertID string, user string) error {
 	return s.rewriteAll(all)
 }
 
+// Resolve marks an alert as resolved by the given user.
+// Returns an error if the alert is not found.
+func (s *AlertStore) Resolve(alertID string, user string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	all, err := s.loadFromFile()
+	if err != nil {
+		return fmt.Errorf("load alerts: %w", err)
+	}
+
+	now := time.Now()
+	found := false
+	for i := range all {
+		if all[i].ID == alertID {
+			all[i].Status = domain.AlertStatusResolved
+			all[i].ResolvedAt = &now
+			all[i].ResolvedBy = user
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("alert %q not found", alertID)
+	}
+
+	return s.rewriteAll(all)
+}
+
 // FindByDedupKey searches for an alert record by dedup_key.
 // Returns nil when no match is found.
 func (s *AlertStore) FindByDedupKey(dedupKey string) (*domain.AlertRecord, error) {
