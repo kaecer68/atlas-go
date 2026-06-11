@@ -73,6 +73,7 @@ type ProcessManager struct {
 func NewManager(workDir string) *ProcessManager {
 	pythonBin := resolvePythonBin()
 	scriptPath := filepath.Join(workDir, "services", "fubon-proxy", "main.py")
+	scriptPath, _ = filepath.Abs(scriptPath)
 
 	return &ProcessManager{
 		workDir:    workDir,
@@ -353,7 +354,7 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 		msg = msg[:len(msg)-1]
 	}
 	if msg != "" {
-		logging.Debug(w.component, "output", "message", msg)
+		logging.Info(w.component, "output", "message", msg)
 	}
 	return len(p), nil
 }
