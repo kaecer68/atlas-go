@@ -141,10 +141,10 @@ function renderStrategiesPanel(data) {
   const ci = data && data.core_indicators;
   const ciStrip = ci ? `
     <div class="dc-section" style="display:flex;gap:6px;flex-wrap:wrap;padding:6px 8px;background:var(--surface-2);border-radius:4px;margin-bottom:6px">
-      <span class="badge ${ci.foreign_capital_net_twd > 0 ? 'ok' : 'err'}" title="外資現貨 (TWD 億)">外資 ${(ci.foreign_capital_net_twd / 1e8).toFixed(1)}</span>
-      <span class="badge ${ci.tsm_adr_pct > 0 ? 'ok' : 'err'}" title="TSM ADR (%)">TSM ${ci.tsm_adr_pct.toFixed(2)}%</span>
-      <span class="badge ${ci.nvda_pct > 0 ? 'ok' : 'err'}" title="NVDA (%)">NVDA ${ci.nvda_pct.toFixed(2)}%</span>
-      <span class="badge ${ci.dxy_pct < 0 ? 'ok' : 'err'}" title="DXY (% change, 跌=資金回流)">DXY ${ci.dxy_pct.toFixed(2)}%</span>
+      <span class="badge ${ci.foreign_capital_net_twd > 0 ? 'up' : 'down'}" title="外資現貨 (TWD 億)">外資 ${(ci.foreign_capital_net_twd / 1e8).toFixed(1)}</span>
+      <span class="badge ${ci.tsm_adr_pct > 0 ? 'up' : 'down'}" title="TSM ADR (%)">TSM ${ci.tsm_adr_pct.toFixed(2)}%</span>
+      <span class="badge ${ci.nvda_pct > 0 ? 'up' : 'down'}" title="NVDA (%)">NVDA ${ci.nvda_pct.toFixed(2)}%</span>
+      <span class="badge ${ci.dxy_pct < 0 ? 'up' : 'down'}" title="DXY (% change, 跌=資金回流)">DXY ${ci.dxy_pct.toFixed(2)}%</span>
     </div>` : '';
   if (!strategies || !strategies.length) return ciStrip + empty('尚無投資心法（9 條 seeds 未載入或非活躍）');
   const LAYER_COLORS = { L1: 'var(--color-info)', L2: '#a855f7', L3: 'var(--color-success)', L4: 'var(--color-warning)', L5: 'var(--color-danger)' };
@@ -171,7 +171,7 @@ function renderStrategiesPanel(data) {
       <div style="margin-top:2px;font-size:10px;color:var(--muted)">
         ${themes}
         <span class="badge ${s.risk === 'low' ? 'ok' : s.risk === 'high' ? 'err' : 'warn'}">${escapeHtml(s.risk)}</span>
-        <span class="badge ${s.direction === 'up' ? 'ok' : s.direction === 'down' ? 'err' : 'warn'}">${escapeHtml(s.direction)}</span>
+        <span class="badge ${s.direction === 'up' ? 'up' : s.direction === 'down' ? 'down' : 'warn'}">${escapeHtml(s.direction)}</span>
       </div>
     </div>`;
   }).join('');
@@ -243,7 +243,7 @@ function renderExitAlerts(data) {
     const pnlSign = a.pnl_pct >= 0 ? '+' : '';
     return `<div class="dc-exit-row">
       <span>🔔 ${renderStockCell(a.symbol)} ${escapeHtml(a.name && a.name !== a.symbol ? a.name : '')}</span>
-      <span class="badge ${a.pnl_pct >= 10 ? 'ok' : a.pnl_pct <= -5 ? 'err' : 'warn'}">
+      <span class="badge ${a.pnl_pct >= 10 ? 'up' : a.pnl_pct <= -5 ? 'down' : 'warn'}">
         ${pnlSign}${a.pnl_pct.toFixed(1)}%
       </span>
       <span style="font-size:11px;color:var(--muted);flex:1;text-align:right">${escapeHtml(a.suggestion)}</span>

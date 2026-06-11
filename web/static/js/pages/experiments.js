@@ -45,7 +45,7 @@ export async function loadExperimentHistory() {
     const items = (data.history || []).slice(0, 20);
     if (!items.length) { el.innerHTML = renderEmptyState('無紀錄', ''); return; }
     el.innerHTML = `<table><thead><tr><th>時間</th><th>版本</th><th>實驗</th><th>AI</th><th>狀態</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${escapeHtml(it.experiment_id) || ''}</td><td>${escapeHtml(agentName(it.target_agent_id)) || (it.target_agent_id ? escapeHtml(it.target_agent_id) : '')}</td><td><span class="badge ${it.status==='accepted'?'ok':'warn'}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':escapeHtml(it.status))}</span></td></tr>`).join('')}
+      ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${escapeHtml(it.experiment_id) || ''}</td><td>${escapeHtml(agentName(it.target_agent_id)) || (it.target_agent_id ? escapeHtml(it.target_agent_id) : '')}</td><td><span class="badge ${it.status==='accepted'?'ok':(it.status==='rejected'?'err':'warn')}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':escapeHtml(it.status))}</span></td></tr>`).join('')}
     </tbody></table>`;
     const revertSel = document.getElementById('revertSelect');
     revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${escapeHtml(it.experiment_id)}">v${it.version_after || i} - ${escapeHtml(it.experiment_id)}</option>`).join('');

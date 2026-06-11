@@ -17,7 +17,7 @@ export function renderLiveStatus(data) {
   const pnlClass = pnl >= 0 ? 'up' : 'down';
   const dayPnlClass = dayPnl >= 0 ? 'up' : 'down';
   const cbState = cb.state === 'tripped' ? '已觸發' : '正常';
-  const cbStateClass = cb.state === 'tripped' ? 'err' : 'ok';
+  const cbStateColor = cb.state === 'tripped' ? 'var(--color-danger)' : 'var(--color-success)';
 
   let cooldownInfo = '';
   if (cb.cooldown_until && cb.cooldown_until !== '0001-01-01T00:00:00Z') {
@@ -31,11 +31,12 @@ export function renderLiveStatus(data) {
 
   let slWarning = '';
   if (cb.consecutive_sl > 0) {
-    slWarning = `<div class="metric"><div class="label">連續止損</div><div class="value ${cb.consecutive_sl >= 3 ? 'err' : 'warn'}">${cb.consecutive_sl} 次</div></div>`;
+    const slColor = cb.consecutive_sl >= 3 ? 'var(--color-danger)' : 'var(--color-warning)';
+    slWarning = `<div class="metric"><div class="label">連續止損</div><div class="value" style="color:${slColor}">${cb.consecutive_sl} 次</div></div>`;
   }
 
   el.innerHTML = `
-    <div class="metric"><div class="label">熔斷機制</div><div class="value ${cbStateClass}">${cbState}</div></div>
+    <div class="metric"><div class="label">熔斷機制</div><div class="value" style="color:${cbStateColor}">${cbState}</div></div>
     <div class="metric"><div class="label">現金</div><div class="value">${(pf.cash || 0).toLocaleString()}</div></div>
     <div class="metric"><div class="label">持倉市值</div><div class="value">${(pf.total_exposure || 0).toLocaleString()}</div></div>
     <div class="metric"><div class="label">持倉數</div><div class="value">${pf.positions_count || 0}</div></div>

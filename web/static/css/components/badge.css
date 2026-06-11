@@ -5,3 +5,6 @@
 .badge.err { background: rgba(239,68,68,.18); color: var(--color-danger); border: 1px solid rgba(239,68,68,.4); }
 .badge.info { background: rgba(79,193,255,.15); color: var(--accent); border: 1px solid rgba(79,193,255,.35); }
 .badge.muted { background: rgba(156,163,175,.12); color: var(--muted); border: 1px solid rgba(156,163,175,.25); }
+/* Market direction (Taiwan: 紅漲綠跌). Use for PnL / price / direction badges. */
+.badge.up { background: rgba(239,68,68,.18); color: var(--bullish); border: 1px solid rgba(239,68,68,.4); }
+.badge.down { background: rgba(38,161,123,.18); color: var(--bearish); border: 1px solid rgba(38,161,123,.4); }

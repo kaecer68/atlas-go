@@ -58,7 +58,7 @@ function renderConsensus(consensus) {
   for (const item of consensus) {
     const dir = (item.consensus_direction || 'neutral').toLowerCase();
     const dirIcon = dir === 'bullish' ? '📈' : dir === 'bearish' ? '📉' : '↔️';
-    const dirColor = dir === 'bullish' ? 'var(--color-success)' : dir === 'bearish' ? 'var(--color-danger)' : 'var(--muted)';
+    const dirColor = dir === 'bullish' ? 'var(--bullish)' : dir === 'bearish' ? 'var(--bearish)' : 'var(--muted)';
     const dirLabel = dir === 'bullish' ? '看多' : dir === 'bearish' ? '看空' : '中立';
     const conf = item.average_confidence != null ? (item.average_confidence * 100).toFixed(1) + '%' : '—';
     rows += `<tr>

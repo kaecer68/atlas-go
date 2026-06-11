@@ -249,27 +249,11 @@ func (s *DataChannelService) GetChannelStatus(ctx context.Context, channel strin
 	return DataChannel{}, fmt.Errorf("channel not found: %s", channel)
 }
 
-// resolveStatusFromStore merges the Gateway health store record with a
-// file-age-based health check. The health store takes priority because it
-// reflects the actual result of the last fetch attempt. File-age alone
-// can produce false "待更新" warnings on weekends/holidays when no fetch
-// is expected but the channel itself is healthy.
+// resolveStatusFromStore delegates to the package-level resolver so the
+// DataChannelService and SystemService apply identical precedence rules.
+// See channel_status_resolver.go for behavior details.
 func (s *DataChannelService) resolveStatusFromStore(channelID string, fileStatus, fileUpdated string) (status, updated, lastError string) {
-	rec := s.healthStore.Get(channelID)
-	if rec == nil {
-		return fileStatus, fileUpdated, ""
-	}
-
-	switch rec.Status {
-	case "ok":
-		// Last fetch succeeded — channel is healthy regardless of data age.
-		return "ok", rec.LastFetchAt, ""
-	case "error":
-		// Last fetch failed — report the actual error.
-		return "error", "上次失敗: " + rec.LastError, rec.LastError
-	default:
-		return fileStatus, fileUpdated, rec.LastError
-	}
+	return resolveChannelStatusFromStore(s.healthStore, channelID, fileStatus, fileUpdated)
 }
 
 func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataChannel, error) {
