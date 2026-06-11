@@ -58,6 +58,7 @@
 - **Fugle 符號格式**：Fugle 盤中 API 符號通常為純數字 (如 `2330`)，不帶 `.TW`。
 - **Yahoo Macro 符號映射**：美債 10 年期請使用 `^TNX`，匯率請確認 `USD/TWD` 的載入正確性。
 - **ETF NAV 資料來源**：目前無任何 API channel 提供即時 ETF 淨值。`TWSEETFNAVScraper` 使用分層策略：Tier 1 (TWSE scrape) 為 stub，Tier 2 (收盤價代理) 為唯一可用路徑。台股 ETF 追蹤誤差通常 <0.5%。
+- **providerBreaker 泛化熔斷器（2026-06 重構）**：`internal/marketdata/circuit_breaker.go` 提供 `providerBreaker` struct + `newProviderBreaker(name, cfg)` 構造。新增 provider 熔斷只需：(1) 構造一個 `providerBreaker`，(2) 註冊到 `HybridProvider.breakers` map，(3) 在 `GetQuotes` 對應位置呼叫 `shouldTry()` + `recordSuccess()` / `recordFailure()`。Fubon 與 Fugle 熔斷完全獨立，不互相影響。
 
 ### ETF NAV 數據源調查 (2026-05-29)
 

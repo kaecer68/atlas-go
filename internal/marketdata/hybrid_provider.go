@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -47,12 +46,7 @@ type HybridProvider struct {
 	fugleProvider   *FugleProvider
 	twseClient      *TWSEClient
 
-	cbState         ProviderCircuitState
-	cbFailureCount  int
-	cbLastFailure   time.Time
-	cbHalfOpenCalls int
-	cbConfig        circuitBreakerConfig
-	cbMutex         sync.RWMutex
+	breakers map[string]*providerBreaker
 
 	fallbackCount    int
 	lastFallbackAt   time.Time
@@ -91,13 +85,19 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 		fugleProvider = NewFugleProviderWithAPIKey(fugleAPIKey)
 	}
 
+	breakers := map[string]*providerBreaker{
+		"fugle": newProviderBreaker("fugle", defaultCircuitBreakerConfig()),
+	}
+	if fubonProvider != nil {
+		breakers["fubon"] = newProviderBreaker("fubon", defaultCircuitBreakerConfig())
+	}
+
 	return &HybridProvider{
 		fubonProvider:   fubonProvider,
 		finmindProvider: finmindProvider,
 		fugleProvider:   fugleProvider,
 		twseClient:      GetSharedTWSEClient(),
-		cbState:         ProviderCircuitClosed,
-		cbConfig:        defaultCircuitBreakerConfig(),
+		breakers:        breakers,
 	}
 }
 
@@ -115,11 +115,13 @@ func (p *HybridProvider) Name() string {
 }
 
 func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
-	if p.fubonProvider != nil {
+	if p.fubonProvider != nil && p.breakers["fubon"].shouldTry() {
 		quotes, err := p.fubonProvider.GetQuotes(ctx, asOf, symbols)
 		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
+			p.breakers["fubon"].recordSuccess()
 			return quotes, nil
 		}
+		p.breakers["fubon"].recordFailure()
 		logging.Warn("hybrid_provider", "fubon_failed_fallback", logging.Err(err))
 		if p.traceWriter != nil {
 			p.traceWriter.Record(0, "marketdata", "WARN", map[string]any{
@@ -152,9 +154,10 @@ func (p *HybridProvider) getQuotesFromFugleOrTWSE(ctx context.Context, asOf time
 	if p.fugleProvider != nil && p.shouldTryFugle() {
 		quotes, err := p.tryFugle(ctx, asOf, symbols)
 		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
-			p.UseFugle()
+			p.breakers["fugle"].recordSuccess()
 			return quotes, nil
 		}
+		p.breakers["fugle"].recordFailure()
 		if err != nil {
 			logging.Warn("hybrid_provider", "fugle_failed_fallback", logging.Err(err))
 			if p.traceWriter != nil {
@@ -170,16 +173,7 @@ func (p *HybridProvider) getQuotesFromFugleOrTWSE(ctx context.Context, asOf time
 }
 
 func (p *HybridProvider) shouldTryFugle() bool {
-	p.cbMutex.Lock()
-	defer p.cbMutex.Unlock()
-
-	if p.cbState == ProviderCircuitClosed || p.cbState == ProviderCircuitHalfOpen {
-		return p.fugleProvider != nil
-	}
-	if p.cbState == ProviderCircuitOpen && time.Since(p.cbLastFailure) > p.cbConfig.recoveryTimeout {
-		return p.fugleProvider != nil
-	}
-	return false
+	return p.breakers["fugle"].shouldTry() && p.fugleProvider != nil
 }
 
 func (p *HybridProvider) tryFugle(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
@@ -191,12 +185,6 @@ func (p *HybridProvider) tryFugle(ctx context.Context, asOf time.Time, symbols [
 		return quotes, fmt.Errorf("fugle returned invalid/empty data")
 	}
 	return quotes, nil
-}
-
-func (p *HybridProvider) isCircuitOpen() bool {
-	p.cbMutex.RLock()
-	defer p.cbMutex.RUnlock()
-	return p.cbState == ProviderCircuitOpen
 }
 
 func (p *HybridProvider) getQuotesFromTWSE(ctx context.Context, symbols []string) ([]domain.Quote, error) {
@@ -227,32 +215,24 @@ func (p *HybridProvider) hasInvalidQuotes(quotes []domain.Quote) bool {
 }
 
 func (p *HybridProvider) Reset() {
-	p.cbMutex.Lock()
-	defer p.cbMutex.Unlock()
 	if p.fugleProvider == nil {
-		p.cbState = ProviderCircuitOpen
+		p.breakers["fugle"].forceState(ProviderCircuitOpen)
 	} else {
-		p.cbState = ProviderCircuitClosed
+		p.breakers["fugle"].reset()
 	}
-	p.cbFailureCount = 0
-	p.cbHalfOpenCalls = 0
+	if fb, ok := p.breakers["fubon"]; ok {
+		fb.reset()
+	}
 	p.fallbackCount = 0
 	p.recoveryAttempts = 0
 }
 
 func (p *HybridProvider) UseTWSE() {
-	p.cbMutex.Lock()
-	defer p.cbMutex.Unlock()
-	p.cbState = ProviderCircuitOpen
-	p.cbLastFailure = time.Now()
+	p.breakers["fugle"].forceState(ProviderCircuitOpen)
 }
 
 func (p *HybridProvider) UseFugle() {
-	p.cbMutex.Lock()
-	defer p.cbMutex.Unlock()
-	p.cbState = ProviderCircuitClosed
-	p.cbFailureCount = 0
-	p.cbHalfOpenCalls = 0
+	p.breakers["fugle"].forceState(ProviderCircuitClosed)
 }
 
 func (p *HybridProvider) GetFinMindClient() *FinMindClient {
@@ -285,19 +265,31 @@ func (p *HybridProvider) SetTraceWriter(tw TraceWriter) {
 }
 
 func (p *HybridProvider) IsUsingTWSE() bool {
-	return p.isCircuitOpen()
+	return p.breakers["fugle"].stateSnapshot().State == ProviderCircuitOpen
 }
 
 func (p *HybridProvider) CircuitBreakerStats() map[string]any {
-	p.cbMutex.RLock()
-	defer p.cbMutex.RUnlock()
-	return map[string]any{
-		"state":             string(p.cbState),
-		"failure_count":     p.cbFailureCount,
-		"failure_threshold": p.cbConfig.failureThreshold,
-		"last_failure":      p.cbLastFailure.Format(time.RFC3339),
+	providers := make(map[string]ProviderBreakerInfo)
+	for name, b := range p.breakers {
+		providers[name] = b.stateSnapshot()
+	}
+
+	stats := map[string]any{
 		"fallback_count":    p.fallbackCount,
 		"last_fallback":     p.lastFallbackAt.Format(time.RFC3339),
 		"recovery_attempts": p.recoveryAttempts,
+		"providers":         providers,
 	}
+
+	// backward-compatible top-level fields (Fugle aggregate)
+	if fb, ok := providers["fugle"]; ok {
+		stats["state"] = string(fb.State)
+		stats["failure_count"] = fb.FailureCount
+		stats["failure_threshold"] = fb.Threshold
+		if !fb.LastFailure.IsZero() {
+			stats["last_failure"] = fb.LastFailure.Format(time.RFC3339)
+		}
+	}
+
+	return stats
 }

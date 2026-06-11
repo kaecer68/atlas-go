@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -253,5 +255,122 @@ func TestTWSEClient_GetQuotesBySymbols(t *testing.T) {
 	}
 	if symbols["2317"] {
 		t.Error("2317 should have been filtered out")
+	}
+}
+
+// ─── Fubon Circuit Breaker Integration ───────────────────────────────────────
+
+func TestHybridProvider_FubonBreaker_OpensAfter3Failures(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	fc := &FubonClient{}
+	fc.httpClient = srv.Client()
+	fc.proxyURL = srv.URL
+	fc.intradayLimiter = rate.NewLimiter(rate.Inf, 100)
+
+	fp := NewFubonProviderWithClient(fc)
+
+	p := &HybridProvider{
+		fubonProvider: fp,
+		twseClient:    GetSharedTWSEClient(),
+		breakers: map[string]*providerBreaker{
+			"fugle": newProviderBreaker("fugle", defaultCircuitBreakerConfig()),
+			"fubon": newProviderBreaker("fubon", defaultCircuitBreakerConfig()),
+		},
+	}
+
+	ctx := context.Background()
+	now := time.Now()
+
+	for i := 0; i < 3; i++ {
+		_, _ = p.GetQuotes(ctx, now, []string{"2330"})
+	}
+
+	if p.breakers["fubon"].stateSnapshot().State != ProviderCircuitOpen {
+		t.Fatalf("expected fubon breaker Open, got %s", p.breakers["fubon"].stateSnapshot().State)
+	}
+	if p.breakers["fugle"].stateSnapshot().State != ProviderCircuitClosed {
+		t.Fatalf("expected fugle breaker Closed (independent), got %s", p.breakers["fugle"].stateSnapshot().State)
+	}
+	if callCount != 3 {
+		t.Fatalf("expected Fubon proxy called 3 times, got %d", callCount)
+	}
+}
+
+func TestHybridProvider_FubonBreaker_OpenSkipsFubonCall(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	fc := &FubonClient{}
+	fc.httpClient = srv.Client()
+	fc.proxyURL = srv.URL
+	fc.intradayLimiter = rate.NewLimiter(rate.Inf, 100)
+
+	fp := NewFubonProviderWithClient(fc)
+
+	p := &HybridProvider{
+		fubonProvider: fp,
+		twseClient:    GetSharedTWSEClient(),
+		breakers: map[string]*providerBreaker{
+			"fugle": newProviderBreaker("fugle", defaultCircuitBreakerConfig()),
+			"fubon": newProviderBreaker("fubon", defaultCircuitBreakerConfig()),
+		},
+	}
+
+	p.breakers["fubon"].forceState(ProviderCircuitOpen)
+
+	ctx := context.Background()
+	now := time.Now()
+
+	_, _ = p.GetQuotes(ctx, now, []string{"2330"})
+
+	if callCount != 0 {
+		t.Fatalf("expected Fubon proxy NOT called (breaker Open), got %d calls", callCount)
+	}
+}
+
+func TestHybridProvider_CircuitBreakerStats_IncludesAllProviders(t *testing.T) {
+	fc := &FubonClient{}
+	fc.intradayLimiter = rate.NewLimiter(rate.Inf, 100)
+
+	fp := NewFubonProviderWithClient(fc)
+
+	p := &HybridProvider{
+		fugleProvider: &FugleProvider{},
+		fubonProvider: fp,
+		twseClient:    GetSharedTWSEClient(),
+		breakers: map[string]*providerBreaker{
+			"fugle": newProviderBreaker("fugle", defaultCircuitBreakerConfig()),
+			"fubon": newProviderBreaker("fubon", defaultCircuitBreakerConfig()),
+		},
+	}
+
+	stats := p.CircuitBreakerStats()
+
+	providers, ok := stats["providers"].(map[string]ProviderBreakerInfo)
+	if !ok {
+		t.Fatal("stats must contain 'providers' key with map value")
+	}
+	if _, ok := providers["fugle"]; !ok {
+		t.Fatal("providers map must contain 'fugle' key")
+	}
+	if _, ok := providers["fubon"]; !ok {
+		t.Fatal("providers map must contain 'fubon' key")
+	}
+	// backward-compat top-level keys
+	if _, ok := stats["state"]; !ok {
+		t.Fatal("stats must contain backward-compat 'state' key")
+	}
+	if _, ok := stats["failure_count"]; !ok {
+		t.Fatal("stats must contain backward-compat 'failure_count' key")
 	}
 }
