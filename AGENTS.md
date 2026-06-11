@@ -100,6 +100,17 @@ gh pr create --title "feat(scope): description" --body "..." --base main
 分支命名：`feat/<name>` / `fix/<name>` / `refactor/<name>`。
 Commit 格式：`type(scope): description`。
 
+## Multi-CLI 並行協議
+
+> 防止多個 CLI session 互相覆蓋 working tree 的標準做法。
+
+- **新規則**：開新 CLI session 必須先 `git worktree add ../atlas-<task>`
+- **Main worktree**（`/Users/kaecer/workspace/atlas`）只給 primary CLI 或 stable 視圖
+- **禁止**：兩個 CLI 同時在 main worktree 編輯相同檔案
+- **Worktree 命名**：`../atlas-<branch>` 或 `<short-task>`（例：`../atlas-multi-cli-protocol`）
+- **結束時**：PR merge → branch 自動刪除 → `git worktree prune`
+- **進場前**：必跑 `git worktree list` 確認當前佈局
+
 ## 修改前必讀
 
 任何程式碼修改前，強制執行 7 步驟檢查：
