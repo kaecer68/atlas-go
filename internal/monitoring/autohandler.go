@@ -70,19 +70,17 @@ func (h *AutoHandler) Recover(category string) {
 // Handle processes an alert through the auto-handler pipeline.
 // It implements the AlertHandler function signature.
 func (h *AutoHandler) Handle(alert Alert) {
-	// Run suppression check first for its side-effect of cleaning up
-	// expired entries, but INFO alerts are always auto-acknowledged
-	// regardless of suppression state.
-	suppressed := h.isSuppressed(alert)
-
 	// Step 1: Auto-acknowledge INFO alerts (always — humans should never see them).
+	// isSuppressed is invoked for its side-effect of cleaning up expired
+	// suppression entries; the bool result is intentionally ignored for INFO.
 	if alert.Level == AlertLevelInfo {
+		h.isSuppressed(alert) //nolint:staticcheck // side-effect only
 		h.autoAcknowledge(alert)
 		return
 	}
 
-	// Step 2: Check suppression rules for non-INFO alerts
-	if suppressed {
+	// Step 2: Check suppression rules for non-INFO alerts.
+	if h.isSuppressed(alert) {
 		return
 	}
 }
