@@ -85,7 +85,7 @@ type DashboardAPI struct {
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
-	strategiesAnnotator         llm_annotator.Annotator
+	strategiesAnnotator        llm_annotator.Annotator
 	calibrationTask            *narrative.CalibrationTask
 	crisisModeSetter           func(active bool) // callback: VIX>=35 → optimizer crisis mode
 	correlationSetter          func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
