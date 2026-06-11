@@ -196,7 +196,7 @@ export async function renderStrategiesPage(root) {
         </div>
         ${attribution ? `<div class="mt-xs attribution-preview">${attribution}</div>` : ''}
         <div class="control-group mt-sm">
-          <button data-action="view-attribution" data-id="${escapeHtml(s.id)}">📜 歸因</button>
+          <button data-action="ai-annotate" data-id="${escapeHtml(s.id)}">🤖 AI 歸因</button>
           <button data-action="validate" data-id="${escapeHtml(s.id)}">✓ 驗證</button>
         </div>
       </div>
@@ -212,7 +212,7 @@ export async function renderStrategiesPage(root) {
       m.setAttribute('aria-modal', 'true');
       m.innerHTML = `
         <div class="modal" style="width:min(640px,94vw)">
-          <h3>📜 失效歸因歷史</h3>
+          <h3>🤖 AI 失效歸因</h3>
           <div id="attributionContent">載入中…</div>
           <div class="control-group mt-14 justify-end">
             <button data-action="close-attribution">關閉</button>
@@ -231,8 +231,8 @@ export async function renderStrategiesPage(root) {
         renderStrategyCards();
       });
     });
-    document.querySelectorAll('[data-action="view-attribution"]').forEach(btn => {
-      btn.addEventListener('click', () => openAttribution(btn.dataset.id));
+    document.querySelectorAll('[data-action="ai-annotate"]').forEach(btn => {
+      btn.addEventListener('click', () => aiAnnotate(btn.dataset.id));
     });
     document.querySelectorAll('[data-action="validate"]').forEach(btn => {
       btn.addEventListener('click', () => validateStrategy(btn.dataset.id));
@@ -256,37 +256,64 @@ async function loadStrategiesData() {
   STATE.coreIndicators = chainResp ? (chainResp.core_indicators || null) : null;
 }
 
-async function openAttribution(id) {
+async function aiAnnotate(id) {
   const modal = document.getElementById('attributionModal');
   const body = document.getElementById('attributionContent');
   modal.style.display = 'flex';
-  if (STATE.attributionCache[id]) {
-    renderAttribution(id, STATE.attributionCache[id]);
-    return;
-  }
-  body.textContent = '載入中…';
+  body.innerHTML = '<div class="empty">🤖 正在呼叫 AI 歸因（最長 30 秒）…</div>';
+
+  let staticData = null;
   try {
-    const r = await fetchJSON(`/api/strategies/${encodeURIComponent(id)}/attribution`);
-    STATE.attributionCache[id] = r;
-    renderAttribution(id, r);
+    staticData = await fetchJSON(`/api/strategies/${encodeURIComponent(id)}/attribution`);
   } catch (e) {
-    body.innerHTML = `<div class="empty error">${escapeHtml(e.message)}</div>`;
+    // 靜態歸因失敗不阻擋 AI 路徑
+  }
+
+  try {
+    const r = await fetchJSON(`/api/strategies/${encodeURIComponent(id)}/annotate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    renderAIAttribution(id, r, staticData);
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    if (staticData) {
+      renderAIAttribution(id, {
+        annotation: '',
+        mode: 'rule_based',
+        note: 'AI 不可用，顯示靜態歸因 (' + msg + ')',
+      }, staticData);
+    } else {
+      body.innerHTML = `<div class="empty error">AI 歸因失敗：${escapeHtml(msg)}</div>`;
+    }
   }
 }
 
-function renderAttribution(id, data) {
+function renderAIAttribution(id, aiResp, staticData) {
   const body = document.getElementById('attributionContent');
-  const items = (data.attribution || []);
-  if (items.length === 0) {
-    body.innerHTML = `<div class="empty">${escapeHtml(id)} 目前無失效歸因記錄</div>`;
-    return;
+  const ai = (aiResp && aiResp.annotation) ? aiResp.annotation : '';
+  const isFromLLM = ai.length > 0;
+  const mode = (aiResp && aiResp.mode) || (isFromLLM ? 'llm_annotated' : 'rule_based');
+
+  let html = `<div class="mb-xs text-sm text-muted">心法：<strong>${escapeHtml(id)}</strong></div>`;
+
+  if (isFromLLM) {
+    html += `<div class="mb-sm"><span class="badge ok">🤖 LLM 即時生成</span></div>`;
+    html += `<div style="background:var(--bg-card-2);padding:12px;border-radius:4px;line-height:1.6">${escapeHtml(ai)}</div>`;
+  } else {
+    const note = (aiResp && aiResp.note) ? aiResp.note : 'LLM 未配置或回傳空';
+    html += `<div class="mb-sm"><span class="badge warn">📜 規則化歸因</span> <span class="text-xs-muted">${escapeHtml(note)}</span></div>`;
   }
-  body.innerHTML = `
-    <div class="mb-xs text-sm text-muted">心法：<strong>${escapeHtml(id)}</strong></div>
-    <ul style="padding-left:18px;line-height:1.7">
-      ${items.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
-    </ul>
-  `;
+
+  const staticItems = (staticData && staticData.attribution) || [];
+  if (staticItems.length > 0) {
+    html += `<div class="mt-sm"><h4 class="text-sm m-0">靜態歸因（備查）</h4>`;
+    html += `<ul style="padding-left:18px;line-height:1.7;margin-top:6px">${staticItems.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul></div>`;
+  }
+
+  html += `<div class="mt-sm text-xs-muted">attribution_mode=${escapeHtml(mode)}</div>`;
+  body.innerHTML = html;
 }
 
 function closeAttribution() {
