@@ -42,8 +42,8 @@ func TestLoad_Defaults(t *testing.T) {
 		}
 	}
 
-	if cfg.YahooEnabled {
-		t.Error("YahooEnabled should default to false")
+	if !cfg.YahooEnabled {
+		t.Error("YahooEnabled should default to true (flipped 2026-06; PR #484 safeguard now exposed the silent-zero failure mode this default caused)")
 	}
 	if cfg.FugleAPIKey != "" {
 		t.Errorf("FugleAPIKey should default to empty, got %q", cfg.FugleAPIKey)
@@ -200,6 +200,39 @@ func TestLoad_BrokerMaxRetriesInvalidFallback(t *testing.T) {
 	cfg := Load()
 	if cfg.BrokerMaxRetries != 1 {
 		t.Errorf("BrokerMaxRetries = %d, want 1 when invalid", cfg.BrokerMaxRetries)
+	}
+}
+
+func TestLoad_YahooEnabled_ExplicitFalseOptOut(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("ATLAS_YAHOO_ENABLED", "false")
+
+	cfg := Load()
+	if cfg.YahooEnabled {
+		t.Error("YahooEnabled should be false when ATLAS_YAHOO_ENABLED=false (explicit opt-out)")
+	}
+}
+
+func TestLoad_YahooEnabled_InvalidValueFallsBackToDefault(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("ATLAS_YAHOO_ENABLED", "garbage")
+
+	cfg := Load()
+	if !cfg.YahooEnabled {
+		t.Error("YahooEnabled should fall back to default (true) when env value is invalid")
+	}
+}
+
+func TestLoad_YahooEnabled_AcceptsCommonTruthyTokens(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, val := range []string{"true", "TRUE", " 1 ", "yes", "on"} {
+		t.Run("val="+val, func(t *testing.T) {
+			t.Setenv("ATLAS_YAHOO_ENABLED", val)
+			cfg := Load()
+			if !cfg.YahooEnabled {
+				t.Errorf("YahooEnabled should be true for env=%q, got false", val)
+			}
+		})
 	}
 }
 

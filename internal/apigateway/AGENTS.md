@@ -39,6 +39,7 @@ Caller → gateway.Fetch(channelID)
 | **janus_regime / sector_data 無限速** | `rate.Inf` 標記，不會觸發等待 |
 | **overlap 保護跳過執行** | 前次任務未結束時，新週期直接 skip，需檢查 log 確認 |
 | **CONSTITUTION.md 六條憲法** | CI 強制檢查，違反直接拒絕合併 |
+| **YahooEnabled 預設為 true（2026-06 翻轉）** | `register_adapters.go` 的 4 個 `if cfg.YahooEnabled` 守門（line 69 + 140 + 155 + 170）預設都會通過；8 個 US 通道（us_spx/us_ndx/us_dji/us_nvda/us_aapl/us_msft/sox_index/tsm_adr + 既有 us_yahoo macro）會全部註冊。明確 opt-out 設 `ATLAS_YAHOO_ENABLED=false`。此翻轉與 PR #484 的 4-layer data-visibility safeguard 互補：PR #484 是上層防護（偵測任何 channel 失敗並透過 `data_status="degraded"` + `failed_channels` 暴露），預設翻轉是下層預防（讓 US 通道不再因為環境變數未設而啞火）。Safeguard 對其他失敗模式（rate limit、network、Yahoo API outage）仍必要。詳見 `.claude/skills/atlas-data-visibility/SKILL.md`。 |
 
 ## 測試
 

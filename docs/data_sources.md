@@ -59,7 +59,9 @@ Fetches US market indexes and large-cap tech stocks on-demand via Yahoo Finance 
 | Microsoft | MSFT | `MSFTProvider` | `us_msft` | `adapter_us_tech.go` |
 | TSMC ADR | TSM | `TSMADRProvider` | `tsm_adr` | `adapter_tsm_adr.go` |
 
-Gated by `ATLAS_YAHOO_ENABLED=true` env var. Consumed by `/api/cross-market/status` via `MacroDataGatewayAdapter` → `gateway.Fetch(channelID)`.
+Gated by `ATLAS_YAHOO_ENABLED` env var (default **`true`** as of 2026-06; explicitly set to `false` to opt out). Consumed by `/api/cross-market/status` via `MacroDataGatewayAdapter` → `gateway.Fetch(channelID)`.
+
+**Default-flip rationale (2026-06)**: PR #484 introduced a 4-layer data-visibility safeguard (see `.claude/skills/atlas-data-visibility/SKILL.md`) that exposed 8 US channels returning silent zero values — root cause was `ATLAS_YAHOO_ENABLED` defaulting to `false`, so the channels were never registered in production. The safeguard (upper defense: detects any channel failure) and this default flip (lower prevention: registers all 8 channels) are complementary, not redundant. The safeguard remains valuable for other failure modes (rate limit, network error, Yahoo API outage).
 
 ### ETF NAV (`internal/marketdata/etf_nav_provider.go`)
 
