@@ -14,6 +14,7 @@ type MetricsService struct {
 type MetricsCollector interface {
 	GetScreeningRate() float64
 	GetMetricsSnapshot() MetricsSnapshot
+	CheckThresholds(threshold AlertThreshold) []ThresholdViolation
 }
 
 type MetricsHistory interface {
@@ -23,6 +24,7 @@ type MetricsHistory interface {
 type MetricsCollectorAdapter struct {
 	GetScreeningRateFunc   func() float64
 	GetMetricsSnapshotFunc func() MetricsSnapshot
+	CheckThresholdsFunc    func(AlertThreshold) []ThresholdViolation
 }
 
 func (a *MetricsCollectorAdapter) GetScreeningRate() float64 {
@@ -31,6 +33,13 @@ func (a *MetricsCollectorAdapter) GetScreeningRate() float64 {
 
 func (a *MetricsCollectorAdapter) GetMetricsSnapshot() MetricsSnapshot {
 	return a.GetMetricsSnapshotFunc()
+}
+
+func (a *MetricsCollectorAdapter) CheckThresholds(threshold AlertThreshold) []ThresholdViolation {
+	if a.CheckThresholdsFunc == nil {
+		return nil
+	}
+	return a.CheckThresholdsFunc(threshold)
 }
 
 type MetricsHistoryAdapter struct {
@@ -111,6 +120,34 @@ func (s *MetricsService) GetMetricsTrend(metric, period string) map[string]any {
 		"current":     snapshot,
 		"trend":       filteredTrend,
 		"data_points": len(filteredTrend),
+	}
+}
+
+// defaultThreshold returns the default alert thresholds used by GetThresholds when no override is supplied.
+// Values mirror parameters_defaults.go (MinScreeningRate=0.1, MaxAlertTriggerRate=100/hr, MaxUnacknowledgedAlerts=10)
+// and act as a safe fallback so the API always reports meaningful violations.
+func defaultThreshold() AlertThreshold {
+	return AlertThreshold{
+		MinScreeningRate:        0.1,
+		MaxAlertTriggerRate:     100,
+		MaxUnacknowledgedAlerts: 10,
+	}
+}
+
+func (s *MetricsService) GetThresholds() *ThresholdReport {
+	t := defaultThreshold()
+	var violations []ThresholdViolation
+	if s.collector != nil {
+		violations = s.collector.CheckThresholds(t)
+	}
+	if violations == nil {
+		violations = []ThresholdViolation{}
+	}
+	return &ThresholdReport{
+		Violations: violations,
+		Count:      len(violations),
+		Threshold:  t,
+		CheckedAt:  time.Now().UTC(),
 	}
 }
 
