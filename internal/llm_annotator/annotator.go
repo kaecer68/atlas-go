@@ -93,7 +93,7 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	if err != nil {
 		return "", fmt.Errorf("%w: http: %v", ErrUnavailable, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
