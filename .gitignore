@@ -48,6 +48,7 @@ internal/*/data/
 !internal/marketdata/data/
 !internal/config/data/
 .gitnexus/lbug
+.gitnexus/meta.json
 /.codegraph/
 /.worktrees/
 
