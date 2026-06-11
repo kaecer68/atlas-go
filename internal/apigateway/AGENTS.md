@@ -14,7 +14,7 @@
 | `ChannelRegistry` | `gateway.go` | 通道註冊與查詢 |
 | `RateLimitManager` | `limits.go` | 各通道限速器管理 |
 | `CircuitBreakerManager` | `circuitbreaker.go` | 各通道熔斷器管理 |
-| `FetchResult` | `gateway.go` | 結果包裝：Data + Meta（latency/cached/stale） |
+| `FetchResult` | `provider.go` | 結果包裝：Data + Meta + Stale/Fallback/LastError (circuit-breaker fallback 標記) |
 
 ## 資料流
 
@@ -32,6 +32,7 @@ Caller → gateway.Fetch(channelID)
 | 陷阱 | 說明 |
 |------|------|
 | **禁止裸 http.Client** | 所有外部資料抓取必須經 `gateway.Fetch(channelID)`，違者擋 PR |
+| **FetchResult.Fallback 語意** | 當 circuit-breaker 開啟且 stale cache 命中時設為 `true`,呼叫端應視為 last-known-good 而非新鮮資料。對應 `LastError` 帶有原始錯誤訊息。 |
 | **新通道必須註冊兩處** | `limits.go` 加限速 + `gateway.go` 的 `channelIDs()` 加列舉 |
 | **禁止裸 goroutine 定時任務** | 所有排程必須用 `BackgroundTaskManager`，參見 `CONSTITUTION.md` 第四條 |
 | **frankfurter_fx 使用獨立限速器** | Frankfurter API (api.frankfurter.app) 獨立限速，不再與 us_yahoo 共用 |

@@ -45,6 +45,7 @@
 | `atlas-swarm-analyst` | Swarm 模擬結果、市場共識、異常偵測 | ✅ |
 | `atlas-multi-strategy` | 策略選擇器、分配器、策略比較 | ✅ |
 | `atlas-event-driven-weights` | 事件驅動因子權重、FactorBridge | ⚠️ 部分實作 |
+| `atlas-data-visibility` | 資料可見性防護、零值顯示 bug、通道靜默失敗 | ✅ |
 
 ### 自動生成技能（generated/*）
 對應 `internal/*` 模組，由工具自動同步，提供模組級程式碼導航.

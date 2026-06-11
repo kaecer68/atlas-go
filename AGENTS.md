@@ -126,6 +126,7 @@ skill(name="atlas-pre-change-protocol")
 | FactorType 變更 | 必須同步 7 個位置，CI 強制 |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | Replay 格式 | JSONL，不是 JSON array |
+| 資料可見性 | 通道靜默失敗時,Gateway/Adapter/Service/Frontend 四層須暴露 `data_status` / `failed_channels` / 紅色 badge,不得以零值掩蓋。詳見 `.claude/skills/atlas-data-visibility/SKILL.md` |
 
 ## 文件索引
 

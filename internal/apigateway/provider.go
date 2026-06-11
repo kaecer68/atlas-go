@@ -25,11 +25,15 @@ type DataProvider interface {
 }
 
 // FetchResult contains the data and metadata from a fetch operation.
+// Fallback is true when returning last-known-good data on circuit-breaker open.
+// LastError contains the last error message from the fetch (empty = no error).
 type FetchResult struct {
-	Data   []byte
-	Meta   FetchMetadata
-	Cached bool
-	Stale  bool
+	Data      []byte
+	Meta      FetchMetadata
+	Cached    bool
+	Stale     bool
+	Fallback  bool   `json:"fallback,omitempty"`
+	LastError string `json:"last_error,omitempty"`
 }
 
 // FetchMetadata records call details for health tracking.
@@ -40,6 +44,8 @@ type FetchMetadata struct {
 	Timestamp          time.Time `json:"timestamp"`
 	Cached             bool      `json:"cached"`
 	Stale              bool      `json:"stale"`
+	Fallback           bool      `json:"fallback,omitempty"`
+	LastError          string    `json:"last_error,omitempty"`
 }
 
 // HealthStatus represents the result of a health check.

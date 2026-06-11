@@ -6,6 +6,8 @@ export async function loadCrossMarketData() {
     fetch('/api/dashboard/us-indices').then(r => r.json()).catch(() => null),
     fetch('/api/cross-market/correlation').then(r => r.json()).catch(() => null),
   ]);
+  // renderDegradedBanner: surface channel failures before rendering US cards
+  renderDegradedBanner(status);
   renderUSIndices(status);
   renderTechStocks(status);
   renderMacro(status);
@@ -13,13 +15,18 @@ export async function loadCrossMarketData() {
   renderCrisis(status);
 }
 
-function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey) {
+function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey, failed) {
   const c = color || 'var(--text)';
   const bc = borderColor || 'transparent';
   const borderStyle = bc !== 'transparent' ? `border-left:3px solid ${bc};` : '';
-  const display = fmt ? fmt(value) : (value != null ? String(value) : '—');
   const symbolHtml = symbol ? `<span style="font-size:var(--text-sm);color:var(--muted);margin-left:6px">${escapeHtml(symbol)}</span>` : '';
   const clickable = helpKey ? ` clickable" onclick="openKpiHelp('${helpKey}')` : '';
+  let display;
+  if (failed) {
+    display = `<span class="cm-data-failed" style="color:var(--color-danger);font-size:var(--text-sm);font-weight:600">資料獲取失敗</span>`;
+  } else {
+    display = fmt ? fmt(value) : (value != null ? String(value) : '—');
+  }
   return `<div class="kpi-card${clickable}" style="${borderStyle}"><div class="kpi-label">${label}${symbolHtml}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
 }
 
@@ -45,9 +52,19 @@ function fmtTs(v) {
 function getField(status, key) {
   const raw = status[key];
   if (raw && typeof raw === 'object') {
-    return { value: raw.value, changePct: raw.change_pct, symbol: raw.symbol, timestamp: raw.timestamp };
+    // A field is "failed" when the symbol is empty (Layer 4 of the
+    // data-visibility safeguard — surface channel failures instead of
+    // silently rendering 0).
+    const failed = !raw.symbol || raw.symbol === '';
+    return {
+      value: raw.value,
+      changePct: raw.change_pct,
+      symbol: raw.symbol,
+      timestamp: raw.timestamp,
+      failed,
+    };
   }
-  return { value: raw, changePct: raw, symbol: null, timestamp: null };
+  return { value: raw, changePct: raw, symbol: null, timestamp: null, failed: true };
 }
 
 function renderUSIndices(status) {
@@ -61,15 +78,15 @@ function renderUSIndices(status) {
   const ndx = getField(status, 'ndx');
   const dji = getField(status, 'dji');
   const sox = getField(status, 'sox');
-  const spxColor = parseFloat(spx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
-  const ndxColor = parseFloat(ndx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
-  const djiColor = parseFloat(dji.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
-  const soxColor = parseFloat(sox.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const spxColor = spx.failed ? null : (parseFloat(spx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const ndxColor = ndx.failed ? null : (parseFloat(ndx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const djiColor = dji.failed ? null : (parseFloat(dji.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const soxColor = sox.failed ? null : (parseFloat(sox.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
   el.innerHTML =
-    kpiCard('S&P 500', spx.value, fmtNum, spxColor, null, spx.symbol, 'cm_spx') +
-    kpiCard('Nasdaq', ndx.value, fmtNum, ndxColor, null, ndx.symbol, 'cm_ndx') +
-    kpiCard('Dow Jones', dji.value, fmtNum, djiColor, null, dji.symbol, 'cm_dji') +
-    kpiCard('SOX 半導體', sox.value, fmtNum, soxColor, null, sox.symbol, 'cm_sox');
+    kpiCard('S&P 500', spx.value, fmtNum, spxColor, null, spx.symbol, 'cm_spx', spx.failed) +
+    kpiCard('Nasdaq', ndx.value, fmtNum, ndxColor, null, ndx.symbol, 'cm_ndx', ndx.failed) +
+    kpiCard('Dow Jones', dji.value, fmtNum, djiColor, null, dji.symbol, 'cm_dji', dji.failed) +
+    kpiCard('SOX 半導體', sox.value, fmtNum, soxColor, null, sox.symbol, 'cm_sox', sox.failed);
 }
 
 function renderTechStocks(status) {
@@ -83,15 +100,15 @@ function renderTechStocks(status) {
   const aapl = getField(status, 'aapl');
   const msft = getField(status, 'msft');
   const tsm = getField(status, 'tsm_adr');
-  const nvdaColor = parseFloat(nvda.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
-  const aaplColor = parseFloat(aapl.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
-  const msftColor = parseFloat(msft.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
-  const tsmColor = parseFloat(tsm.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+  const nvdaColor = nvda.failed ? null : (parseFloat(nvda.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const aaplColor = aapl.failed ? null : (parseFloat(aapl.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const msftColor = msft.failed ? null : (parseFloat(msft.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const tsmColor = tsm.failed ? null : (parseFloat(tsm.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
   el.innerHTML =
-    kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol, 'cm_nvda') +
-    kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol, 'cm_aapl') +
-    kpiCard('MSFT', msft.value, fmtNum, msftColor, null, msft.symbol, 'cm_msft') +
-    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'color-mix(in srgb, var(--accent) 30%, transparent)', tsm.symbol, 'cm_tsm');
+    kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol, 'cm_nvda', nvda.failed) +
+    kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol, 'cm_aapl', aapl.failed) +
+    kpiCard('MSFT', msft.value, fmtNum, msftColor, null, msft.symbol, 'cm_msft', msft.failed) +
+    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'color-mix(in srgb, var(--accent) 30%, transparent)', tsm.symbol, 'cm_tsm', tsm.failed);
 }
 
 function renderMacro(status) {
@@ -184,6 +201,30 @@ function emptyState(msg) {
     '<div style="color:var(--text);font-weight:600;margin-bottom:4px">' + escapeHtml(msg || '等待資料') + '</div>' +
     '<div style="color:var(--muted);font-size:var(--text-base)">美台連動監控資料每 5 分鐘自動更新一次。</div>' +
     '</div>';
+}
+
+function renderDegradedBanner(status) {
+  if (!status || status.data_status !== 'degraded') return;
+
+  const failed = status.failed_channels || [];
+  const failedList = failed.length > 0
+    ? failed.map(ch => `<code style="background:var(--panel-l2);padding:2px 6px;border-radius:3px;margin:0 2px">${escapeHtml(ch)}</code>`).join('')
+    : '<em>(部分美國市場通道)</em>';
+
+  const html = `<div class="cm-degraded-banner" style="background:color-mix(in srgb, var(--color-warning) 12%, transparent);border:1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:var(--text-base)">
+    <strong style="color:var(--color-warning)">⚠ 部分美國市場資料獲取失敗</strong>
+    <div style="margin-top:6px;color:var(--text)">以下通道回傳失敗,相關卡片已標示 <span style="color:var(--color-danger);font-weight:600">資料獲取失敗</span>: ${failedList}</div>
+    <div style="margin-top:6px;color:var(--muted);font-size:var(--text-sm)">系統已記錄 degraded 狀態,後續 fetch 成功將自動恢復。</div>
+  </div>`;
+
+  const firstGrid = document.querySelector('#cm-us-indices');
+  if (firstGrid && firstGrid.parentNode) {
+    const existing = firstGrid.parentNode.querySelector('.cm-degraded-banner');
+    if (existing) existing.remove();
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    firstGrid.parentNode.insertBefore(wrapper.firstChild, firstGrid);
+  }
 }
 
 window.loadCrossMarketData = loadCrossMarketData;

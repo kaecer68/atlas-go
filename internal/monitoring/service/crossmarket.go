@@ -67,6 +67,14 @@ type CrossMarketStatus struct {
 	CorrelationTSMTWSE  *float64 `json:"correlation_tsm_twse"`
 	CorrelationNVDATWSE *float64 `json:"correlation_nvda_twse"`
 	CorrelationSPXVIX   *float64 `json:"correlation_spx_vix"`
+
+	// Data visibility (Layer 3 of data-visibility safeguard).
+	// DataStatus is "ok" when all 8 US index/tech fields have real data,
+	// "degraded" when at least one is missing. FailedChannels lists the
+	// specific channelIDs that returned empty (frontend uses this to
+	// render error badges).
+	DataStatus     string   `json:"data_status"`
+	FailedChannels []string `json:"failed_channels,omitempty"`
 }
 
 // CrossMarketIndex bundles an index/stock value with its metadata.
@@ -109,9 +117,10 @@ type CrossMarketService struct {
 	// cacheMu + cachedSnapshot + cacheTime implement a TTL cache for
 	// FetchSnapshot, preventing the 2x redundant ~15-20s HTTP cascade
 	// when GetStatus and GetUSIndices are called concurrently.
-	cacheMu        sync.Mutex
-	cachedSnapshot *marketdata.MacroDataSnapshot
-	cacheTime      time.Time
+	cacheMu          sync.Mutex
+	cachedSnapshot   *marketdata.MacroDataSnapshot
+	cachedStatusMeta *snapshotStatusMeta // co-cached with cachedSnapshot under cacheMu
+	cacheTime        time.Time
 
 	// rollingSPXTWSE is the legacy SPX-SOX engine. Retained for
 	// back-compat with existing consumers and the /api/cross-market/correlation
@@ -150,28 +159,43 @@ func (s *CrossMarketService) UpdateCorrelation(spxReturn, soxReturn float64) {
 	s.rollingSPXTWSE.Update(spxReturn, soxReturn)
 }
 
-// getCachedSnapshot returns a cached FetchSnapshot result if it is newer
-// than cacheTTL. Concurrent callers that arrive during a stale cache each
-// fetch independently (no coalescing), but subsequent requests within the
-// TTL window hit the cache instantly. This eliminates the ~15-20s redundant
-// FetchSnapshot cascade when GetStatus and GetUSIndices are both called.
-func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.MacroDataSnapshot, error) {
+// getCachedSnapshot returns the cached snapshot + its degraded-status
+// metadata. Concurrent callers that arrive during a stale cache each
+// fetch independently (no coalescing), but subsequent requests within
+// the TTL window hit the cache instantly. This eliminates the ~15-20s
+// redundant FetchSnapshot cascade when GetStatus and GetUSIndices are
+// both called.
+//
+// The cached meta ensures that if a fetch came back degraded, every
+// cache hit also reports degraded — preventing a "fixed itself" illusion.
+func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.MacroDataSnapshot, *snapshotStatusMeta, error) {
 	s.cacheMu.Lock()
 	if s.cachedSnapshot != nil && time.Since(s.cacheTime) < cacheTTL {
 		snap := *s.cachedSnapshot
+		var meta *snapshotStatusMeta
+		if s.cachedStatusMeta != nil {
+			cp := *s.cachedStatusMeta
+			meta = &cp
+		}
 		s.cacheMu.Unlock()
-		return snap, nil
+		return snap, meta, nil
 	}
 	s.cacheMu.Unlock()
 
 	snap, err := s.provider.FetchSnapshot(ctx)
 	if err == nil {
+		status, failed := detectDegradedUSStatus(snap)
+		meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed}
+
 		s.cacheMu.Lock()
 		s.cachedSnapshot = &snap
+		s.cachedStatusMeta = meta
 		s.cacheTime = time.Now()
 		s.cacheMu.Unlock()
+
+		return snap, meta, nil
 	}
-	return snap, err
+	return snap, nil, err
 }
 
 // UpdateAllCorrelations ingests a MacroDataSnapshot and pushes the relevant
@@ -209,7 +233,7 @@ func (s *CrossMarketService) UpdateAllCorrelations(snap marketdata.MacroDataSnap
 
 // GetStatus returns the full cross-market status snapshot.
 func (s *CrossMarketService) GetStatus(ctx context.Context) (*CrossMarketStatus, error) {
-	snap, err := s.getCachedSnapshot(ctx)
+	snap, meta, err := s.getCachedSnapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch macro snapshot: %w", err)
 	}
@@ -244,6 +268,13 @@ func (s *CrossMarketService) GetStatus(ctx context.Context) (*CrossMarketStatus,
 	status.CorrelationNVDATWSE = reportableCorrelation(s.rollingNVDATWSE)
 	status.CorrelationSPXVIX = reportableCorrelation(s.rollingSPXVIX)
 
+	// Layer 3: Use cached status meta (co-cached with the snapshot to
+	// prevent cache hits from "fixing" a degraded state).
+	if meta != nil {
+		status.DataStatus = meta.DataStatus
+		status.FailedChannels = meta.FailedChannels
+	}
+
 	return status, nil
 }
 
@@ -262,7 +293,7 @@ func (s *CrossMarketService) GetCorrelation() (*CorrelationResponse, error) {
 
 // GetUSIndices returns the current US market indices snapshot.
 func (s *CrossMarketService) GetUSIndices(ctx context.Context) (*USIndicesResponse, error) {
-	snap, err := s.getCachedSnapshot(ctx)
+	snap, _, err := s.getCachedSnapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch macro snapshot: %w", err)
 	}
@@ -321,4 +352,49 @@ func toIndex(dp marketdata.MacroDataPoint) CrossMarketIndex {
 		ChangePct: dp.ChangePct,
 		Timestamp: dp.Timestamp,
 	}
+}
+
+// detectDegradedUSStatus returns the data status and list of failed channels
+// for the 8 US index/tech fields in MacroDataSnapshot. A field is "failed"
+// when its Symbol is empty (meaning the channel returned an error or no data).
+//
+// This is Layer 3 of the 4-layer data-visibility safeguard
+// (see .claude/skills/atlas-data-visibility/SKILL.md).
+//
+// Returns:
+//   - "ok" + nil when all 8 fields are populated
+//   - "degraded" + list of failed channelIDs otherwise
+func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot) (string, []string) {
+	failed := []string{}
+	checks := []struct {
+		channelID string
+		point     marketdata.MacroDataPoint
+	}{
+		{"us_spx", snap.SPXIndex},
+		{"us_ndx", snap.NDXIndex},
+		{"us_dji", snap.DJIIndex},
+		{"sox_index", snap.SOXIndex},
+		{"us_nvda", snap.NVDA},
+		{"us_aapl", snap.AAPL},
+		{"us_msft", snap.MSFT},
+		{"tsm_adr", snap.TSMADR},
+	}
+	for _, c := range checks {
+		if c.point.Symbol == "" {
+			failed = append(failed, c.channelID)
+		}
+	}
+	if len(failed) == 0 {
+		return "ok", nil
+	}
+	return "degraded", failed
+}
+
+// snapshotStatusMeta is the per-fetch degraded-status metadata co-cached
+// with the MacroDataSnapshot. Layer 3 of the data-visibility safeguard —
+// the cache must not "fix" a degraded snapshot into an "ok" one just
+// because it's served from cache instead of refetched.
+type snapshotStatusMeta struct {
+	DataStatus     string
+	FailedChannels []string
 }

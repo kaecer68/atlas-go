@@ -3,8 +3,8 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,12 +16,37 @@ import (
 // macroDataGatewayAdapter implements marketdata.MacroDataProvider using DataFetcher.
 // Replaces the CompositeMacroProvider + 9 individual provider pattern in NewDashboardAPI.
 type macroDataGatewayAdapter struct {
-	fetcher DataFetcher
+	fetcher    DataFetcher
+	mu         sync.Mutex
+	lastErrors map[string]string // channelID → last error message (Layer 2 of data-visibility)
 }
 
 // NewMacroDataGatewayAdapter creates a MacroDataProvider backed by the Gateway.
 func NewMacroDataGatewayAdapter(fetcher DataFetcher) marketdata.MacroDataProvider {
-	return &macroDataGatewayAdapter{fetcher: fetcher}
+	return &macroDataGatewayAdapter{
+		fetcher:    fetcher,
+		lastErrors: make(map[string]string),
+	}
+}
+
+// ChannelErrors returns a snapshot of the per-channel error map populated
+// by the most recent FetchSnapshot call. The map is a copy, so callers
+// can mutate it freely. Returns nil if no fetch has run yet.
+//
+// This is Layer 2 of the 4-layer data-visibility safeguard — it lets the
+// service layer surface channel failures to the API response instead of
+// silently producing all-zero MacroDataSnapshot fields.
+func (a *macroDataGatewayAdapter) ChannelErrors() map[string]string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.lastErrors) == 0 {
+		return nil
+	}
+	cp := make(map[string]string, len(a.lastErrors))
+	for k, v := range a.lastErrors {
+		cp[k] = v
+	}
+	return cp
 }
 
 func (a *macroDataGatewayAdapter) Name() string {
@@ -60,8 +85,6 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 
 	var (
 		merged marketdata.MacroDataSnapshot
-		errs   []error
-		mu     sync.Mutex
 		wg     sync.WaitGroup
 	)
 
@@ -71,14 +94,15 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 			defer wg.Done()
 			data, err := a.fetcher(ctx, ch.channelID)
 			if err != nil {
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("%s: %w", ch.channelID, err))
-				mu.Unlock()
+				a.mu.Lock()
+				a.lastErrors[ch.channelID] = err.Error()
+				a.mu.Unlock()
 				return
 			}
-			mu.Lock()
+			a.mu.Lock()
+			delete(a.lastErrors, ch.channelID)
 			ch.apply(&merged, data)
-			mu.Unlock()
+			a.mu.Unlock()
 		}(ch)
 	}
 	wg.Wait()
@@ -87,9 +111,16 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		merged.RecordedAt = time.Now().Unix()
 	}
 
-	// Only return error if ALL channels failed
-	if len(errs) > 0 && len(errs) == len(channels) {
-		return merged, errors.Join(errs...)
+	a.mu.Lock()
+	allFailed := len(a.lastErrors) > 0 && len(a.lastErrors) == len(channels)
+	errMsgs := make([]string, 0, len(a.lastErrors))
+	for _, e := range a.lastErrors {
+		errMsgs = append(errMsgs, e)
+	}
+	a.mu.Unlock()
+
+	if allFailed {
+		return merged, fmt.Errorf("all %d channels failed: %s", len(channels), strings.Join(errMsgs, "; "))
 	}
 	return merged, nil
 }

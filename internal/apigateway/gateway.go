@@ -90,9 +90,16 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 
 	if callErr != nil {
 		if breaker.IsOpen() {
-			// Return stale cache if available
+			// Return stale cache if available, marked as fallback so callers know
+			// the data is last-known-good and not a fresh fetch (Layer 1 of the
+			// 4-layer data-visibility safeguard).
 			if stale := g.cache.Get(channelID); stale != nil {
 				stale.Stale = true
+				stale.Fallback = true
+				stale.LastError = callErr.Error()
+				stale.Meta.Stale = true
+				stale.Meta.Fallback = true
+				stale.Meta.LastError = callErr.Error()
 				return stale, nil
 			}
 		}
