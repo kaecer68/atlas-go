@@ -5,15 +5,19 @@ package strategies
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"time"
 
+	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
 // Handlers serves the strategies API.
 type Handlers struct {
-	registry *strategy_techniques.Registry
+	registry  *strategy_techniques.Registry
+	annotator llm_annotator.Annotator
 }
 
 // NewHandlers builds a new Handlers backed by the given Registry.
@@ -29,6 +33,14 @@ func (h *Handlers) SetRegistry(r *strategy_techniques.Registry) {
 	h.registry = r
 }
 
+// SetAnnotator wires the LLM annotator for the /annotate endpoint. nil is
+// permitted; the annotate handler will return 503 until a real annotator
+// is wired in. The annotator is decoupled from the registry so a mock can
+// be used in tests without loading the production registry.
+func (h *Handlers) SetAnnotator(a llm_annotator.Annotator) {
+	h.annotator = a
+}
+
 // RegisterRoutes attaches the strategies routes to mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/strategies", shared.Get(h.listStrategies))
@@ -37,6 +49,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/strategies/{id}", shared.Get(h.getStrategy))
 	mux.Handle("POST /api/strategies/{id}/validate", shared.Post(h.validateStrategy))
 	mux.Handle("GET /api/strategies/{id}/attribution", shared.Get(h.getAttribution))
+	mux.Handle("POST /api/strategies/{id}/annotate", shared.Post(h.annotate))
 }
 
 // StrategyFrameSummary is the API-facing representation of a StrategyFrame.
@@ -242,5 +255,98 @@ func (h *Handlers) getAttribution(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{
 		"id":          f.ID,
 		"attribution": f.Attribution,
+	}
+}
+
+// annotate handles POST /api/strategies/{id}/annotate. It calls the
+// configured LLM annotator to produce a natural-language explanation of
+// why the strategy would not hit under the current macro data. The
+// annotator is opt-in: if no annotator is wired (SetAnnotator was not
+// called), the endpoint returns 503 with a fallback to rule_based.
+//
+// The request body is optional and accepts:
+//   - "macro":       map[string]float64 of MacroSnapshot fields
+//   - "actual":      map[string]float64 of actual condition values
+//   - "occurred_at": RFC3339 string (defaults to time.Now())
+func (h *Handlers) annotate(r *http.Request) (int, any) {
+	id := r.PathValue("id")
+	if err := shared.ValidatePathComponent(id); err != nil {
+		return http.StatusBadRequest, map[string]any{"error": err.Error()}
+	}
+	if h.registry == nil {
+		return http.StatusServiceUnavailable, map[string]any{"error": "registry not initialized"}
+	}
+	frame, err := h.registry.FindByID(id)
+	if err != nil {
+		return http.StatusNotFound, map[string]any{"error": "strategy not found"}
+	}
+	if h.annotator == nil {
+		return http.StatusServiceUnavailable, map[string]any{
+			"error":    "llm annotator not configured (set LLM_ANNOTATOR_API_KEY)",
+			"fallback": frame.Attribution,
+		}
+	}
+	var body struct {
+		Macro      map[string]float64 `json:"macro"`
+		Actual     map[string]float64 `json:"actual"`
+		OccurredAt string             `json:"occurred_at"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body)
+	}
+	occurredAt, _ := time.Parse(time.RFC3339, body.OccurredAt)
+	if occurredAt.IsZero() {
+		occurredAt = time.Now()
+	}
+	fc := buildFailureContext(frame, body.Macro, body.Actual, occurredAt)
+	text, err := h.annotator.Annotate(r.Context(), fc)
+	if err != nil {
+		return http.StatusBadGateway, map[string]any{
+			"error":    err.Error(),
+			"fallback": frame.Attribution,
+			"backend":  h.annotator.Name(),
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"id":         id,
+		"annotation": text,
+		"backend":    h.annotator.Name(),
+	}
+}
+
+// buildFailureContext converts a StrategyFrame + macro/actual maps into
+// the FailureContext that llm_annotator expects. Missing macro fields
+// default to 0; missing actual values default to 0 (the LLM prompt
+// surfaces the gap so the response can explain what was missing).
+func buildFailureContext(frame *strategy_techniques.StrategyFrame, macro, actual map[string]float64, occurredAt time.Time) llm_annotator.FailureContext {
+	snap := llm_annotator.MacroSnapshot{
+		ForeignInvestorNet:  macro["foreign_capital_net_twd"],
+		TSMADR:              macro["tsm_adr_pct"],
+		NVDA:                macro["nvda_pct"],
+		DXY:                 macro["dxy_pct"],
+		USD_TWD:             macro["usd_twd"],
+		RetailMarginBalance: macro["retail_margin_balance"],
+		DomesticFundNet:     macro["domestic_fund_net"],
+		DealerNet:           macro["dealer_net"],
+		VIX:                 macro["vix"],
+		US10Y:               macro["us10y"],
+	}
+	conds := make([]llm_annotator.ConditionSnapshot, len(frame.Conditions))
+	for i, c := range frame.Conditions {
+		conds[i] = llm_annotator.ConditionSnapshot{
+			Field:       c.Field,
+			Operator:    c.Operator,
+			Threshold:   c.Value,
+			ActualValue: actual[c.Field],
+			Timeframe:   c.Timeframe,
+		}
+	}
+	return llm_annotator.FailureContext{
+		FrameID:    frame.ID,
+		FrameName:  frame.Name,
+		Layer:      string(frame.Layer),
+		Conditions: conds,
+		Snap:       snap,
+		OccurredAt: occurredAt,
 	}
 }

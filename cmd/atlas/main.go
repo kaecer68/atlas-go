@@ -34,6 +34,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/metalearning"
@@ -1514,6 +1515,22 @@ func run(args []string, deps appDeps) error {
 				logging.Info("main", "strategy_techniques_loaded", "count", stRegistry.Count(), "path", stSeedsPath)
 			} else {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
+			}
+
+			// LLM annotator (Kimi) is opt-in via env var. Without
+			// LLM_ANNOTATOR_API_KEY the /annotate endpoint returns 503; this is
+			// the explicit signal that the on-demand attribution path is not
+			// configured. Init failure is Warn, not Fatal: rule_based
+			// attribution remains authoritative.
+			if apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY"); apiKey != "" {
+				if kimi, err := llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey}); err != nil {
+					logging.Warn("main", "kimi_init_failed", "err", err.Error())
+				} else {
+					dashboard.SetStrategiesAnnotator(kimi)
+					logging.Info("main", "kimi_annotator_loaded", "backend", kimi.Name())
+				}
+			} else {
+				logging.Info("main", "kimi_annotator_disabled", "hint", "set LLM_ANNOTATOR_API_KEY to enable on-demand attribution")
 			}
 
 			if dashEventBus != nil {

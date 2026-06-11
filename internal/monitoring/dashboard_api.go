@@ -17,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
@@ -84,6 +85,7 @@ type DashboardAPI struct {
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
+	strategiesAnnotator        llm_annotator.Annotator
 	calibrationTask            *narrative.CalibrationTask
 	crisisModeSetter           func(active bool) // callback: VIX>=35 → optimizer crisis mode
 	correlationSetter          func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
@@ -808,6 +810,16 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 func (a *DashboardAPI) SetStrategiesHandlers(h *apistrategies.Handlers) {
 	a.strategyTechniquesHandlers = h
+	if a.strategiesAnnotator != nil {
+		h.SetAnnotator(a.strategiesAnnotator)
+	}
+}
+
+func (a *DashboardAPI) SetStrategiesAnnotator(ann llm_annotator.Annotator) {
+	a.strategiesAnnotator = ann
+	if a.strategyTechniquesHandlers != nil {
+		a.strategyTechniquesHandlers.SetAnnotator(ann)
+	}
 }
 
 func (a *DashboardAPI) RegisterStrategiesRoutes(mux *http.ServeMux) {

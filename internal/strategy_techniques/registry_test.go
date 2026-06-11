@@ -200,7 +200,7 @@ func TestProductionSeeds_Loads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFromFile(%q): %v", path, err)
 	}
-	if got := reg.Count(); got != 9 {
-		t.Errorf("production seed count = %d, want 9", got)
+	if got := reg.Count(); got != 12 {
+		t.Errorf("production seed count = %d, want 12", got)
 	}
 }
