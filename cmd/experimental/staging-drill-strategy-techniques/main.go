@@ -15,7 +15,9 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
@@ -104,8 +106,33 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
+func runPhase2(reg *strategy_techniques.Registry, savePath string) (*orchestrator.System, error) {
+	cfg := config.Load()
+	cfg.BrokerMode = "paper"
+
+	system, err := orchestrator.NewProductionSystem(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("construct production system: %w", err)
+	}
+
+	system.WithStrategyTechniques(reg, savePath)
+	return system, nil
+}
+
 func main() {
-	if _, err := run(); err != nil {
+	reg, err := run()
+	if err != nil {
+		panic(err)
+	}
+
+	tempDir, err := os.MkdirTemp("", "staging-drill-strategy-techniques-main-*")
+	if err != nil {
+		panic(fmt.Errorf("create temp dir: %w", err))
+	}
+	defer os.RemoveAll(tempDir)
+	savePath := filepath.Join(tempDir, "strategy_techniques_save.json")
+
+	if _, err := runPhase2(reg, savePath); err != nil {
 		panic(err)
 	}
 }
