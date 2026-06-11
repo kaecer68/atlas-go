@@ -1,7 +1,9 @@
 package monitoring
 
 import (
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestMetricsCollector_Screening(t *testing.T) {
@@ -64,6 +66,91 @@ func TestMetricsCollector_Snapshot(t *testing.T) {
 	}
 }
 
+func TestMetricKey_LabelCollision(t *testing.T) {
+	k1 := metricKey("orders_total", map[string]string{"symbol": "2330", "side": "buy"})
+	k2 := metricKey("orders_total", map[string]string{"symbol": "2317", "side": "sell"})
+	k3 := metricKey("orders_total", map[string]string{"side": "buy", "symbol": "2330"}) // same as k1, different order
+	k4 := metricKey("orders_total", nil)
+
+	if k1 == k2 {
+		t.Errorf("different labels must produce different keys: k1=%s, k2=%s", k1, k2)
+	}
+	if k1 != k3 {
+		t.Errorf("identical labels (different order) must produce identical keys: k1=%s, k3=%s", k1, k3)
+	}
+	if k4 != "orders_total" {
+		t.Errorf("nil labels must produce name only: got %q, want %q", k4, "orders_total")
+	}
+}
+
+func TestMetricKey_NoCollisionAfterRecord(t *testing.T) {
+	m := NewMetricsCollector()
+	m.RecordCounter("orders_total", 1, map[string]string{"symbol": "2330", "side": "buy"})
+	m.RecordCounter("orders_total", 1, map[string]string{"symbol": "2317", "side": "sell"})
+	m.RecordCounter("orders_total", 1, map[string]string{"symbol": "2330", "side": "buy"}) // duplicate of first
+
+	all := m.GetAllMetrics()
+	var sym2330, sym2317 float64
+	found2330, found2317 := false, false
+	for _, metric := range all {
+		if metric.Name != "orders_total" {
+			continue
+		}
+		switch metric.Labels["symbol"] {
+		case "2330":
+			sym2330 = metric.Value
+			found2330 = true
+		case "2317":
+			sym2317 = metric.Value
+			found2317 = true
+		}
+	}
+	if !found2330 || !found2317 {
+		t.Fatalf("expected both labels to be tracked, found 2330=%v (val=%v), 2317=%v (val=%v)", found2330, sym2330, found2317, sym2317)
+	}
+	if sym2330 != 2 {
+		t.Errorf("expected orders_total{symbol=2330}=2 (1+1 duplicates), got %v", sym2330)
+	}
+	if sym2317 != 1 {
+		t.Errorf("expected orders_total{symbol=2317}=1, got %v", sym2317)
+	}
+}
+
+func TestGetAlertTriggerCount(t *testing.T) {
+	m := NewMetricsCollector()
+
+	// Count is 0 initially
+	if got := m.GetAlertTriggerCount(); got != 0 {
+		t.Errorf("initial count = %v, want 0", got)
+	}
+
+	m.RecordAlert("circuit_breaker")
+	m.RecordAlert("regime_change")
+	m.RecordAlert("circuit_breaker")
+
+	if got := m.GetAlertTriggerCount(); got != 3 {
+		t.Errorf("after 3 alerts count = %v, want 3", got)
+	}
+}
+
+func TestCheckThresholds_AlertTriggerCount_BelowThreshold(t *testing.T) {
+	m := NewMetricsCollector()
+	for i := 0; i < 50; i++ {
+		m.RecordAlert("test")
+	}
+	threshold := AlertThreshold{
+		MinScreeningRate:        0.0,
+		MaxAlertTriggerRate:     100,
+		MaxUnacknowledgedAlerts: 1000,
+	}
+	violations := m.CheckThresholds(threshold)
+	for _, v := range violations {
+		if v.Metric == "alert_trigger_rate" {
+			t.Errorf("did not expect alert_trigger_rate violation when count=50 below threshold=100, got: %+v", v)
+		}
+	}
+}
+
 func TestCheckThresholds(t *testing.T) {
 	// 測試低篩選率
 	m := NewMetricsCollector()
@@ -84,5 +171,197 @@ func TestCheckThresholds(t *testing.T) {
 	violations = m2.CheckThresholds(threshold)
 	if len(violations) != 0 {
 		t.Errorf("expected 0 violations, got %d", len(violations))
+	}
+}
+
+func TestMetricsCollector_PersistenceRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "metrics.jsonl")
+
+	// First collector: write some events
+	m1, err := NewMetricsCollectorWithPath(path)
+	if err != nil {
+		t.Fatalf("create m1: %v", err)
+	}
+	m1.RecordScreening(7, 3) // 7 passed, 3 rejected
+	m1.RecordAlert("circuit_breaker")
+	m1.RecordAlert("regime_change")
+	m1.RecordAlertAcknowledged()
+	m1.RecordCounter("orders_total", 5, map[string]string{"symbol": "2330", "side": "buy"})
+	m1.RecordGauge("portfolio_total", 1000000, nil)
+
+	// Second collector: load from same path
+	m2, err := NewMetricsCollectorWithPath(path)
+	if err != nil {
+		t.Fatalf("create m2: %v", err)
+	}
+	if got := m2.GetScreeningRate(); got < 0.69 || got > 0.71 {
+		t.Errorf("replayed screening rate = %v, want ~0.7", got)
+	}
+	if got := m2.GetAlertTriggerCount(); got != 2 {
+		t.Errorf("replayed alert count = %v, want 2", got)
+	}
+	metric, ok := m2.GetMetric("orders_total", map[string]string{"symbol": "2330", "side": "buy"})
+	if !ok {
+		t.Error("orders_total{symbol=2330,side=buy} not found after replay")
+	} else if metric.Value != 5 {
+		t.Errorf("replayed orders_total value = %v, want 5", metric.Value)
+	}
+	gauge, ok := m2.GetMetric("portfolio_total", nil)
+	if !ok {
+		t.Error("portfolio_total gauge not found after replay")
+	} else if gauge.Value != 1000000 {
+		t.Errorf("replayed portfolio_total = %v, want 1000000", gauge.Value)
+	}
+}
+
+func TestMetricsCollector_NoPersistenceWhenPathEmpty(t *testing.T) {
+	m, err := NewMetricsCollectorWithPath("")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	m.RecordScreening(5, 5)
+	if got := m.GetScreeningRate(); got != 0.5 {
+		t.Errorf("screening rate = %v, want 0.5", got)
+	}
+	// No file should be written when path is empty
+}
+
+func TestGetAlertTriggerCountInWindow(t *testing.T) {
+	m := NewMetricsCollector()
+
+	// Empty → 0
+	if got := m.GetAlertTriggerCountInWindow(time.Hour); got != 0 {
+		t.Errorf("empty count = %d, want 0", got)
+	}
+	// window <= 0 → 0
+	if got := m.GetAlertTriggerCountInWindow(0); got != 0 {
+		t.Errorf("zero window count = %d, want 0", got)
+	}
+
+	// 3 fresh alerts
+	m.RecordAlert("a")
+	m.RecordAlert("b")
+	m.RecordAlert("c")
+	if got := m.GetAlertTriggerCountInWindow(time.Hour); got != 3 {
+		t.Errorf("fresh count = %d, want 3", got)
+	}
+	if got := m.GetAlertTriggerCountInWindow(time.Minute); got != 3 {
+		t.Errorf("1m window count = %d, want 3 (all fresh)", got)
+	}
+}
+
+func TestGetAlertTriggerCountInWindow_PruneRetention(t *testing.T) {
+	m := NewMetricsCollector()
+	// 直接填入超過 24h 的時間戳 + 1 個新鮮的
+	now := time.Now()
+	m.alertTimestamps = []time.Time{
+		now.Add(-25 * time.Hour),  // 應被 prune
+		now.Add(-30 * time.Hour),  // 應被 prune
+		now.Add(-1 * time.Minute), // 保留
+	}
+	// 觸發 prune（透過 RecordAlert）
+	m.RecordAlert("x")
+	// 應只剩下 [fresh, now] 共 2 個
+	if got := m.GetAlertTriggerCountInWindow(time.Hour); got != 2 {
+		t.Errorf("after prune count = %d, want 2", got)
+	}
+}
+
+func TestGetAlertTriggerRate(t *testing.T) {
+	m := NewMetricsCollector()
+	// window <= 0 → 0
+	if got := m.GetAlertTriggerRate(0); got != 0 {
+		t.Errorf("zero window rate = %v, want 0", got)
+	}
+	// window <= 1s → 視為瞬間，回傳 float64(count)
+	m.RecordAlert("a")
+	if got := m.GetAlertTriggerRate(time.Millisecond); got != 1 {
+		t.Errorf("1ms window rate = %v, want 1 (count as-is)", got)
+	}
+	// 60 個 alerts 在 1 小時窗口 → rate = 60/hr
+	for i := 0; i < 59; i++ {
+		m.RecordAlert("bulk")
+	}
+	if got := m.GetAlertTriggerRate(time.Hour); got != 60 {
+		t.Errorf("1h window rate = %v, want 60", got)
+	}
+	// 1 分鐘窗口含 60 alerts → per-hour rate = 60 / (1/60h) = 3600/hr
+	if got := m.GetAlertTriggerRate(time.Minute); got != 3600 {
+		t.Errorf("1m window rate = %v, want 3600 (per-hour normalization)", got)
+	}
+}
+
+func TestCheckThresholds_AlertTriggerRate_Hourly(t *testing.T) {
+	m := NewMetricsCollector()
+	// 觸發 150 個 alerts（> 100/hr 閾值）
+	for i := 0; i < 150; i++ {
+		m.RecordAlert("flood")
+	}
+	threshold := AlertThreshold{
+		MinScreeningRate:        0.0,
+		MaxAlertTriggerRate:     100, // 100/hr
+		MaxUnacknowledgedAlerts: 1000,
+	}
+	violations := m.CheckThresholds(threshold)
+	found := false
+	for _, v := range violations {
+		if v.Metric == "alert_trigger_rate" {
+			found = true
+			if v.Severity != "critical" {
+				t.Errorf("expected critical severity, got %s", v.Severity)
+			}
+			if v.Current != 150 {
+				t.Errorf("expected current=150, got %v", v.Current)
+			}
+			if v.Threshold != 100 {
+				t.Errorf("expected threshold=100, got %v", v.Threshold)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected alert_trigger_rate violation for 150 alerts/hr (threshold=100), got none: %+v", violations)
+	}
+}
+
+func TestCheckThresholds_AlertTriggerRate_Acceptable(t *testing.T) {
+	m := NewMetricsCollector()
+	// 50 個 alerts（< 100/hr 閾值）
+	for i := 0; i < 50; i++ {
+		m.RecordAlert("normal")
+	}
+	threshold := AlertThreshold{
+		MinScreeningRate:        0.0,
+		MaxAlertTriggerRate:     100,
+		MaxUnacknowledgedAlerts: 1000,
+	}
+	violations := m.CheckThresholds(threshold)
+	for _, v := range violations {
+		if v.Metric == "alert_trigger_rate" {
+			t.Errorf("did not expect alert_trigger_rate violation for 50/hr (threshold=100), got: %+v", v)
+		}
+	}
+}
+
+func TestMetricsCollector_PersistenceReplaysAlertTimestamps(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "metrics.jsonl")
+	m1, err := NewMetricsCollectorWithPath(path)
+	if err != nil {
+		t.Fatalf("create m1: %v", err)
+	}
+	m1.RecordAlert("circuit_breaker")
+	m1.RecordAlert("regime_change")
+
+	m2, err := NewMetricsCollectorWithPath(path)
+	if err != nil {
+		t.Fatalf("create m2: %v", err)
+	}
+	// replay 應恢復 alertTimestamps，使 windowed count 正確
+	if got := m2.GetAlertTriggerCountInWindow(time.Hour); got != 2 {
+		t.Errorf("replayed windowed count = %d, want 2", got)
+	}
+	if got := m2.GetAlertTriggerCount(); got != 2 {
+		t.Errorf("replayed total count = %v, want 2", got)
 	}
 }
