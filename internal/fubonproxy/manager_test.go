@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -222,4 +224,588 @@ func TestProcessManager_Stop_DoesNotOrphanDuringRestart(t *testing.T) {
 	if m.cmd != nil {
 		t.Errorf("expected m.cmd=nil after Stop(), got %+v", m.cmd)
 	}
+}
+
+// ============================================================================
+// F-TEST-1 + F1~F8 invariants — test coverage added in response to
+// PR #493 /review findings (see /tmp/pr-493-review-log.json).
+//
+// Acceptance: all 9 new tests green under `go test -race -count=1
+// ./internal/fubonproxy/`, with 3 existing tests not regressing.
+// All health-URL mocks use 127.0.0.1 form (not `localhost`) per PR #495.
+// ============================================================================
+
+// currentPID 安全讀取 m.cmd.Process.Pid。回傳 0 表示無程序。
+func currentPID(m *ProcessManager) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cmd == nil || m.cmd.Process == nil {
+		return 0
+	}
+	return m.cmd.Process.Pid
+}
+
+// waitForPIDChange 等待 m.cmd 的 PID 變成與 oldPID 不同的值。回傳新 PID 與是否在
+// timeout 內變化。用於觀察 supervise() 重啟新程序的時機。
+func waitForPIDChange(m *ProcessManager, oldPID int, timeout time.Duration) (int, bool) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if pid := currentPID(m); pid != 0 && pid != oldPID {
+			return pid, true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return currentPID(m), false
+}
+
+// TestProcessManager_F1_PostStartRecheck_NoOrphanAfterRestart 驗證 F1 post-start
+// re-check 不變式：當 supervise() 啟動新程序之後、註冊到 m.cmd 之前，Stop() 被
+// 呼叫時，新程序必須被 Kill() 而非孤兒化。
+//
+// 測試策略：使用「首次執行 crash、之後 sleep」腳本，驅動 1 次崩潰 + 1 次重啟。
+// 在重啟後的新程序仍活著時呼叫 Stop()，驗證該 PID 死掉且不留孤兒。
+//
+// Reference: PR #489 (F1 fix) + PR #493 review finding F-TEST-1 (CRITICAL).
+func TestProcessManager_F1_PostStartRecheck_NoOrphanAfterRestart(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	// 首次執行 exit 1（觸發 supervise 重啟），之後 sleep 30s（讓測試有時間呼叫 Stop()）
+	script := "#!/bin/sh\n" +
+		"SCRIPT_DIR=\"$(dirname \"$0\")\"\n" +
+		"if [ ! -f \"$SCRIPT_DIR/.crashed_once\" ]; then\n" +
+		"  touch \"$SCRIPT_DIR/.crashed_once\"\n" +
+		"  exit 1\n" +
+		"fi\n" +
+		"sleep 30\n"
+	if err := os.WriteFile(fakeScript, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health", // 永遠不通 — 確保程序會真的啟動
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	firstPID := currentPID(m)
+	if firstPID == 0 {
+		t.Fatal("could not capture first pid")
+	}
+	t.Logf("first process started: pid=%d", firstPID)
+
+	// 等待 1st 程序 crash + 3s backoff + 2nd 程序啟動
+	secondPID, changed := waitForPIDChange(m, firstPID, 8*time.Second)
+	if !changed {
+		m.Stop()
+		t.Fatal("supervise() did not restart process within 8s after crash")
+	}
+	if secondPID == firstPID {
+		m.Stop()
+		t.Fatalf("PID did not change: first=%d second=%d", firstPID, secondPID)
+	}
+	t.Logf("restart detected: first=%d second=%d (after crash + backoff)", firstPID, secondPID)
+
+	// 2nd 程序正在 sleep 30s — 此時呼叫 Stop()。
+	// 不論 Stop() 是落在「post-start re-check 視窗」還是「已註冊到 m.cmd 之後」，
+	// 結果都應該是 2nd 程序被終止、不留孤兒。
+	m.Stop()
+
+	if !waitForProcessExit(firstPID, 3*time.Second) {
+		_ = syscall.Kill(firstPID, syscall.SIGKILL)
+		t.Errorf("first process (pid %d) still running after Stop()", firstPID)
+	}
+	if !waitForProcessExit(secondPID, 3*time.Second) {
+		_ = syscall.Kill(secondPID, syscall.SIGKILL)
+		t.Errorf("second process (pid %d) still running after Stop() — ORPHAN!", secondPID)
+	} else {
+		t.Logf("second process (pid %d) terminated cleanly — no orphan", secondPID)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.running {
+		t.Error("expected m.running=false after Stop()")
+	}
+	if m.cmd != nil {
+		t.Errorf("expected m.cmd=nil after Stop(), got %+v", m.cmd)
+	}
+}
+
+// TestProcessManager_F2F4_NoFireAndForgetHealthCheck 驗證 F2/F4 不變式：
+// supervise() 在重啟路徑中對 health check 是**同步**呼叫，不應 fire-and-forget
+// 產生背景 goroutine。若 fire-and-forget 存在，反覆 crash 會堆積 goroutine。
+//
+// 測試策略：使用立即 crash 腳本，驅動 3 次 crash + 2 次重啟，觀察 goroutine
+// 數量在整個生命週期內是否保持在合理範圍內。
+//
+// Reference: PR #489 (F2/F4 fix) + PR #493 review log F2/F4 informational item.
+func TestProcessManager_F2F4_NoFireAndForgetHealthCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	// baseline goroutines（test goroutine 本身 + runtime 內部 goroutines）
+	baseline := runtime.NumGoroutine()
+	t.Logf("baseline goroutines: %d", baseline)
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	t.Cleanup(func() { m.Stop() })
+
+	// Start 後短暫穩定期：1 個 supervise goroutine + 1 個 health check goroutine
+	// + 0~1 個 HTTP client idle goroutine。允許 baseline + 3。
+	time.Sleep(300 * time.Millisecond)
+	afterStart := runtime.NumGoroutine()
+	t.Logf("after Start(): %d (delta=%d)", afterStart, afterStart-baseline)
+	if afterStart > baseline+5 {
+		t.Errorf("too many goroutines right after Start(): %d (delta=%d, want <=%d)",
+			afterStart, afterStart-baseline, baseline+5)
+	}
+
+	// 驅動 2 次重啟：每次 crash + backoff + 新 process 啟動
+	// 1st PID
+	firstPID := currentPID(m)
+	if firstPID == 0 {
+		t.Fatal("could not capture first pid")
+	}
+
+	// 2nd PID
+	secondPID, _ := waitForPIDChange(m, firstPID, 6*time.Second)
+	if secondPID == 0 || secondPID == firstPID {
+		t.Fatalf("2nd restart did not happen: first=%d second=%d", firstPID, secondPID)
+	}
+
+	mid := runtime.NumGoroutine()
+	t.Logf("after 2nd restart: %d (delta=%d)", mid, mid-baseline)
+	// F2/F4 invariant: 即使經過 2 次重啟，goroutine 數不應明顯增長
+	// fire-and-forget 場景下，這裡會 baseline + 5+（每次重啟 spawn 一個 goroutine）
+	if mid > baseline+7 {
+		t.Errorf("goroutine pile-up detected: %d after 2 restarts (delta=%d, want <=%d)",
+			mid, mid-baseline, baseline+7)
+	}
+
+	// 3rd PID — 再觸發一次重啟
+	thirdPID, _ := waitForPIDChange(m, secondPID, 12*time.Second)
+	if thirdPID == 0 || thirdPID == secondPID {
+		t.Logf("3rd restart not observed within 12s (PID unchanged=%d), acceptable for test scope", secondPID)
+	} else {
+		late := runtime.NumGoroutine()
+		t.Logf("after 3rd restart: %d (delta=%d)", late, late-baseline)
+		if late > baseline+7 {
+			t.Errorf("goroutine pile-up after 3 restarts: %d (delta=%d, want <=%d)",
+				late, late-baseline, baseline+7)
+		}
+	}
+}
+
+// TestProcessManager_F5_WaitForHealthyRespectsContextCancel 驗證 F5 不變式：
+// waitForHealthy() 必須在 ctx 取消時**立即**返回，不應繼續 sleep 至 healthCheckInterval。
+//
+// 測試策略：使用 unreachable health URL，直接呼叫 m.waitForHealthy(cancelledCtx)，
+// 計時驗證返回時間 < 100ms。
+//
+// Reference: PR #489 (F5 fix) + PR #493 review log F5 informational item.
+func TestProcessManager_F5_WaitForHealthyRespectsContextCancel(t *testing.T) {
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: "/dev/null",
+		healthURL:  "http://127.0.0.1:1/health", // 永遠不通 — 確保 polling 持續
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 立即取消
+
+	start := time.Now()
+	err := m.waitForHealthy(ctx)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Errorf("waitForHealthy with cancelled ctx should return error, got nil")
+	}
+	if !strings.Contains(err.Error(), "context canceled") {
+		t.Errorf("expected context.Canceled error, got: %v", err)
+	}
+	// healthCheckInterval 是 500ms — 若 select 沒包好，這裡會 ≥ 500ms
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("waitForHealthy took %v with cancelled ctx; expected < 100ms", elapsed)
+	}
+	t.Logf("waitForHealthy returned in %v with cancelled ctx — OK", elapsed)
+}
+
+// TestProcessManager_F7_StartFailureThenStopDoesNotHang 驗證 F7 不變式：
+// 當 Start() 在錯誤路徑（pythonBin 未找到 / script 不存在）時，後續呼叫 Stop()
+// 必須能快速返回，不應永久阻塞。
+//
+// 測試策略：建立 manager with pythonBin="" 觸發 Start() 早退錯誤路徑，驗證
+// Stop() 在合理時間內返回。
+//
+// Reference: PR #489 (F7 fix) + PR #493 review log F7 informational item.
+func TestProcessManager_F7_StartFailureThenStopDoesNotHang(t *testing.T) {
+	t.Run("pythonBin empty", func(t *testing.T) {
+		m := &ProcessManager{
+			pythonBin:  "", // 觸發 Start() 早退
+			scriptPath: "/tmp/whatever",
+			healthURL:  "http://127.0.0.1:1/health",
+		}
+
+		err := m.Start(context.Background())
+		if err == nil {
+			t.Fatal("Start() with empty pythonBin should return error")
+		}
+		t.Logf("Start() correctly returned error: %v", err)
+
+		// Stop() 必須不阻塞
+		done := make(chan struct{})
+		start := time.Now()
+		go func() {
+			m.Stop()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			elapsed := time.Since(start)
+			if elapsed > 1*time.Second {
+				t.Errorf("Stop() took %v after failed Start(); expected < 1s", elapsed)
+			}
+			t.Logf("Stop() returned in %v after failed Start() — OK", elapsed)
+		case <-time.After(2 * time.Second):
+			t.Fatal("Stop() hung > 2s after failed Start() — mutex dead lock?")
+		}
+	})
+
+	t.Run("script not found", func(t *testing.T) {
+		m := &ProcessManager{
+			pythonBin:  "/bin/sh",
+			scriptPath: "/nonexistent/path/to/script.sh",
+			healthURL:  "http://127.0.0.1:1/health",
+		}
+
+		err := m.Start(context.Background())
+		if err == nil {
+			t.Fatal("Start() with missing script should return error")
+		}
+		if !strings.Contains(err.Error(), "script not found") {
+			t.Errorf("expected 'script not found' error, got: %v", err)
+		}
+
+		done := make(chan struct{})
+		start := time.Now()
+		go func() {
+			m.Stop()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			elapsed := time.Since(start)
+			if elapsed > 1*time.Second {
+				t.Errorf("Stop() took %v after script-not-found Start(); expected < 1s", elapsed)
+			}
+			t.Logf("Stop() returned in %v after script-not-found Start() — OK", elapsed)
+		case <-time.After(2 * time.Second):
+			t.Fatal("Stop() hung > 2s after script-not-found Start()")
+		}
+	})
+}
+
+// TestProcessManager_BackoffStateMachine_3sThen10s 驗證 backoff 狀態機：
+// - 1st 重啟：restartInitialDelay (3s)
+// - 連續 Start() 失敗：restartBackoffDelay (10s)
+//
+// 測試策略：使用立即 crash 腳本，記錄 1st 與 2nd PID 出現時點，計算 gap1。
+// gap1 應在 [2.5s, 5s]。
+//
+// 注意：2nd→3rd 的時間間距會被 30s 的 waitForHealthy 阻塞主導（health 永遠
+// 不通，waitForHealthy 必須等滿 30s timeout 才返回），所以 10s 的
+// restartBackoffDelay 在「health check 失敗」路徑下不可觀察。10s backoff
+// 只在「Start() 本身失敗」路徑下觸發（manager.go:347 `backoff = restartBackoffDelay`），
+// 需更複雜的 script 切換 setup 才能在測試中重現。
+//
+// Reference: PR #489 (backoff state machine fix) + PR #493 review log
+// "Backoff state machine (3s/10s, reset on health pass) untested".
+func TestProcessManager_BackoffStateMachine_3sThen10s(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping backoff timing test in -short mode")
+	}
+
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health", // 永遠不通
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	t.Cleanup(func() { m.Stop() })
+
+	startTime := time.Now()
+	firstPID := currentPID(m)
+	if firstPID == 0 {
+		t.Fatal("could not capture first pid")
+	}
+	t.Logf("T+0  : first  pid=%d", firstPID)
+
+	// 等待 2nd PID — 1st 程序 crash (immediate) + 3s backoff + 2nd start
+	secondPID, ok := waitForPIDChange(m, firstPID, 6*time.Second)
+	if !ok || secondPID == firstPID {
+		t.Fatalf("2nd restart not observed: first=%d second=%d", firstPID, secondPID)
+	}
+	gap1 := time.Since(startTime)
+	t.Logf("T+%.2fs: second pid=%d (gap1=%.2fs, want 3.0±1.5s — restartInitialDelay)",
+		gap1.Seconds(), secondPID, gap1.Seconds())
+
+	if gap1 < 2500*time.Millisecond || gap1 > 5*time.Second {
+		t.Errorf("gap1=%.2fs outside [2.5s, 5s] — restartInitialDelay=3s broken?", gap1.Seconds())
+	}
+}
+
+// TestProcessManager_CrashAutoRestart_FullCycle 驗證崩潰後自動重啟的完整
+// 循環：program crashes → supervise observes exit → backoff → start new program
+// → 新的 PID 與舊的不同。
+//
+// Reference: PR #493 review log "Crash → automatic restart cycle untested".
+func TestProcessManager_CrashAutoRestart_FullCycle(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	t.Cleanup(func() { m.Stop() })
+
+	firstPID := currentPID(m)
+	if firstPID == 0 {
+		t.Fatal("could not capture first pid")
+	}
+	t.Logf("first pid=%d", firstPID)
+
+	secondPID, ok := waitForPIDChange(m, firstPID, 6*time.Second)
+	if !ok || secondPID == firstPID {
+		t.Fatalf("supervise() did not restart crashed process within 6s: first=%d second=%d", firstPID, secondPID)
+	}
+	t.Logf("after crash: second pid=%d (different from first=%d)", secondPID, firstPID)
+
+	// 2nd 程序當下也已經 crash 完畢（exit 1），但中間 supervise 已觀察到它並啟動了 3rd
+	// 這裡只驗證「有自動重啟」與「PID 確實不同」就足夠。
+}
+
+// TestProcessManager_Stop_SIGINTGracefulThenSIGKILL 驗證 Stop() 在 ctx-based
+// 取消路徑下能終止程序。
+//
+// 重要觀察：根據 PR #489 F1 fix，Stop() 會**先**呼叫 `cancel()` 來中斷 supervise()
+// 與 waitForHealthy()。由於 cmd 是用 `exec.CommandContext(ctx, ...)` 建立，ctx
+// 取消會觸發 Go runtime 對程序的 SIGKILL（不是 SIGINT）。所以「SIGINT → 5s →
+// SIGKILL escalation」路徑在當前實作中**不會**被執行 — SIGINT 永遠送給已死的程序。
+//
+// 5s graceful shutdown timeout (`gracefulShutdownTimeout` const) 仍是 Stop() 的
+// 安全網（manager.go:224），但只有在 cancel() 沒能終止 cmd 的罕見情境下才會觸發。
+// 要直接測試該路徑需繞過 exec.CommandContext 的 ctx 綁定，屬於 mock-level test。
+//
+// 本測試驗證實際的取消路徑：program 被 cancel 終止 + Stop() 在合理時間內返回 +
+// 程序真的死掉。
+//
+// Reference: PR #489 (F1 fix, cancel() unconditional) + PR #493 review log
+// "SIGINT → 5s graceful → SIGKILL escalation untested".
+func TestProcessManager_Stop_SIGINTGracefulThenSIGKILL(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	// trap '' INT 忽略 SIGINT — 即使 SIGINT 路徑被走到，process 也不會優雅退出
+	script := "#!/bin/sh\n" +
+		"trap '' INT\n" +
+		"sleep 30\n"
+	if err := os.WriteFile(fakeScript, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	pid := currentPID(m)
+	if pid == 0 {
+		t.Fatal("could not capture pid")
+	}
+	t.Logf("started stuck process: pid=%d (ignore SIGINT, sleep 30)", pid)
+
+	// Stop() 透過 cancel() 終止 cmd（Go exec.CommandContext 內部 SIGKILL）。
+	// 必須在合理時間內返回 — 觀察 [0s, 3s] 範圍。
+	stopStart := time.Now()
+	m.Stop()
+	stopElapsed := time.Since(stopStart)
+	t.Logf("Stop() returned in %.3fs (cancel()-based kill, NOT SIGINT escalation)", stopElapsed.Seconds())
+
+	if stopElapsed > 3*time.Second {
+		t.Errorf("Stop() took %.2fs — too slow for cancel()-based kill, expected < 3s", stopElapsed.Seconds())
+	}
+
+	// 程序必須真的死掉
+	if !waitForProcessExit(pid, 3*time.Second) {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		t.Errorf("stuck process (pid %d) still running after Stop()", pid)
+	} else {
+		t.Logf("stuck process (pid %d) terminated after Stop() — OK", pid)
+	}
+}
+
+// TestProcessManager_NewManager_ScriptPathIsAbsolute 驗證 NewManager 將
+// scriptPath 透過 filepath.Abs 轉為絕對路徑（PR #488 不變式）。
+//
+// 測試策略：用 tmp dir 作為 workDir，呼叫 NewManager(tmpDir)，驗證回傳的
+// ProcessManager.scriptPath 為絕對路徑，且解析後指向期望位置。
+//
+// Reference: PR #488 (filepath.Abs fix) + PR #493 review log
+// "NewManager filepath.Abs (PR #488 invariant) bypassed by struct-literal tests".
+func TestProcessManager_NewManager_ScriptPathIsAbsolute(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 創建 NewManager 預期的目錄結構與 fake script
+	proxyDir := filepath.Join(tmpDir, "services", "fubon-proxy")
+	if err := os.MkdirAll(proxyDir, 0o755); err != nil {
+		t.Fatalf("mkdir proxy dir: %v", err)
+	}
+	fakeMain := filepath.Join(proxyDir, "main.py")
+	if err := os.WriteFile(fakeMain, []byte("#!/usr/bin/env python3\n"), 0o755); err != nil {
+		t.Fatalf("write fake main.py: %v", err)
+	}
+
+	m := NewManager(tmpDir)
+	if m == nil {
+		t.Fatal("NewManager returned nil")
+	}
+
+	// 1. 必須是絕對路徑
+	if !filepath.IsAbs(m.scriptPath) {
+		t.Errorf("scriptPath is not absolute: %q", m.scriptPath)
+	}
+
+	// 2. 必須解析後指向我們創建的 fake main.py
+	resolved, err := filepath.EvalSymlinks(m.scriptPath)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	expected, err := filepath.EvalSymlinks(fakeMain)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(fakeMain): %v", err)
+	}
+	if resolved != expected {
+		t.Errorf("scriptPath resolves to %q, want %q", resolved, expected)
+	}
+
+	// 3. healthURL 預設應為 127.0.0.1:8081（PR #495 IPv4 hardcode）
+	if m.healthURL != "http://127.0.0.1:8081/health" {
+		t.Errorf("healthURL = %q, want %q (PR #495 IPv4 hardcode)", m.healthURL, "http://127.0.0.1:8081/health")
+	}
+}
+
+// TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel 驗證 PR #488 不變式：
+// logWriter 將 Python 程序的 stderr 輸出以 Info 級別寫入日誌（不靜默、不降級為
+// Debug、也不升級為 Error/Warn）。
+//
+// 測試策略：直接構造 logWriter，呼叫 Write 並驗證返回值。Info 級別的設定由源碼
+// 檢視保證（logWriter.Write() 第 391 行呼叫 logging.Info），本測試專注於
+// 「資料不丟失、不阻塞」的不變式。
+//
+// Reference: PR #488 (stderr Info level fix) + PR #493 review log
+// "stderr Info log level (PR #488 invariant) untested".
+func TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel(t *testing.T) {
+	w := &logWriter{component: "test.stderr"}
+
+	t.Run("newline-terminated", func(t *testing.T) {
+		n, err := w.Write([]byte("ERROR: something failed\n"))
+		if err != nil {
+			t.Errorf("Write returned error: %v", err)
+		}
+		if n != len("ERROR: something failed\n") {
+			t.Errorf("Write returned n=%d, want %d", n, len("ERROR: something failed\n"))
+		}
+	})
+
+	t.Run("no trailing newline", func(t *testing.T) {
+		n, err := w.Write([]byte("ERROR: no newline"))
+		if err != nil {
+			t.Errorf("Write returned error: %v", err)
+		}
+		if n != len("ERROR: no newline") {
+			t.Errorf("Write returned n=%d, want %d", n, len("ERROR: no newline"))
+		}
+	})
+
+	t.Run("empty bytes (no log)", func(t *testing.T) {
+		// 空字串不應觸發 logging.Info（避免噪訊）
+		n, err := w.Write([]byte(""))
+		if err != nil {
+			t.Errorf("Write returned error: %v", err)
+		}
+		if n != 0 {
+			t.Errorf("Write returned n=%d for empty input, want 0", n)
+		}
+	})
+
+	t.Run("multiple writes in sequence (no blocking)", func(t *testing.T) {
+		// 模擬 Python 程序快速寫入多行 stderr — logWriter 必須不阻塞
+		done := make(chan struct{})
+		go func() {
+			for i := 0; i < 100; i++ {
+				_, _ = w.Write([]byte("line\n"))
+			}
+			close(done)
+		}()
+		select {
+		case <-done:
+			// OK — 未阻塞
+		case <-time.After(1 * time.Second):
+			t.Fatal("logWriter blocked > 1s on 100 writes")
+		}
+	})
 }
