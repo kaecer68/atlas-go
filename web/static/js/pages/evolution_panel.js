@@ -199,7 +199,7 @@ function formatDelta(baseline, candidate) {
 // ====== Cold-Start Empty State ======
 
 function isColdStart(scorecards, sessions, judges, promotes) {
-  return !scorecards.length && !sessions.length && !judges.length && !promotes.length;
+  return [scorecards, sessions, judges, promotes].every(s => !s || !s.length);
 }
 
 function renderColdStartEmpty() {
