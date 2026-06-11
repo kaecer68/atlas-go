@@ -29,7 +29,7 @@ FUBON_API_KEY=your_api_key_here
 FUBON_PERSONAL_ID=your_id_number
 
 # 微服務 URL（可選，預設 localhost:8081）
-FUBON_PROXY_URL=http://localhost:8081
+FUBON_PROXY_URL=http://127.0.0.1:8081
 ```
 
 ### 2. Docker Compose
@@ -75,16 +75,16 @@ python main.py
 
 ```bash
 # 健康檢查
-curl http://localhost:8081/health
+curl http://127.0.0.1:8081/health
 
 # 取得 2330 行情
-curl http://localhost:8081/quote/2330
+curl http://127.0.0.1:8081/quote/2330
 
 # 批量取得
-curl "http://localhost:8081/quotes?symbols=2330,2317,0050"
+curl "http://127.0.0.1:8081/quotes?symbols=2330,2317,0050"
 
 # 市場狀態
-curl http://localhost:8081/market-status
+curl http://127.0.0.1:8081/market-status
 ```
 
 ## 故障排查

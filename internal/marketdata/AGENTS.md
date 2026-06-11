@@ -99,3 +99,11 @@
 **已知限制**：replay data 目前僅包含 0050.TW，其餘 10 檔 ETF 需擴展 replay data 生成範圍後才能校準 NAV。FinMind `TaiwanStockETF` dataset 為長期方案，待付費註冊後實施（見上方迭代計劃）。
 
 **數據源優先級**：富邦證券 → TWSE OpenAPI → Fugle → TEJ → FinMind（遵循 `internal/apigateway/CONSTITUTION.md` 規範）。
+
+## fubonproxy 連線位址（2026-06 IPv4 硬編碼）
+
+`FubonClient` 與 `HybridProvider` 預設使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`。
+
+**原因**：macOS / Linux 在雙棧 (dual-stack) 環境下，Go `net.Dial` 對 `localhost` 預設優先走 IPv6 `[::1]`；fubonproxy 雖已升級為 `host="::"` 雙棧綁定，但若用戶未重啟服務、或在容器內僅綁 IPv4，仍會 `connect: connection refused`。IPv4 `127.0.0.1` 解析無歧義，跨平台行為一致。
+
+**覆寫方式**：環境變數 `FUBON_PROXY_URL` 仍可設定（例：`FUBON_PROXY_URL=http://192.168.1.10:8081`），但若繼續使用 `localhost`，仍會遇到同樣的 IPv6 優先問題。
