@@ -206,14 +206,9 @@ func (m *MetricsCollector) pruneAlertTimestamps(now time.Time) {
 	}
 }
 
-// GetAlertTriggerCountInWindow 取得指定時間窗口內的警報觸發數
-func (m *MetricsCollector) GetAlertTriggerCountInWindow(window time.Duration) int64 {
-	if window <= 0 {
-		return 0
-	}
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	cutoff := time.Now().Add(-window)
+// countTimestampsInWindowLocked counts alertTimestamps at or after cutoff.
+// Caller MUST hold m.mu — sync.RWMutex is non-reentrant.
+func (m *MetricsCollector) countTimestampsInWindowLocked(cutoff time.Time) int64 {
 	count := int64(0)
 	for _, ts := range m.alertTimestamps {
 		if !ts.Before(cutoff) {
@@ -221,6 +216,16 @@ func (m *MetricsCollector) GetAlertTriggerCountInWindow(window time.Duration) in
 		}
 	}
 	return count
+}
+
+// GetAlertTriggerCountInWindow 取得指定時間窗口內的警報觸發數
+func (m *MetricsCollector) GetAlertTriggerCountInWindow(window time.Duration) int64 {
+	if window <= 0 {
+		return 0
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.countTimestampsInWindowLocked(time.Now().Add(-window))
 }
 
 // GetAlertTriggerRate 取得警報觸發率（每小時），window 為時間窗口。
@@ -505,14 +510,10 @@ func (m *MetricsCollector) CheckThresholds(threshold AlertThreshold) []Threshold
 		}
 	}
 
-	// Per-hour rate 計算必須 inlined（已持有 RLock，避免從 GetAlertTriggerRate 內部再次 RLock 死鎖）
-	rateWindowStart := time.Now().Add(-time.Hour)
-	rateCount := int64(0)
-	for _, ts := range m.alertTimestamps {
-		if !ts.Before(rateWindowStart) {
-			rateCount++
-		}
-	}
+	// Per-hour alert count：視窗 = 1h，故 count 即為 per-hour rate，
+	// 與 threshold.MaxAlertTriggerRate 語意一致。複用 countTimestampsInWindowLocked
+	// 以避免與 GetAlertTriggerCountInWindow 重複實作。
+	rateCount := m.countTimestampsInWindowLocked(time.Now().Add(-time.Hour))
 	if rateCount > int64(threshold.MaxAlertTriggerRate) {
 		violations = append(violations, ThresholdViolation{
 			Metric:    "alert_trigger_rate",
