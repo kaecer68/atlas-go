@@ -2,7 +2,8 @@
 //
 // fubonproxy 啟動、監控、重啟 Python FastAPI 微服務，作為 atlas 啟動生命週期的一部分。
 // 當 atlas 以 API/server 模式啟動時，ProcessManager 會自動偵測 fubon-proxy 是否已在運行，
-// 若未運行則啟動並等待健康檢查通過。supervise goroutine 持續監控程序狀態並在崩潰時自動重啟。
+// 若未運行則啟動並非同步等待健康檢查通過（circuit breaker pattern：Start() 立即返回，
+// 健康檢查在背景 goroutine 中進行）。supervise goroutine 持續監控程序狀態並在崩潰時自動重啟。
 //
 // 使用方式：
 //
@@ -56,6 +57,7 @@ type ProcessManager struct {
 	workDir    string
 	pythonBin  string
 	scriptPath string
+	healthURL  string
 
 	mu       sync.Mutex
 	cmd      *exec.Cmd
@@ -79,6 +81,7 @@ func NewManager(workDir string) *ProcessManager {
 		workDir:    workDir,
 		pythonBin:  pythonBin,
 		scriptPath: scriptPath,
+		healthURL:  healthEndpoint,
 	}
 }
 
@@ -103,9 +106,12 @@ func resolvePythonBin() string {
 	return ""
 }
 
-// Start 啟動 fubon-proxy 服務。
+// Start 啟動 fubon-proxy 服務（非同步 — circuit breaker pattern）。
 // 若服務已在運行（健康檢查通過），則跳過啟動。
 // 若 Python 路徑未找到或腳本不存在，記錄警告後回傳錯誤（非致命）。
+//
+// Circuit breaker: Start() 立即返回；健康檢查在背景 goroutine 中進行。
+// 若健康檢查未在 startupTimeout 內通過，僅記錄警告，不視為致命錯誤。
 func (m *ProcessManager) Start(ctx context.Context) error {
 	if m.pythonBin == "" {
 		return fmt.Errorf("fubonproxy: python binary not found")
@@ -122,9 +128,8 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if m.running {
+		m.mu.Unlock()
 		return nil
 	}
 
@@ -143,11 +148,18 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 
 	if err := cmd.Start(); err != nil {
 		cancel()
+		// 關閉 m.done 以避免 Stop() 永久阻塞 (no-supervise edge case)
+		close(m.done)
+		m.ctx = nil
+		m.cancel = nil
+		m.done = nil
+		m.mu.Unlock()
 		return fmt.Errorf("fubonproxy: failed to start process: %w", err)
 	}
 
 	m.cmd = cmd
 	m.running = true
+	m.mu.Unlock()
 
 	logging.Info("fubonproxy", "process_started",
 		"pid", cmd.Process.Pid,
@@ -155,18 +167,18 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 		"script", m.scriptPath,
 	)
 
-	// 等待健康檢查通過
-	if err := m.waitForHealthy(ctx); err != nil {
-		// 健康檢查失敗不等於致命錯誤，程序可能仍在啟動中
-		logging.Warn("fubonproxy", "health_check_timeout",
-			logging.Err(err),
-			"message", "proxy started but health check did not pass within timeout",
-		)
-	} else {
-		logging.Info("fubonproxy", "health_check_passed")
-	}
+	// Circuit breaker: 健康檢查在背景 goroutine 中進行（不阻塞 Start）
+	go func() {
+		if err := m.waitForHealthy(ctx); err != nil {
+			logging.Warn("fubonproxy", "health_check_timeout",
+				logging.Err(err),
+				"message", "proxy started but health check did not pass within timeout",
+			)
+		} else {
+			logging.Info("fubonproxy", "health_check_passed")
+		}
+	}()
 
-	// 啟動 supervisor goroutine
 	go m.supervise()
 
 	return nil
@@ -174,25 +186,29 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 
 // Stop 停止 fubon-proxy 服務。
 // 先發送 SIGINT，等待 5 秒後強制終止。
+//
+// 關鍵不變式：無論 m.running 為何，都會先設定 m.stopping 並取消 context。
+// 這確保即使在 supervise() 的重啟路徑中被呼叫，也能中斷其重啟邏輯，
+// 避免孤兒行程（orphan process）持續在背景執行（F1: Stop/restart race）。
 func (m *ProcessManager) Stop() {
 	m.mu.Lock()
-	if !m.running || m.stopping {
+	if m.stopping {
 		m.mu.Unlock()
 		return
 	}
+	// 必須先設定 m.stopping，supervise() 在重啟路徑看到此旗標才會退出
 	m.stopping = true
+	cancel := m.cancel
+	cmd := m.cmd
+	done := m.done
 	m.mu.Unlock()
 
 	logging.Info("fubonproxy", "stopping")
 
-	// 取消 context 以通知 supervisor 停止重啟
-	if m.cancel != nil {
-		m.cancel()
+	// 無論是否有 cmd 都在第一時間取消 context，迫使 supervise() 的等待返回
+	if cancel != nil {
+		cancel()
 	}
-
-	m.mu.Lock()
-	cmd := m.cmd
-	m.mu.Unlock()
 
 	if cmd != nil && cmd.Process != nil {
 		// 發送 SIGINT 進行優雅關閉
@@ -200,12 +216,8 @@ func (m *ProcessManager) Stop() {
 			logging.Warn("fubonproxy", "sigint_failed", logging.Err(err))
 		}
 
-		// 等待優雅關閉或超時後強制終止
-		done := make(chan error, 1)
-		go func() {
-			done <- cmd.Wait()
-		}()
-
+		// 等待 supervise() 結束（會在 cmd 退出後 close m.done）
+		// 加上 graceful shutdown timeout 作為安全網
 		select {
 		case <-done:
 			logging.Info("fubonproxy", "stopped_gracefully")
@@ -215,27 +227,27 @@ func (m *ProcessManager) Stop() {
 				logging.Warn("fubonproxy", "kill_failed", logging.Err(err))
 			}
 		}
-	}
-
-	// 等待 supervisor goroutine 結束
-	if m.done != nil {
-		<-m.done
+	} else if done != nil {
+		// 沒有 cmd 但 supervise() 可能正在重啟路徑中等 ctx — 等待它退出
+		<-done
 	}
 
 	m.mu.Lock()
 	m.running = false
 	m.stopping = false
 	m.cmd = nil
+	m.cancel = nil
+	m.done = nil
 	m.mu.Unlock()
 
 	logging.Info("fubonproxy", "stopped")
 }
 
 // IsHealthy 檢查 fubon-proxy 是否健康運行。
-// 向 http://localhost:8081/health 發送 GET 請求，期望 HTTP 200。
+// 向 m.healthURL 發送 GET 請求，期望 HTTP 200。
 func (m *ProcessManager) IsHealthy() bool {
 	client := &http.Client{Timeout: healthCheckTimeout}
-	resp, err := client.Get(healthEndpoint)
+	resp, err := client.Get(m.healthURL)
 	if err != nil {
 		return false
 	}
@@ -243,9 +255,13 @@ func (m *ProcessManager) IsHealthy() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// waitForHealthy 輪詢健康檢查直到通過或超時。
+// waitForHealthy 輪詢健康檢查直到通過、超時、或 ctx 取消。
+// 採用 ctx.Deadline() 與 startupTimeout 中較早者作為實際截止時間（F5）。
 func (m *ProcessManager) waitForHealthy(ctx context.Context) error {
 	deadline := time.Now().Add(startupTimeout)
+	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
+		deadline = dl
+	}
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
@@ -256,12 +272,19 @@ func (m *ProcessManager) waitForHealthy(ctx context.Context) error {
 		if m.IsHealthy() {
 			return nil
 		}
-		time.Sleep(healthCheckInterval)
+
+		// 使用 select 包裝 sleep，讓 ctx 取消能立即被感知（不需等滿 healthCheckInterval）
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(healthCheckInterval):
+		}
 	}
 	return fmt.Errorf("fubon-proxy health check did not pass within %v", startupTimeout)
 }
 
 // supervise 在背景 goroutine 中監控程序健康狀態，崩潰時自動重啟。
+// 採用 lock-check-unlock-work-lock 模式，避免 panic 導致 mutex 永久鎖定（F7）。
 func (m *ProcessManager) supervise() {
 	defer close(m.done)
 
@@ -301,27 +324,35 @@ func (m *ProcessManager) supervise() {
 			return
 		}
 
-		// 嘗試重啟
+		// 嘗試重啟 — 先在鎖內檢查 stopping 並 snapshot ctx（F6：在鎖內讀 m.ctx）
 		m.mu.Lock()
 		if m.stopping {
 			m.mu.Unlock()
 			return
 		}
+		ctx := m.ctx
+		m.mu.Unlock()
 
-		newCmd := exec.CommandContext(m.ctx, m.pythonBin, m.scriptPath)
+		// 在鎖外建構與啟動程序 — 若 exec.Cmd.Start() panic 不會卡死 mutex（F7）
+		newCmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
 		newCmd.Dir = filepath.Dir(m.scriptPath)
 		newCmd.Env = os.Environ()
 		newCmd.Stdout = &logWriter{component: "fubonproxy.stdout"}
 		newCmd.Stderr = &logWriter{component: "fubonproxy.stderr"}
 
 		if startErr := newCmd.Start(); startErr != nil {
-			m.mu.Unlock()
 			logging.Error("fubonproxy", "restart_failed", logging.Err(startErr))
-			// 增加 backoff
 			backoff = restartBackoffDelay
 			continue
 		}
 
+		// 啟動成功 — 在鎖內更新狀態；若同時被要求停止，立即終止新程序（F1）
+		m.mu.Lock()
+		if m.stopping {
+			m.mu.Unlock()
+			_ = newCmd.Process.Kill()
+			return
+		}
 		m.cmd = newCmd
 		m.running = true
 		m.mu.Unlock()
@@ -331,15 +362,16 @@ func (m *ProcessManager) supervise() {
 			"backoff", backoff.String(),
 		)
 
-		// 重啟後等待健康檢查
-		if healthErr := m.waitForHealthy(m.ctx); healthErr != nil {
+		// 同步等待健康檢查 — 阻塞此 goroutine 安全（supervise 本身在背景 goroutine）
+		// 同步等待確保 backoff 僅在健康通過時重置（F2）
+		// 不再 fire-and-forget 產生 goroutine，避免快速重啟下的堆積（F4）
+		if healthErr := m.waitForHealthy(ctx); healthErr != nil {
 			logging.Warn("fubonproxy", "restart_health_check_failed", logging.Err(healthErr))
+			// 失敗時保留較長 backoff，不重置
 		} else {
 			logging.Info("fubonproxy", "restart_health_check_passed")
+			backoff = restartInitialDelay
 		}
-
-		// 重啟成功後重設 backoff 為初始值
-		backoff = restartInitialDelay
 	}
 }
 
