@@ -78,7 +78,7 @@ func resolveSymbolName(symbol string) string {
 
 // Handlers provides HTTP handlers for the decision-chain aggregation API.
 type Handlers struct {
-	NarrativeEng     *narrative.NarrativeEngine
+	NarrativeEng *narrative.NarrativeEngine
 
 	IndustrySvc      *service.IndustryService
 	PipelineSvc      *service.PipelineService

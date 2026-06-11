@@ -93,7 +93,7 @@ type LayerCount struct {
 	Count int    `json:"count"`
 }
 
-// LayersResponse summarises how many strategies live in each of the 5 layers.
+// LayersResponse summarizes how many strategies live in each of the 5 layers.
 type LayersResponse struct {
 	Layers []LayerCount `json:"layers"`
 	Total  int          `json:"total"`
@@ -216,7 +216,7 @@ func (h *Handlers) validateStrategy(r *http.Request) (int, any) {
 		newStatus = strategy_techniques.StatusActive
 		message = "strategy reactivated"
 	default:
-		newStatus = strategy_techniques.Status(f.Status)
+		newStatus = f.Status
 		message = "strategy stable"
 	}
 	return http.StatusOK, ValidateResponse{

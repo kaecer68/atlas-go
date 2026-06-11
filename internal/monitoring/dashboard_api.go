@@ -25,7 +25,6 @@ import (
 	apicrossmarket "github.com/kaecer68/atlas-go/internal/monitoring/api/crossmarket"
 	apidashboard "github.com/kaecer68/atlas-go/internal/monitoring/api/dashboard"
 	apidecision "github.com/kaecer68/atlas-go/internal/monitoring/api/decision"
-
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
@@ -806,6 +805,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	a.RegisterPerformanceRoutes(mux)
 	a.RegisterCircuitBreakerRoutes(mux)
 }
+
 func (a *DashboardAPI) SetStrategiesHandlers(h *apistrategies.Handlers) {
 	a.strategyTechniquesHandlers = h
 }

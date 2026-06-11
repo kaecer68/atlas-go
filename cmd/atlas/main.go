@@ -38,7 +38,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
-
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -292,7 +291,6 @@ func run(args []string, deps appDeps) error {
 				"maturity", string(maturityTracker.Current()),
 				"days_since_start", maturityTracker.DaysSinceStart())
 		}
-
 
 		var lifecycleMgr *storage.LifecycleManager
 
@@ -1508,8 +1506,6 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[RiskGate] restored RSI-tw calibration score: %.4f", params.RSITw.LastCalibratedScore.Value)
 			}
 
-
-
 			stSeedsPath = filepath.Join(cfg.WorkDir, "data/seeds/strategy_techniques.json")
 			if stReg, err := strategy_techniques.LoadFromFile(stSeedsPath); err == nil {
 				stRegistry = stReg
@@ -1519,7 +1515,6 @@ func run(args []string, deps appDeps) error {
 			} else {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
 			}
-
 
 			if dashEventBus != nil {
 				dashEventBus.Subscribe(eventbus.EventSimulationComplete, func(ctx context.Context, ev eventbus.BusEvent) error {
@@ -1552,8 +1547,6 @@ func run(args []string, deps appDeps) error {
 				})
 				log.Printf("[Monitor] subscribed to regime/sharpe/drawdown events")
 			}
-
-
 
 			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
 			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
@@ -2400,4 +2393,3 @@ func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) 
 	}
 	return all, nil
 }
-
