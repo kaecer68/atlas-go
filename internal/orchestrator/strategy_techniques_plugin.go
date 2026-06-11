@@ -145,6 +145,8 @@ func (p *strategyTechniquesPlugin) PostSimulation(_ []domain.Quote, _ domain.Reg
 		logging.Warn("strategy_techniques plugin PostSimulation called with nil registry; ts=%s", ts.Format(time.RFC3339))
 		return
 	}
-	logging.Info("strategy_techniques plugin PostSimulation ts=%s active_strategies=%d evt_buf=%d",
-		ts.Format(time.RFC3339), p.registry.Count(), bufSize)
+	logging.With("strategy_techniques_plugin").Info("PostSimulation",
+		"ts", ts.Format(time.RFC3339),
+		"active_strategies", p.registry.Count(),
+		"evt_buf", bufSize)
 }
