@@ -2,7 +2,7 @@
 //
 // Registry loads StrategyFrame seeds from a JSON file and provides
 // lookup helpers. The JSON schema is the single source of truth for
-// the 9 seed rules (6 existing eventlogic seeds migrated to the new
+// the 12 production seed rules (9 L1-L5 originals + 3 L4 extensions)
 // format, plus 3 L5 geopolitical seeds). New seeds can be added by
 // editing data/seeds/strategy_techniques.json without recompiling.
 //

@@ -30,7 +30,7 @@
 | 8 | `data/state/experiments*` | 實驗記錄 | S/E/U | experiments.jsonl + 實驗目錄 + 突變提案 |
 | 9 | `data/state/human_interventions*` | 人工干預 | S | 稽核軌跡，放行/否決/補追 |
 | 10 | `data/state/swarm*` | Swarm 模擬 | E | MiroFish 結果與訓練記錄 |
-| 11 | `data/state/traces/`, `eventlogic/` | 追蹤與事件 | U/X | 決策鏈追蹤 + 事件邏輯狀態 |
+| 11 | `data/state/traces/`, `strategy_techniques/` | 追蹤與心法 | U/S | 決策鏈追蹤 + 投資心法狀態 |
 | 12 | `data/state/windows/` | 回測視窗 | X | Window.Run() 輸出 |
 | 13 | `data/state/ml_models/` | ML 模型 | X | 序列化權重檔案 |
 | 14 | `data/state/*_state.json`, `metrics*` | 系統狀態 | U/E | 模擬/元學習/指標/告警狀態 |

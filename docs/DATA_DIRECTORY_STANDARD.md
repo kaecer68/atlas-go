@@ -60,7 +60,7 @@ data/
 │   ├── darwinian/           # Darwinian 權重管理
 │   │   ├── darwinian_weights.json
 │   │   └── darwinian_history.jsonl
-│   ├── eventlogic/          # 事件邏輯狀態
+│   	├── strategy_techniques/  # 投資心法狀態
 │   ├── experiments/         # 實驗記錄
 │   ├── export/              # 匯出資料
 │   ├── finmind/             # FinMind 資料快取

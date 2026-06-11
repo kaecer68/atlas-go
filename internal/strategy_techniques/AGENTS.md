@@ -44,10 +44,10 @@
 ## 已知陷阱
 
 - **演進中**：Wave 1 期間 API 可能調整，Wave 2 接入主程式後升 stable。
-- **S-tier 替代品**：完成 Wave 5 清理（刪除 `internal/eventlogic/`）後，本模組需升 S-tier。
+- **S-tier**：5-wave 遷移後已穩定生產（Wave 6 補 3 L4 + LLM 歸因後）
 
 ## 相依關係
 
 - 將被 `cmd/atlas/main.go` 匯入（Wave 2）
-- 取代 `internal/eventlogic/`（Wave 5 清理後）
+- 取代歷史 `internal/eventlogic/`（Wave 5 清理完成）
 - 與 `internal/narrative/`、`internal/portfolio/`、`internal/monitoring/` 互動

@@ -7,7 +7,8 @@ import (
 
 // Condition 描述心法的觸發條件。一個 StrategyFrame 可有多個 Condition（AND 運算）。
 //
-// 擴充自舊 eventlogic.Condition：新增 Timeframe（多時間尺度）與 Source（數據追溯）。
+// 觸發條件的單一原子表達。新增 Timeframe（多時間尺度）與 Source（數據追溯）以支援
+// L1~L5 不同時間維度的策略組合。
 // Operator 支援：eq, neq, gt, lt, gte, lte, cross_above, cross_below。
 type Condition struct {
 	Field       string  `json:"field"`        // 例如 "DXY", "ForeignInvestorNet", "TSMADR.ChangePct"
