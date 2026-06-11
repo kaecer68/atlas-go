@@ -1,12 +1,11 @@
 ---
 name: atlas-strategy-techniques
-description: "Use when working with the 5-layer investment techniques library (L1-L5), StrategyFrame design, or 9 production seeds. Triggers: new strategy techniques, layer classification, hit rate tracking, attribution, eventlogic migration."
+description: "Use when working with the 5-layer investment techniques library (L1-L5), StrategyFrame design, or 12 production seeds. Triggers: new strategy techniques, layer classification, hit rate tracking, attribution, LLM annotation."
 ---
 
-> **實作狀態**：✅ 已實作（`internal/strategy_techniques/` 模組，成熟度 `evolving`）
+> **實作狀態**：✅ 已實作（`internal/strategy_techniques/` 模組，成熟度 `stable`）
 > **最後審計**：2026-06-11
-> **取代關係**：取代 `internal/eventlogic/`（已標 410 Gone，待 Wave 5 cleanup 刪除）
-> **生產種子**：9 條（6 條遷移 + 3 條 L5 新增），載入自 `data/seeds/strategy_techniques.json`
+> **生產種子**：12 條（9 L1-L5 + 3 L4 衍生），載入自 `data/seeds/strategy_techniques.json`
 
 ## 描述
 
@@ -20,7 +19,7 @@ description: "Use when working with the 5-layer investment techniques library (L
 - 調整心法條件（CROSS_ABOVE/BELOW、Timeframe）
 - 追蹤心法命中率（HitRate）
 - 處理心法失效歸因（Attribution）
-- 與 eventlogic 模組做 migration 對照
+- 接入 LLM 歸因路徑（Wave 6 via `internal/llm_annotator`）
 
 ## 核心概念
 
@@ -99,7 +98,7 @@ type Condition struct {
 - `SOXIndex.ChangePct`、`Bdi.ChangePct`
 - `Gold.ChangePct`、`Oil.ChangePct`、`JPY.ChangePct`
 
-### 5. 9 條 Production Seeds
+### 5. 12 條 Production Seeds
 
 | ID | Layer | 條件 | 用途 |
 |----|-------|------|------|
@@ -112,31 +111,34 @@ type Condition struct {
 | `taiwan-strait-tension` | L5 | DXY>106 AND VIX>25 (1D) | 台海緊張（LLM 加註）|
 | `china-slowdown-export-pressure` | L5 | SPX<-1 (5D) AND DXY>104 (5D) | 中國經濟放緩傳導 |
 | `us-tariff-shock-tech` | L5 | SPX<-2 AND VIX>30 (1D) | 美國關稅衝擊科技股 |
+| `margin-balance-extreme` | L4 | RetailMarginBalance>3500 (3D) | 融資餘額過熱反轉（Wave 6）|
+| `dealer-domestic-support` | L4 | DomesticFundNet>30 + DealerNet>20 + ForeignInvestorNet<-50 (1D) | 土洋對作護盤（Wave 6）|
+| `cb-fx-intervention-warning` | L4 | USD_TWD>32.5 + ChangePct>0.5 (1D) | 央行匯市干預預警（Wave 6）|
 
 ### 6. 自我修正機制（混合歸因）
 
 - **規則化打底**：8 種歸因類型 — regime shift / 政策衝擊 / 結構斷裂 / 數據異常 / 季節性 / 流動性 / 板塊輪動 / 未知
-- **LLM 加註**：Wave 4 接入，自然語言解釋失效原因
+- **LLM 加註**：Wave 6 接入（Kimi/Moonshot API），自然語言解釋失效原因
 - **Regime 標籤**：依 `JANUS` RegimeClassification（NOVEL/HISTORICAL/MIXED）做命中率分桶
 - **多時間尺度驗證**：5D/20D/60D rolling HitRate
 
 ## 擴展性設計
 
 - **熱加載**：JSON 外部化（`data/seeds/strategy_techniques.json`），不需重編譯即可新增心法
-- **向後相容**：新代碼優先用 strategy_techniques，舊 eventlogic 路由（已 410 Gone）保留 migration window
 - **新 Layer**：Layer 為 string enum，未來可加 L6（市場結構）/ L7（散戶情緒）
 - **新指標**：在 `marketdata/macro_provider.go` 加欄位 → Condition 自然支援
 
-## 與 eventlogic 取代關係
+## 設計演進（取代舊 eventlogic 模組）
 
-| 事件邏輯（舊） | 投資心法（新） |
-|--------------|--------------|
-| `EventRule{ID, Pattern, Conditions, ...}` | `StrategyFrame{ID, Name, Layer, Rationale, ...}` |
-| 6 條 seed | 9 條 seed（6 遷移 + 3 L5 新增）|
-| 單一 `eventlogic` enum | 6 個 enum（Layer/Status/Direction/Risk/Source/AttributionMode）|
-| `corector.Evaluate` | 混合歸因（rule_based + llm_annotated）|
-| 無 4 指標整合 | 4 核心指標整合心法（nvidia-tsmadr-confirm）|
-| `/api/eventlogic/rules` | `/api/strategies`（已 410 Gone 舊路徑）|
+| 維度 | 設計選擇 | 理由 |
+|------|---------|------|
+| **核心類型** | `StrategyFrame{ID, Name, Layer, Rationale, ...}` | 從「事件→價格」模型升級為「投資心法」模型 |
+| **分類骨架** | 5 層框架（L1~L5）| 對應 5 種因果層（流動性/外資/產業/籌碼/地緣）|
+| **Enum 設計** | 6 個 enum（Layer/Status/Direction/Risk/Source/AttributionMode）| 從單一 enum 拆解，語意更精準 |
+| **歸因** | 混合歸因（rule_based + llm_annotated）| 規則化打底 + LLM 加註（Wave 6 KimiClient）|
+| **指標整合** | 4 核心短線指標 + Condition.dot notation | 對短線 1~3 日台股方向高勝率 |
+| **API 路徑** | `/api/strategies/*` | 唯一對外路徑；舊 `/api/eventlogic/*` 已於 Wave 5 完全刪除 |
+| **種子規模** | 12 條（9 L1-L5 + 3 L4 衍生）| Wave 6 補 3 條 L4 衍生：margin-balance-extreme、dealer-domestic-support、cb-fx-intervention-warning |
 
 ## 實作位置
 
@@ -144,8 +146,8 @@ type Condition struct {
 |------|------|------|
 | 套件核心 | `internal/strategy_techniques/doc.go`、`enums.go`、`frame.go`、`condition.go` | ✅ 已實作 |
 | 註冊表 | `internal/strategy_techniques/registry.go` | ✅ 已實作 |
-| 測試 | `internal/strategy_techniques/*_test.go` | ✅ 29 tests PASS |
-| 種子資料 | `data/seeds/strategy_techniques.json` | ✅ 9 frames |
+| 測試 | `internal/strategy_techniques/*_test.go` | ✅ 7 tests PASS |
+| 種子資料 | `data/seeds/strategy_techniques.json` | ✅ 12 frames |
 | API 端點 | `internal/monitoring/api/strategies/handlers.go` | ✅ 7 routes |
 | 前端 | `web/static/js/pages/strategies.js` | ✅ 5 層 tabs + 4 指標 strip |
 | 整合 | `cmd/atlas/main.go` | ✅ WithStrategyTechniques registered |
@@ -161,8 +163,9 @@ type Condition struct {
 ## 驗證要求
 
 ```bash
-go test ./internal/strategy_techniques/...          # 29 tests
+go test ./internal/strategy_techniques/...          # 7 tests (含 12 seeds 載入)
 go test ./internal/monitoring/api/strategies/...    # 22 tests
+go test ./internal/llm_annotator/...                # 11 tests (KimiClient + Mock)
 go build ./...                                       # 0 errors
 gofmt -l .                                           # 0 dirty
 staticcheck ./...                                    # 0 issues
@@ -173,10 +176,9 @@ esbuild build                                        # 0 errors
 
 | 陷阱 | 說明 |
 |------|------|
-| **L4 種子為零** | 9 條 seeds 中 L4 僅 1 條（usd-twd-32），L4 心法庫稀疏，待擴充 |
+| **L4 種子擴充至 4 條** | Wave 6 補 3 條 L4 (margin-balance-extreme + dealer-domestic-support + cb-fx-intervention-warning)，仍可擴充 |
 | **ConsecutiveDays 缺失** | `ForeignInvestorNet.ConsecutiveDays` 欄位不存在於 MacroDataSnapshot，須從歷史或 eventbus 累積 |
-| **eventlogic 並未刪除** | Wave 5 cleanup 才正式刪除 `internal/eventlogic/`，目前雙軌制（eventlogic 路由 410 Gone，但 package 仍 import）|
-| **StrategyTechniquesPlugin 簡化版** | `PostSimulation` 為 no-op 簡化版，完整 detector + corrector 待 Wave 4 補 |
+| **StrategyTechniquesPlugin 簡化版** | `PostSimulation` 為 no-op 簡化版，完整 detector + corrector 待未來補 |
 
 ## 設計原則
 
@@ -184,7 +186,7 @@ esbuild build                                        # 0 errors
 2. **5 層為骨架**：所有心法歸屬 L1~L5 之一，可疊加跨層
 3. **自我修正強化**：歸因欄位（失效原因）+ Regime 標籤 + 多時間尺度 rolling
 4. **熱擴充**：規則 JSON 化，存於 `data/seeds/strategy_techniques.json`
-5. **向後相容**：保留 `/api/eventlogic/*` 410 Gone，新路徑 `/api/strategies/*` 並行
+5. **API 整合**：`/api/strategies/*` 為唯一對外路徑，與 decision-chain 共享 `core_indicators` block
 
 ---
 

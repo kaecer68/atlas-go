@@ -244,21 +244,20 @@ Read relevant internal/<module>/AGENTS.md for module-specific traps
 4. **9 條 production seeds 不破壞**：新增/修改的代碼須確保既有 `data/seeds/strategy_techniques.json` 仍可載入
 5. **自我修正路徑保留**：修改 `Validate` 或 `AttributionMode` 邏輯時，須保留 `rule_based` + `llm_annotated` 雙路徑
 
-## Code Removal Checklist 增補：刪除 eventlogic/ 模組時
+## Code Removal Checklist 增補：刪除 S-tier 模組時
 
-當執行 Wave 5 cleanup（刪除 `internal/eventlogic/`）時：
+當執行大規模模組清理（如未來刪除 `internal/strategy_techniques/` 等已退役 S-tier）時：
 
 ```
-□ gitnexus_impact({target: "eventlogic", direction: "upstream"}) — 確認 0 呼叫者
-□ grep -r "internal/eventlogic" --include="*.go" . — 確認僅剩 410 Gone handler
-□ grep -r "EventRule\b" --include="*.go" . — 確認無殘留
-□ 確認 cmd/atlas/main.go 的 `apipipeline` import 不依賴 eventlogic
-□ 確認 internal/portfolio/weight_engine.go 的 regime 標籤使用 strategy_techniques
-□ 確認 internal/monitoring/dashboard_api.go 移除 eventLogicHandlers 欄位
-□ 更新 internal/MATURITY.md（eventlogic S-tier 改 strategy_techniques S-tier）
-□ 更新 internal/AGENTS.md（移除 eventlogic 路由、保留 strategy_techniques）
+□ gitnexus_impact({target: "<module>", direction: "upstream"}) — 確認 0 呼叫者
+□ grep -r "internal/<module>" --include="*.go" . — 確認僅剩 410 Gone handler
+□ grep -r "<core-type>\b" --include="*.go" . — 確認無殘留
+□ 確認 cmd/atlas/main.go 的相關 import 不依賴
+□ 確認 internal/monitoring/dashboard_api.go 移除 handlers 欄位
+□ 更新 internal/MATURITY.md（刪除 S-tier 條目）
+□ 更新 internal/AGENTS.md（移除路由、保留替代品）
 □ 跑 `go test ./...` 確認無破壞
 □ 跑 `staticcheck ./...` 確認 0 issues
 ```
 
-**詳見**：`atlas-strategy-techniques` skill 的「與 eventlogic 取代關係」
+**歷史範例**：Wave 5 清理中刪除 `internal/eventlogic/` 的 7 步流程（已記錄於 git log）

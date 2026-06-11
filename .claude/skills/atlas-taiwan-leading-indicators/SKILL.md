@@ -169,7 +169,7 @@ const coreIndicators = {
 ```bash
 go test ./internal/marketdata/...                   # Provider 測試
 go test ./internal/strategy_techniques/...         # 心法命中測試
-go test ./internal/eventlogic/... -run TestEval     # 4 指標在 NumericFields 中
+go test ./internal/strategy_techniques/... -run TestEval     # 4 指標在 NumericFields 中
 ```
 
 ## 設計原則

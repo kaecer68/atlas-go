@@ -268,7 +268,7 @@
 | 4 | `branch_protection/` | 分支保護快照 | 4 |
 | 5 | `capital_flow/` | 資金流向（每日） | 82 |
 | 6 | `constraint_mutations/` | 限制條件突變 | 1 YAML |
-| 7 | `eventlogic/` | 事件邏輯狀態 | 2 |
+| 7 | `strategy_techniques/` | 投資心法狀態 | 12 |
 | 8 | `experiments/` | 實驗記錄 + archive | 183 |
 | 9 | `export/` | 匯出資料 | 3 |
 | 10 | `finmind/` | FinMind API 快取 | 1 |

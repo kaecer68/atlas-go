@@ -145,7 +145,7 @@ P0.1 審計發現：
 |------|------|------|
 | ml_models/ | `data/state/ml_models/` | ML 模型，實驗階段 |
 | geopolitical/ | `data/state/geopolitical/` | 地緣政治數據，使用範圍有限 |
-| eventlogic/ | `data/state/eventlogic/` | 事件邏輯狀態，仍在實驗 |
+| strategy_techniques/ | `data/state/strategy_techniques/` | 投資心法狀態，已穩定生產 |
 | tsmc_revenue/ | `data/state/tsmc_revenue/` | 台積電營收分析，使用範圍有限 |
 | windows/ | `data/state/windows/` | 回測視窗，實驗性質 |
 

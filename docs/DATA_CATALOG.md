@@ -206,14 +206,14 @@
 | **消費者** | `internal/narrative/`（宏觀敘事因果鏈） |
 | **描述** | 地緣政治事件數據，驅動 geopolitical_risk 敘事 |
 
-### eventlogic `data/state/eventlogic/`
+### strategy_techniques `data/state/strategy_techniques/`
 
 | 欄位 | 值 |
 |------|-----|
-| **類型** | Directory（2 個檔案） |
-| **生產者** | `internal/eventlogic/` |
-| **消費者** | `internal/eventbus/`（事件匯流排） |
-| **描述** | 事件邏輯處理狀態，仍在實驗中 |
+| **類型** | Directory（12 個 strategy frames） |
+| **生產者** | `internal/strategy_techniques/` |
+| **消費者** | `internal/orchestrator/`（plugin）+ `internal/monitoring/api/strategies/`（handler） |
+| **描述** | 5 層框架投資心法庫，9 條 production seeds + 3 L4，已穩定生產 |
 
 ### tsmc_revenue `data/state/tsmc_revenue/`
 

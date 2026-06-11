@@ -7,7 +7,7 @@ import (
 )
 
 // StrategyFrame 是投資心法庫的核心資料結構，對應到 dashboard / decision-chain
-// / portfolio 設定檔之間的傳輸格式。取代舊 internal/eventlogic.EventRule。
+// / portfolio 設定檔之間的傳輸格式。內含 6 個 enum（Layer/Status/Direction/Risk/Source/AttributionMode）。
 //
 // 5 層框架：Layer (L1~L5)
 // 自我修正：Attribution[] + AttributionMode (rule_based | llm_annotated)
