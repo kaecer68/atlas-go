@@ -2,11 +2,11 @@ package orchestrator
 
 import (
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/spawning"
+	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
@@ -76,18 +76,36 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 	return s
 }
 
-func (s *System) WithEventLogic(
-	detector *eventlogic.PatternDetector,
-	corrector *eventlogic.SelfCorrector,
-	saveRulesPath string,
-	historyRecorder *eventlogic.HistoryRecorder,
+// WithStrategyTechniques wires the new 5-layer strategy techniques library
+// into the plugin host. This is the StrategyFrame-based replacement for the
+// legacy eventlogic plugin.
+//
+// Framework:
+//   - L1 Global Liquidity, L2 Foreign Capital Behavior, L3 Industry Catalysts,
+//     L4 FX & Chips, L5 Geopolitics
+//   - 4 core leading indicators: ForeignInvestorNet, TSMADR, NVDA, DXY
+//   - Hybrid self-correction: rule-based attribution + LLM annotation
+//     (LLM path is filled in by Wave 4; this scaffold is event-loop safe)
+//
+// Migration: this is the new code path. Existing eventlogicPlugin remains
+// wired only for backward compatibility during the migration window
+// (eventlogic is retired in Wave 5 cleanup after the production seeds
+// migrate and the eventbus references move).
+//
+// Parameter savePath is the on-disk location for the 9 production seeds
+// (data/seeds/strategy_techniques.json). It is read once at boot via
+// strategy_techniques.LoadFromFile; live writes are queued but flushed by
+// the registry's own background task, not by this plugin.
+func (s *System) WithStrategyTechniques(
+	registry *strategy_techniques.Registry,
+	savePath string,
 ) *System {
 	if s.host == nil {
 		s.host = &PluginHost{}
 	}
-	s.host.Register(&eventlogicPlugin{
-		detector: detector, corrector: corrector,
-		saveRulesPath: saveRulesPath, historyRecorder: historyRecorder,
+	s.host.Register(&strategyTechniquesPlugin{
+		registry: registry,
+		savePath: savePath,
 	}, s.SystemCore)
 	return s
 }

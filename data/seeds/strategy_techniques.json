@@ -1,0 +1,421 @@
+[
+  {
+    "id": "dxy-weak-us10y-down",
+    "name": "美元轉弱 + 美債降 → 資金回流亞洲",
+    "layer": "L1",
+    "summary": "DXY 跌破 105 + 美 10Y 跌破 4.5% → 新台幣升值壓力 + 科技股估值擴張",
+    "rationale": "美元流動性寬鬆 → 資金從美國流出 → 亞洲資產重估。新台幣升值吸引外資匯入買超。歷史上 DXY < 105 期間，外資對台股 3 個月買超機率約 68%。",
+    "conditions": [
+      {
+        "field": "DXY",
+        "operator": "lt",
+        "value": 105,
+        "string_value": "",
+        "timeframe": "3D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "US10Y",
+        "operator": "lt",
+        "value": 4.5,
+        "string_value": "",
+        "timeframe": "5D",
+        "source": "us_yahoo"
+      }
+    ],
+    "themes": [
+      "DXY_weakening",
+      "US_rate_down"
+    ],
+    "regimes": [
+      "BULL",
+      "NEUTRAL"
+    ],
+    "sectors": [
+      "半導體",
+      "電子",
+      "出口股"
+    ],
+    "direction": "up",
+    "risk": "medium",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.68,
+    "total_tests": 50,
+    "total_hits": 34
+  },
+  {
+    "id": "foreign-3day-inflow",
+    "name": "外資連 3 日買超 → 短線偏多",
+    "layer": "L2",
+    "summary": "外資現貨連續 3 日淨買超 → 短中期趨勢確立",
+    "rationale": "外資資金是台股邊際定價者，連續 3 日同向操作通常代表中期決策。統計 2018-2025 年，外資連 3 買後 5 日加權指數上漲機率 71%。",
+    "conditions": [
+      {
+        "field": "ForeignInvestorNet",
+        "operator": "gt",
+        "value": 0,
+        "string_value": "",
+        "timeframe": "3D",
+        "source": "twse_capital_flow"
+      }
+    ],
+    "themes": [
+      "foreign_inflow_sustained"
+    ],
+    "regimes": [
+      "BULL",
+      "NEUTRAL",
+      "BEAR"
+    ],
+    "sectors": [
+      "加權指數",
+      "權值股"
+    ],
+    "direction": "up",
+    "risk": "low",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.71,
+    "total_tests": 200,
+    "total_hits": 142
+  },
+  {
+    "id": "nvidia-tsmadr-confirm",
+    "name": "輝達 + 台積電 ADR 同步轉強 → AI 供應鏈",
+    "layer": "L3",
+    "summary": "NVDA 漲幅 > 0.5% + TSM ADR 漲幅 > 0.3%（同日）→ 台股 AI 供應鏈領漲",
+    "rationale": "輝達是 AI 鏈終端需求代表，台積電 ADR 反映台股開盤前夜盤情緒。兩者同步轉強時，台股 AI 供應鏈當日上漲機率 75%。",
+    "conditions": [
+      {
+        "field": "NVDA",
+        "operator": "gt",
+        "value": 0.5,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_nvda"
+      },
+      {
+        "field": "TSMADR",
+        "operator": "gt",
+        "value": 0.3,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "tsm_adr"
+      }
+    ],
+    "themes": [
+      "AI_capex_surge",
+      "AI_chain_lead"
+    ],
+    "regimes": [
+      "BULL"
+    ],
+    "sectors": [
+      "半導體",
+      "AI 供應鏈",
+      "散熱",
+      "PCB",
+      "電源"
+    ],
+    "direction": "up",
+    "risk": "low",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.75,
+    "total_tests": 120,
+    "total_hits": 90
+  },
+  {
+    "id": "us-market-overnight-confirm",
+    "name": "美股四大指數同步收紅 → 台股開盤偏多",
+    "layer": "L3",
+    "summary": "S&P 500 + NASDAQ + SOX + DJI 同步收紅（前日）→ 台股隔日開盤偏多",
+    "rationale": "費半指數與台積電 ADR 是台股夜盤指引。當美股四大指數同步收紅，台股次日開盤上漲機率約 65%，且電子股表現優於大盤。",
+    "conditions": [
+      {
+        "field": "SPX",
+        "operator": "gt",
+        "value": 0,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "NDX",
+        "operator": "gt",
+        "value": 0,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "SOX",
+        "operator": "gt",
+        "value": 0,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "DJI",
+        "operator": "gt",
+        "value": 0,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      }
+    ],
+    "themes": [
+      "us_market_positive"
+    ],
+    "regimes": [
+      "BULL",
+      "NEUTRAL"
+    ],
+    "sectors": [
+      "電子",
+      "科技股"
+    ],
+    "direction": "up",
+    "risk": "low",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.65,
+    "total_tests": 250,
+    "total_hits": 163
+  },
+  {
+    "id": "usd-twd-32-managed-float",
+    "name": "USD_TWD 突破 32 → 外資警戒 + 出口股受惠",
+    "layer": "L4",
+    "summary": "USD_TWD 連續 3 日 > 32 → 外資減持壓力 + 出口股成本競爭力下滑",
+    "rationale": "央行管理浮動匯率制下，32 是市場心理關卡。突破後外資傾向降倉，內需/防禦股表現優於出口股。",
+    "conditions": [
+      {
+        "field": "USD_TWD",
+        "operator": "gt",
+        "value": 32,
+        "string_value": "",
+        "timeframe": "3D",
+        "source": "fugle"
+      }
+    ],
+    "themes": [
+      "USD_TWD_volatility"
+    ],
+    "regimes": [
+      "BEAR",
+      "HIGH_VOL"
+    ],
+    "sectors": [
+      "內需",
+      "高股息",
+      "防禦性資產"
+    ],
+    "direction": "down",
+    "risk": "high",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.62,
+    "total_tests": 80,
+    "total_hits": 50
+  },
+  {
+    "id": "sox-foreignflow-semiconductor",
+    "name": "費半轉強 + 外資當日買超 → 半導體族群",
+    "layer": "L2",
+    "summary": "SOX 漲幅 > 0.5% + 當日外資淨買超 → 半導體族群當日偏多",
+    "rationale": "費半指數反映半導體景氣，與台股半導體高度相關。當費半轉強且外資當日買超，確認半導體族群資金流入。",
+    "conditions": [
+      {
+        "field": "SOX",
+        "operator": "gt",
+        "value": 0.5,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "ForeignInvestorNet",
+        "operator": "gt",
+        "value": 0,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "twse_capital_flow"
+      }
+    ],
+    "themes": [
+      "foreign_inflow_sustained",
+      "us_market_positive"
+    ],
+    "regimes": [
+      "BULL",
+      "NEUTRAL"
+    ],
+    "sectors": [
+      "半導體",
+      "電子"
+    ],
+    "direction": "up",
+    "risk": "low",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.73,
+    "total_tests": 180,
+    "total_hits": 131
+  },
+  {
+    "id": "taiwan-strait-tension",
+    "name": "台海緊張升級 → 防禦性資產 + 波動率飆升",
+    "layer": "L5",
+    "summary": "地緣政治風險升級（軍演 / 外交衝突）→ 內需高股息受惠、半導體承壓",
+    "rationale": "台海風險是台股特有風險溢價。當風險升級，外資減持半導體轉向內需高股息與黃金避險。2022 裴洛西訪台後，外資單週賣超 1500 億，半導體跌 8%。",
+    "conditions": [
+      {
+        "field": "DXY",
+        "operator": "gt",
+        "value": 106,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "VIX",
+        "operator": "gt",
+        "value": 25,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      }
+    ],
+    "themes": [
+      "taiwan_political_risk",
+      "geopolitical_risk_spike"
+    ],
+    "regimes": [
+      "HIGH_VOL",
+      "BEAR"
+    ],
+    "sectors": [
+      "內需",
+      "高股息",
+      "黃金",
+      "防禦性資產"
+    ],
+    "direction": "volatile",
+    "risk": "high",
+    "source": "manual",
+    "status": "active",
+    "attribution_mode": "llm_annotated",
+    "attribution": [],
+    "hit_rate": 0.55,
+    "total_tests": 12,
+    "total_hits": 7
+  },
+  {
+    "id": "china-slowdown-export-pressure",
+    "name": "中國經濟放緩 → 台灣出口股下修",
+    "layer": "L5",
+    "summary": "中國 PMI / 出口數據轉弱 → 台灣對中出口股（電子、塑化）下修",
+    "rationale": "台灣對中出口佔比 25-30%，中國景氣直接影響台灣出口股。當中國 PMI 跌破 50 連 2 月，對中出口股下修壓力升。",
+    "conditions": [
+      {
+        "field": "SPX",
+        "operator": "lt",
+        "value": -1,
+        "string_value": "",
+        "timeframe": "5D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "DXY",
+        "operator": "gt",
+        "value": 104,
+        "string_value": "",
+        "timeframe": "5D",
+        "source": "us_yahoo"
+      }
+    ],
+    "themes": [
+      "china_slowdown",
+      "export_pressure"
+    ],
+    "regimes": [
+      "BEAR"
+    ],
+    "sectors": [
+      "電子",
+      "塑化",
+      "出口股"
+    ],
+    "direction": "down",
+    "risk": "medium",
+    "source": "manual",
+    "status": "active",
+    "attribution_mode": "llm_annotated",
+    "attribution": [],
+    "hit_rate": 0.58,
+    "total_tests": 30,
+    "total_hits": 17
+  },
+  {
+    "id": "us-tariff-shock-tech",
+    "name": "美國對中/台晶片關稅升級 → 半導體急跌",
+    "layer": "L5",
+    "summary": "美國宣布新一輪對中/台晶片關稅 → 半導體單日急跌 + VIX 飆升",
+    "rationale": "關稅升級直接影響台灣半導體出口。2025/4 川普關稅威脅當日台股跌 9.7%，半導體跌 12%。需即時降倉 + 避險。",
+    "conditions": [
+      {
+        "field": "SPX",
+        "operator": "lt",
+        "value": -2,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      },
+      {
+        "field": "VIX",
+        "operator": "gt",
+        "value": 30,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "us_yahoo"
+      }
+    ],
+    "themes": [
+      "tariff_shock",
+      "semiconductor_downturn"
+    ],
+    "regimes": [
+      "BEAR",
+      "HIGH_VOL"
+    ],
+    "sectors": [
+      "半導體",
+      "電子",
+      "出口股"
+    ],
+    "direction": "down",
+    "risk": "high",
+    "source": "manual",
+    "status": "active",
+    "attribution_mode": "llm_annotated",
+    "attribution": [],
+    "hit_rate": 0.85,
+    "total_tests": 8,
+    "total_hits": 7
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "sox-test",
+    "name": "Test SOX seed",
+    "layer": "L2",
+    "summary": "Test summary",
+    "rationale": "Test rationale",
+    "conditions": [
+      {"field": "SOX", "operator": "gt", "value": 0, "string_value": "", "timeframe": "1D", "source": "us_yahoo"}
+    ],
+    "themes": ["AI_capex_surge"],
+    "regimes": ["BULL"],
+    "sectors": ["semiconductor"],
+    "direction": "up",
+    "risk": "low",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.5,
+    "total_tests": 10,
+    "total_hits": 5,
+    "created_at": "2026-06-11T00:00:00Z",
+    "updated_at": "2026-06-11T00:00:00Z"
+  },
+  {
+    "id": "nvda-test",
+    "name": "Test NVDA seed",
+    "layer": "L3",
+    "summary": "Test summary",
+    "rationale": "Test rationale",
+    "conditions": [
+      {"field": "NVDA", "operator": "gt", "value": 0, "string_value": "", "timeframe": "1D", "source": "us_nvda"}
+    ],
+    "themes": ["AI_capex_surge"],
+    "regimes": ["BULL"],
+    "sectors": ["ai_supply_chain"],
+    "direction": "up",
+    "risk": "low",
+    "source": "backtest",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [],
+    "hit_rate": 0.6,
+    "total_tests": 8,
+    "total_hits": 5,
+    "created_at": "2026-06-11T00:00:00Z",
+    "updated_at": "2026-06-11T00:00:00Z"
+  },
+  {
+    "id": "taiwan-strait-test",
+    "name": "Test L5 seed",
+    "layer": "L5",
+    "summary": "Test summary",
+    "rationale": "Test rationale",
+    "conditions": [
+      {"field": "GeopoliticalRiskSpike", "operator": "eq", "value": 0, "string_value": "high", "timeframe": "1D", "source": "narrative"}
+    ],
+    "themes": ["geopolitical_risk_spike"],
+    "regimes": ["BEAR"],
+    "sectors": ["defense", "high_dividend"],
+    "direction": "down",
+    "risk": "high",
+    "source": "manual",
+    "status": "active",
+    "attribution_mode": "llm_annotated",
+    "attribution": [],
+    "hit_rate": 0.4,
+    "total_tests": 5,
+    "total_hits": 2,
+    "created_at": "2026-06-11T00:00:00Z",
+    "updated_at": "2026-06-11T00:00:00Z"
+  }
+]

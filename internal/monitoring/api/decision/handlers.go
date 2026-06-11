@@ -11,11 +11,11 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
 // symbolNameMap resolves common TW stock symbols to Chinese names.
@@ -78,13 +78,43 @@ func resolveSymbolName(symbol string) string {
 
 // Handlers provides HTTP handlers for the decision-chain aggregation API.
 type Handlers struct {
-	NarrativeEng  *narrative.NarrativeEngine
-	Registry      *eventlogic.RuleRegistry
-	IndustrySvc   *service.IndustryService
-	PipelineSvc   *service.PipelineService
-	MacroProvider marketdata.MacroDataProvider
-	WorkDir       string
-	LedgerDir     string
+	NarrativeEng *narrative.NarrativeEngine
+
+	IndustrySvc      *service.IndustryService
+	PipelineSvc      *service.PipelineService
+	MacroProvider    marketdata.MacroDataProvider
+	WorkDir          string
+	LedgerDir        string
+	StrategyRegistry *strategy_techniques.Registry
+}
+
+// StrategyFrameSummary is the API-facing projection of a strategy_techniques
+// StrategyFrame for the decision-chain /strategies response block. It carries
+// the new fields (Layer, Themes, Risk, Attribution) and uses snake_case
+// JSON to match the rest of the dashboard API (see monitoring/AGENTS.md).
+type StrategyFrameSummary struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Layer           string   `json:"layer"`
+	Summary         string   `json:"summary"`
+	Themes          []string `json:"themes"`
+	Direction       string   `json:"direction"`
+	Risk            string   `json:"risk"`
+	HitRate         float64  `json:"hit_rate"`
+	Status          string   `json:"status"`
+	Attribution     []string `json:"attribution"`
+	AffectedSectors []string `json:"affected_sectors"`
+}
+
+// CoreIndicators is the explicit "4 leading indicators" view that the
+// 5-layer framework's short-term judgment depends on. Units match
+// MacroDataSnapshot: ForeignCapitalNetTWD is in TWD millions, the others
+// are percent change.
+type CoreIndicators struct {
+	ForeignCapitalNetTWD float64 `json:"foreign_capital_net_twd"`
+	TSMADRpct            float64 `json:"tsm_adr_pct"`
+	NVDApct              float64 `json:"nvda_pct"`
+	DXYpct               float64 `json:"dxy_pct"`
 }
 
 // ExitAlert represents a position that warrants an exit consideration.
@@ -214,7 +244,6 @@ func buildPremarketData(snap *marketdata.MacroDataSnapshot) *PremarketData {
 func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 	var (
 		events       []narrative.NarrativeEvent
-		rules        []*eventlogic.EventRule
 		industries   []service.IndustryOverview
 		pipelineData *service.RecommendationPipelineData
 		exitAlerts   []ExitAlert
@@ -242,15 +271,7 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 		return nil
 	})
 
-	// 2. Event logic rules — active rules from the self-improving rule registry.
-	if h.Registry != nil {
-		g.Go(func() error {
-			rules = h.Registry.ListActive()
-			return nil
-		})
-	}
-
-	// 3. Industry overview — sector heatmap data.
+	// 2. Industry overview — sector heatmap data.
 	if h.IndustrySvc != nil {
 		g.Go(func() error {
 			industries = h.IndustrySvc.GetIndustryOverview(time.Now())
@@ -293,19 +314,6 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 		} else if e.Timestamp.After(now.Add(-7 * 24 * time.Hour)) {
 			recentEvents = append(recentEvents, e)
 		}
-	}
-
-	// Rules: convert to response shape.
-	ruleSummaries := make([]RuleSummary, 0, len(rules))
-	for _, ru := range rules {
-		ruleSummaries = append(ruleSummaries, RuleSummary{
-			ID:              ru.ID,
-			Pattern:         ru.Pattern,
-			HitRate:         ru.HitRate,
-			AffectedSectors: ru.AffectedSectors,
-			Direction:       ru.Direction,
-			Status:          ru.Status,
-		})
 	}
 
 	// Sector heatmap: pass numeric confidence alongside label.
@@ -369,10 +377,11 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 			Recent:    recentEvents,
 			Premarket: buildPremarketData(macroSnap),
 		},
-		"logic_rules":     ruleSummaries,
 		"sector_heatmap":  heatmap,
 		"recommendations": recs,
 		"exit_alerts":     exitAlerts,
+		"strategies":      h.buildStrategiesSummary(),
+		"core_indicators": h.buildCoreIndicators(macroSnap),
 	}
 }
 
@@ -416,4 +425,50 @@ func (h *Handlers) computeExitAlerts() []ExitAlert {
 		})
 	}
 	return alerts
+}
+
+// buildStrategiesSummary projects the strategy_techniques.Registry into
+// the active-only StrategyFrameSummary list. Returns nil if the registry
+// is unset; this keeps the legacy eventlogic paths working for the
+// migration window (eventlogic is retired in Wave 5 cleanup).
+func (h *Handlers) buildStrategiesSummary() []StrategyFrameSummary {
+	if h.StrategyRegistry == nil {
+		return nil
+	}
+	frames := h.StrategyRegistry.All()
+	out := make([]StrategyFrameSummary, 0, len(frames))
+	for _, f := range frames {
+		if f.Status != strategy_techniques.StatusActive {
+			continue
+		}
+		out = append(out, StrategyFrameSummary{
+			ID:              f.ID,
+			Name:            f.Name,
+			Layer:           f.Layer.String(),
+			Summary:         f.Summary,
+			Themes:          f.Themes,
+			Direction:       f.Direction.String(),
+			Risk:            f.Risk.String(),
+			HitRate:         f.HitRate,
+			Status:          f.Status.String(),
+			Attribution:     f.Attribution,
+			AffectedSectors: f.Sectors,
+		})
+	}
+	return out
+}
+
+// buildCoreIndicators exposes the 4 leading indicators (ForeignInvestorNet,
+// TSMADR, NVDA, DXY) used by the strategy_techniques seeds. Frontend can
+// highlight them as a "core 4" strip on the strategy techniques dashboard.
+func (h *Handlers) buildCoreIndicators(snap *marketdata.MacroDataSnapshot) CoreIndicators {
+	if snap == nil {
+		return CoreIndicators{}
+	}
+	return CoreIndicators{
+		ForeignCapitalNetTWD: snap.ForeignInvestorNet.Value,
+		TSMADRpct:            snap.TSMADR.ChangePct,
+		NVDApct:              snap.NVDA.ChangePct,
+		DXYpct:               snap.DXY.ChangePct,
+	}
 }

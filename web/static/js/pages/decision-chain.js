@@ -52,7 +52,7 @@ function renderDecisionChain(data) {
 
   el.innerHTML = ''
     + renderPanel('⏱ 即時事件雷達', 'events-radar', renderEventsRadar(data), currentTime)
-    + renderPanel('🧠 事件邏輯庫', 'logic-rules', renderLogicRules(data), 'W4 自我精進中')
+    + renderPanel('🧠 投資心法庫', 'strategies-panel', renderStrategiesPanel(data), '5 層框架 + 4 指標')
     + renderPanel('🔥 產業熱力圖', 'sector-heatmap', renderSectorHeatmap(data))
     + renderPanel('📋 推薦標的', 'recommendations', renderRecommendations(data))
     + renderPanel('🔔 出場提醒', 'exit-alerts', renderExitAlerts(data));
@@ -135,20 +135,33 @@ function renderEventsRadar(data) {
   </div>`;
 }
 
-// --- Panel 2: 事件邏輯庫 ---
-function renderLogicRules(data) {
-  const rules = data && data.logic_rules;
-  if (!rules || !rules.length) return empty('尚無事件邏輯規則（等待 W4 種子規則載入）');
-
-  const rows = rules.map(r => {
-    const hitPct = Math.round(r.hit_rate * 100);
+// --- Panel 2: 投資心法庫 ---
+function renderStrategiesPanel(data) {
+  const strategies = data && data.strategies;
+  const ci = data && data.core_indicators;
+  const ciStrip = ci ? `
+    <div class="dc-section" style="display:flex;gap:6px;flex-wrap:wrap;padding:6px 8px;background:var(--surface-2);border-radius:4px;margin-bottom:6px">
+      <span class="badge ${ci.foreign_capital_net_twd > 0 ? 'ok' : 'err'}" title="外資現貨 (TWD 億)">外資 ${(ci.foreign_capital_net_twd / 1e8).toFixed(1)}</span>
+      <span class="badge ${ci.tsm_adr_pct > 0 ? 'ok' : 'err'}" title="TSM ADR (%)">TSM ${ci.tsm_adr_pct.toFixed(2)}%</span>
+      <span class="badge ${ci.nvda_pct > 0 ? 'ok' : 'err'}" title="NVDA (%)">NVDA ${ci.nvda_pct.toFixed(2)}%</span>
+      <span class="badge ${ci.dxy_pct < 0 ? 'ok' : 'err'}" title="DXY (% change, 跌=資金回流)">DXY ${ci.dxy_pct.toFixed(2)}%</span>
+    </div>` : '';
+  if (!strategies || !strategies.length) return ciStrip + empty('尚無投資心法（9 條 seeds 未載入或非活躍）');
+  const LAYER_COLORS = { L1: 'var(--color-info)', L2: '#a855f7', L3: 'var(--color-success)', L4: 'var(--color-warning)', L5: 'var(--color-danger)' };
+  const rows = strategies.map(s => {
+    const hitPct = Math.round((s.hit_rate || 0) * 100);
     const barColor = hitPct >= 70 ? 'var(--status-ok)' : hitPct >= 50 ? 'var(--status-warn)' : 'var(--status-err)';
-    return `<div class="dc-rule-row">
+    const layerColor = LAYER_COLORS[s.layer] || 'var(--muted)';
+    const themes = (s.themes || []).slice(0, 2).map(t => `<span class="badge muted">${escapeHtml(t)}</span>`).join(' ');
+    return `<div class="dc-rule-row" style="border-left:3px solid ${layerColor};padding-left:6px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span class="dc-rule-id" title="${escapeHtml(r.id)}">#${escapeHtml(r.id).slice(0, 30)}</span>
-        <span class="badge ${r.status === 'active' ? 'ok' : 'warn'}">${escapeHtml(r.status)}</span>
+        <span class="dc-rule-id" title="${escapeHtml(s.id)}">#${escapeHtml(s.id).slice(0, 28)}</span>
+        <div style="display:flex;gap:4px">
+          <span class="badge muted">${escapeHtml(s.layer)}</span>
+          <span class="badge ${s.status === 'active' ? 'ok' : 'warn'}">${escapeHtml(s.status)}</span>
+        </div>
       </div>
-      <div class="dc-rule-pattern">${escapeHtml(r.pattern)}</div>
+      <div class="dc-rule-pattern">${escapeHtml(s.name)}</div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
         <div class="dc-hitbar" style="flex:1;height:6px;background:var(--border);border-radius:3px">
           <div style="width:${hitPct}%;height:100%;background:${barColor};border-radius:3px;transition:width 0.3s"></div>
@@ -156,13 +169,13 @@ function renderLogicRules(data) {
         <span style="font-size:11px;font-weight:600;min-width:36px;text-align:right">${hitPct}%</span>
       </div>
       <div style="margin-top:2px;font-size:10px;color:var(--muted)">
-        ${(r.affected_sectors || []).map(s => `<span class="badge muted">${escapeHtml(s)}</span>`).join(' ')}
-        <span class="badge ${r.direction === 'up' ? 'ok' : r.direction === 'down' ? 'err' : 'warn'}">${escapeHtml(r.direction)}</span>
+        ${themes}
+        <span class="badge ${s.risk === 'low' ? 'ok' : s.risk === 'high' ? 'err' : 'warn'}">${escapeHtml(s.risk)}</span>
+        <span class="badge ${s.direction === 'up' ? 'ok' : s.direction === 'down' ? 'err' : 'warn'}">${escapeHtml(s.direction)}</span>
       </div>
     </div>`;
   }).join('');
-
-  return `<div class="dc-section">${rows}</div>`;
+  return `${ciStrip}<div class="dc-section">${rows}</div>`;
 }
 
 // --- Panel 3: 產業熱力圖 ---
@@ -280,7 +293,7 @@ function renderPartialPanel(panelId, data) {
   if (!body) return;
   switch (panelId) {
     case 'events-radar': body.innerHTML = renderEventsRadar(data); break;
-    case 'logic-rules': body.innerHTML = renderLogicRules(data); break;
+    case 'strategies-panel': body.innerHTML = renderStrategiesPanel(data); break;
     case 'sector-heatmap': body.innerHTML = renderSectorHeatmap(data); break;
     case 'recommendations': body.innerHTML = renderRecommendations(data); break;
     case 'exit-alerts': body.innerHTML = renderExitAlerts(data); break;

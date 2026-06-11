@@ -268,8 +268,29 @@ IF 宏觀風險 = 橙色
 6. 若改 Maturity Gating：先確認 `internal/scheduler/auto_calibration_test.go` 涵蓋 BURN_IN skip 行為
 7. 改完後跑 `go build ./... && go test ./internal/narrative/... ./internal/scheduler/... && gofmt -l . && staticcheck ./...`
 
+## 九、5 層框架與心法庫整合
+
+本技能定義的 6 大輸入維度（Fed / US10Y / BOJ / 匯率 / 商品 / 地緣）現在被收斂為 `strategy_techniques` 的 **5 層框架（L1~L5）**：
+
+| 本技能 6 維度 | 收斂至 strategy_techniques | 用途 |
+|--------------|---------------------------|------|
+| Fed 利率路徑 + DXY + US10Y | **L1 全球流動性** | 心法觸發條件 |
+| 外資買賣超 + 法人動向 | **L2 外資行為** | 心法觸發條件 |
+| 半導體 + 油 + 金 | **L3 產業催化** | 心法觸發條件 |
+| USD_TWD + 融資 | **L4 匯率籌碼** | 心法觸發條件 |
+| 地緣風險 | **L5 地緣政治** | 心法觸發條件 |
+
+**整合路徑**：
+- 6 維度 → `narrative/templates.go` 的 25+ 模板 → `strategy_techniques.StrategyFrame.Themes` 欄位
+- 外資出逃機率 → `strategy_techniques` L2 心法的 `Attribution` 歸因依據
+- 與回撤機制整合 → `strategy_techniques` L1~L5 各層心法的 `Regimes` 標籤
+
+**4 核心短線指標**：外資現貨 / TSM ADR / NVDA / DXY（詳見 `atlas-taiwan-leading-indicators`）
+
+**心法庫詳見**：`atlas-strategy-techniques` skill
+
 ---
 
-*技能版本: 1.1*  
-*最後更新: 2026-06-05*  
+*技能版本: 1.2*  
+*最後更新: 2026-06-11*  
 *適用對象: Atlas-Go AI Agent*

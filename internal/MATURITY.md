@@ -26,7 +26,7 @@
 | `config` | 環境變數讀取（`ATLAS_*` 前綴）、參數配置管理 | `Config`, `ParametersConfig` |
 | `domain` | 領域型別 — canonical types、string enum（全系統依賴） | `Regime`, `Recommendation`, `Position` |
 | `eventbus` | 事件匯流排 — Publish/Subscribe | `ChannelEventBus` |
-| `eventlogic` | 事件邏輯 — 系統事件處理規則 | — |
+| `strategy_techniques` | 投資心法庫 — 5 層框架（L1~L5）+ 4 核心指標 + 自我修正 | — |
 | `experiment` | 實驗生命週期 — mutation → execute → judge → promote/revert | `Executor`, `Judge`, `Candidate` |
 | `industry` | 產業生態系 — 參數化分類樹、供應鏈連動、季節性模式、週期羅盤、風險聚合、農曆自動化事件日曆 | `ClassificationTree`, `SupplyChainGraph`, `SeasonalEngine`, `CycleTracker`, `EventCalendar`, `GetAllRisksForIndustry` |
 | `janus` | JANUS 跨 cohort regime 偵測與 PRISM 權重動態調整 | `Detector` |
@@ -65,6 +65,7 @@
 | `sim` | 模擬引擎 — 部位狀態轉換、`Engine.RunSymbol()` | `Engine` | 核心模組，indirect import |
 | `spawning` | Agent 生成管理 — `SpawningManager`、`PerformSpawningCycle()` | `SpawningManager` | 核心模組，indirect import |
 | `strategy` | 策略選擇器與登錄 | `Selector` | 由 orchestrator 使用 |
+| `strategy_techniques` | 投資心法庫 — 5 層框架（L1~L5）+ 4 核心指標（外資/TSM ADR/NVDA/DXY）+ 自我修正（規則歸因 + LLM 加註） | `StrategyFrame`, `Layer`, `Registry` | 取代 `eventlogic`（Wave 5 清理後升 stable） |
 | `tax` | 台灣稅務計算 — `TaiwanTaxCalculator` | `TaiwanTaxCalculator` | 由 sim 使用 |
 | `monitoring/api/dashboard` | Dashboard management center handlers — 資料通道、管線、通道控制、API 金鑰管理 | `Handlers` | 由 monitoring 使用 |
 | `ml` | 監督式學習模型 — OLS、ElasticNet、PCR、PLS 實作（SK-05~09） | `Model`, `Trainer` | 由 Fin-Skills 規範驅動，供 factor/research 使用 |

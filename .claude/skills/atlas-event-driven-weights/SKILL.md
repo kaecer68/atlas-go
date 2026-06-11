@@ -157,3 +157,35 @@ go tool cover -func=coverage.out | grep total  # ≥ 40%
 2. **向後相容**：`executeOrder` / `ExecuteOrder` 兩個方法都需要保留
 3. **不使用全域可變狀態**：執行期協調使用 context
 4. **不過度擬合**：限制最小調整幅度，建立回測驗證框架
+
+## 7. 5 層框架 → 因子權重映射
+
+`strategy_techniques` 的 5 層心法命中時，依以下映射調整因子權重（與第 4 節事件→因子調整並列，但以 Layer 為主鍵）：
+
+| 5 層觸發 | 因子權重調整（基線 delta）| 理由 |
+|---------|-------------------------|------|
+| **L1 全球流動性** 命中（DXY 轉弱 / US10Y 下行） | `Liquidity +0.10`、`InstSent +0.05` | 資金流入預期 → 流動性寬鬆 + 法人情緒轉好 |
+| **L2 外資行為** 命中（連 3 日買超） | `InstSent +0.15`、`Agent +0.05` | 直接強化法人與代理因子 |
+| **L3 產業催化** 命中（NVDA+TSMADR 確認） | `Quality +0.10`、`Momentum +0.10`、`IndustryCycle +0.05` | 科技股景氣 + 動能訊號 |
+| **L4 匯率籌碼** 命中（USD_TWD > 32） | `InstSent +0.05`、`Liquidity -0.05` | 央行防線 + 流動性收緊訊號 |
+| **L5 地緣政治** 命中（台海/關稅） | `Liquidity -0.10`、`Value +0.05`、`Momentum -0.05` | 避險情緒 → 流動性緊縮 + 價值股避風 |
+
+**使用方式**：
+- `strategy_techniques.StrategyFrame.Layer` 為 L1~L5
+- 命中後，呼叫 `FactorWeightEngine.ApplyLayerDelta(layer, severity)`
+- severity 依 `StrategyFrame.HitRate` 推算：>= 0.7 → critical, >= 0.5 → high, >= 0.3 → medium, else low
+
+**反向情境**：當心法歸因為「regime shift / 結構斷裂」，須回退該層所有 delta 並觸發 `corector.Evaluate`（見 `atlas-strategy-techniques` 第 6 節）
+
+**心法庫來源**：`atlas-strategy-techniques` skill
+
+## 8. 5 層框架整合範例
+
+```go
+// 範例：L2 外資行為心法命中 → 因子權重調整
+frame := registry.FindByID("foreign-3day-inflow")  // L2
+if frame.Status == Active && frame.HitRate >= 0.7 {
+    weightEngine.ApplyLayerDelta(LayerL2, SeverityCritical)
+    // 等同 InstSent +0.15, Agent +0.05
+}
+```

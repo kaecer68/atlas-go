@@ -174,3 +174,60 @@ strategies/
 └── history/           # 策略切換歷史
     └── 切換記錄.jsonl
 ```
+
+## 7. Strategy Techniques Library 上游輸入
+
+`strategy_techniques` 心法庫是**策略選擇的上游輸入** — 心法命中會觸發策略篩選條件的 priority 調整：
+
+### 整合路徑
+
+```
+strategy_techniques (L1~L5 心法命中)
+    ↓ 觸發
+multi-strategy.Selector 篩選條件調整
+    ↓
+Strategy.AllowedSectors / AllowedRiskAppetite 動態更新
+    ↓
+StrategyAllocator 重新配權
+```
+
+### 7.1 心法命中 → 策略 priority 調整
+
+| 心法命中類型 | 影響的策略 | priority delta |
+|------------|----------|---------------|
+| L1 全球流動性命中 | `all_weather`（避險型）| +0.20 |
+| L2 外資行為命中（連 3 買）| `growth`、`momentum` | +0.15 |
+| L3 產業催化命中（NVDA 確認）| `growth` | +0.30 |
+| L4 匯率籌碼命中（USD_TWD > 32）| `defensive` | +0.25 |
+| L5 地緣政治命中 | `value`、`all_weather` | +0.20 |
+
+### 7.2 心法失效 → 策略冷卻
+
+- 當 L1~L5 任一心法連續 3 次 `Status = Degraded`
+- 觸發對應策略的「手動冷卻」（繞過 `MinSwitchInterval`）
+- 直到該心法重新 `Status = Active` 才解除
+
+### 7.3 與 Regime 協作
+
+- `strategy_techniques.StrategyFrame.Regimes` 與 `multi-strategy.Strategy.RegimePrefs` 交叉驗證
+- 例如：心法標記適用 `RISK_OFF` regime，策略 `growth` 卻 `RegimePrefs` 為 `RISK_ON` → 衝突
+- 解決：將 `growth` 加入「regime 衝突清單」，Selector 排除
+
+**心法庫詳見**：`atlas-strategy-techniques` skill
+
+## 8. 心法庫與策略選擇的協作範例
+
+```go
+// 範例：L3 產業催化命中 → growth 策略 priority 提升
+strategies := multiStrategy.Registry.ListByRegime(currentRegime)
+for _, s := range strategies {
+    if s.ID == "growth" {
+        for _, frame := range strategyTechniques.FindByLayer(LayerL3) {
+            if frame.Status == Active {
+                s.Priority = basePriority + 0.30
+                break
+            }
+        }
+    }
+}
+```

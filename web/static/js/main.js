@@ -32,7 +32,7 @@ export function switchPage(id, silent) {
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
     metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理', config: '部署配置',
-    evolution_panel: '演化透視', 'eventlogic-rules': '事件邏輯',
+    evolution_panel: '演化透視', strategies: '投資心法',
   swarm: 'Swarm 模擬', crossmarket: '美台連動監控'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
@@ -98,12 +98,12 @@ async function loadModules() {
     import('./pages/synergy.js'),
     import('./pages/evolution_panel.js'),
     import('./pages/decision-chain.js'),
-    import('./pages/eventlogic-rules.js'),
+    import('./pages/strategies.js'),
   import('./pages/swarm.js'),
     import('./pages/crossmarket.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'eventlogic', 'swarm', 'crossmarket'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'strategies', 'swarm', 'crossmarket'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -369,8 +369,8 @@ async function loadPageData(pageId) {
       if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg);
     } catch(e) { console.error(e); }
   }
-  else if (pageId === 'eventlogic-rules') {
-    try { if (m.eventlogic && m.eventlogic.renderEventLogicPage) m.eventlogic.renderEventLogicPage(); } catch(e) { console.error(e); }
+  else if (pageId === 'strategies') {
+    try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'swarm') {
     try { if (m.swarm && m.swarm.loadSwarmData) m.swarm.loadSwarmData(); } catch(e) { console.error(e); }
