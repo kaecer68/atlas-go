@@ -296,9 +296,7 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'datachannels') {
     try {
-      var dc = await silentGetJSON('/api/dashboard/data-channels');
-      if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dc);
-      if (m.datachannels.loadFetchLogs) m.datachannels.loadFetchLogs();
+      if (m.datachannels.loadDataChannels) m.datachannels.loadDataChannels();
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'synergy') {

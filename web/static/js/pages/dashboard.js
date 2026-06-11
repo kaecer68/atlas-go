@@ -42,7 +42,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
       return `<div class="my-xs text-sm text-warn">⚠ ${text}</div>`;
     }).join('');
   } else {
-    crowdingHtml = '<div class="my-xs text-sm text-up">✓ 無擁擠標的</div>';
+    crowdingHtml = '<div class="my-xs text-sm text-success">✓ 無擁擠標的</div>';
   }
 
   // Data channel alerts - unified from system-health API
@@ -54,7 +54,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     ? `<div style="margin:4px 0;font-size:13px;color:var(--color-danger)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
     : (warnChannels.length > 0
       ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料待更新</div>`
-      : '<div class="my-xs text-sm text-up">✓ 所有通道正常</div>');
+      : '<div class="my-xs text-sm text-success">✓ 所有通道正常</div>');
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
   const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--color-success)' : 'var(--warn)') : 'inherit';

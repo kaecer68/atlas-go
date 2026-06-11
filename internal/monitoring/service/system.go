@@ -29,17 +29,22 @@ type SystemService struct {
 	LedgerDir    string
 	BaselinePath string
 	store        ledger.OutcomeStore
+	healthStore  *ChannelHealthStoreAdapter
 	JanusEngine  *janus.Engine
 	CycleTracker *industry.CycleTracker
 }
 
 // NewSystemService creates a new SystemService.
-func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore, janusEngine *janus.Engine) *SystemService {
+// healthStore is used to merge Gateway-managed channel health into the system
+// health snapshot so the home page and the data channels page agree on
+// channel status (see resolveChannelStatusFromStore).
+func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore, janusEngine *janus.Engine, healthStore *ChannelHealthStoreAdapter) *SystemService {
 	return &SystemService{
 		WorkDir:      workDir,
 		LedgerDir:    ledgerDir,
 		BaselinePath: baselinePath,
 		store:        store,
+		healthStore:  healthStore,
 		JanusEngine:  janusEngine,
 	}
 }
@@ -143,22 +148,23 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 
 	now := time.Now()
 	channels := []DataChannelInfo{
-		buildChannelInfo("us_yahoo", "Yahoo Finance Macro", checkMacroHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
-		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now),
-		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now),
-		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, config.GetReplayDataPath(s.WorkDir), now),
-		buildChannelInfo("frankfurter_fx", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
-		buildChannelInfo("twse_margin", "TWSE 融資融券", checkMarginHealth, filepath.Join(s.WorkDir, "data/state/margin"), now),
-		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, "data/state/export"), now),
-		buildChannelInfo("tsmc_revenue", "台積電月營收", checkTSMCRevenueHealth, filepath.Join(s.WorkDir, "data/state/tsmc_revenue"), now),
-		buildChannelInfo("geopolitical_taiwan", "台灣地緣政治", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json"), now),
+		buildChannelInfo("us_yahoo", "Yahoo Finance Macro", checkMacroHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now, s.healthStore),
+		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now, s.healthStore),
+		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, config.GetReplayDataPath(s.WorkDir), now, s.healthStore),
+		buildChannelInfo("frankfurter_fx", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("twse_margin", "TWSE 融資融券", checkMarginHealth, filepath.Join(s.WorkDir, "data/state/margin"), now, s.healthStore),
+		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, "data/state/export"), now, s.healthStore),
+		buildChannelInfo("tsmc_revenue", "台積電月營收", checkTSMCRevenueHealth, filepath.Join(s.WorkDir, "data/state/tsmc_revenue"), now, s.healthStore),
+		buildChannelInfo("geopolitical_taiwan", "台灣地緣政治", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json"), now, s.healthStore),
 	}
-	channels = append(channels, buildAPIKeyChannel("fugle", "Fugle 富果", "FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"))
-	channels = append(channels, buildAPIKeyChannel("fubon", "富邦證券", "FUBON_API_KEY", "ATLAS_FUBON_API_KEY"))
-	channels = append(channels, buildAPIKeyChannel("finmind", "FinMind", "FINMIND_API_KEY", ""))
-	channels = append(channels, buildAPIKeyChannel("tej", "TEJ 台灣經濟新報", "TEJ_API_KEY", ""))
+	channels = append(channels, buildAPIKeyChannel("fugle", "Fugle 富果", "FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", s.healthStore))
+	channels = append(channels, buildAPIKeyChannel("fubon", "富邦證券", "FUBON_API_KEY", "ATLAS_FUBON_API_KEY", s.healthStore))
+	channels = append(channels, buildAPIKeyChannel("finmind", "FinMind", "FINMIND_API_KEY", "", s.healthStore))
+	channels = append(channels, buildAPIKeyChannel("tej", "TEJ 台灣經濟新報", "TEJ_API_KEY", "", s.healthStore))
 	if s.JanusEngine != nil {
-		janusStatus, janusUpdated := checkJanusHealth(s.JanusEngine, now)
+		janusFileStatus, janusFileUpdated := checkJanusHealth(s.JanusEngine, now)
+		janusStatus, janusUpdated, _ := resolveChannelStatusFromStore(s.healthStore, "janus_regime", janusFileStatus, janusFileUpdated)
 		channels = append(channels, DataChannelInfo{
 			ChannelID:  "janus_regime",
 			Label:      "JANUS 盤勢偵測",
@@ -181,8 +187,9 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	}, nil
 }
 
-func buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time) DataChannelInfo {
-	status, updated := checker(path, now)
+func buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time, healthStore *ChannelHealthStoreAdapter) DataChannelInfo {
+	fileStatus, fileUpdated := checker(path, now)
+	status, updated, _ := resolveChannelStatusFromStore(healthStore, id, fileStatus, fileUpdated)
 	return DataChannelInfo{
 		ChannelID:  id,
 		Label:      label,
@@ -192,17 +199,21 @@ func buildChannelInfo(id, label string, checker func(string, time.Time) (string,
 	}
 }
 
-func buildAPIKeyChannel(id, label, primaryKey, fallbackKey string) DataChannelInfo {
+func buildAPIKeyChannel(id, label, primaryKey, fallbackKey string, healthStore *ChannelHealthStoreAdapter) DataChannelInfo {
 	key := config.GetSecret(primaryKey)
 	if key == "" && fallbackKey != "" {
 		key = config.GetSecret(fallbackKey)
 	}
-	status := "inactive"
-	updated := "未設定 API Key"
-	if key != "" {
-		status = "ok"
-		updated = "API key 已設定"
+	if key == "" {
+		return DataChannelInfo{
+			ChannelID:  id,
+			Label:      label,
+			Status:     "inactive",
+			StatusText: StatusText("inactive"),
+			UpdatedAt:  "未設定 API Key",
+		}
 	}
+	status, updated, _ := resolveChannelStatusFromStore(healthStore, id, "ok", "API key 已設定")
 	return DataChannelInfo{
 		ChannelID:  id,
 		Label:      label,

@@ -166,7 +166,7 @@ let fetchLogs = [
 ];
 
 export function loadFetchLogs() {
-  const el = document.getElementById('fetchLogs');
+  const el = document.getElementById('dcFetchLog');
   if (!el) return;
 
   let html = '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-20">時間</th><th class="w-35">通道</th><th class="w-20">結果</th><th class="w-25">延遲</th></tr></thead><tbody>';
@@ -193,7 +193,7 @@ export function renderDataChannels(data) {
     const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
     return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};margin-right:6px;vertical-align:middle"></span>`;
   };
-  const statusClass = s => s === 'ok' ? 'up' : (s === 'warn' ? 'warn' : (s === 'error' ? 'down' : 'muted'));
+  const statusClass = s => s === 'ok' ? 'ok' : (s === 'warn' ? 'warn' : (s === 'error' ? 'err' : 'muted'));
 
   // Calculate summary stats
   const total = channels.length;
@@ -270,8 +270,8 @@ function renderEmptyState(title, subtitle) {
 export function renderMacroDataHealth(data) {
   const el = document.getElementById('macroDataHealth');
   if (!el) return;
-  if (!data || !data.indicators) { el.innerHTML = ''; return; }
   el.classList.remove('loading');
+  if (!data || !data.indicators) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
 
   const statusLight = s => {
     const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));

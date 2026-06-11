@@ -687,7 +687,14 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	}
 	metricsHandlers.RegisterRoutes(mux)
 
-	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath, outcomeStore, a.janusEngine)
+	systemSvc := service.NewSystemService(
+		a.workDir,
+		a.ledgerDir,
+		a.baselinePath,
+		outcomeStore,
+		a.janusEngine,
+		service.NewChannelHealthStoreAdapter(filepath.Join(a.workDir, "data/state"), a.pool),
+	)
 	if a.industryService != nil {
 		systemSvc.SetCycleTracker(a.industryService.CycleTracker)
 	}
