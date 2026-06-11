@@ -297,6 +297,18 @@ func run(args []string, deps appDeps) error {
 		var stRegistry *strategy_techniques.Registry
 		var stSeedsPath string
 
+		// Start fubon-proxy process manager BEFORE Gateway adapter registration,
+		// so the fubon TCP probe in RegisterChannelAdapters finds :8081 already running.
+		if *brokerMode != "dry-run" {
+			fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
+			if err := fubonMgr.Start(context.Background()); err != nil {
+				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
+			} else {
+				log.Printf("[FubonProxy] process manager started")
+			}
+			defer fubonMgr.Stop()
+		}
+
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
 		var gateway *apigateway.Gateway
 		var gatewayFetcher monitoring.DataFetcher
@@ -322,18 +334,6 @@ func run(args []string, deps appDeps) error {
 				}
 				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
-		}
-
-		// Start fubon-proxy process manager (non-fatal on failure).
-		// In dry-run mode, fubon-proxy is skipped — it requires live broker credentials.
-		if *brokerMode != "dry-run" {
-			fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
-			if err := fubonMgr.Start(context.Background()); err != nil {
-				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
-			} else {
-				log.Printf("[FubonProxy] process manager started")
-			}
-			defer fubonMgr.Stop()
 		}
 
 		mux := http.NewServeMux()
