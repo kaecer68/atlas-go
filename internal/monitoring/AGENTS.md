@@ -49,6 +49,24 @@
 | **未處理的 Legacy 格式** | 讀取舊 session 時，`PassedGuards` 等新欄位可能缺失，需在 handler 進行 fallback 補齊（預設為 true）。 |
 | **OOS 取樣範圍太小（單一 session）** | `LoadAgentObservatory()` 不傳 `sessionID` 時，若回退到 `LoadSessionOutcomes()` 只會讀取**最新單一 session**（88 筆），導致多數 agent OOS 樣本不足（`oos_sample_warning: insufficient`）。**必須改為直接呼叫 `LoadOutcomesFromSessions()`** 取得完整歷史資料（131k+ 筆，78 sessions）。|
 
+## 跨市監控資料可見性 (Cross-Market Data Visibility)
+
+`CrossMarketService` 與前端 `crossmarket.js` 採用 **4 層資料可見性** 模式,確保通道靜默失敗時資料缺失能被看見。
+
+| 層級 | 檔案 | 職責 |
+|------|------|------|
+| L1 Gateway | `internal/apigateway/provider.go`, `gateway.go` | `FetchResult.Fallback` / `LastError` 標記 stale-cache fallback |
+| L2 Adapter | `internal/monitoring/gateway_adapter.go` | `ChannelErrors()` 暴露 per-channel 錯誤 |
+| L3 Service | `internal/monitoring/service/crossmarket.go` | `DataStatus` ("ok"/"degraded") + `FailedChannels []string` |
+| L4 Frontend | `web/static/js/pages/crossmarket.js` | "資料獲取失敗" 紅色 badge + 降級 banner |
+
+**觸發場景**: 任何 `MacroDataSnapshot` 欄位 Symbol 為空 → 表示對應 channel 失敗。
+
+**Fail-safe 規則**:
+- 8 個 US 指數/科技股欄位 (SPX/NDX/DJI/SOX/NVDA/AAPL/MSFT/TSM_ADR) 任一失敗 → `data_status="degraded"`
+- `failed_channels` 列出失敗的 channelID (與 `internal/apigateway/gateway.go` 的 `channelIDs()` 對齊)
+- 詳見 `.claude/skills/atlas-data-visibility/SKILL.md`
+
 ### 已修復：前端 PascalCase → snake_case 欄位錯誤（2026-05-07）
 
 **問題描述**：前端 JavaScript 錯誤地使用 PascalCase 存取 API 回傳的 snake_case 欄位，導致畫面顯示 `undefined`。

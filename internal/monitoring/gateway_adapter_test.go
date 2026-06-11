@@ -1,6 +1,9 @@
 package monitoring
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -291,4 +294,76 @@ func TestApplyTSMADR(t *testing.T) {
 			t.Fatalf("expected Value=0, got %f", snap.TSMADR.Value)
 		}
 	})
+}
+
+func TestMacroDataGatewayAdapter_ChannelErrors_AllSuccess(t *testing.T) {
+	fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+		snap := marketdata.MacroDataSnapshot{US10Y: marketdata.MacroDataPoint{Symbol: "^TNX"}}
+		b, _ := json.Marshal(snap)
+		return b, nil
+	}
+	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
+	_, err := gw.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot failed: %v", err)
+	}
+	errs := gw.ChannelErrors()
+	if len(errs) != 0 {
+		t.Errorf("expected empty errors when all succeed, got: %v", errs)
+	}
+}
+
+func TestMacroDataGatewayAdapter_ChannelErrors_MixedFailure(t *testing.T) {
+	failing := map[string]string{
+		"us_spx": "yahoo finance timeout",
+		"us_ndx": "rate limited",
+	}
+	fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+		if msg, ok := failing[channelID]; ok {
+			return nil, errors.New(msg)
+		}
+		snap := marketdata.MacroDataSnapshot{US10Y: marketdata.MacroDataPoint{Symbol: "^TNX"}}
+		b, _ := json.Marshal(snap)
+		return b, nil
+	}
+	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
+	snap, err := gw.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot should not fail when at least one channel succeeds, got: %v", err)
+	}
+	errs := gw.ChannelErrors()
+	if len(errs) == 0 {
+		t.Fatal("expected non-empty errors when some channels fail")
+	}
+	if len(errs) != len(failing) {
+		t.Errorf("expected %d failed channels, got %d: %v", len(failing), len(errs), errs)
+	}
+	for ch, msg := range failing {
+		if errs[ch] != msg {
+			t.Errorf("expected error for %s to be %q, got %q", ch, msg, errs[ch])
+		}
+	}
+	if snap.RecordedAt == 0 {
+		t.Error("expected RecordedAt to be set even with partial failure")
+	}
+}
+
+func TestMacroDataGatewayAdapter_ChannelErrors_ReturnsCopy(t *testing.T) {
+	fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+		return nil, errors.New("fetch failed")
+	}
+	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
+	_, _ = gw.FetchSnapshot(context.Background())
+
+	errs1 := gw.ChannelErrors()
+	if len(errs1) == 0 {
+		t.Fatal("expected non-empty errors")
+	}
+	for k := range errs1 {
+		delete(errs1, k)
+	}
+	errs2 := gw.ChannelErrors()
+	if len(errs2) == 0 {
+		t.Error("expected ChannelErrors to return a copy; original map should not be affected by external mutation")
+	}
 }

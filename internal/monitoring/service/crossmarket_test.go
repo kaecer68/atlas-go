@@ -419,6 +419,125 @@ func TestGetCachedSnapshot_StaleAfterTTL_Refetches(t *testing.T) {
 	}
 }
 
+func TestDetectDegradedUSStatus_AllFailed(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{}
+	status, failed := detectDegradedUSStatus(snap)
+	if status != "degraded" {
+		t.Errorf("expected status=degraded, got %q", status)
+	}
+	if len(failed) != 8 {
+		t.Errorf("expected 8 failed channels, got %d: %v", len(failed), failed)
+	}
+	expected := map[string]bool{
+		"us_spx": false, "us_ndx": false, "us_dji": false, "sox_index": false,
+		"us_nvda": false, "us_aapl": false, "us_msft": false, "tsm_adr": false,
+	}
+	for _, f := range failed {
+		if _, ok := expected[f]; !ok {
+			t.Errorf("unexpected failed channel: %s", f)
+		}
+		expected[f] = true
+	}
+	for ch, seen := range expected {
+		if !seen {
+			t.Errorf("expected %s in failed list", ch)
+		}
+	}
+}
+
+func TestDetectDegradedUSStatus_PartialFailure(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		// DJIIndex empty
+		// SOXIndex empty
+		NVDA: marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL: marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		// MSFT empty
+		// TSMADR empty
+	}
+	status, failed := detectDegradedUSStatus(snap)
+	if status != "degraded" {
+		t.Errorf("expected status=degraded, got %q", status)
+	}
+	if len(failed) != 4 {
+		t.Errorf("expected 4 failed channels (DJI, SOX, MSFT, TSM), got %d: %v", len(failed), failed)
+	}
+	expectedFailed := map[string]bool{"us_dji": false, "sox_index": false, "us_msft": false, "tsm_adr": false}
+	for _, f := range failed {
+		if _, ok := expectedFailed[f]; !ok {
+			t.Errorf("unexpected failed channel: %s", f)
+		}
+		expectedFailed[f] = true
+	}
+}
+
+func TestDetectDegradedUSStatus_AllOK(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC"},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC"},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI"},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX"},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA"},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL"},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT"},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM"},
+	}
+	status, failed := detectDegradedUSStatus(snap)
+	if status != "ok" {
+		t.Errorf("expected status=ok, got %q", status)
+	}
+	if failed != nil {
+		t.Errorf("expected nil failed list when status=ok, got %v", failed)
+	}
+}
+
+func TestGetStatus_DataStatusJSONMarshaling(t *testing.T) {
+	// Build a minimal provider that returns a snapshot with all-zero US fields
+	// (simulating the production bug where channels fail).
+	provider := &fakeMacroProvider{
+		snap: marketdata.MacroDataSnapshot{
+			// All 8 US fields empty
+			VIX:     marketdata.MacroDataPoint{Symbol: "^VIX", Value: 20.5},
+			DXY:     marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 99.5},
+			USD_TWD: marketdata.MacroDataPoint{Symbol: "USDTWD=X", Value: 31.5},
+		},
+	}
+	svc := NewCrossMarketService(provider)
+	status, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+
+	// Verify new fields populated
+	if status.DataStatus != "degraded" {
+		t.Errorf("expected DataStatus=degraded, got %q", status.DataStatus)
+	}
+	if len(status.FailedChannels) != 8 {
+		t.Errorf("expected 8 failed channels, got %d: %v", len(status.FailedChannels), status.FailedChannels)
+	}
+
+	// Verify JSON marshaling includes the new fields
+	data, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	jsonStr := string(data)
+	if !strings.Contains(jsonStr, `"data_status":"degraded"`) {
+		t.Errorf("expected data_status in JSON, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"failed_channels":["us_spx"`) {
+		t.Errorf("expected failed_channels array in JSON, got: %s", jsonStr)
+	}
+	// Verify adjacent fields (VIX/DXY/USD_TWD) still appear with values
+	if !strings.Contains(jsonStr, `"symbol":"^VIX"`) {
+		t.Error("expected VIX symbol in JSON (adjacent regression check)")
+	}
+	if !strings.Contains(jsonStr, `"value":20.5`) {
+		t.Error("expected VIX value in JSON (adjacent regression check)")
+	}
+}
+
 func TestGetCachedSnapshot_ProviderError_DoesNotPoisonCache(t *testing.T) {
 	// Provider fails from the start. The cache must stay empty so a later
 	// successful call can populate it (a poisoned cache would freeze the

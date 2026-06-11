@@ -2,6 +2,8 @@ package apigateway
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -338,6 +340,89 @@ func TestChannelRegistry_ConcurrentAccess(t *testing.T) {
 	ids := r.List()
 	if len(ids) == 0 {
 		t.Fatal("expected some registered providers after concurrent access")
+	}
+}
+
+// =========================================================================
+// FetchResult Fallback & LastError Tests
+// =========================================================================
+
+func TestFetchResult_FallbackAndLastError_ZeroDefaults(t *testing.T) {
+	r := &FetchResult{
+		Data: []byte("test"),
+		Meta: FetchMetadata{ChannelID: "test"},
+	}
+	if r.Fallback {
+		t.Error("expected Fallback to default to false")
+	}
+	if r.LastError != "" {
+		t.Errorf("expected LastError to default to empty string, got %q", r.LastError)
+	}
+	if r.Meta.Fallback {
+		t.Error("expected FetchMetadata.Fallback to default to false")
+	}
+	if r.Meta.LastError != "" {
+		t.Errorf("expected FetchMetadata.LastError to default to empty string, got %q", r.Meta.LastError)
+	}
+}
+
+func TestCacheLayer_Fallback_Roundtrip(t *testing.T) {
+	layer := NewCacheLayer()
+	layer.Set("ch1", &FetchResult{
+		Data:      []byte("stale"),
+		Stale:     true,
+		Fallback:  true,
+		LastError: "circuit breaker open",
+		Meta:      FetchMetadata{ChannelID: "ch1", Stale: true, Fallback: true, LastError: "circuit breaker open"},
+	})
+	got := layer.Get("ch1")
+	if !got.Fallback {
+		t.Error("expected Fallback to be true after roundtrip")
+	}
+	if !got.Stale {
+		t.Error("expected Stale to be true after roundtrip")
+	}
+	if got.LastError != "circuit breaker open" {
+		t.Errorf("expected LastError to survive, got %q", got.LastError)
+	}
+	if !got.Meta.Fallback {
+		t.Error("expected FetchMetadata.Fallback to be true after roundtrip")
+	}
+}
+
+func TestFetchResult_JSONMarshal_OmitsEmptyFallbackAndLastError(t *testing.T) {
+	r := &FetchResult{
+		Data: []byte("test"),
+		Meta: FetchMetadata{ChannelID: "test"},
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	jsonStr := string(data)
+	if strings.Contains(jsonStr, `"fallback"`) {
+		t.Errorf("expected fallback to be omitted when false, got: %s", jsonStr)
+	}
+	if strings.Contains(jsonStr, `"last_error"`) {
+		t.Errorf("expected last_error to be omitted when empty, got: %s", jsonStr)
+	}
+
+	r2 := &FetchResult{
+		Data:      []byte("test"),
+		Fallback:  true,
+		LastError: "fetch failed",
+		Meta:      FetchMetadata{ChannelID: "test", Fallback: true, LastError: "fetch failed"},
+	}
+	data2, err := json.Marshal(r2)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	jsonStr2 := string(data2)
+	if !strings.Contains(jsonStr2, `"fallback":true`) {
+		t.Errorf("expected fallback:true in JSON, got: %s", jsonStr2)
+	}
+	if !strings.Contains(jsonStr2, `"last_error":"fetch failed"`) {
+		t.Errorf("expected last_error in JSON, got: %s", jsonStr2)
 	}
 }
 
