@@ -461,7 +461,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           (retailSentiment.sentiment_sub_indicators.category_a || retailSentiment.sentiment_sub_indicators.category_c);
 
       const compositeScore = retailSentiment.composite_sentiment || 0;
-      const compositeClass = compositeScore > 0.5 ? 'err' : compositeScore > 0 ? 'up' : compositeScore > -0.5 ? 'down' : 'warn';
+      const compositeClass = compositeScore > 0 ? 'up' : compositeScore < 0 ? 'down' : 'warn';
       const compositeLabel = compositeScore > 0.5 ? '極度樂觀' : compositeScore > 0 ? '偏多' : compositeScore > -0.5 ? '偏空' : '極度恐慌';
       const compositeHelp = `RSI-tw 綜合散戶情緒指數（Retail Sentiment Index — Taiwan）\\n\\nPart A（40%）：融資維持率、當沖比率、融資餘額變化、VIX風險映射、週選擇權PCR、零股失衡\\nPart C（25%）：散戶期貨未平倉、券商分點流向、ETF申購\\nPart D：事件調整乘數（0.8-1.2）\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5：散戶狂熱，市場接近短期頂部\\n• +0.2 ~ +0.5：散戶偏多\\n• -0.2 ~ +0.2：中性\\n• -0.5 ~ -0.2：散戶偏空\\n• ＜-0.5：散戶恐慌，可能是底部訊號\\n\\n當前數值：${compositeScore.toFixed(2)} — ${compositeLabel}`;
 
