@@ -163,10 +163,17 @@ func (m *mockScreeningRejectStore) LoadSessionScreeningRejects(sessionID string)
 }
 
 // mockSessionSummaryStore implements SessionSummaryStore for testing.
-type mockSessionSummaryStore struct{}
+type mockSessionSummaryStore struct {
+	summaries []domain.SessionSummary
+}
 
 func (m *mockSessionSummaryStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	m.summaries = append(m.summaries, summary)
 	return nil
+}
+
+func (m *mockSessionSummaryStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return m.summaries, nil
 }
 
 func (m *mockSessionSummaryStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {

@@ -75,6 +75,7 @@ type ScreeningRejectStore interface {
 
 type SessionSummaryStore interface {
 	RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error
+	LoadSessionSummaries() ([]domain.SessionSummary, error)
 	LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error)
 }
 
@@ -420,16 +421,31 @@ func (r *DualWriteRepository) SaveSessionSummary(ctx context.Context, summary do
 
 func (r *DualWriteRepository) LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error) {
 	if r.pg != nil {
-		return r.pg.LoadSessionSummary(ctx, sessionID)
+		summary, err := r.pg.LoadSessionSummary(ctx, sessionID)
+		if err == nil && summary != nil {
+			return summary, nil
+		}
+	}
+	summaries, err := r.jsonl.sessionSummaryStore.LoadSessionSummaries()
+	if err != nil {
+		return nil, err
+	}
+	for i := range summaries {
+		if summaries[i].SessionID == sessionID {
+			return &summaries[i], nil
+		}
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) LoadAllSessionSummaries(ctx context.Context) ([]domain.SessionSummary, error) {
 	if r.pg != nil {
-		return r.pg.LoadAllSessionSummaries(ctx)
+		summaries, err := r.pg.LoadAllSessionSummaries(ctx)
+		if err == nil && len(summaries) > 0 {
+			return summaries, nil
+		}
 	}
-	return nil, nil
+	return r.jsonl.sessionSummaryStore.LoadSessionSummaries()
 }
 
 func (r *DualWriteRepository) RecordHumanIntervention(ctx context.Context, intervention domain.HumanIntervention) error {
