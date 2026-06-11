@@ -1522,7 +1522,7 @@ func run(args []string, deps appDeps) error {
 			// the explicit signal that the on-demand attribution path is not
 			// configured. Init failure is Warn, not Fatal: rule_based
 			// attribution remains authoritative.
-			if apiKey := os.Getenv("LLM_ANNOTATOR_API_KEY"); apiKey != "" {
+			if apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY"); apiKey != "" {
 				if kimi, err := llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey}); err != nil {
 					logging.Warn("main", "kimi_init_failed", "err", err.Error())
 				} else {
