@@ -21,8 +21,9 @@
 // Annotate returns an error when the upstream fails (network, rate limit,
 // non-2xx HTTP, malformed response). Callers MUST treat this as a fallback
 // signal: the registry's rule_based attribution remains authoritative.
-package llm_annotator
+// Maturity: experimental
 
+package llm_annotator
 import (
 	"context"
 	"errors"

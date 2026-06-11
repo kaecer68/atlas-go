@@ -58,8 +58,8 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 		return nil, err
 	}
 	return &KimiClient{
-		cfg: cfg,
-		hc:  &http.Client{Timeout: cfg.Timeout},
+		cfg:     cfg,
+		hc:      &http.Client{Timeout: cfg.Timeout},
 		limiter: rate.NewLimiter(rate.Every(time.Second), 4),
 	}, nil
 }
