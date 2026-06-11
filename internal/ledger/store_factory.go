@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -51,6 +52,9 @@ func NewFullStore(cfg config.Config) (FullStore, error) {
 }
 
 func newStore(baseDir string) *Store {
+	if abs, err := filepath.Abs(baseDir); err == nil {
+		baseDir = abs
+	}
 	return &Store{baseDir: baseDir}
 }
 

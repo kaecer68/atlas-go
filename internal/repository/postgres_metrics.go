@@ -18,7 +18,12 @@ type PostgresRepository struct {
 }
 
 // NewPostgresRepository creates a new PostgreSQL-backed repository.
+// Returns nil when pool is nil so callers can use `r.pg != nil` as a single
+// availability guard (DualWrite fallback logic depends on this).
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
+	if pool == nil {
+		return nil
+	}
 	return &PostgresRepository{pool: pool}
 }
 
