@@ -31,7 +31,9 @@ import (
 
 const (
 	// healthEndpoint 是 fubon-proxy 健康檢查的 HTTP 端點。
-	healthEndpoint = "http://localhost:8081/health"
+	// 使用 IPv4 loopback (127.0.0.1) 而非 localhost,避免雙棧環境下
+	// Go net.Dial 預設優先走 IPv6 [::1] 導致連線失敗。
+	healthEndpoint = "http://127.0.0.1:8081/health"
 
 	// healthCheckTimeout 是單次健康檢查 HTTP 請求的超時時間。
 	healthCheckTimeout = 3 * time.Second

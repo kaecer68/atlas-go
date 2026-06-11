@@ -60,7 +60,7 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 	if os.Getenv("FUBON_PROXY_URL") != "" || fubonProxyBaseURL != "" {
 		// Probe the proxy before creating the client to avoid constant
 		// "connection refused" warnings when the proxy is not running.
-		proxyAddr := "localhost:8081"
+		proxyAddr := "127.0.0.1:8081"
 		if envURL := os.Getenv("FUBON_PROXY_URL"); envURL != "" {
 			if u, err := url.Parse(envURL); err == nil && u.Host != "" {
 				proxyAddr = u.Host

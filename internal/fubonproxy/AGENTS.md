@@ -27,6 +27,7 @@
 - **自動重啟**：崩潰時自動重啟，**backoff 僅在健康通過時重置為 3s**（初始），失敗時保留 10s 重試值。
 - **scriptPath 必須是絕對路徑**：`NewManager` 用 `filepath.Abs` 將 `services/fubon-proxy/main.py` 轉絕對，否則 `cmd.Dir` 與 `cmd.Start()` 解析基準不一致，導致 exit 2（PR #488）。
 - **stderr 必須以 Info 級別記錄**：Python 異常是排查啟動失敗的主要線索，Debug 級別會被吞（PR #488）。
+- **健康檢查位址**：使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`（PR #495）。原因：雙棧環境下 Go `net.Dial` 預設優先走 IPv6 `[::1]`，而 fubonproxy 雖已升級為 `host="::"` 雙棧綁定，但若用戶端 host 解析優先 IPv6 仍會 connection refused。對應 `internal/marketdata/AGENTS.md` 同名段落。
 
 ### 程序監督器不變式（PR #489 — F1~F8）
 

@@ -38,9 +38,9 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
 	}
 	if fubonKey != "" {
-		conn, err := net.DialTimeout("tcp", "localhost:8081", 2*time.Second)
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:8081", 2*time.Second)
 		if err != nil {
-			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — proxy at localhost:8081 not running")
+			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — proxy at 127.0.0.1:8081 not running")
 		} else {
 			_ = conn.Close()
 			_ = conn.Close()
