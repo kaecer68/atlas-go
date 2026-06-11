@@ -111,3 +111,34 @@ func TestDualWriteRepository_LoadAllSessionSummaries_BothEmpty_ReturnsEmpty(t *t
 		t.Errorf("expected 0 summaries on cold start, got %d", len(got))
 	}
 }
+
+// T1 — REGRESSION: empty Evolution page bug, production scenario.
+// PG is wired (PostgresRepository non-nil) but pool is nil (e.g..
+// constructor called with nil pool, or production server had r.pg.pool
+// stale-nil after pool teardown). JSONL has 109+ sessions on disk.
+// Must NOT panic; must fall back to JSONL.
+func TestDualWriteRepository_LoadAllSessionSummaries_PGPoolNil_FallsBackToJSONL(t *testing.T) {
+	want := makeStubSessionSummaries(3)
+	jsonl := &JSONLRepository{
+		sessionSummaryStore: &stubSessionSummaryStore{loadedSummaries: want},
+	}
+	// r.pg is non-nil but r.pg.pool is nil — simulates production nil-pool edge case
+	repo := &DualWriteRepository{
+		pg:    &PostgresRepository{pool: nil},
+		jsonl: jsonl,
+	}
+
+	// Must NOT panic at r.pg.pool.Query deref
+	got, err := repo.LoadAllSessionSummaries(context.Background())
+	if err != nil {
+		t.Fatalf("LoadAllSessionSummaries returned error: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d summaries from JSONL fallback, got %d (nil=%v)", len(want), len(got), got == nil)
+	}
+	for i := range got {
+		if got[i].SessionID != want[i].SessionID {
+			t.Errorf("summary[%d].SessionID = %q, want %q", i, got[i].SessionID, want[i].SessionID)
+		}
+	}
+}

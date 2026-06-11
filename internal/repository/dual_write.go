@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -99,6 +100,14 @@ func NewDualWriteRepository(pool *pgxpool.Pool, alertStore AlertStore, metricsSt
 	}
 }
 
+// pgUsable reports whether the PostgreSQL backend is fully reachable.
+// Centralizes the nil-struct + nil-pool guard so direct construction of
+// &PostgresRepository{pool: nil} (e.g. in tests or after pool teardown)
+// cannot trigger a nil-pointer panic at the Query/Exec call site.
+func (r *DualWriteRepository) pgUsable() bool {
+	return r.pg != nil && r.pg.pool != nil
+}
+
 // ============================================
 // Metrics Operations
 // ============================================
@@ -110,7 +119,7 @@ func (r *DualWriteRepository) Record(ctx context.Context, metricName string, val
 	})
 
 	// Also write to PostgreSQL (best effort)
-	if r.pg != nil {
+	if r.pgUsable() {
 		if err := r.pg.Record(ctx, metricName, value, labels); err != nil {
 			// Log but don't fail - JSONL is the source of truth during transition
 			return nil
@@ -121,7 +130,7 @@ func (r *DualWriteRepository) Record(ctx context.Context, metricName string, val
 
 func (r *DualWriteRepository) QueryRange(ctx context.Context, metricName string, start, end time.Time) ([]MetricPoint, error) {
 	// Prefer PostgreSQL
-	if r.pg != nil {
+	if r.pgUsable() {
 		points, err := r.pg.QueryRange(ctx, metricName, start, end)
 		if err == nil && len(points) > 0 {
 			return points, nil
@@ -131,14 +140,14 @@ func (r *DualWriteRepository) QueryRange(ctx context.Context, metricName string,
 }
 
 func (r *DualWriteRepository) QueryLatest(ctx context.Context, metricName string, labels map[string]string) (*MetricPoint, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryLatest(ctx, metricName, labels)
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) Aggregate(ctx context.Context, metricName string, start, end time.Time, agg string) (float64, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.Aggregate(ctx, metricName, start, end, agg)
 	}
 	return 0, nil
@@ -146,7 +155,7 @@ func (r *DualWriteRepository) Aggregate(ctx context.Context, metricName string, 
 
 func (r *DualWriteRepository) SaveSnapshot(ctx context.Context, snapshot *MetricsSnapshot) error {
 	_ = r.jsonl.metricsStore.SaveSnapshot(*snapshot)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.SaveSnapshot(ctx, snapshot)
 	}
 	return nil
@@ -154,7 +163,7 @@ func (r *DualWriteRepository) SaveSnapshot(ctx context.Context, snapshot *Metric
 
 func (r *DualWriteRepository) LoadToday(ctx context.Context) (*MetricsSnapshot, error) {
 	// Try PostgreSQL first
-	if r.pg != nil {
+	if r.pgUsable() {
 		snap, err := r.pg.LoadToday(ctx)
 		if err == nil && snap != nil {
 			return snap, nil
@@ -165,7 +174,7 @@ func (r *DualWriteRepository) LoadToday(ctx context.Context) (*MetricsSnapshot, 
 }
 
 func (r *DualWriteRepository) LoadRecent(ctx context.Context, n int) ([]MetricsSnapshot, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		snaps, err := r.pg.LoadRecent(ctx, n)
 		if err == nil && len(snaps) > 0 {
 			return snaps, nil
@@ -180,14 +189,14 @@ func (r *DualWriteRepository) LoadRecent(ctx context.Context, n int) ([]MetricsS
 
 func (r *DualWriteRepository) SaveAlert(ctx context.Context, alert domain.AlertRecord) error {
 	_ = r.jsonl.alertStore.Save(alert)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.SaveAlert(ctx, alert)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) LoadAllAlerts(ctx context.Context, limit int) ([]domain.AlertRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		records, err := r.pg.LoadAllAlerts(ctx, limit)
 		if err == nil && len(records) > 0 {
 			return records, nil
@@ -197,7 +206,7 @@ func (r *DualWriteRepository) LoadAllAlerts(ctx context.Context, limit int) ([]d
 }
 
 func (r *DualWriteRepository) LoadUnacknowledgedAlerts(ctx context.Context) ([]domain.AlertRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		records, err := r.pg.LoadUnacknowledgedAlerts(ctx)
 		if err == nil && len(records) > 0 {
 			return records, nil
@@ -208,14 +217,14 @@ func (r *DualWriteRepository) LoadUnacknowledgedAlerts(ctx context.Context) ([]d
 
 func (r *DualWriteRepository) AcknowledgeAlert(ctx context.Context, alertID string, user string) error {
 	_ = r.jsonl.alertStore.Acknowledge(alertID, user)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.AcknowledgeAlert(ctx, alertID, user)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) FindAlertByDedupKey(ctx context.Context, dedupKey string) (*domain.AlertRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		rec, err := r.pg.FindAlertByDedupKey(ctx, dedupKey)
 		if err == nil && rec != nil {
 			return rec, nil
@@ -226,28 +235,28 @@ func (r *DualWriteRepository) FindAlertByDedupKey(ctx context.Context, dedupKey 
 
 func (r *DualWriteRepository) UpdateAlert(ctx context.Context, id string, fn func(*domain.AlertRecord)) error {
 	_ = r.jsonl.alertStore.Update(id, fn)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.UpdateAlertByID(ctx, id, fn)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) LoadAlertsBySeverity(ctx context.Context, severity string, limit int) ([]domain.AlertRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.LoadAlertsBySeverity(ctx, severity, limit)
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) LoadAlertsByTimeRange(ctx context.Context, start, end time.Time) ([]domain.AlertRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.LoadAlertsByTimeRange(ctx, start, end)
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) QuerySessions(ctx context.Context) ([]SessionInfo, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QuerySessions(ctx)
 	}
 	return nil, nil
@@ -259,14 +268,14 @@ func (r *DualWriteRepository) QuerySessions(ctx context.Context) ([]SessionInfo,
 
 func (r *DualWriteRepository) RecordOutcomes(ctx context.Context, outcomes []domain.RecommendationOutcome) error {
 	_ = r.jsonl.outcomeStore.RecordOutcomes(outcomes)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.RecordOutcomes(ctx, outcomes)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) QueryOutcomesBySession(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		outcomes, err := r.pg.QueryOutcomesBySession(ctx, sessionID)
 		if err == nil && len(outcomes) > 0 {
 			return outcomes, nil
@@ -276,28 +285,28 @@ func (r *DualWriteRepository) QueryOutcomesBySession(ctx context.Context, sessio
 }
 
 func (r *DualWriteRepository) QueryOutcomesBySymbol(ctx context.Context, symbol string, start, end time.Time) ([]domain.RecommendationOutcome, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryOutcomesBySymbol(ctx, symbol, start, end)
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) QueryOutcomesByAgent(ctx context.Context, agentID string, start, end time.Time) ([]domain.RecommendationOutcome, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryOutcomesByAgent(ctx, agentID, start, end)
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) QueryPassRate(ctx context.Context, agentID string, window time.Duration) (float64, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryPassRate(ctx, agentID, window)
 	}
 	return 0, nil
 }
 
 func (r *DualWriteRepository) QueryTopSymbols(ctx context.Context, limit int, start, end time.Time) ([]SymbolCount, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryTopSymbols(ctx, limit, start, end)
 	}
 	return nil, nil
@@ -319,7 +328,7 @@ func (r *DualWriteRepository) RecordSessionOutcomes(ctx context.Context, session
 
 func (r *DualWriteRepository) RecordSessionSummary(ctx context.Context, session domain.ReplaySession, summary domain.SessionSummary) error {
 	_ = r.jsonl.sessionSummaryStore.RecordSessionSummary(session, summary)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.SaveSessionSummary(ctx, summary)
 	}
 	return nil
@@ -348,21 +357,21 @@ func (r *DualWriteRepository) LoadSessionScreeningRejects(ctx context.Context, s
 // ============================================
 
 func (r *DualWriteRepository) RecordCapitalFlow(ctx context.Context, channel string, netBuy, totalBuy, totalSell float64) error {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.RecordCapitalFlow(ctx, channel, netBuy, totalBuy, totalSell)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) QueryLatestCapitalFlow(ctx context.Context, channel string) (*CapitalFlowRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryLatestCapitalFlow(ctx, channel)
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) QueryCapitalFlowRange(ctx context.Context, channel string, start, end time.Time) ([]CapitalFlowRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryCapitalFlowRange(ctx, channel, start, end)
 	}
 	return nil, nil
@@ -373,21 +382,21 @@ func (r *DualWriteRepository) QueryCapitalFlowRange(ctx context.Context, channel
 // ============================================
 
 func (r *DualWriteRepository) SaveExportStats(ctx context.Context, year, month int, exportTotal, importTotal, tradeBalance float64) error {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.SaveExportStats(ctx, year, month, exportTotal, importTotal, tradeBalance)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) QueryLatestExportStats(ctx context.Context) (*ExportStatsRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryLatestExportStats(ctx)
 	}
 	return nil, nil
 }
 
 func (r *DualWriteRepository) QueryExportStatsByYearMonth(ctx context.Context, year, month int) (*ExportStatsRecord, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.QueryExportStatsByYearMonth(ctx, year, month)
 	}
 	return nil, nil
@@ -395,14 +404,14 @@ func (r *DualWriteRepository) QueryExportStatsByYearMonth(ctx context.Context, y
 
 func (r *DualWriteRepository) RecordScreeningRejects(ctx context.Context, sessionID string, rejects []domain.ScreeningReject) error {
 	_ = r.jsonl.screeningRejectStore.RecordSessionScreeningRejects(sessionID, rejects)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.RecordScreeningRejects(ctx, sessionID, rejects)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) QueryScreeningRejectsBySession(ctx context.Context, sessionID string) ([]domain.ScreeningReject, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		rejects, err := r.pg.QueryScreeningRejectsBySession(ctx, sessionID)
 		if err == nil && len(rejects) > 0 {
 			return rejects, nil
@@ -413,14 +422,14 @@ func (r *DualWriteRepository) QueryScreeningRejectsBySession(ctx context.Context
 
 func (r *DualWriteRepository) SaveSessionSummary(ctx context.Context, summary domain.SessionSummary) error {
 	_ = r.jsonl.sessionSummaryStore.RecordSessionSummary(domain.ReplaySession{ID: summary.SessionID}, summary)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.SaveSessionSummary(ctx, summary)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		summary, err := r.pg.LoadSessionSummary(ctx, sessionID)
 		if err == nil && summary != nil {
 			return summary, nil
@@ -439,25 +448,35 @@ func (r *DualWriteRepository) LoadSessionSummary(ctx context.Context, sessionID 
 }
 
 func (r *DualWriteRepository) LoadAllSessionSummaries(ctx context.Context) ([]domain.SessionSummary, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		summaries, err := r.pg.LoadAllSessionSummaries(ctx)
 		if err == nil && len(summaries) > 0 {
+			log.Printf("[DualWrite] LoadAllSessionSummaries: PG served %d summaries", len(summaries))
 			return summaries, nil
 		}
+		log.Printf("[DualWrite] LoadAllSessionSummaries: PG returned %d (err=%v); falling back to JSONL", len(summaries), err)
+	} else {
+		log.Printf("[DualWrite] LoadAllSessionSummaries: PG not usable; falling back to JSONL")
 	}
-	return r.jsonl.sessionSummaryStore.LoadSessionSummaries()
+	jsonlSummaries, err := r.jsonl.sessionSummaryStore.LoadSessionSummaries()
+	if err != nil {
+		log.Printf("[DualWrite] LoadAllSessionSummaries: JSONL fallback failed: %v", err)
+		return nil, err
+	}
+	log.Printf("[DualWrite] LoadAllSessionSummaries: JSONL served %d summaries", len(jsonlSummaries))
+	return jsonlSummaries, nil
 }
 
 func (r *DualWriteRepository) RecordHumanIntervention(ctx context.Context, intervention domain.HumanIntervention) error {
 	_ = r.jsonl.humanInterventionStore.RecordHumanIntervention(intervention)
-	if r.pg != nil {
+	if r.pgUsable() {
 		return r.pg.RecordHumanIntervention(ctx, intervention)
 	}
 	return nil
 }
 
 func (r *DualWriteRepository) LoadHumanInterventions(ctx context.Context) ([]domain.HumanIntervention, error) {
-	if r.pg != nil {
+	if r.pgUsable() {
 		interventions, err := r.pg.LoadHumanInterventions(ctx)
 		if err == nil && len(interventions) > 0 {
 			return interventions, nil
