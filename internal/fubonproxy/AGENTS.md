@@ -3,9 +3,9 @@
 ## 模組概述
 
 `fubonproxy` 提供 Fubon-proxy 生命週期管理 — 自動啟動/停止/監控 Python FastAPI 微服務。
-採用 **circuit breaker pattern**：`Start()` 立即返回，背景 goroutine 處理健康檢查與崩潰重啟。
+採用 **non-blocking supervisor pattern**：`Start()` 立即返回，背景 goroutine 處理健康檢查與崩潰重啟。
 
-// Maturity: evolving
+**Maturity**: evolving
 
 ## 關鍵符號
 
@@ -33,14 +33,14 @@
 
 新增或修改 `supervise()` / `Stop()` 必須遵守。完整發現清單見 PR #489 review。
 
-- **F1 — Stop/restart race**：`Stop()` **必須先設 `m.stopping=true` 再做任何檢查**，並**無條件**呼叫 `cancel()`。即使 `m.running=false` 也要走完這步，否則 supervise() 會在重啟路徑中孤兒化新程序。
+- **F1 — Stop/restart race**：`Stop()` **必須先設 `m.stopping=true` 再做任何檢查**，並呼叫 `cancel()`（但會 nil-check cancel 函式）。即使 `m.running=false` 也要走完這步，否則 supervise() 會在重啟路徑中孤兒化新程序。
 - **F1 — Post-start re-check**：supervise() 啟動新程序後必須在鎖內檢查 `m.stopping`，若已設則 `Kill()` 新程序並 return。
 - **F2/F4 — supervise() 的 health check 必須是同步呼叫**：不要 fire-and-forget 背景 goroutine 跑 `waitForHealthy`。崩潰循環中 fire-and-forget 會堆積 goroutine（最多 30s × 連環重啟次數）並以最短 backoff 連環重啟。
 - **F5 — waitForHealthy 必須尊重 ctx.Deadline()**：deadline 採 `min(startupTimeout, ctx.Deadline())`；sleep 必須用 `select { <-ctx.Done(): ... <-time.After(...): }` 包裝，讓取消能立即生效。
-- **F6 — 讀 `m.ctx` 必須在鎖內**：雖單純讀取在技術上安全，但違反 codebase 慣例（後續維護者難以推理）。
+- **F6 — 重啟路徑中必須在鎖內 snapshot `m.ctx`**：重啟路徑讀取共享狀態需在鎖內以避免與 `Stop()` 競爭；`m.ctx.Done()` 在 `select` 中讀取為例外（stdlib 慣例，安全）。
 - **F7 — supervisor 邏輯不用 `defer m.mu.Unlock()`**：使用 **lock-check-unlock-work-lock** pattern。`exec.Cmd.Start()` 必須在鎖外執行，否則 panic 會永久卡死 mutex。
 - **F7 — Start() 錯誤路徑必須清理 m.done**：關閉 m.done + 重置 ctx/cancel/done，避免 Stop() 永久阻塞（no-supervise edge case）。
-- **F8 — doc.go 必須與 code 同步**：F1 fix 後 Start() 是非同步的，doc.go 第 5~10 行的描述要與新行為對齊。
+- **F8 — doc.go 必須與 code 同步**：supervisor decouple fix 後 Start() 是非同步的；目前 doc.go 與 code 對齊。
 
 ### 測試標準（F3）
 
@@ -50,7 +50,7 @@
   - assert `process.Signal(syscall.Signal(0))` 成功（process 真的活著）
   - assert `Stop()` 後 `m.cmd == nil` 且 process 退出
 - **不允許只測「Start() 在 N 秒內返回」**。無 assertion 的時序測試會通過壞程式碼。
-- 注入 `healthURL` 走 `httptest.Server` 才有意義；用獨立於 proxy 的 mock 沒驗證到任何東西。
+- 注入 `healthURL` 走 `httptest.Server` 或 unreachable-IP 模式都有意義；前者驗證 health check 成功路徑，後者驗證 connection refused 處理（既有測試使用此模式）。
 
 ### 與 `internal/live/fubon_dma.go` 的界線
 
