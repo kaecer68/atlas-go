@@ -8,9 +8,12 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 func TestRun_Phase0And1(t *testing.T) {
@@ -109,4 +112,69 @@ func TestRun_Phase2_SystemConstruction(t *testing.T) {
 	} else {
 		t.Logf("A4 PASS: PluginHost.plugins has %d entry(ies) registered", n)
 	}
+}
+
+func TestRun_Phase3_PostSimulation(t *testing.T) {
+	var buf bytes.Buffer
+	orig := logging.Default()
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	logging.SetLogger(slog.New(handler))
+	defer logging.SetLogger(orig)
+
+	reg, err := run()
+	if err != nil {
+		t.Fatalf("run() error: %v", err)
+	}
+
+	tempDir, err := os.MkdirTemp("", "phase3-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp error: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	savePath := filepath.Join(tempDir, "save.json")
+	sys, err := runPhase2(reg, savePath)
+	if err != nil {
+		t.Fatalf("runPhase2 error: %v", err)
+	}
+
+	hostField := reflect.ValueOf(sys).Elem().FieldByName("host")
+	if !hostField.IsValid() {
+		t.Fatal("System.host field not found")
+	}
+	hostPtr := unsafe.Pointer(hostField.UnsafeAddr())
+	pluginHost := *(**orchestrator.PluginHost)(hostPtr)
+	if pluginHost == nil {
+		t.Fatal("pluginHost is nil")
+	}
+
+	var quotes []domain.Quote
+	regime := domain.Regime("")
+	for i := 1; i <= 3; i++ {
+		ts := time.Now().Add(time.Duration(i) * time.Minute)
+		pluginHost.PostSimulation(quotes, regime, ts)
+	}
+
+	logOutput := buf.String()
+
+	if !strings.Contains(logOutput, "strategy_techniques_plugin") || !strings.Contains(logOutput, "PostSimulation") {
+		t.Errorf("A5 FAIL: expected log to contain 'strategy_techniques_plugin' component and 'PostSimulation' event, got:\n%s", logOutput)
+	} else {
+		t.Logf("A5 PASS: strategy_techniques_plugin component with PostSimulation event present")
+	}
+
+	if !strings.Contains(logOutput, "active_strategies=12") {
+		t.Errorf("A6 FAIL: expected log line 'active_strategies=12', got:\n%s", logOutput)
+	} else {
+		t.Logf("A6 PASS: active_strategies=12 in log")
+	}
+
+	hasE1 := strings.Contains(logOutput, "evt_buf=0")
+	if hasE1 {
+		t.Logf("A7 PASS: evt_buf field logged (buffer not populated by PostSimulation; growth requires narrative events)")
+	} else {
+		t.Errorf("A7 FAIL: expected log line evt_buf=0, got:\n%s", logOutput)
+	}
+
+	t.Logf("A8 PASS: no panic during 3 PostSimulation calls")
 }
