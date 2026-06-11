@@ -82,7 +82,7 @@ func Load() Config {
 		FubonAPIKey:                envOrKeychain("FUBON_API_KEY"),
 		FugleAPIKey:                envOrKeychain("FUGLE_API_KEY"),
 		FinMindAPIKey:              envOrKeychain("FINMIND_API_KEY"),
-		YahooEnabled:               os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
+		YahooEnabled:               envOrBool("ATLAS_YAHOO_ENABLED", true),
 		BrokerMode:                 envOr("ATLAS_BROKER_MODE", "dry-run"),
 		BrokerMaxRetries:           envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),
 		BrokerAdapter:              envOr("ATLAS_BROKER_ADAPTER", "guarded"),
@@ -163,6 +163,18 @@ func envOrInt(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+func envOrBool(key string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch value {
+	case "true", "1", "yes", "on":
+		return true
+	case "false", "0", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 func envOrIntCSV(key string, fallback []int) []int {

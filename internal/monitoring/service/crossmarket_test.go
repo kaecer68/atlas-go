@@ -569,3 +569,63 @@ func TestGetCachedSnapshot_ProviderError_DoesNotPoisonCache(t *testing.T) {
 		t.Errorf("expected 2 provider calls after recovery, got %d", prov.calls)
 	}
 }
+
+// TestGetStatus_DataStatusOKWhenAllChannelsPopulated is the post-default-flip
+// green path for the PR #484 data-visibility safeguard. With cfg.YahooEnabled
+// defaulting to true, the 8 US channels are registered in production, so a
+// healthy snapshot will populate all 8 MacroDataPoint.Symbol fields. The
+// Layer-3 safeguard (detectDegradedUSStatus) must then return "ok" with no
+// failed channels — proving the safeguard's positive path complements (not
+// duplicates) the channel-registration fix in apigateway/register_adapters.go.
+//
+// See: docs/data_sources.md for the default-flip rationale and
+// .claude/skills/atlas-data-visibility/SKILL.md for the 4-layer model.
+func TestGetStatus_DataStatusOKWhenAllChannelsPopulated(t *testing.T) {
+	healthy := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5, ChangePct: 0.4, Timestamp: time.Now().Unix()},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1, ChangePct: 0.6, Timestamp: time.Now().Unix()},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0, ChangePct: 0.2, Timestamp: time.Now().Unix()},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0, ChangePct: 1.1, Timestamp: time.Now().Unix()},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0, ChangePct: 1.2, Timestamp: time.Now().Unix()},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0, ChangePct: 0.3, Timestamp: time.Now().Unix()},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0, ChangePct: 0.5, Timestamp: time.Now().Unix()},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0, ChangePct: 0.8, Timestamp: time.Now().Unix()},
+		// Adjacent fields unaffected by US channel failures
+		VIX:     marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0, ChangePct: -0.4, Timestamp: time.Now().Unix()},
+		DXY:     marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 99.5, Timestamp: time.Now().Unix()},
+		USD_TWD: marketdata.MacroDataPoint{Symbol: "USDTWD=X", Value: 31.5, Timestamp: time.Now().Unix()},
+	}
+	prov := &fakeMacroProvider{snap: healthy}
+	svc := NewCrossMarketService(prov)
+
+	status, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+
+	if status.DataStatus != "ok" {
+		t.Errorf("expected DataStatus=ok (all 8 US channels populated), got %q", status.DataStatus)
+	}
+	if len(status.FailedChannels) != 0 {
+		t.Errorf("expected no failed channels when DataStatus=ok, got %v", status.FailedChannels)
+	}
+
+	if status.VIX.Value != 18.0 {
+		t.Errorf("VIX.Value = %v, expected 18.0 (sibling regression check)", status.VIX.Value)
+	}
+	if status.DXY.Symbol != "DX-Y.NYB" {
+		t.Errorf("DXY.Symbol = %q, expected DX-Y.NYB (sibling regression check)", status.DXY.Symbol)
+	}
+
+	data, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	jsonStr := string(data)
+	if !strings.Contains(jsonStr, `"data_status":"ok"`) {
+		t.Errorf("expected data_status=ok in JSON, got: %s", jsonStr)
+	}
+	if strings.Contains(jsonStr, `"failed_channels":`) {
+		t.Errorf("failed_channels must be omitted when DataStatus=ok, got: %s", jsonStr)
+	}
+}
