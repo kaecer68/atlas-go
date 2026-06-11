@@ -253,7 +253,7 @@ type TaskStatus struct {
 	Enabled             bool          `json:"enabled"`
 	Interval            time.Duration `json:"interval"`
 	LastRun             time.Time     `json:"last_run"`
-	NextRun             time.Time     `json:"next_run"`
+	NextRun             time.Time     `json:"next_run"` // Zero = task never ran; past time = missed schedule (overlap or extended runtime); future time = upcoming scheduled execution
 	ConsecutiveFailures int           `json:"consecutive_failures"`
 }
 

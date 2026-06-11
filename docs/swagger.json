@@ -1311,7 +1311,8 @@
           "next_run": {
             "type": "string",
             "format": "date-time",
-            "nullable": true
+            "nullable": true,
+            "description": "Next scheduled execution time. Null when task has never run. Past timestamps indicate a missed schedule (overlap protection skip or extended runtime). Future timestamps indicate the upcoming scheduled execution."
           },
           "consecutive_failures": {
             "type": "integer"
