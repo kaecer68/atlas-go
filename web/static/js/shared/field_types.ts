@@ -525,6 +525,8 @@ export interface CrossMarketStatus {
   correlation_tsm_twse: number | null;
   correlation_nvda_twse: number | null;
   correlation_spx_vix: number | null;
+  data_status: string;
+  failed_channels?: string[];
 }
 
 export interface CustomerConcentration {
