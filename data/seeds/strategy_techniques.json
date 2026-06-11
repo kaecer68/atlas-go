@@ -417,5 +417,159 @@
     "hit_rate": 0.85,
     "total_tests": 8,
     "total_hits": 7
+  },
+  {
+    "id": "margin-balance-extreme",
+    "name": "融資餘額極端反轉",
+    "layer": "L4",
+    "summary": "融資餘額連續 3 日突破 3500 億，過熱反轉訊號",
+    "rationale": "融資餘額上升代表散戶槓桿進場，過熱後容易引發追價動能消退與強制回補潮，統計上此時短線回檔機率高",
+    "conditions": [
+      {
+        "field": "RetailMarginBalance",
+        "operator": "gt",
+        "value": 3500,
+        "string_value": "",
+        "timeframe": "3D",
+        "source": "twse_margin"
+      }
+    ],
+    "themes": [
+      "margin_extreme",
+      "retail_overheat",
+      "leverage_unwind"
+    ],
+    "regimes": [
+      "BULL",
+      "NEUTRAL"
+    ],
+    "sectors": [
+      "中小型股",
+      "題材股"
+    ],
+    "direction": "down",
+    "risk": "medium",
+    "source": "manual",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [
+      "槓桿過熱引發散戶停損",
+      "自營商避險拋售",
+      "法人反向操作"
+    ],
+    "hit_rate": 0.0,
+    "total_tests": 0,
+    "total_hits": 0
+  },
+  {
+    "id": "dealer-domestic-support",
+    "name": "土洋對作護盤訊號",
+    "layer": "L4",
+    "summary": "投信與自營商聯手買超 + 外資賣超時的本土防禦訊號",
+    "rationale": "當外資大賣而本土法人（投信 + 自營商）逆勢同步買超，通常代表政策面或 ETF 定期定額買盤在底部承接，是台股特有的『土洋對作』結構",
+    "conditions": [
+      {
+        "field": "DomesticFundNet",
+        "operator": "gt",
+        "value": 30,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "twse_capital_flow"
+      },
+      {
+        "field": "DealerNet",
+        "operator": "gt",
+        "value": 20,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "twse_capital_flow"
+      },
+      {
+        "field": "ForeignInvestorNet",
+        "operator": "lt",
+        "value": -50,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "twse_capital_flow"
+      }
+    ],
+    "themes": [
+      "dealer_support",
+      "domestic_defense",
+      "policy_stabilization"
+    ],
+    "regimes": [
+      "BEAR",
+      "NEUTRAL"
+    ],
+    "sectors": [
+      "權值股",
+      "高股息",
+      "ETF 標的"
+    ],
+    "direction": "up",
+    "risk": "low",
+    "source": "manual",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [
+      "投信季底作帳",
+      "ETF 被動買盤進場",
+      "政策護盤訊號"
+    ],
+    "hit_rate": 0.0,
+    "total_tests": 0,
+    "total_hits": 0
+  },
+  {
+    "id": "cb-fx-intervention-warning",
+    "name": "央行匯市干預預警",
+    "layer": "L4",
+    "summary": "USD_TWD 突破 32.5 且單日升幅 > 0.5% 時，央行可能進場調節",
+    "rationale": "新台幣 32.5 為歷史央行防線之一，當升勢過快且幅度過大，央行傾向進場拋匯阻升，後續股市動能可能因熱錢效應消退而轉弱",
+    "conditions": [
+      {
+        "field": "USD_TWD",
+        "operator": "gt",
+        "value": 32.5,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "twse_fx"
+      },
+      {
+        "field": "USD_TWD",
+        "operator": "gt",
+        "value": 0.5,
+        "string_value": "",
+        "timeframe": "1D",
+        "source": "twse_fx"
+      }
+    ],
+    "themes": [
+      "fx_intervention",
+      "twd_volatility",
+      "central_bank_action"
+    ],
+    "regimes": [
+      "BEAR",
+      "NEUTRAL"
+    ],
+    "sectors": [
+      "外銷股",
+      "出口導向股"
+    ],
+    "direction": "down",
+    "risk": "medium",
+    "source": "manual",
+    "status": "active",
+    "attribution_mode": "rule_based",
+    "attribution": [
+      "央行拋匯阻升",
+      "出口商恐慌拋匯",
+      "熱錢效應消退"
+    ],
+    "hit_rate": 0.0,
+    "total_tests": 0,
+    "total_hits": 0
   }
 ]

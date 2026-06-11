@@ -6,14 +6,17 @@ package strategies
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
+	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
 // Handlers serves the strategies API.
 type Handlers struct {
-	registry *strategy_techniques.Registry
+	registry  *strategy_techniques.Registry
+	annotator llm_annotator.Annotator
 }
 
 // NewHandlers builds a new Handlers backed by the given Registry.
@@ -29,6 +32,14 @@ func (h *Handlers) SetRegistry(r *strategy_techniques.Registry) {
 	h.registry = r
 }
 
+// SetAnnotator wires the LLM annotator for the /annotate endpoint. nil is
+// permitted; the annotate handler will return 503 until a real annotator
+// is wired in. The annotator is decoupled from the registry so a mock can
+// be used in tests without loading the production registry.
+func (h *Handlers) SetAnnotator(a llm_annotator.Annotator) {
+	h.annotator = a
+}
+
 // RegisterRoutes attaches the strategies routes to mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/strategies", shared.Get(h.listStrategies))
@@ -37,6 +48,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/strategies/{id}", shared.Get(h.getStrategy))
 	mux.Handle("POST /api/strategies/{id}/validate", shared.Post(h.validateStrategy))
 	mux.Handle("GET /api/strategies/{id}/attribution", shared.Get(h.getAttribution))
+	mux.Handle("POST /api/strategies/{id}/annotate", shared.Post(h.annotate))
 }
 
 // StrategyFrameSummary is the API-facing representation of a StrategyFrame.
