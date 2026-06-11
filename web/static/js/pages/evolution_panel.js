@@ -198,6 +198,8 @@ function formatDelta(baseline, candidate) {
 
 // ====== Cold-Start Empty State ======
 
+const COLD_START_SCHEDULER = 'auto_strategy_evolution';
+
 function isColdStart(scorecards, sessions, judges, promotes) {
   return [scorecards, sessions, judges, promotes].every(s => !s || !s.length);
 }
@@ -206,7 +208,7 @@ function renderColdStartEmpty() {
   return '<div class="empty-state-guidance" style="padding:48px 16px">' +
     '<div class="icon" style="font-size:48px">🧬</div>' +
     '<div class="title" style="font-size:16px;margin-bottom:8px">演化系統尚未啟動</div>' +
-    '<div class="desc" style="max-width:480px;margin:0 auto 12px">需等待 <code>auto_strategy_evolution</code> 排程首次觸發。<br>' +
+    '<div class="desc" style="max-width:480px;margin:0 auto 12px">需等待 <code>' + COLD_START_SCHEDULER + '</code> 排程首次觸發。<br>' +
     '在此之前，Agent 評分、Regime 歷史、實驗記錄均為空。</div>' +
     '<div class="action">💡 可至排程頁面查詢首次執行時間</div>' +
     '</div>';
@@ -215,7 +217,7 @@ function renderColdStartEmpty() {
 function renderAgentScoreEmpty() {
   return '<div class="empty-state-guidance"><div class="icon">🤖</div>' +
     '<div class="title">無 Agent 評分</div>' +
-    '<div class="desc">需等待 <code>auto_strategy_evolution</code> 排程首次執行</div></div>';
+    '<div class="desc">需等待 <code>' + COLD_START_SCHEDULER + '</code> 排程首次執行</div></div>';
 }
 
 // ====== Shared Experiment List ======
