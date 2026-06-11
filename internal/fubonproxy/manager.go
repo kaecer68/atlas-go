@@ -56,14 +56,14 @@ type ProcessManager struct {
 	workDir    string
 	pythonBin  string
 	scriptPath string
-
-	mu       sync.Mutex
-	cmd      *exec.Cmd
-	running  bool
-	stopping bool
-	ctx      context.Context
-	cancel   context.CancelFunc
-	done     chan struct{}
+	healthURL  string
+	mu         sync.Mutex
+	cmd        *exec.Cmd
+	running    bool
+	stopping   bool
+	ctx        context.Context
+	cancel     context.CancelFunc
+	done       chan struct{}
 }
 
 // NewManager 建立新的 ProcessManager。
@@ -78,6 +78,7 @@ func NewManager(workDir string) *ProcessManager {
 		workDir:    workDir,
 		pythonBin:  pythonBin,
 		scriptPath: scriptPath,
+		healthURL:  healthEndpoint,
 	}
 }
 
@@ -154,18 +155,17 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 		"script", m.scriptPath,
 	)
 
-	// 等待健康檢查通過
-	if err := m.waitForHealthy(ctx); err != nil {
-		// 健康檢查失敗不等於致命錯誤，程序可能仍在啟動中
-		logging.Warn("fubonproxy", "health_check_timeout",
-			logging.Err(err),
-			"message", "proxy started but health check did not pass within timeout",
-		)
-	} else {
-		logging.Info("fubonproxy", "health_check_passed")
-	}
+	go func() {
+		if err := m.waitForHealthy(ctx); err != nil {
+			logging.Warn("fubonproxy", "health_check_timeout",
+				logging.Err(err),
+				"message", "proxy started but health check did not pass within timeout",
+			)
+		} else {
+			logging.Info("fubonproxy", "health_check_passed")
+		}
+	}()
 
-	// 啟動 supervisor goroutine
 	go m.supervise()
 
 	return nil
@@ -234,7 +234,7 @@ func (m *ProcessManager) Stop() {
 // 向 http://localhost:8081/health 發送 GET 請求，期望 HTTP 200。
 func (m *ProcessManager) IsHealthy() bool {
 	client := &http.Client{Timeout: healthCheckTimeout}
-	resp, err := client.Get(healthEndpoint)
+	resp, err := client.Get(m.healthURL)
 	if err != nil {
 		return false
 	}
@@ -330,12 +330,13 @@ func (m *ProcessManager) supervise() {
 			"backoff", backoff.String(),
 		)
 
-		// 重啟後等待健康檢查
-		if healthErr := m.waitForHealthy(m.ctx); healthErr != nil {
-			logging.Warn("fubonproxy", "restart_health_check_failed", logging.Err(healthErr))
-		} else {
-			logging.Info("fubonproxy", "restart_health_check_passed")
-		}
+		go func() {
+			if healthErr := m.waitForHealthy(m.ctx); healthErr != nil {
+				logging.Warn("fubonproxy", "restart_health_check_failed", logging.Err(healthErr))
+			} else {
+				logging.Info("fubonproxy", "restart_health_check_passed")
+			}
+		}()
 
 		// 重啟成功後重設 backoff 為初始值
 		backoff = restartInitialDelay
