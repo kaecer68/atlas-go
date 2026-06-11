@@ -112,6 +112,12 @@ export interface AlertRecord {
   silenced_until?: string | null;
 }
 
+export interface AlertThreshold {
+  min_screening_rate: number;
+  max_alert_trigger_rate: number;
+  max_unacknowledged_alerts: number;
+}
+
 export interface AsymmetricRiskConfig {
   bad_news_threshold: number;
   good_news_threshold: number;
@@ -441,6 +447,13 @@ export interface ConvictionStep {
   param_ref?: string;
   param_value?: string;
   sensitivity?: number | null;
+}
+
+export interface CoreIndicators {
+  foreign_capital_net_twd: number;
+  tsm_adr_pct: number;
+  nvda_pct: number;
+  dxy_pct: number;
 }
 
 export interface CorporateAction {
@@ -1603,11 +1616,21 @@ export interface LayerAdjustment {
   reason: string;
 }
 
+export interface LayerCount {
+  layer: string;
+  count: number;
+}
+
 export interface LayerMetrics {
   total_signals: number;
   correct_signals: number;
   accuracy: number;
   last_updated: string;
+}
+
+export interface LayersResponse {
+  layers: string[];
+  total: number;
 }
 
 export interface LinkageConfig {
@@ -2937,9 +2960,33 @@ export interface SizingParameters {
   default_atr: string;
 }
 
+export interface StrategiesListResponse {
+  strategies: string[];
+  total: number;
+}
+
 export interface StrategyEvolutionConfig {
   cooldown_period_hours: number;
   configs: Record<string, string>;
+}
+
+export interface StrategyFrameSummary {
+  id: string;
+  name: string;
+  layer: string;
+  summary: string;
+  rationale: string;
+  direction: string;
+  risk: string;
+  status: string;
+  source: string;
+  hit_rate: number;
+  total_tests: number;
+  total_hits: number;
+  themes: string[];
+  sectors: string[];
+  regimes: string[];
+  attribution: string[];
 }
 
 export interface StrategyParameters {
@@ -3175,6 +3222,21 @@ export interface TechnicalBreakoutExecutorParameters {
   catch_up_upper_threshold: string;
 }
 
+export interface ThresholdReport {
+  violations: string[];
+  count: number;
+  threshold: string;
+  checked_at: string;
+}
+
+export interface ThresholdViolation {
+  metric: string;
+  current: number;
+  threshold: number;
+  severity: string;
+  message: string;
+}
+
 export interface TradeRecord {
   trade_id: string;
   session_id: string;
@@ -3203,6 +3265,18 @@ export interface UniverseOverlapResponse {
   agents: string[];
   matrix: Record<string, Record<string, number>>;
   warnings: string[];
+}
+
+export interface ValidateRequest {
+  total_tests: number;
+  total_hits: number;
+}
+
+export interface ValidateResponse {
+  id: string;
+  status: string;
+  hit_rate: number;
+  message: string;
 }
 
 export interface ValidationResult {
@@ -3273,14 +3347,6 @@ export interface revenueRecord {
   revenue_year: number;
 }
 
-export interface statsResponse {
-  total_rules: number;
-  active_rules: number;
-  degraded_rules: number;
-  expired_rules: number;
-  average_hit_rate: number;
-}
-
 export interface submitTaskRequest {
   task_type: string;
   payload?: Record<string, string>;
@@ -3296,14 +3362,5 @@ export interface submitTaskResponse {
 export interface supplyChainGraphJSON {
   nodes: string[];
   correlations: Record<string, number>;
-}
-
-export interface validateRuleResponse {
-  message: string;
-  rule_id: string;
-  hit_rate: number;
-  total_tests: number;
-  total_hits: number;
-  status: string;
 }
 
