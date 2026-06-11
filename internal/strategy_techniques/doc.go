@@ -10,5 +10,5 @@
 //
 // Seeds: data/seeds/strategy_techniques.json (9 production frames)
 //
-// Maturity: stable
+// Maturity: evolving
 package strategy_techniques
