@@ -66,9 +66,12 @@ while IFS= read -r file; do
       exit_alerts|logic_rules|sector_heatmap|\
       confidence_breakdown) continue ;;  # TODO: planned substructure, not yet in Go struct
       # Fields from map[string]any or packages not scanned by gentags
+      # (next_run is tagged in apigateway/, outside gentags scan scope;
+      # core_indicators is a wrapper map key around the CoreIndicators struct)
       auto_discovered_count|auto_discovered_rules|\
       avg_improvement|convergence_rate|success_rate|\
-      confidence_score|oil_pct|vix_level) continue ;;
+      confidence_score|oil_pct|vix_level|\
+      core_indicators|last_24h|next_run) continue ;;
     esac
 
     echo "$field" >> "$FOUND_FIELDS"
