@@ -87,6 +87,7 @@ export interface AlertParameters {
   min_screening_rate: string;
   max_alert_trigger_rate: string;
   max_unacknowledged_alerts: string;
+  suppress_categories: string;
 }
 
 export interface AlertRecord {
