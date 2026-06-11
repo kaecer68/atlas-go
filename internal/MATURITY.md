@@ -65,7 +65,6 @@
 | `sim` | 模擬引擎 — 部位狀態轉換、`Engine.RunSymbol()` | `Engine` | 核心模組，indirect import |
 | `spawning` | Agent 生成管理 — `SpawningManager`、`PerformSpawningCycle()` | `SpawningManager` | 核心模組，indirect import |
 | `strategy` | 策略選擇器與登錄 | `Selector` | 由 orchestrator 使用 |
-| `strategy_techniques` | 投資心法庫 — 5 層框架（L1~L5）+ 4 核心指標（外資/TSM ADR/NVDA/DXY）+ 自我修正（規則歸因 + LLM 加註） | `StrategyFrame`, `Layer`, `Registry` | 取代 `eventlogic`（Wave 5 清理後升 stable） |
 | `tax` | 台灣稅務計算 — `TaiwanTaxCalculator` | `TaiwanTaxCalculator` | 由 sim 使用 |
 | `monitoring/api/dashboard` | Dashboard management center handlers — 資料通道、管線、通道控制、API 金鑰管理 | `Handlers` | 由 monitoring 使用 |
 | `ml` | 監督式學習模型 — OLS、ElasticNet、PCR、PLS 實作（SK-05~09） | `Model`, `Trainer` | 由 Fin-Skills 規範驅動，供 factor/research 使用 |
@@ -73,7 +72,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 6 packages
+## X · Experimental（實驗中）— 7 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -85,6 +84,7 @@
 | `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，實驗中 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | 情境模擬 |
 | `swarm` | MiroFish swarm 模擬 + GARCH 波動率 + 策略進化 + API + Agent Skill | `Swarm` | 演進中 |
+| `llm_annotator` | LLM 歸因標註 — 自然語言解釋 StrategyFrame 失效原因（Kimi/Moonshot API） | `Annotator`, `KimiClient`, `MockAnnotator`, `FailureContext` | 需 `LLM_ANNOTATOR_API_KEY` 環境變數（透過 apigateway `config.GetSecret` 取得），opt-in 啟用（空時 `/api/strategies/{id}/annotate` 回 503） |
 
 ---
 
