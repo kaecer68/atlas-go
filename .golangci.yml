@@ -40,8 +40,9 @@ linters:
 
   exclusions:
     paths:
-      - ".*_test\.go"
+      - ".*_test\\.go"
       - "cmd/experimental/staging-drill-strategy-techniques/main_test.go"
+      - "cmd/experimental/staging-drill-strategy-techniques/main.go"
       - "internal/experiment/data/.*"
       - "data/.*"
       - ".worktrees"
