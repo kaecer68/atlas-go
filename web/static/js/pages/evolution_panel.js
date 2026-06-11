@@ -196,6 +196,28 @@ function formatDelta(baseline, candidate) {
   return { cls, text: arrow + ' ' + Math.abs(delta).toFixed(1) + '%', value: delta };
 }
 
+// ====== Cold-Start Empty State ======
+
+function isColdStart(scorecards, sessions, judges, promotes) {
+  return !scorecards.length && !sessions.length && !judges.length && !promotes.length;
+}
+
+function renderColdStartEmpty() {
+  return '<div class="empty-state-guidance" style="padding:48px 16px">' +
+    '<div class="icon" style="font-size:48px">🧬</div>' +
+    '<div class="title" style="font-size:16px;margin-bottom:8px">演化系統尚未啟動</div>' +
+    '<div class="desc" style="max-width:480px;margin:0 auto 12px">需等待 <code>auto_strategy_evolution</code> 排程首次觸發。<br>' +
+    '在此之前，Agent 評分、Regime 歷史、實驗記錄均為空。</div>' +
+    '<div class="action">💡 可至排程頁面查詢首次執行時間</div>' +
+    '</div>';
+}
+
+function renderAgentScoreEmpty() {
+  return '<div class="empty-state-guidance"><div class="icon">🤖</div>' +
+    '<div class="title">無 Agent 評分</div>' +
+    '<div class="desc">需等待 <code>auto_strategy_evolution</code> 排程首次執行</div></div>';
+}
+
 // ====== Shared Experiment List ======
 
 function renderExperimentList(judges, promotes, showStatus) {
@@ -308,6 +330,10 @@ function renderCompact() {
   const el = document.getElementById('evolutionContent');
   if (!el) return;
   const { scorecards, sessions, judges, promotes } = getData();
+  if (isColdStart(scorecards, sessions, judges, promotes)) {
+    el.innerHTML = renderPageGuide('compact') + renderColdStartEmpty();
+    return;
+  }
   var allExps = judges.concat(promotes);
 
   const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
@@ -361,15 +387,17 @@ stateHtml +
   }
   let agentSection = '<div class="panel" style="padding:14px 16px">' +
     '<div class="ev-section-title">🏆 Agent 表現 Top 5</div>' +
-    '<div class="ev-metric-legend" style="margin-bottom:6px">' +
-      '<span><span class="ev-legend-swatch high"></span> 命中率 &gt;60%</span>' +
-      '<span><span class="ev-legend-swatch mid"></span> 30-60%</span>' +
-      '<span><span class="ev-legend-swatch low"></span> &lt;30%</span>' +
-      '<span style="margin-left:8px"><span class="ev-legend-swatch good"></span> Sharpe &gt;1</span>' +
-      '<span><span class="ev-legend-swatch warn"></span> 0-1</span>' +
-      '<span><span class="ev-legend-swatch bad"></span> &lt;0</span>' +
-    '</div>' +
-    agentRows + '</div>';
+    (top5.length > 0
+      ? '<div class="ev-metric-legend" style="margin-bottom:6px">' +
+        '<span><span class="ev-legend-swatch high"></span> 命中率 &gt;60%</span>' +
+        '<span><span class="ev-legend-swatch mid"></span> 30-60%</span>' +
+        '<span><span class="ev-legend-swatch low"></span> &lt;30%</span>' +
+        '<span style="margin-left:8px"><span class="ev-legend-swatch good"></span> Sharpe &gt;1</span>' +
+        '<span><span class="ev-legend-swatch warn"></span> 0-1</span>' +
+        '<span><span class="ev-legend-swatch bad"></span> &lt;0</span>' +
+        '</div>' + agentRows
+      : renderAgentScoreEmpty()) +
+    '</div>';
 
   let elimRows = '';
   for (let i = 0; i < weakest.length; i++) {
@@ -404,6 +432,10 @@ function renderDetailed() {
   const el = document.getElementById('evolutionContent');
   if (!el) return;
   const { scorecards, sessions, judges, promotes } = getData();
+  if (isColdStart(scorecards, sessions, judges, promotes)) {
+    el.innerHTML = renderPageGuide('detailed') + renderColdStartEmpty();
+    return;
+  }
   const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
   const current = latestRegime(sessions);
 
@@ -412,13 +444,15 @@ function renderDetailed() {
     renderRegimeTimeline(sessions, 80) +
     '</div>';
 
-  let tableHtml = '<table class="ev-score-table"><thead><tr>' +
-    '<th>Agent</th><th>技能</th><th style="text-align:center">層</th><th style="text-align:right" title="該 Agent 參與過的歷史回測視窗數。越多表示統計可信度越高。">觀察 ⓘ</th>' +
-    '<th style="text-align:right" title="推薦產生正向報酬的比例。>60% 優秀（綠），30-60% 一般（黃），<30% 偏低（灰）。">命中率 ⓘ</th>' +
-    '<th style="text-align:right" title="風險調整後報酬。>1 良好（綠），0-1 一般（黃），<0 虧損（紅）。越高代表單位風險報酬越好。">Sharpe ⓘ</th>' +
-    '<th style="text-align:right" title="歷史推薦中最大累積虧損。越接近 0 風險控制越好。">最大回撤 ⓘ</th></tr></thead><tbody>';
+  let tableHtml;
+  if (sorted.length > 0) {
+    tableHtml = '<table class="ev-score-table"><thead><tr>' +
+      '<th>Agent</th><th>技能</th><th style="text-align:center">層</th><th style="text-align:right" title="該 Agent 參與過的歷史回測視窗數。越多表示統計可信度越高。">觀察 ⓘ</th>' +
+      '<th style="text-align:right" title="推薦產生正向報酬的比例。>60% 優秀（綠），30-60% 一般（黃），<30% 偏低（灰）。">命中率 ⓘ</th>' +
+      '<th style="text-align:right" title="風險調整後報酬。>1 良好（綠），0-1 一般（黃），<0 虧損（紅）。越高代表單位風險報酬越好。">Sharpe ⓘ</th>' +
+      '<th style="text-align:right" title="歷史推薦中最大累積虧損。越接近 0 風險控制越好。">最大回撤 ⓘ</th></tr></thead><tbody>';
 
-  for (let i = 0; i < sorted.length; i++) {
+    for (let i = 0; i < sorted.length; i++) {
     const a = sorted[i];
     const sClass = sharpeClass(a.sharpe);
     const hColor = (a.hit_rate || 0) > 0.5 ? 'var(--up)' : ((a.hit_rate || 0) > 0.3 ? 'var(--warn)' : 'var(--muted)');
@@ -431,8 +465,11 @@ function renderDetailed() {
       '<td style="text-align:right"><span class="' + sClass + '">' + (a.sharpe || 0).toFixed(2) + '</span></td>' +
       '<td style="text-align:right;color:var(--color-danger)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
       '</tr>';
+    }
+    tableHtml += '</tbody></table>';
+  } else {
+    tableHtml = renderAgentScoreEmpty();
   }
-  tableHtml += '</tbody></table>';
 
   let scoreSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
     '<div class="ev-section-title">Agent 評分表 <span class="ev-section-count">' + sorted.length + ' agents</span></div>' +
@@ -454,13 +491,18 @@ function renderCategorical() {
   if (!el || !catEl) return;
   catEl.style.display = 'block';
 
+  const { scorecards, sessions, judges, promotes } = getData();
+  if (isColdStart(scorecards, sessions, judges, promotes)) {
+    el.innerHTML = renderPageGuide('categorical') + renderColdStartEmpty();
+    return;
+  }
+
   el.innerHTML = renderPageGuide('categorical') + '<div style="display:flex;gap:8px;margin-bottom:16px" id="evolutionTabs">' +
     '<button class="cat-tab active" id="catTab-agents" onclick="window._evCatTab(\'agents\')">Agent 競爭</button>' +
     '<button class="cat-tab" id="catTab-regime" onclick="window._evCatTab(\'regime\')">Regime 演化</button>' +
     '<button class="cat-tab" id="catTab-experiments" onclick="window._evCatTab(\'experiments\')">實驗日誌</button>' +
     '</div>';
 
-  const { scorecards, sessions, judges, promotes } = getData();
   renderCatContent('agents', scorecards, sessions, judges, promotes);
 }
 
