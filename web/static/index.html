@@ -603,6 +603,10 @@
           注意：篩選統計與警報計數為記憶體內累計值，系統重啟後歸零。當系統持續運行並處理資料時，指標將自動累積。
         </span>
       </details>
+      <div style="display:flex;align-items:center;gap:12px;margin:0 0 12px">
+        <button class="refresh" id="metricsRefreshBtn" title="手動重新整理" style="padding:6px 14px">🔄 重新整理</button>
+        <span class="kpi-label" id="metricsLastUpdated" style="color:var(--muted)">尚未載入</span>
+      </div>
       <div class="panel wide" id="simHealthPanel">
         <div id="simHealthContainer"></div>
       </div>
@@ -627,10 +631,34 @@
           <div class="kpi-value" id="storageDeleted">-</div>
           <div class="kpi-label">最近清理刪除的檔案數</div>
         </div>
+<div class="panel" id="thresholdViolationsKpi" data-severity="unknown">
+          <h3>閾值健康度</h3>
+          <div class="kpi-value" id="thresholdViolationsCount">-</div>
+          <div class="kpi-label" id="thresholdViolationsLabel">載入中…</div>
+        </div>
+        <div class="panel" id="screeningTotalKpi" data-severity="unknown">
+          <h3>篩選總數</h3>
+          <div class="kpi-value" id="screeningTotalCount">-</div>
+          <div class="kpi-label" id="screeningTotalLabel">載入中…</div>
+        </div>
+        <div class="panel" id="pendingAlertsKpi" data-severity="unknown">
+          <h3>待處理警報</h3>
+          <div class="kpi-value" id="pendingAlertsCount">-</div>
+          <div class="kpi-label" id="pendingAlertsLabel">載入中…</div>
+        </div>
+        <div class="panel" id="ackRateKpi" data-severity="unknown">
+          <h3>警報確認率</h3>
+          <div class="kpi-value" id="ackRateCount">-</div>
+          <div class="kpi-label" id="ackRateLabel">載入中…</div>
+        </div>
       </div>
       <div class="panel wide" id="storageCleanupPanel" style="display:none">
         <h2>存儲清理詳情</h2>
         <div id="storageCleanupDetail" class="empty">載入中…</div>
+      </div>
+      <div class="panel wide" id="dataQualityPanel">
+        <h2>資料品質檢查 <span id="dataQualityScore" class="kpi-label">載入中…</span></h2>
+        <div id="dataQualityDetail" class="empty">載入中…</div>
       </div>
       <div class="panel wide">
         <h2>指標趨勢</h2>
