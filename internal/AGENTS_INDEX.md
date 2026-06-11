@@ -15,7 +15,7 @@
 | `db` | PostgreSQL 連線管理 |
 | `domain` | 領域型別、string enum、JSON tag snake_case |
 | `eventbus` | 事件匯流排 Publish/Subscribe |
-| `eventlogic` | 系統事件處理規則 |
+| `strategy_techniques` | 投資心法庫 — 5 層框架 + 4 核心指標 + 自我修正 |
 | `industry` | 產業輪動、供給需求、季節性、週期 |
 | `ledger` | JSONL append-only、OutcomeCount 計算 |
 | `logging` | 統一日誌介面 |

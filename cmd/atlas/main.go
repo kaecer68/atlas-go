@@ -26,7 +26,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
-	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/importer"
@@ -39,10 +38,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
-	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
+
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
+	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -52,6 +52,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/storage"
+	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 	"github.com/kaecer68/atlas-go/web"
 )
@@ -292,13 +293,11 @@ func run(args []string, deps appDeps) error {
 				"days_since_start", maturityTracker.DaysSinceStart())
 		}
 
-		var elDetector *eventlogic.PatternDetector
-		var elCorrector *eventlogic.SelfCorrector
-		var elValidator *eventlogic.RuleValidator
-		var narLifecycleMgr *narrative.EventLifecycleManager
+
 		var lifecycleMgr *storage.LifecycleManager
-		var elRulesPath string
-		var elHistoryRecorder *eventlogic.HistoryRecorder
+
+		var stRegistry *strategy_techniques.Registry
+		var stSeedsPath string
 
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
 		var gateway *apigateway.Gateway
@@ -403,7 +402,6 @@ func run(args []string, deps appDeps) error {
 		lifecycleMgr = storage.NewLifecycleManager(filepath.Join(cfg.WorkDir, "data/state"))
 		dashboard.SetStorageReporter(lifecycleMgr)
 		log.Printf("[Storage] reporter injected into dashboard API")
-		narLifecycleMgr = dashboard.GetEventLifecycleManager()
 
 		// Startup health check: verify critical data files exist and warn if missing.
 		replayPath := config.GetReplayDataPath(cfg.WorkDir)
@@ -512,8 +510,9 @@ func run(args []string, deps appDeps) error {
 			if repo != nil {
 				system.SetRepository(repo)
 			}
-			if elDetector != nil && elCorrector != nil {
-				system.WithEventLogic(elDetector, elCorrector, elRulesPath, elHistoryRecorder)
+
+			if stRegistry != nil {
+				system.WithStrategyTechniques(stRegistry, stSeedsPath)
 			}
 			if dashboard != nil {
 				system.SetDrawdownReporter(func(d portfolio.DrawdownResult) {
@@ -1120,14 +1119,7 @@ func run(args []string, deps appDeps) error {
 						if svc := dashRef.GetCrossMarketService(); svc != nil {
 							svc.UpdateAllCorrelations(snap)
 						}
-						// EventLogic cross-market rule evaluation against live data.
-						if elValidator != nil && snap.RecordedAt > 0 {
-							themes := narrativeActiveThemes(narLifecycleMgr)
-							fired := eventlogic.EvaluateActiveRules(elValidator, snap, themes)
-							if len(fired) > 0 {
-								logging.Info("main", "eventlogic_fired", "count", len(fired), "rules", fired)
-							}
-						}
+
 						return nil
 					},
 				})
@@ -1516,17 +1508,18 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[RiskGate] restored RSI-tw calibration score: %.4f", params.RSITw.LastCalibratedScore.Value)
 			}
 
-			elRulesPath = filepath.Join(cfg.WorkDir, "data/state/eventlogic", "rules.json")
-			elHistoryRecorder = eventlogic.NewHistoryRecorder(filepath.Join(cfg.WorkDir, "data/state/eventlogic", "history.jsonl"))
-			elRegistry := eventlogic.LoadOrDefault(elRulesPath)
-			elValidator = eventlogic.NewValidator(elRegistry)
-			elDetector = eventlogic.NewDetector(elRegistry)
-			elCorrector = eventlogic.NewCorrector(elRegistry)
-			elHandlers := apieventlogic.NewHandlers(elRegistry, elValidator, elDetector)
-			dashboard.SetEventLogicHandlers(elHandlers)
-			elRegistry.MustSave(elRulesPath)
-			elHistoryRecorder.SnapshotAll(elRegistry)
-			log.Printf("[EventLogic] loaded %d rules from %s", elRegistry.Count(), elRulesPath)
+
+
+			stSeedsPath = filepath.Join(cfg.WorkDir, "data/seeds/strategy_techniques.json")
+			if stReg, err := strategy_techniques.LoadFromFile(stSeedsPath); err == nil {
+				stRegistry = stReg
+				stHandlers := apistrategies.NewHandlers(stRegistry)
+				dashboard.SetStrategiesHandlers(stHandlers)
+				logging.Info("main", "strategy_techniques_loaded", "count", stRegistry.Count(), "path", stSeedsPath)
+			} else {
+				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
+			}
+
 
 			if dashEventBus != nil {
 				dashEventBus.Subscribe(eventbus.EventSimulationComplete, func(ctx context.Context, ev eventbus.BusEvent) error {
@@ -1560,22 +1553,7 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Monitor] subscribed to regime/sharpe/drawdown events")
 			}
 
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "eventlogic_auto_discover",
-				Interval: 168 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					candidates := elDetector.DiscoverPatterns(nil)
-					logging.Info("eventlogic_discover", "completed", "candidates", len(candidates))
-					for _, c := range candidates {
-						if rule, err := elDetector.PromoteCandidate(&c); err == nil {
-							logging.Info("eventlogic_discover", "promoted", "rule_id", rule.ID)
-						}
-					}
-					return nil
-				},
-			})
-			log.Printf("[EventLogic] weekly auto-discover background task registered")
+
 
 			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
 			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
@@ -2423,16 +2401,3 @@ func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) 
 	return all, nil
 }
 
-// narrativeActiveThemes returns the active narrative themes from the lifecycle
-// manager. Returns nil when the manager is not initialized.
-func narrativeActiveThemes(mgr *narrative.EventLifecycleManager) []string {
-	if mgr == nil {
-		return nil
-	}
-	events := mgr.GetActiveEvents()
-	themes := make([]string, len(events))
-	for i, ev := range events {
-		themes[i] = ev.Theme
-	}
-	return themes
-}

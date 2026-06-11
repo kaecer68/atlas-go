@@ -25,7 +25,7 @@ import (
 	apicrossmarket "github.com/kaecer68/atlas-go/internal/monitoring/api/crossmarket"
 	apidashboard "github.com/kaecer68/atlas-go/internal/monitoring/api/dashboard"
 	apidecision "github.com/kaecer68/atlas-go/internal/monitoring/api/decision"
-	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
+
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
@@ -37,6 +37,7 @@ import (
 	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
+	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	apiswarm "github.com/kaecer68/atlas-go/internal/monitoring/api/swarm"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
@@ -54,40 +55,40 @@ import (
 type DataFetcher func(ctx context.Context, channelID string) ([]byte, error)
 
 type DashboardAPI struct {
-	workDir            string
-	ledgerDir          string
-	storeBackend       string
-	sqlitePath         string
-	baselinePath       string
-	narrativeEngine    *narrative.NarrativeEngine
-	macroIngestor      *narrative.MacroIngestor
-	macroProvider      marketdata.MacroDataProvider
-	lifecycleMgr       *narrative.EventLifecycleManager
-	geoProvider        narrative.GeopoliticalRiskProvider
-	taiwanGeoProvider  narrative.GeopoliticalRiskProvider
-	taiwanStressCalc   *narrative.TaiwanStressCalculator
-	reportGenerator    *narrative.ReportGenerator
-	pool               *pgxpool.Pool
-	industryService    *service.IndustryService
-	metricsCollector   *MetricsCollector
-	metricsHistory     *MetricsHistory
-	healthManager      *portfolio.AgentHealthManager
-	dataQualityChecker *DataQualityChecker
-	janusEngine        *janus.Engine
-	repo               *repository.DualWriteRepository
-	taskManager        *taskexec.Manager
-	eventBus           *eventbus.ChannelEventBus
-	outcomeStore       *DualWriteOutcomeStoreAdapter
-	storageReport      apimetrics.StorageReporter
-	dataFetcher        DataFetcher
-	riskGate           *risk.RiskGate
-	latestDrawdown     *portfolio.DrawdownResult
-	drawdownMu         sync.RWMutex
-	eventLogicHandlers *apieventlogic.Handlers
-	calibrationTask    *narrative.CalibrationTask
-	crisisModeSetter   func(active bool) // callback: VIX>=35 → optimizer crisis mode
-	correlationSetter  func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
-	crossMarketSvc     *service.CrossMarketService
+	workDir                    string
+	ledgerDir                  string
+	storeBackend               string
+	sqlitePath                 string
+	baselinePath               string
+	narrativeEngine            *narrative.NarrativeEngine
+	macroIngestor              *narrative.MacroIngestor
+	macroProvider              marketdata.MacroDataProvider
+	lifecycleMgr               *narrative.EventLifecycleManager
+	geoProvider                narrative.GeopoliticalRiskProvider
+	taiwanGeoProvider          narrative.GeopoliticalRiskProvider
+	taiwanStressCalc           *narrative.TaiwanStressCalculator
+	reportGenerator            *narrative.ReportGenerator
+	pool                       *pgxpool.Pool
+	industryService            *service.IndustryService
+	metricsCollector           *MetricsCollector
+	metricsHistory             *MetricsHistory
+	healthManager              *portfolio.AgentHealthManager
+	dataQualityChecker         *DataQualityChecker
+	janusEngine                *janus.Engine
+	repo                       *repository.DualWriteRepository
+	taskManager                *taskexec.Manager
+	eventBus                   *eventbus.ChannelEventBus
+	outcomeStore               *DualWriteOutcomeStoreAdapter
+	storageReport              apimetrics.StorageReporter
+	dataFetcher                DataFetcher
+	riskGate                   *risk.RiskGate
+	latestDrawdown             *portfolio.DrawdownResult
+	drawdownMu                 sync.RWMutex
+	strategyTechniquesHandlers *apistrategies.Handlers
+	calibrationTask            *narrative.CalibrationTask
+	crisisModeSetter           func(active bool) // callback: VIX>=35 → optimizer crisis mode
+	correlationSetter          func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
+	crossMarketSvc             *service.CrossMarketService
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -623,9 +624,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		WorkDir:       a.workDir,
 		LedgerDir:     a.ledgerDir,
 	}
-	if a.eventLogicHandlers != nil {
-		decisionHandlers.Registry = a.eventLogicHandlers.Registry()
-	}
+
 	decisionHandlers.RegisterRoutes(mux)
 
 	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore)
@@ -807,11 +806,13 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	a.RegisterPerformanceRoutes(mux)
 	a.RegisterCircuitBreakerRoutes(mux)
 }
+func (a *DashboardAPI) SetStrategiesHandlers(h *apistrategies.Handlers) {
+	a.strategyTechniquesHandlers = h
+}
 
-func (a *DashboardAPI) SetEventLogicHandlers(h *apieventlogic.Handlers) { a.eventLogicHandlers = h }
-func (a *DashboardAPI) RegisterEventLogicRoutes(mux *http.ServeMux) {
-	if a.eventLogicHandlers != nil {
-		a.eventLogicHandlers.RegisterRoutes(mux)
+func (a *DashboardAPI) RegisterStrategiesRoutes(mux *http.ServeMux) {
+	if a.strategyTechniquesHandlers != nil {
+		a.strategyTechniquesHandlers.RegisterRoutes(mux)
 	}
 }
 
@@ -1072,7 +1073,7 @@ func (a *DashboardAPI) RegisterAllRoutes(mux *http.ServeMux, opts RouteOptions) 
 	a.RegisterCrossMarketRoutes(mux)
 	a.RegisterExperimentRoutes(mux)
 	a.RegisterIndustryRoutes(mux)
-	a.RegisterEventLogicRoutes(mux)
+	a.RegisterStrategiesRoutes(mux)
 	a.RegisterLiveRoutes(mux)
 
 	if opts.IncludeBacktest {

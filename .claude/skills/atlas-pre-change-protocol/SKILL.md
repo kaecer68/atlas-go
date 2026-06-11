@@ -233,3 +233,32 @@ Read relevant internal/<module>/AGENTS.md for module-specific traps
 ```
 
 **Investigation mode is EXEMPT from Steps 4, 5, 7 (constitution check, pattern matching, code intent) — these only apply to code modifications.**
+
+## Strategy Techniques 觸及檢查（Step 2.5 增補）
+
+當變更觸及 `internal/strategy_techniques/` 模組時，**額外**執行以下檢查：
+
+1. **5 層框架一致性**：新增/修改的 StrategyFrame.Layer 須落在 L1~L5 之一，不可自創
+2. **4 核心指標相容性**：Condition.Field 須使用 dot notation（`ForeignInvestorNet.Value`、`TSMADR.ChangePct` 等），與 `atlas-taiwan-leading-indicators` skill 列出的 4 個 MacroDataSnapshot 欄位一致
+3. **3 個 enum 對齊**：Direction、Risk、Status 須使用 `strategy_techniques.Direction/Risk/Status` 型別，不可自建
+4. **9 條 production seeds 不破壞**：新增/修改的代碼須確保既有 `data/seeds/strategy_techniques.json` 仍可載入
+5. **自我修正路徑保留**：修改 `Validate` 或 `AttributionMode` 邏輯時，須保留 `rule_based` + `llm_annotated` 雙路徑
+
+## Code Removal Checklist 增補：刪除 eventlogic/ 模組時
+
+當執行 Wave 5 cleanup（刪除 `internal/eventlogic/`）時：
+
+```
+□ gitnexus_impact({target: "eventlogic", direction: "upstream"}) — 確認 0 呼叫者
+□ grep -r "internal/eventlogic" --include="*.go" . — 確認僅剩 410 Gone handler
+□ grep -r "EventRule\b" --include="*.go" . — 確認無殘留
+□ 確認 cmd/atlas/main.go 的 `apipipeline` import 不依賴 eventlogic
+□ 確認 internal/portfolio/weight_engine.go 的 regime 標籤使用 strategy_techniques
+□ 確認 internal/monitoring/dashboard_api.go 移除 eventLogicHandlers 欄位
+□ 更新 internal/MATURITY.md（eventlogic S-tier 改 strategy_techniques S-tier）
+□ 更新 internal/AGENTS.md（移除 eventlogic 路由、保留 strategy_techniques）
+□ 跑 `go test ./...` 確認無破壞
+□ 跑 `staticcheck ./...` 確認 0 issues
+```
+
+**詳見**：`atlas-strategy-techniques` skill 的「與 eventlogic 取代關係」
