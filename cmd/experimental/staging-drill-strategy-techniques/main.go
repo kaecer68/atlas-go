@@ -11,15 +11,19 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
+
+const annotateEndpointEnvVar = "ATLAS_ANNOTATE_URL"
 
 // run executes Phase 0 (pre-flight) + Phase 1 (boot-time seed loading).
 // It returns the loaded Registry for downstream phases to reuse.
@@ -119,20 +123,89 @@ func runPhase2(reg *strategy_techniques.Registry, savePath string) (*orchestrato
 	return system, nil
 }
 
+func runPhase4And5(reg *strategy_techniques.Registry, frameID string) error {
+	baseURL := os.Getenv(annotateEndpointEnvVar)
+	return runPhase4And5WithEndpoint(reg, frameID, baseURL)
+}
+
+func runPhase4And5WithEndpoint(reg *strategy_techniques.Registry, frameID, baseURL string) error {
+	tempDir, err := os.MkdirTemp("", "staging-drill-phase45-*")
+	if err != nil {
+		return fmt.Errorf("phase4+5 create temp dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY")
+
+	if apiKey == "" {
+		logging.Default().Info("staging_drill_phase4_dummy",
+			slog.String("reason", "LLM_ANNOTATOR_API_KEY unset"),
+		)
+		return nil
+	}
+	if baseURL == "" {
+		logging.Default().Info("staging_drill_phase4_dummy",
+			slog.String("reason", annotateEndpointEnvVar+" unset"),
+		)
+		return nil
+	}
+
+	url := fmt.Sprintf("%s/api/strategies/%s/annotate", baseURL, frameID)
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return fmt.Errorf("phase4 create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("phase4 POST: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("phase4 /annotate returned %d, expected 200", resp.StatusCode)
+	}
+
+	logging.Default().Info("staging_drill_phase4_annotated",
+		slog.String("url", url),
+		slog.Int("status", resp.StatusCode),
+	)
+	return nil
+}
+
 func main() {
+	start := time.Now()
+
 	reg, err := run()
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "Phase 0+1 failed: %v\n", err)
+		os.Exit(1)
 	}
 
 	tempDir, err := os.MkdirTemp("", "staging-drill-strategy-techniques-main-*")
 	if err != nil {
-		panic(fmt.Errorf("create temp dir: %w", err))
+		fmt.Fprintf(os.Stderr, "Phase 5 setup failed: %v\n", err)
+		os.Exit(1)
 	}
 	defer os.RemoveAll(tempDir)
 	savePath := filepath.Join(tempDir, "strategy_techniques_save.json")
 
 	if _, err := runPhase2(reg, savePath); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "Phase 2 failed: %v\n", err)
+		os.Exit(1)
 	}
+
+	all := reg.All()
+	if len(all) == 0 {
+		fmt.Fprintln(os.Stderr, "Phase 4 failed: registry has no frames")
+		os.Exit(1)
+	}
+	if err := runPhase4And5(reg, all[0].ID); err != nil {
+		fmt.Fprintf(os.Stderr, "Phase 4 failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	elapsed := time.Since(start)
+	fmt.Printf("staging-drill: all 10 assertions PASS, elapsed=%s\n", elapsed)
 }
