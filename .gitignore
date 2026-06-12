@@ -57,7 +57,9 @@ cmd/experimental/*/data/
 # Development artifacts
 /.omo/
 **/.omo/
-/.opencode/
+/.opencode/*
+!/.opencode/worktree-workflow.json
+!/.opencode/commands/*.md
 /.planning/
 /.playwright-mcp/
 /.graphify_cached.json
