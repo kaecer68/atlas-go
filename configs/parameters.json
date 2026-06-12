@@ -1,6 +1,6 @@
 {
   "version": "1.2",
-  "updated_at": "2026-06-10T18:26:10.626862+08:00",
+  "updated_at": "2026-06-13T00:30:48.122544+08:00",
   "darwinian": {
     "weight_min": {
       "value": 0.3,
@@ -59,9 +59,12 @@
       }
     },
     "bottom_quartile_multiplier": {
-      "value": 0.85,
+      "value": 0.9042752813095427,
       "rationale": "5% daily cut for bottom performers",
       "source": "heuristic",
+      "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_method": "sharpe_ratio_based",
       "citation": {
         "source_type": "heuristic",
         "source_reference": "Parameter validated via empirical_calibration during calibration audit",
@@ -101,9 +104,12 @@
       }
     },
     "ema_alpha": {
-      "value": 0.4,
+      "value": 0.3,
       "rationale": "Standard EMA smoothing factor",
       "source": "literature",
+      "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_method": "autocorrelation_based",
       "citation": {
         "source_type": "literature",
         "source_reference": "Agent weight system calibration",
@@ -171,9 +177,12 @@
       }
     },
     "risk_volatility_threshold": {
-      "value": 1.8426176768468487,
+      "value": 1.7617066538852415,
       "rationale": "8% daily volatility is extreme; extra penalty warranted",
       "source": "empirical",
+      "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
         "source_reference": "Agent weight system calibration",
@@ -202,8 +211,8 @@
       "value": 0.5116279069767442,
       "rationale": "60% hit rate is good in TW equity market",
       "source": "calibrated",
-      "last_calibrated": "2026-06-10T11:49:27.14606+08:00",
-      "calibration_timestamp": "2026-06-10T11:49:27.14606+08:00",
+      "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
       "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
@@ -216,11 +225,11 @@
       }
     },
     "hit_rate_low_threshold": {
-      "value": 0,
+      "value": 0.13043478260869565,
       "rationale": "40% hit rate is poor and warrants reduction",
       "source": "calibrated",
-      "last_calibrated": "2026-06-10T11:49:27.14606+08:00",
-      "calibration_timestamp": "2026-06-10T11:49:27.14606+08:00",
+      "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
       "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
@@ -6578,11 +6587,6 @@
       "rationale": "System metrics collection interval (30 seconds)",
       "source": "heuristic"
     },
-    "suppress_categories": {
-      "value": ["gateway", "simulation:risk_off"],
-      "rationale": "Alert categories that should be auto-suppressed (not saved to alert stream). Gateway heartbeat and simulation RISK_OFF are expected behavior.",
-      "source": "heuristic"
-    },
     "min_screening_rate": {
       "value": 0.1,
       "rationale": "Minimum screening rate (10%) before warning",
@@ -6596,6 +6600,14 @@
     "max_unacknowledged_alerts": {
       "value": 10,
       "rationale": "Maximum unacknowledged alerts before warning",
+      "source": "heuristic"
+    },
+    "suppress_categories": {
+      "value": [
+        "gateway",
+        "simulation:risk_off"
+      ],
+      "rationale": "Alert categories that should be auto-suppressed (not saved to alert stream). Gateway heartbeat and simulation RISK_OFF are expected behavior.",
       "source": "heuristic"
     }
   },
