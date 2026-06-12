@@ -438,7 +438,9 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 					preTotal += s
 					preCount++
 				}
-				if preCount > 0 && preTotal/float64(preCount) < 40 {
+				// Factor scores are clamped to [-1, 1] (see portfolio/factor_engine.go);
+				// skip symbols whose average factor score is below the 0.40 quality bar.
+				if preCount > 0 && preTotal/float64(preCount) < 0.40 {
 					continue
 				}
 			}
@@ -466,6 +468,30 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			}
 
 			recs = append(recs, rec)
+		}
+	}
+
+	// Wave 2: Append position-rotation recs (SELL/REDUCE) for held positions whose
+	// factor signals have decayed. Auto-rotation per ULTRAWORK rule "machine-first".
+	// No-op when heldPositions is empty or rotator has no evaluators.
+	if plugins != nil && plugins.rotator != nil && len(plugins.rotator.evaluators) > 0 && len(plugins.heldPositions) > 0 {
+		for _, agent := range registry.Agents {
+			if !agent.Enabled {
+				continue
+			}
+			if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle && agent.Layer != domain.LayerSuperinvestor {
+				continue
+			}
+			prompt := plugins.ResolvePrompt(agent, overrides)
+			rotationRecs := plugins.rotator.Rotate(plugins.heldPositions, quotes, agent, prompt, regime, factorSnapshot)
+			if len(rotationRecs) > 0 {
+				recs = append(recs, rotationRecs...)
+				logging.Info("rotation", "evaluator_fired",
+					logging.AgentID(agent.ID),
+					"layer", string(agent.Layer),
+					"held_positions", len(plugins.heldPositions),
+					"rotation_recs", len(rotationRecs))
+			}
 		}
 	}
 
