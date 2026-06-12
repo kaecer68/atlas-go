@@ -1,0 +1,8 @@
+{
+  "remote": "origin",
+  "branchPrefix": "wt/",
+  "baseBranch": "main",
+  "worktreeRoot": "$ROOT_PARENT",
+  "cleanupMode": "preview",
+  "protectedBranches": ["main"]
+}
