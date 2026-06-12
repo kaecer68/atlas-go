@@ -105,27 +105,6 @@ export async function loadSwarmData() {
   renderStrategies(strategies);
 }
 
-const SCENARIO_NAME_ZH = {
-  fed_hikes_2022: '聯準會激進升息（2022）',
-  ai_bubble_2024: 'AI 半導體泡沫（2024）',
-  taiwan_tension_2022: '台海地緣緊張（2022）',
-  normal_market_2024: '正常市場（2024）',
-  level3_alert_2021: '三級警戒（2021）',
-};
-
-const STRATEGY_NAME_RULES = {
-  'Conservative Momentum': '保守動能策略',
-  'Conservative Momentum (Mutated)': '保守動能策略（突變）',
-};
-
-const STRATEGY_TYPE_ZH = {
-  momentum: '動能策略',
-  adaptive: '適應性學習',
-  curriculum: 'AI 學習',
-  ensemble: '多策略組合',
-  evolutionary: '演化式策略',
-};
-
 function renderStatus(status) {
   const el = document.getElementById('swarm-status');
   if (!el) return;
