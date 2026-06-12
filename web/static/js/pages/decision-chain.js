@@ -117,14 +117,14 @@ function renderEventsRadar(data) {
     const sev = e.severity || 'low';
     const sevEmoji = sev === 'critical' ? '🔴' : sev === 'high' ? '🟠' : sev === 'medium' ? '🟡' : '🟢';
     return `<div class="dc-event-row">
-      <span>${sevEmoji} <strong title="${escapeHtml(e.theme)}">${narrativeThemeLabel(e.theme)}</strong></span>
+      <span>${sevEmoji} <strong title="${escapeHtml(e.theme)}">${escapeHtml(narrativeThemeLabel(e.theme))}</strong></span>
       <span class="text-muted" style="font-size:11px">Conf ${(e.confidence * 100).toFixed(0)}% · Hit ${(e.hit_rate * 100).toFixed(0)}% · ${escapeHtml(e.status || 'active')}</span>
     </div>`;
   }).join('');
 
   const recentRows = (events.recent || []).slice(0, 5).map(e => {
     return `<div class="dc-event-row" style="opacity:0.7">
-      <span>📌 <strong title="${escapeHtml(e.theme)}">${narrativeThemeLabel(e.theme)}</strong></span>
+      <span>📌 <strong title="${escapeHtml(e.theme)}">${escapeHtml(narrativeThemeLabel(e.theme))}</strong></span>
       <span class="text-muted" style="font-size:11px">${timeAgo(e.timestamp)} · Conf ${(e.confidence * 100).toFixed(0)}%</span>
     </div>`;
   }).join('');
