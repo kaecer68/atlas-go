@@ -110,9 +110,11 @@ var (
 	}
 
 	ScenarioEMContagion = Scenario{
-		ID:         "em_contagion_2018",
-		Regime:     domain.RegimeRiskOff,
-		WindowDays: 20,
+		ID:          "em_contagion_2018",
+		Name:        "新興市場傳染風險 2018",
+		Description: "2018: 美元強勢 + 聯準會升息 + 新興市場資金外逃, 土耳其/阿根廷匯率危機",
+		Regime:      domain.RegimeRiskOff,
+		WindowDays:  20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 24.0, IsTradable: true},
 			{Symbol: "DXY", Last: 96.5, Open: 95.0, IsTradable: true},
@@ -122,9 +124,11 @@ var (
 	}
 
 	ScenarioLiquidityCrunch = Scenario{
-		ID:         "liquidity_crunch_2008",
-		Regime:     domain.RegimeRiskOff,
-		WindowDays: 20,
+		ID:          "liquidity_crunch_2008",
+		Name:        "金融海嘯流動性緊縮 2008",
+		Description: "2008: 雷曼兄弟倒閉 + 信用利差暴增 + VIX 創歷史新高, 全球流動性枯竭",
+		Regime:      domain.RegimeRiskOff,
+		WindowDays:  20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 69.3, IsTradable: true},
 			{Symbol: "DXY", Last: 83.0, Open: 80.0, IsTradable: true},

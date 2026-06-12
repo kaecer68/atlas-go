@@ -104,20 +104,20 @@ type SimulationResult struct {
 
 // ConsensusPrediction aggregates predictions across fish
 type ConsensusPrediction struct {
-	Symbol             string
-	BullishCount       int
-	BearishCount       int
-	NeutralCount       int
-	AverageConfidence  float64
-	ConsensusDirection string
+	Symbol             string  `json:"symbol"`
+	BullishCount       int     `json:"bullish_count"`
+	BearishCount       int     `json:"bearish_count"`
+	NeutralCount       int     `json:"neutral_count"`
+	AverageConfidence  float64 `json:"average_confidence"`
+	ConsensusDirection string  `json:"consensus_direction"`
 }
 
 // Anomaly flags unusual patterns in simulation
 type Anomaly struct {
-	Type        string
-	Description string
-	Severity    float64
-	Symbols     []string
+	Type        string   `json:"type"`
+	Description string   `json:"description"`
+	Severity    float64  `json:"severity"`
+	Symbols     []string `json:"symbols"`
 }
 
 // SwarmConfig configures swarm behavior

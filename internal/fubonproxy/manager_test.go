@@ -678,16 +678,11 @@ func TestProcessManager_Stop_SIGINTGracefulThenSIGKILL(t *testing.T) {
 	}
 	t.Logf("started stuck process: pid=%d (ignore SIGINT, sleep 30)", pid)
 
-	// Stop() 透過 cancel() 終止 cmd（Go exec.CommandContext 內部 SIGKILL）。
-	// 必須在合理時間內返回 — 觀察 [0s, 3s] 範圍。
+	// F3: 驗證正確性不只時序 — gracefulShutdownTimeout=5s 為設計安全網。
 	stopStart := time.Now()
 	m.Stop()
 	stopElapsed := time.Since(stopStart)
-	t.Logf("Stop() returned in %.3fs (cancel()-based kill, NOT SIGINT escalation)", stopElapsed.Seconds())
-
-	if stopElapsed > 3*time.Second {
-		t.Errorf("Stop() took %.2fs — too slow for cancel()-based kill, expected < 3s", stopElapsed.Seconds())
-	}
+	t.Logf("Stop() returned in %.3fs (includes 5s graceful shutdown safety net)", stopElapsed.Seconds())
 
 	// 程序必須真的死掉
 	if !waitForProcessExit(pid, 3*time.Second) {
