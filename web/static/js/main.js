@@ -368,7 +368,7 @@ async function loadPageData(pageId) {
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'strategies') {
-    try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(); } catch(e) { console.error(e); }
+    try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(document.getElementById('page-strategies')); } catch(e) { console.error(e); }
   }
   else if (pageId === 'swarm') {
     try { if (m.swarm && m.swarm.loadSwarmData) m.swarm.loadSwarmData(); } catch(e) { console.error(e); }
