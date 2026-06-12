@@ -118,7 +118,7 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
       <div class="metric"><div class="label">壓力等級</div><div class="value">${sLabel}</div></div>
       <div class="metric" style="flex:1;min-width:260px">
         <div class="label">主要敘事事件</div>
-        <div class="value" style="font-size:14px">${topEvent ? narrativeThemeLabel(topEvent.theme) : '無活躍事件'}</div>
+        <div class="value" style="font-size:14px">${topEvent ? escapeHtml(narrativeThemeLabel(topEvent.theme)) : '無活躍事件'}</div>
         <div style="margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6">
           情緒方向：<strong style="color:${sentimentColor}">${sentimentText}</strong> · ${stressAdvice}
         </div>
