@@ -48,6 +48,7 @@ cmd/*/reports/
 internal/*/data/
 !internal/marketdata/data/
 !internal/config/data/
+cmd/experimental/*/data/
 .gitnexus/lbug
 /.codegraph/
 /.worktrees/
