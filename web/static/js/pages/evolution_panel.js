@@ -311,7 +311,7 @@ function renderRegimeTimeline(sessions, maxDots) {
   }
   dotsHtml += '</div>';
 
-  let hintHtml = '<div class="ev-section-hint">🟢 多頭（RISK_ON）= 偏向積極配置 · 🔴 空頭（RISK_OFF）= 防禦或減倉 · 🟡 盤整（NEUTRAL）= 中性觀望 · 🟣 過渡（TRANSITIONAL）= 體制切換中。藍色分隔線標記體制切換點；同色密集區 = 市場穩定期，頻繁變色 = 動盪期。</div>';
+  let hintHtml = '<div class="ev-section-hint">🔴 多頭（RISK_ON）= 偏向積極配置 · 🟢 空頭（RISK_OFF）= 防禦或減倉 · 🟡 盤整（NEUTRAL）= 中性觀望 · 🟣 過渡（TRANSITIONAL）= 體制切換中。藍色分隔線標記體制切換點；同色密集區 = 市場穩定期，頻繁變色 = 動盪期。</div>';
 
   let metaHtml = '<div class="ev-regime-meta">' +
     '<div class="ev-regime-legend">' +
