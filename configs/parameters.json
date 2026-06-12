@@ -64,6 +64,7 @@
       "source": "heuristic",
       "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
       "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_method": "sharpe_ratio_based",
       "citation": {
         "source_type": "heuristic",
         "source_reference": "Parameter validated via empirical_calibration during calibration audit",
@@ -108,6 +109,7 @@
       "source": "literature",
       "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
       "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_method": "autocorrelation_based",
       "citation": {
         "source_type": "literature",
         "source_reference": "Agent weight system calibration",
@@ -180,6 +182,7 @@
       "source": "empirical",
       "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
       "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+      "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
         "source_reference": "Agent weight system calibration",
