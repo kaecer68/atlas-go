@@ -28,6 +28,7 @@
 - **scriptPath 必須是絕對路徑**：`NewManager` 用 `filepath.Abs` 將 `services/fubon-proxy/main.py` 轉絕對，否則 `cmd.Dir` 與 `cmd.Start()` 解析基準不一致，導致 exit 2（PR #488）。
 - **stderr 必須以 Info 級別記錄**：Python 異常是排查啟動失敗的主要線索，Debug 級別會被吞（PR #488）。
 - **健康檢查位址**：使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`（PR #495）。原因：雙棧環境下 Go `net.Dial` 預設優先走 IPv6 `[::1]`，而 fubonproxy 雖已升級為 `host="::"` 雙棧綁定，但若用戶端 host 解析優先 IPv6 仍會 connection refused。對應 `internal/marketdata/AGENTS.md` 同名段落。
+- **啟動前 port 探測（F9）**：`Start()` 進入 spawn 路徑前先以 `net.Listen("tcp", "127.0.0.1:8081")` 探測（IPv4 對齊上述 PR #495 約定）。Free → fall through；EADDRINUSE + `IsHealthy()` → 視為外部已管理、跳過 spawn；EADDRINUSE + 非 healthy + lsof 解析成功 → 回傳 actionable error（含 `pid=...` 與 `kill <pid>` 指令），**不**進入 supervise() 3s backoff-loop；探測或 lsof 失敗 → log warn + fall through to spawn，保留原行為。
 
 ### 程序監督器不變式（PR #489 — F1~F8）
 
@@ -42,6 +43,10 @@
 - **F7 — Start() 錯誤路徑必須清理 m.done**：關閉 m.done + 重置 ctx/cancel/done，避免 Stop() 永久阻塞（no-supervise edge case）。
 - **F8 — doc.go 必須與 code 同步**：supervisor decouple fix 後 Start() 是非同步的；目前 doc.go 與 code 對齊。
 
+### Start() pre-flight 不變式（F9）
+
+- **F9 — Start() 啟動前 port 探測**：在 `scriptPath` 與 `IsHealthy` 檢查之間，必須以 3-state switch（portStateFree / Healthy / Foreign）取代單一 `IsHealthy()` 早退。理由：port 被非 fubon-proxy process 佔用時，`IsHealthy()` 會回 false，繼續 spawn 會撞 EADDRINUSE → supervise() 進 3s backoff-loop；同時 `cmd/atlas` 視 Start() 為 non-fatal warning，導致 fubon adapter 跳過註冊、前端缺資料。Foreign 占用必須回傳 actionable error（含 PID 與 `kill` 指令），由呼叫端決定是否升級為 fatal。Probe 用 `net.Listen` 而非 `net.Dial` 避免 side effect。**probe 僅在 L125 進行一次，不在 supervise() 重啟路徑中重複**。
+
 ### 測試標準（F3）
 
 - **測試必須驗證「正確性」不只「時序」**：
@@ -51,6 +56,7 @@
   - assert `Stop()` 後 `m.cmd == nil` 且 process 退出
 - **不允許只測「Start() 在 N 秒內返回」**。無 assertion 的時序測試會通過壞程式碼。
 - 注入 `healthURL` 走 `httptest.Server` 或 unreachable-IP 模式都有意義；前者驗證 health check 成功路徑，後者驗證 connection refused 處理（既有測試使用此模式）。
+- **F9 port 探測測試標準**：必須用真實 `net.Listen("tcp", "127.0.0.1:8081")` 佔位（搭配 `t.Cleanup` 釋放）；不可用 mock 替代。port 已被佔用時 `t.Skip` 而非 Fatal。涵蓋：Free → spawn 路徑、Healthy（bind + /health=200）→ 跳過 spawn 且 m.running=false、Foreign（bind + /health=404）→ error 含 `"port 8081"` / `"foreign"` / `"kill"` 關鍵字。`lookupPortOccupant` 單元測試可在 lsof 不可用時 skip。
 
 ### 與 `internal/live/fubon_dma.go` 的界線
 
@@ -77,5 +83,5 @@
 
 1. 必跑：`go test -race -count=1 ./internal/fubonproxy/` 確認 3 個測試全綠
 2. 必跑：`go vet ./internal/fubonproxy/` + `staticcheck ./internal/fubonproxy/`
-3. 若改 supervisor 邏輯：重新檢視 F1~F8 是否仍遵守，並更新本檔
+3. 若改 supervisor 邏輯：重新檢視 F1~F8；改 Start() pre-flight 時檢視 F9，並更新本檔
 4. 若改介面：更新 `doc.go`（package 層級文件）保持一致

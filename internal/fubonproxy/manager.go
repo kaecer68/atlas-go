@@ -17,11 +17,15 @@ package fubonproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -52,7 +56,29 @@ const (
 
 	// restartBackoffDelay 是連續崩潰後的重啟等待時間。
 	restartBackoffDelay = 10 * time.Second
+
+	// proxyListenPort 是 fubon-proxy 服務綁定的 TCP 埠。Start() 在 spawn
+	// 之前會預先探測此埠的占用情況（F9 不變式），避免在 supervise() 內部
+	// 才發現 EADDRINUSE 而陷入 backoff-loop。
+	proxyListenPort = 8081
 )
+
+// portState 表達 port 8081 在 Start() 預先探測後的占用狀態。
+// 設計目的：區分「可 spawn」、「外部 fubon-proxy 已管理」、「外部進程佔住」
+// 三種情況，避免在 spawn() 內部才發現 EADDRINUSE 而延遲到 supervise() 才反應。
+type portState int
+
+const (
+	portStateFree portState = iota
+	portStateHealthy
+	portStateForeign
+)
+
+// portOccupant 描述佔住 port 8081 的程序。用於構造 actionable error。
+type portOccupant struct {
+	PID     int
+	Command string
+}
 
 // ProcessManager 管理 fubon-proxy Python 服務的生命週期。
 type ProcessManager struct {
@@ -123,10 +149,45 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 		return fmt.Errorf("fubonproxy: script not found at %s: %w", m.scriptPath, err)
 	}
 
-	// 檢查是否已有實體在運行
-	if m.IsHealthy() {
-		logging.Info("fubonproxy", "already_running", "message", "fubon-proxy is already running, skipping start")
-		return nil
+	// Pre-flight port 8081 探測（F9 不變式）。
+	// 目的：避免 spawn() 在 supervise() 內部 EADDRINUSE 失敗而進入
+	// backoff-loop（原始 bug：外部進程佔住 :8081 導致無限重啟 + 前端拿不到
+	// fubon 資料）。三種狀態：
+	//   - portStateFree     — 可 spawn，走原本路徑
+	//   - portStateHealthy  — 外部 fubon-proxy 已管理 /health，跳過 spawn
+	//   - portStateForeign  — 外部進程佔住，回傳 actionable error（含 PID+cmd）
+	//
+	// probe 失敗時退化為「直接 spawn」，保留舊行為；supervise() 仍會在
+	// EADDRINUSE 時 retry，但我們已先把最常見的 lsof-not-found 情境 log 出來。
+	state, occupant, probeErr := m.probePort8081()
+	if probeErr != nil {
+		logging.Warn("fubonproxy", "port_probe_failed",
+			logging.Err(probeErr),
+			"port", proxyListenPort,
+			"fallback", "spawn_directly",
+		)
+	} else {
+		switch state {
+		case portStateHealthy:
+			logging.Info("fubonproxy", "external_managed",
+				"port", proxyListenPort,
+				"occupant_pid", occupant.PID,
+				"message", "port already serves /health; skipping spawn",
+			)
+			return nil
+		case portStateForeign:
+			if occupant.PID > 0 {
+				return fmt.Errorf("fubonproxy: port %d held by foreign process "+
+					"(pid=%d, cmd=%q); stop it with `kill %d` or change fubon-proxy port",
+					proxyListenPort, occupant.PID, occupant.Command, occupant.PID)
+			}
+			return fmt.Errorf("fubonproxy: port %d held by unknown process; "+
+				"identify it with `lsof -nP -iTCP:%d -sTCP:LISTEN` and stop it, "+
+				"or change fubon-proxy port",
+				proxyListenPort, proxyListenPort)
+		case portStateFree:
+			// 走原本 spawn 路徑
+		}
 	}
 
 	m.mu.Lock()
@@ -255,6 +316,87 @@ func (m *ProcessManager) IsHealthy() bool {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
+}
+
+// isHealthyWithTimeout 是 IsHealthy() 的變體，使用可設定 timeout。
+// 用於 probePort8081 內 retry loop，避免每輪等待 IsHealthy 預設的 3s
+// healthCheckTimeout（F9: 容忍外部 fubon-proxy 剛啟動時 /health 尚未 accept）。
+func (m *ProcessManager) isHealthyWithTimeout(timeout time.Duration) bool {
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Get(m.healthURL)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode == http.StatusOK
+}
+
+// probePort8081 探測 port 8081 占用狀態（F9 pre-flight）。
+// 同步執行（< 100ms + lsof ~50ms）。
+// IPv4 hardcode 對齊 healthEndpoint（PR #495），避免雙棧環境下 [::1] 優先導致誤判。
+func (m *ProcessManager) probePort8081() (portState, portOccupant, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(proxyListenPort))
+	if err == nil {
+		_ = ln.Close()
+		return portStateFree, portOccupant{}, nil
+	}
+	if !errors.Is(err, syscall.EADDRINUSE) {
+		return 0, portOccupant{}, fmt.Errorf("port %d probe failed: %w", proxyListenPort, err)
+	}
+	// port 被佔：可能是健康的 fubon-proxy 剛啟動，/health 尚未 accept。
+	// 重試容忍 race（F9_PortHeldByHealthyFubon_SkipsSpawn 測試 + 真實世界
+	// 「外部 fubon-proxy 剛 cmd.Start() 完成」），避免誤判為 foreign。
+	// 預算 500ms（5 × 100ms），probe 不會無限期阻塞 Start()。
+	for attempt := 0; attempt < 5; attempt++ {
+		if m.isHealthyWithTimeout(100 * time.Millisecond) {
+			occupant, _ := lookupPortOccupant(proxyListenPort)
+			return portStateHealthy, occupant, nil
+		}
+		if attempt < 4 {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	// port 被佔但 /health 失敗 → 外部進程
+	occupant, lookupErr := lookupPortOccupant(proxyListenPort)
+	if lookupErr != nil {
+		logging.Warn("fubonproxy", "lsof_lookup_failed",
+			logging.Err(lookupErr),
+			"port", proxyListenPort,
+		)
+	}
+	return portStateForeign, occupant, nil
+}
+
+// lookupPortOccupant 用 lsof -F 機讀格式解析 port 占用者。
+// lsof 不可用時回傳 error，呼叫端降級使用空 occupant。
+func lookupPortOccupant(port int) (portOccupant, error) {
+	out, err := exec.Command("lsof",
+		"-nP",
+		fmt.Sprintf("-iTCP:%d", port),
+		"-sTCP:LISTEN",
+		"-FpcL",
+	).Output()
+	if err != nil {
+		return portOccupant{}, fmt.Errorf("lsof: %w", err)
+	}
+	var occ portOccupant
+	for _, line := range strings.Split(string(out), "\n") {
+		if len(line) < 2 {
+			continue
+		}
+		switch line[0] {
+		case 'p':
+			if pid, perr := strconv.Atoi(line[1:]); perr == nil {
+				occ.PID = pid
+			}
+		case 'c':
+			occ.Command = line[1:]
+		}
+	}
+	if occ.PID == 0 {
+		return portOccupant{}, fmt.Errorf("port %d held but lsof reported no PID", port)
+	}
+	return occ, nil
 }
 
 // waitForHealthy 輪詢健康檢查直到通過、超時、或 ctx 取消。
