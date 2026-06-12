@@ -255,6 +255,7 @@ type PluginRegistry struct {
 	mlScorer           *MLScorer
 	promptResolver     PromptResolver    // plugin boundary — injected via WithPromptResolver; nil = fallback to os.ReadFile
 	rotator            *PortfolioRotator // position rotation evaluator
+	heldPositions      []domain.Position // positions carried over from prior session; drives SELL/REDUCE in collectRecommendations
 }
 
 func NewPluginRegistry(loaders ...ExecutorLoader) *PluginRegistry {
@@ -321,6 +322,16 @@ func (r *PluginRegistry) RegisterPositionEvaluators(evaluators ...PositionEvalua
 	} else {
 		r.rotator.evaluators = append(r.rotator.evaluators, evaluators...)
 	}
+	return r
+}
+
+// WithHeldPositions attaches the portfolio's currently-held positions so that
+// collectRecommendations can run PortfolioRotator.Rotate and emit SELL/REDUCE
+// recs for positions whose factor signals have decayed. When heldPositions is
+// nil/empty (or the rotator has no evaluators), the rotation path is a no-op
+// and behavior is identical to pre-fix.
+func (r *PluginRegistry) WithHeldPositions(positions []domain.Position) *PluginRegistry {
+	r.heldPositions = positions
 	return r
 }
 
