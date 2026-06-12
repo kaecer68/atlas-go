@@ -1512,6 +1512,9 @@ func run(args []string, deps appDeps) error {
 				stRegistry = stReg
 				stHandlers := apistrategies.NewHandlers(stRegistry)
 				dashboard.SetStrategiesHandlers(stHandlers)
+				// Re-register: RegisterAllRoutes ran before SetStrategiesHandlers,
+				// so the original call encountered a nil handler. nil-safe.
+				dashboard.RegisterStrategiesRoutes(mux)
 				logging.Info("main", "strategy_techniques_loaded", "count", stRegistry.Count(), "path", stSeedsPath)
 			} else {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())

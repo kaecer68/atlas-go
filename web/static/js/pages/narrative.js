@@ -1,4 +1,5 @@
-import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName, confidenceSourceName, severityName, statusName } from '../names.js';
+import { stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName, confidenceSourceName, severityName, statusName } from '../names.js';
+import { narrativeThemeLabel } from '../shared/constants.js';
 import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
@@ -117,7 +118,7 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
       <div class="metric"><div class="label">壓力等級</div><div class="value">${sLabel}</div></div>
       <div class="metric" style="flex:1;min-width:260px">
         <div class="label">主要敘事事件</div>
-        <div class="value" style="font-size:14px">${topEvent ? eventName(topEvent.theme) : '無活躍事件'}</div>
+        <div class="value" style="font-size:14px">${topEvent ? escapeHtml(narrativeThemeLabel(topEvent.theme)) : '無活躍事件'}</div>
         <div style="margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6">
           情緒方向：<strong style="color:${sentimentColor}">${sentimentText}</strong> · ${stressAdvice}
         </div>
@@ -305,7 +306,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           sourceDataHtml = `<div class="text-muted text-sm mt-xs" style="font-size:11px">觸發條件：${escapeHtml(sdItems)}</div>`;
         }
         return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:var(--panel-l2);border-radius:8px">
-          <div class="font-bold">${escapeHtml(eventName(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
+          <div class="font-bold">${escapeHtml(narrativeThemeLabel(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
           <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confidence || 0) * 100).toFixed(0)}% · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
           <div class="text-muted text-sm mt-xs">資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)} · 信心來源：${escapeHtml(cs)}</div>
           ${sourceDataHtml}
@@ -580,7 +581,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     else {
       const rows = seasonal.expectations.map(e => {
         const statusBadge = e.already_priced_in ? '<span class="badge">已反應</span>' : '<span class="badge ok">有驚喜潛力</span>';
-        return `<tr><td>${escapeHtml(eventName(e.theme))}</td><td>${(e.historical_avg_return * 100).toFixed(1)}%</td><td>${(e.current_return * 100).toFixed(1)}%</td><td>${(e.expectation_gap * 100).toFixed(1)}%</td><td>${statusBadge}</td></tr>`;
+        return `<tr><td>${escapeHtml(narrativeThemeLabel(e.theme))}</td><td>${(e.historical_avg_return * 100).toFixed(1)}%</td><td>${(e.current_return * 100).toFixed(1)}%</td><td>${(e.expectation_gap * 100).toFixed(1)}%</td><td>${statusBadge}</td></tr>`;
       }).join('');
       seasonalEl.innerHTML = `<table><thead><tr><th>主題</th><th>歷史平均</th><th>當前報酬</th><th>預期差</th><th>狀態</th></tr></thead><tbody>${rows}</tbody></table>`;
     }

@@ -139,6 +139,18 @@ func (d *Dataset) ForwardReturn(symbol string, currentDate time.Time, window int
 		return 0, false
 	}
 
+	// Reject stale/duplicated OHLCV: if both bars share the same Open/High/Low/Close/Volume,
+	// the data source is likely backfilled with the same row across consecutive dates.
+	// Return ok=false so downstream code (orchestrator, judge) falls back to the
+	// synthetic forward-return path instead of recording a fabricated 0% real return.
+	if currentBar.Open == nextBar.Open &&
+		currentBar.High == nextBar.High &&
+		currentBar.Low == nextBar.Low &&
+		currentBar.Close == nextBar.Close &&
+		currentBar.Volume == nextBar.Volume {
+		return 0, false
+	}
+
 	return (nextBar.Close - currentBar.Close) / currentBar.Close, true
 }
 

@@ -11,7 +11,7 @@
 //
 // 環境變數：
 //   ATLAS_PORT     — atlas server port（預設 18080）
-//   SMOKE_PAGES    — 要 smoke 的 page 清單（逗號分隔，預設 overview,narrative,live,portfolio）
+//   SMOKE_PAGES    — 要 smoke 的 page 清單（逗號分隔，預設 overview,narrative,live,portfolio,strategies）
 //   SMOKE_TIMEOUT  — 每個 page 切換後等待 fetch 完成的秒數（預設 5）
 
 import { chromium } from "playwright";
@@ -48,7 +48,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "overview,narrative,live,portfolio")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "overview,narrative,live,portfolio,strategies")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -59,6 +59,7 @@ const PAGE_SELECTORS = {
   narrative: "#page-narrative",
   live: "#page-live",
   portfolio: "#page-portfolio",
+  strategies: "#page-strategies",
   industry: "#page-industry",
   decision: "#page-decision",
   pipeline: "#page-pipeline",

@@ -1,4 +1,5 @@
-import { agentName, stockName, regimeLabel, eventName, stressLabel, sectorName } from '../names.js';
+import { agentName, stockName, regimeLabel, stressLabel, sectorName } from '../names.js';
+import { narrativeThemeLabel } from '../shared/constants.js';
 import { getJSON, notify, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
@@ -32,7 +33,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const topEvent = sortedEvents[0];
   const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
   const stressRegime = stress ? stressLabel(stress.regime || '-') : '-';
-  const narrativeTitle = topEvent ? eventName(topEvent.theme) : '無活躍事件';
+  const narrativeTitle = topEvent ? escapeHtml(narrativeThemeLabel(topEvent.theme)) : '無活躍事件';
   const narrativeSub = `外資出逃指數 ${stressScore}分（${stressRegime}）· ${nev.length} 個事件`;
 
   let crowdingHtml = '';

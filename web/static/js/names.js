@@ -133,39 +133,6 @@ export const STRESS_NAME_MAP = {
 
 export function stressLabel(r) { return STRESS_NAME_MAP[r] || r; }
 
-// Event name mapping
-export const EVENT_NAME_MAP = {
-  'US_rates_up': '美國升息',
-  'US_rates_down': '美國降息',
-  'AI_capex_surge': 'AI 資本支出激增',
-  'geopolitical_tension': '地緣政治緊張',
-  'geopolitical_risk_spike': '地緣政治風險飆升',
-  'china_slowdown': '中國經濟放緩',
-  'taiwan_export_boom': '台灣出口強勁',
-  'semiconductor_cycle_peak': '半導體週期高峰',
-  'semiconductor_downturn': '半導體週期下行',
-  'financials_deregulation': '金融去管制',
-  'shipping_rate_spike': '運價飆升',
-  'oil_price_shock': '油價衝擊',
-  'JPY_carry_unwind': '日圓套利平倉',
-  'middle_east_escalation': '中東衝突升級',
-  'taiwan_political_risk': '台灣地緣政治風險',
-  'USD_TWD_volatility': '台幣劇烈波動',
-  'retail_institutional_divergence': '散戶機構分歧',
-  'gold_rally': '黃金避險行情',
-  'dollar_surge': '美元強勢',
-  'inflation_spike': '通膨升溫',
-  'earnings_surprise': '財報驚喜',
-  'spring_festival_season': '春節行情',
-  'election_cycle': '選舉週期',
-  'earnings_blackout': '財報空窗期',
-  'tech_peak_season': '科技旺季效應',
-  'year_end_window_dressing': '年底作帳行情',
-  'dividend_season': '除權息旺季'
-};
-
-export function eventName(theme) { return EVENT_NAME_MAP[theme] || theme; }
-
 // Confidence source name mapping
 export const CONFIDENCE_SOURCE_NAME_MAP = {
   'deviation_based_v1': '偏離度模型 v1',

@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
 type Handlers struct {
@@ -277,10 +278,10 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 			StopLossPrice:       item.StopLossPrice,
 			ForwardReturn:       item.ForwardReturn,
 			Hit:                 item.Hit,
-			Reason:              item.Reason,
+			Reason:              narrative.TranslateReason(item.Reason),
 			Price:               item.Price,
 			PassedGuards:        item.PassedGuards,
-			GuardReason:         item.GuardReason,
+			GuardReason:         narrative.TranslateReason(item.GuardReason),
 			Tags:                item.Tags,
 			RecordedAt:          item.RecordedAt,
 			FactorScores:        item.FactorScores,
