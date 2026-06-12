@@ -38,14 +38,14 @@ package narrative
 
 import "strings"
 
-// RationaleCorpus maps a normalized (lowercased, whitespace-trimmed) English
+// reasonCorpus maps a normalized (lowercased, whitespace-trimmed) English
 // rationale string to its Chinese (Traditional, Taiwan-style) translation.
 // Keys are stored lowercased; TranslateReason lowercases the lookup input.
 //
 // To add a new entry: append `english lowercase literal: "中文翻譯"` here.
 // The TranslateReason function will pick it up on the next request — no
 // registration, no rebuild, no agent-file change required.
-var RationaleCorpus = map[string]string{
+var reasonCorpus = map[string]string{
 	// ─── Sector agents: semiconductor / AI supply chain / LEO ───
 	"semiconductor leadership and supply-chain role":    "半導體領導地位與供應鏈角色",
 	"ai infrastructure order-flow sensitivity":          "AI 基礎建設訂單流敏感度",
@@ -90,48 +90,40 @@ var RationaleCorpus = map[string]string{
 	"deep tech ip moat differentiation thesis": "深度科技 IP 護城河差異化論點",
 	"quality compounder catalyst thesis":       "品質複利型企業觸發論點",
 
-	// ─── Already-Chinese control/guard strings (passthrough identity map) ───
-	// These exist so that an "exactly equal" round-trip preserves the original
-	// Chinese strings byte-for-byte (no invisible reformatting).
-	"控制層已略過（未啟用 cro 檢查）":                  "控制層已略過（未啟用 CRO 檢查）",
-	"未通過控制層過濾":                            "未通過控制層過濾",
-	"未過濾任何推薦，全部放行":                        "未過濾任何推薦，全部放行",
-	"強制阻擋全部推薦，當日不進場":                      "強制阻擋全部推薦，當日不進場",
-	"控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用": "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用",
-	"本場次尚無推薦產出記錄":                         "本場次尚無推薦產出記錄",
+	// (no Chinese→Chinese identity entries here: containsCJK short-circuits
+	//  TranslateReason before the lookup, so such entries would be dead code.
+	//  Control-layer / guard-layer Chinese strings bypass translation via
+	//  the CJK passthrough in step 2 — no map entry needed.)
 }
 
-// RationaleTemplate is a prefix-based rule for templated English rationales.
+// rationaleTemplate is a prefix-based rule for templated English rationales.
 // The English prefix (e.g. "[crowded:") is preserved in the output because
 // the pipeline UI (web/static/js/pages/pipeline.js:247) string-matches on
 // it to render the "擁擠" badge. The hard rule of this wave is "no
 // frontend change" — so the structural marker stays in English and only
-// the trailing base reason is translated. The Chinese column below is
-// documented for future use (e.g. when the frontend is updated to match
-// on the Chinese marker) but is NOT emitted by TranslateReason.
-type RationaleTemplate struct {
-	Prefix  string // lowercased English prefix (e.g. "[crowded:")
-	Chinese string // documented Chinese translation; not emitted by TranslateReason
+// the trailing base reason is translated.
+type rationaleTemplate struct {
+	Prefix string // lowercased English prefix (e.g. "[crowded:")
 }
 
-// RationaleTemplates lists the prefix templates for control-layer badges
+// rationaleTemplates lists the prefix templates for control-layer badges
 // (see internal/orchestrator/plugin_control.go lines 87, 171, 295, 298, 482).
 // The prefix and dynamic substitution (e.g. "2 agents", "ackman_quality")
 // are passed through unchanged; only the trailing base reason is
 // translated by recursing into TranslateReason.
-var RationaleTemplates = []RationaleTemplate{
-	{Prefix: "[crowded:", Chinese: "[擁擠"},
-	{Prefix: "[weighted:", Chinese: "[加權"},
-	{Prefix: "[superinvestor:", Chinese: "[超級投資者"},
+var rationaleTemplates = []rationaleTemplate{
+	{Prefix: "[crowded:"},
+	{Prefix: "[weighted:"},
+	{Prefix: "[superinvestor:"},
 }
 
-// RationaleSuffixMarkers list substring markers that indicate a composite
+// rationaleSuffixMarkers list substring markers that indicate a composite
 // reason made of [static base] + [dynamic suffix]. TranslateReason splits
 // the input on the first occurrence of any marker, translates the leading
-// static base via RationaleCorpus, and preserves the marker + suffix
+// static base via reasonCorpus, and preserves the marker + suffix
 // unchanged. This covers runtime-appended English suffixes whose dynamic
 // numbers are audit-relevant and should NOT be masked by translation.
-var RationaleSuffixMarkers = []string{
+var rationaleSuffixMarkers = []string{
 	" | narrative:", // system.go:966 (NarrativeConvictionModulator)
 	" [prism:",      // phase3_controller.go:232 (PRISM conviction boost)
 }
@@ -143,11 +135,11 @@ var RationaleSuffixMarkers = []string{
 //  1. Empty / whitespace-only input → empty string.
 //  2. Already-CJK input → returned unchanged (avoids double-translation
 //     of control-layer and guard-layer Chinese strings).
-//  3. Exact match against RationaleCorpus (lowercased + whitespace-trimmed key).
-//  4. Prefix match against RationaleTemplates (preserves the English
+//  3. Exact match against reasonCorpus (lowercased + whitespace-trimmed key).
+//  4. Prefix match against rationaleTemplates (preserves the English
 //     structural prefix and dynamic substitution; recursively translates
 //     the trailing base reason).
-//  5. Suffix split: if the input contains any RationaleSuffixMarker, the
+//  5. Suffix split: if the input contains any rationaleSuffixMarker, the
 //     leading base is translated via (3)/(4), and the marker + suffix is
 //     preserved unchanged.
 //  6. Passthrough: return the original (trimmed) input verbatim so
@@ -166,7 +158,7 @@ func TranslateReason(english string) string {
 	normalized := strings.ToLower(trimmed)
 
 	// 3) Exact match against the static corpus.
-	if translated, ok := RationaleCorpus[normalized]; ok {
+	if translated, ok := reasonCorpus[normalized]; ok {
 		return translated
 	}
 
@@ -180,7 +172,7 @@ func TranslateReason(english string) string {
 	//      "[Superinvestor:ackman_quality] quality compounder catalyst thesis"
 	//        → "[Superinvestor:ackman_quality] 品質複利型企業觸發論點"
 	//      "[Weighted:3 agents]" (no base) → "[Weighted:3 agents]"
-	for _, tpl := range RationaleTemplates {
+	for _, tpl := range rationaleTemplates {
 		prefixLower := strings.ToLower(tpl.Prefix)
 		if !strings.HasPrefix(normalized, prefixLower) {
 			continue
@@ -200,7 +192,7 @@ func TranslateReason(english string) string {
 
 	// 5) Suffix split. The leading base is translated; the suffix
 	//    (audit-relevant metadata) is preserved unchanged.
-	for _, marker := range RationaleSuffixMarkers {
+	for _, marker := range rationaleSuffixMarkers {
 		idx := strings.Index(strings.ToLower(trimmed), marker)
 		if idx < 0 {
 			continue

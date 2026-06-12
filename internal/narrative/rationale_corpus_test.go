@@ -4,8 +4,8 @@ package narrative
 // the 6-step TranslateReason dispatcher.
 //
 // Strategy:
-//   - Structural tests (RationaleCorpus, RationaleTemplates,
-//     RationaleSuffixMarkers) lock in the public API surface so a careless
+//   - Structural tests (reasonCorpus, rationaleTemplates,
+//     rationaleSuffixMarkers) lock in the internal API surface so a careless
 //     refactor can't silently drop entries or rename fields.
 //   - Behavior tests for TranslateReason cover every step in the documented
 //     lookup order: empty → CJK → exact → prefix → suffix → passthrough.
@@ -23,8 +23,8 @@ import (
 // ─── Structural tests ──────────────────────────────────────────────────
 
 func TestRationaleCorpus_NotEmpty(t *testing.T) {
-	if len(RationaleCorpus) == 0 {
-		t.Fatal("RationaleCorpus must not be empty — the static map is the source of truth")
+	if len(reasonCorpus) == 0 {
+		t.Fatal("reasonCorpus must not be empty — the static map is the source of truth")
 	}
 }
 
@@ -33,33 +33,35 @@ func TestRationaleCorpus_NoDuplicateKeys(t *testing.T) {
 	// refactor that adds an entry twice would be invisible at runtime.
 	// Detect it by counting unique lowercased+trimmed values and comparing
 	// against the map size.
-	seen := make(map[string]int, len(RationaleCorpus))
-	for k := range RationaleCorpus {
+	seen := make(map[string]int, len(reasonCorpus))
+	for k := range reasonCorpus {
 		k = strings.ToLower(strings.TrimSpace(k))
 		seen[k]++
 	}
 	for k, n := range seen {
 		if n > 1 {
-			t.Errorf("duplicate key (after normalization) in RationaleCorpus: %q appears %d times", k, n)
+			t.Errorf("duplicate key (after normalization) in reasonCorpus: %q appears %d times", k, n)
 		}
 	}
 }
 
 func TestRationaleCorpus_AllValuesNonEmpty(t *testing.T) {
-	for k, v := range RationaleCorpus {
+	for k, v := range reasonCorpus {
 		if strings.TrimSpace(v) == "" {
-			t.Errorf("RationaleCorpus[%q] has empty translation", k)
+			t.Errorf("reasonCorpus[%q] has empty translation", k)
 		}
 	}
 }
 
 func TestRationaleCorpus_HasMinimumEntryCount(t *testing.T) {
-	// The expansion wave adds 18 new entries on top of the pre-existing
-	// 20 entries. Total should be at least 38. If someone accidentally
-	// drops a section, this trips.
-	const minExpected = 38
-	if got := len(RationaleCorpus); got < minExpected {
-		t.Errorf("RationaleCorpus has %d entries, expected at least %d (18 new + 20 inherited)", got, minExpected)
+	// The expansion wave adds 14 new non-CJK entries (9 ETF + 5
+	// superinvestor) on top of the pre-existing 18 non-CJK entries.
+	// 6 unreachable CJK identity entries were removed. Total non-CJK
+	// entries should be at least 32. If someone accidentally drops a
+	// section, this trips.
+	const minExpected = 32
+	if got := len(reasonCorpus); got < minExpected {
+		t.Errorf("reasonCorpus has %d entries, expected at least %d (14 new + 18 inherited, excluding 6 removed CJK identity)", got, minExpected)
 	}
 }
 
@@ -79,7 +81,7 @@ func TestRationaleCorpus_NewETFEntries_Present(t *testing.T) {
 	}
 	for _, k := range etfKeys {
 		k = strings.ToLower(strings.TrimSpace(k))
-		v, ok := RationaleCorpus[k]
+		v, ok := reasonCorpus[k]
 		if !ok {
 			t.Errorf("missing ETF rotation entry: %q", k)
 			continue
@@ -101,34 +103,13 @@ func TestRationaleCorpus_NewSuperinvestorEntries_Present(t *testing.T) {
 	}
 	for _, k := range siKeys {
 		k = strings.ToLower(strings.TrimSpace(k))
-		v, ok := RationaleCorpus[k]
+		v, ok := reasonCorpus[k]
 		if !ok {
 			t.Errorf("missing superinvestor entry: %q", k)
 			continue
 		}
 		if !containsCJK(v) {
 			t.Errorf("superinvestor entry %q translated to non-CJK value: %q", k, v)
-		}
-	}
-}
-
-func TestRationaleCorpus_NewControlLayerIdentityEntries_Present(t *testing.T) {
-	// The 4 new control-layer identity entries (Chinese → Chinese).
-	// These must round-trip byte-for-byte (no invisible reformatting).
-	identityKeys := []string{
-		"未過濾任何推薦，全部放行",
-		"強制阻擋全部推薦，當日不進場",
-		"控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用",
-		"本場次尚無推薦產出記錄",
-	}
-	for _, k := range identityKeys {
-		v, ok := RationaleCorpus[k]
-		if !ok {
-			t.Errorf("missing control-layer identity entry: %q", k)
-			continue
-		}
-		if v != k {
-			t.Errorf("identity entry must round-trip byte-for-byte: key=%q value=%q", k, v)
 		}
 	}
 }
@@ -158,14 +139,11 @@ func TestRationaleCorpus_BackwardCompat_KeySet(t *testing.T) {
 		"defensive yield lens with valuation discipline",
 		"earnings quality and forward visibility support",
 		"breakout structure confirmed by volume and close",
-		// Control-layer Chinese identity (the 2 pre-existing ones)
-		"控制層已略過（未啟用 cro 檢查）",
-		"未通過控制層過濾",
 	}
 	for _, k := range required {
 		k = strings.ToLower(strings.TrimSpace(k))
-		if _, ok := RationaleCorpus[k]; !ok {
-			t.Errorf("backward-compat entry dropped from RationaleCorpus: %q", k)
+		if _, ok := reasonCorpus[k]; !ok {
+			t.Errorf("backward-compat entry dropped from reasonCorpus: %q", k)
 		}
 	}
 }
@@ -176,38 +154,35 @@ func TestRationaleCorpus_BackwardCompat_LEOTranslationPreserved(t *testing.T) {
 	// so any future re-introduction of `部署循環` is caught.
 	const leoKey = "leo satellite infrastructure and deployment cycle"
 	const wantZh = "低軌衛星基礎建設與部署週期"
-	got, ok := RationaleCorpus[leoKey]
+	got, ok := reasonCorpus[leoKey]
 	if !ok {
-		t.Fatalf("LEO entry missing from RationaleCorpus")
+		t.Fatalf("LEO entry missing from reasonCorpus")
 	}
 	if got != wantZh {
 		t.Errorf("LEO entry translation drifted: got %q, want %q (R1: original was 部署週期)", got, wantZh)
 	}
 }
 
-// ─── RationaleTemplates structural tests ──────────────────────────────
+// ─── rationaleTemplates structural tests ──────────────────────────────
 
 func TestRationaleTemplates_WellFormed(t *testing.T) {
-	if len(RationaleTemplates) != 3 {
-		t.Errorf("RationaleTemplates has %d entries, expected 3 ([crowded:, [weighted:, [superinvestor:)", len(RationaleTemplates))
+	if len(rationaleTemplates) != 3 {
+		t.Errorf("rationaleTemplates has %d entries, expected 3 ([crowded:, [weighted:, [superinvestor:)", len(rationaleTemplates))
 	}
-	seen := make(map[string]bool, len(RationaleTemplates))
-	for i, tpl := range RationaleTemplates {
+	seen := make(map[string]bool, len(rationaleTemplates))
+	for i, tpl := range rationaleTemplates {
 		if tpl.Prefix == "" {
-			t.Errorf("RationaleTemplates[%d].Prefix is empty", i)
-		}
-		if tpl.Chinese == "" {
-			t.Errorf("RationaleTemplates[%d].Chinese is empty", i)
+			t.Errorf("rationaleTemplates[%d].Prefix is empty", i)
 		}
 		if !strings.HasPrefix(tpl.Prefix, "[") {
-			t.Errorf("RationaleTemplates[%d].Prefix %q must start with [", i, tpl.Prefix)
+			t.Errorf("rationaleTemplates[%d].Prefix %q must start with [", i, tpl.Prefix)
 		}
 		if !strings.HasSuffix(tpl.Prefix, ":") {
-			t.Errorf("RationaleTemplates[%d].Prefix %q must end with :", i, tpl.Prefix)
+			t.Errorf("rationaleTemplates[%d].Prefix %q must end with :", i, tpl.Prefix)
 		}
 		lower := strings.ToLower(tpl.Prefix)
 		if seen[lower] {
-			t.Errorf("duplicate prefix in RationaleTemplates: %q", tpl.Prefix)
+			t.Errorf("duplicate prefix in rationaleTemplates: %q", tpl.Prefix)
 		}
 		seen[lower] = true
 	}
@@ -217,42 +192,42 @@ func TestRationaleTemplates_RequiredPrefixes(t *testing.T) {
 	// The 3 required prefixes — pin them so a typo in a future edit
 	// (e.g. `[crowded ` without the colon) is caught.
 	required := []string{"[crowded:", "[weighted:", "[superinvestor:"}
-	have := make(map[string]bool, len(RationaleTemplates))
-	for _, tpl := range RationaleTemplates {
+	have := make(map[string]bool, len(rationaleTemplates))
+	for _, tpl := range rationaleTemplates {
 		have[strings.ToLower(tpl.Prefix)] = true
 	}
 	for _, p := range required {
 		if !have[p] {
-			t.Errorf("RationaleTemplates missing required prefix %q", p)
+			t.Errorf("rationaleTemplates missing required prefix %q", p)
 		}
 	}
 }
 
-// ─── RationaleSuffixMarkers structural tests ──────────────────────────
+// ─── rationaleSuffixMarkers structural tests ──────────────────────────
 
 func TestRationaleSuffixMarkers_WellFormed(t *testing.T) {
-	if len(RationaleSuffixMarkers) != 2 {
-		t.Errorf("RationaleSuffixMarkers has %d entries, expected 2", len(RationaleSuffixMarkers))
+	if len(rationaleSuffixMarkers) != 2 {
+		t.Errorf("rationaleSuffixMarkers has %d entries, expected 2", len(rationaleSuffixMarkers))
 	}
-	for i, m := range RationaleSuffixMarkers {
+	for i, m := range rationaleSuffixMarkers {
 		if m == "" {
-			t.Errorf("RationaleSuffixMarkers[%d] is empty", i)
+			t.Errorf("rationaleSuffixMarkers[%d] is empty", i)
 		}
 		if !strings.HasPrefix(m, " ") {
-			t.Errorf("RationaleSuffixMarkers[%d] %q should start with a space (to be safely droppable from the trimmed head)", i, m)
+			t.Errorf("rationaleSuffixMarkers[%d] %q should start with a space (to be safely droppable from the trimmed head)", i, m)
 		}
 	}
 }
 
 func TestRationaleSuffixMarkers_RequiredMarkers(t *testing.T) {
 	required := []string{" | narrative:", " [prism:"}
-	have := make(map[string]bool, len(RationaleSuffixMarkers))
-	for _, m := range RationaleSuffixMarkers {
+	have := make(map[string]bool, len(rationaleSuffixMarkers))
+	for _, m := range rationaleSuffixMarkers {
 		have[m] = true
 	}
 	for _, m := range required {
 		if !have[m] {
-			t.Errorf("RationaleSuffixMarkers missing required marker %q", m)
+			t.Errorf("rationaleSuffixMarkers missing required marker %q", m)
 		}
 	}
 }
@@ -282,7 +257,6 @@ func TestTranslateReason_CJKPassthrough(t *testing.T) {
 	cases := []string{
 		"低軌衛星基礎建設與部署週期",
 		"半導體領導地位",
-		"未過濾任何推薦，全部放行",
 		"superinvestor 風格", // mixed CJK + ASCII should also passthrough
 	}
 	for _, in := range cases {
@@ -314,7 +288,7 @@ func TestTranslateReason_ExactMatch_BackwardCompat(t *testing.T) {
 }
 
 func TestTranslateReason_ExactMatch_NewEntries(t *testing.T) {
-	// The 18 new entries — both key and expected translation pinned.
+	// The 14 new entries — both key and expected translation pinned.
 	cases := []struct {
 		in, want string
 	}{
@@ -334,11 +308,6 @@ func TestTranslateReason_ExactMatch_NewEntries(t *testing.T) {
 		{"ai compute cycle durable demand thesis", "AI 算力循環耐久需求論點"},
 		{"deep tech ip moat differentiation thesis", "深度科技 IP 護城河差異化論點"},
 		{"quality compounder catalyst thesis", "品質複利型企業觸發論點"},
-		// Control-layer Chinese identity (4) — must round-trip byte-for-byte
-		{"未過濾任何推薦，全部放行", "未過濾任何推薦，全部放行"},
-		{"強制阻擋全部推薦，當日不進場", "強制阻擋全部推薦，當日不進場"},
-		{"控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用", "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用"},
-		{"本場次尚無推薦產出記錄", "本場次尚無推薦產出記錄"},
 	}
 	for _, c := range cases {
 		got := TranslateReason(c.in)
