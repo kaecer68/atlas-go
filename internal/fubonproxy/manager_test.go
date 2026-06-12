@@ -2,9 +2,10 @@ package fubonproxy
 
 import (
 	"context"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -117,6 +118,10 @@ func TestProcessManager_Start_NonBlocking_WhenProxyUnhealthy(t *testing.T) {
 // TestProcessManager_Start_SkipsWhenAlreadyHealthy 驗證：
 // 當 health 端點已可達（IsHealthy()=true）時，Start() 應立即返回且不啟動新程序。
 // 這是「冪等啟動」的關鍵不變式 — 重複呼叫 Start() 不應重複啟動程序。
+//
+// F9 改動：原本用 httptest.NewServer 隨機 port + m.healthURL 注入（繞過 probe），
+// 改用 bindPort8081 模擬「:8081 已被 healthy fubon-proxy 佔住」的生產現實。
+// 此測試在 F9 設計下與 F9_P2 校驗同一不變式，保留為冪等啟動語義的命名錨點。
 func TestProcessManager_Start_SkipsWhenAlreadyHealthy(t *testing.T) {
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
@@ -124,20 +129,19 @@ func TestProcessManager_Start_SkipsWhenAlreadyHealthy(t *testing.T) {
 		t.Fatalf("write fake script: %v", err)
 	}
 
-	// 模擬「已有 proxy 在運行」：health 端點回 200
-	healthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer healthServer.Close()
+	})
+	bindPort8081(t, handler)
 
 	m := &ProcessManager{
 		pythonBin:  "/bin/sh",
 		scriptPath: fakeScript,
-		healthURL:  healthServer.URL + "/health",
+		healthURL:  "http://127.0.0.1:8081/health",
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -803,4 +807,209 @@ func TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel(t *testing.T) {
 			t.Fatal("logWriter blocked > 1s on 100 writes")
 		}
 	})
+}
+
+// ============================================================================
+// F9 — port 8081 pre-flight probe (fix/fubonproxy-port-conflict-probe)
+//
+// 為什麼需要：當 port 8081 被外部進程佔住，supervise() spawn() 內部會遇到
+// EADDRINUSE → backoff-loop → 無限重啟 + 前端拿不到 fubon 資料。
+// 預先探測 port 區分三種狀態：
+//   1. portStateFree     — 走原本 spawn 路徑
+//   2. portStateHealthy  — 已有 fubon-proxy 在跑，跳過 spawn
+//   3. portStateForeign  — 外部進程佔住，回傳 actionable error 含 PID+cmd
+//
+// 測試使用真實的 net.Listen 佔 127.0.0.1:8081 模擬外部占用。所有測試必須
+// 互相不衝突（依賴 Go test 內建單 goroutine 序列執行；不使用 t.Parallel）。
+// ============================================================================
+
+// bindPort8081 佔住 127.0.0.1:8081 模擬外部進程。handler 給測試控制 /health
+// 行為。測試結束透過 t.Cleanup 自動關閉。
+//
+// 8081 已被系統上其他服務佔用時 t.Skip() 而非 t.Fatal()，允許在共享 CI runner
+// 上執行而不誤報。
+func bindPort8081(t *testing.T, h http.Handler) (net.Listener, *http.Server) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:8081")
+	if err != nil {
+		t.Skipf("port 8081 unavailable on test host: %v — skipping", err)
+	}
+	srv := &http.Server{Handler: h}
+	go func() {
+		_ = srv.Serve(ln)
+	}()
+	t.Cleanup(func() {
+		_ = srv.Close()
+		_ = ln.Close()
+	})
+	return ln, srv
+}
+
+// F9.P1 — port 8081 空閒時，probe 回 portStateFree，後續路徑不變（走 spawn）。
+func TestProcessManager_F9_PortFree_ProceedsToExistingPath(t *testing.T) {
+	// 確認 8081 真的空著（probe 用完立刻關閉，避免 listener 殘留被 m.Start() 誤判為 foreign）
+	if ln, err := net.Listen("tcp", "127.0.0.1:8081"); err != nil {
+		t.Skipf("port 8081 in use on test host: %v — skipping", err)
+	} else {
+		_ = ln.Close()
+	}
+
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health", // 永遠不通 — 確保 spawn 路徑被走到
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	t.Cleanup(func() { m.Stop() })
+
+	// portStateFree → IsHealthy()=false → spawn 必須真的啟動
+	m.mu.Lock()
+	if !m.running {
+		t.Error("expected m.running=true after Start() with port free")
+	}
+	if m.cmd == nil || m.cmd.Process == nil {
+		t.Error("expected m.cmd.Process to be set after Start()")
+	} else if err := m.cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Errorf("process is not alive: %v", err)
+	}
+	m.mu.Unlock()
+}
+
+// F9.P2 — port 8081 被健康的 fubon-proxy 佔住（/health=200），probe 回
+// portStateHealthy，Start() 立即返回 nil 且不啟動新程序。
+func TestProcessManager_F9_PortHeldByHealthyFubon_SkipsSpawn(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	bindPort8081(t, handler)
+
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  healthEndpoint, // bindPort8081 handler 模擬 healthy fubon-proxy
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	err := m.Start(ctx)
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Errorf("Start() returned error: %v (expected nil for external healthy fubon)", err)
+	}
+	if elapsed > 1*time.Second {
+		t.Errorf("Start() blocked for %v; expected < 1s (should skip due to portStateHealthy)", elapsed)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.running {
+		t.Error("expected m.running=false (no new process should be spawned)")
+	}
+	if m.cmd != nil {
+		t.Error("expected m.cmd=nil (no new process should be spawned)")
+	}
+}
+
+// F9.P3 — port 8081 被外部非 fubon 進程佔住（/health=404），probe 回
+// portStateForeign，Start() 回傳 actionable error 含 PID 與 command。
+//
+// 模擬方式：bind 127.0.0.1:8081 + handler 回 404。production 環境下 lsof 會
+// 抓到真實的占用者 PID+Command；本測試不依賴 lsof 解析內容，只驗證錯誤
+// 訊息的「行動性」關鍵字（port 8081 / foreign / kill）。
+func TestProcessManager_F9_PortHeldByForeign_ReturnsActionableError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	bindPort8081(t, handler)
+
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		// 走預設 healthURL (http://127.0.0.1:8081/health) — 拿到 404
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := m.Start(ctx)
+	if err == nil {
+		t.Fatal("Start() should return error when port held by foreign process")
+	}
+
+	msg := err.Error()
+	if !strings.Contains(msg, "port 8081") {
+		t.Errorf("error message should mention 'port 8081', got: %q", msg)
+	}
+	if !strings.Contains(msg, "foreign") {
+		t.Errorf("error message should mention 'foreign' process, got: %q", msg)
+	}
+	if !strings.Contains(msg, "kill") && !strings.Contains(msg, "stop it") {
+		t.Errorf("error message should suggest action (kill/stop), got: %q", msg)
+	}
+	t.Logf("actionable error returned: %s", msg)
+
+	// 必須沒有 spawn 新程序
+	m.mu.Lock()
+	if m.running {
+		t.Error("expected m.running=false (no spawn when foreign holds port)")
+	}
+	if m.cmd != nil {
+		t.Error("expected m.cmd=nil (no spawn when foreign holds port)")
+	}
+	m.mu.Unlock()
+}
+
+// F9.P4 — lookupPortOccupant 能在 lsof 可用時解析 PID+command。
+// lsof 不可用時 skip（常見於 minimal container images）。
+func TestProcessManager_F9_LookupPortOccupant_ResolvesOurTestListener(t *testing.T) {
+	if _, err := exec.LookPath("lsof"); err != nil {
+		t.Skipf("lsof not available on test host: %v — skipping", err)
+	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	bindPort8081(t, handler)
+
+	occ, err := lookupPortOccupant(8081)
+	if err != nil {
+		t.Fatalf("lookupPortOccupant failed: %v", err)
+	}
+	if occ.PID == 0 {
+		t.Errorf("expected non-zero PID, got: %+v", occ)
+	}
+	if occ.Command == "" {
+		t.Errorf("expected non-empty command, got: %+v", occ)
+	}
+	t.Logf("port 8081 occupied by pid=%d cmd=%q", occ.PID, occ.Command)
 }
