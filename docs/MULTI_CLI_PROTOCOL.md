@@ -53,7 +53,7 @@ CLI session 開機流程(v0.6.3):**仍然需要 bootstrap** —— 在 chat 內 
 - `remote`: 用於偵測 default branch,必填
 - `branchPrefix`: **plugin 預設 `wt/`**,建立 branch 命名為 `wt/<slug>`(slug 來自 title,**不是**用現有 branch 名)
 - `baseBranch`: 用於 worktree 建立 + cleanup 的 base,預設 = remote default branch
-- `worktreeRoot`: 支援 `$REPO` / `$ROOT` / `$ROOT_PARENT` 三種 template(plugin `path.resolve` 時展開)
+- `worktreeRoot`: 支援 `$REPO` / `$ROOT` / `$ROOT_PARENT` 三種 template(plugin 純字串 `replaceAll` 展開;**不是** `path.resolve`)
 - `protectedBranches`: 必含 `baseBranch`,plugin 自動加入 `defaultBranch` + `baseBranch` + 此清單(`src/index.js:710`)
 - `cleanupMode`: `"preview"`(預設)或 `"apply"`,決定 `wt-clean` 預設是否實際刪除
 
@@ -61,15 +61,15 @@ CLI session 開機流程(v0.6.3):**仍然需要 bootstrap** —— 在 chat 內 
 
 裝好 sven1103 後,跑下面步驟確認 plugin 真的載入 + tools 可呼叫。注意:**v0.6.3 沒有 path rewriting hook**,所以「阻擋 sibling escape」「阻擋絕對路徑」這類 adversarial test 在 v0.6.3 **不適用** —— 那些需要 1.0.0-alpha 線的 hook 行為,目前未驗證。v0.6.3 只能驗證:
 
-1. **Plugin 載入檢查**:在 CLI session 內呼叫 `worktree_prepare(title="verify-plugin-load")`,回傳 `result.path` 應指向 sidecar 設定的 worktree 根目錄下的 `verify-plugin-load/`(e.g. `../atlas-wt/verify-plugin-load`),branch = `wt/verify-plugin-load`。
-2. **Cleanup preview**:呼叫 `worktree_cleanup(mode="preview")`,回傳應列出當前 session 的 worktree 為「可清理」狀態;**預設模式只預覽不刪**。若沒列代表 plugin 沒成功綁定 worktree。
-3. **Subagent dispatch 隔離(REQUIRES MANUAL VERIFICATION)**:從 worktree A 用 `task` 委派子任務給另一個 agent。**sven1103 v0.6.3 完全不參與 parent→child session 傳遞,subagent 繼承的是 parent dispatch 時的 CWD**,不是 plugin 行為。請直接實測確認,**不要相信 AI 自報「我在 worktree 內」**。
+1. **Plugin 載入檢查**:在 CLI session 內呼叫 `worktree_prepare(title="verify-plugin-load")`。Tool 回傳的是 **string message**(不是物件),內容含 `branch: <branch>` 與 `worktree: <absolute-path>` 兩行(`src/index.js:177-186` `formatPrepareSummary`)。**`worktree:` 行的絕對路徑應指向 sidecar 設定的 `worktreeRoot` 下的 `verify-plugin-load/`**。若 sidecar 用 `worktreeRoot: "$ROOT_PARENT"`(本 repo sidecar 即如此),路徑是 `<repo parent>/verify-plugin-load/`(e.g. repo 在 `/Users/kaecer/workspace/atlas` → worktree 落 `/Users/kaecer/workspace/verify-plugin-load`)。若走 plugin metadata,key 是 `worktree_path`(**不是** `path`)。
+2. **Cleanup preview**:呼叫 `worktree_cleanup(mode="preview")`,回傳的 preview **會把當前 session 的 worktree 列在「Not cleanable here」/ `blocked` 群,理由 `current worktree`**(`src/index.js:433-440` `classifyEntry` 明確歸類 current worktree 為 blocked)。**不要**期待它出現在 `Safe to clean automatically` 或 `Needs review before cleanup` 群;若出現代表 plugin 有 bug。**預設模式只預覽不刪**。完全看不到自己的 worktree(連 blocked 都沒)代表 plugin 連 classifyEntry 都沒跑;在 safe 群出現代表 plugin 誤判。
+3. **Subagent dispatch 隔離(REQUIRES MANUAL VERIFICATION)**:從 worktree A 用 `task` 委派子任務給另一個 agent,然後**在子任務 session 內跑 `git rev-parse --show-toplevel`** —— 應回傳 parent dispatch 時的 CWD 完整絕對路徑(若 parent CWD 是 `/Users/kaecer/workspace/<wt>`,子任務也會回同樣的絕對路徑)。**sven1103 v0.6.3 完全不參與 parent→child session 傳遞,subagent 繼承的是 parent dispatch 時的 CWD**,不是 plugin 行為。請直接實測確認,**不要相信 AI 自報「我在 worktree 內」**。
 
 ## v0.6.3 已知限制(Known Limitations)
 
 - **無 hook**:不攔截任何 tool 呼叫,bash/glob/grep/read/edit 都不會被路徑重寫
 - **無自動隔離**:session 啟動時不會自動建 worktree,必須在 chat 內**主動** call `worktree_prepare(title)`
-- **無 slash commands**:`/wt-new` / `/wt-clean` 在 v0.6.3 不存在,要在 chat 直接呼叫 tool
+- **無 slash commands**:`/wt-new` / `/wt-clean` 在 v0.6.3 不存在,要在 chat 直接呼叫 tool。**plugin 自身的 output 也不一致**:`worktree_cleanup(mode="preview")` 結果會印出 `Run /wt-clean apply ...` 提示(`src/index.js:171-172` `formatPreview`),但 `/wt-clean` 在 v0.6.3 **不存在**;請忽略 plugin output 提到的 slash command,以本文件為準。
 - **無 subagent 控制**:不會修改 parent→child dispatch 的 CWD 傳遞
 - **無 sibling escape 防護**:bash 命令可自由讀 sibling worktree 的檔案,plugin 不會擋
 - **1.0.0-alpha 線**(`@1.0.0-alpha.4`)預期會有 hook + 自動隔離 + slash commands,**未驗證可用**,**不要在 production 用**
