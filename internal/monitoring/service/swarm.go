@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
@@ -121,26 +122,13 @@ func (s *SwarmService) LoadScenarios() ([]swarm.ScenarioSnapshot, error) {
 	return snap.Scenarios, nil
 }
 
-// StrategyPerformance holds performance metrics from the MetaLearner state.
-type StrategyPerformance struct {
-	SuccessCount      int     `json:"success_count"`
-	TotalApplications int     `json:"total_applications"`
-	FailureCount      int     `json:"failure_count"`
-	AvgImprovement    float64 `json:"avg_improvement"`
-	ConvergenceRate   float64 `json:"convergence_rate"`
-	StabilityScore    float64 `json:"stability_score"`
-	BestImprovement   float64 `json:"best_improvement"`
-	WorstImprovement  float64 `json:"worst_improvement"`
-	AvgTrainingTime   float64 `json:"avg_training_time"`
-}
-
 // StrategySummary represents a single learning strategy for the dashboard.
 type StrategySummary struct {
-	ID          string               `json:"id"`
-	Name        string               `json:"name"`
-	Type        string               `json:"type"`
-	Score       float64              `json:"score"`
-	Performance *StrategyPerformance `json:"performance,omitempty"`
+	ID          string                            `json:"id"`
+	Name        string                            `json:"name"`
+	Type        string                            `json:"type"`
+	Score       float64                           `json:"score"`
+	Performance *metalearning.StrategyPerformance `json:"performance,omitempty"`
 }
 
 // LoadRecommendedStrategies returns top strategies from the MetaLearner state file.
@@ -152,10 +140,10 @@ func (s *SwarmService) LoadRecommendedStrategies() ([]StrategySummary, error) {
 	}
 	var state struct {
 		Strategies map[string]struct {
-			ID          string               `json:"id"`
-			Name        string               `json:"name"`
-			Type        string               `json:"type"`
-			Performance *StrategyPerformance `json:"performance,omitempty"`
+			ID          string                            `json:"id"`
+			Name        string                            `json:"name"`
+			Type        string                            `json:"type"`
+			Performance *metalearning.StrategyPerformance `json:"performance,omitempty"`
 		} `json:"strategies"`
 		Population []string `json:"population"`
 	}
