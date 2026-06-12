@@ -5,6 +5,7 @@
 /dist/
 /coverage.out
 /atlas
+/atlas-go
 /tmp/
 /.gocache/
 /data/cache/
