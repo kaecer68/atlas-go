@@ -132,8 +132,8 @@ function renderStrategies(strategies) {
     const avgImprovement = perf.avg_improvement != null ? perf.avg_improvement.toFixed(4) : '—';
     const convergenceRate = perf.convergence_rate != null ? (perf.convergence_rate * 100).toFixed(1) + '%' : '—';
     rows += `<tr>
-      <td style="font-weight:600">${escapeHtml(s.name || '')}</td>
-      <td><span class="badge">${escapeHtml(s.type || '—')}</span></td>
+      <td style="font-weight:600">${escapeHtml(STRATEGY_NAME_RULES[s.name] || s.name || '')}</td>
+      <td><span class="badge">${escapeHtml(STRATEGY_TYPE_ZH[s.type] || s.type || '—')}</span></td>
       <td>${s.score != null ? s.score.toFixed(4) : '—'}</td>
       <td>${successRate}</td>
       <td>${avgImprovement}</td>
