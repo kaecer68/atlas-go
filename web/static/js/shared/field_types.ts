@@ -3012,6 +3012,7 @@ export interface StrategySummary {
   name: string;
   type: string;
   score: number;
+  performance?: string | null;
 }
 
 export interface StressIndexScaling {

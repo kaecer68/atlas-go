@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
@@ -123,10 +124,11 @@ func (s *SwarmService) LoadScenarios() ([]swarm.ScenarioSnapshot, error) {
 
 // StrategySummary represents a single learning strategy for the dashboard.
 type StrategySummary struct {
-	ID    string  `json:"id"`
-	Name  string  `json:"name"`
-	Type  string  `json:"type"`
-	Score float64 `json:"score"`
+	ID          string                            `json:"id"`
+	Name        string                            `json:"name"`
+	Type        string                            `json:"type"`
+	Score       float64                           `json:"score"`
+	Performance *metalearning.StrategyPerformance `json:"performance,omitempty"`
 }
 
 // LoadRecommendedStrategies returns top strategies from the MetaLearner state file.
@@ -138,13 +140,10 @@ func (s *SwarmService) LoadRecommendedStrategies() ([]StrategySummary, error) {
 	}
 	var state struct {
 		Strategies map[string]struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Type        string `json:"type"`
-			Performance *struct {
-				SuccessCount      int `json:"success_count"`
-				TotalApplications int `json:"total_applications"`
-			} `json:"performance,omitempty"`
+			ID          string                            `json:"id"`
+			Name        string                            `json:"name"`
+			Type        string                            `json:"type"`
+			Performance *metalearning.StrategyPerformance `json:"performance,omitempty"`
 		} `json:"strategies"`
 		Population []string `json:"population"`
 	}
@@ -157,15 +156,17 @@ func (s *SwarmService) LoadRecommendedStrategies() ([]StrategySummary, error) {
 		if !ok {
 			continue
 		}
+		perf := s.Performance
 		score := 0.0
-		if s.Performance != nil && s.Performance.TotalApplications > 0 {
-			score = float64(s.Performance.SuccessCount) / float64(s.Performance.TotalApplications)
+		if perf != nil && perf.TotalApplications > 0 {
+			score = float64(perf.SuccessCount) / float64(perf.TotalApplications)
 		}
 		results = append(results, StrategySummary{
-			ID:    s.ID,
-			Name:  s.Name,
-			Type:  s.Type,
-			Score: score,
+			ID:          s.ID,
+			Name:        s.Name,
+			Type:        s.Type,
+			Score:       score,
+			Performance: perf,
 		})
 		if len(results) >= 5 {
 			break

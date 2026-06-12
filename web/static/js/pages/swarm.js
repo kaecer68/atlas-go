@@ -232,12 +232,14 @@ function renderStrategies(strategies) {
   let rows = '';
   for (const s of strategies) {
     const perf = s.performance || {};
-    const successRate = perf.success_rate != null ? perf.success_rate : null;
+    const successRate = s.score != null ? s.score : null;
     const successRateStr = successRate != null ? (successRate * 100).toFixed(1) + '%' : '—';
     const avgImprovement = perf.avg_improvement != null ? perf.avg_improvement : null;
     const avgImprovementStr = avgImprovement != null ? avgImprovement.toFixed(4) : '—';
     const convergenceRate = perf.convergence_rate != null ? perf.convergence_rate : null;
     const convergenceRateStr = convergenceRate != null ? (convergenceRate * 100).toFixed(1) + '%' : '—';
+    const stabilityScore = perf.stability_score != null ? perf.stability_score : null;
+    const stabilityScoreStr = stabilityScore != null ? stabilityScore.toFixed(4) : '—';
     const impColor = avgImprovement == null
       ? 'var(--muted)'
       : avgImprovement > 0 ? 'var(--metric-good)' : avgImprovement < 0 ? 'var(--metric-bad)' : 'var(--muted)';
@@ -250,11 +252,12 @@ function renderStrategies(strategies) {
       <td style="color:${metricColor(successRate)}">${successRateStr}</td>
       <td style="color:${impColor}">${avgImprovementStr}</td>
       <td style="color:${metricColor(convergenceRate)}">${convergenceRateStr}</td>
+      <td style="color:${metricColor(stabilityScore)}">${stabilityScoreStr}</td>
     </tr>`;
   }
   el.innerHTML = `<div class="table-wrapper"><table>
-    <colgroup><col style="width:30%"><col style="width:18%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"></colgroup>
-    <thead><tr><th>策略名稱</th><th>類型</th><th>分數</th><th>成功率</th><th>平均改善</th><th>收斂率</th></tr></thead>
+    <colgroup><col style="width:25%"><col style="width:14%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"></colgroup>
+    <thead><tr><th>策略名稱</th><th>類型</th><th>分數</th><th>成功率</th><th>平均改善</th><th>收斂率</th><th>穩定性</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
