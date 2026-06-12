@@ -15,21 +15,31 @@ function negSpan(val, fmt) {
   return `<span${style}>${fmt != null ? fmt : num}</span>`;
 }
 
-// Delegated click handler for pipeline approve/reject buttons (replaces inline onclick)
+// Delegated click handler for pipeline action buttons (legacy .pipeline-action + new gear-icon override)
 if (typeof document !== 'undefined') {
   document.addEventListener('click', function(e) {
+    // Legacy direct buttons (放行/否決/補追)
     const btn = e.target.closest('.pipeline-action');
-    if (!btn) return;
-    const text = btn.textContent.trim();
-    if (text !== '放行' && text !== '補追' && text !== '否決') return;
-    const symbol = btn.dataset.symbol;
-    const agentId = btn.dataset.agentId;
-    if (!symbol || !agentId) return;
-    e.stopPropagation();
-    if (text === '否決') {
-      rejectRec(btn, symbol, agentId);
-    } else {
-      approveRec(btn, symbol, agentId);
+    if (btn) {
+      const text = btn.textContent.trim();
+      if (text === '放行' || text === '補追' || text === '否決') {
+        const symbol = btn.dataset.symbol;
+        const agentId = btn.dataset.agentId;
+        if (!symbol || !agentId) return;
+        e.stopPropagation();
+        if (text === '否決') {
+          rejectRec(btn, symbol, agentId);
+        } else {
+          approveRec(btn, symbol, agentId);
+        }
+        return;
+      }
+    }
+    // Machine-first gear-icon override button
+    const overrideBtn = e.target.closest('.pipeline-override-btn');
+    if (overrideBtn) {
+      handleOverrideClick({ currentTarget: overrideBtn, stopPropagation: () => {} });
+      return;
     }
   });
 }
@@ -246,7 +256,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     const rowStyle = !it.passed_guards ? 'background:rgba(239,68,68,0.06);border-left:3px solid var(--color-danger)' : 'border-left:3px solid var(--color-success)';
     const crowded = (it.reason || '').includes('[crowded:');
     const badge = crowded ? `<span class="badge warn">擁擠</span> ` : '';
-    const sideLabel = it.side === 'BUY' ? '<span style="color:var(--up);font-weight:700">買入</span>' : (it.side === 'SELL' ? '<span style="color:var(--down);font-weight:700">賣出</span>' : '-');
+    const sideLabel = it.side === 'BUY' ? '<span style="color:var(--up);font-weight:700">買入</span>' : (it.side === 'SELL' ? '<span style="color:var(--down);font-weight:700">賣出</span>' : (it.side === 'REDUCE' ? '<span style="color:var(--warn);font-weight:700">減持</span>' : '-'));
     const priceLabel = it.price ? it.price.toFixed(2) : '-';
     const targetPriceLabel = it.target_price > 0 ? it.target_price.toFixed(2) : '-';
     const stopLossPriceLabel = it.stop_loss_price > 0 ? it.stop_loss_price.toFixed(2) : '-';
@@ -258,9 +268,9 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     const layerName = layerMap[it.layer] || (it.layer || (it.agent_id === 'alpha_discovery' ? '風格因子' : '-'));
     const tags = (it.tags || []).map(t => `<span class="badge" style="font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--border);margin-right:3px">${escapeHtml(t)}</span>`).join('');
     const actionBtns = it.passed_guards
-      ? `<button class="pipeline-action" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}">放行</button> <button class="pipeline-action" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}">否決</button>`
-      : `<button class="pipeline-action" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}">補追</button>`;
-    const actionHelp = `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:4px" onclick="event.stopPropagation();openInfoHelp('人工覆寫說明', \`<p><strong>放行</strong>：人工背書此推薦，系統後續回測不會將它濾除。</p><p><strong>否決</strong>：人工拒絕此推薦，系統後續回測會強制排除該 (標的, Agent) 組合。</p><p><strong>補追</strong>：對已被控制層擋下的標的進行人工放行。</p>\`)">ℹ️</span>`;
+      ? `<button class="pipeline-override-btn" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}" data-guards="1" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:13px;color:var(--muted);line-height:1" title="人工覆寫（機器已放行）">⚙</button>`
+      : `<button class="pipeline-override-btn" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}" data-guards="0" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:13px;color:var(--color-warning);line-height:1" title="人工覆寫（機器已阻擋）">⚙</button>`;
+    const actionHelp = `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:2px" onclick="event.stopPropagation();openInfoHelp('人工覆寫說明', \`<p><strong>機器優先原則</strong>：系統自動執行所有決策，人工覆寫僅用於對機器決策有不同意見的例外情況。</p><p>點擊 ⚙ 按鈕可選擇：</p><ul><li><strong>放行</strong>：人工背書此推薦，跳過控制層過濾。</li><li><strong>否決</strong>：人工拒絕此推薦，強制排除該組合。</li><li><strong>補追</strong>：對已被控制層擋下的標的進行人工放行。</li></ul><p>覆寫有效期 48 小時，過期後自動回復機器決策。</p>\`)">ℹ️</span>`;
     const narrativeEvents = it.narrative_event_ids || [];
     const narrativeCtx = it.narrative_context;
     const hasNarrative = narrativeEvents.length > 0 || narrativeCtx;
@@ -388,6 +398,76 @@ export function toggleWorkflowScreening() {
   }
 }
 
+
+// Machine-first override: gear-icon click opens a compact dropdown with
+// contextual options based on guard status (passed vs blocked).
+export function handleOverrideClick(e) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  const symbol = btn.dataset.symbol;
+  const agentId = btn.dataset.agentId;
+  const passedGuards = btn.dataset.guards === '1';
+
+  const existing = document.querySelector('.override-popover');
+  if (existing) existing.remove();
+
+  const popover = document.createElement('div');
+  popover.className = 'override-popover';
+  popover.style.cssText = 'position:absolute;z-index:999;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;min-width:140px;box-shadow:0 4px 12px rgba(0,0,0,0.15)';
+  popover.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${symbol} · ${agentId}</div>
+    ${passedGuards
+      ? '<button class="override-action" data-action="reject" style="display:block;width:100%;padding:4px 8px;margin-bottom:4px;border-radius:4px;border:1px solid var(--color-danger);background:rgba(239,68,68,.1);color:var(--color-danger);cursor:pointer;font-size:12px;text-align:left">🚫 強制否決</button>'
+      : '<button class="override-action" data-action="approve" style="display:block;width:100%;padding:4px 8px;border-radius:4px;border:1px solid var(--color-success);background:rgba(34,197,94,.1);color:var(--color-success);cursor:pointer;font-size:12px;text-align:left">✅ 強制放行</button>'
+    }
+    <div style="margin-top:6px">
+      <input type="text" class="override-reason" placeholder="覆寫原因（必填）" style="width:100%;box-sizing:border-box;padding:3px 6px;font-size:11px;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:var(--text)">
+    </div>
+    <button class="override-submit" style="display:block;width:100%;margin-top:6px;padding:4px 8px;border-radius:4px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:12px">確認送出</button>
+    <div class="override-error" style="display:none;margin-top:4px;font-size:11px;color:var(--color-danger)"></div>
+  `;
+
+  const btnRect = btn.getBoundingClientRect();
+  popover.style.left = (btnRect.left - 130) + 'px';
+  popover.style.top = (btnRect.bottom + 4) + 'px';
+  document.body.appendChild(popover);
+
+  popover.querySelector('.override-submit').onclick = async () => {
+    const reason = popover.querySelector('.override-reason').value.trim();
+    if (reason.length < 4) {
+      popover.querySelector('.override-error').style.display = 'block';
+      popover.querySelector('.override-error').textContent = '原因至少需 4 個字元';
+      return;
+    }
+    const action = popover.querySelector('.override-action').dataset.action;
+    const endpoint = action === 'approve'
+      ? '/api/control/approve-recommendation'
+      : '/api/control/reject-recommendation';
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, agent_id: agentId, reason, operator: 'admin' })
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      popover.remove();
+      window._pipelinePage = window._pipelinePage || 0;
+      renderPipeline(window._pipelineData, document.getElementById('pipelineShowAll')?.checked || false, null, false);
+    } catch (err) {
+      popover.querySelector('.override-error').style.display = 'block';
+      popover.querySelector('.override-error').textContent = '送出失敗: ' + err.message;
+    }
+  };
+
+  const closeHandler = (ev) => {
+    if (!popover.contains(ev.target) && ev.target !== btn) {
+      popover.remove();
+      document.removeEventListener('click', closeHandler);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
+}
+
 if (typeof window !== "undefined") Object.assign(window, {
-  applyFilters, clearFilters, toggleFilterPanel, toggleWorkflowScreening
+  applyFilters, clearFilters, toggleFilterPanel, toggleWorkflowScreening, handleOverrideClick
 });
