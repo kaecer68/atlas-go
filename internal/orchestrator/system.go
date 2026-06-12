@@ -374,6 +374,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			held = s.Sim().persistentState.Positions
 		}
 		s.plugins.WithHeldPositions(held)
+		s.plugins.WithRecOverrides(loadRecOverrides(s.Sim().ledger))
 	}
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
@@ -656,6 +657,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 			held = s.Sim().persistentState.Positions
 		}
 		s.plugins.WithHeldPositions(held)
+		s.plugins.WithRecOverrides(loadRecOverrides(s.Sim().ledger))
 	}
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,

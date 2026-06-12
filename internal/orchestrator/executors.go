@@ -13,12 +13,45 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/retail"
 )
+
+// loadRecOverrides reads human interventions from the ledger and returns a map
+// of overrides for consume by collectRecommendations. Only non-expired
+// approve_rec / reject_rec interventions are considered.
+// Key format: "agentID:symbol", value: "approved" or "rejected".
+func loadRecOverrides(store ledger.OutcomeStore) map[string]string {
+	if store == nil {
+		return nil
+	}
+	interventions, err := store.LoadHumanInterventions()
+	if err != nil || len(interventions) == 0 {
+		return nil
+	}
+	result := make(map[string]string)
+	for _, iv := range interventions {
+		if iv.IsExpired() || iv.TargetSymbol == "" {
+			continue
+		}
+		switch iv.Type {
+		case "approve_rec":
+			key := iv.TargetAgentID + ":" + iv.TargetSymbol
+			result[key] = "approved"
+		case "reject_rec":
+			key := iv.TargetAgentID + ":" + iv.TargetSymbol
+			result[key] = "rejected"
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
 
 // LayerRouter encapsulates layer-based agent routing logic.
 // This decouples AgentRegistry layer filtering from executor dispatch,
@@ -447,6 +480,24 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
 			if !ok {
 				continue
+			}
+
+			// Human-in-the-loop override: force-approve or force-reject
+			// specific (agent, symbol) pairs before guard filtering.
+			// This is the ONLY path by which approve_rec/reject_rec interventions
+			// affect the simulation pipeline. Without it, those interventions
+			// are audit-log-only with no runtime effect.
+			if plugins != nil && len(plugins.recOverrides) > 0 {
+				key := agent.ID + ":" + rec.Symbol
+				if action, ok := plugins.recOverrides[key]; ok {
+					if action == "rejected" {
+						continue // skip entirely — human rejected this recommendation
+					}
+					if action == "approved" {
+						recs = append(recs, rec)
+						continue // bypass guard + multi-timeframe for approved recs
+					}
+				}
 			}
 
 			// Multi-timeframe adjustment: use intraday OHLC position as a
