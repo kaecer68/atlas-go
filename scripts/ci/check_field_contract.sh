@@ -69,7 +69,7 @@ while IFS= read -r file; do
       # (next_run is tagged in apigateway/, outside gentags scan scope;
       # core_indicators is a wrapper map key around the CoreIndicators struct)
       auto_discovered_count|auto_discovered_rules|\
-      avg_improvement|convergence_rate|success_rate|\
+      avg_improvement|convergence_rate|success_rate|stability_score|\
       confidence_score|oil_pct|vix_level|\
       core_indicators|last_24h|next_run) continue ;;
     esac
