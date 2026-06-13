@@ -862,3 +862,137 @@ func TestBackgroundTaskManager_Status_AllFieldsPopulated(t *testing.T) {
 		t.Errorf("ConsecutiveFailures = %d, want 0", s.ConsecutiveFailures)
 	}
 }
+
+// =========================================================================
+// BackgroundTaskManager Tests — Panic Recovery
+// =========================================================================
+
+func TestExecuteTask_PanicInTaskFunc_RecoversAndRecordsFailure(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	var failureHandlerMu sync.Mutex
+	var failureHandlerCalled bool
+	var failureHandlerName string
+	var failureHandlerErr error
+	var failureHandlerFailures int
+
+	m.SetFailureHandler(func(taskName string, consecutiveFailures int, err error) {
+		failureHandlerMu.Lock()
+		defer failureHandlerMu.Unlock()
+		failureHandlerCalled = true
+		failureHandlerName = taskName
+		failureHandlerErr = err
+		failureHandlerFailures = consecutiveFailures
+	})
+
+	task := &ScheduledTask{
+		Name:     "panicking-task",
+		Interval: 1 * time.Hour,
+		Jitter:   0,
+		Task: func(ctx context.Context) error {
+			panic("intentional test panic for recovery test")
+		},
+	}
+	task.SetEnabled(true)
+
+	m.executeTask(context.Background(), task)
+
+	if task.Failures() == 0 {
+		t.Error("expected Failures() > 0 after panic, got 0 (recover() should call RecordFailure)")
+	}
+
+	failureHandlerMu.Lock()
+	defer failureHandlerMu.Unlock()
+	if !failureHandlerCalled {
+		t.Error("expected failureHandler to be called after panic, was not")
+	}
+	if failureHandlerName != "panicking-task" {
+		t.Errorf("failureHandler name = %q, want %q", failureHandlerName, "panicking-task")
+	}
+	if failureHandlerErr == nil {
+		t.Error("expected failureHandler err to be non-nil after panic")
+	}
+	if failureHandlerFailures < 1 {
+		t.Errorf("expected failureHandler consecutiveFailures >= 1, got %d", failureHandlerFailures)
+	}
+}
+
+func TestExecuteTask_FailureHandlerPanics_ManagerSurvives(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	m.SetFailureHandler(func(taskName string, consecutiveFailures int, err error) {
+		panic("intentional test panic in failureHandler")
+	})
+
+	task := &ScheduledTask{
+		Name:     "task-with-panicking-handler",
+		Interval: 1 * time.Hour,
+		Jitter:   0,
+		Task:     func(ctx context.Context) error { return errors.New("normal task error") },
+	}
+	task.SetEnabled(true)
+
+	m.executeTask(context.Background(), task)
+
+	if task.Failures() == 0 {
+		t.Error("expected Failures() > 0 after normal task error (RecordFailure should still run)")
+	}
+}
+
+func TestBackgroundTaskManager_Start_PanicInTask_DoesNotCrashManager(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	eventCh := make(chan struct{}, 2)
+
+	panickingTask := &ScheduledTask{
+		Name:     "panicking-task-e2e",
+		Interval: 1 * time.Hour,
+		Jitter:   1 * time.Millisecond,
+		Task: func(ctx context.Context) error {
+			panic("intentional test panic — manager should survive")
+		},
+	}
+	panickingTask.SetEnabled(true)
+	if err := m.Register(panickingTask); err != nil {
+		t.Fatalf("Register panickingTask: %v", err)
+	}
+
+	safeTask := &ScheduledTask{
+		Name:     "safe-task-e2e",
+		Interval: 1 * time.Hour,
+		Jitter:   1 * time.Millisecond,
+		Task: func(ctx context.Context) error {
+			eventCh <- struct{}{}
+			return nil
+		},
+	}
+	safeTask.SetEnabled(true)
+	if err := m.Register(safeTask); err != nil {
+		t.Fatalf("Register safeTask: %v", err)
+	}
+
+	m.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
+		eventCh <- struct{}{}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	m.Start(ctx)
+	defer m.Stop()
+
+	select {
+	case <-eventCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for first event — manager likely crashed")
+	}
+	select {
+	case <-eventCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for second event — other task never ran")
+	}
+
+	if panickingTask.Failures() == 0 {
+		t.Error("expected panickingTask.Failures() > 0 (failure not recorded)")
+	}
+}

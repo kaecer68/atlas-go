@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -160,6 +161,43 @@ func (m *BackgroundTaskManager) SetFailureHandler(h TaskFailureHandler) {
 	m.failureHandler = h
 }
 
+// safeCallFailureHandler invokes m.failureHandler inside a nested defer recover
+// so a misbehaving handler cannot propagate a panic and crash the process.
+// Handler panics are logged with full stack trace and the task name for
+// postmortem. A nil handler is a no-op.
+func (m *BackgroundTaskManager) safeCallFailureHandler(taskName string, consecutiveFailures int, err error) {
+	if m.failureHandler == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			logging.Error(
+				"background_task", "failureHandler_panic_recovered",
+				"task_name", taskName,
+				"consecutive_failures", consecutiveFailures,
+				"panic", fmt.Sprintf("%v", r),
+				"stack", string(stack),
+			)
+		}
+	}()
+	m.failureHandler(taskName, consecutiveFailures, err)
+}
+
+func logAndWrapPanic(taskName, event string, r interface{}) error {
+	if r == nil {
+		return nil
+	}
+	stack := debug.Stack()
+	logging.Error(
+		"background_task", event,
+		"name", taskName,
+		"panic", fmt.Sprintf("%v", r),
+		"stack", string(stack),
+	)
+	return fmt.Errorf("task panicked: %v", r)
+}
+
 // SetRecoveryHandler sets a callback invoked when a task recovers from failures.
 func (m *BackgroundTaskManager) SetRecoveryHandler(h TaskRecoveryHandler) {
 	m.recoveryHandler = h
@@ -175,6 +213,13 @@ func (m *BackgroundTaskManager) Stop() {
 
 func (m *BackgroundTaskManager) runTask(ctx context.Context, task *ScheduledTask) {
 	defer m.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			if err := logAndWrapPanic(task.Name, "runTask_panic_recovered", r); err != nil {
+				m.safeCallFailureHandler(task.Name, -1, err)
+			}
+		}
+	}()
 
 	// Apply startup jitter to prevent thundering herd
 	if task.Jitter > 0 {
@@ -225,7 +270,14 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 		}
 	}
 
-	err := task.Task(ctx)
+	err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = logAndWrapPanic(task.Name, "task_panic_recovered", r)
+			}
+		}()
+		return task.Task(ctx)
+	}()
 	if err != nil {
 		task.RecordFailure()
 		logging.Error(
@@ -234,9 +286,7 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 			"err", err.Error(),
 			"consecutive_failures", task.Failures(),
 		)
-		if m.failureHandler != nil {
-			m.failureHandler(task.Name, task.Failures(), err)
-		}
+		m.safeCallFailureHandler(task.Name, task.Failures(), err)
 	} else {
 		prev := task.Failures()
 		task.RecordSuccess()
