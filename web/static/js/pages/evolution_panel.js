@@ -97,7 +97,7 @@ function renderTrendSummary(scorecards, sessions) {
 function renderPageGuide(view) {
   var views = {
     compact: '<strong>精簡檢視</strong>：一目了然看趨勢 — 上方 Regime 點矩陣判斷市場環境，中間實驗卡了解進化熱度，下方 Agent 排名與淘汰名單判斷策略健康度。',
-    detailed: '<strong>詳細檢視</strong>：數字全貌 — 完整的 Regime 時間線、Agent 評分表（含命中率、Sharpe、最大回撤）、以及實驗日誌。適合深入分析個別 Agent 的歷史績效。',
+    detailed: '<strong>詳細檢視</strong>：數字全貌 — Agent 評分表（含命中率、Sharpe、最大回撤）、以及實驗日誌。適合深入分析個別 Agent 的歷史績效。',
     categorical: '<strong>AI 競爭檢視</strong>：關係探索 — Agent 競爭散布圖以 X=命中率 Y=Sharpe 二維展開，直觀看出哪些層（layer）的 Agent 在右上角「優秀區」聚集。'
   };
   var viewDesc = views[view] || '';
@@ -718,7 +718,3 @@ function renderCatContent(tab, scorecards, sessions, judges, promotes) {
 
 // ====== Global bridges ======
 window._evSwitch = function(mode) { switchView(mode); };
-window._evCatTab = function(tab) {
-  const { scorecards, sessions, judges, promotes } = getData();
-  renderCatContent(tab, scorecards, sessions, judges, promotes);
-};
