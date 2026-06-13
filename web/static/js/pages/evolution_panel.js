@@ -98,12 +98,12 @@ function renderPageGuide(view) {
   var views = {
     compact: '<strong>精簡檢視</strong>：一目了然看趨勢 — 上方 Regime 點矩陣判斷市場環境，中間實驗卡了解進化熱度，下方 Agent 排名與淘汰名單判斷策略健康度。',
     detailed: '<strong>詳細檢視</strong>：數字全貌 — 完整的 Regime 時間線、Agent 評分表（含命中率、Sharpe、最大回撤）、以及實驗日誌。適合深入分析個別 Agent 的歷史績效。',
-    categorical: '<strong>分類檢視</strong>：關係探索 — Agent 競爭散布圖以 X=命中率 Y=Sharpe 二維展開，直觀看出哪些層（layer）的 Agent 在右上角「優秀區」聚集。'
+    categorical: '<strong>AI 競爭檢視</strong>：關係探索 — Agent 競爭散布圖以 X=命中率 Y=Sharpe 二維展開，直觀看出哪些層（layer）的 Agent 在右上角「優秀區」聚集。'
   };
   var viewDesc = views[view] || '';
 
   return '<details class="ev-reading-guide" id="evReadingGuide">' +
-    '<summary><strong>💡 如何解讀本頁</strong> — ' + (view === 'compact' ? '精簡' : (view === 'detailed' ? '詳細' : '分類')) + '檢視</summary>' +
+    '<summary><strong>💡 如何解讀本頁</strong> — ' + (view === 'compact' ? '精簡' : (view === 'detailed' ? '詳細' : 'AI競爭')) + '檢視</summary>' +
     '<div class="ev-guide-body">' +
       '<p><strong>演化透視</strong> 是系統的「達爾文進化儀表板」— 顯示 AI Agent 在回測中的競爭、淘汰與進化過程。</p>' +
       '<p style="margin-bottom:6px">目前模式：' + viewDesc + '</p>' +
@@ -439,12 +439,6 @@ function renderDetailed() {
     return;
   }
   const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
-  const current = latestRegime(sessions);
-
-  let regimeSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
-    '<div class="ev-section-title">Regime 時間線 <span class="ev-current-regime ' + regimeClass(current) + '" style="margin-left:auto">' + regimeLabel(current) + '</span></div>' +
-    renderRegimeTimeline(sessions, 80) +
-    '</div>';
 
   let tableHtml;
   if (sorted.length > 0) {
@@ -482,7 +476,7 @@ function renderDetailed() {
     renderExperimentList(judges, promotes, true) +
     '</div>';
 
-  el.innerHTML = renderPageGuide('detailed') + regimeSection + scoreSection + expSection;
+  el.innerHTML = renderPageGuide('detailed') + scoreSection + expSection;
 }
 
 // ====== Categorical View ======
@@ -499,11 +493,7 @@ function renderCategorical() {
     return;
   }
 
-  el.innerHTML = renderPageGuide('categorical') + '<div style="display:flex;gap:8px;margin-bottom:16px" id="evolutionTabs">' +
-    '<button class="cat-tab active" id="catTab-agents" onclick="window._evCatTab(\'agents\')">Agent 競爭</button>' +
-    '<button class="cat-tab" id="catTab-regime" onclick="window._evCatTab(\'regime\')">Regime 演化</button>' +
-    '<button class="cat-tab" id="catTab-experiments" onclick="window._evCatTab(\'experiments\')">實驗日誌</button>' +
-    '</div>';
+  el.innerHTML = renderPageGuide('categorical');
 
   renderCatContent('agents', scorecards, sessions, judges, promotes);
 }
@@ -707,10 +697,6 @@ function renderCatContent(tab, scorecards, sessions, judges, promotes) {
   const el = document.getElementById('evolutionCatContent');
   if (!el) return;
 
-  document.querySelectorAll('#evolutionTabs .cat-tab').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('catTab-' + tab);
-  if (btn) btn.classList.add('active');
-
   if (tab === 'agents') {
     el.innerHTML = '<div class="ev-section-title">Agent 競爭散布圖 <span class="ev-section-count">X: 命中率 / Y: Sharpe</span></div>' +
       '<div id="evScatterWrap" style="position:relative;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
@@ -727,12 +713,6 @@ function renderCatContent(tab, scorecards, sessions, judges, promotes) {
         '</div>' +
       '</div>';
       requestAnimationFrame(function() { renderScatterPlot(scorecards); });
-  } else if (tab === 'regime') {
-    el.innerHTML = '<div class="ev-section-title">Regime 演化時間線 <span class="ev-section-count">' + sessions.length + ' sessions</span></div>' +
-      renderRegimeTimeline(sessions, -1);
-  } else if (tab === 'experiments') {
-    el.innerHTML = '<div class="ev-section-title">實驗日誌</div>' +
-      renderExperimentList(judges, promotes, false);
   }
 }
 
