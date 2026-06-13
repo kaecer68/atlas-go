@@ -942,8 +942,7 @@ func TestExecuteTask_FailureHandlerPanics_ManagerSurvives(t *testing.T) {
 func TestBackgroundTaskManager_Start_PanicInTask_DoesNotCrashManager(t *testing.T) {
 	m := NewBackgroundTaskManager(nil)
 
-	var safeTaskMu sync.Mutex
-	var safeTaskRan int
+	eventCh := make(chan struct{}, 2)
 
 	panickingTask := &ScheduledTask{
 		Name:     "panicking-task-e2e",
@@ -963,9 +962,7 @@ func TestBackgroundTaskManager_Start_PanicInTask_DoesNotCrashManager(t *testing.
 		Interval: 1 * time.Hour,
 		Jitter:   1 * time.Millisecond,
 		Task: func(ctx context.Context) error {
-			safeTaskMu.Lock()
-			defer safeTaskMu.Unlock()
-			safeTaskRan++
+			eventCh <- struct{}{}
 			return nil
 		},
 	}
@@ -974,31 +971,28 @@ func TestBackgroundTaskManager_Start_PanicInTask_DoesNotCrashManager(t *testing.
 		t.Fatalf("Register safeTask: %v", err)
 	}
 
+	m.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
+		eventCh <- struct{}{}
+	})
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	m.Start(ctx)
 	defer m.Stop()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		safeTaskMu.Lock()
-		ran := safeTaskRan
-		safeTaskMu.Unlock()
-		if panickingTask.Failures() > 0 && ran > 0 {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
+	select {
+	case <-eventCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for first event — manager likely crashed")
+	}
+	select {
+	case <-eventCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for second event — other task never ran")
 	}
 
 	if panickingTask.Failures() == 0 {
-		t.Fatal("expected panickingTask.Failures() > 0 within 2s, got 0 (manager likely crashed)")
-	}
-
-	safeTaskMu.Lock()
-	ran := safeTaskRan
-	safeTaskMu.Unlock()
-	if ran == 0 {
-		t.Error("expected safe-task to run at least once — manager should not have crashed from panicking task")
+		t.Error("expected panickingTask.Failures() > 0 (failure not recorded)")
 	}
 }
