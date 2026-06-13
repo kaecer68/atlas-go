@@ -167,6 +167,10 @@ func publishBootstrapEvents(bus eventbus.EventBus, replayPath, baselinePath stri
 	})
 }
 
+func shouldStartFubonProxy(mode string) bool {
+	return mode == "live"
+}
+
 func main() {
 	if err := run(os.Args[1:], defaultAppDeps()); err != nil {
 		log.Fatalf("%v", err)
@@ -300,7 +304,7 @@ func run(args []string, deps appDeps) error {
 
 		// Start fubon-proxy process manager BEFORE Gateway adapter registration,
 		// so the fubon TCP probe in RegisterChannelAdapters finds :8081 already running.
-		if *brokerMode != "dry-run" {
+		if shouldStartFubonProxy(cfg.BrokerMode) {
 			fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
 			if err := fubonMgr.Start(context.Background()); err != nil {
 				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)

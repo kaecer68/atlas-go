@@ -749,3 +749,24 @@ func TestAPIModeRegistersNarrativeRoutes(t *testing.T) {
 		t.Fatalf("GET /api/narrative/events status = %d, want 200", rr.Code)
 	}
 }
+
+func TestShouldStartFubonProxy(t *testing.T) {
+	cases := []struct {
+		name string
+		mode string
+		want bool
+	}{
+		{"empty_defaults_to_no", "", false},
+		{"dry_run_no_proxy", "dry-run", false},
+		{"paper_no_proxy", "paper", false},
+		{"live_starts_proxy", "live", true},
+		{"unknown_mode_no_proxy", "bogus", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldStartFubonProxy(tc.mode); got != tc.want {
+				t.Fatalf("shouldStartFubonProxy(%q) = %v, want %v", tc.mode, got, tc.want)
+			}
+		})
+	}
+}
