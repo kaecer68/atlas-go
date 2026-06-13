@@ -559,3 +559,53 @@ func TestParameterMetadata_RoundTrip(t *testing.T) {
 		t.Errorf("last_calibrated not preserved")
 	}
 }
+
+func TestLoadParametersConfig_FallbackPriceTargetsDefaultsMerged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "parameters_partial.json")
+
+	// Start from defaults so all required sections are valid, then override
+	// FallbackPriceTargets with a partial map that omits _default.
+	cfg := DefaultParametersConfig()
+	cfg.FallbackPriceTargets = map[string]FallbackPriceTarget{
+		"technical_breakout": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.12},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.93},
+		},
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	loaded, err := LoadParametersConfig(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	defaultEntry, ok := loaded.FallbackPriceTargets["_default"]
+	if !ok {
+		t.Fatalf("_default key not merged into FallbackPriceTargets")
+	}
+	if defaultEntry.TargetMultiplier.Value != 1.05 {
+		t.Errorf("_default target multiplier = %v, want 1.05", defaultEntry.TargetMultiplier.Value)
+	}
+	if defaultEntry.StopLossMultiplier.Value != 0.95 {
+		t.Errorf("_default stop-loss multiplier = %v, want 0.95", defaultEntry.StopLossMultiplier.Value)
+	}
+
+	customEntry, ok := loaded.FallbackPriceTargets["technical_breakout"]
+	if !ok {
+		t.Fatalf("technical_breakout key not preserved")
+	}
+	if customEntry.TargetMultiplier.Value != 1.12 {
+		t.Errorf("technical_breakout target multiplier = %v, want 1.12", customEntry.TargetMultiplier.Value)
+	}
+	if customEntry.StopLossMultiplier.Value != 0.93 {
+		t.Errorf("technical_breakout stop-loss multiplier = %v, want 0.93", customEntry.StopLossMultiplier.Value)
+	}
+}
