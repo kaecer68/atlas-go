@@ -161,6 +161,29 @@ func (m *BackgroundTaskManager) SetFailureHandler(h TaskFailureHandler) {
 	m.failureHandler = h
 }
 
+// safeCallFailureHandler invokes m.failureHandler inside a nested defer recover
+// so a misbehaving handler cannot propagate a panic and crash the process.
+// Handler panics are logged with full stack trace and the task name for
+// postmortem. A nil handler is a no-op.
+func (m *BackgroundTaskManager) safeCallFailureHandler(taskName string, consecutiveFailures int, err error) {
+	if m.failureHandler == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			logging.Error(
+				"background_task", "failureHandler_panic_recovered",
+				"task_name", taskName,
+				"consecutive_failures", consecutiveFailures,
+				"panic", fmt.Sprintf("%v", r),
+				"stack", string(stack),
+			)
+		}
+	}()
+	m.failureHandler(taskName, consecutiveFailures, err)
+}
+
 // SetRecoveryHandler sets a callback invoked when a task recovers from failures.
 func (m *BackgroundTaskManager) SetRecoveryHandler(h TaskRecoveryHandler) {
 	m.recoveryHandler = h
@@ -185,9 +208,7 @@ func (m *BackgroundTaskManager) runTask(ctx context.Context, task *ScheduledTask
 				"panic", fmt.Sprintf("%v", r),
 				"stack", string(stack),
 			)
-			if m.failureHandler != nil {
-				m.failureHandler(task.Name, -1, fmt.Errorf("runTask panicked: %v", r))
-			}
+			m.safeCallFailureHandler(task.Name, -1, fmt.Errorf("runTask panicked: %v", r))
 		}
 	}()
 
@@ -263,9 +284,7 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 			"err", err.Error(),
 			"consecutive_failures", task.Failures(),
 		)
-		if m.failureHandler != nil {
-			m.failureHandler(task.Name, task.Failures(), err)
-		}
+		m.safeCallFailureHandler(task.Name, task.Failures(), err)
 	} else {
 		prev := task.Failures()
 		task.RecordSuccess()

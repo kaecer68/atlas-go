@@ -917,6 +917,28 @@ func TestExecuteTask_PanicInTaskFunc_RecoversAndRecordsFailure(t *testing.T) {
 	}
 }
 
+func TestExecuteTask_FailureHandlerPanics_ManagerSurvives(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	m.SetFailureHandler(func(taskName string, consecutiveFailures int, err error) {
+		panic("intentional test panic in failureHandler")
+	})
+
+	task := &ScheduledTask{
+		Name:     "task-with-panicking-handler",
+		Interval: 1 * time.Hour,
+		Jitter:   0,
+		Task:     func(ctx context.Context) error { return errors.New("normal task error") },
+	}
+	task.SetEnabled(true)
+
+	m.executeTask(context.Background(), task)
+
+	if task.Failures() == 0 {
+		t.Error("expected Failures() > 0 after normal task error (RecordFailure should still run)")
+	}
+}
+
 func TestBackgroundTaskManager_Start_PanicInTask_DoesNotCrashManager(t *testing.T) {
 	m := NewBackgroundTaskManager(nil)
 
