@@ -526,9 +526,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	tw.Record(7, "ledger_write", "START", nil)
 	// Use replay-based forward returns when dataset is available (real data).
 	// Falls back to synthetic when replay is nil.
-	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, s.Sim().replay)
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.Sim().replay)
 	if len(outcomes) == 0 {
-		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
+		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime))
 	}
 	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
 	// The XOR pattern was removed because DualWriteRepository already handles DB ↔ file sync.
@@ -774,7 +774,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.Risk().eventBus.PublishGuardOutcomes(s.Sim().session.ID, guardOutcomes)
 	}
 	tw.Record(7, "ledger_write", "START", nil)
-	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.Sim().replay)
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, string(regime), s.Sim().replay)
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
 	}
@@ -1401,7 +1401,7 @@ func buildParameterSnapshot() *shared.ParameterSnapshot {
 	return snap
 }
 
-func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time) []domain.RecommendationOutcome {
+func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, regime string) []domain.RecommendationOutcome {
 	if len(rawRecs) == 0 {
 		return nil
 	}
@@ -1439,13 +1439,14 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 			ConvictionBreakdown: rec.ConvictionBreakdown,
 			SupportingEvents:    rec.SupportingEvents,
 			ParameterSnapshot:   snapshot,
+			Regime:              regime,
 			IsSynthetic:         true,
 		})
 	}
 	return outcomes
 }
 
-func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, ds *replay.Dataset) []domain.RecommendationOutcome {
+func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, regime string, ds *replay.Dataset) []domain.RecommendationOutcome {
 	if ds == nil || len(rawRecs) == 0 {
 		return nil
 	}
@@ -1488,6 +1489,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 			ConvictionBreakdown: rec.ConvictionBreakdown,
 			SupportingEvents:    rec.SupportingEvents,
 			ParameterSnapshot:   snapshot,
+			Regime:              regime,
 			IsSynthetic:         synthetic,
 		})
 	}

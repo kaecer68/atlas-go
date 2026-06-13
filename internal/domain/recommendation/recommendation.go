@@ -72,6 +72,7 @@ type RecommendationOutcome struct {
 	SupportingEvents    []string                    `json:"supporting_events,omitempty"`
 	ParameterSnapshot   *shared.ParameterSnapshot   `json:"parameter_snapshot,omitempty"`
 	IsSynthetic         bool                        `json:"is_synthetic"`
+	Regime              string                      `json:"regime,omitempty"`
 }
 
 func (r *RecommendationOutcome) Validate() error {

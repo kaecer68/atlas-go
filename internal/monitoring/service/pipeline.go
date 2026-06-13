@@ -239,9 +239,11 @@ func computeAgentRegimeBreakdown(outcomes []domain.RecommendationOutcome, agentI
 	}
 	byRegime := make(map[string][]domain.RecommendationOutcome)
 	for _, o := range agentOutcomes {
-		regime := defaultRegime
-		_ = regime
-		byRegime[defaultRegime] = append(byRegime[defaultRegime], o)
+		regime := o.Regime
+		if regime == "" {
+			regime = defaultRegime
+		}
+		byRegime[regime] = append(byRegime[regime], o)
 	}
 	regs := make(map[string]domain.RegimePerformance, len(byRegime))
 	for regime, rs := range byRegime {
