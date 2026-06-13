@@ -97,13 +97,12 @@ function renderTrendSummary(scorecards, sessions) {
 function renderPageGuide(view) {
   var views = {
     compact: '<strong>精簡檢視</strong>：一目了然看趨勢 — 上方 Regime 點矩陣判斷市場環境，中間實驗卡了解進化熱度，下方 Agent 排名與淘汰名單判斷策略健康度。',
-    detailed: '<strong>詳細檢視</strong>：數字全貌 — Agent 評分表（含命中率、Sharpe、最大回撤）、以及實驗日誌。適合深入分析個別 Agent 的歷史績效。',
-    categorical: '<strong>AI 競爭檢視</strong>：關係探索 — Agent 競爭散布圖以 X=命中率 Y=Sharpe 二維展開，直觀看出哪些層（layer）的 Agent 在右上角「優秀區」聚集。'
+    'ai-analysis': '<strong>AI 競爭分析</strong>：結合 Agent 競爭散布圖、Agent 評分表（含命中率、Sharpe、最大回撤）與實驗日誌，全面分析 Agent 的歷史績效與競爭態勢。'
   };
   var viewDesc = views[view] || '';
 
   return '<details class="ev-reading-guide" id="evReadingGuide">' +
-    '<summary><strong>💡 如何解讀本頁</strong> — ' + (view === 'compact' ? '精簡' : (view === 'detailed' ? '詳細' : 'AI競爭')) + '檢視</summary>' +
+    '<summary><strong>💡 如何解讀本頁</strong> — ' + (view === 'compact' ? '精簡' : 'AI 競爭') + '檢視</summary>' +
     '<div class="ev-guide-body">' +
       '<p><strong>演化透視</strong> 是系統的「達爾文進化儀表板」— 顯示 AI Agent 在回測中的競爭、淘汰與進化過程。</p>' +
       '<p style="margin-bottom:6px">目前模式：' + viewDesc + '</p>' +
@@ -141,8 +140,7 @@ export function switchView(mode) {
   if (catEl) catEl.style.display = 'none';
 
   if (currentView === 'compact') renderCompact();
-  else if (currentView === 'detailed') renderDetailed();
-  else if (currentView === 'categorical') renderCategorical();
+  else if (currentView === 'ai-analysis') renderAiAnalysis();
 }
 
 function getData() {
@@ -428,16 +426,25 @@ stateHtml +
     '</div>';
 }
 
-// ====== Detailed View ======
+// ====== AI Analysis View ======
 
-function renderDetailed() {
+function renderAiAnalysis() {
   const el = document.getElementById('evolutionContent');
-  if (!el) return;
+  const catEl = document.getElementById('evolutionCatContent');
+  if (!el || !catEl) return;
+  catEl.style.display = 'block';
+
   const { scorecards, sessions, judges, promotes } = getData();
   if (isColdStart(scorecards, sessions, judges, promotes)) {
-    el.innerHTML = renderPageGuide('detailed') + renderColdStartEmpty();
+    el.innerHTML = renderPageGuide('ai-analysis') + renderColdStartEmpty();
+    renderCatContent('agents', scorecards, sessions, judges, promotes);
     return;
   }
+
+  // Render categorical content in catEl
+  renderCatContent('agents', scorecards, sessions, judges, promotes);
+
+  // Render detailed content in el
   const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
 
   let tableHtml;
@@ -451,7 +458,7 @@ function renderDetailed() {
     for (let i = 0; i < sorted.length; i++) {
     const a = sorted[i];
     const sClass = sharpeClass(a.sharpe);
-    const hColor = (a.hit_rate || 0) > 0.5 ? 'var(--up)' : ((a.hit_rate || 0) > 0.3 ? 'var(--warn)' : 'var(--muted)');
+    const hColor = (a.hit_rate || 0) > 0.5 ? 'var(--metric-good)' : ((a.hit_rate || 0) > 0.3 ? 'var(--warn)' : 'var(--muted)');
     tableHtml += '<tr>' +
       '<td>' + escapeHtml(agentName(a.agent_id)) + '</td>' +
       '<td class="text-muted">' + escapeHtml(a.skill || '-') + '</td>' +
@@ -459,7 +466,7 @@ function renderDetailed() {
       '<td style="text-align:right">' + (a.observations || 0) + '</td>' +
       '<td style="text-align:right;color:' + hColor + '">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</td>' +
       '<td style="text-align:right"><span class="' + sClass + '">' + (a.sharpe || 0).toFixed(2) + '</span></td>' +
-      '<td style="text-align:right;color:var(--color-danger)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
+      '<td style="text-align:right;color:var(--risk-high)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
       '</tr>';
     }
     tableHtml += '</tbody></table>';
@@ -476,26 +483,7 @@ function renderDetailed() {
     renderExperimentList(judges, promotes, true) +
     '</div>';
 
-  el.innerHTML = renderPageGuide('detailed') + scoreSection + expSection;
-}
-
-// ====== Categorical View ======
-
-function renderCategorical() {
-  const el = document.getElementById('evolutionContent');
-  const catEl = document.getElementById('evolutionCatContent');
-  if (!el || !catEl) return;
-  catEl.style.display = 'block';
-
-  const { scorecards, sessions, judges, promotes } = getData();
-  if (isColdStart(scorecards, sessions, judges, promotes)) {
-    el.innerHTML = renderPageGuide('categorical') + renderColdStartEmpty();
-    return;
-  }
-
-  el.innerHTML = renderPageGuide('categorical');
-
-  renderCatContent('agents', scorecards, sessions, judges, promotes);
+  el.innerHTML = renderPageGuide('ai-analysis') + scoreSection + expSection;
 }
 
 function renderScatterPlot(scorecards) {
@@ -596,6 +584,10 @@ function renderScatterPlot(scorecards) {
   ctx.font = '8px sans-serif';
   ctx.fillText('60%', x60 + 2, pad.top + 10);
 
+  var mutedColor = getThemeColor('--muted', '#9ca3af');
+  var upColor = getThemeColor('--metric-good', '#10b981');
+  var downColor = getThemeColor('--metric-bad', '#ef4444');
+
   ctx.fillStyle = hexToRgba(upColor, 0.04);
   ctx.fillRect(toX(0), toY(3), plotW * (1 / (xMax - xMin)), plotH * ((3 - 0) / (yMax - yMin)));
   ctx.fillStyle = hexToRgba(downColor, 0.04);
@@ -624,9 +616,6 @@ function renderScatterPlot(scorecards) {
   }
 
   // Quadrant annotations
-  var mutedColor = cs.getPropertyValue('--muted').trim() || '#9ca3af';
-  var upColor = cs.getPropertyValue('--up').trim() || '#10b981';
-  var downColor = cs.getPropertyValue('--down').trim() || '#ef4444';
   ctx.textAlign = 'left';
   ctx.font = 'bold 10px sans-serif';
   // Top-right: good zone
@@ -680,8 +669,8 @@ function renderScatterPlot(scorecards) {
     if (found && tip) {
       tip.innerHTML = '<strong>' + agentName(found.agent_id) + '</strong>' +
         '<span class="ev-tip-layer">' + escapeHtml(found.layer || '?') + '</span>' +
-        '<div class="ev-tip-row"><span>命中率</span><span style="color:' + (found.hit_rate > 0.6 ? 'var(--up)' : (found.hit_rate > 0.3 ? 'var(--warn)' : 'var(--muted)')) + '">' + ((found.hit_rate || 0) * 100).toFixed(0) + '%</span></div>' +
-        '<div class="ev-tip-row"><span>Sharpe</span><span style="color:' + (found.sharpe > 1 ? 'var(--up)' : (found.sharpe > 0 ? 'var(--warn)' : 'var(--down)')) + '">' + (found.sharpe || 0).toFixed(2) + '</span></div>' +
+        '<div class="ev-tip-row"><span>命中率</span><span style="color:' + (found.hit_rate > 0.6 ? 'var(--metric-good)' : (found.hit_rate > 0.3 ? 'var(--warn)' : 'var(--muted)')) + '">' + ((found.hit_rate || 0) * 100).toFixed(0) + '%</span></div>' +
+        '<div class="ev-tip-row"><span>Sharpe</span><span style="color:' + (found.sharpe > 1 ? 'var(--metric-good)' : (found.sharpe > 0 ? 'var(--warn)' : 'var(--metric-bad)')) + '">' + (found.sharpe || 0).toFixed(2) + '</span></div>' +
         (found.observations ? '<div class="ev-tip-row"><span>觀察數</span><span>' + found.observations + '</span></div>' : '');
       tip.style.display = 'block';
       tip.style.left = Math.min(mx + 14, rect.width - 130) + 'px';
