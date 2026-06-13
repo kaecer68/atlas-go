@@ -526,9 +526,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	tw.Record(7, "ledger_write", "START", nil)
 	// Use replay-based forward returns when dataset is available (real data).
 	// Falls back to synthetic when replay is nil.
-	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, regime, s.Sim().replay)
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.Sim().replay)
 	if len(outcomes) == 0 {
-		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, regime)
+		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime))
 	}
 	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
 	// The XOR pattern was removed because DualWriteRepository already handles DB ↔ file sync.
@@ -774,7 +774,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.Risk().eventBus.PublishGuardOutcomes(s.Sim().session.ID, guardOutcomes)
 	}
 	tw.Record(7, "ledger_write", "START", nil)
-	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, regime, s.Sim().replay)
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, string(regime), s.Sim().replay)
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
 	}
