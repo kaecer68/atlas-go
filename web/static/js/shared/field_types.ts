@@ -2459,6 +2459,7 @@ export interface RecommendationOutcome {
   supporting_events?: string[];
   parameter_snapshot?: ParameterSnapshot | null;
   is_synthetic: boolean;
+  regime?: string | null;
 }
 
 export interface RecommendationPipelineResponse {

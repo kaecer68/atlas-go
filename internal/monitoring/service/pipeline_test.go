@@ -826,6 +826,57 @@ func TestComputeAgentRegimeBreakdown_AgentOutcomesAggregated(t *testing.T) {
 	}
 }
 
+func TestComputeAgentRegimeBreakdown_PerOutcomeRegime(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "target", Regime: "risk_on", ForwardReturn: 0.10, Hit: true},
+		{AgentID: "target", Regime: "risk_on", ForwardReturn: -0.02, Hit: false},
+		{AgentID: "target", Regime: "risk_off", ForwardReturn: 0.04, Hit: true},
+		{AgentID: "target", Regime: "", ForwardReturn: 0.05, Hit: true}, // fallback regime
+		{AgentID: "other", Regime: "risk_on", ForwardReturn: 0.99, Hit: true}, // ignored
+	}
+	got := computeAgentRegimeBreakdown(outcomes, "target", "default")
+	if got == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+	if len(got.Regimes) != 3 {
+		t.Fatalf("expected 3 regime entries, got %d", len(got.Regimes))
+	}
+
+	on, ok := got.Regimes["risk_on"]
+	if !ok {
+		t.Fatal("expected 'risk_on' regime entry")
+	}
+	if on.SessionCount != 2 {
+		t.Errorf("risk_on SessionCount = %d, want 2", on.SessionCount)
+	}
+	wantReturnRiskOn := 0.10 - 0.02
+	if on.TotalReturn < wantReturnRiskOn-1e-9 || on.TotalReturn > wantReturnRiskOn+1e-9 {
+		t.Errorf("risk_on TotalReturn = %v, want %v", on.TotalReturn, wantReturnRiskOn)
+	}
+
+	off, ok := got.Regimes["risk_off"]
+	if !ok {
+		t.Fatal("expected 'risk_off' regime entry")
+	}
+	if off.SessionCount != 1 {
+		t.Errorf("risk_off SessionCount = %d, want 1", off.SessionCount)
+	}
+	if off.TotalReturn < 0.04-1e-9 || off.TotalReturn > 0.04+1e-9 {
+		t.Errorf("risk_off TotalReturn = %v, want 0.04", off.TotalReturn)
+	}
+
+	fallback, ok := got.Regimes["default"]
+	if !ok {
+		t.Fatal("expected 'default' regime entry for empty Regime fallback")
+	}
+	if fallback.SessionCount != 1 {
+		t.Errorf("default SessionCount = %d, want 1", fallback.SessionCount)
+	}
+	if fallback.TotalReturn < 0.05-1e-9 || fallback.TotalReturn > 0.05+1e-9 {
+		t.Errorf("default TotalReturn = %v, want 0.05", fallback.TotalReturn)
+	}
+}
+
 // =============================================================================
 // Smoke test: ensure coverage tools see the new tests run.
 // (No assertions; this is a marker that the test file was compiled and run.)
