@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -175,6 +176,20 @@ func (m *BackgroundTaskManager) Stop() {
 
 func (m *BackgroundTaskManager) runTask(ctx context.Context, task *ScheduledTask) {
 	defer m.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			logging.Error(
+				"background_task", "runTask_panic_recovered",
+				"name", task.Name,
+				"panic", fmt.Sprintf("%v", r),
+				"stack", string(stack),
+			)
+			if m.failureHandler != nil {
+				m.failureHandler(task.Name, -1, fmt.Errorf("runTask panicked: %v", r))
+			}
+		}
+	}()
 
 	// Apply startup jitter to prevent thundering herd
 	if task.Jitter > 0 {
@@ -225,7 +240,21 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 		}
 	}
 
-	err := task.Task(ctx)
+	err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				stack := debug.Stack()
+				logging.Error(
+					"background_task", "task_panic_recovered",
+					"name", task.Name,
+					"panic", fmt.Sprintf("%v", r),
+					"stack", string(stack),
+				)
+				err = fmt.Errorf("task panicked: %v", r)
+			}
+		}()
+		return task.Task(ctx)
+	}()
 	if err != nil {
 		task.RecordFailure()
 		logging.Error(
