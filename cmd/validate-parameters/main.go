@@ -1,10 +1,12 @@
 package main
 
-import "encoding/json"
-import "fmt"
-import "os"
+import (
+	"encoding/json"
+	"fmt"
+	"os"
 
-import "github.com/kaecer68/atlas-go/internal/paramcheck"
+	"github.com/kaecer68/atlas-go/internal/paramcheck"
+)
 
 func main() {
 	path, strict := "configs/parameters.json", false
