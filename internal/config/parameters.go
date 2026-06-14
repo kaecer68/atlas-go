@@ -1213,18 +1213,18 @@ type WeightFactorConfig struct {
 // Includes base weights, derivation factors, and formula multipliers for multi-factor
 // sector weight computation (cycle × seasonal × linkage × narrative × macro × factor).
 type SectorAllocationConfig struct {
-	Rationale         string             `json:"rationale"`
-	Source            ParameterSource    `json:"source"`
-	Citation         *ParameterCitation `json:"citation,omitempty"`
-	BaseWeights        map[string]float64            `json:"base_weights"`
-	DerivationFactors  map[string][]WeightFactorConfig `json:"derivation_factors"`
-	CycleWeight        float64            `json:"cycle_weight"`
-	SeasonalWeight     float64            `json:"seasonal_weight"`
-	LinkageWeight      float64            `json:"linkage_weight"`
-	NarrativeWeight    float64            `json:"narrative_weight"`
-	MacroWeight        float64            `json:"macro_weight"`
-	FactorWeight       float64            `json:"factor_weight"`
-	WeightFloor        float64            `json:"weight_floor"`
+	Rationale         string                          `json:"rationale"`
+	Source            ParameterSource                 `json:"source"`
+	Citation          *ParameterCitation              `json:"citation,omitempty"`
+	BaseWeights       map[string]float64              `json:"base_weights"`
+	DerivationFactors map[string][]WeightFactorConfig `json:"derivation_factors"`
+	CycleWeight       float64                         `json:"cycle_weight"`
+	SeasonalWeight    float64                         `json:"seasonal_weight"`
+	LinkageWeight     float64                         `json:"linkage_weight"`
+	NarrativeWeight   float64                         `json:"narrative_weight"`
+	MacroWeight       float64                         `json:"macro_weight"`
+	FactorWeight      float64                         `json:"factor_weight"`
+	WeightFloor       float64                         `json:"weight_floor"`
 }
 
 type ParametersConfig struct {
@@ -2244,6 +2244,22 @@ func (p *ParametersConfig) validateEngine() error {
 	}
 	if p.RSITw.C3BullishThreshold.Value < p.RSITw.C3BearishThreshold.Value {
 		return fmt.Errorf("rsi_tw.c3_bullish_threshold (%.0f) must be >= c3_bearish_threshold (%.0f)", p.RSITw.C3BullishThreshold.Value, p.RSITw.C3BearishThreshold.Value)
+	}
+
+	if p.SectorAllocation.WeightFloor <= 0 || p.SectorAllocation.WeightFloor >= 0.5 {
+		return fmt.Errorf("sector_allocation.weight_floor (%.3f) must be in (0, 0.5)", p.SectorAllocation.WeightFloor)
+	}
+	for name, val := range map[string]float64{
+		"cycle_weight":     p.SectorAllocation.CycleWeight,
+		"seasonal_weight":  p.SectorAllocation.SeasonalWeight,
+		"linkage_weight":   p.SectorAllocation.LinkageWeight,
+		"narrative_weight": p.SectorAllocation.NarrativeWeight,
+		"macro_weight":     p.SectorAllocation.MacroWeight,
+		"factor_weight":    p.SectorAllocation.FactorWeight,
+	} {
+		if val < 0 {
+			return fmt.Errorf("sector_allocation.%s (%.3f) must be non-negative", name, val)
+		}
 	}
 
 	return nil

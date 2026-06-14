@@ -3545,7 +3545,7 @@ func deriveDefaultSectorAllocationConfig() SectorAllocationConfig {
 		Rationale: "Multi-factor sector weight model: base × cycle × seasonal × linkage × narrative × macro × factor. Replaces three independent hard-coded weight sources (industry.calculateWeightDerivation, portfolio.sector_weights, orchestrator.base_allocations) with one auditable pipeline.",
 		Source:    SourceHeuristic,
 		Citation: &ParameterCitation{
-			SourceType:       "internal_synthesis",
+			SourceType:       "heuristic",
 			SourceReference:  "internal/sectorallocation/ + internal/industry/ + internal/portfolio/ unification",
 			EvidenceQuality:  "medium",
 			UpdatePolicy:     "recalibrate when backtest drift > 5% over 20 sessions",
