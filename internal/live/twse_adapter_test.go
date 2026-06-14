@@ -407,3 +407,73 @@ func TestTWSEBrokerAdapterNilCircuitBreaker(t *testing.T) {
 		t.Errorf("unexpected order id: %s", result.OrderID)
 	}
 }
+
+func TestValidateConfig_MissingBaseURL(t *testing.T) {
+	adapter := NewTWSEBrokerAdapter(TWSEBrokerAdapterConfig{
+		APIKey:    "key",
+		APISecret: "secret",
+		AccountID: "ACC-001",
+	}, nil)
+	err := adapter.validateConfig()
+	if err == nil {
+		t.Fatal("expected error for missing base URL")
+	}
+	if !strings.Contains(err.Error(), "base_url") {
+		t.Errorf("expected base_url error, got: %v", err)
+	}
+}
+
+func TestValidateConfig_MissingAPIKey(t *testing.T) {
+	adapter := NewTWSEBrokerAdapter(TWSEBrokerAdapterConfig{
+		BaseURL:   "http://localhost",
+		APISecret: "secret",
+		AccountID: "ACC-001",
+	}, nil)
+	err := adapter.validateConfig()
+	if err == nil {
+		t.Fatal("expected error for missing API key")
+	}
+}
+
+func TestValidateConfig_MissingAPISecret(t *testing.T) {
+	adapter := NewTWSEBrokerAdapter(TWSEBrokerAdapterConfig{
+		BaseURL:   "http://localhost",
+		APIKey:    "key",
+		AccountID: "ACC-001",
+	}, nil)
+	err := adapter.validateConfig()
+	if err == nil {
+		t.Fatal("expected error for missing API secret")
+	}
+}
+
+func TestValidateConfig_MissingAccountID(t *testing.T) {
+	adapter := NewTWSEBrokerAdapter(TWSEBrokerAdapterConfig{
+		BaseURL:   "http://localhost",
+		APIKey:    "key",
+		APISecret: "secret",
+	}, nil)
+	err := adapter.validateConfig()
+	if err == nil {
+		t.Fatal("expected error for missing account ID")
+	}
+}
+
+func TestMapSide_Buy(t *testing.T) {
+	if s := mapSide(domain.SideBuy); s != "B" {
+		t.Errorf("expected B, got %s", s)
+	}
+}
+
+func TestMapSide_Sell(t *testing.T) {
+	if s := mapSide(domain.SideSell); s != "S" {
+		t.Errorf("expected S, got %s", s)
+	}
+}
+
+func TestMapSide_Unknown(t *testing.T) {
+	// Unknown side defaults to "B"
+	if s := mapSide("invalid_side"); s != "B" {
+		t.Errorf("expected B for unknown side, got %s", s)
+	}
+}
