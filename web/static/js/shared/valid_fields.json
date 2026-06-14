@@ -1305,6 +1305,7 @@
   "state_changed_at",
   "statistically_significant",
   "status",
+  "status_message",
   "status_text",
   "std_dev",
   "stddev_mean_ratio_threshold",

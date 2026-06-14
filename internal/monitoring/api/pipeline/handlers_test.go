@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 // TestPipelineItem_MetricsOmittedWhenEmpty proves that the Metrics field
@@ -115,5 +116,45 @@ func TestPipelineItem_FactorScoresAlignment(t *testing.T) {
 		if _, has := fs[field]; !has {
 			t.Errorf("expected factor_scores to have %q", field)
 		}
+	}
+}
+
+func TestRecommendationPipelineResponse_StatusFieldsSerialized(t *testing.T) {
+	resp := RecommendationPipelineResponse{
+		SessionID:     "session-20260614-daily",
+		Status:        service.PipelineStatusDegraded,
+		StatusMessage: "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用",
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if raw["status"] != string(service.PipelineStatusDegraded) {
+		t.Errorf("expected status=%q, got %v", service.PipelineStatusDegraded, raw["status"])
+	}
+	if raw["status_message"] != "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用" {
+		t.Errorf("expected status_message in JSON, got %v", raw["status_message"])
+	}
+}
+
+func TestRecommendationPipelineResponse_StatusOmittedWhenEmpty(t *testing.T) {
+	resp := RecommendationPipelineResponse{SessionID: "x"}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, has := raw["status"]; has {
+		t.Error("expected 'status' to be omitted when empty")
+	}
+	if _, has := raw["status_message"]; has {
+		t.Error("expected 'status_message' to be omitted when empty")
 	}
 }
