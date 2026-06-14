@@ -178,6 +178,11 @@ func (g *GDELTGeopoliticalProvider) Name() string {
 	return "gdelt_geopolitical"
 }
 
+// SetHTTPClient overrides the default HTTP client (testability hook).
+func (g *GDELTGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	g.client = client
+}
+
 // FetchScore queries GDELT for violent events in the Middle East over the last 24h.
 func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
 	now := time.Now().UTC()
@@ -241,6 +246,11 @@ func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (Geopolitica
 	return score, nil
 }
 
+// SetHTTPClient overrides the default HTTP client (testability hook).
+func (r *RSSGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	r.client = client
+}
+
 // CompositeGeopoliticalProvider merges scores from multiple geopolitical providers.
 type CompositeGeopoliticalProvider struct {
 	providers []GeopoliticalRiskProvider
@@ -254,6 +264,15 @@ func NewCompositeGeopoliticalProvider(providers ...GeopoliticalRiskProvider) *Co
 // Name returns the provider name.
 func (c *CompositeGeopoliticalProvider) Name() string {
 	return "composite_geopolitical"
+}
+
+// SetHTTPClient propagates the custom HTTP client to inner providers that support it.
+func (c *CompositeGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	for _, p := range c.providers {
+		if setter, ok := p.(interface{ SetHTTPClient(*http.Client) }); ok {
+			setter.SetHTTPClient(client)
+		}
+	}
 }
 
 // FetchScore averages intensity across all providers.
