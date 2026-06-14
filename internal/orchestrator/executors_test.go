@@ -150,7 +150,7 @@ func TestBuildReplayOutcomesUsesRecommendationAgentAndSkill(t *testing.T) {
 			Reason:     "test",
 		},
 	}
-	outcomes := buildReplayOutcomes(recs, recs, nil, time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC), ds)
+	outcomes := buildReplayOutcomes(recs, recs, nil, time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC), ds, domain.RegimeRiskOn)
 
 	if len(outcomes) != 1 {
 		t.Fatalf("expected one outcome, got %d", len(outcomes))
@@ -160,6 +160,9 @@ func TestBuildReplayOutcomesUsesRecommendationAgentAndSkill(t *testing.T) {
 	}
 	if outcomes[0].Skill != "financials_desk" {
 		t.Fatalf("expected outcome skill to come from recommendation, got %s", outcomes[0].Skill)
+	}
+	if outcomes[0].Regime != string(domain.RegimeRiskOn) {
+		t.Fatalf("expected outcome regime to be propagated, got %q", outcomes[0].Regime)
 	}
 }
 

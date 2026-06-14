@@ -73,7 +73,7 @@ func TestBuildSyntheticOutcomesMarksAllAgentsPassedForSharedSymbol(t *testing.T)
 		{Symbol: "2609.TW", Open: 245, Last: 246, IsTradable: true},
 	}
 
-	outcomes := buildSyntheticOutcomes(rawRecs, finalRecs, quotes, asOf)
+	outcomes := buildSyntheticOutcomes(rawRecs, finalRecs, quotes, asOf, domain.RegimeRiskOn)
 	if len(outcomes) != 3 {
 		t.Fatalf("expected 3 outcomes (one per raw rec), got %d", len(outcomes))
 	}
@@ -89,6 +89,11 @@ func TestBuildSyntheticOutcomesMarksAllAgentsPassedForSharedSymbol(t *testing.T)
 		}
 		if out.GuardReason != "" {
 			t.Errorf("expected empty GuardReason when passed, got %q for agent %q", out.GuardReason, out.AgentID)
+		}
+	}
+	for _, out := range outcomes {
+		if out.Regime != string(domain.RegimeRiskOn) {
+			t.Errorf("expected Regime=%q for agent %q, got %q", domain.RegimeRiskOn, out.AgentID, out.Regime)
 		}
 	}
 }
@@ -113,7 +118,7 @@ func TestBuildSyntheticOutcomesMarksUnpassedSymbolFailed(t *testing.T) {
 	// finalRecs 為空集合（假設 2881.TW 被 CRO 阻擋或 CIO 阻擋）
 	finalRecs := []domain.Recommendation{}
 
-	outcomes := buildSyntheticOutcomes(rawRecs, finalRecs, nil, asOf)
+	outcomes := buildSyntheticOutcomes(rawRecs, finalRecs, nil, asOf, domain.RegimeRiskOff)
 	if len(outcomes) != 1 {
 		t.Fatalf("expected 1 outcome, got %d", len(outcomes))
 	}
@@ -177,7 +182,7 @@ func TestBuildReplayOutcomesMarksAllAgentsPassedForSharedSymbol(t *testing.T) {
 	}
 
 	asOf := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
-	outcomes := buildReplayOutcomes(rawRecs, finalRecs, nil, asOf, ds)
+	outcomes := buildReplayOutcomes(rawRecs, finalRecs, nil, asOf, ds, domain.RegimeRiskOn)
 
 	if len(outcomes) != 2 {
 		t.Fatalf("expected 2 outcomes, got %d", len(outcomes))
@@ -190,6 +195,9 @@ func TestBuildReplayOutcomesMarksAllAgentsPassedForSharedSymbol(t *testing.T) {
 		}
 		if out.AgentID != "financials-desk-01" && out.AgentID != "value-yield-01" {
 			t.Errorf("unexpected AgentID %q in outcome", out.AgentID)
+		}
+		if out.Regime != string(domain.RegimeRiskOn) {
+			t.Errorf("expected Regime=%q for agent %q, got %q", domain.RegimeRiskOn, out.AgentID, out.Regime)
 		}
 	}
 }
