@@ -560,6 +560,70 @@ func TestParameterMetadata_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestSectorAllocationConfig_Defaults(t *testing.T) {
+	cfg := DefaultParametersConfig()
+
+	if cfg.SectorAllocation.BaseWeights == nil {
+		t.Errorf("SectorAllocation.BaseWeights is nil, want non-nil map")
+	}
+
+	if cfg.SectorAllocation.BaseWeights["semiconductor"] <= 0 {
+		t.Errorf("SectorAllocation.BaseWeights[semiconductor] = %f, want > 0", cfg.SectorAllocation.BaseWeights["semiconductor"])
+	}
+
+	if cfg.SectorAllocation.WeightFloor <= 0 {
+		t.Errorf("SectorAllocation.WeightFloor = %f, want > 0", cfg.SectorAllocation.WeightFloor)
+	}
+
+	if cfg.SectorAllocation.CycleWeight != 1.0 {
+		t.Errorf("SectorAllocation.CycleWeight = %f, want 1.0", cfg.SectorAllocation.CycleWeight)
+	}
+	if cfg.SectorAllocation.SeasonalWeight != 1.0 {
+		t.Errorf("SectorAllocation.SeasonalWeight = %f, want 1.0", cfg.SectorAllocation.SeasonalWeight)
+	}
+	if cfg.SectorAllocation.LinkageWeight != 1.0 {
+		t.Errorf("SectorAllocation.LinkageWeight = %f, want 1.0", cfg.SectorAllocation.LinkageWeight)
+	}
+	if cfg.SectorAllocation.NarrativeWeight != 1.0 {
+		t.Errorf("SectorAllocation.NarrativeWeight = %f, want 1.0", cfg.SectorAllocation.NarrativeWeight)
+	}
+	if cfg.SectorAllocation.MacroWeight != 1.0 {
+		t.Errorf("SectorAllocation.MacroWeight = %f, want 1.0", cfg.SectorAllocation.MacroWeight)
+	}
+	if cfg.SectorAllocation.FactorWeight != 1.0 {
+		t.Errorf("SectorAllocation.FactorWeight = %f, want 1.0", cfg.SectorAllocation.FactorWeight)
+	}
+}
+
+func TestSectorAllocationConfig_ParameterMetadata(t *testing.T) {
+	cfg := DefaultParametersConfig()
+
+	if cfg.SectorAllocation.Rationale == "" {
+		t.Errorf("SectorAllocation.Rationale is empty, want non-empty rationale")
+	}
+	if cfg.SectorAllocation.Source == "" {
+		t.Errorf("SectorAllocation.Source is empty, want non-empty source")
+	}
+	if cfg.SectorAllocation.Citation == nil {
+		t.Errorf("SectorAllocation.Citation is nil, want non-nil citation")
+	} else {
+		if cfg.SectorAllocation.Citation.EvidenceQuality == "" {
+			t.Errorf("SectorAllocation.Citation.EvidenceQuality is empty")
+		}
+		if cfg.SectorAllocation.Citation.SourceReference == "" {
+			t.Errorf("SectorAllocation.Citation.SourceReference is empty")
+		}
+	}
+}
+
+func TestSectorAllocationConfig_DerivationFactors(t *testing.T) {
+	cfg := DefaultParametersConfig()
+
+	if cfg.SectorAllocation.DerivationFactors == nil {
+		t.Errorf("SectorAllocation.DerivationFactors is nil, want empty map or populated map")
+	}
+}
+
 func TestLoadParametersConfig_FallbackPriceTargetsDefaultsMerged(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "parameters_partial.json")
