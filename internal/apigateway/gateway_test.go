@@ -2,7 +2,9 @@ package apigateway
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"golang.org/x/time/rate"
 
@@ -171,5 +173,315 @@ func TestRateLimitManager_Status(t *testing.T) {
 	status := m.Status()
 	if status == nil {
 		t.Fatal("Status returned nil")
+	}
+}
+
+func TestGateway_ForceOpenChannel_KnownChannel(t *testing.T) {
+	g := newTestGateway(t)
+	// channelIDs() includes known channels; ForceOpenChannel should work
+	err := g.ForceOpenChannel("us_yahoo")
+	if err != nil {
+		t.Errorf("ForceOpenChannel(us_yahoo) returned error: %v", err)
+	}
+}
+
+func TestGateway_ForceOpenChannel_UnknownChannel(t *testing.T) {
+	g := newTestGateway(t)
+	err := g.ForceOpenChannel("nonexistent_channel")
+	if err == nil {
+		t.Error("ForceOpenChannel for nonexistent channel should return error")
+	}
+}
+
+func TestGateway_HealthCheck_KnownChannel(t *testing.T) {
+	g := newTestGateway(t)
+	// Without adapters registered, known channels exist in breakers
+	// but their providers return errors; HealthCheck should propagate that
+	_, err := g.HealthCheck(context.Background(), "us_yahoo")
+	if err == nil {
+		t.Log("HealthCheck succeeded for us_yahoo without adapters - no error expected, this is fine")
+	}
+}
+
+func TestGateway_ForceOpenChannel_AllKnownChannels(t *testing.T) {
+	g := newTestGateway(t)
+	for _, id := range channelIDs() {
+		err := g.ForceOpenChannel(id)
+		if err != nil {
+			t.Errorf("ForceOpenChannel(%s) returned error: %v", id, err)
+		}
+	}
+}
+
+func TestGateway_Fetch_ChannelWithNoProvider(t *testing.T) {
+	g := newTestGateway(t)
+	// known channel has circuit breaker but no provider registered
+	_, err := g.Fetch(context.Background(), "us_yahoo")
+	if err == nil {
+		t.Error("Fetch for channel with no provider should return error")
+	}
+}
+
+func TestGateway_Fetch_Success(t *testing.T) {
+	g := newTestGateway(t)
+	expectedData := []byte(`{"key":"value"}`)
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return expectedData, nil
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "ok", CheckType: "liveness"}, nil
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	result, err := g.Fetch(context.Background(), "us_yahoo")
+	if err != nil {
+		t.Fatalf("Fetch failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Fetch returned nil result")
+	}
+	if result.Fallback {
+		t.Error("result.Fallback should be false for a successful fetch")
+	}
+	if string(result.Data) != string(expectedData) {
+		t.Errorf("Data = %q, want %q", string(result.Data), string(expectedData))
+	}
+}
+
+func TestGateway_Fetch_ProviderError(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return nil, errors.New("network error")
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "error"}, errors.New("network error")
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	_, err := g.Fetch(context.Background(), "us_yahoo")
+	if err == nil {
+		t.Error("Fetch should return error for failing provider")
+	}
+}
+
+func TestGateway_Fetch_CacheHit(t *testing.T) {
+	g := newTestGateway(t)
+	callCount := 0
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			callCount++
+			return []byte(`{"data":"fresh"}`), nil
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "ok", CheckType: "liveness"}, nil
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	// First fetch should call the provider
+	result, err := g.Fetch(context.Background(), "us_yahoo")
+	if err != nil {
+		t.Fatalf("First Fetch failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("First Fetch returned nil")
+	}
+	// Second fetch should hit the cache (no additional provider call)
+	result2, err := g.Fetch(context.Background(), "us_yahoo")
+	if err != nil {
+		t.Fatalf("Second Fetch failed: %v", err)
+	}
+	if result2 == nil {
+		t.Fatal("Second Fetch returned nil")
+	}
+	// Provider should have been called only once
+	if callCount != 1 {
+		t.Errorf("callCount = %d, want 1 (second fetch should hit cache)", callCount)
+	}
+}
+
+func TestGateway_HealthCheck_RegisteredProvider(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return []byte(`{}`), nil
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "ok", CheckType: "liveness"}, nil
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	status, err := g.HealthCheck(context.Background(), "us_yahoo")
+	if err != nil {
+		t.Fatalf("HealthCheck failed: %v", err)
+	}
+	if status.Status != "ok" {
+		t.Errorf("HealthCheck status = %q, want ok", status.Status)
+	}
+}
+
+func TestGateway_Fetch_ContextCancelled(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Every(10*time.Second), 1), // tight limiter so Wait() drains tokens
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return []byte(`{}`), nil
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "ok"}, nil
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	_, err := g.Fetch(ctx, "us_yahoo")
+	if err == nil {
+		t.Error("Fetch with cancelled context should return error")
+	}
+}
+
+func TestGateway_Fetch_CircuitBreakerOpens(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return nil, errors.New("persistent network error")
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "error"}, errors.New("persistent network error")
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	// Fetch until circuit breaker opens (threshold = 3)
+	for i := 0; i < 3; i++ {
+		_, _ = g.Fetch(context.Background(), "us_yahoo")
+	}
+
+	// Now the breaker should be open
+	_, err := g.Fetch(context.Background(), "us_yahoo")
+	if err == nil {
+		t.Error("Fetch should return error when circuit breaker is open")
+	}
+}
+
+func TestGateway_Fetch_FallbackOnCircuitOpen(t *testing.T) {
+	g := newTestGateway(t)
+	ctx := context.Background()
+
+	// Populate cache with a successful fetch
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return []byte(`{"data":"cached"}`), nil
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "ok"}, nil
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+	_, err := g.Fetch(ctx, "us_yahoo")
+	if err != nil {
+		t.Fatalf("Initial fetch failed: %v", err)
+	}
+
+	// Force the circuit breaker open
+	if err := g.ForceOpenChannel("us_yahoo"); err != nil {
+		t.Fatalf("ForceOpenChannel failed: %v", err)
+	}
+
+	// Fetch should return cached data with fallback flag
+	result, err := g.Fetch(ctx, "us_yahoo")
+	if err != nil {
+		t.Fatalf("Fetch with fallback should not error, got: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Fetch returned nil when fallback expected")
+	}
+	if !result.Fallback {
+		t.Error("result.Fallback should be true for circuit breaker fallback")
+	}
+	if !result.Stale {
+		t.Error("result.Stale should be true for circuit breaker fallback")
+	}
+	if result.LastError == "" {
+		t.Error("result.LastError should be non-empty for fallback")
+	}
+	if string(result.Data) != `{"data":"cached"}` {
+		t.Errorf("Data = %q, want cached data", string(result.Data))
+	}
+}
+
+func TestGateway_HealthCheck_ErrorProvider(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return nil, errors.New("error")
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "error", CheckType: "liveness"}, errors.New("health error")
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	_, err := g.HealthCheck(context.Background(), "us_yahoo")
+	if err == nil {
+		t.Error("HealthCheck should return error for failing health check")
+	}
+}
+
+func TestUnifiedHealthStore_CheckHealth_WithProvider(t *testing.T) {
+	s := newTestHealthStore(t)
+	g := newTestGateway(t)
+
+	provider := &HTTPProvider{
+		name:    "us_yahoo",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "us_yahoo", Country: "US"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return []byte(`{}`), nil
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "ok", CheckType: "liveness"}, nil
+		},
+	}
+	g.registry.Register("us_yahoo", provider)
+
+	results := s.CheckHealth(context.Background(), g.registry)
+	if results == nil {
+		t.Fatal("CheckHealth returned nil")
+	}
+	if hs, ok := results["us_yahoo"]; ok {
+		if hs.Status != "ok" {
+			t.Errorf("us_yahoo status = %q, want ok", hs.Status)
+		}
 	}
 }

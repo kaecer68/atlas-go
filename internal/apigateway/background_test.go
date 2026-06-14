@@ -996,3 +996,174 @@ func TestBackgroundTaskManager_Start_PanicInTask_DoesNotCrashManager(t *testing.
 		t.Error("expected panickingTask.Failures() > 0 (failure not recorded)")
 	}
 }
+
+// =========================================================================
+// BackgroundTaskManager — SetRecoveryHandler
+// =========================================================================
+
+func TestBackgroundTaskManager_SetRecoveryHandler_SetsHandler(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	var called bool
+	var recoveredName string
+	var recoveredFrom int
+
+	m.SetRecoveryHandler(func(name string, from int) {
+		called = true
+		recoveredName = name
+		recoveredFrom = from
+	})
+
+	// Simulate a task that failed then succeeded:
+	// 1. Create a task with 2 failures
+	// 2. Execute it with a successful task func
+	// 3. Recovery handler should be called
+	task := &ScheduledTask{
+		Name:     "recovering-task",
+		Interval: 1 * time.Hour,
+		Jitter:   0,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+	task.SetEnabled(true)
+
+	// Artificially set failure count > 0
+	task.RecordFailure()
+	task.RecordFailure()
+
+	m.executeTask(context.Background(), task)
+
+	if !called {
+		t.Error("SetRecoveryHandler callback was not invoked after task recovered")
+	}
+	if recoveredName != "recovering-task" {
+		t.Errorf("recovery handler name = %q, want recovering-task", recoveredName)
+	}
+	if recoveredFrom != 2 {
+		t.Errorf("recovery handler from = %d, want 2", recoveredFrom)
+	}
+	if task.Failures() != 0 {
+		t.Errorf("Failures after recovery = %d, want 0", task.Failures())
+	}
+}
+
+func TestBackgroundTaskManager_SetRecoveryHandler_NilHandler(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	// Setting nil handler should not panic and should clear
+	m.SetRecoveryHandler(nil)
+
+	task := &ScheduledTask{
+		Name:     "task-no-recovery-handler",
+		Interval: 1 * time.Hour,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+	task.SetEnabled(true)
+	task.RecordFailure()
+
+	// Execute without a handler should not panic
+	m.executeTask(context.Background(), task)
+	// Task should have recovered (failures reset to 0)
+	if task.Failures() != 0 {
+		t.Errorf("Failures = %d, want 0", task.Failures())
+	}
+}
+
+func TestBackgroundTaskManager_SetRecoveryHandler_NoFailuresBefore(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	var called bool
+
+	m.SetRecoveryHandler(func(name string, from int) {
+		called = true
+	})
+
+	task := &ScheduledTask{
+		Name:     "fresh-task",
+		Interval: 1 * time.Hour,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+	task.SetEnabled(true)
+	// No failures - handler should NOT be called
+	m.executeTask(context.Background(), task)
+
+	if called {
+		t.Error("recovery handler was called when there were no prior failures")
+	}
+}
+
+func TestTaskRecoveryHandler_Signature(t *testing.T) {
+	var h TaskRecoveryHandler = func(taskName string, recoveredFrom int) {
+	}
+	_ = h
+}
+
+func TestBackgroundTaskManager_Register_ChannelIDValidation(t *testing.T) {
+	g := newTestGateway(t)
+	m := NewBackgroundTaskManager(g)
+	task := &ScheduledTask{
+		Name:      "invalid-channel-task",
+		ChannelID: "nonexistent_channel",
+		Interval:  1 * time.Hour,
+		Task:      func(ctx context.Context) error { return nil },
+	}
+	err := m.Register(task)
+	if err == nil {
+		t.Error("Register should fail when ChannelID is not registered in gateway")
+	}
+}
+
+func TestBackgroundTaskManager_Register_ChannelIDValidation_EmptyChannel(t *testing.T) {
+	g := newTestGateway(t)
+	m := NewBackgroundTaskManager(g)
+	task := &ScheduledTask{
+		Name:      "no-channel-task",
+		ChannelID: "",
+		Interval:  1 * time.Hour,
+		Task:      func(ctx context.Context) error { return nil },
+	}
+	err := m.Register(task)
+	if err != nil {
+		t.Errorf("Register with empty ChannelID should succeed, got: %v", err)
+	}
+}
+
+func TestBackgroundTaskManager_Register_JitterDefault(t *testing.T) {
+	g := newTestGateway(t)
+	m := NewBackgroundTaskManager(g)
+	task := &ScheduledTask{
+		Name:     "jitery-task",
+		Interval: 10 * time.Second,
+		Jitter:   0,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+	err := m.Register(task)
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if task.Jitter == 0 {
+		t.Error("Jitter should be auto-set to non-zero for tasks with Interval > 0")
+	}
+	if task.Jitter != time.Duration(0.1*float64(10*time.Second)) {
+		t.Errorf("Jitter = %v, want %v", task.Jitter, time.Duration(1*time.Second))
+	}
+}
+
+func TestBackgroundTaskManager_ExecuteTask_Disabled(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:     "disabled-task",
+		Interval: 1 * time.Hour,
+		Task:     func(ctx context.Context) error { return errors.New("should not be called") },
+	}
+	task.SetEnabled(false)
+	m.executeTask(context.Background(), task)
+}
+
+func TestBackgroundTaskManager_SafeCallFailureHandler_NilHandler(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	m.safeCallFailureHandler("test-task", 3, errors.New("test error"))
+}
+
+func TestLogAndWrapPanic_NilRecover(t *testing.T) {
+	err := logAndWrapPanic("test-task", "test-event", nil)
+	if err != nil {
+		t.Errorf("logAndWrapPanic with nil recover should return nil, got: %v", err)
+	}
+}
