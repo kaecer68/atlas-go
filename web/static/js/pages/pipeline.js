@@ -155,8 +155,6 @@ export function passesFilter(item) {
   return true;
 }
 
-export let pipelineSessions = [];
-
 export function renderPipeline(data, showAll, sessionId, showScreened) {
   if (showAll === undefined) showAll = false;
   if (showScreened === undefined) showScreened = false;
@@ -181,7 +179,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     if (count) count.textContent = `符合條件：${after} / ${before} 筆`;
   }
 
-  const sessionList = (window.pipelineSessions && window.pipelineSessions.length) ? window.pipelineSessions : pipelineSessions;
+  const sessionList = (window.pipelineSessions && window.pipelineSessions.length) ? window.pipelineSessions : [];
   const sessionSelect = sessionList.length ? `
     <select id="pipelineSessionSelect" style="font-size:12px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--text)" onchange="togglePipelineSession(this)">
       ${sessionList.map(s => `<option value="${escapeHtml(s.session_id)}" ${s.session_id === data.session_id ? 'selected' : ''}>${escapeHtml(s.session_id)} · ${escapeHtml(s.regime)} · ${new Date(s.recorded_at).toLocaleDateString('zh-TW')}</option>`).join('')}
@@ -323,7 +321,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
       <button onclick="switchPage('reports')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--warn);background:rgba(245,158,11,.15);color:var(--warn);cursor:pointer;margin-left:auto">🚀 啟動新回測</button>
     </div>
   ` : '';
-  const degradedBanner = (data.status === 'degraded' || data.status === 'partial') ? `
+  const degradedBanner = data.status === 'degraded' ? `
     <div style="margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="badge warn">資料不完整</span>
       <span style="font-size:13px">⚠️ ${escapeHtml(data.status_message || '本場次部分資料缺失（控制層審核記錄不可用），推薦清單仍可檢視。')}</span>

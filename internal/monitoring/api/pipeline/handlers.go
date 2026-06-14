@@ -308,7 +308,7 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 		IsFallbackSession: data.IsFallbackSession,
 		FallbackMessage:   data.FallbackMessage,
 		CycleStatus:       data.CycleStatus,
-		Status:            string(data.Status),
+		Status:            data.Status,
 		StatusMessage:     data.StatusMessage,
 	}
 	return http.StatusOK, resp
@@ -371,7 +371,7 @@ type RecommendationPipelineResponse struct {
 	IsFallbackSession bool                         `json:"is_fallback_session"`
 	FallbackMessage   string                       `json:"fallback_message"`
 	CycleStatus       *service.CycleStatusResponse `json:"cycle_status,omitempty"`
-	Status            string                       `json:"status,omitempty"`
+	Status            service.PipelineLoadStatus   `json:"status,omitempty"`
 	StatusMessage     string                       `json:"status_message,omitempty"`
 }
 

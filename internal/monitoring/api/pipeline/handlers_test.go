@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 // TestPipelineItem_MetricsOmittedWhenEmpty proves that the Metrics field
@@ -121,7 +122,7 @@ func TestPipelineItem_FactorScoresAlignment(t *testing.T) {
 func TestRecommendationPipelineResponse_StatusFieldsSerialized(t *testing.T) {
 	resp := RecommendationPipelineResponse{
 		SessionID:     "session-20260614-daily",
-		Status:        "degraded",
+		Status:        service.PipelineStatusDegraded,
 		StatusMessage: "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用",
 	}
 	data, err := json.Marshal(resp)
@@ -132,8 +133,8 @@ func TestRecommendationPipelineResponse_StatusFieldsSerialized(t *testing.T) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if raw["status"] != "degraded" {
-		t.Errorf("expected status=degraded, got %v", raw["status"])
+	if raw["status"] != string(service.PipelineStatusDegraded) {
+		t.Errorf("expected status=%q, got %v", service.PipelineStatusDegraded, raw["status"])
 	}
 	if raw["status_message"] != "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用" {
 		t.Errorf("expected status_message in JSON, got %v", raw["status_message"])
