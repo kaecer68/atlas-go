@@ -2472,6 +2472,8 @@ export interface RecommendationPipelineResponse {
   is_fallback_session: boolean;
   fallback_message: string;
   cycle_status?: CycleStatusResponse | null;
+  status?: string;
+  status_message?: string;
 }
 
 export interface RegimeBreakdown {

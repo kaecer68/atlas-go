@@ -886,3 +886,47 @@ func TestPipelineTier2TestFileCompiles(t *testing.T) {
 	_ = context.TODO()
 	_ = ledger.NewStore
 }
+
+func TestLoadRecommendationPipeline_DegradedWhenSummaryMissing(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260614-daily"
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+
+	outcome := domain.RecommendationOutcome{
+		AgentID:      "agent-1",
+		Skill:        "growth_momentum",
+		Layer:        domain.LayerStyle,
+		Symbol:       "2330.TW",
+		Side:         domain.SideBuy,
+		Conviction:   88,
+		PassedGuards: true,
+	}
+	outcomeBytes, err := json.Marshal(outcome)
+	if err != nil {
+		t.Fatalf("marshal outcome: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), append(outcomeBytes, '\n'), 0o644); err != nil {
+		t.Fatalf("write recommendation_outcomes.jsonl: %v", err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadRecommendationPipeline(sessionID, true)
+	if err != nil {
+		t.Fatalf("load recommendation pipeline: %v", err)
+	}
+	if data == nil {
+		t.Fatalf("expected pipeline data")
+	}
+	if data.Status != PipelineStatusDegraded {
+		t.Errorf("expected Status=%q, got %q", PipelineStatusDegraded, data.Status)
+	}
+	if data.StatusMessage == "" {
+		t.Error("expected non-empty StatusMessage when degraded")
+	}
+	if len(data.Items) != 1 {
+		t.Errorf("expected 1 item (outcomes still render when degraded), got %d", len(data.Items))
+	}
+}
