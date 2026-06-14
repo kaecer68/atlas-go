@@ -30,7 +30,22 @@ type SectorRotationPlan struct {
 	ConfigSource string             `json:"config_source,omitempty"`
 }
 
-// SectorRotator executes sector rotation based on macro conditions
+// SectorRotator executes sector rotation based on macro conditions.
+//
+// MIGRATION (2026-06-14): The base allocations used here were one of three
+// independent sources of hard-coded weights (orchestrator.base_allocations:
+// semiconductor=19%) that caused the "三個不同半導體權重" bug. New code
+// should:
+//
+//  1. Call sectorallocation.WeightEngine.ComputeWeights(ctx, now) to obtain
+//     the unified SectorAllocationPlan.
+//  2. Feed that plan's adjusted_weight values into NewSectorRotatorWithTargets
+//     (or a similar constructor that accepts a target map) as the
+//     "current_pct" basis.
+//  3. Let the macro-driven min/max/rebalance logic run unchanged on top.
+//
+// SectorRotator itself is retained because the macro rotation logic is
+// orthogonal to weight derivation; only the input source changes.
 type SectorRotator struct {
 	baseAllocations    map[string]float64
 	minAllocation      float64
