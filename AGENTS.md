@@ -3,6 +3,8 @@
 > **文件角色**：本文件是 **AI 路由索引**，指向子文件的詳細規範。文章越短、AI 越不會浪費 token。
 >
 > **AI 須知**：修改 code 前請跑 `skill(name="atlas-pre-change-protocol")`。不要跳過。
+>
+> **🌐 語言強制**：所有 AI 回覆必須使用**繁體中文**，禁止使用英文。使用者未特別要求英文時，不得以英文回應。
 
 ## 📜 內容歸屬規則（ALL AI MUST READ FIRST）
 
@@ -154,7 +156,7 @@ skill(name="atlas-pre-change-protocol")
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (44668 symbols, 136948 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (45570 symbols, 138851 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
