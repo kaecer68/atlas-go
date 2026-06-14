@@ -455,3 +455,305 @@ func TestBuildScorecards_OOS_ChronologicalOrder(t *testing.T) {
 		t.Errorf("expected overfit_warning when OOS negative and IS positive")
 	}
 }
+
+func TestRecordAndLoadSessionTrades(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	sessionID := "session-trades"
+
+	trades := []domain.TradeRecord{
+		{TradeID: "t1", SessionID: sessionID, Symbol: "2330.TW", Side: domain.SideBuy, Quantity: 1000, Price: 500.0, Amount: 500000, Timestamp: time.Now()},
+		{TradeID: "t2", SessionID: sessionID, Symbol: "2317.TW", Side: domain.SideSell, Quantity: 2000, Price: 100.0, Amount: 200000, Timestamp: time.Now()},
+	}
+	if err := store.RecordSessionTrades(sessionID, trades); err != nil {
+		t.Fatalf("RecordSessionTrades: %v", err)
+	}
+
+	loaded, err := store.LoadSessionTrades(sessionID)
+	if err != nil {
+		t.Fatalf("LoadSessionTrades: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 trades, got %d", len(loaded))
+	}
+	if loaded[0].TradeID != "t1" {
+		t.Errorf("first trade ID = %q, want t1", loaded[0].TradeID)
+	}
+	if loaded[1].TradeID != "t2" {
+		t.Errorf("second trade ID = %q, want t2", loaded[1].TradeID)
+	}
+}
+
+func TestRecordSessionTrades_EmptySlice_Noop(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	if err := store.RecordSessionTrades("session-empty", nil); err != nil {
+		t.Fatalf("RecordSessionTrades with nil: %v", err)
+	}
+	if err := store.RecordSessionTrades("session-empty", []domain.TradeRecord{}); err != nil {
+		t.Fatalf("RecordSessionTrades with empty: %v", err)
+	}
+	// No file should have been created
+	tradesPath := filepath.Join(dir, "sessions", "session-empty", "trades.jsonl")
+	if _, err := os.Stat(tradesPath); !os.IsNotExist(err) {
+		t.Errorf("expected no trades file for empty slice, but found one at %s", tradesPath)
+	}
+}
+
+func TestLoadSessionTrades_NotExist(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	loaded, err := store.LoadSessionTrades("nonexistent")
+	if err != nil {
+		t.Fatalf("LoadSessionTrades: %v", err)
+	}
+	if loaded != nil {
+		t.Errorf("expected nil for nonexistent session, got %v", loaded)
+	}
+}
+
+func TestLoadAllSessionTrades(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+
+	trades1 := []domain.TradeRecord{
+		{TradeID: "t1", SessionID: "s1", Symbol: "2330.TW", Side: domain.SideBuy, Quantity: 100, Price: 500, Amount: 50000, Timestamp: time.Now().Add(-2 * time.Hour)},
+	}
+	trades2 := []domain.TradeRecord{
+		{TradeID: "t2", SessionID: "s2", Symbol: "2317.TW", Side: domain.SideSell, Quantity: 200, Price: 100, Amount: 20000, Timestamp: time.Now()},
+	}
+	if err := store.RecordSessionTrades("s1", trades1); err != nil {
+		t.Fatalf("RecordSessionTrades s1: %v", err)
+	}
+	if err := store.RecordSessionTrades("s2", trades2); err != nil {
+		t.Fatalf("RecordSessionTrades s2: %v", err)
+	}
+
+	all, err := store.LoadAllSessionTrades()
+	if err != nil {
+		t.Fatalf("LoadAllSessionTrades: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 total trades, got %d", len(all))
+	}
+	// Should be sorted newest-first
+	if all[0].TradeID != "t2" {
+		t.Errorf("newest trade ID = %q, want t2", all[0].TradeID)
+	}
+}
+
+func TestRecordWindowSummary(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	summary := domain.BacktestWindowSummary{
+		WindowID: "window-1", SessionCount: 10, OutcomeCount: 100,
+		GeneratedAt: time.Now(),
+	}
+	if err := store.RecordWindowSummary(summary); err != nil {
+		t.Fatalf("RecordWindowSummary: %v", err)
+	}
+	path := filepath.Join(dir, "windows", "window-1.json")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("window summary file should exist: %v", err)
+	}
+}
+
+func TestRecordAndLoadExperiments(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+
+	rec := domain.ExperimentRecord{ID: "exp-1", Status: domain.ExperimentPlanned}
+	if err := store.RecordExperiment(rec); err != nil {
+		t.Fatalf("RecordExperiment: %v", err)
+	}
+
+	loaded, err := store.LoadExperiments()
+	if err != nil {
+		t.Fatalf("LoadExperiments: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 experiment, got %d", len(loaded))
+	}
+	if loaded[0].ID != "exp-1" {
+		t.Errorf("experiment ID = %q, want exp-1", loaded[0].ID)
+	}
+}
+
+func TestLoadExperiments_NotExist(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	loaded, err := store.LoadExperiments()
+	if err != nil {
+		t.Fatalf("LoadExperiments: %v", err)
+	}
+	if loaded != nil {
+		t.Errorf("expected nil for missing experiments, got %v", loaded)
+	}
+}
+
+func TestLoadOutcomesFromSessions(t *testing.T) {
+	dir := t.TempDir()
+	// LoadOutcomesFromSessions reads session dirs directly from baseDir (not sessions/ subdir)
+	sessionDir := filepath.Join(dir, "session-1")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(sessionDir, "recommendation_outcomes.jsonl")
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "a1", Skill: "s1", Symbol: "2330.TW", Side: domain.SideBuy, Window: "1d", ForwardReturn: 0.01, Hit: true, RecordedAt: time.Now(), Conviction: 80},
+		{AgentID: "a2", Skill: "s2", Symbol: "2317.TW", Side: domain.SideSell, Window: "1d", ForwardReturn: -0.01, Hit: false, RecordedAt: time.Now(), Conviction: 60},
+	}
+	if err := writeOutcomesToFile(path, outcomes); err != nil {
+		t.Fatalf("write outcomes: %v", err)
+	}
+
+	store := NewStore(dir).(*Store)
+	loaded, err := store.LoadOutcomesFromSessions()
+	if err != nil {
+		t.Fatalf("LoadOutcomesFromSessions: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 outcomes, got %d", len(loaded))
+	}
+}
+
+func TestLoadOutcomesFromSessions_NoSessions(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	// Empty dir returns nil, nil (not an error)
+	loaded, err := store.LoadOutcomesFromSessions()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if loaded != nil {
+		t.Errorf("expected nil for no sessions, got %v", loaded)
+	}
+}
+
+func TestLoadOutcomesFromSessions_SkipsNonSessions(t *testing.T) {
+	dir := t.TempDir()
+	// Create a non-session directory that should be skipped
+	otherDir := filepath.Join(dir, "not-a-session")
+	if err := os.MkdirAll(otherDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	store := NewStore(dir).(*Store)
+	loaded, err := store.LoadOutcomesFromSessions()
+	if err != nil {
+		t.Fatalf("LoadOutcomesFromSessions: %v", err)
+	}
+	if loaded != nil {
+		t.Errorf("expected nil for no session dirs, got %v", loaded)
+	}
+}
+
+func TestRecordAndLoadSessionScreeningRejects_Detailed(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	sessionID := "session-rejects"
+
+	rejects := []domain.ScreeningReject{
+		{Symbol: "2498.TW", AgentID: "a1", Criterion: "volume"},
+		{Symbol: "3008.TW", AgentID: "a2", Criterion: "pe"},
+	}
+	if err := store.RecordSessionScreeningRejects(sessionID, rejects); err != nil {
+		t.Fatalf("RecordSessionScreeningRejects: %v", err)
+	}
+
+	loaded, err := store.LoadSessionScreeningRejects(sessionID)
+	if err != nil {
+		t.Fatalf("LoadSessionScreeningRejects: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 rejects, got %d", len(loaded))
+	}
+	if loaded[0].Symbol != "2498.TW" {
+		t.Errorf("first reject symbol = %q, want 2498.TW", loaded[0].Symbol)
+	}
+}
+
+func TestLoadSessionScreeningRejects_NotExist(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	loaded, err := store.LoadSessionScreeningRejects("nonexistent")
+	if err != nil {
+		t.Fatalf("LoadSessionScreeningRejects: %v", err)
+	}
+	if loaded != nil {
+		t.Errorf("expected nil for nonexistent session, got %v", loaded)
+	}
+}
+
+func TestRecordSpawnRecord(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	rec := SpawnRecord{
+		AgentID:    "agent-1",
+		GapID:      "gap-1",
+		GapPattern: "momentum",
+		CreatedAt:  time.Now(),
+	}
+	if err := store.RecordSpawnRecord(rec); err != nil {
+		t.Fatalf("RecordSpawnRecord: %v", err)
+	}
+	loaded, err := store.LoadSpawnRecords()
+	if err != nil {
+		t.Fatalf("LoadSpawnRecords: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 spawn record, got %d", len(loaded))
+	}
+	if loaded[0].AgentID != "agent-1" {
+		t.Errorf("AgentID = %q, want agent-1", loaded[0].AgentID)
+	}
+}
+
+func TestRecordHumanIntervention_PersistsFullRecord(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	intervention := domain.HumanIntervention{
+		ID: "hi-1", Type: "override", Reason: "manual correction",
+		Operator: "admin", RecordedAt: time.Now(),
+	}
+	if err := store.RecordHumanIntervention(intervention); err != nil {
+		t.Fatalf("RecordHumanIntervention: %v", err)
+	}
+	loaded, err := store.LoadHumanInterventions()
+	if err != nil {
+		t.Fatalf("LoadHumanInterventions: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 intervention, got %d", len(loaded))
+	}
+}
+
+func TestConcurrentRecordOutcomes(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	var wg sync.WaitGroup
+	n := 10
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			outcome := domain.RecommendationOutcome{
+				AgentID: fmt.Sprintf("agent-%d", idx),
+				Skill:   "s", Symbol: "2330.TW", Window: "1d",
+				ForwardReturn: float64(idx) * 0.01, Hit: idx%2 == 0,
+				RecordedAt: time.Now(),
+			}
+			if err := store.RecordOutcomes([]domain.RecommendationOutcome{outcome}); err != nil {
+				t.Errorf("concurrent RecordOutcomes idx=%d: %v", idx, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	loaded, err := store.LoadOutcomes()
+	if err != nil {
+		t.Fatalf("LoadOutcomes after concurrent writes: %v", err)
+	}
+	if len(loaded) != n {
+		t.Errorf("expected %d outcomes after concurrent writes, got %d", n, len(loaded))
+	}
+}

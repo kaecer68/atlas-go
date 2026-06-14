@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -777,52 +778,167 @@ func TestPipelineService_ProviderSetters(t *testing.T) {
 // computeAgentRegimeBreakdown (regression + edge cases)
 // =============================================================================
 
-func TestComputeAgentRegimeBreakdown_NoOutcomes(t *testing.T) {
-	got := computeAgentRegimeBreakdown(nil, "agent-x", "bull")
-	if got != nil {
-		t.Errorf("empty outcomes: got %+v, want nil", got)
-	}
-}
+func TestComputeAgentRegimeBreakdown(t *testing.T) {
+	agentA := "agent-a"
+	bull := "bull"
+	bear := "bear"
+	unknown := "unknown"
 
-func TestComputeAgentRegimeBreakdown_OtherAgentsIgnored(t *testing.T) {
-	outcomes := []domain.RecommendationOutcome{
-		{AgentID: "other-agent", ForwardReturn: 0.05, Hit: true},
+	cases := []struct {
+		name          string
+		outcomes      []domain.RecommendationOutcome
+		agentID       string
+		defaultRegime string
+		wantNil       bool
+		wantRegimes   map[string]domain.RegimePerformance
+	}{
+		{
+			name:          "nil outcomes",
+			outcomes:      nil,
+			agentID:       agentA,
+			defaultRegime: bull,
+			wantNil:       true,
+		},
+		{
+			name: "no matching agent",
+			outcomes: []domain.RecommendationOutcome{
+				{AgentID: "other-agent", ForwardReturn: 0.05, Hit: true, Regime: bull},
+			},
+			agentID:       agentA,
+			defaultRegime: bull,
+			wantNil:       true,
+		},
+		{
+			name: "single regime from outcome",
+			outcomes: []domain.RecommendationOutcome{
+				{AgentID: agentA, ForwardReturn: 0.10, Hit: true, Regime: bull},
+				{AgentID: agentA, ForwardReturn: -0.05, Hit: false, Regime: bull},
+				{AgentID: agentA, ForwardReturn: 0.03, Hit: true, Regime: bull},
+				{AgentID: "other", ForwardReturn: 0.99, Hit: true, Regime: bull},
+			},
+			agentID:       agentA,
+			defaultRegime: unknown,
+			wantRegimes: map[string]domain.RegimePerformance{
+				bull: {
+					Regime:       bull,
+					SessionCount: 3,
+					TotalReturn:  0.10 - 0.05 + 0.03,
+					WinRate:      2.0 / 3.0,
+					AvgReturn:    (0.10 - 0.05 + 0.03) / 3.0,
+				},
+			},
+		},
+		{
+			name: "multiple regimes",
+			outcomes: []domain.RecommendationOutcome{
+				{AgentID: agentA, ForwardReturn: 0.10, Hit: true, Regime: bull},
+				{AgentID: agentA, ForwardReturn: -0.05, Hit: false, Regime: bear},
+				{AgentID: agentA, ForwardReturn: 0.03, Hit: true, Regime: bull},
+				{AgentID: agentA, ForwardReturn: -0.02, Hit: false, Regime: bear},
+			},
+			agentID:       agentA,
+			defaultRegime: unknown,
+			wantRegimes: map[string]domain.RegimePerformance{
+				bull: {
+					Regime:       bull,
+					SessionCount: 2,
+					TotalReturn:  0.13,
+					WinRate:      1.0,
+					AvgReturn:    0.065,
+				},
+				bear: {
+					Regime:       bear,
+					SessionCount: 2,
+					TotalReturn:  -0.07,
+					WinRate:      0.0,
+					AvgReturn:    -0.035,
+				},
+			},
+		},
+		{
+			name: "empty regime falls back to default",
+			outcomes: []domain.RecommendationOutcome{
+				{AgentID: agentA, ForwardReturn: 0.10, Hit: true, Regime: ""},
+				{AgentID: agentA, ForwardReturn: -0.05, Hit: false, Regime: ""},
+				{AgentID: agentA, ForwardReturn: 0.03, Hit: true, Regime: bull},
+			},
+			agentID:       agentA,
+			defaultRegime: unknown,
+			wantRegimes: map[string]domain.RegimePerformance{
+				unknown: {
+					Regime:       unknown,
+					SessionCount: 2,
+					TotalReturn:  0.05,
+					WinRate:      0.5,
+					AvgReturn:    0.025,
+				},
+				bull: {
+					Regime:       bull,
+					SessionCount: 1,
+					TotalReturn:  0.03,
+					WinRate:      1.0,
+					AvgReturn:    0.03,
+				},
+			},
+		},
+		{
+			name: "all outcomes default regime when no outcome regime",
+			outcomes: []domain.RecommendationOutcome{
+				{AgentID: agentA, ForwardReturn: 0.10, Hit: true, Regime: ""},
+				{AgentID: agentA, ForwardReturn: -0.05, Hit: false, Regime: ""},
+				{AgentID: agentA, ForwardReturn: 0.03, Hit: true, Regime: ""},
+			},
+			agentID:       agentA,
+			defaultRegime: bull,
+			wantRegimes: map[string]domain.RegimePerformance{
+				bull: {
+					Regime:       bull,
+					SessionCount: 3,
+					TotalReturn:  0.08,
+					WinRate:      2.0 / 3.0,
+					AvgReturn:    0.08 / 3.0,
+				},
+			},
+		},
 	}
-	got := computeAgentRegimeBreakdown(outcomes, "target-agent", "bull")
-	if got != nil {
-		t.Errorf("no matching outcomes: got %+v, want nil", got)
-	}
-}
 
-func TestComputeAgentRegimeBreakdown_AgentOutcomesAggregated(t *testing.T) {
-	outcomes := []domain.RecommendationOutcome{
-		{AgentID: "target", ForwardReturn: 0.10, Hit: true},
-		{AgentID: "target", ForwardReturn: -0.05, Hit: false},
-		{AgentID: "target", ForwardReturn: 0.03, Hit: true},
-		{AgentID: "other", ForwardReturn: 0.99, Hit: true}, // ignored
-	}
-	got := computeAgentRegimeBreakdown(outcomes, "target", "bull")
-	if got == nil {
-		t.Fatal("expected non-nil breakdown")
-	}
-	perf, ok := got.Regimes["bull"]
-	if !ok {
-		t.Fatal("expected 'bull' regime entry")
-	}
-	if perf.SessionCount != 3 {
-		t.Errorf("SessionCount = %d, want 3", perf.SessionCount)
-	}
-	wantReturn := 0.10 - 0.05 + 0.03
-	if perf.TotalReturn < wantReturn-1e-9 || perf.TotalReturn > wantReturn+1e-9 {
-		t.Errorf("TotalReturn = %v, want %v", perf.TotalReturn, wantReturn)
-	}
-	wantWinRate := 2.0 / 3.0
-	if perf.WinRate < wantWinRate-1e-9 || perf.WinRate > wantWinRate+1e-9 {
-		t.Errorf("WinRate = %v, want %v", perf.WinRate, wantWinRate)
-	}
-	wantAvg := wantReturn / 3.0
-	if perf.AvgReturn < wantAvg-1e-9 || perf.AvgReturn > wantAvg+1e-9 {
-		t.Errorf("AvgReturn = %v, want %v", perf.AvgReturn, wantAvg)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := computeAgentRegimeBreakdown(tc.outcomes, tc.agentID, tc.defaultRegime)
+			if tc.wantNil {
+				if got != nil {
+					t.Fatalf("expected nil, got %+v", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("expected non-nil breakdown")
+			}
+			if len(got.Regimes) != len(tc.wantRegimes) {
+				t.Fatalf("regime count = %d, want %d", len(got.Regimes), len(tc.wantRegimes))
+			}
+			for regime, want := range tc.wantRegimes {
+				perf, ok := got.Regimes[regime]
+				if !ok {
+					t.Fatalf("missing regime %q", regime)
+				}
+				if perf.Regime != want.Regime {
+					t.Errorf("Regime = %q, want %q", perf.Regime, want.Regime)
+				}
+				if perf.SessionCount != want.SessionCount {
+					t.Errorf("SessionCount = %d, want %d", perf.SessionCount, want.SessionCount)
+				}
+				if math.Abs(perf.TotalReturn-want.TotalReturn) > 1e-9 {
+					t.Errorf("TotalReturn = %v, want %v", perf.TotalReturn, want.TotalReturn)
+				}
+				if math.Abs(perf.WinRate-want.WinRate) > 1e-9 {
+					t.Errorf("WinRate = %v, want %v", perf.WinRate, want.WinRate)
+				}
+				if math.Abs(perf.AvgReturn-want.AvgReturn) > 1e-9 {
+					t.Errorf("AvgReturn = %v, want %v", perf.AvgReturn, want.AvgReturn)
+				}
+			}
+		})
 	}
 }
 

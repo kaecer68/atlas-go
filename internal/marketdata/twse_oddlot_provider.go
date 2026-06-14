@@ -39,6 +39,13 @@ func NewTWSEOddLotProvider() *TWSEOddLotProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (p *TWSEOddLotProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		p.client = client
+	}
+}
+
 // Name returns the provider name.
 func (p *TWSEOddLotProvider) Name() string {
 	return "twse_oddlot"

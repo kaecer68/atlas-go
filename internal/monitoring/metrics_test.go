@@ -1,9 +1,12 @@
 package monitoring
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 func TestMetricsCollector_Screening(t *testing.T) {
@@ -363,5 +366,112 @@ func TestMetricsCollector_PersistenceReplaysAlertTimestamps(t *testing.T) {
 	}
 	if got := m2.GetAlertTriggerCount(); got != 2 {
 		t.Errorf("replayed total count = %v, want 2", got)
+	}
+}
+
+func TestTradingMetrics_RecordPosition(t *testing.T) {
+	collector := NewMetricsCollector()
+	tm := NewTradingMetrics(collector, nil)
+	tm.RecordPosition(domain.Position{Symbol: "2330", MarketValue: 50000})
+
+	metric, ok := collector.GetMetric("position_value", map[string]string{"symbol": "2330"})
+	if !ok || metric.Value != 50000 {
+		t.Errorf("expected position_value=50000, got ok=%v value=%v", ok, metric.Value)
+	}
+}
+
+func TestTradingMetrics_RecordPortfolio(t *testing.T) {
+	collector := NewMetricsCollector()
+	tm := NewTradingMetrics(collector, nil)
+	tm.RecordPortfolio(100000, 500000)
+
+	cash, ok := collector.GetMetric("portfolio_cash", nil)
+	if !ok || cash.Value != 100000 {
+		t.Errorf("expected portfolio_cash=100000, got ok=%v value=%v", ok, cash.Value)
+	}
+	total, ok := collector.GetMetric("portfolio_total", nil)
+	if !ok || total.Value != 500000 {
+		t.Errorf("expected portfolio_total=500000, got ok=%v value=%v", ok, total.Value)
+	}
+}
+
+func TestTradingMetrics_RecordCircuitBreakerState(t *testing.T) {
+	collector := NewMetricsCollector()
+	tm := NewTradingMetrics(collector, nil)
+	tm.RecordCircuitBreakerState("halted")
+
+	metric, ok := collector.GetMetric("circuit_breaker_state", map[string]string{"state": "halted"})
+	if !ok || metric.Value != 1 {
+		t.Errorf("expected circuit_breaker_state=1, got ok=%v value=%v", ok, metric.Value)
+	}
+}
+
+func TestTradingMetrics_RecordRiskEvent(t *testing.T) {
+	collector := NewMetricsCollector()
+	tm := NewTradingMetrics(collector, nil)
+	tm.RecordRiskEvent("drawdown", "2330")
+
+	metric, ok := collector.GetMetric("risk_events", map[string]string{"type": "drawdown", "symbol": "2330"})
+	if !ok || metric.Value != 1 {
+		t.Errorf("expected risk_events=1, got ok=%v value=%v", ok, metric.Value)
+	}
+}
+
+func TestTradingMetrics_RecordCounterAndGauge(t *testing.T) {
+	collector := NewMetricsCollector()
+	tm := NewTradingMetrics(collector, nil)
+	tm.RecordCounter("custom_counter", 5, nil)
+	tm.RecordGauge("custom_gauge", 3.14, nil)
+
+	c, ok := collector.GetMetric("custom_counter", nil)
+	if !ok || c.Value != 5 {
+		t.Errorf("expected custom_counter=5, got ok=%v value=%v", ok, c.Value)
+	}
+	g, ok := collector.GetMetric("custom_gauge", nil)
+	if !ok || g.Value != 3.14 {
+		t.Errorf("expected custom_gauge=3.14, got ok=%v value=%v", ok, g.Value)
+	}
+}
+
+func TestCheckThresholds_UnacknowledgedAlerts(t *testing.T) {
+	m := NewMetricsCollector()
+	m.RecordAlert("a")
+	m.RecordAlert("b")
+	m.RecordAlert("c")
+
+	threshold := AlertThreshold{
+		MinScreeningRate:        0.0,
+		MaxAlertTriggerRate:     1000,
+		MaxUnacknowledgedAlerts: 2,
+	}
+	violations := m.CheckThresholds(threshold)
+	found := false
+	for _, v := range violations {
+		if v.Metric == "unacknowledged_alerts" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected unacknowledged_alerts violation, got %+v", violations)
+	}
+}
+
+func TestSystemMetrics_Start(t *testing.T) {
+	collector := NewMetricsCollector()
+	sm := NewSystemMetrics(collector, nil)
+	sm.Start(context.Background()) // deprecated no-op
+}
+
+func TestMetricsHistory(t *testing.T) {
+	h := NewMetricsHistory(2)
+	h.AddSnapshot(MetricsSnapshot{ScreeningRate: 0.1, Timestamp: time.Now()})
+	h.AddSnapshot(MetricsSnapshot{ScreeningRate: 0.2, Timestamp: time.Now()})
+	h.AddSnapshot(MetricsSnapshot{ScreeningRate: 0.3, Timestamp: time.Now()})
+
+	if got := len(h.GetTrend("screening_rate")); got != 2 {
+		t.Errorf("expected max 2 trend points, got %d", got)
+	}
+	if got := len(h.GetTrend("unknown")); got != 0 {
+		t.Errorf("expected 0 trend points for unknown metric, got %d", got)
 	}
 }

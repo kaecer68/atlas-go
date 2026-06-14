@@ -36,6 +36,13 @@ func NewTWSEMarginBalanceProvider(storageDir string) *TWSEMarginBalanceProvider 
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (t *TWSEMarginBalanceProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		t.client = client
+	}
+}
+
 // Name returns the provider name.
 func (t *TWSEMarginBalanceProvider) Name() string {
 	return "twse_margin_balance"
@@ -164,7 +171,7 @@ func (t *TWSEMarginBalanceProvider) saveMargin(dateStr string, balance, shortBal
 	if err := os.MkdirAll(t.storageDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"date":             dateStr,
 		"margin_balance":   balance,
 		"short_balance":    shortBalance,

@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/experiment"
 )
 
 func main() {
@@ -19,25 +18,7 @@ func main() {
 }
 
 func findLatestExperiment(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var files []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if filepath.Ext(name) == ".json" && name != "test-experiment.json" {
-			files = append(files, name)
-		}
-	}
-	if len(files) == 0 {
-		return ""
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(files)))
-	return filepath.Join(dir, files[0])
+	return experiment.FindLatestExperiment(dir)
 }
 
 func run(args []string) error {

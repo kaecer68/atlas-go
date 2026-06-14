@@ -207,3 +207,87 @@ func TestAdapt_NoContent_EmptyBody(t *testing.T) {
 		t.Errorf("body = %q, want empty for 204 No Content", body)
 	}
 }
+
+func TestAuthMiddleware_ProductionRequiresAPIKey(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	t.Setenv("ATLAS_API_KEY", "")
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not run when production key is missing")
+	}))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestAuthMiddleware_AcceptsBearerAndRejectsBadKey(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "")
+	t.Setenv("ATLAS_API_KEY", "secret")
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	}))
+
+	bad := httptest.NewRecorder()
+	h.ServeHTTP(bad, httptest.NewRequest(http.MethodGet, "/test", nil))
+	if bad.Code != http.StatusUnauthorized {
+		t.Fatalf("bad key status = %d, want %d", bad.Code, http.StatusUnauthorized)
+	}
+
+	good := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	h.ServeHTTP(good, req)
+	if good.Code != http.StatusTeapot {
+		t.Fatalf("good key status = %d, want %d", good.Code, http.StatusTeapot)
+	}
+}
+
+func TestRequireAdmin(t *testing.T) {
+	t.Setenv("ATLAS_ADMIN_KEY", "admin-secret")
+	h := RequireAdmin(func(r *http.Request) (int, any) {
+		return http.StatusAccepted, map[string]string{"ok": "true"}
+	})
+
+	status, body := h(httptest.NewRequest(http.MethodPost, "/admin", nil))
+	if status != http.StatusUnauthorized {
+		t.Fatalf("missing admin status = %d, want 401 (body=%v)", status, body)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/admin", nil)
+	req.Header.Set("Authorization", "Admin admin-secret")
+	status, _ = h(req)
+	if status != http.StatusAccepted {
+		t.Fatalf("authorized status = %d, want 202", status)
+	}
+}
+
+func TestAdminPost_RequiresPostAndAdmin(t *testing.T) {
+	t.Setenv("ATLAS_ADMIN_KEY", "admin-secret")
+	h := AdminPost(func(r *http.Request) (int, any) {
+		return http.StatusOK, map[string]string{"status": "ok"}
+	})
+
+	get := httptest.NewRecorder()
+	h.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if get.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET status = %d, want 405", get.Code)
+	}
+
+	unauthorized := httptest.NewRecorder()
+	h.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, "/admin", nil))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d, want 401", unauthorized.Code)
+	}
+
+	authorized := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/admin", nil)
+	req.Header.Set("X-Admin-Key", "admin-secret")
+	h.ServeHTTP(authorized, req)
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authorized status = %d, want 200", authorized.Code)
+	}
+}

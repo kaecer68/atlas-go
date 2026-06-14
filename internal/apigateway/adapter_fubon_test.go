@@ -1,6 +1,13 @@
 package apigateway
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+)
 
 func TestFubonChannelAdapter_Metadata(t *testing.T) {
 	a := &FubonChannelAdapter{}
@@ -25,13 +32,100 @@ func TestFubonChannelAdapter_Metadata(t *testing.T) {
 	}
 }
 
-func TestFubonChannelAdapter_RateLimit(t *testing.T) {
-	a := NewFubonChannelAdapter(nil)
-	if a == nil {
-		t.Fatal("NewFubonChannelAdapter returned nil")
+func TestFubonChannelAdapter_Fetch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[
+			{"symbol":"2330","last":600.0,"open":595.0,"high":605.0,"low":590.0,"volume":10000,"is_open":true,"is_close":false},
+			{"symbol":"0050","last":150.0,"open":149.0,"high":151.0,"low":148.0,"volume":5000,"is_open":true,"is_close":false}
+		]`))
+	}))
+	defer server.Close()
+
+	writeParametersJSON(t, map[string]any{
+		"marketdata": map[string]any{
+			"fubon_api_timeout_sec": map[string]any{"value": 10},
+			"fubon_intraday_limit":  map[string]any{"value": 1000},
+		},
+	})
+
+	client := marketdata.NewFubonClient("test-token")
+	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
+
+	adapter := NewFubonChannelAdapter(client)
+	res, err := adapter.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
 	}
-	limiter := a.RateLimit()
-	if limiter == nil {
+	if res == nil || len(res.Data) == 0 {
+		t.Fatal("Fetch() returned empty data")
+	}
+	if res.Meta.ChannelID != "fubon" {
+		t.Errorf("ChannelID = %q, want fubon", res.Meta.ChannelID)
+	}
+}
+
+func TestFubonChannelAdapter_HealthCheck(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Errorf("path = %q, want /health", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	writeParametersJSON(t, map[string]any{
+		"marketdata": map[string]any{
+			"fubon_api_timeout_sec": map[string]any{"value": 10},
+			"fubon_intraday_limit":  map[string]any{"value": 1000},
+		},
+	})
+
+	client := marketdata.NewFubonClient("test-token")
+	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
+
+	adapter := NewFubonChannelAdapter(client)
+	status, err := adapter.HealthCheck(context.Background())
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if status.Status != "ok" {
+		t.Errorf("Status = %q, want ok", status.Status)
+	}
+}
+
+func TestFubonChannelAdapter_HealthCheck_Failure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	writeParametersJSON(t, map[string]any{
+		"marketdata": map[string]any{
+			"fubon_api_timeout_sec": map[string]any{"value": 10},
+			"fubon_intraday_limit":  map[string]any{"value": 1000},
+		},
+	})
+
+	client := marketdata.NewFubonClient("test-token")
+	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
+
+	adapter := NewFubonChannelAdapter(client)
+	status, err := adapter.HealthCheck(context.Background())
+	if err == nil {
+		t.Fatal("expected error on failed health check")
+	}
+	if status.Status != "error" {
+		t.Errorf("Status = %q, want error", status.Status)
+	}
+}
+
+func TestFubonChannelAdapter_RateLimit(t *testing.T) {
+	writeParametersJSON(t, nil)
+	client := marketdata.NewFubonClient("test-token")
+	adapter := NewFubonChannelAdapter(client)
+	if adapter.RateLimit() == nil {
 		t.Fatal("RateLimit() returned nil")
 	}
 }

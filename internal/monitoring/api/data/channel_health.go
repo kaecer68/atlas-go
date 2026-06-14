@@ -9,10 +9,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
+
+// dbExecer is the small subset of *pgxpool.Pool used by channelHealthStore.
+// It exists so DB-dependent paths can be exercised without a real PostgreSQL.
+type dbExecer interface {
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+}
 
 type ChannelAlert struct {
 	ChannelID string `json:"channel_id"`
@@ -39,16 +48,19 @@ type channelHealthStore struct {
 	path   string
 	mu     sync.RWMutex
 	data   map[string]*ChannelHealthRecord
-	pool   *pgxpool.Pool
+	pool   dbExecer
 	loaded bool
 }
 
 func NewChannelHealthStoreWithPool(dir string, pool *pgxpool.Pool) ChannelHealthRecorder {
-	return &channelHealthStore{
+	s := &channelHealthStore{
 		path: filepath.Join(dir, "channel_health.json"),
 		data: make(map[string]*ChannelHealthRecord),
-		pool: pool,
 	}
+	if pool != nil {
+		s.pool = pool
+	}
+	return s
 }
 
 func (s *channelHealthStore) load() error {

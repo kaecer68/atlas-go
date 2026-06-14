@@ -2,9 +2,12 @@ package macro
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -32,6 +35,97 @@ func TestHandleChannelsIngest_StubLock_GeoAlwaysFalseOnMacroError(t *testing.T) 
 	}
 	if geoErr, _ := resp["geo_error"].(string); geoErr == "" {
 		t.Error("expected non-empty geo_error explaining why geo_ok is false")
+	}
+}
+
+func newMacroServiceWithSnapshot(t *testing.T, snap marketdata.MacroDataSnapshot) *service.MacroService {
+	t.Helper()
+	snapDir := t.TempDir()
+	b, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	for _, name := range []string{"latest.json", "2026-06-14.json"} {
+		if err := os.WriteFile(filepath.Join(snapDir, name), b, 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	ingestor := narrative.NewMacroIngestor(okProvider{}, snapDir)
+	return service.NewMacroService(t.TempDir(), ingestor, narrative.NewTaiwanStressCalculator(nil, ""))
+}
+
+func testMacroSnapshot() marketdata.MacroDataSnapshot {
+	now := time.Now().Unix()
+	return marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Symbol: "DXY", Value: 104, ChangePct: 0.5, Timestamp: now},
+		US10Y:              marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25, ChangePct: -0.2, Timestamp: now},
+		VIX:                marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18, ChangePct: 1.1, Timestamp: now},
+		USD_TWD:            marketdata.MacroDataPoint{Symbol: "USDTWD", Value: 32.2, ChangePct: 0.1, Timestamp: now},
+		Oil:                marketdata.MacroDataPoint{Symbol: "CL=F", Value: 75, ChangePct: -0.4, Timestamp: now},
+		Gold:               marketdata.MacroDataPoint{Symbol: "GC=F", Value: 2300, ChangePct: 0.3, Timestamp: now},
+		JPY:                marketdata.MacroDataPoint{Symbol: "JPY=X", Value: 155, ChangePct: -0.1, Timestamp: now},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "FII", Value: 123.4, ChangePct: 0, Timestamp: now},
+		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DFI", Value: -12.3, ChangePct: 0, Timestamp: now},
+		DealerNet:          marketdata.MacroDataPoint{Symbol: "DLR", Value: 5.6, ChangePct: 0, Timestamp: now},
+		RecordedAt:         now,
+	}
+}
+
+func TestMacroHandlers_SnapshotAndFlowEndpoints(t *testing.T) {
+	h := &Handlers{Service: newMacroServiceWithSnapshot(t, testMacroSnapshot())}
+	endpoints := []struct {
+		name string
+		path string
+		fn   func(*http.Request) (int, any)
+	}{
+		{"latest", "/api/macro/snapshot/latest", h.HandleMacroSnapshotLatest},
+		{"history", "/api/macro/snapshot/history?date=2026-06-14", h.HandleMacroSnapshotHistory},
+		{"capital_flow", "/api/macro/capital-flow/latest", h.HandleCapitalFlowLatest},
+		{"stress", "/api/taiwan/stress-index", h.HandleTaiwanStressIndex},
+		{"health", "/api/dashboard/macro-data-health", h.HandleMacroDataHealth},
+	}
+	for _, endpoint := range endpoints {
+		t.Run(endpoint.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, endpoint.path, nil)
+			status, body := endpoint.fn(req)
+			if status != http.StatusOK {
+				t.Fatalf("status = %d, want 200 (body=%v)", status, body)
+			}
+			if _, err := json.Marshal(body); err != nil {
+				t.Fatalf("response is not JSON encodable: %v", err)
+			}
+		})
+	}
+}
+
+func TestHandleMacroSnapshotHistory_ValidationErrors(t *testing.T) {
+	h := &Handlers{Service: newMacroServiceWithSnapshot(t, testMacroSnapshot())}
+	cases := []struct {
+		name string
+		path string
+		want int
+	}{
+		{"missing_date", "/api/macro/snapshot/history", http.StatusBadRequest},
+		{"invalid_date", "/api/macro/snapshot/history?date=20260614", http.StatusBadRequest},
+		{"not_found", "/api/macro/snapshot/history?date=2026-06-15", http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			status, body := h.HandleMacroSnapshotHistory(req)
+			if status != tc.want {
+				t.Fatalf("status = %d, want %d (body=%v)", status, tc.want, body)
+			}
+		})
+	}
+}
+
+func TestHandleMacroIngest_Error(t *testing.T) {
+	h := &Handlers{Service: newMacroServiceFailingIngest(t)}
+	req := httptest.NewRequest(http.MethodPost, "/api/macro/ingest", nil)
+	status, body := h.HandleMacroIngest(req)
+	if status != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (body=%v)", status, body)
 	}
 }
 

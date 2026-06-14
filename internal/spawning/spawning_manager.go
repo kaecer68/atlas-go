@@ -62,7 +62,7 @@ func DefaultSpawningConfig() SpawningConfig {
 func NewSpawningManager(registry *domain.AgentRegistry, config SpawningConfig) *SpawningManager {
 	return &SpawningManager{
 		gapDetector:          NewGapDetector(),
-		agentFactory:         NewAgentFactory(),
+		agentFactory:         NewAgentFactory(config.PromptsDir),
 		spawnedAgents:        make(map[string]*SpawnedAgent),
 		registry:             registry,
 		maxActiveSpawns:      config.MaxActiveSpawns,

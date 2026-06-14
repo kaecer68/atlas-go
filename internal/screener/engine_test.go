@@ -401,3 +401,301 @@ func TestScreenDetailedMinTotalFactorScoreMissing(t *testing.T) {
 		t.Fatal("expected actual to be set")
 	}
 }
+
+// mockTraceWriter records trace calls for test assertions.
+type mockTraceWriter struct {
+	records []traceRecord
+}
+
+type traceRecord struct {
+	step   int
+	layer  string
+	status string
+	meta   map[string]any
+}
+
+func (m *mockTraceWriter) Record(step int, layer, status string, meta map[string]any) {
+	m.records = append(m.records, traceRecord{step: step, layer: layer, status: status, meta: meta})
+}
+
+func TestEngine_WithTraceWriter(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	if engine.traceWriter != nil {
+		t.Error("traceWriter should be nil by default")
+	}
+	m := &mockTraceWriter{}
+	got := engine.WithTraceWriter(m)
+	if got != engine {
+		t.Error("WithTraceWriter should return the same Engine for chaining")
+	}
+	if engine.traceWriter != m {
+		t.Error("WithTraceWriter should set the traceWriter")
+	}
+}
+
+func TestScreenUniverse_AllRejected_EmitsTrace(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"A.TW": {PE: 10},
+	})
+	engine := NewEngine(nil, fp)
+	m := &mockTraceWriter{}
+	engine.WithTraceWriter(m)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		PE: &domain.RangeFilter{Max: ptrFloat64(15)},
+	}
+
+	passed, err := engine.ScreenUniverse(context.Background(), []string{"A.TW"}, criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(passed) != 1 {
+		t.Fatal("A.TW should pass PE filter")
+	}
+	if len(m.records) != 0 {
+		t.Error("no trace should be emitted when some symbols pass")
+	}
+
+	m2 := &mockTraceWriter{}
+	engine.WithTraceWriter(m2)
+	criteria2 := domain.ScreeningCriteria{
+		PE: &domain.RangeFilter{Max: ptrFloat64(5)},
+	}
+	passed2, err2 := engine.ScreenUniverse(context.Background(), []string{"A.TW", "B.TW"}, criteria2, quotes)
+	if err2 != nil {
+		t.Fatalf("unexpected error: %v", err2)
+	}
+	if len(passed2) != 0 {
+		t.Fatal("expected all symbols to be rejected")
+	}
+	if len(m2.records) != 1 {
+		t.Fatalf("expected 1 trace record, got %d", len(m2.records))
+	}
+	tr := m2.records[0]
+	if tr.status != "WARN" {
+		t.Errorf("trace status = %q, want WARN", tr.status)
+	}
+	if tr.layer != "screener" {
+		t.Errorf("trace layer = %q, want screener", tr.layer)
+	}
+	if tr.meta["rejected"].(int) != 2 {
+		t.Errorf("expected 2 rejected in trace, got %v", tr.meta["rejected"])
+	}
+}
+
+func TestScreenDetailed_DividendYieldMinFail(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"LOW_DIV.TW": {DividendYield: 1.0},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		DividendYield: &domain.RangeFilter{Min: ptrFloat64(3.0)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "LOW_DIV.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion != "dividend_yield_min" {
+		t.Errorf("expected criterion 'dividend_yield_min', got %q", res.Criterion)
+	}
+	if res.Label != "Dividend yield" {
+		t.Errorf("expected label 'Dividend yield', got %q", res.Label)
+	}
+	if res.Threshold == "" {
+		t.Fatal("expected threshold to be set")
+	}
+	if res.Actual == "" {
+		t.Fatal("expected actual to be set")
+	}
+}
+
+func TestScreenDetailed_DividendYieldMaxFail(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"HIGH_DIV.TW": {DividendYield: 8.0},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		DividendYield: &domain.RangeFilter{Max: ptrFloat64(5.0)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "HIGH_DIV.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion != "dividend_yield_max" {
+		t.Errorf("expected criterion 'dividend_yield_max', got %q", res.Criterion)
+	}
+	if res.Label != "Dividend yield" {
+		t.Errorf("expected label 'Dividend yield', got %q", res.Label)
+	}
+}
+
+func TestScreenDetailed_DividendYieldMissing(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"OTHER.TW": {PE: 15},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		DividendYield: &domain.RangeFilter{Min: ptrFloat64(2.0)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "NO_DATA.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail for missing dividend yield")
+	}
+	if res.Criterion != "dividend_yield_missing" {
+		t.Errorf("expected criterion 'dividend_yield_missing', got %q", res.Criterion)
+	}
+	if res.Label != "Dividend yield" {
+		t.Errorf("expected label 'Dividend yield', got %q", res.Label)
+	}
+	if res.Threshold != "required" {
+		t.Errorf("expected threshold 'required', got %q", res.Threshold)
+	}
+	if res.Actual != "missing data" {
+		t.Errorf("expected actual 'missing data', got %q", res.Actual)
+	}
+}
+
+func TestScreenDetailed_PEWithMissingFundamentals(t *testing.T) {
+	e := NewEngine(nil, nil)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		PE: &domain.RangeFilter{Max: ptrFloat64(15)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "ANY.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.Passed {
+		t.Fatal("expected pass: nil fundamentals skips PE filter")
+	}
+}
+
+func TestScreenDetailed_VolumeMissingQuote(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	quotes := map[string]domain.Quote{}
+	minVol := int64(1000000)
+	criteria := domain.ScreeningCriteria{
+		VolumeIntraday: &domain.MinFilter{Min: &minVol},
+	}
+	res, err := engine.ScreenDetailed(context.Background(), "MISSING.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail for missing quote")
+	}
+	if res.Criterion != "volume_intraday_min" {
+		t.Errorf("expected criterion 'volume_intraday_min', got %q", res.Criterion)
+	}
+	if res.Actual != "missing quote" {
+		t.Errorf("expected actual 'missing quote', got %q", res.Actual)
+	}
+}
+
+func TestScreenDetailed_PBMinFail(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"LOW_PB.TW": {PB: 0.5},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		PB: &domain.RangeFilter{Min: ptrFloat64(1.0)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "LOW_PB.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion != "pb_min" {
+		t.Errorf("expected criterion 'pb_min', got %q", res.Criterion)
+	}
+	if res.Label != "P/B" {
+		t.Errorf("expected label 'P/B', got %q", res.Label)
+	}
+}
+
+func TestScreenDetailed_PBMaxFail(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"HIGH_PB.TW": {PB: 5.0},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		PB: &domain.RangeFilter{Max: ptrFloat64(3.0)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "HIGH_PB.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion != "pb_max" {
+		t.Errorf("expected criterion 'pb_max', got %q", res.Criterion)
+	}
+	if res.Label != "P/B" {
+		t.Errorf("expected label 'P/B', got %q", res.Label)
+	}
+}
+
+func TestScreenDetailed_MinTotalFactorScoreBelowThreshold(t *testing.T) {
+	fe := portfolio.NewFactorEngine()
+	e := NewEngine(fe, nil)
+	quotes := map[string]domain.Quote{
+		"FLAT.TW": {Symbol: "FLAT.TW", Open: 100, Last: 100, IsTradable: true},
+	}
+	criteria := domain.ScreeningCriteria{
+		MinTotalFactorScore: ptrFloat64(0.9),
+	}
+	res, err := e.ScreenDetailed(context.Background(), "FLAT.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail for score below threshold")
+	}
+	if res.Criterion != "min_total_factor_score" {
+		t.Errorf("expected criterion 'min_total_factor_score', got %q", res.Criterion)
+	}
+	if res.Actual == "" || res.Actual == "missing" {
+		t.Error("expected numeric actual value, not missing")
+	}
+}
+
+func TestScreenDetailed_Momentum20DMinFail(t *testing.T) {
+	fe := portfolio.NewFactorEngine()
+	e := NewEngine(fe, nil)
+	quotes := map[string]domain.Quote{
+		"DOWN.TW": {Symbol: "DOWN.TW", Open: 100, Last: 90, IsTradable: true},
+	}
+	criteria := domain.ScreeningCriteria{
+		Momentum20Day: &domain.RangeFilter{Min: ptrFloat64(0.05)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "DOWN.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail for momentum below min")
+	}
+	if res.Criterion != "momentum_20d_min" {
+		t.Errorf("expected criterion 'momentum_20d_min', got %q", res.Criterion)
+	}
+	if res.Label != "20-day momentum" {
+		t.Errorf("expected label '20-day momentum', got %q", res.Label)
+	}
+}

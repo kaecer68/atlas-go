@@ -9,12 +9,23 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// pgPool abstracts the subset of *pgxpool.Pool methods used by PostgresRepository.
+// It is satisfied by *pgxpool.Pool and enables test doubles for unit tests.
+type pgPool interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 // PostgresRepository implements all repository interfaces using PostgreSQL/TimescaleDB.
 type PostgresRepository struct {
-	pool *pgxpool.Pool
+	pool pgPool
 }
 
 // NewPostgresRepository creates a new PostgreSQL-backed repository.

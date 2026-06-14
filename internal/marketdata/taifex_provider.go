@@ -58,6 +58,13 @@ func NewTAIFEXProvider() *TAIFEXProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (t *TAIFEXProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		t.client = client
+	}
+}
+
 // Name returns the provider name.
 func (t *TAIFEXProvider) Name() string {
 	return "taifex"

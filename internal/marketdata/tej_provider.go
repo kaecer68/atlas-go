@@ -105,6 +105,13 @@ func NewTEJClient(apiKey string) *TEJClient {
 	return newTEJClientInternal(apiKey)
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (c *TEJClient) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		c.httpClient = client
+	}
+}
+
 // newTEJClientInternal creates a TEJ API client (shared implementation).
 func newTEJClientInternal(apiKey string) *TEJClient {
 	params := config.GetParametersConfig()

@@ -55,6 +55,13 @@ func NewTWSESectorIndexProvider(cacheDir string) *TWSESectorIndexProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (p *TWSESectorIndexProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		p.client = client
+	}
+}
+
 // Name returns the provider name.
 func (p *TWSESectorIndexProvider) Name() string {
 	return "twse_sector_index"
