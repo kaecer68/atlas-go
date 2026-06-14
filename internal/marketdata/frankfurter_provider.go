@@ -32,6 +32,13 @@ func NewFrankfurterFXProvider() *FrankfurterFXProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (f *FrankfurterFXProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		f.client = client
+	}
+}
+
 func (f *FrankfurterFXProvider) Name() string {
 	return "frankfurter_fx"
 }

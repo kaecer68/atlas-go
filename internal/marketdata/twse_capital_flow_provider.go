@@ -43,6 +43,13 @@ func NewTWSECapitalFlowProvider(storageDir string) *TWSECapitalFlowProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (t *TWSECapitalFlowProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		t.client = client
+	}
+}
+
 // Name returns the provider name.
 func (t *TWSECapitalFlowProvider) Name() string {
 	return "twse_capital_flow"
