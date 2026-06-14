@@ -11,9 +11,10 @@ import { getThemeColor } from "../shared/utils.js";
 
 export async function loadIndustryData() {
   try {
-    const [classification, overview, seasonality, calendar, graph, cycleStatus] = await Promise.all(
+    const [classification, allocationPlan, overview, seasonality, calendar, graph, cycleStatus] = await Promise.all(
       [
         silentGetJSON("/api/dashboard/industry-classification"),
+        silentGetJSON("/api/dashboard/sector-allocation-plan"),
         silentGetJSON("/api/dashboard/industry-overview"),
         silentGetJSON("/api/dashboard/industry-seasonality"),
         silentGetJSON("/api/dashboard/industry-seasonality-calendar"),
@@ -21,7 +22,7 @@ export async function loadIndustryData() {
         silentGetJSON("/api/dashboard/cycle-status-card"),
       ],
     );
-    renderIndustryMap(classification);
+    renderIndustryMap(allocationPlan);
     populateShockSourceDropdown(classification);
     renderCycleStatusCard(cycleStatus && cycleStatus.card);
     renderIndustryLinkage(overview);
@@ -46,9 +47,9 @@ export function renderIndustryMap(data) {
   const industries = data.industries;
   let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
   industries.forEach((ind) => {
-    const weightPct = Math.round((ind.weight || 0) * 100);
+    const weightPct = Math.round((ind.adjusted_weight || ind.base_weight || 0) * 100);
     html += `<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer" onclick="showIndustryDetail('${ind.id}')">`;
-    html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name}</div>`;
+    html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name || ind.id}</div>`;
     html += `<div style="font-size:12px;color:var(--muted)">權重 ${weightPct}%</div>`;
     html += `<div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">`;
     html += `<div style="width:${weightPct}%;height:100%;background:var(--accent)"></div></div>`;
