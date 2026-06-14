@@ -640,6 +640,18 @@ func (s *IndustryService) GetIndustryDetail(industryID string, now time.Time) (*
 	}, nil
 }
 
+// DEPRECATED (2026-06-14): Use sectorallocation.WeightEngine.ComputeWeight instead.
+//
+// This function encodes 12 hard-coded per-industry switch cases and is the
+// root cause of the "三個不同半導體權重" bug (30% / 22% / 19% across three
+// modules). The replacement is a single multi-factor pipeline:
+//
+//	adjusted = base × cycle × seasonal × linkage × narrative × (1+macro) × (1+factor)
+//
+// See internal/sectorallocation/ and the unified
+// /api/dashboard/sector-allocation-plan endpoint. Retained only for
+// backward compatibility with monitoring/service callers; will be removed
+// after the next monitoring service refactor.
 func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegment) WeightDerivation {
 	baseWeight := s.getSectorWeight(seg.ID, seg.Weight)
 	wd := WeightDerivation{
