@@ -329,7 +329,6 @@ grep -rn "NewOrderManager(" internal/ cmd/
 Expected locations to update:
 - `internal/live/orchestrator.go` — wire the actual risk gate
 - `internal/live/order_manager_test.go` — pass `nil` for existing tests
-- `cmd/experimental/staging-drill/` — pass `nil` for drill mode
 
 - [ ] **Step 6: Wire RiskGate into Orchestrator**
 
