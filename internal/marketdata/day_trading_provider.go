@@ -42,6 +42,13 @@ func NewDayTradingProvider() *DayTradingProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (d *DayTradingProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		d.client = client
+	}
+}
+
 // Name returns the provider name.
 func (d *DayTradingProvider) Name() string {
 	return "twse_day_trading"

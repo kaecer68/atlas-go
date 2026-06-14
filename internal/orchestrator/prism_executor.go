@@ -64,6 +64,7 @@ func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResu
 				RecordedAt:          date,
 				FactorScores:        rec.FactorScores,
 				ConvictionBreakdown: rec.ConvictionBreakdown,
+				Regime:              string(regime),
 			})
 		}
 	}

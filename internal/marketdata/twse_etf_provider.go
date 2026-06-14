@@ -37,6 +37,13 @@ func NewTWSEETFProvider() *TWSEETFProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (p *TWSEETFProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		p.client = client
+	}
+}
+
 // Name returns the provider name.
 func (p *TWSEETFProvider) Name() string {
 	return "twse_etf"

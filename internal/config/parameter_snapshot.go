@@ -216,7 +216,7 @@ func DiffSnapshots(old, new *ParameterSnapshot) []ParameterChange {
 	compareBool(&changes, "industry.asymmetric_risk_enabled", old.Params.Industry.AsymmetricRiskEnabled.Value, new.Params.Industry.AsymmetricRiskEnabled.Value, now)
 	compareFloat(&changes, "industry.customer_concentration_limit", old.Params.Industry.CustomerConcentrationLimit.Value, new.Params.Industry.CustomerConcentrationLimit.Value, now)
 	compareFloat(&changes, "industry.geographic_exposure_limit", old.Params.Industry.GeographicExposureLimit.Value, new.Params.Industry.GeographicExposureLimit.Value, now)
-	compareMapStringFloat(&changes, "industry.sector_weights", old.Params.Industry.SectorWeights.Value, new.Params.Industry.SectorWeights.Value, now)
+	// DEPRECATED: industry.sector_weights diff removed; use sector_allocation.base_weights
 	compareMapCycleThreshold(&changes, "industry.cycle_thresholds", old.Params.Industry.CycleThresholds.Value, new.Params.Industry.CycleThresholds.Value, now)
 	compareInventoryCycleThreshold(&changes, "industry.inventory_cycle_thresholds", old.Params.Industry.InventoryCycleThresholds.Value, new.Params.Industry.InventoryCycleThresholds.Value, now)
 	compareCapexCycleThreshold(&changes, "industry.capex_cycle_thresholds", old.Params.Industry.CapexCycleThresholds.Value, new.Params.Industry.CapexCycleThresholds.Value, now)
@@ -343,44 +343,6 @@ func compareLinkageParams(changes *[]ParameterChange, param string, oldVal, newV
 	compareFloat(changes, param+".default_correlation", oldVal.DefaultCorrelation, newVal.DefaultCorrelation, t)
 	compareFloat(changes, param+".systemic_importance_divisor", oldVal.SystemicImportanceDivisor, newVal.SystemicImportanceDivisor, t)
 	compareFloat(changes, param+".min_correlation_threshold", oldVal.MinCorrelationThreshold, newVal.MinCorrelationThreshold, t)
-}
-
-func compareMapStringFloat(changes *[]ParameterChange, param string, oldVal, newVal map[string]float64, t time.Time) {
-	if len(oldVal) != len(newVal) {
-		*changes = append(*changes, ParameterChange{
-			Parameter: param + " (count)",
-			OldValue:  len(oldVal),
-			NewValue:  len(newVal),
-			Timestamp: t,
-		})
-	}
-	for k, v := range oldVal {
-		if newV, ok := newVal[k]; !ok {
-			*changes = append(*changes, ParameterChange{
-				Parameter: param + "." + k,
-				OldValue:  v,
-				NewValue:  "removed",
-				Timestamp: t,
-			})
-		} else if v != newV {
-			*changes = append(*changes, ParameterChange{
-				Parameter: param + "." + k,
-				OldValue:  v,
-				NewValue:  newV,
-				Timestamp: t,
-			})
-		}
-	}
-	for k, v := range newVal {
-		if _, ok := oldVal[k]; !ok {
-			*changes = append(*changes, ParameterChange{
-				Parameter: param + "." + k,
-				OldValue:  "added",
-				NewValue:  v,
-				Timestamp: t,
-			})
-		}
-	}
 }
 
 func compareMapCycleThreshold(changes *[]ParameterChange, param string, oldVal, newVal map[string]CycleThresholdConfig, t time.Time) {

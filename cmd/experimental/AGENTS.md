@@ -12,7 +12,6 @@
 |------|------|----------|
 | `janus-backtest` | JANUS 權重調整的回測驗證 | 修改 JANUS 邏輯後 |
 | `janus-status` | 檢視 JANUS 各 cohort 當前狀態 | 調試 regime 判定時 |
-| `staging-drill` | 12 秒 live trading 煙霧測試（dry-run） | 部署前驗證 live 管線 |
 | `test-hybrid` | HybridProvider 資料回退邏輯驗證 | 修改 provider 後 |
 | `validate-broker` | Broker adapter HMAC-SHA256 簽名格式驗證 | 整合新券商 API 前 |
 | `validate-narrative-shock` | **(DEPRECATED)** 敘事事件衝擊場景驗證 — 改用 `go test -tags=integration -run TestNarrativeShockIntegration ./internal/orchestrator/` | 已棄用，由整合測試取代 |
@@ -24,7 +23,7 @@
 ## CONVENTIONS
 
 - **獨立執行**：每個子命令皆為獨立 `main.go`，可直接 `go run ./cmd/experimental/<name>`。
-- **隔離狀態**：涉及檔案系統的工具（如 `staging-drill`）必須使用 `os.MkdirTemp` 建立臨時目錄，禁止寫入生產狀態路徑（`data/state/`）。
+- **隔離狀態**：涉及檔案系統的工具必須使用 `os.MkdirTemp` 建立臨時目錄，禁止寫入生產狀態路徑（`data/state/`）。
 - **環境變數**：需外部憑證時（如 `validate-broker`），一律從環境變數讀取，禁止硬編碼。
 - **Dummy 模式**：憑證缺失時自動降級為 dummy 驗證（格式檢查），不報錯退出。
 
@@ -33,7 +32,6 @@
 ## ANTI-PATTERNS
 
 - **不可寫入生產資料**：實驗命令禁止修改 `data/state/`、`data/ledger/` 或任何生產路徑。
-- **不可跳過隔離**：`staging-drill` 若未使用臨時目錄，會污染生產 state，導致後續實驗結果混亂。
 - **不可預設 live broker**：所有驗證命令預設必須是 dry-run 或 paper trading，除非顯式傳入 `-allow-live-broker`。
 
 ---
@@ -43,9 +41,6 @@
 ```bash
 # Broker 簽名格式驗證（dummy 模式）
 go run ./cmd/experimental/validate-broker
-
-# Live 管線煙霧測試（12 秒，臨時狀態）
-go run ./cmd/experimental/staging-drill
 
 # JANUS 回測對比（Baseline vs JANUS 加權）
 go run ./cmd/experimental/janus-backtest -start 2026-03-26 -end 2026-03-27

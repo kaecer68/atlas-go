@@ -316,3 +316,98 @@ func TestWriteRejectsToFile_RoundTrip(t *testing.T) {
 		t.Errorf("Criterion = %q", decoded.Criterion)
 	}
 }
+
+func TestSessionWriter_WriteSession_SummaryOnly(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	writer := NewSessionWriter(store)
+
+	req := SessionWriteRequest{
+		Session: domain.ReplaySession{ID: "session-summary-only"},
+		Summary: &domain.SessionSummary{
+			SessionID:  "session-summary-only",
+			Regime:     domain.RegimeRiskOff,
+			RecordedAt: time.Now(),
+		},
+	}
+
+	if err := writer.WriteSession(context.Background(), req); err != nil {
+		t.Fatalf("WriteSession summary-only: %v", err)
+	}
+
+	sessionDir := filepath.Join(dir, "sessions", "session-summary-only")
+	if _, err := os.Stat(filepath.Join(sessionDir, "summary.json")); os.IsNotExist(err) {
+		t.Error("summary.json should exist")
+	}
+	if _, err := os.Stat(filepath.Join(sessionDir, "recommendation_outcomes.jsonl")); !os.IsNotExist(err) {
+		t.Error("outcomes file should not exist")
+	}
+}
+
+func TestSessionWriter_WriteSession_RejectsOnly(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	writer := NewSessionWriter(store)
+
+	req := SessionWriteRequest{
+		Session: domain.ReplaySession{ID: "session-rejects-only"},
+		Rejects: []domain.ScreeningReject{
+			{Symbol: "2498.TW", AgentID: "a1", Criterion: "volume"},
+		},
+	}
+
+	if err := writer.WriteSession(context.Background(), req); err != nil {
+		t.Fatalf("WriteSession rejects-only: %v", err)
+	}
+
+	sessionDir := filepath.Join(dir, "sessions", "session-rejects-only")
+	if _, err := os.Stat(filepath.Join(sessionDir, "screened_symbols.jsonl")); os.IsNotExist(err) {
+		t.Error("screened_symbols.jsonl should exist")
+	}
+}
+
+func TestSessionWriter_WriteSession_RereadAfterWrite(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+	writer := NewSessionWriter(store)
+	sessionID := "session-twice"
+
+	req := SessionWriteRequest{
+		Session: domain.ReplaySession{ID: sessionID},
+		Outcomes: []domain.RecommendationOutcome{
+			{AgentID: "a1", Symbol: "2330.TW", Side: domain.SideBuy, Window: "2026-04-22", Conviction: 80},
+		},
+		Summary: &domain.SessionSummary{
+			SessionID: sessionID, Regime: domain.RegimeNeutral, RecordedAt: time.Now(),
+		},
+	}
+	if err := writer.WriteSession(context.Background(), req); err != nil {
+		t.Fatalf("WriteSession: %v", err)
+	}
+
+	outcomes, err := store.LoadSessionOutcomes(sessionID)
+	if err != nil {
+		t.Fatalf("LoadSessionOutcomes: %v", err)
+	}
+	if len(outcomes) != 1 {
+		t.Fatalf("expected 1 outcome, got %d", len(outcomes))
+	}
+	if outcomes[0].AgentID != "a1" {
+		t.Errorf("AgentID = %q, want a1", outcomes[0].AgentID)
+	}
+
+	summaries, err := store.LoadSessionSummaries()
+	if err != nil {
+		t.Fatalf("LoadSessionSummaries: %v", err)
+	}
+	found := false
+	for _, s := range summaries {
+		if s.SessionID == sessionID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("session summary not found")
+	}
+}

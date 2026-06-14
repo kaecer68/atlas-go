@@ -56,3 +56,45 @@ func TestSystem_RecordSessionSummary_AfterRun(t *testing.T) {
 		t.Fatalf("RecordSessionSummary error: %v", err)
 	}
 }
+
+func TestSystem_AccessorMethods(t *testing.T) {
+	sys := newTestSystem(t)
+	// Exercise all accessor methods — some return nil for a minimal fixture.
+	_ = sys.Replay()
+	_ = sys.GetRegistry()
+	_ = sys.GetPolicy()
+	_ = sys.Registry()
+	_ = sys.GetPlugins()
+	_ = sys.GetExecutionPolicy()
+	_ = sys.GetCurrentStrategy()
+	_ = sys.GetStrategySelector()
+	_ = sys.GetStrategyAllocator()
+	_ = sys.GetStrategyEvolver()
+	_ = sys.Session()
+}
+
+func TestSystem_SetMethods(t *testing.T) {
+	sys := newTestSystem(t)
+
+	// SetEventBus
+	sys.SetEventBus(nil)
+	// SetDrawdownReporter
+	sys.SetDrawdownReporter(nil)
+	// SetVerboseTrace
+	sys.SetVerboseTrace(true)
+	// SetRepository
+	sys.SetRepository(nil)
+	// Phase3Controller
+	if sys.Phase3Controller() != nil {
+		t.Log("Phase3Controller is non-nil")
+	}
+	// MaturityTracker
+	if sys.MaturityTracker() != nil {
+		t.Log("MaturityTracker is non-nil")
+	}
+
+	// GetThresholdEngine
+	if sys.GetThresholdEngine() != nil {
+		t.Log("GetThresholdEngine is non-nil")
+	}
+}

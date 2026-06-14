@@ -31,6 +31,13 @@ func NewExchangeRateProvider() *ExchangeRateProvider {
 	}
 }
 
+// SetHTTPClient sets a custom HTTP client for tests.
+func (e *ExchangeRateProvider) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		e.client = client
+	}
+}
+
 func (e *ExchangeRateProvider) Name() string {
 	return "exchange_rate_api"
 }

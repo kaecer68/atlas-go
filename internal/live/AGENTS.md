@@ -59,7 +59,7 @@
 - **預設安全**：所有實盤相關功能預設為 dry-run，必須顯式啟用 live broker（`-allow-live-broker`、`-allow-real-signor`）。
 - **原子寫入**：狀態更新必須使用原子檔案寫入，禁止就地覆寫。
 - **Context 統一**：所有長時間運行的操作必須接受 `context.Context`，支援 graceful shutdown。
-- **BrokerMode 強制**：`staging-drill` 等測試工具必須強制設定 `cfg.BrokerMode = "paper"`。
+- **BrokerMode 強制**：測試工具必須強制設定 `cfg.BrokerMode = "paper"`。
 
 ---
 
@@ -72,7 +72,7 @@
 | **StateStore 非原子寫入** | 直接使用 `os.WriteFile` 覆寫狀態檔可能導致損毀，必須使用 `StateStore` 提供的原子寫入方法。 |
 | **忽略 CircuitBreaker** | 熔斷觸發後必須停止下單，不可繞過 `CircuitBreaker` 直接呼叫 `Broker`。 |
 | **Nonce 重複使用** | `nonce_store.go` 產生的 nonce 必須單次有效，禁止快取或重複使用。 |
-| **未隔離的 staging 測試** | `staging-drill` 若未使用臨時目錄，會污染生產 state。 |
+
 | **混合職責直接修改** | 本套件已知混合基礎設施與業務邏輯，新增功能時應註明屬於哪一類，為未來拆分做準備。 |
 
 ---
@@ -103,6 +103,4 @@ go test ./internal/live/...
 # Broker 簽名格式驗證（dummy 模式）
 go run ./cmd/experimental/validate-broker
 
-# Live 管線煙霧測試（12 秒，臨時狀態）
-go run ./cmd/experimental/staging-drill
 ```

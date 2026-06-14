@@ -217,7 +217,6 @@ type OrchestratorParameters struct {
 	PromotionHitRateThreshold        ParameterMetadata[float64]                       `json:"promotion_hitrate_threshold"`
 	RejectionSharpeThreshold         ParameterMetadata[float64]                       `json:"rejection_sharpe_threshold"`
 	RejectionHitRateThreshold        ParameterMetadata[float64]                       `json:"rejection_hitrate_threshold"`
-	SectorRotationBaseAllocations    ParameterMetadata[map[string]float64]            `json:"sector_rotation_base_allocations"`
 	SectorRotationMacroAdjustments   ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_macro_adjustments,omitempty"`
 	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments,omitempty"`
 	UseMLScoring                     ParameterMetadata[bool]                          `json:"use_ml_scoring"`
@@ -438,9 +437,6 @@ type ClassificationTreeConfig struct {
 // IndustryParameters holds tunable values for industry analysis, seasonality,
 // business cycle detection, and risk scoring.
 type IndustryParameters struct {
-	// Sector weights aligned with Taiwan market structure
-	SectorWeights ParameterMetadata[map[string]float64] `json:"sector_weights"`
-
 	// Business cycle thresholds per industry
 	CycleThresholds ParameterMetadata[map[string]CycleThresholdConfig] `json:"cycle_thresholds"`
 
@@ -1861,18 +1857,6 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("marketdata.retry_backoff_ms (%d) must be >= 0", p.Marketdata.RetryBackoffMs.Value)
 	}
 
-	if p.Industry.SectorWeights.Value != nil {
-		var totalWeight float64
-		for sector, weight := range p.Industry.SectorWeights.Value {
-			if weight < 0 || weight > 1 {
-				return fmt.Errorf("industry.sector_weights[%s] (%.3f) must be in [0,1]", sector, weight)
-			}
-			totalWeight += weight
-		}
-		if math.Abs(totalWeight-1.0) > 0.05 {
-			return fmt.Errorf("industry.sector_weights must sum to ~1.0, got %.3f", totalWeight)
-		}
-	}
 	if p.Industry.CustomerConcentrationLimit.Value < 0 || p.Industry.CustomerConcentrationLimit.Value > 1 {
 		return fmt.Errorf("industry.customer_concentration_limit (%.3f) must be in [0,1]", p.Industry.CustomerConcentrationLimit.Value)
 	}
@@ -2056,20 +2040,6 @@ func (p *ParametersConfig) Validate() error {
 			ps.ScoreExpansion, ps.ScoreRecovery, ps.ScoreMature, ps.ScoreRecession)
 	}
 
-	// Orchestrator new field constraints
-	if len(p.Orchestrator.SectorRotationBaseAllocations.Value) == 0 {
-		return fmt.Errorf("orchestrator.sector_rotation_base_allocations must not be empty")
-	}
-	var allocTotal float64
-	for sector, alloc := range p.Orchestrator.SectorRotationBaseAllocations.Value {
-		if alloc < 0 {
-			return fmt.Errorf("orchestrator.sector_rotation_base_allocations[%s] (%.2f) must be non-negative", sector, alloc)
-		}
-		allocTotal += alloc
-	}
-	if allocTotal < 0.99 || allocTotal > 1.01 {
-		return fmt.Errorf("orchestrator.sector_rotation_base_allocations must sum to 1.0, got %.2f", allocTotal)
-	}
 	if len(p.Orchestrator.SectorRotationMacroAdjustments.Value) == 0 {
 		return fmt.Errorf("orchestrator.sector_rotation_macro_adjustments must not be empty")
 	}

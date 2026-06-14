@@ -339,6 +339,130 @@ func TestAlertStore_Resolve_NotFound(t *testing.T) {
 	}
 }
 
+func TestAlertStore_DeleteWhere(t *testing.T) {
+	store := newTestStore(t)
+	a1 := makeAlert("alert-1")
+	a1.Rule = "cpu"
+	a2 := makeAlert("alert-2")
+	a2.Rule = "memory"
+	if err := store.Save(a1); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(a2); err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := store.DeleteWhere(func(r *domain.AlertRecord) bool { return r.Rule == "cpu" })
+	if err != nil {
+		t.Fatalf("DeleteWhere: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("deleted = %d, want 1", deleted)
+	}
+	all, _ := store.LoadAll()
+	if len(all) != 1 || all[0].ID != "alert-2" {
+		t.Errorf("expected only alert-2, got %+v", all)
+	}
+}
+
+func TestAlertStore_DeleteWhere_NoMatch(t *testing.T) {
+	store := newTestStore(t)
+	if err := store.Save(makeAlert("alert-1")); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := store.DeleteWhere(func(r *domain.AlertRecord) bool { return false })
+	if err != nil {
+		t.Fatalf("DeleteWhere: %v", err)
+	}
+	if deleted != 0 {
+		t.Errorf("deleted = %d, want 0", deleted)
+	}
+}
+
+func TestAlertStore_AcknowledgeWhere(t *testing.T) {
+	store := newTestStore(t)
+	a1 := makeAlert("alert-1")
+	a1.Rule = "cpu"
+	a2 := makeAlert("alert-2")
+	a2.Rule = "memory"
+	if err := store.Save(a1); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(a2); err != nil {
+		t.Fatal(err)
+	}
+
+	acked, err := store.AcknowledgeWhere(func(r *domain.AlertRecord) bool { return r.Rule == "cpu" }, "bot")
+	if err != nil {
+		t.Fatalf("AcknowledgeWhere: %v", err)
+	}
+	if acked != 1 {
+		t.Errorf("acked = %d, want 1", acked)
+	}
+	all, _ := store.LoadAll()
+	if !all[0].Acknowledged {
+		t.Error("expected alert-1 acknowledged")
+	}
+}
+
+func TestAlertStore_AcknowledgeWhere_NoMatch(t *testing.T) {
+	store := newTestStore(t)
+	if err := store.Save(makeAlert("alert-1")); err != nil {
+		t.Fatal(err)
+	}
+	acked, err := store.AcknowledgeWhere(func(r *domain.AlertRecord) bool { return false }, "bot")
+	if err != nil {
+		t.Fatalf("AcknowledgeWhere: %v", err)
+	}
+	if acked != 0 {
+		t.Errorf("acked = %d, want 0", acked)
+	}
+}
+
+func TestAlertStore_ResolveWhere(t *testing.T) {
+	store := newTestStore(t)
+	a1 := makeAlert("alert-1")
+	a1.Rule = "cpu"
+	a1.Status = domain.AlertStatusTriggered
+	a2 := makeAlert("alert-2")
+	a2.Rule = "cpu"
+	a2.Status = domain.AlertStatusAcknowledged
+	if err := store.Save(a1); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(a2); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, err := store.ResolveWhere(func(r *domain.AlertRecord) bool {
+		return r.Rule == "cpu" && r.Status == domain.AlertStatusTriggered
+	}, "bot")
+	if err != nil {
+		t.Fatalf("ResolveWhere: %v", err)
+	}
+	if resolved != 1 {
+		t.Errorf("resolved = %d, want 1", resolved)
+	}
+	all, _ := store.LoadAll()
+	if all[0].Status != domain.AlertStatusResolved {
+		t.Errorf("expected alert-1 resolved, got %s", all[0].Status)
+	}
+}
+
+func TestAlertStore_ResolveWhere_NoMatch(t *testing.T) {
+	store := newTestStore(t)
+	if err := store.Save(makeAlert("alert-1")); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := store.ResolveWhere(func(r *domain.AlertRecord) bool { return false }, "bot")
+	if err != nil {
+		t.Fatalf("ResolveWhere: %v", err)
+	}
+	if resolved != 0 {
+		t.Errorf("resolved = %d, want 0", resolved)
+	}
+}
+
 func TestAlertStore_DirCreationError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("skipping as root")

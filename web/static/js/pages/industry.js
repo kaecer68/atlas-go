@@ -11,10 +11,9 @@ import { getThemeColor } from "../shared/utils.js";
 
 export async function loadIndustryData() {
   try {
-    const [classification, allocationPlan, overview, seasonality, calendar, graph, cycleStatus] = await Promise.all(
+    const [classification, overview, seasonality, calendar, graph, cycleStatus] = await Promise.all(
       [
         silentGetJSON("/api/dashboard/industry-classification"),
-        silentGetJSON("/api/dashboard/sector-allocation-plan"),
         silentGetJSON("/api/dashboard/industry-overview"),
         silentGetJSON("/api/dashboard/industry-seasonality"),
         silentGetJSON("/api/dashboard/industry-seasonality-calendar"),
@@ -22,7 +21,6 @@ export async function loadIndustryData() {
         silentGetJSON("/api/dashboard/cycle-status-card"),
       ],
     );
-    renderIndustryMap(allocationPlan);
     populateShockSourceDropdown(classification);
     renderCycleStatusCard(cycleStatus && cycleStatus.card);
     renderIndustryLinkage(overview);
@@ -34,6 +32,96 @@ export async function loadIndustryData() {
   } catch (e) {
     console.error("loadIndustryData error:", e);
   }
+  await loadSectorAllocationPlan();
+  startSectorAllocationPolling();
+  bindSectorRefreshButton();
+}
+
+const SECTOR_POLL_INTERVAL_MS = 60000;
+const SECTOR_INDICATOR_TICK_MS = 1000;
+let sectorPollTimer = null;
+let sectorIndicatorTimer = null;
+let lastSectorUpdate = null;
+let sectorFetchInFlight = false;
+
+export async function loadSectorAllocationPlan() {
+  if (sectorFetchInFlight) return;
+  sectorFetchInFlight = true;
+  setSectorRefreshSpinning(true);
+  try {
+    const allocationPlan = await silentGetJSON("/api/dashboard/sector-allocation-plan");
+    renderIndustryMap(allocationPlan);
+    lastSectorUpdate = new Date();
+    updateLastUpdatedIndicator();
+  } catch (e) {
+    console.error("loadSectorAllocationPlan error:", e);
+  } finally {
+    sectorFetchInFlight = false;
+    setSectorRefreshSpinning(false);
+  }
+}
+
+function startSectorAllocationPolling() {
+  stopSectorAllocationPolling();
+  sectorPollTimer = setInterval(loadSectorAllocationPlan, SECTOR_POLL_INTERVAL_MS);
+  if (sectorIndicatorTimer == null) {
+    sectorIndicatorTimer = setInterval(updateLastUpdatedIndicator, SECTOR_INDICATOR_TICK_MS);
+  }
+  if (typeof document !== "undefined" && !document.__sectorVisibilityBound) {
+    document.addEventListener("visibilitychange", handleSectorVisibilityChange);
+    document.__sectorVisibilityBound = true;
+  }
+}
+
+function stopSectorAllocationPolling() {
+  if (sectorPollTimer != null) {
+    clearInterval(sectorPollTimer);
+    sectorPollTimer = null;
+  }
+}
+
+function handleSectorVisibilityChange() {
+  if (typeof document === "undefined") return;
+  if (document.hidden) {
+    stopSectorAllocationPolling();
+  } else {
+    loadSectorAllocationPlan();
+    startSectorAllocationPolling();
+  }
+}
+
+function updateLastUpdatedIndicator() {
+  const el = typeof document !== "undefined" ? document.getElementById("sectorLastUpdated") : null;
+  if (!el) return;
+  if (!lastSectorUpdate) {
+    el.textContent = "--";
+    el.title = "尚未載入";
+    return;
+  }
+  const secs = Math.max(0, Math.floor((Date.now() - lastSectorUpdate.getTime()) / 1000));
+  let text;
+  if (secs < 5) text = "剛剛";
+  else if (secs < 60) text = `${secs} 秒前`;
+  else if (secs < 3600) text = `${Math.floor(secs / 60)} 分鐘前`;
+  else text = `${Math.floor(secs / 3600)} 小時前`;
+  el.textContent = text;
+  el.title = lastSectorUpdate.toLocaleString();
+}
+
+function setSectorRefreshSpinning(spinning) {
+  const btn = typeof document !== "undefined" ? document.getElementById("sectorRefreshBtn") : null;
+  if (!btn) return;
+  btn.disabled = spinning;
+  btn.classList.toggle("spinning", spinning);
+}
+
+function bindSectorRefreshButton() {
+  const btn = typeof document !== "undefined" ? document.getElementById("sectorRefreshBtn") : null;
+  if (!btn || btn.__sectorBound) return;
+  btn.__sectorBound = true;
+  btn.addEventListener("click", () => {
+    loadSectorAllocationPlan();
+  });
 }
 
 export function renderIndustryMap(data) {

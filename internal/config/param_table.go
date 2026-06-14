@@ -1074,11 +1074,7 @@ var mapParamPrefixes = []mapParamPrefix{
 	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
 		cfg.Narrative.EventTTLMultiplier.Value = m
 	}},
-	{prefix: "industry_sector_weights_", getMap: func(cfg *ParametersConfig) map[string]float64 {
-		return cfg.Industry.SectorWeights.Value
-	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
-		cfg.Industry.SectorWeights.Value = m
-	}},
+	// DEPRECATED: industry_sector_weights_* table entry removed; use sector_allocation.base_weights
 	{prefix: "drawdown_sector_constraints_risk_off_", getMap: func(cfg *ParametersConfig) map[string]float64 {
 		return cfg.Drawdown.SectorConstraintsRiskOff.Value
 	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
@@ -1094,11 +1090,7 @@ var mapParamPrefixes = []mapParamPrefix{
 	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
 		cfg.Drawdown.SectorConstraintsSectorRotation.Value = m
 	}},
-	{prefix: "orchestrator_sector_rotation_base_allocations_", getMap: func(cfg *ParametersConfig) map[string]float64 {
-		return cfg.Orchestrator.SectorRotationBaseAllocations.Value
-	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
-		cfg.Orchestrator.SectorRotationBaseAllocations.Value = m
-	}},
+	// DEPRECATED: orchestrator_sector_rotation_base_allocations_* table entry removed; use sector_allocation.base_weights
 }
 
 // mapParamPrefix describes a dot-notation map parameter prefix and its accessors.

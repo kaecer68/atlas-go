@@ -1,6 +1,11 @@
 package apigateway
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+)
 
 func TestYahooMacroChannelAdapter_Metadata(t *testing.T) {
 	a := &YahooMacroChannelAdapter{}
@@ -26,12 +31,57 @@ func TestYahooMacroChannelAdapter_Metadata(t *testing.T) {
 }
 
 func TestYahooMacroChannelAdapter_RateLimit(t *testing.T) {
-	a := NewYahooMacroChannelAdapter(nil)
+	a := NewYahooMacroChannelAdapter(marketdata.NewYahooFinanceMacroProvider())
 	if a == nil {
 		t.Fatal("NewYahooMacroChannelAdapter returned nil")
 	}
 	limiter := a.RateLimit()
 	if limiter == nil {
 		t.Fatal("RateLimit() returned nil")
+	}
+}
+
+func TestYahooMacroChannelAdapter_Fetch(t *testing.T) {
+	writeParametersJSON(t, nil)
+	setupYahooMockServer(t)
+
+	a := NewYahooMacroChannelAdapter(marketdata.NewYahooFinanceMacroProvider())
+	res, err := a.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	if res == nil || len(res.Data) == 0 {
+		t.Fatal("Fetch() returned empty data")
+	}
+	if res.Meta.ChannelID != "us_yahoo" {
+		t.Errorf("ChannelID = %q, want us_yahoo", res.Meta.ChannelID)
+	}
+}
+
+func TestYahooMacroChannelAdapter_HealthCheck(t *testing.T) {
+	writeParametersJSON(t, nil)
+	setupYahooMockServer(t)
+
+	a := NewYahooMacroChannelAdapter(marketdata.NewYahooFinanceMacroProvider())
+	status, err := a.HealthCheck(context.Background())
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if status.Status != "ok" {
+		t.Errorf("Status = %q, want ok", status.Status)
+	}
+}
+
+func TestYahooMacroChannelAdapter_HealthCheck_Partial(t *testing.T) {
+	writeParametersJSON(t, nil)
+	setupYahooMockServer(t)
+
+	a := NewYahooMacroChannelAdapter(marketdata.NewYahooFinanceMacroProvider())
+	status, err := a.HealthCheck(context.Background())
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if status.Status != "ok" && status.Status != "warn" {
+		t.Errorf("Status = %q, want ok or warn", status.Status)
 	}
 }

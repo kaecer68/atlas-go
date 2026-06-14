@@ -1,6 +1,13 @@
 package apigateway
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+)
 
 func TestExportStatisticsChannelAdapter_Metadata(t *testing.T) {
 	a := &ExportStatisticsChannelAdapter{}
@@ -33,5 +40,71 @@ func TestExportStatisticsChannelAdapter_RateLimit(t *testing.T) {
 	limiter := a.RateLimit()
 	if limiter == nil {
 		t.Fatal("RateLimit() returned nil")
+	}
+}
+
+func TestExportStatisticsChannelAdapter_Fetch(t *testing.T) {
+	csvBody := "year,month,export_total,import_total,col4,col5,col6,col7,trade_balance\n" +
+		"115,5,1000000,900000,0,0,0,0,100000\n" +
+		"115,4,950000,850000,0,0,0,0,100000\n"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(csvBody))
+	}))
+	defer server.Close()
+
+	provider := marketdata.ExportStatisticsProviderWithClient(withClientMockTransport(server, "opendata.customs.gov.tw"), t.TempDir())
+	a := NewExportStatisticsChannelAdapter(provider)
+
+	res, err := a.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	if res == nil || len(res.Data) == 0 {
+		t.Fatal("Fetch() returned empty data")
+	}
+}
+
+func TestExportStatisticsChannelAdapter_HealthCheck(t *testing.T) {
+	csvBody := "year,month,export_total,import_total,col4,col5,col6,col7,trade_balance\n" +
+		"115,5,1000000,900000,0,0,0,0,100000\n" +
+		"115,4,950000,850000,0,0,0,0,100000\n"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(csvBody))
+	}))
+	defer server.Close()
+
+	provider := marketdata.ExportStatisticsProviderWithClient(withClientMockTransport(server, "opendata.customs.gov.tw"), t.TempDir())
+	a := NewExportStatisticsChannelAdapter(provider)
+
+	status, err := a.HealthCheck(context.Background())
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if status.Status != "ok" {
+		t.Errorf("Status = %q, want ok", status.Status)
+	}
+}
+
+func TestExportStatisticsChannelAdapter_HealthCheck_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	provider := marketdata.ExportStatisticsProviderWithClient(withClientMockTransport(server, "opendata.customs.gov.tw"), t.TempDir())
+	a := NewExportStatisticsChannelAdapter(provider)
+
+	status, err := a.HealthCheck(context.Background())
+	if err == nil {
+		t.Fatal("HealthCheck() expected error")
+	}
+	if status.Status != "error" {
+		t.Errorf("Status = %q, want error", status.Status)
 	}
 }

@@ -100,7 +100,7 @@ func (r *AdversarialScenarioRunner) agentScoreOverWindowWithMutation(agent domai
 		if mutate != nil {
 			quotes = mutate(quotes)
 		}
-		_, rawRecs, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
+		regime, rawRecs, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
 			r.registry, quotes, map[string]string{}, domain.ExecutionPolicy{RequireCROPass: false},
 		)
 		for _, rec := range rawRecs {
@@ -123,6 +123,7 @@ func (r *AdversarialScenarioRunner) agentScoreOverWindowWithMutation(agent domai
 				RecordedAt:          date,
 				FactorScores:        rec.FactorScores,
 				ConvictionBreakdown: rec.ConvictionBreakdown,
+				Regime:              string(regime),
 			})
 		}
 		_ = nextDate
