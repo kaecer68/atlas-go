@@ -135,3 +135,96 @@ func TestWithLastDataAt(t *testing.T) {
 		t.Fatalf("expected last_data_at %q, got %q", timestamp.Format(time.RFC3339), rec.LastDataAt)
 	}
 }
+
+func TestChannelHealthStore_RecordAndGet(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+
+	if err := store.Record("twse", "ok", "", WithLatencyMs(100)); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	rec := store.Get("twse")
+	if rec == nil {
+		t.Fatal("expected record")
+	}
+	if rec.Status != "ok" {
+		t.Errorf("status = %q, want ok", rec.Status)
+	}
+	if rec.LatencyMs != 100 {
+		t.Errorf("latency = %d, want 100", rec.LatencyMs)
+	}
+}
+
+func TestChannelHealthStore_Record_Error(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+
+	if err := store.Record("fugle", "error", "timeout", WithRecordsFetched(0)); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	rec := store.Get("fugle")
+	if rec == nil || rec.Status != "error" {
+		t.Fatalf("expected error record, got %+v", rec)
+	}
+	if rec.LastError != "timeout" {
+		t.Errorf("last_error = %q, want timeout", rec.LastError)
+	}
+}
+
+func TestChannelHealthStore_LoadExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "channel_health.json")
+	payload := `{"channels":{"twse":{"status":"ok","last_fetch_at":"2026-01-01T00:00:00Z"}}}`
+	if err := os.WriteFile(path, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewChannelHealthStore(dir)
+	rec := store.Get("twse")
+	if rec == nil || rec.Status != "ok" {
+		t.Fatalf("expected loaded record, got %+v", rec)
+	}
+}
+
+func TestChannelHealthStore_Alerts(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+
+	if err := store.Record("twse", "ok", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Record("fugle", "error", "down"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Record("finmind", "inactive", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	alerts := store.Alerts()
+	if len(alerts) != 1 || alerts[0].ChannelID != "fugle" {
+		t.Errorf("expected 1 alert for fugle, got %+v", alerts)
+	}
+}
+
+func TestChannelHealthStore_SyncAllToDB_NoPool(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+	if err := store.Record("twse", "ok", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SyncAllToDB(); err == nil {
+		t.Error("expected error when pool nil")
+	}
+}
+
+func TestRecordChannelFetchWithPool_NoPool(t *testing.T) {
+	dir := t.TempDir()
+	RecordChannelFetchWithPool(dir, "twse", "ok", "", nil, WithLastDataAt(time.Now()))
+
+	store := NewChannelHealthStore(dir)
+	if store.Get("twse") == nil {
+		t.Error("expected record")
+	}
+}

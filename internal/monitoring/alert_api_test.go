@@ -29,6 +29,7 @@ func seedAlerts(t *testing.T, store *AlertStore) {
 		Rule:      "rule_a",
 		Severity:  "WARNING",
 		Message:   "msg1",
+		Status:    domain.AlertStatusTriggered,
 	}
 	a2 := domain.AlertRecord{
 		ID:        "alert-2",
@@ -36,6 +37,7 @@ func seedAlerts(t *testing.T, store *AlertStore) {
 		Rule:      "rule_b",
 		Severity:  "ERROR",
 		Message:   "msg2",
+		Status:    domain.AlertStatusTriggered,
 	}
 	a3 := domain.AlertRecord{
 		ID:           "alert-3",
@@ -44,6 +46,7 @@ func seedAlerts(t *testing.T, store *AlertStore) {
 		Severity:     "CRITICAL",
 		Message:      "msg3",
 		Acknowledged: true,
+		Status:       domain.AlertStatusAcknowledged,
 	}
 	for _, a := range []domain.AlertRecord{a1, a2, a3} {
 		if err := store.Save(a); err != nil {
@@ -320,5 +323,200 @@ func TestAlertAPI_RegisterRoutes(t *testing.T) {
 		if rec.Code == http.StatusNotFound {
 			t.Errorf("route %s %s not registered", tt.method, tt.path)
 		}
+	}
+}
+
+func TestAlertAPI_Stats(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/stats", nil)
+	rec := httptest.NewRecorder()
+	api.handleStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var stats map[string]int
+	if err := json.NewDecoder(rec.Body).Decode(&stats); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if stats["total"] != 3 {
+		t.Errorf("total = %d, want 3", stats["total"])
+	}
+	if stats["warning"] != 1 {
+		t.Errorf("warning = %d, want 1", stats["warning"])
+	}
+	if stats["error"] != 1 {
+		t.Errorf("error = %d, want 1", stats["error"])
+	}
+	if stats["critical"] != 1 {
+		t.Errorf("critical = %d, want 1", stats["critical"])
+	}
+}
+
+func TestAlertAPI_Stats_MethodNotAllowed(t *testing.T) {
+	api, _ := newTestAlertAPI(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/stats", nil)
+	rec := httptest.NewRecorder()
+	api.handleStats(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want 405", rec.Code)
+	}
+}
+
+func TestAlertAPI_ListAlerts_FilterStatus(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts?status=triggered", nil)
+	rec := httptest.NewRecorder()
+	api.handleListAlerts(rec, req)
+
+	var resp struct {
+		Alerts []domain.AlertRecord `json:"alerts"`
+		Total  int                  `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 2 {
+		t.Errorf("total = %d, want 2", resp.Total)
+	}
+}
+
+func TestAlertAPI_ListAlerts_FilterSeverity(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts?severity=ERROR", nil)
+	rec := httptest.NewRecorder()
+	api.handleListAlerts(rec, req)
+
+	var resp struct {
+		Alerts []domain.AlertRecord `json:"alerts"`
+		Total  int                  `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Errorf("total = %d, want 1", resp.Total)
+	}
+	if len(resp.Alerts) != 1 || resp.Alerts[0].Severity != "ERROR" {
+		t.Errorf("expected one ERROR alert, got %+v", resp.Alerts)
+	}
+}
+
+func TestAlertAPI_ListAlerts_FilterRule(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts?rule=rule_a", nil)
+	rec := httptest.NewRecorder()
+	api.handleListAlerts(rec, req)
+
+	var resp struct {
+		Alerts []domain.AlertRecord `json:"alerts"`
+		Total  int                  `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Errorf("total = %d, want 1", resp.Total)
+	}
+}
+
+func TestAlertAPI_ListAlerts_FilterTimeRange(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	from := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)
+	to := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339)
+	url := "/api/alerts?from=" + from + "&to=" + to
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	rec := httptest.NewRecorder()
+	api.handleListAlerts(rec, req)
+
+	var resp struct {
+		Alerts []domain.AlertRecord `json:"alerts"`
+		Total  int                  `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 3 {
+		t.Errorf("total = %d, want 3", resp.Total)
+	}
+}
+
+func TestAlertAPI_ListAlerts_Pagination(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts?page=2&page_size=1", nil)
+	rec := httptest.NewRecorder()
+	api.handleListAlerts(rec, req)
+
+	var resp struct {
+		Alerts []domain.AlertRecord `json:"alerts"`
+		Total  int                  `json:"total"`
+		Page   int                  `json:"page"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 3 {
+		t.Errorf("total = %d, want 3", resp.Total)
+	}
+	if resp.Page != 2 {
+		t.Errorf("page = %d, want 2", resp.Page)
+	}
+	if len(resp.Alerts) != 1 {
+		t.Errorf("alerts len = %d, want 1", len(resp.Alerts))
+	}
+}
+
+func TestAlertAPI_ListAlerts_PageSizeCapped(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts?page_size=9999", nil)
+	rec := httptest.NewRecorder()
+	api.handleListAlerts(rec, req)
+
+	var resp struct {
+		PageSize int `json:"page_size"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.PageSize != 50 {
+		t.Errorf("page_size = %d, want 50 (capped)", resp.PageSize)
+	}
+}
+
+func TestAlertAPI_ListAlerts_InvalidPageSize(t *testing.T) {
+	api, store := newTestAlertAPI(t)
+	seedAlerts(t, store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts?page_size=abc", nil)
+	rec := httptest.NewRecorder()
+	api.handleListAlerts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp struct {
+		PageSize int `json:"page_size"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.PageSize != 50 {
+		t.Errorf("page_size = %d, want 50 (default)", resp.PageSize)
 	}
 }
