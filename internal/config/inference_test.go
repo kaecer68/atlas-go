@@ -271,7 +271,6 @@ func TestInferenceEngineMapParameterRoundTrip(t *testing.T) {
 		{"optimizer_factor_weights_momentum", "optimizer_factor_weights_momentum", 0.25},
 		{"risk_sector_constraints_risk_off_semiconductor", "risk_sector_constraints_risk_off_semiconductor", 0.10},
 		{"narrative_event_ttl_multiplier_bull", "narrative_event_ttl_multiplier_bull", 1.5},
-		{"industry_sector_weights_semiconductor", "industry_sector_weights_semiconductor", 0.30},
 	}
 
 	for _, tt := range tests {

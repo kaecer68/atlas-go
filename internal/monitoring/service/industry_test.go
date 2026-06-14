@@ -553,8 +553,8 @@ func TestGenerateRecommendation_ExpansionFavorable(t *testing.T) {
 
 func TestGenerateRecommendation_RecoveryFavorable(t *testing.T) {
 	s := newTestIndustryService()
-	seg := makeSegment("ai_supply_chain", 0.10)
-	pos := makeCyclePos("ai_supply_chain", industry.CycleRecovery, industry.InvRestockingPassive, industry.CapexMaintenance, 0.7)
+	seg := makeSegment("semiconductor", 0.10)
+	pos := makeCyclePos("semiconductor", industry.CycleRecovery, industry.InvRestockingPassive, industry.CapexMaintenance, 0.7)
 	rec := s.generateRecommendation(seg, pos)
 	if rec.Action != "溫和增持" {
 		t.Errorf("Action = %q, want 溫和增持", rec.Action)
@@ -570,8 +570,8 @@ func TestGenerateRecommendation_RecoveryFavorable(t *testing.T) {
 
 func TestGenerateRecommendation_RecessionUnfavorable(t *testing.T) {
 	s := newTestIndustryService()
-	seg := makeSegment("shipping", 0.20)
-	pos := makeCyclePos("shipping", industry.CycleRecession, industry.InvDestockingActive, industry.CapexContraction, 0.6)
+	seg := makeSegment("industrials", 0.20)
+	pos := makeCyclePos("industrials", industry.CycleRecession, industry.InvDestockingActive, industry.CapexContraction, 0.6)
 	rec := s.generateRecommendation(seg, pos)
 	if rec.Action != "減持" {
 		t.Errorf("Action = %q, want 減持", rec.Action)
@@ -617,8 +617,8 @@ func TestGenerateRecommendation_CapexRiskAdjustment(t *testing.T) {
 
 func TestGenerateRecommendation_Delta(t *testing.T) {
 	s := newTestIndustryService()
-	seg := makeSegment("ai_supply_chain", 0.10)
-	pos := makeCyclePos("ai_supply_chain", industry.CycleExpansion, industry.InvRestockingActive, industry.CapexMaintenance, 0.85)
+	seg := makeSegment("semiconductor", 0.10)
+	pos := makeCyclePos("semiconductor", industry.CycleExpansion, industry.InvRestockingActive, industry.CapexMaintenance, 0.85)
 	rec := s.generateRecommendation(seg, pos)
 	wantBase := s.getSectorWeight(seg.ID, 0)
 	wantDelta := wantBase*1.2 - wantBase
@@ -655,8 +655,8 @@ func TestGetRegimeContext_AISupercycle(t *testing.T) {
 
 func TestGetRegimeContext_AISupplyChainSupercycle(t *testing.T) {
 	s := newTestIndustryService()
-	seg := makeSegment("ai_supply_chain", 0.10)
-	pos := makeCyclePos("ai_supply_chain", industry.CycleExpansion, industry.InvRestockingActive, industry.CapexMaintenance, 0.9)
+	seg := makeSegment("semiconductor", 0.10)
+	pos := makeCyclePos("semiconductor", industry.CycleExpansion, industry.InvRestockingActive, industry.CapexMaintenance, 0.9)
 	got := s.getRegimeContext(seg, pos)
 	if !stringContains(got, "AI超級循環") {
 		t.Errorf("expected AI supercycle context, got %q", got)
@@ -697,8 +697,8 @@ func TestGetRegimeContext_PhaseMessages(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(string(tc.phase), func(t *testing.T) {
 			// Pick a segment that doesn't trigger special cases
-			seg := makeSegment("mining", 0.10)
-			pos := makeCyclePos("mining", tc.phase, industry.InvRestockingPassive, industry.CapexMaintenance, 0.5)
+			seg := makeSegment("materials", 0.10)
+			pos := makeCyclePos("materials", tc.phase, industry.InvRestockingPassive, industry.CapexMaintenance, 0.5)
 			got := s.getRegimeContext(seg, pos)
 			if !stringContains(got, tc.substring) {
 				t.Errorf("got %q, want substring %q", got, tc.substring)

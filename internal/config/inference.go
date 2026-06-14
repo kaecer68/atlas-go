@@ -341,15 +341,9 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Industry.SectorWeights
-	if strings.HasPrefix(name, "industry_sector_weights_") {
-		key := strings.TrimPrefix(name, "industry_sector_weights_")
-		if cfg.Industry.SectorWeights.Value != nil {
-			if v, ok := cfg.Industry.SectorWeights.Value[key]; ok {
-				return &v
-			}
-		}
-		return nil
-	}
+	// DEPRECATED: industry_sector_weights_* parameter paths removed in favor of
+	// sector_allocation.base_weights (see internal/sectorallocation). Returns nil
+	// for backward compatibility; callers should query the sectorallocation module.
 	// Drawdown.SectorConstraintsRiskOff
 	if strings.HasPrefix(name, "drawdown_sector_constraints_risk_off_") {
 		key := strings.TrimPrefix(name, "drawdown_sector_constraints_risk_off_")
@@ -381,15 +375,9 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Orchestrator.SectorRotationBaseAllocations
-	if strings.HasPrefix(name, "orchestrator_sector_rotation_base_allocations_") {
-		key := strings.TrimPrefix(name, "orchestrator_sector_rotation_base_allocations_")
-		if cfg.Orchestrator.SectorRotationBaseAllocations.Value != nil {
-			if v, ok := cfg.Orchestrator.SectorRotationBaseAllocations.Value[key]; ok {
-				return &v
-			}
-		}
-		return nil
-	}
+	// DEPRECATED: orchestrator_sector_rotation_base_allocations_* parameter paths
+	// removed in favor of sector_allocation.base_weights (see internal/sectorallocation).
+	// Returns nil for backward compatibility; callers should query the sectorallocation module.
 	return nil
 }
 
@@ -683,14 +671,9 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Industry.SectorWeights
-	if strings.HasPrefix(name, "industry_sector_weights_") {
-		key := strings.TrimPrefix(name, "industry_sector_weights_")
-		if cfg.Industry.SectorWeights.Value == nil {
-			cfg.Industry.SectorWeights.Value = make(map[string]float64)
-		}
-		cfg.Industry.SectorWeights.Value[key] = value
-		return true
-	}
+	// DEPRECATED: industry_sector_weights_* write paths removed. Use
+	// sector_allocation.base_weights instead. Returns false to indicate the
+	// parameter name is no longer recognized.
 	// Drawdown.SectorConstraintsRiskOff
 	if strings.HasPrefix(name, "drawdown_sector_constraints_risk_off_") {
 		key := strings.TrimPrefix(name, "drawdown_sector_constraints_risk_off_")
@@ -719,14 +702,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Orchestrator.SectorRotationBaseAllocations
-	if strings.HasPrefix(name, "orchestrator_sector_rotation_base_allocations_") {
-		key := strings.TrimPrefix(name, "orchestrator_sector_rotation_base_allocations_")
-		if cfg.Orchestrator.SectorRotationBaseAllocations.Value == nil {
-			cfg.Orchestrator.SectorRotationBaseAllocations.Value = make(map[string]float64)
-		}
-		cfg.Orchestrator.SectorRotationBaseAllocations.Value[key] = value
-		return true
-	}
+	// DEPRECATED: orchestrator_sector_rotation_base_allocations_* write paths
+	// removed. Use sector_allocation.base_weights instead. Returns false.
 	return false
 }
 

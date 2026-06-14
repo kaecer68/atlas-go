@@ -2346,35 +2346,6 @@
         "last_validated": "2026-05-04T00:00:00Z"
       }
     },
-    "sector_rotation_base_allocations": {
-      "value": {
-        "ai_supply_chain": 0.15,
-        "cash": 0.1,
-        "consumer": 0.04,
-        "defensive": 0.1,
-        "electronics": 0.05,
-        "energy": 0.04,
-        "financials": 0.11,
-        "industrial": 0.04,
-        "leo_satellite": 0.05,
-        "robotics": 0.06,
-        "semiconductor": 0.19,
-        "shipping": 0.07
-      },
-      "rationale": "[DEPRECATED 2026-06-14, replaced by sector_allocation.base_weights] Baseline sector allocation weights representing Taiwan equity market structure. Kept for backward compatibility only; the single authoritative source is internal/sectorallocation/.",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TWSE sector weights + engine.json historical baseline",
-        "evidence_quality": "medium",
-        "update_policy": "backtest_calibration",
-        "validation_method": "grid_search_sweep",
-        "dependencies": [
-          "engine.json sector_rotation.base_allocations (deprecated)"
-        ],
-        "last_validated": "2026-05-21T00:00:00Z"
-      }
-    },
     "sector_rotation_macro_adjustments": {
       "value": {
         "high_risk": {
@@ -3936,34 +3907,6 @@
     }
   },
   "industry": {
-    "sector_weights": {
-      "value": {
-        "ai_supply_chain": 0.17,
-        "consumer": 0.06,
-        "electronics": 0.06,
-        "energy": 0.05,
-        "financials": 0.14,
-        "industrial": 0.06,
-        "leo_satellite": 0.05,
-        "mining": 0.05,
-        "robotics": 0.06,
-        "semiconductor": 0.22,
-        "shipping": 0.08
-      },
-      "rationale": "[DEPRECATED 2026-06-14, replaced by sector_allocation.base_weights] Industry classification reference weights aligned with DefaultClassification() Level 1 segments. Kept for backward compatibility only; the single authoritative source is internal/sectorallocation/.",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "DefaultClassification() in internal/industry/types.go",
-        "evidence_quality": "medium",
-        "update_policy": "manual",
-        "validation_method": "cross_reference",
-        "dependencies": [
-          "internal/industry/types.go IndustrySegment.Weight (deprecated fallback)"
-        ],
-        "last_validated": "2026-05-21T00:00:00Z"
-      }
-    },
     "cycle_thresholds": {
       "value": {
         "ai_supply_chain": {

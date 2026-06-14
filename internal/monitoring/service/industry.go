@@ -437,7 +437,7 @@ type IndustryOverview struct {
 }
 
 func (s *IndustryService) getSectorWeight(segID string, fallback float64) float64 {
-	if w, ok := config.GetParametersConfig().Industry.SectorWeights.Value[segID]; ok {
+	if w, ok := config.GetParametersConfig().SectorAllocation.BaseWeights[segID]; ok {
 		return w
 	}
 	return fallback
@@ -445,7 +445,7 @@ func (s *IndustryService) getSectorWeight(segID string, fallback float64) float6
 
 func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview {
 	segments := s.Classifier.GetAllSegments()
-	sectorWeights := config.GetParametersConfig().Industry.SectorWeights.Value
+	sectorWeights := config.GetParametersConfig().SectorAllocation.BaseWeights
 	weightFloor := config.GetParametersConfig().Industry.WeightFloor.Value
 	linkageImpact := config.GetParametersConfig().Industry.LinkageWeightImpact.Value
 
