@@ -47,8 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // === Page: evolution_panel ===
   document.getElementById('evView-compact').addEventListener('click', () => window._evSwitch('compact'));
-  document.getElementById('evView-detailed').addEventListener('click', () => window._evSwitch('detailed'));
-  document.getElementById('evView-categorical').addEventListener('click', () => window._evSwitch('categorical'));
+  document.getElementById('evView-ai-analysis').addEventListener('click', () => window._evSwitch('ai-analysis'));
 
   // === Page: datachannels ===
   document.getElementById('btnIngestChannels').addEventListener('click', () => window.triggerChannelsIngest());

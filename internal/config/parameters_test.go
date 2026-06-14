@@ -559,3 +559,117 @@ func TestParameterMetadata_RoundTrip(t *testing.T) {
 		t.Errorf("last_calibrated not preserved")
 	}
 }
+
+func TestSectorAllocationConfig_Defaults(t *testing.T) {
+	cfg := DefaultParametersConfig()
+
+	if cfg.SectorAllocation.BaseWeights == nil {
+		t.Errorf("SectorAllocation.BaseWeights is nil, want non-nil map")
+	}
+
+	if cfg.SectorAllocation.BaseWeights["semiconductor"] <= 0 {
+		t.Errorf("SectorAllocation.BaseWeights[semiconductor] = %f, want > 0", cfg.SectorAllocation.BaseWeights["semiconductor"])
+	}
+
+	if cfg.SectorAllocation.WeightFloor <= 0 {
+		t.Errorf("SectorAllocation.WeightFloor = %f, want > 0", cfg.SectorAllocation.WeightFloor)
+	}
+
+	if cfg.SectorAllocation.CycleWeight != 1.0 {
+		t.Errorf("SectorAllocation.CycleWeight = %f, want 1.0", cfg.SectorAllocation.CycleWeight)
+	}
+	if cfg.SectorAllocation.SeasonalWeight != 1.0 {
+		t.Errorf("SectorAllocation.SeasonalWeight = %f, want 1.0", cfg.SectorAllocation.SeasonalWeight)
+	}
+	if cfg.SectorAllocation.LinkageWeight != 1.0 {
+		t.Errorf("SectorAllocation.LinkageWeight = %f, want 1.0", cfg.SectorAllocation.LinkageWeight)
+	}
+	if cfg.SectorAllocation.NarrativeWeight != 1.0 {
+		t.Errorf("SectorAllocation.NarrativeWeight = %f, want 1.0", cfg.SectorAllocation.NarrativeWeight)
+	}
+	if cfg.SectorAllocation.MacroWeight != 1.0 {
+		t.Errorf("SectorAllocation.MacroWeight = %f, want 1.0", cfg.SectorAllocation.MacroWeight)
+	}
+	if cfg.SectorAllocation.FactorWeight != 1.0 {
+		t.Errorf("SectorAllocation.FactorWeight = %f, want 1.0", cfg.SectorAllocation.FactorWeight)
+	}
+}
+
+func TestSectorAllocationConfig_ParameterMetadata(t *testing.T) {
+	cfg := DefaultParametersConfig()
+
+	if cfg.SectorAllocation.Rationale == "" {
+		t.Errorf("SectorAllocation.Rationale is empty, want non-empty rationale")
+	}
+	if cfg.SectorAllocation.Source == "" {
+		t.Errorf("SectorAllocation.Source is empty, want non-empty source")
+	}
+	if cfg.SectorAllocation.Citation == nil {
+		t.Errorf("SectorAllocation.Citation is nil, want non-nil citation")
+	} else {
+		if cfg.SectorAllocation.Citation.EvidenceQuality == "" {
+			t.Errorf("SectorAllocation.Citation.EvidenceQuality is empty")
+		}
+		if cfg.SectorAllocation.Citation.SourceReference == "" {
+			t.Errorf("SectorAllocation.Citation.SourceReference is empty")
+		}
+	}
+}
+
+func TestSectorAllocationConfig_DerivationFactors(t *testing.T) {
+	cfg := DefaultParametersConfig()
+
+	if cfg.SectorAllocation.DerivationFactors == nil {
+		t.Errorf("SectorAllocation.DerivationFactors is nil, want empty map or populated map")
+	}
+}
+
+func TestLoadParametersConfig_FallbackPriceTargetsDefaultsMerged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "parameters_partial.json")
+
+	// Start from defaults so all required sections are valid, then override
+	// FallbackPriceTargets with a partial map that omits _default.
+	cfg := DefaultParametersConfig()
+	cfg.FallbackPriceTargets = map[string]FallbackPriceTarget{
+		"technical_breakout": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.12},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.93},
+		},
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	loaded, err := LoadParametersConfig(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	defaultEntry, ok := loaded.FallbackPriceTargets["_default"]
+	if !ok {
+		t.Fatalf("_default key not merged into FallbackPriceTargets")
+	}
+	if defaultEntry.TargetMultiplier.Value != 1.05 {
+		t.Errorf("_default target multiplier = %v, want 1.05", defaultEntry.TargetMultiplier.Value)
+	}
+	if defaultEntry.StopLossMultiplier.Value != 0.95 {
+		t.Errorf("_default stop-loss multiplier = %v, want 0.95", defaultEntry.StopLossMultiplier.Value)
+	}
+
+	customEntry, ok := loaded.FallbackPriceTargets["technical_breakout"]
+	if !ok {
+		t.Fatalf("technical_breakout key not preserved")
+	}
+	if customEntry.TargetMultiplier.Value != 1.12 {
+		t.Errorf("technical_breakout target multiplier = %v, want 1.12", customEntry.TargetMultiplier.Value)
+	}
+	if customEntry.StopLossMultiplier.Value != 0.93 {
+		t.Errorf("technical_breakout stop-loss multiplier = %v, want 0.93", customEntry.StopLossMultiplier.Value)
+	}
+}

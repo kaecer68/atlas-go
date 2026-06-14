@@ -85,6 +85,7 @@
 | `stress` | 壓力測試場景 — `RunScenario()` | — | 情境模擬 |
 | `swarm` | MiroFish swarm 模擬 + GARCH 波動率 + 策略進化 + API + Agent Skill | `Swarm` | 演進中 |
 | `llm_annotator` | LLM 歸因標註 — 自然語言解釋 StrategyFrame 失效原因（Kimi/Moonshot API） | `Annotator`, `KimiClient`, `MockAnnotator`, `FailureContext` | 需 `LLM_ANNOTATOR_API_KEY` 環境變數（透過 apigateway `config.GetSecret` 取得），opt-in 啟用（空時 `/api/strategies/{id}/annotate` 回 503） |
+| `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（base × cycle × seasonal × linkage × narrative × macro × factor） | `WeightEngine`, `ComputeWeights()`, `ComputeWeight()`, 6 `InputProvider` adapters | 取代硬編碼 12 個 switch case；deprecated: `monitoring/service.calculateWeightDerivation` |
 
 ---
 

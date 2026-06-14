@@ -40,6 +40,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		Engine:               defaultEngineParameters(),
 		RSITw:                defaultRSITwParameters(),
 		Tax:                  defaultTaxParameters(),
+		SectorAllocation:     deriveDefaultSectorAllocationConfig(),
 	}
 }
 
@@ -3536,5 +3537,110 @@ func defaultFallbackPriceTargets() map[string]FallbackPriceTarget {
 			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.05, Rationale: "5% default upside target", Source: SourceHeuristic},
 			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% default stop-loss", Source: SourceHeuristic},
 		},
+	}
+}
+
+func deriveDefaultSectorAllocationConfig() SectorAllocationConfig {
+	return SectorAllocationConfig{
+		Rationale: "Multi-factor sector weight model: base × cycle × seasonal × linkage × narrative × macro × factor. Replaces three independent hard-coded weight sources (industry.calculateWeightDerivation, portfolio.sector_weights, orchestrator.base_allocations) with one auditable pipeline.",
+		Source:    SourceHeuristic,
+		Citation: &ParameterCitation{
+			SourceType:       "heuristic",
+			SourceReference:  "internal/sectorallocation/ + internal/industry/ + internal/portfolio/ unification",
+			EvidenceQuality:  "medium",
+			UpdatePolicy:     "recalibrate when backtest drift > 5% over 20 sessions",
+			ValidationMethod: "Compare adjusted weights against historical regime accuracy (n>=30 sessions)",
+			Dependencies:     []string{"darwinian.weight_min/max", "engine.sector_rotation.base_allocations"},
+			LastValidated:    "2026-06-14",
+		},
+		BaseWeights: map[string]float64{
+			"semiconductor": 0.30,
+			"financials":    0.14,
+			"electronics":   0.10,
+			"materials":     0.08,
+			"industrials":   0.07,
+			"consumer":      0.06,
+			"healthcare":    0.05,
+			"energy":        0.05,
+			"telecom":       0.05,
+			"utilities":     0.04,
+			"real_estate":   0.04,
+			"_cash_reserve": 0.02,
+		},
+		DerivationFactors: map[string][]WeightFactorConfig{
+			"semiconductor": {
+				{Factor: "出口比重", Weight: 0.35, Source: "財政部海關統計", Evidence: "佔台灣總出口 35%+，晶片法案受惠"},
+				{Factor: "景氣循環", Weight: 0.25, Source: "國發會景氣對策信號", Evidence: "與全球半導體銷售週期同步"},
+				{Factor: "AI需求", Weight: 0.20, Source: "Gartner / TSMA 預估", Evidence: "AI 加速器 2025-2027 CAGR >40%"},
+				{Factor: "地緣政治", Weight: 0.20, Source: "美中科技戰 / 出口管制", Evidence: "CHIPS Act + 台灣風險溢價"},
+			},
+			"financials": {
+				{Factor: "升息循環", Weight: 0.40, Source: "Fed 政策利率 / 台灣央行", Evidence: "淨利差擴張"},
+				{Factor: "信用品質", Weight: 0.30, Source: "金管會逾放比", Evidence: "M2 / 房貸 / 企業債"},
+				{Factor: "保險需求", Weight: 0.20, Source: "保發中心", Evidence: "高利率保單吸引力回升"},
+				{Factor: "台股量能", Weight: 0.10, Source: "TWSE 月成交", Evidence: "經紀/手續費收入"},
+			},
+			"electronics": {
+				{Factor: "消費電子循環", Weight: 0.35, Source: "全球 PMI / 手機出貨", Evidence: "iPhone / 筆電 / 平板"},
+				{Factor: "車用電子", Weight: 0.30, Source: "EV 滲透率 / Tier1 訂單", Evidence: "ADAS / 車載娛樂"},
+				{Factor: "伺服器 / 資料中心", Weight: 0.25, Source: "雲端資本支出", Evidence: "Hyperscaler capex 成長"},
+				{Factor: "存儲 / 被動元件", Weight: 0.10, Source: "DRAM / MLCC 報價", Evidence: "週期性觸底回升"},
+			},
+			"materials": {
+				{Factor: "原物料價格", Weight: 0.40, Source: "CRB / LME / 鋼鐵指數", Evidence: "鐵礦 / 銅 / 鋁"},
+				{Factor: "中國需求", Weight: 0.30, Source: "中國 PMI / 地產", Evidence: "基礎建設 + 房地產"},
+				{Factor: "匯率", Weight: 0.20, Source: "TWD/USD", Evidence: "出口競爭力"},
+				{Factor: "ESG / 碳關稅", Weight: 0.10, Source: "CBAM 進度", Evidence: "高碳排產業成本上升"},
+			},
+			"industrials": {
+				{Factor: "資本支出循環", Weight: 0.35, Source: "全球半導體 capex", Evidence: "廠房 / 設備 / 自動化"},
+				{Factor: "自動化需求", Weight: 0.25, Source: "工業機器人出貨", Evidence: "缺工 + 智慧製造"},
+				{Factor: "航運 / 物流", Weight: 0.25, Source: "SCFI / BDI / 運價", Evidence: "全球貿易量"},
+				{Factor: "軍工 / 政府支出", Weight: 0.15, Source: "國防預算", Evidence: "地緣政治升溫"},
+			},
+			"consumer": {
+				{Factor: "內需景氣", Weight: 0.40, Source: "台灣零售 / 餐飲營收", Evidence: "可支配所得 / 消費信心"},
+				{Factor: "觀光復甦", Weight: 0.25, Source: "來台旅客", Evidence: "跨境消費回升"},
+				{Factor: "電商 / 跨境", Weight: 0.20, Source: "momo / PChome / 蝦皮", Evidence: "滲透率提升"},
+				{Factor: "薪資成長", Weight: 0.15, Source: "主計處經常性薪資", Evidence: "基本工資調升"},
+			},
+			"healthcare": {
+				{Factor: "人口老化", Weight: 0.35, Source: "國發會人口推估", Evidence: "65+ 比例突破 20%"},
+				{Factor: "新藥 / CDMO", Weight: 0.30, Source: "TFDA / FDA 核准", Evidence: "海外授權金收入"},
+				{Factor: "醫材出口", Weight: 0.20, Source: "醫材公會", Evidence: "高值化醫材成長"},
+				{Factor: "健保政策", Weight: 0.15, Source: "健保署", Evidence: "給付 / 核價制度"},
+			},
+			"energy": {
+				{Factor: "國際油價", Weight: 0.40, Source: "Brent / WTI", Evidence: "OPEC+ 產量政策"},
+				{Factor: "綠能轉型", Weight: 0.30, Source: "離岸風電 / 太陽能裝置量", Evidence: "RE100 企業需求"},
+				{Factor: "地緣政治", Weight: 0.20, Source: "中東局勢 / 俄烏", Evidence: "能源安全溢價"},
+				{Factor: "碳權 / 碳交易", Weight: 0.10, Source: "國際碳價", Evidence: "減碳成本內部化"},
+			},
+			"telecom": {
+				{Factor: "5G / 寬頻滲透", Weight: 0.40, Source: "NCC", Evidence: "FTTH / 行動上網"},
+				{Factor: "資費競爭", Weight: 0.25, Source: "NCC 資費審查", Evidence: "ARPU 變化"},
+				{Factor: "企業專網 / IDC", Weight: 0.20, Source: "企業用戶", Evidence: "AI / 雲端需求"},
+				{Factor: "股利穩定度", Weight: 0.15, Source: "現金股利殖利率", Evidence: "防禦性配置"},
+			},
+			"utilities": {
+				{Factor: "電價 / 費率", Weight: 0.40, Source: "經濟部電價審議", Evidence: "成本反映機制"},
+				{Factor: "綠能投資", Weight: 0.25, Source: "再生能源占比", Evidence: "2025 再生能源 20% 目標"},
+				{Factor: "資本支出", Weight: 0.20, Source: "台電 / 民營電廠", Evidence: "電網強韌 + 儲能"},
+				{Factor: "防禦性需求", Weight: 0.15, Source: "高股息 / 低波動", Evidence: "退休 / 收益型配置"},
+			},
+			"real_estate": {
+				{Factor: "利率敏感度", Weight: 0.40, Source: "央行利率 / 房貸", Evidence: "房貸利率 >2.5% 衝擊"},
+				{Factor: "政策調控", Weight: 0.25, Source: "信用管制 / 囤房稅", Evidence: "選擇性信用管制"},
+				{Factor: "供需結構", Weight: 0.20, Source: "使照 / 開工", Evidence: "人口集中度"},
+				{Factor: "商辦 / 廠辦", Weight: 0.15, Source: "空置率 / 租金", Evidence: "科技業擴廠需求"},
+			},
+		},
+		CycleWeight:     1.0,
+		SeasonalWeight:  1.0,
+		LinkageWeight:   1.0,
+		NarrativeWeight: 1.0,
+		MacroWeight:     1.0,
+		FactorWeight:    1.0,
+		WeightFloor:     0.01,
 	}
 }

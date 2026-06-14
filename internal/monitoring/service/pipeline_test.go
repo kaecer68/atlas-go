@@ -942,6 +942,57 @@ func TestComputeAgentRegimeBreakdown(t *testing.T) {
 	}
 }
 
+func TestComputeAgentRegimeBreakdown_PerOutcomeRegime(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "target", Regime: string(domain.RegimeRiskOn), ForwardReturn: 0.10, Hit: true},
+		{AgentID: "target", Regime: string(domain.RegimeRiskOn), ForwardReturn: -0.02, Hit: false},
+		{AgentID: "target", Regime: string(domain.RegimeRiskOff), ForwardReturn: 0.04, Hit: true},
+		{AgentID: "target", Regime: "", ForwardReturn: 0.05, Hit: true},                         // fallback regime
+		{AgentID: "other", Regime: string(domain.RegimeRiskOn), ForwardReturn: 0.99, Hit: true}, // ignored
+	}
+	got := computeAgentRegimeBreakdown(outcomes, "target", "default")
+	if got == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+	if len(got.Regimes) != 3 {
+		t.Fatalf("expected 3 regime entries, got %d", len(got.Regimes))
+	}
+
+	on, ok := got.Regimes[string(domain.RegimeRiskOn)]
+	if !ok {
+		t.Fatal("expected 'RISK_ON' regime entry")
+	}
+	if on.SessionCount != 2 {
+		t.Errorf("RISK_ON SessionCount = %d, want 2", on.SessionCount)
+	}
+	wantReturnRiskOn := 0.10 - 0.02
+	if on.TotalReturn < wantReturnRiskOn-1e-9 || on.TotalReturn > wantReturnRiskOn+1e-9 {
+		t.Errorf("RISK_ON TotalReturn = %v, want %v", on.TotalReturn, wantReturnRiskOn)
+	}
+
+	off, ok := got.Regimes[string(domain.RegimeRiskOff)]
+	if !ok {
+		t.Fatal("expected 'RISK_OFF' regime entry")
+	}
+	if off.SessionCount != 1 {
+		t.Errorf("RISK_OFF SessionCount = %d, want 1", off.SessionCount)
+	}
+	if off.TotalReturn < 0.04-1e-9 || off.TotalReturn > 0.04+1e-9 {
+		t.Errorf("RISK_OFF TotalReturn = %v, want 0.04", off.TotalReturn)
+	}
+
+	fallback, ok := got.Regimes["default"]
+	if !ok {
+		t.Fatal("expected 'default' regime entry for empty Regime fallback")
+	}
+	if fallback.SessionCount != 1 {
+		t.Errorf("default SessionCount = %d, want 1", fallback.SessionCount)
+	}
+	if fallback.TotalReturn < 0.05-1e-9 || fallback.TotalReturn > 0.05+1e-9 {
+		t.Errorf("default TotalReturn = %v, want 0.05", fallback.TotalReturn)
+	}
+}
+
 // =============================================================================
 // Smoke test: ensure coverage tools see the new tests run.
 // (No assertions; this is a marker that the test file was compiled and run.)
@@ -950,4 +1001,93 @@ func TestComputeAgentRegimeBreakdown(t *testing.T) {
 func TestPipelineTier2TestFileCompiles(t *testing.T) {
 	_ = context.TODO()
 	_ = ledger.NewStore
+}
+
+func TestLoadRecommendationPipeline_DegradedWhenSummaryMissing(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260614-daily"
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+
+	outcome := domain.RecommendationOutcome{
+		AgentID:      "agent-1",
+		Skill:        "growth_momentum",
+		Layer:        domain.LayerStyle,
+		Symbol:       "2330.TW",
+		Side:         domain.SideBuy,
+		Conviction:   88,
+		PassedGuards: true,
+	}
+	outcomeBytes, err := json.Marshal(outcome)
+	if err != nil {
+		t.Fatalf("marshal outcome: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), append(outcomeBytes, '\n'), 0o644); err != nil {
+		t.Fatalf("write recommendation_outcomes.jsonl: %v", err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadRecommendationPipeline(sessionID, true)
+	if err != nil {
+		t.Fatalf("load recommendation pipeline: %v", err)
+	}
+	if data == nil {
+		t.Fatalf("expected pipeline data")
+	}
+	if data.Status != PipelineStatusDegraded {
+		t.Errorf("expected Status=%q, got %q", PipelineStatusDegraded, data.Status)
+	}
+	if data.StatusMessage == "" {
+		t.Error("expected non-empty StatusMessage when degraded")
+	}
+	if len(data.Items) != 1 {
+		t.Errorf("expected 1 item (outcomes still render when degraded), got %d", len(data.Items))
+	}
+}
+
+func TestLoadRecommendationPipeline_MinimalWhenNoOutcomes(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260614-daily"
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	summary := domain.SessionSummary{
+		SessionID: sessionID,
+		Regime:    domain.RegimeRiskOn,
+	}
+	summaryBytes, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryBytes, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadRecommendationPipeline(sessionID, true)
+	if err != nil {
+		t.Fatalf("load recommendation pipeline: %v", err)
+	}
+	if data.Status != PipelineStatusMinimal {
+		t.Errorf("expected Status=%q when outcomes JSONL missing, got %q", PipelineStatusMinimal, data.Status)
+	}
+}
+
+func TestLoadRecommendationPipeline_NoSession(t *testing.T) {
+	baseDir := t.TempDir()
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadRecommendationPipeline("", true)
+	if err != nil {
+		t.Fatalf("expected no error for empty sessions dir, got: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data even with no sessions")
+	}
+	if data.Status != PipelineStatusNoSession {
+		t.Errorf("expected Status=%q when no sessions exist, got %q", PipelineStatusNoSession, data.Status)
+	}
 }

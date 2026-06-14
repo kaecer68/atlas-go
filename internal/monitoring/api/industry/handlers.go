@@ -8,10 +8,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
 type Handlers struct {
-	Svc *service.IndustryService
+	Svc             *service.IndustryService
+	SectorAllocator sectorallocation.WeightEngine
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -32,6 +34,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/industry-data-aggregator", shared.Get(h.HandleDataAggregator))
 	mux.Handle("GET /api/dashboard/industry-seasonal-health", shared.Get(h.HandleSeasonalHealth))
 	mux.Handle("GET /api/dashboard/industry-correlation-loader", shared.Get(h.HandleCorrelationLoader))
+	mux.Handle("GET /api/dashboard/sector-allocation-plan", shared.Get(h.HandleSectorAllocationPlan))
 }
 
 func (h *Handlers) HandleIndustryClassification(r *http.Request) (int, any) {
@@ -472,4 +475,28 @@ func (h *Handlers) HandleCorrelationLoader(r *http.Request) (int, any) {
 	sectorSymbolsPath := ""
 	meta := h.Svc.GetCorrelationLoaderMetadata(replayPath, sectorSymbolsPath)
 	return http.StatusOK, meta
+}
+
+func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
+	if h.SectorAllocator == nil {
+		return http.StatusServiceUnavailable, map[string]any{
+			"error":   "sector_allocation_engine_not_configured",
+			"message": "sectorallocation.WeightEngine is not wired into the handler",
+		}
+	}
+	ctx := r.Context()
+	now := time.Now()
+	weights, err := h.SectorAllocator.ComputeWeights(ctx, now)
+	if err != nil {
+		return http.StatusInternalServerError, map[string]any{
+			"error":   "compute_weights_failed",
+			"message": err.Error(),
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"industries":    weights,
+		"count":         len(weights),
+		"updated_at":    now,
+		"config_source": "parameters.json#sector_allocation",
+	}
 }
