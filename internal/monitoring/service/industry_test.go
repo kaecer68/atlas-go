@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
 // =============================================================================
@@ -24,7 +26,7 @@ func newTestIndustryService(opts ...func(*industryServiceOptions)) *IndustryServ
 	for _, fn := range opts {
 		fn(o)
 	}
-	return NewIndustryService(
+	s := NewIndustryService(
 		o.classifier,
 		o.seasonalEngine,
 		o.cycleTracker,
@@ -36,6 +38,8 @@ func newTestIndustryService(opts ...func(*industryServiceOptions)) *IndustryServ
 		nil,
 		"",
 	)
+	s.WeightEngine = o.weightEngine
+	return s
 }
 
 type industryServiceOptions struct {
@@ -46,6 +50,7 @@ type industryServiceOptions struct {
 	riskMonitor     *industry.RiskMonitor
 	siliconTracker  *industry.SiliconCycleTracker
 	eventCalendar   *industry.EventCalendar
+	weightEngine    sectorallocation.WeightEngine
 }
 
 func withAllEngines() func(*industryServiceOptions) {
@@ -477,77 +482,32 @@ func TestBuildIndustryCycleStatusCard_NilCardBuilder(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// calculateWeightDerivation — switch on seg.ID
-// =============================================================================
+func TestGetIndustryDetail_WeightDerivationFromSectorAllocation(t *testing.T) {
+	s := newTestIndustryService(withAllEngines())
+	s.Classifier.AddSegment(makeSegment("semiconductor", 0.30))
+	cfg := config.SectorAllocationConfig{
+		BaseWeights: map[string]float64{
+			"semiconductor": 0.42,
+		},
+		CycleWeight:     1.0,
+		SeasonalWeight:  1.0,
+		LinkageWeight:   1.0,
+		NarrativeWeight: 1.0,
+		MacroWeight:     1.0,
+		FactorWeight:    1.0,
+		WeightFloor:     0.0,
+	}
+	s.WeightEngine = sectorallocation.NewDefaultEngine(cfg, nil, nil, nil, nil, nil, nil, 0.3, 2.5)
 
-func TestCalculateWeightDerivation_KnownSegments(t *testing.T) {
-	s := newTestIndustryService()
-	cases := []struct {
-		id                string
-		wantFactorsCount  int
-		wantRiskCount     int
-		wantOppCount      int
-		interpretationHas string
-	}{
-		{"semiconductor", 4, 3, 3, "半導體為台灣經濟命脈"},
-		{"ai_supply_chain", 4, 3, 3, "AI供應鏈為台灣下一個核心成長引擎"},
-		{"robotics", 4, 3, 3, "機器人產業"},
-		{"financials", 4, 3, 3, "金融業"},
-		{"shipping", 4, 3, 3, "航運業"},
-		{"energy", 4, 3, 3, "能源業"},
-		{"electronics", 4, 3, 3, "電子零組件"},
-		{"consumer", 4, 3, 3, "傳產消費業"},
-		{"industrial", 4, 3, 3, "工業製造業"},
-		{"mining", 4, 3, 3, "採礦"},
-		{"leo_satellite", 4, 3, 3, "低軌衛星"},
-		{"etf_rotation", 4, 3, 3, "ETF輪動"},
+	detail, err := s.GetIndustryDetail("semiconductor", time.Now())
+	if err != nil {
+		t.Fatalf("GetIndustryDetail: %v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.id, func(t *testing.T) {
-			seg := makeSegment(tc.id, 0.10)
-			wd := s.calculateWeightDerivation(seg)
-			// calculateWeightDerivation calls s.getSectorWeight(seg.ID, seg.Weight)
-			// so for segments not present in the configured SectorWeights map,
-			// the fallback (seg.Weight = 0.10) is used.
-			wantBase := s.getSectorWeight(seg.ID, seg.Weight)
-			if math.Abs(wd.BaseWeight-wantBase) > 1e-9 {
-				t.Errorf("BaseWeight = %v, want %v", wd.BaseWeight, wantBase)
-			}
-			if len(wd.DerivationFactors) != tc.wantFactorsCount {
-				t.Errorf("DerivationFactors count = %d, want %d", len(wd.DerivationFactors), tc.wantFactorsCount)
-			}
-			if len(wd.RiskFactors) != tc.wantRiskCount {
-				t.Errorf("RiskFactors count = %d, want %d", len(wd.RiskFactors), tc.wantRiskCount)
-			}
-			if len(wd.Opportunities) != tc.wantOppCount {
-				t.Errorf("Opportunities count = %d, want %d", len(wd.Opportunities), tc.wantOppCount)
-			}
-			if !stringContains(wd.Interpretation, tc.interpretationHas) {
-				t.Errorf("Interpretation = %q, want substring %q", wd.Interpretation, tc.interpretationHas)
-			}
-		})
+	if detail == nil {
+		t.Fatal("expected non-nil detail")
 	}
-}
-
-func TestCalculateWeightDerivation_DefaultCase(t *testing.T) {
-	s := newTestIndustryService()
-	seg := makeSegment("unknown_industry", 0.05)
-	wd := s.calculateWeightDerivation(seg)
-	if wd.BaseWeight != 0.05 {
-		t.Errorf("BaseWeight = %v, want 0.05", wd.BaseWeight)
-	}
-	if !stringContains(wd.Interpretation, "權重") {
-		t.Errorf("default Interpretation should mention 權重, got %q", wd.Interpretation)
-	}
-	if len(wd.DerivationFactors) != 1 {
-		t.Errorf("default DerivationFactors = %d, want 1", len(wd.DerivationFactors))
-	}
-	if len(wd.RiskFactors) != 0 {
-		t.Errorf("default RiskFactors = %d, want 0", len(wd.RiskFactors))
-	}
-	if len(wd.Opportunities) != 0 {
-		t.Errorf("default Opportunities = %d, want 0", len(wd.Opportunities))
+	if detail.WeightDerivation.BaseWeight == 0 {
+		t.Fatal("expected non-zero sector allocation weight derivation base weight")
 	}
 }
 

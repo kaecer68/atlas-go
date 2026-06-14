@@ -10,5 +10,5 @@
 //	adjusted = baseWeight × cycleMultiplier × seasonalMultiplier ×
 //	          linkageMultiplier × narrativeMultiplier × macroTilt × factorTilt
 //
-// Maturity: X (experimental) — API may change, not yet used by stable modules
+// Maturity: experimental
 package sectorallocation
