@@ -4,7 +4,8 @@
 #   type(scope): description
 #
 # Allowed types: feat, fix, refactor, chore, docs, test, ci, style, perf, revert
-# Allowed scope: any alphanumeric + hyphen module name
+# Allowed scope: lowercase alphanumeric + . _ - / , separators
+#   (supports nested module paths and cross-module scopes)
 #
 # Usage:
 #   bash scripts/ci/check_commit_messages.sh            # check HEAD~1..HEAD
@@ -23,7 +24,7 @@ HEAD="${2:-HEAD}"
 echo "🔍 Checking commit messages from $BASE..$HEAD for semantic format..."
 
 VALID_TYPES="feat|fix|refactor|chore|docs|test|ci|style|perf|revert"
-PATTERN="^($VALID_TYPES)(\([a-z0-9][a-z0-9._-]*\))?: .+"
+PATTERN="^($VALID_TYPES)(\([a-z0-9][a-z0-9._,\/-]*\))?: .+"
 
 HAS_ERRORS=false
 while IFS= read -r commit; do
