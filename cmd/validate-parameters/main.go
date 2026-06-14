@@ -32,35 +32,35 @@ func main() {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "FAIL: cannot read %s: %v\n", path, err)
+		_, _ = fmt.Fprintf(os.Stderr, "FAIL: cannot read %s: %v\n", path, err)
 		os.Exit(1)
 	}
 
 	var config map[string]any
 	if err := json.Unmarshal(data, &config); err != nil {
-		fmt.Fprintf(os.Stderr, "FAIL: invalid JSON in %s: %v\n", path, err)
+		_, _ = fmt.Fprintf(os.Stderr, "FAIL: invalid JSON in %s: %v\n", path, err)
 		os.Exit(1)
 	}
 
 	warnings, errors := walkTree(config, "", strict)
 
 	for _, w := range warnings {
-		fmt.Fprintf(os.Stderr, "WARN: %s\n", w)
+		_, _ = fmt.Fprintf(os.Stderr, "WARN: %s\n", w)
 	}
 	for _, e := range errors {
-		fmt.Fprintf(os.Stderr, "FAIL: %s\n", e)
+		_, _ = fmt.Fprintf(os.Stderr, "FAIL: %s\n", e)
 	}
 
 	if len(errors) > 0 {
-		fmt.Printf("\n%d error(s), %d warning(s)\n", len(errors), len(warnings))
+		_, _ = fmt.Printf("\n%d error(s), %d warning(s)\n", len(errors), len(warnings))
 		os.Exit(1)
 	}
 	if strict && len(warnings) > 0 {
-		fmt.Printf("\n%d warning(s) (strict mode)\n", len(warnings))
+		_, _ = fmt.Printf("\n%d warning(s) (strict mode)\n", len(warnings))
 		os.Exit(1)
 	}
 
-	fmt.Printf("OK: %s is valid (%d sections checked)\n", path, countSections(config))
+	_, _ = fmt.Printf("OK: %s is valid (%d sections checked)\n", path, countSections(config))
 }
 
 func countSections(config map[string]any) int {
