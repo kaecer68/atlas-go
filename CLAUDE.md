@@ -1,5 +1,9 @@
 # CLAUDE.md — atlas-go 規則索引
 
+## 🌐 語言強制規範（首要規則）
+
+> **全部回覆皆須使用繁體中文（Traditional Chinese）**。除非使用者明確要求使用英文，否則禁止使用英文回應。此規則優先於所有技術指令。
+
 本檔案僅作為工具進入點。所有專案專屬規則、陷阱與禁令，請直接參考 **AGENTS.md**。
 本檔案不重複任何規則，以確保單一權威來源，避免 token 重複計費。
 
@@ -26,7 +30,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (43127 symbols, 132304 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (45570 symbols, 138851 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
