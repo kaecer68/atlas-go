@@ -2,6 +2,7 @@ package spawning
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,13 +16,16 @@ import (
 type AgentFactory struct {
 	defaultPromptTemplate string
 	counter               int
+	promptsDir            string // base directory for prompt file paths (e.g. "prompts" or absolute)
 }
 
-// NewAgentFactory creates a new agent factory
-func NewAgentFactory() *AgentFactory {
+// NewAgentFactory creates a new agent factory. promptsDir is the base directory
+// for prompt file paths, matching SpawningConfig.PromptsDir.
+func NewAgentFactory(promptsDir string) *AgentFactory {
 	return &AgentFactory{
 		defaultPromptTemplate: defaultPromptTemplate(),
 		counter:               0,
+		promptsDir:            promptsDir,
 	}
 }
 
@@ -41,8 +45,8 @@ func (f *AgentFactory) CreateAgentForGap(
 	// Generate skill name
 	skill := f.generateSkill(gap)
 
-	// Generate prompt file path
-	promptFile := fmt.Sprintf("prompts/agents/%s.md", agentID)
+	// Generate prompt file path — resolved relative to configured PromptsDir
+	promptFile := filepath.Join(f.promptsDir, "agents", agentID+".md")
 
 	// Create prompt content based on gap
 	promptContent := f.generatePromptContent(gap, agentID)
@@ -377,7 +381,7 @@ func (f *AgentFactory) CloneAgentWithVariation(
 		Name:             fmt.Sprintf("%s (%s Variant)", parent.Name, cases.Title(language.English).String(variationType)),
 		Layer:            parent.Layer,
 		Skill:            parent.Skill + "_" + variationType,
-		PromptFile:       fmt.Sprintf("prompts/agents/%s.md", agentID),
+		PromptFile:       filepath.Join(f.promptsDir, "agents", agentID+".md"),
 		Enabled:          false,
 		Universe:         parent.Universe,
 		DarwinianWeight:  1.0,
