@@ -12,8 +12,8 @@ import (
 )
 
 type Handlers struct {
-	Svc              *service.IndustryService
-	SectorAllocator  sectorallocation.WeightEngine
+	Svc             *service.IndustryService
+	SectorAllocator sectorallocation.WeightEngine
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
