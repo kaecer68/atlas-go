@@ -175,7 +175,6 @@ type RuntimeMarketdataConfig struct {
 
 // RuntimeIndustryConfig holds runtime values for industry analysis.
 type RuntimeIndustryConfig struct {
-	SectorWeights              map[string]float64
 	InventoryCycleThresholds   config.InventoryCycleThresholdConfig
 	CapexCycleThresholds       config.CapexCycleThresholdConfig
 	CycleThresholds            map[string]config.CycleThresholdConfig
@@ -383,7 +382,7 @@ func ToRuntimeParameters(cfg *config.ParametersConfig) *RuntimeParameters {
 			RetryBackoffMs:       cfg.Marketdata.RetryBackoffMs.Value,
 		},
 		Industry: RuntimeIndustryConfig{
-			SectorWeights:              cfg.Industry.SectorWeights.Value,
+			// DEPRECATED: SectorWeights field removed; use sector_allocation.base_weights
 			InventoryCycleThresholds:   cfg.Industry.InventoryCycleThresholds.Value,
 			CapexCycleThresholds:       cfg.Industry.CapexCycleThresholds.Value,
 			CycleThresholds:            cfg.Industry.CycleThresholds.Value,
