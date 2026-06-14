@@ -26,6 +26,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/marketdata/twse"
 )
 
 // twseBaseURL is overridden in tests to point at mock servers.
@@ -44,12 +45,12 @@ func main() {
 	}
 
 	symbols := strings.Split(*symbolsFlag, ",")
-	start, err := time.Parse("2006-01-02", *startFlag)
+	start, err := twse.ParseDate(*startFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid start date: %v\n", err)
 		os.Exit(1)
 	}
-	end, err := time.Parse("2006-01-02", *endFlag)
+	end, err := twse.ParseDate(*endFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid end date: %v\n", err)
 		os.Exit(1)
@@ -188,11 +189,11 @@ func fetchStockDay(ctx context.Context, client *http.Client, symbol string, date
 		return HistoricalBar{}, false, nil
 	}
 
-	open := parseFloat(matched[3])
-	high := parseFloat(matched[4])
-	low := parseFloat(matched[5])
-	close := parseFloat(matched[6])
-	volume := parseInt64(matched[1])
+	open := twse.ParseFloat(matched[3])
+	high := twse.ParseFloat(matched[4])
+	low := twse.ParseFloat(matched[5])
+	close := twse.ParseFloat(matched[6])
+	volume := twse.ParseInt64(matched[1])
 	name := strings.TrimSpace(result.Title)
 	// Extract ETF name from title (e.g., "0050 元大台灣50 各日成交資訊")
 	if idx := strings.Index(name, " "); idx > 0 {
@@ -213,30 +214,6 @@ func fetchStockDay(ctx context.Context, client *http.Client, symbol string, date
 	}, true, nil
 }
 
-func parseFloat(s string) float64 {
-	s = strings.ReplaceAll(strings.TrimSpace(s), ",", "")
-	if s == "" || s == "--" || s == "-" {
-		return 0
-	}
-	f, _ := strconv.ParseFloat(s, 64)
-	return f
-}
-
-func parseInt64(s string) int64 {
-	s = strings.ReplaceAll(strings.TrimSpace(s), ",", "")
-	if s == "" || s == "--" || s == "-" {
-		return 0
-	}
-	i, _ := strconv.ParseInt(s, 10, 64)
-	return i
-}
-
 func tradingDates(start, end time.Time) []time.Time {
-	var dates []time.Time
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
-			dates = append(dates, d)
-		}
-	}
-	return dates
+	return twse.TradingDates(start, end)
 }

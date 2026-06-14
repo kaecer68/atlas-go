@@ -8,13 +8,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/marketdata/twse"
 )
 
 const (
@@ -135,40 +134,12 @@ func (f *Fetcher) FetchDay(ctx context.Context, date time.Time) ([]TWSEQuote, er
 	return quotes, nil
 }
 
-func parseFloat(s string) float64 {
-	s = strings.ReplaceAll(strings.TrimSpace(s), ",", "")
-	if s == "" || s == "--" || s == "-" {
-		return 0
-	}
-	f, _ := strconv.ParseFloat(s, 64)
-	return f
-}
-
-func parseInt64(s string) int64 {
-	s = strings.ReplaceAll(strings.TrimSpace(s), ",", "")
-	if s == "" || s == "--" || s == "-" {
-		return 0
-	}
-	i, _ := strconv.ParseInt(s, 10, 64)
-	return i
-}
-
 func tradingDates(start, end time.Time) []time.Time {
-	var dates []time.Time
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
-			dates = append(dates, d)
-		}
-	}
-	return dates
+	return twse.TradingDates(start, end)
 }
 
 func formatYYYYMMDD(t time.Time) string {
 	return t.Format("20060102")
-}
-
-func parseDate(s string) (time.Time, error) {
-	return time.Parse("2006-01-02", s)
 }
 
 func loadExistingKeys(path string) (map[string]bool, error) {
@@ -223,7 +194,7 @@ func main() {
 
 	flag.Parse()
 
-	start, err := parseDate(*startStr)
+	start, err := twse.ParseDate(*startStr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid start date: %v\n", err)
 		os.Exit(1)
@@ -231,7 +202,7 @@ func main() {
 
 	end := time.Now()
 	if *endStr != "" {
-		end, err = parseDate(*endStr)
+		end, err = twse.ParseDate(*endStr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "invalid end date: %v\n", err)
 			os.Exit(1)
@@ -275,7 +246,7 @@ func main() {
 
 		var bars []HistoricalBar
 		for _, q := range quotes {
-			close := parseFloat(q.ClosingPrice)
+			close := twse.ParseFloat(q.ClosingPrice)
 			if close == 0 {
 				continue
 			}
@@ -288,11 +259,11 @@ func main() {
 				Date:   d.Format("2006-01-02"),
 				Symbol: q.Code + ".TW",
 				Name:   q.Name,
-				Open:   parseFloat(q.OpeningPrice),
-				High:   parseFloat(q.HighestPrice),
-				Low:    parseFloat(q.LowestPrice),
+				Open:   twse.ParseFloat(q.OpeningPrice),
+				High:   twse.ParseFloat(q.HighestPrice),
+				Low:    twse.ParseFloat(q.LowestPrice),
 				Close:  close,
-				Volume: parseInt64(q.TradeVolume),
+				Volume: twse.ParseInt64(q.TradeVolume),
 			})
 		}
 

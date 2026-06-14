@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata/twse"
 )
 
 func TestTradingDayFilter(t *testing.T) {
@@ -44,8 +46,8 @@ func TestTradingDayFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			start, _ := parseDate(tt.start)
-			end, _ := parseDate(tt.end)
+			start, _ := twse.ParseDate(tt.start)
+			end, _ := twse.ParseDate(tt.end)
 			dates := tradingDates(start, end)
 			if len(dates) != tt.expected {
 				t.Errorf("tradingDates(%s, %s) = %d, want %d", tt.start, tt.end, len(dates), tt.expected)
@@ -163,9 +165,9 @@ func TestParseFloat(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := parseFloat(tt.input)
+		got := twse.ParseFloat(tt.input)
 		if got != tt.expected {
-			t.Errorf("parseFloat(%q) = %f, want %f", tt.input, got, tt.expected)
+			t.Errorf("twse.ParseFloat(%q) = %f, want %f", tt.input, got, tt.expected)
 		}
 	}
 }
@@ -183,9 +185,9 @@ func TestParseInt64(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := parseInt64(tt.input)
+		got := twse.ParseInt64(tt.input)
 		if got != tt.expected {
-			t.Errorf("parseInt64(%q) = %d, want %d", tt.input, got, tt.expected)
+			t.Errorf("twse.ParseInt64(%q) = %d, want %d", tt.input, got, tt.expected)
 		}
 	}
 }
@@ -225,7 +227,7 @@ func TestQuotesFilteredByZeroClose(t *testing.T) {
 
 	var bars []HistoricalBar
 	for _, q := range quotes {
-		close := parseFloat(q.ClosingPrice)
+		close := twse.ParseFloat(q.ClosingPrice)
 		if close == 0 {
 			continue
 		}
@@ -252,7 +254,7 @@ func TestFormatYYYYMMDD(t *testing.T) {
 }
 
 func TestParseDate(t *testing.T) {
-	got, err := parseDate("2026-01-02")
+	got, err := twse.ParseDate("2026-01-02")
 	if err != nil {
 		t.Fatalf("parseDate failed: %v", err)
 	}
