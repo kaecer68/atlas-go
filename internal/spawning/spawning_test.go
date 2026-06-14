@@ -86,14 +86,14 @@ func TestGapDetector(t *testing.T) {
 
 func TestAgentFactory(t *testing.T) {
 	t.Run("NewAgentFactory", func(t *testing.T) {
-		factory := NewAgentFactory()
+		factory := NewAgentFactory(t.TempDir())
 		if factory == nil {
 			t.Fatal("Expected non-nil factory")
 		}
 	})
 
 	t.Run("CreateAgentForGap", func(t *testing.T) {
-		factory := NewAgentFactory()
+		factory := NewAgentFactory(t.TempDir())
 		gap := &KnowledgeGap{
 			ID:       "test_gap_001",
 			Type:     GapTypeSector,
@@ -125,7 +125,7 @@ func TestAgentFactory(t *testing.T) {
 	})
 
 	t.Run("CloneAgentWithVariation", func(t *testing.T) {
-		factory := NewAgentFactory()
+		factory := NewAgentFactory(t.TempDir())
 		parent := domain.AgentSpec{
 			ID:    "parent_001",
 			Name:  "Parent Agent",
