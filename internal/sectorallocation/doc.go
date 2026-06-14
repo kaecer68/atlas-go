@@ -6,8 +6,9 @@
 // multi-factor engine.
 //
 // Weight Formula:
-//   adjusted = baseWeight × cycleMultiplier × seasonalMultiplier ×
-//             linkageMultiplier × narrativeMultiplier × macroTilt × factorTilt
+//
+//	adjusted = baseWeight × cycleMultiplier × seasonalMultiplier ×
+//	          linkageMultiplier × narrativeMultiplier × macroTilt × factorTilt
 //
 // Maturity: X (experimental) — API may change, not yet used by stable modules
 package sectorallocation

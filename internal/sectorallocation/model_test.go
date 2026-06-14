@@ -10,7 +10,7 @@ import (
 // MockWeightEngine implements WeightEngine for testing.
 type MockWeightEngine struct {
 	weights []SectorWeight
-	err    error
+	err     error
 }
 
 func (m *MockWeightEngine) ComputeWeights(ctx context.Context, now time.Time) ([]SectorWeight, error) {
@@ -75,10 +75,10 @@ func (m *MockFactorInputProvider) GetFactorTilt(ctx context.Context, industryID 
 // with snake_case JSON tags correctly.
 func TestSectorWeightJSONRoundtrip(t *testing.T) {
 	sw := SectorWeight{
-		ID:               "semiconductor",
-		Name:             "半導體",
-		BaseWeight:       0.22,
-		AdjustedWeight:   0.25,
+		ID:             "semiconductor",
+		Name:           "半導體",
+		BaseWeight:     0.22,
+		AdjustedWeight: 0.25,
 		DerivationFactors: []WeightFactor{
 			{Factor: "出口比重", Contribution: 0.35, Source: "TWSE", Evidence: "台灣出口占比"},
 			{Factor: "景氣循環", Contribution: 0.25, Source: "CIA", Evidence: "全球GDP成長率"},
@@ -139,9 +139,9 @@ func TestSectorAllocationPlanJSON(t *testing.T) {
 			{ID: "semiconductor", Name: "半導體", BaseWeight: 0.22, AdjustedWeight: 0.25},
 			{ID: "financials", Name: "金融", BaseWeight: 0.14, AdjustedWeight: 0.15},
 		},
-		PrimaryFlow: "risk_on",
-		Rationale:  "Macro conditions favor risk assets",
-		Timestamp:  time.Date(2026, 1, 15, 9, 30, 0, 0, time.UTC),
+		PrimaryFlow:  "risk_on",
+		Rationale:    "Macro conditions favor risk assets",
+		Timestamp:    time.Date(2026, 1, 15, 9, 30, 0, 0, time.UTC),
 		ConfigSource: "parameters.json",
 	}
 
@@ -174,8 +174,8 @@ func TestWeightDerivationJSON(t *testing.T) {
 			{Factor: "出口比重", Contribution: 0.35, Source: "TWSE", Evidence: "台灣出口占比"},
 		},
 		Interpretation: "Strong export dependency",
-		RiskFactors:   []string{"晶片法案", "景氣放緩"},
-		Opportunities: []string{"AI需求", "先進製程"},
+		RiskFactors:    []string{"晶片法案", "景氣放緩"},
+		Opportunities:  []string{"AI需求", "先進製程"},
 	}
 
 	data, err := json.Marshal(wd)
