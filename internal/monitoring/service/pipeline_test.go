@@ -930,3 +930,48 @@ func TestLoadRecommendationPipeline_DegradedWhenSummaryMissing(t *testing.T) {
 		t.Errorf("expected 1 item (outcomes still render when degraded), got %d", len(data.Items))
 	}
 }
+
+func TestLoadRecommendationPipeline_MinimalWhenNoOutcomes(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260614-daily"
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	summary := domain.SessionSummary{
+		SessionID: sessionID,
+		Regime:    domain.RegimeRiskOn,
+	}
+	summaryBytes, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryBytes, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadRecommendationPipeline(sessionID, true)
+	if err != nil {
+		t.Fatalf("load recommendation pipeline: %v", err)
+	}
+	if data.Status != PipelineStatusMinimal {
+		t.Errorf("expected Status=%q when outcomes JSONL missing, got %q", PipelineStatusMinimal, data.Status)
+	}
+}
+
+func TestLoadRecommendationPipeline_NoSession(t *testing.T) {
+	baseDir := t.TempDir()
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadRecommendationPipeline("", true)
+	if err != nil {
+		t.Fatalf("expected no error for empty sessions dir, got: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data even with no sessions")
+	}
+	if data.Status != PipelineStatusNoSession {
+		t.Errorf("expected Status=%q when no sessions exist, got %q", PipelineStatusNoSession, data.Status)
+	}
+}
