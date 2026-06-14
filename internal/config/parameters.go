@@ -2253,6 +2253,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeSectorExecutorDefaults(&cfg)
 	mergeIndustryDefaults(&cfg)
 	mergeRSITwDefaults(&cfg)
+	mergeFallbackPriceTargetsDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -2921,5 +2922,30 @@ func mergeRSITwDefaults(cfg *ParametersConfig) {
 	}
 	if r.DCreditTighteningMultiplier.Value == 0 {
 		r.DCreditTighteningMultiplier = def.DCreditTighteningMultiplier
+	}
+}
+
+// mergeFallbackPriceTargetsDefaults ensures every skill key (including _default)
+// defined in defaults is present in the loaded config, and fills zero-valued
+// target/stop-loss multipliers for any missing or partial entry. This prevents
+// panics in monitoring/service/session.go when it looks up the _default key.
+func mergeFallbackPriceTargetsDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().FallbackPriceTargets
+	if cfg.FallbackPriceTargets == nil {
+		cfg.FallbackPriceTargets = make(map[string]FallbackPriceTarget)
+	}
+	for key, defaultEntry := range def {
+		entry, ok := cfg.FallbackPriceTargets[key]
+		if !ok {
+			cfg.FallbackPriceTargets[key] = defaultEntry
+			continue
+		}
+		if entry.TargetMultiplier.Value == 0 {
+			entry.TargetMultiplier = defaultEntry.TargetMultiplier
+		}
+		if entry.StopLossMultiplier.Value == 0 {
+			entry.StopLossMultiplier = defaultEntry.StopLossMultiplier
+		}
+		cfg.FallbackPriceTargets[key] = entry
 	}
 }
