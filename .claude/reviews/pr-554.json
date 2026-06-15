@@ -1,0 +1,128 @@
+{
+  "pr_number": 554,
+  "title": "test(orchestrator): zero-coverage push (59.9% statements)",
+  "verdict": "APPROVED_WITH_INFORMATIONAL_NOTES",
+  "blocking_findings": 0,
+  "informational_findings": 9,
+  "merged_at": "2026-06-15T15:54:44Z",
+  "merge_commit": "fe263546",
+  "pre_merge_head": "135cfcd4",
+  "original_head": "29288708",
+  "base_ref": "main",
+  "base_commit": "9c3dc70a",
+  "stats": {
+    "files_changed": 3,
+    "insertions": 833,
+    "deletions": 0,
+    "production_code_changes": 0,
+    "test_files": [
+      "internal/orchestrator/plugin_adapters_coverage_test.go",
+      "internal/orchestrator/plugin_registry_coverage_test.go",
+      "internal/orchestrator/system_coverage_test.go"
+    ],
+    "lines_per_file": {
+      "plugin_adapters_coverage_test.go": 241,
+      "plugin_registry_coverage_test.go": 247,
+      "system_coverage_test.go": 345
+    },
+    "tests_pass": true,
+    "staticcheck_clean": true,
+    "coverage_statements_pct": 59.9
+  },
+  "coverage_gain": {
+    "internal/orchestrator/plugin_adapters.go": {
+      "Name": {"before": 0, "after": 100.0},
+      "Attach": {"before": 0, "after": 100.0},
+      "ProcessRecommendations": {"before": 0, "after": 100.0},
+      "PostSimulation": {"before": 0, "after": 93.3}
+    }
+  },
+  "findings": [
+    {
+      "id": 1,
+      "severity": "CRITICAL_RESOLVED",
+      "category": "scope",
+      "summary": "Branch initially included system.go and system_record_summary_retry.go production changes (107 inserts / 519 deletes from merge/consolidation base). FIXED by git rebase --autostash origin/main before merge.",
+      "resolution": "rebased",
+      "pre_merge_head_after_fix": "135cfcd4"
+    },
+    {
+      "id": 2,
+      "severity": "INFORMATIONAL",
+      "category": "coverage",
+      "summary": "maxAttempts<1 default-to-1 branch in RecordSummaryWithRetry not covered by any test."
+    },
+    {
+      "id": 3,
+      "severity": "INFORMATIONAL",
+      "category": "coverage",
+      "summary": "ResolvePrompt only tests override-map path; resolver injection and os.ReadFile fallback are untested."
+    },
+    {
+      "id": 4,
+      "severity": "INFORMATIONAL",
+      "category": "coverage",
+      "summary": "loadRecOverrides edge cases (expired interventions, empty TargetSymbol) not exercised."
+    },
+    {
+      "id": 5,
+      "severity": "INFORMATIONAL",
+      "category": "brittleness",
+      "summary": "Tests assert private fields: sys.Risk().eventBus, sys.drawdownReporter, reg.promptResolver, sc.provider. Refactors to internal layout will break these.",
+      "private_fields_accessed": [
+        "system.Risk().eventBus",
+        "system.drawdownReporter",
+        "registry.promptResolver",
+        "system_coverage.sc.provider"
+      ]
+    },
+    {
+      "id": 6,
+      "severity": "INFORMATIONAL",
+      "category": "naming",
+      "summary": "_Cov suffix on test function names and _coverage_test.go filename are non-standard for this codebase."
+    },
+    {
+      "id": 7,
+      "severity": "INFORMATIONAL",
+      "category": "redundancy",
+      "summary": "plugin_adapters_coverage_test.go largely duplicates existing plugin_adapters_test.go; several functions are low-value smoke tests."
+    },
+    {
+      "id": 8,
+      "severity": "INFORMATIONAL",
+      "category": "coverage",
+      "summary": "CalculateFactorScores tests only assert non-nil; no numeric value or component checks."
+    },
+    {
+      "id": 9,
+      "severity": "INFORMATIONAL",
+      "category": "smoke",
+      "summary": "TestPluginRegistry_WithSetters is a pure smoke test with no meaningful assertions."
+    }
+  ],
+  "passes": [
+    "mock_correctness",
+    "test_independence",
+    "resource_cleanup",
+    "lint_staticcheck"
+  ],
+  "preexisting_issues_not_from_pr": [
+    "internal/monitoring build failure (redeclared tests)",
+    "internal/risk/macro_aware_drawdown_test.go gofmt violation",
+    "web/embed.go build fail"
+  ],
+  "follow_up": {
+    "decision": "deferred",
+    "decision_date": "2026-06-15",
+    "rationale": "All findings are quality/coverage, not correctness. Atomic-PR principle. Source of truth for cleanup is this file.",
+    "trigger": "next time internal/orchestrator/*_test.go is touched",
+    "recommended_order": [
+      "brittleness",
+      "redundancy",
+      "naming",
+      "edge_cases"
+    ],
+    "estimated_effort": "1 PR, ~3-5 hours"
+  }
+}
