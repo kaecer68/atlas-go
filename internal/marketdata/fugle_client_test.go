@@ -6,104 +6,129 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"golang.org/x/time/rate"
 )
 
-func TestFugleClient_GetQuote_Success(t *testing.T) {
-	payload := FugleQuoteResponse{
+func TestFugleClient_SetHTTPClient(t *testing.T) {
+	c := NewFugleClient("test-key")
+	c.SetHTTPClient(nil)
+	if c.httpClient != nil {
+		t.Error("expected httpClient nil after SetHTTPClient(nil)")
+	}
+}
+
+func TestFugleClient_RateLimiter(t *testing.T) {
+	c := NewFugleClient("test-key")
+	if c.RateLimiter() == nil {
+		t.Fatal("expected non-nil rate limiter")
+	}
+}
+
+func TestGetFugleRateLimit(t *testing.T) {
+	// Default free tier
+	if got := getFugleRateLimit(); got != 60 {
+		t.Errorf("getFugleRateLimit() = %d, want 60", got)
+	}
+}
+
+func TestFugleClient_GetMeta_Success(t *testing.T) {
+	payload := FugleMetaResponse{
 		APIVersion: "v0.3",
 	}
-	payload.Data.Info.Symbol = "2330"
-	payload.Data.Quote.Trade.Price = 785.0
-	payload.Data.Quote.PriceOpen.Price = 780.0
-	payload.Data.Quote.PriceHigh.Price = 790.0
-	payload.Data.Quote.PriceLow.Price = 775.0
-	payload.Data.Quote.Total.TradeVolume = 1500000
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
+	payload.Data.Info.Symbol = "0050"
+	payload.Data.Meta.IsSuspended = false
+	payload.Data.Meta.IsDelisted = false
+	body, _ := json.Marshal(payload)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("symbolId") != "2330" {
-			t.Errorf("unexpected symbolId: %s", r.URL.Query().Get("symbolId"))
+		if r.URL.Path != "/intraday/meta" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
+		w.Header().Set("Content-Type", "application/json")
 		w.Write(body)
 	}))
 	defer srv.Close()
 
-	client := NewFugleClient("test-key")
-	client.baseURL = srv.URL
+	c := NewFugleClient("test-key")
+	c.baseURL = srv.URL
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
 
-	quote, err := client.GetQuote(context.Background(), "2330")
+	meta, err := c.GetMeta(context.Background(), "0050")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if quote.Symbol != "2330" {
-		t.Errorf("Symbol = %q, want 2330", quote.Symbol)
-	}
-	if quote.Last != 785.0 {
-		t.Errorf("Last = %f, want 785.0", quote.Last)
-	}
-	if quote.Source != "fugle" {
-		t.Errorf("Source = %q, want fugle", quote.Source)
+	if meta.Data.Info.Symbol != "0050" {
+		t.Errorf("Symbol = %q, want 0050", meta.Data.Info.Symbol)
 	}
 }
 
-func TestFugleClient_GetQuote_NonOK(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-	}))
-	defer srv.Close()
-
-	client := NewFugleClient("bad-key")
-	client.baseURL = srv.URL
-
-	_, err := client.GetQuote(context.Background(), "2330")
-	if err == nil {
-		t.Fatal("expected error for non-200 response")
-	}
-}
-
-func TestFugleClient_GetQuotes(t *testing.T) {
-	payload := FugleQuoteResponse{
-		APIVersion: "v0.3",
-	}
-	payload.Data.Info.Symbol = "2330"
-	payload.Data.Quote.Trade.Price = 785.0
-	payload.Data.Quote.PriceOpen.Price = 780.0
-	payload.Data.Quote.PriceHigh.Price = 790.0
-	payload.Data.Quote.PriceLow.Price = 775.0
-	payload.Data.Quote.Total.TradeVolume = 1000
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
+func TestFugleClient_CheckMarketStatus_Open(t *testing.T) {
+	payload := FugleMetaResponse{}
+	payload.Data.Info.Symbol = "0050"
+	payload.Data.Meta.IsSuspended = false
+	payload.Data.Meta.IsDelisted = false
+	body, _ := json.Marshal(payload)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.Write(body)
 	}))
 	defer srv.Close()
 
-	client := NewFugleClient("test-key")
-	client.baseURL = srv.URL
+	c := NewFugleClient("test-key")
+	c.baseURL = srv.URL
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
 
-	quotes, err := client.GetQuotes(context.Background(), []string{"2330", "2317"})
+	open, err := c.CheckMarketStatus(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(quotes) != 2 {
-		t.Fatalf("expected 2 quotes, got %d", len(quotes))
+	if !open {
+		t.Error("expected market open")
 	}
 }
 
-func TestNewFugleProviderWithAPIKey(t *testing.T) {
-	p := NewFugleProviderWithAPIKey("test-key")
-	if p == nil {
-		t.Fatal("expected non-nil provider")
+func TestFugleClient_CheckMarketStatus_Suspended(t *testing.T) {
+	payload := FugleMetaResponse{}
+	payload.Data.Info.Symbol = "0050"
+	payload.Data.Meta.IsSuspended = true
+	payload.Data.Meta.IsDelisted = false
+	body, _ := json.Marshal(payload)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewFugleClient("test-key")
+	c.baseURL = srv.URL
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
+
+	open, err := c.CheckMarketStatus(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if p.Name() != "fugle" {
-		t.Errorf("Name = %q, want fugle", p.Name())
+	if open {
+		t.Error("expected market not open when suspended")
+	}
+}
+
+func TestNewFugleProviderWithClient(t *testing.T) {
+	c := NewFugleClient("test-key")
+	p := NewFugleProviderWithClient(c)
+	if p.GetClient() != c {
+		t.Error("expected provider client to equal injected client")
+	}
+}
+
+func TestResetSharedFugleClient(t *testing.T) {
+	ResetSharedFugleClient()
+	c1 := GetSharedFugleClient("key1")
+	ResetSharedFugleClient()
+	c2 := GetSharedFugleClient("key2")
+	if c1 == c2 {
+		t.Error("expected different shared client instances after reset")
 	}
 }
