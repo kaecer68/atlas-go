@@ -116,7 +116,7 @@ func TestResolveWhere_NoMatches(t *testing.T) {
 
 // ─── AutoHandler ───────────────────────────────────────────────────────────
 
-func TestAutoHandler_Suppress(t *testing.T) {
+func TestAutoHandler_Suppress_NilStore(t *testing.T) {
 	h := NewAutoHandler(nil, nil)
 	h.Suppress("test-category", 1*time.Hour)
 	// Verify suppression took effect by checking isSuppressed.
