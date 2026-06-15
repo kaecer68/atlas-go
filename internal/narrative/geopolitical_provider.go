@@ -37,6 +37,7 @@ type GeopoliticalRiskProvider interface {
 
 // RSSGeopoliticalProvider computes risk intensity by scanning RSS feeds for conflict keywords.
 type RSSGeopoliticalProvider struct {
+	mu       sync.RWMutex
 	client   *http.Client
 	feeds    []string
 	keywords []string
@@ -119,7 +120,10 @@ func (r *RSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context, url s
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
-	resp, err := r.client.Do(req)
+	r.mu.RLock()
+	client := r.client
+	r.mu.RUnlock()
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -163,6 +167,7 @@ type rssItem struct {
 
 // GDELTGeopoliticalProvider fetches conflict event counts from GDELT 2.0 API.
 type GDELTGeopoliticalProvider struct {
+	mu     sync.RWMutex
 	client *http.Client
 }
 
@@ -180,6 +185,8 @@ func (g *GDELTGeopoliticalProvider) Name() string {
 
 // SetHTTPClient overrides the default HTTP client (testability hook).
 func (g *GDELTGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	g.client = client
 }
 
@@ -200,7 +207,10 @@ func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (Geopolitica
 		return GeopoliticalRiskScore{}, err
 	}
 
-	resp, err := g.client.Do(req)
+	g.mu.RLock()
+	client := g.client
+	g.mu.RUnlock()
+	resp, err := client.Do(req)
 	if err != nil {
 		return GeopoliticalRiskScore{}, err
 	}
@@ -248,6 +258,8 @@ func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (Geopolitica
 
 // SetHTTPClient overrides the default HTTP client (testability hook).
 func (r *RSSGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.client = client
 }
 
