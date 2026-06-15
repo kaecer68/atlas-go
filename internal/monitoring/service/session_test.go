@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -202,7 +203,7 @@ func TestComputePipelineTags_Wrapper(t *testing.T) {
 			"2026-06-05": {"2330": {Symbol: "2330", Open: 100, Close: 110, Volume: 1000}},
 		},
 	}
-	tags, err := ComputePipelineTags(nil, ds, "2330", base.AddDate(0, 0, 4))
+	tags, err := ComputePipelineTags(context.TODO(), ds, "2330", base.AddDate(0, 0, 4))
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -212,7 +213,7 @@ func TestComputePipelineTags_Wrapper(t *testing.T) {
 }
 
 func TestFallbackPriceTargets_WithDefault(t *testing.T) {
-	target, stopLoss, err := FallbackPriceTargets(nil, "nonexistent-skill", 100.0, domain.SideBuy)
+	target, stopLoss, err := FallbackPriceTargets(context.TODO(), "nonexistent-skill", 100.0, domain.SideBuy)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -222,7 +223,7 @@ func TestFallbackPriceTargets_WithDefault(t *testing.T) {
 }
 
 func TestFallbackPriceTargets_SellSide(t *testing.T) {
-	target, stopLoss, err := FallbackPriceTargets(nil, "nonexistent-skill", 100.0, domain.SideSell)
+	target, stopLoss, err := FallbackPriceTargets(context.TODO(), "nonexistent-skill", 100.0, domain.SideSell)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}

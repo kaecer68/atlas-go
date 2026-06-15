@@ -849,10 +849,7 @@ func TestGetIndustryOverview_NilLinkageAnalyzer(t *testing.T) {
 func TestGetIndustryOverview_WithLinkageData(t *testing.T) {
 	svc := newTestIndustryService(withAllEngines())
 	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
-	overviews := svc.GetIndustryOverview(now)
-	if len(overviews) < 0 {
-		t.Error("overviews slice should be non-nil")
-	}
+	_ = svc.GetIndustryOverview(now)
 }
 
 // =============================================================================
