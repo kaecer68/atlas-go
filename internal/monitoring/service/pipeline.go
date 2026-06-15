@@ -1112,6 +1112,14 @@ type DarwinianStatusData struct {
 }
 
 // DarwinianAgentInfo holds weight and performance data for a single agent.
+//
+// Status is a data-visibility label for the agent and MUST be one of:
+//   - "active":  the agent has produced at least one signal (total_signals > 0)
+//   - "dormant": the agent is registered in configs/agents.json but has zero signals
+//   - "ghost":   the agent is NOT registered and has zero signals (legacy or stale residual)
+//
+// This explicit marking prevents the frontend from having to infer agent health
+// from zero values (atlas-data-visibility L4 spec).
 type DarwinianAgentInfo struct {
 	Weight        float64 `json:"weight"`
 	RollingSharpe float64 `json:"rolling_sharpe"`
@@ -1121,6 +1129,7 @@ type DarwinianAgentInfo struct {
 	LossCount     int     `json:"loss_count"`
 	AvgReturn     float64 `json:"avg_return"`
 	LastUpdated   string  `json:"last_updated,omitempty"`
+	Status        string  `json:"status"`
 }
 
 // LoadDarwinianStatus loads the current Darwinian weight state from disk.
@@ -1175,6 +1184,11 @@ type DarwinianHistoryPoint struct {
 }
 
 func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
+	registered, err := s.loadRegisteredAgentIDs()
+	if err != nil {
+		return nil, fmt.Errorf("load registered agent list: %w", err)
+	}
+
 	weightsPath := filepath.Join(s.WorkDir, "data/state/darwinian_weights.json")
 	data, err := os.ReadFile(weightsPath)
 	if err != nil {
@@ -1189,7 +1203,7 @@ func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
 			Weight        float64 `json:"weight"`
 			RollingSharpe float64 `json:"rolling_sharpe"`
 			HitRate       float64 `json:"hit_rate"`
-			TotalSignals  int     `json:"total_signals"`
+			TotalSignals  *int    `json:"total_signals"`
 			WinCount      int     `json:"win_count"`
 			LossCount     int     `json:"loss_count"`
 			AvgReturn     float64 `json:"avg_return"`
@@ -1201,15 +1215,28 @@ func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
 	}
 	agents := make(map[string]DarwinianAgentInfo, len(saved.Weights))
 	for id, w := range saved.Weights {
+		totalSignals := 0
+		status := "ghost"
+		if w.TotalSignals != nil {
+			totalSignals = *w.TotalSignals
+			if totalSignals > 0 {
+				status = "active"
+			} else if isInRegisteredAgentList(registered, id) {
+				status = "dormant"
+			} else {
+				status = "ghost"
+			}
+		}
 		agents[id] = DarwinianAgentInfo{
 			Weight:        w.Weight,
 			RollingSharpe: w.RollingSharpe,
 			HitRate:       w.HitRate,
-			TotalSignals:  w.TotalSignals,
+			TotalSignals:  totalSignals,
 			WinCount:      w.WinCount,
 			LossCount:     w.LossCount,
 			AvgReturn:     w.AvgReturn,
 			LastUpdated:   w.LastUpdatedAt,
+			Status:        status,
 		}
 	}
 	return &DarwinianStatusData{
@@ -1218,6 +1245,34 @@ func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
 		AgentCount:   len(agents),
 		Agents:       agents,
 	}, nil
+}
+
+func (s *PipelineService) loadRegisteredAgentIDs() (map[string]bool, error) {
+	registryPath := filepath.Join(s.WorkDir, "configs", "agents.json")
+	data, err := os.ReadFile(registryPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]bool{}, nil
+		}
+		return nil, fmt.Errorf("read agents registry: %w", err)
+	}
+	var registry struct {
+		Agents []struct {
+			ID string `json:"id"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(data, &registry); err != nil {
+		return nil, fmt.Errorf("parse agents registry: %w", err)
+	}
+	ids := make(map[string]bool, len(registry.Agents))
+	for _, a := range registry.Agents {
+		ids[a.ID] = true
+	}
+	return ids, nil
+}
+
+func isInRegisteredAgentList(registered map[string]bool, agentID string) bool {
+	return registered[agentID]
 }
 
 type RegimeHistoryData struct {

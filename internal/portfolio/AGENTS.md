@@ -66,17 +66,27 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 ### 2.4. FactorWeightEngine (動態權重引擎)
 - **職責**：根據市場事件與 Regime 動態調整因子權重，並確保權重總和為 1.0。
 - **配置化**：所有因子權重、Regime 調整、事件 delta 以及策略調整均已透過 `ParametersConfig.FactorWeight` 進行配置化。`internal/config/parameters.go` 與 `configs/parameters.json` 是唯一的權威來源。
-- **基礎權重配置**（8 因子 - **預設值，可透過 parameters.json 覆蓋**）：
-    | 因子 | 基礎權重 |
-    |------|----------|
-    | Momentum | 0.25 |
-    | Value | 0.20 |
-    | Quality | 0.20 |
-    | Agent | 0.15 |
-    | InstitutionalSentiment | 0.10 |
-    | Liquidity | 0.05 |
-    | Narrative | 0.05 |
-    | IndustryCycle | 0.00 |
+- **基礎權重配置**（**12 因子** - **預設值，可透過 parameters.json 覆蓋**）：
+    | 因子 | 基礎權重 | 說明 |
+    |------|----------|------|
+    | Momentum | 0.25 | 動能因子,價格趨勢強度 |
+    | Value | 0.20 | 價值因子,本益比/股價淨值比等估值指標 |
+    | Quality | 0.20 | 品質因子,ROE/毛利率/盈餘穩定性 |
+    | Agent | 0.15 | 代理因子,Agent 信心度與歷史績效 |
+    | InstitutionalSentiment | 0.10 | 法人情緒,外資/投信/融資券流向 |
+    | Liquidity | 0.05 | 流動性因子,Amihud ILLIQ proxy |
+    | Narrative | 0.05 | 敘事因子,宏觀事件對市場情緒的影響 |
+    | IndustryCycle | 0.00 | 產業週期因子,景氣位置與產業輪動評分 |
+    | PreciousMetals | 0.00 | 貴金屬因子,僅黃金/白銀類股啟用 |
+    | ETF | 0.00 | ETF 因子,僅 ETF 標的啟用 |
+    | Linkage | 0.00 | 連動因子,需 WithLinkageProvider 注入 |
+    | TSMC | 0.05 | 台積電因子,需 WithTSMCProvider 注入 |
+- **新因子條件啟用**：
+    - **PreciousMetals**:僅對貴金屬類股(`isPreciousMetal(symbol)` 判定)計算,其他標的權重為 0。
+    - **ETF**:僅對 ETF 標的計算,個股不適用。
+    - **Linkage**:需透過 `WithLinkageProvider` 注入 Provider,未注入時權重為 0。
+    - **TSMC**:需透過 `WithTSMCProvider` 注入 Provider,未注入時權重為 0。
+- **Known Issue (2026-06-15)**:`CalculateAllScoresWithBreakdown` 路徑曾漏算 TSMC 因子(回傳 `FactorScoreItem{}` 空值),已於同期 W2-T1 修補。`FactorTSMC` 仍由 `calculateMultiFactorScores`(optimizer.go:391-395)獨立計算,兩條路徑現在已對齊。
 - **事件驅動調整**：當 NarrativeEvent 觸發時，FactorWeightEngine 根據事件 Theme 與 Severity 調整相關因子權重。
     - `AI_capex_surge`：提升 Quality (+delta) 與 Momentum (+delta)
     - `US_rates_up`：提升 Value (+delta)，降低 InstitutionalSentiment (-delta)

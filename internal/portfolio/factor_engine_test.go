@@ -640,3 +640,82 @@ func TestEnsureAdjustedDifferentSymbols(t *testing.T) {
 		t.Errorf("expected 2 provider calls (one per symbol), got %d", provider.calls)
 	}
 }
+
+// TestCalculateAllScoresWithBreakdown_TSMC verifies that TSMC factor is populated
+// in the breakdown when a TSMC provider is attached.
+func TestCalculateAllScoresWithBreakdown_TSMC(t *testing.T) {
+	fe := NewFactorEngine()
+
+	// Attach a TSMC provider that returns a non-zero score.
+	fe.WithTSMCProvider(func(symbol string) *domain.FactorScoreItem {
+		return &domain.FactorScoreItem{
+			Score:      0.75,
+			Formula:    "tsmc_factor(adv_ratio=0.42, premium=1.23)",
+			RawInputs:  map[string]float64{"adv_ratio": 0.42, "premium": 1.23},
+			IsFallback: false,
+		}
+	})
+
+	quotes := map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 500, Last: 550, IsTradable: true},
+	}
+	agentRecs := []domain.Recommendation{
+		{Agent: "test-agent", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+	factorWeights := map[FactorType]float64{
+		FactorMomentum: 0.25,
+		FactorValue:    0.20,
+		FactorQuality:  0.20,
+		FactorAgent:    0.15,
+	}
+
+	breakdown, _ := fe.CalculateAllScoresWithBreakdown("2330.TW", quotes, agentRecs, nil, factorWeights)
+
+	if breakdown.TSMC.Score == 0 {
+		t.Errorf("expected TSMC.Score != 0 when provider is attached, got %f", breakdown.TSMC.Score)
+	}
+	if breakdown.TSMC.Formula == "" {
+		t.Error("expected TSMC.Formula != \"\" when provider is attached")
+	}
+}
+
+// TestCalculateAllScoresWithBreakdown_TSMC_Fallback verifies that when no TSMC
+// provider is attached, breakdown.TSMC is the zero value (default FactorScoreItem{}),
+// NOT a panic or error. This prevents regression where CalculateAllScoresWithBreakdown
+// returned an empty FactorScoreItem instead of properly handling the nil provider.
+func TestCalculateAllScoresWithBreakdown_TSMC_Fallback(t *testing.T) {
+	fe := NewFactorEngine()
+	// Explicitly do NOT attach a TSMC provider
+
+	quotes := map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 500, Last: 550, IsTradable: true},
+	}
+	agentRecs := []domain.Recommendation{
+		{Agent: "test-agent", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+	factorWeights := map[FactorType]float64{
+		FactorMomentum: 0.25,
+		FactorValue:    0.20,
+		FactorQuality:  0.20,
+		FactorAgent:    0.15,
+	}
+
+	// Should not panic, should return zero value for TSMC
+	breakdown, scores := fe.CalculateAllScoresWithBreakdown("2330.TW", quotes, agentRecs, nil, factorWeights)
+
+	// TSMC should be zero value
+	if breakdown.TSMC.Score != 0 {
+		t.Errorf("expected TSMC.Score = 0 when no provider attached, got %f", breakdown.TSMC.Score)
+	}
+	if breakdown.TSMC.Formula != "" {
+		t.Errorf("expected TSMC.Formula = \"\" when no provider attached, got %q", breakdown.TSMC.Formula)
+	}
+	if breakdown.TSMC.IsFallback {
+		t.Error("expected TSMC.IsFallback = false when no provider (not a fallback, just absent)")
+	}
+
+	// TSMC should NOT contribute to total score when not attached
+	if _, ok := scores[FactorTSMC]; ok {
+		t.Error("expected FactorTSMC not in scores map when no provider attached")
+	}
+}

@@ -536,6 +536,82 @@ func TestLoadDarwinianStatus_MalformedJSON(t *testing.T) {
 	}
 }
 
+func TestLoadDarwinianStatus_StatusLabels(t *testing.T) {
+	baseDir := t.TempDir()
+	stateDir := filepath.Join(baseDir, "data", "state")
+	cfgDir := filepath.Join(baseDir, "configs")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := map[string]any{
+		"version": 1,
+		"agents": []map[string]any{
+			{"id": "registered-zero"},
+			{"id": "active-agent"},
+		},
+	}
+	regData, _ := json.Marshal(registry)
+	if err := os.WriteFile(filepath.Join(cfgDir, "agents.json"), regData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	weights := map[string]any{
+		"saved_at": "2026-04-22T04:00:00Z",
+		"weights": map[string]any{
+			"registered-zero": map[string]any{
+				"weight": 1.0, "rolling_sharpe": 0.0, "hit_rate": 0.0,
+				"total_signals": 0, "win_count": 0, "loss_count": 0,
+				"avg_return": 0.0, "last_updated_at": "2026-04-22T03:55:00Z",
+			},
+			"ghost-agent": map[string]any{
+				"weight": 1.2, "rolling_sharpe": 0.0, "hit_rate": 0.0,
+				"total_signals": 0, "win_count": 0, "loss_count": 0,
+				"avg_return": 0.0, "last_updated_at": "2026-04-22T03:55:00Z",
+			},
+			"active-agent": map[string]any{
+				"weight": 1.5, "rolling_sharpe": 2.0, "hit_rate": 0.6,
+				"total_signals": 10, "win_count": 6, "loss_count": 4,
+				"avg_return": 0.02, "last_updated_at": "2026-04-22T03:55:00Z",
+			},
+			"legacy-agent": map[string]any{
+				"weight": 0.9, "rolling_sharpe": 0.0, "hit_rate": 0.0,
+				"win_count": 0, "loss_count": 0,
+				"avg_return": 0.0, "last_updated_at": "2026-04-22T03:55:00Z",
+			},
+		},
+	}
+	data, _ := json.Marshal(weights)
+	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	status, err := svc.LoadDarwinianStatus()
+	if err != nil {
+		t.Fatalf("LoadDarwinianStatus: %v", err)
+	}
+
+	cases := map[string]string{
+		"registered-zero": "dormant",
+		"ghost-agent":     "ghost",
+		"active-agent":    "active",
+		"legacy-agent":    "ghost",
+	}
+	for id, want := range cases {
+		a, ok := status.Agents[id]
+		if !ok {
+			t.Fatalf("agent %s missing from response", id)
+		}
+		if a.Status != want {
+			t.Errorf("agent %s Status = %q, want %q", id, a.Status, want)
+		}
+	}
+}
+
 // =============================================================================
 // LoadRegimeHistory: uses OutcomeStore.LoadSessionSummaries
 // =============================================================================

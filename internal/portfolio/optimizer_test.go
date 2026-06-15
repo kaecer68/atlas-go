@@ -1082,3 +1082,76 @@ func TestDrawdownSimulation_NotEnoughAssets(t *testing.T) {
 		t.Error("expected zero drawdown for single-asset portfolio (no covariance)")
 	}
 }
+
+const testTSMCProviderScore = 0.75
+
+func TestOptimizer_TSMCConsistency(t *testing.T) {
+	fe := NewFactorEngine()
+	fe.WithTSMCProvider(func(symbol string) *domain.FactorScoreItem {
+		return &domain.FactorScoreItem{
+			Score:      testTSMCProviderScore,
+			Formula:    "tsmc_factor(adv_ratio=0.42, premium=1.23)",
+			RawInputs:  map[string]float64{"adv_ratio": 0.42, "premium": 1.23},
+			IsFallback: false,
+		}
+	})
+
+	o := NewOptimizer()
+	o.WithFactorEngine(fe)
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0,
+		FactorValue:    0.0,
+		FactorQuality:  0.0,
+		FactorAgent:    0.0,
+		FactorTSMC:     1.0,
+	})
+
+	quotes := map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 500, Last: 550, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Agent: "test-agent", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+
+	breakdown, _ := fe.CalculateAllScoresWithBreakdown("2330.TW", quotes, recs, nil, map[FactorType]float64{
+		FactorMomentum: 0.25,
+		FactorValue:    0.20,
+		FactorQuality:  0.20,
+		FactorAgent:    0.15,
+		FactorTSMC:     0.20,
+	})
+
+	if breakdown.TSMC.Score != testTSMCProviderScore {
+		t.Errorf("FactorEngine path: expected TSMC score %f, got %f", testTSMCProviderScore, breakdown.TSMC.Score)
+	}
+	if breakdown.TSMC.Formula == "" {
+		t.Error("FactorEngine path: expected non-empty TSMC.Formula")
+	}
+
+	aggregated := o.aggregateRecommendations(recs)
+	internalScores := o.calculateMultiFactorScores(aggregated, quotes, map[FactorType]float64{
+		FactorMomentum: 0.0,
+		FactorValue:    0.0,
+		FactorQuality:  0.0,
+		FactorAgent:    0.0,
+		FactorTSMC:     1.0,
+	})
+
+	key := "2330.TW_BUY"
+	internalScore, ok := internalScores[key]
+	if !ok {
+		t.Fatal("expected symbol score for 2330.TW in optimizer path")
+	}
+	if internalScore.TSMC != testTSMCProviderScore {
+		t.Errorf("Optimizer path: expected TSMC score %f, got %f", testTSMCProviderScore, internalScore.TSMC)
+	}
+
+	if breakdown.TSMC.Score != internalScore.TSMC {
+		t.Errorf("TSMC score mismatch between paths: FactorEngine=%f, Optimizer=%f",
+			breakdown.TSMC.Score, internalScore.TSMC)
+	}
+}

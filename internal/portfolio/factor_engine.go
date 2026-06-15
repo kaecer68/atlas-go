@@ -141,6 +141,13 @@ func (fe *FactorEngine) WithLinkageProvider(fn func(symbol string) *domain.Linka
 	return fe
 }
 
+func (fe *FactorEngine) WithTSMCProvider(fn func(symbol string) *domain.FactorScoreItem) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.tsmcProv = fn
+	return fe
+}
+
 func (fe *FactorEngine) WithCorporateActionProvider(p CorporateActionProvider) *FactorEngine {
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
@@ -790,11 +797,12 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		FactorAgent:    agent.Score,
 	}
 
-	var nar, icl, link domain.FactorScoreItem
+	var nar, icl, link, tsmc domain.FactorScoreItem
 	fe.mu.RLock()
 	narProv := fe.narrativeProv
 	iclProv := fe.cycleProv
 	linkProv := fe.linkageProv
+	tsmcProv := fe.tsmcProv
 	fe.mu.RUnlock()
 
 	if narProv != nil {
@@ -827,6 +835,12 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 			result[FactorLinkage] = link.Score
 		}
 	}
+	if tsmcProv != nil {
+		if tfs := tsmcProv(symbol); tfs != nil {
+			tsmc = *tfs
+			result[FactorTSMC] = tfs.Score
+		}
+	}
 
 	breakdown := &domain.FactorScoreBreakdown{
 		Momentum:               mom,
@@ -838,7 +852,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		Narrative:              nar,
 		IndustryCycle:          icl,
 		Linkage:                link,
-		TSMC:                   domain.FactorScoreItem{},
+		TSMC:                   tsmc,
 	}
 
 	// Precious Metals: compute PM score when symbol is a known PM instrument.

@@ -666,6 +666,7 @@ export interface DarwinianAgentInfo {
   loss_count: number;
   avg_return: number;
   last_updated?: string;
+  status: string;
 }
 
 export interface DarwinianHistoryPoint {
