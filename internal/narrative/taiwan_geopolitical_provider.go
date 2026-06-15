@@ -19,6 +19,7 @@ import (
 // TaiwanRSSGeopoliticalProvider monitors Taiwan-related geopolitical news via RSS feeds.
 // It extends the RSS pattern to track cross-strait tensions, military drills, and sanctions.
 type TaiwanRSSGeopoliticalProvider struct {
+	mu       sync.RWMutex
 	client   *http.Client
 	feeds    []string
 	keywords []string
@@ -61,7 +62,10 @@ func (t *TaiwanRSSGeopoliticalProvider) Name() string {
 }
 
 // SetHTTPClient overrides the default HTTP client (testability hook).
+// Locked with mu to prevent races with concurrent FetchScore readers.
 func (t *TaiwanRSSGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.client = client
 }
 
@@ -129,7 +133,10 @@ func (t *TaiwanRSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context,
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
-	resp, err := t.client.Do(req)
+	t.mu.RLock()
+	client := t.client
+	t.mu.RUnlock()
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}

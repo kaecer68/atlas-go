@@ -2,7 +2,11 @@ package narrative
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -124,4 +128,43 @@ func TestCompositeTaiwanGeopoliticalProvider_FetchScore(t *testing.T) {
 	if score.Intensity < 0 || score.Intensity > 100 {
 		t.Fatalf("intensity out of range: %v", score.Intensity)
 	}
+}
+
+// Verifies SetHTTPClient is safe under concurrent FetchScore (regression test for #534).
+func TestTaiwanRSSGeopoliticalProvider_SetHTTPClient_Race(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `<?xml version="1.0"?><rss version="2.0"><channel><title>Empty</title></channel></rss>`)
+	}))
+	defer server.Close()
+
+	clientA := server.Client()
+	clientB := &http.Client{Timeout: 5 * time.Second}
+	p := NewTaiwanRSSGeopoliticalProvider()
+
+	const N = 50
+	var wg sync.WaitGroup
+
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if i%2 == 0 {
+				p.SetHTTPClient(clientA)
+			} else {
+				p.SetHTTPClient(clientB)
+			}
+		}(i)
+	}
+
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = p.FetchScore(ctx)
+		}()
+	}
+
+	wg.Wait()
 }
