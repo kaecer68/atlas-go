@@ -91,6 +91,44 @@ func TestTaxAwareSizerBaseSizer(t *testing.T) {
 	}
 }
 
+func TestTaxAwareSizer_RoundsToLot(t *testing.T) {
+	base := portfolio.NewSizer()
+	cfg := domain.TaxConfig{
+		DividendTaxRate:    0.28,
+		TransactionTaxRate: 0.003,
+		IncludeNHI:         true,
+	}
+	sizer := NewTaxAwareSizer(base, cfg)
+
+	// capital=50000, price=100, taxRate=0.003
+	// effectiveCapital = 50000 / 1.003 ≈ 49850.45
+	// shares = int(49850.45 / 100) = 498
+	// after lot rounding: (498 / 1000) * 1000 = 0
+	shares := sizer.SizePosition("2330", 50000, 100)
+	if shares != 0 {
+		t.Errorf("expected 0 shares after lot rounding, got %d", shares)
+	}
+}
+
+func TestTaxAwareSizer_LotSizeBoundary(t *testing.T) {
+	base := portfolio.NewSizer()
+	cfg := domain.TaxConfig{
+		DividendTaxRate:    0.28,
+		TransactionTaxRate: 0,
+		IncludeNHI:         true,
+	}
+	sizer := NewTaxAwareSizer(base, cfg)
+
+	// capital=100000, price=100, taxRate=0
+	// effectiveCapital = 100000 / 1.0 = 100000
+	// shares = int(100000 / 100) = 1000
+	// after lot rounding: (1000 / 1000) * 1000 = 1000
+	shares := sizer.SizePosition("2330", 100000, 100)
+	if shares != 1000 {
+		t.Errorf("expected 1000 shares at lot boundary, got %d", shares)
+	}
+}
+
 func TestTaxAwareSizerWithCustomTaxRate(t *testing.T) {
 	base := portfolio.NewSizer()
 	cfg := domain.TaxConfig{
