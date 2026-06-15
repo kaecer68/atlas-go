@@ -60,6 +60,11 @@ func (t *TaiwanRSSGeopoliticalProvider) Name() string {
 	return "taiwan_rss_geopolitical"
 }
 
+// SetHTTPClient overrides the default HTTP client (testability hook).
+func (t *TaiwanRSSGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	t.client = client
+}
+
 // FetchScore aggregates keyword counts from Taiwan RSS feeds and maps to intensity.
 func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
 	var totalMatches int
@@ -165,6 +170,15 @@ func NewCompositeTaiwanGeopoliticalProvider(providers ...GeopoliticalRiskProvide
 // Name returns the provider name.
 func (c *CompositeTaiwanGeopoliticalProvider) Name() string {
 	return "composite_taiwan_geopolitical"
+}
+
+// SetHTTPClient propagates the custom HTTP client to inner providers that support it.
+func (c *CompositeTaiwanGeopoliticalProvider) SetHTTPClient(client *http.Client) {
+	for _, p := range c.providers {
+		if setter, ok := p.(interface{ SetHTTPClient(*http.Client) }); ok {
+			setter.SetHTTPClient(client)
+		}
+	}
 }
 
 // FetchScore averages intensity across all Taiwan providers.

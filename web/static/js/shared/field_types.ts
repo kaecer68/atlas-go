@@ -1458,7 +1458,6 @@ export interface IndustryOverview {
 }
 
 export interface IndustryParameters {
-  sector_weights: string;
   cycle_thresholds: string;
   inventory_cycle_thresholds: string;
   capex_cycle_thresholds: string;
@@ -1999,7 +1998,6 @@ export interface OrchestratorParameters {
   promotion_hitrate_threshold: string;
   rejection_sharpe_threshold: string;
   rejection_hitrate_threshold: string;
-  sector_rotation_base_allocations: string;
   sector_rotation_macro_adjustments?: string;
   sector_rotation_flow_adjustments?: string;
   use_ml_scoring: string;
@@ -2072,6 +2070,7 @@ export interface ParametersConfig {
   engine?: string;
   rsi_tw?: string;
   tax?: string;
+  sector_allocation: string;
 }
 
 export interface PerformanceReport {
@@ -2796,6 +2795,21 @@ export interface SeasonalPerformance {
   recorded_at: string;
 }
 
+export interface SectorAllocationConfig {
+  rationale: string;
+  source: string;
+  citation?: string | null;
+  base_weights: Record<string, number>;
+  derivation_factors: Record<string, string[]>;
+  cycle_weight: number;
+  seasonal_weight: number;
+  linkage_weight: number;
+  narrative_weight: number;
+  macro_weight: number;
+  factor_weight: number;
+  weight_floor: number;
+}
+
 export interface SectorAttribution {
   sector: string;
   sector_label: string;
@@ -3301,17 +3315,9 @@ export interface ValueYieldExecutorParameters {
   yield_trap_penalty: string;
 }
 
-export interface WeightDerivation {
-  base_weight: number;
-  derivation_factors: string[];
-  interpretation: string;
-  risk_factors: string[];
-  opportunities: string[];
-}
-
-export interface WeightFactor {
+export interface WeightFactorConfig {
   factor: string;
-  contribution: number;
+  weight: number;
   source: string;
   evidence: string;
 }

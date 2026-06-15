@@ -351,18 +351,21 @@ func TestAgentRunner_PublishEvent_WithEventBus(t *testing.T) {
 	defer eb.Close()
 	runner := &AgentRunner{eventBus: eb}
 
-	var received bool
+	received := make(chan struct{}, 1)
 	sub := eb.Subscribe(EventSystemStart, func(ctx context.Context, event BusEvent) error {
-		received = true
+		select {
+		case received <- struct{}{}:
+		default:
+		}
 		return nil
 	})
 	defer sub.Cancel()
 
 	runner.publishEvent(BusEvent{ID: "evt-1", Type: EventSystemStart, Timestamp: time.Now()})
-	time.Sleep(50 * time.Millisecond)
-
-	if !received {
-		t.Error("expected event to be published and received")
+	select {
+	case <-received:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected event to be published within 2s")
 	}
 }
 
@@ -424,8 +427,13 @@ func TestAgentRunner_ApplyExecutionInput_WithEventBus(t *testing.T) {
 	defer eb.Close()
 
 	var eventPayload map[string]any
+	done := make(chan struct{}, 1)
 	sub := eb.Subscribe(EventSystemStart, func(ctx context.Context, event BusEvent) error {
 		eventPayload = event.Payload.(map[string]any)
+		select {
+		case done <- struct{}{}:
+		default:
+		}
 		return nil
 	})
 	defer sub.Cancel()
@@ -443,7 +451,11 @@ func TestAgentRunner_ApplyExecutionInput_WithEventBus(t *testing.T) {
 		t.Fatalf("ApplyExecutionInput failed: %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected execution_input_applied event within 2s")
+	}
 
 	if eventPayload == nil {
 		t.Fatal("expected event to be published")

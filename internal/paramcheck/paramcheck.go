@@ -165,19 +165,19 @@ func CheckSection(obj map[string]any, path string, strict bool) (warnings, error
 func ValidateAndReport(config map[string]any, path string, strict bool, stdout, stderr io.Writer) int {
 	warnings, errors := WalkTree(config, "", strict)
 	for _, w := range warnings {
-		fmt.Fprintf(stderr, "WARN: %s\n", w)
+		_, _ = fmt.Fprintf(stderr, "WARN: %s\n", w)
 	}
 	for _, e := range errors {
-		fmt.Fprintf(stderr, "FAIL: %s\n", e)
+		_, _ = fmt.Fprintf(stderr, "FAIL: %s\n", e)
 	}
 	if len(errors) > 0 {
-		fmt.Fprintf(stdout, "\n%d error(s), %d warning(s)\n", len(errors), len(warnings))
+		_, _ = fmt.Fprintf(stdout, "\n%d error(s), %d warning(s)\n", len(errors), len(warnings))
 		return 1
 	}
 	if strict && len(warnings) > 0 {
-		fmt.Fprintf(stdout, "\n%d warning(s) (strict mode)\n", len(warnings))
+		_, _ = fmt.Fprintf(stdout, "\n%d warning(s) (strict mode)\n", len(warnings))
 		return 1
 	}
-	fmt.Fprintf(stdout, "OK: %s is valid (%d sections checked)\n", path, CountSections(config))
+	_, _ = fmt.Fprintf(stdout, "OK: %s is valid (%d sections checked)\n", path, CountSections(config))
 	return 0
 }

@@ -1,10 +1,12 @@
 package main
 
-import "encoding/json"
-import "fmt"
-import "os"
+import (
+	"encoding/json"
+	"fmt"
+	"os"
 
-import "github.com/kaecer68/atlas-go/internal/paramcheck"
+	"github.com/kaecer68/atlas-go/internal/paramcheck"
+)
 
 func main() {
 	path, strict := "configs/parameters.json", false
@@ -17,12 +19,12 @@ func main() {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "FAIL: cannot read %s: %v\n", path, err)
+		_, _ = fmt.Fprintf(os.Stderr, "FAIL: cannot read %s: %v\n", path, err)
 		os.Exit(1)
 	}
 	var config map[string]any
 	if err := json.Unmarshal(data, &config); err != nil {
-		fmt.Fprintf(os.Stderr, "FAIL: invalid JSON in %s: %v\n", path, err)
+		_, _ = fmt.Fprintf(os.Stderr, "FAIL: invalid JSON in %s: %v\n", path, err)
 		os.Exit(1)
 	}
 	os.Exit(paramcheck.ValidateAndReport(config, path, strict, os.Stdout, os.Stderr))

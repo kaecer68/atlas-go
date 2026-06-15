@@ -431,10 +431,19 @@ func inferSectorFromAgent(agent domain.AgentSpec) string {
 		"tech":       "electronics",
 	}
 
+	// Longest-match-first: prevents shorter keywords (e.g. "ai")
+	// from incorrectly matching as substrings of longer ones (e.g. "retail").
+	keywords := make([]string, 0, len(sectorKeywords))
+	for k := range sectorKeywords {
+		keywords = append(keywords, k)
+	}
+	sort.Slice(keywords, func(i, j int) bool {
+		return len(keywords[i]) > len(keywords[j])
+	})
 	searchText := strings.ToLower(agent.ID + " " + agent.Skill)
-	for keyword, sector := range sectorKeywords {
+	for _, keyword := range keywords {
 		if strings.Contains(searchText, keyword) {
-			return sector
+			return sectorKeywords[keyword]
 		}
 	}
 
@@ -455,10 +464,19 @@ func inferStyleFromAgent(agent domain.AgentSpec) string {
 		"reversal":       "mean_reversion",
 	}
 
+	// Longest-match-first: prevents shorter keywords from incorrectly
+	// matching as substrings of longer ones (e.g. "reversal" vs "mean_reversion").
+	keywords := make([]string, 0, len(styleKeywords))
+	for k := range styleKeywords {
+		keywords = append(keywords, k)
+	}
+	sort.Slice(keywords, func(i, j int) bool {
+		return len(keywords[i]) > len(keywords[j])
+	})
 	searchText := strings.ToLower(agent.ID + " " + agent.Skill)
-	for keyword, style := range styleKeywords {
+	for _, keyword := range keywords {
 		if strings.Contains(searchText, keyword) {
-			return style
+			return styleKeywords[keyword]
 		}
 	}
 
