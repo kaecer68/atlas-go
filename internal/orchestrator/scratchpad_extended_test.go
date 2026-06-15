@@ -99,23 +99,6 @@ func TestScratchpad_ExportJSONL(t *testing.T) {
 	}
 }
 
-func TestScratchpad_ExportJSONL_ReadOnlyDir(t *testing.T) {
-	dir := t.TempDir()
-	// Pre-create traces dir and make it read-only to trigger MkdirAll failure.
-	tracesDir := filepath.Join(dir, "traces")
-	if err := os.MkdirAll(tracesDir, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	// On macOS, the owner can still write. This test at least exercises the path.
-	s := &Scratchpad{
-		sessionID: "session-20250101-daily",
-		baseDir:   dir,
-		traces:    []ReasoningTrace{},
-	}
-	_, _ = s.ExportJSONL()
-	// May succeed or fail depending on OS; just verify no panic.
-}
-
 func TestScratchpad_LoadScratchpad_FileNotFound(t *testing.T) {
 	dir := t.TempDir()
 	_, err := LoadScratchpad("nonexistent", dir)

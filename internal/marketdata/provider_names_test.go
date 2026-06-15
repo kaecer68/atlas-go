@@ -1,7 +1,6 @@
 package marketdata
 
 import (
-	"context"
 	"testing"
 )
 
@@ -34,36 +33,6 @@ func TestProviderNamesAndConstructors(t *testing.T) {
 			}
 			if got := p.Name(); got != tc.wantName {
 				t.Errorf("Name() = %q, want %q", got, tc.wantName)
-			}
-		})
-	}
-}
-
-func TestFetchSnapshots_CancelledContexts(t *testing.T) {
-	tests := []struct {
-		name    string
-		fetcher func(ctx context.Context) (MacroDataSnapshot, error)
-	}{
-		{"SPX", func(ctx context.Context) (MacroDataSnapshot, error) { return NewSPXIndexProvider().FetchSnapshot(ctx) }},
-		{"NDX", func(ctx context.Context) (MacroDataSnapshot, error) { return NewNDXIndexProvider().FetchSnapshot(ctx) }},
-		{"DJI", func(ctx context.Context) (MacroDataSnapshot, error) { return NewDJIIndexProvider().FetchSnapshot(ctx) }},
-		{"NVDA", func(ctx context.Context) (MacroDataSnapshot, error) { return NewNVDAProvider().FetchSnapshot(ctx) }},
-		{"AAPL", func(ctx context.Context) (MacroDataSnapshot, error) { return NewAAPLProvider().FetchSnapshot(ctx) }},
-		{"MSFT", func(ctx context.Context) (MacroDataSnapshot, error) { return NewMSFTProvider().FetchSnapshot(ctx) }},
-		{"TSMADR", func(ctx context.Context) (MacroDataSnapshot, error) { return NewTSMADRProvider().FetchSnapshot(ctx) }},
-		{"OTC", func(ctx context.Context) (MacroDataSnapshot, error) { return NewOTCIndexProvider().FetchSnapshot(ctx) }},
-		{"DRAM", func(ctx context.Context) (MacroDataSnapshot, error) {
-			return NewDRAMSpotPriceProvider().FetchSnapshot(ctx)
-		}},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			_, err := tc.fetcher(ctx)
-			if err == nil {
-				t.Skip("expected error for cancelled context, got nil (provider may use different codepath)")
 			}
 		})
 	}

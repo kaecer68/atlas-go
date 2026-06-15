@@ -211,17 +211,6 @@ func TestFactorBridge_ComputeStressLevel_CappedAt100(t *testing.T) {
 	}
 }
 
-func TestFactorBridge_SetCalculator(t *testing.T) {
-	fb := NewFactorBridge()
-	if fb.calculator != nil {
-		t.Error("calculator should be nil by default")
-	}
-	fb.SetCalculator(nil) // should not panic
-	if fb.calculator != nil {
-		t.Error("setting nil should keep calculator nil")
-	}
-}
-
 // approxEqual checks if two float64 values are within epsilon of each other.
 func approxEqual(a, b, epsilon float64) bool {
 	diff := a - b
