@@ -5,6 +5,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
+// TaiwanLotSize is the standard trading unit for Taiwan equities.
+// 1 張 = 1000 股. Position sizes are rounded down to multiples of this unit.
+const TaiwanLotSize = 1000
+
 // TaxAwareSizer wraps a portfolio.Sizer and reduces effective capital
 // by the transaction tax rate before computing position size.
 type TaxAwareSizer struct {
@@ -31,8 +35,7 @@ func (s *TaxAwareSizer) SizePosition(symbol string, capital float64, price float
 
 	effectiveCapital := capital / (1 + s.taxCfg.TransactionTaxRate)
 	shares := int(effectiveCapital / price)
-	// Taiwan stocks trade in lots of 1000 (1 張)
-	shares = (shares / 1000) * 1000
+	shares = (shares / TaiwanLotSize) * TaiwanLotSize
 	if shares < 0 {
 		return 0
 	}

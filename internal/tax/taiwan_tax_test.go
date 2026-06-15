@@ -1,7 +1,9 @@
 package tax
 
 import (
+	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -254,6 +256,78 @@ func TestCalculatePortfolioTax(t *testing.T) {
 			t.Errorf("expected empty slice, got %d items", len(snapshots))
 		}
 	})
+}
+
+func TestCalculatePositionTaxStrict_NormalCase(t *testing.T) {
+	calc := NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
+
+	pos := domain.Position{
+		Symbol:      "2330",
+		Quantity:    1000,
+		AverageCost: 50,
+	}
+
+	snap, err := calc.CalculatePositionTaxStrict(pos, 60, 1000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// DividendTax = 1000 * 0.28 = 280
+	// TransactionTax = 1000 * 60 * 0.003 = 180
+	// TotalTax = 280 + 180 = 460
+	// AfterTaxPnL = 1000*(60-50) - 460 = 10000 - 460 = 9540
+	if snap.TotalTax != 460 {
+		t.Errorf("TotalTax = %v, want 460", snap.TotalTax)
+	}
+	if snap.AfterTaxPnL != 9540 {
+		t.Errorf("AfterTaxPnL = %v, want 9540", snap.AfterTaxPnL)
+	}
+	if snap.DividendTax != 280 {
+		t.Errorf("DividendTax = %v, want 280", snap.DividendTax)
+	}
+	if snap.TransactionTax != 180 {
+		t.Errorf("TransactionTax = %v, want 180", snap.TransactionTax)
+	}
+}
+
+func TestCalculatePositionTaxStrict_ZeroQuantity(t *testing.T) {
+	calc := NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
+
+	pos := domain.Position{Symbol: "2330", Quantity: 0, AverageCost: 50}
+	snap, err := calc.CalculatePositionTaxStrict(pos, 60, 0)
+
+	if err == nil {
+		t.Fatal("expected error for zero quantity, got nil")
+	}
+	if !errors.Is(err, ErrInvalidPositionTaxInput) {
+		t.Errorf("error should wrap ErrInvalidPositionTaxInput, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "quantity") {
+		t.Errorf("error message should contain 'quantity', got %q", err.Error())
+	}
+	if snap != (domain.TaxSnapshot{}) {
+		t.Errorf("expected zero TaxSnapshot on error, got %+v", snap)
+	}
+}
+
+func TestCalculatePositionTaxStrict_ZeroPrice(t *testing.T) {
+	calc := NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
+
+	pos := domain.Position{Symbol: "2330", Quantity: 1000, AverageCost: 50}
+	snap, err := calc.CalculatePositionTaxStrict(pos, 0, 0)
+
+	if err == nil {
+		t.Fatal("expected error for zero sell price, got nil")
+	}
+	if !errors.Is(err, ErrInvalidPositionTaxInput) {
+		t.Errorf("error should wrap ErrInvalidPositionTaxInput, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "price") {
+		t.Errorf("error message should contain 'price', got %q", err.Error())
+	}
+	if snap != (domain.TaxSnapshot{}) {
+		t.Errorf("expected zero TaxSnapshot on error, got %+v", snap)
+	}
 }
 
 func TestConfig(t *testing.T) {

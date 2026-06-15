@@ -1,8 +1,15 @@
 package tax
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
+
+// ErrInvalidPositionTaxInput is returned by strict tax calculation variants
+// when position quantity or sell price is non-positive.
+var ErrInvalidPositionTaxInput = errors.New("invalid position tax input")
 
 // TaiwanTaxCalculator computes Taiwan equity taxes for simulation and reporting.
 //
@@ -77,6 +84,9 @@ func (c *TaiwanTaxCalculator) CalculateTransactionTax(sellNotional float64) floa
 
 // CalculatePositionTax computes the full tax snapshot for a single position
 // assuming it is sold at sellPrice with dividendReceived during the holding period.
+//
+// Deprecated: use CalculatePositionTaxStrict for explicit error handling on
+// invalid inputs (zero/negative quantity or sell price).
 func (c *TaiwanTaxCalculator) CalculatePositionTax(pos domain.Position, sellPrice float64, dividendReceived float64) domain.TaxSnapshot {
 	if pos.Quantity <= 0 || sellPrice <= 0 {
 		return domain.TaxSnapshot{
@@ -123,6 +133,59 @@ func (c *TaiwanTaxCalculator) CalculatePortfolioTax(
 		snapshots = append(snapshots, snap)
 	}
 	return snapshots
+}
+
+// CalculatePositionTaxStrict computes the full tax snapshot for a single position
+// and returns an error when pos.Quantity <= 0 or sellPrice <= 0.
+func (c *TaiwanTaxCalculator) CalculatePositionTaxStrict(pos domain.Position, sellPrice float64, dividendReceived float64) (domain.TaxSnapshot, error) {
+	if pos.Quantity <= 0 {
+		return domain.TaxSnapshot{}, fmt.Errorf("%w: quantity must be positive, got %d", ErrInvalidPositionTaxInput, pos.Quantity)
+	}
+	if sellPrice <= 0 {
+		return domain.TaxSnapshot{}, fmt.Errorf("%w: sell price must be positive, got %v", ErrInvalidPositionTaxInput, sellPrice)
+	}
+
+	sellNotional := float64(pos.Quantity) * sellPrice
+	divTax := c.CalculateDividendTax(dividendReceived)
+	txnTax := c.CalculateTransactionTax(sellNotional)
+	totalTax := divTax + txnTax
+
+	unrealizedPnL := float64(pos.Quantity) * (sellPrice - pos.AverageCost)
+	afterTaxPnL := unrealizedPnL - totalTax
+
+	return domain.TaxSnapshot{
+		Symbol:             pos.Symbol,
+		DividendTaxRate:    c.effectiveDividendTaxRate(),
+		TransactionTaxRate: c.cfg.TransactionTaxRate,
+		DividendTax:        divTax,
+		TransactionTax:     txnTax,
+		TotalTax:           totalTax,
+		AfterTaxPnL:        afterTaxPnL,
+	}, nil
+}
+
+// CalculatePortfolioTaxStrict computes tax snapshots for an entire portfolio
+// and returns an error on the first position with invalid input.
+// sellPrices maps symbol → assumed sell price; dividends maps symbol → dividend received.
+func (c *TaiwanTaxCalculator) CalculatePortfolioTaxStrict(
+	positions []domain.Position,
+	sellPrices map[string]float64,
+	dividends map[string]float64,
+) ([]domain.TaxSnapshot, error) {
+	snapshots := make([]domain.TaxSnapshot, 0, len(positions))
+	for _, pos := range positions {
+		sellPrice := sellPrices[pos.Symbol]
+		if sellPrice <= 0 {
+			sellPrice = pos.CurrentPrice
+		}
+		div := dividends[pos.Symbol]
+		snap, err := c.CalculatePositionTaxStrict(pos, sellPrice, div)
+		if err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, snap)
+	}
+	return snapshots, nil
 }
 
 // TaiwanCostModel computes round-trip trading costs for Taiwan equities.
