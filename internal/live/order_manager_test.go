@@ -393,20 +393,32 @@ func TestOrderManager_Run_BrokerRejectsOrder(t *testing.T) {
 		t.Fatalf("expected error to mention insufficient funds, got: %v", err)
 	}
 
-	select {
-	case got := <-eventCh:
-		if got.Type != EventOrderError {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderError)
+	// Drain events until we find the rejected error event. ChannelEventBus
+	// dispatches each handler in its own goroutine, so the order.rejected
+	// lifecycle event and the order.error event may arrive in either order.
+	found := false
+	for {
+		select {
+		case got := <-eventCh:
+			if got.Type != EventOrderError {
+				continue
+			}
+			payload, ok := got.Payload.(OrderErrorEventPayload)
+			if !ok {
+				t.Fatalf("unexpected payload type: %T", got.Payload)
+			}
+			if payload.ErrorCode != "rejected" {
+				t.Fatalf("unexpected error code: %q", payload.ErrorCode)
+			}
+			found = true
+		case <-time.After(1 * time.Second):
+			if !found {
+				t.Fatal("expected rejected event but none was received")
+			}
 		}
-		payload, ok := got.Payload.(OrderErrorEventPayload)
-		if !ok {
-			t.Fatalf("unexpected payload type: %T", got.Payload)
+		if found {
+			break
 		}
-		if payload.ErrorCode != "rejected" {
-			t.Fatalf("unexpected error code: %q", payload.ErrorCode)
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("expected rejected event but none was received")
 	}
 }
 
