@@ -79,6 +79,51 @@ func TestComputePipelineTags_Low5TriggeredWhenTrueLow(t *testing.T) {
 	}
 }
 
+func TestIsStockPickingLayer(t *testing.T) {
+	tests := []struct {
+		layer  string
+		expect bool
+	}{
+		{"sector", true},
+		{"style", true},
+		{"superinvestor", true},
+		{"regime", false},
+		{"macro", false},
+		{"", false},
+		{"sECTOR", false},
+	}
+	for _, tt := range tests {
+		got := isStockPickingLayer(tt.layer)
+		if got != tt.expect {
+			t.Errorf("isStockPickingLayer(%q) = %v, want %v", tt.layer, got, tt.expect)
+		}
+	}
+}
+
+func TestIsStockPickingLayerByID(t *testing.T) {
+	views := []AgentUniverseViewData{
+		{AgentID: "agent-001", Name: "Agent 1", Layer: "sector"},
+		{AgentID: "agent-002", Name: "Agent 2", Layer: "regime"},
+		{AgentID: "agent-003", Name: "Agent 3", Layer: "style"},
+	}
+
+	if !isStockPickingLayerByID("agent-001", views) {
+		t.Error("agent-001 is sector layer, expected true")
+	}
+	if isStockPickingLayerByID("agent-002", views) {
+		t.Error("agent-002 is regime layer, expected false")
+	}
+	if !isStockPickingLayerByID("agent-003", views) {
+		t.Error("agent-003 is style layer, expected true")
+	}
+	if isStockPickingLayerByID("nonexistent", views) {
+		t.Error("nonexistent agent should return false")
+	}
+	if isStockPickingLayerByID("", views) {
+		t.Error("empty agentID should return false")
+	}
+}
+
 func contains(ss []string, target string) bool {
 	for _, s := range ss {
 		if s == target {
@@ -86,4 +131,102 @@ func contains(ss []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func TestComputePipelineTags_NilDataset(t *testing.T) {
+	tags := computePipelineTags(nil, "2330", time.Now())
+	if tags != nil {
+		t.Errorf("expected nil for nil dataset, got %v", tags)
+	}
+}
+
+func TestComputePipelineTags_MissingSymbol(t *testing.T) {
+	ds, today := buildDataset(t, "2330", []float64{100, 100, 100, 100, 100})
+	tags := computePipelineTags(ds, "missing", today)
+	if tags != nil {
+		t.Errorf("expected nil for missing symbol, got %v", tags)
+	}
+}
+
+func TestComputePipelineTags_LongRed(t *testing.T) {
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	ds := &replay.Dataset{
+		Dates: []time.Time{base.AddDate(0, 0, 4)},
+		ByDate: map[string]map[string]domain.DailyBar{
+			"2026-06-05": {"2330": {Symbol: "2330", Open: 100, Close: 110, Volume: 1000}},
+		},
+	}
+	tags := computePipelineTags(ds, "2330", base.AddDate(0, 0, 4))
+	if !contains(tags, "長紅") {
+		t.Errorf("expected 長紅 tag for +10%% move, got %v", tags)
+	}
+}
+
+func TestComputePipelineTags_LongBlack(t *testing.T) {
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	ds := &replay.Dataset{
+		Dates: []time.Time{base.AddDate(0, 0, 4)},
+		ByDate: map[string]map[string]domain.DailyBar{
+			"2026-06-05": {"2330": {Symbol: "2330", Open: 100, Close: 90, Volume: 1000}},
+		},
+	}
+	tags := computePipelineTags(ds, "2330", base.AddDate(0, 0, 4))
+	if !contains(tags, "長黑") {
+		t.Errorf("expected 長黑 tag for -10%% move, got %v", tags)
+	}
+}
+
+func TestComputePipelineTags_VolumeSurge(t *testing.T) {
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	ds := &replay.Dataset{
+		Dates: []time.Time{base, base.AddDate(0, 0, 1), base.AddDate(0, 0, 2), base.AddDate(0, 0, 3), base.AddDate(0, 0, 4)},
+		ByDate: map[string]map[string]domain.DailyBar{
+			"2026-06-01": {"2330": {Symbol: "2330", Open: 100, Close: 100, Volume: 1000}},
+			"2026-06-02": {"2330": {Symbol: "2330", Open: 100, Close: 100, Volume: 1000}},
+			"2026-06-03": {"2330": {Symbol: "2330", Open: 100, Close: 100, Volume: 1000}},
+			"2026-06-04": {"2330": {Symbol: "2330", Open: 100, Close: 100, Volume: 1000}},
+			"2026-06-05": {"2330": {Symbol: "2330", Open: 100, Close: 105, Volume: 2000}},
+		},
+	}
+	tags := computePipelineTags(ds, "2330", base.AddDate(0, 0, 4))
+	if !contains(tags, "放量") {
+		t.Errorf("expected 放量 tag for volume surge, got %v", tags)
+	}
+}
+
+func TestComputePipelineTags_Wrapper(t *testing.T) {
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	ds := &replay.Dataset{
+		Dates: []time.Time{base.AddDate(0, 0, 4)},
+		ByDate: map[string]map[string]domain.DailyBar{
+			"2026-06-05": {"2330": {Symbol: "2330", Open: 100, Close: 110, Volume: 1000}},
+		},
+	}
+	tags, err := ComputePipelineTags(nil, ds, "2330", base.AddDate(0, 0, 4))
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if !contains(tags, "長紅") {
+		t.Errorf("expected 長紅 tag, got %v", tags)
+	}
+}
+
+func TestFallbackPriceTargets_WithDefault(t *testing.T) {
+	target, stopLoss, err := FallbackPriceTargets(nil, "nonexistent-skill", 100.0, domain.SideBuy)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if target <= 100.0 || stopLoss >= 100.0 {
+		t.Errorf("target (%f) should be > price (100), stopLoss (%f) should be < price (100)", target, stopLoss)
+	}
+}
+
+func TestFallbackPriceTargets_SellSide(t *testing.T) {
+	target, stopLoss, err := FallbackPriceTargets(nil, "nonexistent-skill", 100.0, domain.SideSell)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if stopLoss <= 100.0 || target >= 100.0 {
+		t.Errorf("for sell side: stopLoss (%f) should be > price (100), target (%f) should be < price (100)", stopLoss, target)
+	}
 }

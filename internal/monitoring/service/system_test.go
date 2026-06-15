@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 func TestCheckTSMCRevenueHealth(t *testing.T) {
@@ -248,4 +250,143 @@ func TestCheckMarginHealth(t *testing.T) {
 			t.Errorf("expected error (no _margin.json files), got %s", status)
 		}
 	})
+}
+
+// =============================================================================
+// NewSystemService
+// =============================================================================
+
+func TestNewSystemService(t *testing.T) {
+	svc := NewSystemService("/workdir", "/ledger", "/baseline", nil, nil, nil)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if svc.WorkDir != "/workdir" {
+		t.Errorf("expected WorkDir /workdir, got %q", svc.WorkDir)
+	}
+	if svc.LedgerDir != "/ledger" {
+		t.Errorf("expected LedgerDir /ledger, got %q", svc.LedgerDir)
+	}
+	if svc.BaselinePath != "/baseline" {
+		t.Errorf("expected BaselinePath /baseline, got %q", svc.BaselinePath)
+	}
+}
+
+// =============================================================================
+// LoadPhase3Status
+// =============================================================================
+
+// =============================================================================
+// LoadSystemHealth
+// =============================================================================
+
+func TestLoadSystemHealth(t *testing.T) {
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+	health, err := svc.LoadSystemHealth()
+	if err != nil {
+		t.Fatalf("LoadSystemHealth: %v", err)
+	}
+	if health.ReplayDataPathOK {
+		t.Error("expected ReplayDataPathOK false for nonexistent path")
+	}
+}
+
+// =============================================================================
+// LoadClampingEvents
+// =============================================================================
+
+func TestLoadClampingEvents_FileNotFound(t *testing.T) {
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "", nil, nil, nil)
+	events, err := svc.LoadClampingEvents(10)
+	if err != nil {
+		t.Fatalf("expected no error when file not found, got %v", err)
+	}
+	if events == nil {
+		t.Error("expected non-nil events slice")
+	}
+	if len(events) != 0 {
+		t.Errorf("expected 0 events, got %d", len(events))
+	}
+}
+
+// =============================================================================
+// LoadConvictionClampingEvents
+// =============================================================================
+
+func TestLoadConvictionClampingEvents_FileNotFound(t *testing.T) {
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "", nil, nil, nil)
+	events, err := svc.LoadConvictionClampingEvents(10)
+	if err != nil {
+		t.Fatalf("expected no error when file not found, got %v", err)
+	}
+	if events == nil {
+		t.Error("expected non-nil events slice")
+	}
+	if len(events) != 0 {
+		t.Errorf("expected 0 events, got %d", len(events))
+	}
+}
+
+// =============================================================================
+// SetCycleTracker
+// =============================================================================
+
+func TestSetCycleTracker(t *testing.T) {
+	svc := NewSystemService("/workdir", "/ledger", "", nil, nil, nil)
+	ct := industry.NewCycleTracker()
+	svc.SetCycleTracker(ct)
+	if svc.CycleTracker == nil {
+		t.Error("expected CycleTracker to be set")
+	}
+}
+
+// =============================================================================
+// checkCycleStale
+// =============================================================================
+
+func TestCheckCycleStale_NilTracker(t *testing.T) {
+	svc := NewSystemService("/workdir", "/ledger", "", nil, nil, nil)
+	if svc.checkCycleStale() {
+		t.Error("expected false when CycleTracker is nil")
+	}
+}
+
+func TestIsWeekendGap_Within24Hours(t *testing.T) {
+	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
+	dataTime := time.Date(2026, 6, 15, 8, 0, 0, 0, time.UTC)
+	if isWeekendGap(dataTime, now, 72) {
+		t.Error("data within 24h should not be weekend gap")
+	}
+}
+
+func TestIsWeekendGap_FridayToMonday(t *testing.T) {
+	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
+	dataTime := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC)
+	if !isWeekendGap(dataTime, now, 72) {
+		t.Error("friday 18:00 to monday 10:00 should be weekend gap")
+	}
+}
+
+func TestIsWeekendGap_FridayToTuesday(t *testing.T) {
+	now := time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC)
+	dataTime := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC)
+	if isWeekendGap(dataTime, now, 72) {
+		t.Error("tuesday is not in weekend gap window")
+	}
+}
+
+func TestIsWeekendGap_Outside72Hours(t *testing.T) {
+	now := time.Date(2026, 6, 17, 10, 0, 0, 0, time.UTC)
+	dataTime := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC)
+	if isWeekendGap(dataTime, now, 72) {
+		t.Error("beyond 72h should not be weekend gap")
+	}
+}
+
+func TestIsWeekendGap_DefaultMaxWeekendHours(t *testing.T) {
+	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
+	dataTime := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC)
+	if got := isWeekendGap(dataTime, now, 0); !got {
+		t.Error("zero maxWeekendHours should use default 72h")
+	}
 }

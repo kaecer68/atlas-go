@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 // =============================================================================
@@ -882,11 +882,6 @@ func TestComputeAgentRegimeBreakdown_PerOutcomeRegime(t *testing.T) {
 // (No assertions; this is a marker that the test file was compiled and run.)
 // =============================================================================
 
-func TestPipelineTier2TestFileCompiles(t *testing.T) {
-	_ = context.TODO()
-	_ = ledger.NewStore
-}
-
 func TestLoadRecommendationPipeline_DegradedWhenSummaryMissing(t *testing.T) {
 	baseDir := t.TempDir()
 	sessionID := "session-20260614-daily"
@@ -973,5 +968,139 @@ func TestLoadRecommendationPipeline_NoSession(t *testing.T) {
 	}
 	if data.Status != PipelineStatusNoSession {
 		t.Errorf("expected Status=%q when no sessions exist, got %q", PipelineStatusNoSession, data.Status)
+	}
+}
+
+func TestPipelineService_LoadUniverseOverlap_WithSeedRegistry(t *testing.T) {
+	registry := orchestrator.SeedRegistry()
+	provider := func() (domain.AgentRegistry, error) { return registry, nil }
+
+	svc := NewPipelineService("/tmp/nonexistent", "/tmp/nonexistent", nil)
+	svc.registryProvider = provider
+
+	data, err := svc.LoadUniverseOverlap()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data")
+	}
+	if len(data.Agents) == 0 {
+		t.Fatal("expected at least one agent from SeedRegistry")
+	}
+	if data.Matrix == nil {
+		t.Fatal("expected non-nil matrix")
+	}
+}
+
+func TestPipelineService_LoadUniverseOverlap_OverlapCalculation(t *testing.T) {
+	agentA := recommendation.AgentSpec{
+		ID:       "agent-a",
+		Name:     "Agent A",
+		Layer:    domain.LayerSector,
+		Enabled:  true,
+		Universe: []string{"2330", "2317", "2454"},
+	}
+	agentB := recommendation.AgentSpec{
+		ID:       "agent-b",
+		Name:     "Agent B",
+		Layer:    domain.LayerStyle,
+		Enabled:  true,
+		Universe: []string{"2330", "2454", "2498"},
+	}
+	registry := domain.AgentRegistry{Agents: []recommendation.AgentSpec{agentA, agentB}}
+	provider := func() (domain.AgentRegistry, error) { return registry, nil }
+
+	svc := NewPipelineService("/tmp/nonexistent", "/tmp/nonexistent", nil)
+	svc.registryProvider = provider
+
+	data, err := svc.LoadUniverseOverlap()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if data.Matrix["agent-a"]["agent-b"] != 2 {
+		t.Errorf("expected overlap=2 between agent-a and agent-b, got %d", data.Matrix["agent-a"]["agent-b"])
+	}
+	if data.Matrix["agent-b"]["agent-a"] != 2 {
+		t.Errorf("expected overlap=2 between agent-b and agent-a, got %d", data.Matrix["agent-b"]["agent-a"])
+	}
+	if _, ok := data.Matrix["agent-a"]["agent-a"]; ok {
+		t.Error("diagonal entry agent-a->agent-a should be absent")
+	}
+}
+
+func TestPipelineService_LoadUniverseOverlap_Warnings(t *testing.T) {
+	agentA := recommendation.AgentSpec{
+		ID:       "context-agent",
+		Name:     "Context Agent",
+		Layer:    domain.LayerContext,
+		Enabled:  true,
+		Universe: []string{},
+	}
+	agentB := recommendation.AgentSpec{
+		ID:       "sector-agent",
+		Name:     "Sector Agent",
+		Layer:    domain.LayerSector,
+		Enabled:  true,
+		Universe: []string{"2330", "2317", "2454"},
+	}
+	registry := domain.AgentRegistry{Agents: []recommendation.AgentSpec{agentA, agentB}}
+	provider := func() (domain.AgentRegistry, error) { return registry, nil }
+
+	svc := NewPipelineService("/tmp/nonexistent", "/tmp/nonexistent", nil)
+	svc.registryProvider = provider
+
+	data, err := svc.LoadUniverseOverlap()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	for _, w := range data.Warnings {
+		t.Logf("warning: %s", w)
+	}
+}
+
+func TestPipelineService_LoadUniverseOverlap_SmallUniverse(t *testing.T) {
+	agent := recommendation.AgentSpec{
+		ID:       "tiny-agent",
+		Name:     "Tiny Agent",
+		Layer:    domain.LayerSector,
+		Enabled:  true,
+		Universe: []string{"2330"},
+	}
+	registry := domain.AgentRegistry{Agents: []recommendation.AgentSpec{agent}}
+	provider := func() (domain.AgentRegistry, error) { return registry, nil }
+
+	svc := NewPipelineService("/tmp/nonexistent", "/tmp/nonexistent", nil)
+	svc.registryProvider = provider
+
+	data, err := svc.LoadUniverseOverlap()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(data.Warnings) == 0 {
+		t.Error("expected warning for universe < 3 symbols")
+	}
+}
+
+func TestPipelineService_LoadUniverseOverlap_RegistryError_FallsBackToSeed(t *testing.T) {
+	called := false
+	provider := func() (domain.AgentRegistry, error) {
+		called = true
+		return domain.AgentRegistry{}, errors.New("registry load failed")
+	}
+
+	svc := NewPipelineService("/tmp/nonexistent", "/tmp/nonexistent", nil)
+	svc.registryProvider = provider
+
+	data, err := svc.LoadUniverseOverlap()
+	if err != nil {
+		t.Fatalf("expected no error on fallback, got: %v", err)
+	}
+	if !called {
+		t.Error("expected registry provider to be called")
+	}
+	if len(data.Agents) == 0 {
+		t.Fatal("expected non-empty agents from SeedRegistry fallback")
 	}
 }

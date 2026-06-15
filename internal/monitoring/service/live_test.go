@@ -249,3 +249,74 @@ func TestEquityCurvePoint_NewFields(t *testing.T) {
 		t.Errorf("TaxPaid = %v, want 5000.0", point.TaxPaid)
 	}
 }
+
+func TestResolveSymbolName_KnownSymbol(t *testing.T) {
+	name := resolveSymbolName("2330.TW")
+	if name != "台積電" {
+		t.Errorf("expected 台積電, got %q", name)
+	}
+}
+
+func TestResolveSymbolName_KnownSymbolWithoutTW(t *testing.T) {
+	name := resolveSymbolName("2330")
+	if name != "台積電" {
+		t.Errorf("expected 台積電, got %q", name)
+	}
+}
+
+func TestResolveSymbolName_UnknownSymbol(t *testing.T) {
+	name := resolveSymbolName("9999.TW")
+	if name != "9999.TW" {
+		t.Errorf("expected 9999.TW (unchanged), got %q", name)
+	}
+}
+
+func TestResolveSymbolName_UnknownWithoutTW(t *testing.T) {
+	name := resolveSymbolName("XXXX")
+	if name != "XXXX" {
+		t.Errorf("expected XXXX (unchanged), got %q", name)
+	}
+}
+
+func TestNewLiveService(t *testing.T) {
+	svc := NewLiveService("/workdir", "/ledger")
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if svc.WorkDir != "/workdir" {
+		t.Errorf("expected WorkDir /workdir, got %q", svc.WorkDir)
+	}
+	if svc.LedgerDir != "/ledger" {
+		t.Errorf("expected LedgerDir /ledger, got %q", svc.LedgerDir)
+	}
+}
+
+func TestLiveService_LoadLiveStatus(t *testing.T) {
+	svc := NewLiveService(t.TempDir(), t.TempDir())
+	status := svc.LoadLiveStatus()
+	if status.CircuitBreaker.State == "" {
+		t.Error("expected CircuitBreaker state to be set")
+	}
+	_ = status.Timestamp
+}
+
+func TestBuildSymbolSectorMap_NilClassifier(t *testing.T) {
+	svc := NewLiveService(t.TempDir(), t.TempDir())
+	m := svc.buildSymbolSectorMap()
+	if m == nil {
+		t.Error("expected non-nil map")
+	}
+	if len(m) != 0 {
+		t.Errorf("expected 0 entries with nil classifier, got %d", len(m))
+	}
+}
+
+func TestGetSectorForSymbol(t *testing.T) {
+	m := map[string]string{"2330": "semiconductor", "2317": "semiconductor"}
+	if got := getSectorForSymbol("2330", m); got != "semiconductor" {
+		t.Errorf("expected semiconductor, got %q", got)
+	}
+	if got := getSectorForSymbol("unknown", m); got != "other" {
+		t.Errorf("expected other, got %q", got)
+	}
+}
