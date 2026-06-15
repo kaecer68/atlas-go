@@ -23,6 +23,7 @@ type FactorBridge struct {
 	marginAvg      float64
 	marginStd      float64
 	calculator     *retail.Calculator // optional RSI-tw calculator for retail sentiment
+	stressIndex    *StressIndex       // config-driven Taiwan Stress Index
 }
 
 // NewFactorBridge creates a FactorBridge with default calibration values.
@@ -32,6 +33,7 @@ func NewFactorBridge() *FactorBridge {
 		foreignFlowStd: 50e8, // 50 billion TWD standard deviation
 		marginAvg:      0,
 		marginStd:      50e8,
+		stressIndex:    NewStressIndexFromConfig(DefaultStressIndexConfig()),
 	}
 }
 
@@ -96,36 +98,7 @@ func (fb *FactorBridge) computeRetailSentiment(snap MacroDataSnapshot) float64 {
 }
 
 // computeStressLevel calculates market stress from VIX, DXY, and rate indicators.
+// Delegates to the config-driven StressIndex for indicator contributions.
 func (fb *FactorBridge) computeStressLevel(snap MacroDataSnapshot) float64 {
-	stress := 0.0
-
-	// VIX contribution (0-40 points)
-	vix := snap.VIX.Value
-	if vix > 30 {
-		stress += 40
-	} else if vix > 20 {
-		stress += (vix - 20) * 4
-	}
-
-	// DXY contribution (0-30 points) - USD strengthening = stress
-	dxy := snap.DXY.Value
-	if dxy > 105 {
-		stress += 30
-	} else if dxy > 100 {
-		stress += (dxy - 100) * 6
-	}
-
-	// Rate spread contribution (0-30 points)
-	us10y := snap.US10Y.Value
-	if us10y > 4.5 {
-		stress += 30
-	} else if us10y > 3.5 {
-		stress += (us10y - 3.5) * 30
-	}
-
-	// Normalize to [0, 100]
-	if stress > 100 {
-		stress = 100
-	}
-	return stress
+	return fb.stressIndex.ComputeStressLevel(snap)
 }
