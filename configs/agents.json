@@ -603,6 +603,45 @@
       }
     },
     {
+      "id": "growth-momentum-01",
+      "name": "成長動能",
+      "layer": "style",
+      "skill": "growth_momentum",
+      "promptFile": "prompts/agents/growth_momentum.md",
+      "enabled": true,
+      "universe": [
+        "2317.TW",
+        "2382.TW",
+        "2454.TW",
+        "3034.TW",
+        "3037.TW",
+        "6669.TW"
+      ],
+      "primaryMetrics": [
+        "alpha_hit_rate",
+        "momentum_followthrough"
+      ],
+      "requiredSkills": [
+        "growth_momentum",
+        "technical_breakout"
+      ],
+      "forbiddenActions": [
+        "illiquid_breakout_chasing",
+        "earnings_blindness"
+      ],
+      "operatingNotes": [
+        "Require confirmation and liquidity before upgrading conviction."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 1000000
+        },
+        "momentum_20d": {
+          "min": 0.0
+        }
+      }
+    },
+    {
       "id": "cro-01",
       "name": "風控長",
       "layer": "control",
