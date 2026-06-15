@@ -109,7 +109,7 @@ func TestCalculateComponentVaR(t *testing.T) {
 		"2317": 0.2,
 	}
 
-	items := CalculateComponentVaR(returns, weights)
+	items := CalculateComponentVaR(returns, weights, 0.95)
 	if len(items) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
@@ -133,7 +133,7 @@ func TestCalculateComponentVaR(t *testing.T) {
 }
 
 func TestCalculateComponentVaR_Empty(t *testing.T) {
-	items := CalculateComponentVaR(map[string][]float64{}, map[string]float64{})
+	items := CalculateComponentVaR(map[string][]float64{}, map[string]float64{}, 0.95)
 	if len(items) != 0 {
 		t.Errorf("expected 0 items for empty input, got %d", len(items))
 	}
@@ -158,7 +158,7 @@ func TestCalculateComponentVaR_EqualWeights(t *testing.T) {
 		"B": 0.5,
 	}
 
-	items := CalculateComponentVaR(returns, weights)
+	items := CalculateComponentVaR(returns, weights, 0.95)
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
@@ -173,7 +173,7 @@ func TestCalculateComponentVaR_ShortSeries(t *testing.T) {
 	}
 	weights := map[string]float64{"A": 1.0}
 
-	items := CalculateComponentVaR(returns, weights)
+	items := CalculateComponentVaR(returns, weights, 0.95)
 	if len(items) != 0 {
 		t.Errorf("expected 0 items for short series (<252), got %d", len(items))
 	}
@@ -192,5 +192,60 @@ func TestVaRPercentileAccuracy(t *testing.T) {
 
 	if math.Abs(var95-expected) > 0.0001 {
 		t.Errorf("VaR95 percentile accuracy: expected %.4f, got %.4f", expected, var95)
+	}
+}
+
+func TestCalculateComponentVaR_CustomConfidence(t *testing.T) {
+	// Use unique returns so sorted[2] ≠ sorted[12] at 252 observations.
+	a := make([]float64, MinObservationsForVaR)
+	b := make([]float64, MinObservationsForVaR)
+	for i := 0; i < MinObservationsForVaR; i++ {
+		a[i] = float64(i-MinObservationsForVaR/2) / 1000.0
+		b[i] = float64(MinObservationsForVaR/2-i) / 1000.0
+	}
+	returns := map[string][]float64{"A": a, "B": b}
+	weights := map[string]float64{"A": 0.6, "B": 0.4}
+
+	items95 := CalculateComponentVaR(returns, weights, 0.95)
+	items99 := CalculateComponentVaR(returns, weights, 0.99)
+
+	if len(items95) != 2 || len(items99) != 2 {
+		t.Fatalf("expected 2 items each, got %d and %d", len(items95), len(items99))
+	}
+
+	for i := range items95 {
+		if items95[i].ComponentVaR == items99[i].ComponentVaR {
+			t.Errorf("ComponentVaR for %s should differ between 0.95 and 0.99 confidence", items95[i].Symbol)
+		}
+	}
+}
+
+func TestCalculateVaR_AtMinObservations(t *testing.T) {
+	returns := make([]float64, MinObservationsForVaR)
+	for i := range returns {
+		returns[i] = float64(i-MinObservationsForVaR/2) / 1000.0
+	}
+	sort.Float64s(returns)
+
+	var95 := CalculateVaR(returns, 0.95)
+	expectedIndex := int(math.Floor((1.0 - 0.95) * float64(MinObservationsForVaR)))
+	expected := returns[expectedIndex]
+
+	if math.Abs(var95-expected) > 0.0001 {
+		t.Errorf("VaR95 at min observations: expected %.4f (index %d), got %.4f",
+			expected, expectedIndex, var95)
+	}
+}
+
+func TestCalculateVaR_InsufficientObservations(t *testing.T) {
+	returns := make([]float64, MinObservationsForVaR-1)
+	for i := range returns {
+		returns[i] = -0.01
+	}
+
+	result := CalculateVaR(returns, 0.95)
+	if result != 0.0 {
+		t.Errorf("expected 0.0 for insufficient observations (%d < %d), got %f",
+			len(returns), MinObservationsForVaR, result)
 	}
 }
