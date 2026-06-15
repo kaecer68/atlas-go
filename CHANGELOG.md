@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.0.3] - 2026-06-15
+
+### Fixed
+- `internal/live`: `TestOrderManager_Run_BrokerRejectsOrder` was flaky in `go test ./internal/live` — the assertion read the first event from the SubscribeAll channel, but `ChannelEventBus` dispatches handlers in their own goroutines, so `order.rejected` could arrive before `order.error`. The test now drains error events until it finds the expected `EventOrderError` (1 commit, 7906284b).
+
 ## [0.0.0.2] - 2026-06-14
 
 ### Added — Coverage Push (Stages 1-6 of functional-coverage-fix plan)
