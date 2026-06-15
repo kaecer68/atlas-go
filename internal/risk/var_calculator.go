@@ -8,6 +8,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// MinObservationsForVaR is the minimum number of daily return observations
+// required for a statistically meaningful VaR calculation (1 trading year).
+const MinObservationsForVaR = 252
+
 type VaRCalculator struct {
 	primaryConfidence   float64
 	secondaryConfidence float64
@@ -30,10 +34,16 @@ func (c *VaRCalculator) ComputeRiskSnapshot(dailyReturns []float64, portfolioVal
 	}
 }
 
+// ComputeComponentVaR decomposes portfolio VaR into per-asset contributions
+// using the calculator's primary confidence level.
+func (c *VaRCalculator) ComputeComponentVaR(returns map[string][]float64, weights map[string]float64) []ComponentVaRItem {
+	return CalculateComponentVaR(returns, weights, c.primaryConfidence)
+}
+
 // CalculateVaR computes historical VaR and CVaR from a series of daily returns.
 // confidence should be 0.95 or 0.99.
 func CalculateVaR(dailyReturns []float64, confidence float64) float64 {
-	if len(dailyReturns) < 252 {
+	if len(dailyReturns) < MinObservationsForVaR {
 		return 0.0
 	}
 	sorted := make([]float64, len(dailyReturns))
@@ -50,7 +60,7 @@ func CalculateVaR(dailyReturns []float64, confidence float64) float64 {
 // CalculateCVaR computes Conditional VaR (Expected Shortfall) as the average
 // of returns worse than the VaR threshold.
 func CalculateCVaR(dailyReturns []float64, confidence float64) float64 {
-	if len(dailyReturns) < 252 {
+	if len(dailyReturns) < MinObservationsForVaR {
 		return 0.0
 	}
 	varThreshold := CalculateVaR(dailyReturns, confidence)
@@ -109,7 +119,8 @@ type ComponentVaRItem struct {
 //
 // returns maps symbol → daily return series.
 // weights maps symbol → portfolio weight (should sum to ~1.0).
-func CalculateComponentVaR(returns map[string][]float64, weights map[string]float64) []ComponentVaRItem {
+// confidence is the VaR confidence level (e.g., 0.95 or 0.99).
+func CalculateComponentVaR(returns map[string][]float64, weights map[string]float64, confidence float64) []ComponentVaRItem {
 	if len(returns) == 0 || len(weights) == 0 {
 		return nil
 	}
@@ -120,7 +131,7 @@ func CalculateComponentVaR(returns map[string][]float64, weights map[string]floa
 			minLen = len(r)
 		}
 	}
-	if minLen < 252 {
+	if minLen < MinObservationsForVaR {
 		return nil
 	}
 
@@ -143,11 +154,6 @@ func CalculateComponentVaR(returns map[string][]float64, weights map[string]floa
 	sorted := make([]float64, len(portReturns))
 	copy(sorted, portReturns)
 	sort.Float64s(sorted)
-
-	confidence := 0.95
-	if cfg := config.GetParametersConfig(); cfg != nil {
-		confidence = cfg.Risk.VaRConfidenceLevel.Value
-	}
 
 	varIndex := max(int(math.Floor((1.0-confidence)*float64(len(sorted)))), 0)
 	if varIndex >= len(sorted) {
