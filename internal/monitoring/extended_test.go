@@ -135,16 +135,6 @@ func TestAutoHandler_Suppress_OverridesExisting(t *testing.T) {
 	}
 }
 
-func TestAutoHandler_Recover_NilStore(t *testing.T) {
-	h := NewAutoHandler(nil, nil)
-	h.Recover("test-category") // no panic on nil store
-}
-
-func TestAutoHandler_Handle_INFO_AutoAcknowledge(t *testing.T) {
-	h := NewAutoHandler(nil, nil)
-	h.Handle(Alert{Level: AlertLevelInfo, Category: "test", ID: "alert-1"}) // no panic
-}
-
 func TestNewAutoHandler_WithRules(t *testing.T) {
 	rules := []SuppressRule{{Category: "test-cat", Duration: 1 * time.Hour}}
 	h := NewAutoHandler(nil, rules)

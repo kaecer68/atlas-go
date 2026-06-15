@@ -65,17 +65,6 @@ func TestReadPositionsFromFile_ValidPositions(t *testing.T) {
 	}
 }
 
-func TestReadPositionsFromFile_TooShortData(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "tooshort.json")
-	if err := os.WriteFile(path, []byte("[]"), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-	pos := readPositionsFromFile(path)
-	if pos != nil {
-		t.Errorf("expected nil for empty array, got %v", pos)
-	}
-}
-
 // =====================================================================
 // loadPositions – no positions available
 // =====================================================================

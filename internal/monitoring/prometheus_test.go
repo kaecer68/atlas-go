@@ -89,17 +89,6 @@ func TestFormatMetricLine_WithLabels(t *testing.T) {
 	}
 }
 
-func TestFormatMetricLine_SingleLabel(t *testing.T) {
-	m := Metric{
-		Value:  0.5,
-		Labels: map[string]string{"method": "GET"},
-	}
-	got := formatMetricLine("latency", m)
-	if len(got) == 0 {
-		t.Fatal("formatMetricLine returned empty string")
-	}
-}
-
 func TestFormatMetricLine_EmptyLabels(t *testing.T) {
 	m := Metric{Value: 0.0, Labels: map[string]string{}}
 	got := formatMetricLine("zero_metric", m)

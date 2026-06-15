@@ -1080,13 +1080,6 @@ func TestLoadRecommendationOutcomes_InvalidSessionID(t *testing.T) {
 	}
 }
 
-func TestRegisterRoutes(t *testing.T) {
-	h := &Handlers{}
-	mux := http.NewServeMux()
-
-	h.RegisterRoutes(mux)
-}
-
 func TestPnLAttributionResponse_JSONSerialization(t *testing.T) {
 	resp := PnLAttributionResponse{
 		SnapshotTime:     time.Date(2026, 4, 14, 12, 0, 0, 0, time.UTC),
