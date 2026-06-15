@@ -473,7 +473,7 @@ func TestAlertStore_DirCreationError(t *testing.T) {
 	}
 }
 
-func TestAlertStore_DeleteWhere(t *testing.T) {
+func TestAlertStore_DeleteWhere_ByDedupKey(t *testing.T) {
 	store := newTestStore(t)
 
 	a1 := makeAlert("alert-1")
@@ -511,7 +511,7 @@ func TestAlertStore_DeleteWhere(t *testing.T) {
 	}
 }
 
-func TestAlertStore_DeleteWhere_NoMatch(t *testing.T) {
+func TestAlertStore_DeleteWhere_NoMatchWithRecords(t *testing.T) {
 	store := newTestStore(t)
 
 	a1 := makeAlert("alert-1")
@@ -538,7 +538,7 @@ func TestAlertStore_DeleteWhere_NoMatch(t *testing.T) {
 	}
 }
 
-func TestAlertStore_AcknowledgeWhere(t *testing.T) {
+func TestAlertStore_AcknowledgeWhere_ByDedupKey(t *testing.T) {
 	store := newTestStore(t)
 
 	a1 := makeAlert("alert-1")
@@ -587,7 +587,7 @@ func TestAlertStore_AcknowledgeWhere(t *testing.T) {
 	}
 }
 
-func TestAlertStore_AcknowledgeWhere_NoMatch(t *testing.T) {
+func TestAlertStore_AcknowledgeWhere_NoMatchWithRecords(t *testing.T) {
 	store := newTestStore(t)
 
 	a1 := makeAlert("alert-1")
@@ -606,7 +606,7 @@ func TestAlertStore_AcknowledgeWhere_NoMatch(t *testing.T) {
 	}
 }
 
-func TestAlertStore_ResolveWhere(t *testing.T) {
+func TestAlertStore_ResolveWhere_ByDedupKey(t *testing.T) {
 	store := newTestStore(t)
 
 	a1 := makeAlert("alert-1")
@@ -658,7 +658,7 @@ func TestAlertStore_ResolveWhere(t *testing.T) {
 	}
 }
 
-func TestAlertStore_ResolveWhere_NoMatch(t *testing.T) {
+func TestAlertStore_ResolveWhere_NoMatchWithRecords(t *testing.T) {
 	store := newTestStore(t)
 
 	a1 := makeAlert("alert-1")

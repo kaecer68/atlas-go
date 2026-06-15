@@ -1490,5 +1490,9 @@
     "internal/monitoring/api/backtest/handlers.go": "e14208a941e43663a65da2746e7142c886d7764ad727868120cc96fabbe2c767",
     "web/static/js/shared/components/seasonality-panel.js": "57645d5a84fd9a000a9d79d658157fda5710cb915176bad3d1dd14389e86d614",
     "internal/monitoring/api/tax/testdata/live/state/positions_current.json": "5a5fcb2ce5456c03112bd38854cb3c31e2e5f5a54c5e0bca7cad93967738bcd4"
+  },
+  "incrementalInProgress": {
+    "startedAt": 1781517284086,
+    "toWriteCount": 258
   }
 }
