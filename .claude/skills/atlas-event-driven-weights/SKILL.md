@@ -5,7 +5,7 @@ description: "Use when modifying factor weights, adding factor types, or connect
 
 > **實作狀態**：⚠️ 部分實作 — 核心元件已實作，部分功能已整合至現有模組  
 > **最後審計**：2026-06-02  
-> **實際檔案結構**：`factor_bridge.go`（已實作）、`factor_weight_engine.go`（已實作，8 因子），其餘因子計算已內建於 `factor_engine.go`
+> **實際檔案結構**：`factor_bridge.go`（已實作）、`factor_weight_engine.go`（已實作，12 因子：8 個核心 + 4 個條件式），其餘因子計算已內建於 `factor_engine.go`
 
 ## 描述
 
@@ -32,7 +32,7 @@ FactorBridge
          ↓
 ForeignFlowScore, MarginBalanceScore, RetailSentimentScore, StressLevel
          ↓
-FactorEngine (8因子)
+FactorEngine (12 因子)
 ```
 
 **輸入來源**：
@@ -40,7 +40,9 @@ FactorEngine (8因子)
 - TWSECapitalFlowProvider → 外資/法人數據
 - TaiwanStressIndex → 市場壓力指數
 
-### 2. 八因子系統（已擴充為 8 因子）
+### 2. 十二因子系統（8 個核心 + 4 個條件式）
+
+**8 個核心因子**（`defaultBaseWeights` 中權重 ≥ 0.05）：
 
 | 因子 | 基礎權重 | 說明 | 狀態 |
 |------|----------|------|------|
@@ -51,7 +53,16 @@ FactorEngine (8因子)
 | InstitutionalSentiment | 0.10 | 機構情緒因子 | ✅ 已實作（factor_engine.go `CalculateInstitutionalSentimentScore()`） |
 | Liquidity | 0.05 | 流動性因子 | ✅ 已實作（factor_engine.go `CalculateLiquidityScore()`） |
 | Narrative | 0.05 | 敘事因子 | ✅ 已實作 |
-| IndustryCycle | 0.00 | 產業週期因子 | ✅ 已實作 |
+| TSMC | 0.05 | 台積電權重因子 | ✅ 已實作（conditioned on `tsmcProv` injection） |
+
+**4 個條件式因子**（`defaultBaseWeights` 中權重 = 0.00，由事件或配置觸發啟用）：
+
+| 因子 | 基礎權重 | 說明 | 觸發條件 |
+|------|----------|------|----------|
+| IndustryCycle | 0.00 | 產業週期因子 | 事件 `oil_price_shock` 等觸發 IndustryCycle + delta |
+| PreciousMetals | 0.00 | 貴金屬因子 | 事件 `gold_rally` 觸發 PreciousMetals + delta |
+| ETF | 0.00 | ETF 資金流因子 | 多事件共同觸發（AI_capex_surge / US_rates_up / oil_price_shock / JPY_carry_unwind / gold_rally） |
+| Linkage | 0.00 | 供應鏈連動因子 | 配置啟用，預留供跨市場連動情境使用 |
 
 ### 3. InstitutionalSentiment 因子
 
@@ -118,7 +129,7 @@ type FactorWeightEngine struct {
 | FactorBridge | `internal/portfolio/factor_bridge.go` | ✅ 已實作（含 RSI-tw 計算器整合） |
 | InstitutionalSentiment | `internal/portfolio/factor_institutional_sentiment.go` | ⚠️ 未建立獨立檔案 — 功能已內建於 `factor_engine.go` |
 | Liquidity | `internal/portfolio/factor_liquidity.go` | ⚠️ 未建立獨立檔案 — 功能已內建於 `factor_engine.go` |
-| FactorWeightEngine | `internal/portfolio/factor_weight_engine.go` | ✅ 已實作（8 因子，配置化，含策略調整） |
+| FactorWeightEngine | `internal/portfolio/factor_weight_engine.go` | ✅ 已實作（12 因子，配置化，含策略調整） |
 | RegimeChange | `internal/portfolio/regime_change.go` | ⚠️ 未建立獨立檔案 — 功能由 `factor_weight_engine.go` + `regime.go` 覆蓋 |
 | Regime/Style 定義 | `internal/portfolio/regime.go` | ✅ 已實作（RegimeConfig、StyleAllocation） |
 
@@ -128,7 +139,7 @@ type FactorWeightEngine struct {
 
 1. ✅ `CalculateInstitutionalSentiment()` — 已整合於 `factor_engine.go`
 2. ✅ `CalculateLiquidity()` — 已整合於 `factor_engine.go`
-3. ✅ `CalculateAllScoresWithBreakdown()` — 已擴展支援 8 因子
+3. ✅ `CalculateAllScoresWithBreakdown()` — 已擴展支援 12 因子
 
 ## 驗證要求
 
@@ -189,3 +200,9 @@ if frame.Status == Active && frame.HitRate >= 0.7 {
     // 等同 InstSent +0.15, Agent +0.05
 }
 ```
+
+## Factor System Audit (2026-06-15)
+
+12 因子系統已於 2026-06-15 同步 `internal/portfolio/AGENTS.md` §2.4。本 skill 描述的 8 因子為歷史慣用語,實際實作擴展為 12 因子。4 個新增因子 (PreciousMetals / ETF / Linkage / TSMC) 為條件式啟用,詳見 `internal/portfolio/AGENTS.md` §2.4 與 `internal/portfolio/factor_weight_engine.go:41-56` (`defaultBaseWeights`)。
+
+**核心權重（總和 = 1.00）**：Momentum 0.25 + Value 0.20 + Quality 0.20 + Agent 0.15 + InstSent 0.10 + Liquidity 0.05 + Narrative 0.05 + TSMC 0.05 = 1.00；4 個條件式因子（IndustryCycle / PreciousMetals / ETF / Linkage）以 0.00 為基線，僅在事件觸發或配置覆蓋時提升。
