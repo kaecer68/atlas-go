@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -327,5 +328,127 @@ func TestDataChannelService_getHealthFromStore_NilRecordFallbacks(t *testing.T) 
 				t.Fatalf("expected last error %q, got %q", tt.expectLastErr, lastErr)
 			}
 		})
+	}
+}
+
+// =============================================================================
+// NewDataChannelService (0% → covered)
+// =============================================================================
+
+func TestNewDataChannelService(t *testing.T) {
+	svc := NewDataChannelService("/tmp/workdir", nil, nil, nil, nil, nil, "fugle-key", "fubon-key", "finmind-key", "tej-key")
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if svc.WorkDir != "/tmp/workdir" {
+		t.Errorf("expected WorkDir /tmp/workdir, got %q", svc.WorkDir)
+	}
+	if svc.FugleAPIKey != "fugle-key" {
+		t.Errorf("expected FugleAPIKey fugle-key, got %q", svc.FugleAPIKey)
+	}
+	if svc.healthStore == nil {
+		t.Error("expected healthStore to be initialized")
+	}
+}
+
+// =============================================================================
+// GetChannelStatus (0% → covered)
+// =============================================================================
+
+func TestGetChannelStatus(t *testing.T) {
+	svc := NewDataChannelService("/tmp/workdir", nil, nil, nil, nil, nil, "", "", "", "")
+	ch, err := svc.GetChannelStatus(context.Background(), "fugle")
+	if err != nil {
+		t.Fatalf("expected no error for valid channel, got %v", err)
+	}
+	if ch.ChannelID != "fugle" {
+		t.Errorf("expected channelID fugle, got %q", ch.ChannelID)
+	}
+}
+
+func TestGetChannelStatus_NotFound(t *testing.T) {
+	svc := NewDataChannelService("/tmp/workdir", nil, nil, nil, nil, nil, "", "", "", "")
+	_, err := svc.GetChannelStatus(context.Background(), "nonexistent_channel")
+	if err == nil {
+		t.Fatal("expected error for nonexistent channel")
+	}
+}
+
+// =============================================================================
+// GetAllChannelStatuses (0% → covered)
+// =============================================================================
+
+func TestGetAllChannelStatuses(t *testing.T) {
+	svc := NewDataChannelService("/tmp/workdir", nil, nil, nil, nil, nil, "fugle-key", "fubon-key", "finmind-key", "tej-key")
+	channels, err := svc.GetAllChannelStatuses(context.Background())
+	if err != nil {
+		t.Fatalf("GetAllChannelStatuses: %v", err)
+	}
+	if len(channels) == 0 {
+		t.Fatal("expected at least one channel")
+	}
+	seen := make(map[string]bool)
+	for _, c := range channels {
+		if c.ChannelID == "" {
+			t.Error("channel with empty ChannelID")
+		}
+		if seen[c.ChannelID] {
+			t.Errorf("duplicate channelID %q", c.ChannelID)
+		}
+		seen[c.ChannelID] = true
+	}
+}
+
+// =============================================================================
+// GetAlerts (0% → covered)
+// =============================================================================
+
+func TestGetAlerts_NoAlerts(t *testing.T) {
+	svc := NewDataChannelService("/tmp/workdir", nil, nil, nil, nil, nil, "", "", "", "")
+	alerts, err := svc.GetAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("GetAlerts: %v", err)
+	}
+	if alerts == nil {
+		t.Error("expected non-nil alerts slice, got nil")
+	}
+}
+
+func TestGetAlerts_WithErrorChannel(t *testing.T) {
+	adapter := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	_ = adapter.Record("fugle", "error", "connection refused")
+	svc := &DataChannelService{
+		WorkDir:     "/tmp/workdir",
+		healthStore: adapter,
+	}
+	alerts, err := svc.GetAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("GetAlerts: %v", err)
+	}
+	if len(alerts) == 0 {
+		t.Error("expected at least one alert for error channel")
+	}
+}
+
+// =============================================================================
+// statusText (0% → covered)
+// =============================================================================
+
+func TestStatusText(t *testing.T) {
+	tests := []struct {
+		status string
+		expect string
+	}{
+		{"ok", "正常"},
+		{"warn", "待更新"},
+		{"error", "異常"},
+		{"inactive", "未啟用"},
+		{"unknown", "未知"},
+	}
+	for _, tt := range tests {
+		got := statusText(tt.status)
+		if got != tt.expect {
+			t.Errorf("statusText(%q) = %q, want %q", tt.status, got, tt.expect)
+		}
 	}
 }

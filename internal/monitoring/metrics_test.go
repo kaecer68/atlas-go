@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -454,12 +453,6 @@ func TestCheckThresholds_UnacknowledgedAlerts(t *testing.T) {
 	if !found {
 		t.Errorf("expected unacknowledged_alerts violation, got %+v", violations)
 	}
-}
-
-func TestSystemMetrics_Start(t *testing.T) {
-	collector := NewMetricsCollector()
-	sm := NewSystemMetrics(collector, nil)
-	sm.Start(context.Background()) // deprecated no-op
 }
 
 func TestMetricsHistory(t *testing.T) {

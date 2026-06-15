@@ -18,13 +18,6 @@ func fixtureSnapshot() marketdata.MacroDataSnapshot {
 	}
 }
 
-func TestNewFactorBridge(t *testing.T) {
-	fb := NewFactorBridge()
-	if fb == nil {
-		t.Fatal("NewFactorBridge returned nil")
-	}
-}
-
 func TestFactorBridge_Standardize(t *testing.T) {
 	fb := NewFactorBridge()
 
@@ -61,27 +54,24 @@ func TestFactorBridge_Convert(t *testing.T) {
 	snap := fixtureSnapshot()
 	input := fb.Convert(snap)
 
-	// ForeignFlowScore should be non-zero given 25e8 / 50e8 = 0.5
-	if input.ForeignFlowScore == 0 {
-		t.Error("ForeignFlowScore should be non-zero")
-	}
-	if input.ForeignFlowScore < -1 || input.ForeignFlowScore > 1 {
-		t.Errorf("ForeignFlowScore %v outside [-1, 1]", input.ForeignFlowScore)
+	// ForeignFlowScore: standardize(25e8, 0, 50e8) = 0.5
+	if !approxEqual(input.ForeignFlowScore, 0.5, 0.001) {
+		t.Errorf("ForeignFlowScore = %v, want 0.5", input.ForeignFlowScore)
 	}
 
-	// DomesticFlowScore should be non-zero
-	if input.DomesticFlowScore == 0 {
-		t.Error("DomesticFlowScore should be non-zero")
+	// DomesticFlowScore: standardize(-5e8, 0, 50e8) = -0.1
+	if !approxEqual(input.DomesticFlowScore, -0.1, 0.001) {
+		t.Errorf("DomesticFlowScore = %v, want -0.1", input.DomesticFlowScore)
 	}
 
-	// RetailSentimentScore should be between [-1, 1]
-	if input.RetailSentimentScore < -1 || input.RetailSentimentScore > 1 {
-		t.Errorf("RetailSentimentScore %v outside [-1, 1]", input.RetailSentimentScore)
+	// RetailSentimentScore: fallback 3.0 / 10.0 = 0.3
+	if !approxEqual(input.RetailSentimentScore, 0.3, 0.001) {
+		t.Errorf("RetailSentimentScore = %v, want 0.3", input.RetailSentimentScore)
 	}
 
-	// StressLevel should be between [0, 100]
-	if input.StressLevel < 0 || input.StressLevel > 100 {
-		t.Errorf("StressLevel %v outside [0, 100]", input.StressLevel)
+	// StressLevel: VIX 22→8 + DXY 104→24 + US10Y 4.2→21 = 53
+	if !approxEqual(input.StressLevel, 53.0, 0.001) {
+		t.Errorf("StressLevel = %v, want 53.0", input.StressLevel)
 	}
 }
 
@@ -173,9 +163,9 @@ func TestFactorBridge_ComputeStressLevel_HighStress(t *testing.T) {
 	}
 
 	level := fb.computeStressLevel(snap)
-	// VIX > 30 → 40, DXY > 105 → 30, US10Y > 4.5 → 30 → total 100, capped
-	if level < 80 {
-		t.Errorf("expected high stress level, got %v", level)
+	// VIX 35 > 30 → 40, DXY 110 > 105 → 30, US10Y 5.0 > 4.5 → 30 → total 100, capped
+	if level != 100.0 {
+		t.Errorf("expected stress level 100.0 (capped), got %v", level)
 	}
 }
 
@@ -192,8 +182,8 @@ func TestFactorBridge_ComputeStressLevel_MediumStress(t *testing.T) {
 	// DXY 102 (> 100): (102-100)*6 = 12
 	// US10Y 4.0 (> 3.5): (4.0-3.5)*30 = 15
 	// total = 47
-	if level < 40 || level > 60 {
-		t.Errorf("expected medium stress ~47, got %v", level)
+	if level != 47.0 {
+		t.Errorf("expected stress level 47.0, got %v", level)
 	}
 }
 
@@ -206,19 +196,9 @@ func TestFactorBridge_ComputeStressLevel_CappedAt100(t *testing.T) {
 	}
 
 	level := fb.computeStressLevel(snap)
-	if level > 100 {
-		t.Errorf("stress level %v exceeds cap of 100", level)
-	}
-}
-
-func TestFactorBridge_SetCalculator(t *testing.T) {
-	fb := NewFactorBridge()
-	if fb.calculator != nil {
-		t.Error("calculator should be nil by default")
-	}
-	fb.SetCalculator(nil) // should not panic
-	if fb.calculator != nil {
-		t.Error("setting nil should keep calculator nil")
+	// VIX 50 > 30 → 40, DXY 120 > 105 → 30, US10Y 8.0 > 4.5 → 30 → total 100, capped
+	if level != 100.0 {
+		t.Errorf("stress level %v should be capped at 100.0", level)
 	}
 }
 

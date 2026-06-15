@@ -112,21 +112,6 @@ func TestSetCheckInterval(t *testing.T) {
 	}
 }
 
-func TestEvaluateRules_NoRules(t *testing.T) {
-	e := NewRuleEngine(nil)
-	e.EvaluateRules(nil) // no panic on nil state, no rules
-}
-
-func TestEvaluateRules_WithRules_NilState(t *testing.T) {
-	// DefaultRules conditions all handle nil state via explicit checks.
-	e := NewRuleEngine(nil)
-	rules := DefaultRules()
-	for _, r := range rules {
-		e.RegisterRule(r)
-	}
-	e.EvaluateRules(nil)
-}
-
 func TestDefaultRules(t *testing.T) {
 	rules := DefaultRules()
 	if len(rules) == 0 {

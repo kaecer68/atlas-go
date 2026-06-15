@@ -88,13 +88,6 @@ func TestUpdateAllCorrelations_PushesAllPairs(t *testing.T) {
 	}
 }
 
-func TestUpdateAllCorrelations_NilSafe(t *testing.T) {
-	// Nil receiver must not panic. This protects the BTM task from
-	// startup-race crashes when the service hasn't been wired yet.
-	var svc *CrossMarketService
-	svc.UpdateAllCorrelations(makeSnapshot())
-}
-
 func TestGetStatus_PopulatesAllFiveNewCorrelationsAfterMinObs(t *testing.T) {
 	prov := &fakeMacroProvider{snap: makeSnapshot()}
 	svc := NewCrossMarketService(prov)

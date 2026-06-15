@@ -18,6 +18,10 @@ func TestNewFundamentalProvider(t *testing.T) {
 	if fp.HasData() {
 		t.Error("new provider should have no data")
 	}
+	// Unknown symbol returns empty sector
+	if got := fp.GetSector("2330.TW"); got != "" {
+		t.Errorf("expected empty sector for unknown symbol, got %q", got)
+	}
 }
 
 func TestFundamentalProvider_HasData(t *testing.T) {
@@ -211,15 +215,5 @@ func TestFundamentalProvider_LoadFromJSON_PreviousDataReplaced(t *testing.T) {
 	}
 }
 
-func TestSectorConstants(t *testing.T) {
-	// Ensure constants are defined with expected values
-	if SectorSemiconductor != "semiconductor" {
-		t.Errorf("SectorSemiconductor = %q, want semiconductor", SectorSemiconductor)
-	}
-	if SectorFinancials != "financials" {
-		t.Errorf("SectorFinancials = %q, want financials", SectorFinancials)
-	}
-	if SectorElectronics != "electronics" {
-		t.Errorf("SectorElectronics = %q, want electronics", SectorElectronics)
-	}
-}
+// TestSectorConstants removed — tautological test (constant == its own literal).
+// Sector constants are verified through usage in GetSector/Get tests above.

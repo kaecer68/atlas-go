@@ -182,7 +182,192 @@ func TestLoadRecommendedStrategies_MissingStateFile(t *testing.T) {
 	}
 }
 
-func TestLoadRecommendedStrategies_MalformedJSON(t *testing.T) {
+func TestSwarmService_NewSwarmService(t *testing.T) {
+	svc := NewSwarmService("/path/to/snapshot")
+	if svc == nil {
+		t.Fatal("NewSwarmService returned nil")
+	}
+	if svc.snapshotPath != "/path/to/snapshot" {
+		t.Errorf("snapshotPath = %q, want /path/to/snapshot", svc.snapshotPath)
+	}
+}
+
+func TestSwarmService_SetTrainingDir(t *testing.T) {
+	svc := NewSwarmService("/path/to/snapshot")
+	svc.SetTrainingDir("/training/dir")
+	if svc.trainingDir != "/training/dir" {
+		t.Errorf("trainingDir = %q, want /training/dir", svc.trainingDir)
+	}
+}
+
+func writeSwarmSnapshotFixture(t *testing.T, dir, snapshotJSON string) string {
+	snapPath := filepath.Join(dir, "swarm_snapshot.json")
+	if err := os.WriteFile(snapPath, []byte(snapshotJSON), 0o644); err != nil {
+		t.Fatalf("write swarm_snapshot.json: %v", err)
+	}
+	return snapPath
+}
+
+func TestSwarmService_LoadStatus_OK(t *testing.T) {
+	dir := t.TempDir()
+	snap := `{
+		"recorded_at": "2026-06-15T10:00:00Z",
+		"total_fish": 20,
+		"consensus_confidence": 0.75,
+		"top_fish_accuracy": 0.68,
+		"generations_evolved": 5,
+		"consensus": {"2330": {"bullish_count": 8, "bearish_count": 2, "neutral_count": 2, "consensus_direction": "bullish", "average_confidence": 0.72}},
+		"anomalies": [{"type": "flash_rally", "symbol": "2330"}],
+		"scenarios": [{"id": "bull_market", "name": "Bull Market", "regime": "bull", "volatility": 0.15, "trend": 0.3}]
+	}`
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, snap))
+
+	status, err := svc.LoadStatus()
+	if err != nil {
+		t.Fatalf("LoadStatus error = %v", err)
+	}
+	if status.TotalFish != 20 {
+		t.Errorf("TotalFish = %d, want 20", status.TotalFish)
+	}
+	if status.ConsensusSymbols != 1 {
+		t.Errorf("ConsensusSymbols = %d, want 1", status.ConsensusSymbols)
+	}
+	if status.ConsensusConfidence != 0.75 {
+		t.Errorf("ConsensusConfidence = %v, want 0.75", status.ConsensusConfidence)
+	}
+	if status.AnomalyCount != 1 {
+		t.Errorf("AnomalyCount = %d, want 1", status.AnomalyCount)
+	}
+	if status.ScenarioCount != 1 {
+		t.Errorf("ScenarioCount = %d, want 1", status.ScenarioCount)
+	}
+	if status.GenerationsEvolved != 5 {
+		t.Errorf("GenerationsEvolved = %d, want 5", status.GenerationsEvolved)
+	}
+}
+
+func TestSwarmService_LoadStatus_NotFound(t *testing.T) {
+	svc := NewSwarmService("/nonexistent/path/snapshot.json")
+	_, err := svc.LoadStatus()
+	if err == nil {
+		t.Error("expected error for nonexistent snapshot")
+	}
+}
+
+func TestSwarmService_LoadStatus_MalformedJSON(t *testing.T) {
+	dir := t.TempDir()
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, `{not valid json`))
+	_, err := svc.LoadStatus()
+	if err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestSwarmService_LoadConsensus_OK(t *testing.T) {
+	dir := t.TempDir()
+	snap := `{
+		"consensus": {
+			"2330": {"bullish_count": 8, "bearish_count": 2, "neutral_count": 2, "consensus_direction": "bullish", "average_confidence": 0.72},
+			"2317": {"bullish_count": 3, "bearish_count": 5, "neutral_count": 1, "consensus_direction": "bearish", "average_confidence": 0.65}
+		}
+	}`
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, snap))
+
+	entries, err := svc.LoadConsensus()
+	if err != nil {
+		t.Fatalf("LoadConsensus error = %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("len(entries) = %d, want 2", len(entries))
+	}
+}
+
+func TestSwarmService_LoadConsensus_Empty(t *testing.T) {
+	dir := t.TempDir()
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, `{"consensus": {}}`))
+
+	entries, err := svc.LoadConsensus()
+	if err != nil {
+		t.Fatalf("LoadConsensus error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("len(entries) = %d, want 0", len(entries))
+	}
+}
+
+func TestSwarmService_LoadAnomalies_OK(t *testing.T) {
+	dir := t.TempDir()
+	snap := `{"anomalies": [{"type": "flash_rally", "symbol": "2330"}, {"type": "liquidity_crisis", "symbol": "2317"}]}`
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, snap))
+
+	anomalies, err := svc.LoadAnomalies()
+	if err != nil {
+		t.Fatalf("LoadAnomalies error = %v", err)
+	}
+	if len(anomalies) != 2 {
+		t.Errorf("len(anomalies) = %d, want 2", len(anomalies))
+	}
+}
+
+func TestSwarmService_LoadScenarios_OK(t *testing.T) {
+	dir := t.TempDir()
+	snap := `{"scenarios": [{"id": "bull", "name": "Bull Market", "regime": "bull", "volatility": 0.15, "trend": 0.3}]}`
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, snap))
+
+	scenarios, err := svc.LoadScenarios()
+	if err != nil {
+		t.Fatalf("LoadScenarios error = %v", err)
+	}
+	if len(scenarios) != 1 {
+		t.Errorf("len(scenarios) = %d, want 1", len(scenarios))
+	}
+}
+
+func TestSwarmService_CountTrainingScenarios_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, `{}`))
+	svc.SetTrainingDir(dir)
+
+	count := svc.countTrainingScenarios()
+	if count != 0 {
+		t.Errorf("countTrainingScenarios = %d, want 0 for empty dir", count)
+	}
+}
+
+func TestSwarmService_CountTrainingScenarios_NoTrainingDir(t *testing.T) {
+	svc := NewSwarmService("/some/path")
+	count := svc.countTrainingScenarios()
+	if count != 0 {
+		t.Errorf("countTrainingScenarios = %d, want 0 when trainingDir not set", count)
+	}
+}
+
+func TestSwarmService_CountTrainingScenarios_WithJSONLFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "scenario1.jsonl"), []byte(`{"a":1}
+{"b":2}
+{"c":3}
+`), 0o644); err != nil {
+		t.Fatalf("write scenario1.jsonl: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "scenario2.jsonl"), []byte(`{"d":4}
+`), 0o644); err != nil {
+		t.Fatalf("write scenario2.jsonl: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notjsonl.txt"), []byte(`ignore me`), 0o644); err != nil {
+		t.Fatalf("write notjsonl.txt: %v", err)
+	}
+
+	svc := NewSwarmService(writeSwarmSnapshotFixture(t, dir, `{}`))
+	svc.SetTrainingDir(dir)
+
+	count := svc.countTrainingScenarios()
+	if count != 4 {
+		t.Errorf("countTrainingScenarios = %d, want 4 (3 lines + 1 line)", count)
+	}
+}
+
+func TestSwarmService_LoadRecommendedStrategies_MalformedJSON(t *testing.T) {
 	dir := t.TempDir()
 	s := NewSwarmService(writeMLFixture(t, dir, `{not valid json`))
 
