@@ -141,3 +141,85 @@ test('regimeLabel (constants.js): 簡化版標籤行為對齊 names.js', () => {
   assert.equal(regimeLabelFromConstants(null), '-');
   assert.equal(regimeLabelFromConstants(undefined), '-');
 });
+
+// ============================================================================
+// P1-A: buildPipelineStatusBanner 必須處理全部 5 種 status + is_fallback_session
+// ============================================================================
+
+import { buildPipelineStatusBanner } from '../pages/pipeline.js';
+
+test('buildPipelineStatusBanner: status=ok 必須回傳空字串 (無 banner)', () => {
+  const html = buildPipelineStatusBanner({ status: 'ok', status_message: 'ok' });
+  assert.equal(html, '', 'ok 狀態不應顯示任何 banner');
+});
+
+test('buildPipelineStatusBanner: status=undefined 必須回傳空字串 (向後相容)', () => {
+  // 既有 API response 沒有 status 欄位時,不得崩潰
+  assert.equal(buildPipelineStatusBanner({}), '');
+  assert.equal(buildPipelineStatusBanner(null), '');
+  assert.equal(buildPipelineStatusBanner(undefined), '');
+});
+
+test('buildPipelineStatusBanner: status=degraded 必須顯示資料不完整 banner', () => {
+  const html = buildPipelineStatusBanner({
+    status: 'degraded',
+    status_message: '控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用',
+  });
+  assert.match(html, /資料不完整/, '必須包含「資料不完整」徽章');
+  assert.match(html, /控制層過濾記錄未載入/, '必須顯示後端 status_message');
+  assert.match(html, /summary\.json/, '訊息必須包含後端具體原因');
+});
+
+test('buildPipelineStatusBanner: status=minimal 必須顯示「尚無推薦產出」banner', () => {
+  // 修復前:pipeline.js 只判斷 'degraded',minimal 狀態被靜默忽略,
+  // 頁面直接空白,使用者以為系統壞掉。
+  const html = buildPipelineStatusBanner({
+    status: 'minimal',
+    status_message: '本場次尚無推薦產出記錄',
+  });
+  assert.match(html, /尚無推薦產出|無資料/, '必須明確告知使用者本場次無推薦');
+  assert.match(html, /本場次尚無推薦產出記錄/, '必須包含後端 status_message');
+});
+
+test('buildPipelineStatusBanner: status=no_session 必須顯示「尚未執行任何場次」banner', () => {
+  const html = buildPipelineStatusBanner({
+    status: 'no_session',
+    status_message: '尚未執行任何回測場次，請先執行回測',
+  });
+  assert.match(html, /尚未執行|請先執行/, '必須明確告知尚未執行回測');
+  assert.match(html, /回測/, '必須提及回測');
+});
+
+test('buildPipelineStatusBanner: status=error 必須顯示錯誤 banner', () => {
+  const html = buildPipelineStatusBanner({
+    status: 'error',
+    status_message: '載入推薦管線資料時發生錯誤',
+  });
+  assert.match(html, /錯誤|失敗/, '必須明確標示錯誤狀態');
+  assert.match(html, /載入推薦管線資料時發生錯誤/, '必須包含後端錯誤訊息');
+});
+
+test('buildPipelineStatusBanner: is_fallback_session=true 必須顯示 fallback banner', () => {
+  // fallback 與 degraded 是兩個獨立維度,可同時為 true。
+  // 修復前:fallbackBanner 和 degradedBanner 是兩個獨立變數,可能只渲染其中一個。
+  const html = buildPipelineStatusBanner({
+    status: 'degraded',
+    status_message: 'summary 缺失',
+    is_fallback_session: true,
+    fallback_message: '最新場次 session-X 尚無數據，已自動切換至 session-Y',
+  });
+  assert.match(html, /已自動切換/, '必須包含 fallback_message');
+  assert.match(html, /資料不完整/, 'degraded 徽章也必須保留');
+});
+
+test('buildPipelineStatusBanner: 完整資料 (status=ok) 不得渲染任何 banner', () => {
+  // 重要回歸測試:正常 session 不得被錯誤降級。
+  const html = buildPipelineStatusBanner({
+    session_id: 'session-20260610-daily',
+    status: 'ok',
+    status_message: '',
+    is_fallback_session: false,
+    fallback_message: '',
+  });
+  assert.equal(html, '', '正常 session 必須無 banner');
+});
