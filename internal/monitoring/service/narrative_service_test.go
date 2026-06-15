@@ -100,9 +100,10 @@ func TestNarrativeService_BuildMarketNarrativeData_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildMarketNarrativeData error = %v", err)
 	}
-	if data.SOXIndexChangePct != 0 || data.TSMADRChangePct != 0 {
+	// No geo provider set → GeopoliticalGPR should be 0
+	if data.GeopoliticalGPR != 0 {
+		t.Errorf("GeopoliticalGPR = %v, want 0 (no geo provider)", data.GeopoliticalGPR)
 	}
-	_ = data.GeopoliticalGPR
 }
 
 func TestNarrativeService_BuildMarketNarrativeData_WithGeoProvider(t *testing.T) {
@@ -141,7 +142,10 @@ func TestNarrativeService_DetectEvents(t *testing.T) {
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
 	events := svc.DetectEvents(narrative.MarketNarrativeData{})
 	if events == nil {
-		t.Error("DetectEvents returned nil")
+		t.Fatal("DetectEvents returned nil")
+	}
+	if len(events) == 0 {
+		t.Error("expected at least 1 event from DetectEvents (always emits default)")
 	}
 }
 
@@ -149,7 +153,10 @@ func TestNarrativeService_GetTemplates(t *testing.T) {
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
 	templates := svc.GetTemplates()
 	if templates == nil {
-		t.Error("GetTemplates returned nil")
+		t.Fatal("GetTemplates returned nil")
+	}
+	if len(templates) == 0 {
+		t.Error("expected non-empty templates from NarrativeEngine")
 	}
 }
 
@@ -157,7 +164,10 @@ func TestNarrativeService_GenerateDailySummary(t *testing.T) {
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
 	summary := svc.GenerateDailySummary("2026-06-15", nil, nil, nil)
 	if summary == nil {
-		t.Error("GenerateDailySummary returned nil")
+		t.Fatal("GenerateDailySummary returned nil")
+	}
+	if summary.Date != "2026-06-15" {
+		t.Errorf("Date = %q, want 2026-06-15", summary.Date)
 	}
 }
 
@@ -165,6 +175,9 @@ func TestNarrativeService_GetStressIndexHistory(t *testing.T) {
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
 	history := svc.GetStressIndexHistory(30)
 	if history == nil {
-		t.Error("GetStressIndexHistory returned nil")
+		t.Fatal("GetStressIndexHistory returned nil")
+	}
+	if len(history) != 0 {
+		t.Errorf("expected empty history for fresh engine, got %d entries", len(history))
 	}
 }

@@ -707,8 +707,8 @@ func TestGetSectorWeight_NoConfig(t *testing.T) {
 	if got != got { // NaN check
 		t.Errorf("got NaN")
 	}
-	if got < 0 {
-		t.Errorf("got negative weight: %v", got)
+	if got <= 0 {
+		t.Errorf("expected positive weight, got %v", got)
 	}
 }
 
