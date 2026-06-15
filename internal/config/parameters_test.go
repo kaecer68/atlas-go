@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 func TestDefaultParametersConfig(t *testing.T) {
@@ -531,6 +533,54 @@ func TestEngineParameters_ConsumerAccessPatterns(t *testing.T) {
 	sectorCfg := cfg.Engine.SectorRotation.ToConfig()
 	if sectorCfg.MinAllocation <= 0 {
 		t.Errorf("SectorRotation.ToConfig().MinAllocation: got %f, want positive", sectorCfg.MinAllocation)
+	}
+}
+
+func TestTaxParameters_ToConfig_ZeroValuesUseStatutoryDefaults(t *testing.T) {
+	// Zero values in TaxParameters carry the semantic "use statutory default rate".
+	// ToConfig() must apply DefaultTaiwanTaxConfig() when fields are 0.
+	p := TaxParameters{
+		DividendTaxRate:    ParameterMetadata[float64]{Value: 0, Rationale: "0 = use statutory"},
+		TransactionTaxRate: ParameterMetadata[float64]{Value: 0, Rationale: "0 = use statutory"},
+		NHISurchargeRate:   ParameterMetadata[float64]{Value: 0, Rationale: "0 = use statutory"},
+	}
+	cfg := p.ToConfig()
+
+	want := domain.DefaultTaiwanTaxConfig()
+	if cfg.DividendTaxRate != want.DividendTaxRate {
+		t.Errorf("DividendTaxRate: got %f, want %f (statutory)", cfg.DividendTaxRate, want.DividendTaxRate)
+	}
+	if cfg.TransactionTaxRate != want.TransactionTaxRate {
+		t.Errorf("TransactionTaxRate: got %f, want %f (statutory)", cfg.TransactionTaxRate, want.TransactionTaxRate)
+	}
+	if cfg.NHISurchargeRate != want.NHISurchargeRate {
+		t.Errorf("NHISurchargeRate: got %f, want %f (statutory)", cfg.NHISurchargeRate, want.NHISurchargeRate)
+	}
+	if !cfg.IncludeNHI {
+		t.Error("IncludeNHI: got false, want true")
+	}
+}
+
+func TestTaxParameters_ToConfig_ExplicitValuesOverrideDefaults(t *testing.T) {
+	// Non-zero values should override statutory defaults.
+	p := TaxParameters{
+		DividendTaxRate:    ParameterMetadata[float64]{Value: 0.30, Rationale: "custom rate"},
+		TransactionTaxRate: ParameterMetadata[float64]{Value: 0.001, Rationale: "custom rate"},
+		NHISurchargeRate:   ParameterMetadata[float64]{Value: 0.01, Rationale: "custom rate"},
+	}
+	cfg := p.ToConfig()
+
+	if cfg.DividendTaxRate != 0.30 {
+		t.Errorf("DividendTaxRate: got %f, want 0.30", cfg.DividendTaxRate)
+	}
+	if cfg.TransactionTaxRate != 0.001 {
+		t.Errorf("TransactionTaxRate: got %f, want 0.001", cfg.TransactionTaxRate)
+	}
+	if cfg.NHISurchargeRate != 0.01 {
+		t.Errorf("NHISurchargeRate: got %f, want 0.01", cfg.NHISurchargeRate)
+	}
+	if !cfg.IncludeNHI {
+		t.Error("IncludeNHI: got false, want true")
 	}
 }
 
