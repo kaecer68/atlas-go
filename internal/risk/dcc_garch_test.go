@@ -190,3 +190,41 @@ func TestDCCGARCH_InputValidation(t *testing.T) {
 		t.Error("expected error on too-short input, got nil")
 	}
 }
+
+func TestFitGARCH11Fallback_KnownValues(t *testing.T) {
+	mean := 0.001
+	demean := []float64{-0.01, 0.02, -0.005, 0.015, -0.02}
+	uncond := sampleVariance(demean)
+	if uncond <= 0 {
+		t.Fatal("unconditional variance must be positive for fallback test")
+	}
+
+	fit := fitGARCH11Fallback(demean, uncond, mean)
+
+	if len(fit.sigma2) != len(demean) {
+		t.Errorf("sigma2 length %d, want %d", len(fit.sigma2), len(demean))
+	}
+	if len(fit.stdResid) != len(demean) {
+		t.Errorf("stdResid length %d, want %d", len(fit.stdResid), len(demean))
+	}
+	for i, v := range fit.sigma2 {
+		if math.Abs(v-uncond) > 1e-12 {
+			t.Errorf("sigma2[%d] = %.12g, want unconditional variance %.12g", i, v, uncond)
+		}
+	}
+	for i, v := range fit.stdResid {
+		want := demean[i] / math.Sqrt(uncond)
+		if math.Abs(v-want) > 1e-12 {
+			t.Errorf("stdResid[%d] = %.12g, want %.12g", i, v, want)
+		}
+	}
+	if fit.mean != mean {
+		t.Errorf("mean = %.6g, want %.6g", fit.mean, mean)
+	}
+	if fit.omega != uncond {
+		t.Errorf("omega = %.12g, want %.12g", fit.omega, uncond)
+	}
+	if fit.alpha != 0 || fit.beta != 0 {
+		t.Errorf("fallback must have alpha=beta=0, got alpha=%.12g beta=%.12g", fit.alpha, fit.beta)
+	}
+}

@@ -2,8 +2,11 @@ package risk
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 func TestRiskGate_PreTradeCheckAllow(t *testing.T) {
@@ -193,5 +196,73 @@ func TestRiskGate_PostTradeCheckModeChange(t *testing.T) {
 	// Gate mode should also be updated
 	if g.Mode() != ModeSuspended {
 		t.Errorf("gate mode should be SUSPENDED after PostTradeCheck, got %s", g.Mode())
+	}
+}
+
+func TestRiskGate_SetPreTradeRSITwScore(t *testing.T) {
+	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	g.SetPreTradeRSITwScore(0.75)
+
+	order := OrderIntent{Symbol: "2330", Side: "BUY", Notional: 10_000, Sector: "semiconductor"}
+	pf := PortfolioState{TotalValue: 1_000_000, Cash: 500_000, Positions: map[string]float64{}, Var95: -5_000}
+
+	dec, err := g.PreTradeCheck(context.Background(), order, pf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dec.Verdict != VerdictBlock {
+		t.Errorf("expected BLOCK for extreme RSI-tw score, got %s", dec.Verdict)
+	}
+
+	found := false
+	for _, d := range dec.Details {
+		if d.RuleName == "retail_sentiment" && !d.Passed {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected retail_sentiment rule to fail")
+	}
+}
+
+func TestRiskGate_SetPreTradeRSITwScore_Reduce(t *testing.T) {
+	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	g.SetPreTradeRSITwScore(0.55)
+
+	order := OrderIntent{Symbol: "2330", Side: "BUY", Notional: 10_000, Sector: "semiconductor"}
+	pf := PortfolioState{TotalValue: 1_000_000, Cash: 500_000, Positions: map[string]float64{}, Var95: -5_000}
+
+	dec, err := g.PreTradeCheck(context.Background(), order, pf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dec.Verdict != VerdictReduce {
+		t.Errorf("expected REDUCE for elevated RSI-tw score, got %s", dec.Verdict)
+	}
+}
+
+func TestRiskGate_WithMaturityTracker(t *testing.T) {
+	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	mt := domain.NewMaturityTrackerWithStart(time.Now().UTC())
+	g.WithMaturityTracker(mt)
+
+	order := OrderIntent{Symbol: "2330", Side: "BUY", Notional: 10_000, Sector: "semiconductor"}
+	pf := PortfolioState{TotalValue: 1_000_000, Cash: 500_000, Positions: map[string]float64{}, Var95: -5_000}
+
+	dec, err := g.PreTradeCheck(context.Background(), order, pf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	found := false
+	for _, d := range dec.Details {
+		if d.RuleName == "var_limit" && d.Passed && strings.Contains(d.Message, "warming") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected VaR warming message during burn-in maturity")
 	}
 }
