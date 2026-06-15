@@ -101,6 +101,8 @@ CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 | `reporting` | 報告生成 — Markdown、ASCII chart、Agent 績效表 | — | 被其他模組呼叫 |
 | `taskexec` | 非同步任務執行器 — `Manager`、`Cancel/Subscribe` | — | 輔助基礎設施 |
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷 | `cmd/calibrate-parameters` | 工具層，非 runtime |
+| `risktest` | 風險測試場景 — `RunScenario()` | `cmd/stress-test` | 由 orchestrator 測試使用 |
+| `backfill` | 一次性 ledger state 修復工具 — 孤兒 summary.json 補寫、dry-run、安全 idempotent | `cmd/backfill-summaries` | 工具層，非 runtime |
 
 ---
 
