@@ -173,12 +173,9 @@ if [[ $READY -ne 1 ]]; then
 fi
 ok "Atlas healthy at $HEALTH_URL"
 
-# 7. 安裝 playwright chromium（若尚未安裝）
-if [[ ! -d "$REPO_ROOT/web/node_modules/playwright/.local-browsers" ]] && \
-   ! find "$HOME/.cache/ms-playwright" -maxdepth 1 -name "chromium-*" -type d 2>/dev/null | grep -q . ; then
-  log "Installing playwright chromium"
-  (cd web && npx playwright install --with-deps chromium 2>&1 | tail -10)
-fi
+# 7. 安裝 playwright chromium（總是執行，npx 會善用快取；避免 CI 環境版本對不上導致找不到 binary）
+log "Installing playwright chromium"
+(cd web && npx playwright install --with-deps chromium 2>&1 | tail -10)
 
 # 8. 跑 Playwright smoke
 log "Running Playwright smoke"
