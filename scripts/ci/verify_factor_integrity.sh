@@ -99,5 +99,42 @@ for ft in $FACTORS; do
 done
 [ -z "$MISSING" ] && pass "All factors have consumers" || warn "No string refs found:$MISSING" "may be FactorType-constant-only"
 
+# G11: Ghost agent detection (zero signals for >N days)
+echo "--- G11: Ghost agent check ---"
+GHOST_THRESHOLD_DAYS=${GHOST_THRESHOLD_DAYS:-7}
+GHOST_COUNT=0
+
+# Check if darwinian_weights.json exists
+if [ -f data/state/darwinian_weights.json ]; then
+  # Cross-platform date cutoff (macOS + Linux)
+  if date -d "now" +%s >/dev/null 2>&1; then
+    # GNU date (Linux)
+    CUTOFF=$(date -d "$GHOST_THRESHOLD_DAYS days ago" +%s)
+  else
+    # BSD date (macOS)
+    CUTOFF=$(date -v-${GHOST_THRESHOLD_DAYS}d +%s)
+  fi
+
+  # Iterate over agents in weights file
+  for agent_id in $(jq -r '.weights | keys[]' data/state/darwinian_weights.json 2>/dev/null); do
+    signals=$(jq -r ".weights[\"$agent_id\"].total_signals // 0" data/state/darwinian_weights.json)
+    updated=$(jq -r ".weights[\"$agent_id\"].last_updated_at // \"1970-01-01T00:00:00Z\"" data/state/darwinian_weights.json)
+
+    # Parse the timestamp (try GNU first, then BSD)
+    ts=$(date -d "${updated%Z}" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${updated:0:19}" +%s 2>/dev/null || echo 0)
+
+    if [ "$signals" = "0" ] && [ "$ts" -lt "$CUTOFF" ] && [ "$ts" -gt "0" ]; then
+      GHOST_COUNT=$((GHOST_COUNT+1))
+      echo "  GHOST: $agent_id (signals=0, last_updated=$updated)"
+    fi
+  done
+fi
+
+if [ "$GHOST_COUNT" -gt 0 ]; then
+  fail "G11: Found $GHOST_COUNT ghost agent(s)" "Remove from weights or fix outcome recording"
+else
+  pass "G11: No ghost agents detected (threshold: $GHOST_THRESHOLD_DAYS days)"
+fi
+
 echo "=== Result: $CHECKS_PASS/$CHECKS_RUN passed ==="
 $PASS && exit 0 || exit 1
