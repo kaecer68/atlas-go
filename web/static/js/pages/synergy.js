@@ -138,6 +138,9 @@ function renderLeaderboard(status, trend) {
     else if (weight <= 0.3) statusBadgeHtml = '<span class="badge err" title="已達權重下限，面臨淘汰">淘汰邊緣</span>';
     else if (weight < 0.5) statusBadgeHtml = '<span class="badge warn" title="低影響力，可能被淘汰">高風險</span>';
 
+    const isGhost = (agent.total_signals === 0) || (agent.status === "ghost");
+    if (isGhost) statusBadgeHtml = '<span class="badge muted">幽靈</span>';
+
     const trendDir = trends[agent.agent_id] || 'flat';
     let trendHtml = '<span class="text-muted">→</span>';
     if (trendDir === 'up') trendHtml = '<span class="text-up">↑</span>';
@@ -160,7 +163,7 @@ function renderLeaderboard(status, trend) {
       : (avgReturn < 0 ? `<span style="color:var(--down)">${fmtVal(avgReturn)}</span>` : fmtVal(avgReturn));
 
     html += `
-      <tr>
+      <tr${isGhost ? ' class="ghost-agent"' : ''}${isGhost ? ' title="此 agent 從未產生信號"' : ''}>
         <td>#${index + 1}</td>
         <td><strong>${escapeHtml(getAgentName(agent.agent_id))}</strong></td>
         <td>${weight.toFixed(3)}</td>
