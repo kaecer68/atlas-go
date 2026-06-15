@@ -472,3 +472,207 @@ func TestAlertStore_DirCreationError(t *testing.T) {
 		t.Fatal("expected error creating in /proc, got nil")
 	}
 }
+
+func TestAlertStore_DeleteWhere(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	a1.DedupKey = "keep"
+	a2 := makeAlert("alert-2")
+	a2.DedupKey = "delete-me"
+	a3 := makeAlert("alert-3")
+	a3.DedupKey = "delete-me-too"
+
+	for _, a := range []domain.AlertRecord{a1, a2, a3} {
+		if err := store.Save(a); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+	}
+
+	deleted, err := store.DeleteWhere(func(r *domain.AlertRecord) bool {
+		return r.DedupKey == "delete-me" || r.DedupKey == "delete-me-too"
+	})
+	if err != nil {
+		t.Fatalf("DeleteWhere: %v", err)
+	}
+	if deleted != 2 {
+		t.Errorf("deleted = %d, want 2", deleted)
+	}
+
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("LoadAll len = %d, want 1", len(records))
+	}
+	if records[0].ID != "alert-1" {
+		t.Errorf("remaining record ID = %q, want alert-1", records[0].ID)
+	}
+}
+
+func TestAlertStore_DeleteWhere_NoMatch(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	if err := store.Save(a1); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	deleted, err := store.DeleteWhere(func(r *domain.AlertRecord) bool {
+		return false
+	})
+	if err != nil {
+		t.Fatalf("DeleteWhere: %v", err)
+	}
+	if deleted != 0 {
+		t.Errorf("deleted = %d, want 0", deleted)
+	}
+
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(records) != 1 {
+		t.Errorf("LoadAll len = %d, want 1", len(records))
+	}
+}
+
+func TestAlertStore_AcknowledgeWhere(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	a1.DedupKey = "group-a"
+	a2 := makeAlert("alert-2")
+	a2.DedupKey = "group-a"
+	a3 := makeAlert("alert-3")
+	a3.DedupKey = "group-b"
+
+	for _, a := range []domain.AlertRecord{a1, a2, a3} {
+		if err := store.Save(a); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+	}
+
+	acked, err := store.AcknowledgeWhere(func(r *domain.AlertRecord) bool {
+		return r.DedupKey == "group-a"
+	}, "admin")
+	if err != nil {
+		t.Fatalf("AcknowledgeWhere: %v", err)
+	}
+	if acked != 2 {
+		t.Errorf("acked = %d, want 2", acked)
+	}
+
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("LoadAll len = %d, want 3", len(records))
+	}
+	for _, r := range records {
+		if r.DedupKey == "group-a" {
+			if !r.Acknowledged {
+				t.Errorf("alert %s should be acknowledged", r.ID)
+			}
+			if r.AcknowledgedBy != "admin" {
+				t.Errorf("AcknowledgedBy = %q, want admin", r.AcknowledgedBy)
+			}
+		} else {
+			if r.Acknowledged {
+				t.Errorf("alert %s should NOT be acknowledged", r.ID)
+			}
+		}
+	}
+}
+
+func TestAlertStore_AcknowledgeWhere_NoMatch(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	if err := store.Save(a1); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	acked, err := store.AcknowledgeWhere(func(r *domain.AlertRecord) bool {
+		return false
+	}, "admin")
+	if err != nil {
+		t.Fatalf("AcknowledgeWhere: %v", err)
+	}
+	if acked != 0 {
+		t.Errorf("acked = %d, want 0", acked)
+	}
+}
+
+func TestAlertStore_ResolveWhere(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	a1.DedupKey = "resolve-group"
+	a2 := makeAlert("alert-2")
+	a2.DedupKey = "resolve-group"
+	a3 := makeAlert("alert-3")
+	a3.DedupKey = "keep-group"
+
+	for _, a := range []domain.AlertRecord{a1, a2, a3} {
+		if err := store.Save(a); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+	}
+
+	resolved, err := store.ResolveWhere(func(r *domain.AlertRecord) bool {
+		return r.DedupKey == "resolve-group"
+	}, "auto-recovery")
+	if err != nil {
+		t.Fatalf("ResolveWhere: %v", err)
+	}
+	if resolved != 2 {
+		t.Errorf("resolved = %d, want 2", resolved)
+	}
+
+	records, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("LoadAll len = %d, want 3", len(records))
+	}
+	for _, r := range records {
+		if r.DedupKey == "resolve-group" {
+			if r.Status != domain.AlertStatusResolved {
+				t.Errorf("alert %s status = %q, want resolved", r.ID, r.Status)
+			}
+			if r.ResolvedBy != "auto-recovery" {
+				t.Errorf("ResolvedBy = %q, want auto-recovery", r.ResolvedBy)
+			}
+			if r.ResolvedAt == nil {
+				t.Error("ResolvedAt should not be nil")
+			}
+		} else {
+			if r.Status == domain.AlertStatusResolved {
+				t.Errorf("alert %s should NOT be resolved", r.ID)
+			}
+		}
+	}
+}
+
+func TestAlertStore_ResolveWhere_NoMatch(t *testing.T) {
+	store := newTestStore(t)
+
+	a1 := makeAlert("alert-1")
+	if err := store.Save(a1); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	resolved, err := store.ResolveWhere(func(r *domain.AlertRecord) bool {
+		return false
+	}, "auto-recovery")
+	if err != nil {
+		t.Fatalf("ResolveWhere: %v", err)
+	}
+	if resolved != 0 {
+		t.Errorf("resolved = %d, want 0", resolved)
+	}
+}
