@@ -898,6 +898,21 @@ type PipelineItemMetrics struct {
 	BacktestReturn  *float64
 }
 
+// countNonEmptyLines 回傳檔案內非空行數(給孤兒 session OutcomeCount fallback 用)。
+func countNonEmptyLines(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
+		return 0
+	}
+	count := 0
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
+}
+
 // LoadSessions loads all sessions metadata.
 func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
@@ -944,6 +959,15 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 		// Fall back to session ID date if RecordedAt was not set from summary.
 		if meta.RecordedAt.IsZero() {
 			meta.RecordedAt = domain.SessionDateFromID(sessionID)
+		}
+
+		// Fall back to outcomes.jsonl line count if summary.json missing or had 0 outcomes.
+		// 理由:孤兒 session (寫了 outcomes.jsonl 但 summary.json 未寫入) 應在 sessions
+		// 下拉選單顯示實際筆數,而不是 0。僅在 summary 為 0 時覆寫,保留 summary 為「過濾後」語意。
+		if meta.OutcomeCount == 0 {
+			if count := countNonEmptyLines(filepath.Join(sessionsDir, sessionID, "recommendation_outcomes.jsonl")); count > 0 {
+				meta.OutcomeCount = count
+			}
 		}
 
 		sessions = append(sessions, meta)
