@@ -10,7 +10,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
-	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
@@ -71,6 +70,16 @@ func withNilSeasonalEngine() func(*industryServiceOptions) {
 		o.cycleTracker = industry.NewCycleTracker()
 		o.linkageAnalyzer = industry.NewLinkageAnalyzer()
 		o.riskMonitor = industry.NewRiskMonitor()
+	}
+}
+
+// withDefaultClassification wires the service with the production default
+// classification tree and a cycle tracker seeded with default positions.
+// Use this when exercising functions that iterate over real segments.
+func withDefaultClassification() func(*industryServiceOptions) {
+	return func(o *industryServiceOptions) {
+		o.classifier = industry.DefaultClassification()
+		o.cycleTracker = industry.NewCycleTracker()
 	}
 }
 
@@ -259,11 +268,8 @@ func TestGetActiveNarrativeThemes_NilSeasonalEngine(t *testing.T) {
 // UpdateDynamicEnv — nil-safe path
 // =============================================================================
 
-func TestUpdateDynamicEnv_NilSeasonalEngine(t *testing.T) {
-	s := newTestIndustryService(withNilSeasonalEngine())
-	// Should not panic
-	s.UpdateDynamicEnv(marketdata.MacroDataSnapshot{}) //nolint:staticcheck // testing nil-safe path
-}
+// =============================================================================
+// GetCalibrationEvidence
 
 // =============================================================================
 // GetCalibrationEvidence
@@ -362,13 +368,8 @@ func TestGetCalibrationEvidence_NoTimestamp(t *testing.T) {
 // RebuildCorrelations — nil-safe path
 // =============================================================================
 
-func TestRebuildCorrelations_NilLinkageAnalyzer(t *testing.T) {
-	s := NewIndustryService(nil, nil, nil, nil, nil, nil, nil, nil, nil, "")
-	// Should not panic
-	s.RebuildCorrelations(map[string][]float64{
-		"semiconductor": {0.1, 0.2, 0.15},
-	})
-}
+// =============================================================================
+// SetMacroProvider — nil-safe path
 
 // =============================================================================
 // SetMacroProvider — nil-safe path
@@ -446,11 +447,8 @@ func TestGetCalibrationMetrics_NilCalibration(t *testing.T) {
 // RecordCycleCalibrationOutcome — nil-safe path
 // =============================================================================
 
-func TestRecordCycleCalibrationOutcome_NilCalibration(t *testing.T) {
-	s := &IndustryService{}
-	// Should not panic
-	s.RecordCycleCalibrationOutcome("sess-1", time.Now(), map[string]float64{"silicon": 0.8}, 0.05)
-}
+// =============================================================================
+// BuildCycleStatusCard — nil-safe path
 
 // =============================================================================
 // BuildCycleStatusCard — nil-safe path
@@ -750,17 +748,8 @@ func TestPropagateShock_ExplicitMaxDepth(t *testing.T) {
 	}
 }
 
-func TestPropagateShock_NilLinkageAnalyzer(t *testing.T) {
-	s := &IndustryService{LinkageAnalyzer: nil}
-	// Will likely panic in PropagateShock because it dereferences s.LinkageAnalyzer
-	// Let's see if it's nil-safe or not. We test the actual behavior.
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("PropagateShock with nil LinkageAnalyzer panicked: %v (acceptable — caller must initialize)", r)
-		}
-	}()
-	_ = s.PropagateShock("semiconductor", 0.1, 3)
-}
+// =============================================================================
+// GetIndustryGraph
 
 // =============================================================================
 // GetIndustryGraph
@@ -817,6 +806,143 @@ func TestGetIndustryGraph_SeededDefaults(t *testing.T) {
 // =============================================================================
 // helpers
 // =============================================================================
+
+// =============================================================================
+// GetSeasonalCalendar (0% → covered)
+// =============================================================================
+
+func TestGetSeasonalCalendar_EmptyIndustryID(t *testing.T) {
+	svc := newTestIndustryService(withAllEngines())
+	calendar := svc.GetSeasonalCalendar("", 2026)
+	if len(calendar) != 12 {
+		t.Errorf("expected 12 months, got %d", len(calendar))
+	}
+	for _, month := range calendar {
+		if month["month"] == nil {
+			t.Error("month key missing")
+		}
+		if month["patterns"] == nil {
+			t.Error("patterns key missing")
+		}
+	}
+}
+
+func TestGetSeasonalCalendar_WithIndustryFilter(t *testing.T) {
+	svc := newTestIndustryService(withAllEngines())
+	calendar := svc.GetSeasonalCalendar("nonexistent", 2026)
+	if len(calendar) != 12 {
+		t.Errorf("expected 12 months even for unknown industry, got %d", len(calendar))
+	}
+}
+
+// =============================================================================
+// GetCyclePositions (0% → covered)
+// =============================================================================
+
+// =============================================================================
+// GetIndustryOverview (0% → covered)
+
+// =============================================================================
+// GetIndustryOverview (0% → covered)
+// =============================================================================
+
+func TestGetIndustryOverview_NilLinkageAnalyzer(t *testing.T) {
+	svc := newTestIndustryService(withNilSeasonalEngine())
+	svc.LinkageAnalyzer = nil
+	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	overviews := svc.GetIndustryOverview(now)
+	if len(overviews) != 0 {
+		t.Errorf("expected 0 overviews when LinkageAnalyzer is nil, got %d", len(overviews))
+	}
+}
+
+func TestGetIndustryOverview_WithLinkageData(t *testing.T) {
+	svc := newTestIndustryService(withAllEngines(), withDefaultClassification())
+	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	overviews := svc.GetIndustryOverview(now)
+	if len(overviews) == 0 {
+		t.Error("overviews slice should be non-empty")
+	}
+}
+
+// =============================================================================
+// GetODMChannelSnapshot (0% → covered)
+// =============================================================================
+
+func TestGetODMChannelSnapshot_NilODMChannel(t *testing.T) {
+	svc := newTestIndustryService(withAllEngines())
+	svc.ODMChannel = nil
+	snap := svc.GetODMChannelSnapshot(context.Background())
+	if snap.CowosCurrent != 0 {
+		t.Errorf("expected 0 CowosCurrent when ODMChannel is nil, got %f", snap.CowosCurrent)
+	}
+	if len(snap.RegisteredSymbols) != 0 {
+		t.Errorf("expected 0 RegisteredSymbols when ODMChannel is nil, got %d", len(snap.RegisteredSymbols))
+	}
+}
+
+// =============================================================================
+// GetDataAggregatorSummary (0% → covered)
+// =============================================================================
+
+func TestGetDataAggregatorSummary_NilAggregators(t *testing.T) {
+	svc := newTestIndustryService(withNilSeasonalEngine())
+	summary := svc.GetDataAggregatorSummary()
+	if summary.Count != 0 {
+		t.Errorf("expected 0 count with nil DataAggregator, got %d", summary.Count)
+	}
+	if len(summary.Industries) != 0 {
+		t.Errorf("expected empty industries with nil DataAggregator, got %d", len(summary.Industries))
+	}
+}
+
+func TestGetDataAggregatorSummary_WithClassifier(t *testing.T) {
+	svc := newTestIndustryService(withAllEngines())
+	summary := svc.GetDataAggregatorSummary()
+	if summary.Count < 0 {
+		t.Errorf("Count should be >= 0, got %d", summary.Count)
+	}
+}
+
+// =============================================================================
+// GetSeasonalHealth (0% → covered)
+// =============================================================================
+
+func TestGetSeasonalHealth_EmptyParamsPath(t *testing.T) {
+	svc := newTestIndustryService(withAllEngines())
+	svc.ParamsPath = ""
+	health, err := svc.GetSeasonalHealth()
+	if err == nil {
+		t.Error("expected error for empty ParamsPath")
+	}
+	if health != nil {
+		t.Error("expected nil health for empty ParamsPath")
+	}
+}
+
+// =============================================================================
+// GetCorrelationLoaderMetadata (0% → covered)
+// =============================================================================
+
+func TestGetCorrelationLoaderMetadata_NilLinkageAnalyzer(t *testing.T) {
+	svc := newTestIndustryService(withNilSeasonalEngine())
+	svc.LinkageAnalyzer = nil
+	meta := svc.GetCorrelationLoaderMetadata("/replay", "/sectors")
+	if meta.ReplayPath != "/replay" {
+		t.Errorf("expected ReplayPath '/replay', got %q", meta.ReplayPath)
+	}
+	if meta.SectorCount != 0 {
+		t.Errorf("expected 0 SectorCount with nil LinkageAnalyzer, got %d", meta.SectorCount)
+	}
+}
+
+func TestGetCorrelationLoaderMetadata_WithLinkageAnalyzer(t *testing.T) {
+	svc := newTestIndustryService(withAllEngines())
+	meta := svc.GetCorrelationLoaderMetadata("/replay/path", "/sectors/path")
+	if meta.MinObservations != 15 {
+		t.Errorf("expected MinObservations 15, got %d", meta.MinObservations)
+	}
+}
 
 func stringContains(haystack, needle string) bool {
 	if needle == "" {

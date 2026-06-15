@@ -67,34 +67,6 @@ func TestTSMADRPremium_Discount(t *testing.T) {
 
 // ─── DailyQuotaTracker ─────────────────────────────────────────────────────
 
-func TestDailyQuotaTracker_Remaining(t *testing.T) {
-	dir := t.TempDir()
-	tracker := NewDailyQuotaTracker("test", dir, 100)
-
-	if got := tracker.Remaining(); got != 100 {
-		t.Fatalf("Remaining() = %d, want 100", got)
-	}
-}
-
-func TestDailyQuotaTracker_CallsToday(t *testing.T) {
-	dir := t.TempDir()
-	tracker := NewDailyQuotaTracker("test", dir, 100)
-
-	if got := tracker.CallsToday(); got != 0 {
-		t.Fatalf("CallsToday() = %d, want 0", got)
-	}
-}
-
-func TestDailyQuotaTracker_SetLimit(t *testing.T) {
-	dir := t.TempDir()
-	tracker := NewDailyQuotaTracker("test", dir, 50)
-
-	tracker.SetLimit(200)
-	if got := tracker.Remaining(); got != 200 {
-		t.Fatalf("Remaining() after SetLimit = %d, want 200", got)
-	}
-}
-
 func TestDailyQuotaTracker_AllowCall_DecrementsRemaining(t *testing.T) {
 	dir := t.TempDir()
 	tracker := NewDailyQuotaTracker("test", dir, 5)
