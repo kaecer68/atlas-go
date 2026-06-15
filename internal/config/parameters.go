@@ -1264,13 +1264,22 @@ type TaxParameters struct {
 }
 
 // ToConfig converts TaxParameters to a domain.TaxConfig for use by tax calculators.
+// Zero values in parameters.json carry the semantic meaning "use statutory default rate"
+// (the rationale field in the JSON documents this convention). This sentinel fallback
+// ensures that explicitly zero tax rates resolve to the statutory defaults rather than 0.
 func (p TaxParameters) ToConfig() domain.TaxConfig {
-	return domain.TaxConfig{
-		DividendTaxRate:    p.DividendTaxRate.Value,
-		TransactionTaxRate: p.TransactionTaxRate.Value,
-		NHISurchargeRate:   p.NHISurchargeRate.Value,
-		IncludeNHI:         true, // NHI inclusion is a policy flag, not a tunable rate
+	cfg := domain.DefaultTaiwanTaxConfig()
+	if p.DividendTaxRate.Value != 0 {
+		cfg.DividendTaxRate = p.DividendTaxRate.Value
 	}
+	if p.TransactionTaxRate.Value != 0 {
+		cfg.TransactionTaxRate = p.TransactionTaxRate.Value
+	}
+	if p.NHISurchargeRate.Value != 0 {
+		cfg.NHISurchargeRate = p.NHISurchargeRate.Value
+	}
+	cfg.IncludeNHI = true // NHI inclusion is a policy flag, not a tunable rate
+	return cfg
 }
 
 // EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.
