@@ -229,6 +229,78 @@ func TestLoadSessions_MultipleSessions(t *testing.T) {
 	}
 }
 
+func TestLoadSessions_OrphanSession_FallbackOutcomeCountFromJSONL(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260614-daily"
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-1", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 88, PassedGuards: true, RecordedAt: time.Date(2026, 6, 14, 4, 0, 0, 0, time.UTC)},
+		{AgentID: "agent-2", Symbol: "2454.TW", Side: domain.SideBuy, Conviction: 73, PassedGuards: true, RecordedAt: time.Date(2026, 6, 14, 4, 0, 0, 0, time.UTC)},
+		{AgentID: "agent-3", Symbol: "3008.TW", Side: domain.SideBuy, Conviction: 95, PassedGuards: true, RecordedAt: time.Date(2026, 6, 14, 4, 0, 0, 0, time.UTC)},
+	}
+	var buf []byte
+	for _, o := range outcomes {
+		b, _ := json.Marshal(o)
+		buf = append(buf, b...)
+		buf = append(buf, '\n')
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), buf, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	sessions, err := svc.LoadSessions()
+	if err != nil {
+		t.Fatalf("LoadSessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].OutcomeCount != 3 {
+		t.Errorf("orphan session OutcomeCount = %d, want 3 (fallback from outcomes.jsonl)", sessions[0].OutcomeCount)
+	}
+}
+
+func TestLoadSessions_OrphanSession_EmptyOutcomesKeepsZero(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260615-daily"
+	if err := os.MkdirAll(filepath.Join(baseDir, "sessions", sessionID), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	sessions, err := svc.LoadSessions()
+	if err != nil {
+		t.Fatalf("LoadSessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].OutcomeCount != 0 {
+		t.Errorf("empty orphan OutcomeCount = %d, want 0", sessions[0].OutcomeCount)
+	}
+}
+
+func TestLoadSessions_SummaryAuthoritativeNotOverriddenByOutcomes(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260616-daily"
+	writeTestSessionArtifacts(t, baseDir, sessionID,
+		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: time.Date(2026, 6, 16, 4, 0, 0, 0, time.UTC), OutcomeCount: 10},
+		domain.RecommendationOutcome{AgentID: "agent-1", Symbol: "2330.TW", RecordedAt: time.Date(2026, 6, 16, 4, 0, 0, 0, time.UTC)},
+	)
+
+	svc := NewPipelineService(baseDir, baseDir, nil)
+	sessions, err := svc.LoadSessions()
+	if err != nil {
+		t.Fatalf("LoadSessions: %v", err)
+	}
+	if sessions[0].OutcomeCount != 10 {
+		t.Errorf("summary.OutcomeCount should be authoritative, got %d, want 10", sessions[0].OutcomeCount)
+	}
+}
+
 func TestLoadSessions_FallbackToSessionIDDate(t *testing.T) {
 	baseDir := t.TempDir()
 	sessionID := "session-20260422-daily"

@@ -11,7 +11,7 @@ import { eventSource } from './services/event-source.js';
 import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
-import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
+import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
 
 export { getJSON, escapeHtml };
 
@@ -192,7 +192,9 @@ async function loadAll() {
       consecutiveFailures = 0; hideErrorBanner();
     }
 
-    window.pipelineSessions = sessions && sessions.sessions ? sessions.sessions : [];
+    var parsed = parseSessionsList(sessions);
+    window.pipelineSessions = parsed.sessions;
+    window.pipelineSessionsStatus = parsed.data_status;
 
     await loadModules();
     var m = modules;

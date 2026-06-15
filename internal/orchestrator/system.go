@@ -1237,7 +1237,16 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		}
 	}
 
-	if err := s.Sim().ledger.RecordSessionSummary(s.Sim().session, summary); err != nil {
+	// Retry guard: a single transient I/O failure here would leave an orphan
+	// session directory (outcomes.jsonl present, summary.json missing) and
+	// break the pipeline page's recommendation count trust contract.
+	if err := recordSummaryWithRetry(
+		s.Sim().ledger,
+		s.Sim().session,
+		summary,
+		3,
+		100*time.Millisecond,
+	); err != nil {
 		return err
 	}
 

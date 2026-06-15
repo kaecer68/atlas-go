@@ -25,7 +25,12 @@ export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + 
 
 export { escapeHtml };
 
-export function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
+export function formatDate(d) {
+  if (!d) return '-';
+  const date = new Date(d);
+  if (isNaN(date.getTime()) || date.getFullYear() < 2000) return '-';
+  return date.toLocaleString('zh-TW');
+}
 
 export function renderEmptyState(msg, hint) {
   return '<div style="padding:20px;text-align:center;color:var(--muted)">' + escapeHtml(msg || '尚無資料') + (hint ? '<br><small>' + escapeHtml(hint) + '</small>' : '') + '</div>';
@@ -40,7 +45,17 @@ export function renderSkeleton(lines) {
 export function sortNarrativeEvents(events) {
   return events.sort(function(a, b) {
     var strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1) * (a.hit_rate || 0.5);
-    var strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1) * (b.hit_rate || 0.5);
+    var strengthB = Math.abs(a.sentiment || 0) * (b.confidence || 1) * (b.hit_rate || 0.5);
     return strengthB - strengthA;
   });
+}
+
+export function parseSessionsList(payload) {
+  if (payload === null || payload === undefined) {
+    return { sessions: [], data_status: 'fetch_failed' };
+  }
+  if (!Array.isArray(payload.sessions)) {
+    return { sessions: [], data_status: 'malformed' };
+  }
+  return { sessions: payload.sessions, data_status: 'ok' };
 }

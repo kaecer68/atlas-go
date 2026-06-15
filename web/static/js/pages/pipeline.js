@@ -165,7 +165,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
   // Store data for filter access
   window._pipelineData = data;
 
-  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
+  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes, data.items);
   let items = data.items || [];
   const screenedItems = data.screened_items || [];
   const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
@@ -321,12 +321,8 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
       <button onclick="switchPage('reports')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--warn);background:rgba(245,158,11,.15);color:var(--warn);cursor:pointer;margin-left:auto">🚀 啟動新回測</button>
     </div>
   ` : '';
-  const degradedBanner = data.status === 'degraded' ? `
-    <div style="margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span class="badge warn">資料不完整</span>
-      <span style="font-size:13px">⚠️ ${escapeHtml(data.status_message || '本場次部分資料缺失（控制層審核記錄不可用），推薦清單仍可檢視。')}</span>
-    </div>
-  ` : '';
+  const statusBanner = buildPipelineStatusBanner(data);
+  const degradedBanner = data.status === 'degraded' ? statusBanner : '';
 
   const emptyStateWithAction = !items.length ? `
     <div class="empty-state-guidance" style="padding:32px 16px">
@@ -477,3 +473,36 @@ export function handleOverrideClick(e) {
 if (typeof window !== "undefined") Object.assign(window, {
   applyFilters, clearFilters, toggleFilterPanel, toggleWorkflowScreening, handleOverrideClick
 });
+
+// buildPipelineStatusBanner: 依後端 PipelineLoadStatus 與 is_fallback_session
+// 組合回傳對應的 banner HTML。正常 (ok) 與未提供 status 時回傳空字串。
+// 對應後端 internal/monitoring/service/pipeline.go 的 PipelineStatus* 常數。
+export function buildPipelineStatusBanner(data) {
+  if (!data) return '';
+  const banners = [];
+  if (data.is_fallback_session) {
+    banners.push(`<div style="margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px">⚠️ ${escapeHtml(data.fallback_message || '已自動切換至最近有數據的場次')}</span><button onclick="switchPage('reports')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--warn);background:rgba(245,158,11,.15);color:var(--warn);cursor:pointer;margin-left:auto">🚀 啟動新回測</button></div>`);
+  }
+  switch (data.status) {
+    case 'degraded':
+      banners.push(`<div style="margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="badge warn">資料不完整</span><span style="font-size:13px">⚠️ ${escapeHtml(data.status_message || '本場次部分資料缺失（控制層審核記錄不可用），推薦清單仍可檢視。')}</span></div>`);
+      break;
+    case 'minimal':
+      banners.push(`<div style="margin-bottom:12px;padding:10px 14px;background:rgba(107,114,128,.1);border:1px solid rgba(107,114,128,.35);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="badge">尚無資料</span><span style="font-size:13px">ℹ️ ${escapeHtml(data.status_message || '本場次尚無推薦產出記錄')}</span></div>`);
+      break;
+    case 'no_session':
+      banners.push(`<div style="margin-bottom:12px;padding:10px 14px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.35);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="badge info">尚未執行</span><span style="font-size:13px">ℹ️ ${escapeHtml(data.status_message || '尚未執行任何回測場次，請先執行回測')}</span><button onclick="switchPage('reports')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--color-info);background:rgba(59,130,246,.15);color:var(--color-info);cursor:pointer;margin-left:auto">🚀 啟動新回測</button></div>`);
+      break;
+    case 'error':
+      banners.push(`<div style="margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.45);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="badge err">錯誤</span><span style="font-size:13px">❌ ${escapeHtml(data.status_message || '載入推薦管線資料時發生錯誤')}</span></div>`);
+      break;
+    case 'ok':
+    case undefined:
+    case '':
+    case null:
+      break;
+    default:
+      banners.push(`<div style="margin-bottom:12px;padding:10px 14px;background:rgba(107,114,128,.1);border:1px solid var(--border);border-radius:8px"><span style="font-size:12px;color:var(--muted)">未知的管線狀態：${escapeHtml(String(data.status))}</span></div>`);
+  }
+  return banners.join('');
+}
