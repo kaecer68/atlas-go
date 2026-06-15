@@ -25,7 +25,12 @@ export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + 
 
 export { escapeHtml };
 
-export function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
+export function formatDate(d) {
+  if (!d) return '-';
+  const date = new Date(d);
+  if (isNaN(date.getTime()) || date.getFullYear() < 2000) return '-';
+  return date.toLocaleString('zh-TW');
+}
 
 export function renderEmptyState(msg, hint) {
   return '<div style="padding:20px;text-align:center;color:var(--muted)">' + escapeHtml(msg || '尚無資料') + (hint ? '<br><small>' + escapeHtml(hint) + '</small>' : '') + '</div>';

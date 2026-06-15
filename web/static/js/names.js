@@ -121,7 +121,10 @@ export const REGIME_NAME_MAP = {
   'RISK_OFF': '風險趨避'
 };
 
-export function regimeLabel(r) { return REGIME_NAME_MAP[r] ? `${REGIME_NAME_MAP[r]}（${r}）` : r; }
+export function regimeLabel(r) {
+  if (!r) return '-';
+  return REGIME_NAME_MAP[r] ? `${REGIME_NAME_MAP[r]}（${r}）` : '-';
+}
 
 // Stress name mapping
 export const STRESS_NAME_MAP = {

@@ -165,7 +165,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
   // Store data for filter access
   window._pipelineData = data;
 
-  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
+  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes, data.items);
   let items = data.items || [];
   const screenedItems = data.screened_items || [];
   const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
