@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.0.0.4] - 2026-06-15
+
+### Fixed — Pipeline Data Visibility (6 commits, P0-P2)
+
+**P0-C/D/E (20d1f56e) — frontend zero-value display**:
+- `computePipelineSummary`: fallback `items` to `outcome_count` when summary missing.
+- `formatDate`: filter zero-time (year<2000, NaN, year>9999), return `"-"`.
+- `regimeLabel`: unify `"unknown"` → `"-"` across all 3 rendering paths.
+
+**P1-A (ce4d89fc) — pipeline status banner**:
+- `buildPipelineStatusBanner`: 5-status handler (`ok/degraded/minimal/no_session/error`).
+- `is_fallback_session` as independent dimension.
+
+**P1-B (366151b7) — OutcomeCount fallback**:
+- `LoadSessions`: when `OutcomeCount==0`, derive from `recommendation_outcomes.jsonl` line count.
+- Only overwrites zero — preserves summary's post-filter semantics.
+
+**P1-C (0a553e4f) — backfill-summaries tool**:
+- `cmd/backfill-summaries`: one-shot CLI for repairing orphan session directories.
+- `internal/backfill/` package with `BackfillSummaries()` — idempotent, dry-run, never overwrites existing.
+- 6 test cases covering orphan/existing/empty/mixed/noop scenarios.
+
+**P2-A (36ac8a87) — RecordSessionSummary retry**:
+- `recordSummaryWithRetry`: 3 attempts, 100ms linear backoff.
+- Single chokepoint for all production summary writes.
+
+**P2-B (4e4e97fa) — data_status sibling**:
+- `parseSessionsList`: surface `data_status` as sibling field in array response.
+
 ## [0.0.0.3] - 2026-06-15
 
 ### Fixed
