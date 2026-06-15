@@ -184,6 +184,7 @@ func (g *GDELTGeopoliticalProvider) Name() string {
 }
 
 // SetHTTPClient overrides the default HTTP client (testability hook).
+// Locked with mu to prevent races with concurrent FetchScore readers.
 func (g *GDELTGeopoliticalProvider) SetHTTPClient(client *http.Client) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -257,6 +258,7 @@ func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (Geopolitica
 }
 
 // SetHTTPClient overrides the default HTTP client (testability hook).
+// Locked with mu to prevent races with concurrent FetchScore readers.
 func (r *RSSGeopoliticalProvider) SetHTTPClient(client *http.Client) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

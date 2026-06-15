@@ -158,6 +158,7 @@ func TestNewGeopoliticalStore(t *testing.T) {
 	}
 }
 
+// Verifies SetHTTPClient is safe under concurrent FetchScore (regression test for #534).
 func TestRSSGeopoliticalProvider_SetHTTPClient_Race(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `<?xml version="1.0"?><rss version="2.0"><channel><title>Empty</title></channel></rss>`)
@@ -196,6 +197,7 @@ func TestRSSGeopoliticalProvider_SetHTTPClient_Race(t *testing.T) {
 	wg.Wait()
 }
 
+// Verifies SetHTTPClient is safe under concurrent FetchScore (regression test for #534).
 func TestGDELTGeopoliticalProvider_SetHTTPClient_Race(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `<?xml version="1.0"?><rss version="2.0"><channel><title>Empty</title></channel></rss>`)

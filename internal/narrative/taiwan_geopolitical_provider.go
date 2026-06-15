@@ -62,6 +62,7 @@ func (t *TaiwanRSSGeopoliticalProvider) Name() string {
 }
 
 // SetHTTPClient overrides the default HTTP client (testability hook).
+// Locked with mu to prevent races with concurrent FetchScore readers.
 func (t *TaiwanRSSGeopoliticalProvider) SetHTTPClient(client *http.Client) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
