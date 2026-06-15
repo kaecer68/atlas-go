@@ -34,7 +34,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	resolvedLedger := resolveLedgerDir(*ledgerDir, *workDir, cfg)
+	resolvedLedger := resolveLedgerDir(*ledgerDir, *workDir)
 	sessionsDir := filepath.Join(resolvedLedger, "sessions")
 
 	fmt.Printf("Scanning sessions directory: %s\n", sessionsDir)
@@ -62,7 +62,7 @@ func main() {
 }
 
 // resolveLedgerDir 解析 ledger 目錄,優先序: 明確指定 > workdir flag > config
-func resolveLedgerDir(ledgerFlag, workdirFlag string, cfg any) string {
+func resolveLedgerDir(ledgerFlag, workdirFlag string) string {
 	if ledgerFlag != "" {
 		return ledgerFlag
 	}

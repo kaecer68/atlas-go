@@ -1244,7 +1244,6 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		s.Sim().ledger,
 		s.Sim().session,
 		summary,
-		3,
 		100*time.Millisecond,
 	); err != nil {
 		return err

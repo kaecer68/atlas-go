@@ -30,12 +30,9 @@ func recordSummaryWithRetry(
 	store recordSummaryStore,
 	session domain.ReplaySession,
 	summary domain.SessionSummary,
-	maxAttempts int,
 	backoff time.Duration,
 ) error {
-	if maxAttempts < 1 {
-		maxAttempts = 1
-	}
+	const maxAttempts = 3
 
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {

@@ -36,7 +36,7 @@ func TestRecordSummaryWithRetry_SucceedsAfterTransientFailures(t *testing.T) {
 	store := &flakyRecordStore{err: errors.New("transient fsync failure")}
 	store.failuresLeft.Store(2) // fail twice, succeed on 3rd attempt
 
-	err := recordSummaryWithRetry(store, domain.ReplaySession{}, domain.SessionSummary{}, 3, 0)
+	err := recordSummaryWithRetry(store, domain.ReplaySession{}, domain.SessionSummary{}, 0)
 	if err != nil {
 		t.Fatalf("expected success after retries, got: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestRecordSummaryWithRetry_GivesUpAfterMaxAttempts(t *testing.T) {
 	store := &flakyRecordStore{err: errors.New("persistent disk full")}
 	store.failuresLeft.Store(10)
 
-	err := recordSummaryWithRetry(store, domain.ReplaySession{}, domain.SessionSummary{}, 3, 0)
+	err := recordSummaryWithRetry(store, domain.ReplaySession{}, domain.SessionSummary{}, 0)
 	if err == nil {
 		t.Fatal("expected error after exhausting retries, got nil")
 	}
@@ -70,7 +70,7 @@ func TestRecordSummaryWithRetry_NoBackoffOnLastAttempt(t *testing.T) {
 	store.failuresLeft.Store(5)
 
 	start := time.Now()
-	_ = recordSummaryWithRetry(store, domain.ReplaySession{}, domain.SessionSummary{}, 3, 50*time.Millisecond)
+	_ = recordSummaryWithRetry(store, domain.ReplaySession{}, domain.SessionSummary{}, 50*time.Millisecond)
 	elapsed := time.Since(start)
 
 	// 3 attempts with backoff after attempt 1 and 2: 50ms + 100ms = 150ms minimum.
