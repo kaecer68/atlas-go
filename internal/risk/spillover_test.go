@@ -228,3 +228,20 @@ func TestSpillover_InputValidation(t *testing.T) {
 		}
 	})
 }
+
+func TestNewSpilloverIndex(t *testing.T) {
+	vars := []string{"SPX", "NDX", "TAIEX"}
+	idx := NewSpilloverIndex(vars)
+	if idx == nil {
+		t.Fatal("NewSpilloverIndex returned nil")
+	}
+	if idx.horizon != 10 {
+		t.Errorf("horizon = %d, want 10", idx.horizon)
+	}
+	if idx.varLags != 2 {
+		t.Errorf("varLags = %d, want 2", idx.varLags)
+	}
+	if len(idx.variables) != 3 || idx.variables[0] != "SPX" {
+		t.Errorf("variables = %v, want %v", idx.variables, vars)
+	}
+}

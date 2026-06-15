@@ -2,7 +2,11 @@ package risk
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 func defaultPortfolio() PortfolioState {
@@ -266,13 +270,65 @@ func TestPreTradeGate_MaxOpenPositionsSellOnExistingPosition(t *testing.T) {
 	pf := defaultPortfolio()
 	pf.Positions = map[string]float64{"2330": 100000, "2454": 100000, "3008": 100000, "2317": 100000, "2882": 100000}
 	order := defaultOrder()
-	order.Symbol = "2330" // Already held — sell does not increase count
+	order.Symbol = "2330"
 	order.Side = "SELL"
 
 	dec, err := g.Check(context.Background(), order, pf, "NORMAL")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// SELL on existing position should pass max_open_positions
 	assertRulePassed(t, dec, "max_open_positions", true)
+}
+
+func TestPreTradeGate_MaxCorrelation(t *testing.T) {
+	g := NewPreTradeGate()
+	if g.MaxCorrelation() != 0.70 {
+		t.Errorf("MaxCorrelation = %.2f, want 0.70", g.MaxCorrelation())
+	}
+}
+
+func TestPreTradeGate_SetRSITwScore(t *testing.T) {
+	g := NewPreTradeGate()
+	g.SetRSITwScore(0.80)
+
+	dec, err := g.Check(context.Background(), defaultOrder(), defaultPortfolio(), "NORMAL")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dec.Verdict != VerdictBlock {
+		t.Errorf("expected BLOCK for extreme RSI-tw, got %s", dec.Verdict)
+	}
+
+	found := false
+	for _, d := range dec.Details {
+		if d.RuleName == "retail_sentiment" && d.Severity == "CRITICAL" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected retail_sentiment CRITICAL severity")
+	}
+}
+
+func TestPreTradeGate_WithMaturityTracker(t *testing.T) {
+	g := NewPreTradeGate()
+	mt := domain.NewMaturityTrackerWithStart(time.Now().UTC())
+	g.WithMaturityTracker(mt)
+
+	dec, err := g.Check(context.Background(), defaultOrder(), defaultPortfolio(), "NORMAL")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	found := false
+	for _, d := range dec.Details {
+		if d.RuleName == "var_limit" && d.Passed && strings.Contains(d.Message, "warming") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected VaR warming message during burn-in")
+	}
 }

@@ -254,7 +254,6 @@ func TestMacroAwareDrawdownEngine_CalculatePortfolioAdjustment(t *testing.T) {
 				t.Errorf("Target = %.2f, want %.2f", target, tt.wantTarget)
 			}
 
-			// Use tolerance for floating point comparison
 			tolerance := 0.0001
 			if adjustment < tt.wantAdjustment-tolerance || adjustment > tt.wantAdjustment+tolerance {
 				t.Errorf("Adjustment = %.2f, want %.2f", adjustment, tt.wantAdjustment)
@@ -262,3 +261,62 @@ func TestMacroAwareDrawdownEngine_CalculatePortfolioAdjustment(t *testing.T) {
 		})
 	}
 }
+
+func TestNewMacroAwareDrawdownEngineFromParameters(t *testing.T) {
+	engine := NewMacroAwareDrawdownEngineFromParameters()
+	if engine == nil {
+		t.Fatal("NewMacroAwareDrawdownEngineFromParameters returned nil")
+	}
+	if len(engine.levels) == 0 {
+		t.Error("expected levels to be populated from parameters")
+	}
+
+	if engine.cfg.OrangeOverrideMinScore != 0.55 {
+		t.Errorf("OrangeOverrideMinScore = %.2f, want 0.55", engine.cfg.OrangeOverrideMinScore)
+	}
+	if engine.cfg.RedOverrideMinScore != 0.75 {
+		t.Errorf("RedOverrideMinScore = %.2f, want 0.75", engine.cfg.RedOverrideMinScore)
+	}
+
+	light, ok := engine.levels[DrawdownLight]
+	if !ok {
+		t.Fatal("expected light drawdown level")
+	}
+	if light.Percentage != 0.15 || light.MaxExposure != 0.85 {
+		t.Errorf("light level = (%v, %v), want (0.15, 0.85)", light.Percentage, light.MaxExposure)
+	}
+}
+
+func TestMacroAwareDrawdownEngine_GetPositionSizeAdjustment(t *testing.T) {
+	engine := NewMacroAwareDrawdownEngine()
+	decision := &MacroAwareDrawdownDecision{MaxExposure: 0.65}
+	if got := engine.GetPositionSizeAdjustment(decision); got != 0.65 {
+		t.Errorf("GetPositionSizeAdjustment = %.2f, want 0.65", got)
+	}
+}
+
+func TestMacroAwareDrawdownEngine_EvaluateWithIndustry_Escalation(t *testing.T) {
+	engine := NewMacroAwareDrawdownEngine()
+	macro := &narrative.MacroRiskAssessment{Level: narrative.MacroRiskOrange, ForeignOutflowProb: 55.0}
+	structural := &narrative.StructuralTrendAssessment{OverrideScore: 0.0, ShouldOverrideRisk: false}
+	industry := &IndustryRiskAssessment{
+		TotalIndustryCount:     10,
+		RecessionIndustryCount: 3,
+		ExpansionIndustryCount: 2,
+	}
+
+	dec, breakdown := engine.EvaluateWithIndustry(macro, structural, industry)
+	if dec.Action != DrawdownSevere {
+		t.Errorf("expected escalation to SEVERE, got %v", dec.Action)
+	}
+	if breakdown == nil {
+		t.Fatal("expected breakdown")
+	}
+	if len(breakdown.Steps) < 3 {
+		t.Errorf("expected at least 3 breakdown steps, got %d", len(breakdown.Steps))
+	}
+	if breakdown.FinalAction != DrawdownSevere {
+		t.Errorf("expected FinalAction SEVERE, got %v", breakdown.FinalAction)
+	}
+}
+

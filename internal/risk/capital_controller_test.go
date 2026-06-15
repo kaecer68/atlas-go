@@ -1,6 +1,9 @@
 package risk
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -371,5 +374,111 @@ func TestNextPhase_Progression(t *testing.T) {
 		if ctrl.GetSnapshot().Phase != expectedOrder[i+1] {
 			t.Errorf("expected next phase %q, got %q", expectedOrder[i+1], ctrl.GetSnapshot().Phase)
 		}
+	}
+}
+
+func TestNewCapitalPhaseControllerWithPersistence_LoadsSavedState(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.MinDaysPerPhase = 1
+	cfg.PhaseStartDate = time.Now().Add(-20 * 24 * time.Hour)
+	ctrl := NewCapitalPhaseControllerWithPersistence(cfg, dir)
+	ctrl.UpdateMetrics(1.5, 0.05)
+
+	if err := ctrl.AdvancePhase(); err != nil {
+		t.Fatalf("AdvancePhase failed: %v", err)
+	}
+	if ctrl.GetSnapshot().Phase != domain.PhasePaper {
+		t.Fatalf("expected phase paper after advance, got %q", ctrl.GetSnapshot().Phase)
+	}
+
+	freshCfg := domain.DefaultCapitalPhaseConfig()
+	freshCfg.CurrentPhase = domain.PhaseSimulation
+	restored := NewCapitalPhaseControllerWithPersistence(freshCfg, dir)
+
+	if restored.GetSnapshot().Phase != domain.PhasePaper {
+		t.Errorf("expected restored phase paper, got %q", restored.GetSnapshot().Phase)
+	}
+	if restored.config.CurrentPhase != domain.PhasePaper {
+		t.Errorf("expected restored config phase paper, got %q", restored.config.CurrentPhase)
+	}
+}
+
+func TestNewCapitalPhaseControllerWithPersistence_EmptyDir(t *testing.T) {
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.CurrentPhase = domain.PhaseLive
+	ctrl := NewCapitalPhaseControllerWithPersistence(cfg, "")
+
+	if ctrl.GetSnapshot().Phase != domain.PhaseLive {
+		t.Errorf("expected phase live when persist dir empty, got %q", ctrl.GetSnapshot().Phase)
+	}
+}
+
+func TestCapitalPhaseController_LoadState_NoPersistPath(t *testing.T) {
+	ctrl := NewCapitalPhaseController(domain.DefaultCapitalPhaseConfig())
+	if _, err := ctrl.LoadState(); err == nil {
+		t.Error("expected error when LoadState called with no persist path")
+	}
+}
+
+func TestCapitalPhaseController_LoadState_MissingFile(t *testing.T) {
+	dir := t.TempDir()
+	ctrl := NewCapitalPhaseControllerWithPersistence(domain.DefaultCapitalPhaseConfig(), dir)
+	_ = os.Remove(ctrl.persistPath)
+
+	if _, err := ctrl.LoadState(); err == nil {
+		t.Error("expected error when state file is missing")
+	}
+}
+
+func TestCapitalPhaseController_LoadState_InvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	ctrl := NewCapitalPhaseControllerWithPersistence(domain.DefaultCapitalPhaseConfig(), dir)
+	if err := os.WriteFile(ctrl.persistPath, []byte("not json"), 0o644); err != nil {
+		t.Fatalf("setup invalid json failed: %v", err)
+	}
+
+	if _, err := ctrl.LoadState(); err == nil {
+		t.Error("expected error when state file contains invalid JSON")
+	}
+}
+
+func TestCapitalPhaseController_LoadState_CorruptedConfig(t *testing.T) {
+	dir := t.TempDir()
+	_ = NewCapitalPhaseControllerWithPersistence(domain.DefaultCapitalPhaseConfig(), dir)
+
+	state := PersistedState{
+		Config: domain.CapitalPhaseConfig{
+			CurrentPhase:   domain.PhaseFull,
+			PhaseStartDate: time.Now().Add(-90 * 24 * time.Hour),
+			CapitalLimits: map[string]float64{
+				string(domain.PhaseSimulation): 1.0,
+				string(domain.PhasePaper):      0.10,
+				string(domain.PhaseLive):       0.30,
+				string(domain.PhaseFull):       1.0,
+			},
+		},
+		Snapshot: domain.CapitalSnapshot{
+			Phase:         domain.PhaseFull,
+			RollingSharpe: 1.8,
+			MaxDrawdown:   0.04,
+		},
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal state: %v", err)
+	}
+	path := filepath.Join(dir, "capital_phase_state.json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	restored := NewCapitalPhaseControllerWithPersistence(domain.DefaultCapitalPhaseConfig(), dir)
+	if restored.GetSnapshot().Phase != domain.PhaseFull {
+		t.Errorf("expected restored phase full, got %q", restored.GetSnapshot().Phase)
+	}
+	if restored.GetSnapshot().RollingSharpe != 1.8 {
+		t.Errorf("expected restored RollingSharpe 1.8, got %.2f", restored.GetSnapshot().RollingSharpe)
 	}
 }
