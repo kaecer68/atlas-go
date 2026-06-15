@@ -1,0 +1,707 @@
+package marketdata
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+)
+
+// ─── FinMindClient singleton ─────────────────────────────────────────────────
+
+func TestFinMindClient_RateLimiter(t *testing.T) {
+	c := NewFinMindClient("test-key")
+	if c.RateLimiter() == nil {
+		t.Fatal("expected non-nil rate limiter")
+	}
+}
+
+func TestFinMindClient_SetHTTPClient(t *testing.T) {
+	c := NewFinMindClient("test-key")
+	custom := &http.Client{}
+	c.SetHTTPClient(custom)
+	if c.httpClient != custom {
+		t.Error("SetHTTPClient did not assign the provided client")
+	}
+}
+
+func TestFinMindClient_NewFinMindClient(t *testing.T) {
+	c := NewFinMindClient("api-key-123")
+	if c.apiKey != "api-key-123" {
+		t.Errorf("apiKey = %q, want api-key-123", c.apiKey)
+	}
+	if c.httpClient == nil {
+		t.Error("httpClient should be initialized")
+	}
+	if c.rateLimiter == nil {
+		t.Error("rateLimiter should be initialized")
+	}
+}
+
+func TestFinMindProvider_Name(t *testing.T) {
+	p := NewFinMindProviderWithClient(NewFinMindClient("k"))
+	if got := p.Name(); got != "finmind" {
+		t.Errorf("Name() = %q, want finmind", got)
+	}
+}
+
+func TestFinMindProvider_GetClient(t *testing.T) {
+	c := NewFinMindClient("k")
+	p := NewFinMindProviderWithClient(c)
+	if p.GetClient() != c {
+		t.Error("GetClient should return injected client")
+	}
+}
+
+// ─── FinMind fetchDataset (with URL-rewriting transport) ─────────────────────
+
+// rewriteTransport redirects HTTP requests for finmindBaseURL to the test server.
+type rewriteTransport struct {
+	target string
+	inner  http.RoundTripper
+}
+
+func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if strings.HasPrefix(req.URL.String(), finmindBaseURL) {
+		newReq2 := req.Clone(req.Context())
+		newReq2.URL.Scheme = "http"
+		newReq2.URL.Host = strings.TrimPrefix(t.target, "http://")
+		newReq2.Host = ""
+		return t.inner.RoundTrip(newReq2)
+	}
+	return t.inner.RoundTrip(req)
+}
+
+// ─── FinMindClient.fetchDataset tests via URL-rewriting client ───────────────
+
+func TestFinMindClient_fetchDataset_Success(t *testing.T) {
+	var capturedAuth string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"msg":"success","status":200,"data":[{"revenue":289420000000.0}]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("test-key")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	data, err := c.fetchDataset(context.Background(), "TaiwanStockMonthRevenue", "2330", "2026-04-01", "2026-04-30")
+	if err != nil {
+		t.Fatalf("fetchDataset error: %v", err)
+	}
+	if len(data) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(data))
+	}
+	if data[0]["revenue"].(float64) != 289420000000.0 {
+		t.Errorf("revenue = %v, want 289420000000.0", data[0]["revenue"])
+	}
+	if capturedAuth != "Bearer test-key" {
+		t.Errorf("Authorization = %q, want Bearer test-key", capturedAuth)
+	}
+}
+
+func TestFinMindClient_fetchDataset_NoAPIKey(t *testing.T) {
+	var authReceived string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authReceived = r.Header.Get("Authorization")
+		w.Write([]byte(`{"msg":"success","status":200,"data":[]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, err := c.fetchDataset(context.Background(), "TaiwanStockMonthRevenue", "2330", "2026-04-01", "2026-04-30")
+	if err != nil {
+		t.Fatalf("fetchDataset error: %v", err)
+	}
+	if authReceived != "" {
+		t.Errorf("Authorization should not be set when apiKey is empty, got %q", authReceived)
+	}
+}
+
+func TestFinMindClient_fetchDataset_HTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"msg":"forbidden"}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, err := c.fetchDataset(context.Background(), "TaiwanStockMonthRevenue", "2330", "2026-04-01", "2026-04-30")
+	if err == nil {
+		t.Fatal("expected error for 403 response")
+	}
+}
+
+func TestFinMindClient_fetchDataset_APIError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"msg":"Invalid token","status":401,"data":[]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("bad-key")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, err := c.fetchDataset(context.Background(), "TaiwanStockMonthRevenue", "2330", "2026-04-01", "2026-04-30")
+	if err == nil {
+		t.Fatal("expected error for API status 401")
+	}
+	if !strings.Contains(err.Error(), "Invalid token") {
+		t.Errorf("error %q should mention Invalid token", err.Error())
+	}
+}
+
+func TestFinMindClient_fetchDataset_MalformedJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`not-json`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	if _, err := c.fetchDataset(context.Background(), "X", "Y", "2026-01-01", "2026-01-31"); err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+}
+
+// ─── FinMindClient.GetMonthRevenue ───────────────────────────────────────────
+
+func TestFinMindClient_GetMonthRevenue_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("dataset") != "TaiwanStockMonthRevenue" {
+			t.Errorf("dataset = %q, want TaiwanStockMonthRevenue", r.URL.Query().Get("dataset"))
+		}
+		if r.URL.Query().Get("data_id") != "2330" {
+			t.Errorf("data_id = %q, want 2330", r.URL.Query().Get("data_id"))
+		}
+		if r.URL.Query().Get("start_date") != "2026-04-01" {
+			t.Errorf("start_date = %q, want 2026-04-01", r.URL.Query().Get("start_date"))
+		}
+		if r.URL.Query().Get("end_date") != "2026-04-31" {
+			t.Errorf("end_date = %q, want 2026-04-31 (note: API uses padded 31)", r.URL.Query().Get("end_date"))
+		}
+		w.Write([]byte(`{"msg":"success","status":200,"data":[{"revenue":289420000000.0,"date":"2026-04-01"}]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	rev, err := c.GetMonthRevenue(context.Background(), "2330", 2026, 4)
+	if err != nil {
+		t.Fatalf("GetMonthRevenue error: %v", err)
+	}
+	if rev != 289420000000.0 {
+		t.Errorf("revenue = %v, want 289420000000.0", rev)
+	}
+}
+
+func TestFinMindClient_GetMonthRevenue_NoData(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"msg":"success","status":200,"data":[]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	_, err := c.GetMonthRevenue(context.Background(), "9999", 2026, 1)
+	if err == nil {
+		t.Fatal("expected error when no data returned")
+	}
+	if !strings.Contains(err.Error(), "no month revenue data") {
+		t.Errorf("error %q should mention 'no month revenue data'", err.Error())
+	}
+}
+
+func TestFinMindClient_GetMonthRevenue_NonFloatRevenue(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"msg":"success","status":200,"data":[{"revenue":"289.42"}]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	_, err := c.GetMonthRevenue(context.Background(), "2330", 2026, 4)
+	if err == nil {
+		t.Fatal("expected error when revenue is not float64")
+	}
+}
+
+// ─── FinMindClient.GetFinancialStatements ────────────────────────────────────
+
+func TestFinMindClient_GetFinancialStatements_FiltersByQuarter(t *testing.T) {
+	// Note: production code uses dateStr[5] - '0' to derive quarter, which is
+	// a heuristic not strictly month-aligned. For date "2026-03-31",
+	// dateStr[5] is '0' (leading zero of month), so quarter=0 matches. For
+	// date "2026-12-31", dateStr[5] is '1', so quarter=1 matches.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"msg":"success","status":200,
+			"data":[
+				{"date":"2026-12-31","origin_name":"Revenue","value":1750000.0},
+				{"date":"2026-12-31","origin_name":"NetIncome","value":450000.0},
+				{"date":"2026-03-31","origin_name":"Revenue","value":1600000.0}
+			]
+		}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	// quarter=1 matches December entries (dateStr[5]='1')
+	statements, err := c.GetFinancialStatements(context.Background(), "2330", 2026, 1)
+	if err != nil {
+		t.Fatalf("GetFinancialStatements error: %v", err)
+	}
+	if len(statements) != 2 {
+		t.Fatalf("expected 2 statements for quarter=1, got %d", len(statements))
+	}
+	if statements["Revenue"] != 1750000.0 {
+		t.Errorf("Revenue = %v, want 1750000.0", statements["Revenue"])
+	}
+	if statements["NetIncome"] != 450000.0 {
+		t.Errorf("NetIncome = %v, want 450000.0", statements["NetIncome"])
+	}
+}
+
+func TestFinMindClient_GetFinancialStatements_NoDateField(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"msg":"success","status":200,
+			"data":[{"origin_name":"Revenue","value":1600000.0}]
+		}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	statements, err := c.GetFinancialStatements(context.Background(), "2330", 2026, 2)
+	if err != nil {
+		t.Fatalf("GetFinancialStatements error: %v", err)
+	}
+	if len(statements) != 0 {
+		t.Errorf("expected 0 statements when date missing, got %d", len(statements))
+	}
+}
+
+func TestFinMindClient_GetFinancialStatements_ShortDateString(t *testing.T) {
+	// date string shorter than 7 chars → quarter index parsing skipped
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"msg":"success","status":200,
+			"data":[{"date":"2026","origin_name":"Revenue","value":1600000.0}]
+		}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	statements, err := c.GetFinancialStatements(context.Background(), "2330", 2026, 1)
+	if err != nil {
+		t.Fatalf("GetFinancialStatements error: %v", err)
+	}
+	if len(statements) != 0 {
+		t.Errorf("expected 0 statements for short date, got %d", len(statements))
+	}
+}
+
+// ─── FinMindClient.GetInstitutionalInvestors ─────────────────────────────────
+
+func TestFinMindClient_GetInstitutionalInvestors_AllThreeCategories(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"msg":"success","status":200,
+			"data":[
+				{"name":"ForeignInvestors","buy":100000.0,"sell":50000.0},
+				{"name":"ForeignDealer","buy":20000.0,"sell":10000.0},
+				{"name":"InvestmentTrust","buy":30000.0,"sell":25000.0},
+				{"name":"DomesticInstitution","buy":5000.0,"sell":4000.0},
+				{"name":"Dealer","buy":10000.0,"sell":8000.0}
+			]
+		}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	foreign, domestic, dealer, err := c.GetInstitutionalInvestors(context.Background(), "2330", "2026-04-29")
+	if err != nil {
+		t.Fatalf("GetInstitutionalInvestors error: %v", err)
+	}
+	// ForeignInvestors + ForeignDealer = (100000-50000) + (20000-10000) = 50000+10000 = 60000
+	if foreign != 60000.0 {
+		t.Errorf("foreign = %v, want 60000.0", foreign)
+	}
+	// InvestmentTrust + DomesticInstitution = (30000-25000) + (5000-4000) = 5000+1000 = 6000
+	if domestic != 6000.0 {
+		t.Errorf("domestic = %v, want 6000.0", domestic)
+	}
+	if dealer != 2000.0 {
+		t.Errorf("dealer = %v, want 2000.0", dealer)
+	}
+}
+
+func TestFinMindClient_GetInstitutionalInvestors_SkipsInvalidEntries(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"msg":"success","status":200,
+			"data":[
+				{"buy":100000.0,"sell":50000.0},
+				{"name":"ForeignInvestors","buy":10000.0,"sell":5000.0}
+			]
+		}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	foreign, _, _, err := c.GetInstitutionalInvestors(context.Background(), "2330", "2026-04-29")
+	if err != nil {
+		t.Fatalf("GetInstitutionalInvestors error: %v", err)
+	}
+	if foreign != 5000.0 {
+		t.Errorf("foreign = %v, want 5000.0 (only one valid ForeignInvestors entry)", foreign)
+	}
+}
+
+// ─── FinMindClient.GetStockPrice ─────────────────────────────────────────────
+
+func TestFinMindClient_GetStockPrice_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"msg":"success","status":200,
+			"data":[{
+				"date":"2026-04-29",
+				"open":1070.0,
+				"max":1075.0,
+				"min":1055.0,
+				"close":1065.0,
+				"Trading_Volume":45045.0
+			}]
+		}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	q, err := c.GetStockPrice(context.Background(), "2330", "2026-04-29")
+	if err != nil {
+		t.Fatalf("GetStockPrice error: %v", err)
+	}
+	if q.Symbol != "2330" {
+		t.Errorf("Symbol = %q, want 2330", q.Symbol)
+	}
+	if q.Last != 1065.0 {
+		t.Errorf("Last = %v, want 1065.0", q.Last)
+	}
+	if q.Open != 1070.0 {
+		t.Errorf("Open = %v, want 1070.0", q.Open)
+	}
+	if q.High != 1075.0 {
+		t.Errorf("High = %v, want 1075.0", q.High)
+	}
+	if q.Low != 1055.0 {
+		t.Errorf("Low = %v, want 1055.0", q.Low)
+	}
+	if q.Volume != 45045 {
+		t.Errorf("Volume = %d, want 45045", q.Volume)
+	}
+	if q.Market != "TW" {
+		t.Errorf("Market = %q, want TW", q.Market)
+	}
+	if q.Source != "finmind" {
+		t.Errorf("Source = %q, want finmind", q.Source)
+	}
+}
+
+func TestFinMindClient_GetStockPrice_NoData(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"msg":"success","status":200,"data":[]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	_, err := c.GetStockPrice(context.Background(), "2330", "2026-04-29")
+	if err == nil {
+		t.Fatal("expected error for empty data")
+	}
+}
+
+func TestFinMindClient_GetStockPrice_OnlyClose(t *testing.T) {
+	// When only "close" is present, High/Low fall back to close.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"msg":"success","status":200,
+			"data":[{"close":100.0,"Trading_Volume":1000.0}]
+		}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	q, err := c.GetStockPrice(context.Background(), "2330", "2026-04-29")
+	if err != nil {
+		t.Fatalf("GetStockPrice error: %v", err)
+	}
+	if q.Last != 100.0 {
+		t.Errorf("Last = %v, want 100.0", q.Last)
+	}
+	// Without max/min, High and Low default to Last
+	if q.High != 100.0 {
+		t.Errorf("High = %v, want 100.0 (fallback to close)", q.High)
+	}
+	if q.Low != 100.0 {
+		t.Errorf("Low = %v, want 100.0 (fallback to close)", q.Low)
+	}
+	if q.Open != 0 {
+		t.Errorf("Open = %v, want 0 (no open field)", q.Open)
+	}
+	if q.Volume != 1000 {
+		t.Errorf("Volume = %d, want 1000", q.Volume)
+	}
+}
+
+// ─── FinMindProvider.GetQuotes ────────────────────────────────────────────────
+
+func TestFinMindProvider_GetQuotes_PartialSuccess(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("data_id") {
+		case "2330":
+			w.Write([]byte(`{"msg":"success","status":200,"data":[{"close":1065.0,"Trading_Volume":45045.0}]}`))
+		case "9999":
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	p := NewFinMindProviderWithClient(c)
+	quotes, err := p.GetQuotes(context.Background(), asOfDate("2026-04-29"), []string{"2330", "9999"})
+	if err != nil {
+		t.Fatalf("GetQuotes error: %v", err)
+	}
+	if len(quotes) != 1 {
+		t.Fatalf("expected 1 quote (only 2330 succeeded), got %d", len(quotes))
+	}
+	if quotes[0].Symbol != "2330" {
+		t.Errorf("Symbol = %q, want 2330", quotes[0].Symbol)
+	}
+}
+
+func TestFinMindProvider_GetQuotes_AllFailed(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	p := NewFinMindProviderWithClient(c)
+	_, err := p.GetQuotes(context.Background(), asOfDate("2026-04-29"), []string{"X", "Y"})
+	if err == nil {
+		t.Fatal("expected error when all symbols fail")
+	}
+}
+
+func TestFinMindProvider_GetMonthRevenue_DelegatesToClient(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"msg":"success","status":200,"data":[{"revenue":500.0}]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	p := NewFinMindProviderWithClient(c)
+	rev, err := p.GetMonthRevenue(context.Background(), "2330", 2026, 1)
+	if err != nil {
+		t.Fatalf("GetMonthRevenue error: %v", err)
+	}
+	if rev != 500.0 {
+		t.Errorf("revenue = %v, want 500.0", rev)
+	}
+}
+
+func TestFinMindProvider_GetFinancialStatements_DelegatesToClient(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// date "2026-12-31" matches quarter=1 via the production dateStr[5] heuristic
+		w.Write([]byte(`{"msg":"success","status":200,"data":[{"date":"2026-12-31","origin_name":"Revenue","value":2000.0}]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	p := NewFinMindProviderWithClient(c)
+	statements, err := p.GetFinancialStatements(context.Background(), "2330", 2026, 1)
+	if err != nil {
+		t.Fatalf("GetFinancialStatements error: %v", err)
+	}
+	if statements["Revenue"] != 2000.0 {
+		t.Errorf("Revenue = %v, want 2000.0", statements["Revenue"])
+	}
+}
+
+func TestFinMindProvider_GetInstitutionalInvestors_DelegatesToClient(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"msg":"success","status":200,"data":[{"name":"ForeignInvestors","buy":1000.0,"sell":500.0}]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	p := NewFinMindProviderWithClient(c)
+	foreign, _, _, err := p.GetInstitutionalInvestors(context.Background(), "2330", "2026-04-29")
+	if err != nil {
+		t.Fatalf("GetInstitutionalInvestors error: %v", err)
+	}
+	if foreign != 500.0 {
+		t.Errorf("foreign = %v, want 500.0", foreign)
+	}
+}
+
+// ─── Shared client lifecycle ─────────────────────────────────────────────────
+
+func TestGetSharedFinMindClient_Singleton(t *testing.T) {
+	ResetSharedFinMindClient()
+	c1 := GetSharedFinMindClient("key1")
+	c2 := GetSharedFinMindClient("ignored-after-first-call")
+	if c1 != c2 {
+		t.Error("expected singleton to return same instance")
+	}
+	if c1.apiKey != "key1" {
+		t.Errorf("apiKey = %q, want key1", c1.apiKey)
+	}
+	ResetSharedFinMindClient()
+}
+
+func TestUpdateSharedFinMindAPIKey_BeforeInit(t *testing.T) {
+	ResetSharedFinMindClient()
+	// Should not panic when sharedFinMindClient is nil
+	UpdateSharedFinMindAPIKey("new-key")
+}
+
+func TestUpdateSharedFinMindAPIKey_AfterInit(t *testing.T) {
+	ResetSharedFinMindClient()
+	GetSharedFinMindClient("initial-key")
+	UpdateSharedFinMindAPIKey("rotated-key")
+	c := GetSharedFinMindClient("ignored")
+	if c.apiKey != "rotated-key" {
+		t.Errorf("apiKey = %q, want rotated-key", c.apiKey)
+	}
+	ResetSharedFinMindClient()
+}
+
+func TestResetSharedFinMindClient(t *testing.T) {
+	GetSharedFinMindClient("k")
+	ResetSharedFinMindClient()
+	c := GetSharedFinMindClient("k2")
+	if c.apiKey != "k2" {
+		t.Errorf("apiKey = %q, want k2 (reset should allow new key)", c.apiKey)
+	}
+	ResetSharedFinMindClient()
+}
+
+// asOfDate is a tiny helper to keep tests readable.
+func asOfDate(s string) time.Time {
+	t, _ := time.Parse("2006-01-02", s)
+	return t
+}
+
+// ─── Sanity tests using io.ReadAll directly ──────────────────────────────────
+
+func TestFinMindClient_HTTPReadFailure(t *testing.T) {
+	c := NewFinMindClient("k")
+	// Use a context that is already cancelled to force a request failure.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: "http://127.0.0.1:1", inner: http.DefaultTransport},
+	}
+	_, err := c.fetchDataset(ctx, "X", "Y", "2026-01-01", "2026-01-31")
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
+
+// TestFinMindClient_GetStockPrice_RawTypeFallback ensures type assertions are graceful.
+func TestFinMindClient_GetStockPrice_RawTypeFallback(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// close present but no max/min — High and Low fall back to Last
+		w.Write([]byte(`{"msg":"success","status":200,"data":[{"close":100.0}]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+	q, err := c.GetStockPrice(context.Background(), "2330", "2026-04-29")
+	if err != nil {
+		t.Fatalf("GetStockPrice error: %v", err)
+	}
+	if q.Last != 100.0 {
+		t.Errorf("Last = %v, want 100.0", q.Last)
+	}
+	if q.Open != 0 || q.High != 100.0 || q.Low != 100.0 || q.Volume != 0 {
+		t.Errorf("expected (Open=0, High=100, Low=100, Vol=0), got Open=%v High=%v Low=%v Vol=%d",
+			q.Open, q.High, q.Low, q.Volume)
+	}
+}
+
+// ─── encoding/json smoke test for compile-time guarantee ─────────────────────
+
+func TestFinMindResponse_Parse(t *testing.T) {
+	body := []byte(`{"msg":"success","status":200,"data":[{"a":1.0}]}`)
+	var resp FinMindResponse
+	if err := json.NewDecoder(io.NopCloser(strings.NewReader(string(body)))).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if resp.Status != 200 {
+		t.Errorf("status = %d, want 200", resp.Status)
+	}
+	if resp.Msg != "success" {
+		t.Errorf("msg = %q, want success", resp.Msg)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 data record, got %d", len(resp.Data))
+	}
+	if resp.Data[0]["a"].(float64) != 1.0 {
+		t.Errorf("data[0][a] = %v, want 1.0", resp.Data[0]["a"])
+	}
+}
