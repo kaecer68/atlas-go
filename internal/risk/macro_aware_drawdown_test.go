@@ -319,4 +319,3 @@ func TestMacroAwareDrawdownEngine_EvaluateWithIndustry_Escalation(t *testing.T) 
 		t.Errorf("expected FinalAction SEVERE, got %v", breakdown.FinalAction)
 	}
 }
-

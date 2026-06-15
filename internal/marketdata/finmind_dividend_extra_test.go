@@ -23,13 +23,13 @@ func TestFinMindDividendProvider_parseDividendRecord_CashOnly(t *testing.T) {
 
 	p := NewFinMindDividendProvider(NewFinMindClient("k"), t.TempDir())
 	rec := p.parseDividendRecord(map[string]any{
-		"stock_id":                     "2330",
-		"CashEarningsDistribution":     4.5,
-		"CashStatutorySurplus":         1.5,
-		"StockEarningsDistribution":    0.0,
-		"CashExDividendTradingDate":    "2025-07-17",
-		"CashDividendPaymentDate":      "2025-08-15",
-		"year":                         "2025",
+		"stock_id":                  "2330",
+		"CashEarningsDistribution":  4.5,
+		"CashStatutorySurplus":      1.5,
+		"StockEarningsDistribution": 0.0,
+		"CashExDividendTradingDate": "2025-07-17",
+		"CashDividendPaymentDate":   "2025-08-15",
+		"year":                      "2025",
 	})
 	if rec == nil {
 		t.Fatal("expected non-nil record")

@@ -61,7 +61,7 @@ func TestNVDAProvider_FetchSnapshot_Success(t *testing.T) {
 	if snap.NVDA.Value != 1010.0 {
 		t.Errorf("Value = %v, want 1010.0", snap.NVDA.Value)
 	}
-	// (1010-950)/950*100 = 6.315... 
+	// (1010-950)/950*100 = 6.315...
 	expectedPct := (1010.0 - 950.0) / 950.0 * 100
 	if snap.NVDA.ChangePct != expectedPct {
 		t.Errorf("ChangePct = %v, want %v", snap.NVDA.ChangePct, expectedPct)
