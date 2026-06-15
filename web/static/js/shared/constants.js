@@ -5,8 +5,9 @@ export function agentName(id) {
 }
 
 export function regimeLabel(regime) {
+  if (!regime) return '-';
   const m = { 'RISK_ON': '多頭', 'RISK_OFF': '空頭', 'NEUTRAL': '盤整' };
-  return m[regime] || regime || '-';
+  return m[regime] || '-';
 }
 
 // Narrative event theme labels (frontend canonical source of truth).

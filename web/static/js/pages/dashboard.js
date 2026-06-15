@@ -111,7 +111,12 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
 
 // --- Utilities ---
 
-function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
+function formatDate(d) {
+  if (!d) return '-';
+  const date = new Date(d);
+  if (isNaN(date.getTime()) || date.getFullYear() < 2000) return '-';
+  return date.toLocaleString('zh-TW');
+}
 function fmt(num, digits=3) { return (num ?? 0).toFixed(digits); }
 
 
@@ -133,21 +138,36 @@ export function renderSkeleton(lines=4) {
   return `<div class="skeleton-block"></div><div style="padding:8px">${html}</div>`;
 }
 
-export function computePipelineSummary(guardOutcomes) {
+export function computePipelineSummary(guardOutcomes, items) {
   const guard = guardOutcomes || [];
-  const firstGuard = guard[0];
-  const lastGuard = guard[guard.length - 1];
-  const rawInputs = firstGuard ? (firstGuard.input_count || 0) : 0;
-  const finalOutputs = lastGuard ? (lastGuard.output_count || 0) : 0;
-  const filteredCount = Math.max(0, rawInputs - finalOutputs);
-  return { rawInputs, finalOutputs, filteredCount, guard };
+  const itemList = items || [];
+
+  if (guard.length) {
+    const firstGuard = guard[0];
+    const lastGuard = guard[guard.length - 1];
+    const rawInputs = firstGuard ? (firstGuard.input_count || 0) : 0;
+    const finalOutputs = lastGuard ? (lastGuard.output_count || 0) : 0;
+    const filteredCount = Math.max(0, rawInputs - finalOutputs);
+    return { rawInputs, finalOutputs, filteredCount, guard };
+  }
+
+  // Fallback: 對齊 backend pipeline.go:621-623 的 legacy PassedGuards 處理，避免孤兒 session 顯示 0/0。
+  const rawInputsFromItems = itemList.length;
+  const finalOutputsFromItems = itemList.filter(it => it.passed_guards !== false).length;
+  const filteredCountFromItems = Math.max(0, rawInputsFromItems - finalOutputsFromItems);
+  return {
+    rawInputs: rawInputsFromItems,
+    finalOutputs: finalOutputsFromItems,
+    filteredCount: filteredCountFromItems,
+    guard: [],
+  };
 }
 
 export function renderMacroRadar(data, pipelineData) {
   const el = document.getElementById('macroRadar');
   if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
-  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
+  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes, data.items);
   const regimeColor = data.regime === 'RISK_ON' ? 'var(--up)' : (data.regime === 'RISK_OFF' ? 'var(--down)' : (data.regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
   const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
   const items = (pipelineData && pipelineData.items) || [];
@@ -401,7 +421,6 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
   const avgWeight = agentList.length > 0 ? (agentList.reduce((s, a) => s + (a.weight || 0), 0) / agentList.length).toFixed(2) : '-';
 
   const regime = (macro && macro.regime) || 'NEUTRAL';
-  const regimeLabel = regime === 'RISK_ON' ? '多頭' : (regime === 'RISK_OFF' ? '空頭' : '盤整');
   const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : 'var(--warn)');
 
   const stressVal = (stress && typeof stress.score === 'number') ? stress.score : null;
