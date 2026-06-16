@@ -16,7 +16,7 @@ export async function renderBenchmarkComparison(container, getJSON) {
     { label: 'Alpha', value: fmtP(data.alpha || 0), cls: data.alpha > 0 ? 'text-up' : 'text-down' },
     { label: 'Beta', value: fmtF(data.beta || 0) },
     { label: 'Tracking Error', value: fmtP(data.tracking_error || 0) },
-    { label: 'Sharpe Ratio', value: fmtF(data.sharpe_ratio || 0) },
+    { label: 'Sharpe Ratio', value: data.sharpe_ratio == null ? 'N/A' : fmtF(data.sharpe_ratio) },
     { label: 'Info Ratio', value: fmtF(data.info_ratio || 0) },
   ];
 

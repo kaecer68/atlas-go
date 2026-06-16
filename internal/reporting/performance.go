@@ -58,7 +58,7 @@ type PerformanceReport struct {
 	EndDate          time.Time           `json:"end_date"`
 	TotalReturn      float64             `json:"total_return"`
 	AnnualizedReturn float64             `json:"annualized_return"`
-	SharpeRatio      float64             `json:"sharpe_ratio"`
+	SharpeRatio      *float64            `json:"sharpe_ratio"`
 	SortinoRatio     float64             `json:"sortino_ratio"`
 	CalmarRatio      float64             `json:"calmar_ratio"`
 	MaxDrawdown      float64             `json:"max_drawdown"`
@@ -135,7 +135,12 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 		annualizedReturn = math.Pow(1+totalReturn, 365.0/days) - 1
 	}
 
-	sharpeRatio := CalculateSharpeRatio(dailyReturns)
+	sharpeValue := CalculateSharpeRatio(dailyReturns)
+	var sharpeRatio *float64
+	if sharpeValue != 0 {
+		sharpeRatio = &sharpeValue
+	}
+
 	sortinoRatio := shared.ComputeSortino(dailyReturns, shared.SortinoConfig{
 		Frequency:  shared.FrequencyPerDay,
 		MinSamples: 2,
@@ -202,7 +207,11 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	sb.WriteString("|--------|-------|\n")
 	fmt.Fprintf(&sb, "| Total Return | %.2f%% |\n", report.TotalReturn*100)
 	fmt.Fprintf(&sb, "| Annualized Return | %.2f%% |\n", report.AnnualizedReturn*100)
-	fmt.Fprintf(&sb, "| Sharpe Ratio | %.3f |\n", report.SharpeRatio)
+	if report.SharpeRatio == nil {
+		sb.WriteString("| Sharpe Ratio | N/A |\n")
+	} else {
+		fmt.Fprintf(&sb, "| Sharpe Ratio | %.3f |\n", *report.SharpeRatio)
+	}
 	fmt.Fprintf(&sb, "| Sortino Ratio | %.3f |\n", report.SortinoRatio)
 	fmt.Fprintf(&sb, "| Calmar Ratio | %.3f |\n", report.CalmarRatio)
 	fmt.Fprintf(&sb, "| Max Drawdown | %.2f%% |\n", report.MaxDrawdown*100)
