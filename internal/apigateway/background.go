@@ -261,14 +261,11 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 
 	task.SetLastRun(time.Now())
 
-	// If channel has circuit breaker and it's open, skip
-	if task.ChannelID != "" {
-		breaker, err := m.gateway.breakers.Get(task.ChannelID)
-		if err == nil && breaker.IsOpen() {
-			logging.Warn("background_task", "circuit_open_skipping", "name", task.Name, "channel", task.ChannelID)
-			return
-		}
-	}
+	// Intentionally NOT pre-checking breaker.IsOpen(): if we returned early
+	// here, the half-open probe inside breaker.Call() (gateway.Fetch path)
+	// would never fire for tasks that are the channel's only caller,
+	// leaving the breaker permanently open. See
+	// docs/INCIDENTS/fubon-channel-recurring-failure-2026-06.md.
 
 	err := func() (err error) {
 		defer func() {
