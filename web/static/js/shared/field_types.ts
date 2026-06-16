@@ -2080,7 +2080,7 @@ export interface PerformanceReport {
   end_date: string;
   total_return: number;
   annualized_return: number;
-  sharpe_ratio: number;
+  sharpe_ratio: number | null;
   sortino_ratio: number;
   calmar_ratio: number;
   max_drawdown: number;
