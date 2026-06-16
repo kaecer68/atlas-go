@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -220,19 +221,29 @@ func TestHandleBacktestStatus_Initially(t *testing.T) {
 	}
 }
 
+// TestHandleBacktestStatus_AfterStart verifies the status endpoint
+// reports running=true after starting a backtest. The backtest runs
+// asynchronously; we poll briefly to handle the race where it may
+// complete before the first status check.
 func TestHandleBacktestStatus_AfterStart(t *testing.T) {
 	h := newTestHandlers(t)
 	req := postJSON(t, "/api/backtest/run", map[string]string{
 		"start": "2024-01-01", "end": "2024-06-01",
 	})
 	_, _ = h.HandleBacktestRun(req)
-	req2 := getRequest(t, "/api/backtest/status")
-	status, body := h.HandleBacktestStatus(req2)
-	assertStatus(t, status, http.StatusOK)
-	m := assertJSONKey(t, body, "running")
-	if m["running"] != true {
-		t.Errorf("running = %v, want true", m["running"])
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		req2 := getRequest(t, "/api/backtest/status")
+		status, body := h.HandleBacktestStatus(req2)
+		assertStatus(t, status, http.StatusOK)
+		m := assertJSONKey(t, body, "running")
+		if running, _ := m["running"].(bool); running {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	t.Errorf("running never became true after 3s (backtest goroutine may have failed quickly)")
 }
 
 // --- HandleBacktestSnapshots ---
