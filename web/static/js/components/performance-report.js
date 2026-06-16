@@ -87,6 +87,32 @@ export function renderPerformanceReport(container) {
   });
 
   fetchPerformanceReport('30d');
+  loadAgentNameRegistry();
+}
+
+let agentNameRegistry = null;
+
+async function loadAgentNameRegistry() {
+  try {
+    const res = await fetch('/api/dashboard/agent-names');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    agentNameRegistry = await res.json();
+  } catch (err) {
+    console.warn('performance-report: failed to load agent name registry, falling back to static map', err);
+    agentNameRegistry = null;
+  }
+}
+
+function resolveAgentName(agent) {
+  if (agent && agent.display_name) return agent.display_name;
+  var id = agent && agent.agent_id;
+  if (!id) return '—';
+  if (agentNameRegistry && agentNameRegistry[id]) return agentNameRegistry[id];
+  if (window.agentNameEsm) {
+    var fallback = window.agentNameEsm(id);
+    if (fallback && fallback !== id) return fallback;
+  }
+  return '—';
 }
 
 async function fetchPerformanceReport(period) {
@@ -150,7 +176,7 @@ function renderReportData(data) {
         ? '<span style="color:var(--text-muted)">N/A</span>'
         : (fmtFloat ? fmtFloat(a.sharpe_like, 2) : a.sharpe_like.toFixed(2));
       return '<tr>' +
-        '<td>' + (a.display_name || (agentNameEsm ? agentNameEsm(a.agent_id) : a.agent_id)) + '</td>' +
+        '<td>' + resolveAgentName(a) + '</td>' +
         '<td style="color:' + (ret > 0 ? 'var(--up)' : (ret < 0 ? 'var(--down)' : 'var(--text)')) + '">' + (fmtPct ? fmtPct(ret) : (ret*100).toFixed(2)+'%') + '</td>' +
         '<td>' + (fmtPct ? fmtPct(a.win_rate || 0) : ((a.win_rate||0)*100).toFixed(1)+'%') + '</td>' +
         '<td>' + sharpeCell + '</td>' +

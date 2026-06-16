@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -35,6 +36,67 @@ func TestDashboardAPI_SetStorageReporter(t *testing.T) {
 	// Verify type assertion works
 	if _, ok := d.storageReport.(*storage.LifecycleManager); !ok {
 		t.Fatal("storageReport is not a *storage.LifecycleManager")
+	}
+}
+
+func TestDashboardAPI_AgentNamesEndpoint(t *testing.T) {
+	workDir := t.TempDir()
+	configsDir := filepath.Join(workDir, "configs")
+	if err := os.MkdirAll(configsDir, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+	agentsJSON := `{
+  "version": 1,
+  "agents": [
+    {"id": "taiwan-macro-01", "name": "台灣總經"},
+    {"id": "us-macro-spx-01", "name": "美股宏觀 SPX"}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(configsDir, "agents.json"), []byte(agentsJSON), 0o644); err != nil {
+		t.Fatalf("write agents: %v", err)
+	}
+
+	d := NewDashboardAPIWithGateway(workDir, ".", nil, NoopFetcher())
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/agent-names", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var got map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["taiwan-macro-01"] != "台灣總經" {
+		t.Errorf("expected '台灣總經' for taiwan-macro-01, got %q", got["taiwan-macro-01"])
+	}
+	if got["us-macro-spx-01"] != "美股宏觀 SPX" {
+		t.Errorf("expected '美股宏觀 SPX' for us-macro-spx-01, got %q", got["us-macro-spx-01"])
+	}
+}
+
+func TestDashboardAPI_AgentNamesEndpoint_MissingFile(t *testing.T) {
+	workDir := t.TempDir()
+
+	d := NewDashboardAPIWithGateway(workDir, ".", nil, NoopFetcher())
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/agent-names", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 with empty map, got %d", rr.Code)
+	}
+	body := strings.TrimSpace(rr.Body.String())
+	if body != "{}" {
+		t.Errorf("expected empty JSON object, got %q", body)
 	}
 }
 

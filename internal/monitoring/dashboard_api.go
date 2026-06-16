@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -760,6 +761,35 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
+
+	// Agent display name registry (single source of truth; replaces competing
+	// frontend static maps that previously missed 6 agents).
+	mux.HandleFunc("/api/dashboard/agent-names", func(w http.ResponseWriter, r *http.Request) {
+		agentsPath := filepath.Join(a.workDir, "configs", "agents.json")
+		data, err := os.ReadFile(agentsPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{}`))
+				return
+			}
+			http.Error(w, fmt.Sprintf("read agents: %v", err), http.StatusInternalServerError)
+			return
+		}
+		var reg domain.AgentRegistry
+		if err := json.Unmarshal(data, &reg); err != nil {
+			http.Error(w, fmt.Sprintf("parse agents: %v", err), http.StatusInternalServerError)
+			return
+		}
+		names := make(map[string]string, len(reg.Agents))
+		for _, ag := range reg.Agents {
+			names[ag.ID] = ag.Name
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(names)
+	})
 
 	swarmSvc := service.NewSwarmService(filepath.Join(a.workDir, "data/state/swarm_latest.json"))
 	swarmSvc.SetTrainingDir(filepath.Join(a.workDir, "data/state/swarm_training"))

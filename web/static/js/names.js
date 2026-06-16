@@ -1,3 +1,10 @@
+// DEPRECATED 2026-06-16: Static agent name map superseded by
+// GET /api/dashboard/agent-names (single source of truth from
+// configs/agents.json). Frontend perf-report page now fetches the
+// authoritative map and falls back to this static map only on fetch
+// failure. New code MUST use the endpoint; do not extend this map.
+// See perf-report audit Wave 4.
+
 // Name maps and lookup functions for the trading system
 
 // Agent name mapping
