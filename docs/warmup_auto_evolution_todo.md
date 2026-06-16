@@ -66,7 +66,10 @@ git diff --stat  # parameters.json 不應出現在變更列表中
 - Darwinian weights：`internal/portfolio/darwinian_weights.go:RecordOutcome()`、`UpdateRollingSharpe()`
 
 **關鍵約束**：
-- `SharpeMinSampleSize = 60`（`internal/config/parameters_defaults.go`）
+- `SharpeMinSampleSize`（2026-06 修正）：不再是全域常數；改為 per-site 配置：
+  - KPI（`PerformanceReport.SharpeRatio`）：`MinSamples: 2` via `CalculateSharpeRatio()`
+  - Per-agent（`AgentContribution.SharpeLike`）：`MinSamples: 5`，樣本不足回傳 `nil`（前端 N/A）
+  - Darwinian rolling Sharpe：保留原 60-sample 門檻（不同生命週期）
 - `RecordOutcome(agentID, forwardReturn, isHit)` 在 `internal/portfolio/darwinian_weights.go:265`
 - RollingSharpe 計算需要 `StdDev > 0`，即回報值需要有變異
 

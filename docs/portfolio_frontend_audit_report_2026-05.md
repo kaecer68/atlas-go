@@ -123,17 +123,22 @@ if oc.ForwardReturn > 0 { wins++ }
 
 ### 2.6 Sharpe-like（Agent）計算 ⚠️ 非標準 Sharpe
 
-**檔案**: `internal/reporting/performance.go:486-506`
+> **狀態更新（2026-06-16）**：`calculateSharpeLike` 已於 commit `a661daa8` 移除（PR #558）。
+> 現行為：KPI（`PerformanceReport.SharpeRatio`）呼叫 `CalculateSharpeRatio(dailyReturns)` → `portfolio.ComputeSharpe(..., MinSamples: 2)`；
+> Per-agent（`AgentContribution.SharpeLike`）呼叫 `portfolio.ComputeSharpe(..., MinSamples: 5)`，
+> 樣本不足時回傳 `nil`（前端顯示 N/A）。
+> 本節保留以說明歷史脈絡。
+
+**檔案**: `internal/reporting/performance.go`（移除後的 `calculateSharpeLike` 對應呼叫）
 
 ```go
-func calculateSharpeLike(returns []float64) float64 {
-    mean := sum(returns) / N
-    variance := sum((r - mean)^2) / N
-    return mean / (variance + 1e-9)
-}
+sharpeLike := portfolio.ComputeSharpe(returns, portfolio.SharpeConfig{
+    Frequency:  portfolio.FrequencyPerOutcome,
+    MinSamples: 5,
+})
 ```
 
-**問題**: 此函數計算 `mean / variance`（變異數倒數），而非標準 Sharpe ratio（`mean / stdDev * sqrt(N)`）。雖然前端標籤為「Sharpe-like」而非「Sharpe」，但計算方式與傳統 Sharpe 有本質差異——前者對波動率的懲罰是平方關係，後者是線性關係。
+**問題（原）**: 舊版 `calculateSharpeLike` 計算 `mean / variance`（變異數倒數），而非標準 Sharpe ratio（`mean / stdDev * sqrt(N)`）。雖然前端標籤為「Sharpe-like」而非「Sharpe」，但計算方式與傳統 Sharpe 有本質差異——前者對波動率的懲罰是平方關係，後者是線性關係。
 
 **比較**:
 - 標準 Sharpe: `mean / stdDev` → 報酬每單位風險
