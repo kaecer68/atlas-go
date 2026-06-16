@@ -104,6 +104,23 @@ func NewBackgroundTaskManager(gateway *Gateway) *BackgroundTaskManager {
 }
 
 // Register adds a task to the registry.
+//
+// ChannelID contract:
+//
+// When a ScheduledTask has a non-empty ChannelID, the task's BackgroundTaskFunc
+// MUST call gateway.Fetch(channelID) to retrieve data. It MUST NOT bypass the
+// gateway by using a raw http.Client or other direct-fetch mechanism.
+//
+// This contract exists because:
+//   - Circuit breaker state transitions (Open→HalfOpen→Closed) are driven by
+//     breaker.Call() inside Gateway.Fetch(). A task that bypasses the gateway
+//     can leave the breaker permanently Open, since no probe ever fires.
+//   - Cache, rate limiting, and health tracking are also applied at the
+//     gateway layer. Bypassing them produces stale data, missed rate-limit
+//     backpressure, and inaccurate failure counts.
+//
+// Register validates the channel exists in the gateway when ChannelID is set.
+// Builds that violate this contract will be rejected in review.
 func (m *BackgroundTaskManager) Register(task *ScheduledTask) error {
 	if task.ChannelID != "" && m.gateway != nil && !m.gateway.HasChannel(task.ChannelID) {
 		return fmt.Errorf("task %s: channel %s not registered in gateway", task.Name, task.ChannelID)
