@@ -29,19 +29,24 @@ func winRateThreshold() float64 {
 }
 
 // AgentContribution represents a single agent's contribution to portfolio performance.
+//
+// IMPORTANT: AggregateForwardReturn is the SUM of per-recommendation ForwardReturn
+// values (recommendation_outcomes.jsonl), NOT a portfolio MTM return. The portfolio
+// MTM return lives at PerformanceReport.TotalReturn. Renamed from TotalReturn to
+// make this distinction explicit (see Wave 3 of perf-report root-cause audit).
 type AgentContribution struct {
-	AgentID             string  `json:"agent_id"`
-	DisplayName         string  `json:"display_name"`
-	Skill               string  `json:"skill"`
-	Layer               string  `json:"layer"`
-	TotalReturn         float64 `json:"total_return"`
-	WinRate             float64 `json:"win_rate"`
-	RealTradeCount      int     `json:"real_trade_count"`
-	SyntheticTradeCount int     `json:"synthetic_trade_count"`
-	TradeCount          int     `json:"trade_count"`
-	AvgReturn           float64 `json:"avg_return"`
-	ProfitFactor        float64 `json:"profit_factor"`
-	SharpeLike          float64 `json:"sharpe_like"`
+	AgentID                string   `json:"agent_id"`
+	DisplayName            string   `json:"display_name"`
+	Skill                  string   `json:"skill"`
+	Layer                  string   `json:"layer"`
+	AggregateForwardReturn float64  `json:"aggregate_forward_return"`
+	WinRate                float64  `json:"win_rate"`
+	RealTradeCount         int      `json:"real_trade_count"`
+	SyntheticTradeCount    int      `json:"synthetic_trade_count"`
+	TradeCount             int      `json:"trade_count"`
+	AvgReturn              float64  `json:"avg_return"`
+	ProfitFactor           float64  `json:"profit_factor"`
+	SharpeLike             *float64 `json:"sharpe_like"`
 }
 
 // RegimeBreakdown holds performance metrics segmented by market regime.
@@ -50,12 +55,16 @@ type RegimeBreakdown struct {
 }
 
 // RegimePerformance is the performance stats for a single regime.
+//
+// IMPORTANT: AggregateForwardReturn is the SUM of per-recommendation ForwardReturn
+// values within this regime window, NOT a portfolio MTM return. See AgentContribution
+// doc for the semantic distinction rationale.
 type RegimePerformance struct {
-	Regime       string  `json:"regime"`
-	SessionCount int     `json:"session_count"`
-	TotalReturn  float64 `json:"total_return"`
-	WinRate      float64 `json:"win_rate"`
-	AvgReturn    float64 `json:"avg_return"`
+	Regime                 string  `json:"regime"`
+	SessionCount           int     `json:"session_count"`
+	AggregateForwardReturn float64 `json:"aggregate_forward_return"`
+	WinRate                float64 `json:"win_rate"`
+	AvgReturn              float64 `json:"avg_return"`
 }
 
 // MonthlyReturn represents a single month's return.
@@ -255,15 +264,19 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	if len(report.TopAgents) == 0 {
 		sb.WriteString("_No agent data available._\n")
 	} else {
-		sb.WriteString("| Agent | Skill | Layer | Real | Synthetic | Win Rate | Avg Return | Total Return | Sharpe | Prof. Factor |\n")
-		sb.WriteString("|-------|-------|-------|------|-----------|----------|------------|-------------|--------|-------------|\n")
+		sb.WriteString("| Agent | Skill | Layer | Real | Synthetic | Win Rate | Avg Return | Forward Return (Σ) | Sharpe | Prof. Factor |\n")
+		sb.WriteString("|-------|-------|-------|------|-----------|----------|------------|--------------------|--------|-------------|\n")
 		for _, a := range report.TopAgents {
 			name := a.DisplayName
 			if name == "" {
 				name = a.AgentID
 			}
+			sharpeStr := "N/A"
+			if a.SharpeLike != nil {
+				sharpeStr = fmt.Sprintf("%.2f", *a.SharpeLike)
+			}
 			fmt.Fprintf(
-				&sb, "| %s | %s | %s | %d | %d | %.1f%% | %.2f%% | %.2f%% | %.2f | %.2f |\n",
+				&sb, "| %s | %s | %s | %d | %d | %.1f%% | %.2f%% | %.2f%% | %s | %.2f |\n",
 				truncate(name, 20),
 				a.Skill,
 				a.Layer,
@@ -271,8 +284,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 				a.SyntheticTradeCount,
 				a.WinRate*100,
 				a.AvgReturn*100,
-				a.TotalReturn*100,
-				a.SharpeLike,
+				a.AggregateForwardReturn*100,
+				sharpeStr,
 				a.ProfitFactor,
 			)
 		}
@@ -283,19 +296,27 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	if len(report.RegimeBreakdown.Regimes) == 0 {
 		sb.WriteString("_No regime data available._\n")
 	} else {
-		sb.WriteString("| Regime | Sessions | Total Return | Win Rate | Avg Return |\n")
-		sb.WriteString("|--------|----------|--------------|----------|------------|\n")
+		sb.WriteString("| Regime | Sessions | Forward Return (Σ) | Win Rate | Avg Return |\n")
+		sb.WriteString("|--------|----------|--------------------|----------|------------|\n")
 		for _, r := range report.RegimeBreakdown.Regimes {
 			fmt.Fprintf(
 				&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
 				r.Regime,
 				r.SessionCount,
-				r.TotalReturn*100,
+				r.AggregateForwardReturn*100,
 				r.WinRate*100,
 				r.AvgReturn*100,
 			)
 		}
 	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Metric Definitions\n\n")
+	sb.WriteString("- **Total Return** (KPI): portfolio mark-to-market return over the period (equity curve).\n")
+	sb.WriteString("- **Win Rate**: share of real (non-synthetic) recommendations whose ForwardReturn exceeds the cost-adjusted threshold (default 20 bps).\n")
+	sb.WriteString("- **Forward Return (Σ)**: sum of per-recommendation ForwardReturn (from `recommendation_outcomes.jsonl`), NOT portfolio MTM.\n")
+	sb.WriteString("- **Sharpe (per-agent)**: annualized Sharpe over real outcomes; `N/A` when fewer than 5 real samples.\n")
+	sb.WriteString("- **Synthetic trades**: outcomes generated as a fallback when replay data is missing. Excluded from win-rate and Sharpe but shown for transparency.\n")
 	sb.WriteString("\n")
 
 	sb.WriteString("## Monthly Returns\n\n")
@@ -527,10 +548,14 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[
 		if realTrades > 0 {
 			winRate = float64(a.wins) / float64(realTrades)
 		}
-		sharpeLike := portfolio.ComputeSharpe(a.returns, portfolio.SharpeConfig{
-			Frequency:  portfolio.FrequencyPerOutcome,
-			MinSamples: 5,
-		})
+		var sharpeLike *float64
+		if len(a.returns) >= 5 {
+			v := portfolio.ComputeSharpe(a.returns, portfolio.SharpeConfig{
+				Frequency:  portfolio.FrequencyPerOutcome,
+				MinSamples: 5,
+			})
+			sharpeLike = &v
+		}
 		pf := 0.0
 		if a.grossLosses > 0 {
 			pf = a.grossWins / a.grossLosses
@@ -541,26 +566,26 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[
 		}
 
 		contributions = append(contributions, AgentContribution{
-			AgentID:             a.agentID,
-			DisplayName:         displayName,
-			Skill:               a.skill,
-			Layer:               a.layer,
-			TotalReturn:         totalReturn,
-			WinRate:             winRate,
-			RealTradeCount:      realTrades,
-			SyntheticTradeCount: a.syntheticCount,
-			TradeCount:          a.trades,
-			AvgReturn:           avgReturn,
-			ProfitFactor:        pf,
-			SharpeLike:          sharpeLike,
+			AgentID:                a.agentID,
+			DisplayName:            displayName,
+			Skill:                  a.skill,
+			Layer:                  a.layer,
+			AggregateForwardReturn: totalReturn,
+			WinRate:                winRate,
+			RealTradeCount:         realTrades,
+			SyntheticTradeCount:    a.syntheticCount,
+			TradeCount:             a.trades,
+			AvgReturn:              avgReturn,
+			ProfitFactor:           pf,
+			SharpeLike:             sharpeLike,
 		})
 	}
 
 	slices.SortFunc(contributions, func(a, b AgentContribution) int {
-		if a.TotalReturn > b.TotalReturn {
+		if a.AggregateForwardReturn > b.AggregateForwardReturn {
 			return -1
 		}
-		if a.TotalReturn < b.TotalReturn {
+		if a.AggregateForwardReturn < b.AggregateForwardReturn {
 			return 1
 		}
 		return 0
@@ -650,7 +675,7 @@ func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []doma
 				wins++
 			}
 		}
-		regimeData[regime].TotalReturn = totalReturn
+		regimeData[regime].AggregateForwardReturn = totalReturn
 		regimeData[regime].AvgReturn = totalReturn / float64(len(returns))
 		regimeData[regime].WinRate = float64(wins) / float64(len(returns))
 	}

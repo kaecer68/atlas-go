@@ -27,7 +27,7 @@ export function renderPerformanceReport(container) {
         <thead>
           <tr>
             <th>AI 名稱</th>
-            <th>總報酬</th>
+            <th title="所有推薦的前瞻報酬累加（不含交易成本與投資組合加權）">前瞻報酬合計</th>
             <th>勝率</th>
             <th>夏普值</th>
           </tr>
@@ -144,13 +144,16 @@ function renderReportData(data) {
   const agentsBody = document.getElementById('prAgentsBody');
   if (data.top_agents && data.top_agents.length > 0) {
     agentsBody.innerHTML = data.top_agents.map(function(a) {
-      var ret = a.total_return || 0;
+      var ret = a.aggregate_forward_return != null ? a.aggregate_forward_return : 0;
       var cls = ret > 0 ? 'positive' : (ret < 0 ? 'negative' : '');
+      var sharpeCell = a.sharpe_like == null
+        ? '<span style="color:var(--text-muted)">N/A</span>'
+        : (fmtFloat ? fmtFloat(a.sharpe_like, 2) : a.sharpe_like.toFixed(2));
       return '<tr>' +
         '<td>' + (a.display_name || (agentNameEsm ? agentNameEsm(a.agent_id) : a.agent_id)) + '</td>' +
         '<td style="color:' + (ret > 0 ? 'var(--up)' : (ret < 0 ? 'var(--down)' : 'var(--text)')) + '">' + (fmtPct ? fmtPct(ret) : (ret*100).toFixed(2)+'%') + '</td>' +
         '<td>' + (fmtPct ? fmtPct(a.win_rate || 0) : ((a.win_rate||0)*100).toFixed(1)+'%') + '</td>' +
-        '<td>' + (fmtFloat ? fmtFloat(a.sharpe_like || 0, 2) : (a.sharpe_like||0).toFixed(2)) + '</td>' +
+        '<td>' + sharpeCell + '</td>' +
         '</tr>';
     }).join('');
   } else {

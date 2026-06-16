@@ -106,11 +106,11 @@ func TestGenerateMarkdownReport(t *testing.T) {
 		AvgWin:           0.02,
 		AvgLoss:          -0.01,
 		TopAgents: []AgentContribution{
-			{AgentID: "agent-a", Skill: "tech", Layer: "sector", TotalReturn: 0.03, WinRate: 0.7, TradeCount: 5, AvgReturn: 0.006},
+			{AgentID: "agent-a", Skill: "tech", Layer: "sector", AggregateForwardReturn: 0.03, WinRate: 0.7, TradeCount: 5, AvgReturn: 0.006},
 		},
 		RegimeBreakdown: RegimeBreakdown{
 			Regimes: map[string]RegimePerformance{
-				"RISK_ON": {Regime: "RISK_ON", SessionCount: 5, TotalReturn: 0.05, WinRate: 0.6, AvgReturn: 0.01},
+				"RISK_ON": {Regime: "RISK_ON", SessionCount: 5, AggregateForwardReturn: 0.05, WinRate: 0.6, AvgReturn: 0.01},
 			},
 		},
 		MonthlyReturns: []MonthlyReturn{
@@ -468,8 +468,11 @@ func TestCalculateTopAgents_SharpeMinSamples5(t *testing.T) {
 	if len(agents) != 1 {
 		t.Fatalf("expected 1 agent, got %d", len(agents))
 	}
-	if agents[0].SharpeLike == 0 {
-		t.Errorf("expected non-zero Sharpe with 5 real samples, got %v", agents[0].SharpeLike)
+	if agents[0].SharpeLike == nil {
+		t.Fatal("expected non-nil SharpeLike with 5 real samples")
+	}
+	if *agents[0].SharpeLike == 0 {
+		t.Errorf("expected non-zero Sharpe with 5 real samples, got %v", *agents[0].SharpeLike)
 	}
 }
 
@@ -484,8 +487,8 @@ func TestCalculateTopAgents_SharpeInsufficientSamples(t *testing.T) {
 	if len(agents) != 1 {
 		t.Fatalf("expected 1 agent, got %d", len(agents))
 	}
-	if agents[0].SharpeLike != 0 {
-		t.Errorf("expected zero SharpeLike for < 5 samples, got %v", agents[0].SharpeLike)
+	if agents[0].SharpeLike != nil {
+		t.Errorf("expected nil SharpeLike for < 5 samples, got %v", *agents[0].SharpeLike)
 	}
 }
 
