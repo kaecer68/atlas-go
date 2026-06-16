@@ -19,14 +19,18 @@ import (
 
 // AgentContribution represents a single agent's contribution to portfolio performance.
 type AgentContribution struct {
-	AgentID     string  `json:"agent_id"`
-	Skill       string  `json:"skill"`
-	Layer       string  `json:"layer"`
-	TotalReturn float64 `json:"total_return"`
-	WinRate     float64 `json:"win_rate"`
-	TradeCount  int     `json:"trade_count"`
-	AvgReturn   float64 `json:"avg_return"`
-	SharpeLike  float64 `json:"sharpe_like"`
+	AgentID             string  `json:"agent_id"`
+	DisplayName         string  `json:"display_name"`
+	Skill               string  `json:"skill"`
+	Layer               string  `json:"layer"`
+	TotalReturn         float64 `json:"total_return"`
+	WinRate             float64 `json:"win_rate"`
+	RealTradeCount      int     `json:"real_trade_count"`
+	SyntheticTradeCount int     `json:"synthetic_trade_count"`
+	TradeCount          int     `json:"trade_count"`
+	AvgReturn           float64 `json:"avg_return"`
+	ProfitFactor        float64 `json:"profit_factor"`
+	SharpeLike          float64 `json:"sharpe_like"`
 }
 
 // RegimeBreakdown holds performance metrics segmented by market regime.
@@ -53,27 +57,30 @@ type MonthlyReturn struct {
 
 // PerformanceReport is the structured performance report for a given period.
 type PerformanceReport struct {
-	Period           string              `json:"period"`
-	StartDate        time.Time           `json:"start_date"`
-	EndDate          time.Time           `json:"end_date"`
-	TotalReturn      float64             `json:"total_return"`
-	AnnualizedReturn float64             `json:"annualized_return"`
-	SharpeRatio      *float64            `json:"sharpe_ratio"`
-	SortinoRatio     float64             `json:"sortino_ratio"`
-	CalmarRatio      float64             `json:"calmar_ratio"`
-	MaxDrawdown      float64             `json:"max_drawdown"`
-	StartingValue    float64             `json:"starting_value"`
-	EndingValue      float64             `json:"ending_value"`
-	AfterTaxValue    float64             `json:"after_tax_value"`
-	TotalTaxPaid     float64             `json:"total_tax_paid"`
-	WinRate          float64             `json:"win_rate"`
-	TotalTrades      int                 `json:"total_trades"`
-	AvgWin           float64             `json:"avg_win"`
-	AvgLoss          float64             `json:"avg_loss"`
-	TopAgents        []AgentContribution `json:"top_agents"`
-	RegimeBreakdown  RegimeBreakdown     `json:"regime_breakdown"`
-	MonthlyReturns   []MonthlyReturn     `json:"monthly_returns"`
-	GeneratedAt      time.Time           `json:"generated_at"`
+	Period              string              `json:"period"`
+	StartDate           time.Time           `json:"start_date"`
+	EndDate             time.Time           `json:"end_date"`
+	TotalReturn         float64             `json:"total_return"`
+	AnnualizedReturn    float64             `json:"annualized_return"`
+	SharpeRatio         *float64            `json:"sharpe_ratio"`
+	SortinoRatio        float64             `json:"sortino_ratio"`
+	CalmarRatio         float64             `json:"calmar_ratio"`
+	MaxDrawdown         float64             `json:"max_drawdown"`
+	StartingValue       float64             `json:"starting_value"`
+	EndingValue         float64             `json:"ending_value"`
+	AfterTaxValue       float64             `json:"after_tax_value"`
+	TotalTaxPaid        float64             `json:"total_tax_paid"`
+	WinRate             float64             `json:"win_rate"`
+	TotalTrades         int                 `json:"total_trades"`
+	RealTradeCount      int                 `json:"real_trade_count"`
+	SyntheticTradeCount int                 `json:"synthetic_trade_count"`
+	ProfitFactor        float64             `json:"profit_factor"`
+	AvgWin              float64             `json:"avg_win"`
+	AvgLoss             float64             `json:"avg_loss"`
+	TopAgents           []AgentContribution `json:"top_agents"`
+	RegimeBreakdown     RegimeBreakdown     `json:"regime_breakdown"`
+	MonthlyReturns      []MonthlyReturn     `json:"monthly_returns"`
+	GeneratedAt         time.Time           `json:"generated_at"`
 }
 
 // GenerateReport builds a PerformanceReport from ledger data for the given period.
@@ -154,35 +161,40 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 	}
 	afterTaxValue := endingValue - totalTaxPaid
 
-	outcomes := loadAllOutcomes(ledgerPath, filtered)
-	winRate, totalTrades, avgWin, avgLoss := calculateTradeMetrics(outcomes)
+	agentNames := loadAgentDisplayNames()
 
-	topAgents := calculateTopAgents(outcomes)
+	outcomes := loadAllOutcomes(ledgerPath, filtered)
+	winRate, totalTrades, realTrades, syntheticTrades, avgWin, avgLoss, profitFactor := calculateTradeMetrics(outcomes)
+
+	topAgents := calculateTopAgents(outcomes, agentNames)
 	regimeBreakdown := calculateRegimeBreakdown(filtered, outcomes)
 	monthlyReturns := calculateMonthlyReturns(filtered, portfolioValues)
 
 	return &PerformanceReport{
-		Period:           period,
-		StartDate:        startDate,
-		EndDate:          endDate,
-		TotalReturn:      totalReturn,
-		AnnualizedReturn: annualizedReturn,
-		SharpeRatio:      sharpeRatio,
-		SortinoRatio:     sortinoRatio,
-		CalmarRatio:      calmarRatio,
-		MaxDrawdown:      maxDD,
-		StartingValue:    startingValue,
-		EndingValue:      endingValue,
-		AfterTaxValue:    afterTaxValue,
-		TotalTaxPaid:     totalTaxPaid,
-		WinRate:          winRate,
-		TotalTrades:      totalTrades,
-		AvgWin:           avgWin,
-		AvgLoss:          avgLoss,
-		TopAgents:        topAgents,
-		RegimeBreakdown:  regimeBreakdown,
-		MonthlyReturns:   monthlyReturns,
-		GeneratedAt:      time.Now(),
+		Period:              period,
+		StartDate:           startDate,
+		EndDate:             endDate,
+		TotalReturn:         totalReturn,
+		AnnualizedReturn:    annualizedReturn,
+		SharpeRatio:         sharpeRatio,
+		SortinoRatio:        sortinoRatio,
+		CalmarRatio:         calmarRatio,
+		MaxDrawdown:         maxDD,
+		StartingValue:       startingValue,
+		EndingValue:         endingValue,
+		AfterTaxValue:       afterTaxValue,
+		TotalTaxPaid:        totalTaxPaid,
+		WinRate:             winRate,
+		TotalTrades:         totalTrades,
+		RealTradeCount:      realTrades,
+		SyntheticTradeCount: syntheticTrades,
+		ProfitFactor:        profitFactor,
+		AvgWin:              avgWin,
+		AvgLoss:             avgLoss,
+		TopAgents:           topAgents,
+		RegimeBreakdown:     regimeBreakdown,
+		MonthlyReturns:      monthlyReturns,
+		GeneratedAt:         time.Now(),
 	}, nil
 }
 
@@ -221,6 +233,9 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	fmt.Fprintf(&sb, "| Total Tax Paid | %s |\n", domain.FormatNTD(report.TotalTaxPaid))
 	fmt.Fprintf(&sb, "| Win Rate | %.1f%% |\n", report.WinRate*100)
 	fmt.Fprintf(&sb, "| Total Trades | %d |\n", report.TotalTrades)
+	fmt.Fprintf(&sb, "| Real Trades | %d |\n", report.RealTradeCount)
+	fmt.Fprintf(&sb, "| Synthetic Trades | %d |\n", report.SyntheticTradeCount)
+	fmt.Fprintf(&sb, "| Profit Factor | %.2f |\n", report.ProfitFactor)
 	fmt.Fprintf(&sb, "| Avg Win | %.2f%% |\n", report.AvgWin*100)
 	fmt.Fprintf(&sb, "| Avg Loss | %.2f%% |\n", report.AvgLoss*100)
 	sb.WriteString("\n")
@@ -229,18 +244,25 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	if len(report.TopAgents) == 0 {
 		sb.WriteString("_No agent data available._\n")
 	} else {
-		sb.WriteString("| Agent | Skill | Layer | Trades | Win Rate | Avg Return | Total Return |\n")
-		sb.WriteString("|-------|-------|-------|--------|----------|------------|-------------|\n")
+		sb.WriteString("| Agent | Skill | Layer | Real | Synthetic | Win Rate | Avg Return | Total Return | Sharpe | Prof. Factor |\n")
+		sb.WriteString("|-------|-------|-------|------|-----------|----------|------------|-------------|--------|-------------|\n")
 		for _, a := range report.TopAgents {
+			name := a.DisplayName
+			if name == "" {
+				name = a.AgentID
+			}
 			fmt.Fprintf(
-				&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
-				truncate(a.AgentID, 20),
+				&sb, "| %s | %s | %s | %d | %d | %.1f%% | %.2f%% | %.2f%% | %.2f | %.2f |\n",
+				truncate(name, 20),
 				a.Skill,
 				a.Layer,
-				a.TradeCount,
+				a.RealTradeCount,
+				a.SyntheticTradeCount,
 				a.WinRate*100,
 				a.AvgReturn*100,
 				a.TotalReturn*100,
+				a.SharpeLike,
+				a.ProfitFactor,
 			)
 		}
 	}
@@ -359,6 +381,24 @@ func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
 	return outcomes, nil
 }
 
+// loadAgentDisplayNames loads the agent display name map from the registry.
+// Returns nil on error (graceful fallback).
+func loadAgentDisplayNames() map[string]string {
+	data, err := os.ReadFile("configs/agents.json")
+	if err != nil {
+		return nil
+	}
+	var reg domain.AgentRegistry
+	if err := json.Unmarshal(data, &reg); err != nil {
+		return nil
+	}
+	names := make(map[string]string, len(reg.Agents))
+	for _, a := range reg.Agents {
+		names[a.ID] = a.Name
+	}
+	return names
+}
+
 // CalculateSharpeRatio computes the annualized Sharpe ratio from daily returns.
 func CalculateSharpeRatio(dailyReturns []float64) float64 {
 	return portfolio.ComputeSharpe(dailyReturns, portfolio.SharpeConfig{
@@ -374,11 +414,7 @@ func calculateCalmarRatio(annualizedReturn, maxDrawdown float64) float64 {
 	return annualizedReturn / maxDrawdown
 }
 
-func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate float64, totalTrades int, avgWin, avgLoss float64) {
-	if len(outcomes) == 0 {
-		return 0, 0, 0, 0
-	}
-
+func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate float64, totalTrades int, realTrades int, syntheticTrades int, avgWin, avgLoss, profitFactor float64) {
 	wins := 0
 	var winSum, lossSum float64
 	winCount, lossCount := 0, 0
@@ -388,6 +424,11 @@ func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate flo
 			continue
 		}
 		totalTrades++
+		if oc.IsSynthetic {
+			syntheticTrades++
+			continue
+		}
+		realTrades++
 		if oc.ForwardReturn > 0 {
 			wins++
 			winSum += oc.ForwardReturn
@@ -398,8 +439,8 @@ func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate flo
 		}
 	}
 
-	if totalTrades > 0 {
-		winRate = float64(wins) / float64(totalTrades)
+	if realTrades > 0 {
+		winRate = float64(wins) / float64(realTrades)
 	}
 	if winCount > 0 {
 		avgWin = winSum / float64(winCount)
@@ -407,18 +448,24 @@ func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate flo
 	if lossCount > 0 {
 		avgLoss = lossSum / float64(lossCount)
 	}
+	if lossSum != 0 {
+		profitFactor = winSum / math.Abs(lossSum)
+	}
 
-	return winRate, totalTrades, avgWin, avgLoss
+	return
 }
 
-func calculateTopAgents(outcomes []domain.RecommendationOutcome) []AgentContribution {
+func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[string]string) []AgentContribution {
 	type agg struct {
-		agentID string
-		skill   string
-		layer   string
-		returns []float64
-		wins    int
-		trades  int
+		agentID        string
+		skill          string
+		layer          string
+		returns        []float64
+		wins           int
+		trades         int
+		syntheticCount int
+		grossWins      float64
+		grossLosses    float64
 	}
 
 	byAgent := map[string]*agg{}
@@ -435,10 +482,17 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome) []AgentContribu
 			}
 			byAgent[oc.AgentID] = entry
 		}
-		entry.returns = append(entry.returns, oc.ForwardReturn)
 		entry.trades++
+		if oc.IsSynthetic {
+			entry.syntheticCount++
+			continue
+		}
+		entry.returns = append(entry.returns, oc.ForwardReturn)
 		if oc.ForwardReturn > 0 {
 			entry.wins++
+			entry.grossWins += oc.ForwardReturn
+		} else if oc.ForwardReturn < 0 {
+			entry.grossLosses += math.Abs(oc.ForwardReturn)
 		}
 	}
 
@@ -447,23 +501,45 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome) []AgentContribu
 		if a.trades == 0 {
 			continue
 		}
+		realTrades := a.trades - a.syntheticCount
 		var totalReturn float64
 		for _, r := range a.returns {
 			totalReturn += r
 		}
-		avgReturn := totalReturn / float64(a.trades)
-		winRate := float64(a.wins) / float64(a.trades)
-		sharpeLike := calculateSharpeLike(a.returns)
+		avgReturn := 0.0
+		if realTrades > 0 {
+			avgReturn = totalReturn / float64(realTrades)
+		}
+		winRate := 0.0
+		if realTrades > 0 {
+			winRate = float64(a.wins) / float64(realTrades)
+		}
+		sharpeLike := portfolio.ComputeSharpe(a.returns, portfolio.SharpeConfig{
+			Frequency:  portfolio.FrequencyPerOutcome,
+			MinSamples: 5,
+		})
+		pf := 0.0
+		if a.grossLosses > 0 {
+			pf = a.grossWins / a.grossLosses
+		}
+		displayName := a.agentID
+		if name, ok := agentNames[a.agentID]; ok && name != "" {
+			displayName = name
+		}
 
 		contributions = append(contributions, AgentContribution{
-			AgentID:     a.agentID,
-			Skill:       a.skill,
-			Layer:       a.layer,
-			TotalReturn: totalReturn,
-			WinRate:     winRate,
-			TradeCount:  a.trades,
-			AvgReturn:   avgReturn,
-			SharpeLike:  sharpeLike,
+			AgentID:             a.agentID,
+			DisplayName:         displayName,
+			Skill:               a.skill,
+			Layer:               a.layer,
+			TotalReturn:         totalReturn,
+			WinRate:             winRate,
+			RealTradeCount:      realTrades,
+			SyntheticTradeCount: a.syntheticCount,
+			TradeCount:          a.trades,
+			AvgReturn:           avgReturn,
+			ProfitFactor:        pf,
+			SharpeLike:          sharpeLike,
 		})
 	}
 
@@ -481,18 +557,6 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome) []AgentContribu
 		contributions = contributions[:5]
 	}
 	return contributions
-}
-
-func calculateSharpeLike(returns []float64) float64 {
-	if len(returns) < 60 {
-		return 0
-	}
-	m := mean(returns)
-	s := stdDev(returns)
-	if s == 0 {
-		return 0
-	}
-	return m / s
 }
 
 // CalculateBeta computes the CAPM beta of the portfolio relative to the benchmark.
@@ -551,6 +615,9 @@ func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []doma
 		if !oc.PassedGuards {
 			continue
 		}
+		if oc.IsSynthetic {
+			continue
+		}
 		regime := findRegimeForWindow(summaries, oc.Window)
 		if regime == "" {
 			regime = "unknown"
@@ -584,7 +651,15 @@ func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []doma
 }
 
 func findRegimeForWindow(summaries []domain.SessionSummary, window string) string {
+	if window == "" {
+		return ""
+	}
+	windowDate := domain.SessionDateFromID(window)
 	for _, s := range summaries {
+		sessionDate := domain.SessionDateFromID(s.SessionID)
+		if !windowDate.IsZero() && !sessionDate.IsZero() && windowDate.Equal(sessionDate) {
+			return string(s.Regime)
+		}
 		if s.SessionID == window {
 			return string(s.Regime)
 		}

@@ -231,10 +231,16 @@ func TestCalculateTradeMetrics(t *testing.T) {
 		{ForwardReturn: 0.02, PassedGuards: false},
 	}
 
-	winRate, totalTrades, avgWin, avgLoss := calculateTradeMetrics(outcomes)
+	winRate, totalTrades, realTrades, syntheticTrades, avgWin, avgLoss, profitFactor := calculateTradeMetrics(outcomes)
 
 	if totalTrades != 5 {
 		t.Errorf("expected 5 trades, got %d", totalTrades)
+	}
+	if realTrades != 5 {
+		t.Errorf("expected 5 real trades, got %d", realTrades)
+	}
+	if syntheticTrades != 0 {
+		t.Errorf("expected 0 synthetic trades, got %d", syntheticTrades)
 	}
 	if math.Abs(winRate-0.6) > 1e-9 {
 		t.Errorf("expected win rate 0.6, got %f", winRate)
@@ -244,6 +250,9 @@ func TestCalculateTradeMetrics(t *testing.T) {
 	}
 	if math.Abs(avgLoss+0.015) > 1e-9 {
 		t.Errorf("expected avg loss -0.015, got %f", avgLoss)
+	}
+	if math.Abs(profitFactor-(0.09/0.03)) > 1e-9 {
+		t.Errorf("expected profit factor %.4f, got %f", 0.09/0.03, profitFactor)
 	}
 }
 
@@ -260,6 +269,143 @@ func TestEmptyReport(t *testing.T) {
 	}
 	if r.MonthlyReturns == nil {
 		t.Error("expected non-nil MonthlyReturns")
+	}
+}
+
+func TestCalculateTradeMetrics_ExcludesSynthetic(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{ForwardReturn: 0.05, PassedGuards: true, IsSynthetic: true},
+		{ForwardReturn: -0.10, PassedGuards: true, IsSynthetic: true},
+		{ForwardReturn: 0.03, PassedGuards: true},
+		{ForwardReturn: -0.01, PassedGuards: true},
+		{ForwardReturn: 0.02, PassedGuards: true},
+	}
+
+	winRate, totalTrades, realTrades, syntheticTrades, avgWin, avgLoss, profitFactor := calculateTradeMetrics(outcomes)
+
+	if totalTrades != 5 {
+		t.Errorf("expected total trades 5, got %d", totalTrades)
+	}
+	if syntheticTrades != 2 {
+		t.Errorf("expected synthetic trades 2, got %d", syntheticTrades)
+	}
+	if realTrades != 3 {
+		t.Errorf("expected real trades 3, got %d", realTrades)
+	}
+	if math.Abs(winRate-2.0/3.0) > 1e-9 {
+		t.Errorf("expected win rate %.4f, got %f", 2.0/3.0, winRate)
+	}
+	if math.Abs(avgWin-0.025) > 1e-9 {
+		t.Errorf("expected avg win 0.025, got %f", avgWin)
+	}
+	if math.Abs(avgLoss+0.01) > 1e-9 {
+		t.Errorf("expected avg loss -0.01, got %f", avgLoss)
+	}
+	if math.Abs(profitFactor-(0.05/0.01)) > 1e-9 {
+		t.Errorf("expected profit factor %.4f, got %f", 0.05/0.01, profitFactor)
+	}
+}
+
+func TestCalculateTradeMetrics_ProfitFactorZeroLosses(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{ForwardReturn: 0.05, PassedGuards: true},
+		{ForwardReturn: 0.03, PassedGuards: true},
+	}
+
+	_, _, _, _, _, _, profitFactor := calculateTradeMetrics(outcomes)
+
+	if profitFactor != 0 {
+		t.Errorf("expected profit factor 0 when no losses, got %f", profitFactor)
+	}
+}
+
+func TestCalculateTopAgents_DisplayNamePresent(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.05, PassedGuards: true},
+	}
+	names := map[string]string{"agent-a": "Alpha Agent"}
+
+	agents := calculateTopAgents(outcomes, names)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].DisplayName != "Alpha Agent" {
+		t.Errorf("expected display name Alpha Agent, got %s", agents[0].DisplayName)
+	}
+}
+
+func TestCalculateTopAgents_DisplayNameFallback(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-x", Skill: "macro", Layer: "context", ForwardReturn: 0.01, PassedGuards: true},
+	}
+
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].DisplayName != "agent-x" {
+		t.Errorf("expected display name fallback agent-x, got %s", agents[0].DisplayName)
+	}
+}
+
+func TestCalculateTopAgents_SyntheticSeparation(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.05, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: -0.02, PassedGuards: true, IsSynthetic: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: -0.01, PassedGuards: true},
+	}
+
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	a := agents[0]
+	if a.TradeCount != 3 {
+		t.Errorf("expected trade count 3, got %d", a.TradeCount)
+	}
+	if a.RealTradeCount != 2 {
+		t.Errorf("expected real trade count 2, got %d", a.RealTradeCount)
+	}
+	if a.SyntheticTradeCount != 1 {
+		t.Errorf("expected synthetic trade count 1, got %d", a.SyntheticTradeCount)
+	}
+	if a.WinRate != 0.5 {
+		t.Errorf("expected win rate 0.5 (real only), got %f", a.WinRate)
+	}
+}
+
+func TestCalculateTopAgents_SharpeMinSamples5(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.01, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: -0.005, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.02, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: -0.01, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.015, PassedGuards: true},
+	}
+
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].SharpeLike == 0 {
+		t.Errorf("expected non-zero Sharpe with 5 real samples, got %f", agents[0].SharpeLike)
+	}
+}
+
+func TestFindRegimeForWindow_DateMatch(t *testing.T) {
+	summaries := []domain.SessionSummary{
+		{SessionID: "session-20260101-daily", Regime: domain.RegimeRiskOn},
+		{SessionID: "session-20260102-daily", Regime: domain.RegimeRiskOff},
+	}
+
+	if got := findRegimeForWindow(summaries, "session-20260101-daily"); got != "RISK_ON" {
+		t.Errorf("expected exact match RISK_ON, got %s", got)
+	}
+	if got := findRegimeForWindow(summaries, "session-20260102-nightly"); got != "RISK_OFF" {
+		t.Errorf("expected date-match fallback RISK_OFF, got %s", got)
+	}
+	if got := findRegimeForWindow(summaries, "session-20261231-daily"); got != "" {
+		t.Errorf("expected empty for unmatched window, got %s", got)
 	}
 }
 
