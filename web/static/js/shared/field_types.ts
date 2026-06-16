@@ -24,12 +24,16 @@ export interface AgentAttribution {
 
 export interface AgentContribution {
   agent_id: string;
+  display_name: string;
   skill: string;
   layer: string;
   total_return: number;
   win_rate: number;
+  real_trade_count: number;
+  synthetic_trade_count: number;
   trade_count: number;
   avg_return: number;
+  profit_factor: number;
   sharpe_like: number;
 }
 
