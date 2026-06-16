@@ -1007,8 +1007,7 @@ func run(args []string, deps appDeps) error {
 				Interval:  6 * time.Hour,
 				Enabled:   true,
 				Task: func(ctx context.Context) error {
-					adapter := apigateway.NewGeopoliticalChannelAdapter(cfg.WorkDir)
-					_, err := adapter.Fetch(ctx)
+					_, err := gateway.Fetch(ctx, "geopolitical")
 					return err
 				},
 			})
