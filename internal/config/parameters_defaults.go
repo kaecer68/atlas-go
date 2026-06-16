@@ -40,7 +40,18 @@ func DefaultParametersConfig() *ParametersConfig {
 		Engine:               defaultEngineParameters(),
 		RSITw:                defaultRSITwParameters(),
 		Tax:                  defaultTaxParameters(),
+		Reporting:            defaultReportingParameters(),
 		SectorAllocation:     deriveDefaultSectorAllocationConfig(),
+	}
+}
+
+func defaultReportingParameters() ReportingParameters {
+	return ReportingParameters{
+		WinRateThreshold: ParameterMetadata[float64]{
+			Value:     0.002,
+			Rationale: "Cost-adjusted win-rate threshold (20 bps); forward returns below this are treated as not covering transaction costs",
+			Source:    SourceEmpirical,
+		},
 	}
 }
 

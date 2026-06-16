@@ -319,6 +319,87 @@ func TestCalculateTradeMetrics_ProfitFactorZeroLosses(t *testing.T) {
 	}
 }
 
+func TestCalculateTradeMetrics_CostAdjustedThreshold(t *testing.T) {
+	positivesAbove := []float64{
+		0.05, 0.045, 0.04, 0.035, 0.03, 0.025, 0.02, 0.015, 0.012, 0.01,
+		0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003, 0.0025, 0.0021, 0.00201,
+	}
+	positivesBelow := []float64{
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003,
+	}
+	negatives := []float64{
+		-0.05, -0.045, -0.04, -0.035, -0.03, -0.025,
+		-0.02, -0.015, -0.01, -0.005, -0.003, -0.001,
+	}
+
+	var outcomes []domain.RecommendationOutcome
+	for _, r := range positivesAbove {
+		outcomes = append(outcomes, domain.RecommendationOutcome{ForwardReturn: r, PassedGuards: true})
+	}
+	for _, r := range positivesBelow {
+		outcomes = append(outcomes, domain.RecommendationOutcome{ForwardReturn: r, PassedGuards: true})
+	}
+	for _, r := range negatives {
+		outcomes = append(outcomes, domain.RecommendationOutcome{ForwardReturn: r, PassedGuards: true})
+	}
+
+	winRate, totalTrades, realTrades, syntheticTrades, _, _, _ := calculateTradeMetrics(outcomes)
+
+	if totalTrades != 50 {
+		t.Errorf("expected 50 trades, got %d", totalTrades)
+	}
+	if realTrades != 50 {
+		t.Errorf("expected 50 real trades, got %d", realTrades)
+	}
+	if syntheticTrades != 0 {
+		t.Errorf("expected 0 synthetic trades, got %d", syntheticTrades)
+	}
+	expectedWinRate := float64(len(positivesAbove)) / float64(totalTrades)
+	if math.Abs(winRate-expectedWinRate) > 1e-9 {
+		t.Errorf("expected win rate %.4f with cost-adjusted threshold, got %.4f", expectedWinRate, winRate)
+	}
+}
+
+func TestCalculateTopAgents_CostAdjustedThreshold(t *testing.T) {
+	positivesAbove := []float64{
+		0.05, 0.045, 0.04, 0.035, 0.03, 0.025, 0.02, 0.015, 0.012, 0.01,
+		0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003, 0.0025, 0.0021, 0.00201,
+	}
+	positivesBelow := []float64{
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003,
+	}
+	negatives := []float64{
+		-0.05, -0.045, -0.04, -0.035, -0.03, -0.025,
+		-0.02, -0.015, -0.01, -0.005, -0.003, -0.001,
+	}
+
+	var outcomes []domain.RecommendationOutcome
+	for _, r := range positivesAbove {
+		outcomes = append(outcomes, domain.RecommendationOutcome{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: r, PassedGuards: true})
+	}
+	for _, r := range positivesBelow {
+		outcomes = append(outcomes, domain.RecommendationOutcome{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: r, PassedGuards: true})
+	}
+	for _, r := range negatives {
+		outcomes = append(outcomes, domain.RecommendationOutcome{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: r, PassedGuards: true})
+	}
+
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	expectedWinRate := float64(len(positivesAbove)) / float64(len(outcomes))
+	if math.Abs(agents[0].WinRate-expectedWinRate) > 1e-9 {
+		t.Errorf("expected agent win rate %.4f with cost-adjusted threshold, got %.4f", expectedWinRate, agents[0].WinRate)
+	}
+}
+
 func TestCalculateTopAgents_DisplayNamePresent(t *testing.T) {
 	outcomes := []domain.RecommendationOutcome{
 		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.05, PassedGuards: true},
@@ -388,7 +469,23 @@ func TestCalculateTopAgents_SharpeMinSamples5(t *testing.T) {
 		t.Fatalf("expected 1 agent, got %d", len(agents))
 	}
 	if agents[0].SharpeLike == 0 {
-		t.Errorf("expected non-zero Sharpe with 5 real samples, got %f", agents[0].SharpeLike)
+		t.Errorf("expected non-zero Sharpe with 5 real samples, got %v", agents[0].SharpeLike)
+	}
+}
+
+func TestCalculateTopAgents_SharpeInsufficientSamples(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.01, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: -0.005, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.02, PassedGuards: true},
+	}
+
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].SharpeLike != 0 {
+		t.Errorf("expected zero SharpeLike for < 5 samples, got %v", agents[0].SharpeLike)
 	}
 }
 

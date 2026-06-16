@@ -10,12 +10,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
+
+const defaultWinRateThreshold = 0.002
+
+func winRateThreshold() float64 {
+	cfg := config.GetParametersConfig()
+	if cfg != nil && cfg.Reporting.WinRateThreshold.Value > 0 {
+		return cfg.Reporting.WinRateThreshold.Value
+	}
+	return defaultWinRateThreshold
+}
 
 // AgentContribution represents a single agent's contribution to portfolio performance.
 type AgentContribution struct {
@@ -418,6 +429,7 @@ func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate flo
 	wins := 0
 	var winSum, lossSum float64
 	winCount, lossCount := 0, 0
+	threshold := winRateThreshold()
 
 	for _, oc := range outcomes {
 		if !oc.PassedGuards {
@@ -429,7 +441,7 @@ func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate flo
 			continue
 		}
 		realTrades++
-		if oc.ForwardReturn > 0 {
+		if oc.ForwardReturn > threshold {
 			wins++
 			winSum += oc.ForwardReturn
 			winCount++
@@ -469,6 +481,7 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[
 	}
 
 	byAgent := map[string]*agg{}
+	threshold := winRateThreshold()
 	for _, oc := range outcomes {
 		if !oc.PassedGuards || oc.AgentID == "" {
 			continue
@@ -488,7 +501,7 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[
 			continue
 		}
 		entry.returns = append(entry.returns, oc.ForwardReturn)
-		if oc.ForwardReturn > 0 {
+		if oc.ForwardReturn > threshold {
 			entry.wins++
 			entry.grossWins += oc.ForwardReturn
 		} else if oc.ForwardReturn < 0 {

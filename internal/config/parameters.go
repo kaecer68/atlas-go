@@ -1223,6 +1223,11 @@ type SectorAllocationConfig struct {
 	WeightFloor       float64                         `json:"weight_floor"`
 }
 
+// ReportingParameters holds tunable values for performance report generation.
+type ReportingParameters struct {
+	WinRateThreshold ParameterMetadata[float64] `json:"win_rate_threshold"`
+}
+
 type ParametersConfig struct {
 	Version              string                         `json:"version"`
 	UpdatedAt            time.Time                      `json:"updated_at"`
@@ -1253,6 +1258,7 @@ type ParametersConfig struct {
 	Engine               EngineParameters               `json:"engine,omitempty"`
 	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
 	Tax                  TaxParameters                  `json:"tax,omitempty"`
+	Reporting            ReportingParameters            `json:"reporting"`
 	SectorAllocation     SectorAllocationConfig         `json:"sector_allocation"`
 }
 
@@ -2125,6 +2131,10 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("narrative taiwan stress weights must sum to 1.0, got %.3f", stressWeights)
 	}
 
+	if p.Reporting.WinRateThreshold.Value <= 0 || p.Reporting.WinRateThreshold.Value >= 1 {
+		return fmt.Errorf("reporting.win_rate_threshold (%.4f) must be in (0,1)", p.Reporting.WinRateThreshold.Value)
+	}
+
 	return nil
 }
 
@@ -2276,6 +2286,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeIndustryDefaults(&cfg)
 	mergeRSITwDefaults(&cfg)
 	mergeFallbackPriceTargetsDefaults(&cfg)
+	mergeReportingDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -2969,5 +2980,12 @@ func mergeFallbackPriceTargetsDefaults(cfg *ParametersConfig) {
 			entry.StopLossMultiplier = defaultEntry.StopLossMultiplier
 		}
 		cfg.FallbackPriceTargets[key] = entry
+	}
+}
+
+func mergeReportingDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Reporting
+	if cfg.Reporting.WinRateThreshold.Value <= 0 {
+		cfg.Reporting.WinRateThreshold = def.WinRateThreshold
 	}
 }
