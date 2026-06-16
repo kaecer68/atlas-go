@@ -325,7 +325,7 @@ func init() {
 | 行為 | 說明 |
 |------|------|
 | **連續失敗** | TaskManager 會持續記錄，可透過 `SetFailureHandler` 設置告警 |
-| **熔斷互動** | 若任務有 `ChannelID`，TaskManager 會在 Circuit Breaker Open 時自動跳過執行 |
+| **熔斷互動** | TaskManager **不預先檢查** `breaker.IsOpen()`，一律呼叫 `task.Task(ctx)`，由 `gateway.Fetch` 內部的 `breaker.Call()` 處理 Open→HalfOpen→Closed 轉換。若熔斷中，`gateway.Fetch` 仍會依 Art. 5.4 返回 stale cache + `last_error`，但**任務函式本身必須被執行**，才能讓半開探測有機會觸發。 |
 | **重疊保護** | 若前一輪執行尚未完成，下一輪會被跳過（`task_skipped_overlap`） |
 | **啟動抖動** | 啟動時自動加入隨機 Jitter（預設 Interval 的 10%），防止驚群效應 |
 

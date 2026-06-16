@@ -1167,3 +1167,55 @@ func TestLogAndWrapPanic_NilRecover(t *testing.T) {
 		t.Errorf("logAndWrapPanic with nil recover should return nil, got: %v", err)
 	}
 }
+
+// TestExecuteTask_DoesNotSkipWhenBreakerOpen is a regression test for the
+// 2026-06 fubon channel deadlock: the previous implementation called
+// breaker.IsOpen() in executeTask and returned early when open. If the
+// BackgroundTaskManager is the channel's only caller (e.g.
+// channel_health_fubon), the half-open probe inside breaker.Call() never
+// fired, leaving the breaker permanently open. The fix is to always
+// invoke task.Task(ctx); gateway.Fetch's breaker.Call() handles the
+// Open→HalfOpen→Closed transitions itself.
+func TestExecuteTask_DoesNotSkipWhenBreakerOpen(t *testing.T) {
+	g := newTestGateway(t)
+	breaker, err := g.breakers.Get("fubon")
+	if err != nil {
+		t.Fatalf("Get(fubon) failed: %v", err)
+	}
+	breaker.ForceOpen()
+	if !breaker.IsOpen() {
+		t.Fatal("precondition: breaker should be open after ForceOpen")
+	}
+
+	m := NewBackgroundTaskManager(g)
+	called := 0
+	task := &ScheduledTask{
+		Name:      "channel_health_fubon",
+		ChannelID: "fubon",
+		Interval:  1 * time.Hour,
+		Task:      func(ctx context.Context) error { called++; return nil },
+	}
+	task.SetEnabled(true)
+	m.executeTask(context.Background(), task)
+
+	if called != 1 {
+		t.Errorf("task.Task should be invoked even when breaker is open, got called=%d (regression: deadlock returns early)", called)
+	}
+}
+
+func TestExecuteTask_Baseline_InvokesTask(t *testing.T) {
+	g := newTestGateway(t)
+	m := NewBackgroundTaskManager(g)
+	called := 0
+	task := &ScheduledTask{
+		Name:      "channel_health_fubon",
+		ChannelID: "fubon",
+		Interval:  1 * time.Hour,
+		Task:      func(ctx context.Context) error { called++; return nil },
+	}
+	task.SetEnabled(true)
+	m.executeTask(context.Background(), task)
+	if called != 1 {
+		t.Errorf("task.Task should be invoked when breaker is closed, got called=%d", called)
+	}
+}
