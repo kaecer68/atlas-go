@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // =========================================================================
@@ -1217,5 +1219,81 @@ func TestExecuteTask_Baseline_InvokesTask(t *testing.T) {
 	m.executeTask(context.Background(), task)
 	if called != 1 {
 		t.Errorf("task.Task should be invoked when breaker is closed, got called=%d", called)
+	}
+}
+
+// TestExecuteTask_HalfOpenTransition verifies that executeTask can trigger a
+// breaker Open→HalfOpen→Closed transition through Gateway.Fetch().
+//
+// This is the core integration test for the 2026-06 fubon channel fix:
+// earlier code pre-checked breaker.IsOpen() in executeTask and returned early,
+// which meant no probe ever reached breaker.Call() — so for tasks that were
+// the channel's sole caller, the breaker stayed Open forever. The fix was to
+// remove the pre-check and let breaker.Call() inside Gateway.Fetch() manage
+// the transition.
+//
+// Because CircuitBreakerRecoveryTimeout is 5 minutes, we fast-forward
+// lastFailure to bypass the recovery check and exercise the actual
+// state machine transition through the real gateway path.
+func TestExecuteTask_HalfOpenTransition(t *testing.T) {
+	g := newTestGateway(t)
+
+	provider := &HTTPProvider{
+		name:    "fubon",
+		limiter: rate.NewLimiter(rate.Inf, 0),
+		meta:    ChannelMetadata{ChannelID: "fubon", Country: "TW"},
+		fetcher: func(ctx context.Context) ([]byte, error) {
+			return []byte(`{"status":"ok"}`), nil
+		},
+		healthFunc: func(ctx context.Context) (HealthStatus, error) {
+			return HealthStatus{Status: "ok", CheckType: "liveness"}, nil
+		},
+	}
+	g.registry.Register("fubon", provider)
+
+	breaker, err := g.breakers.Get("fubon")
+	if err != nil {
+		t.Fatalf("Get(fubon) failed: %v", err)
+	}
+	breaker.ForceOpen()
+	if breaker.State() != StateOpen {
+		t.Fatalf("precondition: breaker should be Open after ForceOpen, got State()=%v", breaker.State())
+	}
+
+	breaker.mu.Lock()
+	breaker.lastFailure = time.Now().Add(-2 * CircuitBreakerRecoveryTimeout)
+	breaker.mu.Unlock()
+
+	m := NewBackgroundTaskManager(g)
+	var fetchResult *FetchResult
+	task := &ScheduledTask{
+		Name:      "channel_health_fubon",
+		ChannelID: "fubon",
+		Interval:  1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			result, err := g.Fetch(ctx, "fubon")
+			if err != nil {
+				return err
+			}
+			fetchResult = result
+			return nil
+		},
+	}
+	task.SetEnabled(true)
+
+	m.executeTask(context.Background(), task)
+
+	if breaker.State() != StateClosed {
+		t.Errorf("breaker should be Closed after successful half-open probe, got State()=%v", breaker.State())
+	}
+
+	if fetchResult == nil {
+		t.Fatal("fetchResult is nil — Gateway.Fetch was not called by executeTask")
+	}
+	if fetchResult.Fallback {
+		t.Error("got fallback data but expected a fresh fetch through half-open probe")
+	}
+	if string(fetchResult.Data) != `{"status":"ok"}` {
+		t.Errorf("unexpected fetch result data: got %q, want %q", string(fetchResult.Data), `{"status":"ok"}`)
 	}
 }
