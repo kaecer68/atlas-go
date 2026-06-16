@@ -47,6 +47,19 @@
 
 - **F9 — Start() 啟動前 port 探測**：在 `scriptPath` 與 `IsHealthy` 檢查之間，必須以 3-state switch（portStateFree / Healthy / Foreign）取代單一 `IsHealthy()` 早退。理由：port 被非 fubon-proxy process 佔用時，`IsHealthy()` 會回 false，繼續 spawn 會撞 EADDRINUSE → supervise() 進 3s backoff-loop；同時 `cmd/atlas` 視 Start() 為 non-fatal warning，導致 fubon adapter 跳過註冊、前端缺資料。Foreign 占用必須回傳 actionable error（含 PID 與 `kill` 指令），由呼叫端決定是否升級為 fatal。Probe 用 `net.Listen` 而非 `net.Dial` 避免 side effect。**probe 僅在 L125 進行一次，不在 supervise() 重啟路徑中重複**。
 
+### Zombie auto-kill 流程（F9 — post-probe）
+
+F9 port 探測發現 Foreign 佔用時，若 `isFubonZombie()` 判斷為 fubon-proxy 殭屍，會自動清除：
+
+- **isFubonZombie 判別邏輯**：比對 lsof 回傳的 command name 是否含 `"python"` 或 `"uvicorn"`。port 8081 僅供 fubon-proxy Python 服務使用，因此出現 Python/uvicorn 幾乎可判定是殭屍。**非 Python 程序（java, nginx, node, go, sh 等）不會被 auto-kill**，直接回傳 actionable error。
+- **killOccupant 二段式終止**：先送 SIGTERM → 等待 1 秒 → signal(0) 檢查是否已退出；若仍在運行則升級 SIGKILL。**killOccupant 不回傳 process 資源給呼叫端，由 caller 自行 `cmd.Wait()` 收屍**。
+- **macOS zombie 陷阱（重要）**：行程被 SIGKILL 後在 macOS 上會變成 zombie（defunct process），`syscall.Kill(pid, 0)` 對 zombie 仍回 `nil`（表示 process exists）。因此**不能用輪詢 `signal(0)` 來確認 SIGKILL 是否生效**。解決方案：在 goroutine 中跑 `cmd.Wait()` 來真正收屍。測試中若用 `sh -c "trap 'exit 0' TERM; sleep 30"` + SIGKILL，外層 shell 被 kill 後 `sleep` child 會變成 zombie，需要 `cmd.Wait()` 回收。
+- **auto-kill 後 re-probe**：kill 成功後立即重新 probe（`probePort8081()`），根據新狀態走：
+  - `portStateFree` → fall through to spawn（殭屍清除，正常啟動）
+  - `portStateHealthy` → 視為外部已管理，跳過 spawn（罕見，表示殭屍死後新實例已接手）
+  - `portStateForeign` → error「still held after auto-kill」，交使用者手動處理
+- **re-probe 失敗**：不阻擋 spawn，log warn + fall through to spawn（保留原行為）。
+
 ### 測試標準（F3）
 
 - **測試必須驗證「正確性」不只「時序」**：
@@ -81,7 +94,7 @@
 
 ## 修改前必讀
 
-1. 必跑：`go test -race -count=1 ./internal/fubonproxy/` 確認 3 個測試全綠
+1. 必跑：`go test -race -count=1 ./internal/fubonproxy/` 確認測試全綠（目前 19 個 test functions，可能隨功能增加）
 2. 必跑：`go vet ./internal/fubonproxy/` + `staticcheck ./internal/fubonproxy/`
 3. 若改 supervisor 邏輯：重新檢視 F1~F8；改 Start() pre-flight 時檢視 F9，並更新本檔
 4. 若改介面：更新 `doc.go`（package 層級文件）保持一致
