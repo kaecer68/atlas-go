@@ -752,20 +752,23 @@ func TestAPIModeRegistersNarrativeRoutes(t *testing.T) {
 
 func TestShouldStartFubonProxy(t *testing.T) {
 	cases := []struct {
-		name string
-		mode string
-		want bool
+		name        string
+		mode        string
+		fubonAPIKey string
+		want        bool
 	}{
-		{"empty_defaults_to_no", "", false},
-		{"dry_run_no_proxy", "dry-run", false},
-		{"paper_no_proxy", "paper", false},
-		{"live_starts_proxy", "live", true},
-		{"unknown_mode_no_proxy", "bogus", false},
+		{"empty_defaults_to_no", "", "", false},
+		{"api_key_starts_proxy", "", "test-key", true},
+		{"dry_run_no_proxy", "dry-run", "", false},
+		{"paper_no_proxy", "paper", "", false},
+		{"live_starts_proxy", "live", "", true},
+		{"live_with_key_starts_proxy", "live", "test-key", true},
+		{"unknown_mode_no_proxy", "bogus", "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := shouldStartFubonProxy(tc.mode); got != tc.want {
-				t.Fatalf("shouldStartFubonProxy(%q) = %v, want %v", tc.mode, got, tc.want)
+			if got := shouldStartFubonProxy(tc.mode, tc.fubonAPIKey); got != tc.want {
+				t.Fatalf("shouldStartFubonProxy(%q, %q) = %v, want %v", tc.mode, tc.fubonAPIKey, got, tc.want)
 			}
 		})
 	}
