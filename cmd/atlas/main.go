@@ -167,8 +167,15 @@ func publishBootstrapEvents(bus eventbus.EventBus, replayPath, baselinePath stri
 	})
 }
 
-func shouldStartFubonProxy(mode string) bool {
-	return mode == "live"
+// shouldStartFubonProxy 判斷是否應自動啟動 fubon-proxy 服務。
+// 兩種情境觸發：
+//   - broker mode 為 "live"（即時交易模式，需要 proxy 處理 broker API 請求）
+//   - FUBON_API_KEY 已設定（即使非 live 模式，dashboard API 也需要 fubon 資料通道）
+//
+// 目標：讓 `atlas -api` 搭配 FUBON_API_KEY 設定時能一鍵啟動 fubon-proxy，
+// 不需要使用者手動啟動 Python FastAPI 微服務。
+func shouldStartFubonProxy(mode string, fubonAPIKey string) bool {
+	return mode == "live" || fubonAPIKey != ""
 }
 
 func main() {
@@ -304,7 +311,7 @@ func run(args []string, deps appDeps) error {
 
 		// Start fubon-proxy process manager BEFORE Gateway adapter registration,
 		// so the fubon TCP probe in RegisterChannelAdapters finds :8081 already running.
-		if shouldStartFubonProxy(cfg.BrokerMode) {
+		if shouldStartFubonProxy(cfg.BrokerMode, cfg.FubonAPIKey) {
 			fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
 			if err := fubonMgr.Start(context.Background()); err != nil {
 				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)

@@ -176,15 +176,61 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 			)
 			return nil
 		case portStateForeign:
-			if occupant.PID > 0 {
+			if occupant.PID > 0 && isFubonZombie(occupant) {
+				logging.Warn("fubonproxy", "zombie_detected",
+					"pid", occupant.PID,
+					"cmd", occupant.Command,
+					"message", "auto-killing zombie fubon proxy on port "+strconv.Itoa(proxyListenPort),
+				)
+				if killErr := killOccupant(occupant.PID); killErr != nil {
+					logging.Error("fubonproxy", "zombie_kill_failed",
+						logging.Err(killErr),
+						"message", "auto-kill failed; falling through to error",
+					)
+					return fmt.Errorf("fubonproxy: port %d held by zombie process "+
+						"(pid=%d, cmd=%q); auto-kill failed: %v; "+
+						"stop it manually with `kill %d`",
+						proxyListenPort, occupant.PID, occupant.Command, killErr, occupant.PID)
+				}
+				// Kill successful — re-probe
+				logging.Info("fubonproxy", "zombie_killed",
+					"pid", occupant.PID,
+					"message", "re-probing port after zombie kill",
+				)
+				newState, newOccupant, probeErr := m.probePort8081()
+				if probeErr != nil {
+					logging.Warn("fubonproxy", "reprobe_failed_after_zombie_kill",
+						logging.Err(probeErr),
+						"port", proxyListenPort,
+						"fallback", "spawn_directly",
+					)
+					break // fall through to spawn
+				}
+				switch newState {
+				case portStateFree:
+					break // fall through to spawn
+				case portStateHealthy:
+					logging.Info("fubonproxy", "external_managed_after_kill",
+						"port", proxyListenPort,
+						"occupant_pid", newOccupant.PID,
+						"message", "port now serves /health after kill; skipping spawn",
+					)
+					return nil
+				case portStateForeign:
+					return fmt.Errorf("fubonproxy: port %d still held after auto-kill "+
+						"(pid=%d, cmd=%q); stop it with `kill %d`",
+						proxyListenPort, newOccupant.PID, newOccupant.Command, newOccupant.PID)
+				}
+			} else if occupant.PID > 0 {
 				return fmt.Errorf("fubonproxy: port %d held by foreign process "+
 					"(pid=%d, cmd=%q); stop it with `kill %d` or change fubon-proxy port",
 					proxyListenPort, occupant.PID, occupant.Command, occupant.PID)
+			} else {
+				return fmt.Errorf("fubonproxy: port %d held by unknown process; "+
+					"identify it with `lsof -nP -iTCP:%d -sTCP:LISTEN` and stop it, "+
+					"or change fubon-proxy port",
+					proxyListenPort, proxyListenPort)
 			}
-			return fmt.Errorf("fubonproxy: port %d held by unknown process; "+
-				"identify it with `lsof -nP -iTCP:%d -sTCP:LISTEN` and stop it, "+
-				"or change fubon-proxy port",
-				proxyListenPort, proxyListenPort)
 		case portStateFree:
 			// 走原本 spawn 路徑
 		}
@@ -397,6 +443,47 @@ func lookupPortOccupant(port int) (portOccupant, error) {
 		return portOccupant{}, fmt.Errorf("port %d held but lsof reported no PID", port)
 	}
 	return occ, nil
+}
+
+// isFubonZombie 判斷佔住 port 的程序是否為 fubon-proxy 的殭屍行程。
+// 比對 lsof 回傳的 command name 是否包含 "python" 或 "uvicorn"。
+// port 8081 是專用給 fubon-proxy 的端口，其他 Python 行程不應佔用此 port，
+// 因此出現 Python/uvicorn → 幾乎可確定是 fubon 殭屍。
+func isFubonZombie(occ portOccupant) bool {
+	cmd := strings.ToLower(occ.Command)
+	return strings.Contains(cmd, "python") || strings.Contains(cmd, "uvicorn")
+}
+
+// killOccupant 終止佔住 port 的程序。
+// 先發送 SIGTERM 進行優雅關閉，等待 1 秒後檢查程序是否仍在運行，
+// 若仍在運行則升級為 SIGKILL。
+func killOccupant(pid int) error {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("find process %d: %w", pid, err)
+	}
+
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("sigterm %d: %w", pid, err)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	// signal 0 是 Unix 的存在檢查；ESRCH 表示程序已退出
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		return nil
+	}
+
+	logging.Warn("fubonproxy", "zombie_sigterm_timeout",
+		"pid", pid,
+		"message", "SIGTERM did not stop process within 1s, sending SIGKILL",
+	)
+	if err := proc.Signal(syscall.SIGKILL); err != nil {
+		return fmt.Errorf("sigkill %d: %w", pid, err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+	return nil
 }
 
 // waitForHealthy 輪詢健康檢查直到通過、超時、或 ctx 取消。

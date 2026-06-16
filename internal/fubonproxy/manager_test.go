@@ -1013,3 +1013,86 @@ func TestProcessManager_F9_LookupPortOccupant_ResolvesOurTestListener(t *testing
 	}
 	t.Logf("port 8081 occupied by pid=%d cmd=%q", occ.PID, occ.Command)
 }
+
+// ============================================================================
+// Auto-kill zombie — isFubonZombie + killOccupant unit tests
+// ============================================================================
+
+// TestIsFubonZombie 驗證 isFubonZombie 對各種 command 名稱的判別邏輯：
+// - Python/uvicorn → zombie（true）
+// - 其他程序（java, nginx, node, go, sh）→ 非 zombie（false）
+// - 空字串 → 非 zombie（false）
+func TestIsFubonZombie(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{name: "python short", cmd: "python", want: true},
+		{name: "python3", cmd: "python3", want: true},
+		{name: "uvicorn", cmd: "uvicorn", want: true},
+		{name: "full path python3", cmd: "/usr/bin/python3", want: true},
+		{name: "Python uppercase", cmd: "Python", want: true},
+		{name: "python with script arg", cmd: "python /opt/fubon/main.py", want: true},
+		{name: "uvicorn module arg", cmd: "uvicorn main:app", want: true},
+		{name: "java", cmd: "java", want: false},
+		{name: "nginx", cmd: "nginx", want: false},
+		{name: "node", cmd: "node", want: false},
+		{name: "go", cmd: "go", want: false},
+		{name: "sh", cmd: "sh", want: false},
+		{name: "empty string", cmd: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			occ := portOccupant{PID: 12345, Command: tt.cmd}
+			got := isFubonZombie(occ)
+			if got != tt.want {
+				t.Errorf("isFubonZombie(%q) = %v, want %v", tt.cmd, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestKillOccupant 驗證 killOccupant 能終止一個子行程。
+// 使用 sh -c 包裝 sleep，使其對 SIGTERM 有預期行為。SIGTERM → 1s → SIGKILL
+// escalation 路徑由 killOccupant 內部測試；本測試專注於驗證函式不報錯且行程
+// 最終退出。
+//
+// macOS 注意：行程被 SIGKILL 後會變成 zombie，須透過 cmd.Wait() 收屍。
+// syscall.Kill(pid, 0) 對 zombie 仍回 nil，因此不能用輪詢方式確認。
+// 正確做法是 killOccupant → cmd.Wait() 帶超時。
+func TestKillOccupant(t *testing.T) {
+	// 用 sleep 30 確保程序在 killOccupant 被呼叫時仍在存活
+	cmd := exec.Command("sh", "-c", "trap 'exit 0' TERM; sleep 30")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start shell: %v", err)
+	}
+	pid := cmd.Process.Pid
+
+	killErr := killOccupant(pid)
+	if killErr != nil {
+		t.Fatalf("killOccupant(%d) returned error: %v", pid, killErr)
+	}
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-waitCh:
+		t.Logf("process (pid %d) reaped: %v", pid, err)
+	case <-time.After(3 * time.Second):
+		t.Errorf("process (pid %d) not reaped within 3s after killOccupant", pid)
+	}
+}
+
+// TestKillOccupant_NonExistentPID 驗證 killOccupant 對不存在的 PID 回傳 error。
+func TestKillOccupant_NonExistentPID(t *testing.T) {
+	err := killOccupant(999999999)
+	if err == nil {
+		t.Error("killOccupant on non-existent PID should return error")
+	} else {
+		t.Logf("killOccupant returned expected error: %v", err)
+	}
+}
