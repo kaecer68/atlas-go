@@ -94,7 +94,6 @@ func TestGenerateMarkdownReport(t *testing.T) {
 		EndDate:          time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
 		TotalReturn:      0.05,
 		AnnualizedReturn: 0.80,
-		SharpeRatio:      1.2,
 		SortinoRatio:     1.5,
 		CalmarRatio:      26.67,
 		MaxDrawdown:      0.03,
@@ -145,6 +144,38 @@ func TestGenerateMarkdownReport_Nil(t *testing.T) {
 	md := GenerateMarkdownReport(nil)
 	if !strings.Contains(md, "No report data available") {
 		t.Error("expected nil report message")
+	}
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
+}
+
+func TestGenerateReport_SharpeNA(t *testing.T) {
+	tmpDir := setupTestLedger(t)
+	report, err := GenerateReport(tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report.SharpeRatio != nil {
+		t.Errorf("expected nil SharpeRatio for single-session report, got %v", *report.SharpeRatio)
+	}
+}
+
+func TestGenerateMarkdownReport_SharpeNA(t *testing.T) {
+	report := emptyReport("all")
+	md := GenerateMarkdownReport(report)
+	if !strings.Contains(md, "| Sharpe Ratio | N/A |") {
+		t.Errorf("expected markdown to contain 'N/A' Sharpe, got:\n%s", md)
+	}
+
+	report2 := &PerformanceReport{
+		Period:      "all",
+		SharpeRatio: float64Ptr(1.234),
+	}
+	md2 := GenerateMarkdownReport(report2)
+	if !strings.Contains(md2, "| Sharpe Ratio | 1.234 |") {
+		t.Errorf("expected markdown to contain formatted Sharpe, got:\n%s", md2)
 	}
 }
 
