@@ -52,10 +52,10 @@ function fmtTs(v) {
 function getField(status, key) {
   const raw = status[key];
   if (raw && typeof raw === 'object') {
-    // A field is "failed" when the symbol is empty (Layer 4 of the
-    // data-visibility safeguard — surface channel failures instead of
-    // silently rendering 0).
-    const failed = !raw.symbol || raw.symbol === '';
+    // A field is "failed" when the symbol is empty or the value is ≤ 0
+    // (Layer 4 of the data-visibility safeguard — surface channel failures
+    // and garbage/zero data instead of silently rendering 0).
+    const failed = !raw.symbol || raw.symbol === '' || (raw.value != null && Number(raw.value) <= 0);
     return {
       value: raw.value,
       changePct: raw.change_pct,

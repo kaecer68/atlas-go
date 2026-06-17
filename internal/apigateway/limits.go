@@ -73,8 +73,8 @@ var (
 // Group-scoped limiters for Yahoo Finance channels.
 //
 // History: all 8 Yahoo channels previously shared a single 1 req/s limiter
-// (yahooSharedLimiter), which serialized the 7-channel us_market_refresh
-// batch into a 7+ second cold start. Per Constitution Art. 2.3 ("共享
+// (yahooSharedLimiter), which serialized the 8-channel us_market_refresh
+// batch into an 8+ second cold start. Per Constitution Art. 2.3 ("共享
 // limiter 用同一個 instance；不同 endpoint 可獨立 limiter"), we treat
 // macro / index / tech as distinct endpoint groups — each is independently
 // rate-limited so cold start and steady-state traffic are parallelized
@@ -125,9 +125,9 @@ func NewRateLimitManager() *RateLimitManager {
 			"taifex_daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_etf":            rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
-			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
-			// (see yahooIndexLimiter / yahooTechLimiter above) so the 7-channel
-			// us_market_refresh batch does not serialize at 1 req/s.
+		// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
+		// (see yahooIndexLimiter / yahooTechLimiter above) so the 8-channel
+		// us_market_refresh batch does not serialize at 1 req/s.
 			"us_spx":  yahooIndexLimiter,
 			"us_ndx":  yahooIndexLimiter,
 			"us_dji":  yahooIndexLimiter,

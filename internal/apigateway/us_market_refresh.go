@@ -9,9 +9,9 @@ import (
 // USMarketChannels returns the 8 US market channel IDs that hit Yahoo Finance
 // v8 chart API. These channels were registered by PR #416 as on-demand only;
 // this task provides periodic refresh so API consumers hit the cache instead
-// of making live calls. Channels are split across yahooIndexLimiter (3
-// indexes) and yahooTechLimiter (4 tech stocks + TSM ADR) so the 8-channel
-// batch no longer serializes at 1 req/s.
+// of making live calls. Channels are split across yahooIndexLimiter (3 major
+// indexes), ExportStatisticsRate (sox_index), and yahooTechLimiter (4 tech
+// stocks + TSM ADR) for parallelized fetching.
 func USMarketChannels() []string {
 	return []string{
 		"us_spx",
@@ -26,9 +26,10 @@ func USMarketChannels() []string {
 }
 
 // NewUSMarketRefreshTask returns a BackgroundTaskFunc that batch-fetches all
-// 8 US market channels. The 3 index channels share yahooIndexLimiter and the
-// 5 tech/ADR channels share yahooTechLimiter, so the batch parallelizes across
-// two limiter groups instead of serializing at 1 req/s. Per-channel errors
+// 8 US market channels. Channels are split across three limiter groups —
+// yahooIndexLimiter (3 major indexes), ExportStatisticsRate (sox_index),
+// and yahooTechLimiter (4 tech stocks + TSM ADR) — so the batch parallelizes
+// instead of serializing at 1 req/s. Per-channel errors
 // are logged as warnings but do not fail the whole batch — a single channel's
 // transient failure should not block the other channels from being refreshed.
 //

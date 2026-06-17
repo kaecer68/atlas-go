@@ -69,7 +69,7 @@ type CrossMarketStatus struct {
 	CorrelationSPXVIX   *float64 `json:"correlation_spx_vix"`
 
 	// Data visibility (Layer 3 of data-visibility safeguard).
-	// DataStatus is "ok" when all 8 US index/tech fields have real data,
+	// DataStatus is "ok" when all 10 US index/tech/macro fields have real data,
 	// "degraded" when at least one is missing. FailedChannels lists the
 	// specific channelIDs that returned empty (frontend uses this to
 	// render error badges).
@@ -119,6 +119,7 @@ type CrossMarketService struct {
 	// gateway.Health().Record() (per-channel) and monitor.Warning()
 	// (user-visible alert) — Option B full alerting.
 	degradedCallback func(string, []string)
+	callbackMu       sync.Mutex // protects degradedCallback reads/writes
 
 	// cacheMu + cachedSnapshot + cacheTime implement a TTL cache for
 	// FetchSnapshot, preventing the 2x redundant ~15-20s HTTP cascade
@@ -149,6 +150,8 @@ type CrossMarketService struct {
 // finds degraded data. Production wiring in main.go routes this to both
 // gateway.Health().Record() (per-channel) and monitor.Warning() (user-visible alert).
 func (s *CrossMarketService) SetDegradedCallback(cb func(string, []string)) {
+	s.callbackMu.Lock()
+	defer s.callbackMu.Unlock()
 	s.degradedCallback = cb
 }
 func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketService {
@@ -199,8 +202,11 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 		meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed}
 
 		if status == "degraded" {
-			if s.degradedCallback != nil {
-				s.degradedCallback(status, failed)
+			s.callbackMu.Lock()
+			cb := s.degradedCallback
+			s.callbackMu.Unlock()
+			if cb != nil {
+				cb(status, failed)
 			}
 		}
 

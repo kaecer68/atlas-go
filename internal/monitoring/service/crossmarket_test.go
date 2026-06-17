@@ -628,3 +628,97 @@ func TestGetStatus_DataStatusOKWhenAllChannelsPopulated(t *testing.T) {
 		t.Errorf("failed_channels must be omitted when DataStatus=ok, got: %s", jsonStr)
 	}
 }
+
+// TestDetectDegradedUSStatus_ZeroValueNonNullSymbol isolates the Value<=0
+// branch from the Symbol=="" branch. In the production bug, VIX had
+// Symbol="^VIX" but Value=0, which must be detected as failed.
+func TestDetectDegradedUSStatus_ZeroValueNonNullSymbol(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 0}, // Zero value — should fail
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 0}, // Zero value — should fail
+	}
+	status, failed := detectDegradedUSStatus(snap)
+	if status != "degraded" {
+		t.Errorf("expected status=degraded (SOX and VIX are Value=0), got %q", status)
+	}
+	if len(failed) != 2 {
+		t.Errorf("expected 2 failed channels (sox_index, vix), got %d: %v", len(failed), failed)
+	}
+}
+
+// TestSetDegradedCallback_InvokedOnDegradation verifies that the degradedCallback
+// is called when detectDegradedUSStatus returns "degraded".
+func TestSetDegradedCallback_InvokedOnDegradation(t *testing.T) {
+	// All fields empty → all 10 degraded
+	prov := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{}}
+	svc := NewCrossMarketService(prov)
+
+	var calledStatus string
+	var calledFailed []string
+	svc.SetDegradedCallback(func(s string, f []string) {
+		calledStatus = s
+		calledFailed = f
+	})
+
+	_, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+
+	if calledStatus != "degraded" {
+		t.Errorf("expected callback status='degraded', got %q", calledStatus)
+	}
+	if len(calledFailed) != 10 {
+		t.Errorf("expected 10 failed channels in callback, got %d: %v", len(calledFailed), calledFailed)
+	}
+}
+
+// TestSetDegradedCallback_NilCallbackNoPanic verifies that no panic occurs
+// when degradedCallback is nil and status is "degraded".
+func TestSetDegradedCallback_NilCallbackNoPanic(t *testing.T) {
+	// Empty snapshot → degraded; no callback set → must not panic
+	svc := NewCrossMarketService(&fakeMacroProvider{snap: marketdata.MacroDataSnapshot{}})
+	_, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus with nil callback: %v", err)
+	}
+	// If we reach here without panic, the test passes.
+}
+
+// TestSetDegradedCallback_NotInvokedWhenOK verifies that the callback is
+// NOT called when all 10 channels are healthy.
+func TestSetDegradedCallback_NotInvokedWhenOK(t *testing.T) {
+	prov := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}}
+	svc := NewCrossMarketService(prov)
+
+	called := false
+	svc.SetDegradedCallback(func(string, []string) { called = true })
+
+	_, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+
+	if called {
+		t.Error("callback must NOT be invoked when all channels are healthy")
+	}
+}
