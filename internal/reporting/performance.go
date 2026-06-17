@@ -757,7 +757,7 @@ func stdDev(values []float64) float64 {
 // classification. ForwardReturn values strictly greater than this threshold
 // are counted as wins; values below it are losses (covering transaction cost
 // + slippage). Falls back to the package default if config is unavailable
-// (e.g. during tests that don't initialise the singleton).
+// (e.g. during tests that don't initialize the singleton).
 func winRateThreshold() float64 {
 	defaultWinRateThreshold := 0.002
 	cfg := configpkg.GetParametersConfig()
