@@ -50,7 +50,7 @@ func TestFubonChannelAdapter_Fetch(t *testing.T) {
 		},
 	})
 
-	client := marketdata.NewFubonClient("test-token")
+	client := marketdata.NewFubonClient()
 	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
 
 	adapter := NewFubonChannelAdapter(client)
@@ -82,7 +82,7 @@ func TestFubonChannelAdapter_HealthCheck(t *testing.T) {
 		},
 	})
 
-	client := marketdata.NewFubonClient("test-token")
+	client := marketdata.NewFubonClient()
 	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
 
 	adapter := NewFubonChannelAdapter(client)
@@ -108,7 +108,7 @@ func TestFubonChannelAdapter_HealthCheck_Failure(t *testing.T) {
 		},
 	})
 
-	client := marketdata.NewFubonClient("test-token")
+	client := marketdata.NewFubonClient()
 	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
 
 	adapter := NewFubonChannelAdapter(client)
@@ -123,7 +123,7 @@ func TestFubonChannelAdapter_HealthCheck_Failure(t *testing.T) {
 
 func TestFubonChannelAdapter_RateLimit(t *testing.T) {
 	writeParametersJSON(t, nil)
-	client := marketdata.NewFubonClient("test-token")
+	client := marketdata.NewFubonClient()
 	adapter := NewFubonChannelAdapter(client)
 	if adapter.RateLimit() == nil {
 		t.Fatal("RateLimit() returned nil")

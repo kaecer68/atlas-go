@@ -62,7 +62,7 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 		logging.Info("hybrid_provider", "fubon_proxy_not_reachable", "msg", "skipping fubon fallback — proxy not running")
 	} else {
 		_ = conn.Close()
-		fubonClient := NewFubonClient("")
+		fubonClient := GetSharedFubonClient()
 		fubonProvider = NewFubonProviderWithClient(fubonClient)
 	}
 
