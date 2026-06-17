@@ -78,7 +78,7 @@ func SaveResults(cfg *config.ParametersConfig, results []CalibrationResult, para
 			}
 		}
 	}
-	if err := cfg.SaveWithRollback(paramsPath); err != nil {
+	if err := cfg.LockedSaveWithRollback(paramsPath); err != nil {
 		return fmt.Errorf("save parameters: %w", err)
 	}
 	return nil

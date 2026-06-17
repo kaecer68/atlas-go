@@ -238,7 +238,7 @@ func applyCalibration(workDir string, result calibrationResult) error {
 		cfg.RSITw.A4VixScores.CalibrationMethod = "even_spacing_6_buckets"
 	}
 
-	return cfg.SaveWithRollback(paramsPath)
+	return cfg.LockedSaveWithRollback(paramsPath)
 }
 
 func percentile(sorted []float64, p float64) float64 {

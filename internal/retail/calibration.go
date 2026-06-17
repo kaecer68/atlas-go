@@ -171,7 +171,7 @@ func CalibrateRSITw(workDir string) (*CalibrationReport, error) {
 	cfg.RSITw.LastCalibratedScore.Value = report.Score
 	cfg.RSITw.LastCalibratedScore.Source = config.SourceCalibrated
 	cfg.RSITw.LastCalibratedScore.LastCalibrated = &report.Timestamp
-	if err := cfg.SaveWithRollback(filepath.Join(workDir, "configs", "parameters.json")); err != nil {
+	if err := cfg.LockedSaveWithRollback(filepath.Join(workDir, "configs", "parameters.json")); err != nil {
 		logging.Error("rsi_tw_calibrate", "save_params_failed", "err", err.Error())
 		return report, fmt.Errorf("save calibrated params: %w", err)
 	}

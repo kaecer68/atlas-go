@@ -126,7 +126,7 @@ func main() {
 
 	cfg.Industry.ClassificationTree = updated
 
-	if err := cfg.SaveWithRollback("configs/parameters.json"); err != nil {
+	if err := cfg.LockedSaveWithRollback("configs/parameters.json"); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to save config: %v\n", err)
 		os.Exit(1)
 	}

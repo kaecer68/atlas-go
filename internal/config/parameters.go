@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"time"
 
@@ -2686,6 +2687,16 @@ func (p *ParametersConfig) SaveWithRollback(path string) error {
 
 	_ = os.Remove(bakPath)
 	return nil
+}
+
+func (p *ParametersConfig) LockedSaveWithRollback(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create parent dir for parameters config: %w", err)
+	}
+	locker := GetFileLocker(path)
+	unlock := locker.Lock()
+	defer unlock()
+	return p.SaveWithRollback(path)
 }
 
 func mergeRiskGateDefaults(cfg *ParametersConfig) {

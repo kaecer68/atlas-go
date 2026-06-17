@@ -198,7 +198,7 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 		return fmt.Errorf("marshal updated parameters: %w", err)
 	}
 
-	if err := os.WriteFile(paramsPath, out, 0o644); err != nil {
+	if err := config.LockedWriteFileWithRollback(paramsPath, out); err != nil {
 		return fmt.Errorf("write parameters.json: %w", err)
 	}
 

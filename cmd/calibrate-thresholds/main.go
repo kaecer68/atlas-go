@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	configpkg "github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
@@ -88,5 +89,5 @@ func writeConfig(configPath string, results []industry.CalibrationResult) error 
 		return fmt.Errorf("marshal: %w", err)
 	}
 	out = append(out, '\n')
-	return os.WriteFile(configPath, out, 0o644)
+	return configpkg.LockedWriteFileWithRollback(configPath, out)
 }
