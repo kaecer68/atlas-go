@@ -550,11 +550,20 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[
 		}
 		var sharpeLike *float64
 		if len(a.returns) >= 5 {
-			v := portfolio.ComputeSharpe(a.returns, portfolio.SharpeConfig{
-				Frequency:  portfolio.FrequencyPerOutcome,
-				MinSamples: 5,
-			})
-			sharpeLike = &v
+			// Skip Sharpe when std-dev is 0 (or near-zero below IEEE-754
+			// precision threshold). ComputeSharpe returns 0 in that case,
+			// which is semantically "undefined" not "zero". Leaving
+			// sharpeLike as nil lets the frontend render "N/A" instead of
+			// a misleading 0.00 (see Wave 3+4 of perf-report root-cause
+			// audit + Issue 3 of PR #562 code review).
+			_, stdDev := shared.MeanSampleVariance(a.returns)
+			if stdDev > 0 {
+				v := portfolio.ComputeSharpe(a.returns, portfolio.SharpeConfig{
+					Frequency:  portfolio.FrequencyPerOutcome,
+					MinSamples: 5,
+				})
+				sharpeLike = &v
+			}
 		}
 		pf := 0.0
 		if a.grossLosses > 0 {
@@ -663,6 +672,7 @@ func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []doma
 		regimeReturns[regime] = append(regimeReturns[regime], oc.ForwardReturn)
 	}
 
+	threshold := winRateThreshold()
 	for regime, returns := range regimeReturns {
 		if _, ok := regimeData[regime]; !ok {
 			regimeData[regime] = &RegimePerformance{Regime: regime}
@@ -671,7 +681,7 @@ func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []doma
 		wins := 0
 		for _, r := range returns {
 			totalReturn += r
-			if r > 0 {
+			if r > threshold {
 				wins++
 			}
 		}

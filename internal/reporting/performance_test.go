@@ -492,6 +492,60 @@ func TestCalculateTopAgents_SharpeInsufficientSamples(t *testing.T) {
 	}
 }
 
+// TestCalculateTopAgents_SharpeStdDevZero verifies that when an agent's
+// returns have zero standard deviation (all identical values), SharpeLike
+// stays nil so the frontend renders "N/A" instead of the misleading "0.00".
+// This locks in Issue 3 of PR #562 code review.
+func TestCalculateTopAgents_SharpeStdDevZero(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.02, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.02, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.02, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.02, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.02, PassedGuards: true},
+	}
+
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].SharpeLike != nil {
+		t.Errorf("expected nil SharpeLike when std-dev=0 (renders N/A), got %v", *agents[0].SharpeLike)
+	}
+}
+
+// TestCalculateRegimeBreakdown_CostAdjustedThreshold verifies that regime
+// win-rate uses winRateThreshold() instead of `r > 0`, matching the
+// behavior of calculateTradeMetrics and calculateTopAgents. This locks in
+// Issue 1 of PR #562 code review.
+func TestCalculateRegimeBreakdown_CostAdjustedThreshold(t *testing.T) {
+	summaries := []domain.SessionSummary{
+		{SessionID: "session-20260101-daily", Regime: domain.RegimeRiskOn},
+	}
+
+	// 5 returns for RISK_ON: 2 above threshold (wins), 2 between 0 and
+	// threshold (cost-failed positives), 1 negative.
+	// Old `r > 0` logic: 3 wins / 5 = 0.6 (FALSE positive — 0.0005 isn't a real win).
+	// New threshold logic: 2 wins / 5 = 0.4.
+	outcomes := []domain.RecommendationOutcome{
+		{Window: "session-20260101-daily", ForwardReturn: 0.05, PassedGuards: true},
+		{Window: "session-20260101-daily", ForwardReturn: 0.03, PassedGuards: true},
+		{Window: "session-20260101-daily", ForwardReturn: 0.0005, PassedGuards: true},
+		{Window: "session-20260101-daily", ForwardReturn: 0.0001, PassedGuards: true},
+		{Window: "session-20260101-daily", ForwardReturn: -0.01, PassedGuards: true},
+	}
+
+	breakdown := calculateRegimeBreakdown(summaries, outcomes)
+	riskOn, ok := breakdown.Regimes["RISK_ON"]
+	if !ok {
+		t.Fatalf("expected RISK_ON regime, got %v", breakdown.Regimes)
+	}
+	expectedWinRate := 2.0 / 5.0
+	if math.Abs(riskOn.WinRate-expectedWinRate) > 1e-9 {
+		t.Errorf("expected regime win rate %.4f with cost-adjusted threshold, got %.4f", expectedWinRate, riskOn.WinRate)
+	}
+}
+
 func TestFindRegimeForWindow_DateMatch(t *testing.T) {
 	summaries := []domain.SessionSummary{
 		{SessionID: "session-20260101-daily", Regime: domain.RegimeRiskOn},
