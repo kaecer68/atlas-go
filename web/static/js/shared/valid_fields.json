@@ -482,6 +482,7 @@
   "equity_curve",
   "error",
   "error_message",
+  "error_severity",
   "errors",
   "est_value",
   "etf",

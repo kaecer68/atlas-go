@@ -738,6 +738,7 @@ export interface DataChannel {
   status_text: string;
   updated_at: string;
   last_error?: string;
+  error_severity?: string;
 }
 
 export interface DataChannelInfo {

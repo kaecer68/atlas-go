@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -330,16 +330,16 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 	fileStatus, fileUpdated := checkMacroHealth(macroPath, now)
 	status, updated, lastError := s.resolveStatusFromStore("us_yahoo", fileStatus, fileUpdated)
 	return DataChannel{
-		ChannelID:  "us_yahoo",
-		Country:    "美國",
-		Platform:   "Yahoo Finance",
-		APIFormat:  "REST JSON",
-		Path:       "query1.finance.yahoo.com/v8/finance/chart",
-		Storage:    "data/state/macro/latest.json",
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "us_yahoo",
+		Country:       "美國",
+		Platform:      "Yahoo Finance",
+		APIFormat:     "REST JSON",
+		Path:          "query1.finance.yahoo.com/v8/finance/chart",
+		Storage:       "data/state/macro/latest.json",
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
@@ -349,16 +349,16 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 	fileStatus, fileUpdated := checkReplayHealth(replayPath, now)
 	status, updated, lastError := s.resolveStatusFromStore("twse_replay", fileStatus, fileUpdated)
 	return DataChannel{
-		ChannelID:  "twse_replay",
-		Country:    "台灣",
-		Platform:   "TWSE 證交所",
-		APIFormat:  "OpenAPI / CSV",
-		Path:       "openapi.twse.com.tw / www.twse.com.tw",
-		Storage:    config.GetReplayDataPath(s.WorkDir),
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "twse_replay",
+		Country:       "台灣",
+		Platform:      "TWSE 證交所",
+		APIFormat:     "OpenAPI / CSV",
+		Path:          "openapi.twse.com.tw / www.twse.com.tw",
+		Storage:       config.GetReplayDataPath(s.WorkDir),
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
@@ -383,16 +383,16 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 func (s *DataChannelService) buildFugleChannel() DataChannel {
 	status, updated, lastError := s.getCachedFugleHealth()
 	return DataChannel{
-		ChannelID:  "fugle",
-		Country:    "台灣",
-		Platform:   "Fugle 富果",
-		APIFormat:  "REST JSON",
-		Path:       "api.fugle.tw",
-		Storage:    "data/state/fugle/latest.json",
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "fugle",
+		Country:       "台灣",
+		Platform:      "Fugle 富果",
+		APIFormat:     "REST JSON",
+		Path:          "api.fugle.tw",
+		Storage:       "data/state/fugle/latest.json",
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
@@ -400,16 +400,16 @@ func (s *DataChannelService) buildFugleChannel() DataChannel {
 func (s *DataChannelService) buildFubonChannel() DataChannel {
 	status, updated, lastError := s.getCachedFubonHealth()
 	return DataChannel{
-		ChannelID:  "fubon",
-		Country:    "台灣",
-		Platform:   "富邦證券",
-		APIFormat:  "REST JSON",
-		Path:       "api.fubon.com.tw",
-		Storage:    "data/state/fubon/latest.json",
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "fubon",
+		Country:       "台灣",
+		Platform:      "富邦證券",
+		APIFormat:     "REST JSON",
+		Path:          "api.fubon.com.tw",
+		Storage:       "data/state/fubon/latest.json",
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
@@ -417,16 +417,16 @@ func (s *DataChannelService) buildFubonChannel() DataChannel {
 func (s *DataChannelService) buildFinMindChannel() DataChannel {
 	status, updated, lastError := s.getCachedFinMindHealth()
 	return DataChannel{
-		ChannelID:  "finmind",
-		Country:    "台灣",
-		Platform:   "FinMind",
-		APIFormat:  "REST JSON",
-		Path:       "api.finmindtrade.com",
-		Storage:    "data/state/finmind/latest.json",
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "finmind",
+		Country:       "台灣",
+		Platform:      "FinMind",
+		APIFormat:     "REST JSON",
+		Path:          "api.finmindtrade.com",
+		Storage:       "data/state/finmind/latest.json",
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
@@ -467,16 +467,16 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 	fileStatus, fileUpdated := checkGeopoliticalHealth(geoPath, now)
 	status, updated, lastError := s.resolveStatusFromStore("geopolitical", fileStatus, fileUpdated)
 	return DataChannel{
-		ChannelID:  "geopolitical",
-		Country:    "中東/全球",
-		Platform:   "RSS + GDELT",
-		APIFormat:  "RSS / REST JSON",
-		Path:       "feeds.bbci.co.uk / api.gdeltproject.org",
-		Storage:    "data/state/geopolitical/latest.json",
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "geopolitical",
+		Country:       "中東/全球",
+		Platform:      "RSS + GDELT",
+		APIFormat:     "RSS / REST JSON",
+		Path:          "feeds.bbci.co.uk / api.gdeltproject.org",
+		Storage:       "data/state/geopolitical/latest.json",
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
@@ -504,16 +504,16 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 	fileStatus, fileUpdated := checkExportHealth(exportDir, now)
 	status, updated, lastError := s.resolveStatusFromStore("export_statistics", fileStatus, fileUpdated)
 	return DataChannel{
-		ChannelID:  "export_statistics",
-		Country:    "台灣",
-		Platform:   "海關進出口統計 (data.gov.tw)",
-		APIFormat:  "CSV",
-		Path:       "opendata.customs.gov.tw/data/6053/csv.csv",
-		Storage:    "data/state/export/*_export.json",
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "export_statistics",
+		Country:       "台灣",
+		Platform:      "海關進出口統計 (data.gov.tw)",
+		APIFormat:     "CSV",
+		Path:          "opendata.customs.gov.tw/data/6053/csv.csv",
+		Storage:       "data/state/export/*_export.json",
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
@@ -541,16 +541,16 @@ func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataC
 	fileStatus, fileUpdated := checkGeopoliticalHealth(twGeoPath, now)
 	status, updated, lastError := s.resolveStatusFromStore("geopolitical_taiwan", fileStatus, fileUpdated)
 	return DataChannel{
-		ChannelID:  "geopolitical_taiwan",
-		Country:    "台灣",
-		Platform:   "CNA / 自由時報 / TVBS RSS",
-		APIFormat:  "RSS XML",
-		Path:       "www.cna.com.tw / news.ltn.com.tw / news.tvbs.com.tw",
-		Storage:    "data/state/geopolitical/taiwan/latest.json",
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-		LastError:  lastError,
+		ChannelID:     "geopolitical_taiwan",
+		Country:       "台灣",
+		Platform:      "CNA / 自由時報 / TVBS RSS",
+		APIFormat:     "RSS XML",
+		Path:          "www.cna.com.tw / news.ltn.com.tw / news.tvbs.com.tw",
+		Storage:       "data/state/geopolitical/taiwan/latest.json",
+		Status:        status,
+		StatusText:    statusText(status),
+		UpdatedAt:     updated,
+		LastError:     lastError,
 		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }

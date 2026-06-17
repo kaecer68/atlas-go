@@ -459,9 +459,9 @@ func TestStatusText(t *testing.T) {
 
 func TestClassifyErrorSeverity(t *testing.T) {
 	tests := []struct {
-		name    string
-		errMsg  string
-		expect  string
+		name   string
+		errMsg string
+		expect string
 	}{
 		// Empty / no error
 		{name: "empty string", errMsg: "", expect: ""},
