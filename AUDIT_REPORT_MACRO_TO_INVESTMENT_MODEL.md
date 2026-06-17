@@ -76,7 +76,7 @@ func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, w
 
 ### 🔴 P0-3: 前端 `MODEL_NAME_MAP` 覆蓋率僅 33%
 
-**位置**: `web/static/js/names.js:204-210`  
+**位置**: `/api/dashboard/agent-names`（取代 `web/static/js/names.js`，2026-06 — 改由後端讀取 `configs/agents.json` 提供單一權威來源）  
 **影響**: 6 個投資模型名稱無法被前端正確顯示
 
 **問題描述**:
@@ -365,4 +365,4 @@ type InvestmentModel struct {
 - `internal/config/parameters_defaults.go` — 參數默認值
 - `web/static/js/pages/narrative.js` — 前端渲染
 - `web/static/js/shared/field_types.ts` — 前端類型
-- `web/static/js/names.js` — 名稱映射
+- `/api/dashboard/agent-names` — 名稱映射（取代 `web/static/js/names.js`，2026-06）

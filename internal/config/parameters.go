@@ -1254,6 +1254,7 @@ type ParametersConfig struct {
 	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
 	Tax                  TaxParameters                  `json:"tax,omitempty"`
 	SectorAllocation     SectorAllocationConfig         `json:"sector_allocation"`
+	Reporting            ReportingParameters            `json:"reporting"`
 }
 
 // TaxParameters holds tunable Taiwan tax rates with full provenance tracking.
@@ -1280,6 +1281,16 @@ func (p TaxParameters) ToConfig() domain.TaxConfig {
 	}
 	cfg.IncludeNHI = true // NHI inclusion is a policy flag, not a tunable rate
 	return cfg
+}
+
+// ReportingParameters holds tunables for the performance-report rendering pipeline.
+// WinRateThreshold applies a cost-adjusted cutoff to per-recommendation ForwardReturn:
+// values <= threshold are counted as losses (covers transaction cost + slippage).
+// SharpeMinSamples is the minimum per-agent sample count for SharpeLike to be
+// reported; below it, SharpeLike is null and the frontend renders "N/A".
+type ReportingParameters struct {
+	WinRateThreshold ParameterMetadata[float64] `json:"win_rate_threshold"`
+	SharpeMinSamples ParameterMetadata[int]     `json:"sharpe_min_samples"`
 }
 
 // EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.
@@ -2241,6 +2252,13 @@ func (p *ParametersConfig) validateEngine() error {
 		}
 	}
 
+	if p.Reporting.WinRateThreshold.Value < 0 || p.Reporting.WinRateThreshold.Value >= 1 {
+		return fmt.Errorf("reporting.win_rate_threshold (%.3f) must be in [0, 1)", p.Reporting.WinRateThreshold.Value)
+	}
+	if p.Reporting.SharpeMinSamples.Value < 1 {
+		return fmt.Errorf("reporting.sharpe_min_samples (%d) must be >= 1", p.Reporting.SharpeMinSamples.Value)
+	}
+
 	return nil
 }
 
@@ -2276,6 +2294,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeIndustryDefaults(&cfg)
 	mergeRSITwDefaults(&cfg)
 	mergeFallbackPriceTargetsDefaults(&cfg)
+	mergeReportingDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -2969,5 +2988,16 @@ func mergeFallbackPriceTargetsDefaults(cfg *ParametersConfig) {
 			entry.StopLossMultiplier = defaultEntry.StopLossMultiplier
 		}
 		cfg.FallbackPriceTargets[key] = entry
+	}
+}
+
+// mergeReportingDefaults fills zero-valued fields with package-level defaults.
+func mergeReportingDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Reporting
+	if cfg.Reporting.WinRateThreshold.Value == 0 {
+		cfg.Reporting.WinRateThreshold = def.WinRateThreshold
+	}
+	if cfg.Reporting.SharpeMinSamples.Value == 0 {
+		cfg.Reporting.SharpeMinSamples = def.SharpeMinSamples
 	}
 }

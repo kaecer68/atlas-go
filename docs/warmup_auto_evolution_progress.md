@@ -84,7 +84,7 @@
 
 **參考：**
 - `RecordOutcome(agentID, forwardReturn, isHit)` 在 `internal/portfolio/darwinian_weights.go:265`
-- Sharpe 計算需要 ≥60 個樣本（`SharpeMinSampleSize=60`）
+- Sharpe 計算需要 ≥5 個樣本（`reporting.sharpe_min_samples=5`，2026-06 自 60 降低）
 - RollingSharpe 更新邏輯在 `UpdateRollingSharpe()` 中
 
 ---

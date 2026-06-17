@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -759,6 +760,11 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		})
 	})
 
+	// Agent display-name registry endpoint. Single source of truth for the
+	// performance-report frontend (replaces two competing static maps in
+	// web/static/js/names.js and web/static/js/shared/constants.js).
+	mux.HandleFunc("/api/dashboard/agent-names", a.handleAgentNames)
+
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
 
 	swarmSvc := service.NewSwarmService(filepath.Join(a.workDir, "data/state/swarm_latest.json"))
@@ -1012,6 +1018,45 @@ func (a *DashboardAPI) SetLatestDrawdown(d *portfolio.DrawdownResult) {
 	a.drawdownMu.Lock()
 	defer a.drawdownMu.Unlock()
 	a.latestDrawdown = d
+}
+
+// handleAgentNames serves the agent display-name registry as JSON. Reads
+// configs/agents.json from workDir and returns one record per agent with
+// id, name, skill, layer. Returns an empty array on missing file so the
+// frontend can render gracefully without error-handling per render.
+func (a *DashboardAPI) handleAgentNames(w http.ResponseWriter, r *http.Request) {
+	type agentNameResp struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Skill string `json:"skill"`
+		Layer string `json:"layer"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	agentsPath := filepath.Join(a.workDir, "configs", "agents.json")
+	data, err := os.ReadFile(agentsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"agents": []agentNameResp{}})
+			return
+		}
+		http.Error(w, "read agent registry", http.StatusInternalServerError)
+		return
+	}
+	var reg domain.AgentRegistry
+	if err := json.Unmarshal(data, &reg); err != nil {
+		http.Error(w, "parse agent registry", http.StatusInternalServerError)
+		return
+	}
+	agents := make([]agentNameResp, 0, len(reg.Agents))
+	for _, ag := range reg.Agents {
+		agents = append(agents, agentNameResp{
+			ID:    ag.ID,
+			Name:  ag.Name,
+			Skill: ag.Skill,
+			Layer: string(ag.Layer),
+		})
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"agents": agents})
 }
 
 // SetCrisisModeSetter registers a callback invoked when macro ingest detects

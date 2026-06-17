@@ -740,3 +740,76 @@ func TestDashboardAPI_CalibrateNarrative_NoEngine(t *testing.T) {
 		t.Error("expected error when narrative engine nil")
 	}
 }
+
+// TestHandleAgentNames verifies the /api/dashboard/agent-names endpoint returns
+// the agent registry from configs/agents.json with id/name/skill/layer fields,
+// and gracefully returns an empty array when the file is missing.
+func TestHandleAgentNames(t *testing.T) {
+	tmpDir := t.TempDir()
+	configsDir := filepath.Join(tmpDir, "configs")
+	if err := os.MkdirAll(configsDir, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+	registryJSON := `{
+		"version": 1,
+		"agents": [
+			{"id":"agent-a","name":"Alpha","skill":"tech","layer":"sector","prompt_file":"x.md","enabled":true,"universe":[],"primary_metrics":[]},
+			{"id":"agent-b","name":"Beta","skill":"value","layer":"stock","prompt_file":"y.md","enabled":true,"universe":[],"primary_metrics":[]}
+		]
+	}`
+	if err := os.WriteFile(filepath.Join(configsDir, "agents.json"), []byte(registryJSON), 0o644); err != nil {
+		t.Fatalf("write agents.json: %v", err)
+	}
+
+	d := NewDashboardAPIWithGateway(tmpDir, ".", nil, NoopFetcher())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/agent-names", nil)
+	d.handleAgentNames(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Agents []struct {
+			ID    string `json:"id"`
+			Name  string `json:"name"`
+			Skill string `json:"skill"`
+			Layer string `json:"layer"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if len(resp.Agents) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(resp.Agents))
+	}
+	if resp.Agents[0].ID != "agent-a" || resp.Agents[0].Name != "Alpha" || resp.Agents[0].Skill != "tech" {
+		t.Errorf("agent-a mismatch: %+v", resp.Agents[0])
+	}
+	if resp.Agents[1].ID != "agent-b" || resp.Agents[1].Name != "Beta" {
+		t.Errorf("agent-b mismatch: %+v", resp.Agents[1])
+	}
+}
+
+// TestHandleAgentNames_MissingFile verifies graceful degradation when
+// configs/agents.json is absent (returns 200 + empty array).
+func TestHandleAgentNames_MissingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	d := NewDashboardAPIWithGateway(tmpDir, ".", nil, NoopFetcher())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/agent-names", nil)
+	d.handleAgentNames(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 even with missing file, got %d", rec.Code)
+	}
+	var resp struct {
+		Agents []map[string]string `json:"agents"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if len(resp.Agents) != 0 {
+		t.Errorf("expected empty agents array, got %d entries", len(resp.Agents))
+	}
+}

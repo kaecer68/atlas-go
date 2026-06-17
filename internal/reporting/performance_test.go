@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 func TestGenerateReport_EmptyLedger(t *testing.T) {
@@ -106,11 +107,11 @@ func TestGenerateMarkdownReport(t *testing.T) {
 		AvgWin:           0.02,
 		AvgLoss:          -0.01,
 		TopAgents: []AgentContribution{
-			{AgentID: "agent-a", Skill: "tech", Layer: "sector", TotalReturn: 0.03, WinRate: 0.7, TradeCount: 5, AvgReturn: 0.006},
+			{AgentID: "agent-a", Skill: "tech", Layer: "sector", AggregateForwardReturn: 0.03, WinRate: 0.7, TradeCount: 5, AvgReturn: 0.006},
 		},
 		RegimeBreakdown: RegimeBreakdown{
 			Regimes: map[string]RegimePerformance{
-				"RISK_ON": {Regime: "RISK_ON", SessionCount: 5, TotalReturn: 0.05, WinRate: 0.6, AvgReturn: 0.01},
+				"RISK_ON": {Regime: "RISK_ON", SessionCount: 5, AggregateForwardReturn: 0.05, WinRate: 0.6, AvgReturn: 0.01},
 			},
 		},
 		MonthlyReturns: []MonthlyReturn{
@@ -387,8 +388,10 @@ func TestCalculateTopAgents_SharpeMinSamples5(t *testing.T) {
 	if len(agents) != 1 {
 		t.Fatalf("expected 1 agent, got %d", len(agents))
 	}
-	if agents[0].SharpeLike == 0 {
-		t.Errorf("expected non-zero Sharpe with 5 real samples, got %f", agents[0].SharpeLike)
+	if agents[0].SharpeLike == nil {
+		t.Errorf("expected non-nil SharpeLike with 5 real samples")
+	} else if *agents[0].SharpeLike == 0 {
+		t.Errorf("expected non-zero Sharpe with 5 real samples, got %f", *agents[0].SharpeLike)
 	}
 }
 
@@ -552,4 +555,96 @@ func setupTestLedgerWithOldAndNewSessions(t *testing.T) string {
 	}
 
 	return tmpDir
+}
+
+// TestCalculateTradeMetrics_CostAdjustedThreshold verifies that the win-rate
+// classification uses the cost-adjusted threshold (default 0.002) instead of
+// raw ForwardReturn > 0. ForwardReturn values in (-0.002, +0.002) should NOT
+// count as wins because they don't cover transaction cost + slippage.
+func TestCalculateTradeMetrics_CostAdjustedThreshold(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{PassedGuards: true, ForwardReturn: 0.005},
+		{PassedGuards: true, ForwardReturn: 0.001},
+		{PassedGuards: true, ForwardReturn: -0.001},
+		{PassedGuards: true, ForwardReturn: -0.01},
+		{PassedGuards: true, ForwardReturn: 0.02},
+		{PassedGuards: true, ForwardReturn: 0.0005, IsSynthetic: true},
+	}
+	winRate, totalTrades, realTrades, _, _, _, _ := calculateTradeMetrics(outcomes)
+	if totalTrades != 6 {
+		t.Errorf("expected 6 total trades (incl. synthetic), got %d", totalTrades)
+	}
+	if realTrades != 5 {
+		t.Errorf("expected 5 real trades (synthetic excluded), got %d", realTrades)
+	}
+	expected := 0.4
+	if math.Abs(winRate-expected) > 0.001 {
+		t.Errorf("expected win rate %.3f, got %.3f", expected, winRate)
+	}
+}
+
+// TestCalculateTopAgents_SharpeInsufficientSamples verifies that agents with
+// fewer than 5 real samples produce a nil SharpeLike (not 0.00).
+func TestCalculateTopAgents_SharpeInsufficientSamples(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{PassedGuards: true, AgentID: "agent-x", Skill: "tech", Layer: shared.AgentLayer("sector"), ForwardReturn: 0.01},
+		{PassedGuards: true, AgentID: "agent-x", Skill: "tech", Layer: shared.AgentLayer("sector"), ForwardReturn: 0.02},
+		{PassedGuards: true, AgentID: "agent-x", Skill: "tech", Layer: shared.AgentLayer("sector"), ForwardReturn: -0.005},
+	}
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+	if agents[0].SharpeLike != nil {
+		t.Errorf("expected nil SharpeLike with <5 samples, got %v", *agents[0].SharpeLike)
+	}
+}
+
+// TestCalculateRegimeBreakdown_CostAdjustedThreshold verifies that regime
+// breakdown win-rate classification also uses the cost-adjusted threshold.
+func TestCalculateRegimeBreakdown_CostAdjustedThreshold(t *testing.T) {
+	summaries := []domain.SessionSummary{
+		{SessionID: "2026-06-15-tw", Regime: domain.RegimeRiskOn},
+	}
+	outcomes := []domain.RecommendationOutcome{
+		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: 0.005},
+		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: 0.001},
+		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: -0.001},
+		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: 0.02},
+	}
+	breakdown := calculateRegimeBreakdown(summaries, outcomes)
+	regime, ok := breakdown.Regimes["RISK_ON"]
+	if !ok {
+		t.Fatalf("expected RISK_ON regime, got %v", breakdown.Regimes)
+	}
+	if regime.SessionCount != 1 {
+		t.Errorf("expected 1 session for RISK_ON, got %d", regime.SessionCount)
+	}
+	if math.Abs(regime.WinRate-0.5) > 0.001 {
+		t.Errorf("expected win rate 0.5, got %.3f", regime.WinRate)
+	}
+	expected := 0.005 + 0.001 - 0.001 + 0.02
+	if math.Abs(regime.AggregateForwardReturn-expected) > 0.001 {
+		t.Errorf("expected aggregate %.3f, got %.3f", expected, regime.AggregateForwardReturn)
+	}
+}
+
+// TestFormatSharpeLike verifies the markdown renderer handles nil values.
+func TestFormatSharpeLike(t *testing.T) {
+	if got := formatSharpeLike(nil); got != "N/A" {
+		t.Errorf("expected N/A for nil, got %q", got)
+	}
+	v := 1.5
+	if got := formatSharpeLike(&v); got != "1.50" {
+		t.Errorf("expected 1.50, got %q", got)
+	}
+}
+
+// TestWinRateThreshold_Default verifies the helper returns the configured
+// threshold (0.002 default) when config is loaded.
+func TestWinRateThreshold_Default(t *testing.T) {
+	got := winRateThreshold()
+	if got != 0.002 {
+		t.Errorf("expected default winRateThreshold 0.002, got %f", got)
+	}
 }
