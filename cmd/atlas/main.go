@@ -221,14 +221,15 @@ func run(args []string, deps appDeps) error {
 	logging.Init(*logFormat, slog.LevelInfo)
 
 	if *checkIntegrity {
-		errs := config.CheckParamsIntegrity("configs/parameters.json")
+		paramsPath := config.GetParametersConfigPath()
+		errs := config.CheckParamsIntegrity(paramsPath)
 		if len(errs) > 0 {
 			for _, err := range errs {
 				logging.Error("integrity_check", "integrity_check: "+err.Error())
 			}
 			os.Exit(1)
 		}
-		logging.Info("integrity_check", "integrity_check: configs/parameters.json is valid")
+		logging.Info("integrity_check", fmt.Sprintf("integrity_check: %s is valid", paramsPath))
 		os.Exit(0)
 	}
 
