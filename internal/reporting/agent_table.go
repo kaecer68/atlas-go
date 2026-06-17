@@ -18,7 +18,7 @@ type AgentPerformanceRow struct {
 	SharpeLike   float64
 	MaxDrawdown  float64
 	Weight       float64
-	AfterTaxPnL  float64
+	AfterTaxPnL  *float64
 }
 
 // RenderAgentPerformanceTable generates a Markdown table from agent rows.
@@ -58,10 +58,6 @@ func BuildAgentRows(scorecards []domain.Scorecard, weights map[string]float64) [
 				w = vw
 			}
 		}
-		var afterTaxPnL float64
-		if sc.AfterTaxPnL != nil {
-			afterTaxPnL = *sc.AfterTaxPnL
-		}
 		rows = append(rows, AgentPerformanceRow{
 			AgentID:      sc.AgentID,
 			Skill:        sc.Skill,
@@ -71,7 +67,7 @@ func BuildAgentRows(scorecards []domain.Scorecard, weights map[string]float64) [
 			HitRate:      sc.HitRate,
 			SharpeLike:   sc.SharpeLike,
 			MaxDrawdown:  sc.MaxDrawdown,
-			AfterTaxPnL:  afterTaxPnL,
+			AfterTaxPnL:  sc.AfterTaxPnL,
 			Weight:       w,
 		})
 	}
@@ -86,11 +82,11 @@ func truncate(s string, max int) string {
 }
 
 // formatAfterTaxPnL formats the after-tax P&L column. Returns "N/A" when
-// the value is zero (agent has no after-tax contribution or per-agent tax
-// allocation has not been computed).
-func formatAfterTaxPnL(v float64) string {
-	if v == 0 {
+// the value is nil (per-agent tax allocation has not been computed) or
+// zero (agent has no after-tax contribution).
+func formatAfterTaxPnL(v *float64) string {
+	if v == nil || *v == 0 {
 		return "N/A"
 	}
-	return fmt.Sprintf("%.0f", v)
+	return fmt.Sprintf("%.0f", *v)
 }
