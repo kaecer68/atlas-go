@@ -588,8 +588,8 @@ func TestGetStatus_DataStatusOKWhenAllChannelsPopulated(t *testing.T) {
 		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0, ChangePct: 0.5, Timestamp: time.Now().Unix()},
 		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0, ChangePct: 0.8, Timestamp: time.Now().Unix()},
 		// US10Y and VIX are now checked by detectDegradedUSStatus (Fix 3)
-		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25, ChangePct: 0.1, Timestamp: time.Now().Unix()},
-		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0, ChangePct: -0.4, Timestamp: time.Now().Unix()},
+		US10Y: marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25, ChangePct: 0.1, Timestamp: time.Now().Unix()},
+		VIX:   marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0, ChangePct: -0.4, Timestamp: time.Now().Unix()},
 		// Adjacent fields unaffected by US channel failures
 		DXY:     marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 99.5, Timestamp: time.Now().Unix()},
 		USD_TWD: marketdata.MacroDataPoint{Symbol: "USDTWD=X", Value: 31.5, Timestamp: time.Now().Unix()},

@@ -125,9 +125,9 @@ func NewRateLimitManager() *RateLimitManager {
 			"taifex_daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_etf":            rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
-		// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
-		// (see yahooIndexLimiter / yahooTechLimiter above) so the 8-channel
-		// us_market_refresh batch does not serialize at 1 req/s.
+			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
+			// (see yahooIndexLimiter / yahooTechLimiter above) so the 8-channel
+			// us_market_refresh batch does not serialize at 1 req/s.
 			"us_spx":  yahooIndexLimiter,
 			"us_ndx":  yahooIndexLimiter,
 			"us_dji":  yahooIndexLimiter,

@@ -119,10 +119,10 @@ type CrossMarketService struct {
 	// gateway.Health().Record() (per-channel) and monitor.Warning()
 	// (user-visible alert) — Option B full alerting.
 	// callbackMu protects degradedCallback reads/writes and last-degraded state.
-	callbackMu          sync.Mutex
-	degradedCallback    func(string, []string)
-	lastDegradedStatus  string   // previous status string ("ok"/"degraded")
-	lastFailedChannels  []string // previous failed channel list for dedup
+	callbackMu         sync.Mutex
+	degradedCallback   func(string, []string)
+	lastDegradedStatus string   // previous status string ("ok"/"degraded")
+	lastFailedChannels []string // previous failed channel list for dedup
 
 	// cacheMu + cachedSnapshot + cacheTime implement a TTL cache for
 	// FetchSnapshot, preventing the 2x redundant ~15-20s HTTP cascade
