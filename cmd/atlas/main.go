@@ -1182,7 +1182,8 @@ func run(args []string, deps appDeps) error {
 							{Symbol: "VIX", Price: snap.VIX.Value, Timestamp: now},
 						}
 						if snap.SPXIndex.Value > 0 {
-							points = append(points,
+							points = append(
+								points,
 								realtime.MarketDataPoint{Symbol: "SPX", Price: snap.SPXIndex.Value, Timestamp: now},
 								realtime.MarketDataPoint{Symbol: "NDX", Price: snap.NDXIndex.Value, Timestamp: now},
 							)

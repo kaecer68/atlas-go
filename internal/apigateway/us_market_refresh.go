@@ -41,12 +41,14 @@ func NewUSMarketRefreshTask(g *Gateway) BackgroundTaskFunc {
 		for _, ch := range channels {
 			_, err := g.Fetch(ctx, ch)
 			if err != nil {
-				logging.Warn("apigateway", "us_market_refresh_failed",
+				logging.Warn(
+					"apigateway", "us_market_refresh_failed",
 					"channel", ch,
 					"err", err,
 				)
 			} else {
-				logging.Info("apigateway", "us_market_refresh_ok",
+				logging.Info(
+					"apigateway", "us_market_refresh_ok",
 					"channel", ch,
 				)
 			}

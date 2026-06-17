@@ -157,6 +157,7 @@ func (s *CrossMarketService) SetDegradedCallback(cb func(string, []string)) {
 	defer s.callbackMu.Unlock()
 	s.degradedCallback = cb
 }
+
 func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketService {
 	return &CrossMarketService{
 		provider:        provider,
