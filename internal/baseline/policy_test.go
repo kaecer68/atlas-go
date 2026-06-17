@@ -58,6 +58,9 @@ func TestDefaultPolicy_ContractGuards(t *testing.T) {
 	if policy.Constraints.TakeProfitPct != 0 {
 		t.Errorf("default TakeProfitPct drift: expected 0, got %v", policy.Constraints.TakeProfitPct)
 	}
+	if policy.Constraints.MaxHoldingDays != 0 {
+		t.Errorf("default MaxHoldingDays drift: expected 0 (unlimited), got %d", policy.Constraints.MaxHoldingDays)
+	}
 	if policy.ExecutionPolicy.ConvictionFloor != 60 {
 		t.Errorf("default ConvictionFloor drift: expected 60, got %d", policy.ExecutionPolicy.ConvictionFloor)
 	}

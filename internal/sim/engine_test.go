@@ -404,3 +404,33 @@ func TestBuildOrderIntentWithTargetPrice(t *testing.T) {
 		t.Errorf("expected positive notional from conviction, got %.0f", order.Notional)
 	}
 }
+
+func TestDeriveSimDay_ReturnsQuoteAsOf(t *testing.T) {
+	now := time.Now()
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", AsOf: now},
+	}
+	day := deriveSimDay(quotes)
+	if !day.Equal(now) {
+		t.Errorf("deriveSimDay = %v, want %v", day, now)
+	}
+}
+
+func TestDeriveSimDay_SkipsZeroAsOf(t *testing.T) {
+	now := time.Now()
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", AsOf: time.Time{}},
+		{Symbol: "2317.TW", AsOf: now},
+	}
+	day := deriveSimDay(quotes)
+	if !day.Equal(now) {
+		t.Errorf("deriveSimDay = %v, want %v", day, now)
+	}
+}
+
+func TestDeriveSimDay_EmptyReturnsZero(t *testing.T) {
+	day := deriveSimDay(nil)
+	if !day.IsZero() {
+		t.Errorf("deriveSimDay(nil) = %v, want zero time", day)
+	}
+}

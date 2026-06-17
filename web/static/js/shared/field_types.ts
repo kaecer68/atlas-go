@@ -1242,6 +1242,13 @@ export interface ForecastVsRealityResponse {
   broker_runtime: BrokerRuntimeAudit;
 }
 
+export interface ForwardReturnParameters {
+  risk_on_mean: string;
+  risk_off_mean: string;
+  risk_on_std_dev: string;
+  risk_off_std_dev: string;
+}
+
 export interface FreshnessScoresConfig {
   score_live: number;
   score_recent: number;
@@ -1685,6 +1692,11 @@ export interface LiveStatusResponse {
   timestamp: string;
 }
 
+export interface LockedCashEntry {
+  unlock_day: string;
+  amount: number;
+}
+
 export interface MacroDataHealthResponse {
   recorded_at: number;
   generated_at: string;
@@ -2077,6 +2089,7 @@ export interface ParametersConfig {
   tax?: string;
   sector_allocation: string;
   reporting: string;
+  forward_return?: string;
 }
 
 export interface PerformanceReport {
@@ -2210,6 +2223,7 @@ export interface Position {
   current_price: number;
   market_value: number;
   unrealized_pnl: number;
+  entry_date: string;
 }
 
 export interface PositionConcentration {
@@ -2699,6 +2713,7 @@ export interface Scorecard {
   is_oos_ratio: number;
   overfit_warning: boolean;
   overfit_reason?: string;
+  after_tax_pnl?: number | null;
   rolling_sharpe_trend: number;
   oos_sample_warning?: string;
 }
@@ -2935,6 +2950,7 @@ export interface SimulationConstraints {
   reserve_cash_fraction: number;
   stop_loss_pct: number;
   take_profit_pct: number;
+  max_holding_days: number;
 }
 
 export interface SimulationReport {
@@ -2968,6 +2984,7 @@ export interface SimulationState {
   previous_values: Record<string, number>;
   max_equity: number;
   current_drawdown: number;
+  locked_cash: string[];
 }
 
 export interface SizingParameters {
