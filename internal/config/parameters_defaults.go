@@ -41,6 +41,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		RSITw:                defaultRSITwParameters(),
 		Tax:                  defaultTaxParameters(),
 		SectorAllocation:     deriveDefaultSectorAllocationConfig(),
+		Reporting:            deriveDefaultReportingConfig(),
 	}
 }
 
@@ -3606,5 +3607,20 @@ func deriveDefaultSectorAllocationConfig() SectorAllocationConfig {
 		MacroWeight:     1.0,
 		FactorWeight:    1.0,
 		WeightFloor:     0.01,
+	}
+}
+
+func deriveDefaultReportingConfig() ReportingParameters {
+	return ReportingParameters{
+		WinRateThreshold: ParameterMetadata[float64]{
+			Value:     0.002,
+			Rationale: "0.2% cost-adjusted threshold for win-rate classification. Covers transaction cost (~0.15% in TW market) + slippage buffer. ForwardReturn must exceed this to count as a win.",
+			Source:    SourceHeuristic,
+		},
+		SharpeMinSamples: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "Minimum 5 per-agent forward-return samples before SharpeLike is reported. Below this, statistical significance is poor and the value is shown as N/A on the frontend.",
+			Source:    SourceHeuristic,
+		},
 	}
 }
