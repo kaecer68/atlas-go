@@ -42,7 +42,7 @@ Core path:
 # .env
 FUBON_API_KEY=your_api_key
 FUBON_PERSONAL_ID=your_id_number  # Required for DMA login
-FUBON_PROXY_URL=http://127.0.0.1:8081  # Optional, defaults to 127.0.0.1:8081
+# Fubon proxy URL is fixed at 127.0.0.1:8081 (env override removed 2026-06).
 ```
 
 Main packages:

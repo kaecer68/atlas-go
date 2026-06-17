@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 	"time"
 
@@ -20,7 +19,6 @@ import (
 // fubonProxyBaseURL 預設使用 IPv4 loopback (127.0.0.1) 而非 localhost,
 // 避免 macOS / Linux 在雙棧環境下,Go 的 net.Dial 預設優先走 IPv6 [::1]
 // 導致 `dial tcp [::1]:8081: connect: connection refused` 錯誤。
-// 設定環境變數 FUBON_PROXY_URL 可覆寫此預設值。
 const fubonProxyBaseURL = "http://127.0.0.1:8081"
 
 type FubonClient struct {
@@ -95,14 +93,9 @@ func NewFubonClient(authToken string) *FubonClient {
 }
 
 func newFubonClient(authToken string) *FubonClient {
-	proxyURL := os.Getenv("FUBON_PROXY_URL")
-	if proxyURL == "" {
-		proxyURL = fubonProxyBaseURL
-	}
-
 	params := config.GetParametersConfig()
 	return &FubonClient{
-		proxyURL:        proxyURL,
+		proxyURL:        fubonProxyBaseURL,
 		httpClient:      httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second),
 		intradayLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
 	}

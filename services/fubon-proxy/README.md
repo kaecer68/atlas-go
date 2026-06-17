@@ -28,8 +28,7 @@ FUBON_API_KEY=your_api_key_here
 # 身分證號（DMA 登入模式，無需憑證）
 FUBON_PERSONAL_ID=your_id_number
 
-# 微服務 URL（可選，預設 localhost:8081）
-FUBON_PROXY_URL=http://127.0.0.1:8081
+# 微服務 URL：固定為 127.0.0.1:8081（環境變數覆寫已於 2026-06 移除）
 ```
 
 ### 2. Docker Compose
@@ -95,7 +94,7 @@ curl http://127.0.0.1:8081/market-status
 
 ### 問題：連線超時
 - 確認 fubon-proxy 服務已啟動
-- 檢查 `FUBON_PROXY_URL` 設定正確
+- 確認 proxy 監聽 127.0.0.1:8081（環境變數覆寫已移除）
 
 ### 問題：無資料返回
 - 確認為交易日（非週末/假日）

@@ -106,4 +106,4 @@
 
 **原因**：macOS / Linux 在雙棧 (dual-stack) 環境下，Go `net.Dial` 對 `localhost` 預設優先走 IPv6 `[::1]`；fubonproxy 雖已升級為 `host="::"` 雙棧綁定，但若用戶未重啟服務、或在容器內僅綁 IPv4，仍會 `connect: connection refused`。IPv4 `127.0.0.1` 解析無歧義，跨平台行為一致。
 
-**覆寫方式**：環境變數 `FUBON_PROXY_URL` 仍可設定（例：`FUBON_PROXY_URL=http://192.168.1.10:8081`），但若繼續使用 `localhost`，仍會遇到同樣的 IPv6 優先問題。
+**不再支援環境變數覆寫**（2026-06 移除）：`FUBON_PROXY_URL` 環境變數已於 PR #563 移除。proxy 位址固定為 `127.0.0.1:8081`，不再有 IPv6 雙棧歧義。若需 Docker/遠端部署支援，請參閱 `configs/parameters.json`。
