@@ -9,6 +9,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/globalmarket"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 )
 
 // cacheTTL controls how long a FetchSnapshot result is reused across
@@ -137,6 +138,8 @@ type CrossMarketService struct {
 	// endpoint contract.
 	rollingSPXTWSE *globalmarket.RollingCorrelation
 
+	degradedMetrics *metrics.DegradedMetrics
+
 	// rollingNDXTWSE / DJI / TSM / NVDA use TAIEX as the TWSE proxy.
 	// TAIEX is the Taiwan Stock Exchange Weighted Index — the canonical
 	// broad-market benchmark for Taiwan.
@@ -156,6 +159,10 @@ func (s *CrossMarketService) SetDegradedCallback(cb func(string, []string)) {
 	s.callbackMu.Lock()
 	defer s.callbackMu.Unlock()
 	s.degradedCallback = cb
+}
+
+func (s *CrossMarketService) SetDegradedMetrics(m *metrics.DegradedMetrics) {
+	s.degradedMetrics = m
 }
 
 func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketService {
@@ -201,39 +208,47 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	s.cacheMu.Unlock()
 
 	snap, err := s.provider.FetchSnapshot(ctx)
-	if err == nil {
-		status, failed := detectDegradedUSStatus(snap)
-		meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed}
-
-		// Debounce: only fire callback on state transition
-		// (ok↔degraded) or when the failed-channel list changes.
-		// Without this, the callback fires on EVERY cache refresh
-		// (~30s) while the snapshot is degraded — producing duplicate
-		// health.Record() calls and alert spam.
-		s.callbackMu.Lock()
-		cb := s.degradedCallback
-		prevStatus := s.lastDegradedStatus
-		prevFailed := s.lastFailedChannels
-		changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed)
-		shouldFire := cb != nil && status == "degraded" && (changed || prevStatus == "")
-		if changed || prevStatus == "" {
-			s.lastDegradedStatus = status
-			s.lastFailedChannels = failed
+	if err != nil {
+		if s.degradedMetrics != nil {
+			s.degradedMetrics.ProviderErrors.WithLabelValues("crossmarket", err.Error()).Inc()
 		}
-		s.callbackMu.Unlock()
-		if shouldFire {
-			cb(status, failed)
-		}
-
-		s.cacheMu.Lock()
-		s.cachedSnapshot = &snap
-		s.cachedStatusMeta = meta
-		s.cacheTime = time.Now()
-		s.cacheMu.Unlock()
-
-		return snap, meta, nil
+		return snap, nil, err
 	}
-	return snap, nil, err
+
+	status, failed := detectDegradedUSStatus(snap)
+	meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed}
+
+	// Debounce: only fire callback on state transition
+	// (ok↔degraded) or when the failed-channel list changes.
+	// Without this, the callback fires on EVERY cache refresh
+	// (~30s) while the snapshot is degraded — producing duplicate
+	// health.Record() calls and alert spam.
+	s.callbackMu.Lock()
+	cb := s.degradedCallback
+	prevStatus := s.lastDegradedStatus
+	prevFailed := s.lastFailedChannels
+	changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed)
+	shouldFire := cb != nil && status == "degraded" && (changed || prevStatus == "")
+	if changed || prevStatus == "" {
+		s.lastDegradedStatus = status
+		s.lastFailedChannels = failed
+	}
+	s.callbackMu.Unlock()
+	if shouldFire {
+		cb(status, failed)
+	}
+
+	if status == "degraded" && s.degradedMetrics != nil {
+		s.degradedMetrics.DegradedActivations.WithLabelValues("crossmarket", "missing_us_index_data").Inc()
+	}
+
+	s.cacheMu.Lock()
+	s.cachedSnapshot = &snap
+	s.cachedStatusMeta = meta
+	s.cacheTime = time.Now()
+	s.cacheMu.Unlock()
+
+	return snap, meta, nil
 }
 
 // UpdateAllCorrelations ingests a MacroDataSnapshot and pushes the relevant
