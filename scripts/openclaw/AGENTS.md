@@ -82,6 +82,28 @@ bash ./scripts/openclaw/onboard.sh
 
 ---
 
+## 投資人溝通功能（Robot Communication）
+
+OpenClaw/Hermes Agent 可透過 `.claude/skills/robot-communication/` 下的技能，將 Atlas 系統的複雜數據轉化為投資人可理解的繁體中文回應：
+
+| 技能 | 用途 | 排程建議 |
+|------|------|---------|
+| `atlas-daily-briefing` | 每日投資摘要（市場狀態、風險等級、Top Picks） | 每日開盤前 8:45 AM |
+| `atlas-portfolio-qa` | 投資組合問答（持倉解釋、配置理由、績效） | 投資人查詢時觸發 |
+| `atlas-strategy-explain` | 投資策略白話解釋（因子選股、進化機制） | 投資人詢問策略時觸發 |
+| `atlas-risk-status` | 風險狀態解讀（燈號、VaR、進出場建議） | 風險等級變更時推播 |
+
+### 整合方式
+
+1. OpenClaw Agent 載入 `robot-communication/` 下的技能文件
+2. 透過 Atlas API Gateway（`internal/apigateway`）取得即時數據
+3. 依技能規範將數據格式化為投資人語言輸出
+4. 支援排程每日摘要（cron + today_start.sh 的擴展）
+
+> **注意**: 機器人溝通技能標記 `auto_load: false`，僅供 OpenClaw/Hermes Agent 載入。AI Coding 開發時不應自動載入。
+
+---
+
 ## 依賴
 
 - `bash` >= 4.0

@@ -1,7 +1,7 @@
 # Atlas-Go 規範文件索引（Guidelines Index）
 
-**版本**：1.2  
-**日期**：2026-06-02  
+**版本**：1.3  
+**日期**：2026-06-17  
 **用途**：所有規範文件的統一入口與權威階層定義。
 
 ---
@@ -63,14 +63,20 @@
 
 ### 階層 3：技能文件（Skills）
 
+> 完整技能地圖與分類體系請見 **`.claude/SKILLS-MAP.md`**（42 技能，6 大分類）。
+
 | 文件 | 範圍 | 何時閱讀 |
 |------|------|---------|
-| `.claude/skills/atlas-core-architecture/SKILL.md` | 系統架構總覽、分層設計原則 | 新功能開發前、跨模組修改時 |
 | `.claude/skills/atlas-pre-change-protocol/SKILL.md` | 修改程式碼前的 7 步檢查清單 | **修改程式碼前必讀** |
 | `.claude/skills/atlas-macro-narrative/SKILL.md` | 宏觀敘事、資金流向推導 | 每日開盤前、重大事件發生時 |
 | `.claude/skills/atlas-risk-management/SKILL.md` | 動態倉位調整、回撤機制 | 組合回撤或宏觀風險升級時 |
 | `.claude/skills/atlas-strategy-evolution/SKILL.md` | 實驗生命週期、Darwinian 權重 | 每月模型績效評估 |
-| `.claude/skills/atlas-operations-guide/SKILL.md` | 日常運維、緊急應變 | 每日開盤前、系統異常時 |
+| `.claude/skills/atlas-swarm-analyst/SKILL.md` | Swarm 模擬結果、市場共識、異常偵測 | Swarm 執行後 |
+| `.claude/skills/atlas-data-visibility/SKILL.md` | 四層資料可見性防護 | 資料流/通道變更時 |
+
+**機器人溝通技能**（`robot-communication/`，4 個）：供 OpenClaw/Hermes Agent 載入，為投資人提供每日摘要、組合問答、策略解釋、風險解讀。非 AI Coding 用，詳見 `.claude/SKILLS-MAP.md`。
+
+**自動生成技能**（`generated/`，21 個）：純程式碼符號索引，僅供程式碼導航。標記 `load_policy: "manual_only"`，不應自動載入。
 
 ### 階層 4：模組指南（AGENTS.md）
 
@@ -130,8 +136,8 @@
 | **新增參數** | `docs/PARAMETER_SYSTEM.md` | `go-core.instructions.md` |
 | **新增背景任務** | `CONSTITUTION.md` 第四條 | 無 |
 | **修改前端** | `monitoring/AGENTS.md`（snake_case 契約） | 無 |
-| **理解系統架構** | `atlas-core-architecture/SKILL.md` | `docs/architecture.md` |
-| **跨模組重構** | `atlas-core-architecture/SKILL.md` | 涉及的所有模組 `AGENTS.md` |
+| **理解系統架構** | `docs/architecture.md`、`.claude/SKILLS-MAP.md` | `docs/ai_agent_architecture.md` |
+| **跨模組重構** | `docs/architecture.md`、`.claude/SKILLS-MAP.md` | 涉及的所有模組 `AGENTS.md` |
 
 ---
 
@@ -141,9 +147,12 @@
 |------|---------|------|
 | `internal/*/CONSTITUTION.md` | 憲法（最高權威） | 1 |
 | `.github/instructions/*.md` | 領域守則 | 3 |
-| `.claude/skills/*/SKILL.md` | 技能文件 | 16 |
-| `internal/*/AGENTS.md` | 模組指南 | 34 |
+| `.claude/skills/*/SKILL.md` | 手寫技能文件 | 10 |
+| `internal/*/AGENTS.md` | 模組指南 | 52 |
 | `docs/*.md` | 參考文件 | 10+ |
+| `.claude/skills/generated/*/SKILL.md` | 自動生成技能（程式碼導航） | 21 |
+| `.claude/skills/robot-communication/*/SKILL.md` | 機器人溝通技能 | 4 |
+| `.claude/skills/gitnexus/*/SKILL.md` | GitNexus 工具技能 | 6 |
 
 ---
 
@@ -151,6 +160,7 @@
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 1.3 | 2026-06-17 | 修正不存在技能引用（atlas-core-architecture → SKILLS-MAP.md + docs/architecture.md）；更新技能數量為實際值（手寫 10 + 生成 21 + 機器人 4 + GitNexus 6）；新增機器人溝通與自動生成技能分類說明 |
 | 1.2 | 2026-06-02 | 修正統計數字：技能文件 5→16、模組指南 21→34、移除 sim 缺失標記（已補齊） |
 | 1.1 | 2026-05-29 | 補齊憲法、技能與模組指南索引，修正缺失清單與使用情境路由 |
 | 1.0 | 2026-05-22 | 初版，依據 Phase 2 規範盤點建立 |

@@ -1,7 +1,14 @@
 ---
 name: risk
 description: "Skill for the Risk area of atlas. 77 symbols across 11 files."
+auto_generated: true
+load_policy: "manual_only"
 ---
+> ⚠️ **AUTO-GENERATED — 不應自動載入**
+> 此技能由程式碼符號索引工具自動生成，僅供程式碼導航參考。
+> **不包含領域知識、金融工程見解或使用情境**。AI Coding 時請勿將此技能載入 context。
+> 需要模組領域知識時，請查閱對應的 `internal/<模組>/AGENTS.md` 或手寫技能。
+
 
 # Risk
 

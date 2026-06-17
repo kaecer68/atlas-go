@@ -136,11 +136,12 @@ skill(name="atlas-pre-change-protocol")
 
 | 文件 | 用途 |
 |------|------|
+| `CLAUDE.md` | 工具進入點、GitNexus 完整規範（**單一權威來源**） |
 | `docs/GUIDELINES_INDEX.md` | 規範階層與使用情境路由（衝突時為最終仲裁者） |
 | `docs/TRAPS.md` | 完整陷阱參考（跨模組 + 模組特定，按類別分類） |
 | `docs/architecture.md` | 系統架構詳細說明 |
 | `docs/DATA_ARCHITECTURE.md` | 資料儲存層、讀寫路徑 |
-| `.claude/SKILLS-MAP.md` | 39 技能入口地圖 |
+| `.claude/SKILLS-MAP.md` | 技能入口地圖（42 技能，6 大分類） |
 | `.claude/skills/atlas-pre-change-protocol/SKILL.md` | 修改前強制 7 步驟檢查清單 |
 | `internal/apigateway/CONSTITUTION.md` | 憲法級強制規範 |
 | `.omo/CONSTITUTION.md` | 深度憲法（矩陣運算、真實數據、證偽要求） |
@@ -149,50 +150,17 @@ skill(name="atlas-pre-change-protocol")
 
 ---
 
-<!-- ════════════════════════════════════════════════════════════════════ -->
-<!-- 以下為工具自動注入區塊，請勿手動編輯。AI 在此行之前的人類內容 ≤ 160 行。 -->
-<!-- ════════════════════════════════════════════════════════════════════ -->
+## GitNexus 程式碼智慧
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+> 完整 GitNexus 規範（Always Do / Never Do / Resources / CLI）存放於 **`CLAUDE.md`**。
+> 此處僅保留最低限度的路由資訊，避免與 CLAUDE.md 重複造成 token 浪費。
 
-This project is indexed by GitNexus as **atlas-go** (43127 symbols, 132304 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+| 使用情境 | 對應工具 |
+|---------|---------|
+| 修改符號前影響分析 | `gitnexus_impact({target, direction: "upstream"})` |
+| 提交前變更驗證 | `gitnexus_detect_changes()` |
+| 程式碼探索 | `gitnexus_query({query})` |
+| 符號上下文（callers/callees） | `gitnexus_context({name})` |
+| 安全重命名 | `gitnexus_rename({symbol_name, new_name})` |
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/atlas-go/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/atlas-go/clusters` | All functional areas |
-| `gitnexus://repo/atlas-go/processes` | All execution flows |
-| `gitnexus://repo/atlas-go/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
+> **強制規則**: 修改任何 function/class/method 前必須執行 `gitnexus_impact`。詳細規範見 `CLAUDE.md`。
