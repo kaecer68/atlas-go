@@ -76,6 +76,7 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 		ReserveCashFraction         float64 `json:"ReserveCashFraction"`
 		StopLossPct                 float64 `json:"StopLossPct"`
 		TakeProfitPct               float64 `json:"TakeProfitPct"`
+		MaxHoldingDays              int     `json:"MaxHoldingDays"`
 	}
 
 	type legacyExecutionPolicy struct {
@@ -134,6 +135,7 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 			ReserveCashFraction:         legacy.Constraints.ReserveCashFraction,
 			StopLossPct:                 legacy.Constraints.StopLossPct,
 			TakeProfitPct:               legacy.Constraints.TakeProfitPct,
+			MaxHoldingDays:              legacy.Constraints.MaxHoldingDays,
 		},
 		ExecutionPolicy: domain.ExecutionPolicy{
 			ConvictionFloor:               legacy.ExecutionPolicy.ConvictionFloor,
@@ -183,6 +185,7 @@ func DefaultPolicy() Policy {
 		CommissionDiscountThreshold: cfg.CommissionDiscountThreshold.Value,
 		SlippageBPS:                 cfg.SlippageBPS.Value,
 		ReserveCashFraction:         cfg.ReserveCashFraction.Value,
+		MaxHoldingDays:              0,
 	}
 	return Policy{
 		Version:         1,
@@ -332,6 +335,10 @@ func ApplyConstraintCandidate(base domain.SimulationConstraints, candidate strin
 		case strings.HasPrefix(line, "slippage_bps:"):
 			if v, ok := parseFloatValue(line); ok {
 				base.SlippageBPS = v
+			}
+		case strings.HasPrefix(line, "max_holding_days:"):
+			if v, ok := parseIntValue(line); ok {
+				base.MaxHoldingDays = v
 			}
 		}
 	}

@@ -170,6 +170,11 @@ type Scorecard struct {
 	OverfitWarning bool `json:"overfit_warning"`
 	// OverfitReason gives the human-readable reason for the warning.
 	OverfitReason string `json:"overfit_reason,omitempty"`
+	// AfterTaxPnL is the after-tax profit/loss attributable to this agent.
+	// Nil when per-agent tax allocation has not been computed.
+	// TODO(per-agent-tax): allocate portfolio-level tax proportionally to
+	// each agent's contribution; see sim.Engine.computeTaxAdjustedResults.
+	AfterTaxPnL *float64 `json:"after_tax_pnl,omitempty"`
 	// RollingSharpeTrend is the linear regression slope of per-window
 	// Sharpe across the chronological order. Positive = improving,
 	// negative = degrading. 0 when fewer than 2 windows.

@@ -32,15 +32,16 @@ func RenderAgentPerformanceTable(rows []AgentPerformanceRow) string {
 	sb.WriteString("|-------|-------|---------|----------|--------|--------|--------------|--------|\n")
 
 	for _, r := range rows {
+		afterTaxStr := formatAfterTaxPnL(r.AfterTaxPnL)
 		fmt.Fprintf(
-			&sb, "| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %.0f | %.2f |\n",
+			&sb, "| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %s | %.2f |\n",
 			truncate(r.AgentID, 20),
 			r.Layer,
 			r.WindowCount,
 			r.HitRate*100,
 			r.SharpeLike,
 			r.MaxDrawdown*100,
-			r.AfterTaxPnL,
+			afterTaxStr,
 			r.Weight,
 		)
 	}
@@ -57,6 +58,10 @@ func BuildAgentRows(scorecards []domain.Scorecard, weights map[string]float64) [
 				w = vw
 			}
 		}
+		var afterTaxPnL float64
+		if sc.AfterTaxPnL != nil {
+			afterTaxPnL = *sc.AfterTaxPnL
+		}
 		rows = append(rows, AgentPerformanceRow{
 			AgentID:      sc.AgentID,
 			Skill:        sc.Skill,
@@ -66,6 +71,7 @@ func BuildAgentRows(scorecards []domain.Scorecard, weights map[string]float64) [
 			HitRate:      sc.HitRate,
 			SharpeLike:   sc.SharpeLike,
 			MaxDrawdown:  sc.MaxDrawdown,
+			AfterTaxPnL:  afterTaxPnL,
 			Weight:       w,
 		})
 	}
@@ -77,4 +83,14 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+// formatAfterTaxPnL formats the after-tax P&L column. Returns "N/A" when
+// the value is zero (agent has no after-tax contribution or per-agent tax
+// allocation has not been computed).
+func formatAfterTaxPnL(v float64) string {
+	if v == 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.0f", v)
 }

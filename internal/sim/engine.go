@@ -238,7 +238,8 @@ func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.
 
 // RunWithState executes a simulation using an existing state, enabling multi-day backtests.
 func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
-	dayResult := e.RunDay(state, time.Time{}, regime, quotes, recs)
+	day := deriveSimDay(quotes)
+	dayResult := e.RunDay(state, day, regime, quotes, recs)
 	result := domain.SimulationResult{
 		Regime:         regime,
 		Orders:         dayResult.Orders,
@@ -822,6 +823,17 @@ func calculateSharpe(returns []float64) float64 {
 		Frequency:  portfolio.FrequencyPerDay,
 		MinSamples: 60,
 	})
+}
+
+// deriveSimDay extracts the trading day from the first quote's AsOf field.
+// Falls back to time.Time{} when quotes is empty (preserving pre-fix behavior).
+func deriveSimDay(quotes []domain.Quote) time.Time {
+	for _, q := range quotes {
+		if !q.AsOf.IsZero() {
+			return q.AsOf
+		}
+	}
+	return time.Time{}
 }
 
 func applyBPS(price, bps float64) float64 {
