@@ -69,10 +69,9 @@ var (
 // share. Using a single client ensures consistent proxy URL, shared HTTP
 // client, and one intraday rate-limiter token bucket across all call sites
 // (gateway channels, hybrid provider).
-// The authToken is used only on first call; subsequent calls ignore it.
-func GetSharedFubonClient(authToken string) *FubonClient {
+func GetSharedFubonClient() *FubonClient {
 	sharedFubonClientOnce.Do(func() {
-		sharedFubonClient = newFubonClient(authToken)
+		sharedFubonClient = newFubonClient()
 	})
 	return sharedFubonClient
 }
@@ -88,11 +87,11 @@ func ResetSharedFubonClient() {
 // NewFubonClient creates a standalone FubonClient with its own rate limiter.
 // Prefer GetSharedFubonClient in production to avoid multiple independent
 // token buckets that can collectively exceed the rate limit.
-func NewFubonClient(authToken string) *FubonClient {
-	return newFubonClient(authToken)
+func NewFubonClient() *FubonClient {
+	return newFubonClient()
 }
 
-func newFubonClient(authToken string) *FubonClient {
+func newFubonClient() *FubonClient {
 	params := config.GetParametersConfig()
 	return &FubonClient{
 		proxyURL:        fubonProxyBaseURL,

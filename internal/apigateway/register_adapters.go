@@ -44,7 +44,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		} else {
 			_ = conn.Close()
 			_ = conn.Close()
-			fubonClient := marketdata.NewFubonClient(fubonKey)
+			fubonClient := marketdata.GetSharedFubonClient()
 			fubonAdapter := NewFubonChannelAdapter(fubonClient)
 			g.registry.Register("fubon", fubonAdapter)
 			logging.Info("apigateway", "adapter_registered", "channel", "fubon")
