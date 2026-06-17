@@ -26,7 +26,12 @@ export const AGENT_NAME_MAP = {
   'super-asc-01': 'Aschenbrenner 超級投資者',
   'super-bak-01': 'Baker 超級投資者',
   'super-ack-01': 'Ackman 超級投資者',
-  'alpha_discovery': '阿爾法發現'
+  'alpha_discovery': '阿爾法發現',
+  'us-macro-spx-01': '美股 S&P 500 宏觀監控',
+  'us-macro-tech-01': '美股科技/半導體宏觀監控',
+  'us-crossmarket-01': '美台跨市場傳導監控',
+  'odm-channel-01': 'ODM 通道監控',
+  'odm-data-01': 'ODM 資料提供者'
 };
 
 export function agentName(id) { return AGENT_NAME_MAP[id] || id; }

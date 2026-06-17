@@ -1,9 +1,9 @@
 # Atlas 投資人 UI — 核心架構與設計原則
 
-**版本**: 2.0（拆分自 v1.0）  
-**日期**: 2026-06-02  
+**版本**: 2.1（拆分自 v1.0）  
+**日期**: 2026-06-17  
 **成熟度**: X（experimental）  
-**原始來源**: `atlas-investor-ui` v1.0（526 行）→ 拆分為 5 個聚焦技能
+**來源**: 原 `atlas-investor-ui` v1.0（526 行）→ 拆分為 5 個聚焦技能。相關 AI 技能見 `.claude/skills/robot-communication/`。
 
 ---
 

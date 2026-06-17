@@ -1,9 +1,9 @@
 # Atlas 投資人 TrustScore — 信任分數系統
 
-**版本**: 1.0  
-**日期**: 2026-06-02  
+**版本**: 1.1  
+**日期**: 2026-06-17  
 **成熟度**: X（experimental）  
-**父技能**: `atlas-investor-ui`
+**父文件**: `docs/investor-ui/investor-ui.md`
 
 ---
 
