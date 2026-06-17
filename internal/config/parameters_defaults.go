@@ -42,6 +42,32 @@ func DefaultParametersConfig() *ParametersConfig {
 		Tax:                  defaultTaxParameters(),
 		SectorAllocation:     deriveDefaultSectorAllocationConfig(),
 		Reporting:            deriveDefaultReportingConfig(),
+		ForwardReturn:        defaultForwardReturnParameters(),
+	}
+}
+
+func defaultForwardReturnParameters() ForwardReturnParameters {
+	return ForwardReturnParameters{
+		RiskOnMean: ParameterMetadata[float64]{
+			Value:     0.0008,
+			Rationale: "Risk-on regime expected positive daily drift on TWSE; long-term equity premium",
+			Source:    SourceHeuristic,
+		},
+		RiskOffMean: ParameterMetadata[float64]{
+			Value:     0.0001,
+			Rationale: "Risk-off regime near-zero drift reflects defensive positioning",
+			Source:    SourceHeuristic,
+		},
+		RiskOnStdDev: ParameterMetadata[float64]{
+			Value:     0.015,
+			Rationale: "Risk-on regime 1.5% daily vol matches typical TWSE large-cap",
+			Source:    SourceHeuristic,
+		},
+		RiskOffStdDev: ParameterMetadata[float64]{
+			Value:     0.008,
+			Rationale: "Risk-off regime 0.8% daily vol reflects compressed trading ranges",
+			Source:    SourceHeuristic,
+		},
 	}
 }
 

@@ -1255,6 +1255,7 @@ type ParametersConfig struct {
 	Tax                  TaxParameters                  `json:"tax,omitempty"`
 	SectorAllocation     SectorAllocationConfig         `json:"sector_allocation"`
 	Reporting            ReportingParameters            `json:"reporting"`
+	ForwardReturn        ForwardReturnParameters        `json:"forward_return,omitempty"`
 }
 
 // TaxParameters holds tunable Taiwan tax rates with full provenance tracking.
@@ -1262,6 +1263,13 @@ type TaxParameters struct {
 	DividendTaxRate    ParameterMetadata[float64] `json:"dividend_tax_rate"`
 	TransactionTaxRate ParameterMetadata[float64] `json:"transaction_tax_rate"`
 	NHISurchargeRate   ParameterMetadata[float64] `json:"nhi_surcharge_rate"`
+}
+
+type ForwardReturnParameters struct {
+	RiskOnMean    ParameterMetadata[float64] `json:"risk_on_mean"`
+	RiskOffMean   ParameterMetadata[float64] `json:"risk_off_mean"`
+	RiskOnStdDev  ParameterMetadata[float64] `json:"risk_on_std_dev"`
+	RiskOffStdDev ParameterMetadata[float64] `json:"risk_off_std_dev"`
 }
 
 // ToConfig converts TaxParameters to a domain.TaxConfig for use by tax calculators.

@@ -174,7 +174,7 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	oosResult, oosErr := j.oosValidator.ValidateWithBrief(candidatePromptPath, j.baselinePath, result.Brief, windowSummary.EndDate)
 	result.OOSResult = oosResult
 
-	accepted, acceptanceNote := j.passesAcceptance(result)
+	accepted, acceptanceNote := j.passesAcceptance(result, promptBytes)
 	result.JudgeChecks = append(result.JudgeChecks, acceptanceNote)
 	if result.Experiment.ApprovalID == "" {
 		result.Experiment.ApprovalID = "approval-" + result.Experiment.ID
@@ -331,7 +331,7 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 	return checks
 }
 
-func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
+func (j *Judge) passesAcceptance(result domain.PromptExperimentResult, promptBytes []byte) (bool, string) {
 	// Burn-in gate: do not judge experiments until statistical engines are reliable.
 	if j.maturityTracker != nil && j.maturityTracker.Current() == domain.MaturityBurnIn {
 		return false, fmt.Sprintf("rejected: burn_in mode (%d days until calibrating)",
@@ -514,6 +514,10 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 		case "retail_sentiment_filter":
 			if math.Abs(result.Brief.RSITwScore) >= 0.7 {
 				return false, fmt.Sprintf("rejected: extreme retail sentiment (%.2f) — noisy environment", result.Brief.RSITwScore)
+			}
+		case "respect_holding_period":
+			if !promptMentionsHoldingPeriod(string(promptBytes)) {
+				return false, "rejected: candidate prompt does not declare a holding period or max_holding_days constraint"
 			}
 		default:
 			return false, fmt.Sprintf("rejected: unknown gate %q", gate)
@@ -780,4 +784,13 @@ func (j *Judge) computeAndAttachImportance(result *domain.PromptExperimentResult
 	}
 
 	result.ImportanceResult = &imp
+}
+
+func promptMentionsHoldingPeriod(prompt string) bool {
+	lower := strings.ToLower(prompt)
+	return strings.Contains(lower, "holding_period") ||
+		strings.Contains(lower, "max_holding_days") ||
+		strings.Contains(lower, "holding days") ||
+		strings.Contains(lower, "max holding") ||
+		strings.Contains(lower, "exit_rule")
 }

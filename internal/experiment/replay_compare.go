@@ -311,6 +311,9 @@ func scoreSimulationResult(result domain.SimulationResult, nextQuotes []domain.Q
 	if startingCash == 0 {
 		return 0
 	}
+	if result.AfterTaxPnL != 0 || result.TotalTaxPaid != 0 {
+		return result.AfterTaxPnL / startingCash
+	}
 	quoteBySymbol := make(map[string]domain.Quote, len(nextQuotes))
 	for _, quote := range nextQuotes {
 		quoteBySymbol[quote.Symbol] = quote

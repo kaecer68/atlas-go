@@ -56,7 +56,11 @@ type sellDetail struct {
 }
 
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
-	return &Engine{constraints: constraints, ctx: context.Background()}
+	return &Engine{
+		constraints: constraints,
+		ctx:         context.Background(),
+		taxCalc:     tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig()),
+	}
 }
 
 // WithContext sets the root context for optimizer calls.
@@ -257,7 +261,7 @@ func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regim
 // RunDay executes a single trading day, updating state in-place.
 func (e *Engine) RunDay(
 	state *domain.SimulationState,
-	_ time.Time,
+	day time.Time,
 	regime domain.Regime,
 	quotes []domain.Quote,
 	recs []domain.Recommendation,
@@ -294,7 +298,7 @@ func (e *Engine) RunDay(
 
 	// 2. Sell logic
 	if e.constraints.SellLogicEnabled() {
-		sellOrders, sellDetails := e.executeSells(state, quoteBySymbol, recs, &fallbackEvents)
+		sellOrders, sellDetails := e.executeSells(state, quoteBySymbol, recs, &fallbackEvents, day)
 		orders = append(orders, sellOrders...)
 		for _, sd := range sellDetails {
 			state.RealizedPnL += float64(sd.Quantity) * (sd.ExecPrice - sd.AvgCost)
@@ -332,7 +336,7 @@ func (e *Engine) RunDay(
 					proceeds := float64(reduceQty) * q.Last
 					price := applyBPS(q.Last, -(slippageBPS + e.transactionCostBPS(proceeds)))
 					proceeds = float64(reduceQty) * price
-					state.Cash += proceeds
+					e.creditCashWithTPlus2Lock(state, proceeds, day)
 					state.Positions[i].Quantity -= reduceQty
 					state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * q.Last
 					state.RealizedPnL += float64(reduceQty) * (price - state.Positions[i].AverageCost)
@@ -356,8 +360,41 @@ func (e *Engine) RunDay(
 		}
 	}
 
+	if e.constraints.MaxHoldingDays > 0 {
+		kept := make([]domain.Position, 0, len(state.Positions))
+		for i := range state.Positions {
+			pos := &state.Positions[i]
+			if pos.Quantity <= 0 || pos.EntryDate.IsZero() {
+				kept = append(kept, *pos)
+				continue
+			}
+			heldDays := int(day.Sub(pos.EntryDate).Hours() / 24)
+			if heldDays <= e.constraints.MaxHoldingDays {
+				kept = append(kept, *pos)
+				continue
+			}
+			q, ok := quoteBySymbol[pos.Symbol]
+			if !ok || !q.IsTradable {
+				kept = append(kept, *pos)
+				continue
+			}
+			slippageBPS := e.getSlippageBPS(pos.Symbol, quoteBySymbol, &fallbackEvents)
+			price := applyBPS(q.Last, -(slippageBPS + e.transactionCostBPS(float64(pos.Quantity)*q.Last)))
+			proceeds := float64(pos.Quantity) * price
+			e.creditCashWithTPlus2Lock(state, proceeds, day)
+			state.RealizedPnL += float64(pos.Quantity) * (price - pos.AverageCost)
+			orders = append(orders, domain.Order{
+				Symbol: pos.Symbol, Side: domain.SideSell, Quantity: pos.Quantity, Price: price, Reason: "max_holding_days",
+			})
+			trades = append(trades, domain.TradeRecord{
+				Symbol: pos.Symbol, Side: domain.SideSell, Quantity: pos.Quantity, Price: price, Amount: proceeds, Reason: "max_holding_days",
+			})
+		}
+		state.Positions = kept
+	}
+
 	// 3. Buy logic
-	buyOrders, newPositions := e.executeBuys(state.Cash, state.Positions, quoteBySymbol, recs, regime, &fallbackEvents)
+	buyOrders, newPositions := e.executeBuys(state.AvailableCash(day), state.Positions, quoteBySymbol, recs, regime, &fallbackEvents, day)
 	orders = append(orders, buyOrders...)
 	for _, o := range buyOrders {
 		trades = append(trades, domain.TradeRecord{
@@ -423,11 +460,20 @@ func (e *Engine) transactionCostBPS(notional float64) float64 {
 	return e.constraints.TransactionCostBPS
 }
 
+func (e *Engine) creditCashWithTPlus2Lock(state *domain.SimulationState, amount float64, day time.Time) {
+	state.Cash += amount
+	state.LockedCash = append(state.LockedCash, domain.LockedCashEntry{
+		UnlockDay: day.AddDate(0, 0, 2),
+		Amount:    amount,
+	})
+}
+
 func (e *Engine) executeSells(
 	state *domain.SimulationState,
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
 	fallbackEvents *[]string,
+	day time.Time,
 ) ([]domain.Order, []sellDetail) {
 	remaining := make([]domain.Position, 0, len(state.Positions))
 	var orders []domain.Order
@@ -446,7 +492,7 @@ func (e *Engine) executeSells(
 			notional := float64(pos.Quantity) * quote.Last
 			price := applyBPS(quote.Last, -(slippageBPS + e.transactionCostBPS(notional)))
 			proceeds := float64(pos.Quantity) * price
-			state.Cash += proceeds
+			e.creditCashWithTPlus2Lock(state, proceeds, day)
 			orders = append(orders, domain.Order{
 				Symbol:   pos.Symbol,
 				Side:     domain.SideSell,
@@ -548,14 +594,15 @@ func (e *Engine) executeBuys(
 	recs []domain.Recommendation,
 	regime domain.Regime,
 	fallbackEvents *[]string,
+	day time.Time,
 ) ([]domain.Order, []domain.Position) {
 	if e.preTradeGate != nil {
 		recs = e.filterByPreTradeGate(cash, existingPositions, recs)
 	}
 	if e.useOptimizer && e.optimizer != nil {
-		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
+		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day)
 	}
-	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
+	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day)
 }
 
 func (e *Engine) executeOptimizerBuys(
@@ -565,6 +612,7 @@ func (e *Engine) executeOptimizerBuys(
 	recs []domain.Recommendation,
 	regime domain.Regime,
 	fallbackEvents *[]string,
+	day time.Time,
 ) ([]domain.Order, []domain.Position) {
 	orders, err := e.optimizer.OptimizeToOrders(e.ctx, recs, quoteBySymbol, cash)
 	if err != nil {
@@ -579,7 +627,7 @@ func (e *Engine) executeOptimizerBuys(
 				"rec_cnt": len(recs),
 			})
 		}
-		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
+		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day)
 	}
 
 	positions := clonePositions(existingPositions)
@@ -646,7 +694,7 @@ func (e *Engine) executeOptimizerBuys(
 			CurrentPrice:  quote.Last,
 			MarketValue:   float64(quantity) * quote.Last,
 			UnrealizedPnL: 0,
-		})
+		}, day)
 	}
 
 	return filteredOrders, positions
@@ -659,6 +707,7 @@ func (e *Engine) executeLegacyBuys(
 	recs []domain.Recommendation,
 	regime domain.Regime,
 	fallbackEvents *[]string,
+	day time.Time,
 ) ([]domain.Order, []domain.Position) {
 	positions := clonePositions(existingPositions)
 	orders := make([]domain.Order, 0)
@@ -729,13 +778,13 @@ func (e *Engine) executeLegacyBuys(
 			CurrentPrice:  quote.Last,
 			MarketValue:   float64(quantity) * quote.Last,
 			UnrealizedPnL: 0,
-		})
+		}, day)
 	}
 
 	return orders, positions
 }
 
-func appendOrUpdatePosition(positions []domain.Position, newPos domain.Position) []domain.Position {
+func appendOrUpdatePosition(positions []domain.Position, newPos domain.Position, day time.Time) []domain.Position {
 	for i := range positions {
 		if positions[i].Symbol == newPos.Symbol {
 			totalQty := positions[i].Quantity + newPos.Quantity
@@ -748,6 +797,7 @@ func appendOrUpdatePosition(positions []domain.Position, newPos domain.Position)
 			return positions
 		}
 	}
+	newPos.EntryDate = day
 	return append(positions, newPos)
 }
 
