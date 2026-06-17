@@ -10,7 +10,52 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
+
+// costAdjustedOutcomes builds a synthetic outcome slice with mixed forward returns
+// designed to verify the cost-adjusted win-rate threshold. Uses defaultWinRateThreshold
+// (with small epsilons) so tests track the live config value automatically.
+func costAdjustedOutcomes(agentID string) []domain.RecommendationOutcome {
+	// Above threshold (long-tail distribution): 0.0025 down to threshold+0.0005/0.0001
+	// using defaultWinRateThreshold-derived bounds to avoid hardcoded magic numbers.
+	t := defaultWinRateThreshold
+	positivesAbove := []float64{
+		0.05, 0.045, 0.04, 0.035, 0.03, 0.025, 0.02, 0.015, 0.012, 0.01,
+		0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003, 0.0025, t + 0.0005, t + 0.0001,
+	}
+	// Below threshold (small positive but not profitable after costs)
+	positivesBelow := []float64{
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
+		0.0001, 0.0002, 0.0003,
+	}
+	negatives := []float64{
+		-0.05, -0.045, -0.04, -0.035, -0.03, -0.025,
+		-0.02, -0.015, -0.01, -0.005, -0.003, -0.001,
+	}
+
+	skill, layer := "", shared.AgentLayer("")
+	if agentID != "" {
+		skill = "tech"
+		layer = shared.LayerSector
+	}
+
+	out := make([]domain.RecommendationOutcome, 0, len(positivesAbove)+len(positivesBelow)+len(negatives))
+	appendRange := func(rs []float64) {
+		for _, r := range rs {
+			out = append(out, domain.RecommendationOutcome{
+				AgentID: agentID, Skill: skill, Layer: layer,
+				ForwardReturn: r, PassedGuards: true,
+			})
+		}
+	}
+	appendRange(positivesAbove)
+	appendRange(positivesBelow)
+	appendRange(negatives)
+	return out
+}
 
 func TestGenerateReport_EmptyLedger(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -320,31 +365,7 @@ func TestCalculateTradeMetrics_ProfitFactorZeroLosses(t *testing.T) {
 }
 
 func TestCalculateTradeMetrics_CostAdjustedThreshold(t *testing.T) {
-	positivesAbove := []float64{
-		0.05, 0.045, 0.04, 0.035, 0.03, 0.025, 0.02, 0.015, 0.012, 0.01,
-		0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003, 0.0025, 0.0021, 0.00201,
-	}
-	positivesBelow := []float64{
-		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
-		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
-		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
-		0.0001, 0.0002, 0.0003,
-	}
-	negatives := []float64{
-		-0.05, -0.045, -0.04, -0.035, -0.03, -0.025,
-		-0.02, -0.015, -0.01, -0.005, -0.003, -0.001,
-	}
-
-	var outcomes []domain.RecommendationOutcome
-	for _, r := range positivesAbove {
-		outcomes = append(outcomes, domain.RecommendationOutcome{ForwardReturn: r, PassedGuards: true})
-	}
-	for _, r := range positivesBelow {
-		outcomes = append(outcomes, domain.RecommendationOutcome{ForwardReturn: r, PassedGuards: true})
-	}
-	for _, r := range negatives {
-		outcomes = append(outcomes, domain.RecommendationOutcome{ForwardReturn: r, PassedGuards: true})
-	}
+	outcomes := costAdjustedOutcomes("")
 
 	winRate, totalTrades, realTrades, syntheticTrades, _, _, _ := calculateTradeMetrics(outcomes)
 
@@ -357,44 +378,20 @@ func TestCalculateTradeMetrics_CostAdjustedThreshold(t *testing.T) {
 	if syntheticTrades != 0 {
 		t.Errorf("expected 0 synthetic trades, got %d", syntheticTrades)
 	}
-	expectedWinRate := float64(len(positivesAbove)) / float64(totalTrades)
+	expectedWinRate := 20.0 / 50.0 // len(positivesAbove)=20 of totalTrades=50
 	if math.Abs(winRate-expectedWinRate) > 1e-9 {
 		t.Errorf("expected win rate %.4f with cost-adjusted threshold, got %.4f", expectedWinRate, winRate)
 	}
 }
 
 func TestCalculateTopAgents_CostAdjustedThreshold(t *testing.T) {
-	positivesAbove := []float64{
-		0.05, 0.045, 0.04, 0.035, 0.03, 0.025, 0.02, 0.015, 0.012, 0.01,
-		0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003, 0.0025, 0.0021, 0.00201,
-	}
-	positivesBelow := []float64{
-		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
-		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
-		0.0001, 0.0002, 0.0003, 0.0004, 0.0005,
-		0.0001, 0.0002, 0.0003,
-	}
-	negatives := []float64{
-		-0.05, -0.045, -0.04, -0.035, -0.03, -0.025,
-		-0.02, -0.015, -0.01, -0.005, -0.003, -0.001,
-	}
-
-	var outcomes []domain.RecommendationOutcome
-	for _, r := range positivesAbove {
-		outcomes = append(outcomes, domain.RecommendationOutcome{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: r, PassedGuards: true})
-	}
-	for _, r := range positivesBelow {
-		outcomes = append(outcomes, domain.RecommendationOutcome{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: r, PassedGuards: true})
-	}
-	for _, r := range negatives {
-		outcomes = append(outcomes, domain.RecommendationOutcome{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: r, PassedGuards: true})
-	}
+	outcomes := costAdjustedOutcomes("agent-a")
 
 	agents := calculateTopAgents(outcomes, nil)
 	if len(agents) != 1 {
 		t.Fatalf("expected 1 agent, got %d", len(agents))
 	}
-	expectedWinRate := float64(len(positivesAbove)) / float64(len(outcomes))
+	expectedWinRate := 20.0 / 50.0 // len(positivesAbove)=20 of total=50
 	if math.Abs(agents[0].WinRate-expectedWinRate) > 1e-9 {
 		t.Errorf("expected agent win rate %.4f with cost-adjusted threshold, got %.4f", expectedWinRate, agents[0].WinRate)
 	}

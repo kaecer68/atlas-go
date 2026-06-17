@@ -113,6 +113,31 @@
         }
       }
     },
+    "/api/dashboard/agent-names": {
+      "get": {
+        "summary": "Agent display name registry (single source of truth)",
+        "description": "Returns agent_id → display_name map from configs/agents.json. Frontend uses this to resolve mixed Chinese/English names consistently. Empty map (200) returned if file missing (graceful degradation).",
+        "responses": {
+          "200": {
+            "description": "Agent name registry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "example": {
+                    "technical-elliott-01": "技術分析 — Elliott Wave",
+                    "macro-flow-01": "宏觀資金流"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/report/latest": {
       "get": {
         "summary": "Get the latest backtest report",
@@ -836,7 +861,9 @@
             "type": "number"
           },
           "sharpe_like": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Sharpe-like ratio. null when sample count < Reporting.SharpeMinSamples (default 5) or standard deviation is zero (insufficient data). Frontend renders as 'N/A'."
           },
           "max_drawdown": {
             "type": "number"

@@ -1,5 +1,46 @@
 # Changelog
 
+## [Unreleased] - 2026-06-17
+
+### Breaking Changes — Performance Report Data Accuracy (PR #562)
+
+**AgentContribution.sharpe_like: `float64` → `*float64`**:
+- `null` when sample count < `Reporting.SharpeMinSamples` (default 5) OR standard deviation is zero.
+- Frontend renders `null` as `"N/A"` instead of misleading `0.00`.
+- External API consumers expecting `0` should handle `null` going forward.
+
+**AgentContribution.total_return & RegimePerformance.total_return → `aggregate_forward_return`**:
+- Renamed to clarify semantic difference from portfolio MTM total_return.
+- New field is the sum of per-recommendation `ForwardReturn` values for the cohort.
+- Different metric with same name would be a footgun — explicit rename prevents confusion.
+- Frontend column header changed from "Total Return" to "Forward Return (Σ)".
+
+### Added
+
+- **GET `/api/dashboard/agent-names`** — agent display name registry endpoint (single source of truth).
+  - Returns `agent_id → display_name` map from `configs/agents.json`.
+  - Empty `{}` returned with 200 if file missing (graceful degradation).
+  - Frontend uses this to resolve mixed Chinese/English agent names consistently.
+  - **Migration**: Replace hardcoded name lookups in `web/static/js/components/performance-report.js` with calls to this endpoint. Existing `names.js` and `constants.js` maps are deprecated.
+
+- **`Reporting` config sub-struct** in `ParametersConfig`:
+  - `Reporting.WinRateThreshold.Value` (default `0.002` = 20 bps).
+  - `Reporting.SharpeMinSamples.Value` (default `5`).
+  - Validation in `Validate()`: `WinRateThreshold` must be in (0, 1).
+
+### Changed
+
+- **Win-rate calculation** in `internal/reporting/performance.go`:
+  - Old: `ForwardReturn > 0` (no cost threshold → inflates win rate during bull markets).
+  - New: `ForwardReturn > Reporting.WinRateThreshold` (cost-adjusted).
+  - Applied to `calculateTradeMetrics`, `calculateTopAgents`, `calculateRegimeBreakdown`.
+
+- **`internal/reporting/AGENTS.md`**: Dependency contract updated to allow `internal/config` for threshold lookup.
+
+### Documentation
+
+- Updated 4 stale docs: `AUDIT_REPORT_MACRO_TO_INVESTMENT_MODEL.md`, `docs/portfolio_frontend_audit_report_2026-05.md`, `docs/warmup_auto_evolution_todo.md`, `docs/superpowers/handoff/2026-05-22-handoff-to-new-session.md`.
+
 ## [0.0.0.4] - 2026-06-15
 
 ### Fixed — Pipeline Data Visibility (6 commits, P0-P2)

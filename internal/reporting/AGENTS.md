@@ -17,7 +17,7 @@
    - `RenderMutationSummary` — 變異統計段落
    - `BuildAgentRows` — `[]domain.Scorecard` → `[]AgentPerformanceRow`
 3. **純函數原則**：所有渲染函式不接受 `io.Writer`，只回傳 `string`
-4. **無外部依賴**：僅使用 `internal/domain`，不使用模板引擎
+4. **無外部依賴**：僅使用 `internal/domain` 與 `internal/config`（讀取 `ParametersConfig.Reporting` 閾值），不使用模板引擎
 
 ## 欄位完整性契約
 

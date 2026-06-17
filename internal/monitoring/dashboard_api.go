@@ -501,6 +501,37 @@ func (a *DashboardAPI) SetContext(ctx context.Context) {
 	}
 }
 
+// handleAgentNames returns the agent_id → display_name map from configs/agents.json
+// as the single source of truth for frontend display name resolution. Missing file
+// is treated as an empty registry (200 + `{}`); parse errors return 500 with a
+// sanitized message that does not leak filesystem paths.
+func (a *DashboardAPI) handleAgentNames(w http.ResponseWriter, r *http.Request) {
+	agentsPath := filepath.Join(a.workDir, "configs", "agents.json")
+	data, err := os.ReadFile(agentsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		http.Error(w, "failed to read agent registry", http.StatusInternalServerError)
+		return
+	}
+	var reg domain.AgentRegistry
+	if err := json.Unmarshal(data, &reg); err != nil {
+		http.Error(w, "failed to parse agent registry", http.StatusInternalServerError)
+		return
+	}
+	names := make(map[string]string, len(reg.Agents))
+	for _, ag := range reg.Agents {
+		names[ag.ID] = ag.Name
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(names)
+}
+
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
@@ -764,32 +795,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	// Agent display name registry (single source of truth; replaces competing
 	// frontend static maps that previously missed 6 agents).
-	mux.HandleFunc("/api/dashboard/agent-names", func(w http.ResponseWriter, r *http.Request) {
-		agentsPath := filepath.Join(a.workDir, "configs", "agents.json")
-		data, err := os.ReadFile(agentsPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(`{}`))
-				return
-			}
-			http.Error(w, fmt.Sprintf("read agents: %v", err), http.StatusInternalServerError)
-			return
-		}
-		var reg domain.AgentRegistry
-		if err := json.Unmarshal(data, &reg); err != nil {
-			http.Error(w, fmt.Sprintf("parse agents: %v", err), http.StatusInternalServerError)
-			return
-		}
-		names := make(map[string]string, len(reg.Agents))
-		for _, ag := range reg.Agents {
-			names[ag.ID] = ag.Name
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(names)
-	})
+	mux.HandleFunc("/api/dashboard/agent-names", a.handleAgentNames)
 
 	swarmSvc := service.NewSwarmService(filepath.Join(a.workDir, "data/state/swarm_latest.json"))
 	swarmSvc.SetTrainingDir(filepath.Join(a.workDir, "data/state/swarm_training"))
