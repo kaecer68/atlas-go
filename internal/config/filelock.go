@@ -59,10 +59,7 @@ func (fl *FileLocker) TryLock(timeout time.Duration) (func(), error) {
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
-	for {
-		if fl.mu.TryLock() {
-			break
-		}
+	for !fl.mu.TryLock() {
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("failed to acquire lock within %v: %w", timeout, ctx.Err())
