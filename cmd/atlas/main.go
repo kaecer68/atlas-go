@@ -611,6 +611,34 @@ func run(args []string, deps appDeps) error {
 				params.RuleEngineIntervalSec.Value)
 		}
 
+		// Wire cross-market degraded-data detection into the unified alert+health
+		// pipeline (Fix 5 — Option B full alerting). The callback avoids circular
+		// imports by running in main.go where both gateway.Health() and monitor
+		// are accessible.
+		if gateway != nil && monitor != nil {
+			if svc := dashboard.GetCrossMarketService(); svc != nil {
+				svc.SetDegradedCallback(func(status string, failed []string) {
+					if status != "degraded" || len(failed) == 0 {
+						return // recovery or false alarm; no action needed
+					}
+					// Record per-channel degraded status in the same
+					// UnifiedHealthStore used by Gateway.Fetch.
+					for _, ch := range failed {
+						_ = gateway.Health().Record(ch, "degraded",
+							"detectDegradedUSStatus: data missing or zero-value in macro snapshot")
+					}
+					// Surface as user-visible alert.
+					monitor.Warning("crossmarket",
+						fmt.Sprintf("美台連動數據降級: %d 個通道失敗 (%v)", len(failed), failed),
+						map[string]any{
+							"data_status":     status,
+							"failed_channels": failed,
+						})
+				})
+				log.Printf("[CrossMarket] degraded-data callback wired to UnifiedHealthStore + Monitor")
+			}
+		}
+
 		subFS, err := fs.Sub(web.DistFS, "dist")
 		if err != nil {
 			log.Fatalf("failed to get dist sub FS: %v", err)
@@ -1154,7 +1182,8 @@ func run(args []string, deps appDeps) error {
 							{Symbol: "VIX", Price: snap.VIX.Value, Timestamp: now},
 						}
 						if snap.SPXIndex.Value > 0 {
-							points = append(points,
+							points = append(
+								points,
 								realtime.MarketDataPoint{Symbol: "SPX", Price: snap.SPXIndex.Value, Timestamp: now},
 								realtime.MarketDataPoint{Symbol: "NDX", Price: snap.NDXIndex.Value, Timestamp: now},
 							)

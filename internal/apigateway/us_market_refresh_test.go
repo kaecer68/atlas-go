@@ -7,17 +7,18 @@ import (
 
 func TestUSMarketChannels(t *testing.T) {
 	channels := USMarketChannels()
-	if len(channels) != 7 {
-		t.Errorf("len(USMarketChannels) = %d, want 7", len(channels))
+	if len(channels) != 8 {
+		t.Errorf("len(USMarketChannels) = %d, want 8", len(channels))
 	}
 	expected := map[string]bool{
-		"us_spx":  true,
-		"us_ndx":  true,
-		"us_dji":  true,
-		"us_nvda": true,
-		"us_aapl": true,
-		"us_msft": true,
-		"tsm_adr": true,
+		"us_spx":    true,
+		"us_ndx":    true,
+		"us_dji":    true,
+		"sox_index": true,
+		"us_nvda":   true,
+		"us_aapl":   true,
+		"us_msft":   true,
+		"tsm_adr":   true,
 	}
 	for _, ch := range channels {
 		if !expected[ch] {
@@ -42,7 +43,7 @@ func TestNewUSMarketRefreshTask_ExecutesWithoutPanic(t *testing.T) {
 	g := newTestGateway(t)
 	task := NewUSMarketRefreshTask(g)
 	// The task will attempt to fetch each channel; without adapters registered
-	// all 7 will fail, but the function should not panic and should return nil
+	// all 8 will fail, but the function should not panic and should return nil
 	err := task(context.Background())
 	if err != nil {
 		t.Errorf("task returned error: %v", err)

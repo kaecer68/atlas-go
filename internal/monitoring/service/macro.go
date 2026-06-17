@@ -199,6 +199,9 @@ func (s *MacroService) GetMacroDataHealth() (*MacroDataHealthResponse, error) {
 		case now.Unix()-item.pt.Timestamp > 86400:
 			h.Status = "warn"
 			h.StatusText = fmt.Sprintf("資料待更新 (%d 小時前)", (now.Unix()-item.pt.Timestamp)/3600)
+		case item.pt.Value == 0:
+			h.Status = "error"
+			h.StatusText = "數值異常 — 資料提供者回傳零值"
 		case math.Abs(item.pt.ChangePct) < 1e-9 && item.pt.Value > 0:
 			// 僅在時間戳記遺失或超過 24 小時時才標記為異常。
 			// 近期資料的零變動為正當情況（首次執行或市場持平）。

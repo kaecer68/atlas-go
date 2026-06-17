@@ -23,7 +23,7 @@ function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey, failed)
   const clickable = helpKey ? ` clickable" onclick="openKpiHelp('${helpKey}')` : '';
   let display;
   if (failed) {
-    display = `<span class="cm-data-failed" style="color:var(--color-danger);font-size:var(--text-sm);font-weight:600">資料獲取失敗</span>`;
+    display = `<span class="cm-data-failed">資料獲取失敗</span>`;
   } else {
     display = fmt ? fmt(value) : (value != null ? String(value) : '—');
   }
@@ -52,10 +52,10 @@ function fmtTs(v) {
 function getField(status, key) {
   const raw = status[key];
   if (raw && typeof raw === 'object') {
-    // A field is "failed" when the symbol is empty (Layer 4 of the
-    // data-visibility safeguard — surface channel failures instead of
-    // silently rendering 0).
-    const failed = !raw.symbol || raw.symbol === '';
+    // A field is "failed" when the symbol is empty or the value is ≤ 0
+    // (Layer 4 of the data-visibility safeguard — surface channel failures
+    // and garbage/zero data instead of silently rendering 0).
+    const failed = !raw.symbol || raw.symbol === '' || (raw.value != null && Number(raw.value) <= 0);
     return {
       value: raw.value,
       changePct: raw.change_pct,
@@ -211,10 +211,10 @@ function renderDegradedBanner(status) {
     ? failed.map(ch => `<code style="background:var(--panel-l2);padding:2px 6px;border-radius:3px;margin:0 2px">${escapeHtml(ch)}</code>`).join('')
     : '<em>(部分美國市場通道)</em>';
 
-  const html = `<div class="cm-degraded-banner" style="background:color-mix(in srgb, var(--color-warning) 12%, transparent);border:1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:var(--text-base)">
-    <strong style="color:var(--color-warning)">⚠ 部分美國市場資料獲取失敗</strong>
-    <div style="margin-top:6px;color:var(--text)">以下通道回傳失敗,相關卡片已標示 <span style="color:var(--color-danger);font-weight:600">資料獲取失敗</span>: ${failedList}</div>
-    <div style="margin-top:6px;color:var(--muted);font-size:var(--text-sm)">系統已記錄 degraded 狀態,後續 fetch 成功將自動恢復。</div>
+  const html = `<div class="cm-degraded-banner">
+    <strong>⚠ 部分美國市場資料獲取失敗</strong>
+    <div class="cm-failed-list">以下通道回傳失敗,相關卡片已標示 <span style="color:var(--color-danger);font-weight:600">資料獲取失敗</span>: ${failedList}</div>
+    <div class="cm-failed-recovery">系統已記錄 degraded 狀態,後續 fetch 成功將自動恢復。</div>
   </div>`;
 
   const firstGrid = document.querySelector('#cm-us-indices');

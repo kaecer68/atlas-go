@@ -69,7 +69,7 @@ type CrossMarketStatus struct {
 	CorrelationSPXVIX   *float64 `json:"correlation_spx_vix"`
 
 	// Data visibility (Layer 3 of data-visibility safeguard).
-	// DataStatus is "ok" when all 8 US index/tech fields have real data,
+	// DataStatus is "ok" when all 10 US index/tech/macro fields have real data,
 	// "degraded" when at least one is missing. FailedChannels lists the
 	// specific channelIDs that returned empty (frontend uses this to
 	// render error badges).
@@ -114,6 +114,16 @@ type USIndicesResponse struct {
 type CrossMarketService struct {
 	provider marketdata.MacroDataProvider
 
+	// degradedCallback is called when detectDegradedUSStatus returns
+	// "degraded". In production this is wired in main.go to call both
+	// gateway.Health().Record() (per-channel) and monitor.Warning()
+	// (user-visible alert) — Option B full alerting.
+	// callbackMu protects degradedCallback reads/writes and last-degraded state.
+	callbackMu         sync.Mutex
+	degradedCallback   func(string, []string)
+	lastDegradedStatus string   // previous status string ("ok"/"degraded")
+	lastFailedChannels []string // previous failed channel list for dedup
+
 	// cacheMu + cachedSnapshot + cacheTime implement a TTL cache for
 	// FetchSnapshot, preventing the 2x redundant ~15-20s HTTP cascade
 	// when GetStatus and GetUSIndices are called concurrently.
@@ -139,7 +149,15 @@ type CrossMarketService struct {
 	rollingSPXVIX *globalmarket.RollingCorrelation
 }
 
-// NewCrossMarketService creates a cross-market service backed by the composite provider.
+// SetDegradedCallback injects a handler called when detectDegradedUSStatus
+// finds degraded data. Production wiring in main.go routes this to both
+// gateway.Health().Record() (per-channel) and monitor.Warning() (user-visible alert).
+func (s *CrossMarketService) SetDegradedCallback(cb func(string, []string)) {
+	s.callbackMu.Lock()
+	defer s.callbackMu.Unlock()
+	s.degradedCallback = cb
+}
+
 func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketService {
 	return &CrossMarketService{
 		provider:        provider,
@@ -186,6 +204,26 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	if err == nil {
 		status, failed := detectDegradedUSStatus(snap)
 		meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed}
+
+		// Debounce: only fire callback on state transition
+		// (ok↔degraded) or when the failed-channel list changes.
+		// Without this, the callback fires on EVERY cache refresh
+		// (~30s) while the snapshot is degraded — producing duplicate
+		// health.Record() calls and alert spam.
+		s.callbackMu.Lock()
+		cb := s.degradedCallback
+		prevStatus := s.lastDegradedStatus
+		prevFailed := s.lastFailedChannels
+		changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed)
+		shouldFire := cb != nil && status == "degraded" && (changed || prevStatus == "")
+		if changed || prevStatus == "" {
+			s.lastDegradedStatus = status
+			s.lastFailedChannels = failed
+		}
+		s.callbackMu.Unlock()
+		if shouldFire {
+			cb(status, failed)
+		}
 
 		s.cacheMu.Lock()
 		s.cachedSnapshot = &snap
@@ -355,14 +393,15 @@ func toIndex(dp marketdata.MacroDataPoint) CrossMarketIndex {
 }
 
 // detectDegradedUSStatus returns the data status and list of failed channels
-// for the 8 US index/tech fields in MacroDataSnapshot. A field is "failed"
-// when its Symbol is empty (meaning the channel returned an error or no data).
+// for the 10 US index/tech/macro fields in MacroDataSnapshot. A field is "failed"
+// when its Symbol is empty (meaning the channel returned an error or no data)
+// or its Value is ≤ 0 (meaning the provider returned garbage/zero data).
 //
 // This is Layer 3 of the 4-layer data-visibility safeguard
 // (see .claude/skills/atlas-data-visibility/SKILL.md).
 //
 // Returns:
-//   - "ok" + nil when all 8 fields are populated
+//   - "ok" + nil when all 10 fields are populated and non-zero
 //   - "degraded" + list of failed channelIDs otherwise
 func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot) (string, []string) {
 	failed := []string{}
@@ -378,9 +417,11 @@ func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot) (string, []string
 		{"us_aapl", snap.AAPL},
 		{"us_msft", snap.MSFT},
 		{"tsm_adr", snap.TSMADR},
+		{"us10y", snap.US10Y},
+		{"vix", snap.VIX},
 	}
 	for _, c := range checks {
-		if c.point.Symbol == "" {
+		if c.point.Symbol == "" || c.point.Value <= 0 {
 			failed = append(failed, c.channelID)
 		}
 	}
@@ -388,6 +429,21 @@ func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot) (string, []string
 		return "ok", nil
 	}
 	return "degraded", failed
+}
+
+// stringSlicesEqual reports whether two string slices have identical
+// elements in the same order. Both nil and empty slices are treated as
+// equivalent (len == 0 comparison).
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // snapshotStatusMeta is the per-fetch degraded-status metadata co-cached
