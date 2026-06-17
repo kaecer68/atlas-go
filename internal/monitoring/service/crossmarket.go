@@ -210,7 +210,7 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	snap, err := s.provider.FetchSnapshot(ctx)
 	if err != nil {
 		if s.degradedMetrics != nil {
-			s.degradedMetrics.ProviderErrors.WithLabelValues("crossmarket", err.Error()).Inc()
+			s.degradedMetrics.ProviderErrors.WithLabelValues("crossmarket", classifyErrorSeverity(err.Error())).Inc()
 		}
 		return snap, nil, err
 	}
