@@ -43,7 +43,7 @@ git pull origin feat/portfolio-audit-phase6-10
 | `internal/autobacktest/signals.go` | NewSignalEngine 改為 (*, error) 消除 panic |
 | `internal/autobacktest/runner.go` | 同上，更新呼叫者 |
 | `internal/monitoring/api/backtest/handlers.go` | 同上 |
-| `web/static/js/names.js` | leo_satellite: '低軌衛星' |
+| `/api/dashboard/agent-names`（取代 `web/static/js/names.js`，2026-06） | leo_satellite: '低軌衛星' |
 | `internal/monitoring/api/control/handlers.go` | approve/reject 儲存 agent_id:symbol 組合鍵 |
 | `internal/monitoring/service/control.go` | CreateIntervention 解析組合鍵 |
 

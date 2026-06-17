@@ -123,17 +123,11 @@ if oc.ForwardReturn > 0 { wins++ }
 
 ### 2.6 Sharpe-like（Agent）計算 ⚠️ 非標準 Sharpe
 
-**檔案**: `internal/reporting/performance.go:486-506`
+**檔案**: `internal/reporting/performance.go`（calculateTopAgents 透過 `portfolio.ComputeSharpe`，SharpeMinSamples 預設 5，SharpeLike 為 *float64）
 
-```go
-func calculateSharpeLike(returns []float64) float64 {
-    mean := sum(returns) / N
-    variance := sum((r - mean)^2) / N
-    return mean / (variance + 1e-9)
-}
-```
+**當前實作（2026-06 更新）**: 自 PR #558 起，`calculateSharpeLike` 已被 `portfolio.ComputeSharpe`（`internal/domain/shared/sharpe.go`）取代。MinSamples 預設 5（原 60 過於嚴苛，導致 99% 樣本被丟棄）。樣本不足時 SharpeLike 回傳 nil，前端顯示 "N/A"；stdDev==0 時亦回傳 nil。WinRate 閾值改為成本調整 0.2%（`reporting.win_rate_threshold`，`internal/config/parameters.go`）。
 
-**問題**: 此函數計算 `mean / variance`（變異數倒數），而非標準 Sharpe ratio（`mean / stdDev * sqrt(N)`）。雖然前端標籤為「Sharpe-like」而非「Sharpe」，但計算方式與傳統 Sharpe 有本質差異——前者對波動率的懲罰是平方關係，後者是線性關係。
+**歷史背景**: 舊版本確實是 `mean / variance`（PR #562 review #12 指出），現已改為標準 `mean / stdDev * sqrt(N)` 形式（`portfolio.ComputeSharpe`）。
 
 **比較**:
 - 標準 Sharpe: `mean / stdDev` → 報酬每單位風險

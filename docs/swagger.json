@@ -41,6 +41,41 @@
         }
       }
     },
+    "/api/dashboard/agent-names": {
+      "get": {
+        "summary": "Agent display-name registry",
+        "description": "Returns the agent display-name registry from configs/agents.json. Single source of truth for the performance-report frontend, replacing two competing static maps (web/static/js/names.js and web/static/js/shared/constants.js). Returns an empty agents array when the registry file is absent (graceful degradation).",
+        "responses": {
+          "200": {
+            "description": "Agent registry response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string", "description": "Agent identifier (e.g. 'foreign-flow-01')"},
+                          "name": {"type": "string", "description": "Human-readable display name (e.g. '外資流向追蹤')"},
+                          "skill": {"type": "string", "description": "Agent skill category"},
+                          "layer": {"type": "string", "description": "Agent layer (sector / stock / etc.)"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error (registry parse failure)"
+          }
+        }
+      }
+    },
     "/api/dashboard/agent-observatory": {
       "get": {
         "summary": "Agent performance scorecards",

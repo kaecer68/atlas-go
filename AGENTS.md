@@ -68,7 +68,7 @@ go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | g
 | `internal/swarm/` | MiroFish swarm 模擬 | 直接讀碼 |
 | `internal/industry/` | 產業分析（輪動、供給需求、季節性、週期） | `internal/industry/AGENTS.md` |
 | `internal/monitoring/` | Dashboard API、監控、人工干預入口 | `internal/monitoring/AGENTS.md` |
-| `internal/config/` | 環境變數、ParametersConfig | 直接讀碼 |
+| `internal/config/` | 環境變數、ParametersConfig（含 `ReportingParameters` 0.0.0.5：`win_rate_threshold`、`sharpe_min_samples`） | 直接讀碼 |
 | `internal/db/` | PostgreSQL 連接管理 | 直接讀碼 |
 | `internal/eventbus/` | 事件匯流排 | `internal/eventbus/AGENTS.md` |
 | `internal/spawning/` | Agent 生成管理 | `internal/spawning/AGENTS.md` |

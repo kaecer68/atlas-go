@@ -66,7 +66,7 @@ git diff --stat  # parameters.json 不應出現在變更列表中
 - Darwinian weights：`internal/portfolio/darwinian_weights.go:RecordOutcome()`、`UpdateRollingSharpe()`
 
 **關鍵約束**：
-- `SharpeMinSampleSize = 60`（`internal/config/parameters_defaults.go`）
+- `Reporting.SharpeMinSamples = 5`（`internal/config/parameters.go`，2026-06 自 60 降低；可由 `reporting.sharpe_min_samples` 設定）
 - `RecordOutcome(agentID, forwardReturn, isHit)` 在 `internal/portfolio/darwinian_weights.go:265`
 - RollingSharpe 計算需要 `StdDev > 0`，即回報值需要有變異
 
@@ -86,7 +86,7 @@ func TestAutoRollback_AgentDisable(t *testing.T) {
     ar := NewAutoRollback(nil, dw, nil).WithMaturityTracker(tr)
 
     // 注入足夠多負向回報，使 RollingSharpe < -1.0
-    // 需要 ≥60 個樣本（SharpeMinSampleSize），且回報值有變異
+    // 需要 ≥5 個樣本（Reporting.SharpeMinSamples），且回報值有變異
     // 交替注入 -3% 和 -1%，確保標準差 > 0
     for i := 0; i < 60; i++ {
         if i%2 == 0 {
