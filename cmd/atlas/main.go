@@ -618,6 +618,9 @@ func run(args []string, deps appDeps) error {
 		if gateway != nil && monitor != nil {
 			if svc := dashboard.GetCrossMarketService(); svc != nil {
 				svc.SetDegradedCallback(func(status string, failed []string) {
+					if status != "degraded" || len(failed) == 0 {
+						return // recovery or false alarm; no action needed
+					}
 					// Record per-channel degraded status in the same
 					// UnifiedHealthStore used by Gateway.Fetch.
 					for _, ch := range failed {

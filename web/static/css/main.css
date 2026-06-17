@@ -68,6 +68,10 @@
 @import url("pages/decision-chain.css");
 @import url("pages/parameters.css");
 
+/* Pages - Cross-Market & Data Channels */
+@import url("pages/crossmarket.css");
+@import url("pages/datachannels.css");
+
 /* Existing standalone modules (backward compatibility) */
 @import url("components/circuit-breaker.css");
 @import url("components/performance-report.css");

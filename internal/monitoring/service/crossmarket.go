@@ -118,8 +118,11 @@ type CrossMarketService struct {
 	// "degraded". In production this is wired in main.go to call both
 	// gateway.Health().Record() (per-channel) and monitor.Warning()
 	// (user-visible alert) — Option B full alerting.
-	degradedCallback func(string, []string)
-	callbackMu       sync.Mutex // protects degradedCallback reads/writes
+	// callbackMu protects degradedCallback reads/writes and last-degraded state.
+	callbackMu          sync.Mutex
+	degradedCallback    func(string, []string)
+	lastDegradedStatus  string   // previous status string ("ok"/"degraded")
+	lastFailedChannels  []string // previous failed channel list for dedup
 
 	// cacheMu + cachedSnapshot + cacheTime implement a TTL cache for
 	// FetchSnapshot, preventing the 2x redundant ~15-20s HTTP cascade
@@ -201,13 +204,24 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 		status, failed := detectDegradedUSStatus(snap)
 		meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed}
 
-		if status == "degraded" {
-			s.callbackMu.Lock()
-			cb := s.degradedCallback
-			s.callbackMu.Unlock()
-			if cb != nil {
-				cb(status, failed)
-			}
+		// Debounce: only fire callback on state transition
+		// (ok↔degraded) or when the failed-channel list changes.
+		// Without this, the callback fires on EVERY cache refresh
+		// (~30s) while the snapshot is degraded — producing duplicate
+		// health.Record() calls and alert spam.
+		s.callbackMu.Lock()
+		cb := s.degradedCallback
+		prevStatus := s.lastDegradedStatus
+		prevFailed := s.lastFailedChannels
+		changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed)
+		shouldFire := cb != nil && status == "degraded" && (changed || prevStatus == "")
+		if changed || prevStatus == "" {
+			s.lastDegradedStatus = status
+			s.lastFailedChannels = failed
+		}
+		s.callbackMu.Unlock()
+		if shouldFire {
+			cb(status, failed)
 		}
 
 		s.cacheMu.Lock()
@@ -414,6 +428,21 @@ func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot) (string, []string
 		return "ok", nil
 	}
 	return "degraded", failed
+}
+
+// stringSlicesEqual reports whether two string slices have identical
+// elements in the same order. Both nil and empty slices are treated as
+// equivalent (len == 0 comparison).
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // snapshotStatusMeta is the per-fetch degraded-status metadata co-cached

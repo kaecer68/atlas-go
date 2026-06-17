@@ -210,7 +210,7 @@ export function renderDataChannels(data) {
   let html = '';
 
   // Control panel summary
-  html += `<div class="control-summary" style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+  html += `<div class="control-summary">
     <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
       <div class="label">總通道</div>
       <div class="value">${total}</div>
