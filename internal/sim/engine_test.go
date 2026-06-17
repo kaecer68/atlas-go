@@ -324,7 +324,7 @@ func TestTaxAdjustedPnLEqualsGrossMinusTax(t *testing.T) {
 	}
 }
 
-func TestRunWithoutTaxCalculatorLeavesTaxFieldsZero(t *testing.T) {
+func TestRunWithDefaultTaxCalculatorPopulatesTaxFields(t *testing.T) {
 	engine := NewEngine(domain.SimulationConstraints{
 		StartingCash:                1000000,
 		MaxPositionWeight:           0.5,
@@ -345,11 +345,11 @@ func TestRunWithoutTaxCalculatorLeavesTaxFieldsZero(t *testing.T) {
 
 	result := engine.Run(domain.RegimeRiskOn, quotes, recs)
 
-	if len(result.TaxSnapshots) != 0 {
-		t.Errorf("expected no tax snapshots without tax calculator, got %d", len(result.TaxSnapshots))
+	if len(result.TaxSnapshots) == 0 {
+		t.Errorf("expected tax snapshots with default tax calculator, got 0")
 	}
-	if result.TotalTaxPaid != 0 {
-		t.Errorf("expected zero TotalTaxPaid, got %v", result.TotalTaxPaid)
+	if result.AfterTaxPnL == 0 && result.BeforeTaxPnL != 0 {
+		t.Errorf("AfterTaxPnL should be computed: got %f, BeforeTaxPnL=%f", result.AfterTaxPnL, result.BeforeTaxPnL)
 	}
 }
 

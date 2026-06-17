@@ -89,7 +89,7 @@ func (p *AutoJudgePromoter) RunDaily(ctx context.Context, pending []experiment.P
 			"baseline_obs", exp.BaselineObservations,
 			"candidate_obs", exp.CandidateObservations)
 
-		accepted, note := p.judge.passesAcceptance(exp)
+		accepted, note := p.judge.passesAcceptance(exp, nil)
 		res := EvaluationResult{
 			ExperimentID: exp.Experiment.ID,
 			Accepted:     accepted,

@@ -116,7 +116,7 @@ func TestPassesAcceptanceUsesMaturityThresholds(t *testing.T) {
 		CandidateObservations: 6,
 		JudgeChecks:           []string{"a", "b"},
 	}
-	accepted, _ := testJudge().passesAcceptance(level1)
+	accepted, _ := testJudge().passesAcceptance(level1, nil)
 	if !accepted {
 		t.Fatalf("expected level 1 experiment to accept modest improvement")
 	}
@@ -135,7 +135,7 @@ func TestPassesAcceptanceUsesMaturityThresholds(t *testing.T) {
 		CandidateObservations: 12,
 		JudgeChecks:           []string{"a", "b", "c", "d"},
 	}
-	accepted, note := testJudge().passesAcceptance(level3)
+	accepted, note := testJudge().passesAcceptance(level3, nil)
 	if accepted {
 		t.Fatalf("expected level 3 experiment to reject small improvement, got note %q", note)
 	}
@@ -156,7 +156,7 @@ func TestPassesAcceptanceUsesMutationTypeProfiles(t *testing.T) {
 		CandidateObservations: 8,
 		JudgeChecks:           []string{"a", "b", "c"},
 	}
-	accepted, _ := testJudge().passesAcceptance(promptMutation)
+	accepted, _ := testJudge().passesAcceptance(promptMutation, nil)
 	if !accepted {
 		t.Fatalf("expected prompt tightening to pass with sufficient level 2 improvement")
 	}
@@ -175,7 +175,7 @@ func TestPassesAcceptanceUsesMutationTypeProfiles(t *testing.T) {
 		CandidateObservations: 9,
 		JudgeChecks:           []string{"a", "b", "c", "d"},
 	}
-	accepted, note := testJudge().passesAcceptance(riskMutation)
+	accepted, note := testJudge().passesAcceptance(riskMutation, nil)
 	if accepted {
 		t.Fatalf("expected risk rule change to require a larger delta, got note %q", note)
 	}
@@ -197,7 +197,7 @@ func TestPassesAcceptanceRejectsWhenObservationsInsufficient(t *testing.T) {
 		JudgeChecks:           []string{"a", "b", "c", "d", "e"},
 	}
 
-	accepted, note := testJudge().passesAcceptance(result)
+	accepted, note := testJudge().passesAcceptance(result, nil)
 	if accepted {
 		t.Fatalf("expected rejection for insufficient observations")
 	}
@@ -392,7 +392,7 @@ func TestPassesAcceptanceReportsNoConstraintDeltaWhenEqual(t *testing.T) {
 		JudgeChecks:           []string{"a", "b", "c"},
 	}
 
-	accepted, note := testJudge().passesAcceptance(result)
+	accepted, note := testJudge().passesAcceptance(result, nil)
 	if accepted {
 		t.Fatalf("expected rejection when baseline == candidate")
 	}
@@ -757,7 +757,7 @@ func TestNoDrawdownSpikeGateRejectsWhenOOSFails(t *testing.T) {
 		},
 	}
 
-	accepted, note := testJudge().passesAcceptance(result)
+	accepted, note := testJudge().passesAcceptance(result, nil)
 	if accepted {
 		t.Fatal("expected no_drawdown_spike to reject when OOSResult.Passed=false")
 	}
@@ -805,7 +805,7 @@ func TestPreserveDownsideProtectionGate_AcceptableDrawdown(t *testing.T) {
 		JudgeChecks:           []string{"a", "b"},
 	}
 
-	accepted, note := testJudge().passesAcceptance(result)
+	accepted, note := testJudge().passesAcceptance(result, nil)
 	if !accepted {
 		t.Fatalf("expected acceptable drawdown to pass, got: %s", note)
 	}
@@ -832,7 +832,7 @@ func TestPreserveDownsideProtectionGate_ExcessiveDrawdown(t *testing.T) {
 		JudgeChecks:           []string{"a", "b"},
 	}
 
-	accepted, note := testJudge().passesAcceptance(result)
+	accepted, note := testJudge().passesAcceptance(result, nil)
 	if accepted {
 		t.Fatalf("expected excessive drawdown to be rejected, got: %s", note)
 	}
@@ -865,7 +865,7 @@ func TestPassesAcceptanceRejectsFallbackWindowWhenNotInBurnIn(t *testing.T) {
 	// (backdate start by 60 days so computeMaturity returns Calibrating).
 	judge.maturityTracker = domain.NewMaturityTrackerWithStart(time.Now().AddDate(0, 0, -60))
 
-	accepted, note := judge.passesAcceptance(result)
+	accepted, note := judge.passesAcceptance(result, nil)
 	if accepted {
 		t.Fatalf("expected rejection for fallback-window experiment in calibrating maturity, got accepted")
 	}
@@ -902,7 +902,7 @@ func TestPassesAcceptanceAllowsFallbackWindowDuringBurnIn(t *testing.T) {
 	// Start 3 days ago so computeMaturity returns BurnIn (threshold = 0).
 	judge.maturityTracker = domain.NewMaturityTrackerWithStart(time.Now().AddDate(0, 0, -3))
 
-	accepted, note := judge.passesAcceptance(result)
+	accepted, note := judge.passesAcceptance(result, nil)
 	if accepted {
 		t.Fatalf("expected burn-in rejection (not fallback gate), got accepted")
 	}

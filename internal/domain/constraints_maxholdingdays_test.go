@@ -11,10 +11,10 @@ import (
 // (no enforcement). Foundation for P2-T4 force-close logic.
 func TestSimulationConstraints_HasMaxHoldingDaysField(t *testing.T) {
 	c := SimulationConstraints{
-		StartingCash:      1_000_000,
-		MaxHoldingDays:    20,
-		StopLossPct:       -0.05,
-		TakeProfitPct:     0.10,
+		StartingCash:   1_000_000,
+		MaxHoldingDays: 20,
+		StopLossPct:    -0.05,
+		TakeProfitPct:  0.10,
 	}
 
 	data, err := json.Marshal(c)

@@ -56,7 +56,11 @@ type sellDetail struct {
 }
 
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
-	return &Engine{constraints: constraints, ctx: context.Background()}
+	return &Engine{
+		constraints: constraints,
+		ctx:        context.Background(),
+		taxCalc:    tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig()),
+	}
 }
 
 // WithContext sets the root context for optimizer calls.
@@ -375,7 +379,7 @@ func (e *Engine) RunDay(
 				continue
 			}
 			slippageBPS := e.getSlippageBPS(pos.Symbol, quoteBySymbol, &fallbackEvents)
-			price := applyBPS(q.Last, -(slippageBPS+e.transactionCostBPS(float64(pos.Quantity)*q.Last)))
+			price := applyBPS(q.Last, -(slippageBPS + e.transactionCostBPS(float64(pos.Quantity)*q.Last)))
 			proceeds := float64(pos.Quantity) * price
 			e.creditCashWithTPlus2Lock(state, proceeds, day)
 			state.RealizedPnL += float64(pos.Quantity) * (price - pos.AverageCost)

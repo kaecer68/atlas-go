@@ -18,6 +18,7 @@ type AgentPerformanceRow struct {
 	SharpeLike   float64
 	MaxDrawdown  float64
 	Weight       float64
+	AfterTaxPnL  float64
 }
 
 // RenderAgentPerformanceTable generates a Markdown table from agent rows.
@@ -27,18 +28,19 @@ func RenderAgentPerformanceTable(rows []AgentPerformanceRow) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("| Agent | Layer | Windows | Hit Rate | Sharpe | Max DD | Weight |\n")
-	sb.WriteString("|-------|-------|---------|----------|--------|--------|--------|\n")
+	sb.WriteString("| Agent | Layer | Windows | Hit Rate | Sharpe | Max DD | After-Tax P&L | Weight |\n")
+	sb.WriteString("|-------|-------|---------|----------|--------|--------|--------------|--------|\n")
 
 	for _, r := range rows {
 		fmt.Fprintf(
-			&sb, "| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %.2f |\n",
+			&sb, "| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %.0f | %.2f |\n",
 			truncate(r.AgentID, 20),
 			r.Layer,
 			r.WindowCount,
 			r.HitRate*100,
 			r.SharpeLike,
 			r.MaxDrawdown*100,
+			r.AfterTaxPnL,
 			r.Weight,
 		)
 	}

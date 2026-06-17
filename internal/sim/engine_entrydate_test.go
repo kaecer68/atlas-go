@@ -33,10 +33,10 @@ func TestRunDay_RecordsEntryDateOnBuy(t *testing.T) {
 		Reason:     "test buy",
 	}}
 	quotes := []domain.Quote{{
-		Symbol:    "2330",
-		Last:      100.0,
-		Open:      100.0,
-		Volume:    100_000,
+		Symbol:     "2330",
+		Last:       100.0,
+		Open:       100.0,
+		Volume:     100_000,
 		IsTradable: true,
 	}}
 
