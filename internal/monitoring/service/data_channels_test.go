@@ -452,3 +452,131 @@ func TestStatusText(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// classifyErrorSeverity
+// =============================================================================
+
+func TestClassifyErrorSeverity(t *testing.T) {
+	tests := []struct {
+		name   string
+		errMsg string
+		expect string
+	}{
+		// Empty / no error
+		{name: "empty string", errMsg: "", expect: ""},
+
+		// info: off-hours / no-data — expected, not actionable
+		{name: "info: no data available", errMsg: "margin fetch: no TWSE margin balance data available in the last 7 days", expect: ErrorSeverityInfo},
+		{name: "info: no capital flow data", errMsg: "capital_flow fetch: no TWSE capital flow data available in the last 7 days", expect: ErrorSeverityInfo},
+
+		// warn: transient network / rate-limit — usually self-healing
+		{name: "warn: rate limit", errMsg: "rate limit: context deadline exceeded", expect: ErrorSeverityWarn},
+		{name: "warn: context deadline", errMsg: "context deadline exceeded (Client.Timeout exceeded)", expect: ErrorSeverityWarn},
+		{name: "warn: timeout", errMsg: "request timeout after 30s", expect: ErrorSeverityWarn},
+		{name: "warn: connection reset", errMsg: "read tcp: connection reset by peer", expect: ErrorSeverityWarn},
+
+		// error: infra down — requires operator action
+		{name: "error: connection refused", errMsg: "dial tcp 127.0.0.1:8081: connection refused", expect: ErrorSeverityError},
+		{name: "error: no such host", errMsg: "lookup api.example.com: no such host", expect: ErrorSeverityError},
+		{name: "error: dial tcp", errMsg: "dial tcp 10.0.0.1:443: i/o timeout", expect: ErrorSeverityError},
+
+		// error: config / registration — needs admin fix
+		{name: "error: channel not registered", errMsg: "channel not registered: us_yahoo", expect: ErrorSeverityError},
+		{name: "error: not found", errMsg: "config key not found", expect: ErrorSeverityError},
+		{name: "error: invalid", errMsg: "invalid parameter: start_date", expect: ErrorSeverityError},
+
+		// critical: auth / credential — urgent
+		{name: "critical: api key", errMsg: "api key missing or invalid", expect: ErrorSeverityCritical},
+		{name: "critical: unauthorized", errMsg: "unauthorized: token expired", expect: ErrorSeverityCritical},
+		{name: "critical: 401", errMsg: "HTTP 401 Unauthorized", expect: ErrorSeverityCritical},
+		{name: "critical: 403", errMsg: "HTTP 403 Forbidden", expect: ErrorSeverityCritical},
+		{name: "critical: forbidden", errMsg: "access forbidden by policy", expect: ErrorSeverityCritical},
+
+		// default: unknown falls to warn
+		{name: "default: unknown error", errMsg: "something unexpected happened", expect: ErrorSeverityWarn},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyErrorSeverity(tt.errMsg)
+			if got != tt.expect {
+				t.Errorf("classifyErrorSeverity(%q) = %q, want %q", tt.errMsg, got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestClassifyErrorSeverity_RulePriority(t *testing.T) {
+	got := classifyErrorSeverity("invalid api key")
+	if got != ErrorSeverityCritical {
+		t.Errorf("expected critical (auth beats config), got %q", got)
+	}
+
+	got2 := classifyErrorSeverity("connection refused: no data available in the last hour")
+	if got2 != ErrorSeverityError {
+		t.Errorf("expected error (infra beats info), got %q", got2)
+	}
+
+	got3 := classifyErrorSeverity("rate limit exceeded: HTTP 403")
+	if got3 != ErrorSeverityWarn {
+		t.Errorf("expected warn (rate limit before 403), got %q", got3)
+	}
+}
+
+func TestClassifyErrorSeverity_RealWorldMessages(t *testing.T) {
+	// Real messages observed in channel_health.json
+	tests := []struct {
+		name   string
+		errMsg string
+		expect string
+	}{
+		{
+			name:   "twse_margin off-hours",
+			errMsg: "margin fetch: no TWSE margin balance data available in the last 7 days",
+			expect: ErrorSeverityInfo,
+		},
+		{
+			name:   "us_yahoo unregistered",
+			errMsg: "channel not registered: us_yahoo",
+			expect: ErrorSeverityError,
+		},
+		{
+			name:   "rate limit timeout",
+			errMsg: "rate limit: context deadline exceeded",
+			expect: ErrorSeverityWarn,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyErrorSeverity(tt.errMsg)
+			if got != tt.expect {
+				t.Errorf("classifyErrorSeverity(%q) = %q, want %q", tt.errMsg, got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestContainsAny(t *testing.T) {
+	tests := []struct {
+		name    string
+		s       string
+		substrs []string
+		expect  bool
+	}{
+		{name: "single match", s: "hello world", substrs: []string{"world"}, expect: true},
+		{name: "no match", s: "hello world", substrs: []string{"foo", "bar"}, expect: false},
+		{name: "empty input", s: "", substrs: []string{"anything"}, expect: false},
+		{name: "empty substrs", s: "hello", substrs: nil, expect: false},
+		{name: "substring match", s: "connection refused", substrs: []string{"refused"}, expect: true},
+		{name: "case sensitive", s: "Rate Limit", substrs: []string{"rate limit"}, expect: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := containsAny(tt.s, tt.substrs...)
+			if got != tt.expect {
+				t.Errorf("containsAny(%q, %v) = %v, want %v", tt.s, tt.substrs, got, tt.expect)
+			}
+		})
+	}
+}

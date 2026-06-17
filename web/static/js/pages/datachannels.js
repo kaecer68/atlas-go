@@ -229,11 +229,15 @@ export function renderDataChannels(data) {
     </div>
   </div>`;
 
+  const sevIcon = { info: 'ℹ', warn: '⚠', error: '❌', critical: '🚫' };
+  const sevColor = { info: 'var(--muted)', warn: 'var(--warn)', error: 'var(--color-danger)', critical: 'var(--color-danger)' };
+
   Object.keys(byCountry).forEach(country => {
     html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
     html += '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-8">燈號</th><th class="w-12">平台名稱</th><th class="w-10">API 格式</th><th class="w-20">資料路徑</th><th class="w-12">本地儲存</th><th class="w-15">狀態</th><th class="w-13">操作</th><th class="w-10">最後更新</th></tr></thead><tbody>';
     byCountry[country].forEach(c => {
-      const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--color-danger);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
+      const sev = c.error_severity || 'warn';
+      const errorHint = c.last_error ? `<div style="font-size:11px;color:${sevColor[sev] || sevColor.warn};margin-top:2px">${sevIcon[sev] || sevIcon.warn} ${escapeHtml(c.last_error)}</div>` : '';
       const toggleBtn = `<button class="text-xs" onclick="toggleChannel('${c.channel_id}', this.dataset.enabled !== 'true')" data-enabled="${c.status !== 'inactive'}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${c.status === 'inactive' ? '啟用' : '停用'}</button>`;
       const triggerBtn = `<button class="text-xs" onclick="triggerChannelFetch('${c.channel_id}')" style="padding:2px 8px;border-radius:4px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;margin-left:4px">觸發</button>`;
       html += `<tr>
