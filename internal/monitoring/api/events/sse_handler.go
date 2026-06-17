@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
 // SSEClient represents a single SSE connection.
@@ -70,7 +71,7 @@ func NewSSEHandler(eventBus *eventbus.ChannelEventBus) *SSEHandler {
 func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		shared.WriteJSONErrorEx(w, http.StatusInternalServerError, "streaming_not_supported", "streaming not supported")
 		return
 	}
 

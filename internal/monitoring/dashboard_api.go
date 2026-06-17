@@ -38,6 +38,7 @@ import (
 	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
+	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	apiswarm "github.com/kaecer68/atlas-go/internal/monitoring/api/swarm"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
@@ -727,7 +728,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				_, _ = w.Write([]byte(`{"channels":[],"updated_at":""}`))
 				return
 			}
-			http.Error(w, fmt.Sprintf("read channel health: %v", err), http.StatusInternalServerError)
+			apishared.WriteJSONErrorEx(w, http.StatusInternalServerError, "channel_health_read_failed", fmt.Sprintf("read channel health: %v", err))
 			return
 		}
 		var wrapper struct {
@@ -735,7 +736,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			UpdatedAt string                          `json:"updated_at,omitempty"`
 		}
 		if err := json.Unmarshal(b, &wrapper); err != nil {
-			http.Error(w, fmt.Sprintf("parse channel health: %v", err), http.StatusInternalServerError)
+			apishared.WriteJSONErrorEx(w, http.StatusInternalServerError, "channel_health_parse_failed", fmt.Sprintf("parse channel health: %v", err))
 			return
 		}
 		// Build channels array for frontend
@@ -1039,12 +1040,12 @@ func (a *DashboardAPI) handleAgentNames(w http.ResponseWriter, r *http.Request) 
 			_ = json.NewEncoder(w).Encode(map[string]any{"agents": []agentNameResp{}})
 			return
 		}
-		http.Error(w, "read agent registry", http.StatusInternalServerError)
+		apishared.WriteJSONErrorEx(w, http.StatusInternalServerError, "agent_registry_read_failed", "read agent registry")
 		return
 	}
 	var reg domain.AgentRegistry
 	if err := json.Unmarshal(data, &reg); err != nil {
-		http.Error(w, "parse agent registry", http.StatusInternalServerError)
+		apishared.WriteJSONErrorEx(w, http.StatusInternalServerError, "agent_registry_parse_failed", "parse agent registry")
 		return
 	}
 	agents := make([]agentNameResp, 0, len(reg.Agents))
