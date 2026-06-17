@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -721,5 +722,94 @@ func TestLoadParametersConfig_FallbackPriceTargetsDefaultsMerged(t *testing.T) {
 	}
 	if customEntry.StopLossMultiplier.Value != 0.93 {
 		t.Errorf("technical_breakout stop-loss multiplier = %v, want 0.93", customEntry.StopLossMultiplier.Value)
+	}
+}
+
+func TestParametersConfig_LockedSaveWithRollback(t *testing.T) {
+	tmpDir := t.TempDir()
+	paramsPath := filepath.Join(tmpDir, "test-params.json")
+
+	cfg := DefaultParametersConfig()
+
+	if err := cfg.LockedSaveWithRollback(paramsPath); err != nil {
+		t.Fatalf("LockedSaveWithRollback failed: %v", err)
+	}
+
+	// Verify file exists and is valid JSON
+	data, err := os.ReadFile(paramsPath)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("file is empty")
+	}
+	// Verify round-trip parseable
+	if _, err := LoadParametersConfig(paramsPath); err != nil {
+		t.Fatalf("LoadParametersConfig failed: %v", err)
+	}
+}
+
+func TestParametersConfig_LockedSaveWithRollback_CreatesParentDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Use a deeply nested path whose parent dir does NOT exist
+	paramsPath := filepath.Join(tmpDir, "nested", "deeply", "test-params.json")
+
+	cfg := DefaultParametersConfig()
+
+	if err := cfg.LockedSaveWithRollback(paramsPath); err != nil {
+		t.Fatalf("LockedSaveWithRollback should create parent dirs: %v", err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(paramsPath); err != nil {
+		t.Fatalf("file should exist after save: %v", err)
+	}
+
+	// Verify parent dir was created
+	parentDir := filepath.Dir(paramsPath)
+	if _, err := os.Stat(parentDir); err != nil {
+		t.Fatalf("parent dir should exist: %v", err)
+	}
+
+	// Verify round-trip parseable
+	if _, err := LoadParametersConfig(paramsPath); err != nil {
+		t.Fatalf("LoadParametersConfig failed: %v", err)
+	}
+}
+
+func TestParametersConfig_LockedSaveWithRollback_Concurrent(t *testing.T) {
+	tmpDir := t.TempDir()
+	paramsPath := filepath.Join(tmpDir, "concurrent-params.json")
+
+	// Pre-create a valid initial file
+	cfg := DefaultParametersConfig()
+	if err := cfg.SaveWithRollback(paramsPath); err != nil {
+		t.Fatalf("initial save failed: %v", err)
+	}
+
+	// Launch 10 goroutines, all calling LockedSaveWithRollback concurrently
+	const N = 10
+	var wg sync.WaitGroup
+	errCh := make(chan error, N)
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			c := DefaultParametersConfig()
+			if err := c.LockedSaveWithRollback(paramsPath); err != nil {
+				errCh <- err
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Errorf("concurrent save failed: %v", err)
+	}
+
+	// Verify final file is valid
+	if _, err := LoadParametersConfig(paramsPath); err != nil {
+		t.Fatalf("final LoadParametersConfig failed (data corruption?): %v", err)
 	}
 }
