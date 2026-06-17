@@ -1,8 +1,5 @@
 export { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './utils.js';
-
-export function agentName(id) {
-  return AGENT_NAME_MAP[id] || id;
-}
+export { AGENT_NAME_MAP, agentName } from '../names.js';
 
 export function regimeLabel(regime) {
   if (!regime) return '-';
@@ -48,46 +45,6 @@ export function narrativeThemeLabel(theme) {
   if (!theme) return '-';
   return NARRATIVE_THEME_LABELS[theme] || theme;
 }
-
-export const AGENT_NAME_MAP = {
-  'cro-01': '風控長',
-  'cio-01': '投資長',
-  'taiwan-macro-01': '台灣總經',
-  'etf-rotation-01': 'ETF 輪動',
-  'value-yield-01': '價值收益',
-  'growth-momentum-01': '成長動能',
-  'technical-breakout-01': '技術突破',
-  'financials-desk-01': '金融產業',
-  'semi-desk-01': '半導體產業',
-  'ai-desk-01': 'AI 供應鏈',
-  'shipping-desk-01': '航運產業',
-  'earnings-quality-01': '盈餘品質',
-  'leo-satellite-desk-01': '低軌衛星',
-  'robotics-desk-01': '機器人產業',
-  'mining-desk-01': '礦業/貴金屬',
-  'energy-desk-01': '能源產業',
-  'electronics-desk-01': '電子零組件',
-  'consumer-desk-01': '消費產業',
-  'industrial-desk-01': '工業/製造',
-  'etf_rotation_desk': 'ETF 輪動',
-  'value_yield': '價值收益',
-  'growth_momentum': '成長動能',
-  'technical_breakout': '技術突破',
-  'financials_desk': '金融產業',
-  'semiconductor_desk': '半導體產業',
-  'ai_supply_chain_desk': 'AI 供應鏈',
-  'shipping_desk': '航運產業',
-  'earnings_quality': '盈餘品質',
-  'leo_satellite_desk': '低軌衛星',
-  'robotics_desk': '機器人產業',
-  'mining_desk': '礦業/貴金屬',
-  'energy_desk': '能源產業',
-  'electronics_desk': '電子零組件',
-  'consumer_desk': '消費產業',
-  'industrial_desk': '工業/製造',
-  'cro_risk': '風控長',
-  'cio_portfolio': '投資長',
-};
 
 export const PAGE_TITLES = {
   overview: '總覽', live: '風控結果', pipeline: '投資管線',
