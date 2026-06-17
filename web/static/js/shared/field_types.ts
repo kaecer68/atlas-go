@@ -27,14 +27,14 @@ export interface AgentContribution {
   display_name: string;
   skill: string;
   layer: string;
-  total_return: number;
+  aggregate_forward_return: number;
   win_rate: number;
   real_trade_count: number;
   synthetic_trade_count: number;
   trade_count: number;
   avg_return: number;
   profit_factor: number;
-  sharpe_like: number;
+  sharpe_like: number | null;
 }
 
 export interface AgentObservatoryResponse {
@@ -2076,6 +2076,7 @@ export interface ParametersConfig {
   rsi_tw?: string;
   tax?: string;
   sector_allocation: string;
+  reporting: string;
 }
 
 export interface PerformanceReport {
@@ -2094,6 +2095,9 @@ export interface PerformanceReport {
   total_tax_paid: number;
   win_rate: number;
   total_trades: number;
+  real_trade_count: number;
+  synthetic_trade_count: number;
+  profit_factor: number;
   avg_win: number;
   avg_loss: number;
   top_agents: string[];
@@ -2507,7 +2511,7 @@ export interface RegimeHistoryData {
 export interface RegimePerformance {
   regime: string;
   session_count: number;
-  total_return: number;
+  aggregate_forward_return: number;
   win_rate: number;
   avg_return: number;
 }
@@ -2544,6 +2548,11 @@ export interface ReportSection {
   title: string;
   content: string;
   priority: number;
+}
+
+export interface ReportingParameters {
+  win_rate_threshold: string;
+  sharpe_min_samples: string;
 }
 
 export interface RetailSentimentResponse {
