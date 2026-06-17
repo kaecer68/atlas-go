@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"path/filepath"
 	"sync"
 	"time"
@@ -16,17 +17,63 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
+// Error severity levels for frontend display.
+const (
+	ErrorSeverityInfo     = "info"     // Expected: off-hours, no new data available
+	ErrorSeverityWarn     = "warn"     // Transient: rate limits, network timeouts
+	ErrorSeverityError    = "error"    // Config/Infra: misconfiguration, service down
+	ErrorSeverityCritical = "critical" // Auth: API key missing or invalid
+)
+
+func classifyErrorSeverity(errMsg string) string {
+	if errMsg == "" {
+		return ""
+	}
+	// Service / infra down patterns — requires operator action (check FIRST, before generic timeout keywords)
+	if containsAny(errMsg, "connection refused", "no such host", "dial tcp") {
+		return ErrorSeverityError
+	}
+	// Transient network / rate-limit patterns — usually self-healing (check BEFORE auth, so "rate limit: 403" stays warn)
+	if containsAny(errMsg, "rate limit", "context deadline exceeded", "timeout", "connection reset") {
+		return ErrorSeverityWarn
+	}
+	// Auth / credential patterns — urgent
+	if containsAny(errMsg, "api key", "unauthorized", "401", "403", "forbidden") {
+		return ErrorSeverityCritical
+	}
+	// Configuration / registration patterns — needs admin fix
+	if containsAny(errMsg, "channel not registered", "not found", "invalid") {
+		return ErrorSeverityError
+	}
+	// Off-hours / no-data patterns — expected behavior, not actionable (check LAST, "data available in the last" is specific enough)
+	if containsAny(errMsg, "data available in the last") {
+		return ErrorSeverityInfo
+	}
+	// Unknown errors default to warn
+	return ErrorSeverityWarn
+}
+
+func containsAny(s string, substrs ...string) bool {
+	for _, sub := range substrs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 type DataChannel struct {
-	ChannelID  string `json:"channel_id"`
-	Country    string `json:"country"`
-	Platform   string `json:"platform"`
-	APIFormat  string `json:"api_format"`
-	Path       string `json:"path"`
-	Storage    string `json:"storage"`
-	Status     string `json:"status"`
-	StatusText string `json:"status_text"`
-	UpdatedAt  string `json:"updated_at"`
-	LastError  string `json:"last_error,omitempty"`
+	ChannelID     string `json:"channel_id"`
+	Country       string `json:"country"`
+	Platform      string `json:"platform"`
+	APIFormat     string `json:"api_format"`
+	Path          string `json:"path"`
+	Storage       string `json:"storage"`
+	Status        string `json:"status"`
+	StatusText    string `json:"status_text"`
+	UpdatedAt     string `json:"updated_at"`
+	LastError     string `json:"last_error,omitempty"`
+	ErrorSeverity string `json:"error_severity,omitempty"`
 }
 
 type ChannelAlert struct {
@@ -293,6 +340,7 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
@@ -311,6 +359,7 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
@@ -344,6 +393,7 @@ func (s *DataChannelService) buildFugleChannel() DataChannel {
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
@@ -360,6 +410,7 @@ func (s *DataChannelService) buildFubonChannel() DataChannel {
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
@@ -376,6 +427,7 @@ func (s *DataChannelService) buildFinMindChannel() DataChannel {
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
@@ -425,6 +477,7 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
@@ -461,6 +514,7 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
@@ -497,6 +551,7 @@ func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataC
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
+		ErrorSeverity: classifyErrorSeverity(lastError),
 	}
 }
 
