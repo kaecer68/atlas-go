@@ -136,6 +136,17 @@ async function loadModules() {
     if (modules.alerts.acknowledgeAlert) window.acknowledgeAlert = modules.alerts.acknowledgeAlert;
     if (modules.alerts.showUnacknowledgedOnly) window.showUnacknowledgedOnly = modules.alerts.showUnacknowledgedOnly;
   }
+  if (modules.datachannels) {
+    if (modules.datachannels.triggerChannelsIngest) window.triggerChannelsIngest = modules.datachannels.triggerChannelsIngest;
+    if (modules.datachannels.enableAllChannels) window.dcEnableAll = modules.datachannels.enableAllChannels;
+    if (modules.datachannels.disableAllChannels) window.dcDisableAll = modules.datachannels.disableAllChannels;
+    if (modules.datachannels.triggerChannelFetch) window.triggerChannelFetch = modules.datachannels.triggerChannelFetch;
+    if (modules.datachannels.toggleChannel) window.toggleChannel = modules.datachannels.toggleChannel;
+    if (modules.datachannels.updateApiKey) window.dcUpdateApiKey = modules.datachannels.updateApiKey;
+    if (modules.datachannels.loadFetchLogs) window.loadFetchLogs = modules.datachannels.loadFetchLogs;
+    if (modules.datachannels.loadDataChannels) window.loadDataChannels = modules.datachannels.loadDataChannels;
+    if (modules.datachannels.refreshChannelStatus) window.refreshChannelStatus = modules.datachannels.refreshChannelStatus;
+  }
   return modules;
 }
 // --- Main Data Loader ---
@@ -553,22 +564,6 @@ if (typeof window !== "undefined") window.toggleTheme = function() {
   r.setAttribute('data-theme', r.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
 };
 
-
-// datachannels globals
-import('./pages/datachannels.js').then(function(m) {
-  if (typeof window === 'undefined') return;
-  if (m.triggerChannelsIngest) window.triggerChannelsIngest = m.triggerChannelsIngest;
-  if (m.enableAllChannels) window.dcEnableAll = m.enableAllChannels;
-  if (m.disableAllChannels) window.dcDisableAll = m.disableAllChannels;
-  if (m.triggerChannelFetch) window.triggerChannelFetch = m.triggerChannelFetch;
-  if (m.toggleChannel) window.toggleChannel = m.toggleChannel;
-  if (m.updateApiKey) window.dcUpdateApiKey = m.updateApiKey;
-  if (m.loadFetchLogs) window.loadFetchLogs = m.loadFetchLogs;
-  if (m.loadDataChannels) window.loadDataChannels = m.loadDataChannels;
-  if (m.refreshChannelStatus) window.refreshChannelStatus = m.refreshChannelStatus;
-}).catch(function(err) {
-  console.error('[Dynamic import] datachannels module load failed:', err);
-});
 
 window.addEventListener('popstate', function(e) {
   if (e.state && e.state.page) {

@@ -418,12 +418,13 @@ func TestDetectDegradedUSStatus_AllFailed(t *testing.T) {
 	if status != "degraded" {
 		t.Errorf("expected status=degraded, got %q", status)
 	}
-	if len(failed) != 8 {
-		t.Errorf("expected 8 failed channels, got %d: %v", len(failed), failed)
+	if len(failed) != 10 {
+		t.Errorf("expected 10 failed channels, got %d: %v", len(failed), failed)
 	}
 	expected := map[string]bool{
 		"us_spx": false, "us_ndx": false, "us_dji": false, "sox_index": false,
 		"us_nvda": false, "us_aapl": false, "us_msft": false, "tsm_adr": false,
+		"us10y": false, "vix": false,
 	}
 	for _, f := range failed {
 		if _, ok := expected[f]; !ok {
@@ -453,10 +454,10 @@ func TestDetectDegradedUSStatus_PartialFailure(t *testing.T) {
 	if status != "degraded" {
 		t.Errorf("expected status=degraded, got %q", status)
 	}
-	if len(failed) != 4 {
-		t.Errorf("expected 4 failed channels (DJI, SOX, MSFT, TSM), got %d: %v", len(failed), failed)
+	if len(failed) != 6 {
+		t.Errorf("expected 6 failed channels (DJI, SOX, MSFT, TSM, US10Y, VIX), got %d: %v", len(failed), failed)
 	}
-	expectedFailed := map[string]bool{"us_dji": false, "sox_index": false, "us_msft": false, "tsm_adr": false}
+	expectedFailed := map[string]bool{"us_dji": false, "sox_index": false, "us_msft": false, "tsm_adr": false, "us10y": false, "vix": false}
 	for _, f := range failed {
 		if _, ok := expectedFailed[f]; !ok {
 			t.Errorf("unexpected failed channel: %s", f)
@@ -467,14 +468,16 @@ func TestDetectDegradedUSStatus_PartialFailure(t *testing.T) {
 
 func TestDetectDegradedUSStatus_AllOK(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{
-		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC"},
-		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC"},
-		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI"},
-		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX"},
-		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA"},
-		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL"},
-		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT"},
-		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM"},
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 1.0},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 1.0},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 1.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 1.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 1.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 1.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 1.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 1.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
 	}
 	status, failed := detectDegradedUSStatus(snap)
 	if status != "ok" {
@@ -490,7 +493,8 @@ func TestGetStatus_DataStatusJSONMarshaling(t *testing.T) {
 	// (simulating the production bug where channels fail).
 	provider := &fakeMacroProvider{
 		snap: marketdata.MacroDataSnapshot{
-			// All 8 US fields empty
+			// All 8 original US fields empty (zero-value); VIX is populated.
+			// US10Y is also empty → 9 failed total.
 			VIX:     marketdata.MacroDataPoint{Symbol: "^VIX", Value: 20.5},
 			DXY:     marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 99.5},
 			USD_TWD: marketdata.MacroDataPoint{Symbol: "USDTWD=X", Value: 31.5},
@@ -506,8 +510,8 @@ func TestGetStatus_DataStatusJSONMarshaling(t *testing.T) {
 	if status.DataStatus != "degraded" {
 		t.Errorf("expected DataStatus=degraded, got %q", status.DataStatus)
 	}
-	if len(status.FailedChannels) != 8 {
-		t.Errorf("expected 8 failed channels, got %d: %v", len(status.FailedChannels), status.FailedChannels)
+	if len(status.FailedChannels) != 9 {
+		t.Errorf("expected 9 failed channels (8 orig + US10Y; VIX is populated), got %d: %v", len(status.FailedChannels), status.FailedChannels)
 	}
 
 	// Verify JSON marshaling includes the new fields
@@ -566,7 +570,7 @@ func TestGetCachedSnapshot_ProviderError_DoesNotPoisonCache(t *testing.T) {
 // TestGetStatus_DataStatusOKWhenAllChannelsPopulated is the post-default-flip
 // green path for the PR #484 data-visibility safeguard. With cfg.YahooEnabled
 // defaulting to true, the 8 US channels are registered in production, so a
-// healthy snapshot will populate all 8 MacroDataPoint.Symbol fields. The
+// healthy snapshot will populate all 10 MacroDataPoint.Symbol fields. The
 // Layer-3 safeguard (detectDegradedUSStatus) must then return "ok" with no
 // failed channels — proving the safeguard's positive path complements (not
 // duplicates) the channel-registration fix in apigateway/register_adapters.go.
@@ -583,6 +587,8 @@ func TestGetStatus_DataStatusOKWhenAllChannelsPopulated(t *testing.T) {
 		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0, ChangePct: 0.3, Timestamp: time.Now().Unix()},
 		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0, ChangePct: 0.5, Timestamp: time.Now().Unix()},
 		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0, ChangePct: 0.8, Timestamp: time.Now().Unix()},
+		// US10Y and VIX are now checked by detectDegradedUSStatus (Fix 3)
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25, ChangePct: 0.1, Timestamp: time.Now().Unix()},
 		// Adjacent fields unaffected by US channel failures
 		VIX:     marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0, ChangePct: -0.4, Timestamp: time.Now().Unix()},
 		DXY:     marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 99.5, Timestamp: time.Now().Unix()},
@@ -597,7 +603,7 @@ func TestGetStatus_DataStatusOKWhenAllChannelsPopulated(t *testing.T) {
 	}
 
 	if status.DataStatus != "ok" {
-		t.Errorf("expected DataStatus=ok (all 8 US channels populated), got %q", status.DataStatus)
+		t.Errorf("expected DataStatus=ok (all 10 US channels populated), got %q", status.DataStatus)
 	}
 	if len(status.FailedChannels) != 0 {
 		t.Errorf("expected no failed channels when DataStatus=ok, got %v", status.FailedChannels)
