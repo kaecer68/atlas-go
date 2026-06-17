@@ -58,8 +58,8 @@ type sellDetail struct {
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
 	return &Engine{
 		constraints: constraints,
-		ctx:        context.Background(),
-		taxCalc:    tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig()),
+		ctx:         context.Background(),
+		taxCalc:     tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig()),
 	}
 }
 

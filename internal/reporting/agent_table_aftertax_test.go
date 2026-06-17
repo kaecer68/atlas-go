@@ -7,12 +7,12 @@ import (
 
 func TestAgentPerformanceRow_HasAfterTaxPnLField(t *testing.T) {
 	row := AgentPerformanceRow{
-		AgentID:      "test_agent",
-		HitRate:      0.65,
-		SharpeLike:   1.5,
-		MaxDrawdown:  0.15,
-		Weight:       1.0,
-		AfterTaxPnL:  9500.0,
+		AgentID:     "test_agent",
+		HitRate:     0.65,
+		SharpeLike:  1.5,
+		MaxDrawdown: 0.15,
+		Weight:      1.0,
+		AfterTaxPnL: 9500.0,
 	}
 	if row.AfterTaxPnL != 9500.0 {
 		t.Errorf("AfterTaxPnL = %f, want 9500.0", row.AfterTaxPnL)

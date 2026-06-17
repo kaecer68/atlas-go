@@ -9,11 +9,11 @@ import (
 
 func TestScoreSimulationResult_UsesAfterTaxPnL(t *testing.T) {
 	result := domain.SimulationResult{
-		EndingCash:    1100000,
-		BeforeTaxPnL:  100000,
-		AfterTaxPnL:   95000,
-		TotalTaxPaid:  5000,
-		Positions:     []domain.Position{},
+		EndingCash:   1100000,
+		BeforeTaxPnL: 100000,
+		AfterTaxPnL:  95000,
+		TotalTaxPaid: 5000,
+		Positions:    []domain.Position{},
 	}
 	startingCash := 1000000
 
