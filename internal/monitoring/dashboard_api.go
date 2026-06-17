@@ -44,6 +44,7 @@ import (
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
 	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
+	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -910,6 +911,7 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 
 func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
 	a.crossMarketSvc = service.NewCrossMarketService(a.macroProvider)
+	a.crossMarketSvc.SetDegradedMetrics(metrics.NewDegradedMetrics())
 	handlers := &apicrossmarket.Handlers{
 		Svc: a.crossMarketSvc,
 	}

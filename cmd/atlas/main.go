@@ -212,12 +212,26 @@ func run(args []string, deps appDeps) error {
 	simulateMode := flags.Bool("simulate", false, "run one-shot daily simulation and exit (skip api server)")
 	verboseMode := flags.Bool("verbose", false, "enable color-coded terminal trace output during simulation")
 	dateOverride := flags.String("date", "", "override simulation session date (format: 2006-01-02)")
+	checkIntegrity := flags.Bool("check-integrity", false, "check configs/parameters.json integrity and exit")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
 	cfg := deps.loadConfig()
 	logging.Init(*logFormat, slog.LevelInfo)
+
+	if *checkIntegrity {
+		paramsPath := config.GetParametersConfigPath()
+		errs := config.CheckParamsIntegrity(paramsPath)
+		if len(errs) > 0 {
+			for _, err := range errs {
+				logging.Error("integrity_check", "integrity_check: "+err.Error())
+			}
+			os.Exit(1)
+		}
+		logging.Info("integrity_check", fmt.Sprintf("integrity_check: %s is valid", paramsPath))
+		os.Exit(0)
+	}
 
 	// Ensure PostgreSQL is reachable before we try to connect.
 	// If DATABASE_URL is unset or postgres is already running, this is a no-op.
