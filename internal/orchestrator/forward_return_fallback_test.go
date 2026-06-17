@@ -4,11 +4,12 @@ import (
 	"math"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 func TestGenerateForwardReturn_ValidQuotePositiveIntraday(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   100.0,
@@ -24,7 +25,7 @@ func TestGenerateForwardReturn_ValidQuotePositiveIntraday(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_ValidQuoteNegativeIntraday(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   100.0,
@@ -40,7 +41,7 @@ func TestGenerateForwardReturn_ValidQuoteNegativeIntraday(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_FlatDayUsesDistributionFallback(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "TESTFLAT",
 		Open:   100.0,
@@ -58,7 +59,7 @@ func TestGenerateForwardReturn_FlatDayUsesDistributionFallback(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_NoQuoteUsesDistributionFallback(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   0,
@@ -73,7 +74,7 @@ func TestGenerateForwardReturn_NoQuoteUsesDistributionFallback(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_RiskOnVsRiskOffDiffers(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   0,
@@ -89,7 +90,7 @@ func TestGenerateForwardReturn_RiskOnVsRiskOffDiffers(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_SymbolHashDeterminism(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   0,
@@ -108,7 +109,7 @@ func TestGenerateForwardReturn_SymbolHashDeterminism(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_QuoteWithNoOpenFallsBack(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   0,
@@ -123,7 +124,7 @@ func TestGenerateForwardReturn_QuoteWithNoOpenFallsBack(t *testing.T) {
 }
 
 func TestDefaultFallbackParams_Values(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 
 	if fallback.RiskOnParams.Mean <= 0 {
 		t.Errorf("RiskOn Mean should be positive, got %f", fallback.RiskOnParams.Mean)
@@ -146,7 +147,7 @@ func TestDefaultFallbackParams_Values(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_ClipToMax(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   100.0,
@@ -161,7 +162,7 @@ func TestGenerateForwardReturn_ClipToMax(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_ClipToMin(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   100.0,
@@ -176,7 +177,7 @@ func TestGenerateForwardReturn_ClipToMin(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_EmptySymbol(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "",
 		Open:   0,
@@ -209,7 +210,7 @@ func TestHashString_DifferentSymbols(t *testing.T) {
 }
 
 func TestGenerateForwardReturn_NeutralRegime(t *testing.T) {
-	fallback := DefaultFallbackParams()
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
 	quote := domain.Quote{
 		Symbol: "2330",
 		Open:   0,

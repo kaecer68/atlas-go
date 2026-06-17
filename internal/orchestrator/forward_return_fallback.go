@@ -4,6 +4,7 @@ import (
 	"hash/fnv"
 	"math"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -19,17 +20,17 @@ type ForwardReturnFallback struct {
 	RiskOffParams DistributionParams
 }
 
-func DefaultFallbackParams() ForwardReturnFallback {
+func DefaultFallbackParams(cfg *config.ParametersConfig) ForwardReturnFallback {
 	return ForwardReturnFallback{
 		RiskOnParams: DistributionParams{
-			Mean:      0.0008,
-			StdDev:    0.015,
+			Mean:      cfg.ForwardReturn.RiskOnMean.Value,
+			StdDev:    cfg.ForwardReturn.RiskOnStdDev.Value,
 			MinReturn: -0.05,
 			MaxReturn: 0.05,
 		},
 		RiskOffParams: DistributionParams{
-			Mean:      0.0001,
-			StdDev:    0.008,
+			Mean:      cfg.ForwardReturn.RiskOffMean.Value,
+			StdDev:    cfg.ForwardReturn.RiskOffStdDev.Value,
 			MinReturn: -0.03,
 			MaxReturn: 0.03,
 		},

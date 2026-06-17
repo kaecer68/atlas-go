@@ -2,6 +2,11 @@ package domain
 
 import "time"
 
+type LockedCashEntry struct {
+	UnlockDay time.Time `json:"unlock_day"`
+	Amount    float64   `json:"amount"`
+}
+
 // SimulationState tracks cross-day portfolio state for multi-day backtests.
 type SimulationState struct {
 	Cash            float64            `json:"cash"`
@@ -13,6 +18,7 @@ type SimulationState struct {
 	PreviousValues  map[string]float64 `json:"previous_values"`
 	MaxEquity       float64            `json:"max_equity"`
 	CurrentDrawdown float64            `json:"current_drawdown"`
+	LockedCash      []LockedCashEntry  `json:"locked_cash"`
 }
 
 // NewSimulationState initializes a simulation state with starting cash.
@@ -25,6 +31,7 @@ func NewSimulationState(startingCash float64) SimulationState {
 		DailyReturns:   make([]float64, 0),
 		PreviousValues: make(map[string]float64),
 		MaxEquity:      startingCash,
+		LockedCash:     make([]LockedCashEntry, 0),
 	}
 }
 
@@ -35,6 +42,16 @@ func (s SimulationState) PortfolioValue() float64 {
 		value += p.MarketValue
 	}
 	return value
+}
+
+func (s SimulationState) AvailableCash(day time.Time) float64 {
+	available := s.Cash
+	for _, lc := range s.LockedCash {
+		if day.Before(lc.UnlockDay) {
+			available -= lc.Amount
+		}
+	}
+	return available
 }
 
 // SellLogicEnabled is always true in the upgraded simulator;

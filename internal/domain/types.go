@@ -5,12 +5,13 @@ package domain
 import "time"
 
 type Position struct {
-	Symbol        string  `json:"symbol"`
-	Quantity      int     `json:"quantity"`
-	AverageCost   float64 `json:"average_cost"`
-	CurrentPrice  float64 `json:"current_price"`
-	MarketValue   float64 `json:"market_value"`
-	UnrealizedPnL float64 `json:"unrealized_pnl"`
+	Symbol        string    `json:"symbol"`
+	Quantity      int       `json:"quantity"`
+	AverageCost   float64   `json:"average_cost"`
+	CurrentPrice  float64   `json:"current_price"`
+	MarketValue   float64   `json:"market_value"`
+	UnrealizedPnL float64   `json:"unrealized_pnl"`
+	EntryDate     time.Time `json:"entry_date"`
 }
 
 type Order struct {
@@ -35,6 +36,7 @@ type SimulationConstraints struct {
 	ReserveCashFraction         float64 `json:"reserve_cash_fraction"`
 	StopLossPct                 float64 `json:"stop_loss_pct"`   // sell when price drops below avgCost*(1+StopLossPct)
 	TakeProfitPct               float64 `json:"take_profit_pct"` // sell when price rises above avgCost*(1+TakeProfitPct)
+	MaxHoldingDays              int     `json:"max_holding_days"`
 }
 
 type ExecutionPolicy struct {
