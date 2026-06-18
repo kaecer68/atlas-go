@@ -3,6 +3,8 @@ package llm_annotator
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,6 +56,56 @@ type KimiClient struct {
 	usage       Usage
 	budgetMu    sync.Mutex
 	budgetFired bool
+	cache       *responseCache
+	cacheTTL    time.Duration
+}
+
+// responseCache is a TTL-keyed string cache for LLM responses. A nil
+// *responseCache is a valid no-op receiver so callers can disable caching
+// without conditionals at the call site.
+type responseCache struct {
+	mu      sync.RWMutex
+	entries map[string]responseCacheEntry
+}
+
+type responseCacheEntry struct {
+	content   string
+	expiresAt time.Time
+}
+
+func (c *responseCache) get(key string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	e, ok := c.entries[key]
+	if !ok || time.Now().After(e.expiresAt) {
+		return "", false
+	}
+	return e.content, true
+}
+
+func (c *responseCache) put(key, content string, ttl time.Duration) {
+	if c == nil || ttl <= 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		c.entries = make(map[string]responseCacheEntry)
+	}
+	c.entries[key] = responseCacheEntry{content: content, expiresAt: time.Now().Add(ttl)}
+}
+
+// cacheKey hashes the deterministic portion of FailureContext. OccurredAt
+// is excluded so repeated annotations of the same failure share a cache
+// entry even when their timestamps differ.
+func cacheKey(fc FailureContext) string {
+	fc.OccurredAt = time.Time{}
+	data, _ := json.Marshal(fc)
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 // Usage is the cumulative token/accounting snapshot for a KimiClient.
@@ -78,6 +130,8 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 		limiter:     rate.NewLimiter(rate.Every(time.Second), 4),
 		maxAttempts: 3,
 		backoff:     defaultBackoff,
+		cache:       &responseCache{},
+		cacheTTL:    time.Hour,
 	}, nil
 }
 
@@ -94,9 +148,11 @@ func defaultBackoff(attempt int) time.Duration {
 // Name implements Annotator.
 func (k *KimiClient) Name() string { return "kimi" }
 
-// Annotate implements Annotator. It blocks on the rate limiter, then sends
-// the chat-completion request with automatic retry on transient errors
-// (5xx, 429). Client errors (4xx) and transport errors fail fast.
+// Annotate implements Annotator. It blocks on the rate limiter, checks the
+// response cache, then sends the chat-completion request with automatic retry
+// on transient errors (5xx, 429). Client errors (4xx) and transport errors
+// fail fast. Cache hits return immediately without an HTTP round-trip and
+// are not counted in Usage.
 func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, error) {
 	if err := k.limiter.Wait(ctx); err != nil {
 		return "", fmt.Errorf("%w: rate limit wait: %v", ErrUnavailable, err)
@@ -106,6 +162,14 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("%w: marshal request: %v", ErrUnavailable, err)
+	}
+
+	var key string
+	if k.cacheTTL > 0 {
+		key = cacheKey(fc)
+		if content, hit := k.cache.get(key); hit {
+			return content, nil
+		}
 	}
 
 	var lastErr error
@@ -121,6 +185,9 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 		content, used, retryable, err := k.doRequest(ctx, raw)
 		if err == nil {
 			k.recordUsage(used)
+			if key != "" {
+				k.cache.put(key, content, k.cacheTTL)
+			}
 			return content, nil
 		}
 		lastErr = err

@@ -261,6 +261,7 @@ func TestKimiClient_Annotate_TracksTokenUsage(t *testing.T) {
 
 	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
 	c.backoff = func(int) time.Duration { return 0 }
+	c.cacheTTL = 0
 	for i := 0; i < 3; i++ {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 			t.Fatalf("attempt %d: %v", i, err)
@@ -320,6 +321,7 @@ func newBudgetKimiClient(t *testing.T, promptTokens, completionTokens int64, thr
 		t.Fatalf("NewKimiClient: %v", err)
 	}
 	c.backoff = func(int) time.Duration { return 0 }
+	c.cacheTTL = 0
 	return c
 }
 
@@ -392,6 +394,7 @@ func TestBudgetAlert_DisabledByDefault(t *testing.T) {
 	defer srv.Close()
 	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL, MaxTokens: 64, Timeout: 5 * time.Second})
 	c.backoff = func(int) time.Duration { return 0 }
+	c.cacheTTL = 0
 	for i := 0; i < 3; i++ {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 			t.Fatalf("call %d: %v", i, err)
@@ -431,5 +434,55 @@ func TestBudgetAlert_CallbackCanCallUsageWithoutDeadlock(t *testing.T) {
 	defer mu.Unlock()
 	if fired == 0 {
 		t.Errorf("callback never fired; threshold=100 should trigger on first call (100 tokens)")
+	}
+}
+
+func TestKimiClient_Annotate_CacheHit(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Write([]byte(`{"choices":[{"message":{"content":"cached"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	fc := FailureContext{FrameID: "f1", FrameName: "n1", Layer: "L1"}
+	for i := 0; i < 3; i++ {
+		got, err := c.Annotate(context.Background(), fc)
+		if err != nil {
+			t.Fatalf("attempt %d: %v", i, err)
+		}
+		if got != "cached" {
+			t.Errorf("attempt %d: got %q, want %q", i, got, "cached")
+		}
+	}
+	if requests != 1 {
+		t.Errorf("expected 1 HTTP request (2 cache hits), got %d", requests)
+	}
+	if u := c.Usage(); u.Requests != 1 {
+		t.Errorf("Usage.Requests should count only HTTP calls, got %d", u.Requests)
+	}
+}
+
+func TestKimiClient_Annotate_CacheTTL(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Write([]byte(`{"choices":[{"message":{"content":"x"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	c.cacheTTL = 0
+	fc := FailureContext{FrameID: "f1", FrameName: "n1", Layer: "L1"}
+	for i := 0; i < 2; i++ {
+		if _, err := c.Annotate(context.Background(), fc); err != nil {
+			t.Fatalf("attempt %d: %v", i, err)
+		}
+	}
+	if requests != 2 {
+		t.Errorf("expected 2 HTTP requests (TTL=0 → no cache), got %d", requests)
 	}
 }
