@@ -357,12 +357,36 @@ func (h *Handlers) HandleAuditLog(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{"changes": changes}
 }
 
+func formatIntegrityErrors(errs []error) string {
+	msgs := make([]string, len(errs))
+	for i, e := range errs {
+		msgs[i] = e.Error()
+	}
+	return strings.Join(msgs, "; ")
+}
+
 // HandleReload reloads parameters from disk and updates the global singleton.
 func (h *Handlers) HandleReload(r *http.Request) (int, any) {
-	if err := config.ReloadParametersConfig(); err != nil {
+	path := h.paramsPath
+	if path == "" {
+		path = config.GetParametersConfigPath()
+	}
+
+	if errs := config.CheckParamsIntegrity(path); len(errs) > 0 {
+		return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("integrity check failed: %v", formatIntegrityErrors(errs))}
+	}
+
+	cfg, err := config.LoadParametersConfig(path)
+	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("reload failed: %v", err)}
 	}
-	reloaded := config.GetParametersConfig()
-	h.params = reloaded
-	return http.StatusOK, map[string]string{"status": "reloaded", "version": reloaded.Version}
+
+	if err := cfg.Validate(); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("validation failed: %v", err)}
+	}
+
+	*config.GetParametersConfig() = *cfg
+	h.params = cfg
+
+	return http.StatusOK, map[string]string{"status": "reloaded", "version": cfg.Version}
 }

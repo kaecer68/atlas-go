@@ -813,3 +813,59 @@ func TestHandleAgentNames_MissingFile(t *testing.T) {
 		t.Errorf("expected empty agents array, got %d entries", len(resp.Agents))
 	}
 }
+
+func TestRegisterCrossMarketRoutes_DegradedMetricsOnIncWired(t *testing.T) {
+	collector := NewMetricsCollector()
+	d := NewDashboardAPIWithGateway(".", ".", collector, NoopFetcher())
+	mux := http.NewServeMux()
+	d.RegisterCrossMarketRoutes(mux)
+
+	svc := d.GetCrossMarketService()
+	if svc == nil {
+		t.Fatal("expected cross-market service to be created")
+	}
+
+	dm := svc.GetDegradedMetrics()
+	if dm == nil {
+		t.Fatal("expected degraded metrics to be set on cross-market service")
+	}
+
+	dm.DegradedActivations.WithLabelValues("crossmarket", "snapshot_stale").Inc()
+
+	m, ok := collector.GetMetric("degraded_activations", map[string]string{"crossmarket": "snapshot_stale"})
+	if !ok {
+		t.Fatalf("expected degraded_activations metric to be recorded in collector")
+	}
+	if m.Value != 1.0 {
+		t.Fatalf("expected metric value 1.0, got %v", m.Value)
+	}
+}
+
+func TestRegisterCrossMarketRoutes_DegradedEndpointRegistered(t *testing.T) {
+	collector := NewMetricsCollector()
+	d := NewDashboardAPIWithGateway(".", ".", collector, NoopFetcher())
+	mux := http.NewServeMux()
+	d.RegisterCrossMarketRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/degraded", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected /degraded status 200, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var snap map[string][]map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&snap); err != nil {
+		t.Fatalf("decode /degraded response: %v", err)
+	}
+	if _, ok := snap["degraded_activations"]; !ok {
+		t.Error("expected 'degraded_activations' key in /degraded snapshot")
+	}
+	if _, ok := snap["provider_errors"]; !ok {
+		t.Error("expected 'provider_errors' key in /degraded snapshot")
+	}
+}
