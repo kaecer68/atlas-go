@@ -3,14 +3,45 @@ package metrics
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
+type degradedSnapshotJSON struct {
+	Timestamp           time.Time        `json:"timestamp"`
+	DegradedActivations []map[string]any `json:"degraded_activations"`
+	ProviderErrors      []map[string]any `json:"provider_errors"`
+}
+
+func sampleToMap(s Sample) map[string]any {
+	entry := make(map[string]any, len(s.Labels)+2)
+	for k, v := range s.Labels {
+		entry[k] = v
+	}
+	entry["value"] = s.Value
+	entry["timestamp"] = s.Timestamp
+	return entry
+}
+
 // HandleDegraded returns an HTTP handler that exposes the current degraded
-// metrics snapshot as JSON.
+// metrics snapshot as JSON. Each sample is serialized as a flat map
+// (labels + value + timestamp) for backward compatibility with existing
+// dashboards and the Prometheus bridge; the top-level timestamp marks the
+// capture moment.
 func HandleDegraded(dm *DegradedMetrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		snap := dm.Snapshot()
+		out := degradedSnapshotJSON{
+			Timestamp:           snap.Timestamp,
+			DegradedActivations: make([]map[string]any, 0, len(snap.DegradedActivations)),
+			ProviderErrors:      make([]map[string]any, 0, len(snap.ProviderErrors)),
+		}
+		for _, s := range snap.DegradedActivations {
+			out.DegradedActivations = append(out.DegradedActivations, sampleToMap(s))
+		}
+		for _, s := range snap.ProviderErrors {
+			out.ProviderErrors = append(out.ProviderErrors, sampleToMap(s))
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(snap)
+		_ = json.NewEncoder(w).Encode(out)
 	}
 }

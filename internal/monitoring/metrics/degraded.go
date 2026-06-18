@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // OnInc is called whenever a DegradedMetrics counter is incremented.
@@ -132,41 +133,54 @@ func orderedLabelValues(labels map[string]string, names []string) []string {
 	return values
 }
 
-func (cv *CounterVec) snapshotEntries() []map[string]any {
+func (cv *CounterVec) snapshotSamplesAt(t time.Time) []Sample {
 	cv.mu.Lock()
 	defer cv.mu.Unlock()
 
-	type entry struct {
-		labels map[string]string
-		value  float64
-	}
-
-	entries := make([]entry, 0, len(cv.counters))
+	samples := make([]Sample, 0, len(cv.counters))
 	for _, c := range cv.counters {
-		entries = append(entries, entry{labels: c.labels, value: c.Value()})
+		labelsCopy := make(map[string]string, len(c.labels))
+		for k, v := range c.labels {
+			labelsCopy[k] = v
+		}
+		samples = append(samples, Sample{
+			Labels:    labelsCopy,
+			Value:     c.Value(),
+			Timestamp: t,
+		})
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return labelKey(entries[i].labels) < labelKey(entries[j].labels)
+	sort.Slice(samples, func(i, j int) bool {
+		return labelKey(samples[i].Labels) < labelKey(samples[j].Labels)
 	})
 
-	result := make([]map[string]any, len(entries))
-	for i, e := range entries {
-		entry := make(map[string]any, len(e.labels)+1)
-		for k, v := range e.labels {
-			entry[k] = v
-		}
-		entry["value"] = e.value
-		result[i] = entry
-	}
-	return result
+	return samples
 }
 
-// Snapshot returns the current values of all degraded counters.
-func (m *DegradedMetrics) Snapshot() map[string][]map[string]any {
-	return map[string][]map[string]any{
-		"degraded_activations": m.DegradedActivations.snapshotEntries(),
-		"provider_errors":      m.ProviderErrors.snapshotEntries(),
+// Sample is a single labeled counter observation at a point in time.
+type Sample struct {
+	Labels    map[string]string
+	Value     float64
+	Timestamp time.Time
+}
+
+// DegradedSnapshot is a point-in-time view of all degraded counters.
+type DegradedSnapshot struct {
+	Timestamp           time.Time
+	DegradedActivations []Sample
+	ProviderErrors      []Sample
+}
+
+// Snapshot returns the current values of all degraded counters, stamped
+// with the wall-clock time at which the snapshot was captured. The
+// returned samples contain copies of the label maps so callers can
+// mutate them without affecting subsequent snapshots.
+func (m *DegradedMetrics) Snapshot() DegradedSnapshot {
+	now := time.Now()
+	return DegradedSnapshot{
+		Timestamp:           now,
+		DegradedActivations: m.DegradedActivations.snapshotSamplesAt(now),
+		ProviderErrors:      m.ProviderErrors.snapshotSamplesAt(now),
 	}
 }
 
