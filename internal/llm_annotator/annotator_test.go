@@ -298,6 +298,112 @@ func TestKimiClient_Annotate_NoUsageOnFailure(t *testing.T) {
 	}
 }
 
+// newLabeledKimiClient returns a KimiClient that records 100 tokens (50 prompt
+// + 50 completion) per call, with no budget alert, for per-feature tests.
+func newLabeledKimiClient(t *testing.T) *KimiClient {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":50,"completion_tokens":50,"total_tokens":100}}`))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL, MaxTokens: 64, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("NewKimiClient: %v", err)
+	}
+	c.backoff = func(int) time.Duration { return 0 }
+	c.cacheTTL = 0
+	return c
+}
+
+func TestPerFeatureUsage_TracksPerLabel(t *testing.T) {
+	c := newLabeledKimiClient(t)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if _, err := c.Annotate(ctx, FailureContext{FrameID: "x", Label: "alert"}); err != nil {
+			t.Fatalf("alert call %d: %v", i, err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := c.Annotate(ctx, FailureContext{FrameID: "x", Label: "summary"}); err != nil {
+			t.Fatalf("summary call %d: %v", i, err)
+		}
+	}
+	alertU := c.UsageByLabel("alert")
+	summaryU := c.UsageByLabel("summary")
+	if alertU.Requests != 3 || alertU.TotalTokens != 300 {
+		t.Errorf("alert usage = %+v, want Requests=3 TotalTokens=300", alertU)
+	}
+	if summaryU.Requests != 2 || summaryU.TotalTokens != 200 {
+		t.Errorf("summary usage = %+v, want Requests=2 TotalTokens=200", summaryU)
+	}
+}
+
+func TestPerFeatureUsage_TotalIncludesAllLabels(t *testing.T) {
+	c := newLabeledKimiClient(t)
+	ctx := context.Background()
+	labels := []string{"alpha", "beta", "gamma", "alpha", "beta"}
+	for _, l := range labels {
+		if _, err := c.Annotate(ctx, FailureContext{FrameID: "x", Label: l}); err != nil {
+			t.Fatalf("label %q: %v", l, err)
+		}
+	}
+	total := c.Usage()
+	if total.Requests != 5 || total.TotalTokens != 500 {
+		t.Errorf("total = %+v, want Requests=5 TotalTokens=500", total)
+	}
+	var sumRequests, sumTokens int64
+	for _, u := range c.UsageAll() {
+		sumRequests += u.Requests
+		sumTokens += u.TotalTokens
+	}
+	if sumRequests != total.Requests || sumTokens != total.TotalTokens {
+		t.Errorf("per-label sum (req=%d, tok=%d) != total (req=%d, tok=%d)",
+			sumRequests, sumTokens, total.Requests, total.TotalTokens)
+	}
+}
+
+func TestPerFeatureUsage_EmptyLabelNotTracked(t *testing.T) {
+	c := newLabeledKimiClient(t)
+	ctx := context.Background()
+	if _, err := c.Annotate(ctx, FailureContext{FrameID: "x"}); err != nil {
+		t.Fatalf("empty-label call: %v", err)
+	}
+	if _, err := c.Annotate(ctx, FailureContext{FrameID: "x", Label: "named"}); err != nil {
+		t.Fatalf("named call: %v", err)
+	}
+	all := c.UsageAll()
+	if len(all) != 1 {
+		t.Errorf("UsageAll() should have 1 entry (named only), got %d: %+v", len(all), all)
+	}
+	if _, ok := all[""]; ok {
+		t.Errorf("empty label must not appear in UsageAll(), got %+v", all)
+	}
+	if _, ok := all["named"]; !ok {
+		t.Errorf("named label missing from UsageAll(), got %+v", all)
+	}
+	if c.Usage().Requests != 2 {
+		t.Errorf("total requests = %d, want 2 (both calls recorded)", c.Usage().Requests)
+	}
+}
+
+func TestPerFeatureUsage_UsageAllReturnsCopy(t *testing.T) {
+	c := newLabeledKimiClient(t)
+	if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x", Label: "feat"}); err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	all := c.UsageAll()
+	all["feat"] = Usage{Requests: 9999, TotalTokens: 9999}
+	all["rogue"] = Usage{Requests: 1}
+	fresh := c.UsageByLabel("feat")
+	if fresh.Requests != 1 || fresh.TotalTokens != 100 {
+		t.Errorf("UsageByLabel saw mutated value: %+v", fresh)
+	}
+	if _, ok := c.UsageAll()["rogue"]; ok {
+		t.Errorf("rogue key leaked into client state")
+	}
+}
+
 // newBudgetKimiClient returns a KimiClient wired to a stub server that always
 // returns a chat-completion with the supplied per-call token counts. The
 // shared server is closed via t.Cleanup.
