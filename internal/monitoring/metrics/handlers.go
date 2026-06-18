@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 )
 
 type degradedSnapshotJSON struct {
@@ -43,5 +45,26 @@ func HandleDegraded(dm *DegradedMetrics) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
+	}
+}
+
+// HandleCost returns an HTTP handler that exposes a KimiClient's CostReport
+// as JSON. costPer1kTokens is the USD price per 1,000 tokens (e.g. 0.001
+// = $0.001/1k). Pass 0 to compute token counts without a USD total. The
+// handler returns 503 if client is nil so a non-KimiClient wiring degrades
+// gracefully instead of 500ing.
+func HandleCost(client *llm_annotator.KimiClient, costPer1kTokens float64) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if client == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "llm annotator cost endpoint unavailable: no KimiClient wired",
+			})
+			return
+		}
+		report := client.CostReport(costPer1kTokens)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(report)
 	}
 }

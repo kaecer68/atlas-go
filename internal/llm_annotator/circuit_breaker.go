@@ -53,6 +53,14 @@ func (s CircuitState) String() string {
 // ForceOpen sets manualOverride, which prevents subsequent successes
 // from auto-closing the breaker — the budget callback's "stop calling
 // the LLM" decision persists until an operator calls Reset.
+//
+// NOTE: This is a local implementation rather than a reuse of
+// internal/apigateway/circuitbreaker.go because of an unavoidable
+// import cycle: monitoring.dashboard_api imports llm_annotator, and
+// monitoring.api.scheduler imports apigateway, so llm_annotator cannot
+// import apigateway. The local type also has a smaller surface
+// (Reset, manualOverride, ErrCircuitOpen sentinel) that the apigateway
+// type does not need but this client does.
 type CircuitBreaker struct {
 	mu             sync.RWMutex
 	state          CircuitState
