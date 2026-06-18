@@ -191,22 +191,37 @@ func TestHandleBacktestRun_Success(t *testing.T) {
 }
 
 func TestHandleBacktestRun_AlreadyRunning(t *testing.T) {
-	h := newTestHandlers(t)
-	// Start first backtest
-	req := postJSON(t, "/api/backtest/run", map[string]string{
-		"start": "2024-01-01", "end": "2024-06-01",
-	})
-	_, _ = h.HandleBacktestRun(req)
-	// Try to start a second one while first is running
-	req2 := postJSON(t, "/api/backtest/run", map[string]string{
-		"start": "2024-02-01", "end": "2024-07-01",
-	})
-	status, body := h.HandleBacktestRun(req2)
-	assertStatus(t, status, http.StatusConflict)
-	m := assertJSONKey(t, body, "error")
-	if m["error"] != "backtest already running" {
-		t.Errorf("error = %q, want %q", m["error"], "backtest already running")
+	// The backtest runs asynchronously and may complete in microseconds
+	// on empty test data. We retry the whole sequence (start + immediately
+	// attempt second run) until we observe a 409, or until deadline.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		h := newTestHandlers(t)
+
+		req := postJSON(t, "/api/backtest/run", map[string]string{
+			"start": "2024-01-01", "end": "2024-06-01",
+		})
+		_, _ = h.HandleBacktestRun(req)
+
+		// Fire second run immediately after first — no sleep.
+		// If the backtest goroutine hasn't set running=false yet,
+		// Start() will see running=true and return error→409.
+		req2 := postJSON(t, "/api/backtest/run", map[string]string{
+			"start": "2024-02-01", "end": "2024-07-01",
+		})
+		status, body := h.HandleBacktestRun(req2)
+
+		if status == http.StatusConflict {
+			m := assertJSONKey(t, body, "error")
+			if m["error"] == "backtest already running" {
+				return
+			}
+			t.Errorf("error = %q, want %q", m["error"], "backtest already running")
+			return
+		}
+		// Backtest completed too fast — retry with fresh service.
 	}
+	t.Fatal("backtest never returned 409 after 5s (backtest always completes before second Start)")
 }
 
 // --- HandleBacktestStatus ---
