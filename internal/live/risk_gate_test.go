@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -139,6 +140,81 @@ func TestRiskGate_Status(t *testing.T) {
 		if _, ok := status[k]; !ok {
 			t.Fatalf("expected key %q in status", k)
 		}
+	}
+}
+
+func TestRiskGate_ConcurrentRecordFill_NoRace(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.50,
+		VaRCriticalThreshold: 0.50,
+	})
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 4)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			gate.RecordFill(domain.SideSell, 100.0, 90.0, 10, 1000.0)
+		}()
+		go func() {
+			defer wg.Done()
+			gate.UpdateVaR(0.05)
+		}()
+		go func() {
+			defer wg.Done()
+			gate.SetHaltTrading(true)
+			gate.SetHaltTrading(false)
+		}()
+		go func() {
+			defer wg.Done()
+			_ = gate.Check(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100})
+		}()
+	}
+
+	wg.Wait()
+
+	status := gate.Status()
+	if _, ok := status["daily_loss"]; !ok {
+		t.Fatal("status missing daily_loss after concurrent calls")
+	}
+}
+
+func TestRiskGate_MidnightReset_DoesNotAccumulate(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.10,
+		VaRCriticalThreshold: 0.10,
+	})
+
+	gate.mu.Lock()
+	gate.today = "2020-01-01"
+	gate.dailyLoss = 0.05
+	gate.mu.Unlock()
+
+	gate.UpdateDailyLoss(0.10)
+
+	status := gate.Status()
+	loss, _ := status["daily_loss"].(float64)
+	if loss != 0.10 {
+		t.Fatalf("expected daily_loss 0.10 after midnight reset+update, got %.4f", loss)
+	}
+	if gate.today == "2020-01-01" {
+		t.Fatal("expected today field to be updated to current date")
+	}
+}
+
+func TestRiskGate_Check_AllowsLossExactlyAtThreshold(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+
+	gate.UpdateDailyLoss(0.05)
+
+	order := domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100}
+	if err := gate.Check(context.Background(), order); err != nil {
+		t.Fatalf("expected order allowed when loss equals threshold, got: %v", err)
 	}
 }
 
