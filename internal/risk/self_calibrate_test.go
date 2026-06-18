@@ -2,6 +2,8 @@ package risk
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -123,6 +125,76 @@ func TestReplayWithThresholds(t *testing.T) {
 	adjusted := replayWithThresholds(results, cfg)
 	if len(adjusted) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(adjusted))
+	}
+}
+
+func TestReplayWithThresholds_UsesNotionalNotReturn(t *testing.T) {
+	cfg := config.DefaultParametersConfig()
+	cfg.Risk.MaxPositionSize.Value = 0.10
+	cfg.Risk.MaxDailyLossPct.Value = 0.03
+
+	results := []replayResult{
+		{OrderPrice: 1000, Quantity: 1000, ForwardReturn: -0.05},
+		{OrderPrice: 100, Quantity: 10, ForwardReturn: -0.05},
+	}
+	adjusted := replayWithThresholds(results, cfg)
+
+	if !adjusted[0].WouldHaveBlocked {
+		t.Fatal("expected notional=1M blocked at 10%% cap on 3M ref")
+	}
+	if adjusted[1].WouldHaveBlocked {
+		t.Fatal("expected notional=1000 NOT blocked at 10%% cap on 3M ref")
+	}
+}
+
+func TestApplyCalibrationChange_RecordsSetParameterError(t *testing.T) {
+	cfg := config.DefaultParametersConfig()
+	ie := config.NewInferenceEngine(cfg)
+	report := &CalibrationReport{}
+
+	applyCalibrationChange(ie, "unknown_param_xyz", 0.5, report)
+
+	if len(report.Errors) != 1 {
+		t.Fatalf("expected 1 error recorded, got %d", len(report.Errors))
+	}
+	if !strings.Contains(report.Errors[0], "unknown_param_xyz") {
+		t.Fatalf("expected error to mention param name, got: %s", report.Errors[0])
+	}
+}
+
+func TestApplyCalibrationChange_NoErrorOnSuccess(t *testing.T) {
+	cfg := config.DefaultParametersConfig()
+	ie := config.NewInferenceEngine(cfg)
+	report := &CalibrationReport{}
+
+	applyCalibrationChange(ie, "risk_max_position_size", 0.15, report)
+
+	if len(report.Errors) != 0 {
+		t.Fatalf("expected no errors on valid param, got %v", report.Errors)
+	}
+}
+
+func TestDetectOscillation_AlternatingReturnsTrue(t *testing.T) {
+	if !detectOscillation([]float64{0.05, 0.10, 0.06, 0.11}) {
+		t.Fatal("expected oscillation detected for alternating up/down sequence")
+	}
+}
+
+func TestDetectOscillation_MonotonicReturnsFalse(t *testing.T) {
+	if detectOscillation([]float64{0.05, 0.06, 0.07, 0.08}) {
+		t.Fatal("expected no oscillation for monotonic increasing sequence")
+	}
+	if detectOscillation([]float64{0.10, 0.09, 0.08, 0.07}) {
+		t.Fatal("expected no oscillation for monotonic decreasing sequence")
+	}
+}
+
+func TestDetectOscillation_ShortHistoryReturnsFalse(t *testing.T) {
+	if detectOscillation([]float64{0.05}) {
+		t.Fatal("expected no oscillation with single value")
+	}
+	if detectOscillation(nil) {
+		t.Fatal("expected no oscillation with empty history")
 	}
 }
 
@@ -322,5 +394,42 @@ func TestSelfCalibrateBoundsCurrentBuggyValues(t *testing.T) {
 			t.Errorf("BUG: %s proposed value %v accepted, but it falls 20x+ outside [val*0.3, val*3.0]",
 				v.name, v.value)
 		}
+	}
+}
+
+func TestSelfCalibrate_Concurrent(t *testing.T) {
+	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	now := time.Now()
+	outcomes := []SessionOutcome{
+		{
+			SessionID:      "session-20260501-daily",
+			PortfolioValue: 1_000_000,
+			EndingCash:     200_000,
+			Orders: []HistoricOrder{
+				{Symbol: "2330", Side: "buy", Notional: 50_000, ForwardReturn: 0.03, Hit: true},
+				{Symbol: "2303", Side: "buy", Notional: 30_000, ForwardReturn: -0.08, Hit: false},
+				{Symbol: "2317", Side: "buy", Notional: 40_000, ForwardReturn: -0.12, Hit: false},
+			},
+			Timestamp: now,
+		},
+	}
+	provider := &mockCalibrationProvider{Sessions: outcomes}
+
+	const N = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, N)
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := g.SelfCalibrate(context.Background(), provider, 5); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent SelfCalibrate error: %v", err)
 	}
 }

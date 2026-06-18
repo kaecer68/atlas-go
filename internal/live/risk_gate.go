@@ -79,6 +79,31 @@ func (g *RiskGate) SetHaltTrading(halt bool) {
 	g.haltTrading = halt
 }
 
+// SyncHaltFromCircuitState mirrors the circuit breaker state into the risk
+// gate's halt flag. Halted and Paused both block new orders; Normal clears
+// the halt. This is the canonical wire point between CircuitBreaker and
+// RiskGate.
+func (g *RiskGate) SyncHaltFromCircuitState(state CircuitState) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.haltTrading = state == CircuitHalted || state == CircuitPaused
+}
+
+// SyncRiskGateFromCircuitBreaker is the canonical wire point between the
+// circuit breaker and the risk gate. It mirrors the circuit state into the
+// risk gate's halt flag and, if a non-nil provider is given, refreshes the
+// VaR estimate. The orchestrator should call this on a schedule (e.g., after
+// each circuit evaluation or market cycle).
+func SyncRiskGateFromCircuitBreaker(rg *RiskGate, cb *CircuitBreaker, varProvider func() float64) {
+	if rg == nil || cb == nil {
+		return
+	}
+	rg.SyncHaltFromCircuitState(cb.State())
+	if varProvider != nil {
+		rg.UpdateVaR(varProvider())
+	}
+}
+
 // UpdateVaR updates the current Value-at-Risk estimate.
 func (g *RiskGate) UpdateVaR(value float64) {
 	g.mu.Lock()
@@ -92,6 +117,37 @@ func (g *RiskGate) UpdateDailyLoss(loss float64) {
 	defer g.mu.Unlock()
 	g.maybeResetDaily()
 	g.dailyLoss = loss
+}
+
+// RecordFill ingests a fill event and updates the daily loss accumulator
+// when the fill resulted in a loss. Gains do not reduce the accumulator.
+//
+// For SELL fills: PnL = (fillPrice - orderPrice) * qty
+// For BUY fills:  PnL = (orderPrice - fillPrice) * qty
+//
+// portfolioValue is the pre-fill portfolio notional used to express loss
+// as a fraction. If non-positive, the call is a no-op.
+func (g *RiskGate) RecordFill(side domain.Side, orderPrice, fillPrice, qty, portfolioValue float64) {
+	if portfolioValue <= 0 || qty == 0 {
+		return
+	}
+	var pnl float64
+	if side == domain.SideSell {
+		pnl = (fillPrice - orderPrice) * qty
+	} else {
+		pnl = (orderPrice - fillPrice) * qty
+	}
+	if pnl >= 0 {
+		return
+	}
+	lossFraction := -pnl / portfolioValue
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.maybeResetDaily()
+	if lossFraction > g.dailyLoss {
+		g.dailyLoss = lossFraction
+	}
 }
 
 // ResetDaily resets the daily loss accumulator to zero.

@@ -541,3 +541,132 @@ func TestOrderManagerPublishesSignerErrorClassification(t *testing.T) {
 		t.Fatalf("expected order error event but none was received")
 	}
 }
+
+type haltOnFirstSubmitBroker struct {
+	results []BrokerResult
+	errors  []error
+	idx     int
+	gate    *RiskGate
+	submitN int
+}
+
+func (b *haltOnFirstSubmitBroker) Mode() string { return "test" }
+
+func (b *haltOnFirstSubmitBroker) SubmitOrder(_ context.Context, _ domain.Order) (BrokerResult, error) {
+	idx := b.idx
+	b.idx++
+	b.submitN++
+	if b.gate != nil {
+		b.gate.SetHaltTrading(true)
+	}
+	if idx < len(b.errors) && b.errors[idx] != nil {
+		return BrokerResult{}, b.errors[idx]
+	}
+	if idx < len(b.results) {
+		return b.results[idx], nil
+	}
+	return BrokerResult{}, errors.New("script exhausted")
+}
+
+func TestOrderManager_Run_RechecksRiskGateOnRetry(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+	bus := NewChannelEventBus(16)
+	t.Cleanup(func() { _ = bus.Close() })
+
+	broker := &haltOnFirstSubmitBroker{
+		errors:  []error{errors.New("temporary"), nil},
+		results: []BrokerResult{{OrderID: "oid-1", Status: "filled", FillPrice: 100}},
+		gate:    gate,
+	}
+
+	mgr := NewOrderManager(broker, bus, 1, 0, gate)
+	mgr.SetPortfolioValueProvider(func() float64 { return 1000.0 })
+
+	err := mgr.Run(context.Background(), domain.Order{
+		Symbol:   "2330",
+		Side:     domain.SideBuy,
+		Quantity: 10,
+		Price:    100.0,
+	})
+
+	if err == nil {
+		t.Fatal("expected error when risk gate halts on retry")
+	}
+	if !strings.Contains(err.Error(), "risk gate blocked") {
+		t.Fatalf("expected risk gate blocked error, got: %v", err)
+	}
+	if broker.submitN != 1 {
+		t.Fatalf("expected exactly 1 broker submit (halt blocks retry), got %d", broker.submitN)
+	}
+}
+
+func TestOrderManager_Run_FilledStatusRecordsFillToRiskGate(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+	bus := NewChannelEventBus(16)
+	t.Cleanup(func() { _ = bus.Close() })
+
+	broker := &scriptedBroker{
+		results: []BrokerResult{
+			{OrderID: "oid-1", Status: "filled", FillPrice: 90.0},
+		},
+	}
+
+	mgr := NewOrderManager(broker, bus, 0, 0, gate)
+	mgr.SetPortfolioValueProvider(func() float64 { return 1000.0 })
+
+	err := mgr.Run(context.Background(), domain.Order{
+		Symbol:   "2330",
+		Side:     domain.SideSell,
+		Quantity: 10,
+		Price:    100.0,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	status := gate.Status()
+	loss, _ := status["daily_loss"].(float64)
+	if loss != 0.10 {
+		t.Fatalf("expected daily_loss 0.10 from filled order, got %.4f", loss)
+	}
+}
+
+func TestOrderManager_Run_PlacedStatusDoesNotRecordFill(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+	bus := NewChannelEventBus(16)
+	t.Cleanup(func() { _ = bus.Close() })
+
+	broker := &scriptedBroker{
+		results: []BrokerResult{
+			{OrderID: "oid-1", Status: "placed", FillPrice: 0},
+		},
+	}
+
+	mgr := NewOrderManager(broker, bus, 0, 0, gate)
+	mgr.SetPortfolioValueProvider(func() float64 { return 1000.0 })
+
+	err := mgr.Run(context.Background(), domain.Order{
+		Symbol:   "2330",
+		Side:     domain.SideSell,
+		Quantity: 10,
+		Price:    100.0,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	status := gate.Status()
+	loss, _ := status["daily_loss"].(float64)
+	if loss != 0 {
+		t.Fatalf("expected daily_loss 0 for placed (not filled) status, got %.4f", loss)
+	}
+}

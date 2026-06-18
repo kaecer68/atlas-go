@@ -45,6 +45,7 @@ type CalibrationReport struct {
 	SessionSpan string            `json:"session_span"`
 	Evaluated   int               `json:"orders_evaluated"`
 	Changes     []ParameterChange `json:"changes"`
+	Errors      []string          `json:"errors,omitempty"`
 	Verdict     string            `json:"verdict"`
 	Summary     string            `json:"summary"`
 }
@@ -61,6 +62,8 @@ type ParameterChange struct {
 type replayResult struct {
 	Blocked          bool
 	ForwardReturn    float64
+	OrderPrice       float64
+	Quantity         int
 	WouldHaveBlocked bool
 }
 
@@ -107,6 +110,8 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 			allResults = append(allResults, replayResult{
 				Blocked:          blocked,
 				ForwardReturn:    o.ForwardReturn,
+				OrderPrice:       order.Price,
+				Quantity:         order.Quantity,
 				WouldHaveBlocked: blocked,
 			})
 			if !blocked {
@@ -171,24 +176,19 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		change.Confidence = classifyDelta(delta, len(sessions))
 
 		report.Changes = append(report.Changes, change)
-		_ = ie.SetParameter(name, best)
+		applyCalibrationChange(ie, name, best, report)
 	}
 
 	// Persist calibrated parameters to disk so they survive server restarts.
 	if len(report.Changes) > 0 {
 		now := time.Now()
-		params := config.GetParametersConfig()
 		for _, name := range paramNames {
 			switch name {
-			case "risk_max_position_size":
-				params.Risk.MaxPositionSize.LastCalibrated = &now
-				params.Risk.MaxPositionSize.CalibrationMethod = "bayesian_optimization"
-			case "risk_max_daily_loss_pct":
-				params.Risk.MaxDailyLossPct.LastCalibrated = &now
-				params.Risk.MaxDailyLossPct.CalibrationMethod = "bayesian_optimization"
+			case "risk_max_position_size", "risk_max_daily_loss_pct":
+				config.SetRiskCalibrationMetadata(name, now, "bayesian_optimization")
 			}
 		}
-		if err := params.LockedSaveWithRollback(config.GetParametersConfigPath()); err != nil {
+		if err := config.GetParametersConfig().LockedSaveWithRollback(config.GetParametersConfigPath()); err != nil {
 			// Non-fatal: calibration results remain valid in memory.
 			fmt.Printf("self_calibrate: failed to persist parameters: %v\n", err)
 		}
@@ -306,16 +306,49 @@ func replayWithThresholds(results []replayResult, cfg *config.ParametersConfig) 
 	copy(adjusted, results)
 
 	for i, r := range results {
-		notional := 0.0
-		if r.ForwardReturn != 0 {
-			notional = math.Abs(r.ForwardReturn)
-		}
+		notional := r.OrderPrice * float64(r.Quantity)
 		posPct := notional / 3_000_000
 		lossPct := notional * 1.5 / 3_000_000
 
 		adjusted[i].WouldHaveBlocked = posPct > maxPosition || lossPct > maxDailyLoss
 	}
 	return adjusted
+}
+
+// applyCalibrationChange writes a single optimized parameter through the
+// inference engine and surfaces any write failure into the report rather
+// than silently dropping it. Calibration continues for the remaining
+// parameters; one bad write does not poison the whole cycle.
+func applyCalibrationChange(ie *config.InferenceEngine, name string, value float64, report *CalibrationReport) {
+	if err := ie.SetParameter(name, value); err != nil {
+		report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", name, err))
+	}
+}
+
+// detectOscillation returns true when the recent history alternates sign
+// more often than it continues — i.e., consecutive Bayesian runs are
+// pushing the parameter back and forth instead of converging. Used to
+// refuse changes that would destabilize the risk gate.
+func detectOscillation(history []float64) bool {
+	if len(history) < 3 {
+		return false
+	}
+	signChanges := 0
+	intervals := len(history) - 1
+	for i := 2; i < len(history); i++ {
+		delta := history[i] - history[i-1]
+		if delta == 0 {
+			continue
+		}
+		prev := history[i-1] - history[i-2]
+		if prev == 0 {
+			continue
+		}
+		if (delta > 0) != (prev > 0) {
+			signChanges++
+		}
+	}
+	return signChanges*2 >= intervals
 }
 
 func classifyDelta(deltaPct float64, nSessions int) string {
