@@ -58,6 +58,9 @@ func run(args []string) error {
 	}
 
 	if *update {
+		if *replayPath == "" {
+			return fmt.Errorf("calibrate-seasonal: refusing --update with synthetic 2024 fallback data; rerun with --replay <path> to supply real stock returns before writing to configs/parameters.json")
+		}
 		if err := updateParametersFile(results, *updateThreshold, *replayPath); err != nil {
 			return fmt.Errorf("update parameters: %w", err)
 		}
