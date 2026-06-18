@@ -79,6 +79,31 @@ func (g *RiskGate) SetHaltTrading(halt bool) {
 	g.haltTrading = halt
 }
 
+// SyncHaltFromCircuitState mirrors the circuit breaker state into the risk
+// gate's halt flag. Halted and Paused both block new orders; Normal clears
+// the halt. This is the canonical wire point between CircuitBreaker and
+// RiskGate.
+func (g *RiskGate) SyncHaltFromCircuitState(state CircuitState) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.haltTrading = state == CircuitHalted || state == CircuitPaused
+}
+
+// SyncRiskGateFromCircuitBreaker is the canonical wire point between the
+// circuit breaker and the risk gate. It mirrors the circuit state into the
+// risk gate's halt flag and, if a non-nil provider is given, refreshes the
+// VaR estimate. The orchestrator should call this on a schedule (e.g., after
+// each circuit evaluation or market cycle).
+func SyncRiskGateFromCircuitBreaker(rg *RiskGate, cb *CircuitBreaker, varProvider func() float64) {
+	if rg == nil || cb == nil {
+		return
+	}
+	rg.SyncHaltFromCircuitState(cb.State())
+	if varProvider != nil {
+		rg.UpdateVaR(varProvider())
+	}
+}
+
 // UpdateVaR updates the current Value-at-Risk estimate.
 func (g *RiskGate) UpdateVaR(value float64) {
 	g.mu.Lock()

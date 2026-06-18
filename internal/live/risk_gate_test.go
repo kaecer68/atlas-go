@@ -142,6 +142,42 @@ func TestRiskGate_Status(t *testing.T) {
 	}
 }
 
+func TestRiskGate_SyncHaltFromCircuitState(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+
+	gate.SyncHaltFromCircuitState(CircuitHalted)
+	if !gate.Status()["halt_trading"].(bool) {
+		t.Fatal("expected halt_trading true after Halted sync")
+	}
+
+	gate.SyncHaltFromCircuitState(CircuitNormal)
+	if gate.Status()["halt_trading"].(bool) {
+		t.Fatal("expected halt_trading false after Normal sync")
+	}
+
+	gate.SyncHaltFromCircuitState(CircuitPaused)
+	if !gate.Status()["halt_trading"].(bool) {
+		t.Fatal("expected halt_trading true after Paused sync (close-only)")
+	}
+}
+
+func TestRiskGate_UpdateVaR_BlocksOrderAboveThreshold(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0,
+		VaRCriticalThreshold: 0.10,
+	})
+
+	gate.UpdateVaR(0.15)
+
+	order := domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100}
+	if err := gate.Check(context.Background(), order); err == nil {
+		t.Fatal("expected order blocked when VaR exceeds threshold")
+	}
+}
+
 func TestRiskGate_RecordFill_UpdatesDailyLossOnLoss(t *testing.T) {
 	gate := NewRiskGate(RiskGateConfig{
 		MaxDailyLossPct:      0.05,
