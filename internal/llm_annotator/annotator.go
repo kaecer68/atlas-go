@@ -47,17 +47,18 @@ func (m *MockAnnotator) Annotate(_ context.Context, _ FailureContext) (string, e
 // It is OpenAI-API compatible, so the same struct would work for any
 // OpenAI-compatible endpoint with a different BaseURL.
 type KimiClient struct {
-	cfg         Config
-	hc          *http.Client
-	limiter     *rate.Limiter
-	maxAttempts int
-	backoff     func(attempt int) time.Duration
-	usageMu     sync.Mutex
-	usage       Usage
-	budgetMu    sync.Mutex
-	budgetFired bool
-	cache       *responseCache
-	cacheTTL    time.Duration
+	cfg          Config
+	hc           *http.Client
+	limiter      *rate.Limiter
+	maxAttempts  int
+	backoff      func(attempt int) time.Duration
+	usageMu      sync.Mutex
+	usage        Usage
+	usageByLabel map[string]Usage
+	budgetMu     sync.Mutex
+	budgetFired  bool
+	cache        *responseCache
+	cacheTTL     time.Duration
 }
 
 // responseCache is a TTL-keyed string cache for LLM responses. A nil
@@ -125,13 +126,14 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 		return nil, err
 	}
 	return &KimiClient{
-		cfg:         cfg,
-		hc:          &http.Client{Timeout: cfg.Timeout},
-		limiter:     rate.NewLimiter(rate.Every(time.Second), 4),
-		maxAttempts: 3,
-		backoff:     defaultBackoff,
-		cache:       &responseCache{},
-		cacheTTL:    time.Hour,
+		cfg:          cfg,
+		hc:           &http.Client{Timeout: cfg.Timeout},
+		limiter:      rate.NewLimiter(rate.Every(time.Second), 4),
+		maxAttempts:  3,
+		backoff:      defaultBackoff,
+		usageByLabel: make(map[string]Usage),
+		cache:        &responseCache{},
+		cacheTTL:     time.Hour,
 	}, nil
 }
 
@@ -139,6 +141,27 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 // Safe to call from any goroutine.
 func (k *KimiClient) Usage() Usage {
 	return k.usage
+}
+
+// UsageByLabel returns the cumulative Usage recorded against the given
+// per-feature label. A zero Usage is returned for unknown labels. Safe
+// to call from any goroutine.
+func (k *KimiClient) UsageByLabel(label string) Usage {
+	k.usageMu.Lock()
+	defer k.usageMu.Unlock()
+	return k.usageByLabel[label]
+}
+
+// UsageAll returns a copy of the per-label usage map. The returned map is
+// safe to mutate; it does not affect the client's internal state.
+func (k *KimiClient) UsageAll() map[string]Usage {
+	k.usageMu.Lock()
+	defer k.usageMu.Unlock()
+	out := make(map[string]Usage, len(k.usageByLabel))
+	for label, u := range k.usageByLabel {
+		out[label] = u
+	}
+	return out
 }
 
 func defaultBackoff(attempt int) time.Duration {
@@ -184,7 +207,7 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 
 		content, used, retryable, err := k.doRequest(ctx, raw)
 		if err == nil {
-			k.recordUsage(used)
+			k.recordUsage(used, fc.Label)
 			if key != "" {
 				k.cache.put(key, content, k.cacheTTL)
 			}
@@ -198,12 +221,20 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	return "", lastErr
 }
 
-func (k *KimiClient) recordUsage(u Usage) {
+func (k *KimiClient) recordUsage(u Usage, label string) {
 	k.usageMu.Lock()
 	k.usage.PromptTokens += u.PromptTokens
 	k.usage.CompletionTokens += u.CompletionTokens
 	k.usage.TotalTokens += u.TotalTokens
 	k.usage.Requests++
+	if label != "" {
+		lu := k.usageByLabel[label]
+		lu.PromptTokens += u.PromptTokens
+		lu.CompletionTokens += u.CompletionTokens
+		lu.TotalTokens += u.TotalTokens
+		lu.Requests++
+		k.usageByLabel[label] = lu
+	}
 	snapshot := k.usage
 	k.usageMu.Unlock()
 

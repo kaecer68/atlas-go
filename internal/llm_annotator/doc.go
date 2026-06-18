@@ -39,6 +39,7 @@ type FailureContext struct {
 	FrameID    string
 	FrameName  string
 	Layer      string
+	Label      string
 	Conditions []ConditionSnapshot
 	Snap       MacroSnapshot
 	OccurredAt time.Time
