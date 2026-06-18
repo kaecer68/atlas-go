@@ -1,0 +1,134 @@
+package llm_annotator
+
+import (
+	"sync"
+)
+
+// MetricsRecorder is the minimal interface KimiClient uses to surface
+// observability events to the host application. A nil MetricsRecorder is a
+// valid no-op so callers that do not need metrics can leave Config.Metrics
+// unset.
+//
+// The interface intentionally mirrors the in-memory MetricsCollector in
+// internal/monitoring/metrics.go (Counter + Gauge only). Histograms are
+// deliberately omitted because the existing RecordHistogram implementation
+// in that package is dead code (no read path). Latency is exposed via
+// KimiClient.Latency() instead.
+//
+// Implementations MUST be safe for concurrent use.
+type MetricsRecorder interface {
+	RecordCounter(name string, value float64, labels map[string]string)
+	RecordGauge(name string, value float64, labels map[string]string)
+}
+
+// noopMetrics is a MetricsRecorder that drops every record. It is the
+// default when Config.Metrics is nil and is also used by tests that do not
+// care about metrics.
+type noopMetrics struct{}
+
+func (noopMetrics) RecordCounter(string, float64, map[string]string) {}
+func (noopMetrics) RecordGauge(string, float64, map[string]string)   {}
+
+// countingMetrics is a test-only MetricsRecorder that accumulates counter
+// and gauge values into in-memory maps. Counters are summed per label set;
+// gauges are overwritten (last-write-wins). All operations are goroutine-safe.
+//
+// Use this in tests to assert that the right metric calls happen with the
+// right labels and values.
+type countingMetrics struct {
+	mu       sync.Mutex
+	counters map[string]float64 // key: metricName + sorted labelKey
+	gauges   map[string]float64 // key: metricName + sorted labelKey
+	calls    map[string]int     // key: metricName + sorted labelKey
+}
+
+// newCountingMetrics returns a fresh, empty countingMetrics ready for use.
+func newCountingMetrics() *countingMetrics {
+	return &countingMetrics{
+		counters: make(map[string]float64),
+		gauges:   make(map[string]float64),
+		calls:    make(map[string]int),
+	}
+}
+
+func (c *countingMetrics) RecordCounter(name string, value float64, labels map[string]string) {
+	key := metricKey(name, labels)
+	c.mu.Lock()
+	c.counters[key] += value
+	c.calls[key]++
+	c.mu.Unlock()
+}
+
+func (c *countingMetrics) RecordGauge(name string, value float64, labels map[string]string) {
+	key := metricKey(name, labels)
+	c.mu.Lock()
+	c.gauges[key] = value
+	c.calls[key]++
+	c.mu.Unlock()
+}
+
+// CounterValue returns the cumulative counter value for the given metric
+// name + labels, or 0 if no such call was recorded.
+func (c *countingMetrics) CounterValue(name string, labels map[string]string) float64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.counters[metricKey(name, labels)]
+}
+
+// GaugeValue returns the last gauge value for the given metric name +
+// labels, or 0 if no such call was recorded.
+func (c *countingMetrics) GaugeValue(name string, labels map[string]string) float64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.gauges[metricKey(name, labels)]
+}
+
+// CallCount returns the number of times RecordCounter or RecordGauge was
+// invoked for the given metric name + labels.
+func (c *countingMetrics) CallCount(name string, labels map[string]string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls[metricKey(name, labels)]
+}
+
+// TotalCalls returns the sum of all counter+gauge invocations across every
+// metric name. Useful for asserting "no metrics were recorded" without
+// caring about specific names.
+func (c *countingMetrics) TotalCalls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	total := 0
+	for _, v := range c.calls {
+		total += v
+	}
+	return total
+}
+
+// metricKey builds a stable map key from a metric name + labels. Label keys
+// are sorted alphabetically so the same logical label set always produces
+// the same key regardless of map iteration order.
+func metricKey(name string, labels map[string]string) string {
+	if len(labels) == 0 {
+		return name
+	}
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sortStrings(keys)
+	out := name
+	for _, k := range keys {
+		out += "\x00" + k + "=" + labels[k]
+	}
+	return out
+}
+
+// sortStrings sorts a slice of strings in ascending order in place.
+// Extracted so this package does not need to import "sort" just for tests.
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j-1] > s[j]; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
+}

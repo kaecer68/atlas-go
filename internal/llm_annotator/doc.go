@@ -92,6 +92,10 @@ var ErrUnavailable = errors.New("llm annotator unavailable")
 // callback is invoked exactly once with the current Usage snapshot. The
 // callback is dispatched outside the client's internal lock so it may
 // safely call back into the client (e.g. Usage()).
+//
+// Metrics, when set, receives counter/gauge observations for every
+// Annotate call. NewKimiClient defaults to noopMetrics{} if Metrics is nil
+// so callers can leave it unset without nil-checks at the call site.
 type Config struct {
 	APIKey          string
 	BaseURL         string
@@ -100,6 +104,7 @@ type Config struct {
 	MaxTokens       int
 	BudgetThreshold int64
 	BudgetCallback  func(Usage)
+	Metrics         MetricsRecorder
 }
 
 // WithDefaults returns a copy of cfg with zero-value fields filled in. It

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -47,18 +49,20 @@ func (m *MockAnnotator) Annotate(_ context.Context, _ FailureContext) (string, e
 // It is OpenAI-API compatible, so the same struct would work for any
 // OpenAI-compatible endpoint with a different BaseURL.
 type KimiClient struct {
-	cfg          Config
-	hc           *http.Client
-	limiter      *rate.Limiter
-	maxAttempts  int
-	backoff      func(attempt int) time.Duration
-	usageMu      sync.Mutex
-	usage        Usage
-	usageByLabel map[string]Usage
-	budgetMu     sync.Mutex
-	budgetFired  bool
-	cache        *responseCache
-	cacheTTL     time.Duration
+	cfg               Config
+	hc                *http.Client
+	limiter           *rate.Limiter
+	maxAttempts       int
+	backoff           func(attempt int) time.Duration
+	usageMu           sync.RWMutex
+	usage             Usage
+	usageByLabel      map[string]Usage
+	budgetMu          sync.Mutex
+	budgetFired       bool
+	cache             *responseCache
+	cacheTTL          time.Duration
+	metrics           MetricsRecorder
+	lastDurationNanos atomic.Int64
 }
 
 // responseCache is a TTL-keyed string cache for LLM responses. A nil
@@ -125,6 +129,10 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	metrics := cfg.Metrics
+	if metrics == nil {
+		metrics = noopMetrics{}
+	}
 	return &KimiClient{
 		cfg:          cfg,
 		hc:           &http.Client{Timeout: cfg.Timeout},
@@ -134,12 +142,15 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 		usageByLabel: make(map[string]Usage),
 		cache:        &responseCache{},
 		cacheTTL:     time.Hour,
+		metrics:      metrics,
 	}, nil
 }
 
 // Usage returns the cumulative token/request snapshot for this client.
 // Safe to call from any goroutine.
 func (k *KimiClient) Usage() Usage {
+	k.usageMu.RLock()
+	defer k.usageMu.RUnlock()
 	return k.usage
 }
 
@@ -147,21 +158,55 @@ func (k *KimiClient) Usage() Usage {
 // per-feature label. A zero Usage is returned for unknown labels. Safe
 // to call from any goroutine.
 func (k *KimiClient) UsageByLabel(label string) Usage {
-	k.usageMu.Lock()
-	defer k.usageMu.Unlock()
+	k.usageMu.RLock()
+	defer k.usageMu.RUnlock()
 	return k.usageByLabel[label]
 }
 
 // UsageAll returns a copy of the per-label usage map. The returned map is
 // safe to mutate; it does not affect the client's internal state.
 func (k *KimiClient) UsageAll() map[string]Usage {
-	k.usageMu.Lock()
-	defer k.usageMu.Unlock()
+	k.usageMu.RLock()
+	defer k.usageMu.RUnlock()
 	out := make(map[string]Usage, len(k.usageByLabel))
 	for label, u := range k.usageByLabel {
 		out[label] = u
 	}
 	return out
+}
+
+// Latency returns the wall-clock duration of the most recent Annotate call,
+// including any retries. Returns 0 if Annotate has not yet been called.
+// Safe to call from any goroutine.
+func (k *KimiClient) Latency() time.Duration {
+	return time.Duration(k.lastDurationNanos.Load())
+}
+
+// Snapshot is a point-in-time view of a KimiClient's operational state.
+// It is safe to read from any goroutine.
+type Snapshot struct {
+	Latency      time.Duration    `json:"latency"`
+	Usage        Usage            `json:"usage"`
+	UsageByLabel map[string]Usage `json:"usage_by_label"`
+	Provider     string           `json:"provider"`
+}
+
+// Snapshot returns a Snapshot of the client's current operational state.
+// Safe to call from any goroutine.
+func (k *KimiClient) Snapshot() Snapshot {
+	k.usageMu.RLock()
+	byLabel := make(map[string]Usage, len(k.usageByLabel))
+	for label, u := range k.usageByLabel {
+		byLabel[label] = u
+	}
+	usage := k.usage
+	k.usageMu.RUnlock()
+	return Snapshot{
+		Latency:      k.Latency(),
+		Usage:        usage,
+		UsageByLabel: byLabel,
+		Provider:     k.Name(),
+	}
 }
 
 func defaultBackoff(attempt int) time.Duration {
@@ -177,13 +222,23 @@ func (k *KimiClient) Name() string { return "kimi" }
 // fail fast. Cache hits return immediately without an HTTP round-trip and
 // are not counted in Usage.
 func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, error) {
+	start := time.Now()
+	defer func() {
+		dur := time.Since(start)
+		k.lastDurationNanos.Store(int64(dur))
+		k.metrics.RecordGauge("llm_annotator_last_call_seconds", dur.Seconds(),
+			map[string]string{"provider": "kimi"})
+	}()
+
 	if err := k.limiter.Wait(ctx); err != nil {
+		k.recordOutcome("rate_limited", 0)
 		return "", fmt.Errorf("%w: rate limit wait: %v", ErrUnavailable, err)
 	}
 
 	body := buildRequest(k.cfg, fc)
 	raw, err := json.Marshal(body)
 	if err != nil {
+		k.recordOutcome("protocol_error", 0)
 		return "", fmt.Errorf("%w: marshal request: %v", ErrUnavailable, err)
 	}
 
@@ -191,34 +246,58 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	if k.cacheTTL > 0 {
 		key = cacheKey(fc)
 		if content, hit := k.cache.get(key); hit {
+			k.recordOutcome("cache_hit", 0)
 			return content, nil
 		}
 	}
 
 	var lastErr error
+	var lastStatus int
 	for attempt := 0; attempt < k.maxAttempts; attempt++ {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
+				k.recordOutcome("canceled", 0)
 				return "", fmt.Errorf("%w: context done during backoff: %v", ErrUnavailable, ctx.Err())
 			case <-time.After(k.backoff(attempt - 1)):
 			}
 		}
 
-		content, used, retryable, err := k.doRequest(ctx, raw)
+		content, used, retryable, status, err := k.doRequest(ctx, raw)
 		if err == nil {
 			k.recordUsage(used, fc.Label)
+			k.recordOutcome("success", 0)
 			if key != "" {
 				k.cache.put(key, content, k.cacheTTL)
 			}
 			return content, nil
 		}
 		lastErr = err
+		lastStatus = status
 		if !retryable {
+			if status == 0 {
+				k.recordOutcome("protocol_error", 0)
+			} else {
+				k.recordOutcome("client_error", status)
+			}
 			return "", err
 		}
+		k.recordOutcome("retry", 0)
+	}
+	if lastStatus == 0 {
+		k.recordOutcome("transport_error", 0)
+	} else {
+		k.recordOutcome("retry_exhausted", lastStatus)
 	}
 	return "", lastErr
+}
+
+func (k *KimiClient) recordOutcome(outcome string, status int) {
+	labels := map[string]string{"provider": "kimi", "outcome": outcome}
+	if status > 0 {
+		labels["status"] = strconv.Itoa(status)
+	}
+	k.metrics.RecordCounter("llm_annotator_requests_total", 1, labels)
 }
 
 func (k *KimiClient) recordUsage(u Usage, label string) {
@@ -257,43 +336,43 @@ func (k *KimiClient) recordUsage(u Usage, label string) {
 	callback(snapshot)
 }
 
-func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, Usage, bool, error) {
+func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, Usage, bool, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		k.cfg.BaseURL+"/chat/completions", bytes.NewReader(raw))
 	if err != nil {
-		return "", Usage{}, false, fmt.Errorf("%w: build request: %v", ErrUnavailable, err)
+		return "", Usage{}, false, 0, fmt.Errorf("%w: build request: %v", ErrUnavailable, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+k.cfg.APIKey)
 
 	resp, err := k.hc.Do(req)
 	if err != nil {
-		return "", Usage{}, true, fmt.Errorf("%w: http: %v", ErrUnavailable, err)
+		return "", Usage{}, true, 0, fmt.Errorf("%w: http: %v", ErrUnavailable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", Usage{}, true, fmt.Errorf("%w: read body: %v", ErrUnavailable, err)
+		return "", Usage{}, true, resp.StatusCode, fmt.Errorf("%w: read body: %v", ErrUnavailable, err)
 	}
 	if resp.StatusCode/100 != 2 {
 		retryable := resp.StatusCode == 429 || resp.StatusCode/100 == 5
-		return "", Usage{}, retryable, fmt.Errorf("%w: status %d: %s",
+		return "", Usage{}, retryable, resp.StatusCode, fmt.Errorf("%w: status %d: %s",
 			ErrUnavailable, resp.StatusCode, string(respBody))
 	}
 
 	var parsed chatResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", Usage{}, false, fmt.Errorf("%w: unmarshal: %v", ErrUnavailable, err)
+		return "", Usage{}, false, resp.StatusCode, fmt.Errorf("%w: unmarshal: %v", ErrUnavailable, err)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", Usage{}, false, fmt.Errorf("%w: empty choices", ErrUnavailable)
+		return "", Usage{}, false, resp.StatusCode, fmt.Errorf("%w: empty choices", ErrUnavailable)
 	}
 	return parsed.Choices[0].Message.Content, Usage{
 		PromptTokens:     parsed.Usage.PromptTokens,
 		CompletionTokens: parsed.Usage.CompletionTokens,
 		TotalTokens:      parsed.Usage.TotalTokens,
-	}, false, nil
+	}, false, resp.StatusCode, nil
 }
 
 // buildRequest assembles the OpenAI-compatible chat completions body.
