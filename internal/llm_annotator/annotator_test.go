@@ -140,6 +140,78 @@ func TestKimiClient_Annotate_EmptyChoices(t *testing.T) {
 	}
 }
 
+func TestKimiClient_Annotate_RetriesOn5xx(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte(`{"choices":[{"message":{"content":"recovered"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	got, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	if err != nil {
+		t.Fatalf("expected success after retries, got: %v", err)
+	}
+	if got != "recovered" {
+		t.Errorf("got %q, want %q", got, "recovered")
+	}
+	if attempts != 3 {
+		t.Errorf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestKimiClient_Annotate_RetriesOn429(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 2 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	got, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	if err != nil {
+		t.Fatalf("expected success after retry, got: %v", err)
+	}
+	if got != "ok" {
+		t.Errorf("got %q, want %q", got, "ok")
+	}
+	if attempts != 2 {
+		t.Errorf("expected 2 attempts, got %d", attempts)
+	}
+}
+
+func TestKimiClient_Annotate_NoRetryOn4xx(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"bad request"}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	_, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	if !errors.Is(err, ErrUnavailable) {
+		t.Errorf("got %v, want ErrUnavailable", err)
+	}
+	if attempts != 1 {
+		t.Errorf("expected 1 attempt (no retry on 4xx), got %d", attempts)
+	}
+}
+
 func TestKimiClient_Annotate_MalformedResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`not json`))
