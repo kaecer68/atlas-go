@@ -2587,6 +2587,27 @@ func GetParametersConfigPath() string {
 	return parametersPath
 }
 
+// SetRiskCalibrationMetadata records when and how a risk parameter was
+// calibrated. Called by risk.SelfCalibrate after SetParameter to pair the
+// threshold-value update with its provenance metadata under the same
+// configAccessMu lock. Without this pairing, concurrent OptimizeBayesian
+// callers can observe a partially-updated state (new value, stale metadata
+// or vice versa) via cloneParams.
+func SetRiskCalibrationMetadata(name string, t time.Time, method string) {
+	configAccessMu.Lock()
+	defer configAccessMu.Unlock()
+	now := t
+	cfg := GetParametersConfig()
+	switch name {
+	case "risk_max_position_size":
+		cfg.Risk.MaxPositionSize.LastCalibrated = &now
+		cfg.Risk.MaxPositionSize.CalibrationMethod = method
+	case "risk_max_daily_loss_pct":
+		cfg.Risk.MaxDailyLossPct.LastCalibrated = &now
+		cfg.Risk.MaxDailyLossPct.CalibrationMethod = method
+	}
+}
+
 // mirrorCalibrationTimestamp injects a sibling `calibration_timestamp` field
 // after every `last_calibrated` field found in the marshaled JSON, copying
 // the same value. This keeps the two timestamp fields — one written by the
@@ -2652,8 +2673,10 @@ func (p *ParametersConfig) SaveWithRollback(path string) error {
 	tmpPath := path + ".tmp"
 	bakPath := path + ".bak"
 
+	configAccessMu.Lock()
 	p.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(p, "", "  ")
+	configAccessMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("marshal parameters config: %w", err)
 	}

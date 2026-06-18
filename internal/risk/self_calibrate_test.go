@@ -3,6 +3,7 @@ package risk
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -393,5 +394,42 @@ func TestSelfCalibrateBoundsCurrentBuggyValues(t *testing.T) {
 			t.Errorf("BUG: %s proposed value %v accepted, but it falls 20x+ outside [val*0.3, val*3.0]",
 				v.name, v.value)
 		}
+	}
+}
+
+func TestSelfCalibrate_Concurrent(t *testing.T) {
+	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	now := time.Now()
+	outcomes := []SessionOutcome{
+		{
+			SessionID:      "session-20260501-daily",
+			PortfolioValue: 1_000_000,
+			EndingCash:     200_000,
+			Orders: []HistoricOrder{
+				{Symbol: "2330", Side: "buy", Notional: 50_000, ForwardReturn: 0.03, Hit: true},
+				{Symbol: "2303", Side: "buy", Notional: 30_000, ForwardReturn: -0.08, Hit: false},
+				{Symbol: "2317", Side: "buy", Notional: 40_000, ForwardReturn: -0.12, Hit: false},
+			},
+			Timestamp: now,
+		},
+	}
+	provider := &mockCalibrationProvider{Sessions: outcomes}
+
+	const N = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, N)
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := g.SelfCalibrate(context.Background(), provider, 5); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent SelfCalibrate error: %v", err)
 	}
 }
