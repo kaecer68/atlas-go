@@ -2,6 +2,7 @@ package risk
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -142,6 +143,33 @@ func TestReplayWithThresholds_UsesNotionalNotReturn(t *testing.T) {
 	}
 	if adjusted[1].WouldHaveBlocked {
 		t.Fatal("expected notional=1000 NOT blocked at 10%% cap on 3M ref")
+	}
+}
+
+func TestApplyCalibrationChange_RecordsSetParameterError(t *testing.T) {
+	cfg := config.DefaultParametersConfig()
+	ie := config.NewInferenceEngine(cfg)
+	report := &CalibrationReport{}
+
+	applyCalibrationChange(ie, "unknown_param_xyz", 0.5, report)
+
+	if len(report.Errors) != 1 {
+		t.Fatalf("expected 1 error recorded, got %d", len(report.Errors))
+	}
+	if !strings.Contains(report.Errors[0], "unknown_param_xyz") {
+		t.Fatalf("expected error to mention param name, got: %s", report.Errors[0])
+	}
+}
+
+func TestApplyCalibrationChange_NoErrorOnSuccess(t *testing.T) {
+	cfg := config.DefaultParametersConfig()
+	ie := config.NewInferenceEngine(cfg)
+	report := &CalibrationReport{}
+
+	applyCalibrationChange(ie, "risk_max_position_size", 0.15, report)
+
+	if len(report.Errors) != 0 {
+		t.Fatalf("expected no errors on valid param, got %v", report.Errors)
 	}
 }
 

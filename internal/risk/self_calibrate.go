@@ -45,6 +45,7 @@ type CalibrationReport struct {
 	SessionSpan string            `json:"session_span"`
 	Evaluated   int               `json:"orders_evaluated"`
 	Changes     []ParameterChange `json:"changes"`
+	Errors      []string          `json:"errors,omitempty"`
 	Verdict     string            `json:"verdict"`
 	Summary     string            `json:"summary"`
 }
@@ -175,7 +176,7 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		change.Confidence = classifyDelta(delta, len(sessions))
 
 		report.Changes = append(report.Changes, change)
-		_ = ie.SetParameter(name, best)
+		applyCalibrationChange(ie, name, best, report)
 	}
 
 	// Persist calibrated parameters to disk so they survive server restarts.
@@ -317,6 +318,16 @@ func replayWithThresholds(results []replayResult, cfg *config.ParametersConfig) 
 		adjusted[i].WouldHaveBlocked = posPct > maxPosition || lossPct > maxDailyLoss
 	}
 	return adjusted
+}
+
+// applyCalibrationChange writes a single optimized parameter through the
+// inference engine and surfaces any write failure into the report rather
+// than silently dropping it. Calibration continues for the remaining
+// parameters; one bad write does not poison the whole cycle.
+func applyCalibrationChange(ie *config.InferenceEngine, name string, value float64, report *CalibrationReport) {
+	if err := ie.SetParameter(name, value); err != nil {
+		report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", name, err))
+	}
 }
 
 func classifyDelta(deltaPct float64, nSessions int) string {
