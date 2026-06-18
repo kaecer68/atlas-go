@@ -21,9 +21,9 @@ func TestHandleDegraded_EmptySnapshot(t *testing.T) {
 	}
 
 	var got struct {
-		Timestamp           time.Time          `json:"timestamp"`
-		DegradedActivations []map[string]any   `json:"degraded_activations"`
-		ProviderErrors      []map[string]any   `json:"provider_errors"`
+		Timestamp           time.Time        `json:"timestamp"`
+		DegradedActivations []map[string]any `json:"degraded_activations"`
+		ProviderErrors      []map[string]any `json:"provider_errors"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatalf("failed to decode JSON response: %v", err)
