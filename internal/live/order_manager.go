@@ -115,34 +115,45 @@ func (m *OrderManager) recordFillToRiskGate(order domain.Order, result BrokerRes
 	m.riskGate.RecordFill(order.Side, order.Price, result.FillPrice, float64(order.Quantity), provider())
 }
 
+// checkRiskGate validates the order against the current risk gate state. It
+// is invoked on every retry attempt so a halt triggered by a circuit
+// transition or daily-loss breach between attempts will short-circuit the
+// retry loop instead of leaking the order to the broker.
+func (m *OrderManager) checkRiskGate(ctx context.Context, order domain.Order, attempt int) error {
+	if m.riskGate == nil {
+		return nil
+	}
+	if err := m.riskGate.Check(ctx, order); err != nil {
+		if m.eventBus != nil {
+			m.eventBus.PublishOrderError(
+				"",
+				order.Symbol,
+				string(order.Side),
+				order.Price,
+				order.Quantity,
+				"risk_gate_blocked",
+				err.Error(),
+				attempt,
+				"blocked",
+			)
+		}
+		return fmt.Errorf("risk gate blocked order for %s: %w", order.Symbol, err)
+	}
+	return nil
+}
+
 func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 	if m.broker == nil {
 		m.broker = NewDryRunBroker()
 	}
 
-	// Pre-execution risk gate check
-	if m.riskGate != nil {
-		if err := m.riskGate.Check(ctx, order); err != nil {
-			if m.eventBus != nil {
-				m.eventBus.PublishOrderError(
-					"",
-					order.Symbol,
-					string(order.Side),
-					order.Price,
-					order.Quantity,
-					"risk_gate_blocked",
-					err.Error(),
-					1,
-					"blocked",
-				)
-			}
-			return fmt.Errorf("risk gate blocked order for %s: %w", order.Symbol, err)
-		}
-	}
-
 	attempts := m.maxRetries + 1
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
+		if err := m.checkRiskGate(ctx, order, attempt); err != nil {
+			return err
+		}
+
 		result, err := m.broker.SubmitOrder(ctx, order)
 		if err != nil {
 			lastErr = fmt.Errorf("attempt %d/%d: %w", attempt, attempts, err)
