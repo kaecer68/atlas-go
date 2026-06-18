@@ -182,18 +182,13 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 	// Persist calibrated parameters to disk so they survive server restarts.
 	if len(report.Changes) > 0 {
 		now := time.Now()
-		params := config.GetParametersConfig()
 		for _, name := range paramNames {
 			switch name {
-			case "risk_max_position_size":
-				params.Risk.MaxPositionSize.LastCalibrated = &now
-				params.Risk.MaxPositionSize.CalibrationMethod = "bayesian_optimization"
-			case "risk_max_daily_loss_pct":
-				params.Risk.MaxDailyLossPct.LastCalibrated = &now
-				params.Risk.MaxDailyLossPct.CalibrationMethod = "bayesian_optimization"
+			case "risk_max_position_size", "risk_max_daily_loss_pct":
+				config.SetRiskCalibrationMetadata(name, now, "bayesian_optimization")
 			}
 		}
-		if err := params.LockedSaveWithRollback(config.GetParametersConfigPath()); err != nil {
+		if err := config.GetParametersConfig().LockedSaveWithRollback(config.GetParametersConfigPath()); err != nil {
 			// Non-fatal: calibration results remain valid in memory.
 			fmt.Printf("self_calibrate: failed to persist parameters: %v\n", err)
 		}

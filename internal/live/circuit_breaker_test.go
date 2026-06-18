@@ -1,6 +1,7 @@
 package live
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -76,6 +77,59 @@ func TestCircuitBreakerAutoRecoverAfterCooldown(t *testing.T) {
 	cb.Evaluate(livestore.PortfolioState{Cash: 1000000}, nil, nil)
 	if cb.State() != CircuitNormal {
 		t.Fatalf("expected normal after cooldown expired, got %s", cb.State())
+	}
+}
+
+func TestCircuitBreakerLoadEvents_MissingFileReturnsNilNil(t *testing.T) {
+	tmp := t.TempDir()
+	logPath := filepath.Join(tmp, "circuit_events.jsonl")
+
+	cb := NewCircuitBreaker(logPath, "")
+
+	events, err := cb.LoadEvents()
+	if err != nil {
+		t.Fatalf("expected no error for missing file, got: %v", err)
+	}
+	if events != nil {
+		t.Fatalf("expected nil events for missing file, got %v", events)
+	}
+}
+
+func TestCircuitBreakerReset_TransitionsFromHaltedToNormal(t *testing.T) {
+	tmp := t.TempDir()
+	logPath := filepath.Join(tmp, "circuit_events.jsonl")
+
+	cb := NewCircuitBreaker(logPath, "")
+
+	cb.transitionLocked(CircuitHalted, "trip", 0, 0)
+	if cb.State() != CircuitHalted {
+		t.Fatal("expected Halted before Reset")
+	}
+
+	if err := cb.Reset(""); err != nil {
+		t.Fatalf("Reset returned error: %v", err)
+	}
+	if cb.State() != CircuitNormal {
+		t.Fatalf("expected Normal after Reset, got %s", cb.State())
+	}
+}
+
+func TestCircuitBreakerReset_TransitionsToNormal(t *testing.T) {
+	tmp := t.TempDir()
+	logPath := filepath.Join(tmp, "circuit_events.jsonl")
+
+	cb := NewCircuitBreaker(logPath, "")
+
+	cb.transitionLocked(CircuitHalted, "trip", 0, 0)
+	if cb.State() != CircuitHalted {
+		t.Fatal("expected Halted before Reset")
+	}
+
+	if err := cb.Reset("recovered"); err != nil {
+		t.Fatalf("Reset returned error: %v", err)
+	}
+	if cb.State() != CircuitNormal {
+		t.Fatalf("expected Normal after Reset, got %s", cb.State())
 	}
 }
 
