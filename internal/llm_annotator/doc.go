@@ -85,12 +85,20 @@ var ErrUnavailable = errors.New("llm annotator unavailable")
 
 // Config bundles the parameters a real Annotator implementation needs.
 // APIKey is required; the others have safe defaults applied in New.
+//
+// BudgetThreshold and BudgetCallback together configure a one-shot alert:
+// when cumulative TotalTokens first meets or exceeds BudgetThreshold the
+// callback is invoked exactly once with the current Usage snapshot. The
+// callback is dispatched outside the client's internal lock so it may
+// safely call back into the client (e.g. Usage()).
 type Config struct {
-	APIKey    string
-	BaseURL   string
-	Model     string
-	Timeout   time.Duration
-	MaxTokens int
+	APIKey          string
+	BaseURL         string
+	Model           string
+	Timeout         time.Duration
+	MaxTokens       int
+	BudgetThreshold int64
+	BudgetCallback  func(Usage)
 }
 
 // WithDefaults returns a copy of cfg with zero-value fields filled in. It

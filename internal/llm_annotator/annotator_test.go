@@ -3,9 +3,11 @@ package llm_annotator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -292,5 +294,142 @@ func TestKimiClient_Annotate_NoUsageOnFailure(t *testing.T) {
 	u := c.Usage()
 	if u.Requests != 0 {
 		t.Errorf("requests should be 0 on failure, got %d", u.Requests)
+	}
+}
+
+// newBudgetKimiClient returns a KimiClient wired to a stub server that always
+// returns a chat-completion with the supplied per-call token counts. The
+// shared server is closed via t.Cleanup.
+func newBudgetKimiClient(t *testing.T, promptTokens, completionTokens int64, threshold int64, cb func(Usage)) *KimiClient {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":%d,"completion_tokens":%d,"total_tokens":%d}}`,
+			promptTokens, completionTokens, promptTokens+completionTokens)
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewKimiClient(Config{
+		APIKey:          "k",
+		BaseURL:         srv.URL,
+		MaxTokens:       64,
+		Timeout:         5 * time.Second,
+		BudgetThreshold: threshold,
+		BudgetCallback:  cb,
+	})
+	if err != nil {
+		t.Fatalf("NewKimiClient: %v", err)
+	}
+	c.backoff = func(int) time.Duration { return 0 }
+	return c
+}
+
+func TestBudgetAlert_FiresWhenThresholdCrossed(t *testing.T) {
+	var fired int
+	var seen Usage
+	var mu sync.Mutex
+	callback := func(u Usage) {
+		mu.Lock()
+		defer mu.Unlock()
+		fired++
+		seen = u
+	}
+	// Each call returns 100 tokens total. After 2nd call we are at 200 >= 150.
+	c := newBudgetKimiClient(t, 50, 50, 150, callback)
+	for i := 0; i < 3; i++ {
+		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if fired != 1 {
+		t.Errorf("callback fired %d times, want 1 (threshold fires once)", fired)
+	}
+	if seen.TotalTokens < 150 {
+		t.Errorf("callback saw TotalTokens=%d, want >=150", seen.TotalTokens)
+	}
+}
+
+func TestBudgetAlert_DoesNotFireUnderThreshold(t *testing.T) {
+	var fired int
+	var mu sync.Mutex
+	callback := func(u Usage) { mu.Lock(); fired++; mu.Unlock() }
+	c := newBudgetKimiClient(t, 10, 10, 1000, callback)
+	for i := 0; i < 3; i++ {
+		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if fired != 0 {
+		t.Errorf("callback fired %d times, want 0 (under threshold)", fired)
+	}
+}
+
+func TestBudgetAlert_FiresExactlyOnceAcrossManyCalls(t *testing.T) {
+	var fired int
+	var mu sync.Mutex
+	callback := func(u Usage) { mu.Lock(); fired++; mu.Unlock() }
+	c := newBudgetKimiClient(t, 25, 25, 50, callback)
+	for i := 0; i < 10; i++ {
+		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if fired != 1 {
+		t.Errorf("callback fired %d times, want exactly 1 across 10 calls", fired)
+	}
+}
+
+func TestBudgetAlert_DisabledByDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`))
+	}))
+	defer srv.Close()
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL, MaxTokens: 64, Timeout: 5 * time.Second})
+	c.backoff = func(int) time.Duration { return 0 }
+	for i := 0; i < 3; i++ {
+		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	u := c.Usage()
+	if u.TotalTokens != 9 || u.Requests != 3 {
+		t.Errorf("usage = %+v, want TotalTokens=9 Requests=3", u)
+	}
+}
+
+func TestBudgetAlert_CallbackCanCallUsageWithoutDeadlock(t *testing.T) {
+	// Regression guard: invoking Usage() inside the callback must not deadlock,
+	// because the callback is dispatched outside the usage lock.
+	var fired int
+	var mu sync.Mutex
+	callback := func(u Usage) {
+		mu.Lock()
+		defer mu.Unlock()
+		fired++
+		_ = u
+	}
+	c := newBudgetKimiClient(t, 50, 50, 100, callback)
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 2; i++ {
+			_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Annotate deadlocked: callback re-entry into client methods blocked")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if fired == 0 {
+		t.Errorf("callback never fired; threshold=100 should trigger on first call (100 tokens)")
 	}
 }
