@@ -140,6 +140,78 @@ func TestKimiClient_Annotate_EmptyChoices(t *testing.T) {
 	}
 }
 
+func TestKimiClient_Annotate_RetriesOn5xx(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte(`{"choices":[{"message":{"content":"recovered"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	got, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	if err != nil {
+		t.Fatalf("expected success after retries, got: %v", err)
+	}
+	if got != "recovered" {
+		t.Errorf("got %q, want %q", got, "recovered")
+	}
+	if attempts != 3 {
+		t.Errorf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestKimiClient_Annotate_RetriesOn429(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 2 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	got, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	if err != nil {
+		t.Fatalf("expected success after retry, got: %v", err)
+	}
+	if got != "ok" {
+		t.Errorf("got %q, want %q", got, "ok")
+	}
+	if attempts != 2 {
+		t.Errorf("expected 2 attempts, got %d", attempts)
+	}
+}
+
+func TestKimiClient_Annotate_NoRetryOn4xx(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"bad request"}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	_, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	if !errors.Is(err, ErrUnavailable) {
+		t.Errorf("got %v, want ErrUnavailable", err)
+	}
+	if attempts != 1 {
+		t.Errorf("expected 1 attempt (no retry on 4xx), got %d", attempts)
+	}
+}
+
 func TestKimiClient_Annotate_MalformedResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`not json`))
@@ -176,5 +248,49 @@ func TestFailureContextToPrompt(t *testing.T) {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing %q\nfull prompt:\n%s", want, prompt)
 		}
+	}
+}
+
+func TestKimiClient_Annotate_TracksTokenUsage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":12,"completion_tokens":7,"total_tokens":19}}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	for i := 0; i < 3; i++ {
+		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
+			t.Fatalf("attempt %d: %v", i, err)
+		}
+	}
+	u := c.Usage()
+	if u.PromptTokens != 36 {
+		t.Errorf("prompt_tokens: got %d, want 36", u.PromptTokens)
+	}
+	if u.CompletionTokens != 21 {
+		t.Errorf("completion_tokens: got %d, want 21", u.CompletionTokens)
+	}
+	if u.TotalTokens != 57 {
+		t.Errorf("total_tokens: got %d, want 57", u.TotalTokens)
+	}
+	if u.Requests != 3 {
+		t.Errorf("requests: got %d, want 3", u.Requests)
+	}
+}
+
+func TestKimiClient_Annotate_NoUsageOnFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"bad"}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	u := c.Usage()
+	if u.Requests != 0 {
+		t.Errorf("requests should be 0 on failure, got %d", u.Requests)
 	}
 }
