@@ -52,6 +52,8 @@ type KimiClient struct {
 	backoff     func(attempt int) time.Duration
 	usageMu     sync.Mutex
 	usage       Usage
+	budgetMu    sync.Mutex
+	budgetFired bool
 }
 
 // Usage is the cumulative token/accounting snapshot for a KimiClient.
@@ -131,11 +133,30 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 
 func (k *KimiClient) recordUsage(u Usage) {
 	k.usageMu.Lock()
-	defer k.usageMu.Unlock()
 	k.usage.PromptTokens += u.PromptTokens
 	k.usage.CompletionTokens += u.CompletionTokens
 	k.usage.TotalTokens += u.TotalTokens
 	k.usage.Requests++
+	snapshot := k.usage
+	k.usageMu.Unlock()
+
+	threshold := k.cfg.BudgetThreshold
+	callback := k.cfg.BudgetCallback
+	if threshold <= 0 || callback == nil {
+		return
+	}
+	k.budgetMu.Lock()
+	if k.budgetFired {
+		k.budgetMu.Unlock()
+		return
+	}
+	if snapshot.TotalTokens < threshold {
+		k.budgetMu.Unlock()
+		return
+	}
+	k.budgetFired = true
+	k.budgetMu.Unlock()
+	callback(snapshot)
 }
 
 func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, Usage, bool, error) {
