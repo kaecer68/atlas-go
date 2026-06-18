@@ -142,6 +142,52 @@ func TestRiskGate_Status(t *testing.T) {
 	}
 }
 
+func TestRiskGate_RecordFill_UpdatesDailyLossOnLoss(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+
+	gate.RecordFill(domain.SideSell, 100.0, 90.0, 10, 1000.0)
+
+	status := gate.Status()
+	loss, _ := status["daily_loss"].(float64)
+	if loss != 0.10 {
+		t.Fatalf("expected daily_loss 0.10 after losing fill, got %.4f", loss)
+	}
+}
+
+func TestRiskGate_RecordFill_DoesNotReduceOnGain(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+
+	gate.RecordFill(domain.SideSell, 100.0, 90.0, 10, 1000.0)
+	gate.RecordFill(domain.SideSell, 100.0, 110.0, 5, 1000.0)
+
+	status := gate.Status()
+	loss, _ := status["daily_loss"].(float64)
+	if loss != 0.10 {
+		t.Fatalf("expected daily_loss 0.10 (gain should not reduce), got %.4f", loss)
+	}
+}
+
+func TestRiskGate_RecordFill_BuyDirection(t *testing.T) {
+	gate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      0.05,
+		VaRCriticalThreshold: 0.10,
+	})
+
+	gate.RecordFill(domain.SideBuy, 100.0, 110.0, 10, 1000.0)
+
+	status := gate.Status()
+	loss, _ := status["daily_loss"].(float64)
+	if loss != 0.10 {
+		t.Fatalf("expected daily_loss 0.10 after buy-losing fill, got %.4f", loss)
+	}
+}
+
 func TestRiskGate_Check_ZerodConfig(t *testing.T) {
 	// With zero MaxDailyLossPct and VaRCriticalThreshold, the gate should
 	// not block orders based on those limits (only halt matters).

@@ -94,6 +94,37 @@ func (g *RiskGate) UpdateDailyLoss(loss float64) {
 	g.dailyLoss = loss
 }
 
+// RecordFill ingests a fill event and updates the daily loss accumulator
+// when the fill resulted in a loss. Gains do not reduce the accumulator.
+//
+// For SELL fills: PnL = (fillPrice - orderPrice) * qty
+// For BUY fills:  PnL = (orderPrice - fillPrice) * qty
+//
+// portfolioValue is the pre-fill portfolio notional used to express loss
+// as a fraction. If non-positive, the call is a no-op.
+func (g *RiskGate) RecordFill(side domain.Side, orderPrice, fillPrice, qty, portfolioValue float64) {
+	if portfolioValue <= 0 || qty == 0 {
+		return
+	}
+	var pnl float64
+	if side == domain.SideSell {
+		pnl = (fillPrice - orderPrice) * qty
+	} else {
+		pnl = (orderPrice - fillPrice) * qty
+	}
+	if pnl >= 0 {
+		return
+	}
+	lossFraction := -pnl / portfolioValue
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.maybeResetDaily()
+	if lossFraction > g.dailyLoss {
+		g.dailyLoss = lossFraction
+	}
+}
+
 // ResetDaily resets the daily loss accumulator to zero.
 func (g *RiskGate) ResetDaily() {
 	g.mu.Lock()

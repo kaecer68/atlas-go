@@ -54,8 +54,9 @@ type OrderManager struct {
 	retryBackoff time.Duration
 	riskGate     *RiskGate
 
-	mu     sync.RWMutex
-	orders map[string]OrderRecord
+	mu               sync.RWMutex
+	orders           map[string]OrderRecord
+	portfolioValueFn func() float64
 }
 
 func NewOrderManager(broker Broker, eventBus *ChannelEventBus, maxRetries int, retryBackoff time.Duration, riskGate *RiskGate) *OrderManager {
@@ -90,6 +91,28 @@ func (m *OrderManager) RecordOrder(order OrderRecord) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.orders[order.OrderID] = order
+}
+
+// SetPortfolioValueProvider registers a function that returns the current
+// portfolio notional. The OrderManager calls it on each fill to compute the
+// loss fraction reported to the RiskGate.
+func (m *OrderManager) SetPortfolioValueProvider(fn func() float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.portfolioValueFn = fn
+}
+
+func (m *OrderManager) recordFillToRiskGate(order domain.Order, result BrokerResult) {
+	if m.riskGate == nil {
+		return
+	}
+	m.mu.RLock()
+	provider := m.portfolioValueFn
+	m.mu.RUnlock()
+	if provider == nil {
+		return
+	}
+	m.riskGate.RecordFill(order.Side, order.Price, result.FillPrice, float64(order.Quantity), provider())
 }
 
 func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
@@ -141,6 +164,10 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 
 		if m.eventBus != nil {
 			m.eventBus.PublishOrderEvent(eventOrder, result.OrderID, status, result.FillPrice)
+		}
+
+		if status == "filled" {
+			m.recordFillToRiskGate(order, result)
 		}
 
 		if status == "rejected" {
