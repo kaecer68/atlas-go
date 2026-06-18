@@ -105,6 +105,7 @@ type Config struct {
 	BudgetThreshold int64
 	BudgetCallback  func(Usage)
 	Metrics         MetricsRecorder
+	Breaker         *CircuitBreaker
 }
 
 // WithDefaults returns a copy of cfg with zero-value fields filled in. It

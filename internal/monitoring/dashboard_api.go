@@ -89,6 +89,7 @@ type DashboardAPI struct {
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
 	strategiesAnnotator        llm_annotator.Annotator
+	kimiClient                 *llm_annotator.KimiClient // concrete handle for cost/health endpoints; nil if strategiesAnnotator is not a KimiClient
 	calibrationTask            *narrative.CalibrationTask
 	crisisModeSetter           func(active bool) // callback: VIX>=35 → optimizer crisis mode
 	correlationSetter          func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
@@ -832,6 +833,9 @@ func (a *DashboardAPI) SetStrategiesHandlers(h *apistrategies.Handlers) {
 
 func (a *DashboardAPI) SetStrategiesAnnotator(ann llm_annotator.Annotator) {
 	a.strategiesAnnotator = ann
+	if kc, ok := ann.(*llm_annotator.KimiClient); ok {
+		a.kimiClient = kc
+	}
 	if a.strategyTechniquesHandlers != nil {
 		a.strategyTechniquesHandlers.SetAnnotator(ann)
 	}
@@ -921,6 +925,7 @@ func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
 	})
 	a.crossMarketSvc.SetDegradedMetrics(dm)
 	mux.HandleFunc("/degraded", metrics.HandleDegraded(dm))
+	mux.HandleFunc("/llm_annotator/cost", metrics.HandleCost(a.kimiClient, 0.001))
 	handlers := &apicrossmarket.Handlers{
 		Svc: a.crossMarketSvc,
 	}

@@ -62,6 +62,7 @@ type KimiClient struct {
 	cache             *responseCache
 	cacheTTL          time.Duration
 	metrics           MetricsRecorder
+	breaker           *CircuitBreaker
 	lastDurationNanos atomic.Int64
 }
 
@@ -133,8 +134,26 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 	if metrics == nil {
 		metrics = noopMetrics{}
 	}
+	budgetCb := cfg.BudgetCallback
+	if cfg.BudgetThreshold > 0 && budgetCb != nil && cfg.Breaker != nil {
+		br := cfg.Breaker
+		originalCb := budgetCb
+		budgetCb = func(u Usage) {
+			br.ForceOpen()
+			originalCb(u)
+		}
+	}
 	return &KimiClient{
-		cfg:          cfg,
+		cfg: Config{
+			APIKey:          cfg.APIKey,
+			BaseURL:         cfg.BaseURL,
+			Model:           cfg.Model,
+			Timeout:         cfg.Timeout,
+			MaxTokens:       cfg.MaxTokens,
+			BudgetThreshold: cfg.BudgetThreshold,
+			BudgetCallback:  budgetCb,
+			Metrics:         cfg.Metrics,
+		},
 		hc:           &http.Client{Timeout: cfg.Timeout},
 		limiter:      rate.NewLimiter(rate.Every(time.Second), 4),
 		maxAttempts:  3,
@@ -143,7 +162,17 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 		cache:        &responseCache{},
 		cacheTTL:     time.Hour,
 		metrics:      metrics,
+		breaker:      cfg.Breaker,
 	}, nil
+}
+
+// BreakerState returns the circuit breaker's state as a string. Returns
+// "disabled" when no breaker was configured.
+func (k *KimiClient) BreakerState() string {
+	if k.breaker == nil {
+		return "disabled"
+	}
+	return k.breaker.State().String()
 }
 
 // Usage returns the cumulative token/request snapshot for this client.
@@ -252,44 +281,69 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	}
 
 	var lastErr error
-	var lastStatus int
-	for attempt := 0; attempt < k.maxAttempts; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				k.recordOutcome("canceled", 0)
-				return "", fmt.Errorf("%w: context done during backoff: %v", ErrUnavailable, ctx.Err())
-			case <-time.After(k.backoff(attempt - 1)):
+	var content string
+	op := func() error {
+		var opErr error
+		var opStatus int
+		for attempt := 0; attempt < k.maxAttempts; attempt++ {
+			if attempt > 0 {
+				select {
+				case <-ctx.Done():
+					k.recordOutcome("canceled", 0)
+					return fmt.Errorf("%w: context done during backoff: %v", ErrUnavailable, ctx.Err())
+				case <-time.After(k.backoff(attempt - 1)):
+				}
 			}
-		}
 
-		content, used, retryable, status, err := k.doRequest(ctx, raw)
-		if err == nil {
-			k.recordUsage(used, fc.Label)
-			k.recordOutcome("success", 0)
-			if key != "" {
-				k.cache.put(key, content, k.cacheTTL)
+			c, used, retryable, status, err := k.doRequest(ctx, raw)
+			if err == nil {
+				content = c
+				k.recordUsage(used, fc.Label)
+				k.recordOutcome("success", 0)
+				if key != "" {
+					k.cache.put(key, content, k.cacheTTL)
+				}
+				return nil
 			}
-			return content, nil
-		}
-		lastErr = err
-		lastStatus = status
-		if !retryable {
-			if status == 0 {
-				k.recordOutcome("protocol_error", 0)
-			} else {
-				k.recordOutcome("client_error", status)
+			opErr = err
+			opStatus = status
+			if !retryable {
+				lastErr = err
+				if status == 0 {
+					k.recordOutcome("protocol_error", 0)
+				} else {
+					k.recordOutcome("client_error", status)
+				}
+				return err
 			}
-			return "", err
+			k.recordOutcome("retry", 0)
 		}
-		k.recordOutcome("retry", 0)
+		lastErr = opErr
+		if opStatus == 0 {
+			k.recordOutcome("transport_error", 0)
+		} else {
+			k.recordOutcome("retry_exhausted", opStatus)
+		}
+		return opErr
 	}
-	if lastStatus == 0 {
-		k.recordOutcome("transport_error", 0)
+
+	if k.breaker != nil && k.breaker.IsOpen() {
+		k.recordOutcome("circuit_open", 0)
+		return "", fmt.Errorf("%w: circuit breaker open", ErrUnavailable)
+	}
+
+	if k.breaker != nil {
+		if cbErr := k.breaker.Call(op); cbErr != nil && cbErr != lastErr {
+			k.recordOutcome("circuit_open", 0)
+			return "", fmt.Errorf("%w: %v", ErrUnavailable, cbErr)
+		}
 	} else {
-		k.recordOutcome("retry_exhausted", lastStatus)
+		_ = op()
 	}
-	return "", lastErr
+	if lastErr != nil && content == "" {
+		return "", lastErr
+	}
+	return content, nil
 }
 
 func (k *KimiClient) recordOutcome(outcome string, status int) {
