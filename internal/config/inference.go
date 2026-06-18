@@ -5,7 +5,15 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 )
+
+// configAccessMu serializes mutations to the shared ParametersConfig singleton.
+// SelfCalibrate callers create per-call InferenceEngines but all share the same
+// underlying *ParametersConfig (via GetParametersConfig). Without this lock,
+// concurrent OptimizeBayesian (which clones via cloneParams) races against
+// applyCalibrationChange (which writes via SetParameter).
+var configAccessMu sync.RWMutex
 
 // InferenceEngine provides parameter inference and calibration capabilities.
 type InferenceEngine struct {
@@ -218,6 +226,8 @@ func (ie *InferenceEngine) SweepParameter(paramName string, currentValue float64
 }
 
 func (ie *InferenceEngine) cloneParams() *ParametersConfig {
+	configAccessMu.RLock()
+	defer configAccessMu.RUnlock()
 	cfg := DefaultParametersConfig()
 	*cfg = *ie.params
 	return cfg
@@ -226,10 +236,14 @@ func (ie *InferenceEngine) cloneParams() *ParametersConfig {
 // SetParameter sets a single parameter by name on the engine's config.
 // For map parameters, use dot notation: "factor_institutional_sentiment_weights_foreign"
 func (ie *InferenceEngine) SetParameter(name string, value float64) error {
+	configAccessMu.Lock()
+	defer configAccessMu.Unlock()
 	return ie.setParameterOnConfig(ie.params, name, value)
 }
 
 func (ie *InferenceEngine) SetStringParameter(name string, value string) error {
+	configAccessMu.Lock()
+	defer configAccessMu.Unlock()
 	return ie.setStringParameterOnConfig(ie.params, name, value)
 }
 
@@ -244,6 +258,8 @@ func (ie *InferenceEngine) setStringParameterOnConfig(cfg *ParametersConfig, nam
 // SetMapParameter performs a bulk replacement of a map[string]float64 parameter
 // using the mapParamPrefixes table. Each key in the map is set as a sub-key.
 func (ie *InferenceEngine) SetMapParameter(prefix string, value map[string]float64) error {
+	configAccessMu.Lock()
+	defer configAccessMu.Unlock()
 	for _, mp := range mapParamPrefixes {
 		if mp.prefix == prefix {
 			mp.setMap(ie.params, value)
@@ -254,6 +270,8 @@ func (ie *InferenceEngine) SetMapParameter(prefix string, value map[string]float
 }
 
 func (ie *InferenceEngine) SetBoolParameter(name string, value bool) error {
+	configAccessMu.Lock()
+	defer configAccessMu.Unlock()
 	if accessor, ok := boolParameterTable[name]; ok {
 		accessor.set(ie.params, value)
 		return nil
@@ -264,6 +282,8 @@ func (ie *InferenceEngine) SetBoolParameter(name string, value bool) error {
 // GetParameter retrieves the current value of a parameter by name.
 // Returns the value and true if found, or 0 and false if not found.
 func (ie *InferenceEngine) GetParameter(name string) (float64, bool) {
+	configAccessMu.RLock()
+	defer configAccessMu.RUnlock()
 	return ie.getParameterFromConfig(ie.params, name)
 }
 
