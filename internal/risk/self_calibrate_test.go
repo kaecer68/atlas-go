@@ -126,6 +126,25 @@ func TestReplayWithThresholds(t *testing.T) {
 	}
 }
 
+func TestReplayWithThresholds_UsesNotionalNotReturn(t *testing.T) {
+	cfg := config.DefaultParametersConfig()
+	cfg.Risk.MaxPositionSize.Value = 0.10
+	cfg.Risk.MaxDailyLossPct.Value = 0.03
+
+	results := []replayResult{
+		{OrderPrice: 1000, Quantity: 1000, ForwardReturn: -0.05},
+		{OrderPrice: 100, Quantity: 10, ForwardReturn: -0.05},
+	}
+	adjusted := replayWithThresholds(results, cfg)
+
+	if !adjusted[0].WouldHaveBlocked {
+		t.Fatal("expected notional=1M blocked at 10%% cap on 3M ref")
+	}
+	if adjusted[1].WouldHaveBlocked {
+		t.Fatal("expected notional=1000 NOT blocked at 10%% cap on 3M ref")
+	}
+}
+
 func TestClassifyDelta(t *testing.T) {
 	if c := classifyDelta(10, 50); c != "high" {
 		t.Errorf("expected high for 10%% delta with 50 sessions, got %s", c)

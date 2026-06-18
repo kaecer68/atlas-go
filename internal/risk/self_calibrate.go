@@ -61,6 +61,8 @@ type ParameterChange struct {
 type replayResult struct {
 	Blocked          bool
 	ForwardReturn    float64
+	OrderPrice       float64
+	Quantity         int
 	WouldHaveBlocked bool
 }
 
@@ -107,6 +109,8 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 			allResults = append(allResults, replayResult{
 				Blocked:          blocked,
 				ForwardReturn:    o.ForwardReturn,
+				OrderPrice:       order.Price,
+				Quantity:         order.Quantity,
 				WouldHaveBlocked: blocked,
 			})
 			if !blocked {
@@ -306,10 +310,7 @@ func replayWithThresholds(results []replayResult, cfg *config.ParametersConfig) 
 	copy(adjusted, results)
 
 	for i, r := range results {
-		notional := 0.0
-		if r.ForwardReturn != 0 {
-			notional = math.Abs(r.ForwardReturn)
-		}
+		notional := r.OrderPrice * float64(r.Quantity)
 		posPct := notional / 3_000_000
 		lossPct := notional * 1.5 / 3_000_000
 
