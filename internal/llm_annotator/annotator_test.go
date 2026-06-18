@@ -250,3 +250,47 @@ func TestFailureContextToPrompt(t *testing.T) {
 		}
 	}
 }
+
+func TestKimiClient_Annotate_TracksTokenUsage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":12,"completion_tokens":7,"total_tokens":19}}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	for i := 0; i < 3; i++ {
+		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
+			t.Fatalf("attempt %d: %v", i, err)
+		}
+	}
+	u := c.Usage()
+	if u.PromptTokens != 36 {
+		t.Errorf("prompt_tokens: got %d, want 36", u.PromptTokens)
+	}
+	if u.CompletionTokens != 21 {
+		t.Errorf("completion_tokens: got %d, want 21", u.CompletionTokens)
+	}
+	if u.TotalTokens != 57 {
+		t.Errorf("total_tokens: got %d, want 57", u.TotalTokens)
+	}
+	if u.Requests != 3 {
+		t.Errorf("requests: got %d, want 3", u.Requests)
+	}
+}
+
+func TestKimiClient_Annotate_NoUsageOnFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"bad"}`))
+	}))
+	defer srv.Close()
+
+	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
+	c.backoff = func(int) time.Duration { return 0 }
+	_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	u := c.Usage()
+	if u.Requests != 0 {
+		t.Errorf("requests should be 0 on failure, got %d", u.Requests)
+	}
+}

@@ -50,6 +50,17 @@ type KimiClient struct {
 	limiter     *rate.Limiter
 	maxAttempts int
 	backoff     func(attempt int) time.Duration
+	usageMu     sync.Mutex
+	usage       Usage
+}
+
+// Usage is the cumulative token/accounting snapshot for a KimiClient.
+// It is safe to read from any goroutine via Usage().
+type Usage struct {
+	PromptTokens     int64 `json:"prompt_tokens"`
+	CompletionTokens int64 `json:"completion_tokens"`
+	TotalTokens      int64 `json:"total_tokens"`
+	Requests         int64 `json:"requests"`
 }
 
 // NewKimiClient returns a KimiClient wired to the given config. It validates
@@ -66,6 +77,12 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 		maxAttempts: 3,
 		backoff:     defaultBackoff,
 	}, nil
+}
+
+// Usage returns the cumulative token/request snapshot for this client.
+// Safe to call from any goroutine.
+func (k *KimiClient) Usage() Usage {
+	return k.usage
 }
 
 func defaultBackoff(attempt int) time.Duration {
@@ -99,8 +116,9 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 			}
 		}
 
-		content, retryable, err := k.doRequest(ctx, raw)
+		content, used, retryable, err := k.doRequest(ctx, raw)
 		if err == nil {
+			k.recordUsage(used)
 			return content, nil
 		}
 		lastErr = err
@@ -111,39 +129,52 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	return "", lastErr
 }
 
-func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, bool, error) {
+func (k *KimiClient) recordUsage(u Usage) {
+	k.usageMu.Lock()
+	defer k.usageMu.Unlock()
+	k.usage.PromptTokens += u.PromptTokens
+	k.usage.CompletionTokens += u.CompletionTokens
+	k.usage.TotalTokens += u.TotalTokens
+	k.usage.Requests++
+}
+
+func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, Usage, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		k.cfg.BaseURL+"/chat/completions", bytes.NewReader(raw))
 	if err != nil {
-		return "", false, fmt.Errorf("%w: build request: %v", ErrUnavailable, err)
+		return "", Usage{}, false, fmt.Errorf("%w: build request: %v", ErrUnavailable, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+k.cfg.APIKey)
 
 	resp, err := k.hc.Do(req)
 	if err != nil {
-		return "", true, fmt.Errorf("%w: http: %v", ErrUnavailable, err)
+		return "", Usage{}, true, fmt.Errorf("%w: http: %v", ErrUnavailable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", true, fmt.Errorf("%w: read body: %v", ErrUnavailable, err)
+		return "", Usage{}, true, fmt.Errorf("%w: read body: %v", ErrUnavailable, err)
 	}
 	if resp.StatusCode/100 != 2 {
 		retryable := resp.StatusCode == 429 || resp.StatusCode/100 == 5
-		return "", retryable, fmt.Errorf("%w: status %d: %s",
+		return "", Usage{}, retryable, fmt.Errorf("%w: status %d: %s",
 			ErrUnavailable, resp.StatusCode, string(respBody))
 	}
 
 	var parsed chatResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", false, fmt.Errorf("%w: unmarshal: %v", ErrUnavailable, err)
+		return "", Usage{}, false, fmt.Errorf("%w: unmarshal: %v", ErrUnavailable, err)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", false, fmt.Errorf("%w: empty choices", ErrUnavailable)
+		return "", Usage{}, false, fmt.Errorf("%w: empty choices", ErrUnavailable)
 	}
-	return parsed.Choices[0].Message.Content, false, nil
+	return parsed.Choices[0].Message.Content, Usage{
+		PromptTokens:     parsed.Usage.PromptTokens,
+		CompletionTokens: parsed.Usage.CompletionTokens,
+		TotalTokens:      parsed.Usage.TotalTokens,
+	}, false, nil
 }
 
 // buildRequest assembles the OpenAI-compatible chat completions body.
@@ -195,11 +226,16 @@ func failureContextToPrompt(fc FailureContext) string {
 }
 
 // chatResponse is the OpenAI-compatible chat completions response. We
-// only need the first choice's content; everything else is ignored.
+// only need the first choice's content and the usage block for cost tracking.
 type chatResponse struct {
 	Choices []struct {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int64 `json:"prompt_tokens"`
+		CompletionTokens int64 `json:"completion_tokens"`
+		TotalTokens      int64 `json:"total_tokens"`
+	} `json:"usage"`
 }
