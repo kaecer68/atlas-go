@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestHandleDegraded_EmptySnapshot(t *testing.T) {
@@ -19,16 +20,23 @@ func TestHandleDegraded_EmptySnapshot(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
 
-	var got map[string][]map[string]any
+	var got struct {
+		Timestamp           time.Time          `json:"timestamp"`
+		DegradedActivations []map[string]any   `json:"degraded_activations"`
+		ProviderErrors      []map[string]any   `json:"provider_errors"`
+	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatalf("failed to decode JSON response: %v", err)
 	}
 
-	if len(got["degraded_activations"]) != 0 {
-		t.Fatalf("expected empty degraded_activations, got %v", got["degraded_activations"])
+	if got.Timestamp.IsZero() {
+		t.Fatalf("expected non-zero top-level timestamp, got %v", got.Timestamp)
 	}
-	if len(got["provider_errors"]) != 0 {
-		t.Fatalf("expected empty provider_errors, got %v", got["provider_errors"])
+	if len(got.DegradedActivations) != 0 {
+		t.Fatalf("expected empty degraded_activations, got %v", got.DegradedActivations)
+	}
+	if len(got.ProviderErrors) != 0 {
+		t.Fatalf("expected empty provider_errors, got %v", got.ProviderErrors)
 	}
 }
 
@@ -47,25 +55,43 @@ func TestHandleDegraded_WithIncrements(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
 
-	var got map[string][]map[string]any
+	var got struct {
+		Timestamp           time.Time        `json:"timestamp"`
+		DegradedActivations []map[string]any `json:"degraded_activations"`
+		ProviderErrors      []map[string]any `json:"provider_errors"`
+	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatalf("failed to decode JSON response: %v", err)
 	}
 
-	activations := got["degraded_activations"]
+	if got.Timestamp.IsZero() {
+		t.Fatalf("expected non-zero top-level timestamp, got %v", got.Timestamp)
+	}
+
+	activations := got.DegradedActivations
 	if len(activations) != 1 {
 		t.Fatalf("expected 1 degraded_activations entry, got %d", len(activations))
 	}
 	if activations[0]["service"] != "svc-a" || activations[0]["reason"] != "timeout" || activations[0]["value"] != float64(2) {
 		t.Fatalf("unexpected degraded_activations entry: %v", activations[0])
 	}
+	if tsStr, ok := activations[0]["timestamp"].(string); !ok || tsStr == "" {
+		t.Fatalf("expected non-empty per-sample timestamp string, got %v (%T)", activations[0]["timestamp"], activations[0]["timestamp"])
+	} else if ts, err := time.Parse(time.RFC3339Nano, tsStr); err != nil || ts.IsZero() {
+		t.Fatalf("expected parseable RFC3339 timestamp, got %q (err=%v)", tsStr, err)
+	}
 
-	errors := got["provider_errors"]
+	errors := got.ProviderErrors
 	if len(errors) != 1 {
 		t.Fatalf("expected 1 provider_errors entry, got %d", len(errors))
 	}
 	if errors[0]["service"] != "svc-b" || errors[0]["error_type"] != "network" || errors[0]["value"] != float64(1) {
 		t.Fatalf("unexpected provider_errors entry: %v", errors[0])
+	}
+	if tsStr, ok := errors[0]["timestamp"].(string); !ok || tsStr == "" {
+		t.Fatalf("expected non-empty per-sample timestamp on error, got %v (%T)", errors[0]["timestamp"], errors[0]["timestamp"])
+	} else if ts, err := time.Parse(time.RFC3339Nano, tsStr); err != nil || ts.IsZero() {
+		t.Fatalf("expected parseable RFC3339 timestamp on error, got %q (err=%v)", tsStr, err)
 	}
 }
 

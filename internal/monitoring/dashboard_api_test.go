@@ -858,7 +858,7 @@ func TestRegisterCrossMarketRoutes_DegradedEndpointRegistered(t *testing.T) {
 		t.Errorf("expected Content-Type application/json, got %q", ct)
 	}
 
-	var snap map[string][]map[string]any
+	var snap map[string]any
 	if err := json.NewDecoder(rr.Body).Decode(&snap); err != nil {
 		t.Fatalf("decode /degraded response: %v", err)
 	}
@@ -867,5 +867,8 @@ func TestRegisterCrossMarketRoutes_DegradedEndpointRegistered(t *testing.T) {
 	}
 	if _, ok := snap["provider_errors"]; !ok {
 		t.Error("expected 'provider_errors' key in /degraded snapshot")
+	}
+	if _, ok := snap["timestamp"].(string); !ok {
+		t.Error("expected 'timestamp' (string) key in /degraded snapshot")
 	}
 }
