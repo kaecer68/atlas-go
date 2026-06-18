@@ -173,6 +173,30 @@ func TestApplyCalibrationChange_NoErrorOnSuccess(t *testing.T) {
 	}
 }
 
+func TestDetectOscillation_AlternatingReturnsTrue(t *testing.T) {
+	if !detectOscillation([]float64{0.05, 0.10, 0.06, 0.11}) {
+		t.Fatal("expected oscillation detected for alternating up/down sequence")
+	}
+}
+
+func TestDetectOscillation_MonotonicReturnsFalse(t *testing.T) {
+	if detectOscillation([]float64{0.05, 0.06, 0.07, 0.08}) {
+		t.Fatal("expected no oscillation for monotonic increasing sequence")
+	}
+	if detectOscillation([]float64{0.10, 0.09, 0.08, 0.07}) {
+		t.Fatal("expected no oscillation for monotonic decreasing sequence")
+	}
+}
+
+func TestDetectOscillation_ShortHistoryReturnsFalse(t *testing.T) {
+	if detectOscillation([]float64{0.05}) {
+		t.Fatal("expected no oscillation with single value")
+	}
+	if detectOscillation(nil) {
+		t.Fatal("expected no oscillation with empty history")
+	}
+}
+
 func TestClassifyDelta(t *testing.T) {
 	if c := classifyDelta(10, 50); c != "high" {
 		t.Errorf("expected high for 10%% delta with 50 sessions, got %s", c)

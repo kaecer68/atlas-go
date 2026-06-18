@@ -330,6 +330,32 @@ func applyCalibrationChange(ie *config.InferenceEngine, name string, value float
 	}
 }
 
+// detectOscillation returns true when the recent history alternates sign
+// more often than it continues — i.e., consecutive Bayesian runs are
+// pushing the parameter back and forth instead of converging. Used to
+// refuse changes that would destabilize the risk gate.
+func detectOscillation(history []float64) bool {
+	if len(history) < 3 {
+		return false
+	}
+	signChanges := 0
+	intervals := len(history) - 1
+	for i := 2; i < len(history); i++ {
+		delta := history[i] - history[i-1]
+		if delta == 0 {
+			continue
+		}
+		prev := history[i-1] - history[i-2]
+		if prev == 0 {
+			continue
+		}
+		if (delta > 0) != (prev > 0) {
+			signChanges++
+		}
+	}
+	return signChanges*2 >= intervals
+}
+
 func classifyDelta(deltaPct float64, nSessions int) string {
 	switch {
 	case nSessions >= 30 && math.Abs(deltaPct) > 5:
