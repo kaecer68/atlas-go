@@ -328,8 +328,18 @@ func TestCancelTask_Success(t *testing.T) {
 	}
 	json.NewDecoder(w.Body).Decode(&createResp)
 
-	// Give the goroutine time to start running.
-	time.Sleep(50 * time.Millisecond)
+	// Wait deterministically for the goroutine to start running.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		current, err := store.GetExecution(context.Background(), createResp.ID)
+		if err == nil && current.Status == domain.TaskStatusRunning {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("task did not reach running within 2s; last status = %v, err = %v", current, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Cancel the running task.
 	req2 := httptest.NewRequest(http.MethodPost, "/api/tasks/"+createResp.ID+"/cancel", nil)
