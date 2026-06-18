@@ -165,6 +165,10 @@ func (s *CrossMarketService) SetDegradedMetrics(m *metrics.DegradedMetrics) {
 	s.degradedMetrics = m
 }
 
+func (s *CrossMarketService) GetDegradedMetrics() *metrics.DegradedMetrics {
+	return s.degradedMetrics
+}
+
 func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketService {
 	return &CrossMarketService{
 		provider:        provider,

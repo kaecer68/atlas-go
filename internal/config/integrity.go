@@ -54,8 +54,48 @@ func CheckParamsIntegrity(path string) []error {
 
 	var errs []error
 	for _, key := range requiredParamsKeys {
-		if _, ok := obj[key]; !ok {
+		raw, ok := obj[key]
+		if !ok {
 			errs = append(errs, fmt.Errorf("params.json missing required top-level key: %s", key))
+			continue
+		}
+
+		var nested map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &nested); err != nil {
+			// version and updated_at are scalar metadata fields; any JSON type is allowed.
+			if key == "version" || key == "updated_at" {
+				continue
+			}
+
+			var val interface{}
+			if json.Unmarshal(raw, &val) == nil {
+				switch val.(type) {
+				case string:
+					errs = append(errs, fmt.Errorf("params.json key '%s' has type string, expected object", key))
+				case float64:
+					errs = append(errs, fmt.Errorf("params.json key '%s' has type number, expected object", key))
+				case bool:
+					errs = append(errs, fmt.Errorf("params.json key '%s' has type bool, expected object", key))
+				case []interface{}:
+					errs = append(errs, fmt.Errorf("params.json key '%s' has type array, expected object", key))
+				case nil:
+					errs = append(errs, fmt.Errorf("params.json key '%s' has type null, expected object", key))
+				default:
+					errs = append(errs, fmt.Errorf("params.json key '%s' has type unknown, expected object", key))
+				}
+			} else {
+				errs = append(errs, fmt.Errorf("params.json key '%s' has type unknown, expected object", key))
+			}
+			continue
+		}
+
+		if nested == nil {
+			errs = append(errs, fmt.Errorf("params.json key '%s' is null", key))
+			continue
+		}
+
+		if len(nested) == 0 {
+			errs = append(errs, fmt.Errorf("params.json key '%s' is empty object", key))
 		}
 	}
 

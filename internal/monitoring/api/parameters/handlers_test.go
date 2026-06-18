@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -311,8 +312,78 @@ func TestHandleAuditLog_Success(t *testing.T) {
 	}
 }
 
+func writeTempParamsFile(t *testing.T, modifier func(map[string]any)) string {
+	t.Helper()
+	data, err := os.ReadFile("../../../../configs/parameters.json")
+	if err != nil {
+		t.Fatalf("read params: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := m["reporting"]; !ok {
+		m["reporting"] = map[string]any{
+			"win_rate_threshold": map[string]any{"value": 0.5, "rationale": "test", "source": "heuristic"},
+			"sharpe_min_samples": map[string]any{"value": 30, "rationale": "test", "source": "heuristic"},
+		}
+	}
+	if modifier != nil {
+		modifier(m)
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	f, err := os.CreateTemp("", "params-*.json")
+	if err != nil {
+		t.Fatalf("create temp: %v", err)
+	}
+	if _, err := f.Write(out); err != nil {
+		t.Fatalf("write temp: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close temp: %v", err)
+	}
+	t.Cleanup(func() { os.Remove(f.Name()) })
+	return f.Name()
+}
+
 func TestHandleReload_Success(t *testing.T) {
-	h := newTestHandlers(t)
+	path := writeTempParamsFile(t, nil)
+	h := NewHandlers(path)
+	req := httptest.NewRequest(http.MethodPost, "/api/parameters/reload", nil)
+	status, body := h.HandleReload(req)
+	assertStatus(t, status, http.StatusOK)
+	m := assertJSONKey(t, body, "status")
+	if m["status"] != "reloaded" {
+		t.Errorf("status = %v, want reloaded", m["status"])
+	}
+}
+
+func TestHandleReload_RejectsNullValue(t *testing.T) {
+	path := writeTempParamsFile(t, func(m map[string]any) {
+		m["darwinian"] = nil
+	})
+	h := NewHandlers(path)
+	req := httptest.NewRequest(http.MethodPost, "/api/parameters/reload", nil)
+	status, _ := h.HandleReload(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
+func TestHandleReload_RejectsEmptyObject(t *testing.T) {
+	path := writeTempParamsFile(t, func(m map[string]any) {
+		m["darwinian"] = map[string]any{}
+	})
+	h := NewHandlers(path)
+	req := httptest.NewRequest(http.MethodPost, "/api/parameters/reload", nil)
+	status, _ := h.HandleReload(req)
+	assertStatus(t, status, http.StatusBadRequest)
+}
+
+func TestHandleReload_AcceptsValidConfig(t *testing.T) {
+	path := writeTempParamsFile(t, nil)
+	h := NewHandlers(path)
 	req := httptest.NewRequest(http.MethodPost, "/api/parameters/reload", nil)
 	status, body := h.HandleReload(req)
 	assertStatus(t, status, http.StatusOK)
