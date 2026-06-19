@@ -11,10 +11,10 @@ import (
 // receiver. The schema is defined in
 // https://github.com/prometheus/alertmanager/blob/main/template/default.tmpl.
 type AlertmanagerPayload struct {
-	Version  string             `json:"version"`
-	GroupKey string             `json:"groupKey"`
-	Status   string             `json:"status"`
-	Receiver string             `json:"receiver"`
+	Version  string              `json:"version"`
+	GroupKey string              `json:"groupKey"`
+	Status   string              `json:"status"`
+	Receiver string              `json:"receiver"`
 	Alerts   []AlertmanagerAlert `json:"alerts"`
 }
 

@@ -15,8 +15,8 @@ type OscillationVerdict struct {
 }
 
 var (
-	oscMu             sync.Mutex
-	lastFactorDeltas  map[FactorType]float64
+	oscMu            sync.Mutex
+	lastFactorDeltas map[FactorType]float64
 )
 
 // detectOscillation compares the proposed delta (optimal - current) against
