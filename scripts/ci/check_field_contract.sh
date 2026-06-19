@@ -67,11 +67,18 @@ while IFS= read -r file; do
       confidence_breakdown) continue ;;  # TODO: planned substructure, not yet in Go struct
       # Fields from map[string]any or packages not scanned by gentags
       # (next_run is tagged in apigateway/, outside gentags scan scope;
-      # core_indicators is a wrapper map key around the CoreIndicators struct)
+      # core_indicators is a wrapper map key around the CoreIndicators struct;
+      # empty_state is returned via map literal in
+      #   internal/monitoring/api/dashboard/fetch_log.go:79
+      # gate_mode is returned via map literal in
+      #   internal/monitoring/api/dashboard/risk/handlers.go:121
+      # — both are designed fields with JS consumers + Go tests, but
+      # built dynamically rather than via a typed response struct.)
       auto_discovered_count|auto_discovered_rules|\
       avg_improvement|convergence_rate|success_rate|stability_score|\
       confidence_score|oil_pct|vix_level|\
-      core_indicators|last_24h|next_run) continue ;;
+      core_indicators|last_24h|next_run|\
+      empty_state|gate_mode) continue ;;
     esac
 
     echo "$field" >> "$FOUND_FIELDS"
