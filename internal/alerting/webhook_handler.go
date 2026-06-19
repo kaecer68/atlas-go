@@ -3,6 +3,7 @@ package alerting
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -46,20 +47,40 @@ func NewAlertWebhookHandler(cap int) *AlertWebhookHandler {
 	return &AlertWebhookHandler{cap: cap}
 }
 
-// ServeHTTP decodes the Alertmanager payload, appends its alerts to the
-// in-memory store, and acknowledges with 200 OK. Non-POST requests are
-// rejected with 405; malformed JSON returns 400.
+// ServeHTTP dispatches GET → recent alerts JSON, POST → ingest payload.
+// Other methods are rejected with 405.
 func (h *AlertWebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		h.serveRecent(w, r)
+	case http.MethodPost:
+		h.serveIngest(w, r)
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
+}
+
+func (h *AlertWebhookHandler) serveRecent(w http.ResponseWriter, r *http.Request) {
+	n := 100
+	if v := r.URL.Query().Get("n"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			n = parsed
+		}
+	}
+	alerts := h.Recent(n)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Alerts []AlertmanagerAlert `json:"alerts"`
+		Count  int                 `json:"count"`
+	}{Alerts: alerts, Count: len(alerts)})
+}
+
+func (h *AlertWebhookHandler) serveIngest(w http.ResponseWriter, r *http.Request) {
 	var p AlertmanagerPayload
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		http.Error(w, "bad json: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.store = append(h.store, p.Alerts...)

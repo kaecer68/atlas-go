@@ -25,6 +25,11 @@ route:
         severity: info
       repeat_interval: 12h
 
+    - receiver: atlas-webhook
+      match:
+        service: atlas
+      repeat_interval: 1m
+
 receivers:
   - name: default-slack
     slack_configs:
@@ -62,7 +67,7 @@ receivers:
           {{ end }}
         send_resolved: true
 
-  - name: info-slack
+- name: info-slack
     slack_configs:
       - channel: "#atlas-alerts-info"
         title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
@@ -70,8 +75,14 @@ receivers:
           {{ range .Alerts }}
           *{{ .Labels.alertname }}* ({{ .Labels.severity }})
           {{ .Annotations.summary }}
+          {{ .Annotations.description }}
           {{ end }}
         send_resolved: false
+
+  - name: atlas-webhook
+    webhook_configs:
+      - url: 'http://localhost:8080/api/v1/alerts'
+        send_resolved: true
 
 inhibit_rules:
   - source_match:

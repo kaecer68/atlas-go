@@ -45,7 +45,7 @@ func TestAlertWebhookHandler_AcceptsPayload(t *testing.T) {
 
 func TestAlertWebhookHandler_RejectsNonPost(t *testing.T) {
 	h := NewAlertWebhookHandler(100)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alerts", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/alerts", nil)
 	rr := httptest.NewRecorder()
 
 	h.ServeHTTP(rr, req)
@@ -120,4 +120,52 @@ func itoa(i int) string {
 		i /= 10
 	}
 	return string(b)
+}
+
+func TestAlertWebhookHandler_GetReturnsRecent(t *testing.T) {
+	h := NewAlertWebhookHandler(100)
+
+	body := AlertmanagerPayload{
+		Version:  "4",
+		Status:   "firing",
+		Receiver: "atlas",
+		Alerts: []AlertmanagerAlert{
+			{
+				Status:      "firing",
+				Labels:      map[string]string{"alertname": "TestAlert", "severity": "critical"},
+				Annotations: map[string]string{"summary": "test alert"},
+			},
+		},
+	}
+	buf, _ := json.Marshal(body)
+	postReq := httptest.NewRequest(http.MethodPost, "/api/v1/alerts", bytes.NewReader(buf))
+	h.ServeHTTP(httptest.NewRecorder(), postReq)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/alerts?n=10", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, getReq)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var resp struct {
+		Alerts []AlertmanagerAlert `json:"alerts"`
+		Count  int                 `json:"count"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Count != 1 {
+		t.Errorf("expected count=1, got %d", resp.Count)
+	}
+	if len(resp.Alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(resp.Alerts))
+	}
+	if resp.Alerts[0].Labels["alertname"] != "TestAlert" {
+		t.Errorf("unexpected alert: %+v", resp.Alerts[0])
+	}
 }
