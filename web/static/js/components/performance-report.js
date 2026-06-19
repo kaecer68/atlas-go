@@ -121,7 +121,7 @@ function renderReportData(data) {
     { label: '總報酬', value: fmtPct ? fmtPct(data.total_return || 0) : ((data.total_return||0)*100).toFixed(2)+'%', sign: data.total_return },
     { label: '年化報酬', value: fmtPct ? fmtPct(data.annualized_return || 0) : ((data.annualized_return||0)*100).toFixed(2)+'%', sign: data.annualized_return },
     { label: '夏普比率', value: data.sharpe_ratio == null ? 'N/A' : (fmtFloat ? fmtFloat(data.sharpe_ratio, 2) : (data.sharpe_ratio).toFixed(2)) },
-    { label: '最大回撤', value: drawdownVal > 0 ? ('-' + (fmtPct ? fmtPct(drawdownVal) : (drawdownVal*100).toFixed(2)+'%')) : '0.00%', sign: drawdownSign },
+    { label: '最大回撤', value: data.max_drawdown == null ? '—' : (drawdownVal > 0 ? ('-' + (fmtPct ? fmtPct(drawdownVal) : (drawdownVal*100).toFixed(2)+'%')) : '0.00%'), sign: drawdownSign },
     { label: '稅後價值', value: fmtNTD ? fmtNTD(data.after_tax_value || 0) : (data.after_tax_value||0).toFixed(0) },
     { label: '已繳稅額', value: fmtNTD ? fmtNTD(data.total_tax_paid || 0) : (data.total_tax_paid||0).toFixed(0), hint: '累積' },
     { label: '勝率', value: fmtPct ? fmtPct(data.win_rate || 0) : ((data.win_rate||0)*100).toFixed(1)+'%' },

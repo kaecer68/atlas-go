@@ -132,6 +132,9 @@ func (m *BackgroundTaskManager) Register(task *ScheduledTask) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if _, exists := m.registry[task.Name]; exists {
+		return fmt.Errorf("duplicate task name %q: BackgroundTaskManager.Register silently overwrites by name; if intentional, remove this check or rename the task", task.Name)
+	}
 	m.registry[task.Name] = task
 	return nil
 }

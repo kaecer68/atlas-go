@@ -70,10 +70,20 @@ func CalibrateWeights(ctx context.Context, orders []CalibratedOrder) (*WeightCal
 		vDelta := (optV - baseV) / math.Abs(baseV+1e-10) * 100
 		switch {
 		case vDelta > 3.0 && improvement > 5.0:
-			verdict = "applied"
+			osc := detectOscillation(current, optimal)
+			applied := optimal
+			if osc.Detected {
+				applied = dampenWeights(optimal, current, osc.DampingFactor)
+				verdict = "oscillation_dampened"
+			} else {
+				verdict = "applied"
+			}
 			summary = fmt.Sprintf("valid=+%.1f%% train=+%.1f%%", vDelta, improvement)
-			changes = buildWeightChanges(current, optimal, len(orders))
-			applyFactorWeights(optimal)
+			if osc.Detected {
+				summary += " oscillation=" + osc.Reason
+			}
+			changes = buildWeightChanges(current, applied, len(orders))
+			applyFactorWeights(applied)
 		case vDelta < -2.0:
 			verdict = "degraded"
 			summary = fmt.Sprintf("valid=%.1f%% (train=+%.1f%%)", vDelta, improvement)
@@ -81,10 +91,20 @@ func CalibrateWeights(ctx context.Context, orders []CalibratedOrder) (*WeightCal
 			summary = fmt.Sprintf("valid=+%.1f%% stable", vDelta)
 		}
 	} else if improvement > 15.0 {
-		verdict = "applied"
+		osc := detectOscillation(current, optimal)
+		applied := optimal
+		if osc.Detected {
+			applied = dampenWeights(optimal, current, osc.DampingFactor)
+			verdict = "oscillation_dampened"
+		} else {
+			verdict = "applied"
+		}
 		summary = fmt.Sprintf("train=+%.1f%%", improvement)
-		changes = buildWeightChanges(current, optimal, len(orders))
-		applyFactorWeights(optimal)
+		if osc.Detected {
+			summary += " oscillation=" + osc.Reason
+		}
+		changes = buildWeightChanges(current, applied, len(orders))
+		applyFactorWeights(applied)
 	} else {
 		summary = fmt.Sprintf("train=+%.1f%% stable", improvement)
 	}
