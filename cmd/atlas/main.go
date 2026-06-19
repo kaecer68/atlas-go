@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/alerting"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
@@ -380,7 +381,11 @@ func run(args []string, deps appDeps) error {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
 		dashboard.SetPool(pool)
-		dashboard.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
+		agentHealthMgr := portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams)
+		dashboard.SetHealthManager(agentHealthMgr)
+		dwMgr := portfolio.NewDarwinianWeightManager(filepath.Join(cfg.WorkDir, "data/state/darwinian_weights.json"))
+		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
+		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
 		dashboard.SetJanusEngine(janusEngine)
 		log.Printf("[JANUS] engine injected into dashboard API")
 		if repo != nil {
@@ -450,6 +455,10 @@ func run(args []string, deps appDeps) error {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
 			alertAPI.RegisterRoutes(mux)
 		}
+
+		alertWebhook := alerting.NewAlertWebhookHandler(1000)
+		mux.Handle("/api/v1/alerts", alertWebhook)
+		log.Printf("[Alerting] registered /api/v1/alerts webhook handler (cap=1000)")
 
 		if taskManager != nil {
 			dashboard.SetTaskManager(taskManager)
@@ -869,6 +878,28 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
 			}
 
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_rollback",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					_, err := autoRollback.RunDaily(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_rollback background task (24h interval)")
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "system_health_monitor",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					_, err := healthMonitor.RunDaily(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered system_health_monitor background task (24h interval)")
+
 			// Register auto_backfill via Gateway.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:      "auto_backfill",
@@ -1228,32 +1259,6 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered silicon_cycle_update background task (10m interval)")
 			}
 
-			// Narrative model + template hit-rate self-calibration (24h).
-			{
-				dashRef := dashboard
-				replayCSV := cfg.ReplayDataPath
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "narrative_calibrate",
-					Interval: 24 * time.Hour,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						report, err := dashRef.CalibrateNarrative(replayCSV)
-						if err != nil {
-							logging.Warn("main", "narrative_calibrate_failed", "err", err)
-							return nil
-						}
-						logging.Info(
-							"main", "narrative_calibrate_ok",
-							"verdict", report.Verdict,
-							"models_updated", report.ModelsUpdated,
-							"templates_updated", report.TemplatesUpdated,
-						)
-						return nil
-					},
-				})
-				log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
-			}
-
 			// StrategyEvolver daily re-evaluation (24h, audit-style trigger).
 			{
 				dashRef := dashboard
@@ -1582,6 +1587,14 @@ func run(args []string, deps appDeps) error {
 				if kimi, err := llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey, Metrics: collector}); err != nil {
 					logging.Warn("main", "kimi_init_failed", "err", err.Error())
 				} else {
+					if store, storeErr := llm_annotator.NewJSONLStore(
+						filepath.Join(cfg.WorkDir, "data/state/llm_annotations", "annotations.jsonl"),
+					); storeErr != nil {
+						logging.Warn("main", "annotation_store_init_failed", "err", storeErr.Error())
+					} else {
+						kimi.SetAnnotationStore(store)
+						defer func() { _ = store.Close() }()
+					}
 					dashboard.SetStrategiesAnnotator(kimi)
 					logging.Info("main", "kimi_annotator_loaded", "backend", kimi.Name())
 				}
