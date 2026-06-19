@@ -77,6 +77,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/data-channels", shared.Get(h.HandleDataChannels))
 	mux.Handle("GET /api/dashboard/data-pipeline", shared.Get(h.HandleDataPipeline))
 	mux.Handle("GET /api/dashboard/drawdown", shared.Get(h.HandleDrawdown))
+	mux.Handle("GET /api/dashboard/channel-fetch-log", shared.Get(h.HandleChannelFetchLog))
 	mux.Handle("GET /api/traces/sim-latest", shared.Get(h.HandleSimLatest))
 	mux.Handle("POST /api/dashboard/channels/", shared.Adapt(h.HandleChannelAction))
 	mux.Handle("POST /api/dashboard/api-keys/update", shared.Post(h.HandleAPIKeyUpdate))
