@@ -238,6 +238,21 @@ func (k *KimiClient) appendAnnotation(rec AnnotationRecord) {
 	if len(k.recentAnnotations) > annotationBufferCap {
 		k.recentAnnotations = k.recentAnnotations[len(k.recentAnnotations)-annotationBufferCap:]
 	}
+	store := k.annotationStore
+	k.annotationMu.Unlock()
+
+	if store != nil {
+		_ = store.Write(rec)
+	}
+}
+
+// SetAnnotationStore wires an AnnotationStore for durable persistence.
+// A nil store disables persistence. Persistence failures are swallowed
+// (the in-memory ring buffer remains the source of truth for runtime
+// decisions); callers can monitor disk health via the store's Close error.
+func (k *KimiClient) SetAnnotationStore(s AnnotationStore) {
+	k.annotationMu.Lock()
+	k.annotationStore = s
 	k.annotationMu.Unlock()
 }
 

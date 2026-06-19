@@ -67,6 +67,7 @@ type KimiClient struct {
 	annotationMu      sync.Mutex
 	recentAnnotations []AnnotationRecord
 	annotationCounter uint64
+	annotationStore   AnnotationStore
 }
 
 // responseCache is a TTL-keyed string cache for LLM responses. A nil

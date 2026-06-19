@@ -50,6 +50,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
@@ -360,6 +361,49 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	calCfg := params.Industry.CycleCalibration.Value
 	cal := industry.NewCycleCalibration(calCfg)
 	svc.SetCycleCalibration(cal)
+
+	narrativeThemeMap := map[string]map[string]float64{
+		"AI_capex_surge":          {"semiconductor": 0.08, "ai_supply_chain": 0.08, "electronics": 0.05},
+		"US_rates_up":             {"financials": -0.04},
+		"JPY_carry_unwind":        {"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03},
+		"geopolitical_risk_spike": {"shipping": -0.05, "energy": -0.05, "industrial": -0.03},
+		"oil_price_shock":         {"shipping": -0.04, "energy": -0.04, "industrial": -0.03},
+		"semiconductor_downturn":  {"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06},
+	}
+	narrativeFn := func(_ context.Context, industryID string) (float64, float64, string, error) {
+		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+		totalBias := 0.0
+		maxConf := 0.0
+		activeTheme := ""
+		for _, e := range events {
+			if bias, ok := narrativeThemeMap[e.Theme][industryID]; ok {
+				weighted := bias * e.Confidence * e.HitRate
+				totalBias += weighted
+				if e.Confidence*e.HitRate > maxConf {
+					maxConf = e.Confidence * e.HitRate
+					activeTheme = e.Theme
+				}
+			}
+		}
+		return totalBias, maxConf, activeTheme, nil
+	}
+	macroFn := func(_ context.Context, industryID, _, _ string) (float64, error) {
+		return modulator.SeasonalModulation(industryID) - 1.0, nil
+	}
+	factorFn := func(_ context.Context, _ string) (float64, error) {
+		return 0.0, nil
+	}
+	svc.WeightEngine = sectorallocation.NewDefaultEngine(
+		params.SectorAllocation,
+		sectorallocation.NewCycleAdapter(cycleTracker),
+		sectorallocation.NewSeasonalAdapter(seasonalEngine),
+		sectorallocation.NewLinkageAdapter(linkageAnalyzer, nil),
+		sectorallocation.NewNarrativeAdapter(narrativeFn),
+		sectorallocation.MacroProviderFunc(macroFn),
+		sectorallocation.FactorProviderFunc(factorFn),
+		params.Darwinian.WeightMin.Value,
+		params.Darwinian.WeightMax.Value,
+	)
 
 	return svc
 }
