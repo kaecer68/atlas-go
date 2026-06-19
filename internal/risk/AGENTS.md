@@ -40,3 +40,31 @@ MacroAwareDrawdownEngine.Evaluate(riskSnapshot, regime, narrativeEvents)
 ```
 
 **注意**：`positionScale` 為乘法因子。`0.5` 表示「將所有倉位減半」— 不包含現金。若需限制總曝險的因子，請改用 `CapitalPhaseController.GetCapitalLimit()`。
+
+---
+
+## 組態設定（2026-06-20 裁定）
+
+**`internal/risk` 模組統一使用全域 `config.GetParametersConfig()`，未採用 per-module 組態檔。**
+
+### 歷史上曾存在的 `internal/risk/configs/parameters.json`
+
+- **狀態**：未追蹤孤兒（建立於 2026-06-20 00:56:18，從未進入 git），已於 commit `chore(risk): remove orphan per-module config (use global ParametersConfig)` 刪除
+- **體積**：190,833 bytes（與全域 `configs/parameters.json` 198,595 bytes 高度重疊，研判為 dump 殘留）
+- **引用數**：0 個 `.go` 檔案以字串引用、0 個 `fsnotify`/watcher、0 個排程任務、0 個寫入器、0 個 lockfile 創建者
+- **違反規範**：`docs/TRAPS.md`「繞過 ParametersConfig 硬編碼參數」明確禁止此模式；權威計畫 `docs/superpowers/plans/2026-05-21-risk-module-fixes.md` 6 個 Phase 全部走全域 ParametersConfig
+
+### 新增 / 修改風險參數的正確做法
+
+1. 擴充 `ParametersConfig.Risk` 結構於 `internal/config/parameters.go`（見 `RiskParameters` 類型，line 1241 附近）
+2. 為新欄位加入 `ParameterMetadata[T]` 包裝（含 `Rationale` / `Source` / `Todo`）
+3. 預設值置於 `internal/config/parameters_defaults.go`
+4. 透過 `LockedSaveWithRollback` 寫回 `configs/parameters.json`（根目錄，預設路徑；可用 `ATLAS_PARAMETERS_CONFIG` 或 `ATLAS_PARAMETERS_CONFIG_PATH` 環境變數覆寫）
+5. 校準管線（Bayesian optimizer / calibrator）會自動讀取/寫回，無需手動同步
+
+### 為什麼不做 per-module 風險 loader
+
+- 全域 loader 是中央化單例 + 鎖定回寫模式（`internal/config/parameters.go:2276` 起）
+- 風險子結構已內嵌於全域 schema，`self_calibrate.go:191` 明確寫回全域路徑 — 拆檔會造成 split-brain
+- 唯一 per-module loader 先例 `internal/risktest/config.go` 使用 CLI flag，無 env 變數、無 lock，與本模組需求不符
+- 詳見 `.opencode/handoffs/risk-config-loader.md` 完整 Q1-Q4 調查記錄
