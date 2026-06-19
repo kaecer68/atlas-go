@@ -306,6 +306,9 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("FUBON_PROXY_PORT", "8081"))
-    # 使用 IPv6 wildcard "::" (含 IPV6_V6ONLY=0) 而非 "0.0.0.0",同時支援 IPv4 / IPv6 連線。
-    # Go client 已改為 IPv4 (127.0.0.1) 硬編碼;此處雙棧綁定讓 IPv6 客戶端 (例如容器內 [::1]) 也能用。
-    uvicorn.run(app, host="::", port=port)
+    # 綁定 IPv4 wildcard "0.0.0.0" 而非 IPv6 "::"。
+    # 原因:uvicorn 在裝有 uvloop 時會建立 IPv6 socket 並強制 IPV6_V6ONLY=1,
+    # 此時 host="::" 變成 IPv6-only,IPv4 連線 (含 Go client 的 127.0.0.1:8081) 會被拒絕。
+    # Go client 已硬編碼 IPv4 (127.0.0.1),雙棧實作在 uvloop 下無效,因此採 IPv4-only 綁定最安全。
+    # 若未來需 IPv6,須顯式設定 IPV6_V6ONLY=0 socket option,且 uvicorn/uvloop 需升級或關閉 uvloop。
+    uvicorn.run(app, host="0.0.0.0", port=port)

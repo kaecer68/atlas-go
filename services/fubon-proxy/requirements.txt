@@ -1,5 +1,8 @@
 fastapi==0.115.0
-uvicorn[standard]==0.32.0
+# 不使用 uvicorn[standard] 避免引入 uvloop — uvloop 在 IPv6 socket 上強制
+# IPV6_V6ONLY=1,導致 host="::" 變成 IPv6-only,破壞 Go client 的 IPv4 連線。
+# 若未來需要 uvloop 效能,必須先驗證綁定行為再啟用。
+uvicorn==0.32.0
 pydantic==2.9.0
 fubon-neo==2.2.8
 python-dotenv==1.0.1
