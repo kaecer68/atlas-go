@@ -29,7 +29,10 @@ func setupIndustryHandlers() *Handlers {
 		"",  // paramsPath
 	)
 
-	return &Handlers{Svc: svc}
+	return &Handlers{
+		Svc:             svc,
+		SectorAllocator: svc.WeightEngine,
+	}
 }
 
 // =====================================================================
