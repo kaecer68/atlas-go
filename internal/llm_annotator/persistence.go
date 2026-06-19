@@ -27,8 +27,10 @@ type jsonlStore struct {
 	keep     int
 }
 
-const defaultJSONLMaxBytes int64 = 50 * 1024 * 1024
-const defaultJSONLKeep int = 3
+const (
+	defaultJSONLMaxBytes int64 = 50 * 1024 * 1024
+	defaultJSONLKeep           = 3
+)
 
 // NewJSONLStore creates a JSONL store with default rotation (50MB per
 // file, 3 rotated copies).
@@ -39,13 +41,15 @@ func NewJSONLStore(path string) (AnnotationStore, error) {
 // NewJSONLStoreWithRotation creates a JSONL store with explicit rotation
 // parameters. maxBytes <= 0 disables rotation.
 func NewJSONLStoreWithRotation(path string, maxBytes int64, keep int) (AnnotationStore, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	st, err := f.Stat()
 	if err != nil {
-		f.Close()
+		if closeErr := f.Close(); closeErr != nil {
+			return nil, fmt.Errorf("stat %s: %w (close after stat failure: %v)", path, err, closeErr)
+		}
 		return nil, fmt.Errorf("stat %s: %w", path, err)
 	}
 	return &jsonlStore{
@@ -105,7 +109,7 @@ func (s *jsonlStore) rotateLocked() error {
 	if err := os.Rename(s.path, s.path+".1"); err != nil {
 		return fmt.Errorf("rotate %s: %w", s.path, err)
 	}
-	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return fmt.Errorf("open new %s: %w", s.path, err)
 	}
