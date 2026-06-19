@@ -49,24 +49,24 @@ func (m *MockAnnotator) Annotate(_ context.Context, _ FailureContext) (string, e
 // It is OpenAI-API compatible, so the same struct would work for any
 // OpenAI-compatible endpoint with a different BaseURL.
 type KimiClient struct {
-	cfg                Config
-	hc                 *http.Client
-	limiter            *rate.Limiter
-	maxAttempts        int
-	backoff            func(attempt int) time.Duration
-	usageMu            sync.RWMutex
-	usage              Usage
-	usageByLabel       map[string]Usage
-	budgetMu           sync.Mutex
-	budgetFired        bool
-	cache              *responseCache
-	cacheTTL           time.Duration
-	metrics            MetricsRecorder
-	breaker            *CircuitBreaker
-	lastDurationNanos  atomic.Int64
-	annotationMu       sync.Mutex
-	recentAnnotations  []AnnotationRecord
-	annotationCounter  uint64
+	cfg               Config
+	hc                *http.Client
+	limiter           *rate.Limiter
+	maxAttempts       int
+	backoff           func(attempt int) time.Duration
+	usageMu           sync.RWMutex
+	usage             Usage
+	usageByLabel      map[string]Usage
+	budgetMu          sync.Mutex
+	budgetFired       bool
+	cache             *responseCache
+	cacheTTL          time.Duration
+	metrics           MetricsRecorder
+	breaker           *CircuitBreaker
+	lastDurationNanos atomic.Int64
+	annotationMu      sync.Mutex
+	recentAnnotations []AnnotationRecord
+	annotationCounter uint64
 }
 
 // responseCache is a TTL-keyed string cache for LLM responses. A nil
