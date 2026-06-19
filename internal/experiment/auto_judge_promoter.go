@@ -14,6 +14,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
+// PromotionRecorder receives audit callbacks when an experiment is auto-promoted.
+// AutoJudgePromoter notifies the recorder on every successful auto-promote so
+// downstream systems (e.g. scheduler.AutoRollback) can snapshot pre-promotion
+// state for later rollback decisions.
+type PromotionRecorder interface {
+	RecordPromotion(experimentID string, prePromotionSharpe float64)
+}
+
 // AutoJudgePromoter automatically evaluates pending experiments when they
 // reach sufficient statistical power, then auto-promotes accepted experiments
 // or auto-reverts rejected ones.
@@ -29,6 +37,7 @@ type AutoJudgePromoter struct {
 	minObservations int
 	lastPromote     time.Time
 	promoteCooldown time.Duration
+	recorder        PromotionRecorder
 }
 
 // NewAutoJudgePromoter creates a promoter wired to the judge and baseline systems.
@@ -50,6 +59,13 @@ func (p *AutoJudgePromoter) WithMaturityTracker(mt *domain.MaturityTracker) *Aut
 // WithMinObservations overrides the default minimum observation threshold.
 func (p *AutoJudgePromoter) WithMinObservations(n int) *AutoJudgePromoter {
 	p.minObservations = n
+	return p
+}
+
+// WithPromotionRecorder attaches a recorder that receives audit callbacks when
+// an experiment is auto-promoted.
+func (p *AutoJudgePromoter) WithPromotionRecorder(r PromotionRecorder) *AutoJudgePromoter {
+	p.recorder = r
 	return p
 }
 
@@ -176,6 +192,10 @@ func (p *AutoJudgePromoter) autoPromote(result experiment.PromptExperimentResult
 	logging.Info("auto_judge", "auto_promoted",
 		"experiment_id", result.Experiment.ID,
 		"candidate_prompt_len", len(result.CandidatePrompt))
+	// TODO(integration): wire dwManager here to pass real pre-promotion system Sharpe.
+	if p.recorder != nil {
+		p.recorder.RecordPromotion(result.Experiment.ID, 0.0)
+	}
 	return nil
 }
 

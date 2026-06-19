@@ -293,3 +293,53 @@ func makeJudgeableResult(id string, baseObs, candObs int) experiment.PromptExper
 		CandidateReturns:      []float64{0.02, 0.03, 0.025, 0.02, 0.03},
 	}
 }
+
+type fakeRecorder struct {
+	calls []struct {
+		experimentID string
+		sharpe       float64
+	}
+}
+
+func (f *fakeRecorder) RecordPromotion(experimentID string, prePromotionSharpe float64) {
+	f.calls = append(f.calls, struct {
+		experimentID string
+		sharpe       float64
+	}{experimentID, prePromotionSharpe})
+}
+
+func TestAutoJudgePromoter_RecordsPromotionOnSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	policyPath := filepath.Join(tmpDir, "baseline_policy.json")
+
+	policy := baseline.DefaultPolicy()
+	if err := baseline.Save(policyPath, policy); err != nil {
+		t.Fatalf("save baseline policy: %v", err)
+	}
+
+	judge := NewJudge(nil, "", "")
+	mgr := baseline.NewManager(policyPath)
+	rec := &fakeRecorder{}
+
+	p := NewAutoJudgePromoter(judge, mgr).
+		WithMinObservations(2).
+		WithPromotionRecorder(rec)
+
+	candPath := filepath.Join(tmpDir, "candidate.txt")
+	if err := os.WriteFile(candPath, []byte("test candidate prompt"), 0o644); err != nil {
+		t.Fatalf("write candidate: %v", err)
+	}
+
+	result := makeAcceptedResult("exp-record-001", candPath)
+
+	if err := p.autoPromote(result); err != nil {
+		t.Fatalf("autoPromote: %v", err)
+	}
+
+	if len(rec.calls) != 1 {
+		t.Fatalf("expected 1 RecordPromotion call, got %d", len(rec.calls))
+	}
+	if rec.calls[0].experimentID != "exp-record-001" {
+		t.Errorf("expected ID 'exp-record-001', got %q", rec.calls[0].experimentID)
+	}
+}

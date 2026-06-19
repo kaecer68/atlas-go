@@ -389,7 +389,9 @@ function renderCatTabContent(tab, scorecards, sessions, judges, promotes) {
       '<div style="font-size:11px;color:var(--muted);margin-bottom:12px">共 ' + sessions.length + ' 個 session</div>' +
       '<div id="regimeVolumeContainer"></div>';
     
-    let volumes = sessions.map(() => 0.3 + Math.random() * 0.7);
+    // Regime as intensity proxy (backend has no per-session volume yet).
+    const _regimeToIntensity = { RISK_ON: 1.0, RISK_OFF: 0.4, NEUTRAL: 0.7 };
+    let volumes = sessions.map(s => _regimeToIntensity[s.regime] || 0.5);
     setTimeout(() => renderRegimeVolumeChart('regimeVolumeContainer', sessions, volumes), 50);
   }
   else if (tab === 'experiments') {
