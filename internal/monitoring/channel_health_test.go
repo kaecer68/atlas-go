@@ -228,3 +228,128 @@ func TestRecordChannelFetchWithPool_NoPool(t *testing.T) {
 		t.Error("expected record")
 	}
 }
+
+func TestChannelHealthStore_RecentFetches_Empty(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+
+	got := store.RecentFetches(10)
+	if len(got) != 0 {
+		t.Errorf("expected 0 fetches for fresh store, got %d", len(got))
+	}
+}
+
+func TestChannelHealthStore_RecentFetches_AppendsInOrder(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+
+	if err := store.Record("twse", "ok", "", WithLatencyMs(120)); err != nil {
+		t.Fatalf("Record twse: %v", err)
+	}
+	if err := store.Record("finmind", "error", "timeout", WithLatencyMs(2000)); err != nil {
+		t.Fatalf("Record finmind: %v", err)
+	}
+	if err := store.Record("fugle", "ok", "", WithLatencyMs(456)); err != nil {
+		t.Fatalf("Record fugle: %v", err)
+	}
+
+	got := store.RecentFetches(10)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(got))
+	}
+	if got[0].Channel != "fugle" {
+		t.Errorf("entry[0].Channel = %q, want fugle (newest)", got[0].Channel)
+	}
+	if got[0].Status != "ok" {
+		t.Errorf("entry[0].Status = %q, want ok", got[0].Status)
+	}
+	if got[0].LatencyMs != 456 {
+		t.Errorf("entry[0].LatencyMs = %d, want 456", got[0].LatencyMs)
+	}
+	if got[1].Channel != "finmind" {
+		t.Errorf("entry[1].Channel = %q, want finmind", got[1].Channel)
+	}
+	if got[1].Status != "error" {
+		t.Errorf("entry[1].Status = %q, want error", got[1].Status)
+	}
+	if got[1].LatencyMs != 2000 {
+		t.Errorf("entry[1].LatencyMs = %d, want 2000", got[1].LatencyMs)
+	}
+	if got[2].Channel != "twse" {
+		t.Errorf("entry[2].Channel = %q, want twse (oldest)", got[2].Channel)
+	}
+	for i, e := range got {
+		if e.Timestamp == "" {
+			t.Errorf("entry[%d].Timestamp empty", i)
+		}
+	}
+}
+
+func TestChannelHealthStore_RecentFetches_LimitRespected(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+
+	for i := 0; i < 20; i++ {
+		channelID := []string{"twse", "finmind", "fugle"}[i%3]
+		if err := store.Record(channelID, "ok", "", WithLatencyMs(int64(100+i))); err != nil {
+			t.Fatalf("Record %d: %v", i, err)
+		}
+	}
+
+	got := store.RecentFetches(5)
+	if len(got) != 5 {
+		t.Errorf("expected 5 entries (limit), got %d", len(got))
+	}
+	if got[0].LatencyMs != 119 {
+		t.Errorf("first entry.LatencyMs = %d, want 119 (most recent overall)", got[0].LatencyMs)
+	}
+	if got[4].LatencyMs != 115 {
+		t.Errorf("last entry.LatencyMs = %d, want 115 (5th most recent)", got[4].LatencyMs)
+	}
+}
+
+func TestChannelHealthStore_RecentFetches_CapAt50(t *testing.T) {
+	dir := t.TempDir()
+	store := NewChannelHealthStore(dir)
+
+	for i := 0; i < 60; i++ {
+		if err := store.Record("twse", "ok", "", WithLatencyMs(int64(i))); err != nil {
+			t.Fatalf("Record %d: %v", i, err)
+		}
+	}
+
+	got := store.RecentFetches(100)
+	if len(got) != 50 {
+		t.Errorf("expected ring buffer cap of 50, got %d", len(got))
+	}
+	if got[0].LatencyMs != 59 {
+		t.Errorf("first entry.LatencyMs = %d, want 59 (newest kept)", got[0].LatencyMs)
+	}
+	if got[49].LatencyMs != 10 {
+		t.Errorf("last entry.LatencyMs = %d, want 10 (oldest kept)", got[49].LatencyMs)
+	}
+}
+
+func TestChannelHealthStore_RecentFetches_PersistsAcrossInstances(t *testing.T) {
+	dir := t.TempDir()
+
+	store1 := NewChannelHealthStore(dir)
+	if err := store1.Record("twse", "ok", "", WithLatencyMs(234)); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if err := store1.Record("finmind", "error", "down", WithLatencyMs(1200)); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	store2 := NewChannelHealthStore(dir)
+	got := store2.RecentFetches(10)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries to persist, got %d", len(got))
+	}
+	if got[0].Channel != "finmind" {
+		t.Errorf("entry[0].Channel = %q, want finmind (newest)", got[0].Channel)
+	}
+	if got[1].Channel != "twse" {
+		t.Errorf("entry[1].Channel = %q, want twse (oldest)", got[1].Channel)
+	}
+}

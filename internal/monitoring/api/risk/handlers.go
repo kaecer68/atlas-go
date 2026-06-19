@@ -110,9 +110,15 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 		}
 	}
 
+	gateMode := ""
+	if h.RiskGate != nil {
+		gateMode = string(h.RiskGate.Mode())
+	}
+
 	return http.StatusOK, map[string]any{
 		"risk_snapshot": snap,
 		"session_count": len(portfolioValues),
+		"gate_mode":     gateMode,
 	}
 }
 

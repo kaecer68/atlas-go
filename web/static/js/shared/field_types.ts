@@ -3359,6 +3359,14 @@ export interface channelState {
   updated_at: string;
 }
 
+export interface fetchLogEntry {
+  channel: string;
+  status: string;
+  latency_ms: number;
+  timestamp: string;
+  error?: string;
+}
+
 export interface marginHistoryFile {
   date: string;
   margin_balance: number;

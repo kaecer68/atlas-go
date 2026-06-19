@@ -3,7 +3,7 @@ import { silentGetJSON, notify } from '../shared/app-utils.js';
 export async function loadDataChannels() {
   const data = await silentGetJSON('/api/dashboard/data-channels');
   renderDataChannels(data);
-  loadMacroDataHealth();
+  await Promise.all([loadMacroDataHealth(), loadFetchLogs()]);
 }
 
 export async function loadMacroDataHealth() {
@@ -152,25 +152,11 @@ export async function updateApiKey(provider) {
   }
 }
 
-let fetchLogs = [
-  { time: '14:32:01', channel: 'us_yahoo', result: 'ok', latency: '234ms' },
-  { time: '14:30:00', channel: 'twse_margin', result: 'ok', latency: '456ms' },
-  { time: '14:28:00', channel: 'finmind', result: 'error', latency: '1.2s' },
-  { time: '14:25:00', channel: 'geopolitical', result: 'ok', latency: '189ms' },
-  { time: '14:22:00', channel: 'export_statistics', result: 'ok', latency: '567ms' },
-  { time: '14:20:00', channel: 'twse_capital_flow', result: 'ok', latency: '345ms' },
-  { time: '14:18:00', channel: 'tsmc_revenue', result: 'warn', latency: '2.1s' },
-  { time: '14:15:00', channel: 'jpy_yahoo', result: 'ok', latency: '198ms' },
-  { time: '14:12:00', channel: 'tej', result: 'ok', latency: '423ms' },
-  { time: '14:10:00', channel: 'janus_regime', result: 'ok', latency: '12ms' }
-];
+let fetchLogs = [];
 
-export function loadFetchLogs() {
-  const el = document.getElementById('dcFetchLog');
-  if (!el) return;
-
+function renderFetchLogsTable(logs) {
   let html = '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-20">時間</th><th class="w-35">通道</th><th class="w-20">結果</th><th class="w-25">延遲</th></tr></thead><tbody>';
-  fetchLogs.forEach(log => {
+  logs.forEach(log => {
     const resultIcon = log.result === 'ok' ? '✓' : (log.result === 'warn' ? '⚠' : '✗');
     const resultColor = log.result === 'ok' ? 'var(--color-success)' : (log.result === 'warn' ? 'var(--warn)' : 'var(--color-danger)');
     html += `<tr>
@@ -181,7 +167,29 @@ export function loadFetchLogs() {
     </tr>`;
   });
   html += '</tbody></table></div>';
-  el.innerHTML = html;
+  return html;
+}
+
+export async function loadFetchLogs() {
+  const el = document.getElementById('dcFetchLog');
+  if (!el) return;
+
+  el.classList.add('loading');
+  try {
+    const data = await silentGetJSON('/api/dashboard/channel-fetch-log?limit=10');
+    if (!data || !Array.isArray(data.entries) || data.entries.length === 0) {
+      const emptyMsg = (data && data.empty_state) ? data.empty_state : '尚無 fetch 紀錄 (CLI 工具下次抓取時會自動寫入)';
+      el.innerHTML = `<div class="empty"><div class="text-muted">${emptyMsg}</div></div>`;
+      fetchLogs = [];
+      return;
+    }
+    fetchLogs = data.entries;
+    el.innerHTML = renderFetchLogsTable(fetchLogs);
+  } catch (e) {
+    el.innerHTML = `<div class="empty"><div class="text-muted">無法載入 fetch 紀錄: ${e.message || e}</div></div>`;
+  } finally {
+    el.classList.remove('loading');
+  }
 }
 
 export function renderDataChannels(data) {

@@ -26,12 +26,26 @@ type ChannelHealthRecord struct {
 	Errors             []string `json:"errors,omitempty"`
 }
 
+// ChannelFetchLogEntry captures a single channel fetch event for the recent-fetches ring buffer.
+type ChannelFetchLogEntry struct {
+	Channel   string `json:"channel"`
+	Status    string `json:"status"`
+	LatencyMs int64  `json:"latency_ms"`
+	Timestamp string `json:"timestamp"` // RFC3339
+	Error     string `json:"error,omitempty"`
+}
+
+// fetchLogCap bounds the persistent recent-fetches ring buffer per ChannelHealthStore.
+const fetchLogCap = 50
+
 // ChannelHealthStore persists channel fetch outcomes.
 type ChannelHealthStore struct {
-	path string
-	mu   sync.RWMutex
-	data map[string]*ChannelHealthRecord
-	pool *pgxpool.Pool
+	path         string
+	fetchLogPath string
+	mu           sync.RWMutex
+	data         map[string]*ChannelHealthRecord
+	fetchLog     []ChannelFetchLogEntry
+	pool         *pgxpool.Pool
 }
 
 // NewChannelHealthStore creates or loads a health store at the given directory.
@@ -42,9 +56,10 @@ func NewChannelHealthStore(dir string) *ChannelHealthStore {
 // NewChannelHealthStoreWithPool creates a health store with an optional DB pool.
 func NewChannelHealthStoreWithPool(dir string, pool *pgxpool.Pool) *ChannelHealthStore {
 	return &ChannelHealthStore{
-		path: filepath.Join(dir, "channel_health.json"),
-		data: make(map[string]*ChannelHealthRecord),
-		pool: pool,
+		path:         filepath.Join(dir, "channel_health.json"),
+		fetchLogPath: filepath.Join(dir, "channel_fetch_log.json"),
+		data:         make(map[string]*ChannelHealthRecord),
+		pool:         pool,
 	}
 }
 
@@ -54,6 +69,7 @@ func (s *ChannelHealthStore) load() error {
 	b, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			s.fetchLog = s.fetchLog[:0]
 			return nil
 		}
 		return fmt.Errorf("read channel health file: %w", err)
@@ -67,6 +83,28 @@ func (s *ChannelHealthStore) load() error {
 	s.data = wrapper.Channels
 	if s.data == nil {
 		s.data = make(map[string]*ChannelHealthRecord)
+	}
+	return s.loadFetchLogLocked()
+}
+
+func (s *ChannelHealthStore) loadFetchLogLocked() error {
+	b, err := os.ReadFile(s.fetchLogPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.fetchLog = s.fetchLog[:0]
+			return nil
+		}
+		return fmt.Errorf("read channel fetch log: %w", err)
+	}
+	if len(b) == 0 {
+		s.fetchLog = s.fetchLog[:0]
+		return nil
+	}
+	if err := json.Unmarshal(b, &s.fetchLog); err != nil {
+		return fmt.Errorf("unmarshal channel fetch log: %w", err)
+	}
+	if len(s.fetchLog) > fetchLogCap {
+		s.fetchLog = s.fetchLog[len(s.fetchLog)-fetchLogCap:]
 	}
 	return nil
 }
@@ -86,7 +124,56 @@ func (s *ChannelHealthStore) save() error {
 	if err := os.WriteFile(tmp, b, 0o644); err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}
-	return os.Rename(tmp, s.path)
+	if err := os.Rename(tmp, s.path); err != nil {
+		return fmt.Errorf("rename channel health: %w", err)
+	}
+	return s.saveFetchLogLocked()
+}
+
+func (s *ChannelHealthStore) saveFetchLogLocked() error {
+	b, err := json.MarshalIndent(s.fetchLog, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal channel fetch log: %w", err)
+	}
+	_ = os.MkdirAll(filepath.Dir(s.fetchLogPath), 0o755)
+	tmp := s.fetchLogPath + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return fmt.Errorf("write fetch log temp: %w", err)
+	}
+	return os.Rename(tmp, s.fetchLogPath)
+}
+
+func (s *ChannelHealthStore) appendFetchLogLocked(entry ChannelFetchLogEntry) {
+	s.fetchLog = append(s.fetchLog, entry)
+	if len(s.fetchLog) > fetchLogCap {
+		s.fetchLog = s.fetchLog[len(s.fetchLog)-fetchLogCap:]
+	}
+}
+
+// RecentFetches returns the most recent fetch log entries, newest first, up to limit.
+// If limit exceeds fetchLogCap it is clamped to fetchLogCap. A non-positive limit returns nil.
+func (s *ChannelHealthStore) RecentFetches(limit int) []ChannelFetchLogEntry {
+	if limit <= 0 {
+		return nil
+	}
+	_ = s.load()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit > fetchLogCap {
+		limit = fetchLogCap
+	}
+	n := len(s.fetchLog)
+	if n == 0 {
+		return []ChannelFetchLogEntry{}
+	}
+	if limit > n {
+		limit = n
+	}
+	out := make([]ChannelFetchLogEntry, 0, limit)
+	for i := n - 1; i >= n-limit; i-- {
+		out = append(out, s.fetchLog[i])
+	}
+	return out
 }
 
 // Record updates the health record for a channel.
@@ -112,6 +199,13 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	for _, opt := range opts {
 		opt(rec)
 	}
+	s.appendFetchLogLocked(ChannelFetchLogEntry{
+		Channel:   channelID,
+		Status:    status,
+		LatencyMs: rec.LatencyMs,
+		Timestamp: rec.LastFetchAt,
+		Error:     errMsg,
+	})
 	s.mu.Unlock()
 
 	if s.pool != nil {

@@ -127,6 +127,38 @@ func TestHandleCorrelationMatrix_WithNilMatrix(t *testing.T) {
 	assertJSONKey(t, body, "matrix")
 }
 
+func TestHandleRiskMetrics_GateMode_NilRiskGate(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0755); err != nil {
+		t.Fatalf("mkdir sessions: %v", err)
+	}
+	h := &Handlers{LedgerDir: dir} // RiskGate intentionally nil
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
+	status, body := h.HandleRiskMetrics(req)
+	assertStatus(t, status, http.StatusOK)
+	m := assertJSONKey(t, body, "gate_mode")
+	if m["gate_mode"] != "" {
+		t.Errorf("gate_mode = %v, want empty string when RiskGate is nil", m["gate_mode"])
+	}
+}
+
+func TestHandleRiskMetrics_GateMode_WithRiskGate(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0755); err != nil {
+		t.Fatalf("mkdir sessions: %v", err)
+	}
+	rg := risk.NewRiskGate(nil, nil, nil)
+	rg.SetMode(risk.ModeDefensive)
+	h := (&Handlers{LedgerDir: dir}).WithRiskGate(rg)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
+	status, body := h.HandleRiskMetrics(req)
+	assertStatus(t, status, http.StatusOK)
+	m := assertJSONKey(t, body, "gate_mode")
+	if m["gate_mode"] != "DEFENSIVE" {
+		t.Errorf("gate_mode = %v, want DEFENSIVE", m["gate_mode"])
+	}
+}
+
 func TestHandleRiskCalibration_NilRiskGate(t *testing.T) {
 	h := &Handlers{LedgerDir: t.TempDir()}
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk-calibration", nil)
