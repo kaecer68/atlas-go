@@ -68,3 +68,44 @@ MacroAwareDrawdownEngine.Evaluate(riskSnapshot, regime, narrativeEvents)
 - 風險子結構已內嵌於全域 schema，`self_calibrate.go:191` 明確寫回全域路徑 — 拆檔會造成 split-brain
 - 唯一 per-module loader 先例 `internal/risktest/config.go` 使用 CLI flag，無 env 變數、無 lock，與本模組需求不符
 - 詳見 `.opencode/handoffs/risk-config-loader.md` 完整 Q1-Q4 調查記錄
+
+### 金融工程權衡分析（per-module vs global，2026-06-20 補）
+
+**本節以金融工程視角補完上述拒絕 per-module 的理由，避免未來僅看經驗性證據時再度發起討論。**
+
+| 維度 | Per-module（orphan 暗示方向） | Global（現狀） |
+|------|-------------------------------|---------------|
+| 參數迭代速度 | 各子模組可獨立調參 | 須走完整 calibration pipeline |
+| 生產環境一致性 | 兩份 source of truth 必然漂移 | 單一檔案 = 單一時戳 = 單一校準事件 |
+| 校準原子性 | 拆檔後 `LockedSaveWithRollback` 無法保證跨檔原子寫入 | 單檔 lock + write + rollback（`parameters.go:2715-2722`） |
+| 熱重載一致性 | 需 N 個熱重載路徑，每個獨立 lock | 單例 `ReloadParametersConfig`（`parameters.go:2576`） |
+| 稽核軌跡 | N 個時間戳須 join 才能還原 | 單一時戳即完整快照 |
+| 失效情境 | 校準崩潰時 runtime 可能讀到「昨天的 factor + 今天的 risk」拼接 | 寫失敗 = 完全沒寫，runtime 續用上一個完整快照 |
+
+### 失效情境具體化（live trading 視角）
+
+atlas-go 是 **live trading 系統**（`internal/portfolio/risk_manager.go:95-97` 即時消費 `params.Risk.*`），不是研究工具。Per-module 在此情境下的具體失效案例：
+
+1. T0 — calibrator 開始 Bayesian 校準（讀全域 → 計算新 VaR/Drawdown 參數）
+2. T1 — 計算完成，準備寫回
+3. T2 — 部分寫入成功（factor 寫到全域，risk 寫到 per-module）
+4. T3 — 程序崩潰 / disk full / 網路斷線
+5. T4 — 重啟後 runtime 讀全域 → 拿到新 factor + 舊 risk
+
+**對 live trading 的後果**：
+- 新 factor 認為「成長股環境」→ 部位放大 1.5x
+- 舊 risk 不知道 → Drawdown 熔斷閾值仍為前一代
+- -3% 正常下跌可能錯誤觸發 halt，或更糟 — 應該觸發時未觸發
+- 結算損失難以解釋（稽核記錄顯示參數「看起來對」，實際跨檔不一致）
+
+這是 **silent corruption** — 系統不報錯，行為已錯。金融系統最致命的失效模式。
+
+**額外強證據**：`internal/risk/self_calibrate.go:187-189` 顯示 calibrator 處理的 risk 欄位（`risk_max_position_size`、`risk_max_daily_loss_pct`）正是 orphan 那 190KB JSON 的核心內容。**orphan 就是 calibrator 寫入鏈的「鏡像 dump」被放在錯誤路徑上**，進一步證明拆檔會直接造成 split-brain。
+
+### 替代方案（如未來真有 per-module 業務需求）
+
+若業務需求演進到「某 risk 子模組需要獨立迭代」，正確做法是：
+- 在 `ParametersConfig` 內做更細的子分組（`Risk.VaR` / `Risk.Drawdown` / `Risk.Capital`），不要拆檔案，而是在單一檔案內做邏輯分區
+- 必要時用 `ReloadParametersConfig` 支援子集熱重載（hot-reload 已在 `parameters.go:2576` 預留 hook）
+
+這能在保持單一 source of truth + 原子寫入的前提下，給出 per-module 帶來的 velocity 紅利。
