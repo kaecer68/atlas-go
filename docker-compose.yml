@@ -44,7 +44,8 @@ services:
     networks:
       - atlas-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      # 使用 127.0.0.1 對齊 Go client 硬編碼 (避免 IPv6 雙棧歧義)
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
