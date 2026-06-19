@@ -15,7 +15,7 @@
 - `IsHealthy()` — 向 `/health` 端點發 GET
 - `waitForHealthy(ctx)` — 同步輪詢；deadline = `min(startupTimeout, ctx.Deadline())`
 - `supervise()` — 背景 goroutine；崩潰時 backoff 重啟
-- `healthURL` — struct 欄位（測試注入用，預設 `http://localhost:8081/health`）
+- `healthURL` — struct 欄位（測試注入用，預設 `http://127.0.0.1:8081/health`，見 `manager.go:40`）
 
 ## 已知陷阱
 
@@ -27,7 +27,8 @@
 - **自動重啟**：崩潰時自動重啟，**backoff 僅在健康通過時重置為 3s**（初始），失敗時保留 10s 重試值。
 - **scriptPath 必須是絕對路徑**：`NewManager` 用 `filepath.Abs` 將 `services/fubon-proxy/main.py` 轉絕對，否則 `cmd.Dir` 與 `cmd.Start()` 解析基準不一致，導致 exit 2（PR #488）。
 - **stderr 必須以 Info 級別記錄**：Python 異常是排查啟動失敗的主要線索，Debug 級別會被吞（PR #488）。
-- **健康檢查位址**：使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`（PR #495）。原因：雙棧環境下 Go `net.Dial` 預設優先走 IPv6 `[::1]`，而 fubonproxy 雖已升級為 `host="::"` 雙棧綁定，但若用戶端 host 解析優先 IPv6 仍會 connection refused。對應 `internal/marketdata/AGENTS.md` 同名段落。
+- **健康檢查位址**：使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`（PR #495）。對應 `internal/marketdata/AGENTS.md` 同名段落。
+  **2026-06 修正**：PR #495 同時把 Python proxy 改為 `host="::"` 想做「雙棧綁定」,但因 uvloop 強制 IPv6 socket 設 `IPV6_V6ONLY=1`,實際只接受 IPv6 連線,IPv4 (含 Go client 127.0.0.1) 會被拒絕。已將 `services/fubon-proxy/main.py` 改回 `host="0.0.0.0"` 並從 `requirements.txt` 移除 uvloop 依賴,行為與 Go client 預期一致。
 - **啟動前 port 探測（F9）**：`Start()` 進入 spawn 路徑前先以 `net.Listen("tcp", "127.0.0.1:8081")` 探測（IPv4 對齊上述 PR #495 約定）。Free → fall through；EADDRINUSE + `IsHealthy()` → 視為外部已管理、跳過 spawn；EADDRINUSE + 非 healthy + lsof 解析成功 → 回傳 actionable error（含 `pid=...` 與 `kill <pid>` 指令），**不**進入 supervise() 3s backoff-loop；探測或 lsof 失敗 → log warn + fall through to spawn，保留原行為。
 
 ### 程序監督器不變式（PR #489 — F1~F8）
