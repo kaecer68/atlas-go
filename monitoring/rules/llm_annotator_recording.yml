@@ -1,0 +1,63 @@
+groups:
+  - name: llm_annotator_recording
+    interval: 30s
+    rules:
+      - record: llm_annotator:requests_good:rate5m
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome=~"success|cache_hit"}[5m])) by (provider)
+
+      - record: llm_annotator:requests_good:rate30m
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome=~"success|cache_hit"}[30m])) by (provider)
+
+      - record: llm_annotator:requests_good:rate1h
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome=~"success|cache_hit"}[1h])) by (provider)
+
+      - record: llm_annotator:requests_good:rate6h
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome=~"success|cache_hit"}[6h])) by (provider)
+
+      - record: llm_annotator:requests_total:rate5m
+        expr: |
+          sum(rate(llm_annotator_requests_total[5m])) by (provider)
+
+      - record: llm_annotator:requests_total:rate30m
+        expr: |
+          sum(rate(llm_annotator_requests_total[30m])) by (provider)
+
+      - record: llm_annotator:requests_total:rate1h
+        expr: |
+          sum(rate(llm_annotator_requests_total[1h])) by (provider)
+
+      - record: llm_annotator:requests_total:rate6h
+        expr: |
+          sum(rate(llm_annotator_requests_total[6h])) by (provider)
+
+      - record: llm_annotator:error_rate:rate5m
+        expr: |
+          1 - (
+            llm_annotator:requests_good:rate5m
+            / llm_annotator:requests_total:rate5m
+          )
+
+      - record: llm_annotator:error_rate:rate30m
+        expr: |
+          1 - (
+            llm_annotator:requests_good:rate30m
+            / llm_annotator:requests_total:rate30m
+          )
+
+      - record: llm_annotator:error_rate:rate1h
+        expr: |
+          1 - (
+            llm_annotator:requests_good:rate1h
+            / llm_annotator:requests_total:rate1h
+          )
+
+      - record: llm_annotator:error_rate:rate6h
+        expr: |
+          1 - (
+            llm_annotator:requests_good:rate6h
+            / llm_annotator:requests_total:rate6h
+          )
