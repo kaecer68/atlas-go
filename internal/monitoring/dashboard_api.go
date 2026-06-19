@@ -860,7 +860,8 @@ func (a *DashboardAPI) RunCalibration() (*narrative.CalibrationValidation, error
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
 	handlers := &apiindustry.Handlers{
-		Svc: a.industryService,
+		Svc:             a.industryService,
+		SectorAllocator: a.industryService.WeightEngine,
 	}
 	handlers.RegisterRoutes(mux)
 }

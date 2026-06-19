@@ -6,8 +6,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
@@ -209,6 +212,117 @@ func TestHandleSimLatest_NoTraces(t *testing.T) {
 		}
 	default:
 		t.Logf("records type: %T", body)
+	}
+}
+
+func TestHandleSimLatest_HappyPath(t *testing.T) {
+	dir := t.TempDir()
+	tracesDir := filepath.Join(dir, ".omo", "traces")
+	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
+		t.Fatalf("mkdir traces: %v", err)
+	}
+
+	ts1 := time.Date(2026, 6, 19, 9, 0, 0, 0, time.UTC)
+	ts2 := time.Date(2026, 6, 19, 9, 5, 0, 0, time.UTC)
+	records := []orchestrator.SimTraceRecord{
+		{Step: 1, Layer: "data", Status: "OK", TS: ts1, SessionID: "20260619"},
+		{Step: 2, Layer: "signal", Status: "OK", TS: ts2, SessionID: "20260619",
+			Metadata: map[string]any{"symbol": "2330.TW"}},
+	}
+	path := filepath.Join(tracesDir, "sim-20260619.jsonl")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for _, r := range records {
+		b, _ := json.Marshal(r)
+		if _, err := f.Write(append(b, '\n')); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	h := &Handlers{WorkDir: dir}
+	req := httptest.NewRequest(http.MethodGet, "/api/traces/sim-latest", nil)
+	status, body := h.HandleSimLatest(req)
+
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %v", status, body)
+	}
+	got, ok := body.([]orchestrator.SimTraceRecord)
+	if !ok {
+		t.Fatalf("expected []SimTraceRecord, got %T", body)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(got))
+	}
+	if got[0].Layer != "data" || got[1].Layer != "signal" {
+		t.Errorf("record order mismatch: %+v", got)
+	}
+	if got[1].Metadata["symbol"] != "2330.TW" {
+		t.Errorf("metadata not preserved: %+v", got[1].Metadata)
+	}
+}
+
+func TestHandleSimLatest_PicksLatestOfMultiple(t *testing.T) {
+	dir := t.TempDir()
+	tracesDir := filepath.Join(dir, ".omo", "traces")
+	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	older := filepath.Join(tracesDir, "sim-20260618.jsonl")
+	newer := filepath.Join(tracesDir, "sim-20260619.jsonl")
+	writeTrace := func(path, layer string) {
+		r := orchestrator.SimTraceRecord{Step: 1, Layer: layer, Status: "OK", SessionID: "x"}
+		b, _ := json.Marshal(r)
+		if err := os.WriteFile(path, append(b, '\n'), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	writeTrace(older, "old-layer")
+	writeTrace(newer, "new-layer")
+
+	h := &Handlers{WorkDir: dir}
+	req := httptest.NewRequest(http.MethodGet, "/api/traces/sim-latest", nil)
+	status, body := h.HandleSimLatest(req)
+
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %v", status, body)
+	}
+	got := body.([]orchestrator.SimTraceRecord)
+	if len(got) != 1 || got[0].Layer != "new-layer" {
+		t.Fatalf("expected 1 record from latest file, got %+v", got)
+	}
+}
+
+func TestHandleSimLatest_ParseFail(t *testing.T) {
+	dir := t.TempDir()
+	tracesDir := filepath.Join(dir, ".omo", "traces")
+	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(tracesDir, "sim-bad.jsonl")
+	content := "{\"step\":1,\"layer\":\"data\"}\nnot valid json\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	h := &Handlers{WorkDir: dir}
+	req := httptest.NewRequest(http.MethodGet, "/api/traces/sim-latest", nil)
+	status, body := h.HandleSimLatest(req)
+
+	if status != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on parse error, got %d: %v", status, body)
+	}
+	resp, ok := body.(map[string]string)
+	if !ok {
+		t.Fatalf("expected error map, got %T", body)
+	}
+	if !strings.Contains(resp["error"], "parse") {
+		t.Errorf("expected parse error message, got %q", resp["error"])
 	}
 }
 
