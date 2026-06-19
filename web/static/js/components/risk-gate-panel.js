@@ -36,7 +36,7 @@ export function renderRiskGatePanel(container, getJSON) {
           </div>
         </div>
         <div style="padding:8px 12px;font-size:12px;color:var(--muted);border-top:1px solid var(--border)">
-          風控閘道模式：<span class="risk-gate-mode">NORMAL</span>
+          風控閘道模式：<span class="risk-gate-mode">${data.gate_mode || 'NORMAL'}</span>
         </div>
       `;
     })
