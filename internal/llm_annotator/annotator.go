@@ -49,21 +49,24 @@ func (m *MockAnnotator) Annotate(_ context.Context, _ FailureContext) (string, e
 // It is OpenAI-API compatible, so the same struct would work for any
 // OpenAI-compatible endpoint with a different BaseURL.
 type KimiClient struct {
-	cfg               Config
-	hc                *http.Client
-	limiter           *rate.Limiter
-	maxAttempts       int
-	backoff           func(attempt int) time.Duration
-	usageMu           sync.RWMutex
-	usage             Usage
-	usageByLabel      map[string]Usage
-	budgetMu          sync.Mutex
-	budgetFired       bool
-	cache             *responseCache
-	cacheTTL          time.Duration
-	metrics           MetricsRecorder
-	breaker           *CircuitBreaker
-	lastDurationNanos atomic.Int64
+	cfg                Config
+	hc                 *http.Client
+	limiter            *rate.Limiter
+	maxAttempts        int
+	backoff            func(attempt int) time.Duration
+	usageMu            sync.RWMutex
+	usage              Usage
+	usageByLabel       map[string]Usage
+	budgetMu           sync.Mutex
+	budgetFired        bool
+	cache              *responseCache
+	cacheTTL           time.Duration
+	metrics            MetricsRecorder
+	breaker            *CircuitBreaker
+	lastDurationNanos  atomic.Int64
+	annotationMu       sync.Mutex
+	recentAnnotations  []AnnotationRecord
+	annotationCounter  uint64
 }
 
 // responseCache is a TTL-keyed string cache for LLM responses. A nil
@@ -252,22 +255,34 @@ func (k *KimiClient) Name() string { return "kimi" }
 // are not counted in Usage.
 func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, error) {
 	start := time.Now()
+	callID := k.nextAnnotationID()
+	var finalOutcome string
+	var finalTokens int64
+
 	defer func() {
 		dur := time.Since(start)
 		k.lastDurationNanos.Store(int64(dur))
 		k.metrics.RecordGauge("llm_annotator_last_call_seconds", dur.Seconds(),
 			map[string]string{"provider": "kimi"})
+		k.appendAnnotation(AnnotationRecord{
+			ID:        callID,
+			Timestamp: start,
+			Label:     fc.Label,
+			Tokens:    finalTokens,
+			Outcome:   finalOutcome,
+			LatencyMs: dur.Milliseconds(),
+		})
 	}()
 
 	if err := k.limiter.Wait(ctx); err != nil {
-		k.recordOutcome("rate_limited", 0)
+		k.recordOutcome(&finalOutcome, "rate_limited", 0)
 		return "", fmt.Errorf("%w: rate limit wait: %v", ErrUnavailable, err)
 	}
 
 	body := buildRequest(k.cfg, fc)
 	raw, err := json.Marshal(body)
 	if err != nil {
-		k.recordOutcome("protocol_error", 0)
+		k.recordOutcome(&finalOutcome, "protocol_error", 0)
 		return "", fmt.Errorf("%w: marshal request: %v", ErrUnavailable, err)
 	}
 
@@ -275,7 +290,7 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	if k.cacheTTL > 0 {
 		key = cacheKey(fc)
 		if content, hit := k.cache.get(key); hit {
-			k.recordOutcome("cache_hit", 0)
+			k.recordOutcome(&finalOutcome, "cache_hit", 0)
 			return content, nil
 		}
 	}
@@ -289,7 +304,7 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 			if attempt > 0 {
 				select {
 				case <-ctx.Done():
-					k.recordOutcome("canceled", 0)
+					k.recordOutcome(&finalOutcome, "canceled", 0)
 					return fmt.Errorf("%w: context done during backoff: %v", ErrUnavailable, ctx.Err())
 				case <-time.After(k.backoff(attempt - 1)):
 				}
@@ -298,8 +313,9 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 			c, used, retryable, status, err := k.doRequest(ctx, raw)
 			if err == nil {
 				content = c
+				finalTokens = used.TotalTokens
 				k.recordUsage(used, fc.Label)
-				k.recordOutcome("success", 0)
+				k.recordOutcome(&finalOutcome, "success", 0)
 				if key != "" {
 					k.cache.put(key, content, k.cacheTTL)
 				}
@@ -310,31 +326,31 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 			if !retryable {
 				lastErr = err
 				if status == 0 {
-					k.recordOutcome("protocol_error", 0)
+					k.recordOutcome(&finalOutcome, "protocol_error", 0)
 				} else {
-					k.recordOutcome("client_error", status)
+					k.recordOutcome(&finalOutcome, "client_error", status)
 				}
 				return err
 			}
-			k.recordOutcome("retry", 0)
+			k.recordOutcome(&finalOutcome, "retry", 0)
 		}
 		lastErr = opErr
 		if opStatus == 0 {
-			k.recordOutcome("transport_error", 0)
+			k.recordOutcome(&finalOutcome, "transport_error", 0)
 		} else {
-			k.recordOutcome("retry_exhausted", opStatus)
+			k.recordOutcome(&finalOutcome, "retry_exhausted", opStatus)
 		}
 		return opErr
 	}
 
 	if k.breaker != nil && k.breaker.IsOpen() {
-		k.recordOutcome("circuit_open", 0)
+		k.recordOutcome(&finalOutcome, "circuit_open", 0)
 		return "", fmt.Errorf("%w: circuit breaker open", ErrUnavailable)
 	}
 
 	if k.breaker != nil {
 		if cbErr := k.breaker.Call(op); cbErr != nil && cbErr != lastErr {
-			k.recordOutcome("circuit_open", 0)
+			k.recordOutcome(&finalOutcome, "circuit_open", 0)
 			return "", fmt.Errorf("%w: %v", ErrUnavailable, cbErr)
 		}
 	} else {
@@ -346,7 +362,10 @@ func (k *KimiClient) Annotate(ctx context.Context, fc FailureContext) (string, e
 	return content, nil
 }
 
-func (k *KimiClient) recordOutcome(outcome string, status int) {
+func (k *KimiClient) recordOutcome(outcomeSink *string, outcome string, status int) {
+	if outcomeSink != nil {
+		*outcomeSink = outcome
+	}
 	labels := map[string]string{"provider": "kimi", "outcome": outcome}
 	if status > 0 {
 		labels["status"] = strconv.Itoa(status)

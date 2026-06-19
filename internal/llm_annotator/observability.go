@@ -1,6 +1,7 @@
 package llm_annotator
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -193,4 +194,57 @@ func (k *KimiClient) CostReport(costPer1kTokens float64) CostReport {
 		LatencyMillis:   k.Latency().Milliseconds(),
 		GeneratedAt:     time.Now(),
 	}
+}
+
+// AnnotationRecord is the per-call trace for cost-per-annotation reporting.
+// ID is a unique call identifier (timestamp + counter). Label is the
+// FailureContext.Label if set; empty for unlabeled calls. Tokens is the
+// Usage.TotalTokens for the call (0 for failures / cache hits). Outcome
+// is the final outcome label from recordOutcome (success, cache_hit,
+// rate_limited, etc.). LatencyMs is the call's wall-clock duration.
+//
+// Records are kept in an in-memory ring buffer (cap: 1000) and surfaced via
+// RecentAnnotations so callers can join per-call cost with downstream
+// signals without paying for a persistent store.
+type AnnotationRecord struct {
+	ID        string    `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	Label     string    `json:"label"`
+	Tokens    int64     `json:"tokens"`
+	Outcome   string    `json:"outcome"`
+	LatencyMs int64     `json:"latency_ms"`
+}
+
+// RecentAnnotations returns the most recent n records (oldest first within
+// the returned slice). Pass n <= 0 to get all retained records. Safe to
+// call from any goroutine. The returned slice is a defensive copy.
+func (k *KimiClient) RecentAnnotations(n int) []AnnotationRecord {
+	k.annotationMu.Lock()
+	defer k.annotationMu.Unlock()
+	size := len(k.recentAnnotations)
+	if n <= 0 || n > size {
+		n = size
+	}
+	out := make([]AnnotationRecord, n)
+	copy(out, k.recentAnnotations[size-n:])
+	return out
+}
+
+const annotationBufferCap = 1000
+
+func (k *KimiClient) appendAnnotation(rec AnnotationRecord) {
+	k.annotationMu.Lock()
+	k.recentAnnotations = append(k.recentAnnotations, rec)
+	if len(k.recentAnnotations) > annotationBufferCap {
+		k.recentAnnotations = k.recentAnnotations[len(k.recentAnnotations)-annotationBufferCap:]
+	}
+	k.annotationMu.Unlock()
+}
+
+func (k *KimiClient) nextAnnotationID() string {
+	k.annotationMu.Lock()
+	k.annotationCounter++
+	id := fmt.Sprintf("ann-%d-%d", time.Now().UnixNano(), k.annotationCounter)
+	k.annotationMu.Unlock()
+	return id
 }
