@@ -1579,7 +1579,7 @@ func run(args []string, deps appDeps) error {
 			// configured. Init failure is Warn, not Fatal: rule_based
 			// attribution remains authoritative.
 			if apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY"); apiKey != "" {
-				if kimi, err := llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey}); err != nil {
+				if kimi, err := llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey, Metrics: collector}); err != nil {
 					logging.Warn("main", "kimi_init_failed", "err", err.Error())
 				} else {
 					dashboard.SetStrategiesAnnotator(kimi)

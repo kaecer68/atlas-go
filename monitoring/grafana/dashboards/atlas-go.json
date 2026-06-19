@@ -205,6 +205,56 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 11,
+      "title": "LLM Annotator",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 12,
+      "title": "LLM Annotator Outcomes (rate)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(llm_annotator_requests_total[5m])",
+          "legendFormat": "{{ outcome }}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 13,
+      "title": "LLM Annotator Last Call Latency",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "llm_annotator_last_call_seconds",
+          "legendFormat": "Last Call",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear" }
+        },
+        "overrides": []
+      }
     }
   ]
 }
