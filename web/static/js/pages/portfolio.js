@@ -46,45 +46,58 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
       'industrial': '工業', 'other': '其他'
     };
 
-    kpis.innerHTML = `
+    function kpiNTD(v) {
+  if (v == null) return '—';
+  return window.fmtNTD ? window.fmtNTD(v) : v.toFixed(0);
+}
+function kpiPct(v) {
+  if (v == null) return '—';
+  return window.fmtPct ? window.fmtPct(v) : (v * 100).toFixed(2) + '%';
+}
+function kpiNum(v) {
+  if (v == null) return '—';
+  return v.toString();
+}
+
+kpis.innerHTML = `
       <div class="kpi-card">
         <div class="kpi-label">稅前淨值</div>
-        <div class="kpi-value">${window.fmtNTD ? window.fmtNTD(state.portfolio_value || 0) : (state.portfolio_value || 0).toFixed(0)}</div>
-        <div class="kpi-hint">可用現金: ${window.fmtNTD ? window.fmtNTD(state.cash || 0) : (state.cash || 0).toFixed(0)}</div>
+        <div class="kpi-value">${kpiNTD(state.portfolio_value)}</div>
+        <div class="kpi-hint">可用現金: ${kpiNTD(state.cash)}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">稅後淨值</div>
-        <div class="kpi-value">${window.fmtNTD ? window.fmtNTD(afterTaxValue) : afterTaxValue.toFixed(0)}</div>
+        <div class="kpi-value">${kpiNTD(afterTaxValue)}</div>
         <div class="kpi-hint">已扣除累積稅負</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">已實現損益</div>
-        <div class="kpi-value ${realizedPnL > 0 ? 'text-up' : (realizedPnL < 0 ? 'text-down' : '')}">${window.fmtNTD ? window.fmtNTD(realizedPnL) : realizedPnL.toFixed(0)}</div>
+        <div class="kpi-value ${realizedPnL > 0 ? 'text-up' : (realizedPnL < 0 ? 'text-down' : '')}">${kpiNTD(realizedPnL)}</div>
         <div class="kpi-hint">模擬累積已平倉損益</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">累積交易數</div>
-        <div class="kpi-value">${tradeCount}</div>
+        <div class="kpi-value">${kpiNum(tradeCount)}</div>
         <div class="kpi-hint">交易歷史總筆數</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">累積稅負</div>
-        <div class="kpi-value text-danger">${window.fmtNTD ? window.fmtNTD(totalTaxPaid) : totalTaxPaid.toFixed(0)}</div>
-        <div class="kpi-hint">持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '-'}</div>
+        <div class="kpi-value text-danger">${kpiNTD(totalTaxPaid)}</div>
+        <div class="kpi-hint">持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '—'}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">未實現損益</div>
-        <div class="kpi-value ${unrealizedPnLTotal > 0 ? 'text-up' : (unrealizedPnLTotal < 0 ? 'text-down' : '')}">${window.fmtNTD ? window.fmtNTD(unrealizedPnLTotal) : unrealizedPnLTotal.toFixed(0)}</div>
+        <div class="kpi-value ${unrealizedPnLTotal > 0 ? 'text-up' : (unrealizedPnLTotal < 0 ? 'text-down' : '')}">${kpiNTD(unrealizedPnLTotal)}</div>
         <div class="kpi-hint">持倉未實現總損益</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">持倉集中度 (HHI)</div>
-        <div class="kpi-value">${window.fmtPct ? window.fmtPct(concentrationRatio) : (concentrationRatio * 100).toFixed(2) + '%'}</div>
+        <div class="kpi-value">${kpiPct(concentrationRatio)}</div>
         <div class="kpi-hint">0~1，越高越集中</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">最大回撤</div>
-        <div class="kpi-value text-danger">${window.fmtPct ? window.fmtPct(currentDrawdown) : (currentDrawdown * 100).toFixed(2) + '%'}</div>
+        <div class="kpi-value text-danger">${kpiPct(currentDrawdown)}</div>
         <div class="kpi-hint">歷史最大回撤</div>
       </div>
     `;

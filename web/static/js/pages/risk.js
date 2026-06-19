@@ -222,9 +222,11 @@ export function renderRiskCalibration(data) {
   var report = data.report;
   var generated = data.generated || '';
   var isCalibrated = report.verdict === 'calibrated';
-  var statusIcon = isCalibrated ? '🔵' : '🟢';
-  var statusLabel = isCalibrated ? '已校準' : '閾值穩定';
-  var statusColor = isCalibrated ? 'var(--color-info)' : 'var(--color-success)';
+  var hasChanges = report.changes && report.changes.length > 0;
+  var statusIcon = isCalibrated && hasChanges ? '🔵' : (isCalibrated ? '⚪' : '⚪');
+  var statusLabel = isCalibrated && hasChanges ? '已校準（本次有調整）'
+    : (isCalibrated ? '已校準（本次無調整）' : '未校準 — 等待首次校準完成');
+  var statusColor = isCalibrated && hasChanges ? 'var(--color-info)' : 'var(--muted)';
 
   var changesHtml = '';
   if (report.changes && report.changes.length > 0) {

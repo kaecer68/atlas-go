@@ -128,7 +128,7 @@ export class CircuitBreakerPanel {
                 const drawdown = ((data.intraday_peak - data.day_start_value) / data.day_start_value * 100).toFixed(2);
                 this.intradayPeak.textContent = `${drawdown}%`;
             } else if (state === 'normal') {
-                this.intradayPeak.textContent = '0.00%';
+                this.intradayPeak.textContent = '—';
             } else {
                 this.intradayPeak.textContent = '-';
             }
