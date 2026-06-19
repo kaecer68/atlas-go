@@ -1,0 +1,144 @@
+groups:
+  - name: llm_annotator_availability_fast_burn
+    rules:
+      - alert: LLMAnnotatorHighErrorRateFastBurn
+        expr: |
+          (
+            llm_annotator:error_rate:rate1h > (14.4 * 0.001)
+            and
+            llm_annotator:error_rate:rate5m > (14.4 * 0.001)
+          )
+        for: 1m
+        labels:
+          severity: critical
+          service: llm-annotator
+          slo: availability
+          burn_rate: fast
+        annotations:
+          summary: "LLM Annotator error rate consuming budget at 14.4x (fast burn)"
+          description: |
+            Provider {{ $labels.provider }} 1h error rate: {{ $value | humanizePercentage }}.
+            At this rate, the 30-day error budget exhausts in ~2 days.
+          runbook_url: "https://wiki.internal/runbooks/llm-annotator-fast-burn"
+
+      - alert: LLMAnnotatorHighErrorRateMediumBurn
+        expr: |
+          (
+            llm_annotator:error_rate:rate6h > (6 * 0.001)
+            and
+            llm_annotator:error_rate:rate30m > (6 * 0.001)
+          )
+        for: 5m
+        labels:
+          severity: warning
+          service: llm-annotator
+          slo: availability
+          burn_rate: medium
+        annotations:
+          summary: "LLM Annotator error rate consuming budget at 6x (medium burn)"
+          description: |
+            Provider {{ $labels.provider }} 6h error rate: {{ $value | humanizePercentage }}.
+            At this rate, the 30-day error budget exhausts in ~5 days.
+          runbook_url: "https://wiki.internal/runbooks/llm-annotator-medium-burn"
+
+  - name: llm_annotator_availability_slow_burn
+    rules:
+      - alert: LLMAnnotatorHighErrorRateSlowBurn
+        expr: |
+          llm_annotator:error_rate:rate6h > (1 * 0.001)
+        for: 6h
+        labels:
+          severity: info
+          service: llm-annotator
+          slo: availability
+          burn_rate: slow
+        annotations:
+          summary: "LLM Annotator error rate at 1x baseline (slow burn)"
+          description: |
+            Provider {{ $labels.provider }} sustained error rate: {{ $value | humanizePercentage }}.
+            At baseline burn, the 30-day budget exhausts exactly on day 30.
+          runbook_url: "https://wiki.internal/runbooks/llm-annotator-slow-burn"
+
+  - name: llm_annotator_circuit_breaker
+    rules:
+      - alert: LLMAnnotatorCircuitBreakerOpen
+        expr: |
+          rate(llm_annotator_requests_total{outcome="circuit_open"}[1m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: llm-annotator
+        annotations:
+          summary: "LLM Annotator circuit breaker OPEN for {{ $labels.provider }}"
+          description: |
+            Circuit breaker is rejecting all requests to provider {{ $labels.provider }}.
+            Provider has been failing consecutively; check provider status page.
+          runbook_url: "https://wiki.internal/runbooks/llm-annotator-circuit-breaker"
+
+  - name: llm_annotator_error_category_spikes
+    rules:
+      - alert: LLMAnnotatorRateLimited
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome="rate_limited"}[5m])) by (provider) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: llm-annotator
+          error_category: rate_limited
+        annotations:
+          summary: "LLM Annotator rate-limited by {{ $labels.provider }}"
+          description: "Provider is throttling requests. 5m rate: {{ $value | humanize }} req/s."
+
+      - alert: LLMAnnotatorTransportErrors
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome="transport_error"}[5m])) by (provider) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: llm-annotator
+          error_category: transport_error
+        annotations:
+          summary: "LLM Annotator transport errors for {{ $labels.provider }}"
+          description: "Network-level failures. 5m rate: {{ $value | humanize }} req/s."
+
+      - alert: LLMAnnotatorProtocolErrors
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome="protocol_error"}[5m])) by (provider) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: llm-annotator
+          error_category: protocol_error
+        annotations:
+          summary: "LLM Annotator protocol errors for {{ $labels.provider }}"
+          description: "Unexpected response format. 5m rate: {{ $value | humanize }} req/s."
+
+      - alert: LLMAnnotatorRetryExhausted
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome="retry_exhausted"}[5m])) by (provider) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: llm-annotator
+          error_category: retry_exhausted
+        annotations:
+          summary: "LLM Annotator retries exhausted for {{ $labels.provider }}"
+          description: "All retry attempts failed. 5m rate: {{ $value | humanize }} req/s."
+
+  - name: llm_annotator_traffic_cessation
+    rules:
+      - alert: LLMAnnotatorNoTraffic
+        expr: |
+          sum(rate(llm_annotator_requests_total{outcome="success"}[5m])) == 0
+            and
+          sum(increase(llm_annotator_requests_total{outcome="success"}[10m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: llm-annotator
+        annotations:
+          summary: "LLM Annotator has had zero successful calls for 10+ minutes"
+          description: |
+            No successful LLM annotator requests in the last 10 minutes.
+            Service may be down or no traffic is flowing.
+          runbook_url: "https://wiki.internal/runbooks/llm-annotator-no-traffic"
