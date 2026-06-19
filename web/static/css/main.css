@@ -19,6 +19,7 @@
 @import url("components/pipeline.css");
 @import url("components/modal.css");
 @import url("components/tabs.css");
+@import url("components/risk-gate-panel.css");
 
 /* Pages - Industry */
 @import url("pages/industry.css");
