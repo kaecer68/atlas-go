@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -26,6 +27,7 @@ type AutoRollback struct {
 	dwManager   *portfolio.DarwinianWeightManager
 	healthMgr   *portfolio.AgentHealthManager
 	tracker     *domain.MaturityTracker
+	eventBus    *eventbus.ChannelEventBus
 
 	// promotedSnapshot holds Sharpe before promotion, keyed by experimentID
 	promotedSnapshot map[string]float64
@@ -54,6 +56,12 @@ func (r *AutoRollback) WithMaturityTracker(mt *domain.MaturityTracker) *AutoRoll
 	return r
 }
 
+// WithEventBus attaches an event bus for publishing promotion/rollback events.
+func (r *AutoRollback) WithEventBus(eb *eventbus.ChannelEventBus) *AutoRollback {
+	r.eventBus = eb
+	return r
+}
+
 // RecordPromotion should be called whenever an experiment is promoted.
 // It snapshots the pre-promotion system Sharpe for later comparison.
 func (r *AutoRollback) RecordPromotion(experimentID string, prePromotionSharpe float64) {
@@ -61,6 +69,13 @@ func (r *AutoRollback) RecordPromotion(experimentID string, prePromotionSharpe f
 	logging.Info("auto_rollback", "promotion_recorded",
 		"experiment_id", experimentID,
 		"pre_promotion_sharpe", prePromotionSharpe)
+	if r.eventBus != nil {
+		r.eventBus.PublishPromotionRecorded(eventbus.PromotionRecordedPayload{
+			ExperimentID:       experimentID,
+			PrePromotionSharpe: prePromotionSharpe,
+			Timestamp:          time.Now(),
+		})
+	}
 }
 
 // RecordCalibration should be called before applying a calibration.

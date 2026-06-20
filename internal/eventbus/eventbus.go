@@ -74,6 +74,7 @@ const (
 	EventSharpeDegradation EventType = "monitor.sharpe.degradation"
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
 	EventHealthAlert       EventType = "monitor.health.alert"
+	EventPromotionRecorded EventType = "experiment.promotion_recorded"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -209,6 +210,14 @@ type HealthAlertPayload struct {
 	Threshold       float64   `json:"threshold"`
 	SuggestedAction string    `json:"suggested_action"`
 	Timestamp       time.Time `json:"timestamp"`
+}
+
+// PromotionRecordedPayload is emitted when AutoRollback.RecordPromotion
+// snapshots pre-promotion state for an experiment.
+type PromotionRecordedPayload struct {
+	ExperimentID       string    `json:"experiment_id"`
+	PrePromotionSharpe float64   `json:"pre_promotion_sharpe"`
+	Timestamp          time.Time `json:"timestamp"`
 }
 
 // BusEvent 总线事件
@@ -672,6 +681,16 @@ func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
 		Timestamp: time.Now(),
 		Payload:   alert,
 		Severity:  alert.Severity,
+	})
+}
+
+func (b *ChannelEventBus) PublishPromotionRecorded(payload PromotionRecordedPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventPromotionRecorded,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
 	})
 }
 

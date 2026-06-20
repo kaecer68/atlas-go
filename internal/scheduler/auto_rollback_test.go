@@ -2,10 +2,12 @@ package scheduler
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
@@ -195,5 +197,24 @@ func TestAutoRollback_History(t *testing.T) {
 	}
 	if history[0].Action != "disable_agent" {
 		t.Errorf("expected history action=disable_agent, got %s", history[0].Action)
+	}
+}
+
+func TestAutoRollback_RecordPromotion_EmitsEvent(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	bus.Subscribe(eventbus.EventPromotionRecorded, func(_ context.Context, _ eventbus.BusEvent) error {
+		received.Add(1)
+		return nil
+	})
+
+	ar := NewAutoRollback(nil, nil, nil).WithEventBus(bus)
+	ar.RecordPromotion("exp-event-001", 1.42)
+
+	time.Sleep(100 * time.Millisecond)
+	if got := received.Load(); got != 1 {
+		t.Fatalf("expected 1 EventPromotionRecorded emitted, got %d", got)
 	}
 }

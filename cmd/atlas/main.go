@@ -406,6 +406,7 @@ func run(args []string, deps appDeps) error {
 
 		// Inject EventBus for SSE streaming endpoint
 		dashboard.SetEventBus(dashEventBus)
+		autoRollback.WithEventBus(dashEventBus)
 		dashboard.SetContext(context.Background())
 		log.Printf("[EventBus] injected into dashboard API for SSE streaming")
 		dashEventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
