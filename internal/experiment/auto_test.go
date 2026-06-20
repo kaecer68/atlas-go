@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/experiment"
 )
 
 func TestAutoExperimentNilSystemReturnsError(t *testing.T) {
@@ -207,5 +208,57 @@ func writeExperimentJSONL(t *testing.T, path string, records []domain.Experiment
 		}
 		f.Write(b)
 		f.Write([]byte("\n"))
+	}
+}
+
+func TestLoadPendingExperiments(t *testing.T) {
+	tmpDir := t.TempDir()
+	expDir := filepath.Join(tmpDir, "data", "state", "experiments")
+	if err := os.MkdirAll(expDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	mkResult := func(id string, status domain.ExperimentStatus) string {
+		r := experiment.PromptExperimentResult{
+			Experiment: domain.ExperimentRecord{
+				ID:              id,
+				Status:          status,
+				TargetAgentID:   "test-agent",
+				Skill:           "test-skill",
+				MutationType:    "prompt_tightening",
+				AcceptanceGates: []string{"improve_sharpe_like"},
+			},
+			BaselineObservations:  100,
+			CandidateObservations: 100,
+			BaselineReturns:       []float64{0.01, 0.02, 0.015},
+			CandidateReturns:      []float64{0.02, 0.03, 0.025},
+		}
+		b, _ := json.Marshal(r)
+		return string(b)
+	}
+
+	for _, c := range []struct {
+		id     string
+		status domain.ExperimentStatus
+	}{
+		{"exp-planned-001", domain.ExperimentPlanned},
+		{"exp-accepted-001", domain.ExperimentAccepted},
+		{"exp-rejected-001", domain.ExperimentRejected},
+	} {
+		if err := os.WriteFile(filepath.Join(expDir, c.id+".json"), []byte(mkResult(c.id, c.status)), 0o644); err != nil {
+			t.Fatalf("write %s: %v", c.id, err)
+		}
+	}
+
+	results := LoadPendingExperiments(tmpDir)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 pending (planned), got %d", len(results))
+	}
+	if results[0].Experiment.ID != "exp-planned-001" {
+		t.Errorf("expected exp-planned-001, got %s", results[0].Experiment.ID)
+	}
+
+	if got := LoadPendingExperiments(t.TempDir()); len(got) != 0 {
+		t.Errorf("expected empty for non-existent dir, got %d", len(got))
 	}
 }

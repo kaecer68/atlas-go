@@ -12,6 +12,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -252,4 +253,36 @@ func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
 		}
 	}
 	return oldest
+}
+
+// LoadPendingExperiments returns all pending experiment results from the
+// data/state/experiments directory. Pending = Status not in {Accepted, Rejected}.
+// Files that fail to parse are skipped (logged at Warn) so partial corruption
+// does not block the auto-judge-promoter wire.
+func LoadPendingExperiments(workDir string) []experiment.PromptExperimentResult {
+	expDir := filepath.Join(workDir, "data", "state", "experiments")
+	files, err := filepath.Glob(filepath.Join(expDir, "*.json"))
+	if err != nil {
+		logging.Warn("auto_judge", "load_pending_glob_failed", "dir", expDir, "err", err.Error())
+		return nil
+	}
+	var pending []experiment.PromptExperimentResult
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			logging.Warn("auto_judge", "load_pending_read_failed", "file", filepath.Base(f), "err", err.Error())
+			continue
+		}
+		var r experiment.PromptExperimentResult
+		if err := json.Unmarshal(data, &r); err != nil {
+			logging.Warn("auto_judge", "load_pending_parse_failed", "file", filepath.Base(f), "err", err.Error())
+			continue
+		}
+		switch r.Experiment.Status {
+		case domain.ExperimentAccepted, domain.ExperimentRejected:
+			continue
+		}
+		pending = append(pending, r)
+	}
+	return pending
 }
