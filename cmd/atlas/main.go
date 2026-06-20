@@ -1175,6 +1175,29 @@ func run(args []string, deps appDeps) error {
 						defer cancel()
 						svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
 						svc.EventCalendar.RefreshEvents(time.Now())
+						// Wave 8.3: Publish active industry calendar events to EventBus.
+						// The SSE handler buffers the last 50 calendar events and replays them on client connect.
+						for _, evt := range svc.EventCalendar.DetectActiveEvents(time.Now()) {
+							dashEventBus.PublishIndustryCalendarEvent(eventbus.IndustryCalendarEventPayload{
+								EventID:             evt.ID,
+								Name:                evt.Name,
+								NameEN:              evt.NameEN,
+								EventType:           evt.EventType,
+								Description:         evt.Description,
+								Direction:           evt.Direction,
+								BaseWeight:          evt.BaseWeight,
+								Active:              evt.Active,
+								StartDate:           evt.StartDate,
+								EndDate:             evt.EndDate,
+								PeakDate:            evt.PeakDate,
+								DecayDays:           evt.DecayDays,
+								AffectedIndustries:  evt.AffectedIndustries,
+								SentimentAdjustment: evt.SentimentAdjustment,
+								DataSource:          string(evt.DataSource),
+								EvidenceQuality:     string(evt.EvidenceQuality),
+								GeneratedAt:         evt.GeneratedAt,
+							})
+						}
 						logging.Info("calendar", "auto_calendar_refresh completed")
 						return nil
 					},
@@ -2100,6 +2123,27 @@ func run(args []string, deps appDeps) error {
 					logging.Info("linkage_calibrate", "completed",
 						"baseline", fmt.Sprintf("%.3f", result.BaselineScore),
 						"optimized", fmt.Sprintf("%.3f", result.OptimizedScore))
+					if dashEventBus != nil {
+						topChangeParam := ""
+						topChangeDeltaPct := 0.0
+						if len(result.Changes) > 0 {
+							topChangeParam = result.Changes[0].ParamName
+							topChangeDeltaPct = result.Changes[0].DeltaPct
+						}
+						dashEventBus.PublishCalibrationCompleted(eventbus.CalibrationCompletedEventPayload{
+							Module:            "linkage",
+							CalibratorName:    "LinkageAmplifier",
+							ParamCount:        result.ParamCount,
+							BaselineScore:     result.BaselineScore,
+							OptimizedScore:    result.OptimizedScore,
+							Verdict:           result.Verdict,
+							ChangeCount:       len(result.Changes),
+							TopChangeParam:    topChangeParam,
+							TopChangeDeltaPct: topChangeDeltaPct,
+							GeneratedAt:       result.Timestamp,
+							SyncSucceeded:     true,
+						})
+					}
 					return nil
 				},
 			})
@@ -2162,10 +2206,10 @@ func run(args []string, deps appDeps) error {
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_swarm_simulation",
-				Interval: 30 * time.Minute,
-				Jitter:   3 * time.Minute,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
+			Interval: 5 * time.Minute,
+			Jitter:   30 * time.Second,
+			Enabled:  true,
+			Task: func(ctx context.Context) error {
 					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for swarm: %w", err)
@@ -2198,7 +2242,7 @@ func run(args []string, deps appDeps) error {
 					return nil
 				},
 			})
-			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
+			log.Printf("[Gateway] registered auto_swarm_simulation background task (5m interval)")
 
 			// RSI-tw autonomous calibration — runs every 24h at market close
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

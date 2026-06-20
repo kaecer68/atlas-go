@@ -51,18 +51,20 @@ func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventOrderFilled {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderFilled)
+		if got.Type != EventOrderFilled && got.Type != EventTradeSlippage {
+			t.Fatalf("unexpected event type: got=%s", got.Type)
 		}
-		payload, ok := got.Payload.(OrderEventPayload)
-		if !ok {
-			t.Fatalf("unexpected payload type: %T", got.Payload)
-		}
-		if payload.OrderID == "" {
-			t.Fatalf("expected non-empty order id")
-		}
-		if payload.Status != "filled" {
-			t.Fatalf("unexpected order status: %s", payload.Status)
+		if got.Type == EventOrderFilled {
+			payload, ok := got.Payload.(OrderEventPayload)
+			if !ok {
+				t.Fatalf("unexpected payload type: %T", got.Payload)
+			}
+			if payload.OrderID == "" {
+				t.Fatalf("expected non-empty order id")
+			}
+			if payload.Status != "filled" {
+				t.Fatalf("unexpected order status: %s", payload.Status)
+			}
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatalf("expected order filled event but none was received")

@@ -709,3 +709,246 @@ func TestPublishRiskGateEvent(t *testing.T) {
 		t.Fatalf("expected 1 risk gate overridden event, got %d", overriddenCount.Load())
 	}
 }
+
+func TestPublishRiskGateEvent_HALTRouting(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var rejectedCount, overriddenCount atomic.Int32
+	bus.Subscribe(EventRiskGateRejected, func(ctx context.Context, event BusEvent) error {
+		rejectedCount.Add(1)
+		return nil
+	})
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+		overriddenCount.Add(1)
+		return nil
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "in_trade",
+		Verdict:   "HALT",
+		Reason:    "margin call",
+		Symbol:    "2330",
+		Mode:      "DEFENSIVE",
+		Timestamp: time.Now(),
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "post_trade",
+		Verdict:   "ALERT_ONLY",
+		Reason:    "concentration warning",
+		Symbol:    "2330",
+		Mode:      "CAUTIOUS",
+		Timestamp: time.Now(),
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if rejectedCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate rejected event (HALT), got %d", rejectedCount.Load())
+	}
+	if overriddenCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate overridden event (ALERT_ONLY), got %d", overriddenCount.Load())
+	}
+}
+
+func TestPublishRiskGateEvent_ReduceRouting(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var overriddenCount atomic.Int32
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+		overriddenCount.Add(1)
+		payload := event.Payload.(RiskGateEventPayload)
+		if payload.Verdict != "REDUCE" {
+			t.Errorf("expected REDUCE verdict for overridden event, got %s", payload.Verdict)
+		}
+		return nil
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "REDUCE",
+		Reason:    "partial reduction after override",
+		Symbol:    "2454",
+		Mode:      "CAUTIOUS",
+		Timestamp: time.Now(),
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if overriddenCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate overridden event, got %d", overriddenCount.Load())
+	}
+}
+
+func TestPublishIndustryCalendarEvent(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var capturedPayload IndustryCalendarEventPayload
+	bus.Subscribe(EventIndustryCalendar, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		capturedPayload = event.Payload.(IndustryCalendarEventPayload)
+		return nil
+	})
+
+	bus.PublishIndustryCalendarEvent(IndustryCalendarEventPayload{
+		EventID:             "ex_dividend_2026_06",
+		Name:                "除權息旺季",
+		NameEN:              "Ex-Dividend Season",
+		EventType:           "ex_dividend",
+		Description:         "除權息旺季 - 6 月至 8 月",
+		Direction:           "mixed",
+		BaseWeight:          0.70,
+		Active:              true,
+		StartDate:           time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC),
+		EndDate:             time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+		PeakDate:            time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
+		DecayDays:           7,
+		AffectedIndustries:  []string{"financials", "consumer"},
+		SentimentAdjustment: 0.0125,
+		DataSource:          "default_rules",
+		EvidenceQuality:     "backtested",
+		GeneratedAt:         time.Now(),
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 industry calendar event, got %d", received.Load())
+	}
+	if capturedPayload.EventID != "ex_dividend_2026_06" {
+		t.Errorf("expected EventID ex_dividend_2026_06, got %s", capturedPayload.EventID)
+	}
+	if capturedPayload.Name != "除權息旺季" {
+		t.Errorf("expected Name 除權息旺季, got %s", capturedPayload.Name)
+	}
+	if capturedPayload.Direction != "mixed" {
+		t.Errorf("expected Direction mixed, got %s", capturedPayload.Direction)
+	}
+	if len(capturedPayload.AffectedIndustries) != 2 {
+		t.Errorf("expected 2 affected industries, got %d", len(capturedPayload.AffectedIndustries))
+	}
+}
+
+func TestPublishBacktestCompleted(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var receivedPayload BacktestCompletedEventPayload
+	bus.Subscribe(EventBacktestCompleted, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		receivedPayload = event.Payload.(BacktestCompletedEventPayload)
+		return nil
+	})
+
+	bus.PublishBacktestCompleted(BacktestCompletedEventPayload{
+		WindowID:              "bt-2026-06-21",
+		StartDate:             time.Now().AddDate(0, 0, -30),
+		EndDate:               time.Now(),
+		SessionCount:          22,
+		OutcomeCount:          17,
+		WorstAgentID:          "agent-momentum-1",
+		WorstAgentSkill:       "momentum",
+		WorstAgentLayer:       "L1",
+		WorstAgentWindowCount: 22,
+		WorstAgentSharpeLike:  0.42,
+		GeneratedAt:           time.Now(),
+		TargetDate:            time.Now(),
+		SyncSucceeded:         true,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 backtest completed event, got %d", received.Load())
+	}
+	if receivedPayload.WindowID != "bt-2026-06-21" {
+		t.Errorf("unexpected window_id: %s", receivedPayload.WindowID)
+	}
+	if !receivedPayload.SyncSucceeded {
+		t.Errorf("expected SyncSucceeded=true, got false")
+	}
+}
+
+func TestPublishCalibrationCompleted(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var capturedPayload CalibrationCompletedEventPayload
+	bus.Subscribe(EventCalibrationCompleted, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		capturedPayload = event.Payload.(CalibrationCompletedEventPayload)
+		return nil
+	})
+
+	now := time.Now()
+	bus.PublishCalibrationCompleted(CalibrationCompletedEventPayload{
+		Module:            "linkage",
+		CalibratorName:    "LinkageAmplifier",
+		ParamCount:        3,
+		BaselineScore:     0.58,
+		OptimizedScore:    0.72,
+		Verdict:           "improved",
+		ChangeCount:       2,
+		TopChangeParam:    "semiconductor_to_tech",
+		TopChangeDeltaPct: 0.14,
+		GeneratedAt:       now,
+		SyncSucceeded:     true,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 calibration completed event, got %d", received.Load())
+	}
+	if capturedPayload.Module != "linkage" {
+		t.Errorf("expected module=linkage, got %s", capturedPayload.Module)
+	}
+	if capturedPayload.OptimizedScore <= capturedPayload.BaselineScore {
+		t.Errorf("expected optimized > baseline, got baseline=%f optimized=%f", capturedPayload.BaselineScore, capturedPayload.OptimizedScore)
+	}
+	if capturedPayload.TopChangeParam != "semiconductor_to_tech" {
+		t.Errorf("expected top_change_param=semiconductor_to_tech, got %s", capturedPayload.TopChangeParam)
+	}
+	if !capturedPayload.SyncSucceeded {
+		t.Errorf("expected SyncSucceeded=true")
+	}
+}
+
+func TestPublishTradeSlippage(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var capturedPayload TradeSlippageEventPayload
+	bus.Subscribe(EventTradeSlippage, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		capturedPayload = event.Payload.(TradeSlippageEventPayload)
+		return nil
+	})
+
+	now := time.Now()
+	bus.PublishTradeSlippage(TradeSlippageEventPayload{
+		OrderID:       "ord-001",
+		Symbol:        "2330",
+		Side:          "buy",
+		Quantity:      1000,
+		ExpectedPrice: 600.0,
+		FillPrice:     600.30,
+		SlippageBPS:   5.0,
+		SlippageCost:  300.0,
+		BrokerMode:    "dry-run",
+		Timestamp:     now,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 trade slippage event, got %d", received.Load())
+	}
+	if capturedPayload.OrderID != "ord-001" {
+		t.Errorf("expected OrderID=ord-001, got %s", capturedPayload.OrderID)
+	}
+	if capturedPayload.SlippageBPS != 5.0 {
+		t.Errorf("expected SlippageBPS=5.0, got %f", capturedPayload.SlippageBPS)
+	}
+}

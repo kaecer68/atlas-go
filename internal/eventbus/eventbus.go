@@ -75,11 +75,17 @@ const (
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
 
 	// 风险闸门事件
-	EventRiskGateRejected  EventType = "monitor.risk_gate.rejected"
+	EventRiskGateRejected   EventType = "monitor.risk_gate.rejected"
 	EventRiskGateOverridden EventType = "monitor.risk_gate.overridden"
 
-	EventHealthAlert       EventType = "monitor.health.alert"
-	EventPromotionRecorded EventType = "experiment.promotion_recorded"
+	// 产业日历事件
+	EventIndustryCalendar EventType = "industry.calendar.event"
+
+	EventHealthAlert          EventType = "monitor.health.alert"
+	EventPromotionRecorded    EventType = "experiment.promotion_recorded"
+	EventBacktestCompleted    EventType = "experiment.backtest_completed"
+	EventCalibrationCompleted EventType = "experiment.calibration_completed"
+	EventTradeSlippage        EventType = "trade.slippage"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -168,14 +174,81 @@ type RiskEventPayload struct {
 
 // RiskGateEventPayload 风险闸门决策事件载荷
 type RiskGateEventPayload struct {
-	Phase             string    `json:"phase"`              // pre_trade, in_trade, post_trade
-	Verdict           string    `json:"verdict"`            // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
+	Phase             string    `json:"phase"`   // pre_trade, in_trade, post_trade
+	Verdict           string    `json:"verdict"` // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
 	Reason            string    `json:"reason"`
 	ActionType        string    `json:"action_type"`        // SELL, REDUCE, FREEZE, LIQUIDATE, NOTIFY (空字串 if no action)
 	ActionDescription string    `json:"action_description"` // 人類可讀描述 (空字串 if no action)
 	Mode              string    `json:"mode"`               // NORMAL, CAUTIOUS, DEFENSIVE, SUSPENDED
 	Symbol            string    `json:"symbol"`
 	Timestamp         time.Time `json:"timestamp"`
+}
+
+// IndustryCalendarEventPayload 产业日历事件载荷
+type IndustryCalendarEventPayload struct {
+	EventID             string    `json:"event_id"`
+	Name                string    `json:"name"`
+	NameEN              string    `json:"name_en,omitempty"`
+	EventType           string    `json:"event_type"`
+	Description         string    `json:"description"`
+	Direction           string    `json:"direction"` // bullish / bearish / mixed / neutral
+	BaseWeight          float64   `json:"base_weight"`
+	Active              bool      `json:"active"`
+	StartDate           time.Time `json:"start_date"`
+	EndDate             time.Time `json:"end_date"`
+	PeakDate            time.Time `json:"peak_date"`
+	DecayDays           int       `json:"decay_days"`
+	AffectedIndustries  []string  `json:"affected_industries"`
+	SentimentAdjustment float64   `json:"sentiment_adjustment"`
+	DataSource          string    `json:"data_source"`      // default_rules / twse_provider / finmind_provider / mops_provider
+	EvidenceQuality     string    `json:"evidence_quality"` // backtested / estimated / unverified / realtime
+	GeneratedAt         time.Time `json:"generated_at"`
+}
+
+// BacktestCompletedEventPayload 自动回测完成事件载荷
+type BacktestCompletedEventPayload struct {
+	WindowID              string    `json:"window_id"`
+	StartDate             time.Time `json:"start_date"`
+	EndDate               time.Time `json:"end_date"`
+	SessionCount          int       `json:"session_count"`
+	OutcomeCount          int       `json:"outcome_count"`
+	WorstAgentID          string    `json:"worst_agent_id"`
+	WorstAgentSkill       string    `json:"worst_agent_skill"`
+	WorstAgentLayer       string    `json:"worst_agent_layer"`
+	WorstAgentWindowCount int       `json:"worst_agent_window_count"`
+	WorstAgentSharpeLike  float64   `json:"worst_agent_sharpe_like"`
+	GeneratedAt           time.Time `json:"generated_at"`
+	TargetDate            time.Time `json:"target_date"`
+	SyncSucceeded         bool      `json:"sync_succeeded"`
+}
+
+// CalibrationCompletedEventPayload 参数校准完成事件载荷
+type CalibrationCompletedEventPayload struct {
+	Module            string    `json:"module"`
+	CalibratorName    string    `json:"calibrator_name"`
+	ParamCount        int       `json:"param_count"`
+	BaselineScore     float64   `json:"baseline_score"`
+	OptimizedScore    float64   `json:"optimized_score"`
+	Verdict           string    `json:"verdict"`
+	ChangeCount       int       `json:"change_count"`
+	TopChangeParam    string    `json:"top_change_param"`
+	TopChangeDeltaPct float64   `json:"top_change_delta_pct"`
+	GeneratedAt       time.Time `json:"generated_at"`
+	SyncSucceeded     bool      `json:"sync_succeeded"`
+}
+
+// TradeSlippageEventPayload 滑价事件载荷 — emitted per order fill.
+type TradeSlippageEventPayload struct {
+	OrderID       string    `json:"order_id"`
+	Symbol        string    `json:"symbol"`
+	Side          string    `json:"side"`
+	Quantity      int       `json:"quantity"`
+	ExpectedPrice float64   `json:"expected_price"`
+	FillPrice     float64   `json:"fill_price"`
+	SlippageBPS   float64   `json:"slippage_bps"`
+	SlippageCost  float64   `json:"slippage_cost"`
+	BrokerMode    string    `json:"broker_mode"`
+	Timestamp     time.Time `json:"timestamp"`
 }
 
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
@@ -287,8 +360,12 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},
 	EventNarrative:                  {"偵測到宏觀敘事事件", "warning"},
 	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
+	EventIndustryCalendar:           {"產業日曆事件：當前台股市場日曆事件（除權息、MSCI 調整、財報季等）", "info"},
 	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
 	EventRiskGateOverridden:         {"風控閘門決策被手動覆寫，部位操作已變更", "warning"},
+	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
+	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
+	EventTradeSlippage:              {"訂單成交滑價計算：期望價與實際成交價之差（BPS），用於監控執行品質", "info"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -716,6 +793,53 @@ func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
 		Timestamp: time.Now(),
 		Payload:   payload,
 		Severity:  "warning",
+	})
+}
+
+// PublishIndustryCalendarEvent publishes a Taiwan market calendar event to the event bus.
+func (b *ChannelEventBus) PublishIndustryCalendarEvent(payload IndustryCalendarEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventIndustryCalendar,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
+	})
+}
+
+// PublishBacktestCompleted publishes an auto-backtest completion event.
+// Fired by internal/autobacktest.Runner after RunAndStore succeeds and live store is synced.
+func (b *ChannelEventBus) PublishBacktestCompleted(payload BacktestCompletedEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventBacktestCompleted,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
+	})
+}
+
+// PublishCalibrationCompleted publishes a parameter calibration completion event.
+// Fired by cmd/atlas/main.go linkage_calibrate task after CalibrateParameters succeeds.
+func (b *ChannelEventBus) PublishCalibrationCompleted(payload CalibrationCompletedEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventCalibrationCompleted,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
+	})
+}
+
+// PublishTradeSlippage publishes a per-order-fill slippage event.
+// Fired by internal/live/order_manager.go on every order fill (status == "filled").
+func (b *ChannelEventBus) PublishTradeSlippage(payload TradeSlippageEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventTradeSlippage,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
 	})
 }
 

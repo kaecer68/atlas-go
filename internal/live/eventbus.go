@@ -46,6 +46,7 @@ const (
 	EventSystemStart                = eventbus.EventSystemStart
 	EventSystemError                = eventbus.EventSystemError
 	EventExperimentInsufficientData = eventbus.EventExperimentInsufficientData
+	EventTradeSlippage              = eventbus.EventTradeSlippage
 )
 
 func NewChannelEventBus(bufferSize int) *ChannelEventBus {
