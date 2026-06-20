@@ -186,4 +186,4 @@ if dashEventBus != nil {
 - [`experiment.backtest_completed`](./backtest-completed.md) — 回測完成事件（Wave 8.8）
 - [`experiment.insufficient_data`](./experiment-insufficient-data.md) — 實驗資料不足事件（既有）
 - [`monitor.health_alert`](./health-alert.md) — 系統健康警告（既有）
-- [`monitor.risk_gate.overridden`](./risk-gate-overridden.md) — 風控覆寫事件（Wave 8.2）
+- [`monitor.risk_gate.overridden`](./risk-gate-allowed.md) — 風控覆寫事件（Wave 8.2）

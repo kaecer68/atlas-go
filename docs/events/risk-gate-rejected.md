@@ -46,5 +46,5 @@
 
 ## 相關事件
 
-- [`risk.gate_overridden`](./risk-gate-overridden.md) — 管理員覆寫此拒絕事件
+- [`risk.gate_overridden`](./risk-gate-allowed.md) — 管理員覆寫此拒絕事件
 - [`risk.alert`](./risk-alert.md) — 高嚴重性時升級為 alert

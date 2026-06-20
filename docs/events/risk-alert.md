@@ -48,7 +48,7 @@
 ## 相關事件
 
 - [`risk.gate_rejected`](./risk-gate-rejected.md) — 觸發來源
-- [`risk.gate_overridden`](./risk-gate-overridden.md) — 觸發來源
+- [`risk.gate_overridden`](./risk-gate-allowed.md) — 觸發來源
 - [`risk.drawdown_breach`](./drawdown-breach.md) — 觸發來源
 - [`risk.stoploss_triggered`](./risk-stoploss-triggered.md) — 觸發來源
 - [`risk.takeprofit_triggered`](./risk-takeprofit-triggered.md) — 觸發來源

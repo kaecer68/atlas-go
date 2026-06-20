@@ -167,7 +167,7 @@ _ = taskMgr.Register(&apigateway.ScheduledTask{
 ## 相關事件
 
 - [`monitor.risk_gate.rejected`](./risk-gate-rejected.md) — 風險閘道拒絕（Wave 8.0-8.1）
-- [`monitor.risk_gate.overridden`](./risk-gate-overridden.md) — 風險閘道覆寫（Wave 8.2）
+- [`monitor.risk_gate.overridden`](./risk-gate-allowed.md) — 風險閘道覆寫（Wave 8.2）
 - `industry.*` 系列（Wave 9 規劃）— 觀測性擴展事件
 
 ## 相關模組

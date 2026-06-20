@@ -779,7 +779,6 @@ func TestShouldStartFubonProxy(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 func TestRiskGateEventBus_BufferWiring(t *testing.T) {
 	bus := eventbus.NewChannelEventBus(64)
 	defer bus.Close()
@@ -832,6 +831,9 @@ func TestRiskGateEventBus_BufferWiring(t *testing.T) {
 	}
 	if !hasAllowed {
 		t.Error("expected buffered event with type EventRiskGateAllowed, not found")
+	}
+}
+
 // ── P2-S1: buildBaseState returns real prices (not 100.0 placeholder) ──
 
 // fakeProvider implements marketdata.Provider for testing.
