@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
     container_name: atlas-go
     restart: unless-stopped
-    command: ["-api"]
+    command: ["-api", "-live"]
     ports:
       - "8080:8080"
     env_file:
