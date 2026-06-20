@@ -549,3 +549,30 @@ func TestFactorWeightEngine_PM_InflationSpike(t *testing.T) {
 		t.Errorf("weights should normalize to ~1.0 after PM event, got %f", total)
 	}
 }
+
+// TestNewOptimizer_FactorWeightEngineOverHardcoded is the Wave 7.5 Task 7
+// regression test. It locks the production path: NewOptimizer() must wire a
+// live FactorWeightEngine so Optimize() picks up calibrator updates via
+// fwe.GetWeights("") instead of the static params.Optimizer.FactorWeights map.
+func TestNewOptimizer_FactorWeightEngineOverHardcoded(t *testing.T) {
+	o := NewOptimizer()
+
+	if o.factorWeightEngine == nil {
+		t.Fatal("NewOptimizer() must initialize factorWeightEngine; production path broken")
+	}
+
+	src := o.factorWeightEngine.WeightSource()
+	if src != "builtin_defaults" && src != "config" {
+		t.Errorf("unexpected weight source %q", src)
+	}
+
+	weights := o.factorWeightEngine.GetWeights("")
+	if len(weights) == 0 {
+		t.Fatal("FactorWeightEngine.GetWeights() returned empty; fwe path broken")
+	}
+	for ft := range weights {
+		if weights[ft] < 0.02 || weights[ft] > 0.50 {
+			t.Errorf("factor %s weight %.4f outside clamp bounds [0.02, 0.50]", ft, weights[ft])
+		}
+	}
+}

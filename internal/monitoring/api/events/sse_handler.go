@@ -56,6 +56,19 @@ var (
 	lastPromotionMutex sync.RWMutex
 )
 
+// BufferedHealthAlertEvent holds a published health-alert event for SSE catchup.
+type BufferedHealthAlertEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedHealthAlertEvents = 50
+
+var (
+	healthAlertBuffer    []BufferedHealthAlertEvent
+	lastHealthAlertMutex sync.RWMutex
+)
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -98,6 +111,35 @@ func resetPromotionBuffer() {
 	lastPromotionMutex.Lock()
 	defer lastPromotionMutex.Unlock()
 	promotionBuffer = nil
+}
+
+// BufferHealthAlertEvent stores a health-alert event for catchup by new SSE clients.
+func BufferHealthAlertEvent(event eventbus.BusEvent) {
+	lastHealthAlertMutex.Lock()
+	defer lastHealthAlertMutex.Unlock()
+	healthAlertBuffer = append(healthAlertBuffer, BufferedHealthAlertEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(healthAlertBuffer) > maxBufferedHealthAlertEvents {
+		healthAlertBuffer = healthAlertBuffer[len(healthAlertBuffer)-maxBufferedHealthAlertEvents:]
+	}
+}
+
+// GetBufferedHealthAlerts returns a snapshot of buffered health-alert events.
+func GetBufferedHealthAlerts() []BufferedHealthAlertEvent {
+	lastHealthAlertMutex.RLock()
+	defer lastHealthAlertMutex.RUnlock()
+	out := make([]BufferedHealthAlertEvent, len(healthAlertBuffer))
+	copy(out, healthAlertBuffer)
+	return out
+}
+
+// resetHealthAlertBuffer clears the health-alert buffer. Test-only helper.
+func resetHealthAlertBuffer() {
+	lastHealthAlertMutex.Lock()
+	defer lastHealthAlertMutex.Unlock()
+	healthAlertBuffer = nil
 }
 
 // NewSSEHandler creates a new SSE handler.
@@ -181,6 +223,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	promotionBuffered := promotionBuffer
 	lastPromotionMutex.RUnlock()
 	for _, b := range promotionBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastHealthAlertMutex.RLock()
+	healthAlertBuffered := healthAlertBuffer
+	lastHealthAlertMutex.RUnlock()
+	for _, b := range healthAlertBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue
