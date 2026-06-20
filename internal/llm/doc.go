@@ -31,12 +31,19 @@
 //
 // Example:
 //
-//	r := llm.Router{}
-//	req := llm.Request{
-//		Model: "moonshot-v1-8k",
-//		Messages: []llm.Message{{Role: "user", Content: "hello"}},
+//	router, err := llm.NewDefaultRouter(myProviderImpl)
+//	if err != nil {
+//		log.Fatal(err)
 //	}
-//	resp, err := r.Route(context.Background(), req)
+//	resp, err := router.Call(ctx, llm.Request{
+//		Capability: llm.CapabilityFailureAttribution,
+//		Payload:    myTypedPayload,
+//		DataClass:  llm.DataClassNonRegulated,
+//	})
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	fmt.Println(resp.Output)
 //
 // Maturity: experimental
 
