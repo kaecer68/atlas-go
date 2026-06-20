@@ -18,29 +18,29 @@ type OnInc func(counterName string, labels []string, value float64)
 // It mirrors prometheus.CounterVec semantics using an in-memory counter
 // store so it can be used from any package without creating import cycles.
 type DegradedMetrics struct {
-	DegradedActivations *CounterVec
-	ProviderErrors      *CounterVec
-	onInc               OnInc
+	DegradedActivations   *CounterVec
+	ProviderErrors        *CounterVec
+	DegradedCallbackCount *CounterVec
+	onInc                 OnInc
 }
 
 // SetOnInc installs a callback that is invoked on every counter increment.
 // Calling SetOnInc multiple times replaces the previous callback.
 func (d *DegradedMetrics) SetOnInc(fn OnInc) {
 	d.onInc = fn
-	if d.DegradedActivations != nil {
-		d.DegradedActivations.OnInc = func(_ string, labels map[string]string, value float64) {
+	wireOnInc := func(cv *CounterVec, counterName string) {
+		if cv == nil {
+			return
+		}
+		cv.OnInc = func(_ string, labels map[string]string, value float64) {
 			if d.onInc != nil {
-				d.onInc("degraded_activations", orderedLabelValues(labels, d.DegradedActivations.labelNames), value)
+				d.onInc(counterName, orderedLabelValues(labels, cv.labelNames), value)
 			}
 		}
 	}
-	if d.ProviderErrors != nil {
-		d.ProviderErrors.OnInc = func(_ string, labels map[string]string, value float64) {
-			if d.onInc != nil {
-				d.onInc("provider_errors", orderedLabelValues(labels, d.ProviderErrors.labelNames), value)
-			}
-		}
-	}
+	wireOnInc(d.DegradedActivations, "degraded_activations")
+	wireOnInc(d.ProviderErrors, "provider_errors")
+	wireOnInc(d.DegradedCallbackCount, "degraded_callback_count")
 }
 
 // CounterVec is a vector of counters keyed by label values.
@@ -166,9 +166,10 @@ type Sample struct {
 
 // DegradedSnapshot is a point-in-time view of all degraded counters.
 type DegradedSnapshot struct {
-	Timestamp           time.Time
-	DegradedActivations []Sample
-	ProviderErrors      []Sample
+	Timestamp             time.Time
+	DegradedActivations   []Sample
+	ProviderErrors        []Sample
+	DegradedCallbackCount []Sample
 }
 
 // Snapshot returns the current values of all degraded counters, stamped
@@ -178,9 +179,10 @@ type DegradedSnapshot struct {
 func (m *DegradedMetrics) Snapshot() DegradedSnapshot {
 	now := time.Now()
 	return DegradedSnapshot{
-		Timestamp:           now,
-		DegradedActivations: m.DegradedActivations.snapshotSamplesAt(now),
-		ProviderErrors:      m.ProviderErrors.snapshotSamplesAt(now),
+		Timestamp:             now,
+		DegradedActivations:   m.DegradedActivations.snapshotSamplesAt(now),
+		ProviderErrors:        m.ProviderErrors.snapshotSamplesAt(now),
+		DegradedCallbackCount: m.DegradedCallbackCount.snapshotSamplesAt(now),
 	}
 }
 
@@ -195,6 +197,10 @@ func NewDegradedMetrics() *DegradedMetrics {
 		ProviderErrors: &CounterVec{
 			name:       "atlas_sox_limiter_provider_errors_total",
 			labelNames: []string{"service", "error_type"},
+		},
+		DegradedCallbackCount: &CounterVec{
+			name:       "atlas_sox_limiter_degraded_callback_count_total",
+			labelNames: []string{"source", "reason", "limiter_state"},
 		},
 	}
 }

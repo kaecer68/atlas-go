@@ -240,6 +240,9 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	s.callbackMu.Unlock()
 	if shouldFire {
 		cb(status, failed)
+		if s.degradedMetrics != nil {
+			s.degradedMetrics.DegradedCallbackCount.WithLabelValues("crossmarket", "missing_us_index_data", status).Inc()
+		}
 	}
 
 	if status == "degraded" && s.degradedMetrics != nil {
