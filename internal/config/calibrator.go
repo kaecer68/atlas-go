@@ -191,7 +191,7 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 		now := time.Now()
 		markCalibrated(params, paramNames, "bayesian_optimization", &now)
 		if p := GetParametersConfigPath(); p != "" {
-			if err := params.LockedSaveWithRollback(p); err != nil {
+			if err := params.TryLockedSaveWithRollback(p, 30*time.Second); err != nil {
 				logging.Error("calibrator", "save_failed",
 					logging.FStr("path", p), logging.Err(err))
 			}

@@ -813,3 +813,85 @@ func TestParametersConfig_LockedSaveWithRollback_Concurrent(t *testing.T) {
 		t.Fatalf("final LoadParametersConfig failed (data corruption?): %v", err)
 	}
 }
+
+func TestParametersConfig_TryLockedSaveWithRollback_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	paramsPath := filepath.Join(tmpDir, "trylock-params.json")
+
+	cfg := DefaultParametersConfig()
+	if err := cfg.TryLockedSaveWithRollback(paramsPath, 5*time.Second); err != nil {
+		t.Fatalf("TryLockedSaveWithRollback failed: %v", err)
+	}
+
+	data, err := os.ReadFile(paramsPath)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("file is empty")
+	}
+	if _, err := LoadParametersConfig(paramsPath); err != nil {
+		t.Fatalf("LoadParametersConfig failed: %v", err)
+	}
+}
+
+func TestParametersConfig_TryLockedSaveWithRollback_TimeoutWhenLocked(t *testing.T) {
+	tmpDir := t.TempDir()
+	paramsPath := filepath.Join(tmpDir, "trylock-contention-params.json")
+
+	// Pre-create a valid initial file
+	cfg := DefaultParametersConfig()
+	if err := cfg.SaveWithRollback(paramsPath); err != nil {
+		t.Fatalf("initial save failed: %v", err)
+	}
+
+	// Hold the advisory lock externally using the same registry path
+	locker := GetFileLocker(paramsPath)
+	unlock := locker.Lock()
+	defer unlock()
+
+	// TryLocked should time out quickly instead of blocking indefinitely
+	start := time.Now()
+	err := cfg.TryLockedSaveWithRollback(paramsPath, 100*time.Millisecond)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected TryLockedSaveWithRollback to fail when lock is held")
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("expected fail-fast, but blocked for %v", elapsed)
+	}
+}
+
+func TestParametersConfig_TryLockedSaveWithRollback_Concurrent(t *testing.T) {
+	tmpDir := t.TempDir()
+	paramsPath := filepath.Join(tmpDir, "trylock-concurrent-params.json")
+
+	cfg := DefaultParametersConfig()
+	if err := cfg.SaveWithRollback(paramsPath); err != nil {
+		t.Fatalf("initial save failed: %v", err)
+	}
+
+	const N = 10
+	var wg sync.WaitGroup
+	errCh := make(chan error, N)
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			c := DefaultParametersConfig()
+			if err := c.TryLockedSaveWithRollback(paramsPath, 10*time.Second); err != nil {
+				errCh <- err
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Errorf("concurrent try-locked save failed: %v", err)
+	}
+
+	if _, err := LoadParametersConfig(paramsPath); err != nil {
+		t.Fatalf("final LoadParametersConfig failed (data corruption?): %v", err)
+	}
+}
