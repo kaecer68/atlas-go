@@ -9,10 +9,13 @@ import (
 // Router defines the capability-based request routing interface.
 // Call dispatches a request to the appropriate provider, following the
 // routing chain for the request's capability. Health reports the health
-// status of all registered providers.
+// status of all registered providers. Register adds a ProviderImpl to the
+// router's provider set (keyed by the provider's Health().Provider value),
+// enabling it for future Call dispatches.
 type Router interface {
 	Call(ctx context.Context, req Request) (Response, error)
 	Health() map[Provider]HealthStatus
+	Register(p ProviderImpl) error
 }
 
 // DefaultRouter implements Router with a capability-based multi-provider
@@ -54,6 +57,14 @@ func NewDefaultRouter(impls ...ProviderImpl) *DefaultRouter {
 		providers:    providers,
 		routingTable: defaultRoutingTable(),
 	}
+}
+
+// Register adds a ProviderImpl to the router's provider set, keyed by
+// p.Health().Provider. Idempotent: registering an already-registered
+// provider overwrites the existing entry silently.
+func (r *DefaultRouter) Register(p ProviderImpl) error {
+	r.providers[p.Health().Provider] = p
+	return nil
 }
 
 // Call dispatches a request through the routing chain. The dispatch order is:

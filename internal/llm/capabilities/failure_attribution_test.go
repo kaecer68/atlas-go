@@ -34,6 +34,10 @@ func (m *mockRouter) Health() map[llm.Provider]llm.HealthStatus {
 	return nil
 }
 
+func (m *mockRouter) Register(_ llm.ProviderImpl) error {
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // TestFailureAttributionHandler_Success_StringOutput verifies that when the
 // Router returns a plain string response, the handler uses it as Annotation
