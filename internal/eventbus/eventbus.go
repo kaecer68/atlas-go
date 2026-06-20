@@ -81,9 +81,10 @@ const (
 	// 产业日历事件
 	EventIndustryCalendar EventType = "industry.calendar.event"
 
-	EventHealthAlert       EventType = "monitor.health.alert"
-	EventPromotionRecorded EventType = "experiment.promotion_recorded"
-	EventBacktestCompleted EventType = "experiment.backtest_completed"
+	EventHealthAlert          EventType = "monitor.health.alert"
+	EventPromotionRecorded    EventType = "experiment.promotion_recorded"
+	EventBacktestCompleted    EventType = "experiment.backtest_completed"
+	EventCalibrationCompleted EventType = "experiment.calibration_completed"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -220,6 +221,21 @@ type BacktestCompletedEventPayload struct {
 	SyncSucceeded         bool      `json:"sync_succeeded"`
 }
 
+// CalibrationCompletedEventPayload 参数校准完成事件载荷
+type CalibrationCompletedEventPayload struct {
+	Module            string    `json:"module"`
+	CalibratorName    string    `json:"calibrator_name"`
+	ParamCount        int       `json:"param_count"`
+	BaselineScore     float64   `json:"baseline_score"`
+	OptimizedScore    float64   `json:"optimized_score"`
+	Verdict           string    `json:"verdict"`
+	ChangeCount       int       `json:"change_count"`
+	TopChangeParam    string    `json:"top_change_param"`
+	TopChangeDeltaPct float64   `json:"top_change_delta_pct"`
+	GeneratedAt       time.Time `json:"generated_at"`
+	SyncSucceeded     bool      `json:"sync_succeeded"`
+}
+
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
 type ExperimentInsufficientDataEventPayload struct {
 	ExperimentID  string `json:"experiment_id"`
@@ -333,6 +349,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
 	EventRiskGateOverridden:         {"風控閘門決策被手動覆寫，部位操作已變更", "warning"},
 	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
+	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -780,6 +797,18 @@ func (b *ChannelEventBus) PublishBacktestCompleted(payload BacktestCompletedEven
 	b.Publish(BusEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventBacktestCompleted,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
+	})
+}
+
+// PublishCalibrationCompleted publishes a parameter calibration completion event.
+// Fired by cmd/atlas/main.go linkage_calibrate task after CalibrateParameters succeeds.
+func (b *ChannelEventBus) PublishCalibrationCompleted(payload CalibrationCompletedEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventCalibrationCompleted,
 		Timestamp: time.Now(),
 		Payload:   payload,
 		Severity:  "info",

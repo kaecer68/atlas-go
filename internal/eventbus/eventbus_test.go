@@ -869,3 +869,48 @@ func TestPublishBacktestCompleted(t *testing.T) {
 		t.Errorf("expected SyncSucceeded=true, got false")
 	}
 }
+
+func TestPublishCalibrationCompleted(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var capturedPayload CalibrationCompletedEventPayload
+	bus.Subscribe(EventCalibrationCompleted, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		capturedPayload = event.Payload.(CalibrationCompletedEventPayload)
+		return nil
+	})
+
+	now := time.Now()
+	bus.PublishCalibrationCompleted(CalibrationCompletedEventPayload{
+		Module:            "linkage",
+		CalibratorName:    "LinkageAmplifier",
+		ParamCount:        3,
+		BaselineScore:     0.58,
+		OptimizedScore:    0.72,
+		Verdict:           "improved",
+		ChangeCount:       2,
+		TopChangeParam:    "semiconductor_to_tech",
+		TopChangeDeltaPct: 0.14,
+		GeneratedAt:       now,
+		SyncSucceeded:     true,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 calibration completed event, got %d", received.Load())
+	}
+	if capturedPayload.Module != "linkage" {
+		t.Errorf("expected module=linkage, got %s", capturedPayload.Module)
+	}
+	if capturedPayload.OptimizedScore <= capturedPayload.BaselineScore {
+		t.Errorf("expected optimized > baseline, got baseline=%f optimized=%f", capturedPayload.BaselineScore, capturedPayload.OptimizedScore)
+	}
+	if capturedPayload.TopChangeParam != "semiconductor_to_tech" {
+		t.Errorf("expected top_change_param=semiconductor_to_tech, got %s", capturedPayload.TopChangeParam)
+	}
+	if !capturedPayload.SyncSucceeded {
+		t.Errorf("expected SyncSucceeded=true")
+	}
+}

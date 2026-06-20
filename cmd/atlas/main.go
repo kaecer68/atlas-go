@@ -2107,6 +2107,27 @@ func run(args []string, deps appDeps) error {
 					logging.Info("linkage_calibrate", "completed",
 						"baseline", fmt.Sprintf("%.3f", result.BaselineScore),
 						"optimized", fmt.Sprintf("%.3f", result.OptimizedScore))
+					if dashEventBus != nil {
+						topChangeParam := ""
+						topChangeDeltaPct := 0.0
+						if len(result.Changes) > 0 {
+							topChangeParam = result.Changes[0].ParamName
+							topChangeDeltaPct = result.Changes[0].DeltaPct
+						}
+						dashEventBus.PublishCalibrationCompleted(eventbus.CalibrationCompletedEventPayload{
+							Module:            "linkage",
+							CalibratorName:    "LinkageAmplifier",
+							ParamCount:        result.ParamCount,
+							BaselineScore:     result.BaselineScore,
+							OptimizedScore:    result.OptimizedScore,
+							Verdict:           result.Verdict,
+							ChangeCount:       len(result.Changes),
+							TopChangeParam:    topChangeParam,
+							TopChangeDeltaPct: topChangeDeltaPct,
+							GeneratedAt:       result.Timestamp,
+							SyncSucceeded:     true,
+						})
+					}
 					return nil
 				},
 			})
