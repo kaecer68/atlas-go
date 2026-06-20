@@ -33,6 +33,7 @@ const (
 	CapabilityRiskSurfaceExtraction Capability = "risk_surface_extraction"
 	CapabilityRegimeExplanation     Capability = "regime_explanation"
 	CapabilityScenarioSimulation    Capability = "scenario_simulation"
+	CapabilitySentimentExplanation  Capability = "sentiment_explanation"
 	CapabilityPerformanceForensics  Capability = "performance_forensics"
 	CapabilityContraAttribution     Capability = "contra_attribution"
 )
