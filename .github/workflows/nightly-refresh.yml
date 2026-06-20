@@ -1,0 +1,70 @@
+name: Nightly Calibration Refresh + Integrity Check
+
+on:
+  schedule:
+    # 02:00 UTC+8 = 18:00 UTC (after US market close, before Asia open)
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  backfill-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Build backfill binary
+      run: go build -o atlas-backfill ./cmd/backfill-industry-tree
+
+    - name: Run industry-tree backfill (best-effort)
+      id: backfill
+      env:
+        ATLAS_ENV: production
+        ATLAS_DATA_DIR: ./data
+      run: |
+        ./atlas-backfill || echo "backfill exited non-zero; will still run integrity check"
+      continue-on-error: true
+
+    - name: Build validation binary
+      run: go build -o atlas-validate ./cmd/calibration-validate
+
+    - name: Run post-backfill integrity check
+      id: validate
+      run: |
+        set +e
+        ./atlas-validate --path=configs/parameters.json --max-age=48h --format=json > validate-result.json
+        echo "validate-exit=$?" >> "$GITHUB_OUTPUT"
+        cat validate-result.json
+
+    - name: Upload validation result artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: nightly-calibration-validation
+          path: validate-result.json
+          retention-days: 30
+
+    - name: Slack alert on failure
+      if: hashFiles('validate-result.json') != '' && (steps.validate.outputs.validate-exit != '0' || steps.backfill.conclusion == 'failure')
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        if [ -z "$SLACK_WEBHOOK_URL" ]; then
+          echo "SLACK_WEBHOOK_URL not configured; skipping alert"
+          exit 0
+        fi
+        payload=$(jq -nc \
+          --arg text ":warning: Nightly calibration validation failed" \
+          --argjson details "$(cat validate-result.json 2>/dev/null || echo '{}')" \
+          '{text: $text, attachments: [{color: "warning", fields: [{title: "Details", value: ($details | tostring), short: false}]}]}')
+        curl -sf -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" || echo "Slack POST failed (non-blocking)"
