@@ -1620,6 +1620,22 @@ func run(args []string, deps appDeps) error {
 			}
 			dashboard.SetRiskGate(riskGate)
 
+			// Wave 8.0: Wire RiskGate decisions to EventBus for SSE streaming.
+			// BLOCK / HALT verdicts → EventRiskGateRejected; all others → EventRiskGateOverridden.
+			// The SSE handler buffers the last 50 risk-gate events and replays them on client connect.
+			riskGate.Subscribe(func(rd risk.RiskDecision) {
+				dashEventBus.PublishRiskGateEvent(eventbus.RiskGateEventPayload{
+					Phase:             string(rd.Phase),
+					Verdict:           string(rd.Verdict),
+					Reason:            rd.Reason,
+					ActionType:        string(rd.Action.Type),
+					ActionDescription: rd.Action.Description,
+					Mode:              rd.Mode,
+					Symbol:            rd.Symbol,
+					Timestamp:         rd.Recorded,
+				})
+			})
+
 			if params := config.GetParametersConfig(); params != nil && params.RSITw.LastCalibratedScore.Value > 0 {
 				riskGate.SetPreTradeRSITwScore(params.RSITw.LastCalibratedScore.Value)
 				log.Printf("[RiskGate] restored RSI-tw calibration score: %.4f", params.RSITw.LastCalibratedScore.Value)
