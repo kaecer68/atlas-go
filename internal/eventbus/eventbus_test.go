@@ -886,10 +886,13 @@ func TestPublishCalibrationCompleted(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
+	var mu sync.Mutex
 	var capturedPayload CalibrationCompletedEventPayload
 	bus.Subscribe(EventCalibrationCompleted, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
+		mu.Lock()
 		capturedPayload = event.Payload.(CalibrationCompletedEventPayload)
+		mu.Unlock()
 		return nil
 	})
 
@@ -912,6 +915,7 @@ func TestPublishCalibrationCompleted(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 calibration completed event, got %d", received.Load())
 	}
+	mu.Lock()
 	if capturedPayload.Module != "linkage" {
 		t.Errorf("expected module=linkage, got %s", capturedPayload.Module)
 	}
@@ -924,6 +928,7 @@ func TestPublishCalibrationCompleted(t *testing.T) {
 	if !capturedPayload.SyncSucceeded {
 		t.Errorf("expected SyncSucceeded=true")
 	}
+	mu.Unlock()
 }
 
 func TestPublishTradeSlippage(t *testing.T) {
@@ -931,10 +936,13 @@ func TestPublishTradeSlippage(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
+	var mu sync.Mutex
 	var capturedPayload TradeSlippageEventPayload
 	bus.Subscribe(EventTradeSlippage, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
+		mu.Lock()
 		capturedPayload = event.Payload.(TradeSlippageEventPayload)
+		mu.Unlock()
 		return nil
 	})
 
@@ -956,12 +964,14 @@ func TestPublishTradeSlippage(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 trade slippage event, got %d", received.Load())
 	}
+	mu.Lock()
 	if capturedPayload.OrderID != "ord-001" {
 		t.Errorf("expected OrderID=ord-001, got %s", capturedPayload.OrderID)
 	}
 	if capturedPayload.SlippageBPS != 5.0 {
 		t.Errorf("expected SlippageBPS=5.0, got %f", capturedPayload.SlippageBPS)
 	}
+	mu.Unlock()
 }
 
 func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
@@ -970,10 +980,13 @@ func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
 
 	var captured BusEvent
 	var received atomic.Int32
+	var mu sync.Mutex
 
 	bus.Subscribe(EventTradeSlippage, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
+		mu.Lock()
 		captured = event
+		mu.Unlock()
 		return nil
 	})
 
@@ -987,14 +1000,17 @@ func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 event, got %d", received.Load())
 	}
+	mu.Lock()
 	if captured.SchemaVersion != 1 {
 		t.Errorf("expected SchemaVersion=1, got %d", captured.SchemaVersion)
 	}
 
 	data, err := json.Marshal(captured)
 	if err != nil {
+		mu.Unlock()
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
+	mu.Unlock()
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
