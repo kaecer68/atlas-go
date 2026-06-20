@@ -1616,8 +1616,9 @@ func run(args []string, deps appDeps) error {
 			// the explicit signal that the on-demand attribution path is not
 			// configured. Init failure is Warn, not Fatal: rule_based
 			// attribution remains authoritative.
+			apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY")
 			var kimi *llm_annotator.KimiClient
-			if apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY"); apiKey != "" {
+			if apiKey != "" {
 				var err error
 				kimi, err = llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey, Metrics: collector})
 				if err != nil {
@@ -1643,13 +1644,8 @@ func run(args []string, deps appDeps) error {
 			// the raw *KimiClient required by dashboard_api.go:880 type assertion.
 			var llmRouter llm.Router
 			if kimi != nil {
-				kimiConfig := llm_annotator.Config{
-					BaseURL: "https://api.kimi.com/coding/v1",
-					Model:   "moonshot-v1-8k",
-					APIKey:  config.GetSecret("LLM_ANNOTATOR_API_KEY"),
-				}
 				llmRouter = llm.NewDefaultRouter(
-					llmAdapters.NewAnnotatorAdapter(kimi, kimiConfig.Model),
+					llmAdapters.NewAnnotatorAdapter(kimi, "moonshot-v1-8k"),
 				)
 			} else {
 				// No API key — Router still exists but all Supports() return false.
