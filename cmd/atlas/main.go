@@ -1615,12 +1615,21 @@ func run(args []string, deps appDeps) error {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
 			}
 
-			// LLM annotator (Kimi) is opt-in via env var. Without
-			// LLM_ANNOTATOR_API_KEY the /annotate endpoint returns 503; this is
+			// LLM annotator is opt-in via env var. Without
+			// LLM_MINIMAX_API_KEY (or LLM_ANNOTATOR_API_KEY for backward
+			// compatibility) the /annotate endpoint returns 503; this is
 			// the explicit signal that the on-demand attribution path is not
 			// configured. Init failure is Warn, not Fatal: rule_based
 			// attribution remains authoritative.
-			apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY")
+			//
+			// Phase 4 fix: LLM_ANNOTATOR_API_KEY has always held a MiniMax
+			// coding plan key (sk-cp- prefix). The env var name was misleading.
+			// We now read LLM_MINIMAX_API_KEY first, falling back to
+			// LLM_ANNOTATOR_API_KEY for backward compatibility.
+			apiKey := config.GetSecret("LLM_MINIMAX_API_KEY")
+			if apiKey == "" {
+				apiKey = config.GetSecret("LLM_ANNOTATOR_API_KEY")
+			}
 			var kimi *llm_annotator.KimiClient
 			if apiKey != "" {
 				var err error
@@ -1643,50 +1652,50 @@ func run(args []string, deps appDeps) error {
 				logging.Info("main", "kimi_annotator_disabled", "hint", "set LLM_ANNOTATOR_API_KEY to enable on-demand attribution")
 			}
 
-		// Phase 1: LLM Router (experimental, X-level). Created empty; Phase 2
-		// adapters are registered below. The annotator continues to work through
-		// dashboard.SetStrategiesAnnotator(kimi) — the raw *KimiClient is still
-		// required by dashboard_api.go:880 for the /annotate endpoint.
-		llmRouter := llm.NewDefaultRouter()
-		llmHealthHandler := llmHealth.NewHandler(llmRouter)
-		llmHealthHandler.RegisterRoutes(mux)
+			// Phase 1: LLM Router (experimental, X-level). Created empty; Phase 2
+			// adapters are registered below. The annotator continues to work through
+			// dashboard.SetStrategiesAnnotator(kimi) — the raw *KimiClient is still
+			// required by dashboard_api.go:880 for the /annotate endpoint.
+			llmRouter := llm.NewDefaultRouter()
+			llmHealthHandler := llmHealth.NewHandler(llmRouter)
+			llmHealthHandler.RegisterRoutes(mux)
 
 			// =============================================================================
 			// Phase 2: LLM Capability Wiring (opt-in via LLM_*_ENABLED flags)
 			// =============================================================================
 
-		// Provider clients (created only if API keys are set)
-		var (
-			deepseekClient *clients.DeepSeekClient
-			minimaxClient  *clients.MiniMaxClient
-		)
+			// Provider clients (created only if API keys are set)
+			var (
+				deepseekClient *clients.DeepSeekClient
+				minimaxClient  *clients.MiniMaxClient
+			)
 
-		if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
-			deepseekClient = clients.NewDeepSeekClient(apiKey, nil)
-		}
-		if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
-			minimaxClient = clients.NewMiniMaxClient(apiKey, nil)
-		}
+			if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
+				deepseekClient = clients.NewDeepSeekClient(apiKey, nil)
+			}
+			if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
+				minimaxClient = clients.NewMiniMaxClient(apiKey, nil)
+			}
 
-		// ProviderImpl adapters (created only if client exists)
-		var (
-			deepseekAdapter *llmAdapters.DeepSeekAdapter
-			minimaxAdapter  *llmAdapters.MiniMaxAdapter
-		)
-		if deepseekClient != nil {
-			deepseekAdapter = llmAdapters.NewDeepSeekAdapter(deepseekClient, "deepseek-v4-pro")
-		}
-		if minimaxClient != nil {
-			minimaxAdapter = llmAdapters.NewMiniMaxAdapter(minimaxClient)
-		}
+			// ProviderImpl adapters (created only if client exists)
+			var (
+				deepseekAdapter *llmAdapters.DeepSeekAdapter
+				minimaxAdapter  *llmAdapters.MiniMaxAdapter
+			)
+			if deepseekClient != nil {
+				deepseekAdapter = llmAdapters.NewDeepSeekAdapter(deepseekClient, "deepseek-v4-pro")
+			}
+			if minimaxClient != nil {
+				minimaxAdapter = llmAdapters.NewMiniMaxAdapter(minimaxClient)
+			}
 
-		// Register adapters with Router (llmRouter is always non-nil after Phase 1)
-		if deepseekAdapter != nil {
-			_ = llmRouter.Register(deepseekAdapter)
-		}
-		if minimaxAdapter != nil {
-			_ = llmRouter.Register(minimaxAdapter)
-		}
+			// Register adapters with Router (llmRouter is always non-nil after Phase 1)
+			if deepseekAdapter != nil {
+				_ = llmRouter.Register(deepseekAdapter)
+			}
+			if minimaxAdapter != nil {
+				_ = llmRouter.Register(minimaxAdapter)
+			}
 
 			// Wire 4 module hooks (only if flag enabled AND Router exists)
 			if cfg.LLMRationaleTranslationEnabled {
