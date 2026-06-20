@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 )
 
@@ -47,7 +49,14 @@ func (h *RationaleGenerationHandler) Handle(
 		dc = llm.DataClassNonRegulated
 	}
 
-	payload, _ := json.Marshal(input)
+	userPrompt := fmt.Sprintf(rationaleGenerationUserPromptFmt, input.EnglishText)
+	messages := []clients.Message{
+		{Role: "system", Content: rationaleGenerationSystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"messages": messages,
+	})
 	req := llm.Request{
 		Capability: llm.CapabilityRationaleGeneration,
 		Payload:    payload,

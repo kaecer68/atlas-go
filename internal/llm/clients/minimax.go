@@ -108,7 +108,7 @@ func (c *MiniMaxClient) Chat(ctx context.Context, model string, messages []Messa
 	if err != nil {
 		return nil, fmt.Errorf("minimax: %w", err)
 	}
-	_ = resp
+	defer func() { _ = resp.Body.Close() }()
 
 	var parsed miniMaxResponseBody
 	if err := json.Unmarshal(body, &parsed); err != nil {

@@ -11,7 +11,7 @@ import (
 // Default DeepSeek model constants.
 const (
 	DefaultModelV4Pro   = "deepseek-v4-pro"
-	DefaultModelV4Flash  = "deepseek-v4-flash"
+	DefaultModelV4Flash = "deepseek-v4-flash"
 )
 
 // deepSeekAPIBase is the production API base URL for DeepSeek.
@@ -94,7 +94,7 @@ func (c *DeepSeekClient) Chat(ctx context.Context, model string, messages []Mess
 	if err != nil {
 		return nil, fmt.Errorf("deepseek: %w", err)
 	}
-	_ = resp // resp.Body already consumed by DoRequest; use parsed body
+	defer func() { _ = resp.Body.Close() }()
 
 	var parsed deepSeekResponseBody
 	if err := json.Unmarshal(body, &parsed); err != nil {

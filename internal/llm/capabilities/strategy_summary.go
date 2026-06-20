@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 )
 
@@ -45,7 +47,15 @@ func (h *StrategySummaryHandler) Handle(
 		dc = llm.DataClassRegulated
 	}
 
-	payload, _ := json.Marshal(input)
+	frameJSON, _ := json.Marshal(input.Frame)
+	userPrompt := fmt.Sprintf(strategySummaryUserPromptFmt, string(frameJSON))
+	messages := []clients.Message{
+		{Role: "system", Content: strategySummarySystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"messages": messages,
+	})
 	req := llm.Request{
 		Capability: llm.CapabilityStrategySummary,
 		Payload:    payload,

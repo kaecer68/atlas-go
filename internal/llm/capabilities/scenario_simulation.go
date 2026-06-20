@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 )
 
@@ -48,7 +50,15 @@ func (h *ScenarioSimulationHandler) Handle(
 		dc = llm.DataClassRegulated
 	}
 
-	payload, _ := json.Marshal(input)
+	resultJSON, _ := json.Marshal(input.Result)
+	userPrompt := fmt.Sprintf(scenarioSimulationUserPromptFmt, string(resultJSON), input.Regime)
+	messages := []clients.Message{
+		{Role: "system", Content: scenarioSimulationSystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"messages": messages,
+	})
 	req := llm.Request{
 		Capability: llm.CapabilityScenarioSimulation,
 		Payload:    payload,

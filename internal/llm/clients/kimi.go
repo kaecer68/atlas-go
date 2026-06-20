@@ -110,7 +110,7 @@ func (c *KimiClient) Chat(ctx context.Context, messages []Message, opts *ChatOpt
 	if err != nil {
 		return nil, fmt.Errorf("kimi: %w", err)
 	}
-	_ = resp
+	defer func() { _ = resp.Body.Close() }()
 
 	var parsed kimiResponseBody
 	if err := json.Unmarshal(body, &parsed); err != nil {

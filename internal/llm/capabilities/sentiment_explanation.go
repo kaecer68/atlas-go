@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 )
 
@@ -46,7 +48,15 @@ func (h *SentimentExplanationHandler) Handle(
 		dc = llm.DataClassNonRegulated
 	}
 
-	payload, _ := json.Marshal(input)
+	eventJSON, _ := json.Marshal(input.Event)
+	userPrompt := fmt.Sprintf(sentimentExplanationUserPromptFmt, string(eventJSON))
+	messages := []clients.Message{
+		{Role: "system", Content: sentimentExplanationSystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"messages": messages,
+	})
 	req := llm.Request{
 		Capability: llm.CapabilitySentimentExplanation,
 		Payload:    payload,

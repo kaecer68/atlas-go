@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 )
 
@@ -46,7 +48,15 @@ func (h *RiskSurfaceExtractionHandler) Handle(
 		dc = llm.DataClassRegulated
 	}
 
-	payload, _ := json.Marshal(input)
+	gapJSON, _ := json.Marshal(input.Gap)
+	userPrompt := fmt.Sprintf(riskSurfaceExtractionUserPromptFmt, string(gapJSON))
+	messages := []clients.Message{
+		{Role: "system", Content: riskSurfaceExtractionSystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"messages": messages,
+	})
 	req := llm.Request{
 		Capability: llm.CapabilityRiskSurfaceExtraction,
 		Payload:    payload,

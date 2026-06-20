@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 )
 
@@ -48,7 +50,14 @@ func (h *PromptLintHandler) Handle(
 		dc = llm.DataClassNonRegulated
 	}
 
-	payload, _ := json.Marshal(input)
+	userPrompt := fmt.Sprintf(promptLintUserPromptFmt, input.PromptPath, input.PromptContent)
+	messages := []clients.Message{
+		{Role: "system", Content: promptLintSystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"messages": messages,
+	})
 	req := llm.Request{
 		Capability: llm.CapabilityPromptLint,
 		Payload:    payload,

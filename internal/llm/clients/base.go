@@ -101,6 +101,9 @@ func (b *BaseClient) DoRequest(ctx context.Context, method, url string, headers 
 			}
 
 			resp, respBody, status, retryable, err := b.doHTTP(ctx, method, url, headers, body)
+			if resp != nil {
+				defer func() { _ = resp.Body.Close() }()
+			}
 			if err == nil {
 				resultResp = resp
 				resultBody = respBody
@@ -163,7 +166,7 @@ func (b *BaseClient) doHTTP(ctx context.Context, method, url string, headers map
 	if err != nil {
 		return nil, nil, 0, true, fmt.Errorf("http: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {

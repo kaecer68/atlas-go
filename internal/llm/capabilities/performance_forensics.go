@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 )
 
@@ -47,7 +49,15 @@ func (h *PerformanceForensicsHandler) Handle(
 		dc = llm.DataClassRegulated
 	}
 
-	payload, _ := json.Marshal(input)
+	snapshotJSON, _ := json.Marshal(input.Snapshot)
+	userPrompt := fmt.Sprintf(performanceForensicsUserPromptFmt, string(snapshotJSON))
+	messages := []clients.Message{
+		{Role: "system", Content: performanceForensicsSystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"messages": messages,
+	})
 	req := llm.Request{
 		Capability: llm.CapabilityPerformanceForensics,
 		Payload:    payload,
