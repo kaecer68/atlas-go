@@ -50,7 +50,7 @@ internal/*/data/
 !internal/marketdata/data/
 !internal/config/data/
 cmd/experimental/*/data/
-.gitnexus/lbug
+.gitnexus/
 /.codegraph/
 /.worktrees/
 
