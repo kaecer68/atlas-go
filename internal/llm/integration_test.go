@@ -297,33 +297,30 @@ func TestMiniMaxAdapter_EndToEnd(t *testing.T) {
 }
 
 // ============================================================================
-// Test 3: Router — full fallback chain with 2 adapters
-// ============================================================================
-
 // TestRouter_FullChain_AllAdapters verifies the complete routing chain:
 // Primary fails → Backup1 succeeds → Backup2 not reached.
 // Uses CapabilityFailureAttribution, whose default routing chain is
-// DeepSeek → MiniMax → OpenCodeGo. We register DeepSeek (fails) and
-// MiniMax (succeeds); OpenCodeGo is not registered and would be skipped.
+// MiniMax → DeepSeek → OpenCodeGo. We register MiniMax (fails) and
+// DeepSeek (succeeds); OpenCodeGo is not registered and would be skipped.
 // Asserts correct provider, output, and AttemptedProviders order.
 func TestRouter_FullChain_AllAdapters(t *testing.T) {
-	// Primary (DeepSeek) — configured to fail.
-	primaryErr := errors.New("deepseek upstream timeout")
+	// Primary (MiniMax) — configured to fail.
+	primaryErr := errors.New("minimax upstream timeout")
 	primary := &integrationMockProvider{
-		name:    llm.ProviderDeepSeek,
+		name:    llm.ProviderMiniMax,
 		callErr: primaryErr,
 		healthResp: llm.HealthStatus{
-			Provider: llm.ProviderDeepSeek,
+			Provider: llm.ProviderMiniMax,
 			Healthy:  true,
 		},
 	}
 
-	// Backup1 (MiniMax) — configured to succeed.
+	// Backup1 (DeepSeek) — configured to succeed.
 	backup1 := &integrationMockProvider{
-		name: llm.ProviderMiniMax,
+		name: llm.ProviderDeepSeek,
 		callResp: llm.Response{
-			Output:   "fallback to MiniMax succeeded",
-			Provider: llm.ProviderMiniMax,
+			Output:   "fallback to DeepSeek succeeded",
+			Provider: llm.ProviderDeepSeek,
 			Usage: llm.Usage{
 				InputTokens:  10,
 				OutputTokens: 5,
@@ -331,13 +328,13 @@ func TestRouter_FullChain_AllAdapters(t *testing.T) {
 			},
 		},
 		healthResp: llm.HealthStatus{
-			Provider: llm.ProviderMiniMax,
+			Provider: llm.ProviderDeepSeek,
 			Healthy:  true,
 		},
 	}
 
 	// Use NewDefaultRouter with registered providers.
-	// CapabilityFailureAttribution default chain: DeepSeek → MiniMax → OpenCodeGo.
+	// CapabilityFailureAttribution default chain: MiniMax → DeepSeek → OpenCodeGo.
 	router := llm.NewDefaultRouter(primary, backup1)
 
 	// Execute.
@@ -348,26 +345,26 @@ func TestRouter_FullChain_AllAdapters(t *testing.T) {
 	resp, err := router.Call(context.Background(), req)
 	assertNoError(t, err, "Router.Call")
 
-	// Assert: response is from MiniMax (Backup1).
-	if resp.Output != "fallback to MiniMax succeeded" {
-		t.Errorf("Output = %q, want %q", resp.Output, "fallback to MiniMax succeeded")
+	// Assert: response is from DeepSeek (Backup1).
+	if resp.Output != "fallback to DeepSeek succeeded" {
+		t.Errorf("Output = %q, want %q", resp.Output, "fallback to DeepSeek succeeded")
 	}
-	if resp.Provider != llm.ProviderMiniMax {
-		t.Errorf("Provider = %q, want %q", resp.Provider, llm.ProviderMiniMax)
+	if resp.Provider != llm.ProviderDeepSeek {
+		t.Errorf("Provider = %q, want %q", resp.Provider, llm.ProviderDeepSeek)
 	}
 
-	// Assert: AttemptedProviders contains [DeepSeek, MiniMax].
+	// Assert: AttemptedProviders contains [MiniMax, DeepSeek].
 	if len(resp.AttemptedProviders) != 2 {
 		t.Fatalf("len(AttemptedProviders) = %d, want 2: %v",
 			len(resp.AttemptedProviders), resp.AttemptedProviders)
 	}
-	if resp.AttemptedProviders[0] != llm.ProviderDeepSeek {
+	if resp.AttemptedProviders[0] != llm.ProviderMiniMax {
 		t.Errorf("AttemptedProviders[0] = %q, want %q",
-			resp.AttemptedProviders[0], llm.ProviderDeepSeek)
+			resp.AttemptedProviders[0], llm.ProviderMiniMax)
 	}
-	if resp.AttemptedProviders[1] != llm.ProviderMiniMax {
+	if resp.AttemptedProviders[1] != llm.ProviderDeepSeek {
 		t.Errorf("AttemptedProviders[1] = %q, want %q",
-			resp.AttemptedProviders[1], llm.ProviderMiniMax)
+			resp.AttemptedProviders[1], llm.ProviderDeepSeek)
 	}
 }
 
