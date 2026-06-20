@@ -971,17 +971,21 @@ S               ✗      ✗      ✗      ✓   ← narrative, orchestrator, ri
 
 ### 6.1 路由表（每 capability 的四級鏈）
 
+**Capability column 命名約定**：本表 capability column 採用 `internal/llm/provider.go` 中 Capability 常數的字串值（即 `CapabilityFailureAttribution` 的字面值），Phase 1 開發期使用的 dotted name（如 `strategy.failure_attribution`、`narrative.rationale_translation_fallback`）僅作為 §3 capability taxonomy 的歷史參照，已不具權威性。Phase 2 整合時若 doc scope 與 code scope 不一致（如 `rationale_translation_fallback` vs `rationale_generation`），需另立 ADR 記錄決策（目前 ADR-011 處理六處落差）。
+
 | Capability | Primary | Backup1 | Backup2 | Last Resort |
 |------------|---------|---------|---------|-------------|
-| `strategy.failure_attribution` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `rule_based`（`frame.Attribution`） |
-| `narrative.rationale_translation_fallback` | DeepSeek V4-Flash | MiniMax M3 | OpenCode-Go | `passthrough`（原字回傳） |
-| `strategy.frame_summary` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `null`（端點回空字串） |
-| `dev.prompt_lint` | DeepSeek V4-Flash | Kimi K2.7 | OpenCode-Go | `pass`（CI 不擋） |
-| `orchestrator.prism_cohort_insight` | MiniMax M3 | DeepSeek V4-Pro | OpenCode-Go | `discard`（不存） |
-| `spawning.gap_description_enrichment` | MiniMax M3 | DeepSeek V4-Pro | OpenCode-Go | `passthrough`（保留低覆蓋率原描述） |
-| `narrative.event_headline` | DeepSeek V4-Flash | MiniMax M3 | OpenCode-Go | `passthrough` |
-| `risk.confidence_calibration_commentary` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `passthrough` |
-| `dev.code_review_annotation` | Kimi K2.7 | DeepSeek V4-Flash | OpenCode-Go | `empty`（無註解） |
+| `failure_attribution` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `rule_based`（`frame.Attribution`） |
+| `rationale_generation` | DeepSeek V4-Flash | MiniMax M3 | OpenCode-Go | `passthrough`（原字回傳） |
+| `strategy_summary` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `null`（端點回空字串） |
+| `prompt_lint` | DeepSeek V4-Flash | Kimi K2.7 | OpenCode-Go | `pass`（CI 不擋） |
+| `scenario_simulation` | MiniMax M3 | DeepSeek V4-Pro | OpenCode-Go | `discard`（不存） |
+| `risk_surface_extraction` | MiniMax M3 | DeepSeek V4-Pro | OpenCode-Go | `passthrough`（保留低覆蓋率原描述） |
+| `regime_explanation` | DeepSeek V4-Flash | MiniMax M3 | OpenCode-Go | `passthrough` |
+| `performance_forensics` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `passthrough` |
+| `code_review_annotation` | Kimi K2.7 | DeepSeek V4-Flash | OpenCode-Go | `empty`（無註解） |
+
+> **ADR-011**（Phase 2 capability name 對齊決策）：採用 Option B — 對齊 code → doc。Phase 1 開發期間 doc 與 code 曾使用不同的命名空間（doc 用 dotted name、code 用 snake_case enum），Phase 2 統一以 code enum 為權威來源。對齊過程中發現的 scope 差異（如 `narrative.rationale_translation_fallback` 的翻譯補丁概念 vs `rationale_generation` 的 rationale 生成概念）以本 ADR 記錄，Phase 2 adapter 實作時須重新定義兩者的輸入輸出契約。
 
 **為何每列都至少 4 級**：
 - `primary` 對應 §3.2 決策表，與任務特性最佳匹配。
