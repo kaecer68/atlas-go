@@ -112,9 +112,11 @@ type Config struct {
 // is the single source of truth for the package's defaults.
 func (c Config) WithDefaults() Config {
 	if c.BaseURL == "" {
-		c.BaseURL = "https://api.moonshot.cn/v1"
+		c.BaseURL = "https://api.kimi.com/coding/v1"
 	}
 	if c.Model == "" {
+		// Deprecated: retained for backward compatibility only.
+		// Actual usage should follow docs/llm-integration-strategy-framework.md §1a.
 		c.Model = "moonshot-v1-8k"
 	}
 	if c.Timeout == 0 {
