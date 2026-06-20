@@ -9,7 +9,7 @@ import (
 // classification for risk surface analysis.
 type RiskSurfaceExtractionInput struct {
 	Gap       spawning.KnowledgeGap `json:"gap"`
-	DataClass llm.DataClass          `json:"data_class"`
+	DataClass llm.DataClass         `json:"data_class"`
 }
 
 // RiskSurfaceExtractionResponse is the output of the risk surface

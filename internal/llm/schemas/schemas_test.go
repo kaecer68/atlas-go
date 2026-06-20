@@ -300,12 +300,12 @@ func TestRiskSurfaceExtractionRoundTrip(t *testing.T) {
 
 func TestRegimeExplanationRoundTrip(t *testing.T) {
 	event := narrative.NarrativeEvent{
-		ID:         "evt-001",
-		Theme:      "US_rates_up",
-		Region:     "US",
-		Sentiment:  -0.5,
-		Confidence: 0.85,
-		HitRate:    0.70,
+		ID:          "evt-001",
+		Theme:       "US_rates_up",
+		Region:      "US",
+		Sentiment:   -0.5,
+		Confidence:  0.85,
+		HitRate:     0.70,
 		CapitalFlow: "flight_to_USD",
 		TimeWindow:  "immediate",
 		Timestamp:   time.Date(2024, 5, 15, 0, 0, 0, 0, time.UTC),
@@ -465,12 +465,12 @@ func TestCodeReviewAnnotationRoundTrip(t *testing.T) {
 
 func TestSentimentExplanationRoundTrip(t *testing.T) {
 	event := narrative.NarrativeEvent{
-		ID:         "evt-002",
-		Theme:      "earnings_surprise",
-		Region:     "Global",
-		Sentiment:  0.75,
-		Confidence: 0.90,
-		HitRate:    0.80,
+		ID:          "evt-002",
+		Theme:       "earnings_surprise",
+		Region:      "Global",
+		Sentiment:   0.75,
+		Confidence:  0.90,
+		HitRate:     0.80,
 		CapitalFlow: "risk_on",
 		TimeWindow:  "1_week",
 		Timestamp:   time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC),

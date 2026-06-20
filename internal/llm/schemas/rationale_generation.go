@@ -1,11 +1,13 @@
 package schemas
 
-import "github.com/kaecer68/atlas-go/internal/llm"
+import (
+	"github.com/kaecer68/atlas-go/internal/llm"
+)
 
 // RationaleGenerationInput carries the text to be translated and its
 // data classification for routing decisions.
 type RationaleGenerationInput struct {
-	EnglishText string       `json:"english_text"`
+	EnglishText string        `json:"english_text"`
 	DataClass   llm.DataClass `json:"data_class"`
 }
 

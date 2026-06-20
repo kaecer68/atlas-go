@@ -1,12 +1,14 @@
 package schemas
 
-import "github.com/kaecer68/atlas-go/internal/llm"
+import (
+	"github.com/kaecer68/atlas-go/internal/llm"
+)
 
 // CodeReviewAnnotationInput carries a diff text, PR URL, and data
 // classification for the code review annotation capability.
 type CodeReviewAnnotationInput struct {
-	DiffText  string       `json:"diff_text"`
-	PRURL     string       `json:"pr_url"`
+	DiffText  string        `json:"diff_text"`
+	PRURL     string        `json:"pr_url"`
 	DataClass llm.DataClass `json:"data_class"`
 }
 
