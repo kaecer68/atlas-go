@@ -44,6 +44,18 @@
 - **F7 — Start() 錯誤路徑必須清理 m.done**：關閉 m.done + 重置 ctx/cancel/done，避免 Stop() 永久阻塞（no-supervise edge case）。
 - **F8 — doc.go 必須與 code 同步**：supervisor decouple fix 後 Start() 是非同步的；目前 doc.go 與 code 對齊。
 
+### Stop() 取消路徑（補充 #500）
+
+- **取消路徑：`cancel()` 會透過 `exec.CommandContext` 立即 SIGKILL cmd**。後續的 SIGINT 與 5s `gracefulShutdownTimeout` 為雙重安全網，正常情況下不會觸發 — 程序已在前一步被終止。
+- **優雅關閉不是當前實作語意**：若需要 SIGINT-based 優雅關閉，需改用 `exec.Command`（非 `exec.CommandContext`），並把 cancel 路徑改為 SIGINT → wait → SIGKILL 三段式。
+- **測試覆蓋**：`TestProcessManager_Stop_SIGINTGracefulThenSIGKILL`（PR #499）驗證實際 cancel-based kill 路徑，並在 docstring 說明此設計權衡。
+
+### Backoff 觸發條件（補充 #500）
+
+- **`restartBackoffDelay` (10s) 僅在 `cmd.Start()` 失敗時生效**（`supervise()` 重啟路徑中 `newCmd.Start()` 回傳 error）。
+- **連環 crash 場景**：程式崩潰後若 health check 持續失敗，backoff 維持 3s（`restartInitialDelay`），並被 30s `waitForHealthy` timeout 阻塞主導。整體重啟頻率約 33s 一次（30s waitForHealthy + 3s backoff）。
+- **測試覆蓋**：`TestProcessManager_BackoffStateMachine_3sThen10s`（PR #499）簡化為只測 1st→2nd 的 3s gap，並在 docstring 記錄 2nd→3rd 為何不可觀察（30s waitForHealthy 阻塞）。
+
 ### Start() pre-flight 不變式（F9）
 
 - **F9 — Start() 啟動前 port 探測**：在 `scriptPath` 與 `IsHealthy` 檢查之間，必須以 3-state switch（portStateFree / Healthy / Foreign）取代單一 `IsHealthy()` 早退。理由：port 被非 fubon-proxy process 佔用時，`IsHealthy()` 會回 false，繼續 spawn 會撞 EADDRINUSE → supervise() 進 3s backoff-loop；同時 `cmd/atlas` 視 Start() 為 non-fatal warning，導致 fubon adapter 跳過註冊、前端缺資料。Foreign 占用必須回傳 actionable error（含 PID 與 `kill` 指令），由呼叫端決定是否升級為 fatal。Probe 用 `net.Listen` 而非 `net.Dial` 避免 side effect。**probe 僅在 L125 進行一次，不在 supervise() 重啟路徑中重複**。

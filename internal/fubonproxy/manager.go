@@ -299,6 +299,10 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 // 關鍵不變式：無論 m.running 為何，都會先設定 m.stopping 並取消 context。
 // 這確保即使在 supervise() 的重啟路徑中被呼叫，也能中斷其重啟邏輯，
 // 避免孤兒行程（orphan process）持續在背景執行（F1: Stop/restart race）。
+//
+// 取消路徑：cancel() 會透過 exec.CommandContext 立即 SIGKILL cmd。
+// 後續的 SIGINT 與 gracefulShutdownTimeout 是雙重安全網，
+// 正常情況下不會觸發 — 程序已在前一步被終止。
 func (m *ProcessManager) Stop() {
 	m.mu.Lock()
 	if m.stopping {
