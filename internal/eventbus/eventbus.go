@@ -75,8 +75,8 @@ const (
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
 
 	// 风险闸门事件
-	EventRiskGateRejected   EventType = "monitor.risk_gate.rejected"
-	EventRiskGateOverridden EventType = "monitor.risk_gate.overridden"
+EventRiskGateRejected  EventType = "monitor.risk_gate.rejected"
+	EventRiskGateAllowed   EventType = "monitor.risk_gate.allowed"
 
 	// 产业日历事件
 	EventIndustryCalendar EventType = "industry.calendar.event"
@@ -362,7 +362,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
 	EventIndustryCalendar:           {"產業日曆事件：當前台股市場日曆事件（除權息、MSCI 調整、財報季等）", "info"},
 	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
-	EventRiskGateOverridden:         {"風控閘門決策被手動覆寫，部位操作已變更", "warning"},
+EventRiskGateAllowed:            {"風控閘門允許交易，部位操作已通過", "info"},
 	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
 	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
 	EventTradeSlippage:              {"訂單成交滑價計算：期望價與實際成交價之差（BPS），用於監控執行品質", "info"},
@@ -781,9 +781,9 @@ func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
 }
 
 // PublishRiskGateEvent publishes a risk gate decision to the event bus.
-// Verdict BLOCK or HALT → EventRiskGateRejected; otherwise → EventRiskGateOverridden.
+// Verdict BLOCK or HALT → EventRiskGateRejected; otherwise → EventRiskGateAllowed.
 func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
-	eventType := EventRiskGateOverridden
+	eventType := EventRiskGateAllowed
 	if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
 		eventType = EventRiskGateRejected
 	}

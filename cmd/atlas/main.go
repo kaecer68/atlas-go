@@ -428,6 +428,14 @@ func run(args []string, deps appDeps) error {
 			apievents.BufferHealthAlertEvent(event)
 			return nil
 		})
+		dashEventBus.Subscribe(eventbus.EventRiskGateRejected, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferRiskGateEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventRiskGateAllowed, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferRiskGateEvent(event)
+			return nil
+		})
 		risk.NewAuditSubscriber(dashEventBus)
 		log.Printf("[Risk] audit subscriber registered on shared event bus")
 		// Initial macro ingestion on startup to populate snapshot and publish events.
@@ -1620,8 +1628,8 @@ func run(args []string, deps appDeps) error {
 			}
 			dashboard.SetRiskGate(riskGate)
 
-			// Wave 8.0: Wire RiskGate decisions to EventBus for SSE streaming.
-			// BLOCK / HALT verdicts → EventRiskGateRejected; all others → EventRiskGateOverridden.
+		// Wave 8.0: Wire RiskGate decisions to EventBus for SSE streaming.
+		// BLOCK / HALT verdicts → EventRiskGateRejected; all others → EventRiskGateAllowed.
 			// The SSE handler buffers the last 50 risk-gate events and replays them on client connect.
 			riskGate.Subscribe(func(rd risk.RiskDecision) {
 				dashEventBus.PublishRiskGateEvent(eventbus.RiskGateEventPayload{

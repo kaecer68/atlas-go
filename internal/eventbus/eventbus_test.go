@@ -678,7 +678,7 @@ func TestPublishRiskGateEvent(t *testing.T) {
 		}
 		return nil
 	})
-	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+	bus.Subscribe(EventRiskGateAllowed, func(ctx context.Context, event BusEvent) error {
 		overriddenCount.Add(1)
 		return nil
 	})
