@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -46,6 +47,7 @@ func (fl *FileLocker) Lock() func() {
 
 		fl.lockCount = 0
 		_ = fl.flock.Unlock()
+		_ = os.Remove(fl.path)
 		fl.mu.Unlock()
 	}
 }
@@ -85,6 +87,7 @@ func (fl *FileLocker) TryLock(timeout time.Duration) (func(), error) {
 
 		fl.lockCount = 0
 		_ = fl.flock.Unlock()
+		_ = os.Remove(fl.path)
 		fl.mu.Unlock()
 	}, nil
 }

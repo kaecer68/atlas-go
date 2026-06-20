@@ -184,4 +184,5 @@ web/dist/
 .gstack/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+configs/*.lock
 cmd/cleanup-channel-health/cleanup-channel-health
