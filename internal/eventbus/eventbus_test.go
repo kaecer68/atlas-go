@@ -709,3 +709,73 @@ func TestPublishRiskGateEvent(t *testing.T) {
 		t.Fatalf("expected 1 risk gate overridden event, got %d", overriddenCount.Load())
 	}
 }
+
+func TestPublishRiskGateEvent_HALTRouting(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var rejectedCount, overriddenCount atomic.Int32
+	bus.Subscribe(EventRiskGateRejected, func(ctx context.Context, event BusEvent) error {
+		rejectedCount.Add(1)
+		return nil
+	})
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+		overriddenCount.Add(1)
+		return nil
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "in_trade",
+		Verdict:   "HALT",
+		Reason:    "margin call",
+		Symbol:    "2330",
+		Mode:      "DEFENSIVE",
+		Timestamp: time.Now(),
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "post_trade",
+		Verdict:   "ALERT_ONLY",
+		Reason:    "concentration warning",
+		Symbol:    "2330",
+		Mode:      "CAUTIOUS",
+		Timestamp: time.Now(),
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if rejectedCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate rejected event (HALT), got %d", rejectedCount.Load())
+	}
+	if overriddenCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate overridden event (ALERT_ONLY), got %d", overriddenCount.Load())
+	}
+}
+
+func TestPublishRiskGateEvent_ReduceRouting(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var overriddenCount atomic.Int32
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+		overriddenCount.Add(1)
+		payload := event.Payload.(RiskGateEventPayload)
+		if payload.Verdict != "REDUCE" {
+			t.Errorf("expected REDUCE verdict for overridden event, got %s", payload.Verdict)
+		}
+		return nil
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "REDUCE",
+		Reason:    "partial reduction after override",
+		Symbol:    "2454",
+		Mode:      "CAUTIOUS",
+		Timestamp: time.Now(),
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if overriddenCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate overridden event, got %d", overriddenCount.Load())
+	}
+}
