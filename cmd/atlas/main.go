@@ -36,12 +36,15 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/llm"
+	llmAdapters "github.com/kaecer68/atlas-go/internal/llm/adapters"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
+	llmHealth "github.com/kaecer68/atlas-go/internal/monitoring/api/llm"
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
@@ -1609,8 +1612,11 @@ func run(args []string, deps appDeps) error {
 			// the explicit signal that the on-demand attribution path is not
 			// configured. Init failure is Warn, not Fatal: rule_based
 			// attribution remains authoritative.
+			var kimi *llm_annotator.KimiClient
 			if apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY"); apiKey != "" {
-				if kimi, err := llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey, Metrics: collector}); err != nil {
+				var err error
+				kimi, err = llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey, Metrics: collector})
+				if err != nil {
 					logging.Warn("main", "kimi_init_failed", "err", err.Error())
 				} else {
 					if store, storeErr := llm_annotator.NewJSONLStore(
@@ -1627,6 +1633,26 @@ func run(args []string, deps appDeps) error {
 			} else {
 				logging.Info("main", "kimi_annotator_disabled", "hint", "set LLM_ANNOTATOR_API_KEY to enable on-demand attribution")
 			}
+
+			// Phase 1: LLM Router (experimental, X-level). Wraps existing KimiClient via adapter.
+			// Does NOT replace dashboard.SetStrategiesAnnotator(kimi) above — that still receives
+			// the raw *KimiClient required by dashboard_api.go:880 type assertion.
+			var llmRouter llm.Router
+			if kimi != nil {
+				kimiConfig := llm_annotator.Config{
+					BaseURL: "https://api.kimi.com/coding/v1",
+					Model:   "moonshot-v1-8k",
+					APIKey:  config.GetSecret("LLM_ANNOTATOR_API_KEY"),
+				}
+				llmRouter = llm.NewDefaultRouter(
+					llmAdapters.NewAnnotatorAdapter(kimi, kimiConfig.Model),
+				)
+			} else {
+				// No API key — Router still exists but all Supports() return false.
+				llmRouter = llm.NewDefaultRouter()
+			}
+			llmHealthHandler := llmHealth.NewHandler(llmRouter)
+			llmHealthHandler.RegisterRoutes(mux)
 
 			if dashEventBus != nil {
 				dashEventBus.Subscribe(eventbus.EventSimulationComplete, func(ctx context.Context, ev eventbus.BusEvent) error {
