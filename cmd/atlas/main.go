@@ -1643,68 +1643,50 @@ func run(args []string, deps appDeps) error {
 				logging.Info("main", "kimi_annotator_disabled", "hint", "set LLM_ANNOTATOR_API_KEY to enable on-demand attribution")
 			}
 
-			// Phase 1: LLM Router (experimental, X-level). Wraps existing KimiClient via adapter.
-			// Does NOT replace dashboard.SetStrategiesAnnotator(kimi) above — that still receives
-			// the raw *KimiClient required by dashboard_api.go:880 type assertion.
-			var llmRouter llm.Router
-			if kimi != nil {
-				llmRouter = llm.NewDefaultRouter(
-					llmAdapters.NewAnnotatorAdapter(kimi, "moonshot-v1-8k"),
-				)
-			} else {
-				// No API key — Router still exists but all Supports() return false.
-				llmRouter = llm.NewDefaultRouter()
-			}
-			llmHealthHandler := llmHealth.NewHandler(llmRouter)
-			llmHealthHandler.RegisterRoutes(mux)
+		// Phase 1: LLM Router (experimental, X-level). Created empty; Phase 2
+		// adapters are registered below. The annotator continues to work through
+		// dashboard.SetStrategiesAnnotator(kimi) — the raw *KimiClient is still
+		// required by dashboard_api.go:880 for the /annotate endpoint.
+		llmRouter := llm.NewDefaultRouter()
+		llmHealthHandler := llmHealth.NewHandler(llmRouter)
+		llmHealthHandler.RegisterRoutes(mux)
 
 			// =============================================================================
 			// Phase 2: LLM Capability Wiring (opt-in via LLM_*_ENABLED flags)
 			// =============================================================================
 
-			// Provider clients (created only if API keys are set)
-			var (
-				deepseekClient *clients.DeepSeekClient
-				minimaxClient  *clients.MiniMaxClient
-				kimiClient     *clients.KimiClient
-			)
+		// Provider clients (created only if API keys are set)
+		var (
+			deepseekClient *clients.DeepSeekClient
+			minimaxClient  *clients.MiniMaxClient
+		)
 
-			if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
-				deepseekClient = clients.NewDeepSeekClient(apiKey, nil)
-			}
-			if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
-				minimaxClient = clients.NewMiniMaxClient(apiKey, nil)
-			}
-			if apiKey := config.GetSecret("LLM_KIMI_API_KEY"); apiKey != "" {
-				kimiClient = clients.NewKimiClient(apiKey, nil)
-			}
+		if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
+			deepseekClient = clients.NewDeepSeekClient(apiKey, nil)
+		}
+		if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
+			minimaxClient = clients.NewMiniMaxClient(apiKey, nil)
+		}
 
-			// ProviderImpl adapters (created only if client exists)
-			var (
-				deepseekAdapter *llmAdapters.DeepSeekAdapter
-				minimaxAdapter  *llmAdapters.MiniMaxAdapter
-				kimiPhase2      *llmAdapters.KimiAdapter
-			)
-			if deepseekClient != nil {
-				deepseekAdapter = llmAdapters.NewDeepSeekAdapter(deepseekClient, "deepseek-v4-pro")
-			}
-			if minimaxClient != nil {
-				minimaxAdapter = llmAdapters.NewMiniMaxAdapter(minimaxClient)
-			}
-			if kimiClient != nil {
-				kimiPhase2 = llmAdapters.NewKimiAdapter(kimiClient)
-			}
+		// ProviderImpl adapters (created only if client exists)
+		var (
+			deepseekAdapter *llmAdapters.DeepSeekAdapter
+			minimaxAdapter  *llmAdapters.MiniMaxAdapter
+		)
+		if deepseekClient != nil {
+			deepseekAdapter = llmAdapters.NewDeepSeekAdapter(deepseekClient, "deepseek-v4-pro")
+		}
+		if minimaxClient != nil {
+			minimaxAdapter = llmAdapters.NewMiniMaxAdapter(minimaxClient)
+		}
 
-			// Register adapters with Router (llmRouter is always non-nil after Phase 1)
-			if deepseekAdapter != nil {
-				_ = llmRouter.Register(deepseekAdapter)
-			}
-			if minimaxAdapter != nil {
-				_ = llmRouter.Register(minimaxAdapter)
-			}
-			if kimiPhase2 != nil {
-				_ = llmRouter.Register(kimiPhase2)
-			}
+		// Register adapters with Router (llmRouter is always non-nil after Phase 1)
+		if deepseekAdapter != nil {
+			_ = llmRouter.Register(deepseekAdapter)
+		}
+		if minimaxAdapter != nil {
+			_ = llmRouter.Register(minimaxAdapter)
+		}
 
 			// Wire 4 module hooks (only if flag enabled AND Router exists)
 			if cfg.LLMRationaleTranslationEnabled {

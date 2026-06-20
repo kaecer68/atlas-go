@@ -1,8 +1,8 @@
 // Package llm_test provides end-to-end integration tests for the full
 // handler → Router → adapter → client → HTTP → response parsing chain.
 //
-// These tests exercise the Phase 2 ProviderImpl adapters (DeepSeek, MiniMax,
-// Kimi) with real httptest servers, and the DefaultRouter routing chain with
+// These tests exercise the Phase 2 ProviderImpl adapters (DeepSeek, MiniMax)
+// with real httptest servers, and the DefaultRouter routing chain with
 // mock ProviderImpl implementations.
 //
 // Test categories:
@@ -15,10 +15,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -299,211 +297,7 @@ func TestMiniMaxAdapter_EndToEnd(t *testing.T) {
 }
 
 // ============================================================================
-// Test 3: KimiAdapter — full HTTP E2E chain + K2.7 constraints
-// ============================================================================
-
-// TestKimiAdapter_EndToEnd verifies the Kimi K2.7 integration:
-//   - Full HTTP chain with forced thinking + temperature=1.0
-//   - ADR-009 guard: Supports() rejects non-code capabilities
-//   - Client-side DataClass gate
-func TestKimiAdapter_EndToEnd(t *testing.T) {
-	t.Run("successful chat with K2.7 constraints", func(t *testing.T) {
-		var capturedBody []byte
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("read body: %v", err)
-			}
-			capturedBody = body
-
-			resp := map[string]any{
-				"model": clients.DefaultModelKimiK27,
-				"choices": []map[string]any{
-					{
-						"message": map[string]string{
-							"role":    "assistant",
-							"content": "Kimi K2.7 code review response",
-						},
-						"finish_reason": "stop",
-					},
-				},
-				"usage": map[string]int64{
-					"prompt_tokens":     50,
-					"completion_tokens": 25,
-					"total_tokens":      75,
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(resp)
-		}))
-		defer srv.Close()
-
-		baseClient := newIntegrationBaseClient()
-		client := clients.NewKimiClient("test-kimi-key", baseClient)
-		client.BaseURL = srv.URL
-
-		adapter := adapters.NewKimiAdapter(client)
-
-		payload := mustJSON(t, map[string]any{
-			"messages": []map[string]string{
-				{"role": "user", "content": "Review this code for bugs"},
-			},
-		})
-
-		req := llm.Request{
-			Capability: llm.CapabilityCodeReviewAnnotation, // ADR-009 allowed
-			Payload:    payload,
-			DataClass:  llm.DataClassNonRegulated,
-			Options:    llm.Options{MaxTokens: 200},
-		}
-
-		resp, err := adapter.Call(context.Background(), req)
-		assertNoError(t, err, "KimiAdapter.Call")
-
-		if resp.Output != "Kimi K2.7 code review response" {
-			t.Errorf("Output = %q, want %q", resp.Output, "Kimi K2.7 code review response")
-		}
-		if resp.Provider != llm.ProviderKimi {
-			t.Errorf("Provider = %q, want %q", resp.Provider, llm.ProviderKimi)
-		}
-
-		// Verify K2.7 constraints are enforced in the request body.
-		var reqBody map[string]any
-		if err := json.Unmarshal(capturedBody, &reqBody); err != nil {
-			t.Fatalf("unmarshal captured body: %v", err)
-		}
-
-		// Temperature must be exactly 1.0.
-		temp, ok := reqBody["temperature"].(float64)
-		if !ok || temp != 1.0 {
-			t.Errorf("temperature = %v (%T), want 1.0", reqBody["temperature"], reqBody["temperature"])
-		}
-
-		// Thinking must be forced on.
-		thinking, ok := reqBody["thinking"].(map[string]any)
-		if !ok {
-			t.Fatalf("thinking field missing or wrong type: %T", reqBody["thinking"])
-		}
-		thinkType, ok := thinking["type"].(string)
-		if !ok || thinkType != "enabled" {
-			t.Errorf("thinking.type = %q, want %q", thinkType, "enabled")
-		}
-
-		// Model must be kimi-for-coding.
-		model, _ := reqBody["model"].(string)
-		if model != clients.DefaultModelKimiK27 {
-			t.Errorf("model = %q, want %q", model, clients.DefaultModelKimiK27)
-		}
-	})
-
-	t.Run("ADR-009: Supports rejects CapabilityRationaleGeneration", func(t *testing.T) {
-		adapter := adapters.NewKimiAdapter(nil)
-
-		if adapter.Supports(llm.CapabilityRationaleGeneration) {
-			t.Error("Supports(CapabilityRationaleGeneration) = true, want false (ADR-009)")
-		}
-		if adapter.Supports(llm.CapabilityFailureAttribution) {
-			t.Error("Supports(CapabilityFailureAttribution) = true, want false (ADR-009)")
-		}
-		if !adapter.Supports(llm.CapabilityCodeReviewAnnotation) {
-			t.Error("Supports(CapabilityCodeReviewAnnotation) = false, want true")
-		}
-		if !adapter.Supports(llm.CapabilityPromptLint) {
-			t.Error("Supports(CapabilityPromptLint) = false, want true")
-		}
-	})
-
-	t.Run("ADR-009: Call rejects unauthorized capability", func(t *testing.T) {
-		adapter := adapters.NewKimiAdapter(nil)
-
-		payload := mustJSON(t, map[string]any{
-			"messages": []map[string]string{{"role": "user", "content": "test"}},
-		})
-
-		req := llm.Request{
-			Capability: llm.CapabilityRationaleGeneration, // NOT in ADR-009 allowed set
-			Payload:    payload,
-		}
-
-		_, err := adapter.Call(context.Background(), req)
-		if err == nil {
-			t.Fatal("expected ErrKimiRestricted for unauthorized capability, got nil")
-		}
-		if !errors.Is(err, adapters.ErrKimiRestricted) {
-			t.Errorf("error = %v, want ErrKimiRestricted", err)
-		}
-	})
-
-	t.Run("DataClassRegulated rejected by K2.7 client", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Error("server should not be called for DataClassRegulated")
-			http.Error(w, "unexpected", http.StatusInternalServerError)
-		}))
-		defer srv.Close()
-
-		baseClient := newIntegrationBaseClient()
-		client := clients.NewKimiClient("test-kimi-key", baseClient)
-		client.BaseURL = srv.URL
-
-		adapter := adapters.NewKimiAdapter(client)
-
-		payload := mustJSON(t, map[string]any{
-			"messages": []map[string]string{{"role": "user", "content": "test"}},
-		})
-
-		req := llm.Request{
-			Capability: llm.CapabilityCodeReviewAnnotation, // ADR-009 allowed
-			Payload:    payload,
-			DataClass:  llm.DataClassRegulated,
-			Options:    llm.Options{MaxTokens: 100}, // ensure buildChatOptions is non-nil
-		}
-
-		_, err := adapter.Call(context.Background(), req)
-		if err == nil {
-			t.Fatal("expected error for DataClassRegulated, got nil")
-		}
-		if !strings.Contains(err.Error(), "incompatible") {
-			t.Errorf("error = %v, want error containing 'incompatible'", err)
-		}
-	})
-
-	t.Run("DataClassSecret rejected by K2.7 client", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Error("server should not be called for DataClassSecret")
-			http.Error(w, "unexpected", http.StatusInternalServerError)
-		}))
-		defer srv.Close()
-
-		baseClient := newIntegrationBaseClient()
-		client := clients.NewKimiClient("test-kimi-key", baseClient)
-		client.BaseURL = srv.URL
-
-		adapter := adapters.NewKimiAdapter(client)
-
-		payload := mustJSON(t, map[string]any{
-			"messages": []map[string]string{{"role": "user", "content": "test"}},
-		})
-
-		req := llm.Request{
-			Capability: llm.CapabilityPromptLint, // ADR-009 allowed
-			Payload:    payload,
-			DataClass:  llm.DataClassSecret,
-			Options:    llm.Options{MaxTokens: 100},
-		}
-
-		_, err := adapter.Call(context.Background(), req)
-		if err == nil {
-			t.Fatal("expected error for DataClassSecret, got nil")
-		}
-		if !strings.Contains(err.Error(), "incompatible") {
-			t.Errorf("error = %v, want error containing 'incompatible'", err)
-		}
-	})
-}
-
-// ============================================================================
-// Test 4: Router — full fallback chain with 3 adapters
+// Test 3: Router — full fallback chain with 2 adapters
 // ============================================================================
 
 // TestRouter_FullChain_AllAdapters verifies the complete routing chain:
@@ -578,7 +372,7 @@ func TestRouter_FullChain_AllAdapters(t *testing.T) {
 }
 
 // ============================================================================
-// Test 5: Router — DataClass gate prevents MiniMax fallback
+// Test 4: Router — DataClass gate prevents MiniMax fallback
 // ============================================================================
 
 // TestRouter_DataClassGate_PreventsFallback verifies that when the routing
@@ -659,12 +453,12 @@ func TestRouter_DataClassGate_PreventsFallback(t *testing.T) {
 }
 
 // ============================================================================
-// Test 6: Router — Health endpoint aggregates all providers
+// Test 5: Router — Health endpoint aggregates all providers
 // ============================================================================
 
 // TestRouter_HealthEndpoint_AggregatesAllProviders verifies that Router.Health()
 // returns all registered providers with their respective health statuses,
-// including healthy, error-state, and circuit-breaker-open providers.
+// including healthy and error-state providers (Kimi K2.7 removed).
 func TestRouter_HealthEndpoint_AggregatesAllProviders(t *testing.T) {
 	lastSuccess := time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
 
@@ -684,28 +478,17 @@ func TestRouter_HealthEndpoint_AggregatesAllProviders(t *testing.T) {
 		healthResp: llm.HealthStatus{
 			Provider:  llm.ProviderMiniMax,
 			Healthy:   false,
-			LastError: "connection refused: api.minimax.io:443",
+			LastError: "connection refused: api.minimaxi.com:443",
 		},
 	}
 
-	// Provider with circuit breaker open.
-	kimi := &integrationMockProvider{
-		name: llm.ProviderKimi,
-		healthResp: llm.HealthStatus{
-			Provider:    llm.ProviderKimi,
-			Healthy:     false,
-			BreakerOpen: true,
-			LastError:   "circuit breaker open: 5 consecutive failures",
-		},
-	}
-
-	router := llm.NewDefaultRouter(deepseek, minimax, kimi)
+	router := llm.NewDefaultRouter(deepseek, minimax)
 
 	healthMap := router.Health()
 
-	// Assert all 3 providers are present.
-	if len(healthMap) != 3 {
-		t.Fatalf("len(Health()) = %d, want 3", len(healthMap))
+	// Assert 2 providers are present (Kimi removed).
+	if len(healthMap) != 2 {
+		t.Fatalf("len(Health()) = %d, want 2", len(healthMap))
 	}
 
 	// Assert DeepSeek is healthy.
@@ -731,19 +514,10 @@ func TestRouter_HealthEndpoint_AggregatesAllProviders(t *testing.T) {
 	if mmHealth.LastError == "" {
 		t.Error("MiniMax should have LastError set")
 	}
-
-	// Assert Kimi has breaker open.
-	kHealth, ok := healthMap[llm.ProviderKimi]
-	if !ok {
-		t.Fatal("ProviderKimi not found in Health()")
-	}
-	if !kHealth.BreakerOpen {
-		t.Error("Kimi should have BreakerOpen=true")
-	}
 }
 
 // ============================================================================
-// Test 7: RationaleGenerationHandler — full chain through Router
+// Test 6: RationaleGenerationHandler — full chain through Router
 // ============================================================================
 
 // TestRationaleGenerationHandler_ThroughRouter verifies the complete

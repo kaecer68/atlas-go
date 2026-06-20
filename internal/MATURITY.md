@@ -73,7 +73,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 13 packages
+## X · Experimental（實驗中）— 12 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -90,8 +90,8 @@
 | `alerting` | Alertmanager webhook receiver — 接收 Alertmanager firing/resolved 警報，in-memory ring buffer 保留最近 1000 筆供 SSE/UI 消費 | `AlertWebhookHandler`, `AlertmanagerPayload`, `AlertmanagerAlert` | 掛載於 `/api/v1/alerts`；待 Prometheus alertmanager targets 與 docker-compose alertmanager service 補齊後晉升 evolving |
 | `llm` | LLM 多 Provider 統一介面 — 路由器、能力調度、DataClass 閘門、備援鏈、健康端點 | `ProviderImpl`, `DefaultRouter`, `Capability`, `DataClass` | Phase 1 plumbing；無 runtime 路由呼叫（adapter 僅包裝 `llm_annotator`）；詳見 `docs/llm-integration-strategy-framework.md` |
 | `llm/schemas` | LLM 能力輸入/輸出結構合約 — 9 個 capability 的 typed I/O 結構，JSON 序列化 | `RationaleGenerationResponse`, `StrategySummaryResponse`, `PromptLintResponse`, `ScenarioSimulationResponse`, `RiskSurfaceExtractionResponse`, `RegimeExplanationResponse`, `PerformanceForensicsResponse`, `CodeReviewAnnotationResponse`, `SentimentExplanationResponse` | Phase 2 為 9 個 capability handlers 提供型別安全 contract；handler 端用 `json.Marshal/Unmarshal` 對接 Router |
-| `llm/clients` | LLM Provider HTTP 客戶端 — DeepSeek V4、MiniMax M3、Kimi K2.7 + 共享 `BaseClient`（retry / rate limit / circuit breaker） | `BaseClient`, `DeepSeekClient`, `MiniMaxClient`, `KimiClient`, `Message`, `ChatOptions`, `ChatResponse` | Phase 2 新增；Kimi K2.7 client 強制 `thinking: enabled` + `temperature: 1.0` + DataClass guard；MiniMax 附中國國家安全法資料主權警告 |
-| `llm/capabilities` | LLM 能力處理器 — 10 個 capability handler（failure_attribution + 9 個新），每個封裝 prompt template + schema-typed I/O + Router 呼叫 | `FailureAttributionHandler`, `RationaleGenerationHandler`, `StrategySummaryHandler`, `PromptLintHandler`, `ScenarioSimulationHandler`, `RiskSurfaceExtractionHandler`, `RegimeExplanationHandler`, `PerformanceForensicsHandler`, `CodeReviewAnnotationHandler`, `SentimentExplanationHandler` | Phase 2 從 1 個擴充至 10 個；Kimi K2.7 guard 限制 `code_review_annotation` + `prompt_lint` 兩個 capability（ADR-009） |
+| `llm/clients` | LLM Provider HTTP 客戶端 — DeepSeek V4、MiniMax M3 + 共享 `BaseClient`（retry / rate limit / circuit breaker） | `BaseClient`, `DeepSeekClient`, `MiniMaxClient`, `Message`, `ChatOptions`, `ChatResponse` | Phase 2 新增；MiniMax 附中國國家安全法資料主權警告 |
+| `llm/capabilities` | LLM 能力處理器 — 10 個 capability handler（failure_attribution + 9 個新），每個封裝 prompt template + schema-typed I/O + Router 呼叫 | `FailureAttributionHandler`, `RationaleGenerationHandler`, `StrategySummaryHandler`, `PromptLintHandler`, `ScenarioSimulationHandler`, `RiskSurfaceExtractionHandler`, `RegimeExplanationHandler`, `PerformanceForensicsHandler`, `CodeReviewAnnotationHandler`, `SentimentExplanationHandler` | Phase 2 從 1 個擴充至 10 個；Kimi K2.7 已移除（coding plan key 限制 CLI 工具，不可用於 app-level 呼叫） |
 
 ---
 

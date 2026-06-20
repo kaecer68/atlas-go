@@ -12,7 +12,8 @@ import (
 const DefaultModelMiniMaxM3 = "MiniMax-M3"
 
 // miniMaxAPIBase is the production API base URL for MiniMax.
-const miniMaxAPIBase = "https://api.minimax.io"
+// China: api.minimaxi.com (extra 'i'), International: api.minimax.io
+const miniMaxAPIBase = "https://api.minimaxi.com"
 
 // miniMaxEndpoint is the relative path for the OpenAI-compatible endpoint.
 const miniMaxEndpointOpenAI = "/v1/chat/completions"
@@ -25,9 +26,7 @@ const miniMaxEndpointAnthropic = "/v1/anthropic/chat/completions"
 //
 // WARNING: MiniMax is hosted under Chinese national security law.
 // DataClassSecret and DataClassRegulated payloads MUST NOT route to this
-// provider. This restriction is enforced at the Router level; the client
-// itself does not reject requests based on DataClass — see the KimiClient
-// for an example of client-side enforcement.
+// provider. This restriction is enforced at the Router level.
 type MiniMaxClient struct {
 	*BaseClient
 

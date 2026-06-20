@@ -194,22 +194,22 @@ func defaultRoutingTable() RouterConfig {
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
-			// doc §6.1: dev.code_review_annotation
-			//   K2.7 → V4-Flash → OpenCode-Go → empty
-			CapabilityCodeReviewAnnotation: {
-				Primary:    ProviderKimi,
-				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
-				LastResort: ProviderMock,
-			},
-			// doc §6.1: dev.prompt_lint
-			//   V4-Flash → K2.7 → OpenCode-Go → pass
-			CapabilityPromptLint: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderKimi,
-				Backup2:    ProviderOpenCodeGo,
-				LastResort: ProviderMock,
-			},
+		// doc §6.1: dev.code_review_annotation
+		//   V4-Pro → M3 → OpenCode-Go → empty (Kimi K2.7 removed)
+		CapabilityCodeReviewAnnotation: {
+			Primary:    ProviderDeepSeek,
+			Backup1:    ProviderMiniMax,
+			Backup2:    ProviderOpenCodeGo,
+			LastResort: ProviderMock,
+		},
+		// doc §6.1: dev.prompt_lint
+		//   V4-Flash → M3 → OpenCode-Go → pass (Kimi K2.7 removed)
+		CapabilityPromptLint: {
+			Primary:    ProviderDeepSeek,
+			Backup1:    ProviderMiniMax,
+			Backup2:    ProviderOpenCodeGo,
+			LastResort: ProviderMock,
+		},
 			// doc §6.1: narrative.rationale_translation_fallback
 			//   V4-Flash → M3 → OpenCode-Go → passthrough
 			CapabilityRationaleGeneration: {
