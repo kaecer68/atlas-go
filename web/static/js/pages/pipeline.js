@@ -434,6 +434,14 @@ export function handleOverrideClick(e) {
   popover.style.top = (btnRect.bottom + 4) + 'px';
   document.body.appendChild(popover);
 
+  const popoverWidth = popover.offsetWidth;
+  if (btnRect.left - popoverWidth < 0) {
+    popover.style.left = (btnRect.right + 4) + 'px';
+    if (popover.offsetLeft + popoverWidth > window.innerWidth) {
+      popover.style.left = Math.max(4, window.innerWidth - popoverWidth - 4) + 'px';
+    }
+  }
+
   popover.querySelector('.override-submit').onclick = async () => {
     const reason = popover.querySelector('.override-reason').value.trim();
     if (reason.length < 4) {
