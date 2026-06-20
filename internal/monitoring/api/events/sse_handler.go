@@ -69,6 +69,41 @@ var (
 	lastHealthAlertMutex sync.RWMutex
 )
 
+// BufferedRiskGateEvent holds a published risk-gate event for SSE catchup.
+type BufferedRiskGateEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedRiskGateEvents = 50
+
+var (
+	riskGateBuffer    []BufferedRiskGateEvent
+	lastRiskGateMutex sync.RWMutex
+)
+
+// BufferRiskGateEvent stores a risk-gate event for catchup by new SSE clients.
+func BufferRiskGateEvent(event eventbus.BusEvent) {
+	lastRiskGateMutex.Lock()
+	defer lastRiskGateMutex.Unlock()
+	riskGateBuffer = append(riskGateBuffer, BufferedRiskGateEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(riskGateBuffer) > maxBufferedRiskGateEvents {
+		riskGateBuffer = riskGateBuffer[len(riskGateBuffer)-maxBufferedRiskGateEvents:]
+	}
+}
+
+// GetBufferedRiskGateEvents returns a snapshot of the latest risk-gate events for SSE catchup.
+func GetBufferedRiskGateEvents() []BufferedRiskGateEvent {
+	lastRiskGateMutex.RLock()
+	defer lastRiskGateMutex.RUnlock()
+	result := make([]BufferedRiskGateEvent, len(riskGateBuffer))
+	copy(result, riskGateBuffer)
+	return result
+}
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -235,6 +270,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	healthAlertBuffered := healthAlertBuffer
 	lastHealthAlertMutex.RUnlock()
 	for _, b := range healthAlertBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastRiskGateMutex.RLock()
+	riskGateBuffered := riskGateBuffer
+	lastRiskGateMutex.RUnlock()
+	for _, b := range riskGateBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue

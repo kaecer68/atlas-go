@@ -73,6 +73,11 @@ const (
 	// 自动监控事件
 	EventSharpeDegradation EventType = "monitor.sharpe.degradation"
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
+
+	// 风险闸门事件
+	EventRiskGateRejected  EventType = "monitor.risk_gate.rejected"
+	EventRiskGateOverridden EventType = "monitor.risk_gate.overridden"
+
 	EventHealthAlert       EventType = "monitor.health.alert"
 	EventPromotionRecorded EventType = "experiment.promotion_recorded"
 )
@@ -159,6 +164,18 @@ type RiskEventPayload struct {
 	Position     domain.Position `json:"position"`
 	TriggerType  string          `json:"trigger_type"` // "stop_loss", "take_profit", "max_loss"
 	TriggerPrice float64         `json:"trigger_price"`
+}
+
+// RiskGateEventPayload 风险闸门决策事件载荷
+type RiskGateEventPayload struct {
+	Phase             string    `json:"phase"`              // pre_trade, in_trade, post_trade
+	Verdict           string    `json:"verdict"`            // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
+	Reason            string    `json:"reason"`
+	ActionType        string    `json:"action_type"`        // SELL, REDUCE, FREEZE, LIQUIDATE, NOTIFY (空字串 if no action)
+	ActionDescription string    `json:"action_description"` // 人類可讀描述 (空字串 if no action)
+	Mode              string    `json:"mode"`               // NORMAL, CAUTIOUS, DEFENSIVE, SUSPENDED
+	Symbol            string    `json:"symbol"`
+	Timestamp         time.Time `json:"timestamp"`
 }
 
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
@@ -270,6 +287,8 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},
 	EventNarrative:                  {"偵測到宏觀敘事事件", "warning"},
 	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
+	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
+	EventRiskGateOverridden:         {"風控閘門決策被手動覆寫，部位操作已變更", "warning"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -681,6 +700,22 @@ func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
 		Timestamp: time.Now(),
 		Payload:   alert,
 		Severity:  alert.Severity,
+	})
+}
+
+// PublishRiskGateEvent publishes a risk gate decision to the event bus.
+// Verdict BLOCK or HALT → EventRiskGateRejected; otherwise → EventRiskGateOverridden.
+func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
+	eventType := EventRiskGateOverridden
+	if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
+		eventType = EventRiskGateRejected
+	}
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      eventType,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "warning",
 	})
 }
 

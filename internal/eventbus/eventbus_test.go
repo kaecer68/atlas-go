@@ -664,3 +664,48 @@ func TestPublishConvictionClamping(t *testing.T) {
 		t.Fatalf("expected 1 conviction clamping event, got %d", received.Load())
 	}
 }
+
+func TestPublishRiskGateEvent(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var rejectedCount, overriddenCount atomic.Int32
+	bus.Subscribe(EventRiskGateRejected, func(ctx context.Context, event BusEvent) error {
+		rejectedCount.Add(1)
+		payload := event.Payload.(RiskGateEventPayload)
+		if payload.Verdict != "BLOCK" && payload.Verdict != "HALT" {
+			t.Errorf("expected BLOCK or HALT verdict for rejected event, got %s", payload.Verdict)
+		}
+		return nil
+	})
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+		overriddenCount.Add(1)
+		return nil
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "BLOCK",
+		Reason:    "VaR limit exceeded",
+		Symbol:    "2330",
+		Mode:      "DEFENSIVE",
+		Timestamp: time.Now(),
+	})
+
+	bus.PublishRiskGateEvent(RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "ALLOW",
+		Reason:    "manual override by CIO",
+		Symbol:    "2330",
+		Mode:      "NORMAL",
+		Timestamp: time.Now(),
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if rejectedCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate rejected event, got %d", rejectedCount.Load())
+	}
+	if overriddenCount.Load() != 1 {
+		t.Fatalf("expected 1 risk gate overridden event, got %d", overriddenCount.Load())
+	}
+}

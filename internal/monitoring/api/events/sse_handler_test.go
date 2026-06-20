@@ -435,3 +435,51 @@ func TestSSEHandler_ServeHTTP_DeliversBufferedHealthAlertOnConnect(t *testing.T)
 		t.Errorf("expected buffered alert message in body, got: %s", body)
 	}
 }
+
+func TestSSEHandler_BufferRiskGateEvent(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(256)
+	defer bus.Close()
+
+	evt := eventbus.RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "BLOCK",
+		Reason:    "VaR limit exceeded",
+		Symbol:    "2330",
+		Mode:      "DEFENSIVE",
+		Timestamp: time.Now(),
+	}
+	bus.PublishRiskGateEvent(evt)
+	time.Sleep(50 * time.Millisecond)
+
+	BufferRiskGateEvent(eventbus.BusEvent{
+		ID:        "test-001",
+		Type:      eventbus.EventRiskGateRejected,
+		Timestamp: time.Now(),
+		Payload:   evt,
+		Severity:  "warning",
+	})
+
+	handler := NewSSEHandler(bus)
+	req := httptest.NewRequest(http.MethodGet, "/api/events/stream", nil)
+	rec := httptest.NewRecorder()
+
+	ctx, cancel := context.WithCancel(req.Context())
+	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
+	go func() {
+		defer close(handlerDone)
+		handler.ServeHTTP(rec, req)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-handlerDone
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "monitor.risk_gate.rejected") {
+		t.Errorf("expected risk_gate.rejected event in body, got: %s", body)
+	}
+	if !strings.Contains(body, "VaR limit exceeded") {
+		t.Errorf("expected VaR limit exceeded reason in body, got: %s", body)
+	}
+}
