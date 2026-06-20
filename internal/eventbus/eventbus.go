@@ -83,6 +83,7 @@ const (
 
 	EventHealthAlert       EventType = "monitor.health.alert"
 	EventPromotionRecorded EventType = "experiment.promotion_recorded"
+	EventBacktestCompleted EventType = "experiment.backtest_completed"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -202,6 +203,23 @@ type IndustryCalendarEventPayload struct {
 	GeneratedAt         time.Time `json:"generated_at"`
 }
 
+// BacktestCompletedEventPayload 自动回测完成事件载荷
+type BacktestCompletedEventPayload struct {
+	WindowID              string    `json:"window_id"`
+	StartDate             time.Time `json:"start_date"`
+	EndDate               time.Time `json:"end_date"`
+	SessionCount          int       `json:"session_count"`
+	OutcomeCount          int       `json:"outcome_count"`
+	WorstAgentID          string    `json:"worst_agent_id"`
+	WorstAgentSkill       string    `json:"worst_agent_skill"`
+	WorstAgentLayer       string    `json:"worst_agent_layer"`
+	WorstAgentWindowCount int       `json:"worst_agent_window_count"`
+	WorstAgentSharpeLike  float64   `json:"worst_agent_sharpe_like"`
+	GeneratedAt           time.Time `json:"generated_at"`
+	TargetDate            time.Time `json:"target_date"`
+	SyncSucceeded         bool      `json:"sync_succeeded"`
+}
+
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
 type ExperimentInsufficientDataEventPayload struct {
 	ExperimentID  string `json:"experiment_id"`
@@ -314,6 +332,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventIndustryCalendar:           {"產業日曆事件：當前台股市場日曆事件（除權息、MSCI 調整、財報季等）", "info"},
 	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
 	EventRiskGateOverridden:         {"風控閘門決策被手動覆寫，部位操作已變更", "warning"},
+	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -749,6 +768,18 @@ func (b *ChannelEventBus) PublishIndustryCalendarEvent(payload IndustryCalendarE
 	b.Publish(BusEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventIndustryCalendar,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
+	})
+}
+
+// PublishBacktestCompleted publishes an auto-backtest completion event.
+// Fired by internal/autobacktest.Runner after RunAndStore succeeds and live store is synced.
+func (b *ChannelEventBus) PublishBacktestCompleted(payload BacktestCompletedEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventBacktestCompleted,
 		Timestamp: time.Now(),
 		Payload:   payload,
 		Severity:  "info",

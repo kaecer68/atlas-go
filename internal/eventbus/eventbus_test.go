@@ -829,3 +829,43 @@ func TestPublishIndustryCalendarEvent(t *testing.T) {
 		t.Errorf("expected 2 affected industries, got %d", len(capturedPayload.AffectedIndustries))
 	}
 }
+
+func TestPublishBacktestCompleted(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var receivedPayload BacktestCompletedEventPayload
+	bus.Subscribe(EventBacktestCompleted, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		receivedPayload = event.Payload.(BacktestCompletedEventPayload)
+		return nil
+	})
+
+	bus.PublishBacktestCompleted(BacktestCompletedEventPayload{
+		WindowID:              "bt-2026-06-21",
+		StartDate:             time.Now().AddDate(0, 0, -30),
+		EndDate:               time.Now(),
+		SessionCount:          22,
+		OutcomeCount:          17,
+		WorstAgentID:          "agent-momentum-1",
+		WorstAgentSkill:       "momentum",
+		WorstAgentLayer:       "L1",
+		WorstAgentWindowCount: 22,
+		WorstAgentSharpeLike:  0.42,
+		GeneratedAt:           time.Now(),
+		TargetDate:            time.Now(),
+		SyncSucceeded:         true,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 backtest completed event, got %d", received.Load())
+	}
+	if receivedPayload.WindowID != "bt-2026-06-21" {
+		t.Errorf("unexpected window_id: %s", receivedPayload.WindowID)
+	}
+	if !receivedPayload.SyncSucceeded {
+		t.Errorf("expected SyncSucceeded=true, got false")
+	}
+}
