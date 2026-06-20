@@ -593,3 +593,30 @@ func TestSSEHandler_BufferCalibrationCompletedEvent(t *testing.T) {
 		t.Errorf("expected type %s, got %s", eventbus.EventCalibrationCompleted, buffered[0].Event.Type)
 	}
 }
+
+func TestSSEHandler_BufferTradeSlippageEvent(t *testing.T) {
+	resetTradeSlippageBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "ts-test-1",
+		Type:      eventbus.EventTradeSlippage,
+		Timestamp: time.Now(),
+		Payload: eventbus.TradeSlippageEventPayload{
+			OrderID: "ord-001",
+			Symbol:  "2330",
+		},
+	}
+	BufferTradeSlippageEvent(event)
+
+	buffered := GetBufferedTradeSlippageEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered trade slippage event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(eventbus.TradeSlippageEventPayload)
+	if payload.OrderID != "ord-001" {
+		t.Errorf("expected OrderID=ord-001, got %s", payload.OrderID)
+	}
+	if buffered[0].Event.Type != eventbus.EventTradeSlippage {
+		t.Errorf("expected type %s, got %s", eventbus.EventTradeSlippage, buffered[0].Event.Type)
+	}
+}

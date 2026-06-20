@@ -914,3 +914,41 @@ func TestPublishCalibrationCompleted(t *testing.T) {
 		t.Errorf("expected SyncSucceeded=true")
 	}
 }
+
+func TestPublishTradeSlippage(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var capturedPayload TradeSlippageEventPayload
+	bus.Subscribe(EventTradeSlippage, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		capturedPayload = event.Payload.(TradeSlippageEventPayload)
+		return nil
+	})
+
+	now := time.Now()
+	bus.PublishTradeSlippage(TradeSlippageEventPayload{
+		OrderID:       "ord-001",
+		Symbol:        "2330",
+		Side:          "buy",
+		Quantity:      1000,
+		ExpectedPrice: 600.0,
+		FillPrice:     600.30,
+		SlippageBPS:   5.0,
+		SlippageCost:  300.0,
+		BrokerMode:    "dry-run",
+		Timestamp:     now,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 trade slippage event, got %d", received.Load())
+	}
+	if capturedPayload.OrderID != "ord-001" {
+		t.Errorf("expected OrderID=ord-001, got %s", capturedPayload.OrderID)
+	}
+	if capturedPayload.SlippageBPS != 5.0 {
+		t.Errorf("expected SlippageBPS=5.0, got %f", capturedPayload.SlippageBPS)
+	}
+}

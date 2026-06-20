@@ -222,6 +222,44 @@ func resetCalibrationCompletedBuffer() {
 	calibrationCompletedBuffer = nil
 }
 
+type BufferedTradeSlippageEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedTradeSlippageEvents = 50
+
+var (
+	tradeSlippageBuffer    []BufferedTradeSlippageEvent
+	lastTradeSlippageMutex sync.RWMutex
+)
+
+func BufferTradeSlippageEvent(event eventbus.BusEvent) {
+	lastTradeSlippageMutex.Lock()
+	defer lastTradeSlippageMutex.Unlock()
+	tradeSlippageBuffer = append(tradeSlippageBuffer, BufferedTradeSlippageEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(tradeSlippageBuffer) > maxBufferedTradeSlippageEvents {
+		tradeSlippageBuffer = tradeSlippageBuffer[len(tradeSlippageBuffer)-maxBufferedTradeSlippageEvents:]
+	}
+}
+
+func GetBufferedTradeSlippageEvents() []BufferedTradeSlippageEvent {
+	lastTradeSlippageMutex.RLock()
+	defer lastTradeSlippageMutex.RUnlock()
+	out := make([]BufferedTradeSlippageEvent, len(tradeSlippageBuffer))
+	copy(out, tradeSlippageBuffer)
+	return out
+}
+
+func resetTradeSlippageBuffer() {
+	lastTradeSlippageMutex.Lock()
+	defer lastTradeSlippageMutex.Unlock()
+	tradeSlippageBuffer = nil
+}
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -436,6 +474,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	calibrationCompletedBuffered := calibrationCompletedBuffer
 	lastCalibrationCompletedMutex.RUnlock()
 	for _, b := range calibrationCompletedBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastTradeSlippageMutex.RLock()
+	tradeSlippageBuffered := tradeSlippageBuffer
+	lastTradeSlippageMutex.RUnlock()
+	for _, b := range tradeSlippageBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue

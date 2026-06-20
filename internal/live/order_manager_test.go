@@ -67,11 +67,11 @@ func TestOrderManagerRetriesThenPublishesFilled(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventOrderFilled && got.Type != EventOrderPlaced {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderFilled)
+		if got.Type != EventOrderFilled && got.Type != EventOrderPlaced && got.Type != EventTradeSlippage {
+			t.Fatalf("unexpected event type: got=%s", got.Type)
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatalf("expected order error event but none was received")
+		t.Fatalf("expected order event but none was received")
 	}
 }
 
