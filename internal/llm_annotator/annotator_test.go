@@ -36,7 +36,7 @@ func TestMockAnnotator_ReturnsError(t *testing.T) {
 
 func TestConfig_WithDefaults(t *testing.T) {
 	c := Config{APIKey: "k"}.WithDefaults()
-	if c.BaseURL != "https://api.moonshot.cn/v1" {
+	if c.BaseURL != "https://api.kimi.com/coding/v1" {
 		t.Errorf("BaseURL = %q, want default", c.BaseURL)
 	}
 	if c.Model != "moonshot-v1-8k" {
