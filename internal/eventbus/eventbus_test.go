@@ -779,3 +779,53 @@ func TestPublishRiskGateEvent_ReduceRouting(t *testing.T) {
 		t.Fatalf("expected 1 risk gate overridden event, got %d", overriddenCount.Load())
 	}
 }
+
+func TestPublishIndustryCalendarEvent(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	var capturedPayload IndustryCalendarEventPayload
+	bus.Subscribe(EventIndustryCalendar, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		capturedPayload = event.Payload.(IndustryCalendarEventPayload)
+		return nil
+	})
+
+	bus.PublishIndustryCalendarEvent(IndustryCalendarEventPayload{
+		EventID:             "ex_dividend_2026_06",
+		Name:                "除權息旺季",
+		NameEN:              "Ex-Dividend Season",
+		EventType:           "ex_dividend",
+		Description:         "除權息旺季 - 6 月至 8 月",
+		Direction:           "mixed",
+		BaseWeight:          0.70,
+		Active:              true,
+		StartDate:           time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC),
+		EndDate:             time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+		PeakDate:            time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
+		DecayDays:           7,
+		AffectedIndustries:  []string{"financials", "consumer"},
+		SentimentAdjustment: 0.0125,
+		DataSource:          "default_rules",
+		EvidenceQuality:     "backtested",
+		GeneratedAt:         time.Now(),
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 industry calendar event, got %d", received.Load())
+	}
+	if capturedPayload.EventID != "ex_dividend_2026_06" {
+		t.Errorf("expected EventID ex_dividend_2026_06, got %s", capturedPayload.EventID)
+	}
+	if capturedPayload.Name != "除權息旺季" {
+		t.Errorf("expected Name 除權息旺季, got %s", capturedPayload.Name)
+	}
+	if capturedPayload.Direction != "mixed" {
+		t.Errorf("expected Direction mixed, got %s", capturedPayload.Direction)
+	}
+	if len(capturedPayload.AffectedIndustries) != 2 {
+		t.Errorf("expected 2 affected industries, got %d", len(capturedPayload.AffectedIndustries))
+	}
+}

@@ -82,6 +82,48 @@ var (
 	lastRiskGateMutex sync.RWMutex
 )
 
+// BufferedIndustryCalendarEvent holds a published industry calendar event for SSE catchup.
+type BufferedIndustryCalendarEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedIndustryCalendarEvents = 50
+
+var (
+	industryCalendarBuffer    []BufferedIndustryCalendarEvent
+	lastIndustryCalendarMutex sync.RWMutex
+)
+
+// BufferIndustryCalendarEvent stores an industry calendar event for catchup by new SSE clients.
+func BufferIndustryCalendarEvent(event eventbus.BusEvent) {
+	lastIndustryCalendarMutex.Lock()
+	defer lastIndustryCalendarMutex.Unlock()
+	industryCalendarBuffer = append(industryCalendarBuffer, BufferedIndustryCalendarEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(industryCalendarBuffer) > maxBufferedIndustryCalendarEvents {
+		industryCalendarBuffer = industryCalendarBuffer[len(industryCalendarBuffer)-maxBufferedIndustryCalendarEvents:]
+	}
+}
+
+// GetBufferedIndustryCalendarEvents returns a snapshot of the latest industry calendar events for SSE catchup.
+func GetBufferedIndustryCalendarEvents() []BufferedIndustryCalendarEvent {
+	lastIndustryCalendarMutex.RLock()
+	defer lastIndustryCalendarMutex.RUnlock()
+	result := make([]BufferedIndustryCalendarEvent, len(industryCalendarBuffer))
+	copy(result, industryCalendarBuffer)
+	return result
+}
+
+// resetIndustryCalendarBuffer clears the industry calendar buffer. Test-only helper.
+func resetIndustryCalendarBuffer() {
+	lastIndustryCalendarMutex.Lock()
+	defer lastIndustryCalendarMutex.Unlock()
+	industryCalendarBuffer = nil
+}
+
 // BufferRiskGateEvent stores a risk-gate event for catchup by new SSE clients.
 func BufferRiskGateEvent(event eventbus.BusEvent) {
 	lastRiskGateMutex.Lock()
@@ -282,6 +324,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	riskGateBuffered := riskGateBuffer
 	lastRiskGateMutex.RUnlock()
 	for _, b := range riskGateBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastIndustryCalendarMutex.RLock()
+	industryCalendarBuffered := industryCalendarBuffer
+	lastIndustryCalendarMutex.RUnlock()
+	for _, b := range industryCalendarBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue
