@@ -2169,10 +2169,10 @@ func run(args []string, deps appDeps) error {
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_swarm_simulation",
-				Interval: 30 * time.Minute,
-				Jitter:   3 * time.Minute,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
+			Interval: 5 * time.Minute,
+			Jitter:   30 * time.Second,
+			Enabled:  true,
+			Task: func(ctx context.Context) error {
 					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for swarm: %w", err)
@@ -2205,7 +2205,7 @@ func run(args []string, deps appDeps) error {
 					return nil
 				},
 			})
-			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
+			log.Printf("[Gateway] registered auto_swarm_simulation background task (5m interval)")
 
 			// RSI-tw autonomous calibration — runs every 24h at market close
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

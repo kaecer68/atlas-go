@@ -16,6 +16,7 @@ import (
 type Runner struct {
 	btRunner *backtest.Runner
 	cfg      config.Config
+	eventBus *eventbus.ChannelEventBus
 }
 
 func NewRunner(cfg config.Config) *Runner {
@@ -35,6 +36,7 @@ func NewRunnerWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	return &Runner{
 		btRunner: btRunner,
 		cfg:      cfg,
+		eventBus: eventBus,
 	}
 }
 
@@ -64,6 +66,24 @@ func (r *Runner) RunAndStore() error {
 	}
 
 	r.syncToLiveStore()
+
+	if r.eventBus != nil {
+		r.eventBus.PublishBacktestCompleted(eventbus.BacktestCompletedEventPayload{
+			WindowID:              summary.WindowID,
+			StartDate:             summary.StartDate,
+			EndDate:               summary.EndDate,
+			SessionCount:          summary.SessionCount,
+			OutcomeCount:          summary.OutcomeCount,
+			WorstAgentID:          summary.WorstAgentID,
+			WorstAgentSkill:       summary.WorstAgentSkill,
+			WorstAgentLayer:       string(summary.WorstAgentLayer),
+			WorstAgentWindowCount: summary.WorstAgentWindowCount,
+			WorstAgentSharpeLike:  summary.WorstAgentSharpeLike,
+			GeneratedAt:           summary.GeneratedAt,
+			TargetDate:            targetDate,
+			SyncSucceeded:         true,
+		})
+	}
 
 	return nil
 }

@@ -88,6 +88,12 @@ type BufferedIndustryCalendarEvent struct {
 	ReceivedAt time.Time
 }
 
+// BufferedBacktestCompletedEvent holds a published backtest-completed event for SSE catchup.
+type BufferedBacktestCompletedEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
 const maxBufferedIndustryCalendarEvents = 50
 
 var (
@@ -124,6 +130,13 @@ func resetIndustryCalendarBuffer() {
 	industryCalendarBuffer = nil
 }
 
+const maxBufferedBacktestCompletedEvents = 50
+
+var (
+	backtestCompletedBuffer    []BufferedBacktestCompletedEvent
+	lastBacktestCompletedMutex sync.RWMutex
+)
+
 // BufferRiskGateEvent stores a risk-gate event for catchup by new SSE clients.
 func BufferRiskGateEvent(event eventbus.BusEvent) {
 	lastRiskGateMutex.Lock()
@@ -144,6 +157,28 @@ func GetBufferedRiskGateEvents() []BufferedRiskGateEvent {
 	result := make([]BufferedRiskGateEvent, len(riskGateBuffer))
 	copy(result, riskGateBuffer)
 	return result
+}
+
+// BufferBacktestCompletedEvent stores a backtest-completed event for catchup by new SSE clients.
+func BufferBacktestCompletedEvent(event eventbus.BusEvent) {
+	lastBacktestCompletedMutex.Lock()
+	defer lastBacktestCompletedMutex.Unlock()
+	backtestCompletedBuffer = append(backtestCompletedBuffer, BufferedBacktestCompletedEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(backtestCompletedBuffer) > maxBufferedBacktestCompletedEvents {
+		backtestCompletedBuffer = backtestCompletedBuffer[len(backtestCompletedBuffer)-maxBufferedBacktestCompletedEvents:]
+	}
+}
+
+// GetBufferedBacktestCompletedEvents returns a snapshot of buffered backtest-completed events.
+func GetBufferedBacktestCompletedEvents() []BufferedBacktestCompletedEvent {
+	lastBacktestCompletedMutex.RLock()
+	defer lastBacktestCompletedMutex.RUnlock()
+	out := make([]BufferedBacktestCompletedEvent, len(backtestCompletedBuffer))
+	copy(out, backtestCompletedBuffer)
+	return out
 }
 
 const defaultMaxSSEClients = 20
@@ -336,6 +371,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	industryCalendarBuffered := industryCalendarBuffer
 	lastIndustryCalendarMutex.RUnlock()
 	for _, b := range industryCalendarBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastBacktestCompletedMutex.RLock()
+	backtestCompletedBuffered := backtestCompletedBuffer
+	lastBacktestCompletedMutex.RUnlock()
+	for _, b := range backtestCompletedBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue
