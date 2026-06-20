@@ -9,6 +9,8 @@ services:
     command: ["-api"]
     ports:
       - "8080:8080"
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - ATLAS_ENV=production
       - ATLAS_LOG_LEVEL=info
