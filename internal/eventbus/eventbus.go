@@ -75,8 +75,8 @@ const (
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
 
 	// 风险闸门事件
-EventRiskGateRejected  EventType = "monitor.risk_gate.rejected"
-	EventRiskGateAllowed   EventType = "monitor.risk_gate.allowed"
+	EventRiskGateRejected EventType = "monitor.risk_gate.rejected"
+	EventRiskGateAllowed  EventType = "monitor.risk_gate.allowed"
 
 	// 产业日历事件
 	EventIndustryCalendar EventType = "industry.calendar.event"
@@ -312,12 +312,13 @@ type PromotionRecordedPayload struct {
 
 // BusEvent 总线事件
 type BusEvent struct {
-	ID          string    `json:"id"`
-	Type        EventType `json:"type"`
-	Timestamp   time.Time `json:"timestamp"`
-	Payload     any       `json:"payload"`
-	Description string    `json:"description,omitempty"`
-	Severity    string    `json:"severity,omitempty"` // "info", "warning", "error"
+	ID            string    `json:"id"`
+	Type          EventType `json:"type"`
+	Timestamp     time.Time `json:"timestamp"`
+	Payload       any       `json:"payload"`
+	Description   string    `json:"description,omitempty"`
+	Severity      string    `json:"severity,omitempty"` // "info", "warning", "error"
+	SchemaVersion int       `json:"schema_version"`     // PD-1：事件 schema 版本，零值視為 v1 向後相容
 }
 
 // EnrichEvent populates Description and Severity on an event that lacks them,
@@ -362,7 +363,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
 	EventIndustryCalendar:           {"產業日曆事件：當前台股市場日曆事件（除權息、MSCI 調整、財報季等）", "info"},
 	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
-EventRiskGateAllowed:            {"風控閘門允許交易，部位操作已通過", "info"},
+	EventRiskGateAllowed:            {"風控閘門允許交易，部位操作已通過", "info"},
 	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
 	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
 	EventTradeSlippage:              {"訂單成交滑價計算：期望價與實際成交價之差（BPS），用於監控執行品質", "info"},
@@ -511,6 +512,7 @@ func (b *ChannelEventBus) PublishMarketSnapshot(quote domain.Quote) {
 			Quote:     quote,
 			Timestamp: time.Now(),
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -524,6 +526,7 @@ func (b *ChannelEventBus) PublishSimulationStart(sessionID string, asOf time.Tim
 			"session_id": sessionID,
 			"as_of":      asOf.Format("2006-01-02"),
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -539,6 +542,7 @@ func (b *ChannelEventBus) PublishSimulationComplete(sessionID string, portfolioV
 			"order_count":     orderCount,
 			"position_count":  positionCount,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -554,6 +558,7 @@ func (b *ChannelEventBus) PublishRegimeChange(oldRegime, newRegime domain.Regime
 			Confidence:   confidence,
 			DeterminedBy: determinedBy,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -568,6 +573,7 @@ func (b *ChannelEventBus) PublishPositionUpdate(symbol string, position domain.P
 			Position:   position,
 			ChangeType: changeType,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -581,6 +587,7 @@ func (b *ChannelEventBus) PublishRecommendation(agent string, recommendations []
 			Agent:           agent,
 			Recommendations: recommendations,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -594,6 +601,7 @@ func (b *ChannelEventBus) PublishGuardOutcomes(sessionID string, outcomes []doma
 			SessionID: sessionID,
 			Outcomes:  outcomes,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -606,6 +614,7 @@ func (b *ChannelEventBus) PublishDarwinianClamping(events []ClampingEventPayload
 		Payload: DarwinianClampingEventPayload{
 			ClampingEvents: events,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -622,16 +631,18 @@ func (b *ChannelEventBus) PublishAgentHealthChange(agentID, oldStatus, newStatus
 			Reason:    reason,
 			Timestamp: time.Now(),
 		},
+		SchemaVersion: 1,
 	})
 }
 
 // PublishConvictionClamping 发布 Conviction 夹制事件
 func (b *ChannelEventBus) PublishConvictionClamping(events []ConvictionClampingEventPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventConvictionClamping,
-		Timestamp: time.Now(),
-		Payload:   events,
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventConvictionClamping,
+		Timestamp:     time.Now(),
+		Payload:       events,
+		SchemaVersion: 1,
 	})
 }
 
@@ -657,10 +668,11 @@ func (b *ChannelEventBus) PublishOrderEvent(order domain.Order, orderID, status 
 	}
 
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      eventType,
-		Timestamp: time.Now(),
-		Payload:   payload,
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          eventType,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		SchemaVersion: 1,
 	})
 }
 
@@ -676,6 +688,7 @@ func (b *ChannelEventBus) PublishRiskEvent(eventType EventType, symbol string, p
 			TriggerType:  triggerType,
 			TriggerPrice: triggerPrice,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -693,6 +706,7 @@ func (b *ChannelEventBus) PublishExperimentInsufficientData(experimentID string,
 			MaturityLevel: maturityLevel,
 			UsedFallback:  usedFallback,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -714,6 +728,7 @@ func (b *ChannelEventBus) PublishOrderError(orderID, symbol, side string, price 
 			LastStatus:   lastStatus,
 			Timestamp:    time.Now(),
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -761,6 +776,7 @@ func (b *ChannelEventBus) PublishNarrativeEvent(eventID, theme, region string, s
 			TimeWindow:       timeWindow,
 			Description:      description,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -772,11 +788,12 @@ func parseFloat(s string) float64 {
 // PublishHealthAlert publishes a system health alert to the event bus.
 func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventHealthAlert,
-		Timestamp: time.Now(),
-		Payload:   alert,
-		Severity:  alert.Severity,
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventHealthAlert,
+		Timestamp:     time.Now(),
+		Payload:       alert,
+		Severity:      alert.Severity,
+		SchemaVersion: 1,
 	})
 }
 
@@ -788,22 +805,24 @@ func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
 		eventType = EventRiskGateRejected
 	}
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      eventType,
-		Timestamp: time.Now(),
-		Payload:   payload,
-		Severity:  "warning",
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          eventType,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "warning",
+		SchemaVersion: 1,
 	})
 }
 
 // PublishIndustryCalendarEvent publishes a Taiwan market calendar event to the event bus.
 func (b *ChannelEventBus) PublishIndustryCalendarEvent(payload IndustryCalendarEventPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventIndustryCalendar,
-		Timestamp: time.Now(),
-		Payload:   payload,
-		Severity:  "info",
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventIndustryCalendar,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
 	})
 }
 
@@ -811,11 +830,12 @@ func (b *ChannelEventBus) PublishIndustryCalendarEvent(payload IndustryCalendarE
 // Fired by internal/autobacktest.Runner after RunAndStore succeeds and live store is synced.
 func (b *ChannelEventBus) PublishBacktestCompleted(payload BacktestCompletedEventPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventBacktestCompleted,
-		Timestamp: time.Now(),
-		Payload:   payload,
-		Severity:  "info",
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventBacktestCompleted,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
 	})
 }
 
@@ -823,11 +843,12 @@ func (b *ChannelEventBus) PublishBacktestCompleted(payload BacktestCompletedEven
 // Fired by cmd/atlas/main.go linkage_calibrate task after CalibrateParameters succeeds.
 func (b *ChannelEventBus) PublishCalibrationCompleted(payload CalibrationCompletedEventPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventCalibrationCompleted,
-		Timestamp: time.Now(),
-		Payload:   payload,
-		Severity:  "info",
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventCalibrationCompleted,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
 	})
 }
 
@@ -835,21 +856,23 @@ func (b *ChannelEventBus) PublishCalibrationCompleted(payload CalibrationComplet
 // Fired by internal/live/order_manager.go on every order fill (status == "filled").
 func (b *ChannelEventBus) PublishTradeSlippage(payload TradeSlippageEventPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventTradeSlippage,
-		Timestamp: time.Now(),
-		Payload:   payload,
-		Severity:  "info",
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventTradeSlippage,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
 	})
 }
 
 func (b *ChannelEventBus) PublishPromotionRecorded(payload PromotionRecordedPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventPromotionRecorded,
-		Timestamp: time.Now(),
-		Payload:   payload,
-		Severity:  "info",
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventPromotionRecorded,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
 	})
 }
 

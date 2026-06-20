@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -950,5 +951,53 @@ func TestPublishTradeSlippage(t *testing.T) {
 	}
 	if capturedPayload.SlippageBPS != 5.0 {
 		t.Errorf("expected SlippageBPS=5.0, got %f", capturedPayload.SlippageBPS)
+	}
+}
+
+func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var captured BusEvent
+	var received atomic.Int32
+
+	bus.Subscribe(EventTradeSlippage, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		captured = event
+		return nil
+	})
+
+	bus.PublishTradeSlippage(TradeSlippageEventPayload{
+		OrderID:     "ord-sv-001",
+		Symbol:      "2330",
+		SlippageBPS: 3.0,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	if received.Load() != 1 {
+		t.Fatalf("expected 1 event, got %d", received.Load())
+	}
+	if captured.SchemaVersion != 1 {
+		t.Errorf("expected SchemaVersion=1, got %d", captured.SchemaVersion)
+	}
+
+	data, err := json.Marshal(captured)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	sv, ok := raw["schema_version"]
+	if !ok {
+		t.Fatal("expected schema_version key in JSON, but not found")
+	}
+	svFloat, ok := sv.(float64)
+	if !ok {
+		t.Fatalf("expected schema_version to be number, got %T", sv)
+	}
+	if int(svFloat) != 1 {
+		t.Errorf("expected schema_version=1, got %v", sv)
 	}
 }
