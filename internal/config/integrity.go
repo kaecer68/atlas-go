@@ -180,7 +180,8 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 
 	l1IDs := make(map[string]bool)
 	for _, s := range segments {
-		if s.Level == 1 {
+		switch s.Level {
+		case 1:
 			res.L1Count++
 			if s.ID == "" {
 				res.OK = false
@@ -191,7 +192,7 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 				res.OK = false
 				res.Issues = append(res.Issues, fmt.Sprintf("L1 segment %q has no RepresentativeStocks", s.ID))
 			}
-		} else if s.Level == 2 {
+		case 2:
 			res.L2Count++
 			if s.ParentID == "" {
 				res.OK = false
