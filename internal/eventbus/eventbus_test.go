@@ -1001,3 +1001,67 @@ func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
 		t.Errorf("expected schema_version=1, got %v", sv)
 	}
 }
+
+// PD-3: Throttle tests
+
+func TestChannelEventBus_ThrottleLimitsRate(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	bus.Subscribe(EventMarketSnapshot, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		return nil
+	})
+
+	bus.SetEventThrottle(EventMarketSnapshot, 5)
+
+	for i := 0; i < 20; i++ {
+		bus.Publish(BusEvent{ID: fmt.Sprintf("throttle-%d", i), Type: EventMarketSnapshot, Timestamp: time.Now()})
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	stats := bus.Stats()
+	throttled := stats["publish_throttled"].(int64)
+	dropped := stats["publish_dropped"].(int64)
+
+	if throttled == 0 {
+		t.Fatalf("expected some events to be throttled, got %d", throttled)
+	}
+	if dropped != 0 {
+		t.Fatalf("expected no dropped events, got %d", dropped)
+	}
+}
+
+func TestChannelEventBus_ThrottleWithoutConfig(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var received atomic.Int32
+	bus.Subscribe(EventSystemStart, func(ctx context.Context, event BusEvent) error {
+		received.Add(1)
+		return nil
+	})
+
+	for i := 0; i < 10; i++ {
+		bus.Publish(BusEvent{ID: fmt.Sprintf("no-throttle-%d", i), Type: EventSystemStart, Timestamp: time.Now()})
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	stats := bus.Stats()
+	throttled := stats["publish_throttled"].(int64)
+
+	if throttled != 0 {
+		t.Fatalf("expected no throttled events without throttle config, got %d", throttled)
+	}
+}
+
+func TestChannelEventBus_Stats_IncludesThrottled(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	stats := bus.Stats()
+	if _, ok := stats["publish_throttled"]; !ok {
+		t.Fatal("expected Stats() to include publish_throttled key")
+	}
+}

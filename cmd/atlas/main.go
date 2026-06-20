@@ -1628,8 +1628,8 @@ func run(args []string, deps appDeps) error {
 			}
 			dashboard.SetRiskGate(riskGate)
 
-		// Wave 8.0: Wire RiskGate decisions to EventBus for SSE streaming.
-		// BLOCK / HALT verdicts → EventRiskGateRejected; all others → EventRiskGateAllowed.
+			// Wave 8.0: Wire RiskGate decisions to EventBus for SSE streaming.
+			// BLOCK / HALT verdicts → EventRiskGateRejected; all others → EventRiskGateAllowed.
 			// The SSE handler buffers the last 50 risk-gate events and replays them on client connect.
 			riskGate.Subscribe(func(rd risk.RiskDecision) {
 				dashEventBus.PublishRiskGateEvent(eventbus.RiskGateEventPayload{
@@ -2214,10 +2214,10 @@ func run(args []string, deps appDeps) error {
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_swarm_simulation",
-			Interval: 5 * time.Minute,
-			Jitter:   30 * time.Second,
-			Enabled:  true,
-			Task: func(ctx context.Context) error {
+				Interval: 5 * time.Minute,
+				Jitter:   30 * time.Second,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
 					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for swarm: %w", err)

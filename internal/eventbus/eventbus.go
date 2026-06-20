@@ -456,12 +456,22 @@ type ChannelEventBus struct {
 	// Observable counters (atomic)
 	publishDropped  int64
 	handlerTimeouts int64
+
+	// PD-3: Throttling
+	throttleMu       sync.RWMutex
+	throttleConfigs  map[EventType]*throttleEntry
+	publishThrottled int64 // atomic
 }
 
 type subscriber struct {
 	id       string
 	handler  EventHandler
 	critical bool
+}
+
+type throttleEntry struct {
+	lastAllowed time.Time
+	minInterval time.Duration
 }
 
 // NewChannelEventBus 创建新的事件总线
@@ -483,6 +493,12 @@ func NewChannelEventBus(bufferSize int) *ChannelEventBus {
 }
 
 func (b *ChannelEventBus) Publish(event BusEvent) {
+	// PD-3: Throttle check
+	if !b.allowEvent(event.Type) {
+		atomic.AddInt64(&b.publishThrottled, 1)
+		return
+	}
+
 	select {
 	case b.eventChan <- event:
 		return
@@ -499,6 +515,40 @@ func (b *ChannelEventBus) Publish(event BusEvent) {
 			logging.FStr("event_type", string(event.Type)),
 			logging.FStr("reason", "channel_full"))
 	}
+}
+
+// allowEvent 檢查事件類型是否超過節流設定；若無設定則一律放行。
+func (b *ChannelEventBus) allowEvent(et EventType) bool {
+	b.throttleMu.Lock()
+	defer b.throttleMu.Unlock()
+
+	entry := b.throttleConfigs[et]
+	if entry == nil {
+		return true
+	}
+
+	if time.Since(entry.lastAllowed) < entry.minInterval {
+		return false
+	}
+
+	entry.lastAllowed = time.Now()
+	return true
+}
+
+// SetEventThrottle 設定每秒最大事件數；maxPerSecond <= 0 時視為不限制。
+func (b *ChannelEventBus) SetEventThrottle(eventType EventType, maxPerSecond int) {
+	b.throttleMu.Lock()
+	defer b.throttleMu.Unlock()
+
+	if b.throttleConfigs == nil {
+		b.throttleConfigs = make(map[EventType]*throttleEntry)
+	}
+
+	minInterval := time.Duration(0)
+	if maxPerSecond > 0 {
+		minInterval = time.Second / time.Duration(maxPerSecond)
+	}
+	b.throttleConfigs[eventType] = &throttleEntry{minInterval: minInterval}
 }
 
 // PublishMarketSnapshot 发布市场快照事件（便捷方法）
@@ -1066,6 +1116,7 @@ func (b *ChannelEventBus) Stats() map[string]any {
 	stats["channel_capacity"] = cap(b.eventChan)
 	stats["channel_length"] = len(b.eventChan)
 	stats["publish_dropped"] = atomic.LoadInt64(&b.publishDropped)
+	stats["publish_throttled"] = atomic.LoadInt64(&b.publishThrottled)
 	stats["handler_timeouts"] = atomic.LoadInt64(&b.handlerTimeouts)
 
 	return stats
