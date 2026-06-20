@@ -2223,8 +2223,9 @@ func run(args []string, deps appDeps) error {
 					if err != nil {
 						return fmt.Errorf("create system for swarm: %w", err)
 					}
+					provider := orchestrator.NewGatewayBackedProvider(cfg)
 					if gatewayFetcher != nil {
-						sys.Sim().SetProvider(orchestrator.NewGatewayBackedProvider(cfg))
+						sys.Sim().SetProvider(provider)
 					}
 					ctrl := sys.Phase3Controller()
 					if ctrl == nil {
@@ -2236,16 +2237,7 @@ func run(args []string, deps appDeps) error {
 					ctrl.SetMetaLearner(metalearning.NewMetaLearner(metalearning.DefaultMetaLearningConfig()),
 						filepath.Join(cfg.WorkDir, "data/state/metalearner_state.json"))
 
-					baseState := swarm.MarketState{
-						Timestamp: time.Now(),
-						Prices:    make(map[string]float64),
-						Volumes:   make(map[string]float64),
-					}
-					// Seed with common TWSE symbols and placeholder prices.
-					for _, sym := range []string{"2330.TW", "2317.TW", "2454.TW", "2412.TW", "2308.TW"} {
-						baseState.Prices[sym] = 100.0
-						baseState.Volumes[sym] = 5000000
-					}
+					baseState := buildBaseState(provider, []string{"2330.TW", "2317.TW", "2454.TW", "2412.TW", "2308.TW"})
 					ctrl.RunSwarmCycle(baseState)
 					logging.Info("swarm_btm", "cycle_completed", "symbols", len(baseState.Prices))
 					return nil
@@ -2504,6 +2496,49 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 	}
 }
 
+// buildBaseState queries the provider for current market state.
+// Falls back to placeholder values if provider fails (with warning log).
+func buildBaseState(provider marketdata.Provider, symbols []string) swarm.MarketState {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	state := swarm.MarketState{
+		Timestamp: time.Now(),
+		Prices:    make(map[string]float64),
+		Volumes:   make(map[string]float64),
+	}
+
+	quotes, err := provider.GetQuotes(ctx, time.Now(), symbols)
+	if err != nil {
+		logging.Warn("buildBaseState", "get_quotes_failed",
+			logging.Err(err),
+			"symbols", len(symbols))
+		for _, sym := range symbols {
+			state.Prices[sym] = 100.0
+			state.Volumes[sym] = 5_000_000.0
+		}
+		return state
+	}
+
+	quoteMap := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		quoteMap[q.Symbol] = q
+	}
+
+	for _, sym := range symbols {
+		if q, ok := quoteMap[sym]; ok {
+			state.Prices[sym] = q.Last
+			state.Volumes[sym] = float64(q.Volume)
+		} else {
+			logging.Warn("buildBaseState", "symbol_not_in_quotes",
+				"symbol", sym)
+			state.Prices[sym] = 100.0
+			state.Volumes[sym] = 5_000_000.0
+		}
+	}
+	return state
+}
+
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
 	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
@@ -2519,7 +2554,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 
 	stateStore := livestore.NewStateStore("data/state/live")
-	provider := marketdata.NewMockProvider()
+	provider := marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 
 	liveCfg := live.DefaultOrchestratorConfig()
 	liveCfg.ForceIntradayCycles = forceIntradayCycles
