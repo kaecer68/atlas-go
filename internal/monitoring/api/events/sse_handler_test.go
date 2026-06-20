@@ -334,3 +334,104 @@ func TestSSEHandler_ServeHTTP_DeliversPromotionRecorded(t *testing.T) {
 		t.Errorf("expected experiment ID 'exp-sse-001' in body, got: %s", body)
 	}
 }
+
+func TestBufferHealthAlertEvent_AppendsToBuffer(t *testing.T) {
+	resetHealthAlertBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "evt-health-1",
+		Type:      eventbus.EventHealthAlert,
+		Timestamp: time.Now(),
+		Payload: eventbus.HealthAlertPayload{
+			Severity:  "WARNING",
+			Category:  "sharpe_trend",
+			Message:   "test alert",
+			Value:     0.1,
+			Threshold: 0.5,
+		},
+	}
+
+	BufferHealthAlertEvent(event)
+
+	read := GetBufferedHealthAlerts()
+	if len(read) != 1 {
+		t.Fatalf("expected 1 buffered health alert, got %d", len(read))
+	}
+	if read[0].Event.ID != "evt-health-1" {
+		t.Errorf("expected ID 'evt-health-1', got %q", read[0].Event.ID)
+	}
+	payload, ok := read[0].Event.Payload.(eventbus.HealthAlertPayload)
+	if !ok {
+		t.Fatalf("expected HealthAlertPayload, got %T", read[0].Event.Payload)
+	}
+	if payload.Category != "sharpe_trend" || payload.Severity != "WARNING" {
+		t.Errorf("unexpected payload: %+v", payload)
+	}
+}
+
+func TestBufferHealthAlertEvent_CapsAt50(t *testing.T) {
+	resetHealthAlertBuffer()
+
+	for i := 0; i < 60; i++ {
+		BufferHealthAlertEvent(eventbus.BusEvent{
+			ID:        fmt.Sprintf("evt-cap-%d", i),
+			Type:      eventbus.EventHealthAlert,
+			Timestamp: time.Now(),
+		})
+	}
+
+	read := GetBufferedHealthAlerts()
+	if len(read) != 50 {
+		t.Fatalf("expected 50 buffered health alerts (capped), got %d", len(read))
+	}
+	if read[0].Event.ID != "evt-cap-10" {
+		t.Errorf("expected oldest kept to be 'evt-cap-10', got %q", read[0].Event.ID)
+	}
+	if read[49].Event.ID != "evt-cap-59" {
+		t.Errorf("expected newest to be 'evt-cap-59', got %q", read[49].Event.ID)
+	}
+}
+
+func TestSSEHandler_ServeHTTP_DeliversBufferedHealthAlertOnConnect(t *testing.T) {
+	resetHealthAlertBuffer()
+
+	BufferHealthAlertEvent(eventbus.BusEvent{
+		ID:        "evt-health-buffered-1",
+		Type:      eventbus.EventHealthAlert,
+		Timestamp: time.Now(),
+		Payload: eventbus.HealthAlertPayload{
+			Severity:  "CRITICAL",
+			Category:  "drawdown",
+			Message:   "buffered alert before connect",
+			Value:     0.18,
+			Threshold: 0.15,
+		},
+	})
+
+	bus := eventbus.NewChannelEventBus(256)
+	defer bus.Close()
+
+	handler := NewSSEHandler(bus)
+	req := httptest.NewRequest(http.MethodGet, "/api/events/stream", nil)
+	rec := httptest.NewRecorder()
+
+	ctx, cancel := context.WithCancel(req.Context())
+	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
+	go func() {
+		defer close(handlerDone)
+		handler.ServeHTTP(rec, req)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-handlerDone
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "monitor.health.alert") {
+		t.Errorf("expected health_alert event in body, got: %s", body)
+	}
+	if !strings.Contains(body, "buffered alert before connect") {
+		t.Errorf("expected buffered alert message in body, got: %s", body)
+	}
+}

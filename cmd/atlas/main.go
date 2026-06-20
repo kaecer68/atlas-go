@@ -420,6 +420,10 @@ func run(args []string, deps appDeps) error {
 			apievents.BufferPromotionRecordedEvent(event)
 			return nil
 		})
+		dashEventBus.Subscribe(eventbus.EventHealthAlert, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferHealthAlertEvent(event)
+			return nil
+		})
 		risk.NewAuditSubscriber(dashEventBus)
 		log.Printf("[Risk] audit subscriber registered on shared event bus")
 		// Initial macro ingestion on startup to populate snapshot and publish events.
