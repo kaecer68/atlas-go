@@ -483,3 +483,30 @@ func TestSSEHandler_BufferRiskGateEvent(t *testing.T) {
 		t.Errorf("expected VaR limit exceeded reason in body, got: %s", body)
 	}
 }
+
+func TestSSEHandler_BufferIndustryCalendarEvent(t *testing.T) {
+	resetIndustryCalendarBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "test-1",
+		Type:      eventbus.EventIndustryCalendar,
+		Timestamp: time.Now(),
+		Payload: eventbus.IndustryCalendarEventPayload{
+			EventID: "test_event_2026",
+			Name:    "Test Event",
+		},
+	}
+	BufferIndustryCalendarEvent(event)
+
+	buffered := GetBufferedIndustryCalendarEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered industry calendar event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(eventbus.IndustryCalendarEventPayload)
+	if payload.EventID != "test_event_2026" {
+		t.Errorf("expected EventID test_event_2026, got %s", payload.EventID)
+	}
+	if buffered[0].Event.Type != eventbus.EventIndustryCalendar {
+		t.Errorf("expected type %s, got %s", eventbus.EventIndustryCalendar, buffered[0].Event.Type)
+	}
+}

@@ -75,8 +75,11 @@ const (
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
 
 	// 风险闸门事件
-	EventRiskGateRejected  EventType = "monitor.risk_gate.rejected"
+	EventRiskGateRejected   EventType = "monitor.risk_gate.rejected"
 	EventRiskGateOverridden EventType = "monitor.risk_gate.overridden"
+
+	// 产业日历事件
+	EventIndustryCalendar EventType = "industry.calendar.event"
 
 	EventHealthAlert       EventType = "monitor.health.alert"
 	EventPromotionRecorded EventType = "experiment.promotion_recorded"
@@ -168,14 +171,35 @@ type RiskEventPayload struct {
 
 // RiskGateEventPayload 风险闸门决策事件载荷
 type RiskGateEventPayload struct {
-	Phase             string    `json:"phase"`              // pre_trade, in_trade, post_trade
-	Verdict           string    `json:"verdict"`            // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
+	Phase             string    `json:"phase"`   // pre_trade, in_trade, post_trade
+	Verdict           string    `json:"verdict"` // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
 	Reason            string    `json:"reason"`
 	ActionType        string    `json:"action_type"`        // SELL, REDUCE, FREEZE, LIQUIDATE, NOTIFY (空字串 if no action)
 	ActionDescription string    `json:"action_description"` // 人類可讀描述 (空字串 if no action)
 	Mode              string    `json:"mode"`               // NORMAL, CAUTIOUS, DEFENSIVE, SUSPENDED
 	Symbol            string    `json:"symbol"`
 	Timestamp         time.Time `json:"timestamp"`
+}
+
+// IndustryCalendarEventPayload 产业日历事件载荷
+type IndustryCalendarEventPayload struct {
+	EventID             string    `json:"event_id"`
+	Name                string    `json:"name"`
+	NameEN              string    `json:"name_en,omitempty"`
+	EventType           string    `json:"event_type"`
+	Description         string    `json:"description"`
+	Direction           string    `json:"direction"` // bullish / bearish / mixed / neutral
+	BaseWeight          float64   `json:"base_weight"`
+	Active              bool      `json:"active"`
+	StartDate           time.Time `json:"start_date"`
+	EndDate             time.Time `json:"end_date"`
+	PeakDate            time.Time `json:"peak_date"`
+	DecayDays           int       `json:"decay_days"`
+	AffectedIndustries  []string  `json:"affected_industries"`
+	SentimentAdjustment float64   `json:"sentiment_adjustment"`
+	DataSource          string    `json:"data_source"`      // default_rules / twse_provider / finmind_provider / mops_provider
+	EvidenceQuality     string    `json:"evidence_quality"` // backtested / estimated / unverified / realtime
+	GeneratedAt         time.Time `json:"generated_at"`
 }
 
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
@@ -287,6 +311,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},
 	EventNarrative:                  {"偵測到宏觀敘事事件", "warning"},
 	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
+	EventIndustryCalendar:           {"產業日曆事件：當前台股市場日曆事件（除權息、MSCI 調整、財報季等）", "info"},
 	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
 	EventRiskGateOverridden:         {"風控閘門決策被手動覆寫，部位操作已變更", "warning"},
 }
@@ -716,6 +741,17 @@ func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
 		Timestamp: time.Now(),
 		Payload:   payload,
 		Severity:  "warning",
+	})
+}
+
+// PublishIndustryCalendarEvent publishes a Taiwan market calendar event to the event bus.
+func (b *ChannelEventBus) PublishIndustryCalendarEvent(payload IndustryCalendarEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventIndustryCalendar,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
 	})
 }
 

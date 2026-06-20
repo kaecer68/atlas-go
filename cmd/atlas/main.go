@@ -1175,6 +1175,29 @@ func run(args []string, deps appDeps) error {
 						defer cancel()
 						svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
 						svc.EventCalendar.RefreshEvents(time.Now())
+						// Wave 8.3: Publish active industry calendar events to EventBus.
+						// The SSE handler buffers the last 50 calendar events and replays them on client connect.
+						for _, evt := range svc.EventCalendar.DetectActiveEvents(time.Now()) {
+							dashEventBus.PublishIndustryCalendarEvent(eventbus.IndustryCalendarEventPayload{
+								EventID:             evt.ID,
+								Name:                evt.Name,
+								NameEN:              evt.NameEN,
+								EventType:           evt.EventType,
+								Description:         evt.Description,
+								Direction:           evt.Direction,
+								BaseWeight:          evt.BaseWeight,
+								Active:              evt.Active,
+								StartDate:           evt.StartDate,
+								EndDate:             evt.EndDate,
+								PeakDate:            evt.PeakDate,
+								DecayDays:           evt.DecayDays,
+								AffectedIndustries:  evt.AffectedIndustries,
+								SentimentAdjustment: evt.SentimentAdjustment,
+								DataSource:          string(evt.DataSource),
+								EvidenceQuality:     string(evt.EvidenceQuality),
+								GeneratedAt:         evt.GeneratedAt,
+							})
+						}
 						logging.Info("calendar", "auto_calendar_refresh completed")
 						return nil
 					},
