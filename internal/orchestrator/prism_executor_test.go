@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"math"
 	"testing"
 	"time"
@@ -119,5 +120,67 @@ func TestPRISMTrainingExecutorRunFiltersSamplesByTaskRegime(t *testing.T) {
 	wantReturn := (95.0-90.0)/90.0 + (85.0-80.0)/80.0
 	if math.Abs(result.TotalReturn-wantReturn) > 1e-9 {
 		t.Fatalf("expected total return %.10f, got %.10f", wantReturn, result.TotalReturn)
+	}
+}
+
+func TestScenarioExplainerHook(t *testing.T) {
+	called := false
+	ScenarioExplainer = func(ctx context.Context, result interface{}) (string, error) {
+		called = true
+		return "PRISM scenario insight", nil
+	}
+	defer func() { ScenarioExplainer = nil }()
+
+	riskOnDate := time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC)
+	riskOffDate := time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC)
+	settlementDate := time.Date(2026, 3, 28, 0, 0, 0, 0, time.UTC)
+
+	ds := &replay.Dataset{
+		ByDate: map[string]map[string]domain.DailyBar{
+			riskOnDate.Format("2006-01-02"): {
+				"2881.TW": {Date: riskOnDate, Symbol: "2881.TW", Open: 80, High: 92, Low: 79, Close: 90, Volume: 5_000_000},
+				"2882.TW": {Date: riskOnDate, Symbol: "2882.TW", Open: 70, High: 82, Low: 69, Close: 80, Volume: 5_000_000},
+			},
+			riskOffDate.Format("2006-01-02"): {
+				"2881.TW": {Date: riskOffDate, Symbol: "2881.TW", Open: 100, High: 101, Low: 94, Close: 95, Volume: 5_000_000},
+				"2882.TW": {Date: riskOffDate, Symbol: "2882.TW", Open: 90, High: 91, Low: 84, Close: 85, Volume: 5_000_000},
+			},
+			settlementDate.Format("2006-01-02"): {
+				"2881.TW": {Date: settlementDate, Symbol: "2881.TW", Open: 96, High: 97, Low: 84, Close: 85, Volume: 5_000_000},
+				"2882.TW": {Date: settlementDate, Symbol: "2882.TW", Open: 86, High: 87, Low: 74, Close: 75, Volume: 5_000_000},
+			},
+		},
+		Dates: []time.Time{riskOnDate, riskOffDate, settlementDate},
+	}
+
+	registry := domain.AgentRegistry{
+		Version: 1,
+		Agents: []domain.AgentSpec{{
+			ID:         "financials-desk-01",
+			Name:       "Financials Desk",
+			Layer:      domain.LayerSector,
+			Skill:      "financials_desk",
+			Enabled:    true,
+			Universe:   []string{"2881.TW", "2882.TW"},
+			PromptFile: "",
+		}},
+	}
+
+	executor := NewPRISMTrainingExecutor(ds, registry, baseline.DefaultPolicy())
+	result, err := executor.Run(prism.TrainingTask{
+		AgentID:     "financials-desk-01",
+		WindowStart: riskOnDate,
+		WindowEnd:   riskOffDate,
+		Regime:      prism.RegimeRiskOn,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if !called {
+		t.Error("ScenarioExplainer was not called during Run")
+	}
+	if result.Explanation != "PRISM scenario insight" {
+		t.Errorf("expected Explanation %q, got %q", "PRISM scenario insight", result.Explanation)
 	}
 }

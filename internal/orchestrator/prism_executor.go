@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -9,6 +10,16 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
+
+// ScenarioExplainer is a package-level hook for LLM-based explanation of
+// PRISM training results. When non-nil, PRISMTrainingExecutor.Run calls
+// this function after computing a TrainingResult and, on success, stores
+// the returned explanation in result.Explanation.
+//
+// Set by main.go when config.LLMPrismScenarioEnabled is true and an LLM
+// router is available. Uses var indirection to avoid an orchestrator→llm
+// import cycle.
+var ScenarioExplainer func(ctx context.Context, result interface{}) (string, error)
 
 // PRISMTrainingExecutor runs actual backtests over replay data for PRISM training tasks.
 type PRISMTrainingExecutor struct {
@@ -91,7 +102,7 @@ func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResu
 	}
 
 	winCount := countPositive(returns)
-	return prism.TrainingResult{
+	result := prism.TrainingResult{
 		HitRate:      sc.HitRate,
 		SharpeRatio:  sc.SharpeLike,
 		MaxDrawdown:  sc.MaxDrawdown,
@@ -99,7 +110,16 @@ func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResu
 		SignalsCount: sc.Observations,
 		WinCount:     winCount,
 		LossCount:    len(returns) - winCount,
-	}, nil
+	}
+
+	if ScenarioExplainer != nil {
+		explanation, err := ScenarioExplainer(context.Background(), result)
+		if err == nil {
+			result.Explanation = explanation
+		}
+	}
+
+	return result, nil
 }
 
 func mapDomainRegimeToPRISMTrainingRegime(r domain.Regime) prism.RegimeType {

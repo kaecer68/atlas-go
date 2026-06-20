@@ -251,6 +251,14 @@ func defaultRoutingTable() RouterConfig {
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
+			// doc §6.1: narrative.sentiment_explanation
+			//   M3 → V4-Pro → OpenCode-Go → passthrough
+			CapabilitySentimentExplanation: {
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
+				Backup2:    ProviderOpenCodeGo,
+				LastResort: ProviderMock,
+			},
 			// Not in doc §6.1; Phase 2 capability set.
 			CapabilityContraAttribution: {
 				Primary:    ProviderDeepSeek,

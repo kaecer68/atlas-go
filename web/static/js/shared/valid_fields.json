@@ -1244,6 +1244,7 @@
   "sensitivity",
   "sentiment",
   "sentiment_adjustment",
+  "sentiment_explanation",
   "sentiment_label",
   "sentiment_score",
   "sentiment_sub_indicators",

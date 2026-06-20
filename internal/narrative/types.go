@@ -19,6 +19,16 @@ type NarrativeEvent struct {
 	ExpiresAt        time.Time          `json:"expires_at"`
 	Severity         string             `json:"severity"`
 	Status           string             `json:"status"`
+
+	// Explanation is an optional LLM-generated regime explanation for this
+	// event, populated by RegimeExplainer when LLM_NARRATIVE_EXPLAIN_ENABLED
+	// is true. Uses var indirection to avoid narrative→llm import cycle.
+	Explanation string `json:"explanation,omitempty"`
+
+	// SentimentExplanation is an optional LLM-generated sentiment analysis
+	// for this event, populated by SentimentExplainer when
+	// LLM_NARRATIVE_EXPLAIN_ENABLED is true.
+	SentimentExplanation string `json:"sentiment_explanation,omitempty"`
 }
 
 // CausalStep represents one step in a causal transmission chain.

@@ -1866,6 +1866,8 @@ export interface NarrativeEvent {
   expires_at: string;
   severity: string;
   status: string;
+  explanation?: string;
+  sentiment_explanation?: string;
 }
 
 export interface NarrativeFactorScore {
