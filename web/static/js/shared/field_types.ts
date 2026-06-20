@@ -3367,6 +3367,11 @@ export interface fetchLogEntry {
   error?: string;
 }
 
+export interface healthResponse {
+  providers: Record<string, string>;
+  router_version: string;
+}
+
 export interface marginHistoryFile {
   date: string;
   margin_balance: number;
@@ -3376,6 +3381,14 @@ export interface marginHistoryFile {
 export interface maturityTrackerState {
   first_start_date: string;
   last_checked: string;
+}
+
+export interface providerHealthJSON {
+  provider: string;
+  healthy: boolean;
+  last_error: string;
+  last_success: string;
+  breaker_open: boolean;
 }
 
 export interface rawOutcome {
