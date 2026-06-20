@@ -786,10 +786,13 @@ func TestPublishIndustryCalendarEvent(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
+	var mu sync.Mutex
 	var capturedPayload IndustryCalendarEventPayload
 	bus.Subscribe(EventIndustryCalendar, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
+		mu.Lock()
 		capturedPayload = event.Payload.(IndustryCalendarEventPayload)
+		mu.Unlock()
 		return nil
 	})
 
@@ -817,6 +820,7 @@ func TestPublishIndustryCalendarEvent(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 industry calendar event, got %d", received.Load())
 	}
+	mu.Lock()
 	if capturedPayload.EventID != "ex_dividend_2026_06" {
 		t.Errorf("expected EventID ex_dividend_2026_06, got %s", capturedPayload.EventID)
 	}
@@ -829,6 +833,7 @@ func TestPublishIndustryCalendarEvent(t *testing.T) {
 	if len(capturedPayload.AffectedIndustries) != 2 {
 		t.Errorf("expected 2 affected industries, got %d", len(capturedPayload.AffectedIndustries))
 	}
+	mu.Unlock()
 }
 
 func TestPublishBacktestCompleted(t *testing.T) {
@@ -836,10 +841,13 @@ func TestPublishBacktestCompleted(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
+	var mu sync.Mutex
 	var receivedPayload BacktestCompletedEventPayload
 	bus.Subscribe(EventBacktestCompleted, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
+		mu.Lock()
 		receivedPayload = event.Payload.(BacktestCompletedEventPayload)
+		mu.Unlock()
 		return nil
 	})
 
@@ -863,12 +871,14 @@ func TestPublishBacktestCompleted(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 backtest completed event, got %d", received.Load())
 	}
+	mu.Lock()
 	if receivedPayload.WindowID != "bt-2026-06-21" {
 		t.Errorf("unexpected window_id: %s", receivedPayload.WindowID)
 	}
 	if !receivedPayload.SyncSucceeded {
 		t.Errorf("expected SyncSucceeded=true, got false")
 	}
+	mu.Unlock()
 }
 
 func TestPublishCalibrationCompleted(t *testing.T) {
