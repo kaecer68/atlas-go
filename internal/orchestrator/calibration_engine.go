@@ -346,7 +346,7 @@ func (e *CalibrationEngine) ApplyToConfigPath(report ConvictionCalibrationReport
 			return fmt.Errorf("ApplyToConfig: %w", err)
 		}
 	}
-	return params.LockedSaveWithRollback(path)
+	return params.TryLockedSaveWithRollback(path, 30*time.Second)
 }
 
 // applyParamField maps a ParameterMeta.Name string to the corresponding

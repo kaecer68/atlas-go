@@ -2722,6 +2722,24 @@ func (p *ParametersConfig) LockedSaveWithRollback(path string) error {
 	return p.SaveWithRollback(path)
 }
 
+// TryLockedSaveWithRollback attempts to acquire the advisory file lock for
+// parameters.json within the given timeout, then performs the same atomic
+// write as SaveWithRollback. If the lock cannot be acquired in time, it
+// returns an error immediately instead of blocking indefinitely, allowing
+// callers to log and skip the write rather than stalling the process.
+func (p *ParametersConfig) TryLockedSaveWithRollback(path string, timeout time.Duration) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create parent dir for parameters config: %w", err)
+	}
+	locker := GetFileLocker(path)
+	unlock, err := locker.TryLock(timeout)
+	if err != nil {
+		return fmt.Errorf("acquire parameter file lock: %w", err)
+	}
+	defer unlock()
+	return p.SaveWithRollback(path)
+}
+
 func mergeRiskGateDefaults(cfg *ParametersConfig) {
 	def := DefaultParametersConfig().RiskGate
 	r := &cfg.RiskGate
