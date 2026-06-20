@@ -16,6 +16,8 @@ package narrative
 //     expansion flips it to `部署循環`, this test fails loudly.
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -503,5 +505,52 @@ func TestContainsCJK(t *testing.T) {
 		if got := containsCJK(c.in); got != c.want {
 			t.Errorf("containsCJK(%q) = %v, want %v", c.in, got, c.want)
 		}
+	}
+}
+
+// ─── RationaleTranslator hook tests ────────────────────────────────────
+
+func TestRationaleCorpus_TranslatorHook(t *testing.T) {
+	// Set a mock RationaleTranslator and verify TranslateReason calls it
+	// for unknown English text (passthrough seam).
+	called := false
+	RationaleTranslator = func(ctx context.Context, englishText string, dataClass string) (string, error) {
+		called = true
+		return "LLM 翻譯結果", nil
+	}
+	defer func() { RationaleTranslator = nil }()
+
+	got := TranslateReason("some unmapped english rationale")
+	if !called {
+		t.Error("RationaleTranslator was not called")
+	}
+	if got != "LLM 翻譯結果" {
+		t.Errorf("expected LLM translation, got %q", got)
+	}
+}
+
+func TestRationaleCorpus_TranslatorNil_PassesThrough(t *testing.T) {
+	// When RationaleTranslator is nil, TranslateReason returns untranslated text.
+	RationaleTranslator = nil
+
+	in := "some unmapped english rationale"
+	got := TranslateReason(in)
+	if got != in {
+		t.Errorf("nil hook should passthrough, got %q, want %q", got, in)
+	}
+}
+
+func TestRationaleCorpus_TranslatorErrorFallsThrough(t *testing.T) {
+	// When RationaleTranslator returns an error, TranslateReason falls
+	// through to passthrough (existing behavior).
+	RationaleTranslator = func(ctx context.Context, englishText string, dataClass string) (string, error) {
+		return "", fmt.Errorf("LLM unavailable")
+	}
+	defer func() { RationaleTranslator = nil }()
+
+	in := "some unmapped english rationale"
+	got := TranslateReason(in)
+	if got != in {
+		t.Errorf("error hook should passthrough, got %q, want %q", got, in)
 	}
 }

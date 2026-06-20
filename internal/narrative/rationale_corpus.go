@@ -36,7 +36,22 @@
 //     guard-layer strings don't get double-translated.
 package narrative
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
+
+// RationaleTranslator is a package-level hook for LLM-based translation of
+// English rationales that are not covered by the static reasonCorpus.
+//
+// When non-nil, TranslateReason calls this function at the passthrough seam
+// (step 6) before returning the untranslated English text. The hook accepts
+// a context, the English text, and a data class string (e.g. "public").
+//
+// Set by main.go when config.LLMRationaleTranslationEnabled is true and an
+// LLM router is available. Uses var indirection to avoid a narrative→llm
+// import cycle (narrative is a leaf package that cannot import llm).
+var RationaleTranslator func(ctx context.Context, englishText string, dataClass string) (string, error)
 
 // reasonCorpus maps a normalized (lowercased, whitespace-trimmed) English
 // rationale string to its Chinese (Traditional, Taiwan-style) translation.
@@ -205,7 +220,17 @@ func TranslateReason(english string) string {
 		return translatedBase + " " + suffix
 	}
 
-	// 6) Passthrough — unmapped English stays visible for future corpus expansion.
+	// 6) Passthrough seam with opt-in LLM fallback.
+	// When RationaleTranslator is non-nil (wired by main.go under the
+	// LLM_RATIONALE_TRANSLATION_ENABLED flag), try LLM-based translation
+	// before returning the untranslated English text. Falls through to
+	// passthrough on any error or empty result.
+	if RationaleTranslator != nil {
+		translated, err := RationaleTranslator(context.Background(), trimmed, "public")
+		if err == nil && translated != "" {
+			return translated
+		}
+	}
 	return trimmed
 }
 

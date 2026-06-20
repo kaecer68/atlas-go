@@ -83,6 +83,12 @@ type TrainingResult struct {
 	Error        string
 	Duration     time.Duration
 	Synthetic    bool // true when no TrainingExecutor was available
+
+	// Explanation is an optional natural-language explanation of the
+	// training result, populated by the ScenarioExplainer hook when
+	// LLM_PRISM_SCENARIO_ENABLED is true. Uses var indirection in
+	// internal/orchestrator to avoid a prism→llm import cycle.
+	Explanation string `json:"explanation,omitempty"`
 }
 
 // TrainingQueue manages a regime-specific training queue

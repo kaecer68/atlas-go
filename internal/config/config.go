@@ -55,6 +55,15 @@ type Config struct {
 	FubonDMAAPIKey             string
 	FubonDMAScriptPath         string
 	FubonDMAPythonPath         string
+
+	// LLM capability wiring flags (opt-in, all default false).
+	// Each flag gates a package-level var hook that wires an LLM capability
+	// handler into a product module (narrative / prism / risk) without
+	// creating an import cycle. Set to "true" via env var or .env file.
+	LLMRationaleTranslationEnabled bool // LLM_RATIONALE_TRANSLATION_ENABLED — W1: rationale_corpus.go translator hook
+	LLMPrismScenarioEnabled        bool // LLM_PRISM_SCENARIO_ENABLED — W2: prism_executor.go scenario explainer hook
+	LLMNarrativeExplainEnabled     bool // LLM_NARRATIVE_EXPLAIN_ENABLED — W3: explain_hooks.go regime+sentiment hooks
+	LLMRiskForensicsEnabled        bool // LLM_RISK_FORENSICS_ENABLED — W4: forensics_hook.go performance forensics hook
 }
 
 func Load() Config {
@@ -108,6 +117,12 @@ func Load() Config {
 		FubonDMAAPIKey:             envOr("FUBON_DMA_API_KEY", ""),
 		FubonDMAScriptPath:         envOr("FUBON_DMA_SCRIPT_PATH", "cmd/fubon-dma/wrapper.py"),
 		FubonDMAPythonPath:         envOr("FUBON_DMA_PYTHON_PATH", "python3"),
+
+		// LLM capability wiring (all opt-in, default false)
+		LLMRationaleTranslationEnabled: envOrBool("LLM_RATIONALE_TRANSLATION_ENABLED", false),
+		LLMPrismScenarioEnabled:        envOrBool("LLM_PRISM_SCENARIO_ENABLED", false),
+		LLMNarrativeExplainEnabled:     envOrBool("LLM_NARRATIVE_EXPLAIN_ENABLED", false),
+		LLMRiskForensicsEnabled:        envOrBool("LLM_RISK_FORENSICS_ENABLED", false),
 	}
 }
 
