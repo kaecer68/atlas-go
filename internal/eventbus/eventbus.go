@@ -85,6 +85,7 @@ const (
 	EventPromotionRecorded    EventType = "experiment.promotion_recorded"
 	EventBacktestCompleted    EventType = "experiment.backtest_completed"
 	EventCalibrationCompleted EventType = "experiment.calibration_completed"
+	EventTradeSlippage        EventType = "trade.slippage"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -236,6 +237,20 @@ type CalibrationCompletedEventPayload struct {
 	SyncSucceeded     bool      `json:"sync_succeeded"`
 }
 
+// TradeSlippageEventPayload 滑价事件载荷 — emitted per order fill.
+type TradeSlippageEventPayload struct {
+	OrderID       string    `json:"order_id"`
+	Symbol        string    `json:"symbol"`
+	Side          string    `json:"side"`
+	Quantity      int       `json:"quantity"`
+	ExpectedPrice float64   `json:"expected_price"`
+	FillPrice     float64   `json:"fill_price"`
+	SlippageBPS   float64   `json:"slippage_bps"`
+	SlippageCost  float64   `json:"slippage_cost"`
+	BrokerMode    string    `json:"broker_mode"`
+	Timestamp     time.Time `json:"timestamp"`
+}
+
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
 type ExperimentInsufficientDataEventPayload struct {
 	ExperimentID  string `json:"experiment_id"`
@@ -350,6 +365,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventRiskGateOverridden:         {"風控閘門決策被手動覆寫，部位操作已變更", "warning"},
 	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
 	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
+	EventTradeSlippage:              {"訂單成交滑價計算：期望價與實際成交價之差（BPS），用於監控執行品質", "info"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -809,6 +825,18 @@ func (b *ChannelEventBus) PublishCalibrationCompleted(payload CalibrationComplet
 	b.Publish(BusEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventCalibrationCompleted,
+		Timestamp: time.Now(),
+		Payload:   payload,
+		Severity:  "info",
+	})
+}
+
+// PublishTradeSlippage publishes a per-order-fill slippage event.
+// Fired by internal/live/order_manager.go on every order fill (status == "filled").
+func (b *ChannelEventBus) PublishTradeSlippage(payload TradeSlippageEventPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventTradeSlippage,
 		Timestamp: time.Now(),
 		Payload:   payload,
 		Severity:  "info",
