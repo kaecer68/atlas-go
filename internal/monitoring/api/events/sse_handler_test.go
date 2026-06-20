@@ -260,3 +260,77 @@ func TestSSEHandler_ServeHTTP_EventDelivery(t *testing.T) {
 		t.Errorf("expected %q in body, got: %s", expected, body)
 	}
 }
+
+func TestBufferPromotionRecordedEvent_AppendsToBuffer(t *testing.T) {
+	resetPromotionBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "evt-prom-1",
+		Type:      eventbus.EventPromotionRecorded,
+		Timestamp: time.Now(),
+		Payload: eventbus.PromotionRecordedPayload{
+			ExperimentID:       "exp-test-001",
+			PrePromotionSharpe: 1.42,
+		},
+	}
+
+	BufferPromotionRecordedEvent(event)
+
+	read := GetBufferedPromotionEvents()
+	if len(read) != 1 {
+		t.Fatalf("expected 1 buffered promotion event, got %d", len(read))
+	}
+	if read[0].Event.ID != "evt-prom-1" {
+		t.Errorf("expected ID 'evt-prom-1', got %q", read[0].Event.ID)
+	}
+	payload, ok := read[0].Event.Payload.(eventbus.PromotionRecordedPayload)
+	if !ok {
+		t.Fatalf("expected PromotionRecordedPayload, got %T", read[0].Event.Payload)
+	}
+	if payload.ExperimentID != "exp-test-001" || payload.PrePromotionSharpe != 1.42 {
+		t.Errorf("unexpected payload: %+v", payload)
+	}
+}
+
+func TestSSEHandler_ServeHTTP_DeliversPromotionRecorded(t *testing.T) {
+	resetPromotionBuffer()
+
+	bus := eventbus.NewChannelEventBus(256)
+	defer bus.Close()
+
+	handler := NewSSEHandler(bus)
+	req := httptest.NewRequest(http.MethodGet, "/api/events/stream?type=experiment.promotion_recorded", nil)
+	rec := httptest.NewRecorder()
+
+	ctx, cancel := context.WithCancel(req.Context())
+	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
+	go func() {
+		defer close(handlerDone)
+		handler.ServeHTTP(rec, req)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	bus.Publish(eventbus.BusEvent{
+		ID:        "evt-prom-sse-1",
+		Type:      eventbus.EventPromotionRecorded,
+		Timestamp: time.Now(),
+		Payload: eventbus.PromotionRecordedPayload{
+			ExperimentID:       "exp-sse-001",
+			PrePromotionSharpe: 0.95,
+		},
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-handlerDone
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "experiment.promotion_recorded") {
+		t.Errorf("expected promotion_recorded event in body, got: %s", body)
+	}
+	if !strings.Contains(body, "exp-sse-001") {
+		t.Errorf("expected experiment ID 'exp-sse-001' in body, got: %s", body)
+	}
+}

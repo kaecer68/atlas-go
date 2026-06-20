@@ -23,6 +23,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/backtest"
+	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -386,6 +387,11 @@ func run(args []string, deps appDeps) error {
 		dwMgr := portfolio.NewDarwinianWeightManager(filepath.Join(cfg.WorkDir, "data/state/darwinian_weights.json"))
 		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
 		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
+		baselineMgr := baseline.NewManager(cfg.BaselinePolicyPath)
+		judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
+		autoJudgePromoter := experiment.NewAutoJudgePromoter(judge, baselineMgr).
+			WithMaturityTracker(maturityTracker).
+			WithPromotionRecorder(autoRollback)
 		dashboard.SetJanusEngine(janusEngine)
 		log.Printf("[JANUS] engine injected into dashboard API")
 		if repo != nil {
@@ -400,10 +406,15 @@ func run(args []string, deps appDeps) error {
 
 		// Inject EventBus for SSE streaming endpoint
 		dashboard.SetEventBus(dashEventBus)
+		autoRollback.WithEventBus(dashEventBus)
 		dashboard.SetContext(context.Background())
 		log.Printf("[EventBus] injected into dashboard API for SSE streaming")
 		dashEventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
 			apievents.BufferNarrativeEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventPromotionRecorded, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferPromotionRecordedEvent(event)
 			return nil
 		})
 		risk.NewAuditSubscriber(dashEventBus)
@@ -888,6 +899,21 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered auto_rollback background task (24h interval)")
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_judge_promoter",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					pending := experiment.LoadPendingExperiments(cfg.WorkDir)
+					if len(pending) == 0 {
+						return nil
+					}
+					_, err := autoJudgePromoter.RunDaily(ctx, pending)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_judge_promoter background task (24h interval)")
 
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "system_health_monitor",
