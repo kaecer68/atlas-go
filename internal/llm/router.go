@@ -69,6 +69,13 @@ func NewDefaultRouter(impls ...ProviderImpl) *DefaultRouter {
 func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error) {
 	// Step 1: ForceProvider bypasses routing table
 	if req.Options.ForceProvider != nil {
+		// ForceProvider still respects the DataClass gate (ADR-010).
+		// Without this check, a caller could route regulated data to hosted
+		// MiniMax M3 by setting ForceProvider=ProviderMiniMax + DataClass=Regulated,
+		// violating the data sovereignty boundary.
+		if r.shouldGateProvider(*req.Options.ForceProvider, req.DataClass) {
+			return Response{}, ErrProviderDisabled
+		}
 		impl, ok := r.providers[*req.Options.ForceProvider]
 		if !ok {
 			return Response{}, ErrProviderNotFound

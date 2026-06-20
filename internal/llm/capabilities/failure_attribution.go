@@ -63,7 +63,7 @@ func (h *FailureAttributionHandler) Handle(
 	payload FailureAttributionPayload,
 ) (FailureAttributionResponse, error) {
 	dc := payload.DataClass
-	if dc == 0 {
+	if dc == llm.DataClassUnmarked {
 		dc = llm.DataClassNonRegulated
 	}
 

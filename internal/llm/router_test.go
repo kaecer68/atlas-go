@@ -459,3 +459,84 @@ func TestDefaultRouter_Counter_Increment(t *testing.T) {
 		t.Error("BackupChainExhaustedTotal counter is nil")
 	}
 }
+
+// TestDefaultRouter_ForceProvider_RespectsDataClassGate verifies that ForceProvider
+// still respects the DataClass gate (ADR-010). A caller cannot route regulated data
+// to hosted MiniMax M3 by setting ForceProvider=ProviderMiniMax + DataClass=Regulated.
+func TestDefaultRouter_ForceProvider_RespectsDataClassGate(t *testing.T) {
+	miniMax := &mockProvider{
+		name: ProviderMiniMax,
+		healthResp: HealthStatus{
+			Provider: ProviderMiniMax,
+			Healthy:  true,
+		},
+	}
+	deepseek := &mockProvider{
+		name: ProviderDeepSeek,
+		healthResp: HealthStatus{
+			Provider: ProviderDeepSeek,
+			Healthy:  true,
+		},
+	}
+	router := NewDefaultRouter(miniMax, deepseek)
+
+	t.Run("Regulated+ForceProviderMiniMax returns ErrProviderDisabled", func(t *testing.T) {
+		forceM3 := ProviderMiniMax
+		req := Request{
+			Capability: CapabilityFailureAttribution,
+			DataClass:  DataClassRegulated,
+			Options:    Options{ForceProvider: &forceM3},
+		}
+		_, err := router.Call(context.Background(), req)
+		if !errors.Is(err, ErrProviderDisabled) {
+			t.Fatalf("expected ErrProviderDisabled, got %v", err)
+		}
+	})
+
+	t.Run("Secret+ForceProviderMiniMax returns ErrProviderDisabled", func(t *testing.T) {
+		forceM3 := ProviderMiniMax
+		req := Request{
+			Capability: CapabilityFailureAttribution,
+			DataClass:  DataClassSecret,
+			Options:    Options{ForceProvider: &forceM3},
+		}
+		_, err := router.Call(context.Background(), req)
+		if !errors.Is(err, ErrProviderDisabled) {
+			t.Fatalf("expected ErrProviderDisabled, got %v", err)
+		}
+	})
+
+	t.Run("Unmarked+ForceProviderMiniMax proceeds normally", func(t *testing.T) {
+		miniMax.callResp = Response{Output: "ok", Provider: ProviderMiniMax}
+		forceM3 := ProviderMiniMax
+		req := Request{
+			Capability: CapabilityFailureAttribution,
+			DataClass:  DataClassUnmarked,
+			Options:    Options{ForceProvider: &forceM3},
+		}
+		resp, err := router.Call(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Provider != ProviderMiniMax {
+			t.Errorf("expected ProviderMiniMax, got %v", resp.Provider)
+		}
+	})
+
+	t.Run("NonRegulated+ForceProviderDeepSeek proceeds normally", func(t *testing.T) {
+		deepseek.callResp = Response{Output: "deepseek ok", Provider: ProviderDeepSeek}
+		forceDS := ProviderDeepSeek
+		req := Request{
+			Capability: CapabilityFailureAttribution,
+			DataClass:  DataClassRegulated,
+			Options:    Options{ForceProvider: &forceDS},
+		}
+		resp, err := router.Call(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Provider != ProviderDeepSeek {
+			t.Errorf("expected ProviderDeepSeek, got %v", resp.Provider)
+		}
+	})
+}

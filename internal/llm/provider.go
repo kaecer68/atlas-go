@@ -69,10 +69,10 @@ type DataClass int
 //   - Regulated:  data subject to regulatory controls (e.g., PII, financial data)
 //   - Secret:     highly sensitive data requiring maximum safeguards
 const (
-	DataClassUnmarked     DataClass = iota + 1 // 1
-	DataClassNonRegulated                      // 2
-	DataClassRegulated                         // 3
-	DataClassSecret                            // 4
+	DataClassUnmarked     DataClass = iota // 0
+	DataClassNonRegulated                  // 1
+	DataClassRegulated                     // 2
+	DataClassSecret                        // 3
 )
 
 // Request encapsulates a single LLM inference request.
