@@ -38,6 +38,9 @@ import (
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/llm"
 	llmAdapters "github.com/kaecer68/atlas-go/internal/llm/adapters"
+	"github.com/kaecer68/atlas-go/internal/llm/capabilities"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
+	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -51,6 +54,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/realtime"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/retail"
@@ -1653,6 +1657,113 @@ func run(args []string, deps appDeps) error {
 			}
 			llmHealthHandler := llmHealth.NewHandler(llmRouter)
 			llmHealthHandler.RegisterRoutes(mux)
+
+			// =============================================================================
+			// Phase 2: LLM Capability Wiring (opt-in via LLM_*_ENABLED flags)
+			// =============================================================================
+
+			// Provider clients (created only if API keys are set)
+			var (
+				deepseekClient *clients.DeepSeekClient
+				minimaxClient  *clients.MiniMaxClient
+				kimiClient     *clients.KimiClient
+			)
+
+			if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
+				deepseekClient = clients.NewDeepSeekClient(apiKey, nil)
+			}
+			if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
+				minimaxClient = clients.NewMiniMaxClient(apiKey, nil)
+			}
+			if apiKey := config.GetSecret("LLM_KIMI_API_KEY"); apiKey != "" {
+				kimiClient = clients.NewKimiClient(apiKey, nil)
+			}
+
+			// ProviderImpl adapters (created only if client exists)
+			var (
+				deepseekAdapter *llmAdapters.DeepSeekAdapter
+				minimaxAdapter  *llmAdapters.MiniMaxAdapter
+				kimiPhase2      *llmAdapters.KimiAdapter
+			)
+			if deepseekClient != nil {
+				deepseekAdapter = llmAdapters.NewDeepSeekAdapter(deepseekClient, "deepseek-v4-pro")
+			}
+			if minimaxClient != nil {
+				minimaxAdapter = llmAdapters.NewMiniMaxAdapter(minimaxClient)
+			}
+			if kimiClient != nil {
+				kimiPhase2 = llmAdapters.NewKimiAdapter(kimiClient)
+			}
+
+			// Register adapters with Router (llmRouter is always non-nil after Phase 1)
+			if deepseekAdapter != nil {
+				_ = llmRouter.Register(deepseekAdapter)
+			}
+			if minimaxAdapter != nil {
+				_ = llmRouter.Register(minimaxAdapter)
+			}
+			if kimiPhase2 != nil {
+				_ = llmRouter.Register(kimiPhase2)
+			}
+
+			// Wire 4 module hooks (only if flag enabled AND Router exists)
+			if cfg.LLMRationaleTranslationEnabled {
+				narrative.RationaleTranslator = func(ctx context.Context, englishText string, dataClass string) (string, error) {
+					h := capabilities.NewRationaleGenerationHandler(llmRouter)
+					input := schemas.RationaleGenerationInput{
+						EnglishText: englishText,
+						DataClass:   llm.DataClassNonRegulated,
+					}
+					output, err := h.Handle(ctx, input)
+					return output.TranslatedText, err
+				}
+			}
+			if cfg.LLMPrismScenarioEnabled {
+				orchestrator.ScenarioExplainer = func(ctx context.Context, result interface{}) (string, error) {
+					h := capabilities.NewScenarioSimulationHandler(llmRouter)
+					tr, ok := result.(prism.TrainingResult)
+					if !ok {
+						return "", fmt.Errorf("scenario: unexpected result type %T", result)
+					}
+					input := schemas.ScenarioSimulationInput{Result: tr}
+					output, err := h.Handle(ctx, input)
+					return output.Insight, err
+				}
+			}
+			if cfg.LLMNarrativeExplainEnabled {
+				narrative.RegimeExplainer = func(ctx context.Context, event interface{}) (string, error) {
+					h := capabilities.NewRegimeExplanationHandler(llmRouter)
+					ne, ok := event.(*narrative.NarrativeEvent)
+					if !ok {
+						return "", fmt.Errorf("regime: unexpected event type %T", event)
+					}
+					input := schemas.RegimeExplanationInput{Event: *ne}
+					output, err := h.Handle(ctx, input)
+					return output.Headline, err
+				}
+				narrative.SentimentExplainer = func(ctx context.Context, event interface{}) (string, error) {
+					h := capabilities.NewSentimentExplanationHandler(llmRouter)
+					ne, ok := event.(*narrative.NarrativeEvent)
+					if !ok {
+						return "", fmt.Errorf("sentiment: unexpected event type %T", event)
+					}
+					input := schemas.SentimentExplanationInput{Event: *ne}
+					output, err := h.Handle(ctx, input)
+					return output.Explanation, err
+				}
+			}
+			if cfg.LLMRiskForensicsEnabled {
+				risk.PerformanceForensics = func(ctx context.Context, snapshot interface{}) (string, error) {
+					h := capabilities.NewPerformanceForensicsHandler(llmRouter)
+					rs, ok := snapshot.(domain.RiskSnapshot)
+					if !ok {
+						return "", fmt.Errorf("forensics: unexpected snapshot type %T", snapshot)
+					}
+					input := schemas.PerformanceForensicsInput{Snapshot: rs}
+					output, err := h.Handle(ctx, input)
+					return output.Commentary, err
+				}
+			}
 
 			if dashEventBus != nil {
 				dashEventBus.Subscribe(eventbus.EventSimulationComplete, func(ctx context.Context, ev eventbus.BusEvent) error {

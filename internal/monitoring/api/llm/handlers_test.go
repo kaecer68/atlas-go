@@ -25,6 +25,10 @@ func (m *mockRouter) Health() map[corellm.Provider]corellm.HealthStatus {
 	return m.healthMap
 }
 
+func (m *mockRouter) Register(_ corellm.ProviderImpl) error {
+	return nil
+}
+
 // TestHandleGetHealth_Healthy tests that GET /api/llm/health returns 200
 // when providers are healthy and the response schema is correct.
 func TestHandleGetHealth_Healthy(t *testing.T) {

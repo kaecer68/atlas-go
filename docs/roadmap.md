@@ -58,6 +58,46 @@ Shipped in v0.0.0.6:
 - `EventPromotionRecorded` event type delivered to dashboard clients via SSE with catch-up support.
 - `GET /api/dashboard/fetch-log` endpoint for recent channel fetch events.
 
+## Wave 8 (2026-06, in planning)
+
+Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
+
+目標：把 b29 audit 識別的 4 個 RED + 5 個 YELLOW 事件缺口實作成統一事件流（type 定義 + producer + SSE handler + frontend component）。
+
+### 前置決策（必拍板才能開工）
+
+- **PD-1**：事件 payload schema 版本化（每個事件加 `schema_version` 欄位）
+- **PD-2**：JSONL 審計軌跡（9 個新事件同步寫入 AnnotationStore，batch flush 100 筆或 1 秒）
+- **PD-3**：效能預算與去重（單節點 max 500 events/sec；高頻事件 producer 端 dedup）
+
+### Wave 8 RED（9 個事件，1 PR = 1 事件）
+
+1. `RiskGateRejected`
+2. `RiskGateOverride`
+3. `IndustryCalendarEvent`
+4. `TradeSlippage`
+5. `LLMAnnotatorCircuitOpen`
+6. `LLMAnnotatorFallbackUsed`
+7. `LLMAnnotatorQuotaExceeded`
+8. `BacktestCompleted`
+9. `CalibrationCompleted`
+
+### Wave 9 YELLOW（5 個，排隊等 Wave 8 收尾）
+
+- `ChannelIndividualHealth`、`FactorWeightRegression`、`DriftDetector`、`RegimeChangeConfirmed`、`IngestionLagSpike`
+
+### 依賴
+
+- 上游：Wave 7.5 v0.0.0.6 ✅、Phase 2 CLI #610 修復（in-flight）
+- 下游：Phase 4 Production Trading、refactor issue #611
+
+### 邊界（嚴格）
+
+- ✅ 可動：`internal/monitoring/api/events/`、`internal/monitoring/service/`、`web/services/sse.js`、`web/components/event-list.js`、`monitoring/rules/`、`docs/`
+- ⛔ 不可動：`internal/llm/`、`internal/llm_annotator/`、`internal/narrative/`、`internal/spawning/`、`internal/orchestrator/`、`cmd/atlas/main.go` provider 區段
+
+---
+
 ## Phase 6: Production Trading (Next)
 
 - Decision chain transparency (FactorScores breakdown, ConvictionBreakdown, MacroEvent confidence) ✅
