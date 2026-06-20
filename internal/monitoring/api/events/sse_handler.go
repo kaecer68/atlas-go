@@ -43,6 +43,19 @@ var (
 	lastNarrativeMutex sync.RWMutex
 )
 
+// BufferedPromotionRecordedEvent holds a published promotion-recorded event for SSE catchup.
+type BufferedPromotionRecordedEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedPromotionEvents = 50
+
+var (
+	promotionBuffer    []BufferedPromotionRecordedEvent
+	lastPromotionMutex sync.RWMutex
+)
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -56,6 +69,35 @@ func BufferNarrativeEvent(event eventbus.BusEvent) {
 	if len(narrativeBuffer) > maxBufferedNarrativeEvents {
 		narrativeBuffer = narrativeBuffer[len(narrativeBuffer)-maxBufferedNarrativeEvents:]
 	}
+}
+
+// BufferPromotionRecordedEvent stores a promotion-recorded event for SSE catchup.
+func BufferPromotionRecordedEvent(event eventbus.BusEvent) {
+	lastPromotionMutex.Lock()
+	defer lastPromotionMutex.Unlock()
+	promotionBuffer = append(promotionBuffer, BufferedPromotionRecordedEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(promotionBuffer) > maxBufferedPromotionEvents {
+		promotionBuffer = promotionBuffer[len(promotionBuffer)-maxBufferedPromotionEvents:]
+	}
+}
+
+// GetBufferedPromotionEvents returns a snapshot of buffered promotion-recorded events.
+func GetBufferedPromotionEvents() []BufferedPromotionRecordedEvent {
+	lastPromotionMutex.RLock()
+	defer lastPromotionMutex.RUnlock()
+	out := make([]BufferedPromotionRecordedEvent, len(promotionBuffer))
+	copy(out, promotionBuffer)
+	return out
+}
+
+// resetPromotionBuffer clears the promotion buffer. Test-only helper.
+func resetPromotionBuffer() {
+	lastPromotionMutex.Lock()
+	defer lastPromotionMutex.Unlock()
+	promotionBuffer = nil
 }
 
 // NewSSEHandler creates a new SSE handler.
@@ -127,6 +169,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buffered := narrativeBuffer
 	lastNarrativeMutex.RUnlock()
 	for _, b := range buffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastPromotionMutex.RLock()
+	promotionBuffered := promotionBuffer
+	lastPromotionMutex.RUnlock()
+	for _, b := range promotionBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue
