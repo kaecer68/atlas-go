@@ -1616,12 +1616,21 @@ func run(args []string, deps appDeps) error {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
 			}
 
-			// LLM annotator (Kimi) is opt-in via env var. Without
-			// LLM_ANNOTATOR_API_KEY the /annotate endpoint returns 503; this is
+			// LLM annotator is opt-in via env var. Without
+			// LLM_MINIMAX_API_KEY (or LLM_ANNOTATOR_API_KEY for backward
+			// compatibility) the /annotate endpoint returns 503; this is
 			// the explicit signal that the on-demand attribution path is not
 			// configured. Init failure is Warn, not Fatal: rule_based
 			// attribution remains authoritative.
-			apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY")
+			//
+			// Phase 4 fix: LLM_ANNOTATOR_API_KEY has always held a MiniMax
+			// coding plan key (sk-cp- prefix). The env var name was misleading.
+			// We now read LLM_MINIMAX_API_KEY first, falling back to
+			// LLM_ANNOTATOR_API_KEY for backward compatibility.
+			apiKey := config.GetSecret("LLM_MINIMAX_API_KEY")
+			if apiKey == "" {
+				apiKey = config.GetSecret("LLM_ANNOTATOR_API_KEY")
+			}
 			var kimi *llm_annotator.KimiClient
 			if apiKey != "" {
 				var err error
