@@ -565,3 +565,31 @@ func TestSSEHandler_BufferBacktestCompletedEvent(t *testing.T) {
 		t.Errorf("expected window_id bt-buffered-1 in body, got: %s", body)
 	}
 }
+
+func TestSSEHandler_BufferCalibrationCompletedEvent(t *testing.T) {
+	resetCalibrationCompletedBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "cal-test-1",
+		Type:      eventbus.EventCalibrationCompleted,
+		Timestamp: time.Now(),
+		Payload: eventbus.CalibrationCompletedEventPayload{
+			Module:         "linkage",
+			CalibratorName: "LinkageAmplifier",
+			Verdict:        "improved",
+		},
+	}
+	BufferCalibrationCompletedEvent(event)
+
+	buffered := GetBufferedCalibrationCompletedEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered calibration completed event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(eventbus.CalibrationCompletedEventPayload)
+	if payload.Module != "linkage" {
+		t.Errorf("expected module=linkage, got %s", payload.Module)
+	}
+	if buffered[0].Event.Type != eventbus.EventCalibrationCompleted {
+		t.Errorf("expected type %s, got %s", eventbus.EventCalibrationCompleted, buffered[0].Event.Type)
+	}
+}

@@ -181,6 +181,47 @@ func GetBufferedBacktestCompletedEvents() []BufferedBacktestCompletedEvent {
 	return out
 }
 
+// BufferedCalibrationCompletedEvent holds a published calibration-completed event for SSE catchup.
+type BufferedCalibrationCompletedEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedCalibrationCompletedEvents = 50
+
+var (
+	calibrationCompletedBuffer    []BufferedCalibrationCompletedEvent
+	lastCalibrationCompletedMutex sync.RWMutex
+)
+
+// BufferCalibrationCompletedEvent stores a calibration-completed event for catchup by new SSE clients.
+func BufferCalibrationCompletedEvent(event eventbus.BusEvent) {
+	lastCalibrationCompletedMutex.Lock()
+	defer lastCalibrationCompletedMutex.Unlock()
+	calibrationCompletedBuffer = append(calibrationCompletedBuffer, BufferedCalibrationCompletedEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(calibrationCompletedBuffer) > maxBufferedCalibrationCompletedEvents {
+		calibrationCompletedBuffer = calibrationCompletedBuffer[len(calibrationCompletedBuffer)-maxBufferedCalibrationCompletedEvents:]
+	}
+}
+
+// GetBufferedCalibrationCompletedEvents returns a snapshot of buffered calibration-completed events.
+func GetBufferedCalibrationCompletedEvents() []BufferedCalibrationCompletedEvent {
+	lastCalibrationCompletedMutex.RLock()
+	defer lastCalibrationCompletedMutex.RUnlock()
+	out := make([]BufferedCalibrationCompletedEvent, len(calibrationCompletedBuffer))
+	copy(out, calibrationCompletedBuffer)
+	return out
+}
+
+func resetCalibrationCompletedBuffer() {
+	lastCalibrationCompletedMutex.Lock()
+	defer lastCalibrationCompletedMutex.Unlock()
+	calibrationCompletedBuffer = nil
+}
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -383,6 +424,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	backtestCompletedBuffered := backtestCompletedBuffer
 	lastBacktestCompletedMutex.RUnlock()
 	for _, b := range backtestCompletedBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastCalibrationCompletedMutex.RLock()
+	calibrationCompletedBuffered := calibrationCompletedBuffer
+	lastCalibrationCompletedMutex.RUnlock()
+	for _, b := range calibrationCompletedBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue
