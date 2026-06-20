@@ -1,10 +1,10 @@
-# `monitor.risk_gate.overridden` — 風險閘道決策被覆寫事件
+# `monitor.risk_gate.allowed` — 風險閘道決策通過事件
 
 > **Wave**：8.2
 > **穩定性**：stable
 > **首次上線**：v0.0.0.7
-> **EventType 常數**：`eventbus.EventRiskGateOverridden`
-> **字串值**：`"monitor.risk_gate.overridden"`
+> **EventType 常數**：`eventbus.EventRiskGateAllowed`
+> **字串值**：`"monitor.risk_gate.allowed"`
 > **Severity**：`warning`
 
 ---
@@ -43,13 +43,13 @@ riskGate.Subscribe(func(rd risk.RiskDecision) {
 
 **Auto-routing 邏輯**（在 `PublishRiskGateEvent` 內，見 `eventbus.go:708-720`）：
 ```go
-eventType := EventRiskGateOverridden  // 預設為 overridden
+eventType := EventRiskGateAllowed  // 預設為 overridden
 if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
     eventType = EventRiskGateRejected  // 阻擋類走 rejected
 }
 ```
 
-→ BLOCK / HALT 路由至 `monitor.risk_gate.rejected`，其餘（ALLOW / REDUCE / ALERT_ONLY）路由至 `monitor.risk_gate.overridden`。
+→ BLOCK / HALT 路由至 `monitor.risk_gate.rejected`，其餘（ALLOW / REDUCE / ALERT_ONLY）路由至 `monitor.risk_gate.allowed`。
 
 ---
 
@@ -94,7 +94,7 @@ if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
 |------|------|------|
 | EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
 | 既有組件 | `web/static/js/components/risk-gate-panel.js` | 操作面板，**非 SSE-driven**，定期 fetch `/api/dashboard/risk` |
-| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('monitor.risk_gate.overridden', handler)` 訂閱 |
+| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('monitor.risk_gate.allowed', handler)` 訂閱 |
 
 **渲染建議**（Wave 8.10 整合測試階段）：
 - 風控操作面板新增「Recent Overrides」section，列出最近 10 筆 overridden 事件
@@ -146,7 +146,7 @@ if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
 
 | 版本 | 日期 | 變更 |
 |------|------|------|
-| v0.0.0.7 | 2026-06-20 | Wave 8.0 加入 EventRiskGateOverridden 常數、RiskGateEventPayload、PublishRiskGateEvent |
+| v0.0.0.7 | 2026-06-20 | Wave 8.0 加入 EventRiskGateAllowed 常數、RiskGateEventPayload、PublishRiskGateEvent |
 | v0.0.0.7 | 2026-06-20 | Wave 8.1 加入 producer bridge（與 rejected 共用） |
 | v0.0.0.7 | 2026-06-20 | Wave 8.2 加入本文件 + HALT/REDUCE 路由測試 |
 

@@ -719,7 +719,7 @@ func TestPublishRiskGateEvent_HALTRouting(t *testing.T) {
 		rejectedCount.Add(1)
 		return nil
 	})
-	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+	bus.Subscribe(EventRiskGateAllowed, func(ctx context.Context, event BusEvent) error {
 		overriddenCount.Add(1)
 		return nil
 	})
@@ -756,7 +756,7 @@ func TestPublishRiskGateEvent_ReduceRouting(t *testing.T) {
 	defer bus.Close()
 
 	var overriddenCount atomic.Int32
-	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+	bus.Subscribe(EventRiskGateAllowed, func(ctx context.Context, event BusEvent) error {
 		overriddenCount.Add(1)
 		payload := event.Payload.(RiskGateEventPayload)
 		if payload.Verdict != "REDUCE" {
