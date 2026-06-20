@@ -217,6 +217,7 @@ func run(args []string, deps appDeps) error {
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
 	liveMode := flags.Bool("live", false, "start live trading orchestrator")
+	forceIntradayCycles := flags.Bool("force-intraday-cycles", false, "bypass market hours check for off-hours testing")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
 	simulateMode := flags.Bool("simulate", false, "run one-shot daily simulation and exit (skip api server)")
 	verboseMode := flags.Bool("verbose", false, "enable color-coded terminal trace output during simulation")
@@ -2359,7 +2360,7 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector, repo)
+		return runLiveTrading(cfg, deps, collector, repo, *forceIntradayCycles)
 	}
 	return runSimulation(cfg, false, collector, repo, deps.shutdown)
 }
@@ -2503,7 +2504,7 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 	}
 }
 
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
 	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
 	if err != nil {
@@ -2521,6 +2522,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	provider := marketdata.NewMockProvider()
 
 	liveCfg := live.DefaultOrchestratorConfig()
+	liveCfg.ForceIntradayCycles = forceIntradayCycles
 	liveCfg.BrokerMode = cfg.BrokerMode
 	liveCfg.BrokerAdapter = cfg.BrokerAdapter
 	liveCfg.BrokerSigner = cfg.BrokerSigner
