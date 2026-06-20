@@ -51,7 +51,7 @@ func TestFubonChannelAdapter_Fetch(t *testing.T) {
 	})
 
 	client := marketdata.NewFubonClient()
-	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
+	client.SetHTTPClient(withClientMockTransport(server, "host.docker.internal:8081"))
 
 	adapter := NewFubonChannelAdapter(client)
 	res, err := adapter.Fetch(context.Background())
@@ -83,7 +83,7 @@ func TestFubonChannelAdapter_HealthCheck(t *testing.T) {
 	})
 
 	client := marketdata.NewFubonClient()
-	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
+	client.SetHTTPClient(withClientMockTransport(server, "host.docker.internal:8081"))
 
 	adapter := NewFubonChannelAdapter(client)
 	status, err := adapter.HealthCheck(context.Background())
@@ -109,7 +109,7 @@ func TestFubonChannelAdapter_HealthCheck_Failure(t *testing.T) {
 	})
 
 	client := marketdata.NewFubonClient()
-	client.SetHTTPClient(withClientMockTransport(server, "127.0.0.1:8081"))
+	client.SetHTTPClient(withClientMockTransport(server, "host.docker.internal:8081"))
 
 	adapter := NewFubonChannelAdapter(client)
 	status, err := adapter.HealthCheck(context.Background())

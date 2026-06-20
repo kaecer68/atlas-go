@@ -16,10 +16,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// fubonProxyBaseURL 預設使用 IPv4 loopback (127.0.0.1) 而非 localhost,
-// 避免 macOS / Linux 在雙棧環境下,Go 的 net.Dial 預設優先走 IPv6 [::1]
-// 導致 `dial tcp [::1]:8081: connect: connection refused` 錯誤。
-const fubonProxyBaseURL = "http://127.0.0.1:8081"
+// fubonProxyBaseURL 使用 host.docker.internal 而非 127.0.0.1，
+// 因為 fubon-proxy 在 macOS host 上執行 (原生 Python)，
+// atlas 容器必須透過 Docker Desktop 的 host-gateway 別名連線到 host。
+// Docker Desktop 4.13+ (macOS/Windows) 支援 host.docker.internal 自動解析為 host gateway IP。
+// 注意：不使用 localhost 避免 macOS / Linux 雙棧環境下 Go net.Dial 優先走 IPv6 [::1]。
+const fubonProxyBaseURL = "http://host.docker.internal:8081"
 
 type FubonClient struct {
 	proxyURL        string

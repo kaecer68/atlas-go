@@ -57,7 +57,7 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 	var fubonProvider *FubonProvider
 	// Probe the proxy before creating the client to avoid constant
 	// "connection refused" warnings when the proxy is not running.
-	proxyAddr := "127.0.0.1:8081"
+	proxyAddr := "host.docker.internal:8081"
 	if conn, err := net.DialTimeout("tcp", proxyAddr, 2*time.Second); err != nil {
 		logging.Info("hybrid_provider", "fubon_proxy_not_reachable", "msg", "skipping fubon fallback — proxy not running")
 	} else {
