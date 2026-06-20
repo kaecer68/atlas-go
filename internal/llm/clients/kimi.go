@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
 )
@@ -68,7 +67,7 @@ func (c *KimiClient) Chat(ctx context.Context, messages []Message, opts *ChatOpt
 
 	apiKey := c.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("LLM_KIMI_API_KEY")
+		return nil, fmt.Errorf("kimi: API key not set (caller must pass via NewKimiClient; use config.GetSecret(\"LLM_KIMI_API_KEY\") in main.go wiring)")
 	}
 
 	// K2.7 constraints: thinking forced on, temperature locked to 1.0.

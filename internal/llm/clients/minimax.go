@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
 )
@@ -68,7 +67,7 @@ func NewMiniMaxClient(apiKey string, baseClient *BaseClient) *MiniMaxClient {
 func (c *MiniMaxClient) Chat(ctx context.Context, model string, messages []Message, opts *ChatOptions) (*ChatResponse, error) {
 	apiKey := c.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("LLM_MINIMAX_API_KEY")
+		return nil, fmt.Errorf("minimax: API key not set (caller must pass via NewMiniMaxClient; use config.GetSecret(\"LLM_MINIMAX_API_KEY\") in main.go wiring)")
 	}
 
 	if model == "" {

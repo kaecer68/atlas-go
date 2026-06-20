@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
 )
@@ -59,7 +58,7 @@ func NewDeepSeekClient(apiKey string, baseClient *BaseClient) *DeepSeekClient {
 func (c *DeepSeekClient) Chat(ctx context.Context, model string, messages []Message, opts *ChatOptions) (*ChatResponse, error) {
 	apiKey := c.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("LLM_DEEPSEEK_API_KEY")
+		return nil, fmt.Errorf("deepseek: API key not set (caller must pass via NewDeepSeekClient; use config.GetSecret(\"LLM_DEEPSEEK_API_KEY\") in main.go wiring)")
 	}
 
 	if model == "" {
