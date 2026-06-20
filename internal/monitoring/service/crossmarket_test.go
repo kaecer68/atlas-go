@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 )
 
 // fakeMacroProvider is a stub MacroDataProvider for testing CrossMarketService.
@@ -720,5 +721,60 @@ func TestSetDegradedCallback_NotInvokedWhenOK(t *testing.T) {
 
 	if called {
 		t.Error("callback must NOT be invoked when all channels are healthy")
+	}
+}
+
+// TestDegradedCallbackCount_InvokedOnDegradation verifies that the
+// DegradedCallbackCount counter increments with the expected labels when the
+// degraded callback fires.
+func TestDegradedCallbackCount_InvokedOnDegradation(t *testing.T) {
+	prov := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{}}
+	svc := NewCrossMarketService(prov)
+
+	m := metrics.NewDegradedMetrics()
+	svc.SetDegradedMetrics(m)
+	svc.SetDegradedCallback(func(string, []string) {})
+
+	_, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+
+	got := m.DegradedCallbackCount.WithLabelValues("crossmarket", "missing_us_index_data", "degraded").Value()
+	if got != 1 {
+		t.Errorf("DegradedCallbackCount = %v, want 1", got)
+	}
+}
+
+// TestDegradedCallbackCount_NotInvokedWhenOK verifies that the
+// DegradedCallbackCount counter is NOT incremented when all channels are
+// healthy and the callback does not fire.
+func TestDegradedCallbackCount_NotInvokedWhenOK(t *testing.T) {
+	prov := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}}
+	svc := NewCrossMarketService(prov)
+
+	m := metrics.NewDegradedMetrics()
+	svc.SetDegradedMetrics(m)
+	svc.SetDegradedCallback(func(string, []string) {})
+
+	_, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+
+	got := m.DegradedCallbackCount.WithLabelValues("crossmarket", "missing_us_index_data", "degraded").Value()
+	if got != 0 {
+		t.Errorf("DegradedCallbackCount = %v, want 0", got)
 	}
 }

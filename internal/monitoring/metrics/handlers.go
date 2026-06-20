@@ -9,9 +9,10 @@ import (
 )
 
 type degradedSnapshotJSON struct {
-	Timestamp           time.Time        `json:"timestamp"`
-	DegradedActivations []map[string]any `json:"degraded_activations"`
-	ProviderErrors      []map[string]any `json:"provider_errors"`
+	Timestamp             time.Time        `json:"timestamp"`
+	DegradedActivations   []map[string]any `json:"degraded_activations"`
+	ProviderErrors        []map[string]any `json:"provider_errors"`
+	DegradedCallbackCount []map[string]any `json:"degraded_callback_count"`
 }
 
 func sampleToMap(s Sample) map[string]any {
@@ -33,15 +34,19 @@ func HandleDegraded(dm *DegradedMetrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		snap := dm.Snapshot()
 		out := degradedSnapshotJSON{
-			Timestamp:           snap.Timestamp,
-			DegradedActivations: make([]map[string]any, 0, len(snap.DegradedActivations)),
-			ProviderErrors:      make([]map[string]any, 0, len(snap.ProviderErrors)),
+			Timestamp:             snap.Timestamp,
+			DegradedActivations:   make([]map[string]any, 0, len(snap.DegradedActivations)),
+			ProviderErrors:        make([]map[string]any, 0, len(snap.ProviderErrors)),
+			DegradedCallbackCount: make([]map[string]any, 0, len(snap.DegradedCallbackCount)),
 		}
 		for _, s := range snap.DegradedActivations {
 			out.DegradedActivations = append(out.DegradedActivations, sampleToMap(s))
 		}
 		for _, s := range snap.ProviderErrors {
 			out.ProviderErrors = append(out.ProviderErrors, sampleToMap(s))
+		}
+		for _, s := range snap.DegradedCallbackCount {
+			out.DegradedCallbackCount = append(out.DegradedCallbackCount, sampleToMap(s))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
