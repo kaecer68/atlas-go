@@ -10,6 +10,10 @@ It provides an auditable workflow for:
 - evaluating mutations (prompt/risk/constraint)
 - accepting or rejecting candidates with explicit gates
 
+## Recent updates
+
+- **v0.0.0.6 (Wave 7.5)** — Risk gate safety wiring, orphan config rejection, `AutoJudgePromoter` scheduler integration, promotion-recorded SSE events, and dashboard channel fetch log. See [CHANGELOG.md](CHANGELOG.md).
+
 ## Current-First Readme
 
 This README is an operational entrypoint, not a frozen performance report.

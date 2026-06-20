@@ -45,6 +45,19 @@
 - Style rotation detection ✅
 - Post-trade analysis ✅
 
+## Wave 7.5 (2026-06) ✅
+
+Shipped in v0.0.0.6:
+
+- Risk gate safety wiring with explicit promotion limits and rejection reasons.
+- Orphan config rejection for misplaced `parameters.json` files.
+- Alertmanager webhook receiver hardening and field contract validation.
+- Calibration metadata preservation across auto-rollback scenarios.
+- Channel health improvements with per-channel failure reasons and fetch log persistence.
+- `AutoJudgePromoter` wired into the atlas scheduler.
+- `EventPromotionRecorded` event type delivered to dashboard clients via SSE with catch-up support.
+- `GET /api/dashboard/fetch-log` endpoint for recent channel fetch events.
+
 ## Phase 6: Production Trading (Next)
 
 - Decision chain transparency (FactorScores breakdown, ConvictionBreakdown, MacroEvent confidence) ✅

@@ -67,6 +67,7 @@
 | `strategy` | 策略選擇器與登錄 | `Selector` | 由 orchestrator 使用 |
 | `tax` | 台灣稅務計算 — `TaiwanTaxCalculator` | `TaiwanTaxCalculator` | 由 sim 使用 |
 | `monitoring/api/dashboard` | Dashboard management center handlers — 資料通道、管線、通道控制、API 金鑰管理 | `Handlers` | 由 monitoring 使用 |
+| `monitoring/api/events` | SSE 事件串流 — 轉發 eventbus 事件到 dashboard 客戶端，含 narrative 與 promotion 事件 catch-up 緩衝 | `SSEHandler` | 由 monitoring 使用 |
 | `ml` | 監督式學習模型 — OLS、ElasticNet、PCR、PLS 實作（SK-05~09） | `Model`, `Trainer` | 由 Fin-Skills 規範驅動，供 factor/research 使用 |
 | `scheduler` | ML 模型重訓排程器 — 定時從 replay 資料重訓 OLS/ElasticNet/PCR/PLS | `MLRetrainScheduler`, `RetrainAll()`, `GetLatestModel()` | 由 BackgroundTaskManager 排程，evolving |
 
