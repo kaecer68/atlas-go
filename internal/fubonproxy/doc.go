@@ -15,5 +15,9 @@
 //
 // 此模組不會阻擋 atlas 啟動：若 proxy 啟動失敗，僅記錄警告後繼續。
 //
+// 注意：`Stop()` 為硬殺（hard kill）而非優雅關閉。`exec.CommandContext` 在 cancel 時
+// 會由 Go runtime 內部送出 SIGKILL，因此後續的 SIGINT + 5s graceful timeout
+// 屬於雙重安全網，正常路徑不會觸發。
+//
 // Maturity: evolving
 package fubonproxy
