@@ -50,7 +50,9 @@ internal/*/data/
 !internal/marketdata/data/
 !internal/config/data/
 cmd/experimental/*/data/
-.gitnexus/
+# GitNexus: track meta.json (CI verify-gitnexus-stats.sh reads it); ignore local cache.
+.gitnexus/lbug
+.gitnexus/parse-cache/
 /.codegraph/
 /.worktrees/
 
