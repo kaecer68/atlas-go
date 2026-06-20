@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCheckIntegrity_ValidFile(t *testing.T) {
@@ -266,5 +267,111 @@ func TestCheckParamsIntegrity_AllValidPasses(t *testing.T) {
 	errs := CheckParamsIntegrity(path)
 	if len(errs) != 0 {
 		t.Fatalf("expected no errors for valid params, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestValidateCalibration_Valid(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "params.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.UpdatedAt = time.Now()
+	cfg.Industry.ClassificationTree.Value.Segments = []IndustrySegmentConfig{
+		{ID: "tech", Level: 1, RepresentativeStocks: []string{"2330.TW", "2454.TW"}},
+		{ID: "tsmc", Level: 2, ParentID: "tech", RepresentativeStocks: []string{"2330.TW"}},
+	}
+	data, _ := json.Marshal(cfg)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write params.json: %v", err)
+	}
+
+	res, err := ValidateCalibration(path, 48*time.Hour)
+	if err != nil {
+		t.Fatalf("ValidateCalibration: %v", err)
+	}
+	if !res.OK {
+		t.Fatalf("expected OK=true, got issues: %v", res.Issues)
+	}
+	if res.SegmentsCount != 2 || res.L1Count != 1 || res.L2Count != 1 {
+		t.Errorf("unexpected counts: segments=%d L1=%d L2=%d", res.SegmentsCount, res.L1Count, res.L2Count)
+	}
+}
+
+func TestValidateCalibration_StaleFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "params.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.UpdatedAt = time.Now().Add(-72 * time.Hour)
+	data, _ := json.Marshal(cfg)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write params.json: %v", err)
+	}
+
+	res, _ := ValidateCalibration(path, 48*time.Hour)
+	if res.OK {
+		t.Fatal("expected OK=false for stale file")
+	}
+	if len(res.Issues) == 0 {
+		t.Fatal("expected non-empty Issues for stale file")
+	}
+}
+
+func TestValidateCalibration_EmptySegments(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "params.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.UpdatedAt = time.Now()
+	cfg.Industry.ClassificationTree.Value.Segments = nil
+	data, _ := json.Marshal(cfg)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write params.json: %v", err)
+	}
+
+	res, _ := ValidateCalibration(path, 48*time.Hour)
+	if res.OK {
+		t.Fatal("expected OK=false for empty segments")
+	}
+	found := false
+	for _, iss := range res.Issues {
+		if strings.Contains(iss, "Segments is empty") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'Segments is empty' issue, got: %v", res.Issues)
+	}
+}
+
+func TestValidateCalibration_BadL2Parent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "params.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.UpdatedAt = time.Now()
+	cfg.Industry.ClassificationTree.Value.Segments = []IndustrySegmentConfig{
+		{ID: "tech", Level: 1, RepresentativeStocks: []string{"2330.TW"}},
+		{ID: "tsmc", Level: 2, ParentID: "ghost", RepresentativeStocks: []string{"2330.TW"}},
+	}
+	data, _ := json.Marshal(cfg)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write params.json: %v", err)
+	}
+
+	res, _ := ValidateCalibration(path, 48*time.Hour)
+	if res.OK {
+		t.Fatal("expected OK=false for dangling L2 parent")
+	}
+	found := false
+	for _, iss := range res.Issues {
+		if strings.Contains(iss, "unknown ParentID") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'unknown ParentID' issue, got: %v", res.Issues)
 	}
 }
