@@ -126,7 +126,7 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 
 	// Step 7: All chain members exhausted — invoke last-resort handler
 	atomic.AddInt64(BackupChainExhaustedTotal, 1)
-	return r.lastResortHandler(req.Capability, attempted), nil
+	return r.lastResortHandler(attempted), nil
 }
 
 // shouldGateProvider returns true when the given provider should be excluded
@@ -143,7 +143,7 @@ func (r *DefaultRouter) shouldGateProvider(providerName Provider, dc DataClass) 
 // capabilities, it returns an empty-string output with ProviderMock as
 // a safe fallback. Unknown capabilities are handled before this function
 // is called (Call returns ErrCapabilityNotSupported).
-func (r *DefaultRouter) lastResortHandler(cap Capability, attempted []Provider) Response {
+func (r *DefaultRouter) lastResortHandler(attempted []Provider) Response {
 	return Response{
 		Output:             "",
 		Provider:           ProviderMock,
