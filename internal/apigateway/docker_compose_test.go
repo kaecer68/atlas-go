@@ -75,8 +75,8 @@ func TestDockerCompose_HasHostDockerInternalAlias(t *testing.T) {
 	}
 
 	if !foundInAtlas {
-		t.Errorf("'host.docker.internal' not found within atlas service section\n\n"+
-			"原因：atlas 容器需要透過 host.docker.internal 連線至 macOS host 上的 fubon-proxy。"+
+		t.Errorf("'host.docker.internal' not found within atlas service section\n\n" +
+			"原因：atlas 容器需要透過 host.docker.internal 連線至 macOS host 上的 fubon-proxy。" +
 			"Docker Desktop macOS/Windows 4.13+ 支援 host-gateway 特殊值。",
 		)
 	}

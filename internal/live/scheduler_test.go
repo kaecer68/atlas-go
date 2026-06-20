@@ -490,10 +490,10 @@ func TestScheduler_OnHours_ForceOn_DoesNotAutoStop(t *testing.T) {
 
 	closeCalled := false
 	s.SetCycleCallbacks(
-		func() {}, // onMarketOpen
-		func() {}, // onIntradayCycle
+		func() {},                     // onMarketOpen
+		func() {},                     // onIntradayCycle
 		func() { closeCalled = true }, // onMarketClose — should NOT be called
-		func() {}, // onFetchQuotes
+		func() {},                     // onFetchQuotes
 	)
 
 	err = s.Start()
