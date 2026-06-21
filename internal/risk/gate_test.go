@@ -275,6 +275,7 @@ func TestRiskGate_PublishWritesConfidenceCommentary(t *testing.T) {
 
 func TestRiskGate_PublishConfidenceCommentaryNilHook(t *testing.T) {
 	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	defer func() { ConfidenceCommentary = nil }()
 	ConfidenceCommentary = nil
 
 	received := make(chan RiskDecision, 1)
