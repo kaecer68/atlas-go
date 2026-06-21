@@ -1174,6 +1174,7 @@
   "revert_reason",
   "risk",
   "risk_adjusted",
+  "risk_commentary",
   "risk_confidence",
   "risk_count",
   "risk_gate",

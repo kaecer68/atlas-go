@@ -2976,6 +2976,7 @@ export interface SimulationResult {
   after_tax_pnl: number;
   total_tax_paid: number;
   fallback_events?: string[];
+  risk_commentary?: string;
 }
 
 export interface SimulationState {

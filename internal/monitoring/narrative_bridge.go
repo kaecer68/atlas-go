@@ -255,10 +255,9 @@ func (b *NarrativeEventBridge) Scrape(ctx context.Context) ([]NarrativeEvent, er
 				logging.Err(err))
 			continue
 		}
+		defer resp.Body.Close()
 
-		// Drain and close body regardless of status to avoid resource leak.
 		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
 		if readErr != nil {
 			logging.Warn("narrative_bridge", "rss_read_body_failed",
 				logging.FStr("feed", feedURL),
