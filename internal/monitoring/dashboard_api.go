@@ -18,6 +18,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	llmcapabilities "github.com/kaecer68/atlas-go/internal/llm/capabilities"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -882,6 +883,15 @@ func (a *DashboardAPI) SetStrategiesAnnotator(ann llm_annotator.Annotator) {
 	}
 	if a.strategyTechniquesHandlers != nil {
 		a.strategyTechniquesHandlers.SetAnnotator(ann)
+	}
+}
+
+// SetStrategiesSummaryHandler wires the LLM strategy summary handler into
+// the strategies API. The handler is opt-in; the /summary endpoint returns
+// 503 until a real handler is wired in.
+func (a *DashboardAPI) SetStrategiesSummaryHandler(sh *llmcapabilities.StrategySummaryHandler) {
+	if a.strategyTechniquesHandlers != nil {
+		a.strategyTechniquesHandlers.SetSummaryHandler(sh)
 	}
 }
 

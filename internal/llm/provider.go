@@ -36,6 +36,7 @@ const (
 	CapabilitySentimentExplanation  Capability = "sentiment_explanation"
 	CapabilityPerformanceForensics  Capability = "performance_forensics"
 	CapabilityContraAttribution     Capability = "contra_attribution"
+	CapabilityConfidenceCommentary  Capability = "confidence_commentary"
 )
 
 // Provider identifies a specific LLM provider implementation.

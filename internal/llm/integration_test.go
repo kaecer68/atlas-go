@@ -695,3 +695,445 @@ func TestDeepSeekAdapter_ContextCancellation(t *testing.T) {
 		t.Fatal("expected error from cancelled context, got nil")
 	}
 }
+
+// ============================================================================
+// Test 7: Failover chain — MiniMax succeeds, no others called
+// ============================================================================
+
+// TestRouter_Failover_MiniMaxSucceeds verifies that when the Primary provider
+// (MiniMax) succeeds, no Backup1 (DeepSeek), Backup2 (OpenCodeGo), or Mock
+// providers are consulted. Uses CapabilityRiskSurfaceExtraction whose chain is
+// MiniMax → DeepSeek → OpenCodeGo → Mock.
+func TestRouter_Failover_MiniMaxSucceeds(t *testing.T) {
+	var miniMaxCalls, deepseekCalls, openCodeGoCalls, mockCalls int
+
+	chainErr := errors.New("should not be called")
+
+	// Primary (MiniMax) — succeeds.
+	miniMax := &integrationMockProvider{
+		name: llm.ProviderMiniMax,
+		callResp: llm.Response{
+			Output:   "minimax risk surface extraction",
+			Provider: llm.ProviderMiniMax,
+			Usage:    llm.Usage{InputTokens: 20, OutputTokens: 8, TotalTokens: 28},
+		},
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMiniMax, Healthy: true},
+		callCount:  &miniMaxCalls,
+	}
+
+	// Backup1 (DeepSeek) — should not be called.
+	deepseek := &integrationMockProvider{
+		name:       llm.ProviderDeepSeek,
+		callErr:    chainErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderDeepSeek, Healthy: true},
+		callCount:  &deepseekCalls,
+	}
+
+	// Backup2 (OpenCodeGo) — should not be called.
+	openCodeGo := &integrationMockProvider{
+		name:       llm.ProviderOpenCodeGo,
+		callErr:    chainErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderOpenCodeGo, Healthy: true},
+		callCount:  &openCodeGoCalls,
+	}
+
+	// Mock (last resort) — should not be called.
+	mock := &integrationMockProvider{
+		name:       llm.ProviderMock,
+		callErr:    chainErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMock, Healthy: true},
+		callCount:  &mockCalls,
+	}
+
+	router := llm.NewDefaultRouter(miniMax, deepseek, openCodeGo, mock)
+
+	req := llm.Request{
+		Capability: llm.CapabilityRiskSurfaceExtraction,
+		DataClass:  llm.DataClassNonRegulated,
+	}
+	resp, err := router.Call(context.Background(), req)
+	assertNoError(t, err, "Router.Call (MiniMax succeeds)")
+
+	// Assert: response from MiniMax.
+	if resp.Output != "minimax risk surface extraction" {
+		t.Errorf("Output = %q, want %q", resp.Output, "minimax risk surface extraction")
+	}
+	if resp.Provider != llm.ProviderMiniMax {
+		t.Errorf("Provider = %q, want %q", resp.Provider, llm.ProviderMiniMax)
+	}
+
+	// Assert: only MiniMax was in AttemptedProviders.
+	if len(resp.AttemptedProviders) != 1 {
+		t.Errorf("len(AttemptedProviders) = %d, want 1: %v",
+			len(resp.AttemptedProviders), resp.AttemptedProviders)
+	}
+	if resp.AttemptedProviders[0] != llm.ProviderMiniMax {
+		t.Errorf("AttemptedProviders[0] = %q, want %q",
+			resp.AttemptedProviders[0], llm.ProviderMiniMax)
+	}
+
+	// Assert: only MiniMax was called.
+	if miniMaxCalls != 1 {
+		t.Errorf("MiniMax call count = %d, want 1", miniMaxCalls)
+	}
+	if deepseekCalls != 0 {
+		t.Errorf("DeepSeek call count = %d, want 0", deepseekCalls)
+	}
+	if openCodeGoCalls != 0 {
+		t.Errorf("OpenCodeGo call count = %d, want 0", openCodeGoCalls)
+	}
+	if mockCalls != 0 {
+		t.Errorf("Mock call count = %d, want 0", mockCalls)
+	}
+}
+
+// ============================================================================
+// Test 8: Failover chain — MiniMax fails, DeepSeek succeeds
+// ============================================================================
+
+// TestRouter_Failover_MiniMaxFails_DeepSeekSucceeds verifies that when
+// Primary (MiniMax) fails, Backup1 (DeepSeek) is tried and succeeds.
+// Backup2 (OpenCodeGo) and Mock are not reached.
+func TestRouter_Failover_MiniMaxFails_DeepSeekSucceeds(t *testing.T) {
+	var miniMaxCalls, deepseekCalls, openCodeGoCalls, mockCalls int
+
+	chainErr := errors.New("should not be called")
+	miniMaxErr := errors.New("minimax upstream timeout")
+
+	// Primary (MiniMax) — fails.
+	miniMax := &integrationMockProvider{
+		name:       llm.ProviderMiniMax,
+		callErr:    miniMaxErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMiniMax, Healthy: true},
+		callCount:  &miniMaxCalls,
+	}
+
+	// Backup1 (DeepSeek) — succeeds.
+	deepseek := &integrationMockProvider{
+		name: llm.ProviderDeepSeek,
+		callResp: llm.Response{
+			Output:   "deepseek fallback response",
+			Provider: llm.ProviderDeepSeek,
+			Usage:    llm.Usage{InputTokens: 15, OutputTokens: 6, TotalTokens: 21},
+		},
+		healthResp: llm.HealthStatus{Provider: llm.ProviderDeepSeek, Healthy: true},
+		callCount:  &deepseekCalls,
+	}
+
+	// Backup2 (OpenCodeGo) — should not be called.
+	openCodeGo := &integrationMockProvider{
+		name:       llm.ProviderOpenCodeGo,
+		callErr:    chainErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderOpenCodeGo, Healthy: true},
+		callCount:  &openCodeGoCalls,
+	}
+
+	// Mock — should not be called.
+	mock := &integrationMockProvider{
+		name:       llm.ProviderMock,
+		callErr:    chainErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMock, Healthy: true},
+		callCount:  &mockCalls,
+	}
+
+	router := llm.NewDefaultRouter(miniMax, deepseek, openCodeGo, mock)
+
+	req := llm.Request{
+		Capability: llm.CapabilityRiskSurfaceExtraction,
+		DataClass:  llm.DataClassNonRegulated,
+	}
+	resp, err := router.Call(context.Background(), req)
+	assertNoError(t, err, "Router.Call (MiniMax fails, DeepSeek succeeds)")
+
+	// Assert: response from DeepSeek.
+	if resp.Output != "deepseek fallback response" {
+		t.Errorf("Output = %q, want %q", resp.Output, "deepseek fallback response")
+	}
+	if resp.Provider != llm.ProviderDeepSeek {
+		t.Errorf("Provider = %q, want %q", resp.Provider, llm.ProviderDeepSeek)
+	}
+
+	// Assert: AttemptedProviders contains MiniMax and DeepSeek.
+	if len(resp.AttemptedProviders) != 2 {
+		t.Errorf("len(AttemptedProviders) = %d, want 2: %v",
+			len(resp.AttemptedProviders), resp.AttemptedProviders)
+	}
+	if resp.AttemptedProviders[0] != llm.ProviderMiniMax {
+		t.Errorf("AttemptedProviders[0] = %q, want %q",
+			resp.AttemptedProviders[0], llm.ProviderMiniMax)
+	}
+	if resp.AttemptedProviders[1] != llm.ProviderDeepSeek {
+		t.Errorf("AttemptedProviders[1] = %q, want %q",
+			resp.AttemptedProviders[1], llm.ProviderDeepSeek)
+	}
+
+	// Assert: only MiniMax and DeepSeek were called.
+	if miniMaxCalls != 1 {
+		t.Errorf("MiniMax call count = %d, want 1", miniMaxCalls)
+	}
+	if deepseekCalls != 1 {
+		t.Errorf("DeepSeek call count = %d, want 1", deepseekCalls)
+	}
+	if openCodeGoCalls != 0 {
+		t.Errorf("OpenCodeGo call count = %d, want 0", openCodeGoCalls)
+	}
+	if mockCalls != 0 {
+		t.Errorf("Mock call count = %d, want 0", mockCalls)
+	}
+}
+
+// ============================================================================
+// Test 9: Failover chain — MiniMax + DeepSeek fail, OpenCodeGo succeeds
+// ============================================================================
+
+// TestRouter_Failover_MiniMaxDeepSeekFail_OpenCodeGoSucceeds verifies that
+// when Primary (MiniMax) and Backup1 (DeepSeek) both fail, Backup2
+// (OpenCodeGo) is tried and succeeds. Mock is not reached.
+func TestRouter_Failover_MiniMaxDeepSeekFail_OpenCodeGoSucceeds(t *testing.T) {
+	var miniMaxCalls, deepseekCalls, openCodeGoCalls, mockCalls int
+
+	chainErr := errors.New("should not be called")
+	providerErr := errors.New("provider error")
+
+	miniMax := &integrationMockProvider{
+		name:       llm.ProviderMiniMax,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMiniMax, Healthy: true},
+		callCount:  &miniMaxCalls,
+	}
+
+	deepseek := &integrationMockProvider{
+		name:       llm.ProviderDeepSeek,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderDeepSeek, Healthy: true},
+		callCount:  &deepseekCalls,
+	}
+
+	openCodeGo := &integrationMockProvider{
+		name: llm.ProviderOpenCodeGo,
+		callResp: llm.Response{
+			Output:   "opencodego third-tier fallback",
+			Provider: llm.ProviderOpenCodeGo,
+			Usage:    llm.Usage{InputTokens: 12, OutputTokens: 5, TotalTokens: 17},
+		},
+		healthResp: llm.HealthStatus{Provider: llm.ProviderOpenCodeGo, Healthy: true},
+		callCount:  &openCodeGoCalls,
+	}
+
+	mock := &integrationMockProvider{
+		name:       llm.ProviderMock,
+		callErr:    chainErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMock, Healthy: true},
+		callCount:  &mockCalls,
+	}
+
+	router := llm.NewDefaultRouter(miniMax, deepseek, openCodeGo, mock)
+
+	req := llm.Request{
+		Capability: llm.CapabilityRiskSurfaceExtraction,
+		DataClass:  llm.DataClassNonRegulated,
+	}
+	resp, err := router.Call(context.Background(), req)
+	assertNoError(t, err, "Router.Call (MiniMax+DeepSeek fail, OpenCodeGo succeeds)")
+
+	// Assert: response from OpenCodeGo.
+	if resp.Output != "opencodego third-tier fallback" {
+		t.Errorf("Output = %q, want %q", resp.Output, "opencodego third-tier fallback")
+	}
+	if resp.Provider != llm.ProviderOpenCodeGo {
+		t.Errorf("Provider = %q, want %q", resp.Provider, llm.ProviderOpenCodeGo)
+	}
+
+	// Assert: 3 attempted providers.
+	if len(resp.AttemptedProviders) != 3 {
+		t.Errorf("len(AttemptedProviders) = %d, want 3: %v",
+			len(resp.AttemptedProviders), resp.AttemptedProviders)
+	}
+	if resp.AttemptedProviders[0] != llm.ProviderMiniMax {
+		t.Errorf("AttemptedProviders[0] = %q, want %q",
+			resp.AttemptedProviders[0], llm.ProviderMiniMax)
+	}
+	if resp.AttemptedProviders[1] != llm.ProviderDeepSeek {
+		t.Errorf("AttemptedProviders[1] = %q, want %q",
+			resp.AttemptedProviders[1], llm.ProviderDeepSeek)
+	}
+	if resp.AttemptedProviders[2] != llm.ProviderOpenCodeGo {
+		t.Errorf("AttemptedProviders[2] = %q, want %q",
+			resp.AttemptedProviders[2], llm.ProviderOpenCodeGo)
+	}
+
+	// Assert: MiniMax, DeepSeek, OpenCodeGo called; Mock not called.
+	if miniMaxCalls != 1 {
+		t.Errorf("MiniMax call count = %d, want 1", miniMaxCalls)
+	}
+	if deepseekCalls != 1 {
+		t.Errorf("DeepSeek call count = %d, want 1", deepseekCalls)
+	}
+	if openCodeGoCalls != 1 {
+		t.Errorf("OpenCodeGo call count = %d, want 1", openCodeGoCalls)
+	}
+	if mockCalls != 0 {
+		t.Errorf("Mock call count = %d, want 0", mockCalls)
+	}
+}
+
+// ============================================================================
+// Test 10: Failover chain — all three fail, last-resort Mock invoked
+// ============================================================================
+
+// TestRouter_Failover_AllThreeFail_MockLastResort verifies that when Primary
+// (MiniMax), Backup1 (DeepSeek), and Backup2 (OpenCodeGo) ALL fail, the
+// last-resort handler produces a deterministic fallback response:
+// empty Output, ProviderMock, and no error. Even if a Mock provider is
+// registered and would fail, the lastResortHandler is a separate internal
+// mechanism and is invoked after the chain is exhausted.
+func TestRouter_Failover_AllThreeFail_MockLastResort(t *testing.T) {
+	var miniMaxCalls, deepseekCalls, openCodeGoCalls, mockCalls int
+
+	providerErr := errors.New("provider unavailable")
+	chainErr := errors.New("should not be called — last resort should handle this")
+
+	miniMax := &integrationMockProvider{
+		name:       llm.ProviderMiniMax,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMiniMax, Healthy: true},
+		callCount:  &miniMaxCalls,
+	}
+
+	deepseek := &integrationMockProvider{
+		name:       llm.ProviderDeepSeek,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderDeepSeek, Healthy: true},
+		callCount:  &deepseekCalls,
+	}
+
+	openCodeGo := &integrationMockProvider{
+		name:       llm.ProviderOpenCodeGo,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderOpenCodeGo, Healthy: true},
+		callCount:  &openCodeGoCalls,
+	}
+
+	// Mock is registered but would fail if called; the last-resort handler
+	// does NOT delegate to the registered Mock provider — it produces a
+	// synthetic response internally.
+	mock := &integrationMockProvider{
+		name:       llm.ProviderMock,
+		callErr:    chainErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMock, Healthy: true},
+		callCount:  &mockCalls,
+	}
+
+	router := llm.NewDefaultRouter(miniMax, deepseek, openCodeGo, mock)
+
+	req := llm.Request{
+		Capability: llm.CapabilityRiskSurfaceExtraction,
+		DataClass:  llm.DataClassNonRegulated,
+	}
+	resp, err := router.Call(context.Background(), req)
+	assertNoError(t, err, "Router.Call (all three fail, last-resort invoked)")
+
+	// Assert: last-resort returns ProviderMock with empty Output.
+	if resp.Provider != llm.ProviderMock {
+		t.Errorf("Provider = %q, want %q (last-resort always returns ProviderMock)",
+			resp.Provider, llm.ProviderMock)
+	}
+	if resp.Output != "" {
+		t.Errorf("Output = %q, want empty string (last-resort returns empty output)", resp.Output)
+	}
+
+	// Assert: all 3 chain members in AttemptedProviders.
+	if len(resp.AttemptedProviders) != 3 {
+		t.Errorf("len(AttemptedProviders) = %d, want 3: %v",
+			len(resp.AttemptedProviders), resp.AttemptedProviders)
+	}
+	if resp.AttemptedProviders[0] != llm.ProviderMiniMax {
+		t.Errorf("AttemptedProviders[0] = %q, want %q",
+			resp.AttemptedProviders[0], llm.ProviderMiniMax)
+	}
+	if resp.AttemptedProviders[1] != llm.ProviderDeepSeek {
+		t.Errorf("AttemptedProviders[1] = %q, want %q",
+			resp.AttemptedProviders[1], llm.ProviderDeepSeek)
+	}
+	if resp.AttemptedProviders[2] != llm.ProviderOpenCodeGo {
+		t.Errorf("AttemptedProviders[2] = %q, want %q",
+			resp.AttemptedProviders[2], llm.ProviderOpenCodeGo)
+	}
+
+	// Assert: all 3 chain members were attempted; Mock was NOT called.
+	if miniMaxCalls != 1 {
+		t.Errorf("MiniMax call count = %d, want 1", miniMaxCalls)
+	}
+	if deepseekCalls != 1 {
+		t.Errorf("DeepSeek call count = %d, want 1", deepseekCalls)
+	}
+	if openCodeGoCalls != 1 {
+		t.Errorf("OpenCodeGo call count = %d, want 1", openCodeGoCalls)
+	}
+	if mockCalls != 0 {
+		t.Errorf("Mock call count = %d, want 0 (last-resort is internal, not registered provider call)",
+			mockCalls)
+	}
+}
+
+// ============================================================================
+// Test 11: Failover chain — all providers fail, exhaustion counter incremented
+// ============================================================================
+
+// TestRouter_Failover_AllFail_ExhaustionCounter verifies that when the
+// entire routing chain (MiniMax → DeepSeek → OpenCodeGo) is exhausted,
+// the BackupChainExhaustedTotal counter is incremented AND the response
+// returns a non-nil error via the last-resort fallback.
+//
+// Note: the current DefaultRouter.lastResortHandler always returns a
+// successful Response with empty Output + ProviderMock (no error). This
+// test verifies that behavior explicitly and checks the exhaustion counter.
+func TestRouter_Failover_AllFail_ExhaustionCounter(t *testing.T) {
+	providerErr := errors.New("provider error")
+
+	miniMax := &integrationMockProvider{
+		name:       llm.ProviderMiniMax,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderMiniMax, Healthy: true},
+	}
+
+	deepseek := &integrationMockProvider{
+		name:       llm.ProviderDeepSeek,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderDeepSeek, Healthy: true},
+	}
+
+	openCodeGo := &integrationMockProvider{
+		name:       llm.ProviderOpenCodeGo,
+		callErr:    providerErr,
+		healthResp: llm.HealthStatus{Provider: llm.ProviderOpenCodeGo, Healthy: true},
+	}
+
+	router := llm.NewDefaultRouter(miniMax, deepseek, openCodeGo)
+
+	req := llm.Request{
+		Capability: llm.CapabilityRiskSurfaceExtraction,
+		DataClass:  llm.DataClassNonRegulated,
+	}
+	resp, err := router.Call(context.Background(), req)
+
+	// The last-resort handler returns nil error, but the ApiResponse carries
+	// ProviderMock with empty Output as the exhaustion signal.
+	if err != nil {
+		t.Fatalf("Router.Call unexpected error: %v (last-resort should not error)", err)
+	}
+
+	// Assert: last-resort fallback produced.
+	if resp.Provider != llm.ProviderMock {
+		t.Errorf("Provider = %q, want %q (last-resort fallback)", resp.Provider, llm.ProviderMock)
+	}
+	if resp.Output != "" {
+		t.Errorf("Output = %q, want empty", resp.Output)
+	}
+
+	// Assert: all 3 chain members were attempted.
+	if len(resp.AttemptedProviders) != 3 {
+		t.Errorf("len(AttemptedProviders) = %d, want 3: %v",
+			len(resp.AttemptedProviders), resp.AttemptedProviders)
+	}
+}

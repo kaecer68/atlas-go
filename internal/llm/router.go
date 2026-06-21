@@ -49,13 +49,21 @@ var ErrProviderNotFound = errors.New("llm: forced provider not found in register
 // and the default routing table. Accepts variadic ProviderImpl arguments for
 // dependency injection. Providers are keyed by their Health().Provider value.
 func NewDefaultRouter(impls ...ProviderImpl) *DefaultRouter {
+	return NewDefaultRouterFromConfig(defaultRoutingTable(), impls...)
+}
+
+// NewDefaultRouterFromConfig creates a DefaultRouter with the given routing
+// configuration and provider implementations. Use this when loading routing
+// from a config file (e.g. configs/llm_router.yaml) via LoadRouterConfig or
+// TryLoadRouterConfig.
+func NewDefaultRouterFromConfig(config RouterConfig, impls ...ProviderImpl) *DefaultRouter {
 	providers := make(map[Provider]ProviderImpl, len(impls))
 	for _, impl := range impls {
 		providers[impl.Health().Provider] = impl
 	}
 	return &DefaultRouter{
 		providers:    providers,
-		routingTable: defaultRoutingTable(),
+		routingTable: config,
 	}
 }
 
@@ -268,6 +276,13 @@ func defaultRoutingTable() RouterConfig {
 			},
 			// Not in doc §6.1; Phase 2 capability set.
 			CapabilityContraAttribution: {
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
+				Backup2:    ProviderOpenCodeGo,
+				LastResort: ProviderMock,
+			},
+			// Phase 3.3: risk.confidence_commentary (non-blocking bypass)
+			CapabilityConfidenceCommentary: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,

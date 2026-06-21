@@ -1649,10 +1649,11 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[RiskGate] restored RSI-tw calibration score: %.4f", params.RSITw.LastCalibratedScore.Value)
 			}
 
+			var stHandlers *apistrategies.Handlers
 			stSeedsPath = filepath.Join(cfg.WorkDir, "data/seeds/strategy_techniques.json")
 			if stReg, err := strategy_techniques.LoadFromFile(stSeedsPath); err == nil {
 				stRegistry = stReg
-				stHandlers := apistrategies.NewHandlers(stRegistry)
+				stHandlers = apistrategies.NewHandlers(stRegistry)
 				dashboard.SetStrategiesHandlers(stHandlers)
 				// Re-register: RegisterAllRoutes ran before SetStrategiesHandlers,
 				// so the original call encountered a nil handler. nil-safe.
@@ -1703,7 +1704,7 @@ func run(args []string, deps appDeps) error {
 			// adapters are registered below. The annotator continues to work through
 			// dashboard.SetStrategiesAnnotator(kimi) — the raw *KimiClient is still
 			// required by dashboard_api.go:880 for the /annotate endpoint.
-			llmRouter := llm.NewDefaultRouter()
+			llmRouter := llm.NewDefaultRouterFromConfig(llm.TryLoadRouterConfig("configs/llm_router.yaml"))
 			llmHealthHandler := llmHealth.NewHandler(llmRouter)
 			llmHealthHandler.RegisterRoutes(mux)
 
@@ -1742,6 +1743,15 @@ func run(args []string, deps appDeps) error {
 			}
 			if minimaxAdapter != nil {
 				_ = llmRouter.Register(minimaxAdapter)
+			}
+
+			// Strategy summary handler: wired unconditionally (no env-var gate
+			// yet). The /api/strategies/{id}/summary endpoint returns 503 if
+			// no router adapters are registered; the handler checks provider
+			// availability via the Router.
+			if stHandlers != nil {
+				summaryHandler := capabilities.NewStrategySummaryHandler(llmRouter)
+				dashboard.SetStrategiesSummaryHandler(summaryHandler)
 			}
 
 			// Wire 4 module hooks (only if flag enabled AND Router exists)
@@ -1798,6 +1808,17 @@ func run(args []string, deps appDeps) error {
 						return "", fmt.Errorf("forensics: unexpected snapshot type %T", snapshot)
 					}
 					input := schemas.PerformanceForensicsInput{Snapshot: rs}
+					output, err := h.Handle(ctx, input)
+					return output.Commentary, err
+				}
+			}
+			if cfg.LLMConfidenceCommentaryEnabled {
+				risk.ConfidenceCommentary = func(ctx context.Context, decision interface{}) (string, error) {
+					h := capabilities.NewConfidenceCommentaryHandler(llmRouter)
+					input := schemas.ConfidenceCommentaryInput{
+						Decision:  decision,
+						DataClass: llm.DataClassNonRegulated,
+					}
 					output, err := h.Handle(ctx, input)
 					return output.Commentary, err
 				}
