@@ -77,11 +77,10 @@ func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, _ bool, _ string)
 
 	// ── Wire risk exclusion filter ──────────────────────────────────────────
 	// RiskManager and QuoteProvider are nil (optional — dependent checks skip).
-	// minDailyAmount defaults to 5,000,000 TWD internally; MinDailyAmountTWD
-	// from parameters is reserved for future constructor override.
+	// Apply SmartUniverseConfig overrides (5 risk thresholds) via Configure().
 	hp := portfolio.NewHistoricalPrices()
 	riskFilter := monitoring.NewRiskExclusionFilter(nil, nil, hp)
-	_ = suCfg.MinDailyAmountTWD.Value // reserved for future RiskExclusionFilter parameter wiring
+	riskFilter.Configure(suCfg)
 
 	// ── Build universe of TWSE symbols ──────────────────────────────────────
 	// Gather all symbols from the market data provider.
