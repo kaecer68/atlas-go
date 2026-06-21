@@ -3570,11 +3570,6 @@ func defaultSmartUniverseParams() SmartUniverseConfig {
 			Rationale: "30% drawdown threshold for risk flag (flag only, not exclusion)",
 			Source:    SourceHeuristic,
 		},
-		UniverseHistoryRetentionDays: ParameterMetadata[int]{
-			Value:     7,
-			Rationale: "Keep 7 days of universe history to support quick rollback",
-			Source:    SourceHeuristic,
-		},
 		ConfidenceThreshold: ParameterMetadata[int]{
 			Value:     3,
 			Rationale: "Minimum of 3 supporting signals or confidence points required for inclusion",

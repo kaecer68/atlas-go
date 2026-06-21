@@ -1449,26 +1449,25 @@ func (p EngineSimulationParameters) ToConfig() SimulationConfig {
 // SmartUniverseConfig holds tunable parameters for the Smart Universe Builder.
 // Parameters are Oracle-audited defaults from the SP4 design doc §9.
 type SmartUniverseConfig struct {
-	TopN                         ParameterMetadata[int]     `json:"top_n"`
-	PEWeight                     ParameterMetadata[float64] `json:"pe_weight"`
-	PBWeight                     ParameterMetadata[float64] `json:"pb_weight"`
-	VolumeWeight                 ParameterMetadata[float64] `json:"volume_weight"`
-	MomentumWeight               ParameterMetadata[float64] `json:"momentum_weight"`
-	QualityWeight                ParameterMetadata[float64] `json:"quality_weight"`
-	ForeignFlowWeight            ParameterMetadata[float64] `json:"foreign_flow_weight"`
-	VolumeFloorTWD               ParameterMetadata[float64] `json:"volume_floor_twd"`
-	MinDailyAmountTWD            ParameterMetadata[float64] `json:"min_daily_amount_twd"`
-	MaxIndustryConcentration     ParameterMetadata[float64] `json:"max_industry_concentration"`
-	PriceMinimum                 ParameterMetadata[float64] `json:"price_minimum"`
-	FactorScoreMaxAgeDays        ParameterMetadata[int]     `json:"factor_score_max_age_days"`
-	D6ExpiryTradingDays          ParameterMetadata[int]     `json:"d6_expiry_trading_days"`
-	VaRContributionMultiplier    ParameterMetadata[float64] `json:"var_contribution_multiplier"`
-	VolatilityMultiplier         ParameterMetadata[float64] `json:"volatility_multiplier"`
-	DrawdownWindow               ParameterMetadata[int]     `json:"drawdown_window"`
-	DrawdownThreshold            ParameterMetadata[float64] `json:"drawdown_threshold"`
-	UniverseHistoryRetentionDays ParameterMetadata[int]     `json:"universe_history_retention_days"`
-	ConfidenceThreshold          ParameterMetadata[int]     `json:"confidence_threshold"`
-	SupplyChainExpandDepth       ParameterMetadata[int]     `json:"supply_chain_expand_depth"`
+	TopN                      ParameterMetadata[int]     `json:"top_n"`
+	PEWeight                  ParameterMetadata[float64] `json:"pe_weight"`
+	PBWeight                  ParameterMetadata[float64] `json:"pb_weight"`
+	VolumeWeight              ParameterMetadata[float64] `json:"volume_weight"`
+	MomentumWeight            ParameterMetadata[float64] `json:"momentum_weight"`
+	QualityWeight             ParameterMetadata[float64] `json:"quality_weight"`
+	ForeignFlowWeight         ParameterMetadata[float64] `json:"foreign_flow_weight"`
+	VolumeFloorTWD            ParameterMetadata[float64] `json:"volume_floor_twd"`
+	MinDailyAmountTWD         ParameterMetadata[float64] `json:"min_daily_amount_twd"`
+	MaxIndustryConcentration  ParameterMetadata[float64] `json:"max_industry_concentration"`
+	PriceMinimum              ParameterMetadata[float64] `json:"price_minimum"`
+	FactorScoreMaxAgeDays     ParameterMetadata[int]     `json:"factor_score_max_age_days"`
+	D6ExpiryTradingDays       ParameterMetadata[int]     `json:"d6_expiry_trading_days"`
+	VaRContributionMultiplier ParameterMetadata[float64] `json:"var_contribution_multiplier"`
+	VolatilityMultiplier      ParameterMetadata[float64] `json:"volatility_multiplier"`
+	DrawdownWindow            ParameterMetadata[int]     `json:"drawdown_window"`
+	DrawdownThreshold         ParameterMetadata[float64] `json:"drawdown_threshold"`
+	ConfidenceThreshold       ParameterMetadata[int]     `json:"confidence_threshold"`
+	SupplyChainExpandDepth    ParameterMetadata[int]     `json:"supply_chain_expand_depth"`
 }
 
 func (p *ParametersConfig) validateAlert() error {

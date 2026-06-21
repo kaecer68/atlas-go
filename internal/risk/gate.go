@@ -141,26 +141,33 @@ func (g *RiskGate) Mode() RiskGateMode {
 }
 
 // SetMode transitions the risk gate to a new mode and publishes a decision event.
+// The mutex is released before publish() to avoid holding the write lock during
+// EnrichDecision (a blocking LLM hook). This matches the pattern used by
+// PreTradeCheck, InTradeCheck, and PostTradeCheck.
 func (g *RiskGate) SetMode(mode RiskGateMode) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	prev := g.mode
 	g.mode = mode
-	if prev != mode {
-		// Mode change is a system-internal action without a request context.
-		// Using context.Background() is the documented exception for this path.
-		g.publish(context.Background(), RiskDecision{
-			Phase:   PhasePostTrade,
-			Verdict: VerdictAlertOnly,
-			Mode:    string(mode),
-			Reason:  fmt.Sprintf("risk gate mode changed from %s to %s", prev, mode),
-			Action: RiskAction{
-				Type:        ActionNotify,
-				Description: fmt.Sprintf("風控模式切換：%s → %s", prev, mode),
-			},
-			Recorded: time.Now(),
-		})
+	g.mu.Unlock()
+
+	// Bail early: no-op if mode unchanged.
+	if prev == mode {
+		return
 	}
+
+	// Mode change is a system-internal action without a request context.
+	// Using context.Background() is the documented exception for this path.
+	g.publish(context.Background(), RiskDecision{
+		Phase:   PhasePostTrade,
+		Verdict: VerdictAlertOnly,
+		Mode:    string(mode),
+		Reason:  fmt.Sprintf("risk gate mode changed from %s to %s", prev, mode),
+		Action: RiskAction{
+			Type:        ActionNotify,
+			Description: fmt.Sprintf("風控模式切換：%s → %s", prev, mode),
+		},
+		Recorded: time.Now(),
+	})
 }
 
 func (g *RiskGate) publish(ctx context.Context, dec RiskDecision) {

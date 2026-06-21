@@ -165,8 +165,16 @@ func WriteUniverseRegistry(path string, result *UniverseBuildResult, ranked []Ra
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("open temp file for sync: %w", err)
 	}
-	_ = f.Sync()
-	_ = f.Close()
+	syncErr := f.Sync()
+	closeErr := f.Close()
+	if syncErr != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("fsync temp universe registry: %w", syncErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("close temp universe registry: %w", closeErr)
+	}
 
 	// Backup existing file before replacing it.
 	if _, statErr := os.Stat(path); statErr == nil {

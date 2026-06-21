@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -63,6 +64,7 @@ type RiskExclusionFilter struct {
 
 // NewRiskExclusionFilter creates a filter with sensible defaults.
 // All providers are optional; missing providers cause dependent checks to skip.
+// Callers should call Configure() after construction to apply parameter overrides.
 func NewRiskExclusionFilter(riskMgr RiskManager, marketDataProvider QuoteProvider, priceHistoryProvider HistoricalPriceProvider) *RiskExclusionFilter {
 	return &RiskExclusionFilter{
 		riskMgr:              riskMgr,
@@ -74,6 +76,18 @@ func NewRiskExclusionFilter(riskMgr RiskManager, marketDataProvider QuoteProvide
 		drawdownThreshold:    0.30,
 		minDailyAmount:       5_000_000.0,
 	}
+}
+
+// Configure applies SmartUniverseConfig parameter overrides. Call this
+// after construction, before the first Filter() invocation. All five risk
+// thresholds (VaR contribution, volatility, drawdown window + threshold,
+// and liquidity) are wired from the parameters system.
+func (f *RiskExclusionFilter) Configure(cfg config.SmartUniverseConfig) {
+	f.varThreshold = cfg.VaRContributionMultiplier.Value
+	f.volMultiplier = cfg.VolatilityMultiplier.Value
+	f.drawdownWindow = cfg.DrawdownWindow.Value
+	f.drawdownThreshold = cfg.DrawdownThreshold.Value
+	f.minDailyAmount = cfg.MinDailyAmountTWD.Value
 }
 
 // Filter runs the four Layer 2.5 checks against every symbol and returns
@@ -138,6 +152,7 @@ func (f *RiskExclusionFilter) computeVolatilityMap(symbols []string) (map[string
 
 func (f *RiskExclusionFilter) checkVaRContribution(symbol string, portfolioAvgVar float64, r *RiskExclusionResult) {
 	if f.riskMgr == nil {
+		r.RuleResults = append(r.RuleResults, RuleDetail{RuleName: "var_contribution", Passed: true, Severity: "INFO", Message: fmt.Sprintf("%s skipped: risk manager not configured", symbol)})
 		return
 	}
 	contrib, err := f.riskMgr.VaRContribution(symbol)
@@ -159,6 +174,7 @@ func (f *RiskExclusionFilter) checkVaRContribution(symbol string, portfolioAvgVa
 func (f *RiskExclusionFilter) checkVolatility(symbol string, volBySymbol map[string]float64, medianVol float64, r *RiskExclusionResult) {
 	vol, ok := volBySymbol[symbol]
 	if !ok || medianVol <= 0 {
+		r.RuleResults = append(r.RuleResults, RuleDetail{RuleName: "volatility", Passed: true, Severity: "INFO", Message: fmt.Sprintf("%s skipped: insufficient volatility data (available=%d, median=%.4f)", symbol, len(volBySymbol), medianVol)})
 		return
 	}
 	threshold := f.volMultiplier * medianVol
@@ -172,6 +188,7 @@ func (f *RiskExclusionFilter) checkVolatility(symbol string, volBySymbol map[str
 
 func (f *RiskExclusionFilter) checkDrawdown(symbol string, r *RiskExclusionResult) {
 	if f.priceHistoryProvider == nil {
+		r.RuleResults = append(r.RuleResults, RuleDetail{RuleName: "drawdown_warning", Passed: true, Severity: "INFO", Message: fmt.Sprintf("%s skipped: price history provider not configured", symbol)})
 		return
 	}
 	dd := f.maxDrawdown(symbol, f.drawdownWindow)

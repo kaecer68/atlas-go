@@ -329,10 +329,10 @@ type ScoringScreener struct {
 	IndustryMapper SymbolIndustryMapper
 	// Weights holds the 6-factor weight table. Use DefaultScreenerWeights().
 	Weights ScreenerWeights
-	// TopN is the number of symbols returned after ranking. Default 50.
+	// TopN is the number of symbols returned after ranking. Default 150.
 	TopN int
 	// MaxIndustryConcentration caps the share of one industry in the ranked
-	// output (0-1]. Default 0.25.
+	// output (0-1]. Default 0.40.
 	MaxIndustryConcentration float64
 	// VolumeFloorTWD is the minimum approximate daily TWD volume (quote.Volume
 	// * quote.Last). Default 10,000,000.

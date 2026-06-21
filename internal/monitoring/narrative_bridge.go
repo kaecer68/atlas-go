@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
@@ -185,7 +186,7 @@ type FeedFetcher func(ctx context.Context, channelID string) (*FeedData, error)
 // the cycle tracker and sector allocation engines.
 type NarrativeEventBridge struct {
 	mu                  sync.RWMutex
-	rssFeeds            []string
+	channelIDs          []string
 	keywords            map[string][]KeywordMapping
 	feedFetcher         FeedFetcher
 	cachePath           string
@@ -193,17 +194,17 @@ type NarrativeEventBridge struct {
 	confidenceThreshold int
 }
 
-// NewNarrativeEventBridge creates a bridge with sensible defaults. If cachePath
+// newNarrativeEventBridge creates a bridge with sensible defaults. If cachePath
 // is empty, it falls back to data/state/narrative_cache.json under the current
 // working directory. Callers must set a FeedFetcher via
 // NewNarrativeEventBridgeWithFetcher or SetFetcher before Scrape can fetch
 // external data.
-func NewNarrativeEventBridge(cachePath string) *NarrativeEventBridge {
+func newNarrativeEventBridge(cachePath string) *NarrativeEventBridge {
 	if cachePath == "" {
 		cachePath = filepath.Join("data", "state", "narrative_cache.json")
 	}
 	return &NarrativeEventBridge{
-		rssFeeds:            defaultChannelIDs(),
+		channelIDs:          defaultChannelIDs(),
 		keywords:            defaultKeywordMappings(),
 		feedFetcher:         nil,
 		cachePath:           cachePath,
@@ -217,7 +218,7 @@ func NewNarrativeEventBridge(cachePath string) *NarrativeEventBridge {
 // CONSTITUTION.md Article 1 by routing all external fetches through apigateway
 // (via a wrapper provided by the caller).
 func NewNarrativeEventBridgeWithFetcher(cachePath string, fetcher FeedFetcher) *NarrativeEventBridge {
-	b := NewNarrativeEventBridge(cachePath)
+	b := newNarrativeEventBridge(cachePath)
 	b.feedFetcher = fetcher
 	return b
 }
@@ -236,20 +237,10 @@ func (b *NarrativeEventBridge) getFetcher() FeedFetcher {
 	return b.feedFetcher
 }
 
-// SetConfidenceThreshold overrides the default hit-count threshold used by
-// ComputeConfidence.
-func (b *NarrativeEventBridge) SetConfidenceThreshold(threshold int) {
-	b.confidenceThreshold = threshold
-}
-
-// SetDecayLambda overrides the per-event-type decay coefficients.
-func (b *NarrativeEventBridge) SetDecayLambda(lambdas map[string]float64) {
-	b.decayLambda = lambdas
-}
-
-// SetCachePath overrides the path used by SaveCache and LoadCache.
-func (b *NarrativeEventBridge) SetCachePath(path string) {
-	b.cachePath = path
+// Configure applies SmartUniverseConfig overrides. Currently wires
+// confidenceThreshold from the parameter system.
+func (b *NarrativeEventBridge) Configure(cfg config.SmartUniverseConfig) {
+	b.confidenceThreshold = cfg.ConfidenceThreshold.Value
 }
 
 // rssFeed, rssChannel, and rssItem are minimal XML structs for parsing
@@ -281,7 +272,7 @@ func (b *NarrativeEventBridge) Scrape(ctx context.Context) ([]NarrativeEvent, er
 	seen := make(map[string]bool) // "keyword|industry_id" dedup
 	var events []NarrativeEvent
 
-	for _, channelID := range b.rssFeeds {
+	for _, channelID := range b.channelIDs {
 		data, err := fetcher(ctx, channelID)
 		if err != nil {
 			logging.Warn("narrative_bridge", "channel_fetch_failed",

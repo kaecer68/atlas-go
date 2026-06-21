@@ -28,12 +28,10 @@ func runBuildUniverse(rt *bootstrap.Runtime, cfg config.Config, verbose bool, da
 		return buildUniverseRun(rt, cfg, verbose, dateOverride)
 	case "map":
 		return buildUniverseMap(cfg)
-	case "scrape":
-		return buildUniverseScrape(cfg)
 	case "status":
 		return buildUniverseStatus(cfg)
 	default:
-		return fmt.Errorf("unknown universe sub-command: %s (valid: run, map, scrape, status)", subCmd)
+		return fmt.Errorf("unknown universe sub-command: %s (valid: run, map, status)", subCmd)
 	}
 }
 
@@ -201,24 +199,6 @@ func buildUniverseMap(cfg config.Config) error {
 	log.Printf("  ─────────────────────────────────────────────")
 	log.Printf("  TOTAL: %d/%d mapped (%.1f%%), %d unknown", grandMapped, grandTotal, grandPct, grandUnknown)
 
-	return nil
-}
-
-// buildUniverseScrape creates a NarrativeEventBridge and calls Scrape().
-func buildUniverseScrape(cfg config.Config) error {
-	cachePath := filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json")
-	bridge := monitoring.NewNarrativeEventBridge(cachePath)
-
-	events, err := bridge.Scrape(context.Background())
-	if err != nil {
-		return fmt.Errorf("narrative scrape: %w", err)
-	}
-
-	log.Printf("[universe scrape] events found: %d", len(events))
-	for _, ev := range events {
-		log.Printf("  keyword=%s industry=%s type=%s hit=%d confidence=%.2f bias=%.2f",
-			ev.Keyword, ev.IndustryID, ev.EventType, ev.HitCount, ev.Confidence, ev.Bias)
-	}
 	return nil
 }
 

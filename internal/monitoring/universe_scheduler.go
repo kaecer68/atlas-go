@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -100,6 +101,11 @@ type UniverseBuilderDeps struct {
 	// WorkDir is the runtime working directory. The snapshot path is derived as
 	// <WorkDir>/data/state/universe_snapshot.json.
 	WorkDir string
+	// WatchlistMu serializes CheckD6Expiry calls to prevent concurrent
+	// read-modify-write on universe_watchlist.json. The caller (main.go)
+	// supplies &sync.Mutex{} so all task closures share the same lock.
+	// Exported so callers outside this package can wire it.
+	WatchlistMu *sync.Mutex
 }
 
 // ── Task factories ───────────────────────────────────────────────────────
@@ -153,9 +159,19 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 			"ranked", result.SymbolsRanked,
 			"excluded", result.SymbolsExcluded)
 
-		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols, deps.Mapper); err != nil {
+		if deps.WatchlistMu != nil {
+			deps.WatchlistMu.Lock()
+		}
+		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols, deps.Mapper, deps.Config.D6ExpiryTradingDays.Value); err != nil {
+			if deps.WatchlistMu != nil {
+				deps.WatchlistMu.Unlock()
+			}
 			logging.Warn("universe_scheduler", "d6_expiry_check_error",
 				logging.Err(err))
+		} else {
+			if deps.WatchlistMu != nil {
+				deps.WatchlistMu.Unlock()
+			}
 		}
 
 		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, deps.Tree, 0.50)
@@ -214,9 +230,19 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 			"ranked", result.SymbolsRanked,
 			"excluded", result.SymbolsExcluded)
 
-		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols, deps.Mapper); err != nil {
+		if deps.WatchlistMu != nil {
+			deps.WatchlistMu.Lock()
+		}
+		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols, deps.Mapper, deps.Config.D6ExpiryTradingDays.Value); err != nil {
+			if deps.WatchlistMu != nil {
+				deps.WatchlistMu.Unlock()
+			}
 			logging.Warn("universe_scheduler", "d6_expiry_check_error",
 				logging.Err(err))
+		} else {
+			if deps.WatchlistMu != nil {
+				deps.WatchlistMu.Unlock()
+			}
 		}
 
 		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, deps.Tree, 0.50)
@@ -566,13 +592,13 @@ func alignToTarget(now time.Time, hour, minute int) bool {
 // ── D6 Expiry ────────────────────────────────────────────────────────────
 
 // CheckD6Expiry maintains the watchlist for symbols that have been dropped from
-// the ranked universe. Symbols failing to re-enter the ranked list for 60+
-// consecutive trading days are moved to the watchlist. The watchlist is persisted
-// to <workDir>/data/state/universe_watchlist.json using an atomic write.
+// the ranked universe. Symbols failing to re-enter the ranked list for
+// expiryDays consecutive trading days are moved to the watchlist. The watchlist
+// is persisted to <workDir>/data/state/universe_watchlist.json using an atomic write.
 //
 // previousUniverseSymbols provides the ranked symbols from the last pipeline run.
 // ranked is the current (today's) ranked symbol list.
-func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbols []string, mapper SymbolIndustryMapper) error {
+func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbols []string, mapper SymbolIndustryMapper, expiryDays int) error {
 	now := time.Now()
 	today := now.Format("2006-01-02")
 
@@ -657,9 +683,9 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 	expiredCount := 0
 	for i := range wl.Symbols {
 		e := &wl.Symbols[i]
-		if e.ConsecutiveFailures >= 60 {
+		if e.ConsecutiveFailures >= expiryDays {
 			expiredCount++
-			if e.ConsecutiveFailures == 60 {
+			if e.ConsecutiveFailures == expiryDays {
 				logging.Warn("universe_scheduler", "d6_expiry_entered",
 					"symbol", e.Symbol,
 					"industry", e.Industry,
