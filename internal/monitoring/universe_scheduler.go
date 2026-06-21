@@ -153,7 +153,7 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 				logging.Err(err))
 		}
 
-		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, 0.50)
+		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, deps.Tree, 0.50)
 		logging.Info("universe_scheduler", "coverage_check",
 			"mapped", mapped,
 			"total", total,
@@ -214,7 +214,7 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 				logging.Err(err))
 		}
 
-		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, 0.50)
+		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, deps.Tree, 0.50)
 		logging.Info("universe_scheduler", "coverage_check",
 			"mapped", mapped,
 			"total", total,
@@ -501,8 +501,12 @@ func saveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []
 	}
 
 	path := filepath.Join(outDir, "universe_snapshot.json")
-	if err := os.WriteFile(path, data, 0o640); err != nil {
-		return fmt.Errorf("write universe snapshot %q: %w", path, err)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o640); err != nil {
+		return fmt.Errorf("write universe snapshot tmp %q: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("rename universe snapshot %q: %w", tmpPath, err)
 	}
 	return nil
 }
@@ -601,21 +605,24 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 		previouslyRankedSet[normalizeSymbol(sym)] = true
 	}
 
+	// Collect new entries separately to avoid slice realloc
+	// invalidating entryBySymbol pointers (see C4).
+	var newEntries []D6WatchlistEntry
+
 	for sym := range previouslyRankedSet {
 		if currentSet[sym] {
 			continue
 		}
 		entry, exists := entryBySymbol[sym]
 		if !exists {
-			cls := inferredIndustry(sym)
-			wl.Symbols = append(wl.Symbols, D6WatchlistEntry{
+			cls := inferredIndustry(sym, ranked)
+			newEntries = append(newEntries, D6WatchlistEntry{
 				Symbol:              sym,
 				Industry:            cls,
 				ConsecutiveFailures: 1,
 				FirstFailureDate:    today,
 				LastCheckDate:       today,
 			})
-			entryBySymbol[sym] = &wl.Symbols[len(wl.Symbols)-1]
 		} else {
 			entry.ConsecutiveFailures++
 			entry.LastCheckDate = today
@@ -623,6 +630,14 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 				entry.FirstFailureDate = today
 			}
 		}
+	}
+
+	// Append all new entries at once, then rebuild the pointer map
+	// so subsequent mutations go to the final backing array.
+	wl.Symbols = append(wl.Symbols, newEntries...)
+	entryBySymbol = make(map[string]*D6WatchlistEntry, len(wl.Symbols))
+	for i := range wl.Symbols {
+		entryBySymbol[wl.Symbols[i].Symbol] = &wl.Symbols[i]
 	}
 
 	// Reset failures for symbols that returned to ranked
@@ -673,9 +688,15 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 	return nil
 }
 
-// inferredIndustry attempts to determine the industry for a symbol from the
-// ranked list's metadata. Returns "unknown" if no classification is available.
-func inferredIndustry(sym string) string {
+// inferredIndustry looks up the industry for sym from the current ranked
+// list. Falls back to "unknown" when the symbol is not in the ranked set.
+func inferredIndustry(sym string, ranked []RankedSymbol) string {
+	norm := normalizeSymbol(sym)
+	for _, r := range ranked {
+		if normalizeSymbol(r.Symbol) == norm && r.Industry != "" {
+			return r.Industry
+		}
+	}
 	return "unknown"
 }
 
@@ -685,25 +706,14 @@ func inferredIndustry(sym string) string {
 // mapped to Level-1 industries. Returns mapped, total, ratio, and an alert
 // message when the ratio falls below the threshold.
 //
-// A nil mapper returns 0, 0, 0 with an alert.
-func CheckUniverseCoverage(mapper SymbolIndustryMapper, threshold float64) (mapped int, total int, ratio float64, alert string) {
-	if mapper == nil {
-		return 0, 0, 0, "no mapper available"
+// A nil mapper or tree returns 0, 0, 0 with an alert.
+func CheckUniverseCoverage(mapper SymbolIndustryMapper, tree ClassificationTreeAccessor, threshold float64) (mapped int, total int, ratio float64, alert string) {
+	if mapper == nil || tree == nil {
+		return 0, 0, 0, "mapper or tree not available"
 	}
-	// Walk all Level-1 industries and count total mapped symbols.
-	// Without a classification tree reference, we iterate all industries
-	// accessible through a representative set.  The mapper contract requires
-	// GetSymbolsByIndustry to return the symbol list for a given industry ID.
 	allSymbols := make(map[string]bool)
-	// Iterate common TWSE industry IDs as a reasonable proxy for the full set.
-	commonIDs := []string{
-		"semiconductor", "electronic_parts", "optoelectronics",
-		"computer_peripheral", "communication_network", "electronic_components",
-		"financial", "steel", "cement", "textile", "shipping", "automobile",
-		"biotech", "chemical", "food", "construction", "other",
-	}
-	for _, id := range commonIDs {
-		for _, sym := range mapper.GetSymbolsByIndustry(id) {
+	for _, seg := range tree.GetLevel1() {
+		for _, sym := range mapper.GetSymbolsByIndustry(seg.ID) {
 			allSymbols[normalizeSymbol(sym)] = true
 		}
 	}
