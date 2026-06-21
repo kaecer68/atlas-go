@@ -24,12 +24,12 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 | 1 | `RiskGateRejected` | ~180 | `internal/risk/gate.go` reject path | `internal/risk/` 已存在 |
 | 2 | `RiskGateOverride` | ~150 | `internal/risk/gate.go` override callback | 同上 |
 | 3 | `IndustryCalendarEvent` | ~220 | `internal/data/industry_calendar.go` ingest | `industry_calendar` 已存在 |
-| 4 | `BacktestCompleted` | ~200 | `internal/backtest/runner.go` | 已存在 |
-| 5 | `CalibrationCompleted` | ~220 | `internal/calibration/engine.go` | 已存在 |
-| 6 | `TradeSlippage` | ~200 | `internal/broker/order.go` fill callback | broker 介面已存在 |
-| 7 | `LLMAnnotatorCircuitOpen` | ~180 | `internal/llm_annotator/circuit_breaker.go` | 需 Phase 2 #610 完成 |
-| 8 | `LLMAnnotatorFallbackUsed` | ~150 | `internal/llm_annotator/router.go` | 同上 |
-| 9 | `LLMAnnotatorQuotaExceeded` | ~140 | `internal/llm_annotator/quota.go` | 同上 |
+| 4 | `TradeSlippage` | ~200 | `internal/broker/order.go` fill callback | broker 介面已存在 |
+| 5 | `LLMAnnotatorCircuitOpen` | ~180 | `internal/llm_annotator/circuit_breaker.go` | 需 Phase 2 #610 完成 |
+| 6 | `LLMAnnotatorFallbackUsed` | ~150 | `internal/llm_annotator/router.go` | 同上 |
+| 7 | `LLMAnnotatorQuotaExceeded` | ~140 | `internal/llm_annotator/quota.go` | 同上 |
+| 8 | `BacktestCompleted` | ~200 | `internal/backtest/runner.go` | 已存在 |
+| 9 | `CalibrationCompleted` | ~220 | `internal/calibration/engine.go` | 已存在 |
 
 ### 2.2 Wave 9 YELLOW（5 個觀測性擴展，排隊等 Wave 8 完成）
 
@@ -132,10 +132,10 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 | Wave 8.1 | `RiskGateRejected` | （使用 Wave 8.0 基礎） | 0.5 day |
 | Wave 8.2 | `RiskGateOverride` | — | 0.5 day |
 | Wave 8.3 | `IndustryCalendarEvent` | PD-2 效能驗證 | 1 day |
-| Wave 8.6 | `TradeSlippage` | PD-3 (high-freq dedup) | 1 day |
-| Wave 8.11 | `LLMAnnotatorCircuitOpen` | PD-3 (throttle framework) | 0.5 day |
-| Wave 8.12 | `LLMAnnotatorFallbackUsed` | — | 0.5 day |
-| Wave 8.13 | `LLMAnnotatorQuotaExceeded` | — | 0.5 day |
+| Wave 8.4 | `TradeSlippage` | PD-3 (high-freq dedup) | 1 day |
+| Wave 8.5 | `LLMAnnotatorCircuitOpen` | PD-3 (throttle framework) | 0.5 day |
+| Wave 8.6 | `LLMAnnotatorFallbackUsed` | — | 0.5 day |
+| Wave 8.7 | `LLMAnnotatorQuotaExceeded` | — | 0.5 day |
 | Wave 8.8 | `BacktestCompleted` | — | 0.5 day |
 | Wave 8.9 | `CalibrationCompleted` | — | 0.5 day |
 | Wave 8.10 | frontend 整合測試 + docs | — | 1 day |
