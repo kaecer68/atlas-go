@@ -58,38 +58,44 @@ Shipped in v0.0.0.6:
 - `EventPromotionRecorded` event type delivered to dashboard clients via SSE with catch-up support.
 - `GET /api/dashboard/fetch-log` endpoint for recent channel fetch events.
 
-## Wave 8 (2026-06, in planning)
+## Wave 8 (2026-06, **shipped in v0.0.0.7**)
 
 Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 
 目標：把 b29 audit 識別的 4 個 RED + 5 個 YELLOW 事件缺口實作成統一事件流（type 定義 + producer + SSE handler + frontend component）。
 
-### 前置決策（必拍板才能開工）
+### Wave 8 收尾狀態（v0.0.0.7）
 
-- **PD-1**：事件 payload schema 版本化（每個事件加 `schema_version` 欄位）
-- **PD-2**：JSONL 審計軌跡（9 個新事件同步寫入 AnnotationStore，batch flush 100 筆或 1 秒）
-- **PD-3**：效能預算與去重（單節點 max 500 events/sec；高頻事件 producer 端 dedup）
+- **RED 事件完成度**：6/9 實作完成，3 個推遲（見下表）
+- **YELLOW 事件**：5 個全數保留至 Wave 9 plan，未在本 wave 實作
+- **三項前置決策（PD-1/PD-2/PD-3）**：PD-1（schema version）、PD-2（JSONL audit）、PD-3（節流）已分別於 eventbus.go、AnnotationStore、monitoring/service 落實
 
 ### Wave 8 RED（9 個事件，1 PR = 1 事件）
 
-1. `RiskGateRejected`
-2. `RiskGateOverride`
-3. `IndustryCalendarEvent`
-4. `TradeSlippage`
-5. `LLMAnnotatorCircuitOpen`
-6. `LLMAnnotatorFallbackUsed`
-7. `LLMAnnotatorQuotaExceeded`
-8. `BacktestCompleted`
-9. `CalibrationCompleted`
+| # | 事件 | 狀態 | PR / 補充說明 |
+|---|------|------|---------------|
+| 1 | `RiskGateRejected` | ✅ 已合併 | #619 — BLOCK / HALT 路由 |
+| 2 | `RiskGateOverride` → 重構為 `RiskGateOverridden` | ✅ 已合併 + Wave 8.2 收尾 | #620 + Wave 8.2 收尾 — REDUCE / ALERT_ONLY 路由 |
+| 3 | `IndustryCalendarEvent` | ✅ 已合併 | #621 |
+| 4 | `TradeSlippage` | ✅ 已合併 | #625（經 P3 編號對齊從 8.4 變 8.6） |
+| 5 | `LLMAnnotatorCircuitOpen` | ⏸️ 推遲至 Wave 8.11+ | LLM 重構（PR #628/#629）改為 capability-based routing，原 circuit breaker 由 `llm_annotator:requests_good:rate5m` + alert rule `llm_annotator_availability_fast_burn` 取代 |
+| 6 | `LLMAnnotatorFallbackUsed` | ⏸️ 推遲至 Wave 8.11+ | 同上，fallback 路徑由 router logs 與 metrics 揭露 |
+| 7 | `LLMAnnotatorQuotaExceeded` | ⏸️ 推遲至 Wave 8.11+ | 同上，quota 控管整合進 router 計費 |
+| 8 | `BacktestCompleted` | ✅ 已合併 | #622 |
+| 9 | `CalibrationCompleted` | ✅ 已合併 | #623 |
 
-### Wave 9 YELLOW（5 個，排隊等 Wave 8 收尾）
+> **Wave 8.10 Docs 收尾**（PR #627）：補寫 3 個既有事件 doc（narrative-event.md、health-alert.md、promotion-recorded.md）+ 更新 INDEX.md + P3 編號對齊（TradeSlippage 維持 8.6，LLM 事件預留 8.11+）。
+>
+> **Wave 8.2 收尾**（本批次）：補實作 `EventRiskGateOverridden` 常數，routing 改為三向 split（BLOCK/HALT → rejected、REDUCE/ALERT_ONLY → overridden、ALLOW → allowed）；補 `risk-gate-overridden.md` 文件 + 更新 `risk-gate-allowed.md` 反映新語意。
+
+### Wave 9 YELLOW（5 個，待 Wave 8 收尾合併後啟動評估）
 
 - `ChannelIndividualHealth`、`FactorWeightRegression`、`DriftDetector`、`RegimeChangeConfirmed`、`IngestionLagSpike`
 
 ### 依賴
 
-- 上游：Wave 7.5 v0.0.0.6 ✅、Phase 2 CLI #610 修復（in-flight）
-- 下游：Phase 4 Production Trading、refactor issue #611
+- 上游：Wave 7.5 v0.0.0.6 ✅、Phase 2 CLI #610 修復 ✅（PR #618 收尾）
+- 下游：Phase 4 Production Trading（Wave 8 SSE 完備）、refactor issue #611
 
 ### 邊界（嚴格）
 
