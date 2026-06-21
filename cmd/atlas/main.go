@@ -2699,6 +2699,29 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		liveCfg,
 	)
 
+	d6WatchlistPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_watchlist.json")
+	if d6Data, rErr := os.ReadFile(d6WatchlistPath); rErr == nil {
+		var wl monitoring.Watchlist
+		if uErr := json.Unmarshal(d6Data, &wl); uErr == nil {
+			var d6Symbols []string
+			for _, entry := range wl.Symbols {
+				if entry.ConsecutiveFailures >= 60 {
+					d6Symbols = append(d6Symbols, entry.Symbol)
+				}
+			}
+			if len(d6Symbols) > 0 {
+				o.SetWatchlist(d6Symbols)
+				log.Printf("[D6 Watchlist] wired %d expired symbols to live scheduler: %v", len(d6Symbols), d6Symbols)
+			} else {
+				log.Printf("[D6 Watchlist] no D6-expired symbols found in watchlist")
+			}
+		} else {
+			log.Printf("[D6 Watchlist] failed to parse watchlist file: %v", uErr)
+		}
+	} else {
+		log.Printf("[D6 Watchlist] no watchlist file found — skipping")
+	}
+
 	// Metrics collector for live trading observability
 	monitor := monitoring.NewMonitor()
 	tradingMetrics := monitoring.NewTradingMetrics(collector, monitor)

@@ -158,15 +158,49 @@ func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, _ bool, _ string)
 // buildUniverseMap prints mapping coverage statistics.
 func buildUniverseMap(cfg config.Config) error {
 	_ = cfg
-	// SymbolIndustryMapper has no concrete implementation yet.
-	// Once available, this would load the mapper and compute coverage:
-	//   totalTWSE := len(allTWSE)
-	//   mapped := 0
-	//   for _, sym := range allTWSE { if _, ok := mapper.GetClassification(sym); ok { mapped++ } }
-	//   log.Printf("Mapping coverage: %d/%d mapped (%.1f%%), %d unknown (%.1f%%)",
-	//       mapped, totalTWSE, float64(mapped)/float64(totalTWSE)*100,
-	//       totalTWSE-mapped, float64(totalTWSE-mapped)/float64(totalTWSE)*100)
-	log.Printf("[universe map] SymbolIndustryMapper not yet implemented — coverage stats unavailable")
+
+	// ── Wire industry components ───────────────────────────────────────────
+	classTree := industry.DefaultClassification()
+	classTreeAdapter := monitoring.AdaptClassificationTree(classTree)
+	mapper := monitoring.NewTreeBasedMapper(classTreeAdapter)
+
+	level1 := classTree.GetLevel1()
+	log.Printf("[universe map] Classification coverage across %d Level-1 industries:", len(level1))
+
+	grandTotal := 0
+	grandMapped := 0
+	grandUnknown := 0
+
+	for _, seg := range level1 {
+		symbols := mapper.GetSymbolsByIndustry(seg.ID)
+		total := len(symbols)
+		mapped := 0
+		unknown := 0
+		for _, sym := range symbols {
+			if _, ok := mapper.GetClassification(sym); ok {
+				mapped++
+			} else {
+				unknown++
+			}
+		}
+		grandTotal += total
+		grandMapped += mapped
+		grandUnknown += unknown
+
+		var pct float64
+		if total > 0 {
+			pct = float64(mapped) / float64(total) * 100
+		}
+		log.Printf("  %-30s %s: %d/%d mapped (%.1f%%), %d unknown", seg.Name, seg.ID, mapped, total, pct, unknown)
+	}
+
+	grandPct := 0.0
+	if grandTotal > 0 {
+		grandPct = float64(grandMapped) / float64(grandTotal) * 100
+	}
+	log.Printf("  ─────────────────────────────────────────────")
+	log.Printf("  TOTAL: %d/%d mapped (%.1f%%), %d unknown", grandMapped, grandTotal, grandPct, grandUnknown)
+
 	return nil
 }
 
