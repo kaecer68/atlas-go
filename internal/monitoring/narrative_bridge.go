@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -168,6 +169,7 @@ func defaultRSSFeeds() []string {
 // exponential time decay to each signal and exposes the primitives needed by
 // the cycle tracker and sector allocation engines.
 type NarrativeEventBridge struct {
+	mu                  sync.RWMutex
 	rssFeeds            []string
 	keywords            map[string][]KeywordMapping
 	httpClient          *http.Client
@@ -197,7 +199,16 @@ func NewNarrativeEventBridge(cachePath string) *NarrativeEventBridge {
 // injecting a gateway-compatible transport later without breaking the bridge's
 // public signature.
 func (b *NarrativeEventBridge) SetHTTPClient(client *http.Client) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.httpClient = client
+}
+
+// getHTTPClient returns the current HTTP client under read lock.
+func (b *NarrativeEventBridge) getHTTPClient() *http.Client {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.httpClient
 }
 
 // SetConfidenceThreshold overrides the default hit-count threshold used by
@@ -247,7 +258,7 @@ func (b *NarrativeEventBridge) Scrape(ctx context.Context) ([]NarrativeEvent, er
 			continue
 		}
 
-		resp, err := b.httpClient.Do(req)
+		resp, err := b.getHTTPClient().Do(req)
 		cancel()
 		if err != nil {
 			logging.Warn("narrative_bridge", "rss_fetch_failed",
@@ -425,8 +436,12 @@ func (b *NarrativeEventBridge) SaveCache(events []NarrativeEvent) error {
 	if err != nil {
 		return fmt.Errorf("narrative bridge: marshal cache: %w", err)
 	}
-	if err := os.WriteFile(b.cachePath, data, 0o640); err != nil {
-		return fmt.Errorf("narrative bridge: write cache %q: %w", b.cachePath, err)
+	tmpPath := b.cachePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o640); err != nil {
+		return fmt.Errorf("narrative bridge: write cache tmp %q: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, b.cachePath); err != nil {
+		return fmt.Errorf("narrative bridge: commit cache %q: %w", b.cachePath, err)
 	}
 	return nil
 }

@@ -128,6 +128,11 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 				"day", now.Weekday().String())
 			return nil
 		}
+		if now.Weekday() == time.Monday {
+			logging.Debug("universe_scheduler", "daily_skip_monday",
+				"note", "weekly rebuild handles Monday")
+			return nil
+		}
 		if !alignToTarget(now, 6, 0) {
 			return nil // silent skip — not the trigger minute
 		}
@@ -148,7 +153,7 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 			"ranked", result.SymbolsRanked,
 			"excluded", result.SymbolsExcluded)
 
-		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols); err != nil {
+		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols, deps.Mapper); err != nil {
 			logging.Warn("universe_scheduler", "d6_expiry_check_error",
 				logging.Err(err))
 		}
@@ -209,7 +214,7 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 			"ranked", result.SymbolsRanked,
 			"excluded", result.SymbolsExcluded)
 
-		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols); err != nil {
+		if err := CheckD6Expiry(deps.WorkDir, ranked, prevSymbols, deps.Mapper); err != nil {
 			logging.Warn("universe_scheduler", "d6_expiry_check_error",
 				logging.Err(err))
 		}
@@ -567,7 +572,7 @@ func alignToTarget(now time.Time, hour, minute int) bool {
 //
 // previousUniverseSymbols provides the ranked symbols from the last pipeline run.
 // ranked is the current (today's) ranked symbol list.
-func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbols []string) error {
+func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbols []string, mapper SymbolIndustryMapper) error {
 	now := time.Now()
 	today := now.Format("2006-01-02")
 
@@ -615,7 +620,7 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 		}
 		entry, exists := entryBySymbol[sym]
 		if !exists {
-			cls := inferredIndustry(sym, ranked)
+			cls := inferredIndustry(sym, mapper)
 			newEntries = append(newEntries, D6WatchlistEntry{
 				Symbol:              sym,
 				Industry:            cls,
@@ -688,16 +693,15 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 	return nil
 }
 
-// inferredIndustry looks up the industry for sym from the current ranked
-// list. Falls back to "unknown" when the symbol is not in the ranked set.
-func inferredIndustry(sym string, ranked []RankedSymbol) string {
-	norm := normalizeSymbol(sym)
-	for _, r := range ranked {
-		if normalizeSymbol(r.Symbol) == norm && r.Industry != "" {
-			return r.Industry
-		}
+// inferredIndustry resolves the industry classification for sym using the
+// mapper, which queries the full classification tree (not just today's
+// ranked set). Falls back to "unknown" when no classification is found.
+func inferredIndustry(sym string, mapper SymbolIndustryMapper) string {
+	cls, ok := mapper.GetClassification(sym)
+	if !ok || cls.Level1.Name == "" {
+		return "unknown"
 	}
-	return "unknown"
+	return cls.Level1.Name
 }
 
 // ── Coverage Check ────────────────────────────────────────────────────────

@@ -1690,9 +1690,11 @@ func run(args []string, deps appDeps) error {
 					snapshotPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_snapshot.json")
 					snapshotSymbols := 0
 					if data, rErr := os.ReadFile(snapshotPath); rErr == nil {
-						var result monitoring.UniverseBuildResult
-						if err := json.Unmarshal(data, &result); err == nil {
-							snapshotSymbols = result.SymbolsBuilt
+						var snapshot struct {
+							Result monitoring.UniverseBuildResult `json:"result"`
+						}
+						if err := json.Unmarshal(data, &snapshot); err == nil {
+							snapshotSymbols = snapshot.Result.SymbolsBuilt
 						}
 					}
 					if totalSymbols > 0 {

@@ -57,7 +57,7 @@ func (m *UniverseMetrics) SetOnInc(fn OnInc) {
 	wireOnInc(m.SnapshotSizeBytes, "atlas_universe_snapshot_size_bytes")
 	wireOnInc(m.PipelineDurationSeconds, "atlas_universe_pipeline_duration_seconds")
 	wireOnInc(m.CoverageMapped, "atlas_universe_coverage_mapped_total")
-	wireOnInc(m.CoverageTotal, "atlas_universe_coverage_total_total")
+	wireOnInc(m.CoverageTotal, "atlas_universe_coverage_total")
 	wireOnInc(m.D6ExpiredSymbols, "atlas_universe_d6_expired_symbols_total")
 }
 
