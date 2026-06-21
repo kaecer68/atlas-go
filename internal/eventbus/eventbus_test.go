@@ -489,9 +489,9 @@ func TestPublishConvenienceMethods(t *testing.T) {
 
 	bus.PublishOrderError("ord-err", "2330", "buy", 500, 100, "E001", "timeout", 3, "pending")
 
-	bus.PublishNarrativeEvent("narr-1", "AI_capex_surge", "TW", 0.8, 0.9, "AI", "0.85", "inflow", "1d")
+	bus.PublishNarrativeEvent("narr-1", "AI_capex_surge", "TW", 0.8, 0.9, "AI", "0.85", "inflow", "1d", "", "")
 
-	bus.PublishNarrativeEvent("narr-2", "custom_event", "US", 0.0, 0.5, "manual", "0.5", "neutral", "7d")
+	bus.PublishNarrativeEvent("narr-2", "custom_event", "US", 0.0, 0.5, "manual", "0.5", "neutral", "7d", "", "")
 
 	time.Sleep(150 * time.Millisecond)
 	mu.Lock()
@@ -624,11 +624,11 @@ func TestPublishNarrativeEvent_SentimentText(t *testing.T) {
 	})
 
 	// Positive sentiment (>0.3) → 利多
-	bus.PublishNarrativeEvent("n-1", "US_rates_up", "US", 0.5, 0.8, "model", "0.7", "outflow", "1d")
+	bus.PublishNarrativeEvent("n-1", "US_rates_up", "US", 0.5, 0.8, "model", "0.7", "outflow", "1d", "", "")
 	// Negative sentiment (<-0.3) → 利空
-	bus.PublishNarrativeEvent("n-2", "retail_fear", "TW", -0.5, 0.7, "model", "0.6", "outflow", "1d")
+	bus.PublishNarrativeEvent("n-2", "retail_fear", "TW", -0.5, 0.7, "model", "0.6", "outflow", "1d", "", "")
 	// Neutral sentiment → 中立
-	bus.PublishNarrativeEvent("n-3", "geopolitical_risk_spike", "CN", 0.0, 0.6, "model", "0.5", "neutral", "7d")
+	bus.PublishNarrativeEvent("n-3", "geopolitical_risk_spike", "CN", 0.0, 0.6, "model", "0.5", "neutral", "7d", "", "")
 
 	time.Sleep(150 * time.Millisecond)
 	mu.Lock()

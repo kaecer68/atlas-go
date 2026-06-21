@@ -18,7 +18,7 @@ type trackEventBus struct {
 	published []string
 }
 
-func (t *trackEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) {
+func (t *trackEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow, explanation, sentimentExplanation string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.published = append(t.published, theme)

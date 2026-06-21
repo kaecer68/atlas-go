@@ -136,7 +136,7 @@ func TestRiskGate_PreTradeCheckNotInitialized(t *testing.T) {
 func TestRiskGate_PostTradeCheckNotInitialized(t *testing.T) {
 	g := &RiskGate{} // nil postTrade
 
-	_, err := g.PostTradeCheck(PostTradeInput{})
+	_, err := g.PostTradeCheck(context.Background(), PostTradeInput{})
 	if err == nil {
 		t.Fatal("expected error for uninitialized postTrade gate")
 	}
@@ -185,7 +185,7 @@ func TestRiskGate_PostTradeCheckModeChange(t *testing.T) {
 		ConsecutiveLosses:  0,
 	}
 
-	dec, err := g.PostTradeCheck(input)
+	dec, err := g.PostTradeCheck(context.Background(), input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

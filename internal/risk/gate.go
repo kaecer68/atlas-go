@@ -64,7 +64,7 @@ func (g *RiskGate) PreTradeCheck(ctx context.Context, order OrderIntent, pf Port
 			Symbol:   order.Symbol,
 			Recorded: time.Now(),
 		}
-		g.publish(*dec)
+		g.publish(ctx, *dec)
 		return dec, nil
 	}
 
@@ -83,7 +83,7 @@ func (g *RiskGate) PreTradeCheck(ctx context.Context, order OrderIntent, pf Port
 		})
 	}
 
-	g.publish(*decision)
+	g.publish(ctx, *decision)
 	return decision, nil
 }
 
@@ -106,12 +106,12 @@ func (g *RiskGate) InTradeCheck(ctx context.Context, positions []InTradePosition
 		g.SetMode(ModeSuspended)
 	}
 
-	g.publish(*decision)
+	g.publish(ctx, *decision)
 	return decision, nil
 }
 
 // PostTradeCheck evaluates portfolio-level metrics and recommends mode changes.
-func (g *RiskGate) PostTradeCheck(input PostTradeInput) (*RiskDecision, error) {
+func (g *RiskGate) PostTradeCheck(ctx context.Context, input PostTradeInput) (*RiskDecision, error) {
 	g.mu.RLock()
 	mode := g.mode
 	g.mu.RUnlock()
@@ -129,7 +129,7 @@ func (g *RiskGate) PostTradeCheck(input PostTradeInput) (*RiskDecision, error) {
 		g.SetMode(RiskGateMode(decision.Mode))
 	}
 
-	g.publish(*decision)
+	g.publish(ctx, *decision)
 	return decision, nil
 }
 
@@ -141,27 +141,37 @@ func (g *RiskGate) Mode() RiskGateMode {
 }
 
 // SetMode transitions the risk gate to a new mode and publishes a decision event.
+// The mutex is released before publish() to avoid holding the write lock during
+// EnrichDecision (a blocking LLM hook). This matches the pattern used by
+// PreTradeCheck, InTradeCheck, and PostTradeCheck.
 func (g *RiskGate) SetMode(mode RiskGateMode) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	prev := g.mode
 	g.mode = mode
-	if prev != mode {
-		g.publish(RiskDecision{
-			Phase:   PhasePostTrade,
-			Verdict: VerdictAlertOnly,
-			Mode:    string(mode),
-			Reason:  fmt.Sprintf("risk gate mode changed from %s to %s", prev, mode),
-			Action: RiskAction{
-				Type:        ActionNotify,
-				Description: fmt.Sprintf("風控模式切換：%s → %s", prev, mode),
-			},
-			Recorded: time.Now(),
-		})
+	g.mu.Unlock()
+
+	// Bail early: no-op if mode unchanged.
+	if prev == mode {
+		return
 	}
+
+	// Mode change is a system-internal action without a request context.
+	// Using context.Background() is the documented exception for this path.
+	g.publish(context.Background(), RiskDecision{
+		Phase:   PhasePostTrade,
+		Verdict: VerdictAlertOnly,
+		Mode:    string(mode),
+		Reason:  fmt.Sprintf("risk gate mode changed from %s to %s", prev, mode),
+		Action: RiskAction{
+			Type:        ActionNotify,
+			Description: fmt.Sprintf("風控模式切換：%s → %s", prev, mode),
+		},
+		Recorded: time.Now(),
+	})
 }
 
-func (g *RiskGate) publish(dec RiskDecision) {
+func (g *RiskGate) publish(ctx context.Context, dec RiskDecision) {
+	dec.ConfidenceCommentary = EnrichDecision(ctx, dec)
 	for _, sub := range g.subs {
 		sub(dec)
 	}

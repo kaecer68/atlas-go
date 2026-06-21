@@ -277,17 +277,19 @@ type OrderErrorEventPayload struct {
 
 // NarrativeEventPayload 叙事事件载荷
 type NarrativeEventPayload struct {
-	EventID          string  `json:"event_id"`
-	Theme            string  `json:"theme"`
-	Region           string  `json:"region"`
-	Sentiment        float64 `json:"sentiment"`
-	SentimentText    string  `json:"sentiment_text"`
-	Confidence       float64 `json:"confidence"`
-	ConfidenceSource string  `json:"confidence_source"`
-	HitRate          float64 `json:"hit_rate"`
-	CapitalFlow      string  `json:"capital_flow"`
-	TimeWindow       string  `json:"time_window"`
-	Description      string  `json:"description"`
+	EventID              string  `json:"event_id"`
+	Theme                string  `json:"theme"`
+	Region               string  `json:"region"`
+	Sentiment            float64 `json:"sentiment"`
+	SentimentText        string  `json:"sentiment_text"`
+	Confidence           float64 `json:"confidence"`
+	ConfidenceSource     string  `json:"confidence_source"`
+	HitRate              float64 `json:"hit_rate"`
+	CapitalFlow          string  `json:"capital_flow"`
+	TimeWindow           string  `json:"time_window"`
+	Description          string  `json:"description"`
+	Explanation          string  `json:"explanation,omitempty"`
+	SentimentExplanation string  `json:"sentiment_explanation,omitempty"`
 }
 
 // HealthAlertPayload carries a single system health alert for downstream
@@ -783,7 +785,7 @@ func (b *ChannelEventBus) PublishOrderError(orderID, symbol, side string, price 
 }
 
 // PublishNarrativeEvent 发布叙事事件 (MacroIngestor 生成)
-func (b *ChannelEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) {
+func (b *ChannelEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow, explanation, sentimentExplanation string) {
 	sentimentText := "中立"
 	if sentiment > 0.3 {
 		sentimentText = "利多"
@@ -814,17 +816,19 @@ func (b *ChannelEventBus) PublishNarrativeEvent(eventID, theme, region string, s
 		Type:      EventNarrative,
 		Timestamp: time.Now(),
 		Payload: NarrativeEventPayload{
-			EventID:          eventID,
-			Theme:            theme,
-			Region:           region,
-			Sentiment:        sentiment,
-			SentimentText:    sentimentText,
-			Confidence:       confidence,
-			ConfidenceSource: confidenceSource,
-			HitRate:          parseFloat(hitRate),
-			CapitalFlow:      capitalFlow,
-			TimeWindow:       timeWindow,
-			Description:      description,
+			EventID:              eventID,
+			Theme:                theme,
+			Region:               region,
+			Sentiment:            sentiment,
+			SentimentText:        sentimentText,
+			Confidence:           confidence,
+			ConfidenceSource:     confidenceSource,
+			HitRate:              parseFloat(hitRate),
+			CapitalFlow:          capitalFlow,
+			TimeWindow:           timeWindow,
+			Description:          description,
+			Explanation:          explanation,
+			SentimentExplanation: sentimentExplanation,
 		},
 		SchemaVersion: 1,
 	})

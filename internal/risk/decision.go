@@ -67,14 +67,15 @@ const (
 
 // RiskDecision is the unified risk gate verdict for a single checkpoint evaluation.
 type RiskDecision struct {
-	Phase    RiskPhase    `json:"phase"`
-	Verdict  Verdict      `json:"verdict"`
-	Reason   string       `json:"reason"`
-	Action   RiskAction   `json:"action"`
-	Details  []RuleResult `json:"details"`
-	Mode     string       `json:"mode"`
-	Symbol   string       `json:"symbol,omitempty"`
-	Recorded time.Time    `json:"recorded_at"`
+	Phase                RiskPhase    `json:"phase"`
+	Verdict              Verdict      `json:"verdict"`
+	Reason               string       `json:"reason"`
+	Action               RiskAction   `json:"action"`
+	Details              []RuleResult `json:"details"`
+	Mode                 string       `json:"mode"`
+	Symbol               string       `json:"symbol,omitempty"`
+	Recorded             time.Time    `json:"recorded_at"`
+	ConfidenceCommentary string       `json:"confidence_commentary,omitempty"`
 }
 
 // RiskAction describes the concrete corrective measure prescribed by the risk decision.

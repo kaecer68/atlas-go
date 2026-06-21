@@ -67,6 +67,7 @@ type SimulationResult struct {
 	AfterTaxPnL    float64       `json:"after_tax_pnl"`
 	TotalTaxPaid   float64       `json:"total_tax_paid"`
 	FallbackEvents []string      `json:"fallback_events,omitempty"`
+	RiskCommentary string        `json:"risk_commentary,omitempty"`
 }
 
 type ReportSection struct {

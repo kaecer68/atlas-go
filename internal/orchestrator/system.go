@@ -273,13 +273,15 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 		eventBus.Subscribe(eventbus.EventNarrative, func(_ context.Context, e eventbus.BusEvent) error {
 			if p, ok := e.Payload.(eventbus.NarrativeEventPayload); ok {
 				ev := &narrative.NarrativeEvent{
-					ID:         p.EventID,
-					Theme:      p.Theme,
-					Confidence: p.Confidence,
-					HitRate:    p.HitRate,
-					Timestamp:  time.Now(),
-					Status:     "active",
-					Duration:   7 * 24 * time.Hour,
+					ID:                   p.EventID,
+					Theme:                p.Theme,
+					Confidence:           p.Confidence,
+					HitRate:              p.HitRate,
+					Timestamp:            time.Now(),
+					Status:               "active",
+					Duration:             7 * 24 * time.Hour,
+					Explanation:          p.Explanation,
+					SentimentExplanation: p.SentimentExplanation,
 				}
 				port.factorWeightEngine.AddEvent(ev)
 			}
@@ -516,6 +518,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if len(s.Sim().returnHistory) >= 30 {
 		snap := risk.ComputeRiskSnapshot(s.Sim().returnHistory, s.Sim().portfolioHistory)
 		result.RiskSnapshot = &snap
+		result.RiskCommentary = risk.AnnotateSnapshot(s.Sim().ctx, snap)
 	}
 	if err := s.persistPersistentState(); err != nil {
 		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)
