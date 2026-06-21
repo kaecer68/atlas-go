@@ -3,15 +3,19 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // defaultProfitBiasRatio controls how the profit bias is derived from the
@@ -212,23 +216,104 @@ func (b *NarrativeEventBridge) SetCachePath(path string) {
 	b.cachePath = path
 }
 
-// Scrape iterates the keyword dictionary and returns an empty result set.
-// This is a placeholder: real RSS/Atom parsing is intentionally left as a
-// TODO because the project has not yet settled on an RSS library and because
-// all external HTTP traffic must eventually route through apigateway.
+// rssFeed, rssChannel, and rssItem are minimal XML structs for parsing
+// RSS 2.0 feeds without importing an external library.
+type rssFeed struct {
+	Channel rssChannel `xml:"channel"`
+}
+type rssChannel struct {
+	Items []rssItem `xml:"item"`
+}
+type rssItem struct {
+	Title       string `xml:"title"`
+	Description string `xml:"description"`
+}
+
+// Scrape fetches every registered RSS feed, parses each item's title and
+// description for keyword matches, and returns deduplicated NarrativeEvent
+// results. Feeds that fail to fetch or parse are skipped with a warning log.
 func (b *NarrativeEventBridge) Scrape(ctx context.Context) ([]NarrativeEvent, error) {
-	// TODO: implement real RSS/Atom parsing for the registered feeds:
-	//   - 經濟日報 (money.udn.com/rss)
-	//   - 工商時報 (ctee.com.tw/rss)
-	//   - Digitimes (digitimes.com/rss)
-	// The production implementation must use apigateway.Fetch with a registered
-	// channel and rate limiter, per internal/apigateway/CONSTITUTION.md.
-	_ = ctx
-	_ = b.rssFeeds
-	for keyword := range b.keywords {
-		_ = keyword
+	seen := make(map[string]bool) // "keyword|industry_id" dedup
+	var events []NarrativeEvent
+
+	for _, feedURL := range b.rssFeeds {
+		reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, feedURL, nil)
+		if err != nil {
+			cancel()
+			logging.Warn("narrative_bridge", "rss_request_create_failed",
+				logging.FStr("feed", feedURL),
+				logging.Err(err))
+			continue
+		}
+
+		resp, err := b.httpClient.Do(req)
+		cancel()
+		if err != nil {
+			logging.Warn("narrative_bridge", "rss_fetch_failed",
+				logging.FStr("feed", feedURL),
+				logging.Err(err))
+			continue
+		}
+
+		// Drain and close body regardless of status to avoid resource leak.
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			logging.Warn("narrative_bridge", "rss_read_body_failed",
+				logging.FStr("feed", feedURL),
+				logging.Err(readErr))
+			continue
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			logging.Warn("narrative_bridge", "rss_non_200",
+				logging.FStr("feed", feedURL),
+				logging.FStr("status", resp.Status))
+			continue
+		}
+
+		var feed rssFeed
+		if err := xml.Unmarshal(body, &feed); err != nil {
+			logging.Warn("narrative_bridge", "rss_parse_failed",
+				logging.FStr("feed", feedURL),
+				logging.Err(err))
+			continue
+		}
+
+		for _, item := range feed.Channel.Items {
+			titleLower := strings.ToLower(item.Title)
+			descLower := strings.ToLower(item.Description)
+
+			for keyword, mappings := range b.keywords {
+				kwLower := strings.ToLower(keyword)
+				if !strings.Contains(titleLower, kwLower) && !strings.Contains(descLower, kwLower) {
+					continue
+				}
+
+				for _, m := range mappings {
+					dedupKey := m.Keyword + "|" + m.IndustryID
+					if seen[dedupKey] {
+						continue
+					}
+					seen[dedupKey] = true
+
+					events = append(events, NarrativeEvent{
+						Keyword:    m.Keyword,
+						IndustryID: m.IndustryID,
+						EventType:  m.EventType,
+						HitCount:   1,
+						Sources:    []string{feedURL},
+						DetectedAt: time.Now(),
+						Bias:       m.Bias,
+						Confidence: 0.7,
+					})
+				}
+			}
+		}
 	}
-	return []NarrativeEvent{}, nil
+
+	return events, nil
 }
 
 // ApplyDecay returns the time-decayed bias for an event.

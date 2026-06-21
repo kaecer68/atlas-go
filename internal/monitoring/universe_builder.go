@@ -45,13 +45,14 @@ type IndustryClassification struct {
 // IndustrySegment mirrors industry.IndustrySegment with the subset of fields
 // consumed here. Cyclicality is kept as a string to avoid importing industry.Cyclicality.
 type IndustrySegment struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	NameEN      string  `json:"name_en"`
-	Level       int     `json:"level"`
-	ParentID    string  `json:"parent_id,omitempty"`
-	Weight      float64 `json:"weight,omitempty"`
-	Cyclicality string  `json:"cyclicality,omitempty"` // "high" | "medium" | "low"
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	NameEN               string   `json:"name_en"`
+	Level                int      `json:"level"`
+	ParentID             string   `json:"parent_id,omitempty"`
+	Weight               float64  `json:"weight,omitempty"`
+	Cyclicality          string   `json:"cyclicality,omitempty"`           // "high" | "medium" | "low"
+	RepresentativeStocks []string `json:"representative_stocks,omitempty"` // mirror of industry.IndustrySegment.RepresentativeStocks
 }
 
 // ClassificationTreeAccessor mirrors industry.ClassificationTree methods we
@@ -244,14 +245,18 @@ func (a *classificationTreeAdapter) GetPath(id string) []IndustrySegment {
 }
 
 func adaptSegment(seg *industry.IndustrySegment) IndustrySegment {
+	// Defensive copy of representative stocks to avoid sharing the backing array.
+	stocks := make([]string, len(seg.RepresentativeStocks))
+	copy(stocks, seg.RepresentativeStocks)
 	return IndustrySegment{
-		ID:          seg.ID,
-		Name:        seg.Name,
-		NameEN:      seg.NameEN,
-		Level:       int(seg.Level),
-		ParentID:    seg.ParentID,
-		Weight:      seg.Weight,
-		Cyclicality: string(seg.Cyclicality),
+		ID:                   seg.ID,
+		Name:                 seg.Name,
+		NameEN:               seg.NameEN,
+		Level:                int(seg.Level),
+		ParentID:             seg.ParentID,
+		Weight:               seg.Weight,
+		Cyclicality:          string(seg.Cyclicality),
+		RepresentativeStocks: stocks,
 	}
 }
 

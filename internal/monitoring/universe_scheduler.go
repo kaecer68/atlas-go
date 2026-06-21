@@ -433,6 +433,17 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		logging.Warn("universe_scheduler", "snapshot_save_error",
 			logging.Err(snapshotErr))
 	}
+
+	// Also persist as agents.json-compatible universe registry.
+	registryPath := filepath.Join(deps.WorkDir, "data", "state", "universe.json")
+	version := 1
+	if prev, err := LoadUniverseRegistry(registryPath); err == nil {
+		version = prev.Version + 1
+	}
+	if err := WriteUniverseRegistry(registryPath, result, ranked, version); err != nil {
+		logging.Warn("universe_scheduler", "universe_registry_write_error", logging.Err(err))
+	}
+
 	if um != nil {
 		um.SnapshotPersisted.WithLabelValues(stage).Inc()
 		elapsedSec := int64(time.Since(startTime).Seconds())

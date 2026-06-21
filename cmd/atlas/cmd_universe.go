@@ -49,10 +49,7 @@ func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, _ bool, _ string)
 	classTreeAdapter := monitoring.AdaptClassificationTree(classTree)
 	supplyGraph := industry.NewSupplyChainGraph()
 	supplyAdapter := monitoring.AdaptSupplyChainGraph(supplyGraph)
-	// SymbolIndustryMapper is a local interface with no concrete implementation yet.
-	// Pass nil; the pipeline gracefully degrades (all symbols → "unknown" industry).
-	var mapper monitoring.SymbolIndustryMapper = nil
-	_ = mapper // reserved for future use
+	mapper := monitoring.NewTreeBasedMapper(classTreeAdapter)
 
 	indFilter := monitoring.NewIndustryFilter(mapper, classTreeAdapter, supplyAdapter)
 	indFilter.ExpandSupplyChainDepth = suCfg.SupplyChainExpandDepth.Value
