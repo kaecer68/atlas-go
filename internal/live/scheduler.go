@@ -31,6 +31,9 @@ type Scheduler struct {
 	cancel         context.CancelFunc
 	mu             sync.RWMutex
 
+	nowFunc       func() time.Time
+	checkInterval time.Duration
+
 	onMarketOpen    func()
 	onIntradayCycle func()
 	onMarketClose   func()
@@ -54,6 +57,8 @@ func NewScheduler(
 		effectiveBrokerMode: effectiveBrokerMode,
 		ctx:                 ctx,
 		cancel:              cancel,
+		nowFunc:             time.Now,
+		checkInterval:       time.Minute,
 	}
 }
 
@@ -135,7 +140,7 @@ func (s *Scheduler) marketTimeScheduler() {
 		default:
 		}
 
-		now := time.Now()
+		now := s.nowFunc()
 		marketOpen, _ := time.Parse("15:04", s.config.MarketOpenTime)
 		marketClose, _ := time.Parse("15:04", s.config.MarketCloseTime)
 
@@ -144,7 +149,9 @@ func (s *Scheduler) marketTimeScheduler() {
 		todayClose := time.Date(now.Year(), now.Month(), now.Day(),
 			marketClose.Hour(), marketClose.Minute(), 0, 0, now.Location())
 
-		if now.After(todayOpen) && now.Before(todayClose) {
+		inMarketHours := now.After(todayOpen) && now.Before(todayClose)
+
+		if inMarketHours || s.config.ForceIntradayCycles {
 			s.mu.RLock()
 			hasTicker := s.intradayTicker != nil
 			s.mu.RUnlock()
@@ -158,7 +165,7 @@ func (s *Scheduler) marketTimeScheduler() {
 			}
 		}
 
-		if now.After(todayClose) {
+		if !s.config.ForceIntradayCycles && now.After(todayClose) {
 			s.mu.RLock()
 			hasTicker := s.intradayTicker != nil
 			s.mu.RUnlock()
@@ -174,7 +181,7 @@ func (s *Scheduler) marketTimeScheduler() {
 		select {
 		case <-s.ctx.Done():
 			return
-		case <-time.After(time.Minute):
+		case <-time.After(s.checkInterval):
 		}
 	}
 }

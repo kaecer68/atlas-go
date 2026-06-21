@@ -93,6 +93,7 @@ type OrchestratorConfig struct {
 	FubonDMAAPIKey             string
 	FubonDMAScriptPath         string
 	FubonDMAPythonPath         string
+	ForceIntradayCycles        bool
 }
 
 func DefaultOrchestratorConfig() OrchestratorConfig {

@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -358,3 +359,178 @@ func TestDefaultOrchestratorConfig(t *testing.T) {
 
 // Ensure mockProvider satisfies marketdata.Provider interface
 var _ marketdata.Provider = (*mockProvider)(nil)
+
+func TestScheduler_OffHours_ForceOff_NoTicker(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		t.Fatalf("failed to load Asia/Taipei location: %v", err)
+	}
+	fakeNow := time.Date(2026, 6, 20, 23, 0, 0, 0, loc) // 23:00 Taipei = off-hours
+
+	ctx := context.Background()
+	provider := &mockProvider{name: "test"}
+	st := livestore.NewStateStore(t.TempDir())
+	cb := NewCircuitBreaker("", "")
+	cfg := OrchestratorConfig{
+		MarketOpenTime:      "09:00",
+		MarketCloseTime:     "13:30",
+		IntradayInterval:    time.Minute,
+		QuotePollInterval:   5 * time.Second,
+		ForceIntradayCycles: false,
+	}
+
+	s := NewScheduler(ctx, provider, st, cb, cfg, "paper")
+	s.nowFunc = func() time.Time { return fakeNow }
+	s.checkInterval = 10 * time.Millisecond
+
+	s.SetCycleCallbacks(
+		func() {}, // onMarketOpen — should NOT be called
+		func() {}, // onIntradayCycle
+		func() {}, // onMarketClose
+		func() {}, // onFetchQuotes
+	)
+
+	err = s.Start()
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer s.Stop()
+
+	time.Sleep(100 * time.Millisecond)
+
+	status := s.Status()
+	ticker, ok := status["intraday_ticker"]
+	if !ok {
+		t.Fatal("status missing intraday_ticker key")
+	}
+	if ticker != false {
+		t.Errorf("expected intraday_ticker=false for off-hours with ForceIntradayCycles=false, got %v", ticker)
+	}
+}
+
+func TestScheduler_OffHours_ForceOn_TickerStarts(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		t.Fatalf("failed to load Asia/Taipei location: %v", err)
+	}
+	fakeNow := time.Date(2026, 6, 20, 23, 0, 0, 0, loc) // 23:00 Taipei = off-hours
+
+	ctx := context.Background()
+	provider := &mockProvider{name: "test"}
+	st := livestore.NewStateStore(t.TempDir())
+	cb := NewCircuitBreaker("", "")
+	cfg := OrchestratorConfig{
+		MarketOpenTime:      "09:00",
+		MarketCloseTime:     "13:30",
+		IntradayInterval:    time.Minute,
+		QuotePollInterval:   5 * time.Second,
+		ForceIntradayCycles: true,
+	}
+
+	s := NewScheduler(ctx, provider, st, cb, cfg, "paper")
+	s.nowFunc = func() time.Time { return fakeNow }
+	s.checkInterval = 10 * time.Millisecond
+
+	openCalled := false
+	s.SetCycleCallbacks(
+		func() { openCalled = true }, // onMarketOpen — SHOULD be called
+		func() {},                    // onIntradayCycle
+		func() {},                    // onMarketClose
+		func() {},                    // onFetchQuotes
+	)
+
+	err = s.Start()
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer s.Stop()
+
+	time.Sleep(100 * time.Millisecond)
+
+	status := s.Status()
+	ticker, ok := status["intraday_ticker"]
+	if !ok {
+		t.Fatal("status missing intraday_ticker key")
+	}
+	if ticker != true {
+		t.Errorf("expected intraday_ticker=true for off-hours with ForceIntradayCycles=true, got %v", ticker)
+	}
+	if !openCalled {
+		t.Error("expected onMarketOpen callback to be invoked when force-starting intraday cycles")
+	}
+}
+
+func TestScheduler_OnHours_ForceOn_DoesNotAutoStop(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		t.Fatalf("failed to load Asia/Taipei location: %v", err)
+	}
+	fakeNow := time.Date(2026, 6, 20, 10, 0, 0, 0, loc) // 10:00 Taipei = on-hours
+	var mu sync.Mutex
+
+	ctx := context.Background()
+	provider := &mockProvider{name: "test"}
+	st := livestore.NewStateStore(t.TempDir())
+	cb := NewCircuitBreaker("", "")
+	cfg := OrchestratorConfig{
+		MarketOpenTime:      "09:00",
+		MarketCloseTime:     "13:30",
+		IntradayInterval:    time.Minute,
+		QuotePollInterval:   5 * time.Second,
+		ForceIntradayCycles: true,
+	}
+
+	s := NewScheduler(ctx, provider, st, cb, cfg, "paper")
+	s.nowFunc = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return fakeNow
+	}
+	s.checkInterval = 10 * time.Millisecond
+
+	closeCalled := false
+	s.SetCycleCallbacks(
+		func() {},                     // onMarketOpen
+		func() {},                     // onIntradayCycle
+		func() { closeCalled = true }, // onMarketClose — should NOT be called
+		func() {},                     // onFetchQuotes
+	)
+
+	err = s.Start()
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer s.Stop()
+
+	// Wait for first iteration: ticker should start (10:00 is on-hours)
+	time.Sleep(100 * time.Millisecond)
+
+	status := s.Status()
+	ticker, ok := status["intraday_ticker"]
+	if !ok {
+		t.Fatal("status missing intraday_ticker key")
+	}
+	if ticker != true {
+		t.Fatalf("expected intraday_ticker=true at 10:00 (on-hours), got %v", ticker)
+	}
+
+	// Advance time past 13:30 close
+	mu.Lock()
+	fakeNow = time.Date(2026, 6, 20, 14, 0, 0, 0, loc) // 14:00 Taipei = past close
+	mu.Unlock()
+
+	// Wait for next scheduler loop iteration
+	time.Sleep(200 * time.Millisecond)
+
+	status = s.Status()
+	ticker, ok = status["intraday_ticker"]
+	if !ok {
+		t.Fatal("status missing intraday_ticker key after time advance")
+	}
+	if ticker != true {
+		t.Errorf("expected intraday_ticker=true past close with ForceIntradayCycles=true (should NOT auto-stop), got %v", ticker)
+	}
+	if closeCalled {
+		t.Error("expected onMarketClose NOT to be called when ForceIntradayCycles=true prevents auto-stop")
+	}
+}
