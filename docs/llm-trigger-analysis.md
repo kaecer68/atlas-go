@@ -1,8 +1,11 @@
 # LLM 掛載觸發分析報告
 
-**日期**: 2026-06-20  
-**分支**: `feature/llm-phase3-main-wiring`  
-**範圍**: 4 個 Phase 2 LLM 功能掛載（RationaleTranslator, ScenarioExplainer, RegimeExplainer/SentimentExplainer, PerformanceForensics）
+**日期**: 2026-06-20（初版）  
+**更新**: 2026-06-22（Phase 4 閉環完成後標記為 RESOLVED）  
+**分支**: `feature/llm-phase3-main-wiring` → 合併至 main（PR #630）  
+**範圍**: 5 個 Phase 2 LLM 功能掛載（RationaleTranslator, ScenarioExplainer, RegimeExplainer/SentimentExplainer, PerformanceForensics, ConfidenceCommentary）
+
+> **狀態更新（2026-06-22）**：Phase 4 LLM 閉環已實作完成。下方矩陣中標示為 **NO** 的項目已全數升級為 **RESOLVED**。具體接線位置見「第五節：Phase 4 閉環實作記錄」。
 
 ---
 
@@ -10,11 +13,12 @@
 
 | 掛載 | 模組 | 插入點 | 呼叫者路徑 | 目前是否觸發？ | 觸發條件 |
 |------|------|--------|--------------|----------------|------------|
-| **RationaleTranslator** | `narrative` | `rationale_corpus.go:228` | `GET /api/dashboard/recommendation-pipeline` → `pipeline/handlers.go:281,284` → `narrative.TranslateReason()` → passthrough seam | **NO** — 掛載從未賦值 | `LLM_RATIONALE_TRANSLATION_ENABLED=true` 且 main.go 將 `narrative.RationaleTranslator` 賦值為 LLM client |
-| **ScenarioExplainer** | `orchestrator` | `prism_executor.go:115` | PRISM 訓練任務佇列 → `PRISMTrainingExecutor.Run()` → 計算 `TrainingResult` 後之 hook | **NO** — 掛載從未賦值 | `LLM_PRISM_SCENARIO_ENABLED=true` 且 main.go 將 `orchestrator.ScenarioExplainer` 賦值為 LLM client |
-| **RegimeExplainer** | `narrative` | `explain_hooks.go:27` | `AnnotateEvent()` — **零個生產環境呼叫者** | **NO** — 掛載從未賦值且 `AnnotateEvent()` 無呼叫者 | `LLM_NARRATIVE_EXPLAIN_ENABLED=true` + main.go 賦值 + 呼叫者加入 `AnnotateEvent()` |
-| **SentimentExplainer** | `narrative` | `explain_hooks.go:33` | `AnnotateEvent()` — **零個生產環境呼叫者** | **NO** — 掛載從未賦值且 `AnnotateEvent()` 無呼叫者 | 同上 |
-| **PerformanceForensics** | `risk` | `forensics_hook.go:21` | `AnnotateSnapshot()` — **零個生產環境呼叫者** | **NO** — 掛載從未賦值且 `AnnotateSnapshot()` 無呼叫者 | `LLM_RISK_FORENSICS_ENABLED=true` + main.go 賦值 + 呼叫者加入 `AnnotateSnapshot()` |
+| **RationaleTranslator** | `narrative` | `rationale_corpus.go:228` | `GET /api/dashboard/recommendation-pipeline` → `pipeline/handlers.go:281,284` → `narrative.TranslateReason()` → passthrough seam | **✅ RESOLVED**（main.go 已接線） | `LLM_RATIONALE_TRANSLATION_ENABLED=true` → `cmd/atlas/main.go:1892` 賦值 → 既有 `TranslateReason()` 呼叫鏈自動觸發 |
+| **ScenarioExplainer** | `orchestrator` | `prism_executor.go:115` | PRISM 訓練任務佇列 → `PRISMTrainingExecutor.Run()` → 計算 `TrainingResult` 後之 hook | **✅ RESOLVED**（main.go 已接線） | `LLM_PRISM_SCENARIO_ENABLED=true` → `cmd/atlas/main.go:1903` 賦值 → 既有 PRISM executor 呼叫鏈自動觸發 |
+| **RegimeExplainer** | `narrative` | `explain_hooks.go:27` | `AnnotateEvent()` — **已新增生產環境呼叫者** | **✅ RESOLVED**（main.go + ingestor.go 雙重接線） | `LLM_NARRATIVE_EXPLAIN_ENABLED=true` → `cmd/atlas/main.go:1915` 賦值 → `internal/narrative/ingestor.go:139` 新增 `AnnotateEvent(ctx, e)` 呼叫 |
+| **SentimentExplainer** | `narrative` | `explain_hooks.go:33` | `AnnotateEvent()` — **已新增生產環境呼叫者** | **✅ RESOLVED**（main.go + ingestor.go 雙重接線） | 同上 |
+| **PerformanceForensics** | `risk` | `forensics_hook.go:21` | `AnnotateSnapshot()` — **已新增生產環境呼叫者** | **✅ RESOLVED**（main.go + system.go 雙重接線） | `LLM_RISK_FORENSICS_ENABLED=true` → `cmd/atlas/main.go:1937` 賦值 → `internal/orchestrator/system.go:521` 新增 `risk.AnnotateSnapshot()` 呼叫 |
+| **ConfidenceCommentary** | `risk` | `confidence_hook.go:18` | `EnrichDecision()` — **已新增生產環境呼叫者** | **✅ RESOLVED**（main.go + gate.go 雙重接線） | `LLM_CONFIDENCE_COMMENTARY_ENABLED=true` → `cmd/atlas/main.go:1949` 賦值 → `internal/risk/gate.go:174` 內 `RiskGate.publish()` 呼叫 |
 
 ---
 

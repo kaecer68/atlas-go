@@ -28,6 +28,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/screener"
 )
 
+// clockFunc is the time source for scheduler closures. Tests may override
+// it to deterministically trigger time-gated branches (isTradingDay,
+// alignToTarget, Monday skip). Defaults to time.Now.
+var clockFunc = time.Now
+
 // ── Result types ─────────────────────────────────────────────────────────
 
 // UniverseBuildResult captures the outcome of one SmartUniverseBuilder pipeline
@@ -128,7 +133,7 @@ type UniverseBuilderDeps struct {
 //	})
 func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		now := time.Now()
+		now := clockFunc()
 		if !isTradingDay(now) {
 			logging.Debug("universe_scheduler", "daily_skip_non_trading",
 				"day", now.Weekday().String())
@@ -204,7 +209,7 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 // apigateway.ScheduledTask.Task.
 func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		now := time.Now()
+		now := clockFunc()
 		if now.Weekday() != time.Monday {
 			logging.Debug("universe_scheduler", "weekly_skip_not_monday",
 				"day", now.Weekday().String())
