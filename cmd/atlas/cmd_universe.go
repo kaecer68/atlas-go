@@ -38,7 +38,7 @@ func runBuildUniverse(rt *bootstrap.Runtime, cfg config.Config, verbose bool, da
 }
 
 // buildUniverseRun wires the full SmartUniverse pipeline and prints the top N ranked symbols.
-func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, verbose bool, dateOverride string) error {
+func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, _ bool, _ string) error {
 	suCfg := config.GetParametersConfig().SmartUniverse
 
 	log.Printf("[universe] TopN=%d VolumeFloorTWD=%.0f MaxIndustryConc=%.2f",
