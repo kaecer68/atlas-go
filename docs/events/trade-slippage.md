@@ -173,6 +173,6 @@ if status == "filled" {
 
 ## 相關事件
 
-- [`order.filled`](./order-filled.md) — 既有訂單成交事件（Wave 8.6 與此事件同觸發點，在 PublishOrderEvent 之後緊接 PublishTradeSlippage）
-- [`order.rejected`](./order-rejected.md) — 訂單拒絕事件（既有）
-- [`risk.stoploss.triggered`](./risk-stoploss-triggered.md) — 停損觸發（既有，可能伴隨大量滑價）
+- `order.filled` — 既有訂單成交事件（文件待撰寫）
+- `order.rejected` — 訂單拒絕事件（文件待撰寫）
+- `risk.stoploss.triggered` — 停損觸發（文件待撰寫）

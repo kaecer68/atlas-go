@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/llm"
 	"github.com/kaecer68/atlas-go/internal/llm/adapters"
 	"github.com/kaecer68/atlas-go/internal/llm/capabilities"
@@ -95,13 +96,13 @@ func main() {
 func buildRouter() llm.Router {
 	var impls []llm.ProviderImpl
 
-	if apiKey := os.Getenv("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
+	if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
 		dsClient := clients.NewDeepSeekClient(apiKey, nil)
 		dsAdapter := adapters.NewDeepSeekAdapter(dsClient, "deepseek-v4-pro")
 		impls = append(impls, dsAdapter)
 	}
 
-	if apiKey := os.Getenv("LLM_MINIMAX_API_KEY"); apiKey != "" {
+	if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
 		mmClient := clients.NewMiniMaxClient(apiKey, nil)
 		mmAdapter := adapters.NewMiniMaxAdapter(mmClient)
 		impls = append(impls, mmAdapter)

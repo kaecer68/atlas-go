@@ -154,7 +154,7 @@ if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
 
 ## 相關事件
 
-- [`monitor.risk_gate.rejected`](./risk-gate-rejected.md) — 阻擋類決策（BLOCK / HALT）
-- [`risk.stoploss.triggered`](./risk-stoploss-triggered.md) — 停損觸發（既有）
-- [`risk.takeprofit.triggered`](./risk-takeprofit-triggered.md) — 停利觸發（既有）
-- [`risk.alert`](./risk-alert.md) — 風險警告（既有）
+- `monitor.risk_gate.rejected` — 阻擋類決策（文件待撰寫）
+- `risk.stoploss.triggered` — 停損觸發（文件待撰寫）
+- `risk.takeprofit.triggered` — 停利觸發（文件待撰寫）
+- `risk.alert` — 風險警告（文件待撰寫）

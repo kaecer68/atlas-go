@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/llm"
 	llmAdapters "github.com/kaecer68/atlas-go/internal/llm/adapters"
 	"github.com/kaecer68/atlas-go/internal/llm/capabilities"
@@ -89,8 +90,8 @@ func main() {
 // buildRouter creates an LLM Router wired with DeepSeek and MiniMax
 // adapters. Returns nil when neither API key is available.
 func buildRouter() llm.Router {
-	deepseekKey := os.Getenv("LLM_DEEPSEEK_API_KEY")
-	minimaxKey := os.Getenv("LLM_MINIMAX_API_KEY")
+	deepseekKey := config.GetSecret("LLM_DEEPSEEK_API_KEY")
+	minimaxKey := config.GetSecret("LLM_MINIMAX_API_KEY")
 
 	if deepseekKey == "" && minimaxKey == "" {
 		return nil
