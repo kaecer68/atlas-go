@@ -186,6 +186,7 @@ type FeedFetcher func(ctx context.Context, channelID string) (*FeedData, error)
 // the cycle tracker and sector allocation engines.
 type NarrativeEventBridge struct {
 	mu                  sync.RWMutex
+	confidenceMu        sync.RWMutex
 	channelIDs          []string
 	keywords            map[string][]KeywordMapping
 	feedFetcher         FeedFetcher
@@ -240,6 +241,8 @@ func (b *NarrativeEventBridge) getFetcher() FeedFetcher {
 // Configure applies SmartUniverseConfig overrides. Currently wires
 // confidenceThreshold from the parameter system.
 func (b *NarrativeEventBridge) Configure(cfg config.SmartUniverseConfig) {
+	b.confidenceMu.Lock()
+	defer b.confidenceMu.Unlock()
 	b.confidenceThreshold = cfg.ConfidenceThreshold.Value
 }
 
@@ -384,6 +387,8 @@ func (b *NarrativeEventBridge) MapIndustries(matchedKeywords []string) []Keyword
 // ComputeConfidence maps a hit count to a [0, 1] confidence score. It saturates
 // at 1.0 once hitCount reaches confidenceThreshold.
 func (b *NarrativeEventBridge) ComputeConfidence(hitCount int) float64 {
+	b.confidenceMu.RLock()
+	defer b.confidenceMu.RUnlock()
 	if b.confidenceThreshold <= 0 {
 		return 1.0
 	}
