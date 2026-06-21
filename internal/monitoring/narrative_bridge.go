@@ -266,7 +266,7 @@ func (b *NarrativeEventBridge) Scrape(ctx context.Context) ([]NarrativeEvent, er
 				logging.Err(err))
 			continue
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		body, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
