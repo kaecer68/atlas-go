@@ -81,6 +81,16 @@ func TestParseGoFile(t *testing.T) {
 }
 
 func TestParseGoFile_nonexistent(t *testing.T) {
+	// Suppress stderr to prevent GitHub Actions ##[error] annotation on parse failures.
+	realStderr := os.Stderr
+	devNull, openErr := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if openErr == nil {
+		os.Stderr = devNull
+		defer func() {
+			os.Stderr = realStderr
+			devNull.Close()
+		}()
+	}
 	fset := token.NewFileSet()
 	f := ParseGoFile(fset, "nonexistent.go")
 	if f != nil {
