@@ -786,10 +786,10 @@ func TestPublishIndustryCalendarEvent(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
-	var capturedPayload IndustryCalendarEventPayload
+	var capturedPayload atomic.Value
 	bus.Subscribe(EventIndustryCalendar, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
-		capturedPayload = event.Payload.(IndustryCalendarEventPayload)
+		capturedPayload.Store(event.Payload.(IndustryCalendarEventPayload))
 		return nil
 	})
 
@@ -817,17 +817,18 @@ func TestPublishIndustryCalendarEvent(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 industry calendar event, got %d", received.Load())
 	}
-	if capturedPayload.EventID != "ex_dividend_2026_06" {
-		t.Errorf("expected EventID ex_dividend_2026_06, got %s", capturedPayload.EventID)
+	cp := capturedPayload.Load().(IndustryCalendarEventPayload)
+	if cp.EventID != "ex_dividend_2026_06" {
+		t.Errorf("expected EventID ex_dividend_2026_06, got %s", cp.EventID)
 	}
-	if capturedPayload.Name != "除權息旺季" {
-		t.Errorf("expected Name 除權息旺季, got %s", capturedPayload.Name)
+	if cp.Name != "除權息旺季" {
+		t.Errorf("expected Name 除權息旺季, got %s", cp.Name)
 	}
-	if capturedPayload.Direction != "mixed" {
-		t.Errorf("expected Direction mixed, got %s", capturedPayload.Direction)
+	if cp.Direction != "mixed" {
+		t.Errorf("expected Direction mixed, got %s", cp.Direction)
 	}
-	if len(capturedPayload.AffectedIndustries) != 2 {
-		t.Errorf("expected 2 affected industries, got %d", len(capturedPayload.AffectedIndustries))
+	if len(cp.AffectedIndustries) != 2 {
+		t.Errorf("expected 2 affected industries, got %d", len(cp.AffectedIndustries))
 	}
 }
 
@@ -836,10 +837,10 @@ func TestPublishBacktestCompleted(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
-	var receivedPayload BacktestCompletedEventPayload
+	var receivedPayload atomic.Value
 	bus.Subscribe(EventBacktestCompleted, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
-		receivedPayload = event.Payload.(BacktestCompletedEventPayload)
+		receivedPayload.Store(event.Payload.(BacktestCompletedEventPayload))
 		return nil
 	})
 
@@ -863,10 +864,11 @@ func TestPublishBacktestCompleted(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 backtest completed event, got %d", received.Load())
 	}
-	if receivedPayload.WindowID != "bt-2026-06-21" {
-		t.Errorf("unexpected window_id: %s", receivedPayload.WindowID)
+	rp := receivedPayload.Load().(BacktestCompletedEventPayload)
+	if rp.WindowID != "bt-2026-06-21" {
+		t.Errorf("unexpected window_id: %s", rp.WindowID)
 	}
-	if !receivedPayload.SyncSucceeded {
+	if !rp.SyncSucceeded {
 		t.Errorf("expected SyncSucceeded=true, got false")
 	}
 }
@@ -876,10 +878,10 @@ func TestPublishCalibrationCompleted(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
-	var capturedPayload CalibrationCompletedEventPayload
+	var capturedPayload atomic.Value
 	bus.Subscribe(EventCalibrationCompleted, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
-		capturedPayload = event.Payload.(CalibrationCompletedEventPayload)
+		capturedPayload.Store(event.Payload.(CalibrationCompletedEventPayload))
 		return nil
 	})
 
@@ -902,16 +904,17 @@ func TestPublishCalibrationCompleted(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 calibration completed event, got %d", received.Load())
 	}
-	if capturedPayload.Module != "linkage" {
-		t.Errorf("expected module=linkage, got %s", capturedPayload.Module)
+	cp := capturedPayload.Load().(CalibrationCompletedEventPayload)
+	if cp.Module != "linkage" {
+		t.Errorf("expected module=linkage, got %s", cp.Module)
 	}
-	if capturedPayload.OptimizedScore <= capturedPayload.BaselineScore {
-		t.Errorf("expected optimized > baseline, got baseline=%f optimized=%f", capturedPayload.BaselineScore, capturedPayload.OptimizedScore)
+	if cp.OptimizedScore <= cp.BaselineScore {
+		t.Errorf("expected optimized > baseline, got baseline=%f optimized=%f", cp.BaselineScore, cp.OptimizedScore)
 	}
-	if capturedPayload.TopChangeParam != "semiconductor_to_tech" {
-		t.Errorf("expected top_change_param=semiconductor_to_tech, got %s", capturedPayload.TopChangeParam)
+	if cp.TopChangeParam != "semiconductor_to_tech" {
+		t.Errorf("expected top_change_param=semiconductor_to_tech, got %s", cp.TopChangeParam)
 	}
-	if !capturedPayload.SyncSucceeded {
+	if !cp.SyncSucceeded {
 		t.Errorf("expected SyncSucceeded=true")
 	}
 }
@@ -921,10 +924,10 @@ func TestPublishTradeSlippage(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
-	var capturedPayload TradeSlippageEventPayload
+	var capturedPayload atomic.Value
 	bus.Subscribe(EventTradeSlippage, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
-		capturedPayload = event.Payload.(TradeSlippageEventPayload)
+		capturedPayload.Store(event.Payload.(TradeSlippageEventPayload))
 		return nil
 	})
 
@@ -946,11 +949,12 @@ func TestPublishTradeSlippage(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 trade slippage event, got %d", received.Load())
 	}
-	if capturedPayload.OrderID != "ord-001" {
-		t.Errorf("expected OrderID=ord-001, got %s", capturedPayload.OrderID)
+	cp := capturedPayload.Load().(TradeSlippageEventPayload)
+	if cp.OrderID != "ord-001" {
+		t.Errorf("expected OrderID=ord-001, got %s", cp.OrderID)
 	}
-	if capturedPayload.SlippageBPS != 5.0 {
-		t.Errorf("expected SlippageBPS=5.0, got %f", capturedPayload.SlippageBPS)
+	if cp.SlippageBPS != 5.0 {
+		t.Errorf("expected SlippageBPS=5.0, got %f", cp.SlippageBPS)
 	}
 }
 
@@ -958,12 +962,12 @@ func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
 	bus := NewChannelEventBus(64)
 	defer bus.Close()
 
-	var captured BusEvent
+	var captured atomic.Value
 	var received atomic.Int32
 
 	bus.Subscribe(EventTradeSlippage, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
-		captured = event
+		captured.Store(event)
 		return nil
 	})
 
@@ -977,11 +981,12 @@ func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 event, got %d", received.Load())
 	}
-	if captured.SchemaVersion != 1 {
-		t.Errorf("expected SchemaVersion=1, got %d", captured.SchemaVersion)
+	ev := captured.Load().(BusEvent)
+	if ev.SchemaVersion != 1 {
+		t.Errorf("expected SchemaVersion=1, got %d", ev.SchemaVersion)
 	}
 
-	data, err := json.Marshal(captured)
+	data, err := json.Marshal(ev)
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
