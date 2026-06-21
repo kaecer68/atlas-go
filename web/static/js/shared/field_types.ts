@@ -3033,7 +3033,6 @@ export interface SmartUniverseConfig {
   volatility_multiplier: string;
   drawdown_window: string;
   drawdown_threshold: string;
-  universe_history_retention_days: string;
   confidence_threshold: string;
   supply_chain_expand_depth: string;
 }
