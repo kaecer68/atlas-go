@@ -64,7 +64,7 @@ func (g *RiskGate) PreTradeCheck(ctx context.Context, order OrderIntent, pf Port
 			Symbol:   order.Symbol,
 			Recorded: time.Now(),
 		}
-		g.publish(*dec)
+		g.publish(ctx, *dec)
 		return dec, nil
 	}
 
@@ -83,7 +83,7 @@ func (g *RiskGate) PreTradeCheck(ctx context.Context, order OrderIntent, pf Port
 		})
 	}
 
-	g.publish(*decision)
+	g.publish(ctx, *decision)
 	return decision, nil
 }
 
@@ -106,12 +106,12 @@ func (g *RiskGate) InTradeCheck(ctx context.Context, positions []InTradePosition
 		g.SetMode(ModeSuspended)
 	}
 
-	g.publish(*decision)
+	g.publish(ctx, *decision)
 	return decision, nil
 }
 
 // PostTradeCheck evaluates portfolio-level metrics and recommends mode changes.
-func (g *RiskGate) PostTradeCheck(input PostTradeInput) (*RiskDecision, error) {
+func (g *RiskGate) PostTradeCheck(ctx context.Context, input PostTradeInput) (*RiskDecision, error) {
 	g.mu.RLock()
 	mode := g.mode
 	g.mu.RUnlock()
@@ -129,7 +129,7 @@ func (g *RiskGate) PostTradeCheck(input PostTradeInput) (*RiskDecision, error) {
 		g.SetMode(RiskGateMode(decision.Mode))
 	}
 
-	g.publish(*decision)
+	g.publish(ctx, *decision)
 	return decision, nil
 }
 
@@ -147,7 +147,9 @@ func (g *RiskGate) SetMode(mode RiskGateMode) {
 	prev := g.mode
 	g.mode = mode
 	if prev != mode {
-		g.publish(RiskDecision{
+		// Mode change is a system-internal action without a request context.
+		// Using context.Background() is the documented exception for this path.
+		g.publish(context.Background(), RiskDecision{
 			Phase:   PhasePostTrade,
 			Verdict: VerdictAlertOnly,
 			Mode:    string(mode),
@@ -161,8 +163,8 @@ func (g *RiskGate) SetMode(mode RiskGateMode) {
 	}
 }
 
-func (g *RiskGate) publish(dec RiskDecision) {
-	dec.ConfidenceCommentary = EnrichDecision(context.Background(), dec)
+func (g *RiskGate) publish(ctx context.Context, dec RiskDecision) {
+	dec.ConfidenceCommentary = EnrichDecision(ctx, dec)
 	for _, sub := range g.subs {
 		sub(dec)
 	}

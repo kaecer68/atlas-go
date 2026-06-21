@@ -190,6 +190,22 @@ func shouldStartFubonProxy(mode string, fubonAPIKey string) bool {
 	return mode == "live" || fubonAPIKey != ""
 }
 
+// narrativeFeedFetcher adapts *apigateway.Gateway into a monitoring.FeedFetcher.
+// It bridges the monitoring↔apigateway package boundary without creating an
+// import cycle (apigateway already imports monitoring for WithLatencyMs).
+func narrativeFeedFetcher(gw *apigateway.Gateway) monitoring.FeedFetcher {
+	if gw == nil {
+		return nil
+	}
+	return func(ctx context.Context, channelID string) (*monitoring.FeedData, error) {
+		result, err := gw.Fetch(ctx, channelID)
+		if err != nil {
+			return nil, err
+		}
+		return &monitoring.FeedData{Data: result.Data, Stale: result.Stale, LastError: result.LastError}, nil
+	}
+}
+
 func main() {
 	if err := run(os.Args[1:], defaultAppDeps()); err != nil {
 		log.Fatalf("%v", err)
@@ -1624,7 +1640,7 @@ func run(args []string, deps appDeps) error {
 					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
 					Quotes:          nil,
 					RiskFilter:      monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices()),
-					NarrativeBridge: monitoring.NewNarrativeEventBridge(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json")),
+					NarrativeBridge: monitoring.NewNarrativeEventBridgeWithFetcher(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json"), narrativeFeedFetcher(gateway)),
 					UniverseMetrics: um,
 					Config:          suCfg,
 					WorkDir:         cfg.WorkDir,
@@ -1647,7 +1663,7 @@ func run(args []string, deps appDeps) error {
 					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
 					Quotes:          nil,
 					RiskFilter:      monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices()),
-					NarrativeBridge: monitoring.NewNarrativeEventBridge(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json")),
+					NarrativeBridge: monitoring.NewNarrativeEventBridgeWithFetcher(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json"), narrativeFeedFetcher(gateway)),
 					UniverseMetrics: um,
 					Config:          suCfg,
 					WorkDir:         cfg.WorkDir,

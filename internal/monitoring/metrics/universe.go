@@ -174,7 +174,7 @@ func NewUniverseMetrics() *UniverseMetrics {
 			labelNames: []string{"stage", "industry"},
 		},
 		CoverageTotal: &CounterVec{
-			name:       "atlas_universe_coverage_total_total",
+			name:       "atlas_universe_coverage_total",
 			labelNames: []string{"stage", "industry"},
 		},
 		D6ExpiredSymbols: &CounterVec{

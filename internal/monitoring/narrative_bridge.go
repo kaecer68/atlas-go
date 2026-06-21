@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -154,15 +152,32 @@ func defaultKeywordMappings() map[string][]KeywordMapping {
 	}
 }
 
-// defaultRSSFeeds returns the placeholder RSS feed URLs that a real scraper
-// would consume. These are intentionally not wired to HTTP calls yet.
-func defaultRSSFeeds() []string {
+// defaultChannelIDs returns the default list of apigateway channel IDs that
+// the bridge consumes. Channels must be registered in apigateway (see
+// register_adapters.go) and return RSS XML as FetchResult.Data.
+//
+// Per CONSTITUTION.md Article 1, all external HTTP access must go through
+// apigateway.Fetch — the bridge no longer owns any HTTP client.
+func defaultChannelIDs() []string {
 	return []string{
-		"https://money.udn.com/rssfeed/news/1001/5591/5612?ch=news",
-		"https://www.ctee.com.tw/rss/newslist_rss.xml",
-		"https://www.digitimes.com/rss/daily.xml",
+		"geopolitical_taiwan",
 	}
 }
+
+// FeedData is the bridge-local data type returned by FeedFetcher. It mirrors
+// the subset of apigateway.FetchResult the bridge needs and avoids an
+// import cycle (apigateway already imports monitoring for WithLatencyMs).
+type FeedData struct {
+	Data      []byte
+	Stale     bool
+	LastError string
+}
+
+// FeedFetcher is the minimal dependency the bridge needs to fetch channel
+// data. The production implementation wraps *apigateway.Gateway.Fetch; tests
+// can supply a stub. Returning nil feedFetcher disables Scrape (returns
+// "gateway not set" error).
+type FeedFetcher func(ctx context.Context, channelID string) (*FeedData, error)
 
 // NarrativeEventBridge is a Layer 3 adapter that translates scraped RSS/news
 // keyword signals into industry-level NarrativeAdjustment values. It applies
@@ -172,7 +187,7 @@ type NarrativeEventBridge struct {
 	mu                  sync.RWMutex
 	rssFeeds            []string
 	keywords            map[string][]KeywordMapping
-	httpClient          *http.Client
+	feedFetcher         FeedFetcher
 	cachePath           string
 	decayLambda         map[string]float64
 	confidenceThreshold int
@@ -180,35 +195,45 @@ type NarrativeEventBridge struct {
 
 // NewNarrativeEventBridge creates a bridge with sensible defaults. If cachePath
 // is empty, it falls back to data/state/narrative_cache.json under the current
-// working directory.
+// working directory. Callers must set a FeedFetcher via
+// NewNarrativeEventBridgeWithFetcher or SetFetcher before Scrape can fetch
+// external data.
 func NewNarrativeEventBridge(cachePath string) *NarrativeEventBridge {
 	if cachePath == "" {
 		cachePath = filepath.Join("data", "state", "narrative_cache.json")
 	}
 	return &NarrativeEventBridge{
-		rssFeeds:            defaultRSSFeeds(),
+		rssFeeds:            defaultChannelIDs(),
 		keywords:            defaultKeywordMappings(),
-		httpClient:          &http.Client{Timeout: 30 * time.Second},
+		feedFetcher:         nil,
 		cachePath:           cachePath,
 		decayLambda:         defaultDecayLambdas,
 		confidenceThreshold: 3,
 	}
 }
 
-// SetHTTPClient replaces the default HTTP client. Useful for tests and for
-// injecting a gateway-compatible transport later without breaking the bridge's
-// public signature.
-func (b *NarrativeEventBridge) SetHTTPClient(client *http.Client) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.httpClient = client
+// NewNarrativeEventBridgeWithFetcher creates a bridge wired to the given
+// FeedFetcher. This is the production constructor — it satisfies
+// CONSTITUTION.md Article 1 by routing all external fetches through apigateway
+// (via a wrapper provided by the caller).
+func NewNarrativeEventBridgeWithFetcher(cachePath string, fetcher FeedFetcher) *NarrativeEventBridge {
+	b := NewNarrativeEventBridge(cachePath)
+	b.feedFetcher = fetcher
+	return b
 }
 
-// getHTTPClient returns the current HTTP client under read lock.
-func (b *NarrativeEventBridge) getHTTPClient() *http.Client {
+// SetFetcher injects the FeedFetcher dependency. This replaces the legacy
+// SetHTTPClient injection point and routes all fetches through apigateway.
+func (b *NarrativeEventBridge) SetFetcher(f FeedFetcher) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.feedFetcher = f
+}
+
+func (b *NarrativeEventBridge) getFetcher() FeedFetcher {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	return b.httpClient
+	return b.feedFetcher
 }
 
 // SetConfidenceThreshold overrides the default hit-count threshold used by
@@ -243,50 +268,44 @@ type rssItem struct {
 // Scrape fetches every registered RSS feed, parses each item's title and
 // description for keyword matches, and returns deduplicated NarrativeEvent
 // results. Feeds that fail to fetch or parse are skipped with a warning log.
+//
+// Per CONSTITUTION.md Article 1, all external HTTP access goes through
+// apigateway.Fetch (via the injected FeedFetcher). The bridge consumes
+// registered channel IDs and parses the returned RSS XML.
 func (b *NarrativeEventBridge) Scrape(ctx context.Context) ([]NarrativeEvent, error) {
+	fetcher := b.getFetcher()
+	if fetcher == nil {
+		return nil, fmt.Errorf("narrative bridge: fetcher not set (use NewNarrativeEventBridgeWithFetcher or SetFetcher)")
+	}
+
 	seen := make(map[string]bool) // "keyword|industry_id" dedup
 	var events []NarrativeEvent
 
-	for _, feedURL := range b.rssFeeds {
-		reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, feedURL, nil)
+	for _, channelID := range b.rssFeeds {
+		data, err := fetcher(ctx, channelID)
 		if err != nil {
-			cancel()
-			logging.Warn("narrative_bridge", "rss_request_create_failed",
-				logging.FStr("feed", feedURL),
+			logging.Warn("narrative_bridge", "channel_fetch_failed",
+				logging.FStr("channel", channelID),
 				logging.Err(err))
 			continue
 		}
 
-		resp, err := b.getHTTPClient().Do(req)
-		cancel()
-		if err != nil {
-			logging.Warn("narrative_bridge", "rss_fetch_failed",
-				logging.FStr("feed", feedURL),
-				logging.Err(err))
-			continue
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			logging.Warn("narrative_bridge", "rss_read_body_failed",
-				logging.FStr("feed", feedURL),
-				logging.Err(readErr))
+		if data == nil {
+			logging.Warn("narrative_bridge", "channel_no_data",
+				logging.FStr("channel", channelID))
 			continue
 		}
 
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			logging.Warn("narrative_bridge", "rss_non_200",
-				logging.FStr("feed", feedURL),
-				logging.FStr("status", resp.Status))
-			continue
+		if data.Stale {
+			logging.Warn("narrative_bridge", "channel_stale_fallback",
+				logging.FStr("channel", channelID),
+				logging.FStr("last_error", data.LastError))
 		}
 
 		var feed rssFeed
-		if err := xml.Unmarshal(body, &feed); err != nil {
+		if err := xml.Unmarshal(data.Data, &feed); err != nil {
 			logging.Warn("narrative_bridge", "rss_parse_failed",
-				logging.FStr("feed", feedURL),
+				logging.FStr("channel", channelID),
 				logging.Err(err))
 			continue
 		}
@@ -313,7 +332,7 @@ func (b *NarrativeEventBridge) Scrape(ctx context.Context) ([]NarrativeEvent, er
 						IndustryID: m.IndustryID,
 						EventType:  m.EventType,
 						HitCount:   1,
-						Sources:    []string{feedURL},
+						Sources:    []string{channelID},
 						DetectedAt: time.Now(),
 						Bias:       m.Bias,
 						Confidence: 0.7,
