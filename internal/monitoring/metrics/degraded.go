@@ -68,6 +68,14 @@ func (c *Counter) Inc() {
 	}
 }
 
+// Add increments the counter by n.
+func (c *Counter) Add(n int64) {
+	c.value.Add(n)
+	if c.vec != nil && c.vec.OnInc != nil {
+		c.vec.OnInc(c.name, c.labels, c.Value())
+	}
+}
+
 // Value returns the current counter value, or 0 if the counter has not
 // been recorded yet.
 func (c *Counter) Value() float64 {

@@ -51,6 +51,7 @@ import (
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
+	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -60,6 +61,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
+	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 	"github.com/kaecer68/atlas-go/internal/swarm"
@@ -223,6 +225,7 @@ func run(args []string, deps appDeps) error {
 	verboseMode := flags.Bool("verbose", false, "enable color-coded terminal trace output during simulation")
 	dateOverride := flags.String("date", "", "override simulation session date (format: 2006-01-02)")
 	checkIntegrity := flags.Bool("check-integrity", false, "check configs/parameters.json integrity and exit")
+	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|scrape|status")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
@@ -312,6 +315,11 @@ func run(args []string, deps appDeps) error {
 	// Handle --simulate mode: run one-shot daily simulation and exit
 	if *simulateMode {
 		return runSimulationMode(rt, cfg, *verboseMode, *dateOverride)
+	}
+
+	// Handle --build-universe: run SmartUniverseBuilder pipeline and exit.
+	if *buildUniverseMode != "" {
+		return runBuildUniverse(rt, cfg, *verboseMode, *dateOverride, *buildUniverseMode)
 	}
 
 	if *apiMode {
@@ -1591,6 +1599,136 @@ func run(args []string, deps appDeps) error {
 				})
 				log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
 			}
+
+			// Register auto_universe_refresh — daily SmartUniverseBuilder pipeline (06:00 TW, trading days).
+			// Fires every minute but only executes when alignToTarget(06:00) and isTradingDay() both pass.
+			// The task closure is raw func(ctx context.Context) error to avoid monitoring ↔ apigateway
+			// circular import; callers assign directly to apigateway.ScheduledTask.Task.
+			um := metrics.NewUniverseMetrics()
+			um.SetOnInc(func(name string, labels []string, value float64) {
+				labelMap := make(map[string]string, len(labels)/2)
+				for i := 0; i+1 < len(labels); i += 2 {
+					labelMap[labels[i]] = labels[i+1]
+				}
+				collector.RecordCounter(name, value, labelMap)
+			})
+			{
+				suCfg := config.GetParametersConfig().SmartUniverse
+				suDeps := monitoring.UniverseBuilderDeps{
+					Tree:            monitoring.AdaptClassificationTree(industry.DefaultClassification()),
+					SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
+					Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
+					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
+					Quotes:          nil,
+					RiskFilter:      monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices()),
+					NarrativeBridge: monitoring.NewNarrativeEventBridge(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json")),
+					UniverseMetrics: um,
+					Config:          suCfg,
+					WorkDir:         cfg.WorkDir,
+				}
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_universe_refresh",
+					Interval: 1 * time.Minute,
+					Enabled:  true,
+					Task:     monitoring.NewDailyUniverseRefreshTask(suDeps),
+				})
+				log.Printf("[Gateway] registered auto_universe_refresh background task (1m interval, 06:00 TW trigger)")
+			}
+			{
+				suCfg := config.GetParametersConfig().SmartUniverse
+				suDeps := monitoring.UniverseBuilderDeps{
+					Tree:            monitoring.AdaptClassificationTree(industry.DefaultClassification()),
+					SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
+					Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
+					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
+					Quotes:          nil,
+					RiskFilter:      monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices()),
+					NarrativeBridge: monitoring.NewNarrativeEventBridge(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json")),
+					UniverseMetrics: um,
+					Config:          suCfg,
+					WorkDir:         cfg.WorkDir,
+				}
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_universe_full_rebuild",
+					Interval: 1 * time.Minute,
+					Enabled:  true,
+					Task:     monitoring.NewWeeklyUniverseRebuildTask(suDeps),
+				})
+				log.Printf("[Gateway] registered auto_universe_full_rebuild background task (1m interval, Mon 06:00 TW trigger)")
+			}
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "universe_coverage_check",
+				Interval: 1 * time.Minute,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					tz, err := time.LoadLocation("Asia/Taipei")
+					if err != nil {
+						return nil
+					}
+					now := time.Now().In(tz)
+					target := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, tz)
+					diff := now.Sub(target)
+					if diff < -1*time.Minute || diff > 1*time.Minute {
+						return nil
+					}
+					wd := now.Weekday()
+					if wd == time.Saturday || wd == time.Sunday {
+						return nil
+					}
+					// Count total symbols from Level-1 industries via classification tree.
+					classTree := industry.DefaultClassification()
+					totalSymbols := 0
+					for _, seg := range classTree.GetLevel1() {
+						totalSymbols += len(seg.RepresentativeStocks)
+					}
+					// Load universe snapshot and count built symbols.
+					snapshotPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_snapshot.json")
+					snapshotSymbols := 0
+					if data, rErr := os.ReadFile(snapshotPath); rErr == nil {
+						var result monitoring.UniverseBuildResult
+						if err := json.Unmarshal(data, &result); err == nil {
+							snapshotSymbols = result.SymbolsBuilt
+						}
+					}
+					if totalSymbols > 0 {
+						coveragePct := float64(snapshotSymbols) / float64(totalSymbols) * 100
+						if snapshotSymbols > 0 && coveragePct < 90 {
+							monitor.Alert(monitoring.AlertLevelWarning, "universe_coverage",
+								fmt.Sprintf("Universe coverage %.1f%% (%d/%d symbols) — snapshot may be stale",
+									coveragePct, snapshotSymbols, totalSymbols),
+								map[string]any{
+									"snapshot_symbols": snapshotSymbols,
+									"total_symbols":    totalSymbols,
+									"coverage_pct":     coveragePct,
+								})
+						}
+						um.CoverageMapped.WithLabelValues("coverage_check", "all").Add(int64(snapshotSymbols))
+						um.CoverageTotal.WithLabelValues("coverage_check", "all").Add(int64(totalSymbols))
+					}
+					// Check D6 watchlist size.
+					watchlistPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_watchlist.json")
+					if wlData, rErr := os.ReadFile(watchlistPath); rErr == nil {
+						var watchlist []string
+						if err := json.Unmarshal(wlData, &watchlist); err == nil && len(watchlist) > 20 {
+							monitor.Alert(monitoring.AlertLevelWarning, "universe_watchlist",
+								fmt.Sprintf("D6 watchlist has %d symbols (threshold: 20)",
+									len(watchlist)),
+								map[string]any{
+									"watchlist_size": len(watchlist),
+									"threshold":      20,
+								})
+						}
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered universe_coverage_check background task (1m interval, 06:00 TW trigger)")
+
+			mux.HandleFunc("/universe/metrics", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(um.Snapshot())
+			})
 
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 			if maturityTracker != nil {

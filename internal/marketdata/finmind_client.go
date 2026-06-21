@@ -39,6 +39,13 @@ type FinMindResponse struct {
 	Data   []map[string]any `json:"data"`
 }
 
+type StockInfo struct {
+	StockID          string `json:"stock_id"`
+	StockName        string `json:"stock_name"`
+	IndustryCategory string `json:"industry_category"`
+	Type             string `json:"type"`
+}
+
 var (
 	sharedFinMindClient     *FinMindClient
 	sharedFinMindClientOnce sync.Once
@@ -259,6 +266,54 @@ func (c *FinMindClient) GetStockPrice(ctx context.Context, symbol string, date s
 	}
 
 	return quote, nil
+}
+
+func parseStockInfo(item map[string]any) (StockInfo, error) {
+	var info StockInfo
+
+	stockID, ok := item["stock_id"].(string)
+	if !ok {
+		return info, fmt.Errorf("finmind: missing stock_id in TaiwanStockInfo")
+	}
+	info.StockID = stockID
+
+	stockName, _ := item["stock_name"].(string)
+	info.StockName = stockName
+
+	industryCategory, _ := item["industry_category"].(string)
+	info.IndustryCategory = industryCategory
+
+	stockType, _ := item["type"].(string)
+	info.Type = stockType
+
+	return info, nil
+}
+
+func (c *FinMindClient) GetStockInfo(ctx context.Context) ([]StockInfo, error) {
+	data, err := c.fetchDataset(ctx, "TaiwanStockInfo", "", "", "")
+	if err != nil {
+		return nil, fmt.Errorf("finmind: TaiwanStockInfo: %w", err)
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("finmind: TaiwanStockInfo returned empty data")
+	}
+
+	infos := make([]StockInfo, 0, len(data))
+	for _, item := range data {
+		info, err := parseStockInfo(item)
+		if err != nil {
+			logging.Warn("finmind", "parse_stock_info_failed", logging.Err(err))
+			continue
+		}
+		infos = append(infos, info)
+	}
+
+	if len(infos) == 0 {
+		return nil, fmt.Errorf("finmind: TaiwanStockInfo: all items failed to parse")
+	}
+
+	return infos, nil
 }
 
 type FinMindProvider struct {

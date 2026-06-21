@@ -42,6 +42,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		Tax:                  defaultTaxParameters(),
 		SectorAllocation:     deriveDefaultSectorAllocationConfig(),
 		Reporting:            deriveDefaultReportingConfig(),
+		SmartUniverse:        defaultSmartUniverseParams(),
 		ForwardReturn:        defaultForwardReturnParameters(),
 	}
 }
@@ -3478,6 +3479,111 @@ func defaultRSITwParameters() RSITwParameters {
 			Rationale: "20% sentiment reduction when credit tightening signal active",
 			Source:    SourceHeuristic,
 			Todo:      "Wire credit tightening signal to actual central bank / margin rate data",
+		},
+	}
+}
+
+func defaultSmartUniverseParams() SmartUniverseConfig {
+	return SmartUniverseConfig{
+		TopN: ParameterMetadata[int]{
+			Value:     150,
+			Rationale: "Default universe size of 150 names; Oracle recommends 120-180 dynamic range, with bear-market override to 100-120",
+			Source:    SourceHeuristic,
+		},
+		PEWeight: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Oracle-calibrated weight for valuation factor; retained despite Taiwan PE distortion from semiconductors",
+			Source:    SourceCalibrated,
+		},
+		PBWeight: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "Oracle-calibrated weight for book-value factor; important for financials screening",
+			Source:    SourceCalibrated,
+		},
+		VolumeWeight: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Oracle-calibrated weight reduced from 0.20 to 0.15 to make room for the foreign-flow factor",
+			Source:    SourceCalibrated,
+		},
+		MomentumWeight: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Oracle-calibrated weight reduced sharply from 0.30 to 0.15 because Taiwan momentum reverses quickly",
+			Source:    SourceCalibrated,
+		},
+		QualityWeight: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "Oracle-calibrated weight combining ROE, ROA and accruals quality",
+			Source:    SourceCalibrated,
+		},
+		ForeignFlowWeight: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "Oracle-calibrated new foreign-investor flow factor; core driver for Taiwan equities",
+			Source:    SourceCalibrated,
+		},
+		VolumeFloorTWD: ParameterMetadata[float64]{
+			Value:     10_000_000.0,
+			Rationale: "Minimum daily turnover of NT$10M replaces share-count floor to avoid low-priced stocks passing a 100-lot screen",
+			Source:    SourceHeuristic,
+		},
+		MinDailyAmountTWD: ParameterMetadata[float64]{
+			Value:     5_000_000.0,
+			Rationale: "Relaxed Layer-2.5 re-check floor of NT$5M for liquidity verification before final inclusion",
+			Source:    SourceHeuristic,
+		},
+		MaxIndustryConcentration: ParameterMetadata[float64]{
+			Value:     0.40,
+			Rationale: "Oracle-recommended 40% cap to avoid semiconductor over-concentration in the universe",
+			Source:    SourceHeuristic,
+		},
+		PriceMinimum: ParameterMetadata[float64]{
+			Value:     10.0,
+			Rationale: "Minimum stock price of NT$10 for universe eligibility",
+			Source:    SourceHeuristic,
+		},
+		FactorScoreMaxAgeDays: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "Factor scores older than 30 days are downgraded to avoid stale inputs",
+			Source:    SourceHeuristic,
+		},
+		D6ExpiryTradingDays: ParameterMetadata[int]{
+			Value:     60,
+			Rationale: "Unselected Layer-2 candidates remain on the D6 watchlist for 60 trading days before expiry",
+			Source:    SourceHeuristic,
+		},
+		VaRContributionMultiplier: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "Exclude names with VaR contribution above 2x the portfolio average",
+			Source:    SourceHeuristic,
+		},
+		VolatilityMultiplier: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "Exclude names with 30-day realized volatility above 2x the median",
+			Source:    SourceHeuristic,
+		},
+		DrawdownWindow: ParameterMetadata[int]{
+			Value:     60,
+			Rationale: "60-day window for drawdown flagging",
+			Source:    SourceHeuristic,
+		},
+		DrawdownThreshold: ParameterMetadata[float64]{
+			Value:     0.30,
+			Rationale: "30% drawdown threshold for risk flag (flag only, not exclusion)",
+			Source:    SourceHeuristic,
+		},
+		UniverseHistoryRetentionDays: ParameterMetadata[int]{
+			Value:     7,
+			Rationale: "Keep 7 days of universe history to support quick rollback",
+			Source:    SourceHeuristic,
+		},
+		ConfidenceThreshold: ParameterMetadata[int]{
+			Value:     3,
+			Rationale: "Minimum of 3 supporting signals or confidence points required for inclusion",
+			Source:    SourceHeuristic,
+		},
+		SupplyChainExpandDepth: ParameterMetadata[int]{
+			Value:     2,
+			Rationale: "Expand supply-chain mapping up to 2 hops when building representative stock sets",
+			Source:    SourceHeuristic,
 		},
 	}
 }
