@@ -863,7 +863,7 @@ func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
 // The three-way split preserves the semantic distinction between "fully allowed",
 // "modified after override" (e.g. partial reduction or alert-only warning), and
 // "blocked entirely". Frontend subscribers can render each category with its own
-// badge colour without parsing payload.Verdict themselves.
+// badge color without parsing payload.Verdict themselves.
 func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
 	eventType := EventRiskGateAllowed
 	switch payload.Verdict {
