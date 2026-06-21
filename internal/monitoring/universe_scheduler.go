@@ -301,6 +301,18 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 
 	um := deps.UniverseMetrics
 
+	// Cache single-label counters at task entry to avoid repeated
+	// WithLabelValues() resolution across pipeline stages.
+	var gatheredCounter, quotesFetchedCounter, rankedCounter, scrapedCounter, snapshotCounter, durationCounter *metrics.Counter
+	if um != nil {
+		gatheredCounter = um.SymbolsGathered.WithLabelValues(stage)
+		quotesFetchedCounter = um.QuotesFetched.WithLabelValues(stage)
+		rankedCounter = um.SymbolsRanked.WithLabelValues(stage)
+		scrapedCounter = um.NarrativeEventsScraped.WithLabelValues(stage)
+		snapshotCounter = um.SnapshotPersisted.WithLabelValues(stage)
+		durationCounter = um.PipelineDurationSeconds.WithLabelValues(stage)
+	}
+
 	// ── Step 1: Gather all symbols ──────────────────────────────────────
 
 	allSymbols := gatherAllSymbols(deps.Tree, deps.Mapper)
@@ -312,8 +324,8 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 	logging.Info("universe_scheduler", "symbols_gathered",
 		"count", result.SymbolsBuilt,
 		"full_rebuild", fullRebuild)
-	if um != nil {
-		um.SymbolsGathered.WithLabelValues(stage).Add(int64(result.SymbolsBuilt))
+	if gatheredCounter != nil {
+		gatheredCounter.Add(int64(result.SymbolsBuilt))
 	}
 
 	// ── Step 2: IndustryFilter ──────────────────────────────────────────
@@ -354,8 +366,8 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		for _, q := range quotes {
 			quoteMap[normalizeSymbol(q.Symbol)] = q
 		}
-		if um != nil {
-			um.QuotesFetched.WithLabelValues(stage).Add(int64(len(quoteMap)))
+		if quotesFetchedCounter != nil {
+			quotesFetchedCounter.Add(int64(len(quoteMap)))
 		}
 	} else {
 		quoteMap = make(map[string]domain.Quote)
@@ -393,7 +405,9 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		if len(filtered) > len(ranked) {
 			um.SymbolsScreened.WithLabelValues(stage, "failed").Add(int64(len(filtered) - len(ranked)))
 		}
-		um.SymbolsRanked.WithLabelValues(stage).Add(int64(len(ranked)))
+		if rankedCounter != nil {
+			rankedCounter.Add(int64(len(ranked)))
+		}
 	}
 
 	// ── Step 5: RiskExclusionFilter ─────────────────────────────────────
@@ -451,8 +465,8 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 			}
 			logging.Info("universe_scheduler", "narrative_scrape_ok",
 				"events", len(events))
-			if um != nil {
-				um.NarrativeEventsScraped.WithLabelValues(stage).Add(int64(len(events)))
+			if scrapedCounter != nil {
+				scrapedCounter.Add(int64(len(events)))
 			}
 		}
 	}
@@ -475,10 +489,12 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		logging.Warn("universe_scheduler", "universe_registry_write_error", logging.Err(err))
 	}
 
-	if um != nil {
-		um.SnapshotPersisted.WithLabelValues(stage).Inc()
+	if snapshotCounter != nil {
+		snapshotCounter.Inc()
 		elapsedSec := int64(time.Since(startTime).Seconds())
-		um.PipelineDurationSeconds.WithLabelValues(stage).Add(elapsedSec)
+		if durationCounter != nil {
+			durationCounter.Add(elapsedSec)
+		}
 	}
 
 	return result, ranked, nil
@@ -759,4 +775,18 @@ func CheckUniverseCoverage(mapper SymbolIndustryMapper, tree ClassificationTreeA
 		alert = fmt.Sprintf("coverage %.2f%% below threshold %.2f%%", ratio*100, threshold*100)
 	}
 	return mapped, total, ratio, alert
+}
+
+// TotalClassifiedSymbols counts the total number of representative stocks across
+// all Level-1 industry segments visible through the classification tree.
+// It sums len(seg.RepresentativeStocks) for every top-level segment.
+func TotalClassifiedSymbols(tree ClassificationTreeAccessor) int {
+	if tree == nil {
+		return 0
+	}
+	total := 0
+	for _, seg := range tree.GetLevel1() {
+		total += len(seg.RepresentativeStocks)
+	}
+	return total
 }

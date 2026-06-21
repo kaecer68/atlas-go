@@ -129,6 +129,10 @@ func (f *IndustryFilter) Filter(symbols []string) []string {
 		seen[norm] = true
 		result = append(result, norm)
 	}
+	// Hoist BFS allocations outside the symbol loop so visited/queue/nextDepth
+	// slices and maps are reused across semiconductor expansions.
+	var visited map[string]bool
+	var queue, nextDepth []string
 	for _, sym := range symbols {
 		cls, ok := f.Mapper.GetClassification(normalizeSymbol(sym))
 		if !ok {
@@ -142,11 +146,11 @@ func (f *IndustryFilter) Filter(symbols []string) []string {
 		}
 		add(sym)
 		if isSemiconductor(cls) && f.SupplyChain != nil && depth > 0 {
-			visited := map[string]bool{cls.Level1.ID: true}
-			queue := []string{cls.Level1.ID}
+			visited = map[string]bool{cls.Level1.ID: true}
+			queue = append(queue[:0], cls.Level1.ID)
 			curDepth := 0
 			for len(queue) > 0 && curDepth < depth {
-				nextDepth := make([]string, 0, len(queue))
+				nextDepth = nextDepth[:0]
 				for _, id := range queue {
 					for _, downID := range f.SupplyChain.GetDownstream(id) {
 						if visited[downID] {
@@ -167,6 +171,10 @@ func (f *IndustryFilter) Filter(symbols []string) []string {
 	return result
 }
 
+// semiconductorMarkers is the set of strings used to detect semiconductor
+// industry membership in Chinese or English industry names/IDs.
+var semiconductorMarkers = []string{"半導體", "semiconductor"}
+
 // isSemiconductor returns true when the symbol belongs to the semiconductor
 // Level-1 or Level-2 industry (matches Chinese and English names defensively).
 func isSemiconductor(cls *IndustryClassification) bool {
@@ -176,8 +184,10 @@ func isSemiconductor(cls *IndustryClassification) bool {
 	if strings.EqualFold(cls.Level1.ID, "semiconductor") || strings.EqualFold(cls.Level2.ID, "semiconductor") {
 		return true
 	}
-	if strings.Contains(strings.ToLower(cls.Level1.Name), "半導體") {
-		return true
+	for _, marker := range semiconductorMarkers {
+		if strings.Contains(strings.ToLower(cls.Level1.Name), marker) {
+			return true
+		}
 	}
 	return strings.Contains(strings.ToLower(cls.Level1.NameEN), "semiconductor")
 }
@@ -376,7 +386,14 @@ func NewScoringScreener(scr screener.Screener, factorEng FactorScoreProvider) *S
 func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote) []RankedSymbol {
 	normalizedQuotes := normalizeQuotes(quotes)
 
-	survivors := s.applyVolumeAndPriceFilters(universe, normalizedQuotes)
+	// Pre-compute normalized universe once so downstream filters avoid
+	// repeated normalizeSymbol calls inside tight loops.
+	normalizedUniverse := make([]string, len(universe))
+	for i, sym := range universe {
+		normalizedUniverse[i] = normalizeSymbol(sym)
+	}
+
+	survivors := s.applyVolumeAndPriceFilters(normalizedUniverse, normalizedQuotes)
 
 	// Binary pass/fail via the injected screener.
 	// Per screener contract errors are non-fatal; fall back to the survivors.
@@ -399,8 +416,7 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 func (s *ScoringScreener) applyVolumeAndPriceFilters(universe []string, quotes map[string]domain.Quote) []string {
 	var survivors []string
 	for _, sym := range universe {
-		norm := normalizeSymbol(sym)
-		q, ok := quotes[norm]
+		q, ok := quotes[sym]
 		if !ok {
 			continue
 		}
@@ -410,7 +426,7 @@ func (s *ScoringScreener) applyVolumeAndPriceFilters(universe []string, quotes m
 		if approxTWD < s.VolumeFloorTWD || q.Last < s.PriceMin {
 			continue
 		}
-		survivors = append(survivors, norm)
+		survivors = append(survivors, sym)
 	}
 	return survivors
 }

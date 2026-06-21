@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -68,6 +69,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/swarm"
 	"github.com/kaecer68/atlas-go/web"
 )
+
+// universeWatchlistMu is the package-level mutex shared by all universe-builder
+// task closures to serialize concurrent read-modify-write on universe_watchlist.json.
+var universeWatchlistMu sync.Mutex
 
 // experimentMonitorAdapter wraps *monitoring.Monitor to match experiment.AutoExperimentMonitor interface.
 type experimentMonitorAdapter struct {
@@ -224,18 +229,20 @@ func newUniverseBuilderDeps(
 		narrativeFeedFetcher(gateway),
 	)
 	narrativeBridge.Configure(suCfg)
+	factorEngine := portfolio.NewFactorEngine()
 	return monitoring.UniverseBuilderDeps{
 		Mapper:          monitoring.NewTreeBasedMapper(classTreeAdapter),
 		Tree:            classTreeAdapter,
 		SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
-		Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
-		FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
+		Screener:        screener.NewEngine(factorEngine, portfolio.NewFundamentalProvider()),
+		FactorEng:       monitoring.AdaptFactorEngine(factorEngine),
 		Quotes:          nil,
 		RiskFilter:      riskFilter,
 		NarrativeBridge: narrativeBridge,
 		UniverseMetrics: um,
 		Config:          suCfg,
 		WorkDir:         cfg.WorkDir,
+		WatchlistMu:     &universeWatchlistMu,
 	}
 }
 
@@ -1705,12 +1712,8 @@ func run(args []string, deps appDeps) error {
 					if wd == time.Saturday || wd == time.Sunday {
 						return nil
 					}
-					// Count total symbols from Level-1 industries via classification tree.
-					classTree := industry.DefaultClassification()
-					totalSymbols := 0
-					for _, seg := range classTree.GetLevel1() {
-						totalSymbols += len(seg.RepresentativeStocks)
-					}
+					// Count total symbols from the shared classification tree.
+					totalSymbols := monitoring.TotalClassifiedSymbols(classTreeAdapter)
 					// Load universe snapshot and count built symbols.
 					snapshotPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_snapshot.json")
 					snapshotSymbols := 0

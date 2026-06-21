@@ -14,17 +14,14 @@ type UniverseMetrics struct {
 	QuotesErrors            *CounterVec
 	SymbolsScreened         *CounterVec
 	SymbolsRanked           *CounterVec
-	ScoringErrors           *CounterVec
 	RiskChecked             *CounterVec
 	RiskErrors              *CounterVec
 	NarrativeEventsScraped  *CounterVec
 	NarrativeErrors         *CounterVec
 	SnapshotPersisted       *CounterVec
-	SnapshotSizeBytes       *CounterVec
 	PipelineDurationSeconds *CounterVec
 	CoverageMapped          *CounterVec
 	CoverageTotal           *CounterVec
-	D6ExpiredSymbols        *CounterVec
 	onInc                   OnInc
 }
 
@@ -48,17 +45,14 @@ func (m *UniverseMetrics) SetOnInc(fn OnInc) {
 	wireOnInc(m.QuotesErrors, "atlas_universe_quotes_errors_total")
 	wireOnInc(m.SymbolsScreened, "atlas_universe_symbols_screened_total")
 	wireOnInc(m.SymbolsRanked, "atlas_universe_symbols_ranked_total")
-	wireOnInc(m.ScoringErrors, "atlas_universe_scoring_errors_total")
 	wireOnInc(m.RiskChecked, "atlas_universe_risk_checked_total")
 	wireOnInc(m.RiskErrors, "atlas_universe_risk_errors_total")
 	wireOnInc(m.NarrativeEventsScraped, "atlas_universe_narrative_events_scraped_total")
 	wireOnInc(m.NarrativeErrors, "atlas_universe_narrative_errors_total")
 	wireOnInc(m.SnapshotPersisted, "atlas_universe_snapshot_persisted_total")
-	wireOnInc(m.SnapshotSizeBytes, "atlas_universe_snapshot_size_bytes")
 	wireOnInc(m.PipelineDurationSeconds, "atlas_universe_pipeline_duration_seconds")
 	wireOnInc(m.CoverageMapped, "atlas_universe_coverage_mapped_total")
 	wireOnInc(m.CoverageTotal, "atlas_universe_coverage_total")
-	wireOnInc(m.D6ExpiredSymbols, "atlas_universe_d6_expired_symbols_total")
 }
 
 // UniverseSnapshot is a point-in-time view of all universe pipeline counters.
@@ -70,17 +64,14 @@ type UniverseSnapshot struct {
 	QuotesErrors            []Sample
 	SymbolsScreened         []Sample
 	SymbolsRanked           []Sample
-	ScoringErrors           []Sample
 	RiskChecked             []Sample
 	RiskErrors              []Sample
 	NarrativeEventsScraped  []Sample
 	NarrativeErrors         []Sample
 	SnapshotPersisted       []Sample
-	SnapshotSizeBytes       []Sample
 	PipelineDurationSeconds []Sample
 	CoverageMapped          []Sample
 	CoverageTotal           []Sample
-	D6ExpiredSymbols        []Sample
 }
 
 // Snapshot returns the current values of all universe pipeline counters,
@@ -95,17 +86,14 @@ func (m *UniverseMetrics) Snapshot() UniverseSnapshot {
 		QuotesErrors:            m.QuotesErrors.snapshotSamplesAt(now),
 		SymbolsScreened:         m.SymbolsScreened.snapshotSamplesAt(now),
 		SymbolsRanked:           m.SymbolsRanked.snapshotSamplesAt(now),
-		ScoringErrors:           m.ScoringErrors.snapshotSamplesAt(now),
 		RiskChecked:             m.RiskChecked.snapshotSamplesAt(now),
 		RiskErrors:              m.RiskErrors.snapshotSamplesAt(now),
 		NarrativeEventsScraped:  m.NarrativeEventsScraped.snapshotSamplesAt(now),
 		NarrativeErrors:         m.NarrativeErrors.snapshotSamplesAt(now),
 		SnapshotPersisted:       m.SnapshotPersisted.snapshotSamplesAt(now),
-		SnapshotSizeBytes:       m.SnapshotSizeBytes.snapshotSamplesAt(now),
 		PipelineDurationSeconds: m.PipelineDurationSeconds.snapshotSamplesAt(now),
 		CoverageMapped:          m.CoverageMapped.snapshotSamplesAt(now),
 		CoverageTotal:           m.CoverageTotal.snapshotSamplesAt(now),
-		D6ExpiredSymbols:        m.D6ExpiredSymbols.snapshotSamplesAt(now),
 	}
 }
 
@@ -137,10 +125,6 @@ func NewUniverseMetrics() *UniverseMetrics {
 			name:       "atlas_universe_symbols_ranked_total",
 			labelNames: []string{"stage"},
 		},
-		ScoringErrors: &CounterVec{
-			name:       "atlas_universe_scoring_errors_total",
-			labelNames: []string{"stage", "error_type"},
-		},
 		RiskChecked: &CounterVec{
 			name:       "atlas_universe_risk_checked_total",
 			labelNames: []string{"stage", "result"},
@@ -161,10 +145,6 @@ func NewUniverseMetrics() *UniverseMetrics {
 			name:       "atlas_universe_snapshot_persisted_total",
 			labelNames: []string{"stage"},
 		},
-		SnapshotSizeBytes: &CounterVec{
-			name:       "atlas_universe_snapshot_size_bytes",
-			labelNames: []string{"stage"},
-		},
 		PipelineDurationSeconds: &CounterVec{
 			name:       "atlas_universe_pipeline_duration_seconds",
 			labelNames: []string{"stage"},
@@ -176,10 +156,6 @@ func NewUniverseMetrics() *UniverseMetrics {
 		CoverageTotal: &CounterVec{
 			name:       "atlas_universe_coverage_total",
 			labelNames: []string{"stage", "industry"},
-		},
-		D6ExpiredSymbols: &CounterVec{
-			name:       "atlas_universe_d6_expired_symbols_total",
-			labelNames: []string{"stage"},
 		},
 	}
 }

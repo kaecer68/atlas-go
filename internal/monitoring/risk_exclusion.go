@@ -5,10 +5,20 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+)
+
+const (
+	// SeverityCriticalRatio is the current/threshold ratio above which a
+	// failed check is classified as CRITICAL.
+	SeverityCriticalRatio = 2.0
+	// SeverityWarningRatio is the current/threshold ratio above which a
+	// failed check is classified as WARNING (below this is also WARNING).
+	SeverityWarningRatio = 1.5
 )
 
 // RiskExclusionResult is the per-symbol outcome of the Layer 2.5 risk filter.
@@ -55,6 +65,8 @@ type RiskExclusionFilter struct {
 	marketDataProvider   QuoteProvider
 	priceHistoryProvider HistoricalPriceProvider
 
+	mu sync.RWMutex
+
 	varThreshold      float64
 	volMultiplier     float64
 	drawdownWindow    int
@@ -83,6 +95,8 @@ func NewRiskExclusionFilter(riskMgr RiskManager, marketDataProvider QuoteProvide
 // thresholds (VaR contribution, volatility, drawdown window + threshold,
 // and liquidity) are wired from the parameters system.
 func (f *RiskExclusionFilter) Configure(cfg config.SmartUniverseConfig) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.varThreshold = cfg.VaRContributionMultiplier.Value
 	f.volMultiplier = cfg.VolatilityMultiplier.Value
 	f.drawdownWindow = cfg.DrawdownWindow.Value
@@ -93,6 +107,8 @@ func (f *RiskExclusionFilter) Configure(cfg config.SmartUniverseConfig) {
 // Filter runs the four Layer 2.5 checks against every symbol and returns
 // the full set of results. Callers should inspect Passed to obtain the safe universe.
 func (f *RiskExclusionFilter) Filter(symbols []string) ([]RiskExclusionResult, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	if len(symbols) == 0 {
 		return nil, nil
 	}
@@ -293,9 +309,9 @@ func severity(passed bool, current, threshold float64) string {
 	}
 	ratio := current / threshold
 	switch {
-	case ratio > 2.0:
+	case ratio > SeverityCriticalRatio:
 		return "CRITICAL"
-	case ratio > 1.5:
+	case ratio > SeverityWarningRatio:
 		return "WARNING"
 	default:
 		return "WARNING"

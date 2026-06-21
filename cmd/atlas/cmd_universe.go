@@ -21,7 +21,7 @@ import (
 )
 
 // runBuildUniverse is the main dispatch function for universe-builder CLI commands.
-// Sub-commands: run, map, scrape, status.
+// Sub-commands: run, map, status.
 func runBuildUniverse(rt *bootstrap.Runtime, cfg config.Config, verbose bool, dateOverride string, subCmd string) error {
 	switch subCmd {
 	case "run":
