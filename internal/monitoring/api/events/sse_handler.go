@@ -69,6 +69,197 @@ var (
 	lastHealthAlertMutex sync.RWMutex
 )
 
+// BufferedRiskGateEvent holds a published risk-gate event for SSE catchup.
+type BufferedRiskGateEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedRiskGateEvents = 50
+
+var (
+	riskGateBuffer    []BufferedRiskGateEvent
+	lastRiskGateMutex sync.RWMutex
+)
+
+// BufferedIndustryCalendarEvent holds a published industry calendar event for SSE catchup.
+type BufferedIndustryCalendarEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+// BufferedBacktestCompletedEvent holds a published backtest-completed event for SSE catchup.
+type BufferedBacktestCompletedEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedIndustryCalendarEvents = 50
+
+var (
+	industryCalendarBuffer    []BufferedIndustryCalendarEvent
+	lastIndustryCalendarMutex sync.RWMutex
+)
+
+// BufferIndustryCalendarEvent stores an industry calendar event for catchup by new SSE clients.
+func BufferIndustryCalendarEvent(event eventbus.BusEvent) {
+	lastIndustryCalendarMutex.Lock()
+	defer lastIndustryCalendarMutex.Unlock()
+	industryCalendarBuffer = append(industryCalendarBuffer, BufferedIndustryCalendarEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(industryCalendarBuffer) > maxBufferedIndustryCalendarEvents {
+		industryCalendarBuffer = industryCalendarBuffer[len(industryCalendarBuffer)-maxBufferedIndustryCalendarEvents:]
+	}
+}
+
+// GetBufferedIndustryCalendarEvents returns a snapshot of the latest industry calendar events for SSE catchup.
+func GetBufferedIndustryCalendarEvents() []BufferedIndustryCalendarEvent {
+	lastIndustryCalendarMutex.RLock()
+	defer lastIndustryCalendarMutex.RUnlock()
+	result := make([]BufferedIndustryCalendarEvent, len(industryCalendarBuffer))
+	copy(result, industryCalendarBuffer)
+	return result
+}
+
+// resetIndustryCalendarBuffer clears the industry calendar buffer. Test-only helper.
+func resetIndustryCalendarBuffer() {
+	lastIndustryCalendarMutex.Lock()
+	defer lastIndustryCalendarMutex.Unlock()
+	industryCalendarBuffer = nil
+}
+
+const maxBufferedBacktestCompletedEvents = 50
+
+var (
+	backtestCompletedBuffer    []BufferedBacktestCompletedEvent
+	lastBacktestCompletedMutex sync.RWMutex
+)
+
+// BufferRiskGateEvent stores a risk-gate event for catchup by new SSE clients.
+func BufferRiskGateEvent(event eventbus.BusEvent) {
+	lastRiskGateMutex.Lock()
+	defer lastRiskGateMutex.Unlock()
+	riskGateBuffer = append(riskGateBuffer, BufferedRiskGateEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(riskGateBuffer) > maxBufferedRiskGateEvents {
+		riskGateBuffer = riskGateBuffer[len(riskGateBuffer)-maxBufferedRiskGateEvents:]
+	}
+}
+
+// GetBufferedRiskGateEvents returns a snapshot of the latest risk-gate events for SSE catchup.
+func GetBufferedRiskGateEvents() []BufferedRiskGateEvent {
+	lastRiskGateMutex.RLock()
+	defer lastRiskGateMutex.RUnlock()
+	result := make([]BufferedRiskGateEvent, len(riskGateBuffer))
+	copy(result, riskGateBuffer)
+	return result
+}
+
+// BufferBacktestCompletedEvent stores a backtest-completed event for catchup by new SSE clients.
+func BufferBacktestCompletedEvent(event eventbus.BusEvent) {
+	lastBacktestCompletedMutex.Lock()
+	defer lastBacktestCompletedMutex.Unlock()
+	backtestCompletedBuffer = append(backtestCompletedBuffer, BufferedBacktestCompletedEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(backtestCompletedBuffer) > maxBufferedBacktestCompletedEvents {
+		backtestCompletedBuffer = backtestCompletedBuffer[len(backtestCompletedBuffer)-maxBufferedBacktestCompletedEvents:]
+	}
+}
+
+// GetBufferedBacktestCompletedEvents returns a snapshot of buffered backtest-completed events.
+func GetBufferedBacktestCompletedEvents() []BufferedBacktestCompletedEvent {
+	lastBacktestCompletedMutex.RLock()
+	defer lastBacktestCompletedMutex.RUnlock()
+	out := make([]BufferedBacktestCompletedEvent, len(backtestCompletedBuffer))
+	copy(out, backtestCompletedBuffer)
+	return out
+}
+
+// BufferedCalibrationCompletedEvent holds a published calibration-completed event for SSE catchup.
+type BufferedCalibrationCompletedEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedCalibrationCompletedEvents = 50
+
+var (
+	calibrationCompletedBuffer    []BufferedCalibrationCompletedEvent
+	lastCalibrationCompletedMutex sync.RWMutex
+)
+
+// BufferCalibrationCompletedEvent stores a calibration-completed event for catchup by new SSE clients.
+func BufferCalibrationCompletedEvent(event eventbus.BusEvent) {
+	lastCalibrationCompletedMutex.Lock()
+	defer lastCalibrationCompletedMutex.Unlock()
+	calibrationCompletedBuffer = append(calibrationCompletedBuffer, BufferedCalibrationCompletedEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(calibrationCompletedBuffer) > maxBufferedCalibrationCompletedEvents {
+		calibrationCompletedBuffer = calibrationCompletedBuffer[len(calibrationCompletedBuffer)-maxBufferedCalibrationCompletedEvents:]
+	}
+}
+
+// GetBufferedCalibrationCompletedEvents returns a snapshot of buffered calibration-completed events.
+func GetBufferedCalibrationCompletedEvents() []BufferedCalibrationCompletedEvent {
+	lastCalibrationCompletedMutex.RLock()
+	defer lastCalibrationCompletedMutex.RUnlock()
+	out := make([]BufferedCalibrationCompletedEvent, len(calibrationCompletedBuffer))
+	copy(out, calibrationCompletedBuffer)
+	return out
+}
+
+func resetCalibrationCompletedBuffer() {
+	lastCalibrationCompletedMutex.Lock()
+	defer lastCalibrationCompletedMutex.Unlock()
+	calibrationCompletedBuffer = nil
+}
+
+type BufferedTradeSlippageEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedTradeSlippageEvents = 50
+
+var (
+	tradeSlippageBuffer    []BufferedTradeSlippageEvent
+	lastTradeSlippageMutex sync.RWMutex
+)
+
+func BufferTradeSlippageEvent(event eventbus.BusEvent) {
+	lastTradeSlippageMutex.Lock()
+	defer lastTradeSlippageMutex.Unlock()
+	tradeSlippageBuffer = append(tradeSlippageBuffer, BufferedTradeSlippageEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(tradeSlippageBuffer) > maxBufferedTradeSlippageEvents {
+		tradeSlippageBuffer = tradeSlippageBuffer[len(tradeSlippageBuffer)-maxBufferedTradeSlippageEvents:]
+	}
+}
+
+func GetBufferedTradeSlippageEvents() []BufferedTradeSlippageEvent {
+	lastTradeSlippageMutex.RLock()
+	defer lastTradeSlippageMutex.RUnlock()
+	out := make([]BufferedTradeSlippageEvent, len(tradeSlippageBuffer))
+	copy(out, tradeSlippageBuffer)
+	return out
+}
+
+func resetTradeSlippageBuffer() {
+	lastTradeSlippageMutex.Lock()
+	defer lastTradeSlippageMutex.Unlock()
+	tradeSlippageBuffer = nil
+}
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -235,6 +426,66 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	healthAlertBuffered := healthAlertBuffer
 	lastHealthAlertMutex.RUnlock()
 	for _, b := range healthAlertBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastRiskGateMutex.RLock()
+	riskGateBuffered := riskGateBuffer
+	lastRiskGateMutex.RUnlock()
+	for _, b := range riskGateBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastIndustryCalendarMutex.RLock()
+	industryCalendarBuffered := industryCalendarBuffer
+	lastIndustryCalendarMutex.RUnlock()
+	for _, b := range industryCalendarBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastBacktestCompletedMutex.RLock()
+	backtestCompletedBuffered := backtestCompletedBuffer
+	lastBacktestCompletedMutex.RUnlock()
+	for _, b := range backtestCompletedBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastCalibrationCompletedMutex.RLock()
+	calibrationCompletedBuffered := calibrationCompletedBuffer
+	lastCalibrationCompletedMutex.RUnlock()
+	for _, b := range calibrationCompletedBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastTradeSlippageMutex.RLock()
+	tradeSlippageBuffered := tradeSlippageBuffer
+	lastTradeSlippageMutex.RUnlock()
+	for _, b := range tradeSlippageBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue

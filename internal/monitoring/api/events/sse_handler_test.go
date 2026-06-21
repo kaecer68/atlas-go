@@ -435,3 +435,188 @@ func TestSSEHandler_ServeHTTP_DeliversBufferedHealthAlertOnConnect(t *testing.T)
 		t.Errorf("expected buffered alert message in body, got: %s", body)
 	}
 }
+
+func TestSSEHandler_BufferRiskGateEvent(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(256)
+	defer bus.Close()
+
+	evt := eventbus.RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "BLOCK",
+		Reason:    "VaR limit exceeded",
+		Symbol:    "2330",
+		Mode:      "DEFENSIVE",
+		Timestamp: time.Now(),
+	}
+	bus.PublishRiskGateEvent(evt)
+	time.Sleep(50 * time.Millisecond)
+
+	BufferRiskGateEvent(eventbus.BusEvent{
+		ID:        "test-001",
+		Type:      eventbus.EventRiskGateRejected,
+		Timestamp: time.Now(),
+		Payload:   evt,
+		Severity:  "warning",
+	})
+
+	handler := NewSSEHandler(bus)
+	req := httptest.NewRequest(http.MethodGet, "/api/events/stream", nil)
+	rec := httptest.NewRecorder()
+
+	ctx, cancel := context.WithCancel(req.Context())
+	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
+	go func() {
+		defer close(handlerDone)
+		handler.ServeHTTP(rec, req)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-handlerDone
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "monitor.risk_gate.rejected") {
+		t.Errorf("expected risk_gate.rejected event in body, got: %s", body)
+	}
+	if !strings.Contains(body, "VaR limit exceeded") {
+		t.Errorf("expected VaR limit exceeded reason in body, got: %s", body)
+	}
+}
+
+func TestSSEHandler_BufferIndustryCalendarEvent(t *testing.T) {
+	resetIndustryCalendarBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "test-1",
+		Type:      eventbus.EventIndustryCalendar,
+		Timestamp: time.Now(),
+		Payload: eventbus.IndustryCalendarEventPayload{
+			EventID: "test_event_2026",
+			Name:    "Test Event",
+		},
+	}
+	BufferIndustryCalendarEvent(event)
+
+	buffered := GetBufferedIndustryCalendarEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered industry calendar event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(eventbus.IndustryCalendarEventPayload)
+	if payload.EventID != "test_event_2026" {
+		t.Errorf("expected EventID test_event_2026, got %s", payload.EventID)
+	}
+	if buffered[0].Event.Type != eventbus.EventIndustryCalendar {
+		t.Errorf("expected type %s, got %s", eventbus.EventIndustryCalendar, buffered[0].Event.Type)
+	}
+}
+
+func TestSSEHandler_BufferBacktestCompletedEvent(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(256)
+	defer bus.Close()
+
+	evt := eventbus.BacktestCompletedEventPayload{
+		WindowID:              "bt-buffered-1",
+		StartDate:             time.Now().AddDate(0, 0, -30),
+		EndDate:               time.Now(),
+		SessionCount:          22,
+		OutcomeCount:          17,
+		WorstAgentID:          "agent-momentum-1",
+		WorstAgentSkill:       "momentum",
+		WorstAgentLayer:       "L1",
+		WorstAgentWindowCount: 22,
+		WorstAgentSharpeLike:  0.42,
+		GeneratedAt:           time.Now(),
+		TargetDate:            time.Now(),
+		SyncSucceeded:         true,
+	}
+	bus.PublishBacktestCompleted(evt)
+	time.Sleep(50 * time.Millisecond)
+
+	BufferBacktestCompletedEvent(eventbus.BusEvent{
+		ID:        "bt-test-001",
+		Type:      eventbus.EventBacktestCompleted,
+		Timestamp: time.Now(),
+		Payload:   evt,
+		Severity:  "info",
+	})
+
+	handler := NewSSEHandler(bus)
+	req := httptest.NewRequest(http.MethodGet, "/api/events/stream", nil)
+	rec := httptest.NewRecorder()
+
+	ctx, cancel := context.WithCancel(req.Context())
+	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
+	go func() {
+		defer close(handlerDone)
+		handler.ServeHTTP(rec, req)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-handlerDone
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "experiment.backtest_completed") {
+		t.Errorf("expected backtest_completed event in body, got: %s", body)
+	}
+	if !strings.Contains(body, "bt-buffered-1") {
+		t.Errorf("expected window_id bt-buffered-1 in body, got: %s", body)
+	}
+}
+
+func TestSSEHandler_BufferCalibrationCompletedEvent(t *testing.T) {
+	resetCalibrationCompletedBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "cal-test-1",
+		Type:      eventbus.EventCalibrationCompleted,
+		Timestamp: time.Now(),
+		Payload: eventbus.CalibrationCompletedEventPayload{
+			Module:         "linkage",
+			CalibratorName: "LinkageAmplifier",
+			Verdict:        "improved",
+		},
+	}
+	BufferCalibrationCompletedEvent(event)
+
+	buffered := GetBufferedCalibrationCompletedEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered calibration completed event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(eventbus.CalibrationCompletedEventPayload)
+	if payload.Module != "linkage" {
+		t.Errorf("expected module=linkage, got %s", payload.Module)
+	}
+	if buffered[0].Event.Type != eventbus.EventCalibrationCompleted {
+		t.Errorf("expected type %s, got %s", eventbus.EventCalibrationCompleted, buffered[0].Event.Type)
+	}
+}
+
+func TestSSEHandler_BufferTradeSlippageEvent(t *testing.T) {
+	resetTradeSlippageBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "ts-test-1",
+		Type:      eventbus.EventTradeSlippage,
+		Timestamp: time.Now(),
+		Payload: eventbus.TradeSlippageEventPayload{
+			OrderID: "ord-001",
+			Symbol:  "2330",
+		},
+	}
+	BufferTradeSlippageEvent(event)
+
+	buffered := GetBufferedTradeSlippageEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered trade slippage event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(eventbus.TradeSlippageEventPayload)
+	if payload.OrderID != "ord-001" {
+		t.Errorf("expected OrderID=ord-001, got %s", payload.OrderID)
+	}
+	if buffered[0].Event.Type != eventbus.EventTradeSlippage {
+		t.Errorf("expected type %s, got %s", eventbus.EventTradeSlippage, buffered[0].Event.Type)
+	}
+}

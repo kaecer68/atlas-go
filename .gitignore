@@ -158,6 +158,10 @@ prompts/archive/
 /calibrate-parameters
 /calibrate-seasonal
 
+# LLM phase CLI binaries
+/lint-pr
+/lint-prompts
+
 # Build artifacts
 /fetch-historical
 

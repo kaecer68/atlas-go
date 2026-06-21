@@ -18,6 +18,89 @@
 | 跨模組陷阱詳細參考 | `docs/TRAPS.md` |
 | 根規則與全域禁令 | `AGENTS.md` |
 | 架構憲法 | `internal/apigateway/CONSTITUTION.md` |
+| 部署設定（本機 Docker） | `## 部署設定`（下方） |
+
+## 部署設定
+
+### 平台
+**本機 Docker**（`docker compose` 單機部署，非 production server）。
+
+### 映像來源
+- 註冊表：`ghcr.io/kaecer68/atlas-go`（`ci-cd.yml` main/develop 自動建置推送）
+- Dockerfile：multi-stage（Node.js 前端 + Go 1.25 後端），expose port 8080
+- compose 設定：`docker-compose.yml`（healthcheck、env vars、postgres）
+
+### 環境變數（統一由 `~/.config/atlas-go/.env` 載入）
+`config.Load()` 自動讀取以下路徑（`internal/config/config.go:70-71`）：
+1. `loadEnvFile(resolveEnvFilePath())` — 專案根 `.env`
+2. `loadUserEnvFile()` — `~/.config/atlas-go/.env`（使用者統一管理入口）
+
+| 變數 | 用途 | 備註 |
+|------|------|------|
+| `LLM_DEEPSEEK_API_KEY` | Phase 3 DeepSeek V4-Pro / V4-Flash | 需新增（從 https://platform.deepseek.com 取得） |
+| `LLM_MINIMAX_API_KEY` | Phase 3 MiniMax M3（coding plan） | 與 `LLM_ANNOTATOR_API_KEY` 同源，皆為 `sk-cp-` 前綴的 minimax-cn-coding-plan key |
+
+| `LLM_ANNOTATOR_API_KEY` | **向後相容** — Phase 1 `KimiClient` 讀此變數 | 實際值等同 `LLM_MINIMAX_API_KEY`（歷史誤標，Phase 1 用 minimax key 打 Kimi API 為已知問題） |
+| `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 rationale 翻譯 hook | default `false` |
+| `LLM_PRISM_SCENARIO_ENABLED` | 啟用 prism scenario 說明 hook | default `false` |
+| `LLM_NARRATIVE_EXPLAIN_ENABLED` | 啟用 regime + sentiment 解釋 hook | default `false` |
+| `LLM_RISK_FORENSICS_ENABLED` | 啟用 performance forensics hook | default `false` |
+
+### 部署流程
+
+```bash
+# 1. 確認 main HEAD 已是目標版本
+git fetch origin main && git log --oneline origin/main -1
+
+# 2. 拉最新映像（CI 已建置並推送 ghcr.io）
+docker compose pull
+
+# 3. 重啟服務
+docker compose up -d
+
+# 4. 確認容器狀態
+docker compose ps
+```
+
+### 部署驗證（Health Check）
+
+兩個 endpoint 都必須通過：
+
+```bash
+# Liveness（基礎健康）
+curl -fsS http://localhost:8080/health
+
+# LLM Readiness（深度健康 — 含 Provider 狀態、Router 版本）
+curl -fsS http://localhost:8080/api/llm/health
+```
+
+預期回傳：
+- `/health`：JSON `{"status":"ok",...}`
+- `/api/llm/health`：JSON `{"providers":{"deepseek":{...},"minimax":{...}},"router_version":"v2.1"}`
+
+### 部署後驗證腳本
+
+```bash
+#!/usr/bin/env bash
+# scripts/verify_deploy.sh
+set -e
+echo "=== Liveness ==="
+curl -fsS http://localhost:8080/health | jq .
+echo "=== LLM Health ==="
+curl -fsS http://localhost:8080/api/llm/health | jq .
+echo "=== Container Status ==="
+docker compose ps --format json | jq -s 'map({name, state, health})'
+```
+
+### Rollback
+
+```bash
+# 退回上一個 commit 並重啟
+git checkout <previous-sha> -- docker-compose.yml  # 若有 compose 變更
+docker compose up -d
+```
+
+或使用 ghcr.io tag pinning：修改 `docker-compose.yml` 的 `image:` tag 為上一個版本，重新 `docker compose up -d`。
 
 ## Token Efficiency Rules
 

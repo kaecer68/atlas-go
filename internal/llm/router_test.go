@@ -46,13 +46,13 @@ func TestDefaultRouter_PrimarySuccess(t *testing.T) {
 	// Given: a router with a mock provider that succeeds
 	primaryResp := Response{
 		Output:   "primary output",
-		Provider: ProviderDeepSeek,
+		Provider: ProviderMiniMax,
 	}
 	primary := &mockProvider{
-		name:     ProviderDeepSeek,
+		name:     ProviderMiniMax,
 		callResp: primaryResp,
 		healthResp: HealthStatus{
-			Provider: ProviderDeepSeek,
+			Provider: ProviderMiniMax,
 			Healthy:  true,
 		},
 	}
@@ -73,14 +73,14 @@ func TestDefaultRouter_PrimarySuccess(t *testing.T) {
 	if resp.Output != "primary output" {
 		t.Errorf("expected primary output, got %q", resp.Output)
 	}
-	if resp.Provider != ProviderDeepSeek {
-		t.Errorf("expected ProviderDeepSeek, got %v", resp.Provider)
+	if resp.Provider != ProviderMiniMax {
+		t.Errorf("expected ProviderMiniMax, got %v", resp.Provider)
 	}
 	if len(resp.AttemptedProviders) != 1 {
 		t.Errorf("expected 1 attempted provider, got %d: %v", len(resp.AttemptedProviders), resp.AttemptedProviders)
 	}
-	if resp.AttemptedProviders[0] != ProviderDeepSeek {
-		t.Errorf("expected first attempted to be ProviderDeepSeek, got %v", resp.AttemptedProviders[0])
+	if resp.AttemptedProviders[0] != ProviderMiniMax {
+		t.Errorf("expected first attempted to be ProviderMiniMax, got %v", resp.AttemptedProviders[0])
 	}
 }
 
@@ -90,23 +90,23 @@ func TestDefaultRouter_PrimaryFail_Backup1Success(t *testing.T) {
 	// Given: Primary fails, Backup1 succeeds
 	primaryErr := errors.New("primary down")
 	primary := &mockProvider{
-		name:    ProviderDeepSeek,
+		name:    ProviderMiniMax,
 		callErr: primaryErr,
 		healthResp: HealthStatus{
-			Provider: ProviderDeepSeek,
+			Provider: ProviderMiniMax,
 			Healthy:  true,
 		},
 	}
 
 	backupResp := Response{
 		Output:   "backup output",
-		Provider: ProviderMiniMax,
+		Provider: ProviderDeepSeek,
 	}
 	backup := &mockProvider{
-		name:     ProviderMiniMax,
+		name:     ProviderDeepSeek,
 		callResp: backupResp,
 		healthResp: HealthStatus{
-			Provider: ProviderMiniMax,
+			Provider: ProviderDeepSeek,
 			Healthy:  true,
 		},
 	}
@@ -127,17 +127,17 @@ func TestDefaultRouter_PrimaryFail_Backup1Success(t *testing.T) {
 	if resp.Output != "backup output" {
 		t.Errorf("expected backup output, got %q", resp.Output)
 	}
-	if resp.Provider != ProviderMiniMax {
-		t.Errorf("expected ProviderMiniMax, got %v", resp.Provider)
+	if resp.Provider != ProviderDeepSeek {
+		t.Errorf("expected ProviderDeepSeek, got %v", resp.Provider)
 	}
 	if len(resp.AttemptedProviders) != 2 {
 		t.Errorf("expected 2 attempted providers, got %d: %v", len(resp.AttemptedProviders), resp.AttemptedProviders)
 	}
-	if resp.AttemptedProviders[0] != ProviderDeepSeek {
-		t.Errorf("expected first attempted to be ProviderDeepSeek, got %v", resp.AttemptedProviders[0])
+	if resp.AttemptedProviders[0] != ProviderMiniMax {
+		t.Errorf("expected first attempted to be ProviderMiniMax, got %v", resp.AttemptedProviders[0])
 	}
-	if resp.AttemptedProviders[1] != ProviderMiniMax {
-		t.Errorf("expected second attempted to be ProviderMiniMax, got %v", resp.AttemptedProviders[1])
+	if resp.AttemptedProviders[1] != ProviderDeepSeek {
+		t.Errorf("expected second attempted to be ProviderDeepSeek, got %v", resp.AttemptedProviders[1])
 	}
 }
 

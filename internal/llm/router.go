@@ -49,13 +49,21 @@ var ErrProviderNotFound = errors.New("llm: forced provider not found in register
 // and the default routing table. Accepts variadic ProviderImpl arguments for
 // dependency injection. Providers are keyed by their Health().Provider value.
 func NewDefaultRouter(impls ...ProviderImpl) *DefaultRouter {
+	return NewDefaultRouterFromConfig(defaultRoutingTable(), impls...)
+}
+
+// NewDefaultRouterFromConfig creates a DefaultRouter with the given routing
+// configuration and provider implementations. Use this when loading routing
+// from a config file (e.g. configs/llm_router.yaml) via LoadRouterConfig or
+// TryLoadRouterConfig.
+func NewDefaultRouterFromConfig(config RouterConfig, impls ...ProviderImpl) *DefaultRouter {
 	providers := make(map[Provider]ProviderImpl, len(impls))
 	for _, impl := range impls {
 		providers[impl.Health().Provider] = impl
 	}
 	return &DefaultRouter{
 		providers:    providers,
-		routingTable: defaultRoutingTable(),
+		routingTable: config,
 	}
 }
 
@@ -187,42 +195,42 @@ func defaultRoutingTable() RouterConfig {
 	return RouterConfig{
 		RoutingChains: map[Capability]RoutingChain{
 			// doc §6.1: strategy.failure_attribution
-			//   V4-Pro → M3 → OpenCode-Go → rule_based
+			//   M3 → V4-Pro → OpenCode-Go → rule_based
 			CapabilityFailureAttribution: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderMiniMax,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: dev.code_review_annotation
-			//   K2.7 → V4-Flash → OpenCode-Go → empty
+			//   M3 → V4-Pro → OpenCode-Go → empty
 			CapabilityCodeReviewAnnotation: {
-				Primary:    ProviderKimi,
+				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: dev.prompt_lint
-			//   V4-Flash → K2.7 → OpenCode-Go → pass
+			//   M3 → V4-Pro → OpenCode-Go → pass
 			CapabilityPromptLint: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderKimi,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: narrative.rationale_translation_fallback
-			//   V4-Flash → M3 → OpenCode-Go → passthrough
+			//   M3 → V4-Flash → OpenCode-Go → passthrough
 			CapabilityRationaleGeneration: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderMiniMax,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: strategy.frame_summary
-			//   V4-Pro → M3 → OpenCode-Go → null
+			//   M3 → V4-Pro → OpenCode-Go → null
 			CapabilityStrategySummary: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderMiniMax,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
@@ -235,27 +243,23 @@ func defaultRoutingTable() RouterConfig {
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: narrative.event_headline
-			//   V4-Flash → M3 → OpenCode-Go → passthrough
+			//   M3 → V4-Flash → OpenCode-Go → passthrough
 			CapabilityRegimeExplanation: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderMiniMax,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: risk.confidence_calibration_commentary
-			//   V4-Pro → M3 → OpenCode-Go → passthrough
+			//   M3 → V4-Pro → OpenCode-Go → passthrough
 			CapabilityPerformanceForensics: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderMiniMax,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},
-			// Not in doc §6.1; Phase 2 capability set.
 			// doc §6.1: orchestrator.prism_cohort_insight
 			//   M3 → V4-Pro → OpenCode-Go → discard
-			// No matching enum yet; default chain mirrors the V4-Pro →
-			// M3 → OpenCode-Go pattern, with PRISM executor out of
-			// scope for Phase 1 (per ADR-003).
 			CapabilityScenarioSimulation: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
@@ -272,8 +276,15 @@ func defaultRoutingTable() RouterConfig {
 			},
 			// Not in doc §6.1; Phase 2 capability set.
 			CapabilityContraAttribution: {
-				Primary:    ProviderDeepSeek,
-				Backup1:    ProviderMiniMax,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
+				Backup2:    ProviderOpenCodeGo,
+				LastResort: ProviderMock,
+			},
+			// Phase 3.3: risk.confidence_commentary (non-blocking bypass)
+			CapabilityConfidenceCommentary: {
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
 				Backup2:    ProviderOpenCodeGo,
 				LastResort: ProviderMock,
 			},

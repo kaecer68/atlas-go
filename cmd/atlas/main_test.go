@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -13,7 +14,9 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 )
 
 func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
@@ -771,5 +774,60 @@ func TestShouldStartFubonProxy(t *testing.T) {
 				t.Fatalf("shouldStartFubonProxy(%q, %q) = %v, want %v", tc.mode, tc.fubonAPIKey, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRiskGateEventBus_BufferWiring(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(64)
+	defer bus.Close()
+
+	bus.Subscribe(eventbus.EventRiskGateRejected, func(ctx context.Context, event eventbus.BusEvent) error {
+		apievents.BufferRiskGateEvent(event)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventRiskGateAllowed, func(ctx context.Context, event eventbus.BusEvent) error {
+		apievents.BufferRiskGateEvent(event)
+		return nil
+	})
+
+	bus.PublishRiskGateEvent(eventbus.RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "BLOCK",
+		Reason:    "VaR limit exceeded",
+		Symbol:    "2330",
+		Mode:      "DEFENSIVE",
+		Timestamp: time.Now(),
+	})
+	bus.PublishRiskGateEvent(eventbus.RiskGateEventPayload{
+		Phase:     "pre_trade",
+		Verdict:   "ALLOW",
+		Reason:    "within limits",
+		Symbol:    "2330",
+		Mode:      "NORMAL",
+		Timestamp: time.Now(),
+	})
+
+	time.Sleep(50 * time.Millisecond)
+
+	buffered := apievents.GetBufferedRiskGateEvents()
+	if len(buffered) < 2 {
+		t.Fatalf("expected at least 2 buffered risk gate events, got %d", len(buffered))
+	}
+
+	hasRejected := false
+	hasAllowed := false
+	for _, e := range buffered {
+		if e.Event.Type == eventbus.EventRiskGateRejected {
+			hasRejected = true
+		}
+		if e.Event.Type == eventbus.EventRiskGateAllowed {
+			hasAllowed = true
+		}
+	}
+	if !hasRejected {
+		t.Error("expected buffered event with type EventRiskGateRejected, not found")
+	}
+	if !hasAllowed {
+		t.Error("expected buffered event with type EventRiskGateAllowed, not found")
 	}
 }

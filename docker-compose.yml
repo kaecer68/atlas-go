@@ -6,14 +6,17 @@ services:
       dockerfile: Dockerfile
     container_name: atlas-go
     restart: unless-stopped
-    command: ["-api"]
+    command: ["-api", "-live"]
     ports:
       - "8080:8080"
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - ATLAS_ENV=production
       - ATLAS_LOG_LEVEL=info
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
+      - ATLAS_API_KEY=${ATLAS_API_KEY}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data

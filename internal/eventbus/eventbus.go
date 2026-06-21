@@ -73,8 +73,19 @@ const (
 	// 自动监控事件
 	EventSharpeDegradation EventType = "monitor.sharpe.degradation"
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
-	EventHealthAlert       EventType = "monitor.health.alert"
-	EventPromotionRecorded EventType = "experiment.promotion_recorded"
+
+	// 风险闸门事件
+	EventRiskGateRejected EventType = "monitor.risk_gate.rejected"
+	EventRiskGateAllowed  EventType = "monitor.risk_gate.allowed"
+
+	// 产业日历事件
+	EventIndustryCalendar EventType = "industry.calendar.event"
+
+	EventHealthAlert          EventType = "monitor.health.alert"
+	EventPromotionRecorded    EventType = "experiment.promotion_recorded"
+	EventBacktestCompleted    EventType = "experiment.backtest_completed"
+	EventCalibrationCompleted EventType = "experiment.calibration_completed"
+	EventTradeSlippage        EventType = "trade.slippage"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -161,6 +172,85 @@ type RiskEventPayload struct {
 	TriggerPrice float64         `json:"trigger_price"`
 }
 
+// RiskGateEventPayload 风险闸门决策事件载荷
+type RiskGateEventPayload struct {
+	Phase             string    `json:"phase"`   // pre_trade, in_trade, post_trade
+	Verdict           string    `json:"verdict"` // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
+	Reason            string    `json:"reason"`
+	ActionType        string    `json:"action_type"`        // SELL, REDUCE, FREEZE, LIQUIDATE, NOTIFY (空字串 if no action)
+	ActionDescription string    `json:"action_description"` // 人類可讀描述 (空字串 if no action)
+	Mode              string    `json:"mode"`               // NORMAL, CAUTIOUS, DEFENSIVE, SUSPENDED
+	Symbol            string    `json:"symbol"`
+	Timestamp         time.Time `json:"timestamp"`
+}
+
+// IndustryCalendarEventPayload 产业日历事件载荷
+type IndustryCalendarEventPayload struct {
+	EventID             string    `json:"event_id"`
+	Name                string    `json:"name"`
+	NameEN              string    `json:"name_en,omitempty"`
+	EventType           string    `json:"event_type"`
+	Description         string    `json:"description"`
+	Direction           string    `json:"direction"` // bullish / bearish / mixed / neutral
+	BaseWeight          float64   `json:"base_weight"`
+	Active              bool      `json:"active"`
+	StartDate           time.Time `json:"start_date"`
+	EndDate             time.Time `json:"end_date"`
+	PeakDate            time.Time `json:"peak_date"`
+	DecayDays           int       `json:"decay_days"`
+	AffectedIndustries  []string  `json:"affected_industries"`
+	SentimentAdjustment float64   `json:"sentiment_adjustment"`
+	DataSource          string    `json:"data_source"`      // default_rules / twse_provider / finmind_provider / mops_provider
+	EvidenceQuality     string    `json:"evidence_quality"` // backtested / estimated / unverified / realtime
+	GeneratedAt         time.Time `json:"generated_at"`
+}
+
+// BacktestCompletedEventPayload 自动回测完成事件载荷
+type BacktestCompletedEventPayload struct {
+	WindowID              string    `json:"window_id"`
+	StartDate             time.Time `json:"start_date"`
+	EndDate               time.Time `json:"end_date"`
+	SessionCount          int       `json:"session_count"`
+	OutcomeCount          int       `json:"outcome_count"`
+	WorstAgentID          string    `json:"worst_agent_id"`
+	WorstAgentSkill       string    `json:"worst_agent_skill"`
+	WorstAgentLayer       string    `json:"worst_agent_layer"`
+	WorstAgentWindowCount int       `json:"worst_agent_window_count"`
+	WorstAgentSharpeLike  float64   `json:"worst_agent_sharpe_like"`
+	GeneratedAt           time.Time `json:"generated_at"`
+	TargetDate            time.Time `json:"target_date"`
+	SyncSucceeded         bool      `json:"sync_succeeded"`
+}
+
+// CalibrationCompletedEventPayload 参数校准完成事件载荷
+type CalibrationCompletedEventPayload struct {
+	Module            string    `json:"module"`
+	CalibratorName    string    `json:"calibrator_name"`
+	ParamCount        int       `json:"param_count"`
+	BaselineScore     float64   `json:"baseline_score"`
+	OptimizedScore    float64   `json:"optimized_score"`
+	Verdict           string    `json:"verdict"`
+	ChangeCount       int       `json:"change_count"`
+	TopChangeParam    string    `json:"top_change_param"`
+	TopChangeDeltaPct float64   `json:"top_change_delta_pct"`
+	GeneratedAt       time.Time `json:"generated_at"`
+	SyncSucceeded     bool      `json:"sync_succeeded"`
+}
+
+// TradeSlippageEventPayload 滑价事件载荷 — emitted per order fill.
+type TradeSlippageEventPayload struct {
+	OrderID       string    `json:"order_id"`
+	Symbol        string    `json:"symbol"`
+	Side          string    `json:"side"`
+	Quantity      int       `json:"quantity"`
+	ExpectedPrice float64   `json:"expected_price"`
+	FillPrice     float64   `json:"fill_price"`
+	SlippageBPS   float64   `json:"slippage_bps"`
+	SlippageCost  float64   `json:"slippage_cost"`
+	BrokerMode    string    `json:"broker_mode"`
+	Timestamp     time.Time `json:"timestamp"`
+}
+
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
 type ExperimentInsufficientDataEventPayload struct {
 	ExperimentID  string `json:"experiment_id"`
@@ -222,12 +312,13 @@ type PromotionRecordedPayload struct {
 
 // BusEvent 总线事件
 type BusEvent struct {
-	ID          string    `json:"id"`
-	Type        EventType `json:"type"`
-	Timestamp   time.Time `json:"timestamp"`
-	Payload     any       `json:"payload"`
-	Description string    `json:"description,omitempty"`
-	Severity    string    `json:"severity,omitempty"` // "info", "warning", "error"
+	ID            string    `json:"id"`
+	Type          EventType `json:"type"`
+	Timestamp     time.Time `json:"timestamp"`
+	Payload       any       `json:"payload"`
+	Description   string    `json:"description,omitempty"`
+	Severity      string    `json:"severity,omitempty"` // "info", "warning", "error"
+	SchemaVersion int       `json:"schema_version"`     // PD-1：事件 schema 版本，零值視為 v1 向後相容
 }
 
 // EnrichEvent populates Description and Severity on an event that lacks them,
@@ -270,6 +361,12 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},
 	EventNarrative:                  {"偵測到宏觀敘事事件", "warning"},
 	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
+	EventIndustryCalendar:           {"產業日曆事件：當前台股市場日曆事件（除權息、MSCI 調整、財報季等）", "info"},
+	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
+	EventRiskGateAllowed:            {"風控閘門允許交易，部位操作已通過", "info"},
+	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
+	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
+	EventTradeSlippage:              {"訂單成交滑價計算：期望價與實際成交價之差（BPS），用於監控執行品質", "info"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -359,12 +456,22 @@ type ChannelEventBus struct {
 	// Observable counters (atomic)
 	publishDropped  int64
 	handlerTimeouts int64
+
+	// PD-3: Throttling
+	throttleMu       sync.RWMutex
+	throttleConfigs  map[EventType]*throttleEntry
+	publishThrottled int64 // atomic
 }
 
 type subscriber struct {
 	id       string
 	handler  EventHandler
 	critical bool
+}
+
+type throttleEntry struct {
+	lastAllowed time.Time
+	minInterval time.Duration
 }
 
 // NewChannelEventBus 创建新的事件总线
@@ -386,6 +493,12 @@ func NewChannelEventBus(bufferSize int) *ChannelEventBus {
 }
 
 func (b *ChannelEventBus) Publish(event BusEvent) {
+	// PD-3: Throttle check
+	if !b.allowEvent(event.Type) {
+		atomic.AddInt64(&b.publishThrottled, 1)
+		return
+	}
+
 	select {
 	case b.eventChan <- event:
 		return
@@ -404,6 +517,40 @@ func (b *ChannelEventBus) Publish(event BusEvent) {
 	}
 }
 
+// allowEvent 檢查事件類型是否超過節流設定；若無設定則一律放行。
+func (b *ChannelEventBus) allowEvent(et EventType) bool {
+	b.throttleMu.Lock()
+	defer b.throttleMu.Unlock()
+
+	entry := b.throttleConfigs[et]
+	if entry == nil {
+		return true
+	}
+
+	if time.Since(entry.lastAllowed) < entry.minInterval {
+		return false
+	}
+
+	entry.lastAllowed = time.Now()
+	return true
+}
+
+// SetEventThrottle 設定每秒最大事件數；maxPerSecond <= 0 時視為不限制。
+func (b *ChannelEventBus) SetEventThrottle(eventType EventType, maxPerSecond int) {
+	b.throttleMu.Lock()
+	defer b.throttleMu.Unlock()
+
+	if b.throttleConfigs == nil {
+		b.throttleConfigs = make(map[EventType]*throttleEntry)
+	}
+
+	minInterval := time.Duration(0)
+	if maxPerSecond > 0 {
+		minInterval = time.Second / time.Duration(maxPerSecond)
+	}
+	b.throttleConfigs[eventType] = &throttleEntry{minInterval: minInterval}
+}
+
 // PublishMarketSnapshot 发布市场快照事件（便捷方法）
 func (b *ChannelEventBus) PublishMarketSnapshot(quote domain.Quote) {
 	b.Publish(BusEvent{
@@ -415,6 +562,7 @@ func (b *ChannelEventBus) PublishMarketSnapshot(quote domain.Quote) {
 			Quote:     quote,
 			Timestamp: time.Now(),
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -428,6 +576,7 @@ func (b *ChannelEventBus) PublishSimulationStart(sessionID string, asOf time.Tim
 			"session_id": sessionID,
 			"as_of":      asOf.Format("2006-01-02"),
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -443,6 +592,7 @@ func (b *ChannelEventBus) PublishSimulationComplete(sessionID string, portfolioV
 			"order_count":     orderCount,
 			"position_count":  positionCount,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -458,6 +608,7 @@ func (b *ChannelEventBus) PublishRegimeChange(oldRegime, newRegime domain.Regime
 			Confidence:   confidence,
 			DeterminedBy: determinedBy,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -472,6 +623,7 @@ func (b *ChannelEventBus) PublishPositionUpdate(symbol string, position domain.P
 			Position:   position,
 			ChangeType: changeType,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -485,6 +637,7 @@ func (b *ChannelEventBus) PublishRecommendation(agent string, recommendations []
 			Agent:           agent,
 			Recommendations: recommendations,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -498,6 +651,7 @@ func (b *ChannelEventBus) PublishGuardOutcomes(sessionID string, outcomes []doma
 			SessionID: sessionID,
 			Outcomes:  outcomes,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -510,6 +664,7 @@ func (b *ChannelEventBus) PublishDarwinianClamping(events []ClampingEventPayload
 		Payload: DarwinianClampingEventPayload{
 			ClampingEvents: events,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -526,16 +681,18 @@ func (b *ChannelEventBus) PublishAgentHealthChange(agentID, oldStatus, newStatus
 			Reason:    reason,
 			Timestamp: time.Now(),
 		},
+		SchemaVersion: 1,
 	})
 }
 
 // PublishConvictionClamping 发布 Conviction 夹制事件
 func (b *ChannelEventBus) PublishConvictionClamping(events []ConvictionClampingEventPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventConvictionClamping,
-		Timestamp: time.Now(),
-		Payload:   events,
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventConvictionClamping,
+		Timestamp:     time.Now(),
+		Payload:       events,
+		SchemaVersion: 1,
 	})
 }
 
@@ -561,10 +718,11 @@ func (b *ChannelEventBus) PublishOrderEvent(order domain.Order, orderID, status 
 	}
 
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      eventType,
-		Timestamp: time.Now(),
-		Payload:   payload,
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          eventType,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		SchemaVersion: 1,
 	})
 }
 
@@ -580,6 +738,7 @@ func (b *ChannelEventBus) PublishRiskEvent(eventType EventType, symbol string, p
 			TriggerType:  triggerType,
 			TriggerPrice: triggerPrice,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -597,6 +756,7 @@ func (b *ChannelEventBus) PublishExperimentInsufficientData(experimentID string,
 			MaturityLevel: maturityLevel,
 			UsedFallback:  usedFallback,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -618,6 +778,7 @@ func (b *ChannelEventBus) PublishOrderError(orderID, symbol, side string, price 
 			LastStatus:   lastStatus,
 			Timestamp:    time.Now(),
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -665,6 +826,7 @@ func (b *ChannelEventBus) PublishNarrativeEvent(eventID, theme, region string, s
 			TimeWindow:       timeWindow,
 			Description:      description,
 		},
+		SchemaVersion: 1,
 	})
 }
 
@@ -676,21 +838,91 @@ func parseFloat(s string) float64 {
 // PublishHealthAlert publishes a system health alert to the event bus.
 func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventHealthAlert,
-		Timestamp: time.Now(),
-		Payload:   alert,
-		Severity:  alert.Severity,
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventHealthAlert,
+		Timestamp:     time.Now(),
+		Payload:       alert,
+		Severity:      alert.Severity,
+		SchemaVersion: 1,
+	})
+}
+
+// PublishRiskGateEvent publishes a risk gate decision to the event bus.
+// Verdict BLOCK or HALT → EventRiskGateRejected; otherwise → EventRiskGateAllowed.
+func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
+	eventType := EventRiskGateAllowed
+	if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
+		eventType = EventRiskGateRejected
+	}
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          eventType,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "warning",
+		SchemaVersion: 1,
+	})
+}
+
+// PublishIndustryCalendarEvent publishes a Taiwan market calendar event to the event bus.
+func (b *ChannelEventBus) PublishIndustryCalendarEvent(payload IndustryCalendarEventPayload) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventIndustryCalendar,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
+	})
+}
+
+// PublishBacktestCompleted publishes an auto-backtest completion event.
+// Fired by internal/autobacktest.Runner after RunAndStore succeeds and live store is synced.
+func (b *ChannelEventBus) PublishBacktestCompleted(payload BacktestCompletedEventPayload) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventBacktestCompleted,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
+	})
+}
+
+// PublishCalibrationCompleted publishes a parameter calibration completion event.
+// Fired by cmd/atlas/main.go linkage_calibrate task after CalibrateParameters succeeds.
+func (b *ChannelEventBus) PublishCalibrationCompleted(payload CalibrationCompletedEventPayload) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventCalibrationCompleted,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
+	})
+}
+
+// PublishTradeSlippage publishes a per-order-fill slippage event.
+// Fired by internal/live/order_manager.go on every order fill (status == "filled").
+func (b *ChannelEventBus) PublishTradeSlippage(payload TradeSlippageEventPayload) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventTradeSlippage,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
 	})
 }
 
 func (b *ChannelEventBus) PublishPromotionRecorded(payload PromotionRecordedPayload) {
 	b.Publish(BusEvent{
-		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventPromotionRecorded,
-		Timestamp: time.Now(),
-		Payload:   payload,
-		Severity:  "info",
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventPromotionRecorded,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
+		SchemaVersion: 1,
 	})
 }
 
@@ -884,6 +1116,7 @@ func (b *ChannelEventBus) Stats() map[string]any {
 	stats["channel_capacity"] = cap(b.eventChan)
 	stats["channel_length"] = len(b.eventChan)
 	stats["publish_dropped"] = atomic.LoadInt64(&b.publishDropped)
+	stats["publish_throttled"] = atomic.LoadInt64(&b.publishThrottled)
 	stats["handler_timeouts"] = atomic.LoadInt64(&b.handlerTimeouts)
 
 	return stats

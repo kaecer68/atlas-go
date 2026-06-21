@@ -3,12 +3,14 @@ package live
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
 // OrderEvent records a single event in an order's lifecycle.
@@ -179,6 +181,25 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 
 		if status == "filled" {
 			m.recordFillToRiskGate(order, result)
+			if m.eventBus != nil {
+				slippageBPS := 0.0
+				if order.Price > 0 {
+					slippageBPS = math.Abs(result.FillPrice-order.Price) / order.Price * 10000
+				}
+				slippageCost := math.Abs(result.FillPrice-order.Price) * float64(order.Quantity)
+				m.eventBus.PublishTradeSlippage(eventbus.TradeSlippageEventPayload{
+					OrderID:       result.OrderID,
+					Symbol:        order.Symbol,
+					Side:          string(order.Side),
+					Quantity:      order.Quantity,
+					ExpectedPrice: order.Price,
+					FillPrice:     result.FillPrice,
+					SlippageBPS:   slippageBPS,
+					SlippageCost:  slippageCost,
+					BrokerMode:    m.Mode(),
+					Timestamp:     time.Now(),
+				})
+			}
 		}
 
 		if status == "rejected" {
