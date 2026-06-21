@@ -15,25 +15,25 @@
 
 ## 既有事件（Wave 1-7）
 
-| 事件類型 | EventType 常數 | Schema |
-|---------|---------------|--------|
-| 市場快照 | `EventMarketSnapshot` | v1 |
-| 模擬開始 | `EventSimulationStart` | v1 |
-| 模擬完成 | `EventSimulationComplete` | v1 |
-| 體制變更 | `EventRegimeChange` | v1 |
-| 部位更新 | `EventPositionUpdate` | v1 |
-| 推薦生成 | `EventRecommendation` | v1 |
-| Guard 結果 | `EventGuardOutcomes` | v1 |
-| Darwinian 夾制 | `EventDarwinianClamping` | v1 |
-| Agent 健康變更 | `EventAgentHealthChange` | v1 |
-| Conviction 夾制 | `EventConvictionClamping` | v1 |
-| 訂單事件 | `EventOrderFilled` | v1 |
-| 風險事件（停損/停利） | `EventRiskStopLoss` / `EventRiskTakeProfit` | v1 |
-| 實驗數據不足 | `EventExperimentInsufficientData` | v1 |
-| 訂單錯誤 | `EventOrderError` | v1 |
-| 宏觀敘事 | `EventNarrative` | v1 |
-| 健康警報 | `EventHealthAlert` | v1 |
-| 晉升記錄 | `EventPromotionRecorded` | v1 |
+| 事件類型 | EventType 常數 | Schema | 說明文件 |
+|---------|---------------|--------|---------|
+| 市場快照 | `EventMarketSnapshot` | v1 | – |
+| 模擬開始 | `EventSimulationStart` | v1 | – |
+| 模擬完成 | `EventSimulationComplete` | v1 | – |
+| 體制變更 | `EventRegimeChange` | v1 | – |
+| 部位更新 | `EventPositionUpdate` | v1 | – |
+| 推薦生成 | `EventRecommendation` | v1 | – |
+| Guard 結果 | `EventGuardOutcomes` | v1 | – |
+| Darwinian 夾制 | `EventDarwinianClamping` | v1 | – |
+| Agent 健康變更 | `EventAgentHealthChange` | v1 | – |
+| Conviction 夾制 | `EventConvictionClamping` | v1 | – |
+| 訂單事件 | `EventOrderFilled` | v1 | – |
+| 風險事件（停損/停利） | `EventRiskStopLoss` / `EventRiskTakeProfit` | v1 | – |
+| 實驗數據不足 | `EventExperimentInsufficientData` | v1 | – |
+| 訂單錯誤 | `EventOrderError` | v1 | – |
+| 宏觀敘事 | `EventNarrative` | v1 | [narrative-event.md](narrative-event.md) |
+| 健康警報 | `EventHealthAlert` | v1 | [health-alert.md](health-alert.md) |
+| 晉升記錄 | `EventPromotionRecorded` | v1 | [promotion-recorded.md](promotion-recorded.md) |
 
 ## Schema Version 說明
 
