@@ -144,7 +144,7 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 				"note", "weekly rebuild handles Monday")
 			return nil
 		}
-		if !alignToTarget(now, 6, 0) {
+		if !alignToTarget(now) {
 			return nil // silent skip — not the trigger minute
 		}
 
@@ -215,7 +215,7 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 				"day", now.Weekday().String())
 			return nil
 		}
-		if !alignToTarget(now, 6, 0) {
+		if !alignToTarget(now) {
 			return nil // silent skip
 		}
 
@@ -599,10 +599,10 @@ func isTradingDay(t time.Time) bool {
 	}
 }
 
-// alignToTarget returns true when now is within ±1 minute of the given hour
-// and minute in the same timezone.
-func alignToTarget(now time.Time, hour, minute int) bool {
-	target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+// alignToTarget returns true when now is within ±1 minute of 06:00 local
+// time (Taiwan stock market open).
+func alignToTarget(now time.Time) bool {
+	target := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, now.Location())
 	diff := now.Sub(target)
 	if diff < 0 {
 		diff = -diff

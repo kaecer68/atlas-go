@@ -185,9 +185,9 @@ func TestAlignToTarget(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := alignToTarget(tt.t, 6, 0)
+			got := alignToTarget(tt.t)
 			if got != tt.want {
-				t.Fatalf("alignToTarget(%v, 6, 0) = %v, want %v", tt.t, got, tt.want)
+				t.Fatalf("alignToTarget(%v) = %v, want %v", tt.t, got, tt.want)
 			}
 		})
 	}
@@ -904,14 +904,14 @@ func TestAlignToTargetNegativeDiff(t *testing.T) {
 
 	t.Run("30s_before_target", func(t *testing.T) {
 		tm := time.Date(2026, 6, 16, 5, 59, 30, 0, loc)
-		if !alignToTarget(tm, 6, 0) {
+		if !alignToTarget(tm) {
 			t.Fatal("05:59:30 should be within ±1min of 06:00")
 		}
 	})
 
 	t.Run("61s_before_target", func(t *testing.T) {
 		tm := time.Date(2026, 6, 16, 5, 58, 59, 0, loc)
-		if alignToTarget(tm, 6, 0) {
+		if alignToTarget(tm) {
 			t.Fatal("05:58:59 should NOT be within ±1min of 06:00")
 		}
 	})
