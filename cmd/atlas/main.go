@@ -206,6 +206,39 @@ func narrativeFeedFetcher(gw *apigateway.Gateway) monitoring.FeedFetcher {
 	}
 }
 
+// newUniverseBuilderDeps constructs the SmartUniverseBuilder dependency
+// struct with all parameters wired from SmartUniverseConfig. Callers
+// should invoke this once at startup; the returned deps are safe to
+// share across daily/weekly scheduler tasks.
+func newUniverseBuilderDeps(
+	cfg config.Config,
+	classTreeAdapter monitoring.ClassificationTreeAccessor,
+	gateway *apigateway.Gateway,
+	um *metrics.UniverseMetrics,
+	suCfg config.SmartUniverseConfig,
+) monitoring.UniverseBuilderDeps {
+	riskFilter := monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices())
+	riskFilter.Configure(suCfg)
+	narrativeBridge := monitoring.NewNarrativeEventBridgeWithFetcher(
+		filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json"),
+		narrativeFeedFetcher(gateway),
+	)
+	narrativeBridge.Configure(suCfg)
+	return monitoring.UniverseBuilderDeps{
+		Mapper:          monitoring.NewTreeBasedMapper(classTreeAdapter),
+		Tree:            classTreeAdapter,
+		SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
+		Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
+		FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
+		Quotes:          nil,
+		RiskFilter:      riskFilter,
+		NarrativeBridge: narrativeBridge,
+		UniverseMetrics: um,
+		Config:          suCfg,
+		WorkDir:         cfg.WorkDir,
+	}
+}
+
 func main() {
 	if err := run(os.Args[1:], defaultAppDeps()); err != nil {
 		log.Fatalf("%v", err)
@@ -1632,19 +1665,7 @@ func run(args []string, deps appDeps) error {
 			classTreeAdapter := monitoring.AdaptClassificationTree(industry.DefaultClassification())
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
-				suDeps := monitoring.UniverseBuilderDeps{
-					Mapper:          monitoring.NewTreeBasedMapper(classTreeAdapter),
-					Tree:            classTreeAdapter,
-					SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
-					Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
-					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
-					Quotes:          nil,
-					RiskFilter:      monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices()),
-					NarrativeBridge: monitoring.NewNarrativeEventBridgeWithFetcher(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json"), narrativeFeedFetcher(gateway)),
-					UniverseMetrics: um,
-					Config:          suCfg,
-					WorkDir:         cfg.WorkDir,
-				}
+				suDeps := newUniverseBuilderDeps(cfg, classTreeAdapter, gateway, um, suCfg)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "auto_universe_refresh",
 					Interval: 1 * time.Minute,
@@ -1655,19 +1676,7 @@ func run(args []string, deps appDeps) error {
 			}
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
-				suDeps := monitoring.UniverseBuilderDeps{
-					Mapper:          monitoring.NewTreeBasedMapper(classTreeAdapter),
-					Tree:            classTreeAdapter,
-					SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
-					Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
-					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
-					Quotes:          nil,
-					RiskFilter:      monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices()),
-					NarrativeBridge: monitoring.NewNarrativeEventBridgeWithFetcher(filepath.Join(cfg.WorkDir, "data", "state", "narrative_cache.json"), narrativeFeedFetcher(gateway)),
-					UniverseMetrics: um,
-					Config:          suCfg,
-					WorkDir:         cfg.WorkDir,
-				}
+				suDeps := newUniverseBuilderDeps(cfg, classTreeAdapter, gateway, um, suCfg)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "auto_universe_full_rebuild",
 					Interval: 1 * time.Minute,
