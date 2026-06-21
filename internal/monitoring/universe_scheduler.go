@@ -476,7 +476,7 @@ func gatherAllSymbols(tree ClassificationTreeAccessor, mapper SymbolIndustryMapp
 // <workDir>/data/state/universe_snapshot.json, creating directories as needed.
 func saveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []RankedSymbol) error {
 	outDir := filepath.Join(workDir, "data", "state")
-	if err := os.MkdirAll(outDir, 0750); err != nil {
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		return fmt.Errorf("create snapshot directory %q: %w", outDir, err)
 	}
 
@@ -490,7 +490,7 @@ func saveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []
 	}
 
 	path := filepath.Join(outDir, "universe_snapshot.json")
-	if err := os.WriteFile(path, data, 0640); err != nil {
+	if err := os.WriteFile(path, data, 0o640); err != nil {
 		return fmt.Errorf("write universe snapshot %q: %w", path, err)
 	}
 	return nil
@@ -561,7 +561,7 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 
 	wl := Watchlist{Version: "1", UpdatedAt: now.Format(time.RFC3339)}
 
-	if err := os.MkdirAll(outDir, 0750); err != nil {
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		return fmt.Errorf("create watchlist directory %q: %w", outDir, err)
 	}
 
@@ -652,7 +652,7 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 	}
 
 	tmpPath := watchlistPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0640); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0o640); err != nil {
 		return fmt.Errorf("write watchlist tmp %q: %w", tmpPath, err)
 	}
 	if err := os.Rename(tmpPath, watchlistPath); err != nil {

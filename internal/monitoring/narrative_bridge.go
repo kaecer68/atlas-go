@@ -334,14 +334,14 @@ func (b *NarrativeEventBridge) BuildAdjustment(industryID string, events []Narra
 // SaveCache persists the given events to cachePath as JSON.
 func (b *NarrativeEventBridge) SaveCache(events []NarrativeEvent) error {
 	dir := filepath.Dir(b.cachePath)
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("narrative bridge: create cache directory %q: %w", dir, err)
 	}
 	data, err := json.MarshalIndent(events, "", "  ")
 	if err != nil {
 		return fmt.Errorf("narrative bridge: marshal cache: %w", err)
 	}
-	if err := os.WriteFile(b.cachePath, data, 0640); err != nil {
+	if err := os.WriteFile(b.cachePath, data, 0o640); err != nil {
 		return fmt.Errorf("narrative bridge: write cache %q: %w", b.cachePath, err)
 	}
 	return nil

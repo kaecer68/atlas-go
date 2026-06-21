@@ -137,7 +137,7 @@ func deriveIndustrySkill(industry string) string {
 //  5. On failure, restore from path.bak if it exists.
 //  6. On success, remove path.bak.
 func WriteUniverseRegistry(path string, result *UniverseBuildResult, ranked []RankedSymbol, version int) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create universe registry parent dir: %w", err)
 	}
 
@@ -155,7 +155,7 @@ func WriteUniverseRegistry(path string, result *UniverseBuildResult, ranked []Ra
 	tmpPath := path + ".tmp"
 	bakPath := path + ".bak"
 
-	if err := os.WriteFile(tmpPath, data, 0640); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0o640); err != nil {
 		return fmt.Errorf("write temp universe registry: %w", err)
 	}
 

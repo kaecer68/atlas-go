@@ -2092,6 +2092,7 @@ export interface ParametersConfig {
   tax?: string;
   sector_allocation: string;
   reporting: string;
+  smart_universe?: string;
   forward_return?: string;
 }
 
@@ -3011,6 +3012,29 @@ export interface SizingParameters {
   default_volatility: string;
   default_adv: string;
   default_atr: string;
+}
+
+export interface SmartUniverseConfig {
+  top_n: string;
+  pe_weight: string;
+  pb_weight: string;
+  volume_weight: string;
+  momentum_weight: string;
+  quality_weight: string;
+  foreign_flow_weight: string;
+  volume_floor_twd: string;
+  min_daily_amount_twd: string;
+  max_industry_concentration: string;
+  price_minimum: string;
+  factor_score_max_age_days: string;
+  d6_expiry_trading_days: string;
+  var_contribution_multiplier: string;
+  volatility_multiplier: string;
+  drawdown_window: string;
+  drawdown_threshold: string;
+  universe_history_retention_days: string;
+  confidence_threshold: string;
+  supply_chain_expand_depth: string;
 }
 
 export interface StrategiesListResponse {

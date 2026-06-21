@@ -38,7 +38,7 @@ func runBuildUniverse(rt *bootstrap.Runtime, cfg config.Config, verbose bool, da
 }
 
 // buildUniverseRun wires the full SmartUniverse pipeline and prints the top N ranked symbols.
-func buildUniverseRun(rt *bootstrap.Runtime, cfg config.Config, verbose bool, dateOverride string) error {
+func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, verbose bool, dateOverride string) error {
 	suCfg := config.GetParametersConfig().SmartUniverse
 
 	log.Printf("[universe] TopN=%d VolumeFloorTWD=%.0f MaxIndustryConc=%.2f",
@@ -243,7 +243,7 @@ type snapshotSymbol struct {
 
 func persistUniverseSnapshot(path string, ranked []monitoring.RankedSymbol, allSymbols []string, excludedCount int) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create snapshot directory: %w", err)
 	}
 
@@ -266,7 +266,7 @@ func persistUniverseSnapshot(path string, ranked []monitoring.RankedSymbol, allS
 	if err != nil {
 		return fmt.Errorf("marshal snapshot: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0640); err != nil {
+	if err := os.WriteFile(path, data, 0o640); err != nil {
 		return fmt.Errorf("write snapshot: %w", err)
 	}
 	log.Printf("[universe] snapshot persisted to %s", path)
