@@ -496,6 +496,32 @@ func saveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []
 	return nil
 }
 
+// loadPreviousRankedSymbols reads the most recent universe snapshot from disk
+// and extracts just the symbol names from the ranked list. Returns nil when
+// no snapshot exists (first run).
+func loadPreviousRankedSymbols(workDir string) []string {
+	path := filepath.Join(workDir, "data", "state", "universe_snapshot.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var payload struct {
+		Ranked []RankedSymbol `json:"ranked"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		logging.Warn("universe_scheduler", "load_previous_ranked_unmarshal_error",
+			logging.Err(err))
+		return nil
+	}
+
+	symbols := make([]string, 0, len(payload.Ranked))
+	for _, r := range payload.Ranked {
+		symbols = append(symbols, normalizeSymbol(r.Symbol))
+	}
+	return symbols
+}
+
 // isTradingDay returns true when t falls on a weekday (Mon–Fri).
 func isTradingDay(t time.Time) bool {
 	switch t.Weekday() {
