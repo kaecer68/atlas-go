@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/llm"
+	llmcapabilities "github.com/kaecer68/atlas-go/internal/llm/capabilities"
+	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
@@ -16,8 +19,9 @@ import (
 
 // Handlers serves the strategies API.
 type Handlers struct {
-	registry  *strategy_techniques.Registry
-	annotator llm_annotator.Annotator
+	registry       *strategy_techniques.Registry
+	annotator      llm_annotator.Annotator
+	summaryHandler *llmcapabilities.StrategySummaryHandler
 }
 
 // NewHandlers builds a new Handlers backed by the given Registry.
@@ -41,6 +45,13 @@ func (h *Handlers) SetAnnotator(a llm_annotator.Annotator) {
 	h.annotator = a
 }
 
+// SetSummaryHandler wires the LLM strategy summary handler for the
+// /{id}/summary endpoint. nil is permitted; the getSummary handler will
+// return 503 until a real handler is wired in.
+func (h *Handlers) SetSummaryHandler(sh *llmcapabilities.StrategySummaryHandler) {
+	h.summaryHandler = sh
+}
+
 // RegisterRoutes attaches the strategies routes to mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/strategies", shared.Get(h.listStrategies))
@@ -50,6 +61,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/strategies/{id}/validate", shared.Post(h.validateStrategy))
 	mux.Handle("GET /api/strategies/{id}/attribution", shared.Get(h.getAttribution))
 	mux.Handle("POST /api/strategies/{id}/annotate", shared.Post(h.annotate))
+	mux.Handle("GET /api/strategies/{id}/summary", shared.Get(h.getSummary))
 }
 
 // StrategyFrameSummary is the API-facing representation of a StrategyFrame.
@@ -311,6 +323,46 @@ func (h *Handlers) annotate(r *http.Request) (int, any) {
 		"id":         id,
 		"annotation": text,
 		"backend":    h.annotator.Name(),
+	}
+}
+
+// getSummary handles GET /api/strategies/{id}/summary. It calls the
+// configured StrategySummaryHandler to produce a human-readable Chinese
+// summary of the strategy frame and its key conditions. The handler is
+// opt-in: if no summary handler is wired (SetSummaryHandler was not
+// called), the endpoint returns 503.
+func (h *Handlers) getSummary(r *http.Request) (int, any) {
+	id := r.PathValue("id")
+	if err := shared.ValidatePathComponent(id); err != nil {
+		return http.StatusBadRequest, map[string]any{"error": err.Error()}
+	}
+	if h.registry == nil {
+		return http.StatusServiceUnavailable, map[string]any{"error": "registry not initialized"}
+	}
+	frame, err := h.registry.FindByID(id)
+	if err != nil {
+		return http.StatusNotFound, map[string]any{"error": "strategy not found"}
+	}
+	if h.summaryHandler == nil {
+		return http.StatusServiceUnavailable, map[string]any{
+			"error": "llm summary handler not configured (set LLM_*_API_KEY)",
+		}
+	}
+	input := schemas.StrategySummaryInput{
+		Frame:     *frame,
+		DataClass: llm.DataClassRegulated,
+	}
+	resp, err := h.summaryHandler.Handle(r.Context(), input)
+	if err != nil {
+		return http.StatusBadGateway, map[string]any{
+			"error": err.Error(),
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"id":             id,
+		"summary":        resp.Summary,
+		"key_conditions": resp.KeyConditions,
+		"backend":        "llm",
 	}
 }
 

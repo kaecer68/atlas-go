@@ -162,4 +162,4 @@ func (r *AutoRollback) RecordPromotion(experimentID string, prePromotionSharpe f
 
 - [`experiment.backtest_completed`](./backtest-completed.md) — 自動回測完成（晉升前的前置步驟，於 Rollback 比較時對照）
 - [`experiment.calibration_completed`](./calibration-completed.md) — 參數校準完成（晉升週期的姊妹事件，由同一 `AutoRollback` 系統管理）
-- [`narrative.detected`](./narrative.md) — 宏觀敘事事件（晉升判斷的環境上下文之一，影響 Sharpe 評估）
+- [`narrative.detected`](./narrative-event.md) — 宏觀敘事事件（晉升判斷的環境上下文之一，影響 Sharpe 評估）

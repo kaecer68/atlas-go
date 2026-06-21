@@ -73,7 +73,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 12 packages
+## X · Experimental（實驗中）— 13 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 

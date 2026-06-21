@@ -187,6 +187,6 @@ return nil
 ## 相關事件
 
 - [`experiment.promotion_recorded`](./promotion-recorded.md) — 實驗 promotion 記錄（既有）
-- [`experiment.insufficient_data`](./experiment-insufficient-data.md) — 實驗資料不足（既有）
-- [`monitor.sharpe.degradation`](./sharpe-degradation.md) — Sharpe 退化警告（既有）
-- [`monitor.drawdown.breach`](./drawdown-breach.md) — 回撤突破閾值（既有）
+- `experiment.insufficient_data` — 實驗資料不足（文件待撰寫）
+- `monitor.sharpe.degradation` — Sharpe 退化警告（文件待撰寫）
+- `monitor.drawdown.breach` — 回撤突破閾值（文件待撰寫）

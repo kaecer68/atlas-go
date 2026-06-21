@@ -64,6 +64,7 @@ type Config struct {
 	LLMPrismScenarioEnabled        bool // LLM_PRISM_SCENARIO_ENABLED — W2: prism_executor.go scenario explainer hook
 	LLMNarrativeExplainEnabled     bool // LLM_NARRATIVE_EXPLAIN_ENABLED — W3: explain_hooks.go regime+sentiment hooks
 	LLMRiskForensicsEnabled        bool // LLM_RISK_FORENSICS_ENABLED — W4: forensics_hook.go performance forensics hook
+	LLMConfidenceCommentaryEnabled bool // LLM_CONFIDENCE_COMMENTARY_ENABLED — W5: confidence_hook.go confidence commentary hook
 }
 
 func Load() Config {
@@ -123,6 +124,7 @@ func Load() Config {
 		LLMPrismScenarioEnabled:        envOrBool("LLM_PRISM_SCENARIO_ENABLED", false),
 		LLMNarrativeExplainEnabled:     envOrBool("LLM_NARRATIVE_EXPLAIN_ENABLED", false),
 		LLMRiskForensicsEnabled:        envOrBool("LLM_RISK_FORENSICS_ENABLED", false),
+		LLMConfidenceCommentaryEnabled: envOrBool("LLM_CONFIDENCE_COMMENTARY_ENABLED", false),
 	}
 }
 
