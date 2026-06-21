@@ -13,7 +13,7 @@
 
 當 RiskGate 評估後產出非阻擋類決策（`ALLOW` / `REDUCE` / `ALERT_ONLY`）並被人類（透過手動 override）或上游策略（透過 in-band override callback）覆寫時，記錄該覆寫事件供監控、SSE 串流、JSONL 審計軌跡使用。
 
-本事件與 [`monitor.risk_gate.rejected`](./risk-gate-rejected.md) 互補：被閘道主動阻擋的決策走 rejected 路徑；通過閘道但事後被覆寫的決策走 overridden 路徑。
+本事件與 `monitor.risk_gate.rejected`（文件待撰寫）互補：被閘道主動阻擋的決策走 rejected 路徑；通過閘道但事後被覆寫的決策走 overridden 路徑。
 
 ---
 
@@ -154,7 +154,7 @@ if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
 
 ## 相關事件
 
-- [`monitor.risk_gate.rejected`](./risk-gate-rejected.md) — 阻擋類決策（BLOCK / HALT）
-- [`risk.stoploss.triggered`](./risk-stoploss-triggered.md) — 停損觸發（既有）
-- [`risk.takeprofit.triggered`](./risk-takeprofit-triggered.md) — 停利觸發（既有）
-- [`risk.alert`](./risk-alert.md) — 風險警告（既有）
+- `monitor.risk_gate.rejected` — 阻擋類決策（文件待撰寫）
+- `risk.stoploss.triggered` — 停損觸發（文件待撰寫）
+- `risk.takeprofit.triggered` — 停利觸發（文件待撰寫）
+- `risk.alert` — 風險警告（文件待撰寫）

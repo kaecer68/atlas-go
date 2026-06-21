@@ -429,14 +429,6 @@ func run(args []string, deps appDeps) error {
 			apievents.BufferHealthAlertEvent(event)
 			return nil
 		})
-		dashEventBus.Subscribe(eventbus.EventRiskGateRejected, func(ctx context.Context, event eventbus.BusEvent) error {
-			apievents.BufferRiskGateEvent(event)
-			return nil
-		})
-		dashEventBus.Subscribe(eventbus.EventRiskGateAllowed, func(ctx context.Context, event eventbus.BusEvent) error {
-			apievents.BufferRiskGateEvent(event)
-			return nil
-		})
 		risk.NewAuditSubscriber(dashEventBus)
 		log.Printf("[Risk] audit subscriber registered on shared event bus")
 		// Initial macro ingestion on startup to populate snapshot and publish events.
@@ -1184,29 +1176,6 @@ func run(args []string, deps appDeps) error {
 						defer cancel()
 						svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
 						svc.EventCalendar.RefreshEvents(time.Now())
-						// Wave 8.3: Publish active industry calendar events to EventBus.
-						// The SSE handler buffers the last 50 calendar events and replays them on client connect.
-						for _, evt := range svc.EventCalendar.DetectActiveEvents(time.Now()) {
-							dashEventBus.PublishIndustryCalendarEvent(eventbus.IndustryCalendarEventPayload{
-								EventID:             evt.ID,
-								Name:                evt.Name,
-								NameEN:              evt.NameEN,
-								EventType:           evt.EventType,
-								Description:         evt.Description,
-								Direction:           evt.Direction,
-								BaseWeight:          evt.BaseWeight,
-								Active:              evt.Active,
-								StartDate:           evt.StartDate,
-								EndDate:             evt.EndDate,
-								PeakDate:            evt.PeakDate,
-								DecayDays:           evt.DecayDays,
-								AffectedIndustries:  evt.AffectedIndustries,
-								SentimentAdjustment: evt.SentimentAdjustment,
-								DataSource:          string(evt.DataSource),
-								EvidenceQuality:     string(evt.EvidenceQuality),
-								GeneratedAt:         evt.GeneratedAt,
-							})
-						}
 						logging.Info("calendar", "auto_calendar_refresh completed")
 						return nil
 					},
@@ -1629,22 +1598,6 @@ func run(args []string, deps appDeps) error {
 			}
 			dashboard.SetRiskGate(riskGate)
 
-			// Wave 8.0: Wire RiskGate decisions to EventBus for SSE streaming.
-			// BLOCK / HALT verdicts → EventRiskGateRejected; all others → EventRiskGateAllowed.
-			// The SSE handler buffers the last 50 risk-gate events and replays them on client connect.
-			riskGate.Subscribe(func(rd risk.RiskDecision) {
-				dashEventBus.PublishRiskGateEvent(eventbus.RiskGateEventPayload{
-					Phase:             string(rd.Phase),
-					Verdict:           string(rd.Verdict),
-					Reason:            rd.Reason,
-					ActionType:        string(rd.Action.Type),
-					ActionDescription: rd.Action.Description,
-					Mode:              rd.Mode,
-					Symbol:            rd.Symbol,
-					Timestamp:         rd.Recorded,
-				})
-			})
-
 			if params := config.GetParametersConfig(); params != nil && params.RSITw.LastCalibratedScore.Value > 0 {
 				riskGate.SetPreTradeRSITwScore(params.RSITw.LastCalibratedScore.Value)
 				log.Printf("[RiskGate] restored RSI-tw calibration score: %.4f", params.RSITw.LastCalibratedScore.Value)
@@ -1663,21 +1616,12 @@ func run(args []string, deps appDeps) error {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
 			}
 
-			// LLM annotator is opt-in via env var. Without
-			// LLM_MINIMAX_API_KEY (or LLM_ANNOTATOR_API_KEY for backward
-			// compatibility) the /annotate endpoint returns 503; this is
+			// LLM annotator (Kimi) is opt-in via env var. Without
+			// LLM_ANNOTATOR_API_KEY the /annotate endpoint returns 503; this is
 			// the explicit signal that the on-demand attribution path is not
 			// configured. Init failure is Warn, not Fatal: rule_based
 			// attribution remains authoritative.
-			//
-			// Phase 4 fix: LLM_ANNOTATOR_API_KEY has always held a MiniMax
-			// coding plan key (sk-cp- prefix). The env var name was misleading.
-			// We now read LLM_MINIMAX_API_KEY first, falling back to
-			// LLM_ANNOTATOR_API_KEY for backward compatibility.
-			apiKey := config.GetSecret("LLM_MINIMAX_API_KEY")
-			if apiKey == "" {
-				apiKey = config.GetSecret("LLM_ANNOTATOR_API_KEY")
-			}
+			apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY")
 			var kimi *llm_annotator.KimiClient
 			if apiKey != "" {
 				var err error
@@ -1700,11 +1644,18 @@ func run(args []string, deps appDeps) error {
 				logging.Info("main", "kimi_annotator_disabled", "hint", "set LLM_ANNOTATOR_API_KEY to enable on-demand attribution")
 			}
 
-			// Phase 1: LLM Router (experimental, X-level). Created empty; Phase 2
-			// adapters are registered below. The annotator continues to work through
-			// dashboard.SetStrategiesAnnotator(kimi) — the raw *KimiClient is still
-			// required by dashboard_api.go:880 for the /annotate endpoint.
-			llmRouter := llm.NewDefaultRouter()
+			// Phase 1: LLM Router (experimental, X-level). Wraps existing KimiClient via adapter.
+			// Does NOT replace dashboard.SetStrategiesAnnotator(kimi) above — that still receives
+			// the raw *KimiClient required by dashboard_api.go:880 type assertion.
+			var llmRouter llm.Router
+			if kimi != nil {
+				llmRouter = llm.NewDefaultRouter(
+					llmAdapters.NewAnnotatorAdapter(kimi, "moonshot-v1-8k"),
+				)
+			} else {
+				// No API key — Router still exists but all Supports() return false.
+				llmRouter = llm.NewDefaultRouter()
+			}
 			llmHealthHandler := llmHealth.NewHandler(llmRouter)
 			llmHealthHandler.RegisterRoutes(mux)
 
@@ -1716,6 +1667,7 @@ func run(args []string, deps appDeps) error {
 			var (
 				deepseekClient *clients.DeepSeekClient
 				minimaxClient  *clients.MiniMaxClient
+				kimiClient     *clients.KimiClient
 			)
 
 			if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
@@ -1724,17 +1676,24 @@ func run(args []string, deps appDeps) error {
 			if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
 				minimaxClient = clients.NewMiniMaxClient(apiKey, nil)
 			}
+			if apiKey := config.GetSecret("LLM_KIMI_API_KEY"); apiKey != "" {
+				kimiClient = clients.NewKimiClient(apiKey, nil)
+			}
 
 			// ProviderImpl adapters (created only if client exists)
 			var (
 				deepseekAdapter *llmAdapters.DeepSeekAdapter
 				minimaxAdapter  *llmAdapters.MiniMaxAdapter
+				kimiPhase2      *llmAdapters.KimiAdapter
 			)
 			if deepseekClient != nil {
 				deepseekAdapter = llmAdapters.NewDeepSeekAdapter(deepseekClient, "deepseek-v4-pro")
 			}
 			if minimaxClient != nil {
 				minimaxAdapter = llmAdapters.NewMiniMaxAdapter(minimaxClient)
+			}
+			if kimiClient != nil {
+				kimiPhase2 = llmAdapters.NewKimiAdapter(kimiClient)
 			}
 
 			// Register adapters with Router (llmRouter is always non-nil after Phase 1)
@@ -1743,6 +1702,9 @@ func run(args []string, deps appDeps) error {
 			}
 			if minimaxAdapter != nil {
 				_ = llmRouter.Register(minimaxAdapter)
+			}
+			if kimiPhase2 != nil {
+				_ = llmRouter.Register(kimiPhase2)
 			}
 
 			// Wire 4 module hooks (only if flag enabled AND Router exists)
@@ -2132,27 +2094,6 @@ func run(args []string, deps appDeps) error {
 					logging.Info("linkage_calibrate", "completed",
 						"baseline", fmt.Sprintf("%.3f", result.BaselineScore),
 						"optimized", fmt.Sprintf("%.3f", result.OptimizedScore))
-					if dashEventBus != nil {
-						topChangeParam := ""
-						topChangeDeltaPct := 0.0
-						if len(result.Changes) > 0 {
-							topChangeParam = result.Changes[0].ParamName
-							topChangeDeltaPct = result.Changes[0].DeltaPct
-						}
-						dashEventBus.PublishCalibrationCompleted(eventbus.CalibrationCompletedEventPayload{
-							Module:            "linkage",
-							CalibratorName:    "LinkageAmplifier",
-							ParamCount:        result.ParamCount,
-							BaselineScore:     result.BaselineScore,
-							OptimizedScore:    result.OptimizedScore,
-							Verdict:           result.Verdict,
-							ChangeCount:       len(result.Changes),
-							TopChangeParam:    topChangeParam,
-							TopChangeDeltaPct: topChangeDeltaPct,
-							GeneratedAt:       result.Timestamp,
-							SyncSucceeded:     true,
-						})
-					}
 					return nil
 				},
 			})
@@ -2215,8 +2156,8 @@ func run(args []string, deps appDeps) error {
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_swarm_simulation",
-				Interval: 5 * time.Minute,
-				Jitter:   30 * time.Second,
+				Interval: 30 * time.Minute,
+				Jitter:   3 * time.Minute,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
 					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
@@ -2243,7 +2184,7 @@ func run(args []string, deps appDeps) error {
 					return nil
 				},
 			})
-			log.Printf("[Gateway] registered auto_swarm_simulation background task (5m interval)")
+			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
 
 			// RSI-tw autonomous calibration — runs every 24h at market close
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

@@ -23,8 +23,11 @@
 //   - RoutingChain — ordered chain of providers to try in sequence
 //   - RouterConfig — router configuration (providers, chains, health thresholds)
 //   - DataClass    — data classification for capability routing
-//   - Options      — per-request options (tracing, retry budget, etc.)
-//   - Usage        — token usage record returned with every response
+//   - Options        — per-request options (tracing, retry budget, etc.)
+//   - Usage          — token usage record returned with every response
+//   - LoadRouterConfig     — load a RouterConfig from a YAML file
+//   - TryLoadRouterConfig  — load or fall back to defaultRoutingTable()
+//   - NewDefaultRouterFromConfig — create a DefaultRouter with explicit config
 //
 // Hot-path guard: This package should not be imported directly by S/E-level
 // modules; any hot-path call must be async or fallback-safe.
