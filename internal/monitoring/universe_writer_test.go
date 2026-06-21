@@ -383,8 +383,8 @@ func TestDeriveIndustrySkill(t *testing.T) {
 			industry string
 			want     string
 		}{
-		{"Oil & Gas", "oil_&_gas_desk"},   // & is not replaced; only space/slash/hyphen become underscore
-			{"High-Tech", "high_tech_desk"},        // hyphen → underscore
+			{"Oil & Gas", "oil_&_gas_desk"}, // & is not replaced; only space/slash/hyphen become underscore
+			{"High-Tech", "high_tech_desk"}, // hyphen → underscore
 			{"Auto Parts", "auto_parts_desk"},
 		}
 		for _, tt := range tests {

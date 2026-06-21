@@ -10,12 +10,12 @@ func TestNewTreeBasedMapper_Empty(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name  string
-		tree  ClassificationTreeAccessor
+		name string
+		tree ClassificationTreeAccessor
 	}{
 		{
-			name:  "empty level1",
-			tree:  newFakeTree(nil),
+			name: "empty level1",
+			tree: newFakeTree(nil),
 		},
 	}
 
