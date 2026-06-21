@@ -1,19 +1,24 @@
-# `monitor.risk_gate.allowed` — 風險閘道決策通過事件
+# `monitor.risk_gate.allowed` — 風險閘道純通過事件
 
 > **Wave**：8.2
 > **穩定性**：stable
 > **首次上線**：v0.0.0.7
 > **EventType 常數**：`eventbus.EventRiskGateAllowed`
 > **字串值**：`"monitor.risk_gate.allowed"`
-> **Severity**：`warning`
+> **Severity**：`info`
 
 ---
 
 ## 用途
 
-當 RiskGate 評估後產出非阻擋類決策（`ALLOW` / `REDUCE` / `ALERT_ONLY`）並被人類（透過手動 override）或上游策略（透過 in-band override callback）覆寫時，記錄該覆寫事件供監控、SSE 串流、JSONL 審計軌跡使用。
+當 RiskGate 評估後產出**純通過**決策（`ALLOW`，即所有條件符合、無需覆寫）時記錄該事件，供監控、SSE 串流、JSONL 審計軌跡使用。
 
-本事件與 `monitor.risk_gate.rejected`（文件待撰寫）互補：被閘道主動阻擋的決策走 rejected 路徑；通過閘道但事後被覆寫的決策走 overridden 路徑。
+Wave 8.2 起 routing 改為三向 split：
+- `ALLOW` → `monitor.risk_gate.allowed`（**純通過**，本文件）
+- `REDUCE` / `ALERT_ONLY` → `monitor.risk_gate.overridden`（覆寫路徑）
+- `BLOCK` / `HALT` → `monitor.risk_gate.rejected`（阻擋）
+
+本事件僅承載 `ALLOW` 語意。若需要覆寫（REDUCE / ALERT_ONLY）事件，請參考 [`risk-gate-overridden.md`](risk-gate-overridden.md)。
 
 ---
 

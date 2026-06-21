@@ -242,6 +242,59 @@ func TestRiskGate_SetPreTradeRSITwScore_Reduce(t *testing.T) {
 	}
 }
 
+func TestRiskGate_PublishWritesConfidenceCommentary(t *testing.T) {
+	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	defer func() { ConfidenceCommentary = nil }()
+
+	ConfidenceCommentary = func(ctx context.Context, decision interface{}) (string, error) {
+		if _, ok := decision.(RiskDecision); !ok {
+			t.Errorf("unexpected decision type: %T", decision)
+		}
+		return "VaR at 1.8x limit; recommend defensive posture", nil
+	}
+
+	received := make(chan RiskDecision, 1)
+	g.Subscribe(func(d RiskDecision) {
+		received <- d
+	})
+
+	g.SetMode(ModeDefensive)
+
+	select {
+	case d := <-received:
+		if d.ConfidenceCommentary != "VaR at 1.8x limit; recommend defensive posture" {
+			t.Errorf("expected subscriber to receive populated ConfidenceCommentary, got %q", d.ConfidenceCommentary)
+		}
+		if d.Mode != string(ModeDefensive) {
+			t.Errorf("expected mode DEFENSIVE, got %s", d.Mode)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for mode change event")
+	}
+}
+
+func TestRiskGate_PublishConfidenceCommentaryNilHook(t *testing.T) {
+	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
+	defer func() { ConfidenceCommentary = nil }()
+	ConfidenceCommentary = nil
+
+	received := make(chan RiskDecision, 1)
+	g.Subscribe(func(d RiskDecision) {
+		received <- d
+	})
+
+	g.SetMode(ModeCautious)
+
+	select {
+	case d := <-received:
+		if d.ConfidenceCommentary != "" {
+			t.Errorf("expected empty ConfidenceCommentary with nil hook, got %q", d.ConfidenceCommentary)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for mode change event")
+	}
+}
+
 func TestRiskGate_WithMaturityTracker(t *testing.T) {
 	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
 	mt := domain.NewMaturityTrackerWithStart(time.Now().UTC())

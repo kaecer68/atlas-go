@@ -1,17 +1,25 @@
 # Atlas 事件目錄
 
-> 最後更新：2026-06-20
+> 最後更新：2026-06-22
 > Schema Version: 1（全部事件）
 
 ## Wave 8 事件（已完成）
 
 | # | 事件類型 | EventType 常數 | 說明文件 | PR | 狀態 |
 |---|---------|---------------|---------|-----|------|
-| 8.0 | 風險閘門基礎設施 | `EventRiskGateRejected` / `EventRiskGateAllowed` | [risk-gate-allowed.md](risk-gate-allowed.md) | #619, #620 | ✅ 已合併 |
+| 8.0 | 風險閘門基礎設施（三向 routing：BLOCK/HALT → rejected、REDUCE/ALERT_ONLY → overridden、ALLOW → allowed） | `EventRiskGateRejected` / `EventRiskGateAllowed` / `EventRiskGateOverridden` | [risk-gate-allowed.md](risk-gate-allowed.md) / [risk-gate-overridden.md](risk-gate-overridden.md) | #619, #620, Wave 8.2 收尾 | ✅ 已合併 |
 | 8.3 | 產業日曆事件 | `EventIndustryCalendar` | [industry-calendar.md](industry-calendar.md) | #621 | ✅ 已合併 |
 | 8.8 | 自動回測完成 | `EventBacktestCompleted` | [backtest-completed.md](backtest-completed.md) | #622 | ✅ 已合併 |
 | 8.9 | 參數校準完成 | `EventCalibrationCompleted` | [calibration-completed.md](calibration-completed.md) | #623 | ✅ 已合併 |
 | 8.6 | 交易滑價 | `EventTradeSlippage` | [trade-slippage.md](trade-slippage.md) | #625 | ✅ 已合併 |
+
+## Wave 8 LLM 事件（推遲至 Wave 8.11+，因 LLM 重構期間吸收）
+
+| # | 事件類型 | 推遲原因 | 替代追蹤 |
+|---|---------|---------|---------|
+| 8.5 | `LLMAnnotatorCircuitOpen` | LLM Provider 路由改為 capability-based（PR #628/#629），原 circuit breaker 事件由 metrics `llm_annotator:requests_good:rate5m` + alert rule `llm_annotator_availability_fast_burn` 取代 | [monitoring/rules/llm_annotator_alerts.yml](../../monitoring/rules/llm_annotator_alerts.yml) |
+| 8.6 (LLM) | `LLMAnnotatorFallbackUsed` | 同上，fallback 路徑由 router logs 與 metrics 揭露 | llm_annotator_alerts.yml |
+| 8.7 | `LLMAnnotatorQuotaExceeded` | 同上，quota 控管整合進 router 計費 | llm_annotator_recording.yml |
 
 ## 既有事件（Wave 1-7）
 

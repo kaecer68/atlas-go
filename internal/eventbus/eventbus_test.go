@@ -720,7 +720,7 @@ func TestPublishRiskGateEvent_HALTRouting(t *testing.T) {
 		rejectedCount.Add(1)
 		return nil
 	})
-	bus.Subscribe(EventRiskGateAllowed, func(ctx context.Context, event BusEvent) error {
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
 		overriddenCount.Add(1)
 		return nil
 	})
@@ -757,7 +757,7 @@ func TestPublishRiskGateEvent_ReduceRouting(t *testing.T) {
 	defer bus.Close()
 
 	var overriddenCount atomic.Int32
-	bus.Subscribe(EventRiskGateAllowed, func(ctx context.Context, event BusEvent) error {
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
 		overriddenCount.Add(1)
 		payload := event.Payload.(RiskGateEventPayload)
 		if payload.Verdict != "REDUCE" {
@@ -778,6 +778,53 @@ func TestPublishRiskGateEvent_ReduceRouting(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if overriddenCount.Load() != 1 {
 		t.Fatalf("expected 1 risk gate overridden event, got %d", overriddenCount.Load())
+	}
+}
+
+// TestPublishRiskGateEvent_ThreeWayRouting locks the Wave 8.2 three-way
+// semantic split (BLOCK/HALT → rejected, REDUCE/ALERT_ONLY → overridden,
+// ALLOW → allowed). All five RiskDecision verdicts must route to their
+// designated EventType so frontend subscribers can render distinct badges
+// without inspecting payload.Verdict themselves.
+func TestPublishRiskGateEvent_ThreeWayRouting(t *testing.T) {
+	bus := NewChannelEventBus(64)
+	defer bus.Close()
+
+	var rejectedCount, allowedCount, overriddenCount atomic.Int32
+	bus.Subscribe(EventRiskGateRejected, func(ctx context.Context, event BusEvent) error {
+		rejectedCount.Add(1)
+		return nil
+	})
+	bus.Subscribe(EventRiskGateAllowed, func(ctx context.Context, event BusEvent) error {
+		allowedCount.Add(1)
+		return nil
+	})
+	bus.Subscribe(EventRiskGateOverridden, func(ctx context.Context, event BusEvent) error {
+		overriddenCount.Add(1)
+		return nil
+	})
+
+	verdicts := []string{"BLOCK", "HALT", "ALLOW", "REDUCE", "ALERT_ONLY"}
+	for _, v := range verdicts {
+		bus.PublishRiskGateEvent(RiskGateEventPayload{
+			Phase:     "pre_trade",
+			Verdict:   v,
+			Reason:    "test " + v,
+			Symbol:    "2330",
+			Mode:      "NORMAL",
+			Timestamp: time.Now(),
+		})
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if rejectedCount.Load() != 2 {
+		t.Fatalf("expected 2 rejected events (BLOCK+HALT), got %d", rejectedCount.Load())
+	}
+	if allowedCount.Load() != 1 {
+		t.Fatalf("expected 1 allowed event (ALLOW), got %d", allowedCount.Load())
+	}
+	if overriddenCount.Load() != 2 {
+		t.Fatalf("expected 2 overridden events (REDUCE+ALERT_ONLY), got %d", overriddenCount.Load())
 	}
 }
 

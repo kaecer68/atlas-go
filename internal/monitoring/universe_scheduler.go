@@ -28,6 +28,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/screener"
 )
 
+// clockFunc is the time source for scheduler closures. Tests may override
+// it to deterministically trigger time-gated branches (isTradingDay,
+// alignToTarget, Monday skip). Defaults to time.Now.
+var clockFunc = time.Now
+
 // ── Result types ─────────────────────────────────────────────────────────
 
 // UniverseBuildResult captures the outcome of one SmartUniverseBuilder pipeline
@@ -128,7 +133,7 @@ type UniverseBuilderDeps struct {
 //	})
 func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		now := time.Now()
+		now := clockFunc()
 		if !isTradingDay(now) {
 			logging.Debug("universe_scheduler", "daily_skip_non_trading",
 				"day", now.Weekday().String())
@@ -139,7 +144,7 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 				"note", "weekly rebuild handles Monday")
 			return nil
 		}
-		if !alignToTarget(now, 6, 0) {
+		if !alignToTarget(now) {
 			return nil // silent skip — not the trigger minute
 		}
 
@@ -204,13 +209,13 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 // apigateway.ScheduledTask.Task.
 func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		now := time.Now()
+		now := clockFunc()
 		if now.Weekday() != time.Monday {
 			logging.Debug("universe_scheduler", "weekly_skip_not_monday",
 				"day", now.Weekday().String())
 			return nil
 		}
-		if !alignToTarget(now, 6, 0) {
+		if !alignToTarget(now) {
 			return nil // silent skip
 		}
 
@@ -594,10 +599,10 @@ func isTradingDay(t time.Time) bool {
 	}
 }
 
-// alignToTarget returns true when now is within ±1 minute of the given hour
-// and minute in the same timezone.
-func alignToTarget(now time.Time, hour, minute int) bool {
-	target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+// alignToTarget returns true when now is within ±1 minute of 06:00 local
+// time (Taiwan stock market open).
+func alignToTarget(now time.Time) bool {
+	target := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, now.Location())
 	diff := now.Sub(target)
 	if diff < 0 {
 		diff = -diff

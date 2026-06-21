@@ -75,8 +75,9 @@ const (
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
 
 	// 风险闸门事件
-	EventRiskGateRejected EventType = "monitor.risk_gate.rejected"
-	EventRiskGateAllowed  EventType = "monitor.risk_gate.allowed"
+	EventRiskGateRejected   EventType = "monitor.risk_gate.rejected"
+	EventRiskGateAllowed    EventType = "monitor.risk_gate.allowed"
+	EventRiskGateOverridden EventType = "monitor.risk_gate.overridden"
 
 	// 产业日历事件
 	EventIndustryCalendar EventType = "industry.calendar.event"
@@ -366,6 +367,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventIndustryCalendar:           {"產業日曆事件：當前台股市場日曆事件（除權息、MSCI 調整、財報季等）", "info"},
 	EventRiskGateRejected:           {"風控閘門拒絕交易，部位操作已被中止", "warning"},
 	EventRiskGateAllowed:            {"風控閘門允許交易，部位操作已通過", "info"},
+	EventRiskGateOverridden:         {"風控閘門決策被覆寫（REDUCE 或 ALERT_ONLY），仍記錄但不阻擋", "info"},
 	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
 	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
 	EventTradeSlippage:              {"訂單成交滑價計算：期望價與實際成交價之差（BPS），用於監控執行品質", "info"},
@@ -852,11 +854,23 @@ func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
 }
 
 // PublishRiskGateEvent publishes a risk gate decision to the event bus.
-// Verdict BLOCK or HALT → EventRiskGateRejected; otherwise → EventRiskGateAllowed.
+//
+// Auto-routing logic (Wave 8.2):
+//   - BLOCK / HALT    → EventRiskGateRejected   (阻擋類)
+//   - REDUCE / ALERT_ONLY → EventRiskGateOverridden (覆寫路徑)
+//   - ALLOW           → EventRiskGateAllowed    (純通過)
+//
+// The three-way split preserves the semantic distinction between "fully allowed",
+// "modified after override" (e.g. partial reduction or alert-only warning), and
+// "blocked entirely". Frontend subscribers can render each category with its own
+// badge color without parsing payload.Verdict themselves.
 func (b *ChannelEventBus) PublishRiskGateEvent(payload RiskGateEventPayload) {
 	eventType := EventRiskGateAllowed
-	if payload.Verdict == "BLOCK" || payload.Verdict == "HALT" {
+	switch payload.Verdict {
+	case "BLOCK", "HALT":
 		eventType = EventRiskGateRejected
+	case "REDUCE", "ALERT_ONLY":
+		eventType = EventRiskGateOverridden
 	}
 	b.Publish(BusEvent{
 		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
