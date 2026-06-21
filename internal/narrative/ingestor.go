@@ -27,7 +27,7 @@ type MacroIngestor struct {
 
 // eventbusPublisher abstracts the event bus for testing.
 type eventbusPublisher interface {
-	PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string)
+	PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow, explanation, sentimentExplanation string)
 }
 
 // NewMacroIngestor creates an ingestor with a given provider and snapshot directory.
@@ -69,7 +69,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 				logging.Warn("ingestor", "partial_save_failed", logging.Err(saveErr))
 			}
 			events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
-			m.publishEvents(events)
+			m.publishEvents(ctx, events)
 			return events, snap, nil
 		}
 		prev, prevErr := m.loadLatestSnapshot()
@@ -86,7 +86,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 				prev.USD_TWD.ChangePct = (prev.USD_TWD.Value - prevPrev.USD_TWD.Value) / prevPrev.USD_TWD.Value * 100
 			}
 			events := detectEventsFromSnapshot(prev, prevPrev, m.divergenceDetect)
-			m.publishEvents(events)
+			m.publishEvents(ctx, events)
 			return events, prev, nil
 		}
 		return nil, snap, fmt.Errorf("fetch snapshot: %w", err)
@@ -108,7 +108,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	}
 
 	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
-	m.publishEvents(events)
+	m.publishEvents(ctx, events)
 
 	snap = mergeWithPrev(snap, prev)
 	snap = computeChangePct(snap, prev)
@@ -119,7 +119,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	return events, snap, nil
 }
 
-func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
+func (m *MacroIngestor) publishEvents(ctx context.Context, events []NarrativeEvent) {
 	if m.eventBus == nil {
 		return
 	}
@@ -136,11 +136,13 @@ func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
 			}
 			m.lifecycle.AddEvent(e)
 		}
+		AnnotateEvent(ctx, e)
 		m.eventBus.PublishNarrativeEvent(
 			e.ID, e.Theme, e.Region,
 			e.Sentiment, e.Confidence,
 			e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
 			e.CapitalFlow, e.TimeWindow,
+			e.Explanation, e.SentimentExplanation,
 		)
 	}
 }

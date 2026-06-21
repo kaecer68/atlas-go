@@ -1613,10 +1613,12 @@ func run(args []string, deps appDeps) error {
 				}
 				collector.RecordCounter(name, value, labelMap)
 			})
+			classTreeAdapter := monitoring.AdaptClassificationTree(industry.DefaultClassification())
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
 				suDeps := monitoring.UniverseBuilderDeps{
-					Tree:            monitoring.AdaptClassificationTree(industry.DefaultClassification()),
+					Mapper:          monitoring.NewTreeBasedMapper(classTreeAdapter),
+					Tree:            classTreeAdapter,
 					SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
 					Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
 					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
@@ -1638,7 +1640,8 @@ func run(args []string, deps appDeps) error {
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
 				suDeps := monitoring.UniverseBuilderDeps{
-					Tree:            monitoring.AdaptClassificationTree(industry.DefaultClassification()),
+					Mapper:          monitoring.NewTreeBasedMapper(classTreeAdapter),
+					Tree:            classTreeAdapter,
 					SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
 					Screener:        screener.NewEngine(portfolio.NewFactorEngine(), portfolio.NewFundamentalProvider()),
 					FactorEng:       monitoring.AdaptFactorEngine(portfolio.NewFactorEngine()),
@@ -1710,13 +1713,13 @@ func run(args []string, deps appDeps) error {
 					// Check D6 watchlist size.
 					watchlistPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_watchlist.json")
 					if wlData, rErr := os.ReadFile(watchlistPath); rErr == nil {
-						var watchlist []string
-						if err := json.Unmarshal(wlData, &watchlist); err == nil && len(watchlist) > 20 {
+						var wl monitoring.Watchlist
+						if err := json.Unmarshal(wlData, &wl); err == nil && len(wl.Symbols) > 20 {
 							monitor.Alert(monitoring.AlertLevelWarning, "universe_watchlist",
 								fmt.Sprintf("D6 watchlist has %d symbols (threshold: 20)",
-									len(watchlist)),
+									len(wl.Symbols)),
 								map[string]any{
-									"watchlist_size": len(watchlist),
+									"watchlist_size": len(wl.Symbols),
 									"threshold":      20,
 								})
 						}
@@ -1909,6 +1912,21 @@ func run(args []string, deps appDeps) error {
 						return "", fmt.Errorf("forensics: unexpected snapshot type %T", snapshot)
 					}
 					input := schemas.PerformanceForensicsInput{Snapshot: rs}
+					output, err := h.Handle(ctx, input)
+					return output.Commentary, err
+				}
+			}
+			if cfg.LLMConfidenceCommentaryEnabled {
+				risk.ConfidenceCommentary = func(ctx context.Context, decision interface{}) (string, error) {
+					h := capabilities.NewConfidenceCommentaryHandler(llmRouter)
+					rd, ok := decision.(risk.RiskDecision)
+					if !ok {
+						return "", fmt.Errorf("confidence: unexpected decision type %T", decision)
+					}
+					input := schemas.ConfidenceCommentaryInput{
+						Decision:  rd,
+						DataClass: llm.DataClassNonRegulated,
+					}
 					output, err := h.Handle(ctx, input)
 					return output.Commentary, err
 				}

@@ -162,6 +162,7 @@ func (g *RiskGate) SetMode(mode RiskGateMode) {
 }
 
 func (g *RiskGate) publish(dec RiskDecision) {
+	dec.ConfidenceCommentary = EnrichDecision(context.Background(), dec)
 	for _, sub := range g.subs {
 		sub(dec)
 	}
