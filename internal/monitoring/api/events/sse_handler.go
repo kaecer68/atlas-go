@@ -260,6 +260,75 @@ func resetTradeSlippageBuffer() {
 	tradeSlippageBuffer = nil
 }
 
+// Wave 9 YELLOW observability event buffers. Forward-compat design per
+// docs/refactor-611-contract.md: slots reserved before publishers exist so
+// the 5 events become operational without modifying #611 target files.
+
+// BufferedChannelIndividualHealthEvent holds a published channel individual health event for SSE catchup.
+type BufferedChannelIndividualHealthEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedChannelIndividualHealthEvents = 50
+
+var (
+	channelIndividualHealthBuffer    []BufferedChannelIndividualHealthEvent
+	lastChannelIndividualHealthMutex sync.RWMutex
+)
+
+// BufferedRegimeChangeConfirmedEvent holds a published regime-change-confirmed event for SSE catchup.
+type BufferedRegimeChangeConfirmedEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedRegimeChangeConfirmedEvents = 50
+
+var (
+	regimeChangeConfirmedBuffer    []BufferedRegimeChangeConfirmedEvent
+	lastRegimeChangeConfirmedMutex sync.RWMutex
+)
+
+// BufferedFactorWeightRegressionEvent holds a published factor weight regression event for SSE catchup.
+type BufferedFactorWeightRegressionEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedFactorWeightRegressionEvents = 50
+
+var (
+	factorWeightRegressionBuffer    []BufferedFactorWeightRegressionEvent
+	lastFactorWeightRegressionMutex sync.RWMutex
+)
+
+// BufferedDriftDetectedEvent holds a published portfolio drift detected event for SSE catchup.
+type BufferedDriftDetectedEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedDriftDetectedEvents = 50
+
+var (
+	driftDetectedBuffer    []BufferedDriftDetectedEvent
+	lastDriftDetectedMutex sync.RWMutex
+)
+
+// BufferedIngestionLagSpikeEvent holds a published ingestion lag spike event for SSE catchup.
+type BufferedIngestionLagSpikeEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedIngestionLagSpikeEvents = 50
+
+var (
+	ingestionLagSpikeBuffer    []BufferedIngestionLagSpikeEvent
+	lastIngestionLagSpikeMutex sync.RWMutex
+)
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -331,6 +400,146 @@ func resetHealthAlertBuffer() {
 	lastHealthAlertMutex.Lock()
 	defer lastHealthAlertMutex.Unlock()
 	healthAlertBuffer = nil
+}
+
+// BufferChannelIndividualHealthEvent stores a channel individual health event for catchup by new SSE clients.
+func BufferChannelIndividualHealthEvent(event eventbus.BusEvent) {
+	lastChannelIndividualHealthMutex.Lock()
+	defer lastChannelIndividualHealthMutex.Unlock()
+	channelIndividualHealthBuffer = append(channelIndividualHealthBuffer, BufferedChannelIndividualHealthEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(channelIndividualHealthBuffer) > maxBufferedChannelIndividualHealthEvents {
+		channelIndividualHealthBuffer = channelIndividualHealthBuffer[len(channelIndividualHealthBuffer)-maxBufferedChannelIndividualHealthEvents:]
+	}
+}
+
+// GetBufferedChannelIndividualHealthEvents returns a snapshot of the latest channel individual health events for SSE catchup.
+func GetBufferedChannelIndividualHealthEvents() []BufferedChannelIndividualHealthEvent {
+	lastChannelIndividualHealthMutex.RLock()
+	defer lastChannelIndividualHealthMutex.RUnlock()
+	result := make([]BufferedChannelIndividualHealthEvent, len(channelIndividualHealthBuffer))
+	copy(result, channelIndividualHealthBuffer)
+	return result
+}
+
+func resetChannelIndividualHealthBuffer() {
+	lastChannelIndividualHealthMutex.Lock()
+	defer lastChannelIndividualHealthMutex.Unlock()
+	channelIndividualHealthBuffer = nil
+}
+
+// BufferRegimeChangeConfirmedEvent stores a regime-change-confirmed event for catchup by new SSE clients.
+func BufferRegimeChangeConfirmedEvent(event eventbus.BusEvent) {
+	lastRegimeChangeConfirmedMutex.Lock()
+	defer lastRegimeChangeConfirmedMutex.Unlock()
+	regimeChangeConfirmedBuffer = append(regimeChangeConfirmedBuffer, BufferedRegimeChangeConfirmedEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(regimeChangeConfirmedBuffer) > maxBufferedRegimeChangeConfirmedEvents {
+		regimeChangeConfirmedBuffer = regimeChangeConfirmedBuffer[len(regimeChangeConfirmedBuffer)-maxBufferedRegimeChangeConfirmedEvents:]
+	}
+}
+
+// GetBufferedRegimeChangeConfirmedEvents returns a snapshot of the latest regime-change-confirmed events for SSE catchup.
+func GetBufferedRegimeChangeConfirmedEvents() []BufferedRegimeChangeConfirmedEvent {
+	lastRegimeChangeConfirmedMutex.RLock()
+	defer lastRegimeChangeConfirmedMutex.RUnlock()
+	result := make([]BufferedRegimeChangeConfirmedEvent, len(regimeChangeConfirmedBuffer))
+	copy(result, regimeChangeConfirmedBuffer)
+	return result
+}
+
+func resetRegimeChangeConfirmedBuffer() {
+	lastRegimeChangeConfirmedMutex.Lock()
+	defer lastRegimeChangeConfirmedMutex.Unlock()
+	regimeChangeConfirmedBuffer = nil
+}
+
+// BufferFactorWeightRegressionEvent stores a factor-weight-regression event for catchup by new SSE clients.
+func BufferFactorWeightRegressionEvent(event eventbus.BusEvent) {
+	lastFactorWeightRegressionMutex.Lock()
+	defer lastFactorWeightRegressionMutex.Unlock()
+	factorWeightRegressionBuffer = append(factorWeightRegressionBuffer, BufferedFactorWeightRegressionEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(factorWeightRegressionBuffer) > maxBufferedFactorWeightRegressionEvents {
+		factorWeightRegressionBuffer = factorWeightRegressionBuffer[len(factorWeightRegressionBuffer)-maxBufferedFactorWeightRegressionEvents:]
+	}
+}
+
+// GetBufferedFactorWeightRegressionEvents returns a snapshot of the latest factor-weight-regression events for SSE catchup.
+func GetBufferedFactorWeightRegressionEvents() []BufferedFactorWeightRegressionEvent {
+	lastFactorWeightRegressionMutex.RLock()
+	defer lastFactorWeightRegressionMutex.RUnlock()
+	result := make([]BufferedFactorWeightRegressionEvent, len(factorWeightRegressionBuffer))
+	copy(result, factorWeightRegressionBuffer)
+	return result
+}
+
+func resetFactorWeightRegressionBuffer() {
+	lastFactorWeightRegressionMutex.Lock()
+	defer lastFactorWeightRegressionMutex.Unlock()
+	factorWeightRegressionBuffer = nil
+}
+
+// BufferDriftDetectedEvent stores a portfolio-drift-detected event for catchup by new SSE clients.
+func BufferDriftDetectedEvent(event eventbus.BusEvent) {
+	lastDriftDetectedMutex.Lock()
+	defer lastDriftDetectedMutex.Unlock()
+	driftDetectedBuffer = append(driftDetectedBuffer, BufferedDriftDetectedEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(driftDetectedBuffer) > maxBufferedDriftDetectedEvents {
+		driftDetectedBuffer = driftDetectedBuffer[len(driftDetectedBuffer)-maxBufferedDriftDetectedEvents:]
+	}
+}
+
+// GetBufferedDriftDetectedEvents returns a snapshot of the latest portfolio-drift-detected events for SSE catchup.
+func GetBufferedDriftDetectedEvents() []BufferedDriftDetectedEvent {
+	lastDriftDetectedMutex.RLock()
+	defer lastDriftDetectedMutex.RUnlock()
+	result := make([]BufferedDriftDetectedEvent, len(driftDetectedBuffer))
+	copy(result, driftDetectedBuffer)
+	return result
+}
+
+func resetDriftDetectedBuffer() {
+	lastDriftDetectedMutex.Lock()
+	defer lastDriftDetectedMutex.Unlock()
+	driftDetectedBuffer = nil
+}
+
+// BufferIngestionLagSpikeEvent stores an ingestion-lag-spike event for catchup by new SSE clients.
+func BufferIngestionLagSpikeEvent(event eventbus.BusEvent) {
+	lastIngestionLagSpikeMutex.Lock()
+	defer lastIngestionLagSpikeMutex.Unlock()
+	ingestionLagSpikeBuffer = append(ingestionLagSpikeBuffer, BufferedIngestionLagSpikeEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(ingestionLagSpikeBuffer) > maxBufferedIngestionLagSpikeEvents {
+		ingestionLagSpikeBuffer = ingestionLagSpikeBuffer[len(ingestionLagSpikeBuffer)-maxBufferedIngestionLagSpikeEvents:]
+	}
+}
+
+// GetBufferedIngestionLagSpikeEvents returns a snapshot of the latest ingestion-lag-spike events for SSE catchup.
+func GetBufferedIngestionLagSpikeEvents() []BufferedIngestionLagSpikeEvent {
+	lastIngestionLagSpikeMutex.RLock()
+	defer lastIngestionLagSpikeMutex.RUnlock()
+	result := make([]BufferedIngestionLagSpikeEvent, len(ingestionLagSpikeBuffer))
+	copy(result, ingestionLagSpikeBuffer)
+	return result
+}
+
+func resetIngestionLagSpikeBuffer() {
+	lastIngestionLagSpikeMutex.Lock()
+	defer lastIngestionLagSpikeMutex.Unlock()
+	ingestionLagSpikeBuffer = nil
 }
 
 // NewSSEHandler creates a new SSE handler.
@@ -486,6 +695,66 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tradeSlippageBuffered := tradeSlippageBuffer
 	lastTradeSlippageMutex.RUnlock()
 	for _, b := range tradeSlippageBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastChannelIndividualHealthMutex.RLock()
+	channelIndividualHealthBuffered := channelIndividualHealthBuffer
+	lastChannelIndividualHealthMutex.RUnlock()
+	for _, b := range channelIndividualHealthBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastRegimeChangeConfirmedMutex.RLock()
+	regimeChangeConfirmedBuffered := regimeChangeConfirmedBuffer
+	lastRegimeChangeConfirmedMutex.RUnlock()
+	for _, b := range regimeChangeConfirmedBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastFactorWeightRegressionMutex.RLock()
+	factorWeightRegressionBuffered := factorWeightRegressionBuffer
+	lastFactorWeightRegressionMutex.RUnlock()
+	for _, b := range factorWeightRegressionBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastDriftDetectedMutex.RLock()
+	driftDetectedBuffered := driftDetectedBuffer
+	lastDriftDetectedMutex.RUnlock()
+	for _, b := range driftDetectedBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
+
+	lastIngestionLagSpikeMutex.RLock()
+	ingestionLagSpikeBuffered := ingestionLagSpikeBuffer
+	lastIngestionLagSpikeMutex.RUnlock()
+	for _, b := range ingestionLagSpikeBuffered {
 		data, err := json.Marshal(b.Event)
 		if err != nil {
 			continue

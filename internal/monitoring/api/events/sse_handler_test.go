@@ -620,3 +620,149 @@ func TestSSEHandler_BufferTradeSlippageEvent(t *testing.T) {
 		t.Errorf("expected type %s, got %s", eventbus.EventTradeSlippage, buffered[0].Event.Type)
 	}
 }
+
+func TestSSEHandler_BufferChannelIndividualHealthEvent(t *testing.T) {
+	resetChannelIndividualHealthBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "cih-test-1",
+		Type:      eventbus.EventChannelIndividualHealth,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"channel_id":    "spx",
+			"error_message": "fetch timeout",
+			"first_seen_at": time.Now(),
+			"detected_at":   time.Now(),
+		},
+	}
+	BufferChannelIndividualHealthEvent(event)
+
+	buffered := GetBufferedChannelIndividualHealthEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered channel individual health event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(map[string]any)
+	if payload["channel_id"] != "spx" {
+		t.Errorf("expected channel_id=spx, got %v", payload["channel_id"])
+	}
+	if buffered[0].Event.Type != eventbus.EventChannelIndividualHealth {
+		t.Errorf("expected type %s, got %s", eventbus.EventChannelIndividualHealth, buffered[0].Event.Type)
+	}
+}
+
+func TestSSEHandler_BufferRegimeChangeConfirmedEvent(t *testing.T) {
+	resetRegimeChangeConfirmedBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "rcc-test-1",
+		Type:      eventbus.EventRegimeChangeConfirmed,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"old_regime":   "RISK_ON",
+			"new_regime":   "NEUTRAL",
+			"confidence":   0.87,
+			"stable_since": time.Now().Add(-30 * time.Second),
+		},
+	}
+	BufferRegimeChangeConfirmedEvent(event)
+
+	buffered := GetBufferedRegimeChangeConfirmedEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered regime change confirmed event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(map[string]any)
+	if payload["new_regime"] != "NEUTRAL" {
+		t.Errorf("expected new_regime=NEUTRAL, got %v", payload["new_regime"])
+	}
+	if buffered[0].Event.Type != eventbus.EventRegimeChangeConfirmed {
+		t.Errorf("expected type %s, got %s", eventbus.EventRegimeChangeConfirmed, buffered[0].Event.Type)
+	}
+}
+
+func TestSSEHandler_BufferFactorWeightRegressionEvent(t *testing.T) {
+	resetFactorWeightRegressionBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "fwr-test-1",
+		Type:      eventbus.EventFactorWeightRegression,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"regime":       "RISK_ON",
+			"mse":          0.0123,
+			"sample_count": 252,
+			"detected_at":  time.Now(),
+		},
+	}
+	BufferFactorWeightRegressionEvent(event)
+
+	buffered := GetBufferedFactorWeightRegressionEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered factor weight regression event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(map[string]any)
+	if payload["regime"] != "RISK_ON" {
+		t.Errorf("expected regime=RISK_ON, got %v", payload["regime"])
+	}
+	if buffered[0].Event.Type != eventbus.EventFactorWeightRegression {
+		t.Errorf("expected type %s, got %s", eventbus.EventFactorWeightRegression, buffered[0].Event.Type)
+	}
+}
+
+func TestSSEHandler_BufferDriftDetectedEvent(t *testing.T) {
+	resetDriftDetectedBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "dd-test-1",
+		Type:      eventbus.EventDriftDetected,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"drift_type":     "concentration",
+			"symbol":         "2330",
+			"actual_weight":  0.32,
+			"expected_range": []float64{0.0, 0.25},
+			"detected_at":    time.Now(),
+		},
+	}
+	BufferDriftDetectedEvent(event)
+
+	buffered := GetBufferedDriftDetectedEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered drift detected event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(map[string]any)
+	if payload["symbol"] != "2330" {
+		t.Errorf("expected symbol=2330, got %v", payload["symbol"])
+	}
+	if buffered[0].Event.Type != eventbus.EventDriftDetected {
+		t.Errorf("expected type %s, got %s", eventbus.EventDriftDetected, buffered[0].Event.Type)
+	}
+}
+
+func TestSSEHandler_BufferIngestionLagSpikeEvent(t *testing.T) {
+	resetIngestionLagSpikeBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "ils-test-1",
+		Type:      eventbus.EventIngestionLagSpike,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"channel_id":  "yahoo",
+			"lag_seconds": 45.2,
+			"threshold":   30.0,
+			"detected_at": time.Now(),
+		},
+	}
+	BufferIngestionLagSpikeEvent(event)
+
+	buffered := GetBufferedIngestionLagSpikeEvents()
+	if len(buffered) != 1 {
+		t.Fatalf("expected 1 buffered ingestion lag spike event, got %d", len(buffered))
+	}
+	payload := buffered[0].Event.Payload.(map[string]any)
+	if payload["channel_id"] != "yahoo" {
+		t.Errorf("expected channel_id=yahoo, got %v", payload["channel_id"])
+	}
+	if buffered[0].Event.Type != eventbus.EventIngestionLagSpike {
+		t.Errorf("expected type %s, got %s", eventbus.EventIngestionLagSpike, buffered[0].Event.Type)
+	}
+}
