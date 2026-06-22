@@ -87,7 +87,7 @@ RSI-tw 由三個加權組件構成：
 | `doc.go` | Package 概述、Maturity 標記 |
 | `rsi_tw_calculator.go` | 計算器主邏輯（504 行） |
 | `internal/config/parameters.go:971` | `RSITwParameters` 定義 |
-| `internal/config/parameters_defaults.go:3020` | 預設參數值 |
+| `defaultPreciousMetalsParameters()` in `internal/config/parameters_defaults.go` | 預設參數值 |
 | `internal/monitoring/api/system/handlers.go:148` | API handler 與資料組裝 |
 | `internal/monitoring/dashboard_api.go:544` | Fetcher 接線 |
 | `internal/monitoring/gateway_adapter.go:319` | Gateway adapter 實作 |
