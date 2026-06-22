@@ -619,194 +619,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	return result, nil
 }
 
-func (s *System) detectNarrativeEvents(quotes []domain.Quote) []narrative.NarrativeEvent {
-	if s.narrativeEngine == nil {
-		return nil
-	}
-	data := QuotesToNarrativeData(quotes)
-	return s.narrativeEngine.DetectEvents(data)
-}
-
-func (s *System) applyNarrativeContextWithEvents(recs []domain.Recommendation, events []narrative.NarrativeEvent) []domain.Recommendation {
-	if s.narrativeEngine == nil || len(events) == 0 {
-		return recs
-	}
-	chains := s.narrativeEngine.MatchChains(events)
-
-	enriched := make([]domain.Recommendation, len(recs))
-	for i, rec := range recs {
-		enriched[i] = rec
-		// Attach narrative context to context and superinvestor layers.
-		var agentLayer string
-		for _, agent := range s.Sim().registry.Agents {
-			if agent.ID == rec.Agent {
-				agentLayer = string(agent.Layer)
-				break
-			}
-		}
-		if agentLayer == "context" || agentLayer == "superinvestor" {
-			enriched[i].SupportingEvents = make([]string, len(events))
-			for j, e := range events {
-				enriched[i].SupportingEvents[j] = e.ID
-			}
-			enriched[i].ReasoningChain = []string{}
-			for _, e := range events {
-				enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("%s (%s, confidence %.2f)", e.Theme, e.Region, e.Confidence))
-			}
-			for _, c := range chains {
-				if len(c.Steps) > 0 {
-					enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("Chain %s: %s", c.TemplateID, c.Steps[0].Description))
-				}
-			}
-			if enriched[i].Reason != "" {
-				enriched[i].Reason = fmt.Sprintf("%s | Narrative: %d event(s)", enriched[i].Reason, len(events))
-			}
-		}
-	}
-	return enriched
-}
-
-func AdjustRegimeFromNarrative(base domain.Regime, events []narrative.NarrativeEvent) domain.Regime {
-	if len(events) == 0 {
-		return base
-	}
-
-	riskOffScore := 0
-	riskOnScore := 0
-	for _, e := range events {
-		switch e.Theme {
-		case "US_rates_up", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind":
-			riskOffScore++
-		case "AI_capex_surge":
-			riskOnScore++
-		}
-	}
-
-	switch {
-	case riskOffScore >= 1:
-		return domain.RegimeRiskOff
-	case riskOnScore >= 1 && base == domain.RegimeNeutral:
-		return domain.RegimeRiskOn
-	case riskOnScore >= 1 && base == domain.RegimeRiskOff:
-		return domain.RegimeNeutral
-	default:
-		return base
-	}
-}
-
-func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Recommendation {
-	if s.Sim().ledger == nil {
-		return recs
-	}
-	interventions, err := s.Sim().ledger.LoadHumanInterventions()
-	if err != nil {
-		return recs
-	}
-
-	pausedAgents := make(map[string]bool)
-	bannedSectors := make(map[string]bool)
-	type approvedKey struct{ agentID, symbol string }
-	approved := make(map[approvedKey]bool)
-	rejected := make(map[approvedKey]bool)
-	for _, iv := range interventions {
-		if iv.IsExpired() {
-			continue
-		}
-		switch iv.Type {
-		case "pause_agent":
-			pausedAgents[iv.TargetAgentID] = true
-		case "resume_agent":
-			delete(pausedAgents, iv.TargetAgentID)
-		case "sector_ban":
-			bannedSectors[iv.TargetSector] = true
-		case "sector_unban":
-			delete(bannedSectors, iv.TargetSector)
-		case "approve_rec":
-			approved[approvedKey{iv.TargetAgentID, iv.TargetSymbol}] = true
-		case "reject_rec":
-			rejected[approvedKey{iv.TargetAgentID, iv.TargetSymbol}] = true
-		case "set_model_weight":
-			if s.Port() != nil && s.Port().darwinian != nil && iv.TargetModelID != "" {
-				s.Port().darwinian.SetWeight(iv.TargetModelID, iv.Value)
-			}
-		default:
-			// Ignore unknown intervention types.
-		}
-	}
-
-	filtered := make([]domain.Recommendation, 0, len(recs))
-	for _, rec := range recs {
-		key := approvedKey{rec.Agent, rec.Symbol}
-		if rejected[key] {
-			continue
-		}
-		if pausedAgents[rec.Agent] {
-			continue
-		}
-		if isRecommendationInBannedSector(rec, s.Sim().registry, bannedSectors) {
-			continue
-		}
-		filtered = append(filtered, rec)
-	}
-	return filtered
-}
-
-func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.AgentRegistry, bannedSectors map[string]bool) bool {
-	if len(bannedSectors) == 0 {
-		return false
-	}
-	var skill string
-	for _, agent := range registry.Agents {
-		if agent.ID == rec.Agent {
-			skill = agent.Skill
-			break
-		}
-	}
-	mappings := config.GetParametersConfig().Industry.SkillToIndustries.Value
-	if mappings == nil {
-		return false
-	}
-	for _, sector := range mappings[skill] {
-		if bannedSectors[sector] {
-			return true
-		}
-	}
-	return false
-}
-
-func QuotesToNarrativeData(quotes []domain.Quote) narrative.MarketNarrativeData {
-	data := narrative.MarketNarrativeData{}
-	for _, q := range quotes {
-		switch q.Symbol {
-		case "DXY", "^DXY":
-			data.DXYChangePct = (q.Last - q.Open) / q.Open * 100
-		case "US10Y", "^TNX":
-			data.US10YChangeBps = q.Last
-		case "VIX", "^VIX":
-			data.VIXLevel = q.Last
-		case "OIL", "CL=F":
-			data.OilChangePct = (q.Last - q.Open) / q.Open * 100
-		case "GOLD", "GC=F":
-			data.GoldChangePct = (q.Last - q.Open) / q.Open * 100
-		case "JPY=X", "USDJPY=X":
-			data.JPY_ChangePct = (q.Last - q.Open) / q.Open * 100
-		}
-	}
-	return data
-}
-
-func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recommendation) []domain.Recommendation {
-	if s.Port().alphaDiscovery == nil {
-		return nil
-	}
-	symbols := RegistrySymbols(s.Sim().registry)
-	quoteMap := make(map[string]domain.Quote, len(quotes))
-	for _, q := range quotes {
-		quoteMap[q.Symbol] = q
-	}
-	return s.Port().alphaDiscovery.Discover(s.Sim().ctx, symbols, quoteMap, recs)
-}
-
 func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 	// Use session-dir outcomes (richest data source) instead of sparse global file.
 	outcomes, err := s.Sim().ledger.LoadOutcomesFromSessions()
@@ -1394,4 +1206,114 @@ func (s *System) RunDailyStressTests() error {
 		logging.FFloat64("avg_return", report.AvgReturn))
 
 	return nil
+}
+
+// PR4 candidates — narrative regime adjustment + human override + banned-sector filter.
+// Restored after PR3 sed over-deletion; will be moved to system_risk_session.go in PR4.
+func AdjustRegimeFromNarrative(base domain.Regime, events []narrative.NarrativeEvent) domain.Regime {
+	if len(events) == 0 {
+		return base
+	}
+
+	riskOffScore := 0
+	riskOnScore := 0
+	for _, e := range events {
+		switch e.Theme {
+		case "US_rates_up", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind":
+			riskOffScore++
+		case "AI_capex_surge":
+			riskOnScore++
+		}
+	}
+
+	switch {
+	case riskOffScore >= 1:
+		return domain.RegimeRiskOff
+	case riskOnScore >= 1 && base == domain.RegimeNeutral:
+		return domain.RegimeRiskOn
+	case riskOnScore >= 1 && base == domain.RegimeRiskOff:
+		return domain.RegimeNeutral
+	default:
+		return base
+	}
+}
+
+func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Recommendation {
+	if s.Sim().ledger == nil {
+		return recs
+	}
+	interventions, err := s.Sim().ledger.LoadHumanInterventions()
+	if err != nil {
+		return recs
+	}
+
+	pausedAgents := make(map[string]bool)
+	bannedSectors := make(map[string]bool)
+	type approvedKey struct{ agentID, symbol string }
+	approved := make(map[approvedKey]bool)
+	rejected := make(map[approvedKey]bool)
+	for _, iv := range interventions {
+		if iv.IsExpired() {
+			continue
+		}
+		switch iv.Type {
+		case "pause_agent":
+			pausedAgents[iv.TargetAgentID] = true
+		case "resume_agent":
+			delete(pausedAgents, iv.TargetAgentID)
+		case "sector_ban":
+			bannedSectors[iv.TargetSector] = true
+		case "sector_unban":
+			delete(bannedSectors, iv.TargetSector)
+		case "approve_rec":
+			approved[approvedKey{iv.TargetAgentID, iv.TargetSymbol}] = true
+		case "reject_rec":
+			rejected[approvedKey{iv.TargetAgentID, iv.TargetSymbol}] = true
+		case "set_model_weight":
+			if s.Port() != nil && s.Port().darwinian != nil && iv.TargetModelID != "" {
+				s.Port().darwinian.SetWeight(iv.TargetModelID, iv.Value)
+			}
+		default:
+			// Ignore unknown intervention types.
+		}
+	}
+
+	filtered := make([]domain.Recommendation, 0, len(recs))
+	for _, rec := range recs {
+		key := approvedKey{rec.Agent, rec.Symbol}
+		if rejected[key] {
+			continue
+		}
+		if pausedAgents[rec.Agent] {
+			continue
+		}
+		if isRecommendationInBannedSector(rec, s.Sim().registry, bannedSectors) {
+			continue
+		}
+		filtered = append(filtered, rec)
+	}
+	return filtered
+}
+
+func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.AgentRegistry, bannedSectors map[string]bool) bool {
+	if len(bannedSectors) == 0 {
+		return false
+	}
+	var skill string
+	for _, agent := range registry.Agents {
+		if agent.ID == rec.Agent {
+			skill = agent.Skill
+			break
+		}
+	}
+	mappings := config.GetParametersConfig().Industry.SkillToIndustries.Value
+	if mappings == nil {
+		return false
+	}
+	for _, sector := range mappings[skill] {
+		if bannedSectors[sector] {
+			return true
+		}
+	}
+	return false
 }
