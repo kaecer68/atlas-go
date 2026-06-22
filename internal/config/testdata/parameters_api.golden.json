@@ -1,0 +1,1557 @@
+{
+  "consts": [
+    {
+      "name": "SourceCalibrated",
+      "type": "ParameterSource",
+      "value": "\"calibrated\""
+    },
+    {
+      "name": "SourceEmpirical",
+      "type": "ParameterSource",
+      "value": "\"empirical\""
+    },
+    {
+      "name": "SourceExperimental",
+      "type": "ParameterSource",
+      "value": "\"experimental\""
+    },
+    {
+      "name": "SourceHeuristic",
+      "type": "ParameterSource",
+      "value": "\"heuristic\""
+    },
+    {
+      "name": "SourceInferred",
+      "type": "ParameterSource",
+      "value": "\"inferred\""
+    },
+    {
+      "name": "SourceLiterature",
+      "type": "ParameterSource",
+      "value": "\"literature\""
+    }
+  ],
+  "funcs": [
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "EngineDrawdownParameters",
+      "results": "(DrawdownConfig)"
+    },
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "EngineExecutorsParameters",
+      "results": "(ExecutorsConfig)"
+    },
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "EngineMacroRiskParameters",
+      "results": "(MacroRiskConfig)"
+    },
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "EngineSectorRotationParameters",
+      "results": "(SectorRotationConfig)"
+    },
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "EngineSimulationParameters",
+      "results": "(SimulationConfig)"
+    },
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "EngineStrategyEvolutionParameters",
+      "results": "(StrategyEvolutionConfig)"
+    },
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "EngineStructuralTrendParameters",
+      "results": "(StructuralTrendConfig)"
+    },
+    {
+      "name": "GetParametersConfig",
+      "params": "",
+      "results": "(*ParametersConfig)"
+    },
+    {
+      "name": "GetParametersConfigPath",
+      "params": "",
+      "results": "(string)"
+    },
+    {
+      "name": "LoadParametersConfig",
+      "params": "(path string)",
+      "results": "(*ParametersConfig, error)"
+    },
+    {
+      "name": "LockedSaveWithRollback",
+      "params": "(path string)",
+      "receiver": "ParametersConfig",
+      "results": "(error)"
+    },
+    {
+      "name": "Save",
+      "params": "(path string)",
+      "receiver": "ParametersConfig",
+      "results": "(error)"
+    },
+    {
+      "name": "SaveWithRollback",
+      "params": "(path string)",
+      "receiver": "ParametersConfig",
+      "results": "(error)"
+    },
+    {
+      "name": "TryLockedSaveWithRollback",
+      "params": "(path string, timeout time.Duration)",
+      "receiver": "ParametersConfig",
+      "results": "(error)"
+    },
+    {
+      "name": "Validate",
+      "params": "",
+      "receiver": "ParametersConfig",
+      "results": "(error)"
+    },
+    {
+      "name": "ReloadParametersConfig",
+      "params": "",
+      "results": "(error)"
+    },
+    {
+      "name": "ResetParametersConfig",
+      "params": "",
+      "results": ""
+    },
+    {
+      "name": "MarshalJSON",
+      "params": "",
+      "receiver": "SentimentBounds",
+      "results": "([]byte, error)"
+    },
+    {
+      "name": "UnmarshalJSON",
+      "params": "(data []byte)",
+      "receiver": "SentimentBounds",
+      "results": "(error)"
+    },
+    {
+      "name": "SetRiskCalibrationMetadata",
+      "params": "(name string, t time.Time, method string)",
+      "results": ""
+    },
+    {
+      "name": "GetCooldownDuration",
+      "params": "",
+      "receiver": "StrategyEvolutionConfig",
+      "results": "(time.Duration)"
+    },
+    {
+      "name": "ToConfig",
+      "params": "",
+      "receiver": "TaxParameters",
+      "results": "(domain.TaxConfig)"
+    }
+  ],
+  "package": "config",
+  "types": [
+    {
+      "fields": [
+        "MinCashThreshold ParameterMetadata[float64]",
+        "MaxPositionsCount ParameterMetadata[int]",
+        "MaxPositionWeightPct ParameterMetadata[float64]",
+        "MaxUnrealizedLossPct ParameterMetadata[float64]",
+        "DailyLossWarningPct ParameterMetadata[float64]",
+        "DailyLossCriticalPct ParameterMetadata[float64]",
+        "RuleEngineIntervalSec ParameterMetadata[int]",
+        "RuleEngineCooldownSec ParameterMetadata[int]",
+        "SystemMetricsIntervalSec ParameterMetadata[int]",
+        "MinScreeningRate ParameterMetadata[float64]",
+        "MaxAlertTriggerRate ParameterMetadata[float64]",
+        "MaxUnacknowledgedAlerts ParameterMetadata[int]",
+        "SuppressCategories ParameterMetadata[[]string]"
+      ],
+      "kind": "struct",
+      "name": "AlertParameters"
+    },
+    {
+      "fields": [
+        "BadNewsThreshold float64",
+        "GoodNewsThreshold float64",
+        "ReactionTimeMinutes int",
+        "VolumeSpikeMultiplier float64"
+      ],
+      "kind": "struct",
+      "name": "AsymmetricRiskConfig"
+    },
+    {
+      "fields": [
+        "StartingCash ParameterMetadata[float64]",
+        "MaxPositionWeight ParameterMetadata[float64]",
+        "MaxOpenPositions ParameterMetadata[int]",
+        "MinTradableVolume ParameterMetadata[float64]",
+        "MinRecommendationConviction ParameterMetadata[int]",
+        "RequireCROPass ParameterMetadata[bool]",
+        "TransactionCostBPS ParameterMetadata[float64]",
+        "DiscountedCommissionBps ParameterMetadata[float64]",
+        "CommissionDiscountThreshold ParameterMetadata[float64]",
+        "SlippageBPS ParameterMetadata[float64]",
+        "AvgTradingCost ParameterMetadata[float64]",
+        "ReserveCashFraction ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "BaselineParameters"
+    },
+    {
+      "fields": [
+        "ExpansionCapacityMin float64",
+        "ExpansionRevenueMin float64",
+        "MaintenanceCapacityMin float64",
+        "MaintenanceRevenueMin float64"
+      ],
+      "kind": "struct",
+      "name": "CapexCycleThresholdConfig"
+    },
+    {
+      "fields": [
+        "Segments []IndustrySegmentConfig"
+      ],
+      "kind": "struct",
+      "name": "ClassificationTreeConfig"
+    },
+    {
+      "fields": [
+        "LayerWeights map[string]float64",
+        "SentimentThresholds map[string]SentimentBounds",
+        "ClampMin float64",
+        "ClampMax float64"
+      ],
+      "kind": "struct",
+      "name": "CompositeCardConfig"
+    },
+    {
+      "fields": [
+        "WeightBoundary float64",
+        "WeightFreshness float64",
+        "WeightSeasonal float64",
+        "WeightLinkage float64",
+        "WeightNarrative float64",
+        "FavorableConfidenceMin float64"
+      ],
+      "kind": "struct",
+      "name": "ConfidenceMixConfig"
+    },
+    {
+      "fields": [
+        "SignalBase float64",
+        "RevenueNormDenom float64",
+        "RevenueWeight float64",
+        "ProfitNormDenom float64",
+        "ProfitWeight float64",
+        "InventoryNormDenom float64",
+        "InventoryWeight float64",
+        "UtilizationWeight float64",
+        "SignalBoundaryMix float64",
+        "BoundaryDenomFactor float64",
+        "ConfidenceFloor float64",
+        "ConfidenceCeiling float64",
+        "RevenueTrendThreshold float64",
+        "RevenueIndicatorWeight float64",
+        "InventoryTrendThreshold float64",
+        "InventoryIndicatorWeight float64",
+        "ProfitTrendThreshold float64",
+        "ProfitIndicatorWeight float64",
+        "CapacityTrendThreshold float64",
+        "CapacityIndicatorWeight float64",
+        "TrendUpMultiplier float64",
+        "TrendDownMultiplier float64",
+        "ThresholdRangeFallback float64"
+      ],
+      "kind": "struct",
+      "name": "ConfidenceSignalConfig"
+    },
+    {
+      "fields": [
+        "MinSamples int",
+        "LearningRate float64",
+        "HitRateHigh float64",
+        "HitRateLow float64",
+        "WeightClampMin float64",
+        "WeightClampMax float64",
+        "WindowSize int"
+      ],
+      "kind": "struct",
+      "name": "CycleCalibrationConfig"
+    },
+    {
+      "fields": [
+        "ExpansionRevenuePct float64",
+        "ExpansionProfitPct float64",
+        "RecoveryRevenuePct float64",
+        "RecoveryProfitPct float64",
+        "MatureRevenuePct float64",
+        "MatureProfitPct float64"
+      ],
+      "kind": "struct",
+      "name": "CycleThresholdConfig"
+    },
+    {
+      "fields": [
+        "FromPhase string",
+        "ToPhase string",
+        "Triggers []string",
+        "Probability float64",
+        "TypicalDurationDays int"
+      ],
+      "kind": "struct",
+      "name": "CycleTransitionConfig"
+    },
+    {
+      "fields": [
+        "ExpansionMultiplier float64",
+        "RecoveryMultiplier float64",
+        "MatureMultiplier float64",
+        "RecessionMultiplier float64"
+      ],
+      "kind": "struct",
+      "name": "CycleWeightMultipliersConfig"
+    },
+    {
+      "fields": [
+        "WeightMin ParameterMetadata[float64]",
+        "WeightMax ParameterMetadata[float64]",
+        "WeightNeutral ParameterMetadata[float64]",
+        "TopQuartileMultiplier ParameterMetadata[float64]",
+        "BottomQuartileMultiplier ParameterMetadata[float64]",
+        "DailyAdjustmentCooldown ParameterMetadata[string]",
+        "LookbackDays ParameterMetadata[int]",
+        "EMAAlpha ParameterMetadata[float64]",
+        "SharpeNormalizeDenom ParameterMetadata[float64]",
+        "MaxPerformanceBonusPct ParameterMetadata[float64]",
+        "VolatilityPenaltyThreshold ParameterMetadata[float64]",
+        "VolatilityPenaltyMultiplier ParameterMetadata[float64]",
+        "RiskVolatilityThreshold ParameterMetadata[float64]",
+        "RiskMultiplier ParameterMetadata[float64]",
+        "HitRateHighThreshold ParameterMetadata[float64]",
+        "HitRateLowThreshold ParameterMetadata[float64]",
+        "MiddleTierBoostMultiplier ParameterMetadata[float64]",
+        "MiddleTierCutMultiplier ParameterMetadata[float64]",
+        "SharpeMinSampleSize ParameterMetadata[int]",
+        "StdDevMeanRatioThreshold ParameterMetadata[float64]",
+        "ConvictionClampMin ParameterMetadata[int]",
+        "ConvictionClampMax ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "DarwinianParameters"
+    },
+    {
+      "fields": [
+        "Levels map[string]DrawdownLevel",
+        "OrangeOverrideMinScore float64",
+        "RedOverrideMinScore float64",
+        "SectorConstraintsRiskOff map[string]float64",
+        "SectorConstraintsCarryTradeUnwind map[string]float64",
+        "SectorConstraintsSectorRotation map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "DrawdownConfig"
+    },
+    {
+      "fields": [
+        "Percentage float64",
+        "MaxExposure float64"
+      ],
+      "kind": "struct",
+      "name": "DrawdownLevel"
+    },
+    {
+      "fields": [
+        "NonePercentage ParameterMetadata[float64]",
+        "NoneMaxExposure ParameterMetadata[float64]",
+        "LightPercentage ParameterMetadata[float64]",
+        "LightMaxExposure ParameterMetadata[float64]",
+        "ModeratePercentage ParameterMetadata[float64]",
+        "ModerateMaxExposure ParameterMetadata[float64]",
+        "SeverePercentage ParameterMetadata[float64]",
+        "SevereMaxExposure ParameterMetadata[float64]",
+        "EmergencyPercentage ParameterMetadata[float64]",
+        "EmergencyMaxExposure ParameterMetadata[float64]",
+        "OrangeOverrideMinScore ParameterMetadata[float64]",
+        "RedOverrideMinScore ParameterMetadata[float64]",
+        "SectorConstraintsRiskOff ParameterMetadata[map[string]float64]",
+        "SectorConstraintsCarryTradeUnwind ParameterMetadata[map[string]float64]",
+        "SectorConstraintsSectorRotation ParameterMetadata[map[string]float64]"
+      ],
+      "kind": "struct",
+      "name": "DrawdownParameters"
+    },
+    {
+      "fields": [
+        "OilHighThreshold float64",
+        "OilLowThreshold float64",
+        "OilEnergyMult float64",
+        "OilShippingPenalty float64",
+        "OilShippingBenefit float64",
+        "OilIndustrialPenalty float64",
+        "OilIndustrialBenefit float64",
+        "BDIHighThreshold float64",
+        "BDILowThreshold float64",
+        "BDIShippingBoost float64",
+        "BDICostPenalty float64",
+        "DXYHighThreshold float64",
+        "DXYLowThreshold float64",
+        "DXYExportPenalty float64",
+        "DXYExportBenefit float64",
+        "HistoryWindowDays int",
+        "HistoryCapMultiplier int",
+        "OilPriceShockThreshold float64",
+        "UsRatesDxyThreshold float64",
+        "JpyCarryDxyThreshold float64"
+      ],
+      "kind": "struct",
+      "name": "DynamicEnvConfig"
+    },
+    {
+      "fields": [
+        "RepeatableBoost ParameterMetadata[int]",
+        "GuidancePenalty ParameterMetadata[int]",
+        "GuidanceThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "EarningsQualityExecutorParameters"
+    },
+    {
+      "fields": [
+        "Levels ParameterMetadata[map[string]DrawdownLevel]",
+        "OrangeOverrideMinScore ParameterMetadata[float64]",
+        "RedOverrideMinScore ParameterMetadata[float64]",
+        "SectorConstraintsRiskOff ParameterMetadata[map[string]float64]",
+        "SectorConstraintsCarryUnwind ParameterMetadata[map[string]float64]",
+        "SectorConstraintsSectorRotate ParameterMetadata[map[string]float64]"
+      ],
+      "kind": "struct",
+      "name": "EngineDrawdownParameters"
+    },
+    {
+      "fields": [
+        "VIXMomentumCrashThreshold ParameterMetadata[float64]",
+        "CrowdingPenaltyAgents3 ParameterMetadata[float64]",
+        "CrowdingPenaltyAgents4 ParameterMetadata[float64]",
+        "MinTradeAmount ParameterMetadata[float64]",
+        "MaxStocksDefault ParameterMetadata[int]",
+        "MaxStocksMin ParameterMetadata[int]",
+        "MaxStocksMax ParameterMetadata[int]",
+        "ConvictionFloorDefault ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "EngineExecutorsParameters"
+    },
+    {
+      "fields": [
+        "CarryTradeUnwindThreshold ParameterMetadata[float64]",
+        "VIXThreshold ParameterMetadata[float64]",
+        "US10YThreshold ParameterMetadata[float64]",
+        "OilShockThresholdPct ParameterMetadata[float64]",
+        "GoldSurgeThresholdPct ParameterMetadata[float64]",
+        "DXYSurgeThresholdPct ParameterMetadata[float64]",
+        "TWDStressThresholdPct ParameterMetadata[float64]",
+        "OutflowProbBase ParameterMetadata[float64]",
+        "OutflowProbMax ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "EngineMacroRiskParameters"
+    },
+    {
+      "fields": [
+        "MacroRisk EngineMacroRiskParameters",
+        "StructuralTrend EngineStructuralTrendParameters",
+        "Drawdown EngineDrawdownParameters",
+        "SectorRotation EngineSectorRotationParameters",
+        "StrategyEvolution EngineStrategyEvolutionParameters",
+        "Executors EngineExecutorsParameters",
+        "Simulation EngineSimulationParameters"
+      ],
+      "kind": "struct",
+      "name": "EngineParameters"
+    },
+    {
+      "fields": [
+        "BaseAllocations ParameterMetadata[map[string]float64]",
+        "MinAllocation ParameterMetadata[float64]",
+        "MaxAllocation ParameterMetadata[float64]",
+        "RebalanceThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "EngineSectorRotationParameters"
+    },
+    {
+      "fields": [
+        "NeutralRegimeSizingFactor ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "EngineSimulationParameters"
+    },
+    {
+      "fields": [
+        "CooldownPeriodHours ParameterMetadata[int]",
+        "Configs ParameterMetadata[map[string]StrategyStateConfig]"
+      ],
+      "kind": "struct",
+      "name": "EngineStrategyEvolutionParameters"
+    },
+    {
+      "fields": [
+        "MinTrendStrength ParameterMetadata[float64]",
+        "MinConfidence ParameterMetadata[float64]",
+        "MinHitRate ParameterMetadata[float64]",
+        "OverrideThreshold ParameterMetadata[float64]",
+        "AIRevenueGrowthThreshold ParameterMetadata[float64]",
+        "CoWoSUtilizationThreshold ParameterMetadata[float64]",
+        "CapexGrowthThreshold ParameterMetadata[float64]",
+        "SemiconductorIndexThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "EngineStructuralTrendParameters"
+    },
+    {
+      "fields": [
+        "EventType string",
+        "Name string",
+        "BaseWeight float64",
+        "DecayDays int",
+        "Direction string"
+      ],
+      "kind": "struct",
+      "name": "EventCalendarRule"
+    },
+    {
+      "fields": [
+        "VIXMomentumCrashThreshold float64",
+        "CrowdingPenaltyAgents3 float64",
+        "CrowdingPenaltyAgents4 float64",
+        "MinTradeAmount float64",
+        "MaxStocksDefault int",
+        "MaxStocksMin int",
+        "MaxStocksMax int",
+        "ConvictionFloorDefault int"
+      ],
+      "kind": "struct",
+      "name": "ExecutorsConfig"
+    },
+    {
+      "fields": [
+        "MaturityLevel1Observations ParameterMetadata[int]",
+        "MaturityLevel2Observations ParameterMetadata[int]",
+        "MaturityLevel3Observations ParameterMetadata[int]",
+        "ImprovementThreshold ParameterMetadata[float64]",
+        "WelchTTestThreshold ParameterMetadata[float64]",
+        "DrawdownProtectionRatio ParameterMetadata[float64]",
+        "VolatilityToleranceRatio ParameterMetadata[float64]",
+        "OOSWindowDays ParameterMetadata[int]",
+        "SharpeStabilityThreshold ParameterMetadata[float64]",
+        "MaxFallbackRatio ParameterMetadata[float64]",
+        "FactorWeightDriftThreshold ParameterMetadata[float64]",
+        "WalkForwardEmbargoDays ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "ExperimentParameters"
+    },
+    {
+      "fields": [
+        "MomentumHighThreshold ParameterMetadata[float64]",
+        "MomentumHighDelta ParameterMetadata[int]",
+        "MomentumModThreshold ParameterMetadata[float64]",
+        "MomentumModDelta ParameterMetadata[int]",
+        "MomentumWeakThreshold ParameterMetadata[float64]",
+        "MomentumWeakDelta ParameterMetadata[int]",
+        "ValueHighThreshold ParameterMetadata[float64]",
+        "ValueHighDelta ParameterMetadata[int]",
+        "ValueModThreshold ParameterMetadata[float64]",
+        "ValueModDelta ParameterMetadata[int]",
+        "ValueWeakThreshold ParameterMetadata[float64]",
+        "ValueWeakDelta ParameterMetadata[int]",
+        "QualityThreshold ParameterMetadata[float64]",
+        "QualityDelta ParameterMetadata[int]",
+        "LiquidityHighThreshold ParameterMetadata[float64]",
+        "LiquidityHighDelta ParameterMetadata[int]",
+        "LiquidityGoodThreshold ParameterMetadata[float64]",
+        "LiquidityGoodDelta ParameterMetadata[int]",
+        "LiquidityLowThreshold ParameterMetadata[float64]",
+        "LiquidityLowDelta ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "FactorConvictionParams"
+    },
+    {
+      "fields": [
+        "MomentumLookbackDays ParameterMetadata[int]",
+        "MomentumStdDevDivisor ParameterMetadata[float64]",
+        "MomentumIntradayDiscount ParameterMetadata[float64]",
+        "MomentumIntradayThreshold ParameterMetadata[float64]",
+        "ValuePERangeCenter ParameterMetadata[float64]",
+        "ValuePERangeWidth ParameterMetadata[float64]",
+        "ValuePBRangeCenter ParameterMetadata[float64]",
+        "ValuePBRangeWidth ParameterMetadata[float64]",
+        "ValuePSRangeCenter ParameterMetadata[float64]",
+        "ValuePSRangeWidth ParameterMetadata[float64]",
+        "QualityDividendYieldCap ParameterMetadata[float64]",
+        "QualityVolatilityStd ParameterMetadata[float64]",
+        "QualityFallbackScore ParameterMetadata[float64]",
+        "ValueFallbackScore ParameterMetadata[float64]",
+        "InstitutionalSentimentWeights ParameterMetadata[map[string]float64]",
+        "FallbackWeightReduction ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "FactorParameters"
+    },
+    {
+      "fields": [
+        "BaseWeights ParameterMetadata[map[string]float64]",
+        "RegimeBullMomentum ParameterMetadata[float64]",
+        "RegimeBullQuality ParameterMetadata[float64]",
+        "RegimeBullValue ParameterMetadata[float64]",
+        "RegimeBearQuality ParameterMetadata[float64]",
+        "RegimeBearValue ParameterMetadata[float64]",
+        "RegimeBearMomentum ParameterMetadata[float64]",
+        "RegimeHighVolLiquidity ParameterMetadata[float64]",
+        "RegimeHighVolMomentum ParameterMetadata[float64]",
+        "RegimeHighVolInstSent ParameterMetadata[float64]",
+        "SeverityCritical ParameterMetadata[float64]",
+        "SeverityHigh ParameterMetadata[float64]",
+        "SeverityMedium ParameterMetadata[float64]",
+        "SeverityLow ParameterMetadata[float64]",
+        "ClampMin ParameterMetadata[float64]",
+        "ClampMax ParameterMetadata[float64]",
+        "RiskOnMomentum ParameterMetadata[float64]",
+        "RiskOnQuality ParameterMetadata[float64]",
+        "RiskOffMomentum ParameterMetadata[float64]",
+        "RiskOffQuality ParameterMetadata[float64]",
+        "RiskOffLiquidity ParameterMetadata[float64]",
+        "ConservativeValue ParameterMetadata[float64]",
+        "ConservativeQuality ParameterMetadata[float64]",
+        "ConservativeMomentum ParameterMetadata[float64]",
+        "AggressiveMomentum ParameterMetadata[float64]",
+        "AggressiveInstSent ParameterMetadata[float64]",
+        "AggressiveValue ParameterMetadata[float64]",
+        "AggressiveQuality ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "FactorWeightParameters"
+    },
+    {
+      "fields": [
+        "TargetMultiplier ParameterMetadata[float64]",
+        "StopLossMultiplier ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "FallbackPriceTarget"
+    },
+    {
+      "fields": [
+        "DividendBoost ParameterMetadata[int]",
+        "BalanceSheetPenalty ParameterMetadata[int]",
+        "CreditQualityBoost ParameterMetadata[int]",
+        "CreditQualityPenalty ParameterMetadata[int]",
+        "SpreadSensitivityBoost ParameterMetadata[int]",
+        "SpreadSensitivityPenalty ParameterMetadata[int]",
+        "CapitalAdequacyBoost ParameterMetadata[int]",
+        "PriceToOpenThreshold ParameterMetadata[float64]",
+        "PriceToHighThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "FinancialsExecutorParameters"
+    },
+    {
+      "fields": [
+        "RiskOnMean ParameterMetadata[float64]",
+        "RiskOffMean ParameterMetadata[float64]",
+        "RiskOnStdDev ParameterMetadata[float64]",
+        "RiskOffStdDev ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "ForwardReturnParameters"
+    },
+    {
+      "fields": [
+        "ScoreLive float64",
+        "ScoreRecent float64",
+        "ScoreStale float64",
+        "ScoreFallback float64",
+        "ScoreDefault float64"
+      ],
+      "kind": "struct",
+      "name": "FreshnessScoresConfig"
+    },
+    {
+      "fields": [
+        "Omega ParameterMetadata[float64]",
+        "Alpha ParameterMetadata[float64]",
+        "Beta ParameterMetadata[float64]",
+        "MaxHistory ParameterMetadata[int]",
+        "CorrelationMinDays ParameterMetadata[int]",
+        "SmoothingFactor ParameterMetadata[float64]",
+        "RebalanceThreshold ParameterMetadata[float64]",
+        "MinForecastDays ParameterMetadata[int]",
+        "MaxHistoryPoints ParameterMetadata[int]",
+        "HighVolThreshold ParameterMetadata[float64]",
+        "LowVolThreshold ParameterMetadata[float64]",
+        "ReduceMagnitude ParameterMetadata[float64]",
+        "IncreaseMagnitude ParameterMetadata[float64]",
+        "WeeklyRebalanceDays ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "GARCHParameters"
+    },
+    {
+      "fields": [
+        "ConvictionBase ParameterMetadata[int]",
+        "PricePenalty ParameterMetadata[int]",
+        "TrendConfirmationPenalty ParameterMetadata[int]",
+        "DowngradePricePenalty ParameterMetadata[int]",
+        "DowngradeOpenPenalty ParameterMetadata[int]",
+        "ExploratoryPricePenalty ParameterMetadata[int]",
+        "ExploratoryOpenPenalty ParameterMetadata[int]",
+        "DowngradeThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "GrowthMomentumExecutorParameters"
+    },
+    {
+      "fields": [
+        "MuteThreshold ParameterMetadata[int]",
+        "UnmuteThreshold ParameterMetadata[int]",
+        "AutoRecoverDays ParameterMetadata[int]",
+        "MinSampleSize ParameterMetadata[int]",
+        "NegativeSharpeThreshold ParameterMetadata[float64]",
+        "SharpeWeight ParameterMetadata[float64]",
+        "HitRateWeight ParameterMetadata[float64]",
+        "StreakWeight ParameterMetadata[float64]",
+        "MaxSharpe ParameterMetadata[float64]",
+        "MinSharpe ParameterMetadata[float64]",
+        "StreakMax ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "HealthParameters"
+    },
+    {
+      "fields": [
+        "MonitorIntervalSec ParameterMetadata[int]",
+        "StopLossPct ParameterMetadata[float64]",
+        "TakeProfitPct ParameterMetadata[float64]",
+        "TrailingStopATRMult ParameterMetadata[float64]",
+        "VolatilitySpikeMult ParameterMetadata[float64]",
+        "CircuitBreakerDailyLossPct ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "InTradeGateParameters"
+    },
+    {
+      "fields": [
+        "RevenueGrowthYoY float64",
+        "ProfitGrowthYoY float64",
+        "InventoryTurnover float64",
+        "CapacityUtilization float64"
+      ],
+      "kind": "struct",
+      "name": "IndustryDefaultMetrics"
+    },
+    {
+      "fields": [
+        "BullMultiplier map[string]float64",
+        "BearMultiplier map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "IndustryMultiplierMap"
+    },
+    {
+      "fields": [
+        "CycleThresholds ParameterMetadata[map[string]CycleThresholdConfig]",
+        "InventoryCycleThresholds ParameterMetadata[InventoryCycleThresholdConfig]",
+        "CapexCycleThresholds ParameterMetadata[CapexCycleThresholdConfig]",
+        "ConcentrationRiskEnabled ParameterMetadata[bool]",
+        "NewsLatencyRiskEnabled ParameterMetadata[bool]",
+        "AsymmetricRiskEnabled ParameterMetadata[bool]",
+        "CustomerConcentrationLimit ParameterMetadata[float64]",
+        "GeographicExposureLimit ParameterMetadata[float64]",
+        "CustomerShareThreshold1 ParameterMetadata[float64]",
+        "CustomerShareThreshold2 ParameterMetadata[float64]",
+        "USExposureThreshold1 ParameterMetadata[float64]",
+        "USExposureThreshold2 ParameterMetadata[float64]",
+        "RiskScoreWeight1 ParameterMetadata[float64]",
+        "RiskScoreWeight2 ParameterMetadata[float64]",
+        "RiskScoreWeight3 ParameterMetadata[float64]",
+        "RiskScoreWeight4 ParameterMetadata[float64]",
+        "SeverityThresholdMedium ParameterMetadata[float64]",
+        "SeverityThresholdHigh ParameterMetadata[float64]",
+        "SeverityThresholdCritical ParameterMetadata[float64]",
+        "ImpactMultiplier ParameterMetadata[float64]",
+        "RiskConfidence ParameterMetadata[float64]",
+        "ConfidenceSignal ParameterMetadata[ConfidenceSignalConfig]",
+        "ConfidenceMix ParameterMetadata[ConfidenceMixConfig]",
+        "SeasonalPatterns ParameterMetadata[[]SeasonalPatternConfig]",
+        "AsymmetricRisk ParameterMetadata[AsymmetricRiskConfig]",
+        "NewsLatencyRisk ParameterMetadata[NewsLatencyConfig]",
+        "AsymmetricDropCritical ParameterMetadata[float64]",
+        "AsymmetricDropHigh ParameterMetadata[float64]",
+        "AsymmetricDropMedium ParameterMetadata[float64]",
+        "NewsImpactMultiplier ParameterMetadata[float64]",
+        "BoundaryFallback ParameterMetadata[float64]",
+        "AdjustmentFloor ParameterMetadata[float64]",
+        "FreshnessScores ParameterMetadata[FreshnessScoresConfig]",
+        "PhaseScores ParameterMetadata[PhaseScoresConfig]",
+        "SkillToIndustry ParameterMetadata[map[string]string]",
+        "SkillToIndustries ParameterMetadata[map[string][]string]",
+        "CycleTransitions ParameterMetadata[[]CycleTransitionConfig]",
+        "CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig]",
+        "LinkageWeightImpact ParameterMetadata[float64]",
+        "WeightFloor ParameterMetadata[float64]",
+        "MaxDailyWeightChange ParameterMetadata[float64]",
+        "LinkageParams ParameterMetadata[LinkageConfig]",
+        "DynamicEnv ParameterMetadata[DynamicEnvConfig]",
+        "CycleCalibration ParameterMetadata[CycleCalibrationConfig]",
+        "HistoryRetentionDays ParameterMetadata[int]",
+        "DefaultMetrics ParameterMetadata[map[string]IndustryDefaultMetrics]",
+        "SiliconCycle ParameterMetadata[SiliconCycleParameters]",
+        "EventCalendarRules ParameterMetadata[[]EventCalendarRule]",
+        "EventSentimentCap ParameterMetadata[float64]",
+        "CompositeCard ParameterMetadata[CompositeCardConfig]",
+        "SeasonalMultipliers ParameterMetadata[SeasonalMultiplierConfig]",
+        "ClassificationTree ParameterMetadata[ClassificationTreeConfig]"
+      ],
+      "kind": "struct",
+      "name": "IndustryParameters"
+    },
+    {
+      "fields": [
+        "ID string",
+        "Name string",
+        "NameEN string",
+        "Level int",
+        "ParentID string",
+        "Weight float64",
+        "GeographicExposure string",
+        "Cyclicality string",
+        "TechnologyIntensity string",
+        "CapitalIntensity string",
+        "RepresentativeStocks []string",
+        "Description string"
+      ],
+      "kind": "struct",
+      "name": "IndustrySegmentConfig"
+    },
+    {
+      "fields": [
+        "ActiveRestockingInventoryMin float64",
+        "ActiveRestockingCapacityMin float64",
+        "PassiveRestockingInventoryMin float64",
+        "PassiveRestockingCapacityMin float64",
+        "ActiveDestockingInventoryMax float64",
+        "ActiveDestockingCapacityMax float64"
+      ],
+      "kind": "struct",
+      "name": "InventoryCycleThresholdConfig"
+    },
+    {
+      "fields": [
+        "ShortWindowDays ParameterMetadata[int]",
+        "MediumWindowDays ParameterMetadata[int]",
+        "LongWindowDays ParameterMetadata[int]",
+        "MaxHistoryDays ParameterMetadata[int]",
+        "MinWeight ParameterMetadata[float64]",
+        "MaxWeight ParameterMetadata[float64]",
+        "NovelThreshold ParameterMetadata[float64]",
+        "HistoricalThreshold ParameterMetadata[float64]",
+        "EpsilonWeight ParameterMetadata[float64]",
+        "ShortWindowBlend ParameterMetadata[float64]",
+        "MediumWindowBlend ParameterMetadata[float64]",
+        "LongWindowBlend ParameterMetadata[float64]",
+        "HealthStaleHours ParameterMetadata[int]",
+        "HealthWarnHours ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "JanusParameters"
+    },
+    {
+      "fields": [
+        "ConvictionBase ParameterMetadata[int]",
+        "PricePenaltyDelta ParameterMetadata[int]",
+        "LaunchBoostDelta ParameterMetadata[int]",
+        "DeploymentBoostDelta ParameterMetadata[int]",
+        "DowngradePenaltyDelta ParameterMetadata[int]",
+        "TargetPriceMult ParameterMetadata[float64]",
+        "StopLossMult ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "LEOSatelliteExecutorParameters"
+    },
+    {
+      "fields": [
+        "DownstreamDecayFactor float64",
+        "UpstreamDecayFactor float64",
+        "SeasonalDecayFactor float64",
+        "DefaultCorrelation float64",
+        "SystemicImportanceDivisor float64",
+        "MinCorrelationThreshold float64",
+        "CorrelationWindowDays int",
+        "CorrelationMatrix map[string]float64",
+        "RecessionCorrelationBoost float64",
+        "RecessionShockAmplifier float64"
+      ],
+      "kind": "struct",
+      "name": "LinkageConfig"
+    },
+    {
+      "fields": [
+        "CarryTradeUnwindThreshold float64",
+        "VIXThreshold float64",
+        "US10YThreshold float64",
+        "OilShockThresholdPct float64",
+        "GoldSurgeThresholdPct float64",
+        "DXYSurgeThresholdPct float64",
+        "TWDStressThresholdPct float64",
+        "OutflowProbBase float64",
+        "OutflowProbMax float64"
+      ],
+      "kind": "struct",
+      "name": "MacroRiskConfig"
+    },
+    {
+      "fields": [
+        "TWSEAPIRateLimit ParameterMetadata[float64]",
+        "TWSEAPIRateBurst ParameterMetadata[int]",
+        "TWSEAPITimeoutSec ParameterMetadata[int]",
+        "FubonIntradayLimit ParameterMetadata[int]",
+        "FubonHistoricalLimit ParameterMetadata[int]",
+        "FubonAPITimeoutSec ParameterMetadata[int]",
+        "TEJCallsPerSecond ParameterMetadata[int]",
+        "TEJAPITimeoutSec ParameterMetadata[int]",
+        "FugleRateLimit ParameterMetadata[int]",
+        "FugleAPITimeoutSec ParameterMetadata[int]",
+        "BDIAPITimeoutSec ParameterMetadata[int]",
+        "BDIEndpoint ParameterMetadata[string]",
+        "MaxRetryAttempts ParameterMetadata[int]",
+        "RetryBackoffMs ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "MarketdataParameters"
+    },
+    {
+      "fields": [
+        "ThemeHitRates ParameterMetadata[map[string]float64]",
+        "SkillToTheme ParameterMetadata[map[string]string]"
+      ],
+      "kind": "struct",
+      "name": "NarrativeConvictionParameters"
+    },
+    {
+      "fields": [
+        "MinTrendStrength ParameterMetadata[float64]",
+        "MinConfidence ParameterMetadata[float64]",
+        "MinHitRate ParameterMetadata[float64]",
+        "OverrideThreshold ParameterMetadata[float64]",
+        "AIRevenueGrowthThreshold ParameterMetadata[float64]",
+        "CoWoSUtilizationThreshold ParameterMetadata[float64]",
+        "CapexGrowthThreshold ParameterMetadata[float64]",
+        "US10YChangeBpsThreshold ParameterMetadata[float64]",
+        "DXYChangePctThreshold ParameterMetadata[float64]",
+        "GeopoliticalGPRThreshold ParameterMetadata[float64]",
+        "OilChangePctThreshold ParameterMetadata[float64]",
+        "JPYChangePctThreshold ParameterMetadata[float64]",
+        "VIXLevelThreshold ParameterMetadata[float64]",
+        "GoldChangePctThreshold ParameterMetadata[float64]",
+        "USDTWDChangePctThreshold ParameterMetadata[float64]",
+        "SemiconductorExportDropThreshold ParameterMetadata[float64]",
+        "RetailMarginZScoreThreshold ParameterMetadata[float64]",
+        "AICapexSentimentThreshold ParameterMetadata[float64]",
+        "TSMCRevenueYoYThreshold ParameterMetadata[float64]",
+        "TaiwanStressUSDTWDThreshold ParameterMetadata[float64]",
+        "RetailInstitutionalDivergenceThreshold ParameterMetadata[float64]",
+        "AICapexNegativeSentimentThreshold ParameterMetadata[float64]",
+        "AICapexFallbackSentiment ParameterMetadata[float64]",
+        "TSMCRevenuePositiveThreshold ParameterMetadata[float64]",
+        "ConfidenceBaseUSRates ParameterMetadata[float64]",
+        "ConfidenceBaseJPYCarry ParameterMetadata[float64]",
+        "ConfidenceBaseGeopolitical ParameterMetadata[float64]",
+        "ConfidenceBaseOilShock ParameterMetadata[float64]",
+        "ConfidenceBaseAICapex ParameterMetadata[float64]",
+        "ConfidenceBaseTSMCRevenue ParameterMetadata[float64]",
+        "ConfidenceBaseTaiwanStress ParameterMetadata[float64]",
+        "ConfidenceDeviationCeiling ParameterMetadata[float64]",
+        "SOXIndexDropThreshold ParameterMetadata[float64]",
+        "TaiwanStressDXYWeight ParameterMetadata[float64]",
+        "TaiwanStressUS10YWeight ParameterMetadata[float64]",
+        "TaiwanStressForeignWeight ParameterMetadata[float64]",
+        "TaiwanStressVIXWeight ParameterMetadata[float64]",
+        "TaiwanStressJPYWeight ParameterMetadata[float64]",
+        "TaiwanStressGeoWeight ParameterMetadata[float64]",
+        "TaiwanStressOilWeight ParameterMetadata[float64]",
+        "TaiwanStressGoldWeight ParameterMetadata[float64]",
+        "TaiwanStressDXYScale ParameterMetadata[float64]",
+        "TaiwanStressUS10YScale ParameterMetadata[float64]",
+        "TaiwanStressForeignScale ParameterMetadata[float64]",
+        "TaiwanStressVIXScale ParameterMetadata[float64]",
+        "TaiwanStressJPYScale ParameterMetadata[float64]",
+        "TaiwanStressGeoScale ParameterMetadata[float64]",
+        "TaiwanStressOilScale ParameterMetadata[float64]",
+        "TaiwanStressGoldScale ParameterMetadata[float64]",
+        "TaiwanStressCrisisThreshold ParameterMetadata[float64]",
+        "TaiwanStressHighThreshold ParameterMetadata[float64]",
+        "TaiwanStressAlertThreshold ParameterMetadata[float64]",
+        "CalibrationBaselineWindow ParameterMetadata[int]",
+        "CalibrationTargetMedian ParameterMetadata[float64]",
+        "CalibrationValidationPct ParameterMetadata[float64]",
+        "CalibrationMinRecords ParameterMetadata[int]",
+        "CalibrationEnabled ParameterMetadata[bool]",
+        "EventTTLMultiplier ParameterMetadata[map[string]float64]",
+        "ModelLookbackDays ParameterMetadata[int]",
+        "ModelHoldWindowDays ParameterMetadata[int]",
+        "RetailFrenzyPercentileThreshold ParameterMetadata[float64]",
+        "RetailFearPercentileThreshold ParameterMetadata[float64]",
+        "RetailAccelerationWindowDays ParameterMetadata[int]",
+        "InflationEstimate ParameterMetadata[float64]",
+        "SpringFestivalConfidence ParameterMetadata[float64]",
+        "ElectionCycleConfidence ParameterMetadata[float64]",
+        "EarningsBlackoutConfidence ParameterMetadata[float64]",
+        "TechPeakSeasonConfidence ParameterMetadata[float64]",
+        "YearEndWindowDressingConfidence ParameterMetadata[float64]",
+        "EarningsSurpriseConfidence ParameterMetadata[float64]",
+        "EarningsSurpriseThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "NarrativeParameters"
+    },
+    {
+      "fields": [
+        "MaxLatencyHours float64",
+        "SeverityCriticalMin float64",
+        "SeverityHighMin float64",
+        "ImpactMultiplier float64",
+        "DropCriticalThreshold float64",
+        "DropHighThreshold float64",
+        "DropMediumThreshold float64",
+        "ConfidenceDivisor float64"
+      ],
+      "kind": "struct",
+      "name": "NewsLatencyConfig"
+    },
+    {
+      "fields": [
+        "MaxPositionPct ParameterMetadata[float64]",
+        "MaxSectorPct ParameterMetadata[float64]",
+        "MaxTurnoverDaily ParameterMetadata[float64]",
+        "TargetBeta ParameterMetadata[float64]",
+        "BetaRangeMin ParameterMetadata[float64]",
+        "BetaRangeMax ParameterMetadata[float64]",
+        "MinTradeSize ParameterMetadata[int]",
+        "CashReserve ParameterMetadata[float64]",
+        "FactorWeights ParameterMetadata[map[string]float64]"
+      ],
+      "kind": "struct",
+      "name": "OptimizerParameters"
+    },
+    {
+      "fields": [
+        "ConvictionFloorDefault ParameterMetadata[int]",
+        "SuperinvestorMinConviction ParameterMetadata[int]",
+        "SuperinvestorConvictionBase ParameterMetadata[int]",
+        "CROZScoreThreshold ParameterMetadata[float64]",
+        "SectorConcentrationThreshold ParameterMetadata[float64]",
+        "SectorConcentrationThresholdHigh ParameterMetadata[float64]",
+        "SectorConvictionMultiplier ParameterMetadata[float64]",
+        "CrowdedConvictionMultiplier ParameterMetadata[float64]",
+        "FactorWeightMomentum ParameterMetadata[float64]",
+        "FactorWeightValue ParameterMetadata[float64]",
+        "FactorWeightQuality ParameterMetadata[float64]",
+        "FactorWeightAgent ParameterMetadata[float64]",
+        "PRISMBoostMultiplier ParameterMetadata[float64]",
+        "PRISMBoostMin ParameterMetadata[int]",
+        "PRISMBoostMax ParameterMetadata[int]",
+        "PromotionMinObservations ParameterMetadata[int]",
+        "PromotionSharpeThreshold ParameterMetadata[float64]",
+        "PromotionHitRateThreshold ParameterMetadata[float64]",
+        "RejectionSharpeThreshold ParameterMetadata[float64]",
+        "RejectionHitRateThreshold ParameterMetadata[float64]",
+        "SectorRotationMacroAdjustments ParameterMetadata[map[string]map[string]float64]",
+        "SectorRotationFlowAdjustments ParameterMetadata[map[string]map[string]float64]",
+        "UseMLScoring ParameterMetadata[bool]"
+      ],
+      "kind": "struct",
+      "name": "OrchestratorParameters"
+    },
+    {
+      "fields": [
+        "SourceType string",
+        "SourceReference string",
+        "EvidenceQuality string",
+        "UpdatePolicy string",
+        "ValidationMethod string",
+        "Dependencies []string",
+        "LastValidated string"
+      ],
+      "kind": "struct",
+      "name": "ParameterCitation"
+    },
+    {
+      "fields": [
+        "Value T",
+        "Rationale string",
+        "Source ParameterSource",
+        "LastCalibrated *time.Time",
+        "CalibrationMethod string",
+        "Todo string",
+        "Citation *ParameterCitation"
+      ],
+      "kind": "struct",
+      "name": "ParameterMetadata"
+    },
+    {
+      "kind": "alias",
+      "name": "ParameterSource"
+    },
+    {
+      "fields": [
+        "Version string",
+        "UpdatedAt time.Time",
+        "FallbackPriceTargets map[string]FallbackPriceTarget",
+        "Darwinian DarwinianParameters",
+        "Factor FactorParameters",
+        "FactorWeight FactorWeightParameters",
+        "Optimizer OptimizerParameters",
+        "Sizing SizingParameters",
+        "Health HealthParameters",
+        "GARCH GARCHParameters",
+        "Experiment ExperimentParameters",
+        "Baseline BaselineParameters",
+        "Orchestrator OrchestratorParameters",
+        "Risk RiskParameters",
+        "Drawdown DrawdownParameters",
+        "Realtime RealtimeParameters",
+        "Janus JanusParameters",
+        "Narrative NarrativeParameters",
+        "NarrativeConviction NarrativeConvictionParameters",
+        "Marketdata MarketdataParameters",
+        "Industry IndustryParameters",
+        "Strategy StrategyParameters",
+        "PreciousMetals PreciousMetalsParameters",
+        "SectorExecutor SectorExecutorParameters",
+        "Alert AlertParameters",
+        "RiskGate RiskGateParameters",
+        "Engine EngineParameters",
+        "RSITw RSITwParameters",
+        "Tax TaxParameters",
+        "SectorAllocation SectorAllocationConfig",
+        "Reporting ReportingParameters",
+        "SmartUniverse SmartUniverseConfig",
+        "ForwardReturn ForwardReturnParameters"
+      ],
+      "kind": "struct",
+      "name": "ParametersConfig"
+    },
+    {
+      "fields": [
+        "ScoreExpansion float64",
+        "ScoreRecovery float64",
+        "ScoreMature float64",
+        "ScoreRecession float64"
+      ],
+      "kind": "struct",
+      "name": "PhaseScoresConfig"
+    },
+    {
+      "fields": [
+        "MaxDrawdownHaltPct ParameterMetadata[float64]",
+        "MaxDrawdownDefensivePct ParameterMetadata[float64]",
+        "MinRollingSharpe ParameterMetadata[float64]",
+        "ConsecutiveLossDays ParameterMetadata[int]",
+        "EvaluationIntervalHours ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "PostTradeGateParameters"
+    },
+    {
+      "fields": [
+        "MaxPositionPct ParameterMetadata[float64]",
+        "MaxSectorExposurePct ParameterMetadata[float64]",
+        "VaRConfidenceLevel ParameterMetadata[float64]",
+        "VarLimitPct ParameterMetadata[float64]",
+        "MinCashBufferPct ParameterMetadata[float64]",
+        "MaxCorrelation ParameterMetadata[float64]",
+        "MinADVRatio ParameterMetadata[float64]",
+        "MaxOpenPositions ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "PreTradeGateParameters"
+    },
+    {
+      "fields": [
+        "CentralBankBuyingTrend ParameterMetadata[string]",
+        "CentralBankNetBuy ParameterMetadata[float64]",
+        "IndiaGoldImportsYoY ParameterMetadata[float64]",
+        "ChinaGoldImportsYoY ParameterMetadata[float64]",
+        "COMEXDefaultNetLong ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "PreciousMetalsParameters"
+    },
+    {
+      "fields": [
+        "A1Weight ParameterMetadata[float64]",
+        "A2Weight ParameterMetadata[float64]",
+        "A3Weight ParameterMetadata[float64]",
+        "A4Weight ParameterMetadata[float64]",
+        "A5Weight ParameterMetadata[float64]",
+        "A6Weight ParameterMetadata[float64]",
+        "APartWeight ParameterMetadata[float64]",
+        "CPartWeight ParameterMetadata[float64]",
+        "A3Midpoint ParameterMetadata[float64]",
+        "A3Scale ParameterMetadata[float64]",
+        "A4VixThresholds ParameterMetadata[[]float64]",
+        "A4VixScores ParameterMetadata[[]float64]",
+        "A5PcrThresholds ParameterMetadata[[]float64]",
+        "A5PcrScores ParameterMetadata[[]float64]",
+        "A5PcrFallback ParameterMetadata[float64]",
+        "A6OddLotThresholds ParameterMetadata[[]float64]",
+        "A6OddLotScores ParameterMetadata[[]float64]",
+        "A6OddLotFallback ParameterMetadata[float64]",
+        "C1Weight ParameterMetadata[float64]",
+        "C2Weight ParameterMetadata[float64]",
+        "C3Weight ParameterMetadata[float64]",
+        "C1VeryBullishThreshold ParameterMetadata[float64]",
+        "C1BullishThreshold ParameterMetadata[float64]",
+        "C1BearishThreshold ParameterMetadata[float64]",
+        "C1VeryBearishThreshold ParameterMetadata[float64]",
+        "C2NeutralMidpoint ParameterMetadata[float64]",
+        "C2NetflowScalingFactor ParameterMetadata[float64]",
+        "C3VeryBullishThreshold ParameterMetadata[float64]",
+        "C3BullishThreshold ParameterMetadata[float64]",
+        "C3BearishThreshold ParameterMetadata[float64]",
+        "DGeoPoliticalRiskThreshold ParameterMetadata[float64]",
+        "DGeoPoliticalRiskMultiplier ParameterMetadata[float64]",
+        "DVIXSpikeThreshold ParameterMetadata[float64]",
+        "DVIXSpikeMultiplier ParameterMetadata[float64]",
+        "DCreditTighteningMultiplier ParameterMetadata[float64]",
+        "LastCalibratedScore ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "RSITwParameters"
+    },
+    {
+      "fields": [
+        "VolatilityThreshold ParameterMetadata[float64]",
+        "VolumeSpikeThreshold ParameterMetadata[float64]",
+        "PriceChangeThreshold ParameterMetadata[float64]",
+        "MinConfidence ParameterMetadata[float64]",
+        "WeightAdjustmentRate ParameterMetadata[float64]",
+        "MaxWeightChange ParameterMetadata[float64]",
+        "MinWeight ParameterMetadata[float64]",
+        "UpdateIntervalMs ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "RealtimeParameters"
+    },
+    {
+      "fields": [
+        "WinRateThreshold ParameterMetadata[float64]",
+        "SharpeMinSamples ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "ReportingParameters"
+    },
+    {
+      "fields": [
+        "PreTrade PreTradeGateParameters",
+        "InTrade InTradeGateParameters",
+        "PostTrade PostTradeGateParameters"
+      ],
+      "kind": "struct",
+      "name": "RiskGateParameters"
+    },
+    {
+      "fields": [
+        "VaRConfidenceLevel ParameterMetadata[float64]",
+        "VaRSecondaryConfidence ParameterMetadata[float64]",
+        "VaRAlertThreshold ParameterMetadata[float64]",
+        "VaRCriticalThreshold ParameterMetadata[float64]",
+        "ConsecutiveLossLimit ParameterMetadata[int]",
+        "SectorConstraintsRiskOff ParameterMetadata[map[string]float64]",
+        "SectorConstraintsCarryTrade ParameterMetadata[map[string]float64]",
+        "SectorConstraintsSectorRotation ParameterMetadata[map[string]float64]",
+        "MaxDrawdownPct ParameterMetadata[float64]",
+        "MaxPositionSize ParameterMetadata[float64]",
+        "MaxDailyLossPct ParameterMetadata[float64]",
+        "StopLoss ParameterMetadata[float64]",
+        "TakeProfit ParameterMetadata[float64]",
+        "MaxLossPerTrade ParameterMetadata[float64]",
+        "MaxTotalExposure ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "RiskParameters"
+    },
+    {
+      "fields": [
+        "ThemeMultipliers map[string]IndustryMultiplierMap",
+        "ThemeCorrelations map[string]map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "SeasonalMultiplierConfig"
+    },
+    {
+      "fields": [
+        "ID string",
+        "Name string",
+        "NameEN string",
+        "StartMonth int",
+        "StartDay int",
+        "EndMonth int",
+        "EndDay int",
+        "FavoredIndustries []string",
+        "AvoidedIndustries []string",
+        "StyleTags []string",
+        "AdjustmentFactor float64",
+        "HistoricalAccuracy float64",
+        "AvgMarketReturn float64",
+        "Description string"
+      ],
+      "kind": "struct",
+      "name": "SeasonalPatternConfig"
+    },
+    {
+      "fields": [
+        "Rationale string",
+        "Source ParameterSource",
+        "Citation *ParameterCitation",
+        "BaseWeights map[string]float64",
+        "DerivationFactors map[string][]WeightFactorConfig",
+        "CycleWeight float64",
+        "SeasonalWeight float64",
+        "LinkageWeight float64",
+        "NarrativeWeight float64",
+        "MacroWeight float64",
+        "FactorWeight float64",
+        "WeightFloor float64"
+      ],
+      "kind": "struct",
+      "name": "SectorAllocationConfig"
+    },
+    {
+      "fields": [
+        "LEOSatellite LEOSatelliteExecutorParameters",
+        "Financials FinancialsExecutorParameters",
+        "Shipping ShippingExecutorParameters",
+        "ValueYield ValueYieldExecutorParameters",
+        "EarningsQuality EarningsQualityExecutorParameters",
+        "TechnicalBreakout TechnicalBreakoutExecutorParameters",
+        "GrowthMomentum GrowthMomentumExecutorParameters",
+        "FactorConviction FactorConvictionParams"
+      ],
+      "kind": "struct",
+      "name": "SectorExecutorParameters"
+    },
+    {
+      "fields": [
+        "BaseAllocations map[string]float64",
+        "MinAllocation float64",
+        "MaxAllocation float64",
+        "RebalanceThreshold float64"
+      ],
+      "kind": "struct",
+      "name": "SectorRotationConfig"
+    },
+    {
+      "fields": [
+        "Min float64",
+        "Max float64"
+      ],
+      "kind": "struct",
+      "name": "SentimentBounds"
+    },
+    {
+      "fields": [
+        "TacticalBoost ParameterMetadata[int]",
+        "WeakClosePenalty ParameterMetadata[int]",
+        "WeakCloseThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "ShippingExecutorParameters"
+    },
+    {
+      "fields": [
+        "RevenueYoYThreshold float64",
+        "BillingsYoYThreshold float64",
+        "DRAMStabilizationThreshold float64",
+        "BillingsStabilizationThreshold float64",
+        "InventoryDaysThreshold float64",
+        "UtilizationThreshold float64",
+        "IndexMAPercentThreshold float64",
+        "SOXExtremeThreshold float64",
+        "CapexCutThreshold float64",
+        "MinConfidence float64",
+        "HistoryWindowSize int"
+      ],
+      "kind": "struct",
+      "name": "SiliconCycleParameters"
+    },
+    {
+      "fields": [
+        "NeutralRegimeSizingFactor float64"
+      ],
+      "kind": "struct",
+      "name": "SimulationConfig"
+    },
+    {
+      "fields": [
+        "KellyFraction ParameterMetadata[float64]",
+        "VolLookbackDays ParameterMetadata[int]",
+        "MaxPositionByADV ParameterMetadata[float64]",
+        "MaxDrawdownLimit ParameterMetadata[float64]",
+        "ATRMultiplier ParameterMetadata[float64]",
+        "CorrelationPenalty ParameterMetadata[float64]",
+        "CorrelationThreshold ParameterMetadata[float64]",
+        "DefaultWinRate ParameterMetadata[float64]",
+        "DefaultPayoffRatio ParameterMetadata[float64]",
+        "TargetVolatility ParameterMetadata[float64]",
+        "VolAdjustmentMin ParameterMetadata[float64]",
+        "VolAdjustmentMax ParameterMetadata[float64]",
+        "ATRTargetRisk ParameterMetadata[float64]",
+        "ATRAdjustmentMin ParameterMetadata[float64]",
+        "ATRAdjustmentMax ParameterMetadata[float64]",
+        "CorrelationPenaltyFactor ParameterMetadata[float64]",
+        "MaxCorrelationPenalty ParameterMetadata[float64]",
+        "DefaultVolatility ParameterMetadata[float64]",
+        "DefaultADV ParameterMetadata[float64]",
+        "DefaultATR ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "SizingParameters"
+    },
+    {
+      "fields": [
+        "TopN ParameterMetadata[int]",
+        "PEWeight ParameterMetadata[float64]",
+        "PBWeight ParameterMetadata[float64]",
+        "VolumeWeight ParameterMetadata[float64]",
+        "MomentumWeight ParameterMetadata[float64]",
+        "QualityWeight ParameterMetadata[float64]",
+        "ForeignFlowWeight ParameterMetadata[float64]",
+        "VolumeFloorTWD ParameterMetadata[float64]",
+        "MinDailyAmountTWD ParameterMetadata[float64]",
+        "MaxIndustryConcentration ParameterMetadata[float64]",
+        "PriceMinimum ParameterMetadata[float64]",
+        "FactorScoreMaxAgeDays ParameterMetadata[int]",
+        "D6ExpiryTradingDays ParameterMetadata[int]",
+        "VaRContributionMultiplier ParameterMetadata[float64]",
+        "VolatilityMultiplier ParameterMetadata[float64]",
+        "DrawdownWindow ParameterMetadata[int]",
+        "DrawdownThreshold ParameterMetadata[float64]",
+        "ConfidenceThreshold ParameterMetadata[int]",
+        "SupplyChainExpandDepth ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "SmartUniverseConfig"
+    },
+    {
+      "fields": [
+        "CooldownPeriodHours int",
+        "Configs map[string]StrategyStateConfig"
+      ],
+      "kind": "struct",
+      "name": "StrategyEvolutionConfig"
+    },
+    {
+      "fields": [
+        "MinSwitchIntervalDays ParameterMetadata[int]",
+        "SwitchThreshold ParameterMetadata[float64]",
+        "ScoreLookbackDays ParameterMetadata[int]",
+        "FallbackStrategy ParameterMetadata[string]"
+      ],
+      "kind": "struct",
+      "name": "StrategyParameters"
+    },
+    {
+      "fields": [
+        "MaxPositionSize float64",
+        "MaxSectorExposure float64",
+        "MinCashReserve float64",
+        "HedgeRatio float64",
+        "AllowNewPositions bool",
+        "AllowConcentration bool"
+      ],
+      "kind": "struct",
+      "name": "StrategyStateConfig"
+    },
+    {
+      "fields": [
+        "MinTrendStrength float64",
+        "MinConfidence float64",
+        "MinHitRate float64",
+        "OverrideThreshold float64",
+        "AIRevenueGrowthThreshold float64",
+        "CoWoSUtilizationThreshold float64",
+        "CapexGrowthThreshold float64",
+        "SemiconductorIndexThreshold float64"
+      ],
+      "kind": "struct",
+      "name": "StructuralTrendConfig"
+    },
+    {
+      "fields": [
+        "DividendTaxRate ParameterMetadata[float64]",
+        "TransactionTaxRate ParameterMetadata[float64]",
+        "NHISurchargeRate ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "TaxParameters"
+    },
+    {
+      "fields": [
+        "DefaultVolumeFloor ParameterMetadata[int64]",
+        "StrictVolumeFloor ParameterMetadata[int64]",
+        "RelaxedVolumeFloor ParameterMetadata[int64]",
+        "LowVolumeFloor ParameterMetadata[int64]",
+        "LowVolumeBoost ParameterMetadata[int]",
+        "RejectLowVolumeFloor ParameterMetadata[int64]",
+        "VolumeBoost ParameterMetadata[int]",
+        "CloseStrengthPenalty ParameterMetadata[int]",
+        "CloseStrengthThreshold ParameterMetadata[float64]",
+        "CloseStrengthTolerance ParameterMetadata[float64]",
+        "SurgeBoost ParameterMetadata[int]",
+        "SurgePenalty ParameterMetadata[int]",
+        "OpenRejectionPenalty ParameterMetadata[int]",
+        "LateBreakoutPenalty ParameterMetadata[int]",
+        "LateBreakoutThreshold ParameterMetadata[float64]",
+        "ConfirmationBoost ParameterMetadata[int]",
+        "ConfirmationThreshold ParameterMetadata[float64]",
+        "CatchUpBoost ParameterMetadata[int]",
+        "CatchUpLowerThreshold ParameterMetadata[float64]",
+        "CatchUpUpperThreshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "TechnicalBreakoutExecutorParameters"
+    },
+    {
+      "fields": [
+        "CashFlowBoost ParameterMetadata[int]",
+        "YieldTrapPenalty ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "ValueYieldExecutorParameters"
+    },
+    {
+      "fields": [
+        "Factor string",
+        "Weight float64",
+        "Source string",
+        "Evidence string"
+      ],
+      "kind": "struct",
+      "name": "WeightFactorConfig"
+    }
+  ],
+  "vars": null
+}
