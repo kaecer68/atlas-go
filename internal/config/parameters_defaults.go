@@ -1,17 +1,11 @@
 package config
 
-import (
-	"time"
-)
-
 // DefaultParametersConfig returns a configuration that exactly mirrors
 // the current hard-coded values in the portfolio, experiment, and baseline
 // packages. This ensures zero behavioral drift when no config file exists.
 func DefaultParametersConfig() *ParametersConfig {
-	now := time.Now()
 	return &ParametersConfig{
 		Version:              "1.0",
-		UpdatedAt:            now,
 		FallbackPriceTargets: defaultFallbackPriceTargets(),
 		Darwinian:            defaultDarwinianParameters(),
 		Factor:               defaultFactorParameters(),
