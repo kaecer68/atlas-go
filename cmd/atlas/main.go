@@ -2490,47 +2490,6 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 
 // buildBaseState queries the provider for current market state.
 // Falls back to placeholder values if provider fails (with warning log).
-func buildBaseState(provider marketdata.Provider, symbols []string) swarm.MarketState {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	state := swarm.MarketState{
-		Timestamp: time.Now(),
-		Prices:    make(map[string]float64),
-		Volumes:   make(map[string]float64),
-	}
-
-	quotes, err := provider.GetQuotes(ctx, time.Now(), symbols)
-	if err != nil {
-		logging.Warn("buildBaseState", "get_quotes_failed",
-			logging.Err(err),
-			"symbols", len(symbols))
-		for _, sym := range symbols {
-			state.Prices[sym] = 100.0
-			state.Volumes[sym] = 5_000_000.0
-		}
-		return state
-	}
-
-	quoteMap := make(map[string]domain.Quote, len(quotes))
-	for _, q := range quotes {
-		quoteMap[q.Symbol] = q
-	}
-
-	for _, sym := range symbols {
-		if q, ok := quoteMap[sym]; ok {
-			state.Prices[sym] = q.Last
-			state.Volumes[sym] = float64(q.Volume)
-		} else {
-			logging.Warn("buildBaseState", "symbol_not_in_quotes",
-				"symbol", sym)
-			state.Prices[sym] = 100.0
-			state.Volumes[sym] = 5_000_000.0
-		}
-	}
-	return state
-}
-
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
 	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
@@ -2732,24 +2691,4 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	}
 
 	return nil
-}
-
-func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) {
-	sessionsDir := filepath.Join(workDir, "data", "state", "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		return nil, err
-	}
-	var all []portfolio.CalibratedOrder
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		orders, err := portfolio.LoadOrdersFromJSONL(filepath.Join(sessionsDir, e.Name(), "recommendation_outcomes.jsonl"))
-		if err != nil {
-			continue
-		}
-		all = append(all, orders...)
-	}
-	return all, nil
 }
