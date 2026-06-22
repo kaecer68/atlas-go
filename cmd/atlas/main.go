@@ -13,10 +13,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/alerting"
@@ -2287,8 +2285,7 @@ func run(args []string, deps appDeps) error {
 			}
 		}()
 
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		sigCh := registerShutdownSignal()
 		select {
 		case <-sigCh:
 			log.Printf("received signal, shutting down api server...")
@@ -2584,8 +2581,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		return fmt.Errorf("start live orchestrator: %w", err)
 	}
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sigCh := registerShutdownSignal()
 	log.Printf("live trading orchestrator running; press Ctrl+C to stop")
 	select {
 	case <-sigCh:
