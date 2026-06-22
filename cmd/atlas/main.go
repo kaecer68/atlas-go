@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/alerting"
@@ -43,7 +41,6 @@ import (
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	llmHealth "github.com/kaecer68/atlas-go/internal/monitoring/api/llm"
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
-	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -906,51 +903,14 @@ func run(args []string, deps appDeps) error {
 		})
 		log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
 
-		authWrappedMux := apishared.AuthMiddleware(mux)
-		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			if r.URL.Path == "/metrics" || r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/static/") {
-				mux.ServeHTTP(w, r)
-				return
-			}
-			authWrappedMux.ServeHTTP(w, r)
+		return runAPIServerLifecycle(apiServerLifecycleDeps{
+			Mux:             mux,
+			APIAddr:         *apiAddr,
+			SysCancel:       sysCancel,
+			RealtimeAdapter: realtimeAdapter,
+			Shutdown:        deps.shutdown,
+			ListenAndServe:  deps.listenAndServe,
 		})
-		srv := &http.Server{
-			Addr:              *apiAddr,
-			Handler:           finalMux,
-			ReadHeaderTimeout: 10 * time.Second,
-		}
-		srvErr := make(chan error, 1)
-		go func() {
-			if err := deps.listenAndServe(srv); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				srvErr <- fmt.Errorf("dashboard api server failed: %w", err)
-			}
-		}()
-
-		sigCh := registerShutdownSignal()
-		select {
-		case <-sigCh:
-			log.Printf("received signal, shutting down api server...")
-		case err := <-srvErr:
-			sysCancel()
-			return err
-		case <-deps.shutdown:
-			log.Printf("shutdown signal received, shutting down api server...")
-		}
-
-		sysCancel()
-		if realtimeAdapter != nil {
-			realtimeAdapter.Stop()
-			log.Printf("[RealTime] adapter stopped")
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("api server graceful shutdown failed: %v", err)
-		} else {
-			log.Printf("api server stopped")
-		}
-		return nil
 	}
 
 	if *liveMode {
