@@ -21,20 +21,20 @@
 | 8.6 (LLM) | `LLMAnnotatorFallbackUsed` | 同上，fallback 路徑由 router logs 與 metrics 揭露 | llm_annotator_alerts.yml |
 | 8.7 | `LLMAnnotatorQuotaExceeded` | 同上，quota 控管整合進 router 計費 | llm_annotator_recording.yml |
 
-## Wave 9 YELLOW 觀測性擴展（plan ready，採 forward-compat 設計）
+## Wave 9 YELLOW 觀測性擴展（已合併至 v0.0.0.8）
 
 **計畫檔案**：[`.omo/plans/wave-9-plan.md`](../../.omo/plans/wave-9-plan.md) | **Oracle 審計**：`ses_1133ac96fffeEza3owbT02OsPL`
 
-| # | 事件類型 | EventType 常數 | 說明文件（待寫） | Alert Rule | 預設狀態 |
-|---|---------|---------------|----------------|-----------|---------|
-| 9.1 | 個別監控通道健康 | `EventChannelIndividualHealth` | [channel-individual-health.md](channel-individual-health.md) | [wave9_channel_individual_health.yml](../../monitoring/rules/wave9_channel_individual_health.yml) | ⏳ Wave 9.1 placeholder |
-| 9.2 | Regime 轉變穩定確認 | `EventRegimeChangeConfirmed` | [regime-change-confirmed.md](regime-change-confirmed.md) | [wave9_regime_change_confirmed.yml](../../monitoring/rules/wave9_regime_change_confirmed.yml) | ⏳ Wave 9.2 placeholder |
-| 9.3 | 因子權重回歸偵測 | `EventFactorWeightRegression` | [factor-weight-regression.md](factor-weight-regression.md) | [wave9_factor_weight_regression.yml](../../monitoring/rules/wave9_factor_weight_regression.yml) | ⏳ Wave 9.3 placeholder |
-| 9.4 | 投資組合部位漂移偵測 | `EventDriftDetected` | [drift-detector.md](drift-detector.md) | [wave9_drift_detected.yml](../../monitoring/rules/wave9_drift_detected.yml) | ⏳ Wave 9.4 placeholder |
-| 9.5 | API Gateway ingestion lag spike | `EventIngestionLagSpike` | [ingestion-lag-spike.md](ingestion-lag-spike.md) | [wave9_ingestion_lag_spike.yml](../../monitoring/rules/wave9_ingestion_lag_spike.yml) | ⏳ Wave 9.5 placeholder |
+| # | 事件類型 | EventType 常數 | 說明文件 | Alert Rule | 狀態 |
+|---|---------|---------------|---------|-----------|------|
+| 9.1 | 個別監控通道健康 | `EventChannelIndividualHealth` | [channel-individual-health.md](channel-individual-health.md) | [wave9_channel_individual_health.yml](../../monitoring/rules/wave9_channel_individual_health.yml) | ✅ 已合併（v0.0.0.8） |
+| 9.2 | Regime 轉變穩定確認 | `EventRegimeChangeConfirmed` | [regime-change-confirmed.md](regime-change-confirmed.md) | [wave9_regime_change_confirmed.yml](../../monitoring/rules/wave9_regime_change_confirmed.yml) | ✅ 已合併（v0.0.0.8） |
+| 9.3 | 因子權重回歸偵測 | `EventFactorWeightRegression` | [factor-weight-regression.md](factor-weight-regression.md) | [wave9_factor_weight_regression.yml](../../monitoring/rules/wave9_factor_weight_regression.yml) | ✅ 已合併（v0.0.0.8） |
+| 9.4 | 投資組合部位漂移偵測 | `EventDriftDetected` | [drift-detector.md](drift-detector.md) | [wave9_drift_detected.yml](../../monitoring/rules/wave9_drift_detected.yml) | ✅ 已合併（v0.0.0.8） |
+| 9.5 | API Gateway ingestion lag spike | `EventIngestionLagSpike` | [ingestion-lag-spike.md](ingestion-lag-spike.md) | [wave9_ingestion_lag_spike.yml](../../monitoring/rules/wave9_ingestion_lag_spike.yml) | ✅ 已合併（v0.0.0.8） |
 
-> **PD-W9-1**：5 個 YELLOW 事件預設 `severity: "info"`，alert rule 預設 `enabled: false`，由 operator 決定是否啟用。
-> **Forward-compat 設計**：5 個事件只讀既有 public API（`ChannelErrors()`、`EventRegimeChange`、`EventPositionUpdate` 等），不修改 #611 將重構的 9 個檔案。
+> **PD-W9-1**：5 個 YELLOW 事件預設 `severity: "info"`（IngestionLagSpike 除外，severity=warning），alert rule 預設 `enabled: false`，由 operator 決定是否啟用。
+> **Forward-compat 驗證**：Wave 9 全程 0 修改 #611 9 個檔案（`git diff --stat` 為空）。
 
 ## 既有事件（Wave 1-7）
 
