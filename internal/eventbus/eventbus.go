@@ -87,6 +87,13 @@ const (
 	EventBacktestCompleted    EventType = "experiment.backtest_completed"
 	EventCalibrationCompleted EventType = "experiment.calibration_completed"
 	EventTradeSlippage        EventType = "trade.slippage"
+
+	// Wave 9 YELLOW 觀測性擴展（forward-compat 設計，只讀既有 public API）
+	EventChannelIndividualHealth EventType = "monitor.channel.health.individual"
+	EventRegimeChangeConfirmed   EventType = "market.regime.confirmed"
+	EventFactorWeightRegression  EventType = "portfolio.factor.regression"
+	EventDriftDetected           EventType = "portfolio.drift.detected"
+	EventIngestionLagSpike       EventType = "apigateway.ingestion.lag.spike"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -371,6 +378,11 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventBacktestCompleted:          {"自動回測完成，投組快照與風險訊號已記錄", "info"},
 	EventCalibrationCompleted:       {"參數校準完成，模組參數已更新或保持不變", "info"},
 	EventTradeSlippage:              {"訂單成交滑價計算：期望價與實際成交價之差（BPS），用於監控執行品質", "info"},
+	EventChannelIndividualHealth:    {"個別監控通道健康狀態變化（per-channel error rate 變化）", "info"},
+	EventRegimeChangeConfirmed:      {"市場體制轉變穩定確認（新 regime 持續 30 秒未變動）", "info"},
+	EventFactorWeightRegression:     {"因子權重回歸偵測（regime 變化後權重位移超過閾值 0.5）", "info"},
+	EventDriftDetected:              {"投資組合部位漂移偵測（單一持倉集中度 > 25% 或週轉率 > 15%）", "info"},
+	EventIngestionLagSpike:          {"API Gateway ingestion p99 latency 超過 5 秒閾值", "warning"},
 }
 
 var narrativeThemeLabels = map[string]string{
