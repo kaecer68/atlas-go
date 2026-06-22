@@ -2403,7 +2403,7 @@
         ],
         "evidence_quality": "medium",
         "last_validated": "2026-06-05T00:00:00.000000",
-        "source_reference": "DefaultClassification() in parameters_defaults.go, previously hardcoded in internal/industry/types.go",
+        "source_reference": "industry.DefaultClassification() in internal/industry/types.go:217",
         "source_type": "heuristic",
         "update_policy": "manual",
         "validation_method": "cross_reference"
