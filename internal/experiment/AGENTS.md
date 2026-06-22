@@ -62,7 +62,7 @@
 - 若用 `baselineDD / ratio` 會反轉語義：`/ 0.8 = 1.25×`，ratio 越小反而越寬鬆（違反直覺）
 
 實作位置: `internal/experiment/judge.go:405-411`
-預設值: `DrawdownProtectionRatio = 0.8`（見 `internal/config/parameters_defaults.go:602`）
+預設值: `DrawdownProtectionRatio = 0.8`（見 `defaultGARCHParameters()` in `internal/config/parameters_defaults.go`）
 
 ## Fallback Window Gate (UsedFallbackWindow)
 
