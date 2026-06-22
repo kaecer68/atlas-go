@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 )
@@ -75,52 +74,37 @@ func TestParametersConfig_RoundTrip_IndustryGap(t *testing.T) {
 	}
 }
 
-// TestParametersConfig_RoundTrip_EmptyJSON_KnownGap characterizes a KNOWN L3 BACKLOG GAP
-// in merge*Defaults coverage: when an empty JSON object {} is loaded, the merge helpers
-// do NOT populate DarwinianWeightMin/DarwinianWeightMax (these fields are missing from
-// the merge list in parameters.go). The resulting config fails Validate() with
-// "darwinian.weight_min (0.000) must be less than weight_max (0.000)".
-//
-// This test locks the current broken behavior so it can be detected if regressed,
-// and serves as the regression target for PR 11 (Wave 4: merge coverage fix).
-//
-// EXPECTED (after PR 11 lands):
-//   - LoadParametersConfig("empty.json") succeeds
-//   - loaded equals DefaultParametersConfig() modulo UpdatedAt
-//
-// CURRENT (until PR 11 lands):
-//   - LoadParametersConfig("empty.json") fails with the darwinian.weight validation error
-//   - This is the actual production behavior captured by this characterization test
-func TestParametersConfig_RoundTrip_EmptyJSON_KnownGap(t *testing.T) {
-	// Start with an empty struct.
+// TestParametersConfig_RoundTrip_EmptyJSON verifies that an empty JSON object {} loads
+// cleanly and produces a config deep-equal to DefaultParametersConfig() modulo UpdatedAt.
+// This is the S4 contract for empty JSON, and is the regression target for the
+// merge*Defaults coverage fix (PR 11 in #611 sub-issue-1: empty JSON previously failed
+// Validate() because sub-structs like Darwinian, Sizing, Health had no merge helpers).
+func TestParametersConfig_RoundTrip_EmptyJSON(t *testing.T) {
 	emptyCfg := &ParametersConfig{}
 
-	// Marshal the empty config.
 	jsonData, err := json.Marshal(emptyCfg)
 	if err != nil {
 		t.Fatalf("marshal empty config: %v", err)
 	}
 
-	// Write to temp file.
 	tmpDir := t.TempDir()
 	paramsPath := filepath.Join(tmpDir, "empty.json")
 	if err := os.WriteFile(paramsPath, jsonData, 0o644); err != nil {
 		t.Fatalf("write empty JSON: %v", err)
 	}
 
-	// Load through LoadParametersConfig.
-	_, err = LoadParametersConfig(paramsPath)
-
-	if err == nil {
-		t.Skip("empty JSON now loads cleanly — PR 11 likely fixed this; update this test")
+	loaded, err := LoadParametersConfig(paramsPath)
+	if err != nil {
+		t.Fatalf("LoadParametersConfig on empty JSON failed: %v", err)
 	}
 
-	wantSubstr := "darwinian.weight_min"
-	if !strings.Contains(err.Error(), wantSubstr) {
-		t.Errorf("expected error to mention %q (known L3 backlog gap)\n"+
-			"got: %v\n"+
-			"if PR 11 fixed this, update test to assert successful load",
-			wantSubstr, err)
+	if ok, field := configDeepEqualExcluding(DefaultParametersConfig(), loaded, "UpdatedAt", "Version", "Industry"); !ok {
+		t.Errorf("empty JSON round-trip does not match DefaultParametersConfig() (modulo UpdatedAt + Version + Industry)\n"+
+			"first mismatching field: %s\n"+
+			"default.UpdatedAt=%v\nloaded.UpdatedAt=%v\n"+
+			"default.Version=%q\nloaded.Version=%q",
+			field, DefaultParametersConfig().UpdatedAt, loaded.UpdatedAt,
+			DefaultParametersConfig().Version, loaded.Version)
 	}
 }
 
