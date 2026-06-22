@@ -3,7 +3,6 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,18 +60,23 @@ func TestContract_PublishRegimeChange_Payload(t *testing.T) {
 	defer bus.Close()
 
 	var got RegimeEventPayload
-	var received atomic.Bool
+	done := make(chan struct{})
 	bus.Subscribe(EventRegimeChange, func(ctx context.Context, event BusEvent) error {
 		got = event.Payload.(RegimeEventPayload)
-		received.Store(true)
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
 		return nil
 	})
 
 	bus.PublishRegimeChange(domain.RegimeNeutral, domain.RegimeRiskOn, 0.85, "contract_test")
 
-	time.Sleep(100 * time.Millisecond)
-	if !received.Load() {
-		t.Fatal("did not receive regime change event")
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for regime change event")
 	}
 	if got.NewRegime != domain.RegimeRiskOn {
 		t.Errorf("NewRegime = %v, want %v", got.NewRegime, domain.RegimeRiskOn)
@@ -92,18 +96,23 @@ func TestContract_PublishPositionUpdate_Payload(t *testing.T) {
 
 	pos := domain.Position{Quantity: 1000, AverageCost: 500.0}
 	var got PositionEventPayload
-	var received atomic.Bool
+	done := make(chan struct{})
 	bus.Subscribe(EventPositionUpdate, func(ctx context.Context, event BusEvent) error {
 		got = event.Payload.(PositionEventPayload)
-		received.Store(true)
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
 		return nil
 	})
 
 	bus.PublishPositionUpdate("2330", pos, "added")
 
-	time.Sleep(100 * time.Millisecond)
-	if !received.Load() {
-		t.Fatal("did not receive position update event")
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for position update event")
 	}
 	if got.Symbol != "2330" {
 		t.Errorf("Symbol = %q, want 2330", got.Symbol)
@@ -120,18 +129,23 @@ func TestContract_PublishMarketSnapshot_Payload(t *testing.T) {
 
 	quote := domain.Quote{Symbol: "2330", Last: 500.0}
 	var got MarketEventPayload
-	var received atomic.Bool
+	done := make(chan struct{})
 	bus.Subscribe(EventMarketSnapshot, func(ctx context.Context, event BusEvent) error {
 		got = event.Payload.(MarketEventPayload)
-		received.Store(true)
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
 		return nil
 	})
 
 	bus.PublishMarketSnapshot(quote)
 
-	time.Sleep(100 * time.Millisecond)
-	if !received.Load() {
-		t.Fatal("did not receive market snapshot event")
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for market snapshot event")
 	}
 	if got.Symbol != "2330" {
 		t.Errorf("Symbol = %q, want 2330", got.Symbol)
@@ -181,6 +195,29 @@ func TestContract_PositionEventPayload_JSONTags(t *testing.T) {
 	for _, key := range requiredKeys {
 		if _, ok := raw[key]; !ok {
 			t.Errorf("missing JSON key %q in PositionEventPayload", key)
+		}
+	}
+}
+
+// Test 13: C6 — MarketEventPayload JSON tag verification
+func TestContract_MarketEventPayload_JSONTags(t *testing.T) {
+	payload := MarketEventPayload{
+		Symbol:    "2330",
+		Quote:     domain.Quote{Symbol: "2330", Last: 500.0},
+		Timestamp: time.Now(),
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	requiredKeys := []string{"symbol", "quote", "timestamp"}
+	for _, key := range requiredKeys {
+		if _, ok := raw[key]; !ok {
+			t.Errorf("missing JSON key %q in MarketEventPayload", key)
 		}
 	}
 }

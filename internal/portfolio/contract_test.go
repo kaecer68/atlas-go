@@ -21,7 +21,7 @@ func TestContract_OnRegimeChange_Signature(t *testing.T) {
 func TestContract_GetWeights_ReturnsNonNil(t *testing.T) {
 	engine := NewFactorWeightEngine()
 	if engine == nil {
-		t.Skip("NewFactorWeightEngine() returned nil — skipping runtime test")
+		t.Fatal("NewFactorWeightEngine() returned nil — contract violation")
 	}
 	weights := engine.GetWeights("")
 	if weights == nil {
