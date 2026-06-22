@@ -505,23 +505,7 @@ func run(args []string, deps appDeps) error {
 			fmt.Fprintf(w, `{"status":"ok","session":"%s","regime":"%s","orders":%d,"positions":%d}`+"\n",
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
-		monitor = monitoring.NewMonitor()
-		if alertStore != nil {
-			monitor.SetAlertStore(alertStore)
-		}
-		// Phase 2A: dedup, auto-handler, console output
-		alertDeduplicator := monitoring.NewAlertDeduplicator(5*time.Minute, alertStore)
-		var suppressRules []monitoring.SuppressRule
-		for _, cat := range paramsCfg.Alert.SuppressCategories.Value {
-			suppressRules = append(suppressRules, monitoring.SuppressRule{
-				Category: cat,
-				Duration: 24 * time.Hour,
-			})
-		}
-		autoHandler := monitoring.NewAutoHandler(alertStore, suppressRules)
-		monitor.SetDeduplicator(alertDeduplicator)
-		monitor.SetAutoHandler(autoHandler)
-		monitor.RegisterHandler(monitoring.ConsoleHandler)
+		monitor, autoHandler := setupMonitor(alertStore, paramsCfg.Alert.SuppressCategories.Value)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 
 		var ruleEngine *monitoring.RuleEngine
