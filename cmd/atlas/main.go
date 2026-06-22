@@ -56,7 +56,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/realtime"
 	"github.com/kaecer68/atlas-go/internal/repository"
-	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/storage"
@@ -578,33 +577,6 @@ func run(args []string, deps appDeps) error {
 
 			registerDataSyncAndHealthTasks(taskMgr, cfg, gateway, monitor, pool)
 
-			// Register calibration_cycle background task (rolling calibration framework).
-			// Maturity-gated: BackgroundCalibrationScheduler.RunDaily checks maturityTracker
-			// and skips gracefully in BURN_IN mode (no validation, no false signals).
-			if maturityTracker != nil {
-				calTask := narrative.NewCalibrationTask(cfg.WorkDir)
-				calScheduler := scheduler.NewBackgroundCalibrationScheduler(maturityTracker)
-				calScheduler.Register(&scheduler.CalibrationTask{
-					Name:        "narrative_weight_calibration",
-					MinMaturity: domain.MaturityCalibrating,
-					Run: func(_ context.Context) error {
-						_, err := calTask.RunCalibrationCycle()
-						return err
-					},
-				})
-				dashboard.SetCalibrationTask(calTask)
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "calibration_cycle",
-					Interval: 24 * time.Hour,
-					Jitter:   30 * time.Minute,
-					Enabled:  paramsCfg.Narrative.CalibrationEnabled.Value,
-					Task:     calScheduler.RunDaily,
-				})
-				log.Printf("[Gateway] registered calibration_cycle background task (24h interval, maturity-gated)")
-			} else {
-				log.Printf("[Gateway] calibration_cycle skipped: maturity tracker is nil")
-			}
-
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_rollback",
 				Interval: 24 * time.Hour,
@@ -853,23 +825,6 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
 
 			if svc := dashboard.GetIndustryService(); svc != nil {
-				var finmindClient *marketdata.FinMindClient
-				if cfg.FinMindAPIKey != "" {
-					finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
-				}
-				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "auto_cycle_update",
-					Interval: 6 * time.Hour,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-						defer cancel()
-						return cycleAggregator.AggregateAllIndustries(bgCtx)
-					},
-				})
-				log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
-
 				calendarProvider := marketdata.NewTWSECalendarProvider()
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "auto_calendar_refresh",
@@ -885,30 +840,6 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered auto_calendar_refresh background task (24h interval)")
-			}
-
-			{
-				revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
-				configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "auto_threshold_calibrate",
-					Interval: 24 * time.Hour,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						now := time.Now()
-						if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-							now = now.In(tz)
-						}
-						if now.Day() != 1 || now.Hour() < 3 {
-							return nil
-						}
-						if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
-							return nil
-						}
-						return industry.RecalibrateThresholds(revenuePath, configPath)
-					},
-				})
-				log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
 			}
 
 			{
@@ -999,24 +930,6 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered silicon_cycle_update background task (10m interval)")
-			}
-
-			// StrategyEvolver daily re-evaluation (24h, audit-style trigger).
-			{
-				dashRef := dashboard
-				maturityRef := maturityTracker
-				sectorDir := cfg.WorkDir
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "auto_strategy_evolution",
-					Interval: 24 * time.Hour,
-					Enabled:  true,
-					Task: scheduler.StrategyEvolutionTaskFunc(scheduler.StrategyEvolutionDeps{
-						Dashboard:       dashRef,
-						SectorDataDir:   sectorDir,
-						MaturityTracker: maturityRef,
-					}),
-				})
-				log.Printf("[Gateway] registered auto_strategy_evolution background task (24h interval)")
 			}
 
 			if repo != nil {
@@ -1634,358 +1547,6 @@ func run(args []string, deps appDeps) error {
 			}
 
 			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
-			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "risk_gate_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					report, err := riskGate.SelfCalibrate(ctx, calProvider, 30)
-					if err != nil {
-						logging.Error("risk_calibrate", "self_calibrate_failed", "err", err.Error())
-						return err
-					}
-					riskGate.SetLastCalibration(report)
-					logging.Info("risk_calibrate", "completed",
-						"verdict", report.Verdict,
-						"changes", len(report.Changes),
-						"summary", report.Summary)
-					for _, ch := range report.Changes {
-						logging.Info("risk_calibrate", "parameter_change",
-							"param", ch.Name,
-							"before", ch.Before,
-							"after", ch.After,
-							"rationale", ch.Rationale,
-							"confidence", ch.Confidence)
-					}
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered risk_gate_calibrate background task (24h interval)")
-
-			if svc := dashboard.GetIndustryService(); svc != nil && svc.CycleCalibration != nil {
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "cycle_calibrate",
-					Interval: 24 * time.Hour,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						defaultCfg := industry.CardConfig{
-							LayerWeights: map[string]float64{
-								"silicon":        0.25,
-								"business_cycle": 0.20,
-								"seasonal":       0.15,
-								"events":         0.15,
-								"supply_chain":   0.10,
-							},
-						}
-						calibrated := svc.CycleCalibration.CalibrateWeights(defaultCfg.LayerWeights)
-						metrics := svc.CycleCalibration.GetMetrics()
-
-						logging.Info("cycle_calibrate", "completed",
-							"outcomes", svc.CycleCalibration.GetOutcomeCount(),
-							"layers", len(calibrated))
-						for layer, m := range metrics {
-							logging.Info("cycle_calibrate", "layer_accuracy",
-								"layer", layer,
-								"accuracy", m.Accuracy,
-								"signals", m.TotalSignals)
-						}
-						return nil
-					},
-				})
-				log.Printf("[Gateway] registered cycle_calibrate background task (24h interval)")
-			}
-
-			if janusEngine != nil {
-				var prevRegime string
-				regimeScenario := map[string]string{
-					"NOVEL_REGIME":      "ai_bubble_2024",
-					"HISTORICAL_REGIME": "normal_market_2024",
-					"RISK_OFF":          "covid_crash_2020",
-				}
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "regime_calibrate",
-					Interval: 1 * time.Hour,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						class := janusEngine.GetRegimeClassification()
-						current := string(class)
-						if current == "" || current == "MIXED" {
-							prevRegime = current
-							return nil
-						}
-						if current != prevRegime && prevRegime != "" {
-							scenario := regimeScenario[current]
-							if scenario == "" {
-								scenario = "fed_hikes_2022"
-							}
-							logging.Info("regime_calibrate", "regime_change_detected",
-								"from", prevRegime, "to", current,
-								"suggested_stress_scenario", scenario)
-							report, err := riskGate.SelfCalibrate(ctx, calProvider, 20)
-							if err != nil {
-								logging.Error("regime_calibrate", "calibrate_after_regime_change_failed", "err", err.Error())
-								return nil
-							}
-							riskGate.SetLastCalibration(report)
-							logging.Info("regime_calibrate", "calibration_after_regime_change",
-								"verdict", report.Verdict, "changes", len(report.Changes))
-						}
-						prevRegime = current
-						return nil
-					},
-				})
-				log.Printf("[Gateway] registered regime_calibrate background task (1h interval, triggers calibration on regime change)")
-			}
-
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "factor_weight_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					orders, err := loadCalibrationOrders(cfg.WorkDir)
-					if err != nil {
-						return nil
-					}
-					report, err := portfolio.CalibrateWeights(ctx, orders)
-					if err != nil {
-						return nil
-					}
-					logging.Info("fw_calibrate", "completed",
-						"verdict", report.Verdict,
-						"improvement", report.ImprovementPct,
-						"changes", len(report.Changes),
-						"orders", report.OrdersEvaluated)
-					for _, ch := range report.Changes {
-						logging.Info("fw_calibrate", "weight_change",
-							"factor", string(ch.Factor),
-							"before", ch.Before,
-							"after", ch.After,
-							"delta", ch.DeltaPct,
-							"confidence", ch.Confidence)
-					}
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered factor_weight_calibrate background task (24h interval)")
-
-			// Register conviction_calibrate — optimizes factor-driven conviction
-			// thresholds and deltas (FactorConvictionParams) using historical
-			// recommendation outcomes with forward returns.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "conviction_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					return orchestrator.RunConvictionCalibration(
-						cfg.WorkDir,
-						orchestrator.SemiconductorExecutor{},
-						orchestrator.AISupplyChainExecutor{},
-						orchestrator.LEOSatelliteExecutor{},
-						orchestrator.ETFRotationExecutor{},
-						orchestrator.FinancialsExecutor{},
-						orchestrator.ShippingExecutor{},
-						orchestrator.ValueYieldExecutor{},
-						orchestrator.EarningsQualityExecutor{},
-						orchestrator.TechnicalBreakoutExecutor{},
-						orchestrator.GrowthMomentumExecutor{},
-					)
-				},
-			})
-			log.Printf("[Gateway] registered conviction_calibrate background task (24h interval)")
-
-			// Register macro_risk_calibrate — calibrates Engine MacroRisk thresholds
-			// (carry_trade, VIX, US10Y, oil, gold, DXY, TWD, outflow probabilities).
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "macro_risk_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					cal := config.NewMacroRiskCalibrator()
-					evaluator := cal.BuildEvaluator()
-					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
-					if err != nil {
-						logging.Error("macro_risk_calibrate", "failed", "err", err.Error())
-						return err
-					}
-					logging.Info("macro_risk_calibrate", "completed",
-						"verdict", result.Verdict,
-						"changes", len(result.Changes),
-						"summary", result.Summary)
-					for _, ch := range result.Changes {
-						logging.Info("macro_risk_calibrate", "param_change",
-							"param", ch.ParamName,
-							"before", ch.Before,
-							"after", ch.After,
-							"delta", ch.DeltaPct,
-							"confidence", ch.Confidence)
-					}
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered macro_risk_calibrate background task (24h interval)")
-
-			// Register structural_trend_calibrate — calibrates Engine StructuralTrend
-			// thresholds (trend strength, confidence, override, AI/capex/utilization).
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "structural_trend_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					cal := &config.StructuralTrendCalibrator{}
-					evaluator := cal.BuildEvaluator()
-					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
-					if err != nil {
-						logging.Error("structural_trend_calibrate", "failed", "err", err.Error())
-						return err
-					}
-					logging.Info("structural_trend_calibrate", "completed",
-						"verdict", result.Verdict,
-						"changes", len(result.Changes),
-						"summary", result.Summary)
-					for _, ch := range result.Changes {
-						logging.Info("structural_trend_calibrate", "param_change",
-							"param", ch.ParamName,
-							"before", ch.Before,
-							"after", ch.After,
-							"delta", ch.DeltaPct,
-							"confidence", ch.Confidence)
-					}
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered structural_trend_calibrate background task (24h interval)")
-
-			// Register narrative_calibrate — calibrates Narrative event detection
-			// thresholds (AI revenue, CoWoS, capex, US10Y, DXY, GPR, oil, JPY, VIX).
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "narrative_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					nc := &config.NarrativeCalibrator{}
-					evaluator := config.NewNarrativeEvaluator()
-					result, err := config.CalibrateParameters(ctx, nc, evaluator, config.DefaultCalibrateConfig())
-					if err != nil {
-						logging.Error("narrative_calibrate", "failed", "err", err.Error())
-						return err
-					}
-					logging.Info("narrative_calibrate", "completed",
-						"verdict", result.Verdict,
-						"changes", len(result.Changes),
-						"summary", result.Summary)
-					for _, ch := range result.Changes {
-						logging.Info("narrative_calibrate", "param_change",
-							"param", ch.ParamName,
-							"before", ch.Before,
-							"after", ch.After,
-							"delta", ch.DeltaPct,
-							"confidence", ch.Confidence)
-					}
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
-
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "seasonal_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-seasonal",
-						"--replay", "data/replay/finmind_2020_2024.jsonl",
-						"--start", "2020", "--end", "2024", "--update", "--update-threshold", "1")
-					output, err := cmd.CombinedOutput()
-					if err != nil {
-						logging.Error("seasonal_calibrate", "failed", "err", err.Error(), "output", string(output))
-						return err
-					}
-					logging.Info("seasonal_calibrate", "completed", "output", string(output))
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered seasonal_calibrate background task (24h interval)")
-
-			// Register linkage_calibrate — calibrates RecessionShockAmplifier
-			// for shock propagation amplification during recession regimes.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "linkage_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					calibrator := &config.LinkageAmplifierCalibrator{}
-					evaluator := func(cfg *config.ParametersConfig) (float64, error) {
-						// TODO: Implement proper recession shock accuracy scoring
-						// using historical session data. For now, return a
-						// neutral score so the calibration infrastructure runs
-						// end-to-end without changing the amplifier value.
-						return 0.0, nil
-					}
-					result, err := config.CalibrateParameters(ctx, calibrator, evaluator, config.DefaultCalibrateConfig())
-					if err != nil {
-						logging.Error("linkage_calibrate", "calibration_failed", "err", err.Error())
-						return err
-					}
-					logging.Info("linkage_calibrate", "completed",
-						"baseline", fmt.Sprintf("%.3f", result.BaselineScore),
-						"optimized", fmt.Sprintf("%.3f", result.OptimizedScore))
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered linkage_calibrate background task (24h interval)")
-
-			// Register factor_weight_strategy_calibrate — calibrates FactorWeight
-			// strategy deltas (conservative/aggressive/risk-on/risk-off adjustments).
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "factor_weight_strategy_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					result, err := config.CalibrateStrategyDeltas(ctx, config.DefaultCalibrateConfig())
-					if err != nil {
-						logging.Error("fw_strategy_calibrate", "failed", "err", err.Error())
-						return err
-					}
-					logging.Info("fw_strategy_calibrate", "completed",
-						"verdict", result.Verdict,
-						"changes", len(result.Changes),
-						"summary", result.Summary)
-					for _, ch := range result.Changes {
-						logging.Info("fw_strategy_calibrate", "delta_change",
-							"param", ch.ParamName,
-							"before", ch.Before,
-							"after", ch.After,
-							"delta", ch.DeltaPct,
-							"confidence", ch.Confidence)
-					}
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered factor_weight_strategy_calibrate background task (24h interval)")
-
-			// Register auto_calibrate — runs Darwinian parameter calibration from
-			// historical session outcome data (7-day interval).
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "auto_calibrate",
-				Interval: 7 * 24 * time.Hour,
-				Jitter:   4 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-parameters",
-						"--module=darwinian")
-					cmd.Dir = cfg.WorkDir
-					out, err := cmd.CombinedOutput()
-					if err != nil {
-						logging.Warn("auto_calibrate", "failed",
-							logging.Err(err),
-							logging.FStr("output", string(out)))
-						return nil
-					}
-					logging.Info("auto_calibrate", "completed")
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered auto_calibrate background task (7-day interval)")
 
 			// Register auto_swarm_simulation — periodic swarm simulation
 			// for training data generation and scenario monitoring.
@@ -2021,29 +1582,22 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
 
-			// RSI-tw autonomous calibration — runs every 24h at market close
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "rsi_tw_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					report, err := retail.CalibrateRSITw(cfg.WorkDir)
-					if err != nil {
-						log.Printf("[RSITw] calibration failed: %v", err)
-						return err
-					}
-					riskGate.SetPreTradeRSITwScore(report.Score)
-					log.Printf("[RSITw] calibration complete: %s (score=%.4f, samples=%d, changes=%d)",
-						report.Verdict, report.Score, report.SampleCount, len(report.Changes))
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered rsi_tw_calibrate background task (24h interval)")
-
 			if realtimeAdapter != nil {
 				go realtimeAdapter.Start(sysCtx)
 				log.Printf("[RealTime] adapter started (cadence=%dms)", paramsCfg.Realtime.UpdateIntervalMs.Value)
 			}
+
+			registerCalibrationTasks(calibrationDeps{
+				TaskMgr:         taskMgr,
+				Cfg:             cfg,
+				ParamsCfg:       paramsCfg,
+				RiskGate:        riskGate,
+				JanusEngine:     janusEngine,
+				Dashboard:       dashboard,
+				FinMindClient:   nil,
+				MaturityTracker: maturityTracker,
+				CalProvider:     monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state")),
+			})
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
