@@ -23,8 +23,6 @@
 
 ## Wave 9 YELLOW 觀測性擴展（已合併至 v0.0.0.8）
 
-**計畫檔案**：[`.omo/plans/wave-9-plan.md`](../../.omo/plans/wave-9-plan.md) | **Oracle 審計**：`ses_1133ac96fffeEza3owbT02OsPL`
-
 | # | 事件類型 | EventType 常數 | 說明文件 | Alert Rule | 狀態 |
 |---|---------|---------------|---------|-----------|------|
 | 9.1 | 個別監控通道健康 | `EventChannelIndividualHealth` | [channel-individual-health.md](channel-individual-health.md) | [wave9_channel_individual_health.yml](../../monitoring/rules/wave9_channel_individual_health.yml) | ✅ 已合併（v0.0.0.8） |

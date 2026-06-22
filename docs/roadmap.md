@@ -90,8 +90,6 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 
 ### Wave 9 YELLOW（5 個，**shipped in v0.0.0.8**）✅
 
-**計畫檔案**：[`.omo/plans/wave-9-plan.md`](../.omo/plans/wave-9-plan.md) | **啟動 prompt**：[`.opencode/prompts/wave-9-bootstrap.md`](../.opencode/prompts/wave-9-bootstrap.md)
-
 **5 個事件**：`ChannelIndividualHealth`、`RegimeChangeConfirmed`、`FactorWeightRegression`、`DriftDetector`、`IngestionLagSpike`
 
 **對應 VERSION**：v0.0.0.8（Wave 8 v0.0.0.7 已收尾）✅ **已發布**
