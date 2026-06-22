@@ -13,7 +13,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -44,34 +43,6 @@ type IndustryContextData struct {
 	CycleConfidence    float64
 	SeasonalMultiplier float64
 	SystemicImportance float64
-}
-
-type (
-	NarrativeProviderFunc func(eventIDs []string) *NarrativeContextData
-	CycleProviderFunc     func(skill string) *IndustryContextData
-	CycleCardProviderFunc func() *industry.CycleStatusCard
-)
-
-type RegistryProviderFunc func() (domain.AgentRegistry, error)
-
-func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *PipelineService {
-	s.registryProvider = fn
-	return s
-}
-
-func (s *PipelineService) WithNarrativeProvider(fn NarrativeProviderFunc) *PipelineService {
-	s.narrativeProvider = fn
-	return s
-}
-
-func (s *PipelineService) WithCycleProvider(fn CycleProviderFunc) *PipelineService {
-	s.cycleProvider = fn
-	return s
-}
-
-func (s *PipelineService) WithCycleCardProvider(fn CycleCardProviderFunc) *PipelineService {
-	s.cardProvider = fn
-	return s
 }
 
 func NewPipelineService(workDir, ledgerDir string, store ledger.OutcomeStore) *PipelineService {
