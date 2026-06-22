@@ -1,12 +1,12 @@
 // Package snapshot provides two complementary snapshot strategies for the
 // #611 refactor safety net (Layer 3):
 //
-//   1. APISnapshot — uses go/parser + go/ast to extract exported symbols
-//      (funcs, types, consts, vars) from a Go source file. Detects accidental
-//      additions, removals, or signature changes during refactor.
+//  1. APISnapshot — uses go/parser + go/ast to extract exported symbols
+//     (funcs, types, consts, vars) from a Go source file. Detects accidental
+//     additions, removals, or signature changes during refactor.
 //
-//   2. GoldenSnapshot — serializes a runtime value to deterministic JSON and
-//      compares against a snapshot file. Locks behavior of pure functions.
+//  2. GoldenSnapshot — serializes a runtime value to deterministic JSON and
+//     compares against a snapshot file. Locks behavior of pure functions.
 //
 // Both strategies fail the calling test on mismatch. The first mismatch run
 // writes the actual output to testdata/<file>.actual for review. To accept a

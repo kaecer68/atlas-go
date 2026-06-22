@@ -28,10 +28,11 @@ func TestMain_PublicAPI(t *testing.T) {
 // disable real-money broker connections.
 //
 // Truth table (4 cases, all must be stable across refactor):
-//   mode="live"      key=""      → true  (live mode always starts proxy)
-//   mode="live"      key="abc"   → true  (live + explicit key)
-//   mode="simulation" key=""      → false (no live without live mode)
-//   mode="simulation" key="abc"   → true  (key alone forces proxy)
+//
+//	mode="live"      key=""      → true  (live mode always starts proxy)
+//	mode="live"      key="abc"   → true  (live + explicit key)
+//	mode="simulation" key=""      → false (no live without live mode)
+//	mode="simulation" key="abc"   → true  (key alone forces proxy)
 func TestShouldStartFubonProxy_Golden(t *testing.T) {
 	cases := []struct {
 		mode, key string

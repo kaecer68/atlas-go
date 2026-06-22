@@ -24,8 +24,8 @@ func TestCaptureAPI_SelfParse(t *testing.T) {
 
 	// Must contain the public entry points we exported.
 	wantFuncs := map[string]bool{
-		"CaptureAPI":   false,
-		"AssertAPI":    false,
+		"CaptureAPI":       false,
+		"AssertAPI":        false,
 		"AssertGoldenJSON": false,
 	}
 	for _, f := range snap.Funcs {

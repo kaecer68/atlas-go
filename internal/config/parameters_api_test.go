@@ -146,4 +146,3 @@ func BenchmarkLoadParametersConfig(b *testing.B) {
 		}
 	}
 }
-
