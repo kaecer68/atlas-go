@@ -1,0 +1,5023 @@
+{
+  "alert": {
+    "daily_loss_critical_pct": {
+      "rationale": "Daily PnL critical threshold (-2%)",
+      "source": "heuristic",
+      "value": -0.02
+    },
+    "daily_loss_warning_pct": {
+      "rationale": "Daily PnL warning threshold (-1.5%)",
+      "source": "heuristic",
+      "value": -0.015
+    },
+    "max_alert_trigger_rate": {
+      "rationale": "Maximum alert trigger rate per hour before critical",
+      "source": "heuristic",
+      "value": 100
+    },
+    "max_position_weight_pct": {
+      "rationale": "Maximum single position weight (15%) before error alert",
+      "source": "heuristic",
+      "value": 0.15
+    },
+    "max_positions_count": {
+      "rationale": "Maximum number of open positions before concentration warning",
+      "source": "heuristic",
+      "value": 20
+    },
+    "max_unacknowledged_alerts": {
+      "rationale": "Maximum unacknowledged alerts before warning",
+      "source": "heuristic",
+      "value": 10
+    },
+    "max_unrealized_loss_pct": {
+      "rationale": "Unrealized loss threshold (-5%) before position warning",
+      "source": "heuristic",
+      "value": -0.05
+    },
+    "min_cash_threshold": {
+      "rationale": "Minimum cash reserve before triggering low-cash warning",
+      "source": "heuristic",
+      "value": 100000
+    },
+    "min_screening_rate": {
+      "rationale": "Minimum screening rate (10%) before warning",
+      "source": "heuristic",
+      "value": 0.1
+    },
+    "rule_engine_cooldown_sec": {
+      "rationale": "Default rule cooldown (5 minutes)",
+      "source": "heuristic",
+      "value": 300
+    },
+    "rule_engine_interval_sec": {
+      "rationale": "Rule engine evaluation interval (30 seconds)",
+      "source": "heuristic",
+      "value": 30
+    },
+    "suppress_categories": {
+      "rationale": "",
+      "source": "",
+      "value": null
+    },
+    "system_metrics_interval_sec": {
+      "rationale": "System metrics collection interval (30 seconds)",
+      "source": "heuristic",
+      "value": 30
+    }
+  },
+  "baseline": {
+    "avg_trading_cost": {
+      "rationale": "Aggregate round-trip trading cost for Taiwan equities: commission (0.1425% × broker discount ~0.6 × 2 sides) + slippage (0.1% × 2 sides) + market impact. Calibrated from TWSE empirical data.",
+      "source": "empirical",
+      "todo": "Recalibrate against rolling 12-month TWSE trading cost distribution",
+      "value": 0.00654
+    },
+    "commission_discount_threshold": {
+      "rationale": "Minimum order notional (NTD) to qualify for discounted commission rate",
+      "source": "heuristic",
+      "value": 500000
+    },
+    "discounted_commission_bps": {
+      "rationale": "Discounted electronic trading commission rate: 0.085% = 8.5 bps",
+      "source": "empirical",
+      "value": 8.5
+    },
+    "max_open_positions": {
+      "rationale": "5 open positions balances diversification with monitoring overhead; at 18% max weight, 5 positions allow up to 90% deployed capital; each position gets meaningful allocation (~600K TWD on 3M base) without dilution",
+      "source": "heuristic",
+      "todo": "Backtest [3,8] range to find optimal number of positions for risk-adjusted returns",
+      "value": 5
+    },
+    "max_position_weight": {
+      "rationale": "18% single-position cap provides ~5-6 name diversification with room for conviction weighting; conservative end of typical 15-25% single-name limit for concentrated portfolios; above 20% would allow only 4-5 equally-weighted positions risking under-diversification",
+      "source": "literature",
+      "todo": "Validate against TW market concentration cost analysis and adjust per market cap segment",
+      "value": 0.18
+    },
+    "min_recommendation_conviction": {
+      "rationale": "Minimum 60 conviction for recommendations to pass CRO",
+      "source": "heuristic",
+      "value": 60
+    },
+    "min_tradable_volume": {
+      "rationale": "1M TWD minimum daily volume for liquidity",
+      "source": "empirical",
+      "value": 1000000
+    },
+    "require_cro_pass": {
+      "rationale": "Require CRO approval before execution",
+      "source": "heuristic",
+      "value": true
+    },
+    "reserve_cash_fraction": {
+      "rationale": "10% cash reserve for liquidity and opportunities",
+      "source": "literature",
+      "value": 0.1
+    },
+    "slippage_bps": {
+      "rationale": "4 bps estimated slippage for market orders",
+      "source": "empirical",
+      "value": 4
+    },
+    "starting_cash": {
+      "rationale": "3M TWD (~$90K USD) approximates minimum viable capital for 5-position TW equity portfolio with meaningful position sizes (~600K/position); represents conservative retail investor starting point above minimum lot thresholds",
+      "source": "heuristic",
+      "todo": "Validate against typical TW retail account sizes (CBC Financial Stability Report) and adjust for different investor segments",
+      "value": 3000000
+    },
+    "transaction_cost_bps": {
+      "rationale": "TW stock minimum brokerage fee: 0.1425% = 14.25 bps (tax calculated separately)",
+      "source": "empirical",
+      "value": 14.25
+    }
+  },
+  "darwinian": {
+    "bottom_quartile_multiplier": {
+      "rationale": "5% daily cut for bottom performers",
+      "source": "heuristic",
+      "todo": "Calibrate: test asymmetric penalties",
+      "value": 0.95
+    },
+    "conviction_clamp_max": {
+      "rationale": "Maximum conviction after weight scaling (100 * 2.5)",
+      "source": "heuristic",
+      "value": 250
+    },
+    "conviction_clamp_min": {
+      "rationale": "Minimum conviction after weight scaling",
+      "source": "heuristic",
+      "value": 1
+    },
+    "daily_adjustment_cooldown": {
+      "rationale": "Slightly less than 24h for daily trading frequency",
+      "source": "heuristic",
+      "todo": "Validate 20h vs 24h cooldown impact on agent turnover and stability",
+      "value": "20h"
+    },
+    "ema_alpha": {
+      "rationale": "Standard EMA smoothing factor",
+      "source": "literature",
+      "value": 0.3
+    },
+    "hit_rate_high_threshold": {
+      "rationale": "60% hit rate is good in TW equity market",
+      "source": "empirical",
+      "value": 0.6
+    },
+    "hit_rate_low_threshold": {
+      "rationale": "40% hit rate is poor and warrants reduction",
+      "source": "empirical",
+      "value": 0.4
+    },
+    "lookback_days": {
+      "rationale": "60 trading days (~3 months) for statistically stable rolling Sharpe; matches SharpeMinSampleSize",
+      "source": "literature",
+      "value": 60
+    },
+    "max_performance_bonus_pct": {
+      "rationale": "Cap performance bonus at +20%",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest optimization",
+      "value": 0.2
+    },
+    "middle_tier_boost_multiplier": {
+      "rationale": "2% mild boost for middle tier with good hit rate",
+      "source": "heuristic",
+      "value": 1.02
+    },
+    "middle_tier_cut_multiplier": {
+      "rationale": "2% mild cut for middle tier with poor hit rate",
+      "source": "heuristic",
+      "value": 0.98
+    },
+    "risk_multiplier": {
+      "rationale": "Extra 10% cut for extreme volatility",
+      "source": "heuristic",
+      "value": 0.9
+    },
+    "risk_volatility_threshold": {
+      "rationale": "8% daily volatility is extreme; extra penalty warranted",
+      "source": "empirical",
+      "value": 0.08
+    },
+    "sharpe_min_sample_size": {
+      "rationale": "60 trading days (~3 months) for statistically stable Sharpe estimation; matches academic standard for daily returns",
+      "source": "literature",
+      "todo": "Calibrate: test 60 vs 90 vs 126 for TW market agent population",
+      "value": 60
+    },
+    "sharpe_normalize_denom": {
+      "rationale": "Sigmoid normalization knee: Sharpe/(Sharpe+1.5); calibrated to top-quartile agent Sharpe for middle-range discrimination",
+      "source": "heuristic",
+      "value": 1.5
+    },
+    "stddev_mean_ratio_threshold": {
+      "rationale": "Guard against IEEE 754 precision edge case for identical returns",
+      "source": "inferred",
+      "value": 0.001
+    },
+    "top_quartile_multiplier": {
+      "rationale": "5% daily boost for top performers",
+      "source": "heuristic",
+      "todo": "Literature review: Atlas-GIC uses tiered scaling, exact value unverified",
+      "value": 1.05
+    },
+    "volatility_penalty_multiplier": {
+      "rationale": "5% penalty for high volatility agents",
+      "source": "heuristic",
+      "value": 0.95
+    },
+    "volatility_penalty_threshold": {
+      "rationale": "5% daily volatility (~79% annualized) is high for TW market",
+      "source": "empirical",
+      "value": 0.05
+    },
+    "weight_max": {
+      "rationale": "Shout level: agent influence amplified to 250%",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [2.0, 3.0] range",
+      "value": 2.5
+    },
+    "weight_min": {
+      "rationale": "Whisper level: agent influence reduced to 30%",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [0.2, 0.5] range",
+      "value": 0.3
+    },
+    "weight_neutral": {
+      "rationale": "Baseline: no adjustment",
+      "source": "heuristic",
+      "todo": "Calibrate neutral weight: test [0.8, 1.0, 1.2] with 30-day backtest",
+      "value": 1
+    }
+  },
+  "drawdown": {
+    "emergency_max_exposure": {
+      "rationale": "10% max exposure for emergency drawdown; minimum viable positions only",
+      "source": "heuristic",
+      "value": 0.1
+    },
+    "emergency_percentage": {
+      "rationale": "90% reduction for emergency drawdown; near-total liquidation",
+      "source": "heuristic",
+      "value": 0.9
+    },
+    "light_max_exposure": {
+      "rationale": "85% max exposure for light drawdown; allows most positions intact",
+      "source": "heuristic",
+      "value": 0.85
+    },
+    "light_percentage": {
+      "rationale": "15% reduction for yellow macro risk level (elevated but manageable)",
+      "source": "heuristic",
+      "value": 0.15
+    },
+    "moderate_max_exposure": {
+      "rationale": "65% max exposure for moderate drawdown; significant position trimming",
+      "source": "heuristic",
+      "value": 0.65
+    },
+    "moderate_percentage": {
+      "rationale": "35% reduction for orange macro risk (significant outflow concerns)",
+      "source": "heuristic",
+      "value": 0.35
+    },
+    "none_max_exposure": {
+      "rationale": "100% exposure allowed when no macro risk detected",
+      "source": "heuristic",
+      "value": 1
+    },
+    "none_percentage": {
+      "rationale": "No drawdown reduction at green macro risk; full exposure maintained",
+      "source": "heuristic",
+      "value": 0
+    },
+    "orange_override_min_score": {
+      "rationale": "Minimum structural trend override score needed to withstand orange macro risk; 0.55 requires moderately strong structural signal",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.50, 0.65] range against historical orange-regime drawdown outcomes",
+      "value": 0.55
+    },
+    "red_override_min_score": {
+      "rationale": "Minimum structural trend override score needed to withstand red macro risk; 0.75 requires very strong structural signal to justify staying invested",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.70, 0.85] range against historical red-regime drawdown outcomes; higher bar warranted for crisis-level risk",
+      "value": 0.75
+    },
+    "sector_constraints_carry_trade_unwind": {
+      "rationale": "Carry trade unwind: exit equities (0.1), minimal tech (0.05), minimal financials (0.1), maximum cash (2.0)",
+      "source": "heuristic",
+      "todo": "Calibrate: derive multipliers from carry trade unwind episodes (2024/8, 2008/10, 1998/10)",
+      "value": {
+        "all_equities": 0.1,
+        "cash": 2,
+        "financials": 0.1,
+        "tech": 0.05
+      }
+    },
+    "sector_constraints_risk_off": {
+      "rationale": "Risk-off flow: reduce growth/risk assets (AI supply chain 0.3, small cap 0.2, EM 0.1), rotate to defensive (gold 1.5, utilities 1.2)",
+      "source": "heuristic",
+      "todo": "Calibrate: derive multipliers from risk-off regime sector return analysis",
+      "value": {
+        "ai_supply_chain": 0.3,
+        "emerging_market": 0.1,
+        "gold": 1.5,
+        "small_cap": 0.2,
+        "utilities": 1.2
+      }
+    },
+    "sector_constraints_sector_rotation": {
+      "rationale": "Sector rotation flow: overweight energy (1.8) and oil services (1.5), reduce high-valuation tech (0.3) and rate-sensitive (0.4)",
+      "source": "heuristic",
+      "todo": "Calibrate: derive multipliers from sector rotation episode return analysis",
+      "value": {
+        "energy": 1.8,
+        "high_valuation_tech": 0.3,
+        "oil_services": 1.5,
+        "rate_sensitive": 0.4
+      }
+    },
+    "severe_max_exposure": {
+      "rationale": "40% max exposure for severe drawdown; only conviction positions survive",
+      "source": "heuristic",
+      "value": 0.4
+    },
+    "severe_percentage": {
+      "rationale": "60% reduction for red macro risk (crisis-level threat); most positions liquidated",
+      "source": "heuristic",
+      "value": 0.6
+    }
+  },
+  "engine": {
+    "drawdown": {
+      "levels": {
+        "rationale": "Five-tier drawdown risk framework: none (0%), light (15%), moderate (35%), severe (60%), emergency (90%); calibrated to TW market correction patterns",
+        "source": "heuristic",
+        "todo": "Validate drawdown level thresholds against 2020-2026 TWSE drawdown distribution",
+        "value": {
+          "emergency": {
+            "max_exposure": 0.1,
+            "percentage": 0.9
+          },
+          "light": {
+            "max_exposure": 0.85,
+            "percentage": 0.15
+          },
+          "moderate": {
+            "max_exposure": 0.65,
+            "percentage": 0.35
+          },
+          "none": {
+            "max_exposure": 1,
+            "percentage": 0
+          },
+          "severe": {
+            "max_exposure": 0.4,
+            "percentage": 0.6
+          }
+        }
+      },
+      "orange_override_min_score": {
+        "rationale": "Minimum composite score for orange (moderate) drawdown override of agent recommendations",
+        "source": "heuristic",
+        "value": 0.55
+      },
+      "red_override_min_score": {
+        "rationale": "Minimum composite score for red (severe/emergency) drawdown override; must be \u003e OrangeOverrideMinScore",
+        "source": "heuristic",
+        "value": 0.75
+      },
+      "sector_constraints_carry_trade_unwind": {
+        "rationale": "Carry trade unwind constraints: equities severely curtailed (5-10%), cash doubled; based on 2024 JPY carry unwind impact on TW markets",
+        "source": "empirical",
+        "value": {
+          "all_equities": 0.1,
+          "cash": 2,
+          "financials": 0.1,
+          "tech": 0.05
+        }
+      },
+      "sector_constraints_risk_off": {
+        "rationale": "Risk-off sector constraints: AI supply chain cut to 30% of normal, small cap/EM near-zero; gold/utilities boosted as defensive rotation",
+        "source": "heuristic",
+        "value": {
+          "ai_supply_chain": 0.3,
+          "emerging_market": 0.1,
+          "gold": 1.5,
+          "small_cap": 0.2,
+          "utilities": 1.2
+        }
+      },
+      "sector_constraints_sector_rotation": {
+        "rationale": "Sector rotation constraints: energy/oil services boosted 1.5-1.8x on commodity surge; high-valuation tech and rate-sensitives cut to 30-40%",
+        "source": "heuristic",
+        "value": {
+          "energy": 1.8,
+          "high_valuation_tech": 0.3,
+          "oil_services": 1.5,
+          "rate_sensitive": 0.4
+        }
+      }
+    },
+    "executors": {
+      "conviction_floor_default": {
+        "rationale": "Minimum 50 conviction (out of 100) for executor recommendations to be considered; below 50 is effectively a coin flip",
+        "source": "heuristic",
+        "todo": "Calibrate floor against executor historical precision-recall curve",
+        "value": 50
+      },
+      "crowding_penalty_agents_3": {
+        "rationale": "When 3 agents crowd same stock, conviction reduced to 75% to prevent herding; based on Kelly criterion adjustment for correlated bets",
+        "source": "heuristic",
+        "value": 0.75
+      },
+      "crowding_penalty_agents_4": {
+        "rationale": "When 4+ agents crowd same stock, conviction reduced to 60%; exponential penalty as crowding increases",
+        "source": "heuristic",
+        "value": 0.6
+      },
+      "max_stocks_default": {
+        "rationale": "Default 8 stocks max per session balances diversification with position concentration; aligned with baseline MaxOpenPositions (5) + buffer",
+        "source": "heuristic",
+        "value": 8
+      },
+      "max_stocks_max": {
+        "rationale": "Maximum 12 stocks prevents over-diversification diluting alpha; above 12, marginal diversification benefit \u003c transaction cost",
+        "source": "literature",
+        "value": 12
+      },
+      "max_stocks_min": {
+        "rationale": "Minimum 5 stocks ensures basic sector diversification across semiconductor, AI, financials, shipping, and one defensive",
+        "source": "heuristic",
+        "value": 5
+      },
+      "min_trade_amount": {
+        "rationale": "100K TWD minimum trade amount filters out uneconomically small orders; ~$3K USD at current FX",
+        "source": "heuristic",
+        "value": 100000
+      },
+      "vix_momentum_crash_threshold": {
+        "rationale": "VIX above 30 signals momentum crash regime; TW market foreign flow sensitivity increases ~3x above this level",
+        "source": "empirical",
+        "value": 30
+      }
+    },
+    "macro_risk": {
+      "carry_trade_unwind_threshold": {
+        "rationale": "JPY/USD above 145 triggers carry trade unwind concern; TW market foreign outflow accelerates above this threshold",
+        "source": "empirical",
+        "todo": "Recalibrate with 2024-2026 JPY-TWSE correlation data",
+        "value": 145
+      },
+      "dxy_surge_threshold_pct": {
+        "rationale": "1.5% DXY surge signals USD strength that pressures EM currencies including TWD; TW exporters face FX headwind",
+        "source": "empirical",
+        "value": 1.5
+      },
+      "gold_surge_threshold_pct": {
+        "rationale": "5% gold surge signals risk-off flight to safety, correlating with TW equity outflows",
+        "source": "heuristic",
+        "todo": "Validate against gold-USD-TWD correlation during 2022-2026 risk events",
+        "value": 5
+      },
+      "oil_shock_threshold_pct": {
+        "rationale": "10% oil price surge triggers supply-chain cost shock for TW manufacturing; historical shocks: 2022 Ukraine (+30%), 2023 OPEC cut (+8%)",
+        "source": "empirical",
+        "value": 10
+      },
+      "outflow_prob_base": {
+        "rationale": "35% baseline foreign outflow probability under normal conditions; calibrated from TWSE foreign flow data 2020-2025",
+        "source": "empirical",
+        "value": 35
+      },
+      "outflow_prob_max": {
+        "rationale": "80% max outflow probability under extreme conditions; upper bound observed during 2020 COVID and 2022 rate shock",
+        "source": "empirical",
+        "value": 80
+      },
+      "twd_stress_threshold_pct": {
+        "rationale": "2% TWD depreciation in a session signals capital flight; TW central bank typically intervenes at this level",
+        "source": "empirical",
+        "value": 2
+      },
+      "us10y_threshold": {
+        "rationale": "US 10Y above 4.5% signals rate-driven capital reallocation from EM equities; TW market shows sensitivity at this level",
+        "source": "empirical",
+        "value": 4.5
+      },
+      "vix_threshold": {
+        "rationale": "VIX above 30 indicates global fear regime triggering TW foreign capital outflow",
+        "source": "empirical",
+        "todo": "Recalibrate with 2025-2026 VIX-TAIEX correlation",
+        "value": 30
+      }
+    },
+    "sector_rotation": {
+      "base_allocations": {
+        "rationale": "TW market sector allocation: semiconductor (19%) + AI supply chain (15%) dominate (34% combined); defensive+cash (20%) reserve; all sectors sum to 100%",
+        "source": "heuristic",
+        "todo": "Calibrate sector weights against TWSE sector index market cap weights 2025-2026",
+        "value": {
+          "ai_supply_chain": 0.15,
+          "cash": 0.1,
+          "consumer": 0.04,
+          "defensive": 0.1,
+          "electronics": 0.05,
+          "energy": 0.04,
+          "financials": 0.11,
+          "industrial": 0.04,
+          "leo_satellite": 0.05,
+          "robotics": 0.06,
+          "semiconductor": 0.19,
+          "shipping": 0.07
+        }
+      },
+      "max_allocation": {
+        "rationale": "Maximum 40% single-sector allocation prevents over-concentration; ~2x semiconductor base weight (19%) allows tactical overweight",
+        "source": "heuristic",
+        "value": 0.4
+      },
+      "min_allocation": {
+        "rationale": "Minimum 2% sector allocation prevents zero-weight exclusion of small sectors",
+        "source": "heuristic",
+        "value": 0.02
+      },
+      "rebalance_threshold": {
+        "rationale": "1% rebalance threshold avoids excessive trading; sector weight deviation must exceed 1% to trigger rebalance",
+        "source": "heuristic",
+        "value": 0.01
+      }
+    },
+    "simulation": {
+      "neutral_regime_sizing_factor": {
+        "rationale": "85% position sizing in neutral regime reduces max position from full weight to 85%; provides 15% buffer for regime uncertainty",
+        "source": "heuristic",
+        "todo": "Calibrate sizing factor [0.70-1.00] via walk-forward backtest per regime",
+        "value": 0.85
+      }
+    },
+    "strategy_evolution": {
+      "configs": {
+        "rationale": "Five strategy states from normal (full risk) to suspended (no positions); progressive de-risking: cautious → defensive → hedged → suspended",
+        "source": "heuristic",
+        "todo": "Validate strategy state transitions with backtest across 2022 (bear), 2023-2024 (bull), 2025 (mixed) cycles",
+        "value": {
+          "cautious": {
+            "allow_concentration": false,
+            "allow_new_positions": true,
+            "hedge_ratio": 0.1,
+            "max_position_size": 0.12,
+            "max_sector_exposure": 0.25,
+            "min_cash_reserve": 0.1
+          },
+          "defensive": {
+            "allow_concentration": false,
+            "allow_new_positions": false,
+            "hedge_ratio": 0.2,
+            "max_position_size": 0.08,
+            "max_sector_exposure": 0.2,
+            "min_cash_reserve": 0.2
+          },
+          "hedged": {
+            "allow_concentration": false,
+            "allow_new_positions": true,
+            "hedge_ratio": 0.3,
+            "max_position_size": 0.1,
+            "max_sector_exposure": 0.25,
+            "min_cash_reserve": 0.15
+          },
+          "normal": {
+            "allow_concentration": true,
+            "allow_new_positions": true,
+            "hedge_ratio": 0,
+            "max_position_size": 0.15,
+            "max_sector_exposure": 0.3,
+            "min_cash_reserve": 0.05
+          },
+          "suspended": {
+            "allow_concentration": false,
+            "allow_new_positions": false,
+            "hedge_ratio": 0,
+            "max_position_size": 0,
+            "max_sector_exposure": 0,
+            "min_cash_reserve": 1
+          }
+        }
+      },
+      "cooldown_period_hours": {
+        "rationale": "24-hour cooldown between strategy switches prevents whipsaw during volatile regime transitions",
+        "source": "heuristic",
+        "todo": "Test 24h vs 48h vs 72h cooldown impact on strategy stability",
+        "value": 24
+      }
+    },
+    "structural_trend": {
+      "ai_revenue_growth_threshold": {
+        "rationale": "50% YoY AI revenue growth threshold flags structural AI capex surge; TSMC AI revenue grew ~50% in 2024-2025",
+        "source": "empirical",
+        "value": 50
+      },
+      "capex_growth_threshold": {
+        "rationale": "40% YoY capex growth flags structural capacity expansion; TSMC capex grew ~34% in 2024, ~40% planned for 2025",
+        "source": "empirical",
+        "value": 40
+      },
+      "cowos_utilization_threshold": {
+        "rationale": "85% CoWoS utilization signals near-capacity AI packaging demand; TSMC CoWoS utilization tracked at 90%+ in 2025",
+        "source": "empirical",
+        "value": 85
+      },
+      "min_confidence": {
+        "rationale": "75% minimum confidence for structural trend signal; balances false positive rate vs early detection",
+        "source": "heuristic",
+        "value": 0.75
+      },
+      "min_hit_rate": {
+        "rationale": "70% minimum historical hit rate for narrative events to be considered valid structural trends",
+        "source": "heuristic",
+        "todo": "Validate against narrative event hit rate distribution",
+        "value": 0.7
+      },
+      "min_trend_strength": {
+        "rationale": "Minimum 0.7 trend strength for structural classification; below this threshold trends are considered noise",
+        "source": "heuristic",
+        "todo": "Calibrate against TW structural trend detection accuracy 2020-2026",
+        "value": 0.7
+      },
+      "override_threshold": {
+        "rationale": "0.65 threshold for structural trend to override cyclical signals; must be lower than MinConfidence to prioritize structure",
+        "source": "heuristic",
+        "value": 0.65
+      },
+      "semiconductor_index_threshold": {
+        "rationale": "Placeholder for semiconductor index trend threshold; pending index construction",
+        "source": "heuristic",
+        "todo": "Define once TW semiconductor composite index is built",
+        "value": 0
+      }
+    }
+  },
+  "experiment": {
+    "drawdown_protection_ratio": {
+      "rationale": "Candidate drawdown must be \u003e= 80% of baseline",
+      "source": "heuristic",
+      "value": 0.8
+    },
+    "factor_weight_drift_threshold": {
+      "rationale": "Maximum allowed factor weight drift (15%) before rejecting experiment as regime-confounded",
+      "source": "heuristic",
+      "value": 0.15
+    },
+    "improvement_threshold": {
+      "rationale": "0.05% minimum improvement over baseline",
+      "source": "heuristic",
+      "todo": "Calibrate: too low may accept noise; too high rejects real improvements",
+      "value": 0.0005
+    },
+    "maturity_level1_observations": {
+      "rationale": "Minimum 3 observations for exploratory experiments",
+      "source": "heuristic",
+      "todo": "Literature suggests n\u003e=10 for any statistical conclusion",
+      "value": 3
+    },
+    "maturity_level2_observations": {
+      "rationale": "Minimum 8 observations for window-validated experiments",
+      "source": "heuristic",
+      "value": 8
+    },
+    "maturity_level3_observations": {
+      "rationale": "Minimum 12 observations for regime-aware experiments",
+      "source": "heuristic",
+      "value": 12
+    },
+    "max_fallback_ratio": {
+      "rationale": "Maximum fraction of factors allowed to be IsFallback (60%) before degrading experiment confidence",
+      "source": "heuristic",
+      "value": 0.6
+    },
+    "oos_window_days": {
+      "rationale": "30-day out-of-sample validation window",
+      "source": "heuristic",
+      "value": 30
+    },
+    "sharpe_stability_threshold": {
+      "rationale": "Sharpe stability: stderr \u003c 0.5 AND |mean|/stddev \u003e= 0.5",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "volatility_tolerance_ratio": {
+      "rationale": "Candidate volatility \u003c= 150% of baseline",
+      "source": "heuristic",
+      "value": 1.5
+    },
+    "walk_forward_embargo_days": {
+      "rationale": "5-trading-day embargo gap between walk-forward train/test folds and between primary training window and OOS window. Prevents data leakage from corporate-event reorgs and event-driven labeling lag.",
+      "source": "heuristic",
+      "todo": "Calibrate from leakage-sensitive backtest: test [3, 7, 10] range vs hit rate stability",
+      "value": 5
+    },
+    "welch_t_test_threshold": {
+      "rationale": "|t| \u003e= 2.0 corresponds to ~95% confidence",
+      "source": "literature",
+      "value": 2
+    }
+  },
+  "factor": {
+    "fallback_weight_reduction": {
+      "rationale": "50% weight reduction for fallback estimates",
+      "source": "heuristic",
+      "todo": "Calibrate: measure fallback estimate accuracy",
+      "value": 0.5
+    },
+    "institutional_sentiment_weights": {
+      "rationale": "Foreign flow 45%, domestic 30%, margin balance 20%, retail sentiment 5% — retail sentiment from RSI-tw calculator feeds into institutional sentiment as contrarian signal",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: predict next-day returns",
+      "value": {
+        "domestic": 0.3,
+        "foreign": 0.45,
+        "margin": 0.2,
+        "retail": 0.05
+      }
+    },
+    "momentum_intraday_discount": {
+      "rationale": "50% discount for intraday returns when historical data unavailable",
+      "source": "heuristic",
+      "todo": "SCOR-01: review discount factor with more data",
+      "value": 0.5
+    },
+    "momentum_intraday_threshold": {
+      "rationale": "10% intraday return = full score",
+      "source": "heuristic",
+      "value": 0.1
+    },
+    "momentum_lookback_days": {
+      "rationale": "Standard 20-day momentum window",
+      "source": "literature",
+      "value": 20
+    },
+    "momentum_stddev_divisor": {
+      "rationale": "30% return = full score; most TW stocks score below 0.3",
+      "source": "heuristic",
+      "todo": "Calibrate: use historical return distribution 90th percentile",
+      "value": 0.3
+    },
+    "quality_dividend_yield_cap": {
+      "rationale": "5% dividend yield is excellent for TW market",
+      "source": "empirical",
+      "value": 5
+    },
+    "quality_fallback_score": {
+      "rationale": "Low fallback score when data unavailable",
+      "source": "heuristic",
+      "value": 0.05
+    },
+    "quality_volatility_std": {
+      "rationale": "2% daily volatility benchmark based on TW market empirical data; TW stocks typically exhibit 1-3% daily volatility with median ~1.8%",
+      "source": "empirical",
+      "value": 0.02
+    },
+    "value_fallback_score": {
+      "rationale": "Conservative fallback score when data unavailable (harmonized with QualityFallbackScore)",
+      "source": "heuristic",
+      "value": 0.05
+    },
+    "value_pb_range_center": {
+      "rationale": "P/B=0.5 is cheap",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "value_pb_range_width": {
+      "rationale": "Range [0.5, 5.0]",
+      "source": "heuristic",
+      "value": 4.5
+    },
+    "value_pe_range_center": {
+      "rationale": "P/E=5 is cheap; P/E=50 is expensive",
+      "source": "heuristic",
+      "value": 5
+    },
+    "value_pe_range_width": {
+      "rationale": "Range [5, 50] covers most TW stocks",
+      "source": "empirical",
+      "value": 45
+    },
+    "value_ps_range_center": {
+      "rationale": "P/S=0.5 is cheap",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "value_ps_range_width": {
+      "rationale": "Range [0.5, 10.0]",
+      "source": "heuristic",
+      "value": 9.5
+    }
+  },
+  "factor_weight": {
+    "aggressive_inst_sent": {
+      "rationale": "Aggressive strategy: boost institutional sentiment (+3%) — follow smart money",
+      "source": "heuristic",
+      "todo": "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+      "value": 0.03
+    },
+    "aggressive_momentum": {
+      "rationale": "Aggressive strategy: boost momentum (+5%) — capitalize on trends",
+      "source": "heuristic",
+      "todo": "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+      "value": 0.05
+    },
+    "aggressive_quality": {
+      "rationale": "Aggressive strategy: reduce quality (-3%) — quality premium unnecessary in strong uptrend",
+      "source": "heuristic",
+      "todo": "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+      "value": -0.03
+    },
+    "aggressive_value": {
+      "rationale": "Aggressive strategy: reduce value (-3%) — value underperforms in aggressive markets",
+      "source": "heuristic",
+      "todo": "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+      "value": -0.03
+    },
+    "base_weights": {
+      "rationale": "Eight-factor weight distribution; momentum, value, quality as primary factors (65% combined), agent/inst_sent as secondary, liquidity/narrative as tertiary, industry_cycle as placeholder",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from factor attribution backtest across 2024-2026 regime cycles",
+      "value": {
+        "agent": 0.15,
+        "industry_cycle": 0,
+        "inst_sent": 0.1,
+        "liquidity": 0.05,
+        "momentum": 0.25,
+        "narrative": 0.05,
+        "quality": 0.2,
+        "value": 0.2
+      }
+    },
+    "clamp_max": {
+      "rationale": "Maximum factor weight ceiling (50%) prevents single-factor dominance",
+      "source": "heuristic",
+      "todo": "Verify: test with 0.40 ceiling to assess diversification impact",
+      "value": 0.5
+    },
+    "clamp_min": {
+      "rationale": "Minimum factor weight floor (2%) prevents any factor from being eliminated",
+      "source": "heuristic",
+      "todo": "Verify: test with 0.01 floor to assess extreme regime impact",
+      "value": 0.02
+    },
+    "conservative_momentum": {
+      "rationale": "Conservative strategy: reduce momentum (-5%) — dampen trend-chasing in defensive mode",
+      "source": "heuristic",
+      "todo": "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+      "value": -0.05
+    },
+    "conservative_quality": {
+      "rationale": "Conservative strategy: boost quality (+5%) — quality orientation for safety",
+      "source": "heuristic",
+      "todo": "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+      "value": 0.05
+    },
+    "conservative_value": {
+      "rationale": "Conservative strategy: boost value (+5%) — value orientation for safety",
+      "source": "heuristic",
+      "todo": "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+      "value": 0.05
+    },
+    "regime_bear_momentum": {
+      "rationale": "Bear regime: reduce momentum (-5%) — momentum strategies suffer in reversals",
+      "source": "heuristic",
+      "todo": "Calibrate: bear regime delta from 2022 drawdown data",
+      "value": -0.05
+    },
+    "regime_bear_quality": {
+      "rationale": "Bear regime: shift toward quality (+5%) for defensive positioning",
+      "source": "heuristic",
+      "todo": "Calibrate: bear regime delta from 2022 drawdown data",
+      "value": 0.05
+    },
+    "regime_bear_value": {
+      "rationale": "Bear regime: shift toward value (+3%) — value provides relative downside protection",
+      "source": "heuristic",
+      "todo": "Calibrate: bear regime delta from 2022 drawdown data",
+      "value": 0.03
+    },
+    "regime_bull_momentum": {
+      "rationale": "Bull regime: shift toward momentum (+5%) to capture trend continuation",
+      "source": "heuristic",
+      "todo": "Calibrate: optimize regime delta range via walk-forward backtest",
+      "value": 0.05
+    },
+    "regime_bull_quality": {
+      "rationale": "Bull regime: reduce quality (-3%) — defensive quality underperforms in strong rallies",
+      "source": "heuristic",
+      "todo": "Calibrate: optimize regime delta range via walk-forward backtest",
+      "value": -0.03
+    },
+    "regime_bull_value": {
+      "rationale": "Bull regime: reduce value (-2%) — value lags in momentum-driven bull markets",
+      "source": "heuristic",
+      "todo": "Calibrate: optimize regime delta range via walk-forward backtest",
+      "value": -0.02
+    },
+    "regime_high_vol_inst_sent": {
+      "rationale": "High volatility regime: reduce institutional sentiment (-2%) — lagging indicator in fast markets",
+      "source": "heuristic",
+      "todo": "Calibrate: high-vol delta from VIX regime analysis",
+      "value": -0.02
+    },
+    "regime_high_vol_liquidity": {
+      "rationale": "High volatility regime: rotate to liquidity (+5%) for stability",
+      "source": "heuristic",
+      "todo": "Calibrate: high-vol delta from VIX regime analysis",
+      "value": 0.05
+    },
+    "regime_high_vol_momentum": {
+      "rationale": "High volatility regime: reduce momentum (-3%) — momentum fragile in volatile markets",
+      "source": "heuristic",
+      "todo": "Calibrate: high-vol delta from VIX regime analysis",
+      "value": -0.03
+    },
+    "risk_off_liquidity": {
+      "rationale": "RISK_OFF mode: boost liquidity (+3%) — liquidity premium in stress",
+      "source": "heuristic",
+      "todo": "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+      "value": 0.03
+    },
+    "risk_off_momentum": {
+      "rationale": "RISK_OFF mode: reduce momentum (-5%) — momentum crashes in risk-off",
+      "source": "heuristic",
+      "todo": "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+      "value": -0.05
+    },
+    "risk_off_quality": {
+      "rationale": "RISK_OFF mode: boost quality (+5%) — flight to quality",
+      "source": "heuristic",
+      "todo": "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+      "value": 0.05
+    },
+    "risk_on_momentum": {
+      "rationale": "RISK_ON mode: boost momentum (+5%) — risk appetite favors trend",
+      "source": "heuristic",
+      "todo": "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+      "value": 0.05
+    },
+    "risk_on_quality": {
+      "rationale": "RISK_ON mode: reduce quality (-3%) — quality premium compresses in risk-on",
+      "source": "heuristic",
+      "todo": "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+      "value": -0.03
+    },
+    "severity_critical": {
+      "rationale": "Critical event: ±10% delta for severe market-moving events",
+      "source": "heuristic",
+      "todo": "Calibrate: severity deltas from event study of 50+ significant events",
+      "value": 0.1
+    },
+    "severity_high": {
+      "rationale": "High event: ±5% delta for significant events",
+      "source": "heuristic",
+      "todo": "Calibrate: severity deltas from event study",
+      "value": 0.05
+    },
+    "severity_low": {
+      "rationale": "Low event: ±1% delta for minor events",
+      "source": "heuristic",
+      "todo": "Calibrate: severity deltas from event study",
+      "value": 0.01
+    },
+    "severity_medium": {
+      "rationale": "Medium event: ±2% delta for moderate events",
+      "source": "heuristic",
+      "todo": "Calibrate: severity deltas from event study",
+      "value": 0.02
+    }
+  },
+  "fallback_price_targets": {
+    "_default": {
+      "stop_loss_multiplier": {
+        "rationale": "5% default stop-loss",
+        "source": "heuristic",
+        "value": 0.95
+      },
+      "target_multiplier": {
+        "rationale": "5% default upside target",
+        "source": "heuristic",
+        "value": 1.05
+      }
+    },
+    "ai_supply_chain_desk": {
+      "stop_loss_multiplier": {
+        "rationale": "5% stop-loss for AI supply chain",
+        "source": "heuristic",
+        "value": 0.95
+      },
+      "target_multiplier": {
+        "rationale": "8% upside target for AI supply chain",
+        "source": "heuristic",
+        "value": 1.08
+      }
+    },
+    "alpha_discovery": {
+      "stop_loss_multiplier": {
+        "rationale": "5% stop-loss for alpha discovery",
+        "source": "heuristic",
+        "value": 0.95
+      },
+      "target_multiplier": {
+        "rationale": "6% upside target for alpha discovery",
+        "source": "heuristic",
+        "value": 1.06
+      }
+    },
+    "earnings_quality": {
+      "stop_loss_multiplier": {
+        "rationale": "5% stop-loss for earnings quality",
+        "source": "heuristic",
+        "value": 0.95
+      },
+      "target_multiplier": {
+        "rationale": "6% upside target for earnings quality",
+        "source": "heuristic",
+        "value": 1.06
+      }
+    },
+    "etf_rotation_desk": {
+      "stop_loss_multiplier": {
+        "rationale": "3% stop-loss for ETF rotation",
+        "source": "heuristic",
+        "value": 0.97
+      },
+      "target_multiplier": {
+        "rationale": "4% upside target for ETF rotation",
+        "source": "heuristic",
+        "value": 1.04
+      }
+    },
+    "financials_desk": {
+      "stop_loss_multiplier": {
+        "rationale": "4% stop-loss for financials",
+        "source": "heuristic",
+        "value": 0.96
+      },
+      "target_multiplier": {
+        "rationale": "5% upside target for financials",
+        "source": "heuristic",
+        "value": 1.05
+      }
+    },
+    "growth_momentum": {
+      "stop_loss_multiplier": {
+        "rationale": "5% stop-loss for growth momentum",
+        "source": "heuristic",
+        "value": 0.95
+      },
+      "target_multiplier": {
+        "rationale": "8% upside target for growth momentum",
+        "source": "heuristic",
+        "value": 1.08
+      }
+    },
+    "semiconductor_desk": {
+      "stop_loss_multiplier": {
+        "rationale": "5% stop-loss for semiconductor sector",
+        "source": "heuristic",
+        "value": 0.95
+      },
+      "target_multiplier": {
+        "rationale": "6% upside target for semiconductor sector",
+        "source": "heuristic",
+        "value": 1.06
+      }
+    },
+    "shipping_desk": {
+      "stop_loss_multiplier": {
+        "rationale": "6% stop-loss for shipping sector",
+        "source": "heuristic",
+        "value": 0.94
+      },
+      "target_multiplier": {
+        "rationale": "7% upside target for shipping sector",
+        "source": "heuristic",
+        "value": 1.07
+      }
+    },
+    "technical_breakout": {
+      "stop_loss_multiplier": {
+        "rationale": "6% stop-loss for technical breakout",
+        "source": "heuristic",
+        "value": 0.94
+      },
+      "target_multiplier": {
+        "rationale": "10% upside target for technical breakout",
+        "source": "heuristic",
+        "value": 1.1
+      }
+    },
+    "value_yield": {
+      "stop_loss_multiplier": {
+        "rationale": "4% stop-loss for value/yield",
+        "source": "heuristic",
+        "value": 0.96
+      },
+      "target_multiplier": {
+        "rationale": "5% upside target for value/yield",
+        "source": "heuristic",
+        "value": 1.05
+      }
+    }
+  },
+  "forward_return": {
+    "risk_off_mean": {
+      "rationale": "Risk-off regime near-zero drift reflects defensive positioning",
+      "source": "heuristic",
+      "value": 0.0001
+    },
+    "risk_off_std_dev": {
+      "rationale": "Risk-off regime 0.8% daily vol reflects compressed trading ranges",
+      "source": "heuristic",
+      "value": 0.008
+    },
+    "risk_on_mean": {
+      "rationale": "Risk-on regime expected positive daily drift on TWSE; long-term equity premium",
+      "source": "heuristic",
+      "value": 0.0008
+    },
+    "risk_on_std_dev": {
+      "rationale": "Risk-on regime 1.5% daily vol matches typical TWSE large-cap",
+      "source": "heuristic",
+      "value": 0.015
+    }
+  },
+  "garch": {
+    "alpha": {
+      "rationale": "GARCH(1,1) alpha: shock persistence",
+      "source": "literature",
+      "todo": "MLE estimation from historical returns",
+      "value": 0.1
+    },
+    "beta": {
+      "rationale": "GARCH(1,1) beta: variance persistence",
+      "source": "literature",
+      "todo": "MLE estimation from historical returns",
+      "value": 0.85
+    },
+    "correlation_min_days": {
+      "rationale": "Minimum 30 days for correlation calculation",
+      "source": "literature",
+      "value": 30
+    },
+    "high_vol_threshold": {
+      "rationale": "Asset vol \u003e target*1.5 triggers reduction",
+      "source": "heuristic",
+      "value": 1.5
+    },
+    "increase_magnitude": {
+      "rationale": "Increase by 20% for low vol assets",
+      "source": "heuristic",
+      "value": 0.2
+    },
+    "low_vol_threshold": {
+      "rationale": "Current vol \u003c target*0.7 triggers increase",
+      "source": "heuristic",
+      "value": 0.7
+    },
+    "max_history": {
+      "rationale": "One year of trading days",
+      "source": "literature",
+      "value": 252
+    },
+    "max_history_points": {
+      "rationale": "Maximum volatility history points to retain",
+      "source": "heuristic",
+      "value": 1000
+    },
+    "min_forecast_days": {
+      "rationale": "Minimum 100 days for GARCH forecast",
+      "source": "heuristic",
+      "value": 100
+    },
+    "omega": {
+      "rationale": "GARCH(1,1) omega: long-run variance component",
+      "source": "literature",
+      "todo": "MLE estimation from historical returns",
+      "value": 0.000001
+    },
+    "rebalance_threshold": {
+      "rationale": "5% deviation threshold for rebalancing",
+      "source": "heuristic",
+      "value": 0.05
+    },
+    "reduce_magnitude": {
+      "rationale": "Reduce by 50% for high vol assets",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "smoothing_factor": {
+      "rationale": "EMA smoothing factor for volatility",
+      "source": "literature",
+      "value": 0.3
+    },
+    "weekly_rebalance_days": {
+      "rationale": "Weekly rebalancing interval",
+      "source": "heuristic",
+      "value": 7
+    }
+  },
+  "health": {
+    "auto_recover_days": {
+      "rationale": "Auto-recover after 7 days muted",
+      "source": "heuristic",
+      "value": 7
+    },
+    "hit_rate_weight": {
+      "rationale": "Hit rate contributes 30% to composite score",
+      "source": "heuristic",
+      "value": 0.3
+    },
+    "max_sharpe": {
+      "rationale": "Cap Sharpe at 5.0 for normalization",
+      "source": "heuristic",
+      "todo": "Use historical distribution instead of hard cap",
+      "value": 5
+    },
+    "min_sample_size": {
+      "rationale": "Minimum 30 observations for health assessment; 30 is the standard rule-of-thumb for CLT applicability",
+      "source": "literature",
+      "todo": "Currently defined but unused; implement in evaluateInterventions",
+      "value": 30
+    },
+    "min_sharpe": {
+      "rationale": "Floor Sharpe at -5.0 for normalization",
+      "source": "heuristic",
+      "value": -5
+    },
+    "mute_threshold": {
+      "rationale": "5 consecutive losses triggers mute",
+      "source": "heuristic",
+      "value": 5
+    },
+    "negative_sharpe_threshold": {
+      "rationale": "Sharpe below -0.5 indicates severe underperformance",
+      "source": "heuristic",
+      "value": -0.5
+    },
+    "sharpe_weight": {
+      "rationale": "Sharpe contributes 40% to composite score",
+      "source": "heuristic",
+      "todo": "Calibrate from predictive power regression",
+      "value": 0.4
+    },
+    "streak_max": {
+      "rationale": "10 consecutive wins = full streak score",
+      "source": "heuristic",
+      "value": 10
+    },
+    "streak_weight": {
+      "rationale": "Streak contributes 30% to composite score",
+      "source": "heuristic",
+      "value": 0.3
+    },
+    "unmute_threshold": {
+      "rationale": "3 consecutive wins triggers recovery",
+      "source": "heuristic",
+      "value": 3
+    }
+  },
+  "industry": {
+    "adjustment_floor": {
+      "rationale": "Minimum seasonal adjustment floor (1% of baseline); prevents complete elimination of industry weighting when combined adjustments drop below zero",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.005, 0.02] range for floor impact on portfolio stability",
+      "value": 0.01
+    },
+    "asymmetric_drop_critical": {
+      "rationale": "10% price drop triggers critical asymmetric risk severity; aligns with historical TW stock tail-event thresholds where \u003e10% single-day drops correlate with structural deterioration",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (99th percentile)",
+      "value": 0.1
+    },
+    "asymmetric_drop_high": {
+      "rationale": "7% price drop triggers high asymmetric risk severity; captures significant but non-extreme downside moves (e.g., sector-wide selloffs, geopolitical events)",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (95th percentile)",
+      "value": 0.07
+    },
+    "asymmetric_drop_medium": {
+      "rationale": "5% price drop triggers medium asymmetric risk severity; captures moderate downside moves that still warrant stop-loss monitoring",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (90th percentile)",
+      "value": 0.05
+    },
+    "asymmetric_risk": {
+      "rationale": "3% drop triggers bad news detection; 5% rise for good news; 30 min reaction window; 2x volume confirms",
+      "source": "heuristic",
+      "value": {
+        "bad_news_threshold": -0.03,
+        "good_news_threshold": 0.05,
+        "reaction_time_minutes": 30,
+        "volume_spike_multiplier": 2
+      }
+    },
+    "asymmetric_risk_enabled": {
+      "rationale": "Enable asymmetric downside risk scoring (tail risk analysis)",
+      "source": "heuristic",
+      "value": true
+    },
+    "boundary_fallback": {
+      "rationale": "Fallback threshold range width (25%) when cycle phase thresholds (expansion - mature) produce a non-positive range; prevents division-by-zero in boundary confidence calculation",
+      "source": "heuristic",
+      "todo": "Audit: verify this fallback is rarely triggered once per-industry thresholds are properly calibrated",
+      "value": 0.25
+    },
+    "capex_cycle_thresholds": {
+      "rationale": "Capex cycle thresholds: expansion at \u003e85% utilization + \u003e15% revenue growth; maintenance at \u003e70% + \u003e5%",
+      "source": "heuristic",
+      "value": {
+        "expansion_capacity_min": 0.85,
+        "expansion_revenue_min": 0.15,
+        "maintenance_capacity_min": 0.7,
+        "maintenance_revenue_min": 0.05
+      }
+    },
+    "classification_tree": {
+      "rationale": "Complete industry classification hierarchy migrated from hardcoded types.go to ParametersConfig. L1 weights sum to 1.0, L2 weights within each parent sum to 1.0. Representative stocks and attributes serve as initialization seeds; auto_tree_update pipeline refreshes weights quarterly from market-cap data.",
+      "source": "heuristic",
+      "todo": "Auto-update: run cmd/backfill-industry-tree after each quarter close to recompute weights from TWSE market cap data. Validate: ensure L1 weights sum to 1.0 and L2 weights per parent sum to 1.0.",
+      "value": {
+        "segments": [
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "台灣經濟支柱，包含晶圓代工、IC設計、封測",
+            "geographic_exposure": "Export",
+            "id": "semiconductor",
+            "level": 1,
+            "name": "半導體產業",
+            "name_en": "Semiconductor",
+            "representative_stocks": [
+              "2330.TW",
+              "2303.TW",
+              "2454.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.3
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "受全球貿易週期影響顯著",
+            "geographic_exposure": "Global",
+            "id": "shipping",
+            "level": 1,
+            "name": "航運產業",
+            "name_en": "Shipping \u0026 Logistics",
+            "representative_stocks": [
+              "2603.TW",
+              "2609.TW",
+              "2615.TW"
+            ],
+            "technology_intensity": "LowTech",
+            "weight": 0.08
+          },
+          {
+            "capital_intensity": "MediumCapital",
+            "cyclicality": "Hybrid",
+            "description": "利率敏感，獲利受央行政策影響",
+            "geographic_exposure": "Domestic",
+            "id": "financials",
+            "level": 1,
+            "name": "金融保險",
+            "name_en": "Financials",
+            "representative_stocks": [
+              "2881.TW",
+              "2882.TW",
+              "2886.TW"
+            ],
+            "technology_intensity": "LowTech",
+            "weight": 0.12
+          },
+          {
+            "capital_intensity": "MediumCapital",
+            "cyclicality": "Cyclical",
+            "description": "連結全球科技供應鏈",
+            "geographic_exposure": "Export",
+            "id": "electronics",
+            "level": 1,
+            "name": "電子零組件",
+            "name_en": "Electronics Components",
+            "representative_stocks": [
+              "2317.TW",
+              "2382.TW",
+              "2357.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.15
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "新興高成長領域",
+            "geographic_exposure": "Export",
+            "id": "ai_supply_chain",
+            "level": 1,
+            "name": "AI 供應鏈",
+            "name_en": "AI Supply Chain",
+            "representative_stocks": [
+              "2383.TW",
+              "3661.TW",
+              "4938.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.1
+          },
+          {
+            "capital_intensity": "MediumCapital",
+            "cyclicality": "Cyclical",
+            "description": "經濟週期後段受益者",
+            "geographic_exposure": "Domestic",
+            "id": "industrial",
+            "level": 1,
+            "name": "傳產機械",
+            "name_en": "Industrial Machinery",
+            "representative_stocks": [
+              "1513.TW",
+              "1590.TW"
+            ],
+            "technology_intensity": "MediumTech",
+            "weight": 0.08
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Hybrid",
+            "description": "基礎設施，需求穩定",
+            "geographic_exposure": "Domestic",
+            "id": "energy",
+            "level": 1,
+            "name": "能源電力",
+            "name_en": "Energy \u0026 Power",
+            "representative_stocks": [
+              "6505.TW",
+              "9917.TW"
+            ],
+            "technology_intensity": "LowTech",
+            "weight": 0.05
+          },
+          {
+            "capital_intensity": "LowCapital",
+            "cyclicality": "Defensive",
+            "description": "內需導向，經濟下行相對穩定",
+            "geographic_exposure": "Domestic",
+            "id": "consumer",
+            "level": 1,
+            "name": "消費零售",
+            "name_en": "Consumer Retail",
+            "representative_stocks": [
+              "2912.TW",
+              "9927.TW"
+            ],
+            "technology_intensity": "LowTech",
+            "weight": 0.05
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "新興自動化領域",
+            "geographic_exposure": "Export",
+            "id": "robotics",
+            "level": 1,
+            "name": "機器人產業",
+            "name_en": "Robotics",
+            "representative_stocks": [
+              "2356.TW",
+              "2049.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.03
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "大宗商品週期",
+            "geographic_exposure": "Global",
+            "id": "mining",
+            "level": 1,
+            "name": "採礦與基本金屬",
+            "name_en": "Mining \u0026 Metals",
+            "representative_stocks": [
+              "1605.TW",
+              "1707.TW"
+            ],
+            "technology_intensity": "LowTech",
+            "weight": 0.02
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "衛星通訊新興供應鏈",
+            "geographic_exposure": "Export",
+            "id": "leo_satellite",
+            "level": 1,
+            "name": "低軌衛星",
+            "name_en": "LEO Satellite",
+            "representative_stocks": [
+              "6271.TW",
+              "3426.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.02
+          },
+          {
+            "capital_intensity": "LowCapital",
+            "cyclicality": "Hybrid",
+            "description": "跨產業策略配置",
+            "geographic_exposure": "Domestic",
+            "id": "etf_rotation",
+            "level": 1,
+            "name": "ETF 輪動",
+            "name_en": "ETF Rotation",
+            "technology_intensity": "LowTech"
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "TSMC, UMC",
+            "geographic_exposure": "Export",
+            "id": "foundry",
+            "level": 2,
+            "name": "晶圓代工",
+            "name_en": "Foundry",
+            "parent_id": "semiconductor",
+            "representative_stocks": [
+              "2330.TW",
+              "2303.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.5
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "AI server assembly",
+            "geographic_exposure": "Export",
+            "id": "server_assembly",
+            "level": 2,
+            "name": "伺服器組裝",
+            "name_en": "Server Assembly",
+            "parent_id": "semiconductor",
+            "representative_stocks": [
+              "2324.TW",
+              "2356.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.25
+          },
+          {
+            "capital_intensity": "MediumCapital",
+            "cyclicality": "Cyclical",
+            "description": "Liquid/air cooling",
+            "geographic_exposure": "Export",
+            "id": "cooling",
+            "level": 2,
+            "name": "散熱方案",
+            "name_en": "Cooling Solutions",
+            "parent_id": "semiconductor",
+            "representative_stocks": [
+              "3324.TW",
+              "6230.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.25
+          },
+          {
+            "capital_intensity": "MediumCapital",
+            "cyclicality": "Cyclical",
+            "description": "Gold/silver recovery",
+            "geographic_exposure": "Global",
+            "id": "precious_metals_recycling",
+            "level": 2,
+            "name": "貴金屬回收",
+            "name_en": "Precious Metals Recycling",
+            "parent_id": "mining",
+            "representative_stocks": [
+              "3550.TW",
+              "8936.TW"
+            ],
+            "technology_intensity": "MediumTech",
+            "weight": 0.3
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "Copper mining/refining",
+            "geographic_exposure": "Global",
+            "id": "copper_industry",
+            "level": 2,
+            "name": "銅工業",
+            "name_en": "Copper Industry",
+            "parent_id": "mining",
+            "representative_stocks": [
+              "1605.TW",
+              "8930.TW"
+            ],
+            "technology_intensity": "LowTech",
+            "weight": 0.25
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "Rare earth elements",
+            "geographic_exposure": "Global",
+            "id": "rare_earth_specialty",
+            "level": 2,
+            "name": "稀土及特殊材料",
+            "name_en": "Rare Earth \u0026 Specialty",
+            "parent_id": "mining",
+            "representative_stocks": [
+              "2031.TW",
+              "1815.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.2
+          },
+          {
+            "capital_intensity": "MediumCapital",
+            "cyclicality": "Cyclical",
+            "description": "Metal fabrication",
+            "geographic_exposure": "Domestic",
+            "id": "metal_processing",
+            "level": 2,
+            "name": "金屬加工",
+            "name_en": "Metal Processing",
+            "parent_id": "mining",
+            "representative_stocks": [
+              "2015.TW",
+              "5007.TW"
+            ],
+            "technology_intensity": "LowTech",
+            "weight": 0.25
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "RF front-end modules",
+            "geographic_exposure": "Export",
+            "id": "satellite_rf_components",
+            "level": 2,
+            "name": "衛星射頻元件",
+            "name_en": "Satellite RF Components",
+            "parent_id": "leo_satellite",
+            "representative_stocks": [
+              "6271.TW",
+              "4958.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.35
+          },
+          {
+            "capital_intensity": "MediumCapital",
+            "cyclicality": "Cyclical",
+            "description": "High-frequency PCB",
+            "geographic_exposure": "Export",
+            "id": "satellite_pcb",
+            "level": 2,
+            "name": "衛星用 PCB",
+            "name_en": "Satellite PCB",
+            "parent_id": "leo_satellite",
+            "representative_stocks": [
+              "2355.TW",
+              "8046.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.25
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "Ground stations \u0026 terminals",
+            "geographic_exposure": "Domestic",
+            "id": "ground_equipment",
+            "level": 2,
+            "name": "地面設備",
+            "name_en": "Ground Equipment",
+            "parent_id": "leo_satellite",
+            "representative_stocks": [
+              "2314.TW",
+              "2353.TW"
+            ],
+            "technology_intensity": "MediumTech",
+            "weight": 0.25
+          },
+          {
+            "capital_intensity": "HighCapital",
+            "cyclicality": "Cyclical",
+            "description": "Optical inter-satellite links",
+            "geographic_exposure": "Export",
+            "id": "laser_communication",
+            "level": 2,
+            "name": "雷射通訊",
+            "name_en": "Laser Communication",
+            "parent_id": "leo_satellite",
+            "representative_stocks": [
+              "3426.TW",
+              "6533.TW"
+            ],
+            "technology_intensity": "HighTech",
+            "weight": 0.15
+          }
+        ]
+      }
+    },
+    "composite_card": {
+      "rationale": "Layer weights sum to 0.85 reflecting silicon-dominant Taiwan market. Sentiment thresholds calibrated to historical composite movement. Clamp [0.80,1.20] prevents extreme daily swings while allowing meaningful adjustment.",
+      "source": "heuristic; validated against 2024 TWSE daily returns",
+      "todo": "Backtest layer weights against actual forward returns from ledger data. Calibrate sentiment thresholds using historical composite coefficient distribution.",
+      "value": {
+        "clamp_max": 1.2,
+        "clamp_min": 0.8,
+        "layer_weights": {
+          "business_cycle": 0.2,
+          "events": 0.15,
+          "seasonal": 0.15,
+          "silicon": 0.25,
+          "supply_chain": 0.1
+        },
+        "sentiment_thresholds": {
+          "中性": {
+            "max": 1.05,
+            "min": 0.95
+          },
+          "偏多": {
+            "max": 1.1,
+            "min": 1.05
+          },
+          "偏空": {
+            "max": 0.95,
+            "min": 0.9
+          },
+          "強烈看多": {
+            "max": "+Inf",
+            "min": 1.1
+          },
+          "強烈看空": {
+            "max": 0.9,
+            "min": 0
+          }
+        }
+      }
+    },
+    "concentration_risk_enabled": {
+      "rationale": "Enable customer concentration risk scoring for supply chain analysis",
+      "source": "heuristic",
+      "value": true
+    },
+    "confidence_mix": {
+      "rationale": "Confidence mix: boundary(45%) + freshness(20%) + seasonal(15%) + linkage(10%) + narrative(10%)",
+      "source": "heuristic",
+      "value": {
+        "favorable_confidence_min": 0.4,
+        "weight_boundary": 0.45,
+        "weight_freshness": 0.2,
+        "weight_linkage": 0.1,
+        "weight_narrative": 0.1,
+        "weight_seasonal": 0.15
+      }
+    },
+    "confidence_signal": {
+      "rationale": "Signal weights derived from relative informativeness of each metric; boundary denom based on threshold spread; mix ratio balances data amplitude vs phase clarity",
+      "source": "heuristic",
+      "value": {
+        "boundary_denom_factor": 0.3,
+        "capacity_indicator_weight": 0.3,
+        "capacity_trend_threshold": 0.75,
+        "confidence_ceiling": 1,
+        "confidence_floor": 0.1,
+        "inventory_indicator_weight": 0.25,
+        "inventory_norm_denom": 10,
+        "inventory_trend_threshold": 4,
+        "inventory_weight": 0.1,
+        "profit_indicator_weight": 0.35,
+        "profit_norm_denom": 0.5,
+        "profit_trend_threshold": 0.1,
+        "profit_weight": 0.25,
+        "revenue_indicator_weight": 0.3,
+        "revenue_norm_denom": 0.5,
+        "revenue_trend_threshold": 0.1,
+        "revenue_weight": 0.25,
+        "signal_base": 0.3,
+        "signal_boundary_mix": 0.6,
+        "threshold_range_fallback": 0.25,
+        "trend_down_multiplier": 0.9,
+        "trend_up_multiplier": 1.1,
+        "utilization_weight": 0.15
+      }
+    },
+    "customer_concentration_limit": {
+      "rationale": "Flag customer concentration \u003e40% as high risk; TSMC Apple exposure ~25% is acceptable",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.30, 0.50] range; consider industry norms",
+      "value": 0.4
+    },
+    "customer_share_threshold_1": {
+      "rationale": "First tier customer concentration threshold (30%); triggers initial risk score",
+      "source": "heuristic",
+      "todo": "Calibrate: test [20, 40] range",
+      "value": 30
+    },
+    "customer_share_threshold_2": {
+      "rationale": "Second tier customer concentration threshold (50%); triggers higher risk score",
+      "source": "heuristic",
+      "todo": "Calibrate: test [40, 60] range",
+      "value": 50
+    },
+    "cycle_calibration": {
+      "rationale": "Cycle compass self-calibration: min 10 outcome samples before calibration, 5% learning rate for weight adjustments, hit rate \u003e0.55 upweights and \u003c0.45 downweights, weights clamped to [0.05, 0.40] range, 30-session rolling window",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest optimal hit_rate thresholds and learning_rate across multiple TW market regimes",
+      "value": {
+        "hit_rate_high": 0.55,
+        "hit_rate_low": 0.45,
+        "learning_rate": 0.05,
+        "min_samples": 10,
+        "weight_clamp_max": 0.4,
+        "weight_clamp_min": 0.05,
+        "window_size": 30
+      }
+    },
+    "cycle_thresholds": {
+      "rationale": "Per-industry business cycle thresholds covering all 12 L1 sectors. _default key serves as fallback for L2/L3 segments without explicit config. Thresholds calibrated by cyclicality: high-cyclical (shipping, mining) \u003e growth (semiconductor, AI) \u003e stable (financials, energy) \u003e defensive (consumer).",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from historical revenue/profit CAGR per sector via cmd/calibrate-seasonal --cycle-thresholds. Auto-update after each quarterly earnings season.",
+      "value": {
+        "_default": {
+          "expansion_profit_pct": 0.2,
+          "expansion_revenue_pct": 0.2,
+          "mature_profit_pct": -0.05,
+          "mature_revenue_pct": -0.05,
+          "recovery_profit_pct": 0.05,
+          "recovery_revenue_pct": 0.05
+        },
+        "ai_supply_chain": {
+          "expansion_profit_pct": 0.3,
+          "expansion_revenue_pct": 0.25,
+          "mature_profit_pct": 0.08,
+          "mature_revenue_pct": 0.05,
+          "recovery_profit_pct": 0.15,
+          "recovery_revenue_pct": 0.12
+        },
+        "consumer": {
+          "expansion_profit_pct": 0.1,
+          "expansion_revenue_pct": 0.08,
+          "mature_profit_pct": 0,
+          "mature_revenue_pct": -0.02,
+          "recovery_profit_pct": 0.05,
+          "recovery_revenue_pct": 0.03
+        },
+        "electronics": {
+          "expansion_profit_pct": 0.18,
+          "expansion_revenue_pct": 0.15,
+          "mature_profit_pct": 0.05,
+          "mature_revenue_pct": 0.03,
+          "recovery_profit_pct": 0.1,
+          "recovery_revenue_pct": 0.08
+        },
+        "energy": {
+          "expansion_profit_pct": 0.12,
+          "expansion_revenue_pct": 0.1,
+          "mature_profit_pct": 0.02,
+          "mature_revenue_pct": 0,
+          "recovery_profit_pct": 0.06,
+          "recovery_revenue_pct": 0.04
+        },
+        "etf_rotation": {
+          "expansion_profit_pct": 0.05,
+          "expansion_revenue_pct": 0.05,
+          "mature_profit_pct": -0.02,
+          "mature_revenue_pct": -0.02,
+          "recovery_profit_pct": 0.02,
+          "recovery_revenue_pct": 0.02
+        },
+        "financials": {
+          "expansion_profit_pct": 0.15,
+          "expansion_revenue_pct": 0.1,
+          "mature_profit_pct": 0.05,
+          "mature_revenue_pct": 0.02,
+          "recovery_profit_pct": 0.08,
+          "recovery_revenue_pct": 0.05
+        },
+        "industrial": {
+          "expansion_profit_pct": 0.15,
+          "expansion_revenue_pct": 0.12,
+          "mature_profit_pct": 0.02,
+          "mature_revenue_pct": 0,
+          "recovery_profit_pct": 0.08,
+          "recovery_revenue_pct": 0.05
+        },
+        "leo_satellite": {
+          "expansion_profit_pct": 0.25,
+          "expansion_revenue_pct": 0.22,
+          "mature_profit_pct": 0.05,
+          "mature_revenue_pct": 0.03,
+          "recovery_profit_pct": 0.12,
+          "recovery_revenue_pct": 0.1
+        },
+        "mining": {
+          "expansion_profit_pct": 0.28,
+          "expansion_revenue_pct": 0.25,
+          "mature_profit_pct": 0.05,
+          "mature_revenue_pct": 0.02,
+          "recovery_profit_pct": 0.12,
+          "recovery_revenue_pct": 0.1
+        },
+        "robotics": {
+          "expansion_profit_pct": 0.22,
+          "expansion_revenue_pct": 0.2,
+          "mature_profit_pct": 0.05,
+          "mature_revenue_pct": 0.02,
+          "recovery_profit_pct": 0.1,
+          "recovery_revenue_pct": 0.08
+        },
+        "semiconductor": {
+          "expansion_profit_pct": 0.25,
+          "expansion_revenue_pct": 0.2,
+          "mature_profit_pct": 0.08,
+          "mature_revenue_pct": 0.05,
+          "recovery_profit_pct": 0.15,
+          "recovery_revenue_pct": 0.1
+        },
+        "shipping": {
+          "expansion_profit_pct": 0.35,
+          "expansion_revenue_pct": 0.3,
+          "mature_profit_pct": 0.1,
+          "mature_revenue_pct": 0.05,
+          "recovery_profit_pct": 0.2,
+          "recovery_revenue_pct": 0.15
+        }
+      }
+    },
+    "cycle_transitions": {
+      "rationale": "TW cycle transition probabilities and durations",
+      "source": "heuristic",
+      "value": [
+        {
+          "from_phase": "recession",
+          "probability": 0.7,
+          "to_phase": "recovery",
+          "triggers": [
+            "inventory_depletion",
+            "demand_stabilization"
+          ],
+          "typical_duration_days": 180
+        },
+        {
+          "from_phase": "recovery",
+          "probability": 0.8,
+          "to_phase": "expansion",
+          "triggers": [
+            "revenue_acceleration",
+            "capex_increase"
+          ],
+          "typical_duration_days": 270
+        },
+        {
+          "from_phase": "expansion",
+          "probability": 0.6,
+          "to_phase": "mature",
+          "triggers": [
+            "growth_deceleration",
+            "margin_compression"
+          ],
+          "typical_duration_days": 360
+        },
+        {
+          "from_phase": "mature",
+          "probability": 0.5,
+          "to_phase": "recession",
+          "triggers": [
+            "demand_destruction",
+            "overcapacity"
+          ],
+          "typical_duration_days": 180
+        }
+      ]
+    },
+    "cycle_weight_multipliers": {
+      "rationale": "Cycle phase weight multipliers: expansion +20%, recovery +10%, mature neutral, recession -30%",
+      "source": "heuristic",
+      "value": {
+        "expansion_multiplier": 1.2,
+        "mature_multiplier": 1,
+        "recession_multiplier": 0.7,
+        "recovery_multiplier": 1.1
+      }
+    },
+    "default_metrics": {
+      "rationale": "Seed bootstrap values for CycleTracker initialization; replaced by real FinMind data within 6h (auto_cycle_update). Values match the previously hardcoded defaults in initializeDefaultPositions(). Only four seed fields are configurable — RevenueGrowthYoY, ProfitGrowthYoY, InventoryTurnover, CapacityUtilization — the remaining IndustryMetrics fields (MarketCap, PE, PB, DivYield, Volatility) are set to zero and filled from market data.",
+      "source": "heuristic",
+      "todo": "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
+      "value": {
+        "ai_supply_chain": {
+          "capacity_utilization": 0.9,
+          "inventory_turnover": 6,
+          "profit_growth_yoy": 0.5,
+          "revenue_growth_yoy": 0.45
+        },
+        "consumer": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 6,
+          "profit_growth_yoy": 0.05,
+          "revenue_growth_yoy": 0.03
+        },
+        "cooling": {
+          "capacity_utilization": 0.8,
+          "inventory_turnover": 5.5,
+          "profit_growth_yoy": 0.22,
+          "revenue_growth_yoy": 0.2
+        },
+        "copper_industry": {
+          "capacity_utilization": 0.72,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.1,
+          "revenue_growth_yoy": 0.08
+        },
+        "electronics": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.15,
+          "revenue_growth_yoy": 0.12
+        },
+        "energy": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.03,
+          "revenue_growth_yoy": 0.05
+        },
+        "etf_rotation": {
+          "capacity_utilization": 0,
+          "inventory_turnover": 0,
+          "profit_growth_yoy": 0.05,
+          "revenue_growth_yoy": 0.05
+        },
+        "financials": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 0,
+          "profit_growth_yoy": 0.1,
+          "revenue_growth_yoy": 0.08
+        },
+        "foundry": {
+          "capacity_utilization": 0.88,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.28,
+          "revenue_growth_yoy": 0.22
+        },
+        "ground_equipment": {
+          "capacity_utilization": 0.72,
+          "inventory_turnover": 3.5,
+          "profit_growth_yoy": 0.28,
+          "revenue_growth_yoy": 0.25
+        },
+        "industrial": {
+          "capacity_utilization": 0.68,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.08,
+          "revenue_growth_yoy": 0.06
+        },
+        "laser_communication": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 3,
+          "profit_growth_yoy": 0.55,
+          "revenue_growth_yoy": 0.5
+        },
+        "leo_satellite": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.4,
+          "revenue_growth_yoy": 0.35
+        },
+        "metal_processing": {
+          "capacity_utilization": 0.73,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.08,
+          "revenue_growth_yoy": 0.06
+        },
+        "mining": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.12,
+          "revenue_growth_yoy": 0.1
+        },
+        "precious_metals_recycling": {
+          "capacity_utilization": 0.8,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.18,
+          "revenue_growth_yoy": 0.15
+        },
+        "rare_earth_specialty": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 3.5,
+          "profit_growth_yoy": 0.06,
+          "revenue_growth_yoy": 0.05
+        },
+        "robotics": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.12,
+          "revenue_growth_yoy": 0.15
+        },
+        "satellite_pcb": {
+          "capacity_utilization": 0.78,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.35,
+          "revenue_growth_yoy": 0.3
+        },
+        "satellite_rf_components": {
+          "capacity_utilization": 0.8,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.5,
+          "revenue_growth_yoy": 0.45
+        },
+        "semiconductor": {
+          "capacity_utilization": 0.85,
+          "inventory_turnover": 5.5,
+          "profit_growth_yoy": 0.3,
+          "revenue_growth_yoy": 0.25
+        },
+        "server_assembly": {
+          "capacity_utilization": 0.85,
+          "inventory_turnover": 6.5,
+          "profit_growth_yoy": 0.45,
+          "revenue_growth_yoy": 0.4
+        },
+        "shipping": {
+          "capacity_utilization": 0.65,
+          "inventory_turnover": 3,
+          "profit_growth_yoy": -0.1,
+          "revenue_growth_yoy": -0.05
+        }
+      }
+    },
+    "dynamic_env": {
+      "rationale": "Dynamic env modulation thresholds and multipliers: oil \u003e10% triggers energy/shipping/industrial adjustments; BDI \u003e10% amplifies shipping; DXY \u003e5% penalizes exporters; values preserve original heuristic tuning from dynamic_env.go",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
+      "value": {
+        "bdi_cost_penalty": 0.04,
+        "bdi_high_threshold": 0.1,
+        "bdi_low_threshold": 0.1,
+        "bdi_shipping_boost": 0.3,
+        "dxy_export_benefit": 0.04,
+        "dxy_export_penalty": 0.05,
+        "dxy_high_threshold": 0.05,
+        "dxy_low_threshold": 0.03,
+        "history_cap_multiplier": 2,
+        "history_window_days": 90,
+        "jpy_carry_dxy_threshold": 0.03,
+        "oil_energy_mult": 0.5,
+        "oil_high_threshold": 0.1,
+        "oil_industrial_benefit": 0.04,
+        "oil_industrial_penalty": 0.06,
+        "oil_low_threshold": 0.1,
+        "oil_price_shock_threshold": 0.05,
+        "oil_shipping_benefit": 0.05,
+        "oil_shipping_penalty": 0.05,
+        "us_rates_dxy_threshold": 0.03
+      }
+    },
+    "event_calendar_rules": {
+      "rationale": "",
+      "source": "",
+      "value": null
+    },
+    "event_sentiment_cap": {
+      "rationale": "Cap per-event sentiment adjustment at ±5% to prevent any single calendar event from dominating the composite cycle sentiment. Based on empirical observation that even major Taiwan market events (elections, MSCI rebalance, earnings season) rarely move broad market \u003e3% in a single day, making ±5% a conservative but meaningful cap.",
+      "source": "heuristic",
+      "todo": "Backtest calibration: compute distribution of actual TWSE returns during historical calendar events and set cap at the 95th percentile of excess returns.",
+      "value": 0.05
+    },
+    "freshness_scores": {
+      "rationale": "Maps DataFreshness enum to confidence weights",
+      "source": "heuristic",
+      "value": {
+        "score_default": 0.3,
+        "score_fallback": 0.2,
+        "score_live": 1,
+        "score_recent": 0.8,
+        "score_stale": 0.4
+      }
+    },
+    "geographic_exposure_limit": {
+      "rationale": "Flag geographic revenue concentration \u003e60% as high risk; China exposure threshold",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.50, 0.70] range based on geopolitical risk assessment",
+      "value": 0.6
+    },
+    "history_retention_days": {
+      "rationale": "Keep 90 days of cycle history for trend analysis",
+      "source": "heuristic",
+      "value": 90
+    },
+    "impact_multiplier": {
+      "rationale": "Multiplier for estimated price impact from risk score",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.10, 0.25] range",
+      "value": 0.15
+    },
+    "inventory_cycle_thresholds": {
+      "rationale": "Inventory cycle thresholds derived from TW semiconductor and electronics supply chain behavior",
+      "source": "heuristic",
+      "value": {
+        "active_destocking_capacity_max": 0.6,
+        "active_destocking_inventory_max": 3,
+        "active_restocking_capacity_min": 0.8,
+        "active_restocking_inventory_min": 6,
+        "passive_restocking_capacity_min": 0.7,
+        "passive_restocking_inventory_min": 4
+      }
+    },
+    "linkage_params": {
+      "rationale": "Downstream decay (0.80) \u003e upstream (0.60); seasonal decay (0.30) for supply-chain propagation; default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier() for dynamic macro event modulation. Correlation matrix migrated from hardcoded linkage.go to ParametersConfig.",
+      "source": "heuristic; validated against 2024 TWSE sector index returns",
+      "todo": "Auto-update: run cmd/backfill-correlation-matrix monthly to recompute from TWSE sector index daily returns. Validate: compare matrix against rolling 90-day correlation of sector ETFs.",
+      "value": {
+        "correlation_matrix": {
+          "ai_supply_chain ↔ electronics": 0.65,
+          "ai_supply_chain ↔ financials": 0.2,
+          "ai_supply_chain ↔ robotics": 0.55,
+          "ai_supply_chain ↔ shipping": 0.05,
+          "consumer ↔ energy": 0.15,
+          "consumer ↔ industrial": 0.2,
+          "etf_rotation ↔ financials": 0.45,
+          "etf_rotation ↔ semiconductor": 0.3,
+          "etf_rotation ↔ shipping": 0.05,
+          "financials ↔ consumer": 0.35,
+          "financials ↔ energy": 0.1,
+          "financials ↔ industrial": 0.25,
+          "financials ↔ shipping": 0.05,
+          "mining ↔ ai_supply_chain": 0.5,
+          "mining ↔ consumer": 0.1,
+          "mining ↔ electronics": 0.6,
+          "mining ↔ energy": 0.35,
+          "mining ↔ financials": 0.3,
+          "mining ↔ industrial": 0.4,
+          "mining ↔ robotics": 0.45,
+          "mining ↔ semiconductor": 0.55,
+          "mining ↔ shipping": 0.25,
+          "robotics ↔ electronics": 0.48,
+          "robotics ↔ financials": 0.1,
+          "robotics ↔ industrial": 0.6,
+          "semiconductor ↔ ai_supply_chain": 0.85,
+          "semiconductor ↔ electronics": 0.72,
+          "semiconductor ↔ financials": 0.15,
+          "semiconductor ↔ robotics": 0.45,
+          "semiconductor ↔ shipping": -0.1,
+          "shipping ↔ energy": 0.4,
+          "shipping ↔ industrial": 0.3
+        },
+        "correlation_window_days": 30,
+        "default_correlation": 0.5,
+        "downstream_decay_factor": 0.8,
+        "min_correlation_threshold": 0.3,
+        "recession_correlation_boost": 0.3,
+        "recession_shock_amplifier": 1.3,
+        "seasonal_decay_factor": 0.3,
+        "systemic_importance_divisor": 10,
+        "upstream_decay_factor": 0.6
+      }
+    },
+    "linkage_weight_impact": {
+      "rationale": "Linkage systemic importance deviation scaling: ±20% max impact",
+      "source": "heuristic",
+      "value": 0.2
+    },
+    "max_daily_weight_change": {
+      "rationale": "Maximum 5% daily weight change to prevent excessive volatility",
+      "source": "heuristic",
+      "value": 0.05
+    },
+    "news_impact_multiplier": {
+      "rationale": "5% estimated price impact multiplier for news latency risk scoring; represents conservative estimate of information disadvantage cost for TW investors vs US Tier-1 sources",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TW stock price response to delayed news versus US peers (event study methodology)",
+      "value": 0.05
+    },
+    "news_latency_risk": {
+      "rationale": "24h max latency gap; severity bands at 0.5/0.8; drop thresholds at 5%/7%/10%",
+      "source": "heuristic",
+      "value": {
+        "confidence_divisor": 3,
+        "drop_critical_threshold": 0.1,
+        "drop_high_threshold": 0.07,
+        "drop_medium_threshold": 0.05,
+        "impact_multiplier": 0.05,
+        "max_latency_hours": 24,
+        "severity_critical_min": 0.8,
+        "severity_high_min": 0.5
+      }
+    },
+    "news_latency_risk_enabled": {
+      "rationale": "Enable news latency risk scoring for event-driven positions",
+      "source": "heuristic",
+      "value": true
+    },
+    "phase_scores": {
+      "rationale": "Cycle phase conviction deltas; expansion (+20) and recovery (+10) boost, recession (-20) penalizes, mature (0) neutral",
+      "source": "heuristic",
+      "todo": "Calibrate: derive phase deltas from sector-regime conviction regression",
+      "value": {
+        "score_expansion": 20,
+        "score_mature": 0,
+        "score_recession": -20,
+        "score_recovery": 10
+      }
+    },
+    "risk_confidence": {
+      "rationale": "Confidence level for risk assessment",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.70, 0.95] range",
+      "value": 0.85
+    },
+    "risk_score_weight_1": {
+      "rationale": "Risk score weight for first tier customer concentration",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.2, 0.5] range",
+      "value": 0.4
+    },
+    "risk_score_weight_2": {
+      "rationale": "Risk score weight for second tier customer concentration",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.2, 0.4] range",
+      "value": 0.3
+    },
+    "risk_score_weight_3": {
+      "rationale": "Risk score weight for first tier US exposure",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.1, 0.3] range",
+      "value": 0.2
+    },
+    "risk_score_weight_4": {
+      "rationale": "Risk score weight for second tier US exposure",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.05, 0.2] range",
+      "value": 0.1
+    },
+    "seasonal_multipliers": {
+      "rationale": "",
+      "source": "",
+      "value": {
+        "theme_correlations": null,
+        "theme_multipliers": null
+      }
+    },
+    "seasonal_patterns": {
+      "rationale": "7 canonical Taiwan seasonal patterns from DefaultSeasonalPatterns(); values read from config by NewSeasonalEngine()",
+      "source": "heuristic",
+      "value": [
+        {
+          "adjustment_factor": 1.15,
+          "avg_market_return": 0.032,
+          "avoided_industries": [
+            "semiconductor",
+            "ai_supply_chain"
+          ],
+          "description": "年前資金回籠，高股息與金融股受追捧；電子股進入淡季",
+          "end_day": 15,
+          "end_month": 2,
+          "favored_industries": [
+            "financials"
+          ],
+          "historical_accuracy": 0.7,
+          "id": "spring_festival",
+          "name": "春節行情",
+          "name_en": "Spring Festival Rally",
+          "start_day": 15,
+          "start_month": 1,
+          "style_tags": [
+            "high_dividend",
+            "small_cap"
+          ]
+        },
+        {
+          "adjustment_factor": 1.1,
+          "avg_market_return": 0.015,
+          "avoided_industries": [
+            "consumer",
+            "industrial"
+          ],
+          "description": "季報空窗期，成長股與AI供應鏈有表現空間",
+          "end_day": 15,
+          "end_month": 4,
+          "favored_industries": [
+            "ai_supply_chain",
+            "electronics"
+          ],
+          "historical_accuracy": 0.55,
+          "id": "earnings_window",
+          "name": "季報空窗期",
+          "name_en": "Earnings Report Window",
+          "start_day": 1,
+          "start_month": 3
+        },
+        {
+          "adjustment_factor": 1.2,
+          "avg_market_return": 0.025,
+          "avoided_industries": [
+            "semiconductor",
+            "ai_supply_chain",
+            "electronics"
+          ],
+          "description": "除權除息旺季，高股息股與金融股表現較佳；科技股相對弱勢",
+          "end_day": 30,
+          "end_month": 6,
+          "favored_industries": [
+            "financials",
+            "consumer"
+          ],
+          "historical_accuracy": 0.65,
+          "id": "dividend_season",
+          "name": "除權除息季",
+          "name_en": "Dividend Season",
+          "start_day": 1,
+          "start_month": 5,
+          "style_tags": [
+            "high_dividend"
+          ]
+        },
+        {
+          "adjustment_factor": 1.25,
+          "avg_market_return": 0.085,
+          "avoided_industries": [
+            "consumer"
+          ],
+          "description": "蘋果新機拉貨、AI晶片需求高峰，科技股表現最強",
+          "end_day": 15,
+          "end_month": 9,
+          "favored_industries": [
+            "semiconductor",
+            "ai_supply_chain",
+            "electronics"
+          ],
+          "historical_accuracy": 0.75,
+          "id": "tech_peak_season",
+          "name": "科技旺季",
+          "name_en": "Technology Peak Season",
+          "start_day": 1,
+          "start_month": 7
+        },
+        {
+          "adjustment_factor": 1.1,
+          "avg_market_return": 0.02,
+          "avoided_industries": null,
+          "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售",
+          "end_day": 31,
+          "end_month": 10,
+          "favored_industries": null,
+          "historical_accuracy": 0.6,
+          "id": "earnings_verification",
+          "name": "季報驗證期",
+          "name_en": "Earnings Verification",
+          "start_day": 15,
+          "start_month": 9
+        },
+        {
+          "adjustment_factor": 1.12,
+          "avg_market_return": 0.018,
+          "avoided_industries": null,
+          "description": "法人年底作帳，大型權值股與金融股相對強勢",
+          "end_day": 31,
+          "end_month": 12,
+          "favored_industries": [
+            "financials"
+          ],
+          "historical_accuracy": 0.58,
+          "id": "year_end_rally",
+          "name": "年底作帳",
+          "name_en": "Year-End Window Dressing",
+          "start_day": 1,
+          "start_month": 11,
+          "style_tags": [
+            "large_cap",
+            "index_heavyweights"
+          ]
+        },
+        {
+          "adjustment_factor": 1.08,
+          "avg_market_return": 0.012,
+          "avoided_industries": [
+            "industrial"
+          ],
+          "description": "夏季用電高峰，能源相對強勢；高耗電製造業成本上升",
+          "end_day": 31,
+          "end_month": 8,
+          "favored_industries": [
+            "energy"
+          ],
+          "historical_accuracy": 0.62,
+          "id": "summer_electricity",
+          "name": "夏季用電高峰",
+          "name_en": "Summer Electricity Peak",
+          "start_day": 1,
+          "start_month": 6
+        }
+      ]
+    },
+    "severity_threshold_critical": {
+      "rationale": "Risk score threshold for critical severity",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.7, 0.9] range",
+      "value": 0.8
+    },
+    "severity_threshold_high": {
+      "rationale": "Risk score threshold for high severity",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.5, 0.7] range",
+      "value": 0.6
+    },
+    "severity_threshold_medium": {
+      "rationale": "Risk score threshold for medium severity",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.3, 0.5] range",
+      "value": 0.4
+    },
+    "silicon_cycle": {
+      "citation": {
+        "dependencies": null,
+        "evidence_quality": "medium",
+        "last_validated": "",
+        "source_reference": "TSMC quarterly reports; WSTS semiconductor forecast; Philadelphia SOX Index historical data",
+        "source_type": "practitioner_convention",
+        "update_policy": "review_quarterly",
+        "validation_method": "backtest_phase_accuracy"
+      },
+      "rationale": "Thresholds derived from historical TSMC revenue cycles (2015-2024), WSTS semiconductor forecast methodology, and Philadelphia SOX Index behavioral patterns. RevenueYoY=15% aligns with TSMC's average quarterly growth inflection. SOXExtreme=40% reflects the ~2σ band of SOX annual returns. CapexCut=10% is the conventional analyst threshold for 'meaningful capex reduction.'",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest phase detection accuracy against labeled historical silicon cycles (e.g., 2018-2019 downturn, 2021-2022 super-cycle, 2023 inventory correction). Compare DRAMStabilizationThreshold and BillingsStabilizationThreshold against actual DRAMeXchange/WSTS data when providers are integrated.",
+      "value": {
+        "billings_stabilization_threshold": -0.05,
+        "billings_yoy_threshold": 0.1,
+        "capex_cut_threshold": 0.1,
+        "dram_stabilization_threshold": 0,
+        "history_window_size": 60,
+        "index_ma_percent_threshold": 0.2,
+        "inventory_days_threshold": 45,
+        "min_confidence": 0.6,
+        "revenue_yoy_threshold": 0.15,
+        "sox_extreme_threshold": 0.4,
+        "utilization_threshold": 0.75
+      }
+    },
+    "skill_to_industries": {
+      "rationale": "Maps agent skills to one or more industry sectors for sector-ban filtering",
+      "source": "heuristic",
+      "value": {
+        "ai_supply_chain_desk": [
+          "ai_supply_chain",
+          "pcb",
+          "thermal"
+        ],
+        "etf_rotation_desk": [
+          "high_dividend",
+          "etf_rotation"
+        ],
+        "financials_desk": [
+          "financials"
+        ],
+        "leo_satellite_desk": [
+          "leo_satellite",
+          "satellite_rf_components",
+          "satellite_pcb"
+        ],
+        "semiconductor_desk": [
+          "semiconductor",
+          "foundry"
+        ],
+        "shipping_desk": [
+          "shipping"
+        ]
+      }
+    },
+    "skill_to_industry": {
+      "rationale": "Maps agent skills to industry sectors for cycle-aware conviction adjustments",
+      "source": "heuristic",
+      "todo": "Validate: verify mapping aligns with sector coverage mandates",
+      "value": {
+        "ai_infrastructure": "ai_supply_chain",
+        "consumer_analyst": "traditional",
+        "defense_industrial": "ai_supply_chain",
+        "energy_analyst": "renewable_energy",
+        "macro_research": "financials",
+        "semiconductor_desk": "semiconductor",
+        "shipping_analyst": "shipping"
+      }
+    },
+    "us_exposure_threshold_1": {
+      "rationale": "US geographic exposure threshold (50%); triggers initial risk score",
+      "source": "heuristic",
+      "todo": "Calibrate: test [40, 60] range",
+      "value": 50
+    },
+    "us_exposure_threshold_2": {
+      "rationale": "High US geographic exposure threshold (70%); triggers higher risk score",
+      "source": "heuristic",
+      "todo": "Calibrate: test [60, 80] range",
+      "value": 70
+    },
+    "weight_floor": {
+      "rationale": "Minimum 3% weight per industry after normalization",
+      "source": "heuristic",
+      "value": 0.03
+    }
+  },
+  "janus": {
+    "epsilon_weight": {
+      "rationale": "Minimal weight assigned to negative-Sharpe cohorts when others are positive",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.01, 0.05] range",
+      "value": 0.02
+    },
+    "health_stale_hours": {
+      "rationale": "Hours before JANUS data is considered stale (7 days); triggers error-level health alert",
+      "source": "heuristic",
+      "value": 168
+    },
+    "health_warn_hours": {
+      "rationale": "Hours before JANUS data triggers warning-level health alert (2 days)",
+      "source": "heuristic",
+      "value": 48
+    },
+    "historical_threshold": {
+      "rationale": "Weight delta threshold for HISTORICAL_REGIME detection; long-window winner maintains stable lead",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.10, 0.25] range",
+      "value": 0.15
+    },
+    "long_window_blend": {
+      "rationale": "20% weight on long-window Sharpe in blended score; retains long-term memory",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.1, 0.3] range; must sum with short+medium to 1.0",
+      "value": 0.2
+    },
+    "long_window_days": {
+      "rationale": "Long lookback window (~1 trading quarter) for cohort performance",
+      "source": "heuristic",
+      "todo": "Calibrate: test [40, 90] range for long-term memory",
+      "value": 60
+    },
+    "max_history_days": {
+      "rationale": "Maximum rolling history per cohort; must cover longest window comfortably",
+      "source": "heuristic",
+      "value": 90
+    },
+    "max_weight": {
+      "rationale": "Ceiling for any cohort weight; prevents single-cohort dominance",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.40, 0.80] range",
+      "value": 0.6
+    },
+    "medium_window_blend": {
+      "rationale": "30% weight on medium-window Sharpe in blended score",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.2, 0.4] range; must sum with short+long to 1.0",
+      "value": 0.3
+    },
+    "medium_window_days": {
+      "rationale": "Medium lookback window (~1 trading month) for cohort performance",
+      "source": "heuristic",
+      "todo": "Calibrate: test [15, 30] range for medium-term stability",
+      "value": 20
+    },
+    "min_weight": {
+      "rationale": "Floor for any cohort weight; prevents total elimination",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.01, 0.10] range",
+      "value": 0.05
+    },
+    "novel_threshold": {
+      "rationale": "Weight delta threshold for NOVEL_REGIME detection; short-window winner surges past long-window standing",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.10, 0.25] range",
+      "value": 0.15
+    },
+    "short_window_blend": {
+      "rationale": "50% weight on short-window Sharpe in blended score; emphasizes recent accuracy",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.3, 0.6] range; must sum with medium+long to 1.0",
+      "value": 0.5
+    },
+    "short_window_days": {
+      "rationale": "Short lookback window (~1 trading week) for cohort performance",
+      "source": "heuristic",
+      "todo": "Calibrate: test [3, 10] range for short-term sensitivity",
+      "value": 5
+    }
+  },
+  "marketdata": {
+    "bdi_api_timeout_sec": {
+      "rationale": "HTTP timeout for CNBC BDI API; public free endpoint, accept slower response",
+      "source": "heuristic",
+      "todo": "Calibrate: test [5, 15] range based on observed CNBC latency",
+      "value": 10
+    },
+    "bdi_endpoint": {
+      "rationale": "CNBC free REST JSON API for Baltic Dry Index; no API key required, /BADI symbol includes change_pct and last_time_msec",
+      "source": "empirical",
+      "value": "https://quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI\u0026output=json"
+    },
+    "fubon_api_timeout_sec": {
+      "rationale": "HTTP timeout for Fubon API calls; proxy adds latency, keep short",
+      "source": "heuristic",
+      "todo": "Calibrate: test [5, 15] range based on proxy latency",
+      "value": 10
+    },
+    "fubon_historical_limit": {
+      "rationale": "Fubon historical data API rate limit; conservative to avoid throttling",
+      "source": "heuristic",
+      "todo": "Verify: check Fubon DMA documentation for actual limits",
+      "value": 60
+    },
+    "fubon_intraday_limit": {
+      "rationale": "Fubon intraday API burst limit; prevents overwhelming the proxy",
+      "source": "heuristic",
+      "todo": "Verify: check Fubon DMA documentation for actual limits",
+      "value": 30
+    },
+    "fugle_api_timeout_sec": {
+      "rationale": "HTTP timeout for Fugle API; premium service, expect fast responses",
+      "source": "heuristic",
+      "todo": "Calibrate: test [5, 15] range",
+      "value": 10
+    },
+    "fugle_rate_limit": {
+      "rationale": "Fugle API free tier: 60 req/min. Developer: 600/min. Advanced: 2000/min",
+      "source": "empirical",
+      "todo": "Set FUGLE_TIER env var if using paid plan",
+      "value": 60
+    },
+    "max_retry_attempts": {
+      "rationale": "Maximum retry attempts for transient failures; exponential backoff",
+      "source": "heuristic",
+      "todo": "Calibrate: test [2, 5] range based on failure rate analysis",
+      "value": 3
+    },
+    "retry_backoff_ms": {
+      "rationale": "Base backoff between retries in milliseconds; doubles each attempt",
+      "source": "heuristic",
+      "todo": "Calibrate: test [500, 2000] range",
+      "value": 1000
+    },
+    "tej_api_timeout_sec": {
+      "rationale": "HTTP timeout for TEJ API; historical queries can be slow",
+      "source": "heuristic",
+      "todo": "Calibrate: test [20, 45] range",
+      "value": 30
+    },
+    "tej_calls_per_second": {
+      "rationale": "TEJ free tier rate limit: 500 calls/day, burst at 5 calls/second",
+      "source": "heuristic",
+      "todo": "Verify: check TEJ subscription tier for actual limits",
+      "value": 5
+    },
+    "twse_api_rate_burst": {
+      "rationale": "TWSE OpenAPI burst limit: 3 requests per 5-second window",
+      "source": "heuristic",
+      "todo": "Verify: check TWSE documentation for current burst limits",
+      "value": 3
+    },
+    "twse_api_rate_limit": {
+      "rationale": "TWSE OpenAPI rate limit: 3 requests per 5 seconds = 0.6 req/s",
+      "source": "heuristic",
+      "todo": "Verify: check TWSE documentation for current limits",
+      "value": 0.6
+    },
+    "twse_api_timeout_sec": {
+      "rationale": "HTTP timeout for TWSE API calls; balances responsiveness vs slow responses",
+      "source": "heuristic",
+      "todo": "Calibrate: test [10, 30] range based on observed latency distribution",
+      "value": 15
+    }
+  },
+  "narrative": {
+    "ai_capex_fallback_sentiment": {
+      "rationale": "Fallback AI capex sentiment when TSMC revenue YoY is not positive; conservative bearish default",
+      "source": "heuristic",
+      "todo": "Calibrate from historical TSMC revenue-to-sentiment mapping",
+      "value": -0.3
+    },
+    "ai_capex_negative_sentiment_threshold": {
+      "rationale": "AI capex sentiment threshold for semiconductor downturn detection; \u003c-0.3 indicates bearish outlook",
+      "source": "heuristic",
+      "todo": "Calibrate from historical sentiment floor levels",
+      "value": -0.3
+    },
+    "ai_capex_sentiment_threshold": {
+      "rationale": "AI capex sentiment score threshold for AI_capex_surge event; \u003e0.5 indicates bullish capex outlook",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC capex guidance vs forward returns",
+      "value": 0.5
+    },
+    "ai_revenue_growth_threshold": {
+      "rationale": "AI revenue YoY growth % threshold to detect AI capex surge (TSMC revenue proxy)",
+      "source": "heuristic",
+      "todo": "Calibrate from historical TSMC revenue data",
+      "value": 50
+    },
+    "calibration_baseline_window": {
+      "rationale": "60 trading days ≈ 3 calendar months for rolling baseline; long enough to span a full seasonal cycle, short enough to remain market-relevant",
+      "source": "heuristic",
+      "todo": "re-evaluate window after 6 months of live calibration data",
+      "value": 60
+    },
+    "calibration_enabled": {
+      "rationale": "disabled by default; enable after initial validation confirms improvement over hand-tuned config",
+      "source": "heuristic",
+      "value": false
+    },
+    "calibration_min_records": {
+      "rationale": "minimum 10 historical records to attempt calibration; below this, statistical significance is too low to trust the new config",
+      "source": "heuristic",
+      "value": 10
+    },
+    "calibration_target_median": {
+      "rationale": "target 20 points per factor under normal conditions; keeps the Taiwan Stress Index within the 0-100 range while allowing headroom for stress spikes",
+      "source": "heuristic",
+      "value": 20
+    },
+    "calibration_validation_pct": {
+      "rationale": "standard 80/20 train/validation split; validation set is used to detect out-of-sample degradation before export",
+      "source": "heuristic",
+      "value": 0.2
+    },
+    "capex_growth_threshold": {
+      "rationale": "25% YoY capex growth threshold for AI infrastructure expansion (captures early-cycle)",
+      "source": "heuristic",
+      "value": 25
+    },
+    "confidence_base_ai_capex": {
+      "rationale": "Base confidence for AI capex event; derived from TSMC capex guidance vs semiconductor cycle correlation",
+      "source": "empirical",
+      "todo": "Recalibrate as AI capex cycle data accumulates",
+      "value": 0.7
+    },
+    "confidence_base_geopolitical": {
+      "rationale": "Base confidence for geopolitical risk event; derived from GPR index historical correlations",
+      "source": "empirical",
+      "todo": "Recalibrate when GPR index methodology changes",
+      "value": 0.65
+    },
+    "confidence_base_jpy_carry": {
+      "rationale": "Base confidence for JPY carry unwind event; derived from carry trade unwinding historical patterns",
+      "source": "empirical",
+      "todo": "Recalibrate after major BOJ policy shifts",
+      "value": 0.65
+    },
+    "confidence_base_oil_shock": {
+      "rationale": "Base confidence for oil price shock event; derived from Hamilton-type oil shock literature",
+      "source": "empirical",
+      "todo": "Recalibrate with structural oil market changes",
+      "value": 0.6
+    },
+    "confidence_base_taiwan_stress": {
+      "rationale": "Base confidence for Taiwan stress index-based events; conservative heuristic default",
+      "source": "heuristic",
+      "todo": "Calibrate from historical Taiwan stress index distribution",
+      "value": 0.6
+    },
+    "confidence_base_tsmc_revenue": {
+      "rationale": "Base confidence for TSMC revenue-based events; derived from WSTS semiconductor forecast accuracy",
+      "source": "empirical",
+      "todo": "Recalibrate as TSMC revenue data accumulates",
+      "value": 0.7
+    },
+    "confidence_base_us_rates": {
+      "rationale": "Base confidence for US rates event; derived from historical predictability of yield-driven episodes",
+      "source": "empirical",
+      "todo": "Recalibrate when significant Fed regime change occurs",
+      "value": 0.75
+    },
+    "confidence_deviation_ceiling": {
+      "rationale": "Upper bound for deviation-based dynamic confidence; prevents perfect certainty (1.0) for any single indicator",
+      "source": "heuristic",
+      "todo": "Backtest optimal ceiling against forward returns; consider per-theme ceilings",
+      "value": 0.95
+    },
+    "cowos_utilization_threshold": {
+      "rationale": "CoWoS capacity utilization % threshold indicating structural AI demand",
+      "source": "heuristic",
+      "todo": "Calibrate from CoWoS utilization reports",
+      "value": 85
+    },
+    "dxy_change_pct_threshold": {
+      "rationale": "DXY change % threshold to trigger US_rates_up event alongside yield move",
+      "source": "heuristic",
+      "todo": "Calibrate from historical DXY distribution",
+      "value": 1.5
+    },
+    "earnings_blackout_confidence": {
+      "rationale": "Confidence for earnings blackout seasonal event (Mar 1 - Apr 15); moderate pre-earnings positioning signal",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical blackout period returns",
+      "value": 0.55
+    },
+    "earnings_surprise_confidence": {
+      "rationale": "Confidence baseline for externally-triggered earnings surprise events (consumed by ingestor/swarm detectors, not calendar-based); default before empirical calibration",
+      "source": "heuristic",
+      "todo": "Calibrate from earnings surprise frequency and market reaction data",
+      "value": 0.65
+    },
+    "earnings_surprise_threshold": {
+      "rationale": "TSMC revenue YoY change %% threshold to trigger earnings_surprise event; 15%% represents 2+ standard deviations above mean quarterly revenue growth",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC historical quarterly revenue surprise distribution",
+      "value": 15
+    },
+    "election_cycle_confidence": {
+      "rationale": "Confidence for election cycle seasonal event (late Dec - mid Jan); based on pre-election uncertainty premium",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical election cycle returns",
+      "value": 0.6
+    },
+    "event_ttl_multiplier": {
+      "rationale": "Event TTL in days per theme: AI capex 90d (structural), rates 7d (transient), carry unwind 14d, geopolitical 30d, oil 15d, Fed emergency 3d, earnings 10d",
+      "source": "heuristic",
+      "todo": "Calibrate from historical event impact decay analysis",
+      "value": {
+        "AI_capex_surge": 90,
+        "Fed_emergency_cut": 3,
+        "JPY_carry_unwind": 14,
+        "US_rates_up": 7,
+        "earnings_surprise": 10,
+        "geopolitical_risk_spike": 30,
+        "oil_price_shock": 15
+      }
+    },
+    "geopolitical_gpr_threshold": {
+      "rationale": "Geopolitical risk index (GPR) threshold to trigger geopolitical_risk_spike event",
+      "source": "heuristic",
+      "todo": "Calibrate from Caldara-Iacoviello GPR index historical data",
+      "value": 150
+    },
+    "gold_change_pct_threshold": {
+      "rationale": "Gold price change %% threshold for geopolitical risk detection; gold traditionally serves as safe-haven proxy",
+      "source": "heuristic",
+      "todo": "Calibrate from historical gold volatility around geopolitical events",
+      "value": 2
+    },
+    "inflation_estimate": {
+      "rationale": "long-run US inflation target used as fallback when live CPI data is unavailable",
+      "source": "heuristic",
+      "todo": "replace with live CPI from FRED API when available",
+      "value": 2.5
+    },
+    "jpy_change_pct_threshold": {
+      "rationale": "JPY change % threshold to trigger JPY_carry_unwind event",
+      "source": "heuristic",
+      "todo": "Calibrate from historical JPY volatility around BOJ policy shifts",
+      "value": 2
+    },
+    "min_confidence": {
+      "rationale": "Minimum confidence level for structural trend detection",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [0.6, 0.85] range",
+      "value": 0.75
+    },
+    "min_hit_rate": {
+      "rationale": "Minimum historical hit rate for structural trend validity",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [0.6, 0.8] range",
+      "value": 0.7
+    },
+    "min_trend_strength": {
+      "rationale": "Minimum trend strength (0-1) to be considered significant for structural override",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [0.5, 0.8] range",
+      "value": 0.7
+    },
+    "model_hold_window_days": {
+      "rationale": "Forward hold window in trading days for model evaluation",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [3, 10] range",
+      "value": 5
+    },
+    "model_lookback_days": {
+      "rationale": "Lookback window in trading days for model evaluation",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [5, 20] range",
+      "value": 10
+    },
+    "oil_change_pct_threshold": {
+      "rationale": "Oil price change % threshold (absolute) to trigger oil_price_shock event",
+      "source": "heuristic",
+      "todo": "Calibrate from historical oil price volatility",
+      "value": 5
+    },
+    "override_threshold": {
+      "rationale": "Score threshold for structural trends to override macro risk signals",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [0.55, 0.75] range",
+      "value": 0.65
+    },
+    "retail_acceleration_window_days": {
+      "rationale": "Rolling acceleration window in trading days for retail margin velocity confirmation",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [3, 10] range for optimal retail momentum detection",
+      "value": 5
+    },
+    "retail_fear_percentile_threshold": {
+      "rationale": "Margin balance percentile threshold for retail fear event; \u003c=10th percentile indicates extreme retail selling",
+      "source": "heuristic",
+      "todo": "Calibrate from historical margin balance distribution during retail-driven selloffs",
+      "value": 10
+    },
+    "retail_frenzy_percentile_threshold": {
+      "rationale": "Margin balance percentile threshold for retail frenzy event; \u003e=90th percentile indicates extreme retail buying",
+      "source": "heuristic",
+      "todo": "Calibrate from historical margin balance distribution during retail-driven rallies",
+      "value": 90
+    },
+    "retail_institutional_divergence_threshold": {
+      "rationale": "Retail-institutional divergence threshold; divergence \u003e 0 means retail is more bullish than institutions",
+      "source": "heuristic",
+      "todo": "Calibrate from divergence index backtest",
+      "value": 0
+    },
+    "retail_margin_zscore_threshold": {
+      "rationale": "Margin balance z-score threshold for retail divergence event; z\u003e1.5 indicates extreme positioning",
+      "source": "heuristic",
+      "todo": "Calibrate from historical margin balance distribution",
+      "value": 1.5
+    },
+    "semiconductor_export_drop_threshold": {
+      "rationale": "Semiconductor export change %% threshold for downturn detection; -5%% MoM decline signals demand weakening",
+      "source": "heuristic",
+      "todo": "Calibrate from historical Taiwan electronics export cycles",
+      "value": -5
+    },
+    "sox_index_drop_threshold": {
+      "rationale": "SOX index change %% threshold for semiconductor stress detection; -5%% is significant drawdown",
+      "source": "empirical",
+      "todo": "Calibrate from historical SOX index volatility",
+      "value": -5
+    },
+    "spring_festival_confidence": {
+      "rationale": "Confidence for spring festival seasonal event (Jan 15 - Feb 15); based on historical TWSE pre/post-CNY rally probability ~70%",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical CNY window returns and hit rate",
+      "value": 0.65
+    },
+    "taiwan_stress_alert_threshold": {
+      "rationale": "Alert regime threshold (yellow alert)",
+      "source": "heuristic",
+      "value": 30
+    },
+    "taiwan_stress_crisis_threshold": {
+      "rationale": "Crisis regime threshold (red alert)",
+      "source": "heuristic",
+      "value": 70
+    },
+    "taiwan_stress_dxy_scale": {
+      "rationale": "DXY change (%) scaling: 1% change = 5 stress points",
+      "source": "heuristic",
+      "value": 5
+    },
+    "taiwan_stress_dxy_weight": {
+      "rationale": "DXY component weight in Taiwan stress index (13%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: DXY vs foreign flow correlation",
+      "value": 0.13
+    },
+    "taiwan_stress_foreign_scale": {
+      "rationale": "Foreign flow scaling: 1B TWD outflow = 10 stress points",
+      "source": "heuristic",
+      "value": 10
+    },
+    "taiwan_stress_foreign_weight": {
+      "rationale": "Foreign investor net flow component weight in Taiwan stress index (22%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: foreign flow vs TAIEX returns",
+      "value": 0.22
+    },
+    "taiwan_stress_geo_scale": {
+      "rationale": "Geopolitical score scaling: direct pass-through (already 0-100)",
+      "source": "heuristic",
+      "value": 1
+    },
+    "taiwan_stress_geo_weight": {
+      "rationale": "Geopolitical risk component weight in Taiwan stress index (13%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: GPR vs TAIEX returns",
+      "value": 0.13
+    },
+    "taiwan_stress_gold_scale": {
+      "rationale": "Gold change (%) scaling: 1% change = 2 stress points",
+      "source": "heuristic",
+      "value": 2
+    },
+    "taiwan_stress_gold_weight": {
+      "rationale": "Gold price component weight in Taiwan stress index (6%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: gold price vs foreign flow correlation",
+      "value": 0.06
+    },
+    "taiwan_stress_high_threshold": {
+      "rationale": "High stress regime threshold (orange alert)",
+      "source": "heuristic",
+      "value": 50
+    },
+    "taiwan_stress_jpy_scale": {
+      "rationale": "JPY change (%) scaling: 1% change = 10 stress points",
+      "source": "heuristic",
+      "value": 10
+    },
+    "taiwan_stress_jpy_weight": {
+      "rationale": "JPY component weight in Taiwan stress index (8%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: JPY vs carry trade flow",
+      "value": 0.08
+    },
+    "taiwan_stress_oil_scale": {
+      "rationale": "Oil change (%) scaling: 1% change = 2 stress points",
+      "source": "heuristic",
+      "value": 2
+    },
+    "taiwan_stress_oil_weight": {
+      "rationale": "Oil price component weight in Taiwan stress index (7%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: oil price vs foreign flow correlation",
+      "value": 0.07
+    },
+    "taiwan_stress_us10y_scale": {
+      "rationale": "US10Y yield scaling: 1% yield = 2 stress points",
+      "source": "heuristic",
+      "value": 2
+    },
+    "taiwan_stress_us10y_weight": {
+      "rationale": "US 10Y yield component weight in Taiwan stress index (18%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: US10Y vs foreign flow correlation",
+      "value": 0.18
+    },
+    "taiwan_stress_usdtwd_threshold": {
+      "rationale": "USD/TWD change %% threshold for Taiwan stress signal in geopolitical detection; 1%% depreciation signals capital outflow",
+      "source": "heuristic",
+      "todo": "Calibrate from historical TWD depreciation episodes",
+      "value": 1
+    },
+    "taiwan_stress_vix_scale": {
+      "rationale": "VIX scaling: VIX=40 maps to 100 stress points",
+      "source": "heuristic",
+      "value": 2.5
+    },
+    "taiwan_stress_vix_weight": {
+      "rationale": "VIX component weight in Taiwan stress index (13%)",
+      "source": "heuristic",
+      "todo": "Calibrate from regression: VIX vs foreign flow correlation",
+      "value": 0.13
+    },
+    "tech_peak_season_confidence": {
+      "rationale": "Confidence for tech peak season event (Jul 1 - Sep 15); strong historical signal driven by back-to-school and holiday demand",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical Q3 tech sector returns",
+      "value": 0.75
+    },
+    "tsmc_revenue_positive_threshold": {
+      "rationale": "TSMC revenue YoY threshold for positive growth; \u003e0%% triggers moderate bullish sentiment",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC revenue growth distribution",
+      "value": 0
+    },
+    "tsmc_revenue_yoy_threshold": {
+      "rationale": "TSMC revenue YoY growth %% threshold for AI sentiment computation; \u003e10%% indicates strong AI demand",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC quarterly revenue cycles",
+      "value": 10
+    },
+    "us10y_change_bps_threshold": {
+      "rationale": "US 10Y yield change in basis points to trigger US_rates_up event",
+      "source": "heuristic",
+      "todo": "Calibrate from historical yield volatility distribution",
+      "value": 10
+    },
+    "usdtwd_change_pct_threshold": {
+      "rationale": "USD/TWD daily change %% threshold for FX volatility event; 1%% daily move is significant for managed-float TWD",
+      "source": "heuristic",
+      "todo": "Calibrate from historical USD/TWD daily volatility distribution",
+      "value": 1
+    },
+    "vix_level_threshold": {
+      "rationale": "VIX level threshold to trigger JPY_carry_unwind and geopolitical events",
+      "source": "heuristic",
+      "todo": "Calibrate from historical VIX distribution around crisis periods",
+      "value": 25
+    },
+    "year_end_window_dressing_confidence": {
+      "rationale": "Confidence for year-end window dressing event (Nov - Dec); institutional rebalancing effect",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical year-end returns and institutional flow patterns",
+      "value": 0.58
+    }
+  },
+  "narrative_conviction": {
+    "skill_to_theme": {
+      "rationale": "Maps agent skills to narrative themes; semiconductor/ai_supply_chain/earnings/growth/technical → AI_capex_surge, financials/value_yield → US_rates_up, etf_rotation → JPY_carry_unwind, shipping → oil_price_shock; aligns with narrative_conviction_modulator.go defaultSkillToTheme",
+      "source": "heuristic",
+      "todo": "Validate: review agent-narrative alignment with domain experts",
+      "value": {
+        "ai_supply_chain_desk": "AI_capex_surge",
+        "earnings_quality": "AI_capex_surge",
+        "etf_rotation_desk": "JPY_carry_unwind",
+        "financials_desk": "US_rates_up",
+        "growth_momentum": "AI_capex_surge",
+        "semiconductor_desk": "AI_capex_surge",
+        "shipping_desk": "oil_price_shock",
+        "technical_breakout": "AI_capex_surge",
+        "value_yield": "US_rates_up"
+      }
+    },
+    "theme_hit_rates": {
+      "rationale": "Historical hit rates for narrative themes; AI_capex_surge highest (0.81), oil_price_shock lowest (0.58) due to TW semiconductor hedging",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from 36-month narrative event backtest",
+      "value": {
+        "AI_capex_surge": 0.81,
+        "JPY_carry_unwind": 0.68,
+        "US_rates_up": 0.72,
+        "geopolitical_risk_spike": 0.65,
+        "oil_price_shock": 0.58
+      }
+    }
+  },
+  "optimizer": {
+    "beta_range_max": {
+      "rationale": "Maximum portfolio beta",
+      "source": "heuristic",
+      "todo": "Currently unused",
+      "value": 1.2
+    },
+    "beta_range_min": {
+      "rationale": "Minimum portfolio beta",
+      "source": "heuristic",
+      "todo": "Currently unused",
+      "value": 0.8
+    },
+    "cash_reserve": {
+      "rationale": "5% cash reserve for liquidity",
+      "source": "heuristic",
+      "value": 0.05
+    },
+    "factor_weights": {
+      "rationale": "Momentum 25%, Value 20%, Quality 20%, Agent 15%, Narrative 10%, Industry Cycle 10%",
+      "source": "heuristic",
+      "todo": "Calibrate narrative and industry cycle weights via backtest; verify sum = 1.0",
+      "value": {
+        "agent": 0.15,
+        "industry_cycle": 0.1,
+        "momentum": 0.25,
+        "narrative": 0.1,
+        "quality": 0.2,
+        "value": 0.2
+      }
+    },
+    "max_position_pct": {
+      "rationale": "15% max single position for diversification",
+      "source": "literature",
+      "value": 0.15
+    },
+    "max_sector_pct": {
+      "rationale": "40% max single sector concentration",
+      "source": "heuristic",
+      "value": 0.4
+    },
+    "max_turnover_daily": {
+      "rationale": "20% daily turnover limit",
+      "source": "heuristic",
+      "todo": "Currently unused in optimizer; implement or remove",
+      "value": 0.2
+    },
+    "min_trade_size": {
+      "rationale": "Minimum 1 share",
+      "source": "heuristic",
+      "todo": "Currently unused; implement minimum trade size",
+      "value": 1
+    },
+    "target_beta": {
+      "rationale": "Market-neutral target beta",
+      "source": "literature",
+      "todo": "Currently unused; implement beta constraint",
+      "value": 1
+    }
+  },
+  "orchestrator": {
+    "conviction_floor_default": {
+      "rationale": "Default conviction floor when not set by policy",
+      "source": "heuristic",
+      "value": 50
+    },
+    "cro_zscore_threshold": {
+      "rationale": "Z-score threshold for CRO conviction normalization filter",
+      "source": "heuristic",
+      "value": -1.5
+    },
+    "crowded_conviction_multiplier": {
+      "rationale": "Conviction multiplier when 3+ agents recommend same symbol",
+      "source": "heuristic",
+      "value": 0.7
+    },
+    "factor_weight_agent": {
+      "rationale": "Agent factor weight in total score",
+      "source": "heuristic",
+      "value": 0.2
+    },
+    "factor_weight_momentum": {
+      "rationale": "Momentum factor weight in total score",
+      "source": "heuristic",
+      "value": 0.3
+    },
+    "factor_weight_quality": {
+      "rationale": "Quality factor weight in total score",
+      "source": "heuristic",
+      "value": 0.25
+    },
+    "factor_weight_value": {
+      "rationale": "Value factor weight in total score",
+      "source": "heuristic",
+      "value": 0.25
+    },
+    "prism_boost_max": {
+      "rationale": "Maximum PRISM conviction boost",
+      "source": "heuristic",
+      "value": 15
+    },
+    "prism_boost_min": {
+      "rationale": "Minimum PRISM conviction boost",
+      "source": "heuristic",
+      "value": -10
+    },
+    "prism_boost_multiplier": {
+      "rationale": "Multiplier for PRISM Sharpe to conviction boost",
+      "source": "heuristic",
+      "value": 20
+    },
+    "promotion_hitrate_threshold": {
+      "rationale": "Hit rate threshold for auto-promotion",
+      "source": "heuristic",
+      "value": 0.45
+    },
+    "promotion_min_observations": {
+      "rationale": "Minimum observations before auto-promotion consideration",
+      "source": "heuristic",
+      "value": 10
+    },
+    "promotion_sharpe_threshold": {
+      "rationale": "Sharpe threshold for auto-promotion",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "rejection_hitrate_threshold": {
+      "rationale": "Hit rate threshold for auto-rejection",
+      "source": "heuristic",
+      "value": 0.3
+    },
+    "rejection_sharpe_threshold": {
+      "rationale": "Sharpe threshold for auto-rejection",
+      "source": "heuristic",
+      "value": 0
+    },
+    "sector_concentration_threshold": {
+      "rationale": "Sector concentration threshold (\u003c 10 recommendations)",
+      "source": "heuristic",
+      "value": 0.4
+    },
+    "sector_concentration_threshold_high": {
+      "rationale": "Sector concentration threshold (\u003e= 10 recommendations)",
+      "source": "heuristic",
+      "value": 0.35
+    },
+    "sector_conviction_multiplier": {
+      "rationale": "Conviction multiplier when sector is overcrowded",
+      "source": "heuristic",
+      "value": 0.7
+    },
+    "sector_rotation_flow_adjustments": {
+      "rationale": "Capital flow patterns → sector allocation adjustments; risk_off=defensive, carry_trade_unwind=cash/JPY, sector_rotation=energy/shipping",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from flow pattern → sector return regression analysis",
+      "value": {
+        "carry_trade_unwind": {
+          "ai_supply_chain": 0.02,
+          "cash": 0.3,
+          "financials": -0.1,
+          "jpy": 0.05,
+          "semiconductor": 0.03,
+          "short_term_bonds": 0.15
+        },
+        "risk_off": {
+          "ai_supply_chain": -0.1,
+          "gold": 0.1,
+          "high_dividend": 0.07,
+          "small_cap": 0,
+          "utilities": 0.08
+        },
+        "sector_rotation": {
+          "alternative_energy": 0.05,
+          "energy": 0.15,
+          "high_valuation_tech": 0.02,
+          "oil_services": 0.08,
+          "rate_sensitive": -0.08,
+          "shipping": 0.05
+        }
+      }
+    },
+    "sector_rotation_macro_adjustments": {
+      "rationale": "Macro risk level → sector allocation adjustments; yellow=light defensive tilt, orange=moderate, red=severe risk-off; aligns with sector_rotator.go macroLevelKey mapping",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from macro regime → sector performance analysis",
+      "value": {
+        "orange": {
+          "ai_supply_chain": -0.08,
+          "cash": 0.08,
+          "defensive": 0.1,
+          "financials": -0.05,
+          "gold": 0.05,
+          "semiconductor": -0.08
+        },
+        "red": {
+          "ai_supply_chain": -0.15,
+          "cash": 0.25,
+          "defensive": 0.15,
+          "financials": -0.1,
+          "gold": 0.1,
+          "semiconductor": -0.15,
+          "shipping": -0.05
+        },
+        "yellow": {
+          "ai_supply_chain": -0.04,
+          "cash": 0.03,
+          "defensive": 0.05,
+          "semiconductor": -0.04
+        }
+      }
+    },
+    "superinvestor_conviction_base": {
+      "rationale": "Base conviction for superinvestor Recommend() — above sector default (~55), allows keyword boosts of +8 to reach ~68",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest comparing superinvestor hit rate vs sector agents",
+      "value": 60
+    },
+    "superinvestor_min_conviction": {
+      "rationale": "Floor for superinvestor recommendations — lowered from 65 to match sector default",
+      "source": "heuristic",
+      "value": 50
+    },
+    "use_ml_scoring": {
+      "rationale": "Enable ML-based factor scoring from internal/ml models",
+      "source": "experimental",
+      "todo": "Validate with A/B backtest before enabling",
+      "value": false
+    }
+  },
+  "precious_metals": {
+    "central_bank_buying_trend": {
+      "citation": {
+        "dependencies": null,
+        "evidence_quality": "medium",
+        "last_validated": "2026-05-01",
+        "source_reference": "World Gold Council, Gold Demand Trends Q1 2026",
+        "source_type": "report",
+        "update_policy": "quarterly",
+        "validation_method": ""
+      },
+      "rationale": "WGC quarterly CB gold buying trend: accelerating, stable, or decelerating",
+      "source": "literature",
+      "todo": "Update quarterly from WGC Gold Demand Trends report",
+      "value": "stable"
+    },
+    "central_bank_net_buy": {
+      "rationale": "Annualized central bank net gold purchases in tonnes (~800t in 2025)",
+      "source": "literature",
+      "todo": "Update from WGC quarterly report",
+      "value": 800
+    },
+    "china_gold_imports_yoy": {
+      "rationale": "China SGE withdrawal YoY % change; 0 means no change from prior year",
+      "source": "literature",
+      "todo": "Update monthly from Shanghai Gold Exchange data",
+      "value": 0
+    },
+    "comex_default_net_long": {
+      "rationale": "CFTC COT managed money net long default (typical mid-cycle level)",
+      "source": "empirical",
+      "todo": "Update weekly from CFTC Commitment of Traders report",
+      "value": 150000
+    },
+    "india_gold_imports_yoy": {
+      "rationale": "India gold imports YoY % change; 0 means no change from prior year",
+      "source": "literature",
+      "todo": "Update monthly from India Ministry of Commerce data",
+      "value": 0
+    }
+  },
+  "realtime": {
+    "max_weight_change": {
+      "rationale": "Maximum 50% weight change per adjustment",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "min_confidence": {
+      "rationale": "70% minimum confidence for real-time signals",
+      "source": "heuristic",
+      "value": 0.7
+    },
+    "min_weight": {
+      "rationale": "Minimum 10% weight to maintain position",
+      "source": "heuristic",
+      "value": 0.1
+    },
+    "price_change_threshold": {
+      "rationale": "1% price move threshold for signal detection",
+      "source": "heuristic",
+      "value": 0.01
+    },
+    "update_interval_ms": {
+      "rationale": "100ms update interval for real-time processing",
+      "source": "heuristic",
+      "value": 100
+    },
+    "volatility_threshold": {
+      "rationale": "2% daily volatility threshold for regime detection",
+      "source": "heuristic",
+      "value": 0.02
+    },
+    "volume_spike_threshold": {
+      "rationale": "2x average volume indicates unusual activity",
+      "source": "heuristic",
+      "value": 2
+    },
+    "weight_adjustment_rate": {
+      "rationale": "10% weight adjustment per signal for stability",
+      "source": "heuristic",
+      "value": 0.1
+    }
+  },
+  "reporting": {
+    "sharpe_min_samples": {
+      "rationale": "Minimum 5 per-agent forward-return samples before SharpeLike is reported. Below this, statistical significance is poor and the value is shown as N/A on the frontend.",
+      "source": "heuristic",
+      "value": 5
+    },
+    "win_rate_threshold": {
+      "rationale": "0.2% cost-adjusted threshold for win-rate classification. Covers transaction cost (~0.15% in TW market) + slippage buffer. ForwardReturn must exceed this to count as a win.",
+      "source": "heuristic",
+      "value": 0.002
+    }
+  },
+  "risk": {
+    "consecutive_loss_limit": {
+      "rationale": "5 consecutive losses triggers capital phase review",
+      "source": "heuristic",
+      "value": 5
+    },
+    "max_daily_loss_pct": {
+      "rationale": "3% max daily loss",
+      "source": "heuristic",
+      "value": 0.03
+    },
+    "max_drawdown_pct": {
+      "rationale": "8% max portfolio drawdown",
+      "source": "heuristic",
+      "value": 0.08
+    },
+    "max_loss_per_trade": {
+      "rationale": "2% max loss per trade for Kelly calculation",
+      "source": "literature",
+      "value": 0.02
+    },
+    "max_position_size": {
+      "rationale": "15% max single position size",
+      "source": "literature",
+      "value": 0.15
+    },
+    "max_total_exposure": {
+      "rationale": "80% max total exposure",
+      "source": "heuristic",
+      "value": 0.8
+    },
+    "sector_constraints_carry_trade_unwind": {
+      "rationale": "Exit equities, move to cash/bonds during carry trade unwind",
+      "source": "heuristic",
+      "value": {
+        "all_equities": 0.1,
+        "cash": 2,
+        "financials": 0.1,
+        "tech": 0.05
+      }
+    },
+    "sector_constraints_risk_off": {
+      "rationale": "Reduce risk assets, increase defensive assets during risk_off",
+      "source": "heuristic",
+      "value": {
+        "ai_supply_chain": 0.3,
+        "emerging_market": 0.1,
+        "gold": 1.5,
+        "small_cap": 0.2,
+        "utilities": 1.2
+      }
+    },
+    "sector_constraints_sector_rotation": {
+      "rationale": "Rotate to energy, reduce tech during sector rotation",
+      "source": "heuristic",
+      "value": {
+        "energy": 1.8,
+        "high_valuation_tech": 0.3,
+        "oil_services": 1.5,
+        "rate_sensitive": 0.4
+      }
+    },
+    "stop_loss": {
+      "rationale": "5% stop loss triggers alert",
+      "source": "heuristic",
+      "value": -0.05
+    },
+    "take_profit": {
+      "rationale": "20% take profit triggers alert",
+      "source": "heuristic",
+      "value": 0.2
+    },
+    "var_alert_threshold": {
+      "rationale": "2% portfolio value at risk triggers alert",
+      "source": "heuristic",
+      "value": 0.02
+    },
+    "var_confidence_level": {
+      "rationale": "95% VaR confidence level (primary)",
+      "source": "literature",
+      "value": 0.95
+    },
+    "var_critical_threshold": {
+      "rationale": "5% portfolio value at risk is critical",
+      "source": "heuristic",
+      "value": 0.05
+    },
+    "var_secondary_confidence": {
+      "rationale": "99% VaR confidence level (secondary/tail risk)",
+      "source": "literature",
+      "value": 0.99
+    }
+  },
+  "risk_gate": {
+    "in_trade": {
+      "circuit_breaker_daily_loss_pct": {
+        "rationale": "單日組合虧損 5% → 暫停交易",
+        "source": "heuristic",
+        "value": -0.05
+      },
+      "monitor_interval_sec": {
+        "rationale": "每 30 秒檢查一次持倉狀態",
+        "source": "heuristic",
+        "value": 30
+      },
+      "stop_loss_pct": {
+        "rationale": "個股虧損達 10% 即止損",
+        "source": "heuristic",
+        "value": -0.1
+      },
+      "take_profit_pct": {
+        "rationale": "個股獲利達 30% 考慮部分獲利了結",
+        "source": "heuristic",
+        "value": 0.3
+      },
+      "trailing_stop_atr_mult": {
+        "rationale": "2x ATR trailing stop",
+        "source": "literature",
+        "value": 2
+      },
+      "volatility_spike_mult": {
+        "rationale": "波動率超過 3 倍歷史均值 → 減碼",
+        "source": "empirical",
+        "value": 3
+      }
+    },
+    "post_trade": {
+      "consecutive_loss_days": {
+        "rationale": "連續虧損 5 天 → mute agent",
+        "source": "heuristic",
+        "value": 5
+      },
+      "evaluation_interval_hours": {
+        "rationale": "每日盤後評估一次",
+        "source": "heuristic",
+        "value": 24
+      },
+      "max_drawdown_defensive_pct": {
+        "rationale": "最大回撤 10% → DEFENSIVE（減半倉）",
+        "source": "heuristic",
+        "value": 0.1
+      },
+      "max_drawdown_halt_pct": {
+        "rationale": "最大回撤 20% → SUSPENDED",
+        "source": "heuristic",
+        "value": 0.2
+      },
+      "min_rolling_sharpe": {
+        "rationale": "滾動 Sharpe \u003c 0 → CAUTIOUS",
+        "source": "literature",
+        "value": 0
+      }
+    },
+    "pre_trade": {
+      "max_correlation": {
+        "rationale": "與現有持倉相關性 \u003e 0.7 則降低權重",
+        "source": "heuristic",
+        "value": 0.7
+      },
+      "max_open_positions": {
+        "rationale": "最多同時持有 5 檔標的，控制集中度風險",
+        "source": "heuristic",
+        "value": 5
+      },
+      "max_position_pct": {
+        "rationale": "單一持股最大曝險 15%",
+        "source": "literature",
+        "value": 0.15
+      },
+      "max_sector_exposure_pct": {
+        "rationale": "單一產業最大曝險 40%",
+        "source": "heuristic",
+        "value": 0.4
+      },
+      "min_adv_ratio": {
+        "rationale": "下單量不得超過日均量 1%",
+        "source": "literature",
+        "value": 0.01
+      },
+      "min_cash_buffer_pct": {
+        "rationale": "至少保留 5% 現金緩衝",
+        "source": "heuristic",
+        "value": 0.05
+      },
+      "var_confidence_level": {
+        "rationale": "VaR 信賴水準 95%",
+        "source": "literature",
+        "value": 0.95
+      },
+      "var_limit_pct": {
+        "rationale": "VaR 不得超過組合價值 2%",
+        "source": "heuristic",
+        "value": 0.02
+      }
+    }
+  },
+  "rsi_tw": {
+    "a1_weight": {
+      "rationale": "Margin Balance Δ Z-score contributes 25% to Part A score",
+      "source": "heuristic",
+      "todo": "Calibrate from historical margin balance vs. forward return IC",
+      "value": 0.25
+    },
+    "a2_weight": {
+      "rationale": "Day Trading Ratio contributes 20% to Part A score",
+      "source": "heuristic",
+      "value": 0.2
+    },
+    "a3_midpoint": {
+      "rationale": "50th percentile is the neutral midpoint for maintenance ratio",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "a3_scale": {
+      "rationale": "Scale factor transforms percentile deviation to Z-score in [-1, 1]",
+      "source": "heuristic",
+      "value": 2
+    },
+    "a3_weight": {
+      "rationale": "Margin Maintenance Proxy contributes 20% to Part A score",
+      "source": "heuristic",
+      "value": 0.2
+    },
+    "a4_vix_scores": {
+      "rationale": "Monotonic mapping: lower VIX → bullish sentiment, higher VIX → bearish (1.0 = max fear)",
+      "source": "heuristic",
+      "todo": "Calibrate scores from historical VIX vs. TWSE forward return",
+      "value": [
+        0.1,
+        0.3,
+        0.5,
+        0.7,
+        0.85,
+        1
+      ]
+    },
+    "a4_vix_thresholds": {
+      "rationale": "Standard VIX ranges: calm (\u003c15), low (15-20), moderate (20-25), elevated (25-30), high (30-35), extreme (\u003e35)",
+      "source": "literature",
+      "todo": "Validate thresholds against Taiwan VIX equivalent (TVIX) distribution",
+      "value": [
+        15,
+        20,
+        25,
+        30,
+        35
+      ]
+    },
+    "a4_weight": {
+      "rationale": "VIX Nonlinear Mapping contributes 15% to Part A score",
+      "source": "literature",
+      "value": 0.15
+    },
+    "a5_pcr_fallback": {
+      "rationale": "Neutral score when PCR data is unavailable (0)",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "a5_pcr_scores": {
+      "rationale": "Score mapping for PCR: very bearish (0.9) → bearish (0.7) → neutral (0.5) → bullish (0.1)",
+      "source": "heuristic",
+      "value": [
+        0.9,
+        0.7,
+        0.5,
+        0.1
+      ]
+    },
+    "a5_pcr_thresholds": {
+      "rationale": "Standard PCR interpretation: \u003e1.5 very bearish, \u003e1.0 bearish, \u003e0.8 neutral, \u003c0.8 bullish",
+      "source": "heuristic",
+      "todo": "Calibrate against TAIFEX PCR historical distribution",
+      "value": [
+        1.5,
+        1,
+        0.8
+      ]
+    },
+    "a5_weight": {
+      "rationale": "Weekly PCR Proxy contributes 10% to Part A score",
+      "source": "heuristic",
+      "value": 0.1
+    },
+    "a6_oddlot_fallback": {
+      "rationale": "Neutral score when odd-lot data is unavailable (0)",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "a6_oddlot_scores": {
+      "rationale": "Score mapping: heavy buying (0.85 bearish) → heavy selling (0.15 bullish)",
+      "source": "heuristic",
+      "value": [
+        0.85,
+        0.65,
+        0.5,
+        0.35,
+        0.15
+      ]
+    },
+    "a6_oddlot_thresholds": {
+      "rationale": "Odd-lot imbalance ranges: heavy retail buying (\u003e0.2), moderate (\u003e0.1), neutral (-0.1 to 0.1), selling (\u003c-0.1), heavy selling (\u003c-0.2)",
+      "source": "heuristic",
+      "todo": "Calibrate thresholds from TWSE odd-lot historical distribution",
+      "value": [
+        0.2,
+        0.1,
+        -0.1,
+        -0.2
+      ]
+    },
+    "a6_weight": {
+      "rationale": "Odd-Lot Trading contributes 10% to Part A score",
+      "source": "heuristic",
+      "value": 0.1
+    },
+    "a_part_weight": {
+      "rationale": "Part A contributes 40% to final RSI-tw score",
+      "source": "heuristic",
+      "todo": "Calibrate optimal A/C split via walk-forward",
+      "value": 0.4
+    },
+    "c1_bearish_threshold": {
+      "rationale": "Small TAIEX futures OI pct below -10 → retail moderately short (0.5 neutral)",
+      "source": "heuristic",
+      "value": -10
+    },
+    "c1_bullish_threshold": {
+      "rationale": "Small TAIEX futures OI pct above 10 → retail moderately long (0.7)",
+      "source": "heuristic",
+      "value": 10
+    },
+    "c1_very_bearish_threshold": {
+      "rationale": "Small TAIEX futures OI pct below -20 → retail heavily short (0.25 bullish)",
+      "source": "heuristic",
+      "value": -20
+    },
+    "c1_very_bullish_threshold": {
+      "rationale": "Small TAIEX futures OI pct above 20 → retail heavily long (0.9 bearish score)",
+      "source": "heuristic",
+      "todo": "Calibrate from 2Y historical futures OI distribution",
+      "value": 20
+    },
+    "c1_weight": {
+      "rationale": "Small TAIEX Futures OI contributes 40% to Part C score",
+      "source": "heuristic",
+      "todo": "Calibrate from historical futures OI vs. forward return IC",
+      "value": 0.4
+    },
+    "c2_netflow_scaling_factor": {
+      "rationale": "Net flow divided by 1B TWD to get deviation from neutral; score clamped [0.1, 0.9]",
+      "source": "heuristic",
+      "todo": "Learn optimal scaling factor from historical flow distributions",
+      "value": 1000000000
+    },
+    "c2_neutral_midpoint": {
+      "rationale": "Institutional net flow ≈ 0 → neutral midpoint 0.5",
+      "source": "heuristic",
+      "todo": "Calibrate from 2Y foreign/domestic fund net flow distribution",
+      "value": 0.5
+    },
+    "c2_weight": {
+      "rationale": "Foreign/Inst Net Flow contributes 35% to Part C score",
+      "source": "heuristic",
+      "todo": "Calibrate from historical institutional flow vs. forward return IC",
+      "value": 0.35
+    },
+    "c3_bearish_threshold": {
+      "rationale": "ETF net subscription below -100M TWD → outflow (0.45)",
+      "source": "heuristic",
+      "value": -100000000
+    },
+    "c3_bullish_threshold": {
+      "rationale": "ETF net subscription above 100M TWD → moderate inflow (0.7)",
+      "source": "heuristic",
+      "value": 100000000
+    },
+    "c3_very_bullish_threshold": {
+      "rationale": "ETF net subscription above 1B TWD → heavy retail inflow (0.9 bearish)",
+      "source": "heuristic",
+      "value": 1000000000
+    },
+    "c3_weight": {
+      "rationale": "ETF Net Subscription contributes 25% to Part C score",
+      "source": "heuristic",
+      "todo": "Calibrate from historical ETF flow vs. forward return IC",
+      "value": 0.25
+    },
+    "c_part_weight": {
+      "rationale": "Part C contributes 25% to final RSI-tw score",
+      "source": "heuristic",
+      "todo": "Calibrate optimal A/C split via walk-forward",
+      "value": 0.25
+    },
+    "d_credit_tightening_multiplier": {
+      "rationale": "20% sentiment reduction when credit tightening signal active",
+      "source": "heuristic",
+      "todo": "Wire credit tightening signal to actual central bank / margin rate data",
+      "value": 0.8
+    },
+    "d_geopolitical_risk_multiplier": {
+      "rationale": "15% sentiment reduction during elevated geopolitical risk",
+      "source": "heuristic",
+      "todo": "Calibrate against actual market drawdowns during geopolitical events",
+      "value": 0.85
+    },
+    "d_geopolitical_risk_threshold": {
+      "rationale": "Geopolitical risk index above 0.5 → apply 0.85x multiplier",
+      "source": "heuristic",
+      "value": 0.5
+    },
+    "d_vix_spike_multiplier": {
+      "rationale": "10% sentiment reduction during VIX spike \u003e30",
+      "source": "heuristic",
+      "value": 0.9
+    },
+    "d_vix_spike_threshold": {
+      "rationale": "VIX above 30 → spike regime, apply 0.90x multiplier",
+      "source": "literature",
+      "todo": "Validate with Taiwan VIX equivalent (TVIX or VIX futures)",
+      "value": 30
+    },
+    "last_calibrated_score": {
+      "rationale": "",
+      "source": "",
+      "value": 0
+    }
+  },
+  "sector_allocation": {
+    "base_weights": {
+      "_cash_reserve": 0.02,
+      "consumer": 0.06,
+      "electronics": 0.1,
+      "energy": 0.05,
+      "financials": 0.14,
+      "healthcare": 0.05,
+      "industrials": 0.07,
+      "materials": 0.08,
+      "real_estate": 0.04,
+      "semiconductor": 0.3,
+      "telecom": 0.05,
+      "utilities": 0.04
+    },
+    "citation": {
+      "dependencies": [
+        "darwinian.weight_min/max",
+        "engine.sector_rotation.base_allocations"
+      ],
+      "evidence_quality": "medium",
+      "last_validated": "2026-06-14",
+      "source_reference": "internal/sectorallocation/ + internal/industry/ + internal/portfolio/ unification",
+      "source_type": "heuristic",
+      "update_policy": "recalibrate when backtest drift \u003e 5% over 20 sessions",
+      "validation_method": "Compare adjusted weights against historical regime accuracy (n\u003e=30 sessions)"
+    },
+    "cycle_weight": 1,
+    "derivation_factors": {
+      "consumer": [
+        {
+          "evidence": "可支配所得 / 消費信心",
+          "factor": "內需景氣",
+          "source": "台灣零售 / 餐飲營收",
+          "weight": 0.4
+        },
+        {
+          "evidence": "跨境消費回升",
+          "factor": "觀光復甦",
+          "source": "來台旅客",
+          "weight": 0.25
+        },
+        {
+          "evidence": "滲透率提升",
+          "factor": "電商 / 跨境",
+          "source": "momo / PChome / 蝦皮",
+          "weight": 0.2
+        },
+        {
+          "evidence": "基本工資調升",
+          "factor": "薪資成長",
+          "source": "主計處經常性薪資",
+          "weight": 0.15
+        }
+      ],
+      "electronics": [
+        {
+          "evidence": "iPhone / 筆電 / 平板",
+          "factor": "消費電子循環",
+          "source": "全球 PMI / 手機出貨",
+          "weight": 0.35
+        },
+        {
+          "evidence": "ADAS / 車載娛樂",
+          "factor": "車用電子",
+          "source": "EV 滲透率 / Tier1 訂單",
+          "weight": 0.3
+        },
+        {
+          "evidence": "Hyperscaler capex 成長",
+          "factor": "伺服器 / 資料中心",
+          "source": "雲端資本支出",
+          "weight": 0.25
+        },
+        {
+          "evidence": "週期性觸底回升",
+          "factor": "存儲 / 被動元件",
+          "source": "DRAM / MLCC 報價",
+          "weight": 0.1
+        }
+      ],
+      "energy": [
+        {
+          "evidence": "OPEC+ 產量政策",
+          "factor": "國際油價",
+          "source": "Brent / WTI",
+          "weight": 0.4
+        },
+        {
+          "evidence": "RE100 企業需求",
+          "factor": "綠能轉型",
+          "source": "離岸風電 / 太陽能裝置量",
+          "weight": 0.3
+        },
+        {
+          "evidence": "能源安全溢價",
+          "factor": "地緣政治",
+          "source": "中東局勢 / 俄烏",
+          "weight": 0.2
+        },
+        {
+          "evidence": "減碳成本內部化",
+          "factor": "碳權 / 碳交易",
+          "source": "國際碳價",
+          "weight": 0.1
+        }
+      ],
+      "financials": [
+        {
+          "evidence": "淨利差擴張",
+          "factor": "升息循環",
+          "source": "Fed 政策利率 / 台灣央行",
+          "weight": 0.4
+        },
+        {
+          "evidence": "M2 / 房貸 / 企業債",
+          "factor": "信用品質",
+          "source": "金管會逾放比",
+          "weight": 0.3
+        },
+        {
+          "evidence": "高利率保單吸引力回升",
+          "factor": "保險需求",
+          "source": "保發中心",
+          "weight": 0.2
+        },
+        {
+          "evidence": "經紀/手續費收入",
+          "factor": "台股量能",
+          "source": "TWSE 月成交",
+          "weight": 0.1
+        }
+      ],
+      "healthcare": [
+        {
+          "evidence": "65+ 比例突破 20%",
+          "factor": "人口老化",
+          "source": "國發會人口推估",
+          "weight": 0.35
+        },
+        {
+          "evidence": "海外授權金收入",
+          "factor": "新藥 / CDMO",
+          "source": "TFDA / FDA 核准",
+          "weight": 0.3
+        },
+        {
+          "evidence": "高值化醫材成長",
+          "factor": "醫材出口",
+          "source": "醫材公會",
+          "weight": 0.2
+        },
+        {
+          "evidence": "給付 / 核價制度",
+          "factor": "健保政策",
+          "source": "健保署",
+          "weight": 0.15
+        }
+      ],
+      "industrials": [
+        {
+          "evidence": "廠房 / 設備 / 自動化",
+          "factor": "資本支出循環",
+          "source": "全球半導體 capex",
+          "weight": 0.35
+        },
+        {
+          "evidence": "缺工 + 智慧製造",
+          "factor": "自動化需求",
+          "source": "工業機器人出貨",
+          "weight": 0.25
+        },
+        {
+          "evidence": "全球貿易量",
+          "factor": "航運 / 物流",
+          "source": "SCFI / BDI / 運價",
+          "weight": 0.25
+        },
+        {
+          "evidence": "地緣政治升溫",
+          "factor": "軍工 / 政府支出",
+          "source": "國防預算",
+          "weight": 0.15
+        }
+      ],
+      "materials": [
+        {
+          "evidence": "鐵礦 / 銅 / 鋁",
+          "factor": "原物料價格",
+          "source": "CRB / LME / 鋼鐵指數",
+          "weight": 0.4
+        },
+        {
+          "evidence": "基礎建設 + 房地產",
+          "factor": "中國需求",
+          "source": "中國 PMI / 地產",
+          "weight": 0.3
+        },
+        {
+          "evidence": "出口競爭力",
+          "factor": "匯率",
+          "source": "TWD/USD",
+          "weight": 0.2
+        },
+        {
+          "evidence": "高碳排產業成本上升",
+          "factor": "ESG / 碳關稅",
+          "source": "CBAM 進度",
+          "weight": 0.1
+        }
+      ],
+      "real_estate": [
+        {
+          "evidence": "房貸利率 \u003e2.5% 衝擊",
+          "factor": "利率敏感度",
+          "source": "央行利率 / 房貸",
+          "weight": 0.4
+        },
+        {
+          "evidence": "選擇性信用管制",
+          "factor": "政策調控",
+          "source": "信用管制 / 囤房稅",
+          "weight": 0.25
+        },
+        {
+          "evidence": "人口集中度",
+          "factor": "供需結構",
+          "source": "使照 / 開工",
+          "weight": 0.2
+        },
+        {
+          "evidence": "科技業擴廠需求",
+          "factor": "商辦 / 廠辦",
+          "source": "空置率 / 租金",
+          "weight": 0.15
+        }
+      ],
+      "semiconductor": [
+        {
+          "evidence": "佔台灣總出口 35%+，晶片法案受惠",
+          "factor": "出口比重",
+          "source": "財政部海關統計",
+          "weight": 0.35
+        },
+        {
+          "evidence": "與全球半導體銷售週期同步",
+          "factor": "景氣循環",
+          "source": "國發會景氣對策信號",
+          "weight": 0.25
+        },
+        {
+          "evidence": "AI 加速器 2025-2027 CAGR \u003e40%",
+          "factor": "AI需求",
+          "source": "Gartner / TSMA 預估",
+          "weight": 0.2
+        },
+        {
+          "evidence": "CHIPS Act + 台灣風險溢價",
+          "factor": "地緣政治",
+          "source": "美中科技戰 / 出口管制",
+          "weight": 0.2
+        }
+      ],
+      "telecom": [
+        {
+          "evidence": "FTTH / 行動上網",
+          "factor": "5G / 寬頻滲透",
+          "source": "NCC",
+          "weight": 0.4
+        },
+        {
+          "evidence": "ARPU 變化",
+          "factor": "資費競爭",
+          "source": "NCC 資費審查",
+          "weight": 0.25
+        },
+        {
+          "evidence": "AI / 雲端需求",
+          "factor": "企業專網 / IDC",
+          "source": "企業用戶",
+          "weight": 0.2
+        },
+        {
+          "evidence": "防禦性配置",
+          "factor": "股利穩定度",
+          "source": "現金股利殖利率",
+          "weight": 0.15
+        }
+      ],
+      "utilities": [
+        {
+          "evidence": "成本反映機制",
+          "factor": "電價 / 費率",
+          "source": "經濟部電價審議",
+          "weight": 0.4
+        },
+        {
+          "evidence": "2025 再生能源 20% 目標",
+          "factor": "綠能投資",
+          "source": "再生能源占比",
+          "weight": 0.25
+        },
+        {
+          "evidence": "電網強韌 + 儲能",
+          "factor": "資本支出",
+          "source": "台電 / 民營電廠",
+          "weight": 0.2
+        },
+        {
+          "evidence": "退休 / 收益型配置",
+          "factor": "防禦性需求",
+          "source": "高股息 / 低波動",
+          "weight": 0.15
+        }
+      ]
+    },
+    "factor_weight": 1,
+    "linkage_weight": 1,
+    "macro_weight": 1,
+    "narrative_weight": 1,
+    "rationale": "Multi-factor sector weight model: base × cycle × seasonal × linkage × narrative × macro × factor. Replaces three independent hard-coded weight sources (industry.calculateWeightDerivation, portfolio.sector_weights, orchestrator.base_allocations) with one auditable pipeline.",
+    "seasonal_weight": 1,
+    "source": "heuristic",
+    "weight_floor": 0.01
+  },
+  "sector_executor": {
+    "earnings_quality": {
+      "guidance_penalty": {
+        "rationale": "Penalizes stocks where management guidance revision is downward and confirmed by intraday sell pressure; TW companies issuing negative guidance after hours typically gap down 2-3% next session",
+        "source": "heuristic",
+        "todo": "Backtest penalty accuracy against TWSE post-guidance-revision return distribution 2022-2026",
+        "value": 8
+      },
+      "guidance_threshold": {
+        "rationale": "1% below session high triggers guidance penalty; TW stocks failing to hold within 99% of highs after guidance events indicate market skepticism about management outlook",
+        "source": "heuristic",
+        "todo": "Calibrate 0.985/0.990/0.995 against TWSE guidance-event intraday range patterns",
+        "value": 0.99
+      },
+      "repeatable_boost": {
+        "rationale": "Strong conviction boost for companies showing 3+ consecutive quarters of positive earnings surprise exceeding analyst consensus; TW firms with repeatable earnings beat patterns sustain momentum for 6-9 months",
+        "source": "heuristic",
+        "todo": "Validate against TWSE earnings-surprise persistence study: compare 1Q/3Q/5Q streak forward returns",
+        "value": 9
+      }
+    },
+    "factor_conviction": {
+      "liquidity_good_delta": {
+        "rationale": "+3 conviction boost for adequate liquidity; modest delta reflecting that good liquidity enables but doesn't generate alpha — it removes a constraint rather than adding edge",
+        "source": "heuristic",
+        "todo": "Calibrate 2/3/4: verify marginal benefit of liquidity boost beyond execution-cost reduction",
+        "value": 3
+      },
+      "liquidity_good_threshold": {
+        "rationale": "Liquidity score ≥0.2 triggers +3 delta; adequate liquidity for institutional-sized TWSE orders without significant market impact — used by TechnicalBreakout and ETFRotation executors",
+        "source": "heuristic",
+        "todo": "Calibrate 0.15/0.20/0.30 against TWSE institutional order market-impact models",
+        "value": 0.2
+      },
+      "liquidity_high_delta": {
+        "rationale": "+5 conviction boost for high liquidity; slightly higher than standard moderate delta (+4) because liquidity directly reduces execution costs, providing a tangible alpha enhancement",
+        "source": "heuristic",
+        "todo": "Calibrate 4/5/6: measure alpha contribution of liquidity boost vs execution-cost savings",
+        "value": 5
+      },
+      "liquidity_high_threshold": {
+        "rationale": "Liquidity score ≥0.5 triggers +5 delta; identifies highly liquid TWSE stocks (top quartile turnover, tight spreads) where execution risk is minimal — used by TechnicalBreakout for volume-confirmed entries",
+        "source": "heuristic",
+        "todo": "Calibrate 0.4/0.5/0.6 against liquidity-quartile execution slippage and fill-rate data",
+        "value": 0.5
+      },
+      "liquidity_low_delta": {
+        "rationale": "-5 conviction penalty for insufficient liquidity; magnitude reflects that poor liquidity can turn a good signal into a losing trade through slippage, making it a first-order risk factor",
+        "source": "heuristic",
+        "todo": "Calibrate -6/-5/-4: validate penalty magnitude against actual TWSE slippage costs in low-liquidity regime",
+        "value": -5
+      },
+      "liquidity_low_threshold": {
+        "rationale": "Liquidity score ≤-0.3 triggers -5 penalty; identifies stocks where bid-ask spreads and turnover indicate prohibitive execution costs (\u003e50bp estimated slippage) for institutional positions",
+        "source": "heuristic",
+        "todo": "Calibrate -0.35/-0.30/-0.20 against TWSE low-liquidity stock execution-cost and fill-failure data",
+        "value": -0.3
+      },
+      "momentum_high_delta": {
+        "rationale": "+8 conviction boost for strong momentum (\u003e0.4); magnitude reflects momentum factor's historical 60-65% hit rate on TWSE mid/large-cap universe over 20-day forward window",
+        "source": "heuristic",
+        "todo": "Calibrate 6/8/10: measure hit-rate uplift per delta increment on backtest",
+        "value": 8
+      },
+      "momentum_high_threshold": {
+        "rationale": "Momentum factor score ≥0.4 triggers high-conviction delta (+8); top 20% of TWSE momentum distribution, used by TechnicalBreakout for breakout-confirmed momentum picks",
+        "source": "heuristic",
+        "todo": "Calibrate 0.3/0.4/0.5 against TWSE momentum-quintile forward returns; higher threshold increases selectivity",
+        "value": 0.4
+      },
+      "momentum_mod_delta": {
+        "rationale": "+4 conviction boost for moderate momentum; conservative half-weighting relative to high tier reflects lower signal strength at median momentum levels where noise increases",
+        "source": "heuristic",
+        "todo": "Calibrate 3/4/5: verify linearity of delta-to-forward-return relationship",
+        "value": 4
+      },
+      "momentum_mod_threshold": {
+        "rationale": "Momentum score ≥0.15 triggers moderate delta (+4); captures above-median momentum stocks (40th-80th percentile), used by TechnicalBreakout for standard picks and Shipping for BDI-cycle entries",
+        "source": "heuristic",
+        "todo": "Calibrate 0.10/0.15/0.20 against TWSE momentum moderate-tier hit rate and false-positive rate",
+        "value": 0.15
+      },
+      "momentum_weak_delta": {
+        "rationale": "-4 conviction penalty for weak/negative momentum; symmetric to moderate delta (+4) reflecting equal conviction adjustment magnitude in both directions",
+        "source": "heuristic",
+        "todo": "Calibrate -5/-4/-3: validate symmetry assumption against TWSE bear-regime momentum patterns",
+        "value": -4
+      },
+      "momentum_weak_threshold": {
+        "rationale": "Momentum score ≤-0.1 triggers penalty (-4); identifies negative-momentum TWSE stocks where trend has reversed, protecting against value-trap entries in declining names",
+        "source": "heuristic",
+        "todo": "Calibrate -0.15/-0.10/-0.05: compare penalty-hit rate against subsequent drawdown severity",
+        "value": -0.1
+      },
+      "quality_delta": {
+        "rationale": "+4 conviction boost for quality; matches moderate-tier delta convention across all factors, ensuring uniform factor-weight contribution scaling",
+        "source": "heuristic",
+        "todo": "Calibrate 3/4/5: validate hit-rate improvement per delta increment in quality-sorted TWSE backtest",
+        "value": 4
+      },
+      "quality_threshold": {
+        "rationale": "Quality factor score ≥0.2 triggers +4 delta; captures firms with strong ROE, low accruals, and stable margins — used by ValueYield, EarningsQuality, and Financials executors",
+        "source": "heuristic",
+        "todo": "Calibrate 0.15/0.20/0.30 against quality-quintile forward returns on TWSE; higher threshold increases purity",
+        "value": 0.2
+      },
+      "value_high_delta": {
+        "rationale": "+8 conviction boost for deep value (\u003e0.3); TW value premium averages 3-5% annual excess return in top value quintile, warranting conviction proportional to momentum boost",
+        "source": "heuristic",
+        "todo": "Calibrate 6/8/10: measure hit-rate uplift and alpha contribution per delta increment",
+        "value": 8
+      },
+      "value_high_threshold": {
+        "rationale": "Value factor score ≥0.3 triggers high-conviction delta (+8); captured by ValueYield executor for deep-value picks with strong P/B and P/E discounts on TWSE",
+        "source": "heuristic",
+        "todo": "Calibrate 0.25/0.30/0.40 against TWSE value-quintile forward returns and value-premium persistence",
+        "value": 0.3
+      },
+      "value_mod_delta": {
+        "rationale": "+4 conviction boost for moderate value; consistent with momentum moderate delta, maintaining factor-weight symmetry across the multi-factor scoring framework",
+        "source": "heuristic",
+        "todo": "Calibrate 3/4/5: validate cross-factor delta consistency improves overall portfolio Sharpe",
+        "value": 4
+      },
+      "value_mod_threshold": {
+        "rationale": "Value score ≥0.1 triggers moderate delta (+4); above-median value used by Financials (bank valuations) and ValueYield (broad value screening) for moderate conviction",
+        "source": "heuristic",
+        "todo": "Calibrate 0.05/0.10/0.15 against TWSE value moderate-tier forward returns; optimize for Sharpe improvement",
+        "value": 0.1
+      },
+      "value_weak_delta": {
+        "rationale": "-5 conviction penalty for negative value factor; slightly larger magnitude than momentum weak (-4) because value-factor reversals tend to be more persistent in TW market",
+        "source": "heuristic",
+        "todo": "Calibrate -6/-5/-4: verify value-penalty asymmetry improves risk-adjusted returns vs symmetric approach",
+        "value": -5
+      },
+      "value_weak_threshold": {
+        "rationale": "Value score ≤-0.2 triggers penalty (-5); flags overvalued stocks (negative value factor) where premium valuations lack fundamental support, common in TW growth-bubble names",
+        "source": "heuristic",
+        "todo": "Calibrate -0.25/-0.20/-0.15: compare penalty-hit rate against value-trap false-positive rate",
+        "value": -0.2
+      }
+    },
+    "financials": {
+      "balance_sheet_penalty": {
+        "rationale": "Penalizes financials flagged for balance-sheet weakness when intraday low drops 1.5%+ below open, indicating market concern over asset quality or leverage ratios",
+        "source": "heuristic",
+        "todo": "Backtest 4/6/8 against TW bank NPL ratio regime shifts",
+        "value": 6
+      },
+      "capital_adequacy_boost": {
+        "rationale": "Boosts well-capitalized financials requiring double price confirmation (last\u003e=open AND near high); high selectivity bar ensures only strongest capital adequacy signals are rewarded",
+        "source": "heuristic",
+        "todo": "Validate against TW FSC capital adequacy ratio filings for banks and insurers",
+        "value": 3
+      },
+      "credit_quality_boost": {
+        "rationale": "Small boost for credit-quality-gate financials with positive intraday price action; conservative magnitude reflects noisy credit-quality signal in short-term price data",
+        "source": "heuristic",
+        "todo": "Validate SNR against TW insurer credit-rating upgrade events",
+        "value": 2
+      },
+      "credit_quality_penalty": {
+        "rationale": "Penalizes financials with deteriorating credit metrics confirmed by negative intraday drift; larger magnitude than boost reflects asymmetric tail risk in credit events",
+        "source": "heuristic",
+        "todo": "Calibrate 4/6/8 against TW financial credit downgrade history",
+        "value": 6
+      },
+      "dividend_boost": {
+        "rationale": "Rewards dividend-signaling financials where intraday price confirms distribution capacity; TW banks with \u003e3% yield historically outperform sector by 4-6% annually",
+        "source": "heuristic",
+        "todo": "Calibrate [5,8,12] against TW financials dividend backtest 2020-2026",
+        "value": 8
+      },
+      "price_to_high_threshold": {
+        "rationale": "Near-high threshold (0.5% from session peak) for spread and capital adequacy confirmation; tight bar ensures price strength is sustained, not just gap-up noise",
+        "source": "heuristic",
+        "todo": "Validate sensitivity against TW financials close-to-high ratio distribution",
+        "value": 0.995
+      },
+      "price_to_open_threshold": {
+        "rationale": "1.5% intraday drop threshold for balance-sheet penalty trigger; balances sensitivity to genuine distress signals versus normal TW financial sector intraday volatility of 1.0-1.2%",
+        "source": "heuristic",
+        "todo": "Calibrate 0.980/0.985/0.990 against TW financials intraday range distribution",
+        "value": 0.985
+      },
+      "spread_sensitivity_boost": {
+        "rationale": "Modest boost when spread-sensitive financials trade near session high, signaling resilience to yield-curve widening; small magnitude due to indirect spread proxy via price",
+        "source": "heuristic",
+        "todo": "Monitor precision against TW bank NIM expansion quarters",
+        "value": 2
+      },
+      "spread_sensitivity_penalty": {
+        "rationale": "Penalizes spread-sensitive financials failing to hold near highs, suggesting spread compression pressure; asymmetric to boost reflecting convex downside in NIM contraction",
+        "source": "heuristic",
+        "todo": "Backtest 3/4/5 against TW yield-curve inversion periods",
+        "value": 4
+      }
+    },
+    "growth_momentum": {
+      "conviction_base": {
+        "rationale": "Moderate starting conviction for growth-momentum style; lower than sector base (60) because growth picks carry higher earnings-volatility risk requiring more confirmatory signals before full confidence",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: compare hit rates at base 40/45/50 across growth-momentum picks",
+        "value": 45
+      },
+      "downgrade_open_penalty": {
+        "rationale": "Open-based downgrade penalty: when last \u003c open alongside downgrade signals, intraday selling pressure compounds the downgrade thesis with visible bearish conviction",
+        "source": "heuristic",
+        "todo": "Backtest 6/8/10: measure whether open-penalty adds discriminative value beyond price-penalty alone",
+        "value": 8
+      },
+      "downgrade_price_penalty": {
+        "rationale": "Price-based downgrade penalty: when last falls below high×threshold (0.995), the stock failed to hold its peak, signaling potential reversal from a downgrade event",
+        "source": "heuristic",
+        "todo": "Calibrate 10/12/14: compare downgrade penalty hit rate against post-downgrade 5-day forward returns",
+        "value": 12
+      },
+      "downgrade_threshold": {
+        "rationale": "Downgrade trigger threshold: last \u003c high×0.995 means a 0.5% drop from session high, sensitive enough to catch early distribution in high-momentum names without false-triggering on noise",
+        "source": "heuristic",
+        "todo": "Calibrate 0.990/0.995/0.998: measure false-positive rate at each threshold on growth-momentum backtest universe",
+        "value": 0.995
+      },
+      "exploratory_open_penalty": {
+        "rationale": "Reduced open penalty for exploratory mode (4 vs standard 8); acknowledges higher uncertainty tolerance when probing nascent growth themes before trend is established",
+        "source": "heuristic",
+        "todo": "Track exploratory-penalty cohort performance vs standard cohort to calibrate optimal discount factor",
+        "value": 4
+      },
+      "exploratory_price_penalty": {
+        "rationale": "Reduced price penalty for exploratory-mode picks (6 vs standard 12); exploratory signals have wider hypothesis space so equal-weighting full downgrade penalty would over-penalize novel growth candidates",
+        "source": "heuristic",
+        "todo": "Monitor exploratory vs standard penalty hit rates separately; merge if statistically indistinguishable",
+        "value": 6
+      },
+      "price_penalty": {
+        "rationale": "Intraday weakness penalty: when last \u003c open the closing buyer lost control, signaling potential distribution in growth names that rely on sustained buying pressure",
+        "source": "heuristic",
+        "todo": "Calibrate 6/8/10 via cross-executor backtest sweep comparing forward returns on penalized vs non-penalized picks",
+        "value": 8
+      },
+      "trend_confirmation_penalty": {
+        "rationale": "Heavy penalty when prompt demands trend confirmation but price closes below open, indicating the trend hypothesis is contradicted by intraday price action",
+        "source": "heuristic",
+        "todo": "Backtest 12/15/18 to measure false-trend-filter precision at each penalty level",
+        "value": 15
+      }
+    },
+    "leo_satellite": {
+      "conviction_base": {
+        "rationale": "Base conviction for LEOSatelliteExecutor; matches sector consensus used by SemiconductorExecutor and AISupplyChainExecutor",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: compare hit rates at base 50/60/70 across all sector executors",
+        "value": 60
+      },
+      "deployment_boost_delta": {
+        "rationale": "Deployment keyword signal boost: +8 conviction when prompt mentions deployment and price is up; captures constellation deployment cadence",
+        "source": "heuristic",
+        "todo": "Validate: compare deployment boost hit rate vs launch boost hit rate; consider merging if statistically similar",
+        "value": 8
+      },
+      "downgrade_penalty_delta": {
+        "rationale": "Downgrade signal penalty: -10 conviction when prompt mentions downgrade and last \u003c high*0.99; matches AISupplyChainExecutor pattern",
+        "source": "heuristic",
+        "todo": "Calibrate: sweep -8/-10/-12 penalty levels to find optimal precision-recall tradeoff",
+        "value": -10
+      },
+      "launch_boost_delta": {
+        "rationale": "Launch keyword signal boost: +10 conviction when prompt mentions launch and price is up; captures LEO satellite launch catalyst events",
+        "source": "heuristic",
+        "todo": "Validate with domain expert: verify launch keyword precision/recall against Starlink/Kuiper deployment news",
+        "value": 10
+      },
+      "price_penalty_delta": {
+        "rationale": "Intraday weakness penalty: reduces conviction when last \u003c open; mirrors SemiconductorExecutor pattern",
+        "source": "heuristic",
+        "todo": "Test asymmetric penalty levels (-3/-5/-8) via cross-executor backtest sweep",
+        "value": -5
+      },
+      "stop_loss_multiplier": {
+        "rationale": "5% stop-loss below entry price; matches SemiconductorExecutor and AISupplyChainExecutor; standard high-volatility sector stop",
+        "source": "heuristic",
+        "todo": "Calibrate: test 0.93/0.95/0.97 stop levels for LEO satellite names given sector volatility profile",
+        "value": 0.95
+      },
+      "target_price_multiplier": {
+        "rationale": "8% upside target from entry price; matches AISupplyChainExecutor target multiplier reflecting growth-sector premium",
+        "source": "heuristic",
+        "todo": "Validate: compare 1.08 target vs realized-forward-returns for LEO satellite names over 20-day horizon",
+        "value": 1.08
+      }
+    },
+    "shipping": {
+      "tactical_boost": {
+        "rationale": "Rewards tactical BDI/container-rate cycle entry when intraday price confirms bullish momentum; high magnitude reflects shipping's high-beta cyclicality and strong regime-dependent edge",
+        "source": "heuristic",
+        "todo": "Calibrate vs BDI lead-lag correlation with TW shipping names 2020-2026",
+        "value": 10
+      },
+      "weak_close_penalty": {
+        "rationale": "Heavy penalty for session-end weakness in shipping names, which historically signals freight-rate deterioration or charterer pullback ahead of visible data",
+        "source": "heuristic",
+        "todo": "Backtest 10/12/14 against TW shipping close-to-high ratio vs next-week returns",
+        "value": 12
+      },
+      "weak_close_threshold": {
+        "rationale": "0.8% below-session-high threshold for weak-close detection; shipping's intraday range is wider than average, requiring slightly looser threshold to avoid false positives",
+        "source": "heuristic",
+        "todo": "Calibrate 0.988/0.992/0.995 against TW shipping intraday volatility profile",
+        "value": 0.992
+      }
+    },
+    "technical_breakout": {
+      "catch_up_boost": {
+        "rationale": "+6 conviction boost for catch-up momentum (last in 0.993-0.998×high range, above open); identifies TWSE stocks mounting an intraday recovery that hasn't yet reached full breakout, offering early entry opportunity",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 4/6/8 values",
+        "value": 6
+      },
+      "catch_up_lower_threshold": {
+        "rationale": "0.7% below high (last \u003e= high×0.993) is the lower bound for catch-up momentum detection; TWSE stocks recovering to within 0.7% of highs show meaningful buying interest resuming after a pullback",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize catch-up zone",
+        "value": 0.993
+      },
+      "catch_up_upper_threshold": {
+        "rationale": "0.2% below high (last \u003c high×0.998) is the upper bound for catch-up zone; stocks above this level are classified as confirmed breakouts rather than catch-up candidates, avoiding overlap with ConfirmationBoost",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize catch-up zone",
+        "value": 0.998
+      },
+      "close_strength_penalty": {
+        "rationale": "Small -1 conviction penalty for weak close (last \u003c high×0.985) to mildly flag TWSE intraday reversals where breakout fails to hold near highs, indicating potential distribution rather than accumulation",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate magnitude",
+        "value": 1
+      },
+      "close_strength_threshold": {
+        "rationale": "1.5% below intraday high (last \u003c high×0.985) triggers weak-close penalty; calibrated to TWSE typical intraday range where a close below 98.5% of high suggests selling pressure overwhelmed breakout momentum",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 0.980/0.985/0.990",
+        "value": 0.985
+      },
+      "close_strength_tolerance": {
+        "rationale": "2% tolerance band (last \u003e= high×0.98) exempts close from penalty when tolerance is enabled; prevents over-penalizing TWSE stocks that close modestly below highs but still within acceptable reversal range",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize tolerance band",
+        "value": 0.98
+      },
+      "confirmation_boost": {
+        "rationale": "+12 conviction boost for confirmed breakout (last \u003e= high×0.998 AND volume \u003e= 5M); dual-confirmation of price holding near highs with institutional volume is the strongest TWSE breakout signal",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 10/12/14 values",
+        "value": 12
+      },
+      "confirmation_threshold": {
+        "rationale": "99.8% of intraday high required for confirmation boost; ensures TWSE close is essentially at or above the session high, validating that breakout momentum persisted through the close",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize confirmation quality",
+        "value": 0.998
+      },
+      "default_volume_floor": {
+        "rationale": "5M shares is the baseline liquidity threshold for TWSE breakout candidates; filters out thin retail-driven names that lack institutional participation for conviction reliability",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize floor across 3M/5M/7M",
+        "value": 5000000
+      },
+      "late_breakout_penalty": {
+        "rationale": "-8 conviction penalty for late-session breakout fade (last \u003c high×0.998); TWSE late-day reversals suggest exhaustion or program selling rather than sustained buying, reducing breakout credibility",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 6/8/10 values",
+        "value": 8
+      },
+      "late_breakout_threshold": {
+        "rationale": "0.2% below intraday high (last \u003c high×0.998) triggers late-breakout penalty; TWSE closing within 0.2% of high is acceptable, but failure to hold this level signals intraday distribution",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 0.995/0.998/0.999",
+        "value": 0.998
+      },
+      "low_volume_boost": {
+        "rationale": "Small +3 conviction boost compensates for the information disadvantage of thin-liquidity TWSE stocks (3M-5M volume) by recognizing that even modest volume participation signals emerging interest in neglected names",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate precision of low-vol boost",
+        "value": 3
+      },
+      "low_volume_floor": {
+        "rationale": "3M shares lower bound for low-volume participation acceptance; identifies TWSE stocks with meaningful but sub-standard liquidity that still warrant a modest conviction boost for thin-liquidity alpha",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize low-vol band",
+        "value": 3000000
+      },
+      "open_rejection_penalty": {
+        "rationale": "-10 conviction penalty when last \u003c open under structure-first breakout filter; a strong TWSE intraday reversal below opening price indicates selling dominated the session, invalidating the breakout thesis",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate false-breakout rate",
+        "value": 10
+      },
+      "reject_low_volume_floor": {
+        "rationale": "Hard rejection threshold at 5M shares for breakout candidates with 'reject low volume' prompt; prevents low-liquidity TWSE names from entering the pipeline when structure-first filtering is required",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to calibrate false-breakout rejection rate",
+        "value": 5000000
+      },
+      "relaxed_volume_floor": {
+        "rationale": "Coverage expansion regime disables volume floor (zero) to permit scanning mid-cap and small-cap TWSE names that exhibit breakout structure but trade below standard liquidity thresholds",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to assess expansion quality",
+        "value": 0
+      },
+      "strict_volume_floor": {
+        "rationale": "Surge-signal validation requires 40% higher volume than default (7M vs 5M) to confirm genuine institutional buying pressure on TWSE, avoiding false breakouts from retail momentum traps",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize surge floor",
+        "value": 7000000
+      },
+      "surge_boost": {
+        "rationale": "+4 conviction boost when volume meets the strict surge floor (7M+); confirms that TWSE breakout is backed by abnormally high participation, signaling strong institutional conviction in the move",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 3/4/5 values",
+        "value": 4
+      },
+      "surge_penalty": {
+        "rationale": "-4 conviction penalty when volume fails to meet strict surge floor despite surge requirement; flags TWSE breakouts that lack the expected institutional volume, indicating potential bull trap",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to calibrate false-surge penalty",
+        "value": 4
+      },
+      "volume_boost": {
+        "rationale": "+8 conviction boost when volume meets the 5M default floor and prompt requests volume confirmation; rewards TWSE breakouts backed by sufficient participation, distinguishing genuine institutional interest from noise",
+        "source": "heuristic",
+        "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 6/8/10 values",
+        "value": 8
+      }
+    },
+    "value_yield": {
+      "cash_flow_boost": {
+        "rationale": "High conviction boost for free-cash-flow yield signal confirmed by intraday price strength; TW value stocks with FCF yield \u003e 8% and positive price confirmation show 12-18% annual outperformance historically",
+        "source": "heuristic",
+        "todo": "Backtest against TWSE FCF-yield sorted quintile returns 2020-2026 to validate boost magnitude",
+        "value": 10
+      },
+      "yield_trap_penalty": {
+        "rationale": "Penalizes suspiciously high dividend yield (\u003e8%) when accompanied by negative intraday price action; flags potential yield traps where high yield masks deteriorating fundamentals in TW cyclical names",
+        "source": "heuristic",
+        "todo": "Calibrate 8/10/12 against TWSE high-yield trap false-positive rate using forward-return analysis",
+        "value": 10
+      }
+    }
+  },
+  "sizing": {
+    "atr_adjustment_max": {
+      "rationale": "Maximum 2.0x ATR adjustment",
+      "source": "heuristic",
+      "value": 2
+    },
+    "atr_adjustment_min": {
+      "rationale": "Minimum 0.25x ATR adjustment",
+      "source": "heuristic",
+      "value": 0.25
+    },
+    "atr_multiplier": {
+      "rationale": "2x ATR stop-loss is standard",
+      "source": "literature",
+      "value": 2
+    },
+    "atr_target_risk": {
+      "rationale": "2% risk per trade",
+      "source": "literature",
+      "value": 0.02
+    },
+    "correlation_penalty": {
+      "rationale": "50% correlation penalty scaling",
+      "source": "heuristic",
+      "todo": "Calibrate from portfolio optimization backtest",
+      "value": 0.5
+    },
+    "correlation_penalty_factor": {
+      "rationale": "70% of correlation used as penalty",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest",
+      "value": 0.7
+    },
+    "correlation_threshold": {
+      "rationale": "70% correlation is high and warrants penalty",
+      "source": "heuristic",
+      "value": 0.7
+    },
+    "default_adv": {
+      "rationale": "100M TWD default average daily volume",
+      "source": "heuristic",
+      "value": 100000000
+    },
+    "default_atr": {
+      "rationale": "Non-zero default for ATR-based position sizing (2% of price as fallback)",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: test [0.01, 0.03] range",
+      "value": 0.02
+    },
+    "default_payoff_ratio": {
+      "rationale": "Neutral prior: 1:1 payoff ratio",
+      "source": "heuristic",
+      "todo": "Should be overridden by agent historical stats",
+      "value": 1
+    },
+    "default_volatility": {
+      "rationale": "25% annualized default volatility",
+      "source": "heuristic",
+      "value": 0.25
+    },
+    "default_win_rate": {
+      "rationale": "Neutral prior: 50% win rate",
+      "source": "heuristic",
+      "todo": "Should be overridden by agent historical stats",
+      "value": 0.5
+    },
+    "kelly_fraction": {
+      "rationale": "Half-Kelly (0.5) per Thorp (2006) — balances growth and drawdown under parameter uncertainty.",
+      "source": "literature",
+      "value": 0.5
+    },
+    "max_correlation_penalty": {
+      "rationale": "Maximum 70% correlation penalty",
+      "source": "heuristic",
+      "value": 0.7
+    },
+    "max_drawdown_limit": {
+      "rationale": "15% max drawdown limit (professional fund risk controls: 15-25% range)",
+      "source": "heuristic",
+      "value": 0.15
+    },
+    "max_position_by_adv": {
+      "rationale": "1% of average daily volume",
+      "source": "literature",
+      "value": 0.01
+    },
+    "target_volatility": {
+      "rationale": "20% annual target volatility",
+      "source": "literature",
+      "value": 0.2
+    },
+    "vol_adjustment_max": {
+      "rationale": "Maximum 2.0x size adjustment",
+      "source": "heuristic",
+      "value": 2
+    },
+    "vol_adjustment_min": {
+      "rationale": "Minimum 0.25x size adjustment",
+      "source": "heuristic",
+      "value": 0.25
+    },
+    "vol_lookback_days": {
+      "rationale": "20-day volatility lookback",
+      "source": "literature",
+      "value": 20
+    }
+  },
+  "smart_universe": {
+    "confidence_threshold": {
+      "rationale": "Minimum of 3 supporting signals or confidence points required for inclusion",
+      "source": "heuristic",
+      "value": 3
+    },
+    "d6_expiry_trading_days": {
+      "rationale": "Unselected Layer-2 candidates remain on the D6 watchlist for 60 trading days before expiry",
+      "source": "heuristic",
+      "value": 60
+    },
+    "drawdown_threshold": {
+      "rationale": "30% drawdown threshold for risk flag (flag only, not exclusion)",
+      "source": "heuristic",
+      "value": 0.3
+    },
+    "drawdown_window": {
+      "rationale": "60-day window for drawdown flagging",
+      "source": "heuristic",
+      "value": 60
+    },
+    "factor_score_max_age_days": {
+      "rationale": "Factor scores older than 30 days are downgraded to avoid stale inputs",
+      "source": "heuristic",
+      "value": 30
+    },
+    "foreign_flow_weight": {
+      "rationale": "Oracle-calibrated new foreign-investor flow factor; core driver for Taiwan equities",
+      "source": "calibrated",
+      "value": 0.2
+    },
+    "max_industry_concentration": {
+      "rationale": "Oracle-recommended 40% cap to avoid semiconductor over-concentration in the universe",
+      "source": "heuristic",
+      "value": 0.4
+    },
+    "min_daily_amount_twd": {
+      "rationale": "Relaxed Layer-2.5 re-check floor of NT$5M for liquidity verification before final inclusion",
+      "source": "heuristic",
+      "value": 5000000
+    },
+    "momentum_weight": {
+      "rationale": "Oracle-calibrated weight reduced sharply from 0.30 to 0.15 because Taiwan momentum reverses quickly",
+      "source": "calibrated",
+      "value": 0.15
+    },
+    "pb_weight": {
+      "rationale": "Oracle-calibrated weight for book-value factor; important for financials screening",
+      "source": "calibrated",
+      "value": 0.1
+    },
+    "pe_weight": {
+      "rationale": "Oracle-calibrated weight for valuation factor; retained despite Taiwan PE distortion from semiconductors",
+      "source": "calibrated",
+      "value": 0.15
+    },
+    "price_minimum": {
+      "rationale": "Minimum stock price of NT$10 for universe eligibility",
+      "source": "heuristic",
+      "value": 10
+    },
+    "quality_weight": {
+      "rationale": "Oracle-calibrated weight combining ROE, ROA and accruals quality",
+      "source": "calibrated",
+      "value": 0.2
+    },
+    "supply_chain_expand_depth": {
+      "rationale": "Expand supply-chain mapping up to 2 hops when building representative stock sets",
+      "source": "heuristic",
+      "value": 2
+    },
+    "top_n": {
+      "rationale": "Default universe size of 150 names; Oracle recommends 120-180 dynamic range, with bear-market override to 100-120",
+      "source": "heuristic",
+      "value": 150
+    },
+    "var_contribution_multiplier": {
+      "rationale": "Exclude names with VaR contribution above 2x the portfolio average",
+      "source": "heuristic",
+      "value": 2
+    },
+    "volatility_multiplier": {
+      "rationale": "Exclude names with 30-day realized volatility above 2x the median",
+      "source": "heuristic",
+      "value": 2
+    },
+    "volume_floor_twd": {
+      "rationale": "Minimum daily turnover of NT$10M replaces share-count floor to avoid low-priced stocks passing a 100-lot screen",
+      "source": "heuristic",
+      "value": 10000000
+    },
+    "volume_weight": {
+      "rationale": "Oracle-calibrated weight reduced from 0.20 to 0.15 to make room for the foreign-flow factor",
+      "source": "calibrated",
+      "value": 0.15
+    }
+  },
+  "strategy": {
+    "fallback_strategy": {
+      "rationale": "Default strategy when no clear winner; momentum has broad applicability",
+      "source": "heuristic",
+      "todo": "Validate: backtest fallback strategy vs alternatives",
+      "value": "momentum"
+    },
+    "min_switch_interval_days": {
+      "rationale": "Minimum days between strategy switches; prevents whipsaw",
+      "source": "heuristic",
+      "todo": "Calibrate: test [3, 14] range based on transaction costs",
+      "value": 7
+    },
+    "score_lookback_days": {
+      "rationale": "Days of historical performance to evaluate when scoring strategies",
+      "source": "heuristic",
+      "todo": "Calibrate: test [14, 60] range",
+      "value": 30
+    },
+    "switch_threshold": {
+      "rationale": "Minimum score advantage (10%) required to switch strategies",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.05, 0.20] range",
+      "value": 0.1
+    }
+  },
+  "tax": {
+    "dividend_tax_rate": {
+      "rationale": "Taiwan individual income tax rate on dividend income (28% bracket)",
+      "source": "literature",
+      "value": 0.28
+    },
+    "nhi_surcharge_rate": {
+      "rationale": "Taiwan NHI supplementary premium (二代健保補充保費) rate 2.11% effective 2021",
+      "source": "literature",
+      "value": 0.0211
+    },
+    "transaction_tax_rate": {
+      "rationale": "Taiwan securities transaction tax (0.3%, sell-side only)",
+      "source": "literature",
+      "value": 0.003
+    }
+  },
+  "version": "1.0"
+}
