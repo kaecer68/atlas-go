@@ -65,6 +65,11 @@ while IFS= read -r file; do
       sox_pct|net_buy_twd|deviation_pct|change_pct|\
       exit_alerts|logic_rules|sector_heatmap|\
       confidence_breakdown) continue ;;  # TODO: planned substructure, not yet in Go struct
+      # Eventbus event type names (not data fields — these are SSE event listener
+      # registration strings like 'experiment.backtest_completed'). The regex
+      # matches the trailing identifier after the dot, but it's part of the
+      # event name constant, not a struct JSON field.
+      backtest_completed|calibration_completed) continue ;;
       # Fields from map[string]any or packages not scanned by gentags
       # (next_run is tagged in apigateway/, outside gentags scan scope;
       # core_indicators is a wrapper map key around the CoreIndicators struct;

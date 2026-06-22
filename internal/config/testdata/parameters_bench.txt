@@ -1,0 +1,8 @@
+BenchmarkValidate-10                	 1868925	       634.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidate-10                	 1890268	       641.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidate-10                	 1873612	       641.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLoadParametersConfig-10    	     594	   2012805 ns/op	 1279395 B/op	    4631 allocs/op
+BenchmarkLoadParametersConfig-10    	     601	   1999809 ns/op	 1279397 B/op	    4631 allocs/op
+BenchmarkLoadParametersConfig-10    	     596	   2003484 ns/op	 1279397 B/op	    4631 allocs/op
+PASS
+ok  	github.com/kaecer68/atlas-go/internal/config	14.592s

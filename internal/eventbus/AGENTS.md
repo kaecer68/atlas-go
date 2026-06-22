@@ -1,7 +1,7 @@
 # AGENTS.md — internal/eventbus
 
 **成熟度**: stable
-**模組職責**: 頻道式事件匯流排，提供 Publish/Subscribe 與 SSE 橋接，支援 26 種事件類型。
+**模組職責**: 頻道式事件匯流排，提供 Publish/Subscribe 與 SSE 橋接，支援 42 種事件類型（Wave 8 新增 7 個、Wave 9 新增 5 個）。
 
 ---
 

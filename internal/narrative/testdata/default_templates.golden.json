@@ -1,0 +1,1056 @@
+[
+  {
+    "historical_hit_rate": 0.72,
+    "id": "美國升息 / 鷹派聯準會",
+    "name": "美國升息 / 鷹派聯準會",
+    "rationale": "當美國進入鷹派升息週期，無風險利率（以美債10年期為代表）快速攀升，這會直接抬高全球資產的折現率。對台股而言，這意味著兩件事：第一，外資會因美元資產收益率上升而回流美國，導致台股資金面緊縮；第二，高估值、高成長性的科技股對折現率最敏感，本益比會被大幅壓縮。\n\n因此，此時應該【押注】對利率上升「免疫」甚至「受惠」的板塊：\n• 金融股（如富邦金、國泰金）：淨息差（NIM）隨利率上升而擴大，獲利直接改善。\n• 高股息ETF（如0056、00878）：在市場動盪時提供穩定現金流，且成分股多為成熟企業，估值相對穩健。\n• ETF輪動策略：透過降低個股集中風險，捕捉防禦型資產的相對強勢。\n\n同時必須【迴避】對資金成本最敏感的板塊：\n• AI供應鏈（台積電、廣達等）：雖然長期趨勢不變，但在升息環境下，遠期現金流的估值折讓會讓股價劇烈波動。\n• 小盤股：流動性較差，在外資撤離時往往出現「流動性折價」，跌幅會大於大盤。",
+    "required_region": "US",
+    "source_references": [
+      "IMF Working Paper WP/19/128",
+      "BIS Quarterly Review Dec 2022"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "DXY",
+          "新興市場貨幣"
+        ],
+        "description": "美債殖利率上升 → 美元走強",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "外資流向_台股"
+        ],
+        "description": "美元走強 + 利率上升引發新興亞洲外資流出",
+        "impact": -0.7
+      },
+      {
+        "affected": [
+          "金融",
+          "高股息",
+          "ETF輪動"
+        ],
+        "description": "台股大盤承壓；防禦型板塊相對抗跌",
+        "impact": 0.4
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "中小型股"
+        ],
+        "description": "高Beta板塊（AI供應鏈、中小型股）面臨估值壓縮",
+        "impact": -0.6
+      }
+    ],
+    "trigger_theme": "US_rates_up"
+  },
+  {
+    "historical_hit_rate": 0.68,
+    "id": "日圓套利平倉",
+    "name": "日圓套利平倉",
+    "rationale": "日圓長期是全球最大的「融資貨幣」之一，許多對沖基金與機構投資人以極低利率借入日圓，再投入高風險資產（包括台灣科技股）。當日本央行轉鷹或日圓急升時，這些「套利交易」會被迫快速平倉——賣掉台股、買回日圓還債，形成全球流動性的瞬間收縮。\n\n這種去槓桿過程對台股的衝擊具有明顯的「結構性偏好」：\n• 應該【押注】高股息與優質資產：因為套利平倉引發的是「質量逃離」（flight to quality），資金會湧向現金流穩定、財務體質健全的標的。高股息ETF和大型金融股在此階段相對抗跌。\n• 必須【迴避】AI供應鏈與小盤股：這些是外資與槓桿資金最愛的板塊，也是平倉時第一個被賣出的標的。歷史上日圓急升（如2007年8月、2024年8月）時，台灣電子股往往出現「無差別殺盤」，跌幅遠超加權指數。",
+    "required_region": "JP",
+    "source_references": [
+      "BIS Annual Economic Report 2024",
+      "Goldman Sachs Global Macro Note Aug 2024"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "日圓",
+          "全球流動性"
+        ],
+        "description": "日本央行升息或縮表推升日圓",
+        "impact": 0.5
+      },
+      {
+        "affected": [
+          "全球股市",
+          "VIX"
+        ],
+        "description": "日圓融資槓桿部位平倉，降低全球風險偏好",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "中小型股"
+        ],
+        "description": "台灣高槓桿 / 高估值個股面臨短期拋壓",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "日圓",
+          "黃金",
+          "高股息"
+        ],
+        "description": "避險資金流入日圓與優質資產",
+        "impact": 0.4
+      }
+    ],
+    "trigger_theme": "JPY_carry_unwind"
+  },
+  {
+    "historical_hit_rate": 0.81,
+    "id": "AI 資本支出激增",
+    "name": "AI 資本支出激增",
+    "rationale": "AI 被視為繼智慧型手機之後最大的科技硬體週期。當輝達、微軟、Google、亞馬遜等超大規模雲端業者上修 AI 資本支出時，這些訂單幾乎100%會落到台灣供應鏈——因為全球只有台積電能大量生產最先進的 AI 晶片，只有台灣擁有完整的 CoWoS 先進封裝、高階 PCB（如欣興）、以及伺服器組裝（廣達、緯穎）產能。\n\n這不是一般的景氣循環，而是「結構性產能短缺」帶來的定價權轉移：\n• 應該【押注】AI供應鏈、半導體、PCB、散熱：這些板塊的訂單能見度已經排到數個季度之後，營收與獲利上修的確定性最高。\n• 應該【迴避】消費、觀光：在總資金有限的情況下，市場會持續「汰弱留強」，把資金從缺乏成長動能的傳產消費板塊撤出，轉而追逐 AI 硬體的稀缺產能。這種「擠出效應」會讓消費股相對大盤持續跑輸。",
+    "required_region": "US",
+    "source_references": [
+      "Morgan Stanley Taiwan Tech Outlook 2024",
+      "Goldman Sachs Asia Pacific Strategy 2024"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "美國科技資本支出"
+        ],
+        "description": "輝達 / 微軟 / 超大規模雲端業者上修資本支出展望",
+        "impact": 0.8
+      },
+      {
+        "affected": [
+          "半導體",
+          "晶圓代工"
+        ],
+        "description": "CoWoS 與先進封裝需求吃緊",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "半導體",
+          "PCB",
+          "散熱"
+        ],
+        "description": "台灣 AI 供應鏈（晶圓代工、封裝、PCB、散熱）受惠",
+        "impact": 0.8
+      },
+      {
+        "affected": [
+          "半導體設備",
+          "材料"
+        ],
+        "description": "上游設備與材料訂單能見度提升",
+        "impact": 0.5
+      }
+    ],
+    "trigger_theme": "AI_capex_surge"
+  },
+  {
+    "historical_hit_rate": 0.65,
+    "id": "地緣政治風險飆升",
+    "name": "地緣政治風險飆升",
+    "rationale": "地緣政治風險飆升（無論是中東衝突、台海緊張或東歐戰事）會引發市場的「風險規避」本能。投資人會要求更高的風險溢酬（risk premium），這直接體現在股票估值上：不確定性越高，投資人願意支付的本益比就越低。\n\n對台股這個高度出口導向、外資持股比重高的市場，影響尤其劇烈：\n• 應該【押注】金融、高股息、航運：金融股估值低、現金流穩定，是傳統避風港；高股息提供「下跌保護」；航運股則常在地緣衝突初期因運價飆升而逆勢上漲。\n• 必須【迴避】AI供應鏈與小盤股：科技股本益比高、對風險溢酬最敏感；小盤股流動性差，在地緣風險升高時會被外資優先減持。更重要的是，台灣 AI 供應鏈的終端需求高度依賴中美貿易與全球資本支出，地緣政治緊張會讓客戶「延後拉貨」或「分散供應鏈」，直接衝擊訂單能見度。",
+    "required_region": "Global",
+    "source_references": [
+      "Caldara-Iacoviello GPR Dataset",
+      "Fed Finance and Economics Discussion Series 2023"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "地緣政治風險指數",
+          "原油"
+        ],
+        "description": "中東或台海緊張情勢升級，不確定性上升",
+        "impact": -0.8
+      },
+      {
+        "affected": [
+          "DXY",
+          "黃金"
+        ],
+        "description": "避險需求升溫：美元與黃金同步上漲",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "台股大盤"
+        ],
+        "description": "台股風險溢酬擴大；資金轉向防禦配置",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "金融",
+          "高股息",
+          "航運"
+        ],
+        "description": "防禦型板塊（金融、高股息、航運避險）表現優於週期股",
+        "impact": 0.4
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "中小型股"
+        ],
+        "description": "高Beta科技股與出口導向個股面臨本益比下修",
+        "impact": -0.6
+      }
+    ],
+    "trigger_theme": "geopolitical_risk_spike"
+  },
+  {
+    "historical_hit_rate": 0.58,
+    "id": "油價衝擊",
+    "name": "油價衝擊",
+    "rationale": "油價是現代經濟最重要的「隱性稅收」。當油價劇烈波動時，它會同時影響通膨預期、企業成本結構、以及聯準會的利率路徑——這三個因素幾乎決定了所有風險資產的定價。\n\n判斷油價衝擊的投資策略，關鍵在於區分「供給衝擊」還是「需求崩潰」：\n• 如果是供給衝擊（如中東產能中斷），這是「壞的通膨」——聯準會會被迫維持鷹派，對利率敏感的高估值股不利。此時應減碼成長股，轉向現金流穩健的防禦型板塊。\n• 如果是需求崩潰（如全球衰退），油價下跌雖然降低通膨，但反映的是企業獲利萎縮，這時週期股（如航運、石化）和消費股都會受創。\n\n對台股而言，無論哪種情境，【航運股】都首當其衝：油價是航運最大的變動成本，油價飆升會侵蝕獲利；但如果是地緣因素導致的運價上漲，又可能抵銷部分成本壓力。整體而言，油價劇烈波動期應降低對週期股的曝險，提高現金或防禦型資產的比重。",
+    "required_region": "Global",
+    "source_references": [
+      "Hamilton (1983) JPE - Oil and Macroeconomy",
+      "IMF World Economic Outlook 2022"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "通膨預期",
+          "原油"
+        ],
+        "description": "油價劇烈變動改變通膨預期",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "聯準會基金期貨",
+          "美國利率"
+        ],
+        "description": "聯準會政策路徑重新定價（供給衝擊則偏鷹、需求崩潰則偏鴿）",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "航運",
+          "石化"
+        ],
+        "description": "利率敏感資產重估；台灣運輸與石化板塊直接受影響",
+        "impact": -0.4
+      },
+      {
+        "affected": [
+          "消費",
+          "觀光"
+        ],
+        "description": "消費性產業與利潤敏感板塊面臨成本壓力",
+        "impact": -0.3
+      }
+    ],
+    "trigger_theme": "oil_price_shock"
+  },
+  {
+    "historical_hit_rate": 0.7,
+    "id": "春節行情",
+    "name": "春節行情",
+    "rationale": "台股有明顯的春節季節性規律。歷史數據顯示，年前2周上漲概率超過70%，年後1個月外資回流推升大盤。這是因為：1) 台灣企業年終獎金發放後資金流入股市；2) 農曆年後法人重新布局；3) Q2進入除權除息旺季，高股息股提前受追捧。\n\n投資配置：\n• 【押注】高股息、金融：除權除息旺季的確定性收益\n• 【押注】中小型股：年後資金回流時彈性較大\n• 【迴避】電子股：進入傳統淡季，營收動能較弱",
+    "required_region": "TW",
+    "source_references": [
+      "Taiwan Stock Exchange Seasonal Analysis"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "台股大盤",
+          "高股息"
+        ],
+        "description": "農曆年前資金回籠，市場出現紅包行情",
+        "impact": 0.5
+      },
+      {
+        "affected": [
+          "台股大盤",
+          "中小型股"
+        ],
+        "description": "年後資金回流，補漲行情延續",
+        "impact": 0.4
+      },
+      {
+        "affected": [
+          "高股息",
+          "金融"
+        ],
+        "description": "除權除息旺季，高股息股受追捧",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "內需",
+          "傳產"
+        ],
+        "description": "電子股進入淡季，傳產內需相對強勢",
+        "impact": 0.3
+      }
+    ],
+    "trigger_theme": "spring_festival_season"
+  },
+  {
+    "historical_hit_rate": 0.65,
+    "id": "選舉週期",
+    "name": "選舉週期",
+    "rationale": "台灣選舉對台股有顯著的週期性影響。選前3個月，政策不確定性導致外資觀望，波動率通常上升30%。選後1個月，政策明朗化帶動資金回流，上漲概率約65%。\n\n投資配置：\n• 【選前】高股息、金融：防禦型配置，降低不確定性曝險\n• 【選後】綠能、基建、國防：受惠於新政府政策方向\n• 【迴避】高Beta科技股：選前波動大，外資減持首當其衝",
+    "required_region": "TW",
+    "source_references": [
+      "Taiwan Election and Stock Market Historical Analysis"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "台股大盤",
+          "外資流向"
+        ],
+        "description": "選前3個月政策不確定性升溫",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "外資流向_台股"
+        ],
+        "description": "外資因不確定性減少台股曝險",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "台股大盤"
+        ],
+        "description": "選後政策明朗化，資金回流",
+        "impact": 0.5
+      },
+      {
+        "affected": [
+          "綠能",
+          "基建",
+          "國防"
+        ],
+        "description": "特定產業（綠能/基建/國防）受政策青睞",
+        "impact": 0.4
+      }
+    ],
+    "trigger_theme": "election_cycle"
+  },
+  {
+    "historical_hit_rate": 0.65,
+    "id": "台灣地緣政治風險",
+    "name": "台灣地緣政治風險",
+    "rationale": "台灣地緣政治風險是台股特有的「系統性風險」。當兩岸關係緊張、軍事演習頻繁或國際制裁升級時，外資會因擔憂「尾部風險」而主動減持台股，導致資金面緊縮與估值下修。\n\n對台股的傳導路徑：\n1. 兩岸緊張 → 外資風險溢酬要求提高 → 台股估值壓縮\n2. 避險情緒 → 台幣貶值壓力 → 資金外流\n3. 終端客戶擔憂供應鏈中斷 → 訂單延後或轉單\n\n投資配置：\n• 【押注】金融、高股息、內需：這些板塊較不受地緣風險直接影響，且能提供穩定現金流\n• 【迴避】AI供應鏈、半導體、小盤股：外資持股比重高，地緣風險升高時首當其衝",
+    "required_region": "TW",
+    "source_references": [
+      "Taiwan Relations Act",
+      "CSIS First Battle Report 2023"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "台海風險",
+          "軍事不確定性"
+        ],
+        "description": "兩岸關係緊張或軍事演習升級",
+        "impact": -0.9
+      },
+      {
+        "affected": [
+          "外資流向_台股",
+          "台股大盤"
+        ],
+        "description": "外資擔憂地緣風險而減持台股",
+        "impact": -0.8
+      },
+      {
+        "affected": [
+          "USD/TWD",
+          "台灣流動性"
+        ],
+        "description": "台幣貶壓加劇，資金外流",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "金融",
+          "高股息",
+          "內需"
+        ],
+        "description": "防禦型板塊（金融、高股息、內需）相對抗跌",
+        "impact": 0.4
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "半導體",
+          "中小型股"
+        ],
+        "description": "高Beta科技股與出口導向個股面臨本益比下修",
+        "impact": -0.7
+      }
+    ],
+    "trigger_theme": "taiwan_political_risk"
+  },
+  {
+    "historical_hit_rate": 0.62,
+    "id": "USD/TWD 劇烈波動",
+    "name": "USD/TWD 劇烈波動",
+    "rationale": "USD/TWD 匯率是台灣出口競爭力的核心指標。台灣出口佔 GDP 65%，電子產品為主要出口項目，對匯率極度敏感。當美元對台急需貶（\u003e1%）時，雖然短期對出口商有匯兌收益，但長期會侵蝕競爭力；且外公會因換匯成本增加而減少投資意願。\n\n投資配置：\n• 【押注】內需、金融：較不受匯率波動直接影響\n• 【迴避】出口導向科技股：雖有匯兌收益，但競爭力長期受損",
+    "required_region": "TW",
+    "source_references": [
+      "Central Bank of Taiwan Quarterly Report"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "USD/TWD",
+          "出口競爭力"
+        ],
+        "description": "美元對台幣匯率劇烈變動（\u003e1%）",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "出口導向",
+          "進口成本"
+        ],
+        "description": "美元走強 → 台灣出口商競爭力下降，進口成本上升",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "外公流向_台股"
+        ],
+        "description": "外公換匯成本增加，減少台股投資意願",
+        "impact": -0.4
+      },
+      {
+        "affected": [
+          "內需",
+          "金融"
+        ],
+        "description": "內需與金融板塊相對抗跌",
+        "impact": 0.3
+      }
+    ],
+    "trigger_theme": "USD_TWD_volatility"
+  },
+  {
+    "historical_hit_rate": 0.6,
+    "id": "半導體週期下行",
+    "name": "半導體週期下行",
+    "rationale": "半導體是台灣經濟的核心引擎，佔出口比重超過 35%。當電子零組件出口連續下滑時，意味著全球科技需求正在放緩，半導體庫存開始堆積，產能利用率下降。\n\n這對台股的影響：\n1. 營收與獲利下修：科技股本益比是建立在成長預期上，一旦成長放緩，估值會被大幅下調\n2. 庫存減記：半導體庫存價值快速貶值，影響獲利\n3. 資本支出縮減：設備與材料訂單減少，影響上游供應鏈\n\n投資配置：\n• 【押注】高股息、內需、金融：在週期下行時提供防禦\n• 【迴避】半導體、AI供應鏈、PCB：庫存去化期通常持續 2-4 個季度，期間股價承壓",
+    "required_region": "TW",
+    "source_references": [
+      "WSTS Semiconductor Market Forecast",
+      "Taiwan Ministry of Economic Affairs Export Statistics"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "台灣出口",
+          "電子零組件"
+        ],
+        "description": "台灣電子零組件出口連續下滑（\u003c-5%）",
+        "impact": -0.7
+      },
+      {
+        "affected": [
+          "半導體",
+          "晶圓代工"
+        ],
+        "description": "半導體庫存去化，產能利用率下降",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "伺服器"
+        ],
+        "description": "AI 供應鏈訂單能見度下降",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "高股息",
+          "內需"
+        ],
+        "description": "防禦型板塊（高股息、內需）相對抗跌",
+        "impact": 0.3
+      }
+    ],
+    "trigger_theme": "semiconductor_downturn"
+  },
+  {
+    "historical_hit_rate": 0.6,
+    "id": "散戶機構分歧",
+    "name": "散戶機構分歧",
+    "rationale": "當散戶（透過融資餘額衡量）和機構投資人（外資+投信）的方向出現明顯分歧時，市場往往處於過度杠桿或過度樂觀的狀態。融資餘額創新高代表散戶信心飽滿，但若同期機構投資人卻在賣超，這種「群眾 vs 專業」的分歧是經典的逆向訊號。\n\n歷史規律：\n• 散戶融資餘額 Z-Score \u003e 1.5 且外资持續賣超 → 未來 1 個月高Beta股回調概率超過 60%\n• 軋空行情往往在散戶過度樂觀後突然反轉\n\n投資配置：\n• 【迴避】高Beta、主題型中小股：杠桿化程度最高，回調時殺最慘\n• 【押注】高股息、金融：較不受散戶情緒邊際影響",
+    "required_region": "TW",
+    "source_references": [
+      "TWSE Margin Statistics",
+      "Taiwan Financial Supervisory Commission"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "散戶情緒",
+          "融資餘額"
+        ],
+        "description": "融資餘額 Z-Score \u003e 1.5（散戶過度樂觀）",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "外公流向",
+          "投信流向"
+        ],
+        "description": "外公與投信同步賣超（機構偏空）",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "台股大盤",
+          "流動性"
+        ],
+        "description": "市場流動性邊際惡化 → 軋空風險升高",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "中小型股",
+          "主題股"
+        ],
+        "description": "高Beta股和主題型中小股面臨短期回調壓力",
+        "impact": -0.4
+      }
+    ],
+    "trigger_theme": "retail_institutional_divergence"
+  },
+  {
+    "historical_hit_rate": 0.65,
+    "id": "黃金避險行情",
+    "name": "黃金避險行情",
+    "rationale": "黃金作為全球最老牌的避險資產，在市場恐慌、地緣政治緊張或通膨預期升溫時，往往出現急升行情。這種「flight to safety」的資金流動對台股有兩層影響：\n1. 外資為降低新興市場曝險，會從台股抽離資金\n2. 貴金屬相關標的（如黃金ETF 00635U）反而受惠\n\n配置建議：\n• 【押注】貴金屬ETF、原物料板塊：避險資金直接受益\n• 【迴避】高Beta科技股：外資撤離首當其衝",
+    "required_region": "Global",
+    "source_references": [
+      "World Gold Council",
+      "BIS Gold and FX Reserves"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "黃金",
+          "VIX",
+          "避險資產"
+        ],
+        "description": "黃金價格突破關鍵閾值 → 避險需求急升",
+        "impact": 0.8
+      },
+      {
+        "affected": [
+          "貴金屬",
+          "黃金ETF"
+        ],
+        "description": "風險資產資金流向避險資產 → 貴金屬相對強勢",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "台股大盤",
+          "新興市場"
+        ],
+        "description": "新興市場貨幣承壓 → 台幣貶值，外資流出台股",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "貴金屬ETF",
+          "原物料"
+        ],
+        "description": "貴金屬板塊受惠於避險需求與通膨預期",
+        "impact": 0.6
+      }
+    ],
+    "trigger_theme": "gold_rally"
+  },
+  {
+    "historical_hit_rate": 0.7,
+    "id": "美元強勢",
+    "name": "美元強勢",
+    "rationale": "美元走強（DXY飆升）是全球資金流動最重要的訊號之一。當美元急升時：\n1. 新興市場貨幣全面承壓，台幣跟貶\n2. 外資為鎖定美元匯兌收益，會加速從台股撤離\n3. 貴金屬因美元定價關係，短期承壓（美元強 = 黃金弱）\n\n配置建議：\n• 【迴避】貴金屬ETF：美元強勢直接打壓金價\n• 【押注】現金/美元部位：提高現金比例等待回調",
+    "required_region": "US",
+    "source_references": [
+      "Federal Reserve DXY Index",
+      "BIS Triennial Survey"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "DXY",
+          "美元"
+        ],
+        "description": "DXY 美元指數急升突破門檻 → 美元走強",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "台幣",
+          "USD/TWD"
+        ],
+        "description": "美元走強壓抑新興市場貨幣 → 台幣貶值壓力",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "外資流向",
+          "台股大盤"
+        ],
+        "description": "台幣貶值引發外資回流美元資產 → 台股資金流出",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "出口股",
+          "電子股"
+        ],
+        "description": "出口導向企業受惠台幣貶值 → 但資金流出抵消利多",
+        "impact": 0.2
+      }
+    ],
+    "trigger_theme": "dollar_surge"
+  },
+  {
+    "historical_hit_rate": 0.62,
+    "id": "通膨升溫",
+    "name": "通膨升溫",
+    "rationale": "通膨預期升溫是資產配置最重要的宏觀訊號之一。當市場開始重新定價通膨風險時：\n1. 實質利率下降 → 貴金屬（黃金）吸引力上升\n2. 企業成本端壓力 → 利潤率受壓縮，尤其對低毛利產業\n3. 央行可能進入升息循環 → 成長股估值面臨下修\n\n配置建議：\n• 【押注】貴金屬ETF：通膨避險 + 實質利率下降雙重利多\n• 【迴避】高估值成長股：對利率最敏感，首當其衝",
+    "required_region": "US",
+    "source_references": [
+      "Caldara-Iacoviello GPR Index",
+      "Federal Reserve Economic Data (FRED)"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "通膨預期",
+          "實質利率"
+        ],
+        "description": "VIX 急升 + DXY 走強 → 通膨預期重新定價",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "台股大盤",
+          "高估值股"
+        ],
+        "description": "通膨升溫侵蝕企業利潤率 → 本益比壓縮",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "貴金屬",
+          "黃金"
+        ],
+        "description": "實質資產（貴金屬）受惠通膨避險需求",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "中小型股"
+        ],
+        "description": "央行可能被迫升息 → 成長股估值進一步承壓",
+        "impact": -0.5
+      }
+    ],
+    "trigger_theme": "inflation_spike"
+  },
+  {
+    "historical_hit_rate": 0.6,
+    "id": "財報驚喜",
+    "name": "財報驚喜",
+    "rationale": "財報驚喜是短線最強的事件驅動因子之一。當台積電或其他重點權值股公布的營收或獲利大幅超越市場預期時，會引發兩層連鎖反應：第一，分析師集體上調目標價與獲利預估，形成「預期修正循環」；第二，外資因看到基本面支撐而重新流入台股，推升大盤與高Beta個股。\n\n配置建議：\n• 【押注】AI供應鏈、半導體、中小型股：財報優於預期時，這些板塊的Beta最高、彈性最大\n• 【迴避】防禦型板塊（金融、高股息）：在樂觀情緒主導的市場中，防禦型資產的相對報酬落後",
+    "required_region": "TW",
+    "source_references": [
+      "Ball \u0026 Brown (1968) JAR",
+      "Taiwan Stock Exchange Earnings Announcement Studies"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "半導體",
+          "AI供應鏈"
+        ],
+        "description": "台積電或重點權值股財報大幅優於預期",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "外資流向_台股",
+          "台股大盤"
+        ],
+        "description": "外資重新上調台股目標價，資金流入",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "半導體",
+          "中小型股"
+        ],
+        "description": "科技股與高Beta板塊短期受惠",
+        "impact": 0.5
+      }
+    ],
+    "trigger_theme": "earnings_surprise"
+  },
+  {
+    "historical_hit_rate": 0.65,
+    "id": "earnings_blackout",
+    "name": "財報空窗期",
+    "rationale": "每年1-3月、4月中-5月中、7月中-8月中、10月中-11月中為財報空窗期，市場缺乏基本面資訊，法人減少交易",
+    "required_region": "TW",
+    "source_references": [
+      "TWSE calendar",
+      "historical seasonality data"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "technology",
+          "semiconductor"
+        ],
+        "description": "台股進入財報空窗期，資訊不對稱升高 → 資金轉向防禦型標的",
+        "impact": -0.4
+      },
+      {
+        "affected": [
+          "retail_services"
+        ],
+        "description": "散戶缺乏基本面參考，交易量下滑 → 成交量萎縮，波動性降低",
+        "impact": -0.3
+      }
+    ],
+    "trigger_theme": "earnings_blackout"
+  },
+  {
+    "historical_hit_rate": 0.7,
+    "id": "tech_peak_season",
+    "name": "科技旺季效應",
+    "rationale": "每年Q3-Q4為科技產品出貨旺季（新iPhone、年終購物季），台灣科技供應鏈顯著受惠",
+    "required_region": "TW",
+    "source_references": [
+      "semiconductor shipment data",
+      "historical Q3-Q4 performance"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "semiconductor",
+          "ai_supply_chain"
+        ],
+        "description": "進入科技產品出貨旺季，供應鏈備貨需求增加 → 營收成長預期升溫，本益比擴張",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "technology",
+          "electronics"
+        ],
+        "description": "外資資金流入科技股，推升指數 → 加權指數受惠，中小型科技股跟漲",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "electronic_components"
+        ],
+        "description": "年底消費電子產品需求帶動零組件拉貨 → 上游廠商優先受惠",
+        "impact": 0.5
+      }
+    ],
+    "trigger_theme": "tech_peak_season"
+  },
+  {
+    "historical_hit_rate": 0.68,
+    "id": "year_end_window_dressing",
+    "name": "年底作帳行情",
+    "rationale": "每年12月投信與集團作帳行情為台股傳統，配合年終獎金效應，資金流入股市",
+    "required_region": "TW",
+    "source_references": [
+      "TWSE historical December data",
+      "fund manager behavior studies"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "small_cap",
+          "mid_cap"
+        ],
+        "description": "投信法人年底作帳，拉抬持股標的 → 中小型股出現短期超額報酬",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "conglomerate"
+        ],
+        "description": "集團股年底作帳行情，交叉持股拉抬 → 集團股輪動上漲",
+        "impact": 0.5
+      },
+      {
+        "affected": [
+          "retail",
+          "financial"
+        ],
+        "description": "年終獎金發放帶動零售消費與散戶進場 → 消費類股與證券股受益",
+        "impact": 0.4
+      }
+    ],
+    "trigger_theme": "year_end_window_dressing"
+  },
+  {
+    "historical_hit_rate": 0.7,
+    "id": "美國降息 / 鴿派聯準會",
+    "name": "美國降息 / 鴿派聯準會",
+    "rationale": "當美國進入鴿派降息週期，無風險利率下降會降低全球資產折現率。外資因美元資產收益率下降而流出美國、回流新興市場，台股資金面寬鬆；高估值科技股對折現率最敏感，本益比會被擴張。\n\n因此，此時應該【押注】對利率下降「受惠」的板塊：\n• AI供應鏈（台積電、廣達等）：遠期現金流的估值折讓減少，股價彈性最大。\n• 中小型股：外資回流時流動性溢價改善，漲幅常大於大盤。\n\n同時必須【迴避】對利率下降「受損」的板塊：\n• 金融股（富邦金、國泰金）：淨息差（NIM）隨利率下降而壓縮，獲利承壓。",
+    "required_region": "US",
+    "source_references": [
+      "IMF Working Paper WP/19/128",
+      "BIS Quarterly Review Dec 2022"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "DXY",
+          "新興市場貨幣"
+        ],
+        "description": "美債殖利率下降 → 美元走弱",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "外資流向_台股"
+        ],
+        "description": "美元走弱 + 利率下降推動資金回流新興亞洲",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "中小型股"
+        ],
+        "description": "台股大盤受惠；高Beta板塊估值擴張",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "金融"
+        ],
+        "description": "金融股淨息差壓縮，相對劣於大盤",
+        "impact": -0.3
+      }
+    ],
+    "trigger_theme": "US_rates_down"
+  },
+  {
+    "historical_hit_rate": 0.65,
+    "id": "除權息旺季",
+    "name": "除權息旺季",
+    "rationale": "台股每年6–8月為除權除息旺季，超過70%的上市櫃公司在此期間發放股利。高股息策略在這段期間有顯著的「確定性溢價」：\n\n• 高股息股（0056、00878成分股）會吸引存股族、退休基金與外資收益型帳戶加碼，股價在除息前常出現「搶息行情」。\n• 金融股因現金股利穩定且殖利率高，是除權息旺季的核心受惠板塊。\n• 電子股因進入傳統淡季，相對吸引力下降，資金常輪動至傳產與高股息板塊。",
+    "required_region": "TW",
+    "source_references": [
+      "TWSE Dividend Distribution Calendar",
+      "Taiwan Stock Exchange Historical Data"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "高股息",
+          "金融"
+        ],
+        "description": "6–8月進入台股除權除息高峰期，高股息股吸引避險與收益型資金",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "高股息ETF",
+          "大型權值"
+        ],
+        "description": "存股族與退休基金加碼高股息標的，提供股價支撐",
+        "impact": 0.4
+      },
+      {
+        "affected": [
+          "電子股"
+        ],
+        "description": "電子股進入傳統淡季，資金輪動至傳產與高股息",
+        "impact": -0.3
+      }
+    ],
+    "trigger_theme": "dividend_season"
+  },
+  {
+    "historical_hit_rate": 0.62,
+    "id": "運價飆升",
+    "name": "運價飆升",
+    "rationale": "BDI（波羅的海乾散貨指數）是全球貿易需求的重要領先指標。當BDI急升時：\n1. 反映全球原物料與商品貿易活躍\n2. 航運股（長榮、陽明、萬海）獲利直接受惠\n3. 但也暗示進口成本上升，對部分產業形成壓力\n\n配置建議：\n• 【押注】航運股：運價與獲利直接掛鉤\n• 【迴避】進口導向產業：成本上升壓縮利潤",
+    "required_region": "Global",
+    "source_references": [
+      "Baltic Exchange BDI Index",
+      "Clarksons Shipping Intelligence"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "航運",
+          "散裝航運"
+        ],
+        "description": "BDI 波羅的海乾散貨指數急升 → 全球貿易需求強勁",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "航運",
+          "貨櫃航運"
+        ],
+        "description": "運價上漲帶動航運股獲利大幅改善",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "消費",
+          "進口商"
+        ],
+        "description": "進口成本上升 → 通膨壓力增加",
+        "impact": -0.3
+      }
+    ],
+    "trigger_theme": "shipping_rate_spike"
+  },
+  {
+    "historical_hit_rate": 0.6,
+    "id": "中國經濟放緩",
+    "name": "中國經濟放緩",
+    "rationale": "銅被稱為「Dr. Copper」，因為銅價變化通常領先全球經濟週期。銅價大跌往往預示：\n1. 中國與全球工業需求正在放緩\n2. 台灣出口導向的電子與傳產供應鏈將面臨訂單下滑\n3. 原物料與工業金屬板塊全面承壓\n\n配置建議：\n• 【押注】內需、高股息、金融：與中國出口關聯度較低\n• 【迴避】原物料、工業金屬、部分電子零組件：需求放緩直接衝擊",
+    "required_region": "Asia",
+    "source_references": [
+      "LME Copper Price",
+      "China NBS Manufacturing PMI"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "工業金屬",
+          "原物料"
+        ],
+        "description": "銅價下跌（Dr. Copper）→ 工業需求疲軟訊號",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "台股大盤",
+          "電子零組件"
+        ],
+        "description": "中國需求放緩 → 台灣出口導向產業承壓",
+        "impact": -0.5
+      },
+      {
+        "affected": [
+          "內需",
+          "高股息",
+          "金融"
+        ],
+        "description": "避險資金轉向內需與防禦型板塊",
+        "impact": 0.3
+      }
+    ],
+    "trigger_theme": "china_slowdown"
+  },
+  {
+    "historical_hit_rate": 0.65,
+    "id": "台灣出口強勁",
+    "name": "台灣出口強勁",
+    "rationale": "台灣出口佔GDP比重超過65%，電子零組件為主要出口項目。當電子出口大幅成長時：\n1. 反映全球科技需求強勁，半導體與AI供應鏈訂單滿載\n2. 外資因基本面改善而積極加碼台股\n3. 台幣往往因出口收入增加而升值\n\n配置建議：\n• 【押注】半導體、AI供應鏈、電子零組件：出口成長的直接受益者\n• 【押注】台股大盤ETF（0050）：外資流入推升整體市場",
+    "required_region": "TW",
+    "source_references": [
+      "Taiwan Ministry of Economic Affairs Export Statistics",
+      "Customs Administration Monthly Report"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "半導體",
+          "電子零組件"
+        ],
+        "description": "台灣電子零組件出口大幅成長 → 科技需求強勁",
+        "impact": 0.7
+      },
+      {
+        "affected": [
+          "外資流向_台股",
+          "台股大盤"
+        ],
+        "description": "外資因基本面改善而加碼台股",
+        "impact": 0.6
+      },
+      {
+        "affected": [
+          "出口股"
+        ],
+        "description": "台幣升值壓力 → 出口商匯兌收益增加",
+        "impact": 0.3
+      }
+    ],
+    "trigger_theme": "taiwan_export_boom"
+  },
+  {
+    "historical_hit_rate": 0.62,
+    "id": "關稅衝擊",
+    "name": "關稅衝擊",
+    "rationale": "關稅衝擊是近年全球市場最強的系統性風險之一。當美國宣布對主要貿易夥伴加徵關稅時（如2025年4月對台灣加徵32%關稅），會引發多層傳導：\n1. 貿易不確定性急升 → VIX飆升，市場全面避險\n2. 外資恐慌撤離新興市場 → 台股資金面瞬間緊縮\n3. 台幣急貶 → 進口成本上升，出口商短期競爭力受損\n4. 供應鏈重組預期 → 台灣科技股提前反應去庫存風險\n\n2025年4月關稅危機（TAIEX -9.7%單日）證明：關稅事件的市場衝擊超過傳統地緣政治風險。\n配置建議：\n• 【押注】金融、高股息、內需：資金避風港\n• 【迴避】AI供應鏈、半導體、中小型股：外資持股比重高，關稅衝擊首當其衝",
+    "required_region": "US",
+    "source_references": [
+      "Peterson Institute Trade Policy Analysis",
+      "BIS Trade Disruption Research"
+    ],
+    "steps": [
+      {
+        "affected": [
+          "VIX",
+          "DXY",
+          "全球貿易"
+        ],
+        "description": "美國對外關稅政策升級 → 貿易不確定性急升",
+        "impact": -0.9
+      },
+      {
+        "affected": [
+          "外資流向_台股",
+          "台股大盤"
+        ],
+        "description": "全球供應鏈中斷風險 → 外資撤離新興市場",
+        "impact": -0.8
+      },
+      {
+        "affected": [
+          "USD/TWD",
+          "出口導向"
+        ],
+        "description": "台幣貶壓加劇 → 出口競爭力短期受損",
+        "impact": -0.6
+      },
+      {
+        "affected": [
+          "金融",
+          "高股息",
+          "內需"
+        ],
+        "description": "防禦型板塊相對抗跌 → 資金湧向內需與高股息",
+        "impact": 0.4
+      },
+      {
+        "affected": [
+          "AI供應鏈",
+          "半導體",
+          "中小型股"
+        ],
+        "description": "科技股與高Beta板塊面臨估值壓縮",
+        "impact": -0.7
+      }
+    ],
+    "trigger_theme": "tariff_shock"
+  }
+]

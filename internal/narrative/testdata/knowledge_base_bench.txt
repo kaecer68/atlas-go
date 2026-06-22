@@ -1,0 +1,8 @@
+BenchmarkDefaultTemplates-10         	  243816	      5138 ns/op	   11392 B/op	     139 allocs/op
+BenchmarkDefaultTemplates-10         	  243457	      5124 ns/op	   11392 B/op	     139 allocs/op
+BenchmarkDefaultTemplates-10         	  235790	      5059 ns/op	   11392 B/op	     139 allocs/op
+BenchmarkDefaultThemeDurations-10    	 2186152	       550.3 ns/op	     936 B/op	       3 allocs/op
+BenchmarkDefaultThemeDurations-10    	 2189469	       552.8 ns/op	     936 B/op	       3 allocs/op
+BenchmarkDefaultThemeDurations-10    	 1753944	       586.3 ns/op	     936 B/op	       3 allocs/op
+PASS
+ok  	github.com/kaecer68/atlas-go/internal/narrative	27.217s

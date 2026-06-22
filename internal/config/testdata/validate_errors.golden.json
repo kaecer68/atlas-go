@@ -1,0 +1,5 @@
+{
+  "ema_alpha_negative": "darwinian.ema_alpha must be in [0,1], got -0.100",
+  "kelly_fraction_zero": "sizing.kelly_fraction must be in (0,1], got 0.000",
+  "weight_min_gte_weight_max": "darwinian.weight_min (2.500) must be less than weight_max (2.500)"
+}

@@ -1,0 +1,3 @@
+BenchmarkShouldStartFubonProxy-10    	1000000000	         0.3286 ns/op	       0 B/op	       0 allocs/op
+BenchmarkShouldStartFubonProxy-10    	1000000000	         0.3302 ns/op	       0 B/op	       0 allocs/op
+BenchmarkShouldStartFubonProxy-10    	1000000000	         0.3315 ns/op	       0 B/op	       0 allocs/op

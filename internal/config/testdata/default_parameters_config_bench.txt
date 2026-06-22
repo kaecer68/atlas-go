@@ -1,0 +1,5 @@
+BenchmarkDefaultParametersConfig-10    	   42747	     28159 ns/op	   86232 B/op	     170 allocs/op
+BenchmarkDefaultParametersConfig-10    	   42567	     29866 ns/op	   86232 B/op	     170 allocs/op
+BenchmarkDefaultParametersConfig-10    	   43094	     28383 ns/op	   86232 B/op	     170 allocs/op
+PASS
+ok  	github.com/kaecer68/atlas-go/internal/config	8.233s
