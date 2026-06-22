@@ -93,7 +93,12 @@ func (c *channelHealthSynthesizer) check(now time.Time) {
 		c.lastSeen[key] = now
 		c.mu.Unlock()
 
+		// 首次出現時 `last` 為 time.Time 零值，避免將 `0001-01-01T00:00:00Z`
+		// 寫入 payload；改用 `now` 作為首次偵測時間。code review PR #632 issue #1。
 		firstSeen := last
+		if !seen {
+			firstSeen = now
+		}
 		c.bus.Publish(eventbus.BusEvent{
 			Type:          eventbus.EventChannelIndividualHealth,
 			Timestamp:     now,

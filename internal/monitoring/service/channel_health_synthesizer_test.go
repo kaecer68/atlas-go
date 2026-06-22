@@ -141,6 +141,71 @@ func TestChannelHealthSynthesizer_NilProviderNoEmit(t *testing.T) {
 	}
 }
 
+// Regression test: first_seen_at 必須等於首次偵測時間，而非 time.Time 零值。
+// Code review PR #632 issue #1 指出修補前 `firstSeen := last` 在 `seen=false`
+// 時會把 `0001-01-01T00:00:00Z` 寫入 payload。
+func TestChannelHealthSynthesizer_FirstSeenAtEqualsNowOnFirstEmit(t *testing.T) {
+	bus := &recordingBus{}
+	provider := &fakeChannelHealthProvider{}
+	syn := NewChannelHealthSynthesizer(bus, provider)
+
+	t0 := time.Now()
+	provider.set(map[string]string{"twse_capital_flow": "timeout"})
+
+	syn.(*channelHealthSynthesizer).check(t0)
+	events := bus.snapshot()
+	if len(events) != 1 {
+		t.Fatalf("want 1 event, got %d", len(events))
+	}
+	payload, ok := events[0].Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("payload type = %T, want map[string]any", events[0].Payload)
+	}
+	firstSeen, ok := payload["first_seen_at"].(time.Time)
+	if !ok {
+		t.Fatalf("first_seen_at type = %T, want time.Time", payload["first_seen_at"])
+	}
+	if firstSeen.IsZero() {
+		t.Fatalf("first_seen_at is zero time on first emit; want t0 = %v", t0)
+	}
+	if !firstSeen.Equal(t0) {
+		t.Errorf("first_seen_at = %v, want %v", firstSeen, t0)
+	}
+	if detectedAt, _ := payload["detected_at"].(time.Time); !detectedAt.Equal(t0) {
+		t.Errorf("detected_at = %v, want %v", detectedAt, t0)
+	}
+}
+
+// Regression test: 第二次觸發（超出 dedup window）時，first_seen_at 必須
+// 保留首次偵測時間（不可被本次時間覆蓋），確保下游能區分「首次失敗」與「復發」。
+func TestChannelHealthSynthesizer_FirstSeenAtPreservedAcrossRecurrence(t *testing.T) {
+	bus := &recordingBus{}
+	provider := &fakeChannelHealthProvider{}
+	syn := NewChannelHealthSynthesizer(bus, provider)
+
+	t0 := time.Now()
+	t1 := t0.Add(2 * ChannelHealthDedupWindow)
+	provider.set(map[string]string{"twse_capital_flow": "timeout"})
+
+	syn.(*channelHealthSynthesizer).check(t0)
+	syn.(*channelHealthSynthesizer).check(t1)
+
+	events := bus.snapshot()
+	if len(events) != 2 {
+		t.Fatalf("want 2 events, got %d", len(events))
+	}
+	p0, _ := events[0].Payload.(map[string]any)
+	p1, _ := events[1].Payload.(map[string]any)
+	fs0, _ := p0["first_seen_at"].(time.Time)
+	fs1, _ := p1["first_seen_at"].(time.Time)
+	if !fs0.Equal(t0) {
+		t.Errorf("first event first_seen_at = %v, want %v", fs0, t0)
+	}
+	if !fs1.Equal(t0) {
+		t.Errorf("second event first_seen_at = %v, want %v (must preserve original)", fs1, t0)
+	}
+}
+
 func TestChannelHealthSynthesizer_StartStopLifecycle(t *testing.T) {
 	bus := &recordingBus{}
 	provider := &fakeChannelHealthProvider{data: map[string]string{"x": "err"}}
