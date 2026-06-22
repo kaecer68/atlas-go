@@ -505,12 +505,6 @@ func run(args []string, deps appDeps) error {
 			fmt.Fprintf(w, `{"status":"ok","session":"%s","regime":"%s","orders":%d,"positions":%d}`+"\n",
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
-		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
-		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		})
 		monitor = monitoring.NewMonitor()
 		if alertStore != nil {
 			monitor.SetAlertStore(alertStore)
@@ -578,9 +572,7 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Fatalf("failed to get dist sub FS: %v", err)
 		}
-		handler := staticHandler(subFS)
-		mux.Handle("/", handler)
-		mux.Handle("/static/", http.StripPrefix("/static/", handler))
+		registerSimpleRoutes(mux, collector, subFS)
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
 		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.
