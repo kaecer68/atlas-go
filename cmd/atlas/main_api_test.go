@@ -6,14 +6,25 @@ import (
 	"github.com/kaecer68/atlas-go/internal/testutil/snapshot"
 )
 
-// TestMain_PublicAPI locks the exported surface of cmd/atlas/main.go: the
-// 14 exported funcs (main, run, runSimulation, runLiveTrading,
-// runSimulationMode, buildBaseState, staticHandler, loadCalibrationOrders,
-// getLatestReplayDate, publishBootstrapEvents, shouldStartFubonProxy,
-// narrativeFeedFetcher, newUniverseBuilderDeps, defaultAppDeps).
+// TestMain_PublicAPI locks the EXPORTED surface of cmd/atlas/main.go.
+// In package main, almost all top-level functions are unexported (lowercase,
+// e.g. run, runSimulation, runLiveTrading). The snapshot tool
+// (internal/testutil/snapshot.CaptureAPI) intentionally only captures
+// identifiers whose name starts with an uppercase letter — the actual
+// exported surface is small.
 //
-// Any change to public signatures during #611 refactor (sub-issue-2:
-// cmd/atlas/ package split) fails this test.
+// As of 2026-06-22 the locked exported surface is exactly one method:
+//
+//	(*experimentMonitorAdapter).Alert(string, string, string, map[string]any)
+//
+// Anything else in main.go is package-private and protected by the
+// per-function test files (run_simulation_test.go, run_live_test.go,
+// run_simulation_mode_test.go, load_calibration_orders_test.go).
+//
+// Any addition or removal of an exported symbol during #611 refactor
+// (sub-issue-2: cmd/atlas/ package split) fails this test. If you intend
+// to add a new exported func, copy testdata/main_api.actual.json over
+// testdata/main_api.golden.json after diff review.
 func TestMain_PublicAPI(t *testing.T) {
 	snap, err := snapshot.CaptureAPI("main.go")
 	if err != nil {
