@@ -1173,18 +1173,3 @@ var nowUnix = func() int64 {
 	// Overridden in tests.
 	return time.Now().UnixNano()
 }
-
-// NarrativeCalibrationReport summarizes the result of a self-calibration run.
-type NarrativeCalibrationReport struct {
-	Timestamp        time.Time         `json:"timestamp"`
-	ModelsUpdated    int               `json:"models_updated"`
-	TemplatesUpdated int               `json:"templates_updated"`
-	Models           []InvestmentModel `json:"models"`
-	Verdict          string            `json:"verdict"`
-	Summary          string            `json:"summary"`
-}
-
-// SelfCalibrate evaluates model performance against replay data and updates
-// model weights and template hit rates. It orchestrates the existing
-// EvaluateModels → UpdateModelWeights → updateTemplateHitRates pipeline
-// and produces a calibration report.
