@@ -1,0 +1,14 @@
+{
+  "consts": null,
+  "funcs": [
+    {
+      "name": "Alert",
+      "params": "(level string, category,message string, details map[string]any)",
+      "receiver": "experimentMonitorAdapter",
+      "results": ""
+    }
+  ],
+  "package": "main",
+  "types": null,
+  "vars": null
+}

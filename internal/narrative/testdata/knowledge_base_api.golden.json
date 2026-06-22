@@ -1,0 +1,184 @@
+{
+  "consts": null,
+  "funcs": [
+    {
+      "name": "GetTemplate",
+      "params": "(id string)",
+      "receiver": "KnowledgeBase",
+      "results": "(CausalTemplate, bool)"
+    },
+    {
+      "name": "GetTemplateByTheme",
+      "params": "(theme string)",
+      "receiver": "KnowledgeBase",
+      "results": "(CausalTemplate, bool)"
+    },
+    {
+      "name": "ListTemplates",
+      "params": "",
+      "receiver": "KnowledgeBase",
+      "results": "([]CausalTemplate)"
+    },
+    {
+      "name": "MatchChains",
+      "params": "(event NarrativeEvent)",
+      "receiver": "KnowledgeBase",
+      "results": "([]CausalChain)"
+    },
+    {
+      "name": "RegisterTemplate",
+      "params": "(t CausalTemplate)",
+      "receiver": "KnowledgeBase",
+      "results": ""
+    },
+    {
+      "name": "ActiveModels",
+      "params": "(eventThemes []string)",
+      "receiver": "NarrativeEngine",
+      "results": "([]InvestmentModel)"
+    },
+    {
+      "name": "DetectEvents",
+      "params": "(data MarketNarrativeData)",
+      "receiver": "NarrativeEngine",
+      "results": "([]NarrativeEvent)"
+    },
+    {
+      "name": "EvaluateModels",
+      "params": "(replayPath string)",
+      "receiver": "NarrativeEngine",
+      "results": "(error)"
+    },
+    {
+      "name": "GetCurrentStressIndex",
+      "params": "",
+      "receiver": "NarrativeEngine",
+      "results": "(TaiwanStressIndex)"
+    },
+    {
+      "name": "GetStressIndexHistory",
+      "params": "(days int)",
+      "receiver": "NarrativeEngine",
+      "results": "([]TaiwanStressIndex)"
+    },
+    {
+      "name": "GetStressIndexThresholds",
+      "params": "",
+      "receiver": "NarrativeEngine",
+      "results": "(StressIndexThresholds)"
+    },
+    {
+      "name": "ListModels",
+      "params": "",
+      "receiver": "NarrativeEngine",
+      "results": "([]InvestmentModel)"
+    },
+    {
+      "name": "MatchChains",
+      "params": "(events []NarrativeEvent)",
+      "receiver": "NarrativeEngine",
+      "results": "([]CausalChain)"
+    },
+    {
+      "name": "SelfCalibrate",
+      "params": "(replayPath string)",
+      "receiver": "NarrativeEngine",
+      "results": "(*NarrativeCalibrationReport, error)"
+    },
+    {
+      "name": "UpdateMacro",
+      "params": "(macro marketdata.MacroDataSnapshot, geo GeopoliticalRiskScore)",
+      "receiver": "NarrativeEngine",
+      "results": ""
+    },
+    {
+      "name": "UpdateModelWeights",
+      "params": "",
+      "receiver": "NarrativeEngine",
+      "results": ""
+    },
+    {
+      "name": "NewEarningsSurpriseEvent",
+      "params": "(surprisePct float64)",
+      "results": "(*NarrativeEvent)"
+    },
+    {
+      "name": "NewKnowledgeBase",
+      "params": "",
+      "results": "(*KnowledgeBase)"
+    },
+    {
+      "name": "NewNarrativeEngine",
+      "params": "",
+      "results": "(*NarrativeEngine)"
+    }
+  ],
+  "package": "narrative",
+  "types": [
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "templates map[string]CausalTemplate"
+      ],
+      "kind": "struct",
+      "name": "KnowledgeBase"
+    },
+    {
+      "fields": [
+        "US10YChangeBps float64",
+        "DXYChangePct float64",
+        "VIXLevel float64",
+        "USD_TWD_ChangePct float64",
+        "OilChangePct float64",
+        "GoldChangePct float64",
+        "GoldLevel float64",
+        "JPY_ChangePct float64",
+        "JPYLevel float64",
+        "AICapexSentiment float64",
+        "GeopoliticalGPR float64",
+        "RetailInstitutionalDivergence float64",
+        "MarginZScore float64",
+        "EarningsSurprisePct float64",
+        "CPIYoY float64",
+        "BDIChangePct float64",
+        "CopperChangePct float64",
+        "ExportElectronicsChangePct float64",
+        "SOXIndexChangePct float64",
+        "DRAMSpotPriceChangePct float64",
+        "SPXIndexChangePct float64",
+        "NDXIndexChangePct float64",
+        "DJIIndexChangePct float64",
+        "TSMADRChangePct float64"
+      ],
+      "kind": "struct",
+      "name": "MarketNarrativeData"
+    },
+    {
+      "fields": [
+        "Timestamp time.Time",
+        "ModelsUpdated int",
+        "TemplatesUpdated int",
+        "Models []InvestmentModel",
+        "Verdict string",
+        "Summary string"
+      ],
+      "kind": "struct",
+      "name": "NarrativeCalibrationReport"
+    },
+    {
+      "fields": [
+        "kb *KnowledgeBase",
+        "models []InvestmentModel",
+        "stressCalc *TaiwanStressCalculator",
+        "stressHistory []TaiwanStressIndex",
+        "stressMu sync.Mutex",
+        "lastMacro marketdata.MacroDataSnapshot",
+        "prevMacro marketdata.MacroDataSnapshot",
+        "lastGeo GeopoliticalRiskScore"
+      ],
+      "kind": "struct",
+      "name": "NarrativeEngine"
+    }
+  ],
+  "vars": null
+}

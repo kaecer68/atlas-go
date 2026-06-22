@@ -1,0 +1,13 @@
+{
+  "consts": null,
+  "funcs": [
+    {
+      "name": "DefaultParametersConfig",
+      "params": "",
+      "results": "(*ParametersConfig)"
+    }
+  ],
+  "package": "config",
+  "types": null,
+  "vars": null
+}
