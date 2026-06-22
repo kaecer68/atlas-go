@@ -88,13 +88,11 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 >
 > **Wave 8.2 收尾**（本批次）：補實作 `EventRiskGateOverridden` 常數，routing 改為三向 split（BLOCK/HALT → rejected、REDUCE/ALERT_ONLY → overridden、ALLOW → allowed）；補 `risk-gate-overridden.md` 文件 + 更新 `risk-gate-allowed.md` 反映新語意。
 
-### Wave 9 YELLOW（5 個，**plan 已就緒，採 forward-compat 設計**）
-
-**計畫檔案**：[`.omo/plans/wave-9-plan.md`](../.omo/plans/wave-9-plan.md) | **啟動 prompt**：[`.opencode/prompts/wave-9-bootstrap.md`](../.opencode/prompts/wave-9-bootstrap.md)
+### Wave 9 YELLOW（5 個，**shipped in v0.0.0.8**）✅
 
 **5 個事件**：`ChannelIndividualHealth`、`RegimeChangeConfirmed`、`FactorWeightRegression`、`DriftDetector`、`IngestionLagSpike`
 
-**對應 VERSION**：v0.0.0.8（Wave 8 v0.0.0.7 已收尾）
+**對應 VERSION**：v0.0.0.8（Wave 8 v0.0.0.7 已收尾）✅ **已發布**
 
 **關鍵決策（2026-06-22）**：採 **路徑 1：完整 Wave 9 + forward-compat 設計**
 - 5 個事件**全部**先做，不阻塞於 Issue #611
@@ -102,16 +100,24 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 - debouncer 與 drift 計算完全在 `internal/monitoring/service/` 層，#611 完成後 Wave 9 程式碼不需重做
 - 3 個 PD-W9：info severity 預設、外部 debouncer 策略、Prometheus histogram metrics
 
-**7 PR atomic breakdown**：
-- Wave 9.0 infrastructure（5 個 EventType slot + 3 個 PD-W9 框架）
-- Wave 9.1 `ChannelIndividualHealth`
-- Wave 9.2 `RegimeChangeConfirmed`
-- Wave 9.3 `FactorWeightRegression`
-- Wave 9.4 `DriftDetector`
-- Wave 9.5 `IngestionLagSpike`
-- Wave 9.6 frontend 整合測試 + docs
+**7 PR atomic breakdown（全部已合併）**：
+- Wave 9.0a infrastructure：5 個 EventType slot + 5 個 alert rule yml + INDEX.md
+- Wave 9.0b service frameworks：4 個 service interface + struct 框架
+- Wave 9.1 `ChannelIndividualHealth`（commit `fb2e5a9f`）
+- Wave 9.2 `RegimeChangeConfirmed`（commit `0678d067`）
+- Wave 9.3 `FactorWeightRegression`（commit `b0330dc6`，含 WeightProvider DI）
+- Wave 9.4 `DriftDetector`（commit `e16d600f`，concentration drift v1）
+- Wave 9.5 `IngestionLagSpike`（commit `4424fbff`，service framework + follow-up for apigateway histogram）
+- Wave 9.6 docs + VERSION + CHANGELOG + roadmap（本 PR）
 
-**估時**：~7 工作天
+**估時**：~3 工作天（2026-06-22 完成）
+
+**Forward-compat 驗證**：Wave 9 全程 0 修改 #611 9 個檔案（`git diff --stat` 為空）
+
+**Out of scope（follow-up）**：
+- Frontend SSE 整合：5 個事件的 SSE handler 6-component buffer 與 web/static/js/ 渲染（獨立 PR）
+- `internal/apigateway/background.go` 加 `ingestion_latency_seconds` Prometheus histogram + 實作 `IngestionLagProvider`（不在 #611 list，獨立 PR）
+- v2 DriftDetector target weights drift（需 #611 refactor 完成）
 
 ### 依賴
 
