@@ -587,31 +587,9 @@ func run(args []string, deps appDeps) error {
 		publishBootstrapEvents(dashEventBus, replayPath, baselinePath)
 
 		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
-		var taskMgr *apigateway.BackgroundTaskManager
 		var realtimeAdapter *realtime.RealTimeAdapter
+		taskMgr := setupBackgroundTaskManager(gateway, monitor, autoHandler)
 		if gateway != nil {
-			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
-		} else {
-			taskMgr = apigateway.NewBackgroundTaskManager(nil)
-		}
-		if gateway != nil {
-
-			// Wire failure alerts for background tasks.
-			taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
-				if consecutiveFailures >= 3 {
-					monitor.Alert(monitoring.AlertLevelError, "background_task",
-						fmt.Sprintf("Task %s failed %d consecutive times: %v", name, consecutiveFailures, err),
-						map[string]any{"task": name, "consecutive_failures": consecutiveFailures})
-				}
-			})
-			taskMgr.SetRecoveryHandler(func(name string, recoveredFrom int) {
-				if autoHandler != nil {
-					autoHandler.Recover("background_task")
-				}
-				logging.Info("main", "task_recovered",
-					"task", name,
-					"recovered_from", recoveredFrom)
-			})
 
 			// RealTimeAdapter: sub-second regime detection and agent weight
 			// adaptation during live market sessions. Gated behind -allow-realtime
