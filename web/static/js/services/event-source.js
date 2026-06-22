@@ -39,6 +39,20 @@ class EventSourceService {
       this.es.addEventListener('system.complete', this.boundMessageHandler);
       this.es.addEventListener('narrative.event', this.boundMessageHandler);
 
+      this.es.addEventListener('monitor.risk_gate.rejected', this.boundMessageHandler);
+      this.es.addEventListener('monitor.risk_gate.allowed', this.boundMessageHandler);
+      this.es.addEventListener('monitor.risk_gate.overridden', this.boundMessageHandler);
+      this.es.addEventListener('industry.calendar.event', this.boundMessageHandler);
+      this.es.addEventListener('experiment.backtest_completed', this.boundMessageHandler);
+      this.es.addEventListener('experiment.calibration_completed', this.boundMessageHandler);
+      this.es.addEventListener('trade.slippage', this.boundMessageHandler);
+
+      this.es.addEventListener('monitor.channel.health.individual', this.boundMessageHandler);
+      this.es.addEventListener('market.regime.confirmed', this.boundMessageHandler);
+      this.es.addEventListener('portfolio.factor.regression', this.boundMessageHandler);
+      this.es.addEventListener('portfolio.drift.detected', this.boundMessageHandler);
+      this.es.addEventListener('apigateway.ingestion.lag.spike', this.boundMessageHandler);
+
       this.es.onerror = (err) => {
         this.es.close();
         this.es = null;

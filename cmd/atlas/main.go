@@ -494,6 +494,54 @@ func run(args []string, deps appDeps) error {
 			apievents.BufferHealthAlertEvent(event)
 			return nil
 		})
+		dashEventBus.Subscribe(eventbus.EventRiskGateRejected, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferRiskGateEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventRiskGateAllowed, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferRiskGateEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventRiskGateOverridden, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferRiskGateEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventIndustryCalendar, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferIndustryCalendarEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventBacktestCompleted, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferBacktestCompletedEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventCalibrationCompleted, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferCalibrationCompletedEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventTradeSlippage, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferTradeSlippageEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventChannelIndividualHealth, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferChannelIndividualHealthEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventRegimeChangeConfirmed, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferRegimeChangeConfirmedEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventFactorWeightRegression, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferFactorWeightRegressionEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventDriftDetected, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferDriftDetectedEvent(event)
+			return nil
+		})
+		dashEventBus.Subscribe(eventbus.EventIngestionLagSpike, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferIngestionLagSpikeEvent(event)
+			return nil
+		})
 		risk.NewAuditSubscriber(dashEventBus)
 		log.Printf("[Risk] audit subscriber registered on shared event bus")
 		// Initial macro ingestion on startup to populate snapshot and publish events.
