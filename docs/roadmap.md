@@ -88,9 +88,30 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 >
 > **Wave 8.2 收尾**（本批次）：補實作 `EventRiskGateOverridden` 常數，routing 改為三向 split（BLOCK/HALT → rejected、REDUCE/ALERT_ONLY → overridden、ALLOW → allowed）；補 `risk-gate-overridden.md` 文件 + 更新 `risk-gate-allowed.md` 反映新語意。
 
-### Wave 9 YELLOW（5 個，待 Wave 8 收尾合併後啟動評估）
+### Wave 9 YELLOW（5 個，**plan 已就緒，採 forward-compat 設計**）
 
-- `ChannelIndividualHealth`、`FactorWeightRegression`、`DriftDetector`、`RegimeChangeConfirmed`、`IngestionLagSpike`
+**計畫檔案**：[`.omo/plans/wave-9-plan.md`](../.omo/plans/wave-9-plan.md) | **啟動 prompt**：[`.opencode/prompts/wave-9-bootstrap.md`](../.opencode/prompts/wave-9-bootstrap.md)
+
+**5 個事件**：`ChannelIndividualHealth`、`RegimeChangeConfirmed`、`FactorWeightRegression`、`DriftDetector`、`IngestionLagSpike`
+
+**對應 VERSION**：v0.0.0.8（Wave 8 v0.0.0.7 已收尾）
+
+**關鍵決策（2026-06-22）**：採 **路徑 1：完整 Wave 9 + forward-compat 設計**
+- 5 個事件**全部**先做，不阻塞於 Issue #611
+- 只讀既有 public API（`ChannelErrors()`、`OnRegimeChange`、`EventRegimeChange` 等）
+- debouncer 與 drift 計算完全在 `internal/monitoring/service/` 層，#611 完成後 Wave 9 程式碼不需重做
+- 3 個 PD-W9：info severity 預設、外部 debouncer 策略、Prometheus histogram metrics
+
+**7 PR atomic breakdown**：
+- Wave 9.0 infrastructure（5 個 EventType slot + 3 個 PD-W9 框架）
+- Wave 9.1 `ChannelIndividualHealth`
+- Wave 9.2 `RegimeChangeConfirmed`
+- Wave 9.3 `FactorWeightRegression`
+- Wave 9.4 `DriftDetector`
+- Wave 9.5 `IngestionLagSpike`
+- Wave 9.6 frontend 整合測試 + docs
+
+**估時**：~7 工作天
 
 ### 依賴
 
