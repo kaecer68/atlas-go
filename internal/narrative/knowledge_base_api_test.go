@@ -9,11 +9,12 @@ import (
 )
 
 // TestKnowledgeBase_PublicAPI locks the exported surface of knowledge_base.go,
-// knowledge_base_templates.go, and narrative_detectors.go. Per #611 sub-issue-3
-// (NarrativeEngine / KnowledgeBase / detector split), any change to public
+// knowledge_base_templates.go, narrative_detectors.go, and
+// narrative_calibration.go. Per #611 sub-issue-3 (NarrativeEngine /
+// KnowledgeBase / detector / calibration split), any change to public
 // signatures fails this test.
 func TestKnowledgeBase_PublicAPI(t *testing.T) {
-	snap, err := snapshot.CaptureAPIs("knowledge_base.go", "knowledge_base_templates.go", "narrative_detectors.go")
+	snap, err := snapshot.CaptureAPIs("knowledge_base.go", "knowledge_base_templates.go", "narrative_detectors.go", "narrative_calibration.go")
 	if err != nil {
 		t.Fatalf("CaptureAPIs: %v", err)
 	}
