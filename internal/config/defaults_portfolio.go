@@ -122,6 +122,7 @@ func defaultDarwinianParameters() DarwinianParameters {
 		},
 	}
 }
+
 func defaultFactorParameters() FactorParameters {
 	return FactorParameters{
 		MomentumLookbackDays: ParameterMetadata[int]{
