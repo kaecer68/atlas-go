@@ -7,6 +7,57 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	def := DefaultParametersConfig().Narrative
 	n := &cfg.Narrative
 
+	if n.MinTrendStrength.Value == 0 {
+		n.MinTrendStrength = def.MinTrendStrength
+	}
+	if n.MinConfidence.Value == 0 {
+		n.MinConfidence = def.MinConfidence
+	}
+	if n.MinHitRate.Value == 0 {
+		n.MinHitRate = def.MinHitRate
+	}
+	if n.OverrideThreshold.Value == 0 {
+		n.OverrideThreshold = def.OverrideThreshold
+	}
+	if n.AIRevenueGrowthThreshold.Value == 0 {
+		n.AIRevenueGrowthThreshold = def.AIRevenueGrowthThreshold
+	}
+	if n.CoWoSUtilizationThreshold.Value == 0 {
+		n.CoWoSUtilizationThreshold = def.CoWoSUtilizationThreshold
+	}
+	if n.CapexGrowthThreshold.Value == 0 {
+		n.CapexGrowthThreshold = def.CapexGrowthThreshold
+	}
+	if n.US10YChangeBpsThreshold.Value == 0 {
+		n.US10YChangeBpsThreshold = def.US10YChangeBpsThreshold
+	}
+	if n.DXYChangePctThreshold.Value == 0 {
+		n.DXYChangePctThreshold = def.DXYChangePctThreshold
+	}
+	if n.GeopoliticalGPRThreshold.Value == 0 {
+		n.GeopoliticalGPRThreshold = def.GeopoliticalGPRThreshold
+	}
+	if n.OilChangePctThreshold.Value == 0 {
+		n.OilChangePctThreshold = def.OilChangePctThreshold
+	}
+	if n.JPYChangePctThreshold.Value == 0 {
+		n.JPYChangePctThreshold = def.JPYChangePctThreshold
+	}
+	if n.VIXLevelThreshold.Value == 0 {
+		n.VIXLevelThreshold = def.VIXLevelThreshold
+	}
+	if n.ModelLookbackDays.Value == 0 {
+		n.ModelLookbackDays = def.ModelLookbackDays
+	}
+	if n.ModelHoldWindowDays.Value == 0 {
+		n.ModelHoldWindowDays = def.ModelHoldWindowDays
+	}
+	if n.InflationEstimate.Value == 0 {
+		n.InflationEstimate = def.InflationEstimate
+	}
+	if len(n.EventTTLMultiplier.Value) == 0 {
+		n.EventTTLMultiplier = def.EventTTLMultiplier
+	}
 	if n.GoldChangePctThreshold.Value == 0 {
 		n.GoldChangePctThreshold = def.GoldChangePctThreshold
 	}
@@ -96,6 +147,30 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	}
 	if n.EarningsSurpriseThreshold.Value == 0 {
 		n.EarningsSurpriseThreshold = def.EarningsSurpriseThreshold
+	}
+	if n.TaiwanStressDXYWeight.Value == 0 {
+		n.TaiwanStressDXYWeight = def.TaiwanStressDXYWeight
+	}
+	if n.TaiwanStressUS10YWeight.Value == 0 {
+		n.TaiwanStressUS10YWeight = def.TaiwanStressUS10YWeight
+	}
+	if n.TaiwanStressForeignWeight.Value == 0 {
+		n.TaiwanStressForeignWeight = def.TaiwanStressForeignWeight
+	}
+	if n.TaiwanStressVIXWeight.Value == 0 {
+		n.TaiwanStressVIXWeight = def.TaiwanStressVIXWeight
+	}
+	if n.TaiwanStressJPYWeight.Value == 0 {
+		n.TaiwanStressJPYWeight = def.TaiwanStressJPYWeight
+	}
+	if n.TaiwanStressGeoWeight.Value == 0 {
+		n.TaiwanStressGeoWeight = def.TaiwanStressGeoWeight
+	}
+	if n.TaiwanStressOilWeight.Value == 0 {
+		n.TaiwanStressOilWeight = def.TaiwanStressOilWeight
+	}
+	if n.TaiwanStressGoldWeight.Value == 0 {
+		n.TaiwanStressGoldWeight = def.TaiwanStressGoldWeight
 	}
 	if n.TaiwanStressDXYScale.Value == 0 {
 		n.TaiwanStressDXYScale = def.TaiwanStressDXYScale
@@ -398,6 +473,30 @@ func mergeIndustryDefaults(cfg *ParametersConfig) {
 	}
 	if len(i.ClassificationTree.Value.Segments) == 0 {
 		i.ClassificationTree = def.ClassificationTree
+	}
+	if i.CustomerConcentrationLimit.Value == 0 {
+		i.CustomerConcentrationLimit = def.CustomerConcentrationLimit
+	}
+	if i.GeographicExposureLimit.Value == 0 {
+		i.GeographicExposureLimit = def.GeographicExposureLimit
+	}
+	if i.ConfidenceSignal.Value.SignalBase == 0 {
+		i.ConfidenceSignal = def.ConfidenceSignal
+	}
+	if i.ConfidenceMix.Value.WeightBoundary == 0 {
+		i.ConfidenceMix = def.ConfidenceMix
+	}
+	if len(i.SeasonalPatterns.Value) == 0 {
+		i.SeasonalPatterns = def.SeasonalPatterns
+	}
+	if i.PhaseScores.Value.ScoreExpansion == 0 {
+		i.PhaseScores = def.PhaseScores
+	}
+	if len(i.SkillToIndustry.Value) == 0 {
+		i.SkillToIndustry = def.SkillToIndustry
+	}
+	if i.LinkageParams.Value.DownstreamDecayFactor == 0 {
+		i.LinkageParams = def.LinkageParams
 	}
 }
 
