@@ -8,13 +8,13 @@ import (
 	"github.com/kaecer68/atlas-go/internal/testutil/snapshot"
 )
 
-// TestKnowledgeBase_PublicAPI locks the exported surface of knowledge_base.go.
-// Per #611 sub-issue-3 (NarrativeEngine / KnowledgeBase split), any change
-// to public signatures fails this test.
+// TestKnowledgeBase_PublicAPI locks the exported surface of knowledge_base.go
+// and knowledge_base_templates.go. Per #611 sub-issue-3 (NarrativeEngine /
+// KnowledgeBase split), any change to public signatures fails this test.
 func TestKnowledgeBase_PublicAPI(t *testing.T) {
-	snap, err := snapshot.CaptureAPI("knowledge_base.go")
+	snap, err := snapshot.CaptureAPIs("knowledge_base.go", "knowledge_base_templates.go")
 	if err != nil {
-		t.Fatalf("CaptureAPI: %v", err)
+		t.Fatalf("CaptureAPIs: %v", err)
 	}
 	snapshot.AssertAPI(t, snap, "testdata/knowledge_base_api.golden.json")
 }

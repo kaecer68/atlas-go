@@ -74,6 +74,36 @@ func CaptureAPI(path string) (APISnapshot, error) {
 	if err != nil {
 		return APISnapshot{}, fmt.Errorf("parse %s: %w", path, err)
 	}
+	return captureFromAST(fset, f)
+}
+
+// CaptureAPIs parses multiple Go source files in the same package and returns
+// the merged exported API snapshot. All files must share the same package name.
+func CaptureAPIs(paths ...string) (APISnapshot, error) {
+	merged := APISnapshot{}
+	for _, path := range paths {
+		snap, err := CaptureAPI(path)
+		if err != nil {
+			return APISnapshot{}, err
+		}
+		if merged.Package == "" {
+			merged.Package = snap.Package
+		} else if merged.Package != snap.Package {
+			return APISnapshot{}, fmt.Errorf("package mismatch: %s vs %s", merged.Package, snap.Package)
+		}
+		merged.Funcs = append(merged.Funcs, snap.Funcs...)
+		merged.Types = append(merged.Types, snap.Types...)
+		merged.Consts = append(merged.Consts, snap.Consts...)
+		merged.Vars = append(merged.Vars, snap.Vars...)
+	}
+	sort.Slice(merged.Funcs, func(i, j int) bool { return funcKey(merged.Funcs[i]) < funcKey(merged.Funcs[j]) })
+	sort.Slice(merged.Types, func(i, j int) bool { return merged.Types[i].Name < merged.Types[j].Name })
+	sort.Slice(merged.Consts, func(i, j int) bool { return merged.Consts[i].Name < merged.Consts[j].Name })
+	sort.Slice(merged.Vars, func(i, j int) bool { return merged.Vars[i].Name < merged.Vars[j].Name })
+	return merged, nil
+}
+
+func captureFromAST(fset *token.FileSet, f *ast.File) (APISnapshot, error) {
 
 	snap := APISnapshot{Package: f.Name.Name}
 
