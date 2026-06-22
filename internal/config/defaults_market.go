@@ -24,6 +24,7 @@ func defaultForwardReturnParameters() ForwardReturnParameters {
 		},
 	}
 }
+
 func defaultTaxParameters() TaxParameters {
 	return TaxParameters{
 		DividendTaxRate: ParameterMetadata[float64]{
@@ -43,6 +44,7 @@ func defaultTaxParameters() TaxParameters {
 		},
 	}
 }
+
 func defaultRealtimeParameters() RealtimeParameters {
 	return RealtimeParameters{
 		VolatilityThreshold: ParameterMetadata[float64]{
@@ -87,6 +89,7 @@ func defaultRealtimeParameters() RealtimeParameters {
 		},
 	}
 }
+
 func defaultMarketdataParameters() MarketdataParameters {
 	return MarketdataParameters{
 		TWSEAPIRateLimit: ParameterMetadata[float64]{
@@ -175,6 +178,7 @@ func defaultMarketdataParameters() MarketdataParameters {
 		},
 	}
 }
+
 func defaultPreciousMetalsParameters() PreciousMetalsParameters {
 	return PreciousMetalsParameters{
 		CentralBankBuyingTrend: ParameterMetadata[string]{
