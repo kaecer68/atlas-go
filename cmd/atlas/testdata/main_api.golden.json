@@ -2,6 +2,11 @@
   "consts": null,
   "funcs": [
     {
+      "name": "RegisterAdminRoutes",
+      "params": "(mux *http.ServeMux, cfg config.Config)",
+      "results": ""
+    },
+    {
       "name": "Alert",
       "params": "(level string, category,message string, details map[string]any)",
       "receiver": "experimentMonitorAdapter",

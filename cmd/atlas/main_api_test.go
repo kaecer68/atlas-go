@@ -19,13 +19,16 @@ import (
 // .go file in this package. The test walks all non-test .go files and
 // aggregates their exported API into a single snapshot for comparison.
 //
-// As of 2026-06-22 the locked exported surface is exactly one method:
+// As of 2026-06-22 the locked exported surface is two symbols:
 //
 //	(*experimentMonitorAdapter).Alert(string, string, string, map[string]any)
+//	    (in bootstrap_helpers.go)
+//	RegisterAdminRoutes(*http.ServeMux, config.Config)
+//	    (in admin_routes.go)
 //
-// (currently in bootstrap_helpers.go). Anything else is package-private
-// and protected by the per-function test files (run_simulation_test.go,
-// run_live_test.go, run_simulation_mode_test.go, load_calibration_orders_test.go).
+// Anything else is package-private and protected by the per-function
+// test files (run_simulation_test.go, run_live_test.go,
+// run_simulation_mode_test.go, load_calibration_orders_test.go).
 //
 // Any addition or removal of an exported symbol during #611 refactor
 // (sub-issue-2: cmd/atlas/ package split) fails this test. If you intend
