@@ -433,62 +433,9 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[TaskExec] injected into dashboard API")
 		}
 
-		adminHandler := func(h http.HandlerFunc) http.HandlerFunc {
-			return func(w http.ResponseWriter, r *http.Request) {
-				apiKey := os.Getenv("ATLAS_API_KEY")
-				if apiKey != "" {
-					provided := r.Header.Get("X-API-Key")
-					if provided == "" {
-						auth := r.Header.Get("Authorization")
-						if strings.HasPrefix(auth, "Bearer ") {
-							provided = strings.TrimPrefix(auth, "Bearer ")
-						}
-					}
-					if provided != apiKey {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusUnauthorized)
-						//nolint:errcheck
-						fmt.Fprintf(w, `{"error":"unauthorized"}`+"\n")
-						return
-					}
-				}
-				h(w, r)
-			}
-		}
-		mux.HandleFunc("/admin/reload-config", adminHandler(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			if err := config.ReloadParametersConfig(); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to reload config: %v", err), http.StatusInternalServerError)
-				return
-			}
-			cfg := config.GetParametersConfig()
-			w.Header().Set("Content-Type", "application/json")
-			//nolint:errcheck
-			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
-		}))
-		mux.HandleFunc("/api/admin/calibrate-thresholds", adminHandler(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
-			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-			if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-				//nolint:errcheck
-				fmt.Fprintf(w, `{"error":"%s"}`+"\n", err.Error())
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			//nolint:errcheck
-			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
-		}))
+		RegisterAdminRoutes(mux, cfg)
 		var monitor *monitoring.Monitor
-		mux.HandleFunc("/admin/trigger-simulation", adminHandler(func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/admin/trigger-simulation", wrapAdminAuth(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
