@@ -45,12 +45,6 @@ func (s *stubLagProvider) P99LatencySeconds() float64 {
 	return s.p99
 }
 
-func (s *stubLagProvider) set(v float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.p99 = v
-}
-
 func TestIngestionLagMonitor_NoEmitBelowThreshold(t *testing.T) {
 	bus := &lagRecordingBus{}
 	provider := &stubLagProvider{p99: 2.0}
