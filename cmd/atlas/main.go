@@ -12,8 +12,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/alerting"
@@ -27,6 +30,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/fubonproxy"
+	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -54,6 +58,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/realtime"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/storage"
@@ -428,9 +433,62 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[TaskExec] injected into dashboard API")
 		}
 
-		RegisterAdminRoutes(mux, cfg)
+		adminHandler := func(h http.HandlerFunc) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) {
+				apiKey := os.Getenv("ATLAS_API_KEY")
+				if apiKey != "" {
+					provided := r.Header.Get("X-API-Key")
+					if provided == "" {
+						auth := r.Header.Get("Authorization")
+						if strings.HasPrefix(auth, "Bearer ") {
+							provided = strings.TrimPrefix(auth, "Bearer ")
+						}
+					}
+					if provided != apiKey {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusUnauthorized)
+						//nolint:errcheck
+						fmt.Fprintf(w, `{"error":"unauthorized"}`+"\n")
+						return
+					}
+				}
+				h(w, r)
+			}
+		}
+		mux.HandleFunc("/admin/reload-config", adminHandler(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if err := config.ReloadParametersConfig(); err != nil {
+				http.Error(w, fmt.Sprintf("Failed to reload config: %v", err), http.StatusInternalServerError)
+				return
+			}
+			cfg := config.GetParametersConfig()
+			w.Header().Set("Content-Type", "application/json")
+			//nolint:errcheck
+			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
+		}))
+		mux.HandleFunc("/api/admin/calibrate-thresholds", adminHandler(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
+			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
+			if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				//nolint:errcheck
+				fmt.Fprintf(w, `{"error":"%s"}`+"\n", err.Error())
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			//nolint:errcheck
+			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
+		}))
 		var monitor *monitoring.Monitor
-		mux.HandleFunc("/admin/trigger-simulation", wrapAdminAuth(func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/admin/trigger-simulation", adminHandler(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -502,7 +560,29 @@ func run(args []string, deps appDeps) error {
 			fmt.Fprintf(w, `{"status":"ok","session":"%s","regime":"%s","orders":%d,"positions":%d}`+"\n",
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
-		monitor, autoHandler := setupMonitor(alertStore, paramsCfg.Alert.SuppressCategories.Value)
+		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
+		monitor = monitoring.NewMonitor()
+		if alertStore != nil {
+			monitor.SetAlertStore(alertStore)
+		}
+		// Phase 2A: dedup, auto-handler, console output
+		alertDeduplicator := monitoring.NewAlertDeduplicator(5*time.Minute, alertStore)
+		var suppressRules []monitoring.SuppressRule
+		for _, cat := range paramsCfg.Alert.SuppressCategories.Value {
+			suppressRules = append(suppressRules, monitoring.SuppressRule{
+				Category: cat,
+				Duration: 24 * time.Hour,
+			})
+		}
+		autoHandler := monitoring.NewAutoHandler(alertStore, suppressRules)
+		monitor.SetDeduplicator(alertDeduplicator)
+		monitor.SetAutoHandler(autoHandler)
+		monitor.RegisterHandler(monitoring.ConsoleHandler)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 
 		var ruleEngine *monitoring.RuleEngine
@@ -553,16 +633,40 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Fatalf("failed to get dist sub FS: %v", err)
 		}
-		registerSimpleRoutes(mux, collector, subFS)
+		handler := staticHandler(subFS)
+		mux.Handle("/", handler)
+		mux.Handle("/static/", http.StripPrefix("/static/", handler))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
 		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.
 		publishBootstrapEvents(dashEventBus, replayPath, baselinePath)
 
 		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
+		var taskMgr *apigateway.BackgroundTaskManager
 		var realtimeAdapter *realtime.RealTimeAdapter
-		taskMgr := setupBackgroundTaskManager(gateway, monitor, autoHandler)
 		if gateway != nil {
+			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
+		} else {
+			taskMgr = apigateway.NewBackgroundTaskManager(nil)
+		}
+		if gateway != nil {
+
+			// Wire failure alerts for background tasks.
+			taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
+				if consecutiveFailures >= 3 {
+					monitor.Alert(monitoring.AlertLevelError, "background_task",
+						fmt.Sprintf("Task %s failed %d consecutive times: %v", name, consecutiveFailures, err),
+						map[string]any{"task": name, "consecutive_failures": consecutiveFailures})
+				}
+			})
+			taskMgr.SetRecoveryHandler(func(name string, recoveredFrom int) {
+				if autoHandler != nil {
+					autoHandler.Recover("background_task")
+				}
+				logging.Info("main", "task_recovered",
+					"task", name,
+					"recovered_from", recoveredFrom)
+			})
 
 			// RealTimeAdapter: sub-second regime detection and agent weight
 			// adaptation during live market sessions. Gated behind -allow-realtime
@@ -573,28 +677,609 @@ func run(args []string, deps appDeps) error {
 					paramsCfg.Realtime.UpdateIntervalMs.Value, 60)
 			}
 
-			registerDataSyncAndHealthTasks(taskMgr, cfg, gateway, monitor, pool)
+			// Register channel_health_sync task (DB sync, not a data fetcher).
+			if pool != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "channel_health_sync",
+					Interval: 5 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						healthStore := monitoring.NewChannelHealthStoreWithPool(filepath.Join(cfg.WorkDir, "data/state"), pool)
+						return healthStore.SyncAllToDB()
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
+			}
 
-			registerCapitalTasks(capitalDeps{
-				taskMgr:           taskMgr,
-				cfg:               cfg,
-				gateway:           gateway,
-				autoRollback:      autoRollback,
-				autoJudgePromoter: autoJudgePromoter,
+			// Register us_market_refresh — batch-refresh 7 US market channels
+			// (spx, ndx, dji, nvda, aapl, msft, tsm_adr) every 5 minutes.
+			// These channels share yahooSharedLimiter; Gateway.Fetch handles
+			// both rate limiting and circuit breaking per channel. Per-channel
+			// errors are logged but do not fail the batch (transient errors on
+			// one channel should not block the others).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "us_market_refresh",
+				Interval: 5 * time.Minute,
+				Enabled:  true,
+				Task:     apigateway.NewUSMarketRefreshTask(gateway),
 			})
+			log.Printf("[Gateway] registered us_market_refresh background task (5m interval)")
 
-			registerOperationsTasks(operationsDeps{
-				taskMgr:         taskMgr,
-				cfg:             cfg,
-				monitor:         monitor,
-				gateway:         gateway,
-				healthMonitor:   healthMonitor,
-				lifecycleMgr:    lifecycleMgr,
-				dashboard:       dashboard,
-				realtimeAdapter: realtimeAdapter,
-				repo:            repo,
-				collector:       collector,
+			// Register seasonal_calibration background task. Guard: skip silently if
+			// the calibrate-seasonal binary is not co-located with the current binary
+			// (production deploys without it stay clean; no live-trading impact).
+			exePath, exeErr := os.Executable()
+			if exeErr == nil {
+				seasonalBin := filepath.Join(filepath.Dir(exePath), "calibrate-seasonal")
+				if _, statErr := os.Stat(seasonalBin); statErr == nil {
+					_ = taskMgr.Register(&apigateway.ScheduledTask{
+						Name:     "seasonal_calibration",
+						Interval: scheduler.SeasonalCalibrationDefaults.Interval,
+						Jitter:   30 * time.Minute,
+						Enabled:  true,
+						Task:     scheduler.SeasonalCalibrationTaskFunc(seasonalBin),
+					})
+					log.Printf("[Gateway] registered seasonal_calibration background task (7d interval)")
+				} else {
+					log.Printf("[Gateway] seasonal_calibration skipped: binary not found at %s", seasonalBin)
+				}
+			} else {
+				log.Printf("[Gateway] seasonal_calibration skipped: os.Executable failed: %v", exeErr)
+			}
+
+			// Register calibration_cycle background task (rolling calibration framework).
+			// Maturity-gated: BackgroundCalibrationScheduler.RunDaily checks maturityTracker
+			// and skips gracefully in BURN_IN mode (no validation, no false signals).
+			if maturityTracker != nil {
+				calTask := narrative.NewCalibrationTask(cfg.WorkDir)
+				calScheduler := scheduler.NewBackgroundCalibrationScheduler(maturityTracker)
+				calScheduler.Register(&scheduler.CalibrationTask{
+					Name:        "narrative_weight_calibration",
+					MinMaturity: domain.MaturityCalibrating,
+					Run: func(_ context.Context) error {
+						_, err := calTask.RunCalibrationCycle()
+						return err
+					},
+				})
+				dashboard.SetCalibrationTask(calTask)
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "calibration_cycle",
+					Interval: 24 * time.Hour,
+					Jitter:   30 * time.Minute,
+					Enabled:  paramsCfg.Narrative.CalibrationEnabled.Value,
+					Task:     calScheduler.RunDaily,
+				})
+				log.Printf("[Gateway] registered calibration_cycle background task (24h interval, maturity-gated)")
+			} else {
+				log.Printf("[Gateway] calibration_cycle skipped: maturity tracker is nil")
+			}
+			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
+			if monitor != nil {
+				healthChecker := monitoring.NewHealthChecker(monitor, nil)
+				if gateway != nil {
+					healthChecker.SetGateway(gateway)
+				}
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "health_check",
+					Interval: 30 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return healthChecker.RunOnce(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered health_check background task (30s interval)")
+			}
+
+			// Register channel health checks for third-party data providers.
+			// These tasks populate the Gateway health store so the frontend
+			// "信息通道" page can show actual status instead of "未知".
+			if cfg.FugleAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_fugle",
+					ChannelID: "fugle",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "fugle")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_fugle background task (1h interval)")
+			}
+
+			if cfg.FubonAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_fubon",
+					ChannelID: "fubon",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "fubon")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_fubon background task (1h interval)")
+			}
+
+			if cfg.FinMindAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_finmind",
+					ChannelID: "finmind",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "finmind")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_finmind background task (1h interval)")
+			}
+
+			// Register TWSE replay health check (always available, reads from local CSV).
+			{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_twse_replay",
+					ChannelID: "twse_replay",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "twse_replay")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_twse_replay background task (1h interval)")
+			}
+
+			// Register TSMC Revenue task via Gateway.
+			if cfg.FinMindAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "tsmc_revenue",
+					ChannelID: "tsmc_revenue",
+					Interval:  24 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "tsmc_revenue")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
+			}
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_rollback",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					_, err := autoRollback.RunDaily(ctx)
+					return err
+				},
 			})
+			log.Printf("[Gateway] registered auto_rollback background task (24h interval)")
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_judge_promoter",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					pending := experiment.LoadPendingExperiments(cfg.WorkDir)
+					if len(pending) == 0 {
+						return nil
+					}
+					_, err := autoJudgePromoter.RunDaily(ctx, pending)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_judge_promoter background task (24h interval)")
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "system_health_monitor",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					_, err := healthMonitor.RunDaily(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered system_health_monitor background task (24h interval)")
+
+			// Register auto_backfill via Gateway.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_backfill",
+				ChannelID: "twse_replay",
+				Interval:  24 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					absWorkDir, err := filepath.Abs(cfg.WorkDir)
+					if err != nil {
+						absWorkDir = cfg.WorkDir
+					}
+					latestDate, err := getLatestReplayDate(cfg.ReplayDataPath)
+					if err != nil {
+						return fmt.Errorf("backfill replay read: %w", err)
+					}
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+					if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
+						end = end.AddDate(0, 0, -1)
+					}
+					start := latestDate.AddDate(0, 0, 1)
+					for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
+						start = start.AddDate(0, 0, 1)
+					}
+					for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
+						end = end.AddDate(0, 0, -1)
+					}
+					if start.After(end) {
+						return nil
+					}
+					startStr := start.Format("2006-01-02")
+					endStr := end.Format("2006-01-02")
+					log.Printf("[Gateway] backfill gap detected: %s to %s", startStr, endStr)
+					bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+					defer cancel()
+					var cmd *exec.Cmd
+					binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
+					if _, err := os.Stat(binaryPath); err == nil {
+						cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+						cmd.Dir = absWorkDir
+					} else if _, err := exec.LookPath("go"); err == nil {
+						cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+						cmd.Dir = absWorkDir
+					} else {
+						return fmt.Errorf("backfill binary not found")
+					}
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
+					}
+					log.Printf("[Gateway] backfill success: %s", string(out))
+
+					// Auto-convert CSV to JSONL so the system's replay pipeline
+					// (tw_extended_90days.jsonl) stays in sync with the CSV that
+					// daily-replay-sync appends to.  JSONL is the canonical format
+					// consumed by FactorEngine (composition.go:67).
+					absCSV := cfg.ReplayDataPath
+					absJSONL := strings.TrimSuffix(cfg.ReplayDataPath, ".csv") + ".jsonl"
+					if !filepath.IsAbs(absCSV) {
+						absCSV = filepath.Join(absWorkDir, absCSV)
+						absJSONL = filepath.Join(absWorkDir, absJSONL)
+					}
+					if convErr := importer.ImportTWOpenDataCSVToJSONL(absCSV, absJSONL); convErr != nil {
+						log.Printf("[Gateway] backfill CSV→JSONL conversion warning (non-fatal): %v", convErr)
+					} else {
+						log.Printf("[Gateway] backfill CSV→JSONL conversion: %s", absJSONL)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
+
+			// Register fundamentals_staleness_check: fundamentals.json is reference
+			// data (PE/PB/DividendYield for 1070 stocks) loaded by FactorEngine at
+			// startup.  It does not change daily—quarterly refresh is appropriate.
+			// This task alerts when the file exceeds 90 days without an update.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "fundamentals_staleness_check",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					path := filepath.Join(cfg.WorkDir, "data", "fundamentals.json")
+					info, err := os.Stat(path)
+					if err != nil {
+						monitor.Alert(monitoring.AlertLevelWarning, "data_staleness",
+							fmt.Sprintf("fundamentals.json not accessible: %v", err),
+							map[string]any{"file": path})
+						return nil
+					}
+					ageDays := int(time.Since(info.ModTime()).Hours() / 24)
+					if ageDays > 90 {
+						monitor.Alert(monitoring.AlertLevelWarning, "data_staleness",
+							fmt.Sprintf("fundamentals.json is %d days old — run: go run ./cmd/backfill-financial-statements", ageDays),
+							map[string]any{"file": path, "age_days": ageDays})
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered fundamentals_staleness_check background task (24h interval)")
+
+			// Register auto_capital_flow via Gateway.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_capital_flow",
+				ChannelID: "twse_capital_flow",
+				Interval:  30 * time.Minute,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					_, err := gateway.Fetch(ctx, "twse_capital_flow")
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
+
+			// Register auto_margin via Gateway.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_margin",
+				ChannelID: "twse_margin",
+				Interval:  30 * time.Minute,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					_, err := gateway.Fetch(ctx, "twse_margin")
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
+
+			// Register margin_history_backfill via Gateway.
+			if err := taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "margin_history_backfill",
+				ChannelID: "twse_margin",
+				Interval:  24 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					backfiller := narrative.NewMarginHistoryBackfiller(cfg.WorkDir)
+					return backfiller.Backfill(ctx)
+				},
+			}); err != nil {
+				log.Printf("[Gateway] failed to register margin_history_backfill: %v", err)
+			} else {
+				log.Printf("[Gateway] registered margin_history_backfill background task (24h interval)")
+			}
+
+			// Register auto_export via Gateway.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_export",
+				ChannelID: "export_statistics",
+				Interval:  12 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					_, err := gateway.Fetch(ctx, "export_statistics")
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_export background task (12h interval)")
+
+			// Register auto_geopolitical via Gateway.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_geopolitical",
+				ChannelID: "geopolitical",
+				Interval:  6 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					_, err := gateway.Fetch(ctx, "geopolitical")
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
+
+			// Register storage_cleanup via LifecycleManager.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "storage_cleanup",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := lifecycleMgr.Run(ctx, false)
+					if err != nil {
+						return fmt.Errorf("storage cleanup: %w", err)
+					}
+					log.Printf("[StorageCleanup] processed %d policies: %d files deleted, %d kept",
+						len(report.Policies), report.TotalDeleted, report.TotalKept)
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
+
+			if svc := dashboard.GetIndustryService(); svc != nil {
+				var finmindClient *marketdata.FinMindClient
+				if cfg.FinMindAPIKey != "" {
+					finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
+				}
+				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_cycle_update",
+					Interval: 6 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+						defer cancel()
+						return cycleAggregator.AggregateAllIndustries(bgCtx)
+					},
+				})
+				log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
+
+				calendarProvider := marketdata.NewTWSECalendarProvider()
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_calendar_refresh",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						bgCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+						defer cancel()
+						svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
+						svc.EventCalendar.RefreshEvents(time.Now())
+						logging.Info("calendar", "auto_calendar_refresh completed")
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered auto_calendar_refresh background task (24h interval)")
+			}
+
+			{
+				revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
+				configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_threshold_calibrate",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						now := time.Now()
+						if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+							now = now.In(tz)
+						}
+						if now.Day() != 1 || now.Hour() < 3 {
+							return nil
+						}
+						if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
+							return nil
+						}
+						return industry.RecalibrateThresholds(revenuePath, configPath)
+					},
+				})
+				log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
+			}
+
+			{
+				dashRef := dashboard
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "macro_ingest",
+					Interval: 5 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+						defer cancel()
+						_, snap, err := dashRef.IngestAndUpdateMacro(ingestCtx)
+						if err != nil {
+							logging.Warn("main", "macro_ingest_failed", "err", err)
+							return err
+						}
+						// Crisis circuit break: VIX >= 35 triggers force-open on live channels.
+						if gateway != nil && snap.VIX.Value >= 35.0 {
+							liveChannels := []string{"fugle", "fubon", "finmind"}
+							for _, ch := range liveChannels {
+								if err := gateway.ForceOpenChannel(ch); err != nil {
+									logging.Warn("main", "crisis_force_open_failed", "channel", ch, "err", err)
+								} else {
+									logging.Info("main", "crisis_force_open", "channel", ch, "vix", snap.VIX.Value)
+								}
+							}
+						}
+						// Propagate VIX signal to optimizer crisis mode.
+						dashRef.InvokeCrisisModeSetter(snap.VIX.Value >= 35.0)
+						// Feed daily returns into all six rolling correlation engines
+						// (SPX-TWSE legacy + NDX/DJI/TSM/NVDA-TWSE + SPX-VIX).
+						if svc := dashRef.GetCrossMarketService(); svc != nil {
+							svc.UpdateAllCorrelations(snap)
+						}
+
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
+			}
+
+			// RealTimeAdapter feed: periodically ingest market data points from
+			// the latest macro snapshot for sub-second regime detection.
+			if realtimeAdapter != nil {
+				dashRef := dashboard
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "realtime_feed",
+					Interval: 30 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						snap, ok := dashRef.GetLatestMacroSnapshot()
+						if !ok {
+							return nil
+						}
+						now := time.Now()
+						points := []realtime.MarketDataPoint{
+							{Symbol: "SOX", Price: snap.SOXIndex.Value, Timestamp: now},
+							{Symbol: "VIX", Price: snap.VIX.Value, Timestamp: now},
+						}
+						if snap.SPXIndex.Value > 0 {
+							points = append(
+								points,
+								realtime.MarketDataPoint{Symbol: "SPX", Price: snap.SPXIndex.Value, Timestamp: now},
+								realtime.MarketDataPoint{Symbol: "NDX", Price: snap.NDXIndex.Value, Timestamp: now},
+							)
+						}
+						for _, p := range points {
+							if p.Price > 0 {
+								realtimeAdapter.IngestData(p)
+							}
+						}
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered realtime_feed background task (30s interval)")
+			}
+
+			// Silicon cycle indicator update (10m, offset from macro_ingest 5m
+			// to ensure fresh TSMC/SOX data). Uses the macro data pipeline already
+			// maintained by macro_ingest — no additional external API calls.
+			if industrySvc := dashboard.GetIndustryService(); industrySvc != nil && industrySvc.SiliconTracker != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "silicon_cycle_update",
+					Interval: 10 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return industrySvc.UpdateSiliconIndicators(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered silicon_cycle_update background task (10m interval)")
+			}
+
+			// StrategyEvolver daily re-evaluation (24h, audit-style trigger).
+			{
+				dashRef := dashboard
+				maturityRef := maturityTracker
+				sectorDir := cfg.WorkDir
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_strategy_evolution",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: scheduler.StrategyEvolutionTaskFunc(scheduler.StrategyEvolutionDeps{
+						Dashboard:       dashRef,
+						SectorDataDir:   sectorDir,
+						MaturityTracker: maturityRef,
+					}),
+				})
+				log.Printf("[Gateway] registered auto_strategy_evolution background task (24h interval)")
+			}
+
+			if repo != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "metrics_snapshot",
+					Interval: 60 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						snap := collector.GetMetricsSnapshot()
+						repoSnap := repository.MetricsSnapshot{
+							ScreeningTotal:     snap.ScreeningTotal,
+							ScreeningPassed:    snap.ScreeningPassed,
+							ScreeningRate:      snap.ScreeningRate,
+							AlertsTriggered:    snap.AlertsTriggered,
+							AlertsAcknowledged: snap.AlertsAcknowledged,
+							AlertsByType:       snap.AlertsByType,
+							Timestamp:          snap.Timestamp,
+						}
+						return repo.SaveSnapshot(ctx, &repoSnap)
+					},
+				})
+				log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
+			}
 
 			// Register auto_daily_simulation — runs daily simulation at market close.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
@@ -1189,6 +1874,358 @@ func run(args []string, deps appDeps) error {
 			}
 
 			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
+			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "risk_gate_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := riskGate.SelfCalibrate(ctx, calProvider, 30)
+					if err != nil {
+						logging.Error("risk_calibrate", "self_calibrate_failed", "err", err.Error())
+						return err
+					}
+					riskGate.SetLastCalibration(report)
+					logging.Info("risk_calibrate", "completed",
+						"verdict", report.Verdict,
+						"changes", len(report.Changes),
+						"summary", report.Summary)
+					for _, ch := range report.Changes {
+						logging.Info("risk_calibrate", "parameter_change",
+							"param", ch.Name,
+							"before", ch.Before,
+							"after", ch.After,
+							"rationale", ch.Rationale,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered risk_gate_calibrate background task (24h interval)")
+
+			if svc := dashboard.GetIndustryService(); svc != nil && svc.CycleCalibration != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "cycle_calibrate",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						defaultCfg := industry.CardConfig{
+							LayerWeights: map[string]float64{
+								"silicon":        0.25,
+								"business_cycle": 0.20,
+								"seasonal":       0.15,
+								"events":         0.15,
+								"supply_chain":   0.10,
+							},
+						}
+						calibrated := svc.CycleCalibration.CalibrateWeights(defaultCfg.LayerWeights)
+						metrics := svc.CycleCalibration.GetMetrics()
+
+						logging.Info("cycle_calibrate", "completed",
+							"outcomes", svc.CycleCalibration.GetOutcomeCount(),
+							"layers", len(calibrated))
+						for layer, m := range metrics {
+							logging.Info("cycle_calibrate", "layer_accuracy",
+								"layer", layer,
+								"accuracy", m.Accuracy,
+								"signals", m.TotalSignals)
+						}
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered cycle_calibrate background task (24h interval)")
+			}
+
+			if janusEngine != nil {
+				var prevRegime string
+				regimeScenario := map[string]string{
+					"NOVEL_REGIME":      "ai_bubble_2024",
+					"HISTORICAL_REGIME": "normal_market_2024",
+					"RISK_OFF":          "covid_crash_2020",
+				}
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "regime_calibrate",
+					Interval: 1 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						class := janusEngine.GetRegimeClassification()
+						current := string(class)
+						if current == "" || current == "MIXED" {
+							prevRegime = current
+							return nil
+						}
+						if current != prevRegime && prevRegime != "" {
+							scenario := regimeScenario[current]
+							if scenario == "" {
+								scenario = "fed_hikes_2022"
+							}
+							logging.Info("regime_calibrate", "regime_change_detected",
+								"from", prevRegime, "to", current,
+								"suggested_stress_scenario", scenario)
+							report, err := riskGate.SelfCalibrate(ctx, calProvider, 20)
+							if err != nil {
+								logging.Error("regime_calibrate", "calibrate_after_regime_change_failed", "err", err.Error())
+								return nil
+							}
+							riskGate.SetLastCalibration(report)
+							logging.Info("regime_calibrate", "calibration_after_regime_change",
+								"verdict", report.Verdict, "changes", len(report.Changes))
+						}
+						prevRegime = current
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered regime_calibrate background task (1h interval, triggers calibration on regime change)")
+			}
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "factor_weight_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					orders, err := loadCalibrationOrders(cfg.WorkDir)
+					if err != nil {
+						return nil
+					}
+					report, err := portfolio.CalibrateWeights(ctx, orders)
+					if err != nil {
+						return nil
+					}
+					logging.Info("fw_calibrate", "completed",
+						"verdict", report.Verdict,
+						"improvement", report.ImprovementPct,
+						"changes", len(report.Changes),
+						"orders", report.OrdersEvaluated)
+					for _, ch := range report.Changes {
+						logging.Info("fw_calibrate", "weight_change",
+							"factor", string(ch.Factor),
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered factor_weight_calibrate background task (24h interval)")
+
+			// Register conviction_calibrate — optimizes factor-driven conviction
+			// thresholds and deltas (FactorConvictionParams) using historical
+			// recommendation outcomes with forward returns.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "conviction_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					return orchestrator.RunConvictionCalibration(
+						cfg.WorkDir,
+						orchestrator.SemiconductorExecutor{},
+						orchestrator.AISupplyChainExecutor{},
+						orchestrator.LEOSatelliteExecutor{},
+						orchestrator.ETFRotationExecutor{},
+						orchestrator.FinancialsExecutor{},
+						orchestrator.ShippingExecutor{},
+						orchestrator.ValueYieldExecutor{},
+						orchestrator.EarningsQualityExecutor{},
+						orchestrator.TechnicalBreakoutExecutor{},
+						orchestrator.GrowthMomentumExecutor{},
+					)
+				},
+			})
+			log.Printf("[Gateway] registered conviction_calibrate background task (24h interval)")
+
+			// Register macro_risk_calibrate — calibrates Engine MacroRisk thresholds
+			// (carry_trade, VIX, US10Y, oil, gold, DXY, TWD, outflow probabilities).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "macro_risk_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cal := config.NewMacroRiskCalibrator()
+					evaluator := cal.BuildEvaluator()
+					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("macro_risk_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("macro_risk_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("macro_risk_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered macro_risk_calibrate background task (24h interval)")
+
+			// Register structural_trend_calibrate — calibrates Engine StructuralTrend
+			// thresholds (trend strength, confidence, override, AI/capex/utilization).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "structural_trend_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cal := &config.StructuralTrendCalibrator{}
+					evaluator := cal.BuildEvaluator()
+					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("structural_trend_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("structural_trend_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("structural_trend_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered structural_trend_calibrate background task (24h interval)")
+
+			// Register narrative_calibrate — calibrates Narrative event detection
+			// thresholds (AI revenue, CoWoS, capex, US10Y, DXY, GPR, oil, JPY, VIX).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "narrative_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					nc := &config.NarrativeCalibrator{}
+					evaluator := config.NewNarrativeEvaluator()
+					result, err := config.CalibrateParameters(ctx, nc, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("narrative_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("narrative_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("narrative_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "seasonal_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-seasonal",
+						"--replay", "data/replay/finmind_2020_2024.jsonl",
+						"--start", "2020", "--end", "2024", "--update", "--update-threshold", "1")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						logging.Error("seasonal_calibrate", "failed", "err", err.Error(), "output", string(output))
+						return err
+					}
+					logging.Info("seasonal_calibrate", "completed", "output", string(output))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered seasonal_calibrate background task (24h interval)")
+
+			// Register linkage_calibrate — calibrates RecessionShockAmplifier
+			// for shock propagation amplification during recession regimes.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "linkage_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					calibrator := &config.LinkageAmplifierCalibrator{}
+					evaluator := func(cfg *config.ParametersConfig) (float64, error) {
+						// TODO: Implement proper recession shock accuracy scoring
+						// using historical session data. For now, return a
+						// neutral score so the calibration infrastructure runs
+						// end-to-end without changing the amplifier value.
+						return 0.0, nil
+					}
+					result, err := config.CalibrateParameters(ctx, calibrator, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("linkage_calibrate", "calibration_failed", "err", err.Error())
+						return err
+					}
+					logging.Info("linkage_calibrate", "completed",
+						"baseline", fmt.Sprintf("%.3f", result.BaselineScore),
+						"optimized", fmt.Sprintf("%.3f", result.OptimizedScore))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered linkage_calibrate background task (24h interval)")
+
+			// Register factor_weight_strategy_calibrate — calibrates FactorWeight
+			// strategy deltas (conservative/aggressive/risk-on/risk-off adjustments).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "factor_weight_strategy_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					result, err := config.CalibrateStrategyDeltas(ctx, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("fw_strategy_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("fw_strategy_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("fw_strategy_calibrate", "delta_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered factor_weight_strategy_calibrate background task (24h interval)")
+
+			// Register auto_calibrate — runs Darwinian parameter calibration from
+			// historical session outcome data (7-day interval).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_calibrate",
+				Interval: 7 * 24 * time.Hour,
+				Jitter:   4 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-parameters",
+						"--module=darwinian")
+					cmd.Dir = cfg.WorkDir
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						logging.Warn("auto_calibrate", "failed",
+							logging.Err(err),
+							logging.FStr("output", string(out)))
+						return nil
+					}
+					logging.Info("auto_calibrate", "completed")
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_calibrate background task (7-day interval)")
 
 			// Register auto_swarm_simulation — periodic swarm simulation
 			// for training data generation and scenario monitoring.
@@ -1224,22 +2261,29 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
 
+			// RSI-tw autonomous calibration — runs every 24h at market close
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "rsi_tw_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := retail.CalibrateRSITw(cfg.WorkDir)
+					if err != nil {
+						log.Printf("[RSITw] calibration failed: %v", err)
+						return err
+					}
+					riskGate.SetPreTradeRSITwScore(report.Score)
+					log.Printf("[RSITw] calibration complete: %s (score=%.4f, samples=%d, changes=%d)",
+						report.Verdict, report.Score, report.SampleCount, len(report.Changes))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered rsi_tw_calibrate background task (24h interval)")
+
 			if realtimeAdapter != nil {
 				go realtimeAdapter.Start(sysCtx)
 				log.Printf("[RealTime] adapter started (cadence=%dms)", paramsCfg.Realtime.UpdateIntervalMs.Value)
 			}
-
-			registerCalibrationTasks(calibrationDeps{
-				TaskMgr:         taskMgr,
-				Cfg:             cfg,
-				ParamsCfg:       paramsCfg,
-				RiskGate:        riskGate,
-				JanusEngine:     janusEngine,
-				Dashboard:       dashboard,
-				FinMindClient:   nil,
-				MaturityTracker: maturityTracker,
-				CalProvider:     monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state")),
-			})
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
@@ -1296,7 +2340,8 @@ func run(args []string, deps appDeps) error {
 			}
 		}()
 
-		sigCh := registerShutdownSignal()
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		select {
 		case <-sigCh:
 			log.Printf("received signal, shutting down api server...")
@@ -1445,6 +2490,47 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 
 // buildBaseState queries the provider for current market state.
 // Falls back to placeholder values if provider fails (with warning log).
+func buildBaseState(provider marketdata.Provider, symbols []string) swarm.MarketState {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	state := swarm.MarketState{
+		Timestamp: time.Now(),
+		Prices:    make(map[string]float64),
+		Volumes:   make(map[string]float64),
+	}
+
+	quotes, err := provider.GetQuotes(ctx, time.Now(), symbols)
+	if err != nil {
+		logging.Warn("buildBaseState", "get_quotes_failed",
+			logging.Err(err),
+			"symbols", len(symbols))
+		for _, sym := range symbols {
+			state.Prices[sym] = 100.0
+			state.Volumes[sym] = 5_000_000.0
+		}
+		return state
+	}
+
+	quoteMap := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		quoteMap[q.Symbol] = q
+	}
+
+	for _, sym := range symbols {
+		if q, ok := quoteMap[sym]; ok {
+			state.Prices[sym] = q.Last
+			state.Volumes[sym] = float64(q.Volume)
+		} else {
+			logging.Warn("buildBaseState", "symbol_not_in_quotes",
+				"symbol", sym)
+			state.Prices[sym] = 100.0
+			state.Volumes[sym] = 5_000_000.0
+		}
+	}
+	return state
+}
+
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
 	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
@@ -1592,7 +2678,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		return fmt.Errorf("start live orchestrator: %w", err)
 	}
 
-	sigCh := registerShutdownSignal()
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	log.Printf("live trading orchestrator running; press Ctrl+C to stop")
 	select {
 	case <-sigCh:
@@ -1645,4 +2732,24 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	}
 
 	return nil
+}
+
+func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) {
+	sessionsDir := filepath.Join(workDir, "data", "state", "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return nil, err
+	}
+	var all []portfolio.CalibratedOrder
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		orders, err := portfolio.LoadOrdersFromJSONL(filepath.Join(sessionsDir, e.Name(), "recommendation_outcomes.jsonl"))
+		if err != nil {
+			continue
+		}
+		all = append(all, orders...)
+	}
+	return all, nil
 }
