@@ -577,31 +577,13 @@ func run(args []string, deps appDeps) error {
 
 			registerDataSyncAndHealthTasks(taskMgr, cfg, gateway, monitor, pool)
 
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "auto_rollback",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					_, err := autoRollback.RunDaily(ctx)
-					return err
-				},
+			registerCapitalTasks(capitalDeps{
+				taskMgr:           taskMgr,
+				cfg:               cfg,
+				gateway:           gateway,
+				autoRollback:      autoRollback,
+				autoJudgePromoter: autoJudgePromoter,
 			})
-			log.Printf("[Gateway] registered auto_rollback background task (24h interval)")
-
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "auto_judge_promoter",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					pending := experiment.LoadPendingExperiments(cfg.WorkDir)
-					if len(pending) == 0 {
-						return nil
-					}
-					_, err := autoJudgePromoter.RunDaily(ctx, pending)
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_judge_promoter background task (24h interval)")
 
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "system_health_monitor",
@@ -716,96 +698,6 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered fundamentals_staleness_check background task (24h interval)")
-
-			// Register auto_capital_flow via Gateway.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_capital_flow",
-				ChannelID: "twse_capital_flow",
-				Interval:  30 * time.Minute,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-						return nil
-					}
-					hour := now.Hour()
-					if hour < 9 || hour >= 16 {
-						return nil
-					}
-					_, err := gateway.Fetch(ctx, "twse_capital_flow")
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
-
-			// Register auto_margin via Gateway.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_margin",
-				ChannelID: "twse_margin",
-				Interval:  30 * time.Minute,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-						return nil
-					}
-					hour := now.Hour()
-					if hour < 9 || hour >= 16 {
-						return nil
-					}
-					_, err := gateway.Fetch(ctx, "twse_margin")
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
-
-			// Register margin_history_backfill via Gateway.
-			if err := taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "margin_history_backfill",
-				ChannelID: "twse_margin",
-				Interval:  24 * time.Hour,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					backfiller := narrative.NewMarginHistoryBackfiller(cfg.WorkDir)
-					return backfiller.Backfill(ctx)
-				},
-			}); err != nil {
-				log.Printf("[Gateway] failed to register margin_history_backfill: %v", err)
-			} else {
-				log.Printf("[Gateway] registered margin_history_backfill background task (24h interval)")
-			}
-
-			// Register auto_export via Gateway.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_export",
-				ChannelID: "export_statistics",
-				Interval:  12 * time.Hour,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					_, err := gateway.Fetch(ctx, "export_statistics")
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_export background task (12h interval)")
-
-			// Register auto_geopolitical via Gateway.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_geopolitical",
-				ChannelID: "geopolitical",
-				Interval:  6 * time.Hour,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					_, err := gateway.Fetch(ctx, "geopolitical")
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
 
 			// Register storage_cleanup via LifecycleManager.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
