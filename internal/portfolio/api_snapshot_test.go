@@ -23,6 +23,7 @@ import (
 //   - changes a signature (params or results)
 //   - adds a new public symbol (intentional additions must update the golden)
 //   - removes a public symbol
+//
 // will fail this test, forcing a conscious review.
 //
 // Layer 3 safety net (Issue #611 sub-issue-9).
