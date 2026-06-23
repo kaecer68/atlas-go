@@ -60,10 +60,10 @@ type FactorEngine struct {
 	history         *HistoricalPrices
 	fundamentals    *FundamentalProvider
 	params          *RuntimeParameters
-	narrativeProv   func(symbol string) *domain.NarrativeFactorScore
-	cycleProv       func(symbol string) *domain.IndustryCycleFactorScore
-	linkageProv     func(symbol string) *domain.LinkageFactorScore
-	tsmcProv        func(symbol string) *domain.FactorScoreItem
+	narrativeProv   NarrativeProviderFunc
+	cycleProv       IndustryCycleProviderFunc
+	linkageProv     LinkageProviderFunc
+	tsmcProv        TSMCProviderFunc
 	pmCtxProv       PMContextProvider
 	corpActions     CorporateActionProvider
 	etfAnalyzer     *ETFAnalyzer
@@ -90,6 +90,22 @@ type PreciousMetalsContext struct {
 
 // PMContextProvider supplies PreciousMetalsContext for a given symbol.
 type PMContextProvider func(symbol string) *PreciousMetalsContext
+
+// NarrativeProviderFunc returns the narrative factor score for a symbol.
+// Nil return means the symbol has no narrative context.
+type NarrativeProviderFunc func(symbol string) *domain.NarrativeFactorScore
+
+// IndustryCycleProviderFunc returns the industry cycle factor score for a symbol.
+// Nil return means no cycle position is available for the symbol's industry.
+type IndustryCycleProviderFunc func(symbol string) *domain.IndustryCycleFactorScore
+
+// LinkageProviderFunc returns the linkage factor score for a symbol.
+// Nil return means no linkage information is available.
+type LinkageProviderFunc func(symbol string) *domain.LinkageFactorScore
+
+// TSMCProviderFunc returns the TSMC factor score for a symbol.
+// Nil return means no TSMC relevance for the symbol.
+type TSMCProviderFunc func(symbol string) *domain.FactorScoreItem
 
 func NewFactorEngine() *FactorEngine {
 	return &FactorEngine{
@@ -120,28 +136,28 @@ func (fe *FactorEngine) WithParameters(p *RuntimeParameters) *FactorEngine {
 	return fe
 }
 
-func (fe *FactorEngine) WithNarrativeProvider(fn func(symbol string) *domain.NarrativeFactorScore) *FactorEngine {
+func (fe *FactorEngine) WithNarrativeProvider(fn NarrativeProviderFunc) *FactorEngine {
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.narrativeProv = fn
 	return fe
 }
 
-func (fe *FactorEngine) WithIndustryCycleProvider(fn func(symbol string) *domain.IndustryCycleFactorScore) *FactorEngine {
+func (fe *FactorEngine) WithIndustryCycleProvider(fn IndustryCycleProviderFunc) *FactorEngine {
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.cycleProv = fn
 	return fe
 }
 
-func (fe *FactorEngine) WithLinkageProvider(fn func(symbol string) *domain.LinkageFactorScore) *FactorEngine {
+func (fe *FactorEngine) WithLinkageProvider(fn LinkageProviderFunc) *FactorEngine {
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.linkageProv = fn
 	return fe
 }
 
-func (fe *FactorEngine) WithTSMCProvider(fn func(symbol string) *domain.FactorScoreItem) *FactorEngine {
+func (fe *FactorEngine) WithTSMCProvider(fn TSMCProviderFunc) *FactorEngine {
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.tsmcProv = fn
