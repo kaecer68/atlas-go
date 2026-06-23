@@ -173,6 +173,66 @@ func TestYahooFinanceMacroProvider_fetchIndicator_NoClosePrices(t *testing.T) {
 	}
 }
 
+func TestYahooFinanceMacroProvider_fetchIndicator_ZeroLatestPrice(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"chart":{"result":[{"meta":{"regularMarketTime":1714500000},"indicators":{"quote":[{"close":[0.0,0.0,0.0]}]}}]}}`))
+	}))
+	defer ts.Close()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
+
+	y := NewYahooFinanceMacroProvider()
+	_, err := y.fetchIndicator(context.Background(), "^TNX")
+	if err == nil {
+		t.Fatal("expected error for zero latest price (^TNX)")
+	}
+	if !strings.Contains(err.Error(), "zero latest price") {
+		t.Errorf("err = %v, want it to mention 'zero latest price'", err)
+	}
+}
+
+func TestYahooFinanceMacroProvider_FetchSnapshot_ZeroValueExcluded(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		var body string
+		switch {
+		case strings.Contains(r.URL.Path, "^TNX"):
+			body = `{"chart":{"result":[{"meta":{"regularMarketTime":1714500000},"indicators":{"quote":[{"close":[0.0,0.0]}]}}]}}`
+		case strings.Contains(r.URL.Path, "DX-Y.NYB"):
+			body = `{"chart":{"result":[{"meta":{"regularMarketTime":1714500000},"indicators":{"quote":[{"close":[102.45,104.18]}]}}]}}`
+		default:
+			body = `{"chart":{"result":[{"meta":{"regularMarketTime":1714500000},"indicators":{"quote":[{"close":[1.0,1.0]}]}}]}}`
+		}
+		w.Write([]byte(body))
+	}))
+	defer ts.Close()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
+
+	snap, err := NewYahooFinanceMacroProvider().FetchSnapshot(context.Background())
+	if err == nil {
+		t.Fatal("expected partial failure error from ^TNX zero guard")
+	}
+	if snap.DXY.Value != 104.18 {
+		t.Errorf("DXY.Value = %v, want 104.18 (success path should still populate)", snap.DXY.Value)
+	}
+	if snap.US10Y.Value != 0 {
+		t.Errorf("US10Y.Value = %v, want 0 (zero guard should leave field empty)", snap.US10Y.Value)
+	}
+	if snap.US10Y.Symbol != "" {
+		t.Errorf("US10Y.Symbol = %q, want empty (zero guard should leave field empty)", snap.US10Y.Symbol)
+	}
+}
+
 func TestMockMacroProvider(t *testing.T) {
 	want := MacroDataSnapshot{
 		DXY: MacroDataPoint{Symbol: "DX-Y.NYB", Value: 104.18, ChangePct: 1.69},

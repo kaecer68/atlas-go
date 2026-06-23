@@ -213,7 +213,26 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 
 		finishTime := time.Now()
 		execCopy.FinishedAt = &finishTime
-		if err != nil {
+
+		// Preserve cancel_requested when the user requested cancel via
+		// Manager.Cancel(). The store is the synchronization point:
+		// Manager.Cancel writes "cancel_requested" before invoking
+		// cancelFunc(), and the deferred completion here must not
+		// overwrite it with "failed" / "succeeded".
+		// Use context.Background because ctx is already cancelled.
+		currentExec, getErr := m.store.GetExecution(context.Background(), exec.ID)
+		userCanceled := getErr == nil && currentExec.Status == domain.TaskStatusCancelRequested
+
+		switch {
+		case userCanceled:
+			execCopy.Status = domain.TaskStatusCancelRequested
+			sink.Emit(domain.TaskExecutionEvent{
+				EventType: domain.TaskEventDone,
+				Stream:    "system",
+				Message:   "canceled by user",
+				Payload:   mustJSON(map[string]string{"status": "cancel_requested"}),
+			})
+		case err != nil:
 			execCopy.Status = domain.TaskStatusFailed
 			execCopy.ErrorMessage = err.Error()
 			sink.Emit(domain.TaskExecutionEvent{
@@ -223,7 +242,7 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 				Message:   err.Error(),
 				Payload:   mustJSON(map[string]string{"status": "failed"}),
 			})
-		} else {
+		default:
 			execCopy.Status = domain.TaskStatusSucceeded
 			sink.Emit(domain.TaskExecutionEvent{
 				EventType: domain.TaskEventDone,
@@ -233,7 +252,7 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 			})
 		}
 
-		if updateErr := m.store.UpdateExecution(ctx, execCopy); updateErr != nil {
+		if updateErr := m.store.UpdateExecution(context.Background(), execCopy); updateErr != nil {
 			logging.Error("taskexec", "update_execution_to_final_status_failed", "err", updateErr.Error())
 		}
 	}()
