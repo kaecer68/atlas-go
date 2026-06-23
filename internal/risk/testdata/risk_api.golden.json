@@ -1,0 +1,1160 @@
+{
+  "consts": [
+    {
+      "name": "ActionFreeze",
+      "type": "ActionType",
+      "value": "\"FREEZE\""
+    },
+    {
+      "name": "ActionLiquidate",
+      "type": "ActionType",
+      "value": "\"LIQUIDATE\""
+    },
+    {
+      "name": "ActionNotify",
+      "type": "ActionType",
+      "value": "\"NOTIFY\""
+    },
+    {
+      "name": "ActionReduce",
+      "type": "ActionType",
+      "value": "\"REDUCE\""
+    },
+    {
+      "name": "ActionSell",
+      "type": "ActionType",
+      "value": "\"SELL\""
+    },
+    {
+      "name": "DrawdownEmergency",
+      "value": ""
+    },
+    {
+      "name": "DrawdownLight",
+      "value": ""
+    },
+    {
+      "name": "DrawdownModerate",
+      "value": ""
+    },
+    {
+      "name": "DrawdownNone",
+      "type": "DrawdownAction",
+      "value": "iota"
+    },
+    {
+      "name": "DrawdownSevere",
+      "value": ""
+    },
+    {
+      "name": "LevelAlertOnly",
+      "value": ""
+    },
+    {
+      "name": "LevelAllow",
+      "type": "VerdictLevel",
+      "value": "iota"
+    },
+    {
+      "name": "LevelBlock",
+      "value": ""
+    },
+    {
+      "name": "LevelHalt",
+      "value": ""
+    },
+    {
+      "name": "LevelReduce",
+      "value": ""
+    },
+    {
+      "name": "MinObservationsForVaR",
+      "value": "252"
+    },
+    {
+      "name": "ModeCautious",
+      "type": "RiskGateMode",
+      "value": "\"CAUTIOUS\""
+    },
+    {
+      "name": "ModeDefensive",
+      "type": "RiskGateMode",
+      "value": "\"DEFENSIVE\""
+    },
+    {
+      "name": "ModeNormal",
+      "type": "RiskGateMode",
+      "value": "\"NORMAL\""
+    },
+    {
+      "name": "ModeSuspended",
+      "type": "RiskGateMode",
+      "value": "\"SUSPENDED\""
+    },
+    {
+      "name": "PhaseInTrade",
+      "type": "RiskPhase",
+      "value": "\"in_trade\""
+    },
+    {
+      "name": "PhasePostTrade",
+      "type": "RiskPhase",
+      "value": "\"post_trade\""
+    },
+    {
+      "name": "PhasePreTrade",
+      "type": "RiskPhase",
+      "value": "\"pre_trade\""
+    },
+    {
+      "name": "StatusApproved",
+      "type": "ApprovalStatus",
+      "value": "\"approved\""
+    },
+    {
+      "name": "StatusCancelled",
+      "type": "ApprovalStatus",
+      "value": "\"cancelled\""
+    },
+    {
+      "name": "StatusPending",
+      "type": "ApprovalStatus",
+      "value": "\"pending\""
+    },
+    {
+      "name": "StatusRejected",
+      "type": "ApprovalStatus",
+      "value": "\"rejected\""
+    },
+    {
+      "name": "VerdictAlertOnly",
+      "type": "Verdict",
+      "value": "\"ALERT_ONLY\""
+    },
+    {
+      "name": "VerdictAllow",
+      "type": "Verdict",
+      "value": "\"ALLOW\""
+    },
+    {
+      "name": "VerdictBlock",
+      "type": "Verdict",
+      "value": "\"BLOCK\""
+    },
+    {
+      "name": "VerdictHalt",
+      "type": "Verdict",
+      "value": "\"HALT\""
+    },
+    {
+      "name": "VerdictReduce",
+      "type": "Verdict",
+      "value": "\"REDUCE\""
+    }
+  ],
+  "funcs": [
+    {
+      "name": "AnnotateSnapshot",
+      "params": "(ctx context.Context, snapshot interface{})",
+      "results": "(string)"
+    },
+    {
+      "name": "Approve",
+      "params": "(requestID,approvedBy,note string)",
+      "receiver": "ApprovalWorkflow",
+      "results": "(error)"
+    },
+    {
+      "name": "GetRequest",
+      "params": "(requestID string)",
+      "receiver": "ApprovalWorkflow",
+      "results": "(*ApprovalRequest, error)"
+    },
+    {
+      "name": "LoadAll",
+      "params": "",
+      "receiver": "ApprovalWorkflow",
+      "results": "([]ApprovalRequest, error)"
+    },
+    {
+      "name": "PendingRequests",
+      "params": "",
+      "receiver": "ApprovalWorkflow",
+      "results": "([]ApprovalRequest, error)"
+    },
+    {
+      "name": "Reject",
+      "params": "(requestID,rejectedBy,note string)",
+      "receiver": "ApprovalWorkflow",
+      "results": "(error)"
+    },
+    {
+      "name": "RequestApproval",
+      "params": "(reqType,requestedBy,reason string)",
+      "receiver": "ApprovalWorkflow",
+      "results": "(*ApprovalRequest, error)"
+    },
+    {
+      "name": "SetSessionID",
+      "params": "(sessionID string)",
+      "receiver": "AuditSubscriber",
+      "results": ""
+    },
+    {
+      "name": "CalculateCVaR",
+      "params": "(dailyReturns []float64, confidence float64)",
+      "results": "(float64)"
+    },
+    {
+      "name": "CalculateComponentVaR",
+      "params": "(returns map[string][]float64, weights map[string]float64, confidence float64)",
+      "results": "([]ComponentVaRItem)"
+    },
+    {
+      "name": "CalculateMaxDrawdown",
+      "params": "(values []float64)",
+      "results": "(float64)"
+    },
+    {
+      "name": "CalculateSharpeRatio",
+      "params": "(dailyReturns []float64)",
+      "results": "(float64)"
+    },
+    {
+      "name": "CalculateVaR",
+      "params": "(dailyReturns []float64, confidence float64)",
+      "results": "(float64)"
+    },
+    {
+      "name": "AdvancePhase",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": "(error)"
+    },
+    {
+      "name": "CalculateMaxPositionSize",
+      "params": "(totalCapital float64)",
+      "receiver": "CapitalPhaseController",
+      "results": "(float64)"
+    },
+    {
+      "name": "CanAdvance",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": "(bool, string)"
+    },
+    {
+      "name": "GetCapitalLimit",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetSnapshot",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": "(domain.CapitalSnapshot)"
+    },
+    {
+      "name": "LoadState",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": "(*PersistedState, error)"
+    },
+    {
+      "name": "RecordLoss",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": ""
+    },
+    {
+      "name": "RecordWin",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": ""
+    },
+    {
+      "name": "SaveState",
+      "params": "",
+      "receiver": "CapitalPhaseController",
+      "results": "(error)"
+    },
+    {
+      "name": "UpdateMetrics",
+      "params": "(rollingSharpe,maxDrawdown float64)",
+      "receiver": "CapitalPhaseController",
+      "results": ""
+    },
+    {
+      "name": "CheckModeTransition",
+      "params": "(input PostTradeInput, currentMode string)",
+      "results": "(string, string)"
+    },
+    {
+      "name": "Check",
+      "params": "(dayReturn float64)",
+      "receiver": "CircuitBreaker",
+      "results": "(tripped bool, reason string)"
+    },
+    {
+      "name": "ConsecutiveLosses",
+      "params": "",
+      "receiver": "CircuitBreaker",
+      "results": "(int)"
+    },
+    {
+      "name": "IsTripped",
+      "params": "",
+      "receiver": "CircuitBreaker",
+      "results": "(bool)"
+    },
+    {
+      "name": "Reset",
+      "params": "",
+      "receiver": "CircuitBreaker",
+      "results": ""
+    },
+    {
+      "name": "TrippedAt",
+      "params": "",
+      "receiver": "CircuitBreaker",
+      "results": "(time.Time)"
+    },
+    {
+      "name": "WithAutoResetAfter",
+      "params": "(d time.Duration)",
+      "receiver": "CircuitBreaker",
+      "results": "(*CircuitBreaker)"
+    },
+    {
+      "name": "ClaytonLowerTailDep",
+      "params": "(theta float64)",
+      "results": "(float64)"
+    },
+    {
+      "name": "ComputeHedgeRatio",
+      "params": "(h HedgeRatio, in HedgeRatioInputs)",
+      "results": "(float64)"
+    },
+    {
+      "name": "ComputeRiskSnapshot",
+      "params": "(dailyReturns []float64, portfolioValues []float64)",
+      "results": "(domain.RiskSnapshot)"
+    },
+    {
+      "name": "ComputeSpillover",
+      "params": "(returns [][]float64, vars []string, horizon int)",
+      "results": "(*SpilloverResult, error)"
+    },
+    {
+      "name": "Assess",
+      "params": "",
+      "receiver": "CycleTrackerRiskProvider",
+      "results": "(*IndustryRiskAssessment, error)"
+    },
+    {
+      "name": "Fit",
+      "params": "(returnsA,returnsB []float64)",
+      "receiver": "DCCGARCH",
+      "results": "(*DCCResult, error)"
+    },
+    {
+      "name": "String",
+      "params": "",
+      "receiver": "DrawdownAction",
+      "results": "(string)"
+    },
+    {
+      "name": "EnrichDecision",
+      "params": "(ctx context.Context, decision interface{})",
+      "results": "(string)"
+    },
+    {
+      "name": "EstimateClaytonTheta",
+      "params": "(u,v []float64)",
+      "results": "(float64, error)"
+    },
+    {
+      "name": "EstimateGumbelTheta",
+      "params": "(u,v []float64)",
+      "results": "(float64, error)"
+    },
+    {
+      "name": "GumbelUpperTailDep",
+      "params": "(theta float64)",
+      "results": "(float64)"
+    },
+    {
+      "name": "Evaluate",
+      "params": "(_ context.Context, positions []InTradePosition, histVol,currentVol float64, dailyLossPct float64, mode string)",
+      "receiver": "InTradeGate",
+      "results": "(*RiskDecision, error)"
+    },
+    {
+      "name": "CalculatePortfolioAdjustment",
+      "params": "(currentExposure float64, decision *MacroAwareDrawdownDecision)",
+      "receiver": "MacroAwareDrawdownEngine",
+      "results": "(targetExposure float64, adjustment float64)"
+    },
+    {
+      "name": "Evaluate",
+      "params": "(macroAssessment *narrative.MacroRiskAssessment, structuralAssessment *narrative.StructuralTrendAssessment)",
+      "receiver": "MacroAwareDrawdownEngine",
+      "results": "(*MacroAwareDrawdownDecision)"
+    },
+    {
+      "name": "EvaluateWithIndustry",
+      "params": "(macroAssessment *narrative.MacroRiskAssessment, structuralAssessment *narrative.StructuralTrendAssessment, industryAssessment *IndustryRiskAssessment)",
+      "receiver": "MacroAwareDrawdownEngine",
+      "results": "(*MacroAwareDrawdownDecision, *DrawdownBreakdown)"
+    },
+    {
+      "name": "EvaluateWithPortfolio",
+      "params": "(macroAssessment *narrative.MacroRiskAssessment, structuralAssessment *narrative.StructuralTrendAssessment, industryAssessment *IndustryRiskAssessment, portfolioProvider PortfolioRiskProvider)",
+      "receiver": "MacroAwareDrawdownEngine",
+      "results": "(*MacroAwareDrawdownDecision, *DrawdownBreakdown)"
+    },
+    {
+      "name": "GetPositionSizeAdjustment",
+      "params": "(decision *MacroAwareDrawdownDecision)",
+      "receiver": "MacroAwareDrawdownEngine",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetSectorConstraints",
+      "params": "(macro *narrative.MacroRiskAssessment)",
+      "receiver": "MacroAwareDrawdownEngine",
+      "results": "(map[string]float64)"
+    },
+    {
+      "name": "ShouldHaltTrading",
+      "params": "(decision *MacroAwareDrawdownDecision)",
+      "receiver": "MacroAwareDrawdownEngine",
+      "results": "(bool)"
+    },
+    {
+      "name": "NewApprovalWorkflow",
+      "params": "(dir string)",
+      "results": "(*ApprovalWorkflow, error)"
+    },
+    {
+      "name": "NewAuditSubscriber",
+      "params": "(bus *eventbus.ChannelEventBus)",
+      "results": "(*AuditSubscriber)"
+    },
+    {
+      "name": "NewCapitalPhaseController",
+      "params": "(cfg domain.CapitalPhaseConfig)",
+      "results": "(*CapitalPhaseController)"
+    },
+    {
+      "name": "NewCapitalPhaseControllerWithPersistence",
+      "params": "(cfg domain.CapitalPhaseConfig, persistDir string)",
+      "results": "(*CapitalPhaseController)"
+    },
+    {
+      "name": "NewCircuitBreaker",
+      "params": "(maxDailyLossPct float64, maxConsecutiveLossDays int)",
+      "results": "(*CircuitBreaker)"
+    },
+    {
+      "name": "NewCycleTrackerRiskProvider",
+      "params": "(tracker *industry.CycleTracker, sectorWeights map[string]float64)",
+      "results": "(*CycleTrackerRiskProvider)"
+    },
+    {
+      "name": "NewDefaultDrawdownLevels",
+      "params": "(cfg map[string]config.DrawdownLevel)",
+      "results": "(map[DrawdownAction]DrawdownLevel)"
+    },
+    {
+      "name": "NewInTradeGate",
+      "params": "",
+      "results": "(*InTradeGate)"
+    },
+    {
+      "name": "NewMacroAwareDrawdownEngine",
+      "params": "",
+      "results": "(*MacroAwareDrawdownEngine)"
+    },
+    {
+      "name": "NewMacroAwareDrawdownEngineFromParameters",
+      "params": "",
+      "results": "(*MacroAwareDrawdownEngine)"
+    },
+    {
+      "name": "NewMacroAwareDrawdownEngineWithConfig",
+      "params": "(cfg config.DrawdownConfig)",
+      "results": "(*MacroAwareDrawdownEngine)"
+    },
+    {
+      "name": "NewPostTradeGate",
+      "params": "",
+      "results": "(*PostTradeGate)"
+    },
+    {
+      "name": "NewPreTradeGate",
+      "params": "",
+      "results": "(*PreTradeGate)"
+    },
+    {
+      "name": "NewRiskGate",
+      "params": "(preTrade *PreTradeGate, inTrade *InTradeGate, postTrade *PostTradeGate)",
+      "results": "(*RiskGate)"
+    },
+    {
+      "name": "NewSpilloverIndex",
+      "params": "(variables []string)",
+      "results": "(*SpilloverIndex)"
+    },
+    {
+      "name": "NewVaRCalculator",
+      "params": "",
+      "results": "(*VaRCalculator)"
+    },
+    {
+      "name": "Evaluate",
+      "params": "(input PostTradeInput, currentMode string)",
+      "receiver": "PostTradeGate",
+      "results": "(*RiskDecision, error)"
+    },
+    {
+      "name": "Check",
+      "params": "(_ context.Context, order OrderIntent, pf PortfolioState, mode string)",
+      "receiver": "PreTradeGate",
+      "results": "(*RiskDecision, error)"
+    },
+    {
+      "name": "MaxCorrelation",
+      "params": "",
+      "receiver": "PreTradeGate",
+      "results": "(float64)"
+    },
+    {
+      "name": "MaxOpenPositions",
+      "params": "",
+      "receiver": "PreTradeGate",
+      "results": "(int)"
+    },
+    {
+      "name": "MaxPositionPct",
+      "params": "",
+      "receiver": "PreTradeGate",
+      "results": "(float64)"
+    },
+    {
+      "name": "MaxSectorPct",
+      "params": "",
+      "receiver": "PreTradeGate",
+      "results": "(float64)"
+    },
+    {
+      "name": "MinCashBuffer",
+      "params": "",
+      "receiver": "PreTradeGate",
+      "results": "(float64)"
+    },
+    {
+      "name": "SetRSITwScore",
+      "params": "(score float64)",
+      "receiver": "PreTradeGate",
+      "results": ""
+    },
+    {
+      "name": "VarLimitPct",
+      "params": "",
+      "receiver": "PreTradeGate",
+      "results": "(float64)"
+    },
+    {
+      "name": "WithMaturityTracker",
+      "params": "(mt *domain.MaturityTracker)",
+      "receiver": "PreTradeGate",
+      "results": "(*PreTradeGate)"
+    },
+    {
+      "name": "InTradeCheck",
+      "params": "(ctx context.Context, positions []InTradePosition, histVol,currentVol float64, dailyLossPct float64)",
+      "receiver": "RiskGate",
+      "results": "(*RiskDecision, error)"
+    },
+    {
+      "name": "LastCalibrationReport",
+      "params": "",
+      "receiver": "RiskGate",
+      "results": "(*CalibrationReport)"
+    },
+    {
+      "name": "LastDecision",
+      "params": "",
+      "receiver": "RiskGate",
+      "results": "(RiskDecision)"
+    },
+    {
+      "name": "Mode",
+      "params": "",
+      "receiver": "RiskGate",
+      "results": "(RiskGateMode)"
+    },
+    {
+      "name": "PostTradeCheck",
+      "params": "(ctx context.Context, input PostTradeInput)",
+      "receiver": "RiskGate",
+      "results": "(*RiskDecision, error)"
+    },
+    {
+      "name": "PreTradeCheck",
+      "params": "(ctx context.Context, order OrderIntent, pf PortfolioState)",
+      "receiver": "RiskGate",
+      "results": "(*RiskDecision, error)"
+    },
+    {
+      "name": "SelfCalibrate",
+      "params": "(ctx context.Context, provider CalibrationProvider, lookback int)",
+      "receiver": "RiskGate",
+      "results": "(*CalibrationReport, error)"
+    },
+    {
+      "name": "SetLastCalibration",
+      "params": "(report *CalibrationReport)",
+      "receiver": "RiskGate",
+      "results": ""
+    },
+    {
+      "name": "SetMode",
+      "params": "(mode RiskGateMode)",
+      "receiver": "RiskGate",
+      "results": ""
+    },
+    {
+      "name": "SetPreTradeRSITwScore",
+      "params": "(score float64)",
+      "receiver": "RiskGate",
+      "results": ""
+    },
+    {
+      "name": "Subscribe",
+      "params": "(fn func(RiskDecision))",
+      "receiver": "RiskGate",
+      "results": ""
+    },
+    {
+      "name": "WithMaturityTracker",
+      "params": "(mt *domain.MaturityTracker)",
+      "receiver": "RiskGate",
+      "results": "(*RiskGate)"
+    },
+    {
+      "name": "TestGrangerCausality",
+      "params": "(x,y []float64, maxLag int)",
+      "results": "(*CausalityResult, error)"
+    },
+    {
+      "name": "ComputeComponentVaR",
+      "params": "(returns map[string][]float64, weights map[string]float64)",
+      "receiver": "VaRCalculator",
+      "results": "([]ComponentVaRItem)"
+    },
+    {
+      "name": "ComputeRiskSnapshot",
+      "params": "(dailyReturns []float64, portfolioValues []float64)",
+      "receiver": "VaRCalculator",
+      "results": "(domain.RiskSnapshot)"
+    },
+    {
+      "name": "Level",
+      "params": "",
+      "receiver": "Verdict",
+      "results": "(VerdictLevel)"
+    }
+  ],
+  "package": "risk",
+  "types": [
+    {
+      "kind": "alias",
+      "name": "ActionType"
+    },
+    {
+      "fields": [
+        "ID string",
+        "Type string",
+        "Status ApprovalStatus",
+        "RequestedBy string",
+        "Reason string",
+        "ApprovedBy string",
+        "Note string",
+        "CreatedAt time.Time",
+        "UpdatedAt time.Time"
+      ],
+      "kind": "struct",
+      "name": "ApprovalRequest"
+    },
+    {
+      "kind": "alias",
+      "name": "ApprovalStatus"
+    },
+    {
+      "fields": [
+        "dir string"
+      ],
+      "kind": "struct",
+      "name": "ApprovalWorkflow"
+    },
+    {
+      "fields": [
+        "bus *eventbus.ChannelEventBus",
+        "ledgerDir string",
+        "mu sync.RWMutex",
+        "sessionID string",
+        "persistMu sync.Mutex"
+      ],
+      "kind": "struct",
+      "name": "AuditSubscriber"
+    },
+    {
+      "kind": "interface",
+      "name": "CalibrationProvider"
+    },
+    {
+      "fields": [
+        "Timestamp time.Time",
+        "SessionSpan string",
+        "Evaluated int",
+        "Changes []ParameterChange",
+        "Errors []string",
+        "Verdict string",
+        "Summary string"
+      ],
+      "kind": "struct",
+      "name": "CalibrationReport"
+    },
+    {
+      "fields": [
+        "config domain.CapitalPhaseConfig",
+        "snapshot domain.CapitalSnapshot",
+        "persistPath string"
+      ],
+      "kind": "struct",
+      "name": "CapitalPhaseController"
+    },
+    {
+      "fields": [
+        "Cause string",
+        "BestLag int",
+        "FStatistic float64",
+        "PValue float64",
+        "Bidirectional bool"
+      ],
+      "kind": "struct",
+      "name": "CausalityResult"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "maxDailyLossPct float64",
+        "maxConsecutiveLossDays int",
+        "consecutiveLosses int",
+        "tripped bool",
+        "trippedAt time.Time",
+        "autoResetAfter time.Duration"
+      ],
+      "kind": "struct",
+      "name": "CircuitBreaker"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Weight float64",
+        "StandaloneVaR float64",
+        "ComponentVaR float64",
+        "PctContribution float64"
+      ],
+      "kind": "struct",
+      "name": "ComponentVaRItem"
+    },
+    {
+      "fields": [
+        "tracker *industry.CycleTracker",
+        "sectorWeights map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "CycleTrackerRiskProvider"
+    },
+    {
+      "fields": [
+        "omegaA, alphaA, betaA float64",
+        "omegaB, alphaB, betaB float64",
+        "dccA, dccB float64",
+        "meanA, meanB float64"
+      ],
+      "kind": "struct",
+      "name": "DCCGARCH"
+    },
+    {
+      "fields": [
+        "SigmaA2 []float64",
+        "SigmaB2 []float64",
+        "Rho []float64",
+        "StdResidA []float64",
+        "StdResidB []float64"
+      ],
+      "kind": "struct",
+      "name": "DCCResult"
+    },
+    {
+      "kind": "alias",
+      "name": "DrawdownAction"
+    },
+    {
+      "fields": [
+        "Steps []DrawdownBreakdownStep",
+        "FinalAction DrawdownAction",
+        "FinalPercentage float64",
+        "FinalMaxExposure float64",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "DrawdownBreakdown"
+    },
+    {
+      "fields": [
+        "Source string",
+        "Rule string",
+        "Action string",
+        "Confidence float64"
+      ],
+      "kind": "struct",
+      "name": "DrawdownBreakdownStep"
+    },
+    {
+      "fields": [
+        "Action DrawdownAction",
+        "Percentage float64",
+        "MaxExposure float64"
+      ],
+      "kind": "struct",
+      "name": "DrawdownLevel"
+    },
+    {
+      "fields": [
+        "Base float64",
+        "StressMult float64",
+        "CrisisMult float64",
+        "FlowFactor float64"
+      ],
+      "kind": "struct",
+      "name": "HedgeRatio"
+    },
+    {
+      "fields": [
+        "VIX float64",
+        "VIXBaseline float64",
+        "ForeignFlow float64",
+        "VIXRegime string"
+      ],
+      "kind": "struct",
+      "name": "HedgeRatioInputs"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Side string",
+        "Notional float64",
+        "Sector string",
+        "ForwardReturn float64",
+        "Hit bool",
+        "WasBlocked bool"
+      ],
+      "kind": "struct",
+      "name": "HistoricOrder"
+    },
+    {
+      "fields": [
+        "stopLossPct float64",
+        "takeProfitPct float64",
+        "trailingStopATRMult float64",
+        "volSpikeMult float64",
+        "circuitBreakerLossPct float64"
+      ],
+      "kind": "struct",
+      "name": "InTradeGate"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "EntryPrice float64",
+        "CurrentPrice float64",
+        "Quantity int",
+        "UnrealizedPnLPct float64",
+        "ATR float64",
+        "HighestPrice float64"
+      ],
+      "kind": "struct",
+      "name": "InTradePosition"
+    },
+    {
+      "fields": [
+        "TotalIndustryCount int",
+        "RecessionIndustryCount int",
+        "ExpansionIndustryCount int",
+        "WeightedCycleScore float64",
+        "TopRiskIndustries []IndustryRiskItem",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "IndustryRiskAssessment"
+    },
+    {
+      "fields": [
+        "IndustryID string",
+        "BusinessCycle industry.CyclePhase",
+        "Confidence float64",
+        "PhaseScore float64",
+        "Weight float64"
+      ],
+      "kind": "struct",
+      "name": "IndustryRiskItem"
+    },
+    {
+      "kind": "interface",
+      "name": "IndustryRiskProvider"
+    },
+    {
+      "fields": [
+        "Action DrawdownAction",
+        "Percentage float64",
+        "MaxExposure float64",
+        "Rationale string",
+        "StructuralOverride bool",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "MacroAwareDrawdownDecision"
+    },
+    {
+      "fields": [
+        "levels map[DrawdownAction]DrawdownLevel",
+        "cfg config.DrawdownConfig"
+      ],
+      "kind": "struct",
+      "name": "MacroAwareDrawdownEngine"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Side string",
+        "Quantity int",
+        "Price float64",
+        "Notional float64",
+        "AgentID string",
+        "Sector string",
+        "Conviction int"
+      ],
+      "kind": "struct",
+      "name": "OrderIntent"
+    },
+    {
+      "fields": [
+        "Name string",
+        "Before float64",
+        "After float64",
+        "Rationale string",
+        "Confidence string"
+      ],
+      "kind": "struct",
+      "name": "ParameterChange"
+    },
+    {
+      "fields": [
+        "Config domain.CapitalPhaseConfig",
+        "Snapshot domain.CapitalSnapshot"
+      ],
+      "kind": "struct",
+      "name": "PersistedState"
+    },
+    {
+      "fields": [
+        "ConcentrationScore float64",
+        "SectorExposure map[string]float64",
+        "FactorExposure map[string]float64",
+        "TotalRiskScore float64"
+      ],
+      "kind": "struct",
+      "name": "PortfolioRiskAssessment"
+    },
+    {
+      "kind": "interface",
+      "name": "PortfolioRiskProvider"
+    },
+    {
+      "fields": [
+        "TotalValue float64",
+        "Cash float64",
+        "SectorExposure map[string]float64",
+        "Positions map[string]float64",
+        "Var95 float64",
+        "MaxDrawdown float64"
+      ],
+      "kind": "struct",
+      "name": "PortfolioState"
+    },
+    {
+      "fields": [
+        "maxDrawdownHaltPct float64",
+        "maxDrawdownDefensivePct float64",
+        "minRollingSharpe float64",
+        "consecutiveLossDays int"
+      ],
+      "kind": "struct",
+      "name": "PostTradeGate"
+    },
+    {
+      "fields": [
+        "CurrentDrawdownPct float64",
+        "RollingSharpe float64",
+        "ConsecutiveLosses int"
+      ],
+      "kind": "struct",
+      "name": "PostTradeInput"
+    },
+    {
+      "fields": [
+        "maxPositionPct float64",
+        "maxSectorPct float64",
+        "varLimitPct float64",
+        "minCashBuffer float64",
+        "maxCorrelation float64",
+        "maxOpenPositions int",
+        "maturityTracker *domain.MaturityTracker",
+        "rsiTwScore float64"
+      ],
+      "kind": "struct",
+      "name": "PreTradeGate"
+    },
+    {
+      "fields": [
+        "Type ActionType",
+        "TargetPct float64",
+        "Symbols []string",
+        "Sectors []string",
+        "Description string"
+      ],
+      "kind": "struct",
+      "name": "RiskAction"
+    },
+    {
+      "fields": [
+        "Phase RiskPhase",
+        "Verdict Verdict",
+        "Reason string",
+        "Action RiskAction",
+        "Details []RuleResult",
+        "Mode string",
+        "Symbol string",
+        "Recorded time.Time",
+        "ConfidenceCommentary string"
+      ],
+      "kind": "struct",
+      "name": "RiskDecision"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "mode RiskGateMode",
+        "preTrade *PreTradeGate",
+        "inTrade *InTradeGate",
+        "postTrade *PostTradeGate",
+        "subs []func(RiskDecision)",
+        "lastDecision RiskDecision",
+        "lastCalibration *CalibrationReport"
+      ],
+      "kind": "struct",
+      "name": "RiskGate"
+    },
+    {
+      "kind": "alias",
+      "name": "RiskGateMode"
+    },
+    {
+      "kind": "alias",
+      "name": "RiskPhase"
+    },
+    {
+      "fields": [
+        "RuleName string",
+        "Passed bool",
+        "CurrentValue float64",
+        "Threshold float64",
+        "Severity string",
+        "Message string"
+      ],
+      "kind": "struct",
+      "name": "RuleResult"
+    },
+    {
+      "fields": [
+        "SessionID string",
+        "PortfolioValue float64",
+        "EndingCash float64",
+        "SectorExposures map[string]float64",
+        "PositionValues map[string]float64",
+        "Orders []HistoricOrder",
+        "ForwardReturnAvg float64",
+        "ForwardReturnStdDev float64",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "SessionOutcome"
+    },
+    {
+      "fields": [
+        "horizon int",
+        "varLags int",
+        "variables []string"
+      ],
+      "kind": "struct",
+      "name": "SpilloverIndex"
+    },
+    {
+      "fields": [
+        "FromTo map[string]map[string]float64",
+        "FromOthers map[string]float64",
+        "ToOthers map[string]float64",
+        "NetSpillover map[string]float64",
+        "Total float64"
+      ],
+      "kind": "struct",
+      "name": "SpilloverResult"
+    },
+    {
+      "fields": [
+        "primaryConfidence float64",
+        "secondaryConfidence float64"
+      ],
+      "kind": "struct",
+      "name": "VaRCalculator"
+    },
+    {
+      "kind": "alias",
+      "name": "Verdict"
+    },
+    {
+      "kind": "alias",
+      "name": "VerdictLevel"
+    }
+  ],
+  "vars": [
+    {
+      "name": "ConfidenceCommentary",
+      "type": "func(ctx context.Context, decision interface{})(string, error)"
+    },
+    {
+      "name": "DefaultDrawdownLevels",
+      "type": ""
+    },
+    {
+      "name": "PerformanceForensics",
+      "type": "func(ctx context.Context, snapshot interface{})(string, error)"
+    }
+  ]
+}
