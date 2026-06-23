@@ -1,0 +1,2957 @@
+{
+  "consts": [
+    {
+      "name": "ActionIncrease",
+      "value": ""
+    },
+    {
+      "name": "ActionMaintain",
+      "value": ""
+    },
+    {
+      "name": "ActionRebalance",
+      "value": ""
+    },
+    {
+      "name": "ActionReduce",
+      "type": "AdjustmentAction",
+      "value": "iota"
+    },
+    {
+      "name": "AlertConcentration",
+      "value": ""
+    },
+    {
+      "name": "AlertDailyLoss",
+      "value": ""
+    },
+    {
+      "name": "AlertDrawdown",
+      "type": "AlertType",
+      "value": "iota"
+    },
+    {
+      "name": "AlertPositionSize",
+      "value": ""
+    },
+    {
+      "name": "AlertVolatility",
+      "value": ""
+    },
+    {
+      "name": "BottomQuartileMultiplier",
+      "value": "0.95"
+    },
+    {
+      "name": "DailyAdjustmentCooldown",
+      "value": "\u003cunsupported\u003e"
+    },
+    {
+      "name": "DarwinianNeutralWeight",
+      "value": "1.0"
+    },
+    {
+      "name": "DarwinianWeightMax",
+      "value": "2.5"
+    },
+    {
+      "name": "DarwinianWeightMin",
+      "value": "0.3"
+    },
+    {
+      "name": "FactorAgent",
+      "type": "FactorType",
+      "value": "\"agent\""
+    },
+    {
+      "name": "FactorETF",
+      "type": "FactorType",
+      "value": "\"etf\""
+    },
+    {
+      "name": "FactorIndustryCycle",
+      "type": "FactorType",
+      "value": "\"industry_cycle\""
+    },
+    {
+      "name": "FactorInstSent",
+      "type": "FactorType",
+      "value": "\"institutional_sentiment\""
+    },
+    {
+      "name": "FactorLinkage",
+      "type": "FactorType",
+      "value": "\"linkage\""
+    },
+    {
+      "name": "FactorLiquidity",
+      "type": "FactorType",
+      "value": "\"liquidity\""
+    },
+    {
+      "name": "FactorMomentum",
+      "type": "FactorType",
+      "value": "\"momentum\""
+    },
+    {
+      "name": "FactorNarrative",
+      "type": "FactorType",
+      "value": "\"narrative\""
+    },
+    {
+      "name": "FactorPreciousMetals",
+      "type": "FactorType",
+      "value": "\"precious_metals\""
+    },
+    {
+      "name": "FactorQuality",
+      "type": "FactorType",
+      "value": "\"quality\""
+    },
+    {
+      "name": "FactorTSMC",
+      "type": "FactorType",
+      "value": "\"tsmc\""
+    },
+    {
+      "name": "FactorValue",
+      "type": "FactorType",
+      "value": "\"value\""
+    },
+    {
+      "name": "FrequencyPerDay",
+      "value": "shared.FrequencyPerDay"
+    },
+    {
+      "name": "FrequencyPerOutcome",
+      "value": "shared.FrequencyPerOutcome"
+    },
+    {
+      "name": "FrequencyTWSE",
+      "value": "shared.FrequencyTWSE"
+    },
+    {
+      "name": "HealthStatusDegraded",
+      "type": "AgentHealthStatus",
+      "value": "\"degraded\""
+    },
+    {
+      "name": "HealthStatusHealthy",
+      "type": "AgentHealthStatus",
+      "value": "\"healthy\""
+    },
+    {
+      "name": "HealthStatusMuted",
+      "type": "AgentHealthStatus",
+      "value": "\"muted\""
+    },
+    {
+      "name": "HealthStatusRecovering",
+      "type": "AgentHealthStatus",
+      "value": "\"recovering\""
+    },
+    {
+      "name": "LevelCritical",
+      "value": ""
+    },
+    {
+      "name": "LevelEmergency",
+      "value": ""
+    },
+    {
+      "name": "LevelInfo",
+      "type": "AlertLevel",
+      "value": "iota"
+    },
+    {
+      "name": "LevelWarning",
+      "value": ""
+    },
+    {
+      "name": "MinMax",
+      "value": ""
+    },
+    {
+      "name": "Percentile",
+      "value": ""
+    },
+    {
+      "name": "SectorConsumer",
+      "type": "Sector",
+      "value": "\"consumer\""
+    },
+    {
+      "name": "SectorElectronics",
+      "type": "Sector",
+      "value": "\"electronics\""
+    },
+    {
+      "name": "SectorEnergy",
+      "type": "Sector",
+      "value": "\"energy\""
+    },
+    {
+      "name": "SectorFinancials",
+      "type": "Sector",
+      "value": "\"financials\""
+    },
+    {
+      "name": "SectorIndustrial",
+      "type": "Sector",
+      "value": "\"industrial\""
+    },
+    {
+      "name": "SectorOther",
+      "type": "Sector",
+      "value": "\"other\""
+    },
+    {
+      "name": "SectorSemiconductor",
+      "type": "Sector",
+      "value": "\"semiconductor\""
+    },
+    {
+      "name": "SectorShipping",
+      "type": "Sector",
+      "value": "\"shipping\""
+    },
+    {
+      "name": "SplitChronological",
+      "type": "SplitMethod",
+      "value": "\"chronological\""
+    },
+    {
+      "name": "SplitWalkForward",
+      "type": "SplitMethod",
+      "value": "\"walk_forward\""
+    },
+    {
+      "name": "StyleGrowth",
+      "type": "Style",
+      "value": "\"growth\""
+    },
+    {
+      "name": "StyleMomentum",
+      "type": "Style",
+      "value": "\"momentum\""
+    },
+    {
+      "name": "StyleQuality",
+      "type": "Style",
+      "value": "\"quality\""
+    },
+    {
+      "name": "StyleValue",
+      "type": "Style",
+      "value": "\"value\""
+    },
+    {
+      "name": "TopQuartileMultiplier",
+      "value": "1.05"
+    },
+    {
+      "name": "ZScore",
+      "type": "NormalizationMethod",
+      "value": "iota"
+    }
+  ],
+  "funcs": [
+    {
+      "name": "EvaluateAgentBreakers",
+      "params": "",
+      "receiver": "AgentHealthManager",
+      "results": ""
+    },
+    {
+      "name": "GetHealth",
+      "params": "(agentID string)",
+      "receiver": "AgentHealthManager",
+      "results": "(*AgentHealth)"
+    },
+    {
+      "name": "GetMutedAgents",
+      "params": "",
+      "receiver": "AgentHealthManager",
+      "results": "([]*AgentHealth)"
+    },
+    {
+      "name": "IsAgentHealthy",
+      "params": "(agentID string)",
+      "receiver": "AgentHealthManager",
+      "results": "(bool)"
+    },
+    {
+      "name": "RecordOutcome",
+      "params": "(agentID string, isWin bool, sharpe float64, hitRate float64)",
+      "receiver": "AgentHealthManager",
+      "results": ""
+    },
+    {
+      "name": "String",
+      "params": "",
+      "receiver": "AgentHealthManager",
+      "results": "(string)"
+    },
+    {
+      "name": "WithEventBus",
+      "params": "(eb *eventbus.ChannelEventBus)",
+      "receiver": "AgentHealthManager",
+      "results": "(*AgentHealthManager)"
+    },
+    {
+      "name": "WithParameters",
+      "params": "(p *RuntimeParameters)",
+      "receiver": "AgentHealthManager",
+      "results": "(*AgentHealthManager)"
+    },
+    {
+      "name": "LoadAll",
+      "params": "",
+      "receiver": "AgentHealthStore",
+      "results": "(map[string]*AgentHealth, error)"
+    },
+    {
+      "name": "Save",
+      "params": "(h *AgentHealth)",
+      "receiver": "AgentHealthStore",
+      "results": "(error)"
+    },
+    {
+      "name": "CalculateStyleExposures",
+      "params": "(positions []PositionWithStyle, totalValue float64)",
+      "results": "(StyleExposures)"
+    },
+    {
+      "name": "CalibrateWeights",
+      "params": "(ctx context.Context, orders []CalibratedOrder)",
+      "results": "(*WeightCalibrationReport, error)"
+    },
+    {
+      "name": "Allocate",
+      "params": "(phaseConfig domain.CapitalPhaseConfig, recommendations []domain.Recommendation, totalCapital float64, reserveFraction float64)",
+      "receiver": "CapitalAllocator",
+      "results": "(CapitalAllocation)"
+    },
+    {
+      "name": "ReallocateWithTax",
+      "params": "(phaseConfig domain.CapitalPhaseConfig, recommendations []domain.Recommendation, totalCapital float64, reserveFraction float64, taxSnapshots []domain.TaxSnapshot)",
+      "receiver": "CapitalAllocator",
+      "results": "(CapitalAllocation)"
+    },
+    {
+      "name": "ComputeSharpe",
+      "params": "(returns []float64, cfg SharpeConfig)",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetStats",
+      "params": "(agentID string)",
+      "receiver": "ConvictionNormalizer",
+      "results": "(count int, mean,stdDev,min,max float64)"
+    },
+    {
+      "name": "Normalize",
+      "params": "(agentID string, conviction int, method NormalizationMethod)",
+      "receiver": "ConvictionNormalizer",
+      "results": "(float64)"
+    },
+    {
+      "name": "RecordConviction",
+      "params": "(agentID string, conviction int)",
+      "receiver": "ConvictionNormalizer",
+      "results": ""
+    },
+    {
+      "name": "AppendSnapshot",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(error)"
+    },
+    {
+      "name": "ApplyDarwinianWeightsWithEvents",
+      "params": "(recommendations []domain.Recommendation)",
+      "receiver": "DarwinianWeightManager",
+      "results": "([]domain.Recommendation, []ConvictionClampingEvent)"
+    },
+    {
+      "name": "GenerateReport",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(*DarwinianWeightReport)"
+    },
+    {
+      "name": "GetAgentWeightData",
+      "params": "(agentID string)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(*DarwinianAgentWeight, bool)"
+    },
+    {
+      "name": "GetAllAgentWeightData",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "([]*DarwinianAgentWeight)"
+    },
+    {
+      "name": "GetAllWeights",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(map[string]float64)"
+    },
+    {
+      "name": "GetAverageWeight",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetBottomPerformers",
+      "params": "(n int)",
+      "receiver": "DarwinianWeightManager",
+      "results": "([]*DarwinianAgentWeight)"
+    },
+    {
+      "name": "GetTopPerformers",
+      "params": "(n int)",
+      "receiver": "DarwinianWeightManager",
+      "results": "([]*DarwinianAgentWeight)"
+    },
+    {
+      "name": "GetWeight",
+      "params": "(agentID string)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(float64)"
+    },
+    {
+      "name": "InitializeFromRegistry",
+      "params": "(registry domain.AgentRegistry)",
+      "receiver": "DarwinianWeightManager",
+      "results": ""
+    },
+    {
+      "name": "Load",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(error)"
+    },
+    {
+      "name": "LoadHistory",
+      "params": "(limit int)",
+      "receiver": "DarwinianWeightManager",
+      "results": "([]DarwinianSnapshot, error)"
+    },
+    {
+      "name": "PerformDailyAdjustment",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(map[string]float64, []ClampingEvent)"
+    },
+    {
+      "name": "RecordOutcome",
+      "params": "(agentID string, forwardReturn float64, isHit bool)",
+      "receiver": "DarwinianWeightManager",
+      "results": ""
+    },
+    {
+      "name": "RemoveAgent",
+      "params": "(agentID string)",
+      "receiver": "DarwinianWeightManager",
+      "results": ""
+    },
+    {
+      "name": "Reset",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": ""
+    },
+    {
+      "name": "ResetAgent",
+      "params": "(agentID string)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(bool)"
+    },
+    {
+      "name": "Save",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(error)"
+    },
+    {
+      "name": "SaveReport",
+      "params": "(path string)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(error)"
+    },
+    {
+      "name": "SetWeight",
+      "params": "(agentID string, weight float64)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(float64, *ClampingEvent)"
+    },
+    {
+      "name": "WithEventBus",
+      "params": "(eb *eventbus.ChannelEventBus)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(*DarwinianWeightManager)"
+    },
+    {
+      "name": "WithHistoryPath",
+      "params": "(path string)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(*DarwinianWeightManager)"
+    },
+    {
+      "name": "WithMaturityTracker",
+      "params": "(mt *domain.MaturityTracker)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(*DarwinianWeightManager)"
+    },
+    {
+      "name": "WithParameters",
+      "params": "(p *RuntimeParameters)",
+      "receiver": "DarwinianWeightManager",
+      "results": "(*DarwinianWeightManager)"
+    },
+    {
+      "name": "DefaultAgentHealthConfig",
+      "params": "",
+      "results": "(AgentHealthConfig)"
+    },
+    {
+      "name": "DefaultConstraints",
+      "params": "",
+      "results": "(Constraints)"
+    },
+    {
+      "name": "DefaultDarwinianConfig",
+      "params": "",
+      "results": "(DarwinianConfig)"
+    },
+    {
+      "name": "DefaultRegimeConfigs",
+      "params": "",
+      "results": "(map[domain.Regime]RegimeConfig)"
+    },
+    {
+      "name": "DefaultRegimeThresholds",
+      "params": "",
+      "results": "(RegimeThresholds)"
+    },
+    {
+      "name": "DefaultRiskParameters",
+      "params": "",
+      "results": "(RiskParameters)"
+    },
+    {
+      "name": "DefaultRuntimeParameters",
+      "params": "",
+      "results": "(*RuntimeParameters)"
+    },
+    {
+      "name": "DefaultStressIndexConfig",
+      "params": "",
+      "results": "(StressIndexConfig)"
+    },
+    {
+      "name": "AddMetadata",
+      "params": "(symbol string, m ETFMetadata)",
+      "receiver": "ETFAnalyzer",
+      "results": ""
+    },
+    {
+      "name": "AllSymbols",
+      "params": "",
+      "receiver": "ETFAnalyzer",
+      "results": "([]string)"
+    },
+    {
+      "name": "CalculateETFScore",
+      "params": "(symbol string, quote domain.Quote)",
+      "receiver": "ETFAnalyzer",
+      "results": "(domain.FactorScoreItem)"
+    },
+    {
+      "name": "GetNAV",
+      "params": "(symbol string)",
+      "receiver": "ETFAnalyzer",
+      "results": "(float64)"
+    },
+    {
+      "name": "IsETF",
+      "params": "(symbol string)",
+      "receiver": "ETFAnalyzer",
+      "results": "(bool)"
+    },
+    {
+      "name": "LoadMetadata",
+      "params": "(data map[string]ETFMetadata)",
+      "receiver": "ETFAnalyzer",
+      "results": ""
+    },
+    {
+      "name": "RefreshNAV",
+      "params": "(symbol string, nav float64)",
+      "receiver": "ETFAnalyzer",
+      "results": "(bool)"
+    },
+    {
+      "name": "RefreshNAVFromFetcher",
+      "params": "(ctx context.Context, fetcher ETFNAVFetcher, force bool)",
+      "receiver": "ETFAnalyzer",
+      "results": "(int)"
+    },
+    {
+      "name": "SymbolsWithZeroNAV",
+      "params": "",
+      "receiver": "ETFAnalyzer",
+      "results": "([]string)"
+    },
+    {
+      "name": "UpdateNAVFromQuotes",
+      "params": "(quotes []domain.Quote)",
+      "receiver": "ETFAnalyzer",
+      "results": "(int)"
+    },
+    {
+      "name": "WithHistoricalPrices",
+      "params": "(hp *HistoricalPrices)",
+      "receiver": "ETFAnalyzer",
+      "results": "(*ETFAnalyzer)"
+    },
+    {
+      "name": "Convert",
+      "params": "(snap MacroDataSnapshot)",
+      "receiver": "FactorBridge",
+      "results": "(FactorBridgeInput)"
+    },
+    {
+      "name": "SetCalculator",
+      "params": "(c *retail.Calculator)",
+      "receiver": "FactorBridge",
+      "results": ""
+    },
+    {
+      "name": "CalculateAllScores",
+      "params": "(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64, factorWeights map[FactorType]float64, bridgeInputs ...FactorBridgeInput)",
+      "receiver": "FactorEngine",
+      "results": "(map[FactorType]float64)"
+    },
+    {
+      "name": "CalculateAllScoresWithBreakdown",
+      "params": "(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64, factorWeights map[FactorType]float64, bridgeInputs ...FactorBridgeInput)",
+      "receiver": "FactorEngine",
+      "results": "(*domain.FactorScoreBreakdown, map[FactorType]float64)"
+    },
+    {
+      "name": "CalculateETFScore",
+      "params": "(symbol string, quote domain.Quote)",
+      "receiver": "FactorEngine",
+      "results": "(domain.FactorScoreItem)"
+    },
+    {
+      "name": "CalculateInstitutionalSentimentScore",
+      "params": "(input FactorBridgeInput)",
+      "receiver": "FactorEngine",
+      "results": "(domain.FactorScoreItem)"
+    },
+    {
+      "name": "CalculateLiquidityScore",
+      "params": "(symbol string, quotes map[string]domain.Quote)",
+      "receiver": "FactorEngine",
+      "results": "(domain.FactorScoreItem)"
+    },
+    {
+      "name": "CalculateMomentumScore",
+      "params": "(symbol string, quotes map[string]domain.Quote)",
+      "receiver": "FactorEngine",
+      "results": "(float64)"
+    },
+    {
+      "name": "CalculatePreciousMetalsScore",
+      "params": "(ctx context.Context, symbol string, quotes map[string]domain.Quote)",
+      "receiver": "FactorEngine",
+      "results": "(domain.FactorScoreItem)"
+    },
+    {
+      "name": "CalculateQualityScore",
+      "params": "(symbol string, quotes map[string]domain.Quote)",
+      "receiver": "FactorEngine",
+      "results": "(float64)"
+    },
+    {
+      "name": "CalculateValueScore",
+      "params": "(symbol string, quotes map[string]domain.Quote)",
+      "receiver": "FactorEngine",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetETFAnalyzer",
+      "params": "",
+      "receiver": "FactorEngine",
+      "results": "(*ETFAnalyzer)"
+    },
+    {
+      "name": "IsPreciousMetal",
+      "params": "(symbol string)",
+      "receiver": "FactorEngine",
+      "results": "(bool)"
+    },
+    {
+      "name": "RefreshETFNAV",
+      "params": "(ctx context.Context, provider QuoteProvider)",
+      "receiver": "FactorEngine",
+      "results": "(int)"
+    },
+    {
+      "name": "SetCycleCardBuilder",
+      "params": "(cb *industry.CycleStatusCardBuilder, ct *industry.CycleTracker)",
+      "receiver": "FactorEngine",
+      "results": ""
+    },
+    {
+      "name": "SetCycleTracker",
+      "params": "(ct *industry.CycleTracker)",
+      "receiver": "FactorEngine",
+      "results": ""
+    },
+    {
+      "name": "WithCorporateActionProvider",
+      "params": "(p CorporateActionProvider)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithETFAnalyzer",
+      "params": "(ea *ETFAnalyzer)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithFundamentalProvider",
+      "params": "(fp *FundamentalProvider)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithHistoricalPrices",
+      "params": "(hp *HistoricalPrices)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithIndustryCycleProvider",
+      "params": "(fn IndustryCycleProviderFunc)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithLinkageProvider",
+      "params": "(fn LinkageProviderFunc)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithNarrativeProvider",
+      "params": "(fn NarrativeProviderFunc)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithParameters",
+      "params": "(p *RuntimeParameters)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithPreciousMetalsProvider",
+      "params": "(fn PMContextProvider)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "WithTSMCProvider",
+      "params": "(fn TSMCProviderFunc)",
+      "receiver": "FactorEngine",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "AddEvent",
+      "params": "(event *narrative.NarrativeEvent)",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "ApplyStrategy",
+      "params": "(s *strategy.Strategy)",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "ApplyStrategyMix",
+      "params": "(mix strategy.StrategyMix, registry *strategy.Registry)",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "GetActiveEvents",
+      "params": "",
+      "receiver": "FactorWeightEngine",
+      "results": "([]*narrative.NarrativeEvent)"
+    },
+    {
+      "name": "GetWeights",
+      "params": "(regime string)",
+      "receiver": "FactorWeightEngine",
+      "results": "(map[FactorType]float64)"
+    },
+    {
+      "name": "OnRegimeChange",
+      "params": "(oldRegime,newRegime string, confidence float64)",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "RemoveEvent",
+      "params": "(id string)",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "SetBaseWeights",
+      "params": "(weights map[FactorType]float64)",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "SetRegime",
+      "params": "(r string)",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "Update",
+      "params": "",
+      "receiver": "FactorWeightEngine",
+      "results": ""
+    },
+    {
+      "name": "WeightSource",
+      "params": "",
+      "receiver": "FactorWeightEngine",
+      "results": "(string)"
+    },
+    {
+      "name": "Get",
+      "params": "(symbol string)",
+      "receiver": "FundamentalProvider",
+      "results": "(FundamentalData)"
+    },
+    {
+      "name": "GetSector",
+      "params": "(symbol string)",
+      "receiver": "FundamentalProvider",
+      "results": "(string)"
+    },
+    {
+      "name": "HasData",
+      "params": "",
+      "receiver": "FundamentalProvider",
+      "results": "(bool)"
+    },
+    {
+      "name": "LoadFromJSON",
+      "params": "(path string)",
+      "receiver": "FundamentalProvider",
+      "results": "(error)"
+    },
+    {
+      "name": "SectorMedianPE",
+      "params": "(sector string)",
+      "receiver": "FundamentalProvider",
+      "results": "(float64)"
+    },
+    {
+      "name": "ActionEffects",
+      "params": "(symbol string)",
+      "receiver": "HistoricalPrices",
+      "results": "([]shared.ActionEffect)"
+    },
+    {
+      "name": "AdjustForCorporateActions",
+      "params": "(actions []domain.CorporateAction)",
+      "receiver": "HistoricalPrices",
+      "results": "(error)"
+    },
+    {
+      "name": "GetCloseSeries",
+      "params": "(symbol string)",
+      "receiver": "HistoricalPrices",
+      "results": "([]float64)"
+    },
+    {
+      "name": "LoadFromExtendedJSONL",
+      "params": "(path string)",
+      "receiver": "HistoricalPrices",
+      "results": "(error)"
+    },
+    {
+      "name": "MomentumReturn",
+      "params": "(symbol string, days int)",
+      "receiver": "HistoricalPrices",
+      "results": "(float64)"
+    },
+    {
+      "name": "SMA",
+      "params": "(symbol string, days int)",
+      "receiver": "HistoricalPrices",
+      "results": "(float64)"
+    },
+    {
+      "name": "Volatility",
+      "params": "(symbol string, days int)",
+      "receiver": "HistoricalPrices",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetAllocator",
+      "params": "",
+      "receiver": "IntegratedAllocator",
+      "results": "(*RegimeAllocator)"
+    },
+    {
+      "name": "GetCurrentAllocation",
+      "params": "",
+      "receiver": "IntegratedAllocator",
+      "results": "(StyleAllocation)"
+    },
+    {
+      "name": "GetDetector",
+      "params": "",
+      "receiver": "IntegratedAllocator",
+      "results": "(*RegimeDetector)"
+    },
+    {
+      "name": "UpdateAndDetect",
+      "params": "(indicators MarketIndicators)",
+      "receiver": "IntegratedAllocator",
+      "results": "(domain.Regime)"
+    },
+    {
+      "name": "IsOOSDivergent",
+      "params": "(isSharpe,oosSharpe,overfitThreshold float64)",
+      "results": "(bool)"
+    },
+    {
+      "name": "LoadOrdersFromJSONL",
+      "params": "(path string)",
+      "results": "([]CalibratedOrder, error)"
+    },
+    {
+      "name": "NewAgentHealthManager",
+      "params": "",
+      "results": "(*AgentHealthManager)"
+    },
+    {
+      "name": "NewAgentHealthManagerWithConfig",
+      "params": "(config AgentHealthConfig)",
+      "results": "(*AgentHealthManager)"
+    },
+    {
+      "name": "NewAgentHealthManagerWithStore",
+      "params": "(config AgentHealthConfig, store *AgentHealthStore)",
+      "results": "(*AgentHealthManager)"
+    },
+    {
+      "name": "NewAgentHealthStore",
+      "params": "(dir string)",
+      "results": "(*AgentHealthStore, error)"
+    },
+    {
+      "name": "NewCapitalAllocator",
+      "params": "",
+      "results": "(*CapitalAllocator)"
+    },
+    {
+      "name": "NewConvictionNormalizer",
+      "params": "",
+      "results": "(*ConvictionNormalizer)"
+    },
+    {
+      "name": "NewDarwinianWeightManager",
+      "params": "(configPath string)",
+      "results": "(*DarwinianWeightManager)"
+    },
+    {
+      "name": "NewETFAnalyzer",
+      "params": "",
+      "results": "(*ETFAnalyzer)"
+    },
+    {
+      "name": "NewFactorBridge",
+      "params": "",
+      "results": "(*FactorBridge)"
+    },
+    {
+      "name": "NewFactorEngine",
+      "params": "",
+      "results": "(*FactorEngine)"
+    },
+    {
+      "name": "NewFactorWeightEngine",
+      "params": "",
+      "results": "(*FactorWeightEngine)"
+    },
+    {
+      "name": "NewFundamentalProvider",
+      "params": "",
+      "results": "(*FundamentalProvider)"
+    },
+    {
+      "name": "NewHistoricalPrices",
+      "params": "",
+      "results": "(*HistoricalPrices)"
+    },
+    {
+      "name": "NewIntegratedAllocator",
+      "params": "",
+      "results": "(*IntegratedAllocator)"
+    },
+    {
+      "name": "NewOptimizer",
+      "params": "",
+      "results": "(*Optimizer)"
+    },
+    {
+      "name": "NewPortfolioRiskAdjuster",
+      "params": "(engine *risk.MacroAwareDrawdownEngine)",
+      "results": "(*PortfolioRiskAdjuster)"
+    },
+    {
+      "name": "NewPostTradeAnalyzer",
+      "params": "",
+      "results": "(*PostTradeAnalyzer)"
+    },
+    {
+      "name": "NewRegimeAllocator",
+      "params": "",
+      "results": "(*RegimeAllocator)"
+    },
+    {
+      "name": "NewRegimeDetector",
+      "params": "",
+      "results": "(*RegimeDetector)"
+    },
+    {
+      "name": "NewRiskManager",
+      "params": "",
+      "results": "(*RiskManager)"
+    },
+    {
+      "name": "NewSectorRotator",
+      "params": "",
+      "results": "(*SectorRotator)"
+    },
+    {
+      "name": "NewSectorRotatorWithConfig",
+      "params": "(cfg config.SectorRotationConfig)",
+      "results": "(*SectorRotator)"
+    },
+    {
+      "name": "NewSizer",
+      "params": "",
+      "results": "(*Sizer)"
+    },
+    {
+      "name": "NewSizerFromConfig",
+      "params": "(cfg *config.ParametersConfig)",
+      "results": "(*Sizer)"
+    },
+    {
+      "name": "NewStressIndexFromConfig",
+      "params": "(cfg StressIndexConfig)",
+      "results": "(*StressIndex)"
+    },
+    {
+      "name": "NewStyleRotationDetector",
+      "params": "",
+      "results": "(*StyleRotationDetector)"
+    },
+    {
+      "name": "NewStyleRotationStrategy",
+      "params": "",
+      "results": "(*StyleRotationStrategy)"
+    },
+    {
+      "name": "NewVolatilityManager",
+      "params": "(targetVol,maxVol float64)",
+      "results": "(*VolatilityManager)"
+    },
+    {
+      "name": "GetCovarianceMatrix",
+      "params": "(symbols []string)",
+      "receiver": "Optimizer",
+      "results": "([][]float64, []string)"
+    },
+    {
+      "name": "GetCrossMarketCorrelation",
+      "params": "",
+      "receiver": "Optimizer",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetEfficientFrontier",
+      "params": "",
+      "receiver": "Optimizer",
+      "results": "([]struct{float64; })"
+    },
+    {
+      "name": "IsCrisisMode",
+      "params": "",
+      "receiver": "Optimizer",
+      "results": "(bool)"
+    },
+    {
+      "name": "Optimize",
+      "params": "(ctx context.Context, recommendations []domain.Recommendation, quotes map[string]domain.Quote, totalCapital float64)",
+      "receiver": "Optimizer",
+      "results": "([]OptimizedPosition, error)"
+    },
+    {
+      "name": "OptimizeToOrders",
+      "params": "(ctx context.Context, recommendations []domain.Recommendation, quotes map[string]domain.Quote, totalCapital float64)",
+      "receiver": "Optimizer",
+      "results": "([]domain.Order, error)"
+    },
+    {
+      "name": "SetAgentWeights",
+      "params": "(weights map[string]float64)",
+      "receiver": "Optimizer",
+      "results": ""
+    },
+    {
+      "name": "SetConstraints",
+      "params": "(c Constraints)",
+      "receiver": "Optimizer",
+      "results": ""
+    },
+    {
+      "name": "SetCrisisMode",
+      "params": "(active bool)",
+      "receiver": "Optimizer",
+      "results": ""
+    },
+    {
+      "name": "SetCrossMarketCorrelation",
+      "params": "(rho float64)",
+      "receiver": "Optimizer",
+      "results": ""
+    },
+    {
+      "name": "SetFactorWeights",
+      "params": "(weights map[FactorType]float64)",
+      "receiver": "Optimizer",
+      "results": ""
+    },
+    {
+      "name": "SetStyleWeights",
+      "params": "(weights map[string]float64)",
+      "receiver": "Optimizer",
+      "results": ""
+    },
+    {
+      "name": "SimulateDrawdown",
+      "params": "(weights []weightInfo, volatilityScale float64, numDays,numPaths int)",
+      "receiver": "Optimizer",
+      "results": "(DrawdownResult)"
+    },
+    {
+      "name": "SimulateDrawdownForMonitoring",
+      "params": "(positions []domain.Position, portfolioValue float64)",
+      "receiver": "Optimizer",
+      "results": "(DrawdownResult)"
+    },
+    {
+      "name": "WithBridgeInput",
+      "params": "(input FactorBridgeInput)",
+      "receiver": "Optimizer",
+      "results": "(*Optimizer)"
+    },
+    {
+      "name": "WithCrossMarketCorrelation",
+      "params": "(rho float64)",
+      "receiver": "Optimizer",
+      "results": "(*Optimizer)"
+    },
+    {
+      "name": "WithFactorEngine",
+      "params": "(fe *FactorEngine)",
+      "receiver": "Optimizer",
+      "results": "(*Optimizer)"
+    },
+    {
+      "name": "WithFactorWeightEngine",
+      "params": "(fwe *FactorWeightEngine)",
+      "receiver": "Optimizer",
+      "results": "(*Optimizer)"
+    },
+    {
+      "name": "WithFundamentalProvider",
+      "params": "(fp *FundamentalProvider)",
+      "receiver": "Optimizer",
+      "results": "(*Optimizer)"
+    },
+    {
+      "name": "WithHistoricalPrices",
+      "params": "(hp *HistoricalPrices)",
+      "receiver": "Optimizer",
+      "results": "(*Optimizer)"
+    },
+    {
+      "name": "AdjustWeights",
+      "params": "(weights map[string]float64, severity risk.DrawdownAction)",
+      "receiver": "PortfolioRiskAdjuster",
+      "results": "(adjusted map[string]float64, reasons []string)"
+    },
+    {
+      "name": "SetCyclicalSymbols",
+      "params": "(symbols []string)",
+      "receiver": "PortfolioRiskAdjuster",
+      "results": ""
+    },
+    {
+      "name": "SetDefensiveSymbols",
+      "params": "(symbols []string)",
+      "receiver": "PortfolioRiskAdjuster",
+      "results": ""
+    },
+    {
+      "name": "AddTrade",
+      "params": "(trade TradeRecord)",
+      "receiver": "PostTradeAnalyzer",
+      "results": ""
+    },
+    {
+      "name": "AttributionByAgent",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "(map[string]float64)"
+    },
+    {
+      "name": "AttributionBySymbol",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "(map[string]float64)"
+    },
+    {
+      "name": "CalculateAgentStats",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "([]AgentStats)"
+    },
+    {
+      "name": "CalculateDailyPnL",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "([]DailyPnL)"
+    },
+    {
+      "name": "CalculateExecutionQuality",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "(ExecutionQuality)"
+    },
+    {
+      "name": "CalculateMetrics",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "(PerformanceMetrics)"
+    },
+    {
+      "name": "Clear",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": ""
+    },
+    {
+      "name": "FilterByPeriod",
+      "params": "(start,end time.Time)",
+      "receiver": "PostTradeAnalyzer",
+      "results": "([]TradeRecord)"
+    },
+    {
+      "name": "GenerateReport",
+      "params": "(period string)",
+      "receiver": "PostTradeAnalyzer",
+      "results": "(AnalysisReport)"
+    },
+    {
+      "name": "GenerateSuggestions",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "([]ImprovementSuggestion)"
+    },
+    {
+      "name": "GetTrades",
+      "params": "",
+      "receiver": "PostTradeAnalyzer",
+      "results": "([]TradeRecord)"
+    },
+    {
+      "name": "GetAllocation",
+      "params": "",
+      "receiver": "RegimeAllocator",
+      "results": "(StyleAllocation)"
+    },
+    {
+      "name": "GetCashReserve",
+      "params": "",
+      "receiver": "RegimeAllocator",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetCurrentConfig",
+      "params": "",
+      "receiver": "RegimeAllocator",
+      "results": "(RegimeConfig)"
+    },
+    {
+      "name": "GetCurrentRegime",
+      "params": "",
+      "receiver": "RegimeAllocator",
+      "results": "(domain.Regime)"
+    },
+    {
+      "name": "GetMaxExposure",
+      "params": "",
+      "receiver": "RegimeAllocator",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetRegimeConfig",
+      "params": "(regime domain.Regime)",
+      "receiver": "RegimeAllocator",
+      "results": "(RegimeConfig)"
+    },
+    {
+      "name": "GetStyleDescription",
+      "params": "",
+      "receiver": "RegimeAllocator",
+      "results": "(string)"
+    },
+    {
+      "name": "GetStyleWeight",
+      "params": "(style Style)",
+      "receiver": "RegimeAllocator",
+      "results": "(float64)"
+    },
+    {
+      "name": "IsRiskOn",
+      "params": "",
+      "receiver": "RegimeAllocator",
+      "results": "(bool)"
+    },
+    {
+      "name": "SetRegime",
+      "params": "(regime domain.Regime)",
+      "receiver": "RegimeAllocator",
+      "results": ""
+    },
+    {
+      "name": "UpdateConfig",
+      "params": "(regime domain.Regime, config RegimeConfig)",
+      "receiver": "RegimeAllocator",
+      "results": ""
+    },
+    {
+      "name": "Detect",
+      "params": "(indicators MarketIndicators)",
+      "receiver": "RegimeDetector",
+      "results": "(domain.Regime)"
+    },
+    {
+      "name": "SetThresholds",
+      "params": "(thresholds RegimeThresholds)",
+      "receiver": "RegimeDetector",
+      "results": ""
+    },
+    {
+      "name": "AddPosition",
+      "params": "(symbol string, size,price float64)",
+      "receiver": "RiskManager",
+      "results": "(error)"
+    },
+    {
+      "name": "CalculatePositionSize",
+      "params": "(price,volatility float64)",
+      "receiver": "RiskManager",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetActiveAlerts",
+      "params": "",
+      "receiver": "RiskManager",
+      "results": "([]RiskAlert)"
+    },
+    {
+      "name": "GetRiskMetrics",
+      "params": "",
+      "receiver": "RiskManager",
+      "results": "(RiskMetrics)"
+    },
+    {
+      "name": "RemovePosition",
+      "params": "(symbol string, realizedPnL float64)",
+      "receiver": "RiskManager",
+      "results": ""
+    },
+    {
+      "name": "ResetDaily",
+      "params": "",
+      "receiver": "RiskManager",
+      "results": ""
+    },
+    {
+      "name": "SetRiskParameters",
+      "params": "(maxDrawdown,maxPosSize,maxDailyLoss float64)",
+      "receiver": "RiskManager",
+      "results": ""
+    },
+    {
+      "name": "ShouldStopTrading",
+      "params": "",
+      "receiver": "RiskManager",
+      "results": "(bool)"
+    },
+    {
+      "name": "UpdatePortfolioValue",
+      "params": "(value float64)",
+      "receiver": "RiskManager",
+      "results": "([]RiskAlert)"
+    },
+    {
+      "name": "UpdatePosition",
+      "params": "(symbol string, currentPrice float64)",
+      "receiver": "RiskManager",
+      "results": ""
+    },
+    {
+      "name": "IsValid",
+      "params": "",
+      "receiver": "RotationSignal",
+      "results": "(bool)"
+    },
+    {
+      "name": "CanExecuteRotation",
+      "params": "(decision *risk.MacroAwareDrawdownDecision)",
+      "receiver": "SectorRotator",
+      "results": "(bool, string)"
+    },
+    {
+      "name": "GeneratePlan",
+      "params": "(macroAssessment *narrative.MacroRiskAssessment, currentAllocations map[string]float64)",
+      "receiver": "SectorRotator",
+      "results": "(*SectorRotationPlan)"
+    },
+    {
+      "name": "GetRebalancingTrades",
+      "params": "(plan *SectorRotationPlan, portfolioValue float64)",
+      "receiver": "SectorRotator",
+      "results": "([]RebalancingTrade)"
+    },
+    {
+      "name": "CalculatePositionSizing",
+      "params": "(signals []Signal, portfolio PortfolioSnapshot, quotes map[string]domain.Quote)",
+      "receiver": "Sizer",
+      "results": "([]PositionSizingResult)"
+    },
+    {
+      "name": "CalculateSize",
+      "params": "(signal Signal, currentPortfolio PortfolioSnapshot, quote domain.Quote)",
+      "receiver": "Sizer",
+      "results": "(int, float64, error)"
+    },
+    {
+      "name": "SetCorrelationThreshold",
+      "params": "(threshold float64)",
+      "receiver": "Sizer",
+      "results": ""
+    },
+    {
+      "name": "SetRiskParameters",
+      "params": "(params RiskParameters)",
+      "receiver": "Sizer",
+      "results": ""
+    },
+    {
+      "name": "UpdateADV",
+      "params": "(symbol string, adv float64)",
+      "receiver": "Sizer",
+      "results": ""
+    },
+    {
+      "name": "UpdateATR",
+      "params": "(symbol string, atr float64)",
+      "receiver": "Sizer",
+      "results": ""
+    },
+    {
+      "name": "UpdateCorrelation",
+      "params": "(symbol1,symbol2 string, correlation float64)",
+      "receiver": "Sizer",
+      "results": ""
+    },
+    {
+      "name": "UpdateVolatility",
+      "params": "(symbol string, volatility float64)",
+      "receiver": "Sizer",
+      "results": ""
+    },
+    {
+      "name": "WithParameters",
+      "params": "(p *RuntimeParameters)",
+      "receiver": "Sizer",
+      "results": "(*Sizer)"
+    },
+    {
+      "name": "SortOutcomesByTime",
+      "params": "(outcomes []domain.RecommendationOutcome)",
+      "results": "([]domain.RecommendationOutcome)"
+    },
+    {
+      "name": "Split",
+      "params": "(outcomes []domain.RecommendationOutcome, cfg SplitConfig)",
+      "results": "([]domain.RecommendationOutcome, []domain.RecommendationOutcome)"
+    },
+    {
+      "name": "ComputeStressLevel",
+      "params": "(snap marketdata.MacroDataSnapshot)",
+      "receiver": "StressIndex",
+      "results": "(float64)"
+    },
+    {
+      "name": "Validate",
+      "params": "",
+      "receiver": "StyleAllocation",
+      "results": "(bool)"
+    },
+    {
+      "name": "DetectRotation",
+      "params": "",
+      "receiver": "StyleRotationDetector",
+      "results": "(*RotationSignal)"
+    },
+    {
+      "name": "GetAllMomentums",
+      "params": "",
+      "receiver": "StyleRotationDetector",
+      "results": "([]StyleMomentumData)"
+    },
+    {
+      "name": "GetCurrentLeader",
+      "params": "",
+      "receiver": "StyleRotationDetector",
+      "results": "(Style)"
+    },
+    {
+      "name": "GetStyleMomentum",
+      "params": "(style Style)",
+      "receiver": "StyleRotationDetector",
+      "results": "(StyleMomentumData)"
+    },
+    {
+      "name": "Reset",
+      "params": "",
+      "receiver": "StyleRotationDetector",
+      "results": ""
+    },
+    {
+      "name": "SetParameters",
+      "params": "(threshold float64, holdingDays int)",
+      "receiver": "StyleRotationDetector",
+      "results": ""
+    },
+    {
+      "name": "UpdateStyleReturn",
+      "params": "(style Style, dailyReturn float64)",
+      "receiver": "StyleRotationDetector",
+      "results": ""
+    },
+    {
+      "name": "GetAllocator",
+      "params": "",
+      "receiver": "StyleRotationStrategy",
+      "results": "(*RegimeAllocator)"
+    },
+    {
+      "name": "GetDetector",
+      "params": "",
+      "receiver": "StyleRotationStrategy",
+      "results": "(*StyleRotationDetector)"
+    },
+    {
+      "name": "GetStats",
+      "params": "",
+      "receiver": "StyleRotationStrategy",
+      "results": "(RotationStats)"
+    },
+    {
+      "name": "UpdateAndRotate",
+      "params": "(styleReturns map[Style]float64)",
+      "receiver": "StyleRotationStrategy",
+      "results": "(*RotationResult)"
+    },
+    {
+      "name": "ToRuntimeParameters",
+      "params": "(cfg *config.ParametersConfig)",
+      "results": "(*RuntimeParameters)"
+    },
+    {
+      "name": "HoldingPeriod",
+      "params": "",
+      "receiver": "TradeRecord",
+      "results": "(time.Duration)"
+    },
+    {
+      "name": "IsWin",
+      "params": "",
+      "receiver": "TradeRecord",
+      "results": "(bool)"
+    },
+    {
+      "name": "ApplySmoothing",
+      "params": "(returns []float64)",
+      "receiver": "VolatilityManager",
+      "results": "([]float64)"
+    },
+    {
+      "name": "CalculateCurrentVolatility",
+      "params": "(weights map[string]float64)",
+      "receiver": "VolatilityManager",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetVolatilityAdjustments",
+      "params": "",
+      "receiver": "VolatilityManager",
+      "results": "([]VolatilityAdjustment)"
+    },
+    {
+      "name": "GetVolatilityForecast",
+      "params": "(asset string, periods int)",
+      "receiver": "VolatilityManager",
+      "results": "([]float64)"
+    },
+    {
+      "name": "GetVolatilityMetrics",
+      "params": "",
+      "receiver": "VolatilityManager",
+      "results": "(VolatilityMetrics)"
+    },
+    {
+      "name": "UpdateReturns",
+      "params": "(asset string, returns []float64)",
+      "receiver": "VolatilityManager",
+      "results": ""
+    },
+    {
+      "name": "WithParameters",
+      "params": "(p *RuntimeParameters)",
+      "receiver": "VolatilityManager",
+      "results": "(*VolatilityManager)"
+    },
+    {
+      "name": "WalkForwardFolds",
+      "params": "(outcomes []domain.RecommendationOutcome, cfg SplitConfig)",
+      "results": "([]Fold)"
+    },
+    {
+      "name": "Contribution",
+      "params": "(snap marketdata.MacroDataSnapshot)",
+      "receiver": "dxyStressIndicator",
+      "results": "(float64)"
+    },
+    {
+      "name": "Name",
+      "params": "",
+      "receiver": "dxyStressIndicator",
+      "results": "(string)"
+    },
+    {
+      "name": "Contribution",
+      "params": "(snap marketdata.MacroDataSnapshot)",
+      "receiver": "us10yStressIndicator",
+      "results": "(float64)"
+    },
+    {
+      "name": "Name",
+      "params": "",
+      "receiver": "us10yStressIndicator",
+      "results": "(string)"
+    },
+    {
+      "name": "Contribution",
+      "params": "(snap marketdata.MacroDataSnapshot)",
+      "receiver": "vixStressIndicator",
+      "results": "(float64)"
+    },
+    {
+      "name": "Name",
+      "params": "",
+      "receiver": "vixStressIndicator",
+      "results": "(string)"
+    }
+  ],
+  "package": "portfolio",
+  "types": [
+    {
+      "kind": "alias",
+      "name": "AdjustmentAction"
+    },
+    {
+      "fields": [
+        "AgentID string",
+        "Status AgentHealthStatus",
+        "AnnualizedSharpe float64",
+        "HitRate float64",
+        "ConsecutiveLosses int",
+        "ConsecutiveWins int",
+        "CompositeScore float64",
+        "MutedAt *time.Time",
+        "UnmutedAt *time.Time"
+      ],
+      "kind": "struct",
+      "name": "AgentHealth"
+    },
+    {
+      "fields": [
+        "DefaultMuteThreshold int",
+        "DefaultUnmuteThreshold int",
+        "DefaultAutoRecoverDays int",
+        "MinSampleSize int",
+        "NegativeSharpeThreshold float64"
+      ],
+      "kind": "struct",
+      "name": "AgentHealthConfig"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "health map[string]*AgentHealth",
+        "config AgentHealthConfig",
+        "runtimeParams *RuntimeParameters",
+        "store *AgentHealthStore",
+        "eventBus *eventbus.ChannelEventBus"
+      ],
+      "kind": "struct",
+      "name": "AgentHealthManager"
+    },
+    {
+      "kind": "alias",
+      "name": "AgentHealthStatus"
+    },
+    {
+      "fields": [
+        "filePath string",
+        "mu sync.RWMutex"
+      ],
+      "kind": "struct",
+      "name": "AgentHealthStore"
+    },
+    {
+      "fields": [
+        "AgentID string",
+        "TotalTrades int",
+        "WinCount int",
+        "TotalPnL float64",
+        "AvgPnL float64",
+        "WinRate float64",
+        "SharpeLike float64"
+      ],
+      "kind": "struct",
+      "name": "AgentStats"
+    },
+    {
+      "kind": "alias",
+      "name": "AlertLevel"
+    },
+    {
+      "kind": "alias",
+      "name": "AlertType"
+    },
+    {
+      "fields": [
+        "Period string",
+        "GeneratedAt time.Time",
+        "Metrics PerformanceMetrics",
+        "AgentStats []AgentStats",
+        "DailyPnLs []DailyPnL",
+        "ExecutionQuality ExecutionQuality",
+        "Suggestions []ImprovementSuggestion",
+        "Attribution AttributionResult"
+      ],
+      "kind": "struct",
+      "name": "AnalysisReport"
+    },
+    {
+      "fields": [
+        "AgentContributions map[string]float64",
+        "StyleContributions map[Style]float64",
+        "SymbolContributions map[string]float64",
+        "TotalPnL float64"
+      ],
+      "kind": "struct",
+      "name": "AttributionResult"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Side string",
+        "ForwardReturn float64",
+        "FactorScores map[FactorType]float64",
+        "AgentID string",
+        "Skill string"
+      ],
+      "kind": "struct",
+      "name": "CalibratedOrder"
+    },
+    {
+      "fields": [
+        "TotalCapital float64",
+        "TotalDeployable float64",
+        "ReserveCash float64",
+        "PositionSizes map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "CapitalAllocation"
+    },
+    {
+      "kind": "struct",
+      "name": "CapitalAllocator"
+    },
+    {
+      "fields": [
+        "AgentID string",
+        "RawWeight float64",
+        "FinalWeight float64",
+        "Boundary string",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "ClampingEvent"
+    },
+    {
+      "fields": [
+        "MaxPositionPct float64",
+        "MaxSectorPct float64",
+        "MaxTurnoverDaily float64",
+        "TargetBeta float64",
+        "BetaRange [2]float64",
+        "MinTradeSize int",
+        "CashReserve float64"
+      ],
+      "kind": "struct",
+      "name": "Constraints"
+    },
+    {
+      "fields": [
+        "AgentID string",
+        "Symbol string",
+        "RawConviction int",
+        "FinalConviction int",
+        "Weight float64",
+        "Boundary string",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "ConvictionClampingEvent"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "agents map[string]*agentStats"
+      ],
+      "kind": "struct",
+      "name": "ConvictionNormalizer"
+    },
+    {
+      "kind": "interface",
+      "name": "CorporateActionProvider"
+    },
+    {
+      "fields": [
+        "Date string",
+        "PnL float64",
+        "Trades int"
+      ],
+      "kind": "struct",
+      "name": "DailyPnL"
+    },
+    {
+      "fields": [
+        "AgentID string",
+        "Skill string",
+        "Layer string",
+        "Weight float64",
+        "RollingSharpe float64",
+        "RollingVolatility float64",
+        "TotalSignals int",
+        "WinCount int",
+        "LossCount int",
+        "HitRate float64",
+        "AvgReturn float64",
+        "LastAdjustedAt time.Time",
+        "LastUpdatedAt time.Time",
+        "DailyReturns []float64",
+        "ConsecutiveAtMin int"
+      ],
+      "kind": "struct",
+      "name": "DarwinianAgentWeight"
+    },
+    {
+      "fields": [
+        "RollingWindowDays int",
+        "UseExponentialDecay bool",
+        "DecayHalfLifeDays int",
+        "NewAgentProtectionDays int",
+        "NewAgentFixedWeight float64",
+        "MinAdjustmentInterval int",
+        "WeightMomentumFactor float64"
+      ],
+      "kind": "struct",
+      "name": "DarwinianConfig"
+    },
+    {
+      "fields": [
+        "Timestamp time.Time",
+        "Weights map[string]DarwinianAgentWeight"
+      ],
+      "kind": "struct",
+      "name": "DarwinianSnapshot"
+    },
+    {
+      "fields": [
+        "weights map[string]*DarwinianAgentWeight",
+        "configPath string",
+        "historyPath string",
+        "lookbackDays int",
+        "params *RuntimeParameters",
+        "mu sync.RWMutex",
+        "eventBus *eventbus.ChannelEventBus",
+        "maturityTracker *domain.MaturityTracker"
+      ],
+      "kind": "struct",
+      "name": "DarwinianWeightManager"
+    },
+    {
+      "fields": [
+        "GeneratedAt time.Time",
+        "TotalAgents int",
+        "TopPerformers []DarwinianAgentWeight",
+        "BottomPerformers []DarwinianAgentWeight",
+        "Neutrals []DarwinianAgentWeight",
+        "WeightDistribution map[string]int",
+        "Summary string"
+      ],
+      "kind": "struct",
+      "name": "DarwinianWeightReport"
+    },
+    {
+      "fields": [
+        "MaxDrawdown float64",
+        "VaR95 float64",
+        "WorstPath []float64"
+      ],
+      "kind": "struct",
+      "name": "DrawdownResult"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "NAV float64",
+        "MarketPrice float64",
+        "PremiumDiscount float64",
+        "ExpenseRatio float64",
+        "TrackingErrorAnnual float64",
+        "TrackingError20d float64",
+        "Benchmark string"
+      ],
+      "kind": "struct",
+      "name": "ETFAnalysis"
+    },
+    {
+      "fields": [
+        "metadata map[string]ETFMetadata",
+        "hp *HistoricalPrices",
+        "mu sync.RWMutex"
+      ],
+      "kind": "struct",
+      "name": "ETFAnalyzer"
+    },
+    {
+      "fields": [
+        "Name string",
+        "NAV float64",
+        "ExpenseRatio float64",
+        "Benchmark string"
+      ],
+      "kind": "struct",
+      "name": "ETFMetadata"
+    },
+    {
+      "kind": "interface",
+      "name": "ETFNAVFetcher"
+    },
+    {
+      "fields": [
+        "AvgSlippage float64",
+        "AvgCommission float64",
+        "FillRate float64",
+        "AvgExecutionTime time.Duration"
+      ],
+      "kind": "struct",
+      "name": "ExecutionQuality"
+    },
+    {
+      "fields": [
+        "foreignFlowAvg float64",
+        "foreignFlowStd float64",
+        "marginAvg float64",
+        "marginStd float64",
+        "calculator *retail.Calculator",
+        "stressIndex *StressIndex"
+      ],
+      "kind": "struct",
+      "name": "FactorBridge"
+    },
+    {
+      "fields": [
+        "ForeignFlowScore float64",
+        "DomesticFlowScore float64",
+        "MarginBalanceScore float64",
+        "RetailSentimentScore float64",
+        "StressLevel float64"
+      ],
+      "kind": "struct",
+      "name": "FactorBridgeInput"
+    },
+    {
+      "fields": [
+        "history *HistoricalPrices",
+        "fundamentals *FundamentalProvider",
+        "params *RuntimeParameters",
+        "narrativeProv NarrativeProviderFunc",
+        "cycleProv IndustryCycleProviderFunc",
+        "linkageProv LinkageProviderFunc",
+        "tsmcProv TSMCProviderFunc",
+        "pmCtxProv PMContextProvider",
+        "corpActions CorporateActionProvider",
+        "etfAnalyzer *ETFAnalyzer",
+        "mu sync.RWMutex",
+        "adjustedMu sync.Mutex",
+        "adjustedSymbols map[string]time.Time",
+        "adjustmentTTL time.Duration"
+      ],
+      "kind": "struct",
+      "name": "FactorEngine"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Factor FactorType",
+        "Score float64",
+        "Weight float64"
+      ],
+      "kind": "struct",
+      "name": "FactorScore"
+    },
+    {
+      "kind": "alias",
+      "name": "FactorType"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "baseWeights map[FactorType]float64",
+        "eventWeights map[string]map[FactorType]float64",
+        "activeEvents map[string]*narrative.NarrativeEvent",
+        "lifecycle *narrative.EventLifecycleManager",
+        "strategyAdjustment map[FactorType]float64",
+        "weightSource string",
+        "currentRegime string"
+      ],
+      "kind": "struct",
+      "name": "FactorWeightEngine"
+    },
+    {
+      "fields": [
+        "Train []domain.RecommendationOutcome",
+        "Test []domain.RecommendationOutcome"
+      ],
+      "kind": "struct",
+      "name": "Fold"
+    },
+    {
+      "kind": "alias",
+      "name": "Frequency"
+    },
+    {
+      "fields": [
+        "PE float64",
+        "PB float64",
+        "PS float64",
+        "DividendYield float64",
+        "Sector string"
+      ],
+      "kind": "struct",
+      "name": "FundamentalData"
+    },
+    {
+      "fields": [
+        "data map[string]FundamentalData"
+      ],
+      "kind": "struct",
+      "name": "FundamentalProvider"
+    },
+    {
+      "fields": [
+        "prices map[string][]pricePoint",
+        "effects map[string][]shared.ActionEffect"
+      ],
+      "kind": "struct",
+      "name": "HistoricalPrices"
+    },
+    {
+      "fields": [
+        "Category string",
+        "Priority int",
+        "Title string",
+        "Description string",
+        "Metrics map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "ImprovementSuggestion"
+    },
+    {
+      "kind": "alias",
+      "name": "IndustryCycleProviderFunc"
+    },
+    {
+      "fields": [
+        "allocator *RegimeAllocator",
+        "detector *RegimeDetector"
+      ],
+      "kind": "struct",
+      "name": "IntegratedAllocator"
+    },
+    {
+      "kind": "alias",
+      "name": "LinkageProviderFunc"
+    },
+    {
+      "kind": "alias",
+      "name": "MacroDataSnapshot"
+    },
+    {
+      "fields": [
+        "RSI float64",
+        "VIX float64",
+        "SPXTrend float64",
+        "Volume float64"
+      ],
+      "kind": "struct",
+      "name": "MarketIndicators"
+    },
+    {
+      "kind": "alias",
+      "name": "NarrativeProviderFunc"
+    },
+    {
+      "kind": "alias",
+      "name": "NormalizationMethod"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Side domain.Side",
+        "TargetValue float64",
+        "TargetWeight float64",
+        "Confidence float64",
+        "Factors map[FactorType]float64",
+        "Agents []string"
+      ],
+      "kind": "struct",
+      "name": "OptimizedPosition"
+    },
+    {
+      "fields": [
+        "runtimeParams *RuntimeParameters",
+        "constraints Constraints",
+        "agentWeights map[string]float64",
+        "styleWeights map[string]float64",
+        "factorWeights map[FactorType]float64",
+        "history *HistoricalPrices",
+        "fundamentals *FundamentalProvider",
+        "factorEngine *FactorEngine",
+        "mu sync.RWMutex",
+        "factorWeightEngine *FactorWeightEngine",
+        "lookbackDays int",
+        "riskFreeRate float64",
+        "bridgeInput FactorBridgeInput",
+        "crisisMode bool",
+        "crossMarketRho float64"
+      ],
+      "kind": "struct",
+      "name": "Optimizer"
+    },
+    {
+      "fields": [
+        "Detected bool",
+        "DampingFactor float64",
+        "AffectedFactors []FactorType",
+        "Reason string"
+      ],
+      "kind": "struct",
+      "name": "OscillationVerdict"
+    },
+    {
+      "kind": "alias",
+      "name": "PMContextProvider"
+    },
+    {
+      "fields": [
+        "TotalTrades int",
+        "WinningTrades int",
+        "LosingTrades int",
+        "WinRate float64",
+        "AvgWin float64",
+        "AvgLoss float64",
+        "ProfitFactor float64",
+        "TotalPnL float64",
+        "MaxDrawdown float64",
+        "SharpeRatio float64",
+        "AvgHoldingPeriod time.Duration"
+      ],
+      "kind": "struct",
+      "name": "PerformanceMetrics"
+    },
+    {
+      "fields": [
+        "drawdownEngine *risk.MacroAwareDrawdownEngine",
+        "cyclicalSymbols map[string]bool",
+        "defensiveSymbols map[string]bool"
+      ],
+      "kind": "struct",
+      "name": "PortfolioRiskAdjuster"
+    },
+    {
+      "fields": [
+        "TotalValue float64",
+        "Cash float64",
+        "Positions []domain.Position",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "PortfolioSnapshot"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Size float64",
+        "EntryPrice float64",
+        "CurrentPrice float64",
+        "Unrealized float64",
+        "Realized float64",
+        "OpenTime time.Time",
+        "LastUpdate time.Time"
+      ],
+      "kind": "struct",
+      "name": "Position"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Shares int",
+        "TargetValue float64",
+        "RiskAmount float64",
+        "StopLossPrice float64",
+        "Reason string"
+      ],
+      "kind": "struct",
+      "name": "PositionSizingResult"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Value float64",
+        "Styles []Style"
+      ],
+      "kind": "struct",
+      "name": "PositionWithStyle"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "trades []TradeRecord"
+      ],
+      "kind": "struct",
+      "name": "PostTradeAnalyzer"
+    },
+    {
+      "fields": [
+        "RealRate float64",
+        "VIX float64",
+        "DXY float64",
+        "CPIYoY float64",
+        "CentralBankNetBuy float64",
+        "CBReserveTrend float64",
+        "IndiaGoldImportsYoY float64",
+        "ChinaGoldImportsYoY float64",
+        "COMEXNetLong float64",
+        "GoldSilverRatioZ float64"
+      ],
+      "kind": "struct",
+      "name": "PreciousMetalsContext"
+    },
+    {
+      "kind": "interface",
+      "name": "QuoteProvider"
+    },
+    {
+      "fields": [
+        "Sector string",
+        "DeltaPct float64",
+        "DeltaValue float64",
+        "Rationale string"
+      ],
+      "kind": "struct",
+      "name": "RebalancingTrade"
+    },
+    {
+      "fields": [
+        "currentRegime domain.Regime",
+        "configs map[domain.Regime]RegimeConfig",
+        "mu sync.RWMutex"
+      ],
+      "kind": "struct",
+      "name": "RegimeAllocator"
+    },
+    {
+      "fields": [
+        "Allocation StyleAllocation",
+        "MaxExposure float64",
+        "CashReserve float64",
+        "RiskOn bool",
+        "Description string"
+      ],
+      "kind": "struct",
+      "name": "RegimeConfig"
+    },
+    {
+      "fields": [
+        "thresholds RegimeThresholds",
+        "mu sync.RWMutex"
+      ],
+      "kind": "struct",
+      "name": "RegimeDetector"
+    },
+    {
+      "fields": [
+        "RiskOnRSI float64",
+        "RiskOffRSI float64",
+        "VIXHigh float64",
+        "VIXLow float64"
+      ],
+      "kind": "struct",
+      "name": "RegimeThresholds"
+    },
+    {
+      "fields": [
+        "ID string",
+        "Type AlertType",
+        "Level AlertLevel",
+        "Message string",
+        "Target string",
+        "Current float64",
+        "Threshold float64",
+        "Timestamp time.Time",
+        "Resolved bool",
+        "ResolvedAt *time.Time"
+      ],
+      "kind": "struct",
+      "name": "RiskAlert"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "runtimeParams *RuntimeParameters",
+        "maxDrawdownPct float64",
+        "maxPositionSize float64",
+        "maxDailyLossPct float64",
+        "stopLossEnabled bool",
+        "takeProfitEnabled bool",
+        "currentDrawdown float64",
+        "peakValue float64",
+        "currentValue float64",
+        "dailyStartValue float64",
+        "lastUpdate time.Time",
+        "riskAlerts []RiskAlert",
+        "alertHistory []RiskAlert",
+        "positions map[string]*Position",
+        "totalExposure float64"
+      ],
+      "kind": "struct",
+      "name": "RiskManager"
+    },
+    {
+      "fields": [
+        "CurrentDrawdown float64",
+        "MaxDrawdown float64",
+        "TotalExposure float64",
+        "ExposureRatio float64",
+        "ActivePositions int",
+        "ActiveAlerts int",
+        "LastUpdate time.Time"
+      ],
+      "kind": "struct",
+      "name": "RiskMetrics"
+    },
+    {
+      "fields": [
+        "KellyFraction float64",
+        "VolLookback int",
+        "MaxPositionByADV float64",
+        "MaxDrawdownLimit float64",
+        "ATRMultiplier float64",
+        "CorrelationPenalty float64"
+      ],
+      "kind": "struct",
+      "name": "RiskParameters"
+    },
+    {
+      "fields": [
+        "Signal RotationSignal",
+        "Allocation StyleAllocation",
+        "Count int"
+      ],
+      "kind": "struct",
+      "name": "RotationResult"
+    },
+    {
+      "fields": [
+        "FromStyle Style",
+        "ToStyle Style",
+        "Strength float64",
+        "Diff float64",
+        "Timestamp time.Time"
+      ],
+      "kind": "struct",
+      "name": "RotationSignal"
+    },
+    {
+      "fields": [
+        "TotalRotations int",
+        "LastRotation time.Time",
+        "CurrentLeader Style"
+      ],
+      "kind": "struct",
+      "name": "RotationStats"
+    },
+    {
+      "fields": [
+        "StartingCash float64",
+        "MaxPositionWeight float64",
+        "MaxOpenPositions int",
+        "MinTradableVolume float64",
+        "MinRecommendationConviction int",
+        "RequireCROPass bool",
+        "TransactionCostBPS float64",
+        "SlippageBPS float64",
+        "ReserveCashFraction float64"
+      ],
+      "kind": "struct",
+      "name": "RuntimeBaselineConfig"
+    },
+    {
+      "fields": [
+        "WeightMin float64",
+        "WeightMax float64",
+        "WeightNeutral float64",
+        "TopQuartileMultiplier float64",
+        "BottomQuartileMultiplier float64",
+        "DailyAdjustmentCooldown time.Duration",
+        "LookbackDays int",
+        "EMAAlpha float64",
+        "SharpeNormalizeDenom float64",
+        "MaxPerformanceBonusPct float64",
+        "VolatilityPenaltyThreshold float64",
+        "VolatilityPenaltyMultiplier float64",
+        "RiskVolatilityThreshold float64",
+        "RiskMultiplier float64",
+        "HitRateHighThreshold float64",
+        "HitRateLowThreshold float64",
+        "MiddleTierBoostMultiplier float64",
+        "MiddleTierCutMultiplier float64",
+        "SharpeMinSampleSize int",
+        "StdDevMeanRatioThreshold float64",
+        "ConvictionClampMin int",
+        "ConvictionClampMax int"
+      ],
+      "kind": "struct",
+      "name": "RuntimeDarwinianConfig"
+    },
+    {
+      "fields": [
+        "MaturityLevel1Observations int",
+        "MaturityLevel2Observations int",
+        "MaturityLevel3Observations int",
+        "ImprovementThreshold float64",
+        "WelchTTestThreshold float64",
+        "DrawdownProtectionRatio float64",
+        "VolatilityToleranceRatio float64"
+      ],
+      "kind": "struct",
+      "name": "RuntimeExperimentConfig"
+    },
+    {
+      "fields": [
+        "MomentumLookbackDays int",
+        "MomentumStdDevDivisor float64",
+        "MomentumIntradayDiscount float64",
+        "MomentumIntradayThreshold float64",
+        "ValuePERangeCenter float64",
+        "ValuePERangeWidth float64",
+        "ValuePBRangeCenter float64",
+        "ValuePBRangeWidth float64",
+        "ValuePSRangeCenter float64",
+        "ValuePSRangeWidth float64",
+        "QualityDividendYieldCap float64",
+        "QualityVolatilityStd float64",
+        "QualityFallbackScore float64",
+        "ValueFallbackScore float64",
+        "InstitutionalSentimentWeights map[string]float64",
+        "FallbackWeightReduction float64"
+      ],
+      "kind": "struct",
+      "name": "RuntimeFactorConfig"
+    },
+    {
+      "fields": [
+        "Omega float64",
+        "Alpha float64",
+        "Beta float64",
+        "MaxHistory int",
+        "CorrelationMinDays int",
+        "SmoothingFactor float64",
+        "RebalanceThreshold float64",
+        "MinForecastDays int",
+        "MaxHistoryPoints int",
+        "HighVolThreshold float64",
+        "LowVolThreshold float64",
+        "ReduceMagnitude float64",
+        "IncreaseMagnitude float64",
+        "WeeklyRebalanceDays int"
+      ],
+      "kind": "struct",
+      "name": "RuntimeGARCHConfig"
+    },
+    {
+      "fields": [
+        "MuteThreshold int",
+        "UnmuteThreshold int",
+        "AutoRecoverDays int",
+        "MinSampleSize int",
+        "NegativeSharpeThreshold float64",
+        "SharpeWeight float64",
+        "HitRateWeight float64",
+        "StreakWeight float64",
+        "MaxSharpe float64",
+        "MinSharpe float64",
+        "StreakMax int"
+      ],
+      "kind": "struct",
+      "name": "RuntimeHealthConfig"
+    },
+    {
+      "fields": [
+        "InventoryCycleThresholds config.InventoryCycleThresholdConfig",
+        "CapexCycleThresholds config.CapexCycleThresholdConfig",
+        "CycleThresholds map[string]config.CycleThresholdConfig",
+        "ConcentrationRiskEnabled bool",
+        "NewsLatencyRiskEnabled bool",
+        "AsymmetricRiskEnabled bool",
+        "CustomerConcentrationLimit float64",
+        "GeographicExposureLimit float64",
+        "CustomerShareThreshold1 float64",
+        "CustomerShareThreshold2 float64",
+        "USExposureThreshold1 float64",
+        "USExposureThreshold2 float64",
+        "RiskScoreWeight1 float64",
+        "RiskScoreWeight2 float64",
+        "RiskScoreWeight3 float64",
+        "RiskScoreWeight4 float64",
+        "SeverityThresholdMedium float64",
+        "SeverityThresholdHigh float64",
+        "SeverityThresholdCritical float64",
+        "ImpactMultiplier float64",
+        "RiskConfidence float64"
+      ],
+      "kind": "struct",
+      "name": "RuntimeIndustryConfig"
+    },
+    {
+      "fields": [
+        "TWSEAPIRateLimit float64",
+        "TWSEAPIRateBurst int",
+        "TWSEAPITimeoutSec int",
+        "FubonIntradayLimit int",
+        "FubonHistoricalLimit int",
+        "FubonAPITimeoutSec int",
+        "TEJCallsPerSecond int",
+        "TEJAPITimeoutSec int",
+        "FugleRateLimit int",
+        "FugleAPITimeoutSec int",
+        "MaxRetryAttempts int",
+        "RetryBackoffMs int"
+      ],
+      "kind": "struct",
+      "name": "RuntimeMarketdataConfig"
+    },
+    {
+      "fields": [
+        "MaxPositionPct float64",
+        "MaxSectorPct float64",
+        "MaxTurnoverDaily float64",
+        "TargetBeta float64",
+        "BetaRangeMin float64",
+        "BetaRangeMax float64",
+        "MinTradeSize int",
+        "CashReserve float64",
+        "FactorWeights map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "RuntimeOptimizerConfig"
+    },
+    {
+      "fields": [
+        "Darwinian RuntimeDarwinianConfig",
+        "Factor RuntimeFactorConfig",
+        "Optimizer RuntimeOptimizerConfig",
+        "Sizing RuntimeSizingConfig",
+        "Health RuntimeHealthConfig",
+        "GARCH RuntimeGARCHConfig",
+        "Experiment RuntimeExperimentConfig",
+        "Baseline RuntimeBaselineConfig",
+        "Risk RuntimeRiskConfig",
+        "Marketdata RuntimeMarketdataConfig",
+        "Industry RuntimeIndustryConfig",
+        "Strategy RuntimeStrategyConfig"
+      ],
+      "kind": "struct",
+      "name": "RuntimeParameters"
+    },
+    {
+      "fields": [
+        "MaxDrawdownPct float64",
+        "MaxPositionSize float64",
+        "MaxDailyLossPct float64",
+        "StopLoss float64",
+        "TakeProfit float64",
+        "MaxLossPerTrade float64",
+        "MaxTotalExposure float64"
+      ],
+      "kind": "struct",
+      "name": "RuntimeRiskConfig"
+    },
+    {
+      "fields": [
+        "KellyFraction float64",
+        "VolLookbackDays int",
+        "MaxPositionByADV float64",
+        "MaxDrawdownLimit float64",
+        "ATRMultiplier float64",
+        "CorrelationPenalty float64",
+        "CorrelationThreshold float64",
+        "DefaultWinRate float64",
+        "DefaultPayoffRatio float64",
+        "TargetVolatility float64",
+        "VolAdjustmentMin float64",
+        "VolAdjustmentMax float64",
+        "ATRTargetRisk float64",
+        "ATRAdjustmentMin float64",
+        "ATRAdjustmentMax float64",
+        "CorrelationPenaltyFactor float64",
+        "MaxCorrelationPenalty float64",
+        "DefaultVolatility float64",
+        "DefaultADV float64",
+        "DefaultATR float64"
+      ],
+      "kind": "struct",
+      "name": "RuntimeSizingConfig"
+    },
+    {
+      "fields": [
+        "MinSwitchIntervalDays int",
+        "SwitchThreshold float64",
+        "ScoreLookbackDays int",
+        "FallbackStrategy string"
+      ],
+      "kind": "struct",
+      "name": "RuntimeStrategyConfig"
+    },
+    {
+      "kind": "alias",
+      "name": "Sector"
+    },
+    {
+      "fields": [
+        "Sector string",
+        "TargetPct float64",
+        "CurrentPct float64",
+        "Delta float64",
+        "Rationale string"
+      ],
+      "kind": "struct",
+      "name": "SectorAllocation"
+    },
+    {
+      "fields": [
+        "Allocations []SectorAllocation",
+        "PrimaryFlow string",
+        "Rationale string",
+        "Timestamp time.Time",
+        "ConfigSource string"
+      ],
+      "kind": "struct",
+      "name": "SectorRotationPlan"
+    },
+    {
+      "fields": [
+        "baseAllocations map[string]float64",
+        "minAllocation float64",
+        "maxAllocation float64",
+        "rebalanceThreshold float64"
+      ],
+      "kind": "struct",
+      "name": "SectorRotator"
+    },
+    {
+      "kind": "alias",
+      "name": "SharpeConfig"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Side domain.Side",
+        "Conviction float64",
+        "WinRate float64",
+        "PayoffRatio float64"
+      ],
+      "kind": "struct",
+      "name": "Signal"
+    },
+    {
+      "fields": [
+        "params RiskParameters",
+        "runtimeParams *RuntimeParameters",
+        "volatilities map[string]float64",
+        "correlations map[string]map[string]float64",
+        "advCache map[string]float64",
+        "atrCache map[string]float64",
+        "correlationThreshold float64",
+        "mu sync.RWMutex"
+      ],
+      "kind": "struct",
+      "name": "Sizer"
+    },
+    {
+      "fields": [
+        "Method SplitMethod",
+        "TrainRatio float64",
+        "TrainSize int",
+        "TestSize int",
+        "EmbargoDays int"
+      ],
+      "kind": "struct",
+      "name": "SplitConfig"
+    },
+    {
+      "kind": "alias",
+      "name": "SplitMethod"
+    },
+    {
+      "fields": [
+        "indicators []StressIndicator"
+      ],
+      "kind": "struct",
+      "name": "StressIndex"
+    },
+    {
+      "fields": [
+        "Indicators []StressIndicator"
+      ],
+      "kind": "struct",
+      "name": "StressIndexConfig"
+    },
+    {
+      "kind": "interface",
+      "name": "StressIndicator"
+    },
+    {
+      "kind": "alias",
+      "name": "Style"
+    },
+    {
+      "fields": [
+        "Growth float64",
+        "Value float64",
+        "Momentum float64",
+        "Quality float64"
+      ],
+      "kind": "struct",
+      "name": "StyleAllocation"
+    },
+    {
+      "fields": [
+        "Current map[Style]float64",
+        "Target map[Style]float64",
+        "Deviation map[Style]float64"
+      ],
+      "kind": "struct",
+      "name": "StyleExposures"
+    },
+    {
+      "fields": [
+        "Style Style",
+        "Return20D float64",
+        "Return60D float64",
+        "Strength float64"
+      ],
+      "kind": "struct",
+      "name": "StyleMomentumData"
+    },
+    {
+      "fields": [
+        "styleReturns map[Style][]float64",
+        "threshold float64",
+        "holdingPeriod int",
+        "lastSwitch map[Style]time.Time",
+        "currentLeader Style",
+        "mu sync.RWMutex"
+      ],
+      "kind": "struct",
+      "name": "StyleRotationDetector"
+    },
+    {
+      "fields": [
+        "detector *StyleRotationDetector",
+        "allocator *RegimeAllocator",
+        "rotationCount int",
+        "lastRotation time.Time",
+        "mu sync.RWMutex"
+      ],
+      "kind": "struct",
+      "name": "StyleRotationStrategy"
+    },
+    {
+      "kind": "alias",
+      "name": "TSMCProviderFunc"
+    },
+    {
+      "fields": [
+        "Symbol string",
+        "Side domain.Side",
+        "EntryPrice float64",
+        "ExitPrice float64",
+        "Quantity int",
+        "EntryTime time.Time",
+        "ExitTime time.Time",
+        "Pnl float64",
+        "PnlPct float64",
+        "Agent string",
+        "Strategy string",
+        "Slippage float64",
+        "Commission float64"
+      ],
+      "kind": "struct",
+      "name": "TradeRecord"
+    },
+    {
+      "fields": [
+        "Asset string",
+        "Action AdjustmentAction",
+        "Magnitude float64",
+        "Reason string",
+        "Priority int"
+      ],
+      "kind": "struct",
+      "name": "VolatilityAdjustment"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "targetVolatility float64",
+        "maxVolatility float64",
+        "smoothingFactor float64",
+        "rebalanceThreshold float64",
+        "params *RuntimeParameters",
+        "currentVolatility float64",
+        "volatilityHistory []VolatilityPoint",
+        "assetWeights map[string]float64",
+        "lastRebalance time.Time",
+        "returnsHistory map[string][]float64",
+        "correlationMatrix map[string]map[string]float64",
+        "betaValues map[string]float64"
+      ],
+      "kind": "struct",
+      "name": "VolatilityManager"
+    },
+    {
+      "fields": [
+        "CurrentVolatility float64",
+        "TargetVolatility float64",
+        "MaxVolatility float64",
+        "Deviation float64",
+        "LastRebalance time.Time",
+        "AssetCount int",
+        "HistoryLength int"
+      ],
+      "kind": "struct",
+      "name": "VolatilityMetrics"
+    },
+    {
+      "fields": [
+        "Timestamp time.Time",
+        "Volatility float64",
+        "Target float64",
+        "Deviation float64"
+      ],
+      "kind": "struct",
+      "name": "VolatilityPoint"
+    },
+    {
+      "fields": [
+        "Timestamp time.Time",
+        "OrdersEvaluated int",
+        "BaselineScore float64",
+        "OptimizedScore float64",
+        "ImprovementPct float64",
+        "Verdict string",
+        "Changes []WeightChange",
+        "Summary string"
+      ],
+      "kind": "struct",
+      "name": "WeightCalibrationReport"
+    },
+    {
+      "fields": [
+        "Factor FactorType",
+        "Before float64",
+        "After float64",
+        "DeltaPct float64",
+        "Confidence string"
+      ],
+      "kind": "struct",
+      "name": "WeightChange"
+    }
+  ],
+  "vars": null
+}
