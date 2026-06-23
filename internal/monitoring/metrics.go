@@ -225,6 +225,10 @@ func (m *MetricsCollector) GetAlertTriggerCountInWindow(window time.Duration) in
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	// window <= 1s 視為瞬間，回傳累計總數（與 GetAlertTriggerRate 契約一致）。
+	if window <= time.Second {
+		return m.alertsTriggered
+	}
 	return m.countTimestampsInWindowLocked(time.Now().Add(-window))
 }
 
