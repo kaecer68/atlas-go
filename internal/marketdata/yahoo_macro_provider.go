@@ -155,6 +155,14 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 	if math.IsNaN(latest) || math.IsInf(latest, 0) {
 		return MacroDataPoint{}, fmt.Errorf("invalid latest price for %s: %v", ticker, latest)
 	}
+	// 零值防禦: 巨集指標 (US10Y, DXY, VIX, Oil, Gold, USDTWD, Silver, Copper)
+	// 在真實市場中絕對不會等於 0。Yahoo Finance 在休市 / 解析異常時
+	// 可能回傳 closes: [0.0, 0.0, ...],若不擋下會污染下游
+	// narrative/stress index/risk 等計算 (例如 yield spread, US-TW 利差)。
+	// 與 NaN/Inf 視為同等資料錯誤,直接 reject。
+	if latest == 0 {
+		return MacroDataPoint{}, fmt.Errorf("zero latest price for %s (likely off-hours or parse error)", ticker)
+	}
 
 	prev := latest
 	if len(closes) > 1 {
