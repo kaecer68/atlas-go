@@ -5,7 +5,6 @@ package prism
 import (
 	"container/list"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -48,36 +47,6 @@ func (r RegimeType) String() string {
 // keeping an int<->string mapping table.
 func (r RegimeType) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + r.jsonKey() + `"`), nil
-}
-
-// UnmarshalJSON parses either an UPPER_SNAKE_CASE string (RISK_ON,
-// RISK_OFF, HIGH_VOLATILITY, LOW_VOLATILITY, TRANSITION) or a raw integer.
-// Inverse of MarshalJSON; required so round-trip tests in llm/schemas
-// can rehydrate JSON payloads that embed RegimeType as a string.
-func (r *RegimeType) UnmarshalJSON(data []byte) error {
-	s := string(data)
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		s = s[1 : len(s)-1]
-	}
-	if n, err := strconv.Atoi(s); err == nil {
-		*r = RegimeType(n)
-		return nil
-	}
-	switch s {
-	case "RISK_ON":
-		*r = RegimeRiskOn
-	case "RISK_OFF":
-		*r = RegimeRiskOff
-	case "HIGH_VOLATILITY":
-		*r = RegimeHighVolatility
-	case "LOW_VOLATILITY":
-		*r = RegimeLowVolatility
-	case "TRANSITION":
-		*r = RegimeTransition
-	default:
-		return fmt.Errorf("prism.RegimeType: unknown value %q", s)
-	}
-	return nil
 }
 
 // jsonKey returns the stable UPPER_SNAKE_CASE identifier for the regime.
