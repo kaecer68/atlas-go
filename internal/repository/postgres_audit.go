@@ -77,10 +77,11 @@ func scanScreeningRejects(rows pgx.Rows) ([]domain.ScreeningReject, error) {
 func (r *PostgresRepository) SaveSessionSummary(ctx context.Context, summary domain.SessionSummary) error {
 	brokerRuntime, _ := json.Marshal(summary.BrokerRuntime)
 	guardOutcomes, _ := json.Marshal(summary.GuardOutcomes)
+	taxSnapshots, _ := json.Marshal(summary.TaxSnapshots)
 
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO session_summaries (time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO session_summaries (time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes, tax_snapshots, after_tax_pnl, total_tax_paid, parameters_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		ON CONFLICT (session_id) DO UPDATE SET
 			time = EXCLUDED.time,
 			regime = EXCLUDED.regime,
@@ -94,11 +95,16 @@ func (r *PostgresRepository) SaveSessionSummary(ctx context.Context, summary dom
 			proposal_id = EXCLUDED.proposal_id,
 			commit_id = EXCLUDED.commit_id,
 			approval_id = EXCLUDED.approval_id,
-			guard_outcomes = EXCLUDED.guard_outcomes
+			guard_outcomes = EXCLUDED.guard_outcomes,
+			tax_snapshots = EXCLUDED.tax_snapshots,
+			after_tax_pnl = EXCLUDED.after_tax_pnl,
+			total_tax_paid = EXCLUDED.total_tax_paid,
+			parameters_version = EXCLUDED.parameters_version
 	`, summary.RecordedAt, summary.SessionID, string(summary.Regime), summary.OrderCount,
 		summary.PositionCount, summary.EndingCash, summary.PortfolioValue, summary.OutcomeCount,
 		brokerRuntime, summary.NextExperimentAgentID, summary.ProposalID, summary.CommitID,
-		summary.ApprovalID, guardOutcomes)
+		summary.ApprovalID, guardOutcomes, taxSnapshots, summary.AfterTaxPnL, summary.TotalTaxPaid,
+		summary.ParametersVersion)
 	if err != nil {
 		return fmt.Errorf("save session summary: %w", err)
 	}
@@ -108,17 +114,18 @@ func (r *PostgresRepository) SaveSessionSummary(ctx context.Context, summary dom
 func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error) {
 	var summary domain.SessionSummary
 	var regime string
-	var brokerRuntime, guardOutcomes []byte
+	var brokerRuntime, guardOutcomes, taxSnapshots []byte
 
 	err := r.pool.QueryRow(ctx, `
-		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes
+		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes, tax_snapshots, after_tax_pnl, total_tax_paid, parameters_version
 		FROM session_summaries
 		WHERE session_id = $1
 	`, sessionID).Scan(
 		&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
 		&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
 		&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
-		&summary.ApprovalID, &guardOutcomes,
+		&summary.ApprovalID, &guardOutcomes, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
+		&summary.ParametersVersion,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -138,13 +145,18 @@ func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID s
 			return nil, fmt.Errorf("unmarshal guard_outcomes: %w", err)
 		}
 	}
+	if len(taxSnapshots) > 0 {
+		if err := json.Unmarshal(taxSnapshots, &summary.TaxSnapshots); err != nil {
+			return nil, fmt.Errorf("unmarshal tax_snapshots: %w", err)
+		}
+	}
 
 	return &summary, nil
 }
 
 func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]domain.SessionSummary, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes
+		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes, tax_snapshots, after_tax_pnl, total_tax_paid, parameters_version
 		FROM session_summaries
 		ORDER BY time DESC
 	`)
@@ -157,13 +169,14 @@ func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]dom
 	for rows.Next() {
 		var summary domain.SessionSummary
 		var regime string
-		var brokerRuntime, guardOutcomes []byte
+		var brokerRuntime, guardOutcomes, taxSnapshots []byte
 
 		err := rows.Scan(
 			&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
 			&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
 			&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
-			&summary.ApprovalID, &guardOutcomes,
+			&summary.ApprovalID, &guardOutcomes, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
+			&summary.ParametersVersion,
 		)
 		if err != nil {
 			continue
@@ -176,6 +189,11 @@ func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]dom
 		}
 		if len(guardOutcomes) > 0 {
 			if err := json.Unmarshal(guardOutcomes, &summary.GuardOutcomes); err != nil {
+				continue
+			}
+		}
+		if len(taxSnapshots) > 0 {
+			if err := json.Unmarshal(taxSnapshots, &summary.TaxSnapshots); err != nil {
 				continue
 			}
 		}
