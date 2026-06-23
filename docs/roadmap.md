@@ -90,7 +90,7 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 
 ### Wave 9 YELLOW（5 個，**plan 已就緒，採 forward-compat 設計**）
 
-**計畫檔案**：[`.omo/plans/wave-9-plan.md`](../.omo/plans/wave-9-plan.md)
+**計畫檔案**：gitignored local-only（不計入版本控制）
 
 **5 個事件**：`ChannelIndividualHealth`、`RegimeChangeConfirmed`、`FactorWeightRegression`、`DriftDetector`、`IngestionLagSpike`
 
