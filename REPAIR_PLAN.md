@@ -9,9 +9,9 @@
 ## 一、修復範圍與非目標
 
 ### 範圍（IN）
-- `web/static/js/pages/strategies.js`（338 行）—— 主要修改
-- `web/static/js/shared/app-utils.js` —— 新增 `classifyFetchError` 工具
-- `web/static/js/__tests__/strategies.test.mjs` —— 新增（測試 5 種失敗模式）
+- `web/static/js/pages/strategies.js`（491 行）—— 主要修改
+- `web/static/js/shared/fetch-error.js` —— 新增 `classifyFetchError` 工具
+- `web/static/js/__tests__/*.test.mjs` —— 4 個測試檔（拆分為 `fetch-error` / `fetch-error-timeout` / `process-strategies-results` / `render-partial-banner`）
 
 ### 非目標（OUT）
 - 不修改 backend Go 程式碼
@@ -25,16 +25,15 @@
 
 ### Priority 1：fetchJSON 錯誤分類（解模式 A、B）
 
-**現況**：`strategies.js:52-60` 的 `fetchJSON` 直接拋出 `TypeError` 或 `Error(... -> status)`，由 line 80 原樣渲染。
+**現況**：`fetchJSON` 函式直接拋出 `TypeError` 或 `Error(HTTP ...)`，由 `renderStrategiesPage` 的 catch block 原樣渲染。
 
 **修改**：
-- 新增 `app-utils.js` 工具函式 `classifyFetchError(err, url)`，回傳結構：
+- 新增 `web/static/js/shared/fetch-error.js` 工具函式 `classifyFetchError(err, url)`，回傳結構：
   ```js
-  { kind: 'network', message: '後端未啟動...', recoverable: true, hint: 'go run ./cmd/atlas --api' }
-  { kind: 'http_503', message: '策略心法 registry 未初始化...', recoverable: true, hint: 'data/seeds/strategy_techniques.json' }
-  { kind: 'http_4xx', message: '請求被拒', recoverable: false }
-  { kind: 'http_5xx', message: '後端錯誤', recoverable: true }
-  { kind: 'parse', message: '回應格式錯誤', recoverable: false }
+  { kind: 'network' | 'http_503' | 'http_5xx' | 'http_4xx' | 'http_410' | 'timeout' | 'schema' | 'unknown',
+    message: string,
+    recoverable: boolean,
+    hint: string }
   ```
 - `strategies.js` 改用 `classifyFetchError` 後渲染
 
@@ -46,45 +45,53 @@
 
 ### Priority 2：Partial-failure tolerance（解模式 C）
 
-**現況**：`strategies.js:249` `Promise.all` 容忍度不對稱（只有 decision-chain 有 catch）。
+**現況**：`loadStrategiesData` 使用 `Promise.all`，容忍度不對稱（只有 decision-chain 有 catch）。
 
-**修改**：改為 `Promise.allSettled`，並對每條 endpoint 設定最低容忍度：
-- `/api/strategies` → **核心**，失敗 → data_status: 'failed'，但仍嘗試顯示 layers（如果有）
-- `/api/strategies/layers` → **次要**，失敗 → 顯示 strategies 但 KPI 顯示「5 層覆蓋：--」
-- `/api/dashboard/decision-chain` → **輔助**，失敗 → 指標卡顯示「--」
+**修改**：改為 `Promise.allSettled`，並對每條 endpoint 設定分級失敗處理：
+- `/api/strategies` → **核心**，失敗 → `dataStatus='partial'`（單一核心失敗）或 `'failed'`（兩個核心失敗）
+- `/api/strategies/layers` → **核心**，失敗 → 同上邏輯
+- `/api/dashboard/decision-chain` → **輔助**，失敗 → 指標卡顯示「--」+ 黃色 banner「短線指標無法顯示」，不影響 `dataStatus`（核心成功時為 `'ok'`、同時僅 indicators 失敗時降為 `partial`/`failed`）
+
+**`dataStatus` 閾值**（於 `processStrategiesResults()`）：
+- `coreFailures === 0` → `'ok'`（strategies 非空）或 `'empty'`（strategies 空）
+- `coreFailures === 1` → `'partial'`
+- `coreFailures >= 2` → `'failed'`
 
 **測試**：
-- mock strategies=ok、layers=fail → 頁面顯示 strategies 內容但 KPI 顯示覆蓋「--」、頂部黃色 banner「layers 載入失敗」
-- mock strategies=fail、layers=ok → 頁面顯示錯誤狀態（含啟動指令）
-- 三條全 fail → 完整錯誤訊息
+- mock strategies=ok、layers=fail → `dataStatus='partial'`、頁面顯示 strategies 內容、頂部黃色 banner「部分資料載入失敗」
+- mock strategies=fail、layers=ok → `dataStatus='partial'`、顯示錯誤（含啟動指令）
+- mock strategies=fail、layers=fail → `dataStatus='failed'`、完整錯誤訊息
+- 三條全 fail 但都是 schema → 同 `'failed'`（schema 計入 coreFailures）
 
 ### Priority 3：data_status 標記（解模式 D、E）
 
-**現況**：line 254-256 用 `|| []` 兜底，無法區分「後端回空陣列」與「schema 不符」。
+**現況**：`loadStrategiesData` 用 `|| []` 兜底，無法區分「後端回空陣列」與「schema 不符」。
 
-**修改**：`loadStrategiesData` 回傳結構化結果：
+**修改**：`processStrategiesResults` 回傳結構化結果：
 ```js
 {
-  data_status: 'ok' | 'partial' | 'empty' | 'failed',
+  dataStatus: 'idle' | 'ok' | 'partial' | 'empty' | 'failed',
   strategies: [],
   layers: [],
   coreIndicators: null,
-  errors: { '/api/strategies': err, ... }
+  indicatorsError: null,
+  errors: { '/api/strategies': classified, ... }
 }
 ```
 
+**說明**：本實作**不**新增獨立的 `'malformed'` 狀態；schema 錯誤（缺 `strategies` / `layers` 欄位）會被計入 `coreFailures`，因此同樣走 `'partial'` / `'failed'` 路徑，並在 errors map 內以 `kind: 'schema'` 區分。
+
 **測試**：
-- mock 回 `{ strategies: [] }` → data_status='empty'，頁面顯示「資料庫尚無心法，請聯絡管理員」
-- mock 回 `{}`（無 strategies 欄位）→ data_status='malformed'，頁面顯示「回應格式錯誤，請檢查後端版本」
-- mock 回正確資料 → data_status='ok'
+- mock 回 `{ strategies: [] }` → `dataStatus='empty'`、頁面顯示「資料庫為空」banner
+- mock 回 `{}`（無 strategies 欄位）→ 計入 coreFailures、`dataStatus='partial'` 或 `'failed'`、errors map 含 `kind: 'schema'`
+- mock 回正確資料 → `dataStatus='ok'`
 
 ### Priority 4：Loading state 可見（解模式 flicker）
 
-**現況**：line 71-75 同步移除 loading class，用戶看不到「載入中…」。
+**現況**：先前實作同步移除 loading class，用戶看不到「載入中…」。
 
 **修改**：
 - 保留 `class="empty loading"` 直到 `render()` 完成
-- 用 `app-utils.js:39-41` 的 `renderSkeleton(lines)` 取代 line 83-90
 - skeleton 內每行加 `<div class="skeleton-line"></div>` 觸發 CSS 動畫（CSS 不在此 PR 範圍，但 class 已就位）
 
 **測試**：
@@ -95,19 +102,23 @@
 
 ## 三、實作順序（TDD）
 
-1. **Red**：寫 `web/static/js/__tests__/strategies.test.mjs`，覆蓋 5 種失敗模式 + data_status + loading state
+1. **Red**：寫測試於 4 個檔案：
+   - `web/static/js/__tests__/fetch-error.test.mjs` —— 11 個 case 覆蓋 network / 503 / 5xx / 4xx / 410 / unknown
+   - `web/static/js/__tests__/fetch-error-timeout.test.mjs` —— 3 個 case 覆蓋 AbortError
+   - `web/static/js/__tests__/process-strategies-results.test.mjs` —— 16 個 case 覆蓋 5 種失敗模式 + data_status 閾值
+   - `web/static/js/__tests__/render-partial-banner.test.mjs` —— 10 個 case 覆蓋 banner 渲染
 2. **Green**：實作 `classifyFetchError` + 改寫 `fetchJSON` + 改寫 `loadStrategiesData` + 改寫錯誤渲染
-3. **Refactor**：對齊 `app-utils.js` 既有風格（var、function declarations）
-4. **Verify**：`node --test web/static/js/__tests__/strategies.test.mjs`、`lsp_diagnostics`、`gitnexus_detect_changes`
+3. **Refactor**：抽出 `processStrategiesResults` / `renderPartialBanner` 為 pure function + 模組測試
+4. **Verify**：`node --test web/static/js/__tests__/`、`lsp_diagnostics`、`gitnexus_detect_changes`
 
 ---
 
 ## 四、驗收標準
 
-- [ ] `node --test web/static/js/__tests__/strategies.test.mjs` 全綠
+- [ ] `node --test web/static/js/__tests__/` 全綠
 - [ ] 5 種失敗模式都有對應測試
 - [ ] 錯誤訊息含可行動 hint（啟動指令、檔案路徑）
-- [ ] `data_status` 結構對齊 `parseSessionsList` 風格
+- [ ] `dataStatus` 結構與 `processStrategiesResults` 對齊
 - [ ] 部分失敗時頁面仍可用（顯示已成功部分 + 警告 banner）
 - [ ] `lsp_diagnostics` 0 errors
 - [ ] `gitnexus_detect_changes` 影響範圍 ≤ 3 symbols
