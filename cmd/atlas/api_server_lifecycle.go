@@ -27,6 +27,8 @@ import (
 // apiServerLifecycleDeps groups the dependencies needed by
 // runAPIServerLifecycle. Passed as a struct so the signature stays
 // stable as new concerns (e.g. metrics, tracing) are added.
+//
+//nolint:unused // TODO(#611 follow-up): wire runAPIServerLifecycle caller in main.go
 type apiServerLifecycleDeps struct {
 	Mux             *http.ServeMux
 	APIAddr         string
@@ -40,6 +42,8 @@ type apiServerLifecycleDeps struct {
 // server, blocks until shutdown is triggered, then gracefully tears
 // down. Returns the server error if the server failed (not on
 // graceful shutdown).
+//
+//nolint:unused // TODO(#611 follow-up): wire runAPIServerLifecycle caller in main.go
 func runAPIServerLifecycle(d apiServerLifecycleDeps) error {
 	authWrappedMux := shared.AuthMiddleware(d.Mux)
 	finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

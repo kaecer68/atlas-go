@@ -55,6 +55,8 @@ import (
 // experimentDeps groups the dependencies needed by all 11 experiment tasks.
 // Passed as a struct so the function signature stays compact as new
 // tasks are added.
+//
+//nolint:unused // TODO(#611 follow-up): wire registerExperimentTasks caller in main.go
 type experimentDeps struct {
 	taskMgr        *apigateway.BackgroundTaskManager
 	cfg            config.Config
@@ -76,6 +78,8 @@ type experimentDeps struct {
 // here are fire-and-register: a Register error is logged and the task
 // is silently dropped (matches the existing pattern in main.go for
 // non-critical background work).
+//
+//nolint:unused // TODO(#611 follow-up): wire registerExperimentTasks caller in main.go
 func registerExperimentTasks(d experimentDeps) {
 	// Register auto_daily_simulation — runs daily simulation at market close.
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
