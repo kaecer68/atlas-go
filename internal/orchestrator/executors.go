@@ -117,6 +117,14 @@ type ExecutionContext struct {
 	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
 	Scratchpad                 *Scratchpad     // optional reasoning trace recorder
 	FactorSnapshot             *FactorSnapshot // pre-computed factor scores for executor consumption
+	// Strategy injection points. nil → use the matching Default*Strategy implementation.
+	// Embed a custom struct to override any phase without rewriting ExecuteWithContext.
+	MutedAgentFilter         MutedAgentFilterStrategy
+	RegimeInference          RegimeInferenceStrategy
+	RecommendationCollection RecommendationCollectionStrategy
+	MomentumCrashProtection  MomentumCrashProtectionStrategy
+	WeightApplication        WeightApplicationStrategy
+	ControlLayer             ControlLayerStrategy
 }
 
 // ResearchResult holds all outputs from executing registry research.
@@ -165,32 +173,42 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		})
 	}
 
+	// Resolve strategy defaults. Each phase can be overridden by setting the
+	// corresponding field on ExecutionContext before calling ExecuteWithContext.
+	if ctx.MutedAgentFilter == nil {
+		ctx.MutedAgentFilter = DefaultMutedAgentFilterStrategy{}
+	}
+	if ctx.RegimeInference == nil {
+		ctx.RegimeInference = DefaultRegimeInferenceStrategy{}
+	}
+	if ctx.RecommendationCollection == nil {
+		ctx.RecommendationCollection = DefaultRecommendationCollectionStrategy{}
+	}
+	if ctx.MomentumCrashProtection == nil {
+		ctx.MomentumCrashProtection = DefaultMomentumCrashProtectionStrategy{}
+	}
+	if ctx.WeightApplication == nil {
+		ctx.WeightApplication = DefaultWeightApplicationStrategy{}
+	}
+	if ctx.ControlLayer == nil {
+		ctx.ControlLayer = DefaultControlLayerStrategy{}
+	}
+
 	quoteBySymbol := make(map[string]domain.Quote, len(ctx.Quotes))
 	for _, quote := range ctx.Quotes {
 		quoteBySymbol[quote.Symbol] = quote
 	}
 
-	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
+	registry := ctx.MutedAgentFilter.Filter(ctx.Registry, ctx.Plugins)
 
-	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.Scratchpad, ctx.SessionID)
-	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
+	regime := ctx.RegimeInference.InferRegime(ctx, registry, quoteBySymbol)
+	raw, rejects := ctx.RecommendationCollection.Collect(ctx.Context, registry, quoteBySymbol, regime, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
 
-	if ctx.Policy.MomentumCrashProtection {
-		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
-	}
+	raw = ctx.MomentumCrashProtection.Apply(raw, quoteBySymbol, ctx.Policy)
 
-	var weightData []*portfolio.DarwinianAgentWeight
-	controlInput := raw
-	if ctx.WeightManager != nil {
-		var convictionEvents []portfolio.ConvictionClampingEvent
-		controlInput, convictionEvents = ctx.WeightManager.ApplyDarwinianWeightsWithEvents(raw)
-		weightData = ctx.WeightManager.GetAllAgentWeightData()
-		if len(convictionEvents) > 0 && ctx.ConvictionClampingCallback != nil {
-			ctx.ConvictionClampingCallback(convictionEvents)
-		}
-	}
+	controlInput, weightData := ctx.WeightApplication.ApplyWeights(raw, ctx.WeightManager, ctx.ConvictionClampingCallback)
 
-	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
+	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
 
 	return ResearchResult{
 		Regime:               regime,
