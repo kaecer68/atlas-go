@@ -1,8 +1,7 @@
 # Generated data — 6GB+, never needed by Claude
 data/
 
-# Code graph indices
-.codegraph/
+# GitNexus index
 .gitnexus/
 
 # Build artifacts
