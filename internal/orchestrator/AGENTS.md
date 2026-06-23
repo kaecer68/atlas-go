@@ -7,8 +7,27 @@
 ## 核心職責
 
 - **流程協調** (`SystemCore`)：管理模擬生命週期，連結市場資料、實驗狀態與模擬引擎。
-- **分層路由** (`executors.go`)：依序執行 `Context` (Regime) → `Sector/Style/Superinvestor` (Agent) → `Control` (CRO/CIO) 三層架構。
+- **分層路由** (`executor_*.go`)：依序執行 `Context` (Regime) → `Sector/Style/Superinvestor` (Agent) → `Control` (CRO/CIO) 三層架構。檔案已於 #611 sub-issue-8 拆分為 11 個按關注點分離的同 package 檔案（見下方「Executor 檔案佈局」）。
 - **外掛託管** (`PluginHost`)：以統一介面處理 PRISM、Swarm、JANUS 等外部子系統的掛載與生命週期勾子。
+
+## Executor 檔案佈局（sub-issue-8，PR #684）
+
+| 檔案 | 行數 | 內容 |
+|------|------|------|
+| `executors.go` | 30 | Package doc + 檔案地圖 |
+| `executor_types.go` | 93 | 公開型別（LayerRouter / ExecutionContext / ResearchResult / FilterAgentsByLayer）|
+| `executor_strategies.go` | 102 | 6 strategy 介面 + 6 default impls |
+| `executor_pipeline.go` | 148 | ExecuteWithContext + 5 ExecuteRegistry* wrappers |
+| `executor_darwinian.go` | 47 | ExecuteRegistryResearchWithDarwinianWeights + private wrapper |
+| `executor_policy.go` | 15 | DefaultExecutionPolicy |
+| `executor_muted_filter.go` | 62 | filterMutedAgents + loadRecOverrides |
+| `executor_regime.go` | 72 | inferRegime |
+| `executor_collection.go` | 431 | collectRecommendations + avgConvictionScore |
+| `executor_momentum_crash.go` | 46 | applyMomentumCrashProtection |
+| `executor_control.go` | 249 | applyControlLayerWithOutcomes + applyCrowdingPenalty + applyAntiCorrelationLayer + severityForControlAgent + passRatio |
+| `executor_symbols.go` | 189 | DefaultSymbols / loadSymbolsFromCSV / ExpandUniverse / RegistrySymbols / SymbolsForSkill / symbolIterator |
+
+修改 executor 邏輯時，請優先定位到對應的關注點檔案，避免在錯誤檔案添加無關代碼。新增 phase helper 時參考既有關注點邊界（muted / regime / collection / momentum_crash / control / symbols）。
 
 ---
 
