@@ -73,16 +73,16 @@ const (
 
 // TrainingResult contains outcome of training
 type TrainingResult struct {
-	HitRate      float64
-	SharpeRatio  float64
-	MaxDrawdown  float64
-	TotalReturn  float64
-	SignalsCount int
-	WinCount     int
-	LossCount    int
-	Error        string
-	Duration     time.Duration
-	Synthetic    bool // true when no TrainingExecutor was available
+	HitRate      float64 `json:"hit_rate"`
+	SharpeRatio  float64 `json:"sharpe_ratio"`
+	MaxDrawdown  float64 `json:"max_drawdown"`
+	TotalReturn  float64 `json:"total_return"`
+	SignalsCount int     `json:"signals_count"`
+	WinCount     int     `json:"win_count"`
+	LossCount    int     `json:"loss_count"`
+	Error        string  `json:"error,omitempty"`
+	Duration     time.Duration `json:"duration,omitempty"` // nanoseconds; JS reads as number
+	Synthetic    bool          `json:"synthetic,omitempty"` // true when no TrainingExecutor was available
 
 	// Explanation is an optional natural-language explanation of the
 	// training result, populated by the ScenarioExplainer hook when
@@ -226,10 +226,10 @@ func (q *TrainingQueue) GetAllTasks() []*TrainingTask {
 
 // CompletedTrainingResult pairs a regime with its completed training result.
 type CompletedTrainingResult struct {
-	AgentID    string
-	AgentSkill string
-	Regime     RegimeType
-	Result     TrainingResult
+	AgentID    string     `json:"agent_id"`
+	AgentSkill string     `json:"agent_skill,omitempty"`
+	Regime     RegimeType `json:"regime"`
+	Result     TrainingResult `json:"result"`
 }
 
 // TrainingExecutor runs a single training task and returns real metrics.
