@@ -39,6 +39,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/risk", shared.Get(h.HandleRiskMetrics))
 	mux.Handle("GET /api/dashboard/correlation-matrix", shared.Get(h.HandleCorrelationMatrix))
 	mux.Handle("GET /api/dashboard/risk-calibration", shared.Get(h.HandleRiskCalibration))
+	mux.Handle("GET /api/risk/commentary", shared.Get(h.HandleRiskCommentary))
 }
 
 func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
@@ -199,6 +200,37 @@ func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{
 		"report":    report,
 		"generated": time.Now().Format(time.RFC3339),
+	}
+}
+
+// HandleRiskCommentary returns the latest risk gate decision commentary.
+func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
+	if h.RiskGate == nil {
+		return http.StatusOK, map[string]any{
+			"status":    "not_available",
+			"message":   "risk gate not configured in this mode",
+			"generated": false,
+		}
+	}
+	dec := h.RiskGate.LastDecision()
+	if dec.Recorded.IsZero() {
+		return http.StatusOK, map[string]any{
+			"status":    "not_available",
+			"message":   "no risk decision recorded yet",
+			"generated": false,
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"phase":                 string(dec.Phase),
+		"verdict":               string(dec.Verdict),
+		"reason":                dec.Reason,
+		"action_type":           string(dec.Action.Type),
+		"action_description":    dec.Action.Description,
+		"mode":                  dec.Mode,
+		"symbol":                dec.Symbol,
+		"recorded_at":           dec.Recorded.Format(time.RFC3339),
+		"confidence_commentary": dec.ConfidenceCommentary,
+		"generated":             true,
 	}
 }
 

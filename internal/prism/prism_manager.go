@@ -4,7 +4,9 @@ package prism
 
 import (
 	"container/list"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +44,59 @@ func (r RegimeType) String() string {
 	}
 }
 
+// MarshalJSON serializes RegimeType as an UPPER_SNAKE_CASE string so
+// frontend consumers can match keys like RISK_ON / RISK_OFF without
+// keeping an int<->string mapping table.
+func (r RegimeType) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + r.jsonKey() + `"`), nil
+}
+
+// jsonKey returns the stable UPPER_SNAKE_CASE identifier for the regime.
+func (r RegimeType) jsonKey() string {
+	switch r {
+	case RegimeRiskOn:
+		return "RISK_ON"
+	case RegimeRiskOff:
+		return "RISK_OFF"
+	case RegimeHighVolatility:
+		return "HIGH_VOLATILITY"
+	case RegimeLowVolatility:
+		return "LOW_VOLATILITY"
+	case RegimeTransition:
+		return "TRANSITION"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// UnmarshalJSON accepts both the UPPER_SNAKE_CASE string form (what
+// MarshalJSON emits) and a raw integer (legacy callers, tests, and
+// hand-written fixtures). Strings are matched case-insensitively.
+func (r *RegimeType) UnmarshalJSON(data []byte) error {
+	trimmed := strings.Trim(string(data), `"`)
+	if trimmed == "" || trimmed == "null" {
+		*r = RegimeTransition
+		return nil
+	}
+	upper := strings.ToUpper(trimmed)
+	for _, candidate := range []RegimeType{
+		RegimeRiskOn, RegimeRiskOff,
+		RegimeHighVolatility, RegimeLowVolatility,
+		RegimeTransition,
+	} {
+		if candidate.jsonKey() == upper {
+			*r = candidate
+			return nil
+		}
+	}
+	var asInt int
+	if err := json.Unmarshal(data, &asInt); err == nil && asInt >= 0 && asInt < int(RegimeCount) {
+		*r = RegimeType(asInt)
+		return nil
+	}
+	return fmt.Errorf("prism: invalid RegimeType %q", trimmed)
+}
+
 // TrainingTask represents a single training unit for an agent
 type TrainingTask struct {
 	ID          string
@@ -73,16 +128,16 @@ const (
 
 // TrainingResult contains outcome of training
 type TrainingResult struct {
-	HitRate      float64
-	SharpeRatio  float64
-	MaxDrawdown  float64
-	TotalReturn  float64
-	SignalsCount int
-	WinCount     int
-	LossCount    int
-	Error        string
-	Duration     time.Duration
-	Synthetic    bool // true when no TrainingExecutor was available
+	HitRate      float64       `json:"hit_rate"`
+	SharpeRatio  float64       `json:"sharpe_ratio"`
+	MaxDrawdown  float64       `json:"max_drawdown"`
+	TotalReturn  float64       `json:"total_return"`
+	SignalsCount int           `json:"signals_count"`
+	WinCount     int           `json:"win_count"`
+	LossCount    int           `json:"loss_count"`
+	Error        string        `json:"error,omitempty"`
+	Duration     time.Duration `json:"duration,omitempty"`  // nanoseconds; JS reads as number
+	Synthetic    bool          `json:"synthetic,omitempty"` // true when no TrainingExecutor was available
 
 	// Explanation is an optional natural-language explanation of the
 	// training result, populated by the ScenarioExplainer hook when
@@ -226,10 +281,10 @@ func (q *TrainingQueue) GetAllTasks() []*TrainingTask {
 
 // CompletedTrainingResult pairs a regime with its completed training result.
 type CompletedTrainingResult struct {
-	AgentID    string
-	AgentSkill string
-	Regime     RegimeType
-	Result     TrainingResult
+	AgentID    string         `json:"agent_id"`
+	AgentSkill string         `json:"agent_skill,omitempty"`
+	Regime     RegimeType     `json:"regime"`
+	Result     TrainingResult `json:"result"`
 }
 
 // TrainingExecutor runs a single training task and returns real metrics.

@@ -33,7 +33,8 @@ export function switchPage(id, silent) {
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
     metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理', config: '部署配置',
     evolution_panel: '演化透視', strategies: '投資心法',
-  swarm: 'Swarm 模擬', crossmarket: '美台連動監控'
+  swarm: 'Swarm 模擬', crossmarket: '美台連動監控',
+  prism: 'PRISM 訓練結果'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -99,11 +100,12 @@ async function loadModules() {
     import('./pages/evolution_panel.js'),
     import('./pages/decision-chain.js'),
     import('./pages/strategies.js'),
-  import('./pages/swarm.js'),
+    import('./pages/swarm.js'),
     import('./pages/crossmarket.js'),
+    import('./pages/prism.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'strategies', 'swarm', 'crossmarket'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'strategies', 'swarm', 'crossmarket', 'prism'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -224,6 +226,7 @@ async function loadAll() {
     if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(live);
     if (m.risk.renderRiskCards) m.risk.renderRiskCards(riskExposure, pipeline, capitalPhase);
     if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(riskCalibration);
+    if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
 
     if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
     if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
@@ -348,6 +351,7 @@ async function loadPageData(pageId) {
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
       if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
       if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(liveResults[9]);
+      if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
       if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
       if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
     } catch(e) { console.error(e); }
@@ -388,6 +392,9 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'crossmarket') {
     try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'prism') {
+    try { if (m.prism && m.prism.loadPrismData) m.prism.loadPrismData(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'evolution_panel') {
     try {

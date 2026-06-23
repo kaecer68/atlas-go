@@ -33,6 +33,7 @@ type SessionSummary struct {
 	AfterTaxPnL           float64            `json:"after_tax_pnl"`
 	TotalTaxPaid          float64            `json:"total_tax_paid"`
 	ParametersVersion     string             `json:"parameters_version,omitempty"`
+	RiskCommentary        string             `json:"risk_commentary,omitempty"`
 }
 
 type BrokerRuntimeAudit struct {

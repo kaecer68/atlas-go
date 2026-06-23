@@ -77,13 +77,23 @@ while IFS= read -r file; do
       #   internal/monitoring/api/dashboard/fetch_log.go:79
       # gate_mode is returned via map literal in
       #   internal/monitoring/api/dashboard/risk/handlers.go:121
+      # action_type, action_description, confidence_commentary are returned via
+      #   map literal in internal/monitoring/api/risk/handlers.go:222-233
+      #   (HandleRiskCommentary) — designed fields with JS consumers + Go tests,
+      #   but built dynamically rather than via a typed response struct.
+      # agent_skill, signals_count are returned from internal/prism/ which is
+      #   outside gentags scan scope (only domain/api/service/reporting/industry/
+      #   narrative/config are scanned). Now json-tagged on prism structs as of
+      #   PR #677, but gentags still doesn't include them in valid_fields.json.)
       # — both are designed fields with JS consumers + Go tests, but
       # built dynamically rather than via a typed response struct.)
       auto_discovered_count|auto_discovered_rules|\
       avg_improvement|convergence_rate|success_rate|stability_score|\
       confidence_score|oil_pct|vix_level|\
       core_indicators|last_24h|next_run|\
-      empty_state|gate_mode) continue ;;
+      empty_state|gate_mode|\
+      action_type|action_description|confidence_commentary|\
+      agent_skill|signals_count) continue ;;
     esac
 
     echo "$field" >> "$FOUND_FIELDS"

@@ -182,14 +182,15 @@ type RiskEventPayload struct {
 
 // RiskGateEventPayload 风险闸门决策事件载荷
 type RiskGateEventPayload struct {
-	Phase             string    `json:"phase"`   // pre_trade, in_trade, post_trade
-	Verdict           string    `json:"verdict"` // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
-	Reason            string    `json:"reason"`
-	ActionType        string    `json:"action_type"`        // SELL, REDUCE, FREEZE, LIQUIDATE, NOTIFY (空字串 if no action)
-	ActionDescription string    `json:"action_description"` // 人類可讀描述 (空字串 if no action)
-	Mode              string    `json:"mode"`               // NORMAL, CAUTIOUS, DEFENSIVE, SUSPENDED
-	Symbol            string    `json:"symbol"`
-	Timestamp         time.Time `json:"timestamp"`
+	Phase                string    `json:"phase"`   // pre_trade, in_trade, post_trade
+	Verdict              string    `json:"verdict"` // ALLOW, REDUCE, BLOCK, HALT, ALERT_ONLY
+	Reason               string    `json:"reason"`
+	ActionType           string    `json:"action_type"`        // SELL, REDUCE, FREEZE, LIQUIDATE, NOTIFY (空字串 if no action)
+	ActionDescription    string    `json:"action_description"` // 人類可讀描述 (空字串 if no action)
+	Mode                 string    `json:"mode"`               // NORMAL, CAUTIOUS, DEFENSIVE, SUSPENDED
+	Symbol               string    `json:"symbol"`
+	Timestamp            time.Time `json:"timestamp"`
+	ConfidenceCommentary string    `json:"confidence_commentary,omitempty"` // LLM 生成信心註釋
 }
 
 // IndustryCalendarEventPayload 产业日历事件载荷

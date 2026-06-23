@@ -28,6 +28,7 @@ type RiskGate struct {
 	inTrade         *InTradeGate
 	postTrade       *PostTradeGate
 	subs            []func(RiskDecision)
+	lastDecision    RiskDecision
 	lastCalibration *CalibrationReport
 }
 
@@ -172,9 +173,20 @@ func (g *RiskGate) SetMode(mode RiskGateMode) {
 
 func (g *RiskGate) publish(ctx context.Context, dec RiskDecision) {
 	dec.ConfidenceCommentary = EnrichDecision(ctx, dec)
+	g.mu.Lock()
+	g.lastDecision = dec
+	g.mu.Unlock()
 	for _, sub := range g.subs {
 		sub(dec)
 	}
+}
+
+// LastDecision returns the most recent risk decision, or a zero-value RiskDecision
+// if no decision has been recorded yet.
+func (g *RiskGate) LastDecision() RiskDecision {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.lastDecision
 }
 
 // Subscribe registers a callback for risk decision events.

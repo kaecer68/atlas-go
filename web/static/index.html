@@ -42,6 +42,7 @@
    <a data-page="config" tabindex="0" title="部署配置">⚙️ 部署配置</a>
     <a data-page="strategies" tabindex="0" title="投資心法庫">🧠 投資心法</a>
     <a data-page="swarm" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
+    <a data-page="prism" tabindex="0" title="PRISM 訓練結果">🧪 PRISM 訓練結果</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -170,6 +171,10 @@
       <div class="panel wide" id="riskCalibrationPanel" style="display:none;">
         <h2>自主校準</h2>
         <div id="riskCalibration" class="empty loading">載入中…</div>
+      </div>
+      <div class="panel wide" id="liveRiskCommentaryPanel" style="display:none;">
+        <h2>🧠 風控長評語（Risk Commentary）</h2>
+        <div id="liveRiskCommentary" class="empty loading">載入中…</div>
       </div>
     </div>
 
@@ -718,6 +723,14 @@
         <h3>🧠 策略推薦</h3>
         <div class="panel" id="swarm-strategies"></div>
       </div>
+    </div>
+
+    <div class="page" id="page-prism">
+      <div class="page-header">
+        <h1>🧪 PRISM 訓練結果</h1>
+        <p class="page-desc">Regime-Specific 訓練結果 — 依市場體制（RISK_ON / RISK_OFF / NEUTRAL）分群的 AI 策略績效</p>
+      </div>
+      <div id="prismContent" class="empty loading">載入中…</div>
     </div>
   </div>
 </div>

@@ -340,7 +340,7 @@ func TestPostgresRepository_OutcomesAuditAndOtherCRUDWithFakePool(t *testing.T) 
 	now := time.Date(2026, 6, 14, 11, 0, 0, 0, time.UTC)
 	outcomeRow := []any{now, "session-1", "2330", "agent", "sector", 80, true, "", 100.5, []byte(`{"window":"session-1","symbol":"2330","agent_id":"agent","conviction":80}`)}
 	rejectRow := []any{now, "session-1", "2330", "agent", "skill", "criterion", "label", "0.7", "0.5", []byte(`{"total":0.5}`)}
-	summaryRow := []any{now, "session-1", "RISK_ON", 2, 1, 900000.0, 1000000.0, 3, []byte(`{}`), "agent-next", "proposal", "commit", "approval", []byte(`[]`), []byte(`null`), 0.0, 0.0, ""}
+	summaryRow := []any{now, "session-1", "RISK_ON", 2, 1, 900000.0, 1000000.0, 3, []byte(`{}`), "agent-next", "proposal", "commit", "approval", []byte(`[]`), "test-risk-commentary", []byte(`null`), 0.0, 0.0, ""}
 	interventionRow := []any{now, "hi-1", "pause_agent", "agent", "model", "sector", "2330", 0.5, "reason", "operator", "session-1"}
 	pool := &fakePGPool{
 		queryFunc: func(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
@@ -468,10 +468,10 @@ func TestPostgresRepository_SessionSummary_TaxAndParamsFields(t *testing.T) {
 	wantParamsVer := "0.0.0.11"
 	taxJSON, _ := json.Marshal(taxSnaps)
 
-	summaryRow18 := []any{
+	summaryRow19 := []any{
 		now, "session-tax-1", "RISK_ON", 2, 1, 900000.0, 1000000.0, 3,
 		[]byte(`{}`), "agent-next", "proposal", "commit", "approval", []byte(`[]`),
-		taxJSON, wantAfterTax, wantTotalTax, wantParamsVer,
+		"", taxJSON, wantAfterTax, wantTotalTax, wantParamsVer,
 	}
 
 	var capturedExecArgs []any
@@ -484,13 +484,13 @@ func TestPostgresRepository_SessionSummary_TaxAndParamsFields(t *testing.T) {
 		},
 		queryFunc: func(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
 			if strings.Contains(sql, "session_summaries") {
-				return &fakeRows{rows: [][]any{summaryRow18}}, nil
+				return &fakeRows{rows: [][]any{summaryRow19}}, nil
 			}
 			return &fakeRows{}, nil
 		},
 		queryRowFunc: func(_ context.Context, sql string, _ ...any) pgx.Row {
 			if strings.Contains(sql, "session_summaries") {
-				return fakeRow{values: summaryRow18}
+				return fakeRow{values: summaryRow19}
 			}
 			return fakeRow{}
 		},
@@ -519,20 +519,23 @@ func TestPostgresRepository_SessionSummary_TaxAndParamsFields(t *testing.T) {
 	if err := repo.SaveSessionSummary(ctx, in); err != nil {
 		t.Fatalf("SaveSessionSummary() error = %v", err)
 	}
-	if len(capturedExecArgs) != 18 {
-		t.Fatalf("SaveSessionSummary() exec args = %d, want 18", len(capturedExecArgs))
+	if len(capturedExecArgs) != 19 {
+		t.Fatalf("SaveSessionSummary() exec args = %d, want 19", len(capturedExecArgs))
 	}
-	if got, ok := capturedExecArgs[14].([]byte); !ok || string(got) != string(taxJSON) {
-		t.Errorf("SaveSessionSummary arg[14] (tax_snapshots) = %v, want %s", capturedExecArgs[14], taxJSON)
+	if got, _ := capturedExecArgs[14].(string); got != "" {
+		t.Errorf("SaveSessionSummary arg[14] (risk_commentary) = %v, want \"\"", got)
 	}
-	if got, _ := capturedExecArgs[15].(float64); got != wantAfterTax {
-		t.Errorf("SaveSessionSummary arg[15] (after_tax_pnl) = %v, want %v", got, wantAfterTax)
+	if got, ok := capturedExecArgs[15].([]byte); !ok || string(got) != string(taxJSON) {
+		t.Errorf("SaveSessionSummary arg[15] (tax_snapshots) = %v, want %s", capturedExecArgs[15], taxJSON)
 	}
-	if got, _ := capturedExecArgs[16].(float64); got != wantTotalTax {
-		t.Errorf("SaveSessionSummary arg[16] (total_tax_paid) = %v, want %v", got, wantTotalTax)
+	if got, _ := capturedExecArgs[16].(float64); got != wantAfterTax {
+		t.Errorf("SaveSessionSummary arg[16] (after_tax_pnl) = %v, want %v", got, wantAfterTax)
 	}
-	if got, _ := capturedExecArgs[17].(string); got != wantParamsVer {
-		t.Errorf("SaveSessionSummary arg[17] (parameters_version) = %v, want %v", got, wantParamsVer)
+	if got, _ := capturedExecArgs[17].(float64); got != wantTotalTax {
+		t.Errorf("SaveSessionSummary arg[17] (total_tax_paid) = %v, want %v", got, wantTotalTax)
+	}
+	if got, _ := capturedExecArgs[18].(string); got != wantParamsVer {
+		t.Errorf("SaveSessionSummary arg[18] (parameters_version) = %v, want %v", got, wantParamsVer)
 	}
 
 	loaded, err := repo.LoadSessionSummary(ctx, "session-tax-1")
