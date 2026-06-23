@@ -1,0 +1,148 @@
+package orchestrator
+
+import (
+	"context"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ml"
+)
+
+// ExecuteWithContext executes registry research using a unified context.
+func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
+	if ctx.Plugins == nil {
+		ctx.Plugins = NewPluginRegistry()
+	}
+
+	// When use_ml_scoring is enabled and no ML scorer is already wired,
+	// create a default ML scorer with OLS. The caller is responsible for
+	// training via MLScorer.Train() before execution — typically done at
+	// system initialization with historical replay data.
+	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Orchestrator.UseMLScoring.Value {
+		if ctx.Plugins.mlScorer == nil {
+			ctx.Plugins.WithMLScorer(NewMLScorer(ml.NewOLS()))
+		}
+	}
+	if ctx.Policy == (domain.ExecutionPolicy{}) {
+		ctx.Policy = DefaultExecutionPolicy()
+	}
+	if ctx.Context == nil {
+		ctx.Context = context.Background()
+	}
+
+	if ctx.Scratchpad != nil {
+		ctx.Scratchpad.Record(ReasoningTrace{
+			SessionID:  ctx.SessionID,
+			Timestamp:  time.Now().UTC(),
+			Phase:      PhaseSystem,
+			Step:       0,
+			Component:  "orchestrator",
+			Action:     "execute_start",
+			Reasoning:  "Starting registry research execution",
+			Data:       map[string]any{"registry_version": ctx.Registry.Version, "quote_count": len(ctx.Quotes)},
+			Confidence: -1,
+		})
+	}
+
+	// Resolve strategy defaults. Each phase can be overridden by setting the
+	// corresponding field on ExecutionContext before calling ExecuteWithContext.
+	if ctx.MutedAgentFilter == nil {
+		ctx.MutedAgentFilter = DefaultMutedAgentFilterStrategy{}
+	}
+	if ctx.RegimeInference == nil {
+		ctx.RegimeInference = DefaultRegimeInferenceStrategy{}
+	}
+	if ctx.RecommendationCollection == nil {
+		ctx.RecommendationCollection = DefaultRecommendationCollectionStrategy{}
+	}
+	if ctx.MomentumCrashProtection == nil {
+		ctx.MomentumCrashProtection = DefaultMomentumCrashProtectionStrategy{}
+	}
+	if ctx.WeightApplication == nil {
+		ctx.WeightApplication = DefaultWeightApplicationStrategy{}
+	}
+	if ctx.ControlLayer == nil {
+		ctx.ControlLayer = DefaultControlLayerStrategy{}
+	}
+
+	quoteBySymbol := make(map[string]domain.Quote, len(ctx.Quotes))
+	for _, quote := range ctx.Quotes {
+		quoteBySymbol[quote.Symbol] = quote
+	}
+
+	registry := ctx.MutedAgentFilter.Filter(ctx.Registry, ctx.Plugins)
+
+	regime := ctx.RegimeInference.InferRegime(ctx, registry, quoteBySymbol)
+	raw, rejects := ctx.RecommendationCollection.Collect(ctx.Context, registry, quoteBySymbol, regime, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
+
+	raw = ctx.MomentumCrashProtection.Apply(raw, quoteBySymbol, ctx.Policy)
+
+	controlInput, weightData := ctx.WeightApplication.ApplyWeights(raw, ctx.WeightManager, ctx.ConvictionClampingCallback)
+
+	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
+
+	return ResearchResult{
+		Regime:               regime,
+		RawRecommendations:   raw,
+		FinalRecommendations: final,
+		GuardOutcomes:        guardOutcomes,
+		ScreeningRejects:     rejects,
+		DarwinianWeights:     weightData,
+	}
+}
+
+func ExecuteRegistryResearch(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string) (domain.Regime, []domain.Recommendation) {
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+	})
+	return result.Regime, result.FinalRecommendations
+}
+
+func ExecuteRegistryResearchDetailed(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string) (domain.Regime, []domain.Recommendation, []domain.Recommendation) {
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations
+}
+
+func ExecuteRegistryResearchDetailedWithPolicy(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation) {
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+		Policy:    policy,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations
+}
+
+func ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+		Policy:    policy,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes
+}
+
+func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
+	registry domain.AgentRegistry,
+	quotes []domain.Quote,
+	overrides map[string]string,
+	policy domain.ExecutionPolicy,
+	plugins *PluginRegistry,
+) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+		Policy:    policy,
+		Plugins:   plugins,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes
+}
