@@ -2900,6 +2900,7 @@ export interface SessionSummary {
   after_tax_pnl: number;
   total_tax_paid: number;
   parameters_version?: string;
+  risk_commentary?: string;
 }
 
 export interface ShippingExecutorParameters {

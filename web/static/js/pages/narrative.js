@@ -52,6 +52,22 @@ function toggleModelAccordion(idx) {
   modelAccordionState.openModelId = wasOpen ? null : 'model-rationale-' + idx;
 }
 
+function toggleEventAccordion(idx, fieldName) {
+  const targetRow = document.getElementById('event-' + fieldName + '-' + idx);
+  const targetBtn = document.getElementById('event-btn-' + fieldName + '-' + idx);
+  if (!targetRow) return;
+
+  const isHidden = targetRow.style.display === 'none';
+  if (isHidden) {
+    targetRow.style.display = 'block';
+    if (targetBtn) targetBtn.textContent = '收起說明 ▲';
+  } else {
+    targetRow.style.display = 'none';
+    if (targetBtn) targetBtn.textContent = '展開說明 ▼';
+  }
+}
+
+window.toggleEventAccordion = toggleEventAccordion;
 window.toggleTemplateAccordion = toggleTemplateAccordion;
 window.toggleModelAccordion = toggleModelAccordion;
 window.toggleSubIndicators = toggleSubIndicators;
@@ -126,6 +142,14 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
           <div style="margin-bottom:3px">敘事看多板塊：${favoredBadges}</div>
           <div>敘事看空板塊：${avoidedBadges}</div>
         </div>
+        ${topEvent && topEvent.explanation ? `<details class="mt-sm">
+          <summary style="font-size:12px;color:var(--accent);cursor:pointer">LLM 解析（點擊展開）</summary>
+          <div class="mt-xs" style="padding:10px;background:var(--bg);border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap"><strong>事件說明：</strong>\n${escapeHtml(topEvent.explanation)}</div>
+        </details>` : ''}
+        ${topEvent && topEvent.sentiment_explanation ? `<details class="mt-sm">
+          <summary style="font-size:12px;color:${sentimentColor};cursor:pointer">情緒解釋（點擊展開）</summary>
+          <div class="mt-xs" style="padding:10px;background:var(--bg);border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap"><strong style="color:${sentimentColor}">情緒說明：</strong>\n${escapeHtml(topEvent.sentiment_explanation)}</div>
+        </details>` : ''}
       </div>
       <div style="margin-left:auto">
         <button class="pipeline-action" onclick="switchPage('narrative')">查看宏觀敘事 →</button>
@@ -266,8 +290,9 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     const sortedList = sortNarrativeEvents(list.slice());
     if (!sortedList.length) { eventsEl.innerHTML = renderEmptyState('目前無觸發的宏觀敘事', ''); }
     else {
-      eventsEl.innerHTML = sortedList.map(e => {
+      eventsEl.innerHTML = sortedList.map((e, idx) => {
         const sClass = e.sentiment > 0 ? 'up' : 'down';
+        const sColor = e.sentiment > 0 ? 'var(--up)' : (e.sentiment < 0 ? 'var(--down)' : 'var(--warn)');
         const sText = e.sentiment > 0 ? '正面' : '負面';
         const tw = timeWindowName(e.time_window || '-');
         const sev = severityName(e.severity || '-');
@@ -310,6 +335,14 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confidence || 0) * 100).toFixed(0)}% · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
           <div class="text-muted text-sm mt-xs">資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)} · 信心來源：${escapeHtml(cs)}</div>
           ${sourceDataHtml}
+          ${e.explanation ? `<details class="mt-sm">
+            <summary style="font-size:12px;color:var(--accent);cursor:pointer">LLM 解析（點擊展開）</summary>
+            <div class="mt-xs" style="padding:10px;background:var(--bg);border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap"><strong>事件說明：</strong>\n${escapeHtml(e.explanation)}</div>
+          </details>` : ''}
+          ${e.sentiment_explanation ? `<details class="mt-sm">
+            <summary style="font-size:12px;color:${sColor};cursor:pointer">情緒解釋（點擊展開）</summary>
+            <div class="mt-xs" style="padding:10px;background:var(--bg);border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap"><strong style="color:${sColor}">情緒說明：</strong>\n${escapeHtml(e.sentiment_explanation)}</div>
+          </details>` : ''}
         </div>`;
       }).join('');
     }

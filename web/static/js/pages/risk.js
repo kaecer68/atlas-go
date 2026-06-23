@@ -271,6 +271,70 @@ export function renderRiskCalibration(data) {
     changesHtml;
 }
 
+export async function renderRiskCommentary(containerOrData) {
+  var el = typeof containerOrData === 'string'
+    ? document.getElementById(containerOrData)
+    : (containerOrData || document.getElementById('liveRiskCommentary'));
+  if (!el) return;
+  el.classList.remove('loading');
+  var panel = document.getElementById('liveRiskCommentaryPanel');
+  if (panel) panel.style.display = '';
+
+  var data = null;
+  try {
+    var resp = await fetch('/api/risk/commentary');
+    if (!resp.ok) {
+      el.innerHTML = '<div class="empty">風險評語取得失敗 (' + resp.status + ')</div>';
+      return;
+    }
+    data = await resp.json();
+  } catch (err) {
+    console.error('[renderRiskCommentary] fetch failed', err);
+    el.innerHTML = '<div class="empty">風險評語連線錯誤</div>';
+    return;
+  }
+
+  if (!data || data.generated === false) {
+    el.innerHTML = '<div class="empty">尚無風控長評語（等待下一次決策）</div>';
+    return;
+  }
+
+  var verdict = data.verdict || 'unknown';
+  var verdictLabel = { allow: '✅ 放行', block: '🛑 阻擋', warn: '⚠️ 警告' }[verdict] || verdict;
+  var verdictColor = verdict === 'allow' ? 'var(--color-success)'
+    : verdict === 'block' ? 'var(--color-danger)'
+    : verdict === 'warn' ? 'var(--color-warning)' : 'var(--muted)';
+
+  var phase = escapeHtml(data.phase || '—');
+  var mode = escapeHtml(data.mode || '—');
+  var symbol = escapeHtml(data.symbol || '—');
+  var reason = escapeHtml(data.reason || '—');
+  var actionType = escapeHtml(data.action_type || '—');
+  var actionDesc = escapeHtml(data.action_description || '—');
+  var recordedAt = data.recorded_at
+    ? new Date(data.recorded_at).toLocaleString('zh-TW')
+    : '—';
+  var commentary = data.confidence_commentary
+    ? escapeHtml(data.confidence_commentary)
+    : '<span style="color:var(--muted)">（LLM 尚未產生信心評語）</span>';
+
+  el.innerHTML =
+    '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">' +
+      '<span style="padding:2px 10px;border-radius:4px;font-size:12px;font-weight:700;background:color-mix(in srgb, ' + verdictColor + ' 15%, transparent);color:' + verdictColor + '">' + verdictLabel + '</span>' +
+      '<span style="font-size:13px;color:var(--muted)">' + phase + ' · ' + mode + ' · ' + symbol + '</span>' +
+      '<span style="margin-left:auto;font-size:11px;color:var(--muted)">' + recordedAt + '</span>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:12px">' +
+      '<div class="metric"><div class="label">原因</div><div class="value" style="font-size:13px;font-weight:400">' + reason + '</div></div>' +
+      '<div class="metric"><div class="label">行動類型</div><div class="value" style="font-size:13px;font-weight:400">' + actionType + '</div></div>' +
+      '<div class="metric"><div class="label">行動說明</div><div class="value" style="font-size:13px;font-weight:400">' + actionDesc + '</div></div>' +
+    '</div>' +
+    '<details open>' +
+      '<summary style="font-size:13px;font-weight:700;cursor:pointer;padding:6px 0;color:var(--text)">🧠 LLM 信心評語（Confidence Commentary）</summary>' +
+      '<div style="margin-top:6px;padding:10px 14px;background:var(--panel-l2);border-left:3px solid ' + verdictColor + ';border-radius:4px;font-size:13px;line-height:1.6;color:var(--text)">' + commentary + '</div>' +
+    '</details>';
+}
+
 export function inferSectorFromAgent(agentID, layer) {
   const agentSectorMap = {
     'semiconductor': 'semiconductor',
