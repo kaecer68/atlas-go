@@ -4,7 +4,9 @@ package prism
 
 import (
 	"container/list"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,6 +67,34 @@ func (r RegimeType) jsonKey() string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// UnmarshalJSON accepts both the UPPER_SNAKE_CASE string form (what
+// MarshalJSON emits) and a raw integer (legacy callers, tests, and
+// hand-written fixtures). Strings are matched case-insensitively.
+func (r *RegimeType) UnmarshalJSON(data []byte) error {
+	trimmed := strings.Trim(string(data), `"`)
+	if trimmed == "" || trimmed == "null" {
+		*r = RegimeTransition
+		return nil
+	}
+	upper := strings.ToUpper(trimmed)
+	for _, candidate := range []RegimeType{
+		RegimeRiskOn, RegimeRiskOff,
+		RegimeHighVolatility, RegimeLowVolatility,
+		RegimeTransition,
+	} {
+		if candidate.jsonKey() == upper {
+			*r = candidate
+			return nil
+		}
+	}
+	var asInt int
+	if err := json.Unmarshal(data, &asInt); err == nil && asInt >= 0 && asInt < int(RegimeCount) {
+		*r = RegimeType(asInt)
+		return nil
+	}
+	return fmt.Errorf("prism: invalid RegimeType %q", trimmed)
 }
 
 // TrainingTask represents a single training unit for an agent

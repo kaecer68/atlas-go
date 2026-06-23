@@ -54,11 +54,12 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 			NonceStorePath:   s.Sim().cfg.BrokerNonceStorePath,
 			NonceRedisPrefix: s.Sim().cfg.BrokerNonceRedisKeyPrefix,
 		},
-		GuardOutcomes: append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
-		RecordedAt:    time.Now(),
-		TaxSnapshots:  append([]domain.TaxSnapshot(nil), result.TaxSnapshots...),
-		AfterTaxPnL:   result.AfterTaxPnL,
-		TotalTaxPaid:  result.TotalTaxPaid,
+		GuardOutcomes:  append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
+		RecordedAt:     time.Now(),
+		TaxSnapshots:   append([]domain.TaxSnapshot(nil), result.TaxSnapshots...),
+		AfterTaxPnL:    result.AfterTaxPnL,
+		TotalTaxPaid:   result.TotalTaxPaid,
+		RiskCommentary: result.RiskCommentary,
 	}
 	if cfg := config.GetParametersConfig(); cfg != nil {
 		summary.ParametersVersion = cfg.Version
