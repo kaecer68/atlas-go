@@ -207,8 +207,9 @@ func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
 func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 	if h.RiskGate == nil {
 		return http.StatusOK, map[string]any{
-			"status":  "not_available",
-			"message": "risk gate not configured in this mode",
+			"status":    "not_available",
+			"message":   "risk gate not configured in this mode",
+			"generated": false,
 		}
 	}
 	dec := h.RiskGate.LastDecision()
@@ -216,7 +217,7 @@ func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 		return http.StatusOK, map[string]any{
 			"status":    "not_available",
 			"message":   "no risk decision recorded yet",
-			"generated": time.Now().Format(time.RFC3339),
+			"generated": false,
 		}
 	}
 	return http.StatusOK, map[string]any{
@@ -229,7 +230,7 @@ func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 		"symbol":                dec.Symbol,
 		"recorded_at":           dec.Recorded.Format(time.RFC3339),
 		"confidence_commentary": dec.ConfidenceCommentary,
-		"generated":             time.Now().Format(time.RFC3339),
+		"generated":             true,
 	}
 }
 

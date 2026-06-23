@@ -42,6 +42,31 @@ func (r RegimeType) String() string {
 	}
 }
 
+// MarshalJSON serializes RegimeType as an UPPER_SNAKE_CASE string so
+// frontend consumers can match keys like RISK_ON / RISK_OFF without
+// keeping an int<->string mapping table.
+func (r RegimeType) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + r.jsonKey() + `"`), nil
+}
+
+// jsonKey returns the stable UPPER_SNAKE_CASE identifier for the regime.
+func (r RegimeType) jsonKey() string {
+	switch r {
+	case RegimeRiskOn:
+		return "RISK_ON"
+	case RegimeRiskOff:
+		return "RISK_OFF"
+	case RegimeHighVolatility:
+		return "HIGH_VOLATILITY"
+	case RegimeLowVolatility:
+		return "LOW_VOLATILITY"
+	case RegimeTransition:
+		return "TRANSITION"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // TrainingTask represents a single training unit for an agent
 type TrainingTask struct {
 	ID          string

@@ -299,11 +299,17 @@ export async function renderRiskCommentary(containerOrData) {
     return;
   }
 
-  var verdict = data.verdict || 'unknown';
-  var verdictLabel = { allow: '✅ 放行', block: '🛑 阻擋', warn: '⚠️ 警告' }[verdict] || verdict;
-  var verdictColor = verdict === 'allow' ? 'var(--color-success)'
-    : verdict === 'block' ? 'var(--color-danger)'
-    : verdict === 'warn' ? 'var(--color-warning)' : 'var(--muted)';
+  var verdict = data.verdict || 'UNKNOWN';
+  var verdictLabel = {
+    ALLOW: '✅ 放行',
+    REDUCE: '🔻 縮減',
+    BLOCK: '🛑 阻擋',
+    HALT: '⛔ 暫停',
+    ALERT_ONLY: '⚠️ 警報'
+  }[verdict] || verdict;
+  var verdictColor = verdict === 'ALLOW' ? 'var(--color-success)'
+    : verdict === 'BLOCK' || verdict === 'HALT' || verdict === 'REDUCE' ? 'var(--color-danger)'
+    : verdict === 'ALERT_ONLY' ? 'var(--color-warning)' : 'var(--muted)';
 
   var phase = escapeHtml(data.phase || '—');
   var mode = escapeHtml(data.mode || '—');

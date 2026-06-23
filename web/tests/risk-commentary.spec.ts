@@ -30,7 +30,7 @@ test('risk commentary panel renders on page-live with confidence_commentary', as
     contentType: 'application/json',
     body: JSON.stringify({
       phase: 'INTRA_SESSION',
-      verdict: 'block',
+      verdict: 'BLOCK',
       reason: '外資本週累計賣超 800 億',
       action_type: 'reduce_exposure',
       action_description: '砍倉半導體 30%',
