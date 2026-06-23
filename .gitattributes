@@ -57,6 +57,3 @@
 .omo/** linguist-generated=true
 .sisyphus/** linguist-generated=true
 
-# Auto-generated graph artifacts
-/graphify-out/** linguist-generated=true
-.graphify_*.json linguist-generated=true

@@ -41,9 +41,6 @@ cmd/experimental/*/prompts/agents/spawn_*.md
 /test-hybrid
 /test-monitor
 *.test
-/graphify-out/
-/internal/graphify-out/
-*/graphify-out/
 /complexity_top20.txt
 cmd/*/reports/
 internal/*/data/
@@ -64,11 +61,6 @@ cmd/experimental/*/data/
 !/.opencode/commands/*.md
 /.planning/
 /.playwright-mcp/
-/.graphify_cached.json
-/.graphify_uncached.txt
-/.graphify_ast.json
-/.graphify_detect.json
-/.graphify_semantic_new.json
 /.sisyphus/
 
 # Temporary files
@@ -178,10 +170,6 @@ web/dist/
 /stress-test
 /validate-risk-gate
 /samples/replay/*.jsonl
-
-# graphify temp files (extraction artifacts)
-/.graphify_*.json
-/.graphify_chunk_*_files.txt
 
 # compiled go binaries in repo root
 /validate-parameters

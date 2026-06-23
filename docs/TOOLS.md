@@ -1,7 +1,7 @@
 # 開發工具指南
 
-> 本文件比較 atlas-go 專案的三個程式碼知識圖譜工具：GitNexus、CodeGraph、Graphify。
-> 
+> 本文件介紹 atlas-go 專案的兩個程式碼知識圖譜工具：GitNexus、CodeGraph。
+>
 > 適用對象：需要理解專案架構或進行重構的**人類開發者**。
 
 ---
@@ -12,7 +12,6 @@
 |------|------|---------|---------|---------|
 | **GitNexus** | 知識圖譜 + 執行流分析 | 改程式碼前的影響範圍評估 | `npx gitnexus analyze` | 中（需手動重建） |
 | **CodeGraph** | 輕量符號呼叫圖 | 快速查詢函式呼叫鏈 | 自動（`.codegraph/` 目錄） | 低（檔案變更時自動更新） |
-| **Graphify** | 視覺化互動圖譜 | 新進人員理解專案架構 | `graphify update .` | 低（AST-only，無 API 成本） |
 
 ---
 
@@ -22,7 +21,7 @@
 
 GitNexus 是唯一具備「執行流（Process）」與「功能社群（Community）」雙重抽象層的工具。它能回答「這段程式碼在系統中扮演什麼角色」，而不只是「被誰呼叫」。
 
-**節點統計（atlas-go）：** 39,417 節點、119,534 關係、300 個執行流、1,036 個社群
+**節點統計（atlas-go）：** 52,662 symbols、165,265 relationships、300 個執行流
 
 ### 常用指令
 
@@ -98,77 +97,17 @@ codegraph_context("JWT auth implementation")
 
 ---
 
-## Graphify
-
-### 核心能力
-
-Graphify 產生**互動式 HTML 視覺化圖譜**，最適合新進人員理解專案架構，或製作報告時使用。
-
-**節點統計（atlas-go）：** 10,812 節點、30,921 邊、200 個社群
-
-### 常用指令
-
-```bash
-# 更新知識圖譜（AST-only，無 API 成本）
-graphify update .
-
-# 產生互動式 HTML 報告
-graphify
-
-# 更新子圖譜（將大圖切成 4 個小於 700 節點的子圖譜）
-bash scripts/regenerate-subgraphs.sh
-```
-
-### 子圖譜系統
-
-由於完整圖譜過大（>10,000 節點），我們將其切成 4 個主題子圖譜：
-
-| 子圖譜 | 內容 |
-|--------|------|
-| `core` | 核心架構與協調層 |
-| `analysis` | 分析與評估模組 |
-| `research` | 研究與實驗模組 |
-| `infra` | 基礎設施與資料層 |
-
-**導覽入口：** `graphify-out/subgraphs/index.html`
-
-### 使用場景
-
-| 場景 | 說明 |
-|------|------|
-| 新進人員 onboard | 開啟 `graphify-out/subgraphs/index.html`，視覺化理解模組關係 |
-| 架構報告 | 產生 HTML 嵌入簡報 |
-| 程式碼審查 | 視覺化顯示變更影響的社群 |
-
----
-
-## 三工具決策矩陣
+## 二工具決策矩陣
 
 | 情境 | 推薦工具 | 原因 |
 |------|---------|------|
 | 改程式碼前評估風險 | **GitNexus** | 唯一有 impact analysis 和 process 抽象 |
 | 快速查詢函式呼叫鏈 | **CodeGraph** | 輕量、即時、適合單一查詢 |
-| 理解系統整體架構 | **Graphify** | 視覺化最直覺 |
+| 理解系統整體架構 | **GitNexus** | 執行流與功能社群提供語意層級的結構 |
 | 追蹤 bug 根因 | **GitNexus** 或 **CodeGraph** | GitNexus 有完整執行流，CodeGraph 有精確追蹤 |
 | 跨模組重構 | **GitNexus** | 安全改名 + 影響範圍 |
-| 新進人員 onboard | **Graphify** → **GitNexus** | 先看全貌，再細查 |
+| 新進人員 onboard | **GitNexus** → **CodeGraph** | 先用執行流理解全貌，再用呼叫鏈深入細節 |
 | 自動化 CI 檢查 | **GitNexus** | `detect_changes()` 可整合進 pipeline |
-
----
-
-## 維護腳本
-
-### 更新 Graphify 子圖譜
-
-```bash
-# 執行 graphify update + 切片腳本
-bash scripts/regenerate-subgraphs.sh
-```
-
-此腳本會：
-1. 執行 `graphify update .` 更新主圖譜
-2. 執行 `python3 scripts/slice-graph.py` 將主圖切成 4 個子圖譜
-3. 每個子圖譜 < 700 節點，可正常產生互動式 HTML
 
 ---
 
@@ -178,7 +117,6 @@ bash scripts/regenerate-subgraphs.sh
 |------|---------|------|
 | GitNexus | 大規模重構後、PR 合併前 | `npx gitnexus analyze` |
 | CodeGraph | 自動更新（檔案變更時） | 無需手動操作 |
-| Graphify | 新增模組後、報告前 | `graphify update .` |
 
 ---
 

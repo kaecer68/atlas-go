@@ -5,9 +5,6 @@ data/
 .codegraph/
 .gitnexus/
 
-# Graphify output
-graphify-out/
-
 # Build artifacts
 bin/
 *.out
@@ -63,10 +60,6 @@ channel_health.json
 complexity_top20.txt
 *.db
 *.sqlite
-
-# Generated graph JSON
-.graphify_*.json
-.graphify_*.txt
 
 # Session/state artifacts
 .sisyphus/
