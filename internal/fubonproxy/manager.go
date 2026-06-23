@@ -57,6 +57,17 @@ const (
 	// restartBackoffDelay 是連續崩潰後的重啟等待時間。
 	restartBackoffDelay = 10 * time.Second
 
+	// maxRestartFailures 是連續重啟失敗（含 port 衝突與 cmd.Start() 失敗）
+	// 的上限；超過後 supervisor 放棄重啟，避免無限 EADDRINUSE loop。
+	maxRestartFailures = 5
+)
+
+// restartInitialDelayForTest 與 restartBackoffDelayForTest 允許測試覆蓋
+// supervise() 的 backoff 延遲，避免 cap 測試必須等待數十秒。生產環境保持預設常量。
+var (
+	restartInitialDelayForTest = restartInitialDelay
+	restartBackoffDelayForTest = restartBackoffDelay
+
 	// proxyListenPort 是 fubon-proxy 服務綁定的 TCP 埠。Start() 在 spawn
 	// 之前會預先探測此埠的占用情況（F9 不變式），避免在 supervise() 內部
 	// 才發現 EADDRINUSE 而陷入 backoff-loop。
@@ -91,9 +102,12 @@ type ProcessManager struct {
 	cmd      *exec.Cmd
 	running  bool
 	stopping bool
-	ctx      context.Context
-	cancel   context.CancelFunc
-	done     chan struct{}
+	// restartFailures 由 supervise() goroutine 單一擁有，記錄連續重啟失敗次數
+	//（含 port 衝突與 cmd.Start() 失敗），達到 maxRestartFailures 時放棄重啟。
+	restartFailures int
+	ctx             context.Context
+	cancel          context.CancelFunc
+	done            chan struct{}
 }
 
 // NewManager 建立新的 ProcessManager。
@@ -490,6 +504,92 @@ func killOccupant(pid int) error {
 	return nil
 }
 
+// preparePortForRestart 在 supervise() 重啟前檢查 port 8081 狀態。
+// 回傳 (canProceed, shouldStop):
+//   - canProceed=true, shouldStop=false: port 空閒，可以 spawn
+//   - canProceed=false, shouldStop=true: port 由外部 healthy fubon-proxy 管理，supervisor 應退出
+//   - canProceed=false, shouldStop=false: port 被佔用或探測失敗，應 retry/backoff
+func (m *ProcessManager) preparePortForRestart() (bool, bool) {
+	state, occupant, probeErr := m.probePort8081()
+	if probeErr != nil {
+		logging.Warn("fubonproxy", "restart_port_probe_failed",
+			logging.Err(probeErr),
+			"port", proxyListenPort,
+			"fallback", "spawn_directly",
+		)
+		return true, false
+	}
+
+	switch state {
+	case portStateFree:
+		return true, false
+	case portStateHealthy:
+		logging.Info("fubonproxy", "restart_external_managed",
+			"port", proxyListenPort,
+			"occupant_pid", occupant.PID,
+			"message", "port serves /health externally; supervisor will not respawn",
+		)
+		return false, true
+	case portStateForeign:
+		if occupant.PID > 0 && isFubonZombie(occupant) {
+			logging.Warn("fubonproxy", "restart_zombie_detected",
+				"pid", occupant.PID,
+				"cmd", occupant.Command,
+				"message", "auto-killing zombie fubon proxy on port "+strconv.Itoa(proxyListenPort),
+			)
+			if killErr := killOccupant(occupant.PID); killErr != nil {
+				logging.Error("fubonproxy", "restart_zombie_kill_failed",
+					logging.Err(killErr),
+					"message", "auto-kill failed; will retry",
+				)
+				return false, false
+			}
+			newState, newOccupant, probeErr := m.probePort8081()
+			if probeErr != nil {
+				logging.Warn("fubonproxy", "restart_reprobe_failed_after_zombie_kill",
+					logging.Err(probeErr),
+					"port", proxyListenPort,
+					"fallback", "spawn_directly",
+				)
+				return true, false
+			}
+			switch newState {
+			case portStateFree:
+				return true, false
+			case portStateHealthy:
+				logging.Info("fubonproxy", "restart_external_managed_after_kill",
+					"port", proxyListenPort,
+					"occupant_pid", newOccupant.PID,
+					"message", "port serves /health after kill; supervisor will not respawn",
+				)
+				return false, true
+			case portStateForeign:
+				logging.Error("fubonproxy", "restart_port_still_held_after_kill",
+					"port", proxyListenPort,
+					"pid", newOccupant.PID,
+					"cmd", newOccupant.Command,
+					"message", "stop it manually with `kill "+strconv.Itoa(newOccupant.PID)+"`",
+				)
+				return false, false
+			}
+		} else if occupant.PID > 0 {
+			logging.Error("fubonproxy", "restart_foreign_port",
+				"port", proxyListenPort,
+				"pid", occupant.PID,
+				"cmd", occupant.Command,
+				"message", "restart blocked; stop the process with `kill "+strconv.Itoa(occupant.PID)+"`",
+			)
+		} else {
+			logging.Error("fubonproxy", "restart_foreign_port_unknown",
+				"port", proxyListenPort,
+				"message", "restart blocked; identify it with `lsof -nP -iTCP:"+strconv.Itoa(proxyListenPort)+" -sTCP:LISTEN` and stop it",
+			)
+		}
+		return false, false
+	}
+	return true, false
+}
+
 // waitForHealthy 輪詢健康檢查直到通過、超時、或 ctx 取消。
 // 採用 ctx.Deadline() 與 startupTimeout 中較早者作為實際截止時間（F5）。
 func (m *ProcessManager) waitForHealthy(ctx context.Context) error {
@@ -523,7 +623,7 @@ func (m *ProcessManager) waitForHealthy(ctx context.Context) error {
 func (m *ProcessManager) supervise() {
 	defer close(m.done)
 
-	backoff := restartInitialDelay
+	backoff := restartInitialDelayForTest
 
 	for {
 		m.mu.Lock()
@@ -568,6 +668,25 @@ func (m *ProcessManager) supervise() {
 		ctx := m.ctx
 		m.mu.Unlock()
 
+		// 重啟前再次探測 port，避免外部殭屍或外來進程佔用 8081 時陷入無限 EADDRINUSE loop
+		canProceed, shouldStop := m.preparePortForRestart()
+		if shouldStop {
+			logging.Info("fubonproxy", "supervisor_yielding_to_external_proxy")
+			return
+		}
+		if !canProceed {
+			m.restartFailures++
+			if m.restartFailures >= maxRestartFailures {
+				logging.Error("fubonproxy", "max_restart_failures_reached",
+					"count", m.restartFailures,
+					"message", "giving up restarting fubon-proxy; port conflict or repeated start failures",
+				)
+				return
+			}
+			backoff = restartBackoffDelayForTest
+			continue
+		}
+
 		// 在鎖外建構與啟動程序 — 若 exec.Cmd.Start() panic 不會卡死 mutex（F7）
 		newCmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
 		newCmd.Dir = filepath.Dir(m.scriptPath)
@@ -577,7 +696,15 @@ func (m *ProcessManager) supervise() {
 
 		if startErr := newCmd.Start(); startErr != nil {
 			logging.Error("fubonproxy", "restart_failed", logging.Err(startErr))
-			backoff = restartBackoffDelay
+			m.restartFailures++
+			if m.restartFailures >= maxRestartFailures {
+				logging.Error("fubonproxy", "max_restart_failures_reached",
+					"count", m.restartFailures,
+					"message", "giving up restarting fubon-proxy after repeated start failures",
+				)
+				return
+			}
+			backoff = restartBackoffDelayForTest
 			continue
 		}
 
@@ -590,6 +717,7 @@ func (m *ProcessManager) supervise() {
 		}
 		m.cmd = newCmd
 		m.running = true
+		m.restartFailures = 0
 		m.mu.Unlock()
 
 		logging.Info("fubonproxy", "process_restarted",
@@ -605,7 +733,8 @@ func (m *ProcessManager) supervise() {
 			// 失敗時保留較長 backoff，不重置
 		} else {
 			logging.Info("fubonproxy", "restart_health_check_passed")
-			backoff = restartInitialDelay
+			backoff = restartInitialDelayForTest
+			m.restartFailures = 0
 		}
 	}
 }
