@@ -75,19 +75,9 @@
       "results": "(StructuralTrendConfig)"
     },
     {
-      "name": "GetParametersConfig",
-      "params": "",
-      "results": "(*ParametersConfig)"
-    },
-    {
       "name": "GetParametersConfigPath",
       "params": "",
       "results": "(string)"
-    },
-    {
-      "name": "LoadParametersConfig",
-      "params": "(path string)",
-      "results": "(*ParametersConfig, error)"
     },
     {
       "name": "LockedSaveWithRollback",
@@ -110,12 +100,6 @@
     {
       "name": "TryLockedSaveWithRollback",
       "params": "(path string, timeout time.Duration)",
-      "receiver": "ParametersConfig",
-      "results": "(error)"
-    },
-    {
-      "name": "Validate",
-      "params": "",
       "receiver": "ParametersConfig",
       "results": "(error)"
     },
