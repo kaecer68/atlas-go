@@ -21,8 +21,11 @@ const STATE = {
   coreIndicators: null,
   dataStatus: 'idle', // 'idle' | 'ok' | 'partial' | 'empty' | 'failed'
   errors: {},         // { [url]: classifyFetchError result }
+  indicatorsError: null, // decision-chain 失敗但核心 OK 時的單獨錯誤
   attributionCache: {},
 };
+
+const FETCH_TIMEOUT_MS = 30000;
 
 const LAYER_META = {
   L1: { name: 'L1 全球流動性', color: 'var(--color-info)',    desc: 'Fed 利率、DXY、US10Y' },
@@ -53,11 +56,13 @@ const DIRECTION_GLYPH = {
 const LAYER_FILTERS = ['all', 'L1', 'L2', 'L3', 'L4', 'L5'];
 
 async function fetchJSON(url, opts) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let r;
   try {
-    r = await fetch(url, opts);
-  } catch (networkErr) {
-    throw networkErr;
+    r = await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
   if (r.status === 410) {
     const body = await r.json().catch(() => ({}));
@@ -71,6 +76,124 @@ async function fetchJSON(url, opts) {
     throw e;
   }
   return r.json();
+}
+
+export function processStrategiesResults(results) {
+  const errors = {};
+  const schemaErr = (url, missing) => ({
+    kind: 'schema',
+    message: `回應缺少 ${missing} 欄位`,
+    recoverable: false,
+    hint: '請檢查後端 schema 是否變更',
+  });
+  let strategies = [];
+  let layers = [];
+  let chain = null;
+  let coreFailures = 0;
+  let indicatorsError = null;
+
+  if (results[0].status === 'fulfilled') {
+    const value = results[0].value;
+    if (value && Array.isArray(value.strategies)) {
+      strategies = value.strategies;
+    } else {
+      errors['/api/strategies'] = schemaErr('/api/strategies', 'strategies');
+      coreFailures++;
+    }
+  } else {
+    errors['/api/strategies'] = classifyFetchError(results[0].reason, '/api/strategies');
+    coreFailures++;
+  }
+
+  if (results[1].status === 'fulfilled') {
+    const value = results[1].value;
+    if (value && Array.isArray(value.layers)) {
+      layers = value.layers;
+    } else {
+      errors['/api/strategies/layers'] = schemaErr('/api/strategies/layers', 'layers');
+      coreFailures++;
+    }
+  } else {
+    errors['/api/strategies/layers'] = classifyFetchError(results[1].reason, '/api/strategies/layers');
+    coreFailures++;
+  }
+
+  if (results[2].status === 'fulfilled') {
+    chain = results[2].value;
+  } else {
+    const err = classifyFetchError(results[2].reason, '/api/dashboard/decision-chain');
+    errors['/api/dashboard/decision-chain'] = err;
+    if (coreFailures === 0) {
+      indicatorsError = err;
+    }
+  }
+
+  let dataStatus;
+  if (coreFailures === 0) {
+    dataStatus = strategies.length === 0 ? 'empty' : 'ok';
+  } else if (coreFailures >= 2) {
+    dataStatus = 'failed';
+  } else {
+    dataStatus = 'partial';
+  }
+
+  return {
+    strategies,
+    layers,
+    coreIndicators: chain && chain.core_indicators ? chain.core_indicators : null,
+    errors,
+    indicatorsError,
+    dataStatus,
+  };
+}
+
+export function renderPartialBanner(state) {
+  const status = state.dataStatus;
+  const errorEntries = Object.entries(state.errors || {});
+
+  if ((status === 'ok' || status === 'idle') && state.indicatorsError) {
+    const ie = state.indicatorsError;
+    return `
+      <div class="error-banner error-banner--warning" role="status">
+        <div><strong>短線指標無法顯示</strong>：${escapeHtml(ie.message)}</div>
+        ${ie.hint ? `<small class="text-muted">${escapeHtml(ie.hint)}</small>` : ''}
+      </div>
+    `;
+  }
+  if (status === 'ok' || status === 'idle') return '';
+
+  if (status === 'failed') {
+    const items = errorEntries.map(([url, info]) =>
+      `<li><code>${escapeHtml(url)}</code>：${escapeHtml(info.message)}${info.hint ? ` — ${escapeHtml(info.hint)}` : ''}</li>`
+    ).join('');
+    return `
+      <div class="error-banner" role="alert">
+        <div><strong>載入失敗</strong>：核心資料來源全數失敗</div>
+        <ul>${items}</ul>
+      </div>
+    `;
+  }
+  if (status === 'empty') {
+    return `
+      <div class="error-banner error-banner--warning" role="status">
+        <div><strong>資料庫為空</strong>：後端回傳 0 筆心法</div>
+        <small class="text-muted">可能原因：seed 載入但篩選後為空、或 schema 欄位改名。請聯絡管理員確認 <code>data/seeds/strategy_techniques.json</code>。</small>
+      </div>
+    `;
+  }
+  if (status === 'partial') {
+    const items = errorEntries.map(([url, info]) =>
+      `<li><code>${escapeHtml(url)}</code>：${escapeHtml(info.message)}${info.hint ? `<br><small class="text-muted">${escapeHtml(info.hint)}</small>` : ''}</li>`
+    ).join('');
+    return `
+      <div class="error-banner error-banner--warning" role="status">
+        <div><strong>部分資料載入失敗</strong>：</div>
+        <ul>${items}</ul>
+        <small class="text-muted">已顯示可取得的資料；失敗區塊以「--」標示。</small>
+      </div>
+    `;
+  }
+  return '';
 }
 
 export async function renderStrategiesPage(root) {
@@ -110,45 +233,8 @@ export async function renderStrategiesPage(root) {
     `;
   }
 
-  function renderPartialBanner() {
-    var status = STATE.dataStatus;
-    if (status === 'ok' || status === 'idle') return '';
-    var errorEntries = Object.entries(STATE.errors || {});
-
-    if (status === 'failed') {
-      var firstErr = errorEntries[0];
-      var hint = firstErr && firstErr[1] ? firstErr[1].hint : '';
-      var firstKind = firstErr && firstErr[1] ? firstErr[1].kind : '';
-      var message = firstErr && firstErr[1] ? firstErr[1].message : '後端資料來源全部失敗';
-      return `
-        <div class="error-banner" role="alert">
-          <div><strong>載入失敗</strong>：${escapeHtml(message)}${firstKind ? ' (' + escapeHtml(firstKind) + ')' : ''}</div>
-          ${hint ? `<small class="text-muted">${escapeHtml(hint)}</small>` : ''}
-        </div>
-      `;
-    }
-    if (status === 'empty') {
-      return `
-        <div class="error-banner error-banner--warning" role="status">
-          <div><strong>資料庫為空</strong>：後端回傳 0 筆心法</div>
-          <small class="text-muted">可能原因：seed 載入但篩選後為空、或 schema 欄位改名。請聯絡管理員確認 <code>data/seeds/strategy_techniques.json</code>。</small>
-        </div>
-      `;
-    }
-    if (status === 'partial') {
-      var failedUrls = errorEntries.map(function(e) { return e[0]; }).join(', ');
-      return `
-        <div class="error-banner error-banner--warning" role="status">
-          <div><strong>部分資料載入失敗</strong>：${escapeHtml(failedUrls)}</div>
-          <small class="text-muted">已顯示可取得的資料；失敗區塊以「--」標示。</small>
-        </div>
-      `;
-    }
-    return '';
-  }
-
   function render() {
-    var banner = renderPartialBanner();
+    const banner = renderPartialBanner(STATE);
     if (banner) slot.insertAdjacentHTML('afterbegin', banner);
     renderKPIs();
     renderCoreIndicators();
@@ -312,44 +398,13 @@ async function loadStrategiesData() {
     fetchJSON('/api/dashboard/decision-chain'),
   ]);
 
-  const errors = {};
-  let strategies = [];
-  let layers = [];
-  let chain = null;
-  let coreFailures = 0;
-
-  if (results[0].status === 'fulfilled') {
-    strategies = (results[0].value && results[0].value.strategies) || [];
-  } else {
-    errors['/api/strategies'] = classifyFetchError(results[0].reason, '/api/strategies');
-    coreFailures++;
-  }
-
-  if (results[1].status === 'fulfilled') {
-    layers = (results[1].value && results[1].value.layers) || [];
-  } else {
-    errors['/api/strategies/layers'] = classifyFetchError(results[1].reason, '/api/strategies/layers');
-    coreFailures++;
-  }
-
-  if (results[2].status === 'fulfilled') {
-    chain = results[2].value;
-  } else {
-    errors['/api/dashboard/decision-chain'] = classifyFetchError(results[2].reason, '/api/dashboard/decision-chain');
-  }
-
-  STATE.strategies = strategies;
-  STATE.layers = layers;
-  STATE.coreIndicators = chain && chain.core_indicators ? chain.core_indicators : null;
-  STATE.errors = errors;
-
-  if (coreFailures === 0) {
-    STATE.dataStatus = strategies.length === 0 ? 'empty' : 'ok';
-  } else if (coreFailures === 2) {
-    STATE.dataStatus = 'failed';
-  } else {
-    STATE.dataStatus = 'partial';
-  }
+  const next = processStrategiesResults(results);
+  STATE.strategies = next.strategies;
+  STATE.layers = next.layers;
+  STATE.coreIndicators = next.coreIndicators;
+  STATE.errors = next.errors;
+  STATE.indicatorsError = next.indicatorsError;
+  STATE.dataStatus = next.dataStatus;
 }
 
 async function aiAnnotate(id) {
@@ -430,5 +485,7 @@ async function validateStrategy(id) {
   }
 }
 
-window._strategiesSetLayer = layer => { STATE.activeLayer = layer; };
-window._strategiesRefresh  = async () => { await loadStrategiesData(); };
+if (typeof window !== 'undefined') {
+  window._strategiesSetLayer = layer => { STATE.activeLayer = layer; };
+  window._strategiesRefresh  = async () => { await loadStrategiesData(); };
+}

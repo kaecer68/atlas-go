@@ -18,7 +18,17 @@
  * @returns {{kind: string, message: string, recoverable: boolean, hint: string}}
  */
 export function classifyFetchError(err, url) {
-  // 1) 網路層錯誤：fetch() 拋 TypeError（CORS、DNS、TCP RST、連線拒絕）
+  // 1) Timeout：AbortController 中止後 fetch 拋 AbortError（DOMException）
+  if (err && (err.name === 'AbortError' || err.code === 'ABORT_ERR')) {
+    return {
+      kind: 'timeout',
+      message: '後端回應逾時（30 秒）',
+      recoverable: true,
+      hint: '請稍後重試，或檢查後端是否 hang',
+    };
+  }
+
+  // 2) 網路層錯誤：fetch() 拋 TypeError（CORS、DNS、TCP RST、連線拒絕）
   if (err && (err instanceof TypeError || err.name === 'TypeError')) {
     return {
       kind: 'network',
@@ -28,7 +38,7 @@ export function classifyFetchError(err, url) {
     };
   }
 
-  // 2) HTTP 層錯誤：以 .status 區分子類別
+  // 3) HTTP 層錯誤：以 .status 區分子類別
   const status = err && typeof err.status === 'number' ? err.status : null;
 
   if (status === 503) {
@@ -72,7 +82,7 @@ export function classifyFetchError(err, url) {
     };
   }
 
-  // 3) Fallback：無 status 屬性的 Error、null、undefined
+  // 4) Fallback：無 status 屬性的 Error、null、undefined
   var rawMessage = err && err.message ? err.message : '未知錯誤';
   return {
     kind: 'unknown',
