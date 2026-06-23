@@ -1,0 +1,357 @@
+{
+  "consts": [
+    {
+      "name": "DefaultCommissionBPS",
+      "value": "14.25"
+    },
+    {
+      "name": "DiscountedCommissionBPS",
+      "value": "8.5"
+    },
+    {
+      "name": "RegimeBear",
+      "type": "RegimeType",
+      "value": "\"bear\""
+    },
+    {
+      "name": "RegimeBull",
+      "type": "RegimeType",
+      "value": "\"bull\""
+    },
+    {
+      "name": "RegimeHighVol",
+      "type": "RegimeType",
+      "value": "\"highvol\""
+    },
+    {
+      "name": "RegimeNeutral",
+      "type": "RegimeType",
+      "value": "\"neutral\""
+    },
+    {
+      "name": "RiskAppetiteAggressive",
+      "type": "RiskAppetite",
+      "value": "3"
+    },
+    {
+      "name": "RiskAppetiteBalanced",
+      "type": "RiskAppetite",
+      "value": "2"
+    },
+    {
+      "name": "RiskAppetiteConservative",
+      "type": "RiskAppetite",
+      "value": "1"
+    }
+  ],
+  "funcs": [
+    {
+      "name": "AdjustPriceForSlippage",
+      "params": "(price float64, slippageBPS float64, side domain.Side)",
+      "results": "(float64)"
+    },
+    {
+      "name": "CalculateCosts",
+      "params": "(orderNotional float64, slippageBPS float64, impact ImpactResult, commissionBPS float64)",
+      "results": "(CostBreakdown)"
+    },
+    {
+      "name": "DefaultMarketImpactModel",
+      "params": "",
+      "results": "(*MarketImpactModel)"
+    },
+    {
+      "name": "DefaultSlippageModel",
+      "params": "",
+      "results": "(*SlippageModel)"
+    },
+    {
+      "name": "DetectRegime",
+      "params": "(indicators MarketIndicators)",
+      "receiver": "DynamicThresholdEngine",
+      "results": "(RegimeType)"
+    },
+    {
+      "name": "GetCurrentThreshold",
+      "params": "",
+      "receiver": "DynamicThresholdEngine",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetRegimeMultiplier",
+      "params": "(regime RegimeType)",
+      "receiver": "DynamicThresholdEngine",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetRiskAppetite",
+      "params": "",
+      "receiver": "DynamicThresholdEngine",
+      "results": "(RiskAppetite)"
+    },
+    {
+      "name": "GetStats",
+      "params": "",
+      "receiver": "DynamicThresholdEngine",
+      "results": "(map[string]any)"
+    },
+    {
+      "name": "GetThreshold",
+      "params": "(vix float64, regime RegimeType)",
+      "receiver": "DynamicThresholdEngine",
+      "results": "(float64)"
+    },
+    {
+      "name": "SetBaseThreshold",
+      "params": "(threshold float64)",
+      "receiver": "DynamicThresholdEngine",
+      "results": ""
+    },
+    {
+      "name": "SetRiskAppetite",
+      "params": "(ra RiskAppetite)",
+      "receiver": "DynamicThresholdEngine",
+      "results": ""
+    },
+    {
+      "name": "GetThresholdEngine",
+      "params": "",
+      "receiver": "Engine",
+      "results": "(*DynamicThresholdEngine)"
+    },
+    {
+      "name": "Optimizer",
+      "params": "",
+      "receiver": "Engine",
+      "results": "(*portfolio.Optimizer)"
+    },
+    {
+      "name": "Run",
+      "params": "(regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation)",
+      "receiver": "Engine",
+      "results": "(domain.SimulationResult)"
+    },
+    {
+      "name": "RunDay",
+      "params": "(state *domain.SimulationState, day time.Time, regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation)",
+      "receiver": "Engine",
+      "results": "(domain.DayResult)"
+    },
+    {
+      "name": "RunMultiDay",
+      "params": "(quotesByDate map[string][]domain.Quote, recsByDate map[string][]domain.Recommendation, dates []time.Time)",
+      "receiver": "Engine",
+      "results": "(domain.SimulationReport)"
+    },
+    {
+      "name": "RunWithState",
+      "params": "(state *domain.SimulationState, regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation)",
+      "receiver": "Engine",
+      "results": "(domain.SimulationResult)"
+    },
+    {
+      "name": "WithContext",
+      "params": "(ctx context.Context)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithDividends",
+      "params": "(divs map[string]float64)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithOptimizer",
+      "params": "(o *portfolio.Optimizer)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithPreTradeGate",
+      "params": "(g *risk.PreTradeGate)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithReflexivityRules",
+      "params": "(rules ...reflexivity.Rule)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithSlippageModel",
+      "params": "(sm *SlippageModel)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithTaxCalculator",
+      "params": "(tc *tax.TaiwanTaxCalculator)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithThresholdEngine",
+      "params": "(te *DynamicThresholdEngine)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "WithTraceWriter",
+      "params": "(tw TraceWriter)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "IsEligibleForDiscountedCommission",
+      "params": "(orderNotional float64, threshold float64)",
+      "results": "(bool)"
+    },
+    {
+      "name": "LoadPersistentState",
+      "params": "(baseDir string)",
+      "results": "(*domain.SimulationState, error)"
+    },
+    {
+      "name": "Estimate",
+      "params": "(orderNotional float64, adv int64, price float64, volEstimate float64)",
+      "receiver": "MarketImpactModel",
+      "results": "(ImpactResult)"
+    },
+    {
+      "name": "NewDynamicThresholdEngine",
+      "params": "",
+      "results": "(*DynamicThresholdEngine)"
+    },
+    {
+      "name": "NewEngine",
+      "params": "(constraints domain.SimulationConstraints)",
+      "results": "(*Engine)"
+    },
+    {
+      "name": "RegimeFromDomain",
+      "params": "(r domain.Regime)",
+      "results": "(RegimeType)"
+    },
+    {
+      "name": "SavePersistentState",
+      "params": "(baseDir string, state *domain.SimulationState)",
+      "results": "(error)"
+    },
+    {
+      "name": "CalculateSlippageBPS",
+      "params": "(symbol string, quotes map[string]domain.Quote, fallbackEvents *[]string)",
+      "receiver": "SlippageModel",
+      "results": "(float64)"
+    },
+    {
+      "name": "Precompute",
+      "params": "(quotes map[string]domain.Quote)",
+      "receiver": "SlippageModel",
+      "results": ""
+    }
+  ],
+  "package": "sim",
+  "types": [
+    {
+      "fields": [
+        "SlippageBPS float64",
+        "ImpactBPS float64",
+        "CommissionBPS float64",
+        "TotalBPS float64",
+        "TotalPct float64",
+        "TotalCost float64"
+      ],
+      "kind": "struct",
+      "name": "CostBreakdown"
+    },
+    {
+      "fields": [
+        "mu sync.RWMutex",
+        "baseThreshold float64",
+        "minThreshold float64",
+        "maxThreshold float64",
+        "regimeMultipliers map[RegimeType]float64",
+        "currentRegime RegimeType",
+        "lastVIX float64",
+        "updateCount int",
+        "riskAppetite RiskAppetite"
+      ],
+      "kind": "struct",
+      "name": "DynamicThresholdEngine"
+    },
+    {
+      "fields": [
+        "constraints domain.SimulationConstraints",
+        "optimizer *portfolio.Optimizer",
+        "useOptimizer bool",
+        "reflexRules []reflexivity.Rule",
+        "ctx context.Context",
+        "slippageModel *SlippageModel",
+        "taxCalc *tax.TaiwanTaxCalculator",
+        "dividends map[string]float64",
+        "thresholdEngine *DynamicThresholdEngine",
+        "preTradeGate *risk.PreTradeGate",
+        "traceWriter TraceWriter",
+        "rotationFunc RotationFunc"
+      ],
+      "kind": "struct",
+      "name": "Engine"
+    },
+    {
+      "fields": [
+        "TemporaryImpactBPS float64",
+        "PermanentImpactBPS float64",
+        "TotalImpactBPS float64",
+        "AdvRatio float64"
+      ],
+      "kind": "struct",
+      "name": "ImpactResult"
+    },
+    {
+      "fields": [
+        "TemporaryImpactCoef float64",
+        "PermanentImpactCoef float64",
+        "DefaultADV int64"
+      ],
+      "kind": "struct",
+      "name": "MarketImpactModel"
+    },
+    {
+      "fields": [
+        "VIX float64",
+        "SPXTrend float64"
+      ],
+      "kind": "struct",
+      "name": "MarketIndicators"
+    },
+    {
+      "kind": "alias",
+      "name": "RegimeType"
+    },
+    {
+      "kind": "alias",
+      "name": "RiskAppetite"
+    },
+    {
+      "kind": "alias",
+      "name": "RotationFunc"
+    },
+    {
+      "fields": [
+        "TierBPS []float64",
+        "sortedVolumes []int64",
+        "tierBoundaries [2]int",
+        "precomputedLen int"
+      ],
+      "kind": "struct",
+      "name": "SlippageModel"
+    },
+    {
+      "kind": "interface",
+      "name": "TraceWriter"
+    }
+  ],
+  "vars": null
+}
