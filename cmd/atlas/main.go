@@ -283,6 +283,8 @@ func run(args []string, deps appDeps) error {
 		dashboard.SetPool(pool)
 		agentHealthMgr := portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams)
 		dashboard.SetHealthManager(agentHealthMgr)
+		prismMgr := prism.NewPRISMManager(prism.DefaultPRISMConfig())
+		dashboard.WithPRISMManager(prismMgr)
 		dwMgr := portfolio.NewDarwinianWeightManager(filepath.Join(cfg.WorkDir, "data/state/darwinian_weights.json"))
 		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
 		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
@@ -963,6 +965,22 @@ func run(args []string, deps appDeps) error {
 				riskGate.WithMaturityTracker(maturityTracker)
 			}
 			dashboard.SetRiskGate(riskGate)
+
+			// Forward every risk gate decision to the shared EventBus so SSE
+			// clients and audit subscribers receive real-time risk events.
+			riskGate.Subscribe(func(dec risk.RiskDecision) {
+				dashEventBus.PublishRiskGateEvent(eventbus.RiskGateEventPayload{
+					Phase:                string(dec.Phase),
+					Verdict:              string(dec.Verdict),
+					Reason:               dec.Reason,
+					ActionType:           string(dec.Action.Type),
+					ActionDescription:    dec.Action.Description,
+					Mode:                 dec.Mode,
+					Symbol:               dec.Symbol,
+					Timestamp:            dec.Recorded,
+					ConfidenceCommentary: dec.ConfidenceCommentary,
+				})
+			})
 
 			if params := config.GetParametersConfig(); params != nil && params.RSITw.LastCalibratedScore.Value > 0 {
 				riskGate.SetPreTradeRSITwScore(params.RSITw.LastCalibratedScore.Value)
