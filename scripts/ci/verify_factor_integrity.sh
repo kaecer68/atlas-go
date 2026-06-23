@@ -9,6 +9,7 @@ fail() { echo "  [FAIL] $1 — $2"; PASS=false; CHECKS_RUN=$((CHECKS_RUN+1)); }
 warn() { echo "  [WARN] $1 — $2"; CHECKS_RUN=$((CHECKS_RUN+1)); }
 
 FACTOR_TYPE_FILE="internal/portfolio/optimizer.go"
+FACTOR_TYPE_FILES=$(ls internal/portfolio/optimizer*.go 2>/dev/null | grep -v _test.go | sort -u)
 WEIGHT_ENGINE_FILE="internal/portfolio/factor_weight_engine.go"
 BREAKDOWN_FILE="internal/domain/shared/shared.go"
 FRONTEND_TS="web/static/js/shared/field_types.ts"
@@ -23,7 +24,7 @@ extract_scores_tags() {
     sed -n '/^type FactorScores struct {/,/^}$/p' "$BREAKDOWN_FILE" | grep 'json:"' | sed 's/.*json:"\([^",]*\).*/\1/' | sort
 }
 extract_symbolscore_fields() {
-    sed -n '/^type symbolScore struct {/,/^}$/p' "$FACTOR_TYPE_FILE" | grep -v '^[[:space:]]*//' | awk '{print $1}' | grep -vE '^type$|^symbolScore$|^\}$|^$' | tr '[:upper:]' '[:lower:]' | sort
+    cat $FACTOR_TYPE_FILES | sed -n '/^type symbolScore struct {/,/^}$/p' | grep -v '^[[:space:]]*//' | awk '{print $1}' | grep -vE '^type$|^symbolScore$|^\}$|^$' | tr '[:upper:]' '[:lower:]' | sort
 }
 extract_factor_names() {
     sed -n '/^const ($/,/^)$/p' "$FACTOR_TYPE_FILE" | grep 'FactorType =' | awk '{print $1}' | sort
@@ -66,7 +67,7 @@ INV_S=$(comm -13 <(echo "$VALID_FT") <(echo "$STRAT_REFS") | tr '\n' ' ' | sed '
 
 # G7: buildPositions factors
 echo "--- G7: buildPositions ↔ FactorType ---"
-POS_REFS=$(sed -n '/factors := map\[FactorType\]float64{/,/^[[:space:]]*}/p' "$FACTOR_TYPE_FILE" | grep -oE 'Factor[A-Z][a-zA-Z]*' | grep -v FactorType | sort -u)
+POS_REFS=$(cat $FACTOR_TYPE_FILES | sed -n '/factors := map\[FactorType\]float64{/,/^[[:space:]]*}/p' | grep -oE 'Factor[A-Z][a-zA-Z]*' | grep -v FactorType | sort -u)
 POS_COUNT=$(echo "$POS_REFS" | wc -l | tr -d ' ')
 [ "$FACTOR_COUNT" = "$POS_COUNT" ] && pass "Count match ($POS_COUNT)" || warn "$POS_COUNT vs $FACTOR_COUNT" "conditional factors may use if-guards"
 
