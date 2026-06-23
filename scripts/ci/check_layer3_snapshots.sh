@@ -34,6 +34,10 @@ declare -a TARGETS=(
     "internal/config"
     "cmd/atlas"
     "internal/narrative"
+    "internal/orchestrator"
+    "internal/portfolio"
+    "internal/sim"
+    "internal/risk"
 )
 
 # 1) Capture pre-run state of all testdata/ JSON golden files.

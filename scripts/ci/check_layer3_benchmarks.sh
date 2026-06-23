@@ -47,6 +47,10 @@ declare -a TARGETS=(
     "internal/config"
     "cmd/atlas"
     "internal/narrative"
+    "internal/orchestrator"
+    "internal/portfolio"
+    "internal/sim"
+    "internal/risk"
 )
 
 TMPDIR="$(mktemp -d)"
