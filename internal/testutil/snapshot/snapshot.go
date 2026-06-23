@@ -74,7 +74,7 @@ func CaptureAPI(path string) (APISnapshot, error) {
 	if err != nil {
 		return APISnapshot{}, fmt.Errorf("parse %s: %w", path, err)
 	}
-	return captureFromAST(fset, f)
+	return captureFromAST(f)
 }
 
 // CaptureAPIs parses multiple Go source files in the same package and returns
@@ -103,8 +103,7 @@ func CaptureAPIs(paths ...string) (APISnapshot, error) {
 	return merged, nil
 }
 
-func captureFromAST(fset *token.FileSet, f *ast.File) (APISnapshot, error) {
-
+func captureFromAST(f *ast.File) (APISnapshot, error) {
 	snap := APISnapshot{Package: f.Name.Name}
 
 	for _, decl := range f.Decls {
