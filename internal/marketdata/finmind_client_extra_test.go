@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -535,6 +536,54 @@ func TestFinMindProvider_GetQuotes_AllFailed(t *testing.T) {
 	_, err := p.GetQuotes(context.Background(), asOfDate("2026-04-29"), []string{"X", "Y"})
 	if err == nil {
 		t.Fatal("expected error when all symbols fail")
+	}
+}
+
+func TestFinMindProvider_GetQuotes_RejectsSaturday(t *testing.T) {
+	var hits int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+	p := NewFinMindProviderWithClient(c)
+
+	_, err := p.GetQuotes(context.Background(), asOfDate("2026-04-25"), []string{"2330"})
+	if err == nil {
+		t.Fatal("expected error when asOf is Saturday")
+	}
+	if !strings.Contains(err.Error(), "not a Taiwan trading day") {
+		t.Errorf("err = %v, want it to mention 'not a Taiwan trading day'", err)
+	}
+	if atomic.LoadInt32(&hits) != 0 {
+		t.Errorf("expected 0 HTTP calls on non-trading day, got %d", hits)
+	}
+}
+
+func TestFinMindProvider_GetQuotes_RejectsSunday(t *testing.T) {
+	var hits int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+	p := NewFinMindProviderWithClient(c)
+
+	_, err := p.GetQuotes(context.Background(), asOfDate("2026-04-26"), []string{"2330"})
+	if err == nil {
+		t.Fatal("expected error when asOf is Sunday")
+	}
+	if !strings.Contains(err.Error(), "not a Taiwan trading day") {
+		t.Errorf("err = %v, want it to mention 'not a Taiwan trading day'", err)
+	}
+	if atomic.LoadInt32(&hits) != 0 {
+		t.Errorf("expected 0 HTTP calls on non-trading day, got %d", hits)
 	}
 }
 
