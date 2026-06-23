@@ -1015,6 +1015,185 @@ func TestProcessManager_F9_LookupPortOccupant_ResolvesOurTestListener(t *testing
 }
 
 // ============================================================================
+// P0 restart-path tests (fix/fubonproxy-port-conflict)
+//
+// 驗證 supervise() 在重啟前重新探測 port 8081 的行為：
+//   - portStateFree   → 可以重啟
+//   - portStateHealthy → 視為外部已管理，supervisor 退出（yield）
+//   - portStateForeign → retry/backoff，連續失敗達上限後放棄
+//
+// 測試使用 test-only backoff seam 變數（restartInitialDelayForTest /
+// restartBackoffDelayForTest）將延遲壓到 10ms，避免等待數十秒。
+// 每次測試結束透過 t.Cleanup 還原，避免影響其他測試。
+// ============================================================================
+
+func setFastRestartBackoff(t *testing.T) {
+	t.Helper()
+	origInitial := restartInitialDelayForTest
+	origBackoff := restartBackoffDelayForTest
+	restartInitialDelayForTest = 10 * time.Millisecond
+	restartBackoffDelayForTest = 10 * time.Millisecond
+	t.Cleanup(func() {
+		restartInitialDelayForTest = origInitial
+		restartBackoffDelayForTest = origBackoff
+	})
+}
+
+func waitForSupervisorDone(t *testing.T, m *ProcessManager) {
+	t.Helper()
+	var doneCh chan struct{}
+	m.mu.Lock()
+	doneCh = m.done
+	m.mu.Unlock()
+	if doneCh == nil {
+		t.Fatal("supervisor not started")
+	}
+	select {
+	case <-doneCh:
+	case <-time.After(3 * time.Second):
+		t.Fatal("supervisor did not exit within 3s")
+	}
+}
+
+// TestProcessManager_Restart_PortFree_CanProceed 驗證 port 8081 空閒時，
+// preparePortForRestart() 回傳 (true, false)。
+func TestProcessManager_Restart_PortFree_CanProceed(t *testing.T) {
+	if ln, err := net.Listen("tcp", "127.0.0.1:8081"); err != nil {
+		t.Skipf("port 8081 in use on test host: %v — skipping", err)
+	} else {
+		_ = ln.Close()
+	}
+
+	m := &ProcessManager{healthURL: healthEndpoint}
+	canProceed, shouldStop := m.preparePortForRestart()
+	if !canProceed || shouldStop {
+		t.Errorf("preparePortForRestart() = (%v, %v), want (true, false)", canProceed, shouldStop)
+	}
+}
+
+// TestProcessManager_Restart_PortHealthy_Yields 驗證 port 8081 被健康的
+// fubon-proxy 佔住時，preparePortForRestart() 回傳 (false, true)。
+func TestProcessManager_Restart_PortHealthy_Yields(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	bindPort8081(t, handler)
+
+	m := &ProcessManager{healthURL: healthEndpoint}
+	canProceed, shouldStop := m.preparePortForRestart()
+	if canProceed || !shouldStop {
+		t.Errorf("preparePortForRestart() = (%v, %v), want (false, true)", canProceed, shouldStop)
+	}
+}
+
+// TestProcessManager_Restart_PortForeign_Retries 驗證 port 8081 被外部非
+// fubon 進程佔住時，preparePortForRestart() 回傳 (false, false) 以繼續 backoff。
+func TestProcessManager_Restart_PortForeign_Retries(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	bindPort8081(t, handler)
+
+	m := &ProcessManager{healthURL: healthEndpoint}
+	canProceed, shouldStop := m.preparePortForRestart()
+	if canProceed || shouldStop {
+		t.Errorf("preparePortForRestart() = (%v, %v), want (false, false)", canProceed, shouldStop)
+	}
+}
+
+// TestProcessManager_Supervise_YieldsToExternalHealthyProxy 驗證：當原本的
+// proxy 程序結束後，supervise() 重啟前發現 port 8081 已有外部 healthy proxy，
+// 會放棄重啟並結束 supervisor goroutine。
+func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
+	setFastRestartBackoff(t)
+
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 0.5\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  healthEndpoint,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	t.Cleanup(func() { m.Stop() })
+
+	// 在原程序結束前佔住 8081 並提供 /health=200，模擬外部 healthy proxy
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	bindPort8081(t, handler)
+
+	waitForSupervisorDone(t, m)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.running {
+		t.Error("expected m.running=false after supervisor yielded to external proxy")
+	}
+}
+
+// TestProcessManager_Supervise_RestartFailureCap 驗證：當 port 8081 持續被
+// 外部進程佔用，連續重啟失敗達 maxRestartFailures 次後 supervisor 會放棄。
+func TestProcessManager_Supervise_RestartFailureCap(t *testing.T) {
+	setFastRestartBackoff(t)
+
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 0.3\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  healthEndpoint,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	t.Cleanup(func() { m.Stop() })
+
+	// 在原程序結束前佔住 8081 並回傳 404，模擬持續 foreign 占用
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	bindPort8081(t, handler)
+
+	waitForSupervisorDone(t, m)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.running {
+		t.Error("expected m.running=false after restart failure cap reached")
+	}
+	if m.restartFailures < maxRestartFailures {
+		t.Errorf("restartFailures=%d, want >= %d", m.restartFailures, maxRestartFailures)
+	}
+}
+
+// ============================================================================
 // Auto-kill zombie — isFubonZombie + killOccupant unit tests
 // ============================================================================
 
