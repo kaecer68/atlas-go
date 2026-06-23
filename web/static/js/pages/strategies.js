@@ -12,12 +12,15 @@
 // 視覺規範: 紅漲綠跌 (--up/--down) 為市場方向、--risk-high/low 為風險等級
 
 import { escapeHtml } from '../shared/app-utils.js';
+import { classifyFetchError } from '../shared/fetch-error.js';
 
 const STATE = {
   strategies: [],
   layers: [],         // [{layer, count}] 5 層
   activeLayer: 'all', // 'all' | 'L1' | 'L2' | 'L3' | 'L4' | 'L5'
   coreIndicators: null,
+  dataStatus: 'idle', // 'idle' | 'ok' | 'partial' | 'empty' | 'failed'
+  errors: {},         // { [url]: classifyFetchError result }
   attributionCache: {},
 };
 
@@ -50,12 +53,23 @@ const DIRECTION_GLYPH = {
 const LAYER_FILTERS = ['all', 'L1', 'L2', 'L3', 'L4', 'L5'];
 
 async function fetchJSON(url, opts) {
-  const r = await fetch(url, opts);
+  let r;
+  try {
+    r = await fetch(url, opts);
+  } catch (networkErr) {
+    throw networkErr;
+  }
   if (r.status === 410) {
     const body = await r.json().catch(() => ({}));
-    throw new Error(body.error || 'moved');
+    const e = new Error(body.error || 'moved');
+    e.status = 410;
+    throw e;
   }
-  if (!r.ok) throw new Error(`${url} -> ${r.status}`);
+  if (!r.ok) {
+    const e = new Error(`HTTP ${r.status} ${r.statusText || ''}`.trim());
+    e.status = r.status;
+    throw e;
+  }
   return r.json();
 }
 
@@ -71,13 +85,20 @@ export async function renderStrategiesPage(root) {
     <div id="strategiesContent" class="empty loading">載入中…</div>
   `;
   const slot = root.querySelector('#strategiesContent');
-  slot.classList.remove('loading');
-  slot.innerHTML = renderSkeleton();
   try {
     await loadStrategiesData();
+    slot.classList.remove('loading');
+    slot.innerHTML = renderSkeleton();
     render();
   } catch (e) {
-    slot.innerHTML = `<div class="empty error">載入失敗：${escapeHtml(e.message)}</div>`;
+    slot.classList.remove('loading');
+    const classified = classifyFetchError(e, 'strategies page');
+    slot.innerHTML = `
+      <div class="empty error">
+        <div>${escapeHtml(classified.message)}</div>
+        ${classified.hint ? `<small class="text-muted">${escapeHtml(classified.hint)}</small>` : ''}
+      </div>
+    `;
   }
 
   function renderSkeleton() {
@@ -89,7 +110,46 @@ export async function renderStrategiesPage(root) {
     `;
   }
 
+  function renderPartialBanner() {
+    var status = STATE.dataStatus;
+    if (status === 'ok' || status === 'idle') return '';
+    var errorEntries = Object.entries(STATE.errors || {});
+
+    if (status === 'failed') {
+      var firstErr = errorEntries[0];
+      var hint = firstErr && firstErr[1] ? firstErr[1].hint : '';
+      var firstKind = firstErr && firstErr[1] ? firstErr[1].kind : '';
+      var message = firstErr && firstErr[1] ? firstErr[1].message : '後端資料來源全部失敗';
+      return `
+        <div class="error-banner" role="alert">
+          <div><strong>載入失敗</strong>：${escapeHtml(message)}${firstKind ? ' (' + escapeHtml(firstKind) + ')' : ''}</div>
+          ${hint ? `<small class="text-muted">${escapeHtml(hint)}</small>` : ''}
+        </div>
+      `;
+    }
+    if (status === 'empty') {
+      return `
+        <div class="error-banner error-banner--warning" role="status">
+          <div><strong>資料庫為空</strong>：後端回傳 0 筆心法</div>
+          <small class="text-muted">可能原因：seed 載入但篩選後為空、或 schema 欄位改名。請聯絡管理員確認 <code>data/seeds/strategy_techniques.json</code>。</small>
+        </div>
+      `;
+    }
+    if (status === 'partial') {
+      var failedUrls = errorEntries.map(function(e) { return e[0]; }).join(', ');
+      return `
+        <div class="error-banner error-banner--warning" role="status">
+          <div><strong>部分資料載入失敗</strong>：${escapeHtml(failedUrls)}</div>
+          <small class="text-muted">已顯示可取得的資料；失敗區塊以「--」標示。</small>
+        </div>
+      `;
+    }
+    return '';
+  }
+
   function render() {
+    var banner = renderPartialBanner();
+    if (banner) slot.insertAdjacentHTML('afterbegin', banner);
     renderKPIs();
     renderCoreIndicators();
     renderLayerTabs();
@@ -246,14 +306,50 @@ export async function renderStrategiesPage(root) {
 }
 
 async function loadStrategiesData() {
-  const [strategiesResp, layersResp, chainResp] = await Promise.all([
+  const results = await Promise.allSettled([
     fetchJSON('/api/strategies'),
     fetchJSON('/api/strategies/layers'),
-    fetchJSON('/api/dashboard/decision-chain').catch(() => null),
+    fetchJSON('/api/dashboard/decision-chain'),
   ]);
-  STATE.strategies = strategiesResp.strategies || [];
-  STATE.layers = layersResp.layers || [];
-  STATE.coreIndicators = chainResp ? (chainResp.core_indicators || null) : null;
+
+  const errors = {};
+  let strategies = [];
+  let layers = [];
+  let chain = null;
+  let coreFailures = 0;
+
+  if (results[0].status === 'fulfilled') {
+    strategies = (results[0].value && results[0].value.strategies) || [];
+  } else {
+    errors['/api/strategies'] = classifyFetchError(results[0].reason, '/api/strategies');
+    coreFailures++;
+  }
+
+  if (results[1].status === 'fulfilled') {
+    layers = (results[1].value && results[1].value.layers) || [];
+  } else {
+    errors['/api/strategies/layers'] = classifyFetchError(results[1].reason, '/api/strategies/layers');
+    coreFailures++;
+  }
+
+  if (results[2].status === 'fulfilled') {
+    chain = results[2].value;
+  } else {
+    errors['/api/dashboard/decision-chain'] = classifyFetchError(results[2].reason, '/api/dashboard/decision-chain');
+  }
+
+  STATE.strategies = strategies;
+  STATE.layers = layers;
+  STATE.coreIndicators = chain && chain.core_indicators ? chain.core_indicators : null;
+  STATE.errors = errors;
+
+  if (coreFailures === 0) {
+    STATE.dataStatus = strategies.length === 0 ? 'empty' : 'ok';
+  } else if (coreFailures === 2) {
+    STATE.dataStatus = 'failed';
+  } else {
+    STATE.dataStatus = 'partial';
+  }
 }
 
 async function aiAnnotate(id) {
