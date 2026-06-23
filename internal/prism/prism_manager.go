@@ -73,15 +73,15 @@ const (
 
 // TrainingResult contains outcome of training
 type TrainingResult struct {
-	HitRate      float64 `json:"hit_rate"`
-	SharpeRatio  float64 `json:"sharpe_ratio"`
-	MaxDrawdown  float64 `json:"max_drawdown"`
-	TotalReturn  float64 `json:"total_return"`
-	SignalsCount int     `json:"signals_count"`
-	WinCount     int     `json:"win_count"`
-	LossCount    int     `json:"loss_count"`
-	Error        string  `json:"error,omitempty"`
-	Duration     time.Duration `json:"duration,omitempty"` // nanoseconds; JS reads as number
+	HitRate      float64       `json:"hit_rate"`
+	SharpeRatio  float64       `json:"sharpe_ratio"`
+	MaxDrawdown  float64       `json:"max_drawdown"`
+	TotalReturn  float64       `json:"total_return"`
+	SignalsCount int           `json:"signals_count"`
+	WinCount     int           `json:"win_count"`
+	LossCount    int           `json:"loss_count"`
+	Error        string        `json:"error,omitempty"`
+	Duration     time.Duration `json:"duration,omitempty"`  // nanoseconds; JS reads as number
 	Synthetic    bool          `json:"synthetic,omitempty"` // true when no TrainingExecutor was available
 
 	// Explanation is an optional natural-language explanation of the
@@ -226,9 +226,9 @@ func (q *TrainingQueue) GetAllTasks() []*TrainingTask {
 
 // CompletedTrainingResult pairs a regime with its completed training result.
 type CompletedTrainingResult struct {
-	AgentID    string     `json:"agent_id"`
-	AgentSkill string     `json:"agent_skill,omitempty"`
-	Regime     RegimeType `json:"regime"`
+	AgentID    string         `json:"agent_id"`
+	AgentSkill string         `json:"agent_skill,omitempty"`
+	Regime     RegimeType     `json:"regime"`
 	Result     TrainingResult `json:"result"`
 }
 
