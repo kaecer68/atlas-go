@@ -685,6 +685,103 @@ func (s *System) Session() domain.ReplaySession {
 	return s.Sim().session
 }
 
+func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate *domain.Candidate) error {
+	summary := domain.SessionSummary{
+		SessionID:      s.Sim().session.ID,
+		Regime:         result.Regime,
+		OrderCount:     len(result.Orders),
+		PositionCount:  len(result.Positions),
+		EndingCash:     result.EndingCash,
+		PortfolioValue: result.PortfolioValue,
+		OutcomeCount:   len(s.Sim().lastOutcomes),
+		BrokerRuntime: domain.BrokerRuntimeAudit{
+			Mode:             s.Sim().cfg.BrokerMode,
+			Adapter:          s.Sim().cfg.BrokerAdapter,
+			Signer:           s.Sim().cfg.BrokerSigner,
+			SignerVersion:    "v1",
+			KeyID:            s.Sim().cfg.BrokerKeyID,
+			MaxRetries:       s.Sim().cfg.BrokerMaxRetries,
+			HTTPTimeoutSec:   s.Sim().cfg.BrokerHTTPTimeoutS,
+			HTTPAttempts:     s.Sim().cfg.BrokerHTTPAttempts,
+			RetryStatusCodes: append([]int(nil), s.Sim().cfg.BrokerHTTPRetryStatusCodes...),
+			MaxClockSkewSec:  s.Sim().cfg.BrokerMaxClockSkewS,
+			NonceTTLSec:      s.Sim().cfg.BrokerNonceTTLS,
+			NonceStore:       s.Sim().cfg.BrokerNonceStore,
+			NonceStorePath:   s.Sim().cfg.BrokerNonceStorePath,
+			NonceRedisPrefix: s.Sim().cfg.BrokerNonceRedisKeyPrefix,
+		},
+		GuardOutcomes:  append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
+		RecordedAt:     time.Now(),
+		TaxSnapshots:   append([]domain.TaxSnapshot(nil), result.TaxSnapshots...),
+		AfterTaxPnL:    result.AfterTaxPnL,
+		TotalTaxPaid:   result.TotalTaxPaid,
+		RiskCommentary: result.RiskCommentary,
+	}
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		summary.ParametersVersion = cfg.Version
+	}
+	if candidate != nil {
+		summary.NextExperimentAgentID = candidate.Agent.ID
+		summary.ProposalID = candidate.Experiment.ProposalID
+		summary.CommitID = candidate.Experiment.CommitID
+		summary.ApprovalID = candidate.Experiment.ApprovalID
+		if summary.ProposalID == "" {
+			summary.ProposalID = candidate.Experiment.ID
+		}
+	}
+
+	// Retry guard: a single transient I/O failure here would leave an orphan
+	// session directory (outcomes.jsonl present, summary.json missing) and
+	// break the pipeline page's recommendation count trust contract.
+	if err := recordSummaryWithRetry(
+		s.Sim().ledger,
+		s.Sim().session,
+		summary,
+		100*time.Millisecond,
+	); err != nil {
+		return err
+	}
+
+	// Save per-session position snapshot for portfolio page
+	s.saveSessionPositions(s.Sim().session.ID, result.Positions)
+
+	// Anomaly detection: warn on empty or suspicious sessions
+	if summary.OutcomeCount == 0 {
+		logging.Info(
+			"system", "session_no_outcomes",
+			"session_id", summary.SessionID,
+			"orders", summary.OrderCount,
+			"positions", summary.PositionCount,
+		)
+	}
+	if summary.PortfolioValue == 0 && summary.OrderCount > 0 {
+		logging.Warn(
+			"system", "zero_portfolio_with_orders",
+			"session_id", summary.SessionID,
+			"orders", summary.OrderCount,
+		)
+	}
+	s.saveSessionTrades(s.Sim().session.ID, result.Trades)
+	return nil
+}
+
+func (s *System) saveSessionPositions(sessionID string, positions []domain.Position) {
+	if len(positions) == 0 {
+		return
+	}
+	sessionDir := filepath.Join(s.Sim().cfg.LedgerDir, "sessions", sessionID)
+	_ = os.MkdirAll(sessionDir, 0o755)
+	path := filepath.Join(sessionDir, "positions.json")
+	bytes, err := json.MarshalIndent(positions, "", "  ")
+	if err != nil {
+		logging.Warn("System", "failed to marshal positions", "session_id", sessionID, "err", err)
+		return
+	}
+	if err := os.WriteFile(path, bytes, 0o644); err != nil {
+		logging.Warn("System", "failed to write positions", "session_id", sessionID, "err", err)
+	}
+}
+
 func (s *System) saveSessionTrades(sessionID string, trades []domain.TradeRecord) {
 	if len(trades) == 0 {
 		return

@@ -1,0 +1,54 @@
+package orchestrator
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/sim"
+)
+
+func TestRecordSessionSummary_PersistsRiskCommentary(t *testing.T) {
+	baseDir := t.TempDir()
+	sys := &System{
+		SystemCore: &SystemCore{
+			sim: SimulationCore{
+				cfg:      config.Config{PrimaryMarket: "TW"},
+				provider: marketdata.NewMockProvider(),
+				engine:   sim.NewEngine(domain.SimulationConstraints{StartingCash: 1_000_000}),
+				registry: SeedRegistry(),
+				session:  domain.ReplaySession{ID: "test-session"},
+				ledger:   ledger.NewStore(baseDir),
+			},
+			plugins: NewPluginRegistry(),
+		},
+	}
+
+	result := domain.SimulationResult{
+		RiskCommentary: "test commentary XYZ",
+	}
+
+	if err := sys.RecordSessionSummary(result, nil); err != nil {
+		t.Fatalf("RecordSessionSummary error: %v", err)
+	}
+
+	summaryPath := filepath.Join(baseDir, "sessions", sys.Sim().session.ID, "summary.json")
+	bytes, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatalf("read summary.json: %v", err)
+	}
+
+	var got domain.SessionSummary
+	if err := json.Unmarshal(bytes, &got); err != nil {
+		t.Fatalf("unmarshal summary.json: %v", err)
+	}
+
+	if got.RiskCommentary != result.RiskCommentary {
+		t.Fatalf("risk_commentary mismatch: got %q want %q", got.RiskCommentary, result.RiskCommentary)
+	}
+}

@@ -340,7 +340,7 @@ func TestPostgresRepository_OutcomesAuditAndOtherCRUDWithFakePool(t *testing.T) 
 	now := time.Date(2026, 6, 14, 11, 0, 0, 0, time.UTC)
 	outcomeRow := []any{now, "session-1", "2330", "agent", "sector", 80, true, "", 100.5, []byte(`{"window":"session-1","symbol":"2330","agent_id":"agent","conviction":80}`)}
 	rejectRow := []any{now, "session-1", "2330", "agent", "skill", "criterion", "label", "0.7", "0.5", []byte(`{"total":0.5}`)}
-	summaryRow := []any{now, "session-1", "RISK_ON", 2, 1, 900000.0, 1000000.0, 3, []byte(`{}`), "agent-next", "proposal", "commit", "approval", []byte(`[]`), []byte(`null`), 0.0, 0.0, ""}
+	summaryRow := []any{now, "session-1", "RISK_ON", 2, 1, 900000.0, 1000000.0, 3, []byte(`{}`), "agent-next", "proposal", "commit", "approval", []byte(`[]`), "test-risk-commentary", []byte(`null`), 0.0, 0.0, ""}
 	interventionRow := []any{now, "hi-1", "pause_agent", "agent", "model", "sector", "2330", 0.5, "reason", "operator", "session-1"}
 	pool := &fakePGPool{
 		queryFunc: func(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
