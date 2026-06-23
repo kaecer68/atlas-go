@@ -361,6 +361,88 @@ func TestCancelTask_Success(t *testing.T) {
 	}
 }
 
+// TestCancelTask_RunnerCompletionPreservesCancelStatus is a regression test
+// for the race where the runner's deferred completion overwrites the
+// "cancel_requested" status set by Manager.Cancel() with "failed".
+//
+// Race window: Manager.Cancel() writes "cancel_requested" to the store, then
+// calls cancelFunc() which cancels the runner's context. The runner returns
+// with err=context.Canceled; the deferred completion in startRun then writes
+// "failed" to the store, overwriting the cancel status.
+//
+// This test polls for the final terminal state with a 2s timeout so the
+// goroutine has time to fully complete. Without the fix, the final state
+// will be "failed" instead of "cancel_requested".
+func TestCancelTask_RunnerCompletionPreservesCancelStatus(t *testing.T) {
+	_, manager, store, mux := setup(t)
+
+	manager.RegisterRunner("cancel-preserve-test", &stubRunner{
+		name:   "cancel-preserve-test",
+		blocks: true,
+	})
+
+	body := `{"task_type":"cancel-preserve-test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("create: status = %d, want %d; body = %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var createResp struct {
+		ID string `json:"id"`
+	}
+	json.NewDecoder(w.Body).Decode(&createResp)
+
+	// Wait for the goroutine to start running.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		current, err := store.GetExecution(context.Background(), createResp.ID)
+		if err == nil && current.Status == domain.TaskStatusRunning {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("task did not reach running within 2s; last status = %v, err = %v", current, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Cancel the running task.
+	req2 := httptest.NewRequest(http.MethodPost, "/api/tasks/"+createResp.ID+"/cancel", nil)
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusNoContent {
+		t.Fatalf("cancel: status = %d, want %d; body = %s", w2.Code, http.StatusNoContent, w2.Body.String())
+	}
+
+	// Wait long enough for the runner's goroutine to fully complete.
+	// Manager.Cancel() returns 204 after writing "cancel_requested" to the
+	// store, but cancelFunc() then cancels the runner's context, and the
+	// runner's deferred completion runs afterwards. Without the fix, the
+	// deferred completion overwrites "cancel_requested" with "failed".
+	// We sleep so the goroutine has time to settle, then check the final
+	// status.
+	time.Sleep(500 * time.Millisecond)
+
+	exec, err := store.GetExecution(context.Background(), createResp.ID)
+	if err != nil {
+		t.Fatalf("get after settle: %v", err)
+	}
+	if exec.Status == domain.TaskStatusFailed {
+		t.Fatalf("status overwritten by runner completion: got %q, want %q "+
+			"(runner.Run returned ctx.Err but the deferred completion in "+
+			"startRun wrote 'failed' over the 'cancel_requested' set by Manager.Cancel)",
+			exec.Status, domain.TaskStatusCancelRequested)
+	}
+	if exec.Status != domain.TaskStatusCancelRequested {
+		t.Errorf("final status = %q, want %q", exec.Status, domain.TaskStatusCancelRequested)
+	}
+}
+
 func TestCancelTask_NotRunning(t *testing.T) {
 	_, _, _, mux := setup(t)
 
