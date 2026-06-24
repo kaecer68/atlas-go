@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.0.0.14] - 2026-06-24
+
+### Added — Wave 9 follow-up: DriftDetector v2 Target Weights Drift
+
+擴展 `internal/monitoring/service/drift_detector.go` v1 (189 行) 為 v2,新增 target weights drift 偵測。**條件**:Issue #611 refactor 已完成(`FactorWeightEngine.GetWeights(regime)` 介面化 + Optimizer 拆分),原本 v1 計劃書標註為 Out of Scope 的「v2 DriftDetector target weights drift」現在可獨立 PR。
+
+#### 新增介面與建構式
+
+- **`TargetWeightsProvider` 介面**(`drift_helpers.go`):`GetTargetWeights(regime string) map[string]float64` — symbol-level 目標權重(與既有 `WeightProvider` 為 factor-level 不同,**不可混用**)
+- **`NewDriftDetectorWithTargets(bus, provider)` 建構式**:`DriftDetector` 介面不變,新增 DI 入口,provider 為 nil 時 graceful degradation(v1 行為完整保留)
+- **`NewDriftDetector(bus)` 保留**:向後相容,無 target drift 功能
+
+#### 新增 payload 欄位(v2,僅在 provider 非 nil 且回傳非空 map 時出現)
+
+- `target_weights`:regime-snapshot 目標 symbol 權重
+- `actual_weights`:當前 portfolio 實際 symbol 權重
+- `max_drift`:`|actual - target|` 最大 drift
+- `max_drift_symbol`:drift 最大的 symbol
+- `current_regime`:當前 market regime(首次 regime change 前為空字串)
+- `thresholds.target_drift`:0.10(**一律存在**,常數)
+
+#### 新增事件訂閱
+
+- **`EventRegimeChangeConfirmed`**(`regime_debouncer.go` 發布):觸發時更新內部 `currentRegime` 並重置 `prevTotal = 0` (re-baseline,避免 regime 切換時的偽 turnover 事件)
+
+#### Schema 演進
+
+- `DriftEventSchemaVer` 從 `1` bump 到 `2`
+- v1 payload 欄位(`max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds`)完整保留(append-only 演進)
+- 消費者可透過 `data.schema_version` 判斷 v1 / v2
+
+#### 測試覆蓋
+
+- **9 個 v2 characterization tests**(`drift_detector_v2_test.go`):
+  - `TestDriftDetector_V2TargetDriftEmitted`:drift > 10% emit + 驗證 v2 欄位
+  - `TestDriftDetector_V2TargetDriftNoEmit`:target 對齊 + 平衡不 emit
+  - `TestDriftDetector_V2NilProviderGraceful`:nil provider 保留 v1 行為
+  - `TestDriftDetector_V2EmptyTargetWeights`:空 target map 跳過 target drift
+  - `TestDriftDetector_V2RegimeChangeUpdatesCurrentRegime`:handler 更新 currentRegime
+  - `TestDriftDetector_V2RegimeChangeRebaselinesPrevTotal`:regime change 重置 prevTotal
+  - `TestDriftDetector_V2SymbolNotInTargetMap`:target=0 處理缺漏 symbol
+  - `TestDriftDetector_V2SchemaVersionBumped`:SchemaVersion=2
+  - `TestDriftDetector_V2ConcurrentProviderAccess`:concurrent 讀取無 race(-race flag)
+- **v1 6 個 tests 一字不改**:全綠
+- 15 個 drift tests 全部 PASS,全 `internal/monitoring/service/` 套件綠
+
+#### 文件同步
+
+- `docs/events/drift-detector.md`:Schema Version 2 + 5 個 v2 欄位 + 9 個 v2 測試描述
+- `docs/events/INDEX.md`:EventDriftDetected 標記為 v2,Schema Version 說明段落更新
+- `internal/monitoring/AGENTS.md`:新增 DriftDetector v2 段落(Architecture、Event Subscriptions、9 個模組陷阱、向後相容保證)
+
+#### 與 PR #632 Wave 9 plan 的關聯
+
+- 本 PR 收尾 Wave 9 plan §7 Risks 提到的「v2 DriftDetector target weights drift」follow-up
+- Wave 9 plan Out of Scope 三項中此為收尾項
+
+#### 已知限制 / 後續工作 (out of scope,follow-up PR)
+
+- **本 PR 不做**:`internal/monitoring/service` 加入 Layer 3 baseline(目前 baseline 涵蓋 internal/config, cmd/atlas, internal/narrative, internal/orchestrator, internal/portfolio, internal/sim, internal/risk)。DriftDetector 介面為 public,後續 PR 應為其加 baseline。
+- **本 PR 不做**:`cmd/atlas/main.go` wire `NewDriftDetectorWithTargets`(v1 已知未 wire,本 PR 維持 scope 嚴格)
+- **本 PR 不做**:實作 symbol-level target weight provider(目前 `TargetWeightsProvider` 介面已備但無 production 實作;後續 PR 可從 portfolio Optimizer 衍生)
+
 ## [0.0.0.13] - 2026-06-23
 
 ### Added — P2/P3 Startup-Herd 回歸測試
