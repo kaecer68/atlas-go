@@ -147,6 +147,9 @@ func applyFactorWeights(w map[FactorType]float64) {
 	params.FactorWeight.BaseWeights.LastCalibrated = &now
 	params.FactorWeight.BaseWeights.CalibrationMethod = "bayesian_search"
 	if p := config.GetParametersConfigPath(); p != "" {
+		if err := config.SnapshotToBackup(p); err != nil {
+			fmt.Printf("calibrator: snapshot_to_backup failed: %v\n", err)
+		}
 		_ = params.LockedSaveWithRollback(p)
 	}
 }
