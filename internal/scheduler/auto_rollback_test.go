@@ -2,10 +2,14 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -74,20 +78,19 @@ func TestAutoRollback_AgentDisable(t *testing.T) {
 func TestAutoRollback_PromotionDegradation(t *testing.T) {
 	tr := domain.NewMaturityTrackerWithStart(time.Now().UTC().Add(-300 * 24 * time.Hour))
 	dw := portfolio.NewDarwinianWeightManager("/tmp/test_rollback.json")
+	bm := baseline.NewManager("/tmp/test_baseline_rollback.json")
 
 	dw.InitializeFromRegistry(domain.AgentRegistry{
 		Agents: []domain.AgentSpec{
 			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	// Seed with positive returns to get a moderate pre-promotion Sharpe.
-	// Use varied returns to ensure stddev > 0.
 	for i := 0; i < 60; i++ {
-		ret := 0.005 + float64(i%5)*0.002 // 0.005 ~ 0.013
+		ret := 0.005 + float64(i%5)*0.002
 		dw.RecordOutcome("agent_1", ret, true)
 	}
 
-	ar := NewAutoRollback(nil, dw, nil).WithMaturityTracker(tr)
+	ar := NewAutoRollback(bm, dw, nil).WithMaturityTracker(tr)
 
 	preSharpe := ar.computeSystemSharpe()
 	if preSharpe <= 0 {
@@ -95,7 +98,6 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 	}
 	ar.RecordPromotion("exp-001", preSharpe)
 
-	// Now degrade performance: negative returns to drop Sharpe > 20%.
 	dw.Reset()
 	dw.InitializeFromRegistry(domain.AgentRegistry{
 		Agents: []domain.AgentSpec{
@@ -103,7 +105,7 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 		},
 	})
 	for i := 0; i < 60; i++ {
-		ret := -0.03 - float64(i%5)*0.001 // -0.03 ~ -0.034
+		ret := -0.03 - float64(i%5)*0.001
 		dw.RecordOutcome("agent_1", ret, false)
 	}
 
@@ -112,7 +114,6 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 		t.Fatalf("RunDaily: %v", err)
 	}
 
-	// Should detect degradation (>20% drop)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 rollback result for degraded promotion, got %d", len(results))
 	}
@@ -122,14 +123,110 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 	if results[0].TargetID != "exp-001" {
 		t.Errorf("expected target=exp-001, got %s", results[0].TargetID)
 	}
+}
 
-	// Verify alert-only rollback is recorded in history.
+func TestAutoRollback_PromotionDegradation_ExecutesActualRevert(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "baseline_policy.json")
+	resultPath := filepath.Join(dir, "result.json")
+	candidatePath := filepath.Join(dir, "v2.md")
+
+	if err := os.WriteFile(candidatePath, []byte("candidate prompt body v2"), 0o644); err != nil {
+		t.Fatalf("write candidate: %v", err)
+	}
+	result := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			ID:            "exp-revert-001",
+			TargetAgentID: "growth-momentum-01",
+			Skill:         "growth_momentum",
+			MutationType:  "prompt_tightening",
+			Status:        domain.ExperimentAccepted,
+		},
+		CandidatePrompt: candidatePath,
+	}
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
+		t.Fatalf("write result: %v", err)
+	}
+
+	bm := baseline.NewManager(policyPath)
+	if _, err := bm.PromoteResult(resultPath); err != nil {
+		t.Fatalf("first promote: %v", err)
+	}
+
+	pre, err := baseline.Load(policyPath)
+	if err != nil {
+		t.Fatalf("load after first promote: %v", err)
+	}
+	if pre.Version != 2 {
+		t.Fatalf("expected policy version 2 after first promote, got %d", pre.Version)
+	}
+	if len(pre.Promotions) != 1 {
+		t.Fatalf("expected 1 promotion record, got %d", len(pre.Promotions))
+	}
+
+	tr := domain.NewMaturityTrackerWithStart(time.Now().UTC().Add(-300 * 24 * time.Hour))
+	dw := portfolio.NewDarwinianWeightManager(filepath.Join(dir, "dw.json"))
+	dw.InitializeFromRegistry(domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
+		},
+	})
+	for i := 0; i < 60; i++ {
+		ret := 0.005 + float64(i%5)*0.002
+		dw.RecordOutcome("agent_1", ret, true)
+	}
+
+	ar := NewAutoRollback(bm, dw, nil).WithMaturityTracker(tr)
+	preSharpe := ar.computeSystemSharpe()
+	if preSharpe <= 0 {
+		t.Fatalf("pre-promotion sharpe should be > 0, got %f", preSharpe)
+	}
+	ar.RecordPromotion("exp-revert-001", preSharpe)
+
+	dw.Reset()
+	dw.InitializeFromRegistry(domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
+		},
+	})
+	for i := 0; i < 60; i++ {
+		ret := -0.03 - float64(i%5)*0.001
+		dw.RecordOutcome("agent_1", ret, false)
+	}
+
+	results, err := ar.RunDaily(context.Background())
+	if err != nil {
+		t.Fatalf("RunDaily: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 rollback result, got %d", len(results))
+	}
+	if results[0].Action != "revert_baseline" {
+		t.Fatalf("expected action=revert_baseline, got %s", results[0].Action)
+	}
+
 	history := ar.History()
 	if len(history) != 1 {
-		t.Fatalf("expected 1 history entry, got %d", len(history))
+		t.Fatalf("expected 1 history entry after actual revert, got %d", len(history))
 	}
-	if history[0].Action != "revert_baseline" {
-		t.Errorf("expected history action=revert_baseline, got %s", history[0].Action)
+
+	post, err := baseline.Load(policyPath)
+	if err != nil {
+		t.Fatalf("load after revert: %v", err)
+	}
+	if post.Version != 1 {
+		t.Errorf("expected policy version 1 after revert (was 2, reverted to before exp-revert-001), got %d", post.Version)
+	}
+	if len(post.Promotions) != 0 {
+		t.Errorf("expected 0 promotions after revert, got %d", len(post.Promotions))
+	}
+	if len(post.RevertHistory) != 1 {
+		t.Errorf("expected 1 revert record, got %d", len(post.RevertHistory))
 	}
 }
 

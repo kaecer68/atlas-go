@@ -233,8 +233,6 @@ func (r *AutoRollback) computeSystemCompositeScore() float64 {
 	return r.computeSystemSharpe()
 }
 
-// executeRollback performs the actual rollback action based on the result type.
-// TODO: baseline revert and calibration revert require backup infrastructure.
 func (r *AutoRollback) executeRollback(result *RollbackResult) error {
 	switch result.Action {
 	case "disable_agent":
@@ -249,23 +247,26 @@ func (r *AutoRollback) executeRollback(result *RollbackResult) error {
 		return nil
 
 	case "revert_baseline":
-		// TODO: Requires baseline backup infrastructure.
-		// When baseline.Manager supports Revert(snapshotPath), replace this stub.
-		// For now: alert-only mode — record the intent in history but do not error.
-		logging.Warn("auto_rollback", "baseline_revert_alert_only",
+		if r.baselineMgr == nil {
+			return fmt.Errorf("baselineMgr is nil, cannot revert baseline for %s", result.TargetID)
+		}
+		target := baseline.RevertTarget{Type: baseline.RevertToExperiment, ExperimentID: result.TargetID}
+		if _, err := r.baselineMgr.Revert(target, result.Reason, false); err != nil {
+			return fmt.Errorf("baseline revert failed: %w", err)
+		}
+		logging.Info("auto_rollback", "baseline_reverted",
 			"experiment_id", result.TargetID,
-			"reason", result.Reason,
-			"note", "baseline revert requires backup infrastructure; manual intervention needed")
+			"reason", result.Reason)
 		r.rollbackHistory = append(r.rollbackHistory, *result)
 		return nil
 
 	case "revert_calibration":
-		// TODO: Requires parameter backup infrastructure.
-		// When ParametersConfig supports SaveWithRollback from backup, replace this stub.
-		// For now: alert-only mode — record the intent in history but do not error.
+		if result.PreValue <= 0 {
+			return fmt.Errorf("no calibration snapshot available, cannot revert calibration")
+		}
 		logging.Warn("auto_rollback", "calibration_revert_alert_only",
 			"reason", result.Reason,
-			"note", "calibration revert requires parameter backup infrastructure; manual intervention needed")
+			"note", "calibration revert requires parameter backup infrastructure (Wave 10 L1.4); manual intervention needed")
 		r.rollbackHistory = append(r.rollbackHistory, *result)
 		return nil
 
