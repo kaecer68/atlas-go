@@ -144,18 +144,17 @@ func (d *driftDetector) totalValue() float64 {
 
 func (d *driftDetector) checkPeriod(now time.Time) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	total := d.totalValue()
 	if total <= 0 {
 		d.prevTotal = total
 		d.periodStart = now
+		d.mu.Unlock()
 		return
 	}
-
 	if d.prevTotal == 0 {
 		d.prevTotal = total
 		d.periodStart = now
+		d.mu.Unlock()
 		return
 	}
 
@@ -174,25 +173,32 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		turnover = absDiff(total, d.prevTotal) / d.prevTotal
 	}
 
+	currentRegime := d.currentRegime
+	provider := d.provider
+	snapshotValues := make(map[string]float64, len(d.snapshots))
+	for sym, s := range d.snapshots {
+		snapshotValues[sym] = s.value
+	}
+	d.mu.Unlock()
+
 	var (
 		targetDriftChecked = false
 		targetWeights      map[string]float64
-		actualWeights      = make(map[string]float64, len(d.snapshots))
+		actualWeights      = make(map[string]float64, len(snapshotValues))
 		maxDrift           float64
 		maxDriftSymbol     string
 	)
-	if d.provider != nil {
-		targetWeights = d.provider.GetTargetWeights(d.currentRegime)
+	if provider != nil {
+		targetWeights = provider.GetTargetWeights(currentRegime)
 		if len(targetWeights) > 0 {
 			targetDriftChecked = true
-			symbols := make([]string, 0, len(d.snapshots))
-			for sym := range d.snapshots {
+			symbols := make([]string, 0, len(snapshotValues))
+			for sym := range snapshotValues {
 				symbols = append(symbols, sym)
 			}
 			sort.Strings(symbols)
 			for _, sym := range symbols {
-				s := d.snapshots[sym]
-				actual := s.value / total
+				actual := snapshotValues[sym] / total
 				actualWeights[sym] = actual
 				target := targetWeights[sym]
 				drift := absDiff(actual, target)
@@ -209,8 +215,10 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 	hasTargetDrift := targetDriftChecked && maxDrift > DriftTargetWeightThreshold
 
 	if !hasConcentration && !hasTurnover && !hasTargetDrift {
+		d.mu.Lock()
 		d.prevTotal = total
 		d.periodStart = now
+		d.mu.Unlock()
 		return
 	}
 
@@ -230,7 +238,7 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		"max_symbol":        maxSymbol,
 		"turnover":          turnover,
 		"total_value":       total,
-		"period_start":      d.periodStart,
+		"period_start":      now,
 		"reasons":           reasons,
 		"thresholds": map[string]float64{
 			"concentration": DriftMaxConcentrationThreshold,
@@ -244,7 +252,7 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		payload["actual_weights"] = actualWeights
 		payload["max_drift"] = maxDrift
 		payload["max_drift_symbol"] = maxDriftSymbol
-		payload["current_regime"] = d.currentRegime
+		payload["current_regime"] = currentRegime
 	}
 
 	d.bus.Publish(eventbus.BusEvent{
@@ -254,6 +262,8 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		SchemaVersion: DriftEventSchemaVer,
 		Payload:       payload,
 	})
+	d.mu.Lock()
 	d.prevTotal = total
 	d.periodStart = now
+	d.mu.Unlock()
 }
