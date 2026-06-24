@@ -167,10 +167,12 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		return
 	}
 
+	weights := make(map[string]float64, len(d.snapshots))
 	var maxSymbol string
 	var maxWeight float64
 	for sym, s := range d.snapshots {
 		w := s.value / total
+		weights[sym] = w
 		if w > maxWeight {
 			maxWeight = w
 			maxSymbol = sym
@@ -184,16 +186,12 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 
 	currentRegime := d.currentRegime
 	provider := d.provider
-	snapshotValues := make(map[string]float64, len(d.snapshots))
-	for sym, s := range d.snapshots {
-		snapshotValues[sym] = s.value
-	}
 	d.mu.Unlock()
 
 	var (
 		targetDriftChecked = false
 		targetWeights      map[string]float64
-		actualWeights      = make(map[string]float64, len(snapshotValues))
+		actualWeights      = make(map[string]float64, len(weights))
 		maxDrift           float64
 		maxDriftSymbol     string
 	)
@@ -201,13 +199,13 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		targetWeights = provider.GetTargetWeights(currentRegime)
 		if len(targetWeights) > 0 {
 			targetDriftChecked = true
-			symbols := make([]string, 0, len(snapshotValues))
-			for sym := range snapshotValues {
+			symbols := make([]string, 0, len(weights))
+			for sym := range weights {
 				symbols = append(symbols, sym)
 			}
 			sort.Strings(symbols)
 			for _, sym := range symbols {
-				actual := snapshotValues[sym] / total
+				actual := weights[sym]
 				actualWeights[sym] = actual
 				target := targetWeights[sym]
 				drift := absDiff(actual, target)
