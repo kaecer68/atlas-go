@@ -142,6 +142,13 @@ func (d *driftDetector) totalValue() float64 {
 	return total
 }
 
+func schemaVersionFor(targetDriftChecked bool) int {
+	if targetDriftChecked {
+		return DriftEventSchemaVer
+	}
+	return DriftEventSchemaVerV1
+}
+
 func (d *driftDetector) checkPeriod(now time.Time) {
 	d.mu.Lock()
 	total := d.totalValue()
@@ -259,7 +266,7 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		Type:          eventbus.EventDriftDetected,
 		Timestamp:     now,
 		Severity:      "info",
-		SchemaVersion: DriftEventSchemaVer,
+		SchemaVersion: schemaVersionFor(targetDriftChecked),
 		Payload:       payload,
 	})
 	d.mu.Lock()

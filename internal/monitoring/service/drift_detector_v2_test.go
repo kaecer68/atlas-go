@@ -281,11 +281,16 @@ func TestDriftDetector_V2SymbolNotInTargetMap(t *testing.T) {
 	}
 }
 
-// TestDriftDetector_V2SchemaVersionBumped verifies that emitted events
-// always have SchemaVersion=2.
+// TestDriftDetector_V2SchemaVersionBumped verifies that v2 events (with
+// non-empty target weights from a non-nil provider) emit SchemaVersion=2.
 func TestDriftDetector_V2SchemaVersionBumped(t *testing.T) {
 	bus := &driftRecordingBus{}
-	d := NewDriftDetectorWithTargets(bus, nil).(*driftDetector)
+	provider := &stubTargetProvider{
+		weights: map[string]float64{
+			"2330": 0.30, "2454": 0.25, "2317": 0.25, "2881": 0.20,
+		},
+	}
+	d := NewDriftDetectorWithTargets(bus, provider).(*driftDetector)
 
 	dispatchPosition(d, "2330", 700_000, "added")
 	dispatchPosition(d, "2454", 100_000, "added")
@@ -301,6 +306,38 @@ func TestDriftDetector_V2SchemaVersionBumped(t *testing.T) {
 	}
 	if got[0].SchemaVersion != 2 {
 		t.Errorf("expected SchemaVersion=2, got %d", got[0].SchemaVersion)
+	}
+}
+
+// TestDriftDetector_V1ConstructorEmitsSchemaVersion1 verifies that the
+// legacy NewDriftDetector constructor (no provider) emits SchemaVersion=1,
+// preserving the v1 contract. Consumers dispatching on data.schema_version
+// can correctly route v1-shape events to the v1 parser.
+func TestDriftDetector_V1ConstructorEmitsSchemaVersion1(t *testing.T) {
+	bus := &driftRecordingBus{}
+	d := NewDriftDetector(bus).(*driftDetector)
+
+	dispatchPosition(d, "2330", 700_000, "added")
+	dispatchPosition(d, "2454", 100_000, "added")
+	dispatchPosition(d, "2317", 100_000, "added")
+	dispatchPosition(d, "2881", 100_000, "added")
+
+	d.checkPeriod(time.Now())
+	d.checkPeriod(time.Now().Add(5 * time.Minute))
+
+	got := bus.snapshot()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(got))
+	}
+	if got[0].SchemaVersion != 1 {
+		t.Errorf("expected SchemaVersion=1 for v1 constructor, got %d", got[0].SchemaVersion)
+	}
+	payload := got[0].Payload.(map[string]any)
+	if _, hasTargetWeights := payload["target_weights"]; hasTargetWeights {
+		t.Error("v1 constructor event should not include target_weights field")
+	}
+	if _, hasMaxDrift := payload["max_drift"]; hasMaxDrift {
+		t.Error("v1 constructor event should not include max_drift field")
 	}
 }
 

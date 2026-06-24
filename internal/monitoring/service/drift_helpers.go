@@ -11,6 +11,7 @@ const (
 	DriftTurnoverThreshold         = 0.15
 	DriftTargetWeightThreshold     = 0.10
 	DriftCheckInterval             = 5 * time.Minute
+	DriftEventSchemaVerV1          = 1
 	DriftEventSchemaVer            = 2
 )
 
