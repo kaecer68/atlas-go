@@ -2,41 +2,12 @@ package service
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
-
-const (
-	DriftMaxConcentrationThreshold = 0.25
-	DriftTurnoverThreshold         = 0.15
-	DriftCheckInterval             = 5 * time.Minute
-	DriftEventSchemaVer            = 2
-	DriftTargetWeightThreshold     = 0.10
-)
-
-const (
-	ReasonConcentration = "concentration"
-	ReasonTurnover      = "turnover"
-	ReasonTargetDrift   = "target_drift"
-)
-
-// TargetWeightsProvider returns target portfolio weights keyed by symbol for a given regime.
-// nil return or empty map means "no target tracking available".
-type TargetWeightsProvider interface {
-	GetTargetWeights(regime string) map[string]float64
-}
-
-type DriftDetector interface {
-	Start(ctx context.Context) error
-	Stop() error
-}
-
-type driftSnapshot struct {
-	value     float64
-	updatedAt time.Time
-}
 
 type driftDetector struct {
 	bus eventbus.EventBus
@@ -46,7 +17,8 @@ type driftDetector struct {
 	prevTotal   float64
 	periodStart time.Time
 
-	sub       eventbus.Subscription
+	sub eventbus.Subscription
+	//lint:ignore U1000 regimeSub will be wired when EventRegimeChangeConfirmed subscription is implemented in Wave 4.
 	regimeSub eventbus.Subscription // subscribes to EventRegimeChangeConfirmed
 	cancel    context.CancelFunc
 	done      chan struct{}
@@ -177,18 +149,77 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		turnover = absDiff(total, d.prevTotal) / d.prevTotal
 	}
 
-	if maxWeight <= DriftMaxConcentrationThreshold && turnover <= DriftTurnoverThreshold {
+	var (
+		targetDriftChecked = false
+		targetWeights      map[string]float64
+		actualWeights      = make(map[string]float64, len(d.snapshots))
+		maxDrift           float64
+		maxDriftSymbol     string
+	)
+	if d.provider != nil {
+		targetWeights = d.provider.GetTargetWeights(d.currentRegime)
+		if len(targetWeights) > 0 {
+			targetDriftChecked = true
+			symbols := make([]string, 0, len(d.snapshots))
+			for sym := range d.snapshots {
+				symbols = append(symbols, sym)
+			}
+			sort.Strings(symbols)
+			for _, sym := range symbols {
+				s := d.snapshots[sym]
+				actual := s.value / total
+				actualWeights[sym] = actual
+				target := targetWeights[sym]
+				drift := absDiff(actual, target)
+				if drift > maxDrift {
+					maxDrift = drift
+					maxDriftSymbol = sym
+				}
+			}
+		}
+	}
+
+	hasConcentration := maxWeight > DriftMaxConcentrationThreshold
+	hasTurnover := turnover > DriftTurnoverThreshold
+	hasTargetDrift := targetDriftChecked && maxDrift > DriftTargetWeightThreshold
+
+	if !hasConcentration && !hasTurnover && !hasTargetDrift {
 		d.prevTotal = total
 		d.periodStart = now
 		return
 	}
 
 	reasons := []string{}
-	if maxWeight > DriftMaxConcentrationThreshold {
-		reasons = append(reasons, "concentration")
+	if hasConcentration {
+		reasons = append(reasons, ReasonConcentration)
 	}
-	if turnover > DriftTurnoverThreshold {
-		reasons = append(reasons, "turnover")
+	if hasTurnover {
+		reasons = append(reasons, ReasonTurnover)
+	}
+	if hasTargetDrift {
+		reasons = append(reasons, ReasonTargetDrift)
+	}
+
+	payload := map[string]any{
+		"max_concentration": maxWeight,
+		"max_symbol":        maxSymbol,
+		"turnover":          turnover,
+		"total_value":       total,
+		"period_start":      d.periodStart,
+		"reasons":           reasons,
+		"thresholds": map[string]float64{
+			"concentration": DriftMaxConcentrationThreshold,
+			"turnover":      DriftTurnoverThreshold,
+			"target_drift":  DriftTargetWeightThreshold,
+		},
+	}
+
+	if targetDriftChecked {
+		payload["target_weights"] = targetWeights
+		payload["actual_weights"] = actualWeights
+		payload["max_drift"] = maxDrift
+		payload["max_drift_symbol"] = maxDriftSymbol
+		payload["current_regime"] = d.currentRegime
 	}
 
 	d.bus.Publish(eventbus.BusEvent{
@@ -196,26 +227,8 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		Timestamp:     now,
 		Severity:      "info",
 		SchemaVersion: DriftEventSchemaVer,
-		Payload: map[string]any{
-			"max_concentration": maxWeight,
-			"max_symbol":        maxSymbol,
-			"turnover":          turnover,
-			"total_value":       total,
-			"period_start":      d.periodStart,
-			"reasons":           reasons,
-			"thresholds": map[string]float64{
-				"concentration": DriftMaxConcentrationThreshold,
-				"turnover":      DriftTurnoverThreshold,
-			},
-		},
+		Payload:       payload,
 	})
 	d.prevTotal = total
 	d.periodStart = now
-}
-
-func absDiff(a, b float64) float64 {
-	if a > b {
-		return a - b
-	}
-	return b - a
 }
