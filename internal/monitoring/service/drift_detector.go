@@ -17,8 +17,7 @@ type driftDetector struct {
 	prevTotal   float64
 	periodStart time.Time
 
-	sub eventbus.Subscription
-	//lint:ignore U1000 regimeSub will be wired when EventRegimeChangeConfirmed subscription is implemented in Wave 4.
+	sub       eventbus.Subscription // subscribes to EventPositionUpdate
 	regimeSub eventbus.Subscription // subscribes to EventRegimeChangeConfirmed
 	cancel    context.CancelFunc
 	done      chan struct{}
@@ -45,8 +44,24 @@ func NewDriftDetectorWithTargets(bus eventbus.EventBus, provider TargetWeightsPr
 }
 
 // onRegimeChangeConfirmed updates currentRegime and re-baselines prevTotal.
-// Implementation in Wave 4 — for now this is an empty stub.
-func (d *driftDetector) onRegimeChangeConfirmed(_ context.Context, _ eventbus.BusEvent) error {
+// The regime debouncer publishes an untyped map[string]any payload (not a
+// RegimeEventPayload struct), and the new regime is provided as a string.
+func (d *driftDetector) onRegimeChangeConfirmed(_ context.Context, ev eventbus.BusEvent) error {
+	payload, ok := ev.Payload.(map[string]any)
+	if !ok {
+		return nil
+	}
+	newRegime, ok := payload["new_regime"].(string)
+	if !ok {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.currentRegime = newRegime
+	// Re-baseline: reset prevTotal so the next checkPeriod establishes a new
+	// baseline. Without this, a regime change could trigger a spurious
+	// turnover event.
+	d.prevTotal = 0
 	return nil
 }
 
@@ -57,11 +72,15 @@ func (d *driftDetector) Start(ctx context.Context) error {
 	d.periodStart = time.Now()
 	d.mu.Unlock()
 	d.sub = d.bus.Subscribe(eventbus.EventPositionUpdate, d.onPositionUpdate)
+	d.regimeSub = d.bus.Subscribe(eventbus.EventRegimeChangeConfirmed, d.onRegimeChangeConfirmed)
 	go d.run(runCtx)
 	return nil
 }
 
 func (d *driftDetector) Stop() error {
+	if d.regimeSub.Cancel != nil {
+		d.regimeSub.Cancel()
+	}
 	if d.sub.Cancel != nil {
 		d.sub.Cancel()
 	}
