@@ -1,5 +1,99 @@
 # Changelog
 
+## [0.0.0.15] - 2026-06-24
+
+### Fixed — DriftDetector v2 follow-up fixes (review-driven)
+
+對 PR #692 的 pre-landing review 找到的 5 個 CRITICAL + 1 個 doc drift 全部修完。同步補上 3 個新 test 與 1 個 performance refactor。
+
+#### Critical Fixes (6 commits)
+
+1. **Silent failure on regime payload parse** (`5d7f3d5c`): `onRegimeChangeConfirmed` 在 `payload.(map[string]any)` 與 `payload["new_regime"].(string)` 兩處 type-assertion 失敗時,只 `return nil`,違反 `internal/monitoring/AGENTS.md` 4 層資料可見性規範。改為 emit `logging.Warn` 含 actual vs expected type,讓上游 schema regression 可被觀察。
+2. **Provider called under `d.mu` lock** (`9246174d`): `checkPeriod` 持鎖時呼叫 `d.provider.GetTargetWeights(...)`,任何 DB-backed / HTTP-backed provider 會 deadlock。改為 3-phase(under-lock snapshot / no-lock provider call / under-lock publish),provider 不再阻塞 `onPositionUpdate` 與 `onRegimeChangeConfirmed`。
+3. **`DriftEventSchemaVer=2` 漏到 v1 constructor** (`5c8c65e5`): 兩個 constructor 共用單一常數 bump 1→2,v1 detector 也 emit schema=2 但 payload 為 v1-shape,破壞 consumer 透過 `data.schema_version` dispatch 契約。拆分為 `DriftEventSchemaVerV1=1` 與 `DriftEventSchemaVer=2`,由 `schemaVersionFor(targetDriftChecked)` 動態選擇。新增 `TestDriftDetector_V1ConstructorEmitsSchemaVersion1` 鎖住契約。
+4. **v1 constructor behavior leak** (`b7350570`): `Start()` 對兩個 constructor 都訂閱 `EventRegimeChangeConfirmed`,v1 detector (provider=nil) 開始 reset `prevTotal=0` 處理 regime 事件,與 v1 既有 no-op 行為不一致,rolling upgrade 期間舊/新 binary 會 emit 不同 event stream。改為僅在 `d.provider != nil` 時訂閱。新增 2 個 test 鎖住訂閱契約。
+5. **Race test passes vacuously** (`d4fd65ca`): `TestDriftDetector_V2ConcurrentProviderAccess` 沒 assertion,沒 -race 時不驗任何東西。改為 `wg.Wait()` 後做一次 deterministic regime change 強制 `currentRegime=TEST` 與 `prevTotal=0`,然後 assert。
+6. **AGENTS.md 不一致** (`4133bdb1`): DriftDetector v2 段的「Event Subscriptions」與「Stop() 必須取消兩個訂閱」trap 未反映新的 V1/V2 差異。補上。
+
+#### Tests added (3)
+
+- `TestDriftDetector_V2RegimeChangeTriggersNewProviderQuery`: regime 變化後的 checkPeriod 會用新 regime 呼叫 provider。
+- `TestDriftDetector_V2EmptyRegimeStringPassesToProvider`: 沒有 regime 事件前,provider 用 `""` 呼叫。
+- `TestDriftDetector_V2StopCancelsBothSubscriptions`: Start → Stop 不 panic。
+
+#### Refactor
+
+- `11fa1352`: `checkPeriod` 預先計算 `weights` map,消除 v2 階段重複的 `s.value/total` 除法。
+
+#### Verification
+
+- 21 drift tests 全綠(6 v1 + 14 v2 + 1 helper)
+- `go test -race ./internal/monitoring/service/` clean
+- `staticcheck` 0 issues
+
+## [0.0.0.14] - 2026-06-24
+
+### Added — Wave 9 follow-up: DriftDetector v2 Target Weights Drift
+
+擴展 `internal/monitoring/service/drift_detector.go` v1 (189 行) 為 v2,新增 target weights drift 偵測。**條件**:Issue #611 refactor 已完成(`FactorWeightEngine.GetWeights(regime)` 介面化 + Optimizer 拆分),原本 v1 計劃書標註為 Out of Scope 的「v2 DriftDetector target weights drift」現在可獨立 PR。
+
+#### 新增介面與建構式
+
+- **`TargetWeightsProvider` 介面**(`drift_helpers.go`):`GetTargetWeights(regime string) map[string]float64` — symbol-level 目標權重(與既有 `WeightProvider` 為 factor-level 不同,**不可混用**)
+- **`NewDriftDetectorWithTargets(bus, provider)` 建構式**:`DriftDetector` 介面不變,新增 DI 入口,provider 為 nil 時 graceful degradation(v1 行為完整保留)
+- **`NewDriftDetector(bus)` 保留**:向後相容,無 target drift 功能
+
+#### 新增 payload 欄位(v2,僅在 provider 非 nil 且回傳非空 map 時出現)
+
+- `target_weights`:regime-snapshot 目標 symbol 權重
+- `actual_weights`:當前 portfolio 實際 symbol 權重
+- `max_drift`:`|actual - target|` 最大 drift
+- `max_drift_symbol`:drift 最大的 symbol
+- `current_regime`:當前 market regime(首次 regime change 前為空字串)
+- `thresholds.target_drift`:0.10(**一律存在**,常數)
+
+#### 新增事件訂閱
+
+- **`EventRegimeChangeConfirmed`**(`regime_debouncer.go` 發布):觸發時更新內部 `currentRegime` 並重置 `prevTotal = 0` (re-baseline,避免 regime 切換時的偽 turnover 事件)
+
+#### Schema 演進
+
+- `DriftEventSchemaVer` 從 `1` bump 到 `2`
+- v1 payload 欄位(`max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds`)完整保留(append-only 演進)
+- 消費者可透過 `data.schema_version` 判斷 v1 / v2
+
+#### 測試覆蓋
+
+- **9 個 v2 characterization tests**(`drift_detector_v2_test.go`):
+  - `TestDriftDetector_V2TargetDriftEmitted`:drift > 10% emit + 驗證 v2 欄位
+  - `TestDriftDetector_V2TargetDriftNoEmit`:target 對齊 + 平衡不 emit
+  - `TestDriftDetector_V2NilProviderGraceful`:nil provider 保留 v1 行為
+  - `TestDriftDetector_V2EmptyTargetWeights`:空 target map 跳過 target drift
+  - `TestDriftDetector_V2RegimeChangeUpdatesCurrentRegime`:handler 更新 currentRegime
+  - `TestDriftDetector_V2RegimeChangeRebaselinesPrevTotal`:regime change 重置 prevTotal
+  - `TestDriftDetector_V2SymbolNotInTargetMap`:target=0 處理缺漏 symbol
+  - `TestDriftDetector_V2SchemaVersionBumped`:SchemaVersion=2
+  - `TestDriftDetector_V2ConcurrentProviderAccess`:concurrent 讀取無 race(-race flag)
+- **v1 6 個 tests 一字不改**:全綠
+- 15 個 drift tests 全部 PASS,全 `internal/monitoring/service/` 套件綠
+
+#### 文件同步
+
+- `docs/events/drift-detector.md`:Schema Version 2 + 5 個 v2 欄位 + 9 個 v2 測試描述
+- `docs/events/INDEX.md`:EventDriftDetected 標記為 v2,Schema Version 說明段落更新
+- `internal/monitoring/AGENTS.md`:新增 DriftDetector v2 段落(Architecture、Event Subscriptions、9 個模組陷阱、向後相容保證)
+
+#### 與 PR #632 Wave 9 plan 的關聯
+
+- 本 PR 收尾 Wave 9 plan §7 Risks 提到的「v2 DriftDetector target weights drift」follow-up
+- Wave 9 plan Out of Scope 三項中此為收尾項
+
+#### 已知限制 / 後續工作 (out of scope,follow-up PR)
+
+- **本 PR 不做**:`internal/monitoring/service` 加入 Layer 3 baseline(目前 baseline 涵蓋 internal/config, cmd/atlas, internal/narrative, internal/orchestrator, internal/portfolio, internal/sim, internal/risk)。DriftDetector 介面為 public,後續 PR 應為其加 baseline。
+- **本 PR 不做**:`cmd/atlas/main.go` wire `NewDriftDetectorWithTargets`(v1 已知未 wire,本 PR 維持 scope 嚴格)
+- **本 PR 不做**:實作 symbol-level target weight provider(目前 `TargetWeightsProvider` 介面已備但無 production 實作;後續 PR 可從 portfolio Optimizer 衍生)
+
 ## [0.0.0.13] - 2026-06-23
 
 ### Added — P2/P3 Startup-Herd 回歸測試

@@ -2,28 +2,14 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
-
-const (
-	DriftMaxConcentrationThreshold = 0.25
-	DriftTurnoverThreshold         = 0.15
-	DriftCheckInterval             = 5 * time.Minute
-	DriftEventSchemaVer            = 1
-)
-
-type DriftDetector interface {
-	Start(ctx context.Context) error
-	Stop() error
-}
-
-type driftSnapshot struct {
-	value     float64
-	updatedAt time.Time
-}
 
 type driftDetector struct {
 	bus eventbus.EventBus
@@ -33,9 +19,13 @@ type driftDetector struct {
 	prevTotal   float64
 	periodStart time.Time
 
-	sub    eventbus.Subscription
-	cancel context.CancelFunc
-	done   chan struct{}
+	sub       eventbus.Subscription // subscribes to EventPositionUpdate
+	regimeSub eventbus.Subscription // subscribes to EventRegimeChangeConfirmed
+	cancel    context.CancelFunc
+	done      chan struct{}
+
+	provider      TargetWeightsProvider // nil-safe target weight provider
+	currentRegime string                // regime snapshot from EventRegimeChangeConfirmed
 }
 
 func NewDriftDetector(bus eventbus.EventBus) DriftDetector {
@@ -46,6 +36,41 @@ func NewDriftDetector(bus eventbus.EventBus) DriftDetector {
 	}
 }
 
+func NewDriftDetectorWithTargets(bus eventbus.EventBus, provider TargetWeightsProvider) DriftDetector {
+	return &driftDetector{
+		bus:       bus,
+		provider:  provider,
+		snapshots: make(map[string]*driftSnapshot),
+		done:      make(chan struct{}),
+	}
+}
+
+// onRegimeChangeConfirmed updates currentRegime and re-baselines prevTotal.
+// The regime debouncer publishes an untyped map[string]any payload (not a
+// RegimeEventPayload struct), and the new regime is provided as a string.
+func (d *driftDetector) onRegimeChangeConfirmed(_ context.Context, ev eventbus.BusEvent) error {
+	payload, ok := ev.Payload.(map[string]any)
+	if !ok {
+		logging.Warn("drift_detector", "regime_payload_type_assertion_failed",
+			logging.FStr("event_type", string(ev.Type)),
+			logging.FStr("expected", "map[string]any"),
+			logging.FStr("actual_type", fmt.Sprintf("%T", ev.Payload)))
+		return nil
+	}
+	newRegime, ok := payload["new_regime"].(string)
+	if !ok {
+		logging.Warn("drift_detector", "regime_payload_new_regime_parse_failed",
+			logging.FStr("event_type", string(ev.Type)),
+			logging.FStr("actual_type", fmt.Sprintf("%T", payload["new_regime"])))
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.currentRegime = newRegime
+	d.prevTotal = 0
+	return nil
+}
+
 func (d *driftDetector) Start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	d.cancel = cancel
@@ -53,11 +78,17 @@ func (d *driftDetector) Start(ctx context.Context) error {
 	d.periodStart = time.Now()
 	d.mu.Unlock()
 	d.sub = d.bus.Subscribe(eventbus.EventPositionUpdate, d.onPositionUpdate)
+	if d.provider != nil {
+		d.regimeSub = d.bus.Subscribe(eventbus.EventRegimeChangeConfirmed, d.onRegimeChangeConfirmed)
+	}
 	go d.run(runCtx)
 	return nil
 }
 
 func (d *driftDetector) Stop() error {
+	if d.regimeSub.Cancel != nil {
+		d.regimeSub.Cancel()
+	}
 	if d.sub.Cancel != nil {
 		d.sub.Cancel()
 	}
@@ -113,27 +144,35 @@ func (d *driftDetector) totalValue() float64 {
 	return total
 }
 
+func schemaVersionFor(targetDriftChecked bool) int {
+	if targetDriftChecked {
+		return DriftEventSchemaVer
+	}
+	return DriftEventSchemaVerV1
+}
+
 func (d *driftDetector) checkPeriod(now time.Time) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	total := d.totalValue()
 	if total <= 0 {
 		d.prevTotal = total
 		d.periodStart = now
+		d.mu.Unlock()
 		return
 	}
-
 	if d.prevTotal == 0 {
 		d.prevTotal = total
 		d.periodStart = now
+		d.mu.Unlock()
 		return
 	}
 
+	weights := make(map[string]float64, len(d.snapshots))
 	var maxSymbol string
 	var maxWeight float64
 	for sym, s := range d.snapshots {
 		w := s.value / total
+		weights[sym] = w
 		if w > maxWeight {
 			maxWeight = w
 			maxSymbol = sym
@@ -145,45 +184,93 @@ func (d *driftDetector) checkPeriod(now time.Time) {
 		turnover = absDiff(total, d.prevTotal) / d.prevTotal
 	}
 
-	if maxWeight <= DriftMaxConcentrationThreshold && turnover <= DriftTurnoverThreshold {
+	currentRegime := d.currentRegime
+	provider := d.provider
+	d.mu.Unlock()
+
+	var (
+		targetDriftChecked = false
+		targetWeights      map[string]float64
+		actualWeights      = make(map[string]float64, len(weights))
+		maxDrift           float64
+		maxDriftSymbol     string
+	)
+	if provider != nil {
+		targetWeights = provider.GetTargetWeights(currentRegime)
+		if len(targetWeights) > 0 {
+			targetDriftChecked = true
+			symbols := make([]string, 0, len(weights))
+			for sym := range weights {
+				symbols = append(symbols, sym)
+			}
+			sort.Strings(symbols)
+			for _, sym := range symbols {
+				actual := weights[sym]
+				actualWeights[sym] = actual
+				target := targetWeights[sym]
+				drift := absDiff(actual, target)
+				if drift > maxDrift {
+					maxDrift = drift
+					maxDriftSymbol = sym
+				}
+			}
+		}
+	}
+
+	hasConcentration := maxWeight > DriftMaxConcentrationThreshold
+	hasTurnover := turnover > DriftTurnoverThreshold
+	hasTargetDrift := targetDriftChecked && maxDrift > DriftTargetWeightThreshold
+
+	if !hasConcentration && !hasTurnover && !hasTargetDrift {
+		d.mu.Lock()
 		d.prevTotal = total
 		d.periodStart = now
+		d.mu.Unlock()
 		return
 	}
 
 	reasons := []string{}
-	if maxWeight > DriftMaxConcentrationThreshold {
-		reasons = append(reasons, "concentration")
+	if hasConcentration {
+		reasons = append(reasons, ReasonConcentration)
 	}
-	if turnover > DriftTurnoverThreshold {
-		reasons = append(reasons, "turnover")
+	if hasTurnover {
+		reasons = append(reasons, ReasonTurnover)
+	}
+	if hasTargetDrift {
+		reasons = append(reasons, ReasonTargetDrift)
+	}
+
+	payload := map[string]any{
+		"max_concentration": maxWeight,
+		"max_symbol":        maxSymbol,
+		"turnover":          turnover,
+		"total_value":       total,
+		"period_start":      now,
+		"reasons":           reasons,
+		"thresholds": map[string]float64{
+			"concentration": DriftMaxConcentrationThreshold,
+			"turnover":      DriftTurnoverThreshold,
+			"target_drift":  DriftTargetWeightThreshold,
+		},
+	}
+
+	if targetDriftChecked {
+		payload["target_weights"] = targetWeights
+		payload["actual_weights"] = actualWeights
+		payload["max_drift"] = maxDrift
+		payload["max_drift_symbol"] = maxDriftSymbol
+		payload["current_regime"] = currentRegime
 	}
 
 	d.bus.Publish(eventbus.BusEvent{
 		Type:          eventbus.EventDriftDetected,
 		Timestamp:     now,
 		Severity:      "info",
-		SchemaVersion: DriftEventSchemaVer,
-		Payload: map[string]any{
-			"max_concentration": maxWeight,
-			"max_symbol":        maxSymbol,
-			"turnover":          turnover,
-			"total_value":       total,
-			"period_start":      d.periodStart,
-			"reasons":           reasons,
-			"thresholds": map[string]float64{
-				"concentration": DriftMaxConcentrationThreshold,
-				"turnover":      DriftTurnoverThreshold,
-			},
-		},
+		SchemaVersion: schemaVersionFor(targetDriftChecked),
+		Payload:       payload,
 	})
+	d.mu.Lock()
 	d.prevTotal = total
 	d.periodStart = now
-}
-
-func absDiff(a, b float64) float64 {
-	if a > b {
-		return a - b
-	}
-	return b - a
+	d.mu.Unlock()
 }
