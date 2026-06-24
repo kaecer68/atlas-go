@@ -39,6 +39,7 @@ func TestPortfolio_PublicAPI(t *testing.T) {
 		"etf_analysis.go",
 		"factor_bridge.go",
 		"factor_engine.go",
+		"factor_engine_types.go",
 		"factor_weight_calibrator.go",
 		"factor_weight_engine.go",
 		"fundamental_loader.go",
