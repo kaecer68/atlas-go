@@ -419,12 +419,6 @@ func (p *regimeRecordingProvider) GetTargetWeights(regime string) map[string]flo
 	return map[string]float64{"2330": 0.5}
 }
 
-func (p *regimeRecordingProvider) callCount() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return len(p.calls)
-}
-
 func TestDriftDetector_V2RegimeChangeTriggersNewProviderQuery(t *testing.T) {
 	bus := &driftRecordingBus{}
 	provider := &regimeRecordingProvider{}
