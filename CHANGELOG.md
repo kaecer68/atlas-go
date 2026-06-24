@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.0.0.16] - 2026-06-24
+
+### Added — Wave 9 observability wire: production providers + EventPositionUpdate caller (PR A + D)
+
+PR #695 + PR #696 land in main, completing the v0.0.0.8 (2026-06-22) Wave 9 observability stack that was merged in known incomplete state (schema + subscribers present, but no production publisher or providers).
+
+#### PR A (PR #695) — production providers
+
+- **`apigateway/health.go`**: expose `ChannelIDs()` + `ChannelLatencyMs()` on `UnifiedHealthStore` (thread-safe via existing `RLock`).
+- **`monitoring/service/ingestion_lag_provider.go`**: `ChannelHealthIngestionLagProvider` implements `IngestionLagProvider` via ceiling-rank p99 across registered channels.
+- **`monitoring/service/weight_provider.go`**: `FactorWeightEngineWeightProvider` adapts `portfolio.FactorWeightEngine` to `WeightProvider` interface.
+- **Tests**: 5 (lag) + 4 (weight) covering nil/empty/edge cases + regime switching.
+
+#### PR D (PR #696) — EventPositionUpdate caller
+
+- **`live/orchestrator.go`**: in `EventMarketSnapshot` critical handler, after `UpdatePositionPrices`, publish `EventPositionUpdate` with `changeType="updated"` for any held symbol.
+- **`live/orchestrator_test.go`**: table-driven test verifying emission when position exists and silence when no position held, including `CurrentPrice` propagation.
+
+#### Schema + event flow
+
+- `EventPositionUpdate` now has 1 production caller (was 0 — dead code since v0.0.0.8).
+- 4 個 events 中 1 個 (`portfolio.position.update`) 開始流通。
+- 其餘 3 個 (`baseline.update`, `regime.confirmed`, `ingestion.lag.spike`) consumer wiring 留待 v0.0.0.17 PR B/C。
+
+#### Oracle audit
+
+- Plan v2 (.omo/plans/wave9-observability-wire.md) addressed 9 findings (4 HIGH / 3 MEDIUM / 2 LOW) from initial plan review.
+- Provider wiring into monitoring service deferred to PR B (v0.0.0.17)。
+- Fill-driven "added"/"removed" changeTypes deferred to PR B。
+
+#### Verification
+
+- 兩個 PR CI 全綠 (build / fmt / lint / test / security / integration / coverage / governance / constitution)
+- gofmt 0 issues
+- go vet 0 issues
+- /review APPROVED for both PRs (oracle audit 9 findings addressed)
+
+
 ## [0.0.0.15] - 2026-06-24
 
 ### Fixed — DriftDetector v2 follow-up fixes (review-driven)
