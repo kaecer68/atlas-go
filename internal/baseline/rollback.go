@@ -74,7 +74,7 @@ func (m *Manager) Revert(target RevertTarget, reason string, dryRun bool) (Rever
 		RevertedAt:          time.Now(),
 	})
 
-	if err := Save(m.path, revertedPolicy); err != nil {
+	if err := SaveWithLock(m.path, revertedPolicy); err != nil {
 		return RevertResult{}, fmt.Errorf("save reverted policy: %w", err)
 	}
 
