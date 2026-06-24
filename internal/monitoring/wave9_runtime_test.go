@@ -227,13 +227,6 @@ func TestWave9Observability_RequiresProviders(t *testing.T) {
 		opts []Wave9Option
 	}{
 		{
-			name: "missing WeightProvider",
-			opts: []Wave9Option{
-				WithChannelHealthProvider(stub),
-				WithIngestionLagProvider(stub),
-			},
-		},
-		{
 			name: "missing ChannelHealthProvider",
 			opts: []Wave9Option{
 				WithWeightProvider(stub),
@@ -257,6 +250,22 @@ func TestWave9Observability_RequiresProviders(t *testing.T) {
 			assert.Contains(t, err.Error(), field+" is required")
 		})
 	}
+}
+
+func TestWave9Observability_NilWeightProvider(t *testing.T) {
+	bus := &wave9RecordingBus{}
+	stub := wave9StubProvider{}
+	spy := newWave9SpyFactory()
+
+	w, err := NewWave9Observability(bus,
+		WithChannelHealthProvider(stub),
+		WithIngestionLagProvider(stub),
+		withDetectorFactory(spy),
+	)
+	require.NoError(t, err)
+	require.NoError(t, w.Start(context.Background()))
+	assert.True(t, spy.factorWeightRegression.started())
+	require.NoError(t, w.Stop())
 }
 
 func TestWave9Observability_NilBus(t *testing.T) {

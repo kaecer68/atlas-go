@@ -99,8 +99,9 @@ func withDetectorFactory(f detectorFactory) Wave9Option {
 }
 
 // NewWave9Observability creates a new Wave 9 observability coordinator.
-// Required providers: WeightProvider, ChannelHealthProvider, IngestionLagProvider.
-// TargetWeightsProvider is optional.
+// Required providers: ChannelHealthProvider, IngestionLagProvider.
+// WeightProvider and TargetWeightsProvider are optional; when WeightProvider is nil,
+// the factor-weight regression detector no-ops.
 func NewWave9Observability(bus eventbus.EventBus, opts ...Wave9Option) (*Wave9Observability, error) {
 	if bus == nil {
 		return nil, errors.New("event bus is required")
@@ -111,9 +112,6 @@ func NewWave9Observability(bus eventbus.EventBus, opts ...Wave9Option) (*Wave9Ob
 		opt(w)
 	}
 
-	if w.weightProvider == nil {
-		return nil, errors.New("WeightProvider is required")
-	}
 	if w.channelHealthProvider == nil {
 		return nil, errors.New("ChannelHealthProvider is required")
 	}

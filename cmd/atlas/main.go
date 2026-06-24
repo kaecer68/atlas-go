@@ -1613,8 +1613,12 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 
 	// Wave 9 observability detectors (event-driven; managed via defer, not BTM).
 	healthStore := apigateway.NewUnifiedHealthStore(filepath.Join(cfg.WorkDir, "data/state"), nil)
+	var weightProvider monitoringservice.WeightProvider
+	if engine := system.Port().FactorWeightEngine(); engine != nil {
+		weightProvider = monitoringservice.NewFactorWeightEngineWeightProvider(engine)
+	}
 	wave9, err := monitoring.NewWave9Observability(eventBus,
-		monitoring.WithWeightProvider(monitoringservice.NewFactorWeightEngineWeightProvider(system.Port().FactorWeightEngine())),
+		monitoring.WithWeightProvider(weightProvider),
 		monitoring.WithChannelHealthProvider(monitoring.NewChannelHealthProviderFromStore(healthStore)),
 		monitoring.WithIngestionLagProvider(monitoringservice.NewChannelHealthIngestionLagProvider(healthStore)),
 	)
