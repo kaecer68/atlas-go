@@ -270,6 +270,18 @@ func Save(path string, policy Policy) error {
 	return os.WriteFile(path, bytes, 0o644)
 }
 
+func SaveWithLock(path string, policy Policy) error {
+	if path == "" {
+		return errors.New("baseline policy path must not be empty")
+	}
+	policy.LastUpdatedAt = time.Now()
+	bytes, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal policy: %w", err)
+	}
+	return config.LockedWriteFileWithRollback(path, bytes)
+}
+
 func ExecutionPolicyFromConstraints(constraints domain.SimulationConstraints) domain.ExecutionPolicy {
 	floor := constraints.MinRecommendationConviction
 	if floor <= 0 {
