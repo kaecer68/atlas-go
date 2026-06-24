@@ -12,8 +12,21 @@ const (
 	DriftMaxConcentrationThreshold = 0.25
 	DriftTurnoverThreshold         = 0.15
 	DriftCheckInterval             = 5 * time.Minute
-	DriftEventSchemaVer            = 1
+	DriftEventSchemaVer            = 2
+	DriftTargetWeightThreshold     = 0.10
 )
+
+const (
+	ReasonConcentration = "concentration"
+	ReasonTurnover      = "turnover"
+	ReasonTargetDrift   = "target_drift"
+)
+
+// TargetWeightsProvider returns target portfolio weights keyed by symbol for a given regime.
+// nil return or empty map means "no target tracking available".
+type TargetWeightsProvider interface {
+	GetTargetWeights(regime string) map[string]float64
+}
 
 type DriftDetector interface {
 	Start(ctx context.Context) error
@@ -33,9 +46,13 @@ type driftDetector struct {
 	prevTotal   float64
 	periodStart time.Time
 
-	sub    eventbus.Subscription
-	cancel context.CancelFunc
-	done   chan struct{}
+	sub       eventbus.Subscription
+	regimeSub eventbus.Subscription // subscribes to EventRegimeChangeConfirmed
+	cancel    context.CancelFunc
+	done      chan struct{}
+
+	provider      TargetWeightsProvider // nil-safe target weight provider
+	currentRegime string                // regime snapshot from EventRegimeChangeConfirmed
 }
 
 func NewDriftDetector(bus eventbus.EventBus) DriftDetector {
@@ -44,6 +61,21 @@ func NewDriftDetector(bus eventbus.EventBus) DriftDetector {
 		snapshots: make(map[string]*driftSnapshot),
 		done:      make(chan struct{}),
 	}
+}
+
+func NewDriftDetectorWithTargets(bus eventbus.EventBus, provider TargetWeightsProvider) DriftDetector {
+	return &driftDetector{
+		bus:       bus,
+		provider:  provider,
+		snapshots: make(map[string]*driftSnapshot),
+		done:      make(chan struct{}),
+	}
+}
+
+// onRegimeChangeConfirmed updates currentRegime and re-baselines prevTotal.
+// Implementation in Wave 4 — for now this is an empty stub.
+func (d *driftDetector) onRegimeChangeConfirmed(_ context.Context, _ eventbus.BusEvent) error {
+	return nil
 }
 
 func (d *driftDetector) Start(ctx context.Context) error {
