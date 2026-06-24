@@ -48,6 +48,7 @@ import (
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
+	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -304,6 +305,11 @@ func run(args []string, deps appDeps) error {
 		// so simulation events (start, regime change, recommendations, guard outcomes)
 		// flow to SSE clients in real time.
 		dashEventBus := eventbus.NewChannelEventBus(256)
+		defer func() {
+			if err := dashEventBus.Close(); err != nil {
+				logging.Warn("main", "dash_event_bus_close_failed", logging.Err(err))
+			}
+		}()
 
 		// Inject EventBus for SSE streaming endpoint
 		dashboard.SetEventBus(dashEventBus)
@@ -1604,6 +1610,29 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 			log.Printf("dashboard api server failed: %v", err)
 		}
 	}()
+
+	// Wave 9 observability detectors (event-driven; managed via defer, not BTM).
+	healthStore := apigateway.NewUnifiedHealthStore(filepath.Join(cfg.WorkDir, "data/state"), nil)
+	var weightProvider monitoringservice.WeightProvider
+	if engine := system.Port().FactorWeightEngine(); engine != nil {
+		weightProvider = monitoringservice.NewFactorWeightEngineWeightProvider(engine)
+	}
+	wave9, err := monitoring.NewWave9Observability(eventBus,
+		monitoring.WithWeightProvider(weightProvider),
+		monitoring.WithChannelHealthProvider(monitoring.NewChannelHealthProviderFromStore(healthStore)),
+		monitoring.WithIngestionLagProvider(monitoringservice.NewChannelHealthIngestionLagProvider(healthStore)),
+	)
+	if err != nil {
+		return fmt.Errorf("create wave9 observability: %w", err)
+	}
+	defer func() {
+		if err := wave9.Stop(); err != nil {
+			logging.Warn("main", "wave9_stop_failed", logging.Err(err))
+		}
+	}()
+	if err := wave9.Start(ctx); err != nil {
+		return fmt.Errorf("start wave9 observability: %w", err)
+	}
 
 	log.Printf("starting live trading orchestrator (broker_mode=%s)", liveCfg.BrokerMode)
 	if err := o.Start(); err != nil {
