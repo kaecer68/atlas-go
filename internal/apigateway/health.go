@@ -71,6 +71,21 @@ func RecordChannelFetch(store *UnifiedHealthStore, channelID string, result *Fet
 	_ = store.Record(channelID, "ok", "", opts...)
 }
 
+// ChannelIDs returns all registered channel IDs.
+func (u *UnifiedHealthStore) ChannelIDs() []string {
+	return channelIDs()
+}
+
+// ChannelLatencyMs returns the last recorded latency for a channel in
+// milliseconds. It returns 0 when the channel has no record or no latency.
+func (u *UnifiedHealthStore) ChannelLatencyMs(channelID string) int64 {
+	rec := u.Get(channelID)
+	if rec == nil {
+		return 0
+	}
+	return rec.LatencyMs
+}
+
 // StatusSummary returns a summary of all channel health statuses.
 func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 	ids := channelIDs()
