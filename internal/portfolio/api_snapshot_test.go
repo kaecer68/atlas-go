@@ -46,6 +46,7 @@ func TestPortfolio_PublicAPI(t *testing.T) {
 		"factor_engine_institutional.go",
 		"factor_engine_liquidity.go",
 		"factor_engine_momentum.go",
+		"factor_engine_precious_metals.go",
 		"factor_engine_quality.go",
 		"factor_engine_types.go",
 		"factor_engine_value.go",
