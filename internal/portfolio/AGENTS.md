@@ -3,7 +3,13 @@
 ## OVERVIEW
 `internal/portfolio` 負責台股投資組合的權重管理與因子計算，是系統「模擬優先」與「稽核導向」的核心。
 
-portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consumer 使用，`DarwinianWeightManager` 被 9 個 consumer 使用，兩者共同服務同一 pipeline，拆分只會增加跨 package 耦合而不減少實際耦合。代わりに、加強此 AGENTS.md 內部文件以覆蓋所有職責區塊。
+**Same-package 拆分原則（Direction C 補充 — 2026-06 修訂）**：`FactorEngine` 被 11 個 consumer 使用，`DarwinianWeightManager` 被 9 個 consumer 使用。**跨 package 拆分**會增加耦合而不減少實際耦合，因此禁止。但 **同 package 內的多檔案拆分**（依職責分離）是被允許且鼓勵的，只要符合以下條件：
+- 公開 API 完全不變（Layer 3 snapshot `TestPortfolio_PublicAPI` 仍 417-symbol 對齊）
+- 所有 consumer 無需修改（11 個外部 + 1 個 internal caller 零修改）
+- Factor Change Protocol (§12) 不被破壞
+- PR #684 (executors.go 1284 → 11 檔) 是此原則的範本
+
+目前 `FactorEngine` 已拆分為 12 個檔案（見 §2.0）。
 
 ---
 
@@ -25,7 +31,28 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
     - `RawInputs`: 原始輸入數值 (如 P/E, P/B, 20d Volatility)。
     - `IsFallback`: 標記是否因資料缺失而使用猜測值。
 - **Fallback 行為**：當歷史資料不足時，Momentum 會回退至 intraday return；Value/Quality/Liquidity 則回退至固定常數 (`0.1`/`0.05`/`0.0`)。
-- **主要檔案**：`factor_engine.go`
+- **主要檔案**：見 §2.0 檔案地圖（12 個同 package 檔案，按職責分離）。`factor_engine.go` 為 entry stub。
+
+### 2.0 FactorEngine 檔案地圖（12 個同 package 檔案）
+
+2026-06 完成 `factor_engine.go` (1289 → 12 行 entry stub) 拆分為 12 個檔案（1 entry stub + 11 職責分離檔案）。每個檔案獨立可編譯、無 consumer 修改、Layer 3 snapshot 仍對齊 417 個 public symbol。
+
+| 檔案 | 行數（約） | 職責 | 公開符號 |
+|------|-----------|------|---------|
+| `factor_engine.go` | 12 | Entry stub — package doc 指向各檔 | （無） |
+| `factor_engine_types.go` | 81 | 公開型別 + 介面 + struct | `QuoteProvider`, `CorporateActionProvider`, `FactorEngine`, `PreciousMetalsContext`, `PMContextProvider`, `NarrativeProviderFunc`, `IndustryCycleProviderFunc`, `LinkageProviderFunc`, `TSMCProviderFunc` |
+| `factor_engine_constructors.go` | 181 | 建構與注入入口 | `NewFactorEngine`, `WithHistoricalPrices`, `WithFundamentalProvider`, `WithParameters`, `WithNarrativeProvider`, `WithIndustryCycleProvider`, `WithLinkageProvider`, `WithTSMCProvider`, `WithCorporateActionProvider`, `SetCycleTracker`, `SetCycleCardBuilder`, `WithPreciousMetalsProvider`, `WithETFAnalyzer`, `GetETFAnalyzer` |
+| `factor_engine_helpers.go` | 103 | Helpers + TTL 冪等快取 + 產業分類 | `isFinite`, `preciousMetalsRegistry`, `isPreciousMetal`, `IsPreciousMetal`, `ensureAdjusted`, `classifyIndustry` |
+| `factor_engine_momentum.go` | 74 | Momentum 因子 | `CalculateMomentumScore`, `calculateMomentumDetail` |
+| `factor_engine_value.go` | 158 | Value 因子（SCOR-02/03） | `CalculateValueScore`, `calculateValueDetail` |
+| `factor_engine_quality.go` | 94 | Quality 因子 | `CalculateQualityScore`, `calculateQualityDetail` |
+| `factor_engine_institutional.go` | 48 | Institutional Sentiment 因子 | `CalculateInstitutionalSentimentScore` |
+| `factor_engine_liquidity.go` | 54 | Liquidity 因子（Amihud ILLIQ） | `CalculateLiquidityScore` |
+| `factor_engine_aggregate.go` | 324 | Aggregate 計算 + SCOR-04 fallback reduction | `CalculateAllScores`, `CalculateAllScoresWithBreakdown` |
+| `factor_engine_etf.go` | 55 | ETF 因子 + NAV 刷新（public，被 cmd/atlas 呼叫） | `CalculateETFScore`, `RefreshETFNAV` |
+| `factor_engine_precious_metals.go` | 301 | Precious Metals 因子 + 9 sub-factor（Erb & Harvey 2013） | `CalculatePreciousMetalsScore` (+ 9 private `pm*Score`/`getPMContext`/`normalizeImportYoY`) |
+
+**進入任一 `factor_engine_*.go` 檔案修改前必讀 §10.2**（Corporate Action TTL 冪等性 + 24h TTL 邏輯）。`ensureAdjusted` 不可在重構時破壞 `adjustedSymbols map` 的 TTL 語意，否則 `TestEnsureAdjustedCachesWithinTTL` / `TestEnsureAdjustedRefetchesAfterTTL` 會失敗。
 
 ### 2.1. FactorBridge (宏觀數據橋接器)
 - **職責**：將 MacroDataSnapshot（monitoring 數據）轉換為可用於因子計算的輸入。
@@ -51,7 +78,7 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
     - 外資：`TWSECapitalFlowProvider.GetForeignInvestment()`
     - 法人：`TWSECapitalFlowProvider.GetDomesticInstitutional()`
     - 券資比：`TWSEBalanceProvider.GetMarginBalance()`
-- **主要檔案**：功能已實作於 `factor_engine.go` 的 `CalculateInstitutionalSentimentScore()`
+- **主要檔案**：功能已實作於 `factor_engine_institutional.go` 的 `CalculateInstitutionalSentimentScore()`
 
 ### 2.3. Liquidity (流動性因子)
 - **計算方式**（Amihud ILLIQ proxy）：
@@ -61,7 +88,7 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **閾值**：
     - ILLIQ > 1.0：低流動性（因子權重調降）
     - ILLIQ < 0.1：高流動性（正常權重）
-- **主要檔案**：功能已實作於 `factor_engine.go` 的 `CalculateLiquidityScore()`
+- **主要檔案**：功能已實作於 `factor_engine_liquidity.go` 的 `CalculateLiquidityScore()`
 
 ### 2.4. FactorWeightEngine (動態權重引擎)
 - **職責**：根據市場事件與 Regime 動態調整因子權重，並確保權重總和為 1.0。
@@ -205,7 +232,7 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **行動排序**: caller 負責按 ExDate 升序排序；未知 symbol 靜默忽略。
 
 #### 10.2 Corporate Action Integration in FactorEngine (P1-2-γ)
-- **Interface**: `CorporateActionProvider` defined in `factor_engine.go:43-47` — single method `GetCorporateActions(ctx, symbols, from, to) ([]domain.CorporateAction, error)`.
+- **Interface**: `CorporateActionProvider` defined in `factor_engine_types.go:19-21` — single method `GetCorporateActions(ctx, symbols, from, to) ([]domain.CorporateAction, error)`.
 - **Injection**: `WithCorporateActionProvider(CorporateActionProvider)` setter attaches a provider to `FactorEngine`.
 - **Internal state**:
   - `corpActions CorporateActionProvider` — the attached provider (nil = skip adjustment)
@@ -322,7 +349,7 @@ MacroRiskAssessment → SectorRotator.GeneratePlan() → CapitalAllocator 的 se
 | 4 | `shared/shared.go:61-73` | `FactorScores` struct |
 | 5 | `optimizer.go:238-251` | `symbolScore` struct |
 | 6 | `optimizer.go:328-343` | `calculateMultiFactorScores` totalScore 計算 |
-| 7 | `factor_engine.go:610-619` | `CalculateAllScoresWithBreakdown` breakdown 建構 |
+| 7 | `factor_engine_aggregate.go` | `CalculateAllScoresWithBreakdown` breakdown 建構（2026-06 從 `factor_engine.go` 拆分；如重新合併請保留行號） |
 | 8 | `factor_weight_engine.go` | `applyEventAdjustment` / `strategyDeltas` / `GetWeights` 中的因子引用 |
 
 **完成後必須執行**：
