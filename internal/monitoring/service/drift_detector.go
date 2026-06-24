@@ -78,7 +78,9 @@ func (d *driftDetector) Start(ctx context.Context) error {
 	d.periodStart = time.Now()
 	d.mu.Unlock()
 	d.sub = d.bus.Subscribe(eventbus.EventPositionUpdate, d.onPositionUpdate)
-	d.regimeSub = d.bus.Subscribe(eventbus.EventRegimeChangeConfirmed, d.onRegimeChangeConfirmed)
+	if d.provider != nil {
+		d.regimeSub = d.bus.Subscribe(eventbus.EventRegimeChangeConfirmed, d.onRegimeChangeConfirmed)
+	}
 	go d.run(runCtx)
 	return nil
 }

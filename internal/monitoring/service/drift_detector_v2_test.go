@@ -406,3 +406,65 @@ func (c *concurrentCountingProvider) GetTargetWeights(regime string) map[string]
 	}
 	return map[string]float64{"2330": 0.30, "2454": 0.25}
 }
+
+type regimeSpyBus struct {
+	driftRecordingBus
+	subscribeCount map[eventbus.EventType]int
+}
+
+func (b *regimeSpyBus) Subscribe(eventType eventbus.EventType, _ eventbus.EventHandler) eventbus.Subscription {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.subscribeCount == nil {
+		b.subscribeCount = make(map[eventbus.EventType]int)
+	}
+	b.subscribeCount[eventType]++
+	return eventbus.Subscription{Cancel: func() {}}
+}
+
+func (b *regimeSpyBus) SubscribeAll(_ eventbus.EventHandler) eventbus.Subscription {
+	return eventbus.Subscription{Cancel: func() {}}
+}
+
+func TestDriftDetector_V1StartDoesNotSubscribeToRegime(t *testing.T) {
+	bus := &regimeSpyBus{}
+	d := NewDriftDetector(bus).(*driftDetector)
+
+	if err := d.Start(context.Background()); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	bus.mu.Lock()
+	defer bus.mu.Unlock()
+	if bus.subscribeCount[eventbus.EventRegimeChangeConfirmed] != 0 {
+		t.Errorf("v1 detector must not subscribe to EventRegimeChangeConfirmed, got %d subscriptions",
+			bus.subscribeCount[eventbus.EventRegimeChangeConfirmed])
+	}
+	if bus.subscribeCount[eventbus.EventPositionUpdate] != 1 {
+		t.Errorf("v1 detector must subscribe to EventPositionUpdate exactly once, got %d",
+			bus.subscribeCount[eventbus.EventPositionUpdate])
+	}
+}
+
+func TestDriftDetector_V2StartSubscribesToBoth(t *testing.T) {
+	bus := &regimeSpyBus{}
+	provider := &stubTargetProvider{weights: map[string]float64{"2330": 0.5}}
+	d := NewDriftDetectorWithTargets(bus, provider).(*driftDetector)
+
+	if err := d.Start(context.Background()); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	t.Cleanup(func() { _ = d.Stop() })
+
+	bus.mu.Lock()
+	defer bus.mu.Unlock()
+	if bus.subscribeCount[eventbus.EventRegimeChangeConfirmed] != 1 {
+		t.Errorf("v2 detector must subscribe to EventRegimeChangeConfirmed, got %d",
+			bus.subscribeCount[eventbus.EventRegimeChangeConfirmed])
+	}
+	if bus.subscribeCount[eventbus.EventPositionUpdate] != 1 {
+		t.Errorf("v2 detector must subscribe to EventPositionUpdate exactly once, got %d",
+			bus.subscribeCount[eventbus.EventPositionUpdate])
+	}
+}
