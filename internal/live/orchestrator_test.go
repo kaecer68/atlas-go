@@ -9,6 +9,105 @@ import (
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
+func TestOrchestrator_MarketSnapshot_EmitsPositionUpdate(t *testing.T) {
+	tests := []struct {
+		name         string
+		withPosition bool
+		wantEvent    bool
+	}{
+		{
+			name:         "emits position update when position exists",
+			withPosition: true,
+			wantEvent:    true,
+		},
+		{
+			name:         "no event when no position",
+			withPosition: false,
+			wantEvent:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := livestore.NewStateStore(t.TempDir())
+			if tt.withPosition {
+				st.UpdatePosition(domain.Position{
+					Symbol:      "2330",
+					Quantity:    10,
+					AverageCost: 100,
+				})
+			}
+
+			bus := NewChannelEventBus(16)
+			t.Cleanup(func() { _ = bus.Close() })
+
+			o := NewOrchestrator(context.Background(), st, bus,
+				stubProvider{name: "stub", quotes: []domain.Quote{}},
+				domain.AgentRegistry{}, nil, DefaultOrchestratorConfig())
+			if o == nil {
+				t.Fatal("expected orchestrator")
+			}
+
+			eventCh := make(chan BusEvent, 4)
+			sub := bus.Subscribe(EventPositionUpdate, func(ctx context.Context, event BusEvent) error {
+				select {
+				case eventCh <- event:
+				default:
+				}
+				return nil
+			})
+			t.Cleanup(sub.Cancel)
+
+			bus.Publish(BusEvent{
+				ID:        "evt-test-market-snapshot",
+				Type:      EventMarketSnapshot,
+				Timestamp: time.Now(),
+				Payload: MarketEventPayload{
+					Symbol: "2330",
+					Quote: domain.Quote{
+						Symbol: "2330",
+						Last:   105,
+					},
+				},
+			})
+
+			if tt.wantEvent {
+				select {
+				case got := <-eventCh:
+					if got.Type != EventPositionUpdate {
+						t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventPositionUpdate)
+					}
+					payload, ok := got.Payload.(PositionEventPayload)
+					if !ok {
+						t.Fatalf("unexpected payload type: %T", got.Payload)
+					}
+					if payload.Symbol != "2330" {
+						t.Fatalf("unexpected symbol: %s", payload.Symbol)
+					}
+					if payload.ChangeType != "updated" {
+						t.Fatalf("unexpected change type: got=%q want=updated", payload.ChangeType)
+					}
+					if payload.Position.Symbol != "2330" {
+						t.Fatalf("unexpected position symbol: %s", payload.Position.Symbol)
+					}
+					if payload.Position.CurrentPrice != 105 {
+						t.Fatalf("expected current price 105, got %v", payload.Position.CurrentPrice)
+					}
+				case <-time.After(1 * time.Second):
+					t.Fatal("expected EventPositionUpdate but none received")
+				}
+				return
+			}
+
+			select {
+			case got := <-eventCh:
+				t.Fatalf("unexpected event type: %s", got.Type)
+			case <-time.After(120 * time.Millisecond):
+			}
+		})
+	}
+}
+
 func TestCheckRiskTriggers(t *testing.T) {
 	tests := []struct {
 		name          string
