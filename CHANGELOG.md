@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.0.0.17] - 2026-06-24
+
+### Added — Wave 9 observability wire completion: 5 detectors wired + BaselineTrigger (PR B + C)
+
+Resolves the v0.0.0.16 CHANGELOG 「留待 v0.0.0.17 PR B/C」deferred scope. All 4 Wave 9 events now flow through the runtime stack with full lifecycle management.
+
+#### PR B (PR #697) — 5 detectors wired
+
+- **`internal/monitoring/wave9_runtime.go`** (new, +272 lines): `Wave9Observability` coordinator wiring RegimeDebouncer + FactorWeightRegressionDetector + DriftDetector (v2) + ChannelHealthSynthesizer + IngestionLagMonitor with Start/Stop lifecycle and LIFO shutdown order. Uses `detectorFactory` interface for testability.
+- **`internal/monitoring/wave9_runtime_test.go`** (new, +354 lines): lifecycle + nil-guard + LIFO order tests.
+- **`cmd/atlas/main.go`**: wire `Wave9Observability` in `runLiveTrading` with production providers from PR A. `defer dashEventBus.Close()` added for graceful shutdown.
+- **Review fix (`c5cea33e`)**: nil-guard for `system.Port().FactorWeightEngine()` so startup is robust to partial initialization.
+
+#### PR C (PR #698) — BaselineTrigger
+
+- **`internal/baseline/trigger.go`** (new, +154 lines): `Trigger` struct subscribing to `EventPositionUpdate`, evaluating current `Policy` constraints (StopLossPct / TakeProfitPct / MaxHoldingDays) and logging violations via slog.
+- **`internal/baseline/trigger_test.go`** (new, +253 lines): lifecycle + nil-checks + evaluation rules (164% test:prod ratio).
+- **`cmd/atlas/main.go`**: wire `Trigger` as standalone lifecycle component in `runLiveTrading`.
+- **Review fix (`c324d68c`)**:
+  - `defer Stop()` wrapped in closure to log errors (errcheck linter).
+  - `baseline.NewManager` hoisted to `run()` scope and passed into `runLiveTrading` (DI refactor — shared instance between api-mode and live-mode).
+  - `TestRunLiveTrading_SharesBaselineManager` locks the contract.
+
+#### Runtime impact
+
+- **All 4 Wave 9 events now flowing in production**:
+  - `portfolio.position.update` (PR A + D wired in v0.0.0.16)
+  - `regime.confirmed` (PR B — RegimeDebouncer publishes)
+  - `ingestion.lag.spike` (PR B — IngestionLagMonitor publishes)
+  - `factor.weight.regression` (PR B — FactorWeightRegressionDetector publishes, when weights provided)
+  - `EventDriftDetected` (PR B — DriftDetector v2 wired, consumes PositionUpdate + RegimeChangeConfirmed)
+- **`BaselineTrigger`** (PR C) provides policy enforcement: position updates evaluated against `SimulationConstraints`, violations logged as warnings/errors.
+
+#### Deviation from plan v2
+
+- Plan v2 said 4 detectors + use BackgroundTaskManager. Actual: 5 detectors (ChannelHealthSynthesizer missing from plan) + `defer wave9.Stop()` pattern (event-driven lifecycle, not scheduled tasks — `internal/apigateway/CONSTITUTION.md` §4.5.2 exception).
+- Plan v2 PR C was 「Layer 3 baseline CI scripts」; user directive was runtime 「EventPositionUpdate triggers BaselineTrigger evaluation」. Followed user directive.
+
+#### Oracle audit
+
+- Plan v2 addressed 9 findings (4 HIGH / 3 MEDIUM / 2 LOW).
+- /review (focused) found P2/P3 concerns, all fixed before merge.
+
+#### Verification
+
+- `go build ./...` ✓
+- `go vet ./...` ✓
+- `gofmt -l` clean ✓
+- All CI checks green for both PRs (#697 + #698) at merge time.
+
+
 ## [0.0.0.16] - 2026-06-24
 
 ### Added — Wave 9 observability wire: production providers + EventPositionUpdate caller (PR A + D)
