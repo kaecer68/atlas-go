@@ -5,77 +5,28 @@
 
 ## 規則
 
-- **新規則**：開新 CLI session 必須先 `git worktree add ../<branch>` 或用 `wt switch -c <branch>`(worktrunk)
+- **新規則**：開新 CLI session 必須先 `git worktree add ../<branch>`，或在已安裝 worktrunk 的環境用 `wt switch -c <branch>`
 - **Main worktree**（`/Users/kaecer/workspace/atlas`）只給 primary CLI 或 stable 視圖
 - **禁止**：兩個 CLI 同時在 main worktree 編輯相同檔案
-- **Worktree 路徑**:sven1103 自動建立在 main worktree 的 sibling(`../<slug>`),**branch 命名為 `wt/<slug>`**(plugin 行為:slug 來自 worktree title,**不是**用現有 branch 名)
-- **結束時**:PR merge → branch 自動刪除 → `git worktree prune`
-- **進場前**:必跑 `git worktree list` 確認當前佈局
+- **Worktree 路徑**：建立在 main worktree 的 sibling（`../<slug>`），**branch 命名為 `wt/<slug>` 或 `chore/<slug>` 等任務前綴**
+- **結束時**：PR merge → branch 自動刪除 → `git worktree prune`
+- **進場前**：必跑 `git worktree list` 確認當前佈局
 
-## 工具鏈(2026-06-12 修訂)
+## 工具鏈（2026-06 修訂）
 
-開新 CLI session 的隔離保障進化成 **worktrunk + sven1103 雙層防護**：
+atlas-go 不再依賴任何 AI 層 worktree 隔離 plugin（sven1103/opencode-worktree-workflow 已於 v0.0.0.8 退役）。人類操作員使用下列任一工具即可：
 
-- **Worktrunk**(`brew install worktrunk && wt config shell install`):**人類層**快樂路徑 — 操作員手動快速切換、看佈局。`wt switch -c <branch>` 一行開 worktree 並自動 cd 進去(前提是 shell init 已執行),`wt list` 看當前佈局(自帶 status 標記 `!` / `+` / `^`),`wt remove <branch>` 收尾。**路徑 convention**:與 sven1103 統一,worktree 建立在 main worktree 的 sibling(`$ROOT_PARENT/<slug>`)。
-- **sven1103-agent/opencode-worktree-plugin**([GitHub](https://github.com/sven1103-agent/opencode-worktree-plugin),npm package: `@sven1103/opencode-worktree-workflow`):**AI 層 worktree 生命週期工具**(v0.6.3,**目前 latest stable**)。Plugin 暴露兩個 tools,**沒有任何 hook**:
-  - `worktree_prepare(title)` — 為當前 session 綁定一個 worktree(branch = `wt/<slug>` 來自 sidecar,自動 `git worktree add` + 切到該 worktree;`title` 至少 3 字元,會被 normalize 成 slug)
-  - `worktree_cleanup(mode?, raw?, selectors?)` — 收尾 worktree(`mode` = `preview`(預設)只列不刪 / `apply` 真的刪除;`raw` 顯示原始 entry 物件;`selectors` 過濾要清理的對象)
+- **原生 git**：`git worktree add ../<branch> <base>` 開新 worktree，無額外依賴
+- **Worktrunk**（可選，`brew install worktrunk && wt config shell install`）：人類層便捷路徑 — `wt switch -c <branch>` 一行開 worktree 並自動 cd 進去；`wt list` 看當前佈局；`wt remove <branch>` 收尾。**路徑 convention**：worktree 建立在 main worktree 的 sibling（`$ROOT_PARENT/<slug>`）
 
-  ⚠️ **v0.6.3 沒有 `tool.execute.before` hook、不自動重寫 bash/glob/grep/edit 任何工具路徑、不攔截 AI escape worktree、不會在 session 啟動時自動建 worktree**。每個 CLI session 必須在開頭**主動呼叫** `worktree_prepare` 才能拿到隔離;忘了呼叫 = 跟以前一樣 bundling,plugin 不會救你。1.0.0-alpha 線(`@1.0.0-alpha.4`)才有 hook 行為,但未驗證,不要在 production 用。
+## AI session 開機流程
 
-  **安裝**(per-user,`~/.config/opencode/opencode.json`,**pin 固定版本**避免 schema drift):
-  ```json
-  "plugin": [
-    "...",
-    "@sven1103/opencode-worktree-workflow@0.6.3"
-  ]
-  ```
+**主動開 worktree**：在 chat 開頭用 `wt switch -c <branch>`（worktrunk）或 `git worktree add ../<branch> main` 切到隔離的 worktree，**不要直接在 main worktree 開工**。忘了切換 = 跟其他 CLI 共享 main worktree，會互相覆蓋。
 
-  **npm 依賴**(per-project,確保 plugin 跟 package.json 同步,**版本需與 plugin 一致**):
-  ```sh
-  npm install -D @sven1103/opencode-worktree-workflow@0.6.3
-  ```
-
-  **Slash commands**(`/wt-new` / `/wt-clean`):**v0.6.3 沒有附帶**。1.0.0-alpha 線的 release asset 可能會有,但**未驗證可用**。目前要 trigger plugin 必須在 chat 直接呼叫 `worktree_prepare` tool 給對應參數,沒有快捷指令。
-
-雙組合分工(對應 v0.6.3 實際行為):
-- **worktrunk** = 人類層(操作員手動切換、看佈局、收尾)
-- **sven1103** = AI 層 worktree 生命週期(`worktree_prepare` / `worktree_cleanup` 兩個 tools)。**不是 hook、不是自動防護**,需要 CLI session 開頭主動 call `worktree_prepare(title)` 才有隔離;plugin 不會自己動手
-- 兩者分工:worktrunk = 人類層手動操作;sven1103 = AI 層在 session 內 explicit 觸發
-
-CLI session 開機流程(v0.6.3):**仍然需要 bootstrap** —— 在 chat 內 call `worktree_prepare(title="<session-purpose>")` 才會建立 worktree;**忘了 call = 跟以前一樣 bundling**,plugin 不會救你。若需要「人類手動給下個 CLI 開新 worktree」,直接 `wt switch -c <branch>` 即可,worktrunk 自動切換目錄。
-
-## sidecar 設定範例
-
-`.opencode/worktree-workflow.json`(per-repo,版本控管)— 完整 JSON 不在 doc 內重複(避免雙方不同步),見 `.opencode/worktree-workflow.json` 實際內容。
-
-關鍵欄位說明(plugin `src/index.js` 消費這些 keys):
-- `remote`: 用於偵測 default branch,必填
-- `branchPrefix`: **plugin 預設 `wt/`**,建立 branch 命名為 `wt/<slug>`(slug 來自 title,**不是**用現有 branch 名)
-- `baseBranch`: 用於 worktree 建立 + cleanup 的 base,預設 = remote default branch
-- `worktreeRoot`: 支援 `$REPO` / `$ROOT` / `$ROOT_PARENT` 三種 template(plugin 純字串 `replaceAll` 展開;**不是** `path.resolve`)
-- `protectedBranches`: 必含 `baseBranch`,plugin 自動加入 `defaultBranch` + `baseBranch` + 此清單(`src/index.js:710`)
-- `cleanupMode`: `"preview"`(預設)或 `"apply"`,決定 `wt-clean` 預設是否實際刪除
-
-## 驗證 sven1103 真的有效(v0.6.3)
-
-裝好 sven1103 後,跑下面步驟確認 plugin 真的載入 + tools 可呼叫。注意:**v0.6.3 沒有 path rewriting hook**,所以「阻擋 sibling escape」「阻擋絕對路徑」這類 adversarial test 在 v0.6.3 **不適用** —— 那些需要 1.0.0-alpha 線的 hook 行為,目前未驗證。v0.6.3 只能驗證:
-
-1. **Plugin 載入檢查**:在 CLI session 內呼叫 `worktree_prepare(title="verify-plugin-load")`。Tool 回傳的是 **string message**(不是物件),內容含 `branch: <branch>` 與 `worktree: <absolute-path>` 兩行(`src/index.js:177-186` `formatPrepareSummary`)。**`worktree:` 行的絕對路徑應指向 sidecar 設定的 `worktreeRoot` 下的 `verify-plugin-load/`**。若 sidecar 用 `worktreeRoot: "$ROOT_PARENT"`(本 repo sidecar 即如此),路徑是 `<repo parent>/verify-plugin-load/`(e.g. repo 在 `/Users/kaecer/workspace/atlas` → worktree 落 `/Users/kaecer/workspace/verify-plugin-load`)。若走 plugin metadata,key 是 `worktree_path`(**不是** `path`)。
-2. **Cleanup preview**:呼叫 `worktree_cleanup(mode="preview")`,回傳的 preview **會把當前 session 的 worktree 列在「Not cleanable here」/ `blocked` 群,理由 `current worktree`**(`src/index.js:433-440` `classifyEntry` 明確歸類 current worktree 為 blocked)。**不要**期待它出現在 `Safe to clean automatically` 或 `Needs review before cleanup` 群;若出現代表 plugin 有 bug。**預設模式只預覽不刪**。完全看不到自己的 worktree(連 blocked 都沒)代表 plugin 連 classifyEntry 都沒跑;在 safe 群出現代表 plugin 誤判。
-3. **Subagent dispatch 隔離(REQUIRES MANUAL VERIFICATION)**:從 worktree A 用 `task` 委派子任務給另一個 agent,然後**在子任務 session 內跑 `git rev-parse --show-toplevel`** —— 應回傳 parent dispatch 時的 CWD 完整絕對路徑(若 parent CWD 是 `/Users/kaecer/workspace/<wt>`,子任務也會回同樣的絕對路徑)。**sven1103 v0.6.3 完全不參與 parent→child session 傳遞,subagent 繼承的是 parent dispatch 時的 CWD**,不是 plugin 行為。請直接實測確認,**不要相信 AI 自報「我在 worktree 內」**。
-
-## v0.6.3 已知限制(Known Limitations)
-
-- **無 hook**:不攔截任何 tool 呼叫,bash/glob/grep/read/edit 都不會被路徑重寫
-- **無自動隔離**:session 啟動時不會自動建 worktree,必須在 chat 內**主動** call `worktree_prepare(title)`
-- **無 slash commands**:`/wt-new` / `/wt-clean` 在 v0.6.3 不存在,要在 chat 直接呼叫 tool。**plugin 自身的 output 也不一致**:`worktree_cleanup(mode="preview")` 結果會印出 `Run /wt-clean apply ...` 提示(`src/index.js:171-172` `formatPreview`),但 `/wt-clean` 在 v0.6.3 **不存在**;請忽略 plugin output 提到的 slash command,以本文件為準。
-- **無 subagent 控制**:不會修改 parent→child dispatch 的 CWD 傳遞
-- **無 sibling escape 防護**:bash 命令可自由讀 sibling worktree 的檔案,plugin 不會擋
-- **1.0.0-alpha 線**(`@1.0.0-alpha.4`)預期會有 hook + 自動隔離 + slash commands,**未驗證可用**,**不要在 production 用**
+無 hook 自動防護、無 plugin 隔離：每個 CLI session 必須自行決定是否在 worktree 內執行。
 
 ## 為什麼要分文件
 
-root `AGENTS.md` 套用 160 行硬限制(`quality.yml:agents-md-lines` check),任何模組特定或多 CLI 規則應下沉到 `docs/` 或 `internal/<mod>/AGENTS.md`,由 root 用 1 行 reference 指過去即可。
+root `AGENTS.md` 套用 160 行硬限制（`quality.yml:agents-md-lines` check），任何模組特定或多 CLI 規則應下沉到 `docs/` 或 `internal/<mod>/AGENTS.md`，由 root 用 1 行 reference 指過去即可。
 
-本檔屬於「操作程序 / playbook」類,依 `AGENTS.md` 內容歸屬規則存放於 `docs/`。
+本檔屬於「操作程序 / playbook」類，依 `AGENTS.md` 內容歸屬規則存放於 `docs/`。

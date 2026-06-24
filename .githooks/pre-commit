@@ -36,17 +36,7 @@ for f in $staged_files; do
   esac
 done
 
-# ─── Check 3: Graphify semantic cache (should be in .gitignore) ──────────
-for f in $staged_files; do
-  case "$f" in
-    .graphify_*.json|graphify-out/*)
-      echo "WARNING: Graphify artifact staged: $f"
-      echo "  → .gitignore should already exclude this. Check .gitignore."
-      ;;
-  esac
-done
-
-# ─── Check 4: Coverage output files ──────────────────────────────────────
+# ─── Check 3: Coverage output files ──────────────────────────────────────
 for f in $staged_files; do
   case "$f" in
     *.out|cov_*|coverage.out)

@@ -179,7 +179,7 @@ jobs:
 
       - name: Check AGENTS.md human-written line count
         run: |
-          HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/,/^<!-- gitnexus:end -->/{next} /^<!-- graphify:start -->/,/^<!-- graphify:end -->/{next} {count++} END{print count}' AGENTS.md)
+          HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/,/^<!-- gitnexus:end -->/{next} {count++} END{print count}' AGENTS.md)
           echo "Human-written AGENTS.md lines: $HUMAN_LINES"
           if [ "$HUMAN_LINES" -gt 160 ]; then
             echo "ERROR: AGENTS.md has $HUMAN_LINES lines (hard limit: 160)."
@@ -327,7 +327,7 @@ jobs:
   # coverage job (go test ./... includes ./internal/industry/...).
 
   # Orphan artifact detection — ensures no compiled binaries, PID files,
-  # coverage reports, or graphify cache artifacts have been committed.
+  # or coverage reports have been committed.
   check-orphan-artifacts:
     runs-on: ubuntu-latest
     steps:
@@ -354,10 +354,6 @@ jobs:
         # Coverage output
         for f in $(git ls-files '*.out'); do
           orphans="$orphans  [COVERAGE] $f"
-        done
-        # Graphify cache at root
-        for f in $(git ls-files '.graphify_*.json'); do
-          orphans="$orphans  [GRAPHFIY] $f"
         done
         if [ -n "$orphans" ]; then
           echo "❌ Found orphan artifacts in git index:"

@@ -1,12 +1,12 @@
 ---
 name: atlas-pre-change-protocol
-description: "MUST use before ANY code modification in atlas-go. Mandates GitNexus blast radius for changes, graphify architecture check, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes and dead code misidentification. (Read-only investigations are exempt — this skill only triggers on write-intent tasks.)"
+description: "MUST use before ANY code modification in atlas-go. Mandates GitNexus blast radius for changes, GitNexus architecture check, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes and dead code misidentification. (Read-only investigations are exempt — this skill only triggers on write-intent tasks.)"
 ---
 
 # Atlas Pre-Change Protocol
 
 **IRON LAW: No code change without completing Steps 1-7 first.**
-This protocol overrides the default AI impulse to edit immediately. Every step exists because atlas-go has 8972 nodes, 151 communities, and hidden dependencies that grep alone cannot see.
+This protocol overrides the default AI impulse to edit immediately. Every step exists because atlas-go has 52,662 symbols, 165,265 relationships, 300 execution flows, and hidden dependencies that grep alone cannot see.
 
 ---
 
@@ -103,16 +103,15 @@ Verify alignment with existing conventions BEFORE coding:
 3. Verify: "同一件事不可有三種算法" — single source of truth for filtering/counting
 ```
 
-### Step 6: GRAPHIFY ARCHITECTURE CHECK (DO NOT SKIP)
+### Step 6: GITNEXUS ARCHITECTURE CHECK (DO NOT SKIP)
 
-The knowledge graph sees connections that grep and IDE search miss. Use it:
+GitNexus indexes the full call graph and execution flows. Use it to see connections that grep and IDE search miss:
 
 ```
-1. Read graphify-out/GRAPH_REPORT.md for community structure (151 communities, 8972 nodes)
-   → Which community does your target belong to? What are its neighbors?
-2. Use gitnexus_query({query: "your topic"}) to find relevant execution flows
-3. Use gitnexus_context({name: "symbol"}) for 360° view (callers + callees + processes)
-4. Check which community your target belongs to — cross-community changes amplify risk
+1. Use gitnexus_query({query: "your topic"}) to find relevant execution flows
+2. Use gitnexus_context({name: "symbol"}) for 360° view (callers + callees + processes)
+3. Identify which functional communities your target belongs to — cross-community changes amplify risk
+4. If the index is stale, run: npx gitnexus analyze
 ```
 
 ### Step 7: EXISTING CODE INTENT
@@ -160,7 +159,7 @@ Before modifying or removing code, understand WHY it exists:
 □ "I don't need to read AGENTS.md"     → Always check module pitfalls.
 □ "Let me just change this one line"   → Run gitnexus_impact. One-liners can cascade.
 □ "The type system will catch errors"  → Types don't catch logic bugs or data gaps.
-□ "I understand the system well"       → atlas-go has 151 communities. Check graphify.
+□ "I understand the system well"       → atlas-go has 300 execution flows. Check GitNexus.
 □ "I'll fix it the simple way"         → Simple ≠ correct. Match the architecture.
 ```
 
@@ -182,7 +181,7 @@ Before modifying or removing code, understand WHY it exists:
 | `docs/GUIDELINES_INDEX.md` | Authority hierarchy, use-case routing |
 | `.claude/SKILLS-MAP.md` | Full skill inventory (38+ skills) |
 | `.claude/skills/atlas-core-architecture/SKILL.md` | System architecture and data flow |
-| `graphify-out/GRAPH_REPORT.md` | Knowledge graph (8972 nodes, 151 communities) |
+| `gitnexus://repo/atlas-go/clusters` | All functional communities detected by GitNexus |
 
 **Tool quick reference:**
 
@@ -201,12 +200,13 @@ Before modifying or removing code, understand WHY it exists:
 
 For research, investigation, and audit tasks (no code modification expected), use this lighter protocol:
 
-### Step I-1: Graphify First
+### Step I-1: GitNexus First
 ```
-Read graphify-out/GRAPH_REPORT.md → identify which community your topic belongs to
+Use gitnexus_query({query: "your topic"}) → find relevant execution flows and symbols
 This is the FASTEST way to understand system structure before diving into code.
-→ Map the topic to a community (e.g., "market data providers" → marketdata community)
+→ Map the topic to a functional community (e.g., "market data providers" → marketdata community)
 → Check connected communities for cross-cutting concerns
+→ If the index is stale, run: npx gitnexus analyze
 ```
 
 ### Step I-2: GitNexus Concept Search

@@ -75,7 +75,7 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 
 | 技能 | 用途 | 觸發條件 | 版本 |
 |------|------|---------|------|
-| `atlas-pre-change-protocol` | 7 步驟修改前檢查：blast radius → 模組陷阱 → 數據溯源 → 憲法檢查 → 模式匹配 → graphify → 代碼意圖 | **修改任何程式碼前強制執行** | v1.0 |
+| `atlas-pre-change-protocol` | 7 步驟修改前檢查：blast radius → 模組陷阱 → 數據溯源 → 憲法檢查 → 模式匹配 → GitNexus 架構 → 代碼意圖 | **修改任何程式碼前強制執行** | v1.0 |
 | `atlas-data-visibility` | 四層資料可見性防護：Gateway/Adapter/Service/Frontend，防止零值掩蓋通道靜默失敗 | 資料流修改、通道新增、前端 data_status 欄位變更時 | v2.0 |
 
 > **強制規則**: `atlas-pre-change-protocol` 是所有程式碼修改的前置條件，不可跳過。執行方式: `skill(name="atlas-pre-change-protocol")`

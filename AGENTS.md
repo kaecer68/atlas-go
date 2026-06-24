@@ -76,7 +76,7 @@
 skill(name="atlas-pre-change-protocol")
 ```
 
-涵蓋：blast radius → 模組陷阱 → 數據源溯源 → 憲法檢查 → 模式匹配 → graphify 架構 → 代碼意圖。
+涵蓋：blast radius → 模組陷阱 → 數據源溯源 → 憲法檢查 → 模式匹配 → GitNexus 架構 → 代碼意圖。
 
 ## 關鍵跨模組陷阱
 

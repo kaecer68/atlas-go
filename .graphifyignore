@@ -1,9 +1,0 @@
-prompts/
-graphify-out/
-data/
-tmp/
-.worktrees/
-.gocache/
-node_modules/
-web/node_modules/
-graphify-out/subgraphs/

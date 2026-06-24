@@ -39,7 +39,6 @@ done < <(find . \
     -not -path './.opencode/*' \
     -not -path '*/node_modules/*' \
     -not -path '*/.git/*' \
-    -not -path './graphify-out/*' \
     -not -path './web/static/css/*' \
     -not -path './web/static/js/*' \
     -print0)
