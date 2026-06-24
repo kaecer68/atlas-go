@@ -1634,6 +1634,15 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		return fmt.Errorf("start wave9 observability: %w", err)
 	}
 
+	// Baseline trigger: evaluates position updates against the current baseline policy constraints.
+	// Wired as a standalone lifecycle component (independent of Wave 9 detectors).
+	baselineTrigger := baseline.NewTrigger(baseline.NewManager(cfg.BaselinePolicyPath), eventBus)
+	if err := baselineTrigger.Start(ctx); err != nil {
+		logging.Error("main", "baseline_trigger_start_failed", "error", err.Error())
+		return err
+	}
+	defer baselineTrigger.Stop()
+
 	log.Printf("starting live trading orchestrator (broker_mode=%s)", liveCfg.BrokerMode)
 	if err := o.Start(); err != nil {
 		return fmt.Errorf("start live orchestrator: %w", err)
