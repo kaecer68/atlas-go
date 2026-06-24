@@ -1,7 +1,7 @@
 # Atlas 事件目錄
 
 > 最後更新：2026-06-22
-> Schema Version: 1（全部事件）
+> Schema Version: 多版本並存（v1 為多數事件，EventDriftDetected 為 v2，EventFactorWeightRegression 為 v1）
 
 ## Wave 8 事件（已完成）
 
@@ -28,7 +28,7 @@
 | 9.1 | 個別監控通道健康 | `EventChannelIndividualHealth` | [channel-individual-health.md](channel-individual-health.md) | [wave9_channel_individual_health.yml](../../monitoring/rules/wave9_channel_individual_health.yml) | ✅ 已合併（v0.0.0.8） |
 | 9.2 | Regime 轉變穩定確認 | `EventRegimeChangeConfirmed` | [regime-change-confirmed.md](regime-change-confirmed.md) | [wave9_regime_change_confirmed.yml](../../monitoring/rules/wave9_regime_change_confirmed.yml) | ✅ 已合併（v0.0.0.8） |
 | 9.3 | 因子權重回歸偵測 | `EventFactorWeightRegression` | [factor-weight-regression.md](factor-weight-regression.md) | [wave9_factor_weight_regression.yml](../../monitoring/rules/wave9_factor_weight_regression.yml) | ✅ 已合併（v0.0.0.8） |
-| 9.4 | 投資組合部位漂移偵測 | `EventDriftDetected` | [drift-detector.md](drift-detector.md) | [wave9_drift_detected.yml](../../monitoring/rules/wave9_drift_detected.yml) | ✅ 已合併（v0.0.0.8） |
+| 9.4 | 投資組合部位漂移偵測（v2：target weights drift） | `EventDriftDetected` | [drift-detector.md](drift-detector.md) | [wave9_drift_detected.yml](../../monitoring/rules/wave9_drift_detected.yml) | ✅ v1 已合併（v0.0.0.8）；v2 透過 PR feat/drift-detector-v2 追加 target weights drift |
 | 9.5 | API Gateway ingestion lag spike | `EventIngestionLagSpike` | [ingestion-lag-spike.md](ingestion-lag-spike.md) | [wave9_ingestion_lag_spike.yml](../../monitoring/rules/wave9_ingestion_lag_spike.yml) | ✅ 已合併（v0.0.0.8） |
 
 > **PD-W9-1**：5 個 YELLOW 事件預設 `severity: "info"`（IngestionLagSpike 除外，severity=warning），alert rule 預設 `enabled: false`，由 operator 決定是否啟用。
@@ -58,8 +58,9 @@
 
 ## Schema Version 說明
 
-- **v1（當前）**：所有事件的預設 schema 版本。`BusEvent.SchemaVersion` 欄位值為 `1`。
-- **v2+（未來）**：當事件 payload 結構發生 breaking change 時，遞增版本號。前端可透過 `data.schema_version` 判斷如何解析 payload。
+- **v1（多數事件）**：預設 schema 版本。`BusEvent.SchemaVersion` 欄位值為 `1`。
+- **v2（EventDriftDetected）**：2026-06 v2 升級，新增 target weights drift 偵測與 5 個新 payload 欄位（`target_weights`、`actual_weights`、`max_drift`、`max_drift_symbol`、`current_regime`）。v1 欄位完整保留，append-only 演進。
+- **v2+（未來）**：當事件 payload 結構發生重大變更時，遞增版本號。前端可透過 `data.schema_version` 判斷如何解析 payload。
 
 ## 新增事件流程
 
