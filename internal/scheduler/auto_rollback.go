@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -264,9 +265,16 @@ func (r *AutoRollback) executeRollback(result *RollbackResult) error {
 		if result.PreValue <= 0 {
 			return fmt.Errorf("no calibration snapshot available, cannot revert calibration")
 		}
-		logging.Warn("auto_rollback", "calibration_revert_alert_only",
+		paramsPath := config.GetParametersConfigPath()
+		if paramsPath == "" {
+			return fmt.Errorf("parameters config path is empty, cannot revert calibration")
+		}
+		if err := config.RestoreFromBackup(paramsPath); err != nil {
+			return fmt.Errorf("calibration restore failed: %w", err)
+		}
+		logging.Info("auto_rollback", "calibration_reverted",
 			"reason", result.Reason,
-			"note", "calibration revert requires parameter backup infrastructure (Wave 10 L1.4); manual intervention needed")
+			"path", paramsPath)
 		r.rollbackHistory = append(r.rollbackHistory, *result)
 		return nil
 

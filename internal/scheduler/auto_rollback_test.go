@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -236,31 +238,85 @@ func TestAutoRollback_CalibrationDegradation(t *testing.T) {
 
 	ar := NewAutoRollback(nil, dw, nil).WithMaturityTracker(tr)
 
-	// Snapshot before calibration
 	ar.RecordCalibration(1.0)
 
-	// Current score drops >15% (simulate by manipulating dwManager state)
-	// computeSystemCompositeScore returns 0 with no agents, which is < 0.85
 	results, err := ar.RunDaily(context.Background())
 	if err != nil {
 		t.Fatalf("RunDaily: %v", err)
 	}
 
-	// Should detect calibration degradation
 	if len(results) != 1 {
 		t.Fatalf("expected 1 rollback result, got %d", len(results))
 	}
 	if results[0].Action != "revert_calibration" {
 		t.Errorf("expected action=revert_calibration, got %s", results[0].Action)
 	}
+	if results[0].TargetID != "last_calibration" {
+		t.Errorf("expected target=last_calibration, got %s", results[0].TargetID)
+	}
+}
 
-	// Verify alert-only rollback is recorded in history.
+func TestAutoRollback_CalibrationDegradation_RestoresFromSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	paramsPath := filepath.Join(dir, "parameters.json")
+	config.SetParametersConfigPath(paramsPath)
+	t.Cleanup(func() { config.SetParametersConfigPath("") })
+
+	originalCfg := config.DefaultParametersConfig()
+	originalCfg.Version = "pre-calibration-v1"
+	if err := originalCfg.Save(paramsPath); err != nil {
+		t.Fatalf("save initial: %v", err)
+	}
+	if err := config.SnapshotToBackup(paramsPath); err != nil {
+		t.Fatalf("SnapshotToBackup: %v", err)
+	}
+
+	modifiedCfg := config.DefaultParametersConfig()
+	modifiedCfg.Version = "post-calibration-v2"
+	if err := modifiedCfg.LockedSaveWithRollback(paramsPath); err != nil {
+		t.Fatalf("LockedSaveWithRollback: %v", err)
+	}
+
+	dataBeforeRevert, err := os.ReadFile(paramsPath)
+	if err != nil {
+		t.Fatalf("read before revert: %v", err)
+	}
+	if !strings.Contains(string(dataBeforeRevert), `"post-calibration-v2"`) {
+		t.Fatalf("expected post-calibration-v2 in file before revert, got: %s", string(dataBeforeRevert))
+	}
+
+	tr := domain.NewMaturityTrackerWithStart(time.Now().UTC().Add(-300 * 24 * time.Hour))
+	dw := portfolio.NewDarwinianWeightManager(filepath.Join(dir, "dw.json"))
+
+	ar := NewAutoRollback(nil, dw, nil).WithMaturityTracker(tr)
+	ar.RecordCalibration(1.0)
+
+	results, err := ar.RunDaily(context.Background())
+	if err != nil {
+		t.Fatalf("RunDaily: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 rollback result, got %d", len(results))
+	}
+	if results[0].Action != "revert_calibration" {
+		t.Fatalf("expected action=revert_calibration, got %s", results[0].Action)
+	}
+
 	history := ar.History()
 	if len(history) != 1 {
-		t.Fatalf("expected 1 history entry, got %d", len(history))
+		t.Fatalf("expected 1 history entry after actual restore, got %d", len(history))
 	}
-	if history[0].Action != "revert_calibration" {
-		t.Errorf("expected history action=revert_calibration, got %s", history[0].Action)
+
+	dataAfterRevert, err := os.ReadFile(paramsPath)
+	if err != nil {
+		t.Fatalf("read after revert: %v", err)
+	}
+	if !strings.Contains(string(dataAfterRevert), `"pre-calibration-v1"`) {
+		t.Errorf("expected pre-calibration-v1 in file after actual restore, got: %s", string(dataAfterRevert))
+	}
+	if strings.Contains(string(dataAfterRevert), `"post-calibration-v2"`) {
+		t.Errorf("post-calibration-v2 should be gone after restore, got: %s", string(dataAfterRevert))
 	}
 }
 
