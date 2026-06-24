@@ -182,7 +182,7 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 
 - `docs/llm-integration-strategy-framework.md`（v2.1）— Provider 與 capability 架構
 - `b29` 壓縮區段 — Wave 7 audit 與事件缺口依據
-- `.opencode/prompts/wave-8-bootstrap.md` — 新 CLI 工作區啟動提示詞
+- `.opencode/prompts/wave-8-bootstrap.md` — Wave 8 期間的新 CLI 工作區啟動提示詞（**歷史 artifact**，v0.0.0.8 起 codegraph 工具已退役，僅以 GitNexus 為架構探索工具）
 - `docs/roadmap.md` — Wave 7.5 段落（Wave 8 上游）
 - 既有事件 pattern：`internal/monitoring/api/events/health_alert.go`
 - 既有 SSE catchup：`internal/monitoring/api/events/health_alert_catchup.go`（PR #606）

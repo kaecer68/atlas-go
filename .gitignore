@@ -56,8 +56,8 @@ cmd/experimental/*/data/
 /.omo/
 **/.omo/
 /.opencode/*
-!/.opencode/worktree-workflow.json
-!/.opencode/commands/*.md
+!/.opencode/commands/
+!/.opencode/prompts/
 /.planning/
 /.playwright-mcp/
 /.sisyphus/
