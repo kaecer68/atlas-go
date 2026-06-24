@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type driftDetector struct {
@@ -49,18 +51,22 @@ func NewDriftDetectorWithTargets(bus eventbus.EventBus, provider TargetWeightsPr
 func (d *driftDetector) onRegimeChangeConfirmed(_ context.Context, ev eventbus.BusEvent) error {
 	payload, ok := ev.Payload.(map[string]any)
 	if !ok {
+		logging.Warn("drift_detector", "regime_payload_type_assertion_failed",
+			logging.FStr("event_type", string(ev.Type)),
+			logging.FStr("expected", "map[string]any"),
+			logging.FStr("actual_type", fmt.Sprintf("%T", ev.Payload)))
 		return nil
 	}
 	newRegime, ok := payload["new_regime"].(string)
 	if !ok {
+		logging.Warn("drift_detector", "regime_payload_new_regime_parse_failed",
+			logging.FStr("event_type", string(ev.Type)),
+			logging.FStr("actual_type", fmt.Sprintf("%T", payload["new_regime"])))
 		return nil
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.currentRegime = newRegime
-	// Re-baseline: reset prevTotal so the next checkPeriod establishes a new
-	// baseline. Without this, a regime change could trigger a spurious
-	// turnover event.
 	d.prevTotal = 0
 	return nil
 }
