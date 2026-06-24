@@ -1,0 +1,32 @@
+{
+  "$schema": "https://registry.kdco.dev/schemas/worktree.json",
+
+  // Worktree plugin configuration
+  // Documentation: https://github.com/kdcokenny/ocx
+
+  // Custom base path for worktree storage (supports ~)
+  // Default: ~/.local/share/opencode/worktree
+  // "worktreePath": "~/my-worktrees",
+
+  "sync": {
+    // Files to copy from main worktree to new worktrees
+    // .env.example is copied so the new worktree has a reference env template.
+    "copyFiles": [".env.example"],
+
+    // Directories to symlink (saves disk space)
+    // atlas does not use vendor/ or node_modules/, so this stays empty.
+    "symlinkDirs": [],
+
+    // Patterns to exclude from copying
+    "exclude": []
+  },
+
+  "hooks": {
+    // Commands to run after worktree creation
+    // Pre-download Go modules so the agent can build/test immediately.
+    "postCreate": ["go mod download"],
+
+    // Commands to run before worktree deletion
+    "preDelete": []
+  }
+}

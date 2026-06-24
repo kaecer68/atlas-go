@@ -58,6 +58,10 @@ cmd/experimental/*/data/
 /.opencode/*
 !/.opencode/commands/
 !/.opencode/prompts/
+!/.opencode/ocx.jsonc
+!/.opencode/package.json
+!/.opencode/worktree.jsonc
+!/.ocx/
 /.planning/
 /.playwright-mcp/
 /.sisyphus/

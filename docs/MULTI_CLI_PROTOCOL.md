@@ -19,6 +19,38 @@ atlas-go 不再依賴任何 AI 層 worktree 隔離 plugin（sven1103/opencode-wo
 - **原生 git**：`git worktree add ../<branch> <base>` 開新 worktree，無額外依賴
 - **Worktrunk**（可選，`brew install worktrunk && wt config shell install`）：人類層便捷路徑 — `wt switch -c <branch>` 一行開 worktree 並自動 cd 進去；`wt list` 看當前佈局；`wt remove <branch>` 收尾。**路徑 convention**：worktree 建立在 main worktree 的 sibling（`$ROOT_PARENT/<slug>`）
 
+### 推薦的 AI 層 worktree 整合：kdcokenny/opencode-worktree
+
+若要在 opencode CLI session 內自動建立 worktree 並同步檔案/啟動 terminal，專案使用 [kdcokenny/opencode-worktree](https://github.com/kdcokenny/opencode-worktree)（透過 [ocx](https://github.com/kdcokenny/ocx) 安裝管理）。
+
+**安裝步驟**（per-user，一次即可）：
+
+```bash
+# 1. 安裝 ocx CLI（已於 v0.0.0.8 起推薦使用 brew 或 npm global）
+brew install kdcokenny/ocx/ocx    # 或：npm install -g ocx
+
+# 2. 在 repo root 初始化 ocx（會建立 .opencode/ocx.jsonc + .opencode/.gitignore）
+ocx init
+
+# 3. 安裝 worktree plugin（會更新 .opencode/package.json + 建立 .opencode/plugins/）
+ocx add kdco/worktree --from https://registry.kdco.dev
+```
+
+**Repo 端**：`ocx init` 與 `ocx add` 會自動建立/更新以下 tracked 檔案：
+
+- `.opencode/ocx.jsonc`：ocx 專案 config（registries）
+- `.opencode/package.json`：ocx 管理的 dep manifest（包含 `kdco-primitives` + `kdco/worktree`）
+- `.opencode/worktree.jsonc`：plugin-specific config（已預先建立，調整 `sync.copyFiles` / `hooks.postCreate` 以適配專案）
+
+**未追蹤**（per-user 安裝產物，由 `.opencode/.gitignore` 排除）：
+
+- `.opencode/plugins/<plugin>/`：ocx 安裝的 plugin 程式碼（類比 `node_modules/`）
+- `.opencode/node_modules/`：plugin 依賴
+
+**用法**：plugin 暴露兩個 tool — `worktree_create(branch, baseBranch?)` 與 `worktree_delete(reason)`。詳細契約見 [kdcokenny/opencode-worktree README](https://github.com/kdcokenny/opencode-worktree#usage)。
+
+**注意**：此 plugin **不是 npm 套件**，**不要**用 `npm install @kdcokenny/opencode-worktree` 或加入 root `package.json`。所有安裝由 `ocx` 管理。
+
 ## AI session 開機流程
 
 **主動開 worktree**：在 chat 開頭用 `wt switch -c <branch>`（worktrunk）或 `git worktree add ../<branch> main` 切到隔離的 worktree，**不要直接在 main worktree 開工**。忘了切換 = 跟其他 CLI 共享 main worktree，會互相覆蓋。
