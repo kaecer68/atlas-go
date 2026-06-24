@@ -337,6 +337,22 @@ func TestDriftDetector_V2ConcurrentProviderAccess(t *testing.T) {
 		}
 	}()
 	wg.Wait()
+
+	_ = d.onRegimeChangeConfirmed(context.Background(), eventbus.BusEvent{
+		Type:    eventbus.EventRegimeChangeConfirmed,
+		Payload: map[string]any{"new_regime": "TEST"},
+	})
+
+	d.mu.Lock()
+	gotRegime := d.currentRegime
+	gotPrevTotal := d.prevTotal
+	d.mu.Unlock()
+	if gotRegime != "TEST" {
+		t.Errorf("expected currentRegime=TEST after regime change, got %q", gotRegime)
+	}
+	if gotPrevTotal != 0 {
+		t.Errorf("expected prevTotal=0 after regime change reset, got %f", gotPrevTotal)
+	}
 }
 
 // concurrentCountingProvider counts calls for race detection.
