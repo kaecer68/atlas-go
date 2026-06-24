@@ -322,6 +322,10 @@ func (o *Orchestrator) setupEventHandlers() {
 			quotes := []domain.Quote{payload.Quote}
 			o.stateStore.UpdatePositionPrices(quotes)
 
+			if position, hasPosition := o.stateStore.GetPosition(payload.Symbol); hasPosition {
+				o.eventBus.PublishPositionUpdate(payload.Symbol, position, "updated")
+			}
+
 			if o.config.StopLossEnabled || o.config.TakeProfitEnabled {
 				o.checkRiskTriggers(payload.Symbol, payload.Quote.Last)
 			}
