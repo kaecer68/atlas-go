@@ -195,6 +195,7 @@ func run(args []string, deps appDeps) error {
 	}
 
 	var janusEngine *janus.Engine
+	baselineMgr := baseline.NewManager(cfg.BaselinePolicyPath)
 
 	// Handle --simulate mode: run one-shot daily simulation and exit
 	if *simulateMode {
@@ -289,7 +290,6 @@ func run(args []string, deps appDeps) error {
 		dwMgr := portfolio.NewDarwinianWeightManager(filepath.Join(cfg.WorkDir, "data/state/darwinian_weights.json"))
 		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
 		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
-		baselineMgr := baseline.NewManager(cfg.BaselinePolicyPath)
 		judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
 		autoJudgePromoter := experiment.NewAutoJudgePromoter(judge, baselineMgr).
 			WithMaturityTracker(maturityTracker).
@@ -1347,7 +1347,7 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector, repo, *forceIntradayCycles)
+		return runLiveTrading(cfg, deps, collector, repo, baselineMgr, *forceIntradayCycles)
 	}
 	return runSimulation(cfg, false, collector, repo, deps.shutdown)
 }
@@ -1469,7 +1469,7 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 
 // buildBaseState queries the provider for current market state.
 // Falls back to placeholder values if provider fails (with warning log).
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, forceIntradayCycles bool) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, baselineMgr *baseline.Manager, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
 	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
 	if err != nil {
@@ -1633,6 +1633,19 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if err := wave9.Start(ctx); err != nil {
 		return fmt.Errorf("start wave9 observability: %w", err)
 	}
+
+	// Baseline trigger: evaluates position updates against the current baseline policy constraints.
+	// Wired as a standalone lifecycle component (independent of Wave 9 detectors).
+	baselineTrigger := baseline.NewTrigger(baselineMgr, eventBus)
+	if err := baselineTrigger.Start(ctx); err != nil {
+		logging.Error("main", "baseline_trigger_start_failed", "error", err.Error())
+		return err
+	}
+	defer func() {
+		if err := baselineTrigger.Stop(); err != nil {
+			logging.Warn("main", "baseline_trigger_stop_failed", logging.Err(err))
+		}
+	}()
 
 	log.Printf("starting live trading orchestrator (broker_mode=%s)", liveCfg.BrokerMode)
 	if err := o.Start(); err != nil {

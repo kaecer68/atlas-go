@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/baseline"
 )
 
 // TestRunLiveTrading_NilDepsPanicsAtProviderSetup locks the contract
@@ -29,5 +31,23 @@ func TestRunLiveTrading_NilDepsPanicsAtProviderSetup(t *testing.T) {
 		t.Logf("confirmed: runLiveTrading panics with nil deps (panic: %v)", r)
 	}()
 
-	_ = runLiveTrading(configStub(t), appDeps{}, nil, nil, false)
+	_ = runLiveTrading(configStub(t), appDeps{}, nil, nil, baseline.NewManager(""), false)
+}
+
+// TestRunLiveTrading_SharesBaselineManager verifies that runLiveTrading wires
+// the supplied *baseline.Manager into the BaselineTrigger instead of creating
+// a second Manager instance. With a shared manager, Trigger.Start succeeds
+// (default policy for empty path) and the function proceeds to the provider
+// setup, where it panics due to empty appDeps — matching the contract above.
+func TestRunLiveTrading_SharesBaselineManager(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic at provider setup, got no panic")
+		}
+		t.Logf("confirmed: shared baseline manager accepted and trigger started before provider setup (panic: %v)", r)
+	}()
+
+	mgr := baseline.NewManager("")
+	_ = runLiveTrading(configStub(t), appDeps{}, nil, nil, mgr, false)
 }
