@@ -1602,6 +1602,10 @@ func ResetParametersConfig() {
 	parametersConfig = nil
 }
 
+func SetParametersConfigPath(path string) {
+	parametersPath = path
+}
+
 // ReloadParametersConfig re-reads the parameters JSON file and replaces the
 // singleton configuration. Useful for hot-reload without server restart.
 // Returns any parse or validation error.
@@ -1770,4 +1774,34 @@ func (p *ParametersConfig) TryLockedSaveWithRollback(path string, timeout time.D
 	}
 	defer unlock()
 	return p.SaveWithRollback(path)
+}
+
+func SnapshotToBackup(path string) error {
+	if path == "" {
+		return fmt.Errorf("snapshot path must not be empty")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("snapshot: read source: %w", err)
+	}
+	snapshotPath := path + ".snapshot.bak"
+	if err := os.WriteFile(snapshotPath, data, 0o644); err != nil {
+		return fmt.Errorf("snapshot: write: %w", err)
+	}
+	return nil
+}
+
+func RestoreFromBackup(path string) error {
+	if path == "" {
+		return fmt.Errorf("restore path must not be empty")
+	}
+	snapshotPath := path + ".snapshot.bak"
+	data, err := os.ReadFile(snapshotPath)
+	if err != nil {
+		return fmt.Errorf("restore: read snapshot: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("restore: write: %w", err)
+	}
+	return nil
 }
