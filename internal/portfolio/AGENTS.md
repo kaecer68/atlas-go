@@ -9,7 +9,7 @@
 - Factor Change Protocol (§12) 不被破壞
 - PR #684 (executors.go 1284 → 11 檔) 是此原則的範本
 
-目前 `FactorEngine` 已拆分為 11 個檔案（見 §2.0）。
+目前 `FactorEngine` 已拆分為 12 個檔案（見 §2.0）。
 
 ---
 
@@ -31,26 +31,26 @@
     - `RawInputs`: 原始輸入數值 (如 P/E, P/B, 20d Volatility)。
     - `IsFallback`: 標記是否因資料缺失而使用猜測值。
 - **Fallback 行為**：當歷史資料不足時，Momentum 會回退至 intraday return；Value/Quality/Liquidity 則回退至固定常數 (`0.1`/`0.05`/`0.0`)。
-- **主要檔案**：見 §2.0 檔案地圖（11 個同 package 檔案，按職責分離）。`factor_engine.go` 為 entry stub。
+- **主要檔案**：見 §2.0 檔案地圖（12 個同 package 檔案，按職責分離）。`factor_engine.go` 為 entry stub。
 
-### 2.0 FactorEngine 檔案地圖（11 個同 package 檔案）
+### 2.0 FactorEngine 檔案地圖（12 個同 package 檔案）
 
-2026-06 完成 `factor_engine.go` (1289 → 16 行 entry stub) 拆分為 11 個檔案。每個檔案獨立可編譯、無 consumer 修改、Layer 3 snapshot 仍對齊 417 個 public symbol。
+2026-06 完成 `factor_engine.go` (1289 → 12 行 entry stub) 拆分為 12 個檔案（1 entry stub + 11 職責分離檔案）。每個檔案獨立可編譯、無 consumer 修改、Layer 3 snapshot 仍對齊 417 個 public symbol。
 
 | 檔案 | 行數（約） | 職責 | 公開符號 |
 |------|-----------|------|---------|
-| `factor_engine.go` | 16 | Entry stub — package doc 指向各檔 | （無） |
-| `factor_engine_types.go` | 80 | 公開型別 + 介面 + struct | `QuoteProvider`, `CorporateActionProvider`, `FactorEngine`, `PreciousMetalsContext`, `PMContextProvider`, `NarrativeProviderFunc`, `IndustryCycleProviderFunc`, `LinkageProviderFunc`, `TSMCProviderFunc` |
-| `factor_engine_constructors.go` | 160 | 建構與注入入口 | `NewFactorEngine`, `WithHistoricalPrices`, `WithFundamentalProvider`, `WithParameters`, `WithNarrativeProvider`, `WithIndustryCycleProvider`, `WithLinkageProvider`, `WithTSMCProvider`, `WithCorporateActionProvider`, `SetCycleTracker`, `SetCycleCardBuilder`, `WithPreciousMetalsProvider`, `WithETFAnalyzer`, `GetETFAnalyzer` |
-| `factor_engine_helpers.go` | 90 | Helpers + TTL 冪等快取 + 產業分類 | `isFinite`, `preciousMetalsRegistry`, `isPreciousMetal`, `IsPreciousMetal`, `ensureAdjusted`, `classifyIndustry` |
-| `factor_engine_momentum.go` | 65 | Momentum 因子 | `CalculateMomentumScore`, `calculateMomentumDetail` |
-| `factor_engine_value.go` | 145 | Value 因子（SCOR-02/03） | `CalculateValueScore`, `calculateValueDetail` |
-| `factor_engine_quality.go` | 80 | Quality 因子 | `CalculateQualityScore`, `calculateQualityDetail` |
-| `factor_engine_institutional.go` | 45 | Institutional Sentiment 因子 | `CalculateInstitutionalSentimentScore` |
-| `factor_engine_liquidity.go` | 50 | Liquidity 因子（Amihud ILLIQ） | `CalculateLiquidityScore` |
-| `factor_engine_aggregate.go` | 320 | Aggregate 計算 + SCOR-04 fallback reduction | `CalculateAllScores`, `CalculateAllScoresWithBreakdown` |
-| `factor_engine_etf.go` | 50 | ETF 因子 + NAV 刷新（public，被 cmd/atlas 呼叫） | `CalculateETFScore`, `RefreshETFNAV` |
-| `factor_engine_precious_metals.go` | 300 | Precious Metals 因子 + 9 sub-factor（Erb & Harvey 2013） | `CalculatePreciousMetalsScore` (+ 9 private `pm*Score`/`getPMContext`/`normalizeImportYoY`) |
+| `factor_engine.go` | 12 | Entry stub — package doc 指向各檔 | （無） |
+| `factor_engine_types.go` | 81 | 公開型別 + 介面 + struct | `QuoteProvider`, `CorporateActionProvider`, `FactorEngine`, `PreciousMetalsContext`, `PMContextProvider`, `NarrativeProviderFunc`, `IndustryCycleProviderFunc`, `LinkageProviderFunc`, `TSMCProviderFunc` |
+| `factor_engine_constructors.go` | 181 | 建構與注入入口 | `NewFactorEngine`, `WithHistoricalPrices`, `WithFundamentalProvider`, `WithParameters`, `WithNarrativeProvider`, `WithIndustryCycleProvider`, `WithLinkageProvider`, `WithTSMCProvider`, `WithCorporateActionProvider`, `SetCycleTracker`, `SetCycleCardBuilder`, `WithPreciousMetalsProvider`, `WithETFAnalyzer`, `GetETFAnalyzer` |
+| `factor_engine_helpers.go` | 103 | Helpers + TTL 冪等快取 + 產業分類 | `isFinite`, `preciousMetalsRegistry`, `isPreciousMetal`, `IsPreciousMetal`, `ensureAdjusted`, `classifyIndustry` |
+| `factor_engine_momentum.go` | 74 | Momentum 因子 | `CalculateMomentumScore`, `calculateMomentumDetail` |
+| `factor_engine_value.go` | 158 | Value 因子（SCOR-02/03） | `CalculateValueScore`, `calculateValueDetail` |
+| `factor_engine_quality.go` | 94 | Quality 因子 | `CalculateQualityScore`, `calculateQualityDetail` |
+| `factor_engine_institutional.go` | 48 | Institutional Sentiment 因子 | `CalculateInstitutionalSentimentScore` |
+| `factor_engine_liquidity.go` | 54 | Liquidity 因子（Amihud ILLIQ） | `CalculateLiquidityScore` |
+| `factor_engine_aggregate.go` | 324 | Aggregate 計算 + SCOR-04 fallback reduction | `CalculateAllScores`, `CalculateAllScoresWithBreakdown` |
+| `factor_engine_etf.go` | 55 | ETF 因子 + NAV 刷新（public，被 cmd/atlas 呼叫） | `CalculateETFScore`, `RefreshETFNAV` |
+| `factor_engine_precious_metals.go` | 301 | Precious Metals 因子 + 9 sub-factor（Erb & Harvey 2013） | `CalculatePreciousMetalsScore` (+ 9 private `pm*Score`/`getPMContext`/`normalizeImportYoY`) |
 
 **進入任一 `factor_engine_*.go` 檔案修改前必讀 §10.2**（Corporate Action TTL 冪等性 + 24h TTL 邏輯）。`ensureAdjusted` 不可在重構時破壞 `adjustedSymbols map` 的 TTL 語意，否則 `TestEnsureAdjustedCachesWithinTTL` / `TestEnsureAdjustedRefetchesAfterTTL` 會失敗。
 
@@ -78,7 +78,7 @@
     - 外資：`TWSECapitalFlowProvider.GetForeignInvestment()`
     - 法人：`TWSECapitalFlowProvider.GetDomesticInstitutional()`
     - 券資比：`TWSEBalanceProvider.GetMarginBalance()`
-- **主要檔案**：功能已實作於 `factor_engine.go` 的 `CalculateInstitutionalSentimentScore()`
+- **主要檔案**：功能已實作於 `factor_engine_institutional.go` 的 `CalculateInstitutionalSentimentScore()`
 
 ### 2.3. Liquidity (流動性因子)
 - **計算方式**（Amihud ILLIQ proxy）：
@@ -88,7 +88,7 @@
 - **閾值**：
     - ILLIQ > 1.0：低流動性（因子權重調降）
     - ILLIQ < 0.1：高流動性（正常權重）
-- **主要檔案**：功能已實作於 `factor_engine.go` 的 `CalculateLiquidityScore()`
+- **主要檔案**：功能已實作於 `factor_engine_liquidity.go` 的 `CalculateLiquidityScore()`
 
 ### 2.4. FactorWeightEngine (動態權重引擎)
 - **職責**：根據市場事件與 Regime 動態調整因子權重，並確保權重總和為 1.0。
@@ -232,7 +232,7 @@
 - **行動排序**: caller 負責按 ExDate 升序排序；未知 symbol 靜默忽略。
 
 #### 10.2 Corporate Action Integration in FactorEngine (P1-2-γ)
-- **Interface**: `CorporateActionProvider` defined in `factor_engine.go:43-47` — single method `GetCorporateActions(ctx, symbols, from, to) ([]domain.CorporateAction, error)`.
+- **Interface**: `CorporateActionProvider` defined in `factor_engine_types.go:19-21` — single method `GetCorporateActions(ctx, symbols, from, to) ([]domain.CorporateAction, error)`.
 - **Injection**: `WithCorporateActionProvider(CorporateActionProvider)` setter attaches a provider to `FactorEngine`.
 - **Internal state**:
   - `corpActions CorporateActionProvider` — the attached provider (nil = skip adjustment)
