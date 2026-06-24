@@ -114,8 +114,8 @@
 
 ### Event Subscriptions
 
-- `EventPositionUpdate`（v1 既有）：累積 `symbol → MarketValue` snapshot map
-- `EventRegimeChangeConfirmed`（v2 新增）：更新 `currentRegime` 並重置 `prevTotal = 0`（re-baseline）
+- `EventPositionUpdate`：v1 與 v2 detector 皆訂閱，累積 `symbol → MarketValue` snapshot map
+- `EventRegimeChangeConfirmed`：**僅 v2 detector 訂閱**（`d.provider != nil` 時）。`NewDriftDetector(bus)` 產出的 v1 detector 不訂閱此事件，與 v1 既有行為一致。v2 detector 訂閱後會更新 `currentRegime` 並重置 `prevTotal = 0`（re-baseline）
 
 ### 閾值 (Thresholds)
 
@@ -140,7 +140,7 @@
 | `new_regime` 為 string | `regime_debouncer` 透過 `string()` 將 `domain.Regime` 轉為 string。**不可** type-assert 為 `domain.Regime`。 |
 | Nil provider graceful | `NewDriftDetectorWithTargets(bus, nil)` 必須保留 v1 行為：concentration/turnover 偵測照常，target_drift 不 emit，v2 欄位不出現於 payload。`thresholds.target_drift` 一律存在（常數）。 |
 | Regime change re-baseline | `onRegimeChangeConfirmed` 將 `prevTotal = 0` 而非 current total。**這是預期行為**：下一次 `checkPeriod` 會視為首次檢查並建立新 baseline，避免 regime 切換時的偽 turnover 事件。 |
-| `Stop()` 必須取消兩個訂閱 | `d.regimeSub` 與 `d.sub` 都必須取消（nil-safe）。漏掉其中一個會造成 goroutine 洩漏。 |
+| `Stop()` 必須取消兩個訂閱 | v2 detector：`d.regimeSub` 與 `d.sub` 都必須取消（nil-safe）。v1 detector：只有 `d.sub`，`d.regimeSub` 為零值，nil-safe check 確保不 panic。漏掉任何一個 subscription 會造成 goroutine 洩漏。 |
 | Symbol 不在 target map | 視為 `target = 0`，drift = `actual_weight`。`TestDriftDetector_V2SymbolNotInTargetMap` 驗證此行為。 |
 | v1 payload 欄位不可變更 | `max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds` 為既有契約，**append-only**。v2 僅在後方新增欄位。 |
 | `max_drift_symbol` 確定性 | Go map 迭代順序不確定，`max_drift_symbol` 在 drift 平手時可能不固定。已用 `sort.Strings` 排序 symbol keys 確保確定性。 |
