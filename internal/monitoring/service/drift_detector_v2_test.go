@@ -407,6 +407,89 @@ func (c *concurrentCountingProvider) GetTargetWeights(regime string) map[string]
 	return map[string]float64{"2330": 0.30, "2454": 0.25}
 }
 
+type regimeRecordingProvider struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (p *regimeRecordingProvider) GetTargetWeights(regime string) map[string]float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.calls = append(p.calls, regime)
+	return map[string]float64{"2330": 0.5}
+}
+
+func (p *regimeRecordingProvider) callCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.calls)
+}
+
+func TestDriftDetector_V2RegimeChangeTriggersNewProviderQuery(t *testing.T) {
+	bus := &driftRecordingBus{}
+	provider := &regimeRecordingProvider{}
+	d := NewDriftDetectorWithTargets(bus, provider).(*driftDetector)
+
+	dispatchPosition(d, "2330", 200_000, "added")
+	d.checkPeriod(time.Now())
+	d.checkPeriod(time.Now().Add(5 * time.Minute))
+
+	_ = d.onRegimeChangeConfirmed(context.Background(), eventbus.BusEvent{
+		Type:    eventbus.EventRegimeChangeConfirmed,
+		Payload: map[string]any{"new_regime": "BULL"},
+	})
+
+	d.checkPeriod(time.Now().Add(10 * time.Minute))
+	d.checkPeriod(time.Now().Add(15 * time.Minute))
+
+	provider.mu.Lock()
+	afterCalls := len(provider.calls)
+	lastAfter := ""
+	if afterCalls > 0 {
+		lastAfter = provider.calls[afterCalls-1]
+	}
+	provider.mu.Unlock()
+
+	if afterCalls == 0 {
+		t.Fatal("expected provider to be queried after regime change, got 0 calls")
+	}
+	if lastAfter != "BULL" {
+		t.Errorf("expected last provider query to use new regime BULL, got %q", lastAfter)
+	}
+}
+
+func TestDriftDetector_V2EmptyRegimeStringPassesToProvider(t *testing.T) {
+	bus := &driftRecordingBus{}
+	provider := &regimeRecordingProvider{}
+	d := NewDriftDetectorWithTargets(bus, provider).(*driftDetector)
+
+	dispatchPosition(d, "2330", 200_000, "added")
+	d.checkPeriod(time.Now())
+
+	provider.mu.Lock()
+	firstRegime := ""
+	if len(provider.calls) > 0 {
+		firstRegime = provider.calls[0]
+	}
+	provider.mu.Unlock()
+	if firstRegime != "" {
+		t.Errorf("expected first provider query to use empty regime (no regime change yet), got %q", firstRegime)
+	}
+}
+
+func TestDriftDetector_V2StopCancelsBothSubscriptions(t *testing.T) {
+	bus := &regimeSpyBus{}
+	provider := &stubTargetProvider{weights: map[string]float64{"2330": 0.5}}
+	d := NewDriftDetectorWithTargets(bus, provider).(*driftDetector)
+
+	if err := d.Start(context.Background()); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	if err := d.Stop(); err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+}
+
 type regimeSpyBus struct {
 	driftRecordingBus
 	subscribeCount map[eventbus.EventType]int
