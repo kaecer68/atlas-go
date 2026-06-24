@@ -42,6 +42,7 @@ func TestPortfolio_PublicAPI(t *testing.T) {
 		"factor_engine_constructors.go",
 		"factor_engine_helpers.go",
 		"factor_engine_momentum.go",
+		"factor_engine_quality.go",
 		"factor_engine_types.go",
 		"factor_engine_value.go",
 		"factor_weight_calibrator.go",
