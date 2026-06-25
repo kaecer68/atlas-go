@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
 // Gateway is the unified entry point for all data channels.
@@ -83,7 +81,7 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 		g.cache.Set(channelID, result)
 
 		// 5. Record health
-		_ = g.health.Record(channelID, "ok", "", monitoring.WithLatencyMs(result.Meta.LatencyMs))
+		_ = g.health.Record(channelID, "ok", "", WithLatencyMs(result.Meta.LatencyMs))
 
 		return nil
 	})

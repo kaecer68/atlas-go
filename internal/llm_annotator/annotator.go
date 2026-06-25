@@ -143,7 +143,13 @@ func NewKimiClient(cfg Config) (*KimiClient, error) {
 		br := cfg.Breaker
 		originalCb := budgetCb
 		budgetCb = func(u Usage) {
+			// apigateway.ForceOpen does not arm manual override, so a
+			// follow-up success within the recovery window would still
+			// auto-close the breaker and re-enable LLM calls. Pairing it
+			// with SetManualOverride(true) preserves the budget semantic
+			// of "stay open until an operator resets".
 			br.ForceOpen()
+			br.SetManualOverride(true)
 			originalCb(u)
 		}
 	}
@@ -176,7 +182,7 @@ func (k *KimiClient) BreakerState() string {
 	if k.breaker == nil {
 		return "disabled"
 	}
-	return k.breaker.State().String()
+	return k.breaker.Snapshot()
 }
 
 // Usage returns the cumulative token/request snapshot for this client.

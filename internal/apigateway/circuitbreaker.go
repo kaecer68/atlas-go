@@ -3,6 +3,7 @@ package apigateway
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,6 +40,11 @@ type CircuitBreaker struct {
 	// channel breakers do not set this directly; SetManualOverride is
 	// the explicit entry point for callers that need this guarantee.
 	manualOverride bool
+	// now holds the clock source as an atomic.Pointer so timeNow() can
+	// read it without acquiring cb.mu (the lock is already held by
+	// Call / ForceOpen when they call timeNow). Defaults to time.Now
+	// via NewCircuitBreaker; tests can swap it via WithNowFunc.
+	now atomic.Pointer[func() time.Time]
 }
 
 // NewCircuitBreaker creates a breaker for a channel.
@@ -48,11 +54,39 @@ func NewCircuitBreaker(channelID string, maxFailures ...int) *CircuitBreaker {
 	if len(maxFailures) > 0 && maxFailures[0] > 0 {
 		threshold = maxFailures[0]
 	}
-	return &CircuitBreaker{
+	cb := &CircuitBreaker{
 		channelID:   channelID,
 		state:       StateClosed,
 		maxFailures: threshold,
 	}
+	defaultNow := time.Now
+	cb.now.Store(&defaultNow)
+	return cb
+}
+
+// WithNowFunc replaces the clock used for recovery-timeout checks and
+// lastFailure bookkeeping. nil restores time.Now. Test-only entry
+// point — production code must leave the default clock in place.
+// Returns the receiver for fluent-style chaining in test setup.
+func (cb *CircuitBreaker) WithNowFunc(now func() time.Time) *CircuitBreaker {
+	if now == nil {
+		var defaultNow = time.Now
+		cb.now.Store(&defaultNow)
+		return cb
+	}
+	cb.now.Store(&now)
+	return cb
+}
+
+// timeNow returns the injected clock's current time, falling back to
+// time.Now if the field is nil. Lock-free — safe to call while cb.mu
+// is already held by Call / ForceOpen.
+func (cb *CircuitBreaker) timeNow() time.Time {
+	p := cb.now.Load()
+	if p == nil {
+		return time.Now()
+	}
+	return (*p)()
 }
 
 // Call executes fn if the circuit allows it.
@@ -60,7 +94,7 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 	cb.mu.Lock()
 
 	if cb.state == StateOpen {
-		if time.Since(cb.lastFailure) < CircuitBreakerRecoveryTimeout {
+		if cb.timeNow().Sub(cb.lastFailure) < CircuitBreakerRecoveryTimeout {
 			cb.mu.Unlock()
 			return fmt.Errorf("circuit breaker open for channel %s", cb.channelID)
 		}
@@ -86,7 +120,7 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 
 	if err != nil {
 		cb.failures++
-		cb.lastFailure = time.Now()
+		cb.lastFailure = cb.timeNow()
 		if cb.failures >= cb.maxFailures {
 			cb.state = StateOpen
 		}
@@ -119,7 +153,7 @@ func (cb *CircuitBreaker) ForceOpen() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	cb.state = StateOpen
-	cb.lastFailure = time.Now()
+	cb.lastFailure = cb.timeNow()
 	cb.failures = cb.maxFailures
 }
 

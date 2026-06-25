@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-
-	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
 func newTestHealthStore(t *testing.T) *UnifiedHealthStore {
@@ -25,7 +23,7 @@ func TestNewUnifiedHealthStore(t *testing.T) {
 
 func TestUnifiedHealthStore_Record(t *testing.T) {
 	s := newTestHealthStore(t)
-	err := s.Record("test_channel", "ok", "", monitoring.WithLatencyMs(100))
+	err := s.Record("test_channel", "ok", "", WithLatencyMs(100))
 	if err != nil {
 		t.Fatalf("Record failed: %v", err)
 	}
@@ -107,12 +105,12 @@ func TestUnifiedHealthStore_Alerts(t *testing.T) {
 	}
 }
 
-func TestUnifiedHealthStore_RecordChannelFetch_Error(t *testing.T) {
+func TestUnifiedHealthStore_RecordChannelHealthFromResult_Error(t *testing.T) {
 	s := newTestHealthStore(t)
-	RecordChannelFetch(s, "ch1", nil, errors.New("fetch failed"))
+	RecordChannelHealthFromResult(s, "ch1", nil, errors.New("fetch failed"))
 	rec := s.Get("ch1")
 	if rec == nil {
-		t.Fatal("Get returned nil after RecordChannelFetch error")
+		t.Fatal("Get returned nil after RecordChannelHealthFromResult error")
 	}
 	if rec.Status != "error" {
 		t.Errorf("Status = %q, want error", rec.Status)
@@ -122,7 +120,7 @@ func TestUnifiedHealthStore_RecordChannelFetch_Error(t *testing.T) {
 	}
 }
 
-func TestUnifiedHealthStore_RecordChannelFetch_Success(t *testing.T) {
+func TestUnifiedHealthStore_RecordChannelHealthFromResult_Success(t *testing.T) {
 	s := newTestHealthStore(t)
 	result := &FetchResult{
 		Meta: FetchMetadata{
@@ -130,17 +128,17 @@ func TestUnifiedHealthStore_RecordChannelFetch_Success(t *testing.T) {
 			RateLimitRemaining: 99,
 		},
 	}
-	RecordChannelFetch(s, "ch1", result, nil)
+	RecordChannelHealthFromResult(s, "ch1", result, nil)
 	rec := s.Get("ch1")
 	if rec == nil {
-		t.Fatal("Get returned nil after RecordChannelFetch success")
+		t.Fatal("Get returned nil after RecordChannelHealthFromResult success")
 	}
 	if rec.Status != "ok" {
 		t.Errorf("Status = %q, want ok", rec.Status)
 	}
 }
 
-func TestUnifiedHealthStore_RecordChannelFetch_Success_ZeroRateLimit(t *testing.T) {
+func TestUnifiedHealthStore_RecordChannelHealthFromResult_Success_ZeroRateLimit(t *testing.T) {
 	s := newTestHealthStore(t)
 	result := &FetchResult{
 		Meta: FetchMetadata{
@@ -148,10 +146,10 @@ func TestUnifiedHealthStore_RecordChannelFetch_Success_ZeroRateLimit(t *testing.
 			RateLimitRemaining: 0,
 		},
 	}
-	RecordChannelFetch(s, "ch1", result, nil)
+	RecordChannelHealthFromResult(s, "ch1", result, nil)
 	rec := s.Get("ch1")
 	if rec == nil {
-		t.Fatal("Get returned nil after RecordChannelFetch success")
+		t.Fatal("Get returned nil after RecordChannelHealthFromResult success")
 	}
 	if rec.Status != "ok" {
 		t.Errorf("Status = %q, want ok", rec.Status)

@@ -3,159 +3,117 @@ package llm_annotator
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 )
 
-// Circuit breaker defaults for the LLM annotator. The thresholds mirror
-// internal/apigateway/circuitbreaker.go but are local copies because the
-// apigateway package transitively imports llm_annotator via monitoring,
-// creating an import cycle.
+// CircuitState is a Go 1.9+ type alias for apigateway.State. The
+// Wave 4-era codebase compared against named constants (CircuitClosed /
+// CircuitOpen / CircuitHalfOpen) rather than the integer values directly,
+// so we keep both the alias and the named constants for backward compat.
+type CircuitState = apigateway.State
+
+// State constants — preserved from the pre-Phase 2 local CB so existing
+// switch statements and test assertions keep compiling. They map 1:1 to
+// the apigateway.State constants.
 const (
-	cbFailureThreshold = 3
-	cbRecoveryTimeout  = 5 * time.Minute
-	cbHalfOpenMaxCalls = 2
+	CircuitClosed   = apigateway.StateClosed
+	CircuitOpen     = apigateway.StateOpen
+	CircuitHalfOpen = apigateway.StateHalfOpen
 )
 
-// ErrCircuitOpen is returned by Annotate when the breaker rejects a call.
-// Callers should treat it like ErrUnavailable — fallback to rule-based
-// attribution.
-var ErrCircuitOpen = errors.New("llm annotator circuit breaker open")
+// ErrCircuitOpen is returned when the breaker rejects a call. The
+// pre-Phase 2 callers (e.g. monitoring/api/strategies) relied on
+// errors.Is(err, ErrCircuitOpen); we keep the sentinel here for backward
+// compat with downstream tools that grep on this exact message.
+var ErrCircuitOpen = errors.New("circuit breaker open")
 
-// CircuitState is the breaker's high-level state.
-type CircuitState int
+// CircuitBreaker is a thin facade over *apigateway.CircuitBreaker that
+// preserves the Wave 4-era API surface that llm_annotator depended on:
+// CircuitState type alias, ErrCircuitOpen sentinel, Allow(), Snapshot(),
+// and the WithNowFunc clock-injection hook. All state mutations
+// delegate to the canonical apigateway breaker — the wrapper exists only
+// for backward compatibility and to keep the migration surface small.
+type CircuitBreaker struct {
+	cb *apigateway.CircuitBreaker
+}
 
-const (
-	CircuitClosed   CircuitState = iota // normal operation
-	CircuitOpen                         // reject calls until recovery timeout
-	CircuitHalfOpen                     // allow a limited number of test calls
-)
+// newCircuitBreaker constructs a default-initialised breaker for use
+// inside llm_annotator.Config. The breaker is wired with channel id
+// "llm_annotator" so health endpoints can identify it.
+func newCircuitBreaker() *CircuitBreaker {
+	return &CircuitBreaker{
+		cb: apigateway.NewCircuitBreaker("llm_annotator"),
+	}
+}
 
-func (s CircuitState) String() string {
-	switch s {
-	case CircuitClosed:
+// WithNowFunc injects a deterministic clock for recovery-timeout
+// assertions. Test-only entry point — production code must leave the
+// default clock in place. Returns the receiver for fluent chaining.
+func (c *CircuitBreaker) WithNowFunc(now func() time.Time) *CircuitBreaker {
+	c.cb.WithNowFunc(now)
+	return c
+}
+
+// Call delegates to apigateway.CircuitBreaker.Call.
+func (c *CircuitBreaker) Call(fn func() error) error {
+	return c.cb.Call(fn)
+}
+
+// IsOpen reports whether the breaker is in the open state.
+func (c *CircuitBreaker) IsOpen() bool {
+	return c.cb.IsOpen()
+}
+
+// State returns the current breaker state as a CircuitState (alias for
+// apigateway.State).
+func (c *CircuitBreaker) State() CircuitState {
+	return CircuitState(c.cb.State())
+}
+
+// ForceOpen delegates to apigateway.CircuitBreaker.ForceOpen.
+func (c *CircuitBreaker) ForceOpen() {
+	c.cb.ForceOpen()
+}
+
+// SetManualOverride delegates to apigateway.CircuitBreaker.SetManualOverride.
+// Used by the budget-callback wiring in NewKimiClient to keep the breaker
+// open across successful calls until an operator calls Reset.
+func (c *CircuitBreaker) SetManualOverride(enabled bool) {
+	c.cb.SetManualOverride(enabled)
+}
+
+// Reset delegates to apigateway.CircuitBreaker.Reset.
+func (c *CircuitBreaker) Reset() {
+	c.cb.Reset()
+}
+
+// Allow reports whether the next call would proceed without invoking a
+// function. Returns (false, ErrCircuitOpen-wrapped) if the breaker would
+// reject the call. The apigateway CB has no Allow() — this is a Wave 4-era
+// helper that survives in the wrapper for backward compat.
+func (c *CircuitBreaker) Allow() (bool, error) {
+	err := c.cb.Call(func() error { return nil })
+	if err == nil {
+		return true, nil
+	}
+	return false, fmt.Errorf("%w: %v", ErrCircuitOpen, err)
+}
+
+// Snapshot returns the current breaker state as a string
+// ("closed"/"open"/"half-open"/"unknown"). The apigateway CB exposes
+// this indirectly via CircuitBreakerManager.Status; the wrapper offers a
+// single-breaker view that mirrors the pre-Phase 2 API.
+func (c *CircuitBreaker) Snapshot() string {
+	switch c.cb.State() {
+	case apigateway.StateClosed:
 		return "closed"
-	case CircuitOpen:
+	case apigateway.StateOpen:
 		return "open"
-	case CircuitHalfOpen:
+	case apigateway.StateHalfOpen:
 		return "half-open"
 	default:
 		return "unknown"
 	}
-}
-
-// CircuitBreaker tracks consecutive failures of the LLM annotator. After
-// cbFailureThreshold consecutive failures the breaker opens for
-// cbRecoveryTimeout, after which it transitions to half-open and lets
-// cbHalfOpenMaxCalls test calls through. A single success closes the
-// breaker; a single failure reopens it.
-//
-// ForceOpen sets manualOverride, which prevents subsequent successes
-// from auto-closing the breaker — the budget callback's "stop calling
-// the LLM" decision persists until an operator calls Reset.
-//
-// NOTE: This is a local implementation rather than a reuse of
-// internal/apigateway/circuitbreaker.go because of an unavoidable
-// import cycle: monitoring.dashboard_api imports llm_annotator, and
-// monitoring.api.scheduler imports apigateway, so llm_annotator cannot
-// import apigateway. The local type also has a smaller surface
-// (Reset, manualOverride, ErrCircuitOpen sentinel) that the apigateway
-// type does not need but this client does.
-type CircuitBreaker struct {
-	mu             sync.RWMutex
-	state          CircuitState
-	failures       int
-	lastFailure    time.Time
-	halfOpenCalls  int
-	now            func() time.Time
-	manualOverride bool
-}
-
-func newCircuitBreaker() *CircuitBreaker {
-	return &CircuitBreaker{state: CircuitClosed, now: time.Now}
-}
-
-// State returns the current breaker state. Safe for any goroutine.
-func (cb *CircuitBreaker) State() CircuitState {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
-	return cb.state
-}
-
-// IsOpen reports whether the breaker is in the open state.
-func (cb *CircuitBreaker) IsOpen() bool {
-	return cb.State() == CircuitOpen
-}
-
-// ForceOpen manually opens the breaker. The recovery timeout starts now
-// and manualOverride is set so that subsequent successes do NOT
-// auto-close the breaker — the budget callback's "stop calling the LLM"
-// decision persists until an operator calls Reset.
-func (cb *CircuitBreaker) ForceOpen() {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
-	cb.state = CircuitOpen
-	cb.lastFailure = cb.now()
-	cb.failures = cbFailureThreshold
-	cb.manualOverride = true
-}
-
-// Reset moves the breaker back to the closed state and clears the manual
-// override flag. Used by tests and when an operator manually clears the
-// failure state.
-func (cb *CircuitBreaker) Reset() {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
-	cb.state = CircuitClosed
-	cb.failures = 0
-	cb.halfOpenCalls = 0
-	cb.manualOverride = false
-}
-
-// Call runs fn under the breaker. If the breaker is open and the recovery
-// timeout has not elapsed, Call returns ErrCircuitOpen without invoking
-// fn. If fn returns an error, the failure is recorded; if fn returns nil,
-// the breaker is reset to closed.
-func (cb *CircuitBreaker) Call(fn func() error) error {
-	cb.mu.Lock()
-	now := cb.now()
-
-	if cb.state == CircuitOpen {
-		if now.Sub(cb.lastFailure) < cbRecoveryTimeout {
-			cb.mu.Unlock()
-			return fmt.Errorf("%w: recovery in %s",
-				ErrCircuitOpen, cbRecoveryTimeout-now.Sub(cb.lastFailure))
-		}
-		cb.state = CircuitHalfOpen
-		cb.halfOpenCalls = 0
-	}
-
-	if cb.state == CircuitHalfOpen && cb.halfOpenCalls >= cbHalfOpenMaxCalls {
-		cb.mu.Unlock()
-		return fmt.Errorf("%w: half-open limit reached", ErrCircuitOpen)
-	}
-
-	if cb.state == CircuitHalfOpen {
-		cb.halfOpenCalls++
-	}
-	cb.mu.Unlock()
-
-	err := fn()
-
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
-	if err != nil {
-		cb.failures++
-		cb.lastFailure = cb.now()
-		if cb.failures >= cbFailureThreshold {
-			cb.state = CircuitOpen
-		}
-		return err
-	}
-	cb.failures = 0
-	if !cb.manualOverride {
-		cb.state = CircuitClosed
-		cb.halfOpenCalls = 0
-	}
-	return nil
 }

@@ -1,4 +1,4 @@
-package monitoring
+package apigateway
 
 import (
 	"context"
@@ -13,6 +13,12 @@ import (
 )
 
 // ChannelHealthRecord stores the last fetch result for a single channel.
+//
+// Originally declared in internal/monitoring/channel_health.go; relocated
+// here in Wave 12 Phase 2 (Issue #731) to break the 4-layer transitive
+// import cycle `llm_annotator → apigateway → monitoring → llm/capabilities →
+// llm_annotator`. Monitoring keeps type aliases for backward compatibility;
+// new code should depend on apigateway directly.
 type ChannelHealthRecord struct {
 	Status             string   `json:"status"`        // ok | warn | error | inactive
 	LastFetchAt        string   `json:"last_fetch_at"` // RFC3339
@@ -39,6 +45,10 @@ type ChannelFetchLogEntry struct {
 const fetchLogCap = 50
 
 // ChannelHealthStore persists channel fetch outcomes.
+//
+// Originally declared in internal/monitoring/channel_health.go; relocated
+// here in Wave 12 Phase 2 (Issue #731) — see package doc on
+// ChannelHealthRecord for the cycle-breaking rationale.
 type ChannelHealthStore struct {
 	path         string
 	fetchLogPath string
