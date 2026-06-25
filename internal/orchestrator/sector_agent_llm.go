@@ -2,11 +2,21 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/llm"
 )
+
+// toolNames mirrors internal/llm.toolNames (which is package-private).
+func toolNames(tools []llm.Tool) []string {
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = t.Name
+	}
+	return names
+}
 
 // SectorAgentLLM is the template for an LLM-driven sector agent that
 // uses the plan → tool_call → reflect loop. It embeds AgentLoop and
@@ -112,12 +122,12 @@ func (a *SectorAgentLLM) PlanStep(ctx context.Context, symbol string, _ domain.R
 //
 // (PlanDriver != nil OR ReflectDriver != nil) AND Tools present →
 //
-//	dispatched to the matching tool via SafeInvokeHandler. Full
-//	tool-dispatch implementation lives in the L2.3 adapter PR
-//	(PR5a); for now this branch returns an explicit "not yet
-//	wired" error so callers see a clear signal instead of
-//	silent stubs.
-func (a *SectorAgentLLM) RunToolCall(_ context.Context, step PlanStep) (string, error) {
+//	dispatched to the matching tool via llm.SafeInvokeHandler, which
+//	also recovers from panicking handlers (Issue #711 #3).
+//	Lookup is linear over a.Tools (expected <10 entries per skill);
+//	an unknown tool name produces a clear error that lists the
+//	registered tools to help diagnose LLM hallucination.
+func (a *SectorAgentLLM) RunToolCall(ctx context.Context, step PlanStep) (string, error) {
 	if a.PlanDriver == nil && a.ReflectDriver == nil {
 		return "", ErrNotImplemented
 	}
@@ -128,7 +138,40 @@ func (a *SectorAgentLLM) RunToolCall(_ context.Context, step PlanStep) (string, 
 			a.Skill, step.ToolName,
 		))
 	}
-	return "", fmt.Errorf("sector_agent_llm.RunToolCall: tool dispatch not yet implemented for skill=%q tool=%q (PR5a)", a.Skill, step.ToolName)
+
+	// Linear search; slice is small (<10 per skill) and this avoids
+	// exposing a mutable registry that callers could race on.
+	var tool *llm.Tool
+	for i := range a.Tools {
+		if a.Tools[i].Name == step.ToolName {
+			tool = &a.Tools[i]
+			break
+		}
+	}
+	if tool == nil {
+		return "", fmt.Errorf(
+			"sector_agent_llm.RunToolCall: unknown tool %q for skill=%q (registered: %v)",
+			step.ToolName, a.Skill, toolNames(a.Tools),
+		)
+	}
+
+	// Marshal Args to the json.RawMessage contract that SafeInvokeHandler expects.
+	rawArgs, err := json.Marshal(step.Args)
+	if err != nil {
+		return "", fmt.Errorf(
+			"sector_agent_llm.RunToolCall: marshal args for tool %q (skill=%q): %w",
+			step.ToolName, a.Skill, err,
+		)
+	}
+
+	result, err := llm.SafeInvokeHandler(ctx, tool, rawArgs)
+	if err != nil {
+		return "", fmt.Errorf(
+			"sector_agent_llm.RunToolCall: tool %q (skill=%q): %w",
+			step.ToolName, a.Skill, err,
+		)
+	}
+	return string(result), nil
 }
 
 // Reflect satisfies PlanReflectRunner. Same caveat as PlanStep.

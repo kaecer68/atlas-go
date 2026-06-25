@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### fix(orchestrator): wire RunToolCall to llm.SafeInvokeHandler
+
+Closes the PR1 placeholder gap in `SectorAgentLLM.RunToolCall`. The L2.3 PoC path now dispatches registered tools via `llm.SafeInvokeHandler` (which also recovers from panicking handlers per Issue #711 #3) instead of returning the `not yet implemented` error. Lookup is linear over `a.Tools` (expected <10 per skill); an unknown tool name produces a clear error listing registered tools to help diagnose LLM hallucination. The corresponding E2E test (`TestSemiconductorLLMAgent_Recommend_ToolDispatchGap`) is renamed to `_HappyPath` and asserts the full plan → dispatch → reflect → return path succeeds with `ok=true`, the expected conviction, and the recorded plan/reflect call counts. No VERSION bump (follow-up fix to `0.0.0.21`).
+
 ## [0.0.0.21] - 2026-06-25
 
 Wave 10 L2.3 PoC completion (#732, #733) + Wave 11 L2.1 doc audit closure (#723, #730, #734). Closes the LLM-driven sector agent prototype path and the doc-audit followups across `internal/llm/`, `internal/llm_annotator/`, and `internal/orchestrator/`. Tagged as `0.0.0.21` (post-release of `0.0.0.20a`).
