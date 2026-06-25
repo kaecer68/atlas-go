@@ -159,6 +159,13 @@ func GetBufferedRiskGateEvents() []BufferedRiskGateEvent {
 	return result
 }
 
+// resetRiskGateBuffer clears the risk-gate buffer. Test-only helper.
+func resetRiskGateBuffer() {
+	lastRiskGateMutex.Lock()
+	defer lastRiskGateMutex.Unlock()
+	riskGateBuffer = nil
+}
+
 // BufferBacktestCompletedEvent stores a backtest-completed event for catchup by new SSE clients.
 func BufferBacktestCompletedEvent(event eventbus.BusEvent) {
 	lastBacktestCompletedMutex.Lock()
@@ -179,6 +186,13 @@ func GetBufferedBacktestCompletedEvents() []BufferedBacktestCompletedEvent {
 	out := make([]BufferedBacktestCompletedEvent, len(backtestCompletedBuffer))
 	copy(out, backtestCompletedBuffer)
 	return out
+}
+
+// resetBacktestCompletedBuffer clears the backtest-completed buffer. Test-only helper.
+func resetBacktestCompletedBuffer() {
+	lastBacktestCompletedMutex.Lock()
+	defer lastBacktestCompletedMutex.Unlock()
+	backtestCompletedBuffer = nil
 }
 
 // BufferedCalibrationCompletedEvent holds a published calibration-completed event for SSE catchup.
@@ -344,6 +358,22 @@ func BufferNarrativeEvent(event eventbus.BusEvent) {
 	}
 }
 
+// GetBufferedNarrativeEvents returns a snapshot of buffered narrative events for SSE catchup.
+func GetBufferedNarrativeEvents() []BufferedNarrativeEvent {
+	lastNarrativeMutex.RLock()
+	defer lastNarrativeMutex.RUnlock()
+	out := make([]BufferedNarrativeEvent, len(narrativeBuffer))
+	copy(out, narrativeBuffer)
+	return out
+}
+
+// resetNarrativeBuffer clears the narrative buffer. Test-only helper.
+func resetNarrativeBuffer() {
+	lastNarrativeMutex.Lock()
+	defer lastNarrativeMutex.Unlock()
+	narrativeBuffer = nil
+}
+
 // BufferPromotionRecordedEvent stores a promotion-recorded event for SSE catchup.
 func BufferPromotionRecordedEvent(event eventbus.BusEvent) {
 	lastPromotionMutex.Lock()
@@ -402,7 +432,7 @@ func resetHealthAlertBuffer() {
 	healthAlertBuffer = nil
 }
 
-// BufferChannelIndividualHealthEvent stores a channel individual health event for catchup by new SSE clients.
+// BufferChannelIndividualHealthEvent stores a channel individual health event for catchup by new SSE clients.// BufferChannelIndividualHealthEvent stores a channel individual health event for catchup by new SSE clients.
 func BufferChannelIndividualHealthEvent(event eventbus.BusEvent) {
 	lastChannelIndividualHealthMutex.Lock()
 	defer lastChannelIndividualHealthMutex.Unlock()

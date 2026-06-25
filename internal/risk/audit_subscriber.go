@@ -22,7 +22,27 @@ type AuditSubscriber struct {
 	persistMu sync.Mutex
 }
 
+// auditSubscribers is a process-wide registry keyed by bus pointer that
+// prevents double-registration of an AuditSubscriber on the same bus.
+// ChannelEventBus.Subscribe is a pure append, so a second call on the same
+// bus would cause every risk event to be persisted to JSONL twice — an
+// audit-log integrity violation for compliance-sensitive data.
+var (
+	auditSubscribersMu sync.Mutex
+	auditSubscribers   = make(map[*eventbus.ChannelEventBus]*AuditSubscriber)
+)
+
 func NewAuditSubscriber(bus *eventbus.ChannelEventBus) *AuditSubscriber {
+	auditSubscribersMu.Lock()
+	defer auditSubscribersMu.Unlock()
+	if existing, ok := auditSubscribers[bus]; ok {
+		// Double-registration on the same bus would cause every risk event
+		// to be logged + persisted twice. Return the existing subscriber
+		// and surface the issue so the caller can fix the wiring.
+		logging.Warn("risk", "audit_subscriber_already_registered",
+			"detail", "returning existing subscriber; refactor caller to reuse it")
+		return existing
+	}
 	a := &AuditSubscriber{
 		bus:       bus,
 		ledgerDir: config.Load().LedgerDir,
@@ -33,6 +53,7 @@ func NewAuditSubscriber(bus *eventbus.ChannelEventBus) *AuditSubscriber {
 	bus.Subscribe(eventbus.EventOrderFilled, a.log)
 	bus.Subscribe(eventbus.EventOrderRejected, a.log)
 	bus.Subscribe(eventbus.EventOrderPlaced, a.log)
+	auditSubscribers[bus] = a
 	return a
 }
 
