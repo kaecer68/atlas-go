@@ -126,7 +126,10 @@ func NewWave9Observability(bus eventbus.EventBus, opts ...Wave9Option) (*Wave9Ob
 }
 
 // Start idempotently starts all five detectors in the prescribed order.
-func (w *Wave9Observability) Start(ctx context.Context) error {
+// On any error during startup, all detectors that started successfully are
+// stopped before Start returns, and internal references are cleared so a
+// subsequent retry creates fresh instances instead of reusing stale ones.
+func (w *Wave9Observability) Start(ctx context.Context) (err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -134,10 +137,42 @@ func (w *Wave9Observability) Start(ctx context.Context) error {
 		return errors.New("wave9 observability already started")
 	}
 
+	// Track detectors that started successfully so we can stop them on partial
+	// failure. Stops run in reverse of start order (LIFO) to mirror the normal
+	// Stop() ordering semantics.
+	var (
+		startedMu sync.Mutex
+		started   []func() error
+	)
+	addStarted := func(stop func() error) {
+		startedMu.Lock()
+		defer startedMu.Unlock()
+		started = append(started, stop)
+	}
+	defer func() {
+		if err != nil {
+			for i := len(started) - 1; i >= 0; i-- {
+				if stopErr := started[i](); stopErr != nil {
+					logging.Warn("wave9_observability", "cleanup_stop_failed", logging.Err(stopErr))
+				}
+			}
+			// Clear references so a future Start() creates fresh instances
+			// rather than reusing the failed-attempt detectors (which are
+			// already stopped but still subscribed to the bus).
+			w.regimeDebouncer = nil
+			w.ingestionLagMonitor = nil
+			w.channelHealthSynthesizer = nil
+			w.factorWeightRegression = nil
+			w.driftDetector = nil
+			w.started = false
+		}
+	}()
+
 	w.regimeDebouncer = w.factory.newRegimeDebouncer(w.bus)
-	if err := w.regimeDebouncer.Start(ctx); err != nil {
+	if err = w.regimeDebouncer.Start(ctx); err != nil {
 		return fmt.Errorf("start regime debouncer: %w", err)
 	}
+	addStarted(w.regimeDebouncer.Stop)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 3)
@@ -146,41 +181,50 @@ func (w *Wave9Observability) Start(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		w.ingestionLagMonitor = w.factory.newIngestionLagMonitor(w.bus, w.ingestionLagProvider)
-		if err := w.ingestionLagMonitor.Start(ctx); err != nil {
-			errs <- fmt.Errorf("start ingestion lag monitor: %w", err)
+		if startErr := w.ingestionLagMonitor.Start(ctx); startErr != nil {
+			errs <- fmt.Errorf("start ingestion lag monitor: %w", startErr)
+			return
 		}
+		addStarted(w.ingestionLagMonitor.Stop)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		w.channelHealthSynthesizer = w.factory.newChannelHealthSynthesizer(w.bus, w.channelHealthProvider)
-		if err := w.channelHealthSynthesizer.Start(ctx); err != nil {
-			errs <- fmt.Errorf("start channel health synthesizer: %w", err)
+		if startErr := w.channelHealthSynthesizer.Start(ctx); startErr != nil {
+			errs <- fmt.Errorf("start channel health synthesizer: %w", startErr)
+			return
 		}
+		addStarted(w.channelHealthSynthesizer.Stop)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		w.factorWeightRegression = w.factory.newFactorWeightRegressionDetector(w.bus, w.weightProvider)
-		if err := w.factorWeightRegression.Start(ctx); err != nil {
-			errs <- fmt.Errorf("start factor weight regression detector: %w", err)
+		if startErr := w.factorWeightRegression.Start(ctx); startErr != nil {
+			errs <- fmt.Errorf("start factor weight regression detector: %w", startErr)
+			return
 		}
+		addStarted(w.factorWeightRegression.Stop)
 	}()
 
 	wg.Wait()
 	close(errs)
-	for err := range errs {
-		if err != nil {
+	for e := range errs {
+		if e != nil {
+			err = e
 			return err
 		}
 	}
 
 	w.driftDetector = w.factory.newDriftDetector(w.bus, w.targetWeightsProvider)
-	if err := w.driftDetector.Start(ctx); err != nil {
-		return fmt.Errorf("start drift detector: %w", err)
+	if startErr := w.driftDetector.Start(ctx); startErr != nil {
+		err = fmt.Errorf("start drift detector: %w", startErr)
+		return err
 	}
+	addStarted(w.driftDetector.Stop)
 
 	w.started = true
 	logging.Info("wave9_observability", "started")
