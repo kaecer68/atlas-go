@@ -1,6 +1,6 @@
 ---
 name: baseline
-description: "Skill for the Baseline area of atlas. 26 symbols across 6 files."
+description: "Skill for the Baseline area of atlas. 38 symbols across 8 files."
 auto_generated: true
 load_policy: "manual_only"
 ---
@@ -12,12 +12,12 @@ load_policy: "manual_only"
 
 # Baseline
 
-26 symbols | 6 files | Cohesion: 70%
+38 symbols | 8 files | Cohesion: 70%
 
 ## When to Use
 
-- Working with code in `internal/`
-- Understanding how TestRevert_LastPromotion, TestRevert_ToVersion, TestRevert_ToExperiment work
+- Working with code in `internal/baseline/`
+- Understanding how `Trigger`, `NewTrigger`, `Violation` and constraint evaluation work
 - Modifying baseline-related functionality
 
 ## Key Files
@@ -26,6 +26,8 @@ load_policy: "manual_only"
 |------|---------|
 | `internal/baseline/policy.go` | Save, ApplyConstraintCandidate, parseIntValue, parseInt64Value, parseFloatValue (+6) |
 | `internal/baseline/rollback_test.go` | TestRevert_LastPromotion, TestRevert_ToVersion, TestRevert_ToExperiment, TestRevert_ValidationErrors, TestGetPromotionHistory (+3) |
+| `internal/baseline/trigger.go` | Trigger, NewTrigger, Start, Stop, evaluate, Violation |
+| `internal/baseline/trigger_test.go` | TestTrigger_StartStopLifecycle, TestTrigger_Evaluate_StopLoss, TestTrigger_Evaluate_TakeProfit, TestTrigger_Evaluate_MaxHoldingDays, TestTrigger_OnPositionUpdate_Integration (+5) |
 | `cmd/revert-baseline/main.go` | main, showPromotionHistory, truncate |
 | `internal/baseline/policy_test.go` | TestPromoteAcceptedPromptExperiment, TestPromoteAcceptedConstraintExperiment |
 | `internal/baseline/manager.go` | NewManager |
@@ -38,8 +40,8 @@ Start here when exploring this area:
 - **`TestRevert_LastPromotion`** (Function) — `internal/baseline/rollback_test.go:8`
 - **`TestRevert_ToVersion`** (Function) — `internal/baseline/rollback_test.go:53`
 - **`TestRevert_ToExperiment`** (Function) — `internal/baseline/rollback_test.go:95`
-- **`TestRevert_ValidationErrors`** (Function) — `internal/baseline/rollback_test.go:126`
-- **`TestGetPromotionHistory`** (Function) — `internal/baseline/rollback_test.go:162`
+- **`TestTrigger_StartStopLifecycle`** (Function) — `internal/baseline/trigger_test.go:43`
+- **`NewTrigger`** (Function) — `internal/baseline/trigger.go:34`
 
 ## Key Symbols
 
@@ -51,20 +53,20 @@ Start here when exploring this area:
 | `TestRevert_ValidationErrors` | Function | `internal/baseline/rollback_test.go` | 126 |
 | `TestGetPromotionHistory` | Function | `internal/baseline/rollback_test.go` | 162 |
 | `TestGetRevertHistory` | Function | `internal/baseline/rollback_test.go` | 201 |
+| `TestTrigger_StartStopLifecycle` | Function | `internal/baseline/trigger_test.go` | 43 |
+| `TestTrigger_StartRequiresManager` | Function | `internal/baseline/trigger_test.go` | 74 |
+| `TestTrigger_StartRequiresBus` | Function | `internal/baseline/trigger_test.go` | 82 |
+| `TestTrigger_Evaluate_StopLoss` | Function | `internal/baseline/trigger_test.go` | 90 |
+| `TestTrigger_Evaluate_TakeProfit` | Function | `internal/baseline/trigger_test.go` | 115 |
+| `TestTrigger_Evaluate_MaxHoldingDays` | Function | `internal/baseline/trigger_test.go` | 140 |
+| `TestTrigger_Evaluate_NoViolation` | Function | `internal/baseline/trigger_test.go` | 162 |
+| `TestTrigger_Evaluate_AllViolations` | Function | `internal/baseline/trigger_test.go` | 183 |
+| `NewTrigger` | Function | `internal/baseline/trigger.go` | 34 |
+| `Trigger` | Struct | `internal/baseline/trigger.go` | 24 |
+| `Violation` | Struct | `internal/baseline/trigger.go` | 14 |
 | `Save` | Function | `internal/baseline/policy.go` | 91 |
 | `NewManager` | Function | `internal/baseline/manager.go` | 13 |
-| `TestApplyConstraintCandidateParsesRiskAndPortfolioFields` | Function | `internal/experiment/replay_compare_test.go` | 48 |
 | `ApplyConstraintCandidate` | Function | `internal/baseline/policy.go` | 127 |
-| `TestPromoteAcceptedPromptExperiment` | Function | `internal/baseline/policy_test.go` | 24 |
-| `TestPromoteAcceptedConstraintExperiment` | Function | `internal/baseline/policy_test.go` | 49 |
-| `DefaultPolicy` | Function | `internal/baseline/policy.go` | 43 |
-| `Load` | Function | `internal/baseline/policy.go` | 64 |
-| `ExecutionPolicyFromConstraints` | Function | `internal/baseline/policy.go` | 106 |
-| `Promote` | Function | `internal/baseline/policy.go` | 177 |
-| `contains` | Function | `internal/baseline/rollback_test.go` | 188 |
-| `containsHelper` | Function | `internal/baseline/rollback_test.go` | 192 |
-| `main` | Function | `cmd/revert-baseline/main.go` | 12 |
-| `showPromotionHistory` | Function | `cmd/revert-baseline/main.go` | 88 |
 
 ## Execution Flows
 
@@ -77,7 +79,6 @@ Start here when exploring this area:
 | `NewProductionSystem → Policy` | cross_community | 5 |
 | `Main → Policy` | cross_community | 4 |
 | `Main → ExecutionPolicyFromConstraints` | cross_community | 4 |
-| `Main → Policy` | cross_community | 4 |
 | `HandleInbox → Policy` | cross_community | 4 |
 | `HandleInbox → ExecutionPolicyFromConstraints` | cross_community | 4 |
 
@@ -89,6 +90,6 @@ Start here when exploring this area:
 
 ## How to Explore
 
-1. `gitnexus_context({name: "TestRevert_LastPromotion"})` — see callers and callees
+1. `gitnexus_context({name: "NewTrigger"})` — see callers and callees
 2. `gitnexus_query({query: "baseline"})` — find related execution flows
 3. Read key files listed above for implementation details

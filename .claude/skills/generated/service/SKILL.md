@@ -1,6 +1,6 @@
 ---
 name: service
-description: "Skill for the Service area of atlas. 30 symbols across 9 files."
+description: "Skill for the Service area of atlas. 45 symbols across 16 files."
 auto_generated: true
 load_policy: "manual_only"
 ---
@@ -12,12 +12,13 @@ load_policy: "manual_only"
 
 # Service
 
-30 symbols | 9 files | Cohesion: 58%
+45 symbols | 16 files | Cohesion: 58%
 
 ## When to Use
 
-- Working with code in `internal/`
-- Understanding how TestSeedRegistryIsValid, ValidateRegistry, LoadRegistry work
+- Working with service-layer code under `internal/monitoring/service/` and orchestrator registry helpers
+- **Note:** there is no top-level `internal/service/` package; the "service" area spans `internal/monitoring/service/*` plus `internal/orchestrator/registry*.go`
+- Understanding how `TestSeedRegistryIsValid`, `ValidateRegistry`, `LoadRegistry`, `LoadUniverseOverlap`, and Wave 9 service detectors work
 - Modifying service-related functionality
 
 ## Key Files
@@ -25,6 +26,13 @@ load_policy: "manual_only"
 | File | Symbols |
 |------|---------|
 | `internal/monitoring/service/pipeline.go` | LoadUniverseOverlap, isStockPickingLayer, isStockPickingLayerByID, LoadMacroRadar, LoadForecastVsReality (+5) |
+| `internal/monitoring/service/regime_debouncer.go` | RegimeDebouncer, NewRegimeDebouncer |
+| `internal/monitoring/service/factor_weight_regression.go` | FactorWeightRegressionDetector, NewFactorWeightRegressionDetector |
+| `internal/monitoring/service/drift_detector.go` | DriftDetector, NewDriftDetector, NewDriftDetectorWithTargets |
+| `internal/monitoring/service/channel_health_synthesizer.go` | ChannelHealthSynthesizer, ChannelHealthProvider, NewChannelHealthSynthesizer |
+| `internal/monitoring/service/ingestion_lag_monitor.go` | IngestionLagMonitor, IngestionLagProvider, NewIngestionLagMonitor |
+| `internal/monitoring/service/ingestion_lag_provider.go` | ChannelHealthIngestionLagProvider, NewChannelHealthIngestionLagProvider |
+| `internal/monitoring/service/weight_provider.go` | WeightProvider, FactorWeightEngineWeightProvider, NewFactorWeightEngineWeightProvider |
 | `internal/monitoring/dashboard_api.go` | handleUniverseOverlap, handleSystemHealth, buildChannelInfo, handleMacroRadar, handleForecastVsReality (+2) |
 | `internal/monitoring/service/report.go` | LoadDailySummary, loadNarrativeEventsForDate, loadRiskSnapshot, loadRecommendationsForDate |
 | `internal/monitoring/service/system.go` | LoadSystemHealth, statusText, buildChannelInfo |
@@ -61,6 +69,13 @@ Start here when exploring this area:
 | `LoadForecastVsReality` | Method | `internal/monitoring/service/pipeline.go` | 99 |
 | `LoadRecommendationPipeline` | Method | `internal/monitoring/service/pipeline.go` | 197 |
 | `LoadDailySummary` | Method | `internal/monitoring/service/report.go` | 131 |
+| `NewRegimeDebouncer` | Function | `internal/monitoring/service/regime_debouncer.go` | 38 |
+| `NewFactorWeightRegressionDetector` | Function | `internal/monitoring/service/factor_weight_regression.go` | 33 |
+| `NewDriftDetector` | Function | `internal/monitoring/service/drift_detector.go` | 31 |
+| `NewChannelHealthSynthesizer` | Function | `internal/monitoring/service/channel_health_synthesizer.go` | 38 |
+| `NewIngestionLagMonitor` | Function | `internal/monitoring/service/ingestion_lag_monitor.go` | 42 |
+| `NewChannelHealthIngestionLagProvider` | Function | `internal/monitoring/service/ingestion_lag_provider.go` | 23 |
+| `NewFactorWeightEngineWeightProvider` | Function | `internal/monitoring/service/weight_provider.go` | 18 |
 | `isStockPickingLayer` | Function | `internal/monitoring/service/pipeline.go` | 534 |
 | `isStockPickingLayerByID` | Function | `internal/monitoring/service/pipeline.go` | 538 |
 | `statusText` | Function | `internal/monitoring/service/system.go` | 155 |

@@ -1,6 +1,6 @@
 ---
 name: monitoring
-description: "Skill for the Monitoring area of atlas. 200 symbols across 36 files."
+description: "Skill for the Monitoring area of atlas. 250 symbols across 46 files."
 auto_generated: true
 load_policy: "manual_only"
 ---
@@ -12,12 +12,12 @@ load_policy: "manual_only"
 
 # Monitoring
 
-200 symbols | 36 files | Cohesion: 77%
+250 symbols | 46 files | Cohesion: 77%
 
 ## When to Use
 
-- Working with code in `internal/`
-- Understanding how TestMetricsCollector_RecordCounter_Accumulates, TestMetricsCollector_RecordGauge_Overwrites, TestMetricsCollector_RecordHistogram work
+- Working with code in `internal/monitoring/`
+- Understanding how Wave 9 observability (`Wave9Observability`, `NewWave9Observability`) and the five detectors work
 - Modifying monitoring-related functionality
 
 ## Key Files
@@ -26,14 +26,29 @@ load_policy: "manual_only"
 |------|---------|
 | `internal/monitoring/dashboard_api.go` | NewDashboardAPI, RegisterRoutes, RegisterIndustryRoutes, RegisterNarrativeRoutes, RegisterControlRoutes (+20) |
 | `internal/monitoring/metrics.go` | NewMetricsCollector, RecordCounter, RecordGauge, RecordHistogram, GetMetric (+12) |
+| `internal/monitoring/wave9_runtime.go` | Wave9Observability, NewWave9Observability, Start, Stop, Close, NewChannelHealthProviderFromStore (+15) |
+| `internal/monitoring/service/pipeline.go` | LoadUniverseOverlap, isStockPickingLayer, isStockPickingLayerByID, LoadMacroRadar, LoadForecastVsReality (+5) |
 | `internal/monitoring/monitoring_test.go` | TestMetricsCollector_RecordCounter_Accumulates, TestMetricsCollector_RecordGauge_Overwrites, TestMetricsCollector_RecordHistogram, TestMetricsCollector_GetAllMetrics, TestTradingMetrics_RecordOrder (+9) |
 | `internal/monitoring/alert_api_test.go` | newTestAlertAPI, seedAlerts, TestAlertAPI_ListAlerts, TestAlertAPI_ListAlerts_Empty, TestAlertAPI_ListAlerts_MethodNotAllowed (+9) |
 | `internal/monitoring/monitor.go` | Info, Warning, Error, Critical, SetAlertStore (+8) |
 | `internal/monitoring/notifier_test.go` | TestWebhookNotifier_IsConfigured, TestWebhookNotifier_Name, TestWebhookNotifier_Notify_NotConfigured, TestWebhookNotifier_Notify_Success, TestWebhookNotifier_Notify_CustomHeaders (+8) |
 | `internal/monitoring/alert_store_test.go` | newTestStore, makeAlert, TestAlertStore_SaveAndLoadAll, TestAlertStore_LoadAll_EmptyFile, TestAlertStore_LoadAll_NonExistentFile (+7) |
 | `internal/monitoring/notifier.go` | NewWebhookNotifier, Name, IsConfigured, Notify, NewTelegramNotifier (+3) |
-| `internal/monitoring/dashboard_helpers.go` | sessionDateFromID, LoadSessionSummary, writeJSON, writeJSONError, isStockPickingLayer (+3) |
-| `internal/monitoring/alert_store.go` | Save, LoadAll, LoadUnacknowledged, Acknowledge, loadFromFile (+2) |
+
+## Wave 9 / Service Files
+
+| File | Symbols |
+|------|---------|
+| `internal/monitoring/service/regime_debouncer.go` | RegimeDebouncer, NewRegimeDebouncer |
+| `internal/monitoring/service/factor_weight_regression.go` | FactorWeightRegressionDetector, NewFactorWeightRegressionDetector |
+| `internal/monitoring/service/drift_detector.go` | DriftDetector, NewDriftDetector, NewDriftDetectorWithTargets |
+| `internal/monitoring/service/channel_health_synthesizer.go` | ChannelHealthSynthesizer, ChannelHealthProvider, NewChannelHealthSynthesizer |
+| `internal/monitoring/service/ingestion_lag_monitor.go` | IngestionLagMonitor, IngestionLagProvider, NewIngestionLagMonitor |
+| `internal/monitoring/service/ingestion_lag_provider.go` | ChannelHealthIngestionLagProvider, NewChannelHealthIngestionLagProvider |
+| `internal/monitoring/service/weight_provider.go` | WeightProvider, FactorWeightEngineWeightProvider, NewFactorWeightEngineWeightProvider |
+| `internal/monitoring/wave9_runtime_test.go` | TestWave9Observability_StartStop, TestWave9Observability_RequiresProviders |
+| `internal/monitoring/wave9_runtime_integration_test.go` | TestWave9Integration_RegimeDebouncerFlow, TestWave9Integration_FactorWeightRegressionFlow, TestWave9Integration_DriftDetectorFlow, TestWave9Integration_ChannelHealthSynthesizerFlow, TestWave9Integration_IngestionLagMonitorFlow, TestWave9Integration_EndToEndEventFlow |
+| `internal/monitoring/service/wave9_integration_test.go` | TestWave9Integration_RegimeDebouncerFlow, TestWave9Integration_FactorWeightRegressionFlow, TestWave9Integration_DriftDetectorFlow, TestWave9Integration_ChannelHealthSynthesizerFlow, TestWave9Integration_IngestionLagMonitorFlow, TestWave9Integration_EndToEndEventFlow |
 
 ## Entry Points
 
@@ -43,7 +58,7 @@ Start here when exploring this area:
 - **`TestMetricsCollector_RecordGauge_Overwrites`** (Function) — `internal/monitoring/monitoring_test.go:144`
 - **`TestMetricsCollector_RecordHistogram`** (Function) — `internal/monitoring/monitoring_test.go:159`
 - **`TestMetricsCollector_GetAllMetrics`** (Function) — `internal/monitoring/monitoring_test.go:172`
-- **`TestTradingMetrics_RecordOrder`** (Function) — `internal/monitoring/monitoring_test.go:360`
+- **`NewWave9Observability`** (Function) — `internal/monitoring/wave9_runtime.go:105`
 
 ## Key Symbols
 
@@ -54,6 +69,16 @@ Start here when exploring this area:
 | `TestMetricsCollector_RecordHistogram` | Function | `internal/monitoring/monitoring_test.go` | 159 |
 | `TestMetricsCollector_GetAllMetrics` | Function | `internal/monitoring/monitoring_test.go` | 172 |
 | `TestTradingMetrics_RecordOrder` | Function | `internal/monitoring/monitoring_test.go` | 360 |
+| `NewWave9Observability` | Function | `internal/monitoring/wave9_runtime.go` | 105 |
+| `Wave9Observability` | Struct | `internal/monitoring/wave9_runtime.go` | 18 |
+| `NewRegimeDebouncer` | Function | `internal/monitoring/service/regime_debouncer.go` | 38 |
+| `NewFactorWeightRegressionDetector` | Function | `internal/monitoring/service/factor_weight_regression.go` | 33 |
+| `NewDriftDetector` | Function | `internal/monitoring/service/drift_detector.go` | 31 |
+| `NewDriftDetectorWithTargets` | Function | `internal/monitoring/service/drift_detector.go` | 39 |
+| `NewChannelHealthSynthesizer` | Function | `internal/monitoring/service/channel_health_synthesizer.go` | 38 |
+| `NewIngestionLagMonitor` | Function | `internal/monitoring/service/ingestion_lag_monitor.go` | 42 |
+| `NewChannelHealthIngestionLagProvider` | Function | `internal/monitoring/service/ingestion_lag_provider.go` | 23 |
+| `NewFactorWeightEngineWeightProvider` | Function | `internal/monitoring/service/weight_provider.go` | 18 |
 | `TestMetricsCollector_Screening` | Function | `internal/monitoring/metrics_test.go` | 6 |
 | `TestMetricsCollector_Alerts` | Function | `internal/monitoring/metrics_test.go` | 22 |
 | `TestMetricsCollector_Snapshot` | Function | `internal/monitoring/metrics_test.go` | 46 |
@@ -63,12 +88,6 @@ Start here when exploring this area:
 | `DefaultAlertThreshold` | Function | `internal/monitoring/metrics.go` | 310 |
 | `TestAlertAPI_ListAlerts` | Function | `internal/monitoring/alert_api_test.go` | 54 |
 | `TestAlertAPI_ListAlerts_Empty` | Function | `internal/monitoring/alert_api_test.go` | 78 |
-| `TestAlertAPI_ListAlerts_MethodNotAllowed` | Function | `internal/monitoring/alert_api_test.go` | 104 |
-| `TestAlertAPI_Unacknowledged` | Function | `internal/monitoring/alert_api_test.go` | 116 |
-| `TestAlertAPI_Unacknowledged_MethodNotAllowed` | Function | `internal/monitoring/alert_api_test.go` | 145 |
-| `TestAlertAPI_Acknowledge` | Function | `internal/monitoring/alert_api_test.go` | 157 |
-| `TestAlertAPI_Acknowledge_NotFound` | Function | `internal/monitoring/alert_api_test.go` | 193 |
-| `TestAlertAPI_Acknowledge_MissingAlertID` | Function | `internal/monitoring/alert_api_test.go` | 206 |
 
 ## Execution Flows
 
@@ -100,6 +119,6 @@ Start here when exploring this area:
 
 ## How to Explore
 
-1. `gitnexus_context({name: "TestMetricsCollector_RecordCounter_Accumulates"})` — see callers and callees
+1. `gitnexus_context({name: "NewWave9Observability"})` — see callers and callees
 2. `gitnexus_query({query: "monitoring"})` — find related execution flows
 3. Read key files listed above for implementation details
