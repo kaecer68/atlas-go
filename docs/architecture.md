@@ -135,10 +135,53 @@ The system should eventually:
 - `internal/config`: runtime configuration
 - `internal/industry`: industry ecosystem analysis (supply chain linkage, seasonal patterns, business cycle compass)
 - `internal/narrative`: macro narrative event detection, causal chains, and SeasonalBridge for industry correlation modulation
+- `internal/llm`: capability-based multi-provider LLM router with DataClass governance gate (see [LLM Framework](#llm-framework))
 - `internal/replay`: historical market data loading and forward return calculation
 - `internal/reporting`: Markdown report generation and performance tables
 - `cmd/atlas`: entrypoint for local simulation runs
 - `cmd/calibrate-seasonal`: CLI for calibrating seasonal patterns from replay data
+
+## LLM Framework
+
+`internal/llm/` 提供 capability-based 多 Provider 路由層，支援 4 層 fallback chain 與 DataClass 治理閘門，定位為**非同步附掛**而非 hot-path 依賴。
+
+### 分層
+
+| 層 | 檔案 | 職責 |
+|---|------|------|
+| 介面 | `provider.go` | `ProviderImpl` 介面、`Capability`（12 種）、`DataClass`（4 階敏感度）、`RoutingChain` |
+| 路由 | `router.go` | `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort；DataClass 閘門（ADR-010） |
+| 設定 | `config.go` | `LoadRouterConfig()` 載入 `configs/llm_router.yaml`；`TryLoadRouterConfig()` 錯誤時 fallback 預設表 |
+| 健康 | `health.go` | Provider 健康聚合 + circuit breaker 狀態 |
+| 客戶端 | `clients/` | 3 個 Provider HTTP client（DeepSeek V4 / MiniMax M3 / Kimi K2.7）+ 共享 `BaseClient` |
+| 能力 | `capabilities/` | 12 個 capability handler（typed payload → Router → typed response） |
+| 契約 | `schemas/` | 9 個 typed I/O schema（JSON-serialized, Zod-compatible JSON Schema） |
+| 整合 | `adapters/` | Annotator / Router 整合層 |
+
+### 12 個 Capability
+
+`CapabilityFailureAttribution`（strategy.failure_attribution）· `CapabilityCodeReviewAnnotation`（dev.code_review_annotation）· `CapabilityPromptLint`（dev.prompt_lint）· `CapabilityRationaleGeneration`（narrative.rationale_translation_fallback）· `CapabilityStrategySummary`（strategy.frame_summary）· `CapabilityRiskSurfaceExtraction`（spawning.gap_description_enrichment）· `CapabilityRegimeExplanation`（narrative.event_headline）· `CapabilityPerformanceForensics`（risk.confidence_calibration_commentary）· `CapabilityScenarioSimulation`（orchestrator.prism_cohort_insight）· `CapabilitySentimentExplanation`（narrative.sentiment_explanation）· `CapabilityContraAttribution`（Phase 2 擴充）· `CapabilityConfidenceCommentary`（Phase 3.3 非阻塞 bypass）
+
+### 治理閘門（ADR-010）
+
+`MiniMax M3` 對 `DataClass ≥ Regulated` 的請求會在 `router.shouldGateProvider()` 強制 skip（中國管轄資料主權考量）。`ForceProvider` 設為 `ProviderMiniMax` 配合 `DataClass=Regulated` 也會回 `ErrProviderDisabled`，這是**有意設計**，不可繞過。
+
+### 熱路徑護欄
+
+`internal/sim/` 與 `internal/experiment/`（S/E-level）不可 import `internal/llm` 做同步 LLM 呼叫。理由：
+
+- 模擬執行被 LLM 網路延遲拖慢
+- replay 可重現性破壞（同一 replay 應得到相同結果）
+
+觀察窗口內，**S/E 模組必須使用 deterministic 預設值**；`SectorAgentLLM.LLM == nil` 時 runner 回 `ErrNotImplemented`，由 `UseLLMSectorAgents` feature flag 控制是否啟用。
+
+### 設定與監控
+
+- **Routing table**：`configs/llm_router.yaml`（runtime 來源），載入失敗 fallback `router.go:defaultRoutingTable()`
+- **新增 capability 必同步 4 處**：`provider.go` 常數 + `router.go:defaultRoutingTable()` + `config.go:isKnownCapability()` + `configs/llm_router.yaml`
+- **健康端點**：`GET /api/llm/health` 暴露 Provider 狀態與 circuit breaker
+
+> 設計權威：`docs/llm-integration-strategy-framework.md` · `internal/llm/AGENTS.md`
 
 ## Industry Ecosystem
 

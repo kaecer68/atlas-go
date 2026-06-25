@@ -42,6 +42,7 @@
 | `internal/sim/` | 模擬引擎與部位狀態轉換 | `internal/sim/AGENTS.md` |
 | `internal/experiment/` | 實驗執行與評判 | `internal/experiment/AGENTS.md` |
 | `internal/baseline/` | Baseline policy 升降級與版本控制 | `internal/baseline/AGENTS.md` |
+| `internal/llm/` | LLM capability-based 多 Provider 路由 + DataClass 治理閘門 + 4 層 fallback chain | `internal/llm/AGENTS.md` |
 | `internal/ledger/` | JSONL append-only 持久化 | `internal/ledger/AGENTS.md` |
 | `internal/portfolio/` | Darwinian 權重、FactorEngine、組合優化 | `internal/portfolio/AGENTS.md` |
 | `internal/screener/` | 宣告式個股篩選 | 直接讀碼 |
@@ -95,6 +96,8 @@ skill(name="atlas-pre-change-protocol")
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | Replay 格式 | JSONL，不是 JSON array |
 | 資料可見性 | 通道靜默失敗時,Gateway/Adapter/Service/Frontend 四層須暴露 `data_status` / `failed_channels` / 紅色 badge,不得以零值掩蓋。詳見 `.claude/skills/atlas-data-visibility/SKILL.md` |
+| LLM 路由繞過 | 不可直接呼叫 `clients/*Provider` 跳過 `DefaultRouter` | 必須透過 `llm.DefaultRouter.Call()` 或 `capabilities/*Handler`，見 `internal/llm/AGENTS.md` §1 |
+| LLM hot-path import | S/E 模組（`internal/sim/`, `internal/experiment/`）不可 import `internal/llm` 直接同步呼叫 | 觀察窗口內用 deterministic 預設值；replay 必須可重現 |
 
 ## 文件索引
 

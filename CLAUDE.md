@@ -38,14 +38,15 @@
 
 | 變數 | 用途 | 備註 |
 |------|------|------|
-| `LLM_DEEPSEEK_API_KEY` | Phase 3 DeepSeek V4-Pro / V4-Flash | 需新增（從 https://platform.deepseek.com 取得） |
-| `LLM_MINIMAX_API_KEY` | Phase 3 MiniMax M3（coding plan） | 與 `LLM_ANNOTATOR_API_KEY` 同源，皆為 `sk-cp-` 前綴的 minimax-cn-coding-plan key |
+| `LLM_DEEPSEEK_API_KEY` | DeepSeek V4-Pro / V4-Flash | 從 https://platform.deepseek.com 取得 |
+| `LLM_MINIMAX_API_KEY` | MiniMax M3（coding plan） | `sk-cp-` 前綴的 minimax-cn-coding-plan key；DataClass≥Regulated 時被 router 閘門 skip |
+| `LLM_OPENCODE_GO_API_KEY` | OpenCode-Go（自架/本地） | provider 標記為未來規劃，目前 routing chain 有列但未實際掛載 |
 
-| `LLM_ANNOTATOR_API_KEY` | **向後相容** — Phase 1 `KimiClient` 讀此變數 | 實際值等同 `LLM_MINIMAX_API_KEY`（歷史誤標，Phase 1 用 minimax key 打 Kimi API 為已知問題） |
-| `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 rationale 翻譯 hook | default `false` |
-| `LLM_PRISM_SCENARIO_ENABLED` | 啟用 prism scenario 說明 hook | default `false` |
-| `LLM_NARRATIVE_EXPLAIN_ENABLED` | 啟用 regime + sentiment 解釋 hook | default `false` |
-| `LLM_RISK_FORENSICS_ENABLED` | 啟用 performance forensics hook | default `false` |
+| `LLM_ANNOTATOR_API_KEY` | **向後相容** — 早期 `KimiClient` 讀此變數 | 實際值等同 `LLM_MINIMAX_API_KEY`（Kimi K2.7 因 coding plan key 限制已移除） |
+| `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 `CapabilityRationaleGeneration` hook | default `false` |
+| `LLM_PRISM_SCENARIO_ENABLED` | 啟用 `CapabilityScenarioSimulation` hook | default `false` |
+| `LLM_NARRATIVE_EXPLAIN_ENABLED` | 啟用 `CapabilityRegimeExplanation` + `CapabilitySentimentExplanation` | default `false` |
+| `LLM_RISK_FORENSICS_ENABLED` | 啟用 `CapabilityPerformanceForensics` | default `false` |
 
 ### 部署流程
 
