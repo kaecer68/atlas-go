@@ -2,9 +2,20 @@
 
 ## [Unreleased]
 
-### feat(orchestrator): L2.4 observation metrics for SemiconductorLLMAgent
+### fix(orchestrator): align SemiconductorLLMAgent metrics to Issue #740 spec
 
-Adds six `slog.Info` events to `SemiconductorLLMAgent.Recommend` so the L2.4 7-14 day observation window can validate the LLM-driven sector agent without a separate metrics library: `agent_loop.start`, `agent_loop.plan_complete`, `agent_loop.tool_call`, `agent_loop.reflect`, `agent_loop.exhausted`, `agent_loop.final`. Field names align with `docs/wave-11/L2_4_OBSERVATION.md` so the L2.4 aggregator can roll up `llm.latency_p50/p95`, `tool.success_rate`, `loop.exhausted_rate`, etc. without per-source schema mapping. The logger is injectable via a new `Metrics *slog.Logger` field (defaults to `slog.Default()`), so tests capture JSON output via a buffer without touching global state. No production behavior change; the `UseLLMSectorAgents` feature flag still gates enablement.
+Spec-alignment follow-up to PR #743. Rewrites the `slog.Info` events in `SemiconductorLLMAgent.Recommend` to match the exact event names and field names in `kaecer68/atlas-go#740`:
+
+- `agent_loop.start` now carries `(symbol, skill)` only — drops `max_iter`.
+- `agent_loop.plan` (renamed from `plan_complete`) carries `(size, latency_ms, err)`. Emitted **before** the `PlanStep` error guard so aggregators see failed plans.
+- `agent_loop.tool` (renamed from `tool_call`) carries `(name, success, latency_ms)`. Emitted **before** the `RunToolCall` error guard so aggregators see failed tool calls.
+- `agent_loop.reflect` now carries `(continue, conviction)` only — drops `skill`, `symbol`, and `latency_ms`.
+- `agent_loop.end` (renamed from `final`) carries `(symbol, conviction)` and is emitted via `defer` so it fires on early-return failure paths.
+- `agent_loop.exhausted` is removed entirely; the Issue #740 spec does not require it.
+
+The injectable `Metrics *slog.Logger` field and `metricsLogger()` helper from PR #743 are preserved. No production behavior change beyond event names/fields; the `UseLLMSectorAgents` feature flag still gates enablement and the recommendation return value is unchanged on the happy path.
+
+Closes #740.
 
 ### fix(orchestrator): wire RunToolCall to llm.SafeInvokeHandler
 
