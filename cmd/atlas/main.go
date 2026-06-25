@@ -50,6 +50,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	obsotel "github.com/kaecer68/atlas-go/internal/observability/otel"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
@@ -116,6 +117,19 @@ func run(args []string, deps appDeps) error {
 
 	cfg := deps.loadConfig()
 	logging.Init(*logFormat, slog.LevelInfo)
+
+	otelShutdown, otelErr := obsotel.Init(context.Background())
+	if otelErr != nil {
+		logging.Warn("main", "otel_init_failed", "err", otelErr)
+	} else {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := otelShutdown(shutdownCtx); err != nil {
+				logging.Warn("main", "otel_shutdown_failed", "err", err)
+			}
+		}()
+	}
 
 	if *checkIntegrity {
 		paramsPath := config.GetParametersConfigPath()

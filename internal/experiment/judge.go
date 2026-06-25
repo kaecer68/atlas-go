@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/acceptance"
+	"github.com/kaecer68/atlas-go/internal/acceptance/builtin"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eval"
@@ -20,13 +22,14 @@ import (
 )
 
 type Judge struct {
-	store           ledger.ExperimentStore
-	replayDataPath  string
-	baselinePath    string
-	oosValidator    *OOSValidator
-	params          *config.ParametersConfig
-	eventBus        *eventbus.ChannelEventBus
-	maturityTracker *domain.MaturityTracker
+	store                 ledger.ExperimentStore
+	replayDataPath        string
+	baselinePath          string
+	oosValidator          *OOSValidator
+	params                *config.ParametersConfig
+	eventBus              *eventbus.ChannelEventBus
+	maturityTracker       *domain.MaturityTracker
+	useAcceptancePipeline bool
 }
 
 func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string) *Judge {
@@ -331,6 +334,11 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 	return checks
 }
 
+func (j *Judge) WithAcceptancePipeline(enabled bool) *Judge {
+	j.useAcceptancePipeline = enabled
+	return j
+}
+
 func (j *Judge) passesAcceptance(result domain.PromptExperimentResult, promptBytes []byte) (bool, string) {
 	// Burn-in gate: do not judge experiments until statistical engines are reliable.
 	if j.maturityTracker != nil && j.maturityTracker.Current() == domain.MaturityBurnIn {
@@ -393,6 +401,10 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult, promptByt
 	}
 
 	requiredChecks := j.requiredCheckCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
+
+	if j.useAcceptancePipeline {
+		return j.runAcceptancePipeline(result, promptBytes)
+	}
 
 	for _, gate := range gates {
 		switch gate {
@@ -524,6 +536,33 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult, promptByt
 		}
 	}
 	return true, "accepted: maturity-aware gates satisfied"
+}
+
+func (j *Judge) runAcceptancePipeline(result domain.PromptExperimentResult, promptBytes []byte) (bool, string) {
+	registry := acceptance.NewRegistry()
+	registry.Register(builtin.ImproveSharpeLike())
+	registry.Register(builtin.PreserveDownsideProtection())
+	registry.Register(builtin.NoDrawdownSpike())
+	registry.Register(builtin.FactorWeightStability())
+	registry.Register(builtin.RetailSentimentFilter())
+
+	params := acceptance.EvalParams{
+		DrawdownProtectionRatio:    j.params.Experiment.DrawdownProtectionRatio.Value,
+		FactorWeightDriftThreshold: j.params.Experiment.FactorWeightDriftThreshold.Value,
+		PromptBytes:                promptBytes,
+	}
+
+	for _, gate := range result.Experiment.AcceptanceGates {
+		e, ok := registry.Get(gate)
+		if !ok {
+			return false, fmt.Sprintf("rejected: no evaluator registered for gate %q (legacy switch may handle it)", gate)
+		}
+		r := e.Eval(result, params)
+		if !r.Passed {
+			return false, r.Reason
+		}
+	}
+	return true, "accepted: acceptance pipeline passed"
 }
 
 func welchTTest(baselineReturns, candidateReturns []float64) (tStat float64, df float64) {

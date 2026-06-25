@@ -3,7 +3,12 @@ package llm
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync/atomic"
+
+	"go.opentelemetry.io/otel/attribute"
+
+	obsotel "github.com/kaecer68/atlas-go/internal/observability/otel"
 )
 
 // Router defines the capability-based request routing interface.
@@ -86,6 +91,16 @@ func (r *DefaultRouter) Register(p ProviderImpl) error {
 //  6. On each failure, append the provider to attempted and continue.
 //  7. If all three chain members fail, invoke the lastResortHandler.
 func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error) {
+	spanAttrs := []attribute.KeyValue{
+		attribute.String("llm.capability", string(req.Capability)),
+		attribute.String("llm.data_class", strconv.Itoa(int(req.DataClass))),
+	}
+	if req.Options.ForceProvider != nil {
+		spanAttrs = append(spanAttrs, attribute.String("llm.forced_provider", string(*req.Options.ForceProvider)))
+	}
+	ctx, span := obsotel.StartSpan(ctx, "llm."+string(req.Capability), spanAttrs...)
+	defer span.End()
+
 	// Step 1: ForceProvider bypasses routing table
 	if req.Options.ForceProvider != nil {
 		// ForceProvider still respects the DataClass gate (ADR-010).
@@ -146,12 +161,18 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 			continue
 		}
 
+		providerNames := make([]string, len(attempted))
+		for i, p := range attempted {
+			providerNames[i] = string(p)
+		}
+		span.SetAttributes(attribute.StringSlice("llm.attempted_providers", providerNames))
 		resp.AttemptedProviders = attempted
 		return resp, nil
 	}
 
 	// Step 7: All chain members exhausted — invoke last-resort handler
 	atomic.AddInt64(BackupChainExhaustedTotal, 1)
+	span.SetAttributes(attribute.Bool("llm.exhausted", true))
 	return r.lastResortHandler(attempted), nil
 }
 
