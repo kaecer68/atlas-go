@@ -3468,6 +3468,11 @@
       "source": "heuristic",
       "value": 50
     },
+    "use_llm_sector_agents": {
+      "rationale": "",
+      "source": "",
+      "value": false
+    },
     "use_ml_scoring": {
       "rationale": "Enable ML-based factor scoring from internal/ml models",
       "source": "experimental",

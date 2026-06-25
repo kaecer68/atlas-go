@@ -1545,6 +1545,7 @@
   "us_rates_dxy_threshold",
   "usd_twd",
   "usdtwd_change_pct_threshold",
+  "use_llm_sector_agents",
   "use_ml_scoring",
   "used_fallback",
   "used_fallback_window",

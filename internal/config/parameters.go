@@ -47,7 +47,37 @@ type ParameterCitation struct {
 	LastValidated    string   `json:"last_validated"`
 }
 
-// DarwinianParameters holds all tunable values for the Darwinian weight system.
+// UseLLMSectorAgents gates the L2.3 PoC SemiconductorLLMAgent
+// (internal/orchestrator/semiconductor_llm_agent.go) behind a
+// feature flag. Default false keeps the deterministic
+// SemiconductorExecutor as the production path; flip to true to
+// route the semiconductor desk to the LLM-driven implementation
+// (gated by the agent's Supports() method which reads this flag).
+//
+// Plan: PR5b of 7 in the Wave 10 L2.3 execution plan. Tagged
+// v0.0.0.21 once PR5b lands. Cross-ref
+// docs/wave-11/SEMICONDUCTOR_EXECUTOR.md (PR6).
+var UseLLMSectorAgentsMetadata = ParameterMetadata[bool]{
+	Value: false,
+	Rationale: "Gate L2.3 PoC SemiconductorLLMAgent behind a flag; keep " +
+		"deterministic SemiconductorExecutor as default until L2.4 " +
+		"observation window validates LLM behavior.",
+	Source: SourceExperimental,
+	Todo:   "Promote to SourceEmpirical after L2.4 observation window (7-14 day run).",
+}
+
+// GetUseLLMSectorAgents returns the current value of the
+// UseLLMSectorAgents flag. Reads from the loaded parameters config
+// (or default-off if not loaded) so production default-off
+// semantics hold even before config load.
+func GetUseLLMSectorAgents() bool {
+	cfg := GetParametersConfig()
+	if cfg == nil {
+		return UseLLMSectorAgentsMetadata.Value
+	}
+	return cfg.Orchestrator.UseLLMSectorAgents.Value
+}
+
 type DarwinianParameters struct {
 	WeightMin                   ParameterMetadata[float64] `json:"weight_min"`
 	WeightMax                   ParameterMetadata[float64] `json:"weight_max"`
@@ -221,6 +251,7 @@ type OrchestratorParameters struct {
 	SectorRotationMacroAdjustments   ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_macro_adjustments,omitempty"`
 	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments,omitempty"`
 	UseMLScoring                     ParameterMetadata[bool]                          `json:"use_ml_scoring"`
+	UseLLMSectorAgents               ParameterMetadata[bool]                          `json:"use_llm_sector_agents"`
 }
 
 // RiskParameters holds tunable values for risk management.
