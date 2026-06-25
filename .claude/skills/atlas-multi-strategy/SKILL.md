@@ -147,6 +147,8 @@ type ComparisonResult struct {
 - `atlas-event-driven-weights`：動態因子權重影響策略表現
 - `atlas-dynamic-correlation`：動態閾值影響策略篩選效果
 
+> **Wave 9 觀測事件**：`EventRegimeChange` 可能影響策略選擇，詳見 `internal/monitoring/service/regime_debouncer.go`。
+
 ## 設計原則
 
 1. **策略隔離**：每個策略維護獨立的 Agent 組合和 Filter 組合

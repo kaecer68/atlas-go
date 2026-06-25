@@ -79,6 +79,7 @@ Atlas 透過 `internal/janus` 模組的雙面神機制判斷當前市場處於�
 | 指數表現 | `internal/marketdata` | 加權指數、櫃買指數、電子/金融/傳產指數 |
 
 > **存取方式**：機器人代理透過 Atlas API Gateway（`internal/apigateway`）統一取得上述模組數據，實際端點由系統整合層定義。
+> **Wave 9 觀測**：每日摘要可能包含來自 Wave 9 可觀測性的 `EventIngestionLagSpike` 警報。
 
 ## 回答範例
 
