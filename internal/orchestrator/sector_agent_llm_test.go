@@ -108,11 +108,12 @@ func TestRunToolCall_LLMWiredWithTools_NotImpl(t *testing.T) {
 // is still the intersection of PlanDriver + ReflectDriver, so existing
 // implementations that satisfy both halves (like stubLLMDriver) can
 // still be assigned to a single LLMDriver-typed variable.
+//
+// The assignment itself is the test: if this line compiles,
+// stubLLMDriver satisfies LLMDriver. A nil check is dead code
+// (SA4023) because stubLLMDriver{} is a non-nil struct value.
 func TestSectorAgentLLM_LLMDriver_DeprecatedAlias(t *testing.T) {
-	var driver LLMDriver = stubLLMDriver{}
-	if driver == nil {
-		t.Fatal("LLMDriver alias should accept a stubLLMDriver value")
-	}
+	var _ LLMDriver = stubLLMDriver{}
 }
 
 // TestPlanStep_NoPlanDriver_ReturnsErrNotImplemented verifies that
