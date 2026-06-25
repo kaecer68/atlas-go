@@ -865,3 +865,42 @@ func TestCircuitBreaker_OverrideResetEndToEnd(t *testing.T) {
 		t.Errorf("step 6: expected StateClosed, got %v", cb.State())
 	}
 }
+
+func TestCircuitBreaker_OverrideHalfOpenLimitReached(t *testing.T) {
+	cb := NewCircuitBreaker("ch")
+
+	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+		_ = cb.Call(func() error { return errTestFailure })
+	}
+	if cb.State() != StateOpen {
+		t.Fatalf("setup: expected StateOpen, got %v", cb.State())
+	}
+
+	cb.SetManualOverride(true)
+	cb.lastFailure = time.Now().Add(-10 * time.Minute)
+
+	for i := 0; i < CircuitBreakerHalfOpenMaxCalls; i++ {
+		if err := cb.Call(func() error { return nil }); err != nil {
+			t.Fatalf("call %d: unexpected error: %v", i+1, err)
+		}
+		if cb.State() != StateHalfOpen {
+			t.Errorf("call %d: expected StateHalfOpen, got %v", i+1, cb.State())
+		}
+	}
+
+	err := cb.Call(func() error { return nil })
+	if err == nil {
+		t.Fatal("expected 'half-open limit reached' after max successful calls under override")
+	}
+	if !strings.Contains(err.Error(), "half-open limit reached") {
+		t.Errorf("expected half-open limit error, got: %v", err)
+	}
+
+	cb.Reset()
+	if err := cb.Call(func() error { return nil }); err != nil {
+		t.Fatalf("post-reset: unexpected error: %v", err)
+	}
+	if cb.State() != StateClosed {
+		t.Errorf("post-reset: expected StateClosed, got %v", cb.State())
+	}
+}
