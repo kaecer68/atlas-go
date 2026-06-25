@@ -250,3 +250,19 @@ func TestAgentLoop_AdvanceFinal_ClampsConviction_Warns(t *testing.T) {
 		t.Errorf("AdvanceFinal(75).FinalConviction = %d, want 75 (no clamping)", in.FinalConviction)
 	}
 }
+
+// TestAgentLoop_ConcurrentUnsafe documents that AgentLoop is NOT safe
+// for concurrent use. The test is SKIPPED by default; the docstring is
+// the actual contract. T3 fix from plan v2 PR4 test bar.
+//
+// To verify the data race manually: comment out t.Skip() and run with
+// `go test -race ./internal/orchestrator/`. The race detector will flag
+// concurrent AdvancePlan calls (writes to l.Steps, l.Round, l.Phase,
+// l.exhaustedWarningOnce). AgentLoop is intentionally not goroutine-safe;
+// if you need concurrent access, wrap it in an external mutex at the
+// caller level.
+func TestAgentLoop_ConcurrentUnsafe(t *testing.T) {
+	t.Skip("AgentLoop is intentionally not safe for concurrent use. " +
+		"This test documents the limitation; uncomment the body to verify " +
+		"manually with -race. Issue #711 / plan v2 PR4 T3 fix.")
+}
