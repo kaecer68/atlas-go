@@ -4,6 +4,21 @@
 
 `atlas-go` is a simulation-first investment research system for Taiwan stocks. The system is built to let OpenClaw run strategy experiments, evaluate agent performance, and iterate prompts or rules without placing real orders.
 
+## L2.3 PoC — LLM-driven sector agents (Wave 11)
+
+L2.3 introduces an opt-in LLM-driven sector agent that drives a `plan → tool_call → reflect` loop via a `SectorAgentLLM` + `DriverAdapter`. Flag-gated behind `UseLLMSectorAgents` (default **off**) so the deterministic sector agents remain the production path until L2.4 observation validates LLM behavior.
+
+**Components**:
+- `internal/orchestrator/semiconductor_llm_agent.go` — `SemiconductorLLMAgent` (gate mechanism, deterministic fallback)
+- `internal/orchestrator/llm_driver_adapter.go` — `DriverAdapter` (LLM call + response parsing)
+- `internal/llm/prompts/{plan,reflect}.go` — Prompt templates with embedded JSON spec
+- `internal/llm/test_tools.go` — `TestTools()` (3 mock tools: factor weight, regime, liquidity)
+- `internal/orchestrator/sector_agent_llm_test_helpers.go` — `MockLLMDriver` (test-only)
+
+**Documentation**: [`docs/wave-11/L2_3_PLAN_REFLECT.md`](wave-11/L2_3_PLAN_REFLECT.md), [`docs/wave-11/SEMICONDUCTOR_EXECUTOR.md`](wave-11/SEMICONDUCTOR_EXECUTOR.md), [`docs/wave-11/AGENT_LOOP_STATE_MACHINE.md`](wave-11/AGENT_LOOP_STATE_MACHINE.md), [`docs/wave-11/L2_4_OBSERVATION.md`](wave-11/L2_4_OBSERVATION.md).
+
+**Tag**: `v0.0.0.21` (PR5b). Plan: `.omo/plans/wave10-l2.3-execution.md`.
+
 ## Core Principles
 
 - Simulation before execution
