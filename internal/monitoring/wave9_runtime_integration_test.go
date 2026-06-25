@@ -130,9 +130,67 @@ func TestWave9Integration_AllFiveDetectorsWired(t *testing.T) {
 	requireWired(t, w, "ingestionLagMonitor", "*service.ingestionLagMonitor")
 }
 
+// waitForGoroutinesStable polls runtime.NumGoroutine() until the count is
+// stable for `stabilityWindow` consecutive samples or the deadline expires.
+// This is more robust than a fixed `time.Sleep` under CI load (parallel test
+// packages + coverage instrumentation + GC scavenger can leave transient
+// goroutines for >200ms after a Stop()). Returns the final observed count.
+func waitForGoroutinesStable(deadline time.Time, stabilityWindow int, sampleInterval time.Duration) int {
+	var (
+		last   = -1
+		stable int
+		cur    int
+	)
+	for {
+		runtime.GC()
+		cur = runtime.NumGoroutine()
+		if cur == last {
+			stable++
+			if stable >= stabilityWindow {
+				return cur
+			}
+		} else {
+			stable = 0
+			last = cur
+		}
+		if time.Now().After(deadline) {
+			return cur
+		}
+		time.Sleep(sampleInterval)
+	}
+}
+
 func TestWave9Integration_StartStopNoLeak(t *testing.T) {
 	bus := eventbus.NewChannelEventBus(256)
 	defer func() { _ = bus.Close() }()
+
+	// Warmup cycle: prime the Go runtime (GC workers, coverage counters, etc.)
+	// so that the `before` baseline below reflects a stable state, not a cold
+	// one. CI under load with `-cover` and parallel test packages can otherwise
+	// leave 5–10 transient goroutines that settle over hundreds of ms.
+	warmup, err := NewWave9Observability(bus,
+		WithWeightProvider(&wave9StaticWeightProvider{}),
+		WithChannelHealthProvider(&wave9StaticChannelHealthProvider{}),
+		WithIngestionLagProvider(&wave9StaticIngestionLagProvider{p99: 1.0}),
+	)
+	if err != nil {
+		t.Fatalf("warmup NewWave9Observability failed: %v", err)
+	}
+	if err := warmup.Start(context.Background()); err != nil {
+		t.Fatalf("warmup Start failed: %v", err)
+	}
+	if err := warmup.Stop(); err != nil {
+		t.Fatalf("warmup Stop failed: %v", err)
+	}
+
+	const (
+		stabilityWindow = 3
+		sampleInterval  = 100 * time.Millisecond
+		settleTimeout   = 5 * time.Second
+	)
+	_ = waitForGoroutinesStable(time.Now().Add(settleTimeout), stabilityWindow, sampleInterval)
+
+	before := runtime.NumGoroutine()
 
 	w, err := NewWave9Observability(bus,
 		WithWeightProvider(&wave9StaticWeightProvider{}),
@@ -142,8 +200,6 @@ func TestWave9Integration_StartStopNoLeak(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWave9Observability failed: %v", err)
 	}
-
-	before := runtime.NumGoroutine()
 	ctx := context.Background()
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("Start failed: %v", err)
@@ -152,9 +208,10 @@ func TestWave9Integration_StartStopNoLeak(t *testing.T) {
 		t.Fatalf("Stop failed: %v", err)
 	}
 
-	runtime.GC()
-	time.Sleep(200 * time.Millisecond)
-	after := runtime.NumGoroutine()
+	// Poll for stability after Stop. A real leak would keep the count pinned
+	// above `before+5` for the full deadline, while transient CI noise settles
+	// within a few samples.
+	after := waitForGoroutinesStable(time.Now().Add(settleTimeout), stabilityWindow, sampleInterval)
 	if after > before+5 {
 		t.Fatalf("possible goroutine leak: before=%d after=%d", before, after)
 	}
