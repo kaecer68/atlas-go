@@ -1,6 +1,6 @@
 ---
 name: atlas-pre-change-protocol
-description: "MUST use before ANY code modification in atlas-go. Mandates overlap detection (Step 0), GitNexus blast radius for changes, GitNexus architecture check, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes, dead code misidentification, and parallel duplicate implementations."
+description: "MUST use before ANY code modification in atlas-go. Mandates overlap detection (Step 0), GitNexus blast radius for changes, GitNexus architecture check, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes, dead code misidentification, and parallel duplicate implementations. (Read-only investigations are exempt — this skill only triggers on write-intent tasks.)"
 ---
 
 # Atlas Pre-Change Protocol
