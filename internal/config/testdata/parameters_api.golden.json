@@ -114,6 +114,11 @@
       "results": ""
     },
     {
+      "name": "RestoreFromBackup",
+      "params": "(path string)",
+      "results": "(error)"
+    },
+    {
       "name": "MarshalJSON",
       "params": "",
       "receiver": "SentimentBounds",
@@ -126,9 +131,19 @@
       "results": "(error)"
     },
     {
+      "name": "SetParametersConfigPath",
+      "params": "(path string)",
+      "results": ""
+    },
+    {
       "name": "SetRiskCalibrationMetadata",
       "params": "(name string, t time.Time, method string)",
       "results": ""
+    },
+    {
+      "name": "SnapshotToBackup",
+      "params": "(path string)",
+      "results": "(error)"
     },
     {
       "name": "GetCooldownDuration",

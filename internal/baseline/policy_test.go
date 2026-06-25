@@ -276,3 +276,119 @@ func TestApplyConstraintCandidate(t *testing.T) {
 		t.Error("RequireCROPass should be true")
 	}
 }
+
+func TestSaveWithLock_WritesPolicyFileAtomically(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "baseline_policy.json")
+
+	policy := DefaultPolicy()
+	policy.Version = 5
+	policy.PromptOverrides = map[string]string{"agent-1": "v5 prompt"}
+
+	if err := SaveWithLock(policyPath, policy); err != nil {
+		t.Fatalf("SaveWithLock: %v", err)
+	}
+
+	if _, err := os.Stat(policyPath); err != nil {
+		t.Fatalf("policy file not created: %v", err)
+	}
+
+	loaded, err := Load(policyPath)
+	if err != nil {
+		t.Fatalf("load saved policy: %v", err)
+	}
+	if loaded.Version != 5 {
+		t.Errorf("Version = %d, want 5", loaded.Version)
+	}
+	if loaded.PromptOverrides["agent-1"] != "v5 prompt" {
+		t.Errorf("PromptOverrides[agent-1] = %q, want %q", loaded.PromptOverrides["agent-1"], "v5 prompt")
+	}
+
+	if _, err := os.Stat(policyPath + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("expected .tmp to be cleaned up, got err=%v", err)
+	}
+	if _, err := os.Stat(policyPath + ".bak"); !os.IsNotExist(err) {
+		t.Errorf("expected .bak to be cleaned up, got err=%v", err)
+	}
+}
+
+func TestSaveWithLock_OverwritesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "baseline_policy.json")
+
+	p1 := DefaultPolicy()
+	p1.Version = 1
+	p1.PromptOverrides = map[string]string{"agent-1": "v1"}
+	if err := SaveWithLock(policyPath, p1); err != nil {
+		t.Fatalf("first SaveWithLock: %v", err)
+	}
+
+	p2 := DefaultPolicy()
+	p2.Version = 2
+	p2.PromptOverrides = map[string]string{"agent-1": "v2"}
+	if err := SaveWithLock(policyPath, p2); err != nil {
+		t.Fatalf("second SaveWithLock: %v", err)
+	}
+
+	loaded, err := Load(policyPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.Version != 2 {
+		t.Errorf("Version = %d, want 2", loaded.Version)
+	}
+	if loaded.PromptOverrides["agent-1"] != "v2" {
+		t.Errorf("PromptOverrides[agent-1] = %q, want %q", loaded.PromptOverrides["agent-1"], "v2")
+	}
+}
+
+func TestSaveWithLock_RecoversFromStaleTmpFile(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "baseline_policy.json")
+
+	p1 := DefaultPolicy()
+	p1.Version = 1
+	if err := SaveWithLock(policyPath, p1); err != nil {
+		t.Fatalf("initial SaveWithLock: %v", err)
+	}
+
+	if err := os.WriteFile(policyPath+".tmp", []byte("garbage{{{"), 0o644); err != nil {
+		t.Fatalf("write corrupt tmp: %v", err)
+	}
+
+	p2 := DefaultPolicy()
+	p2.Version = 2
+	if err := SaveWithLock(policyPath, p2); err != nil {
+		t.Fatalf("SaveWithLock with corrupt tmp: %v", err)
+	}
+
+	loaded, err := Load(policyPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.Version != 2 {
+		t.Errorf("Version = %d, want 2", loaded.Version)
+	}
+}
+
+func TestSaveWithLock_CreatesParentDirectory(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "nested", "subdir", "baseline_policy.json")
+
+	policy := DefaultPolicy()
+	policy.Version = 7
+
+	if err := SaveWithLock(policyPath, policy); err != nil {
+		t.Fatalf("SaveWithLock with nested path: %v", err)
+	}
+
+	if _, err := os.Stat(policyPath); err != nil {
+		t.Fatalf("policy file not created in nested dir: %v", err)
+	}
+}
+
+func TestSaveWithLock_EmptyPath(t *testing.T) {
+	if err := SaveWithLock("", DefaultPolicy()); err == nil {
+		t.Error("expected error for empty path, got nil")
+	}
+}

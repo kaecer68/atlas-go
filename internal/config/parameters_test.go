@@ -316,6 +316,225 @@ func TestParametersConfig_SaveWithRollbackPreservesCalibrationEvidence(t *testin
 	}
 }
 
+func TestSnapshotToBackup_CreatesSnapshotFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	if err := SnapshotToBackup(path); err != nil {
+		t.Fatalf("SnapshotToBackup: %v", err)
+	}
+
+	if _, err := os.Stat(path + ".snapshot.bak"); err != nil {
+		t.Fatalf("expected .snapshot.bak to be created: %v", err)
+	}
+
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read original: %v", err)
+	}
+	snapshot, err := os.ReadFile(path + ".snapshot.bak")
+	if err != nil {
+		t.Fatalf("read snapshot: %v", err)
+	}
+	if string(original) != string(snapshot) {
+		t.Errorf("snapshot content does not match original")
+	}
+}
+
+func TestSnapshotToBackup_OverwritesExistingSnapshot(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg1 := DefaultParametersConfig()
+	cfg1.Version = "1.0"
+	if err := cfg1.Save(path); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	if err := SnapshotToBackup(path); err != nil {
+		t.Fatalf("first SnapshotToBackup: %v", err)
+	}
+
+	cfg2 := DefaultParametersConfig()
+	cfg2.Version = "2.0"
+	if err := cfg2.Save(path); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+	if err := SnapshotToBackup(path); err != nil {
+		t.Fatalf("second SnapshotToBackup: %v", err)
+	}
+
+	snapshot, err := os.ReadFile(path + ".snapshot.bak")
+	if err != nil {
+		t.Fatalf("read snapshot: %v", err)
+	}
+	if !strings.Contains(string(snapshot), `"version": "2.0"`) {
+		t.Errorf("snapshot should reflect latest version 2.0, got:\n%s", string(snapshot))
+	}
+}
+
+func TestSnapshotToBackup_EmptyPath(t *testing.T) {
+	if err := SnapshotToBackup(""); err == nil {
+		t.Error("expected error for empty path, got nil")
+	}
+}
+
+func TestSnapshotToBackup_MissingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "nonexistent.json")
+	if err := SnapshotToBackup(path); err == nil {
+		t.Error("expected error for missing source file, got nil")
+	}
+}
+
+func TestRestoreFromBackup_HappyPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.Version = "original-v1"
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if err := SnapshotToBackup(path); err != nil {
+		t.Fatalf("SnapshotToBackup: %v", err)
+	}
+
+	cfg.Version = "modified-v2"
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save modified: %v", err)
+	}
+
+	if err := RestoreFromBackup(path); err != nil {
+		t.Fatalf("RestoreFromBackup: %v", err)
+	}
+
+	restored, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read restored: %v", err)
+	}
+	if !strings.Contains(string(restored), `"version": "original-v1"`) {
+		t.Errorf("expected restored file to contain original-v1, got:\n%s", string(restored))
+	}
+	if strings.Contains(string(restored), `"version": "modified-v2"`) {
+		t.Errorf("restored file should not contain modified-v2, got:\n%s", string(restored))
+	}
+}
+
+func TestRestoreFromBackup_NoSnapshot(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	if err := RestoreFromBackup(path); err == nil {
+		t.Error("expected error when no .snapshot.bak exists, got nil")
+	}
+}
+
+func TestRestoreFromBackup_EmptyPath(t *testing.T) {
+	if err := RestoreFromBackup(""); err == nil {
+		t.Error("expected error for empty path, got nil")
+	}
+}
+
+func TestSequence_SnapshotThenLockedSave_PreservesSnapshot(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.Version = "pre-calibration-v1"
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save initial: %v", err)
+	}
+
+	if err := SnapshotToBackup(path); err != nil {
+		t.Fatalf("SnapshotToBackup: %v", err)
+	}
+
+	cfg.Version = "post-calibration-v2"
+	if err := cfg.LockedSaveWithRollback(path); err != nil {
+		t.Fatalf("LockedSaveWithRollback: %v", err)
+	}
+
+	snapshot, err := os.ReadFile(path + ".snapshot.bak")
+	if err != nil {
+		t.Fatalf("read snapshot: %v", err)
+	}
+	if !strings.Contains(string(snapshot), `"version": "pre-calibration-v1"`) {
+		t.Errorf("snapshot should still contain pre-calibration-v1 after LockedSaveWithRollback, got:\n%s", string(snapshot))
+	}
+
+	if err := RestoreFromBackup(path); err != nil {
+		t.Fatalf("RestoreFromBackup: %v", err)
+	}
+
+	restored, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read restored: %v", err)
+	}
+	if !strings.Contains(string(restored), `"version": "pre-calibration-v1"`) {
+		t.Errorf("restored file should contain pre-calibration-v1, got:\n%s", string(restored))
+	}
+}
+
+func TestSnapshotToBackup_NoTempFileAfterSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if err := SnapshotToBackup(path); err != nil {
+		t.Fatalf("SnapshotToBackup: %v", err)
+	}
+	if _, err := os.Stat(path + ".snapshot.bak.tmp"); !os.IsNotExist(err) {
+		t.Errorf("expected .snapshot.bak.tmp to be cleaned up, got err=%v", err)
+	}
+	if _, err := os.Stat(path + ".snapshot.bak"); err != nil {
+		t.Errorf("expected .snapshot.bak to exist: %v", err)
+	}
+}
+
+func TestRestoreFromBackup_NoTempFileAfterSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.Version = "v1"
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save v1: %v", err)
+	}
+	if err := SnapshotToBackup(path); err != nil {
+		t.Fatalf("SnapshotToBackup: %v", err)
+	}
+	cfg.Version = "v2"
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save v2: %v", err)
+	}
+	if err := RestoreFromBackup(path); err != nil {
+		t.Fatalf("RestoreFromBackup: %v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("expected .tmp to be cleaned up, got err=%v", err)
+	}
+	restored, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read restored: %v", err)
+	}
+	if !strings.Contains(string(restored), `"version": "v1"`) {
+		t.Errorf("restored file should contain v1, got:\n%s", string(restored))
+	}
+}
+
 // TestMirrorCalibrationTimestamp_PreservesJSON verifies the post-processor
 // itself: any input containing `last_calibrated` should produce output that
 // (a) still parses as valid JSON, (b) contains a sibling

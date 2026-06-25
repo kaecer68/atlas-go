@@ -188,6 +188,11 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 				config.SetRiskCalibrationMetadata(name, now, "bayesian_optimization")
 			}
 		}
+		if p := config.GetParametersConfigPath(); p != "" {
+			if err := config.SnapshotToBackup(p); err != nil {
+				fmt.Printf("self_calibrate: snapshot_to_backup failed: %v\n", err)
+			}
+		}
 		if err := config.GetParametersConfig().LockedSaveWithRollback(config.GetParametersConfigPath()); err != nil {
 			// Non-fatal: calibration results remain valid in memory.
 			fmt.Printf("self_calibrate: failed to persist parameters: %v\n", err)

@@ -1602,6 +1602,10 @@ func ResetParametersConfig() {
 	parametersConfig = nil
 }
 
+func SetParametersConfigPath(path string) {
+	parametersPath = path
+}
+
 // ReloadParametersConfig re-reads the parameters JSON file and replaces the
 // singleton configuration. Useful for hot-reload without server restart.
 // Returns any parse or validation error.
@@ -1770,4 +1774,63 @@ func (p *ParametersConfig) TryLockedSaveWithRollback(path string, timeout time.D
 	}
 	defer unlock()
 	return p.SaveWithRollback(path)
+}
+
+// SnapshotToBackup atomically writes a copy of path to path + ".snapshot.bak".
+// Uses the .tmp → fsync → rename pattern (matching LockedWriteFileWithRollback)
+// so a process crash mid-write cannot leave a partial snapshot file. The
+// .snapshot.bak suffix intentionally differs from SaveWithRollback's .bak
+// to avoid the line 1743 os.Remove(bakPath) cleanup.
+func SnapshotToBackup(path string) error {
+	if path == "" {
+		return fmt.Errorf("snapshot path must not be empty")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("snapshot: read source: %w", err)
+	}
+	snapshotPath := path + ".snapshot.bak"
+	tmpPath := snapshotPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("snapshot: write tmp: %w", err)
+	}
+	if f, err := os.OpenFile(tmpPath, os.O_RDONLY, 0); err == nil {
+		_ = f.Sync()
+		_ = f.Close()
+	}
+	if err := os.Rename(tmpPath, snapshotPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("snapshot: rename: %w", err)
+	}
+	return nil
+}
+
+// RestoreFromBackup atomically restores path from path + ".snapshot.bak".
+// Uses the .tmp → fsync → rename pattern so a crash mid-restore cannot
+// corrupt the live parameters file. After a successful rename, the
+// in-memory ParametersConfig singleton is NOT refreshed here — callers
+// that need an in-memory refresh should call ReloadParametersConfig()
+// (this decoupling matches LockedWriteFileWithRollback's contract).
+func RestoreFromBackup(path string) error {
+	if path == "" {
+		return fmt.Errorf("restore path must not be empty")
+	}
+	snapshotPath := path + ".snapshot.bak"
+	data, err := os.ReadFile(snapshotPath)
+	if err != nil {
+		return fmt.Errorf("restore: read snapshot: %w", err)
+	}
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("restore: write tmp: %w", err)
+	}
+	if f, err := os.OpenFile(tmpPath, os.O_RDONLY, 0); err == nil {
+		_ = f.Sync()
+		_ = f.Close()
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("restore: rename: %w", err)
+	}
+	return nil
 }

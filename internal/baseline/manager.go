@@ -32,7 +32,7 @@ func (m *Manager) PromoteResult(resultPath string) (Policy, error) {
 	if err != nil {
 		return Policy{}, err
 	}
-	if err := Save(m.path, next); err != nil {
+	if err := SaveWithLock(m.path, next); err != nil {
 		return Policy{}, err
 	}
 	return next, nil
