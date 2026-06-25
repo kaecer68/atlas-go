@@ -95,14 +95,8 @@ DriftDetector 訂閱 `EventPositionUpdate` 與 `EventRegimeChangeConfirmed`（v2
 
 ## 測試
 
-- `internal/monitoring/service/drift_detector_test.go`（v1，6 個測試）：
-  - `TestDriftDetector_NoEmitOnLowConcentration`：4 個 symbol 各 25% 不 emit（threshold 25% 為 exclusive）
-  - `TestDriftDetector_EmitsOnHighConcentration`：70% 集中 emit + 驗證 max_symbol + reasons
-  - `TestDriftDetector_EmitsOnHighTurnover`：50% turnover emit + 驗證 reasons 包含 "turnover"
-  - `TestDriftDetector_RemovedSymbolCleared`：ChangeType=removed 從 snapshots 清除
-  - `TestDriftDetector_EmptyPortfolioNoEmit`：空 portfolio 不 emit（避免 divide by zero）
-  - `TestAbsDiff`：3 個 sub-cases（a>b / a<b / a==b）
-- `internal/monitoring/service/drift_detector_v2_test.go`（v2，9 個測試）：
+- `internal/monitoring/service/drift_detector_test.go`（v1，6 個測試）
+- `internal/monitoring/service/drift_detector_v2_test.go`（v2，14 個測試）：
   - `TestDriftDetector_V2TargetDriftEmitted`：target 偏離 > 10% emit + 驗證 v2 payload 欄位
   - `TestDriftDetector_V2TargetDriftNoEmit`：target 對齊 + 平衡組合不 emit
   - `TestDriftDetector_V2NilProviderGraceful`：nil provider 保留 v1 行為
@@ -112,6 +106,12 @@ DriftDetector 訂閱 `EventPositionUpdate` 與 `EventRegimeChangeConfirmed`（v2
   - `TestDriftDetector_V2SymbolNotInTargetMap`：target=0 處理缺漏 symbol
   - `TestDriftDetector_V2SchemaVersionBumped`：SchemaVersion=2
   - `TestDriftDetector_V2ConcurrentProviderAccess`：concurrent 讀取無 race
+  - `TestDriftDetector_V1ConstructorEmitsSchemaVersion1`：legacy constructor 維持 SchemaVersion=1
+  - `TestDriftDetector_V2RegimeChangeTriggersNewProviderQuery`：regime 改變後使用新 regime 查詢 target weights
+  - `TestDriftDetector_V2EmptyRegimeStringPassesToProvider`：首次檢查使用空 regime
+  - `TestDriftDetector_V2StopCancelsBothSubscriptions`：v2 Stop 取消兩個訂閱
+  - `TestDriftDetector_V1StartDoesNotSubscribeToRegime`：v1 不訂閱 regime confirmed
+  - `TestDriftDetector_V2StartSubscribesToBoth`：v2 同時訂閱 position update 與 regime confirmed
 
 ## Forward-Compat 驗證
 

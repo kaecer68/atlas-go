@@ -48,8 +48,8 @@ Two interfaces listed in the original Phase 0 context do NOT exist in the codeba
 ## Contract 3: EventRegimeChange + PublishRegimeChange + RegimeEventPayload
 
 - **Constant**: `internal/eventbus/eventbus.go:26` — `EventRegimeChange EventType = "market.regime.change"`
-- **Publisher**: `internal/eventbus/eventbus.go:604` — `func (b *ChannelEventBus) PublishRegimeChange(oldRegime, newRegime domain.Regime, confidence float64, determinedBy string)`
-- **Payload**: `internal/eventbus/eventbus.go:100-105` — `RegimeEventPayload{OldRegime, NewRegime, Confidence, DeterminedBy}`
+- **Publisher**: `internal/eventbus/eventbus.go:617` — `func (b *ChannelEventBus) PublishRegimeChange(oldRegime, newRegime domain.Regime, confidence float64, determinedBy string)`
+- **Payload**: `internal/eventbus/eventbus.go:107-112` — `RegimeEventPayload{OldRegime, NewRegime, Confidence, DeterminedBy}`
 - **JSON tags**: `old_regime`, `new_regime`, `confidence`, `determined_by`
 - **Live alias**: `internal/live/eventbus.go:33` (const) + `:16` (type alias)
 - **Subscribers**:
@@ -79,8 +79,8 @@ Two interfaces listed in the original Phase 0 context do NOT exist in the codeba
 ## Contract 5: EventPositionUpdate + PublishPositionUpdate + PositionEventPayload
 
 - **Constant**: `internal/eventbus/eventbus.go:29` — `EventPositionUpdate EventType = "portfolio.position.update"`
-- **Publisher**: `internal/eventbus/eventbus.go:620` — `func (b *ChannelEventBus) PublishPositionUpdate(symbol string, position domain.Position, changeType string)`
-- **Payload**: `internal/eventbus/eventbus.go:107-112` — `PositionEventPayload{Symbol, Position, ChangeType}`
+- **Publisher**: `internal/eventbus/eventbus.go:633` — `func (b *ChannelEventBus) PublishPositionUpdate(symbol string, position domain.Position, changeType string)`
+- **Payload**: `internal/eventbus/eventbus.go:115-119` — `PositionEventPayload{Symbol, Position, ChangeType}`
 - **JSON tags**: `symbol`, `position`, `change_type`
 - **Live alias**: `internal/live/eventbus.go:34` (const) + `:17` (type alias)
 - **Subscribers**: `internal/live/orchestrator.go:341`
@@ -101,8 +101,8 @@ Two interfaces listed in the original Phase 0 context do NOT exist in the codeba
 
 ### EventMarketSnapshot
 - **Constant**: `internal/eventbus/eventbus.go:20` — `EventMarketSnapshot EventType = "market.snapshot"`
-- **Publisher**: `internal/eventbus/eventbus.go:559` — `func (b *ChannelEventBus) PublishMarketSnapshot(quote domain.Quote)`
-- **Payload**: `internal/eventbus/eventbus.go:93-97` — `MarketEventPayload{Symbol, Quote, Timestamp}`
+- **Publisher**: `internal/eventbus/eventbus.go:572` — `func (b *ChannelEventBus) PublishMarketSnapshot(quote domain.Quote)`
+- **Payload**: `internal/eventbus/eventbus.go:100-104` — `MarketEventPayload{Symbol, Quote, Timestamp}`
 - **Live alias**: `internal/live/eventbus.go:29` (const) + `:15` (type alias)
 - **Subscribers**: `internal/live/orchestrator.go:320,336,596`
 - **Existing tests**: `internal/eventbus/eventbus_test.go` (TestPublishMarketSnapshot)

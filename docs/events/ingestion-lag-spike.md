@@ -34,12 +34,13 @@ IngestionLagMonitor 透過 constructor DI 注入的 `IngestionLagProvider` 讀�
 ## 對應 Source
 
 - `IngestionLagProvider` interface：`P99LatencySeconds() float64`
-- 預期實作：在 `internal/apigateway/background.go` 加 `ingestion_latency_seconds` Prometheus histogram
-  - 由 `BackgroundTaskManager.RecordIngestionLatency(d time.Duration)` 記錄每個 ingestion 操作的耗時
-  - 由 `*BackgroundTaskManager` 實作 `IngestionLagProvider` interface，回傳 `histogram_quantile(0.99, rate(...))`
-- ⚠️ **本 PR 範圍**：只提供 service 框架（monitoring/service/）與 IngestionLagProvider interface
-- ⚠️ **待 follow-up PR**：`internal/apigateway/background.go` 加 histogram + 實作 IngestionLagProvider（**不在 #611 list**，可直接修改）
-- ⚠️ **目前行為**：未接 provider 時 `nil` 不 emit，service 仍可啟動但永遠不觸發
+- 生產實作：`internal/monitoring/service/ingestion_lag_provider.go` 的 `ChannelHealthIngestionLagProvider`
+  - 從 `ChannelHealthStore.ChannelLatencyMs(channelID)` 讀取每個 channel 的毫秒級延遲
+  - 對所有 channel 的延遲排序後取 99th percentile
+  - 無 latency 資料的 channel 會被忽略；全部無資料時回傳 0
+- 底層 store：`internal/apigateway/health.go` 的 `UnifiedHealthStore` 維護 `ChannelLatencyMs`
+- ✅ **PR #695 已完成生產資料來源**：不再需要額外在 `internal/apigateway/background.go` 新增 histogram
+- 殘留 gaps：目前僅測量 fetch 完成後的 channel latency，fill-driven latency 仍由 background task 日誌間接觀察
 
 ## 對應 Alert Rule
 
@@ -49,6 +50,7 @@ IngestionLagMonitor 透過 constructor DI 注入的 `IngestionLagProvider` 讀�
 ## 對應 Service
 
 - `internal/monitoring/service/ingestion_lag_monitor.go`：`IngestionLagMonitor` 介面 + 實作
+- `internal/monitoring/service/ingestion_lag_provider.go`：`ChannelHealthIngestionLagProvider` 生產實作
 - 依賴注入：`NewIngestionLagMonitor(bus eventbus.EventBus, provider IngestionLagProvider)`
 - `IngestionLagProvider` interface 定義在 service/ 內（**不 import apigateway**，避免 import cycle）
 
@@ -61,30 +63,13 @@ IngestionLagMonitor 透過 constructor DI 注入的 `IngestionLagProvider` 讀�
   - `TestIngestionLagMonitor_EmitsAgainAfterDedupWindow`：60 秒後重新 emit
   - `TestIngestionLagMonitor_NilProviderNoEmit`：nil provider 不 panic
   - `TestIngestionLagMonitor_StartStopLifecycle`：背景 poll 正常運作
+- `internal/monitoring/service/ingestion_lag_provider_test.go`：
+  - 驗證 `ChannelHealthIngestionLagProvider.P99LatencySeconds()` 從 mock health store 正確計算 p99
 
 ## Forward-Compat 驗證
 
 - ✅ monitoring/service 不 import internal/apigateway（避免 import cycle）
 - ✅ 0 修改 #611 9 個檔案
-- ✅ `internal/apigateway/background.go` 不在 #611 list，可獨立 PR 加 histogram（不影響本 PR）
-
-## 待辦 Follow-up
-
-1. **`internal/apigateway/background.go` 加 histogram**（獨立 PR）：
-   ```go
-   ingestionLatencySeconds prometheus.Histogram
-
-   func (m *BackgroundTaskManager) RecordIngestionLatency(d time.Duration) {
-       m.ingestionLatencySeconds.Observe(d.Seconds())
-   }
-   ```
-2. **`*BackgroundTaskManager` 實作 `IngestionLagProvider`**：
-   ```go
-   func (m *BackgroundTaskManager) P99LatencySeconds() float64 {
-       // 從 histogram exporter 讀 p99
-   }
-   ```
-3. **wiring**：在 `cmd/atlas/main.go` 將 `*BackgroundTaskManager` 注入 `NewIngestionLagMonitor`
 
 ## 啟用情境（建議）
 

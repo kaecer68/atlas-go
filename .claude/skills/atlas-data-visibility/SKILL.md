@@ -198,6 +198,17 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (*CachedSnap
 
 **關鍵設計**: Service 層是「業務判官」。它根據領域知識（8 個 US 欄位全零 = 資料異常）決定整體狀態，並把這個判斷結果寫入 API response，讓前端不需要自己猜。
 
+### Wave 9 擴展：ChannelHealthSynthesizer 與 IngestionLagMonitor
+
+同樣的 L2 `ChannelErrors()` API 在 Wave 9 被 `ChannelHealthSynthesizer` 消費，轉為事件驅動的個別通道健康通知：
+
+| 元件 | 檔案 | 輸入 | 輸出 |
+|------|------|------|------|
+| `ChannelHealthSynthesizer` | `internal/monitoring/service/channel_health_synthesizer.go` | `ChannelHealthProvider.ChannelErrors()` | `EventChannelIndividualHealth` |
+| `IngestionLagMonitor` | `internal/monitoring/service/ingestion_lag_monitor.go` | `IngestionLagProvider.P99LatencySeconds()`（生產實作為 `ChannelHealthIngestionLagProvider`，底層讀取 `UnifiedHealthStore.ChannelLatencyMs`） | `EventIngestionLagSpike` |
+
+兩者都遵循「底層誠實報告、上層業務判斷、事件驅動暴露」的資料可見性模式，與 CrossMarketService 共享同一套 L1/L2 基礎設施。詳見 `internal/monitoring/wave9_runtime.go`。
+
 ---
 
 ### Layer 4: Frontend (`web/static/js/pages/crossmarket.js`)
@@ -423,14 +434,18 @@ cache.Set("snapshot", snapshot.Data) // status 被丟掉了
 |------|------|------|
 | `internal/apigateway/provider.go` | Layer 1 | `FetchResult` struct 定義 |
 | `internal/apigateway/gateway.go` | Layer 1 | Stale cache path 標記邏輯 |
+| `internal/apigateway/health.go` | Layer 1/2 | `UnifiedHealthStore` 與 `ChannelLatencyMs`（Wave 9） |
 | `internal/monitoring/gateway_adapter.go` | Layer 2 | `ChannelErrors()` 與 per-channel 錯誤收集 |
 | `internal/monitoring/service/crossmarket.go` | Layer 3 | `CrossMarketStatus` 與 `isAllZero()` 檢測 |
+| `internal/monitoring/service/channel_health_synthesizer.go` | Wave 9 | 將 `ChannelErrors()` 轉為 `EventChannelIndividualHealth` |
+| `internal/monitoring/service/ingestion_lag_provider.go` | Wave 9 | `ChannelHealthIngestionLagProvider` 生產實作 |
+| `internal/monitoring/wave9_runtime.go` | Wave 9 | 5 個偵測器協調器 |
 | `web/static/js/pages/crossmarket.js` | Layer 4 | `getField()`、`kpiCard()`、degraded banner |
 | `web/static/css/components/error-banner.css` | Layer 4 | 錯誤 banner 樣式 |
 | `web/static/css/components/badge.css` | Layer 4 | 紅色錯誤徽章樣式 |
 
 ---
 
-*技能版本: 1.0*
-*最後更新: 2026-06-11*
+*技能版本: 1.1*
+*最後更新: 2026-06-25*
 *適用對象: Atlas-Go AI Agent*

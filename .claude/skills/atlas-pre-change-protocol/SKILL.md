@@ -85,14 +85,14 @@ Verify no constitutional violations before writing code:
 |---------------|--------------|-----------|
 | Data fetching / API calls | `internal/apigateway/CONSTITUTION.md` | Art.1: registered channels only. Art.4: BackgroundTaskManager only. Art.5: ParametersConfig only. |
 | Portfolio / optimizer | `docs/GUIDELINES_INDEX.md` + module AGENTS.md | Matrix ops required (Ledoit-Wolf), NOT linear weighting. Asset-universal code. |
-| FactorType changes | `AGENTS.md` §高危陷阱 #22 | Must update 7 locations. Verify with `verify_factor_integrity.sh`. |
+| FactorType changes | `AGENTS.md` §高危陷阱 #22 | Must update 8 locations. Verify with `verify_factor_integrity.sh`. |
 
 ### Step 5: PATTERN MATCHING
 
 Verify alignment with existing conventions BEFORE coding:
 
 ```
-1. Read AGENTS.md 高危陷阱 table (lines 224-249) — does your change violate any?
+1. Read AGENTS.md 高危陷阱 table — does your change violate any?
    → Darwinian clipping [0.3, 2.5]? Reused mutable slices? Missing baseline?
    → GuardOutcomes ID override? OutcomeCount from global file?
 2. Match repository design principles:
@@ -179,8 +179,9 @@ Before modifying or removing code, understand WHY it exists:
 |----------|---------|
 | `AGENTS.md` | Project constitution, 22 高危陷阱, git workflow |
 | `docs/GUIDELINES_INDEX.md` | Authority hierarchy, use-case routing |
+| `docs/ENVIRONMENT.md` | Verified external dependency versions and setup notes |
 | `.claude/SKILLS-MAP.md` | Full skill inventory (38+ skills) |
-| `.claude/skills/atlas-core-architecture/SKILL.md` | System architecture and data flow |
+| `docs/architecture.md` | System architecture and data flow |
 | `gitnexus://repo/atlas-go/clusters` | All functional communities detected by GitNexus |
 
 **Tool quick reference:**

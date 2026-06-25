@@ -120,8 +120,25 @@ IF MacroRiskLevel = Yellow/Orange
 | `internal/risk/industry_risk.go` | 產業集中度風險 |
 | `internal/portfolio/sector_rotator.go` | 產業輪動執行器 |
 | `internal/portfolio/sizing.go` | 動態倉位調整（Kelly-based） |
+| `internal/monitoring/service/drift_detector.go` | Wave 9 — 部位集中度 / turnover / target weights drift 偵測 |
+| `internal/baseline/trigger.go` | Wave 9 — baseline policy StopLoss / TakeProfit / MaxHoldingDays 執行期評估 |
+| `internal/monitoring/wave9_runtime.go` | Wave 9 — 5 個觀測器協調器（含 DriftDetector 與 regime debouncer） |
 
 ---
 
-*技能版本: 2.0*  
-*最後更新: 2026-06-02*
+## Wave 9 觀測性整合
+
+Wave 9 新增以下與風險管理直接相關的執行期訊號，風險相關變更應一併考量：
+
+- **`EventDriftDetected`**（`internal/monitoring/service/drift_detector.go`）
+  - 觸發條件：單一持倉集中度 > 25%、5 分鐘 turnover > 15%、或 v2 target weights drift > 10%。
+  - 風險意義：Portfolio 層級的結構性風險；可搭配 `BaselineTrigger` 的停損/停利進行人工審查。
+- **`BaselineTrigger`**（`internal/baseline/trigger.go`）
+  - 訂閱 `EventPositionUpdate`，對每個部位評估 `Constraints.StopLossPct`、`TakeProfitPct`、`MaxHoldingDays`。
+  - 與 `internal/sim/engine.go` 使用相同的正數幅度語意。
+  - 目前只產生 structured log，不自動下單；未來若擴展為自動平倉，需審慎設計閘門與人工覆寫。
+- **`EventRegimeChangeConfirmed`**（`internal/monitoring/service/regime_debouncer.go`）
+  - regime 穩定 30 秒後發布，下游 `FactorWeightRegressionDetector` 與 `DriftDetector` 會據此調整權重或 re-baseline。
+
+*技能版本: 2.1*
+*最後更新: 2026-06-25*
