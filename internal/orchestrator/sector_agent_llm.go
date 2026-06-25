@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/llm"
 )
 
 // SectorAgentLLM is the template for an LLM-driven sector agent that
@@ -26,6 +27,11 @@ type SectorAgentLLM struct {
 	LLM LLMDriver
 	// ConvictionFloor is the minimum conviction to emit a final rec.
 	ConvictionFloor int
+	// Tools is the registry of tools the agent may invoke during plan →
+	// tool_call → reflect. When LLM != nil but Tools is empty, RunToolCall
+	// panics to prevent silent stub data being fed back to the LLM.
+	// See internal/llm.SafeInvokeHandler for the recommended call pattern.
+	Tools []llm.Tool
 }
 
 // LLMDriver is the minimal contract an LLM backend must satisfy to
@@ -56,11 +62,35 @@ func (a *SectorAgentLLM) PlanStep(ctx context.Context, symbol string, _ domain.R
 	return steps, err
 }
 
-// RunToolCall is a no-op stub. Production wiring must dispatch to a
-// tool registry (see internal/llm.Tool for the function-calling
-// contract introduced in L2.3).
+// RunToolCall satisfies PlanReflectRunner.
+//
+// LLM == nil  → returns ErrNotImplemented (deterministic stub path,
+//
+//	preserves test-time behavior of the unconfigured agent).
+//
+// LLM != nil AND Tools empty → panics. A wired LLM with no tool registry
+//
+//	would silently feed synthetic stub results back to the LLM,
+//	corrupting the plan→reflect loop. Issue #711 #4.
+//
+// LLM != nil AND Tools present → dispatched to the matching tool via
+//
+//	SafeInvokeHandler. Full tool-dispatch implementation lives
+//	in the L2.3 adapter PR (PR5a); for now this branch returns
+//	an explicit "not yet wired" error so callers see a clear
+//	signal instead of silent stubs.
 func (a *SectorAgentLLM) RunToolCall(_ context.Context, step PlanStep) (string, error) {
-	return fmt.Sprintf("stub result for %s", step.ToolName), nil
+	if a.LLM == nil {
+		return "", ErrNotImplemented
+	}
+	if len(a.Tools) == 0 {
+		panic(fmt.Sprintf(
+			"sector_agent_llm.RunToolCall: LLM wired but Tools registry empty (skill=%q, step.ToolName=%q); "+
+				"this would feed stub data back to the LLM. Wire Tools via SetTools() or set a.LLM = nil to use the stub path",
+			a.Skill, step.ToolName,
+		))
+	}
+	return "", fmt.Errorf("sector_agent_llm.RunToolCall: tool dispatch not yet implemented for skill=%q tool=%q (PR5a)", a.Skill, step.ToolName)
 }
 
 // Reflect satisfies PlanReflectRunner. Same caveat as PlanStep.

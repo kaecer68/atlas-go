@@ -10,6 +10,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"time"
 )
 
@@ -132,8 +135,12 @@ type Tool struct {
 	InputSchema json.RawMessage
 
 	// Handler is the Go-side executor for this tool. It receives the
-	// raw JSON arguments (already validated by the LLM) and returns
-	// either a JSON result or an error.
+	// raw JSON arguments and returns either a JSON result or an error.
+	//
+	// **LLM validation is a hint, not a guarantee.** The LLM's compliance
+	// with InputSchema is probabilistic — the Handler MUST validate
+	// arguments itself before using them. See SafeInvokeHandler for the
+	// recommended invocation pattern (it also recovers from panics).
 	Handler func(ctx context.Context, args json.RawMessage) (json.RawMessage, error)
 }
 
@@ -149,6 +156,66 @@ type ToolCall struct {
 
 	// Arguments is the raw JSON arguments the LLM produced.
 	Arguments json.RawMessage
+}
+
+// InputArgsFactory creates a zero-value instance of the typed args struct
+// that a tool's handler expects. This enables typed-binding on top of the
+// raw json.RawMessage Handler signature: production code calls BindTypedArgs
+// with the factory and a typed handler, then assigns the result to Tool.Handler.
+//
+// Phase 1 introduces the type and BindTypedArgs helper; the sector_agent_llm
+// tool-dispatch path (PR5a) will use it. No production tool is required to
+// migrate to typed binding — RawMessage-based handlers remain fully supported.
+type InputArgsFactory[T any] func() T
+
+// BindTypedArgs wraps a typed handler (ctx, In) -> (Out, error) in a raw JSON
+// adapter that satisfies the Tool.Handler signature. The framework calls the
+// returned closure with json.RawMessage; BindTypedArgs unmarshals into In,
+// invokes the typed handler, and re-marshals Out back to RawMessage.
+//
+// Two type parameters (In, Out) reflect the common L2.3 use case where the
+// args and result structs are different types (e.g. get_weatherArgs ->
+// weatherResult). Unmarshal errors and typed-handler errors are wrapped with
+// the tool name so logs and error chains identify which tool failed.
+func BindTypedArgs[In, Out any](toolName string, factory InputArgsFactory[In], handler func(ctx context.Context, args In) (Out, error)) func(ctx context.Context, args json.RawMessage) (json.RawMessage, error) {
+	return func(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
+		in := factory()
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return nil, fmt.Errorf("tool %q: typed args unmarshal: %w", toolName, err)
+		}
+		out, err := handler(ctx, in)
+		if err != nil {
+			return nil, fmt.Errorf("tool %q: %w", toolName, err)
+		}
+		marshaled, err := json.Marshal(out)
+		if err != nil {
+			return nil, fmt.Errorf("tool %q: typed result marshal: %w", toolName, err)
+		}
+		return marshaled, nil
+	}
+}
+
+// SafeInvokeHandler invokes t.Handler with panic recovery. A panicking
+// handler is converted to a regular error so one buggy tool cannot crash
+// the LLM driver. The recovered stack is logged via slog for post-mortem.
+//
+// This is the recommended invocation pattern for all production tool
+// dispatchers (see internal/orchestrator for usage). Tests may call
+// t.Handler directly since panics in tests fail the test.
+func SafeInvokeHandler(ctx context.Context, t *Tool, args json.RawMessage) (result json.RawMessage, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			slog.Error("tool handler panic recovered",
+				"tool", t.Name,
+				"panic", fmt.Sprintf("%v", r),
+				"stack", string(stack),
+			)
+			err = fmt.Errorf("tool %q handler panicked: %v", t.Name, r)
+			result = nil
+		}
+	}()
+	return t.Handler(ctx, args)
 }
 
 // Response holds the result of a successful LLM inference.
