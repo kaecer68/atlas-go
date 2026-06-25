@@ -212,6 +212,40 @@ wave9_observability stopped
 
 Wave 9 的生產 provider（`ChannelHealthProvider`、`IngestionLagProvider`、`WeightProvider`、`TargetWeightsProvider`）需要正確的環境與外部服務。詳見 `docs/ENVIRONMENT.md`。
 
+## Wave 9 觀測性 v0.0.0.18 修復與運維指引
+
+v0.0.0.18（PR #704，`feat/wave-10-l1-l2-iteration`）修了 v0.0.0.17 Wave 9 observability wire 的三個 production bug 與一個測試覆蓋缺口。以下是運維時需要注意的場景：
+
+### 1. SSE catchup 在 `runLiveTrading` 是空的
+
+**症狀**：Dashboard 重新連線後看不到即時事件（空白 timeline），但 `run()`（模擬模式）正常。
+
+**根因**：v0.0.0.17 的 15 組 buffer 訂閱只註冊在 `dashEventBus`（模擬用 bus），但 `runLiveTrading` 的 Wave 9 偵測器 publish 到 `eventBus`（另一個獨立 bus 實例），所以 live mode 的 SSE catchup buffer 永遠是空的。
+
+**v0.0.0.18 修法**：批次訂閱 helper `apievents.RegisterDashboardBufferSubs(bus)`（`internal/monitoring/api/events/sse_handler_subscriptions.go`）現在接受 `eventbus.EventBus` 介面。`cmd/atlas/main.go` 的 `run()` 與 `runLiveTrading()` 都會各自呼叫 `RegisterDashboardBufferSubs` 並傳入當前使用的 bus（`dashEventBus` / `eventBus`），確保 live mode SSE catchup 正常。
+
+**運維檢查**：在 live mode 啟動 log 中搜尋 live bus 上的 buffer 訂閱確認。若 SSE 仍為空：確認 `runLiveTrading` 呼叫了 `RegisterDashboardBufferSubs(eventBus)`。
+
+### 2. `risk.NewAuditSubscriber` 重複登錄導致 JSONL 重複
+
+**症狀**：`data/audit/` 目錄下的 JSONL 檔案中每筆風險事件都出現重複記錄。
+
+**根因**：v0.0.0.17 的 `risk.NewAuditSubscriber(bus)` 每次呼叫都會建立新的 subscriber 並註冊到 bus，沒有檢查是否已存在。`cmd/atlas/main.go` 如果在同一 bus 實例上呼叫多次（如 live mode 初始化與 dashboard 初始化路徑重疊），就會產生重複的事件記錄。
+
+**v0.0.0.18 修法**：`risk.NewAuditSubscriber` 現在是 **idempotent**（等冪 — 多次呼叫同一 bus 實例只會建立一個 subscriber）。內部使用 process-wide registry（`var auditSubscribers = make(map[*eventbus.ChannelEventBus]*AuditSubscriber)`）keyed by bus pointer，後續呼叫回傳已存在的 subscriber。
+
+**運維檢查**：檢查 `data/audit/` 目錄的 JSONL 檔案中 `recorded_at` timestamp 是否唯一。`cmd/atlas/main.go` 的 `run()` 與 `runLiveTrading()` 各自呼叫 `risk.NewAuditSubscriber` 在不同的 bus 上是安全的（兩個 bus 實例不同，各自有一個 subscriber）。
+
+### 3. `Wave9Observability.Start` 部分失敗時 goroutine 洩漏
+
+**症狀**：平行啟動 3 個 detector（DriftDetector / ChannelHealthSynthesizer / IngestionLagMonitor）時某一個失敗，log 顯示 error 但其他兩個仍在執行，且 retry Start 時報錯。
+
+**根因**：v0.0.0.17 的 `Start` 在平行啟動失敗後沒有 cleanup 已成功啟動的 detector，也沒有清空內部 field references。retry 時會嘗試啟動已在執行的 detector 實例。
+
+**v0.0.0.18 修法**：`Start` 現在使用 `defer` cleanup，以 LIFO 順序 `Stop()` 已成功啟動的 detector，並把 `w.started = false` 與所有 detector 欄位設為 nil（retry 拿到 fresh instances）。`errs` channel 改用 `errors.Join` 聚合所有平行啟動失敗（不再只回傳第一個）；cleanup 過程中的 `Stop()` 失敗同樣以 `errors.Join` 摺入最終回傳的 error。呼叫端可從 error chain 區分「partial-failure 但 cleanup 乾淨」與「partial-failure 且 leaked subscriptions」。
+
+**運維檢查**：若 `started component=wave9_observability` 出現後隨即出現 error log，檢查 error chain 中是否包含 `errors.Join` 的多個 error。cleanup 乾淨的情況下 retry `Start` 應能成功。
+
 
 ## Operator Techniques
 

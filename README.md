@@ -12,6 +12,7 @@ It provides an auditable workflow for:
 
 ## Recent updates
 
+- **v0.0.0.18 (Wave 9 gap fixes)** — Closed 3 production bugs (SSE catchup dead in `runLiveTrading`, `Start` partial-failure cleanup without defer, `errs` channel dropping errors after first), added v2/chain integration tests, and made `risk.NewAuditSubscriber` idempotent. See [CHANGELOG.md](CHANGELOG.md).
 - **v0.0.0.17 (Wave 9 wire)** — Completed Wave 9 observability wiring (`Wave9Observability`, five detectors, `ChannelHealthSynthesizer`), `BaselineTrigger` policy enforcement, and `docs/ENVIRONMENT.md`. See [CHANGELOG.md](CHANGELOG.md).
 - **v0.0.0.16 (Wave 9 trigger)** — Baseline runtime policy enforcement (`baseline.Trigger`), StopLoss/TakeProfit/MaxHoldingDays violations, and Layer 3 baseline tests. See [CHANGELOG.md](CHANGELOG.md).
 - **v0.0.0.8 (Wave 9 schema)** — Wave 9 event schema: `EventPositionUpdate`, `EventRegimeChangeConfirmed`, `EventFactorWeightRegression`, `EventIngestionLagSpike`, `EventDriftDetected`, `EventChannelIndividualHealth`. See [CHANGELOG.md](CHANGELOG.md).
