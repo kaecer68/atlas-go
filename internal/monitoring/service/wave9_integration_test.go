@@ -81,6 +81,17 @@ func (p *staticIngestionLagProvider) P99LatencySeconds() float64 {
 	return p.p99
 }
 
+// staticTargetWeightsProvider returns a static target-weights map keyed by regime.
+// A nil/empty map for a given regime is equivalent to "no target tracking" and
+// causes the DriftDetector v2 to skip the target_drift check.
+type staticTargetWeightsProvider struct {
+	byRegime map[string]map[string]float64
+}
+
+func (p *staticTargetWeightsProvider) GetTargetWeights(regime string) map[string]float64 {
+	return p.byRegime[regime]
+}
+
 // waitForHandlers yields briefly so that the real ChannelEventBus dispatcher
 // and per-handler goroutines can process published events.  It avoids the
 // long real-time waits that the production tickers would impose.
@@ -433,4 +444,256 @@ func TestWave9Integration_EndToEndEventFlow(t *testing.T) {
 	// Ingestion-lag spike via private check.
 	il.(*ingestionLagMonitor).check(time.Now())
 	rec.WaitForEvent(t, eventbus.EventIngestionLagSpike, 2*time.Second)
+}
+
+// TestWave9Integration_DriftDetectorV2Flow is the integration-level coverage
+// for DriftDetector v2 (NewDriftDetectorWithTargets).  It exercises the full
+// subscribe → handler → publish chain over a real ChannelEventBus and
+// verifies:
+//   - target_drift is emitted when actual portfolio weights deviate from
+//     target weights beyond DriftTargetWeightThreshold (10%);
+//   - SchemaVersion=2 (v2 contract) is set on the emitted event;
+//   - v2-only payload fields (current_regime, target_weights, actual_weights,
+//     max_drift, max_drift_symbol) are populated;
+//   - the concentration reason is still emitted (v1 behavior preserved).
+//
+// Unit-level coverage for the v2 path lives in drift_detector_v2_test.go;
+// this test exists to close the integration-test gap so a future refactor
+// that breaks the bus-level wiring (e.g. wrong payload type assertion) is
+// caught by the same suite that covers v1.
+func TestWave9Integration_DriftDetectorV2Flow(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(256)
+	defer func() { _ = bus.Close() }()
+
+	rec := newIntegrationBusRecorder()
+	bus.Subscribe(eventbus.EventDriftDetected, rec.Handle)
+
+	// Target says each of the 4 symbols should be 25%; actual is 70% in 2330
+	// and 10% in the rest, so 2330 is way off-target.
+	provider := &staticTargetWeightsProvider{
+		byRegime: map[string]map[string]float64{
+			"": {"2330": 0.25, "2454": 0.25, "2317": 0.25, "2881": 0.25},
+		},
+	}
+
+	dd := NewDriftDetectorWithTargets(bus, provider)
+	ctx := context.Background()
+	if err := dd.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer func() { _ = dd.Stop() }()
+
+	// Publish 4 position updates that together produce 70/10/10/10 weights.
+	for _, sym := range []string{"2330", "2454", "2317", "2881"} {
+		mv := 100_000.0
+		if sym == "2330" {
+			mv = 700_000
+		}
+		bus.Publish(eventbus.BusEvent{
+			Type:      eventbus.EventPositionUpdate,
+			Timestamp: time.Now(),
+			Payload: eventbus.PositionEventPayload{
+				Symbol:     sym,
+				ChangeType: "added",
+				Position: domain.Position{
+					Symbol:       sym,
+					Quantity:     1000,
+					MarketValue:  mv,
+					CurrentPrice: mv / 1000,
+				},
+			},
+			SchemaVersion: 1,
+		})
+	}
+	waitForHandlers()
+
+	// First checkPeriod establishes baseline (no emit).
+	d := dd.(*driftDetector)
+	d.checkPeriod(time.Now())
+	waitForHandlers()
+	if got := rec.snapshot()[eventbus.EventDriftDetected]; got != 0 {
+		t.Fatalf("first check should not emit (baseline), got %d events", got)
+	}
+
+	// Second checkPeriod: target_drift + concentration should both fire.
+	d.checkPeriod(time.Now().Add(time.Minute))
+	ev := rec.WaitForEvent(t, eventbus.EventDriftDetected, 2*time.Second)
+	if ev.SchemaVersion != 2 {
+		t.Errorf("v2 detector must emit SchemaVersion=2, got %d", ev.SchemaVersion)
+	}
+	payload, ok := ev.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("want map[string]any payload, got %T", ev.Payload)
+	}
+
+	// v1 contract preserved: concentration + thresholds.
+	reasons := payload["reasons"].([]string)
+	hasConcentration := false
+	for _, r := range reasons {
+		if r == ReasonConcentration {
+			hasConcentration = true
+		}
+	}
+	if !hasConcentration {
+		t.Errorf("expected reasons to include concentration, got %v", reasons)
+	}
+
+	// v2 contract: target_drift reason + v2 fields.
+	hasTargetDrift := false
+	for _, r := range reasons {
+		if r == ReasonTargetDrift {
+			hasTargetDrift = true
+		}
+	}
+	if !hasTargetDrift {
+		t.Errorf("expected reasons to include target_drift, got %v", reasons)
+	}
+	if _, ok := payload["target_weights"].(map[string]float64); !ok {
+		t.Error("v2 payload missing target_weights as map[string]float64")
+	}
+	if _, ok := payload["actual_weights"].(map[string]float64); !ok {
+		t.Error("v2 payload missing actual_weights as map[string]float64")
+	}
+	if _, hasCurrentRegime := payload["current_regime"]; !hasCurrentRegime {
+		t.Error("v2 payload missing current_regime field (even when no regime change received)")
+	}
+	if maxDrift, ok := payload["max_drift"].(float64); !ok || maxDrift < 0.10 {
+		t.Errorf("v2 payload max_drift should reflect 2330 deviation (~0.45), got %v", payload["max_drift"])
+	}
+	if sym := payload["max_drift_symbol"]; sym != "2330" {
+		t.Errorf("v2 max_drift_symbol should be 2330, got %v", sym)
+	}
+
+	thresholds := payload["thresholds"].(map[string]float64)
+	if _, ok := thresholds["target_drift"]; !ok {
+		t.Errorf("v2 payload thresholds missing target_drift key, got %v", thresholds)
+	}
+}
+
+// TestWave9Integration_RegimeDebouncerDrivesDriftDetectorV2 verifies the
+// production chain: RegimeDebouncer publishes EventRegimeChangeConfirmed,
+// and DriftDetector v2 (NewDriftDetectorWithTargets) re-baselines its
+// prevTotal and updates currentRegime in response.  The pre-existing v2
+// unit tests cover the handler in isolation, but this is the only test
+// that drives the bus-level subscription and confirms the two detectors
+// cooperate end-to-end on a real ChannelEventBus.
+func TestWave9Integration_RegimeDebouncerDrivesDriftDetectorV2(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(256)
+	defer func() { _ = bus.Close() }()
+
+	rec := newIntegrationBusRecorder()
+	bus.Subscribe(eventbus.EventRegimeChangeConfirmed, rec.Handle)
+	bus.Subscribe(eventbus.EventDriftDetected, rec.Handle)
+
+	provider := &staticTargetWeightsProvider{
+		byRegime: map[string]map[string]float64{
+			"bull": {"2330": 0.25, "2454": 0.25, "2317": 0.25, "2881": 0.25},
+			"bear": {"2330": 0.10, "2454": 0.30, "2317": 0.30, "2881": 0.30},
+			"":     {"2330": 0.25, "2454": 0.25, "2317": 0.25, "2881": 0.25},
+		},
+	}
+
+	rd := NewRegimeDebouncer(bus)
+	dd := NewDriftDetectorWithTargets(bus, provider)
+
+	ctx := context.Background()
+	if err := rd.Start(ctx); err != nil {
+		t.Fatalf("RegimeDebouncer.Start failed: %v", err)
+	}
+	defer func() { _ = rd.Stop() }()
+	if err := dd.Start(ctx); err != nil {
+		t.Fatalf("DriftDetector.Start failed: %v", err)
+	}
+	defer func() { _ = dd.Stop() }()
+
+	// Publish positions that establish a 70/10/10/10 concentration.
+	for _, sym := range []string{"2330", "2454", "2317", "2881"} {
+		mv := 100_000.0
+		if sym == "2330" {
+			mv = 700_000
+		}
+		bus.Publish(eventbus.BusEvent{
+			Type:      eventbus.EventPositionUpdate,
+			Timestamp: time.Now(),
+			Payload: eventbus.PositionEventPayload{
+				Symbol:     sym,
+				ChangeType: "added",
+				Position: domain.Position{
+					Symbol:       sym,
+					Quantity:     1000,
+					MarketValue:  mv,
+					CurrentPrice: mv / 1000,
+				},
+			},
+			SchemaVersion: 1,
+		})
+	}
+	waitForHandlers()
+
+	// Establish baseline.
+	d := dd.(*driftDetector)
+	d.checkPeriod(time.Now())
+	waitForHandlers()
+	if got := rec.snapshot()[eventbus.EventDriftDetected]; got != 0 {
+		t.Fatalf("baseline check should not emit, got %d", got)
+	}
+
+	// Trigger a regime change.  DriftDetector v2 should re-baseline via
+	// its EventRegimeChangeConfirmed subscription, suppressing the
+	// would-be drift event for this period.
+	bus.Publish(eventbus.BusEvent{
+		Type:      eventbus.EventRegimeChange,
+		Timestamp: time.Now(),
+		Payload: eventbus.RegimeEventPayload{
+			OldRegime:    domain.Regime("neutral"),
+			NewRegime:    domain.Regime("bull"),
+			Confidence:   0.9,
+			DeterminedBy: "integration-test",
+		},
+		SchemaVersion: 1,
+	})
+	waitForHandlers()
+
+	// Force the debouncer to publish EventRegimeChangeConfirmed immediately
+	// (bypassing the 30s production window).
+	rd.(*regimeDebouncer).check(time.Now().Add(60 * time.Second))
+	rec.WaitForEvent(t, eventbus.EventRegimeChangeConfirmed, 2*time.Second)
+	waitForHandlers()
+
+	// Verify the drift detector picked up the regime internally.
+	d.mu.Lock()
+	gotRegime := d.currentRegime
+	d.mu.Unlock()
+	if gotRegime != "bull" {
+		t.Errorf("v2 detector should track currentRegime=bull after regime change, got %q", gotRegime)
+	}
+
+	// First check after regime change: prevTotal was reset to 0, so this
+	// becomes the new baseline (no emit).
+	d.checkPeriod(time.Now().Add(time.Minute))
+	waitForHandlers()
+	if got := rec.snapshot()[eventbus.EventDriftDetected]; got != 0 {
+		t.Fatalf("check right after regime change should re-baseline, got %d events", got)
+	}
+
+	// Second check: target_drift should fire with the "bull" target weights.
+	d.checkPeriod(time.Now().Add(2 * time.Minute))
+	ev := rec.WaitForEvent(t, eventbus.EventDriftDetected, 2*time.Second)
+	if ev.SchemaVersion != 2 {
+		t.Errorf("expected v2 schema, got %d", ev.SchemaVersion)
+	}
+	payload, ok := ev.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("want map[string]any payload, got %T", ev.Payload)
+	}
+	if payload["current_regime"] != "bull" {
+		t.Errorf("expected current_regime=bull, got %v", payload["current_regime"])
+	}
+	target, ok := payload["target_weights"].(map[string]float64)
+	if !ok {
+		t.Fatal("v2 payload missing target_weights")
+	}
+	if target["2330"] != 0.25 {
+		t.Errorf("target_weights[2330] should reflect the bull regime target, got %v", target["2330"])
+	}
 }
