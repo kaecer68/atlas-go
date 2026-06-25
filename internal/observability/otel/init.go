@@ -1,6 +1,8 @@
 // Package otel provides OpenTelemetry SDK initialization for atlas-go.
 // Currently uses the stdout exporter for CI and local verification; production
 // deployments should swap to an OTLP exporter when integrating with ELK/Loki.
+//
+// Maturity: evolving
 package otel
 
 import (
