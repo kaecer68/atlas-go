@@ -10,7 +10,7 @@ META_FILE="$REPO_ROOT/.gitnexus/meta.json"
 
 if [ ! -f "$META_FILE" ]; then
     echo "Error: GitNexus meta file not found at $META_FILE"
-    echo "Run: npx gitnexus analyze"
+    echo "Run: npx gitnexus analyze --skip-agents-md"
     exit 1
 fi
 
@@ -60,7 +60,7 @@ done
 if [ "$MISMATCHES" -gt 0 ]; then
     echo ""
     echo "Found $MISMATCHES file(s) with outdated stats."
-    echo "Fix: update the numbers or run 'npx gitnexus analyze' if the index is stale."
+    echo "Fix: remove the stats line from markdown files, or run 'npx gitnexus analyze --skip-agents-md' if the index is stale."
     exit 1
 else
     echo ""

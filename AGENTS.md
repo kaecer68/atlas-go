@@ -19,7 +19,7 @@
 | 設計文件 / 規劃 | `.omo/plans/`、`.planning/` |
 
 **防膨脹規則**：
-- 本文件不超過 **160 行**（人類編寫部分，不含末尾自動注入區塊）
+- 本文件不超過 **160 行**（人類編寫部分）
 - **155 行時觸發警告**，160 行時 PR 被拒絕
 - 新知識預設加入 `internal/<mod>/AGENTS.md` 或 `docs/`，**不要**加到這裡
 
@@ -72,7 +72,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `CLAUDE.md` | 工具進入點、**GitNexus 單一權威來源** |
+| `CLAUDE.md` | 工具進入點 |
 | `docs/GUIDELINES_INDEX.md` | 規範階層與使用情境路由 |
 | `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態 |
 | `docs/TRAPS.md` | 完整陷阱參考 |
@@ -81,6 +81,12 @@
 
 ## 程式碼智慧工具
 
-> 完整規範與工具列表見 **`CLAUDE.md`** 與 **`docs/TOOLS.md`**。
+> 完整工具列表見 **`docs/TOOLS.md`**；GitNexus 技能見 **`.claude/skills/gitnexus/`**。
 >
-> **強制規則**: 修改任何 function/class/method 前必須執行 `gitnexus_impact`。
+> **強制規則**：
+> - 修改任何 function/class/method 前，執行 `gitnexus_impact({target, direction:"upstream"})`。
+> - commit 前執行 `gitnexus_detect_changes()`。
+> - impact 回傳 HIGH/CRITICAL 風險時，必須警告使用者並取得確認。
+> - 探索程式碼用 `gitnexus_query`，查單一符號上下文用 `gitnexus_context`。
+>
+> **索引更新**：若 GitNexus 提示 index stale，執行 `npx gitnexus analyze --skip-agents-md`（避免自動注入 markdown 區塊）。
