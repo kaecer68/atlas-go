@@ -7,6 +7,25 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
+// resetAllBuffers clears every catchup buffer in the package. Test-only
+// helper.  Centralised so adding a new buffer type only requires updating
+// this list — every test that wants a clean baseline calls this.
+func resetAllBuffers() {
+	resetNarrativeBuffer()
+	resetPromotionBuffer()
+	resetHealthAlertBuffer()
+	resetRiskGateBuffer()
+	resetIndustryCalendarBuffer()
+	resetBacktestCompletedBuffer()
+	resetCalibrationCompletedBuffer()
+	resetTradeSlippageBuffer()
+	resetChannelIndividualHealthBuffer()
+	resetRegimeChangeConfirmedBuffer()
+	resetFactorWeightRegressionBuffer()
+	resetDriftDetectedBuffer()
+	resetIngestionLagSpikeBuffer()
+}
+
 // TestRegisterDashboardBufferSubs_NilBusNoop verifies that passing a nil bus
 // does not panic and silently no-ops. This matches the production callsite
 // where the helper is invoked unconditionally.
@@ -26,26 +45,13 @@ func TestRegisterDashboardBufferSubs_NilBusNoop(t *testing.T) {
 // Wave 9 detectors actually publish) had zero buffer subscribers and SSE
 // catchup was permanently empty.
 func TestRegisterDashboardBufferSubs_AllEventTypesPopulated(t *testing.T) {
-	resetNarrativeBuffer()
-	resetPromotionBuffer()
-	resetHealthAlertBuffer()
-	resetRiskGateBuffer()
-	resetIndustryCalendarBuffer()
-	resetBacktestCompletedBuffer()
-	resetCalibrationCompletedBuffer()
-	resetTradeSlippageBuffer()
-	resetChannelIndividualHealthBuffer()
-	resetRegimeChangeConfirmedBuffer()
-	resetFactorWeightRegressionBuffer()
-	resetDriftDetectedBuffer()
-	resetIngestionLagSpikeBuffer()
+	resetAllBuffers()
 
 	bus := eventbus.NewChannelEventBus(256)
 	defer func() { _ = bus.Close() }()
 
 	RegisterDashboardBufferSubs(bus)
-	// Allow the per-handler goroutines that the bus dispatches into to register.
-	time.Sleep(50 * time.Millisecond)
+	// eventbus.Subscribe is synchronous; no wait needed before publishing.
 
 	cases := []struct {
 		name    string
@@ -181,8 +187,7 @@ func TestRegisterDashboardBufferSubs_AllEventTypesPopulated(t *testing.T) {
 // `runLiveTrading`, so a duplicate registration from those callsites must
 // not panic or leak subscriptions.
 func TestRegisterDashboardBufferSubs_SecondCallAlsoPopulates(t *testing.T) {
-	resetRegimeChangeConfirmedBuffer()
-	resetDriftDetectedBuffer()
+	resetAllBuffers()
 
 	bus1 := eventbus.NewChannelEventBus(256)
 	defer func() { _ = bus1.Close() }()
@@ -191,7 +196,6 @@ func TestRegisterDashboardBufferSubs_SecondCallAlsoPopulates(t *testing.T) {
 
 	RegisterDashboardBufferSubs(bus1)
 	RegisterDashboardBufferSubs(bus2)
-	time.Sleep(50 * time.Millisecond)
 
 	bus1.Publish(eventbus.BusEvent{
 		Type:    eventbus.EventRegimeChangeConfirmed,

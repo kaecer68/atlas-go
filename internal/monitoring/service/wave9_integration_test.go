@@ -81,9 +81,9 @@ func (p *staticIngestionLagProvider) P99LatencySeconds() float64 {
 	return p.p99
 }
 
-// staticTargetWeightsProvider returns a static target-weights map keyed by regime.
-// A nil/empty map for a given regime is equivalent to "no target tracking" and
-// causes the DriftDetector v2 to skip the target_drift check.
+// staticTargetWeightsProvider is a test double for service.TargetWeightsProvider
+// that returns a static map keyed by regime. Pass an empty inner map to
+// simulate "no target tracking for this regime" (see drift_helpers.go).
 type staticTargetWeightsProvider struct {
 	byRegime map[string]map[string]float64
 }
@@ -554,11 +554,20 @@ func TestWave9Integration_DriftDetectorV2Flow(t *testing.T) {
 	if _, ok := payload["actual_weights"].(map[string]float64); !ok {
 		t.Error("v2 payload missing actual_weights as map[string]float64")
 	}
-	if _, hasCurrentRegime := payload["current_regime"]; !hasCurrentRegime {
-		t.Error("v2 payload missing current_regime field (even when no regime change received)")
+	// No regime change was published in this test, so currentRegime stays
+	// at its zero value (empty string). Verify the field is present and
+	// explicitly empty — not absent, not nil, not a leftover value.
+	if v, ok := payload["current_regime"]; !ok {
+		t.Error("v2 payload missing current_regime field (should be present even when no regime change received)")
+	} else if v != "" {
+		t.Errorf("v2 current_regime should be empty string before any regime change, got %v", v)
 	}
-	if maxDrift, ok := payload["max_drift"].(float64); !ok || maxDrift < 0.10 {
-		t.Errorf("v2 payload max_drift should reflect 2330 deviation (~0.45), got %v", payload["max_drift"])
+	// 2330 actual weight 0.70, target 0.25 → max_drift ≈ 0.45.  Tighten the
+	// bound so a regression that zeroes target_drift detection is caught.
+	if maxDrift, ok := payload["max_drift"].(float64); !ok {
+		t.Error("v2 payload missing max_drift")
+	} else if maxDrift < 0.40 || maxDrift > 0.50 {
+		t.Errorf("v2 payload max_drift should reflect 2330 deviation ~0.45, got %v", maxDrift)
 	}
 	if sym := payload["max_drift_symbol"]; sym != "2330" {
 		t.Errorf("v2 max_drift_symbol should be 2330, got %v", sym)
