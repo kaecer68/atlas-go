@@ -135,9 +135,8 @@ agent := &SemiconductorLLMAgent{
 
 ## Known Limitations (L2.3 PoC Scope)
 
-1. `RunToolCall` is a PR1 placeholder — returns "not yet implemented" error. Wire actual tool dispatch in a follow-up PR.
-2. `EvaluatePosition` is out of scope (returns `(zero, false)`).
-3. No multi-iteration test coverage — covered indirectly by `AgentLoop` tests.
+1. `EvaluatePosition` is out of scope (returns `(zero, false)`).
+2. No multi-iteration test coverage — covered indirectly by `AgentLoop` tests.
 
 ## References
 
@@ -146,3 +145,4 @@ agent := &SemiconductorLLMAgent{
 - Test helper: `MockLLMDriver` in `internal/orchestrator/sector_agent_llm_test_helpers.go`
 - State machine: [`AGENT_LOOP_STATE_MACHINE.md`](AGENT_LOOP_STATE_MACHINE.md)
 - L2.3 design: [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md)
+- RunToolCall wiring (L3): [PR #739](https://github.com/kaecer68/atlas-go/pull/739) (`SectorAgentLLM.RunToolCall` → `llm.SafeInvokeHandler`)
