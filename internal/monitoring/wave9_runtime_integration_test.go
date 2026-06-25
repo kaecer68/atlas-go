@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -130,6 +131,32 @@ func TestWave9Integration_AllFiveDetectorsWired(t *testing.T) {
 	requireWired(t, w, "ingestionLagMonitor", "*service.ingestionLagMonitor")
 }
 
+// countWave9Goroutines returns the count of running Wave 9 detector run loops.
+// FactorWeightRegressionDetector is event-driven and excluded.
+func countWave9Goroutines() int {
+	buf := make([]byte, 1<<16)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	stacks := string(buf)
+	markers := []string{
+		"(*regimeDebouncer).run",
+		"(*ingestionLagMonitor).run",
+		"(*channelHealthSynthesizer).run",
+		"(*driftDetector).run",
+	}
+	n := 0
+	for _, m := range markers {
+		n += strings.Count(stacks, m)
+	}
+	return n
+}
+
 func TestWave9Integration_StartStopNoLeak(t *testing.T) {
 	bus := eventbus.NewChannelEventBus(256)
 	defer func() { _ = bus.Close() }()
@@ -143,7 +170,7 @@ func TestWave9Integration_StartStopNoLeak(t *testing.T) {
 		t.Fatalf("NewWave9Observability failed: %v", err)
 	}
 
-	before := runtime.NumGoroutine()
+	before := countWave9Goroutines()
 	ctx := context.Background()
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("Start failed: %v", err)
@@ -154,9 +181,9 @@ func TestWave9Integration_StartStopNoLeak(t *testing.T) {
 
 	runtime.GC()
 	time.Sleep(200 * time.Millisecond)
-	after := runtime.NumGoroutine()
-	if after > before+5 {
-		t.Fatalf("possible goroutine leak: before=%d after=%d", before, after)
+	after := countWave9Goroutines()
+	if after > before {
+		t.Fatalf("Wave9 detector goroutine leak: before=%d after=%d (markers: regimeDebouncer.run / ingestionLagMonitor.run / channelHealthSynthesizer.run / driftDetector.run)", before, after)
 	}
 }
 
