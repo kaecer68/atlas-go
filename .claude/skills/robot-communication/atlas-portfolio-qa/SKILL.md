@@ -82,6 +82,7 @@ Atlas 投資組合由多策略框架共同決定，每檔標的的權重來自�
 | 風險指標 | `internal/risk` | VaR、相關性、波動率、最大回撤 |
 
 > **存取方式**：機器人代理透過 Atlas API Gateway 取得數據。無需指定具體 API 路徑——由系統整合層處理。
+> **Wave 9 即時倉位**：投資組合查詢可能使用 Wave 9 的 `EventPositionUpdate` payload 作為即時部位資料。
 
 ## 回答範例
 

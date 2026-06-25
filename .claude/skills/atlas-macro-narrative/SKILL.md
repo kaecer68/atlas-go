@@ -289,6 +289,8 @@ IF 宏觀風險 = 橙色
 
 **心法庫詳見**：`atlas-strategy-techniques` skill
 
+- 關於 runtime event flow，請參見 `.claude/skills/atlas-pre-change-protocol/` 與 `internal/monitoring/wave9_runtime.go`。
+
 ---
 
 *技能版本: 1.2*  

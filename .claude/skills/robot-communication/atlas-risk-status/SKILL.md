@@ -112,6 +112,7 @@ VaR 越高 → 系統會自動降低持股上限或增加現金比例
 | 交易前後檢查 | `internal/risk`（pre_trade.go / post_trade.go） | 交易前風險閘門、交易後組合風險評估 |
 
 > **存取方式**：機器人代理透過 Atlas API Gateway 取得數據。無需指定具體 API 路徑——由系統整合層處理。
+> **Wave 9 風險事件**：風險狀態可能包含 DriftDetector v2（PR #692）的 `EventDriftDetected`，以及 Wave 9 的 `EventFactorWeightRegression`。
 
 ## 回答範例
 

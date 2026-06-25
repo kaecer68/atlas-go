@@ -137,5 +137,11 @@ Propose → Execute → Judge → Promote/Revert
 
 ---
 
+## Wave 9 觀測整合
+
+策略進化循環可透過 `EventPositionUpdate` 與 `EventRegimeChange` 事件串接 Wave 9 可觀測性。
+
+---
+
 *技能版本: 1.1*  
 *最後更新: 2026-06-08*
