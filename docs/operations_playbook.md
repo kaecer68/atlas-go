@@ -176,6 +176,42 @@ Operate the dashboard left-to-right in normal conditions:
 - **基線管理** -- 從下拉選單晉升實驗，或附帶原因回滾到先前版本。
 - **人工干預紀錄** -- 完整的批准、拒絕、暫停、封鎖與回滾稽核軌跡。
 
+---
+
+## Wave 9 觀測性運維
+
+Wave 9 在 live mode 啟動時會載入 `internal/monitoring/wave9_runtime.go` 的 `Wave9Observability`，協調 5 個偵測器。日常運維時請注意以下事項。
+
+### 確認偵測器已啟動
+
+啟動日誌應出現：
+
+```
+started component=wave9_observability
+```
+
+停止時應出現：
+
+```
+wave9_observability stopped
+```
+
+若只有 `started` 而無對應 `stopped`（例如程序異常退出），請檢查 goroutine 洩漏或 `Stop()` 是否被呼叫。
+
+### 5 個 Wave 9 事件與建議回應
+
+| 事件 | 意義 | 建議回應 |
+|------|------|---------|
+| `monitor.channel.health.individual` | 單一資料通道錯誤率或延遲異常 | 檢查該 channel 對應的資料供應商狀態；與資料採集健康度頁面交叉比對 |
+| `market.regime.confirmed` | 新 regime 已穩定 30 秒 | 觀察後續 `portfolio.factor.regression` 與 `portfolio.drift.detected` 是否觸發 |
+| `portfolio.factor.regression` | regime 變化後 factor weight 位移超過閾值 | 檢視投資組合權重是否需隨 regime 調整；留意策略權重漂移 |
+| `portfolio.drift.detected` | 單一持倉集中度 > 25%、turnover > 15% 或 target drift > 10% | 評估是否人工 rebalance；若 `BaselineTrigger` 已啟用，檢查 structured log 中的 `baseline_violation` |
+| `apigateway.ingestion.lag.spike` | API Gateway p99 latency > 5s | 檢查網路延遲、資料供應商回應速度、背景任務佇列長度 |
+
+### 外部相依設定
+
+Wave 9 的生產 provider（`ChannelHealthProvider`、`IngestionLagProvider`、`WeightProvider`、`TargetWeightsProvider`）需要正確的環境與外部服務。詳見 `docs/ENVIRONMENT.md`。
+
 
 ## Operator Techniques
 

@@ -88,30 +88,25 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 >
 > **Wave 8.2 收尾**（本批次）：補實作 `EventRiskGateOverridden` 常數，routing 改為三向 split（BLOCK/HALT → rejected、REDUCE/ALERT_ONLY → overridden、ALLOW → allowed）；補 `risk-gate-overridden.md` 文件 + 更新 `risk-gate-allowed.md` 反映新語意。
 
-### Wave 9 YELLOW（5 個，**plan 已就緒，採 forward-compat 設計**）
+### Wave 9 YELLOW（5 個，**已於 v0.0.0.16/17 上線**）
 
-**計畫檔案**：gitignored local-only（不計入版本控制）
+**實際 PR 結構**：4 個實作 PR（A–D）+ 1 個整合測試 PR + 1 個環境文件 PR（#695–#700）：
+- PR #695 `IngestionLagSpike` + `ChannelIndividualHealth` 基礎設施
+- PR #696 `EventPositionUpdate` 在 live orchestrator 的生產發布
+- PR #697 `Wave9Observability` 協調器 + 5 偵測器統一啟動/關閉
+- PR #698 `BaselineTrigger` 執行期政策強制
+- PR #699 Wave 9 整合測試
+- PR #700 `docs/ENVIRONMENT.md` 環境狀態文件
 
-**5 個事件**：`ChannelIndividualHealth`、`RegimeChangeConfirmed`、`FactorWeightRegression`、`DriftDetector`、`IngestionLagSpike`
-
-**對應 VERSION**：v0.0.0.8（Wave 8 v0.0.0.7 已收尾）
+**對應 VERSION**：v0.0.0.16（BaselineTrigger）/ v0.0.0.17（Wave 9 observability wire）
 
 **關鍵決策（2026-06-22）**：採 **路徑 1：完整 Wave 9 + forward-compat 設計**
-- 5 個事件**全部**先做，不阻塞於 Issue #611
+- 5 個事件**全部**已上線，不阻塞於 Issue #611
 - 只讀既有 public API（`ChannelErrors()`、`OnRegimeChange`、`EventRegimeChange` 等）
 - debouncer 與 drift 計算完全在 `internal/monitoring/service/` 層，#611 完成後 Wave 9 程式碼不需重做
 - 3 個 PD-W9：info severity 預設、外部 debouncer 策略、Prometheus histogram metrics
 
-**7 PR atomic breakdown**：
-- Wave 9.0 infrastructure（5 個 EventType slot + 3 個 PD-W9 框架）
-- Wave 9.1 `ChannelIndividualHealth`
-- Wave 9.2 `RegimeChangeConfirmed`
-- Wave 9.3 `FactorWeightRegression`
-- Wave 9.4 `DriftDetector`
-- Wave 9.5 `IngestionLagSpike`
-- Wave 9.6 frontend 整合測試 + docs
-
-**估時**：~7 工作天
+**估時**：~7 工作天（已實際完成）
 
 ### 依賴
 
@@ -125,7 +120,7 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 
 ---
 
-## Phase 6: Production Trading (Next)
+## Phase 6: Production Trading ✅
 
 - Decision chain transparency (FactorScores breakdown, ConvictionBreakdown, MacroEvent confidence) ✅
 - NT$ currency formatter + after-tax equity curve + cost KPI cards ✅ (Phase 3)
@@ -134,7 +129,7 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 - Real broker integration
 - Live order management
 - Risk circuit breakers
-- Performance reporting
+- Performance reporting ✅（Wave 9 observability wire：5 detectors + BaselineTrigger，參考 `internal/monitoring/wave9_runtime.go`）
 
 ## P-Infra: Infrastructure Foundation (Future)
 

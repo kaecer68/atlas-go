@@ -41,3 +41,38 @@
 - **忽視版本一致性**：`Policy.Version` 是唯一的真理來源，重建政策時必須確保與 `Promotions` 歷史對齊。
 - **未載入 Baseline 執行實驗**：實驗引擎必須先呼叫 `baseline.Load()`。若未載入，系統將使用預設約束，可能導致實驗結果與現況脫節。
 - **靜默失敗**：晉升與回滾均需確保檔案寫入成功，不可忽略 `Save()` 的回傳錯誤。
+
+---
+
+## Wave 9 — BaselineTrigger 執行期政策強制（PR #698）
+
+`internal/baseline/trigger.go` 提供執行期政策強制元件 `Trigger`，訂閱 `EventPositionUpdate` 並依現行 baseline policy 的 simulation constraints 評估每個部位。
+
+### 核心型別
+
+| 型別 | 位置 | 說明 |
+|------|------|------|
+| `Trigger` | `trigger.go` | 訂閱事件匯流排、評估 policy violation 的執行期守門員 |
+| `Violation` | `trigger.go` | 單一違規記錄：symbol / field / actual / limit / severity / message |
+
+### 運作方式
+
+1. `NewTrigger(manager, bus)` 建立實例；`Start(ctx)` 訂閱 `EventPositionUpdate`。
+2. `onPositionUpdate` 收到 `PositionEventPayload` 後載入 `manager.path` 的現行 policy。
+3. `evaluate()` 對每個部位執行三項檢查，回傳 `[]Violation` 並寫入 structured log。
+
+### 評估規則
+
+| 規則 | 欄位 | 觸發條件 | Severity |
+|------|------|---------|----------|
+| 停損 | `Constraints.StopLossPct` | `pctChange <= -StopLossPct` | error |
+| 停利 | `Constraints.TakeProfitPct` | `pctChange >= TakeProfitPct` | warn |
+| 最大持有天數 | `Constraints.MaxHoldingDays` | `holdingDays >= MaxHoldingDays` | warn |
+
+- `pctChange = (CurrentPrice - AverageCost) / AverageCost`；與 `internal/sim/engine.go` 使用相同正數幅度語意。
+- `AverageCost <= 0` 時直接忽略，避免除以零。
+- 違規僅產生 log，不會自動下單平倉；由下游 `internal/live` 或人工流程決定處置。
+
+### 與 live orchestrator 的關係
+
+`internal/live/orchestrator.go` 在 `EventMarketSnapshot` 的 critical handler 內對持有部位呼叫 `PublishPositionUpdate(..., "updated")`，使 `Trigger` 能持續追蹤停損/停利/持有天數。這是 Wave 9 將 baseline policy 從「回測約束」延伸到「執行期監控」的關鍵接點。

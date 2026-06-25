@@ -145,6 +145,69 @@
 | v1 payload 欄位不可變更 | `max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds` 為既有契約，**append-only**。v2 僅在後方新增欄位。 |
 | `max_drift_symbol` 確定性 | Go map 迭代順序不確定，`max_drift_symbol` 在 drift 平手時可能不固定。已用 `sort.Strings` 排序 symbol keys 確保確定性。 |
 
+---
+
+## Wave 9 Observability — 5 偵測器協調器（PR #697）
+
+`internal/monitoring/wave9_runtime.go` 引入 `Wave9Observability`，負責在 live mode 下統一啟動、協調與關閉 5 個 Wave 9 觀測性偵測器。
+
+### 協調的 5 個偵測器
+
+| 偵測器 | 檔案 | 產出事件 | 職責 |
+|--------|------|---------|------|
+| `RegimeDebouncer` | `service/regime_debouncer.go` | `EventRegimeChangeConfirmed` |  regime 穩定 30 秒後發布確認訊號 |
+| `FactorWeightRegressionDetector` | `service/factor_weight_regression.go` | `EventFactorWeightRegression` | regime 變化後偵測 factor weight 位移 |
+| `DriftDetector` (v2) | `service/drift_detector.go` + `drift_helpers.go` | `EventDriftDetected` | 集中度 / turnover / target weights drift |
+| `ChannelHealthSynthesizer` | `service/channel_health_synthesizer.go` | `EventChannelIndividualHealth` | 將 per-channel 錯誤轉為事件 |
+| `IngestionLagMonitor` | `service/ingestion_lag_monitor.go` | `EventIngestionLagSpike` | p99 ingestion latency > 5s 時預警 |
+
+### `detectorFactory` 介面模式
+
+為了在測試中注入 spy，`Wave9Observability` 透過內部 `detectorFactory` 介面抽象偵測器建構：
+
+```go
+type detectorFactory interface {
+    newRegimeDebouncer(bus eventbus.EventBus) service.RegimeDebouncer
+    newFactorWeightRegressionDetector(bus eventbus.EventBus, provider service.WeightProvider) service.FactorWeightRegressionDetector
+    newDriftDetector(bus eventbus.EventBus, provider service.TargetWeightsProvider) service.DriftDetector
+    newChannelHealthSynthesizer(bus eventbus.EventBus, provider service.ChannelHealthProvider) service.ChannelHealthSynthesizer
+    newIngestionLagMonitor(bus eventbus.EventBus, provider service.IngestionLagProvider) service.IngestionLagMonitor
+}
+```
+
+生產實作為 `defaultDetectorFactory`；`withDetectorFactory` 選項僅供測試使用。
+
+### 啟動與關閉順序
+
+**啟動順序**（`Start`）：
+1. `RegimeDebouncer` 先啟動（其他偵測器可能依賴穩定 regime 訊號）。
+2. `IngestionLagMonitor`、`ChannelHealthSynthesizer`、`FactorWeightRegressionDetector` 並行啟動。
+3. `DriftDetector` 最後啟動（它需要 regime 與 position update 都已就位）。
+
+**關閉順序**（`Stop` / `Close`）— **LIFO**：
+1. `DriftDetector`
+2. `FactorWeightRegressionDetector`
+3. `ChannelHealthSynthesizer`
+4. `IngestionLagMonitor`
+5. `RegimeDebouncer`
+
+任何一個啟動失敗會立即回傳錯誤；關閉時收集所有錯誤但只回傳第一個。
+
+### 必要與選用 providers
+
+| Provider | 必要性 | 注入選項 |
+|----------|--------|---------|
+| `ChannelHealthProvider` | 必要 | `WithChannelHealthProvider` |
+| `IngestionLagProvider` | 必要 | `WithIngestionLagProvider` |
+| `WeightProvider` | 選用 | `WithWeightProvider`；nil 時 factor regression detector no-op |
+| `TargetWeightsProvider` | 選用 | `WithTargetWeightsProvider`；nil 時 drift detector 降級為 v1 |
+
+生產環境的 provider 設定請參考 `docs/ENVIRONMENT.md`。
+
+### 與 Dashboard API 的關係
+
+`Wave9Observability` 本身不暴露 HTTP endpoint；它產生的事件經由 `EventBus` 進入 `internal/monitoring/api/events/sse_handler.go`，再推送至 dashboard 即時事件流。運維時可在 log 中搜尋 `started component=wave9_observability` 與 `wave9_observability stopped` 確認生命週期。
+
 ### 向後相容
 
 - `NewDriftDetector(bus)` 保留（無 target drift 能力）

@@ -1,6 +1,6 @@
 # Atlas 事件目錄
 
-> 最後更新：2026-06-22
+> 最後更新：2026-06-25
 > Schema Version: 多版本並存（v1 為多數事件，EventDriftDetected 為 v2，EventFactorWeightRegression 為 v1）
 
 ## Wave 8 事件（已完成）
@@ -33,6 +33,21 @@
 
 > **PD-W9-1**：5 個 YELLOW 事件預設 `severity: "info"`（IngestionLagSpike 除外，severity=warning），alert rule 預設 `enabled: false`，由 operator 決定是否啟用。
 > **Forward-compat 驗證**：Wave 9 全程 0 修改 #611 9 個檔案（`git diff --stat` 為空）。
+
+### Wave 9 生產接線
+
+以下 4 個 Wave 9 事件現已具備生產環境呼叫者：
+
+| 事件 | 生產呼叫者 | 檔案 |
+|------|-----------|------|
+| `portfolio.position.update` | live orchestrator 在市場快照時發布持有部位更新 | `internal/live/orchestrator.go` |
+| `market.regime.confirmed` | `RegimeDebouncer` 在 regime 穩定 30 秒後發布 | `internal/monitoring/service/regime_debouncer.go` |
+| `factor.weight.regression` | `FactorWeightRegressionDetector` 在 regime 確認後偵測 | `internal/monitoring/service/factor_weight_regression.go` |
+| `ingestion.lag.spike` | `IngestionLagMonitor` 透過 `ChannelHealthIngestionLagProvider` 取得 p99 latency | `internal/monitoring/service/ingestion_lag_monitor.go` |
+
+`portfolio.drift.detected` 由 `DriftDetector` v2 產出，本身不是由上游直接發布，而是 Wave 9 觀測器根據 `portfolio.position.update` 與 `market.regime.confirmed` 計算後觸發。
+
+所有 Wave 9 偵測器的統一啟動與生命週期管理由 `internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 負責。
 
 ## 既有事件（Wave 1-7）
 

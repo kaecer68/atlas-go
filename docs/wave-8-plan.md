@@ -1,5 +1,7 @@
 # Wave 8 Plan — Event-Driven Expansion
 
+> **歷史文件**：Wave 9 已於 v0.0.0.16/17 上線。當前狀態請見 [`docs/roadmap.md`](roadmap.md) 與 [`CHANGELOG.md`](../CHANGELOG.md)。本文件保留作為 Wave 8 執行歷程參考，未來可考慮移至 `docs/archive/`。
+
 > **建立日期**：2026-06-20
 > **對應 VERSION**：v0.0.0.6（Wave 7.5 已收尾）
 > **對應 repo**：kaecer68/atlas-go
@@ -31,13 +33,15 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 | 8 | `BacktestCompleted` | ~200 | `internal/backtest/runner.go` | 已存在 |
 | 9 | `CalibrationCompleted` | ~220 | `internal/calibration/engine.go` | 已存在 |
 
-### 2.2 Wave 9 YELLOW（5 個觀測性擴展，排隊等 Wave 8 完成）
+### 2.2 Wave 9 YELLOW（5 個觀測性擴展，已於 v0.0.0.16/17 上線）
 
 - `ChannelIndividualHealth`（per-channel, not aggregated）
 - `FactorWeightRegression`（factor drift signal）
 - `DriftDetector`（post-rebalance drift score）
 - `RegimeChangeConfirmed`（regime 轉換穩定後 30 秒 emit）
 - `IngestionLagSpike`（ingestion → processing > 5s）
+
+> 詳見 `docs/roadmap.md` 與 `docs/events/INDEX.md`。
 
 ## 3. Boundary（嚴格）
 
