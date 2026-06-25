@@ -25,8 +25,6 @@ type SectorAgentLLM struct {
 	Skill string
 	// LLM is the dependency that makes the actual LLM call. Nil = stub.
 	LLM LLMDriver
-	// ConvictionFloor is the minimum conviction to emit a final rec.
-	ConvictionFloor int
 	// Tools is the registry of tools the agent may invoke during plan →
 	// tool_call → reflect. When LLM != nil but Tools is empty, RunToolCall
 	// panics to prevent silent stub data being fed back to the LLM.

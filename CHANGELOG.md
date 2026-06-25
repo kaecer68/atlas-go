@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.0.0.20a] - 2026-06-25
+
+Phase 2 state machine correctness (Issue #711 #5, #6, #9). Closes the 3 state-machine findings from gstack /review of PR #703. Tagged as `0.0.0.20a` (pre-release of v0.0.0.20) so PR3 (Phase 3 polish) can land without re-bumping.
+
+### Changed — AgentLoop state machine correctness
+
+- **`AgentLoop.Round int` field added**. Counts cumulative plan steps via `AdvancePlan` (incremented by `len(steps)`, NOT +1 per call). A single multi-step plan correctly counts as multiple rounds. Issue #711 #6 (C5 fix).
+- **`Exhausted()` now checks `Round >= MaxIter`**, not `len(Steps) >= MaxIter`. The previous Step-based check measured the wrong thing when the LLM emitted multi-step plans. The legacy Step threshold is preserved as a one-time `slog.Warn` divergence detector via `sync.Once` (catches callers that mutate `Steps` directly without going through `AdvancePlan`).
+- **`AdvanceToolCall()` and `AdvanceReflect()` now return `error`** on phase mismatch. Previously these methods silently no-op'd when called from the wrong phase, masking LLM driver bugs that would otherwise corrupt the plan→reflect loop. Callers MUST handle the error (no `_ =` suppression). Issue #711 #5 (F2 fix).
+
+### Removed — Dead field
+
+- **`SectorAgentLLM.ConvictionFloor int` field removed**. The field was added in Wave 10 L2.4 (76b523dc) but never wired to any control flow — `PlanReflectRunner.AdvanceFinal` doesn't check it, no caller reads it. (No `AdvanceFinal` floor check added — deferred to L2.5 per plan v2.) Issue #711 #9.
+
+### Tests (9 AgentLoop tests, 4 new)
+
+- `TestAgentLoop_Exhausted_BasedOnRoundsNotSteps` (plan v2 test bar) — single AdvancePlan with 2 steps triggers Exhausted() when MaxIter=2.
+- `TestAgentLoop_AdvanceToolCall_PhaseMismatch_ReturnsError` (plan v2 test bar) — error returned from PhaseInitial / PhaseToolCall / PhasePlan-no-steps; Phase unchanged on error.
+- `TestAgentLoop_AdvanceReflect_PhaseMismatch_ReturnsError` (companion) — same for AdvanceReflect.
+- `TestAgentLoop_AdvancePlan_IncrementsRoundByLenSteps` — verifies C5 fix directly: Round += len(steps), not +1.
+- 5 existing tests updated where needed (`PlanReflectFinalSequence` now asserts `err == nil`; `ExhaustedAfterMaxIter` keeps existing assertions since Round-based semantics preserve the happy path).
+
+### Verification
+
+- All 9 AgentLoop tests pass with `-race`.
+- `go vet ./internal/orchestrator/...` clean.
+- `gofmt -l .` clean.
+- Pre-Change Protocol: blast radius LOW (2 d=1 callers: `NewAgentLoop` self-reference, `SectorAgentLLM` via `*AgentLoop` embed).
+- S-tier module (orchestrator) — API change is backwards-incompatible (AdvanceToolCall/Reflect now return error), but F2 verification confirmed zero production callers, so the change is internal-only.
+
 ## [0.0.0.19] - 2026-06-25
 
 Wave 10 L2.1 (OTel OTLP production) + L2.2 polish complete. App traces now flow through a real OTLP pipeline (HTTP exporter → OTel collector → TimescaleDB) instead of stdout-only, and all 17 acceptance gates are ported to the pluggable framework.
