@@ -46,6 +46,7 @@
 | `LLM_PRISM_SCENARIO_ENABLED` | 啟用 prism scenario 說明 hook | default `false` |
 | `LLM_NARRATIVE_EXPLAIN_ENABLED` | 啟用 regime + sentiment 解釋 hook | default `false` |
 | `LLM_RISK_FORENSICS_ENABLED` | 啟用 performance forensics hook | default `false` |
+| `LLM_SECTOR_AGENTS_ENABLED` | 啟用 LLM-driven sector agent loop（Plan → ToolCall → Reflect） | default `false`；Issue #719 / Wave 11 L2.1 |
 
 ### 部署流程
 

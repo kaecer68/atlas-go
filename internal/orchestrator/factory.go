@@ -38,6 +38,15 @@ func NewProductionSystemWithJANUS(
 // EventBus is created (backward-compatible).
 func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus, janusEngine *janus.Engine, opts ...SystemOption) (*System, error) {
 	system, err := NewSystemWithEventBus(cfg, eventBus, opts...)
+
+	// Wave 11 L2.1 (Issue #719): opt-in LLM-driven sector agent wiring.
+	// driver is intentionally nil here — the plugin falls back to the
+	// deterministic sector agent path. Production code that needs the LLM
+	// loop should call system.WithLLMSectorAgents(driver) explicitly with
+	// a real LLMDriver implementation (typically backed by llm.Router).
+	if cfg.LLMSectorAgentsEnabled {
+		system.WithLLMSectorAgents(nil)
+	}
 	if err != nil {
 		return nil, err
 	}

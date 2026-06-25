@@ -109,3 +109,22 @@ func (s *System) WithStrategyTechniques(
 	}, s.SystemCore)
 	return s
 }
+
+// WithLLMSectorAgents wires the LLM-driven sector agent plugin into the
+// system. The driver argument provides the LLM backend (typically backed
+// by llm.Router via dependency injection); when driver is nil the plugin
+// falls back to the deterministic sector agent path so backtest
+// reproducibility is preserved during the observation window.
+//
+// Wave 11 L2.1 (Issue #719): The plugin is opt-in. Production wiring
+// should call this from factory.go only when config.LLMSectorAgentsEnabled
+// is true (driven by LLM_SECTOR_AGENTS_ENABLED env var).
+func (s *System) WithLLMSectorAgents(driver LLMDriver) *System {
+	if s.host == nil {
+		s.host = &PluginHost{}
+	}
+	s.host.Register(&llmSectorAgentsPlugin{
+		driver: driver,
+	}, s.SystemCore)
+	return s
+}

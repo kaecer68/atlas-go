@@ -64,6 +64,9 @@
 - **Executor 註冊**：新增 Executor 需在 `plugin_registry.go` 的 `NewPluginRegistry()` 中手動加入對應陣列。
 - **因子分數**：所有推薦在進入控制層前，必須經由 `CalculateFactorScoresWithBreakdown` 補完因子細節。
 - **原子性**：`System.RunDailySimulation` 應保持無副作用，直到結果寫入 `ledger`。
+- **LLM sector agent loop**（Wave 11 L2.1，Issue #719）：`llmSectorAgentsPlugin` 在 `PluginHost.ProcessRecommendations` hook 點對 `LayerSector` 推薦跑 `SectorAgentLLM.PlanStep → RunToolCall → Reflect` 迴圈。`LLMDriver` 為 `nil` 時為 no-op pass-through，確保 `LLMSectorAgentsEnabled=false`（預設）時 deterministic 路徑保留。`BaseConvictionDriver` 是 production-replacement placeholder：保留 replay 可重現性同時讓 loop 可觀察。啟用條件：`config.LLMSectorAgentsEnabled` (env `LLM_SECTOR_AGENTS_ENABLED`)。
+- **LLMDriver 介面契約**：`PlanComplete(ctx, skill, symbol) ([]PlanStep, error)` 與 `ReflectComplete(ctx, skill, symbol, toolResult) (Reflection, error)`。Production driver 應透過 `apigateway.Fetch` 取得 LLM API key（見 `internal/llm/AGENTS.md` §「環境變數與 secrets」），不可硬編碼 key。
+- **SectorAgentLLM wired 路徑**：`system.WithLLMSectorAgents(driver)` → `host.Register(&llmSectorAgentsPlugin{driver}, core)` → `Attach` 注入 `ServiceRegistry` → `ProcessRecommendations` 依 `sectorLayerEligible(rec)` 篩選 sector-layer rec 後跑 loop。Loop timeout 上限 10s（`llmSectorAgentTimeout`）防止 S/E 熱路徑被卡住。
 
 ---
 
@@ -75,3 +78,4 @@
   仍應保留原始 Agent ID（`finalRecs[].Agent`），供後端 `recommendation_outcomes.jsonl` 與 `PassedGuards` audit trail 使用——僅僅不再依賴它做查核。
 - **靜默過濾**：若標的不符合 `Screener` 門檻，將完全不會進入 `Recommend` 階段，開發時若發現「推薦消失」請優先檢查 `agents.json`。
 - **Registry 變更**：修改 `AgentRegistry` 後，必須確認 `ExecuteRegistryResearch` 的路由邏輯能正確匹配新 Layer。
+- **LLM sector loop 誤觸發**：當 `LLMSectorAgentsEnabled=true` 但 driver 為 nil 時 plugin 應回 no-op（已實作），但**呼叫端若手動呼叫 `RunSectorAgentLoop` 而不傳 driver 會回 `ErrNotImplemented`**。呼叫前務必確認 driver 狀態。

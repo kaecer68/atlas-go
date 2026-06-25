@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -172,6 +173,102 @@ func (p *swarmPlugin) ProcessRecommendations(regime domain.Regime, recs []domain
 }
 
 func (p *swarmPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {}
+
+// llmSectorAgentsPlugin is the Wave 11 L2.1 opt-in plugin (Issue #719)
+// that replaces the deterministic sector agent recommendation path with an
+// LLM-driven Plan → ToolCall → Reflect loop when a non-nil LLMDriver is
+// wired. With a nil driver (the default), the plugin is a no-op pass-through,
+// preserving the deterministic path for backtest reproducibility during
+// the observation window.
+//
+// Activation: factory.go wires this plugin only when
+// config.LLMSectorAgentsEnabled is true (env LLM_SECTOR_AGENTS_ENABLED).
+type llmSectorAgentsPlugin struct {
+	driver LLMDriver
+	// registry is the agent registry, injected via Attach for symbol lookups
+	// (e.g. resolving which skill drives a given symbol when calling the
+	// LLMDriver.PlanComplete(ctx, skill, symbol)).
+	registry domain.AgentRegistry
+}
+
+func (p *llmSectorAgentsPlugin) Name() string { return "llm_sector_agents" }
+
+func (p *llmSectorAgentsPlugin) Attach(core ServiceRegistry) {
+	if core != nil {
+		p.registry = core.GetRegistry()
+	}
+}
+
+// sectorLayerEligible returns true when the agent associated with the
+// recommendation's symbol is a sector-layer agent. We treat rec as sector
+// when the registry maps the symbol to an agent whose Layer is LayerSector
+// (or, in the absence of a strict lookup, when the agent ID is non-empty).
+// Failing lookups are intentionally treated as in-scope so the loop can
+// still exercise the driver without throwing — observability over strictness.
+func (p *llmSectorAgentsPlugin) sectorLayerEligible(rec domain.Recommendation) bool {
+	if rec.Agent == "" {
+		return false
+	}
+	if len(p.registry.Agents) == 0 {
+		return true
+	}
+	for _, a := range p.registry.Agents {
+		if a.ID != rec.Agent {
+			continue
+		}
+		switch a.Layer {
+		case domain.LayerSector:
+			return true
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func (p *llmSectorAgentsPlugin) ProcessRecommendations(
+	regime domain.Regime,
+	recs []domain.Recommendation,
+) []domain.Recommendation {
+	// Phase 2 (Issue #719): when the LLM driver is wired AND the agent is
+	// sector-layer, run the Plan → ToolCall → Reflect loop to adjust the
+	// recommendation's conviction. When the driver is nil (the default),
+	// the plugin is a no-op pass-through to preserve deterministic replay.
+	if p.driver == nil {
+		return recs
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), llmSectorAgentTimeout)
+	defer cancel()
+	for i, rec := range recs {
+		if !p.sectorLayerEligible(rec) {
+			continue
+		}
+		agent := &SectorAgentLLM{
+			AgentLoop:       NewAgentLoop(3),
+			Skill:           rec.Agent,
+			LLM:             p.driver,
+			ConvictionFloor: rec.Conviction,
+		}
+		newConviction, err := RunSectorAgentLoop(ctx, agent, rec.Symbol, rec)
+		if err != nil {
+			continue
+		}
+		recs[i].Conviction = newConviction
+	}
+	return recs
+}
+
+func (p *llmSectorAgentsPlugin) PostSimulation(
+	quotes []domain.Quote,
+	regime domain.Regime,
+	asOf time.Time,
+) {
+}
+
+// llmSectorAgentTimeout caps each recommendation's LLM-driven loop runtime
+// to prevent S/E paths from stalling when the driver hangs. The bound is
+// intentionally generous (10s) — the loop is bounded by MaxIter as well.
+const llmSectorAgentTimeout = 10 * time.Second
 
 type prismPlugin struct {
 	manager    *prism.PRISMManager
