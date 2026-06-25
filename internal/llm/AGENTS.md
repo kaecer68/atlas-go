@@ -176,6 +176,20 @@ go test -run Integration ./internal/llm/...
 
 ---
 
+## 與 `internal/llm_annotator` 的分工（Issue #722）
+
+`internal/llm/adapters/` 與 `internal/llm/capabilities/` 是 Phase 2 canonical 介面，已將 `llm_annotator.Annotator` 包進 capability-based routing。但 `internal/llm_annotator` 仍是早期 narrow 介面（保留向後相容）。
+
+| 套件 | 角色 | 使用時機 |
+|------|------|---------|
+| `internal/llm/capabilities/failure_attribution` | typed handler（canonical） | 新程式碼用這條 |
+| `internal/llm/adapters` | `Annotator` ↔ `llm.ProviderImpl` 雙向 bridge | router 整合層 |
+| `internal/llm_annotator` | 早期 narrow 介面（向後相容） | 既有呼叫端保留 |
+
+**重構狀態**（Wave 12+ 跟追蹤 issue #731）：兩個 CircuitBreaker 雙重實作已知，但 transitive cycle `apigateway → monitoring → llm/capabilities → llm_annotator` 阻擋直接合併。Wave 12+ 統一方案需先把 `monitoring.ChannelHealthRecord`/`RecordOption` 搬到 `apigateway` 內（斷開 monitoring → llm/capabilities → llm_annotator 環），再合併 CircuitBreaker。
+
+---
+
 ## 相關文件
 
 - `docs/llm-integration-strategy-framework.md` — 設計權威
