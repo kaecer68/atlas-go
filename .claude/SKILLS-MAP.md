@@ -1,7 +1,7 @@
 # Atlas Skills Map — 技能分類體系地圖
 
-**版本**: 4.0
-**日期**: 2026-06-17
+**版本**: 4.1
+**日期**: 2026-06-25
 **用途**: Atlas-Go AI 技能統一索引與分類體系。AI Coding 時依分類快速定位所需技能。
 
 ---
@@ -227,6 +227,7 @@ GitNexus 程式碼智慧工具技能。
 | `AGENTS.md` | 全域規則與模組路由 | 引用本文件為技能索引 |
 | `CLAUDE.md` | 工具進入點（含 GitNexus 規範） | 存放 GitNexus 完整規範以避免重複 |
 | `docs/GUIDELINES_INDEX.md` | 規範階層與衝突仲裁 | 技能為階層 3 |
+| `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態單一真相來源 | 技能使用前先確認環境狀態 |
 | `.claude/skills/SKILL_TEMPLATE.md` | 統一手寫技能模板 | 新建技能時的格式規範 |
 | `internal/apigateway/CONSTITUTION.md` | 憲法級強制規範 | 技能不可違反憲法 |
 | `.omo/CONSTITUTION.md` | 深度憲法（矩陣運算、證偽） | 策略技能須遵守數學約束 |
@@ -237,5 +238,6 @@ GitNexus 程式碼智慧工具技能。
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 4.1 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 引用；更新日期以反映 PR #700 |
 | 4.0 | 2026-06-17 | 全面重寫：建立 6 大分類體系、補齊 3 缺失技能（strategy-techniques, taiwan-leading-indicators, data-visibility）、新增機器人溝通分類（4 個新技能）、加入 Token 節省規範、修正不存在技能引用、更新總數為 42 |
 | 3.0 | 2026-06-03 | 加入 generated/ 和 gitnexus/ 目錄 |

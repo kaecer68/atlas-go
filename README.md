@@ -12,6 +12,10 @@ It provides an auditable workflow for:
 
 ## Recent updates
 
+- **v0.0.0.17 (Wave 9 wire)** — Completed Wave 9 observability wiring (`Wave9Observability`, five detectors, `ChannelHealthSynthesizer`), `BaselineTrigger` policy enforcement, and `docs/ENVIRONMENT.md`. See [CHANGELOG.md](CHANGELOG.md).
+- **v0.0.0.16 (Wave 9 trigger)** — Baseline runtime policy enforcement (`baseline.Trigger`), StopLoss/TakeProfit/MaxHoldingDays violations, and Layer 3 baseline tests. See [CHANGELOG.md](CHANGELOG.md).
+- **v0.0.0.8 (Wave 9 schema)** — Wave 9 event schema: `EventPositionUpdate`, `EventRegimeChangeConfirmed`, `EventFactorWeightRegression`, `EventIngestionLagSpike`, `EventDriftDetected`, `EventChannelIndividualHealth`. See [CHANGELOG.md](CHANGELOG.md).
+- **v0.0.0.7 (Wave 8 events)** — Event bus integration, regime debouncing, and DriftDetector v2. See [CHANGELOG.md](CHANGELOG.md).
 - **v0.0.0.6 (Wave 7.5)** — Risk gate safety wiring, orphan config rejection, `AutoJudgePromoter` scheduler integration, promotion-recorded SSE events, and dashboard channel fetch log. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Current-First Readme
@@ -57,9 +61,12 @@ Main packages:
 - `internal/orchestrator`: routing and plugin execution
 - `internal/sim`: portfolio/execution simulation
 - `internal/experiment`: mutation execution and judging
-- `internal/baseline`: baseline policy management
+- `internal/baseline`: baseline policy management; `baseline.Trigger` enforces StopLoss/TakeProfit/MaxHoldingDays in live trading
 - `internal/marketdata`: provider abstraction and adapters
 - `internal/ledger`: outcomes and scorecard persistence
+- `internal/monitoring`: Dashboard API, Wave 9 observability runtime, and channel health synthesis
+- `internal/eventbus`: pub/sub event bus wiring for Wave 8/9 events
+- `internal/risk`: RiskManager, VaR, and macro drawdown guards
 
 ## Quick Start
 
@@ -121,11 +128,23 @@ go test ./internal/sim/...
 For the complete operating skill map and guardrails, see:
 
 - `.claude/SKILLS-MAP.md` — **統一技能地圖入口**
-- `.claude/skills/atlas-core-architecture/SKILL.md` — 核心架構
+- `docs/ENVIRONMENT.md` — 外部依賴與開發環境狀態（PR #700）
+
+Current hand-written `atlas-*` skills:
+
+- `.claude/skills/atlas-pre-change-protocol/SKILL.md` — 修改前 7 步驟強制檢查清單
+- `.claude/skills/atlas-data-visibility/SKILL.md` — 四層資料可見性防護
 - `.claude/skills/atlas-macro-narrative/SKILL.md` — 宏觀敘事
 - `.claude/skills/atlas-risk-management/SKILL.md` — 風險管理
 - `.claude/skills/atlas-strategy-evolution/SKILL.md` — 策略進化
-- `.claude/skills/atlas-operations-guide/SKILL.md` — 操作指南
+- `.claude/skills/atlas-strategy-techniques/SKILL.md` — 投資心法庫
+- `.claude/skills/atlas-multi-strategy/SKILL.md` — 多策略框架
+- `.claude/skills/atlas-event-driven-weights/SKILL.md` — 事件驅動權重
+- `.claude/skills/atlas-swarm-analyst/SKILL.md` — Swarm 分析
+- `.claude/skills/atlas-taiwan-leading-indicators/SKILL.md` — 短線領先指標
+
+Operational playbooks:
+
 - `docs/operations_playbook.md` — 操作手冊
 - `docs/iteration_playbook.md` — 迭代指南
 - `docs/evolution_loop.md` — 演化循環
