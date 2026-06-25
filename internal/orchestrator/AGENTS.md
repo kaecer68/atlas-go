@@ -64,6 +64,8 @@
 - **Executor 註冊**：新增 Executor 需在 `plugin_registry.go` 的 `NewPluginRegistry()` 中手動加入對應陣列。
 - **因子分數**：所有推薦在進入控制層前，必須經由 `CalculateFactorScoresWithBreakdown` 補完因子細節。
 - **原子性**：`System.RunDailySimulation` 應保持無副作用，直到結果寫入 `ledger`。
+- **LLM sector agent wiring**（Wave 11 L2.1，Issue #719）：`system.WithLLMSectorAgents(driver)` 在 `factory.go` 中依 `config.LLMSectorAgentsEnabled`（env `LLM_SECTOR_AGENTS_ENABLED`）決定是否註冊 `llmSectorAgentsPlugin`。Driver 為 `nil` 時 plugin 為 no-op pass-through，確保預設行為保留 deterministic 路徑（backtest 可重現）。`SectorAgentLLM` 與 `PlanDriver` / `ReflectDriver` 介面由 #711 Phase 1-4 提供。
+- **`SectorAgentLLMDriver` 包裝**：當 production driver 注入時，必須是 `SectorAgentLLMDriver`（包 PlanDriver + ReflectDriver）。`SectorAgentLLM` 透過嵌入介面欄位（`PlanDriver`/`ReflectDriver`）取得方法 — 不可用已 deprecated 的 `LLMDriver` 單一介面。
 
 ---
 
@@ -74,4 +76,5 @@
   現已改為 `buildPassedSymbolKey`（Symbol-only key），CIO 覆寫不再影響 `PassedGuards` 查核。
   仍應保留原始 Agent ID（`finalRecs[].Agent`），供後端 `recommendation_outcomes.jsonl` 與 `PassedGuards` audit trail 使用——僅僅不再依賴它做查核。
 - **靜默過濾**：若標的不符合 `Screener` 門檻，將完全不會進入 `Recommend` 階段，開發時若發現「推薦消失」請優先檢查 `agents.json`。
+- **LLM sector agent 啟用順序**：當 `LLMSectorAgentsEnabled=true` 但 driver 為 `nil`，plugin 應回 no-op（已實作）。但呼叫端若手動呼叫 `sector_agent_llm.go` 的 `PlanStep` / `Reflect` 而沒傳 driver 會回 `ErrNotImplemented`（#711 設計）。**不要**混用 `LLMDriver`（deprecated）與 `PlanDriver`+`ReflectDriver`。
 - **Registry 變更**：修改 `AgentRegistry` 後，必須確認 `ExecuteRegistryResearch` 的路由邏輯能正確匹配新 Layer。

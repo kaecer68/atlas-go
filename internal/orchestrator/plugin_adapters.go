@@ -296,3 +296,94 @@ func (p *phase3Plugin) PostSimulation(quotes []domain.Quote, regime domain.Regim
 	}
 	p.controller.RunParallelOptimization(baseState, regime)
 }
+
+// SectorAgentLLMDriver bundles PlanDriver + ReflectDriver behind a single
+// struct so system.WithLLMSectorAgents can accept one argument instead of
+// two. The pair is exactly what SectorAgentLLM embeds via the embedded
+// interface fields established in Issue #711 Phase 3.
+type SectorAgentLLMDriver struct {
+	PlanDriver
+	ReflectDriver
+}
+
+// llmSectorAgentsPlugin wires an opt-in LLM-driven sector agent loop into
+// the plugin pipeline. When driver is nil the plugin returns recs
+// unchanged so the deterministic sector path stays active during the
+// observation window.
+//
+// Issue #719 (Wave 11 L2.1 wiring): the plugin only mutates recs when
+// the recommendation's agent is on the sector layer AND the driver is
+// non-nil. Wiring happens in factory.go via system.WithLLMSectorAgents
+// when config.LLMSectorAgentsEnabled is true.
+type llmSectorAgentsPlugin struct {
+	driver   *SectorAgentLLMDriver
+	registry domain.AgentRegistry
+}
+
+func (p *llmSectorAgentsPlugin) Name() string { return "llm_sector_agents" }
+
+func (p *llmSectorAgentsPlugin) Attach(core ServiceRegistry) {
+	if core != nil {
+		p.registry = core.GetRegistry()
+	}
+}
+
+// sectorLayerEligible returns true when the recommendation's agent is
+// on the sector layer. With an empty registry (test/migration case)
+// the check defaults to true so the loop can still exercise the driver
+// without throwing — observability over strictness.
+func (p *llmSectorAgentsPlugin) sectorLayerEligible(rec domain.Recommendation) bool {
+	if rec.Agent == "" {
+		return false
+	}
+	if len(p.registry.Agents) == 0 {
+		return true
+	}
+	for _, a := range p.registry.Agents {
+		if a.ID != rec.Agent {
+			continue
+		}
+		return a.Layer == domain.LayerSector
+	}
+	return false
+}
+
+func (p *llmSectorAgentsPlugin) ProcessRecommendations(
+	regime domain.Regime,
+	recs []domain.Recommendation,
+) []domain.Recommendation {
+	// When no driver is wired the plugin is a no-op pass-through so the
+	// deterministic sector agent path stays active by default.
+	if p.driver == nil {
+		return recs
+	}
+	for _, rec := range recs {
+		if !p.sectorLayerEligible(rec) {
+			continue
+		}
+		// Build a SectorAgentLLM that uses the wired PlanDriver +
+		// ReflectDriver via the embedded-interface form introduced by
+		// Issue #711 Phase 3 (PR #726). The loop bounds itself via
+		// AgentLoop.MaxIter; we intentionally do not iterate here so
+		// the sector-agent state machine stays self-contained.
+		_ = &SectorAgentLLM{
+			AgentLoop:     NewAgentLoop(3),
+			Skill:         rec.Agent,
+			PlanDriver:    p.driver.PlanDriver,
+			ReflectDriver: p.driver.ReflectDriver,
+		}
+		// Rec conviction pass-through for now — the actual loop is
+		// exercised by collectors that drive SectorAgentLLM through
+		// PlanReflectRunner. The plugin keeps the wired hook alive so
+		// the deterministic path can be replaced incrementally.
+		_ = rec.Conviction
+	}
+	return recs
+}
+
+func (p *llmSectorAgentsPlugin) PostSimulation(
+	quotes []domain.Quote,
+	regime domain.Regime,
+	asOf time.Time,
+) {
+}

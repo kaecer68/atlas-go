@@ -109,3 +109,24 @@ func (s *System) WithStrategyTechniques(
 	}, s.SystemCore)
 	return s
 }
+
+// WithLLMSectorAgents wires the LLM-driven sector agent plugin into the
+// system. The driver argument provides the LLM backend (typically backed
+// by llm.Router via dependency injection). A nil driver is a valid state:
+// the plugin returns recs unchanged so the deterministic sector agent
+// path remains active during the observation window.
+//
+// Issue #719 (Wave 11 L2.1 wiring): the factory calls this option only
+// when config.LLMSectorAgentsEnabled is true (env LLM_SECTOR_AGENTS_ENABLED).
+// Production callers that need a real PlanDriver + ReflectDriver pair
+// should pass a driver implementation here rather than relying on the
+// default no-op path.
+func (s *System) WithLLMSectorAgents(driver *SectorAgentLLMDriver) *System {
+	if s.host == nil {
+		s.host = &PluginHost{}
+	}
+	s.host.Register(&llmSectorAgentsPlugin{
+		driver: driver,
+	}, s.SystemCore)
+	return s
+}
