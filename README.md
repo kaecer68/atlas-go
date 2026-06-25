@@ -12,6 +12,7 @@ It provides an auditable workflow for:
 
 ## Recent updates
 
+- **v0.0.0.21 (Wave 10 L2.3 PoC complete + Wave 11 L2.1 doc audit closure)** — `SemiconductorLLMAgent` wired behind `UseLLMSectorAgents` feature flag (PR #733), `LLMDriver` split into `PlanDriver` + `ReflectDriver` (PR #726), `LLM_OPENCODE_GO_API_KEY` and routing chain demoted to 3-tier effective fallback (PR #723), `llm_annotator` deprecation boundary documented (PR #730), and LLM sector agent plugin wired (PR #734). See [CHANGELOG.md](CHANGELOG.md).
 - **v0.0.0.18 (Wave 9 gap fixes)** — Closed 3 production bugs (SSE catchup dead in `runLiveTrading`, `Start` partial-failure cleanup without defer, `errs` channel dropping errors after first), added v2/chain integration tests, and made `risk.NewAuditSubscriber` idempotent. See [CHANGELOG.md](CHANGELOG.md).
 - **v0.0.0.17 (Wave 9 wire)** — Completed Wave 9 observability wiring (`Wave9Observability`, five detectors, `ChannelHealthSynthesizer`), `BaselineTrigger` policy enforcement, and `docs/ENVIRONMENT.md`. See [CHANGELOG.md](CHANGELOG.md).
 - **v0.0.0.16 (Wave 9 trigger)** — Baseline runtime policy enforcement (`baseline.Trigger`), StopLoss/TakeProfit/MaxHoldingDays violations, and Layer 3 baseline tests. See [CHANGELOG.md](CHANGELOG.md).

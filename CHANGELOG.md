@@ -1,8 +1,39 @@
 # Changelog
 
-## [Unreleased]
+## [0.0.0.21] - 2026-06-25
 
-Phase 3 polish + structural (Issue #711 #7, #8, #10, #11). Low-risk improvements to error visibility, interface clarity, and input validation. No VERSION bump (per M1 convention: polish PRs use the `[Unreleased]` block; v0.0.0.20a is already tagged at PR2).
+Wave 10 L2.3 PoC completion (#732, #733) + Wave 11 L2.1 doc audit closure (#723, #730, #734). Closes the LLM-driven sector agent prototype path and the doc-audit followups across `internal/llm/`, `internal/llm_annotator/`, and `internal/orchestrator/`. Tagged as `0.0.0.21` (post-release of `0.0.0.20a`).
+
+### Wave 11 L2.1: doc audit closure (#723, #730, #734)
+
+#### LLM OpenCode provider demotion (Issue #720, PR #723)
+
+- **`internal/llm/provider.go`**: `ProviderOpenCodeGo` / `ProviderOpenCodeZen` documented as `[PLANNED]` constants reserved for future client implementation. No client implementation exists in `internal/llm/clients/`.
+- **`internal/llm/router.go`** + **`configs/llm_router.yaml`**: `defaultRoutingTable()` and the YAML both set `Backup2: ""` for all 12 capability chains. Effective routing chain is 3-tier (Primary → Backup1 → LastResort). Router iteration tolerates empty-string Backup2 via `continue` in `router.go:Call`.
+- **`internal/llm/router_test.go`** + **`config_test.go`** + **`integration_test.go`** + **`adapters/router_annotator_test.go`**: assertions updated to 3-tier chain semantics.
+- **`internal/llm/adapters/router_annotator.go`**: `Name()` descriptor updated to `"router(minimax→deepseek→mock)"`.
+- **Issue #721 follow-up (PR #723 commit 2)**: removed `LLM_OPENCODE_GO_API_KEY` env var entries from `CLAUDE.md` and `internal/llm/AGENTS.md` (no consumers after routing chain demotion).
+- **Docs**: `CLAUDE.md`, `README.md`, `docs/architecture.md`, `internal/llm/AGENTS.md`, `internal/MATURITY.md` aligned with the effective 3-tier fallback.
+
+#### llm_annotator deprecation boundary (Issue #722, PR #730)
+
+- **`internal/llm_annotator/doc.go`**: package-level deprecation warning points to `internal/llm/capabilities/failure_attribution` as the canonical role; existing public API (`Annotator`, `KimiClient`, `Config`, `ErrUnavailable`) preserved during the deprecation window.
+- **`internal/llm_annotator/AGENTS.md`** (new, 64 lines): five known traps documented — deprecated `Annotator` interface, duplicate `CircuitBreaker`, `apigateway` key requirement, one-shot `BudgetCallback`, `rule_based` fallback contract.
+- **`internal/llm/AGENTS.md`** (new, 200 lines, imported from doc-audit commit 56868db8): Phase 2 canonical ownership + the cycle blocker preventing immediate CircuitBreaker unification.
+- **`internal/MATURITY.md`**: `llm_annotator` row marked deprecated; `llm` row updated to reflect Phase 2 canonical ownership.
+- **No code changes**: `circuit_breaker.go` and `annotator.go` retained as-is so the Wave 12+ follow-up refactor can proceed without contention.
+- **Follow-up tracking**: [Issue #731](https://github.com/kaecer68/atlas-go/issues/731) tracks the Wave 12+ `CircuitBreaker` unification (transitive cycle `apigateway → monitoring → llm/capabilities → llm_annotator`).
+
+#### LLM sector agent wiring (Issue #719, PR #734)
+
+- **`internal/config/config.go`**: `LLMSectorAgentsEnabled` field + `LLM_SECTOR_AGENTS_ENABLED` env var (default `false`).
+- **`internal/orchestrator/system_plugins.go`**: `WithLLMSectorAgents(driver *SectorAgentLLMDriver)` option.
+- **`internal/orchestrator/plugin_adapters.go`**: `SectorAgentLLMDriver` struct wrapping `PlanDriver + ReflectDriver` (the embedded-interface form introduced by Issue #711 Phase 3, PR #726); `llmSectorAgentsPlugin` with `Attach` + `ProcessRecommendations` + `PostSimulation` lifecycle; nil driver is a no-op pass-through that preserves the deterministic sector path.
+- **`internal/orchestrator/factory.go`**: opt-in wiring guarded by `cfg.LLMSectorAgentsEnabled`; default behavior preserves backtest reproducibility.
+- **Tests** (5 new): nil-driver pass-through, non-sector-agent skip, sector-agent no-op, empty-registry fallback, `SectorAgentLLMDriver` interface embeds.
+- **Docs**: `CLAUDE.md`, `internal/orchestrator/AGENTS.md`, `internal/MATURITY.md` aligned.
+
+### Phase 3 polish + structural (Issue #711 #7, #8, #10, #11)
 
 ### Added
 
