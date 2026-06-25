@@ -50,6 +50,39 @@ PR4 of 7 in the Wave 10 L2.3 execution plan. Closes the test-coverage gaps from 
 - Pre-Change Protocol: blast radius ZERO (test files only, no production code modified).
 - Plan v2 test bar: 4 new test files (provider_test.go, tool_args_test.go, handler_fuzz_test.go) + 1 extended file (agent_loop_test.go) = **4 new files** ≥ 6+ required. **1 fuzz test** ≥ 1 required. ✓
 
+### L2.3 PoC: adapter + mock infrastructure (PR5a)
+
+PR5a of 7 in the Wave 10 L2.3 execution plan. Provides the production adapter and test infrastructure for the L2.3 sector-agent plan/reflect loop. No VERSION bump (PR5b will tag v0.0.0.21 with the full L2.3 PoC).
+
+#### New files (5)
+
+- **`internal/orchestrator/llm_driver_adapter.go`** (new, 170 lines): `DriverAdapter` implements `PlanDriver` and `ReflectDriver` by delegating to a concrete `llm.ProviderImpl` and parsing the textual response into `[]PlanStep` / `Reflection`. Exposes `ParsePlanResponse` and `ParseReflectResponse` for direct unit testing. **Deviation from plan v2**: lives in `internal/orchestrator/` (not `internal/llm/`) because the adapter returns `orchestrator.PlanStep` / `orchestrator.Reflection`. Placing it in `internal/llm/` would create an import cycle: `llm` → `orchestrator` (for the types) → `llm` (via `sector_agent_llm.go` for `llm.Tool`).
+- **`internal/llm/prompts/plan.go`** + **`reflect.go`** (new dir, ~80 lines): `PlanPrompt(skill, symbol)` and `ReflectPrompt(skill, symbol, toolResult)` return the full prompt text the adapter sends to the provider. Both embed the JSON format specification (`PlanTemplate` / `ReflectTemplate`) so the format and context live in one place. The adapter uses these functions — the prompt package is actively consumed.
+- **`internal/llm/test_tools.go`** (new, 90 lines): `TestTools()` returns the 3 L2.3 PoC test tools (`get_factor_weight`, `get_regime`, `get_liquidity`) as real `llm.Tool` instances with deterministic handlers returning canned mock data. Each tool takes `{"symbol": "<ticker>"}` and returns hardcoded mock JSON. Production code paths do not import this file.
+- **`internal/orchestrator/sector_agent_llm_test_helpers.go`** (new, 119 lines, `_test_helpers.go` suffix → test-only): `MockLLMDriver` satisfies both `PlanDriver` and `ReflectDriver` for use in PR5b's E2E tests. Configurable via `WithPlanResponse` / `WithReflectResponse` / `WithPlanError` / `WithReflectError` builder methods. Records call history (`PlanCallCount`, `LastPlanCall`, etc.) for test assertions. Per C4 fix: `_test_helpers.go` suffix ensures test-only compilation.
+
+#### Tests (18 new)
+
+- `internal/orchestrator/llm_driver_adapter_test.go` (new, 304 lines): covers `ParsePlanResponse` (7 sub-cases: valid / markdown-fenced / plain-fenced / malformed / empty-steps / invalid-kind / tool-without-name), `ParseReflectResponse` (5 sub-cases: valid / continue-false / markdown-fenced / malformed / out-of-range), `DriverAdapter.PlanComplete` (3 sub-cases: happy-path / provider-error / parse-error), `DriverAdapter.ReflectComplete` (2 sub-cases: happy-path / provider-error), and `stripMarkdownFences` (5 sub-cases).
+
+#### Staticcheck fixes (during PR5a development)
+
+- S1016 × 2: use type conversion (`PlanStep(s)` / `Reflection(resp)`) instead of struct literal — the intermediate JSON types have identical field sets to the final types.
+- S1017: use `strings.TrimSuffix(s, "\`\`\`")` instead of `if HasSuffix(s, "\`\`\`") { s = s[:len(s)-3] }`.
+
+#### Verification
+
+- `go test -race ./internal/orchestrator/... ./internal/llm/...` green.
+- `gofmt -l .` clean.
+- `go vet ./...` clean.
+- `staticcheck ./...` clean.
+- Pre-Change Protocol: blast radius LOW. Adapter is a new file (no existing production code modified). MockLLMDriver is in `_test_helpers.go` (test-only compilation). Test tools are new `TestTools()` function (no production import). Production code paths in `sector_agent_llm.go` unchanged — still returns `ErrNotImplemented` when both drivers are nil.
+- Module maturity: orchestrator is S-tier (stable); llm is experimental.
+
+#### LOC total
+
+~760 lines (plan estimated ~630, actual slightly higher due to comprehensive test coverage and docstrings).
+
 ## [0.0.0.20a] - 2026-06-25
 
 Phase 2 state machine correctness (Issue #711 #5, #6, #9). Closes the 3 state-machine findings from gstack /review of PR #703. Tagged as `0.0.0.20a` (pre-release of v0.0.0.20) so PR3 (Phase 3 polish) can land without re-bumping.
