@@ -5,7 +5,7 @@ description: "Use when modifying factor weights, adding factor types, or connect
 
 > **實作狀態**：⚠️ 部分實作 — 核心元件已實作，部分功能已整合至現有模組  
 > **最後審計**：2026-06-02  
-> **實際檔案結構**：`factor_bridge.go`（已實作）、`factor_weight_engine.go`（已實作，12 因子：8 個核心 + 4 個條件式），其餘因子計算已內建於 `factor_engine.go`
+> **實際檔案結構**：`factor_bridge.go`（已實作）、`factor_weight_engine.go`（已實作，12 因子：8 個核心 + 4 個條件式），其餘因子計算已拆分至 `factor_engine_*.go`（`factor_engine.go` 為 12 行 entry stub）
 
 ## 描述
 
@@ -46,12 +46,12 @@ FactorEngine (12 因子)
 
 | 因子 | 基礎權重 | 說明 | 狀態 |
 |------|----------|------|------|
-| Momentum | 0.25 | 動能因子 | ✅ 已實作（factor_engine.go） |
-| Value | 0.20 | 價值因子 | ✅ 已實作（factor_engine.go） |
-| Quality | 0.20 | 品質因子 | ✅ 已實作（factor_engine.go） |
-| Agent | 0.15 | 代理人因子 | ✅ 已實作（factor_engine.go） |
-| InstitutionalSentiment | 0.10 | 機構情緒因子 | ✅ 已實作（factor_engine.go `CalculateInstitutionalSentimentScore()`） |
-| Liquidity | 0.05 | 流動性因子 | ✅ 已實作（factor_engine.go `CalculateLiquidityScore()`） |
+| Momentum | 0.25 | 動能因子 | ✅ 已實作（`factor_engine_momentum.go`） |
+| Value | 0.20 | 價值因子 | ✅ 已實作（`factor_engine_value.go`） |
+| Quality | 0.20 | 品質因子 | ✅ 已實作（`factor_engine_quality.go`） |
+| Agent | 0.15 | 代理人因子 | ✅ 已實作（`factor_engine_aggregate.go`） |
+| InstitutionalSentiment | 0.10 | 機構情緒因子 | ✅ 已實作（`factor_engine_institutional.go` `CalculateInstitutionalSentimentScore()`） |
+| Liquidity | 0.05 | 流動性因子 | ✅ 已實作（`factor_engine_liquidity.go` `CalculateLiquidityScore()`） |
 | Narrative | 0.05 | 敘事因子 | ✅ 已實作 |
 | TSMC | 0.05 | 台積電權重因子 | ✅ 已實作（conditioned on `tsmcProv` injection） |
 
@@ -72,7 +72,7 @@ InstitutionalSentiment = 0.50 × ForeignFlowScore
                         + 0.30 × DomesticFlowScore
                         + 0.20 × MarginBalanceScore
 ```
-已實作於 `factor_engine.go` 的 `CalculateInstitutionalSentimentScore()` 方法。
+已實作於 `factor_engine_institutional.go` 的 `CalculateInstitutionalSentimentScore()` 方法。
 
 ### 4. Liquidity 因子
 
@@ -80,7 +80,7 @@ InstitutionalSentiment = 0.50 × ForeignFlowScore
 ```
 Liquidity = -log( |Return| / Volume )  // 標準化後
 ```
-已實作於 `factor_engine.go` 的 `CalculateLiquidityScore()` 方法。
+已實作於 `factor_engine_liquidity.go` 的 `CalculateLiquidityScore()` 方法。
 
 ### 5. FactorWeightEngine（動態權重引擎）
 
@@ -127,19 +127,23 @@ type FactorWeightEngine struct {
 | 元件 | 檔案 | 狀態 |
 |------|------|------|
 | FactorBridge | `internal/portfolio/factor_bridge.go` | ✅ 已實作（含 RSI-tw 計算器整合） |
-| InstitutionalSentiment | `internal/portfolio/factor_institutional_sentiment.go` | ⚠️ 未建立獨立檔案 — 功能已內建於 `factor_engine.go` |
-| Liquidity | `internal/portfolio/factor_liquidity.go` | ⚠️ 未建立獨立檔案 — 功能已內建於 `factor_engine.go` |
+| InstitutionalSentiment | `internal/portfolio/factor_engine_institutional.go` | ✅ 已實作（獨立檔案） |
+| Liquidity | `internal/portfolio/factor_engine_liquidity.go` | ✅ 已實作（獨立檔案） |
 | FactorWeightEngine | `internal/portfolio/factor_weight_engine.go` | ✅ 已實作（12 因子，配置化，含策略調整） |
 | RegimeChange | `internal/portfolio/regime_change.go` | ⚠️ 未建立獨立檔案 — 功能由 `factor_weight_engine.go` + `regime.go` 覆蓋 |
 | Regime/Style 定義 | `internal/portfolio/regime.go` | ✅ 已實作（RegimeConfig、StyleAllocation） |
 
 ## 擴展現有程式碼
 
-### 已實作：factor_engine.go
+### 已實作：factor_engine_*.go
 
-1. ✅ `CalculateInstitutionalSentiment()` — 已整合於 `factor_engine.go`
-2. ✅ `CalculateLiquidity()` — 已整合於 `factor_engine.go`
-3. ✅ `CalculateAllScoresWithBreakdown()` — 已擴展支援 12 因子
+1. ✅ `CalculateInstitutionalSentimentScore()` — 位於 `factor_engine_institutional.go`
+2. ✅ `CalculateLiquidityScore()` — 位於 `factor_engine_liquidity.go`
+3. ✅ `CalculateAllScoresWithBreakdown()` — 位於 `factor_engine_aggregate.go`，已擴展支援 12 因子
+
+### Wave 9 觀測整合
+
+`internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 在 live 模式下啟動因子權重迴歸偵測器（`FactorWeightRegressionDetector`）等五個 Wave 9 觀測器，用於監控事件驅動權重的 runtime 行為。
 
 ## 驗證要求
 
