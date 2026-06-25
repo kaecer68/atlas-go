@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### feat(orchestrator): L2.4 observation metrics for SemiconductorLLMAgent
+
+Adds six `slog.Info` events to `SemiconductorLLMAgent.Recommend` so the L2.4 7-14 day observation window can validate the LLM-driven sector agent without a separate metrics library: `agent_loop.start`, `agent_loop.plan_complete`, `agent_loop.tool_call`, `agent_loop.reflect`, `agent_loop.exhausted`, `agent_loop.final`. Field names align with `docs/wave-11/L2_4_OBSERVATION.md` so the L2.4 aggregator can roll up `llm.latency_p50/p95`, `tool.success_rate`, `loop.exhausted_rate`, etc. without per-source schema mapping. The logger is injectable via a new `Metrics *slog.Logger` field (defaults to `slog.Default()`), so tests capture JSON output via a buffer without touching global state. No production behavior change; the `UseLLMSectorAgents` feature flag still gates enablement.
+
 ### fix(orchestrator): wire RunToolCall to llm.SafeInvokeHandler
 
 Closes the PR1 placeholder gap in `SectorAgentLLM.RunToolCall`. The L2.3 PoC path now dispatches registered tools via `llm.SafeInvokeHandler` (which also recovers from panicking handlers per Issue #711 #3) instead of returning the `not yet implemented` error. Lookup is linear over `a.Tools` (expected <10 per skill); an unknown tool name produces a clear error listing registered tools to help diagnose LLM hallucination. The corresponding E2E test (`TestSemiconductorLLMAgent_Recommend_ToolDispatchGap`) is renamed to `_HappyPath` and asserts the full plan → dispatch → reflect → return path succeeds with `ok=true`, the expected conviction, and the recorded plan/reflect call counts. No VERSION bump (follow-up fix to `0.0.0.21`).
