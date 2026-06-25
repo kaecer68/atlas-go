@@ -150,22 +150,34 @@ func (w *Wave9Observability) Start(ctx context.Context) (err error) {
 		started = append(started, stop)
 	}
 	defer func() {
-		if err != nil {
-			for i := len(started) - 1; i >= 0; i-- {
-				if stopErr := started[i](); stopErr != nil {
-					logging.Warn("wave9_observability", "cleanup_stop_failed", logging.Err(stopErr))
-				}
-			}
-			// Clear references so a future Start() creates fresh instances
-			// rather than reusing the failed-attempt detectors (which are
-			// already stopped but still subscribed to the bus).
-			w.regimeDebouncer = nil
-			w.ingestionLagMonitor = nil
-			w.channelHealthSynthesizer = nil
-			w.factorWeightRegression = nil
-			w.driftDetector = nil
-			w.started = false
+		if err == nil {
+			return
 		}
+		// Stop started detectors in LIFO and aggregate any cleanup errors so
+		// the caller can distinguish a clean partial-failure from one where
+		// detectors leaked bus subscriptions (Stop returned an error).
+		var cleanupErrs []error
+		for i := len(started) - 1; i >= 0; i-- {
+			if stopErr := started[i](); stopErr != nil {
+				cleanupErrs = append(cleanupErrs, stopErr)
+				logging.Warn("wave9_observability", "cleanup_stop_failed", logging.Err(stopErr))
+			}
+		}
+		if len(cleanupErrs) > 0 {
+			err = fmt.Errorf("%w; cleanup failures: %w", err, errors.Join(cleanupErrs...))
+		}
+		// Clear references so a future Start() creates fresh instances
+		// rather than reusing the failed-attempt detectors (which are
+		// already stopped but still subscribed to the bus).
+		w.regimeDebouncer = nil
+		w.ingestionLagMonitor = nil
+		w.channelHealthSynthesizer = nil
+		w.factorWeightRegression = nil
+		w.driftDetector = nil
+		// Note: w.started is never true on the error path (it's set to
+		// true only after all five Start calls succeed, line 229), so
+		// the explicit reset below is a defensive no-op kept for clarity.
+		w.started = false
 	}()
 
 	w.regimeDebouncer = w.factory.newRegimeDebouncer(w.bus)
@@ -212,11 +224,18 @@ func (w *Wave9Observability) Start(ctx context.Context) (err error) {
 
 	wg.Wait()
 	close(errs)
+	// Collect ALL parallel-detector failures so the caller knows how many
+	// subsystems were impacted, not just the first.  errs is buffered to 3
+	// so close(errs) below the range never blocks.
+	var startErrs []error
 	for e := range errs {
 		if e != nil {
-			err = e
-			return err
+			startErrs = append(startErrs, e)
 		}
+	}
+	if len(startErrs) > 0 {
+		err = errors.Join(startErrs...)
+		return err
 	}
 
 	w.driftDetector = w.factory.newDriftDetector(w.bus, w.targetWeightsProvider)
