@@ -462,8 +462,8 @@ for _, alert := range alerts {
 
 ```
 # 新增文件（12 個）
-docs/warmup_auto_evolution_design.md
-docs/warmup_auto_evolution_progress.md     # 本文檔
+docs/archive/warmup_auto_evolution_design.md
+docs/archive/warmup_auto_evolution_progress.md     # 本文檔
 internal/domain/maturity.go
 internal/domain/maturity_test.go
 internal/experiment/auto_judge_promoter.go

@@ -63,7 +63,7 @@
 
 ### 階層 3：技能文件（Skills）
 
-> 完整技能地圖與分類體系請見 **`.claude/SKILLS-MAP.md`**（42 技能，6 大分類）。
+> 完整技能地圖與分類體系請見 **`.claude/SKILLS-MAP.md`**（20 技能，5 大分類）。
 
 | 文件 | 範圍 | 何時閱讀 |
 |------|------|---------|
@@ -75,8 +75,6 @@
 | `.claude/skills/atlas-data-visibility/SKILL.md` | 四層資料可見性防護 | 資料流/通道變更時 |
 
 **機器人溝通技能**（`robot-communication/`，4 個）：供 OpenClaw/Hermes Agent 載入，為投資人提供每日摘要、組合問答、策略解釋、風險解讀。非 AI Coding 用，詳見 `.claude/SKILLS-MAP.md`。
-
-**自動生成技能**（`generated/`，21 個）：純程式碼符號索引，僅供程式碼導航。標記 `load_policy: "manual_only"`，不應自動載入。
 
 ### 階層 4：模組指南（AGENTS.md）
 
@@ -119,7 +117,7 @@
 | `docs/iteration_playbook.md` | Mutation 策略模式 |
 | `docs/data_sources.md` | 資料匯入、Replay 格式 |
 | `docs/script_usage_guide.md` | 輔助腳本使用方式 |
-| `docs/GATEWAY_MIGRATION_TRACKING.md` | 遷移 TODO 追蹤 |
+| `docs/archive/GATEWAY_MIGRATION_TRACKING.md` | 遷移 TODO 追蹤（已封存） |
 | `docs/AI_PROMPT_FILES.md` | AI prompt 檔案追蹤政策（避免 local-only 漂移） |
 | `docs/MULTI_CLI_PROTOCOL.md` | 多 CLI 並行 worktree 協議 |
 
@@ -151,9 +149,8 @@
 | `internal/*/CONSTITUTION.md` | 憲法（最高權威） | 1 |
 | `.github/instructions/*.md` | 領域守則 | 3 |
 | `.claude/skills/*/SKILL.md` | 手寫技能文件 | 10 |
-| `internal/*/AGENTS.md` | 模組指南 | 52 |
+| `internal/*/AGENTS.md` | 模組指南 | 49 |
 | `docs/*.md` | 參考文件 | 10+ |
-| `.claude/skills/generated/*/SKILL.md` | 自動生成技能（程式碼導航） | 21 |
 | `.claude/skills/robot-communication/*/SKILL.md` | 機器人溝通技能 | 4 |
 | `.claude/skills/gitnexus/*/SKILL.md` | GitNexus 工具技能 | 6 |
 

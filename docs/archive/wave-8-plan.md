@@ -1,6 +1,6 @@
 # Wave 8 Plan — Event-Driven Expansion
 
-> **歷史文件**：Wave 9 已於 v0.0.0.16/17 上線。當前狀態請見 [`docs/roadmap.md`](roadmap.md) 與 [`CHANGELOG.md`](../CHANGELOG.md)。本文件保留作為 Wave 8 執行歷程參考，未來可考慮移至 `docs/archive/`。
+> **歷史文件**：Wave 9 已於 v0.0.0.16/17 上線。當前狀態請見 [`docs/roadmap.md`](../roadmap.md) 與 [`CHANGELOG.md`](../../CHANGELOG.md)。本文件保留作為 Wave 8 執行歷程參考。
 
 > **建立日期**：2026-06-20
 > **對應 VERSION**：v0.0.0.6（Wave 7.5 已收尾）
@@ -179,7 +179,7 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 - [ ] 所有事件都有對應 Prometheus alert rule
 - [ ] 所有事件都有對應 `docs/events/<event-name>.md` 說明
 - [ ] `docs/roadmap.md` 更新為 v0.0.0.7 + Wave 8 段落
-- [ ] `CHANGELOG.md` 加入 v0.0.0.7 entry
+- [ ] [`CHANGELOG.md`](../../CHANGELOG.md) 加入 v0.0.0.7 entry
 - [ ] `VERSION` 從 0.0.0.6 bump 到 0.0.0.7
 
 ## 9. References

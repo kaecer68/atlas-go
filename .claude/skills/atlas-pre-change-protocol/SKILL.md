@@ -145,7 +145,7 @@ GitNexus indexes the full call graph and execution flows. Use it to see connecti
 1. Use gitnexus_query({query: "your topic"}) to find relevant execution flows
 2. Use gitnexus_context({name: "symbol"}) for 360° view (callers + callees + processes)
 3. Identify which functional communities your target belongs to — cross-community changes amplify risk
-4. If the index is stale, run: npx gitnexus analyze
+4. If the index is stale, run: npx gitnexus analyze --skip-agents-md
 ```
 
 ### Step 7: EXISTING CODE INTENT
@@ -247,7 +247,7 @@ Use gitnexus_query({query: "your topic"}) → find relevant execution flows and 
 This is the FASTEST way to understand system structure before diving into code.
 → Map the topic to a functional community (e.g., "market data providers" → marketdata community)
 → Check connected communities for cross-cutting concerns
-→ If the index is stale, run: npx gitnexus analyze
+→ If the index is stale, run: npx gitnexus analyze --skip-agents-md
 ```
 
 ### Step I-2: GitNexus Concept Search + Overlap Signal

@@ -172,13 +172,13 @@ atlas-go 有 34 個 `internal/` 模組、1,200+ 社群、300 條執行流。多�
 
 GitNexus 具備「執行流（Process）」與「功能社群（Community）」雙重抽象層。它能回答「這段程式碼在系統中扮演什麼角色」，而不只是「被誰呼叫」。
 
-**節點統計（atlas-go，2026-06-25）：** 53,385 symbols / 169,008 relationships / 1,225 communities / 300 execution flows
+**索引範圍：** 完整程式碼庫的 symbols、relationships、communities、execution flows（執行 `npx gitnexus status` 查看即時統計）。
 
 ### 常用指令
 
 ```bash
-# 重建索引（修改大量程式碼後執行）
-npx gitnexus analyze
+# 重建索引（修改大量程式碼後執行；使用 --skip-agents-md 避免注入 markdown 區塊）
+npx gitnexus analyze --skip-agents-md
 
 # 查詢特定概念相關的執行流
 gitnexus_query({query: "auth validation logic"})
@@ -309,7 +309,7 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 
 | 工具 | 更新時機 | 指令 |
 |------|---------|------|
-| GitNexus | 大規模重構後、PR 合併前 | `npx gitnexus analyze` |
+| GitNexus | 大規模重構後、PR 合併前 | `npx gitnexus analyze --skip-agents-md` |
 | codebase-memory | 大規模重構後、模組新增時 | `codebase-memory_index_repository({repo_path, mode:"full"})` |
 
 > 兩者皆有檔案監聽，~1s 內自動同步小改動。**重大改動後建議手動重建**。

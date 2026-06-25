@@ -386,7 +386,7 @@ CREATE INDEX idx_alerts_severity ON alerts(severity) WHERE status = 'triggered';
 ## 10. References
 
 - Frontend fix PR: #458 (acknowledgeAlert binding, imports, pagination prep)
-- Audit report: `docs/alert_monitoring_audit_report.md`
+- Audit report: `docs/archive/alert_monitoring_audit_report.md`
 - Industry research: PagerDuty Events API, Prometheus AlertManager, Grafana, Stripe alerting blog
 
 ---
