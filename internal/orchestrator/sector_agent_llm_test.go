@@ -6,12 +6,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/llm"
 )
 
-// stubLLMDriver is a minimal LLMDriver for tests. The RunToolCall paths
-// we cover here don't actually invoke PlanComplete/ReflectComplete, so
-// these methods can return zero values.
+// Compile-time assertion: SectorAgentLLM must satisfy PlanReflectRunner.
+// Regression guard against the Issue #711 #10 LLMDriver split
+// inadvertently dropping or renaming a required method on the runner
+// contract. (T1 fix from plan v2 PR3 test bar.)
+var _ PlanReflectRunner = (*SectorAgentLLM)(nil)
+
+// stubLLMDriver is a minimal implementation that satisfies both the
+// new PlanDriver and ReflectDriver interfaces (and the deprecated
+// LLMDriver alias). Tests that wire SectorAgentLLM should assign
+// this stub to both the PlanDriver and ReflectDriver fields.
 type stubLLMDriver struct{}
 
 func (stubLLMDriver) PlanComplete(_ context.Context, _, _ string) ([]PlanStep, error) {
@@ -23,8 +31,10 @@ func (stubLLMDriver) ReflectComplete(_ context.Context, _, _, _ string) (Reflect
 }
 
 // TestRunToolCall_LLMNil_ReturnsErrNotImplemented verifies the backward-
-// compat path: when no LLM is wired, RunToolCall returns ErrNotImplemented
-// (not a panic, not a silent stub).
+// compat path: when no LLM is wired (both PlanDriver and ReflectDriver
+// are nil), RunToolCall returns ErrNotImplemented (not a panic, not a
+// silent stub). Issue #711 #10: the nil-check now covers BOTH embedded
+// drivers, not the single LLM field.
 func TestRunToolCall_LLMNil_ReturnsErrNotImplemented(t *testing.T) {
 	agent := &SectorAgentLLM{Skill: "semiconductor"}
 	got, err := agent.RunToolCall(context.Background(), PlanStep{ToolName: "get_weather"})
@@ -37,13 +47,14 @@ func TestRunToolCall_LLMNil_ReturnsErrNotImplemented(t *testing.T) {
 }
 
 // TestRunToolCall_LLMWiredNoTools_Panics verifies the Issue #711 #4
-// trust contract: an LLM wired into the agent but no Tools registered
-// would silently feed stub data back to the LLM. We refuse to operate
-// in that state and panic with an actionable message.
+// trust contract: an LLM driver wired into the agent but no Tools
+// registered would silently feed stub data back to the LLM. We refuse
+// to operate in that state and panic with an actionable message.
 func TestRunToolCall_LLMWiredNoTools_Panics(t *testing.T) {
 	agent := &SectorAgentLLM{
-		Skill: "semiconductor",
-		LLM:   stubLLMDriver{},
+		Skill:         "semiconductor",
+		PlanDriver:    stubLLMDriver{},
+		ReflectDriver: stubLLMDriver{},
 	}
 	defer func() {
 		r := recover()
@@ -65,13 +76,14 @@ func TestRunToolCall_LLMWiredNoTools_Panics(t *testing.T) {
 }
 
 // TestRunToolCall_LLMWiredWithTools_NotImpl verifies the wired-but-not-
-// yet-dispatched path: when LLM and Tools are both set, the agent
+// yet-dispatched path: when LLM drivers and Tools are all set, the agent
 // returns a clear "not yet implemented" error instead of silently
 // returning stub data. PR5a will wire the actual tool dispatch.
 func TestRunToolCall_LLMWiredWithTools_NotImpl(t *testing.T) {
 	agent := &SectorAgentLLM{
-		Skill: "semiconductor",
-		LLM:   stubLLMDriver{},
+		Skill:         "semiconductor",
+		PlanDriver:    stubLLMDriver{},
+		ReflectDriver: stubLLMDriver{},
 		Tools: []llm.Tool{
 			{Name: "get_weather", Description: "Look up weather"},
 		},
@@ -88,5 +100,47 @@ func TestRunToolCall_LLMWiredWithTools_NotImpl(t *testing.T) {
 	}
 	if got != "" {
 		t.Errorf("got result=%q, want empty string on not-impl", got)
+	}
+}
+
+// TestSectorAgentLLM_LLMDriver_DeprecatedAlias verifies the Issue #711
+// #10 backward-compat guarantee: the deprecated LLMDriver interface
+// is still the intersection of PlanDriver + ReflectDriver, so existing
+// implementations that satisfy both halves (like stubLLMDriver) can
+// still be assigned to a single LLMDriver-typed variable.
+func TestSectorAgentLLM_LLMDriver_DeprecatedAlias(t *testing.T) {
+	var driver LLMDriver = stubLLMDriver{}
+	if driver == nil {
+		t.Fatal("LLMDriver alias should accept a stubLLMDriver value")
+	}
+}
+
+// TestPlanStep_NoPlanDriver_ReturnsErrNotImplemented verifies that
+// PlanStep returns ErrNotImplemented when PlanDriver is nil even if
+// ReflectDriver is wired. Issue #711 #10: each driver is independent.
+func TestPlanStep_NoPlanDriver_ReturnsErrNotImplemented(t *testing.T) {
+	agent := &SectorAgentLLM{
+		Skill:         "semiconductor",
+		ReflectDriver: stubLLMDriver{},
+		// PlanDriver intentionally nil
+	}
+	_, err := agent.PlanStep(context.Background(), "2330", domain.Recommendation{})
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("PlanStep with nil PlanDriver: got err=%v, want ErrNotImplemented", err)
+	}
+}
+
+// TestReflect_NoReflectDriver_ReturnsErrNotImplemented verifies the
+// mirror case: Reflect returns ErrNotImplemented when ReflectDriver
+// is nil even if PlanDriver is wired. Issue #711 #10.
+func TestReflect_NoReflectDriver_ReturnsErrNotImplemented(t *testing.T) {
+	agent := &SectorAgentLLM{
+		Skill:      "semiconductor",
+		PlanDriver: stubLLMDriver{},
+		// ReflectDriver intentionally nil
+	}
+	_, err := agent.Reflect(context.Background(), "2330", "tool result", 50)
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("Reflect with nil ReflectDriver: got err=%v, want ErrNotImplemented", err)
 	}
 }

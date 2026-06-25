@@ -192,3 +192,61 @@ func TestAgentLoop_AdvanceReflect_PhaseMismatch_ReturnsError(t *testing.T) {
 		t.Error("AdvanceReflect from PhaseReflect should return error, got nil")
 	}
 }
+
+// TestAgentLoop_NewAgentLoop_NonPositiveMaxIter_Warns verifies Issue #711
+// #8: NewAgentLoop with maxIter <= 0 logs a warning and returns a loop
+// with the default MaxIter=3. Positive values are unchanged.
+func TestAgentLoop_NewAgentLoop_NonPositiveMaxIter_Warns(t *testing.T) {
+	// maxIter=0 → default 3 (warning fires)
+	l0 := NewAgentLoop(0)
+	if l0.MaxIter != 3 {
+		t.Errorf("NewAgentLoop(0).MaxIter = %d, want 3 (default)", l0.MaxIter)
+	}
+	// maxIter=-5 → default 3 (warning fires)
+	lNeg := NewAgentLoop(-5)
+	if lNeg.MaxIter != 3 {
+		t.Errorf("NewAgentLoop(-5).MaxIter = %d, want 3 (default)", lNeg.MaxIter)
+	}
+	// Positive value: unchanged (no warning)
+	lPos := NewAgentLoop(7)
+	if lPos.MaxIter != 7 {
+		t.Errorf("NewAgentLoop(7).MaxIter = %d, want 7 (positive values pass through)", lPos.MaxIter)
+	}
+	// All three should be in PhaseInitial regardless of maxIter
+	for name, l := range map[string]*AgentLoop{"zero": l0, "neg": lNeg, "pos": lPos} {
+		if l.Phase != PhaseInitial {
+			t.Errorf("%s: Phase = %q, want %q", name, l.Phase, PhaseInitial)
+		}
+	}
+}
+
+// TestAgentLoop_AdvanceFinal_ClampsConviction_Warns verifies Issue #711
+// #7: AdvanceFinal logs a warning when clamping conviction to [0,100].
+// Behavior preservation: clamped value is stored and Phase is Final.
+// (The warning is informational; this test does not assert on log output.)
+func TestAgentLoop_AdvanceFinal_ClampsConviction_Warns(t *testing.T) {
+	// conviction > 100 → clamp to 100 (warning fires)
+	over := NewAgentLoop(3)
+	over.AdvanceFinal(150)
+	if over.FinalConviction != 100 {
+		t.Errorf("AdvanceFinal(150).FinalConviction = %d, want 100 (clamped)", over.FinalConviction)
+	}
+	if !over.IsTerminal() {
+		t.Error("AdvanceFinal(150): IsTerminal should be true")
+	}
+	// conviction < 0 → clamp to 0 (warning fires)
+	under := NewAgentLoop(3)
+	under.AdvanceFinal(-5)
+	if under.FinalConviction != 0 {
+		t.Errorf("AdvanceFinal(-5).FinalConviction = %d, want 0 (clamped)", under.FinalConviction)
+	}
+	if !under.IsTerminal() {
+		t.Error("AdvanceFinal(-5): IsTerminal should be true")
+	}
+	// In-range conviction: unchanged (no warning)
+	in := NewAgentLoop(3)
+	in.AdvanceFinal(75)
+	if in.FinalConviction != 75 {
+		t.Errorf("AdvanceFinal(75).FinalConviction = %d, want 75 (no clamping)", in.FinalConviction)
+	}
+}

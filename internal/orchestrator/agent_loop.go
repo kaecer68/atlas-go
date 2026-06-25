@@ -67,8 +67,14 @@ type AgentLoop struct {
 // max iteration budget. MaxIter bounds the total number of plan steps
 // (counted via Round, not the number of planning rounds); once exhausted
 // the loop is forced to PhaseFinal.
+//
+// Issue #711 #8: when maxIter <= 0, a slog.Warn is logged and the loop
+// is created with the default MaxIter=3. Surfaces caller bugs that pass
+// zero or negative iteration budgets instead of silently coercing.
 func NewAgentLoop(maxIter int) *AgentLoop {
 	if maxIter <= 0 {
+		slog.Warn("agent_loop.NewAgentLoop: non-positive maxIter, using default",
+			"requested", maxIter, "default", 3)
 		maxIter = 3
 	}
 	return &AgentLoop{Phase: PhaseInitial, MaxIter: maxIter}
@@ -120,11 +126,19 @@ func (l *AgentLoop) AdvanceReflect() error {
 // AdvanceFinal transitions to PhaseFinal, locking in the final conviction.
 // The clamped value (0..100) is stored in l.FinalConviction so callers can
 // read it back after the loop terminates.
+//
+// Issue #711 #7: when the requested conviction is outside [0,100], a
+// slog.Warn is logged with the requested and clamped values. Surfaces
+// LLM driver bugs that emit out-of-range convictions instead of silently
+// coercing.
 func (l *AgentLoop) AdvanceFinal(conviction int) {
 	if conviction < 0 {
+		slog.Warn("agent_loop.AdvanceFinal: clamping conviction to [0,100]",
+			"requested", conviction, "clamped_to", 0)
 		conviction = 0
-	}
-	if conviction > 100 {
+	} else if conviction > 100 {
+		slog.Warn("agent_loop.AdvanceFinal: clamping conviction to [0,100]",
+			"requested", conviction, "clamped_to", 100)
 		conviction = 100
 	}
 	l.Phase = PhaseFinal
