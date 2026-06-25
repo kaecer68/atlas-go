@@ -33,6 +33,12 @@ type CircuitBreaker struct {
 	halfOpenCalls int
 	channelID     string
 	maxFailures   int
+	// manualOverride, when true, prevents successes from auto-closing
+	// the breaker. This is the "force open until an operator resets"
+	// behavior used by llm_annotator's budget callback. The apigateway
+	// channel breakers do not set this directly; SetManualOverride is
+	// the explicit entry point for callers that need this guarantee.
+	manualOverride bool
 }
 
 // NewCircuitBreaker creates a breaker for a channel.
@@ -88,8 +94,10 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 	}
 
 	cb.failures = 0
-	cb.state = StateClosed
-	cb.halfOpenCalls = 0
+	if !cb.manualOverride {
+		cb.state = StateClosed
+		cb.halfOpenCalls = 0
+	}
 	return nil
 }
 
@@ -113,6 +121,28 @@ func (cb *CircuitBreaker) ForceOpen() {
 	cb.state = StateOpen
 	cb.lastFailure = time.Now()
 	cb.failures = cb.maxFailures
+}
+
+// SetManualOverride enables or disables manual override mode. When enabled,
+// successful calls no longer auto-close the breaker — only Reset() does.
+// Designed for budget callbacks (llm_annotator) where "force open until
+// the operator decides the budget is restored" is the correct semantic.
+func (cb *CircuitBreaker) SetManualOverride(enabled bool) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.manualOverride = enabled
+}
+
+// Reset returns the breaker to StateClosed and clears manual override.
+// Use this to release a forced-open breaker once the operator decides
+// the upstream dependency is healthy again.
+func (cb *CircuitBreaker) Reset() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.state = StateClosed
+	cb.failures = 0
+	cb.halfOpenCalls = 0
+	cb.manualOverride = false
 }
 
 // CircuitBreakerManager manages breakers for all channels.

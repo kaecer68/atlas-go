@@ -633,3 +633,274 @@ func TestCircuitBreaker_Call_ConcurrentFailures(t *testing.T) {
 		t.Errorf("expected StateOpen after concurrent failures, got %v", cb.State())
 	}
 }
+
+// =============================================================================
+// SetManualOverride tests (Phase 1 / Issue #736)
+//
+// manualOverride freezes the breaker so that successful calls do NOT
+// auto-close it. The only path back to StateClosed while override is
+// active is Reset(). This is the budget-callback semantic needed by
+// llm_annotator (PR #730 deprecation boundary).
+// =============================================================================
+
+func TestCircuitBreaker_SetManualOverride(t *testing.T) {
+	t.Run("success closes breaker when override is disabled (default)", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+
+		// Sanity: default override is off
+		if cb.manualOverride {
+			t.Fatal("manualOverride should default to false")
+		}
+
+		err := cb.Call(func() error { return nil })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cb.State() != StateClosed {
+			t.Errorf("expected StateClosed after success with override=false, got %v", cb.State())
+		}
+	})
+
+	t.Run("success does NOT close breaker when override is enabled", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+
+		// Build up two failures (still closed) and arm override
+		_ = cb.Call(func() error { return errTestFailure })
+		_ = cb.Call(func() error { return errTestFailure })
+		if cb.State() != StateClosed {
+			t.Fatalf("expected StateClosed after 2 failures, got %v", cb.State())
+		}
+
+		cb.SetManualOverride(true)
+		if !cb.manualOverride {
+			t.Fatal("SetManualOverride(true) did not set the flag")
+		}
+
+		// A successful call must NOT auto-close while override is armed
+		err := cb.Call(func() error { return nil })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cb.State() != StateClosed {
+			t.Errorf("expected StateClosed after 2 failures (below threshold), got %v", cb.State())
+		}
+		if cb.failures != 0 {
+			t.Errorf("success should still clear failure count, got %d", cb.failures)
+		}
+	})
+
+	t.Run("manualForceOpen + override + success keeps state open", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+
+		// Force open and arm override
+		cb.ForceOpen()
+		cb.SetManualOverride(true)
+		if cb.State() != StateOpen {
+			t.Fatalf("expected StateOpen after ForceOpen, got %v", cb.State())
+		}
+
+		// Wait past recovery timeout so Call() does not immediately reject
+		cb.lastFailure = time.Now().Add(-10 * time.Minute)
+
+		err := cb.Call(func() error { return nil })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Key invariant: success must NOT auto-close. After recovery
+		// timeout the breaker transitions Open -> HalfOpen internally,
+		// then the override-armed success path leaves it at HalfOpen
+		// (not Closed).
+		if cb.State() != StateHalfOpen {
+			t.Errorf("expected StateHalfOpen after success with manualOverride=true (override blocks auto-close), got %v", cb.State())
+		}
+	})
+
+	t.Run("toggling override off restores auto-close behavior", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+		cb.SetManualOverride(true)
+		cb.SetManualOverride(false)
+
+		if cb.manualOverride {
+			t.Fatal("SetManualOverride(false) did not clear the flag")
+		}
+
+		// Drive 2 failures, then success — should close
+		_ = cb.Call(func() error { return errTestFailure })
+		_ = cb.Call(func() error { return errTestFailure })
+		err := cb.Call(func() error { return nil })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cb.State() != StateClosed {
+			t.Errorf("expected StateClosed after success with override=false, got %v", cb.State())
+		}
+	})
+}
+
+// =============================================================================
+// Reset tests (Phase 1 / Issue #736)
+//
+// Reset is the operator-initiated exit from manual override. It clears
+// state, failures, halfOpenCalls, AND manualOverride atomically.
+// =============================================================================
+
+func TestCircuitBreaker_Reset(t *testing.T) {
+	t.Run("reset clears forced-open state", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+		cb.ForceOpen()
+		if cb.State() != StateOpen {
+			t.Fatalf("expected StateOpen after ForceOpen, got %v", cb.State())
+		}
+
+		cb.Reset()
+
+		if cb.State() != StateClosed {
+			t.Errorf("expected StateClosed after Reset, got %v", cb.State())
+		}
+		if cb.failures != 0 {
+			t.Errorf("expected failures=0 after Reset, got %d", cb.failures)
+		}
+		if cb.halfOpenCalls != 0 {
+			t.Errorf("expected halfOpenCalls=0 after Reset, got %d", cb.halfOpenCalls)
+		}
+	})
+
+	t.Run("reset clears manual override flag", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+		cb.SetManualOverride(true)
+
+		cb.Reset()
+
+		if cb.manualOverride {
+			t.Error("expected manualOverride=false after Reset")
+		}
+		// Subsequent success must auto-close (override is gone)
+		err := cb.Call(func() error { return nil })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cb.State() != StateClosed {
+			t.Errorf("expected StateClosed after post-reset success, got %v", cb.State())
+		}
+	})
+
+	t.Run("reset is safe on already-closed breaker", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+		// Should not panic, should leave state at Closed
+		cb.Reset()
+		if cb.State() != StateClosed {
+			t.Errorf("expected StateClosed after Reset on closed breaker, got %v", cb.State())
+		}
+	})
+
+	t.Run("reset clears threshold failures accumulated via Call", func(t *testing.T) {
+		cb := NewCircuitBreaker("ch")
+
+		// Accumulate failures just below threshold
+		for i := 0; i < CircuitBreakerFailureThreshold-1; i++ {
+			_ = cb.Call(func() error { return errTestFailure })
+		}
+		if cb.failures != CircuitBreakerFailureThreshold-1 {
+			t.Fatalf("expected %d failures, got %d", CircuitBreakerFailureThreshold-1, cb.failures)
+		}
+
+		cb.Reset()
+		if cb.failures != 0 {
+			t.Errorf("expected failures=0 after Reset, got %d", cb.failures)
+		}
+		if cb.State() != StateClosed {
+			t.Errorf("expected StateClosed after Reset, got %v", cb.State())
+		}
+	})
+}
+
+// =============================================================================
+// Override + Reset end-to-end (the llm_annotator budget callback flow)
+// =============================================================================
+
+func TestCircuitBreaker_OverrideResetEndToEnd(t *testing.T) {
+	cb := NewCircuitBreaker("ch")
+
+	// Step 1: drive failures to open
+	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+		_ = cb.Call(func() error { return errTestFailure })
+	}
+	if cb.State() != StateOpen {
+		t.Fatalf("step 1: expected StateOpen, got %v", cb.State())
+	}
+
+	// Step 2: simulate budget callback arming manual override
+	cb.SetManualOverride(true)
+
+	// Step 3: wait past recovery timeout
+	cb.lastFailure = time.Now().Add(-10 * time.Minute)
+
+	// Step 4: upstream recovers — but override keeps breaker open
+	err := cb.Call(func() error { return nil })
+	if err != nil {
+		t.Fatalf("step 4: unexpected error: %v", err)
+	}
+	// After recovery timeout, state transitions Open -> HalfOpen
+	// internally; the override-armed success path leaves it at
+	// HalfOpen instead of auto-closing.
+	if cb.State() != StateHalfOpen {
+		t.Fatalf("step 4: expected StateHalfOpen (override blocks auto-close), got %v", cb.State())
+	}
+
+	// Step 5: operator decides budget is restored, calls Reset
+	cb.Reset()
+	if cb.State() != StateClosed {
+		t.Fatalf("step 5: expected StateClosed after Reset, got %v", cb.State())
+	}
+	if cb.manualOverride {
+		t.Error("step 5: expected manualOverride=false after Reset")
+	}
+
+	// Step 6: normal operation resumes
+	err = cb.Call(func() error { return nil })
+	if err != nil {
+		t.Fatalf("step 6: unexpected error: %v", err)
+	}
+	if cb.State() != StateClosed {
+		t.Errorf("step 6: expected StateClosed, got %v", cb.State())
+	}
+}
+
+func TestCircuitBreaker_OverrideHalfOpenLimitReached(t *testing.T) {
+	cb := NewCircuitBreaker("ch")
+
+	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+		_ = cb.Call(func() error { return errTestFailure })
+	}
+	if cb.State() != StateOpen {
+		t.Fatalf("setup: expected StateOpen, got %v", cb.State())
+	}
+
+	cb.SetManualOverride(true)
+	cb.lastFailure = time.Now().Add(-10 * time.Minute)
+
+	for i := 0; i < CircuitBreakerHalfOpenMaxCalls; i++ {
+		if err := cb.Call(func() error { return nil }); err != nil {
+			t.Fatalf("call %d: unexpected error: %v", i+1, err)
+		}
+		if cb.State() != StateHalfOpen {
+			t.Errorf("call %d: expected StateHalfOpen, got %v", i+1, cb.State())
+		}
+	}
+
+	err := cb.Call(func() error { return nil })
+	if err == nil {
+		t.Fatal("expected 'half-open limit reached' after max successful calls under override")
+	}
+	if !strings.Contains(err.Error(), "half-open limit reached") {
+		t.Errorf("expected half-open limit error, got: %v", err)
+	}
+
+	cb.Reset()
+	if err := cb.Call(func() error { return nil }); err != nil {
+		t.Fatalf("post-reset: unexpected error: %v", err)
+	}
+	if cb.State() != StateClosed {
+		t.Errorf("post-reset: expected StateClosed, got %v", cb.State())
+	}
+}
