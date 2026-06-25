@@ -6,6 +6,7 @@
 
 本檔案僅作為工具進入點。所有專案專屬規則、陷阱與禁令，請直接參考 **AGENTS.md**。
 本檔案不重複任何規則，以確保單一權威來源，避免 token 重複計費。
+**例外**：`<!-- gitnexus:start -->` 區塊為 GitNexus 程式碼智慧工具的單一權威來源，集中於此以避免在多個規範文件重複。
 
 全局規則仍遵循 `~/.claude/CLAUDE.md`。
 
@@ -112,10 +113,12 @@ docker compose up -d
 - **Precise file targeting**: Before reading, verify the exact file path with `glob`. Avoid speculative reads of large files.
 - **No duplicate rules**: This file intentionally does not repeat AGENTS.md rules. One source of truth only.
 
+> **以下 GitNexus 規範為專案單一權威來源，請勿在其他文件複製，以避免 token 重複計費。**
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (53385 symbols, 169008 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (53428 symbols, 169051 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

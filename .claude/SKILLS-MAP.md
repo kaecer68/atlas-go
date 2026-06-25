@@ -1,6 +1,6 @@
 # Atlas Skills Map — 技能分類體系地圖
 
-**版本**: 4.1
+**版本**: 5.0
 **日期**: 2026-06-25
 **用途**: Atlas-Go AI 技能統一索引與分類體系。AI Coding 時依分類快速定位所需技能。
 
@@ -11,15 +11,13 @@
 | 分類 | 數量 | 說明 |
 |------|------|------|
 | 🔧 除錯維護迭代 | 2 | 修改前必用、資料可見性防護 |
-| 🚀 功能拓展 | 22 | 自動生成模組參考（手動載入） |
 | 📊 邏輯計算 | 8 | 策略、風控、宏觀、因子、權重 |
-| 🛡️ 資料安全 | 1 | 資料可見性四層防護 |
 | 🤖 機器人溝通 | 4 | OpenClaw/Hermes Agent 投資人互動 |
 | 🔗 第三方工具 | 6 | GitNexus 程式碼智慧 |
 
-**總計: 43 技能**（10 手寫 + 22 自動生成 + 6 GitNexus + 4 機器人溝通 + 1 模板）
+**總計: 20 技能**（10 手寫 + 6 GitNexus + 4 機器人溝通）
 
-> ⚠️ **Token 節省提示**: 自動生成技能（generated/*）標記為 `load_policy: "manual_only"`，AI Coding 時不應自動載入。僅在需要特定模組程式碼導航時手動讀取。
+> ⚠️ **Token 節省提示**: 程式碼導航請優先使用 GitNexus 工具或 `internal/<mod>/AGENTS.md`，不再維護自動生成技能索引。
 
 ---
 
@@ -43,14 +41,6 @@
 │   ├── atlas-event-driven-weights/# 事件驅動權重：12 因子 FactorEngine 動態調整
 │   ├── atlas-strategy-techniques/ # 投資心法庫：5 層架構 + 12 production seeds
 │   └── atlas-taiwan-leading-indicators/ # 短線指標：4 核心領先指標
-│
-├── 🚀 generated/                  # 21 自動生成技能（程式碼導航用）
-│   ├── README.md                  # Generated skills 使用說明
-│   ├── apigateway/ atlas/  baseline/  eventbus/
-│   ├── experiment/  industry/  janus/  ledger/
-│   ├── live/  llm/  marketdata/  monitoring/  narrative/
-│   ├── orchestrator/  portfolio/  prism/  realtime/
-│   └── risk/  service/  sim/  spawning/  tax/
 │
 ├── 🤖 robot-communication/        # 機器人溝通專用技能（OpenClaw/Hermes）
 │   ├── README.md                  # 機器人溝通技能使用說明
@@ -116,37 +106,6 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 
 > **使用注意**: 機器人溝通技能僅供 OpenClaw/Hermes Agent 載入。AI Coding 時**不應自動載入**（`auto_load: false`），除非正在開發投資人面向功能。
 
-### 🚀 功能拓展（Feature Development）
-
-自動生成的模組程式碼參考，僅用於程式碼導航。**不包含領域知識。**
-
-| 技能目錄 | 對應模組 | 符號數 | 說明 |
-|---------|---------|--------|------|
-| `generated/apigateway` | `internal/apigateway` | — | API 閘道、Gateway 模式、限流熔斷 |
-| `generated/atlas` | `cmd/atlas` | — | 系統啟動入口 |
-| `generated/baseline` | `internal/baseline` | — | Baseline policy 升降級 |
-| `generated/eventbus` | `internal/eventbus` | — | 事件匯流排、Pub/Sub |
-| `generated/experiment` | `internal/experiment` | — | 實驗生命週期管理 |
-| `generated/industry` | `internal/industry` | — | 產業分析、供應鏈、季節性 |
-| `generated/janus` | `internal/janus` | — | 跨 Cohort 權重、Blended Score |
-| `generated/ledger` | `internal/ledger` | — | JSONL 持久化、審計軌跡 |
-| `generated/live` | `internal/live` | — | Live Trading、Broker 模式 |
-| `generated/llm` | `internal/llm` | — | LLM 路由器、Provider 客戶端、12 capability handlers |
-| `generated/marketdata` | `internal/marketdata` | — | TWSE/FinMind/Fugle Provider |
-| `generated/monitoring` | `internal/monitoring` | — | Dashboard API、監控 |
-| `generated/narrative` | `internal/narrative` | — | 宏觀事件、因果鏈 |
-| `generated/orchestrator` | `internal/orchestrator` | — | 三層執行路由 |
-| `generated/portfolio` | `internal/portfolio` | — | Darwinian/FactorEngine/Optimizer |
-| `generated/prism` | `internal/prism` | — | Regime 訓練佇列 |
-| `generated/realtime` | `internal/realtime` | — | 即時資料轉接器 |
-| `generated/risk` | `internal/risk` | — | RiskManager、VaR |
-| `generated/service` | `internal/service` | — | 服務層抽象 |
-| `generated/sim` | `internal/sim` | — | 模擬引擎 |
-| `generated/spawning` | `internal/spawning` | — | Agent 生成管理 |
-| `generated/tax` | `internal/tax` | — | 台灣稅務計算 |
-
-> ⚠️ **Generated Skills 載入規則**: 所有 `generated/*` 技能已標記 `load_policy: "manual_only"`。這些是純程式碼符號索引，無領域知識。需要模組領域知識時，請查閱 `internal/<模組>/AGENTS.md`。
-
 ### 🔗 第三方工具（Third-party Tools）
 
 GitNexus 程式碼智慧工具技能。
@@ -193,16 +152,12 @@ GitNexus 程式碼智慧工具技能。
   │   └── 📊 atlas-taiwan-leading-indicators
   │
   ├── LLM 框架（router / capability handler / DataClass 治理）
-  │   └── 🚀 generated/llm（手動載入）
   │   └── internal/llm/AGENTS.md §1 跨模組陷阱必讀
   │
   ├── 投資人面向功能開發
   │   └── 🤖 robot-communication/*
   │
-  ├── 模組程式碼導航
-  │   └── 🚀 generated/<模組>（僅手動載入）
-  │
-  └── 跨模組影響分析
+  └── 跨模組影響分析 / 程式碼導航
       └── 🔗 GitNexus 工具（依 CLAUDE.md 規範）
 ```
 
@@ -214,7 +169,6 @@ GitNexus 程式碼智慧工具技能。
 
 | 技能群 | 載入規則 | 原因 |
 |--------|---------|------|
-| `generated/*` (22 個) | `manual_only` — 僅手動載入 | 純程式碼符號列表，無領域知識 |
 | `robot-communication/*` (4 個) | `auto_load: false` — 僅機器人載入 | 投資人面向內容，開發時不需要 |
 | `gitnexus/*` (6 個) | 依 CLAUDE.md 規範按需載入 | 工具技能，非每次 session 需要 |
 
@@ -243,6 +197,7 @@ GitNexus 程式碼智慧工具技能。
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 5.0 | 2026-06-25 | 移除全數 `generated/*` 技能；總數 43 → 20；程式碼導航改由 GitNexus 與 `internal/<mod>/AGENTS.md` 負責 |
 | 4.2 | 2026-06-25 | 加入 `internal/llm/` generated 技能（LLM 路由器、12 capability handlers）；總數 42 → 43 |
 | 4.1 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 引用；更新日期以反映 PR #700 |
 | 4.0 | 2026-06-17 | 全面重寫：建立 6 大分類體系、補齊 3 缺失技能（strategy-techniques, taiwan-leading-indicators, data-visibility）、新增機器人溝通分類（4 個新技能）、加入 Token 節省規範、修正不存在技能引用、更新總數為 42 |

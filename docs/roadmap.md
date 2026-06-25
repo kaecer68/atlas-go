@@ -60,7 +60,7 @@ Shipped in v0.0.0.6:
 
 ## Wave 8 (2026-06, **shipped in v0.0.0.7**)
 
-Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
+Detailed plan: [`docs/archive/wave-8-plan.md`](archive/wave-8-plan.md)
 
 目標：把 b29 audit 識別的 4 個 RED + 5 個 YELLOW 事件缺口實作成統一事件流（type 定義 + producer + SSE handler + frontend component）。
 

@@ -24,9 +24,9 @@
 | `capabilities/` | ~3K | 10 個 capability handler（typed payload → Router → typed response） |
 | `adapters/` | ~1K | Annotator / Router 整合層，給非 LLM-aware 模組（e.g. `internal/llm_annotator`）注入 |
 
-修改任何子模組前，**必須先讀該子目錄的對應 skill**：
+修改任何子模組前，**必須先讀該子目錄的對應參考**：
 
-- `clients/` → `.claude/skills/generated/clients/SKILL.md`（若存在，否則直接讀碼）
+- `clients/` → 直接讀碼，或透過 GitNexus 查詢符號關係
 - `capabilities/` → handler-specific 測試檔（每個 capability 一個 `*_test.go`）
 - `schemas/` → `schemas_test.go`
 
@@ -48,20 +48,20 @@
 > **Effective routing chain** (Wave 11 L2.1 doc audit, Issue #720): RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串。實作上等於 3 層 fallback（Primary → Backup1 → LastResort）。`ProviderOpenCodeGo` 與 `ProviderOpenCodeZen` 常數保留為 `[PLANNED]` 狀態，等未來 client 實作後可重用。Router iteration 容忍空字串 Backup2（`router.go:Call` 直接 `continue` 跳過）。
 ### 12 個 Capability（命名須與 `provider.go:28-41` 完全一致）
 
-| Constant | 設計來源（doc §6.1） | 典型用途 |
-|----------|----------------------|---------|
-| `CapabilityFailureAttribution` | `strategy.failure_attribution` | StrategyFrame 失效歸因 |
-| `CapabilityCodeReviewAnnotation` | `dev.code_review_annotation` | PR review 自動標註 |
-| `CapabilityPromptLint` | `dev.prompt_lint` | Prompt template 健康檢查 |
-| `CapabilityRationaleGeneration` | `narrative.rationale_translation_fallback` | 中文敘事翻譯/生成 |
-| `CapabilityStrategySummary` | `strategy.frame_summary` | StrategyFrame 摘要 |
-| `CapabilityRiskSurfaceExtraction` | `spawning.gap_description_enrichment` | 風險面提取 |
-| `CapabilityRegimeExplanation` | `narrative.event_headline` | Regime 變化解釋 |
-| `CapabilityPerformanceForensics` | `risk.confidence_calibration_commentary` | 表現歸因 |
-| `CapabilityScenarioSimulation` | `orchestrator.prism_cohort_insight` | PRISM cohort 洞見 |
-| `CapabilitySentimentExplanation` | `narrative.sentiment_explanation` | 情緒指標解釋 |
-| `CapabilityContraAttribution` | Phase 2 擴充 | 反向歸因（adversarial） |
-| `CapabilityConfidenceCommentary` | Phase 3.3 非阻塞 bypass | 信心校準旁路 |
+| Constant | 典型用途 |
+|----------|---------|
+| `CapabilityFailureAttribution` | StrategyFrame 失效歸因 |
+| `CapabilityCodeReviewAnnotation` | PR review 自動標註 |
+| `CapabilityPromptLint` | Prompt template 健康檢查 |
+| `CapabilityRationaleGeneration` | 中文敘事翻譯/生成 |
+| `CapabilityStrategySummary` | StrategyFrame 摘要 |
+| `CapabilityRiskSurfaceExtraction` | 風險面提取 |
+| `CapabilityRegimeExplanation` | Regime 變化解釋 |
+| `CapabilityPerformanceForensics` | 表現歸因 |
+| `CapabilityScenarioSimulation` | PRISM cohort 洞見 |
+| `CapabilitySentimentExplanation` | 情緒指標解釋 |
+| `CapabilityContraAttribution` | 反向歸因（adversarial） |
+| `CapabilityConfidenceCommentary` | 信心校準旁路 |
 
 新增 capability **必須同步 4 個位置**（CI 強制）：
 1. `provider.go` Capability 常數
@@ -197,4 +197,3 @@ go test -run Integration ./internal/llm/...
 - `docs/llm-trigger-analysis.md` — LLM 觸發點分析
 - `configs/llm_router.yaml` — runtime routing table
 - `internal/MATURITY.md` — LLM 相關條目（`llm` / `llm/schemas` / `llm/clients` / `llm/capabilities` / `llm_annotator`）
-- `.claude/skills/generated/llm/SKILL.md` — 生成的技能摘要（若存在）
