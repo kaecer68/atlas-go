@@ -545,10 +545,26 @@ func (j *Judge) runAcceptancePipeline(result domain.PromptExperimentResult, prom
 	registry.Register(builtin.NoDrawdownSpike())
 	registry.Register(builtin.FactorWeightStability())
 	registry.Register(builtin.RetailSentimentFilter())
+	// Remaining 12 gates ported from legacy switch.
+	registry.Register(builtin.NoMaterialDrawdownDegradation())
+	registry.Register(builtin.NoConstraintBypass())
+	registry.Register(builtin.MaintainSharpeLike())
+	registry.Register(builtin.ReduceConcentrationRisk())
+	registry.Register(builtin.FactorQuality())
+	registry.Register(builtin.ReduceFalsePositiveRate())
+	registry.Register(builtin.MaintainCROAuthority())
+	registry.Register(builtin.ReduceSectorBlindspots())
+	registry.Register(builtin.MaintainIndustryCoverage())
+	registry.Register(builtin.ReduceStyleDrift())
+	registry.Register(builtin.MaintainMomentumCatch())
+	registry.Register(builtin.RespectHoldingPeriod())
 
 	params := acceptance.EvalParams{
 		DrawdownProtectionRatio:    j.params.Experiment.DrawdownProtectionRatio.Value,
+		VolatilityToleranceRatio:   j.params.Experiment.VolatilityToleranceRatio.Value,
+		MaxFallbackRatio:           j.params.Experiment.MaxFallbackRatio.Value,
 		FactorWeightDriftThreshold: j.params.Experiment.FactorWeightDriftThreshold.Value,
+		SharpeStabilityThreshold:   j.params.Experiment.SharpeStabilityThreshold.Value,
 		PromptBytes:                promptBytes,
 	}
 
