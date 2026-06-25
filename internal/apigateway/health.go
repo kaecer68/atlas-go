@@ -5,29 +5,31 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
-// UnifiedHealthStore wraps monitoring.ChannelHealthStore with gateway-specific features.
+// UnifiedHealthStore wraps the local ChannelHealthStore (relocated from
+// internal/monitoring in Wave 12 Phase 2, Issue #731) with gateway-specific
+// features. The backing store lives in apigateway now so the gateway does
+// not need to import internal/monitoring — see channel_health.go for the
+// cycle-breaking rationale.
 type UnifiedHealthStore struct {
-	store *monitoring.ChannelHealthStore
+	store *ChannelHealthStore
 }
 
 // NewUnifiedHealthStore creates a health store.
 func NewUnifiedHealthStore(dir string, pool *pgxpool.Pool) *UnifiedHealthStore {
 	return &UnifiedHealthStore{
-		store: monitoring.NewChannelHealthStoreWithPool(dir, pool),
+		store: NewChannelHealthStoreWithPool(dir, pool),
 	}
 }
 
 // Record updates the health record for a channel.
-func (u *UnifiedHealthStore) Record(channelID, status, errMsg string, opts ...monitoring.RecordOption) error {
+func (u *UnifiedHealthStore) Record(channelID, status, errMsg string, opts ...RecordOption) error {
 	return u.store.Record(channelID, status, errMsg, opts...)
 }
 
 // Get retrieves the health record for a channel.
-func (u *UnifiedHealthStore) Get(channelID string) *monitoring.ChannelHealthRecord {
+func (u *UnifiedHealthStore) Get(channelID string) *ChannelHealthRecord {
 	return u.store.Get(channelID)
 }
 
@@ -36,12 +38,7 @@ func (u *UnifiedHealthStore) Alerts() []Alert {
 	records := u.store.Alerts()
 	alerts := make([]Alert, len(records))
 	for i, r := range records {
-		alerts[i] = Alert{
-			ChannelID: r.ChannelID,
-			Status:    r.Status,
-			Error:     r.Error,
-			FetchAt:   r.FetchAt,
-		}
+		alerts[i] = Alert(r)
 	}
 	return alerts
 }
@@ -54,18 +51,21 @@ type Alert struct {
 	FetchAt   string `json:"fetch_at,omitempty"`
 }
 
-// RecordChannelFetch is a convenience function for background tasks.
-func RecordChannelFetch(store *UnifiedHealthStore, channelID string, result *FetchResult, err error) {
+// RecordChannelHealthFromResult is a convenience function for background
+// tasks that have a FetchResult in hand. Renamed from RecordChannelFetch
+// during the Wave 12 Phase 2 (Issue #731) relocation to avoid clashing
+// with the file-backed CLI helper of the same name in channel_health.go.
+func RecordChannelHealthFromResult(store *UnifiedHealthStore, channelID string, result *FetchResult, err error) {
 	if err != nil {
 		_ = store.Record(channelID, "error", err.Error())
 		return
 	}
 
-	opts := []monitoring.RecordOption{
-		monitoring.WithLatencyMs(result.Meta.LatencyMs),
+	opts := []RecordOption{
+		WithLatencyMs(result.Meta.LatencyMs),
 	}
 	if result.Meta.RateLimitRemaining > 0 {
-		opts = append(opts, monitoring.WithRateLimitRemaining(result.Meta.RateLimitRemaining))
+		opts = append(opts, WithRateLimitRemaining(result.Meta.RateLimitRemaining))
 	}
 
 	_ = store.Record(channelID, "ok", "", opts...)

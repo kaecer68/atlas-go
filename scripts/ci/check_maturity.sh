@@ -46,7 +46,7 @@ add_json_violation() {
   fi
 }
 
-VALID_TIERS="stable evolving experimental utility"
+VALID_TIERS="stable evolving experimental utility archived"
 
 # =============================================================================
 # 輔助: 取得所有 internal/*/ Go package 目錄 (排除 testdata)
@@ -147,8 +147,8 @@ check_maturity_md() {
 
   log_pass "MATURITY.md 存在"
 
-  # Verify all four tier sections exist
-  for tier_label in "S · Stable" "E · Evolving" "X · Experimental" "U · Utility"; do
+  # Verify all five tier sections exist
+  for tier_label in "S · Stable" "E · Evolving" "X · Experimental" "U · Utility" "A · Archived"; do
     if ! grep -q "$tier_label" "$maturity_file"; then
       log_fail "MATURITY.md — 缺少 '$tier_label' 章節"
       add_json_violation "maturity_md_structure" "$maturity_file" "missing section: $tier_label"
@@ -156,7 +156,7 @@ check_maturity_md() {
     fi
   done
 
-  log_pass "MATURITY.md 四個層級章節完整"
+  log_pass "MATURITY.md 五個層級章節完整"
   return 0
 }
 
@@ -196,6 +196,8 @@ check_cross_consistency() {
       current_tier="experimental"
     elif echo "$line" | grep -q "U · Utility"; then
       current_tier="utility"
+    elif echo "$line" | grep -q "A · Archived"; then
+      current_tier="archived"
     elif echo "$line" | grep -q "非 Package"; then
       current_tier=""
     fi

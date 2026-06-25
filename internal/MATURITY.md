@@ -11,6 +11,7 @@
 | **E** | `evolving` | 演進中 | API 可能調整、功能完整但仍在迭代、可能晉升為 stable |
 | **X** | `experimental` | 實驗中 | 研究性質、API 不穩定、可能被廢棄、不應被其他模組依賴 |
 | **U** | `utility` | 輔助工具 | CLI 工具、資料轉換、一次性驗證 — 非 runtime 一部分 |
+| **A** | `archived` | 封存 | 已被 Phase 2 canonical 取代；API frozen，僅 bug fix；新程式碼禁止依賴 |
 
 ---
 
@@ -78,7 +79,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 13 packages
+## X · Experimental（實驗中）— 12 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -90,13 +91,22 @@
 | `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，實驗中 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | 情境模擬 |
 | `swarm` | MiroFish swarm 模擬 + GARCH 波動率 + 策略進化 + API + Agent Skill | `Swarm` | 演進中 |
-| `llm_annotator` | LLM 歸因標註 — 自然語言解釋 StrategyFrame 失效原因（Kimi/Moonshot API） | `Annotator`, `KimiClient`, `MockAnnotator`, `FailureContext` | 需 `LLM_ANNOTATOR_API_KEY` 環境變數（透過 apigateway `config.GetSecret` 取得），opt-in 啟用（空時 `/api/strategies/{id}/annotate` 回 503）。**Wave 11 L2.1（Issue #722）**：deprecated bridge package — 新程式碼改用 `internal/llm/capabilities/failure_attribution`，CircuitBreaker 重複實作待 Wave 12+ 重構 |
 | `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（base × cycle × seasonal × linkage × narrative × macro × factor） | `WeightEngine`, `ComputeWeights()`, `ComputeWeight()`, 6 `InputProvider` adapters | 取代硬編碼 12 個 switch case；deprecated: `monitoring/service.calculateWeightDerivation` |
 | `alerting` | Alertmanager webhook receiver — 接收 Alertmanager firing/resolved 警報，in-memory ring buffer 保留最近 1000 筆供 SSE/UI 消費 | `AlertWebhookHandler`, `AlertmanagerPayload`, `AlertmanagerAlert` | 掛載於 `/api/v1/alerts`；待 Prometheus alertmanager targets 與 docker-compose alertmanager service 補齊後晉升 evolving |
 | `llm` | LLM 多 Provider 統一介面 — 路由器、能力調度、DataClass 閘門、備援鏈，健康端點 | `ProviderImpl`, `DefaultRouter`, `Capability`, `DataClass` | Wave 11 L2.1：effective routing chain 為 3 層（Primary → Backup1 → LastResort）；`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 為 `[PLANNED]` 常數，無 client 實作（Issue #720）。**Phase 2 canonical 介面（Issue #722）**：Phase 2 canonical 介面已就緒（`adapters` + `capabilities`），承接 `llm_annotator` 的角色。詳見 `docs/llm-integration-strategy-framework.md` |
 | `llm/schemas` | LLM 能力輸入/輸出結構合約 — 9 個 capability 的 typed I/O 結構，JSON 序列化 | `RationaleGenerationResponse`, `StrategySummaryResponse`, `PromptLintResponse`, `ScenarioSimulationResponse`, `RiskSurfaceExtractionResponse`, `RegimeExplanationResponse`, `PerformanceForensicsResponse`, `CodeReviewAnnotationResponse`, `SentimentExplanationResponse` | Phase 2 為 9 個 capability handlers 提供型別安全 contract；handler 端用 `json.Marshal/Unmarshal` 對接 Router |
 | `llm/clients` | LLM Provider HTTP 客戶端 — DeepSeek V4、MiniMax M3 + 共享 `BaseClient`（retry / rate limit / circuit breaker） | `BaseClient`, `DeepSeekClient`, `MiniMaxClient`, `Message`, `ChatOptions`, `ChatResponse` | Phase 2 新增；MiniMax 附中國國家安全法資料主權警告 |
 | `llm/capabilities` | LLM 能力處理器 — 10 個 capability handler（failure_attribution + 9 個新），每個封裝 prompt template + schema-typed I/O + Router 呼叫 | `FailureAttributionHandler`, `RationaleGenerationHandler`, `StrategySummaryHandler`, `PromptLintHandler`, `ScenarioSimulationHandler`, `RiskSurfaceExtractionHandler`, `RegimeExplanationHandler`, `PerformanceForensicsHandler`, `CodeReviewAnnotationHandler`, `SentimentExplanationHandler` | Phase 2 從 1 個擴充至 10 個；Kimi K2.7 已移除（coding plan key 限制 CLI 工具，不可用於 app-level 呼叫） |
+
+---
+
+## A · Archived（封存）— 1 package
+
+已被 Phase 2 canonical 取代；API frozen，僅接受 bug fix 維護；新程式碼禁止依賴。
+
+| Package | 描述 | 關鍵型別/介面 | 封存原因 |
+|---------|------|--------------|----------|
+| `llm_annotator` | LLM 歸因標註 — 自然語言解釋 StrategyFrame 失效原因（Kimi/Moonshot API） | `Annotator`, `KimiClient`, `MockAnnotator`, `FailureContext`, `CircuitBreaker`(wrapper), `CircuitState`(alias) | **Wave 11 L2.1（Issue #722）**：Phase 2 canonical 介面（`internal/llm/capabilities/failure_attribution` + `internal/llm/adapters`）已就緒，承接本套件的角色。**Wave 12 Phase 2（Issue #731）**：CircuitBreaker 統一為 `apigateway.CircuitBreaker` canonical owner；本套件保留 `CircuitBreaker` thin wrapper 委派（含 `CircuitState = apigateway.State` 型別別名、`ErrCircuitOpen` sentinel、`Allow()`/`Snapshot()`/`WithNowFunc()`）；4 層 transitive import cycle 已破壞（`monitoring.ChannelHealthStore` 等搬到 `apigateway`）。需 `LLM_ANNOTATOR_API_KEY` 環境變數（透過 apigateway `config.GetSecret` 取得），opt-in 啟用（空時 `/api/strategies/{id}/annotate` 回 503）。 |
 
 ---
 
@@ -130,4 +140,5 @@ CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 1. **新增模組**：必須同時更新此表與 `doc.go` 中的 `Maturity:` 標記。
 2. **成熟度變更**：從 X→E、E→S 需 PR review；從 S→E 或任何降級需 migration plan。
 3. **一致性檢查**：CI 應執行 `grep -r "Maturity:" internal/*/doc.go` 並與此表比對。
-4. **移除模組**：若模組被廢棄，先標記為 X 一週後再刪除目錄。
+4. **移除模組**：先標記為 X 一週後，再標記為 A（封存）至少一個 minor 版本週期，最後再刪除目錄。封存期間僅接受 bug fix，禁止新增 feature。
+5. **Phase 2 取代 → 封存**：當模組被 Phase 2 canonical 介面完整取代（例如 `llm_annotator` 被 `internal/llm/capabilities/failure_attribution` 取代），可直接標記為 A 並從主動維護清單移除。
