@@ -46,12 +46,13 @@ var ErrNotImplemented = fmt.Errorf("sector agent LLM not implemented")
 
 // PlanStep satisfies PlanReflectRunner. It returns ErrNotImplemented
 // when no LLM driver is configured; production wiring must replace
-// this with a real PlanComplete call.
-func (a *SectorAgentLLM) PlanStep(ctx context.Context, _ string, _ domain.Recommendation) ([]PlanStep, error) {
+// this with a real PlanComplete call. The symbol argument is forwarded
+// to the LLM driver so per-symbol context is preserved.
+func (a *SectorAgentLLM) PlanStep(ctx context.Context, symbol string, _ domain.Recommendation) ([]PlanStep, error) {
 	if a.LLM == nil {
 		return nil, ErrNotImplemented
 	}
-	steps, err := a.LLM.PlanComplete(ctx, a.Skill, "_")
+	steps, err := a.LLM.PlanComplete(ctx, a.Skill, symbol)
 	return steps, err
 }
 
@@ -63,9 +64,11 @@ func (a *SectorAgentLLM) RunToolCall(_ context.Context, step PlanStep) (string, 
 }
 
 // Reflect satisfies PlanReflectRunner. Same caveat as PlanStep.
-func (a *SectorAgentLLM) Reflect(ctx context.Context, toolResult string, _ int) (Reflection, error) {
+// The symbol argument is forwarded so the LLM driver receives the
+// per-symbol context for symbol-aware reflection.
+func (a *SectorAgentLLM) Reflect(ctx context.Context, symbol string, toolResult string, _ int) (Reflection, error) {
 	if a.LLM == nil {
 		return Reflection{}, ErrNotImplemented
 	}
-	return a.LLM.ReflectComplete(ctx, a.Skill, "_", toolResult)
+	return a.LLM.ReflectComplete(ctx, a.Skill, symbol, toolResult)
 }

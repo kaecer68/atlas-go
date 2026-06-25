@@ -41,10 +41,27 @@ func TestAgentLoop_AdvanceFinalClampsConviction(t *testing.T) {
 	if !l.IsTerminal() {
 		t.Error("IsTerminal should be true after AdvanceFinal")
 	}
+	if l.FinalConviction != 100 {
+		t.Errorf("FinalConviction = %d, want 100 (clamped)", l.FinalConviction)
+	}
 	l2 := NewAgentLoop(3)
 	l2.AdvanceFinal(-5)
 	if !l2.IsTerminal() {
 		t.Error("IsTerminal should be true even with negative conviction")
+	}
+	if l2.FinalConviction != 0 {
+		t.Errorf("FinalConviction = %d, want 0 (clamped)", l2.FinalConviction)
+	}
+}
+
+func TestAgentLoop_AdvanceFinal_StoresConviction(t *testing.T) {
+	l := NewAgentLoop(3)
+	if l.FinalConviction != 0 {
+		t.Errorf("fresh loop FinalConviction = %d, want 0", l.FinalConviction)
+	}
+	l.AdvanceFinal(75)
+	if l.FinalConviction != 75 {
+		t.Errorf("FinalConviction = %d, want 75", l.FinalConviction)
 	}
 }
 

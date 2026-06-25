@@ -44,9 +44,10 @@ type Reflection struct {
 // or use one of the concrete agent types (e.g. SectorAgentLLM) that
 // embed an AgentLoop.
 type AgentLoop struct {
-	Phase   AgentPhase
-	Steps   []PlanStep
-	MaxIter int
+	Phase           AgentPhase
+	Steps           []PlanStep
+	MaxIter         int
+	FinalConviction int
 }
 
 // NewAgentLoop creates a fresh loop starting in PhaseInitial with the given
@@ -82,6 +83,8 @@ func (l *AgentLoop) AdvanceReflect() {
 }
 
 // AdvanceFinal transitions to PhaseFinal, locking in the final conviction.
+// The clamped value (0..100) is stored in l.FinalConviction so callers can
+// read it back after the loop terminates.
 func (l *AgentLoop) AdvanceFinal(conviction int) {
 	if conviction < 0 {
 		conviction = 0
@@ -90,6 +93,7 @@ func (l *AgentLoop) AdvanceFinal(conviction int) {
 		conviction = 100
 	}
 	l.Phase = PhaseFinal
+	l.FinalConviction = conviction
 }
 
 // Exhausted returns true if the loop has hit MaxIter and should force
@@ -116,6 +120,8 @@ type PlanReflectRunner interface {
 	// RunToolCall executes one planned tool call and returns its result.
 	RunToolCall(ctx context.Context, step PlanStep) (string, error)
 	// Reflect is called after each tool result to decide whether to
-	// continue planning or commit the final recommendation.
-	Reflect(ctx context.Context, toolResult string, currentConviction int) (Reflection, error)
+	// continue planning or commit the final recommendation. The symbol
+	// argument carries the per-symbol context that the LLM needs to
+	// produce a symbol-aware reflection.
+	Reflect(ctx context.Context, symbol string, toolResult string, currentConviction int) (Reflection, error)
 }
