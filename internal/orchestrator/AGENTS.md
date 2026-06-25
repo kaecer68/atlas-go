@@ -2,6 +2,10 @@
 
 本目錄是 `atlas-go` 的大腦核心，負責協調領域專家、控制層過濾與系統擴充外掛。
 
+> **Wave 11 變更**:
+> - `AgentLoop` state machine 在 Issue #711 PR2 (v0.0.0.20a) 改為「`AdvanceToolCall`/`AdvanceReflect` 錯誤返回 + `Round` 累加 `len(steps)` + 全部 slog.Warn」。詳見 [`docs/wave-11/AGENT_LOOP_STATE_MACHINE.md`](../../docs/wave-11/AGENT_LOOP_STATE_MACHINE.md)。
+> - `LLMDriver` 在 Issue #711 PR3 拆為 `PlanDriver` + `ReflectDriver`,`LLMDriver` 保留為 deprecated alias。`SectorAgentLLM` 改為 embed 兩個 interface。
+
 ---
 
 ## 核心職責

@@ -6,6 +6,10 @@
 > **路由表來源**：`configs/llm_router.yaml`（runtime 載入）；fallback 預設見 `router.go:defaultRoutingTable()`。
 > **成熟度規則**：`internal/MATURITY.md` LLM 相關條目（`llm` / `llm/schemas` / `llm/clients` / `llm/capabilities` / `llm_annotator`）。
 
+> **Wave 11 變更** (Issue #711):
+> - `Tool.Handler` docstring 在 PR1 更新,加上「LLM validation 是 hint,handler 必須自行驗證」+ 推薦 `SafeInvokeHandler`(支援 panic recovery)。
+> - `Request.Validate()` 在 PR3 新增,驗證 `ToolChoice` 對 reserved keywords 或 registered tool names。Provider adapter 在 dispatch 前必須呼叫,trust valid input。
+
 ---
 
 ## 核心職責

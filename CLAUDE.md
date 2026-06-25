@@ -1,5 +1,7 @@
 # CLAUDE.md — atlas-go 規則索引
 
+> **Wave 10 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.0.21。詳見 [`docs/wave-11/`](docs/wave-11/) (L2.3 plan/reflect 設計、L2.4 觀察窗口、Semiconductor executor 範例、AgentLoop state machine)。`UseLLMSectorAgents` flag 預設 off。
+
 ## 🌐 語言強制規範（首要規則）
 
 > **全部回覆皆須使用繁體中文（Traditional Chinese）**。除非使用者明確要求使用英文，否則禁止使用英文回應。此規則優先於所有技術指令。

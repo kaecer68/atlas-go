@@ -2,7 +2,42 @@
 
 **用途**：AI 與開發者的資料使用指南——需要什麼數據、存在哪裡、如何正確獲取。
 
-**權威來源**：本文檔描述原則與流程，具體資產細節見 [`docs/DATA_CATALOG.md`](DATA_CATALOG.md)。
+**權威來源**:本文檔描述原則與流程,具體資產細節見 [`docs/DATA_CATALOG.md`](DATA_CATALOG.md)。
+
+---
+
+## L2.3 工具呼叫追蹤與 conviction 流程 (Wave 11, v0.0.0.21)
+
+When `UseLLMSectorAgents=true`, the LLM-driven sector agent produces a structured data flow:
+
+```
+LLM PlanComplete (driver)
+  ↓ []PlanStep
+SectorAgentLLM.PlanStep → AgentLoop.AdvancePlan (Round += len(steps))
+  ↓ for each tool step:
+SectorAgentLLM.AdvanceToolCall (error if Phase != Plan)
+  → SectorAgentLLM.RunToolCall (PR1 placeholder; "not yet implemented" — pending follow-up)
+  ↓ tool results concatenated
+SectorAgentLLM.AdvanceReflect (error if Phase != ToolCall)
+  → SectorAgentLLM.Reflect → LLM ReflectComplete
+  ↓ Reflection{Continue, FinalConviction, Reasoning}
+  if Continue=true: loop back to PlanComplete (capped at MaxIter)
+  if Continue=false: AdvanceFinal(FinalConviction) → PhaseFinal
+  ↓
+domain.Recommendation{Symbol, Agent, Conviction, Reason, ...}
+  → orchestrator → downstream
+```
+
+**Data invariants**:
+- `AgentLoop.Round` accumulates `len(PlanStep)` per `AdvancePlan` call (NOT +1 per call).
+- `AgentLoop.Exhausted()` returns true when `Round >= MaxIter`. A one-time `slog.Warn` fires if the legacy `len(Steps) >= MaxIter` threshold is detected (divergence guard).
+- `AgentLoop.AdvanceFinal(c)` clamps `c` to `[0,100]` with `slog.Warn` on clamp.
+- `domain.Recommendation.Conviction` = `Reflection.FinalConviction` (LLM's final value).
+- `domain.Recommendation.Reason` = `Reflection.Reasoning`.
+
+**Tool call traces** (L2.4):
+- Per-recommendation metrics logged: `agent_loop.round`, `agent_loop.plan_count`, `agent_loop.reflect_count`, `agent_loop.tool_count`, `llm.latency_ms.{plan,reflect}`, `reflect.continue`, `recommendation.{symbol,conviction}`.
+- See [`docs/wave-11/L2_4_OBSERVATION.md`](wave-11/L2_4_OBSERVATION.md) for the full metrics list.
 
 ---
 
