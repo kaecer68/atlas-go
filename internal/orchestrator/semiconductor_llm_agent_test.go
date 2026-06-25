@@ -111,11 +111,11 @@ func TestSemiconductorLLMAgent_Recommend_FlagOff(t *testing.T) {
 	_ = rec
 }
 
-// TestSemiconductorLLMAgent_Recommend_ToolDispatchGap verifies
-// that the loop reaches RunToolCall and surfaces the PR1
-// placeholder error. When tool dispatch is wired in a future PR,
-// this test should be updated to expect ok=true.
-func TestSemiconductorLLMAgent_Recommend_ToolDispatchGap(t *testing.T) {
+// TestSemiconductorLLMAgent_Recommend_HappyPath verifies the
+// end-to-end LLM-driven recommendation flow: plan → dispatch tool
+// via registered TestTools → reflect → return final conviction
+// and reasoning.
+func TestSemiconductorLLMAgent_Recommend_HappyPath(t *testing.T) {
 	mock := NewMockLLMDriver().
 		WithPlanResponse([]PlanStep{
 			{Kind: "tool", ToolName: "get_factor_weight", Args: map[string]any{"symbol": "2330"}},
@@ -135,17 +135,23 @@ func TestSemiconductorLLMAgent_Recommend_ToolDispatchGap(t *testing.T) {
 
 	quote := domain.Quote{Symbol: "2330"}
 	rec, ok := agent.Recommend(makeSpec(), quote, "", domain.Regime(""), nil)
-	if ok {
-		t.Fatalf("Recommend tool-dispatch gap: got ok=true, want false")
+	if !ok {
+		t.Fatalf("Recommend happy path: got ok=false, want true; rec.Reason=%q", rec.Reason)
+	}
+	if rec.Conviction != 75 {
+		t.Errorf("rec.Conviction = %d, want 75", rec.Conviction)
+	}
+	if rec.Reason == "" {
+		t.Error("rec.Reason = empty, want non-empty reflection reasoning")
+	}
+	if strings.Contains(rec.Reason, "not yet implemented") {
+		t.Errorf("rec.Reason = %q, should not contain 'not yet implemented'", rec.Reason)
 	}
 	if mock.PlanCallCount() != 1 {
 		t.Errorf("PlanCallCount = %d, want 1", mock.PlanCallCount())
 	}
-	if !strings.Contains(rec.Reason, "not yet implemented") {
-		t.Errorf("rec.Reason = %q, want substring 'not yet implemented'", rec.Reason)
-	}
-	if !strings.Contains(rec.Reason, "get_factor_weight") {
-		t.Errorf("rec.Reason = %q, want substring 'get_factor_weight'", rec.Reason)
+	if mock.ReflectCallCount() != 1 {
+		t.Errorf("ReflectCallCount = %d, want 1", mock.ReflectCallCount())
 	}
 }
 
