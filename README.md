@@ -68,6 +68,30 @@ Main packages:
 - `internal/monitoring`: Dashboard API, Wave 9 observability runtime, and channel health synthesis
 - `internal/eventbus`: pub/sub event bus wiring for Wave 8/9 events
 - `internal/risk`: RiskManager, VaR, and macro drawdown guards
+- `internal/llm`: LLM capability-based multi-provider router with 4-tier fallback chain, DataClass governance gate, and 12 capability handlers (see [LLM Framework](#llm-framework))
+
+## LLM Framework
+
+`internal/llm/` 是 capability-based 多 Provider 路由層，提供 4 層 fallback chain 與 DataClass 治理閘門。
+
+**架構分層**：
+
+- `provider.go` — `ProviderImpl` 介面、`Capability`（能力描述）、`DataClass`（資料分級）、`RoutingChain`（備援鏈）
+- `router.go` — `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort；強制執行 DataClass 閘門（ADR-010：MiniMax M3 對 regulated 資料強制 skip）
+- `clients/` — 3 個 Provider HTTP 客戶端（DeepSeek V4、MiniMax M3、Kimi K2.7）+ 共享 `BaseClient`（retry / rate-limit / circuit breaker）
+- `capabilities/` — 12 個 capability handlers（failure_attribution、code_review_annotation、prompt_lint、rationale_generation、strategy_summary、risk_surface_extraction、regime_explanation、scenario_simulation、sentiment_explanation、performance_forensics、contra_attribution、confidence_commentary）
+- `schemas/` — typed I/O contract（JSON-serialized, Zod-compatible JSON Schema）
+- `adapters/` — Annotator / Router 整合層
+
+**配置**：`configs/llm_router.yaml` 為 runtime 來源（`TryLoadRouterConfig()` 載入）；fallback 預設見 `router.go:defaultRoutingTable()`。
+
+**健康端點**：`GET /api/llm/health` 暴露所有 Provider 的 `HealthStatus` 與 circuit breaker 狀態。
+
+**Sector Agent LLM**：`internal/orchestrator/sector_agent_llm.go` 定義 `SectorAgentLLM` 骨架（plan → tool_call → reflect loop）。在觀察窗口內 `LLM == nil` 回 `ErrNotImplemented`，deterministic 路徑保留以保證 backtest 可重現。Feature flag `UseLLMSectorAgents` 控制啟用。
+
+**熱路徑護欄**：`internal/sim/` 與 `internal/experiment/` 不可 import `internal/llm` 做同步呼叫（見 `internal/llm/AGENTS.md` §2）。
+
+> 設計權威：`docs/llm-integration-strategy-framework.md` · `internal/llm/AGENTS.md`
 
 ## Quick Start
 

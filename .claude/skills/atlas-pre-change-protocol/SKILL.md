@@ -1,6 +1,6 @@
 ---
 name: atlas-pre-change-protocol
-description: "MUST use before ANY code modification in atlas-go. Mandates GitNexus blast radius for changes, GitNexus architecture check, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes and dead code misidentification. (Read-only investigations are exempt — this skill only triggers on write-intent tasks.)"
+description: "MUST use before ANY code modification in atlas-go. Mandates overlap detection (Step 0), GitNexus blast radius for changes, GitNexus architecture check, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes, dead code misidentification, and parallel duplicate implementations. (Read-only investigations are exempt — this skill only triggers on write-intent tasks.)"
 ---
 
 # Atlas Pre-Change Protocol
@@ -30,9 +30,43 @@ Load this skill when the user requests ANY of these:
 
 ---
 
-## Pre-Change Protocol (7 Mandatory Steps)
+## Pre-Change Protocol (8 Mandatory Steps)
 
 Perform each step BEFORE editing. Skip none. Report findings to user AT the step level if risk is HIGH/CRITICAL.
+
+### Step 0: OVERLAP DETECTION（新增前重疊檢查）← NEW
+
+**Before adding ANY new code, verify it doesn't duplicate existing functionality.** This is the #1 failure mode for AI agents working on multi-module systems: generating a new function/type/module that does what another module already does.
+
+```
+MANDATORY for ALL of these:
+□ Adding a new function/method → gitnexus_query({query: "<describe your intent>"})
+  → Do ANY existing execution flows already cover this?
+  → gitnexus_context({name: "<similar sounding symbols>"}) to verify scope
+
+□ Adding a new type/struct → codebase-memory_search_graph({query: "<concept>"})
+  → codebase-memory_search_graph({semantic_query: ["<key concept terms>"]})
+  → Check for semantically similar types across ALL modules
+
+□ Adding a new module/package → codebase-memory_get_architecture()
+  → Which Leiden cluster would this belong to? Is there already a cluster for this domain?
+  → Read internal/MATURITY.md — is there already a module with overlapping responsibility?
+
+□ Adding validation/business logic → gitnexus_query({query: "<rule type> validation"})
+  → Does risk/, apigateway/, or config/ already enforce this rule?
+  → Check docs/TRAPS.md for "同一件事不可有三種算法" violations
+
+□ The search returns EMPTY: proceed (new ground — document intention in commit message)
+□ The search returns HITS: STOP. Read the overlapping code FIRST. If intentional overlap
+  (e.g., live/ has different constraints than sim/), document WHY in the new code's comment.
+```
+```
+Red flags — STOP and re-evaluate:
+→ "I'll just add a helper function here" → Check with gitnexus_query first
+→ "This looks like something the system needs" → Check if it already exists
+→ "Let me create a new validator/checker" → Risk of parallel duplicate implementation
+→ "I'll add validation in this module" → Check if another module already validates this
+```
 
 ### Step 1: BLAST RADIUS
 
@@ -160,6 +194,9 @@ Before modifying or removing code, understand WHY it exists:
 □ "Let me just change this one line"   → Run gitnexus_impact. One-liners can cascade.
 □ "The type system will catch errors"  → Types don't catch logic bugs or data gaps.
 □ "I understand the system well"       → atlas-go has 300 execution flows. Check GitNexus.
+□ "I'll add a helper/validator here"    → Run Step 0 overlap detection. Another module may already do this.
+□ "No callers = dead code, delete it"   → Classify first: incomplete? superseded? accidentally disconnected? config-driven?
+□ "This is new, can't overlap"          → codebase-memory semantic_query before declaring novelty.
 □ "I'll fix it the simple way"         → Simple ≠ correct. Match the architecture.
 ```
 
@@ -190,8 +227,11 @@ Before modifying or removing code, understand WHY it exists:
 |------|---------|
 | `gitnexus_impact` | Blast radius — ALWAYS before changes |
 | `gitnexus_context` | 360° symbol view (callers + callees + processes) |
-| `gitnexus_query` | Find execution flows by concept |
+| `gitnexus_query` | Find execution flows by concept; overlap detection (Step 0) |
 | `gitnexus_detect_changes` | Pre-commit change impact check |
+| `codebase-memory_search_graph` | BM25 + semantic vector search; find similar implementations |
+| `codebase-memory_get_architecture` | Leiden cluster detection; check module domain boundaries |
+| `codebase-memory_query_graph` | Cypher analytics; hot-path complexity scan |
 | `explore` agent | Contextual codebase pattern search |
 | `librarian` agent | External docs/libraries research |
 
@@ -210,11 +250,14 @@ This is the FASTEST way to understand system structure before diving into code.
 → If the index is stale, run: npx gitnexus analyze
 ```
 
-### Step I-2: GitNexus Concept Search
+### Step I-2: GitNexus Concept Search + Overlap Signal
 ```
 gitnexus_query({query: "<concept>"}) → find related execution flows
-→ Empty results are STRONG SIGNAL (concept may not exist in codebase)
+→ Empty results are STRONG SIGNAL (concept may not exist in codebase — new ground)
 → Non-empty results → read process traces for data flow understanding
+→ ALSO: codebase-memory_search_graph({semantic_query: ["<key terms>"]})
+  → Catches implementations with different names but same semantics
+  → Zero semantic matches + zero gitnexus hits = confidently new territory
 ```
 
 ### Step I-3: Data Source Tracing

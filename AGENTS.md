@@ -42,6 +42,7 @@
 | `internal/sim/` | 模擬引擎與部位狀態轉換 | `internal/sim/AGENTS.md` |
 | `internal/experiment/` | 實驗執行與評判 | `internal/experiment/AGENTS.md` |
 | `internal/baseline/` | Baseline policy 升降級與版本控制 | `internal/baseline/AGENTS.md` |
+| `internal/llm/` | LLM capability-based 多 Provider 路由 + DataClass 治理閘門 + 4 層 fallback chain | `internal/llm/AGENTS.md` |
 | `internal/ledger/` | JSONL append-only 持久化 | `internal/ledger/AGENTS.md` |
 | `internal/portfolio/` | Darwinian 權重、FactorEngine、組合優化 | `internal/portfolio/AGENTS.md` |
 | `internal/screener/` | 宣告式個股篩選 | 直接讀碼 |
@@ -70,13 +71,13 @@
 
 ## 修改前必讀
 
-任何程式碼修改前，強制執行 7 步驟檢查：
+任何程式碼修改前，強制執行 8 步驟檢查：
 
 ```
 skill(name="atlas-pre-change-protocol")
 ```
 
-涵蓋：blast radius → 模組陷阱 → 數據源溯源 → 憲法檢查 → 模式匹配 → GitNexus 架構 → 代碼意圖。
+涵蓋：重疊檢查 → blast radius → 模組陷阱 → 數據源溯源 → 憲法檢查 → 模式匹配 → GitNexus 架構 → 代碼意圖。
 
 ## 關鍵跨模組陷阱
 
@@ -94,7 +95,10 @@ skill(name="atlas-pre-change-protocol")
 | FactorType 變更 | 必須同步 8 個位置，CI 強制（for the canonical 8-location list, see `internal/portfolio/AGENTS.md` §12） |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | Replay 格式 | JSONL，不是 JSON array |
+| 平行重複實作 | 新增功能前必須用 GitNexus `query` + codebase-memory `semantic_query` 檢查是否已有重疊實作；孤立 code（無 caller）須分類為「未完成/已取代/意外斷連/組態驅動」後才決定去留，不可逕行刪除 |
 | 資料可見性 | 通道靜默失敗時,Gateway/Adapter/Service/Frontend 四層須暴露 `data_status` / `failed_channels` / 紅色 badge,不得以零值掩蓋。詳見 `.claude/skills/atlas-data-visibility/SKILL.md` |
+| LLM 路由繞過 | 不可直接呼叫 `clients/*Provider` 跳過 `DefaultRouter` | 必須透過 `llm.DefaultRouter.Call()` 或 `capabilities/*Handler`，見 `internal/llm/AGENTS.md` §1 |
+| LLM hot-path import | S/E 模組（`internal/sim/`, `internal/experiment/`）不可 import `internal/llm` 直接同步呼叫 | 觀察窗口內用 deterministic 預設值；replay 必須可重現 |
 
 ## 文件索引
 
@@ -115,25 +119,43 @@ skill(name="atlas-pre-change-protocol")
 
 ---
 
-## GitNexus 程式碼智慧
+## 程式碼智慧工具（GitNexus + codebase-memory）
 
-> 完整 GitNexus 規範（Always Do / Never Do / Resources / CLI）存放於 **`CLAUDE.md`**。
-> 此處僅保留最低限度的路由資訊，避免與 CLAUDE.md 重複造成 token 浪費。
+> 兩個 MCP 並行索引 atlas-go（皆已預先索引完成）：
+> - **GitNexus**：`atlas-go` — 53,385 symbols / 169,008 edges / 300 個執行流（強調 process + community）
+> - **codebase-memory**：`Users-kaecer-workspace-atlas` — 29,757 nodes / 127,367 edges（強調 Cypher 查詢 + Leiden 叢集）
+>
+> 完整規範見 **`CLAUDE.md`** 與 **`docs/TOOLS.md`**；此處僅保留路由速查表。
 
-| 使用情境 | 對應工具 |
-|---------|---------|
-| 修改符號前影響分析 | `gitnexus_impact({target, direction: "upstream"})` |
-| 提交前變更驗證 | `gitnexus_detect_changes()` |
-| 程式碼探索 | `gitnexus_query({query})` |
-| 符號上下文（callers/callees） | `gitnexus_context({name})` |
-| 安全重命名 | `gitnexus_rename({symbol_name, new_name})` |
+### 路由速查表
 
-> **強制規則**: 修改任何 function/class/method 前必須執行 `gitnexus_impact`。詳細規範見 `CLAUDE.md`。
+| 使用情境 | 優先工具 | 備用工具 |
+|---------|---------|---------|
+| 修改符號前影響分析（**強制**） | `gitnexus_impact({target, direction:"upstream"})` | `codebase-memory_trace_path({direction:"inbound"})` |
+| 提交前 blast radius 檢查 | `gitnexus_detect_changes()` | — |
+| 程式碼探索（自然語言 → 執行流） | `gitnexus_query({query})` | `codebase-memory_search_graph({query, semantic_query})` |
+| 單一符號上下文（callers/callees） | `gitnexus_context({name})` | `codebase-memory_explore({query})` |
+| 安全重命名（跨檔案） | `gitnexus_rename({symbol_name, new_name})` | — |
+| 複雜度熱點掃描（cyclomatic/cognitive/loop） | `codebase-memory_query_graph({query:"MATCH (f:Function) WHERE ... RETURN ..."})` | — |
+| 架構叢集與 Leiden 社群偵測 | `codebase-memory_get_architecture()` | `gitnexus_query({query:"concept"})` |
+| 跨倉分析（multi-repo group） | `gitnexus_query({repo:"@<group>"})` | — |
+| ADR / 架構決策紀錄管理 | `codebase-memory_manage_adr({mode})` | — |
+| API 路由映射 / response shape 比對 | `gitnexus_route_map()` / `gitnexus_shape_check()` | — |
+
+### 互補原則
+
+- **改動前必跑 GitNexus**：`impact` + `detect_changes` 是 PR 安全閘，codebase-memory 無對等指令。
+- **分析架構/複雜度時用 codebase-memory**：Cypher 查詢可一次掃所有 hot path；GitNexus 無 query language。
+- **重構與跨模組分析用 GitNexus**：`rename` / `group_sync` / `route_map` 是 GitNexus 獨有。
+- **遇到語意模糊的查詢**：先 codebase-memory `semantic_query`，再用 GitNexus `query` 收斂到 process。
+- **查跨模組執行流必用 GitNexus Process**：atlas 管線化架構（MarketData→Orchestrator→CRO/CIO→Simulator→Ledger）高度依賴 Process 抽象。`trace_path` 只能從已知符號手動逐跳追蹤；`query`/`context` 直接給預計算的完整 step list。詳見 `docs/TOOLS.md`。
+
+> **強制規則**: 修改任何 function/class/method 前必須執行 `gitnexus_impact`。詳細規範見 `CLAUDE.md` 與 `docs/TOOLS.md`。
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (52605 symbols, 165211 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (53385 symbols, 169008 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
