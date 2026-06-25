@@ -1,6 +1,6 @@
 # L2.3 Plan/Reflect — Sector Agent LLM Integration
 
-> **Status**: Design landed; implementation in PR5a + PR5b. Tagged `v0.0.0.21`.
+> **Status**: L2.3 PoC + tool dispatch complete; L2.4 ready.
 > **Plan**: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711) (PR5a/PR5b of 7)
 > **Issues**: [#711](https://github.com/kaecer68/atlas-go/issues/711) (11 design concerns from gstack /review of PR #703)
 
@@ -76,6 +76,7 @@ The two implementations coexist via a **gate mechanism**:
 | `Request.Validate()` | `internal/llm/provider.go` | Validates `ToolChoice` before dispatch (Issue #711 #11). |
 | `llm.Tool` + `SafeInvokeHandler` | `internal/llm/provider.go` | Tool handler interface with panic recovery. |
 | `MockLLMDriver` | `internal/orchestrator/sector_agent_llm_test_helpers.go` | Test helper. Canned responses, no real LLM. |
+| `RunToolCall` wiring (L3) | `internal/orchestrator/sector_agent_llm.go` | Dispatch tool by name via `llm.SafeInvokeHandler` (PR #739). Linear scan over `a.Tools`, panic recovery per Issue #711 #3. |
 
 ## Feature flag: `UseLLMSectorAgents`
 
@@ -99,9 +100,8 @@ func (a SemiconductorLLMAgent) Supports(agent domain.AgentSpec) bool {
 
 ## Known Limitations
 
-1. **`RunToolCall` is a PR1 placeholder** — returns "tool dispatch not yet implemented" error. The actual tool dispatch (find tool by name → call `SafeInvokeHandler` → return result) will be wired in a follow-up PR after L2.3 PoC.
-2. **Conviction from reflection only** — the LLM agent doesn't currently use domain `FactorScores` or other structured inputs. PR5b's `Recommend()` uses the `Reflection.FinalConviction` directly.
-3. **No multi-iteration test coverage** — `TestSemiconductorLLMAgent_Recommend_ToolDispatchGap` tests a single iteration (the tool dispatch fails before reflection). Multi-iteration (continue=true → re-plan) is covered indirectly by `AgentLoop` tests (PR2).
+1. **Conviction from reflection only** — the LLM agent doesn't currently use domain `FactorScores` or other structured inputs. PR5b's `Recommend()` uses the `Reflection.FinalConviction` directly.
+2. **No multi-iteration test coverage** — `TestSemiconductorLLMAgent_Recommend_HappyPath` tests a single iteration. Multi-iteration (continue=true → re-plan) is covered indirectly by `AgentLoop` tests (PR2).
 
 ## Observability (deferred to L2.4)
 
@@ -118,6 +118,6 @@ See `docs/wave-11/L2_4_OBSERVATION.md` for the full metrics list.
 
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711)
 - Issue: [#711](https://github.com/kaecer68/atlas-go/issues/711)
-- PRs: #724 (PR1), #725 (PR2/v0.0.0.20a), #726 (PR3), #729 (PR4), #732 (PR5a), #733 (PR5b/v0.0.0.21)
+- PRs: #724 (PR1), #725 (PR2/v0.0.0.20a), #726 (PR3), #729 (PR4), #732 (PR5a), #733 (PR5b/v0.0.0.21), #739 (L3 wiring: `RunToolCall` → `SafeInvokeHandler`)
 - Cross-references: `AGENT_LOOP_STATE_MACHINE.md`, `SEMICONDUCTOR_EXECUTOR.md`, `L2_4_OBSERVATION.md`
 - Design authority: [`docs/llm-integration-strategy-framework.md`](../llm-integration-strategy-framework.md)

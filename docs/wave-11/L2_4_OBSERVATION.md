@@ -1,6 +1,6 @@
 # L2.4 Observation Window
 
-> **Status**: Not started (L2.3 PoC + flag ships in v0.0.0.21; L2.4 is the 7-14 day observation after enabling the flag).
+> **Status**: Ready to enable. Metrics implementation tracked separately (issue #740).
 > **Predecessor**: [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md) (L2.3 PoC design)
 > **Linked log**: [`docs/wave-10-observation-log.md`](../wave-10-observation-log.md) (existing Wave 10 observations)
 
@@ -100,3 +100,4 @@ If L2.4 fails any acceptance criterion, the rollback is:
 - Predecessor: [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md)
 - Existing log: [`docs/wave-10-observation-log.md`](../wave-10-observation-log.md)
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711) §L2.4
+- Metrics: [Issue #740](https://github.com/kaecer68/atlas-go/issues/740) (slog metrics for L2.4 observability in `SemiconductorLLMAgent.Recommend`)
