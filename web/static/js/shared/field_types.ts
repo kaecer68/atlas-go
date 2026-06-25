@@ -2021,6 +2021,7 @@ export interface OrchestratorParameters {
   sector_rotation_macro_adjustments?: string;
   sector_rotation_flow_adjustments?: string;
   use_ml_scoring: string;
+  use_llm_sector_agents: string;
 }
 
 export interface ParameterChange {

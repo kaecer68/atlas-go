@@ -80,6 +80,11 @@
       "results": "(string)"
     },
     {
+      "name": "GetUseLLMSectorAgents",
+      "params": "",
+      "results": "(bool)"
+    },
+    {
       "name": "LockedSaveWithRollback",
       "params": "(path string)",
       "receiver": "ParametersConfig",
@@ -1078,7 +1083,8 @@
         "RejectionHitRateThreshold ParameterMetadata[float64]",
         "SectorRotationMacroAdjustments ParameterMetadata[map[string]map[string]float64]",
         "SectorRotationFlowAdjustments ParameterMetadata[map[string]map[string]float64]",
-        "UseMLScoring ParameterMetadata[bool]"
+        "UseMLScoring ParameterMetadata[bool]",
+        "UseLLMSectorAgents ParameterMetadata[bool]"
       ],
       "kind": "struct",
       "name": "OrchestratorParameters"
@@ -1552,5 +1558,10 @@
       "name": "WeightFactorConfig"
     }
   ],
-  "vars": null
+  "vars": [
+    {
+      "name": "UseLLMSectorAgentsMetadata",
+      "type": ""
+    }
+  ]
 }

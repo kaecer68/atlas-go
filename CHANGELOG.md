@@ -83,6 +83,44 @@ PR5a of 7 in the Wave 10 L2.3 execution plan. Provides the production adapter an
 
 ~760 lines (plan estimated ~630, actual slightly higher due to comprehensive test coverage and docstrings).
 
+### L2.3 PoC: SemiconductorLLMAgent + feature flag + E2E (PR5b)
+
+PR5b of 7 in the Wave 10 L2.3 execution plan. Wires the LLM-driven `SemiconductorLLMAgent` to the orchestrator registry behind the `UseLLMSectorAgents` feature flag. Tagged as `v0.0.0.21` post-merge.
+
+#### New files (2)
+
+- **`internal/orchestrator/semiconductor_llm_agent.go`** (new): `SemiconductorLLMAgent` implements the LLM-driven variant of the semiconductor sector agent. Satisfies `AgentExecutor` (`Supports` + `Recommend` + `EvaluatePosition`) and `StrategyProvider` (`StrategyMeta`). Drives the plan/reflect loop via a `SectorAgentLLM` instance with the agent's LLM + test tools. The `UseLLMOverride *bool` field allows tests to bypass the global config flag without mutating it. `EvaluatePosition` returns `(zero, false)` — out of scope for the L2.3 PoC.
+- **`internal/orchestrator/semiconductor_llm_agent_test.go`** (new): 9 tests covering Supports (3 cases: flag off, flag on, wrong skill), StrategyMeta, EvaluatePosition (out of scope), Recommend (5 cases: no LLM, flag off, tool-dispatch gap, plan error). The "happy path" test is renamed to `TestSemiconductorLLMAgent_Recommend_ToolDispatchGap` and asserts that the loop reaches `RunToolCall` and surfaces the PR1 placeholder error — when tool dispatch is wired in a future PR, this test should be updated to expect `ok=true`.
+
+#### Modified files (3)
+
+- **`internal/orchestrator/loader.go`**: `SemiconductorLLMAgent{}` registered in `builtinAgentExecutors()`. Comment explains the coexistence model: the deterministic `SemiconductorExecutor` (always in the registry) handles specs when the flag is off; the LLM agent handles them when the flag is on. `Supports()` is the resolution mechanism.
+- **`internal/config/parameters.go`**: added `UseLLMSectorAgents` field to `OrchestratorParameters` (`ParameterMetadata[bool]`, default `false`, `Source: SourceExperimental`). Added `GetUseLLMSectorAgents()` function that reads the loaded config (or returns the default-off metadata value if not loaded). The nil-check on `GetParametersConfig()` preserves the production default-off invariant even before config load.
+- **`configs/parameters.json`**: added `use_llm_sector_agents` entry under `orchestrator` with `source: "experimental"`, `value: false`. Verified by `go run ./cmd/parameter-health-check`.
+
+#### Gate mechanism (deviation from plan v2 C1's swap design)
+
+Plan v2 specified a `registry.Replace("semiconductor", SemiconductorLLMAgent{})` swap mechanism in `ApplyLLMAgentToggle`. The existing codebase has `StaticLoader` with a fixed `builtinAgentExecutors()` list and no `AgentRegistry.Replace` method. The implementation uses a **gate mechanism** instead:
+
+- Both `SemiconductorExecutor` and `SemiconductorLLMAgent` are always in the registry.
+- `SemiconductorLLMAgent.Supports()` returns `true` only when the flag is on; otherwise it returns `false` and the deterministic executor handles the spec.
+- This avoids mutating the executor list at runtime, keeps both implementations coexistable, and is easier to test (no global state mutation needed).
+
+The deviation is documented in the `SemiconductorLLMAgent` struct docstring and the `loader.go` registration comment.
+
+#### Known limitation
+
+`RunToolCall` in `internal/orchestrator/sector_agent_llm.go` (from PR1) is a placeholder that returns `"tool dispatch not yet implemented ... (PR5a)"` — the actual tool dispatch logic (find the tool by name, call `SafeInvokeHandler`, return the result) is NOT part of this PR. It will be wired in a follow-up PR after L2.3 PoC. The `TestSemiconductorLLMAgent_Recommend_ToolDispatchGap` test documents this gap and will be updated when the dispatch is implemented.
+
+#### Verification
+
+- `go test -race ./internal/orchestrator/...` green (9 new tests pass).
+- `gofmt -l .` clean.
+- `go vet ./...` clean.
+- `staticcheck ./...` clean (no issues in new code).
+- Pre-Change Protocol: blast radius MED. `SemiconductorLLMAgent` is a new public type in a new file. `loader.go` adds one entry to `builtinAgentExecutors()`. `parameters.go` adds one field to `OrchestratorParameters` + one new function. `parameters.json` adds one entry. All changes are additive; no existing public API modified (except the new `UseLLMSectorAgents` field which has a zero-value default).
+- Module maturity: orchestrator is S-tier (stable); config is S-tier (stable).
+
 ## [0.0.0.20a] - 2026-06-25
 
 Phase 2 state machine correctness (Issue #711 #5, #6, #9). Closes the 3 state-machine findings from gstack /review of PR #703. Tagged as `0.0.0.20a` (pre-release of v0.0.0.20) so PR3 (Phase 3 polish) can land without re-bumping.

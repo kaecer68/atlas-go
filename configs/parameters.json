@@ -5861,6 +5861,11 @@
       "rationale": "Flag to enable ML-based scoring for agent recommendations; disabled by default",
       "source": "heuristic",
       "value": false
+    },
+    "use_llm_sector_agents": {
+      "rationale": "Gate L2.3 PoC SemiconductorLLMAgent behind a flag; keep deterministic SemiconductorExecutor as default until L2.4 observation window validates LLM behavior.",
+      "source": "experimental",
+      "value": false
     }
   },
   "precious_metals": {
