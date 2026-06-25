@@ -1,5 +1,37 @@
 # Changelog
 
+## [Unreleased]
+
+Phase 3 polish + structural (Issue #711 #7, #8, #10, #11). Low-risk improvements to error visibility, interface clarity, and input validation. No VERSION bump (per M1 convention: polish PRs use the `[Unreleased]` block; v0.0.0.20a is already tagged at PR2).
+
+### Added
+
+- **`Request.Validate()` method** (Issue #711 #11) in `internal/llm/provider.go`. Validates `ToolChoice` against the reserved keywords (`""` / `"none"` / `"auto"` / `"required"`) and the registered tool names in `r.Tools`. Provider adapters will call this before dispatching (PR5a) and trust the input on nil return.
+- **`var _ PlanReflectRunner = (*SectorAgentLLM)(nil)` compile-time check** (T1 fix) in `internal/orchestrator/sector_agent_llm_test.go`. Regression guard against the LLMDriver split inadvertently dropping a required method on the runner contract.
+
+### Changed
+
+- **AgentLoop `NewAgentLoop(<=0)` now logs `slog.Warn`** (Issue #711 #8) before falling back to the default `MaxIter=3`. Surfaces caller bugs that pass zero or negative iteration budgets instead of silently coercing.
+- **AgentLoop `AdvanceFinal` now logs `slog.Warn`** (Issue #711 #7) when clamping conviction to `[0,100]`. Surfaces LLM driver bugs that emit out-of-range convictions.
+- **`LLMDriver` split into `PlanDriver` + `ReflectDriver` interfaces** (Issue #711 #10) in `internal/orchestrator/sector_agent_llm.go`. `SectorAgentLLM` now embeds the two interfaces as anonymous fields instead of holding a single `LLM LLMDriver` field. `LLMDriver` is retained as a deprecated alias (`PlanDriver + ReflectDriver`) for backward compat. Implementations can now supply just the planning half, just the reflection half, or both. `var _ PlanReflectRunner = (*SectorAgentLLM)(nil)` compile-time check ensures the runner contract is preserved across the split.
+
+### Tests (5 new + 1 new test file)
+
+- `TestRequest_Validate_ToolChoice` (8 sub-cases): empty / reserved keywords (`none` / `auto` / `required`) / matching tool name / non-matching tool name / garbage string with no tools / garbage string with empty tools slice.
+- `TestAgentLoop_NewAgentLoop_NonPositiveMaxIter_Warns`: maxIter=0, -5 both use default 3; positive values unchanged.
+- `TestAgentLoop_AdvanceFinal_ClampsConviction_Warns`: clamps 150→100, -5→0; in-range 75 unchanged.
+- `TestSectorAgentLLM_LLMDriver_DeprecatedAlias` (Issue #711 #10): verifies `var _ LLMDriver = stubLLMDriver{}` still compiles.
+- `TestPlanStep_NoPlanDriver_ReturnsErrNotImplemented` + `TestReflect_NoReflectDriver_ReturnsErrNotImplemented`: verify the two embedded drivers are independently nil-checked.
+- `var _ PlanReflectRunner = (*SectorAgentLLM)(nil)` (T1 fix): file-scope compile-time check.
+
+### Verification
+
+- `go test -race ./internal/llm/... ./internal/orchestrator/...` green.
+- `go vet ./...` clean.
+- `gofmt -l .` clean.
+- Pre-Change Protocol: blast radius LOW. `LLMDriver` → `PlanDriver + ReflectDriver` is a backwards-compatible split (LLMDriver alias retained). `SectorAgentLLM.LLM` field removal affects only test code (verified via grep — 3 references, all in `sector_agent_llm_test.go`, updated as part of this PR).
+- Module maturity: orchestrator is S-tier (stable) — interface change is additive (`PlanDriver` + `ReflectDriver` are new, `LLMDriver` is retained). `llm` package is experimental (per `doc.go:51`).
+
 ## [0.0.0.20a] - 2026-06-25
 
 Phase 2 state machine correctness (Issue #711 #5, #6, #9). Closes the 3 state-machine findings from gstack /review of PR #703. Tagged as `0.0.0.20a` (pre-release of v0.0.0.20) so PR3 (Phase 3 polish) can land without re-bumping.

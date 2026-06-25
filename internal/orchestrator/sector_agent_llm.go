@@ -19,27 +19,60 @@ import (
 // Enable via the feature flag `UseLLMSectorAgents` in production;
 // the default (deterministic) SectorAgent path remains active so
 // backtests are reproducible during the observation window.
+//
+// Issue #711 #10: the LLM dependency is split into two embedded
+// interfaces — PlanDriver and ReflectDriver — so an implementation
+// can supply just the planning half, just the reflection half, or
+// both. Use the LLMDriver deprecated alias for the combined
+// "both" case.
 type SectorAgentLLM struct {
 	*AgentLoop
 	// Skill is the agent layer / skill this represents (e.g. "semiconductor").
 	Skill string
-	// LLM is the dependency that makes the actual LLM call. Nil = stub.
-	LLM LLMDriver
+	// PlanDriver is the LLM backend used for the Plan phase. Nil = stub.
+	// Embedded interface: methods are promoted onto the struct.
+	PlanDriver
+	// ReflectDriver is the LLM backend used for the Reflect phase. Nil = stub.
+	// Embedded interface: methods are promoted onto the struct.
+	ReflectDriver
 	// Tools is the registry of tools the agent may invoke during plan →
-	// tool_call → reflect. When LLM != nil but Tools is empty, RunToolCall
-	// panics to prevent silent stub data being fed back to the LLM.
-	// See internal/llm.SafeInvokeHandler for the recommended call pattern.
+	// tool_call → reflect. When either driver is non-nil but Tools is empty,
+	// RunToolCall panics to prevent silent stub data being fed back to the
+	// LLM. See internal/llm.SafeInvokeHandler for the recommended call pattern.
 	Tools []llm.Tool
 }
 
-// LLMDriver is the minimal contract an LLM backend must satisfy to
-// drive a SectorAgentLLM through its loop.
-type LLMDriver interface {
-	// Complete sends a planning prompt to the LLM and returns the
+// PlanDriver is the contract an LLM backend must satisfy to drive
+// the Plan phase of a SectorAgentLLM.
+//
+// Issue #711 #10: split from the original LLMDriver interface so an
+// implementation can supply just the planning half.
+type PlanDriver interface {
+	// PlanComplete sends a planning prompt to the LLM and returns the
 	// parsed list of plan steps.
 	PlanComplete(ctx context.Context, skill, symbol string) ([]PlanStep, error)
+}
+
+// ReflectDriver is the contract an LLM backend must satisfy to drive
+// the Reflect phase of a SectorAgentLLM.
+//
+// Issue #711 #10: split from the original LLMDriver interface so an
+// implementation can supply just the reflection half.
+type ReflectDriver interface {
 	// ReflectComplete sends a reflection prompt after a tool result.
 	ReflectComplete(ctx context.Context, skill, symbol, toolResult string) (Reflection, error)
+}
+
+// LLMDriver is the combined contract for an LLM backend that drives
+// both the Plan and Reflect phases.
+//
+// Deprecated: use PlanDriver and ReflectDriver separately so an
+// implementation can supply just the phase it supports. LLMDriver
+// remains as a convenience alias (= PlanDriver + ReflectDriver) for
+// backward compatibility with code written before the split.
+type LLMDriver interface {
+	PlanDriver
+	ReflectDriver
 }
 
 // ErrNotImplemented is returned by SectorAgentLLM runner methods when
@@ -49,42 +82,49 @@ type LLMDriver interface {
 var ErrNotImplemented = fmt.Errorf("sector agent LLM not implemented")
 
 // PlanStep satisfies PlanReflectRunner. It returns ErrNotImplemented
-// when no LLM driver is configured; production wiring must replace
+// when no PlanDriver is configured; production wiring must replace
 // this with a real PlanComplete call. The symbol argument is forwarded
 // to the LLM driver so per-symbol context is preserved.
+//
+// The method call uses the embedded-interface promoted form
+// (a.PlanComplete) per staticcheck QF1008. The nil check above
+// guarantees the embedded PlanDriver is non-nil before promotion
+// resolves the call.
 func (a *SectorAgentLLM) PlanStep(ctx context.Context, symbol string, _ domain.Recommendation) ([]PlanStep, error) {
-	if a.LLM == nil {
+	if a.PlanDriver == nil {
 		return nil, ErrNotImplemented
 	}
-	steps, err := a.LLM.PlanComplete(ctx, a.Skill, symbol)
-	return steps, err
+	return a.PlanComplete(ctx, a.Skill, symbol)
 }
 
 // RunToolCall satisfies PlanReflectRunner.
 //
-// LLM == nil  → returns ErrNotImplemented (deterministic stub path,
+// PlanDriver == nil AND ReflectDriver == nil → returns ErrNotImplemented
 //
-//	preserves test-time behavior of the unconfigured agent).
+//	(deterministic stub path, preserves test-time behavior
+//	 of the unconfigured agent).
 //
-// LLM != nil AND Tools empty → panics. A wired LLM with no tool registry
+// (PlanDriver != nil OR ReflectDriver != nil) AND Tools empty → panics.
 //
-//	would silently feed synthetic stub results back to the LLM,
-//	corrupting the plan→reflect loop. Issue #711 #4.
+//	A wired LLM with no tool registry would silently feed synthetic
+//	stub results back to the LLM, corrupting the plan→reflect loop.
+//	Issue #711 #4.
 //
-// LLM != nil AND Tools present → dispatched to the matching tool via
+// (PlanDriver != nil OR ReflectDriver != nil) AND Tools present →
 //
-//	SafeInvokeHandler. Full tool-dispatch implementation lives
-//	in the L2.3 adapter PR (PR5a); for now this branch returns
-//	an explicit "not yet wired" error so callers see a clear
-//	signal instead of silent stubs.
+//	dispatched to the matching tool via SafeInvokeHandler. Full
+//	tool-dispatch implementation lives in the L2.3 adapter PR
+//	(PR5a); for now this branch returns an explicit "not yet
+//	wired" error so callers see a clear signal instead of
+//	silent stubs.
 func (a *SectorAgentLLM) RunToolCall(_ context.Context, step PlanStep) (string, error) {
-	if a.LLM == nil {
+	if a.PlanDriver == nil && a.ReflectDriver == nil {
 		return "", ErrNotImplemented
 	}
 	if len(a.Tools) == 0 {
 		panic(fmt.Sprintf(
-			"sector_agent_llm.RunToolCall: LLM wired but Tools registry empty (skill=%q, step.ToolName=%q); "+
-				"this would feed stub data back to the LLM. Wire Tools via SetTools() or set a.LLM = nil to use the stub path",
+			"sector_agent_llm.RunToolCall: LLM driver(s) wired but Tools registry empty (skill=%q, step.ToolName=%q); "+
+				"this would feed stub data back to the LLM. Wire Tools via SetTools() or set both drivers to nil to use the stub path",
 			a.Skill, step.ToolName,
 		))
 	}
@@ -94,9 +134,13 @@ func (a *SectorAgentLLM) RunToolCall(_ context.Context, step PlanStep) (string, 
 // Reflect satisfies PlanReflectRunner. Same caveat as PlanStep.
 // The symbol argument is forwarded so the LLM driver receives the
 // per-symbol context for symbol-aware reflection.
+//
+// Uses the embedded-interface promoted form (a.ReflectComplete) per
+// staticcheck QF1008; nil check above guarantees ReflectDriver is
+// non-nil before promotion resolves.
 func (a *SectorAgentLLM) Reflect(ctx context.Context, symbol string, toolResult string, _ int) (Reflection, error) {
-	if a.LLM == nil {
+	if a.ReflectDriver == nil {
 		return Reflection{}, ErrNotImplemented
 	}
-	return a.LLM.ReflectComplete(ctx, a.Skill, symbol, toolResult)
+	return a.ReflectComplete(ctx, a.Skill, symbol, toolResult)
 }

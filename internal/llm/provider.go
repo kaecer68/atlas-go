@@ -116,7 +116,49 @@ type Request struct {
 	// "required" — model must call at least one tool
 	// "<tool_name>" — model must call the named tool
 	// Empty string means provider default (typically "auto" if Tools).
+	// Call Request.Validate() to enforce this contract before dispatch.
 	ToolChoice string
+}
+
+// Validate checks the Request for configuration errors. Provider
+// adapters should call Validate before dispatching; on nil return,
+// adapters may trust ToolChoice (and other validated fields) without
+// re-checking.
+//
+// Issue #711 #11: moves ToolChoice value validation out of provider
+// adapters and into the Request itself. ToolChoice is valid if:
+//   - "" (empty) — provider default
+//   - "none" / "auto" / "required" — reserved keywords
+//   - a tool name matching one of r.Tools[].Name
+//
+// Returns a descriptive error if the value is not in any of those
+// categories. The error message includes the registered tool names
+// (if any) to help callers diagnose typos.
+func (r *Request) Validate() error {
+	if r.ToolChoice == "" {
+		return nil // provider default
+	}
+	switch r.ToolChoice {
+	case "none", "auto", "required":
+		return nil
+	}
+	// Otherwise must match a registered tool name.
+	for _, tool := range r.Tools {
+		if tool.Name == r.ToolChoice {
+			return nil
+		}
+	}
+	return fmt.Errorf("llm.Request.Validate: ToolChoice %q is not a reserved keyword (none/auto/required) and does not match any registered tool name (registered: %v)", r.ToolChoice, toolNames(r.Tools))
+}
+
+// toolNames returns the names of the given tools, for use in error
+// messages. Package-private helper for Request.Validate.
+func toolNames(tools []Tool) []string {
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = t.Name
+	}
+	return names
 }
 
 // Tool describes a single tool/function the LLM may invoke.

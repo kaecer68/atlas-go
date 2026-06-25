@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -85,5 +86,97 @@ func TestResponse_ToolCalls(t *testing.T) {
 	}
 	if resp.ToolCalls[0].ID != "call_1" {
 		t.Errorf("ID = %q, want call_1", resp.ToolCalls[0].ID)
+	}
+}
+
+// TestRequest_Validate_ToolChoice covers the 5 ToolChoice validation
+// cases introduced by Issue #711 #11. Provider adapters will call
+// Request.Validate() before dispatch (PR5a) and trust the input on
+// nil return.
+func TestRequest_Validate_ToolChoice(t *testing.T) {
+	makeTools := func() []Tool {
+		return []Tool{
+			{Name: "get_weather", Description: "Look up weather"},
+			{Name: "get_stock_price", Description: "Look up stock price"},
+		}
+	}
+
+	tests := []struct {
+		name       string
+		toolChoice string
+		tools      []Tool
+		wantErr    bool
+		errSubstr  string
+	}{
+		{
+			name:       "empty (provider default)",
+			toolChoice: "",
+			tools:      makeTools(),
+			wantErr:    false,
+		},
+		{
+			name:       "reserved keyword: none",
+			toolChoice: "none",
+			tools:      makeTools(),
+			wantErr:    false,
+		},
+		{
+			name:       "reserved keyword: auto",
+			toolChoice: "auto",
+			tools:      makeTools(),
+			wantErr:    false,
+		},
+		{
+			name:       "reserved keyword: required",
+			toolChoice: "required",
+			tools:      makeTools(),
+			wantErr:    false,
+		},
+		{
+			name:       "matching tool name",
+			toolChoice: "get_stock_price",
+			tools:      makeTools(),
+			wantErr:    false,
+		},
+		{
+			name:       "non-matching tool name",
+			toolChoice: "get_nonexistent",
+			tools:      makeTools(),
+			wantErr:    true,
+			errSubstr:  "get_nonexistent",
+		},
+		{
+			name:       "garbage string with no tools",
+			toolChoice: "definitely-not-a-tool",
+			tools:      nil,
+			wantErr:    true,
+			errSubstr:  "definitely-not-a-tool",
+		},
+		{
+			name:       "garbage string with empty tools slice",
+			toolChoice: "anything",
+			tools:      []Tool{},
+			wantErr:    true,
+			errSubstr:  "anything",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := Request{Tools: tc.tools, ToolChoice: tc.toolChoice}
+			err := req.Validate()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Validate() = nil, want error containing %q", tc.errSubstr)
+				}
+				if tc.errSubstr != "" && !strings.Contains(err.Error(), tc.errSubstr) {
+					t.Errorf("Validate() error = %q, want substring %q", err.Error(), tc.errSubstr)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() = %v, want nil", err)
+				}
+			}
+		})
 	}
 }
