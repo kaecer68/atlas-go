@@ -96,7 +96,7 @@ DriftDetector 訂閱 `EventPositionUpdate` 與 `EventRegimeChangeConfirmed`（v2
 ## 測試
 
 - `internal/monitoring/service/drift_detector_test.go`（v1，6 個測試）
-- `internal/monitoring/service/drift_detector_v2_test.go`（v2，14 個測試）：
+- `internal/monitoring/service/drift_detector_v2_test.go`（15 個測試：13 V2 + 2 V1）：
   - `TestDriftDetector_V2TargetDriftEmitted`：target 偏離 > 10% emit + 驗證 v2 payload 欄位
   - `TestDriftDetector_V2TargetDriftNoEmit`：target 對齊 + 平衡組合不 emit
   - `TestDriftDetector_V2NilProviderGraceful`：nil provider 保留 v1 行為
