@@ -150,7 +150,7 @@ The system should eventually:
 | 層 | 檔案 | 職責 |
 |---|------|------|
 | 介面 | `provider.go` | `ProviderImpl` 介面、`Capability`（12 種）、`DataClass`（4 階敏感度）、`RoutingChain` |
-| 路由 | `router.go` | `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort；DataClass 閘門（ADR-010） |
+| 路由 | `router.go` | `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort；DataClass 閘門（ADR-010）。**Wave 11 L2.1 doc audit（Issue #720）**：實作上等於 3 層 fallback，因為 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 為 `[PLANNED]` 常數，無 client 實作 |
 | 設定 | `config.go` | `LoadRouterConfig()` 載入 `configs/llm_router.yaml`；`TryLoadRouterConfig()` 錯誤時 fallback 預設表 |
 | 健康 | `health.go` | Provider 健康聚合 + circuit breaker 狀態 |
 | 客戶端 | `clients/` | 3 個 Provider HTTP client（DeepSeek V4 / MiniMax M3 / Kimi K2.7）+ 共享 `BaseClient` |
@@ -178,6 +178,7 @@ The system should eventually:
 ### 設定與監控
 
 - **Routing table**：`configs/llm_router.yaml`（runtime 來源），載入失敗 fallback `router.go:defaultRoutingTable()`
+- **Effective 3-tier fallback** (Wave 11 L2.1 doc audit, Issue #720): 雖然 `RoutingChain` 結構保留 4 層（Primary/Backup1/Backup2/LastResort），預設 `Backup2` 是空字串，等效於 Primary → Backup1 → LastResort。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 標記為 `[PLANNED]`，等未來 client 實作後可重用
 - **新增 capability 必同步 4 處**：`provider.go` 常數 + `router.go:defaultRoutingTable()` + `config.go:isKnownCapability()` + `configs/llm_router.yaml`
 - **健康端點**：`GET /api/llm/health` 暴露 Provider 狀態與 circuit breaker
 

@@ -1,95 +1,112 @@
 # LLM Router Configuration
-# Defines the per-capability four-tier fallback chain (Primary → Backup1 → Backup2 → LastResort).
+# Defines the per-capability three-tier fallback chain (Primary → Backup1 → LastResort).
 # Design source: docs/llm-integration-strategy-framework.md §6.1
 #
 # Provider values:
 #   minimax      — MiniMax M3 (primary capability host; China jurisdiction — gated for DataClassRegulated)
 #   deepseek     — DeepSeek V4-Pro (first backup; strong analytical capabilities)
-#   opencode_go  — OpenCode-Go (second backup; local/self-host)
 #   mock         — Mock provider (last resort; returns empty output)
-#   opencode_zen — OpenCode-Zen (future; not yet wired)
+#   opencode_go  — [PLANNED] ProviderOpenCodeGo constant reserved for future use; not in routing chain (no client implementation)
+#   opencode_zen — [PLANNED] ProviderOpenCodeZen constant reserved for future use; not in routing chain
+#
+# Issue #720 (Wave 11 L2.1 doc audit): OpenCode-Go and OpenCode-Zen providers were
+# referenced in the routing chain but had no client implementation in
+# internal/llm/clients/. Effective fallback chain was reduced to 3 tiers.
+# Constants retained for forward compatibility; routing chain now skips
+# empty Backup2 (router.go handles "not registered" gracefully).
+#
+# To re-enable 4-tier routing in the future:
+#   1. Implement OpenCodeGoClient / OpenCodeZenClient in internal/llm/clients/
+#   2. Register the providers via NewDefaultRouter(...)
+#   3. Restore backup2: opencode_go entries below
+#
+# Chain semantics:
+#   - primary: required, must be a registered provider
+#   - backup1: optional; empty string skips to last_resort
+#   - backup2: optional (4-tier legacy); empty string skips to last_resort
+#   - last_resort: required, fallback handler
 
 routing_chains:
   # strategy.failure_attribution — annotator hot path
   failure_attribution:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # narrative.rationale_translation_fallback
   rationale_generation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # strategy.frame_summary
   strategy_summary:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # dev.prompt_lint
   prompt_lint:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # orchestrator.prism_cohort_insight
   scenario_simulation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # spawning.gap_description_enrichment
   risk_surface_extraction:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # narrative.event_headline
   regime_explanation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # risk.confidence_calibration_commentary
   performance_forensics:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # narrative.sentiment_explanation
   sentiment_explanation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # dev.code_review_annotation — U-tier utility
   code_review_annotation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # strategy.contra_attribution — adversarial analysis
   contra_attribution:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 
   # risk.confidence_commentary — Phase 3.3 non-blocking bypass
   confidence_commentary:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock

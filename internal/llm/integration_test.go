@@ -509,8 +509,9 @@ func TestKimiAdapter_EndToEnd(t *testing.T) {
 // TestRouter_FullChain_AllAdapters verifies the complete routing chain:
 // Primary fails → Backup1 succeeds → Backup2 not reached.
 // Uses CapabilityFailureAttribution, whose default routing chain is
-// MiniMax → DeepSeek → OpenCodeGo. We register MiniMax (fails) and
-// DeepSeek (succeeds); OpenCodeGo is not registered and would be skipped.
+// MiniMax → DeepSeek → Mock (Backup2 is empty after Wave 11 L2.1 doc audit
+// Issue #720). We register MiniMax (fails) and DeepSeek (succeeds);
+// empty Backup2 is skipped, LastResort (Mock) is reached.
 // Asserts correct provider, output, and AttemptedProviders order.
 func TestRouter_FullChain_AllAdapters(t *testing.T) {
 	// Primary (MiniMax) — configured to fail.
@@ -543,7 +544,7 @@ func TestRouter_FullChain_AllAdapters(t *testing.T) {
 	}
 
 	// Use NewDefaultRouter with registered providers.
-	// CapabilityFailureAttribution default chain: MiniMax → DeepSeek → OpenCodeGo.
+	// CapabilityFailureAttribution default chain: MiniMax → DeepSeek → Mock (Backup2 empty, Issue #720).
 	router := llm.NewDefaultRouter(primary, backup1)
 
 	// Execute.
@@ -588,7 +589,8 @@ func TestRouter_FullChain_AllAdapters(t *testing.T) {
 // MiniMax is skipped entirely and the Router falls through to the next
 // provider in the chain.
 // Uses CapabilityRiskSurfaceExtraction, whose default chain is
-// MiniMax → DeepSeek → OpenCodeGo. With DataClassRegulated, MiniMax is gated.
+// MiniMax → DeepSeek → Mock (Backup2 empty, Issue #720). With
+// DataClassRegulated, MiniMax is gated.
 func TestRouter_DataClassGate_PreventsFallback(t *testing.T) {
 	var miniMaxCallCount int
 
@@ -619,7 +621,7 @@ func TestRouter_DataClassGate_PreventsFallback(t *testing.T) {
 		},
 	}
 
-	// CapabilityRiskSurfaceExtraction default chain: MiniMax → DeepSeek → OpenCodeGo.
+	// CapabilityRiskSurfaceExtraction default chain: MiniMax → DeepSeek → Mock (Backup2 empty, Issue #720).
 	router := llm.NewDefaultRouter(miniMax, deepseek)
 
 	// Execute with regulated data.

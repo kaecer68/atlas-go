@@ -86,10 +86,12 @@ func (r *DefaultRouter) Register(p ProviderImpl) error {
 //     (bypassing the routing table, Supports check, and DataClass gate).
 //  2. Look up the RoutingChain for req.Capability.
 //  3. Try chain members in order: Primary → Backup1 → Backup2.
+//     Empty-string Backup2 entries are skipped (3-tier fallback when
+//     Backup2 is intentionally empty).
 //  4. Skip a provider if the DataClass gate rejects it.
 //  5. Skip a provider if it is not registered or does not Support the capability.
 //  6. On each failure, append the provider to attempted and continue.
-//  7. If all three chain members fail, invoke the lastResortHandler.
+//  7. If all available chain members fail, invoke the lastResortHandler.
 func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error) {
 	spanAttrs := []attribute.KeyValue{
 		attribute.String("llm.capability", string(req.Capability)),
@@ -128,11 +130,21 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 		return Response{}, ErrCapabilityNotSupported
 	}
 
-	// Steps 3-5: Try Primary → Backup1 → Backup2 in order
+	// Steps 3-5: Try Primary → Backup1 → Backup2 in order.
+	// Effective chain length depends on routing config: empty Backup2 (e.g.,
+	// for [PLANNED] OpenCode providers) reduces to 2 tiers. The router
+	// iteration tolerates empty-string entries by skipping them via the
+	// "not registered" branch below.
 	chainProviders := []Provider{chain.Primary, chain.Backup1, chain.Backup2}
 	var attempted []Provider
 
 	for i, providerName := range chainProviders {
+		// Skip empty-string entries (4-tier → 3-tier fallback when Backup2
+		// is intentionally empty per configs/llm_router.yaml).
+		if providerName == "" {
+			continue
+		}
+
 		// Increment fallback counter when trying a backup (not primary)
 		if i > 0 {
 			atomic.AddInt64(FallbackTriggeredTotal, 1)
@@ -201,7 +213,7 @@ func (r *DefaultRouter) lastResortHandler(attempted []Provider) Response {
 // defaultRoutingTable returns the hard-coded capability-to-routing-chain
 // mapping as defined in docs/llm-integration-strategy-framework.md §6.1.
 //
-// Mapping notes (Phase 1):
+// Mapping notes:
 //   - The doc references "DeepSeek V4-Pro" and "DeepSeek V4-Flash" as
 //     distinct providers. Phase 1 treats them both as ProviderDeepSeek
 //     (the V4-Pro / V4-Flash distinction is a Phase 2 Provider-impl concern).
@@ -212,101 +224,105 @@ func (r *DefaultRouter) lastResortHandler(attempted []Provider) Response {
 //     capability-specific handlers.
 //   - Capability names in code are normalized to the enum in provider.go;
 //     the doc's dotted names map approximately.
+//   - Backup2 is intentionally empty (Wave 11 L2.1 doc audit, Issue #720):
+//     ProviderOpenCodeGo/Zen are reserved constants for future use but no
+//     client implementation exists in internal/llm/clients/. The router
+//     skips empty-string providers gracefully (router.go:Call).
 func defaultRoutingTable() RouterConfig {
 	return RouterConfig{
 		RoutingChains: map[Capability]RoutingChain{
 			// doc §6.1: strategy.failure_attribution
-			//   M3 → V4-Pro → OpenCode-Go → rule_based
+			//   M3 → V4-Pro → rule_based
 			CapabilityFailureAttribution: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: dev.code_review_annotation
-			//   M3 → V4-Pro → OpenCode-Go → empty
+			//   M3 → V4-Pro → empty
 			CapabilityCodeReviewAnnotation: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: dev.prompt_lint
-			//   M3 → V4-Pro → OpenCode-Go → pass
+			//   M3 → V4-Pro → pass
 			CapabilityPromptLint: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: narrative.rationale_translation_fallback
-			//   M3 → V4-Flash → OpenCode-Go → passthrough
+			//   M3 → V4-Flash → passthrough
 			CapabilityRationaleGeneration: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: strategy.frame_summary
-			//   M3 → V4-Pro → OpenCode-Go → null
+			//   M3 → V4-Pro → null
 			CapabilityStrategySummary: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: spawning.gap_description_enrichment
-			//   M3 → V4-Pro → OpenCode-Go → passthrough
+			//   M3 → V4-Pro → passthrough
 			CapabilityRiskSurfaceExtraction: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: narrative.event_headline
-			//   M3 → V4-Flash → OpenCode-Go → passthrough
+			//   M3 → V4-Flash → passthrough
 			CapabilityRegimeExplanation: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: risk.confidence_calibration_commentary
-			//   M3 → V4-Pro → OpenCode-Go → passthrough
+			//   M3 → V4-Pro → passthrough
 			CapabilityPerformanceForensics: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: orchestrator.prism_cohort_insight
-			//   M3 → V4-Pro → OpenCode-Go → discard
+			//   M3 → V4-Pro → discard
 			CapabilityScenarioSimulation: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: narrative.sentiment_explanation
-			//   M3 → V4-Pro → OpenCode-Go → passthrough
+			//   M3 → V4-Pro → passthrough
 			CapabilitySentimentExplanation: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// Not in doc §6.1; Phase 2 capability set.
 			CapabilityContraAttribution: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// Phase 3.3: risk.confidence_commentary (non-blocking bypass)
 			CapabilityConfidenceCommentary: {
 				Primary:    ProviderMiniMax,
 				Backup1:    ProviderDeepSeek,
-				Backup2:    ProviderOpenCodeGo,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 		},

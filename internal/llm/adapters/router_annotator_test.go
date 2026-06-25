@@ -113,7 +113,7 @@ func TestRouterAnnotator_NilRouter(t *testing.T) {
 // TestRouterAnnotator_Name verifies the name format.
 func TestRouterAnnotator_Name(t *testing.T) {
 	ra := NewRouterAnnotator(nil)
-	expected := "router(minimax→deepseek→opencode_go)"
+	expected := "router(minimax→deepseek→mock)"
 	if got := ra.Name(); got != expected {
 		t.Errorf("Name() = %q, want %q", got, expected)
 	}
