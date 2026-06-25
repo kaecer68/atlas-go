@@ -68,16 +68,27 @@ Main packages:
 - `internal/monitoring`: Dashboard API, Wave 9 observability runtime, and channel health synthesis
 - `internal/eventbus`: pub/sub event bus wiring for Wave 8/9 events
 - `internal/risk`: RiskManager, VaR, and macro drawdown guards
-- `internal/llm`: LLM capability-based multi-provider router with 4-tier fallback chain, DataClass governance gate, and 12 capability handlers (see [LLM Framework](#llm-framework))
+- `internal/llm`: LLM capability-based multi-provider router with effective 3-tier fallback chain (Primary → Backup1 → LastResort; Backup2 reserved for [PLANNED] OpenCode providers), DataClass governance gate, and 12 capability handlers (see [LLM Framework](#llm-framework))
 
 ## LLM Framework
 
-`internal/llm/` 是 capability-based 多 Provider 路由層，提供 4 層 fallback chain 與 DataClass 治理閘門。
+`internal/llm/` 是 capability-based 多 Provider 路由層，提供 fallback chain 與 DataClass 治理閘門。
+
+> **Effective routing chain**: RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串（等效於 3 層 fallback）。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 標記為 `[PLANNED]` 常數，等未來 client 實作後可重用。參見 Issue #720（Wave 11 L2.1 doc audit）。
+
+- `internal/llm`: LLM capability-based multi-provider router with effective 3-tier fallback chain (Primary → Backup1 → LastResort; Backup2 reserved for [PLANNED] OpenCode providers), DataClass governance gate, and 12 capability handlers (see [LLM Framework](#llm-framework))
+
+## LLM Framework
+
+`internal/llm/` 是 capability-based 多 Provider 路由層，提供 fallback chain 與 DataClass 治理閘門。
+
+> **Effective routing chain**: RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串（等效於 3 層 fallback）。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 標記為 `[PLANNED]` 常數，等未來 client 實作後可重用。參見 Issue #720（Wave 11 L2.1 doc audit）。
+>>>>>>> 62e7a3bc (fix(llm): remove OpenCode-Go/Zen from routing chain (Issue #720))
 
 **架構分層**：
 
 - `provider.go` — `ProviderImpl` 介面、`Capability`（能力描述）、`DataClass`（資料分級）、`RoutingChain`（備援鏈）
-- `router.go` — `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort；強制執行 DataClass 閘門（ADR-010：MiniMax M3 對 regulated 資料強制 skip）
+- `router.go` — `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort（Backup2 預設空字串，等效 3 層）；強制執行 DataClass 閘門（ADR-010：MiniMax M3 對 regulated 資料強制 skip）
 - `clients/` — 3 個 Provider HTTP 客戶端（DeepSeek V4、MiniMax M3、Kimi K2.7）+ 共享 `BaseClient`（retry / rate-limit / circuit breaker）
 - `capabilities/` — 12 個 capability handlers（failure_attribution、code_review_annotation、prompt_lint、rationale_generation、strategy_summary、risk_surface_extraction、regime_explanation、scenario_simulation、sentiment_explanation、performance_forensics、contra_attribution、confidence_commentary）
 - `schemas/` — typed I/O contract（JSON-serialized, Zod-compatible JSON Schema）

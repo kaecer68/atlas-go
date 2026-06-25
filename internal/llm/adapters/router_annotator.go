@@ -26,8 +26,13 @@ func NewRouterAnnotator(r llm.Router) *RouterAnnotator {
 }
 
 // Name implements llm_annotator.Annotator.
+//
+// Returns a human-readable chain descriptor for logging/monitoring.
+// Effective chain is determined by the underlying Router's routing table
+// (see Wave 11 L2.1 doc audit, Issue #720: OpenCode providers are
+// reserved [PLANNED] constants without client implementations).
 func (r *RouterAnnotator) Name() string {
-	return "router(minimax→deepseek→opencode_go)"
+	return "router(minimax→deepseek→mock)"
 }
 
 // Annotate implements llm_annotator.Annotator. It wraps the FailureContext into

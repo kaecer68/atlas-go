@@ -45,6 +45,7 @@
 | `DefaultRouter.Health() map[Provider]HealthStatus` | `/api/llm/health` 端點 | `internal/monitoring/api/llm/handlers.go` |
 | `Capability` / `DataClass` / `Provider` 型別 | 強型別契約 | 跨模組共用 |
 
+> **Effective routing chain** (Wave 11 L2.1 doc audit, Issue #720): RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串。實作上等於 3 層 fallback（Primary → Backup1 → LastResort）。`ProviderOpenCodeGo` 與 `ProviderOpenCodeZen` 常數保留為 `[PLANNED]` 狀態，等未來 client 實作後可重用。Router iteration 容忍空字串 Backup2（`router.go:Call` 直接 `continue` 跳過）。
 ### 12 個 Capability（命名須與 `provider.go:28-41` 完全一致）
 
 | Constant | 設計來源（doc §6.1） | 典型用途 |
@@ -85,7 +86,7 @@
 ### 3. MiniMax DataClass 閘門繞過
 **症狀**：呼叫時 `req.Options.ForceProvider = &ProviderMiniMax` + `req.DataClass = DataClassRegulated` 試圖強制走 MiniMax。
 **後果**：router 會回 `ErrProviderDisabled`（`router.go:110`）。這是有意設計（ADR-010），不可繞過。
-**正確**：regulated 資料只能走 DeepSeek / OpenCode-Go / Mock 路徑。
+**正確**：regulated 資料只能走 DeepSeek 或 Mock 路徑（Issue #720 移除 OpenCode-Go / OpenCode-Zen 後）。
 
 ### 4. Kimi K2.7 已被移除
 **症狀**：使用 `LLM_ANNOTATOR_API_KEY` 配 Kimi API。
@@ -135,7 +136,6 @@
 |------|------|------|
 | `LLM_MINIMAX_API_KEY` | MiniMax M3 API key（`sk-cp-` 前綴） | 從 minimax-cn-coding-plan 取得 |
 | `LLM_DEEPSEEK_API_KEY` | DeepSeek V4-Pro / V4-Flash | 從 https://platform.deepseek.com 取得 |
-| `LLM_OPENCODE_GO_API_KEY` | OpenCode-Go 本地/自架（若啟用） | 自架部署決定 |
 | `LLM_ANNOTATOR_API_KEY` | **向後相容** — 等同 `LLM_MINIMAX_API_KEY` | 歷史誤標，保留 |
 | `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 rationale 翻譯 hook | default `false` |
 | `LLM_PRISM_SCENARIO_ENABLED` | 啟用 PRISM scenario 說明 hook | default `false` |

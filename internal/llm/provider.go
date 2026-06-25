@@ -52,11 +52,22 @@ type Provider string
 // The ProviderOpenAI constant is deprecated and retained only for backward
 // compatibility; do not use it in new code. All new integrations should
 // use one of the other explicitly named providers.
+//
+// ProviderOpenCodeGo and ProviderOpenCodeZen are [PLANNED] constants
+// reserved for future client implementations (Wave 11 L2.1 doc audit,
+// Issue #720). They are not registered in the default routing chain because
+// no client implementation exists in internal/llm/clients/. To enable
+// them, implement OpenCodeGoClient / OpenCodeZenClient and register via
+// NewDefaultRouter(...).
 const (
-	ProviderKimi        Provider = "kimi"
-	ProviderMiniMax     Provider = "minimax"
-	ProviderDeepSeek    Provider = "deepseek"
-	ProviderOpenCodeGo  Provider = "opencode_go"
+	ProviderKimi     Provider = "kimi"
+	ProviderMiniMax  Provider = "minimax"
+	ProviderDeepSeek Provider = "deepseek"
+	// [PLANNED] Reserved constant; no client implementation. Do not
+	// register this provider in DefaultRouter until OpenCodeGoClient exists.
+	ProviderOpenCodeGo Provider = "opencode_go"
+	// [PLANNED] Reserved constant; no client implementation. Do not
+	// register this provider in DefaultRouter until OpenCodeZenClient exists.
 	ProviderOpenCodeZen Provider = "opencode_zen"
 	ProviderMock        Provider = "mock"
 	// DEPRECATED: retained for backward compatibility; do not use in new code.

@@ -218,8 +218,10 @@ func TestNewDefaultRouter_BackwardCompatible(t *testing.T) {
 
 func TestLoadRouterConfig_AllTwelveCapabilities(t *testing.T) {
 	// This test validates that all 12 known Capability constants can be
-	// loaded from a YAML file. This ensures config.go's isKnownCapability
-	// switch stays in sync with provider.go's Capability constants.
+	// loaded from a YAML file with 3-tier fallback chains (Backup2 empty).
+	// This ensures config.go's isKnownCapability switch stays in sync
+	// with provider.go's Capability constants, and that empty Backup2 is
+	// accepted (Wave 11 L2.1 doc audit, Issue #720).
 	dir := t.TempDir()
 	path := filepath.Join(dir, "all_caps.yaml")
 	yaml := `
@@ -227,62 +229,62 @@ routing_chains:
   failure_attribution:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   code_review_annotation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   prompt_lint:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   rationale_generation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   strategy_summary:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   risk_surface_extraction:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   regime_explanation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   scenario_simulation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   sentiment_explanation:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   performance_forensics:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   contra_attribution:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
   confidence_commentary:
     primary: minimax
     backup1: deepseek
-    backup2: opencode_go
+    backup2: ""
     last_resort: mock
 `
 	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {

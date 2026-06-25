@@ -141,11 +141,17 @@ func TestDefaultRouter_PrimaryFail_Backup1Success(t *testing.T) {
 	}
 }
 
-// TestDefaultRouter_AllFail_LastResort tests that when Primary, Backup1, and Backup2
-// all fail, the LastResort handler is invoked and returns a deterministic response
-// (for CapabilityFailureAttribution: empty Output with ProviderMock).
+// TestDefaultRouter_AllFail_LastResort tests that when Primary and Backup1
+// both fail, the LastResort handler is invoked and returns a deterministic
+// response (for CapabilityFailureAttribution: empty Output with ProviderMock).
+//
+// Wave 11 L2.1 doc audit (Issue #720): the default routing chain is now
+// effectively 3 tiers (Backup2 is empty in defaultRoutingTable and
+// configs/llm_router.yaml). Empty Backup2 entries are skipped before being
+// registered as "attempted", so AttemptedProviders contains only the
+// providers that were actually invoked.
 func TestDefaultRouter_AllFail_LastResort(t *testing.T) {
-	// Given: all three chain members fail
+	// Given: both registered chain members fail
 	chainErr := errors.New("provider error")
 	primary := &mockProvider{
 		name:    ProviderDeepSeek,
@@ -156,23 +162,15 @@ func TestDefaultRouter_AllFail_LastResort(t *testing.T) {
 		},
 	}
 	backup1 := &mockProvider{
-		name:    ProviderOpenCodeGo,
+		name:    ProviderMiniMax,
 		callErr: chainErr,
 		healthResp: HealthStatus{
-			Provider: ProviderOpenCodeGo,
-			Healthy:  true,
-		},
-	}
-	backup2 := &mockProvider{
-		name:    ProviderOpenCodeZen,
-		callErr: chainErr,
-		healthResp: HealthStatus{
-			Provider: ProviderOpenCodeZen,
+			Provider: ProviderMiniMax,
 			Healthy:  true,
 		},
 	}
 
-	router := NewDefaultRouter(primary, backup1, backup2)
+	router := NewDefaultRouter(primary, backup1)
 
 	// When
 	req := Request{
@@ -191,9 +189,10 @@ func TestDefaultRouter_AllFail_LastResort(t *testing.T) {
 	if resp.Provider != ProviderMock {
 		t.Errorf("expected ProviderMock from last resort, got %v", resp.Provider)
 	}
-	// All three providers should be in AttemptedProviders
-	if len(resp.AttemptedProviders) != 3 {
-		t.Errorf("expected 3 attempted providers, got %d: %v", len(resp.AttemptedProviders), resp.AttemptedProviders)
+	// Both registered chain members should be in AttemptedProviders.
+	// The empty Backup2 slot (skipped by router.go:Call) is not recorded.
+	if len(resp.AttemptedProviders) != 2 {
+		t.Errorf("expected 2 attempted providers, got %d: %v", len(resp.AttemptedProviders), resp.AttemptedProviders)
 	}
 }
 
