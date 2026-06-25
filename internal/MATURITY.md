@@ -71,6 +71,7 @@
 | `monitoring/api/prism` | PRISM training-results API — 暴露 `[]prism.CompletedTrainingResult`（regime-specific 訓練結果）給 dashboard 頁面 | `HandleTrainingResults` | 由 monitoring 使用，evolving |
 | `ml` | 監督式學習模型 — OLS、ElasticNet、PCR、PLS 實作（SK-05~09） | `Model`, `Trainer` | 由 Fin-Skills 規範驅動，供 factor/research 使用 |
 | `scheduler` | ML 模型重訓排程器 — 定時從 replay 資料重訓 OLS/ElasticNet/PCR/PLS | `MLRetrainScheduler`, `RetrainAll()`, `GetLatestModel()` | 由 BackgroundTaskManager 排程，evolving |
+| `observability/otel` | OpenTelemetry trace 初始化 — stdout exporter、parent/child span helpers，給 `llm.router.Call` 與 `llm/clients.DoRequest` 加 span | `Init()`, `StartSpan()`, `TracerName` | Wave 10 L2.1，evolving，OTLP exporter 待 production 評估 |
 
 ---
 

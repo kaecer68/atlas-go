@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	obsotel "github.com/kaecer68/atlas-go/internal/observability/otel"
 )
 
 // BaseClient provides shared HTTP infrastructure for LLM provider clients.
@@ -77,6 +79,13 @@ func defaultBackoff(attempt int) time.Duration {
 // errors fail immediately. Returns the raw response, the consumed body
 // bytes, and any error encountered.
 func (b *BaseClient) DoRequest(ctx context.Context, method, url string, headers map[string]string, body []byte) (*http.Response, []byte, error) {
+	ctx, span := obsotel.StartSpan(ctx, "llm.http.request",
+		attribute.String("http.method", method),
+		attribute.String("http.url", url),
+		attribute.Int("http.payload_size", len(body)),
+	)
+	defer span.End()
+
 	start := time.Now()
 
 	if err := b.Limiter.Wait(ctx); err != nil {
@@ -126,11 +135,13 @@ func (b *BaseClient) DoRequest(ctx context.Context, method, url string, headers 
 
 	if b.Breaker != nil && b.Breaker.State() == "open" {
 		b.recordOutcome("circuit_open", 0)
+		obsotel.RecordError(span, fmt.Errorf("%w: circuit breaker is open", ErrCircuitOpen))
 		return nil, nil, fmt.Errorf("%w: circuit breaker is open", ErrCircuitOpen)
 	}
 
 	if b.Breaker != nil {
 		if cbErr := b.Breaker.Call(op); cbErr != nil {
+			obsotel.RecordError(span, cbErr)
 			return nil, nil, cbErr
 		}
 	} else {
