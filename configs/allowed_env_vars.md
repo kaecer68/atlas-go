@@ -3,7 +3,7 @@
 本文件為 Constitution 1.2 要求之環境變數白名單。  
 任何 `os.Getenv()` 調用必須在本文件中有對應條目，否則為憲法違規。
 
-**最後更新**：2026-05-22  
+**最後更新**：2026-06-25  
 **維護者**：Atlas 數據源治理委員會
 
 ---
@@ -42,6 +42,7 @@
 | `ATLAS_PARAMETERS_CONFIG` | 參數配置路徑（別名） | `configs/parameters.json` |
 | `ATLAS_ENGINE_CONFIG` | 引擎配置路徑 | `engine.json` |
 | `ATLAS_YAHOO_ENABLED` | Yahoo Finance 功能開關 | `false` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP HTTP exporter endpoint（功能開關：未設定時 fallback stdout） | 空（未設定時使用 stdout） |
 | `ATLAS_API_KEY` | API 認證金鑰（非資料源） | 空（未設定時停用認證） |
 | `ATLAS_ADMIN_KEY` | 管理員認證金鑰（admin-only 操作） | 空（未設定時停用 admin 驗證） |
 | `ATLAS_ENV` | 環境模式（`production`/`development`） | 空 |
