@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.0.0.18] - 2026-06-25
+
+### Fixed — Wave 9 observability verification gaps closed (PR #704)
+
+The v0.0.0.17 Wave 9 observability wire passed a 5-second dry-run smoke test, but the test could not exercise detector behavior because dry-run produces no symbols. A follow-up review of the integration tests uncovered three real production bugs and one test-coverage gap that the smoke test had masked. All four are fixed here.
+
+- **Dashboard buffer catchup now works in runLiveTrading mode.** The 14 buffer subscriptions (including all 5 Wave 9 outputs) were wired against the simulation bus only. The live system publishes to a separate bus, so reconnecting SSE clients saw an empty catchup buffer in live trading. The wiring is now extracted into `apievents.RegisterDashboardBufferSubs(bus)` and re-registered on the live bus in `runLiveTrading`. Risk audit subscriber has the same fix.
+
+- **Partial-failure cleanup for `Wave9Observability.Start`.** When one of the three parallel-starting detectors failed, the other two stayed running with their bus subscriptions active, leaking goroutines and leaving stale instances for the next retry. `Start` now uses a deferred cleanup that stops started detectors in LIFO order and clears internal field references so a retry creates fresh instances.
+
+- **`errs` channel now aggregates all parallel-detector failures.** Previously the first non-nil error returned and the rest were silently dropped. With concurrent partial-failures the caller now sees the full set via `errors.Join`.
+
+- **`risk.NewAuditSubscriber` is now idempotent.** Double-registration on the same bus previously caused every risk event to be persisted to JSONL twice, an audit-log integrity violation. The helper now keys a process-wide registry by bus pointer and returns the existing subscriber on subsequent calls.
+
+### Added — DriftDetector v2 integration coverage
+
+- End-to-end test for `NewDriftDetectorWithTargets` over a real `ChannelEventBus` verifying `SchemaVersion=2`, the `target_drift` reason, the v2-only payload fields (`target_weights`, `actual_weights`, `max_drift`, `max_drift_symbol`, `current_regime`), and the v1 contract (`concentration`) is preserved.
+
+- Chain test for the `RegimeDebouncer → EventRegimeChangeConfirmed → DriftDetector v2` path confirming regime change triggers v2 detector re-baseline (`prevTotal = 0`) and updates `current_regime`.
+
+### Refactored
+
+- `apievents.RegisterDashboardBufferSubs` extracted to its own file (`sse_handler_subscriptions.go`) and takes the `eventbus.EventBus` interface instead of the concrete `*ChannelEventBus`.
+
+### Testing
+
+- 4 new TDD tests for `Wave9Observability.Start` cleanup behavior (parallel-detector failure, drift-detector failure, reference clearing, retry success).
+- 3 new tests for the dashboard buffer subscription helper, with 15 sub-tests covering all 14 event types.
+- 2 new integration tests for DriftDetector v2 + regime-to-drift chain.
+- All previously-passing tests continue to pass; `go test ./...` and `go test -race ./internal/monitoring/` both green.
+
 ## [0.0.0.17] - 2026-06-24
 
 ### Added — Wave 9 observability wire completion: 5 detectors wired + BaselineTrigger (PR B + C)
