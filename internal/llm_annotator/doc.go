@@ -21,32 +21,15 @@
 // Annotate returns an error when the upstream fails (network, rate limit,
 // non-2xx HTTP, malformed response). Callers MUST treat this as a fallback
 // signal: the registry's rule_based attribution remains authoritative.
-// Maturity: experimental
 //
-// --------------------------------------------------------------------
-// Deprecated bridge package — see Issue #722 and the follow-up tracking
-// issue (will be filed under label "area/llm-framework" once this PR is
-// merged). The role of this package is being split between two siblings:
+// Maturity: archived (Wave 12 — see AGENTS.md and internal/MATURITY.md).
 //
-//   - `internal/llm/adapters` (Phase 2 canonical): wraps existing
-//     domain-specific annotators into the capability-based routing system
-//     exposed by `internal/llm.Router`.
-//
-//   - `internal/llm/capabilities/failure_attribution` (Phase 2 canonical):
-//     the typed handler that surfaces `Annotator` as one of the 12
-//     capability handlers.
-//
-// New code should depend on `internal/llm/capabilities/failure_attribution`
-// instead of this package directly. Existing call sites are kept working
-// through the canonical adapters; the dual-CircuitBreaker implementation
-// (apigateway vs. this package) is a known duplication that the follow-up
-// issue tracks for unification once a Wave 12+ import-cycle refactor
-// breaks the `apigateway → monitoring → llm/capabilities → llm_annotator`
-// transitive dependency chain.
-//
-// During the deprecation window this package retains its public API
-// (Annotator interface, KimiClient, Config, ErrUnavailable) so production
-// callers do not break.
+// The CircuitBreaker migration (Issue #731 Phase 2) is complete: this
+// package retains a thin wrapper over *apigateway.CircuitBreaker that
+// preserves the Wave 4-era API (CircuitState type alias, ErrCircuitOpen
+// sentinel, Allow(), Snapshot(), WithNowFunc()). New code should depend
+// on internal/llm/capabilities/failure_attribution.FailureAttributionHandler
+// instead of this package directly.
 package llm_annotator
 
 import (

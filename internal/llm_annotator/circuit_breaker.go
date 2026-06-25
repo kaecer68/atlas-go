@@ -39,7 +39,7 @@ type CircuitBreaker struct {
 	cb *apigateway.CircuitBreaker
 }
 
-// newCircuitBreaker constructs a default-initialised breaker for use
+// newCircuitBreaker constructs a default-initialized breaker for use
 // inside llm_annotator.Config. The breaker is wired with channel id
 // "llm_annotator" so health endpoints can identify it.
 func newCircuitBreaker() *CircuitBreaker {
@@ -69,7 +69,7 @@ func (c *CircuitBreaker) IsOpen() bool {
 // State returns the current breaker state as a CircuitState (alias for
 // apigateway.State).
 func (c *CircuitBreaker) State() CircuitState {
-	return CircuitState(c.cb.State())
+	return c.cb.State()
 }
 
 // ForceOpen delegates to apigateway.CircuitBreaker.ForceOpen.

@@ -11,6 +11,7 @@
 | **E** | `evolving` | 演進中 | API 可能調整、功能完整但仍在迭代、可能晉升為 stable |
 | **X** | `experimental` | 實驗中 | 研究性質、API 不穩定、可能被廢棄、不應被其他模組依賴 |
 | **U** | `utility` | 輔助工具 | CLI 工具、資料轉換、一次性驗證 — 非 runtime 一部分 |
+| **A** | `archived` | 封存 | 已被 Phase 2 canonical 取代；API frozen，僅 bug fix；新程式碼禁止依賴 |
 
 ---
 
@@ -130,4 +131,5 @@ CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 1. **新增模組**：必須同時更新此表與 `doc.go` 中的 `Maturity:` 標記。
 2. **成熟度變更**：從 X→E、E→S 需 PR review；從 S→E 或任何降級需 migration plan。
 3. **一致性檢查**：CI 應執行 `grep -r "Maturity:" internal/*/doc.go` 並與此表比對。
-4. **移除模組**：若模組被廢棄，先標記為 X 一週後再刪除目錄。
+4. **移除模組**：先標記為 X 一週後，再標記為 A（封存）至少一個 minor 版本週期，最後再刪除目錄。封存期間僅接受 bug fix，禁止新增 feature。
+5. **Phase 2 取代 → 封存**：當模組被 Phase 2 canonical 介面完整取代（例如 `llm_annotator` 被 `internal/llm/capabilities/failure_attribution` 取代），可直接標記為 A 並從主動維護清單移除。

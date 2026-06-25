@@ -70,7 +70,7 @@ func NewCircuitBreaker(channelID string, maxFailures ...int) *CircuitBreaker {
 // Returns the receiver for fluent-style chaining in test setup.
 func (cb *CircuitBreaker) WithNowFunc(now func() time.Time) *CircuitBreaker {
 	if now == nil {
-		var defaultNow = time.Now
+		defaultNow := time.Now
 		cb.now.Store(&defaultNow)
 		return cb
 	}
