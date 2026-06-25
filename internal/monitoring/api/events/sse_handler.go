@@ -159,6 +159,13 @@ func GetBufferedRiskGateEvents() []BufferedRiskGateEvent {
 	return result
 }
 
+// resetRiskGateBuffer clears the risk-gate buffer. Test-only helper.
+func resetRiskGateBuffer() {
+	lastRiskGateMutex.Lock()
+	defer lastRiskGateMutex.Unlock()
+	riskGateBuffer = nil
+}
+
 // BufferBacktestCompletedEvent stores a backtest-completed event for catchup by new SSE clients.
 func BufferBacktestCompletedEvent(event eventbus.BusEvent) {
 	lastBacktestCompletedMutex.Lock()
@@ -179,6 +186,13 @@ func GetBufferedBacktestCompletedEvents() []BufferedBacktestCompletedEvent {
 	out := make([]BufferedBacktestCompletedEvent, len(backtestCompletedBuffer))
 	copy(out, backtestCompletedBuffer)
 	return out
+}
+
+// resetBacktestCompletedBuffer clears the backtest-completed buffer. Test-only helper.
+func resetBacktestCompletedBuffer() {
+	lastBacktestCompletedMutex.Lock()
+	defer lastBacktestCompletedMutex.Unlock()
+	backtestCompletedBuffer = nil
 }
 
 // BufferedCalibrationCompletedEvent holds a published calibration-completed event for SSE catchup.
@@ -344,6 +358,22 @@ func BufferNarrativeEvent(event eventbus.BusEvent) {
 	}
 }
 
+// GetBufferedNarrativeEvents returns a snapshot of buffered narrative events.
+func GetBufferedNarrativeEvents() []BufferedNarrativeEvent {
+	lastNarrativeMutex.RLock()
+	defer lastNarrativeMutex.RUnlock()
+	out := make([]BufferedNarrativeEvent, len(narrativeBuffer))
+	copy(out, narrativeBuffer)
+	return out
+}
+
+// resetNarrativeBuffer clears the narrative buffer. Test-only helper.
+func resetNarrativeBuffer() {
+	lastNarrativeMutex.Lock()
+	defer lastNarrativeMutex.Unlock()
+	narrativeBuffer = nil
+}
+
 // BufferPromotionRecordedEvent stores a promotion-recorded event for SSE catchup.
 func BufferPromotionRecordedEvent(event eventbus.BusEvent) {
 	lastPromotionMutex.Lock()
@@ -400,6 +430,85 @@ func resetHealthAlertBuffer() {
 	lastHealthAlertMutex.Lock()
 	defer lastHealthAlertMutex.Unlock()
 	healthAlertBuffer = nil
+}
+
+// RegisterDashboardBufferSubs subscribes the 14 dashboard buffer hooks to the
+// given bus so that SSE reconnecting clients can receive a catchup of recent
+// events for each monitored event type.
+//
+// The catchup buffer lives in this package, but the *bus* that feeds it is
+// owned by the caller (typically the top-level `run` and `runLiveTrading`
+// entry points in cmd/atlas/main.go). Callers must invoke this function on
+// the SAME bus that the SSE handler is subscribed to — otherwise published
+// events go to the live bus while the buffer subscribes to a different one
+// and the buffer stays empty forever. The cmd/atlas wiring calls this once
+// per run-mode to guarantee parity with the bus passed to
+// DashboardAPI.SetEventBus.
+func RegisterDashboardBufferSubs(bus *eventbus.ChannelEventBus) {
+	if bus == nil {
+		return
+	}
+	bus.Subscribe(eventbus.EventNarrative, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferNarrativeEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventPromotionRecorded, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferPromotionRecordedEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventHealthAlert, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferHealthAlertEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventRiskGateRejected, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferRiskGateEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventRiskGateAllowed, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferRiskGateEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventRiskGateOverridden, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferRiskGateEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventIndustryCalendar, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferIndustryCalendarEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventBacktestCompleted, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferBacktestCompletedEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventCalibrationCompleted, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferCalibrationCompletedEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventTradeSlippage, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferTradeSlippageEvent(ev)
+		return nil
+	})
+	// Wave 9 outputs.
+	bus.Subscribe(eventbus.EventChannelIndividualHealth, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferChannelIndividualHealthEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventRegimeChangeConfirmed, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferRegimeChangeConfirmedEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventFactorWeightRegression, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferFactorWeightRegressionEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventDriftDetected, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferDriftDetectedEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventIngestionLagSpike, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferIngestionLagSpikeEvent(ev)
+		return nil
+	})
 }
 
 // BufferChannelIndividualHealthEvent stores a channel individual health event for catchup by new SSE clients.
