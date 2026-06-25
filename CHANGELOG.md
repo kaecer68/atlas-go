@@ -4,32 +4,42 @@
 
 ### Fixed — Wave 9 observability verification gaps closed (PR #704)
 
-The v0.0.0.17 Wave 9 observability wire passed a 5-second dry-run smoke test, but the test could not exercise detector behavior because dry-run produces no symbols. A follow-up review of the integration tests uncovered three real production bugs and one test-coverage gap that the smoke test had masked. All four are fixed here.
+The v0.0.0.17 Wave 9 observability wire passed a 5-second dry-run smoke test, but the test could not exercise detector behavior because dry-run produces no symbols. A follow-up review of the integration tests caught three real production bugs and one test-coverage gap that the smoke test had masked. The fixes ship in v0.0.0.18 (PR #704 on `feat/wave-10-l1-l2-iteration`, landed via PR #716):
 
-- **Dashboard buffer catchup now works in runLiveTrading mode.** The 14 buffer subscriptions (including all 5 Wave 9 outputs) were wired against the simulation bus only. The live system publishes to a separate bus, so reconnecting SSE clients saw an empty catchup buffer in live trading. The wiring is now extracted into `apievents.RegisterDashboardBufferSubs(bus)` and re-registered on the live bus in `runLiveTrading`. Risk audit subscriber has the same fix.
+- **Dashboard buffer catchup now works in `runLiveTrading` mode.** The 15 buffer subscriptions (including all 5 Wave 9 outputs) were wired against the simulation bus only. The live system publishes to a separate bus, so reconnecting SSE clients saw an empty catchup buffer in live trading. Wiring is now extracted into `apievents.RegisterDashboardBufferSubs(bus)` (in `internal/monitoring/api/events/sse_handler_subscriptions.go`) and re-registered on the live bus in `runLiveTrading`. Risk audit subscriber has the same fix.
 
-- **Partial-failure cleanup for `Wave9Observability.Start`.** When one of the three parallel-starting detectors failed, the other two stayed running with their bus subscriptions active, leaking goroutines and leaving stale instances for the next retry. `Start` now uses a deferred cleanup that stops started detectors in LIFO order and clears internal field references so a retry creates fresh instances.
+- **Partial-failure cleanup for `Wave9Observability.Start`.** When one of the three parallel-starting detectors failed, the other two stayed running with their bus subscriptions active, leaking goroutines and leaving stale instances for the next retry. `Start` now uses a deferred cleanup that stops started detectors in LIFO order and clears internal field references so a retry creates fresh instances. Cleanup errors are now aggregated via `errors.Join` and folded into the named return, so a leaked subscription on a real Stop failure is visible to the caller.
 
-- **`errs` channel now aggregates all parallel-detector failures.** Previously the first non-nil error returned and the rest were silently dropped. With concurrent partial-failures the caller now sees the full set via `errors.Join`.
+- **`errs` channel now aggregates all parallel-detector failures** via `errors.Join`. Previously the first non-nil error returned and the rest were silently dropped.
 
-- **`risk.NewAuditSubscriber` is now idempotent.** Double-registration on the same bus previously caused every risk event to be persisted to JSONL twice, an audit-log integrity violation. The helper now keys a process-wide registry by bus pointer and returns the existing subscriber on subsequent calls.
+- **`risk.NewAuditSubscriber` is now idempotent.** Double-registration on the same bus would have persisted every risk event to JSONL twice — an audit-log integrity violation. A process-wide registry keyed by bus pointer tracks which bus instances have an active subscriber and returns the existing subscriber on subsequent calls.
 
-### Added — DriftDetector v2 integration coverage
+### Added — DriftDetector v2 integration coverage (PR #704)
 
-- End-to-end test for `NewDriftDetectorWithTargets` over a real `ChannelEventBus` verifying `SchemaVersion=2`, the `target_drift` reason, the v2-only payload fields (`target_weights`, `actual_weights`, `max_drift`, `max_drift_symbol`, `current_regime`), and the v1 contract (`concentration`) is preserved.
-
-- Chain test for the `RegimeDebouncer → EventRegimeChangeConfirmed → DriftDetector v2` path confirming regime change triggers v2 detector re-baseline (`prevTotal = 0`) and updates `current_regime`.
+- `TestWave9Integration_DriftDetectorV2Flow`: end-to-end test for `NewDriftDetectorWithTargets` over a real `ChannelEventBus` verifying `SchemaVersion=2`, the `target_drift` and `concentration` reasons, and the v2-only payload fields (`target_weights`, `actual_weights`, `max_drift`, `max_drift_symbol`, `current_regime`).
+- `TestWave9Integration_RegimeDebouncerDrivesDriftDetectorV2`: chain test for the `RegimeDebouncer → EventRegimeChangeConfirmed → DriftDetector v2` path confirming regime change triggers v2 detector re-baseline (`prevTotal = 0`) and updates `currentRegime`.
 
 ### Refactored
 
-- `apievents.RegisterDashboardBufferSubs` extracted to its own file (`sse_handler_subscriptions.go`) and takes the `eventbus.EventBus` interface instead of the concrete `*ChannelEventBus`.
+- `apievents.RegisterDashboardBufferSubs` extracted to its own file (`internal/monitoring/api/events/sse_handler_subscriptions.go`) and takes the `eventbus.EventBus` interface instead of the concrete `*eventbus.ChannelEventBus`.
+- `risk.NewAuditSubscriber` keeps its existing single-arg signature; idempotency is internal.
 
 ### Testing
 
-- 4 new TDD tests for `Wave9Observability.Start` cleanup behavior (parallel-detector failure, drift-detector failure, reference clearing, retry success).
-- 3 new tests for the dashboard buffer subscription helper, with 15 sub-tests covering all 14 event types.
-- 2 new integration tests for DriftDetector v2 + regime-to-drift chain.
-- All previously-passing tests continue to pass; `go test ./...` and `go test -race ./internal/monitoring/` both green.
+- 4 new TDD tests for `Wave9Observability.Start` cleanup behavior (parallel-detector failure, drift-detector failure, reference clearing, retry success) in `internal/monitoring/wave9_runtime_cleanup_test.go`.
+- 3 new tests for the dashboard buffer subscription helper (`internal/monitoring/api/events/sse_handler_buffersubs_test.go`), with 15 sub-tests covering all 15 event types.
+- 2 new integration tests for DriftDetector v2 + regime-to-drift chain in `internal/monitoring/service/wave9_integration_test.go`.
+
+### Docs follow-up (PR #713, after this rebase)
+
+- `internal/monitoring/AGENTS.md:194` — replaced pre-#704 `只回傳第一個` description with v0.0.0.18+ behavior: `errors.Join` aggregation + defer LIFO cleanup + reference clearing on retry.
+- `internal/monitoring/AGENTS.md:209` — added `sse_handler_subscriptions.go` reference and the cross-mode `RegisterDashboardBufferSubs` re-registration pattern (`run()` + `runLiveTrading()` both call on their respective buses).
+- `docs/ENVIRONMENT.md` — added "Story so far" paragraph describing how the 5-second dry-run smoke test could not exercise the 3 production bugs v0.0.0.18 closes.
+- `docs/events/drift-detector.md` — added "v0.0.0.18+ 整合測試" section listing the 2 new bus-level integration tests.
+- `docs/roadmap.md` — extended Wave 9 version list to include v0.0.0.18.
+- `docs/modules/README.md` — bumped to v0.0.0.18 (Wave 9 gap fixes 收尾版).
+- `README.md` (PR #718) — added v0.0.0.18 entry in Recent updates.
+- `docs/operations_playbook.md` (PR #718) — added "Wave 9 觀測性 v0.0.0.18 修復與運維指引" section covering SSE catchup, audit subscriber idempotency, and partial-failure cleanup troubleshooting.
 
 ## [0.0.0.17] - 2026-06-24
 

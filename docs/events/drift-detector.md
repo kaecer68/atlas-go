@@ -113,6 +113,11 @@ DriftDetector 訂閱 `EventPositionUpdate` 與 `EventRegimeChangeConfirmed`（v2
   - `TestDriftDetector_V1StartDoesNotSubscribeToRegime`：v1 不訂閱 regime confirmed
   - `TestDriftDetector_V2StartSubscribesToBoth`：v2 同時訂閱 position update 與 regime confirmed
 
+**v0.0.0.18+ 整合測試**（PR #704；bus-level 真實 `ChannelEventBus` subscribe→handler→publish chain）：
+- `internal/monitoring/service/wave9_integration_test.go`：
+  - `TestWave9Integration_DriftDetectorV2Flow`：end-to-end 走 `NewDriftDetectorWithTargets` + 真實 `ChannelEventBus`，驗證 `SchemaVersion=2`、兩種 reasons（`concentration` + `target_drift`）、所有 v2-only payload 欄位（`current_regime` / `target_weights` / `actual_weights` / `max_drift` / `max_drift_symbol`），以及 v1 契約 `concentration` reason 仍正常 emit。
+  - `TestWave9Integration_RegimeDebouncerDrivesDriftDetectorV2`：chain test，`RegimeDebouncer` emit `EventRegimeChangeConfirmed` 後 v2 detector 訂閱的 `onRegimeChangeConfirmed` handler 觸發 `prevTotal=0` re-baseline + `currentRegime` 更新，後續 `checkPeriod` emit target_drift。
+
 ## Forward-Compat 驗證
 
 - ✅ 只訂閱 `EventPositionUpdate` + `EventRegimeChangeConfirmed` + 讀對應 payload

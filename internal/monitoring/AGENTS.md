@@ -191,7 +191,7 @@ type detectorFactory interface {
 4. `IngestionLagMonitor`
 5. `RegimeDebouncer`
 
-任何一個啟動失敗會立即回傳錯誤；關閉時收集所有錯誤但只回傳第一個。
+任何一個啟動失敗會立即回傳錯誤。**v0.0.0.18+**：`errs` channel 改用 `errors.Join` 聚合所有平行啟動失敗（不再只回傳第一個）；失敗時 `defer` cleanup 會以 LIFO 順序 `Stop()` 已經成功啟動的 detector，並把 `w.started = false` 與所有 detector 欄位參照清空（讓 retry 拿到 fresh instances）；cleanup 過程中任何 `Stop()` 失敗同樣以 `errors.Join` 摺進最終回傳的 error，呼叫端可從 error chain 區分「partial-failure 但 cleanup 乾淨」與「partial-failure 且 leaked subscriptions」。
 
 ### 必要與選用 providers
 
@@ -206,7 +206,7 @@ type detectorFactory interface {
 
 ### 與 Dashboard API 的關係
 
-`Wave9Observability` 本身不暴露 HTTP endpoint；它產生的事件經由 `EventBus` 進入 `internal/monitoring/api/events/sse_handler.go`，再推送至 dashboard 即時事件流。運維時可在 log 中搜尋 `started component=wave9_observability` 與 `wave9_observability stopped` 確認生命週期。
+`Wave9Observability` 本身不暴露 HTTP endpoint；它產生的事件經由 `EventBus` 進入 `internal/monitoring/api/events/sse_handler.go`（緩衝管理）與 `internal/monitoring/api/events/sse_handler_subscriptions.go`（**v0.0.0.18+**：批次訂閱註冊 helper `apievents.RegisterDashboardBufferSubs(bus)`，跨模式共用），再推送至 dashboard 即時事件流。`cmd/atlas/main.go` 的 `run()` 與 `runLiveTrading()` 都會呼叫 `RegisterDashboardBufferSubs` 與 `risk.NewAuditSubscriber` 重新註冊在當下使用的 bus（`dashEventBus` 與 `eventBus` 是兩個獨立 bus 實例），確保 `runLiveTrading` 的 SSE catchup 不會是空的。運維時可在 log 中搜尋 `started component=wave9_observability` 與 `wave9_observability stopped` 確認生命週期。
 
 ### 向後相容
 

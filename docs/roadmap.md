@@ -98,7 +98,7 @@ Detailed plan: [`docs/wave-8-plan.md`](wave-8-plan.md)
 - PR #699 Wave 9 整合測試
 - PR #700 `docs/ENVIRONMENT.md` 環境狀態文件
 
-**對應 VERSION**：v0.0.0.16（BaselineTrigger）/ v0.0.0.17（Wave 9 observability wire）
+**對應 VERSION**：v0.0.0.16（BaselineTrigger）/ v0.0.0.17（Wave 9 observability wire）/ v0.0.0.18（Wave 9 verification gap fixes — 見下方 v0.0.0.18 章節）
 
 **關鍵決策（2026-06-22）**：採 **路徑 1：完整 Wave 9 + forward-compat 設計**
 - 5 個事件**全部**已上線，不阻塞於 Issue #611
