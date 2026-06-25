@@ -136,7 +136,6 @@
 |------|------|------|
 | `LLM_MINIMAX_API_KEY` | MiniMax M3 API key（`sk-cp-` 前綴） | 從 minimax-cn-coding-plan 取得 |
 | `LLM_DEEPSEEK_API_KEY` | DeepSeek V4-Pro / V4-Flash | 從 https://platform.deepseek.com 取得 |
-| `LLM_OPENCODE_GO_API_KEY` | OpenCode-Go 本地/自架（若啟用） | 自架部署決定 |
 | `LLM_ANNOTATOR_API_KEY` | **向後相容** — 等同 `LLM_MINIMAX_API_KEY` | 歷史誤標，保留 |
 | `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 rationale 翻譯 hook | default `false` |
 | `LLM_PRISM_SCENARIO_ENABLED` | 啟用 PRISM scenario 說明 hook | default `false` |

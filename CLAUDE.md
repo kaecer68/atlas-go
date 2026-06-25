@@ -40,7 +40,6 @@
 |------|------|------|
 | `LLM_DEEPSEEK_API_KEY` | DeepSeek V4-Pro / V4-Flash | 從 https://platform.deepseek.com 取得 |
 | `LLM_MINIMAX_API_KEY` | MiniMax M3（coding plan） | `sk-cp-` 前綴的 minimax-cn-coding-plan key；DataClass≥Regulated 時被 router 閘門 skip |
-| `LLM_OPENCODE_GO_API_KEY` | OpenCode-Go（[PLANNED]） | 預設 routing chain 不引用此 provider（Wave 11 L2.1 Issue #720）；設定保留供未來 client 實作啟用後使用 |
 
 | `LLM_ANNOTATOR_API_KEY` | **向後相容** — 早期 `KimiClient` 讀此變數 | 實際值等同 `LLM_MINIMAX_API_KEY`（Kimi K2.7 因 coding plan key 限制已移除） |
 | `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 `CapabilityRationaleGeneration` hook | default `false` |
