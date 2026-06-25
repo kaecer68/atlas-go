@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: "Skill for the Orchestrator area of atlas. 319 symbols across 67 files."
+description: "Skill for the Orchestrator area of atlas. 350 symbols across 78 files."
 auto_generated: true
 load_policy: "manual_only"
 ---
@@ -12,12 +12,12 @@ load_policy: "manual_only"
 
 # Orchestrator
 
-319 symbols | 67 files | Cohesion: 76%
+350 symbols | 78 files | Cohesion: 76%
 
 ## When to Use
 
-- Working with code in `internal/`
-- Understanding how TestPhase3Integration, TestMiroFishSwarm, TestMiroFishSwarmLifecycle work
+- Working with code in `internal/orchestrator/`
+- Understanding how executor logic is split across `executor_*.go` files
 - Modifying orchestrator-related functionality
 
 ## Key Files
@@ -27,46 +27,71 @@ load_policy: "manual_only"
 | `internal/spawning/spawning_manager.go` | DefaultSpawningConfig, NewSpawningManager, Start, Stop, runLoop (+15) |
 | `internal/swarm/mirofish_swarm.go` | DefaultSwarmConfig, NewMiroFishSwarm, UpdateScenario, InitializeScenarios, Start (+14) |
 | `internal/orchestrator/system.go` | NewSystem, newSession, WithCapitalManagement, checkCapitalPhase, updateCapitalMetrics (+13) |
-| `internal/orchestrator/executors.go` | filterMutedAgents, ExecuteRegistryResearchDetailed, collectRecommendations, symbolIterator, executeRegistryResearchDetailedWithPolicyAndGuards (+9) |
+| `internal/orchestrator/executor_pipeline.go` | ExecuteWithContext, ExecuteRegistryResearch, ExecuteRegistryResearchDetailed, ExecuteRegistryResearchDetailedWithPolicy, ExecuteRegistryResearchDetailedWithPolicyAndGuards, ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins |
+| `internal/orchestrator/executor_strategies.go` | RegimeInferenceStrategy, DefaultRegimeInferenceStrategy, RecommendationCollectionStrategy, DefaultRecommendationCollectionStrategy, MomentumCrashProtectionStrategy, DefaultMomentumCrashProtectionStrategy, ControlLayerStrategy, DefaultControlLayerStrategy, WeightApplicationStrategy, DefaultWeightApplicationStrategy, MutedAgentFilterStrategy, DefaultMutedAgentFilterStrategy |
+| `internal/orchestrator/executor_types.go` | LayerRouter, DefaultLayerRouter, ExecutionContext, ResearchResult, FilterAgentsByLayer |
 | `internal/orchestrator/forward_return_fallback_test.go` | TestGenerateForwardReturn_ValidQuotePositiveIntraday, TestGenerateForwardReturn_FlatDayUsesDistributionFallback, TestGenerateForwardReturn_RiskOnVsRiskOffDiffers, TestGenerateForwardReturn_QuoteWithNoOpenFallsBack, TestGenerateForwardReturn_ClipToMin (+9) |
 | `internal/reflexivity/reflexivity_engine.go` | NewReflexivityEngine, RegisterBias, validateBias, mergeBiases, UpdateReality (+8) |
 | `internal/orchestrator/phase3_controller.go` | NewPhase3Controller, StartBackgroundSwarm, StopBackgroundSwarm, UpdateSwarmState, swarmUpdateLoop (+8) |
 | `internal/prism/prism_manager.go` | DefaultPRISMConfig, NewPRISMManager, Start, Stop, ScheduleTraining (+7) |
-| `internal/orchestrator/strategy_evolver.go` | String, NewStrategyEvolver, NewStrategyEvolverWithConfig, Evaluate, determineState (+6) |
-| `internal/orchestrator/system_plugins.go` | WithJANUS, WithPRISM, WithSwarm, WithSpawning, WithPhase3Controller (+5) |
+
+## Executor Split
+
+The monolithic `executors.go` has been split into focused executor files:
+
+| File | Symbols |
+|------|---------|
+| `internal/orchestrator/executors.go` | package documentation stub |
+| `internal/orchestrator/executor_muted_filter.go` | filterMutedAgents, loadRecOverrides |
+| `internal/orchestrator/executor_collection.go` | collectRecommendations, avgConvictionScore |
+| `internal/orchestrator/executor_control.go` | applyControlLayerWithOutcomes, applyCrowdingPenalty, applyAntiCorrelationLayer, severityForControlAgent, passRatio |
+| `internal/orchestrator/executor_darwinian.go` | ExecuteRegistryResearchWithDarwinianWeights, executeRegistryResearchWithDarwinianWeights |
+| `internal/orchestrator/executor_momentum_crash.go` | applyMomentumCrashProtection |
+| `internal/orchestrator/executor_pipeline.go` | ExecuteWithContext, ExecuteRegistryResearch, ExecuteRegistryResearchDetailed, ExecuteRegistryResearchDetailedWithPolicy, ExecuteRegistryResearchDetailedWithPolicyAndGuards, ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins |
+| `internal/orchestrator/executor_policy.go` | DefaultExecutionPolicy |
+| `internal/orchestrator/executor_regime.go` | inferRegime |
+| `internal/orchestrator/executor_strategies.go` | Strategy interfaces and default implementations |
+| `internal/orchestrator/executor_symbols.go` | DefaultSymbols, loadSymbolsFromCSV, ExpandUniverse, RegistrySymbols, SymbolsForSkill, symbolIterator |
+| `internal/orchestrator/executor_types.go` | LayerRouter, DefaultLayerRouter, ExecutionContext, ResearchResult |
+| `internal/orchestrator/executors_test.go` | Executor unit tests |
 
 ## Entry Points
 
 Start here when exploring this area:
 
 - **`TestPhase3Integration`** (Function) — `integration_test.go:122`
+- **`ExecuteWithContext`** (Function) — `internal/orchestrator/executor_pipeline.go:10`
+- **`ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins`** (Function) — `internal/orchestrator/executor_pipeline.go:48`
 - **`TestMiroFishSwarm`** (Function) — `internal/swarm/swarm_test.go:7`
 - **`TestMiroFishSwarmLifecycle`** (Function) — `internal/swarm/swarm_runtime_test.go:7`
-- **`TestMiroFishSwarmUpdateScenario`** (Function) — `internal/swarm/swarm_runtime_test.go:38`
-- **`TestMiroFishSwarmResults`** (Function) — `internal/swarm/swarm_runtime_test.go:65`
 
 ## Key Symbols
 
 | Symbol | Type | File | Line |
 |--------|------|------|------|
 | `TestPhase3Integration` | Function | `integration_test.go` | 122 |
+| `ExecuteWithContext` | Function | `internal/orchestrator/executor_pipeline.go` | 10 |
+| `ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins` | Function | `internal/orchestrator/executor_pipeline.go` | 48 |
+| `ExecuteRegistryResearch` | Function | `internal/orchestrator/executor_pipeline.go` | 18 |
+| `ExecuteRegistryResearchDetailed` | Function | `internal/orchestrator/executor_pipeline.go` | 27 |
+| `ExecuteRegistryResearchDetailedWithPolicy` | Function | `internal/orchestrator/executor_pipeline.go` | 36 |
+| `ExecuteRegistryResearchDetailedWithPolicyAndGuards` | Function | `internal/orchestrator/executor_pipeline.go` | 45 |
+| `DefaultExecutionPolicy` | Function | `internal/orchestrator/executor_policy.go` | 10 |
+| `filterMutedAgents` | Function | `internal/orchestrator/executor_muted_filter.go` | 14 |
+| `collectRecommendations` | Function | `internal/orchestrator/executor_collection.go` | 10 |
+| `applyControlLayerWithOutcomes` | Function | `internal/orchestrator/executor_control.go` | 10 |
+| `applyMomentumCrashProtection` | Function | `internal/orchestrator/executor_momentum_crash.go` | 10 |
+| `inferRegime` | Function | `internal/orchestrator/executor_regime.go` | 10 |
+| `ExecuteRegistryResearchWithDarwinianWeights` | Function | `internal/orchestrator/executor_darwinian.go` | 10 |
+| `DefaultSymbols` | Function | `internal/orchestrator/executor_symbols.go` | 10 |
+| `ExpandUniverse` | Function | `internal/orchestrator/executor_symbols.go` | 30 |
+| `LayerRouter` | Interface | `internal/orchestrator/executor_types.go` | 10 |
+| `ExecutionContext` | Struct | `internal/orchestrator/executor_types.go` | 60 |
+| `ResearchResult` | Struct | `internal/orchestrator/executor_types.go` | 75 |
 | `TestMiroFishSwarm` | Function | `internal/swarm/swarm_test.go` | 7 |
 | `TestMiroFishSwarmLifecycle` | Function | `internal/swarm/swarm_runtime_test.go` | 7 |
 | `TestMiroFishSwarmUpdateScenario` | Function | `internal/swarm/swarm_runtime_test.go` | 38 |
 | `TestMiroFishSwarmResults` | Function | `internal/swarm/swarm_runtime_test.go` | 65 |
-| `TestMiroFishSwarmComputeConsensus` | Function | `internal/swarm/swarm_runtime_test.go` | 102 |
-| `TestMiroFishSwarmCollectPerformance` | Function | `internal/swarm/swarm_runtime_test.go` | 136 |
-| `DefaultSwarmConfig` | Function | `internal/swarm/mirofish_swarm.go` | 124 |
-| `NewMiroFishSwarm` | Function | `internal/swarm/mirofish_swarm.go` | 135 |
-| `TestSpawningManager` | Function | `internal/spawning/spawning_test.go` | 151 |
-| `DefaultSpawningConfig` | Function | `internal/spawning/spawning_manager.go` | 46 |
-| `NewSpawningManager` | Function | `internal/spawning/spawning_manager.go` | 58 |
-| `CalculateGapPriorityScore` | Function | `internal/spawning/gap_detector.go` | 482 |
-| `TestFeedbackLoop` | Function | `internal/reflexivity/reflexivity_test.go` | 251 |
-| `NewReflexivityEngine` | Function | `internal/reflexivity/reflexivity_engine.go` | 100 |
-| `TestPRISMManager` | Function | `internal/prism/prism_test.go` | 9 |
-| `DefaultPRISMConfig` | Function | `internal/prism/prism_manager.go` | 261 |
-| `NewPRISMManager` | Function | `internal/prism/prism_manager.go` | 271 |
 | `SeedRegistry` | Function | `internal/orchestrator/registry.go` | 10 |
 | `LoadPhase3Metrics` | Function | `internal/orchestrator/phase3_metrics.go` | 106 |
 
@@ -100,6 +125,6 @@ Start here when exploring this area:
 
 ## How to Explore
 
-1. `gitnexus_context({name: "TestPhase3Integration"})` — see callers and callees
+1. `gitnexus_context({name: "ExecuteWithContext"})` — see callers and callees
 2. `gitnexus_query({query: "orchestrator"})` — find related execution flows
 3. Read key files listed above for implementation details

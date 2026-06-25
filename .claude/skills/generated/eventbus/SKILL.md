@@ -1,6 +1,6 @@
 ---
 name: eventbus
-description: "Skill for the Eventbus area of atlas. 25 symbols across 3 files."
+description: "Skill for the Eventbus area of atlas. 45 symbols across 3 files."
 auto_generated: true
 load_policy: "manual_only"
 ---
@@ -12,56 +12,89 @@ load_policy: "manual_only"
 
 # Eventbus
 
-25 symbols | 3 files | Cohesion: 67%
+45 symbols | 3 files | Cohesion: 67%
 
 ## When to Use
 
-- Working with code in `internal/`
-- Understanding how TestPublishRegimeChange, TestPublishPositionUpdate, TestPublishRecommendation work
+- Working with code in `internal/eventbus/`
+- Understanding how events are published/subscribed, including Wave 9 observability event types
 - Modifying eventbus-related functionality
 
 ## Key Files
 
 | File | Symbols |
 |------|---------|
-| `internal/eventbus/eventbus.go` | PublishRegimeChange, PublishPositionUpdate, PublishRecommendation, Subscribe, unsubscribe (+7) |
-| `internal/eventbus/eventbus_test.go` | TestPublishRegimeChange, TestPublishPositionUpdate, TestPublishRecommendation, TestPublishGuardOutcomes, TestEventBusStats (+2) |
-| `internal/live/eventbus_publish_test.go` | TestPublishRegimeChange, TestPublishPositionUpdate, TestPublishRecommendation, TestEventBusStats, TestSubscribeAndUnsubscribe (+1) |
+| `internal/eventbus/eventbus.go` | NewChannelEventBus, Publish, Subscribe, SubscribeAll, SubscribeCritical, Stats, SetEventThrottle, PublishPositionUpdate, PublishRegimeChange, PublishRecommendation, PublishGuardOutcomes, PublishRiskGateEvent, PublishHealthAlert, PublishTradeSlippage, PublishBacktestCompleted, PublishCalibrationCompleted, PublishIndustryCalendarEvent, PublishPromotionRecorded, EnrichEvent, describeEvent, eventDescriptions (+30) |
+| `internal/eventbus/eventbus_test.go` | TestPublishRegimeChange, TestPublishPositionUpdate, TestPublishRecommendation, TestPublishGuardOutcomes, TestEventBusStats, TestSubscribeAndUnsubscribe, TestSubscribeAll (+3) |
+| `internal/live/eventbus_publish_test.go` | TestPublishRegimeChange, TestPublishPositionUpdate, TestPublishRecommendation, TestEventBusStats, TestSubscribeAndUnsubscribe, TestSubscribeAll (+1) |
+
+## Wave 9 Event Types
+
+| Constant | Description |
+|----------|-------------|
+| `EventChannelIndividualHealth` | Per-channel health status change |
+| `EventRegimeChangeConfirmed` | Regime change stabilized for 30s |
+| `EventFactorWeightRegression` | Factor-weight regression detected after regime change |
+| `EventDriftDetected` | Portfolio concentration / turnover / target-weight drift |
+| `EventIngestionLagSpike` | API Gateway p99 ingestion latency spike |
 
 ## Entry Points
 
 Start here when exploring this area:
 
-- **`TestPublishRegimeChange`** (Function) — `internal/live/eventbus_publish_test.go:33`
-- **`TestPublishPositionUpdate`** (Function) — `internal/live/eventbus_publish_test.go:57`
-- **`TestPublishRecommendation`** (Function) — `internal/live/eventbus_publish_test.go:78`
-- **`TestEventBusStats`** (Function) — `internal/live/eventbus_publish_test.go:152`
+- **`NewChannelEventBus`** (Function) — `internal/eventbus/eventbus.go:495`
+- **`PublishPositionUpdate`** (Method) — `internal/eventbus/eventbus.go:633`
+- **`TestPublishPositionUpdate`** (Function) — `internal/live/eventbus_publish_test.go:54`
 - **`TestPublishRegimeChange`** (Function) — `internal/eventbus/eventbus_test.go:33`
+- **`EnrichEvent`** (Function) — `internal/eventbus/eventbus.go:338`
 
 ## Key Symbols
 
 | Symbol | Type | File | Line |
 |--------|------|------|------|
-| `TestPublishRegimeChange` | Function | `internal/live/eventbus_publish_test.go` | 33 |
-| `TestPublishPositionUpdate` | Function | `internal/live/eventbus_publish_test.go` | 57 |
-| `TestPublishRecommendation` | Function | `internal/live/eventbus_publish_test.go` | 78 |
-| `TestEventBusStats` | Function | `internal/live/eventbus_publish_test.go` | 152 |
-| `TestPublishRegimeChange` | Function | `internal/eventbus/eventbus_test.go` | 33 |
-| `TestPublishPositionUpdate` | Function | `internal/eventbus/eventbus_test.go` | 57 |
-| `TestPublishRecommendation` | Function | `internal/eventbus/eventbus_test.go` | 78 |
-| `TestPublishGuardOutcomes` | Function | `internal/eventbus/eventbus_test.go` | 99 |
-| `TestEventBusStats` | Function | `internal/eventbus/eventbus_test.go` | 182 |
+| `NewChannelEventBus` | Function | `internal/eventbus/eventbus.go` | 495 |
+| `Publish` | Method | `internal/eventbus/eventbus.go` | 512 |
+| `Subscribe` | Method | `internal/eventbus/eventbus.go` | 960 |
+| `SubscribeAll` | Method | `internal/eventbus/eventbus.go` | 980 |
+| `SubscribeCritical` | Method | `internal/eventbus/eventbus.go` | 998 |
+| `Stats` | Method | `internal/eventbus/eventbus.go` | 1135 |
+| `SetEventThrottle` | Method | `internal/eventbus/eventbus.go` | 556 |
+| `EnrichEvent` | Function | `internal/eventbus/eventbus.go` | 338 |
+| `BusEvent` | Struct | `internal/eventbus/eventbus.go` | 325 |
+| `EventBus` | Interface | `internal/eventbus/eventbus.go` | 447 |
+| `ChannelEventBus` | Struct | `internal/eventbus/eventbus.go` | 463 |
+| `Subscription` | Struct | `internal/eventbus/eventbus.go` | 456 |
+| `EventType` | Type | `internal/eventbus/eventbus.go` | 16 |
+| `EventPositionUpdate` | Const | `internal/eventbus/eventbus.go` | 29 |
+| `EventRegimeChange` | Const | `internal/eventbus/eventbus.go` | 26 |
+| `EventRegimeChangeConfirmed` | Const | `internal/eventbus/eventbus.go` | 93 |
+| `EventFactorWeightRegression` | Const | `internal/eventbus/eventbus.go` | 94 |
+| `EventDriftDetected` | Const | `internal/eventbus/eventbus.go` | 95 |
+| `EventIngestionLagSpike` | Const | `internal/eventbus/eventbus.go` | 96 |
+| `EventChannelIndividualHealth` | Const | `internal/eventbus/eventbus.go` | 92 |
+| `EventMarketSnapshot` | Const | `internal/eventbus/eventbus.go` | 20 |
+| `EventAgentRecommendation` | Const | `internal/eventbus/eventbus.go` | 33 |
+| `EventGuardOutcome` | Const | `internal/eventbus/eventbus.go` | 47 |
+| `EventRiskGateRejected` | Const | `internal/eventbus/eventbus.go` | 78 |
+| `EventRiskGateAllowed` | Const | `internal/eventbus/eventbus.go` | 79 |
+| `EventRiskGateOverridden` | Const | `internal/eventbus/eventbus.go` | 80 |
+| `PublishPositionUpdate` | Method | `internal/eventbus/eventbus.go` | 633 |
+| `PublishRegimeChange` | Method | `internal/eventbus/eventbus.go` | 617 |
+| `PublishRecommendation` | Method | `internal/eventbus/eventbus.go` | 648 |
+| `PublishGuardOutcomes` | Method | `internal/eventbus/eventbus.go` | 662 |
+| `PublishRiskGateEvent` | Method | `internal/eventbus/eventbus.go` | 880 |
+| `PublishHealthAlert` | Method | `internal/eventbus/eventbus.go` | 858 |
+| `PublishTradeSlippage` | Method | `internal/eventbus/eventbus.go` | 938 |
+| `PublishBacktestCompleted` | Method | `internal/eventbus/eventbus.go` | 912 |
+| `PublishCalibrationCompleted` | Method | `internal/eventbus/eventbus.go` | 925 |
+| `PublishIndustryCalendarEvent` | Method | `internal/eventbus/eventbus.go` | 899 |
+| `PublishPromotionRecorded` | Method | `internal/eventbus/eventbus.go` | 949 |
+| `TestPublishPositionUpdate` | Function | `internal/live/eventbus_publish_test.go` | 54 |
+| `TestPublishRegimeChange` | Function | `internal/live/eventbus_publish_test.go` | 28 |
+| `TestPublishRecommendation` | Function | `internal/live/eventbus_publish_test.go` | 77 |
+| `TestEventBusStats` | Function | `internal/live/eventbus_publish_test.go` | 167 |
 | `TestSubscribeAndUnsubscribe` | Function | `internal/live/eventbus_publish_test.go` | 99 |
-| `TestSubscribeAll` | Function | `internal/live/eventbus_publish_test.go` | 128 |
-| `TestSubscribeAndUnsubscribe` | Function | `internal/eventbus/eventbus_test.go` | 129 |
-| `TestSubscribeAll` | Function | `internal/eventbus/eventbus_test.go` | 158 |
-| `NewChannelEventBus` | Function | `internal/eventbus/eventbus.go` | 144 |
-| `PublishRegimeChange` | Method | `internal/eventbus/eventbus.go` | 187 |
-| `PublishPositionUpdate` | Method | `internal/eventbus/eventbus.go` | 202 |
-| `PublishRecommendation` | Method | `internal/eventbus/eventbus.go` | 216 |
-| `Subscribe` | Method | `internal/eventbus/eventbus.go` | 284 |
-| `Stats` | Method | `internal/eventbus/eventbus.go` | 403 |
-| `Publish` | Method | `internal/eventbus/eventbus.go` | 161 |
+| `TestSubscribeAll` | Function | `internal/live/eventbus_publish_test.go` | 133 |
 
 ## Execution Flows
 
@@ -79,6 +112,6 @@ Start here when exploring this area:
 
 ## How to Explore
 
-1. `gitnexus_context({name: "TestPublishRegimeChange"})` — see callers and callees
+1. `gitnexus_context({name: "NewChannelEventBus"})` — see callers and callees
 2. `gitnexus_query({query: "eventbus"})` — find related execution flows
 3. Read key files listed above for implementation details
