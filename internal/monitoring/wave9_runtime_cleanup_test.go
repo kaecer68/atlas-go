@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -252,10 +251,12 @@ func TestWave9Integration_StartCanBeRetriedAfterFailure(t *testing.T) {
 		}
 	}
 
-	// Sanity: the OLD detectors were stopped by the first cleanup
+	// Sanity: the OLD detectors were stopped by the first cleanup, and the
+	// retry must not call Stop on them a second time.
 	if !failing.regime.stopped.Load() {
 		t.Error("old regime detector should be stopped after first failure")
 	}
-	// (and the old factory's stop call counts should remain at 1 each)
-	time.Sleep(10 * time.Millisecond) // tiny pause to ensure no extra Stop calls happen
+	if got := failing.regime.stopCount.Load(); got != 1 {
+		t.Errorf("old regime detector must be Stopped exactly once across both attempts, got %d", got)
+	}
 }
