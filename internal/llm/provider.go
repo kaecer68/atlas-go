@@ -8,6 +8,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 )
@@ -99,6 +100,55 @@ type Request struct {
 	// derived data. Providers must enforce data governance requirements
 	// commensurate with the DataClass level.
 	DataClass DataClass
+
+	// Tools is the list of tools/functions the model may invoke.
+	// Empty slice means no tools (regular chat). Each provider adapter
+	// is responsible for serializing this into its native tools format
+	// (e.g. OpenAI "tools" field).
+	Tools []Tool
+
+	// ToolChoice controls how the model selects tools. Valid values:
+	// "none" — model must not call any tool
+	// "auto" — model decides (default when Tools non-empty)
+	// "required" — model must call at least one tool
+	// "<tool_name>" — model must call the named tool
+	// Empty string means provider default (typically "auto" if Tools).
+	ToolChoice string
+}
+
+// Tool describes a single tool/function the LLM may invoke.
+// Modeled on the OpenAI function-calling schema; compatible with most
+// OpenAI-compatible providers (DeepSeek, MiniMax M3, Kimi K2.7).
+type Tool struct {
+	// Name is the function name the LLM emits in its tool_call.
+	Name string
+
+	// Description is shown to the LLM so it knows when to call this tool.
+	Description string
+
+	// InputSchema is a JSON Schema (Zod-compatible) describing the
+	// function's argument shape. Stored as raw JSON to keep the LLM
+	// package free of struct-codegen dependencies.
+	InputSchema json.RawMessage
+
+	// Handler is the Go-side executor for this tool. It receives the
+	// raw JSON arguments (already validated by the LLM) and returns
+	// either a JSON result or an error.
+	Handler func(ctx context.Context, args json.RawMessage) (json.RawMessage, error)
+}
+
+// ToolCall is a single tool invocation emitted by the LLM.
+type ToolCall struct {
+	// ID uniquely identifies this tool call (for correlation with
+	// tool result messages in multi-turn flows).
+	ID string
+
+	// Name is the tool's registered name (must match a Tool.Name
+	// in the request).
+	Name string
+
+	// Arguments is the raw JSON arguments the LLM produced.
+	Arguments json.RawMessage
 }
 
 // Response holds the result of a successful LLM inference.
@@ -137,6 +187,11 @@ type Response struct {
 	// intermediate results, and timing annotations. It is populated
 	// when Request.Options.Trace is true.
 	Trace map[string]any
+
+	// ToolCalls lists the tool invocations the LLM requested.
+	// Empty when the model responded with text only. For the
+	// CapabilityFunctionCalling flow, this is the primary output.
+	ToolCalls []ToolCall
 }
 
 // Usage reports token usage and cost for a single LLM inference call.
