@@ -26,7 +26,7 @@
 ## 專案概覽
 
 `atlas-go` — 模擬優先、稽核導向的台股投資研究系統。
-- **語言**：Go 1.25，**DB**：PostgreSQL 15 + Redis 7
+- **語言**：Go 1.26，**DB**：PostgreSQL 15 + Redis 8
 - **CI**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
 - **覆蓋率門檻**：40%
 
@@ -91,7 +91,7 @@ skill(name="atlas-pre-change-protocol")
 | 權威來源單一 | 放行/過濾筆數由 `GuardOutcomes` 計算，前端不可各自重算 |
 | Constitution 違反 | 不得繞過 BackgroundTaskManager、ParametersConfig、marketdata.Provider |
 | 模組成熟度 | 新增 `internal/` 模組必須有 `doc.go` + 更新 `MATURITY.md` |
-| FactorType 變更 | 必須同步 7 個位置，CI 強制 |
+| FactorType 變更 | 必須同步 8 個位置，CI 強制 |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | Replay 格式 | JSONL，不是 JSON array |
 | 資料可見性 | 通道靜默失敗時,Gateway/Adapter/Service/Frontend 四層須暴露 `data_status` / `failed_channels` / 紅色 badge,不得以零值掩蓋。詳見 `.claude/skills/atlas-data-visibility/SKILL.md` |
@@ -102,6 +102,7 @@ skill(name="atlas-pre-change-protocol")
 |------|------|
 | `CLAUDE.md` | 工具進入點、GitNexus 完整規範（**單一權威來源**） |
 | `docs/GUIDELINES_INDEX.md` | 規範階層與使用情境路由（衝突時為最終仲裁者） |
+| `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態單一真相來源（PR #700） |
 | `docs/TRAPS.md` | 完整陷阱參考（跨模組 + 模組特定，按類別分類） |
 | `docs/architecture.md` | 系統架構詳細說明 |
 | `docs/DATA_ARCHITECTURE.md` | 資料儲存層、讀寫路徑 |

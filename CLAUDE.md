@@ -16,6 +16,7 @@
 | 完整模組索引（34 個） | `internal/AGENTS_INDEX.md` |
 | 模組成熟度對照 | `internal/MATURITY.md` |
 | 跨模組陷阱詳細參考 | `docs/TRAPS.md` |
+| 外部依賴與環境狀態 | `docs/ENVIRONMENT.md` |
 | 根規則與全域禁令 | `AGENTS.md` |
 | 架構憲法 | `internal/apigateway/CONSTITUTION.md` |
 | 部署設定（本機 Docker） | `## 部署設定`（下方） |
@@ -27,7 +28,7 @@
 
 ### 映像來源
 - 註冊表：`ghcr.io/kaecer68/atlas-go`（`ci-cd.yml` main/develop 自動建置推送）
-- Dockerfile：multi-stage（Node.js 前端 + Go 1.25 後端），expose port 8080
+- Dockerfile：multi-stage（Node.js 前端 + Go 1.26 後端），expose port 8080
 - compose 設定：`docker-compose.yml`（healthcheck、env vars、postgres）
 
 ### 環境變數（統一由 `~/.config/atlas-go/.env` 載入）
