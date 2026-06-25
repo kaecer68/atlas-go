@@ -96,7 +96,7 @@ func setupTracerProvider(ctx context.Context, exporter sdktrace.SpanExporter) (f
 			sdktrace.WithBatchTimeout(exportBatchTimeout),
 		),
 		sdktrace.WithResource(res),
-		sdktrace.WithSpanLimits(sdktrace.SpanLimits{
+		sdktrace.WithRawSpanLimits(sdktrace.SpanLimits{
 			AttributeValueLengthLimit: spanAttributeValueLengthLimit,
 			AttributeCountLimit:       spanAttributeCountLimit,
 		}),
