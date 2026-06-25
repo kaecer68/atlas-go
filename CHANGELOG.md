@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.0.0.19] - 2026-06-25
+
+Wave 10 L2.1 (OTel OTLP production) + L2.2 polish complete. App traces now flow through a real OTLP pipeline (HTTP exporter → OTel collector → TimescaleDB) instead of stdout-only, and all 17 acceptance gates are ported to the pluggable framework.
+
+### Added — OpenTelemetry OTLP production pipeline (PR #714 + #715)
+
+- **OTLP HTTP exporter with auto-detect fallback** in `internal/observability/otel/init.go`. Switches to OTLP/HTTP when `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) is set; falls back to stdout exporter for local dev. New `init_test.go` covers the auto-detect branches.
+- **OTel collector service** in `docker-compose.yml` + `monitoring/otel-collector.yaml` (29 lines): receives OTLP traces, batches, and exports to TimescaleDB via the new `sql/migrations/000008_create_otel_traces.{up,down}.sql` migration (otel_traces hypertable). `monitoring/prometheus.yml` updated to scrape collector metrics.
+- `configs/allowed_env_vars.md` documents the new OTLP env vars.
+
+### Added — Pluggable acceptance framework complete (PR #717)
+
+- Remaining 12 evaluators ported from `experiment/judge.go` legacy switch into `acceptance/builtin` package, completing **17/17 acceptance gates**. New: `no_material_drawdown_degradation`, `no_constraint_bypass`, `maintain_sharpe_like`, `reduce_concentration_risk`, `factor_quality`, `reduce_false_positive_rate`, `maintain_cro_authority`, `reduce_sector_blindspots`, `maintain_industry_coverage`, `reduce_style_drift`, `maintain_momentum_catch`, `respect_holding_period`. 24 new tests added; 34/34 pass.
+- `runAcceptancePipeline()` in `judge.go` registers all 17 evaluators; `EvalParams` now also carries `VolatilityToleranceRatio` / `MaxFallbackRatio` / `SharpeStabilityThreshold`.
+
+### Changed — Documentation polish (PR #713 + #718)
+
+- CHANGELOG v0.0.0.18 entry corrected: `internal/monitoring/AGENTS.md` line counts, `docs/ENVIRONMENT.md` Fubon AI discoverability, `docs/events/drift-detector.md` test count (15: 13 V2 + 2 V1), `docs/roadmap.md` Wave 9 PR structure (5 PRs #695-#700), `docs/modules/README.md` version header.
+- README + `docs/operations_playbook.md` updated with v0.0.0.18 entries and Wave 10 L2.1/L2.2 references.
+
+### Verification
+
+- All 5 required CI checks pass (governance / operations / coverage / lint / commitlint).
+- `go build ./...`, `go vet ./...`, `gofmt -l .` clean.
+- 34/34 acceptance tests pass (`go test ./internal/acceptance/...`).
+
 ## [0.0.0.18] - 2026-06-25
 
 ### Fixed — Wave 9 observability verification gaps closed (PR #704)
