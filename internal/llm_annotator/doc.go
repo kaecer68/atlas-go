@@ -22,14 +22,7 @@
 // non-2xx HTTP, malformed response). Callers MUST treat this as a fallback
 // signal: the registry's rule_based attribution remains authoritative.
 //
-// Maturity: archived (Wave 12 — see AGENTS.md and internal/MATURITY.md).
-//
-// The CircuitBreaker migration (Issue #731 Phase 2) is complete: this
-// package retains a thin wrapper over *apigateway.CircuitBreaker that
-// preserves the Wave 4-era API (CircuitState type alias, ErrCircuitOpen
-// sentinel, Allow(), Snapshot(), WithNowFunc()). New code should depend
-// on internal/llm/capabilities/failure_attribution.FailureAttributionHandler
-// instead of this package directly.
+// Maturity: archived
 package llm_annotator
 
 import (
