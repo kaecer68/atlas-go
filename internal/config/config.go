@@ -65,6 +65,7 @@ type Config struct {
 	LLMNarrativeExplainEnabled     bool // LLM_NARRATIVE_EXPLAIN_ENABLED — W3: explain_hooks.go regime+sentiment hooks
 	LLMRiskForensicsEnabled        bool // LLM_RISK_FORENSICS_ENABLED — W4: forensics_hook.go performance forensics hook
 	LLMConfidenceCommentaryEnabled bool // LLM_CONFIDENCE_COMMENTARY_ENABLED — W5: confidence_hook.go confidence commentary hook
+	LLMSectorAgentsEnabled         bool // LLM_SECTOR_AGENTS_ENABLED — W6: sector_agent_llm.go wired plugin hook (Issue #719, Wave 11 L2.1)
 }
 
 func Load() Config {
@@ -125,6 +126,7 @@ func Load() Config {
 		LLMNarrativeExplainEnabled:     envOrBool("LLM_NARRATIVE_EXPLAIN_ENABLED", false),
 		LLMRiskForensicsEnabled:        envOrBool("LLM_RISK_FORENSICS_ENABLED", false),
 		LLMConfidenceCommentaryEnabled: envOrBool("LLM_CONFIDENCE_COMMENTARY_ENABLED", false),
+		LLMSectorAgentsEnabled:         envOrBool("LLM_SECTOR_AGENTS_ENABLED", false),
 	}
 }
 

@@ -86,5 +86,14 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	system.WithStrategyEvolver(NewStrategyEvolver())
 	pm.Start()
 
+	// Wave 11 L2.1 (Issue #719): opt-in LLM-driven sector agent wiring.
+	// driver is intentionally nil — the plugin falls back to the
+	// deterministic sector path. Production code that needs the LLM
+	// loop should call system.WithLLMSectorAgents(driver) explicitly
+	// with a real SectorAgentLLMDriver implementation.
+	if cfg.LLMSectorAgentsEnabled {
+		system.WithLLMSectorAgents(nil)
+	}
+
 	return system, nil
 }
