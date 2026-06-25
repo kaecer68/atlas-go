@@ -261,6 +261,7 @@ func TestAutoRollback_CalibrationDegradation_RestoresFromSnapshot(t *testing.T) 
 	paramsPath := filepath.Join(dir, "parameters.json")
 	config.SetParametersConfigPath(paramsPath)
 	t.Cleanup(func() { config.SetParametersConfigPath("") })
+	config.ResetParametersConfig()
 
 	originalCfg := config.DefaultParametersConfig()
 	originalCfg.Version = "pre-calibration-v1"
@@ -269,6 +270,13 @@ func TestAutoRollback_CalibrationDegradation_RestoresFromSnapshot(t *testing.T) 
 	}
 	if err := config.SnapshotToBackup(paramsPath); err != nil {
 		t.Fatalf("SnapshotToBackup: %v", err)
+	}
+
+	if _, err := config.LoadParametersConfig(paramsPath); err != nil {
+		t.Fatalf("LoadParametersConfig: %v", err)
+	}
+	if config.GetParametersConfig().Version != "pre-calibration-v1" {
+		t.Fatalf("singleton should be pre-calibration-v1 after load, got %s", config.GetParametersConfig().Version)
 	}
 
 	modifiedCfg := config.DefaultParametersConfig()
@@ -317,6 +325,10 @@ func TestAutoRollback_CalibrationDegradation_RestoresFromSnapshot(t *testing.T) 
 	}
 	if strings.Contains(string(dataAfterRevert), `"post-calibration-v2"`) {
 		t.Errorf("post-calibration-v2 should be gone after restore, got: %s", string(dataAfterRevert))
+	}
+
+	if got := config.GetParametersConfig().Version; got != "pre-calibration-v1" {
+		t.Errorf("singleton should be reloaded to pre-calibration-v1 after revert, got: %s", got)
 	}
 }
 

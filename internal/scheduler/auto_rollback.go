@@ -272,6 +272,9 @@ func (r *AutoRollback) executeRollback(result *RollbackResult) error {
 		if err := config.RestoreFromBackup(paramsPath); err != nil {
 			return fmt.Errorf("calibration restore failed: %w", err)
 		}
+		if err := config.ReloadParametersConfig(); err != nil {
+			return fmt.Errorf("calibration reload failed: %w", err)
+		}
 		logging.Info("auto_rollback", "calibration_reverted",
 			"reason", result.Reason,
 			"path", paramsPath)
