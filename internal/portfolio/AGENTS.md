@@ -343,14 +343,16 @@ MacroRiskAssessment → SectorRotator.GeneratePlan() → CapitalAllocator 的 se
 
 | Step | 位置 | 變更內容 |
 |------|------|---------|
-| 1 | `optimizer.go:19-29` | FactorType 常數宣告 |
-| 2 | `factor_weight_engine.go:34-46` | `defaultBaseWeights` map |
-| 3 | `shared/shared.go:47-57` | `FactorScoreBreakdown` struct（含 json tag） |
-| 4 | `shared/shared.go:61-73` | `FactorScores` struct |
-| 5 | `optimizer.go:238-251` | `symbolScore` struct |
-| 6 | `optimizer.go:328-343` | `calculateMultiFactorScores` totalScore 計算 |
+| 1 | `optimizer.go:15-27` | FactorType 常數宣告 |
+| 2 | `factor_weight_engine.go:41-56` | `defaultBaseWeights` map |
+| 3 | `internal/domain/shared/shared.go:48-62` | `FactorScoreBreakdown` struct（含 json tag） |
+| 4 | `internal/domain/shared/shared.go:64-79` | `FactorScores` struct |
+| 5 | `optimizer_pipeline.go:28-45` | `symbolScore` struct |
+| 6 | `optimizer_pipeline.go:138-164` | `calculateMultiFactorScores` totalScore 計算 |
 | 7 | `factor_engine_aggregate.go` | `CalculateAllScoresWithBreakdown` breakdown 建構（2026-06 從 `factor_engine.go` 拆分；如重新合併請保留行號） |
 | 8 | `factor_weight_engine.go` | `applyEventAdjustment` / `strategyDeltas` / `GetWeights` 中的因子引用 |
+
+> 行號會隨重構漂移，請以「該檔案中對應語義區塊」為準。
 
 **完成後必須執行**：
 

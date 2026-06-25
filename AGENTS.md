@@ -91,7 +91,7 @@ skill(name="atlas-pre-change-protocol")
 | 權威來源單一 | 放行/過濾筆數由 `GuardOutcomes` 計算，前端不可各自重算 |
 | Constitution 違反 | 不得繞過 BackgroundTaskManager、ParametersConfig、marketdata.Provider |
 | 模組成熟度 | 新增 `internal/` 模組必須有 `doc.go` + 更新 `MATURITY.md` |
-| FactorType 變更 | 必須同步 8 個位置，CI 強制 |
+| FactorType 變更 | 必須同步 8 個位置，CI 強制（for the canonical 8-location list, see `internal/portfolio/AGENTS.md` §12） |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | Replay 格式 | JSONL，不是 JSON array |
 | 資料可見性 | 通道靜默失敗時,Gateway/Adapter/Service/Frontend 四層須暴露 `data_status` / `failed_channels` / 紅色 badge,不得以零值掩蓋。詳見 `.claude/skills/atlas-data-visibility/SKILL.md` |
