@@ -409,3 +409,33 @@ jobs:
 
     - name: Run frontend smoke
       run: bash scripts/ci/frontend_smoke.sh origin/${{ github.base_ref }}
+
+  # New frontend regression tests (unit + per-app Playwright) introduced with
+  # the admin_web / client_web split. Kept separate from smoke so failures are
+  # scoped to the new SPAs.
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+      with:
+        node-version: '22'
+
+    - name: Build frontends
+      run: bash scripts/ci/build_all_frontends.sh
+
+    - name: Run shared JS unit tests
+      run: node --test shared_web/static/js/__tests__/*.mjs
+
+    - name: Install Playwright chromium
+      run: npx playwright install --with-deps chromium
+
+    - name: Run admin_web E2E tests
+      working-directory: admin_web
+      run: npm run test:e2e
+
+    - name: Run client_web E2E tests
+      working-directory: client_web
+      run: npm run test:e2e
