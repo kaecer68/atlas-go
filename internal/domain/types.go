@@ -160,6 +160,11 @@ type AlertRecord struct {
 	ResolvedAt    *time.Time  `json:"resolved_at,omitempty"`
 	ResolvedBy    string      `json:"resolved_by,omitempty"`
 	SilencedUntil *time.Time  `json:"silenced_until,omitempty"`
+
+	// Decision 9 (alert-redesign-v2.md Part 3.7): SLA tracking. Pointer
+	// because legacy alerts saved before this field existed will not have
+	// it; nil = legacy/no data, > 0 = latency in seconds from emit to ack.
+	AcknowledgedWithinSec *int `json:"acknowledged_within_sec,omitempty"`
 }
 
 type AlertChannelConfig struct {

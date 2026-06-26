@@ -56,6 +56,23 @@ func (p *ParametersConfig) validateAlert() error {
 	if p.Alert.HeartbeatTTLMinutes.Value < 1 {
 		return fmt.Errorf("alert.heartbeat_ttl_minutes (%d) must be >= 1", p.Alert.HeartbeatTTLMinutes.Value)
 	}
+	if p.Alert.AlertSLACriticalSec.Value < 1 {
+		return fmt.Errorf("alert.alert_sla_critical_sec (%d) must be >= 1", p.Alert.AlertSLACriticalSec.Value)
+	}
+	if p.Alert.AlertSLAErrorSec.Value < 1 {
+		return fmt.Errorf("alert.alert_sla_error_sec (%d) must be >= 1", p.Alert.AlertSLAErrorSec.Value)
+	}
+	if p.Alert.AlertSLAWarningSec.Value < 1 {
+		return fmt.Errorf("alert.alert_sla_warning_sec (%d) must be >= 1", p.Alert.AlertSLAWarningSec.Value)
+	}
+	if p.Alert.AlertSLACriticalSec.Value >= p.Alert.AlertSLAErrorSec.Value {
+		return fmt.Errorf("alert.alert_sla_critical_sec (%d) must be < alert_sla_error_sec (%d)",
+			p.Alert.AlertSLACriticalSec.Value, p.Alert.AlertSLAErrorSec.Value)
+	}
+	if p.Alert.AlertSLAErrorSec.Value >= p.Alert.AlertSLAWarningSec.Value {
+		return fmt.Errorf("alert.alert_sla_error_sec (%d) must be < alert_sla_warning_sec (%d)",
+			p.Alert.AlertSLAErrorSec.Value, p.Alert.AlertSLAWarningSec.Value)
+	}
 	return nil
 }
 

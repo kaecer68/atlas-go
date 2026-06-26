@@ -322,6 +322,21 @@ func mergeAlertDefaults(cfg *ParametersConfig) {
 	if a.HeartbeatTTLMinutes.Value == 0 {
 		a.HeartbeatTTLMinutes = def.HeartbeatTTLMinutes
 	}
+	if a.AlertSLACriticalSec.Value == 0 {
+		a.AlertSLACriticalSec = def.AlertSLACriticalSec
+	}
+	if a.AlertSLAErrorSec.Value == 0 {
+		a.AlertSLAErrorSec = def.AlertSLAErrorSec
+	}
+	if a.AlertSLAWarningSec.Value == 0 {
+		a.AlertSLAWarningSec = def.AlertSLAWarningSec
+	}
+	// SLAViolationMetaAlert is a bool; fall back to default only if Value
+	// is false AND Source is empty (unset). This distinguishes "explicitly
+	// false" from "not set".
+	if !a.SLAViolationMetaAlert.Value && a.SLAViolationMetaAlert.Source == "" {
+		a.SLAViolationMetaAlert = def.SLAViolationMetaAlert
+	}
 }
 
 func mergeRiskGateDefaults(cfg *ParametersConfig) {

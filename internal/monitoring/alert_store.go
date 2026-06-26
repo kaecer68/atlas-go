@@ -90,6 +90,10 @@ func (s *AlertStore) Acknowledge(alertID string, user string) error {
 	found := false
 	for i := range all {
 		if all[i].ID == alertID {
+			// Decision 9 (alert-redesign-v2.md Part 3.7): record SLA latency
+			// (seconds from emit to ack) for the per-severity SLA threshold.
+			latencySec := int(now.Sub(all[i].Timestamp).Seconds())
+			all[i].AcknowledgedWithinSec = &latencySec
 			all[i].Acknowledged = true
 			all[i].AcknowledgedAt = &now
 			all[i].AcknowledgedBy = user
