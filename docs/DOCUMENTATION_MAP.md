@@ -35,6 +35,7 @@
 - `operations_playbook.md`, `iteration_playbook.md` — 操作 playbook
 - `developer_guide.md` — 開發者指南（人類向）
 - `guides/ai-productivity.md` — AI 助手指南（AI 向）
+- `guides/git-tool-cache-policy.md` — 工具快取原則（GitNexus / opencode 等 derived artifact 不該 commit）
 - `data_sources.md`, `migration-0.0.0.5.md` — 各種程序
 
 ### 規格 / 設計文檔
