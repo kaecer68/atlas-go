@@ -63,6 +63,8 @@ const (
 
 	// 实验事件
 	EventExperimentInsufficientData EventType = "experiment.insufficient_data"
+	EventExperimentAccepted         EventType = "experiment.accepted"
+	EventExperimentRejected         EventType = "experiment.rejected"
 
 	// 叙事事件 (MacroIngestor 生成)
 	EventNarrative EventType = "narrative.event"
@@ -282,6 +284,19 @@ type OrderErrorEventPayload struct {
 	Attempts     int       `json:"attempts"`
 	LastStatus   string    `json:"last_status"`
 	Timestamp    time.Time `json:"timestamp"`
+}
+
+// ExperimentLifecyclePayload experiment lifecycle event payload (Decision 5).
+// Emitted by internal/experiment/lifecycle_publisher.go when an experiment
+// transitions to Accepted (info) or Rejected (error). Consumed by a future
+// monitoring consumer to surface baseline promotion/rejection on the dashboard.
+type ExperimentLifecyclePayload struct {
+	ExperimentID  string    `json:"experiment_id"`
+	ProposalID    string    `json:"proposal_id"`
+	TargetAgentID string    `json:"target_agent_id"`
+	Skill         string    `json:"skill"`
+	RevertReason  string    `json:"revert_reason,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
 }
 
 // NarrativeEventPayload 叙事事件载荷
@@ -773,6 +788,22 @@ func (b *ChannelEventBus) PublishExperimentInsufficientData(experimentID string,
 			MaturityLevel: maturityLevel,
 			UsedFallback:  usedFallback,
 		},
+		SchemaVersion: 1,
+	})
+}
+
+// PublishExperimentLifecycle publishes an experiment lifecycle event
+// (Accepted or Rejected). Fired by internal/experiment/lifecycle_publisher.go
+// when an experiment status transitions to Accepted (severity "info")
+// or Rejected (severity "error"). The caller specifies the event type
+// and severity so this single method serves both lifecycle transitions.
+func (b *ChannelEventBus) PublishExperimentLifecycle(eventType EventType, payload ExperimentLifecyclePayload, severity string) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          eventType,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      severity,
 		SchemaVersion: 1,
 	})
 }

@@ -30,6 +30,7 @@ type Judge struct {
 	eventBus              *eventbus.ChannelEventBus
 	maturityTracker       *domain.MaturityTracker
 	useAcceptancePipeline bool
+	lifecyclePublisher    *LifecyclePublisher
 }
 
 func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string) *Judge {
@@ -46,6 +47,26 @@ func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string)
 func (j *Judge) WithEventBus(bus *eventbus.ChannelEventBus) *Judge {
 	j.eventBus = bus
 	return j
+}
+
+// WithLifecyclePublisher attaches a LifecyclePublisher for publishing
+// EventExperiment{Accepted,Rejected} events when experiment status
+// transitions. Decision 5 (alert-redesign-v2.md Part 3.6) reversal:
+// the lifecycle event is published instead of being dropped to log.
+func (j *Judge) WithLifecyclePublisher(p *LifecyclePublisher) *Judge {
+	j.lifecyclePublisher = p
+	return j
+}
+
+// transitionExperimentStatus routes through LifecyclePublisher if attached
+// (publishes EventExperiment{Accepted,Rejected} per Decision 5 reversal);
+// otherwise falls back to the direct domain call. Backward-compatible:
+// judges without a publisher work exactly as before.
+func (j *Judge) transitionExperimentStatus(record *domain.ExperimentRecord, next domain.ExperimentStatus) error {
+	if j.lifecyclePublisher != nil {
+		return j.lifecyclePublisher.TransitionAndPublish(record, next)
+	}
+	return domain.TransitionExperimentStatus(record, next)
 }
 
 // WithMaturityTracker attaches a maturity tracker for burn-in gating.
@@ -185,21 +206,21 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	if accepted {
 		if oosErr != nil {
 			// OOS validation error — reject conservatively.
-			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
+			if err := j.transitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
 				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
 			}
 			result.Experiment.RevertReason = fmt.Sprintf("OOS validation error: %v", oosErr)
 			result.Notes = append(result.Notes, "Replay judge rejected due to OOS validation error.")
 		} else if !oosResult.Passed {
 			// OOS failed — reject without accepting.
-			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
+			if err := j.transitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
 				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
 			}
 			result.Experiment.RevertReason = fmt.Sprintf("OOS validation failed: %s", oosResult.Reason)
 			result.Notes = append(result.Notes, fmt.Sprintf("Replay judge rejected on OOS gate: %s.", oosResult.Reason))
 		} else {
 			// OOS passed — accept.
-			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentAccepted); err != nil {
+			if err := j.transitionExperimentStatus(&result.Experiment, domain.ExperimentAccepted); err != nil {
 				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
 			}
 			result.Notes = append(result.Notes, "Replay judge accepted the candidate for the next baseline promotion step.")
@@ -208,7 +229,7 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 			j.computeAndAttachImportance(&result)
 		}
 	} else {
-		if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
+		if err := j.transitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
 			return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
 		}
 		result.Experiment.RevertReason = "Replay judge did not satisfy maturity-aware acceptance gates."
