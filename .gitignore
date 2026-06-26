@@ -190,3 +190,6 @@ shared_web/dist/
 configs/*.lock
 cmd/cleanup-channel-health/cleanup-channel-health
 internal/risk/configs/
+# Playwright test results (per-subproject)
+admin_web/test-results/
+client_web/test-results/
