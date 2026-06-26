@@ -62,6 +62,7 @@
 | `developer_guide.md` | 開發者指南（人類向）|
 | `guides/ai-productivity.md` | AI 助手指南 |
 | `guides/git-tool-cache-policy.md` | 工具快取原則 |
+| `guides/new-workspace-startup.md` | 新工作區起步 SOP（AI 必讀）|
 
 ### Reference / 工具
 
