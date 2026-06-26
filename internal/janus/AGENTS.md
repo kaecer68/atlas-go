@@ -8,7 +8,7 @@
 
 JANUS 位於 `internal/prism` 之上，透過監控不同 PRISM regime cohort 的表現，計算出最符合當下市場環境的權重分佈，並產出突現（emergent）的盤勢信號。
 
-- **跨 Cohort 績效追蹤**：記錄各 regime（Risk-On, Risk-Off, Low-Volatility, Transition）的 Sharpe Ratio、命中率與報酬。
+- **跨 Cohort 績效追蹤**：記錄各 regime（Risk-On, Risk-Off, Low-Volatility, High-Volatility, Transition）的 Sharpe Ratio、命中率與報酬。
 - **動態權重計算**：混合短期（5d）、中期（20d）與長期（60d）表現，產出各 cohort 的配置權重（預設範圍 `[0.05, 0.60]`）。
 - **盤勢分類偵測**：
     - `NOVEL_REGIME`：短期表現最優的 cohort 顯著超越其歷史地位（新趨勢成形）。
@@ -44,21 +44,20 @@ JANUS 的 regime classification 輸出驅動 Risk Gate 的自主校準：
 JANUS Engine (每小時檢測)
   → GetRegimeClassification() 
     → NOVEL_REGIME / HISTORICAL_REGIME / MIXED
-      → regime_calibrate background task (main.go)
+      → regime_calibrate background task (cmd/atlas/calibration_tasks.go)
         → regime 變化時觸發 RiskGate.SelfCalibrate()
           → Bayesian optimizer 調整 risk_max_position_size / risk_max_daily_loss_pct
 ```
 
-**Regime → Stress Scenario Mapping**（main.go `regime_calibrate` task）：
+**Regime → Stress Scenario Mapping**（`cmd/atlas/calibration_tasks.go` 的 `regime_calibrate` task）：
 | Regime | Stress Scenario |
 |--------|----------------|
 | NOVEL_REGIME | ai_bubble_2024 |
 | HISTORICAL_REGIME | normal_market_2024 |
-| RISK_OFF | covid_crash_2020 |
 | 其他 | fed_hikes_2022 (fallback) |
 
 **關鍵不變量**：
-- JANUS 本身**不直接**調用 RiskGate — 所有校準由 `cmd/atlas/main.go` 中的 `regime_calibrate` background task 協調。
+- JANUS 本身**不直接**調用 RiskGate — 所有校準由 `cmd/atlas/calibration_tasks.go` 中的 `regime_calibrate` background task 協調。
 - JANUS 的 `GetRegimeClassification()` 是唯讀查詢，不觸發副作用。
 - MIXED regime 不觸發校準（僅記錄）。
 
@@ -68,7 +67,8 @@ JANUS Engine (每小時檢測)
 
 | 層級 | 檔案 | 用途 |
 |------|------|------|
-| CLI 入口 | `cmd/atlas/main.go` | API mode 初始化、Gateway 注入、Dashboard 注入、regime_calibrate task |
+| CLI 入口 | `cmd/atlas/main.go` | API mode 初始化、Gateway 注入、Dashboard 注入 |
+| Calibration Task | `cmd/atlas/calibration_tasks.go` | `regime_calibrate` background task 註冊與實作 |
 | Plugin 層 | `internal/orchestrator/plugin_adapters.go` | PostSimulation 收集 outcomes → RecordSnapshot → Update |
 | API 層 | `internal/monitoring/dashboard_api.go` | SetJanusEngine 注入，供前端 dashboard 查詢 |
 | Gateway 層 | `internal/apigateway/register_adapters.go` | RegisterChannelAdapters 注入，供健康檢查 |

@@ -2,10 +2,6 @@
 
 本目錄是 `atlas-go` 的大腦核心，負責協調領域專家、控制層過濾與系統擴充外掛。
 
-> **Wave 11 變更**:
-> - `AgentLoop` state machine 在 Issue #711 PR2 (v0.0.0.20a) 改為「`AdvanceToolCall`/`AdvanceReflect` 錯誤返回 + `Round` 累加 `len(steps)` + 全部 slog.Warn」。詳見 [`docs/wave-11/AGENT_LOOP_STATE_MACHINE.md`](../../docs/wave-11/AGENT_LOOP_STATE_MACHINE.md)。
-> - `LLMDriver` 在 Issue #711 PR3 拆為 `PlanDriver` + `ReflectDriver`,`LLMDriver` 保留為 deprecated alias。`SectorAgentLLM` 改為 embed 兩個 interface。
-
 ---
 
 ## 核心職責
@@ -14,7 +10,7 @@
 - **分層路由** (`executor_*.go`)：依序執行 `Context` (Regime) → `Sector/Style/Superinvestor` (Agent) → `Control` (CRO/CIO) 三層架構。檔案已於 #611 sub-issue-8 拆分為 11 個按關注點分離的同 package 檔案（見下方「Executor 檔案佈局」）。
 - **外掛託管** (`PluginHost`)：以統一介面處理 PRISM、Swarm、JANUS 等外部子系統的掛載與生命週期勾子。
 
-## Executor 檔案佈局（sub-issue-8，PR #684）
+## Executor 檔案佈局
 
 | 檔案 | 行數 | 內容 |
 |------|------|------|
@@ -68,7 +64,7 @@
 - **Executor 註冊**：新增 Executor 需在 `plugin_registry.go` 的 `NewPluginRegistry()` 中手動加入對應陣列。
 - **因子分數**：所有推薦在進入控制層前，必須經由 `CalculateFactorScoresWithBreakdown` 補完因子細節。
 - **原子性**：`System.RunDailySimulation` 應保持無副作用，直到結果寫入 `ledger`。
-- **LLM sector agent wiring**（Wave 11 L2.1，Issue #719）：`system.WithLLMSectorAgents(driver)` 在 `factory.go` 中依 `config.LLMSectorAgentsEnabled`（env `LLM_SECTOR_AGENTS_ENABLED`）決定是否註冊 `llmSectorAgentsPlugin`。Driver 為 `nil` 時 plugin 為 no-op pass-through，確保預設行為保留 deterministic 路徑（backtest 可重現）。`SectorAgentLLM` 與 `PlanDriver` / `ReflectDriver` 介面由 #711 Phase 1-4 提供。
+- **LLM sector agent wiring**：`system.WithLLMSectorAgents(driver)` 在 `factory.go` 中依 `config.LLMSectorAgentsEnabled`（env `LLM_SECTOR_AGENTS_ENABLED`）決定是否註冊 `llmSectorAgentsPlugin`。Driver 為 `nil` 時 plugin 為 no-op pass-through，確保預設行為保留 deterministic 路徑（backtest 可重現）。
 - **`SectorAgentLLMDriver` 包裝**：當 production driver 注入時，必須是 `SectorAgentLLMDriver`（包 PlanDriver + ReflectDriver）。`SectorAgentLLM` 透過嵌入介面欄位（`PlanDriver`/`ReflectDriver`）取得方法 — 不可用已 deprecated 的 `LLMDriver` 單一介面。
 
 ---
@@ -76,9 +72,7 @@
 ## 陷阱與反模式
 
 - **禁止跨層呼叫**：Executor 不應直接讀取 `SystemCore` 的私有欄位，應透過傳入的 `registry` 或 `quotes`。
-- **ID 混淆（已修復，2026-06-05）**：原 `buildFinalRecKey` 以 `Symbol+"|"+Agent` 為 key 進行 `PassedGuards` 查核，但 CIO aggregator 會以 bestAgent 覆寫 Agent 欄位，導致非最佳 agent 原始推薦查核失敗。
-  現已改為 `buildPassedSymbolKey`（Symbol-only key），CIO 覆寫不再影響 `PassedGuards` 查核。
-  仍應保留原始 Agent ID（`finalRecs[].Agent`），供後端 `recommendation_outcomes.jsonl` 與 `PassedGuards` audit trail 使用——僅僅不再依賴它做查核。
+- **保留原始 Agent ID**：CIO aggregator 會以 bestAgent 覆寫 `finalRecs[].Agent`，但 `PassedGuards` 查核改用 symbol-only key。後端 `recommendation_outcomes.jsonl` 與 audit trail 仍應保留原始 Agent ID，只是不再依賴它做查核。
 - **靜默過濾**：若標的不符合 `Screener` 門檻，將完全不會進入 `Recommend` 階段，開發時若發現「推薦消失」請優先檢查 `agents.json`。
 - **LLM sector agent 啟用順序**：當 `LLMSectorAgentsEnabled=true` 但 driver 為 `nil`，plugin 應回 no-op（已實作）。但呼叫端若手動呼叫 `sector_agent_llm.go` 的 `PlanStep` / `Reflect` 而沒傳 driver 會回 `ErrNotImplemented`（#711 設計）。**不要**混用 `LLMDriver`（deprecated）與 `PlanDriver`+`ReflectDriver`。
 - **Registry 變更**：修改 `AgentRegistry` 後，必須確認 `ExecuteRegistryResearch` 的路由邏輯能正確匹配新 Layer。

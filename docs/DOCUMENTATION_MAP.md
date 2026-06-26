@@ -122,6 +122,20 @@
 
 ---
 
+## `.claude/skills/` 技能地圖
+
+技能文件是 AI Coding 的標準作業程序延伸。完整分類與載入規則見 **`.claude/SKILLS-MAP.md`**。
+
+| 技能 | 檔案 | 用途 |
+|------|------|------|
+| Pre-change protocol | `.claude/skills/atlas-pre-change-protocol/SKILL.md` | 修改任何程式碼前強制執行的 7 步檢查 |
+| Data visibility | `.claude/skills/atlas-data-visibility/SKILL.md` | 四層資料可見性防護 |
+| LLM provider / capability | `.claude/skills/atlas-llm-provider-capability/SKILL.md` | 新增 LLM Provider client 或 Capability handler 的 SOP |
+| Fubon supervisor invariants | `.claude/skills/atlas-fubon-supervisor-invariants/SKILL.md` | Fubon proxy ProcessManager 監督器不變式（F1~F9） |
+| Factor change protocol | `.claude/skills/atlas-factor-change-protocol/SKILL.md` | FactorType 變更 8 步同步協議 |
+
+---
+
 ## `.omo/` 查找地圖
 
 `.omo/` 在 `.gitignore` 排除範圍，**新 clone 不會取得**。本節是給新 AI 工作區**起步時**用的查找指南。

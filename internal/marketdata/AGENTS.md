@@ -11,7 +11,7 @@
 - **核心介面**：
     - `Provider` (`provider.go`)：個股行情介面，要求實作 `GetQuotes`。
     - `MacroDataProvider` (`macro_provider.go`)：總經指標介面，要求實作 `FetchSnapshot`。
-    - `CorporateActionProvider` (`corporate_action_provider.go`)：法人事件介面（P1-2-α 引入），要求實作 `GetCorporateActions(ctx, symbol, start, end)`。
+    - `CorporateActionProvider` (`corporate_action_provider.go`)：法人事件介面，要求實作 `GetCorporateActions(ctx, symbol, start, end)`。
 - **資料流**：
     `External API (Fugle/TWSE) → Client → Provider/Adapter → domain.Quote / MacroDataSnapshot`
 
@@ -58,7 +58,7 @@
 - **Fugle 符號格式**：Fugle 盤中 API 符號通常為純數字 (如 `2330`)，不帶 `.TW`。
 - **Yahoo Macro 符號映射**：美債 10 年期請使用 `^TNX`，匯率請確認 `USD/TWD` 的載入正確性。
 - **ETF NAV 資料來源**：目前無任何 API channel 提供即時 ETF 淨值。`TWSEETFNAVScraper` 使用分層策略：Tier 1 (TWSE scrape) 為 stub，Tier 2 (收盤價代理) 為唯一可用路徑。台股 ETF 追蹤誤差通常 <0.5%。詳細通道調查見 `docs/investigations/2026-05-29-etf-nav-data-source.md`；待 FinMind 付費註冊後的接入計劃（未實作、工作區限定）見 `.omo/plans/2026-05-29-etf-nav-finmind.md`。
-- **providerBreaker 泛化熔斷器（2026-06 重構）**：`internal/marketdata/circuit_breaker.go` 提供 `providerBreaker` struct + `newProviderBreaker(name, cfg)` 構造。新增 provider 熔斷只需：(1) 構造一個 `providerBreaker`，(2) 註冊到 `HybridProvider.breakers` map，(3) 在 `GetQuotes` 對應位置呼叫 `shouldTry()` + `recordSuccess()` / `recordFailure()`。Fubon 與 Fugle 熔斷完全獨立，不互相影響。
+- **providerBreaker 泛化熔斷器**：`internal/marketdata/circuit_breaker.go` 提供 `providerBreaker` struct + `newProviderBreaker(name, cfg)` 構造。新增 provider 熔斷只需：(1) 構造一個 `providerBreaker`，(2) 註冊到 `HybridProvider.breakers` map，(3) 在 `GetQuotes` 對應位置呼叫 `shouldTry()` + `recordSuccess()` / `recordFailure()`。Fubon 與 Fugle 熔斷完全獨立，不互相影響。
 
 ## ETF NAV 數據流
 

@@ -63,7 +63,7 @@
 | 權威來源單一 | 放行/過濾筆數由 `GuardOutcomes` 計算，前端不可各自重算 |
 | Constitution 違反 | 不得繞過 BackgroundTaskManager、ParametersConfig、marketdata.Provider |
 | 模組成熟度 | 新增 `internal/` 模組必須有 `doc.go` + 更新 `MATURITY.md` |
-| FactorType 變更 | 必須同步 8 個位置，見 `internal/portfolio/AGENTS.md` §12 |
+| FactorType 變更 | 必須同步 8 個位置，見 `.claude/skills/atlas-factor-change-protocol/SKILL.md` |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | Replay 格式 | JSONL，不是 JSON array |
 | 平行重複實作 | 新增功能前用 GitNexus `query` + codebase-memory 檢查重疊 |

@@ -75,4 +75,4 @@
 
 ### 與 live orchestrator 的關係
 
-`internal/live/orchestrator.go` 在 `EventMarketSnapshot` 的 critical handler 內對持有部位呼叫 `PublishPositionUpdate(..., "updated")`，使 `Trigger` 能持續追蹤停損/停利/持有天數。這是 Wave 9 將 baseline policy 從「回測約束」延伸到「執行期監控」的關鍵接點。
+`internal/live/orchestrator.go` 在 `EventMarketSnapshot` 的 critical handler 內對持有部位呼叫 `PublishPositionUpdate(..., "updated")`，使 `Trigger` 能持續追蹤停損/停利/持有天數。這是 baseline policy 從「回測約束」延伸到「執行期監控」的關鍵接點。
