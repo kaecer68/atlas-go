@@ -1047,6 +1047,12 @@ type AlertParameters struct {
 	MaxAlertTriggerRate      ParameterMetadata[float64]  `json:"max_alert_trigger_rate"`
 	MaxUnacknowledgedAlerts  ParameterMetadata[int]      `json:"max_unacknowledged_alerts"`
 	SuppressCategories       ParameterMetadata[[]string] `json:"suppress_categories"`
+
+	// Decision 1 (alert-redesign-v2.md Part 3.1): heartbeat staleness
+	// threshold in minutes. Channel health summaries older than this
+	// are considered "down" by the health check; older alerts with
+	// rule=channel_health_summary are candidates for one-time cleanup.
+	HeartbeatTTLMinutes ParameterMetadata[int] `json:"heartbeat_ttl_minutes"`
 }
 
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.

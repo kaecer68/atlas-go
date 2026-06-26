@@ -181,7 +181,8 @@
         "MinScreeningRate ParameterMetadata[float64]",
         "MaxAlertTriggerRate ParameterMetadata[float64]",
         "MaxUnacknowledgedAlerts ParameterMetadata[int]",
-        "SuppressCategories ParameterMetadata[[]string]"
+        "SuppressCategories ParameterMetadata[[]string]",
+        "HeartbeatTTLMinutes ParameterMetadata[int]"
       ],
       "kind": "struct",
       "name": "AlertParameters"
