@@ -4,111 +4,79 @@
 
 ---
 
-## 概覽 (OVERVIEW)
+## 概覽
 
-`DashboardAPI` 是專案中最大的單一服務組件，負責聚合 `ledger`、`narrative`、`orchestrator` 與 `sim` 的資料並提供 HTTP 介面。核心邏輯位於 `dashboard_api.go`。
+`DashboardAPI` 是專案中最大的單一服務組件，聚合 `ledger`、`narrative`、`orchestrator` 與 `sim` 的資料並提供 HTTP 介面。核心邏輯位於 `dashboard_api.go`。
 
-## API 結構 (API STRUCTURE)
+### API 路由（按職責）
 
-路由按職責分類註冊：
-- **核心儀表板** (`RegisterRoutes`): `/api/dashboard/macro-radar`, `/api/dashboard/recommendation-pipeline` 等。
-- **產業生態系** (`RegisterIndustryRoutes`): `/api/industry/cycles`（週期羅盤）、`/api/industry/seasonality`（季節性模式）、`/api/industry/seasonality/calendar`（季節性行事曆）、`/api/industry/linkage`（供應鏈連動）、`/api/industry/classification`（產業分類）、`/api/industry/detail`（產業詳細資訊）。
-- **敘事分析** (`RegisterNarrativeRoutes`): `/api/narrative/events`, `/api/narrative/chains` 等。
-- **人工干預** (`RegisterControlRoutes`): `/api/control/approve-recommendation`, `/api/control/reject-recommendation`, `/api/control/audit-log`。
-- **實驗與回測**: `/api/experiment/*`, `/api/backtest/*`。
-
-## JSON 慣例 (CONVENTIONS)
-
-- **Unmarshal 陷阱**: 從 JSONL (`recommendation_outcomes.jsonl`) 讀取時，注意部分 legacy 欄位使用 **PascalCase** (如 `AgentID`, `Skill`)，Unmarshal 結構必須精確對應。前端存取 API 回應時必須使用 snake_case（全域規則見根 `AGENTS.md`；2026-05-07 incident 詳見 `docs/audit/2026-05-07-monitoring-pascalcase-snakecase-incident.md`）。
-
-## Agent Observatory API (`GET /api/dashboard/agent-observatory`)
-
-此端點回傳所有 agent 的 Scorecard 陣列，每個 Scorecard 包含以下 **OOS 驗證欄位**（位於 `Scorecard.ScorecardDetail`）：
-
-| JSON 欄位 | 型別 | 意義 |
-|-----------|------|------|
-| `is_sharpe` | number | In-Sample Sharpe ratio |
-| `oos_sharpe` | number | Out-of-Sample Sharpe ratio |
-| `is_oos_ratio` | number | `oos_sharpe / is_sharpe`，< 1 表示衰減 |
-| `overfit_warning` | string | `"none"` / `"mild"` / `"severe"` — 基於 IsOOSDivergent() |
-| `rolling_sharpe_trend` | string | `"up"` / `"down"` / `"flat"` — rolling sharpe 線性迴歸斜率方向 |
-| `oos_sample_warning` | string | `"none"` / `"low"` / `"very_low"` — OOS 樣本數充足性 |
-
-> 前端 `dashboard.js` 的 observatory 表格使用 `rolling_sharpe_trend` 顯示 ▲▼ 趨勢箭頭，並根據 `overfit_warning` / `oos_sample_warning` 顯示色彩徽章。
-
-**陷阱**：修改 `domain.Scorecard` 或 OOS 計算邏輯後，必須同步更新此端點的 response mapping 結構（`agentObservatoryScorecard`）。
-
-## 高危反模式 (ANTI-PATTERNS)
-
-| 陷阱 | 說明 |
+| 職責 | 端點 |
 |------|------|
-| **大小寫失真** | 在 `handleRecommendationPipeline` 中解析 JSONL 時，若 anonymous struct 標籤錯誤會導致欄位為空值。 |
-| **全域 Mutex 阻塞** | `backtestMu` 保護回測執行狀態，避免在 API handler 中進行長時間阻塞操作。 |
-| **未處理的 Legacy 格式** | 讀取舊 session 時，`PassedGuards` 等新欄位可能缺失，需在 handler 進行 fallback 補齊（預設為 true）。 |
-| **OOS 取樣範圍太小（單一 session）** | `LoadAgentObservatory()` 不傳 `sessionID` 時，若回退到 `LoadSessionOutcomes()` 只會讀取**最新單一 session**，導致多數 agent OOS 樣本不足（`oos_sample_warning: insufficient`）。**必須改為直接呼叫 `LoadOutcomesFromSessions()`** 取得完整歷史 session 資料。 |
+| 核心儀表板 | `/api/dashboard/macro-radar`, `/api/dashboard/recommendation-pipeline` |
+| 產業生態系 | `/api/industry/cycles`, `/api/industry/seasonality`, `/api/industry/linkage`, `/api/industry/classification`, `/api/industry/detail` |
+| 敘事分析 | `/api/narrative/events`, `/api/narrative/chains` |
+| 人工干預 | `/api/control/approve-recommendation`, `/api/control/reject-recommendation`, `/api/control/audit-log` |
+| 實驗與回測 | `/api/experiment/*`, `/api/backtest/*` |
 
-## 跨市監控資料可見性 (Cross-Market Data Visibility)
+### JSON 慣例
 
-`CrossMarketService` 採用 **4 層資料可見性** 模式，確保通道靜默失敗時資料缺失能被看見。任何 `MacroDataSnapshot` 欄位 Symbol 為空 → 表示對應 channel 失敗；8 個 US 指數/科技股欄位任一失敗 → `data_status="degraded"`，並於 `failed_channels` 列出失敗 channelID。
-
-- L1 Gateway：`internal/apigateway/provider.go` 標記 `FetchResult.Fallback` / `LastError`
-- L2 Adapter：`internal/monitoring/gateway_adapter.go` 暴露 `ChannelErrors()`
-- L3 Service：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`
-- L4 Frontend：`web/static/js/pages/crossmarket.js` 顯示降級 badge/banner
-
-完整設計與技能指引見 `.claude/skills/atlas-data-visibility/SKILL.md`。
+讀 JSONL（`recommendation_outcomes.jsonl`）時，**部分 legacy 欄位使用 PascalCase**（如 `AgentID`, `Skill`），Unmarshal 結構必須精確對應。前端用 snake_case。詳見 `docs/audit/2026-05-07-monitoring-pascalcase-snakecase-incident.md`。
 
 ---
 
-## DriftDetector v2 — Target Weights Drift
+## Agent Observatory API（`GET /api/dashboard/agent-observatory`）
 
-### Architecture
+回傳所有 agent 的 Scorecard 陣列。**OOS 驗證欄位**（位於 `Scorecard.ScorecardDetail`）：
 
-`internal/monitoring/service/drift_detector.go` + `drift_helpers.go` 提供 `EventDriftDetected` 的偵測與發布。
-
-| 元件 | 位置 | 職責 |
-|------|------|------|
-| `DriftDetector` 介面 | `drift_helpers.go` | 公開 `Start(ctx) / Stop()` 契約 |
-| `TargetWeightsProvider` 介面 | `drift_helpers.go` | 注入 symbol-level 目標權重（v2） |
-| `driftDetector` 實作 | `drift_detector.go` | 訂閱 position update + regime change，週期性檢查 |
-| `NewDriftDetector` | `drift_detector.go` | 舊版 constructor（無 target drift，向後相容） |
-| `NewDriftDetectorWithTargets` | `drift_detector.go` | v2 constructor，接受 provider（可 nil） |
-
-### Event Subscriptions
-
-- `EventPositionUpdate`：v1 與 v2 detector 皆訂閱，累積 `symbol → MarketValue` snapshot map
-- `EventRegimeChangeConfirmed`：**僅 v2 detector 訂閱**（`d.provider != nil` 時）。`NewDriftDetector(bus)` 產出的 v1 detector 不訂閱此事件，與 v1 既有行為一致。v2 detector 訂閱後會更新 `currentRegime` 並重置 `prevTotal = 0`（re-baseline）
-
-### 閾值 (Thresholds)
-
-| 名稱 | 預設值 | 說明 |
-|------|--------|------|
-| `DriftMaxConcentrationThreshold` | 0.25 | 單一持倉最大佔比 |
-| `DriftTurnoverThreshold` | 0.15 | 週期內總值變化率 |
-| `DriftTargetWeightThreshold` | 0.10 | v2 — `|actual - target|` 最大 drift |
-
-### 觸發原因 (`reasons`)
-
-- `"concentration"`：max_concentration > 0.25
-- `"turnover"`：turnover > 0.15
-- `"target_drift"`：v2 — max_drift > 0.10（僅當 `TargetWeightsProvider` 非 nil 且回傳非空 map）
-
-### 陷阱 (Traps)
-
-| 陷阱 | 說明 |
+| 欄位 | 意義 |
 |------|------|
-| `WeightProvider` vs `TargetWeightsProvider` | `WeightProvider`（既有，factor-level）用於 `FactorWeightRegressionDetector`；`TargetWeightsProvider`（v2 新增，symbol-level）用於 DriftDetector。**不可混用**。 |
-| `EventRegimeChangeConfirmed` payload 型別 | `regime_debouncer.go` 發布的是 `map[string]any`，**不是** `RegimeEventPayload` struct。Handler 必須用 `payload.(map[string]any)` 然後 `payload["new_regime"].(string)` 取值。 |
-| `new_regime` 為 string | `regime_debouncer` 透過 `string()` 將 `domain.Regime` 轉為 string。**不可** type-assert 為 `domain.Regime`。 |
-| Nil provider graceful | `NewDriftDetectorWithTargets(bus, nil)` 必須保留 v1 行為：concentration/turnover 偵測照常，target_drift 不 emit，v2 欄位不出現於 payload。`thresholds.target_drift` 一律存在（常數）。 |
-| Regime change re-baseline | `onRegimeChangeConfirmed` 將 `prevTotal = 0` 而非 current total。**這是預期行為**：下一次 `checkPeriod` 會視為首次檢查並建立新 baseline，避免 regime 切換時的偽 turnover 事件。 |
-| `Stop()` 必須取消兩個訂閱 | v2 detector：`d.regimeSub` 與 `d.sub` 都必須取消（nil-safe）。v1 detector：只有 `d.sub`，`d.regimeSub` 為零值，nil-safe check 確保不 panic。漏掉任何一個 subscription 會造成 goroutine 洩漏。 |
-| Symbol 不在 target map | 視為 `target = 0`，drift = `actual_weight`。`TestDriftDetector_V2SymbolNotInTargetMap` 驗證此行為。 |
-| v1 payload 欄位不可變更 | `max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds` 為既有契約，**append-only**。v2 僅在後方新增欄位。 |
-| `max_drift_symbol` 確定性 | Go map 迭代順序不確定，`max_drift_symbol` 在 drift 平手時可能不固定。已用 `sort.Strings` 排序 symbol keys 確保確定性。 |
+| `is_sharpe` / `oos_sharpe` | In/Out-of-Sample Sharpe |
+| `is_oos_ratio` | `oos_sharpe / is_sharpe`，< 1 表示衰減 |
+| `overfit_warning` | `none`/`mild`/`severe` — 基於 `IsOOSDivergent()` |
+| `rolling_sharpe_trend` | `up`/`down`/`flat` — rolling sharpe 斜率方向 |
+| `oos_sample_warning` | `none`/`low`/`very_low` — OOS 樣本數充足性 |
+
+**陷阱**：修改 `domain.Scorecard` 後必須同步更新 `agentObservatoryScorecard` mapping。
+
+---
+
+## ANTI-PATTERNS
+
+- **大小寫失真**：`handleRecommendationPipeline` 解析 JSONL 時 anonymous struct 標籤錯誤會導致欄位為空值
+- **全域 Mutex 阻塞**：`backtestMu` 保護回測執行狀態，避免在 API handler 中長時間阻塞
+- **未處理的 Legacy 格式**：讀舊 session 時 `PassedGuards` 等新欄位可能缺失，需在 handler fallback（預設 true）
+- **OOS 取樣範圍太小**：`LoadAgentObservatory()` 不傳 `sessionID` 時若 fallback 到 `LoadSessionOutcomes()` 只會讀取**最新單一 session**，導致 OOS 樣本不足。**必須改用 `LoadOutcomesFromSessions()`** 取得完整歷史 session。
+
+---
+
+## 跨市監控資料可見性（4 層）
+
+`CrossMarketService` 採用 4 層模式，確保通道靜默失敗時資料缺失能被看見：
+- **L1 Gateway**：`internal/apigateway/provider.go` 標記 `FetchResult.Fallback` / `LastError`
+- **L2 Adapter**：`internal/monitoring/gateway_adapter.go` 暴露 `ChannelErrors()`
+- **L3 Service**：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`
+- **L4 Frontend**：`web/static/js/pages/crossmarket.js` 顯示降級 badge/banner
+
+完整設計與技能指引見 **`.claude/skills/atlas-data-visibility/SKILL.md`**。
+
+---
+
+## DriftDetector v2
+
+`internal/monitoring/service/drift_detector.go` 提供 `EventDriftDetected` 偵測與發布。
+
+**v1 vs v2**：
+- `NewDriftDetector(bus)`：v1，僅訂閱 `EventPositionUpdate`，無 target drift
+- `NewDriftDetectorWithTargets(bus, provider)`：v2，多訂閱 `EventRegimeChangeConfirmed`，新增 `target_drift` 偵測
+
+**閾值**（`thresholds` 常數）：`DriftMaxConcentrationThreshold=0.25`、`DriftTurnoverThreshold=0.15`、`DriftTargetWeightThreshold=0.10`
+
+**v1/v2 payload 契約**：`max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds` 為 v1 既有欄位（**append-only**），v2 僅在後方新增。
+
+關鍵陷阱詳見 `internal/monitoring/service/drift_detector.go` 程式註解與 `drift_helpers.go`。
 
 ---
 
 ## Live 偵測器協調器
 
-`internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 在 live mode 下統一啟動、協調與關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。詳細啟動/關閉順序、provider 注入、與 Dashboard API 的整合與向後相容說明見 `docs/handoff/2026-wave9-observability-coordinator.md`。
+`internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。詳見 `docs/handoff/2026-wave9-observability-coordinator.md`。

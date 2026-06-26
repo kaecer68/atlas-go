@@ -36,15 +36,9 @@ description: "適用於 atlas-go 的 Go 程式碼修改。涵蓋 import 分組�
 defer func() { _ = f.Close() }()
 ```
 
-**適用範圍**：
-- `resp.Body.Close()` — HTTP response body（always safe）
-- `rows.Close()` — `*sql.Rows`（return `error`，但實際僅釋放連線）
-- `stmt.Close()` — `*sql.Stmt`
-- 唯讀 `f.Close()` — 以 `os.Open` 或 `os.OpenFile` 不含寫入旗標開啟的檔案
+**適用範圍**：`resp.Body.Close()`（HTTP body）、`rows.Close()`（`*sql.Rows`）、`stmt.Close()`（`*sql.Stmt`）、唯讀 `f.Close()`。
 
-**不適用**（保留原始 `defer X.Close()`）：
-- 寫入路徑（`os.O_WRONLY` / `os.O_CREATE` / `os.O_APPEND`）— Close error 可能代表資料未完整寫入磁碟
-- `pgx.Rows.Close()` — 不回傳 error，errcheck 不會檢查
+**不適用**（保留原始 `defer X.Close()`）：寫入路徑（`os.O_WRONLY` / `O_CREATE` / `O_APPEND`）— Close error 可能代表資料未完整寫入磁碟。
 
 ### 新程式碼（closure + logging）
 
@@ -60,21 +54,11 @@ defer func() {
 }()
 ```
 
-## 常見 Go 反模式（atlas-go 特有）
-
-以下為此 codebase 高頻踩踏區。修改或新增 Go 程式碼時請檢查：
-
-1. **mutable `[]domain.Recommendation` slice 共享** — 多次 simulation run、executor 之間不可共用同一個 slice。每次需要時請 `make` 新的並 `copy` 資料，否則會導致資料競爭。
-
-2. **Session 日期從 `RecordedAt` 推斷** — `RecordedAt` 是計算完成時間，不是交易日。排序/比較請從 `SessionID` 提取（格式 `session-YYYYMMDD-daily` → `2006-01-02`）。
-
-3. **Darwinian 權重超界靜默夾制** — 權重範圍 `[0.3, 2.5]`。超界不報錯，而是靜態正規化。撰寫權重邏輯時請驗證邊界。
-
-4. **JSON tag 大小寫不一致** — Go struct 的 JSON tag 一律用 snake_case（如 `factor_scores`）。若 API parsing struct 用了 PascalCase（如 `FactorScores`），unmarshal 會無聲失敗，該欄位永遠為零值。變更 JSON tag 後 `go generate .` 會自動同步前端型別。
+> 完整 Go 反模式（mutable slice / Session 日期 / Darwinian 權重 / JSON tag 大小寫）見根 `AGENTS.md` §「關鍵跨模組陷阱」與 `docs/TRAPS.md`。
 
 ## 測試規則
 
-- 新增或更新測試時，使用同目錄同 package 的 *_test.go。
+- 新增或更新測試時，使用同目錄同 package 的 `*_test.go`。
 - 優先跑聚焦套件測試，再視需要擴大測試範圍。
 
 ## 驗證清單
@@ -86,11 +70,8 @@ test -z "$(gofmt -l .)"
 # 聚焦測試（依變更套件調整）
 go test ./internal/orchestrator/...
 go test ./internal/sim/...
-```
 
-若影響範圍較大：
-
-```bash
+# 若影響範圍較大
 go test ./...
 ```
 

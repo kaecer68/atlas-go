@@ -2,177 +2,85 @@
 
 本目錄是 `atlas-go` 的 **LLM 整合基礎設施層**，提供 capability-based 多 Provider 路由 + DataClass 治理閘門 + 熱路徑護欄。
 
-> **設計權威**：`docs/llm-integration-strategy-framework.md`（4-digit semver 規範）。
-> **路由表來源**：`configs/llm_router.yaml`（runtime 載入）；fallback 預設見 `router.go:defaultRoutingTable()`。
-> **成熟度規則**：`internal/MATURITY.md` LLM 相關條目（`llm` / `llm/schemas` / `llm/clients` / `llm/capabilities` / `llm_annotator`）。
+> **設計權威**：`docs/llm-integration-strategy-framework.md`（4-digit semver 規範）
+> **路由表來源**：`configs/llm_router.yaml`（runtime）；fallback 預設見 `router.go:defaultRoutingTable()`
+> **成熟度規則**：`internal/MATURITY.md` LLM 相關條目
 
 ---
-
-## 核心職責
-
-- **Provider 抽象**（`provider.go`）：定義 `ProviderImpl` 介面、`Capability`（能力描述）、`DataClass`（資料分級）、`RoutingChain`（備援鏈）。
-- **路由引擎**（`router.go`）：`DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort 4 層 fallback chain；強制執行 DataClass 閘門（`ADR-010`）。
-- **設定載入**（`config.go`）：`LoadRouterConfig(path)` 讀 YAML 並驗證所有 capability/provider 名稱；`TryLoadRouterConfig` 在錯誤時 fallback 預設表。
-- **健康端點**（`health.go`）：聚合所有已註冊 Provider 的 `HealthStatus` 與 circuit breaker 狀態，供 `/api/llm/health` 暴露。
 
 ## 子模組佈局
 
 | 子目錄 | 行數規模 | 內容 |
 |--------|---------|------|
-| `clients/` | ~3K | 3 個 HTTP Provider client（DeepSeek V4 / MiniMax M3 / Kimi K2.7）+ 共享 `BaseClient`（retry / rate-limit / circuit breaker）+ `metrics.go` |
-| `schemas/` | ~2K | 9 個 capability 的 typed I/O contract（JSON-serialized, Zod-compatible JSON Schema） |
+| `clients/` | ~3K | 3 個 HTTP Provider client（DeepSeek / MiniMax / 共享 `BaseClient`）+ `metrics.go` |
+| `schemas/` | ~2K | 9 個 capability 的 typed I/O contract（JSON Schema） |
 | `capabilities/` | ~3K | 10 個 capability handler（typed payload → Router → typed response） |
-| `adapters/` | ~1K | Annotator / Router 整合層，給非 LLM-aware 模組（e.g. `internal/llm_annotator`）注入 |
+| `adapters/` | ~1K | `Annotator` ↔ `llm.ProviderImpl` 雙向 bridge |
 
-修改任何子模組前，**必須先讀該子目錄的對應參考**：
-
-- `clients/` → 直接讀碼，或透過 GitNexus 查詢符號關係
-- `capabilities/` → handler-specific 測試檔（每個 capability 一個 `*_test.go`）
-- `schemas/` → `schemas_test.go`
+修改前先讀子目錄對應檔案，或用 GitNexus 查符號關係。
 
 ---
 
 ## 公共 API 速查
 
-完整清單見 `doc.go:15-30`。以下是常用對外契約：
+完整清單見 `doc.go:15-30`。最常用入口：
 
-| 函數 / 介面 | 用途 | 觸發位置 |
-|------------|------|---------|
-| `NewDefaultRouter(impls ...ProviderImpl) *DefaultRouter` | 啟動時 wiring router with default routing table | `cmd/atlas/main.go`, `cmd/lint-pr/main.go`, `cmd/lint-prompts/main.go` |
-| `NewDefaultRouterFromConfig(cfg RouterConfig, impls ...ProviderImpl)` | 載入 `configs/llm_router.yaml` 後呼叫 | `cmd/atlas/main.go` |
-| `TryLoadRouterConfig(path string) RouterConfig` | 啟動時載入，失敗 fallback 預設 | `cmd/atlas/main.go` |
-| `DefaultRouter.Call(ctx, Request) (Response, error)` | 任何 LLM 呼叫的入口 | 透過 capability handler |
-| `DefaultRouter.Health() map[Provider]HealthStatus` | `/api/llm/health` 端點 | `internal/monitoring/api/llm/handlers.go` |
-| `Capability` / `DataClass` / `Provider` 型別 | 強型別契約 | 跨模組共用 |
+| 函數 | 用途 |
+|------|------|
+| `NewDefaultRouter(impls ...ProviderImpl) *DefaultRouter` | 啟動時 wiring，附帶 default routing table |
+| `NewDefaultRouterFromConfig(cfg, impls)` | 載入 `configs/llm_router.yaml` 後呼叫 |
+| `DefaultRouter.Call(ctx, Request) (Response, error)` | 所有 LLM 呼叫的唯一入口 |
+| `DefaultRouter.Health() map[Provider]HealthStatus` | `/api/llm/health` |
 
-> **Effective routing chain**: RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串。實作上等於 3 層 fallback（Primary → Backup1 → LastResort）。`ProviderOpenCodeGo` 與 `ProviderOpenCodeZen` 常數保留為 `[PLANNED]` 狀態，等未來 client 實作後可重用。Router iteration 容忍空字串 Backup2（`router.go:Call` 直接 `continue` 跳過）。
-
-### 12 個 Capability（命名須與 `provider.go:28-41` 完全一致）
-
-| Constant | 典型用途 |
-|----------|---------|
-| `CapabilityFailureAttribution` | StrategyFrame 失效歸因 |
-| `CapabilityCodeReviewAnnotation` | PR review 自動標註 |
-| `CapabilityPromptLint` | Prompt template 健康檢查 |
-| `CapabilityRationaleGeneration` | 中文敘事翻譯/生成 |
-| `CapabilityStrategySummary` | StrategyFrame 摘要 |
-| `CapabilityRiskSurfaceExtraction` | 風險面提取 |
-| `CapabilityRegimeExplanation` | Regime 變化解釋 |
-| `CapabilityPerformanceForensics` | 表現歸因 |
-| `CapabilityScenarioSimulation` | PRISM cohort 洞見 |
-| `CapabilitySentimentExplanation` | 情緒指標解釋 |
-| `CapabilityContraAttribution` | 反向歸因（adversarial） |
-| `CapabilityConfidenceCommentary` | 信心校準旁路 |
-
-新增 capability **必須同步 4 個位置**（CI 強制）：
-1. `provider.go` Capability 常數
-2. `router.go:defaultRoutingTable()` routing chain
-3. `config.go:isKnownCapability()` switch case
-4. `configs/llm_router.yaml` routing_chains entry
+> 12 個 `Capability` 常數列於 `provider.go:28-41`，新增 capability 必須同步 4 個位置（見 skill）。
 
 ---
 
-## 陷阱與反模式
+## 核心陷阱
 
-### 1. 直接呼叫 Provider（繞過 Router）
-**症狀**：在業務邏輯直接 `minimaxClient.Call(ctx, req)` 跳過 router。
-**後果**：繞過 DataClass 閘門 → regulated 資料可能送中國管轄 provider；繞過 circuit breaker；繞過 fallback chain；observability span 缺失。
-**正確**：一律透過 `DefaultRouter.Call()` 或對應的 `capabilities/*Handler`。
+1. **繞過 Router 直接呼叫 Provider**：會跳過 DataClass 閘門與 fallback chain。一律透過 `DefaultRouter.Call()` 或 `capabilities/*Handler`。
+2. **S/E 模組直接 import**：會破壞 replay 可重現性。hot-path 呼叫必須 async 或 fallback-safe。
+3. **MiniMax DataClass 繞過**：regulated 資料走 MiniMax 會回 `ErrProviderDisabled`（`router.go:110`）——這是有意設計（ADR-010）。
 
-### 2. 在 hot-path（S/E-level）直接 import
-**症狀**：`internal/sim/`、`internal/experiment/` 等 S/E 模組 import `internal/llm/`。
-**後果**：模擬執行被 LLM 網路延遲拖慢，replay 可重現性破壞。
-**正確**：hot-path 呼叫必須 async 或 fallback-safe（見 `doc.go:32-33`）；觀察窗口內使用 deterministic 預設值。
-
-### 3. MiniMax DataClass 閘門繞過
-**症狀**：呼叫時 `req.Options.ForceProvider = &ProviderMiniMax` + `req.DataClass = DataClassRegulated` 試圖強制走 MiniMax。
-**後果**：router 會回 `ErrProviderDisabled`（`router.go:110`）。這是有意設計（ADR-010），不可繞過。
-**正確**：regulated 資料只能走 DeepSeek 或 Mock 路徑（Issue #720 移除 OpenCode-Go / OpenCode-Zen 後）。
-
-### 4. Kimi K2.7 已被移除
-**症狀**：使用 `LLM_ANNOTATOR_API_KEY` 配 Kimi API。
-**後果**：`LLM_ANNOTATOR_API_KEY` 與 `LLM_MINIMAX_API_KEY` 同源（`sk-cp-` 前綴的 minimax-cn-coding-plan key），呼叫 Kimi 端點會被拒絕。
-**正確**：Phase 1 起改用 MiniMax client。`LLM_ANNOTATOR_API_KEY` 為向後相容保留，新程式碼用 `LLM_MINIMAX_API_KEY`。
-
-### 5. ProviderOpenAI 已 deprecated
-**症狀**：使用 `ProviderOpenAI` 常數。
-**後果**：保留是為向後相容；新整合應使用 `ProviderKimi` / `ProviderMiniMax` / `ProviderDeepSeek` / `ProviderOpenCodeGo` / `ProviderOpenCodeZen` / `ProviderMock`。
-
-### 6. Tool 呼叫的 InputSchema 須為 JSON Schema (Zod-compatible)
-**症狀**：`Tool.InputSchema` 傳 Go struct。
-**後果**：router 與 providers 預期 raw JSON；Go struct 序列化會被當成空 payload。
-**正確**：使用 `json.RawMessage` 內含標準 JSON Schema 字串。
+**完整陷阱與 Provider/Capability 開發 SOP**見 **`.claude/skills/atlas-llm-provider-capability/SKILL.md`**。
 
 ---
 
-## 開發慣例
+## 環境變數
 
-新增 Provider client、Capability handler 或修改 routing table 的完整 SOP 見 **`.claude/skills/atlas-llm-provider-capability/SKILL.md`**。簡要原則：
-
-- 新 provider **必須**嵌入 `BaseClient`。
-- 新 capability **必須**同步 `provider.go` 常數、`router.go:defaultRoutingTable()`、`config.go:isKnownCapability()`、`configs/llm_router.yaml` 四處。
-- routing table YAML 與 `defaultRoutingTable()` **必須**同步。
-- 禁止硬編碼 API key；禁止業務邏輯直接呼叫 provider client。
-
----
-
-## 環境變數與 secrets
-
-| 變數 | 用途 | 來源 |
+| 變數 | 用途 | 預設 |
 |------|------|------|
-| `LLM_MINIMAX_API_KEY` | MiniMax M3 API key（`sk-cp-` 前綴） | 從 minimax-cn-coding-plan 取得 |
-| `LLM_DEEPSEEK_API_KEY` | DeepSeek V4-Pro / V4-Flash | 從 https://platform.deepseek.com 取得 |
-| `LLM_ANNOTATOR_API_KEY` | **向後相容** — 等同 `LLM_MINIMAX_API_KEY` | 歷史誤標，保留 |
-| `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 rationale 翻譯 hook | default `false` |
-| `LLM_PRISM_SCENARIO_ENABLED` | 啟用 PRISM scenario 說明 hook | default `false` |
-| `LLM_NARRATIVE_EXPLAIN_ENABLED` | 啟用 regime + sentiment 解釋 hook | default `false` |
-| `LLM_RISK_FORENSICS_ENABLED` | 啟用 performance forensics hook | default `false` |
+| `LLM_MINIMAX_API_KEY` | MiniMax M3 API key | — |
+| `LLM_DEEPSEEK_API_KEY` | DeepSeek V4-Pro / V4-Flash | — |
+| `LLM_ANNOTATOR_API_KEY` | **向後相容** — 等同 `LLM_MINIMAX_API_KEY` | — |
+| `LLM_RATIONALE_TRANSLATION_ENABLED` | rationale 翻譯 hook | `false` |
+| `LLM_PRISM_SCENARIO_ENABLED` | PRISM scenario 說明 hook | `false` |
+| `LLM_NARRATIVE_EXPLAIN_ENABLED` | regime + sentiment 解釋 hook | `false` |
+| `LLM_RISK_FORENSICS_ENABLED` | performance forensics hook | `false` |
 
 ---
 
-## 觀察窗口（Observation Window）
+## 觀察窗口（Feature Flag）
 
-依據 `sector_agent_llm.go` 設計：
-
-- **`SectorAgentLLM.LLM == nil`** 時 runner 回 `ErrNotImplemented`，deterministic 路徑保留 — 這是**預期**行為，不是 bug。
-- Feature flag `UseLLMSectorAgents` 控制 LLM-driven sector agents 啟用（預設關閉）。
-- 在觀察窗口內，backtest 必須使用 deterministic 路徑以保證可重現性。
+- `SectorAgentLLM.LLM == nil` → runner 回 `ErrNotImplemented`，**這是預期行為**。
+- `UseLLMSectorAgents` flag 預設關閉；backtest 必須用 deterministic 路徑保證可重現性。
 
 ---
 
 ## 測試慣例
 
 ```bash
-# 聚焦測試
 go test ./internal/llm/...
-go test ./internal/llm/clients/...
-go test ./internal/llm/capabilities/...
-go test ./internal/llm/adapters/...
-
-# Integration（含 router + clients 端對端）
-go test -run Integration ./internal/llm/...
+go test -run Integration ./internal/llm/...   # 含 router + clients 端對端
 ```
 
-新增 capability 時**必須**寫 handler 單元測試（mock router），確認：
-
-1. typed payload 正確轉 `llm.Request`（含 DataClass）
-2. router 回 `llm.Response` 正確 unmarshal 回 typed response
-3. router 回錯時 handler 回有意義的 Go error（不可吞錯）
-4. fallback chain 行為（primary fail → backup1 → ... → lastResort）符合預期
+新增 capability 必寫 handler 單元測試（mock router），確認 typed payload 轉換、router fallback 行為、錯誤不吞。
 
 ---
 
-## 與 `internal/llm_annotator` 的分工（Issue #722）
+## 與 `internal/llm_annotator` 的分工
 
-`internal/llm/adapters/` 與 `internal/llm/capabilities/` 是 Phase 2 canonical 介面，已將 `llm_annotator.Annotator` 包進 capability-based routing。但 `internal/llm_annotator` 仍是早期 narrow 介面（保留向後相容）。
-
-| 套件 | 角色 | 使用時機 |
-|------|------|---------|
-| `internal/llm/capabilities/failure_attribution` | typed handler（canonical） | 新程式碼用這條 |
-| `internal/llm/adapters` | `Annotator` ↔ `llm.ProviderImpl` 雙向 bridge | router 整合層 |
-| `internal/llm_annotator` | 早期 narrow 介面（向後相容） | 既有呼叫端保留 |
-
-**已知債務**：兩個 CircuitBreaker 雙重實作仍並存，transitive cycle `apigateway → monitoring → llm/capabilities → llm_annotator` 阻擋直接合併。統一方案需先把 `monitoring.ChannelHealthRecord`/`RecordOption` 搬到 `apigateway` 內（斷開 monitoring → llm/capabilities → llm_annotator 環），再合併 CircuitBreaker。
+`internal/llm/adapters/` + `internal/llm/capabilities/` 是 Phase 2 canonical 介面；`internal/llm_annotator` 是早期 narrow 介面（保留向後相容）。新程式碼用 `capabilities/*Handler`，既有呼叫端保留 `llm_annotator`。
 
 ---
 
@@ -180,6 +88,5 @@ go test -run Integration ./internal/llm/...
 
 - `docs/llm-integration-strategy-framework.md` — 設計權威
 - `docs/llm-promotion-evaluation.md` — LLM 晉升評估流程
-- `docs/archive/2026-06-22-llm-trigger-analysis-RESOLVED.md` — LLM 觸發點分析（已 RESOLVED）
 - `configs/llm_router.yaml` — runtime routing table
-- `internal/MATURITY.md` — LLM 相關條目（`llm` / `llm/schemas` / `llm/clients` / `llm/capabilities` / `llm_annotator`）
+- `.claude/skills/atlas-llm-provider-capability/SKILL.md` — Provider/Capability 開發 SOP
