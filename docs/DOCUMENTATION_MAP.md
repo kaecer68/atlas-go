@@ -43,6 +43,11 @@
 - `specs/real-time-regime-detection.md` — 即時 regime 偵測規格
 - `llm-integration-strategy-framework.md`, `LLM_INTEGRATION_*` — LLM 框架
 
+### 憲法 / 閘門
+
+- `CONSTITUTION.md` — 深度開發憲法（7 條文：深度定義、第一性原理、程式碼預算、修改邊界、迭代閘門、溝通規範、失敗處理）
+- `ITERATION_GATE.md` — 迭代閘門（5 Gate 自我檢查：數學深度、資產通用性、Falsifiability、程式碼預算、回歸測試）
+
 ### 審計 / 歸檔
 
 - `audit/` — 審計報告（含原本 docs/audit + 從根目錄移入的 3 個）
@@ -52,7 +57,7 @@
 
 - `handoff/` — 任務交接
 - `investigations/` — 根因調查
-- `plans/` — 修復計畫（與 `.omo/plans/` 不同：omo 是執行 plan，docs 是 repair plan）
+- `plans/` — 修復計畫
 
 ### 維護 / Hygiene
 
@@ -60,39 +65,27 @@
 
 ### Wave-specific（active）
 
-- `wave-10-observation-log.md` — Wave 10 L1+L2 觀察記錄
+- `wave-10-observation-log.md` — Wave 10 L1+L2 觀察紀錄
 - `wave-11/` — Wave 11 L2.3/L2.4 active work（含 L2.4 RUNBOOK）
 
-## .omo/（執行性 / iteration-bound）
+## .omo/（AI agent ephemeral working dir，**未 git tracked**）
 
-### Governance
+`.omo/` 在 `.gitignore` 排除範圍，**新 clone 不會取得此目錄內容**。此目錄為 AI agent 個人工作區，不該被當作 canonical 規範文件。
+完整用途與規範見 `docs/DOCUMENTATION_STANDARD.md` 的 `.omo/` 段。
 
-- `CONSTITUTION.md` — Atlas 深度開發憲法
-- `ITERATION_GATE.md` — 迭代閘門規則
-- `boulder.json` — 執行追蹤
+| 類別 | 範例 | 生命週期 |
+|------|------|---------|
+| `briefs/` | phase 任務 brief | active → merge 後刪除 |
+| `plans/` | 執行 plan | active → merge 後刪除 |
+| `evidence/` | 驗證報告 | short-lived |
+| `traces/` | sim 執行 JSONL | transient |
+| `run-continuation/` | session state | session-only |
+| `notepads/`, `workspaces/`, `handoffs/` | 決策/交接/工作區 | transient |
+| `phaseN/`, `wave-N*/` | phase/wave 規劃 | merged 後刪除 |
+| `maps/` | 自動產生的架構快照 | 需定期重新生成 |
+| `boulder.json` | 執行追蹤器 | 短暫 |
 
-### Iteration artifacts
-
-- `briefs/` — phase 任務 briefs（P0-1、P0-2、P1-1、P2、P3）
-- `evidence/` — 驗證證據（F1-F4、task-1..16）
-- `plans/` — 規劃（執行 plan）
-- `drafts/`, `phase6/`, `workspaces/`, `notepads/`, `run-continuation/` — session 狀態
-
-### Observability
-
-- `traces/` — 模擬執行記錄（45 個 JSONL）
-- `maps/` — 架構地圖
-
-### Audit / Handoff
-
-- `audits/experimental-todos-20260526.md` — 實驗待辦（active）
-- `handoff-ci-fixes.md`, `session-summary-2026-05-07.md` — 過渡交接
-- `wave-8-surface.md`, `wave-8.1-risk-gate-rejected-surface.md` — 已拒絕表面記錄
-- `handoffs/` — 交接紀錄
-
-### ⚠️ 待處理（follow-up）
-
-- `.omo/briefs/P0-1_covarianc.md` vs `P0-1_covariance.md` — typo 與命名混淆，前者為中文 task brief，後者為英文 status update。需審查合併或保留兩者但加說明。
+**⚠️ 重要**：AGENTS.md 原本引用 `.omo/CONSTITUTION.md` 與 `.omo/ITERATION_GATE.md`，**這是文件斷裂**（新 clone 看不到），已由 PR 修為 `docs/CONSTITUTION.md` 與 `docs/ITERATION_GATE.md`。本目錄未來不應被當作 canonical 來源。
 
 ## 動作紀錄
 
@@ -101,3 +94,9 @@
   - 刪除 `quick_start.md`（重複）
   - 新建 `docs/DOCUMENTATION_STANDARD.md` 與本文件
   - 更新 `AGENTS.md` §「內容歸屬規則」
+- **2026-06-26** PR #751（本 PR 來源）修復文件斷裂：
+  - `git mv .omo/CONSTITUTION.md → docs/CONSTITUTION.md`
+  - `git mv .omo/ITERATION_GATE.md → docs/ITERATION_GATE.md`
+  - `AGENTS.md`：`.omo/CONSTITUTION.md` 引用改為 `docs/CONSTITUTION.md`，新增 `docs/ITERATION_GATE.md`
+  - `AGENTS.md`：「設計文件 / 規劃」行移除對 `.omo/briefs/`、`.omo/plans/`、`.omo/evidence/` 的引用
+  - `DOCUMENTATION_MAP.md`：撤回 `.omo/` 內部檔案描述，改為說明 `.omo/` 是 ephemeral agent working dir

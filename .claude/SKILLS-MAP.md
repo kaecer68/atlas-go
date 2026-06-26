@@ -189,7 +189,7 @@ GitNexus 程式碼智慧工具技能。
 | `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態單一真相來源 | 技能使用前先確認環境狀態 |
 | `.claude/skills/SKILL_TEMPLATE.md` | 統一手寫技能模板 | 新建技能時的格式規範 |
 | `internal/apigateway/CONSTITUTION.md` | 憲法級強制規範 | 技能不可違反憲法 |
-| `.omo/CONSTITUTION.md` | 深度憲法（矩陣運算、證偽） | 策略技能須遵守數學約束 |
+| `docs/CONSTITUTION.md` | 深度憲法（矩陣運算、證偽） | 策略技能須遵守數學約束（2026-06-26 PR #751 從 `.omo/CONSTITUTION.md` 移入，因 `.gitignore` 排除而新 clone 不可見）|
 
 ---
 

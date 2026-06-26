@@ -1,7 +1,7 @@
 # Atlas-Go 規範文件索引（Guidelines Index）
 
-**版本**：1.4  
-**日期**：2026-06-25  
+**版本**：1.5  
+**日期**：2026-06-26  
 **用途**：所有規範文件的統一入口與權威階層定義。
 
 ---
@@ -12,9 +12,11 @@
 
 ```
 階層 1: 憲法（Constitution）
-  └── .omo/CONSTITUTION.md（⚠️ 已被 `.claudeignore` 排除，Claude Code 無法讀取）
+  └── docs/CONSTITUTION.md
       深度工作與數學/實證約束；非 CI 強制，但對 optimizer / portfolio / risk 具關鍵約束。
-      如需查閱，請直接使用 `cat .omo/CONSTITUTION.md` 終端指令。
+      註：原位於 `.omo/CONSTITUTION.md`（2026-06-26 PR #751 移至此處，`.omo/` 為 .gitignore 排除，新 clone 不可見）。
+  └── docs/ITERATION_GATE.md
+      迭代閘門（5 Gate 自我檢查：數學深度、資產通用性、Falsifiability、程式碼預算、回歸測試）。
   └── internal/apigateway/CONSTITUTION.md
       強制規範，CI 自動檢查。違反會阻斷 PR。
 
@@ -50,7 +52,7 @@
 
 | 文件 | 範圍 | AI 入口可達性 |
 |------|------|-------------|
-| `.omo/CONSTITUTION.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ❌ 已被 `.claudeignore` 排除。如需查閱請用 `cat .omo/CONSTITUTION.md` |
+| `docs/CONSTITUTION.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `AGENTS.md` 索引 |
 | `internal/apigateway/CONSTITUTION.md` | 數據源管理：Gateway 模式、限流、熔斷、背景任務、環境變數 | ✅ 從 `agents.md` → `copilot-instructions.md` |
 
 ### 階層 2：領域守則（Instructions）
@@ -160,6 +162,7 @@
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/CONSTITUTION.md` → `docs/CONSTITUTION.md`，新增 `docs/ITERATION_GATE.md`（PR #751）|
 | 1.4 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 索引；更新版本/日期以反映 PR #700 |
 | 1.3 | 2026-06-17 | 修正不存在技能引用（atlas-core-architecture → SKILLS-MAP.md + docs/architecture.md）；更新技能數量為實際值（手寫 10 + 生成 21 + 機器人 4 + GitNexus 6）；新增機器人溝通與自動生成技能分類說明 |
 | 1.2 | 2026-06-02 | 修正統計數字：技能文件 5→16、模組指南 21→34、移除 sim 缺失標記（已補齊） |

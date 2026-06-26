@@ -17,9 +17,9 @@
 | 模組內部陷阱/API/流程 | `internal/<mod>/AGENTS.md` |
 | 操作程序 / playbook | `docs/` |
 | CI / pipeline 設定 | `.github/workflows/`、`.github/instructions/` |
-| 憲法級強制規範 | `internal/apigateway/CONSTITUTION.md`、`.omo/CONSTITUTION.md` |
+| 憲法級強制規範 | `docs/CONSTITUTION.md`、`docs/ITERATION_GATE.md`、`internal/apigateway/CONSTITUTION.md` |
 | 技能 / 子代理指引 | `.claude/SKILLS-MAP.md` |
-| 設計文件 / 規劃 | `.omo/briefs/`、`.omo/plans/`、`.omo/evidence/` |
+| 規範性 / 設計文件 | `docs/`（**不應放 `.omo/`** — `.gitignore` 排除，新 clone 看不到）|
 
 **防膨脹規則**：
 - 本文件不超過 **160 行**（人類編寫部分）
@@ -82,8 +82,9 @@
 | `docs/DOCUMENTATION_STANDARD.md` | **文件歸屬規範**（每種文件放哪、命名、生命週期）|
 | `docs/DOCUMENTATION_MAP.md` | **文件當前位置地圖**（所有檔案實際位置）|
 | `docs/branch-hygiene/` | Branch 維護紀錄（PR #748 建立）|
-| `internal/apigateway/CONSTITUTION.md` | 憲法級強制規範 |
-| `.omo/CONSTITUTION.md` | 深度憲法（矩陣運算、實證約束） |
+| `docs/CONSTITUTION.md` | 深度開發憲法（矩陣運算、實證約束、AI Coding 流程）|
+| `docs/ITERATION_GATE.md` | 迭代閘門（5 Gate 自我檢查規範）|
+| `internal/apigateway/CONSTITUTION.md` | 數據源憲法（Data Source 6 條文 + 3 附錄）|
 
 ## 程式碼智慧工具
 

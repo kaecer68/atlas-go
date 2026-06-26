@@ -26,7 +26,7 @@
 | Skills / AI 引導 | `.claude/skills/` | `atlas-<topic>/SKILL.md` |
 | 開發者 / AI 指南 | `docs/guides/` | `<topic>-guide.md` |
 | 快速入門 | `docs/QUICKSTART.md` | 單一檔（不可複製） |
-| 憲法 / 強制規範 | `.omo/CONSTITUTION.md` 或 `internal/<mod>/CONSTITUTION.md` | 兩者皆為最高層級，議題不同 |
+| 憲法 / 強制規範 | `docs/CONSTITUTION.md` 或 `internal/<mod>/CONSTITUTION.md` | 兩者皆為最高層級，議題不同（**`.omo/CONSTITUTION.md` 不可作為 canonical 來源** — `.gitignore` 排除）|
 
 ## 命名規範
 
