@@ -73,8 +73,9 @@ const (
 	EventOrderError EventType = "order.error"
 
 	// 自动监控事件
-	EventSharpeDegradation EventType = "monitor.sharpe.degradation"
-	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
+	EventSharpeDegradation   EventType = "monitor.sharpe.degradation"
+	EventDrawdownBreach      EventType = "monitor.drawdown.breach"
+	EventConcentrationBreach EventType = "portfolio.concentration.breach"
 
 	// 风险闸门事件
 	EventRiskGateRejected   EventType = "monitor.risk_gate.rejected"
@@ -272,6 +273,19 @@ type DrawdownBreachPayload struct {
 	PortfolioValue  float64   `json:"portfolio_value"`
 	PeakValue       float64   `json:"peak_value"`
 	Timestamp       time.Time `json:"timestamp"`
+}
+
+// ConcentrationBreachPayload portfolio concentration breach event payload.
+// Emitted by internal/risk/concentration_alert_emitter.go when per-position
+// weight, positions count, or sector weight exceeds the configured thresholds.
+// Consumed by a future monitoring consumer (Decision 7 follow-up).
+type ConcentrationBreachPayload struct {
+	Type      string    `json:"type"`      // "position" | "count" | "sector"
+	Symbol    string    `json:"symbol"`    // for Type=="position"
+	Sector    string    `json:"sector"`    // for Type=="sector"
+	Value     float64   `json:"value"`     // breached metric (weight / count / exposure)
+	Threshold float64   `json:"threshold"` // configured threshold
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
@@ -1000,6 +1014,24 @@ func (b *ChannelEventBus) PublishDrawdownBreach(payload DrawdownBreachPayload) {
 		Timestamp:     time.Now(),
 		Payload:       payload,
 		Severity:      "critical",
+		SchemaVersion: 1,
+	})
+}
+
+// PublishConcentrationBreach publishes a portfolio concentration breach
+// event. Fired by internal/risk/concentration_alert_emitter.go when
+// per-position weight, positions count, or sector weight exceeds the
+// configured threshold. Severity is determined by the caller via the
+// BusEvent.Severity field (position/sector breach → "error", count
+// breach → "warning") — the payload Type field tells the consumer which
+// metric was breached.
+func (b *ChannelEventBus) PublishConcentrationBreach(payload ConcentrationBreachPayload, severity string) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventConcentrationBreach,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      severity,
 		SchemaVersion: 1,
 	})
 }
