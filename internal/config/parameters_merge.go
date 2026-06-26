@@ -301,6 +301,12 @@ func mergeAlertDefaults(cfg *ParametersConfig) {
 	if a.RuleEngineCooldownSec.Value == 0 {
 		a.RuleEngineCooldownSec = def.RuleEngineCooldownSec
 	}
+	if a.SlippageErrorBps.Value == 0 {
+		a.SlippageErrorBps = def.SlippageErrorBps
+	}
+	if a.SlippageWarningBps.Value == 0 {
+		a.SlippageWarningBps = def.SlippageWarningBps
+	}
 	if a.SystemMetricsIntervalSec.Value == 0 {
 		a.SystemMetricsIntervalSec = def.SystemMetricsIntervalSec
 	}
