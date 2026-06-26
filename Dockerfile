@@ -3,11 +3,25 @@
 # Stage 1: Frontend build
 FROM node:22-alpine AS nodebuilder
 WORKDIR /build
-COPY web/package.json web/package-lock.json ./
-RUN npm ci
-COPY web/esbuild.config.mjs .
-COPY web/static ./static
-RUN npm run build
+
+# Install dependencies for all three embedded frontends.
+COPY web/package.json web/package-lock.json ./web/
+COPY admin_web/package.json admin_web/package-lock.json ./admin_web/
+COPY client_web/package.json client_web/package-lock.json ./client_web/
+RUN cd web && npm ci
+RUN cd admin_web && npm ci
+RUN cd client_web && npm ci
+
+# Copy build configs and static assets, then build each dist directory.
+COPY web/esbuild.config.mjs ./web/
+COPY admin_web/esbuild.config.mjs ./admin_web/
+COPY client_web/esbuild.config.mjs ./client_web/
+COPY web/static ./web/static
+COPY admin_web/static ./admin_web/static
+COPY client_web/static ./client_web/static
+RUN cd web && npm run build
+RUN cd admin_web && npm run build
+RUN cd client_web && npm run build
 
 # Stage 2: Go build
 FROM golang:1.25-alpine AS builder
@@ -24,7 +38,9 @@ RUN go mod download
 
 # Copy source code
 COPY . .
-COPY --from=nodebuilder /build/dist ./web/dist
+COPY --from=nodebuilder /build/web/dist ./web/dist
+COPY --from=nodebuilder /build/admin_web/dist ./admin_web/dist
+COPY --from=nodebuilder /build/client_web/dist ./client_web/dist
 
 ARG TARGETARCH
 
