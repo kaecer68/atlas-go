@@ -43,14 +43,9 @@ MacroAwareDrawdownEngine.Evaluate(riskSnapshot, regime, narrativeEvents)
 
 ---
 
-## 組態設定（2026-06-20 裁定）
+## 組態設定
 
-**`internal/risk` 統一使用全域 `config.GetParametersConfig()`，禁止 per-module 組態檔。**
-
-### 歷史背景
-- 曾存在孤兒檔案 `internal/risk/configs/parameters.json`（190KB，與全域參數高度重疊，未追蹤於 git）。
-- 已於對應 commit 刪除；0 個 `.go` 檔案引用它。
-- 詳細調查記錄見 `.opencode/handoffs/risk-config-loader.md`。
+**`internal/risk` 統一使用全域 `config.GetParametersConfig()`，禁止 per-module 組態檔。**歷史背景與清理紀錄見 `docs/audit/2026-06-20-risk-orphan-config.md`。
 
 ### 正確做法
 1. 擴充 `ParametersConfig.Risk` 結構於 `internal/config/parameters.go`

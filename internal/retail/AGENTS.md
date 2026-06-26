@@ -91,4 +91,4 @@ RSI-tw 由三個加權組件構成：
 | `internal/monitoring/api/system/handlers.go:148` | API handler 與資料組裝 |
 | `internal/monitoring/dashboard_api.go:544` | Fetcher 接線 |
 | `internal/monitoring/gateway_adapter.go:319` | Gateway adapter 實作 |
-| `docs/superpowers/plans/2026-05-31-rsi-tw-calibration-autonomy.md` | 校準與自主進化計劃 |
+| `.omo/plans/2026-05-31-rsi-tw-calibration-autonomy.md` | 校準與自主進化計劃（未實作、工作區限定） |

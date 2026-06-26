@@ -36,7 +36,7 @@ JANUS 位於 `internal/prism` 之上，透過監控不同 PRISM regime cohort �
 
 ---
 
-## Risk Gate 校準連接（2026-05-22 新增）
+## Risk Gate 校準連接
 
 JANUS 的 regime classification 輸出驅動 Risk Gate 的自主校準：
 

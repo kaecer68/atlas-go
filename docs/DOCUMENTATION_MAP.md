@@ -92,8 +92,12 @@
 ### 審計 / 交接 / 調查 / 修復計畫（時序敏感）
 
 - `audit/` — 審計報告
+  - `2026-06-20-risk-orphan-config.md` — `internal/risk` 孤兒組態檔清理紀錄（PR #756 後第二波整理）
 - `handoff/` — 任務交接
+  - `2026-wave12-llm-annotator-phase2.md` — Wave 12 `llm_annotator` Phase 2 canonical 介面交接（由 `internal/llm_annotator/AGENTS.md` 搬遷）
 - `investigations/` — 根因調查
+  - `2026-05-29-etf-nav-data-source.md` — ETF NAV 資料來源調查（由 `internal/marketdata/AGENTS.md` 搬遷）
+  - `2026-06-fubonproxy-ipv4-uvloop.md` — Fubon proxy IPv4/IPv6 dual-stack 與 uvloop 問題 RCA（由 `internal/marketdata/AGENTS.md` 搬遷）
 - `plans/` — 修復計畫
 - `branch-hygiene/` — branch 維護紀錄
 

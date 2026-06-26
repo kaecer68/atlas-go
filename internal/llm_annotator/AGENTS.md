@@ -54,16 +54,6 @@
 - `docs/llm-integration-strategy-framework.md` — 設計權威
 - `internal/MATURITY.md` — `llm_annotator` 與 `llm` 條目
 
-## Wave 12 重構時程（Issue #731 — Phase 2 ✅ 完成）
+## 重構狀態
 
-Phase 2 canonical 介面已就緒後，本套件保留至 Wave 12+ 由 follow-up issue 統一處理：
-
-1. ✅ 將 `Annotator` 介面標 deprecation 警告（PR #730）
-2. ✅ 統一 CircuitBreaker：打破 transitive cycle（Issue #731, PR #737 + 此 PR）
-   - `monitoring.ChannelHealthStore`、`RecordOption`、`ChannelHealthRecord`、`WithLatencyMs`、`WithRateLimitRemaining`、`NewChannelHealthStore`、`NewChannelHealthStoreWithPool`、`RecordChannelFetch`、`RecordChannelFetchWithPool` 全部搬到 `apigateway/channel_health.go`
-   - `monitoring/channel_health_aliases.go` 提供 type aliases 向後相容（25+ 個外部 caller 不需修改）
-   - 本套件 `Config.Breaker` 與 `KimiClient.breaker` 改持 `*CircuitBreaker`（薄封裝委派 `*apigateway.CircuitBreaker`）
-   - `internal/llm_annotator/circuit_breaker.go` 重新建立為 wrapper：保留 `CircuitState = apigateway.State` type alias、`CircuitClosed/Open/HalfOpen` 常數、`ErrCircuitOpen` sentinel、`Allow()`、`Snapshot()`、`WithNowFunc()` 5 個 Wave 4-era API
-   - `apigateway.CircuitBreaker` 新增 `WithNowFunc` method（用 `atomic.Pointer` 避免 lock re-entry deadlock），讓 wrapper 與外部測試都能注入假時鐘
-3. 後續：將所有 `*Annotator` 直接呼叫遷移到 `*FailureAttributionHandler`
-4. 後續：MATURITY.md 標 `llm_annotator` 為 deprecated
+`internal/llm_annotator` 已 deprecated；Phase 2 canonical 介面已就緒（Wave 12，Issue #731）。已完成事項見 `docs/handoff/2026-wave12-llm-annotator-phase2.md`；後續遷移計劃（未實作、工作區限定）見 `.omo/plans/llm-annotator-removal.md`。

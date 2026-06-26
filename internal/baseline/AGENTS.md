@@ -44,7 +44,7 @@
 
 ---
 
-## Wave 9 — BaselineTrigger 執行期政策強制（PR #698）
+## 執行期政策強制
 
 `internal/baseline/trigger.go` 提供執行期政策強制元件 `Trigger`，訂閱 `EventPositionUpdate` 並依現行 baseline policy 的 simulation constraints 評估每個部位。
 

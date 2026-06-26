@@ -198,6 +198,6 @@ go test -run Integration ./internal/llm/...
 
 - `docs/llm-integration-strategy-framework.md` — 設計權威
 - `docs/llm-promotion-evaluation.md` — LLM 晉升評估流程
-- `docs/llm-trigger-analysis.md` — LLM 觸發點分析
+- `docs/archive/2026-06-22-llm-trigger-analysis-RESOLVED.md` — LLM 觸發點分析（已 RESOLVED）
 - `configs/llm_router.yaml` — runtime routing table
 - `internal/MATURITY.md` — LLM 相關條目（`llm` / `llm/schemas` / `llm/clients` / `llm/capabilities` / `llm_annotator`）
