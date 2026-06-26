@@ -2,7 +2,7 @@
 
 > **Status**: Ready to enable. Metrics implementation tracked separately (issue #740).
 > **Predecessor**: [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md) (L2.3 PoC design)
-> **Linked log**: [`docs/wave-10-observation-log.md`](../wave-10-observation-log.md) (existing Wave 10 observations)
+> **Linked log**: [`docs/archive/wave-10-observation-log.md`](../archive/wave-10-observation-log.md) (existing Wave 10 observations)
 
 ## Overview
 
@@ -98,6 +98,6 @@ If L2.4 fails any acceptance criterion, the rollback is:
 ## References
 
 - Predecessor: [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md)
-- Existing log: [`docs/wave-10-observation-log.md`](../wave-10-observation-log.md)
+- Existing log: [`docs/archive/wave-10-observation-log.md`](../archive/wave-10-observation-log.md)
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711) §L2.4
 - Metrics: [Issue #740](https://github.com/kaecer68/atlas-go/issues/740) (slog metrics for L2.4 observability in `SemiconductorLLMAgent.Recommend`)
