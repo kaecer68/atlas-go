@@ -189,3 +189,43 @@ func newTestBaseClient() *BaseClient {
 	bc.Breaker = nil
 	return bc
 }
+
+// TestDeepSeek_NilBaseClientUsesDefault verifies that NewDeepSeekClient accepts
+// a nil BaseClient and falls back to a working default instead of panicking.
+// Regression test for the startup panic where cmd/atlas passed nil and the
+// first Chat() call dereferenced a nil pointer in BaseClient.DoRequest.
+func TestDeepSeek_NilBaseClientUsesDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(deepSeekResponseBody{
+			Model: "deepseek-v4-pro",
+			Choices: []struct {
+				Message struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			}{
+				{
+					Message: struct {
+						Role    string `json:"role"`
+						Content string `json:"content"`
+					}{Role: "assistant", Content: "ok"},
+					FinishReason: "stop",
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewDeepSeekClient("test-key", nil)
+	client.BaseURL = srv.URL
+
+	resp, err := client.Chat(context.Background(), "", []Message{{Role: "user", Content: "Hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Content != "ok" {
+		t.Errorf("expected content %q, got %q", "ok", resp.Content)
+	}
+}

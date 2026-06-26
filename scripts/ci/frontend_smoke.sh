@@ -122,11 +122,10 @@ fi
 log "Smoke pages: $PAGES"
 export SMOKE_PAGES="$PAGES"
 
-# 3. Build frontend（產 web/dist/，go:embed 編譯時需要）
-log "Building frontend (npm ci + npm run build)"
-(cd web && npm ci --no-audit --no-fund 2>&1 | tail -20)
-(cd web && npm run build 2>&1 | tail -5)
-ok "Frontend built"
+# 3. Build frontends（產 web/admin_web/client_web dist/，go:embed 編譯時需要）
+log "Building frontends (web + admin_web + client_web)"
+bash "$REPO_ROOT/scripts/ci/build_all_frontends.sh"
+ok "Frontends built"
 
 # 4. Build atlas binary
 log "Building atlas binary"

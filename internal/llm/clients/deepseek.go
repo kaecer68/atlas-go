@@ -43,7 +43,14 @@ type DeepSeekClient struct {
 // Use DefaultModelV4Pro for typical inference and DefaultModelV4Flash for
 // latency-sensitive workloads. If apiKey is empty, the client will read
 // LLM_DEEPSEEK_API_KEY from the environment at Chat() time.
+//
+// A nil baseClient is accepted and replaced with a default BaseClient so that
+// callers (e.g., cmd/atlas wiring, cmd/lint-pr) are not required to build the
+// shared HTTP infrastructure manually.
 func NewDeepSeekClient(apiKey string, baseClient *BaseClient) *DeepSeekClient {
+	if baseClient == nil {
+		baseClient = NewBaseClient(llm.ProviderDeepSeek, BaseClientConfig{})
+	}
 	return &DeepSeekClient{
 		BaseClient:   baseClient,
 		APIKey:       apiKey,

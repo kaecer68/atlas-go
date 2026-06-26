@@ -42,7 +42,14 @@ type KimiClient struct {
 // NewKimiClient creates a KimiClient wired to the given BaseClient.
 // If apiKey is empty, the client reads LLM_KIMI_API_KEY from the
 // environment on the first Chat() call.
+//
+// A nil baseClient is accepted and replaced with a default BaseClient so that
+// callers (e.g., cmd/atlas wiring, cmd/lint-pr) are not required to build the
+// shared HTTP infrastructure manually.
 func NewKimiClient(apiKey string, baseClient *BaseClient) *KimiClient {
+	if baseClient == nil {
+		baseClient = NewBaseClient(llm.ProviderKimi, BaseClientConfig{})
+	}
 	return &KimiClient{
 		BaseClient: baseClient,
 		APIKey:     apiKey,
