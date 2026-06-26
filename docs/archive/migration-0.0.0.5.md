@@ -297,5 +297,5 @@ can remain in place even if the field renames are reverted.
 
 - [CHANGELOG.md § 0.0.0.5](../../CHANGELOG.md)
 - [PR #564](https://github.com/kaecer68/atlas-go/pull/564)
-- [docs/swagger.json § /api/dashboard/agent-names](../../swagger.json)
+- [docs/swagger.json § /api/dashboard/agent-names](../swagger.json)
 - [.claude/skills/atlas-data-visibility/SKILL.md](../../.claude/skills/atlas-data-visibility/SKILL.md) — see "single source of truth" pattern
