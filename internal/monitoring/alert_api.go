@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,8 +25,11 @@ func (a *AlertAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/alerts", a.handleListAlerts)
 	mux.HandleFunc("/api/alerts/unacknowledged", a.handleUnacknowledged)
 	mux.HandleFunc("/api/alerts/stats", a.handleStats)
+	mux.HandleFunc("/api/alerts/rules", a.handleRules)
 	mux.Handle("POST /api/alerts/acknowledge", shared.Post(a.handleAcknowledge))
+	mux.Handle("POST /api/alerts/acknowledge-bulk", shared.Post(a.handleAcknowledgeBulk))
 	mux.Handle("POST /api/alerts/resolve", shared.Post(a.handleResolve))
+	mux.Handle("POST /api/alerts/silence", shared.Post(a.handleSilence))
 }
 
 func (a *AlertAPI) handleListAlerts(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +95,12 @@ func (a *AlertAPI) handleListAlerts(w http.ResponseWriter, r *http.Request) {
 		}
 		filtered = append(filtered, rec)
 	}
+
+	// Apply sort (P1-1: alert-redesign-v2.md Part 6.1). Default is
+	// timestamp_desc (newest first). Stable sort by ID for tie-breaking
+	// so tests are deterministic.
+	sortParam := q.Get("sort")
+	sortAlerts(filtered, sortParam)
 
 	total := len(filtered)
 
@@ -232,4 +242,154 @@ func (a *AlertAPI) handleResolve(r *http.Request) (int, any) {
 		return http.StatusNotFound, map[string]string{"error": fmt.Sprintf("resolve: %v", err)}
 	}
 	return http.StatusOK, map[string]any{"success": true, "alert_id": req.AlertID}
+}
+
+// handleAcknowledgeBulk acknowledges multiple alerts in one request.
+// Body: {"ids": ["uuid1", "uuid2", ...]}. Returns the count of
+// acknowledged vs failed (id not found). Per alert-redesign-v2.md Part 6.3.
+func (a *AlertAPI) handleAcknowledgeBulk(r *http.Request) (int, any) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
+	}
+	if len(req.IDs) == 0 {
+		return http.StatusBadRequest, map[string]string{"error": "ids required"}
+	}
+
+	ack := 0
+	for _, id := range req.IDs {
+		if err := a.store.Acknowledge(id, "bulk"); err == nil {
+			ack++
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"acknowledged": ack,
+		"failed":       len(req.IDs) - ack,
+	}
+}
+
+// handleSilence silences a rule for a duration. Per alert-redesign-v2.md
+// Part 6.4. The silenced_until time is computed and returned; the actual
+// suppression is wired via suppress_categories in parameters.json (separate
+// PR scope). This endpoint is the API surface; production wiring follows.
+func (a *AlertAPI) handleSilence(r *http.Request) (int, any) {
+	var req struct {
+		Rule        string `json:"rule"`
+		DurationMin int    `json:"duration_minutes"`
+		Reason      string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
+	}
+	if req.Rule == "" {
+		return http.StatusBadRequest, map[string]string{"error": "rule required"}
+	}
+	if req.DurationMin <= 0 {
+		return http.StatusBadRequest, map[string]string{"error": "duration_minutes must be > 0"}
+	}
+	silencedUntil := time.Now().Add(time.Duration(req.DurationMin) * time.Minute)
+	return http.StatusOK, map[string]any{
+		"rule":           req.Rule,
+		"silenced_until": silencedUntil.UTC().Format(time.RFC3339),
+		"reason":         req.Reason,
+	}
+}
+
+// handleRules returns a list of distinct rules with their active count
+// (status=triggered) and last seen timestamp. Per alert-redesign-v2.md
+// Part 6.5.
+func (a *AlertAPI) handleRules(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	records, err := a.store.LoadAll()
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load alerts: %v", err))
+		return
+	}
+
+	ruleStats := map[string]*struct {
+		ActiveCount int
+		LastSeen    time.Time
+	}{}
+	for _, rec := range records {
+		if _, ok := ruleStats[rec.Rule]; !ok {
+			ruleStats[rec.Rule] = &struct {
+				ActiveCount int
+				LastSeen    time.Time
+			}{}
+		}
+		if rec.Status == domain.AlertStatusTriggered {
+			ruleStats[rec.Rule].ActiveCount++
+		}
+		if rec.Timestamp.After(ruleStats[rec.Rule].LastSeen) {
+			ruleStats[rec.Rule].LastSeen = rec.Timestamp
+		}
+	}
+
+	type ruleEntry struct {
+		Rule        string `json:"rule"`
+		ActiveCount int    `json:"active_count"`
+		LastSeen    string `json:"last_seen"`
+	}
+	out := make([]ruleEntry, 0, len(ruleStats))
+	for rule, s := range ruleStats {
+		lastSeen := ""
+		if !s.LastSeen.IsZero() {
+			lastSeen = s.LastSeen.UTC().Format(time.RFC3339)
+		}
+		out = append(out, ruleEntry{Rule: rule, ActiveCount: s.ActiveCount, LastSeen: lastSeen})
+	}
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"rules": out})
+}
+
+// sortAlerts sorts a slice of AlertRecord in-place by the given sort
+// parameter. Stable sort by ID for tie-breaking (deterministic test output).
+func sortAlerts(records []domain.AlertRecord, sortParam string) {
+	switch strings.ToLower(sortParam) {
+	case "timestamp_asc":
+		sort.SliceStable(records, func(i, j int) bool {
+			if records[i].Timestamp.Equal(records[j].Timestamp) {
+				return records[i].ID < records[j].ID
+			}
+			return records[i].Timestamp.Before(records[j].Timestamp)
+		})
+	case "severity_desc":
+		severityRank := map[string]int{"critical": 4, "error": 3, "warning": 2, "info": 1}
+		sort.SliceStable(records, func(i, j int) bool {
+			ri, rj := severityRank[strings.ToLower(records[i].Severity)], severityRank[strings.ToLower(records[j].Severity)]
+			if ri == rj {
+				return records[i].ID < records[j].ID
+			}
+			return ri > rj
+		})
+	case "first_seen_desc":
+		sort.SliceStable(records, func(i, j int) bool {
+			ai, aj := firstSeen(records[i]), firstSeen(records[j])
+			if ai.Equal(aj) {
+				return records[i].ID < records[j].ID
+			}
+			return ai.After(aj)
+		})
+	default: // timestamp_desc (also default for empty/missing)
+		sort.SliceStable(records, func(i, j int) bool {
+			if records[i].Timestamp.Equal(records[j].Timestamp) {
+				return records[i].ID < records[j].ID
+			}
+			return records[i].Timestamp.After(records[j].Timestamp)
+		})
+	}
+}
+
+// firstSeen returns the earliest known occurrence for tie-breaking.
+// Uses Timestamp if FirstSeen is nil (legacy records).
+func firstSeen(r domain.AlertRecord) time.Time {
+	if r.FirstSeen != nil {
+		return *r.FirstSeen
+	}
+	return r.Timestamp
 }
