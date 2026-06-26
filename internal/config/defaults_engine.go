@@ -584,6 +584,11 @@ func defaultAlertParameters() AlertParameters {
 			Rationale: "Maximum unacknowledged alerts before warning",
 			Source:    SourceHeuristic,
 		},
+		HeartbeatTTLMinutes: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "Decision 1 (alert-redesign-v2.md Part 3.1): channel heartbeat staleness threshold (5 min default); channel health summaries older than this are considered 'down'",
+			Source:    SourceHeuristic,
+		},
 	}
 }
 

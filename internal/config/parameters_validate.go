@@ -53,6 +53,9 @@ func (p *ParametersConfig) validateAlert() error {
 	if p.Alert.MaxUnacknowledgedAlerts.Value < 1 {
 		return fmt.Errorf("alert.max_unacknowledged_alerts (%d) must be >= 1", p.Alert.MaxUnacknowledgedAlerts.Value)
 	}
+	if p.Alert.HeartbeatTTLMinutes.Value < 1 {
+		return fmt.Errorf("alert.heartbeat_ttl_minutes (%d) must be >= 1", p.Alert.HeartbeatTTLMinutes.Value)
+	}
 	return nil
 }
 

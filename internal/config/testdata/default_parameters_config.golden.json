@@ -10,6 +10,11 @@
       "source": "heuristic",
       "value": -0.015
     },
+    "heartbeat_ttl_minutes": {
+      "rationale": "Decision 1 (alert-redesign-v2.md Part 3.1): channel heartbeat staleness threshold (5 min default); channel health summaries older than this are considered 'down'",
+      "source": "heuristic",
+      "value": 5
+    },
     "max_alert_trigger_rate": {
       "rationale": "Maximum alert trigger rate per hour before critical",
       "source": "heuristic",

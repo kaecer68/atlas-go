@@ -319,6 +319,9 @@ func mergeAlertDefaults(cfg *ParametersConfig) {
 	if a.MaxUnacknowledgedAlerts.Value == 0 {
 		a.MaxUnacknowledgedAlerts = def.MaxUnacknowledgedAlerts
 	}
+	if a.HeartbeatTTLMinutes.Value == 0 {
+		a.HeartbeatTTLMinutes = def.HeartbeatTTLMinutes
+	}
 }
 
 func mergeRiskGateDefaults(cfg *ParametersConfig) {
