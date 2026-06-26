@@ -94,7 +94,7 @@
   - 刪除 `quick_start.md`（重複）
   - 新建 `docs/DOCUMENTATION_STANDARD.md` 與本文件
   - 更新 `AGENTS.md` §「內容歸屬規則」
-- **2026-06-26** PR #751（本 PR 來源）修復文件斷裂：
+- **2026-06-26** PR #752（本 PR 來源）修復文件斷裂：
   - `git mv .omo/CONSTITUTION.md → docs/CONSTITUTION.md`
   - `git mv .omo/ITERATION_GATE.md → docs/ITERATION_GATE.md`
   - `AGENTS.md`：`.omo/CONSTITUTION.md` 引用改為 `docs/CONSTITUTION.md`，新增 `docs/ITERATION_GATE.md`
