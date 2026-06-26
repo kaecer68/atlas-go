@@ -32,6 +32,15 @@ func (p *ParametersConfig) validateAlert() error {
 	if p.Alert.RuleEngineCooldownSec.Value < 1 {
 		return fmt.Errorf("alert.rule_engine_cooldown_sec (%d) must be >= 1", p.Alert.RuleEngineCooldownSec.Value)
 	}
+	if p.Alert.SlippageWarningBps.Value <= 0 {
+		return fmt.Errorf("alert.slippage_warning_bps (%.2f) must be positive", p.Alert.SlippageWarningBps.Value)
+	}
+	if p.Alert.SlippageErrorBps.Value <= 0 {
+		return fmt.Errorf("alert.slippage_error_bps (%.2f) must be positive", p.Alert.SlippageErrorBps.Value)
+	}
+	if p.Alert.SlippageErrorBps.Value < p.Alert.SlippageWarningBps.Value {
+		return fmt.Errorf("alert.slippage_error_bps (%.2f) must be >= slippage_warning_bps (%.2f)", p.Alert.SlippageErrorBps.Value, p.Alert.SlippageWarningBps.Value)
+	}
 	if p.Alert.SystemMetricsIntervalSec.Value < 1 {
 		return fmt.Errorf("alert.system_metrics_interval_sec (%d) must be >= 1", p.Alert.SystemMetricsIntervalSec.Value)
 	}

@@ -87,6 +87,8 @@ export interface AlertParameters {
   daily_loss_critical_pct: string;
   rule_engine_interval_sec: string;
   rule_engine_cooldown_sec: string;
+  slippage_error_bps: string;
+  slippage_warning_bps: string;
   system_metrics_interval_sec: string;
   min_screening_rate: string;
   max_alert_trigger_rate: string;

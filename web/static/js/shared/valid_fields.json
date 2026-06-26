@@ -1315,6 +1315,8 @@
   "skill_to_industry",
   "skill_to_theme",
   "slippage_bps",
+  "slippage_error_bps",
+  "slippage_warning_bps",
   "smart_universe",
   "smoothing_factor",
   "snapshot_time",
