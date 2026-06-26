@@ -40,6 +40,15 @@ type Scheduler struct {
 	onFetchQuotes   func()
 }
 
+// safeCall invokes fn only when non-nil. Used for cycle callbacks that may be
+// unset when Scheduler is exercised standalone (tests, partial wiring); calling
+// a nil func panics the goroutine.
+func safeCall(fn func()) {
+	if fn != nil {
+		fn()
+	}
+}
+
 func NewScheduler(
 	ctx context.Context,
 	marketData marketdata.Provider,
@@ -156,7 +165,7 @@ func (s *Scheduler) marketTimeScheduler() {
 			hasTicker := s.intradayTicker != nil
 			s.mu.RUnlock()
 			if !hasTicker {
-				s.onMarketOpen()
+				safeCall(s.onMarketOpen)
 				s.mu.Lock()
 				s.intradayTicker = time.NewTicker(s.config.IntradayInterval)
 				s.mu.Unlock()
@@ -170,7 +179,7 @@ func (s *Scheduler) marketTimeScheduler() {
 			hasTicker := s.intradayTicker != nil
 			s.mu.RUnlock()
 			if hasTicker {
-				s.onMarketClose()
+				safeCall(s.onMarketClose)
 				s.mu.Lock()
 				s.intradayTicker.Stop()
 				s.intradayTicker = nil
@@ -204,7 +213,7 @@ func (s *Scheduler) intradayProcessor() {
 		case <-s.ctx.Done():
 			return
 		case <-tickerCh:
-			s.onIntradayCycle()
+			safeCall(s.onIntradayCycle)
 		}
 	}
 }
@@ -227,7 +236,7 @@ func (s *Scheduler) quotePoller() {
 		case <-s.ctx.Done():
 			return
 		case <-tickerCh:
-			s.onFetchQuotes()
+			safeCall(s.onFetchQuotes)
 		}
 	}
 }
