@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
 // RiskManager manages portfolio risk and drawdown control
@@ -30,6 +32,12 @@ type RiskManager struct {
 
 	positions     map[string]*Position
 	totalExposure float64
+
+	// eventBus is an optional dependency for publishing portfolio-level events
+	// (currently EventDrawdownBreach on drawdown threshold breach).
+	// nil-safe: if not attached, UpdatePortfolioValue still returns RiskAlert
+	// slices unchanged for backward compatibility.
+	eventBus *eventbus.ChannelEventBus
 }
 
 // RiskAlert represents a risk management alert
@@ -115,6 +123,16 @@ func (rm *RiskManager) SetRiskParameters(maxDrawdown, maxPosSize, maxDailyLoss f
 	rm.maxDailyLossPct = maxDailyLoss
 }
 
+// WithEventBus attaches an event bus for publishing portfolio-level events.
+// Returns the same *RiskManager (chainable), mirroring AgentHealthManager.WithEventBus.
+// Nil bus is allowed (publishing becomes no-op).
+func (rm *RiskManager) WithEventBus(eb *eventbus.ChannelEventBus) *RiskManager {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	rm.eventBus = eb
+	return rm
+}
+
 // UpdatePortfolioValue updates the current portfolio value and checks risk limits
 func (rm *RiskManager) UpdatePortfolioValue(value float64) []RiskAlert {
 	rm.mu.Lock()
@@ -140,6 +158,7 @@ func (rm *RiskManager) UpdatePortfolioValue(value float64) []RiskAlert {
 				rm.currentDrawdown*100, rm.maxDrawdownPct*100),
 			"portfolio", rm.currentDrawdown, rm.maxDrawdownPct)
 		newAlerts = append(newAlerts, alert)
+		rm.publishDrawdownBreach(value, rm.peakValue)
 	}
 
 	// Check daily loss
@@ -165,6 +184,25 @@ func (rm *RiskManager) UpdatePortfolioValue(value float64) []RiskAlert {
 	rm.alertHistory = append(rm.alertHistory, newAlerts...)
 
 	return newAlerts
+}
+
+// publishDrawdownBreach emits EventDrawdownBreach on the attached event bus.
+// Nil-bus safe (no-op when bus is not attached). Goroutine launch follows the
+// AgentHealthManager.publishHealthChange fire-and-forget pattern (the eventbus
+// module is fire-and-forget per its AGENTS.md). Field values are captured into
+// the payload struct by copy before the goroutine launches, so the lock held
+// by UpdatePortfolioValue does not extend into the goroutine.
+func (rm *RiskManager) publishDrawdownBreach(portfolioValue, peakValue float64) {
+	if rm.eventBus == nil {
+		return
+	}
+	go rm.eventBus.PublishDrawdownBreach(eventbus.DrawdownBreachPayload{
+		CurrentDrawdown: rm.currentDrawdown,
+		MaxDrawdownPct:  rm.maxDrawdownPct,
+		PortfolioValue:  portfolioValue,
+		PeakValue:       peakValue,
+		Timestamp:       time.Now(),
+	})
 }
 
 // AddPosition adds a new position and checks risk limits

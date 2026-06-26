@@ -260,6 +260,18 @@ type TradeSlippageEventPayload struct {
 	Timestamp     time.Time `json:"timestamp"`
 }
 
+// DrawdownBreachPayload portfolio drawdown breach event payload.
+// Emitted by internal/portfolio/risk_manager.go when currentDrawdown exceeds
+// maxDrawdownPct. Consumed by monitoring/drawdown_consumer.go (Decision 8 PR-B)
+// to surface the alert on the dashboard.
+type DrawdownBreachPayload struct {
+	CurrentDrawdown float64   `json:"current_drawdown"`
+	MaxDrawdownPct  float64   `json:"max_drawdown_pct"`
+	PortfolioValue  float64   `json:"portfolio_value"`
+	PeakValue       float64   `json:"peak_value"`
+	Timestamp       time.Time `json:"timestamp"`
+}
+
 // ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
 type ExperimentInsufficientDataEventPayload struct {
 	ExperimentID  string `json:"experiment_id"`
@@ -942,6 +954,21 @@ func (b *ChannelEventBus) PublishTradeSlippage(payload TradeSlippageEventPayload
 		Timestamp:     time.Now(),
 		Payload:       payload,
 		Severity:      "info",
+		SchemaVersion: 1,
+	})
+}
+
+// PublishDrawdownBreach publishes a portfolio drawdown breach event.
+// Fired by internal/portfolio/risk_manager.go when currentDrawdown exceeds
+// maxDrawdownPct. Severity is "critical" because drawdown breaches represent
+// active capital loss requiring immediate attention.
+func (b *ChannelEventBus) PublishDrawdownBreach(payload DrawdownBreachPayload) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventDrawdownBreach,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "critical",
 		SchemaVersion: 1,
 	})
 }
