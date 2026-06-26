@@ -4,9 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "test": "node --test ../shared_web/static/js/__tests__/*.mjs",
+    "test:e2e": "playwright test",
     "test:smoke": "node smoke/run.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "esbuild": "^0.25.0",
     "playwright": "^1.60.0"
   }

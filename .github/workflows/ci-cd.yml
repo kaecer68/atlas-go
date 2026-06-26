@@ -116,7 +116,9 @@ jobs:
       with:
         version: v2.12.2
         args: --timeout=5m
-        only-new-issues: true
+        # PR diff for this branch is >20k lines, which breaks the action's
+        # only-new-issues patch fetch. Run the full linter instead.
+        only-new-issues: false
 
   # Security Scan
   security:
