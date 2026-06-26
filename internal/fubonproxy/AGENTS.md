@@ -1,4 +1,4 @@
-# Fubonproxy AGENTS.md
+# AGENTS.md — internal/fubonproxy
 
 ## 模組概述
 
@@ -69,14 +69,10 @@
 
 ## 相依關係
 
-- 由 `cmd/atlas` API 模式使用（`NewManager(cfg.WorkDir)` + `defer mgr.Stop()`）
-- 關閉時發送 SIGINT，等待 5 秒後強制終止
-- `healthURL` 可注入為測試替身
-- 在 `cmd/atlas/main.go` 是獨立於 `internal/live` 的啟動路徑，**兩者可同時使用**
+由 `cmd/atlas` API 模式使用（`NewManager(cfg.WorkDir)` + `defer mgr.Stop()`）。`healthURL` 可注入為測試替身。在 `cmd/atlas/main.go` 是獨立於 `internal/live` 的啟動路徑，**兩者可同時使用**。
 
 ## 修改前必讀
 
-1. 必跑：`go test -race -count=1 ./internal/fubonproxy/` 確認測試全綠
-2. 必跑：`go vet ./internal/fubonproxy/` + `staticcheck ./internal/fubonproxy/`
-3. 若改 supervisor 邏輯或測試：重新檢視 **`.claude/skills/atlas-fubon-supervisor-invariants/SKILL.md`** 的 F1~F9
-4. 若改介面：更新 `doc.go`（package 層級文件）保持一致
+1. 必跑：`go test -race -count=1 ./internal/fubonproxy/` + `go vet` + `staticcheck`
+2. 改 supervisor 邏輯或測試：重檢 **`.claude/skills/atlas-fubon-supervisor-invariants/SKILL.md`** 的 F1~F9
+3. 改介面：更新 `doc.go` 保持一致

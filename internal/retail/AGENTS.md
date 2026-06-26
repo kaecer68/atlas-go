@@ -10,15 +10,11 @@ RSI-tw 由三個加權組件構成：
 
 | 組件 | 權重 | 子指標 | 資料來源 |
 |------|------|--------|----------|
-| **Part A** | 40% | A1 融資餘額 Z-score、A2 當沖比率、A3 維持率代理、A4 VIX 映射、A5 週選擇權 PCR、A6 零股交易失衡 | MacroDataSnapshot + 滾動歷史 |
-| **Part C** | 25% | C1 散戶期貨 OI、C2 機構法人流向、C3 ETF 申購贖回 | Gateway channels（taifex_daily, twse_oddlot, twse_etf） |
-| **Part D** | 乘數 | D1 地緣政治風險、D2 VIX 飆升、D3 信貸緊縮、D4 閃崩 | MacroDataSnapshot + Narrative events |
+| **Part A** | 40% | A1 融資餘額 Z-score / A2 當沖比率 / A3 維持率代理 / A4 VIX 映射 / A5 週選擇權 PCR / A6 零股交易失衡 | MacroDataSnapshot + 滾動歷史 |
+| **Part C** | 25% | C1 散戶期貨 OI / C2 機構法人流向 / C3 ETF 申購贖回 | Gateway channels（taifex_daily, twse_oddlot, twse_etf） |
+| **Part D** | 乘數 | D1 地緣政治風險 / D2 VIX 飆升 / D3 信貸緊縮 / D4 閃崩 | MacroDataSnapshot + Narrative events |
 
-**核心型別**：
-- `RSITwInput`：計算輸入（所有資料由 handler 從 snapshot + fetcher 組裝）
-- `RSITwSnapshot`：計算輸出（Score, PartAScore, PartCScore, AdjustmentFactor, SubIndicators）
-- `RSISubIndicator`：單一子指標明細（Value, Weight, ZScore, IsFallback）
-- `Calculator`：Singleton 計算器（含 90 筆滾動歷史用於 Z-score）
+**核心型別**：`RSITwInput`（handler 從 snapshot + fetcher 組裝）、`RSITwSnapshot`（Score / PartAScore / PartCScore / AdjustmentFactor / SubIndicators）、`RSISubIndicator`（Value / Weight / ZScore / IsFallback）、`Calculator`（Singleton，含 90 筆滾動歷史用於 Z-score）。
 
 ---
 
@@ -60,35 +56,10 @@ RSI-tw 由三個加權組件構成：
 
 ## Sub-Indicator Key Convention
 
-計算過程中儲存在 `RSITwSnapshot.SubIndicators` map 中的 key：
-
-| Key | 對應子指標 | 前端顯示名稱 |
-|-----|-----------|-------------|
-| `a1_margin_z` | A1 | 融資餘額 Z-score |
-| `a2_day_trading` | A2 | 當沖比率 |
-| `a3_margin_maint` | A3 | 維持率 Z-score |
-| `a4_vix_map` | A4 | VIX 風險分數 |
-| `a5_pcr_proxy` | A5 | 週選擇權 PCR |
-| `a6_odd_lot` | A6 | 零股交易失衡 |
-| `c1_futures_oi` | C1 | 散戶期貨 OI |
-| `c2_inst_flow` | C2 | 券商分點流向 |
-| `c3_etf_sub` | C3 | ETF 申購分數 |
-| `d1_geopolitical` | D1 | 地緣政治風險 |
-| `d2_vix_spike` | D2 | VIX 飆升 |
-| `d3_credit_control` | D3 | 信貸緊縮 |
-| `d4_flash_crash` | D4 | 閃崩 |
+`RSITwSnapshot.SubIndicators` map 的 key：`a1_margin_z` / `a2_day_trading` / `a3_margin_maint` / `a4_vix_map` / `a5_pcr_proxy` / `a6_odd_lot` / `c1_futures_oi` / `c2_inst_flow` / `c3_etf_sub` / `d1_geopolitical` / `d2_vix_spike` / `d3_credit_control` / `d4_flash_crash`。
 
 ---
 
 ## 相關文件
 
-| 文件 | 內容 |
-|------|------|
-| `doc.go` | Package 概述、Maturity 標記 |
-| `rsi_tw_calculator.go` | 計算器主邏輯（504 行） |
-| `internal/config/parameters.go:1168` | `RSITwParameters` 定義 |
-| `defaultRSITwParameters()` in `internal/config/parameters_defaults.go` | 預設參數值 |
-| `internal/monitoring/api/system/handlers.go:148` | API handler 與資料組裝 |
-| `internal/monitoring/dashboard_api.go:544` | Fetcher 接線 |
-| `internal/monitoring/gateway_adapter.go:319` | Gateway adapter 實作 |
-| `.omo/plans/2026-05-31-rsi-tw-calibration-autonomy.md` | 校準與自主進化計劃（未實作；工作區限定，新 clone 不可見） |
+`doc.go`（Package 概述、Maturity 標記）、`rsi_tw_calculator.go`（計算器主邏輯）、`internal/config/parameters.go:1168`（`RSITwParameters` 定義）、`defaultRSITwParameters()` in `internal/config/parameters_defaults.go`、`internal/monitoring/api/system/handlers.go:148`（API handler）、`internal/monitoring/dashboard_api.go:544`（Fetcher 接線）、`internal/monitoring/gateway_adapter.go:319`（Gateway adapter）、`.omo/plans/2026-05-31-rsi-tw-calibration-autonomy.md`（校準與自主進化計劃，未實作）。

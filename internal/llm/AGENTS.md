@@ -23,14 +23,7 @@
 
 ## 公共 API 速查
 
-完整清單見 `doc.go:15-30`。最常用入口：
-
-| 函數 | 用途 |
-|------|------|
-| `NewDefaultRouter(impls ...ProviderImpl) *DefaultRouter` | 啟動時 wiring，附帶 default routing table |
-| `NewDefaultRouterFromConfig(cfg, impls)` | 載入 `configs/llm_router.yaml` 後呼叫 |
-| `DefaultRouter.Call(ctx, Request) (Response, error)` | 所有 LLM 呼叫的唯一入口 |
-| `DefaultRouter.Health() map[Provider]HealthStatus` | `/api/llm/health` |
+完整清單見 `doc.go:15-30`。最常用入口：`NewDefaultRouter(impls ...ProviderImpl)`（啟動時 wiring）、`NewDefaultRouterFromConfig(cfg, impls)`（載入 `configs/llm_router.yaml` 後呼叫）、`DefaultRouter.Call(ctx, Request)`（所有 LLM 呼叫的唯一入口）、`DefaultRouter.Health() map[Provider]HealthStatus`（`/api/llm/health`）。
 
 > 12 個 `Capability` 常數列於 `provider.go:28-41`，新增 capability 必須同步 4 個位置（見 skill）。
 
@@ -48,15 +41,7 @@
 
 ## 環境變數
 
-| 變數 | 用途 | 預設 |
-|------|------|------|
-| `LLM_MINIMAX_API_KEY` | MiniMax M3 API key | — |
-| `LLM_DEEPSEEK_API_KEY` | DeepSeek V4-Pro / V4-Flash | — |
-| `LLM_ANNOTATOR_API_KEY` | **向後相容** — 等同 `LLM_MINIMAX_API_KEY` | — |
-| `LLM_RATIONALE_TRANSLATION_ENABLED` | rationale 翻譯 hook | `false` |
-| `LLM_PRISM_SCENARIO_ENABLED` | PRISM scenario 說明 hook | `false` |
-| `LLM_NARRATIVE_EXPLAIN_ENABLED` | regime + sentiment 解釋 hook | `false` |
-| `LLM_RISK_FORENSICS_ENABLED` | performance forensics hook | `false` |
+`LLM_MINIMAX_API_KEY`（MiniMax M3）/ `LLM_DEEPSEEK_API_KEY`（DeepSeek V4-Pro/V4-Flash）/ `LLM_ANNOTATOR_API_KEY`（向後相容，等同 `LLM_MINIMAX_API_KEY`）/ `LLM_RATIONALE_TRANSLATION_ENABLED`（rationale 翻譯 hook, 預設 `false`）/ `LLM_PRISM_SCENARIO_ENABLED`（PRISM scenario hook, 預設 `false`）/ `LLM_NARRATIVE_EXPLAIN_ENABLED`（regime + sentiment hook, 預設 `false`）/ `LLM_RISK_FORENSICS_ENABLED`（performance forensics hook, 預設 `false`）。
 
 ---
 
@@ -86,7 +71,4 @@ go test -run Integration ./internal/llm/...   # 含 router + clients 端對端
 
 ## 相關文件
 
-- `docs/llm-integration-strategy-framework.md` — 設計權威
-- `docs/llm-promotion-evaluation.md` — LLM 晉升評估流程
-- `configs/llm_router.yaml` — runtime routing table
-- `.claude/skills/atlas-llm-provider-capability/SKILL.md` — Provider/Capability 開發 SOP
+`docs/llm-integration-strategy-framework.md`（設計權威）、`docs/llm-promotion-evaluation.md`（晉升評估流程）、`configs/llm_router.yaml`（runtime routing table）、`.claude/skills/atlas-llm-provider-capability/SKILL.md`（Provider/Capability SOP）。
