@@ -50,7 +50,14 @@ type MiniMaxClient struct {
 // NewMiniMaxClient creates a MiniMaxClient wired to the given BaseClient.
 // If apiKey is empty, the client will read LLM_MINIMAX_API_KEY from the
 // environment on the first Chat() call.
+//
+// A nil baseClient is accepted and replaced with a default BaseClient so that
+// callers (e.g., cmd/atlas wiring, cmd/lint-pr) are not required to build the
+// shared HTTP infrastructure manually.
 func NewMiniMaxClient(apiKey string, baseClient *BaseClient) *MiniMaxClient {
+	if baseClient == nil {
+		baseClient = NewBaseClient(llm.ProviderMiniMax, BaseClientConfig{})
+	}
 	return &MiniMaxClient{
 		BaseClient:   baseClient,
 		APIKey:       apiKey,

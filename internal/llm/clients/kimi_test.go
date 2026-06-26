@@ -236,3 +236,41 @@ func TestKimi_ForcesThinkingAndTemp(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+// TestKimi_NilBaseClientUsesDefault verifies that NewKimiClient accepts a nil
+// BaseClient and falls back to a working default instead of panicking.
+func TestKimi_NilBaseClientUsesDefault(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(kimiResponseBody{
+			Model: "kimi-for-coding",
+			Choices: []struct {
+				Message struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				} `json:"message"`
+				FinishReason string `json:"finish_reason"`
+			}{
+				{
+					Message: struct {
+						Role    string `json:"role"`
+						Content string `json:"content"`
+					}{Role: "assistant", Content: "ok"},
+					FinishReason: "stop",
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewKimiClient("test-key", nil)
+	client.BaseURL = srv.URL
+
+	resp, err := client.Chat(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Content != "ok" {
+		t.Errorf("expected content %q, got %q", "ok", resp.Content)
+	}
+}

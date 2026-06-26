@@ -1044,6 +1044,22 @@ func run(args []string, deps appDeps) error {
 				kimiClient = clients.NewKimiClient(apiKey, nil)
 			}
 
+			// Wire the runtime metrics collector into any Phase 2 clients.
+			// New*Client now supplies a default BaseClient when nil, but that
+			// default uses a no-op metrics recorder; attach the real collector
+			// so LLM requests are observable in production.
+			if collector != nil {
+				if deepseekClient != nil {
+					deepseekClient.Metrics = collector
+				}
+				if minimaxClient != nil {
+					minimaxClient.Metrics = collector
+				}
+				if kimiClient != nil {
+					kimiClient.Metrics = collector
+				}
+			}
+
 			// ProviderImpl adapters (created only if client exists)
 			var (
 				deepseekAdapter *llmAdapters.DeepSeekAdapter
