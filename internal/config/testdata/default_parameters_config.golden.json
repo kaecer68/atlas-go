@@ -1,5 +1,20 @@
 {
   "alert": {
+    "alert_sla_critical_sec": {
+      "rationale": "Decision 9 (alert-redesign-v2.md Part 3.7): CRITICAL alert must be acknowledged within 30 min; otherwise emits a meta-alert",
+      "source": "heuristic",
+      "value": 1800
+    },
+    "alert_sla_error_sec": {
+      "rationale": "Decision 9: ERROR alert must be acknowledged within 2 hours",
+      "source": "heuristic",
+      "value": 7200
+    },
+    "alert_sla_warning_sec": {
+      "rationale": "Decision 9: WARNING alert must be acknowledged within 24 hours",
+      "source": "heuristic",
+      "value": 86400
+    },
     "daily_loss_critical_pct": {
       "rationale": "Daily PnL critical threshold (-2%)",
       "source": "heuristic",
@@ -59,6 +74,11 @@
       "rationale": "Rule engine evaluation interval (30 seconds)",
       "source": "heuristic",
       "value": 30
+    },
+    "sla_violation_meta_alert": {
+      "rationale": "Decision 9: when enabled, SLA violations emit a CRITICAL meta-alert for visibility",
+      "source": "heuristic",
+      "value": true
     },
     "slippage_error_bps": {
       "rationale": "Trade slippage error threshold (100 BPS = 1.0%) — emits ERROR severity alert",
