@@ -94,9 +94,12 @@
   - 刪除 `quick_start.md`（重複）
   - 新建 `docs/DOCUMENTATION_STANDARD.md` 與本文件
   - 更新 `AGENTS.md` §「內容歸屬規則」
-- **2026-06-26** PR #752（本 PR 來源）修復文件斷裂：
+- **2026-06-26** PR #752 修復文件斷裂：
   - `git mv .omo/CONSTITUTION.md → docs/CONSTITUTION.md`
   - `git mv .omo/ITERATION_GATE.md → docs/ITERATION_GATE.md`
   - `AGENTS.md`：`.omo/CONSTITUTION.md` 引用改為 `docs/CONSTITUTION.md`，新增 `docs/ITERATION_GATE.md`
   - `AGENTS.md`：「設計文件 / 規劃」行移除對 `.omo/briefs/`、`.omo/plans/`、`.omo/evidence/` 的引用
   - `DOCUMENTATION_MAP.md`：撤回 `.omo/` 內部檔案描述，改為說明 `.omo/` 是 ephemeral agent working dir
+- **2026-06-26** PR #754 清理 docs/ 內混合的暫時性與未實作檔案：
+  - **A 類 archive**（已 RESOLVED）：`docs/llm-trigger-analysis.md` → `docs/archive/2026-06-22-llm-trigger-analysis-RESOLVED.md`；`docs/refactor-611-contract.md` → `docs/archive/2026-06-25-refactor-611-contract.md`
+  - **B 類移至 .omo/**（未實作）：`docs/investor-ui/` 整個目錄 → `.omo/investor-ui/`；`docs/live-mode-macro-boundary.md` → `.omo/live-mode-macro-boundary.md`)
