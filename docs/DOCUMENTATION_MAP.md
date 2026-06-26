@@ -63,6 +63,7 @@
 | `guides/ai-productivity.md` | AI 助手指南 |
 | `guides/git-tool-cache-policy.md` | 工具快取原則 |
 | `guides/new-workspace-startup.md` | 新工作區起步 SOP（AI 必讀）|
+| `guides/opencode-oh-my-openagent-tuning.md` | oh-my-openagent hook 機制與 token 防護 |
 
 ### Reference / 工具
 
