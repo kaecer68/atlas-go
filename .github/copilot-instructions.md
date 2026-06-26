@@ -79,7 +79,7 @@ go tool cover -func=coverage.out | tail -n 1
 - [docs/iteration_playbook.md](docs/iteration_playbook.md) — Mutation and evolution cycle
 - [docs/evolution_loop.md](docs/evolution_loop.md) — Acceptance gate logic
 - [docs/data_sources.md](docs/data_sources.md) — Market data import, replay format (JSONL)
-- [ai_productivity_guide.md](ai_productivity_guide.md) — Detailed gotchas & command cheat sheet
+- [docs/guides/ai-productivity.md](docs/guides/ai-productivity.md) — Detailed gotchas & command cheat sheet
 - `docs/archive/phase2-implementation.md` ~ `phase5-architecture.md` — Historical phase decisions
 
 ## 📝 History & Context

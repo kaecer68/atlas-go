@@ -8,6 +8,9 @@
 
 ## 📜 內容歸屬規則（ALL AI MUST READ FIRST）
 
+> 完整歸屬對照表見 **[`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)**。
+> 所有檔案當前位置見 **[`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)**。
+
 | 知識類型 | 歸屬位置 |
 |----------|---------|
 | 跨模組全域規則 | 本文件 |
@@ -16,7 +19,7 @@
 | CI / pipeline 設定 | `.github/workflows/`、`.github/instructions/` |
 | 憲法級強制規範 | `internal/apigateway/CONSTITUTION.md`、`.omo/CONSTITUTION.md` |
 | 技能 / 子代理指引 | `.claude/SKILLS-MAP.md` |
-| 設計文件 / 規劃 | `.omo/plans/`、`.planning/` |
+| 設計文件 / 規劃 | `.omo/briefs/`、`.omo/plans/`、`.omo/evidence/` |
 
 **防膨脹規則**：
 - 本文件不超過 **160 行**（人類編寫部分）
@@ -76,6 +79,9 @@
 | `docs/GUIDELINES_INDEX.md` | 規範階層與使用情境路由 |
 | `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態 |
 | `docs/TRAPS.md` | 完整陷阱參考 |
+| `docs/DOCUMENTATION_STANDARD.md` | **文件歸屬規範**（每種文件放哪、命名、生命週期）|
+| `docs/DOCUMENTATION_MAP.md` | **文件當前位置地圖**（所有檔案實際位置）|
+| `docs/branch-hygiene/` | Branch 維護紀錄（PR #748 建立）|
 | `internal/apigateway/CONSTITUTION.md` | 憲法級強制規範 |
 | `.omo/CONSTITUTION.md` | 深度憲法（矩陣運算、實證約束） |
 

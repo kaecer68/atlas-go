@@ -1,7 +1,7 @@
 # FinMind 日內行情實作計畫
 
 **日期**: 2026-04-30
-**依據**: SPEC.md 調研結果
+**依據**: docs/specs/real-time-regime-detection.md 調研結果
 **Scope**: 方案 A — 大盤 5 秒指數資料整合（低成本可行方案）
 
 ---
