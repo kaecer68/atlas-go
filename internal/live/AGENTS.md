@@ -106,6 +106,6 @@ go run ./cmd/experimental/validate-broker
 
 ---
 
-## Wave 9 — EventPositionUpdate 生產發布
+## EventPositionUpdate 生產發布
 
 `internal/live/orchestrator.go` 是 `EventPositionUpdate` 的生產呼叫者之一，向下游 `BaselineTrigger` 與 `DriftDetector` 發布部位更新。live orchestrator 目前只發布 `"updated"`；新增/移除部位的發布由模擬引擎與訂單成交路徑負責。詳細發布點、`changeType` 語意與下游訂閱者見 `docs/handoff/2026-wave9-event-position-update.md`。

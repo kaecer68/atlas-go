@@ -6,10 +6,6 @@
 > **路由表來源**：`configs/llm_router.yaml`（runtime 載入）；fallback 預設見 `router.go:defaultRoutingTable()`。
 > **成熟度規則**：`internal/MATURITY.md` LLM 相關條目（`llm` / `llm/schemas` / `llm/clients` / `llm/capabilities` / `llm_annotator`）。
 
-> **Wave 11 變更** (Issue #711):
-> - `Tool.Handler` docstring 在 PR1 更新,加上「LLM validation 是 hint,handler 必須自行驗證」+ 推薦 `SafeInvokeHandler`(支援 panic recovery)。
-> - `Request.Validate()` 在 PR3 新增,驗證 `ToolChoice` 對 reserved keywords 或 registered tool names。Provider adapter 在 dispatch 前必須呼叫,trust valid input。
-
 ---
 
 ## 核心職責
@@ -49,7 +45,8 @@
 | `DefaultRouter.Health() map[Provider]HealthStatus` | `/api/llm/health` 端點 | `internal/monitoring/api/llm/handlers.go` |
 | `Capability` / `DataClass` / `Provider` 型別 | 強型別契約 | 跨模組共用 |
 
-> **Effective routing chain** (Wave 11 L2.1 doc audit, Issue #720): RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串。實作上等於 3 層 fallback（Primary → Backup1 → LastResort）。`ProviderOpenCodeGo` 與 `ProviderOpenCodeZen` 常數保留為 `[PLANNED]` 狀態，等未來 client 實作後可重用。Router iteration 容忍空字串 Backup2（`router.go:Call` 直接 `continue` 跳過）。
+> **Effective routing chain**: RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串。實作上等於 3 層 fallback（Primary → Backup1 → LastResort）。`ProviderOpenCodeGo` 與 `ProviderOpenCodeZen` 常數保留為 `[PLANNED]` 狀態，等未來 client 實作後可重用。Router iteration 容忍空字串 Backup2（`router.go:Call` 直接 `continue` 跳過）。
+
 ### 12 個 Capability（命名須與 `provider.go:28-41` 完全一致）
 
 | Constant | 典型用途 |
@@ -110,27 +107,12 @@
 
 ## 開發慣例
 
-### 新增 Provider client
+新增 Provider client、Capability handler 或修改 routing table 的完整 SOP 見 **`.claude/skills/atlas-llm-provider-capability/SKILL.md`**。簡要原則：
 
-1. 在 `clients/` 新建 `<name>.go`，**嵌入 `BaseClient`** 取得 retry / rate-limit / circuit breaker。
-2. 實作 `ProviderImpl.Supports(cap Capability) bool` — 列出支援的 capability 清單。
-3. 實作 `ProviderImpl.Call(ctx, req Request) (Response, error)` — 序列化 request 到 provider 原生格式，回傳 `Response{Provider, Usage, Latency}`。
-4. 在 `router.go:isKnownProvider()` 加入新 provider。
-5. 在 `provider.go` Provider 常數區塊宣告。
-6. **禁止**硬編碼 API key — 一律透過 `apigateway.Fetch(channelID)` 或啟動時注入。
-
-### 新增 Capability handler
-
-1. 在 `capabilities/` 新建 `<name>.go`，定義 `<Name>Handler` struct + `New<Name>Handler(router llm.Router)` constructor。
-2. 實作 typed `<Name>Payload` 與 `<Name>Response`（放在 `schemas/`）。
-3. handler 內部把 payload 包成 `llm.Request{Capability, Payload, DataClass, Options}`，呼叫 `router.Call()`，unmarshal 回 typed response。
-4. 在 `capabilities/<name>_test.go` 寫 mock router 測試。
-
-### 修改 routing table
-
-- 改 `configs/llm_router.yaml`（runtime 來源）— **首選**。
-- 改 `router.go:defaultRoutingTable()`（fallback 預設，僅在 YAML 不可用時生效）。
-- 兩者**必須同步**，否則重啟時行為可能漂移。
+- 新 provider **必須**嵌入 `BaseClient`。
+- 新 capability **必須**同步 `provider.go` 常數、`router.go:defaultRoutingTable()`、`config.go:isKnownCapability()`、`configs/llm_router.yaml` 四處。
+- routing table YAML 與 `defaultRoutingTable()` **必須**同步。
+- 禁止硬編碼 API key；禁止業務邏輯直接呼叫 provider client。
 
 ---
 
@@ -190,7 +172,7 @@ go test -run Integration ./internal/llm/...
 | `internal/llm/adapters` | `Annotator` ↔ `llm.ProviderImpl` 雙向 bridge | router 整合層 |
 | `internal/llm_annotator` | 早期 narrow 介面（向後相容） | 既有呼叫端保留 |
 
-**重構狀態**（Wave 12+ 跟追蹤 issue #731）：兩個 CircuitBreaker 雙重實作已知，但 transitive cycle `apigateway → monitoring → llm/capabilities → llm_annotator` 阻擋直接合併。Wave 12+ 統一方案需先把 `monitoring.ChannelHealthRecord`/`RecordOption` 搬到 `apigateway` 內（斷開 monitoring → llm/capabilities → llm_annotator 環），再合併 CircuitBreaker。
+**已知債務**：兩個 CircuitBreaker 雙重實作仍並存，transitive cycle `apigateway → monitoring → llm/capabilities → llm_annotator` 阻擋直接合併。統一方案需先把 `monitoring.ChannelHealthRecord`/`RecordOption` 搬到 `apigateway` 內（斷開 monitoring → llm/capabilities → llm_annotator 環），再合併 CircuitBreaker。
 
 ---
 
@@ -198,6 +180,6 @@ go test -run Integration ./internal/llm/...
 
 - `docs/llm-integration-strategy-framework.md` — 設計權威
 - `docs/llm-promotion-evaluation.md` — LLM 晉升評估流程
-- `docs/llm-trigger-analysis.md` — LLM 觸發點分析
+- `docs/archive/2026-06-22-llm-trigger-analysis-RESOLVED.md` — LLM 觸發點分析（已 RESOLVED）
 - `configs/llm_router.yaml` — runtime routing table
 - `internal/MATURITY.md` — LLM 相關條目（`llm` / `llm/schemas` / `llm/clients` / `llm/capabilities` / `llm_annotator`）

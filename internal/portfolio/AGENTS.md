@@ -88,30 +88,15 @@ RiskManager.AddPosition() → PostTradeAnalyzer.Record()
 
 ---
 
-## 12. Factor Change Protocol
+## Factor Change Protocol
 
-新增、刪除或改名任何 `FactorType` 時，**必須順序更新以下 8 個位置**：
+新增、刪除或改名任何 `FactorType` 時，必須執行 8 步同步協議。完整步驟、實作位置與驗證指令見 **`.claude/skills/atlas-factor-change-protocol/SKILL.md`**。
 
-| Step | 位置 |
-|------|------|
-| 1 | `optimizer.go` FactorType 常數宣告 |
-| 2 | `factor_weight_engine.go` `defaultBaseWeights` map |
-| 3 | `internal/domain/shared/shared.go` `FactorScoreBreakdown` struct |
-| 4 | `internal/domain/shared/shared.go` `FactorScores` struct |
-| 5 | `optimizer_pipeline.go` `symbolScore` struct |
-| 6 | `optimizer_pipeline.go` `calculateMultiFactorScores` totalScore 計算 |
-| 7 | `factor_engine_aggregate.go` `CalculateAllScoresWithBreakdown` breakdown 建構 |
-| 8 | `factor_weight_engine.go` `applyEventAdjustment` / `strategyDeltas` / `GetWeights` |
+簡要原則：
 
-完成後執行：
-
-```bash
-go generate .
-bash scripts/ci/verify_factor_integrity.sh
-go build ./... && go test ./internal/portfolio/...
-```
-
-**CI 強制**：`quality.yml` 的 `factor-integrity` job 會自動執行 `verify_factor_integrity.sh`。
+- 8 個位置必須同步：`optimizer.go` 常數、`factor_weight_engine.go` 的 `defaultBaseWeights` 與事件調整、`internal/domain/shared/shared.go` 的兩個 struct、`optimizer_pipeline.go` 的 `symbolScore` 與 `calculateMultiFactorScores`、`factor_engine_aggregate.go` 的 breakdown 建構。
+- 完成後必須跑 `go generate .`、`bash scripts/ci/verify_factor_integrity.sh`、`go build ./... && go test ./internal/portfolio/...`。
+- CI `quality.yml` 的 `factor-integrity` job 會自動執行 `verify_factor_integrity.sh`。
 
 ---
 

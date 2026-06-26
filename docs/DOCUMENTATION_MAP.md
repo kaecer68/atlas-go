@@ -92,8 +92,12 @@
 ### 審計 / 交接 / 調查 / 修復計畫（時序敏感）
 
 - `audit/` — 審計報告
+  - `2026-06-20-risk-orphan-config.md` — `internal/risk` 孤兒組態檔清理紀錄（PR #756 後第二波整理）
 - `handoff/` — 任務交接
+  - `2026-wave12-llm-annotator-phase2.md` — Wave 12 `llm_annotator` Phase 2 canonical 介面交接（由 `internal/llm_annotator/AGENTS.md` 搬遷）
 - `investigations/` — 根因調查
+  - `2026-05-29-etf-nav-data-source.md` — ETF NAV 資料來源調查（由 `internal/marketdata/AGENTS.md` 搬遷）
+  - `2026-06-fubonproxy-ipv4-uvloop.md` — Fubon proxy IPv4/IPv6 dual-stack 與 uvloop 問題 RCA（由 `internal/marketdata/AGENTS.md` 搬遷）
 - `plans/` — 修復計畫
 - `branch-hygiene/` — branch 維護紀錄
 
@@ -115,6 +119,20 @@
 - `archive/superpowers/`（41 個短期 plan/spec，merge 後無教學價值）
 - `archive/wave-10-observation-log.md`（觀察期日誌，過渡性）
 - `archive/migration-0.0.0.5.md`（過時 migration，CHANGELOG 已有）
+
+---
+
+## `.claude/skills/` 技能地圖
+
+技能文件是 AI Coding 的標準作業程序延伸。完整分類與載入規則見 **`.claude/SKILLS-MAP.md`**。
+
+| 技能 | 檔案 | 用途 |
+|------|------|------|
+| Pre-change protocol | `.claude/skills/atlas-pre-change-protocol/SKILL.md` | 修改任何程式碼前強制執行的 7 步檢查 |
+| Data visibility | `.claude/skills/atlas-data-visibility/SKILL.md` | 四層資料可見性防護 |
+| LLM provider / capability | `.claude/skills/atlas-llm-provider-capability/SKILL.md` | 新增 LLM Provider client 或 Capability handler 的 SOP |
+| Fubon supervisor invariants | `.claude/skills/atlas-fubon-supervisor-invariants/SKILL.md` | Fubon proxy ProcessManager 監督器不變式（F1~F9） |
+| Factor change protocol | `.claude/skills/atlas-factor-change-protocol/SKILL.md` | FactorType 變更 8 步同步協議 |
 
 ---
 

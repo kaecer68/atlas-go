@@ -9,10 +9,13 @@
 
 | 型別 | 檔案 | 功能 |
 |------|------|
-| `slog.Logger` | `logging.go` | 底層 logger，全域 mutex 保護 |
-| `ctxKey` | `logging.go` | context 中儲存 logger 的鍵型別 |
-| `Component`/`Event`/`Symbol` | `logging.go` | 結構化欄位輔助函式，回傳 `slog.Attr` |
-| `Err` | `logging.go` | 包裝 error 為 slog 欄位，`nil` 時回傳 `nil` |
+| 型別 / 符號 | 檔案 | 功能 |
+|------|------|------|
+| `logger`（package-level） | `logger.go` | 底層 `*slog.Logger`，`mu` 保護 |
+| `ctxKey` | `context.go` | context 中儲存 logger 的鍵型別 |
+| `Component` / `Event` / `Symbol` / `SessionID` / `AgentID` / `DurationMs` | `logger.go` | 結構化欄位輔助函式，回傳 `slog.Attr` |
+| `FStr` / `FInt` / `FFloat64` / `FBool` | `logger.go` | 泛用 slog 欄位輔助函式 |
+| `Err` | `logger.go` | 包裝 error 為 slog 欄位，`nil` 時回傳 `nil` |
 
 ## 資料流
 

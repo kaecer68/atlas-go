@@ -45,7 +45,7 @@
 | **大小寫失真** | 在 `handleRecommendationPipeline` 中解析 JSONL 時，若 anonymous struct 標籤錯誤會導致欄位為空值。 |
 | **全域 Mutex 阻塞** | `backtestMu` 保護回測執行狀態，避免在 API handler 中進行長時間阻塞操作。 |
 | **未處理的 Legacy 格式** | 讀取舊 session 時，`PassedGuards` 等新欄位可能缺失，需在 handler 進行 fallback 補齊（預設為 true）。 |
-| **OOS 取樣範圍太小（單一 session）** | `LoadAgentObservatory()` 不傳 `sessionID` 時，若回退到 `LoadSessionOutcomes()` 只會讀取**最新單一 session**（88 筆），導致多數 agent OOS 樣本不足（`oos_sample_warning: insufficient`）。**必須改為直接呼叫 `LoadOutcomesFromSessions()`** 取得完整歷史資料（131k+ 筆，78 sessions）。|
+| **OOS 取樣範圍太小（單一 session）** | `LoadAgentObservatory()` 不傳 `sessionID` 時，若回退到 `LoadSessionOutcomes()` 只會讀取**最新單一 session**，導致多數 agent OOS 樣本不足（`oos_sample_warning: insufficient`）。**必須改為直接呼叫 `LoadOutcomesFromSessions()`** 取得完整歷史 session 資料。 |
 
 ## 跨市監控資料可見性 (Cross-Market Data Visibility)
 
@@ -109,6 +109,6 @@
 
 ---
 
-## Wave 9 Observability — 5 偵測器協調器
+## Live 偵測器協調器
 
 `internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 在 live mode 下統一啟動、協調與關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。詳細啟動/關閉順序、provider 注入、與 Dashboard API 的整合與向後相容說明見 `docs/handoff/2026-wave9-observability-coordinator.md`。

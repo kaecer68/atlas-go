@@ -44,7 +44,7 @@
 
 ---
 
-## Wave 9 — BaselineTrigger 執行期政策強制（PR #698）
+## 執行期政策強制
 
 `internal/baseline/trigger.go` 提供執行期政策強制元件 `Trigger`，訂閱 `EventPositionUpdate` 並依現行 baseline policy 的 simulation constraints 評估每個部位。
 
@@ -75,4 +75,4 @@
 
 ### 與 live orchestrator 的關係
 
-`internal/live/orchestrator.go` 在 `EventMarketSnapshot` 的 critical handler 內對持有部位呼叫 `PublishPositionUpdate(..., "updated")`，使 `Trigger` 能持續追蹤停損/停利/持有天數。這是 Wave 9 將 baseline policy 從「回測約束」延伸到「執行期監控」的關鍵接點。
+`internal/live/orchestrator.go` 在 `EventMarketSnapshot` 的 critical handler 內對持有部位呼叫 `PublishPositionUpdate(..., "updated")`，使 `Trigger` 能持續追蹤停損/停利/持有天數。這是 baseline policy 從「回測約束」延伸到「執行期監控」的關鍵接點。

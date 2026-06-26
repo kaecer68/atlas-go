@@ -5,7 +5,7 @@
 `strategy_techniques` 提供投資心法庫（Strategy Techniques Library）——
 以 `StrategyFrame` 為核心的規則引擎，作為台股投資心法看板與系統決策依據。
 
-// Maturity: evolving (Wave 2 接入 main.go 後升 stable)
+// Maturity: stable
 
 ## 五層框架（L1～L5）
 
@@ -30,7 +30,7 @@
 
 - **混合歸因**（AttributionMode.RuleBased + AttributionMode.LLMAnnotated）：
   - 規則分類器：regime shift / 政策衝擊 / 結構斷裂 / 數據異常 / 季節性 / 流動性 / 板塊輪動 / 未知
-  - LLM 加註：natural language 歸因（待 Wave 2 接入）
+  - LLM 加註：natural language 歸因（透過 `internal/llm/capabilities/failure_attribution`）
 - **Regime 標籤**：Janus RegimeClassification（NOVEL/HISTORICAL/MIXED）作分桶
 - **多時間尺度驗證**：5D/20D/60D rolling HitRate
 
@@ -43,11 +43,10 @@
 
 ## 已知陷阱
 
-- **演進中**：Wave 1 期間 API 可能調整，Wave 2 接入主程式後升 stable。
-- **S-tier**：5-wave 遷移後已穩定生產（Wave 6 補 3 L4 + LLM 歸因後）
+- **S-tier**：已穩定生產，L4/L5 與 LLM 歸因已接入。
 
 ## 相依關係
 
-- 將被 `cmd/atlas/main.go` 匯入（Wave 2）
-- 取代歷史 `internal/eventlogic/`（Wave 5 清理完成）
+- 已由 `cmd/atlas/main.go` 匯入
+- 取代歷史 `internal/eventlogic/`
 - 與 `internal/narrative/`、`internal/portfolio/`、`internal/monitoring/` 互動

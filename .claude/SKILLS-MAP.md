@@ -1,7 +1,7 @@
 # Atlas Skills Map — 技能分類體系地圖
 
-**版本**: 5.0
-**日期**: 2026-06-25
+**版本**: 5.1
+**日期**: 2026-06-26
 **用途**: Atlas-Go AI 技能統一索引與分類體系。AI Coding 時依分類快速定位所需技能。
 
 ---
@@ -10,12 +10,13 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| 🔧 除錯維護迭代 | 2 | 修改前必用、資料可見性防護 |
+| 🔧 除錯維護迭代 | 3 | 修改前必用、資料可見性防護、Fubon supervisor 不變式 |
 | 📊 邏輯計算 | 8 | 策略、風控、宏觀、因子、權重 |
+| 🚀 功能拓展 | 2 | LLM Provider / Capability 新增 SOP、Factor Change Protocol |
 | 🤖 機器人溝通 | 4 | OpenClaw/Hermes Agent 投資人互動 |
 | 🔗 第三方工具 | 6 | GitNexus 程式碼智慧 |
 
-**總計: 20 技能**（10 手寫 + 6 GitNexus + 4 機器人溝通）
+**總計: 23 技能**（13 手寫 + 6 GitNexus + 4 機器人溝通）
 
 > ⚠️ **Token 節省提示**: 程式碼導航請優先使用 GitNexus 工具或 `internal/<mod>/AGENTS.md`，不再維護自動生成技能索引。
 
@@ -29,8 +30,9 @@
 ├── SKILLS-MAP.md                  # 本文件（技能分類地圖）
 │
 ├── 🔧 除錯維護迭代
-│   ├── atlas-pre-change-protocol/ # 修改前 7 步驟強制檢查清單
-│   └── atlas-data-visibility/     # 四層資料可見性防護（亦屬 🛡️）
+│   ├── atlas-pre-change-protocol/        # 修改前 7 步驟強制檢查清單
+│   ├── atlas-data-visibility/            # 四層資料可見性防護（亦屬 🛡️）
+│   └── atlas-fubon-supervisor-invariants/# Fubon proxy ProcessManager 監督器不變式（F1~F9）
 │
 ├── 📊 邏輯計算
 │   ├── atlas-macro-narrative/     # 宏觀敘事：六大維度外資流向推導
@@ -41,6 +43,10 @@
 │   ├── atlas-event-driven-weights/# 事件驅動權重：12 因子 FactorEngine 動態調整
 │   ├── atlas-strategy-techniques/ # 投資心法庫：5 層架構 + 12 production seeds
 │   └── atlas-taiwan-leading-indicators/ # 短線指標：4 核心領先指標
+│
+├── 🚀 功能拓展
+│   ├── atlas-llm-provider-capability/ # 新增 LLM Provider / Capability SOP
+│   └── atlas-factor-change-protocol/  # FactorType 變更 8 步協議
 │
 ├── 🤖 robot-communication/        # 機器人溝通專用技能（OpenClaw/Hermes）
 │   ├── README.md                  # 機器人溝通技能使用說明
@@ -67,6 +73,7 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 |------|------|---------|------|
 | `atlas-pre-change-protocol` | 7 步驟修改前檢查：blast radius → 模組陷阱 → 數據溯源 → 憲法檢查 → 模式匹配 → GitNexus 架構 → 代碼意圖 | **修改任何程式碼前強制執行** | v1.0 |
 | `atlas-data-visibility` | 四層資料可見性防護：Gateway/Adapter/Service/Frontend，防止零值掩蓋通道靜默失敗 | 資料流修改、通道新增、前端 data_status 欄位變更時 | v2.0 |
+| `atlas-fubon-supervisor-invariants` | Fubon proxy ProcessManager 監督器不變式（F1~F9）：防 orphan process、goroutine 堆積、Stop 阻塞、EADDRINUSE backoff loop | 修改 `internal/fubonproxy` supervisor / Start / Stop / 測試時 | v1.0 |
 
 > **強制規則**: `atlas-pre-change-protocol` 是所有程式碼修改的前置條件，不可跳過。執行方式: `skill(name="atlas-pre-change-protocol")`
 
@@ -84,6 +91,15 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 | `atlas-event-driven-weights` | 12 因子動態權重系統：FactorEngine 事件驅動調整、FactorBridge 銜接 | ✅ 完整 | v1.0 |
 | `atlas-strategy-techniques` | 5 層投資心法庫：基本面、技術面、籌碼面、宏觀面、事件面，含 12 production seeds | ✅ 完整 | v1.0 |
 | `atlas-taiwan-leading-indicators` | 4 核心短線指標：外資期貨未平倉、TSE 融資餘額、VIX 台指、美元/台幣匯率 | ✅ 完整 | v1.0 |
+
+### 🚀 功能拓展（Feature Development）
+
+新增大型功能或整合元件時的標準作業程序。本類技能`auto_load: false`，僅在明確進行相關開發時手動載入。
+
+| 技能 | 用途 | 版本 |
+|------|------|------|
+| `atlas-llm-provider-capability` | 新增 LLM Provider client 或 Capability handler 的完整 SOP：BaseClient 嵌入、ProviderImpl 實作、routing table 同步、四處 capability 註冊、測試規範 | v1.0 |
+| `atlas-factor-change-protocol` | FactorType 變更 8 步協議：同步 optimizer 常數、factor weight engine、domain structs、pipeline score、aggregate breakdown 與事件調整 | v1.0 |
 
 ### 🛡️ 資料安全（Data Security）
 
@@ -152,7 +168,8 @@ GitNexus 程式碼智慧工具技能。
   │   └── 📊 atlas-taiwan-leading-indicators
   │
   ├── LLM 框架（router / capability handler / DataClass 治理）
-  │   └── internal/llm/AGENTS.md §1 跨模組陷阱必讀
+  │   ├── internal/llm/AGENTS.md §1 跨模組陷阱必讀
+  │   └── 🚀 atlas-llm-provider-capability（新增 provider / capability 時）
   │
   ├── 投資人面向功能開發
   │   └── 🤖 robot-communication/*
@@ -170,6 +187,9 @@ GitNexus 程式碼智慧工具技能。
 | 技能群 | 載入規則 | 原因 |
 |--------|---------|------|
 | `robot-communication/*` (4 個) | `auto_load: false` — 僅機器人載入 | 投資人面向內容，開發時不需要 |
+| `atlas-llm-provider-capability` | `auto_load: false` — 僅新增 LLM provider/capability 時手動載入 | 功能開發 SOP，日常編碼不需要 |
+| `atlas-factor-change-protocol` | `auto_load: false` — 僅變更 FactorType 時手動載入 | 功能開發 SOP，日常編碼不需要 |
+| `atlas-fubon-supervisor-invariants` | `auto_load: false` — 僅修改 fubonproxy supervisor 時手動載入 | 專門領域 SOP，日常編碼不需要 |
 | `gitnexus/*` (6 個) | 依 CLAUDE.md 規範按需載入 | 工具技能，非每次 session 需要 |
 
 **自動載入白名單**（AI Coding session 中有領域價值時載入）：
@@ -197,6 +217,7 @@ GitNexus 程式碼智慧工具技能。
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 5.1 | 2026-06-26 | 新增 🚀 功能拓展分類與 `atlas-llm-provider-capability`、`atlas-factor-change-protocol` skill；新增 `atlas-fubon-supervisor-invariants` skill 歸屬 🔧；總數 20 → 23；更新相關流程與載入規則 |
 | 5.0 | 2026-06-25 | 移除全數 `generated/*` 技能；總數 43 → 20；程式碼導航改由 GitNexus 與 `internal/<mod>/AGENTS.md` 負責 |
 | 4.2 | 2026-06-25 | 加入 `internal/llm/` generated 技能（LLM 路由器、12 capability handlers）；總數 42 → 43 |
 | 4.1 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 引用；更新日期以反映 PR #700 |

@@ -29,7 +29,7 @@ Orchestrator (regime detection) → prismPlugin.PostSimulation()
 ## 關鍵設計決策
 
 ### classifyRegime 不使用時間推測
-`classifyRegime()` 不再使用 `time.Now().Month()` 做季節性 regime 猜測。TrainingWindow 的 `RegimeSet` flag 標記 regime 是否由 orchestrator 顯式設定，顯式設定具有權威性；未設定時預設為 `RegimeTransition`。
+`classifyRegime()` 僅尊重 TrainingWindow 的 `RegimeSet` flag：regime 由 orchestrator 顯式設定時具有權威性，未設定時預設為 `RegimeTransition`。不採用 `time.Now().Month()` 等日曆/季節性啟發。
 
 ### 無 executor 時標記 Synthetic
 當 `TrainingExecutor` 未附加時，`executeTraining()` 返回 `TrainingResult{Synthetic: true, Error: "no training executor configured"}`，而非靜默返回假資料。消費者（JANUS、worker loop）可透過 `Synthetic` flag 區分真實結果與佔位結果。
