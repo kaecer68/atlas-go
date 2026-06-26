@@ -36,7 +36,30 @@
 - `developer_guide.md` — 開發者指南（人類向）
 - `guides/ai-productivity.md` — AI 助手指南（AI 向）
 - `guides/git-tool-cache-policy.md` — 工具快取原則（GitNexus / opencode 等 derived artifact 不該 commit）
-- `data_sources.md`, `migration-0.0.0.5.md` — 各種程序
+- `data_sources.md` — 各種程序
+- `evolution_loop.md` — 演化循環
+- `script_usage_guide.md` — 腳本使用指南
+- `AI_PROMPT_FILES.md` — AI Prompt 檔案管理政策
+- `llm-promotion-evaluation.md` — LLM 功能晉升評估清單
+
+### 參考 / Reference
+
+- `ENVIRONMENT.md` — 外部依賴與開發環境狀態
+- `TOOLS.md` — 工具列表與使用時機
+- `ai_agent_architecture.md` — AI 代理架構
+- `audit-trail.md` — 稽核軌跡
+- `calibration-loop.md` — 校準循環
+- `industry-ecosystem.md` — 產業生態分析
+- `silicon_indicators_coverage.md` — 矽谷指標覆蓋範圍
+- `MACRO_CALIBRATION.md` — Rolling 巨集觀校準框架（取代 docs/superpowers/plans/ 已歸檔計畫）
+
+### 數據標準 / Data Standards
+
+- `DATA_CATALOG.md` — 數據目錄
+- `DATA_CATALOG_TEMPLATE.md` — 數據目錄模板
+- `DATA_DIRECTORY_STANDARD.md` — 數據目錄標準
+- `DATA_MATURITY_STANDARD.md` — 數據成熟度標準
+- `DATA_NAMING_CONVENTION.md` — 數據命名規則
 
 ### 規格 / 設計文檔
 
@@ -51,7 +74,7 @@
 ### 審計 / 歸檔
 
 - `audit/` — 審計報告（含原本 docs/audit + 從根目錄移入的 3 個）
-- `archive/` — 歸檔（已存在 20+ 已歸檔的歷史文件）
+- `archive/` — 歸檔（20+ 已歸檔歷史文件，含 superpowers/ 歷史規劃、已完成 wave-10 觀察日誌、migration-0.0.0.5 等）
 
 ### 時序敏感文檔（YYYY-MM-DD 前綴）
 
@@ -65,7 +88,6 @@
 
 ### Wave-specific（active）
 
-- `wave-10-observation-log.md` — Wave 10 L1+L2 觀察紀錄
 - `wave-11/` — Wave 11 L2.3/L2.4 active work（含 L2.4 RUNBOOK）
 
 ## .omo/（AI agent ephemeral working dir，**未 git tracked**）
@@ -103,3 +125,7 @@
 - **2026-06-26** PR #754 清理 docs/ 內混合的暫時性與未實作檔案：
   - **A 類 archive**（已 RESOLVED）：`docs/llm-trigger-analysis.md` → `docs/archive/2026-06-22-llm-trigger-analysis-RESOLVED.md`；`docs/refactor-611-contract.md` → `docs/archive/2026-06-25-refactor-611-contract.md`
   - **B 類移至 .omo/**（未實作）：`docs/investor-ui/` 整個目錄 → `.omo/investor-ui/`；`docs/live-mode-macro-boundary.md` → `.omo/live-mode-macro-boundary.md`)
+- **2026-06-26** docs/ 目錄標準合規審計（PR TBD）：
+  - **A 類 archive**：`docs/wave-10-observation-log.md` → `docs/archive/wave-10-observation-log.md`；`docs/migration-0.0.0.5.md` → `docs/archive/migration-0.0.0.5.md`；`docs/superpowers/` 整目錄 → `docs/archive/superpowers/`
+  - **B 類移至 .omo/**（active 規劃/設計）：`docs/roadmap.md` → `.omo/briefs/roadmap.md`；`docs/ALERT_SYSTEM_REDESIGN.md` → `.omo/briefs/ALERT_SYSTEM_REDESIGN.md`
+  - **C 類刪除重複**：`docs/plans/2026-04-16-*.md` 2 個檔案（已存在於 `docs/archive/plans/`）刪除
