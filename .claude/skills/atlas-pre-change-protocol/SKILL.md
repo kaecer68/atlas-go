@@ -305,3 +305,29 @@ Read relevant internal/<module>/AGENTS.md for module-specific traps
 ```
 
 **歷史範例**：Wave 5 清理中刪除 `internal/eventlogic/` 的 7 步流程（已記錄於 git log）
+
+---
+
+## Post-Merge Cleanup（Exit Criteria）
+
+**AI 在每次 PR merge 後必須自動執行以下 4 步**（不要等使用者指示）：
+
+```
+1. git fetch origin main && git checkout main && git merge --ff-only origin/main
+2. git branch -d <merged-branch>                       # -d 因為本地 main 已 ff
+3. git push origin --delete <merged-branch>
+4. 若使用獨立 worktree：git worktree remove <path>     # 需先切到其他 worktree
+```
+
+完整 SOP 見 `docs/QUICKSTART.md` § Git 工作流 § 4。批次清理（>5 個
+stale branch）見 `docs/branch-hygiene/`。MULTI_CLI_PROTOCOL.md 的
+「Post-merge cleanup checklist」段有對應摘要。
+
+**為什麼加在這裡**：本 skill 在每次「修改程式碼前」必載入（description
+MUST use），AI 進入下一個任務前會看到此段 → 在下一次 PR merge 動作時
+觸發執行。
+
+**歷史背景**：Wave 9 完成後遺留 16 個 stale branch（落後 main 30-60
+commits），雖 MULTI_CLI_PROTOCOL.md 早已明列「PR merge → branch 自動
+刪除」SOP，但 AI 未主動執行 — 文件有寫但 AI 沒 follow。本段為直接
+觸發點。清理見 PR #748。
