@@ -91,7 +91,10 @@
 | `specs/real-time-regime-detection.md` | 即時 regime 偵測規格 |
 | `specs/agent-loop-state-machine.md` | AgentLoop 狀態機規格（Phase/Transition/Invariants）|
 | `specs/llm-sector-agent.md` | L2.3 LLM-driven sector agent 設計記錄 |
-| `llm-integration-strategy-framework.md`, `LLM_INTEGRATION_*` | LLM 框架 |
+| `specs/llm-routing.md` | LLM Provider 路由策略 + 備援鏈（架構藍圖 §6 抽離）|
+| `specs/llm-interface-contract.md` | LLM 統一介面合約（架構藍圖 §4.2-4.5 抽離）|
+| `llm-integration-strategy-framework.md` | LLM 整合策略框架（主檔，§4.2-4.5/6/8/10 已抽離）|
+| `llm-adr-log.md` | LLM 整合架構決策紀錄（ADR-001 ~ ADR-010）|
 
 ### 審計 / 交接 / 調查 / 修復計畫（時序敏感）
 
