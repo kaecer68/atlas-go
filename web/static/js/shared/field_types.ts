@@ -95,6 +95,10 @@ export interface AlertParameters {
   max_unacknowledged_alerts: string;
   suppress_categories: string;
   heartbeat_ttl_minutes: string;
+  alert_sla_critical_sec: string;
+  alert_sla_error_sec: string;
+  alert_sla_warning_sec: string;
+  sla_violation_meta_alert: string;
 }
 
 export interface AlertRecord {
@@ -117,6 +121,7 @@ export interface AlertRecord {
   resolved_at?: string | null;
   resolved_by?: string;
   silenced_until?: string | null;
+  acknowledged_within_sec?: number | null;
 }
 
 export interface AlertThreshold {
