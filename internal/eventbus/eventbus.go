@@ -66,6 +66,10 @@ const (
 	EventExperimentAccepted         EventType = "experiment.accepted"
 	EventExperimentRejected         EventType = "experiment.rejected"
 
+	// 后台任务事件 (Decision 4)
+	EventBackgroundTaskSustainedFailure EventType = "background_task.sustained_failure"
+	EventBackgroundTaskRecovered        EventType = "background_task.recovered"
+
 	// 叙事事件 (MacroIngestor 生成)
 	EventNarrative EventType = "narrative.event"
 
@@ -323,6 +327,17 @@ type ExperimentLifecyclePayload struct {
 	Skill         string    `json:"skill"`
 	RevertReason  string    `json:"revert_reason,omitempty"`
 	Timestamp     time.Time `json:"timestamp"`
+}
+
+// BackgroundTaskPayload background task lifecycle event payload (Decision 4).
+// Emitted by internal/monitoring/background_task_tracker.go when a
+// background task reaches the consecutive-failure threshold
+// (SustainedFailure) or recovers after sustained failures (Recovered).
+type BackgroundTaskPayload struct {
+	TaskName            string    `json:"task_name"`
+	ConsecutiveFailures int       `json:"consecutive_failures"`
+	Threshold           int       `json:"threshold"`
+	Timestamp           time.Time `json:"timestamp"`
 }
 
 // NarrativeEventPayload 叙事事件载荷
@@ -830,6 +845,34 @@ func (b *ChannelEventBus) PublishExperimentLifecycle(eventType EventType, payloa
 		Timestamp:     time.Now(),
 		Payload:       payload,
 		Severity:      severity,
+		SchemaVersion: 1,
+	})
+}
+
+// PublishBackgroundTaskSustainedFailure publishes when a background task
+// has failed consecutively >= threshold times. Decision 4
+// (alert-redesign-v2.md Part 3.2): 1-2 failures are transient, threshold+
+// failures are systematic and worth paging.
+func (b *ChannelEventBus) PublishBackgroundTaskSustainedFailure(payload BackgroundTaskPayload) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventBackgroundTaskSustainedFailure,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "error",
+		SchemaVersion: 1,
+	})
+}
+
+// PublishBackgroundTaskRecovered publishes when a background task that
+// previously hit the threshold has succeeded — auto-resolve signal.
+func (b *ChannelEventBus) PublishBackgroundTaskRecovered(payload BackgroundTaskPayload) {
+	b.Publish(BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          EventBackgroundTaskRecovered,
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "info",
 		SchemaVersion: 1,
 	})
 }
