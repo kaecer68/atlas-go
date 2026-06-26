@@ -1040,6 +1040,8 @@ type AlertParameters struct {
 	DailyLossCriticalPct     ParameterMetadata[float64]  `json:"daily_loss_critical_pct"`
 	RuleEngineIntervalSec    ParameterMetadata[int]      `json:"rule_engine_interval_sec"`
 	RuleEngineCooldownSec    ParameterMetadata[int]      `json:"rule_engine_cooldown_sec"`
+	SlippageErrorBps         ParameterMetadata[float64]  `json:"slippage_error_bps"`
+	SlippageWarningBps       ParameterMetadata[float64]  `json:"slippage_warning_bps"`
 	SystemMetricsIntervalSec ParameterMetadata[int]      `json:"system_metrics_interval_sec"`
 	MinScreeningRate         ParameterMetadata[float64]  `json:"min_screening_rate"`
 	MaxAlertTriggerRate      ParameterMetadata[float64]  `json:"max_alert_trigger_rate"`

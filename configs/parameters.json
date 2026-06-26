@@ -55,6 +55,16 @@
       "source": "heuristic",
       "value": 30
     },
+    "slippage_error_bps": {
+      "rationale": "Trade slippage error threshold (100 BPS = 1.0%) — emits ERROR severity alert",
+      "source": "heuristic",
+      "value": 100
+    },
+    "slippage_warning_bps": {
+      "rationale": "Trade slippage warning threshold (50 BPS = 0.5%) — emits WARNING severity alert",
+      "source": "heuristic",
+      "value": 50
+    },
     "suppress_categories": {
       "rationale": "Alert categories that should be auto-suppressed (not saved to alert stream). Gateway heartbeat and simulation RISK_OFF are expected behavior.",
       "source": "heuristic",

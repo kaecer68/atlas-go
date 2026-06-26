@@ -175,6 +175,8 @@
         "DailyLossCriticalPct ParameterMetadata[float64]",
         "RuleEngineIntervalSec ParameterMetadata[int]",
         "RuleEngineCooldownSec ParameterMetadata[int]",
+        "SlippageErrorBps ParameterMetadata[float64]",
+        "SlippageWarningBps ParameterMetadata[float64]",
         "SystemMetricsIntervalSec ParameterMetadata[int]",
         "MinScreeningRate ParameterMetadata[float64]",
         "MaxAlertTriggerRate ParameterMetadata[float64]",

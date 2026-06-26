@@ -554,6 +554,16 @@ func defaultAlertParameters() AlertParameters {
 			Rationale: "Default rule cooldown (5 minutes)",
 			Source:    SourceHeuristic,
 		},
+		SlippageErrorBps: ParameterMetadata[float64]{
+			Value:     100,
+			Rationale: "Trade slippage error threshold (100 BPS = 1.0%) — emits ERROR severity alert",
+			Source:    SourceHeuristic,
+		},
+		SlippageWarningBps: ParameterMetadata[float64]{
+			Value:     50,
+			Rationale: "Trade slippage warning threshold (50 BPS = 0.5%) — emits WARNING severity alert",
+			Source:    SourceHeuristic,
+		},
 		SystemMetricsIntervalSec: ParameterMetadata[int]{
 			Value:     30,
 			Rationale: "System metrics collection interval (30 seconds)",
