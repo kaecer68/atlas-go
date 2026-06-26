@@ -94,6 +94,7 @@ export interface AlertParameters {
   max_alert_trigger_rate: string;
   max_unacknowledged_alerts: string;
   suppress_categories: string;
+  heartbeat_ttl_minutes: string;
 }
 
 export interface AlertRecord {

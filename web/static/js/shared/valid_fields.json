@@ -604,6 +604,7 @@
   "health_stale_hours",
   "health_warn_hours",
   "healthy",
+  "heartbeat_ttl_minutes",
   "hedge_ratio",
   "high",
   "high_vol_threshold",
