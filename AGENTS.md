@@ -39,16 +39,19 @@
 
 ## 模組路由
 
-| 職能群組 | 模組 |
+**所有模組的 `AGENTS.md` 路徑**：`internal/<mod>/AGENTS.md`（CONSTITUTION 例外：`internal/apigateway/CONSTITUTION.md`）
+
+> **重要（token 經濟）**：**不要預先讀全部子 AGENTS.md**——只在**準備修改** `internal/<mod>/` 下任一檔案時，才讀該目錄的 AGENTS.md。預先讀 26 個會浪費 ~1,500 token。
+
+| 職能群組 | 模組（純文字，避免 inline 連結觸發預先讀）|
 |----------|------|
-| 核心引擎 | [`sim`](internal/sim/AGENTS.md) · [`experiment`](internal/experiment/AGENTS.md) · [`baseline`](internal/baseline/AGENTS.md) · [`portfolio`](internal/portfolio/AGENTS.md) · [`prism`](internal/prism/AGENTS.md) · [`janus`](internal/janus/AGENTS.md) |
-| 控制與決策 | [`orchestrator`](internal/orchestrator/AGENTS.md) · [`narrative`](internal/narrative/AGENTS.md) · [`risk`](internal/risk/AGENTS.md) · [`industry`](internal/industry/AGENTS.md) |
-| 資料與基礎設施 | [`marketdata`](internal/marketdata/AGENTS.md) · [`ledger`](internal/ledger/AGENTS.md) · [`repository`](internal/repository/AGENTS.md) · [`eventbus`](internal/eventbus/AGENTS.md) · [`realtime`](internal/realtime/AGENTS.md) · [`apigateway`](internal/apigateway/CONSTITUTION.md) |
-| 工具與輔助 | [`config`](internal/config/) · [`db`](internal/db/) · [`screener`](internal/screener/AGENTS.md) · [`spawning`](internal/spawning/AGENTS.md) · [`tax`](internal/tax/AGENTS.md) · [`live`](internal/live/AGENTS.md) · [`swarm`](internal/swarm/) |
-| LLM | [`llm`](internal/llm/AGENTS.md) |
+| 核心引擎 | `sim` · `experiment` · `baseline` · `portfolio` · `prism` · `janus` |
+| 控制與決策 | `orchestrator` · `narrative` · `risk` · `industry` |
+| 資料與基礎設施 | `marketdata` · `ledger` · `repository` · `eventbus` · `realtime` · `apigateway` |
+| 工具與輔助 | `config` · `db` · `screener` · `spawning` · `tax` · `live` · `swarm` |
+| LLM | `llm` |
 
 > 沒有 `AGENTS.md` 的模組為共享基礎設施，直接讀碼即可。
-> **進入 `internal/*/` 目錄修改程式碼前，強制先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。**
 
 ## 關鍵跨模組陷阱
 
