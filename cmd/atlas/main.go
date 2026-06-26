@@ -1593,15 +1593,9 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if err != nil {
 		log.Fatalf("failed to get client dist sub FS: %v", err)
 	}
-	mux.Handle("/", staticHandler(subFS))
-	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
-	})
-	mux.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/client/", http.StatusMovedPermanently)
-	})
-	mux.Handle("/admin/", http.StripPrefix("/admin/", staticHandler(adminSubFS)))
-	mux.Handle("/client/", http.StripPrefix("/client/", staticHandler(clientSubFS)))
+	// Static routes and basic probes are registered through the same helper
+	// used by api-mode so live trading and simulation behave identically.
+	registerSimpleRoutes(mux, collector, subFS, adminSubFS, clientSubFS)
 	apiAddr := ":8080"
 	srv := &http.Server{
 		Addr:              apiAddr,
