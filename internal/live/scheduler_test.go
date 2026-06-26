@@ -217,7 +217,19 @@ func TestScheduler_Status_AfterStart(t *testing.T) {
 
 	s := NewScheduler(ctx, provider, st, cb, cfg, "live")
 
-	err := s.Start()
+	// Inject off-hours fake time + dummy callbacks so the background
+	// marketTimeScheduler goroutine never invokes a nil callback regardless
+	// of when this test runs (CI flaky before this fix).
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		t.Fatalf("failed to load Asia/Taipei location: %v", err)
+	}
+	s.nowFunc = func() time.Time {
+		return time.Date(2026, 6, 20, 23, 0, 0, 0, loc) // 23:00 Taipei = off-hours
+	}
+	s.SetCycleCallbacks(func() {}, func() {}, func() {}, func(){})
+
+	err = s.Start()
 	if err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
