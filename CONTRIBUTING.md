@@ -80,7 +80,7 @@ We follow standard Go conventions:
 
 - Read [AGENTS.md](AGENTS.md) for architecture overview
 - Check [docs/architecture.md](docs/architecture.md) for detailed design
-- Review [ai_productivity_guide.md](ai_productivity_guide.md) for common pitfalls
+- Review [docs/guides/ai-productivity.md](docs/guides/ai-productivity.md) for common pitfalls
 
 ## License
 

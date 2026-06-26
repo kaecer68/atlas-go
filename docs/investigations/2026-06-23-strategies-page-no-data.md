@@ -151,4 +151,4 @@ function renderSkeleton() {
 
 ## 八、給實作者的具體建議
 
-見 `REPAIR_PLAN.md`（同一分支內）。
+見 `docs/plans/2026-06-23-strategies-page-repair.md`（同一分支內）。

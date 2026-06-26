@@ -1,7 +1,7 @@
 # REPAIR PLAN: 投資心法頁面數據載入健壯性修復
 
 **日期**: 2026-06-23
-**對應**: `INVESTIGATION.md`（同分支）
+**對應**: `docs/investigations/2026-06-23-strategies-page-no-data.md`（同分支）
 **目標**: 將 5 種「無數據」失敗模式全部顯式化，並符合 `atlas-data-visibility` L4 規範
 
 ---
