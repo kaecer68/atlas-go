@@ -19,9 +19,7 @@
 
 ## JSON 慣例 (CONVENTIONS)
 
-- **命名風格**: 外部 API 回傳結構一律使用 **snake_case**。
-- **Domain 對齊**: `domain.*` 型別已內建 `json:"snake_case"` 標籤，定義新結構時必須沿用。
-- **Unmarshal 陷阱**: 從 JSONL (`recommendation_outcomes.jsonl`) 讀取時，注意部分 legacy 欄位使用 **PascalCase** (如 `AgentID`, `Skill`)，Unmarshal 結構必須精確對應。
+- **Unmarshal 陷阱**: 從 JSONL (`recommendation_outcomes.jsonl`) 讀取時，注意部分 legacy 欄位使用 **PascalCase** (如 `AgentID`, `Skill`)，Unmarshal 結構必須精確對應。前端存取 API 回應時必須使用 snake_case（全域規則見根 `AGENTS.md`；2026-05-07 incident 詳見 `docs/audit/2026-05-07-monitoring-pascalcase-snakecase-incident.md`）。
 
 ## Agent Observatory API (`GET /api/dashboard/agent-observatory`)
 
@@ -51,50 +49,14 @@
 
 ## 跨市監控資料可見性 (Cross-Market Data Visibility)
 
-`CrossMarketService` 與前端 `crossmarket.js` 採用 **4 層資料可見性** 模式,確保通道靜默失敗時資料缺失能被看見。
+`CrossMarketService` 採用 **4 層資料可見性** 模式，確保通道靜默失敗時資料缺失能被看見。任何 `MacroDataSnapshot` 欄位 Symbol 為空 → 表示對應 channel 失敗；8 個 US 指數/科技股欄位任一失敗 → `data_status="degraded"`，並於 `failed_channels` 列出失敗 channelID。
 
-| 層級 | 檔案 | 職責 |
-|------|------|------|
-| L1 Gateway | `internal/apigateway/provider.go`, `gateway.go` | `FetchResult.Fallback` / `LastError` 標記 stale-cache fallback |
-| L2 Adapter | `internal/monitoring/gateway_adapter.go` | `ChannelErrors()` 暴露 per-channel 錯誤 |
-| L3 Service | `internal/monitoring/service/crossmarket.go` | `DataStatus` ("ok"/"degraded") + `FailedChannels []string` |
-| L4 Frontend | `web/static/js/pages/crossmarket.js` | "資料獲取失敗" 紅色 badge + 降級 banner |
+- L1 Gateway：`internal/apigateway/provider.go` 標記 `FetchResult.Fallback` / `LastError`
+- L2 Adapter：`internal/monitoring/gateway_adapter.go` 暴露 `ChannelErrors()`
+- L3 Service：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`
+- L4 Frontend：`web/static/js/pages/crossmarket.js` 顯示降級 badge/banner
 
-**觸發場景**: 任何 `MacroDataSnapshot` 欄位 Symbol 為空 → 表示對應 channel 失敗。
-
-**Fail-safe 規則**:
-- 8 個 US 指數/科技股欄位 (SPX/NDX/DJI/SOX/NVDA/AAPL/MSFT/TSM_ADR) 任一失敗 → `data_status="degraded"`
-- `failed_channels` 列出失敗的 channelID (與 `internal/apigateway/gateway.go` 的 `channelIDs()` 對齊)
-- 詳見 `.claude/skills/atlas-data-visibility/SKILL.md`
-
-### 已修復：前端 PascalCase → snake_case 欄位錯誤（2026-05-07）
-
-**問題描述**：前端 JavaScript 錯誤地使用 PascalCase 存取 API 回傳的 snake_case 欄位，導致畫面顯示 `undefined`。
-
-**受影響欄位**（`GuardOutcome`）：
-| Go 欄位名 | JSON tag | 前端錯誤引用 | 前端正確引用 |
-|-----------|----------|-------------|-------------|
-| `GuardID` | `guard_id` | `g.GuardID` | `g.guard_id` |
-| `GuardSkill` | `guard_skill` | `g.GuardSkill` | `g.guard_skill` |
-| `Passed` | `passed` | `g.Passed` | `g.passed` |
-| `Reason` | `reason` | `g.Reason` | `g.reason` |
-| `InputCount` | `input_count` | `g.InputCount` | `g.input_count` |
-| `OutputCount` | `output_count` | `g.OutputCount` | `g.output_count` |
-
-**影響範圍**：
-- `renderMacroRadar()` — 總經雷達頁面顯示 `undefined 筆推薦 → 最終放行 undefined 筆`
-- `renderDecisionChain()` — 決策鏈頁面控制層紀錄顯示異常
-- `renderPipeline()` — 投資管線頁面控制層徽章顯示異常
-
-**修復方式**：
-1. 將所有前端 PascalCase 屬性存取改為 snake_case
-2. 添加防禦性預設值（`g.input_count || 0`）防止未來欄位缺失
-3. 新增 `validateApiResponse()` 函數，在開發階段自動檢測欄位命名不一致
-
-**預防措施**：
-- 後端 `domain.*` 型別的 JSON tag 一律為 snake_case
-- 前端存取 API 回應時必須使用 snake_case
-- 新增 `validateApiResponse(data, requiredFields, context)` 驗證工具，自動檢測 PascalCase 誤用
+完整設計與技能指引見 `.claude/skills/atlas-data-visibility/SKILL.md`。
 
 ---
 
@@ -147,71 +109,6 @@
 
 ---
 
-## Wave 9 Observability — 5 偵測器協調器（PR #697）
+## Wave 9 Observability — 5 偵測器協調器
 
-`internal/monitoring/wave9_runtime.go` 引入 `Wave9Observability`，負責在 live mode 下統一啟動、協調與關閉 5 個 Wave 9 觀測性偵測器。
-
-### 協調的 5 個偵測器
-
-| 偵測器 | 檔案 | 產出事件 | 職責 |
-|--------|------|---------|------|
-| `RegimeDebouncer` | `service/regime_debouncer.go` | `EventRegimeChangeConfirmed` |  regime 穩定 30 秒後發布確認訊號 |
-| `FactorWeightRegressionDetector` | `service/factor_weight_regression.go` | `EventFactorWeightRegression` | regime 變化後偵測 factor weight 位移 |
-| `DriftDetector` (v2) | `service/drift_detector.go` + `drift_helpers.go` | `EventDriftDetected` | 集中度 / turnover / target weights drift |
-| `ChannelHealthSynthesizer` | `service/channel_health_synthesizer.go` | `EventChannelIndividualHealth` | 將 per-channel 錯誤轉為事件 |
-| `IngestionLagMonitor` | `service/ingestion_lag_monitor.go` | `EventIngestionLagSpike` | p99 ingestion latency > 5s 時預警 |
-
-### `detectorFactory` 介面模式
-
-為了在測試中注入 spy，`Wave9Observability` 透過內部 `detectorFactory` 介面抽象偵測器建構：
-
-```go
-type detectorFactory interface {
-    newRegimeDebouncer(bus eventbus.EventBus) service.RegimeDebouncer
-    newFactorWeightRegressionDetector(bus eventbus.EventBus, provider service.WeightProvider) service.FactorWeightRegressionDetector
-    newDriftDetector(bus eventbus.EventBus, provider service.TargetWeightsProvider) service.DriftDetector
-    newChannelHealthSynthesizer(bus eventbus.EventBus, provider service.ChannelHealthProvider) service.ChannelHealthSynthesizer
-    newIngestionLagMonitor(bus eventbus.EventBus, provider service.IngestionLagProvider) service.IngestionLagMonitor
-}
-```
-
-生產實作為 `defaultDetectorFactory`；`withDetectorFactory` 選項僅供測試使用。
-
-### 啟動與關閉順序
-
-**啟動順序**（`Start`）：
-1. `RegimeDebouncer` 先啟動（其他偵測器可能依賴穩定 regime 訊號）。
-2. `IngestionLagMonitor`、`ChannelHealthSynthesizer`、`FactorWeightRegressionDetector` 並行啟動。
-3. `DriftDetector` 最後啟動（它需要 regime 與 position update 都已就位）。
-
-**關閉順序**（`Stop` / `Close`）— **LIFO**：
-1. `DriftDetector`
-2. `FactorWeightRegressionDetector`
-3. `ChannelHealthSynthesizer`
-4. `IngestionLagMonitor`
-5. `RegimeDebouncer`
-
-任何一個啟動失敗會立即回傳錯誤。**v0.0.0.18+**：`errs` channel 改用 `errors.Join` 聚合所有平行啟動失敗（不再只回傳第一個）；失敗時 `defer` cleanup 會以 LIFO 順序 `Stop()` 已經成功啟動的 detector，並把 `w.started = false` 與所有 detector 欄位參照清空（讓 retry 拿到 fresh instances）；cleanup 過程中任何 `Stop()` 失敗同樣以 `errors.Join` 摺進最終回傳的 error，呼叫端可從 error chain 區分「partial-failure 但 cleanup 乾淨」與「partial-failure 且 leaked subscriptions」。
-
-### 必要與選用 providers
-
-| Provider | 必要性 | 注入選項 |
-|----------|--------|---------|
-| `ChannelHealthProvider` | 必要 | `WithChannelHealthProvider` |
-| `IngestionLagProvider` | 必要 | `WithIngestionLagProvider` |
-| `WeightProvider` | 選用 | `WithWeightProvider`；nil 時 factor regression detector no-op |
-| `TargetWeightsProvider` | 選用 | `WithTargetWeightsProvider`；nil 時 drift detector 降級為 v1 |
-
-生產環境的 provider 設定請參考 `docs/ENVIRONMENT.md`。
-
-### 與 Dashboard API 的關係
-
-`Wave9Observability` 本身不暴露 HTTP endpoint；它產生的事件經由 `EventBus` 進入 `internal/monitoring/api/events/sse_handler.go`（緩衝管理）與 `internal/monitoring/api/events/sse_handler_subscriptions.go`（**v0.0.0.18+**：批次訂閱註冊 helper `apievents.RegisterDashboardBufferSubs(bus)`，跨模式共用），再推送至 dashboard 即時事件流。`cmd/atlas/main.go` 的 `run()` 與 `runLiveTrading()` 都會呼叫 `RegisterDashboardBufferSubs` 與 `risk.NewAuditSubscriber` 重新註冊在當下使用的 bus（`dashEventBus` 與 `eventBus` 是兩個獨立 bus 實例），確保 `runLiveTrading` 的 SSE catchup 不會是空的。運維時可在 log 中搜尋 `started component=wave9_observability` 與 `wave9_observability stopped` 確認生命週期。
-
-### 向後相容
-
-- `NewDriftDetector(bus)` 保留（無 target drift 能力）
-- v1 6 個測試一字不改
-- v1 payload 欄位全部保留
-- `DriftEventSchemaVer` 從 1 bump 到 2（消費者可透過此欄位區分）
-- `thresholds.target_drift` 一律存在（即使 nil provider），讓前端可顯示閾值
+`internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 在 live mode 下統一啟動、協調與關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。詳細啟動/關閉順序、provider 注入、與 Dashboard API 的整合與向後相容說明見 `docs/handoff/2026-wave9-observability-coordinator.md`。
