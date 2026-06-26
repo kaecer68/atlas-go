@@ -58,7 +58,7 @@
 
 ## Constitution compliance
 
-<!-- 參考 .omo/CONSTITUTION.md 與 internal/apigateway/CONSTITUTION.md -->
+<!-- 參考 docs/CONSTITUTION.md 與 internal/apigateway/CONSTITUTION.md -->
 
 - [ ] Does not bypass `BackgroundTaskManager` for long-running ops
 - [ ] Does not bypass `ParametersConfig` validation
