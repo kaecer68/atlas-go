@@ -64,6 +64,7 @@
 | `guides/git-tool-cache-policy.md` | 工具快取原則 |
 | `guides/new-workspace-startup.md` | 新工作區起步 SOP（AI 必讀）|
 | `guides/opencode-oh-my-openagent-tuning.md` | oh-my-openagent hook 機制與 token 防護 |
+| `guides/adding-sector-agents.md` | 新增 sector agent 指南（deterministic + LLM-driven）|
 
 ### Reference / 工具
 
@@ -88,6 +89,8 @@
 | 檔案 | 用途 |
 |------|------|
 | `specs/real-time-regime-detection.md` | 即時 regime 偵測規格 |
+| `specs/agent-loop-state-machine.md` | AgentLoop 狀態機規格（Phase/Transition/Invariants）|
+| `specs/llm-sector-agent.md` | L2.3 LLM-driven sector agent 設計記錄 |
 | `llm-integration-strategy-framework.md`, `LLM_INTEGRATION_*` | LLM 框架 |
 
 ### 審計 / 交接 / 調查 / 修復計畫（時序敏感）
@@ -104,7 +107,7 @@
 
 ### Wave-specific（active）
 
-- `wave-11/` — Wave 11 L2.3/L2.4 active work
+- `wave-11/` — Wave 11 active work（未啟動觀察期/暫存；已 ship 移到 `specs/` 或 `guides/`）
 
 ### 歸檔 `docs/archive/`
 

@@ -167,6 +167,10 @@ prompts/archive/
 /node_modules/
 web/node_modules/
 web/dist/
+admin_web/node_modules/
+admin_web/dist/
+client_web/node_modules/
+client_web/dist/
 
 /gentags
 /optimize-parameters

@@ -1,0 +1,64 @@
+/* Atlas Dashboard - Utilities */
+.help-panel { margin-bottom: var(--space-md); font-size: 13px; color: var(--text); line-height: 1.7; }
+.mb-sm { margin-bottom: var(--space-sm); }
+.mb-md { margin-bottom: var(--space-md); }
+.text-muted { color: var(--muted); }
+.text-down { color: var(--down); }
+.text-up { color: var(--up); }
+.text-pnl-profit { color: var(--pnl-profit); }
+.text-pnl-loss { color: var(--pnl-loss); }
+.text-trend-bullish { color: var(--trend-bullish); }
+.text-trend-bearish { color: var(--trend-bearish); }
+.text-metric-good { color: var(--metric-good); }
+.text-metric-bad { color: var(--metric-bad); }
+.text-risk-high { color: var(--risk-high); }
+.text-risk-low { color: var(--risk-low); }
+.text-success { color: var(--color-success); }
+.text-danger { color: var(--color-danger); }
+.text-warn { color: var(--warn); }
+.text-accent { color: var(--accent); }
+.cursor-pointer { cursor: pointer; }
+.panel--compact { padding: 10px var(--space-md); }
+.panel--compact h2 { font-size: 13px; margin-bottom: 6px; }
+.empty-state-guidance { text-align: center; padding: 12px 8px; }
+.empty-state-guidance .icon { font-size: 24px; margin-bottom: 4px; opacity: .5; }
+.mt-md { margin-top: var(--space-md); }
+.mt-sm { margin-top: var(--space-sm); }
+.m-0 { margin: 0; }
+.input-w-md { width: 180px; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.label-muted { font-size: 12px; color: var(--muted); }
+.text-sm { font-size: 12px; }
+.hidden { display: none; }
+.w-8  { width: 8%; }
+.w-10 { width: 10%; }
+.w-12 { width: 12%; }
+.w-13 { width: 13%; }
+.w-15 { width: 15%; }
+.w-20 { width: 20%; }
+.w-25 { width: 25%; }
+.w-35 { width: 35%; }
+.flex-gap-6 { display: flex; gap: 6px; align-items: center; }
+.flex-gap-8 { display: flex; gap: 8px; }
+.flex-gap-10 { display: flex; align-items: center; gap: 10px; }
+.text-xs-muted { color: var(--muted); font-size: 11px; }
+.text-12-muted { color: var(--muted); font-size: 12px; }
+.text-muted-md { font-size: 13px; color: var(--muted); }
+.label-w-sm { width: 120px; }
+.code-inline { background: var(--panel-l2); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+.hint-box { margin-top: 8px; margin-bottom: 8px; padding: 8px 12px; background: var(--panel-l2); border-radius: 6px; font-size: 12px; color: var(--muted); }
+.mb-14 { margin-bottom: 14px; }
+.h4-section-title { margin: 12px 0 6px; }
+.mt-16 { margin-top: 16px; }
+.mt-14 { margin-top: 14px; }
+.mt-10 { margin-top: 10px; }
+.mt-8 { margin-top: 8px; }
+.ml-auto { margin-left: auto; }
+.justify-end { justify-content: flex-end; }
+
+/* Stock cell：統一股票代號表格渲染 */
+.stock-cell { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.stock-cell-symbol { font-family: var(--font-mono); font-weight: var(--font-semibold); color: var(--text); }
+.stock-cell-name { color: var(--muted); font-size: var(--text-sm); }
+.stock-cell-stacked { flex-direction: column; align-items: flex-start; gap: 1px; }
+.stock-cell-stacked .stock-cell-name { font-size: 11px; }

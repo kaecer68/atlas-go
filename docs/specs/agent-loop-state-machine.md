@@ -3,7 +3,7 @@
 > **Audience**: developers extending the `SectorAgentLLM` loop or debugging state transitions.
 > **Implementation**: `internal/orchestrator/agent_loop.go`
 > **Tests**: `internal/orchestrator/agent_loop_test.go` (9 tests)
-> **Related**: [`SEMICONDUCTOR_EXECUTOR.md`](SEMICONDUCTOR_EXECUTOR.md), [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md)
+> **Related**: [`../guides/adding-sector-agents.md`](../guides/adding-sector-agents.md) (moved from `docs/wave-11/SEMICONDUCTOR_EXECUTOR.md`), [`llm-sector-agent.md`](llm-sector-agent.md) (moved from `docs/wave-11/L2_3_PLAN_REFLECT.md`)
 
 ## Phase Diagram
 

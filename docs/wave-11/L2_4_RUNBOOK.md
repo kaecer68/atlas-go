@@ -1,5 +1,10 @@
 # L2.4 Observation Window — Operations Runbook
 
+> ⚠️ **Status: PLANNED — not yet started.**
+> `UseLLMSectorAgents` feature flag is default `false` (source=`experimental`) per `configs/parameters.json:5860`.
+> Metrics implementation shipped (PR #743) but the **7-14 day observation window has not started**.
+> Update this banner to "IN PROGRESS" once staging enablement begins.
+
 > **對象**: ops / on-call engineering
 > **範圍**: Wave 11 L2.4 — `UseLLMSectorAgents` 啟用後 7-14 天觀察期
 > **Issue**: [#742](https://github.com/kaecer68/atlas-go/issues/742)
@@ -124,7 +129,7 @@ Day 14 acceptance 全部通過後,依序執行:
 
 - Issue: [#742](https://github.com/kaecer68/atlas-go/issues/742)
 - 指標定義: [`L2_4_OBSERVATION.md`](L2_4_OBSERVATION.md) §Metrics
-- L2.3 架構: [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md)
+- L2.3 架構: [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent.md) (moved from `docs/wave-11/L2_3_PLAN_REFLECT.md`)
 - Flag 函式: `internal/config/parameters.go:73` (`GetUseLLMSectorAgents`)
 - Metric 實作: PR #743 — `internal/orchestrator/semiconductor_llm_agent.go`
 - Log 範本: [`../archive/wave-10-observation-log.md`](../archive/wave-10-observation-log.md)

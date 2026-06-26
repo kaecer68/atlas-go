@@ -1,0 +1,78 @@
+/* Atlas Dashboard - Main Aggregator */
+/* Base */
+@import url("base/variables.css");
+@import url("base/reset.css");
+
+/* Layout - Header & Grid */
+@import url("layout/header.css");
+@import url("layout/grid.css");
+
+/* Components - Core UI */
+@import url("components/panel.css");
+@import url("components/metric.css");
+@import url("base/tables.css");
+@import url("components/badge.css");
+@import url("components/misc.css");
+@import url("components/controls.css");
+@import url("components/workflow.css");
+@import url("components/inbox-card.css");
+@import url("components/pipeline.css");
+@import url("components/modal.css");
+@import url("components/tabs.css");
+@import url("components/risk-gate-panel.css");
+
+/* Pages - Industry */
+@import url("pages/industry.css");
+
+/* Components - Notifications & Refresh */
+@import url("components/notification.css");
+@import url("components/refresh.css");
+@import url("components/notification-colors.css");
+@import url("components/refresh-pill.css");
+@import url("components/loading-bar.css");
+@import url("components/error-banner.css");
+@import url("components/table-pagination.css");
+
+/* Layout - Sidebar & SPA Shell */
+@import url("layout/sidebar.css");
+@import url("layout/topbar.css");
+@import url("layout/page-shell.css");
+
+/* Pages - Overview */
+@import url("pages/overview.css");
+
+/* Components - Utilities & Chain */
+@import url("components/utilities.css");
+@import url("components/chain.css");
+
+/* Layout - Responsive & Animations */
+@import url("layout/responsive.css");
+@import url("layout/animations.css");
+
+/* Base - Typography */
+@import url("base/typography.css");
+
+/* Components - UI Panels */
+@import url("components/filter-panel.css");
+@import url("components/empty-state.css");
+@import url("components/view-controls.css");
+
+/* Pages - Evolution Panel */
+@import url("pages/evolution-panel.css");
+
+/* Components - Live & SSE */
+@import url("components/sse-status.css");
+@import url("components/live-progress.css");
+@import url("components/tool-events.css");
+
+/* Pages - Decision Chain & Parameters */
+@import url("pages/decision-chain.css");
+@import url("pages/parameters.css");
+
+/* Pages - Cross-Market & Data Channels */
+@import url("pages/crossmarket.css");
+@import url("pages/datachannels.css");
+
+/* Existing standalone modules (backward compatibility) */
+@import url("components/circuit-breaker.css");
+@import url("components/performance-report.css");

@@ -227,7 +227,7 @@ func TestScheduler_Status_AfterStart(t *testing.T) {
 	s.nowFunc = func() time.Time {
 		return time.Date(2026, 6, 20, 23, 0, 0, 0, loc) // 23:00 Taipei = off-hours
 	}
-	s.SetCycleCallbacks(func() {}, func() {}, func() {}, func(){})
+	s.SetCycleCallbacks(func() {}, func() {}, func() {}, func() {})
 
 	err = s.Start()
 	if err != nil {

@@ -1,0 +1,6 @@
+/* Atlas Dashboard - Grid Layouts */
+/* .container removed — unused in favor of page-specific grids */.live-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 1fr); gap: var(--space-md); align-items: start; }
+@media (max-width: 900px) { .live-grid { grid-template-columns: 1fr; } }
+.two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+.two-col-grid > * { min-width: 0; }
+@media (max-width: 1100px) { .two-col-grid { grid-template-columns: 1fr; } }

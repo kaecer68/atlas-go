@@ -1,0 +1,54 @@
+/* Atlas Dashboard - Overview Page (KPI, RC, RT, Stack) */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .kpi-grid { grid-template-columns: 1fr; } }
+
+/* Crossmarket page: 4-column grid for single-row card layout.
+   Breakpoint pushed down to 900px so 13" laptops (1280px, 1366px) keep 4 cards.
+   Cards are small (numeric KPIs) so 4-up remains readable until narrower. */
+#page-crossmarket .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { #page-crossmarket .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { #page-crossmarket .kpi-grid { grid-template-columns: 1fr; } }
+
+.kpi-card {
+  background: linear-gradient(145deg, var(--panel) 0%, var(--panel-l2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: var(--space-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+  border-radius: 14px 14px 0 0;
+  opacity: 0.7;
+}
+.kpi-card:hover { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255,255,255,0.08); transform: translateY(-3px); border-color: rgba(79, 193, 255, 0.3); }
+.kpi-card:hover::before { opacity: 1; }
+.kpi-group-title { font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: var(--space-lg) 0 var(--space-sm); padding-bottom: var(--space-xs); border-bottom: 1px solid var(--border); }
+.help-details { margin: 0 0 var(--space-md) 0; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; background: var(--panel); }
+.help-details summary { cursor: pointer; font-size: var(--text-sm); color: var(--muted); list-style: none; }
+.help-details summary::-webkit-details-marker { display: none; }
+.help-details summary::before { content: '\25B8 '; }
+.help-details[open] summary::before { content: '\25BE '; }
+.help-details[open] summary { margin-bottom: var(--space-sm); }
+.kpi-card .kpi-label { font-size: var(--text-sm); color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-card .kpi-value { font-size: var(--text-xl); font-weight: var(--font-semibold); font-family: var(--font-display); letter-spacing: -0.01em; }
+.kpi-card .kpi-hint { font-size: var(--text-xs); color: var(--muted); margin-top: 6px; }
+.kpi-card .kpi-value.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.kpi-card.wide { grid-column: 1 / -1; }
+.kpi-card.alert-err { border-color: var(--color-danger); }
+.kpi-card.clickable { cursor: pointer; }

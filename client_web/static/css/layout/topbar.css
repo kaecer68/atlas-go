@@ -1,0 +1,24 @@
+/* Atlas Dashboard - Topbar */
+#main {
+  margin-left: 170px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+#topbar {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  background: rgba(11, 13, 17, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 40;
+}
+#topbar h2 { margin: 0; font-size: var(--text-xl); font-family: var(--font-display); font-weight: var(--font-semibold); letter-spacing: -0.01em; }
+#topbar .meta { font-size: var(--text-sm); color: var(--muted); }

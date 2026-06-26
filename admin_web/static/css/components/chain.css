@@ -1,0 +1,7 @@
+/* Atlas Dashboard - Chain & Sector Tags */
+.chain-step { padding: 10px 12px; margin: 6px 0; background: #0d1015; border-radius: 8px; border-left: 3px solid var(--accent); }
+.chain-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 700; flex-shrink: 0; margin-right: 10px; }
+.chain-impact { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+.chain-impact.positive { background: rgba(16,185,129,.15); color: var(--color-success); }
+.chain-impact.negative { background: rgba(239,68,68,.15); color: var(--color-danger); }
+.sector-tag { display: inline-block; font-size: 11px; padding: 2px 8px; margin: 2px 3px 2px 0; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }

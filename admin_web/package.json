@@ -1,0 +1,13 @@
+{
+  "name": "atlas-admin_web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test:smoke": "node smoke/run.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "playwright": "^1.60.0"
+  }
+}
