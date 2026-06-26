@@ -132,14 +132,6 @@ jobs:
           exit 1
         fi
 
-  gitnexus-stats:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-    - name: Verify GitNexus stats in documentation
-      run: bash scripts/verify-gitnexus-stats.sh
-
   # Maturity label consistency — ensures all internal/ packages have
   # valid Maturity: tags in doc.go and MATURITY.md is consistent.
   maturity:

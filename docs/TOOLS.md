@@ -15,6 +15,8 @@ atlas-go 專案同時被兩個 MCP 索引，並提供互補能力：
 | **GitNexus** | `gitnexus` | `atlas-go` | 53,385 symbols / 169,008 edges / 300 execution flows | 執行流（Process）、功能社群（Community）、API 路由映射、影響範圍分級、安全重命名 |
 | **codebase-memory** | `codebase-memory` | `Users-kaecer-workspace-atlas` | 29,757 nodes / 127,367 edges | 開放 Cypher 查詢、向量語意搜尋、Leiden 叢集偵測、ADR 管理、跨服務資料流追蹤 |
 
+> **上述數字為 2026-06-25 歷史快照**。由於 `scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op），這些數字不再被 CI 自動驗證。**需要 live 數字時，請手動執行** `npx gitnexus status`（GitNexus）或 `codebase-memory_list_projects()`（codebase-memory）。
+
 **為什麼要兩個？**
 - **GitNexus** 強在「**process + community**」抽象與 PR 安全閘（impact / detect_changes / rename）。
 - **codebase-memory** 強在「**Cypher + 語意搜尋 + Leiden 叢集**」的圖分析能力。
@@ -365,4 +367,5 @@ codebase-memory_get_graph_schema({project: "Users-kaecer-workspace-atlas"})
 - `CLAUDE.md` — GitNexus 完整規範與工具使用準則（Always Do / Never Do）
 - `internal/AGENTS_INDEX.md` — 模組索引與成熟度
 - `docs/architecture.md` — 系統架構詳細說明
-- `scripts/verify-gitnexus-stats.sh` — GitNexus 索引統計驗證腳本
+
+> 註：`scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op script，從未檢查到任何 doc 中的 pattern）。GitNexus 索引大小請直接用 `npx gitnexus status` 查詢。
