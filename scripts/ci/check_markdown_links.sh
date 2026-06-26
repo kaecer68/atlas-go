@@ -41,6 +41,7 @@ done < <(find . \
     -not -path '*/.git/*' \
     -not -path './web/static/css/*' \
     -not -path './web/static/js/*' \
+    -not -path '*/.omo/*' \
     -print0)
 
 ERRORS=$(cat "$ERRORS_FILE")
