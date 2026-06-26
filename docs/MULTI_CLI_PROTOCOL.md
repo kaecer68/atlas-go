@@ -12,6 +12,18 @@
 - **結束時**：PR merge → branch 自動刪除 → `git worktree prune`
 - **進場前**：必跑 `git worktree list` 確認當前佈局
 
+## Post-merge cleanup checklist（AI 自動執行）
+
+PR 經 GitHub UI merge 後，**AI 必須自行執行以下 4 步**，不要等使用者指示：
+
+1. `git fetch origin main && git checkout main && git merge --ff-only origin/main`
+2. `git branch -d <merged-branch>`（若本地 main 已 ff，無 "not merged to HEAD" 警告）
+3. `git push origin --delete <merged-branch>`
+4. 若使用獨立 worktree：`git worktree remove <path>`
+
+完整 SOP 見 `docs/QUICKSTART.md` § Git 工作流 §4。批次清理（超過 5 個
+stale branch）見 `docs/branch-hygiene/`。
+
 ## 工具鏈（2026-06 修訂）
 
 atlas-go 不再依賴任何 AI 層 worktree 隔離 plugin（sven1103/opencode-worktree-workflow 已於 v0.0.0.8 退役）。人類操作員使用下列任一工具即可：

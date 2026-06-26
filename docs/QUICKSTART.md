@@ -41,4 +41,23 @@ gh pr create --title "feat(scope): description" --body "..." --base main
 分支命名：`feat/<name>` / `fix/<name>` / `refactor/<name>`。
 Commit 格式：`type(scope): description`。
 
+### 4. Post-merge cleanup（AI 自動執行，不要等使用者指示）
+
+PR 經 GitHub UI merge 後，工作樹 + branch 仍留在本地。**AI 必須自行清理**：
+
+```bash
+# 同步本地 main（否則 `branch -d` 會出 "not merged to HEAD" 警告）
+git fetch origin main
+git checkout main && git merge --ff-only origin/main
+
+# 刪本地 + 遠端 branch（merge commit 已保留在 origin/main，可放心刪）
+git branch -d <merged-branch>
+git push origin --delete <merged-branch>
+
+# 若曾在獨立 worktree 開發：先切到其他 worktree，再移除空 worktree
+git worktree remove <worktree-path>
+```
+
+警告排查：`branch -d` 報 "not yet merged to HEAD" → 本地 main 落後 origin/main，先跑前兩行 fetch + ff-merge。
+
 > **Multi-CLI 並行協議**：[docs/MULTI_CLI_PROTOCOL.md](docs/MULTI_CLI_PROTOCOL.md)
