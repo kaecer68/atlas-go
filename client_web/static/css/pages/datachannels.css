@@ -1,0 +1,9 @@
+/* Atlas Dashboard — Data Channels */
+
+/* Control panel summary inline extraction from datachannels.js renderSummary */
+.control-summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}

@@ -1,0 +1,72 @@
+/* Atlas Dashboard - CSS Variables & Theme */
+
+/* ====================================================================
+   色彩語意系統（重要！台股紅漲綠跌在地化設計）
+   ====================================================================
+   市場方向（價格/漲跌幅）— TW 慣例「紅正綠負」：
+     --bullish   = 紅色 (#ef4444) → 漲/正數/高於昨收
+     --bearish   = 綠色 (#10b981) → 跌/負數/低於昨收
+     --up / --down  為向後相容別名，指向 --bullish / --bearish
+
+   系統狀態（成功/危險/警告）— 維持國際通用「綠OK 紅ERR」：
+     --color-success = 綠色 (#10b981)
+     --color-danger  = 紅色 (#ef4444)
+     --color-warning = 橘色 (#f59e0b)
+     --color-info    = 藍色 (#3b82f6)
+
+   若程式碼要表達「這檔股票漲了」用 --up / --bullish；
+   若要表達「API 連線失敗」用 --color-danger / --status-err。
+   ==================================================================== */
+:root {
+  --bg: #0b0d11; --panel: #13161c; --panel-l2: #1a1e24; --panel-l3: #22262e; --border: #242a33; --text: #f0f4f8; --muted: #b8c4d0;
+  --accent: #4fc1ff; --accent-secondary: #8b5cf6; --accent-tertiary: #10b981;
+  /* 市場方向：台股紅漲綠跌 */
+  --bullish: #ef4444; --bearish: #10b981;
+  --up: var(--bullish); --down: var(--bearish); --warn: var(--color-warning);
+  --primary: #1f6feb; --danger: #da3633;
+  
+  /* 金融語意 Token */
+  --pnl-profit: var(--bullish);
+  --pnl-loss: var(--bearish);
+  --trend-bullish: var(--bullish);
+  --trend-bearish: var(--bearish);
+  --metric-good: var(--bullish);
+  --metric-bad: var(--bearish);
+  --risk-high: var(--color-danger);
+  --risk-low: var(--color-success);
+  /* 系統狀態：國際通用綠OK紅ERR */
+  --color-success: #10b981; --color-danger: #ef4444; --color-warning: #f59e0b; --color-info: #3b82f6;
+  --space-xs: 4px; --space-sm: 8px; --space-md: 14px; --space-lg: 20px; --space-xl: 32px;
+  --layer-1: #3b82f6; --layer-2: #8b5cf6; --layer-3: #10b981; --layer-4: #f59e0b; --layer-5: #ef4444; --layer-6: #6366f1;
+  --status-ok: var(--color-success); --status-warn: var(--color-warning); --status-err: var(--color-danger); --status-unknown: #9ca3af;
+  
+  /* 字體系統 */
+  --font-display: 'Noto Sans TC', 'Source Han Sans TC', system-ui, -apple-system, 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', 'Roboto', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  
+  /* 字體尺寸系統 */
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 18px;
+  --text-3xl: 22px;
+  
+  /* 字重系統 */
+  --font-light: 300;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+}
+:root[data-theme="light"] {
+  --bg: #f5f5f5; --panel: #ffffff; --border: #e0e0e0; --text: #1a1a1a; --muted: #666666;
+  --accent: #0066cc;
+  /* Light theme 市場方向：台股紅漲綠跌 */
+  --bullish: #dc2626; --bearish: #16a34a;
+  --up: var(--bullish); --down: var(--bearish); --warn: var(--color-warning);
+  --primary: #1976d2; --danger: #d32f2f;
+  --color-success: #16a34a; --color-danger: #dc2626; --color-warning: #ea580c; --color-info: #2563eb;
+}

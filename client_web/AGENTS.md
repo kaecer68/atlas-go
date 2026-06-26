@@ -1,0 +1,74 @@
+# agents.md — web (Frontend)
+
+> 修改 web 目錄下的程式碼前請先閱讀此文件。
+
+## CSS 色彩語意系統
+
+atlas-go 使用**台股紅漲綠跌**慣例（與國際相反），系統有兩套並行的色彩體系：
+
+### 市場方向（價格/漲跌）
+| Token | Utility Class | 用途 | 示例場景 |
+|-------|--------------|------|----------|
+| `--up` / `--bullish` | `.text-up` | 上漲/多頭/正值 | 報酬率 > 0、Sharpe > 1、regime RISK_ON |
+| `--down` / `--bearish` | `.text-down` | 下跌/空頭/負值 | 報酬率 < 0、Sharpe < 0、regime RISK_OFF |
+| `--warn` | `.text-warn` | 中性/警告 | Sharpe 介於 0~1、NEUTRAL regime |
+
+### 系統狀態（成功/錯誤/警告 — 國際通用）
+| Token | Utility Class | 用途 |
+|-------|--------------|------|
+| `--color-success` | `.text-success` | API 正常、guard 放行 |
+| `--color-danger` | `.text-danger` | API 錯誤、guard 阻擋 |
+| `--color-warning` | `.text-warn` | 部分過濾、部分成功 |
+
+### 金融語意 Token（新，長期目標取代 `--up`/`--down`）
+| Token | Utility Class | 取代 `--up`/`--down` 場景 |
+|-------|--------------|---------------------------|
+| `--pnl-profit` / `--pnl-loss` | `.text-pnl-profit` / `.text-pnl-loss` | 報酬率、盈虧金額 |
+| `--trend-bullish` / `--trend-bearish` | `.text-trend-bullish` / `.text-trend-bearish` | regime、市場方向、產業輪動 |
+| `--metric-good` / `--metric-bad` | `.text-metric-good` / `.text-metric-bad` | Sharpe、hit rate、信心指數 |
+| `--risk-high` / `--risk-low` | `.text-risk-high` / `.text-risk-low` | 風險指標 |
+
+### 關鍵規則
+- **修改 `--up`/`--down` 使用場景時**：順手遷移到對應的金融語意 token（對照上表）。
+- **新增顏色**：一律使用現有 CSS 變數，不要寫死 hex/rgba。
+- **inline style 用 `var(--...)`**，不要寫死色碼。
+- `--up`/`--down` 目前留 118 處，語意正確無須急著一次性改完，但 touch 到時請順手遷移。
+
+## Canvas 繪圖色彩橋接
+
+Canvas 無法直接讀取 CSS 變數，使用 `utils.js` 提供的橋接函數：
+
+```javascript
+// 讀取 CSS 變數（主題感知）
+const color = getThemeColor('--pnl-profit', '#ef4444');
+ctx.fillStyle = color;
+
+// 透明度處理（替代手動 rgba hack）
+ctx.strokeStyle = hexToRgba(getThemeColor('--trend-bullish'), 0.3);
+```
+
+原則：Canvas 繪圖一律透過 `getThemeColor()` + `hexToRgba()`，不直接寫死 hex。
+
+## 色彩選擇決策樹
+
+```
+要表達的語意是漲跌方向（股價、報酬）？
+  → 用 --up/--down（舊）或 --trend-bullish/--pnl-profit（新）
+
+要表達的語意是系統狀態（API、guard、DB）？
+  → 用 --color-success/--color-danger/--color-warning
+
+要表達的是風險程度（VaR、波動）？
+  → 用 --risk-high/--risk-low
+
+要表達的是績效評估（Sharpe、hit rate）？
+  → 用 --metric-good/--metric-bad
+```
+
+## 重要參考檔案
+
+| 檔案 | 內容 |
+|------|------|
+| `web/static/css/base/variables.css` | 所有 CSS 變數定義（色彩、字體、間距） |
+| `web/static/css/components/utilities.css` | Utility class 定義 |
+| `web/static/js/shared/utils.js` | Canvas 橋接函數 (`getThemeColor`, `hexToRgba`) |

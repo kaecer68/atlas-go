@@ -1,0 +1,24 @@
+/* Atlas Dashboard - Page Shell */
+#content { flex: 1; padding: 20px 24px; }
+.page { display: none; opacity: 0; transform: translateY(10px); }
+.page.active { display: block; animation: pageIn 0.3s ease forwards; }
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Page header - unified title + description */
+.page-header { margin-bottom: var(--space-lg); }
+.page-header h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text);
+  margin: 0 0 var(--space-xs) 0;
+}
+.page-desc {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--muted);
+  margin: 0;
+}

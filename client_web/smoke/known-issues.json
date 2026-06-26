@@ -1,0 +1,9 @@
+{
+  "patterns": [
+    {
+      "pattern": "^$",
+      "reason": "Placeholder: all known issues resolved (last one was HandleRiskMetrics makeslice panic, fixed in PR #392)",
+      "ticket": "atlas-go#392"
+    }
+  ]
+}

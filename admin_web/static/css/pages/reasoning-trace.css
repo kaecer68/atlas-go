@@ -1,0 +1,128 @@
+/* Reasoning Trace Page Styles */
+
+.rt-trace-node {
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.rt-trace-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  left: -27px;
+  top: 4px;
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+.rt-trace-card {
+  padding: 16px;
+}
+
+.rt-trace-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.rt-fallback-badge {
+  margin-left: 8px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: bold;
+  background: #facc15;
+  color: #854d0e;
+  border-radius: 4px;
+}
+
+.rt-confidence-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.rt-confidence-track {
+  flex-grow: 1;
+  height: 6px;
+  background: var(--panel-l3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.rt-confidence-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.rt-explanation {
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: pre-line;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.rt-raw-details {
+  margin-top: 8px;
+}
+
+.rt-raw-summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.rt-raw-pre {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--panel-l2);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+/* Session select bar */
+.rt-session-bar {
+  margin-bottom: 16px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rt-session-select {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* Sync status banners */
+.rt-sync-warn {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fef3cd;
+  border: 1px solid #fde68a;
+  color: #854d0e;
+}
+
+.rt-sync-ok {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}

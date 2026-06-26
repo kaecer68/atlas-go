@@ -1,0 +1,48 @@
+/* Atlas Dashboard - Responsive */
+#menuToggle {
+  display: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+}
+#menuToggle:hover {
+  border-color: var(--accent);
+  background: rgba(79, 193, 255, 0.1);
+  transform: translateY(-1px);
+}
+@media (max-width: 900px) {
+  #sidebar { transform: translateX(-100%); transition: transform .2s ease; }
+  #sidebar.open { transform: translateX(0); }
+  #main { margin-left: 0; }
+  #menuToggle { display: inline-block; }
+}
+@media (max-width: 900px) {
+  .control-group button, .control-group input, .control-group select {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  #sidebar nav a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .pipeline-action { min-height: 44px; padding: 8px 12px; }
+  .refresh { min-height: 44px; min-width: 44px; }
+  /* .table-scroll-hint removed — unused */
+}
+@media (min-width: 768px) and (max-width: 900px) {
+  #sidebar { width: 200px; }
+  #main { margin-left: 200px; }
+}

@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/admin_web"
+	"github.com/kaecer68/atlas-go/client_web"
 	"github.com/kaecer68/atlas-go/internal/alerting"
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
@@ -516,7 +518,15 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Fatalf("failed to get dist sub FS: %v", err)
 		}
-		registerSimpleRoutes(mux, collector, subFS)
+		adminSubFS, err := fs.Sub(admin_web.DistFS, "dist")
+		if err != nil {
+			log.Fatalf("failed to get admin dist sub FS: %v", err)
+		}
+		clientSubFS, err := fs.Sub(client_web.DistFS, "dist")
+		if err != nil {
+			log.Fatalf("failed to get client dist sub FS: %v", err)
+		}
+		registerSimpleRoutes(mux, collector, subFS, adminSubFS, clientSubFS)
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
 		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.
@@ -1559,7 +1569,23 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if err != nil {
 		log.Fatalf("failed to get dist sub FS: %v", err)
 	}
+	adminSubFS, err := fs.Sub(admin_web.DistFS, "dist")
+	if err != nil {
+		log.Fatalf("failed to get admin dist sub FS: %v", err)
+	}
+	clientSubFS, err := fs.Sub(client_web.DistFS, "dist")
+	if err != nil {
+		log.Fatalf("failed to get client dist sub FS: %v", err)
+	}
 	mux.Handle("/", staticHandler(subFS))
+	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/client/", http.StatusMovedPermanently)
+	})
+	mux.Handle("/admin/", http.StripPrefix("/admin/", staticHandler(adminSubFS)))
+	mux.Handle("/client/", http.StripPrefix("/client/", staticHandler(clientSubFS)))
 	apiAddr := ":8080"
 	srv := &http.Server{
 		Addr:              apiAddr,
