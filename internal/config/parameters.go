@@ -1053,6 +1053,14 @@ type AlertParameters struct {
 	// are considered "down" by the health check; older alerts with
 	// rule=channel_health_summary are candidates for one-time cleanup.
 	HeartbeatTTLMinutes ParameterMetadata[int] `json:"heartbeat_ttl_minutes"`
+
+	// Decision 9 (alert-redesign-v2.md Part 3.7): per-severity alert SLA
+	// thresholds (in seconds). AcknowledgedWithinSec > threshold = a
+	// compliance violation. Default: 30m/2h/24h for critical/error/warning.
+	AlertSLACriticalSec   ParameterMetadata[int]  `json:"alert_sla_critical_sec"`
+	AlertSLAErrorSec      ParameterMetadata[int]  `json:"alert_sla_error_sec"`
+	AlertSLAWarningSec    ParameterMetadata[int]  `json:"alert_sla_warning_sec"`
+	SLAViolationMetaAlert ParameterMetadata[bool] `json:"sla_violation_meta_alert"`
 }
 
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.

@@ -82,6 +82,26 @@
       "rationale": "Decision 1 (alert-redesign-v2.md Part 3.1): channel heartbeat staleness threshold (5 min default); channel health summaries older than this are considered 'down'",
       "source": "heuristic",
       "value": 5
+    },
+    "alert_sla_critical_sec": {
+      "rationale": "Decision 9 (alert-redesign-v2.md Part 3.7): CRITICAL alert must be acknowledged within 30 min; otherwise emits a meta-alert",
+      "source": "heuristic",
+      "value": 1800
+    },
+    "alert_sla_error_sec": {
+      "rationale": "Decision 9: ERROR alert must be acknowledged within 2 hours",
+      "source": "heuristic",
+      "value": 7200
+    },
+    "alert_sla_warning_sec": {
+      "rationale": "Decision 9: WARNING alert must be acknowledged within 24 hours",
+      "source": "heuristic",
+      "value": 86400
+    },
+    "sla_violation_meta_alert": {
+      "rationale": "Decision 9: when enabled, SLA violations emit a CRITICAL meta-alert for visibility",
+      "source": "heuristic",
+      "value": true
     }
   },
   "baseline": {

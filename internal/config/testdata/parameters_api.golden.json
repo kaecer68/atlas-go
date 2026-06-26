@@ -182,7 +182,11 @@
         "MaxAlertTriggerRate ParameterMetadata[float64]",
         "MaxUnacknowledgedAlerts ParameterMetadata[int]",
         "SuppressCategories ParameterMetadata[[]string]",
-        "HeartbeatTTLMinutes ParameterMetadata[int]"
+        "HeartbeatTTLMinutes ParameterMetadata[int]",
+        "AlertSLACriticalSec ParameterMetadata[int]",
+        "AlertSLAErrorSec ParameterMetadata[int]",
+        "AlertSLAWarningSec ParameterMetadata[int]",
+        "SLAViolationMetaAlert ParameterMetadata[bool]"
       ],
       "kind": "struct",
       "name": "AlertParameters"

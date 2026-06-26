@@ -589,6 +589,26 @@ func defaultAlertParameters() AlertParameters {
 			Rationale: "Decision 1 (alert-redesign-v2.md Part 3.1): channel heartbeat staleness threshold (5 min default); channel health summaries older than this are considered 'down'",
 			Source:    SourceHeuristic,
 		},
+		AlertSLACriticalSec: ParameterMetadata[int]{
+			Value:     1800,
+			Rationale: "Decision 9 (alert-redesign-v2.md Part 3.7): CRITICAL alert must be acknowledged within 30 min; otherwise emits a meta-alert",
+			Source:    SourceHeuristic,
+		},
+		AlertSLAErrorSec: ParameterMetadata[int]{
+			Value:     7200,
+			Rationale: "Decision 9: ERROR alert must be acknowledged within 2 hours",
+			Source:    SourceHeuristic,
+		},
+		AlertSLAWarningSec: ParameterMetadata[int]{
+			Value:     86400,
+			Rationale: "Decision 9: WARNING alert must be acknowledged within 24 hours",
+			Source:    SourceHeuristic,
+		},
+		SLAViolationMetaAlert: ParameterMetadata[bool]{
+			Value:     true,
+			Rationale: "Decision 9: when enabled, SLA violations emit a CRITICAL meta-alert for visibility",
+			Source:    SourceHeuristic,
+		},
 	}
 }
 
