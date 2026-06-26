@@ -5,7 +5,7 @@
 
 This release ships 3 breaking changes in the performance-report API and 1 additive
 configuration parameter. All changes are documented in
-[CHANGELOG.md § 0.0.0.5](../CHANGELOG.md).
+[CHANGELOG.md § 0.0.0.5](../../CHANGELOG.md).
 
 ## Overview
 
@@ -295,7 +295,7 @@ can remain in place even if the field renames are reverted.
 
 ## Related links
 
-- [CHANGELOG.md § 0.0.0.5](../CHANGELOG.md)
+- [CHANGELOG.md § 0.0.0.5](../../CHANGELOG.md)
 - [PR #564](https://github.com/kaecer68/atlas-go/pull/564)
-- [docs/swagger.json § /api/dashboard/agent-names](swagger.json)
-- [.claude/skills/atlas-data-visibility/SKILL.md](../.claude/skills/atlas-data-visibility/SKILL.md) — see "single source of truth" pattern
+- [docs/swagger.json § /api/dashboard/agent-names](../swagger.json)
+- [.claude/skills/atlas-data-visibility/SKILL.md](../../.claude/skills/atlas-data-visibility/SKILL.md) — see "single source of truth" pattern

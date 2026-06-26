@@ -4,7 +4,7 @@
 > **範圍**: Wave 11 L2.4 — `UseLLMSectorAgents` 啟用後 7-14 天觀察期
 > **Issue**: [#742](https://github.com/kaecer68/atlas-go/issues/742)
 > **觀察指標權威**: [`L2_4_OBSERVATION.md`](L2_4_OBSERVATION.md) §Metrics
-> **Log 範本**: [`../wave-10-observation-log.md`](../wave-10-observation-log.md)
+> **Log 範本**: [`../archive/wave-10-observation-log.md`](../archive/wave-10-observation-log.md)
 > **Flag 函式**: `config.GetUseLLMSectorAgents()`（`internal/config/parameters.go:73`）
 > **Metric 來源**: PR #743 — `SemiconductorLLMAgent.Recommend()` 內 6 個 `slog.Info` events
 
@@ -127,5 +127,5 @@ Day 14 acceptance 全部通過後,依序執行:
 - L2.3 架構: [`L2_3_PLAN_REFLECT.md`](L2_3_PLAN_REFLECT.md)
 - Flag 函式: `internal/config/parameters.go:73` (`GetUseLLMSectorAgents`)
 - Metric 實作: PR #743 — `internal/orchestrator/semiconductor_llm_agent.go`
-- Log 範本: [`../wave-10-observation-log.md`](../wave-10-observation-log.md)
+- Log 範本: [`../archive/wave-10-observation-log.md`](../archive/wave-10-observation-log.md)
 - Plan: [Issue #711](https://github.com/kaecer68/atlas-go/issues/711) §L2.4
