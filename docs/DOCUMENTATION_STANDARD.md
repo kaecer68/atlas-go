@@ -1,110 +1,249 @@
 # 文件存放規範 (Documentation Standard)
 
-> 取代 AGENTS.md §「內容歸屬規則」中模糊部分。明定每種文件的歸屬位置與命名規範。
-> 建立日期：2026-06-26（PR #749）
+> 取代 AGENTS.md §「內容歸屬規則」中模糊部分。明定每種文件的歸屬位置、命名規範與生命週期。
+> 維護者：見 `docs/DOCUMENTATION_MAP.md` 「動作紀錄」段。
+> 最後更新：2026-06-26（PR #756 重構，補上 `.omo/` 完整紀律與機制）
 
-## 原則
+## 三層結構原則
 
-1. **`docs/`** — 規範性、權威性、reference / playbook / spec / audit 文件，給人類閱讀
-2. **`.omo/`** — AI agent 的 ephemeral working dir，**`.gitignore` 排除**（`/.omo/` 與 `**/.omo/`），新 clone 不會取得此目錄內容。詳見下方「`.omo/` 用途與規範」段。
-3. **專案根目錄** — 僅保留通用治理檔（README、AGENTS、CLAUDE、CHANGELOG、LICENSE、NOTICE、SECURITY、CONTRIBUTING、VERSION、Dockerfile、go.mod、docker-compose.yml）
+| 層級 | 用途 | Git 追蹤 | 新 clone 可見 | 對象 |
+|------|------|---------|--------------|------|
+| **`docs/`** | 規範、權威 reference、playbook、stable spec | ✅ | ✅ | 人 + AI（canonical） |
+| **`.omo/`** | AI agent ephemeral working dir（嚴格白名單） | ❌ | ❌ | AI 個人工作區 |
+| **根目錄** | 通用治理檔 | ✅ | ✅ | 全體 |
 
-## `.omo/` 用途與規範
+### 根目錄僅保留（白名單）
 
-### 目的
+`README.md` `AGENTS.md` `CLAUDE.md` `CHANGELOG.md` `LICENSE` `NOTICE` `SECURITY.md` `CONTRIBUTING.md` `VERSION` `Dockerfile` `docker-compose.yml` `go.mod` `go.sum` `.gitignore` `.gitattributes` `.editorconfig` `.golangci.yml`
 
-`.omo/` 是 AI agent 在本機工作時的 **ephemeral working directory**，存放每次 session 產生的 briefs、plans、evidence、traces、notepads 等。`.gitignore` 排除代表：
-- **不該被 git 追蹤**（不會 commit 到 origin）
-- **新 clone 看不到**（這是 by design，不是 bug）
-- 內容純屬 local，agent session 結束可全刪
+**禁止根目錄新增任何 `.md` 文件**（除了上述白名單）。新內容請先判斷歸屬再放。
 
-### 允許的內容
+---
 
-| 子目錄 | 用途 | 生命週期 |
-|--------|------|---------|
-| `briefs/` | phase 任務 briefs（P0-1、P0-2...） | active → merge 後刪除 |
-| `plans/` | 執行 plan | active → merge 後刪除 |
-| `evidence/` | 驗證報告（F1-F4、task-N） | short-lived（驗證完即刪）|
-| `traces/` | sim 執行 JSONL（`sim-YYYYMMDD.jsonl`）| transient（每 run 留最新即可）|
-| `run-continuation/` | session state JSON | session-only（隨 session 結束刪除）|
-| `notepads/` | 決策筆記（learnings、issues、decisions）| transient |
-| `workspaces/` | 跨 session 工作區協調 | merged 後刪除 |
-| `handoffs/` | session 交接 | transient |
-| `phaseN/`, `wave-N*/` | 進行中的 phase/wave 規劃 | merged 後刪除 |
-| `boulder.json` | active 執行追蹤器 | 短暫 |
-| `maps/` | 自動產生的架構快照 | 需定期重新生成（不要 commit） |
+## `docs/` 規範
 
-### 禁止的內容
+### 內容判斷準則（**先回答 yes 才放**）
 
-| 類型 | 應該放哪 | 為什麼 |
-|------|---------|------|
-| **canonical 規範** | `docs/CONSTITUTION.md` | 規範必須被新 clone 取得 |
-| **憲法級文件** | `docs/`（如 `docs/CONSTITUTION.md`）| 同上 |
-| **被 AGENTS.md 引用** | `docs/` 或 `internal/<mod>/` | 引用斷裂風險 |
-| **公開給人類的 reference** | `docs/` | 不該藏在 gitignored 目錄 |
-| **生產規範** | `internal/<mod>/CONSTITUTION.md` 或 `docs/` | 模組級規範必須可見 |
+- [ ] 對 6 個月後新貢獻者仍有參考價值？
+- [ ] 內容已穩定，未來 1 年內不會大改？
+- [ ] 屬於「規範」「手冊」「架構」「領域知識」「憲法」「playbook」其中之一？
 
-### Lifecycle
+**任一為 no → 進 `.omo/`**。
 
-- **active** → 工作中（agent 正在引用）
-- **merge 後** → 主動刪除（避免本地污染）
-- **無引用 30 天** → 可刪除
-- **永遠不 commit**（`.gitignore` 會擋）
+### 子目錄結構
 
-### 清理時機
+```
+docs/
+├── CONSTITUTION.md              # 深度開發憲法（7 條文）
+├── ITERATION_GATE.md            # 5 Gate 自我檢查
+├── QUICKSTART.md                # 5 分鐘入門（單一權威）
+├── GUIDELINES_INDEX.md          # 規範階層
+├── MATURITY.md                  # 模組成熟度
+├── architecture.md              # 分層架構
+├── TRAPS.md                     # 跨模組陷阱
+├── CONVENTIONS_CHECKLIST.md     # 慣例檢查表
+├── PARAMETER_SYSTEM.md          # 參數管理
+├── JSON_SCHEMA_STANDARD.md      # JSON schema 規範
+├── operations_playbook.md       # 操作 playbook
+├── iteration_playbook.md        # 迭代 playbook
+├── evolution_loop.md            # 演化循環
+├── data_sources.md              # 資料源說明
+├── ENVIRONMENT.md               # 外部依賴與環境
+├── TOOLS.md                     # 工具清單
+├── AUDIT_TRAIL.md               # 稽核軌跡
+├── branch-hygiene/              # branch 維護紀錄（PR #748 模式）
+├── audit/                       # 審計報告（YYYY-MM-DD-slug.md）
+├── handoff/                     # 任務交接（YYYY-MM-DD-topic.md）
+├── investigations/              # 根因調查（YYYY-MM-DD-symptom.md）
+├── plans/                       # 修復計畫（YYYY-MM-DD-topic-repair.md）
+├── specs/                       # 規格（topic-spec.md）
+├── guides/                      # 指南（topic-guide.md）
+└── archive/                     # 歸檔（見下方專節）
+```
 
-- 每次 PR merge 後檢查 `.omo/` 對應 plan/brief 是否已 merge → 刪除
-- 定期（每週或每月）用 `git status` 確認 `.omo/` 不在 staged
-- 如果 `.omo/` 總大小超過 100MB，幾乎確定有 stale traces 累積
+### `docs/archive/` 用途（**嚴格**）
 
-### 與 `docs/` 的對比
+**只放對 6 個月後新貢獻者有教學價值的歷史檔案**：
 
-| 維度 | `docs/` | `.omo/` |
-|------|---------|---------|
-| Git tracked | ✅ | ❌ |
-| 對象 | 人 + AI（canonical reference）| AI 個人工作區（ephemeral）|
-| 生命週期 | 永久（直到主動 archive）| 短暫（session 級）|
-| 新 clone 會拿到 | ✅ | ❌ |
-| 該被 commit | ✅ | ❌（`.gitignore` 會擋）|
-| 引用風險 | 低（可被 git 驗證）| 高（斷裂 = 引用不存在）|
+| 該放 | 不該放 |
+|------|--------|
+| 重大架構演進最終快照（phase5-architecture 最終狀態）| 短期 plan/spec（merge 後 git reflog 是真相）|
+| 重大決策的 audit 報告（避免重蹈覆轍）| 觀察期日誌（過渡性）|
+| 有歷史教訓的 incident postmortem | 過時 migration（CHANGELOG 已有）|
+| 重大規則演進（experiment-baseline-report 稀疏資料教訓）| 純粹 snapshot（無結論、無教訓）|
 
-### 預防文件斷裂 SOP
+**入 archive 前必答**：「新 clone 用戶 6 個月後會從這份檔案學到 CHANGELOG 看不到的東西嗎？」
 
-修改任何文件前，先確認該路徑在 git 內（`git ls-files <path>`）。若引用了 `.omo/` 內檔案：
-1. 確認該檔確實是規範（不是 transient agent work）
-2. 將檔移到 `docs/`（規範性）或 `internal/<mod>/`（模組級）
-3. 更新所有引用該檔的 canonical 文件（AGENTS.md、GUIDELINES_INDEX.md 等）
-4. 刪除 `.omo/` 內原始檔
+- 是 → 進 archive
+- 否 → 刪除（git reflog 仍可恢復）
 
-**歷史教訓**：PR #751 即是此 SOP 的實際應用（`.omo/CONSTITUTION.md` → `docs/CONSTITUTION.md`）。
+**archive 內禁止新增子目錄**（`archive/superpowers/`、`archive/plans/` 都已撤銷）。所有歸檔檔案直接放 `archive/<slug>.md` 或 `archive/YYYY/<slug>.md`。
 
-## 文件歸屬對照表
+### `docs/` 生命週期
+
+1. **active** — 當前使用
+2. **stale 60 天無引用** → 評估是否進 `docs/archive/`
+3. **archive 超過 6 個月無引用** → 從 repo 刪除（git reflog 可恢復）
+
+---
+
+## `.omo/` 規範（**最重要，本節是紀律核心**）
+
+### 核心原則
+
+- **`.omo/` 是 AI 個人工作區**，**新 clone 看不到**（by design）
+- **AI 禁止自由生成新子目錄**——只能使用下方白名單
+- **每個子目錄有嚴格命名規範與生命週期**——避免你描述的「內容到處散落」問題
+- **工作區結束時主動清理**——避免你描述的「維護成本高」問題
+
+### 完整子目錄白名單（**這是所有 AI 必須遵守的**）
+
+| 子目錄 | 用途 | 命名規範 | 生命週期 |
+|--------|------|---------|---------|
+| `briefs/` | **長壽** phase 規劃 brief（roadmap、跨模組設計） | `<topic>-brief.md`（無日期前綴） | active → 設計穩定後升級到 `docs/` |
+| `plans/` | **短壽** 執行計畫（具體 PR 的待辦） | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` | merge 後**必須刪除** |
+| `evidence/` | **短壽** 驗證報告（f1-f4 通過證明） | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` | 驗證完即刪 |
+| `traces/` | sim 執行 JSONL | `sim-YYYYMMDD.jsonl` | 保留最新 5 個，其餘刪 |
+| `notepads/` | 跨 session 決策筆記 | `<topic>/learnings.md` 等子目錄 + 檔案 | 寫滿或過時即歸檔或刪 |
+| `handoffs/` | session 交接 | `YYYY-MM-DD-<topic>.md` | session 結束即刪 |
+| `workspaces/` | 跨 session 工作區協調 | `<workspace-name>/` | merged 後刪 |
+| `run-continuation/` | session state JSON | `session-<id>.json` | session 結束即刪 |
+| `phaseN/`, `wave-N/` | 進行中的 phase/wave 工作目錄 | `phase<N>/<slug>.md` | merged 後刪 |
+| `boulder.json` | 執行追蹤器 | — | 任務完成即清 |
+| `maps/` | 自動產生的架構快照 | `<topic>-map.md` | 重新生成時覆蓋舊檔 |
+
+### **禁止的子目錄**（歷史教訓）
+
+以下子目錄名稱**禁止使用**（過去 AI 自由生成導致的污染）：
+
+- ❌ `archive/`（應刪除內容，不該再「歸檔」）
+- ❌ `audits/`（複數，與 `docs/audit/` 衝突；放 `evidence/`）
+- ❌ `client_ui/`、`drafts/`、`investor-ui/`（無命名規範，內容混亂）
+- ❌ `live-mode-macro-boundary.md`（獨立檔案，應放 `briefs/`）
+- ❌ `session-summary-YYYY-MM-DD.md`（應放 `handoffs/` 或 `notepads/`）
+- ❌ `evidence/<topic>/`（**禁止子目錄**——直接用 `evidence/<topic>-task-N.md`）
+
+**歷史違規子目錄在 PR #756 全部清理**。
+
+### 命名規範細則
+
+| 規則 | 範例 |
+|------|------|
+| 全小寫、`-` 分隔 | `alert-redesign-brief.md` ✅，`AlertRedesign.md` ❌ |
+| **簡述性 slug**（不要把整段標題放進檔名）| `roadmap.md` ✅，`2026-06-26-roadmap-v0.0.0.22-update.md` ❌ |
+| 短壽內容用日期前綴（時序敏感） | `plans/2026-06-26-llm-router-fix.md` ✅ |
+| 長壽內容**不用**日期前綴 | `briefs/roadmap.md` ✅，`briefs/2026-roadmap.md` ❌ |
+| 子目錄禁止巢狀（除 `workspaces/` 與 `phaseN/`）| `evidence/foo/bar.md` ❌ |
+| 單數優先（`brief/`、`plan/`、`evidence/`）| 與 `docs/` 保持一致 |
+
+### `.omo/` 生命週期（**AI 必須主動執行**）
+
+| 時機 | 動作 |
+|------|------|
+| 每次 PR merge | 檢查 `plans/` 對應檔 → 刪除；檢查 `evidence/` 對應檔 → 刪除 |
+| 每次 session 結束 | 檢查 `handoffs/` → 確認已交接或刪除；`run-continuation/` → 刪除 |
+| 每次工作區起步 | `git status` 確認 `.omo/` 不在 staged；無用內容立即清 |
+| 內容升級到 `docs/` 時 | `.omo/` 內副本**立即刪除**（避免引用混淆）|
+| 30 天無引用 | 可手動刪除（不會影響 git reflog）|
+| 6 個月無引用 | 必須刪除 |
+
+**禁止**：
+
+- 在 `.omo/` 內新增白名單外的子目錄
+- 在 `evidence/`、`plans/` 等短壽子目錄內建巢狀子目錄
+- 把規範性內容放進 `.omo/`（規範必須在 `docs/`）
+- 跨工作區共用 `.omo/` 內容（每個工作區獨立）
+
+### 判斷流程：放 `docs/` 還是 `.omo/`？
+
+```
+這個內容是什麼？
+│
+├─ 規範 / 憲法 / playbook / 架構 / 領域知識？
+│   └─ 是 → 進 docs/（必須 git tracked）
+│
+├─ 跨模組、跨 session、需要被未來讀到？
+│   ├─ 是、且穩定 → 進 docs/
+│   └─ 是、但還在變 → 進 .omo/briefs/（長壽）
+│
+├─ 短期的 PR 待辦、驗證報告、sim 輸出？
+│   └─ 是 → 進 .omo/plans/ 或 .omo/evidence/ 或 .omo/traces/（短壽）
+│
+└─ session 內的工作記憶、交接？
+    └─ 是 → 進 .omo/notepads/ 或 .omo/handoffs/（transient）
+```
+
+### 防止「AI 自由生成子目錄」機制
+
+每次 AI 準備建立新 `.omo/<dir>/` 時，必須：
+
+1. **先 grep** `DOCUMENTATION_STANDARD.md` § `.omo/` 完整子目錄白名單
+2. **若新目錄不在白名單**：停手，問使用者是否要擴充白名單
+3. **若白名單內已有相似用途**：用既有目錄 + 命名規範
+4. **若確定要新增**：必須在 PR 中同步更新 `DOCUMENTATION_STANDARD.md` 與 `DOCUMENTATION_MAP.md`
+
+**自我檢查指令**：
+
+```bash
+# 工作區起步時確認 .omo/ 結構合規
+ls -la .omo/
+# 對照白名單，任何不在白名單的子目錄/檔案都需清理
+```
+
+---
+
+## 工作區起步 SOP（新 AI 開工作區必讀）
+
+```bash
+# 1. 讀規範（精簡版必讀）
+cat docs/DOCUMENTATION_STANDARD.md | head -100
+cat docs/DOCUMENTATION_MAP.md | head -80
+
+# 2. 確認 .omo/ 結構合規
+ls .omo/
+# 若有白名單外的目錄，記得先清理（見 PR #756）
+
+# 3. 找規劃文件
+ls .omo/briefs/         # 長壽規劃
+ls .omo/plans/          # 短期計畫
+
+# 4. 確認 .gitignore 有 .omo/ 與 .opencode/
+grep -E "(\.omo|\.opencode)" .gitignore
+```
+
+---
+
+## 完整文件歸屬對照表
 
 | 文件類型 | 歸屬位置 | 命名規範 |
 |----------|---------|---------|
-| 操作程序 / playbook | `docs/` | 描述性小寫、可用 `-` 分隔 |
-| 規格 (spec) | `docs/specs/` | 模組或系統名稱 |
-| 設計文件 / 規劃（active） | `.omo/briefs/`、`.omo/plans/` | `P<n>-<n>_<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
+| 規範 / 憲法 / playbook | `docs/` | 無日期前綴，描述性小寫 |
+| 架構 / 領域知識 | `docs/` | 無日期前綴 |
+| 規格 (spec) | `docs/specs/` | `<topic>-spec.md` |
+| 開發者指南 | `docs/guides/` | `<topic>-guide.md` |
 | 審計報告 | `docs/audit/` | `YYYY-MM-DD-<slug>.md` |
-| 證據 / 驗證報告（active） | `.omo/evidence/` | `f<n>-<slug>.md` 或 `task-<n>-<slug>.md` |
-| 任務交接 | `docs/handoff/` 或 `.omo/handoffs/`（active） | `YYYY-MM-DD-<topic>.md` |
+| 任務交接（穩定版） | `docs/handoff/` | `YYYY-MM-DD-<topic>.md` |
 | 根因調查 | `docs/investigations/` | `YYYY-MM-DD-<symptom>.md` |
-| 修復計畫 | `docs/plans/` | `YYYY-MM-DD-<topic>-repair.md` |
-| 追蹤紀錄 (sim 跑、runtime) | `.omo/traces/` | `sim-YYYYMMDD.jsonl` |
-| 架構圖（auto-generated）| `.omo/maps/` | `<topic>-map.md` |
+| 修復計畫（穩定） | `docs/plans/` | `YYYY-MM-DD-<topic>-repair.md` |
+| 歸檔（教學價值） | `docs/archive/` | `<slug>.md` 或 `YYYY/<slug>.md` |
+| **長壽 brief（跨 session 規劃）** | `.omo/briefs/` | `<topic>-brief.md` 或 `<topic>.md` |
+| **短期 PR 待辦** | `.omo/plans/` | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
+| 驗證報告 | `.omo/evidence/` | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` |
+| sim 輸出 | `.omo/traces/` | `sim-YYYYMMDD.jsonl` |
+| session 交接 | `.omo/handoffs/` | `YYYY-MM-DD-<topic>.md` |
+| 決策筆記 | `.omo/notepads/` | `<topic>/learnings.md` 等 |
 | Skills / AI 引導 | `.claude/skills/` | `atlas-<topic>/SKILL.md` |
-| 開發者 / AI 指南 | `docs/guides/` | `<topic>-guide.md` |
-| 快速入門 | `docs/QUICKSTART.md` | 單一檔（不可複製） |
 
-- **日期前綴** `YYYY-MM-DD-`：時序敏感的文檔（handoff、investigation、audit、plan）
-- **無日期前綴**：通用 reference（architecture、conventions、QUICKSTART）
+### 命名格式細則
+
+- **日期前綴 `YYYY-MM-DD-`**：時序敏感（handoff、investigation、audit、plan）
+- **無日期前綴**：通用 reference（architecture、conventions、QUICKSTART、brief）
 - **slug**：小寫、`-` 分隔、無空格、無大寫
-- **單數 vs 複數**：用單數（`docs/audit/`、`docs/handoff/`），例外是已存在的複數目錄（`docs/events/`、`docs/plans/`、`docs/wave-11/`）保留不動
+- **單數 vs 複數**：用單數，例外是已存在的複數目錄（`docs/events/`、`docs/plans/`、`docs/wave-11/`）保留不動
+- **P<n> 編號**：plans 與 evidence 的 P0-1、P0-2 編號可選，但建議用於大型 multi-PR 規劃
 
-## 生命週期
+---
 
-1. **活躍（active）**：當前 phase 使用，所有 AI 都應讀
-2. **歸檔（archived）**：phase 完成後超過 60 天且無引用 → 移入 `docs/archive/YYYY/` 或 `.omo/archive/YYYY/`
-3. **刪除（delete）**：歸檔超過 6 個月且仍無引用 → 從 repo 刪除（仍可從 git reflog 還原）
+## 動作紀錄
 
-完整當前地圖見 `docs/DOCUMENTATION_MAP.md`。建立 audit 流程見 `docs/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。
+完整當前地圖見 `docs/DOCUMENTATION_MAP.md`「動作紀錄」段。建立 audit 流程見 `docs/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。
