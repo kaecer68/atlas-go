@@ -7,7 +7,7 @@
 > **Wave 11 交叉引用** (Issue #711 + v0.0.0.21):
 > - `Tool.Handler` 的 trust boundary 在 PR1 已明確化 — 「LLM validation 是 hint,handler 必須自行驗證」。建議透過 `SafeInvokeHandler` 呼叫(支援 panic recovery)。詳見 `internal/llm/provider.go` 的 `Tool.Handler` docstring。
 > - `Request.Validate()` 在 PR3 新增,統一驗證 `ToolChoice`(reserved keywords 或 registered tool names)。Provider adapter 在 dispatch 前必須呼叫,trust valid input。詳見 `internal/llm/provider.go` 的 `Request.Validate()` docstring。
-> - L2.3 PoC(`SemiconductorLLMAgent` + `DriverAdapter`)是本框架的**第一個 sector agent consumer**,驗證了 end-to-end flow。詳見 [`docs/specs/llm-sector-agent.md`](specs/llm-sector-agent.md)（moved from `docs/wave-11/L2_3_PLAN_REFLECT.md`）。
+> - L2.3 PoC(`SemiconductorLLMAgent` + `DriverAdapter`)是本框架的**第一個 sector agent consumer**,驗證了 end-to-end flow。詳見 [`docs/specs/llm-sector-agent.md`](specs/llm-sector-agent.md)。
 > 維護者：core architecture
 > 版本：v2.1（與 `internal/MATURITY.md` 對齊於 2026-06）
 >

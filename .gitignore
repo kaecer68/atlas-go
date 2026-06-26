@@ -169,8 +169,12 @@ web/node_modules/
 web/dist/
 admin_web/node_modules/
 admin_web/dist/
+admin_web/test-results/
 client_web/node_modules/
 client_web/dist/
+client_web/test-results/
+shared_web/node_modules/
+shared_web/dist/
 
 /gentags
 /optimize-parameters

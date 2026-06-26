@@ -3,6 +3,8 @@
 # Stage 1: Frontend build
 FROM node:22-alpine AS nodebuilder
 WORKDIR /build
+# Shared static assets used by admin_web and client_web builds.
+COPY shared_web/ ./shared_web/
 
 # Install dependencies for all three embedded frontends.
 COPY web/package.json web/package-lock.json ./web/
