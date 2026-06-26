@@ -2,7 +2,7 @@
 
 本目錄負責**實盤交易協調**，是系統從「模擬優先」過渡到「實盤執行」的最後一道閘門。
 
-> **可靠性邊界**（來自 `.github/instructions/live-trading.guardrails.instructions.md`）：replay 與 simulation 路徑為可靠預設；`internal/live` 仍有部分整合 TODO。
+> **可靠性邊界**（`.github/instructions/live-trading.guardrails.instructions.md`）：replay / simulation 為可靠預設；`internal/live` 仍有部分整合 TODO。
 
 ---
 
@@ -19,16 +19,16 @@
 
 ## 核心職責（簡要）
 
-| 職責 | 檔案 | 說明 |
-|------|------|------|
-| 交易編排 | `orchestrator.go` | `Orchestrator` 整合 StateStore / EventBus / Broker / OrderManager / CircuitBreaker |
-| 券商抽象 | `broker.go` | `Broker` 介面；`DryRunBroker` 永遠不送真實委託；`GuardedLiveBroker` 無 adapter 時拒單 |
-| 訂單管理 | `order_manager.go` | 訂單生命週期：pending → submitted → filled/rejected/cancelled |
-| 熔斷機制 | `circuit_breaker.go` | 連續錯誤或異常達閾值時暫停交易；狀態持久化至 `circuit_breaker_state.json` |
-| 狀態持久化 | `store.go` | `StateStore` 原子寫入實盤狀態（部位/訂單/現金） |
-| Nonce 管理 | `nonce_store.go` | 防止重放攻擊；預設 Redis，測試可換記憶體實作 |
-| HTTP Adapter | `http_adapter.go` | 券商 API 客戶端（HMAC-SHA256 簽名、速率限制、重試） |
-| 事件匯流排 | `eventbus.go` | `ChannelEventBus` 解耦 orchestrator 與子系統 |
+| 職責 | 檔案 |
+|------|------|
+| 交易編排 | `orchestrator.go` — 整合 StateStore / EventBus / Broker / OrderManager / CircuitBreaker |
+| 券商抽象 | `broker.go` — `Broker` 介面；`DryRunBroker` 不送真實委託；`GuardedLiveBroker` 無 adapter 拒單 |
+| 訂單管理 | `order_manager.go` — pending → submitted → filled/rejected/cancelled |
+| 熔斷 | `circuit_breaker.go` — 連續錯誤達閾值暫停；持久化 `circuit_breaker_state.json` |
+| 狀態持久化 | `store.go` — `StateStore` 原子寫入（部位/訂單/現金） |
+| Nonce 管理 | `nonce_store.go` — 防重放；預設 Redis，測試可換記憶體實作 |
+| HTTP Adapter | `http_adapter.go` — 券商 API（HMAC-SHA256、速率限制、重試） |
+| 事件匯流排 | `eventbus.go` — `ChannelEventBus` 解耦 |
 
 詳細契約見 `doc.go:15-30`。
 
@@ -55,15 +55,7 @@
 
 ## KEY TYPES
 
-| 結構體/介面 | 用途 |
-|------------|------|
-| `Orchestrator` | 實盤交易核心協調器 |
-| `Broker` / `DryRunBroker` / `GuardedLiveBroker` | 券商下單介面與安全預設 |
-| `OrderManager` | 訂單生命週期管理 |
-| `CircuitBreaker` | 熔斷機制 |
-| `StateStore` | 狀態持久化（原子寫入） |
-| `ChannelEventBus` | 內部事件匯流排 |
-| `Scheduler` / `AgentRunner` | 交易排程與 Agent 決策驅動 |
+對應「核心職責」表中的檔案：`Orchestrator`（`orchestrator.go`）、`Broker` 系列（`broker.go`）、`OrderManager`、`CircuitBreaker`、`StateStore`、`ChannelEventBus`、`Scheduler` / `AgentRunner`。
 
 ---
 
@@ -80,4 +72,4 @@ go run ./cmd/experimental/validate-broker   # Broker 簽名格式驗證（dummy 
 
 ## EventPositionUpdate 生產發布
 
-`internal/live/orchestrator.go` 是 `EventPositionUpdate` 的生產呼叫者之一，向下游 `BaselineTrigger` 與 `DriftDetector` 發布部位更新。live orchestrator 目前只發布 `"updated"`；新增/移除部位的發布由模擬引擎與訂單成交路徑負責。詳細發布點、`changeType` 語意與下游訂閱者見 **`docs/handoff/2026-wave9-event-position-update.md`**。
+`orchestrator.go` 是 `EventPositionUpdate` 的生產呼叫者之一，向 `BaselineTrigger` 與 `DriftDetector` 發布更新；目前只發 `"updated"`，新增/移除部位由模擬引擎與訂單成交路徑負責。詳見 `docs/handoff/2026-wave9-event-position-update.md`。

@@ -26,7 +26,7 @@
 
 ## Agent Observatory API（`GET /api/dashboard/agent-observatory`）
 
-回傳所有 agent 的 Scorecard 陣列。**OOS 驗證欄位**（位於 `Scorecard.ScorecardDetail`）：
+回傳所有 agent 的 Scorecard 陣列。**OOS 驗證欄位**（`Scorecard.ScorecardDetail`）：
 
 | 欄位 | 意義 |
 |------|------|
@@ -63,17 +63,13 @@
 
 ## DriftDetector v2
 
-`internal/monitoring/service/drift_detector.go` 提供 `EventDriftDetected` 偵測與發布。
-
-**v1 vs v2**：
+`internal/monitoring/service/drift_detector.go` 提供 `EventDriftDetected` 偵測與發布。**v1 vs v2**：
 - `NewDriftDetector(bus)`：v1，僅訂閱 `EventPositionUpdate`，無 target drift
 - `NewDriftDetectorWithTargets(bus, provider)`：v2，多訂閱 `EventRegimeChangeConfirmed`，新增 `target_drift` 偵測
 
 **閾值**（`thresholds` 常數）：`DriftMaxConcentrationThreshold=0.25`、`DriftTurnoverThreshold=0.15`、`DriftTargetWeightThreshold=0.10`
 
-**v1/v2 payload 契約**：`max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds` 為 v1 既有欄位（**append-only**），v2 僅在後方新增。
-
-關鍵陷阱詳見 `internal/monitoring/service/drift_detector.go` 程式註解與 `drift_helpers.go`。
+**v1/v2 payload 契約**：`max_concentration` / `max_symbol` / `turnover` / `total_value` / `period_start` / `reasons` / `thresholds` 為 v1 既有欄位（**append-only**），v2 僅在後方新增。詳見 `drift_detector.go` 與 `drift_helpers.go`。
 
 ---
 
