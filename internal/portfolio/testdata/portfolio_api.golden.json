@@ -1434,6 +1434,12 @@
       "results": ""
     },
     {
+      "name": "WithEventBus",
+      "params": "(eb *eventbus.ChannelEventBus)",
+      "receiver": "RiskManager",
+      "results": "(*RiskManager)"
+    },
+    {
       "name": "IsValid",
       "params": "",
       "receiver": "RotationSignal",
@@ -2396,7 +2402,8 @@
         "riskAlerts []RiskAlert",
         "alertHistory []RiskAlert",
         "positions map[string]*Position",
-        "totalExposure float64"
+        "totalExposure float64",
+        "eventBus *eventbus.ChannelEventBus"
       ],
       "kind": "struct",
       "name": "RiskManager"
