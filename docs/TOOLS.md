@@ -12,7 +12,7 @@ atlas-go 專案同時被兩個 MCP 索引，並提供互補能力：
 
 | 工具 | MCP 名稱 | 索引名稱 | 節點 / 邊 | 獨特能力 |
 |------|---------|---------|----------|---------|
-| **GitNexus** | `gitnexus` | `atlas-go` | 請執行 `npx gitnexus status` 取得 live 數字（2026-06-25 快照：53,385 symbols / 169,008 edges / 300 execution flows） | 執行流（Process）、功能社群（Community）、API 路由映射、影響範圍分級、安全重命名 |
+| **GitNexus** | `gitnexus` | `atlas-go` | 請執行 `npx gitnexus status` 取得 live 數字（2026-06-25 快照：53,385 symbols / 169,008 edges / 約 300 execution flows） | 執行流（Process）、功能社群（Community）、API 路由映射、影響範圍分級、安全重命名 |
 | **codebase-memory** | `codebase-memory` | `Users-kaecer-workspace-atlas` | 請執行 `codebase-memory_list_projects()` 取得 live 數字（2026-06-25 快照：29,757 nodes / 127,367 edges） | 開放 Cypher 查詢、向量語意搜尋、Louvain 叢集偵測、ADR 管理、跨服務資料流追蹤 |
 
 > **上述數字為 2026-06-25 歷史快照**。由於 `scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op），這些數字不再被 CI 自動驗證。**需要 live 數字時，請手動執行** `npx gitnexus status`（GitNexus）或 `codebase-memory_list_projects()`（codebase-memory）。
@@ -163,7 +163,7 @@ atlas-go 有 34 個 `internal/` 模組、1,200+ 社群、300 條執行流。多�
 | 簽名層重疊（相同參數、相同回傳） | 間接（context 比對） | `search_code({pattern})` + Cypher |
 | 模組層重疊（「這應該放哪個 package？」） | `query` → 看 community 歸屬 | `get_architecture()` → Louvain 叢集 |
 | 孤兒分類：是否組態驅動 | ❌ 無 config 感知 | ❌ 無 config 感知 → 需手動 `grep` |
-| pre-commit blast radius（哪些 caller 會被影響）| `detect_changes()` — 受影響 Process | `detect_changes({depth:N})` — transitive caller blast radius |
+| pre-commit blast radius（哪些 caller 會被影響）| `detect_changes()` — 受影響 Process + Risk 等級（LOW/MEDIUM/HIGH/CRITICAL） | `detect_changes({depth:N})` — transitive caller blast radius |
 
 > **核心原則**：GitNexus 回答「有沒有類似的執行流」；codebase-memory 回答「有沒有名稱不同但語意相同的實作」。兩者都要跑才算完整檢查。
 
@@ -277,6 +277,8 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 | ADR 管理 | `manage_adr({mode})` | 架構決策紀錄 CRUD |
 | 跨服務資料流 | `trace_path({mode:"cross_service"})` | 透過 HTTP / async 跨 service 追蹤 |
 | 程式碼全文搜尋 | `search_code({pattern, regex:true})` | grep + graph 雙重增強 |
+| 源碼 + 鄰居一覽（中低風險）| `explore({query})` | 一次拿 callers + callees + 同檔 sibling + 逐行 source（FORK-EXCLUSIVE，見 Step 1.5） |
+| pre-commit transitive caller blast radius | `detect_changes({depth:N})` | 跨 N hop caller 影響清單（hop + transitive 標籤，FORK-EXCLUSIVE） |
 
 ### 唯一擁有（codebase-memory 獨佔）
 
@@ -293,6 +295,9 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 - **158 語言 tree-sitter 支援** + **Hybrid LSP 語意型別解析**（Go 含括）— 跨檔案 CALLS 邊以型別推論增強，非純語法匹配
 - **`explore`** — 一個 call 拿 blast-radius (callers + fan-in flags) + nearby neighbors (callees + 同檔 sibling) + 逐行 source code。中低風險、需要 source 的改動最划算
 - **`detect_changes({depth:N})`** — pre-commit transitive caller blast radius（up to N hops），impacted_symbols 帶 hop + transitive 標籤
+
+  > 注意：此為 codebase-memory fork 獨佔，與 GitNexus 的 `detect_changes()` 不同——GitNexus 版附帶 **Risk 等級（LOW/MEDIUM/HIGH/CRITICAL）** 與**受影響 Process 流清單**；本版只提供 N-hop caller 影響清單。**HIGH/CRITICAL 改動必須走 GitNexus 版做風險分級。**
+
 - **Cypher aggregation 修正** — 非聚合函式與聚合混用（如 `RETURN type(r), count(*)`）會正確分組
 
 ---
@@ -304,6 +309,7 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 ├─ 是 → 改前評估 blast radius
 │       ├─ 需要風險等級 + 受影響 Process → GitNexus `impact()` + `detect_changes()`
 │       ├─ 需要源碼 + 鄰居（中低風險） → codebase-memory `explore()`
+│       ├─ 需要 transitive caller blast radius（hop 控制） → codebase-memory `detect_changes({depth:N})`
 │       └─ 跨檔案改名 → GitNexus `rename()`
 └─ 否 → 純查詢？
          ├─ 自然語言概念 → GitNexus `query()`（有執行流排名）
