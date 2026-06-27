@@ -92,8 +92,10 @@ var modules = {};
 async function loadModules() {
   if (modules._loaded) return modules;
   var imports = [
-    import('./pages/pipeline.js'),
+    import('./pages/dashboard.js'),
+    import('./pages/risk.js'),
     import('./pages/narrative.js'),
+    import('./pages/pipeline.js'),
     import('./pages/inbox.js'),
     import('./pages/experiments.js'),
     import('./pages/industry.js'),
@@ -103,7 +105,7 @@ async function loadModules() {
     import('./pages/crossmarket.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['pipe', 'narr', 'inbox', 'experiments', 'industry', 'evolution_panel', 'decision', 'strategies', 'crossmarket'];
+  var keys = ['dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'evolution_panel', 'decision', 'strategies', 'crossmarket'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -255,6 +257,26 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'decision') {
     try {
+      var decisionResults = await Promise.all([
+        silentGetJSON('/api/experiments/inbox'),
+        silentGetJSON('/api/dashboard/darwinian-phase3'),
+        silentGetJSON('/api/dashboard/darwinian-status'),
+        silentGetJSON('/api/dashboard/darwinian-trend'),
+        silentGetJSON('/api/agents/registry'),
+        silentGetJSON('/api/dashboard/macro-radar'),
+        silentGetJSON('/api/taiwan/stress-index'),
+      ]);
+      if (m.dash && m.dash.renderAIEvolution) {
+        m.dash.renderAIEvolution(
+          decisionResults[0],
+          decisionResults[1],
+          decisionResults[2],
+          decisionResults[3],
+          decisionResults[4],
+          decisionResults[5],
+          decisionResults[6],
+        );
+      }
       if (m.decision && m.decision.loadDecisionChain) m.decision.loadDecisionChain();
     } catch(e) { console.error(e); }
   }
@@ -273,17 +295,27 @@ async function loadPageData(pageId) {
   else if (pageId === 'live') {
     try {
       var liveResults = await Promise.all([
-        silentGetJSON('/api/dashboard/live-status'),
-        silentGetJSON('/api/dashboard/recommendation-pipeline'),
-        silentGetJSON('/api/dashboard/risk-exposure'),
-        silentGetJSON('/api/dashboard/macro-radar'),
-        silentGetJSON('/api/narrative/events'),
-        silentGetJSON('/api/taiwan/stress-index'),
-        silentGetJSON('/api/narrative/chains'),
-        silentGetJSON('/api/narrative/models'),
-        silentGetJSON('/api/dashboard/capital-phase'),
-        silentGetJSON('/api/dashboard/risk-calibration'),
-      ]);    } catch(e) { console.error(e); }
+        getJSONWithTimeout('/api/dashboard/live-status'),
+        getJSONWithTimeout('/api/dashboard/recommendation-pipeline'),
+        getJSONWithTimeout('/api/dashboard/risk-exposure'),
+        getJSONWithTimeout('/api/dashboard/macro-radar'),
+        getJSONWithTimeout('/api/narrative/events'),
+        getJSONWithTimeout('/api/taiwan/stress-index'),
+        getJSONWithTimeout('/api/narrative/chains'),
+        getJSONWithTimeout('/api/narrative/models'),
+        getJSONWithTimeout('/api/dashboard/capital-phase'),
+        getJSONWithTimeout('/api/dashboard/risk-calibration'),
+      ]);
+      if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
+      if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
+      if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(liveResults[9]);
+      if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
+      if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
+      if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'industry') {
+    try { if (m.industry && m.industry.loadIndustryData) m.industry.loadIndustryData(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'portfolio') {
     try {

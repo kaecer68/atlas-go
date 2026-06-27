@@ -126,6 +126,7 @@ function bindSectorRefreshButton() {
 
 export function renderIndustryMap(data) {
   const el = document.getElementById("industryMap");
+  if (!el) return;
   if (!data || !data.industries) {
     el.innerHTML = renderEmptyState("尚無產業資料", "");
     el.classList.remove("loading");
@@ -380,6 +381,7 @@ export function renderCycleStatusCard(card) {
 
 export function renderIndustryLinkage(data) {
   const el = document.getElementById("industryLinkage");
+  if (!el) return;
   if (!data || !data.industries) {
     el.innerHTML = renderEmptyState("尚無產業關聯資料", "");
     el.classList.remove("loading");

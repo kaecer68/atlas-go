@@ -4,11 +4,12 @@ import { getJSON, notify, formatDate } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 export async function loadOverrides() {
+  const container = document.getElementById('overrideBadges');
+  if (!container) return;
   try {
     const data = await getJSON('/api/control/active-overrides');
     const paused = data.paused_agents || [];
     const banned = data.banned_sectors || [];
-    const container = document.getElementById('overrideBadges');
     const pausedBadges = paused.map(a => `<span class="badge err">⏸ ${a}</span>`).join('');
     const bannedBadges = banned.map(s => `<span class="badge warn">🚫 ${s}</span>`).join('');
     container.innerHTML = pausedBadges + bannedBadges || '<span class="text-muted text-sm">目前無生效覆寫</span>';
@@ -17,6 +18,7 @@ export async function loadOverrides() {
 
 export async function loadAuditLog() {
   const el = document.getElementById('auditLog');
+  if (!el) return;
   try {
     const data = await getJSON('/api/control/audit-log');
     el.classList.remove('loading');
@@ -39,6 +41,7 @@ export async function loadAuditLog() {
 
 export async function loadExperimentHistory() {
   const el = document.getElementById('experimentHistory');
+  if (!el) return;
   try {
     const data = await getJSON('/api/experiment/history');
     el.classList.remove('loading');

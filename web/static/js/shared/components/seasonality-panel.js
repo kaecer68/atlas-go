@@ -5,6 +5,7 @@ export let seasonalityViewMode = "list"; // 'list' or 'calendar'
 
 export function renderIndustrySeasonality(data) {
   const el = document.getElementById("industrySeasonality");
+  if (!el) return;
   el.classList.remove("loading");
 
   const allPatterns = data && data.all_patterns ? data.all_patterns : [];

@@ -9,6 +9,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const gridMarket = document.getElementById('overviewMarket');
   const gridRisk = document.getElementById('overviewRisk');
   const gridSystem = document.getElementById('overviewSystem');
+  if (!gridMarket || !gridRisk || !gridSystem) return;
   [gridMarket, gridRisk, gridSystem].forEach(g => g.classList.remove('loading'));
   const health = data || {};
   const cards = agentsData || {};
@@ -165,6 +166,7 @@ export function computePipelineSummary(guardOutcomes, items) {
 
 export function renderMacroRadar(data, pipelineData) {
   const el = document.getElementById('macroRadar');
+  if (!el) return;
   if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes, data.items);
@@ -233,6 +235,7 @@ export function renderMacroRadar(data, pipelineData) {
 
 export function renderAgentObservatory(data, overlapData) {
   const el = document.getElementById('agentObservatory');
+  if (!el) return;
   if (!data) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
   const cards = data.scorecards || [];
   if (!cards.length) { el.innerHTML = renderEmptyState('尚無 Agent 績效資料', ''); el.classList.remove('loading'); return; }
@@ -313,6 +316,7 @@ export function renderAgentObservatory(data, overlapData) {
 
 export function renderUniverseOverlap(data) {
   const el = document.getElementById('universeOverlap');
+  if (!el) return;
   if (!data || !data.agents) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const agents = data.agents || [];
@@ -405,6 +409,7 @@ export function toggleBreakdown(key) {
 if (typeof window !== 'undefined') window.toggleBreakdown = toggleBreakdown;
 export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend, agents, macro, stress) {
   const el = document.getElementById('aiEvolution');
+  if (!el) return;
   el.classList.remove('loading');
   const items = (inbox && inbox.items) ? inbox.items : [];
   const pending = items.filter(i => i.status === 'pending' || i.status === 'planned');

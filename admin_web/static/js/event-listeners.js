@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   var qs___page_controls__data_action__ = document.querySelector('#page-controls [data-action="revert-experiment"]'); if (qs___page_controls__data_action__) qs___page_controls__data_action__.addEventListener('click', () => window.revertExperiment());
 
   // === Page: evolution_panel ===
+    var el_evView_compact = document.getElementById('evView-compact'); if (el_evView_compact) el_evView_compact.addEventListener('click', () => window._evSwitch('compact'));
     var el_evView_ai_analysis = document.getElementById('evView-ai-analysis'); if (el_evView_ai_analysis) el_evView_ai_analysis.addEventListener('click', () => window._evSwitch('ai-analysis'));
 
   // === Page: datachannels ===

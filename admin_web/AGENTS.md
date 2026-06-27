@@ -69,6 +69,6 @@ ctx.strokeStyle = hexToRgba(getThemeColor('--trend-bullish'), 0.3);
 
 | 檔案 | 內容 |
 |------|------|
-| `web/static/css/base/variables.css` | 所有 CSS 變數定義（色彩、字體、間距） |
-| `web/static/css/components/utilities.css` | Utility class 定義 |
-| `web/static/js/shared/utils.js` | Canvas 橋接函數 (`getThemeColor`, `hexToRgba`) |
+| `shared_web/static/css/base/variables.css` (canonical) | 所有 CSS 變數定義（色彩、字體、間距） |
+| `shared_web/static/css/components/utilities.css` (canonical) | Utility class 定義 |
+| `shared_web/static/js/shared/utils.js` (canonical) | Canvas 橋接函數 (`getThemeColor`, `hexToRgba`) |
