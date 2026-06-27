@@ -46,7 +46,6 @@ Caller → gateway.Fetch(channelID)
 
 ## 測試
 
-- `go test ./internal/apigateway/...`
 - `background_test.go`：排程與 overlap 測試
 - `limits_test.go`：限速器行為測試
 - `circuitbreaker_test.go`：熔斷狀態轉換測試
