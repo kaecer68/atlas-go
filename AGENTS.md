@@ -9,7 +9,7 @@
 ## 📜 內容歸屬規則（ALL AI MUST READ FIRST）
 
 > 完整歸屬對照表見 **[`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)**。
-> 所有檔案當前位置見 **[`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)`**（包含 Wave 11 AGENTS.md 整合結果）。
+> 所有檔案當前位置見 **[`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)**（包含 Wave 11 AGENTS.md 整合結果）。
 
 | 知識類型 | 歸屬位置 |
 |----------|---------|
@@ -30,7 +30,7 @@
 
 ## 專案概覽
 
-`atlas-go` — 模擬優先、稽導向的台股投資研究系統。
+`atlas-go` — 模擬優先、稽核導向的台股投資研究系統。
 - **語言**：Go 1.26，**DB**：PostgreSQL 15 + Redis 8
 - **CI**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
 - **覆蓋率門檻**：40%

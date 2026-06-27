@@ -93,7 +93,7 @@
 | `specs/llm-sector-agent.md` | L2.3 LLM-driven sector agent 設計記錄 |
 | `specs/llm-routing.md` | LLM Provider 路由策略 + 備援鏈（架構藍圖 §6 抽離）|
 | `specs/llm-interface-contract.md` | LLM 統一介面合約（架構藍圖 §4.2-4.5 抽離）|
-| `specs/domain-types.md` | Domain Canonical Types 規格（Wave 11 Batch 5a 從 `internal/domain/AGENTS.md` 抽離）|
+| `specs/domain-types.md` | Domain Canonical Types 規格（Wave 11 Batch 5a 從原 domain 模組的 AGENTS.md 抽離）|
 | `specs/sim-engine.md` | 模擬引擎 7 步執行序 + 8 陷阱（Wave 11 Batch 5a）|
 | `specs/janus-regime-detection.md` | JANUS meta-layer + Risk Gate 校準（Wave 11 Batch 5a）|
 | `specs/prism-cohort-training.md` | PRISM 5-Regime queue + Synthetic flag（Wave 11 Batch 5a）|
@@ -110,14 +110,14 @@
 
 | 檔案 | 用途 |
 |------|------|
-| `guides/retail-sentiment.md` | RSI-tw 台灣散戶情緒指數規格（Wave 11 Batch 5c 從 `internal/retail/AGENTS.md` 抽離）|
+| `guides/retail-sentiment.md` | RSI-tw 台灣散戶情緒指數規格（Wave 11 Batch 5c 從原 retail 模組的 AGENTS.md 抽離）|
 
 ### 審計 / 交接 / 調查 / 修復計畫（時序敏感）
 
 - `audit/` — 審計報告
   - `2026-06-20-risk-orphan-config.md` — `internal/risk` 孤兒組態檔清理紀錄（PR #756 後第二波整理）
 - `handoff/` — 任務交接
-  - `2026-wave12-llm-annotator-phase2.md` — Wave 12 `llm_annotator` Phase 2 canonical 介面交接（由 `internal/llm_annotator/AGENTS.md` 搬遷）
+  - `2026-wave12-llm-annotator-phase2.md` — Wave 12 `llm_annotator` Phase 2 canonical 介面交接（由原 `llm_annotator` 套件的 AGENTS.md 搬遷）|NTS.md` 搬遷）
 - `investigations/` — 根因調查
   - `2026-05-29-etf-nav-data-source.md` — ETF NAV 資料來源調查（由 `internal/marketdata/AGENTS.md` 搬遷）
   - `2026-06-fubonproxy-ipv4-uvloop.md` — Fubon proxy IPv4/IPv6 dual-stack 與 uvloop 問題 RCA（由 `internal/marketdata/AGENTS.md` 搬遷）
@@ -266,16 +266,16 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ### 2026-06-26 PR #755 docs/ 標準合規審計
 
-- **A 類 archive**：`docs/wave-10-observation-log.md`、`docs/migration-0.0.0.5.md`、`docs/superpowers/` → `docs/archive/`
-- **B 類移至 .omo/**：`docs/roadmap.md`、`docs/ALERT_SYSTEM_REDESIGN.md` → `.omo/briefs/`
+- **A 類 archive**：將 wave-10-observation-log、migration-0.0.0.5、superpowers/ 等搬遷至 `docs/archive/`
+- **B 類移至 .omo/**：將 roadmap、ALERT_SYSTEM_REDESIGN 等長壽規劃移至 `.omo/briefs/`
 - **C 類刪除重複**：`docs/plans/2026-04-16-*.md` 2 個檔案
 - 補登 19 個檔案到 `DOCUMENTATION_MAP.md`
 - 修復 10 個 broken markdown links
 
 ### 2026-06-26 PR #754 docs/ 內混合清理
 
-- A 類 archive：`docs/llm-trigger-analysis.md` → `docs/archive/2026-06-22-llm-trigger-analysis-RESOLVED.md`；`docs/refactor-611-contract.md` → `docs/archive/2026-06-25-refactor-611-contract.md`
-- B 類移至 .omo/：`docs/investor-ui/` → `.omo/investor-ui/`；`docs/live-mode-macro-boundary.md` → `.omo/live-mode-macro-boundary.md`
+- A 類 archive：llm-trigger-analysis → `docs/archive/2026-06-22-llm-trigger-analysis-RESOLVED.md`；refactor-611-contract → `docs/archive/2026-06-25-refactor-611-contract.md`
+- B 類移至 .omo/：investor-ui/ → `.omo/investor-ui/`；live-mode-macro-boundary.md → `.omo/live-mode-macro-boundary.md`
 
 ### 2026-06-26 PR #753 .omo/ 使用規則定義
 

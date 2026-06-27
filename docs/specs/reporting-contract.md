@@ -1,7 +1,7 @@
 # Markdown Reporting Render Contract
 
 > **文件角色**：atlas-go 結構化資料 Markdown 渲染契約。
-> **取代對象**：`internal/reporting/AGENTS.md`（已遷移至此）。
+> **取代對象**：原 internal/reporting/AGENTS.md（已遷移至此）。
 
 本目錄負責將結構化資料渲染為人類可讀的 Markdown 報告。
 

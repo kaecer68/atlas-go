@@ -125,7 +125,7 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 17 speciali
 ## Configuration Mapping
 
 ### Agent Registry to Skills Mapping
-Each agent in `configs/agents.json` maps to a specific skill in `docs/skills-map.md`:
+Each agent in `configs/agents.json` maps to a specific skill in `.claude/SKILLS-MAP.md`:
 
 ```json
 {
@@ -208,6 +208,6 @@ Apply one mutation class per cycle and validate against baseline via judge gates
 
 Atlas-Go uses a layered, policy-bounded multi-agent architecture.
 
-- `docs/skills-map.md` defines current skills, mutation profiles, and guard behavior.
+- `.claude/SKILLS-MAP.md` defines current skills, mutation profiles, and guard behavior.
 - This document explains execution structure and component boundaries.
 - Runtime artifacts remain the final truth for measured performance.

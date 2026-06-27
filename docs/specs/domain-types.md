@@ -1,7 +1,7 @@
 # Domain Canonical Types 規格
 
 > **文件角色**：atlas-go 跨模組 Canonical Types 規格（atlas-go 唯一類型核心）。
-> **取代對象**：`internal/domain/AGENTS.md`（已遷移至此）。
+> **取代對象**：原 internal/domain/AGENTS.md（已遷移至此）。
 > **設計權威**：`internal/domain/types.go` 為 source of truth。
 
 `internal/domain` 是系統的型別核心，定義所有跨套件傳遞的 Canonical Types。**無業務邏輯、無協調邏輯、無持久化實作**。

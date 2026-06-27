@@ -1,7 +1,7 @@
 # PRISM Multi-Cohort Training 規格
 
 > **文件角色**：atlas-go PRISM (Parallel Regime-Specific Independent Systems for Multi-cohort training) 多 cohort 訓練規格。
-> **取代對象**：`internal/prism/AGENTS.md`（已遷移至此）。
+> **取代對象**：原 internal/prism/AGENTS.md（已遷移至此）。
 
 PRISM 管理 5 個獨立 regime 訓練佇列，為 JANUS meta-layer 提供 cohort 績效數據。
 
