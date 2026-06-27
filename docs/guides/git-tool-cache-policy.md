@@ -9,6 +9,7 @@
 |------|------|---------|------|
 | `.gitnexus/` (含 `meta.json`, `lbug`, `lbug.wal`, `parse-cache/`) | GitNexus indexer | `npx gitnexus analyze --skip-agents-md` | 335MB LadybugDB binary + metadata snapshot |
 | `.opencode/package.json` | opencode CLI 內部狀態 | (opencode 自動 sync) | 2 個 size,本來就無害 |
+| `admin_web/static/` 與 `client_web/static/` 的 dedup 前殘檔 (pages/、components/、services/、css/、__tests__/、shared/components/、bootstrap-utils.js、names.js、shared/app-utils.js 等) | web split dedup (`1635acb2`) 刪除後殘留在磁碟的副本 | `rm -rf ...` (見下方 alias) | 權威來源在 `shared_web/static/js/`;這些是 git 已 rm 的舊版檔案 |
 
 ## 判斷原則 (Decision Heuristic)
 
@@ -32,11 +33,57 @@
 執行 `git cleanup-tools` (global git alias,定義於 `~/.gitconfig`):
 
 ```bash
-git cleanup-tools   # 還原 .gitnexus/ + .opencode/package.json + 顯示 status
+git cleanup-tools   # 還原已知 cache + 清除 dedup 殘檔 + 顯示 status
 ```
 
 > 此 alias 屬於個人 machine 全域配置,**不在本 repo 內**。其他 contributor 看不到,
 > 也不該預期他們有。請在本機 `~/.gitconfig` 自行配置。
+
+#### 完整 alias 定義
+
+```bash
+git config --global alias.cleanup-tools '!f() {
+  echo "→ Resetting known tool caches...";
+  git checkout -- .gitnexus/ 2>/dev/null;
+  git checkout -- .opencode/package.json 2>/dev/null;
+  echo "→ Removing dedup stale checkout remnants...";
+  rm -rf \
+    admin_web/static/js/pages/ \
+    admin_web/static/js/components/ \
+    admin_web/static/js/services/ \
+    admin_web/static/js/__tests__/ \
+    admin_web/static/js/shared/components/ \
+    admin_web/static/css/ \
+    admin_web/tests/ \
+    client_web/static/js/pages/ \
+    client_web/static/js/components/ \
+    client_web/static/js/services/ \
+    client_web/static/js/__tests__/ \
+    client_web/static/js/shared/components/ \
+    client_web/static/css/ \
+    client_web/tests/ \
+    2>/dev/null;
+  rm -f \
+    admin_web/static/js/bootstrap-utils.js \
+    admin_web/static/js/names.js \
+    admin_web/static/js/shared/app-utils.js \
+    admin_web/static/js/shared/constants.js \
+    admin_web/static/js/shared/fetch-error.js \
+    admin_web/static/js/shared/utils.js \
+    admin_web/static/narrative-dashboard.html \
+    admin_web/static/trading-dashboard.html \
+    client_web/static/js/bootstrap-utils.js \
+    client_web/static/js/names.js \
+    client_web/static/js/shared/app-utils.js \
+    client_web/static/js/shared/constants.js \
+    client_web/static/js/shared/fetch-error.js \
+    client_web/static/js/shared/utils.js \
+    client_web/static/narrative-dashboard.html \
+    client_web/static/trading-dashboard.html \
+    2>/dev/null;
+  echo "→ Current status:";
+  git status --short;
+}; f'
 
 ### 對 AI agent (本檔的存在意義)
 
