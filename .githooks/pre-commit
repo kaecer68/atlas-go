@@ -9,7 +9,7 @@ echo "🔍 pre-commit: checking for orphan/build artifacts..."
 had_errors=0
 
 # ─── Check 1: Mach-O / ELF compiled binaries ─────────────────────────────
-staged_files=$(git diff --cached --name-only --diff-filter=ACR 2>/dev/null)
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)
 
 # On macOS, `file` detects Mach-O. On Linux, ELF.
 for f in $staged_files; do
@@ -52,6 +52,29 @@ if [ "$had_errors" -ne 0 ]; then
   echo "❌ Commit blocked. Remove the offending files from the index and try again."
   echo "   Tip: git rm --cached <file>  (keeps file on disk)"
   exit 1
+fi
+
+# ─── Check 4: Frontend dynamic imports ──────────────────────────────────
+# When admin_web/client_web main.js or shared_web/pages/*.js are staged,
+# verify every dynamic import resolves to an existing shared_web page.
+# Catches the silent esbuild fallback failure mode (PR #785).
+frontend_changed=$(echo "$staged_files" | grep -E '^(admin_web|client_web)/static/js/main\.js$|^(shared_web)/static/js/pages/[a-z_-]+\.js$' || true)
+if [ -n "$frontend_changed" ]; then
+  echo ""
+  echo "🔍 pre-commit: frontend dynamic import check (PR #785 / script from PR #789)"
+  if [ -x "scripts/ci/check_frontend_imports.sh" ]; then
+    if ! bash scripts/ci/check_frontend_imports.sh; then
+      echo ""
+      echo "❌ Commit blocked. admin_web / client_web / shared_web dynamic imports are inconsistent."
+      echo "   See scripts/ci/check_frontend_imports.sh output above."
+      echo "   Common cause: deleted or renamed a shared_web/static/js/pages/*.js file"
+      echo "   without updating the matching import in admin_web/static/js/main.js or client_web/static/js/main.js."
+      exit 1
+    fi
+    echo "  ✅ frontend imports consistent"
+  else
+    echo "  ⚠️  scripts/ci/check_frontend_imports.sh not found or not executable — skipping"
+  fi
 fi
 
 echo "✅ pre-commit: all checks passed"
