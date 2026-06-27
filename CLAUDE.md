@@ -21,7 +21,61 @@
 | 外部依賴與環境狀態 | `docs/ENVIRONMENT.md` |
 | 根規則與全域禁令 | `AGENTS.md` |
 | 架構憲法 | `internal/apigateway/CONSTITUTION.md` |
+| 前端架構（admin_web / client_web / shared_web） | `## 前端架構`（下方） |
 | 部署設定（本機 Docker） | `## 部署設定`（下方） |
+
+## 前端架構
+
+> 2026-06 完成拆分重構:`./web/`(legacy 單體) → `./admin_web/`(管理後台)+ `./client_web/`(投資人介面)+ `./shared_web/`(共用資源)。
+> 重構後 `./web/` 不再對外服務,僅作 archive;後端 `cmd/atlas/api_routes.go` 只掛載 `admin_web.DistFS` 與 `client_web.DistFS`。
+
+### 目錄職責
+
+| 目錄 | 角色 | 對外 URL |
+|------|------|---------|
+| `admin_web/static/js/` | 管理後台專屬 JS(`main.js`、`component-init.js`、`event-listeners.js`) | `/admin/` |
+| `client_web/static/js/` | 投資人介面專屬 JS | `/client/` |
+| `shared_web/static/js/` | 共用 JS(pages、components、services、shared、bootstrap-utils) | 經 esbuild plugin fallback 引入 |
+| `shared_web/static/css/` | 全部 CSS(dark/light 主題、components、layout、pages) | 經 esbuild 打包成 `css/main.css` |
+
+### 入口檔職責
+
+| 檔案 | 職責 |
+|------|------|
+| `main.js` | 全域狀態、頁面切換(`switchPage`)、動態 import pages、執行各頁 init |
+| `component-init.js` | 共用 component 初始化(circuit-breaker、sim-health、performance-report) |
+| `event-listeners.js` | DOM event 綁定(sidebar nav、evView 按鈕、shock sim 互動、modal 關閉) |
+| `pages/*.js` | 每個頁面的 render 函式,由 `main.js` 動態 import |
+
+### esbuild plugin fallback 規則
+
+`esbuild-shared-plugin.mjs`(`shared_web/`)定義:
+- 從 `admin_web/static/` 找不到的 import → fallback 到 `shared_web/static/`
+- 從 `shared_web/static/` 找不到的 import → fallback 到 `admin_web/static/`(例:`main.js` 中的全域函式)
+
+**陷阱**:若有人刪掉 `shared_web/static/js/pages/xxx.js`,esbuild 會**靜默 fallback 失敗**,UI 卡「載入中...」。CI 驗證腳本 `scripts/ci/check_frontend_imports.sh` 會抓出。
+
+### 前端 CSS 與 JS 規範
+
+- 全部 CSS 變數定義於 `shared_web/static/css/base/variables.css`(canonical)
+- Canvas 繪圖色彩用 `getThemeColor()` + `hexToRgba()` 橋接(`shared_web/static/js/shared/utils.js`)
+- 金融語意 Token:`--pnl-profit`/`--pnl-loss`、`--trend-bullish`/`--trend-bearish`、`--metric-good`/`--metric-bad`、`--risk-high`/`--risk-low`
+- 顏色一律用 `var(--...)`,不寫死 hex/rgba
+
+### 路由 + 後端整合
+
+- `cmd/atlas/api_routes.go` L31-38:`/admin/` 與 `/client/` 分別掛載 `admin_web.DistFS` 與 `client_web.DistFS`
+- API 端點統一前綴 `/api/...`(dashboard、narrative、industry、taiwan、...)
+- 靜態資源經 Go `embed.FS` 嵌入 binary,Docker image 由 multi-stage Dockerfile 重新 `npm run build` 產出 dist
+
+### 前端疑難排解
+
+| 症狀 | 排查 |
+|------|------|
+| Panel 卡「載入中...」 | 檢查 DevTools Network,確認 `/api/...` 是否 timeout;若 200,檢查 `main.js` 對應 pageId 分支是否有 `loadXxx()` 呼叫 |
+| 按鈕沒反應 | 檢查 `event-listeners.js` 是否有對應 listener |
+| h2 標題消失 | 檢查 `static/index.html` 對應 panel div 是否包含 `<h2>` |
+| 整頁空白 | 確認 `dist/index.html` 是最新 build,`docker compose build atlas` 重新編譯 |
 
 ## 部署設定
 
