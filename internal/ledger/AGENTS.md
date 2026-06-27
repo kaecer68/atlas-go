@@ -28,7 +28,7 @@
 4. **Rolling Sharpe 趨勢**：`sharpeTrendSlope()` 對 rolling sharpe 做線性迴歸 → `rolling_sharpe_trend`（正/負/平）
 5. **過度擬合判斷**：`IsOOSDivergent()` 基於 OOS 樣本數與比率決定 `overfit_warning` 與 `oos_sample_warning`
 
-**陷阱**：擴充 Scorecard 欄位時，必須同步更新 `BuildScorecards()` 中的計算邏輯。詳見 `internal/domain/AGENTS.md` 第 4 條。
+**陷阱**：擴充 Scorecard 欄位時，必須同步更新 `BuildScorecards()` 中的計算邏輯。詳見 [`docs/specs/domain-types.md`](../../docs/specs/domain-types.md) §4 Scorecard OOS 同步鏈、§6 CorporateAction canonical 類型。
 
 ## 資料流
 

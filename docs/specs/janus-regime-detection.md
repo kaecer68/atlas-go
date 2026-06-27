@@ -1,7 +1,7 @@
 # JANUS Regime Detection 規格
 
 > **文件角色**：atlas-go meta-layer JANUS 跨 cohort 盤勢偵測規格。
-> **取代對象**：`internal/janus/AGENTS.md`（已遷移至此）。
+> **取代對象**：原 internal/janus/AGENTS.md（已遷移至此）。
 
 JANUS 定義系統的 meta-layer 決策機制「JANUS」，負責跨 cohort 的市場盤勢偵測（Regime Detection）與權重動態調整。
 

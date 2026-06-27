@@ -1,7 +1,7 @@
 # Backtest Pipeline 規格
 
 > **文件角色**：atlas-go 歷史回測執行與自動化排程規格（合併 `backtest` + `autobacktest` 模組）。
-> **取代對象**：`internal/backtest/AGENTS.md` + `internal/autobacktest/AGENTS.md`（已遷移至此）。
+> **取代對象**：原 `internal/backtest/AGENTS.md` + `internal/autobacktest/AGENTS.md`（均已遷移至此規格；後者於 Wave 11 Batch 5c 合併進此文件）。
 
 ---
 

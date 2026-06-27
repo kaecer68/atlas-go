@@ -1,7 +1,7 @@
 # Sim Engine 模擬引擎規格
 
 > **文件角色**：atlas-go 投資組合模擬引擎規格。
-> **取代對象**：`internal/sim/AGENTS.md`（已遷移至此）。
+> **取代對象**：原 internal/sim/AGENTS.md（已遷移至此）。
 
 `internal/sim` 執行投資組合模擬引擎：給定報價與建議，執行委託單、計算成交價、維持部位狀態。
 

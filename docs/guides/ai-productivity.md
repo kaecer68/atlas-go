@@ -6,7 +6,7 @@
 
 This guide is an execution productivity reference. For current OpenClaw mutation lifecycle semantics, treat the following as canonical first:
 
-- `docs/skills-map.md`
+- `.claude/SKILLS-MAP.md`（統一技能地圖入口）
 - `docs/iteration_playbook.md`
 - `docs/operations_playbook.md`
 - `scripts/openclaw/today_start.sh`
@@ -705,7 +705,7 @@ go run ./cmd/backtest-window -start <date> -end <date>  # Multi-session
 
 ### When Proposing Mutations
 
-- **Read the weakest agent's skill definition** from `docs/skills-map.md`
+- **Read the weakest agent's skill definition** from `.claude/SKILLS-MAP.md`
 - **Check requiredSkills and forbiddenActions** in `agents.json`
 - **Limit to one change**: one prompt OR one rule OR one constraint, never mixed
 - **Document expected improvement** in mutation brief (reference scorecard evidence)

@@ -124,6 +124,5 @@ CREATE TABLE quotes (
 
 ## 相關文件
 
-- `docs/audit/P0.1_verification_report.md` — 原始發現
 - `docs/DATA_CATALOG.md` — 資料目錄
 - `docs/DATA_ARCHITECTURE.md` §層級 18 — 架構文件

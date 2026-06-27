@@ -2,7 +2,7 @@
 
 > **適用範圍**：台灣壓力指數（Taiwan Stress Index）與其底層的 macro factor calibration。
 > **適用模組**：`internal/narrative`（主）+ `internal/scheduler`（排程）+ `internal/config`（參數）+ `internal/monitoring`（dashboard）。
-> **取代對象**：`docs/superpowers/plans/2026-06-05-rolling-calibration-framework.md`（計畫書，已完成萃取並可刪除）。
+> **取代對象**：原 `docs/superpowers/plans/2026-06-05-rolling-calibration-framework.md`（PR #756 已清理，計畫書完成萃取並刪除）。
 
 ---
 

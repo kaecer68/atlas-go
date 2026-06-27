@@ -54,7 +54,7 @@
 |---|------|------|
 | ✅ | `docs/GUIDELINES_INDEX.md` | 規範總索引，5 階層優先級鏈 + 使用情境路由表 |
 | ✅ | `CONSTITUTION.md` 第四條擴充 | BackgroundTaskManager 操作指引（例外判斷、註冊流程、DI 模式、命名規範、故障處理） |
-| ✅ | `internal/domain/AGENTS.md` 精簡 | 從 49 行減至 27 行，移除重複內容 |
+| ✅ | [`internal/domain/AGENTS.md`](../specs/domain-types.md) 精簡（後續於 Wave 11 整併） | 從 49 行減至 27 行，移除重複內容 |
 
 ### 結構修復（Phase 3）
 
