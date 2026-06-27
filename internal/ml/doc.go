@@ -9,4 +9,7 @@
 //
 // All models use gonum.org/v1/gonum/mat for matrix operations with no
 // external ML/AI library dependencies.
+//
+// Pitfall: storage format is consumed by internal/scheduler (MLRetrainScheduler).
+// Changing serialization breaks downstream retraining — coordinate updates.
 package ml
