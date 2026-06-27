@@ -80,31 +80,33 @@
 
 ### 階層 4：模組指南（AGENTS.md）
 
+> **經 PR #779 審計 + PR #784-#788 精簡**：從 50 個 `internal/*/AGENTS.md` 精簡至 21 個保留。已遷移模組見 `docs/specs/` 與 `docs/guides/`。
+
 | 模組 | 文件 | 獨特內容 |
 |------|------|---------|
 | `internal/orchestrator/` | `AGENTS.md` | 分層執行順序、註冊陷阱 |
 | `internal/experiment/` | `AGENTS.md` | Maturity-Aware 門檻、Mutation 漂移 |
 | `internal/portfolio/` | `AGENTS.md` | Darwinian/FactorEngine/Optimizer 細節 |
 | `internal/ledger/` | `AGENTS.md` | JSONL 持久化、狀態寫入、審計軌跡 |
-| `internal/repository/` | `AGENTS.md` | 持久化讀寫、雙寫流程、資料一致性 |
 | `internal/eventbus/` | `AGENTS.md` | 發布/訂閱、事件流、背壓處理 |
 | `internal/apigateway/` | `AGENTS.md` | Gateway 規範、背景任務、環境變數 |
-| `internal/bootstrap/` | `AGENTS.md` | 啟動順序、註冊流程、初始化邊界 |
 | `internal/logging/` | `AGENTS.md` | 統一日誌介面、結構化輸出 |
-| `internal/storage/` | `AGENTS.md` | 儲存層抽象、資料持久化慣例 |
 | `internal/marketdata/` | `AGENTS.md` | Provider 抽象、Rate Limiting、符號格式 |
 | `internal/monitoring/` | `AGENTS.md` | API 結構分類、snake_case 契約 |
 | `internal/narrative/` | `AGENTS.md` | Event 狀態機、命中率表 |
-| `internal/janus/` | `AGENTS.md` | 跨 Cohort 權重、Blended Score |
 | `internal/baseline/` | `AGENTS.md` | Policy 生命週期、Promotion/Reversion |
-| `internal/domain/` | `AGENTS.md` | 零值語義、AgentLayer 對齊、擴充欄位 |
 | `internal/industry/` | `AGENTS.md` | 供應鏈圖/季節性/週期 |
 | `internal/live/` | `AGENTS.md` | Broker 模式、Nonce、原子寫入 |
-| `internal/reporting/` | `AGENTS.md` | 純函數渲染、欄位完整性測試 |
+| `internal/llm/` | `AGENTS.md` | DataClass 閘門、hot-path 護欄 |
+| `internal/config/` | `AGENTS.md` | 雙重設定系統、env 陷阱 |
+| `internal/db/` | `AGENTS.md` | pgxpool 初始化、migration 陷阱 |
+| `internal/realtime/` | `AGENTS.md` | 即時資料流、WebSocket 生命週期 |
+| `internal/risk/` | `AGENTS.md` | VaR 計算、drawdown 保護、自校準 |
+| `internal/strategy/` | `AGENTS.md` | Selector/Allocator 策略框架 |
+| `internal/strategy_techniques/` | `AGENTS.md` | 5 層投資技法庫 |
+| `internal/fubonproxy/` | `AGENTS.md` | ProcessManager supervisor 生命週期 |
 | `cmd/experimental/` | `AGENTS.md` | 驗證命令職責、隔離狀態 |
 | `scripts/openclaw/` | `AGENTS.md` | 治理腳本、閘門驗證 |
-
-**缺失的高優先級模組**（已全數補齊）
 
 ### 階層 5：參考文件（Reference Docs）
 
@@ -151,8 +153,10 @@
 | `internal/*/CONSTITUTION.md` | 憲法（最高權威） | 1 |
 | `.github/instructions/*.md` | 領域守則 | 3 |
 | `.claude/skills/*/SKILL.md` | 手寫技能文件 | 10 |
-| `internal/*/AGENTS.md` | 模組指南 | 49 |
+| `internal/*/AGENTS.md` | 模組指南（經 #779 審計精簡） | 21 |
 | `docs/*.md` | 參考文件 | 10+ |
+| `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 9 |
+| `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 1 |
 | `.claude/skills/robot-communication/*/SKILL.md` | 機器人溝通技能 | 4 |
 | `.claude/skills/gitnexus/*/SKILL.md` | GitNexus 工具技能 | 6 |
 
@@ -162,6 +166,7 @@
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 1.6 | 2026-06-27 | 同步 Batch 5a-6 AGENTS.md 精簡：內模組 49→21、新增 docs/specs/ 與 docs/guides/ 分類（PR #784-#788）|
 | 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/CONSTITUTION.md` → `docs/CONSTITUTION.md`，新增 `docs/ITERATION_GATE.md`（PR #752）|
 | 1.4 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 索引；更新版本/日期以反映 PR #700 |
 | 1.3 | 2026-06-17 | 修正不存在技能引用（atlas-core-architecture → SKILLS-MAP.md + docs/architecture.md）；更新技能數量為實際值（手寫 10 + 生成 21 + 機器人 4 + GitNexus 6）；新增機器人溝通與自動生成技能分類說明 |
