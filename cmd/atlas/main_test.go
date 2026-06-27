@@ -21,6 +21,17 @@ import (
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
+// TestMain ensures the package test environment is clean: it unsets
+// ATLAS_API_KEY so the AuthMiddleware returns 200/405 (no-auth) for
+// unauthenticated requests, matching the tests' expectations. Without
+// this, if the developer's ~/.config/atlas-go/.env or the CI runner
+// has ATLAS_API_KEY set, the integration tests in this package fail
+// with 401 instead of 200/405 (PR #796 CI fix).
+func TestMain(m *testing.M) {
+	os.Unsetenv("ATLAS_API_KEY")
+	os.Exit(m.Run())
+}
+
 func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 	ledgerDir := t.TempDir()
 	var gotAddr string
