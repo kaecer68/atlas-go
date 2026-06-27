@@ -232,6 +232,14 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ## 動作紀錄
 
+### 2026-06-27 v3 ACP 遷移（本次）
+
+- **ACP 全面接管 context 壓縮**：安裝 `opencode-acp@1.4.1`（DCP hardened fork +37 bug fixes）
+- **關閉 oh-my-openagent 衝突設定**：`preemptive_compaction: false`、`dynamic_context_pruning.enabled: false`
+- **關閉 opencode 原生 auto-compaction**：`compaction.auto: false`
+- **重寫 `docs/guides/opencode-oh-my-openagent-tuning.md`**：從 DCP 配置指南轉為 ACP 方案
+- **基準測試**：SQLite baseline（`.omo/evidence/2026-06-27-dcp-tuning-baseline.md`）
+
 ### 2026-06-27 Wave 11 AGENTS.md 整合（PR #779-787，本次）
 
 - **AGENTS.md 從 57 → 21 個**（-63%）：原始 `internal/<mod>/AGENTS.md` 50 個，保留 21 個（hot-path 護欄）

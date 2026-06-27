@@ -1,8 +1,10 @@
 # OpenCode + oh-my-openagent Token 注入防護指南
 
 > **目的**：記錄 atlas-go 專案中 `oh-my-openagent` 插件的 hook 機制，並提供經過驗證的 token 注入防護配置。
-> **基於**：原始碼分析（`~/.config/opencode/node_modules/oh-my-openagent/dist/index.js` v4.13.0）+ opencode v1.17.11。
-> **最後更新**：2026-06-26。
+> **基於**：原始碼分析（`~/.config/opencode/node_modules/oh-my-openagent/dist/index.js` v4.13.0）+ ACP（Active Context Pruning）1.4.1。
+> **最後更新**：2026-06-27。
+
+---
 
 ## 為何需要這份文件
 
@@ -11,179 +13,245 @@
 - 累積 session 會持續增加 context window 壓力
 - 導致後續 `git status` / `find` 等簡單操作都要付昂貴的 prefix token 成本
 
+**本文件的配置策略**：由 ACP（Active Context Pruning）全面接管 context 管理，關閉 oh-my-openagent 內建的壓縮機制以避免衝突。
+
 ---
 
 ## 注入器完整清單（基於 `index.js:118127-118249`）
 
 | Hook 名稱 | 預設狀態 | 觸發時機 | 影響 token |
 |----------|---------|---------|-----------|
-| `directory-agents-injector` | ⚠️ 自動 disable（opencode ≥ 1.1.37） | 每次 `read` tool 後，注入該檔案所在目錄的 AGENTS.md | 若啟用：**大**（取決於目錄深度）|
-| `directory-readme-injector` | ⚠️ 預設啟用 | 每次 `read` tool 後，注入該檔案所在目錄的 README.md | 中 |
-| `hephaestus-agents-md-injector` | ⚠️ 預設啟用 | **僅 hephaestus agent 觸發時**，從 root 向上找所有 AGENTS.md 注入 user message | **大**（最多 1-2 個，向上找）|
-| `rules-injector` | ⚠️ 預設啟用 | 從 `.omo/rules/`, `.claude/rules/`, `.github/instructions/`, `~/.omo/rules/` 等注入 | **大**（多個來源）|
+| `directory-agents-injector` | ⚠️ 自動 disable（opencode ≥ 1.1.37） | 每次 `read` tool 後 | **大** |
+| `directory-readme-injector` | ⚠️ 預設啟用 | 每次 `read` tool 後 | 中 |
+| `hephaestus-agents-md-injector` | ⚠️ 預設啟用 | 僅 hephaestus agent 觸發 | **大** |
+| `rules-injector` | ⚠️ 預設啟用 | 從 `.omo/rules/` 等注入 | **大** |
 | `claude-code-hooks` | ⚠️ 預設啟用 | Claude Code 相容 hooks | 中 |
 | `tool-output-truncator` | ✅ 預設啟用 | 截斷 tool 輸出（保護性）| ✅ 保護性 |
-| `preemptive-compaction` | ✅ 預設啟用 | 預先壓縮 context | ✅ 保護性 |
+| `preemptive-compaction` | ⚠️ **建議關閉**(與 ACP 衝突) | 78% 自動 summarize | 與 ACP 衝突 |
 | `anthropic-context-window-limit-recovery` | ✅ 預設啟用 | context 視窗救援 | ✅ 保護性 |
 | `model-fallback` | ✅ 預設啟用 | model 備援 | ✅ 保護性 |
-| `comment-checker` | 預設啟用 | 檢查 comments | 低 |
-| `keyword-detector` | 預設啟用 | 偵測關鍵字觸發 mode | 低 |
-| `session-notification` | 預設啟用 | session 通知 | 低 |
-| `auto-update-checker` | 預設啟用 | 自動更新檢查 | 低 |
-| `think-mode` | 預設啟用 | thinking mode 注入 | 中（inject thinking pattern）|
-| `empty-task-response-detector` | 預設啟用 | 偵測空回應 | 低 |
-| `todo-continuation-enforcer` | 預設啟用 | todo 繼續 | 中 |
-| `non-interactive-env` | 預設啟用 | 非互動環境偵測 | 低 |
-| `interactive-bash-session` | 預設啟用 | 互動 bash session | 低 |
-| `keyword-detector` | 預設啟用 | 關鍵字偵測 | 低 |
-| `category-skill-reminder` | 預設啟用 | category skill 提醒 | 低 |
-| `codegraph-bootstrap` | 預設啟用 | codegraph 引導 | 中 |
-| `ast-grep-sg-provision` | 預設啟用 | ast-grep 工具準備 | 低 |
-| `agent-usage-reminder` | 預設啟用 | agent 使用提醒 | 低 |
-| `tool-pair-validator` | 預設啟用 | 工具配對驗證 | 低 |
-| `auto-slash-command` | 預設啟用 | 自動 slash command | 低 |
-| `team-tool-gating` | 預設啟用（若 team_mode 啟用）| team 工具 gating | 低 |
-| `team-mailbox-injector` | 預設啟用（若 team_mode 啟用）| team mailbox 注入 | 中 |
-| `team-mode-status-injector` | 預設啟用（若 team_mode 啟用）| team 狀態注入 | 中 |
-| `edit-error-recovery` | 預設啟用 | 編輯錯誤恢復 | 低 |
-| `comment-checker` | 預設啟用 | comment 檢查 | 低 |
-| `session-todo-status` | 預設啟用 | session todo 狀態 | 低 |
-| `prometheus-md-only` | 預設啟用 | prometheus md 限制 | 低 |
-| `sisyphus-junior-notepad` | 預設啟用 | junior notepad | 中 |
-| `task-resume-info` | 預設啟用 | task resume 資訊 | 低 |
-| `start-work` | 預設啟用 | start work 觸發 | 中 |
-| `atlas` | 預設啟用 | atlas agent 鉤子 | 中 |
-| `ralph-loop` | 預設啟用 | ralph loop | 中 |
-| `no-sisyphus-gpt` | 預設啟用 | 禁用 sisyphus gpt | 低 |
-| `no-hephaestus-non-gpt` | 預設啟用 | 禁用 hephaestus 非 gpt | 低 |
-| `question-label-truncator` | 預設啟用 | question label 截斷 | 低 |
+| 其餘（comment-checker, keyword-detector 等） | 預設啟用 | 各自功能 | 低 |
 
-> **來源**：`index.js:152003` 的 `isHookEnabled` 邏輯很簡單：`!disabledHooks.has(hookName)`，所以**任何不在 `disabled_hooks` 的 hook 都預設啟用**。
+> **來源**：`index.js:152003` 的 `isHookEnabled` 邏輯：`!disabledHooks.has(hookName)`，所以**任何不在 `disabled_hooks` 的 hook 都預設啟用**。
 
 ---
 
-## Truncator 機制
+## Compaction 機制歷史與衝突分析
 
-所有注入器共用 `createDynamicTruncator`（`index.js:23142-23148`），其行為：
+### DCP（Dynamic Context Pruning）— oh-my-openagent 內建
 
-- **預設上限**：`DEFAULT_TARGET_MAX_TOKENS = 50000`（`index.js:23120`）
-- **動態調整**：`maxOutputTokens = min(usage.remainingTokens * 0.5, 50000)`（`index.js:23133`）
-- **保留開頭**：`preserveHeaderLines = 3`（保留檔案前 3 行）
-- **context 滿時**：`[Output suppressed - context window exhausted]`
+oh-my-openagent 內建的 `dynamic_context_pruning`（DCP）源自上游 DCP，但**未包含後續的 37 個 bug 修復**：
+- CRITICAL：State 跨 restart 未持久化 → 壓縮狀態遺失
+- CRITICAL：`resetOnCompaction()` 清除所有壓縮區塊 → 所有壓縮工作被撤銷
+- CRITICAL：`getCurrentTokenUsage` 回傳 0 → nudge 永遠不觸發
+- HIGH：Context window leak → 壓縮訊息 reappear
+- HIGH：Compression 發出後 model 停止回應
 
-**關鍵觀察**：truncator 只截斷到 50K token（動態），但**累積多個注入器**仍可能灌滿 context。
+### Preemptive-compaction
+
+oh-my-openagent 在 `index.js:102308` 寫死閾值 `PREEMPTIVE_COMPACTION_THRESHOLD = 0.78`（78%）。行為：
+- 當 context 使用率達 78% **且** 有已完成的 summarize → 自動觸發壓縮
+- 78% 閾值對 1M context window 來說約 780K token 才觸發 — **為時已晚**
+- 不可逆：壓縮後無法 decompress
+- 與 ACP 直接衝突：ACP 自主管理壓縮，preemptive 會覆蓋 ACP 的決策
+
+### ACP（Active Context Pruning）— 推薦方案
+
+ACP 1.4.1 是 DCP 的 hardened fork，包含 **37 個 bug 修復**，採用**模型自主壓縮**機制：
+
+| 特性 | DCP / preemptive | ACP |
+|------|-----------------|-----|
+| 觸發方式 | 硬閾值（78% / 95%） | **模型自主決策**（45-55% 提醒，60-90% 分批處理）|
+| 可恢復性 | ❌ 不可逆 | ✅ `decompress` 可還原 |
+| GC 策略 | 無 | **3-tier batch cleanup**（60%/75%/90%）|
+| Per-model 限制 | ❌ 無 | ✅ `modelMaxLimits` / `modelMinLimits` |
+| 保護 user prompt | ❌ | ✅ `protectUserMessages` |
+| 定期提醒 | ❌ | ✅ `nudgeFrequency: 5` |
+| Prompt cache 命中率 | 低（壓縮後全重算）| **~87%** |
+| 典型 context 使用率 | 78-95% | **p50 < 1%, p95 ~30%** |
+
+> **實測數據**（來自 ACP 官方）：582M tokens / 3,024 messages / p95 context 25% / 86.2% cache hit。
 
 ---
 
-## 推薦配置
+## v3 推薦配置（ACP 方案）
 
-### `~/.config/opencode/oh-my-openagent.json`（使用者層級）
+### 1. oh-my-openagent.json — 關閉衝突設定
 
-當前已禁用 `directory-readme-injector`：
-
-```json
+```jsonc
 {
   "disabled_hooks": [
     "directory-readme-injector"
-  ]
+  ],
+  "experimental": {
+    // ACP 全面接管壓縮，oh-my-openagent 不參與
+    "preemptive_compaction": false,
+    "dynamic_context_pruning": {
+      "enabled": false
+    }
+  }
 }
 ```
 
-**建議**（基於 atlas-go 特性，**不要再加入新的 disabled_hooks**——保留「少即是多」原則）：
+**為什麼關閉**：
+- `dynamic_context_pruning.enabled: false` → ACP 接管所有 context 管理
+- `preemptive_compaction: false` → 避免 78% 閾值衝突（ACP 在 45-55% 就開始提醒）
+- `disabled_hooks` 僅保留 `directory-readme-injector`（opencode ≥ 1.1.37 已自動 disable directory-agents-injector）
 
-```json
+### 2. opencode.json — 關閉原生 auto-compaction
+
+```jsonc
 {
-  "disabled_hooks": [
-    "directory-readme-injector"
-  ]
+  "compaction": {
+    "auto": false
+  }
 }
 ```
 
-> 為何不再加：當前 opencode 1.17.11 已自動 disable `directory-agents-injector`，其他 hooks 多為保護性（truncator、compaction、model-fallback）。**`hephaestus-agents-md-injector` 雖然會注入，但只向上找 1 個 AGENTS.md（root），且有 truncator 保護**——可接受。
+> **ACP 官方要求**：OpenCode 原生 compaction 與 ACP 衝突，會導致「重新展開已壓縮訊息」、「壓縮狀態丟失」等問題。
 
-### 專案層級（`AGENTS.md`）
-
-**不要讓 `AGENTS.md:44-48` 列出 26 個 inline 連結**。AI 看到 inline 連結會傾向預先讀全部子檔案，造成**手動觸發的 token 浪費**（非 oh-my-openagent 觸發，是 AI 自主行為）。
-
-**推薦**：
-
-```markdown
-## 模組路由
-
-**所有 26 個模組的 AGENTS.md 路徑**：`internal/<mod>/AGENTS.md`
-
-> 觸發條件：準備修改 `internal/<mod>/` 下任一檔案時，**先讀該目錄的 AGENTS.md**。
-> 不要預先讀全部子 AGENTS.md——只在需要時讀取。
-```
-
-**預估效益**：避免 AI 在每個任務開始時主動讀 26 個子 AGENTS.md（1,500+ token）。
-
----
-
-## 監控 token 注入
-
-### 觀察指標
+### 3. ACP 安裝（尚未安裝）
 
 ```bash
-# 1. 看 opencode 啟動日誌（看哪些 hook 載入）
-~/.config/opencode/bin/opencode --print-logs 2>&1 | grep -E "directory-agents|directory-readme|hephaestus-agents"
-
-# 2. 看 context window 使用率
-# 在 opencode session 中呼叫 hook: getContextWindowUsage (透過 truncator.getUsage)
+opencode plugin install opencode-acp@latest --global
 ```
 
-### 觸發評估的時機
+### 4. acp.jsonc — ACP 壓縮策略
 
-- 當會話 token 突然增加 1,000+ 但無明確 read → 可能是 `hephaestus-agents-md-injector` 觸發
-- 當 `read` 後看到 AGENTS.md 內容出現在 output → `directory-agents-injector` 啟用（但 opencode ≥ 1.1.37 已自動關閉）
-- 當 context window 達 80% → `preemptive-compaction` 應該自動觸發
+```jsonc
+{
+  "$schema": "https://raw.githubusercontent.com/ranxianglei/opencode-acp/master/dcp.schema.json",
+  "enabled": true,
+  "autoUpdate": true,
+  "pruneNotification": "minimal",
+  "pruneNotificationType": "chat",
+  "commands": {
+    "enabled": true,
+    "protectedTools": []
+  },
+  "turnProtection": {
+    "enabled": true,
+    "turns": 4
+  },
+  "compress": {
+    "mode": "range",
+    "permission": "allow",
+    "showCompression": true,
+    "summaryBuffer": true,
+    // DeepSeek v4 Pro 128K context → 55% ≈ 70K soft upper
+    "maxContextLimit": "55%",
+    // 45% ≈ 58K soft lower
+    "minContextLimit": "45%",
+    // 每 5 次 fetch 提醒一次壓縮
+    "nudgeFrequency": 5,
+    // 15 messages 後開始 iteration nudge
+    "iterationNudgeThreshold": 15,
+    // soft = 模型自主決定，不強制
+    "nudgeForce": "soft",
+    // 保護這些 tool 的輸出不被壓縮
+    "protectedTools": [
+      "task",
+      "skill",
+      "todowrite",
+      "todoread",
+      "decompress"
+    ],
+    // 保護 user 的 messages 不被壓縮
+    "protectUserMessages": true
+  },
+  "strategies": {
+    "deduplication": {
+      "enabled": true,
+      "protectedTools": []
+    },
+    "purgeErrors": {
+      "enabled": true,
+      "turns": 6,
+      "protectedTools": []
+    }
+  },
+  "gc": {
+    "algorithm": "truncate",
+    "promotionThreshold": 5,
+    "maxBlockAge": 15,
+    "maxOldGenSummaryLength": 3000,
+    "majorGcThresholdPercent": "100%",
+    "batchCleanup": {
+      "lowThreshold": "60%",
+      "highThreshold": "75%",
+      "forceThreshold": "90%"
+    }
+  }
+}
+```
+
+**配置邏輯**：
+- **`maxContextLimit: "55%"`** = DeepSeek 128K → ~70K，軟上限，超過後 ACP 持續提醒壓縮
+- **`minContextLimit: "45%"`** = DeepSeek 128K → ~58K，低於此不提醒
+- **`nudgeFrequency: 5`** = 每 5 次 fetch 提醒一次，不過度
+- **`protectUserMessages: true`** = 使用者貼的長 prompt 不會被壓縮
+- **`turnProtection.turns: 4`** = 最近 4 輪 messages 受保護
+- **`purgeErrors.turns: 6`** = 失敗 tool 保留 6 輪後才清理
 
 ---
 
-## 專案層級可做的事
+## 遷移路徑（DCP → ACP）
 
-### 1. 精簡 `internal/*/AGENTS.md`（高 ROI）
+### 從 v2（DCP + preemptive）遷移到 v3（ACP）
 
-- 目標：所有 `internal/*/AGENTS.md` < 80 行
-- 現狀：Top 5 個仍 > 100 行（`llm` 184, `narrative` 146, `monitoring` 114, `live` 111, `portfolio` 110）
-- 預估效益：每次觸發 hephaestus 時少注入 200-400 token
+1. 安裝 ACP：`opencode plugin install opencode-acp@latest --global`
+2. 更新 `oh-my-openagent.json`：關閉 `preemptive_compaction` 和 `dynamic_context_pruning`
+3. 更新 `opencode.json`：加入 `"compaction": { "auto": false }`
+4. 刪除 DCP 殘留：`rm -rf ~/.local/share/opencode/storage/plugin/dcp/`
+5. 寫入 ACP 設定：`~/.config/opencode/acp.jsonc`
+6. 重啟 opencode
+7. 驗證：執行 `/acp context` 和 `/acp stats`
 
-### 2. 精簡 `.github/instructions/*.md`
+### 回退（ACP → DCP）
 
-- 當前：`go-core.instructions.md` 103 行、`experiments-guardrails.instructions.md` 62 行、`live-trading.guardrails.instructions.md` 43 行
-- 預估效益：每次會話少注入 200-400 token
-
-### 3. 精簡根 `AGENTS.md`
-
-- 當前：99 行（合規 < 160 行）
-- 移除 inline 連結（保留純文字模組名）
-
-### 4. 評估 `hephaestus-agents-md-injector` 是否值得 disable
-
-- **若 atlas-go 工作流程以 `sisyphus` 為主**：hephaestus 觸發頻率低，保留可接受
-- **若主要用 hephaestus**：考慮 disable，但會失去「自動注入 project context」便利
+1. 移除 ACP plugin
+2. 還原 `oh-my-openagent.json` 中的 `preemptive_compaction: true, dynamic_context_pruning.enabled: true`
+3. 移除 `opencode.json` 的 `compaction.auto: false`
+4. 刪除 ACP storage：`rm -rf ~/.local/share/opencode/storage/plugin/acp/`
+5. 重啟 opencode
 
 ---
 
-## 升級時的注意事項
+## 監控與驗證
 
-當 `oh-my-openagent` 升級（autoupdate: true）時：
+### ACP 內建命令
 
-1. 檢查新版本是否有新的注入器
-2. 重新跑 `index.js:118127-118249` 的 hook 清單
-3. 更新本文件
+| 命令 | 用途 |
+|------|------|
+| `/acp context` | Token 用量細項（system/user/assistant/tools）+ 節省量 |
+| `/acp stats` | 跨 session 壓縮統計 |
+| `/acp sweep [n]` | 手動壓縮最後 n 個 tool |
+| `/acp manual on/off` | 切換手動模式 |
 
-當 opencode 升級時：
+### SQLite 監控
 
-1. 檢查 `OPENCODE_NATIVE_AGENTS_INJECTION_VERSION`（`index.js:24185`）是否變動
-2. 確認 `directory-agents-injector` 仍自動 disable
+```bash
+sqlite3 ~/.local/share/opencode/opencode.db -header -column "
+SELECT slug, name, created_at, input_tokens + output_tokens as total_tokens
+FROM sessions
+WHERE input_tokens > 0
+ORDER BY total_tokens DESC
+LIMIT 10;"
+```
+
+### ACP 日誌
+
+```bash
+ls ~/.config/opencode/logs/acp/
+# 或啟用 debug: acp.jsonc → "debug": true
+```
 
 ---
 
 ## 相關文件
 
-- `docs/DOCUMENTATION_STANDARD.md` — 文件存放規範
-- `docs/guides/new-workspace-startup.md` — 工作區起步 SOP
-- `AGENTS.md` — 專案入口（建議精簡模組路由表）
 - `~/.config/opencode/oh-my-openagent.json` — oh-my-openagent 使用者設定
+- `~/.config/opencode/acp.jsonc` — ACP 壓縮設定
 - `~/.config/opencode/opencode.json` — opencode 全域設定
+- `docs/DOCUMENTATION_MAP.md` — 文件地圖
+- `https://github.com/ranxianglei/opencode-acp` — ACP GitHub
