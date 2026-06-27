@@ -5,6 +5,7 @@ import { escapeHtml } from '../shared/utils.js';
 
 export function renderLiveStatus(data) {
   const el = document.getElementById('liveStatus');
+  if (!el) return;
   el.classList.remove('loading');
   if (!data || !data.circuit_breaker) {
     el.innerHTML = '<div class="empty">即時狀態暫無資料</div>';

@@ -5,6 +5,7 @@ import { escapeHtml } from '../shared/utils.js';
 
 export function renderInbox(data) {
   const el = document.getElementById('experimentInbox');
+  if (!el) return;
   if (!data) { el.innerHTML = renderEmptyState('尚無實驗資料', '執行「go run ./cmd/run-experiment -brief &lt;file&gt;」後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const pending = data.pending_judges || [];
