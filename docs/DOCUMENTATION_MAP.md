@@ -93,8 +93,24 @@
 | `specs/llm-sector-agent.md` | L2.3 LLM-driven sector agent 設計記錄 |
 | `specs/llm-routing.md` | LLM Provider 路由策略 + 備援鏈（架構藍圖 §6 抽離）|
 | `specs/llm-interface-contract.md` | LLM 統一介面合約（架構藍圖 §4.2-4.5 抽離）|
+| `specs/domain-types.md` | Domain Canonical Types 規格（Wave 11 Batch 5a 從 `internal/domain/AGENTS.md` 抽離）|
+| `specs/sim-engine.md` | 模擬引擎 7 步執行序 + 8 陷阱（Wave 11 Batch 5a）|
+| `specs/janus-regime-detection.md` | JANUS meta-layer + Risk Gate 校準（Wave 11 Batch 5a）|
+| `specs/prism-cohort-training.md` | PRISM 5-Regime queue + Synthetic flag（Wave 11 Batch 5a）|
+| `specs/reporting-contract.md` | Markdown Reporting Render Contract（Wave 11 Batch 5c）|
+| `specs/screener-contract.md` | Screener 篩選管線契約（Wave 11 Batch 5c）|
+| `specs/backtest-pipeline.md` | 歷史回測執行與自動化排程規格（Wave 11 Batch 5c）|
+| `specs/repository-dual-write.md` | PG + JSONL 雙寫持久化規格（Wave 11 Batch 5c）|
+| `specs/taiwan-tax.md` | 台灣稅務計算規格（Wave 11 Batch 5c）|
 | `llm-integration-strategy-framework.md` | LLM 整合策略框架（主檔，§4.2-4.5/6/8/10 已抽離）|
 | `llm-adr-log.md` | LLM 整合架構決策紀錄（ADR-001 ~ ADR-010）|
+| `agents-md-audit.md` | **Wave 11 AGENTS.md 整合決策表**（57 → 15 → 21 演化歷程 + 遷移計畫）|
+
+### 金融工程 / 操作 playbook
+
+| 檔案 | 用途 |
+|------|------|
+| `guides/retail-sentiment.md` | RSI-tw 台灣散戶情緒指數規格（Wave 11 Batch 5c 從 `internal/retail/AGENTS.md` 抽離）|
 
 ### 審計 / 交接 / 調查 / 修復計畫（時序敏感）
 
@@ -215,7 +231,19 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ## 動作紀錄
 
-### 2026-06-26 PR #756 重構文件規範（本次）
+### 2026-06-27 Wave 11 AGENTS.md 整合（PR #779-787，本次）
+
+- **AGENTS.md 從 57 → 21 個**（-63%）：原始 `internal/<mod>/AGENTS.md` 50 個，保留 21 個（hot-path 護欄）
+- **Batch 1** (PR #780)：純刪除 5 個 D 類空殼（adversarial、importer、reflexivity、stress、taskexec）
+- **Batch 2** (PR #781)：純刪除 1 個 B 類 deprecated 套件（llm_annotator，內容已遷移至 `internal/llm_annotator/doc.go`）
+- **Batch 3** (PR #782)：合併 2 個 A 類至 `doc.go`（eval、feature）
+- **Batch 4** (PR #783)：遷移 5 個邊界 C 類（bootstrap→QUICKSTART、globalmarket/storage→doc.go、spawning/metalearning→strategy-evolution skill）
+- **Batch 5a** (PR #784)：遷移 4 個 C 類至 `docs/specs/`（domain、sim、janus、prism）
+- **Batch 5b** (PR #786)：合併 5 個 X-tier 模組 AGENTS.md 至 `doc.go`（ml、replay、robustness、scheduler、swarm）
+- **Batch 5c** (PR #787)：遷移 7 個 C 類至 `docs/specs/` 或 `docs/guides/`（retail/reporting/screener/autobacktest/backtest/repository/tax）
+- **Batch 6** (PR #788)：更新根 `AGENTS.md` 模組路由表（21 個）+ `DOCUMENTATION_MAP.md` 補登 12 個新檔
+
+### 2026-06-26 PR #756 重構文件規範
 
 - **重寫 `docs/DOCUMENTATION_STANDARD.md`**：
   - 加入 `.omo/` 完整子目錄白名單 + 命名規範 + 生命週期 SOP

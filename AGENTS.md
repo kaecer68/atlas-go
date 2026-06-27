@@ -9,26 +9,28 @@
 ## 📜 內容歸屬規則（ALL AI MUST READ FIRST）
 
 > 完整歸屬對照表見 **[`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)**。
-> 所有檔案當前位置見 **[`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)**。
+> 所有檔案當前位置見 **[`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)`**（包含 Wave 11 AGENTS.md 整合結果）。
 
 | 知識類型 | 歸屬位置 |
 |----------|---------|
-| 跨模組全域規則 | 本文件 |
-| 模組內部陷阱/API/流程 | `internal/<mod>/AGENTS.md` |
-| 操作程序 / playbook | `docs/` |
+| 跨模組全域規則 | 本文件 + `docs/TRAPS.md` |
+| 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**僅 21 個保留模組**）|
+| 模組技術規格/契約 | `docs/specs/<topic>.md` |
+| 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
+| 套件文件 | `internal/<mod>/doc.go` |
+| 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
 | CI / pipeline 設定 | `.github/workflows/`、`.github/instructions/` |
 | 憲法級強制規範 | `docs/CONSTITUTION.md`、`docs/ITERATION_GATE.md`、`internal/apigateway/CONSTITUTION.md` |
-| 技能 / 子代理指引 | `.claude/SKILLS-MAP.md` |
-| 規範性 / 設計文件 | `docs/`（**不應放 `.omo/`** — `.gitignore` 排除，新 clone 看不到）|
+| 規範性 / 設計文件 | `docs/`（**不應放 `.omo/`** — `.gitignore` 排除）|
 
 **防膨脹規則**：
 - 本文件不超過 **160 行**（人類編寫部分）
 - **155 行時觸發警告**，160 行時 PR 被拒絕
-- 新知識預設加入 `internal/<mod>/AGENTS.md` 或 `docs/`，**不要**加到這裡
+- 新知識預設加入 `internal/<mod>/AGENTS.md`（限 21 保留模組）或 `docs/`，**不要**加到這裡
 
 ## 專案概覽
 
-`atlas-go` — 模擬優先、稽核導向的台股投資研究系統。
+`atlas-go` — 模擬優先、稽導向的台股投資研究系統。
 - **語言**：Go 1.26，**DB**：PostgreSQL 15 + Redis 8
 - **CI**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
 - **覆蓋率門檻**：40%
@@ -37,21 +39,20 @@
 
 > 完整內容 → **[`docs/QUICKSTART.md`](docs/QUICKSTART.md)**
 
-## 模組路由
+## 模組路由（Wave 11 後：21 個 `internal/<mod>/AGENTS.md`）
 
-**所有模組的 `AGENTS.md` 路徑**：`internal/<mod>/AGENTS.md`（CONSTITUTION 例外：`internal/apigateway/CONSTITUTION.md`）
+> **重要（token 經濟）**：**不要預先讀全部子 AGENTS.md**——只在**準備修改** `internal/<mod>/` 下任一檔案時，才讀該目錄的 AGENTS.md。預先讀 21 個會浪費 ~1,300 token。
+>
+> **Wave 11 精簡**：原始 57 個精簡至 21 個（-63%），其他 36 個模組的內容已遷移至 `docs/specs/`、`docs/guides/`、`.claude/skills/` 或合併至 `doc.go`。
 
-> **重要（token 經濟）**：**不要預先讀全部子 AGENTS.md**——只在**準備修改** `internal/<mod>/` 下任一檔案時，才讀該目錄的 AGENTS.md。預先讀 26 個會浪費 ~1,500 token。
-
-| 職能群組 | 模組（純文字，避免 inline 連結觸發預先讀）|
+| 職能群組 | 保留 `AGENTS.md` 的模組（21 個）|
 |----------|------|
-| 核心引擎 | `sim` · `experiment` · `baseline` · `portfolio` · `prism` · `janus` |
-| 控制與決策 | `orchestrator` · `narrative` · `risk` · `industry` |
-| 資料與基礎設施 | `marketdata` · `ledger` · `repository` · `eventbus` · `realtime` · `apigateway` |
-| 工具與輔助 | `config` · `db` · `screener` · `spawning` · `tax` · `live` · `swarm` |
-| LLM | `llm` |
+| 核心引擎 | `llm` · `portfolio` · `narrative` · `live` · `experiment` · `orchestrator` |
+| 資料與基礎設施 | `marketdata` · `industry` · `ledger` · `baseline` · `apigateway` · `eventbus` · `fubonproxy` · `monitoring` · `risk` |
+| 策略與執行 | `strategy` · `strategy_techniques` |
+| 工具與輔助 | `config` · `db` · `logging` · `realtime` |
 
-> 沒有 `AGENTS.md` 的模組為共享基礎設施，直接讀碼即可。
+> 沒有 `AGENTS.md` 的模組（如 `sim`、`domain`、`janus`、`prism`、`tax`、`backtest` 等）：讀 `docs/specs/` 或 `internal/<mod>/doc.go` 即可。
 
 ## 關鍵跨模組陷阱
 
@@ -72,21 +73,25 @@
 | 平行重複實作 | 新增功能前用 GitNexus `query` + codebase-memory 檢查重疊 |
 | 資料可見性 | 通道靜默失敗時須暴露 `data_status` / `failed_channels` |
 | LLM 路由繞過 | 不可直接呼叫 `clients/*Provider`，須透過 `DefaultRouter` |
-| LLM hot-path import | S/E 模組不可 import `internal/llm` 同步呼叫 |
+| LLM hot-path import | S/E 模組不可 import `internal/llm` 做同步呼叫 |
 
 ## 文件索引
 
 | 文件 | 用途 |
 |------|------|
 | `CLAUDE.md` | 工具進入點 |
+| `docs/QUICKSTART.md` | 啟動流程 + 系統初始化順序 |
 | `docs/GUIDELINES_INDEX.md` | 規範階層與使用情境路由 |
 | `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態 |
 | `docs/TRAPS.md` | 完整陷阱參考 |
-| `docs/DOCUMENTATION_STANDARD.md` | **文件歸屬規範**（每種文件放哪、命名、生命週期）|
-| `docs/DOCUMENTATION_MAP.md` | **文件當前位置地圖**（所有檔案實際位置）|
+| `docs/DOCUMENTATION_STANDARD.md` | **文件歸屬規範** |
+| `docs/DOCUMENTATION_MAP.md` | **文件當前位置地圖（含 Wave 11 AGENTS.md 整合）**|
+| `docs/agents-md-audit.md` | Wave 11 AGENTS.md 整合決策表（57→15→21 演化）|
 | `docs/branch-hygiene/` | Branch 維護紀錄（PR #748 建立）|
-| `docs/CONSTITUTION.md` | 深度開發憲法（矩陣運算、實證約束、AI Coding 流程）|
+| `docs/CONSTITUTION.md` | 深度開發憲法 |
 | `docs/ITERATION_GATE.md` | 迭代閘門（5 Gate 自我檢查規範）|
+| `docs/specs/` | 模組技術規格（Wave 11 從 AGENTS.md 抽離）|
+| `docs/guides/` | 金融工程 / 操作 playbook（Wave 11 從 AGENTS.md 抽離）|
 | `internal/apigateway/CONSTITUTION.md` | 數據源憲法（Data Source 6 條文 + 3 附錄）|
 
 ## 程式碼智慧工具
