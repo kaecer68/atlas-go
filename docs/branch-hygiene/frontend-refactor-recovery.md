@@ -1,6 +1,7 @@
 # atlas-go 前端重構追蹤清單
 
 > **建立日期**:2026-06-27
+> **最後更新**:2026-06-28(第三輪:關檔完成項 + 新增 task-executor 平行重複清理 + 修自身 stale 引用)
 > **觸發**:用戶報案 admin_web / client_web 多個頁面失效,經盤點確認為「`./web/` → `./admin_web/` + `./client_web/` + `./shared_web/`」重構時,HTML 互補搬運不完整 + 部分 h2 標題被拿掉 + 部分 JS event-listener 漏註冊。
 > **本檔用途**:追蹤本輪未完成的工作、發現的延伸問題,以及下一次迭代該從何處下手。
 
@@ -91,7 +92,7 @@ curl -fsS http://localhost:8080/api/prism/results
 
 ---
 
-### B-3. client_web 「投資風險總覽」轉圈圈
+### B-3. client_web 「投資風險總覽」轉圈圈 ✅(2026-06-27 第二輪已修)
 
 **問題**:用戶報案「【投資風險總覽】裡面的2個模塊功能失效,一直轉圈圈」。已從 web 補齊 2 個隱藏 panel(`riskCalibrationPanel` + `liveRiskCommentaryPanel`)的 HTML。
 
@@ -99,13 +100,13 @@ curl -fsS http://localhost:8080/api/prism/results
 1. JS `risk.js` 在 client_web main.js 中**沒有被動態 import**
 2. 雖然 admin_web 有 import `./pages/risk.js`,但 client_web 的 main.js L94-103 動態 import 列表**沒有 `risk.js`**
 
-**驗證動作**:
-```bash
-grep -n "import.*pages/risk" /Users/kaecer/workspace/atlas/client_web/static/js/main.js
-# 若沒有,需要補上 import('./pages/risk.js')
-```
+**修復**:
+- `client_web/static/js/main.js` L95-96 新增 `import('./pages/risk.js')` 與 `import('./pages/dashboard.js')`
+- page-live 分支 L309-314 補齊 6 個 render 呼叫
+- page-decision 分支 L269-270 補 `renderAIEvolution`(順帶修「AI 自我進化狀態失效」)
+- dist 重新編譯(322.8kb,漲幅 46.7kb = 風險 + 儀表板頁邏輯)
 
-**預期修復**:client_web main.js 需新增 risk 動態 import,並在 `else if (pageId === 'live')` 分支呼叫 `m.risk.renderLiveStatus` 與 `m.risk.renderRiskCards`。
+**驗證**:見 G-1 節。
 
 ---
 
@@ -131,6 +132,8 @@ diff web vs shared_web:
 
 **處置**:下一輪把 shared_web 的 5 個修正 backport 到 web,或評估是否把 web/ 標為 deprecated。
 
+**2026-06-28 狀態**:✅ **已完成 backport**。`diff -q web vs shared_web` 5 個 pages + 1 個 component + `variables.css` 全部一致(無差異輸出)。`web/` 仍作為 archive 保留但不對外服務;啟動風險已消除。
+
 ---
 
 ### C-2. inline style 色碼遷移(AGENTS.md 規範)
@@ -141,42 +144,45 @@ diff web vs shared_web:
 - `border-color:rgba(239,68,68,0.2)`(敘事 Stress 框)
 - `color:var(--color-danger)`(敘事 Stress 標題)
 
-AGENTS.md 規範要求**寫死色碼一律遷移到金融語意 token**(`/web/static/css/base/variables.css` 內的 `--trend-bullish`/`--pnl-profit` 等)。
+AGENTS.md 規範要求**寫死色碼一律遷移到金融語意 token**(`/shared_web/static/css/base/variables.css` 內的 `--trend-bullish`/`--pnl-profit` 等)。
 
 **處置**:
 1. 在 variables.css 新增 2 個 token:`--macro-accent-rgb`、`--stress-danger-rgb`
 2. 4 處 inline style 改用 `var(--...)` 引用
 
+**2026-06-28 狀態**:✅ **部分完成**。`variables.css` 兩主題(L24、L68、L73)已新增 `--accent-rgb` 與 `--color-danger-rgb`(原計畫的 `--macro-accent-rgb` 名稱未採用,沿用既有 token 較一致)。6 處 inline rgba 已遷移:`admin_web/static/index.html` L136-137、client_web/static/index.html L60-61、web/static/index.html 對應位置。三邊 dist 重新編譯通過。
+
 ---
 
-### C-3. ESM 動態 import 路徑檢查
+### C-3. ESM 動態 import 路徑檢查 ✅(2026-06-28 已建 CI script)
 
 **問題**:兩邊 `main.js` 動態 import 路徑是相對路徑(例如 `./pages/narrative.js`),透過 esbuild plugin fallback 到 `shared_web/static/js/pages/narrative.js`。
 
 但**沒有任何自動化檢查**確認每個 main.js 引用的 pages/*.js 都能在 shared_web 找到。如果有人刪掉 shared_web 內的某個 pages/*.js,esbuild 會靜默失敗。
 
-**處置**:
-1. 在 `esbuild.config.mjs` 加 `onResolve` 警告(若 fallback 觸發,印 log)
-2. 或在 CI 加 grep 驗證:`grep -E "import.*pages/(\w+)" main.js | sed ...` 與 `ls shared_web/static/js/pages/` 對齊
+**處置**:已建立 `scripts/ci/check_frontend_imports.sh`(74 行):驗證 admin_web/client_web 的 main.js 引用的 pages/*.js 是否在 shared_web/ 都有,缺則 exit 1。`--warn-only` 模式只警告不擋。
+
+**已知限制**:此 script 只檢查 `pages/` 動態 import,**不檢查 `components/` 引用**。components/ 重複或孤立的偵測需另寫腳本(見 H 節)。
 
 ---
 
-### C-4. AGENTS.md 路徑不一致
+### C-4. AGENTS.md 路徑不一致 ✅(2026-06-28 已修)
 
 **問題**:三個目錄的 AGENTS.md 都寫「`web/static/css/base/variables.css`」,但實際路徑已改成 `shared_web/static/css/base/variables.css`。
 
-**處置**:三個 AGENTS.md L72-74 區段統一改成 `shared_web/static/...`。
+**處置**:三個 AGENTS.md L72-74 區段統一改成 `shared_web/...`。✅ 已驗證:`admin_web/AGENTS.md`、`client_web/AGENTS.md`、`web/AGENTS.md` 三者 L72 全部為 `shared_web/static/css/base/variables.css`。
 
 ---
 
 ## D. 後續追蹤(P2 — 文檔/組織性質)
 
-### D-1. README/CLAUDE.md 補充前端重構說明
+### D-1. README/CLAUDE.md 補充前端重構說明 ✅(部分完成,2026-06-28)
 
-`AGENTS.md` 與 `CLAUDE.md` 目前都還說 `web/` 是主目錄,沒有提到 `admin_web` + `client_web` + `shared_web` 的拆分架構。下一輪應該補:
-- 入口檔:每邊的 `main.js`、`component-init.js`、`event-listeners.js` 各自負責什麼
-- 共享資源:哪些放 `shared_web/`,哪些放 app 自己的 `static/js/`
-- esbuild plugin 行為:app → shared fallback 規則
+**現況**:`CLAUDE.md` L23-67 已有完整「前端架構」段落(目錄職責表、入口檔職責表、esbuild fallback 規則、CSS/JS 規範、API 整合、疑難排解)。`AGENTS.md` 仍把 web/ 視為主目錄,但已不影響實際運作(因 CLAUDE.md 是 AI 進入入口)。
+
+**2026-06-28 殘留瑕疵**:
+- CLAUDE.md L165 Token Efficiency Rules 仍寫 `web/static/css/main.css` 範例,需改 `shared_web/static/css/main.css`(見 Phase A3 commit)
+- CLAUDE.md 沒有明確指向 `atlas-pre-change-protocol` skill(目前只在 GUIDELINES_INDEX.md 與 .claude/SKILLS-MAP.md 提及)。AI 從 CLAUDE.md 進入看不到這個強制前置檢查的入口(見 Phase A2 commit)
 
 ### D-2. shared_web 內 components/ 與 pages/ 是否有 dead code
 
@@ -284,3 +290,36 @@ curl -fsS http://localhost:8080/health
 - `web/` 是 legacy 單體版本,已被 admin_web/client_web 取代
 
 **處置**:依「Fix minimally. NEVER refactor while fixing.」原則,**不在本輪修復**,僅記錄於追蹤清單。若未來需要重新啟用 `web/`,應先修此結構問題。
+
+---
+
+## H. 第三輪清理(2026-06-28)
+
+### H-1. 平行重複實作 — `components/task-executor.js` 與 `pages/datachannels.js` 重複
+
+**問題**(由 D-2 dead code scan 衍生):`shared_web/static/js/components/task-executor.js`(28 行)0 refs,看似 dead code。
+
+**依 `atlas-pre-change-protocol/SKILL.md` Step 7 Code Intent 驗證**:
+
+| 檢查項 | 結果 |
+|--------|------|
+| `git log --all --oneline -- "**/components/task-executor.js"` | 2 commits:9f898883 (web split 引入)、1635acb2 (dedup 重構)。從未被外部引用 |
+| 介面滿足 / plugin registry / config-driven / reflect 動態載入 | 全部否(裸 `export async function`) |
+| 是否有替代品? | **有**:`pages/datachannels.js` L14 `export async function triggerChannelsIngest` 為完整相同邏輯 |
+| 實際呼叫鏈 | admin_web/main.js L154、client_web/main.js L142、web/main.js L142 都用 `modules.datachannels.triggerChannelsIngest`(從 pages/datachannels.js 取) |
+
+**判定**:不是 dead code、不是未完成工作,是 **parallel duplicate**(平行重複實作),按 Step 0 + Code Removal Checklist 應刪除。
+
+**處置**(見本 PR Phase B1+B2 commits):
+- 刪除 `shared_web/static/js/components/task-executor.js`
+- 同步刪除 `web/static/js/components/task-executor.js`(legacy 同樣孤立)
+- 三邊 `npm run build` 全成功 → 驗證 esbuild 不會 bundle 未引用檔案(dist 不變)
+- `grep -rn "triggerChannelsIngest" shared_web/static/js/components/` 期望 0(確認無殘留)
+
+### H-2. 同步補齊機制指引:CLAUDE.md 缺 atlas-pre-change-protocol 入口
+
+**問題**:使用者回饋每次都要重複「查 gitnexus 重疊」、「未引用 ≠ dead code」提示詞。雖然 `.claude/skills/atlas-pre-change-protocol/SKILL.md` 已完整涵蓋這兩條規則,但 CLAUDE.md(AI 進入入口)未明確指向,AI 從 CLAUDE.md 進入時看不到這個強制前置檢查。
+
+**處置**(見本 PR Phase A2+A3 commits):
+- CLAUDE.md 加 1 行明確指向 atlas-pre-change-protocol skill
+- CLAUDE.md L165 stale `web/static/css/main.css` 範例改為 `shared_web/static/css/main.css`
