@@ -51,12 +51,11 @@
 |------|---------|------|
 | **Baseline 未載入** | baseline | 實驗執行/評估前必須確認 `data/state/baseline_policy.json` 存在且有效。 |
 
-### 自動化（不會踩到的）
+### Build Pipeline / 程式碼生成
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
-| **前端欄位命名不一致 → 已自動解決** | domain | git pre-commit hook 會自動執行 `go generate .` 同步前端類型定義。 |
-| **Go → 前端類型自動生成** | domain | `cmd/gentags` 從 Go struct JSON tag 自動生成。pre-commit hook 自動觸發。 |
+| **手動編輯 `web/static/js/shared/field_types.ts` 或 `valid_fields.json`** | domain / web | 這兩個檔案是 `cmd/gentags` 從 `internal/*/*.go` 的 struct JSON tag 自動產出(`go generate .` 觸發)。**禁止手動編輯** — 任何變更會在下次 `go generate` 被覆寫。<br><br>若需新增/修改/刪除前端可見的欄位或介面:<br>1. 修改對應 Go struct 的 `json:"..."` tag(在 `internal/<pkg>/`)<br>2. 跑 `go generate .` 重新產出這兩個檔<br>3. **不要**直接編輯這兩個檔<br><br>違反的後果:`go generate .` 會覆寫你的手動編輯,並且會在 quality.yml 的 `generate` job 報 "uncommitted changes" → 5 個 frontend PR 全 CI fail。<br><br>防護:`.githooks/pre-commit` Phase 5 自動跑 `go generate .`,若這兩個檔有 drift 會**阻擋 commit**。修正方式見 `web/AGENTS.md`「Generated Files」章節。 |
 
 ---
 
