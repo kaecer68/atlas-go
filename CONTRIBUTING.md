@@ -45,7 +45,7 @@ We follow standard Go conventions:
 - Write tests in `*_test.go` files in the same package
 - Run `go test ./...` before submitting
 - Integration tests use `//go:build integration` tag
-- Coverage threshold: 40% minimum
+- Coverage threshold: 60% minimum
 
 ## Pull Request Process
 

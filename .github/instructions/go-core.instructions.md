@@ -60,11 +60,18 @@ defer func() {
 
 - 新增或更新測試時，使用同目錄同 package 的 `*_test.go`。
 - 優先跑聚焦套件測試，再視需要擴大測試範圍。
+- **覆蓋率門檻 60%**（CI 強制）：`go test -coverprofile=coverage.out ./...` 後執行 `go tool cover -func=coverage.out | grep total` 確認。
+
+## 程式碼生成
+
+修改 `internal/` 下任何 Go struct 的 JSON tag 後，**必須執行 `go generate .`**（CI `generate` job 強制）。`cmd/gentags` 會自動從 struct JSON tag 產出 `field_types.ts` 與 `valid_fields.json`，輸出到全部前端目錄（`admin_web/`、`client_web/`、`shared_web/`、`web/`）。
+
+> **禁止手動編輯**任何一份 `field_types.ts` 或 `valid_fields.json` — 下次 `go generate .` 會覆寫。完整規範見 `docs/TRAPS.md` §「手動編輯 field_types.ts」。
 
 ## 驗證清單
 
 ```bash
-# 格式檢查
+# 格式檢查（CI 強制）
 test -z "$(gofmt -l .)"
 
 # 聚焦測試（依變更套件調整）
@@ -73,12 +80,22 @@ go test ./internal/sim/...
 
 # 若影響範圍較大
 go test ./...
+
+# CI 完整品質檢查（建議 PR 前執行）
+go vet ./...
+staticcheck ./...
+golangci-lint run --timeout=5m
+
+# 覆蓋率檢查
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | grep total   # 須 ≥ 60%
 ```
 
 ## 參考文件
 
-- `agents.md`：倉庫層級邊界與預設指令
-- `internal/apigateway/CONSTITUTION.md`：數據源治理規範 — 禁止直接 `os.Getenv`/`&http.Client{}`，強制 Gateway 模式
+- `AGENTS.md`：倉庫層級邊界、21 模組路由、關鍵跨模組陷阱
+- `docs/TRAPS.md`：高危陷阱完整參考（mutable slice、Session 日期、Darwinian 權重、JSON tag 大小寫等）
+- `docs/QUICKSTART.md`：快速啟動 + CI 完整指令 + 系統初始化順序
+- `internal/apigateway/CONSTITUTION.md`：數據源治理規範 — 6 條憲法，禁止直接 `os.Getenv`/`&http.Client{}`，強制 Gateway 模式
 - `docs/PARAMETER_SYSTEM.md`：參數管理系統 — 禁止硬編碼 magic number，強制使用 `ParametersConfig`
 - `docs/architecture.md`：分層設計原則
-- `docs/ai_agent_architecture.md`：代理協調細節

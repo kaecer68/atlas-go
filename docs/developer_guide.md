@@ -68,7 +68,7 @@ internal/
 - **Live trading**: `-allow-live-broker` flag required (default false)
 - **Secrets**: never hardcode API keys; use `.env` / environment variables
 - **Panic**: zero panics in production code
-- **Coverage**: ≥40% overall; critical paths should have tests
+- **Coverage**: ≥60% overall; critical paths should have tests
 
 ## Key Gotchas (AGENTS.md traps)
 1. Enabled agents in `configs/agents.json` must have matching `prompts/agents/<name>.md`

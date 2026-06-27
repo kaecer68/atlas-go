@@ -33,7 +33,7 @@
 `atlas-go` — 模擬優先、稽核導向的台股投資研究系統。
 - **語言**：Go 1.26，**DB**：PostgreSQL 15 + Redis 8
 - **CI**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
-- **覆蓋率門檻**：40%
+- **覆蓋率門檻**：60%
 
 ## 快速啟動 / CI 指令 / Git 工作流
 

@@ -71,12 +71,12 @@ if [ "$QUICK" = false ]; then
   run_check "go test" go test ./...
 
   # Coverage (exclude cmd/atlas — heavy integration)
-  run_check "coverage threshold (>=40%)" bash -c '
+  run_check "coverage threshold (>=60%)" bash -c '
     go test -coverprofile=coverage.out $(go list ./... | grep -v "/cmd/atlas$")
     COVERAGE=$(go tool cover -func=coverage.out | grep total | awk "{print \$3}" | tr -d "\r" | sed "s/%//")
     echo "Total coverage: $COVERAGE%"
-    if echo "$COVERAGE 40" | awk "{exit !(\$1 < \$2)}"; then
-      echo "Coverage is below 40% threshold"
+    if echo "$COVERAGE 60" | awk "{exit !(\$1 < \$2)}"; then
+      echo "Coverage is below 60% threshold"
       exit 1
     fi
   '

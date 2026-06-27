@@ -65,12 +65,12 @@ jobs:
           go-version-file: go.mod
       - name: Run tests with coverage (exclude cmd/atlas — slow integration tests)
         run: go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
-      - name: Check coverage threshold (>= 40%)
+      - name: Check coverage threshold (>= 60%)
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '\r' | sed 's/%//')
           echo "Total coverage: $COVERAGE%"
-          if echo "$COVERAGE 40" | awk '{exit !($1 < $2)}'; then
-            echo "Coverage is below 40% threshold"
+          if echo "$COVERAGE 60" | awk '{exit !($1 < $2)}'; then
+            echo "Coverage is below 60% threshold"
             exit 1
           fi
 

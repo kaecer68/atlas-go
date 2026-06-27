@@ -25,13 +25,15 @@ description: "適用於 atlas-go 的 live trading 協調路徑修改。強制 re
 
 ```bash
 go test ./internal/live/... ./internal/orchestrator/... ./internal/sim/...
-go run ./cmd/atlas   # 手動 smoke check
+go run ./cmd/atlas                        # 手動 smoke check
+go run ./cmd/experimental/validate-broker # Broker 簽名格式驗證
 ```
 
 ## 參考文件
 
-- `internal/apigateway/CONSTITUTION.md`：Live trading 中所有外部 API 必須透過 Gateway，禁止直接 `os.Getenv`
-- `agents.md`：架構邊界與常見陷阱
+- `internal/apigateway/CONSTITUTION.md`：Live trading 中所有外部 API 必須透過 Gateway（6 條憲法 + 3 附錄：統一入口、限流、熔斷、背景任務排程、環境變數治理）
+- `AGENTS.md`：倉庫層級邊界、21 模組路由、關鍵跨模組陷阱
+- `docs/TRAPS.md`：高危陷阱完整參考（含 live trading 安全旗標陷阱）
 - `docs/operations_playbook.md`：操作流程期待
 - `docs/architecture.md`：執行流程與分層邊界
 - `internal/live/AGENTS.md`：套件內部約定、ANTI-PATTERNS、KEY TYPES

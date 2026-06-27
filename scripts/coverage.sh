@@ -2,7 +2,7 @@
 set -e
 
 COVERAGE_FILE="coverage.out"
-THRESHOLD=40
+THRESHOLD=60
 
 echo "Running tests with coverage..."
 go test -coverprofile="${COVERAGE_FILE}" ./... > /dev/null 2>&1 || true
