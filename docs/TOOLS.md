@@ -12,14 +12,14 @@ atlas-go 專案同時被兩個 MCP 索引，並提供互補能力：
 
 | 工具 | MCP 名稱 | 索引名稱 | 節點 / 邊 | 獨特能力 |
 |------|---------|---------|----------|---------|
-| **GitNexus** | `gitnexus` | `atlas-go` | 53,385 symbols / 169,008 edges / 300 execution flows | 執行流（Process）、功能社群（Community）、API 路由映射、影響範圍分級、安全重命名 |
-| **codebase-memory** | `codebase-memory` | `Users-kaecer-workspace-atlas` | 29,757 nodes / 127,367 edges | 開放 Cypher 查詢、向量語意搜尋、Leiden 叢集偵測、ADR 管理、跨服務資料流追蹤 |
+| **GitNexus** | `gitnexus` | `atlas-go` | 請執行 `npx gitnexus status` 取得 live 數字（2026-06-25 快照：53,385 symbols / 169,008 edges / 300 execution flows） | 執行流（Process）、功能社群（Community）、API 路由映射、影響範圍分級、安全重命名 |
+| **codebase-memory** | `codebase-memory` | `Users-kaecer-workspace-atlas` | 請執行 `codebase-memory_list_projects()` 取得 live 數字（2026-06-25 快照：29,757 nodes / 127,367 edges） | 開放 Cypher 查詢、向量語意搜尋、Louvain 叢集偵測、ADR 管理、跨服務資料流追蹤 |
 
 > **上述數字為 2026-06-25 歷史快照**。由於 `scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op），這些數字不再被 CI 自動驗證。**需要 live 數字時，請手動執行** `npx gitnexus status`（GitNexus）或 `codebase-memory_list_projects()`（codebase-memory）。
 
 **為什麼要兩個？**
 - **GitNexus** 強在「**process + community**」抽象與 PR 安全閘（impact / detect_changes / rename）。
-- **codebase-memory** 強在「**Cypher + 語意搜尋 + Leiden 叢集**」的圖分析能力。
+- **codebase-memory** 強在「**Cypher + 語意搜尋 + Louvain 叢集**」的圖分析能力。
 - 兩者互補：複雜度熱點掃描、跨模組統計分析 → codebase-memory；改動前 blast radius、跨檔案重命名 → GitNexus。
 
 ---
@@ -78,7 +78,7 @@ GitNexus 已將 atlas 的常見跨模組流程預先計算為 300 個 Process。
 
 GitNexus 的雙抽象層彼此獨立但互補：
 
-- **Community**（Leiden 叢集）回答「哪些程式碼屬於同一個功能區塊」— 靜態結構分組。
+- **Community**（Louvain 叢集）回答「哪些程式碼屬於同一個功能區塊」— 靜態結構分組。
 - **Process**（執行流）回答「這些功能區塊如何協作完成一件事」— 動態行為路徑。
 
 對 atlas 來說，Community 幫你理解「`PreTradeGate` 和 `EventBus` 同屬 Risk 模組」，Process 幫你理解「HALT 訊號如何從 `PreTradeGate.ruleVaRLimit` → `EventBus.Publish` → `Dashboard` SSE 推送」。**後者才是日常 debug 和改 code 時最需要的資訊。**
@@ -161,8 +161,9 @@ atlas-go 有 34 個 `internal/` 模組、1,200+ 社群、300 條執行流。多�
 | 概念層重疊（「有沒有人做過風控？」） | ✅ `query` — 執行流排名 | `search_graph` — BM25 排名 |
 | 語意層重疊（「limit check」vs「VaR cap」） | ❌ keyword only | ✅ `semantic_query` 跨詞彙橋接 |
 | 簽名層重疊（相同參數、相同回傳） | 間接（context 比對） | `search_code({pattern})` + Cypher |
-| 模組層重疊（「這應該放哪個 package？」） | `query` → 看 community 歸屬 | `get_architecture()` → Leiden 叢集 |
+| 模組層重疊（「這應該放哪個 package？」） | `query` → 看 community 歸屬 | `get_architecture()` → Louvain 叢集 |
 | 孤兒分類：是否組態驅動 | ❌ 無 config 感知 | ❌ 無 config 感知 → 需手動 `grep` |
+| pre-commit blast radius（哪些 caller 會被影響）| `detect_changes()` — 受影響 Process | `detect_changes({depth:N})` — transitive caller blast radius |
 
 > **核心原則**：GitNexus 回答「有沒有類似的執行流」；codebase-memory 回答「有沒有名稱不同但語意相同的實作」。兩者都要跑才算完整檢查。
 
@@ -229,7 +230,7 @@ gitnexus_detect_changes()
 
 codebase-memory 提供 SQLite-backed 知識圖譜，開放 **openCypher 查詢語言**與**向量語意搜尋**。它的強項是「任意切片分析」與「語意模糊查詢」。
 
-**節點統計（atlas-go，2026-06-25）：** 29,757 nodes / 127,367 edges / 92.7 MB
+**節點統計（2026-06-25 快照）：** 請執行 `codebase-memory_list_projects()` 取得 live 數字（歷史快照：29,757 nodes / 127,367 edges / 92.7 MB）
 
 ### 常用指令
 
@@ -254,7 +255,7 @@ codebase-memory_query_graph({
           RETURN f.qualified_name, f.cyclomatic ORDER BY f.cyclomatic DESC"
 })
 
-# 取得 Leiden 叢集架構
+# 取得 Louvain 叢集架構
 codebase-memory_get_architecture()
 
 # 單一符號 360° 視角
@@ -270,7 +271,7 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 | 場景 | 指令 | 說明 |
 |------|------|------|
 | 複雜度熱點掃描 | `query_graph({query:"MATCH (f:Function) WHERE f.cyclomatic >= 10 ..."})` | 一次性掃所有 hot path（含 nested loop depth、linear scan in loop） |
-| 架構叢集偵測 | `get_architecture()` | Leiden 演算法自動標註 de-facto 模組邊界 |
+| 架構叢集偵測 | `get_architecture()` | Louvain 演算法自動標註 de-facto 模組邊界 |
 | 語意模糊搜尋 | `search_graph({semantic_query:[...]})` | 「send」找「publish」、跨詞彙橋接 |
 | 路徑追蹤 | `trace_path({function_name, direction, mode:"data_flow"})` | 呼叫鏈 + 參數傳遞追蹤 |
 | ADR 管理 | `manage_adr({mode})` | 架構決策紀錄 CRUD |
@@ -281,11 +282,18 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 
 - **openCypher 查詢語言** — 任意切片分析（complexity、cognitive、loop_count、transitive_loop_depth、linear_scan_in_loop、alloc_in_loop、param_count、max_access_depth）
 - **語意向量搜尋** — 多關鍵字 AND 過濾、跨詞彙橋接
-- **Leiden 社群偵測** — 自動計算 de-facto 模組邊界（含 cohesion 分數、代表性 top_nodes）
+- **Louvain 社群偵測** — 自動計算 de-facto 模組邊界（含 cohesion 分數、代表性 top_nodes）
 - **ADR 管理** — `manage_adr({mode})` 整合
 - **跨服務追蹤** — HTTP / Channel / async 多跳追蹤
-- **BM25 ranking score** — 結構感知加權（Function +10 / Route +8 / Class +5）
+- **BM25 ranking score** — 結構感知加權（Functions/Methods +10 / Routes +8 / Classes/Interfaces +5）
 - **穩定性** — SQLite-backed、讀取 sub-millisecond、檔案監聽 ~1s 延遲
+
+### Fork-exclusive 強化（codebase-memory-mcp-pro 分支版）
+
+- **158 語言 tree-sitter 支援** + **Hybrid LSP 語意型別解析**（Go 含括）— 跨檔案 CALLS 邊以型別推論增強，非純語法匹配
+- **`explore`** — 一個 call 拿 blast-radius (callers + fan-in flags) + nearby neighbors (callees + 同檔 sibling) + 逐行 source code。中低風險、需要 source 的改動最划算
+- **`detect_changes({depth:N})`** — pre-commit transitive caller blast radius（up to N hops），impacted_symbols 帶 hop + transitive 標籤
+- **Cypher aggregation 修正** — 非聚合函式與聚合混用（如 `RETURN type(r), count(*)`）會正確分組
 
 ---
 
@@ -293,8 +301,10 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 
 ```
 需要改動符號？
-├─ 是 → 改前評估 blast radius ─→ GitNexus `impact()` + `detect_changes()`
-│                              └─ 跨檔案改名 ─→ GitNexus `rename()`
+├─ 是 → 改前評估 blast radius
+│       ├─ 需要風險等級 + 受影響 Process → GitNexus `impact()` + `detect_changes()`
+│       ├─ 需要源碼 + 鄰居（中低風險） → codebase-memory `explore()`
+│       └─ 跨檔案改名 → GitNexus `rename()`
 └─ 否 → 純查詢？
          ├─ 自然語言概念 → GitNexus `query()`（有執行流排名）
          ├─ 模糊詞彙橋接 → codebase-memory `semantic_query`
@@ -328,7 +338,7 @@ npx gitnexus status
 
 # 列出已索引專案
 gitnexus_list_repos()
-# 期望看到 atlas-go (53,385 nodes / 169,008 edges / 300 processes)
+# 期望看到 atlas-go 專案（節點/邊/process 數字以 list_repos() 實際輸出為準,可能與 2026-06-25 快照不同）
 ```
 
 ### codebase-memory
@@ -336,7 +346,7 @@ gitnexus_list_repos()
 ```bash
 # 確認 MCP 已配置並列出專案
 codebase-memory_list_projects()
-# 期望看到 Users-kaecer-workspace-atlas (29,757 nodes / 127,367 edges, 92.7 MB)
+# 期望看到 Users-kaecer-workspace-atlas 專案（節點/邊數字以 list_projects() 實際輸出為準,可能與 2026-06-25 快照不同）
 
 # 確認索引可用
 codebase-memory_get_graph_schema({project: "Users-kaecer-workspace-atlas"})

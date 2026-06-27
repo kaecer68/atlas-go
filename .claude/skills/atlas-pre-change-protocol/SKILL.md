@@ -6,7 +6,7 @@ description: "MUST use before ANY code modification in atlas-go. Mandates overla
 # Atlas Pre-Change Protocol
 
 **IRON LAW: No code change without completing Steps 1-7 first.**
-This protocol overrides the default AI impulse to edit immediately. Every step exists because atlas-go has 52,662 symbols, 165,265 relationships, 300 execution flows, and hidden dependencies that grep alone cannot see.
+This protocol overrides the default AI impulse to edit immediately. Every step exists because atlas-go has 數萬個 symbols 和 relationships（請執行 `npx gitnexus status` 取得 live 計數）,300+ execution flows, and hidden dependencies that grep alone cannot see.
 
 ---
 
@@ -49,7 +49,7 @@ MANDATORY for ALL of these:
   → Check for semantically similar types across ALL modules
 
 □ Adding a new module/package → codebase-memory_get_architecture()
-  → Which Leiden cluster would this belong to? Is there already a cluster for this domain?
+  → Which Louvain cluster would this belong to? Is there already a cluster for this domain?
   → Read internal/MATURITY.md — is there already a module with overlapping responsibility?
 
 □ Adding validation/business logic → gitnexus_query({query: "<rule type> validation"})
@@ -80,6 +80,27 @@ gitnexus_impact({target: "<symbol>", direction: "upstream"})
 ```
 
 **Risk thresholds**: `<5 d=1 symbols = LOW` | `5-15 = MEDIUM` | `>15 or critical path = HIGH` | `auth/security path = CRITICAL`
+
+### Step 1.5: EXPLORE（codebase-memory FORK-EXCLUSIVE）
+
+對**中低風險改動** — blast-radius 同時還需要 source code 看 caller 怎麼用時：
+
+```
+codebase-memory_explore({query: "<symbol 或概念>"})
+→ 一次拿回 blast-radius（callers + fan-in flags）+ nearby neighbors（callees + 同檔 sibling）+ 逐行 source code
+```
+
+**Complements（不取代）`gitnexus_impact`：**
+- ✅ 取代：後續手動 `Read` 拿 caller source code 的多個 round-trip（節省 token）
+- ✅ 補充：給 `gitnexus_impact` 補上「callers 的 source 內容」資訊
+- ❌ **不取代** `gitnexus_impact` 的風險等級（LOW/MEDIUM/HIGH/CRITICAL）
+- ❌ **不取代** `gitnexus_impact` 的「受影響 Process 流」分析（atlas 的核心抽象）
+- ❌ **不取代** `gitnexus_impact` 的 d=1/d=2/d=3 depth-grouped blast radius
+
+**Routing 規則：**
+- 用 `gitnexus_impact` 當你需要風險等級 + 受影響 Process 流 + d=1 直接破壞者清單（特別是 HIGH/CRITICAL 必須用）
+- 用 `codebase-memory_explore` 當你需要看 caller 的 source code 才能規劃改動（中低風險、單檔或跨檔小範圍）
+- 兩者可串接：先 `gitnexus_impact` 拿風險等級與 Process 流 → 再 `codebase-memory_explore` 拿 source code 細節
 
 ### Step 2: MODULE PITFALLS
 
@@ -230,9 +251,10 @@ Before modifying or removing code, understand WHY it exists:
 | `gitnexus_query` | Find execution flows by concept; overlap detection (Step 0) |
 | `gitnexus_detect_changes` | Pre-commit change impact check |
 | `codebase-memory_search_graph` | BM25 + semantic vector search; find similar implementations |
-| `codebase-memory_get_architecture` | Leiden cluster detection; check module domain boundaries |
+| `codebase-memory_get_architecture` | Louvain cluster detection; check module domain boundaries |
 | `codebase-memory_query_graph` | Cypher analytics; hot-path complexity scan |
-| `explore` agent | Contextual codebase pattern search |
+| `codebase-memory_explore` | **FORK-EXCLUSIVE (codebase-memory-mcp-pro 分支版)** — One call: blast-radius（callers + fan-in flags）+ nearby neighbors（callees + 同檔 sibling）+ 逐行 source code。Complements `gitnexus_impact` 用於中低風險、需要 source 的改動（見 Step 1.5）。 |
+| `explore` (subagent) | oh-my-opencode subagent 的 contextual codebase pattern search。**NOT the same as `codebase-memory_explore` MCP tool 上一行** — 兩者完全不同的東西，避免誤用。 |
 | `librarian` agent | External docs/libraries research |
 
 ---
