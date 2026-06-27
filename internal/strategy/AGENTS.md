@@ -32,7 +32,6 @@
 
 ## 測試
 
-- `go test ./internal/strategy/...`
 - 涵蓋 Registry CRUD、Selector 切換邏輯、Allocator 風險平價計算、ComparisonEngine 分數計算
 
 (End of file - total 36 lines)

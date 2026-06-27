@@ -62,7 +62,6 @@
 ## 測試與驗證
 
 ```bash
-go test ./internal/live/...
 go run ./cmd/experimental/validate-broker   # Broker 簽名格式驗證（dummy 模式）
 ```
 

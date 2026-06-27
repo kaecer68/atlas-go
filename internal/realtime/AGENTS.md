@@ -32,7 +32,6 @@
 
 ## 測試
 
-- `go test ./internal/realtime/...`
 - 涵蓋 Adapter 初始化、資料攝取、Agent 註冊、盤勢偵測、信心度計算、Recommendation 調整
 
 (End of file - total 34 lines)

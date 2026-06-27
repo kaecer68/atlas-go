@@ -75,6 +75,5 @@
 ## 測試
 
 ```bash
-go test -v ./internal/narrative/...
 go test -v ./internal/narrative/calibration_baseline_test.go
 ```

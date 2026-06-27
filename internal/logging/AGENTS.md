@@ -39,5 +39,4 @@ FromContext(ctx) → 取出 logger（fallback 至 slog.Default()）
 
 ## 測試
 
-- `go test ./internal/logging/...`
 - `logging_test.go`：context 傳播、欄位輔助、nil 安全測試

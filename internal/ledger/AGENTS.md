@@ -63,6 +63,5 @@ Orchestrator/Simulator
 
 ## 測試
 
-- `go test ./internal/ledger/...`
 - 整合測試：`//go:build integration`（`store_factory_integration_test.go`）
 - SQLite 記憶體模式：`outcome_store_sqlite_test.go` 等無需外部服務

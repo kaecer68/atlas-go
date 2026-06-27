@@ -27,7 +27,6 @@
 
 ## 測試
 
-- `go test ./internal/db/...`
 - 涵蓋空 DATABASE_URL、無效 env fallback、unreachable host ping 失敗、無效 migration source path、migration-up error 等錯誤路徑（完整連線與 migration 流程需外部 PostgreSQL）。
 
 (End of file - total 28 lines)

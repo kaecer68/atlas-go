@@ -38,6 +38,5 @@ Publisher → ChannelEventBus.Publish()
 
 ## 測試
 
-- `go test ./internal/eventbus/...`
 - `eventbus_test.go`：Publish/Subscribe 單元測試
 - `sse_bridge_test.go`：SSE 連線生命週期測試
