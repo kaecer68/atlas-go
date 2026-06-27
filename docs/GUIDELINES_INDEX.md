@@ -155,8 +155,8 @@
 | `.claude/skills/*/SKILL.md` | 手寫技能文件 | 10 |
 | `internal/*/AGENTS.md` | 模組指南（經 #779 審計精簡） | 21 |
 | `docs/*.md` | 參考文件 | 10+ |
-| `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 9 |
-| `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 1 |
+| `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 14 |
+| `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 6 |
 | `.claude/skills/robot-communication/*/SKILL.md` | 機器人溝通技能 | 4 |
 | `.claude/skills/gitnexus/*/SKILL.md` | GitNexus 工具技能 | 6 |
 
@@ -166,6 +166,7 @@
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 1.6.1 | 2026-06-27 | 修正統計數字（docs/specs 9→14、docs/guides 1→6）— follow-up to PR #793 |
 | 1.6 | 2026-06-27 | 同步 Batch 5a-6 AGENTS.md 精簡：內模組 49→21、新增 docs/specs/ 與 docs/guides/ 分類（PR #784-#788）|
 | 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/CONSTITUTION.md` → `docs/CONSTITUTION.md`，新增 `docs/ITERATION_GATE.md`（PR #752）|
 | 1.4 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 索引；更新版本/日期以反映 PR #700 |
