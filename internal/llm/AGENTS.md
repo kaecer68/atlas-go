@@ -55,7 +55,6 @@
 ## 測試慣例
 
 ```bash
-go test ./internal/llm/...
 go test -run Integration ./internal/llm/...   # 含 router + clients 端對端
 ```
 

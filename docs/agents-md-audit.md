@@ -122,7 +122,7 @@
 |------|------|------|
 | 根 | `./AGENTS.md` | 唯一不變 |
 | 前端（3 個）| `web/AGENTS.md`、`admin_web/AGENTS.md`、`client_web/AGENTS.md` | 前端專屬 |
-| 文件索引 | `docs/wave-11/AGENTS.md` | 目錄索引 |
+| 文件索引 | `docs/wave-11/README.md` | 目錄索引（2026-06 從 AGENTS.md 重命名）|
 | 工具（2 個）| `cmd/experimental/AGENTS.md`、`scripts/openclaw/AGENTS.md` | 跨模組工具 |
 | LLM（5 個）| `internal/llm/AGENTS.md`、`internal/portfolio/AGENTS.md`、`internal/narrative/AGENTS.md`、`internal/live/AGENTS.md`、`internal/experiment/AGENTS.md` | 已保留，PR #776 後 |
 | 數據 | `internal/marketdata/AGENTS.md` | Provider 優先級 + ETF NAV |
@@ -153,7 +153,7 @@
 | 2 | `web/AGENTS.md` | 前端 SPA |
 | 3 | `admin_web/AGENTS.md` | 後台 |
 | 4 | `client_web/AGENTS.md` | client |
-| 5 | `docs/wave-11/AGENTS.md` | Wave 11 目錄 |
+| 5 | `docs/wave-11/README.md` | Wave 11 目錄（2026-06 從 AGENTS.md 重命名）|
 | 6 | `scripts/openclaw/AGENTS.md` | 跨模組工具 |
 | 7 | `cmd/experimental/AGENTS.md` | CLI |
 | 8 | `internal/llm/AGENTS.md` | DataClass 閘門 + hot-path |

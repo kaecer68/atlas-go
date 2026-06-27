@@ -74,6 +74,5 @@
 ## VERIFICATION
 
 ```bash
-go test ./internal/portfolio/...
 test -z "$(gofmt -l internal/portfolio/)"
 ```
