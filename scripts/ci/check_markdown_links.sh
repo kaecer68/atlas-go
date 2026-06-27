@@ -3,7 +3,9 @@
 # check_markdown_links.sh
 #
 # 驗證所有 .md 檔案中的內部連結（含 backtick 中的裸 .md 路徑）。
-# 實作在 check_markdown_links.py — 此 shell 腳本僅負責 find + 傳參。
+# 實作在 check_markdown_links.py — 此 shell 腳本僅負責 find + 透過 stdin 傳參。
+#
+# 為避免 ARG_MAX (Linux: 2MB / macOS: 256KB) 限制，使用 xargs 將檔案清單分批傳遞。
 #
 # Exit 0 = 全部有效；Exit 1 = 發現 broken 連結
 
@@ -14,7 +16,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 cd "$REPO_ROOT"
 
-mapfile -t MD_FILES < <(find . \
+# 用 stdin + xargs 將檔案清單分批傳遞給 Python (避免 ARG_MAX overflow)
+# -n 200: 每批 200 個檔案 (Linux ARG_MAX 2MB, 保守取較小值)
+# -0: null-separated 處理檔名含空格的特殊情況
+find . \
     -name '*.md' \
     -not -path './vendor/*' \
     -not -path './.gocache/*' \
@@ -33,11 +38,5 @@ mapfile -t MD_FILES < <(find . \
     -not -path '*/docs/wave-11/*' \
     -not -path '*/.claude/*' \
     -not -name 'agents-md-audit.md' \
-    -print)
-
-if [ "${#MD_FILES[@]}" -eq 0 ]; then
-    echo "No markdown files found"
-    exit 0
-fi
-
-exec python3 "${SCRIPT_DIR}/check_markdown_links.py" "${MD_FILES[@]}"
+    -print0 |
+    xargs -0 -n 200 python3 "${SCRIPT_DIR}/check_markdown_links.py"
