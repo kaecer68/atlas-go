@@ -1,62 +1,18 @@
 #!/usr/bin/env bash
-# scripts/hooks/pre-commit — Auto-go-generate + map generation + binary detection
+# ⛔ DEPRECATED — This file is replaced by .githooks/pre-commit
 #
-# Install: cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Install the active version:
+#   bash scripts/install-hooks.sh
 #
-# 1. If domain/*.go changed → runs "go generate ." and auto-stages generated files
-# 1.5 If internal/|web/|cmd/mapgen/ changed → regenerates .omo/maps/ system maps
-# 2. Detects Mach-O/ELF/PE binaries in staging area → blocks commit
+# Why deprecated:
+#   - Phase 1 (auto-stage generated files) CONFLICTS with .githooks Check 5
+#     (drift blocker). Auto-staging silently commits unintended changes.
+#   - Phase 2 (binary detection) is a subset of .githooks Check 1.
+#   - Phase 1.5 (map generation) is NOT yet ported — see TODO below.
+#
+# TODO: Port map generation (cmd/mapgen -gen-all) to .githooks/pre-commit as Check 6.
 
-set -euo pipefail
-
-STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
-
-# ---- Phase 1: Auto go generate ----
-if echo "$STAGED" | grep -q '^internal/domain/.*\.go$'; then
-    echo "🔧 domain structs changed → running go generate ."
-    go generate . > /dev/null 2>&1
-    echo ""
-
-    # Always stage generated files (no-op if unchanged)
-    git add web/static/js/shared/field_types.ts 2>/dev/null || true
-    echo "  ✅ generated files auto-synced"
-    echo ""
-fi
-
-# ---- Phase 1.5: Auto map generation ----
-SRC_PATTERNS='^(internal/|web/|cmd/mapgen/)'
-if echo "$STAGED" | grep -qE "$SRC_PATTERNS"; then
-    echo "🗺️  Source changed → regenerating system maps"
-    if go run ./cmd/mapgen -gen-all 2>&1; then
-        git add -f .omo/maps/ 2>/dev/null || true
-        echo "  ✅ .omo/maps/ synced"
-    else
-        echo "  ⚠️  mapgen failed — .omo/maps/ may be stale (commit not blocked)"
-    fi
-    echo ""
-fi
-
-# ---- Phase 2: Binary detection ----
-BINARIES_FOUND=false
-
-while IFS= read -r file; do
-    if [[ ! -f "$file" ]]; then
-        continue
-    fi
-
-    if file "$file" | grep -qE "Mach-O|ELF|PE32|PE32\+"; then
-        echo "❌ BINARY DETECTED: $file"
-        echo "   Type: $(file "$file" | cut -d: -f2-)"
-        BINARIES_FOUND=true
-    fi
-done < <(echo "$STAGED")
-
-if $BINARIES_FOUND; then
-    echo ""
-    echo "⚠️  Commit blocked. Remove the binary before committing:"
-    echo "   git rm --cached <file>"
-    echo "   echo <file> >> .gitignore"
-    exit 1
-fi
-
+echo "⛔ scripts/hooks/pre-commit is DEPRECATED."
+echo "   Install the active pre-commit hook: bash scripts/install-hooks.sh"
+echo "   See .githooks/pre-commit for the current 5-check implementation."
 exit 0
