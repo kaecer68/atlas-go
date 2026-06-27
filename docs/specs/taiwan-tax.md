@@ -1,6 +1,9 @@
-# AGENTS.md — internal/tax
+# Taiwan Tax Calculation 規格
 
-**成熟度**: evolving
+> **文件角色**：atlas-go 台灣股市稅務計算（股息稅、證交稅）規格。
+> **取代對象**：`internal/tax/AGENTS.md`（已遷移至此）。
+
+**成熟度**: evolving  
 **模組職責**: 台灣股市稅務計算（股息所得稅、證交稅）與稅後部位規模調整。
 
 ---
@@ -33,7 +36,8 @@
 
 ## 測試
 
-- `go test ./internal/tax/...`
-- 涵蓋股息稅計算、證交稅計算、部位稅務快照、投組彙總、TaxAwareSizer 取整邏輯
+```bash
+go test ./internal/tax/...
+```
 
-(End of file - total 34 lines)
+涵蓋股息稅計算、證交稅計算、部位稅務快照、投組彙總、TaxAwareSizer 取整邏輯。

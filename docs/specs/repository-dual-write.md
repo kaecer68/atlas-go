@@ -1,6 +1,9 @@
-# AGENTS.md — internal/repository
+# Repository Dual-Write Persistence 規格
 
-**成熟度**: stable
+> **文件角色**：atlas-go PostgreSQL + JSONL 雙寫持久化規格。
+> **取代對象**：`internal/repository/AGENTS.md`（已遷移至此）。
+
+**成熟度**: stable  
 **模組職責**: PostgreSQL + JSONL 雙寫持久化，PG 為首選讀取路徑，JSONL 為 source of truth。
 
 ---

@@ -1,4 +1,7 @@
-# AGENTS.md — internal/screener
+# Screener Screening Pipeline Contract
+
+> **文件角色**：atlas-go screener 篩選管線契約。
+> **取代對象**：`internal/screener/AGENTS.md`（已遷移至此）。
 
 `internal/screener` 在標的進入各 executor 之前，根據 `configs/agents.json` 中 per-agent 的 `ScreeningCriteria` 進行篩選。
 

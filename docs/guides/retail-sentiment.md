@@ -1,6 +1,9 @@
-# AGENTS.md — internal/retail
+# RSI-tw 台灣散戶情緒指數規格
 
-`internal/retail` 提供 RSI-tw（Retail Sentiment Index — Taiwan），一個台灣股市散戶情緒綜合指標計算引擎。
+> **文件角色**：atlas-go 台灣散戶情緒指數（Retail Sentiment Index — Taiwan）計算引擎規格。
+> **取代對象**：`internal/retail/AGENTS.md`（已遷移至此）。
+
+`internal/retail` 提供 RSI-tw，一個台灣股市散戶情緒綜合指標計算引擎。
 
 ---
 
