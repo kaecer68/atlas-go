@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs watch",
     "test:smoke": "node smoke/run.mjs"
   },
   "devDependencies": {

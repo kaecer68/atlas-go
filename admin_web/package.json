@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs watch",
     "test": "node --test ../shared_web/static/js/__tests__/*.mjs",
     "test:e2e": "playwright test",
     "test:smoke": "node smoke/run.mjs"
