@@ -63,6 +63,17 @@ jobs:
     - name: Check naming conventions
       run: bash scripts/ci/check_case_conflicts.sh --strict
 
+  # Frontend dynamic import consistency — verifies every admin_web/client_web
+  # dynamic import('./pages/xxx.js') resolves to an existing shared_web page.
+  # Catches the silent esbuild plugin fallback failure mode (PR #785 / script from PR #789).
+  frontend-imports:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check frontend dynamic import consistency
+      run: bash scripts/ci/check_frontend_imports.sh
+
   # Go generate check — ensures generated files are up-to-date
   generate:
     runs-on: ubuntu-latest
