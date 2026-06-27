@@ -7,6 +7,8 @@
 // This package provides the mathematical scaffolding for modeling this
 // feedback loop in simulation.
 //
-// Maturity: experimental — the underlying model is under active
-// development. Do not depend on this from stable modules.
+// Status: the underlying model is under active development. Do not depend
+// on this from stable modules.
+//
+// Maturity: experimental
 package reflexivity
