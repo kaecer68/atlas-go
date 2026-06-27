@@ -1,4 +1,7 @@
-# AGENTS.md — internal/sim
+# Sim Engine 模擬引擎規格
+
+> **文件角色**：atlas-go 投資組合模擬引擎規格。
+> **取代對象**：`internal/sim/AGENTS.md`（已遷移至此）。
 
 `internal/sim` 執行投資組合模擬引擎：給定報價與建議，執行委託單、計算成交價、維持部位狀態。
 
@@ -8,7 +11,7 @@
 
 | 陷阱 | 說明 |
 |------|------|
-| **`RunWithState()` 就地變異狀態** | `state *domain.SimulationState` 引數會就地修改。多次透過相同狀態呼叫 `RunWithState` 會疊加影響。每次模擬前**必須**呼叫 `domain.NewSimulationState()`。參見根 `agents.md`「高危陷阱」第二項。 |
+| **`RunWithState()` 就地變異狀態** | `state *domain.SimulationState` 引數會就地修改。多次透過相同狀態呼叫 `RunWithState` 會疊加影響。每次模擬前**必須**呼叫 `domain.NewSimulationState()`。參見根 `AGENTS.md`「高危陷阱」第二項。 |
 | **無 SlippageModel = 固定 SlippageBPS** | 若不呼叫 `WithSlippageModel()`，引擎使用 `constraints.SlippageBPS`。此靜態值對高成交量股票過於寬鬆，對低流動性股票過於嚴格。 |
 | **Nil TaxCalculator 靜默跳過稅務** | 若 `taxCalc` 為 nil，引擎記錄警告並跳過稅務計算。最終 `SimulationResult` 的 PnL 為未稅，`FallbackEvents` 附 `"tax: nil calculator, skipping"`。 |
 | **股息資料耦合** | 稅務計算器需要 `dividends` map（透過 `WithDividends()` 設定）。若遺漏，稅務調整使用 0 股息，導致低估稅務責任。 |
@@ -21,7 +24,7 @@
 
 ## 核心執行流程
 
-```go
+```
 Engine.Run(regime, quotes, recs)
   → dayResult := Engine.RunDay(state, time, regime, quotes, recs)
     1. 套用反身性規則（就地變異 recs）
