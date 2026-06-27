@@ -11,8 +11,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-VALID_FIELDS="$REPO_ROOT/web/static/js/shared/valid_fields.json"
-JS_DIR="$REPO_ROOT/web/static/js"
+# Use shared_web as canonical source (gentags writes identical copies to all 4 dirs)
+VALID_FIELDS="$REPO_ROOT/shared_web/static/js/shared/valid_fields.json"
+# Scan JS across all 4 web directories (split frontend)
+JS_DIRS=("$REPO_ROOT/web/static/js" "$REPO_ROOT/admin_web/static/js" "$REPO_ROOT/client_web/static/js" "$REPO_ROOT/shared_web/static/js")
 
 if [ ! -f "$VALID_FIELDS" ]; then
   echo "ERROR: valid_fields.json not found. Run 'go generate .' first."
@@ -31,74 +33,58 @@ echo "✓ Loaded $ALLOW_COUNT valid field names from valid_fields.json"
 VIOLATIONS=0
 FOUND_FIELDS=$(mktemp)
 
-while IFS= read -r file; do
-  # Extract dot-accessed snake_case identifiers using perl (macOS grep lacks -P)
-  perl -ne 'while (/\.([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?=[^a-zA-Z0-9_])/g) { print "$1\n" }' "$file" 2>/dev/null | \
-  while IFS= read -r field; do
-    # Skip known JS built-ins and common patterns
-    case "$field" in
-      replace_state|page_load|auto_refresh|load_page|switch_page|render_overview|\
-      render_pipeline|render_macro|render_live|render_tool|render_inbox|\
-      render_backtest|render_evolution|render_parameters|render_synergy|\
-      load_all|load_modules|load_data|get_json|safe_get|format_date|escape_html|\
-      agent_name|stock_name|event_name|stress_label|sector_name|regime_label|\
-      fmt_ntd|num_results|pass_guards|target_price|stop_loss|forward_return|\
-      show_all|session_id|agent_id|channel_id|recorded_at|updated_at|created_at|\
-      class_name|on_click|data_page|data_theme|key_id|\
-      active_patterns|adjustment_breakdown|all_patterns|\
-      affected_sectors|avoided_sectors|favored_sectors|banned_sectors|\
-      annualized_return|baseline_prompt|\
-      calibration_evidence|capital_flow|changed_at|\
-      concentration_score|confidence_source|consecutive_failures|\
-      data_source|dealer_net|domestic_fund_net|event_id|\
-      fetch_at|foreign_investor_net|geo_error|geo_ok|\
-      historical_hit_rate|impact_count|impact_estimate|last_run|\
-      macro_error|macro_ok|market_close_time|market_hours_only|\
-      market_open_time|max_age_days|monthly_returns|narrative_themes|\
-      new_value|old_value|oldest_kept|orders_evaluated|\
-      paused_agents|prism_completed_results|recent_error|regime_since|\
-      retail_margin_balance|retail_short_balance|session_span|\
-      sharpe_like|shock_propagation_speed|signal_count|\
-      source_references|swarm_running|template_id|time_window|\
-      top_agents|total_assets|total_deleted|total_kept|\
-      trigger_theme|usd_twd|\
-      sox_pct|net_buy_twd|deviation_pct|change_pct|\
-      exit_alerts|logic_rules|sector_heatmap|\
-      confidence_breakdown) continue ;;  # TODO: planned substructure, not yet in Go struct
-      # Eventbus event type names (not data fields — these are SSE event listener
-      # registration strings like 'experiment.backtest_completed'). The regex
-      # matches the trailing identifier after the dot, but it's part of the
-      # event name constant, not a struct JSON field.
-      backtest_completed|calibration_completed) continue ;;
-      # Fields from map[string]any or packages not scanned by gentags
-      # (next_run is tagged in apigateway/, outside gentags scan scope;
-      # core_indicators is a wrapper map key around the CoreIndicators struct;
-      # empty_state is returned via map literal in
-      #   internal/monitoring/api/dashboard/fetch_log.go:79
-      # gate_mode is returned via map literal in
-      #   internal/monitoring/api/dashboard/risk/handlers.go:121
-      # action_type, action_description, confidence_commentary are returned via
-      #   map literal in internal/monitoring/api/risk/handlers.go:222-233
-      #   (HandleRiskCommentary) — designed fields with JS consumers + Go tests,
-      #   but built dynamically rather than via a typed response struct.
-      # agent_skill, signals_count are returned from internal/prism/ which is
-      #   outside gentags scan scope (only domain/api/service/reporting/industry/
-      #   narrative/config are scanned). Now json-tagged on prism structs as of
-      #   PR #677, but gentags still doesn't include them in valid_fields.json.)
-      # — both are designed fields with JS consumers + Go tests, but
-      # built dynamically rather than via a typed response struct.)
-      auto_discovered_count|auto_discovered_rules|\
-      avg_improvement|convergence_rate|success_rate|stability_score|\
-      confidence_score|oil_pct|vix_level|\
-      core_indicators|last_24h|next_run|\
-      empty_state|gate_mode|\
-      action_type|action_description|confidence_commentary|\
-      agent_skill|signals_count) continue ;;
-    esac
+# Global violation accumulator (aggregates across all JS dirs)
+VIOLATIONS=0
+FOUND_FIELDS=$(mktemp)
 
-    echo "$field" >> "$FOUND_FIELDS"
-  done
-done < <(find "$JS_DIR" -name '*.js' -not -path '*/shared/field_*' -not -path '*/shared/valid_*')
+for JS_DIR in "${JS_DIRS[@]}"; do
+  [ ! -d "$JS_DIR" ] && continue
+  while IFS= read -r file; do
+    perl -ne 'while (/\.([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?=[^a-zA-Z0-9_])/g) { print "$1\n" }' "$file" 2>/dev/null | \
+    while IFS= read -r field; do
+      case "$field" in
+        replace_state|page_load|auto_refresh|load_page|switch_page|render_overview|\
+        render_pipeline|render_macro|render_live|render_tool|render_inbox|\
+        render_backtest|render_evolution|render_parameters|render_synergy|\
+        load_all|load_modules|load_data|get_json|safe_get|format_date|escape_html|\
+        agent_name|stock_name|event_name|stress_label|sector_name|regime_label|\
+        fmt_ntd|num_results|pass_guards|target_price|stop_loss|forward_return|\
+        show_all|session_id|agent_id|channel_id|recorded_at|updated_at|created_at|\
+        class_name|on_click|data_page|data_theme|key_id|\
+        active_patterns|adjustment_breakdown|all_patterns|\
+        affected_sectors|avoided_sectors|favored_sectors|banned_sectors|\
+        annualized_return|baseline_prompt|\
+        calibration_evidence|capital_flow|changed_at|\
+        concentration_score|confidence_source|consecutive_failures|\
+        data_source|dealer_net|domestic_fund_net|event_id|\
+        fetch_at|foreign_investor_net|geo_error|geo_ok|\
+        historical_hit_rate|impact_count|impact_estimate|last_run|\
+        macro_error|macro_ok|market_close_time|market_hours_only|\
+        market_open_time|max_age_days|monthly_returns|narrative_themes|\
+        new_value|old_value|oldest_kept|orders_evaluated|\
+        paused_agents|prism_completed_results|recent_error|regime_since|\
+        retail_margin_balance|retail_short_balance|session_span|\
+        sharpe_like|shock_propagation_speed|signal_count|\
+        source_references|swarm_running|template_id|time_window|\
+        top_agents|total_assets|total_deleted|total_kept|\
+        trigger_theme|usd_twd|\
+        sox_pct|net_buy_twd|deviation_pct|change_pct|\
+        exit_alerts|logic_rules|sector_heatmap|\
+        confidence_breakdown) continue ;;
+        backtest_completed|calibration_completed) continue ;;
+        auto_discovered_count|auto_discovered_rules|\
+        avg_improvement|convergence_rate|success_rate|stability_score|\
+        confidence_score|oil_pct|vix_level|\
+        core_indicators|last_24h|next_run|\
+        empty_state|gate_mode|\
+        action_type|action_description|confidence_commentary|\
+        agent_skill|signals_count) continue ;;
+      esac
+
+      echo "$field" >> "$FOUND_FIELDS"
+    done
+  done < <(find "$JS_DIR" -name '*.js' -not -path '*/shared/field_*' -not -path '*/shared/valid_*')
+done
 
 # Deduplicate found fields
 sort -u "$FOUND_FIELDS" -o "$FOUND_FIELDS"
@@ -122,10 +108,12 @@ if [ "$UNKNOWN_COUNT" -gt 0 ]; then
   echo "These fields appear in JS but NOT in any Go JSON tag:"
   echo ""
   while IFS= read -r field; do
-    # Show where this field is used
     echo "  $field — used in:"
-    grep -rn "\.${field}[^a-zA-Z0-9_]" "$JS_DIR" 2>/dev/null | head -3 | while IFS= read -r match; do
-      echo "    $match"
+    for D in "${JS_DIRS[@]}"; do
+      [ ! -d "$D" ] && continue
+      grep -rn "\.${field}[^a-zA-Z0-9_]" "$D" 2>/dev/null | head -3 | while IFS= read -r match; do
+        echo "    $match"
+      done
     done
     echo ""
   done < "$UNKNOWN"

@@ -10,13 +10,20 @@
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
 //	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
 //
-// Writes:
+// Writes (to all 4 web directories so copies don't drift):
 //
-//	web/static/js/shared/field_types.ts   — TypeScript interfaces (single source of truth)
-//	web/static/js/shared/valid_fields.json — flat valid field list for CI
+//	web/static/js/shared/┐
+//	admin_web/static/js/shared/├ field_types.ts   — TypeScript interfaces
+//	client_web/static/js/shared/┤
+//	shared_web/static/js/shared/┘
+//	web/static/js/shared/┐
+//	admin_web/static/js/shared/├ valid_fields.json — flat valid field list for CI
+//	client_web/static/js/shared/┤
+//	shared_web/static/js/shared/┘
 //
 // This eliminates manual synchronization between Go backend structs
-// and frontend field access — a single source of truth.
+// and frontend field access — a single source of truth. All 4 copies
+// are regenerated from the same Go struct sources so they never drift.
 package main
 
 import (
@@ -44,8 +51,11 @@ func main() {
 	if filepath.Base(domainDir) == "domain" {
 		rootDir = filepath.Dir(rootDir)
 	}
-	outTS := filepath.Join(rootDir, "web/static/js/shared/field_types.ts")
-	outValidFields := filepath.Join(rootDir, "web/static/js/shared/valid_fields.json")
+	// Output to all 4 web directories so the copies don't drift.
+	// Before the frontend split (PR #749), only web/ existed. After the split,
+	// admin_web/, client_web/, shared_web/ each maintain their own copy.
+	// All 4 are regenerated from the same Go struct sources by cmd/gentags.
+	webDirs := []string{"web", "admin_web", "client_web", "shared_web"}
 
 	// Scan domain types first (foundational), then API response types (depend on domain types).
 	structs := parseStructs(domainDir)
@@ -126,8 +136,14 @@ func main() {
 		}
 	}
 
-	writeTypeScriptInterfaces(structs, outTS, false)
-	writeValidFields(structs, outValidFields)
+	for _, webDir := range webDirs {
+		outTS := filepath.Join(rootDir, webDir, "static/js/shared/field_types.ts")
+		outValidFields := filepath.Join(rootDir, webDir, "static/js/shared/valid_fields.json")
+		// Ensure parent dir exists (idempotent — no-op if already there)
+		os.MkdirAll(filepath.Dir(outTS), 0755)
+		writeTypeScriptInterfaces(structs, outTS, false)
+		writeValidFields(structs, outValidFields)
+	}
 }
 
 func findDomainDir() string {

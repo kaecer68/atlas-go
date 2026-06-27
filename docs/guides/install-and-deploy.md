@@ -16,31 +16,23 @@ If any step fails, check the [Troubleshooting](#troubleshooting) section at the 
 
 ## 1. Prerequisites
 
-Atlas-go is a Go backend + 3-frontend (esbuild) + Docker infra stack. You need:
+Atlas-go runs in Docker. To install and start the server, you only need:
 
 | Dependency | Version | Why | Install |
 |---|---|---|---|
-| **Go** | 1.26+ | Backend `cmd/atlas` + all `internal/*` packages | `brew install go` (macOS) or [go.dev/dl](https://go.dev/dl) |
-| **Node.js** | 20+ | `npm run build` for `web/` + `admin_web/` + `client_web/` | `brew install node@20` or [nodejs.org](https://nodejs.org) |
-| **Docker** + compose | 24+ | Local dev: postgres, redis, prometheus, grafana, atlas-go, prism worker, swarm runner | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) |
-| **PostgreSQL** | 15 | Persistent storage (`atlas-go` database) | (optional) local install; docker-compose 內含 |
-| **Redis** | 8 | Event bus + session state | (optional) local install; docker-compose 內含 |
-| **Python** | 3.13+ | Fubon SDK proxy (live trading only) | macOS 預設 3.14; Fubon venv 用 3.13 |
-| **git** | 2.30+ | Worktree workflow + pre-commit hooks | macOS 預設 |
-| **gh** CLI | 2.0+ | PR / issue workflows | `brew install gh` + `gh auth login` |
+| **Docker** + compose | 24+ | The entire stack (postgres, redis, atlas-go, etc.) runs in containers | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) |
+| **git** | 2.30+ | Clone the repo + pre-commit hooks | macOS 預設 |
 
-> **Why these versions?** Go 1.26 is the minimum for `slices.Concat` + `maps.Collect` used in `internal/orchestrator`. Node 20+ for esbuild 0.25+. PostgreSQL 15 + Redis 8 match `docker-compose.yml`.
+Everything else (Go 1.26+, Node.js 20+, PostgreSQL 15, Redis 8) is bundled inside the Docker image — you do **not** need to install them on your host.
 
 **Verify your setup**:
 
 ```bash
-go version       # go1.26 or higher
-node --version   # v20.x or higher
 docker --version # 24.x or higher
-gh --version     # 2.x
+git --version    # 2.30 or higher
 ```
 
-If any are missing, install before continuing.
+If either is missing, install before continuing.
 
 ---
 
