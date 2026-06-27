@@ -47,6 +47,7 @@ git config --global alias.cleanup-tools '!f() {
   git checkout -- .gitnexus/ 2>/dev/null;
   git checkout -- .opencode/package.json 2>/dev/null;
   echo "→ Removing dedup stale checkout remnants...";
+  # 整目錄殘檔(HEAD 中完全不存在這些目錄)
   rm -rf \
     admin_web/static/js/pages/ \
     admin_web/static/js/components/ \
@@ -54,15 +55,15 @@ git config --global alias.cleanup-tools '!f() {
     admin_web/static/js/__tests__/ \
     admin_web/static/js/shared/components/ \
     admin_web/static/css/ \
-    admin_web/tests/ \
     client_web/static/js/pages/ \
     client_web/static/js/components/ \
     client_web/static/js/services/ \
     client_web/static/js/__tests__/ \
     client_web/static/js/shared/components/ \
     client_web/static/css/ \
-    client_web/tests/ \
     2>/dev/null;
+  # 獨立檔案殘檔(注意: tests/ 目錄下有 tracked + untracked 混雜,
+  # 所以只 rm 特定 untracked 檔案,不能整目錄 rm)
   rm -f \
     admin_web/static/js/bootstrap-utils.js \
     admin_web/static/js/names.js \
@@ -72,6 +73,7 @@ git config --global alias.cleanup-tools '!f() {
     admin_web/static/js/shared/utils.js \
     admin_web/static/narrative-dashboard.html \
     admin_web/static/trading-dashboard.html \
+    admin_web/tests/narrative-explanation.spec.ts \
     client_web/static/js/bootstrap-utils.js \
     client_web/static/js/names.js \
     client_web/static/js/shared/app-utils.js \
@@ -80,6 +82,8 @@ git config --global alias.cleanup-tools '!f() {
     client_web/static/js/shared/utils.js \
     client_web/static/narrative-dashboard.html \
     client_web/static/trading-dashboard.html \
+    client_web/tests/prism-training-results.spec.ts \
+    client_web/tests/risk-commentary.spec.ts \
     2>/dev/null;
   echo "→ Current status:";
   git status --short;
