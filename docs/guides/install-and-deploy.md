@@ -51,9 +51,55 @@ cd atlas-go
 bash scripts/install-hooks.sh
 ```
 
-This installs `.githooks/pre-commit` (5 phases: binary detection, PID files, coverage output, frontend imports, **go generate drift check**) into `.git/hooks/`. Without this, the pre-commit Phase 5 won't block manual edits to `web/static/js/shared/field_types.ts` + `valid_fields.json`.
+This installs `.githooks/pre-commit` (5 phases: binary detection, PID files, coverage output, frontend imports, **go generate drift check**) + `.githooks/pre-push` (blocks redundant pushes when HEAD == origin/main or zero diff vs main) into `.git/hooks/`. Without this, the pre-commit Phase 5 won't block manual edits to `web/static/js/shared/field_types.ts` + `valid_fields.json`, and the pre-push won't catch the "empty branch → closed-as-redundant PR" failure mode (PR #799 lesson).
 
 > **如果略過這步,未來 AI Coding agent 可能手動改這兩個 generated 檔案,被 CI `generate` job 擋下,造成 PR 整批 fail。** 詳見 `web/AGENTS.md` "Generated Files" 章節。
+
+### 2.2a Optional: AI Coding safety net (opencode plugin)
+
+由於 `.opencode/` 是 gitignored（本機設定),每台機器若希望本機 AI agent 享有「修改 `internal/` 或 `cmd/` 前提示呼叫 `atlas-pre-change-protocol` skill」的保護,需自行註冊 plugin。流程:
+
+1. 建立 `<repo>/.opencode/plugins/pre-change-guard.ts` (59 行,內容見下方)
+2. 在 `<repo>/.opencode/opencode.json` 的 `plugin` 欄位加入路徑:
+
+```json
+{
+  "plugin": ["./plugins/pre-change-guard.ts"]
+}
+```
+
+**plugin source** (複製貼上即可):
+
+```typescript
+// .opencode/plugins/pre-change-guard.ts
+import type { Plugin } from "@opencode-ai/plugin"
+
+const EDIT_TOOLS = new Set(["edit", "write", "patch"])
+const PROTECTED = /\/(internal|cmd)\/[^/]+$/
+
+export const PreChangeGuard: Plugin = async () => {
+  const warned = new Set<string>()
+  return {
+    "tool.execute.before": async (input, output) => {
+      if (!EDIT_TOOLS.has(input.tool)) return
+      const filePath = output?.args?.filePath
+      if (typeof filePath !== "string") return
+      if (!PROTECTED.test(filePath)) return
+      const key = `${input.tool}:${filePath}`
+      if (warned.has(key)) return
+      warned.add(key)
+      console.warn(
+        `\n⚠️  [pre-change-guard] ${input.tool} on protected path:\n   ${filePath}\n` +
+        `   BEFORE this edit, invoke: skill(name="atlas-pre-change-protocol") ` +
+        `(Step 0 OVERLAP DETECTION)\n`,
+      )
+    },
+  }
+}
+export default PreChangeGuard
+```
+
+**為什麼建議裝**:AI agent 每天都在 internal/ 和 cmd/ 內寫出已存在的 function / type / module,造成浪費的 PR (PR #799 是最近的案例)。這個 plugin 不會阻擋開發,只在 AI 即將犯錯時印顯眼警告。
 
 ### 2.3 Set up environment variables
 

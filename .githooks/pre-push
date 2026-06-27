@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# .githooks/pre-push — Block redundant pushes before they reach the remote
+#
+# Catches two failure modes that previously caused wasted CI runs:
+#   1. Local branch HEAD == origin/main  → nothing meaningful to push
+#   2. Zero file diff vs origin/main       → PR will be closed as redundant
+#      (this is the exact failure mode that produced PR #799 — branch had
+#       no unique work vs main, but was pushed and PR'd anyway)
+#
+# Install: bash scripts/install-hooks.sh
+#
+# Skip with: git push --no-verify (use only if you know what you're doing)
+
+set -euo pipefail
+
+remote="$1"
+url="$2"
+
+# Only check the primary remote. Forks / mirrors can be intentional.
+if [ "$remote" != "origin" ]; then
+  exit 0
+fi
+
+# Fast-fetch origin/main so diffs are accurate.
+if ! git fetch origin main --quiet 2>/dev/null; then
+  echo "⚠️  pre-push: cannot fetch origin/main — skipping checks"
+  exit 0
+fi
+
+local_sha=$(git rev-parse HEAD)
+main_sha=$(git rev-parse origin/main)
+
+# Case 1: HEAD already on main — nothing to push.
+if [ "$local_sha" = "$main_sha" ]; then
+  echo ""
+  echo "❌ pre-push: HEAD is already on origin/main."
+  echo "   Nothing to push. Did you mean to merge first?"
+  echo "   If pushing main itself: git push --no-verify"
+  echo ""
+  exit 1
+fi
+
+# Case 2: zero diff vs origin/main (branch unique content = empty).
+diff_count=$(git diff --name-only origin/main...HEAD 2>/dev/null | wc -l | tr -d ' ')
+if [ "$diff_count" -eq 0 ]; then
+  echo ""
+  echo "❌ pre-push: branch has zero file diff vs origin/main."
+  echo "   PR will be empty / closed as redundant (see PR #799 lesson)."
+  echo "   Verify with: git diff --stat origin/main...HEAD"
+  echo "   Bypass with: git push --no-verify"
+  echo ""
+  exit 1
+fi
+
+echo "✅ pre-push: $diff_count file(s) differ from origin/main — push allowed"
+exit 0
