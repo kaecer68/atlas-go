@@ -40,7 +40,7 @@
 - [ ] `go build ./...` succeeds
 - [ ] `go test ./...` passes
 - [ ] New tests added for changed code paths
-- [ ] Coverage maintained at ≥40% (per `internal/MATURITY.md`)
+- [ ] Coverage maintained at ≥60% (per `internal/MATURITY.md`)
 
 ## Migration guide
 

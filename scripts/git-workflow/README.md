@@ -63,4 +63,4 @@ Before creating PR, ensure:
 - [ ] `go test ./...` passes
 - [ ] `gofmt -l .` returns empty
 - [ ] `staticcheck ./...` passes
-- [ ] Coverage ≥ 40%
+- [ ] Coverage ≥ 60%
