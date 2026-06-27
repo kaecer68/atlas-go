@@ -143,5 +143,31 @@ Propose → Execute → Judge → Promote/Revert
 
 ---
 
-*技能版本: 1.1*  
-*最後更新: 2026-06-08*
+## Agent Spawning 模組（internal/spawning）
+
+自動偵測系統知識缺口並生成新 Agent，管理完整生命週期。
+
+| 陷阱 | 說明 |
+|------|------|
+| **PromptsDir 必須為絕對路徑** | `SpawningConfig.PromptsDir` 預設 `"prompts"` 相對於 CWD；`ManualSpawn` 前需確認工作目錄 |
+| **Agent 初始為 disabled** | `AgentFactory.CreateAgentForGap` 產生 `Enabled: false`，必須經 `AcceptAgent()` 才啟用 |
+| **Extinction 閾值 20 天** | `CheckExtinction()` 預設權重維持在 DarwinianWeightMin(0.3) 以下 20 天即淘汰 |
+| **ManualSpawn 不進內部 map** | `ManualSpawn()` 只建立並回傳 `SpawnedAgent`，不會自動加入 `spawnedAgents` map（測試有註解）|
+| **Gap 優先排序用 bubble sort** | `prioritizeGaps()` 使用簡單排序（列表小，非效能瓶頸），嚴重程度加權後以年齡微調 |
+
+## MetaLearner（internal/metalearning）
+
+透過遺傳演算法根據 MiroFish swarm 回饋持續優化學習策略參數。
+
+| 陷阱 | 說明 |
+|------|------|
+| **冷啟動分數為 0** | `calculateStrategyScore()` 在 `TotalApplications == 0` 時回傳 0，新策略初期排名墊底 |
+| **通道滿載丟棄** | `SubmitSwarmData` 與 `SubmitTrainingResult` 使用緩衝 channel（容量 100），滿載時直接丟棄 |
+| **pseudo-random 為 deterministic** | 使用自訂 LCG（`deterministicRand`），測試可重現但非加密安全 |
+| **參數突變可能為負** | `mutateStrategy()` 對 `learning_rate`/`batch_size` 取絕對值，其他參數可能變為負數 |
+| **Save/Load 只存 ID 引用** | `Save()` 將 population 與 elite 存為 ID 列表；`Load()` 需從 `strategies` map 還原引用 |
+
+---
+
+*技能版本: 1.2*  
+*最後更新: 2026-06-27*

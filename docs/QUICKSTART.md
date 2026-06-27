@@ -13,6 +13,20 @@ go run ./cmd/promote-baseline               # 升版 (auto-discovers latest acce
 go run ./cmd/backtest-window -start ... -end ...
 ```
 
+---
+
+## 系統初始化順序（bootstrap）
+
+`internal/bootstrap` 初始化流程**不可顛倒**：`InitMetrics() → InitDatabase() → InitStores() → InitRepository() → InitTaskManager()`，接著 `RegisterDashboardRoutes()` 依序註冊各模組路由，最後 `ApplyBrokerConfig()` 驗證 live mode。Repository 依賴 Stores，Stores 依賴 Ledger — 顛倒會 panic。
+
+| 陷阱 | 說明 |
+|------|------|
+| Broker dry-run 預設 | 未覆寫時 mode=`dry-run`、adapter=`guarded`、signer=`placeholder`；需同時設 `AllowLiveBroker` + `AllowRealSigner` 顯式 opt-in |
+| DATABASE_URL 為空時 graceful | `InitDatabase` 回傳 `nil, nil`，後續邏輯需判斷 nil |
+| ATLAS_STORE_BACKEND 直接讀 env | `InitStores` 繞過 Gateway，僅限啟動階段使用（祖父條款） |
+
+---
+
 ## CI 指令（修改後必跑）
 
 ```bash
