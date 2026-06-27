@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### docs(tools): clarify gitnexus vs codebase-memory-mcp-pro fork usage (PR #807)
+
+Atlas hosts both `gitnexus` MCP and `codebase-memory` MCP (the latter is the `codebase-memory-mcp-pro` fork — ships no prebuilt binaries, includes fork-exclusive fixes for #528 incremental-reindex correctness, #465 Cypher `WITH` aggregation, the new `explore` MCP tool, etc.). Two complementary code-intelligence tools, not a redundancy. AI agents picking between them blindly wastes tokens and risks parallel duplicate implementations.
+
+This PR rewrites `docs/TOOLS.md` and `.claude/skills/atlas-pre-change-protocol/SKILL.md` so the tool surface, the routing tree, and the 8-step pre-change protocol all reflect this correctly:
+
+- **Factual error fixes**: `Leiden` → `Louvain` (9 occurrences across both files — codebase-memory uses Louvain, not Leiden); BM25 boost label precision (`Functions/Methods +10 / Routes +8 / Classes/Interfaces +5`).
+- **Fork-exclusive tool exposure**: Step 1.5 `EXPLORE` section added to the pre-change protocol — `codebase-memory_explore` returns blast-radius + nearby-neighbors + verbatim source in one call, complementing `gitnexus_impact` for medium/low-risk changes (HIGH/CRITICAL still must use `gitnexus_impact` for risk levels + Process flow); `detect_changes({depth:N})` transitive caller blast radius; Cypher aggregation fix.
+- **Hybrid LSP / 158 languages**: documents Go is a Hybrid LSP language (semantic type-aware CALLS resolution directly relevant to atlas-go).
+- **Stale index numbers demoted to live-fetch**: 2026-06-25 snapshot (29,757 nodes / 127,367 edges / 92.7 MB) replaced with `請執行 codebase-memory_list_projects() 取得 live 數字` in 6 locations; resolves 9x drift between snapshot and live.
+- **Routing decision tree** adds `codebase-memory_explore` and `codebase-memory detect_changes({depth:N})` as alternatives to GitNexus options.
+- **Naming collision fix**: `explore` (oh-my-opencode subagent) vs `codebase-memory_explore` (MCP tool) disambiguated in the SKILL.md tool table.
+- **`detect_changes` self-disambiguation** in Fork-exclusive section: GitNexus version provides Risk level (LOW/MEDIUM/HIGH/CRITICAL) + affected Process flow; codebase-memory fork version provides only N-hop caller list. HIGH/CRITICAL must use GitNexus.
+
+Verified by Oracle review (APPROVE WITH MODIFICATIONS, all applied) and `/review` workflow (testing specialist: NO FINDINGS; maintainability specialist: 5 findings, all fixed). Atlas code paths unchanged; documentation only. No VERSION bump (docs-only follow-up to `0.0.0.21`).
+
 ### fix(orchestrator): align SemiconductorLLMAgent metrics to Issue #740 spec
 
 Spec-alignment follow-up to PR #743. Rewrites the `slog.Info` events in `SemiconductorLLMAgent.Recommend` to match the exact event names and field names in `kaecer68/atlas-go#740`:
