@@ -23,6 +23,7 @@
 | 架構憲法 | `internal/apigateway/CONSTITUTION.md` |
 | 前端架構（admin_web / client_web / shared_web） | `## 前端架構`（下方） |
 | 部署設定（本機 Docker） | `## 部署設定`（下方） |
+| **修改程式碼前必跑** | `.claude/skills/atlas-pre-change-protocol/SKILL.md`（Step 0 重疊檢查 + Step 1-7 強制流程） |
 
 ## 前端架構
 
@@ -162,7 +163,7 @@ docker compose up -d
 
 ## Token Efficiency Rules
 
-- **Scoped reads**: Use targeted file paths (e.g. `web/static/css/main.css`) instead of directory reads. Never read `data/` or `.gitnexus/`.
+- **Scoped reads**: Use targeted file paths (e.g. `shared_web/static/css/main.css`) instead of directory reads. Never read `data/` or `.gitnexus/`.
 - **/compact between subtasks**: Run `/compact` between independent subtasks to reclaim context window.
 - **Frontend scope**: For CSS/JS-only changes, skip impact analysis entirely. Only run `gitnexus_impact` for Go backend changes touching 3+ symbols.
 - **Precise file targeting**: Before reading, verify the exact file path with `glob`. Avoid speculative reads of large files.
