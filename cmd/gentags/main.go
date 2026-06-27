@@ -140,7 +140,10 @@ func main() {
 		outTS := filepath.Join(rootDir, webDir, "static/js/shared/field_types.ts")
 		outValidFields := filepath.Join(rootDir, webDir, "static/js/shared/valid_fields.json")
 		// Ensure parent dir exists (idempotent — no-op if already there)
-		os.MkdirAll(filepath.Dir(outTS), 0755)
+		if err := os.MkdirAll(filepath.Dir(outTS), 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "gentags: failed to create dir %s: %v\n", filepath.Dir(outTS), err)
+			os.Exit(1)
+		}
 		writeTypeScriptInterfaces(structs, outTS, false)
 		writeValidFields(structs, outValidFields)
 	}
