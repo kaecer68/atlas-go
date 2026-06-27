@@ -132,18 +132,39 @@
 
     <!-- 宏觀敘事 -->
     <div class="page" id="page-narrative">
+      <div class="narrative-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
+        <div class="panel" style="border-color:rgba(var(--accent-rgb),0.2);"><h2 style="color:var(--accent)">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
+        <div class="panel" style="border-color:rgba(var(--color-danger-rgb),0.2);"><h2 style="color:var(--color-danger)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
+      </div>
       <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
-        <div class="panel"><div id="narrativeSeasonal" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>季節性分析</h2><div id="narrativeSeasonal" class="empty loading">載入中…</div></div>
       </div>
       <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);">
-        <div class="panel"><div id="narrativeChains" class="empty loading">載入中…</div></div>
-        <div class="panel"><div id="narrativeModels" class="empty loading">載入中…</div></div>
-        <div class="panel"><div id="narrativeTemplates" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>投資模型</h2><div id="narrativeModels" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>因果模板庫</h2><div id="narrativeTemplates" class="empty loading">載入中…</div></div>
       </div>
     </div>
 
-    <!-- 風控結果 -->
+    <!-- 風控營運台 -->
     <div class="page" id="page-live">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現<strong>風控層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
+        若風控長阻擋率高，請檢查【宏觀敘事】的外資出逃指數是否飆升（紅燈）；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
+      </details>
+      <div class="panel wide mb-sm" style="padding:10px var(--space-md);"><h2 style="margin-bottom:4px;">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading" style="padding:4px 0;">載入中…</div></div>
+      <div class="live-grid">
+        <div class="panel panel--compact"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
+        <div class="panel panel--compact"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
+      </div>
+      <div class="panel wide" id="riskCardsPanel" style="display:none;">
+        <h2>風險指標</h2>
+        <div id="riskCards" class="kpi-grid"></div>
+        <div id="riskPositionConcentration"></div>
+        <div id="riskSectorDistribution"></div>
+      </div>
       <div class="panel wide" id="riskCalibrationPanel" style="display:none;">
         <h2>自主校準</h2>
         <div id="riskCalibration" class="empty loading">載入中…</div>
@@ -246,7 +267,8 @@
       <div class="panel wide" style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap" id="evolutionViews">
            <span style="font-size:13px;font-weight:700">視覺圖：</span>
-           <button class="view-btn active" id="evView-ai-analysis">AI 競爭分析</button>
+           <button class="view-btn active" id="evView-compact">總覽儀表板</button>
+           <button class="view-btn" id="evView-ai-analysis">AI 競爭分析</button>
         </div>
       </div>
       <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>
@@ -388,12 +410,30 @@
     </div>
 
     <div class="page" id="page-industry">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現 Atlas 對台灣產業的<strong>多維度分析</strong>，包含產業分類樹、週期定位、供應鏈連動與季節性模式。
+        點擊產業卡片可查看詳細的週期羅盤與衝擊傳導分析。
+      </details>
       <div class="two-col-grid">
-        <div class="panel"><div id="industryCycle" class="empty loading">載入中…</div></div>
-        <div class="panel"><div id="industryLinkage" class="empty loading">載入中…</div></div>
-        <div class="panel"><div id="industrySeasonality" class="empty loading">載入中…</div></div>
+        <div class="panel"><div class="panel-header"><h2>產業地圖</h2><div class="panel-header-actions"><span id="sectorLastUpdated" class="last-updated" title="最後更新時間">--</span><button type="button" id="sectorRefreshBtn" class="refresh-btn" title="手動刷新" aria-label="手動刷新">↻</button></div></div><div id="industryMap" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" title="週期燈號計算說明" style="font-size:14px">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
       </div>
+      <div class="panel wide mt-16">
+        <h2>供應鏈網路圖</h2>
+        <div id="industryGraph" class="empty loading" style="height: 400px;">載入中…</div>
       </div>
+      <div class="panel mt-16"><h2>衝擊模擬</h2>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+          <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
+          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
+          <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
+          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--accent);cursor:pointer">▶ 執行模擬</button>
+        </div>
+        <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
+      </div>
+    </div>
 
     <!-- 人機協同 -->
     <div class="page" id="page-synergy">
