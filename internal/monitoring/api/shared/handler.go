@@ -12,22 +12,44 @@ import (
 // WriteJSON is called centrally by Adapt(), eliminating 73 duplicate call sites.
 type Handler func(r *http.Request) (status int, data any)
 
-// authFreePaths lists the HTTP paths that AuthMiddleware always passes
-// through without checking authentication. These are the docker
-// healthcheck endpoints and the Prometheus scrape endpoint, which
-// must remain reachable without credentials so that orchestrators
-// (docker, k8s, prometheus) can probe the service.
+// authFreeExactPaths lists HTTP paths that AuthMiddleware passes through
+// without checking authentication. These are the docker healthcheck
+// endpoints and the Prometheus scrape endpoint, which must remain
+// reachable without credentials so that orchestrators (docker, k8s,
+// prometheus) can probe the service.
 //
 // Symmetric with cmd/atlas/main.go's finalMux path-bypass: we keep
 // both so that any caller that wires AuthMiddleware directly (e.g.
 // via apishared.Adapt) also gets the same exemption.
-var authFreePaths = map[string]bool{
+//
+// Web UI HTML pages (`/admin`, `/client`) and their static assets
+// (`/admin/*`, `/client/*`, `/static/*`) are public because the browser
+// loads them without an API key — the JS inside adds the X-API-Key
+// header for subsequent /api/* calls. Without this exemption the
+// login page itself would 401 before any JS runs.
+var authFreeExactPaths = map[string]bool{
 	"/health":  true,
 	"/metrics": true,
+	"/admin":   true,
+	"/client":  true,
+}
+
+var authFreePrefixPaths = []string{
+	"/admin/",
+	"/client/",
+	"/static/",
 }
 
 func isAuthFreePath(p string) bool {
-	return authFreePaths[p]
+	if authFreeExactPaths[p] {
+		return true
+	}
+	for _, prefix := range authFreePrefixPaths {
+		if strings.HasPrefix(p, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // AuthMiddleware checks API key authentication.

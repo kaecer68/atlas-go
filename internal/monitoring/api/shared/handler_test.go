@@ -283,6 +283,57 @@ func TestAuthMiddleware_ProbingPathsBypassAuth(t *testing.T) {
 	}
 }
 
+// TestAuthMiddleware_WebUIPathsBypassAuth verifies that /admin, /client,
+// and their sub-paths (served via http.StripPrefix on /admin/, /client/,
+// /static/) are reachable without any auth header. The browser loads
+// the HTML and static JS bundles first; only subsequent /api/* calls
+// carry X-API-Key. Without these exemptions the login page itself
+// would 401 before any JS runs, breaking the web UI entirely.
+func TestAuthMiddleware_WebUIPathsBypassAuth(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	t.Setenv("ATLAS_API_KEY", "secret-key")
+
+	hits := 0
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Exact + prefix paths the web UI uses for HTML/static assets.
+	// Each must bypass auth — otherwise the login page itself 401s before JS runs.
+	paths := []string{
+		"/admin",
+		"/admin/",
+		"/admin/index.html",
+		"/admin/some/nested/asset.js",
+		"/client",
+		"/client/",
+		"/client/dashboard.html",
+		"/static/css/main.css",
+		"/static/js/app.js",
+	}
+	for _, path := range paths {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusOK {
+			t.Errorf("%s without auth: status = %d, want %d (body=%s)",
+				path, w.Code, http.StatusOK, w.Body.String())
+		}
+	}
+	if hits != len(paths) {
+		t.Errorf("next handler invocations = %d, want %d", hits, len(paths))
+	}
+
+	for _, path := range []string{"/api/dashboard/x", "/adminfoo", "/adminx"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("protected path %s without auth: status = %d, want %d",
+				path, w.Code, http.StatusUnauthorized)
+		}
+	}
+}
+
 func TestRequireAdmin(t *testing.T) {
 	t.Setenv("ATLAS_ADMIN_KEY", "admin-secret")
 	h := RequireAdmin(func(r *http.Request) (int, any) {
