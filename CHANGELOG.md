@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.0.0.22] - 2026-06-28
+
+### Fixed
+- **5 services crash loop on local dev**: `atlas-prism-worker` fell through to `runSimulation()` (60s restart cycle) → fixed with subcommand routing (`isPrismWorkerCmd` + `runPrismWorker`); `atlas-grafana` provisioning errors → volume reset; `atlas-alertmanager` YAML indentation bug → fixed; `atlas-otel-collector` `postgresql` exporter doesn't exist → switched to `debug`. 5-minute boot test now runs clean with 0 restarts.
+- **Docker `atlas` healthcheck 401**: `ATLAS_API_KEY=${ATLAS_API_KEY}` in `docker-compose.yml` shell-expanded to empty in local dev, putting `AuthMiddleware` into production-misconfigured branch → removed the override, let `env_file` be the single source. `/health` and `/metrics` now bypass auth unconditionally via `authFreePaths` map in `AuthMiddleware` itself (not just caller-side bypass), so `apishared.Adapt()` wrappers also get the exemption.
+- **fubon-proxy 503 in container**: `FUBON_PERSONAL_ID` / `FUBON_PASSWORD` etc. were shell-expanded empty (`host shell` doesn't have them) → switched to `env_file: ~/.config/atlas-go/.env` like `atlas` service. `fubon_neo==2.2.8` is now installed from official `fbs.com.tw` CDN wheel with auto-detected `TARGETARCH` (arm64→aarch64, amd64→x86_64) — exits 1 on unknown arch.
+- **Test infrastructure for adapter tests**: `writeParametersJSON` helper hand-rolled a partial config that failed `Validate()` (`base_allocations sum must be 1.0±0.01`) → fell back to `DefaultParametersConfig()` → BDI/Fubon/Fugle adapter tests fetched the real CNBC URL and failed parsing. Now uses repo's `configs/parameters.json` as template + applies overrides, with `findRepoParametersJSON` locating the file from any cwd up to 6 levels.
+- **Test env contamination**: `cmd/atlas` integration tests assumed `os.Unsetenv("ATLAS_API_KEY")` would clear auth, but `config.Load()` re-populates via `loadWithLookupEnv` from `~/.config/atlas-go/.env` → switched to `os.Setenv("", "")` so `LookupEnv` returns `("", true)` and the .env loader skips it.
+- **golangci-lint unparam**: `runPrismWorker` had `error` return type but always returned nil (prism.Start/Stop don't return error) → `//nolint:unparam` with godoc explaining signature stays consistent with sibling `run*` dispatch targets.
+
+### Changed
+- `cmd/atlas/main.go` adds `isPrismWorkerCmd(args)` exact-match router before heavy init (DB-less worker startup) and `runPrismWorker` daemon with `prismMgr.Start()` + `defer Stop()` (previously manager was created but never started — dashboard-enqueued tasks piled up without processing).
+- `docker-compose.yml` fubon-proxy now uses `env_file` for FUBON secrets and has `args:` for `FUBON_NEO_VERSION` build arg; `prism-worker` gets `healthcheck: disable: true` (inherited `curl /health` from Dockerfile only works for the API service).
+- `.env.example` now commits dev defaults: `ATLAS_API_KEY=e2e-test-key-not-for-prod` (with godoc warning to replace via `openssl rand -hex 32` for production) and `ATLAS_ENV=development` so `cp .env.example .env` works without manual edits.
+
+### Removed
+- `.env_example` stale orphan file (untracked duplicate of `.env.example` from a historical `.env` directory change).
+
+### Documentation
+- `docs/investigations/2026-06-28-boot-loop-multi-service.md` — full RCA: 9 root causes with docker events, code evidence, commit references, and the 5-min boot test protocol.
+- `docs/TRAPS.md` Deploy/Docker section: ENTRYPOINT vs command conflict, env_file precedence, Dockerfile hardcoded healthcheck.
+- `docs/ENVIRONMENT.md` § Fubon SDK: revised away from "PyPI 404" speculation to accurate description (not on PyPI, official CDN only, wheel platform distribution table).
+- `docs/guides/install-and-deploy.md`: env_file gotcha + `openssl rand -hex 32` for `ATLAS_API_KEY`.
+- `services/fubon-proxy/README.md`: Docker deploy design section (wheel install, .p12 mount).
+
 ## [Unreleased]
 
 ### docs(tools): clarify gitnexus vs codebase-memory-mcp-pro fork usage (PR #807)
