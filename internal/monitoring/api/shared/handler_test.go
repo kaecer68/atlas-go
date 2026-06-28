@@ -246,6 +246,43 @@ func TestAuthMiddleware_AcceptsBearerAndRejectsBadKey(t *testing.T) {
 	}
 }
 
+// TestAuthMiddleware_ProbingPathsBypassAuth verifies that /health and
+// /metrics are reachable without any auth header even when
+// ATLAS_API_KEY is set. This is the contract docker healthcheck and
+// Prometheus scrapers rely on. Regression guard for the bypass that
+// was previously only at cmd/atlas/main.go finalMux — moving the
+// logic into AuthMiddleware itself means every caller (including
+// Adapt() wrappers in monitoring handlers) gets the same exemption.
+func TestAuthMiddleware_ProbingPathsBypassAuth(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	t.Setenv("ATLAS_API_KEY", "secret-key")
+
+	hits := 0
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for _, path := range []string{"/health", "/metrics"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusOK {
+			t.Errorf("%s without auth: status = %d, want %d (body=%s)",
+				path, w.Code, http.StatusOK, w.Body.String())
+		}
+	}
+	if hits != 2 {
+		t.Errorf("next handler invocations = %d, want 2 (one per probe path)", hits)
+	}
+
+	// Non-probing paths still require auth
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/dashboard/x", nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("protected path without auth: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestRequireAdmin(t *testing.T) {
 	t.Setenv("ATLAS_ADMIN_KEY", "admin-secret")
 	h := RequireAdmin(func(r *http.Request) (int, any) {

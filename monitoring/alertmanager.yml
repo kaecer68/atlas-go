@@ -67,7 +67,7 @@ receivers:
           {{ end }}
         send_resolved: true
 
-- name: info-slack
+  - name: info-slack
     slack_configs:
       - channel: "#atlas-alerts-info"
         title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'

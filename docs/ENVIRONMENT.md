@@ -38,15 +38,63 @@ the user first. These were carefully configured.**
 
 **Path**: `~/.config/atlas-go/.fubon-env/`
 
-**Contents** (verified 2026-06-25):
+**SDK 來源(非公開 PyPI)**:富邦新一代 API 的官方 Python SDK,**從未放在公開 PyPI**。必須於 [`https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk`](https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk) 簽署 API 服務申請書後,從 `https://www.fbs.com.tw/TradeAPI_SDK/fubon_binary/` 手動下載 wheel。Dockerfile 用 `curl` + `pip install <wheel>` 在 build 階段處理。
+
+**Contents** (verified 2026-06-28):
 
 | File | Purpose |
 |---|---|
 | `bin/python` (3.13.7) | Python interpreter for Fubon proxy |
-| `bin/pip` + fubon_neo 2.2.8 | Official Fubon Python SDK |
+| `bin/pip` + fubon_neo 2.2.8 | Official Fubon Python SDK(從官方 wheel 安裝) |
 | `M120628569_20270620.p12` | Personal certificate for DMA login |
-| `lib/python3.13/site-packages/fubon_neo/...` | SDK source |
+| `lib/python3.13/site-packages/fubon_neo/` | SDK source(`_fubon_neo.abi3.so` + Python 模組) |
 | `pyvenv.cfg` | venv config (system-site-packages enabled) |
+
+**⚠️ 重要:`fubon-neo` 不是公開 PyPI 套件(不是下架,是從未在上面)**
+
+- `https://pypi.org/pypi/fubon-neo` 回 404 — 因為這個 package **本來就不在 PyPI**,它是富邦證券內部 SDK
+- `https://pypi.org/simple/fubon-neo/` 同樣 404
+- 因此 **`pip install fubon-neo==2.2.8` 一定會失敗** — 不是版本問題,是來源問題
+- 唯一可用來源:官方 wheel 下載頁
+- **不要** 假裝 SDK 「下架了」或試圖用「舊版」從 PyPI 裝 — 從來就沒有 PyPI 版本
+
+**Wheel 平台分發(官方提供)**
+
+| 平台 | wheel 檔名 | Python 支援 |
+|------|------------|------------|
+| Windows x64 | `fubon_neo-2.2.8-cp37-abi3-win_amd64.zip` | 3.8-3.13 |
+| macOS arm64 | `fubon_neo-2.2.8-cp37-abi3-macosx_11_0_arm64.zip` | 3.8-3.13 |
+| macOS x86_64 | `fubon_neo-2.2.8-cp37-abi3-macosx_10_12_x86_64.zip` | 3.8-3.13 |
+| Linux x64 | `fubon_neo-2.2.8-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.zip` | 3.8-3.13 |
+
+「cp37-abi3」是 wheel tag,意思是 stable ABI from Python 3.7+;不是 Python 3.7 only。所以 manylinux_2_17 wheel 跟 Python 3.13 是相容的(因為 3.13 >= 3.7,abi3 向前相容)。
+
+**Docker 部署的 build 機制**(`Dockerfile`):
+
+```dockerfile
+ARG FUBON_NEO_WHEEL_URL=https://www.fbs.com.tw/TradeAPI_SDK/fubon_binary/fubon_neo-2.2.8-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.zip
+RUN curl -fsSL "${FUBON_NEO_WHEEL_URL}" -o /tmp/fubon_neo.zip \
+    && unzip -j /tmp/fubon_neo.zip '*.whl' -d /tmp/fubon_wheel \
+    && pip install --no-cache-dir /tmp/fubon_wheel/*.whl
+```
+
+Dockerfile 必須用 `python:3.13-slim`(對齊官方支援範圍 3.8-3.13),不要用 3.12(manylinux wheel 雖然 abi3 向前相容,但 3.13 是官方文件列的支援版本)。
+
+**`.p12` 憑證 mount**(`docker-compose.yml`):
+
+```yaml
+fubon-proxy:
+  volumes:
+    # mount 整個 .fubon-env(只為 .p12),路徑對齊 main.py:_find_cert 搜尋路徑
+    - ~/.config/atlas-go/.fubon-env:/home/appuser/.config/atlas-go/.fubon-env:ro
+```
+
+SDK 本身由 Dockerfile 從官方 wheel install(不靠 mount);只有 `.p12` 憑證需要 mount。
+
+**升級 SDK 版本**:
+1. 到 [官方下載頁](https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk) 確認新版本 + wheel URL
+2. 改 `docker-compose.yml` 的 `args:` (FUBON_NEO_VERSION + FUBON_NEO_WHEEL_URL)
+3. `docker compose build fubon-proxy` — 重新從官方拉 wheel install
 
 **Account** (from `.env` + Keychain):
 - Name: 詹博凱
@@ -82,6 +130,11 @@ ls ~/.config/atlas-go/.fubon-env/*.p12  # should show certificate file
   already in `~/.config/atlas-go/` for re-installation if needed, but do not
   rebuild unless user explicitly requests
 - ❌ Ask "do you have Fubon SDK?" — it IS set up; verify with commands above
+- ❌ Try to `pip install fubon-neo` from PyPI — it's NOT on PyPI (never was);
+  download the wheel from the official Fubon site
+- ❌ Mount the host's macOS venv into a Linux container — the macOS .so
+  is Mach-O, will not load on Linux. The Dockerfile downloads the
+  proper manylinux wheel from the official site instead
 - ❌ Treat `-allow-live-broker` as dangerous-by-default in this env — it is
   safe because the SDK + cert + .env are all present (AGENTS.md:95 warning
   is for environments WITHOUT these pre-installed)
@@ -144,8 +197,12 @@ go version
 **System Python**: 3.14.4 (`/opt/homebrew/bin/python3`)
 **Fubon venv Python**: 3.13.7 (`~/.config/atlas-go/.fubon-env/bin/python`)
 
-The system Python is for general use. The Fubon venv Python is locked to 3.13
-because `fubon_neo 2.2.8` is built for `cp37-abi3` (Python 3.7+).
+The system Python is for general use. The Fubon venv Python 是 **3.13** 因為:
+- `fubon_neo 2.2.8` 官方支援 Python 3.8-3.13(v2.0.1 後停止支援 3.7,**也不支援 3.14**)
+- 「cp37-abi3」是 wheel tag 表示 stable ABI from Python 3.7+,所以 3.13 可用(manylinux wheel 跟 3.13 abi3 相容)
+- macOS 跟 Linux 都有對應 wheel(分開下載,不要 cross-mount)
+
+> 注意:此限制意味著 `fubon-proxy` 的 Dockerfile 必須用 `python:3.13-slim`(官方支援範圍內,不要用 3.12 或 3.14)。
 
 ---
 
@@ -234,3 +291,5 @@ prevents the recurring "AI assumes it's not there" issue.
 - `README.md` — overview + Fubon proxy architecture
 - `internal/apigateway/CONSTITUTION.md` — data source governance
 - `.claude/skills/atlas-data-visibility/SKILL.md` — silent failure detection
+- `docs/investigations/2026-06-28-boot-loop-multi-service.md` — 2026-06 啟動崩潰連環事件完整根因分析(含 fubon-neo PyPI 404 + wheel 平台限制 + 跨平台 deploy 限制)
+- `docs/TRAPS.md` § Deploy/Docker — 跨模組部署陷阱(ENTRYPOINT 衝突、env_file precedence、hardcoded healthcheck)

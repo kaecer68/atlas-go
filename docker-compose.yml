@@ -16,7 +16,15 @@ services:
       - ATLAS_LOG_LEVEL=info
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
-      - ATLAS_API_KEY=${ATLAS_API_KEY}
+      # ATLAS_API_KEY intentionally NOT set in environment — it would
+      # shadow env_file with shell-expanded ${ATLAS_API_KEY} (empty
+      # in local dev). The .env file is the canonical source, and
+      # the AuthMiddleware reads it from the env_file pass-through.
+      # CI/CD should set ATLAS_API_KEY in the .env file rather than
+      # rely on shell env (which contradicts env_file semantics).
+      # Regression: PR #79 originally added `ATLAS_API_KEY=${...}`
+      # here, which silently broke all local dev since the shell
+      # var is unset. Removed in favor of env_file-only path.
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
     volumes:
@@ -39,14 +47,36 @@ services:
     build:
       context: ./services/fubon-proxy
       dockerfile: Dockerfile
+      # 升版 fubon-neo 时只动 FUBON_NEO_VERSION,Dockerfile 会根据
+      # TARGETARCH(arm64 -> aarch64, amd64 -> x86_64)自动从官方 CDN
+      # 选对应 manylinux_2_17 wheel 下来。URL 模式见
+      # https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk
+      args:
+        FUBON_NEO_VERSION: "2.2.8"
     container_name: atlas-fubon-proxy
     restart: unless-stopped
     ports:
       - "8081:8081"
+    # env_file loads FUBON_PERSONAL_ID / FUBON_PASSWORD / FUBON_API_KEY /
+    # FUBON_CERT_PATH / FUBON_CERT_PASSWORD from ~/.config/atlas-go/.env.
+    # Earlier the values used `${...}` shell expansion, which silently
+    # produced empty strings inside the container when the host shell
+    # did not have them set — main.py's /health check then returned 503
+    # with "FUBON_PERSONAL_ID and FUBON_PASSWORD must be set".
+    # env_file mirrors the pattern already used by the atlas service
+    # so the .env file is the single source of truth.
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
-      - FUBON_PERSONAL_ID=${FUBON_PERSONAL_ID}
-      - FUBON_API_KEY=${FUBON_API_KEY}
+      # FUBON_PROXY_PORT stays in environment (not env_file) because
+      # it is a service-port constant owned by this compose file.
       - FUBON_PROXY_PORT=8081
+      # .p12 凭证书放在 ~/.config/atlas-go/.fubon-env/,挂进容器对应路径
+      # 让 main.py:_find_cert() 的 glob 搜尋(默认 ~/.config/atlas-go/.fubon-env)
+      # 可以找到。SDK 本身由 Dockerfile 从官方下載 manylinux wheel install,
+      # 不靠这个 mount。
+    volumes:
+      - ~/.config/atlas-go/.fubon-env:/home/appuser/.config/atlas-go/.fubon-env:ro
     networks:
       - atlas-network
     healthcheck:
@@ -323,7 +353,12 @@ services:
       dockerfile: Dockerfile
     container_name: atlas-prism-worker
     restart: unless-stopped
-    command: ["/app/atlas-go", "prism", "worker"]
+    # Command is args-only — the Dockerfile ENTRYPOINT already provides
+    # the binary path. Writing the full path here would prepend it again
+    # and produce `/app/atlas-go /app/atlas-go prism worker`, which
+    # confuses the subcommand router in run() and makes the container
+    # fall through to runSimulation() (one-shot → 60s restart loop).
+    command: ["prism", "worker"]
     environment:
       - ATLAS_ENV=production
       - ATLAS_WORKER_TYPE=prism
@@ -336,6 +371,13 @@ services:
     depends_on:
       - redis
       - postgres
+    # Override Dockerfile HEALTHCHECK — it targets localhost:8080 which
+    # only the atlas API service exposes. The prism-worker container
+    # does not serve HTTP, so the inherited healthcheck always fails.
+    # A real readiness probe for the worker would query PRISM queue
+    # stats; for now we disable and rely on process liveness.
+    healthcheck:
+      disable: true
 
   # MiroFish swarm simulation runner
   swarm-runner:
@@ -344,7 +386,8 @@ services:
       dockerfile: Dockerfile
     container_name: atlas-swarm-runner
     restart: "no"
-    command: ["/app/atlas-go", "swarm", "run"]
+    # Args-only — see prism-worker for ENTRYPOINT/CMD interaction note.
+    command: ["swarm", "run"]
     environment:
       - ATLAS_ENV=production
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
