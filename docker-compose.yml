@@ -41,6 +41,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # 啟動順序依賴:atlas 啟動時若 postgres/redis 還沒 ready 就 ping,
+    # 會撞 SQLSTATE 57P03("database system is starting up")。docker
+    # compose 預設平行啟動,所以必須用 condition: service_healthy
+    # 等依賴服務 healthcheck 通過才啟動 atlas,避免 race condition。
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Fubon MarketData Proxy (Python microservice)
   fubon-proxy:
@@ -99,6 +108,15 @@ services:
     networks:
       - atlas-network
     command: redis-server --appendonly yes
+    # atlas service depends_on redis:condition: service_healthy,所以 redis
+    # 必須有 healthcheck 才能等 atlas 啟動順序。PING 是 redis 健康檢查
+    # 標準做法,回 PONG 表示 redis server 已接受 connection。
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   # TimescaleDB for persistent storage and time-series data
   postgres:
