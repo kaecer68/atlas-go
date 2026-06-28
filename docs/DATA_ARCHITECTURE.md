@@ -37,7 +37,7 @@ domain.Recommendation{Symbol, Agent, Conviction, Reason, ...}
 
 **Tool call traces** (L2.4):
 - Per-recommendation metrics logged: `agent_loop.round`, `agent_loop.plan_count`, `agent_loop.reflect_count`, `agent_loop.tool_count`, `llm.latency_ms.{plan,reflect}`, `reflect.continue`, `recommendation.{symbol,conviction}`.
-- See [`.omo/wave-11-l2-4/L2_4_OBSERVATION.md`](../.omo/wave-11-l2-4/L2_4_OBSERVATION.md) for the full metrics list (L2.4 observation — PLANNED).
+- See `.omo/wave-11-l2-4/L2_4_OBSERVATION.md`（本地工作目錄，gitignored）for the full metrics list（L2.4 observation — PLANNED）。
 
 ---
 

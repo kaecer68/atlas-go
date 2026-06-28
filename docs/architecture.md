@@ -15,7 +15,7 @@ L2.3 introduces an opt-in LLM-driven sector agent that drives a `plan → tool_c
 - `internal/llm/test_tools.go` — `TestTools()` (3 mock tools: factor weight, regime, liquidity)
 - `internal/orchestrator/sector_agent_llm_test_helpers.go` — `MockLLMDriver` (test-only)
 
-**Documentation**: [`docs/specs/llm-sector-agent.md`](specs/llm-sector-agent.md) (moved from `wave-11/L2_3_PLAN_REFLECT.md`), [`docs/guides/adding-sector-agents.md`](guides/adding-sector-agents.md) (moved from `wave-11/SEMICONDUCTOR_EXECUTOR.md`), [`docs/specs/agent-loop-state-machine.md`](specs/agent-loop-state-machine.md) (moved from `wave-11/AGENT_LOOP_STATE_MACHINE.md`), [`.omo/wave-11-l2-4/L2_4_OBSERVATION.md`](../.omo/wave-11-l2-4/L2_4_OBSERVATION.md) (L2.4 observation — PLANNED).
+**Documentation**: [`docs/specs/llm-sector-agent.md`](specs/llm-sector-agent.md) (moved from `wave-11/L2_3_PLAN_REFLECT.md`), [`docs/guides/adding-sector-agents.md`](guides/adding-sector-agents.md) (moved from `wave-11/SEMICONDUCTOR_EXECUTOR.md`), [`docs/specs/agent-loop-state-machine.md`](specs/agent-loop-state-machine.md) (moved from `wave-11/AGENT_LOOP_STATE_MACHINE.md`). L2.4 觀察期規劃見 `.omo/wave-11-l2-4/`（本地工作目錄，gitignored，PLANNED）。
 
 **Tag**: `v0.0.0.21` (PR5b). Plan: `.omo/plans/wave10-l2.3-execution.md`.
 
