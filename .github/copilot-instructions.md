@@ -19,26 +19,12 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 
 | File | Purpose |
 |------|---------|
-| [AGENTS.md](AGENTS.md) | **Start here** — Build commands, architecture boundaries, project pitfalls |
-| [docs/GUIDELINES_INDEX.md](docs/GUIDELINES_INDEX.md) | Authority hierarchy, use-case routing |
+| [AGENTS.md](AGENTS.md) | **Start here** — Cross-tool AI guidance, file routing, trap quick-reference, tool rules |
+| [CLAUDE.md](CLAUDE.md) | Claude Code-specific config (deployment, frontend architecture, token efficiency) |
 | [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) | Data source governance — Gateway rules, rate limits, circuit breakers |
-| [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md) | Go coding rules, interface design, error handling |
-| [.github/instructions/experiments-guardrails.instructions.md](.github/instructions/experiments-guardrails.instructions.md) | Baseline policy, experiment flow, acceptance logic |
-| [.github/instructions/live-trading.guardrails.instructions.md](.github/instructions/live-trading.guardrails.instructions.md) | Live trading path, replay prioritization |
-| [docs/PARAMETER_SYSTEM.md](docs/PARAMETER_SYSTEM.md) | Parameter management with provenance tracking |
-| [docs/architecture.md](docs/architecture.md) | Layered design, component responsibilities |
+| [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md) | Go coding rules (applies to all `internal/**/*.go`) |
 
-## 🎯 Common Workflows by Task
-
-| Task | First Read |
-|------|-----------|
-| Modify Go code | `AGENTS.md` + `go-core.instructions.md` |
-| Add/modify agents or prompts | `AGENTS.md` §重要陷阱；verify `configs/agents.json` ↔ `prompts/agents/` |
-| Run experiment / modify baseline | `experiments-guardrails.instructions.md`; verify `data/state/baseline_policy.json` |
-| Fix a bug | `AGENTS.md` §關鍵跨模組陷阱 + `docs/architecture.md` |
-| Live trading paths | `live-trading.guardrails.instructions.md`; replay-first is the safe default |
-| Add data source / API call | `internal/apigateway/CONSTITUTION.md` ALL 6 articles; never bare `&http.Client{}` |
-| Add/change parameter | `docs/PARAMETER_SYSTEM.md`; add to `internal/config/parameters.go` |
+> Full file routing and rule hierarchy → **[AGENTS.md §文件路由](AGENTS.md)** and **[docs/GUIDELINES_INDEX.md](docs/GUIDELINES_INDEX.md)**.
 
 ## ⚙️ Build & Test Quick Reference
 
@@ -63,29 +49,20 @@ go test -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out | tail -n 1
 ```
 
-## ⚠️ Top 5 Gotchas
-
-| Gotcha | Prevention |
-|--------|-----------|
-| **Sparse replay window** | Validate n≥10 before judgment |
-| **Reusing recommendation slices across runs** | Rebuild/copy each iteration |
-| **Baseline policy not loaded** | Verify `data/state/baseline_policy.json` exists first |
-| **Darwinian weight clipping (0.3–2.5) is silent** | Values outside range auto-clamp with no warning |
-| **Missing prompt files for enabled agents** | Every `agents.json` entry needs `prompts/agents/<name>.md` |
-
 ## 🔗 Additional Resources
 
+- [docs/QUICKSTART.md](docs/QUICKSTART.md) — First launch & CI commands
 - [docs/operations_playbook.md](docs/operations_playbook.md) — Day-to-day workflows
 - [docs/iteration_playbook.md](docs/iteration_playbook.md) — Mutation and evolution cycle
 - [docs/evolution_loop.md](docs/evolution_loop.md) — Acceptance gate logic
 - [docs/data_sources.md](docs/data_sources.md) — Market data import, replay format (JSONL)
-- [docs/guides/ai-productivity.md](docs/guides/ai-productivity.md) — Detailed gotchas & command cheat sheet
+- [docs/PARAMETER_SYSTEM.md](docs/PARAMETER_SYSTEM.md) — Parameter management with provenance tracking
 - `docs/archive/phase2-implementation.md` ~ `phase5-architecture.md` — Historical phase decisions
 
 ## 📝 History & Context
 
-- **Language preference**: 繁體中文 throughout codebase
+- **Language preference**: 繁體中文 throughout codebase (enforced in AGENTS.md)
 - **Project origin**: Taiwan equity investment research with AI agent orchestration
-- **Current phase**: Phase 5 — full evolution loop, evaluation gates, baseline promotion
+- **Current wave**: Wave 11 — L2.3 PoC shipped, L2.4 observation window PLANNED
 
 **Last Updated**: June 2026
