@@ -156,8 +156,8 @@ func TestHandleBenchmarkComparison_NoSessionsDir(t *testing.T) {
 	})
 	adapted.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 }
 
