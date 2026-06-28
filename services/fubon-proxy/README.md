@@ -43,21 +43,39 @@ docker-compose up -d fubon-proxy
 
 ### 3. 本地開發
 
+**`fubon-neo` 不是公開 PyPI 套件**。它是富邦新一代 API 的官方 Python SDK,需於 [`https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk`](https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk) 簽署 API 服務申請書後手動下載(支援 Windows / macOS / Linux,Python 3.8-3.13)。
+
 ```bash
 cd services/fubon-proxy
 
-# 建立虛擬環境
-python3 -m venv .venv
-source .venv/bin/activate
+# 從官方下載對應平台的 wheel(以 Linux 為例)
+curl -O https://www.fbs.com.tw/TradeAPI_SDK/fubon_binary/fubon_neo-2.2.8-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.zip
+unzip -j fubon_neo-2.2.8-cp37-abi3-manylinux_*.zip '*.whl' -d /tmp/fubon_wheel
+pip install /tmp/fubon_wheel/*.whl
 
-# 安裝依賴
+# 然後裝其他依賴
 pip install -r requirements.txt
 
 # 設定環境變數
 export FUBON_PERSONAL_ID=your_id
 export FUBON_API_KEY=your_key
+export FUBON_CERT_PATH=/path/to/your/cert.p12
+export FUBON_CERT_PASSWORD=your_cert_password
 
 # 啟動服務
+python main.py
+```
+
+如果本機已經有現成的 venv(例如 `~/.config/atlas-go/.fubon-env/`,預裝 SDK),可直接用:
+
+```bash
+# 啟用既有 venv(SDK 已在裡面)
+source ~/.config/atlas-go/.fubon-env/bin/activate
+pip install -r requirements.txt
+export FUBON_PERSONAL_ID=your_id
+export FUBON_API_KEY=your_key
+export FUBON_CERT_PATH=~/.config/atlas-go/.fubon-env/your_cert.p12
+export FUBON_CERT_PASSWORD=your_cert_password
 python main.py
 ```
 
@@ -106,10 +124,31 @@ curl http://127.0.0.1:8081/market-status
 2. **Rate Limit**：遵守富邦 300 req/min 限制
 3. **安全性**：API Key 請妥善保管，勿上傳至版本控制
 
+## Docker 部署的關鍵設計
+
+**`Dockerfile` 從富邦官方下載對應平台的 wheel**(`https://www.fbs.com.tw/TradeAPI_SDK/fubon_binary/...`),build 階段 `pip install` 進 image。**不需要** mount 整個 `.fubon-env` 進容器(SDK 已在 image 裡,只有 `.p12` 憑證需要 mount)。
+
+```dockerfile
+# Dockerfile 關鍵步驟(節錄)
+ARG FUBON_NEO_WHEEL_URL=https://www.fbs.com.tw/TradeAPI_SDK/fubon_binary/fubon_neo-2.2.8-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.zip
+RUN curl -fsSL "${FUBON_NEO_WHEEL_URL}" -o /tmp/fubon_neo.zip \
+    && unzip -j /tmp/fubon_neo.zip '*.whl' -d /tmp/fubon_wheel \
+    && pip install /tmp/fubon_wheel/*.whl
+```
+
+升級 SDK 版本時:
+1. 到 [官方下載頁](https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk) 確認新版本 + wheel URL
+2. 改 `docker-compose.yml` 的 `args:` (FUBON_NEO_VERSION + FUBON_NEO_WHEEL_URL)
+3. `docker compose build fubon-proxy` — 重新從官方拉 wheel install
+
+`.p12` 憑證 mount:`docker-compose.yml` 將 `~/.config/atlas-go/.fubon-env` 掛到容器內 `/home/appuser/.config/atlas-go/.fubon-env`,讓 `main.py:_find_cert()` 的 glob 搜尋(預設 `~/.config/atlas-go/.fubon-env`)可以找到憑證。
+
 ## 相關檔案
 
-- `services/fubon-proxy/main.py` - Python 微服務主程式
-- `services/fubon-proxy/Dockerfile` - Docker 建置檔
-- `services/fubon-proxy/requirements.txt` - Python 依賴
+- `services/fubon-proxy/main.py` - Python 微服務主程式(`_find_cert` 在第 64 行,`get_sdk` 在第 102 行)
+- `services/fubon-proxy/Dockerfile` - Docker 建置檔(必須用 `python:3.13-slim` 對齊 venv)
+- `services/fubon-proxy/requirements.txt` - Python 依賴(故意不含 fubon-neo,見上方)
 - `internal/marketdata/fubon_client.go` - Go HTTP 客戶端
 - `.env` - 環境變數配置
+- `~/.config/atlas-go/.fubon-env/` - 預編譯的 fubon-neo venv
+- `docs/ENVIRONMENT.md` § Fubon SDK - 套件下架、wheel 平台限制的完整說明

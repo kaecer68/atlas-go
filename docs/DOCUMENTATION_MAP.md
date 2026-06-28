@@ -122,6 +122,7 @@
 - `investigations/` — 根因調查
   - `2026-05-29-etf-nav-data-source.md` — ETF NAV 資料來源調查（由 `internal/marketdata/AGENTS.md` 搬遷）
   - `2026-06-fubonproxy-ipv4-uvloop.md` — Fubon proxy IPv4/IPv6 dual-stack 與 uvloop 問題 RCA（由 `internal/marketdata/AGENTS.md` 搬遷）
+  - `2026-06-28-boot-loop-multi-service.md` — 啟動 5 服務 crash loop 連環根因(prism-worker ENTRYPOINT/command 衝突、env_file vs environment shadow、fubon-neo 公開分發、兩個 .env 模板 stale orphan、PRISM 系統實作不完整、alertmanager/otel-collector config 錯誤)
 - `plans/` — 修復計畫
 - `branch-hygiene/` — branch 維護紀錄
 

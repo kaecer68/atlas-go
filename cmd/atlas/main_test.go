@@ -23,12 +23,22 @@ import (
 
 // TestMain ensures the package test environment is clean: it unsets
 // ATLAS_API_KEY so the AuthMiddleware returns 200/405 (no-auth) for
-// unauthenticated requests, matching the tests' expectations. Without
-// this, if the developer's ~/.config/atlas-go/.env or the CI runner
-// has ATLAS_API_KEY set, the integration tests in this package fail
-// with 401 instead of 200/405 (PR #796 CI fix).
+// unauthenticated requests, matching the tests' expectations.
+//
+// 用 os.Setenv("") 而非 os.Unsetenv 是必要的:`config.Load()` 會透過
+// `loadUserEnvFile()` 從 ~/.config/atlas-go/.env 讀 ATLAS_API_KEY 用
+// `os.Setenv` 設進 process env(即使 test 用 custom deps.loadConfig 也無
+// 法阻擋 — 因為 `internal/monitoring/dashboard_api.go:105` 直接呼叫
+// config.Load())。`loadWithLookupEnv` 用 `os.LookupEnv` 判斷「已設才
+// skip」,所以 `os.Setenv("ATLAS_API_KEY", "")` 後,`LookupEnv` 回
+// ("", true) → .env 載入 skip → `os.Getenv` 仍回 "" → AuthMiddleware 走
+// no-auth 分支。
+//
+// 如果只 `os.Unsetenv` 那 .env 載入後 ATLAS_API_KEY 會被設回去,
+// AuthMiddleware 看到非空 → 401,test 失敗。詳見
+// docs/investigations/2026-06-28-boot-loop-multi-service.md § 6。
 func TestMain(m *testing.M) {
-	os.Unsetenv("ATLAS_API_KEY")
+	os.Setenv("ATLAS_API_KEY", "")
 	os.Exit(m.Run())
 }
 
@@ -923,5 +933,37 @@ func TestNewProvider_DefaultsToHybrid(t *testing.T) {
 	// Must be *marketdata.HybridProvider, not *marketdata.MockProvider
 	if _, ok := interface{}(hp).(*marketdata.HybridProvider); !ok {
 		t.Fatalf("expected *marketdata.HybridProvider, got %T", hp)
+	}
+}
+
+// ── P1-S1: prism worker subcommand routing ──
+//
+// Regression guard: docker-compose runs `atlas-go prism worker` as the
+// prism-worker service. Before the fix, the `prism` and `worker`
+// positional args were ignored and run() fell through to runSimulation()
+// (one-shot), causing a 60s restart loop.
+//
+// isPrismWorkerCmd must report true ONLY for exactly ["prism","worker"].
+
+func TestIsPrismWorkerCmd(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"empty args", []string{}, false},
+		{"only flags", []string{"-api", "-addr", ":8080"}, false},
+		{"exact prism worker", []string{"prism", "worker"}, true},
+		{"prism only", []string{"prism"}, false},
+		{"worker only", []string{"worker"}, false},
+		{"unknown subcommand", []string{"swarm", "run"}, false},
+		{"prism with extra arg", []string{"prism", "worker", "extra"}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isPrismWorkerCmd(tc.args); got != tc.want {
+				t.Errorf("isPrismWorkerCmd(%v) = %v, want %v", tc.args, got, tc.want)
+			}
+		})
 	}
 }

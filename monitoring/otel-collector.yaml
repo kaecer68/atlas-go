@@ -14,9 +14,15 @@ processors:
     send_batch_size: 1000
 
 exporters:
-  postgresql:
-    dsn: postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-    traces_table_name: otel_traces
+  # postgresql exporter does not exist in OpenTelemetry Collector
+  # contrib image (verified via "unknown type" error). Replaced with
+  # debug exporter as a no-loss placeholder — traces are still
+  # accepted via OTLP and logged to stdout, but not persisted.
+  # To restore Postgres-backed trace storage, write a custom
+  # exporter (no built-in alternative) or switch the atlas-go env
+  # OTEL_EXPORTER_OTLP_ENDPOINT to a collector that supports it.
+  debug:
+    verbosity: normal
 
 service:
   telemetry:
@@ -26,4 +32,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [postgresql]
+      exporters: [debug]

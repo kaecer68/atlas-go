@@ -51,11 +51,29 @@
 |------|---------|------|
 | **Baseline 未載入** | baseline | 實驗執行/評估前必須確認 `data/state/baseline_policy.json` 存在且有效。 |
 
+### Deploy / Docker
+
+| 陷阱 | 模組 | 說明 |
+|------|------|------|
+| **`docker-compose.yml` `command:` 跟 Dockerfile `ENTRYPOINT:` 重複** | deploy | 當 Dockerfile 用 exec form `ENTRYPOINT: ["/app/atlas-go"]` 時,docker-compose 的 `command` **只能是 args**,**不能包含 binary path**。若寫成 `command: ["/app/atlas-go", "prism", "worker"]`,Docker 會把 ENTRYPOINT 跟 CMD 串接 → 實際命令變成 `/app/atlas-go /app/atlas-go prism worker`,binary 收到 `os.Args[1] = "/app/atlas-go"`(路徑)而不是 `"prism"`,subcommand 路由永遠 false → fall through 到 `runSimulation()`(one-shot)→ 60s 重啟循環。正確寫法:`command: ["prism", "worker"]`。目前 `atlas` 服務是 `command: ["-api", "-live"]`(只有 flag 沒路徑,所以沒踩到);`prism-worker` 跟 `swarm-runner` 已修(2026-06-28)。 |
+| **`environment: VAR=${VAR}` 會 shadow `env_file`** | deploy | Docker Compose 的 `env_file` 跟 `environment` 兩個 section 對同一個變數的行為是:**`environment` 段優先**(後者贏)。`environment` 段的 `${VAR}` 是 **shell 變數展開**(讀 host shell 的 `VAR`,不是讀 .env),如果 host shell 沒設就會展開成空字串,把 .env 裡的值蓋掉。具體案例:`docker-compose.yml` 的 `atlas` 服務曾有 `ATLAS_API_KEY=${ATLAS_API_KEY}`,host shell 沒設 → 容器內 `ATLAS_API_KEY=""` → `AuthMiddleware` 觸發 503(`server misconfigured: ATLAS_API_KEY required in production`)。正確做法:**不要在 `environment` 段設需要從 .env 讀的變數**,讓 `env_file` 唯一負責。CI/CD 也應該把 secrets 寫進 .env,不要靠 shell env(會跟 env_file 語意衝突)。 |
+| **Dockerfile 的硬編碼 `HEALTHCHECK` 會繼承給所有用同 image 的服務** | deploy | `Dockerfile` line 92-93 寫死 `HEALTHCHECK CMD curl -f http://localhost:8080/health || exit 1`。這個 endpoint 只有 `atlas` 服務(用 `-api` 啟動)才會 listen;`prism-worker`(跑 `prism worker` daemon)跟 `cron-*` 服務都沒有 HTTP server 在 8080,繼承這個 healthcheck 會**永遠失敗**,被 Docker 視為 unhealthy。修法:在 `docker-compose.yml` 對非 API 服務用 `healthcheck: disable: true` 或自訂 healthcheck 指令。目前已對 `prism-worker` 套用 `healthcheck: disable: true`(2026-06-28);`cron-*` 仍繼承壞的 healthcheck(因 cron 是週期性 one-shot,無所謂)。 |
+
 ### Build Pipeline / 程式碼生成
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
 | **手動編輯 `field_types.ts` 或 `valid_fields.json`**（存在於全部 4 個 web 目錄） | domain / web / 全前端 | 這兩個檔案由 `cmd/gentags` 從 `internal/*/*.go` 的 struct JSON tag 自動產出。`go generate .` 會同時輸出到 **4 個 web 目錄** (`web/`、`admin_web/`、`client_web/`、`shared_web/`)，因為前端拆分後各目錄有獨立的 esbuild pipeline，不共用 dist。<br><br>**禁止手動編輯任何一份** — 任何變更會在下次 `go generate` 被覆寫。<br><br>若需新增/修改/刪除前端可見的欄位或介面:<br>1. 修改對應 Go struct 的 `json:"..."` tag(在 `internal/<pkg>/`)<br>2. 跑 `go generate .` 重新產出全部 4 份<br>3. **不要**直接編輯這兩個檔<br><br>違反的後果:`go generate .` 會覆寫你的手動編輯,並且會在 quality.yml 的 `generate` job 報 "uncommitted changes" → 5 個 frontend PR 全 CI fail。<br><br>防護:`.githooks/pre-commit` Phase 5 自動跑 `go generate .`,若**任一 copy** 有 drift 會**阻擋 commit**。修正方式見 `web/AGENTS.md`「Generated Files」章節。 |
+
+---
+
+## 啟動異常關閉連環事件(2026-06-28)
+
+5 個服務(prism-worker、grafana、alertmanager、otel-collector、atlas-go 的 `/health`)同時 crash loop 的完整根因分析見:
+
+**[`docs/investigations/2026-06-28-boot-loop-multi-service.md`](investigations/2026-06-28-boot-loop-multi-service.md)**
+
+涵蓋:docker-compose `command` 跟 ENTRYPOINT 衝突、`env_file` vs `environment` precedence、Dockerfile 硬編碼 healthcheck 繼承、PRISM system 實作但不完整、fubon-neo PyPI 404、兩個 .env 模板 stale orphan。
 
 ---
 

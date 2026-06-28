@@ -4,5 +4,10 @@ fastapi==0.115.0
 # 若未來需要 uvloop 效能,必須先驗證綁定行為再啟用。
 uvicorn==0.32.0
 pydantic==2.9.0
+# fubon-neo 2.2.8 為富邦新一代 API 的官方 Python SDK,**非公開 PyPI 套件**(需於
+# https://www.fbs.com.tw/TradeAPI/docs/download/download-sdk 簽署 API 服務
+# 申請書後下載)。Dockerfile 不靠 pip install -r 這行(會 404),而是直接從官方
+# 下載對應平台的 wheel 後 pip install。本檔保留此行是為了「文件化所需
+# 版本」,build 階段會被 Dockerfile 內 explicit pip install 覆蓋。
 fubon-neo==2.2.8
 python-dotenv==1.0.1

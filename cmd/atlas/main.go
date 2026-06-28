@@ -82,6 +82,14 @@ func main() {
 	}
 }
 
+// isPrismWorkerCmd reports whether the given positional args (post flag
+// parsing) represent the "prism worker" subcommand. This is the only
+// subcommand supported by the atlas CLI; all other entry points are
+// flag-based (-api, -live, -simulate, -build-universe).
+func isPrismWorkerCmd(args []string) bool {
+	return len(args) >= 2 && args[0] == "prism" && args[1] == "worker"
+}
+
 func run(args []string, deps appDeps) error {
 	flags := flag.NewFlagSet("atlas", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -119,6 +127,14 @@ func run(args []string, deps appDeps) error {
 
 	cfg := deps.loadConfig()
 	logging.Init(*logFormat, slog.LevelInfo)
+
+	// Subcommand dispatch: "prism worker" is a lightweight daemon that
+	// does not need the full runtime (no API server, no live trading
+	// bootstrap, no Postgres pre-flight). Route it before the heavy
+	// init so a misconfigured DB does not block worker startup.
+	if isPrismWorkerCmd(flags.Args()) {
+		return runPrismWorker(cfg, deps)
+	}
 
 	otelShutdown, otelErr := obsotel.Init(context.Background())
 	if otelErr != nil {
@@ -303,6 +319,13 @@ func run(args []string, deps appDeps) error {
 		dashboard.SetHealthManager(agentHealthMgr)
 		prismMgr := prism.NewPRISMManager(prism.DefaultPRISMConfig())
 		dashboard.WithPRISMManager(prismMgr)
+		// Start the PRISM training-queue workers. Previously the manager
+		// was created but never started, so tasks scheduled via the
+		// dashboard API would queue up without ever being processed.
+		// Workers idle on an empty in-memory queue and exit cleanly via
+		// the deferred Stop() when the apiMode block returns.
+		prismMgr.Start()
+		defer prismMgr.Stop()
 		dwMgr := portfolio.NewDarwinianWeightManager(filepath.Join(cfg.WorkDir, "data/state/darwinian_weights.json"))
 		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
 		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
@@ -1666,6 +1689,50 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		return fmt.Errorf("stop live orchestrator: %w", err)
 	}
 	log.Println("live trading orchestrator stopped")
+	return nil
+}
+
+// runPrismWorker runs the PRISM training-queue worker as a long-lived
+// daemon. The PRISM manager spawns worker goroutines per regime queue
+// and processes tasks as they are enqueued. Without a TrainingExecutor
+// wired up here, tasks complete in synthetic mode (placeholder metrics);
+// a real executor is wired by the atlas API service when it is running
+// alongside this container and shares the same Postgres/Redis backend.
+//
+// Shutdown: SIGINT/SIGTERM trigger a graceful stop of the manager. The
+// docker restart policy is "unless-stopped", so the container will be
+// restarted automatically after clean exit.
+//
+// Regression context: this function exists because the docker-compose
+// `prism-worker` service invokes `atlas-go prism worker`. Before this
+// handler was added, the positional args were ignored and run() fell
+// through to runSimulation() (a one-shot), producing a 60-second
+// restart loop that the user perceived as the system "abnormally
+// closing after running for a while".
+func runPrismWorker(cfg config.Config, deps appDeps) error {
+	cfgPrism := prism.DefaultPRISMConfig()
+	logging.Info("prism_worker", "starting",
+		"workdir", cfg.WorkDir,
+		"replay_session_date", cfg.ReplaySessionDate,
+		"queue_size", cfgPrism.QueueSize,
+		"workers_per_queue", cfgPrism.WorkersPerQueue,
+		"regimes", int(prism.RegimeCount),
+	)
+
+	mgr := prism.NewPRISMManager(cfgPrism)
+	mgr.Start()
+	logging.Info("prism_worker", "started", "regime_queues", int(prism.RegimeCount))
+
+	sigCh := registerShutdownSignal()
+	select {
+	case sig := <-sigCh:
+		logging.Info("prism_worker", "shutdown_signal", "signal", sig.String())
+	case <-deps.shutdown:
+		logging.Info("prism_worker", "deps_shutdown")
+	}
+
+	mgr.Stop()
+	logging.Info("prism_worker", "stopped")
 	return nil
 }
 

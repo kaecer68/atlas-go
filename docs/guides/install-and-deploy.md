@@ -192,6 +192,15 @@ openssl rand -hex 32
 
 **Do NOT use the development placeholder** `ATLAS_API_KEY=e2e-test-key-not-for-prod` in production. See [Pre-Deployment Checklist](#5-pre-deployment-checklist).
 
+> **⚠️ Critical gotcha — `env_file` vs `environment` precedence** (見 `docs/TRAPS.md` § Deploy/Docker 完整說明)
+>
+> `docker-compose.yml` 的 `env_file` 跟 `environment` **兩個 section 對同一個變數會衝突**:`environment` 段優先。
+> `environment: ATLAS_API_KEY=${ATLAS_API_KEY}` 是 **shell 變數展開**(讀 host shell 的 `ATLAS_API_KEY`,**不是從 .env 讀**)。
+> 如果 host shell 沒設 → 展開成空字串 → 把 `env_file` 段從 .env 讀到的值**覆蓋掉** → AuthMiddleware 永遠回 503。
+>
+> **正確做法**:`docker-compose.yml` 的 `environment` 段**不要放**需要從 .env 讀的變數,完全依賴 `env_file` 段提供。
+> CI/CD 也應該把 secrets 寫進 .env(透過 secret mount),不要靠 shell env(會跟 env_file 機制衝突)。
+
 ---
 
 ## 4. Deployment
