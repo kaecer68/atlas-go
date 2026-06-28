@@ -309,9 +309,9 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ### 2026-06-28 Phases 1-6: AGENTS.md/CLAUDE.md 文檔體系重構
 
-- Phase 1: 解散 `docs/wave-11/` — L2.4 規劃移至 `.omo/wave-11-l2-4/`，生命週期規則吸收至 `DOCUMENTATION_STANDARD.md`，更新 7 處外部引用，修正 `parameters.go` 過時註解
+- Phase 1: 解散 `docs/wave-11/` — L2.4 規劃移至 `.omo/wave-11-l2-4/`，生命週期規則吸收至 `DOCUMENTATION_STANDARD.md`，更新 8 處外部引用，修正 `parameters.go` 過時註解
 - Phase 2: `AGENTS.md` 依 v1.0.0 規範重構 — 新增版本資訊、模組對照表、`.github/instructions/` 路由，陷阱表從 14 條濃縮為 top 7，移除 21 模組清單（改指向 `AGENTS_INDEX.md`）
 - Phase 3: `CLAUDE.md` 重構 — 新增 `@AGENTS.md` 匯入，語言強制指向 AGENTS.md，路由表從 10 條減至 3 條 Claude 專屬條目，移除過時 "34 個" 模組數字
-- Phase 4: `.omo/plans/` 清理 — 7 個已完成實作計劃移至 `docs/archive/`，保留 4 個未完成/進行中計劃
+- Phase 4: `.omo/plans/` 清理 — 7 個已完成實作計劃移至 `docs/archive/`，保留 8 個（2 個未實作、1 個指引模式、1 個進行中、4 個近期修復）
 - Phase 5: `.github/copilot-instructions.md` 精簡 — 移除與 AGENTS.md 重疊的 Workflows/Gotchas/Core Files 表
 - Phase 6: `DOCUMENTATION_MAP.md` 更新 — 反映 Phase 1-5 所有變更，新增 archive 條目與動作紀錄
