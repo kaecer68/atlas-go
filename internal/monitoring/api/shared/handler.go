@@ -12,14 +12,40 @@ import (
 // WriteJSON is called centrally by Adapt(), eliminating 73 duplicate call sites.
 type Handler func(r *http.Request) (status int, data any)
 
+// authFreePaths lists the HTTP paths that AuthMiddleware always passes
+// through without checking authentication. These are the docker
+// healthcheck endpoints and the Prometheus scrape endpoint, which
+// must remain reachable without credentials so that orchestrators
+// (docker, k8s, prometheus) can probe the service.
+//
+// Symmetric with cmd/atlas/main.go's finalMux path-bypass: we keep
+// both so that any caller that wires AuthMiddleware directly (e.g.
+// via apishared.Adapt) also gets the same exemption.
+var authFreePaths = map[string]bool{
+	"/health":  true,
+	"/metrics": true,
+}
+
+func isAuthFreePath(p string) bool {
+	return authFreePaths[p]
+}
+
 // AuthMiddleware checks API key authentication.
 // In production (ATLAS_ENV=production), ATLAS_API_KEY is mandatory.
 // It accepts either Authorization: Bearer <key> or X-API-Key: <key>.
+//
+// Probing paths (/health, /metrics) are always passed through
+// unconditionally — see authFreePaths. This makes the middleware
+// self-contained: callers don't need to remember to route around it.
 func AuthMiddleware(next http.Handler) http.Handler {
 	apiKey := os.Getenv("ATLAS_API_KEY")
 	isProduction := strings.ToLower(os.Getenv("ATLAS_ENV")) == "production"
 	if isProduction && apiKey == "" {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isAuthFreePath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			WriteJSONError(w, http.StatusServiceUnavailable, "server misconfigured: ATLAS_API_KEY required in production")
 		})
 	}
@@ -27,6 +53,10 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isAuthFreePath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		provided := r.Header.Get("X-API-Key")
 		if provided == "" {
 			auth := r.Header.Get("Authorization")

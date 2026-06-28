@@ -57,13 +57,20 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8081"
+    # env_file loads FUBON_PERSONAL_ID / FUBON_PASSWORD / FUBON_API_KEY /
+    # FUBON_CERT_PATH / FUBON_CERT_PASSWORD from ~/.config/atlas-go/.env.
+    # Earlier the values used `${...}` shell expansion, which silently
+    # produced empty strings inside the container when the host shell
+    # did not have them set — main.py's /health check then returned 503
+    # with "FUBON_PERSONAL_ID and FUBON_PASSWORD must be set".
+    # env_file mirrors the pattern already used by the atlas service
+    # so the .env file is the single source of truth.
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
-      - FUBON_PERSONAL_ID=${FUBON_PERSONAL_ID}
-      - FUBON_API_KEY=${FUBON_API_KEY}
+      # FUBON_PROXY_PORT stays in environment (not env_file) because
+      # it is a service-port constant owned by this compose file.
       - FUBON_PROXY_PORT=8081
-      - FUBON_CERT_PATH=${FUBON_CERT_PATH}
-      - FUBON_CERT_PASSWORD=${FUBON_CERT_PASSWORD}
-      - FUBON_PASSWORD=${FUBON_PASSWORD}
       # .p12 凭证书放在 ~/.config/atlas-go/.fubon-env/,挂进容器对应路径
       # 让 main.py:_find_cert() 的 glob 搜尋(默认 ~/.config/atlas-go/.fubon-env)
       # 可以找到。SDK 本身由 Dockerfile 从官方下載 manylinux wheel install,
