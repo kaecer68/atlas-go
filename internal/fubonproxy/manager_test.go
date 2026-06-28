@@ -1276,3 +1276,64 @@ func TestKillOccupant_NonExistentPID(t *testing.T) {
 		t.Logf("killOccupant returned expected error: %v", err)
 	}
 }
+
+// bindPort8081IPv6Wildcard 佔住 [::]:8081 (IPv6 wildcard) 模擬 IPv6-only
+// 外部進程（對應 Docker Desktop IPv6-only port forwarder）。handler 給
+// 測試控制 /health 行為。
+func bindPort8081IPv6Wildcard(t *testing.T, h http.Handler) (net.Listener, *http.Server) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "[::]:8081")
+	if err != nil {
+		t.Skipf("IPv6 wildcard port 8081 unavailable on test host: %v — skipping", err)
+	}
+	srv := &http.Server{Handler: h}
+	go func() {
+		_ = srv.Serve(ln)
+	}()
+	t.Cleanup(func() {
+		_ = srv.Close()
+		_ = ln.Close()
+	})
+	return ln, srv
+}
+
+func TestProcessManager_F9_PortIPv6WildcardHeld_ReportsForeign(t *testing.T) {
+	if ln, err := net.Listen("tcp", "0.0.0.0:8081"); err == nil {
+		_ = ln.Close()
+	} else {
+		t.Skipf("0.0.0.0:8081 unavailable: %v — cannot isolate IPv6 case", err)
+	}
+
+	bindPort8081IPv6Wildcard(t, http.NotFoundHandler())
+
+	m := &ProcessManager{}
+	state, _, err := m.probePort8081()
+	if err != nil {
+		t.Fatalf("probePort8081() error: %v", err)
+	}
+	if state != portStateForeign {
+		t.Errorf("probePort8081() with [::]:8081 held = %v, want portStateForeign", state)
+	}
+}
+
+func TestProcessManager_F9_PortBothWildcardsFree_ReturnsFree(t *testing.T) {
+	if ln, err := net.Listen("tcp", "0.0.0.0:8081"); err == nil {
+		_ = ln.Close()
+	} else {
+		t.Skipf("0.0.0.0:8081 in use: %v", err)
+	}
+	if ln, err := net.Listen("tcp", "[::]:8081"); err == nil {
+		_ = ln.Close()
+	} else {
+		t.Skipf("[::]:8081 in use: %v", err)
+	}
+
+	m := &ProcessManager{}
+	state, _, err := m.probePort8081()
+	if err != nil {
+		t.Fatalf("probePort8081() error: %v", err)
+	}
+	if state != portStateFree {
+		t.Errorf("probePort8081() = %v, want portStateFree", state)
+	}
+}
