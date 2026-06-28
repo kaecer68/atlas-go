@@ -397,7 +397,9 @@ func (m *ProcessManager) isHealthyWithTimeout(timeout time.Duration) bool {
 
 // probePort8081 探測 port 8081 占用狀態（F9 pre-flight）。
 // 同步執行（< 100ms + lsof ~50ms）。
-// IPv4 hardcode 對齊 healthEndpoint（PR #495），避免雙棧環境下 [::1] 優先導致誤判。
+// 雙 family check：127.0.0.1 與 [::1] 任一被佔即回 EADDRINUSE，
+// 避免 macOS Docker Desktop（IPv6-only listener）下誤判為 portStateFree。
+// healthEndpoint 仍用 IPv4 127.0.0.1，因 Python fubon-proxy 實際 bind target 是 IPv4。
 func (m *ProcessManager) probePort8081() (portState, portOccupant, error) {
 	addr := "127.0.0.1:" + strconv.Itoa(proxyListenPort)
 	ln, err := net.Listen("tcp", addr)
