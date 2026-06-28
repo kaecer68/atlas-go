@@ -90,6 +90,26 @@ func isPrismWorkerCmd(args []string) bool {
 	return len(args) >= 2 && args[0] == "prism" && args[1] == "worker"
 }
 
+// isPublicPath determines whether a request bypasses the API-key
+// AuthMiddleware. Web UI pages, their static assets, and probing
+// endpoints are loaded by the browser without credentials and must
+// not require an API key. Adding a new path here is a security
+// boundary change.
+func isPublicPath(p string) bool {
+	switch {
+	case p == "/" || p == "/health" || p == "/metrics":
+		return true
+	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
+		return true
+	case p == "/client" || strings.HasPrefix(p, "/client/"):
+		return true
+	case strings.HasPrefix(p, "/static/"):
+		return true
+	default:
+		return false
+	}
+}
+
 func run(args []string, deps appDeps) error {
 	flags := flag.NewFlagSet("atlas", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)

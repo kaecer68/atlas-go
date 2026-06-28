@@ -967,3 +967,57 @@ func TestIsPrismWorkerCmd(t *testing.T) {
 		})
 	}
 }
+
+func TestIsPublicPath(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"root", "/", true},
+		{"health probe", "/health", true},
+		{"metrics", "/metrics", true},
+		{"admin bare", "/admin", true},
+		{"admin prefix", "/admin/", true},
+		{"admin nested", "/admin/dashboard", true},
+		{"client bare", "/client", true},
+		{"client prefix", "/client/", true},
+		{"client nested", "/client/portfolio", true},
+		{"adminfoo typo", "/adminfoo", false},
+		{"admin dot", "/admin.", false},
+		{"clientx typo", "/clientx", false},
+		{"staticfile typo", "/staticfile", false},
+		{"static no slash", "/static", false},
+		{"case sensitive ADMIN", "/ADMIN", false},
+		{"case sensitive Admin", "/Admin", false},
+		{"api endpoint", "/api/dashboard", false},
+		{"universe metrics", "/universe/metrics", false},
+		{"random path", "/random/path", false},
+		{"empty path", "", false},
+		{"double slash", "//", false},
+		{"admin with trailing slash extra", "/admin//foo", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isPublicPath(tc.path); got != tc.want {
+				t.Errorf("isPublicPath(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRootPathRedirectsToAdmin(t *testing.T) {
+	mux := http.NewServeMux()
+	registerSimpleRoutes(mux, &monitoring.MetricsCollector{}, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusTemporaryRedirect {
+		t.Errorf("GET /: got status %d, want %d", rr.Code, http.StatusTemporaryRedirect)
+	}
+	if loc := rr.Header().Get("Location"); loc != "/admin/" {
+		t.Errorf("GET /: got Location %q, want %q", loc, "/admin/")
+	}
+}
