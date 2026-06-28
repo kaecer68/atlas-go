@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.0.23] - 2026-06-28
+
+### Added
+- **`make dev`** target: parallel TUI showing atlas service logs + prism worker logs + celery beat process in foreground — replaces the multi-terminal dance with one focused workflow. Skips atlas service container (you run it locally) so port 8080 stays free for `go run ./cmd/atlas`.
+
+### Fixed
+- **Postgres WAL race on cold start**: `docker-entrypoint-initdb.d/01-schema.sql` was copied AFTER schema apply, causing `relation "atlas_strategies" does not exist` errors on first `docker compose up`. Move `COPY schema.sql` ahead of any SQL execution.
+- **`make dev` would have hit EADDRINUSE on port 8081**: dev target used container_name `atlas-fubon-proxy` in `docker compose stop` instead of service name `fubon-proxy`. `2>/dev/null || true` masked the error, fubon-proxy container kept running, then ProcessManager tried to spawn its own local subprocess on port 8081 → crash. Self-consistent with `dev-stop` target and the TRAPS.md warning about this exact pitfall (auto-fixed during `/review`).
+
+### Documentation
+- `docs/TRAPS.md` — added "Search Before Building" principle (Layer 1/2/3 check before generating new infra).
+- `docs/guides/install-and-deploy.md` — added "Local development workflow" section documenting `make dev` and the postgres race gotcha.
+
 ## [0.0.0.22] - 2026-06-28
 
 ### Fixed

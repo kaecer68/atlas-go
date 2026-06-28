@@ -136,6 +136,53 @@ docker compose up -d   # postgres, redis, atlas-go, prism worker, swarm, grafana
 
 > **First time?** Docker will build the `atlas-go` image from `Dockerfile` (multi-stage: node → go). Takes ~5-10 minutes.
 
+### 2.5a Native dev workflow with `make dev` (recommended for iteration)
+
+如果你主要在改 Go backend(orchestrator / portfolio / marketdata / experiment 等),用 `make dev` 比 docker compose 迭代快 5-10 分鐘(rebuild docker image)→ 2-3 秒(go run 直接 reload)。
+
+**原理**(2026-06-28 從「用戶每次重複踩同一個坑」事件抽出):
+
+- **postgre / redis 用 docker**(隔離、init scripts、auto-restart)
+- **atlas-go 用 native `go run`**(原生 debugger、fast reload)
+- **fubon-proxy 由 ProcessManager 自動 spawn**(`internal/fubonproxy/manager.go` + `shouldStartFubonProxy` — 已有完整 lifecycle,不用再寫新的 orchestration)
+- **`docker compose stop atlas`** 釋出 port 8080 給 native 進程
+
+**用法**:
+
+```bash
+make dev          # 起 docker deps(postgres+redis)+ stop atlas container + go run ./cmd/atlas -api
+                  # CTRL+C 結束;postgres/redis 留 docker 跑
+make dev-status   # 看容器狀態 + port 8080/8081 占用 + native process
+make dev-logs     # tail atlas-go 啟動 log(若 go run 在背景)
+make dev-stop     # 收尾:停 docker deps(注意:不會 kill native atlas-go,用 CTRL+C 或 kill <pid>)
+```
+
+**前置**:
+- `~/.config/atlas-go/.env` 存在(同 2.3)
+- `~/.config/atlas-go/.fubon-env/bin/python` 存在(若 `.env` 有 `FUBON_API_KEY`,ProcessManager 會用此 venv 的 Python spawn fubon-proxy)
+- Port 8080 在 host 沒被其他程式佔用(`make dev-status` 會查;若被佔用會 error 讓你手動處理 — 因為 ProcessManager 也不 auto-kill 8080 衝突,可能誤殺 Chrome devtools / IDE)
+
+**不該做的事**:
+- **不要** `docker compose up -d fubon-proxy` 跟 `make dev` 同時跑 → ProcessManager 看到 8081 healthy 跳過 spawn 看似 OK,但若 docker fubon-proxy 在 restart 中(暫時 unhealthy),ProcessManager 會 spawn 撞 8081 EADDRINUSE 進入 supervisor loop。dev 時讓 ProcessManager 唯一管 fubon-proxy。
+- **不要**修改 `internal/fubonproxy/manager.go` 試圖加「auto-kill port 8080 佔用者」邏輯 — port 8080 可能被 Chrome devtools / IDE LISTEN,自動 kill 風險太高。改由 user 手動 `docker compose stop atlas` 即可。
+
+**驗證**(2026-06-28 實測):
+```
+$ make dev
+✅ postgres + redis healthy
+✅ port 8080 free
+🚀 go run ./cmd/atlas -api
+... (啟動 ~5s)
+dashboard api listening on :8080
+fubonproxy.process_started (spawn native fubon-proxy subprocess)
+fubonproxy.health_check_passed (login Fubon SDK 成功)
+/health → 200 ✓
+```
+
+**為什麼這之前是踩坑**:
+- 第一個版本考慮寫新的 wrapper script / 新 Makefile target 起 fubon-proxy → 查 codebase 才發現 ProcessManager + `shouldStartFubonProxy` 已經在做這件事 → 改用 `make dev` 串接,沒寫任何新 Go code
+- 詳見 `docs/TRAPS.md` § Dev Workflow / 造輪子陷阱
+
 ### 2.6 Verify the stack is healthy
 
 ```bash
