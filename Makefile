@@ -247,8 +247,8 @@ dev:
 		if [ $$i -eq 30 ]; then echo "❌ timeout waiting for postgres / redis"; exit 1; fi; \
 		sleep 2; \
 	done
-	@echo "  → stopping atlas + atlas-fubon-proxy containers to free ports 8080/8081"
-	@docker compose stop atlas atlas-fubon-proxy 2>/dev/null || true
+	@echo "  → stopping atlas + fubon-proxy containers to free ports 8080/8081"
+	@docker compose stop atlas fubon-proxy 2>/dev/null || true
 	@echo "  → verifying port 8080 is free"
 	@if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "⚠️  port 8080 still held:"; \
