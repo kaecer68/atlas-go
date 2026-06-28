@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.0.24] - 2026-06-28
+
+### Fixed
+- **Web UI HTML pages returning 401 unauthorized**: PR #808 set `ATLAS_API_KEY` via `env_file`, which put `AuthMiddleware` from "no-key bypass" mode into "key required" mode. The `authFreePaths` map in `AuthMiddleware` only contained `/health` and `/metrics` — HTML pages like `/admin/` and `/client/` (and their nested assets) hit the auth check and returned 401. `AuthMiddleware.isAuthFreePath` now consults both `authFreeExactPaths` (`/health`, `/metrics`, `/admin`, `/client`) and `authFreePrefixPaths` (`/admin/`, `/client/`, `/static/`). API routes (`/api/*`) still require auth.
+
 ## [0.0.0.23] - 2026-06-28
 
 ### Added
