@@ -12,21 +12,12 @@ import (
 // WriteJSON is called centrally by Adapt(), eliminating 73 duplicate call sites.
 type Handler func(r *http.Request) (status int, data any)
 
-// authFreeExactPaths lists HTTP paths that AuthMiddleware passes through
-// without checking authentication. These are the docker healthcheck
-// endpoints and the Prometheus scrape endpoint, which must remain
-// reachable without credentials so that orchestrators (docker, k8s,
-// prometheus) can probe the service.
-//
-// Symmetric with cmd/atlas/main.go's finalMux path-bypass: we keep
-// both so that any caller that wires AuthMiddleware directly (e.g.
-// via apishared.Adapt) also gets the same exemption.
-//
-// Web UI HTML pages (`/admin`, `/client`) and their static assets
-// (`/admin/*`, `/client/*`, `/static/*`) are public because the browser
-// loads them without an API key — the JS inside adds the X-API-Key
-// header for subsequent /api/* calls. Without this exemption the
-// login page itself would 401 before any JS runs.
+// authFreeExactPaths and authFreePrefixPaths are kept for callers
+// that wire AuthMiddleware directly (e.g. Adapt). The canonical
+// public-path bypass now lives in cmd/atlas/main.go isPublicPath,
+// which is the single source of truth for the top-level HTTP mux.
+// These lists mirror that decision so AuthMiddleware stays
+// self-contained for direct callers.
 var authFreeExactPaths = map[string]bool{
 	"/health":  true,
 	"/metrics": true,

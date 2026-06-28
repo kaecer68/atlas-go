@@ -399,10 +399,16 @@ func (m *ProcessManager) isHealthyWithTimeout(timeout time.Duration) bool {
 // 同步執行（< 100ms + lsof ~50ms）。
 // IPv4 hardcode 對齊 healthEndpoint（PR #495），避免雙棧環境下 [::1] 優先導致誤判。
 func (m *ProcessManager) probePort8081() (portState, portOccupant, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(proxyListenPort))
+	addr := "127.0.0.1:" + strconv.Itoa(proxyListenPort)
+	ln, err := net.Listen("tcp", addr)
 	if err == nil {
 		_ = ln.Close()
-		return portStateFree, portOccupant{}, nil
+		ln6, err6 := net.Listen("tcp", "[::1]:"+strconv.Itoa(proxyListenPort))
+		if err6 == nil {
+			_ = ln6.Close()
+			return portStateFree, portOccupant{}, nil
+		}
+		err = err6
 	}
 	if !errors.Is(err, syscall.EADDRINUSE) {
 		return 0, portOccupant{}, fmt.Errorf("port %d probe failed: %w", proxyListenPort, err)

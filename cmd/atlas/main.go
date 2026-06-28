@@ -1304,9 +1304,29 @@ func run(args []string, deps appDeps) error {
 		log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
+
+		// isPublicPath determines whether a request bypasses the
+		// API-key AuthMiddleware. Web UI pages, their static
+		// assets, and probing endpoints are loaded by the browser
+		// without credentials and must not require an API key.
+		isPublicPath := func(p string) bool {
+			switch {
+			case p == "/" || p == "/health" || p == "/metrics":
+				return true
+			case p == "/admin" || strings.HasPrefix(p, "/admin/"):
+				return true
+			case p == "/client" || strings.HasPrefix(p, "/client/"):
+				return true
+			case strings.HasPrefix(p, "/static/"):
+				return true
+			default:
+				return false
+			}
+		}
+
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			if r.URL.Path == "/metrics" || r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/static/") {
+			if isPublicPath(r.URL.Path) {
 				mux.ServeHTTP(w, r)
 				return
 			}
