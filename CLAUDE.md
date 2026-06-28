@@ -1,29 +1,24 @@
 # CLAUDE.md — atlas-go 規則索引
 
+@AGENTS.md
+
 > **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.0.21。詳見 [`docs/specs/llm-sector-agent.md`](docs/specs/llm-sector-agent.md) (L2.3 plan/reflect 設計)、[`docs/specs/agent-loop-state-machine.md`](docs/specs/agent-loop-state-machine.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 觀察規劃見 [`.omo/wave-11-l2-4/`](../.omo/wave-11-l2-4/)。`UseLLMSectorAgents` flag 預設 off。
 
-## 🌐 語言強制規範（首要規則）
+## 🌐 語言強制規範
 
-> **全部回覆皆須使用繁體中文（Traditional Chinese）**。除非使用者明確要求使用英文，否則禁止使用英文回應。此規則優先於所有技術指令。
+見 [`AGENTS.md`](AGENTS.md)（跨工具權威來源）。全局規則仍遵循 `~/.claude/CLAUDE.md`。
 
-本檔案僅作為工具進入點。所有專案專屬規則、陷阱與禁令，請直接參考 **AGENTS.md**。
-本檔案不重複任何規則，以確保單一權威來源，避免 token 重複計費。
+本檔案為 Claude Code 專屬設定入口。所有跨工具共用規則、陷阱、文件路由見 **[`AGENTS.md`](AGENTS.md)**。
 
-全局規則仍遵循 `~/.claude/CLAUDE.md`。
+## 快速路由（Claude Code 專屬）
 
-## 快速路由
+跨工具共用路由見 [`AGENTS.md`](AGENTS.md)。以下僅列本檔案專有內容：
 
-| 需求 | 文件 |
-|------|------|
-| 完整模組索引（34 個） | `internal/AGENTS_INDEX.md` |
-| 模組成熟度對照 | `internal/MATURITY.md` |
-| 跨模組陷阱詳細參考 | `docs/TRAPS.md` |
-| 外部依賴與環境狀態 | `docs/ENVIRONMENT.md` |
-| 根規則與全域禁令 | `AGENTS.md` |
-| 架構憲法 | `internal/apigateway/CONSTITUTION.md` |
+| 需求 | 參考位置 |
+|------|---------|
 | 前端架構（admin_web / client_web / shared_web） | `## 前端架構`（下方） |
 | 部署設定（本機 Docker） | `## 部署設定`（下方） |
-| **修改程式碼前必跑** | `.claude/skills/atlas-pre-change-protocol/SKILL.md`（Step 0 重疊檢查 + Step 1-7 強制流程） |
+| Token 效率規則（Claude Code 專屬） | `## Token Efficiency Rules`（下方） |
 
 ## 前端架構
 
