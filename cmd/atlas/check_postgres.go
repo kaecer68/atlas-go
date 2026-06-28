@@ -150,7 +150,7 @@ func fixPostgresPassword(containerName, user, password string) bool {
 
 // isPostgresContainerRunning checks if the postgres container exists and is running.
 func isPostgresContainerRunning(dockerPath string) bool {
-	cmd := exec.Command(dockerPath, "ps", "--filter", fmt.Sprintf("name=%s", postgresContainerName),
+	cmd := exec.Command(dockerPath, "ps", "--filter", fmt.Sprintf("name=%s", postgresContainerName), //nolint:gosec // dockerPath is a resolved binary path, postgresContainerName is a constant
 		"--filter", "status=running", "--format", "{{.Names}}")
 	out, err := cmd.Output()
 	if err != nil {
@@ -214,7 +214,7 @@ func parsePostgresHostPort(dsn string) (host, port string) {
 }
 
 func isDockerDaemonRunning(dockerPath string) bool {
-	return exec.Command(dockerPath, "info").Run() == nil
+	return exec.Command(dockerPath, "info").Run() == nil //nolint:gosec // dockerPath is a resolved binary path, not user input
 }
 
 func startDockerDaemon() error {

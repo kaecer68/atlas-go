@@ -2,7 +2,6 @@ package risk
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -46,10 +45,19 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return http.StatusOK, map[string]any{"message": "no sessions available"}
+		logging.Warn("risk_handler", "sessions_dir_unreadable", logging.Err(err))
+		return http.StatusOK, map[string]any{
+			"risk_snapshot": map[string]float64{
+				"var_95":            0,
+				"var_99":            0,
+				"cvar_95":           0,
+				"max_drawdown_pct":  0,
+				"data_points":       0,
+				"insufficient_data": 1,
+			},
+			"session_count": 0,
+			"gate_mode":     "",
 		}
-		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("read sessions: %v", err)}
 	}
 
 	type sessionEntry struct {

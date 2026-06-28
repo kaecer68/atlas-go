@@ -397,15 +397,24 @@ func (m *ProcessManager) isHealthyWithTimeout(timeout time.Duration) bool {
 
 // probePort8081 探測 port 8081 占用狀態（F9 pre-flight）。
 // 同步執行（< 100ms + lsof ~50ms）。
-// IPv4 hardcode 對齊 healthEndpoint（PR #495），避免雙棧環境下 [::1] 優先導致誤判。
+// 用 wildcard (0.0.0.0, [::]) 而非 loopback (127.0.0.1, [::1]) probe：
+// Docker Desktop port forwarder 綁 wildcard，loopback bind 在 wildcard
+// 被佔時仍會成功，導致誤判 portStateFree。healthEndpoint 仍用 127.0.0.1
+// 因為 Python fubon-proxy 實際 bind target 是 IPv4 wildcard 0.0.0.0。
 func (m *ProcessManager) probePort8081() (portState, portOccupant, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(proxyListenPort))
-	if err == nil {
-		_ = ln.Close()
-		return portStateFree, portOccupant{}, nil
+	port := strconv.Itoa(proxyListenPort)
+	ln4, err4 := net.Listen("tcp", "0.0.0.0:"+port)
+	if err4 == nil {
+		_ = ln4.Close()
+		ln6, err6 := net.Listen("tcp", "[::]:"+port)
+		if err6 == nil {
+			_ = ln6.Close()
+			return portStateFree, portOccupant{}, nil
+		}
+		err4 = err6
 	}
-	if !errors.Is(err, syscall.EADDRINUSE) {
-		return 0, portOccupant{}, fmt.Errorf("port %d probe failed: %w", proxyListenPort, err)
+	if !errors.Is(err4, syscall.EADDRINUSE) {
+		return 0, portOccupant{}, fmt.Errorf("port %d probe failed: %w", proxyListenPort, err4)
 	}
 	// port 被佔：可能是健康的 fubon-proxy 剛啟動，/health 尚未 accept。
 	// 重試容忍 race（F9_PortHeldByHealthyFubon_SkipsSpawn 測試 + 真實世界

@@ -823,14 +823,15 @@ func TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel(t *testing.T) {
 // 互相不衝突（依賴 Go test 內建單 goroutine 序列執行；不使用 t.Parallel）。
 // ============================================================================
 
-// bindPort8081 佔住 127.0.0.1:8081 模擬外部進程。handler 給測試控制 /health
-// 行為。測試結束透過 t.Cleanup 自動關閉。
+// bindPort8081 佔住 0.0.0.0:8081 (IPv4 wildcard) 模擬外部進程佔用 wildcard
+// 端口（對應 Docker Desktop port forwarder 的行為）。handler 給測試控制
+// /health 行為。測試結束透過 t.Cleanup 自動關閉。
 //
 // 8081 已被系統上其他服務佔用時 t.Skip() 而非 t.Fatal()，允許在共享 CI runner
 // 上執行而不誤報。
 func bindPort8081(t *testing.T, h http.Handler) (net.Listener, *http.Server) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:8081")
+	ln, err := net.Listen("tcp", "0.0.0.0:8081")
 	if err != nil {
 		t.Skipf("port 8081 unavailable on test host: %v — skipping", err)
 	}
