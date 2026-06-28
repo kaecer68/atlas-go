@@ -23,13 +23,7 @@ func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsColle
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 	handler := staticHandler(subFS)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/admin/", http.StatusTemporaryRedirect)
-			return
-		}
-		handler.ServeHTTP(w, r)
-	})
+	mux.Handle("/", handler)
 	mux.Handle("/static/", http.StripPrefix("/static/", handler))
 
 	// Admin and investor SPAs. Redirect bare /admin and /client so the
