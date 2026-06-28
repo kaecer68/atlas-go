@@ -1709,7 +1709,14 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 // through to runSimulation() (a one-shot), producing a 60-second
 // restart loop that the user perceived as the system "abnormally
 // closing after running for a while".
-func runPrismWorker(cfg config.Config, deps appDeps) error {
+// runPrismWorker runs the PRISM training-queue worker as a long-lived
+// daemon. The error return is intentionally always nil today
+// (prism.NewPRISMManager().Start()/Stop() do not return error), but the
+// signature is kept consistent with the other run* dispatch targets
+// (runLiveTrading, runSimulation) so run() can route subcommands
+// without special-casing each one. If Start/Stop ever grow error
+// returns, wire them through here.
+func runPrismWorker(cfg config.Config, deps appDeps) error { //nolint:unparam
 	cfgPrism := prism.DefaultPRISMConfig()
 	logging.Info("prism_worker", "starting",
 		"workdir", cfg.WorkDir,

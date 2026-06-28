@@ -106,69 +106,28 @@ func withClientMockTransport(server *httptest.Server, hosts ...string) *http.Cli
 	return client
 }
 
-// writeParametersJSON writes a minimal parameters.json to a temp dir and sets
-// ATLAS_PARAMETERS_CONFIG so config.GetParametersConfig() returns it.
+// writeParametersJSON copies the repo's configs/parameters.json to a temp
+// dir, applies test-only overrides, and rewires config.GetParametersConfig()
+// to read it. We start from the real file (rather than a hand-rolled
+// partial config) because LoadParametersConfig → Validate() enforces
+// invariant sums (e.g. sector_rotation.base_allocations must equal
+// 1.0±0.01) that are impractical to maintain by hand here. Copying the
+// real file keeps every other field canonical and makes the override
+// surface obvious.
 func writeParametersJSON(t *testing.T, overrides map[string]any) string {
 	t.Helper()
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "parameters.json")
 
-	cfg := map[string]any{
-		"marketdata": map[string]any{
-			"bdi_endpoint":          map[string]any{"value": ""},
-			"bdi_api_timeout_sec":   map[string]any{"value": 10},
-			"twse_api_rate_limit":   map[string]any{"value": 1000.0},
-			"twse_api_rate_burst":   map[string]any{"value": 10},
-			"twse_api_timeout_sec":  map[string]any{"value": 10},
-			"fugle_api_timeout_sec": map[string]any{"value": 10},
-			"fugle_rate_limit":      map[string]any{"value": 60},
-			"fubon_api_timeout_sec": map[string]any{"value": 10},
-			"fubon_intraday_limit":  map[string]any{"value": 100},
-			"tej_api_timeout_sec":   map[string]any{"value": 10},
-			"tej_calls_per_second":  map[string]any{"value": 10},
-		},
-		"risk_gate": map[string]any{
-			"pre_trade": map[string]any{
-				"max_sector_exposure_pct": map[string]any{"value": 1.0},
-			},
-		},
-		"engine": map[string]any{
-			"sector_rotation": map[string]any{
-				"min_allocation": map[string]any{"value": 0.0},
-				"max_allocation": map[string]any{"value": 1.0},
-				"base_allocations": map[string]any{
-					"value": map[string]float64{"tech": 0.25},
-				},
-				"macro_adjustments":  map[string]any{"value": map[string]any{}},
-				"carry_adjustments":  map[string]any{"value": map[string]any{}},
-				"rotate_adjustments": map[string]any{"value": map[string]any{}},
-			},
-		},
-		"orchestrator": map[string]any{
-			"sector_rotation_base_allocations":   map[string]any{"value": map[string]float64{"tech": 0.25}},
-			"sector_rotation_macro_adjustments":  map[string]any{"value": map[string]any{}},
-			"sector_rotation_flow_adjustments":   map[string]any{"value": map[string]any{}},
-			"sector_constraints_risk_off":        map[string]any{"value": map[string]float64{}},
-			"sector_constraints_carry_trade":     map[string]any{"value": map[string]float64{}},
-			"sector_constraints_sector_rotation": map[string]any{"value": map[string]float64{}},
-		},
-		"industry": map[string]any{
-			"sector_weights": map[string]any{"value": map[string]float64{"tech": 0.25}},
-		},
-		"narrative": map[string]any{
-			"gold_change_pct_threshold":           map[string]any{"value": 0.5},
-			"usdtwd_change_pct_threshold":         map[string]any{"value": 0.5},
-			"semiconductor_export_drop_threshold": map[string]any{"value": 0.1},
-			"retail_margin_zscore_threshold":      map[string]any{"value": 2.0},
-			"tsmc_revenue_yoy_threshold":          map[string]any{"value": 0.1},
-			"tsmc_revenue_positive_threshold":     map[string]any{"value": 0.0},
-			"confidence_base_tsmc_revenue":        map[string]any{"value": 0.5},
-			"sox_index_drop_threshold":            map[string]any{"value": 0.1},
-		},
-		"sector_executor": map[string]any{},
+	srcPath := findRepoParametersJSON(t)
+	srcData, err := os.ReadFile(srcPath)
+	if err != nil {
+		t.Fatalf("read repo parameters.json: %v", err)
 	}
 
-	// Apply overrides by walking the nested map. Only one level of nesting is supported.
+	var cfg map[string]any
+	if err := json.Unmarshal(srcData, &cfg); err != nil {
+		t.Fatalf("parse repo parameters.json: %v", err)
+	}
+
 	for section, vals := range overrides {
 		if secMap, ok := vals.(map[string]any); ok {
 			if cfgSection, ok := cfg[section].(map[string]any); ok {
@@ -179,6 +138,8 @@ func writeParametersJSON(t *testing.T, overrides map[string]any) string {
 		}
 	}
 
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("marshal parameters: %v", err)
@@ -188,6 +149,31 @@ func writeParametersJSON(t *testing.T, overrides map[string]any) string {
 	}
 
 	t.Setenv("ATLAS_PARAMETERS_CONFIG", path)
+	config.SetParametersConfigPath(path)
 	config.ResetParametersConfig()
 	return path
+}
+
+// findRepoParametersJSON walks up from the working directory until it finds
+// configs/parameters.json. Tests run from the package directory, so this
+// locates the canonical file even when the package is moved.
+func findRepoParametersJSON(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	for i := 0; i < 6; i++ {
+		candidate := filepath.Join(dir, "configs", "parameters.json")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatalf("could not locate configs/parameters.json from working directory")
+	return ""
 }
