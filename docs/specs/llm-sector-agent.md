@@ -112,12 +112,12 @@ When `UseLLMSectorAgents=true`, the following should be logged:
 - `tool.calls_per_recommendation`
 - `reflect.continue_rate` (fraction of continues)
 
-See `docs/wave-11/L2_4_OBSERVATION.md` for the full metrics list.
+See `.omo/wave-11-l2-4/L2_4_OBSERVATION.md` for the full metrics list (L2.4 observation window — PLANNED, not yet started).
 
 ## References
 
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711)
 - Issue: [#711](https://github.com/kaecer68/atlas-go/issues/711)
 - PRs: #724 (PR1), #725 (PR2/v0.0.0.20a), #726 (PR3), #729 (PR4), #732 (PR5a), #733 (PR5b/v0.0.0.21), #739 (L3 wiring: `RunToolCall` → `SafeInvokeHandler`)
-- Cross-references: [`agent-loop-state-machine.md`](agent-loop-state-machine.md), [`../guides/adding-sector-agents.md`](../guides/adding-sector-agents.md), `docs/wave-11/L2_4_OBSERVATION.md`
+- Cross-references: [`agent-loop-state-machine.md`](agent-loop-state-machine.md), [`../guides/adding-sector-agents.md`](../guides/adding-sector-agents.md), `.omo/wave-11-l2-4/L2_4_OBSERVATION.md`
 - Design authority: [`docs/llm-integration-strategy-framework.md`](../llm-integration-strategy-framework.md)

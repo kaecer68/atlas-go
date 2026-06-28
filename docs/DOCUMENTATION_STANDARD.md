@@ -154,6 +154,34 @@ docs/
 - 把規範性內容放進 `.omo/`（規範必須在 `docs/`）
 - 跨工作區共用 `.omo/` 內容（每個工作區獨立）
 
+### Wave 工作目錄生命週期（`.omo/wave-N/` 專節）
+
+Wave 目錄用於階段性開發窗口（如 L2.3 PoC、L2.4 觀察期）。與一般短壽目錄不同，wave 有明確的 promotion/rollback 路徑：
+
+**放入條件**（任一即放）：
+1. **PLANNED / IN PROGRESS** — 未啟動或正在執行的階段
+2. **Wave-specific 暫存** — 例如觀察記錄（啟用後建立）
+3. **Wave cleanup** — 歸檔報告準備
+
+**Promotion 路徑**（wave 結束後）：
+```
+Wave 完成 → 文件分類 →
+  ├─ 永久 reference → docs/specs/ 或 docs/guides/
+  ├─ 觀察期文件 → .omo/wave-N/（帶 status banner）
+  └─ 一次性 audit → docs/archive/
+```
+
+**Rollback 路徑**：
+- 失敗 → 帶 status banner 移至 `docs/archive/wave-N-RESOLVED/`
+- 觀察期結束 → 成功 promotion 升級到 `docs/`；rollback 如上
+
+**規則**：
+- 已 ship 的永久文件直接進 `docs/specs/`、`docs/guides/`，**不留在 wave 目錄**
+- wave 目錄在 `.omo/` 下（非 `docs/`），避免規範目錄被暫存內容污染
+- 每個 wave 目錄應有 README 標註狀態（PLANNED / IN PROGRESS / COMPLETED）
+
+> 歷史參考：`docs/wave-11/`（2026-06-28 解散）— L2.4 PLANNED 移至 `.omo/wave-11-l2-4/`，已完成產出移至 `docs/specs/` 與 `docs/guides/`。
+
 ### 判斷流程：放 `docs/` 還是 `.omo/`？
 
 ```
@@ -239,7 +267,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 - **日期前綴 `YYYY-MM-DD-`**：時序敏感（handoff、investigation、audit、plan）
 - **無日期前綴**：通用 reference（architecture、conventions、QUICKSTART、brief）
 - **slug**：小寫、`-` 分隔、無空格、無大寫
-- **單數 vs 複數**：用單數，例外是已存在的複數目錄（`docs/events/`、`docs/plans/`、`docs/wave-11/`）保留不動
+- **單數 vs 複數**：用單數，例外是已存在的複數目錄（`docs/events/`、`docs/plans/`）保留不動
 - **P<n> 編號**：plans 與 evidence 的 P0-1、P0-2 編號可選，但建議用於大型 multi-PR 規劃
 
 ---

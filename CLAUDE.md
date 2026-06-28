@@ -1,6 +1,6 @@
 # CLAUDE.md — atlas-go 規則索引
 
-> **Wave 10 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.0.21。詳見 [`docs/wave-11/`](docs/wave-11/) (L2.3 plan/reflect 設計、L2.4 觀察窗口、Semiconductor executor 範例、AgentLoop state machine)。`UseLLMSectorAgents` flag 預設 off。
+> **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.0.21。詳見 [`docs/specs/llm-sector-agent.md`](docs/specs/llm-sector-agent.md) (L2.3 plan/reflect 設計)、[`docs/specs/agent-loop-state-machine.md`](docs/specs/agent-loop-state-machine.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 觀察規劃見 [`.omo/wave-11-l2-4/`](../.omo/wave-11-l2-4/)。`UseLLMSectorAgents` flag 預設 off。
 
 ## 🌐 語言強制規範（首要規則）
 

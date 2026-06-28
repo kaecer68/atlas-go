@@ -128,7 +128,7 @@
 
 ### Wave-specific（active）
 
-- `wave-11/` — Wave 11 active work（未啟動觀察期/暫存；已 ship 移到 `specs/` 或 `guides/`）
+Wave-11 L2.4 觀察規劃已移至 `.omo/wave-11-l2-4/`（PLANNED — 尚未啟動）。已完成產出已移至 `docs/specs/` 與 `docs/guides/`（見 `docs/wave-11/` 原 README 生命週期規則 — 目錄已解散）。
 
 ### 歸檔 `docs/archive/`
 

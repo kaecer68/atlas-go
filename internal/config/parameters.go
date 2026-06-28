@@ -56,7 +56,7 @@ type ParameterCitation struct {
 //
 // Plan: PR5b of 7 in the Wave 10 L2.3 execution plan. Tagged
 // v0.0.0.21 once PR5b lands. Cross-ref
-// docs/wave-11/SEMICONDUCTOR_EXECUTOR.md (PR6).
+// docs/guides/adding-sector-agents.md (moved from docs/wave-11/SEMICONDUCTOR_EXECUTOR.md).
 var UseLLMSectorAgentsMetadata = ParameterMetadata[bool]{
 	Value: false,
 	Rationale: "Gate L2.3 PoC SemiconductorLLMAgent behind a flag; keep " +

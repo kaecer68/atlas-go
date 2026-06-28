@@ -35,7 +35,6 @@ find . \
     -not -path '*/docs/handoff/*' \
     -not -path '*/docs/investigations/*' \
     -not -path '*/docs/audit/*' \
-    -not -path '*/docs/wave-11/*' \
     -not -path '*/.claude/*' \
     -not -name 'agents-md-audit.md' \
     -print0 |
