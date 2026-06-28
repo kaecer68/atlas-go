@@ -271,7 +271,11 @@ func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		return http.StatusInternalServerError, map[string]string{"error": "read sessions"}
+		if os.IsNotExist(err) {
+			return http.StatusOK, PnLAttributionResponse{}
+		}
+		logging.Warn("live_handler", "sessions_dir_unreadable", logging.Err(err))
+		return http.StatusOK, PnLAttributionResponse{}
 	}
 
 	latestSession := ""
@@ -426,7 +430,17 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		return http.StatusInternalServerError, map[string]string{"error": "read sessions"}
+		if os.IsNotExist(err) {
+			return http.StatusOK, RiskExposureResponse{
+				SnapshotTime:     time.Now(),
+				InsufficientData: true,
+			}
+		}
+		logging.Warn("live_handler", "sessions_dir_unreadable", logging.Err(err))
+		return http.StatusOK, RiskExposureResponse{
+			SnapshotTime:     time.Now(),
+			InsufficientData: true,
+		}
 	}
 
 	type sessionEntry struct {

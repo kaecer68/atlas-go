@@ -50,7 +50,11 @@ func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		return http.StatusInternalServerError, map[string]string{"error": "read sessions dir: " + err.Error()}
+		if os.IsNotExist(err) {
+			return http.StatusOK, BenchmarkComparisonResponse{SnapshotTime: time.Now()}
+		}
+		logging.Warn("benchmark", "sessions_dir_unreadable", logging.Err(err))
+		return http.StatusOK, BenchmarkComparisonResponse{SnapshotTime: time.Now()}
 	}
 
 	var points []sessionPoint

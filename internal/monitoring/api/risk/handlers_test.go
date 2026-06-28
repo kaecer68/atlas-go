@@ -53,9 +53,16 @@ func TestHandleRiskMetrics_NoSessionsDir(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
 	status, body := h.HandleRiskMetrics(req)
 	assertStatus(t, status, http.StatusOK)
-	m := assertJSONKey(t, body, "message")
-	if m["message"] != "no sessions available" {
-		t.Errorf("message = %v", m["message"])
+	m := assertJSONKey(t, body, "risk_snapshot")
+	snap, ok := m["risk_snapshot"].(map[string]any)
+	if !ok {
+		t.Fatalf("risk_snapshot not a map: %T", m["risk_snapshot"])
+	}
+	if snap["insufficient_data"] != float64(1) {
+		t.Errorf("insufficient_data = %v, want 1", snap["insufficient_data"])
+	}
+	if snap["data_points"] != float64(0) {
+		t.Errorf("data_points = %v, want 0", snap["data_points"])
 	}
 }
 
