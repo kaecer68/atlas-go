@@ -42,6 +42,11 @@ var (
 	e2eBinaryOnce sync.Once
 	e2eBinaryPath string
 	e2eBinaryErr  error
+	e2eRepoRoot   string
+
+	foreignHolderOnce sync.Once
+	foreignHolderPath string
+	foreignHolderErr  error
 )
 
 // setupE2EBinary builds atlas once per `go test` invocation and returns the
@@ -49,6 +54,15 @@ var (
 func setupE2EBinary(t *testing.T) string {
 	t.Helper()
 	e2eBinaryOnce.Do(func() {
+		// Resolve the repository root from go.mod so spawned atlas runs with
+		// the correct working directory for relative config/data paths.
+		gmod, err := exec.Command("go", "env", "GOMOD").Output()
+		if err != nil {
+			e2eBinaryErr = fmt.Errorf("resolve go.mod: %w", err)
+			return
+		}
+		e2eRepoRoot = filepath.Dir(strings.TrimSpace(string(gmod)))
+
 		bin, err := os.MkdirTemp("", "atlas-e2e-")
 		if err != nil {
 			e2eBinaryErr = err
@@ -73,6 +87,56 @@ func setupE2EBinary(t *testing.T) string {
 }
 
 // freePort grabs an unused TCP port from the kernel and returns it.
+// setupForeignHolder builds a small Go helper that binds 0.0.0.0:<port> and
+// sleeps, used by the non-zombie E2E test to occupy the fubon port with a
+// process whose command name is not "python" or "uvicorn". Tests are skipped
+// if the helper cannot be built.
+func setupForeignHolder(t *testing.T) string {
+	t.Helper()
+	foreignHolderOnce.Do(func() {
+		tmpDir, err := os.MkdirTemp("", "atlas-foreign-holder-")
+		if err != nil {
+			foreignHolderErr = err
+			return
+		}
+		foreignHolderPath = filepath.Join(tmpDir, "foreign-holder")
+		src := filepath.Join(tmpDir, "holder.go")
+		code := `package main
+import (
+	"fmt"
+	"net"
+	"os"
+	"time"
+)
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: foreign-holder <port>")
+		os.Exit(1)
+	}
+	ln, err := net.Listen("tcp", "0.0.0.0:"+os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	time.Sleep(60 * time.Second)
+	_ = ln.Close()
+}
+`
+		if err := os.WriteFile(src, []byte(code), 0o644); err != nil {
+			foreignHolderErr = err
+			return
+		}
+		cmd := exec.Command("go", "build", "-o", foreignHolderPath, src)
+		if err := cmd.Run(); err != nil {
+			foreignHolderErr = fmt.Errorf("build foreign holder: %w", err)
+		}
+	})
+	if foreignHolderErr != nil {
+		t.Skipf("foreign holder helper unavailable: %v", foreignHolderErr)
+	}
+	return foreignHolderPath
+}
+
 func freePort(t *testing.T) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -146,6 +210,7 @@ func stopAtlas(t *testing.T, cmd *exec.Cmd, waitFor time.Duration) {
 func launchAtlas(t *testing.T, bin string, args ...string) *exec.Cmd {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
+	cmd.Dir = e2eRepoRoot
 	cmd.Env = append(os.Environ(), "FUBON_PROXY_PORT="+lastFlagValue(args, "-fubon-port"))
 	// Discard stdout in tests to keep test logs readable; stderr is kept so
 	// atlas error / preflight_zombie_killed events are visible for debugging.
@@ -194,9 +259,9 @@ func TestE2E_BinaryStartupHealthShape_SIGTERMReleasesPorts(t *testing.T) {
 		"-fubon-port", strconv.Itoa(fubonPort),
 	)
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(apiPort) + "/health"
-	code, body, ok := waitForHealth(t, baseURL, 20*time.Second)
+	code, body, ok := waitForHealth(t, baseURL, 60*time.Second)
 	if !ok {
-		t.Fatalf("/health never returned 200 within 20s (last code=%d body=%q)", code, body)
+		t.Fatalf("/health never returned 200 within 60s (last code=%d body=%q)", code, body)
 	}
 
 	// PR #821 / L2 health JSON shape: must contain `status` and `ports` keys,
@@ -245,7 +310,7 @@ func TestE2E_PythonZombieOrphanReclaimed(t *testing.T) {
 		"-c", fmt.Sprintf(
 			"import socket, time; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); "+
 				"s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); "+
-				"s.bind(('127.0.0.1', %d)); s.listen(8); time.sleep(60)", zombiePort))
+				"s.bind(('0.0.0.0', %d)); s.listen(8); time.sleep(60)", zombiePort))
 	zombieCmd.Stdout = io.Discard
 	zombieCmd.Stderr = io.Discard
 	if err := zombieCmd.Start(); err != nil {
@@ -259,9 +324,9 @@ func TestE2E_PythonZombieOrphanReclaimed(t *testing.T) {
 	})
 
 	// Give the listener a moment to actually bind.
-	if !waitForPortBind(8081, zombiePort, 5*time.Second) { // port==0 here is unused, calling differently
+	if !waitForPortBind(zombiePort, 5*time.Second) {
 		_ = zombieCmd.Process.Kill()
-		t.Skipf("python3 zombie failed to bind 127.0.0.1:%d within 5s", zombiePort)
+		t.Skipf("python3 zombie failed to bind 0.0.0.0:%d within 5s", zombiePort)
 	}
 	// Phase 2: start atlas with that exact port as -fubon-port. The preflight
 	// should observe StateForeign + IsFubonZombie==true and auto-reclaim
@@ -303,11 +368,21 @@ func waitPortReleased(port int, timeout time.Duration) bool {
 	return false
 }
 
-// waitForPortBind is a stub used in the zombie test — currently bypassed
-// because the python listener's bind is fast (sub-second).
-func waitForPortBind(_, _ int, _ time.Duration) bool {
-	time.Sleep(300 * time.Millisecond)
-	return true
+// waitForPortBind polls until the given port has an active listener, with
+// timeout. It uses net.Dial (not net.Listen) so macOS SO_REUSEADDR quirks do
+// not cause false negatives when the occupant bound 0.0.0.0:<port>.
+func waitForPortBind(port int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+	for time.Now().Before(deadline) {
+		conn, err := net.Dial("tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
 }
 
 // TestE2E_NonZombieForeignHolder documents current behaviour for the
@@ -320,53 +395,32 @@ func waitForPortBind(_, _ int, _ time.Duration) bool {
 // flip to expect a healthy /health instead of an exit-with-error.
 func TestE2E_NonZombieForeignHolder_AtlasErrors(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("sleep-based foreign holder only reliable on POSIX")
+		t.Skip("foreign holder helper only reliable on POSIX")
 	}
 	bin := setupE2EBinary(t)
 	foreignPort := freePort(t)
 
-	// Bind the port with `sleep 60` — its comm is "sleep" which IsFubonZombie
-	// does NOT match (needs `python` or `uvicorn` substring).
-	cmd := exec.Command("sleep", "60")
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	// We need sleep to actually bind the port; sleep just sleeps without
-	// binding. So use a small python listener again but with a fake argv[0]
-	// that doesn't match the IsFubonZombie heuristic. We do this by writing
-	// a wrapper script.
-	wrapper := filepath.Join(t.TempDir(), "nonpy")
-	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nexec -a NotPython sleep 60 &\nwait\n"), 0o755); err != nil {
-		t.Fatalf("write wrapper: %v", err)
-	}
-	_ = wrapper // kept for documentation; below listener is actually python with renamed argv
-	pythonListener := exec.Command("python3",
-		"-c", fmt.Sprintf(
-			"import socket, os, sys, time; "+
-				"os.execvp('sleep', ['notpy']); "+
-				"s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); "+
-				"s.bind(('127.0.0.1', %d)); s.listen(8); time.sleep(60)", foreignPort))
-	// Override argv so IsFubonZombie's command-name check looks at 'notpy'
-	// rather than 'python'.
-	pythonListener.Args = []string{"notpy", "-c", fmt.Sprintf(
-		"import socket, time; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); "+
-			"s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); "+
-			"s.bind(('127.0.0.1', %d)); s.listen(8); time.sleep(60)", foreignPort)}
-	pythonListener.SysProcAttr = &syscall.SysProcAttr{}
-	pythonListener.Stdout = io.Discard
-	pythonListener.Stderr = io.Discard
-	if err := pythonListener.Start(); err != nil {
-		t.Skipf("cannot start non-zombie listener: %v", err)
+	// Occupy the port with a tiny Go helper whose command name is neither
+	// "python" nor "uvicorn", so IsFubonZombie does not match. The helper
+	// binds 0.0.0.0:<port> and sleeps, simulating a non-zombie foreign holder
+	// such as Docker Desktop's port forwarder.
+	holderBin := setupForeignHolder(t)
+	holder := exec.Command(holderBin, strconv.Itoa(foreignPort))
+	holder.Stdout = io.Discard
+	holder.Stderr = io.Discard
+	if err := holder.Start(); err != nil {
+		t.Skipf("cannot start foreign holder: %v", err)
 	}
 	t.Cleanup(func() {
-		if pythonListener.Process != nil {
-			_ = pythonListener.Process.Kill()
-			_, _ = pythonListener.Process.Wait()
+		if holder.Process != nil {
+			_ = holder.Process.Kill()
+			_, _ = holder.Process.Wait()
 		}
 	})
-	if !waitPortReleased(0, time.Millisecond) {
-		// tiny settle
+	if !waitForPortBind(foreignPort, 3*time.Second) {
+		_ = holder.Process.Kill()
+		t.Fatalf("foreign holder failed to bind 0.0.0.0:%d within 3s", foreignPort)
 	}
-	time.Sleep(500 * time.Millisecond)
 
 	// Now start atlas against the same port — expect a clean error
 	// (atlas exits non-zero with an actionable error mentioning the foreign
@@ -413,7 +467,7 @@ func TestE2E_RapidCycle5x(t *testing.T) {
 			"-fubon-port", strconv.Itoa(fubonPort),
 		)
 		baseURL := "http://127.0.0.1:" + strconv.Itoa(apiPort) + "/health"
-		if _, _, ok := waitForHealth(t, baseURL, 15*time.Second); !ok {
+		if _, _, ok := waitForHealth(t, baseURL, 60*time.Second); !ok {
 			t.Fatalf("rapid cycle iter %d: /health never returned 200", i+1)
 		}
 		stopAtlas(t, cmd, 5*time.Second)

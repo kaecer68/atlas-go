@@ -446,6 +446,21 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Startup] ⚠️  baseline policy NOT FOUND at: %s", baselinePath)
 		}
 
+		// Register static routes and simple probes *before* DashboardAPI so that
+		// DashboardAPI's dynamic /health (which reflects -addr and -fubon-port)
+		// wins on the same mux pattern. registerSimpleRoutes also provides the
+		// fallback /health used by live/simulation modes.
+		adminSubFS, err := fs.Sub(admin_web.DistFS, "dist")
+		if err != nil {
+			log.Fatalf("failed to get admin dist sub FS: %v", err)
+		}
+		clientSubFS, err := fs.Sub(client_web.DistFS, "dist")
+		if err != nil {
+			log.Fatalf("failed to get client dist sub FS: %v", err)
+		}
+		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
+
+		dashboard.SetHealthAddrs(*apiAddr, *fubonProxyPort)
 		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
 		apipipeline.RegisterL24Routes(mux, apipipeline.L24RouteDeps{Manager: l24Mgr, GetParam: config.GetL2_4Schedule})
 
@@ -585,15 +600,6 @@ func run(args []string, deps appDeps) error {
 			}
 		}
 
-		adminSubFS, err := fs.Sub(admin_web.DistFS, "dist")
-		if err != nil {
-			log.Fatalf("failed to get admin dist sub FS: %v", err)
-		}
-		clientSubFS, err := fs.Sub(client_web.DistFS, "dist")
-		if err != nil {
-			log.Fatalf("failed to get client dist sub FS: %v", err)
-		}
-		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
 		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.

@@ -330,12 +330,18 @@ func TestHealthHandlers_HandleHealth(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
-	m, ok := body.(map[string]string)
+	resp, ok := body.(healthResponse)
 	if !ok {
 		t.Fatalf("body is %T", body)
 	}
-	if m["status"] != "ok" {
-		t.Errorf("status = %q, want ok", m["status"])
+	if resp.Status != "ok" {
+		t.Errorf("status = %q, want ok", resp.Status)
+	}
+	if _, ok := resp.Ports["atlas_http"]; !ok {
+		t.Error("missing atlas_http port report")
+	}
+	if _, ok := resp.Ports["fubon_proxy"]; !ok {
+		t.Error("missing fubon_proxy port report")
 	}
 }
 

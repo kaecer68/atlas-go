@@ -42,6 +42,24 @@ func Probe(addr string) (State, Occupant, error) {
 		return 0, Occupant{}, fmt.Errorf("probe %q: %w", addr, err)
 	}
 
+	// First check the exact address the caller intends to bind. A listener on
+	// the same host:port (including a wildcard listener that covers this
+	// address) makes the address unavailable, even if the occupant set
+	// SO_REUSEADDR. This prevents false negatives on Linux/macOS where a
+	// loopback listener and a wildcard listener could otherwise appear to
+	// coexist.
+	exactLn, exactErr := net.Listen("tcp", addr)
+	if exactErr != nil {
+		if !errors.Is(exactErr, syscall.EADDRINUSE) {
+			return 0, Occupant{}, fmt.Errorf("probe %q: %w", addr, exactErr)
+		}
+		return classifyOccupied(port, host)
+	}
+	_ = exactLn.Close()
+
+	// The exact address is free. Also verify that no wildcard listener occupies
+	// the port on another address family (e.g. Docker Desktop port forwards on
+	// 0.0.0.0 or [::]).
 	portStr := strconv.Itoa(port)
 	ln4, err4 := net.Listen("tcp", "0.0.0.0:"+portStr)
 	if err4 == nil {
@@ -56,8 +74,11 @@ func Probe(addr string) (State, Occupant, error) {
 	if !errors.Is(err4, syscall.EADDRINUSE) {
 		return 0, Occupant{}, fmt.Errorf("probe %q: %w", addr, err4)
 	}
+	return classifyOccupied(port, host)
+}
 
-	healthURL := "http://" + net.JoinHostPort(host, portStr) + healthPath
+func classifyOccupied(port int, host string) (State, Occupant, error) {
+	healthURL := "http://" + net.JoinHostPort(host, strconv.Itoa(port)) + healthPath
 	for attempt := 0; attempt < 5; attempt++ {
 		if isHealthy(healthURL) {
 			occ, _ := lookupOccupantByPort(port)
@@ -67,7 +88,6 @@ func Probe(addr string) (State, Occupant, error) {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
-
 	occ, _ := lookupOccupantByPort(port)
 	return StateForeign, occ, nil
 }
