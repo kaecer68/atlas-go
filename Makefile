@@ -18,6 +18,7 @@
 .PHONY: install-frontend build-frontend test-frontend
 .PHONY: build-backend test-backend lint-backend
 .PHONY: dev dev-stop dev-status dev-logs
+.PHONY: status
 
 # 前端目錄列表(若有新增,加在這裡)
 FRONTENDS := web admin_web client_web
@@ -31,6 +32,7 @@ help:
 	@echo "  dev                啟 docker deps + stop atlas container + go run 原生"
 	@echo "  dev-stop           收尾(停 docker deps)"
 	@echo "  dev-status         看容器狀態 + port 8080/8081 占用 + native process"
+	@echo "  status             只看 port 8080/8081 占用 + PID/命令(對應 /health JSON)"
 	@echo "  dev-logs           tail atlas-go 啟動 log"
 	@echo ""
 	@echo "前端管理:"
@@ -223,6 +225,7 @@ clean:
 #   → 用戶自己決定怎麼處理(本 Makefile 至少停掉 docker atlas-go 這個最常見衝突源)。
 
 .PHONY: dev dev-stop dev-status dev-logs
+.PHONY: status
 
 # 確保 docker deps(postgres + redis)running,然後停 atlas container
 # 把 port 8080 讓給 native atlas-go,最後 exec 進 go run 把 PID 交給 user。
@@ -294,3 +297,19 @@ dev-logs:
 	else \
 		echo "    atlas-go not running natively. Start with 'make dev'."; \
 	fi
+
+# Oracle 反駁 final plan PR 2: shell target showing PID + command for the
+# atlas HTTP (8080) and fubon-proxy (8081) ports, mirroring the JSON shape
+# emitted by GET /health (internally derived from portprobe.Probe).
+status:
+	@printf "  %-22s %-8s %s\n" "ADDR" "PID" "COMMAND"
+	@printf "  %-22s %-8s %s\n" "----------------------" "--------" "------------------------------"
+	@for p in 8080 8081; do \
+		pid=$$(lsof -nP -iTCP:$$p -sTCP:LISTEN -Fpc 2>/dev/null | grep '^p' | head -1 | cut -c2-); \
+		cmd=$$(lsof -nP -iTCP:$$p -sTCP:LISTEN -Fc 2>/dev/null | grep '^c' | head -1 | cut -c2-); \
+		if [ -n "$$pid" ]; then \
+			printf "  127.0.0.1:%-13s %-8s %s\n" "$$p" "$$pid" "$$cmd"; \
+		else \
+			printf "  127.0.0.1:%-13s %-8s %s\n" "$$p" "(free)" ""; \
+		fi; \
+	done
