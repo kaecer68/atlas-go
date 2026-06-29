@@ -75,6 +75,11 @@
       "results": "(StructuralTrendConfig)"
     },
     {
+      "name": "GetL2_4Schedule",
+      "params": "",
+      "results": "(L2_4ScheduleParameters)"
+    },
+    {
       "name": "GetParametersConfigPath",
       "params": "",
       "results": "(string)"
@@ -890,6 +895,17 @@
     },
     {
       "fields": [
+        "DefaultStartTime ParameterMetadata[string]",
+        "DefaultPeriodDays ParameterMetadata[int]",
+        "OverrideStartTime ParameterMetadata[string]",
+        "OverridePeriodDays ParameterMetadata[int]",
+        "AutoEnabled ParameterMetadata[bool]"
+      ],
+      "kind": "struct",
+      "name": "L2_4ScheduleParameters"
+    },
+    {
+      "fields": [
         "ConvictionBase ParameterMetadata[int]",
         "PricePenaltyDelta ParameterMetadata[int]",
         "LaunchBoostDelta ParameterMetadata[int]",
@@ -1091,7 +1107,8 @@
         "SectorRotationMacroAdjustments ParameterMetadata[map[string]map[string]float64]",
         "SectorRotationFlowAdjustments ParameterMetadata[map[string]map[string]float64]",
         "UseMLScoring ParameterMetadata[bool]",
-        "UseLLMSectorAgents ParameterMetadata[bool]"
+        "UseLLMSectorAgents ParameterMetadata[bool]",
+        "L2_4Schedule L2_4ScheduleParameters"
       ],
       "kind": "struct",
       "name": "OrchestratorParameters"

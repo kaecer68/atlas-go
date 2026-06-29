@@ -5901,6 +5901,38 @@
       "rationale": "Gate L2.3 PoC SemiconductorLLMAgent behind a flag; keep deterministic SemiconductorExecutor as default until L2.4 observation window validates LLM behavior.",
       "source": "experimental",
       "value": false
+    },
+    "l2_4_schedule": {
+      "default_start_time": {
+        "rationale": "L2.4 observation default start time (after Taiwan market close). Manual buttons only in this round (user decision 3A); auto cron deferred.",
+        "source": "experimental",
+        "value": "13:45",
+        "todo": "L2.4 manual controls only — auto cron deferred"
+      },
+      "default_period_days": {
+        "rationale": "L2.4 observation default period (matches Day 7 acceptance gate).",
+        "source": "experimental",
+        "value": 7,
+        "todo": "L2.4 manual controls only — auto cron deferred"
+      },
+      "override_start_time": {
+        "rationale": "Operator override for start time (empty = use default).",
+        "source": "experimental",
+        "value": "",
+        "todo": "L2.4 manual controls only — auto cron deferred"
+      },
+      "override_period_days": {
+        "rationale": "Operator override for period in days (0 = use default). Range [1, 30] enforced at API layer.",
+        "source": "experimental",
+        "value": 0,
+        "todo": "L2.4 manual controls only — auto cron deferred"
+      },
+      "auto_enabled": {
+        "rationale": "L2.4 auto-cron disabled in this round; manual buttons only.",
+        "source": "experimental",
+        "value": false,
+        "todo": "Auto cron to be added in a follow-up round"
+      }
     }
   },
   "precious_metals": {

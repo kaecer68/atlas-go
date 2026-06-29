@@ -3377,6 +3377,33 @@
       "source": "heuristic",
       "value": 0.25
     },
+    "l2_4_schedule": {
+      "auto_enabled": {
+        "rationale": "",
+        "source": "",
+        "value": false
+      },
+      "default_period_days": {
+        "rationale": "",
+        "source": "",
+        "value": 0
+      },
+      "default_start_time": {
+        "rationale": "",
+        "source": "",
+        "value": ""
+      },
+      "override_period_days": {
+        "rationale": "",
+        "source": "",
+        "value": 0
+      },
+      "override_start_time": {
+        "rationale": "",
+        "source": "",
+        "value": ""
+      }
+    },
     "prism_boost_max": {
       "rationale": "Maximum PRISM conviction boost",
       "source": "heuristic",

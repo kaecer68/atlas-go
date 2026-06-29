@@ -49,6 +49,7 @@ import (
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
+	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -355,6 +356,7 @@ func run(args []string, deps appDeps) error {
 		prismMgr.Start()
 		defer prismMgr.Stop()
 		dwMgr := portfolio.NewDarwinianWeightManager(filepath.Join(cfg.WorkDir, "data/state/darwinian_weights.json"))
+		l24Mgr := apipipeline.NewL24StateManager(cfg.WorkDir)
 		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
 		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
 		judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
@@ -428,6 +430,7 @@ func run(args []string, deps appDeps) error {
 		}
 
 		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
+		apipipeline.RegisterL24Routes(mux, apipipeline.L24RouteDeps{Manager: l24Mgr, GetParam: config.GetL2_4Schedule})
 
 		if alertStore != nil {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
