@@ -1,4 +1,3 @@
-// Package startup provides one-shot startup-time checks for atlas components.
 package startup
 
 import (
