@@ -69,11 +69,12 @@ For mutation runs, prefer explicit mode selection:
 
 ## Dashboard Operations
 
-The Unified Control Tower (`web/static/index.html`) is the primary human-AI interaction surface. Use it for real-time monitoring, approval, and intervention.
+The Unified Control Tower has been split into two SPAs: `admin_web/` (operator) and `client_web/` (investor). Use them for real-time monitoring, approval, and intervention.
 
-### Entry point
+### Entry points
 
-Open `http://localhost:8080/` after starting `go run ./cmd/atlas -api`.
+- Admin: `http://localhost:8080/admin/` after starting `go run ./cmd/atlas -api`.
+- Investor (default landing): `http://localhost:8080/` redirects to `/client/`.
 
 ### Page workflow (decision logic)
 

@@ -24,6 +24,8 @@ import (
 // (原生 Python),atlas 容器必須透過 Docker Desktop 的 host-gateway 別名連線到 host。
 // Docker Desktop 4.13+ (macOS/Windows) 支援 host.docker.internal 自動解析為 host gateway IP。
 // 注意:不使用 localhost 避免 macOS / Linux 雙棧環境下 Go net.Dial 優先走 IPv6 [::1]。
+//
+//lint:ignore U1000 kept for documentation and test reference
 const fubonProxyBaseURL = "http://host.docker.internal:8081"
 
 // defaultFubonProxyPort 是 fubon-proxy listen port 的預設值(8081)。

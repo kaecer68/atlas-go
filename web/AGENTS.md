@@ -1,5 +1,7 @@
-# agents.md — web (Frontend)
+# agents.md — web (Frontend) ⚠️ DEPRECATED
 
+> **注意**：`./web/` 已於 2026-06 拆分為 `./admin_web/` + `./client_web/` + `./shared_web/`，並於 2026-06-29 從後端路由與 CI 中移除依賴。本目錄不再對外服務、不再由 `go:embed` 編入 binary，僅作歷史參考留存。後續修改請以 `shared_web/` 為權威來源，並同步更新 `admin_web/` 與 `client_web/`。
+>
 > 修改 web 目錄下的程式碼前請先閱讀此文件。
 
 ## CSS 色彩語意系統
@@ -75,11 +77,11 @@ ctx.strokeStyle = hexToRgba(getThemeColor('--trend-bullish'), 0.3);
 
 ## Generated Files(不可手動編輯)
 
-下列兩個檔案由 `cmd/gentags` 從 `internal/*/*.go` 的 struct JSON tag **自動產出**。`go generate ./...` 會同時寫入 **4 個 web 目錄**(`web/`、`admin_web/`、`client_web/`、`shared_web/`)，因為前端拆分後各有獨立的 esbuild pipeline。
+下列兩個檔案由 `cmd/gentags` 從 `internal/*/*.go` 的 struct JSON tag **自動產出**。`go generate ./...` 會同時寫入 **3 個活躍 web 目錄**(`admin_web/`、`client_web/`、`shared_web/`)，因為前端拆分後各有獨立的 esbuild pipeline。`./web/` 已從後端路由與 CI 中移除，不再產出。
 
-| 檔案 (4 份同內容) | 來源 | 觸發指令 |
+| 檔案 (3 份同內容) | 來源 | 觸發指令 |
 |--------------------|------|---------|
-| `web/`、`admin_web/`、`client_web/`、`shared_web/` 各自的 `static/js/shared/field_types.ts` | `internal/domain/*.go`、`internal/monitoring/**/*.go` 等 Go struct 的 `json:"..."` tag | `go generate ./...` |
+| `admin_web/`、`client_web/`、`shared_web/` 各自的 `static/js/shared/field_types.ts` | `internal/domain/*.go`、`internal/monitoring/**/*.go` 等 Go struct 的 `json:"..."` tag | `go generate ./...` |
 | 同上, `valid_fields.json` | 所有合法欄位名稱的扁平清單 | `go generate ./...` |
 
 ### 規則

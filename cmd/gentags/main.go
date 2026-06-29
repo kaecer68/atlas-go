@@ -12,13 +12,11 @@
 //
 // Writes (to all 4 web directories so copies don't drift):
 //
-//	web/static/js/shared/┐
-//	admin_web/static/js/shared/├ field_types.ts   — TypeScript interfaces
-//	client_web/static/js/shared/┤
+//	admin_web/static/js/shared/┐
+//	client_web/static/js/shared/├ field_types.ts   — TypeScript interfaces
 //	shared_web/static/js/shared/┘
-//	web/static/js/shared/┐
-//	admin_web/static/js/shared/├ valid_fields.json — flat valid field list for CI
-//	client_web/static/js/shared/┤
+//	admin_web/static/js/shared/┐
+//	client_web/static/js/shared/├ valid_fields.json — flat valid field list for CI
 //	shared_web/static/js/shared/┘
 //
 // This eliminates manual synchronization between Go backend structs
@@ -51,11 +49,11 @@ func main() {
 	if filepath.Base(domainDir) == "domain" {
 		rootDir = filepath.Dir(rootDir)
 	}
-	// Output to all 4 web directories so the copies don't drift.
+	// Output to all active web directories so the copies don't drift.
 	// Before the frontend split (PR #749), only web/ existed. After the split,
 	// admin_web/, client_web/, shared_web/ each maintain their own copy.
-	// All 4 are regenerated from the same Go struct sources by cmd/gentags.
-	webDirs := []string{"web", "admin_web", "client_web", "shared_web"}
+	// web/ is deprecated and no longer regenerated.
+	webDirs := []string{"admin_web", "client_web", "shared_web"}
 
 	// Scan domain types first (foundational), then API response types (depend on domain types).
 	structs := parseStructs(domainDir)

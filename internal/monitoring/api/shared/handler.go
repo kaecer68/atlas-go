@@ -28,7 +28,6 @@ var authFreeExactPaths = map[string]bool{
 var authFreePrefixPaths = []string{
 	"/admin/",
 	"/client/",
-	"/static/",
 }
 
 func isAuthFreePath(p string) bool {

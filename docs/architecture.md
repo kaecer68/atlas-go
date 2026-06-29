@@ -97,7 +97,7 @@ Market Data -> Layer 1 -> Screener -> Layer 2 -> Layer 3 -> 風控長 -> 投資�
 2. **信念增減** → `ConvictionBreakdown` 含 base/floor/final 與每步 rule/delta/reason
 3. **宏觀事件** → `NarrativeEvent` 含 `confidence_source` 與 `historical_hit_rate`
 
-前端 `web/static/index.html` 的「決策鏈」頁面以五層卡片呈現（宏觀→行業→個股篩選→控制→績效），每層皆可展開查看計算明細。
+前端 `client_web/static/index.html` 的「決策鏈」頁面以五層卡片呈現（宏觀→行業→個股篩選→控制→績效），每層皆可展開查看計算明細。共享頁面邏輯位於 `shared_web/static/js/pages/`。
 
 ## Modes
 

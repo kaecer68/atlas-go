@@ -73,7 +73,7 @@
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
-| **手動編輯 `field_types.ts` 或 `valid_fields.json`**（存在於全部 4 個 web 目錄） | domain / web / 全前端 | 這兩個檔案由 `cmd/gentags` 從 `internal/*/*.go` 的 struct JSON tag 自動產出。`go generate .` 會同時輸出到 **4 個 web 目錄** (`web/`、`admin_web/`、`client_web/`、`shared_web/`)，因為前端拆分後各目錄有獨立的 esbuild pipeline，不共用 dist。<br><br>**禁止手動編輯任何一份** — 任何變更會在下次 `go generate` 被覆寫。<br><br>若需新增/修改/刪除前端可見的欄位或介面:<br>1. 修改對應 Go struct 的 `json:"..."` tag(在 `internal/<pkg>/`)<br>2. 跑 `go generate .` 重新產出全部 4 份<br>3. **不要**直接編輯這兩個檔<br><br>違反的後果:`go generate .` 會覆寫你的手動編輯,並且會在 quality.yml 的 `generate` job 報 "uncommitted changes" → 5 個 frontend PR 全 CI fail。<br><br>防護:`.githooks/pre-commit` Phase 5 自動跑 `go generate .`,若**任一 copy** 有 drift 會**阻擋 commit**。修正方式見 `web/AGENTS.md`「Generated Files」章節。 |
+| **手動編輯 `field_types.ts` 或 `valid_fields.json`**（存在於 3 個 active web 目錄） | domain / web / 全前端 | 這兩個檔案由 `cmd/gentags` 從 `internal/*/*.go` 的 struct JSON tag 自動產出。`go generate .` 會同時輸出到 **3 個 active web 目錄** (`admin_web/`、`client_web/`、`shared_web/`)。`web/` 已 deprecated，不再由 gentags 更新。<br><br>**禁止手動編輯任何一份** — 任何變更會在下次 `go generate` 被覆寫。<br><br>若需新增/修改/刪除前端可見的欄位或介面:<br>1. 修改對應 Go struct 的 `json:\"...\"` tag(在 `internal/<pkg>/`)<br>2. 跑 `go generate .` 重新產出全部 3 份<br>3. **不要**直接編輯這兩個檔<br><br>違反的後果:`go generate .` 會覆寫你的手動編輯,並且會在 quality.yml 的 `generate` job 報 "uncommitted changes" → frontend PR 全 CI fail。<br><br>防護:`.githooks/pre-commit` Phase 5 自動跑 `go generate .`,若**任一 copy** 有 drift 會**阻擋 commit**。修正方式見 `shared_web/AGENTS.md`「Generated Files」章節。 |
 
 ---
 

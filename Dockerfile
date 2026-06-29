@@ -6,22 +6,17 @@ WORKDIR /build
 # Shared static assets used by admin_web and client_web builds.
 COPY shared_web/ ./shared_web/
 
-# Install dependencies for all three embedded frontends.
-COPY web/package.json web/package-lock.json ./web/
+# Install dependencies for both embedded frontends.
 COPY admin_web/package.json admin_web/package-lock.json ./admin_web/
 COPY client_web/package.json client_web/package-lock.json ./client_web/
-RUN cd web && npm ci
 RUN cd admin_web && npm ci
 RUN cd client_web && npm ci
 
 # Copy build configs and static assets, then build each dist directory.
-COPY web/esbuild.config.mjs ./web/
 COPY admin_web/esbuild.config.mjs ./admin_web/
 COPY client_web/esbuild.config.mjs ./client_web/
-COPY web/static ./web/static
 COPY admin_web/static ./admin_web/static
 COPY client_web/static ./client_web/static
-RUN cd web && npm run build
 RUN cd admin_web && npm run build
 RUN cd client_web && npm run build
 
@@ -40,7 +35,6 @@ RUN go mod download
 
 # Copy source code
 COPY . .
-COPY --from=nodebuilder /build/web/dist ./web/dist
 COPY --from=nodebuilder /build/admin_web/dist ./admin_web/dist
 COPY --from=nodebuilder /build/client_web/dist ./client_web/dist
 

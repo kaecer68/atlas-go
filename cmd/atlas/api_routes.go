@@ -74,21 +74,27 @@ func newHealthHandler(cfg healthConfig) http.Handler {
 
 // registerSimpleRoutes installs the API endpoints that have no
 // orchestrator/scheduler state dependencies: Prometheus metrics,
-// the liveness probe, and the static file server that serves the
-// web dashboard UI from web.DistFS. It also serves the split
-// admin_web and client_web SPAs under /admin/ and /client/.
+// the liveness probe, and the static file servers that serve the
+// admin_web and client_web SPAs under /admin/ and /client/. The root
+// path / redirects to /client/ so general users land on the investor
+// interface by default.
 //
 // All routes are best-effort and unconditional — they must not block
 // startup if any of them fails to install.
-func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, subFS, adminFS, clientFS fs.FS) {
+func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, adminFS, clientFS fs.FS) {
 	mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 	mux.Handle("/health", newHealthHandler(healthConfig{}))
-	handler := staticHandler(subFS)
-	mux.Handle("/", handler)
-	mux.Handle("/static/", http.StripPrefix("/static/", handler))
 
-	// Admin and investor SPAs. Redirect bare /admin and /client so the
-	// relative asset paths in index.html resolve correctly.
+	// Redirect root to the client-facing UI. Bare /admin and /client are
+	// also redirected so the trailing-slash relative asset paths in
+	// index.html resolve correctly.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/client/", http.StatusMovedPermanently)
+			return
+		}
+		http.NotFound(w, r)
+	})
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
 	})

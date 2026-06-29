@@ -65,7 +65,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 	"github.com/kaecer68/atlas-go/internal/swarm"
-	"github.com/kaecer68/atlas-go/web"
 )
 
 // appDeps is the central dependency-injection struct for run().
@@ -93,10 +92,10 @@ func isPrismWorkerCmd(args []string) bool {
 }
 
 // isPublicPath determines whether a request bypasses the API-key
-// AuthMiddleware. Web UI pages, their static assets, and probing
-// endpoints are loaded by the browser without credentials and must
-// not require an API key. Adding a new path here is a security
-// boundary change.
+// AuthMiddleware. Web UI pages and their static assets under /admin/
+// and /client/, plus probing endpoints, are loaded by the browser
+// without credentials and must not require an API key. Adding a new
+// path here is a security boundary change.
 func isPublicPath(p string) bool {
 	switch {
 	case p == "/" || p == "/health" || p == "/metrics":
@@ -104,8 +103,6 @@ func isPublicPath(p string) bool {
 	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
 		return true
 	case p == "/client" || strings.HasPrefix(p, "/client/"):
-		return true
-	case strings.HasPrefix(p, "/static/"):
 		return true
 	default:
 		return false
@@ -588,10 +585,6 @@ func run(args []string, deps appDeps) error {
 			}
 		}
 
-		subFS, err := fs.Sub(web.DistFS, "dist")
-		if err != nil {
-			log.Fatalf("failed to get dist sub FS: %v", err)
-		}
 		adminSubFS, err := fs.Sub(admin_web.DistFS, "dist")
 		if err != nil {
 			log.Fatalf("failed to get admin dist sub FS: %v", err)
@@ -600,7 +593,7 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Fatalf("failed to get client dist sub FS: %v", err)
 		}
-		registerSimpleRoutes(mux, collector, subFS, adminSubFS, clientSubFS)
+		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
 		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.
@@ -1656,10 +1649,6 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		monitor.RegisterHandler(monitoring.ConsoleHandler)
 	}
 
-	subFS, err := fs.Sub(web.DistFS, "dist")
-	if err != nil {
-		log.Fatalf("failed to get dist sub FS: %v", err)
-	}
 	adminSubFS, err := fs.Sub(admin_web.DistFS, "dist")
 	if err != nil {
 		log.Fatalf("failed to get admin dist sub FS: %v", err)
@@ -1670,7 +1659,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 	// Static routes and basic probes are registered through the same helper
 	// used by api-mode so live trading and simulation behave identically.
-	registerSimpleRoutes(mux, collector, subFS, adminSubFS, clientSubFS)
+	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
 	srv := &http.Server{
 		Addr:              apiAddr,
 		Handler:           mux,

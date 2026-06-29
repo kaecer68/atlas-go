@@ -26,10 +26,8 @@ func (h *ReportHandlers) RegisterRoutes(mux *http.ServeMux) {
 func (h *ReportHandlers) HandleLatestReport(w http.ResponseWriter, r *http.Request) (int, any) {
 	content, filename, err := h.svc.LoadLatestReport()
 	if err != nil {
-		if err.Error() == "no reports directory found" {
-			return http.StatusNotFound, map[string]string{"error": err.Error()}
-		}
-		if err.Error() == "no backtest report found" {
+		switch err.Error() {
+		case "no reports directory found", "no backtest report found", "no backtest window found":
 			return http.StatusNotFound, map[string]string{"error": err.Error()}
 		}
 		return http.StatusInternalServerError, map[string]string{"error": err.Error()}

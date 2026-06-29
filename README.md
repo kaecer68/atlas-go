@@ -188,23 +188,28 @@ Operational playbooks:
 
 ## Web Dashboard
 
-The web dashboard (`web/static/`) is a vanilla JS SPA served by Go's `http.FileServer`.
-It provides real-time simulation monitoring, agent configuration, and experiment management.
+The frontend has been split into two SPAs served by Go's `http.FileServer`:
+
+- **`client_web/`** — Investor-facing dashboard (`/client/`), default landing page.
+- **`admin_web/`** — Operator/admin dashboard (`/admin/`).
+- **`shared_web/`** — Shared CSS, JS pages, components, and services used by both apps.
+
+Root `/` redirects to `/client/` so general users land on the investor interface by default.
 
 ### Navigation
 
-The SPA uses the **History API** for clean URL routing (e.g., `/overview`, `/portfolio`).
-The Go backend includes a catch-all fallback in both `runSimulation()` and `runLiveTrading()`
-that rewrites unmatched paths to serve `index.html`, enabling direct URL access and refresh on any route.
-Legacy hash URLs (`#page-overview`) are automatically redirected.
+Each SPA uses the **History API** for clean URL routing (e.g., `/client/portfolio`, `/admin/agents`).
+The Go backend serves `index.html` for unmatched paths under `/client/` and `/admin/`,
+enabling direct URL access and refresh on any route. Legacy hash URLs (`#page-overview`) are
+automatically redirected.
 
 ### CSS Architecture
 
-Styles are modularized into 50+ files under `web/static/css/`:
+Styles are modularized into 50+ files under `shared_web/static/css/` and bundled by each app:
 
 ```text
-web/static/css/
-|-- main.css                # @import aggregator (42 imports, cascade-order)
+shared_web/static/css/
+|-- main.css                # @import aggregator (cascade-order)
 |-- base/                   # Design tokens and resets
 |   |-- variables.css       # CSS custom properties (theme)
 |   |-- reset.css           # Element resets
@@ -227,15 +232,15 @@ web/static/css/
 
 ### JavaScript Modules
 
-Key JS files in `web/static/js/`:
+Key JS files live in `shared_web/static/js/` and are consumed by `admin_web/` and `client_web/`:
 
 | File | Purpose |
 |------|---------|
-| `main.js` | SPA router (`switchPage()`), navigation, auto-refresh |
+| `main.js` (per app) | SPA router (`switchPage()`), navigation, auto-refresh |
 | `bootstrap-utils.js` | Utility imports and `window.*` assignments |
-| `component-init.js` | CircuitBreaker, PerformanceReport, SimHealth panel init |
-| `event-listeners.js` | `DOMContentLoaded`-bound event delegation (~80 handlers) |
-| `dashboard.js`, `pipeline.js`, `portfolio.js`, etc. | Page-specific data loading modules |
+| `component-init.js` (admin) | CircuitBreaker, PerformanceReport, SimHealth panel init |
+| `event-listeners.js` (admin) | `DOMContentLoaded`-bound event delegation (~80 handlers) |
+| `pages/*.js` | Page-specific data loading modules |
 
 All inline `onclick` handlers have been extracted to `event-listeners.js` using `addEventListener`.
 
@@ -248,7 +253,10 @@ All inline `onclick` handlers have been extracted to `event-listeners.js` using 
 |-- configs/                # Agent and runtime configuration
 |-- prompts/                # Agent and experiment prompts
 |-- data/                   # Runtime state and replay data
-|-- web/                    # Web dashboard (SPA + static assets)
+|-- admin_web/              # Admin/operator SPA
+|-- client_web/             # Investor-facing SPA
+|-- shared_web/             # Shared frontend assets
+|-- web/                    # Legacy monolithic SPA (deprecated, not served)
 |-- docs/                   # Architecture and operations docs
 `-- scripts/                # Operational helper scripts
 ```
