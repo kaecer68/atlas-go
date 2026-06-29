@@ -11,7 +11,7 @@
 
 ## 版本資訊
 
-- **Wave**：Wave 11（L2.3 PoC 已 ship，L2.4 觀察窗口 PLANNED — 見 `.omo/wave-11-l2-4/`）
+- **Wave**：Wave 11（L2.3 PoC 已 ship + L2.4 觀察窗口已 ship via PR #821，文件永久化於 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md`）
 - **最後更新**：2026-06-28
 - **對應版本**：v0.0.0.23+
 

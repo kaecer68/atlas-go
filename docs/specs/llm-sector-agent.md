@@ -103,21 +103,20 @@ func (a SemiconductorLLMAgent) Supports(agent domain.AgentSpec) bool {
 1. **Conviction from reflection only** — the LLM agent doesn't currently use domain `FactorScores` or other structured inputs. PR5b's `Recommend()` uses the `Reflection.FinalConviction` directly.
 2. **No multi-iteration test coverage** — `TestSemiconductorLLMAgent_Recommend_HappyPath` tests a single iteration. Multi-iteration (continue=true → re-plan) is covered indirectly by `AgentLoop` tests (PR2).
 
-## Observability (deferred to L2.4)
+## Observability (L2.4 spec — SHIPPED via PR #821)
 
-When `UseLLMSectorAgents=true`, the following should be logged:
-- `agent_loop.round` (from `AgentLoop.Round`)
-- `agent_loop.exhausted` (from `Exhausted()`)
-- `llm.latency_ms` (p50, p95)
-- `tool.calls_per_recommendation`
-- `reflect.continue_rate` (fraction of continues)
+L2.4 observation metrics spec and implementation were shipped together via PR #821 (merge commit `f69b3551`, 2026-06-29). Full slog event schema (per-recommendation + aggregate) is defined in [`./l2-4-observation-spec.md`](./l2-4-observation-spec.md) §Metrics. Implementation files:
+- `internal/orchestrator/semiconductor_llm_agent.go` — event emission
+- `internal/monitoring/api/pipeline/l2_4_state.go` — schedule state
+- `cmd/atlas/main.go` — `l24Mgr.SetConfig` boot seed
 
-See `.omo/wave-11-l2-4/L2_4_OBSERVATION.md` for the full metrics list (L2.4 observation window — PLANNED, not yet started).
+Operational procedures (pre-flight / daily check-in / acceptance / rollback) live in [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md). Future work (auto-cron / promotion) tracked in [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md).
 
 ## References
 
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711)
 - Issue: [#711](https://github.com/kaecer68/atlas-go/issues/711)
 - PRs: #724 (PR1), #725 (PR2/v0.0.0.20a), #726 (PR3), #729 (PR4), #732 (PR5a), #733 (PR5b/v0.0.0.21), #739 (L3 wiring: `RunToolCall` → `SafeInvokeHandler`)
-- Cross-references: [`agent-loop-state-machine.md`](agent-loop-state-machine.md), [`../guides/adding-sector-agents.md`](../guides/adding-sector-agents.md), `.omo/wave-11-l2-4/L2_4_OBSERVATION.md`
+- Cross-references: [`agent-loop-state-machine.md`](agent-loop-state-machine.md), [`../guides/adding-sector-agents.md`](../guides/adding-sector-agents.md)
+- L2.4 follow-up: [`./l2-4-observation-spec.md`](./l2-4-observation-spec.md) (metrics spec), [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md) (ops manual), [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md) (future work)
 - Design authority: [`docs/llm-integration-strategy-framework.md`](../llm-integration-strategy-framework.md)
