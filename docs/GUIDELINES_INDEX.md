@@ -126,6 +126,7 @@
 | `docs/MULTI_CLI_PROTOCOL.md` | 多 CLI 並行 worktree 協議 |
 | `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊（pre-flight / daily check-in / acceptance / rollback） |
 | `docs/operations/l2-4-followup.md` | L2.4 後續工作報告（auto-cron / CLI flag / promotion 4 步） |
+| `docs/plans/l2-4-cli-flag-wiring.md` | L2.4 CLI flag 實作規劃（`--use-llm-sector-agents`；PR #828 plan + scaffold）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
 
 ---

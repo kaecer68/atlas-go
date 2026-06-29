@@ -119,6 +119,12 @@ func run(args []string, deps appDeps) error {
 	apiMode := flags.Bool("api", false, "start dashboard api server")
 	apiAddr := flags.String("addr", ":8080", "dashboard api listen address")
 	swaggerMode := flags.Bool("swagger", false, "enable swagger docs endpoints")
+	// L2.4 CLI flag wiring (see docs/plans/l2-4-cli-flag-wiring.md for design).
+	// String flag (not Bool) so empty = no-override, "true"/"false" = explicit override.
+	// Full implementation lands in a follow-up PR per the plan's implementation steps.
+	useLLMSectorAgents := flags.String("use-llm-sector-agents", "",
+		"override L2.4 LLM-driven sector agent (true|false|1|0, empty=no-override)")
+	_ = useLLMSectorAgents // scaffold: full override logic in follow-up PR per the plan
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
 	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
 	brokerSigner := flags.String("broker-signer", "", "override broker signer: placeholder|hmac-sha256")
