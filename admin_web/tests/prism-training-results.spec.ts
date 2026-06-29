@@ -74,7 +74,7 @@ test('prism training results page renders table with regime badges and explanati
   await details.first().click();
   await expect(content).toContainText('PRISM_EXPLANATION_RISK_ON_TEXT');
 
-  await page.screenshot({ path: 'web/test-results/prism-training-results/training-results.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/prism-training-results/training-results.png', fullPage: true });
 });
 
 test('prism training results shows empty state when array is empty', async ({ page }) => {

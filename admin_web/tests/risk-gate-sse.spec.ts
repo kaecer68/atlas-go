@@ -16,7 +16,7 @@ import { join } from 'path';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TEST_EVENTS_DIR = 'web/test-results/risk-gate-sse';
+const TEST_EVENTS_DIR = 'test-results/risk-gate-sse';
 const SSE_ROUTE = '**/api/events/stream*';
 
 /** Sample risk gate event matching RiskGateEventPayload + BusEvent structure. */

@@ -210,7 +210,7 @@ for id in narrativeMacro narrativeStress narrativeRetailSentiment narrativeSeaso
           liveNarrativeStrip macroRadar liveStatus riskCardsPanel \
           riskCalibrationPanel liveRiskCommentaryPanel \
           evView-compact evView-ai-analysis agentObservatory metricsTrend prismContent; do
-  for dir in web admin_web client_web; do
+  for dir in admin_web client_web; do
     [ -f "/Users/kaecer/workspace/atlas/$dir/static/index.html" ] && \
       grep -q "id=\"$id\"" /Users/kaecer/workspace/atlas/$dir/static/index.html && \
       echo "$dir $id ✓" || echo "$dir $id ✗"
