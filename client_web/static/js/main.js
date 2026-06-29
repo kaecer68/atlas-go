@@ -258,11 +258,11 @@ async function loadPageData(pageId) {
   else if (pageId === 'decision') {
     try {
       var decisionResults = await Promise.all([
-        silentGetJSON('/api/experiments/inbox'),
-        silentGetJSON('/api/dashboard/darwinian-phase3'),
-        silentGetJSON('/api/dashboard/darwinian-status'),
-        silentGetJSON('/api/dashboard/darwinian-trend'),
-        silentGetJSON('/api/agents/registry'),
+        silentGetJSON('/api/dashboard/experiment-inbox'),
+        silentGetJSON('/api/dashboard/phase3-status'),
+        silentGetJSON('/api/synergy/darwinian-status'),
+        silentGetJSON('/api/synergy/darwinian-trend'),
+        silentGetJSON('/api/dashboard/agent-observatory'),
         silentGetJSON('/api/dashboard/macro-radar'),
         silentGetJSON('/api/taiwan/stress-index'),
       ]);
