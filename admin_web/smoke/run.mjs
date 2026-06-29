@@ -97,7 +97,13 @@ async function run() {
   });
   page.on("console", (msg) => {
     if (msg.type() === "error") {
-      consoleErrors.push(`console.error: ${msg.text()}`);
+      // Browser-generated resource load failures are already captured by the
+      // response handler above; do not double-count them as frontend JS errors.
+      const text = msg.text();
+      if (text && text.startsWith("Failed to load resource")) {
+        return;
+      }
+      consoleErrors.push(`console.error: ${text}`);
     }
   });
   // 捕捉 404/500 回應的 URL（Chrome console 不會在 text() 中顯示 URL）
