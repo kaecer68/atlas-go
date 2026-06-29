@@ -1,17 +1,17 @@
 #!/usr/bin/env node
-// web/smoke/run.mjs — Atlas frontend smoke runner.
+// client_web/smoke/run.mjs — Atlas investor-facing frontend smoke runner.
 //
 // 用途：在 CI 內由 scripts/ci/frontend_smoke.sh 啟動的 Playwright smoke test。
 // 設計：根據 SMOKE_PAGES env（逗號分隔的 page id 清單）逐一切換 SPA page，
 //       等待 3 秒給 fetch/JS 完成，掃描 #page-X 內文有無 NaN/undefined/null。
-//       Console error 會先過 allowlist（web/smoke/known-issues.json），
+//       Console error 會先過 allowlist（client_web/smoke/known-issues.json），
 //       known → warn only, unknown → gate fail.
 //
 // 退出碼：0 = 全部通過；1 = 任一 page 抓出 bad pattern 或 fetch timeout，或 unknown console error。
 //
 // 環境變數：
 //   ATLAS_PORT     — atlas server port（預設 18080）
-//   SMOKE_PAGES    — 要 smoke 的 page 清單（逗號分隔，預設 overview,narrative,live,portfolio,strategies）
+//   SMOKE_PAGES    — 要 smoke 的 page 清單（逗號分隔，預設 crossmarket,narrative,live,portfolio,strategies）
 //   SMOKE_TIMEOUT  — 每個 page 切換後等待 fetch 完成的秒數（預設 5）
 
 import { chromium } from "playwright";
@@ -46,23 +46,25 @@ function classifyError(msg, knownIssues) {
 }
 
 const PORT = process.env.ATLAS_PORT || "18080";
-const BASE = `http://localhost:${PORT}`;
+const BASE = `http://localhost:${PORT}/client`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "overview,narrative,live,portfolio,strategies")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "crossmarket,narrative,live,portfolio,strategies")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
 // 允許的 page id 與其關鍵 selector（用來確認 page 已切換 active）
 const PAGE_SELECTORS = {
-  overview: "#page-overview",
+  crossmarket: "#page-crossmarket",
+  evolution_panel: "#page-evolution_panel",
   narrative: "#page-narrative",
+  industry: "#page-industry",
+  pipeline: "#page-pipeline",
+  decision: "#page-decision",
   live: "#page-live",
   portfolio: "#page-portfolio",
+  "performance-report": "#page-performance-report",
   strategies: "#page-strategies",
-  industry: "#page-industry",
-  decision: "#page-decision",
-  pipeline: "#page-pipeline",
 };
 
 // 真正會造成 bug 的字串 pattern：浮點數 / 型別錯誤
@@ -87,17 +89,29 @@ async function run() {
   });
   page.on("console", (msg) => {
     if (msg.type() === "error") {
-      consoleErrors.push(`console.error: ${msg.text()}`);
+      // Browser-generated resource load failures are already captured by the
+      // response handler above; do not double-count them as frontend JS errors.
+      const text = msg.text();
+      if (text && text.startsWith("Failed to load resource")) {
+        return;
+      }
+      consoleErrors.push(`console.error: ${text}`);
     }
   });
-  // 捕捉 404 回應的 URL（Chrome console 不會在 text() 中顯示 URL）
+  // 捕捉 404/500 回應的 URL（Chrome console 不會在 text() 中顯示 URL）
   const notFoundUrls = new Set();
+  const serverErrorUrls = new Set();
   page.on("response", (resp) => {
+    const url = resp.url();
     if (resp.status() === 404) {
-      const url = resp.url();
       if (!notFoundUrls.has(url)) {
         notFoundUrls.add(url);
         console.warn(`[404] ${url} (from ${resp.request().resourceType()})`);
+      }
+    } else if (resp.status() >= 500) {
+      if (!serverErrorUrls.has(url)) {
+        serverErrorUrls.add(url);
+        console.error(`[${resp.status()}] ${url} (from ${resp.request().resourceType()})`);
       }
     }
   });

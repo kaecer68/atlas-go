@@ -64,7 +64,7 @@ defer func() {
 
 ## 程式碼生成
 
-修改 `internal/` 下任何 Go struct 的 JSON tag 後，**必須執行 `go generate .`**（CI `generate` job 強制）。`cmd/gentags` 會自動從 struct JSON tag 產出 `field_types.ts` 與 `valid_fields.json`，輸出到全部前端目錄（`admin_web/`、`client_web/`、`shared_web/`、`web/`）。
+修改 `internal/` 下任何 Go struct 的 JSON tag 後，**必須執行 `go generate .`**（CI `generate` job 強制）。`cmd/gentags` 會自動從 struct JSON tag 產出 `field_types.ts` 與 `valid_fields.json`，輸出到活躍前端目錄（`admin_web/`、`client_web/`、`shared_web/`）。
 
 > **禁止手動編輯**任何一份 `field_types.ts` 或 `valid_fields.json` — 下次 `go generate .` 會覆寫。完整規範見 `docs/TRAPS.md` §「手動編輯 field_types.ts」。
 

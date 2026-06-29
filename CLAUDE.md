@@ -23,7 +23,7 @@
 ## 前端架構
 
 > 2026-06 完成拆分重構:`./web/`(legacy 單體) → `./admin_web/`(管理後台)+ `./client_web/`(投資人介面)+ `./shared_web/`(共用資源)。
-> 重構後 `./web/` 不再對外服務,僅作 archive;後端 `cmd/atlas/api_routes.go` 只掛載 `admin_web.DistFS` 與 `client_web.DistFS`。
+> 2026-06-29 後端移除 `web.DistFS` 依賴,root `/` 導向 `/client/`;`./web/` 仍保留在 repo 但已不再 build、不再 serve,待下一輪評估是否整目錄刪除。
 
 ### 目錄職責
 
@@ -60,7 +60,7 @@
 
 ### 路由 + 後端整合
 
-- `cmd/atlas/api_routes.go` L31-38:`/admin/` 與 `/client/` 分別掛載 `admin_web.DistFS` 與 `client_web.DistFS`
+- `cmd/atlas/api_routes.go`:`/admin/` 與 `/client/` 分別掛載 `admin_web.DistFS` 與 `client_web.DistFS`;root `/` 301 導向 `/client/`
 - API 端點統一前綴 `/api/...`(dashboard、narrative、industry、taiwan、...)
 - 靜態資源經 Go `embed.FS` 嵌入 binary,Docker image 由 multi-stage Dockerfile 重新 `npm run build` 產出 dist
 

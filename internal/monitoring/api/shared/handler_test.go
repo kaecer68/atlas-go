@@ -284,11 +284,11 @@ func TestAuthMiddleware_ProbingPathsBypassAuth(t *testing.T) {
 }
 
 // TestAuthMiddleware_WebUIPathsBypassAuth verifies that /admin, /client,
-// and their sub-paths (served via http.StripPrefix on /admin/, /client/,
-// /static/) are reachable without any auth header. The browser loads
-// the HTML and static JS bundles first; only subsequent /api/* calls
-// carry X-API-Key. Without these exemptions the login page itself
-// would 401 before any JS runs, breaking the web UI entirely.
+// and their sub-paths (served via http.StripPrefix on /admin/, /client/)
+// are reachable without any auth header. The browser loads the HTML and
+// static JS bundles first; only subsequent /api/* calls carry X-API-Key.
+// Without these exemptions the login page itself would 401 before any JS
+// runs, breaking the web UI entirely.
 func TestAuthMiddleware_WebUIPathsBypassAuth(t *testing.T) {
 	t.Setenv("ATLAS_ENV", "production")
 	t.Setenv("ATLAS_API_KEY", "secret-key")
@@ -309,8 +309,6 @@ func TestAuthMiddleware_WebUIPathsBypassAuth(t *testing.T) {
 		"/client",
 		"/client/",
 		"/client/dashboard.html",
-		"/static/css/main.css",
-		"/static/js/app.js",
 	}
 	for _, path := range paths {
 		w := httptest.NewRecorder()

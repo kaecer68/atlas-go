@@ -399,7 +399,7 @@ jobs:
         set -e
         node -e "
         const fs = require('fs');
-        const path = 'web/smoke/known-issues.json';
+        const path = 'client_web/smoke/known-issues.json';
         if (!fs.existsSync(path)) { console.error('ERROR: ' + path + ' not found'); process.exit(1); }
         let data;
         try { data = JSON.parse(fs.readFileSync(path, 'utf-8')); } catch (e) { console.error('ERROR: ' + path + ' is not valid JSON: ' + e.message); process.exit(1); }
@@ -415,11 +415,19 @@ jobs:
         "
 
     - name: Install Playwright chromium
-      working-directory: web
+      working-directory: client_web
       run: npx playwright install --with-deps chromium
 
     - name: Run frontend smoke
       run: bash scripts/ci/frontend_smoke.sh origin/${{ github.base_ref }}
+
+    - name: Upload atlas smoke log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: atlas-smoke-log
+        path: /tmp/atlas-smoke.log
+        if-no-files-found: ignore
 
   # New frontend regression tests (unit + per-app Playwright) introduced with
   # the admin_web / client_web split. Kept separate from smoke so failures are

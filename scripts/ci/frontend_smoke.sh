@@ -15,6 +15,7 @@
 # 環境變數：
 #   ATLAS_PORT          — atlas listen port（預設 18080，避免與本機 8080 衝突）
 #   SMOKE_FORCE_PAGES   — 跳過 diff 推論，直接 smoke 指定 pages（除錯用，逗號分隔）
+#   SMOKE_FORCE_FRONTENDS — 跳過 diff 推論，直接指定要跑的 frontend： admin|client|both
 #   SMOKE_SKIP          — 設為 1 時印 SKIP 並 exit 0
 #
 # 退出碼：
@@ -62,68 +63,100 @@ fi
 
 cd "$REPO_ROOT"
 
-# 1. 解析改動檔案 → 推導 page 清單
-if [[ -n "${SMOKE_FORCE_PAGES:-}" ]]; then
-  log "SMOKE_FORCE_PAGES set, using override: $SMOKE_FORCE_PAGES"
-  PAGES="$SMOKE_FORCE_PAGES"
+# 1. 解析改動檔案 → 推導要跑的 frontend 與 page 清單
+RUN_ADMIN=0
+RUN_CLIENT=0
+ADMIN_PAGES=""
+CLIENT_PAGES=""
+
+if [[ -n "${SMOKE_FORCE_FRONTENDS:-}" ]]; then
+  case "$SMOKE_FORCE_FRONTENDS" in
+    admin)  RUN_ADMIN=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-overview,narrative,live,agents,experiments}" ;;
+    client) RUN_CLIENT=1; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-crossmarket,narrative,live,portfolio,strategies}" ;;
+    both|*) RUN_ADMIN=1; RUN_CLIENT=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-overview,narrative,live,agents,experiments}"; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-crossmarket,narrative,live,portfolio,strategies}" ;;
+  esac
+  log "SMOKE_FORCE_FRONTENDS set, using override: admin=$RUN_ADMIN client=$RUN_CLIENT"
+elif [[ -n "${SMOKE_FORCE_PAGES:-}" ]]; then
+  # 保留舊行為：只強制 client_web 的 pages
+  log "SMOKE_FORCE_PAGES set, using override for client: $SMOKE_FORCE_PAGES"
+  RUN_CLIENT=1
+  CLIENT_PAGES="$SMOKE_FORCE_PAGES"
 else
   log "Computing diff against $BASE_REF"
   if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
     warn "Base ref $BASE_REF not found locally; falling back to full smoke"
-    PAGES="overview,narrative,live,portfolio"
+    RUN_ADMIN=1
+    RUN_CLIENT=1
+    ADMIN_PAGES="overview,narrative,live,agents,experiments"
+    CLIENT_PAGES="crossmarket,narrative,live,portfolio,strategies"
   else
     CHANGED=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null || true)
     if [[ -z "$CHANGED" ]]; then
       log "No diff (empty commit or base==HEAD)"
-      PAGES=""
     else
       log "Changed files:"
       echo "$CHANGED" | sed 's/^/    /'
 
-      # 覆蓋表：路徑前綴 → page 清單
-      PAGES_RAW=""
-      declare -A PATH_MAP=(
-        ["internal/marketdata/"]="overview,live"
-        ["internal/baseline/"]="overview,live"
-        ["internal/narrative/"]="narrative"
-        ["internal/portfolio/"]="overview,portfolio,decision"
-        ["internal/risk/"]="overview,portfolio,decision"
-        ["internal/recommendation/"]="overview,portfolio,decision"
-        ["internal/orchestrator/"]="overview,portfolio,decision"
-        ["internal/industry/"]="industry"
-        ["internal/monitoring/"]="overview,narrative,live,portfolio"
-        ["internal/config/"]="overview,narrative,live,portfolio"
-        ["cmd/atlas/"]="overview,narrative,live,portfolio"
-        ["web/"]="overview,narrative,live,portfolio"
+      # admin_web 專用覆蓋表
+      declare -A ADMIN_PATH_MAP=(
+        ["admin_web/"]="overview,narrative,live,agents,experiments"
+        ["shared_web/"]="overview,narrative,live,agents,experiments"
+        ["cmd/atlas/"]="overview,narrative,live,agents,experiments"
       )
 
+      # client_web 專用覆蓋表
+      declare -A CLIENT_PATH_MAP=(
+        ["internal/marketdata/"]="crossmarket,live"
+        ["internal/baseline/"]="crossmarket,live"
+        ["internal/narrative/"]="narrative"
+        ["internal/portfolio/"]="crossmarket,portfolio,decision"
+        ["internal/risk/"]="crossmarket,portfolio,decision"
+        ["internal/recommendation/"]="crossmarket,portfolio,decision"
+        ["internal/orchestrator/"]="crossmarket,portfolio,decision"
+        ["internal/industry/"]="industry"
+        ["internal/monitoring/"]="crossmarket,narrative,live,portfolio"
+        ["internal/config/"]="crossmarket,narrative,live,portfolio"
+        ["cmd/atlas/"]="crossmarket,narrative,live,portfolio"
+        ["client_web/"]="crossmarket,narrative,live,portfolio,strategies"
+        ["shared_web/"]="crossmarket,narrative,live,portfolio,strategies"
+      )
+
+      ADMIN_RAW=""
+      CLIENT_RAW=""
       while IFS= read -r file; do
-        for prefix in "${!PATH_MAP[@]}"; do
+        for prefix in "${!ADMIN_PATH_MAP[@]}"; do
           if [[ "$file" == "$prefix"* ]]; then
-            PAGES_RAW+="${PATH_MAP[$prefix]},"$'\n'
+            ADMIN_RAW+="${ADMIN_PATH_MAP[$prefix]},"$'\n'
+            RUN_ADMIN=1
+            break
+          fi
+        done
+        for prefix in "${!CLIENT_PATH_MAP[@]}"; do
+          if [[ "$file" == "$prefix"* ]]; then
+            CLIENT_RAW+="${CLIENT_PATH_MAP[$prefix]},"$'\n'
+            RUN_CLIENT=1
             break
           fi
         done
       done <<< "$CHANGED"
 
-      # 去重、合併、移除空字串
-      PAGES=$(echo "$PAGES_RAW" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd ',' -)
+      ADMIN_PAGES=$(echo "$ADMIN_RAW" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd ',' -)
+      CLIENT_PAGES=$(echo "$CLIENT_RAW" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd ',' -)
     fi
   fi
 fi
 
 # 2. 決定最終行為
-if [[ -z "$PAGES" ]]; then
-  log "No relevant page mapped from diff → SKIP"
+if [[ $RUN_ADMIN -eq 0 && $RUN_CLIENT -eq 0 ]]; then
+  log "No relevant frontend mapped from diff → SKIP"
   ok "Smoke gate skipped (no relevant changes)"
   exit 0
 fi
 
-log "Smoke pages: $PAGES"
-export SMOKE_PAGES="$PAGES"
+log "Smoke plan: admin=$RUN_ADMIN pages=${ADMIN_PAGES:-(none)} | client=$RUN_CLIENT pages=${CLIENT_PAGES:-(none)}"
 
-# 3. Build frontends（產 web/admin_web/client_web dist/，go:embed 編譯時需要）
-log "Building frontends (web + admin_web + client_web)"
+# 3. Build frontends（產 admin_web/client_web dist/，go:embed 編譯時需要）
+log "Building frontends (admin_web + client_web)"
 bash "$REPO_ROOT/scripts/ci/build_all_frontends.sh"
 ok "Frontends built"
 
@@ -174,19 +207,45 @@ ok "Atlas healthy at $HEALTH_URL"
 
 # 7. 安裝 playwright chromium（總是執行，npx 會善用快取；避免 CI 環境版本對不上導致找不到 binary）
 log "Installing playwright chromium"
-(cd web && npx playwright install --with-deps chromium 2>&1 | tail -10)
+if [[ $RUN_ADMIN -eq 1 ]]; then
+  (cd admin_web && npx playwright install --with-deps chromium 2>&1 | tail -10)
+fi
+if [[ $RUN_CLIENT -eq 1 ]]; then
+  (cd client_web && npx playwright install --with-deps chromium 2>&1 | tail -10)
+fi
 
 # 8. 跑 Playwright smoke
-log "Running Playwright smoke"
-SMOKE_EXIT=0
-(cd web && ATLAS_PORT="$PORT" SMOKE_PAGES="$PAGES" SMOKE_TIMEOUT=5 npm run --silent test:smoke) || SMOKE_EXIT=$?
+OVERALL_EXIT=0
+
+if [[ $RUN_ADMIN -eq 1 ]]; then
+  log "Running admin_web Playwright smoke"
+  ADMIN_EXIT=0
+  (cd admin_web && ATLAS_PORT="$PORT" SMOKE_PAGES="$ADMIN_PAGES" SMOKE_TIMEOUT=5 npm run --silent test:smoke) || ADMIN_EXIT=$?
+  if [[ $ADMIN_EXIT -ne 0 ]]; then
+    err "admin_web smoke FAILED (exit=$ADMIN_EXIT) for pages: $ADMIN_PAGES"
+    OVERALL_EXIT=1
+  else
+    ok "admin_web smoke PASSED for pages: $ADMIN_PAGES"
+  fi
+fi
+
+if [[ $RUN_CLIENT -eq 1 ]]; then
+  log "Running client_web Playwright smoke"
+  CLIENT_EXIT=0
+  (cd client_web && ATLAS_PORT="$PORT" SMOKE_PAGES="$CLIENT_PAGES" SMOKE_TIMEOUT=5 npm run --silent test:smoke) || CLIENT_EXIT=$?
+  if [[ $CLIENT_EXIT -ne 0 ]]; then
+    err "client_web smoke FAILED (exit=$CLIENT_EXIT) for pages: $CLIENT_PAGES"
+    OVERALL_EXIT=1
+  else
+    ok "client_web smoke PASSED for pages: $CLIENT_PAGES"
+  fi
+fi
 
 # 9. 結果
-if [[ $SMOKE_EXIT -eq 0 ]]; then
-  ok "Smoke PASSED for pages: $PAGES"
+if [[ $OVERALL_EXIT -eq 0 ]]; then
+  ok "All smoke PASSED"
   exit 0
 else
-  err "Smoke FAILED (exit=$SMOKE_EXIT) for pages: $PAGES"
-  err "See atlas log: /tmp/atlas-smoke.log"
+  err "Smoke FAILED. See atlas log: /tmp/atlas-smoke.log"
   exit 1
 fi

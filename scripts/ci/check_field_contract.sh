@@ -11,10 +11,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-# Use shared_web as canonical source (gentags writes identical copies to all 4 dirs)
+# Use shared_web as canonical source (gentags writes identical copies to all 3 active dirs)
 VALID_FIELDS="$REPO_ROOT/shared_web/static/js/shared/valid_fields.json"
-# Scan JS across all 4 web directories (split frontend)
-JS_DIRS=("$REPO_ROOT/web/static/js" "$REPO_ROOT/admin_web/static/js" "$REPO_ROOT/client_web/static/js" "$REPO_ROOT/shared_web/static/js")
+# Scan JS across all active web directories (split frontend). web/ is deprecated.
+JS_DIRS=("$REPO_ROOT/admin_web/static/js" "$REPO_ROOT/client_web/static/js" "$REPO_ROOT/shared_web/static/js")
 
 if [ ! -f "$VALID_FIELDS" ]; then
   echo "ERROR: valid_fields.json not found. Run 'go generate .' first."
