@@ -17,7 +17,7 @@ import (
 //   - false: any foreign occupant triggers actionable error,
 //     matches historic preflight semantics — caller's port (e.g., atlas-http)
 //     must not be auto-killed under any circumstance.
-//   - true:  if foreign occupant is recognised as a fubon-proxy zombie
+//   - true:  if foreign occupant is recognized as a fubon-proxy zombie
 //     (portprobe.IsFubonZombie matches command name) we automatically
 //     KillOccupant + re-probe; non-zombie occupants still error out.
 //
@@ -42,7 +42,7 @@ var (
 // Preflight checks that every claimed address is free or healthy. If any
 // address is held by a foreign process, it returns an actionable error
 // identifying the occupant and a kill command; for claims with
-// AllowZombieKill=true a recognised fubon-proxy zombie is auto-killed
+// AllowZombieKill=true a recognized fubon-proxy zombie is auto-killed
 // before producing an error. Probe failures are logged as warnings and
 // do not stop the startup sequence.
 func Preflight(claims []PortClaim) error {
@@ -70,8 +70,8 @@ func checkClaim(claim PortClaim) error {
 		return actionableForeignError(claim, occupant)
 	}
 	if occupant.PID <= 0 || !isFubonZombieFn(occupant) {
-		// AllowZombieKill only authorises reclaiming fubon-proxy zombies;
-		// never auto-kill an unrecognised foreign process even when caller
+		// AllowZombieKill only authorizes reclaiming fubon-proxy zombies;
+		// never auto-kill an unrecognized foreign process even when caller
 		// opted in (mirrors fubonproxy.Start() lines 233-242).
 		return actionableForeignError(claim, occupant)
 	}
@@ -109,7 +109,7 @@ func checkClaim(claim PortClaim) error {
 }
 
 // actionableForeignError formats the user-facing message when no auto-kill
-// is applicable (no AllowZombieKill, or occupant is not a recognised zombie).
+// is applicable (no AllowZombieKill, or occupant is not a recognized zombie).
 func actionableForeignError(claim PortClaim, occupant portprobe.Occupant) error {
 	if occupant.PID > 0 {
 		return fmt.Errorf("%s address %s is held by a foreign process (pid=%d cmd=%q); stop it with `kill %d` or change fubon-proxy port",
