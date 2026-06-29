@@ -33,17 +33,29 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	// --- Fubon ---
 	// Startup probe: skip registration if the local proxy is not reachable,
 	// avoiding constant connection-refused errors at runtime.
+	//
+	// Probe 127.0.0.1 first (host run + Docker Desktop port forwarder),
+	// then host.docker.internal (container run, Docker special DNS). Either
+	// success means a fubon-proxy is reachable.
 	fubonKey := cfg.FubonAPIKey
 	if fubonKey == "" {
 		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
 	}
 	if fubonKey != "" {
-		conn, err := net.DialTimeout("tcp", "host.docker.internal:8081", 2*time.Second)
-		if err != nil {
-			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — proxy at host.docker.internal:8081 not running")
+		probeAddrs := []string{"127.0.0.1:8081", "host.docker.internal:8081"}
+		var dialed bool
+		for _, addr := range probeAddrs {
+			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+			if err != nil {
+				continue
+			}
+			_ = conn.Close()
+			dialed = true
+			break
+		}
+		if !dialed {
+			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — fubon-proxy not reachable on 127.0.0.1:8081 or host.docker.internal:8081")
 		} else {
-			_ = conn.Close()
-			_ = conn.Close()
 			fubonClient := marketdata.GetSharedFubonClient()
 			fubonAdapter := NewFubonChannelAdapter(fubonClient)
 			g.registry.Register("fubon", fubonAdapter)
