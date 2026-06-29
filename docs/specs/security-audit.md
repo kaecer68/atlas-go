@@ -15,8 +15,8 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 | 1 | 每 PR | `pull_request` 事件 | CI 自動 | gosec、golangci-lint、apigateway 憲法檢查、constitution 違規掃描 | PR check 結果 |
 | 2 | 每周 | 排程(`vuln-scan.yml` 預定於 PR #818 新增) | CI 自動 | govulncheck Go module CVE 掃描 | SARIF 報告 + workflow artifact |
 | 3 | 每月 | 月初第一個工作天 | 維護者人工 | 新增 dependency、新增 env var、新增 LLM provider/能力 | 短期稽核紀錄(PR comment 或 issue) |
-| 4 | 每季 | 季度初 | 維護者人工 | 本文件九大範疇全項檢查 | `docs/audit/YYYY-MM-DD-quarterly-security.md` |
-| 5 | 每版本 | 版本標記(`v*` tag push)觸發;維護者於 release 前手動執行 | 維護者人工 | go.mod 變更、env var 變更、apigateway 憲法合規、live flag 預設值 | 發布公告 + `docs/audit/YYYY-MM-DD-release-pre-audit.md` |
+| 4 | 每季 | 季度初 | 維護者人工 | 本文件九大範疇全項檢查 | `docs/audit/<YYYY-MM-DD>-quarterly-security.md` |
+| 5 | 每版本 | 版本標記(`v*` tag push)觸發;維護者於 release 前手動執行 | 維護者人工 | go.mod 變更、env var 變更、apigateway 憲法合規、live flag 預設值 | 發布公告 + `docs/audit/<YYYY-MM-DD>-release-pre-audit.md` |
 
 > Tier 1 與 Tier 2 屬自動化控制,失敗即阻擋合併或標記告警;Tier 3 至 Tier 5 屬人工稽核(包含 Tier 5 雖由 release 事件觸發但仍由維護者手動執行),產出可追溯的稽核紀錄。Tier 5 目前無自動化 release-time audit step(僅有 release event trigger,需待 release job 啟用後整合),執行方式為維護者於版本標記前手動套用本 checklist。
 
@@ -101,7 +101,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 ### 7. Data visibility safeguards
 
 - [ ] 所有 `apigateway.Fetch` 回傳 `FetchMetadata`(含 `latency_ms`、`rate_limit_remaining`、`timestamp`)。
-- [ ] MacroDataSnapshot 卡片有 `status.data_status` 標記,無零值隱藏失敗(主要引用 `.claude/skills/atlas-data-visibility/SKILL.md`;若 `docs/specs/data-visibility.md` 存在則優先引用)。
+- [ ] MacroDataSnapshot 卡片有 `status.data_status` 標記,無零值隱藏失敗(主要引用 `.claude/skills/atlas-data-visibility/SKILL.md`;若 `docs/specs/<data-visibility>.md` 存在則優先引用)。
 - [ ] `FetchResult.Fallback` 機制在 cache miss 時正常運作。
 - [ ] 零值卡片(`ChannelErrors` 為空但 channel 失敗)於前端 UI 顯示明確錯誤訊息,非靜默成功。
 - [ ] 至少一次人工驗證:故意關閉一個 data source,觀察 UI 是否顯示 fallback 狀態而非零值。
@@ -142,7 +142,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 
 ### Tier 4(季度)與 Tier 5(發布前)
 
-於 `docs/audit/YYYY-MM-DD-<slug>.md` 建立完整報告(沿用 `docs/audit/` 既有命名規範,例如 `docs/audit/2026-09-30-quarterly-security.md` 或 `docs/audit/2026-12-15-v0.0.0.22-release-pre-audit.md`)。報告結構建議:
+於 `docs/audit/YYYY-MM-DD-<slug>.md` 建立完整報告(沿用 `docs/audit/` 既有命名規範,例如 `docs/audit/<YYYY-MM-DD>-quarterly-security.md` 或 `docs/audit/<YYYY-MM-DD>-<version>-release-pre-audit.md`)。報告結構建議:
 
 ```markdown
 # Security Audit Report: <tier 與期間>
@@ -177,14 +177,14 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 | Live trading 守則 | [`.github/instructions/live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md) |
 | Go 程式碼守則 | [`.github/instructions/go-core.instructions.md`](../../.github/instructions/go-core.instructions.md) |
 | 高頻陷阱 | [`AGENTS.md`](../../AGENTS.md) § 高頻陷阱速查 |
-| 跨模組陷阱完整版 | [`docs/TRAPS.md`](TRAPS.md) |
-| 環境變數管理 | [`docs/ENVIRONMENT.md`](ENVIRONMENT.md) |
-| 參數管理系統 | [`docs/PARAMETER_SYSTEM.md`](PARAMETER_SYSTEM.md) |
+| 跨模組陷阱完整版 | [`docs/TRAPS.md`](../TRAPS.md) |
+| 環境變數管理 | [`docs/ENVIRONMENT.md`](../ENVIRONMENT.md) |
+| 參數管理系統 | [`docs/PARAMETER_SYSTEM.md`](../PARAMETER_SYSTEM.md) |
 | LLM 路由規格 | [`docs/specs/llm-routing.md`](llm-routing.md) |
 | 數據可見性四層防護 | [`.claude/skills/atlas-data-visibility/SKILL.md`](../../.claude/skills/atlas-data-visibility/SKILL.md) |
 | CI/CD 安全掃描 (gosec) | [`.github/workflows/ci-cd.yml`](../../.github/workflows/ci-cd.yml) § security job |
 | CI 憲法檢查 | [`.github/workflows/constitution.yml`](../../.github/workflows/constitution.yml) |
-| 依賴漏洞掃描 (govulncheck) | [`.github/workflows/vuln-scan.yml`](../../.github/workflows/vuln-scan.yml)(PR #818 新增) |
+| 依賴漏洞掃描 (govulncheck) | `.github/workflows/vuln-scan.yml` (PR #818 新增) |
 | env var 白名單 | [`configs/allowed_env_vars.md`](../../configs/allowed_env_vars.md) |
-| 文件歸屬規範 | [`docs/DOCUMENTATION_STANDARD.md`](DOCUMENTATION_STANDARD.md) |
-| 文件位置地圖 | [`docs/DOCUMENTATION_MAP.md`](DOCUMENTATION_MAP.md) |
+| 文件歸屬規範 | [`docs/DOCUMENTATION_STANDARD.md`](../DOCUMENTATION_STANDARD.md) |
+| 文件位置地圖 | [`docs/DOCUMENTATION_MAP.md`](../DOCUMENTATION_MAP.md) |
