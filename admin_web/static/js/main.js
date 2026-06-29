@@ -327,9 +327,10 @@ async function loadPageData(pageId) {
       var s = await Promise.all([
         silentGetJSON('/api/synergy/darwinian-status'),
         silentGetJSON('/api/synergy/darwinian-trend'),
-        silentGetJSON('/api/dashboard/experiment-inbox')
+        silentGetJSON('/api/dashboard/experiment-inbox'),
+        silentGetJSON('/api/synergy/l2-4-schedule')
       ]);
-      if (m.synergy && m.synergy.renderSynergyPage) m.synergy.renderSynergyPage(s[0], s[1], s[2]);
+      if (m.synergy && m.synergy.renderSynergyPage) m.synergy.renderSynergyPage(s[0], s[1], s[2], s[3]);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'alerts') {

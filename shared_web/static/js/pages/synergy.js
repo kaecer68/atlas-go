@@ -65,9 +65,70 @@ function statusBadge(status) {
   }
 }
 
-export function renderSynergyPage(darwinianStatus, darwinianTrend, inbox) {
+export function renderSynergyPage(darwinianStatus, darwinianTrend, inbox, l24State) {
+  renderL24Schedule(l24State);
   renderLeaderboard(darwinianStatus, darwinianTrend);
   renderCandidates(inbox);
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '-';
+  try {
+    return new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
+  } catch(e) {
+    return '-';
+  }
+}
+
+export function renderL24Schedule(state) {
+  const container = document.getElementById('synergyL24Schedule');
+  if (!container) return;
+
+  if (!state) {
+    container.innerHTML = '<div class="empty">載入中…</div>';
+    return;
+  }
+
+  const running = state.status && state.status.running;
+  const statusBadge = `<span class="badge ${running ? 'ok' : 'muted'}">${running ? '執行中' : '已停止'}</span>`;
+
+  const startedAt = state.status && state.status.started_at ? fmtDateTime(state.status.started_at) : '-';
+  const endsAt = state.status && state.status.ends_at ? fmtDateTime(state.status.ends_at) : '-';
+  const currentPeriod = state.status && state.status.current_period_days ? state.status.current_period_days : '-';
+
+  const defaultStart = state.default_start_time || '-';
+  const defaultPeriod = state.default_period_days || '-';
+  const overrideStart = state.override_start_time || '-';
+  const overridePeriod = state.override_period_days || '-';
+  const effStart = state.effective_start_time || '-';
+  const effPeriod = state.effective_period_days || '-';
+
+  container.innerHTML = `
+    <h2>L2.4 觀察期排程 ${statusBadge}</h2>
+    <div class="l24-schedule-grid">
+      <div>
+        <div class="l24-status-info">開始: ${escapeHtml(startedAt)}<br>結束: ${escapeHtml(endsAt)}<br>當前週期: ${escapeHtml(currentPeriod)} 天</div>
+        <div style="margin-top: 8px;">
+          <div>預設啟動時間: ${escapeHtml(defaultStart)}</div>
+          <div>預設週期: ${escapeHtml(defaultPeriod)} 天</div>
+          <div style="margin-top: 4px; color: var(--warn);">目前生效: ${escapeHtml(effStart)} / ${escapeHtml(effPeriod)} 天</div>
+        </div>
+      </div>
+      <div>
+        <div style="margin-bottom: 8px;">目前覆寫: ${escapeHtml(overrideStart)} / ${escapeHtml(overridePeriod)} 天</div>
+        <div style="margin-bottom: 8px;">
+          <label>覆寫時間: <input type="time" id="l24OverrideStart" value="${overrideStart !== '-' ? escapeHtml(overrideStart) : ''}"></label><br>
+          <label>覆寫週期 (天): <input type="number" id="l24OverridePeriod" min="1" max="30" value="${overridePeriod !== '-' ? escapeHtml(overridePeriod) : ''}"></label>
+        </div>
+        <div class="l24-buttons" style="margin-top: 12px;">
+          <button id="l24StartBtn" class="primary">啟動觀察期</button>
+          <button id="l24StopBtn">停止觀察期</button>
+          <button id="l24SaveBtn">儲存覆寫</button>
+          <button id="l24ResetBtn" class="muted">重設為預設值</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderLeaderboard(status, trend) {

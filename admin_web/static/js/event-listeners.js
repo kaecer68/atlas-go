@@ -15,6 +15,64 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       window.switchPage(link.dataset.page);
     }
+    // === L2.4 schedule panel buttons (synergy page) ===
+    const btn = e.target.closest('button');
+    if (btn && btn.id && btn.id.startsWith('l24')) {
+      const panel = document.getElementById('synergyL24Schedule');
+      const showError = (msg) => {
+        let errDiv = panel ? panel.querySelector('.error-msg') : null;
+        if (!errDiv && panel) {
+          errDiv = document.createElement('div');
+          errDiv.className = 'error-msg';
+          errDiv.style.color = 'var(--color-danger)';
+          errDiv.style.marginTop = '8px';
+          errDiv.style.fontSize = '12px';
+          panel.appendChild(errDiv);
+        }
+        if (errDiv) {
+          errDiv.textContent = msg;
+          setTimeout(() => errDiv.remove(), 5000);
+        }
+      };
+      const doReq = async (url, method, body) => {
+        const opts = { method };
+        if (body !== undefined && body !== null) {
+          opts.headers = { 'Content-Type': 'application/json' };
+          opts.body = JSON.stringify(body);
+        }
+        const res = await fetch(url, opts);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(url + ': ' + res.status + ' ' + text.slice(0, 200));
+        }
+        return res.json();
+      };
+      (async () => {
+        try {
+          if (btn.id === 'l24StartBtn') await doReq('/api/synergy/l2-4-schedule/start', 'POST');
+          else if (btn.id === 'l24StopBtn') await doReq('/api/synergy/l2-4-schedule/stop', 'POST');
+          else if (btn.id === 'l24ResetBtn') await doReq('/api/synergy/l2-4-schedule/reset', 'POST');
+          else if (btn.id === 'l24SaveBtn') {
+            const t = (document.getElementById('l24OverrideStart') || {}).value || '';
+            const p = parseInt((document.getElementById('l24OverridePeriod') || {}).value, 10);
+            if (!t) throw new Error('時間不可為空');
+            if (isNaN(p) || p < 1 || p > 30) throw new Error('週期必須在 1-30 之間');
+            await doReq('/api/synergy/l2-4-schedule', 'PUT', { override_start_time: t, override_period_days: p });
+          }
+          const state = await doReq('/api/synergy/l2-4-schedule', 'GET');
+          if (state && window.m && window.m.synergy && window.m.synergy.renderL24Schedule) {
+            window.m.synergy.renderL24Schedule(state);
+          }
+          if (panel) {
+            panel.classList.remove('l24-flash');
+            void panel.offsetWidth;
+            panel.classList.add('l24-flash');
+          }
+        } catch (err) {
+          showError(err.message);
+        }
+      })();
+    }
   });
 
   // === Global/Core ===
