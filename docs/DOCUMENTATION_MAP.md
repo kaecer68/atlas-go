@@ -66,6 +66,8 @@
 | `guides/install-and-deploy.md` | 安裝/部署指南（PR #796 新增）|
 | `guides/opencode-oh-my-openagent-tuning.md` | oh-my-openagent hook 機制與 token 防護 |
 | `guides/adding-sector-agents.md` | 新增 sector agent 指南（deterministic + LLM-driven）|
+| `operations/l2-4-runbook.md` | L2.4 觀察期操作手冊（pre-flight / acceptance / rollback；PR #821 follow-up）|
+| `operations/l2-4-followup.md` | L2.4 後續工作報告（auto-cron / CLI flag / promotion 4 步）|
 
 ### Reference / 工具
 
@@ -106,6 +108,7 @@
 | `llm-integration-strategy-framework.md` | LLM 整合策略框架（主檔，§4.2-4.5/6/8/10 已抽離）|
 | `llm-adr-log.md` | LLM 整合架構決策紀錄（ADR-001 ~ ADR-010）|
 | `agents-md-audit.md` | **Wave 11 AGENTS.md 整合決策表**（57 → 15 → 21 演化歷程 + 遷移計畫）|
+| `specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics；PR #821 永久化）|
 
 ### 金融工程 / 操作 playbook
 
@@ -128,7 +131,7 @@
 
 ### Wave-specific（active）
 
-Wave-11 L2.4 觀察規劃已移至 `.omo/wave-11-l2-4/`（PLANNED — 尚未啟動）。已完成產出已移至 `docs/specs/` 與 `docs/guides/`。Wave 目錄生命週期規則見 `docs/DOCUMENTATION_STANDARD.md` § Wave 工作目錄。
+Wave-11 L2.4 觀察期 implementation 已 ship(PR #821 merged 2026-06-29)。規劃文件已從 `.omo/wave-11-l2-4/` 永久化到 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md` + `docs/operations/l2-4-followup.md`(見此 PR)。Wave 目錄生命週期規則見 `docs/DOCUMENTATION_STANDARD.md` § Wave 工作目錄。
 
 ### 歸檔 `docs/archive/`
 

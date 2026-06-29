@@ -124,6 +124,9 @@
 | `docs/archive/GATEWAY_MIGRATION_TRACKING.md` | 遷移 TODO 追蹤（已封存） |
 | `docs/AI_PROMPT_FILES.md` | AI prompt 檔案追蹤政策（避免 local-only 漂移） |
 | `docs/MULTI_CLI_PROTOCOL.md` | 多 CLI 並行 worktree 協議 |
+| `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊（pre-flight / daily check-in / acceptance / rollback） |
+| `docs/operations/l2-4-followup.md` | L2.4 後續工作報告（auto-cron / CLI flag / promotion 4 步） |
+| `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
 
 ---
 
