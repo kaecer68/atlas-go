@@ -1385,3 +1385,27 @@ func TestProcessManager_F9_PortBothWildcardsFree_ReturnsFree(t *testing.T) {
 		t.Errorf("probePort8081() = %v, want portStateFree", state)
 	}
 }
+
+// TestGetFubonProxyPort_ReflectsNewManagerOverride 驗證 GetFubonProxyPort getter
+// 會反映 NewManager 的 port override,而非永遠回 defaultFubonProxyPort。
+//
+// 用途:apigateway.RegisterChannelAdapters 的 startup probe 透過這個 getter
+// 動態構造 dial address(L2 落地的 follow-up 修)。如果 getter 漏掉 NewManager
+// 的 port 設定,probe 會繼續 dial 8081,即使 -fubon-port=8080,fubon adapter
+// 就會 silent skip(回 fubon_proxy_not_reachable log)。
+func TestGetFubonProxyPort_ReflectsNewManagerOverride(t *testing.T) {
+	const customPort = 18081
+	t.Cleanup(func() {
+		// 還原預設值,避免污染同檔其他 test 的 proxyListenPort 假設。
+		proxyListenPort = defaultFubonProxyPort
+	})
+
+	if got := GetFubonProxyPort(); got != defaultFubonProxyPort {
+		t.Errorf("pre-NewManager GetFubonProxyPort() = %d, want default %d", got, defaultFubonProxyPort)
+	}
+
+	_ = NewManager(t.TempDir(), customPort)
+	if got := GetFubonProxyPort(); got != customPort {
+		t.Errorf("post-NewManager GetFubonProxyPort() = %d, want %d", got, customPort)
+	}
+}

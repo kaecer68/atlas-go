@@ -142,6 +142,16 @@ func NewManager(workDir string, port int) *ProcessManager {
 	}
 }
 
+// GetFubonProxyPort returns the TCP port fubon-proxy is configured to listen
+// on, set by NewManager when port > 0 or by the cmd/atlas -fubon-port flag
+// before NewManager is called. Returns defaultFubonProxyPort (8081) when
+// NewManager has not yet been called with a non-zero port — callers that
+// probe before fubonproxy.NewManager runs will see the default, which is
+// the documented L1/L2 contract (Oracle F13).
+func GetFubonProxyPort() int {
+	return proxyListenPort
+}
+
 // resolvePythonBin 偵測 Python 可執行檔路徑。
 // 優先檢查 ~/.config/atlas-go/.fubon-env/bin/python，回退至系統 python3。
 func resolvePythonBin() string {

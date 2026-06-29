@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -42,7 +43,14 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
 	}
 	if fubonKey != "" {
-		probeAddrs := []string{"127.0.0.1:8081", "host.docker.internal:8081"}
+		// Port comes from fubonproxy (set by NewManager or -fubon-port flag) so
+		// the probe follows the L2 alt-port contract: when -fubon-port=8080 is
+		// passed, we dial 8080, not the hardcoded default.
+		fubonPort := fubonproxy.GetFubonProxyPort()
+		probeAddrs := []string{
+			fmt.Sprintf("127.0.0.1:%d", fubonPort),
+			fmt.Sprintf("host.docker.internal:%d", fubonPort),
+		}
 		var dialed bool
 		for _, addr := range probeAddrs {
 			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
@@ -54,7 +62,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 			break
 		}
 		if !dialed {
-			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — fubon-proxy not reachable on 127.0.0.1:8081 or host.docker.internal:8081")
+			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", fmt.Sprintf("skipping fubon adapter registration — fubon-proxy not reachable on 127.0.0.1:%d or host.docker.internal:%d", fubonPort, fubonPort))
 		} else {
 			fubonClient := marketdata.GetSharedFubonClient()
 			fubonAdapter := NewFubonChannelAdapter(fubonClient)
