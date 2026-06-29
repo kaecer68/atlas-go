@@ -1,0 +1,81 @@
+# Vulnerability scan for Go modules using govulncheck.
+#
+# Runs weekly (Monday 06:00 UTC) and on-demand via workflow_dispatch.
+# Advisory-only: findings are uploaded to GitHub Security tab as SARIF
+# but never block the workflow. This matches the existing gosec security
+# job pattern in ci-cd.yml.
+#
+# govulncheck scans the full module graph (including transitive dependencies)
+# against the Go vulnerability database (maintained at pkg.go.dev/vuln).
+# Unlike gosec (which scans source code for insecure patterns), govulncheck
+# detects known CVEs in dependency versions.
+
+name: Vulnerability Scan
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Install govulncheck
+      # Pinned to v1.1.4 for reproducible scans. Some versions of govulncheck
+      # emit SARIF with duplicate tags (golang/go#75890); the
+      # `continue-on-error: true` on the upload step handles rejections
+      # gracefully. Bump after confirming a version fixes the bug.
+      run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+    - name: Run govulncheck (advisory only)
+      # govulncheck in -format sarif mode always exits 0 regardless of findings.
+      # govulncheck has no -output flag; use shell redirection to write SARIF
+      # to a file. `|| true` swallows non-finding errors (network, parse, build);
+      # the upload step's `continue-on-error: true` plus the file existence
+      # check below prevent silent upload failures.
+      run: govulncheck -format sarif ./... > results.sarif || true
+
+    - name: Verify SARIF output exists
+      # Defensive visibility: if the SARIF file is missing or empty, emit
+      # a workflow warning so the failure shows up in the Actions UI.
+      run: |
+        if [ ! -s results.sarif ]; then
+          echo "::warning::govulncheck did not produce results.sarif; check scan logs above"
+        fi
+
+    - name: Upload SARIF file
+      # Defensive condition: this workflow has no `pull_request` trigger,
+      # so the condition is always true. Retained for consistency with the
+      # ci-cd.yml gosec security job pattern.
+      if: github.event_name != 'pull_request'
+      uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b # v3
+      continue-on-error: true
+      with:
+        sarif_file: results.sarif
