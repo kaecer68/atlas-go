@@ -7,7 +7,8 @@
 //
 // 使用方式：
 //
-//	mgr := fubonproxy.NewManager(cfg.WorkDir)
+//	mgr := fubonproxy.NewManager(cfg.WorkDir, 0)            // 用預設 :8081
+//	mgr := fubonproxy.NewManager(cfg.WorkDir, 9999)         // 用 -fubon-port flag override
 //	if err := mgr.Start(ctx); err != nil {
 //	    // 非致命：記錄警告後繼續
 //	    logging.Warn("fubonproxy", "start_failed", logging.Err(err))
@@ -31,12 +32,13 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
 
-const (
-	// healthEndpoint 是 fubon-proxy 健康檢查的 HTTP 端點。
-	// 使用 IPv4 loopback (127.0.0.1) 而非 localhost,避免雙棧環境下
-	// Go net.Dial 預設優先走 IPv6 [::1] 導致連線失敗。
-	healthEndpoint = "http://127.0.0.1:8081/health"
+// defaultFubonProxyPort 是 fubon-proxy 的預設 listen port(8081)。
+// PR 2 Oracle 4th-round verdict F13:不指定 -fubon-port flag 時行為完全一致;
+// marketdata 套件與本套件共用這常數以避免 port 漂移(F12:healthURL/proxyURL
+// 必須同步來源)。
+const defaultFubonProxyPort = 8081
 
+const (
 	// healthCheckTimeout 是單次健康檢查 HTTP 請求的超時時間。
 	healthCheckTimeout = 3 * time.Second
 
@@ -109,16 +111,34 @@ type ProcessManager struct {
 // workDir 為 atlas 專案根目錄，用於定位 services/fubon-proxy/main.py。
 // 自動偵測 Python 虛擬環境路徑：優先使用 ~/.config/atlas-go/.fubon-env/bin/python，
 // 若不存在則回退至系統 python3。
-func NewManager(workDir string) *ProcessManager {
+//
+// port 為 fubon-proxy Python 服務綁定的 TCP 埠(也是 healthURL 的 port)。
+// port > 0:override package-level proxyListenPort + log INFO(F11 custom port);
+// port <= 0:不覆寫(保留測試 helper 透過 withFreeEphemeralPort 預設的值)。
+// healthURL 動態從最終的 proxyListenPort 構造(PR 2 Oracle F12:與
+// FubonClient.proxyURL 同步,皆由 cmd/atlas -fubon-port flag 統一注入)。
+func NewManager(workDir string, port int) *ProcessManager {
+	if port > 0 {
+		if port != defaultFubonProxyPort {
+			logging.Info("fubonproxy", "custom_listen_port",
+				"port", port,
+				"message", "fubon-proxy 將綁定非預設 port(預設 8081);由 cmd/atlas -fubon-port flag 注入。",
+			)
+		}
+		proxyListenPort = port
+	}
+
 	pythonBin := resolvePythonBin()
 	scriptPath := filepath.Join(workDir, "services", "fubon-proxy", "main.py")
 	scriptPath, _ = filepath.Abs(scriptPath)
+
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort)
 
 	return &ProcessManager{
 		workDir:    workDir,
 		pythonBin:  pythonBin,
 		scriptPath: scriptPath,
-		healthURL:  healthEndpoint,
+		healthURL:  healthURL,
 	}
 }
 

@@ -727,7 +727,7 @@ func TestProcessManager_NewManager_ScriptPathIsAbsolute(t *testing.T) {
 		t.Fatalf("write fake main.py: %v", err)
 	}
 
-	m := NewManager(tmpDir)
+	m := NewManager(tmpDir, 0) // port=0 → 不覆寫 proxyListenPort,測試 helper (withFreeEphemeralPort/bindPort) 可保留其預設行為
 	if m == nil {
 		t.Fatal("NewManager returned nil")
 	}
