@@ -287,7 +287,7 @@ func run(args []string, deps appDeps) error {
 			fubonListenAddr := fmt.Sprintf("127.0.0.1:%d", *fubonProxyPort)
 			if err := startup.Preflight([]startup.PortClaim{
 				{Component: "atlas-http", Addr: *apiAddr},
-				{Component: "fubon-proxy", Addr: fubonListenAddr},
+				{Component: "fubon-proxy", Addr: fubonListenAddr, AllowZombieKill: true},
 			}); err != nil {
 				return fmt.Errorf("preflight failed: %w", err)
 			}
