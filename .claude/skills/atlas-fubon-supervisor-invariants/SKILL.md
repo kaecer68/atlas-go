@@ -67,10 +67,13 @@ target_audience: developer
 
 ### F9 port 探測測試標準
 
-- 必須用真實 `net.Listen("tcp", "127.0.0.1:8081")` 佔位（搭配 `t.Cleanup` 釋放），不可用 mock。
-- port 已被佔用時 `t.Skip` 而非 Fatal。
-- 涵蓋：Free → spawn、Healthy（bind + /health=200）→ 跳過 spawn 且 `m.running=false`、Foreign（bind + /health=404）→ error 含 `"port 8081"` / `"foreign"` / `"kill"`。
+- 必須用真實 `net.Listen` 佔位（透過 package-level `proxyListenPort` var;測試用 `withFreeEphemeralPort(t)` / `bindEphemeralPort(t, handler)` 取得 OS-assigned ephemeral port 並覆寫 `proxyListenPort`）,不可用 mock。
+- Production `proxyListenPort` 預設值仍為 8081（`manager.go:74`）,不變。
+- ephemeral port 永遠可用,無需 `t.Skip`;若 ephemeral bind 失敗（極罕見,僅在 fd 耗盡時）視為環境異常 `t.Fatal`。
+- 涵蓋：Free → spawn、Healthy（bind + /health=200）→ 跳過 spawn 且 `m.running=false`、Foreign（bind + /health=404）→ error 含 `"port %d"`（用 `proxyListenPort`）/ `"foreign"` / `"kill"`。
 - `lookupPortOccupant` 單元測試可在 lsof 不可用時 skip。
+
+> 由於 `proxyListenPort` 是 package-level var,這些 helper **不可** 用於 `t.Parallel()` 測試（race）。
 
 ## F5 — waitForHealthy 必須尊重 ctx.Deadline()
 
