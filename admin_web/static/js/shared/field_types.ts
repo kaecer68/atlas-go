@@ -1620,6 +1620,54 @@ export interface JanusParameters {
   health_warn_hours: string;
 }
 
+export interface L24Response {
+  status: string;
+  default_start_time: string;
+  default_period_days: number;
+  override_start_time?: string;
+  override_period_days?: number;
+  effective_start_time: string;
+  effective_period_days: number;
+  auto_enabled: boolean;
+  updated_at: string;
+}
+
+export interface L24ResponseStatus {
+  running: boolean;
+  started_at?: string;
+  ends_at?: string;
+  current_period_days?: number;
+}
+
+export interface L24Schedule {
+  status: string;
+  config: string;
+  updated_at: string;
+}
+
+export interface L24ScheduleConfig {
+  default_start_time: string;
+  default_period_days: number;
+  override_start_time?: string;
+  override_period_days?: number;
+  auto_enabled: boolean;
+}
+
+export interface L24ScheduleStatus {
+  running: boolean;
+  started_at?: string | null;
+  ends_at?: string | null;
+  current_period_days?: number;
+}
+
+export interface L2_4ScheduleParameters {
+  default_start_time: string;
+  default_period_days: string;
+  override_start_time?: string;
+  override_period_days?: string;
+  auto_enabled: string;
+}
+
 export interface LEOSatelliteExecutorParameters {
   conviction_base: string;
   price_penalty_delta: string;
@@ -2030,6 +2078,7 @@ export interface OrchestratorParameters {
   sector_rotation_flow_adjustments?: string;
   use_ml_scoring: string;
   use_llm_sector_agents: string;
+  l2_4_schedule: string;
 }
 
 export interface ParameterChange {

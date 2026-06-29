@@ -25,6 +25,12 @@ export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + 
 
 export { escapeHtml };
 
+export async function putJSON(url, body) {
+  var res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(url + ': ' + res.status);
+  return res.json();
+}
+
 export function formatDate(d) {
   if (!d) return '-';
   const date = new Date(d);

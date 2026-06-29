@@ -78,6 +78,32 @@ func GetUseLLMSectorAgents() bool {
 	return cfg.Orchestrator.UseLLMSectorAgents.Value
 }
 
+// L2_4ScheduleParameters holds tunable values for the L2.4 LLM-driven
+// sector agent observation period. Used by the synergy page admin
+// UI to expose manual start/stop controls (auto-cron deferred to a
+// follow-up round per user decision 3A).
+type L2_4ScheduleParameters struct {
+	DefaultStartTime   ParameterMetadata[string] `json:"default_start_time"`
+	DefaultPeriodDays  ParameterMetadata[int]    `json:"default_period_days"`
+	OverrideStartTime  ParameterMetadata[string] `json:"override_start_time,omitempty"`
+	OverridePeriodDays ParameterMetadata[int]    `json:"override_period_days,omitempty"`
+	AutoEnabled        ParameterMetadata[bool]   `json:"auto_enabled"`
+}
+
+// GetL2_4Schedule returns the current L2.4 schedule parameters
+// from the loaded config, or zero-value defaults if config is
+// not yet loaded.
+func GetL2_4Schedule() L2_4ScheduleParameters {
+	cfg := GetParametersConfig()
+	if cfg == nil {
+		return L2_4ScheduleParameters{
+			DefaultStartTime:  ParameterMetadata[string]{Value: "13:45"},
+			DefaultPeriodDays: ParameterMetadata[int]{Value: 7},
+		}
+	}
+	return cfg.Orchestrator.L2_4Schedule
+}
+
 type DarwinianParameters struct {
 	WeightMin                   ParameterMetadata[float64] `json:"weight_min"`
 	WeightMax                   ParameterMetadata[float64] `json:"weight_max"`
@@ -252,6 +278,7 @@ type OrchestratorParameters struct {
 	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments,omitempty"`
 	UseMLScoring                     ParameterMetadata[bool]                          `json:"use_ml_scoring"`
 	UseLLMSectorAgents               ParameterMetadata[bool]                          `json:"use_llm_sector_agents"`
+	L2_4Schedule                     L2_4ScheduleParameters                           `json:"l2_4_schedule"`
 }
 
 // RiskParameters holds tunable values for risk management.

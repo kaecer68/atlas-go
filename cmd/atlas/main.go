@@ -46,6 +46,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	llmHealth "github.com/kaecer68/atlas-go/internal/monitoring/api/llm"
+	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
@@ -355,6 +356,18 @@ func run(args []string, deps appDeps) error {
 		prismMgr.Start()
 		defer prismMgr.Stop()
 		dwMgr := portfolio.NewDarwinianWeightManager(filepath.Join(cfg.WorkDir, "data/state/darwinian_weights.json"))
+		l24Mgr := apipipeline.NewL24StateManager(cfg.WorkDir)
+		// Seed the schedule config from parameters.json so a fresh
+		// state file does not start with DefaultPeriodDays=0, which
+		// would create an immediately-expired observation window.
+		p := config.GetL2_4Schedule()
+		if err := l24Mgr.SetConfig(apipipeline.L24ScheduleConfig{
+			DefaultStartTime:  p.DefaultStartTime.Value,
+			DefaultPeriodDays: p.DefaultPeriodDays.Value,
+			AutoEnabled:       p.AutoEnabled.Value,
+		}); err != nil {
+			logging.Warn("main", "l24_seed_failed", logging.Err(err))
+		}
 		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
 		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
 		judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
@@ -428,6 +441,7 @@ func run(args []string, deps appDeps) error {
 		}
 
 		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
+		apipipeline.RegisterL24Routes(mux, apipipeline.L24RouteDeps{Manager: l24Mgr, GetParam: config.GetL2_4Schedule})
 
 		if alertStore != nil {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
