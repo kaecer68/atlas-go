@@ -2,6 +2,7 @@ package fubonproxy
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -33,6 +34,7 @@ func waitForProcessExit(pid int, timeout time.Duration) bool {
 }
 
 func TestProcessManager_Start_NonBlocking_WhenProxyUnhealthy(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
 	// long sleep so the process is still alive when we assert
@@ -120,7 +122,8 @@ func TestProcessManager_Start_NonBlocking_WhenProxyUnhealthy(t *testing.T) {
 // 這是「冪等啟動」的關鍵不變式 — 重複呼叫 Start() 不應重複啟動程序。
 //
 // F9 改動：原本用 httptest.NewServer 隨機 port + m.healthURL 注入（繞過 probe），
-// 改用 bindPort8081 模擬「:8081 已被 healthy fubon-proxy 佔住」的生產現實。
+// 改用 bindEphemeralPort 模擬「healthy fubon-proxy 已佔住該 port」的生產現實;
+// production `proxyListenPort` 預設仍是 8081。
 // 此測試在 F9 設計下與 F9_P2 校驗同一不變式，保留為冪等啟動語義的命名錨點。
 func TestProcessManager_Start_SkipsWhenAlreadyHealthy(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -136,12 +139,12 @@ func TestProcessManager_Start_SkipsWhenAlreadyHealthy(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	_, port := bindEphemeralPort(t, handler)
 
 	m := &ProcessManager{
 		pythonBin:  "/bin/sh",
 		scriptPath: fakeScript,
-		healthURL:  "http://127.0.0.1:8081/health",
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", port),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -172,6 +175,7 @@ func TestProcessManager_Start_SkipsWhenAlreadyHealthy(t *testing.T) {
 // TestProcessManager_Stop_DoesNotOrphanDuringRestart 驗證 F1：
 // 當程序崩潰後 supervise 進入重啟路徑時呼叫 Stop()，不應留下孤兒行程。
 func TestProcessManager_Stop_DoesNotOrphanDuringRestart(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
 	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
@@ -271,6 +275,7 @@ func waitForPIDChange(m *ProcessManager, oldPID int, timeout time.Duration) (int
 //
 // Reference: PR #489 (F1 fix) + PR #493 review finding F-TEST-1 (CRITICAL).
 func TestProcessManager_F1_PostStartRecheck_NoOrphanAfterRestart(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
 	// 首次執行 exit 1（觸發 supervise 重啟），之後 sleep 30s（讓測試有時間呼叫 Stop()）
@@ -351,6 +356,7 @@ func TestProcessManager_F1_PostStartRecheck_NoOrphanAfterRestart(t *testing.T) {
 //
 // Reference: PR #489 (F2/F4 fix) + PR #493 review log F2/F4 informational item.
 func TestProcessManager_F2F4_NoFireAndForgetHealthCheck(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
 	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
@@ -551,6 +557,7 @@ func TestProcessManager_BackoffStateMachine_3sThen10s(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping backoff timing test in -short mode")
 	}
+	_ = withFreeEphemeralPort(t)
 
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
@@ -599,6 +606,7 @@ func TestProcessManager_BackoffStateMachine_3sThen10s(t *testing.T) {
 //
 // Reference: PR #493 review log "Crash → automatic restart cycle untested".
 func TestProcessManager_CrashAutoRestart_FullCycle(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
 	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
@@ -653,6 +661,7 @@ func TestProcessManager_CrashAutoRestart_FullCycle(t *testing.T) {
 // Reference: PR #489 (F1 fix, cancel() unconditional) + PR #493 review log
 // "SIGINT → 5s graceful → SIGKILL escalation untested".
 func TestProcessManager_Stop_SIGINTGracefulThenSIGKILL(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
 	// trap '' INT 忽略 SIGINT — 即使 SIGINT 路徑被走到，process 也不會優雅退出
@@ -823,37 +832,76 @@ func TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel(t *testing.T) {
 // 互相不衝突（依賴 Go test 內建單 goroutine 序列執行；不使用 t.Parallel）。
 // ============================================================================
 
-// bindPort8081 佔住 0.0.0.0:8081 (IPv4 wildcard) 模擬外部進程佔用 wildcard
-// 端口（對應 Docker Desktop port forwarder 的行為）。handler 給測試控制
-// /health 行為。測試結束透過 t.Cleanup 自動關閉。
+// reserveEphemeralPort binds 0.0.0.0:0 to obtain an OS-assigned ephemeral port,
+// overrides package-level proxyListenPort for the duration of the test, and
+// registers a cleanup to restore the original port value.
 //
-// 8081 已被系統上其他服務佔用時 t.Skip() 而非 t.Fatal()，允許在共享 CI runner
-// 上執行而不誤報。
-func bindPort8081(t *testing.T, h http.Handler) (net.Listener, *http.Server) {
+// We bind the IPv4 wildcard (not 127.0.0.1) so that portprobe.Probe(), which
+// also attempts a wildcard bind, sees the port as occupied. The caller owns the
+// returned listener and must close it (or hand it to an http.Server).
+//
+// Because proxyListenPort is a package-level var, this helper is not safe for
+// t.Parallel() tests.
+func reserveEphemeralPort(t *testing.T) (net.Listener, int) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "0.0.0.0:8081")
+	ln, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
-		t.Skipf("port 8081 unavailable on test host: %v — skipping", err)
+		t.Fatalf("failed to bind ephemeral port: %v", err)
 	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	origPort := proxyListenPort
+	proxyListenPort = port
+	t.Cleanup(func() { proxyListenPort = origPort })
+	return ln, port
+}
+
+// bindEphemeralPort starts an http.Server on an ephemeral IPv4 wildcard port,
+// simulating a foreign or healthy process occupying the port. It returns the
+// server and the port number. The listener and server are closed automatically
+// at test cleanup.
+func bindEphemeralPort(t *testing.T, h http.Handler) (*http.Server, int) {
+	t.Helper()
+	ln, port := reserveEphemeralPort(t)
 	srv := &http.Server{Handler: h}
-	go func() {
-		_ = srv.Serve(ln)
-	}()
+	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() {
 		_ = srv.Close()
 		_ = ln.Close()
 	})
-	return ln, srv
+	return srv, port
 }
 
-// F9.P1 — port 8081 空閒時，probe 回 portStateFree，後續路徑不變（走 spawn）。
-func TestProcessManager_F9_PortFree_ProceedsToExistingPath(t *testing.T) {
-	// 確認 8081 真的空著（probe 用完立刻關閉，避免 listener 殘留被 m.Start() 誤判為 foreign）
-	if ln, err := net.Listen("tcp", "127.0.0.1:8081"); err != nil {
-		t.Skipf("port 8081 in use on test host: %v — skipping", err)
-	} else {
-		_ = ln.Close()
+// bindPort starts an http.Server on a specific IPv4 wildcard port. It is used
+// by tests that need to occupy the same port both before and after
+// ProcessManager.Start().
+func bindPort(t *testing.T, port int, h http.Handler) *http.Server {
+	t.Helper()
+	ln, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	if err != nil {
+		t.Fatalf("failed to bind port %d: %v", port, err)
 	}
+	srv := &http.Server{Handler: h}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() {
+		_ = srv.Close()
+		_ = ln.Close()
+	})
+	return srv
+}
+
+// withFreeEphemeralPort reserves an ephemeral port and immediately closes the
+// listener so the port is free for the duration of the test. It returns the
+// port number (with proxyListenPort overridden accordingly).
+func withFreeEphemeralPort(t *testing.T) int {
+	t.Helper()
+	ln, port := reserveEphemeralPort(t)
+	_ = ln.Close()
+	return port
+}
+
+// F9.P1 — port 空閒時，probe 回 portStateFree，後續路徑不變（走 spawn）。
+func TestProcessManager_F9_PortFree_ProceedsToExistingPath(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
 
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
@@ -864,7 +912,7 @@ func TestProcessManager_F9_PortFree_ProceedsToExistingPath(t *testing.T) {
 	m := &ProcessManager{
 		pythonBin:  "/bin/sh",
 		scriptPath: fakeScript,
-		healthURL:  "http://127.0.0.1:1/health", // 永遠不通 — 確保 spawn 路徑被走到
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort), // 永遠不通 — 確保 spawn 路徑被走到
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -898,7 +946,7 @@ func TestProcessManager_F9_PortHeldByHealthyFubon_SkipsSpawn(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	_, port := bindEphemeralPort(t, handler)
 
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
@@ -909,7 +957,7 @@ func TestProcessManager_F9_PortHeldByHealthyFubon_SkipsSpawn(t *testing.T) {
 	m := &ProcessManager{
 		pythonBin:  "/bin/sh",
 		scriptPath: fakeScript,
-		healthURL:  healthEndpoint, // bindPort8081 handler 模擬 healthy fubon-proxy
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", port), // bindEphemeralPort handler 模擬 healthy fubon-proxy
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -946,7 +994,7 @@ func TestProcessManager_F9_PortHeldByForeign_ReturnsActionableError(t *testing.T
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	_, port := bindEphemeralPort(t, handler)
 
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
@@ -957,7 +1005,7 @@ func TestProcessManager_F9_PortHeldByForeign_ReturnsActionableError(t *testing.T
 	m := &ProcessManager{
 		pythonBin:  "/bin/sh",
 		scriptPath: fakeScript,
-		// 走預設 healthURL (http://127.0.0.1:8081/health) — 拿到 404
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", port), // 拿到 404
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -969,8 +1017,8 @@ func TestProcessManager_F9_PortHeldByForeign_ReturnsActionableError(t *testing.T
 	}
 
 	msg := err.Error()
-	if !strings.Contains(msg, "port 8081") {
-		t.Errorf("error message should mention 'port 8081', got: %q", msg)
+	if !strings.Contains(msg, fmt.Sprintf("port %d", proxyListenPort)) {
+		t.Errorf("error message should mention 'port %d', got: %q", proxyListenPort, msg)
 	}
 	if !strings.Contains(msg, "foreign") {
 		t.Errorf("error message should mention 'foreign' process, got: %q", msg)
@@ -1000,9 +1048,9 @@ func TestProcessManager_F9_LookupPortOccupant_ResolvesOurTestListener(t *testing
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	_, port := bindEphemeralPort(t, handler)
 
-	occ, err := lookupPortOccupant(8081)
+	occ, err := lookupPortOccupant(port)
 	if err != nil {
 		t.Fatalf("lookupPortOccupant failed: %v", err)
 	}
@@ -1012,7 +1060,7 @@ func TestProcessManager_F9_LookupPortOccupant_ResolvesOurTestListener(t *testing
 	if occ.Command == "" {
 		t.Errorf("expected non-empty command, got: %+v", occ)
 	}
-	t.Logf("port 8081 occupied by pid=%d cmd=%q", occ.PID, occ.Command)
+	t.Logf("port %d occupied by pid=%d cmd=%q", port, occ.PID, occ.Command)
 }
 
 // ============================================================================
@@ -1056,23 +1104,19 @@ func waitForSupervisorDone(t *testing.T, m *ProcessManager) {
 	}
 }
 
-// TestProcessManager_Restart_PortFree_CanProceed 驗證 port 8081 空閒時，
+// TestProcessManager_Restart_PortFree_CanProceed 驗證 port 空閒時，
 // preparePortForRestart() 回傳 (true, false)。
 func TestProcessManager_Restart_PortFree_CanProceed(t *testing.T) {
-	if ln, err := net.Listen("tcp", "127.0.0.1:8081"); err != nil {
-		t.Skipf("port 8081 in use on test host: %v — skipping", err)
-	} else {
-		_ = ln.Close()
-	}
+	_ = withFreeEphemeralPort(t)
 
-	m := &ProcessManager{healthURL: healthEndpoint}
+	m := &ProcessManager{healthURL: fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort)}
 	canProceed, shouldStop := m.preparePortForRestart()
 	if !canProceed || shouldStop {
 		t.Errorf("preparePortForRestart() = (%v, %v), want (true, false)", canProceed, shouldStop)
 	}
 }
 
-// TestProcessManager_Restart_PortHealthy_Yields 驗證 port 8081 被健康的
+// TestProcessManager_Restart_PortHealthy_Yields 驗證 port 被健康的
 // fubon-proxy 佔住時，preparePortForRestart() 回傳 (false, true)。
 func TestProcessManager_Restart_PortHealthy_Yields(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1082,24 +1126,24 @@ func TestProcessManager_Restart_PortHealthy_Yields(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	_, port := bindEphemeralPort(t, handler)
 
-	m := &ProcessManager{healthURL: healthEndpoint}
+	m := &ProcessManager{healthURL: fmt.Sprintf("http://127.0.0.1:%d/health", port)}
 	canProceed, shouldStop := m.preparePortForRestart()
 	if canProceed || !shouldStop {
 		t.Errorf("preparePortForRestart() = (%v, %v), want (false, true)", canProceed, shouldStop)
 	}
 }
 
-// TestProcessManager_Restart_PortForeign_Retries 驗證 port 8081 被外部非
+// TestProcessManager_Restart_PortForeign_Retries 驗證 port 被外部非
 // fubon 進程佔住時，preparePortForRestart() 回傳 (false, false) 以繼續 backoff。
 func TestProcessManager_Restart_PortForeign_Retries(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	_, port := bindEphemeralPort(t, handler)
 
-	m := &ProcessManager{healthURL: healthEndpoint}
+	m := &ProcessManager{healthURL: fmt.Sprintf("http://127.0.0.1:%d/health", port)}
 	canProceed, shouldStop := m.preparePortForRestart()
 	if canProceed || shouldStop {
 		t.Errorf("preparePortForRestart() = (%v, %v), want (false, false)", canProceed, shouldStop)
@@ -1118,10 +1162,12 @@ func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 		t.Fatalf("write fake script: %v", err)
 	}
 
+	port := withFreeEphemeralPort(t)
+
 	m := &ProcessManager{
 		pythonBin:  "/bin/sh",
 		scriptPath: fakeScript,
-		healthURL:  healthEndpoint,
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", port),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1132,7 +1178,7 @@ func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 	}
 	t.Cleanup(func() { m.Stop() })
 
-	// 在原程序結束前佔住 8081 並提供 /health=200，模擬外部 healthy proxy
+	// 在原程序結束前佔住 port 並提供 /health=200，模擬外部 healthy proxy
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			w.WriteHeader(http.StatusOK)
@@ -1140,7 +1186,7 @@ func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	bindPort(t, port, handler)
 
 	waitForSupervisorDone(t, m)
 
@@ -1162,10 +1208,12 @@ func TestProcessManager_Supervise_RestartFailureCap(t *testing.T) {
 		t.Fatalf("write fake script: %v", err)
 	}
 
+	port := withFreeEphemeralPort(t)
+
 	m := &ProcessManager{
 		pythonBin:  "/bin/sh",
 		scriptPath: fakeScript,
-		healthURL:  healthEndpoint,
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", port),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1176,11 +1224,11 @@ func TestProcessManager_Supervise_RestartFailureCap(t *testing.T) {
 	}
 	t.Cleanup(func() { m.Stop() })
 
-	// 在原程序結束前佔住 8081 並回傳 404，模擬持續 foreign 占用
+	// 在原程序結束前佔住 port 並回傳 404，模擬持續 foreign 占用
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	bindPort8081(t, handler)
+	bindPort(t, port, handler)
 
 	waitForSupervisorDone(t, m)
 
