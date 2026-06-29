@@ -3453,8 +3453,8 @@ export interface fetchLogEntry {
 }
 
 export interface healthResponse {
-  providers: Record<string, string>;
-  router_version: string;
+  status: string;
+  ports: Record<string, string>;
 }
 
 export interface marginHistoryFile {
@@ -3466,6 +3466,14 @@ export interface marginHistoryFile {
 export interface maturityTrackerState {
   first_start_date: string;
   last_checked: string;
+}
+
+export interface portHealthReport {
+  addr: string;
+  state: string;
+  pid?: number;
+  command?: string;
+  error?: string;
 }
 
 export interface providerHealthJSON {
