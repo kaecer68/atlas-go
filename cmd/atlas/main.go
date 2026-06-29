@@ -124,6 +124,7 @@ func run(args []string, deps appDeps) error {
 	// Full implementation lands in a follow-up PR per the plan's implementation steps.
 	useLLMSectorAgents := flags.String("use-llm-sector-agents", "",
 		"override L2.4 LLM-driven sector agent (true|false|1|0, empty=no-override)")
+	_ = useLLMSectorAgents // scaffold: full override logic in follow-up PR per the plan
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
 	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
 	brokerSigner := flags.String("broker-signer", "", "override broker signer: placeholder|hmac-sha256")

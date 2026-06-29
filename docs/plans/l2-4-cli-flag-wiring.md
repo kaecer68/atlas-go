@@ -2,7 +2,7 @@
 
 > **Status**: Investigation complete; ready for implementation.
 > **Branch**: `feat/l2-4-cli-flag-wiring` (from main `f69b3551`)
-> **Related**: Issue (to be filed); `docs/operations/l2-4-followup.md` §2; PR #821
+> **Related**: Issue (to be filed); `../operations/l2-4-followup.md` §2; PR #821
 > **Estimated effort**: 0.5 days implementation + testing
 
 ## Background & Motivation
@@ -106,7 +106,7 @@ This satisfies the audit-trail use case (who turned L2.4 on, when, what was the 
 | `cmd/atlas/main.go` | Add print row in resolved-config section | +2 |
 | `cmd/atlas/main.go` | Add slog audit log on override | +5 |
 | `docs/QUICKSTART.md` | Add CLI flag example in "啟用觀察期" section | +6 |
-| `docs/operations/l2-4-runbook.md` | Add note that CLI flag can be used as alternative to flag flip | +3 |
+| `../operations/l2-4-runbook.md` | Add note that CLI flag can be used as alternative to flag flip | +3 |
 
 **Total**: 1 file with real code change (`cmd/atlas/main.go`, ~20 lines), 2 files with doc updates.
 
@@ -206,7 +206,7 @@ The CLI flag is purely additive — does not change default behavior.
 4. **Step 4**: Add print row in resolved-config section (after line 1450)
 5. **Step 5**: Add unit tests in `cmd/atlas/main_test.go` (or new `cmd/atlas/cli_test.go`)
 6. **Step 6**: Update `docs/QUICKSTART.md` with CLI flag example
-7. **Step 7**: Update `docs/operations/l2-4-runbook.md` §1 with CLI flag note
+7. **Step 7**: Update `../operations/l2-4-runbook.md` §1 with CLI flag note
 8. **Step 8**: Run `gofmt -l .`, `go vet ./...`, `go test ./...`, `pre-commit` to verify
 9. **Step 9**: Open PR with title `feat(cmd): add --use-llm-sector-agents CLI flag override`
 10. **Step 10**: After merge, update `l2-4-followup.md` §2 to mark item done
@@ -220,8 +220,8 @@ After this PR lands:
 
 ## References
 
-- `docs/operations/l2-4-followup.md` §2 — original work report entry
-- `docs/operations/l2-4-runbook.md` §1 — Pre-flight Checklist (where CLI flag is added as alternative)
+- `../operations/l2-4-followup.md` §2 — original work report entry
+- `../operations/l2-4-runbook.md` §1 — Pre-flight Checklist (where CLI flag is added as alternative)
 - `docs/QUICKSTART.md` — 啟用觀察期 section
 - `cmd/atlas/main.go:116-148` — existing flag definitions
 - `cmd/atlas/main.go:192-202` — existing `bootstrap.ApplyBrokerConfig` pattern

@@ -108,6 +108,7 @@
 | `llm-integration-strategy-framework.md` | LLM 整合策略框架（主檔，§4.2-4.5/6/8/10 已抽離）|
 | `llm-adr-log.md` | LLM 整合架構決策紀錄（ADR-001 ~ ADR-010）|
 | `agents-md-audit.md` | **Wave 11 AGENTS.md 整合決策表**（57 → 15 → 21 演化歷程 + 遷移計畫）|
+| `plans/l2-4-cli-flag-wiring.md` | L2.4 CLI flag 實作規劃（`--use-llm-sector-agents`；PR #828 plan + scaffold）|
 | `specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics；PR #821 永久化）|
 
 ### 金融工程 / 操作 playbook
