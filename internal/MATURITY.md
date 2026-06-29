@@ -15,7 +15,7 @@
 
 ---
 
-## S · Stable（穩定生產）— 21 packages
+## S · Stable（穩定生產）— 23 packages
 
 所有直接由 `cmd/atlas/main.go` 匯入的模組，處於生產執行路徑中。
 
@@ -38,10 +38,12 @@
 | `monitoring` | 監控 API 與 Dashboard — 115 handlers、200 symbols | `Server` |
 | `narrative` | 宏觀敘事事件偵測 — 因果鏈、台灣壓力指數 | `NarrativeEvent`, `Ingestor` |
 | `orchestrator` | 核心協調層 — `SystemCore`、`PluginHost`、三層 executor 路由 | `SystemCore`, `PluginHost` | Wave 11 L2.1：新增 `llmSectorAgentsPlugin`（Issue #719 wired）— opt-in（env `LLM_SECTOR_AGENTS_ENABLED`），driver 為 nil 時回 no-op pass-through；`SectorAgentLLM` 已用 #711 Phase 3 的 `PlanDriver`+`ReflectDriver` 拆分設計;**Wave 11 L2.3**（v0.0.0.21）：新增 `SemiconductorLLMAgent`(Issue #711 PR5b),LLM-driven sector agent behind `UseLLMSectorAgents` flag(default off)。`llm_driver_adapter.go` + `prompts/` 屬 L2.3 PoC 基礎設施。`sector_agent_llm` 維持 experimental(等 L2.4 觀察窗口驗證) |
+| `portprobe` | Stateless TCP port 探測 helper — Probe / LookupOccupant / IsFubonZombie / KillOccupant（wildcard `net.Listen` 無 side effect） | `State`, `Occupant`, `Probe()` |
 | `portfolio` | Darwinian 權重管理（`[0.3, 2.5]`）+ FactorEngine（動能/價值/品質） | `Manager`, `FactorEngine` |
 | `repository` | PostgreSQL 持久化 — `DualWriteRepository` | `DualWriteRepository` |
 | `risk` | 風險管理 — `RiskManager`、VaR、宏觀回撤 | `RiskManager` |
 | `storage` | 檔案儲存抽象 — 原子寫入、檔案管理 | — |
+| `startup` | 一次性啟動期 preflight 檢查 — `Preflight(claims []PortClaim)` 包 portprobe.Probe + actionable error | `Preflight()`, `PortClaim` |
 
 ---
 

@@ -24,9 +24,22 @@
 - **非致命失敗**：若 proxy 啟動失敗，僅記錄警告後繼續，不阻擋 atlas 啟動。
 - **Python 依賴**：使用 `~/.config/atlas-go/.fubon-env/bin/python` 或系統 `python3`。
 - **健康檢查位址**：使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`；Python proxy 綁定 `host="0.0.0.0"`。
-- **啟動前 port 探測**：`Start()` 進入 spawn 路徑前會以 `net.Listen("tcp", "127.0.0.1:8081")` 探測。Free → fall through；已 healthy → 視為外部已管理、跳過 spawn；Foreign 占用 → 回傳 actionable error（含 PID 與 kill 指令），**不**進入 supervise 3s backoff-loop。
+- **啟動前 port 探測**：委派給 `internal/portprobe.Probe("127.0.0.1:8081")`。實作採 wildcard `net.Listen("tcp", "0.0.0.0:8081")` + `[::]:8081`（避免 IPv4-only bind 漏掉 IPv6 listener 的偽陰性），**無 side effect**（用 `net.Listen` 而非 `net.Dial`，命中後立刻關閉 listener）。Free → fall through；已 healthy → 視為外部已管理、跳過 spawn；Foreign 占用 → 回傳 actionable error（含 PID 與 kill 指令），**不**進入 supervise 3s backoff-loop。
 - **殭屍自動清除**：Foreign 占用若判定為 fubon-proxy 殭屍（command name 含 `python`/`uvicorn`），會先 SIGTERM 再 SIGKILL 清除，然後 re-probe。非 Python 程序不會被 auto-kill。
 - **macOS zombie 陷阱**：行程被 SIGKILL 後可能變成 zombie，`syscall.Kill(pid, 0)` 對 zombie 仍回 `nil`，必須用 `cmd.Wait()` 真正回收。
+
+### 與 `internal/portprobe` 的界線
+
+所有 port 探測 / 佔用者查詢 / 殭屍判定 / 強制終止邏輯皆委派給 `internal/portprobe`（stateless、獨立測試、可被 `internal/startup.Preflight` 複用）：
+
+| Helper | 委派目標 | 契約 |
+|---|---|---|
+| `probePort8081()` | `portprobe.Probe(addr)` | 回 `State{Free/Healthy/Foreign}` + `Occupant` |
+| `lookupPortOccupant(port)` | `portprobe.LookupOccupant(addr)` | `lsof -FpcL` 解析 PID + command |
+| `isFubonZombie(occ)` | `portprobe.IsFubonZombie(occ)` | `python` 或 `uvicorn` lowercase contains |
+| `killOccupant(pid)` | `portprobe.KillOccupant(pid)` | SIGTERM → 1s wait → `signal(0)` → SIGKILL + 500ms |
+
+fubonproxy 內只保留兩個型別別名（`portState = portprobe.State`、`portOccupant = portprobe.Occupant`）。改 port 探測 / 殭屍 / kill 行為時**只動 `internal/portprobe`**，勿在本模組重複實作；既有 `manager_test.go` F9 守則測試監測對應的行為契約。
 
 ### 程序監督器不變式（F1~F9）
 
@@ -73,6 +86,7 @@
 
 ## 修改前必讀
 
-1. 必跑：`go test -race -count=1 ./internal/fubonproxy/` + `go vet` + `staticcheck`
+1. 必跑：`go test -race -count=1 ./internal/fubonproxy/ ./internal/portprobe/ ./internal/startup/` + `go vet ./...` + `staticcheck`
 2. 改 supervisor 邏輯或測試：重檢 **`.claude/skills/atlas-fubon-supervisor-invariants/SKILL.md`** 的 F1~F9
-3. 改介面：更新 `doc.go` 保持一致
+3. 改 port 探測 / 殭屍判定 / 強制終止邏輯：只動 `internal/portprobe/`,勿在 fubonproxy 重複實作
+4. 改介面：更新 `doc.go` 保持一致

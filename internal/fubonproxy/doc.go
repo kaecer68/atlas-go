@@ -3,7 +3,8 @@
 // fubonproxy 負責啟動、停止、監控 fubon-proxy Python FastAPI 微服務。
 // 當 atlas 以 API/server 模式啟動時，ProcessManager 會：
 //   - 自動偵測 fubon-proxy 是否已在運行（透過 /health 端點）
-//   - 啟動前先探測 :8081 連接埠：port 空時才 spawn；port 已由 healthy fubon-proxy
+//   - 啟動前先探測 :8081 連接埠（透過 internal/portprobe.Probe,使用 wildcard
+//     net.Listen,無 side effect）：port 空時才 spawn；port 已由 healthy fubon-proxy
 //     佔用時跳過 spawn（標記為外部已管理）；port 被未知 process 佔用時回傳
 //     actionable error（含 PID 與 kill 指令），避免 supervisor 進入無窮 backoff-loop
 //   - 啟動 Python 程序（使用 ~/.config/atlas-go/.fubon-env/bin/python 或系統 python3）
