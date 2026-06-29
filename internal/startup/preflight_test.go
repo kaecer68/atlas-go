@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
 
 func freeAddr(t *testing.T) string {
@@ -98,5 +100,157 @@ func TestPreflight_ProbeError_Continues(t *testing.T) {
 	}
 	if err := Preflight(claims); err != nil {
 		t.Fatalf("Preflight(probe error + free) = %v, want nil", err)
+	}
+}
+
+// AllowZombieKill + function-var injection seam (Oracle 4th round, F10/F10a)
+// Probe/kill/zombie stubs defined below let the four behavioural permutations
+// run without a real subprocess holding a TCP port (compare with the
+// integration-style TestPreflight_OneForeign above, which needs net.Listen).
+
+func withStubProbes(t *testing.T, probe probeStubFn, kill killStubFn, zombie zombieStubFn) {
+	t.Helper()
+	prevProbe, prevKill, prevZombie := probeFn, killFn, isFubonZombieFn
+	probeFn = probe
+	killFn = kill
+	isFubonZombieFn = zombie
+	t.Cleanup(func() {
+		probeFn = prevProbe
+		killFn = prevKill
+		isFubonZombieFn = prevZombie
+	})
+}
+
+type (
+	probeStubFn  = func(addr string) (portprobe.State, portprobe.Occupant, error)
+	killStubFn   = func(pid int) error
+	zombieStubFn = func(occ portprobe.Occupant) bool
+)
+
+// F10: AllowZombieKill=true + recognised fubon-proxy zombie → KillOccupant
+// called, re-probe returns StateFree → Preflight returns nil. Mirrors the
+// SIGKILL/orphan SIGKILL scenario: previous atlas was SIGKILL'd, fubon-proxy
+// subprocess was orphaned holding :8081; new atlas startup reclaims.
+func TestPreflight_AllowZombieKill_ZombieCase(t *testing.T) {
+	var killed []int
+	var probeCalls int
+	withStubProbes(t,
+		func(addr string) (portprobe.State, portprobe.Occupant, error) {
+			probeCalls++
+			if probeCalls == 1 {
+				return portprobe.StateForeign, portprobe.Occupant{PID: 39326, Command: "python fubon-proxy"}, nil
+			}
+			return portprobe.StateFree, portprobe.Occupant{}, nil
+		},
+		func(pid int) error {
+			killed = append(killed, pid)
+			return nil
+		},
+		func(occ portprobe.Occupant) bool {
+			return strings.Contains(strings.ToLower(occ.Command), "python")
+		},
+	)
+
+	if err := Preflight([]PortClaim{
+		{Component: "fubon-proxy", Addr: "127.0.0.1:8081", AllowZombieKill: true},
+	}); err != nil {
+		t.Fatalf("expected no error after auto-kill, got: %v", err)
+	}
+	if len(killed) != 1 || killed[0] != 39326 {
+		t.Errorf("expected KillOccupant(39326) called once, got calls: %v", killed)
+	}
+	if probeCalls != 2 {
+		t.Errorf("expected exactly 2 probes (initial + re-probe after kill), got %d", probeCalls)
+	}
+}
+
+// F10: AllowZombieKill=true but occupant is NOT a recognised fubon-proxy
+// zombie (e.g., com.docker.backend, a legitimate service the user explicitly
+// started) → killFn MUST NOT be called; Preflight must surface the
+// actionable error and identify the foreign process.
+func TestPreflight_AllowZombieKill_NonZombieForeign(t *testing.T) {
+	var killed []int
+	withStubProbes(t,
+		func(addr string) (portprobe.State, portprobe.Occupant, error) {
+			return portprobe.StateForeign, portprobe.Occupant{PID: 5866, Command: "com.docker.backend"}, nil
+		},
+		func(pid int) error {
+			killed = append(killed, pid)
+			return nil
+		},
+		func(occ portprobe.Occupant) bool {
+			lo := strings.ToLower(occ.Command)
+			return strings.Contains(lo, "python") || strings.Contains(lo, "uvicorn")
+		},
+	)
+
+	err := Preflight([]PortClaim{
+		{Component: "fubon-proxy", Addr: "127.0.0.1:8081", AllowZombieKill: true},
+	})
+	if err == nil {
+		t.Fatal("expected error for non-zombie foreign holder")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "com.docker.backend") || !strings.Contains(msg, "5866") {
+		t.Errorf("error should identify non-zombie occupant (pid=5866 cmd=com.docker.backend), got: %q", msg)
+	}
+	if len(killed) != 0 {
+		t.Errorf("killFn must NOT be called for non-zombie occupant, got calls: %v", killed)
+	}
+}
+
+// F10a: AllowZombieKill=false (atlas-http style) → any Foreign returns
+// actionable error and killFn is NEVER called regardless of zombie match.
+func TestPreflight_NoAllowZombieKill_ForeignError(t *testing.T) {
+	var killed []int
+	withStubProbes(t,
+		func(addr string) (portprobe.State, portprobe.Occupant, error) {
+			return portprobe.StateForeign, portprobe.Occupant{PID: 4096, Command: "python-looking"}, nil
+		},
+		func(pid int) error {
+			killed = append(killed, pid)
+			return nil
+		},
+		func(occ portprobe.Occupant) bool { return true },
+	)
+
+	err := Preflight([]PortClaim{
+		{Component: "atlas-http", Addr: "127.0.0.1:8080"}, // AllowZombieKill defaults to false
+	})
+	if err == nil {
+		t.Fatal("expected error when AllowZombieKill=false on foreign")
+	}
+	if !strings.Contains(err.Error(), "4096") {
+		t.Errorf("error should mention pid=4096, got: %v", err)
+	}
+	if len(killed) != 0 {
+		t.Errorf("killFn MUST NOT be called when AllowZombieKill is false, got calls: %v", killed)
+	}
+}
+
+// F10: AllowZombieKill=true but probe reports StateHealthy (e.g., a
+// legitimate external fubon-proxy the user explicitly started via docker
+// compose). Preflight returns nil without touching killFn — healthy
+// foreign is a sign to skip the spawn (handled later by fubonproxy.Start).
+func TestPreflight_HealthyExternallyManaged_NoError(t *testing.T) {
+	var killed []int
+	withStubProbes(t,
+		func(addr string) (portprobe.State, portprobe.Occupant, error) {
+			return portprobe.StateHealthy, portprobe.Occupant{PID: 7000, Command: "uvicorn fubon_proxy.main:app"}, nil
+		},
+		func(pid int) error {
+			killed = append(killed, pid)
+			return nil
+		},
+		func(occ portprobe.Occupant) bool { return true },
+	)
+
+	if err := Preflight([]PortClaim{
+		{Component: "fubon-proxy", Addr: "127.0.0.1:8081", AllowZombieKill: true},
+	}); err != nil {
+		t.Fatalf("healthy external fubon-proxy should pass Preflight, got: %v", err)
+	}
+	if len(killed) != 0 {
+		t.Errorf("killFn must NOT be called when state is Healthy, got calls: %v", killed)
 	}
 }
