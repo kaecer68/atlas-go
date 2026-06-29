@@ -1,9 +1,0 @@
-{
-  "patterns": [
-    {
-      "pattern": "Failed to load resource: the server responded with a status of 500",
-      "reason": "Portfolio page render functions (PnLAttribution, Benchmark, RiskPanel, RiskGatePanel) call backend APIs that panic or error-propagate under empty-seed smoke data. Handlers need hardening to return empty state on missing data. Tracked as followup.",
-      "ticket": "atlas-go#811-followup"
-    }
-  ]
-}
