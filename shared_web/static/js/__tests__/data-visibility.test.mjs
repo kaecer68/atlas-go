@@ -1,4 +1,4 @@
-// web/static/js/__tests__/data-visibility.test.mjs
+// shared_web/static/js/__tests__/data-visibility.test.mjs
 //
 // P0 級別回歸測試：投資管線頁面在「孤兒 session」(summary.json 缺失) 情境下
 // 必須正確顯示推薦明細，不得靜默回傳 0/0、不得顯示 Go zero time "1/1/1"。
@@ -6,7 +6,7 @@
 // 對應 AGENTS.md 規範的 4 層資料可見性 (L1-L4)：前端 (L4) 必須在資料缺失
 // 或不一致時主動暴露，絕不以零值掩蓋。
 //
-// 執行：node --test web/static/js/__tests__/data-visibility.test.mjs
+// 執行：node --test shared_web/static/js/__tests__/data-visibility.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

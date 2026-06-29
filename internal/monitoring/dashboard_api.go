@@ -813,7 +813,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	// Agent display-name registry endpoint. Single source of truth for the
 	// performance-report frontend (replaces two competing static maps in
-	// web/static/js/names.js and web/static/js/shared/constants.js).
+	// shared_web/static/js/names.js and shared_web/static/js/shared/constants.js).
 	mux.HandleFunc("/api/dashboard/agent-names", a.handleAgentNames)
 
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))

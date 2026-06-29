@@ -1,7 +1,7 @@
 // 對應 renderPartialBanner 的單元測試。
 // 涵蓋 4 種 dataStatus（ok/idle/empty/partial/failed）+ indicators 警告 + a11y。
 //
-// 執行：node --test web/static/js/__tests__/render-partial-banner.test.mjs
+// 執行：node --test shared_web/static/js/__tests__/render-partial-banner.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

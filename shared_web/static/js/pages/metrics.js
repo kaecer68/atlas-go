@@ -270,7 +270,7 @@ export async function loadDataQuality() {
     return ns + ' ns';
   };
 
-  // CheckStatus enum → system-status color (per web/AGENTS.md).
+  // CheckStatus enum → system-status color (per client_web/AGENTS.md).
   const statusColor = (status) => {
     if (status === 'ok') return 'var(--color-success)';
     if (status === 'warning') return 'var(--color-warning)';

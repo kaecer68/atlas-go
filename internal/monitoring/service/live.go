@@ -18,7 +18,7 @@ import (
 )
 
 // symbolNameMap resolves common TW stock symbols to Chinese names.
-// Keep in sync with web/static/js/names.js STOCK_NAME_MAP.
+// Keep in sync with shared_web/static/js/names.js STOCK_NAME_MAP.
 var symbolNameMap = map[string]string{
 	"0050.TW":  "元大台灣50",
 	"0056.TW":  "元大高股息",

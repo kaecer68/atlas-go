@@ -1,7 +1,7 @@
 // 對應 classifyFetchError 的 timeout kind 測試。
 // 對應 P2.1：fetchJSON 使用 AbortController，30 秒逾時後拋 AbortError。
 //
-// 執行：node --test web/static/js/__tests__/fetch-error-timeout.test.mjs
+// 執行：node --test shared_web/static/js/__tests__/fetch-error-timeout.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
