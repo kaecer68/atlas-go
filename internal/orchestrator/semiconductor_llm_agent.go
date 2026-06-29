@@ -132,11 +132,14 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 		"skill", agent.Skill,
 	)
 
+	var loopExhausted bool
+
 	// Issue #740: emit end via defer so it fires on every exit path.
 	defer func() {
 		a.metricsLogger().Info("agent_loop.end",
 			"symbol", quote.Symbol,
 			"conviction", rec.Conviction,
+			"exhausted", loopExhausted,
 		)
 	}()
 
@@ -203,6 +206,9 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 
 		if !reflection.Continue {
 			break
+		}
+		if i == maxIter-1 {
+			loopExhausted = true
 		}
 	}
 
