@@ -237,6 +237,21 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ## 動作紀錄
 
+### 2026-06-29 SECURITY.md refresh（本次）
+
+- **首次建立**：2026-05-17（commit `8b6da3d`，v0.0.0.18 之前）
+- **P0 事實修正**：
+  - `Known Limitations` > PostgreSQL sslmode：從 `sslmode=disable` 改為 `sslmode=prefer`（`docker-compose.yml` 10 個位置皆為 `prefer`），並補上「production 應使用 `verify-full` + CA」指引
+  - `Known Limitations` > Grafana 密碼：移除「default admin password」警告（`docker-compose.yml` L207-208 已改用 `GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD` env-driven）
+- **P1 新增章節**：
+  - `Data Source Governance`（6 條文 + 3 附錄的 `internal/apigateway/CONSTITUTION.md`）
+  - `Live Trading Guardrails`（`.github/instructions/live-trading.guardrails.instructions.md` + `-allow-live-broker` 旗標預設關閉）
+  - `LLM Providers` 子段（`LLM_DEEPSEEK_API_KEY` / `LLM_MINIMAX_API_KEY` / `LLM_ANNOTATOR_API_KEY` + 5 個 capability flags）
+  - `Data Visibility Safeguards`（4 層 gateway/adapter/service/UI，引用 `.claude/skills/atlas-data-visibility/SKILL.md`）
+- **AGENTS.md 補強**：於「高頻陷阱速查」表新增「資安設定」一列
+- **Oracle 審計**：APPROVE-WITH-MINOR-EDITS，10/10 事實查核通過，2 個 P2 套用（typo + Issue #719 引用）
+- **PR**：見 PR 編號
+
 ### 2026-06-27 v3 ACP 遷移（本次）
 
 - **ACP 全面接管 context 壓縮**：安裝 `opencode-acp@1.4.1`（DCP hardened fork +37 bug fixes）
