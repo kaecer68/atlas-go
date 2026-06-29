@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Use shared_web as canonical source (gentags writes identical copies to all 3 active dirs)
 VALID_FIELDS="$REPO_ROOT/shared_web/static/js/shared/valid_fields.json"
-# Scan JS across all active web directories (split frontend). web/ is deprecated.
+# Scan JS across all active frontend directories.
 JS_DIRS=("$REPO_ROOT/admin_web/static/js" "$REPO_ROOT/client_web/static/js" "$REPO_ROOT/shared_web/static/js")
 
 if [ ! -f "$VALID_FIELDS" ]; then

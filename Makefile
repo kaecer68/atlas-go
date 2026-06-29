@@ -1,7 +1,7 @@
 # atlas-go root Makefile
 #
 # 統一管理 2 個前端目錄(admin_web / client_web)+ Go backend + CI scripts。
-# 解決新人 onboarding 要手動對 3 目錄各跑 npm ci/build 的摩擦。
+# 解決新人 onboarding 要手動對 2 目錄各跑 npm ci/build 的摩擦。
 #
 # 用法:
 #   make help          列出所有可用 target
@@ -37,7 +37,7 @@ help:
 	@echo ""
 	@echo "前端管理:"
 	@echo "  install-frontend   安裝所有前端依賴 (admin_web / client_web)"
-	@echo "  build-frontend     編譯所有前端 (npm run build x3)"
+	@echo "  build-frontend     編譯所有前端 (npm run build x2)"
 	@echo "  test-frontend      跑前端單元測試"
 	@echo "  watch-frontend     啟動 esbuild --watch 模式"
 	@echo ""

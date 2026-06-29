@@ -114,7 +114,7 @@ $EDITOR ~/.config/atlas-go/.env
 
 The `config.Load()` function (in `internal/config/config.go`) reads this file automatically on every backend start.
 
-### 2.4 Install frontend dependencies (3 directories)
+### 2.4 Install frontend dependencies (2 directories)
 
 ```bash
 make install     # = install-frontend + go mod download

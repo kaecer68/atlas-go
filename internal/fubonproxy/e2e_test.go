@@ -55,8 +55,9 @@ func setupE2EBinary(t *testing.T) string {
 			return
 		}
 		e2eBinaryPath = filepath.Join(bin, "atlas-e2e-test")
-		// -count=1 prevents stale-test caching from breaking the build.
-		cmd := exec.Command("go", "build", "-count=1", "-o", e2eBinaryPath, "./cmd/atlas/")
+		// go build does not accept -count; use the module path so this works
+		// regardless of the test binary's working directory.
+		cmd := exec.Command("go", "build", "-o", e2eBinaryPath, "github.com/kaecer68/atlas-go/cmd/atlas")
 		out := &bytes.Buffer{}
 		cmd.Stderr = out
 		cmd.Stdout = io.Discard

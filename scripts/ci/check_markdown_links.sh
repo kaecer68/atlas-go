@@ -26,8 +26,6 @@ find . \
     -not -path './.opencode/*' \
     -not -path '*/node_modules/*' \
     -not -path '*/.git/*' \
-    -not -path './web/static/css/*' \
-    -not -path './web/static/js/*' \
     -not -path '*/.omo/*' \
     -not -name 'CHANGELOG.md' \
     -not -path '*/docs/briefs/*' \

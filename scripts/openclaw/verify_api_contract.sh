@@ -5,7 +5,7 @@
 # route extraction only greps literal route strings in a subset of Go source
 # directories and misses routes registered via helpers, variables, or in other
 # packages. As a result it reports many false-positive "missing backend handlers".
-# See the web/ removal audit (2026-06-29) for details. Do not treat a failure here
+# See the frontend refactor audit (2026-06-29) for details. Do not treat a failure here
 # as a hard blocker until the extraction logic is rebuilt (e.g. using the same
 # AST approach as cmd/mapgen).
 #
