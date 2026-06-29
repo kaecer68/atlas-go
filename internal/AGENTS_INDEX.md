@@ -44,9 +44,11 @@
 | `metalearning` | 元學習協調器、策略選擇優化 |
 | `ml` | 監督式學習模型 OLS/ElasticNet/PCR/PLS |
 | `portfolio` | Darwinian 權重、FactorEngine、FactorType 變更流程 |
+| `portprobe` | Stateless TCP port 探測 helper（`Probe`/`LookupOccupant`/`IsFubonZombie`/`KillOccupant`）— S-tier（Maturity: stable） |
 | `prism` | Regime-specific 訓練佇列 |
 | `realtime` | 即時資料轉接器 |
 | `scheduler` | ML 模型重訓排程 |
+| `startup` | 一次性啟動期 preflight 檢查（`Preflight(claims)`，`portprobe` 上層 consumer）— S-tier（Maturity: stable） |
 | `strategy` | 策略選擇器與登錄 |
 
 ### X · Experimental（實驗中）
