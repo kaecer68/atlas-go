@@ -17,20 +17,18 @@ package fubonproxy
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
 
 const (
@@ -77,7 +75,7 @@ var (
 // portState 表達 port 8081 在 Start() 預先探測後的占用狀態。
 // 設計目的：區分「可 spawn」、「外部 fubon-proxy 已管理」、「外部進程佔住」
 // 三種情況，避免在 spawn() 內部才發現 EADDRINUSE 而延遲到 supervise() 才反應。
-type portState int
+type portState = portprobe.State
 
 const (
 	portStateFree portState = iota
@@ -86,10 +84,7 @@ const (
 )
 
 // portOccupant 描述佔住 port 8081 的程序。用於構造 actionable error。
-type portOccupant struct {
-	PID     int
-	Command string
-}
+type portOccupant = portprobe.Occupant
 
 // ProcessManager 管理 fubon-proxy Python 服務的生命週期。
 type ProcessManager struct {
@@ -382,19 +377,6 @@ func (m *ProcessManager) IsHealthy() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// isHealthyWithTimeout 是 IsHealthy() 的變體，使用可設定 timeout。
-// 用於 probePort8081 內 retry loop，避免每輪等待 IsHealthy 預設的 3s
-// healthCheckTimeout（F9: 容忍外部 fubon-proxy 剛啟動時 /health 尚未 accept）。
-func (m *ProcessManager) isHealthyWithTimeout(timeout time.Duration) bool {
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Get(m.healthURL)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-	return resp.StatusCode == http.StatusOK
-}
-
 // probePort8081 探測 port 8081 占用狀態（F9 pre-flight）。
 // 同步執行（< 100ms + lsof ~50ms）。
 // 用 wildcard (0.0.0.0, [::]) 而非 loopback (127.0.0.1, [::1]) probe：
@@ -402,74 +384,15 @@ func (m *ProcessManager) isHealthyWithTimeout(timeout time.Duration) bool {
 // 被佔時仍會成功，導致誤判 portStateFree。healthEndpoint 仍用 127.0.0.1
 // 因為 Python fubon-proxy 實際 bind target 是 IPv4 wildcard 0.0.0.0。
 func (m *ProcessManager) probePort8081() (portState, portOccupant, error) {
-	port := strconv.Itoa(proxyListenPort)
-	ln4, err4 := net.Listen("tcp", "0.0.0.0:"+port)
-	if err4 == nil {
-		_ = ln4.Close()
-		ln6, err6 := net.Listen("tcp", "[::]:"+port)
-		if err6 == nil {
-			_ = ln6.Close()
-			return portStateFree, portOccupant{}, nil
-		}
-		err4 = err6
-	}
-	if !errors.Is(err4, syscall.EADDRINUSE) {
-		return 0, portOccupant{}, fmt.Errorf("port %d probe failed: %w", proxyListenPort, err4)
-	}
-	// port 被佔：可能是健康的 fubon-proxy 剛啟動，/health 尚未 accept。
-	// 重試容忍 race（F9_PortHeldByHealthyFubon_SkipsSpawn 測試 + 真實世界
-	// 「外部 fubon-proxy 剛 cmd.Start() 完成」），避免誤判為 foreign。
-	// 預算 500ms（5 × 100ms），probe 不會無限期阻塞 Start()。
-	for attempt := 0; attempt < 5; attempt++ {
-		if m.isHealthyWithTimeout(100 * time.Millisecond) {
-			occupant, _ := lookupPortOccupant(proxyListenPort)
-			return portStateHealthy, occupant, nil
-		}
-		if attempt < 4 {
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-	// port 被佔但 /health 失敗 → 外部進程
-	occupant, lookupErr := lookupPortOccupant(proxyListenPort)
-	if lookupErr != nil {
-		logging.Warn("fubonproxy", "lsof_lookup_failed",
-			logging.Err(lookupErr),
-			"port", proxyListenPort,
-		)
-	}
-	return portStateForeign, occupant, nil
+	addr := "127.0.0.1:" + strconv.Itoa(proxyListenPort)
+	return portprobe.Probe(addr)
 }
 
 // lookupPortOccupant 用 lsof -F 機讀格式解析 port 占用者。
 // lsof 不可用時回傳 error，呼叫端降級使用空 occupant。
 func lookupPortOccupant(port int) (portOccupant, error) {
-	out, err := exec.Command("lsof",
-		"-nP",
-		fmt.Sprintf("-iTCP:%d", port),
-		"-sTCP:LISTEN",
-		"-FpcL",
-	).Output()
-	if err != nil {
-		return portOccupant{}, fmt.Errorf("lsof: %w", err)
-	}
-	var occ portOccupant
-	for _, line := range strings.Split(string(out), "\n") {
-		if len(line) < 2 {
-			continue
-		}
-		switch line[0] {
-		case 'p':
-			if pid, perr := strconv.Atoi(line[1:]); perr == nil {
-				occ.PID = pid
-			}
-		case 'c':
-			occ.Command = line[1:]
-		}
-	}
-	if occ.PID == 0 {
-		return portOccupant{}, fmt.Errorf("port %d held but lsof reported no PID", port)
-	}
-	return occ, nil
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+	return portprobe.LookupOccupant(addr)
 }
 
 // isFubonZombie 判斷佔住 port 的程序是否為 fubon-proxy 的殭屍行程。
@@ -477,40 +400,14 @@ func lookupPortOccupant(port int) (portOccupant, error) {
 // port 8081 是專用給 fubon-proxy 的端口，其他 Python 行程不應佔用此 port，
 // 因此出現 Python/uvicorn → 幾乎可確定是 fubon 殭屍。
 func isFubonZombie(occ portOccupant) bool {
-	cmd := strings.ToLower(occ.Command)
-	return strings.Contains(cmd, "python") || strings.Contains(cmd, "uvicorn")
+	return portprobe.IsFubonZombie(occ)
 }
 
 // killOccupant 終止佔住 port 的程序。
 // 先發送 SIGTERM 進行優雅關閉，等待 1 秒後檢查程序是否仍在運行，
 // 若仍在運行則升級為 SIGKILL。
 func killOccupant(pid int) error {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("find process %d: %w", pid, err)
-	}
-
-	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("sigterm %d: %w", pid, err)
-	}
-
-	time.Sleep(1 * time.Second)
-
-	// signal 0 是 Unix 的存在檢查；ESRCH 表示程序已退出
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
-		return nil
-	}
-
-	logging.Warn("fubonproxy", "zombie_sigterm_timeout",
-		"pid", pid,
-		"message", "SIGTERM did not stop process within 1s, sending SIGKILL",
-	)
-	if err := proc.Signal(syscall.SIGKILL); err != nil {
-		return fmt.Errorf("sigkill %d: %w", pid, err)
-	}
-
-	time.Sleep(500 * time.Millisecond)
-	return nil
+	return portprobe.KillOccupant(pid)
 }
 
 // preparePortForRestart 在 supervise() 重啟前檢查 port 8081 狀態。

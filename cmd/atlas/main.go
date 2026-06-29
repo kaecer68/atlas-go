@@ -60,6 +60,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
+	"github.com/kaecer68/atlas-go/internal/startup"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 	"github.com/kaecer68/atlas-go/internal/swarm"
@@ -281,6 +282,13 @@ func run(args []string, deps appDeps) error {
 		// Start fubon-proxy process manager BEFORE Gateway adapter registration,
 		// so the fubon TCP probe in RegisterChannelAdapters finds :8081 already running.
 		if shouldStartFubonProxy(cfg.BrokerMode, cfg.FubonAPIKey) {
+			if err := startup.Preflight([]startup.PortClaim{
+				{Component: "atlas-http", Addr: *apiAddr},
+				{Component: "fubon-proxy", Addr: "127.0.0.1:8081"},
+			}); err != nil {
+				return fmt.Errorf("preflight failed: %w", err)
+			}
+
 			fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
 			if err := fubonMgr.Start(context.Background()); err != nil {
 				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
@@ -1372,7 +1380,7 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector, repo, baselineMgr, *forceIntradayCycles)
+		return runLiveTrading(cfg, deps, collector, repo, baselineMgr, *apiAddr, *forceIntradayCycles)
 	}
 	return runSimulation(cfg, false, collector, repo, deps.shutdown)
 }
@@ -1494,7 +1502,7 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 
 // buildBaseState queries the provider for current market state.
 // Falls back to placeholder values if provider fails (with warning log).
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, baselineMgr *baseline.Manager, forceIntradayCycles bool) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, baselineMgr *baseline.Manager, apiAddr string, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
 	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
 	if err != nil {
@@ -1640,7 +1648,6 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	// Static routes and basic probes are registered through the same helper
 	// used by api-mode so live trading and simulation behave identically.
 	registerSimpleRoutes(mux, collector, subFS, adminSubFS, clientSubFS)
-	apiAddr := ":8080"
 	srv := &http.Server{
 		Addr:              apiAddr,
 		Handler:           mux,
