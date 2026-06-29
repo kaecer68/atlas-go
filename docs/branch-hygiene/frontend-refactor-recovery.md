@@ -170,7 +170,7 @@ AGENTS.md 規範要求**寫死色碼一律遷移到金融語意 token**(`/shared
 
 **問題**:三個目錄的 AGENTS.md 都寫「`web/static/css/base/variables.css`」,但實際路徑已改成 `shared_web/static/css/base/variables.css`。
 
-**處置**:三個 AGENTS.md L72-74 區段統一改成 `shared_web/...`。✅ 已驗證:`admin_web/AGENTS.md`、`client_web/AGENTS.md`、`web/AGENTS.md` 三者 L72 全部為 `shared_web/static/css/base/variables.css`。
+**處置**:三個 AGENTS.md L72-74 區段統一改成 `shared_web/...`。✅ 已驗證:`admin_web/AGENTS.md`、`client_web/AGENTS.md` 二者 L72 全部為 `shared_web/static/css/base/variables.css`（當時 `web/AGENTS.md` 仍存在，後續隨 `./web/` 整體刪除）。
 
 ---
 
