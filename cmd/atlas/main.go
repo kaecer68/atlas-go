@@ -142,9 +142,11 @@ func run(args []string, deps appDeps) error {
 	dateOverride := flags.String("date", "", "override simulation session date (format: 2006-01-02)")
 	checkIntegrity := flags.Bool("check-integrity", false, "check configs/parameters.json integrity and exit")
 	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|scrape|status")
+	fubonProxyPort := flags.Int("fubon-port", 8081, "fubon-proxy Python 服務 listen port(同時決定 /health URL 與 FubonClient proxy URL);當 :8081 被 foreign 進程佔住時可換到未佔用 port(Oracle 4th-round F13:預設 8081 行為完全一致)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
+	marketdata.SetFubonProxyPort(*fubonProxyPort)
 
 	cfg := deps.loadConfig()
 	logging.Init(*logFormat, slog.LevelInfo)
@@ -280,16 +282,17 @@ func run(args []string, deps appDeps) error {
 		var stSeedsPath string
 
 		// Start fubon-proxy process manager BEFORE Gateway adapter registration,
-		// so the fubon TCP probe in RegisterChannelAdapters finds :8081 already running.
+		// so the fubon TCP probe in RegisterChannelAdapters finds fubon-port already running.
 		if shouldStartFubonProxy(cfg.BrokerMode, cfg.FubonAPIKey) {
+			fubonListenAddr := fmt.Sprintf("127.0.0.1:%d", *fubonProxyPort)
 			if err := startup.Preflight([]startup.PortClaim{
 				{Component: "atlas-http", Addr: *apiAddr},
-				{Component: "fubon-proxy", Addr: "127.0.0.1:8081"},
+				{Component: "fubon-proxy", Addr: fubonListenAddr},
 			}); err != nil {
 				return fmt.Errorf("preflight failed: %w", err)
 			}
 
-			fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
+			fubonMgr := fubonproxy.NewManager(cfg.WorkDir, *fubonProxyPort)
 			if err := fubonMgr.Start(context.Background()); err != nil {
 				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
 			} else {
