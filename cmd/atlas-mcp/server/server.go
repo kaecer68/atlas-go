@@ -77,6 +77,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	registerTools(mcpSrv, srv)
 	registerResources(mcpSrv, srv)
+	registerPrompts(mcpSrv)
 
 	return mcpSrv.Run(ctx, &mcp.StdioTransport{})
 }
