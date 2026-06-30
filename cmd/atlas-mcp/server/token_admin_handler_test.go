@@ -206,3 +206,19 @@ func TestAdminHandler_EmptyAdminTokenRejects(t *testing.T) {
 		t.Fatalf("expected 401 when admin token empty, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestAdminHandler_NilStore_Returns503(t *testing.T) {
+	handler := NewTokenAdminHandler(nil, "admin-secret")
+
+	body := `{"tenant_id":"t1","agent_id":"a1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/mcp/tokens", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Token", "admin-secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil store, got %d: %s", w.Code, w.Body.String())
+	}
+}

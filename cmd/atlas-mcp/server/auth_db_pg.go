@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -36,7 +38,7 @@ func (s *PGTokenStore) Lookup(ctx context.Context, rawToken string) (*TokenInfo,
 		&info.RateLimitPerMin, &info.CreatedAt, &info.ExpiresAt, &info.RevokedAt, &info.LastUsedAt,
 	)
 	if err != nil {
-		if isNoRows(err) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTokenNotFound
 		}
 		return nil, fmt.Errorf("lookup token: %w", err)
@@ -134,8 +136,11 @@ func (s *PGTokenStore) Rotate(ctx context.Context, id uuid.UUID) (*TokenInfo, st
 		err2 := s.pool.QueryRow(ctx,
 			`SELECT revoked_at IS NOT NULL FROM atlas_mcp_tokens WHERE token_id = $1`, id,
 		).Scan(&revoked)
-		if err2 != nil || isNoRows(err2) {
-			return nil, "", ErrTokenNotFound
+		if err2 != nil {
+			if errors.Is(err2, pgx.ErrNoRows) {
+				return nil, "", ErrTokenNotFound
+			}
+			return nil, "", fmt.Errorf("rotate: check revoked: %w", err2)
 		}
 		return nil, "", ErrRevoked
 	}
@@ -202,11 +207,4 @@ func generateRawToken() (string, error) {
 		return "", err
 	}
 	return "mcp-" + hex.EncodeToString(b), nil
-}
-
-func isNoRows(err error) bool {
-	if err == nil {
-		return false
-	}
-	return err.Error() == "no rows in result set"
 }

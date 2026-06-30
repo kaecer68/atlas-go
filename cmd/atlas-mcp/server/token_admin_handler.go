@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -31,6 +32,12 @@ func NewTokenAdminHandler(store TokenStore, adminToken string) *TokenAdminHandle
 //	POST   /api/admin/mcp/tokens/<id>/rotate   — rotate
 //	GET    /api/admin/mcp/tokens               — list (redacted)
 func (h *TokenAdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "token store not configured (DATABASE_URL not set)",
+		})
+		return
+	}
 	if !h.checkAdmin(r) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{
 			"error": "missing or invalid X-Admin-Token",
@@ -62,7 +69,11 @@ func (h *TokenAdminHandler) checkAdmin(r *http.Request) bool {
 	if h.adminToken == "" {
 		return false
 	}
-	return strings.EqualFold(r.Header.Get("X-Admin-Token"), h.adminToken)
+	got := r.Header.Get("X-Admin-Token")
+	if len(got) != len(h.adminToken) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(h.adminToken)) == 1
 }
 
 func (h *TokenAdminHandler) handleRegister(w http.ResponseWriter, r *http.Request) {

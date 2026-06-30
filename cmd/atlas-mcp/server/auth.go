@@ -2,10 +2,10 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 )
 
 // TokenAuth validates the bearer token presented in the JSON-RPC request.
@@ -88,7 +88,7 @@ func (a *TokenAuth) Authenticate(ctx context.Context, presented string) (context
 	if a.token == "" {
 		return ctx, nil // dev mode
 	}
-	if presented == "" || !strings.EqualFold(presented, a.token) {
+	if len(presented) != len(a.token) || subtle.ConstantTimeCompare([]byte(presented), []byte(a.token)) != 1 {
 		return ctx, fmt.Errorf("%w: token mismatch", ErrUnauthorized)
 	}
 	ctx = ContextWithTenantID(ctx, "env-fallback")

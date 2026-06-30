@@ -52,8 +52,8 @@ func TestTokenAuth_Required(t *testing.T) {
 	if err := a.Check("wrong"); !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("wrong token should fail with ErrUnauthorized: %v", err)
 	}
-	if err := a.Check("TOPSECRET"); err != nil {
-		t.Fatalf("token check is case-insensitive: %v", err)
+	if err := a.Check("TOPSECRET"); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("token check is case-sensitive: expected ErrUnauthorized, got %v", err)
 	}
 }
 
