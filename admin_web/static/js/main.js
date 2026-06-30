@@ -163,6 +163,12 @@ async function loadModules() {
   }
   return modules;
 }
+// Expose the module-load promise so click handlers installed at DOMContentLoaded
+// (admin_web/static/js/event-listeners.js) can `await window.__modulesReady` on
+// first click — closes the race window where module imports haven't finished
+// and `window.dcEnableAll` etc. are still undefined. The `modules._loaded` guard
+// inside loadModules makes subsequent calls a no-op.
+window.__modulesReady = loadModules();
 // --- Main Data Loader ---
 async function loadAll() {
   var loadingBar = document.getElementById('loadingBar');

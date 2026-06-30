@@ -103,9 +103,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // === Page: datachannels ===
   var el_btnIngestChannels = document.getElementById('btnIngestChannels'); if (el_btnIngestChannels) el_btnIngestChannels.addEventListener('click', () => window.triggerChannelsIngest());
-  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-enable-all"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => window.dcEnableAll());
-  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-disable-all"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => window.dcDisableAll());
-  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-refresh"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => window.loadDataChannels());
+  // safeCall bridges the race between DOMContentLoaded (when these listeners
+  // attach) and module-load completion (when window.dcEnableAll et al. are set
+  // in main.js loadModules). Without it, a fast click hits
+  // `TypeError: window.dcEnableAll is not a function` and the user perceives the
+  // button as broken.
+  const safeCall = async (fnName, ...args) => {
+    if (typeof window[fnName] === 'function') return window[fnName](...args);
+    await window.__modulesReady;
+    const fn = window[fnName];
+    if (typeof fn !== 'function') throw new Error(`${fnName} not available after module load`);
+    return fn(...args);
+  };
+  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-enable-all"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => safeCall('dcEnableAll'));
+  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-disable-all"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => safeCall('dcDisableAll'));
+  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-refresh"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => safeCall('refreshChannelStatus'));
   // API Key update buttons
   document.querySelectorAll('#page-datachannels [data-provider]').forEach(btn => {
     btn.addEventListener('click', () => window.dcUpdateApiKey(btn.dataset.provider));

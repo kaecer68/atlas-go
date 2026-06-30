@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -578,5 +580,101 @@ func TestContainsAny(t *testing.T) {
 				t.Errorf("containsAny(%q, %v) = %v, want %v", tt.s, tt.substrs, got, tt.expect)
 			}
 		})
+	}
+}
+
+// =============================================================================
+// Enabled merge tests (channels.json → DataChannel.Enabled field)
+// =============================================================================
+
+func TestDataChannelService_GetAllChannelStatuses_EnabledMergedFromChannelsJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	stateDir := filepath.Join(tmpDir, "data/state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	channelsState := map[string]any{
+		"twse_replay": map[string]any{"enabled": true, "updated_at": "2026-01-01T00:00:00Z"},
+		"fugle":       map[string]any{"enabled": false, "updated_at": "2026-01-01T00:00:00Z"},
+		"fubon":       map[string]any{"enabled": false, "updated_at": "2026-01-01T00:00:00Z"},
+	}
+	stateBytes, err := json.Marshal(channelsState)
+	if err != nil {
+		t.Fatalf("marshal channels.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "channels.json"), stateBytes, 0o644); err != nil {
+		t.Fatalf("write channels.json: %v", err)
+	}
+
+	svc := NewDataChannelService(tmpDir, nil, nil, nil, nil, nil, "fugleKey", "fubonKey", "finmindKey", "tejKey")
+	channels, err := svc.GetAllChannelStatuses(context.Background())
+	if err != nil {
+		t.Fatalf("GetAllChannelStatuses: %v", err)
+	}
+	byID := make(map[string]DataChannel, len(channels))
+	for _, c := range channels {
+		byID[c.ChannelID] = c
+	}
+
+	// Case A: explicit enabled=true in JSON → field true
+	if c, ok := byID["twse_replay"]; !ok {
+		t.Errorf("expected twse_replay in response (missing)")
+	} else if !c.Enabled {
+		t.Errorf("expected twse_replay enabled=true (per channels.json), got false")
+	}
+	// Case B: explicit enabled=false in JSON → field false
+	if c, ok := byID["fugle"]; !ok {
+		t.Errorf("expected fugle in response (missing)")
+	} else if c.Enabled {
+		t.Errorf("expected fugle enabled=false (per channels.json), got true")
+	}
+	if c, ok := byID["fubon"]; !ok {
+		t.Errorf("expected fubon in response (missing)")
+	} else if c.Enabled {
+		t.Errorf("expected fubon enabled=false (per channels.json), got true")
+	}
+	// Case C: absent from channels.json → default-on (true)
+	if c, ok := byID["us_yahoo"]; !ok {
+		t.Errorf("expected us_yahoo in response (missing)")
+	} else if !c.Enabled {
+		t.Errorf("expected us_yahoo enabled=true (default-on for absent keys), got false")
+	}
+}
+
+func TestDataChannelService_GetAllChannelStatuses_NoChannelsJSON_DefaultsEnabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewDataChannelService(tmpDir, nil, nil, nil, nil, nil, "fugleKey", "fubonKey", "finmindKey", "tejKey")
+	channels, err := svc.GetAllChannelStatuses(context.Background())
+	if err != nil {
+		t.Fatalf("GetAllChannelStatuses: %v", err)
+	}
+	if len(channels) == 0 {
+		t.Fatal("expected at least one channel even with no channels.json")
+	}
+	for _, c := range channels {
+		if !c.Enabled {
+			t.Errorf("expected channel %q enabled=true (default-on when channels.json missing), got false", c.ChannelID)
+		}
+	}
+}
+
+func TestDataChannelService_GetAllChannelStatuses_MalformedChannelsJSON_DefaultsEnabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	stateDir := filepath.Join(tmpDir, "data/state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "channels.json"), []byte("not-valid-json{"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	svc := NewDataChannelService(tmpDir, nil, nil, nil, nil, nil, "fugleKey", "fubonKey", "finmindKey", "tejKey")
+	channels, err := svc.GetAllChannelStatuses(context.Background())
+	if err != nil {
+		t.Fatalf("GetAllChannelStatuses: %v", err)
+	}
+	for _, c := range channels {
+		if !c.Enabled {
+			t.Errorf("expected channel %q enabled=true (graceful default-on when channels.json malformed), got false", c.ChannelID)
+		}
 	}
 }

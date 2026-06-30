@@ -747,6 +747,7 @@ export interface DataChannel {
   updated_at: string;
   last_error?: string;
   error_severity?: string;
+  enabled: boolean;
 }
 
 export interface DataChannelInfo {

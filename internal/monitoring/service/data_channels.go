@@ -74,6 +74,11 @@ type DataChannel struct {
 	UpdatedAt     string `json:"updated_at"`
 	LastError     string `json:"last_error,omitempty"`
 	ErrorSeverity string `json:"error_severity,omitempty"`
+	// Enabled reflects the operator's toggle state from data/state/channels.json.
+	// When false the channel is intentionally disabled — frontends should surface
+	// this as a 停用 / muted badge even if health status is otherwise "ok".
+	// Absence in channels.json is treated as enabled=true (default-on).
+	Enabled bool `json:"enabled"`
 }
 
 type ChannelAlert struct {
@@ -305,24 +310,62 @@ func (s *DataChannelService) resolveStatusFromStore(channelID string, fileStatus
 
 func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataChannel, error) {
 	now := time.Now()
-	channels := make([]DataChannel, 0, 14)
+	enabledStates := s.loadEnabledStates()
+	mergeEnabled := func(c DataChannel) DataChannel {
+		// Default-on: starting from true and only flipping to false when channels.json
+		// explicitly records enabled=false keeps absent entries (the common case)
+		// equal to "operator has not touched this channel — leave running".
+		c.Enabled = true
+		if e, ok := enabledStates[c.ChannelID]; ok {
+			c.Enabled = e
+		}
+		return c
+	}
 
-	channels = append(channels, s.buildUSYahooChannel(now))
-	channels = append(channels, s.buildTWSEReplayChannel(now))
-	channels = append(channels, s.buildTWSECapitalFlowChannel(now))
-	channels = append(channels, s.buildFugleChannel())
-	channels = append(channels, s.buildFubonChannel())
-	channels = append(channels, s.buildFinMindChannel())
-	channels = append(channels, s.buildFrankfurterFXChannel(now))
-	channels = append(channels, s.buildGeopoliticalChannel(now))
-	channels = append(channels, s.buildTWSEMarginChannel(now))
-	channels = append(channels, s.buildExportStatisticsChannel(now))
-	channels = append(channels, s.buildTSMCRevenueChannel(now))
-	channels = append(channels, s.buildTaiwanGeopoliticalChannel(now))
-	channels = append(channels, s.buildJanusRegimeChannel(now))
-	channels = append(channels, s.buildTEJChannel())
+	channels := []DataChannel{
+		mergeEnabled(s.buildUSYahooChannel(now)),
+		mergeEnabled(s.buildTWSEReplayChannel(now)),
+		mergeEnabled(s.buildTWSECapitalFlowChannel(now)),
+		mergeEnabled(s.buildFugleChannel()),
+		mergeEnabled(s.buildFubonChannel()),
+		mergeEnabled(s.buildFinMindChannel()),
+		mergeEnabled(s.buildFrankfurterFXChannel(now)),
+		mergeEnabled(s.buildGeopoliticalChannel(now)),
+		mergeEnabled(s.buildTWSEMarginChannel(now)),
+		mergeEnabled(s.buildExportStatisticsChannel(now)),
+		mergeEnabled(s.buildTSMCRevenueChannel(now)),
+		mergeEnabled(s.buildTaiwanGeopoliticalChannel(now)),
+		mergeEnabled(s.buildJanusRegimeChannel(now)),
+		mergeEnabled(s.buildTEJChannel()),
+	}
 
 	return channels, nil
+}
+
+// loadEnabledStates reads data/state/channels.json (the same file written by
+// internal/monitoring/api/dashboard.setChannelEnabled). Returns nil if the file
+// is missing or malformed — callers should treat nil as "no overrides recorded,
+// default-on". Channels explicitly listed with enabled=false are honoured.
+// Malformed-file behaviour matches internal/monitoring/api/dashboard.channel_state.go
+// (silent nil → default-on) — both reads share the same file so the contract is
+// "you get the operator's toggles, or you get default-on; never partial".
+func (s *DataChannelService) loadEnabledStates() map[string]bool {
+	path := filepath.Join(s.WorkDir, "data/state/channels.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var raw map[string]struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil
+	}
+	out := make(map[string]bool, len(raw))
+	for k, v := range raw {
+		out[k] = v.Enabled
+	}
+	return out
 }
 
 func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
