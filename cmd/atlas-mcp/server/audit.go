@@ -139,7 +139,7 @@ func (w *AuditWriter) Cleanup(retentionDays int, now time.Time) (int, error) {
 		}
 	}
 	scanErr := scanner.Err()
-	rf.Close()
+	_ = rf.Close()
 	if scanErr != nil {
 		return removed, fmt.Errorf("audit: scan during cleanup: %w", scanErr)
 	}
@@ -151,23 +151,23 @@ func (w *AuditWriter) Cleanup(retentionDays int, now time.Time) (int, error) {
 	}
 	for _, line := range keep {
 		if _, wErr := tf.Write(line); wErr != nil {
-			tf.Close()
-			os.Remove(tmpPath)
+			_ = tf.Close()
+			_ = os.Remove(tmpPath)
 			return removed, fmt.Errorf("audit: write tmp: %w", wErr)
 		}
 		if _, wErr := tf.Write([]byte("\n")); wErr != nil {
-			tf.Close()
-			os.Remove(tmpPath)
+			_ = tf.Close()
+			_ = os.Remove(tmpPath)
 			return removed, fmt.Errorf("audit: write tmp newline: %w", wErr)
 		}
 	}
 	if sErr := tf.Sync(); sErr != nil {
-		tf.Close()
-		os.Remove(tmpPath)
+		_ = tf.Close()
+		_ = os.Remove(tmpPath)
 		return removed, fmt.Errorf("audit: sync tmp: %w", sErr)
 	}
 	if cErr := tf.Close(); cErr != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return removed, fmt.Errorf("audit: close tmp: %w", cErr)
 	}
 	if rErr := os.Rename(tmpPath, w.path); rErr != nil {
