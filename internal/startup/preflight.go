@@ -5,6 +5,9 @@ package startup
 
 import (
 	"fmt"
+	"net"
+	"strconv"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
@@ -90,6 +93,15 @@ func checkClaim(claim PortClaim) error {
 		"pid", occupant.PID,
 		"message", "re-probing "+claim.Addr+" after zombie kill",
 	)
+	if port := portFromAddr(claim.Addr); port > 0 {
+		if !portprobe.WaitForPortFree(port, 5*time.Second) {
+			logging.Warn("startup", "preflight_zombie_port_still_held",
+				"component", claim.Component,
+				"addr", claim.Addr,
+				"message", "port not free after zombie kill; proceeding with re-probe",
+			)
+		}
+	}
 	newState, _, probeErr := probeFn(claim.Addr)
 	if probeErr != nil {
 		// Re-probe unavailable (e.g., lsof missing). Fall through: downstream
@@ -106,6 +118,19 @@ func checkClaim(claim PortClaim) error {
 	}
 	return fmt.Errorf("%s address %s still held after auto-kill; identify the current occupant with `lsof -nP -iTCP:%s -sTCP:LISTEN` and stop it",
 		claim.Component, claim.Addr, claim.Addr)
+}
+
+// portFromAddr extracts the numeric port from a host:port address string.
+func portFromAddr(addr string) int {
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return 0
+	}
+	return port
 }
 
 // actionableForeignError formats the user-facing message when no auto-kill

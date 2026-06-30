@@ -67,6 +67,8 @@ type DashboardAPI struct {
 	storeBackend               string
 	sqlitePath                 string
 	baselinePath               string
+	apiAddr                    string // dashboard HTTP listen address for /health shape
+	fubonProxyPort             int    // fubon proxy port for /health shape
 	narrativeEngine            *narrative.NarrativeEngine
 	macroIngestor              *narrative.MacroIngestor
 	macroProvider              marketdata.MacroDataProvider
@@ -429,6 +431,13 @@ func newWiredEventCalendar(provider marketdata.CalendarEventProvider) *industry.
 	return ec
 }
 
+// SetHealthAddrs records the API listen address and Fubon proxy port so that
+// the /health endpoint can report accurate per-port status.
+func (a *DashboardAPI) SetHealthAddrs(apiAddr string, fubonProxyPort int) {
+	a.apiAddr = apiAddr
+	a.fubonProxyPort = fubonProxyPort
+}
+
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
 	if a.macroIngestor != nil {
@@ -765,6 +774,12 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	systemHandlers.RegisterRoutes(mux)
 
 	handlers := &apisystem.HealthHandlers{}
+	if a.apiAddr != "" {
+		handlers.APIAddr = a.apiAddr
+	}
+	if a.fubonProxyPort != 0 {
+		handlers.FubonAddr = fmt.Sprintf("127.0.0.1:%d", a.fubonProxyPort)
+	}
 	handlers.RegisterRoutes(mux)
 
 	// Channel health summary endpoint for the alerts page dashboard.
@@ -813,7 +828,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	// Agent display-name registry endpoint. Single source of truth for the
 	// performance-report frontend (replaces two competing static maps in
-	// web/static/js/names.js and web/static/js/shared/constants.js).
+	// shared_web/static/js/names.js and shared_web/static/js/shared/constants.js).
 	mux.HandleFunc("/api/dashboard/agent-names", a.handleAgentNames)
 
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))

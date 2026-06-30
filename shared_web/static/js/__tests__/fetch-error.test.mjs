@@ -1,10 +1,10 @@
-// web/static/js/__tests__/fetch-error.test.mjs
+// shared_web/static/js/__tests__/fetch-error.test.mjs
 //
 // 對應 INVESTIGATION.md「模式 A: backend 沒起」與「模式 B: registry 503」的修復。
 // classifyFetchError 必須把 raw fetch / fetchJSON 拋出的錯誤轉成
 // { kind, message, recoverable, hint } 結構，讓前端可以顯示可行動訊息。
 //
-// 執行：node --test web/static/js/__tests__/fetch-error.test.mjs
+// 執行：node --test shared_web/static/js/__tests__/fetch-error.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

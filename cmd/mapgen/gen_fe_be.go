@@ -19,14 +19,22 @@ func generateFrontendBackend() error {
 		return fmt.Errorf("find repo root: %w", err)
 	}
 
-	jsDir := filepath.Join(repoRoot, "web", "static", "js")
+	jsDirs := []string{
+		filepath.Join(repoRoot, "admin_web", "static", "js"),
+		filepath.Join(repoRoot, "client_web", "static", "js"),
+		filepath.Join(repoRoot, "shared_web", "static", "js"),
+	}
 	internalDir := filepath.Join(repoRoot, "internal")
 	cmdDir := filepath.Join(repoRoot, "cmd")
 
 	// 1. Scan frontend JS files for API endpoint references.
-	feEndpoints, err := jsutil.ScanJSFiles(jsDir)
-	if err != nil {
-		return fmt.Errorf("scan JS files: %w", err)
+	var feEndpoints []jsutil.FrontendEndpoint
+	for _, jsDir := range jsDirs {
+		eps, err := jsutil.ScanJSFiles(jsDir)
+		if err != nil {
+			return fmt.Errorf("scan JS files in %s: %w", jsDir, err)
+		}
+		feEndpoints = append(feEndpoints, eps...)
 	}
 
 	// 2. Extract backend routes from Go source.

@@ -170,7 +170,7 @@ AGENTS.md 規範要求**寫死色碼一律遷移到金融語意 token**(`/shared
 
 **問題**:三個目錄的 AGENTS.md 都寫「`web/static/css/base/variables.css`」,但實際路徑已改成 `shared_web/static/css/base/variables.css`。
 
-**處置**:三個 AGENTS.md L72-74 區段統一改成 `shared_web/...`。✅ 已驗證:`admin_web/AGENTS.md`、`client_web/AGENTS.md`、`web/AGENTS.md` 三者 L72 全部為 `shared_web/static/css/base/variables.css`。
+**處置**:三個 AGENTS.md L72-74 區段統一改成 `shared_web/...`。✅ 已驗證:`admin_web/AGENTS.md`、`client_web/AGENTS.md` 二者 L72 全部為 `shared_web/static/css/base/variables.css`（當時 legacy web 目錄的 AGENTS.md 仍存在，後續隨 `./web/` 整體刪除）。
 
 ---
 
@@ -210,7 +210,7 @@ for id in narrativeMacro narrativeStress narrativeRetailSentiment narrativeSeaso
           liveNarrativeStrip macroRadar liveStatus riskCardsPanel \
           riskCalibrationPanel liveRiskCommentaryPanel \
           evView-compact evView-ai-analysis agentObservatory metricsTrend prismContent; do
-  for dir in web admin_web client_web; do
+  for dir in admin_web client_web; do
     [ -f "/Users/kaecer/workspace/atlas/$dir/static/index.html" ] && \
       grep -q "id=\"$id\"" /Users/kaecer/workspace/atlas/$dir/static/index.html && \
       echo "$dir $id ✓" || echo "$dir $id ✗"

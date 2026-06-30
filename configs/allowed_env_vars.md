@@ -49,6 +49,8 @@
 | `ATLAS_SKIP_DOCKER` | 跳過 Docker-based PostgreSQL 啟動 | 空 |
 | `DATABASE_URL` | PostgreSQL 連線字串 | 空（需手動設定） |
 | `HOME` | 使用者家目錄（用於 CLI 工具路徑建構） | 系統預設 |
+| `TMPDIR` | 系統臨時目錄（用於 MCP audit log 等預設路徑） | 系統預設 |
+| `ATLAS_MCP_TOKEN` | MCP 客戶端認證 token（非資料源） | 空（未設定時 dev mode） |
 
 ---
 

@@ -1,4 +1,0 @@
-/* Atlas Dashboard - SSE Status */
-.refresh-pill.sse-connected .dot { background: var(--color-success); box-shadow: 0 0 4px var(--color-success); animation: pulseDot 2s ease-in-out infinite; }
-.refresh-pill.sse-connecting .dot { background: var(--color-warning); box-shadow: 0 0 4px var(--color-warning); animation: pulseDot 1s ease-in-out infinite; }
-.refresh-pill.sse-error .dot { background: var(--color-danger); box-shadow: 0 0 4px var(--color-danger); animation: none; }

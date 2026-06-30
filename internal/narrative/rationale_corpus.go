@@ -2,7 +2,7 @@
 //
 // Purpose:
 //
-//	The investment pipeline UI (web/static/js/pages/pipeline.js, line 275)
+//	The investment pipeline UI (shared_web/static/js/pages/pipeline.js, line 275)
 //	renders the `reason` and `guard_reason` fields verbatim. Agent files
 //	produce English rationales (see internal/orchestrator/plugin_sector.go,
 //	plugin_style.go, plugin_control.go). Translating at the agent layer
@@ -113,7 +113,7 @@ var reasonCorpus = map[string]string{
 
 // rationaleTemplate is a prefix-based rule for templated English rationales.
 // The English prefix (e.g. "[crowded:") is preserved in the output because
-// the pipeline UI (web/static/js/pages/pipeline.js:247) string-matches on
+// the pipeline UI (shared_web/static/js/pages/pipeline.js:247) string-matches on
 // it to render the "擁擠" badge. The hard rule of this wave is "no
 // frontend change" — so the structural marker stays in English and only
 // the trailing base reason is translated.

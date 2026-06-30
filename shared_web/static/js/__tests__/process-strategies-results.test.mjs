@@ -1,7 +1,7 @@
 // 對應 processStrategiesResults 的單元測試。
 // 涵蓋 5 種失敗模式（A/B/C/D/E）+ indicators 失敗 + schema mismatch。
 //
-// 執行：node --test web/static/js/__tests__/process-strategies-results.test.mjs
+// 執行：node --test shared_web/static/js/__tests__/process-strategies-results.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

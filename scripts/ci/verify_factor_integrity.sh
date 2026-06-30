@@ -12,7 +12,7 @@ FACTOR_TYPE_FILE="internal/portfolio/optimizer.go"
 FACTOR_TYPE_FILES=$(ls internal/portfolio/optimizer*.go 2>/dev/null | grep -v _test.go | sort -u)
 WEIGHT_ENGINE_FILE="internal/portfolio/factor_weight_engine.go"
 BREAKDOWN_FILE="internal/domain/shared/shared.go"
-FRONTEND_TS="web/static/js/shared/field_types.ts"
+FRONTEND_TS="shared_web/static/js/shared/field_types.ts"
 
 extract_factors() {
     sed -n '/^const ($/,/^)$/p' "$FACTOR_TYPE_FILE" | grep 'FactorType = "' | sed 's/.*"\(.*\)".*/\1/' | grep -v '^$' | sort
@@ -95,7 +95,7 @@ fi
 echo "--- G10: Consumer coverage ---"
 MISSING=""
 for ft in $FACTORS; do
-    N=$(grep -rl "\"$ft\"" internal/ web/static/js/ --include="*.go" --include="*.js" --include="*.ts" 2>/dev/null | wc -l | tr -d ' ')
+    N=$(grep -rl "\"$ft\"" internal/ admin_web/static/js client_web/static/js shared_web/static/js --include="*.go" --include="*.js" --include="*.ts" 2>/dev/null | wc -l | tr -d ' ')
     [ "$N" -eq 0 ] && MISSING="$MISSING $ft"
 done
 [ -z "$MISSING" ] && pass "All factors have consumers" || warn "No string refs found:$MISSING" "may be FactorType-constant-only"

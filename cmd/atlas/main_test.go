@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +22,20 @@ import (
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
+
+// freePort returns an unused TCP port from the kernel. It is used by tests
+// that need to avoid hard-coded ports such as :8081 which may be occupied by
+// local services (e.g. Docker Desktop on macOS).
+func freePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("freePort: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	_ = ln.Close()
+	return port
+}
 
 // TestMain ensures the package test environment is clean: it unsets
 // ATLAS_API_KEY so the AuthMiddleware returns 200/405 (no-auth) for
@@ -230,6 +246,9 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
+	// Avoid the default :8081 which may be occupied by Docker Desktop or other
+	// local services; use an ephemeral port for the fubon-proxy preflight check.
+	fubonPort := freePort(t)
 	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -250,7 +269,14 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		close(shutdown)
 	}()
 
-	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker"}, deps)
+	err := run([]string{
+		"-api",
+		"-broker-mode", "live",
+		"-allow-live-broker",
+		"-broker-adapter", "http",
+		"-allow-http-broker",
+		"-fubon-port", strconv.Itoa(fubonPort),
+	}, deps)
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}

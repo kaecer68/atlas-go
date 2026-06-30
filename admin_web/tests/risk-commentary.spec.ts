@@ -52,7 +52,7 @@ test('risk commentary panel renders on page-live with confidence_commentary', as
   await expect(panel).toContainText('外資本週累計賣超 800 億');
   await expect(panel).toContainText('2330.TW');
 
-  await page.screenshot({ path: 'web/test-results/risk-commentary/commentary.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/risk-commentary/commentary.png', fullPage: true });
 });
 
 test('risk commentary shows empty state when generated=false', async ({ page }) => {

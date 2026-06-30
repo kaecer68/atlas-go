@@ -21,7 +21,7 @@ RUN cd admin_web && npm run build
 RUN cd client_web && npm run build
 
 # Stage 2: Go build
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26.4-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata

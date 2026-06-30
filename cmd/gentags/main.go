@@ -10,7 +10,7 @@
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
 //	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
 //
-// Writes (to all 4 web directories so copies don't drift):
+// Writes (to all active frontend directories so copies don't drift):
 //
 //	admin_web/static/js/shared/┐
 //	client_web/static/js/shared/├ field_types.ts   — TypeScript interfaces
@@ -20,7 +20,7 @@
 //	shared_web/static/js/shared/┘
 //
 // This eliminates manual synchronization between Go backend structs
-// and frontend field access — a single source of truth. All 4 copies
+// and frontend field access — a single source of truth. All copies
 // are regenerated from the same Go struct sources so they never drift.
 package main
 

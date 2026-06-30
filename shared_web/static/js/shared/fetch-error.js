@@ -1,4 +1,4 @@
-// web/static/js/shared/fetch-error.js
+// shared_web/static/js/shared/fetch-error.js
 //
 // 對應 INVESTIGATION.md 模式 A/B/E：把 raw fetch / fetchJSON 拋出的錯誤
 // 轉成結構化分類，讓前端可以顯示可行動錯誤訊息（不再原樣吐「Failed to fetch」）。

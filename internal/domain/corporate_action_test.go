@@ -34,7 +34,7 @@ func TestCorporateAction_ZeroValue(t *testing.T) {
 }
 
 // TestCorporateAction_JSONTags verifies the JSON serialization shape is exactly
-// the snake_case contract required by web/static/js/shared/field_types.ts and
+// the snake_case contract required by shared_web/static/js/shared/field_types.ts and
 // downstream API consumers. Adding a new field requires updating this test.
 func TestCorporateAction_JSONTags(t *testing.T) {
 	a := domain.CorporateAction{

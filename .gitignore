@@ -168,8 +168,6 @@ prompts/archive/
 
 # Node.js
 /node_modules/
-web/node_modules/
-web/dist/
 admin_web/node_modules/
 admin_web/dist/
 admin_web/test-results/

@@ -13,7 +13,7 @@ const mode = process.argv[2] || "build"; // "build" or "watch"
  *   node esbuild.config.mjs           one-shot build (default, used by `npm run build`)
  *   node esbuild.config.mjs watch     incremental watch + rebuild on file change
  *
- * See web/esbuild.config.mjs for the watch-mode rationale.
+ * See shared_web/esbuild-shared-plugin.mjs for shared build logic.
  */
 
 const opts = {

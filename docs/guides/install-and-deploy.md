@@ -114,7 +114,7 @@ $EDITOR ~/.config/atlas-go/.env
 
 The `config.Load()` function (in `internal/config/config.go`) reads this file automatically on every backend start.
 
-### 2.4 Install frontend dependencies (3 directories)
+### 2.4 Install frontend dependencies (2 directories)
 
 ```bash
 make install     # = install-frontend + go mod download
@@ -123,7 +123,6 @@ make install     # = install-frontend + go mod download
 Or per-directory:
 
 ```bash
-cd web        && npm ci
 cd admin_web && npm ci
 cd client_web && npm ci
 ```
@@ -203,7 +202,7 @@ docker compose ps
 
 ```bash
 make watch-frontend-admin_web
-# (or client_web / web)
+# (or client_web)
 
 # In another terminal, mount the rebuilt dist/ into the running container
 docker compose restart atlas-go
@@ -405,7 +404,6 @@ docker compose up -d
 | Backend entry | `./cmd/atlas/main.go` |
 | Active frontend apps | `./admin_web/`, `./client_web/` |
 | Shared frontend resources | `./shared_web/` |
-| Legacy frontend (deprecated) | `./web/` |
 | Environment config loader | `./internal/config/config.go` |
 | Auth middleware (checks `ATLAS_API_KEY`) | `./internal/monitoring/api/shared/handler.go` |
 | Docker stack | `./docker-compose.yml` |
