@@ -97,9 +97,9 @@ if dashEventBus != nil {
 
 | 項目 | 檔案 | 說明 |
 |------|------|------|
-| EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
-| 既有組件 | `web/static/js/components/risk-gate-panel.js` | 操作面板，**非 SSE-driven** |
-| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('experiment.calibration_completed', handler)` 訂閱 |
+| EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
+| 既有組件 | `shared_web/static/js/components/risk-gate-panel.js` | 操作面板，**非 SSE-driven** |
+| 即時訂閱 | `admin_web/static/js/event-listeners.js` | 透過 `eventSource.on('experiment.calibration_completed', handler)` 訂閱 |
 
 **渲染建議**（Wave 8.10 整合測試階段）：
 - 系統監控頁新增「Calibration History」區塊，列出最近 10 筆 calibration 事件

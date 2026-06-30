@@ -64,7 +64,7 @@
 | 子項 | 真實狀態 | 條件 / 限制 |
 |------|---------|-------------|
 | Decision chain transparency (FactorScores) | ✅ 已實作 | internal/orchestrator/ |
-| NT$ currency formatter | ✅ 已實作 | web/static/js/shared/ |
+| NT$ currency formatter | ✅ 已實作 | shared_web/static/js/shared/ |
 | Experiment monetary NT$ | ✅ 已實作 | evolution panel |
 | Evolution panel chart-based UI upgrade | ⚠️ 部分實作 | Canvas chart 有，dual-curve 待驗證 |
 | Real broker integration | ✅ 已實作（有條件）| `allow-real-signer` flag 預設關閉 |

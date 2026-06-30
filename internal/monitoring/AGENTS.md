@@ -55,7 +55,7 @@
 - **L1 Gateway**：`internal/apigateway/provider.go` 標記 `FetchResult.Fallback` / `LastError`
 - **L2 Adapter**：`internal/monitoring/gateway_adapter.go` 暴露 `ChannelErrors()`
 - **L3 Service**：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`
-- **L4 Frontend**：`web/static/js/pages/crossmarket.js` 顯示降級 badge/banner
+- **L4 Frontend**：`shared_web/static/js/pages/crossmarket.js` 顯示降級 badge/banner
 
 完整設計與技能指引見 **`.claude/skills/atlas-data-visibility/SKILL.md`**。
 

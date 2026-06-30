@@ -88,8 +88,8 @@ func (r *AutoRollback) RecordPromotion(experimentID string, prePromotionSharpe f
 
 | 項目 | 檔案 | 說明 |
 |------|------|------|
-| EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
-| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('experiment.promotion_recorded', handler)` 訂閱 |
+| EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
+| 即時訂閱 | `admin_web/static/js/event-listeners.js` | 透過 `eventSource.on('experiment.promotion_recorded', handler)` 訂閱 |
 
 **渲染建議**：
 - Baseline 演進頁新增「Promotion History」時間軸，依 `Timestamp` 倒序排列

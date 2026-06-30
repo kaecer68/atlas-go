@@ -149,7 +149,7 @@ type Condition struct {
 | 測試 | `internal/strategy_techniques/*_test.go` | ✅ 7 tests PASS |
 | 種子資料 | `data/seeds/strategy_techniques.json` | ✅ 12 frames |
 | API 端點 | `internal/monitoring/api/strategies/handlers.go` | ✅ 7 routes |
-| 前端 | `web/static/js/pages/strategies.js` | ✅ 5 層 tabs + 4 指標 strip |
+| 前端 | `shared_web/static/js/pages/strategies.js` | ✅ 5 層 tabs + 4 指標 strip |
 | 整合 | `cmd/atlas/main.go` | ✅ WithStrategyTechniques registered |
 | 插件 | `internal/orchestrator/strategy_techniques_plugin.go` | ✅ 已實作 |
 

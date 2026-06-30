@@ -27,7 +27,7 @@
 - `internal/monitoring/api/events/`（新增事件檔案 + 擴充 `sse_handler.go` buffer）
 - `internal/monitoring/service/`（事件 producer）
 - `internal/monitoring/dashboard_api.go`（SSE 路由註冊）
-- `web/static/js/services/event-source.js`、`web/static/js/event-listeners.js`
+- `shared_web/static/js/services/event-source.js`、`admin_web/static/js/event-listeners.js`
 - `internal/monitoring/rules.go`
 - `docs/roadmap.md` Wave 8/9 段落、`docs/events/`
 

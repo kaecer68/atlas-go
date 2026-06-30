@@ -45,7 +45,7 @@
 | `GET /api/dashboard/cycle-status-card` | 五層複合週期狀態卡（含 `breakdown`、`silicon_phase`、`composite_coefficient`） |
 | `GET /api/dashboard/industry-detail` | 單一產業完整資訊（連動 + 季節 + 週期 + 風險） |
 
-> ⚠️ **歷史路徑**：本表為 `/api/dashboard/industry-*` 新路徑，舊 `/api/industry/*` 已棄用。前端 `web/static/js/pages/industry.js` 的 `loadIndustryData()` 在 `Promise.all` 中呼叫新路徑。
+> ⚠️ **歷史路徑**：本表為 `/api/dashboard/industry-*` 新路徑，舊 `/api/industry/*` 已棄用。前端 `shared_web/static/js/pages/industry.js` 的 `loadIndustryData()` 在 `Promise.all` 中呼叫新路徑。
 
 ---
 

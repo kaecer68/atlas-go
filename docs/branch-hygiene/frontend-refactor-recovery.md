@@ -26,7 +26,7 @@
 | P0 二次修復 | **client_web page-live 分支補 render 呼叫**(6 個 renderLiveStatus/renderRiskCards/renderRiskCalibration/renderRiskCommentary/renderMacroRadar/renderLiveNarrativeStrip) | `client_web/static/js/main.js` L275-298 | ✅ |
 | P0 二次修復 | client_web page-decision 補 renderAIEvolution(順便修「AI 自我進化狀態失效」) | `client_web/static/js/main.js` L258-280 | ✅ |
 | P0 二次修復 | client_web dist 重新編譯(322.8kb) | `client_web/dist/js/main.js` | ✅ |
-| P2 改進 | shared_web 8 個檔案 null check 修正 backport 回 web | `web/static/js/{pages,shared}/` | ✅ web/ 重新編譯 |
+| P2 改進 | shared_web 8 個檔案 null check 修正 backport 回 legacy web | legacy `web/static/js/{pages,shared}/` | ✅ web/ 重新編譯 |
 | P2 改進 | inline rgba 寫死色碼遷移到 `--accent-rgb` / `--color-danger-rgb` triplet 變數 | `variables.css` + 6 處 inline style | ✅ 三邊 dist 重新編譯 |
 
 ---
@@ -168,7 +168,7 @@ AGENTS.md 規範要求**寫死色碼一律遷移到金融語意 token**(`/shared
 
 ### C-4. AGENTS.md 路徑不一致 ✅(2026-06-28 已修)
 
-**問題**:三個目錄的 AGENTS.md 都寫「`web/static/css/base/variables.css`」,但實際路徑已改成 `shared_web/static/css/base/variables.css`。
+**問題**:三個目錄的 AGENTS.md 都寫「legacy `web/static/css/base/variables.css`」,但實際路徑已改成 `shared_web/static/css/base/variables.css`。
 
 **處置**:三個 AGENTS.md L72-74 區段統一改成 `shared_web/...`。✅ 已驗證:`admin_web/AGENTS.md`、`client_web/AGENTS.md` 二者 L72 全部為 `shared_web/static/css/base/variables.css`（當時 legacy web 目錄的 AGENTS.md 仍存在，後續隨 `./web/` 整體刪除）。
 
@@ -181,12 +181,12 @@ AGENTS.md 規範要求**寫死色碼一律遷移到金融語意 token**(`/shared
 **現況**:`CLAUDE.md` L23-67 已有完整「前端架構」段落(目錄職責表、入口檔職責表、esbuild fallback 規則、CSS/JS 規範、API 整合、疑難排解)。`AGENTS.md` 仍把 web/ 視為主目錄,但已不影響實際運作(因 CLAUDE.md 是 AI 進入入口)。
 
 **2026-06-28 殘留瑕疵**:
-- CLAUDE.md L165 Token Efficiency Rules 仍寫 `web/static/css/main.css` 範例,需改 `shared_web/static/css/main.css`(見 Phase A3 commit)
+- CLAUDE.md L165 Token Efficiency Rules 仍寫 legacy `web/static/css/main.css` 範例,需改 `shared_web/static/css/main.css`(見 Phase A3 commit)
 - CLAUDE.md 沒有明確指向 `atlas-pre-change-protocol` skill(目前只在 GUIDELINES_INDEX.md 與 .claude/SKILLS-MAP.md 提及)。AI 從 CLAUDE.md 進入看不到這個強制前置檢查的入口(見 Phase A2 commit)
 
 ### D-2. shared_web 內 components/ 與 pages/ 是否有 dead code
 
-盤點時發現 `./web/static/js/components/` 與 `./shared_web/static/js/components/` 結構相同(12 個檔案),但沒逐個驗證每個 component 是否真的被某個 page 用到。下一輪應該做 dead code scan:
+盤點時發現 legacy `./web/static/js/components/` 與 `./shared_web/static/js/components/` 結構相同(12 個檔案),但沒逐個驗證每個 component 是否真的被某個 page 用到。下一輪應該做 dead code scan:
 ```bash
 # 對每個 component.js,grep 是否有 pages/*.js 或 main.js import 它
 for f in shared_web/static/js/components/*.js; do
@@ -312,7 +312,7 @@ curl -fsS http://localhost:8080/health
 
 **處置**(見本 PR Phase B1+B2 commits):
 - 刪除 `shared_web/static/js/components/task-executor.js`
-- 同步刪除 `web/static/js/components/task-executor.js`(legacy 同樣孤立)
+- 同步刪除 legacy `web/static/js/components/task-executor.js`(legacy 同樣孤立)
 - 三邊 `npm run build` 全成功 → 驗證 esbuild 不會 bundle 未引用檔案(dist 不變)
 - `grep -rn "triggerChannelsIngest" shared_web/static/js/components/` 期望 0(確認無殘留)
 
@@ -322,4 +322,4 @@ curl -fsS http://localhost:8080/health
 
 **處置**(見本 PR Phase A2+A3 commits):
 - CLAUDE.md 加 1 行明確指向 atlas-pre-change-protocol skill
-- CLAUDE.md L165 stale `web/static/css/main.css` 範例改為 `shared_web/static/css/main.css`
+- CLAUDE.md L165 stale legacy `web/static/css/main.css` 範例改為 `shared_web/static/css/main.css`
