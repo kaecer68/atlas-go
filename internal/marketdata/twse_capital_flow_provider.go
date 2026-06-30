@@ -1,6 +1,7 @@
 package marketdata
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -114,8 +115,8 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 	}
 
 	var apiResp twseT86Response
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return TWSECapitalFlow{}, fmt.Errorf("unmarshal response: %w", err)
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
+		return TWSECapitalFlow{}, fmt.Errorf("decode response: %w", err)
 	}
 	if apiResp.Stat != "OK" || len(apiResp.Data) == 0 {
 		return TWSECapitalFlow{}, fmt.Errorf("TWSE API returned no data: %s", apiResp.Stat)
