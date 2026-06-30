@@ -50,7 +50,7 @@ type llmTraceBaseOutput struct {
 
 func (s *server) handleLLMGetCost(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
 	var out llmTraceBaseOutput
-	if err := s.withAudit("llm_get_cost", nil, func() error {
+	if err := s.withAudit(ctx, "llm_get_cost", nil, func() error {
 		return s.cli.Get(ctx, "/api/llm_annotator/cost", nil, &out.Result)
 	}); err != nil {
 		return nil, llmTraceBaseOutput{}, err
@@ -60,7 +60,7 @@ func (s *server) handleLLMGetCost(ctx context.Context, _ *mcp.CallToolRequest, _
 
 func (s *server) handleLLMGetHealth(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
 	var out llmTraceBaseOutput
-	if err := s.withAudit("llm_get_health", nil, func() error {
+	if err := s.withAudit(ctx, "llm_get_health", nil, func() error {
 		return s.cli.Get(ctx, "/api/llm/health", nil, &out.Result)
 	}); err != nil {
 		return nil, llmTraceBaseOutput{}, err
@@ -70,7 +70,7 @@ func (s *server) handleLLMGetHealth(ctx context.Context, _ *mcp.CallToolRequest,
 
 func (s *server) handleTraceGetSimLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
 	var out llmTraceBaseOutput
-	if err := s.withAudit("trace_get_sim_latest", nil, func() error {
+	if err := s.withAudit(ctx, "trace_get_sim_latest", nil, func() error {
 		return s.cli.Get(ctx, "/api/traces/sim-latest", nil, &out.Result)
 	}); err != nil {
 		return nil, llmTraceBaseOutput{}, err
@@ -80,7 +80,7 @@ func (s *server) handleTraceGetSimLatest(ctx context.Context, _ *mcp.CallToolReq
 
 func (s *server) handleTraceGetAgentObservatory(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
 	var out llmTraceBaseOutput
-	if err := s.withAudit("trace_get_agent_observatory", nil, func() error {
+	if err := s.withAudit(ctx, "trace_get_agent_observatory", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/agent-observatory", nil, &out.Result)
 	}); err != nil {
 		return nil, llmTraceBaseOutput{}, err
@@ -90,7 +90,7 @@ func (s *server) handleTraceGetAgentObservatory(ctx context.Context, _ *mcp.Call
 
 func (s *server) handleTraceGetDecisionChain(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
 	var out llmTraceBaseOutput
-	if err := s.withAudit("trace_get_decision_chain", nil, func() error {
+	if err := s.withAudit(ctx, "trace_get_decision_chain", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/decision-chain", nil, &out.Result)
 	}); err != nil {
 		return nil, llmTraceBaseOutput{}, err
@@ -100,7 +100,7 @@ func (s *server) handleTraceGetDecisionChain(ctx context.Context, _ *mcp.CallToo
 
 func (s *server) handleTraceGetReasoning(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
 	var out llmTraceBaseOutput
-	if err := s.withAudit("trace_get_reasoning", nil, func() error {
+	if err := s.withAudit(ctx, "trace_get_reasoning", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/reasoning-trace", nil, &out.Result)
 	}); err != nil {
 		return nil, llmTraceBaseOutput{}, err

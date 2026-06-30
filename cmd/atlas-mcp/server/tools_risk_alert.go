@@ -62,7 +62,7 @@ type riskAlertBaseOutput struct {
 
 func (s *server) handleRiskGetMetrics(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("risk_get_metrics", nil, func() error {
+	if err := s.withAudit(ctx, "risk_get_metrics", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/risk", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
@@ -72,7 +72,7 @@ func (s *server) handleRiskGetMetrics(ctx context.Context, _ *mcp.CallToolReques
 
 func (s *server) handleRiskGetCorrelationMatrix(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("risk_get_correlation_matrix", nil, func() error {
+	if err := s.withAudit(ctx, "risk_get_correlation_matrix", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/correlation-matrix", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
@@ -82,7 +82,7 @@ func (s *server) handleRiskGetCorrelationMatrix(ctx context.Context, _ *mcp.Call
 
 func (s *server) handleRiskGetDrawdown(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("risk_get_drawdown", nil, func() error {
+	if err := s.withAudit(ctx, "risk_get_drawdown", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/drawdown", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
@@ -92,7 +92,7 @@ func (s *server) handleRiskGetDrawdown(ctx context.Context, _ *mcp.CallToolReque
 
 func (s *server) handleRiskGetCalibration(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("risk_get_calibration", nil, func() error {
+	if err := s.withAudit(ctx, "risk_get_calibration", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/risk-calibration", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
@@ -102,7 +102,7 @@ func (s *server) handleRiskGetCalibration(ctx context.Context, _ *mcp.CallToolRe
 
 func (s *server) handleRiskGetCommentary(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("risk_get_commentary", nil, func() error {
+	if err := s.withAudit(ctx, "risk_get_commentary", nil, func() error {
 		return s.cli.Get(ctx, "/api/risk/commentary", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
@@ -112,7 +112,7 @@ func (s *server) handleRiskGetCommentary(ctx context.Context, _ *mcp.CallToolReq
 
 func (s *server) handleAlertList(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("alert_list", nil, func() error {
+	if err := s.withAudit(ctx, "alert_list", nil, func() error {
 		return s.cli.Get(ctx, "/api/alerts", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
@@ -122,7 +122,7 @@ func (s *server) handleAlertList(ctx context.Context, _ *mcp.CallToolRequest, _ 
 
 func (s *server) handleAlertGetStats(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("alert_get_stats", nil, func() error {
+	if err := s.withAudit(ctx, "alert_get_stats", nil, func() error {
 		return s.cli.Get(ctx, "/api/alerts/stats", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
@@ -132,7 +132,7 @@ func (s *server) handleAlertGetStats(ctx context.Context, _ *mcp.CallToolRequest
 
 func (s *server) handleAlertGetRules(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
-	if err := s.withAudit("alert_get_rules", nil, func() error {
+	if err := s.withAudit(ctx, "alert_get_rules", nil, func() error {
 		return s.cli.Get(ctx, "/api/alerts/rules", nil, &out.Result)
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err

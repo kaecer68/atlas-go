@@ -6,14 +6,10 @@ import (
 	"time"
 )
 
-// RateLimiter enforces per-(tool, caller) token-bucket limits.
+// RateLimiter enforces per-tool rate limits per tenant (or anonymous caller).
 //
-// State: one bucket per (tool, caller) pair. Buckets that have not been
-// used for IdleEvict are periodically evicted to bound memory.
-//
-// Concurrency: a single sync.Mutex guards both the bucket map and each
-// bucket's tokens/lastRefill. Allow() is O(1) and never blocks longer than
-// the time to acquire the mutex.
+// Key format: tenant_id:tool. An empty tenant_id is mapped to "anonymous"
+// for backward compatibility with single-tenant deployments.
 type RateLimiter struct {
 	mu         sync.Mutex
 	buckets    map[string]*bucket
@@ -32,7 +28,7 @@ type bucket struct {
 
 // RateLimiterConfig configures a RateLimiter.
 type RateLimiterConfig struct {
-	PerMinute int           // per-(tool, caller) requests per minute; 0 = disabled
+	PerMinute int           // per-(tenant, tool) requests per minute; 0 = disabled
 	Burst     int           // burst capacity; 0 = defaults to PerMinute
 	IdleEvict time.Duration // evict buckets idle this long (default 1h)
 	IdleSweep time.Duration // sweep interval (default 10m)
@@ -77,14 +73,20 @@ type Result struct {
 // bucket is decremented. On deny, RetryAfter gives the time until the next
 // token is available. The caller argument is opaque (any string), so callers
 // can use token, IP, or session-id.
-func (r *RateLimiter) Allow(tool, caller string) Result {
+func (r *RateLimiter) Allow(tool, tenantID string) Result {
 	if r.capacity == 0 || r.refillPerS == 0 {
 		return Result{Allowed: true, Remaining: r.capacity}
 	}
 	now := r.now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	key := tool + "\x00" + caller
+
+	// Per-tenant key: tenant_id:tool. Empty tenant maps to "anonymous".
+	cid := tenantID
+	if cid == "" {
+		cid = "anonymous"
+	}
+	key := cid + ":" + tool
 	b, ok := r.buckets[key]
 	if !ok {
 		b = &bucket{tokens: r.capacity, lastRefill: now, lastUsed: now}

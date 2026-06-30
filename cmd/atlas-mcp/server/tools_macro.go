@@ -60,7 +60,7 @@ type macroStressIndexHistoryInput struct {
 
 func (s *server) handleMacroGetSnapshotLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, macroBaseOutput, error) {
 	var out macroBaseOutput
-	if err := s.withAudit("macro_get_snapshot_latest", nil, func() error {
+	if err := s.withAudit(ctx, "macro_get_snapshot_latest", nil, func() error {
 		return s.cli.Get(ctx, "/api/macro/snapshot/latest", nil, &out.Result)
 	}); err != nil {
 		return nil, macroBaseOutput{}, err
@@ -78,7 +78,7 @@ func (s *server) handleMacroGetSnapshotHistory(ctx context.Context, _ *mcp.CallT
 	}
 	q := url.Values{"days": {fmt.Sprintf("%d", days)}}
 	var out macroBaseOutput
-	if err := s.withAudit("macro_get_snapshot_history", []string{"days"}, func() error {
+	if err := s.withAudit(ctx, "macro_get_snapshot_history", []string{"days"}, func() error {
 		return s.cli.Get(ctx, "/api/macro/snapshot/history", q, &out.Result)
 	}); err != nil {
 		return nil, macroBaseOutput{}, err
@@ -88,7 +88,7 @@ func (s *server) handleMacroGetSnapshotHistory(ctx context.Context, _ *mcp.CallT
 
 func (s *server) handleMacroGetStressIndexCurrent(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, macroBaseOutput, error) {
 	var out macroBaseOutput
-	if err := s.withAudit("macro_get_stress_index_current", nil, func() error {
+	if err := s.withAudit(ctx, "macro_get_stress_index_current", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/stress-index/current", nil, &out.Result)
 	}); err != nil {
 		return nil, macroBaseOutput{}, err
@@ -106,7 +106,7 @@ func (s *server) handleMacroGetStressIndexHistory(ctx context.Context, _ *mcp.Ca
 	}
 	q := url.Values{"days": {fmt.Sprintf("%d", days)}}
 	var out macroBaseOutput
-	if err := s.withAudit("macro_get_stress_index_history", []string{"days"}, func() error {
+	if err := s.withAudit(ctx, "macro_get_stress_index_history", []string{"days"}, func() error {
 		return s.cli.Get(ctx, "/api/narrative/stress-index/history", q, &out.Result)
 	}); err != nil {
 		return nil, macroBaseOutput{}, err
@@ -116,7 +116,7 @@ func (s *server) handleMacroGetStressIndexHistory(ctx context.Context, _ *mcp.Ca
 
 func (s *server) handleMacroGetCapitalFlowLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, macroBaseOutput, error) {
 	var out macroBaseOutput
-	if err := s.withAudit("macro_get_capital_flow_latest", nil, func() error {
+	if err := s.withAudit(ctx, "macro_get_capital_flow_latest", nil, func() error {
 		return s.cli.Get(ctx, "/api/macro/capital-flow/latest", nil, &out.Result)
 	}); err != nil {
 		return nil, macroBaseOutput{}, err
@@ -126,7 +126,7 @@ func (s *server) handleMacroGetCapitalFlowLatest(ctx context.Context, _ *mcp.Cal
 
 func (s *server) handleMacroGetIngestStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, macroBaseOutput, error) {
 	var out macroBaseOutput
-	if err := s.withAudit("macro_get_ingest_status", nil, func() error {
+	if err := s.withAudit(ctx, "macro_get_ingest_status", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/macro-data-health", nil, &out.Result)
 	}); err != nil {
 		return nil, macroBaseOutput{}, err

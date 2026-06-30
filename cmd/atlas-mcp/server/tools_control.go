@@ -38,7 +38,7 @@ type controlBaseOutput struct {
 
 func (s *server) handleControlGetAuditLog(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, controlBaseOutput, error) {
 	var out controlBaseOutput
-	if err := s.withAudit("control_get_audit_log", nil, func() error {
+	if err := s.withAudit(ctx, "control_get_audit_log", nil, func() error {
 		return s.cli.Get(ctx, "/api/control/audit-log", nil, &out.Result)
 	}); err != nil {
 		return nil, controlBaseOutput{}, err
@@ -48,7 +48,7 @@ func (s *server) handleControlGetAuditLog(ctx context.Context, _ *mcp.CallToolRe
 
 func (s *server) handleControlGetActiveOverrides(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, controlBaseOutput, error) {
 	var out controlBaseOutput
-	if err := s.withAudit("control_get_active_overrides", nil, func() error {
+	if err := s.withAudit(ctx, "control_get_active_overrides", nil, func() error {
 		return s.cli.Get(ctx, "/api/control/active-overrides", nil, &out.Result)
 	}); err != nil {
 		return nil, controlBaseOutput{}, err
@@ -58,7 +58,7 @@ func (s *server) handleControlGetActiveOverrides(ctx context.Context, _ *mcp.Cal
 
 func (s *server) handleControlApproveRecommendation(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, controlBaseOutput, error) {
 	var out controlBaseOutput
-	if err := s.withAudit("control_approve_recommendation", nil, func() error {
+	if err := s.withAudit(ctx, "control_approve_recommendation", nil, func() error {
 		return s.cli.Get(ctx, "/api/control/approve-recommendation", nil, &out.Result)
 	}); err != nil {
 		return nil, controlBaseOutput{}, err
@@ -68,7 +68,7 @@ func (s *server) handleControlApproveRecommendation(ctx context.Context, _ *mcp.
 
 func (s *server) handleControlRejectRecommendation(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, controlBaseOutput, error) {
 	var out controlBaseOutput
-	if err := s.withAudit("control_reject_recommendation", nil, func() error {
+	if err := s.withAudit(ctx, "control_reject_recommendation", nil, func() error {
 		return s.cli.Get(ctx, "/api/control/reject-recommendation", nil, &out.Result)
 	}); err != nil {
 		return nil, controlBaseOutput{}, err

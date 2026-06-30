@@ -32,7 +32,7 @@ type synergyBaseOutput struct {
 
 func (s *server) handleSynergyGetDarwinianStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, synergyBaseOutput, error) {
 	var out synergyBaseOutput
-	if err := s.withAudit("synergy_get_darwinian_status", nil, func() error {
+	if err := s.withAudit(ctx, "synergy_get_darwinian_status", nil, func() error {
 		return s.cli.Get(ctx, "/api/synergy/darwinian/status", nil, &out.Result)
 	}); err != nil {
 		return nil, synergyBaseOutput{}, err
@@ -42,7 +42,7 @@ func (s *server) handleSynergyGetDarwinianStatus(ctx context.Context, _ *mcp.Cal
 
 func (s *server) handleSynergyGetDarwinianTrend(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, synergyBaseOutput, error) {
 	var out synergyBaseOutput
-	if err := s.withAudit("synergy_get_darwinian_trend", nil, func() error {
+	if err := s.withAudit(ctx, "synergy_get_darwinian_trend", nil, func() error {
 		return s.cli.Get(ctx, "/api/synergy/darwinian/trend", nil, &out.Result)
 	}); err != nil {
 		return nil, synergyBaseOutput{}, err
@@ -52,7 +52,7 @@ func (s *server) handleSynergyGetDarwinianTrend(ctx context.Context, _ *mcp.Call
 
 func (s *server) handleSynergyGetL24Schedule(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, synergyBaseOutput, error) {
 	var out synergyBaseOutput
-	if err := s.withAudit("synergy_get_l2_4_schedule", nil, func() error {
+	if err := s.withAudit(ctx, "synergy_get_l2_4_schedule", nil, func() error {
 		return s.cli.Get(ctx, "/api/synergy/l2-4-schedule", nil, &out.Result)
 	}); err != nil {
 		return nil, synergyBaseOutput{}, err

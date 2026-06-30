@@ -42,7 +42,7 @@ type strategyIDInput struct {
 
 func (s *server) handleStrategyGetLayers(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, strategyBaseOutput, error) {
 	var out strategyBaseOutput
-	if err := s.withAudit("strategy_get_layers", nil, func() error {
+	if err := s.withAudit(ctx, "strategy_get_layers", nil, func() error {
 		return s.cli.Get(ctx, "/api/strategies/layers", nil, &out.Result)
 	}); err != nil {
 		return nil, strategyBaseOutput{}, err
@@ -52,7 +52,7 @@ func (s *server) handleStrategyGetLayers(ctx context.Context, _ *mcp.CallToolReq
 
 func (s *server) handleStrategyGet(ctx context.Context, _ *mcp.CallToolRequest, in strategyIDInput) (*mcp.CallToolResult, strategyBaseOutput, error) {
 	var out strategyBaseOutput
-	if err := s.withAudit("strategy_get", []string{"id"}, func() error {
+	if err := s.withAudit(ctx, "strategy_get", []string{"id"}, func() error {
 		return s.cli.Get(ctx, "/api/strategies/"+in.ID, nil, &out.Result)
 	}); err != nil {
 		return nil, strategyBaseOutput{}, err
@@ -62,7 +62,7 @@ func (s *server) handleStrategyGet(ctx context.Context, _ *mcp.CallToolRequest, 
 
 func (s *server) handleStrategyGetAttribution(ctx context.Context, _ *mcp.CallToolRequest, in strategyIDInput) (*mcp.CallToolResult, strategyBaseOutput, error) {
 	var out strategyBaseOutput
-	if err := s.withAudit("strategy_get_attribution", []string{"id"}, func() error {
+	if err := s.withAudit(ctx, "strategy_get_attribution", []string{"id"}, func() error {
 		return s.cli.Get(ctx, "/api/strategies/"+in.ID+"/attribution", nil, &out.Result)
 	}); err != nil {
 		return nil, strategyBaseOutput{}, err
@@ -72,7 +72,7 @@ func (s *server) handleStrategyGetAttribution(ctx context.Context, _ *mcp.CallTo
 
 func (s *server) handleStrategyGetSummary(ctx context.Context, _ *mcp.CallToolRequest, in strategyIDInput) (*mcp.CallToolResult, strategyBaseOutput, error) {
 	var out strategyBaseOutput
-	if err := s.withAudit("strategy_get_summary", []string{"id"}, func() error {
+	if err := s.withAudit(ctx, "strategy_get_summary", []string{"id"}, func() error {
 		return s.cli.Get(ctx, "/api/strategies/"+in.ID+"/summary", nil, &out.Result)
 	}); err != nil {
 		return nil, strategyBaseOutput{}, err

@@ -42,7 +42,7 @@ type taskIDInput struct {
 
 func (s *server) handleSchedulerGetStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, schedulerTaskBaseOutput, error) {
 	var out schedulerTaskBaseOutput
-	if err := s.withAudit("scheduler_get_status", nil, func() error {
+	if err := s.withAudit(ctx, "scheduler_get_status", nil, func() error {
 		return s.cli.Get(ctx, "/api/scheduler/status", nil, &out.Result)
 	}); err != nil {
 		return nil, schedulerTaskBaseOutput{}, err
@@ -52,7 +52,7 @@ func (s *server) handleSchedulerGetStatus(ctx context.Context, _ *mcp.CallToolRe
 
 func (s *server) handleTaskList(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, schedulerTaskBaseOutput, error) {
 	var out schedulerTaskBaseOutput
-	if err := s.withAudit("task_list", nil, func() error {
+	if err := s.withAudit(ctx, "task_list", nil, func() error {
 		return s.cli.Get(ctx, "/api/tasks", nil, &out.Result)
 	}); err != nil {
 		return nil, schedulerTaskBaseOutput{}, err
@@ -62,7 +62,7 @@ func (s *server) handleTaskList(ctx context.Context, _ *mcp.CallToolRequest, _ s
 
 func (s *server) handleTaskGet(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, schedulerTaskBaseOutput, error) {
 	var out schedulerTaskBaseOutput
-	if err := s.withAudit("task_get", []string{"task_id"}, func() error {
+	if err := s.withAudit(ctx, "task_get", []string{"task_id"}, func() error {
 		return s.cli.Get(ctx, "/api/tasks/"+in.TaskID, nil, &out.Result)
 	}); err != nil {
 		return nil, schedulerTaskBaseOutput{}, err
@@ -72,7 +72,7 @@ func (s *server) handleTaskGet(ctx context.Context, _ *mcp.CallToolRequest, in t
 
 func (s *server) handleTaskGetEvents(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, schedulerTaskBaseOutput, error) {
 	var out schedulerTaskBaseOutput
-	if err := s.withAudit("task_get_events", []string{"task_id"}, func() error {
+	if err := s.withAudit(ctx, "task_get_events", []string{"task_id"}, func() error {
 		return s.cli.Get(ctx, "/api/tasks/"+in.TaskID+"/events", nil, &out.Result)
 	}); err != nil {
 		return nil, schedulerTaskBaseOutput{}, err

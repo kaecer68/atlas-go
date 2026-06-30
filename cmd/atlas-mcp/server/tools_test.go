@@ -73,15 +73,6 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	return s, rec, cleanup
 }
 
-func writeIfMissing(t *testing.T, path string) *os.File {
-	t.Helper()
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("create %s: %v", path, err)
-	}
-	return f
-}
-
 // --- regime_get_history -------------------------------------------------------
 
 func TestHandleRegimeGetHistory_DefaultDays(t *testing.T) {

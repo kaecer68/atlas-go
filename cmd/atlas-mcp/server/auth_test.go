@@ -1,9 +1,35 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
+
+func TestTokenAuth_AuthenticateSetsContext(t *testing.T) {
+	store := newMapTokenStore()
+	info, raw, err := store.Register(context.Background(), TokenRegistration{
+		TenantID: "tenant-x",
+		AgentID:  "agent-y",
+	})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	auth := NewTokenAuth("fallback")
+	auth.SetStore(store)
+
+	ctx, err := auth.Authenticate(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("authenticate: %v", err)
+	}
+	if got := TenantIDFromContext(ctx); got != info.TenantID {
+		t.Fatalf("tenant_id: expected %q, got %q", info.TenantID, got)
+	}
+	if got := AgentIDFromContext(ctx); got != info.AgentID {
+		t.Fatalf("agent_id: expected %q, got %q", info.AgentID, got)
+	}
+}
 
 func TestTokenAuth_DevMode(t *testing.T) {
 	a := NewTokenAuth("")

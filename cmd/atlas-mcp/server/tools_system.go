@@ -50,7 +50,7 @@ type systemBaseOutput struct {
 
 func (s *server) handleSystemGetMetrics(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, systemBaseOutput, error) {
 	var out systemBaseOutput
-	if err := s.withAudit("system_get_metrics", nil, func() error {
+	if err := s.withAudit(ctx, "system_get_metrics", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/metrics", nil, &out.Result)
 	}); err != nil {
 		return nil, systemBaseOutput{}, err
@@ -60,7 +60,7 @@ func (s *server) handleSystemGetMetrics(ctx context.Context, _ *mcp.CallToolRequ
 
 func (s *server) handleSystemGetMetricsTrend(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, systemBaseOutput, error) {
 	var out systemBaseOutput
-	if err := s.withAudit("system_get_metrics_trend", nil, func() error {
+	if err := s.withAudit(ctx, "system_get_metrics_trend", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/metrics/trend", nil, &out.Result)
 	}); err != nil {
 		return nil, systemBaseOutput{}, err
@@ -70,7 +70,7 @@ func (s *server) handleSystemGetMetricsTrend(ctx context.Context, _ *mcp.CallToo
 
 func (s *server) handleSystemGetThresholds(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, systemBaseOutput, error) {
 	var out systemBaseOutput
-	if err := s.withAudit("system_get_thresholds", nil, func() error {
+	if err := s.withAudit(ctx, "system_get_thresholds", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/metrics/thresholds", nil, &out.Result)
 	}); err != nil {
 		return nil, systemBaseOutput{}, err
@@ -80,7 +80,7 @@ func (s *server) handleSystemGetThresholds(ctx context.Context, _ *mcp.CallToolR
 
 func (s *server) handleSystemGetDataPipeline(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, systemBaseOutput, error) {
 	var out systemBaseOutput
-	if err := s.withAudit("system_get_data_pipeline", nil, func() error {
+	if err := s.withAudit(ctx, "system_get_data_pipeline", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/data-pipeline", nil, &out.Result)
 	}); err != nil {
 		return nil, systemBaseOutput{}, err
@@ -90,7 +90,7 @@ func (s *server) handleSystemGetDataPipeline(ctx context.Context, _ *mcp.CallToo
 
 func (s *server) handleSystemGetCircuitBreaker(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, systemBaseOutput, error) {
 	var out systemBaseOutput
-	if err := s.withAudit("system_get_circuit_breaker", nil, func() error {
+	if err := s.withAudit(ctx, "system_get_circuit_breaker", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/circuit-breaker", nil, &out.Result)
 	}); err != nil {
 		return nil, systemBaseOutput{}, err
@@ -100,7 +100,7 @@ func (s *server) handleSystemGetCircuitBreaker(ctx context.Context, _ *mcp.CallT
 
 func (s *server) handleSystemGetMaturity(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, systemBaseOutput, error) {
 	var out systemBaseOutput
-	if err := s.withAudit("system_get_maturity", nil, func() error {
+	if err := s.withAudit(ctx, "system_get_maturity", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/maturity", nil, &out.Result)
 	}); err != nil {
 		return nil, systemBaseOutput{}, err

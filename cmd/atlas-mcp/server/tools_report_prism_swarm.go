@@ -74,7 +74,7 @@ type reportPrismSwarmBaseOutput struct {
 
 func (s *server) handleReportGetDailySummary(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("report_get_daily_summary", nil, func() error {
+	if err := s.withAudit(ctx, "report_get_daily_summary", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/daily-summary", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -84,7 +84,7 @@ func (s *server) handleReportGetDailySummary(ctx context.Context, _ *mcp.CallToo
 
 func (s *server) handleReportGetPerformance(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("report_get_performance", nil, func() error {
+	if err := s.withAudit(ctx, "report_get_performance", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/performance-report", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -94,7 +94,7 @@ func (s *server) handleReportGetPerformance(ctx context.Context, _ *mcp.CallTool
 
 func (s *server) handleReportGetTaxSnapshot(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("report_get_tax_snapshot", nil, func() error {
+	if err := s.withAudit(ctx, "report_get_tax_snapshot", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/tax-snapshot", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -104,7 +104,7 @@ func (s *server) handleReportGetTaxSnapshot(ctx context.Context, _ *mcp.CallTool
 
 func (s *server) handleReportGetExportLink(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("report_get_export_link", nil, func() error {
+	if err := s.withAudit(ctx, "report_get_export_link", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/performance-report/export", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -114,7 +114,7 @@ func (s *server) handleReportGetExportLink(ctx context.Context, _ *mcp.CallToolR
 
 func (s *server) handlePrismGetTrainingResults(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("prism_get_training_results", nil, func() error {
+	if err := s.withAudit(ctx, "prism_get_training_results", nil, func() error {
 		return s.cli.Get(ctx, "/api/prism/training-results", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -124,7 +124,7 @@ func (s *server) handlePrismGetTrainingResults(ctx context.Context, _ *mcp.CallT
 
 func (s *server) handleSwarmGetStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("swarm_get_status", nil, func() error {
+	if err := s.withAudit(ctx, "swarm_get_status", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/swarm-status", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -134,7 +134,7 @@ func (s *server) handleSwarmGetStatus(ctx context.Context, _ *mcp.CallToolReques
 
 func (s *server) handleSwarmGetConsensus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("swarm_get_consensus", nil, func() error {
+	if err := s.withAudit(ctx, "swarm_get_consensus", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/swarm-consensus", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -144,7 +144,7 @@ func (s *server) handleSwarmGetConsensus(ctx context.Context, _ *mcp.CallToolReq
 
 func (s *server) handleSwarmGetAnomalies(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("swarm_get_anomalies", nil, func() error {
+	if err := s.withAudit(ctx, "swarm_get_anomalies", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/swarm-anomalies", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -154,7 +154,7 @@ func (s *server) handleSwarmGetAnomalies(ctx context.Context, _ *mcp.CallToolReq
 
 func (s *server) handleSwarmGetScenarios(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("swarm_get_scenarios", nil, func() error {
+	if err := s.withAudit(ctx, "swarm_get_scenarios", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/swarm-scenarios", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
@@ -164,7 +164,7 @@ func (s *server) handleSwarmGetScenarios(ctx context.Context, _ *mcp.CallToolReq
 
 func (s *server) handleSwarmGetStrategies(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismSwarmBaseOutput, error) {
 	var out reportPrismSwarmBaseOutput
-	if err := s.withAudit("swarm_get_strategies", nil, func() error {
+	if err := s.withAudit(ctx, "swarm_get_strategies", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/swarm-strategies", nil, &out.Result)
 	}); err != nil {
 		return nil, reportPrismSwarmBaseOutput{}, err
