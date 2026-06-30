@@ -14,6 +14,11 @@ import (
 // reject queries beyond this to prevent unbounded JSONL parsing.
 const maxAuditWindow = 30 * 24 * time.Hour
 
+// registerAuditTools registers the behavior-analysis tools. Known limitation:
+// because the stdio transport does not yet inject agent_id into the context,
+// AgentIDFromContext currently returns "anonymous" for stdio callers. The
+// fallback is intentional (no panic) and will be removed once SSE/streamable-
+// HTTP transports wire authenticated agent identity.
 func registerAuditTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_call_stats",
