@@ -15,8 +15,8 @@ var (
 	// stay conservative at 1 req/s for the macro channel because each call
 	// fetches a batch of 9 macro indicators (VIX, DXY, US10Y, USD_TWD, Oil,
 	// Gold, Silver, Copper, JPY) and we want predictable server behavior.
-	YahooFinanceRate  = rate.Every(1 * time.Second)
-	YahooFinanceBurst = 1
+	YahooFinanceRate  = rate.Every(5 * time.Second)
+	YahooFinanceBurst = 2
 
 	// YahooIndexRate is the rate for US index channels (us_spx, us_ndx, us_dji).
 	// 1 req/1.5s per channel — 3 channels share this limiter but do not serialize
