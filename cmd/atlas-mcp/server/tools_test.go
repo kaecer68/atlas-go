@@ -293,6 +293,24 @@ func TestRun_RequiresAuditPath(t *testing.T) {
 // guard the registry entry so a future bug doesn't silently diverge.
 var _ = errors.New
 
+// --- audit v2: withAudit writes schema_version=2 entries ----------------------
+// TODO: uncomment after implementing ContextWithAgentID/ContextWithTenantID and
+// updating withAudit to accept context.Context as the first parameter.
+
+/*
+func TestWithAudit_WritesV2Schema(t *testing.T) {
+	// ... requires ContextWithAgentID + context-aware withAudit
+}
+
+func TestWithAudit_V2LatencyMS(t *testing.T) {
+	// ... requires context-aware withAudit
+}
+
+func TestWithAudit_V2OnError(t *testing.T) {
+	// ... requires context-aware withAudit
+}
+*/
+
 // TestNoToolWithoutDescription verifies that every auto-generated tool descriptor has a non-empty description.
 func TestNoToolWithoutDescription(t *testing.T) {
 	if len(autoDescMap) == 0 {

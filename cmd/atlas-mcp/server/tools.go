@@ -200,7 +200,9 @@ func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, f
 				TenantID:   tenantID,
 				AgentID:    agentID,
 				ArgKeys:    argKeys,
+				ArgsHash:   CanonicalizeArgsHash(argKeys),
 				DurationMS: time.Since(start).Milliseconds(),
+				LatencyMS:  time.Since(start).Milliseconds(),
 				Status:     "ratelimited",
 				Error:      fmt.Sprintf("retry after %s", r.RetryAfter),
 			}
@@ -215,7 +217,9 @@ func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, f
 		TenantID:   tenantID,
 		AgentID:    agentID,
 		ArgKeys:    argKeys,
+		ArgsHash:   CanonicalizeArgsHash(argKeys),
 		DurationMS: time.Since(start).Milliseconds(),
+		LatencyMS:  time.Since(start).Milliseconds(),
 		Status:     "ok",
 	}
 	if err != nil {

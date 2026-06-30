@@ -2,6 +2,9 @@ package server
 
 import (
 	"bufio"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,17 +15,41 @@ import (
 
 // AuditEntry is one JSONL record written to the audit log per tools/call.
 // Field tags are snake_case to align with the atlas-go domain convention.
+//
+// Schema version 2 adds fields: SchemaVersion, ArgsHash, SessionID, Transport.
+// When reading, entries without SchemaVersion are treated as v1 and backfilled
+// with safe defaults (empty ArgsHash/SessionID, Transport="unknown").
 type AuditEntry struct {
-	TS         string                 `json:"ts"`
-	Tool       string                 `json:"tool"`
-	TenantID   string                 `json:"tenant_id,omitempty"`
-	AgentID    string                 `json:"agent_id,omitempty"`
-	CallerPID  int                    `json:"caller_pid,omitempty"`
-	ArgKeys    []string               `json:"arg_keys,omitempty"`
-	Status     string                 `json:"status"` // "ok" | "error" | "unauthorized"
-	DurationMS int64                  `json:"duration_ms"`
-	Error      string                 `json:"error,omitempty"`
-	Extra      map[string]interface{} `json:"extra,omitempty"`
+	SchemaVersion int                    `json:"schema_version"`
+	TS            string                 `json:"ts"`
+	SessionID     string                 `json:"session_id,omitempty"`
+	Tool          string                 `json:"tool"`
+	TenantID      string                 `json:"tenant_id,omitempty"`
+	AgentID       string                 `json:"agent_id,omitempty"`
+	CallerPID     int                    `json:"caller_pid,omitempty"`
+	ArgKeys       []string               `json:"arg_keys,omitempty"`
+	ArgsHash      string                 `json:"args_hash,omitempty"`
+	Status        string                 `json:"status"` // "ok" | "error" | "unauthorized" | "ratelimited"
+	LatencyMS     int64                  `json:"latency_ms"`
+	DurationMS    int64                  `json:"duration_ms"` // kept for v1 backward compat; v2 prefers latency_ms
+	Transport     string                 `json:"transport,omitempty"`
+	Error         string                 `json:"error,omitempty"`
+	Extra         map[string]interface{} `json:"extra,omitempty"`
+}
+
+// CanonicalizeArgsHash computes SHA-256 hex of the canonical JSON form of
+// argKeys. This is deterministic: same keys → same hash, regardless of order
+// (the caller is responsible for sorting if needed).
+func CanonicalizeArgsHash(argKeys []string) string {
+	if len(argKeys) == 0 {
+		return ""
+	}
+	raw, err := json.Marshal(argKeys)
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(raw)
+	return hex.EncodeToString(h[:])
 }
 
 // AuditWriter serializes AuditEntry values as JSON lines to a file. It is safe
@@ -68,15 +95,30 @@ func (w *AuditWriter) Close() error {
 	return err
 }
 
-// Write serializes entry as one JSON line and flushes it to disk. Required
-// fields (TS, Tool, Status, DurationMS) are populated from entry or
-// automatically (TS, DurationMS).
+// Write serializes entry as one JSON line and flushes it to disk. It
+// auto-populates TS, SchemaVersion, Transport, and ArgsHash when empty.
+// DurationMS and LatencyMS are synchronised for backward compatibility.
 func (w *AuditWriter) Write(entry AuditEntry) error {
 	if entry.TS == "" {
 		entry.TS = w.now().UTC().Format(time.RFC3339Nano)
 	}
+	if entry.SchemaVersion == 0 {
+		entry.SchemaVersion = 2
+	}
+	if entry.Transport == "" {
+		entry.Transport = "stdio"
+	}
+	if entry.ArgsHash == "" && len(entry.ArgKeys) > 0 {
+		entry.ArgsHash = CanonicalizeArgsHash(entry.ArgKeys)
+	}
 	if entry.DurationMS < 0 {
 		entry.DurationMS = 0
+	}
+	if entry.LatencyMS == 0 && entry.DurationMS != 0 {
+		entry.LatencyMS = entry.DurationMS
+	}
+	if entry.DurationMS == 0 && entry.LatencyMS != 0 {
+		entry.DurationMS = entry.LatencyMS
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -205,4 +247,92 @@ func extractTS(line []byte) *time.Time {
 		return &t
 	}
 	return nil
+}
+
+// ReadAuditEntries reads the audit log at path and returns all entries within
+// the retention window (now - retentionDays). retentionDays <= 0 disables
+// filtering and returns all entries.
+//
+// Backward compatibility: entries without schema_version are treated as v1
+// and backfilled with SchemaVersion=1. LatencyMS is derived from DurationMS
+// when missing.
+//
+// Malformed JSON lines are silently skipped. Missing file returns an error
+// (fail-closed). An empty file returns an empty slice with no error.
+func ReadAuditEntries(path string, retentionDays int, now time.Time) ([]AuditEntry, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("audit: open %s: %w", path, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	var entries []AuditEntry
+	cutoff := now.Add(-time.Duration(retentionDays) * 24 * time.Hour)
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		var e AuditEntry
+		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
+			continue // skip malformed lines
+		}
+
+		// Backfill v1 entries (no schema_version).
+		if e.SchemaVersion == 0 {
+			e.SchemaVersion = 1
+		}
+
+		// v1 entries don't have LatencyMS — use DurationMS.
+		if e.LatencyMS == 0 && e.DurationMS != 0 {
+			e.LatencyMS = e.DurationMS
+		}
+
+		// Retention filter.
+		if retentionDays > 0 {
+			t, err := time.Parse(time.RFC3339Nano, e.TS)
+			if err != nil {
+				t, err = time.Parse(time.RFC3339, e.TS)
+			}
+			if err == nil && t.Before(cutoff) {
+				continue
+			}
+		}
+
+		entries = append(entries, e)
+	}
+	if err := scanner.Err(); err != nil {
+		return entries, fmt.Errorf("audit: scan %s: %w", path, err)
+	}
+	return entries, nil
+}
+
+// --- context keys for AgentID / TenantID ---
+
+type contextKey string
+
+const (
+	agentIDKey  contextKey = "agent_id"
+	tenantIDKey contextKey = "tenant_id"
+)
+
+// ContextWithAgentID returns a context with agent_id attached.
+func ContextWithAgentID(ctx context.Context, agentID string) context.Context {
+	return context.WithValue(ctx, agentIDKey, agentID)
+}
+
+// ContextWithTenantID returns a context with tenant_id attached.
+func ContextWithTenantID(ctx context.Context, tenantID string) context.Context {
+	return context.WithValue(ctx, tenantIDKey, tenantID)
+}
+
+// AgentIDFromContext extracts agent_id from ctx. Returns empty string if absent.
+func AgentIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(agentIDKey).(string)
+	return v
+}
+
+// TenantIDFromContext extracts tenant_id from ctx. Returns empty string if absent.
+func TenantIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(tenantIDKey).(string)
+	return v
 }
