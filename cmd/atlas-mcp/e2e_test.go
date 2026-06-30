@@ -117,11 +117,11 @@ func TestStdioJSONRPC_HappyPath(t *testing.T) {
 		}
 	}
 	wantSet := map[string]bool{
-		"regime_get_history":          true,
-		"strategy_list_active":       true,
-		"experiment_judge":           true,
-		"alert_list_unacknowledged":  true,
-		"system_get_health":          true,
+		"regime_get_history":        true,
+		"strategy_list_active":      true,
+		"experiment_judge":          true,
+		"alert_list_unacknowledged": true,
+		"system_get_health":         true,
 	}
 	gotSet := make(map[string]bool, len(gotNames))
 	for _, n := range gotNames {
