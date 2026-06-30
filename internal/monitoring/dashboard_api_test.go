@@ -423,9 +423,9 @@ func TestDashboardAPI_ConfigHandler(t *testing.T) {
 func TestDashboardAPI_SetGateway_InitializesProviders(t *testing.T) {
 	d := NewDashboardAPI(".", ".", nil)
 	called := make(map[string]bool)
-	fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 		called[channelID] = true
-		return []byte(`{}`), nil
+		return []byte(`{}`), FetchMeta{}, nil
 	}
 	d.SetGateway(fetcher)
 	if d.dataFetcher == nil {

@@ -298,10 +298,10 @@ func TestApplyTSMADR(t *testing.T) {
 }
 
 func TestMacroDataGatewayAdapter_ChannelErrors_AllSuccess(t *testing.T) {
-	fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 		snap := marketdata.MacroDataSnapshot{US10Y: marketdata.MacroDataPoint{Symbol: "^TNX"}}
 		b, _ := json.Marshal(snap)
-		return b, nil
+		return b, FetchMeta{}, nil
 	}
 	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
 	_, err := gw.FetchSnapshot(context.Background())
@@ -319,13 +319,13 @@ func TestMacroDataGatewayAdapter_ChannelErrors_MixedFailure(t *testing.T) {
 		"us_spx": "yahoo finance timeout",
 		"us_ndx": "rate limited",
 	}
-	fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 		if msg, ok := failing[channelID]; ok {
-			return nil, errors.New(msg)
+			return nil, FetchMeta{}, errors.New(msg)
 		}
 		snap := marketdata.MacroDataSnapshot{US10Y: marketdata.MacroDataPoint{Symbol: "^TNX"}}
 		b, _ := json.Marshal(snap)
-		return b, nil
+		return b, FetchMeta{}, nil
 	}
 	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
 	snap, err := gw.FetchSnapshot(context.Background())
@@ -350,8 +350,8 @@ func TestMacroDataGatewayAdapter_ChannelErrors_MixedFailure(t *testing.T) {
 }
 
 func TestMacroDataGatewayAdapter_ChannelErrors_ReturnsCopy(t *testing.T) {
-	fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
-		return nil, errors.New("fetch failed")
+	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		return nil, FetchMeta{}, errors.New("fetch failed")
 	}
 	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
 	_, _ = gw.FetchSnapshot(context.Background())
@@ -587,12 +587,76 @@ func TestApplySectorData(t *testing.T) {
 	}
 }
 
+// TestMacroDataGatewayAdapter_DetectsStaleData locks the bug where L2
+// silently swallows FetchResult.Stale=true (CB-open path returns stale
+// bytes with nil error at gateway.go:107). Expected to FAIL until L2
+// learns to surface staleness via ChannelErrors() with "stale:" prefix.
+func TestMacroDataGatewayAdapter_DetectsStaleData(t *testing.T) {
+	staleFetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		snap := marketdata.MacroDataSnapshot{
+			SPXIndex: marketdata.MacroDataPoint{Symbol: "SPX", Value: 5432.10, ChangePct: 0.5, Timestamp: 1700000000},
+			NDXIndex: marketdata.MacroDataPoint{Symbol: "NDX", Value: 19876.50, ChangePct: -0.3, Timestamp: 1700000000},
+			DJIIndex: marketdata.MacroDataPoint{Symbol: "DJI", Value: 38900.00, ChangePct: 0.2, Timestamp: 1700000000},
+		}
+		b, _ := json.Marshal(snap)
+		_ = channelID
+		return b, FetchMeta{Stale: true, LastError: "circuit breaker open for us_spx"}, nil
+	}
+
+	gw := NewMacroDataGatewayAdapter(staleFetcher).(*macroDataGatewayAdapter)
+	snap, err := gw.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot returned error (should not): %v", err)
+	}
+	if snap.SPXIndex.Symbol != "SPX" || snap.SPXIndex.Value != 5432.10 {
+		t.Fatalf("snapshot should contain stale data, got SPX=%+v", snap.SPXIndex)
+	}
+
+	errs := gw.ChannelErrors()
+	staleCount := 0
+	for _, msg := range errs {
+		if len(msg) >= 6 && msg[:6] == "stale:" {
+			staleCount++
+		}
+	}
+	if staleCount == 0 {
+		t.Fatalf("BUG: stale data silently passed through, ChannelErrors() "+
+			"reported no stale channels. errs=%v", errs)
+	}
+	if staleCount < 3 {
+		t.Errorf("expected at least 3 stale channels (SPX/NDX/DJI), got %d (errs=%v)",
+			staleCount, errs)
+	}
+}
+
+// TestMacroDataGatewayAdapter_FreshDataUnaffected guards against false
+// positives: healthy (non-stale) fetches must not be reported as stale.
+func TestMacroDataGatewayAdapter_FreshDataUnaffected(t *testing.T) {
+	freshFetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		snap := marketdata.MacroDataSnapshot{
+			SPXIndex: marketdata.MacroDataPoint{Symbol: "SPX", Value: 5432.10},
+		}
+		b, _ := json.Marshal(snap)
+		return b, FetchMeta{}, nil
+	}
+	gw := NewMacroDataGatewayAdapter(freshFetcher).(*macroDataGatewayAdapter)
+	if _, err := gw.FetchSnapshot(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	errs := gw.ChannelErrors()
+	for ch, msg := range errs {
+		if len(msg) >= 6 && msg[:6] == "stale:" {
+			t.Errorf("fresh fetch should NOT be reported stale; channel=%s msg=%s", ch, msg)
+		}
+	}
+}
+
 func TestNewDayTradingFetcher(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 			stats := marketdata.DayTradingStats{Date: "2026-01-01", DayTradingVolume: 1000}
 			b, _ := json.Marshal(stats)
-			return b, nil
+			return b, FetchMeta{}, nil
 		}
 		f := NewDayTradingFetcher(fetcher)
 		stats, err := f(context.Background())
@@ -605,8 +669,8 @@ func TestNewDayTradingFetcher(t *testing.T) {
 	})
 
 	t.Run("fetch error", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
-			return nil, errors.New("down")
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			return nil, FetchMeta{}, errors.New("down")
 		}
 		f := NewDayTradingFetcher(fetcher)
 		_, err := f(context.Background())
@@ -616,8 +680,8 @@ func TestNewDayTradingFetcher(t *testing.T) {
 	})
 
 	t.Run("unmarshal error", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
-			return []byte(`not json`), nil
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			return []byte(`not json`), FetchMeta{}, nil
 		}
 		f := NewDayTradingFetcher(fetcher)
 		_, err := f(context.Background())
@@ -629,7 +693,7 @@ func TestNewDayTradingFetcher(t *testing.T) {
 
 func TestNewTaifexFetcher(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 			result := struct {
 				PCR             *marketdata.PCRStats        `json:"pcr"`
 				RetailFuturesOI *marketdata.RetailFuturesOI `json:"retail_futures_oi"`
@@ -638,7 +702,7 @@ func TestNewTaifexFetcher(t *testing.T) {
 				RetailFuturesOI: &marketdata.RetailFuturesOI{Date: "2026-01-01", RetailLongOI: 50},
 			}
 			b, _ := json.Marshal(result)
-			return b, nil
+			return b, FetchMeta{}, nil
 		}
 		f := NewTaifexFetcher(fetcher)
 		pcr, oi, err := f(context.Background())
@@ -654,8 +718,8 @@ func TestNewTaifexFetcher(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
-			return nil, errors.New("down")
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			return nil, FetchMeta{}, errors.New("down")
 		}
 		f := NewTaifexFetcher(fetcher)
 		_, _, err := f(context.Background())
@@ -667,10 +731,10 @@ func TestNewTaifexFetcher(t *testing.T) {
 
 func TestNewOddLotFetcher(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 			stats := marketdata.OddLotStats{Date: "2026-01-01", BuyVolume: 100}
 			b, _ := json.Marshal(stats)
-			return b, nil
+			return b, FetchMeta{}, nil
 		}
 		f := NewOddLotFetcher(fetcher)
 		stats, err := f(context.Background())
@@ -683,8 +747,8 @@ func TestNewOddLotFetcher(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
-			return nil, errors.New("down")
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			return nil, FetchMeta{}, errors.New("down")
 		}
 		f := NewOddLotFetcher(fetcher)
 		_, err := f(context.Background())
@@ -696,10 +760,10 @@ func TestNewOddLotFetcher(t *testing.T) {
 
 func TestNewETFFetcher(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 			stats := marketdata.ETFStats{Date: "2026-01-01", NetSubscription: 1000}
 			b, _ := json.Marshal(stats)
-			return b, nil
+			return b, FetchMeta{}, nil
 		}
 		f := NewETFFetcher(fetcher)
 		stats, err := f(context.Background())
@@ -712,8 +776,8 @@ func TestNewETFFetcher(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, error) {
-			return nil, errors.New("down")
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			return nil, FetchMeta{}, errors.New("down")
 		}
 		f := NewETFFetcher(fetcher)
 		_, err := f(context.Background())

@@ -1,6 +1,7 @@
 import { CircuitBreakerPanel } from './components/circuit-breaker.js';
 import { eventSource } from './services/event-source.js';
 import { SimHealthPanel } from './components/sim-health.js';
+import { DeploymentDashboard } from './components/deployment-dashboard.js';
 
 // Module scripts are deferred; DOM is already ready.
 const cbPanel = new CircuitBreakerPanel('circuitBreakerPanel');
@@ -11,4 +12,10 @@ eventSource.on('*', (ev) => cbPanel.handleSSE(ev));
 const simHealthContainer = document.getElementById('simHealthContainer');
 if (simHealthContainer) {
   window.simHealthPanel = new SimHealthPanel('simHealthContainer');
+}
+
+// Initialize Fubon Deployment Dashboard (M1 Phase 3.5)
+const deploymentContainer = document.getElementById('deploymentDashboardContainer');
+if (deploymentContainer) {
+  window.deploymentDashboard = new DeploymentDashboard('deploymentDashboardContainer');
 }

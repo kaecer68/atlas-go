@@ -14,8 +14,9 @@ import (
 
 // fakeMacroProvider is a stub MacroDataProvider for testing CrossMarketService.
 type fakeMacroProvider struct {
-	snap marketdata.MacroDataSnapshot
-	err  error
+	snap          marketdata.MacroDataSnapshot
+	err           error
+	channelErrors map[string]string
 }
 
 func (f *fakeMacroProvider) Name() string { return "fake" }
@@ -24,6 +25,12 @@ func (f *fakeMacroProvider) FetchSnapshot(_ context.Context) (marketdata.MacroDa
 		return marketdata.MacroDataSnapshot{}, f.err
 	}
 	return f.snap, nil
+}
+
+// ChannelErrors implements channelErrorsProvider so tests can simulate the
+// L2 gateway adapter's per-channel error map (incl. "stale:" prefixes).
+func (f *fakeMacroProvider) ChannelErrors() map[string]string {
+	return f.channelErrors
 }
 
 func makeSnapshot() marketdata.MacroDataSnapshot {
@@ -415,12 +422,15 @@ func TestGetCachedSnapshot_StaleAfterTTL_Refetches(t *testing.T) {
 
 func TestDetectDegradedUSStatus_AllFailed(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{}
-	status, failed := detectDegradedUSStatus(snap)
+	status, failed, stale := detectDegradedUSStatus(snap, nil)
 	if status != "degraded" {
 		t.Errorf("expected status=degraded, got %q", status)
 	}
 	if len(failed) != 10 {
 		t.Errorf("expected 10 failed channels, got %d: %v", len(failed), failed)
+	}
+	if stale != nil {
+		t.Errorf("expected nil stale when no channelErrors map, got %v", stale)
 	}
 	expected := map[string]bool{
 		"us_spx": false, "us_ndx": false, "us_dji": false, "sox_index": false,
@@ -451,12 +461,15 @@ func TestDetectDegradedUSStatus_PartialFailure(t *testing.T) {
 		// MSFT empty
 		// TSMADR empty
 	}
-	status, failed := detectDegradedUSStatus(snap)
+	status, failed, stale := detectDegradedUSStatus(snap, nil)
 	if status != "degraded" {
 		t.Errorf("expected status=degraded, got %q", status)
 	}
 	if len(failed) != 6 {
 		t.Errorf("expected 6 failed channels (DJI, SOX, MSFT, TSM, US10Y, VIX), got %d: %v", len(failed), failed)
+	}
+	if stale != nil {
+		t.Errorf("expected nil stale when no channelErrors, got %v", stale)
 	}
 	expectedFailed := map[string]bool{"us_dji": false, "sox_index": false, "us_msft": false, "tsm_adr": false, "us10y": false, "vix": false}
 	for _, f := range failed {
@@ -480,12 +493,181 @@ func TestDetectDegradedUSStatus_AllOK(t *testing.T) {
 		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
 		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
 	}
-	status, failed := detectDegradedUSStatus(snap)
+	status, failed, stale := detectDegradedUSStatus(snap, nil)
 	if status != "ok" {
 		t.Errorf("expected status=ok, got %q", status)
 	}
 	if failed != nil {
 		t.Errorf("expected nil failed list when status=ok, got %v", failed)
+	}
+	if stale != nil {
+		t.Errorf("expected nil stale list when no channelErrors, got %v", stale)
+	}
+}
+
+// TestDetectDegradedUSStatus_StaleOnly_NoFailure locks the new "stale"
+// taxonomy: when at least one channel returned cached data (L2 marked it
+// with a "stale:" prefix) but no channel fully failed, the status must be
+// "stale" with the failed-list empty and the stale-list populated. This
+// is the user-visible fix: CB-open serving cached values must surface as
+// a warning, not as silently-ok.
+func TestDetectDegradedUSStatus_StaleOnly_NoFailure(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}
+	channelErrors := map[string]string{
+		"us_spx": "stale: gateway returned cached data (CB-open or fallback)",
+		"vix":    "stale: upstream 503",
+		// Non-stale error on a non-checked channel — should be ignored here.
+		"some_other_channel": "real error",
+	}
+	status, failed, stale := detectDegradedUSStatus(snap, channelErrors)
+	if status != "stale" {
+		t.Errorf("expected status=stale (CB-open serving cache, no real failures), got %q", status)
+	}
+	if failed != nil {
+		t.Errorf("expected nil failed list on stale-only path, got %v", failed)
+	}
+	if len(stale) != 2 {
+		t.Fatalf("expected 2 stale channels (us_spx, vix), got %d: %v", len(stale), stale)
+	}
+	// extractStaleChannels sorts lexicographically — verify order is stable.
+	if stale[0] != "us_spx" || stale[1] != "vix" {
+		t.Errorf("expected lexicographic order [us_spx, vix], got %v", stale)
+	}
+}
+
+// TestDetectDegradedUSStatus_Mixed_StaleAndFailed locks the precedence
+// rule: any failure dominates — even if some channels are merely stale,
+// the overall status must be "degraded" so the existing alert path fires.
+// The stale list is still returned alongside, since users benefit from
+// knowing which subset is fresh vs cached vs missing.
+func TestDetectDegradedUSStatus_Mixed_StaleAndFailed(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		// DJIIndex empty (failed)
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}
+	channelErrors := map[string]string{
+		"us_ndx": "stale: gateway returned cached data",
+	}
+	status, failed, stale := detectDegradedUSStatus(snap, channelErrors)
+	if status != "degraded" {
+		t.Errorf("expected status=degraded (DJI failed, NDX stale — failure dominates), got %q", status)
+	}
+	if len(failed) != 1 || failed[0] != "us_dji" {
+		t.Errorf("expected failed=[us_dji], got %v", failed)
+	}
+	if len(stale) != 1 || stale[0] != "us_ndx" {
+		t.Errorf("expected stale=[us_ndx] (returned alongside failure), got %v", stale)
+	}
+}
+
+// TestDetectDegradedUSStatus_FailedOnly_NoStale ensures the negative case:
+// when no channel returned "stale:" but some failed, stale list is nil
+// (omitempty contract preserved).
+func TestDetectDegradedUSStatus_FailedOnly_NoStale(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		// DJIIndex empty
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}
+	channelErrors := map[string]string{
+		"us_dji": "timeout: real error, not stale",
+	}
+	status, failed, stale := detectDegradedUSStatus(snap, channelErrors)
+	if status != "degraded" {
+		t.Errorf("expected status=degraded, got %q", status)
+	}
+	if len(failed) != 1 || failed[0] != "us_dji" {
+		t.Errorf("expected failed=[us_dji], got %v", failed)
+	}
+	if stale != nil {
+		t.Errorf("expected nil stale list (channelErrors had no stale: prefix), got %v", stale)
+	}
+}
+
+// TestDetectDegradedUSStatus_StaleIgnoredWhenAllFresh ensures the
+// "stale" taxonomy fires even when all 10 fields are populated — the L2
+// "stale:" marker is the authoritative signal that the data served was
+// cached, not freshly fetched. We surface this as a warning rather than
+// silently reporting "ok" so users see the CB-open state.
+func TestDetectDegradedUSStatus_StaleIgnoredWhenAllFresh(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}
+	channelErrors := map[string]string{
+		"us_spx": "stale: gateway returned cached data",
+	}
+	status, failed, stale := detectDegradedUSStatus(snap, channelErrors)
+	if status != "stale" {
+		t.Errorf("expected status=stale when channelErrors has stale: prefix, got %q", status)
+	}
+	if failed != nil {
+		t.Errorf("expected nil failed list, got %v", failed)
+	}
+	if len(stale) != 1 || stale[0] != "us_spx" {
+		t.Errorf("expected stale=[us_spx], got %v", stale)
+	}
+}
+
+// TestExtractStaleChannels_UnitCases locks the helper in isolation,
+// including the empty-map and no-stale-prefix cases.
+func TestExtractStaleChannels_UnitCases(t *testing.T) {
+	cases := []struct {
+		name string
+		in   map[string]string
+		want []string
+	}{
+		{"nil map", nil, nil},
+		{"empty map", map[string]string{}, nil},
+		{"no stale prefix", map[string]string{"ch1": "real error", "ch2": "timeout"}, nil},
+		{"single stale", map[string]string{"ch1": "stale: cached"}, []string{"ch1"}},
+		{"mixed", map[string]string{
+			"ch1": "stale: cached",
+			"ch2": "real error",
+			"ch3": "stale: fallback",
+		}, []string{"ch1", "ch3"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extractStaleChannels(tc.in)
+			if !stringSlicesEqual(got, tc.want) {
+				t.Errorf("extractStaleChannels(%v) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -646,12 +828,15 @@ func TestDetectDegradedUSStatus_ZeroValueNonNullSymbol(t *testing.T) {
 		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
 		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 0}, // Zero value — should fail
 	}
-	status, failed := detectDegradedUSStatus(snap)
+	status, failed, stale := detectDegradedUSStatus(snap, nil)
 	if status != "degraded" {
 		t.Errorf("expected status=degraded (SOX and VIX are Value=0), got %q", status)
 	}
 	if len(failed) != 2 {
 		t.Errorf("expected 2 failed channels (sox_index, vix), got %d: %v", len(failed), failed)
+	}
+	if stale != nil {
+		t.Errorf("expected nil stale when no channelErrors, got %v", stale)
 	}
 }
 
