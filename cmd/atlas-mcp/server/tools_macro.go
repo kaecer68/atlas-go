@@ -11,37 +11,37 @@ import (
 func registerMacroTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_snapshot_latest",
-		Description: "Return the latest macro data snapshot (cross-channel aggregate: foreign capital, regime, chips, etc.).",
+		Description: autoDescOr("macro_get_snapshot_latest", "Return the latest macro data snapshot (cross-channel aggregate: foreign capital, regime, chips, etc.)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetSnapshotLatest)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_snapshot_history",
-		Description: "Macro snapshot history over the last N days (default 30, max 365).",
+		Description: autoDescOr("macro_get_snapshot_history", "Macro snapshot history over the last N days (default 30, max 365)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetSnapshotHistory)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_stress_index_current",
-		Description: "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite.",
+		Description: autoDescOr("macro_get_stress_index_current", "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetStressIndexCurrent)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_stress_index_history",
-		Description: "Stress index history over the last N days.",
+		Description: autoDescOr("macro_get_stress_index_history", "Stress index history over the last N days."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetStressIndexHistory)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_capital_flow_latest",
-		Description: "Latest foreign / institutional / retail capital flow snapshot.",
+		Description: autoDescOr("macro_get_capital_flow_latest", "Latest foreign / institutional / retail capital flow snapshot."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetCapitalFlowLatest)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_ingest_status",
-		Description: "Channel ingestion status (last fetch times, error counts). Use to diagnose data freshness.",
+		Description: autoDescOr("macro_get_ingest_status", "Channel ingestion status (last fetch times, error counts). Use to diagnose data freshness."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetIngestStatus)
 }

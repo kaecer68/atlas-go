@@ -9,37 +9,37 @@ import (
 func registerDataUniverseTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_channels",
-		Description: "List all data channels (fugle, twse, yahoo, finmind, internal) with status.",
+		Description: autoDescOr("data_get_channels", "List all data channels (fugle, twse, yahoo, finmind, internal) with status."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleDataGetChannels)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_channel_detail",
-		Description: "Detail for a single data channel by name (latency, error rate, last fetch).",
+		Description: autoDescOr("data_get_channel_detail", "Detail for a single data channel by name (latency, error rate, last fetch)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleDataGetChannelDetail)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_quality",
-		Description: "Data quality metrics (gaps, stale symbols, completeness by source).",
+		Description: autoDescOr("data_get_quality", "Data quality metrics (gaps, stale symbols, completeness by source)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleDataGetQuality)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_field_contract",
-		Description: "Field contract schema introspection (field types, optionality) for a model.",
+		Description: autoDescOr("data_get_field_contract", "Field contract schema introspection (field types, optionality) for a model."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleDataGetFieldContract)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "universe_get_sessions",
-		Description: "Recent simulation sessions (id, date, status).",
+		Description: autoDescOr("universe_get_sessions", "Recent simulation sessions (id, date, status)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleUniverseGetSessions)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "universe_get_universe_overlap",
-		Description: "Universe overlap analysis across recent simulation sessions.",
+		Description: autoDescOr("universe_get_universe_overlap", "Universe overlap analysis across recent simulation sessions."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleUniverseGetUniverseOverlap)
 }

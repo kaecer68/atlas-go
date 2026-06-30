@@ -9,37 +9,37 @@ import (
 func registerSystemTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_metrics",
-		Description: "Live system metrics (request rate, error rate, circuit-breaker state).",
+		Description: autoDescOr("system_get_metrics", "Live system metrics (request rate, error rate, circuit-breaker state)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetMetrics)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_metrics_trend",
-		Description: "System metrics trend over a recent window (per-minute aggregates).",
+		Description: autoDescOr("system_get_metrics_trend", "System metrics trend over a recent window (per-minute aggregates)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetMetricsTrend)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_thresholds",
-		Description: "Configured SLO thresholds (latency, error rate, saturation).",
+		Description: autoDescOr("system_get_thresholds", "Configured SLO thresholds (latency, error rate, saturation)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetThresholds)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_data_pipeline",
-		Description: "Data pipeline state (which channels are flowing, latency, lag).",
+		Description: autoDescOr("system_get_data_pipeline", "Data pipeline state (which channels are flowing, latency, lag)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetDataPipeline)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_circuit_breaker",
-		Description: "Circuit-breaker state per external call site.",
+		Description: autoDescOr("system_get_circuit_breaker", "Circuit-breaker state per external call site."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetCircuitBreaker)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_maturity",
-		Description: "Maturity ratings per module (S/E/X/U per docs/specs convention).",
+		Description: autoDescOr("system_get_maturity", "Maturity ratings per module (S/E/X/U per docs/specs convention)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetMaturity)
 }

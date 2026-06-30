@@ -73,15 +73,6 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	return s, rec, cleanup
 }
 
-func writeIfMissing(t *testing.T, path string) *os.File {
-	t.Helper()
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("create %s: %v", path, err)
-	}
-	return f
-}
-
 // --- regime_get_history -------------------------------------------------------
 
 func TestHandleRegimeGetHistory_DefaultDays(t *testing.T) {
@@ -301,3 +292,18 @@ func TestRun_RequiresAuditPath(t *testing.T) {
 
 // guard the registry entry so a future bug doesn't silently diverge.
 var _ = errors.New
+
+// TestNoToolWithoutDescription verifies that every auto-generated tool descriptor has a non-empty description.
+func TestNoToolWithoutDescription(t *testing.T) {
+	if len(autoDescMap) == 0 {
+		t.Fatal("auto-desc map is empty")
+	}
+	for name, desc := range autoDescMap {
+		if desc.Description == "" {
+			t.Errorf("tool %q has empty description", name)
+		}
+	}
+	if len(autoDescMap) < 60 {
+		t.Errorf("auto-desc map has %d tools, want >= 60", len(autoDescMap))
+	}
+}

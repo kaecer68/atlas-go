@@ -9,49 +9,49 @@ import (
 func registerRiskAlertTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_metrics",
-		Description: "Aggregate risk metrics (current regime risk, VaR estimate, drawdown, exposure).",
+		Description: autoDescOr("risk_get_metrics", "Aggregate risk metrics (current regime risk, VaR estimate, drawdown, exposure)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetMetrics)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_correlation_matrix",
-		Description: "Cross-strategy correlation matrix (risk concentration indicator).",
+		Description: autoDescOr("risk_get_correlation_matrix", "Cross-strategy correlation matrix (risk concentration indicator)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetCorrelationMatrix)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_drawdown",
-		Description: "Current drawdown, peak drawdown, recovery stats.",
+		Description: autoDescOr("risk_get_drawdown", "Current drawdown, peak drawdown, recovery stats."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetDrawdown)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_calibration",
-		Description: "Risk model calibration metrics (predicted vs realized VaR).",
+		Description: autoDescOr("risk_get_calibration", "Risk model calibration metrics (predicted vs realized VaR)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetCalibration)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_commentary",
-		Description: "Latest narrative risk commentary (auto-generated from the risk engine).",
+		Description: autoDescOr("risk_get_commentary", "Latest narrative risk commentary (auto-generated from the risk engine)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetCommentary)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_list",
-		Description: "All alerts (with optional filters). Companion to alert_list_unacknowledged (Phase 1) which is unack-only.",
+		Description: autoDescOr("alert_list", "All alerts (with optional filters). Companion to alert_list_unacknowledged (Phase 1) which is unack-only."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleAlertList)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_get_stats",
-		Description: "Alert statistics (counts by severity, by source, ack latency).",
+		Description: autoDescOr("alert_get_stats", "Alert statistics (counts by severity, by source, ack latency)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleAlertGetStats)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_get_rules",
-		Description: "Configured alert rules (severity, threshold, channels).",
+		Description: autoDescOr("alert_get_rules", "Configured alert rules (severity, threshold, channels)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleAlertGetRules)
 }

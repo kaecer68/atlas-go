@@ -9,61 +9,61 @@ import (
 func registerReportPrismSwarmTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "report_get_daily_summary",
-		Description: "Daily summary report (text or structured) suitable for an LLM agent's morning briefing.",
+		Description: autoDescOr("report_get_daily_summary", "Daily summary report (text or structured) suitable for an LLM agent's morning briefing."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleReportGetDailySummary)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "report_get_performance",
-		Description: "Performance report (period-configurable) with attribution and risk-adjusted metrics.",
+		Description: autoDescOr("report_get_performance", "Performance report (period-configurable) with attribution and risk-adjusted metrics."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleReportGetPerformance)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "report_get_tax_snapshot",
-		Description: "Tax-relevant snapshot (realized gains, dividend totals, foreign tax).",
+		Description: autoDescOr("report_get_tax_snapshot", "Tax-relevant snapshot (realized gains, dividend totals, foreign tax)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleReportGetTaxSnapshot)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "report_get_export_link",
-		Description: "Signed export link for a report variant (expires after a short TTL).",
+		Description: autoDescOr("report_get_export_link", "Signed export link for a report variant (expires after a short TTL)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleReportGetExportLink)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "prism_get_training_results",
-		Description: "Latest PRISM cohort training results (config + metrics per cohort).",
+		Description: autoDescOr("prism_get_training_results", "Latest PRISM cohort training results (config + metrics per cohort)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handlePrismGetTrainingResults)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "swarm_get_status",
-		Description: "MiroFish swarm simulator status (running, paused, fish count).",
+		Description: autoDescOr("swarm_get_status", "MiroFish swarm simulator status (running, paused, fish count)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSwarmGetStatus)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "swarm_get_consensus",
-		Description: "Latest swarm consensus (fish majority vote + divergence).",
+		Description: autoDescOr("swarm_get_consensus", "Latest swarm consensus (fish majority vote + divergence)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSwarmGetConsensus)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "swarm_get_anomalies",
-		Description: "Anomalies detected by the swarm over the most recent window.",
+		Description: autoDescOr("swarm_get_anomalies", "Anomalies detected by the swarm over the most recent window."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSwarmGetAnomalies)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "swarm_get_scenarios",
-		Description: "Active scenarios the swarm is monitoring (config + current state).",
+		Description: autoDescOr("swarm_get_scenarios", "Active scenarios the swarm is monitoring (config + current state)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSwarmGetScenarios)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "swarm_get_strategies",
-		Description: "Strategy swarm composition (how many fish per strategy + voting weights).",
+		Description: autoDescOr("swarm_get_strategies", "Strategy swarm composition (how many fish per strategy + voting weights)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSwarmGetStrategies)
 }

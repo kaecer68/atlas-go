@@ -1,0 +1,613 @@
+{
+  "alert_get_rules": {
+    "name": "alert_get_rules",
+    "description": "Configured alert rules (severity, threshold, channels).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "alert_get_stats": {
+    "name": "alert_get_stats",
+    "description": "Alert statistics (counts by severity, by source, ack latency).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "alert_list": {
+    "name": "alert_list",
+    "description": "All alerts (with optional filters). Companion to alert_list_unacknowledged (Phase 1) which is unack-only.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "alert_list_unacknowledged": {
+    "name": "alert_list_unacknowledged",
+    "description": "List all unacknowledged alerts. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "control_approve_recommendation": {
+    "name": "control_approve_recommendation",
+    "description": "Status of an approve-recommendation override (read-only state inspection; actual approval is admin-only).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "control_get_active_overrides": {
+    "name": "control_get_active_overrides",
+    "description": "Currently active control overrides (paused agents, sector bans, weight overrides).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "control_get_audit_log": {
+    "name": "control_get_audit_log",
+    "description": "Control override audit log (which agents were paused/banned, by which operator). Read-only by design.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "control_reject_recommendation": {
+    "name": "control_reject_recommendation",
+    "description": "Status of a reject-recommendation override (read-only state inspection).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "crossmarket_get_correlation": {
+    "name": "crossmarket_get_correlation",
+    "description": "Latest cross-market correlation matrix (Taiwan sector vs US indices).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "crossmarket_get_status": {
+    "name": "crossmarket_get_status",
+    "description": "Cross-market data feed status (US indices source, freshness, error count).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "crossmarket_get_us_indices": {
+    "name": "crossmarket_get_us_indices",
+    "description": "Latest US index snapshots (S\u0026P 500, NASDAQ, Dow Jones).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "data_get_channel_detail": {
+    "name": "data_get_channel_detail",
+    "description": "Detail for a single data channel by name (latency, error rate, last fetch).",
+    "inputSchema": {
+      "properties": {
+        "channel_name": {
+          "description": "the data channel name (e.g. 'fugle', 'twse')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel_name"
+      ],
+      "type": "object"
+    }
+  },
+  "data_get_channels": {
+    "name": "data_get_channels",
+    "description": "List all data channels (fugle, twse, yahoo, finmind, internal) with status.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "data_get_field_contract": {
+    "name": "data_get_field_contract",
+    "description": "Field contract schema introspection (field types, optionality) for a model.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "data_get_quality": {
+    "name": "data_get_quality",
+    "description": "Data quality metrics (gaps, stale symbols, completeness by source).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "experiment_diff": {
+    "name": "experiment_diff",
+    "description": "Diff between a candidate experiment and the baseline (config + metrics comparison).",
+    "inputSchema": {
+      "properties": {
+        "experiment_id": {
+          "description": "the experiment id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_id"
+      ],
+      "type": "object"
+    }
+  },
+  "experiment_history": {
+    "name": "experiment_history",
+    "description": "Historical list of experiments (judge results, promotions, reverts).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "experiment_judge": {
+    "name": "experiment_judge",
+    "description": "Trigger LLM judge scoring for a candidate experiment vs the baseline. Side-effect: writes to experiment history.",
+    "inputSchema": {
+      "properties": {
+        "experiment_id": {
+          "description": "the experiment id to judge",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_id"
+      ],
+      "type": "object"
+    }
+  },
+  "llm_get_cost": {
+    "name": "llm_get_cost",
+    "description": "LLM cost snapshot — recent spend, by model, by capability.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "llm_get_health": {
+    "name": "llm_get_health",
+    "description": "LLM router health — provider status (DeepSeek, MiniMax/M3), circuit-breaker, fallback chain.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "macro_get_capital_flow_latest": {
+    "name": "macro_get_capital_flow_latest",
+    "description": "Latest foreign / institutional / retail capital flow snapshot.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "macro_get_ingest_status": {
+    "name": "macro_get_ingest_status",
+    "description": "Channel ingestion status (last fetch times, error counts). Use to diagnose data freshness.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "macro_get_snapshot_history": {
+    "name": "macro_get_snapshot_history",
+    "description": "Macro snapshot history over the last N days (default 30, max 365).",
+    "inputSchema": {
+      "properties": {
+        "days": {
+          "description": "how many days back; default 30",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "macro_get_snapshot_latest": {
+    "name": "macro_get_snapshot_latest",
+    "description": "Return the latest macro data snapshot (cross-channel aggregate: foreign capital, regime, chips, etc.).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "macro_get_stress_index_current": {
+    "name": "macro_get_stress_index_current",
+    "description": "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "macro_get_stress_index_history": {
+    "name": "macro_get_stress_index_history",
+    "description": "Stress index history over the last N days.",
+    "inputSchema": {
+      "properties": {
+        "days": {
+          "description": "how many days back; default 30",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "narrative_get_bundle": {
+    "name": "narrative_get_bundle",
+    "description": "Compiled 'briefing bundle' (events + chains + templates) suitable for an LLM agent's morning summary.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "narrative_get_chains": {
+    "name": "narrative_get_chains",
+    "description": "Current narrative chains (cause-effect graphs) for the latest detected event.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "narrative_get_events": {
+    "name": "narrative_get_events",
+    "description": "Latest narrative events (regime shifts, capital flows, macro shocks).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "narrative_get_models": {
+    "name": "narrative_get_models",
+    "description": "Active narrative models (regime detector, flow forecaster, etc.).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "narrative_get_seasonal": {
+    "name": "narrative_get_seasonal",
+    "description": "Latest seasonal narrative packet (regime-by-month statistics).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "narrative_get_templates": {
+    "name": "narrative_get_templates",
+    "description": "Cause-effect templates available to the narrative model registry.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "narrative_stress_index_thresholds": {
+    "name": "narrative_stress_index_thresholds",
+    "description": "Configurable thresholds for the stress index (used by the narrative engine to flag regime shifts).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "prism_get_training_results": {
+    "name": "prism_get_training_results",
+    "description": "Latest PRISM cohort training results (config + metrics per cohort).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "regime_get_history": {
+    "name": "regime_get_history",
+    "description": "Return the market regime history for the last N days. Regimes are RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL.",
+    "inputSchema": {
+      "properties": {
+        "days": {
+          "description": "how many days back; default 30, max 365",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "days"
+      ],
+      "type": "object"
+    }
+  },
+  "report_get_daily_summary": {
+    "name": "report_get_daily_summary",
+    "description": "Daily summary report (text or structured) suitable for an LLM agent's morning briefing.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "report_get_export_link": {
+    "name": "report_get_export_link",
+    "description": "Signed export link for a report variant (expires after a short TTL).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "report_get_performance": {
+    "name": "report_get_performance",
+    "description": "Performance report (period-configurable) with attribution and risk-adjusted metrics.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "report_get_tax_snapshot": {
+    "name": "report_get_tax_snapshot",
+    "description": "Tax-relevant snapshot (realized gains, dividend totals, foreign tax).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "risk_get_calibration": {
+    "name": "risk_get_calibration",
+    "description": "Risk model calibration metrics (predicted vs realized VaR).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "risk_get_commentary": {
+    "name": "risk_get_commentary",
+    "description": "Latest narrative risk commentary (auto-generated from the risk engine).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "risk_get_correlation_matrix": {
+    "name": "risk_get_correlation_matrix",
+    "description": "Cross-strategy correlation matrix (risk concentration indicator).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "risk_get_drawdown": {
+    "name": "risk_get_drawdown",
+    "description": "Current drawdown, peak drawdown, recovery stats.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "risk_get_metrics": {
+    "name": "risk_get_metrics",
+    "description": "Aggregate risk metrics (current regime risk, VaR estimate, drawdown, exposure).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "scheduler_get_status": {
+    "name": "scheduler_get_status",
+    "description": "Background scheduler status: which tasks ran, when, last result. Read-only overview of the dispatcher state.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "strategy_get": {
+    "name": "strategy_get",
+    "description": "Fetch a single strategy by id (returns full config + state metadata).",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "description": "the strategy id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "strategy_get_attribution": {
+    "name": "strategy_get_attribution",
+    "description": "Performance attribution for a strategy over the requested window.",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "description": "the strategy id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "strategy_get_layers": {
+    "name": "strategy_get_layers",
+    "description": "All strategy layers (L1-L5) currently configured in the system.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "strategy_get_summary": {
+    "name": "strategy_get_summary",
+    "description": "Compact summary of a strategy (hit rate, Sharpe, drawdown, regime behavior).",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "description": "the strategy id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "strategy_list_active": {
+    "name": "strategy_list_active",
+    "description": "List the strategy set currently active in production (per docs/WORKFLOW_MAP.md WA-500).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "swarm_get_anomalies": {
+    "name": "swarm_get_anomalies",
+    "description": "Anomalies detected by the swarm over the most recent window.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "swarm_get_consensus": {
+    "name": "swarm_get_consensus",
+    "description": "Latest swarm consensus (fish majority vote + divergence).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "swarm_get_scenarios": {
+    "name": "swarm_get_scenarios",
+    "description": "Active scenarios the swarm is monitoring (config + current state).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "swarm_get_status": {
+    "name": "swarm_get_status",
+    "description": "MiroFish swarm simulator status (running, paused, fish count).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "swarm_get_strategies": {
+    "name": "swarm_get_strategies",
+    "description": "Strategy swarm composition (how many fish per strategy + voting weights).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "synergy_get_darwinian_status": {
+    "name": "synergy_get_darwinian_status",
+    "description": "Current Darwinian weight state (which strategies are being promoted/demoted, current weight delta).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "synergy_get_darwinian_trend": {
+    "name": "synergy_get_darwinian_trend",
+    "description": "Historical Darwinian weight trend per strategy (last N days).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "synergy_get_l2_4_schedule": {
+    "name": "synergy_get_l2_4_schedule",
+    "description": "L2.4 observation window schedule (current state, next boundary).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "system_get_circuit_breaker": {
+    "name": "system_get_circuit_breaker",
+    "description": "Circuit-breaker state per external call site.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "system_get_data_pipeline": {
+    "name": "system_get_data_pipeline",
+    "description": "Data pipeline state (which channels are flowing, latency, lag).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "system_get_health": {
+    "name": "system_get_health",
+    "description": "Return overall system health status (per docs/WORKFLOW_MAP.md WA-606).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "system_get_maturity": {
+    "name": "system_get_maturity",
+    "description": "Maturity ratings per module (S/E/X/U per docs/specs convention).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "system_get_metrics": {
+    "name": "system_get_metrics",
+    "description": "Live system metrics (request rate, error rate, circuit-breaker state).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "system_get_metrics_trend": {
+    "name": "system_get_metrics_trend",
+    "description": "System metrics trend over a recent window (per-minute aggregates).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "system_get_thresholds": {
+    "name": "system_get_thresholds",
+    "description": "Configured SLO thresholds (latency, error rate, saturation).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "task_get": {
+    "name": "task_get",
+    "description": "Single task by id (status, progress, last result).",
+    "inputSchema": {
+      "properties": {
+        "task_id": {
+          "description": "the task id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    }
+  },
+  "task_get_events": {
+    "name": "task_get_events",
+    "description": "Event stream of a single task (ordered lifecycle events).",
+    "inputSchema": {
+      "properties": {
+        "task_id": {
+          "description": "the task id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "type": "object"
+    }
+  },
+  "task_list": {
+    "name": "task_list",
+    "description": "List background tasks (filtered by status).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "trace_get_agent_observatory": {
+    "name": "trace_get_agent_observatory",
+    "description": "Current agent activity observatory (which agents are active, what they're working on).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "trace_get_decision_chain": {
+    "name": "trace_get_decision_chain",
+    "description": "Decision chain for a symbol (full causal trace from macro → sector → agent recommendation).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "trace_get_reasoning": {
+    "name": "trace_get_reasoning",
+    "description": "Reasoning trace (RAG/CoT steps) for a recent recommendation.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "trace_get_sim_latest": {
+    "name": "trace_get_sim_latest",
+    "description": "Latest simulation reasoning trace (most recent agent run).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "universe_get_sessions": {
+    "name": "universe_get_sessions",
+    "description": "Recent simulation sessions (id, date, status).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "universe_get_universe_overlap": {
+    "name": "universe_get_universe_overlap",
+    "description": "Universe overlap analysis across recent simulation sessions.",
+    "inputSchema": {
+      "type": "object"
+    }
+  }
+}

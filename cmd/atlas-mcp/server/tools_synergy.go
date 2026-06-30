@@ -9,19 +9,19 @@ import (
 func registerSynergyTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "synergy_get_darwinian_status",
-		Description: "Current Darwinian weight state (which strategies are being promoted/demoted, current weight delta).",
+		Description: autoDescOr("synergy_get_darwinian_status", "Current Darwinian weight state (which strategies are being promoted/demoted, current weight delta)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSynergyGetDarwinianStatus)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "synergy_get_darwinian_trend",
-		Description: "Historical Darwinian weight trend per strategy (last N days).",
+		Description: autoDescOr("synergy_get_darwinian_trend", "Historical Darwinian weight trend per strategy (last N days)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSynergyGetDarwinianTrend)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "synergy_get_l2_4_schedule",
-		Description: "L2.4 observation window schedule (current state, next boundary).",
+		Description: autoDescOr("synergy_get_l2_4_schedule", "L2.4 observation window schedule (current state, next boundary)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSynergyGetL24Schedule)
 }

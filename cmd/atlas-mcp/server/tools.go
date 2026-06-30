@@ -1,5 +1,7 @@
 package server
 
+//go:generate go run ../descgen -out ../auto-desc.gen.json -pkgdir .
+
 import (
 	"context"
 	"errors"
@@ -32,31 +34,31 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
-		Description: "Return the market regime history for the last N days. Regimes are RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL.",
+		Description: autoDescOr("regime_get_history", "Return the market regime history for the last N days. Regimes are RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRegimeGetHistory)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_list_active",
-		Description: "List the strategy set currently active in production (per docs/WORKFLOW_MAP.md WA-500).",
+		Description: autoDescOr("strategy_list_active", "List the strategy set currently active in production (per docs/WORKFLOW_MAP.md WA-500)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyListActive)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_judge",
-		Description: "Trigger LLM judge scoring for a candidate experiment vs the baseline. Side-effect: writes to experiment history.",
+		Description: autoDescOr("experiment_judge", "Trigger LLM judge scoring for a candidate experiment vs the baseline. Side-effect: writes to experiment history."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
 	}, s.handleExperimentJudge)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_list_unacknowledged",
-		Description: "List all unacknowledged alerts. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope).",
+		Description: autoDescOr("alert_list_unacknowledged", "List all unacknowledged alerts. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleAlertListUnacknowledged)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_health",
-		Description: "Return overall system health status (per docs/WORKFLOW_MAP.md WA-606).",
+		Description: autoDescOr("system_get_health", "Return overall system health status (per docs/WORKFLOW_MAP.md WA-606)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetHealth)
 }
