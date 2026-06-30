@@ -88,6 +88,42 @@ const (
 // portOccupant 描述佔住 port 8081 的程序。用於構造 actionable error。
 type portOccupant = portprobe.Occupant
 
+// maxRecentEvents 是 deployment dashboard 保留的最近 timeline 事件數量上限。
+const maxRecentEvents = 100
+
+// TimelineEvent records a lifecycle event in the ProcessManager.
+type TimelineEvent struct {
+	At     time.Time `json:"at"`
+	Kind   string    `json:"kind"`
+	Detail string    `json:"detail"`
+}
+
+// DeploymentConfig mirrors the ProcessManager configuration.
+type DeploymentConfig struct {
+	Binary      string   `json:"binary"`
+	Args        []string `json:"args"`
+	AutoRestart bool     `json:"auto_restart"`
+	MaxRestarts int      `json:"max_restarts"`
+	ListenPort  int      `json:"listen_port"`
+}
+
+// DeploymentStatus is a read-only snapshot of the fubon-proxy ProcessManager state.
+// Used by the deployment dashboard to surface process health without blocking the supervisor.
+// Returns a zero-value (SupervisorRunning=false) when the ProcessManager has not been started.
+type DeploymentStatus struct {
+	SupervisorRunning bool             `json:"supervisor_running"`
+	ProcessAlive      bool             `json:"process_alive"`
+	PID               int              `json:"pid"`
+	Port              int              `json:"port"`
+	StartedAt         time.Time        `json:"started_at"`
+	RestartCount      int              `json:"restart_count"`
+	LastBeatAt        time.Time        `json:"last_beat_at"`
+	LastBeatAgeSec    int              `json:"last_beat_age_sec"`
+	LastError         string           `json:"last_error"`
+	RecentEvents      []TimelineEvent  `json:"recent_events"`
+	Config            DeploymentConfig `json:"config"`
+}
+
 // ProcessManager 管理 fubon-proxy Python 服務的生命週期。
 type ProcessManager struct {
 	workDir    string
@@ -95,7 +131,7 @@ type ProcessManager struct {
 	scriptPath string
 	healthURL  string
 
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	cmd      *exec.Cmd
 	running  bool
 	stopping bool
@@ -105,6 +141,13 @@ type ProcessManager struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	done            chan struct{}
+
+	// ---- Phase 3.5 M1: deployment dashboard tracking fields ----
+	startedAt    time.Time
+	lastBeatAt   time.Time
+	restartCount int
+	lastErr      string
+	events       []TimelineEvent
 }
 
 // NewManager 建立新的 ProcessManager。
@@ -375,6 +418,9 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 
 	m.cmd = cmd
 	m.running = true
+	m.startedAt = time.Now()
+	m.restartCount = 0
+	m.recordEvent("process_started", fmt.Sprintf("pid=%d", cmd.Process.Pid))
 	m.mu.Unlock()
 
 	logging.Info("fubonproxy", "process_started",
@@ -390,8 +436,16 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 				logging.Err(err),
 				"message", "proxy started but health check did not pass within timeout",
 			)
+			m.mu.Lock()
+			m.lastErr = err.Error()
+			m.recordEvent("health_failed", err.Error())
+			m.mu.Unlock()
 		} else {
 			logging.Info("fubonproxy", "health_check_passed")
+			m.mu.Lock()
+			m.lastBeatAt = time.Now()
+			m.recordEvent("health_passed", "")
+			m.mu.Unlock()
 		}
 	}()
 
@@ -473,6 +527,88 @@ func (m *ProcessManager) IsHealthy() bool {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
+}
+
+// recordEvent appends a timeline event, capped at maxRecentEvents (FIFO).
+// Must be called while m.mu is held (write lock).
+func (m *ProcessManager) recordEvent(kind, detail string) {
+	m.events = append(m.events, TimelineEvent{
+		At:     time.Now(),
+		Kind:   kind,
+		Detail: detail,
+	})
+	if len(m.events) > maxRecentEvents {
+		m.events = m.events[len(m.events)-maxRecentEvents:]
+	}
+}
+
+// Status returns a read-locked snapshot of the ProcessManager state.
+// Uses RLock so the supervisor can continue writing during reads.
+// Returns a zero-value DeploymentStatus when the ProcessManager has not been started
+// (cmd==nil && !running). Never panics.
+func (m *ProcessManager) Status() DeploymentStatus {
+	m.mu.RLock()
+	cmd := m.cmd
+	running := m.running
+	stopping := m.stopping
+
+	// Pre-Start or post-Stop: no process ever spawned.
+	if cmd == nil && !running {
+		m.mu.RUnlock()
+		return DeploymentStatus{}
+	}
+
+	pid := 0
+	if cmd != nil && cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+
+	startedAt := m.startedAt
+	restartCount := m.restartCount
+	lastBeatAt := m.lastBeatAt
+	lastErr := m.lastErr
+
+	// Defensive copy of events slice — never expose internal pointers.
+	events := make([]TimelineEvent, len(m.events))
+	copy(events, m.events)
+
+	bin := m.pythonBin
+	script := m.scriptPath
+	port := proxyListenPort
+	m.mu.RUnlock()
+
+	// Check process liveness outside the lock since Signal() is a syscall.
+	processAlive := false
+	if cmd != nil && cmd.Process != nil {
+		if err := cmd.Process.Signal(syscall.Signal(0)); err == nil {
+			processAlive = true
+		}
+	}
+
+	var lastBeatAgeSec int
+	if !lastBeatAt.IsZero() {
+		lastBeatAgeSec = int(time.Since(lastBeatAt).Seconds())
+	}
+
+	return DeploymentStatus{
+		SupervisorRunning: running && !stopping,
+		ProcessAlive:      processAlive,
+		PID:               pid,
+		Port:              port,
+		StartedAt:         startedAt,
+		RestartCount:      restartCount,
+		LastBeatAt:        lastBeatAt,
+		LastBeatAgeSec:    lastBeatAgeSec,
+		LastError:         lastErr,
+		RecentEvents:      events,
+		Config: DeploymentConfig{
+			Binary:      bin,
+			Args:        []string{script},
+			AutoRestart: true,
+			MaxRestarts: maxRestartFailures,
+			ListenPort:  port,
+		},
+	}
 }
 
 // probePort8081 探測 port 8081 占用狀態（F9 pre-flight）。
@@ -655,6 +791,10 @@ func (m *ProcessManager) supervise() {
 			"backoff", backoff.String(),
 		)
 
+		m.mu.Lock()
+		m.recordEvent("process_exited", fmt.Sprintf("error=%v", err))
+		m.mu.Unlock()
+
 		// 等待 backoff 期間或取消
 		select {
 		case <-time.After(backoff):
@@ -700,6 +840,10 @@ func (m *ProcessManager) supervise() {
 
 		if startErr := newCmd.Start(); startErr != nil {
 			logging.Error("fubonproxy", "restart_failed", logging.Err(startErr))
+			m.mu.Lock()
+			m.lastErr = startErr.Error()
+			m.recordEvent("restart_failed", startErr.Error())
+			m.mu.Unlock()
 			m.restartFailures++
 			if m.restartFailures >= maxRestartFailures {
 				logging.Error("fubonproxy", "max_restart_failures_reached",
@@ -722,6 +866,9 @@ func (m *ProcessManager) supervise() {
 		m.cmd = newCmd
 		m.running = true
 		m.restartFailures = 0
+		m.startedAt = time.Now()
+		m.restartCount++
+		m.recordEvent("process_restarted", fmt.Sprintf("pid=%d", newCmd.Process.Pid))
 		m.mu.Unlock()
 
 		logging.Info("fubonproxy", "process_restarted",
@@ -734,9 +881,17 @@ func (m *ProcessManager) supervise() {
 		// 不再 fire-and-forget 產生 goroutine，避免快速重啟下的堆積（F4）
 		if healthErr := m.waitForHealthy(ctx); healthErr != nil {
 			logging.Warn("fubonproxy", "restart_health_check_failed", logging.Err(healthErr))
+			m.mu.Lock()
+			m.lastErr = healthErr.Error()
+			m.recordEvent("health_failed", healthErr.Error())
+			m.mu.Unlock()
 			// 失敗時保留較長 backoff，不重置
 		} else {
 			logging.Info("fubonproxy", "restart_health_check_passed")
+			m.mu.Lock()
+			m.lastBeatAt = time.Now()
+			m.recordEvent("health_passed", "")
+			m.mu.Unlock()
 			backoff = restartInitialDelayForTest
 			m.restartFailures = 0
 		}

@@ -9,6 +9,7 @@
 //	internal/monitoring/service/**/*.go — service response types (SystemHealthResponse, ...)
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
 //	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
+//	internal/fubonproxy/**/*.go         — fubon-proxy supervisor types (DeploymentConfig, DeploymentStatus, ...)
 //
 // Writes (to all active frontend directories so copies don't drift):
 //
@@ -60,11 +61,12 @@ func main() {
 	configDir := findConfigDir(rootDir)
 	industryDir := findIndustryDir(rootDir)
 	narrativeDir := findNarrativeDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" {
+	fubonDir := findFubonDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir} {
 			if d == "" {
 				continue
 			}
@@ -125,6 +127,16 @@ func main() {
 			for k, v := range narrativeStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and narrative; using narrative version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge fubonproxy structs (e.g. DeploymentConfig, DeploymentStatus).
+		if fubonDir != "" {
+			fubonStructs := parseStructsWithNames(fubonDir, allNames)
+			for k, v := range fubonStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and fubonproxy; using fubonproxy version\n", k)
 				}
 				structs[k] = v
 			}
@@ -205,6 +217,14 @@ func findConfigDir(rootDir string) string {
 
 func findNarrativeDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "narrative")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findFubonDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "fubonproxy")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}

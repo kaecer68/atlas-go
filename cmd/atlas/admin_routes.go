@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/adminapi/deployment"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
@@ -41,11 +43,15 @@ func wrapAdminAuth(h http.HandlerFunc) http.HandlerFunc {
 // RegisterAdminRoutes installs the low-risk admin endpoints on mux.
 // The complex /admin/trigger-simulation route stays inline in run()
 // until Wave 3 PR8 (api bootstrap extraction).
-func RegisterAdminRoutes(mux *http.ServeMux, cfg config.Config) {
+func RegisterAdminRoutes(mux *http.ServeMux, cfg config.Config, pm *fubonproxy.ProcessManager) {
 	mux.HandleFunc("/admin/reload-config", wrapAdminAuth(handleAdminReloadConfig))
 	mux.HandleFunc("/api/admin/calibrate-thresholds", wrapAdminAuth(func(w http.ResponseWriter, r *http.Request) {
 		handleAdminCalibrateThresholds(w, r, cfg)
 	}))
+
+	// Phase 3.5 M1: deployment dashboard — read-only snapshot of fubon-proxy status.
+	dh := deployment.NewHandlers(pm)
+	mux.HandleFunc("/api/admin/live/deployment/dashboard", wrapAdminAuth(dh.HandleDeploymentDashboard))
 }
 
 // handleAdminReloadConfig reloads parameters.json from disk and returns

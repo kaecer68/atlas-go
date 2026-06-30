@@ -1492,3 +1492,237 @@ func TestSetFubonProxyPort_NoOpForNonPositivePort(t *testing.T) {
 		t.Errorf("after SetFubonProxyPort(%d): GetFubonProxyPort() = %d, want %d", customPort, got, customPort)
 	}
 }
+
+// ---- Phase 3.5 M1: DeploymentStatus tests ----
+
+func TestStatus_EmptyBeforeStart(t *testing.T) {
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: "/nonexistent/fake.sh",
+		healthURL:  "http://127.0.0.1:1/health",
+	}
+
+	s := m.Status()
+
+	if s.SupervisorRunning {
+		t.Error("expected SupervisorRunning=false for never-started ProcessManager")
+	}
+	if s.ProcessAlive {
+		t.Error("expected ProcessAlive=false for never-started ProcessManager")
+	}
+	if s.PID != 0 {
+		t.Errorf("expected PID=0, got %d", s.PID)
+	}
+	if s.Port != 0 {
+		t.Errorf("expected Port=0, got %d", s.Port)
+	}
+	if !s.StartedAt.IsZero() {
+		t.Error("expected StartedAt to be zero")
+	}
+	if s.RestartCount != 0 {
+		t.Errorf("expected RestartCount=0, got %d", s.RestartCount)
+	}
+}
+
+func TestStatus_ReflectsAfterStart(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 15\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health", // health never passes
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	defer m.Stop()
+
+	// Give the process a moment to start
+	time.Sleep(500 * time.Millisecond)
+
+	s := m.Status()
+
+	if !s.SupervisorRunning {
+		t.Error("expected SupervisorRunning=true after Start()")
+	}
+	if !s.ProcessAlive {
+		t.Error("expected ProcessAlive=true after Start()")
+	}
+	if s.PID <= 0 {
+		t.Errorf("expected PID > 0, got %d", s.PID)
+	}
+	if s.Port != proxyListenPort {
+		t.Errorf("expected Port=%d, got %d", proxyListenPort, s.Port)
+	}
+	if s.RestartCount != 0 {
+		t.Errorf("expected RestartCount=0 on first start, got %d", s.RestartCount)
+	}
+	if s.StartedAt.IsZero() {
+		t.Error("expected StartedAt to be non-zero after Start()")
+	}
+	if s.Config.Binary == "" {
+		t.Error("expected Config.Binary to be populated")
+	}
+	if len(s.Config.Args) == 0 {
+		t.Error("expected Config.Args to be populated")
+	}
+	if !s.Config.AutoRestart {
+		t.Error("expected Config.AutoRestart=true")
+	}
+	if s.Config.MaxRestarts <= 0 {
+		t.Errorf("expected Config.MaxRestarts > 0, got %d", s.Config.MaxRestarts)
+	}
+	if s.Config.ListenPort != proxyListenPort {
+		t.Errorf("expected Config.ListenPort=%d, got %d", proxyListenPort, s.Config.ListenPort)
+	}
+
+	// Verify events are populated
+	foundStart := false
+	for _, ev := range s.RecentEvents {
+		if ev.Kind == "process_started" {
+			foundStart = true
+			break
+		}
+	}
+	if !foundStart {
+		t.Error("expected 'process_started' event in RecentEvents after Start()")
+	}
+}
+
+func TestStatus_ReadLockDoesNotBlockConcurrentSupervise(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	defer m.Stop()
+
+	done := make(chan struct{})
+	time.AfterFunc(2*time.Second, func() { close(done) })
+
+	// Concurrently call Status() in a tight loop for >=1s.
+	// If Status() used Lock() instead of RLock(), this would deadlock
+	// with the supervise goroutine.
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			_ = m.Status()
+		}
+	}
+}
+
+func TestStatus_ReturnsConsistentSnapshot(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	defer m.Stop()
+
+	// Wait for process to start
+	time.Sleep(500 * time.Millisecond)
+
+	s1 := m.Status()
+	time.Sleep(500 * time.Millisecond)
+	s2 := m.Status()
+
+	// last_beat_at should be zero for both (health never passes)
+	// but PID and RestartCount should be consistent
+	if s1.PID != s2.PID {
+		t.Errorf("PID changed between snapshots: %d → %d", s1.PID, s2.PID)
+	}
+	if s1.RestartCount != s2.RestartCount {
+		t.Errorf("RestartCount changed between snapshots: %d → %d", s1.RestartCount, s2.RestartCount)
+	}
+	// From the second snapshot, started_at should be in the past
+	if time.Since(s2.StartedAt) < 200*time.Millisecond {
+		t.Errorf("StartedAt is too recent: %v ago", time.Since(s2.StartedAt))
+	}
+}
+
+func TestStatus_IncrementsRestartCountAfterSimulatedCrash(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "crash_loop.sh")
+	// Script that exits immediately, forcing the supervisor to restart it.
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  "http://127.0.0.1:1/health",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	defer m.Stop()
+
+	// Wait for at least one restart cycle: process exits → backoff (3s) → restart
+	// The supervisor will detect the exit and restart after restartInitialDelay.
+	time.Sleep(5 * time.Second)
+
+	s := m.Status()
+
+	// After at least one crash+restart cycle, RestartCount should be >= 1
+	if s.RestartCount < 1 {
+		t.Errorf("expected RestartCount >= 1 after crash loop, got %d (PID=%d, SupervisorRunning=%v)",
+			s.RestartCount, s.PID, s.SupervisorRunning)
+	}
+
+	// Verify process_exited event exists
+	foundExit := false
+	for _, ev := range s.RecentEvents {
+		if ev.Kind == "process_exited" {
+			foundExit = true
+			break
+		}
+	}
+	if !foundExit {
+		t.Error("expected 'process_exited' event after crash")
+	}
+}

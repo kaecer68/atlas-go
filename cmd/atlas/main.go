@@ -291,6 +291,7 @@ func run(args []string, deps appDeps) error {
 
 		// Start fubon-proxy process manager BEFORE Gateway adapter registration,
 		// so the fubon TCP probe in RegisterChannelAdapters finds fubon-port already running.
+		var fubonMgr *fubonproxy.ProcessManager
 		if shouldStartFubonProxy(cfg.BrokerMode, cfg.FubonAPIKey) {
 			fubonListenAddr := fmt.Sprintf("127.0.0.1:%d", *fubonProxyPort)
 			if err := startup.Preflight([]startup.PortClaim{
@@ -300,7 +301,7 @@ func run(args []string, deps appDeps) error {
 				return fmt.Errorf("preflight failed: %w", err)
 			}
 
-			fubonMgr := fubonproxy.NewManager(cfg.WorkDir, *fubonProxyPort)
+			fubonMgr = fubonproxy.NewManager(cfg.WorkDir, *fubonProxyPort)
 			if err := fubonMgr.Start(context.Background()); err != nil {
 				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
 			} else {
@@ -487,7 +488,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[TaskExec] injected into dashboard API")
 		}
 
-		RegisterAdminRoutes(mux, cfg)
+		RegisterAdminRoutes(mux, cfg, fubonMgr)
 		var monitor *monitoring.Monitor
 		mux.HandleFunc("/admin/trigger-simulation", wrapAdminAuth(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
