@@ -58,14 +58,12 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 
 	cfg := Config{
 		AtlasBaseURL: ts.URL,
-		MCPToken:     "", // dev mode
 		AuditLogPath: auditPath,
 		HTTPTimeout:  0,
 	}
 	s := &server{
 		cfg:   cfg,
 		audit: audit,
-		auth:  NewTokenAuth(""),
 		cli:   newHTTPClient(cfg),
 	}
 	cleanup := func() {
@@ -132,7 +130,7 @@ func TestHandleRegimeGetHistory_ForwardsAPIToken(t *testing.T) {
 	}
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, APIToken: "secret-token", AuditLogPath: filepath.Join(tmp, "audit.log")}
-	s := &server{cfg: cfg, audit: audit, auth: NewTokenAuth(""), cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
 	_, _, err = s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 7})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -220,7 +218,7 @@ func TestHandleSystemGetHealth_ParsesStatus(t *testing.T) {
 	audit, _ := NewAuditWriter(filepath.Join(tmp, "a.log"))
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: filepath.Join(tmp, "a.log")}
-	s := &server{cfg: cfg, audit: audit, auth: NewTokenAuth(""), cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
 	_, out, err := s.handleSystemGetHealth(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -247,7 +245,7 @@ func TestHandle_AtlasErrorSurfacesAsMCPError(t *testing.T) {
 	audit, _ := NewAuditWriter(filepath.Join(tmp, "a.log"))
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: filepath.Join(tmp, "a.log")}
-	s := &server{cfg: cfg, audit: audit, auth: NewTokenAuth(""), cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
 	_, _, err := s.handleStrategyListActive(context.Background(), nil, struct{}{})
 	if err == nil || !strings.Contains(err.Error(), "500") {
 		t.Fatalf("expected 500 error, got %v", err)
@@ -270,7 +268,7 @@ func TestAuditEntry_WrittenOnBothSuccessAndError(t *testing.T) {
 	}
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
-	s := &server{cfg: cfg, audit: audit, auth: NewTokenAuth(""), cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
 
 	if _, _, err := s.handleStrategyListActive(context.Background(), nil, struct{}{}); err == nil {
 		t.Fatal("expected error from atlas")

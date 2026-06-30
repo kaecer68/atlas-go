@@ -45,6 +45,8 @@
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP HTTP exporter endpoint（功能開關：未設定時 fallback stdout） | 空（未設定時使用 stdout） |
 | `ATLAS_API_KEY` | API 認證金鑰（非資料源） | 空（未設定時停用認證） |
 | `ATLAS_ADMIN_KEY` | 管理員認證金鑰（admin-only 操作） | 空（未設定時停用 admin 驗證） |
+| `ATLAS_BASE_URL` | MCP server 用：atlas-go HTTP API 基準 URL（`cmd/atlas-mcp` 端點，非資料源） | `http://127.0.0.1:8080` |
+| `ATLAS_MCP_AUDIT_LOG` | MCP server 用：JSONL audit log 路徑 | `$TMPDIR/atlas-mcp-audit.log` |
 | `ATLAS_ENV` | 環境模式（`production`/`development`） | 空 |
 | `ATLAS_SKIP_DOCKER` | 跳過 Docker-based PostgreSQL 啟動 | 空 |
 | `DATABASE_URL` | PostgreSQL 連線字串 | 空（需手動設定） |

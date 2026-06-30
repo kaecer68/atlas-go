@@ -5,7 +5,6 @@
 ## Phase 1 (this release)
 
 Phase 1 ships **stdio transport only** with five core tools. Phase 2 will add
-SSE and streamable-HTTP transports (see [`docs/plans/agent-interface-roadmap.md`](../../docs/plans/agent-interface-roadmap.md)).
 
 | Tool | Trigger | Action |
 |------|---------|--------|
@@ -25,8 +24,13 @@ All configuration via environment variables:
 |----------|---------|---------|
 | `ATLAS_BASE_URL` | `http://127.0.0.1:8080` | atlas-go HTTP base URL |
 | `ATLAS_API_KEY` | (unset) | Forwarded as `X-API-Key` header to atlas-go admin endpoints |
-| `ATLAS_MCP_TOKEN` | (unset) | Required token presented by MCP clients. **Unset = dev mode (no auth check)** |
 | `ATLAS_MCP_AUDIT_LOG` | `/tmp/atlas-mcp-audit.log` | JSONL audit log path. Parent dir auto-created with mode 0700 |
+
+> **Phase 1 stdio security model**: there is no transport-level token
+> enforcement. Process isolation (only the parent can reach stdin/stdout)
+> is the security boundary. `TokenAuth` is forward-looking scaffolding for
+> Phase 2 SSE/HTTP transports — do NOT advertise token enforcement for
+> stdio.
 
 ## Build & Run
 

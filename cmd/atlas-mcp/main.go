@@ -8,10 +8,13 @@
 //
 //	ATLAS_BASE_URL       atlas core HTTP base (default: http://127.0.0.1:8080)
 //	ATLAS_API_KEY        admin API key (passed through when invoking atlas HTTP API)
-//	ATLAS_MCP_TOKEN      required token for MCP clients (when set)
 //	ATLAS_MCP_AUDIT_LOG  JSONL audit-log path (default: $TMPDIR/atlas-mcp-audit.log)
 //
-// When ATLAS_MCP_TOKEN is unset the server runs in dev mode (no auth check).
+// Phase 1 stdio security: there is no transport-level token enforcement.
+// Process isolation (only the parent process can reach stdin/stdout) is the
+// security boundary. The `TokenAuth` code under server/auth.go is forward-
+// looking scaffolding for Phase 2 SSE/HTTP transports — do NOT advertise
+// `ATLAS_MCP_TOKEN` as a working feature until Phase 2 lands.
 package main
 
 import (
@@ -26,7 +29,6 @@ func main() {
 	cfg := server.Config{
 		AtlasBaseURL: envOr("ATLAS_BASE_URL", "http://127.0.0.1:8080"),
 		APIToken:     os.Getenv("ATLAS_API_KEY"),
-		MCPToken:     os.Getenv("ATLAS_MCP_TOKEN"),
 		AuditLogPath: envOr("ATLAS_MCP_AUDIT_LOG", defaultAuditLogPath()),
 	}
 	if err := server.Run(context.Background(), cfg); err != nil {

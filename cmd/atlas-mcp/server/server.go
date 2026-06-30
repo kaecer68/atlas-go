@@ -19,7 +19,6 @@ import (
 type Config struct {
 	AtlasBaseURL string        // atlas HTTP base, e.g. http://127.0.0.1:8080
 	APIToken     string        // admin API key forwarded to atlas HTTP API (ATLAS_API_KEY)
-	MCPToken     string        // required token for MCP clients (ATLAS_MCP_TOKEN); empty = dev mode
 	AuditLogPath string        // JSONL audit log file path
 	HTTPTimeout  time.Duration // per-call timeout to atlas HTTP (default 10s)
 }
@@ -41,31 +40,26 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("server: open audit log: %w", err)
 	}
-	auth := NewTokenAuth(cfg.MCPToken)
 
 	srv := &server{
 		cfg:   cfg,
 		audit: audit,
-		auth:  auth,
 		cli:   newHTTPClient(cfg),
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp", Version: "v0.1.0"}
-	mcpSrv := mcp.NewServer(impl, &mcp.ServerOptions{
-		// Stdio transport only in Phase 1.
-	})
+	mcpSrv := mcp.NewServer(impl, &mcp.ServerOptions{})
 
 	registerTools(mcpSrv, srv)
 
 	return mcpSrv.Run(ctx, &mcp.StdioTransport{})
 }
 
-// server holds shared state for all tool handlers. It is not safe for concurrent
-// writes; reads via the embedded http.Client are safe.
+// server holds shared state for all tool handlers. All fields are
+// read-only after construction; readers may proceed without external locking.
 type server struct {
 	cfg   Config
 	audit *AuditWriter
-	auth  *TokenAuth
 	cli   *httpClient
 }
 
