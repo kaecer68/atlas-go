@@ -27,7 +27,7 @@ func registerRiskAlertTools(mcpSrv *mcp.Server, s *server) {
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_calibration",
-		Description: "Risk model calibration metrics (predicted vs realised VaR).",
+		Description: "Risk model calibration metrics (predicted vs realized VaR).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetCalibration)
 

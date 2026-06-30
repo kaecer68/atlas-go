@@ -21,7 +21,7 @@ func registerReportPrismSwarmTools(mcpSrv *mcp.Server, s *server) {
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "report_get_tax_snapshot",
-		Description: "Tax-relevant snapshot (realised gains, dividend totals, foreign tax).",
+		Description: "Tax-relevant snapshot (realized gains, dividend totals, foreign tax).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleReportGetTaxSnapshot)
 
