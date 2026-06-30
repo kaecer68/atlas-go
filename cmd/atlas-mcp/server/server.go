@@ -94,6 +94,7 @@ func Run(ctx context.Context, cfg Config) error {
 	mcpSrv := mcp.NewServer(impl, &mcp.ServerOptions{})
 
 	registerTools(mcpSrv, srv)
+	registerAuditTools(mcpSrv, srv)
 	registerResources(mcpSrv, srv)
 	registerPrompts(mcpSrv)
 
