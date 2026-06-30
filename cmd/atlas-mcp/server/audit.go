@@ -2,7 +2,6 @@ package server
 
 import (
 	"bufio"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -307,35 +306,6 @@ func ReadAuditEntries(path string, retentionDays int, now time.Time) ([]AuditEnt
 }
 
 // --- context keys for AgentID / TenantID ---
-
-type contextKey string
-
-const (
-	agentIDKey  contextKey = "agent_id"
-	tenantIDKey contextKey = "tenant_id"
-)
-
-// ContextWithAgentID returns a context with agent_id attached.
-func ContextWithAgentID(ctx context.Context, agentID string) context.Context {
-	return context.WithValue(ctx, agentIDKey, agentID)
-}
-
-// ContextWithTenantID returns a context with tenant_id attached.
-func ContextWithTenantID(ctx context.Context, tenantID string) context.Context {
-	return context.WithValue(ctx, tenantIDKey, tenantID)
-}
-
-// AgentIDFromContext extracts agent_id from ctx. Returns empty string if absent.
-func AgentIDFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(agentIDKey).(string)
-	return v
-}
-
-// TenantIDFromContext extracts tenant_id from ctx. Returns empty string if absent.
-func TenantIDFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(tenantIDKey).(string)
-	return v
-}
 
 // NewV2Entry is the canonical constructor for AuditEntry v2 records.
 // It sets SchemaVersion=2, Transport="stdio", Status="ok", and computes
