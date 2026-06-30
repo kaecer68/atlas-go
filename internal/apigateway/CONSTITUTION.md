@@ -497,6 +497,8 @@ echo "✅ os.Getenv 檢查通過"
 | sector_data | 不限流 | Readiness | 否 | ❌ |
 | bdi | 1/5s | Liveness | 否 | ❌ |
 
+> **回應欄位（PR #837 新增）**：`GET /api/dashboard/data-channels` 對上述每個通道，回傳的 `service.DataChannel` JSON 都額外包含 `enabled bool` 欄位（操作員手動 toggle 狀態；`channels.json` 缺條目預設為啟用 = true）。實作位於 `internal/monitoring/service/data_channels.go:loadEnabledStates` 與 `GetAllChannelStatuses.mergeEnabled`，與 `api/dashboard.channel_state.go` 共用同一份 `data/state/channels.json`。
+
 ## 附錄 B：違規處理流程
 
 1. **CI 階段**：自動檢查失敗 → PR 無法合併
