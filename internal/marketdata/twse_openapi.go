@@ -2,7 +2,9 @@ package marketdata
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -121,8 +123,14 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	}
 
 	var twseResp TWSEDailyResponse
-	if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &twseResp); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	decodeErr := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &twseResp)
+	if decodeErr != nil {
+		// TWSE changed STOCK_DAY_ALL from JSON to CSV (2026-06-30).
+		// Fallback: parse CSV rows directly instead of failing.
+		if isCSVContentType(resp.Header.Get("Content-Type")) {
+			return c.parseStockCSV(resp.Body)
+		}
+		return nil, fmt.Errorf("decode response: %w", decodeErr)
 	}
 
 	twseQuotes := make([]TWSEQuote, 0, len(twseResp.Data))
@@ -346,4 +354,66 @@ func rowAt(row []string, idx int, fallback string) string {
 		return row[idx]
 	}
 	return fallback
+}
+
+// isCSVContentType reports whether the Content-Type header indicates a CSV
+// response. TWSE changed STOCK_DAY_ALL from JSON to CSV (2026-06-30);
+// GetQuotes uses this as a fallback trigger when DecodeJSON fails.
+func isCSVContentType(contentType string) bool {
+	return strings.HasPrefix(strings.ToLower(contentType), "text/csv")
+}
+
+// parseStockCSV parses a TWSE STOCK_DAY_ALL CSV response into domain.Quote
+// records. TWSE uses standard CSV quoting (double-quote, RFC 4180) with
+// columns: 日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,
+// 收盤價,漲跌價差,成交筆數.
+func (c *TWSEClient) parseStockCSV(body io.Reader) ([]domain.Quote, error) {
+	r := csv.NewReader(body)
+	r.FieldsPerRecord = -1
+
+	headers, err := r.Read()
+	if err != nil {
+		return nil, fmt.Errorf("csv header: %w", err)
+	}
+	col := make(map[string]int)
+	for i, h := range headers {
+		col[h] = i
+	}
+	symbolIdx, ok := col["證券代號"]
+	if !ok {
+		return nil, fmt.Errorf("csv missing column 證券代號")
+	}
+
+	var quotes []domain.Quote
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("csv row: %w", err)
+		}
+		symbol := rowAt(row, symbolIdx, "")
+		if symbol == "" {
+			continue
+		}
+		q := TWSEQuote{
+			Code:         symbol,
+			Name:         rowAt(row, col["證券名稱"], ""),
+			TradeVolume:  rowAt(row, col["成交股數"], ""),
+			TradeValue:   rowAt(row, col["成交金額"], ""),
+			OpeningPrice: rowAt(row, col["開盤價"], ""),
+			HighestPrice: rowAt(row, col["最高價"], ""),
+			LowestPrice:  rowAt(row, col["最低價"], ""),
+			ClosingPrice: rowAt(row, col["收盤價"], ""),
+			Change:       rowAt(row, col["漲跌價差"], ""),
+			Transaction:  rowAt(row, col["成交筆數"], ""),
+		}
+		quote, err := c.convertToQuote(q)
+		if err != nil {
+			continue
+		}
+		quotes = append(quotes, quote)
+	}
+	return quotes, nil
 }
