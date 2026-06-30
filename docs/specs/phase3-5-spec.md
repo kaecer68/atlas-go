@@ -1,7 +1,7 @@
 # Phase 3.5 — 整合層規格 (M1/M2/M3/M4)
 
 > **狀態**: 🟡 DRAFT (2026-06-30,等待 user review)
-> **起點文件**: [`.planning/phase3-4-reassessment.md`](../../.planning/phase3-4-reassessment.md) v1.0 §0 + §3 + §5
+> **起點文件**: `.planning/phase3-4-reassessment.md` v1.0 §0 + §3 + §5
 > **時程**: 11 工作天(2d + 3d + 3d + 3d)
 > **前置**: PR #821 (L2.4 ship) + PR #848 (Wave 11 mid) + Phase 4.A/B 尚未啟動
 > **目標**: 把目前散落在 admin UI、orchestrator、narrative 各處的「live + macro + forecast」三股線,拉到同一個整合層,並用 M4 forecast-bridge 把 sortino 拉抬。
@@ -46,7 +46,7 @@
 | `GET /api/admin/live/metrics` | `internal/admin/live_metrics.go` | 獨立 panel |
 | `GET /api/admin/gateway/health` | `internal/apigateway/admin_handler.go` | 另一個 panel |
 
-admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,違反 [`.planning/phase3-4-reassessment.md`](../../.planning/phase3-4-reassessment.md) §4.1 「live deployment 應是整體可觀測」。也讓 on-call 一次看到 deployment 全貌的成本變高。
+admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,違反 `.planning/phase3-4-reassessment.md` §4.1 「live deployment 應是整體可觀測」。也讓 on-call 一次看到 deployment 全貌的成本變高。
 
 #### 3.1.2 目標
 
@@ -100,7 +100,7 @@ admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,�
 
 #### 3.2.1 問題
 
-narrative event 目前分類不一致 — [`internal/narrative/event.go`](../../internal/narrative/event.go) 的 `EventType` 是 free-form string,沒有強制分層結構。詳見 [`.planning/phase3-4-reassessment.md`](../../.planning/phase3-4-reassessment.md) §3 C2。影響:
+narrative event 目前分類不一致 — [`internal/narrative/event.go`](../../internal/narrative/event.go) 的 `EventType` 是 free-form string,沒有強制分層結構。詳見 `.planning/phase3-4-reassessment.md` §3 C2。影響:
 
 - [`atlas-event-driven-weights`](../../.claude/skills/atlas-event-driven-weights/SKILL.md) factor bridge 對應表依賴 narrative event 分類,目前是 hardcoded lookup table
 - 新 narrative 加入時,需要有人手動擴充 enum + 加 mapping rule,容易漏
@@ -170,7 +170,7 @@ narrative event 目前分類不一致 — [`internal/narrative/event.go`](../../
 
 #### 3.3.1 問題
 
-macro 六維 score(見 [`.planning/phase3-4-reassessment.md`](../../.planning/phase3-4-reassessment.md) §1 + `internal/macro/assessment/macro_assessment.go:158` `MacroRiskAssessmentEngine.determineRiskLevel`)已經計算完成,但**沒有結構化流入 portfolio construction**。Reassessment §0 指出 macro → portfolio flow 是「理論完備但整合缺失」的代表案例。
+macro 六維 score(見 `.planning/phase3-4-reassessment.md` §1 + `internal/macro/assessment/macro_assessment.go:158` `MacroRiskAssessmentEngine.determineRiskLevel`)已經計算完成,但**沒有結構化流入 portfolio construction**。Reassessment §0 指出 macro → portfolio flow 是「理論完備但整合缺失」的代表案例。
 
 目前 macro score 只在 admin narrative panel 顯示,沒有 trigger portfolio rebalance / factor weight shift。
 
@@ -247,7 +247,7 @@ MacroDataSnapshot → determineRiskLevel() → RiskLevel + 6維 score
 
 forecast engine(`internal/forecast/engine.go`)已存在 `MacroRiskAssessmentEngine.determineRiskLevel`(macro_assessment.go:158)與四檔驗證案例(見 reassessment §1 與 `docs/specs/real-time-regime-detection.md`)。**但 forecast 結果只用在 monitor layer 的 regime display,沒有 bridge 到 directional trade layer 的具體 trade direction**。
 
-[`.planning/phase3-4-reassessment.md`](../../.planning/phase3-4-reassessment.md) §0 oracle verdict 把 M4 升 rank 3 因為「補強 trade direction 信心」可拉 sortino。
+`.planning/phase3-4-reassessment.md` §0 oracle verdict 把 M4 升 rank 3 因為「補強 trade direction 信心」可拉 sortino。
 
 #### 3.4.2 目標
 
@@ -408,7 +408,7 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 ### 7.1 內部文件
 
-- 起點 spec:[`.planning/phase3-4-reassessment.md`](../../.planning/phase3-4-reassessment.md) v1.0
+- 起點 spec:`.planning/phase3-4-reassessment.md` v1.0
 - 既存相關 spec:
   - [`agent-mcp-server.md`](./agent-mcp-server.md)
   - [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual.md)
@@ -453,7 +453,7 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 Phase 3.5 全部 4 個 M merge 後,將:
 
-1. 建立 `docs/operations/phase3-5-runbook.md`(對齊 L2.4 runbook 模式)
-2. 更新 [`.planning/phase3-4-reassessment.md`](../../.planning/phase3-4-reassessment.md) §9 Q&A 標示「Phase 3.5 ship」
+1. 建立 `docs/operations/phase3-5-runbook.md`(對齊 L2.4 runbook 模式) — 見同目錄 stub 檔案
+2. 更新 `.planning/phase3-4-reassessment.md` §9 Q&A 標示「Phase 3.5 ship」
 3. 重新評估 Phase 4.A/B 優先順序(基於實際 M1-M4 結果)
 4. 若 sortino 改善達標(> 5%),考慮 Promotion 路線
