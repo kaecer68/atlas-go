@@ -73,10 +73,10 @@ POS_COUNT=$(echo "$POS_REFS" | wc -l | tr -d ' ')
 
 # G8: Regime handler coverage
 echo "--- G8: Regime handler coverage ---"
-ONR_CASES=$(sed -n '/func.*OnRegimeChange/,/^}$/p' "$WEIGHT_ENGINE_FILE" | grep -c 'case "' || echo 0)
+ONR_CASES=$(sed -n '/func.*OnRegimeChange/,/^}$/p' "$WEIGHT_ENGINE_FILE" | grep -c 'case "' || true)
 [ "$ONR_CASES" -gt 0 ] && pass "OnRegimeChange: $ONR_CASES regime case(s)" || fail "OnRegimeChange: no regime cases" ""
 
-GW_CASES=$(sed -n '/func.*GetWeights/,/^}$/p' "$WEIGHT_ENGINE_FILE" | grep -c 'case "' || echo 0)
+GW_CASES=$(sed -n '/func.*GetWeights/,/^}$/p' "$WEIGHT_ENGINE_FILE" | grep -c 'case "' || true)
 if [ "$GW_CASES" -gt 0 ]; then
     pass "GetWeights: $GW_CASES regime cases"
 else
