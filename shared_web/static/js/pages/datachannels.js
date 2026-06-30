@@ -39,50 +39,70 @@ export async function triggerChannelsIngest() {
 }
 
 export async function enableAllChannels() {
-  console.log('[Management] Enable all channels');
-  try {
-    const data = await silentGetJSON('/api/dashboard/data-channels');
-    const channels = data.channels || [];
-    for (const c of channels) {
-      if (c.status === 'inactive') {
-        await fetch(`/api/dashboard/channels/${c.channel_id}/toggle`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: true })
-        });
-      }
-    }
-    notify('已啟用所有通道', 'info');
-    refreshChannelStatus();
-  } catch (e) {
-    notify('啟用通道失敗: ' + e.message, 'err');
-  }
+  return setAllChannelsEnabled(true);
 }
 
 export async function disableAllChannels() {
-  console.log('[Management] Disable all channels');
+  return setAllChannelsEnabled(false);
+}
+
+// The backend (POST /api/dashboard/channels/{id}/toggle) is idempotent — a write
+// to data/state/channels.json with the same value is harmless. So we toggle every
+// channel in parallel without filtering by current state (the old `c.status ===
+// 'inactive'` filter was a semantic confusion of health status with enabled flag
+// and caused the buttons to silently do nothing for most channels).
+async function setAllChannelsEnabled(enabled) {
+  const verb = enabled ? '啟用' : '停用';
+  console.log(`[Management] ${verb} all channels`);
+
+  const buttons = Array.from(
+    document.querySelectorAll('#page-datachannels button[data-action^="dc-"]')
+  );
+  const originalLabels = new Map();
+  for (const b of buttons) {
+    originalLabels.set(b, b.textContent);
+    b.disabled = true;
+  }
+  const liveBtn = buttons.find(b => b.dataset.action === (enabled ? 'dc-enable-all' : 'dc-disable-all'));
+  if (liveBtn) liveBtn.textContent = `${verb}中…`;
+
   try {
     const data = await silentGetJSON('/api/dashboard/data-channels');
     const channels = data.channels || [];
-    for (const c of channels) {
-      if (c.status !== 'inactive') {
-        await fetch(`/api/dashboard/channels/${c.channel_id}/toggle`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: false })
-        });
-      }
+    if (channels.length === 0) {
+      notify('目前無資料通道', 'warn');
+      return;
     }
-    notify('已停用所有通道', 'warn');
-    refreshChannelStatus();
+    const results = await Promise.allSettled(channels.map(c =>
+      fetch(`/api/dashboard/channels/${c.channel_id}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      }).then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res; })
+    ));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.length - ok;
+    if (failed === 0) {
+      notify(`已${verb} ${ok} 個通道`, enabled ? 'info' : 'warn');
+    } else {
+      notify(`${verb}部分失敗：${ok}/${results.length} 成功`, 'warn');
+    }
+    // Re-fetch so persisted enabled flags show up in row badges.
+    await loadDataChannels();
   } catch (e) {
-    notify('停用通道失敗: ' + e.message, 'err');
+    notify(`${verb}通道失敗: ${e.message}`, 'err');
+  } finally {
+    for (const b of buttons) {
+      b.disabled = false;
+      const original = originalLabels.get(b);
+      if (original !== undefined) b.textContent = original;
+    }
   }
 }
 
-export function refreshChannelStatus() {
+export async function refreshChannelStatus() {
   console.log('[Management] Refresh channel status');
-  loadDataChannels();
+  await loadDataChannels();
   notify('狀態已刷新', 'info');
 }
 
@@ -246,15 +266,22 @@ export function renderDataChannels(data) {
     byCountry[country].forEach(c => {
       const sev = c.error_severity || 'warn';
       const errorHint = c.last_error ? `<div style="font-size:11px;color:${sevColor[sev] || sevColor.warn};margin-top:2px">${sevIcon[sev] || sevIcon.warn} ${escapeHtml(c.last_error)}</div>` : '';
-      const toggleBtn = `<button class="text-xs" onclick="toggleChannel('${c.channel_id}', this.dataset.enabled !== 'true')" data-enabled="${c.status !== 'inactive'}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${c.status === 'inactive' ? '啟用' : '停用'}</button>`;
-      const triggerBtn = `<button class="text-xs" onclick="triggerChannelFetch('${c.channel_id}')" style="padding:2px 8px;border-radius:4px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;margin-left:4px">觸發</button>`;
-      html += `<tr>
+      // disabled state is read from the new `enabled` field exposed by the
+      // backend (data/state/channels.json) — the old code keyed off c.status
+      // which conflates health with the operator's enable toggle.
+      const isEnabled = c.enabled !== false;
+      const toggleBtn = `<button class="text-xs dc-toggle" onclick="toggleChannel('${c.channel_id}', ${!isEnabled})" data-enabled="${isEnabled}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${isEnabled ? '停用' : '啟用'}</button>`;
+      const triggerBtn = `<button class="text-xs dc-trigger" onclick="triggerChannelFetch('${c.channel_id}')" style="padding:2px 8px;border-radius:4px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;margin-left:4px">觸發</button>`;
+      const statusBadge = !isEnabled
+        ? `<span class="badge status-disabled">已停用</span>`
+        : `<span class="badge ${statusClass(c.status)}">${c.status_text}</span>`;
+      html += `<tr class="${!isEnabled ? 'dc-row-disabled' : ''}">
         <td class="text-center">${statusLight(c.status)}</td>
         <td>${c.platform}</td>
         <td>${c.api_format}</td>
         <td class="text-muted text-xs">${c.path}</td>
         <td class="text-muted text-xs">${c.storage}</td>
-        <td><span class="badge ${statusClass(c.status)}">${c.status_text}</span>${errorHint}</td>
+        <td>${statusBadge}${errorHint}</td>
         <td>${toggleBtn}${triggerBtn}</td>
         <td class="text-xs">${c.updated_at}</td>
       </tr>`;
