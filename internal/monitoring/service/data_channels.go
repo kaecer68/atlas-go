@@ -345,8 +345,8 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 // loadEnabledStates reads data/state/channels.json (the same file written by
 // internal/monitoring/api/dashboard.setChannelEnabled). Returns nil if the file
 // is missing or malformed — callers should treat nil as "no overrides recorded,
-// default-on". Channels explicitly listed with enabled=false are honoured.
-// Malformed-file behaviour matches internal/monitoring/api/dashboard.channel_state.go
+// default-on". Channels explicitly listed with enabled=false are honored.
+// Malformed-file behavior matches internal/monitoring/api/dashboard.channel_state.go
 // (silent nil → default-on) — both reads share the same file so the contract is
 // "you get the operator's toggles, or you get default-on; never partial".
 func (s *DataChannelService) loadEnabledStates() map[string]bool {
