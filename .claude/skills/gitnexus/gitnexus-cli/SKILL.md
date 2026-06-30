@@ -12,20 +12,16 @@ All commands work via `npx` — no global install required.
 ### analyze — Build or refresh the index
 
 ```bash
-npx gitnexus analyze --skip-agents-md
+npx gitnexus analyze
 ```
 
-Run from the project root. This parses all source files, builds the knowledge graph, and writes it to `.gitnexus/`.
+Run from the project root. This parses all source files, builds the knowledge graph, writes it to `.gitnexus/`, and generates CLAUDE.md / AGENTS.md context files.
 
-| Flag                | Effect                                                                 |
-| ------------------- | ---------------------------------------------------------------------- |
-| `--force`           | Force full re-index even if up to date                                 |
-| `--embeddings`      | Enable embedding generation for semantic search (off by default)       |
+| Flag           | Effect                                                           |
+| -------------- | ---------------------------------------------------------------- |
+| `--force`      | Force full re-index even if up to date                           |
+| `--embeddings` | Enable embedding generation for semantic search (off by default) |
 | `--drop-embeddings` | Drop existing embeddings on rebuild. By default, an `analyze` without `--embeddings` preserves them. |
-| `--skip-agents-md`  | Do not inject/update the GitNexus section in `AGENTS.md` / `CLAUDE.md` |
-| `--index-only`      | Pure index mode: skip all AI-context file injection                    |
-
-> **atlas-go 約定**：一律使用 `--skip-agents-md`，避免自動注入的 GitNexus 區塊撐大 `CLAUDE.md`。本專案的 GitNexus 規則已改由 `AGENTS.md` 手寫維護。
 
 **When to run:** First time in a project, after major code changes, or when `gitnexus://repo/{name}/context` reports the index is stale. In Claude Code, a PostToolUse hook detects staleness after `git commit` and `git merge` and notifies the agent to run `analyze` — the hook does not run analyze itself, to avoid blocking the agent for up to 120s and risking KuzuDB corruption on timeout.
 
