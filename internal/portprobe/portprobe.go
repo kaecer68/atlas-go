@@ -1,6 +1,7 @@
 package portprobe
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +12,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
+)
+
+const defaultLsofTimeout = 5 * time.Second
+
+var (
+	lsofPath    = "lsof"
+	lsofTimeout = defaultLsofTimeout
 )
 
 // State describes the occupancy state of a TCP address after probing.
@@ -178,13 +186,22 @@ func isHealthy(url string) bool {
 }
 
 func lookupOccupantByPort(port int) (Occupant, error) {
-	out, err := exec.Command("lsof",
+	ctx, cancel := context.WithTimeout(context.Background(), lsofTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, lsofPath,
 		"-nP",
 		fmt.Sprintf("-iTCP:%d", port),
 		"-sTCP:LISTEN",
 		"-FpcL",
 	).Output()
 	if err != nil {
+		// exec.CommandContext cancels the process when ctx fires; the resulting
+		// error is a *os/exec.ExitError / signal: killed whose Cause is empty,
+		// so we re-survey ctx.Err() to distinguish deadline/cancellation from a
+		// genuine lsof failure.
+		if cerr := ctx.Err(); cerr != nil {
+			return Occupant{}, fmt.Errorf("lsof timeout after %s on port %d: %w", lsofTimeout, port, cerr)
+		}
 		return Occupant{}, fmt.Errorf("lsof: %w", err)
 	}
 	var occ Occupant

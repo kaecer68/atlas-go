@@ -3,7 +3,9 @@ package portprobe
 import (
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -195,5 +197,33 @@ func TestKillOccupant_NonExistentPID(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "sigterm") && !strings.Contains(err.Error(), "find process") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestLookupOccupant_LsofTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake lsof script relies on /bin/sh")
+	}
+
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fake-lsof")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake lsof: %v", err)
+	}
+
+	prevPath, prevTimeout := lsofPath, lsofTimeout
+	lsofPath = fake
+	lsofTimeout = 100 * time.Millisecond
+	t.Cleanup(func() {
+		lsofPath = prevPath
+		lsofTimeout = prevTimeout
+	})
+
+	_, err := LookupOccupant(freeLocalAddr(t))
+	if err == nil {
+		t.Fatal("LookupOccupant: expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "deadline") && !strings.Contains(err.Error(), "context") {
+		t.Errorf("LookupOccupant error = %v, want contains 'deadline' or 'context'", err)
 	}
 }
