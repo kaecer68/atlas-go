@@ -76,6 +76,7 @@ func Run(ctx context.Context, cfg Config) error {
 	mcpSrv := mcp.NewServer(impl, &mcp.ServerOptions{})
 
 	registerTools(mcpSrv, srv)
+	registerResources(mcpSrv, srv)
 
 	return mcpSrv.Run(ctx, &mcp.StdioTransport{})
 }
