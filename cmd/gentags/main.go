@@ -50,9 +50,6 @@ func main() {
 		rootDir = filepath.Dir(rootDir)
 	}
 	// Output to all active web directories so the copies don't drift.
-	// Before the frontend split (PR #749), only web/ existed. After the split,
-	// admin_web/, client_web/, shared_web/ each maintain their own copy.
-	// web/ is deprecated and no longer regenerated.
 	webDirs := []string{"admin_web", "client_web", "shared_web"}
 
 	// Scan domain types first (foundational), then API response types (depend on domain types).

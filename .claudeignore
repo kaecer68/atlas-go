@@ -77,8 +77,6 @@ configs/parameters.json
 configs/settings.local.json
 
 # field_types generated files
-web/static/js/field_types.d.ts
-web/static/js/field_names.js
 
 # Claude 技能目錄本身
 .claude/
