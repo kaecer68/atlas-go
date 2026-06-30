@@ -56,7 +56,7 @@ type narrativeBaseOutput struct {
 
 func (s *server) handleNarrativeGetEvents(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
-	if err := s.withAudit("narrative_get_events", nil, func() error {
+	if err := s.withAudit(ctx, "narrative_get_events", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/events", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
@@ -66,7 +66,7 @@ func (s *server) handleNarrativeGetEvents(ctx context.Context, _ *mcp.CallToolRe
 
 func (s *server) handleNarrativeGetChains(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
-	if err := s.withAudit("narrative_get_chains", nil, func() error {
+	if err := s.withAudit(ctx, "narrative_get_chains", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/chains", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
@@ -76,7 +76,7 @@ func (s *server) handleNarrativeGetChains(ctx context.Context, _ *mcp.CallToolRe
 
 func (s *server) handleNarrativeGetModels(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
-	if err := s.withAudit("narrative_get_models", nil, func() error {
+	if err := s.withAudit(ctx, "narrative_get_models", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/models", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
@@ -86,7 +86,7 @@ func (s *server) handleNarrativeGetModels(ctx context.Context, _ *mcp.CallToolRe
 
 func (s *server) handleNarrativeGetTemplates(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
-	if err := s.withAudit("narrative_get_templates", nil, func() error {
+	if err := s.withAudit(ctx, "narrative_get_templates", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/templates", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
@@ -96,7 +96,7 @@ func (s *server) handleNarrativeGetTemplates(ctx context.Context, _ *mcp.CallToo
 
 func (s *server) handleNarrativeGetSeasonal(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
-	if err := s.withAudit("narrative_get_seasonal", nil, func() error {
+	if err := s.withAudit(ctx, "narrative_get_seasonal", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/seasonal", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
@@ -106,7 +106,7 @@ func (s *server) handleNarrativeGetSeasonal(ctx context.Context, _ *mcp.CallTool
 
 func (s *server) handleNarrativeGetBundle(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
-	if err := s.withAudit("narrative_get_bundle", nil, func() error {
+	if err := s.withAudit(ctx, "narrative_get_bundle", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/bundle", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
@@ -116,7 +116,7 @@ func (s *server) handleNarrativeGetBundle(ctx context.Context, _ *mcp.CallToolRe
 
 func (s *server) handleNarrativeStressIndexThresholds(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
-	if err := s.withAudit("narrative_stress_index_thresholds", nil, func() error {
+	if err := s.withAudit(ctx, "narrative_stress_index_thresholds", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/stress-index/thresholds", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err

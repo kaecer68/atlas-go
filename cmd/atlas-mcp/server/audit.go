@@ -15,6 +15,8 @@ import (
 type AuditEntry struct {
 	TS         string                 `json:"ts"`
 	Tool       string                 `json:"tool"`
+	TenantID   string                 `json:"tenant_id,omitempty"`
+	AgentID    string                 `json:"agent_id,omitempty"`
 	CallerPID  int                    `json:"caller_pid,omitempty"`
 	ArgKeys    []string               `json:"arg_keys,omitempty"`
 	Status     string                 `json:"status"` // "ok" | "error" | "unauthorized"

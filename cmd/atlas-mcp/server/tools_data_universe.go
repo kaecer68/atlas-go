@@ -54,7 +54,7 @@ type channelNameInput struct {
 
 func (s *server) handleDataGetChannels(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
 	var out dataUniverseBaseOutput
-	if err := s.withAudit("data_get_channels", nil, func() error {
+	if err := s.withAudit(ctx, "data_get_channels", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/data-channels", nil, &out.Result)
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err
@@ -64,7 +64,7 @@ func (s *server) handleDataGetChannels(ctx context.Context, _ *mcp.CallToolReque
 
 func (s *server) handleDataGetChannelDetail(ctx context.Context, _ *mcp.CallToolRequest, in channelNameInput) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
 	var out dataUniverseBaseOutput
-	if err := s.withAudit("data_get_channel_detail", []string{"channel_name"}, func() error {
+	if err := s.withAudit(ctx, "data_get_channel_detail", []string{"channel_name"}, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/data-channels/"+in.ChannelName, nil, &out.Result)
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err
@@ -74,7 +74,7 @@ func (s *server) handleDataGetChannelDetail(ctx context.Context, _ *mcp.CallTool
 
 func (s *server) handleDataGetQuality(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
 	var out dataUniverseBaseOutput
-	if err := s.withAudit("data_get_quality", nil, func() error {
+	if err := s.withAudit(ctx, "data_get_quality", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/data-quality", nil, &out.Result)
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err
@@ -84,7 +84,7 @@ func (s *server) handleDataGetQuality(ctx context.Context, _ *mcp.CallToolReques
 
 func (s *server) handleDataGetFieldContract(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
 	var out dataUniverseBaseOutput
-	if err := s.withAudit("data_get_field_contract", nil, func() error {
+	if err := s.withAudit(ctx, "data_get_field_contract", nil, func() error {
 		return s.cli.Get(ctx, "/api/field-contract", nil, &out.Result)
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err
@@ -94,7 +94,7 @@ func (s *server) handleDataGetFieldContract(ctx context.Context, _ *mcp.CallTool
 
 func (s *server) handleUniverseGetSessions(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
 	var out dataUniverseBaseOutput
-	if err := s.withAudit("universe_get_sessions", nil, func() error {
+	if err := s.withAudit(ctx, "universe_get_sessions", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/sessions", nil, &out.Result)
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err
@@ -104,7 +104,7 @@ func (s *server) handleUniverseGetSessions(ctx context.Context, _ *mcp.CallToolR
 
 func (s *server) handleUniverseGetUniverseOverlap(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
 	var out dataUniverseBaseOutput
-	if err := s.withAudit("universe_get_universe_overlap", nil, func() error {
+	if err := s.withAudit(ctx, "universe_get_universe_overlap", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/universe-overlap", nil, &out.Result)
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err

@@ -113,7 +113,7 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 	}
 	q := map[string]string{"days": fmt.Sprintf("%d", in.Days)}
 	var out RegimeGetHistoryOutput
-	if err := s.withAudit("regime_get_history", []string{"days"}, func() error {
+	if err := s.withAudit(ctx, "regime_get_history", []string{"days"}, func() error {
 		var raw []RegimePoint
 		if err := s.cli.Get(ctx, "/api/dashboard/regime-history", urlValues(q), &raw); err != nil {
 			return err
@@ -128,7 +128,7 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 
 func (s *server) handleStrategyListActive(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, StrategyListActiveOutput, error) {
 	var out StrategyListActiveOutput
-	if err := s.withAudit("strategy_list_active", nil, func() error {
+	if err := s.withAudit(ctx, "strategy_list_active", nil, func() error {
 		if err := s.cli.Get(ctx, "/api/strategies/active", nil, &out.Strategies); err != nil {
 			return err
 		}
@@ -145,7 +145,7 @@ func (s *server) handleExperimentJudge(ctx context.Context, _ *mcp.CallToolReque
 	}
 	var out ExperimentJudgeOutput
 	body := map[string]string{"experiment_id": in.ExperimentID}
-	if err := s.withAudit("experiment_judge", []string{"experiment_id"}, func() error {
+	if err := s.withAudit(ctx, "experiment_judge", []string{"experiment_id"}, func() error {
 		return s.cli.PostJSON(ctx, "/api/experiment/judge", body, &out.Result)
 	}); err != nil {
 		return nil, ExperimentJudgeOutput{}, err
@@ -155,7 +155,7 @@ func (s *server) handleExperimentJudge(ctx context.Context, _ *mcp.CallToolReque
 
 func (s *server) handleAlertListUnacknowledged(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, AlertListUnacknowledgedOutput, error) {
 	var out AlertListUnacknowledgedOutput
-	if err := s.withAudit("alert_list_unacknowledged", nil, func() error {
+	if err := s.withAudit(ctx, "alert_list_unacknowledged", nil, func() error {
 		return s.cli.Get(ctx, "/api/alerts/unacknowledged", nil, &out.Alerts)
 	}); err != nil {
 		return nil, AlertListUnacknowledgedOutput{}, err
@@ -166,7 +166,7 @@ func (s *server) handleAlertListUnacknowledged(ctx context.Context, _ *mcp.CallT
 func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, SystemHealthOutput, error) {
 	var raw map[string]any
 	var out SystemHealthOutput
-	if err := s.withAudit("system_get_health", nil, func() error {
+	if err := s.withAudit(ctx, "system_get_health", nil, func() error {
 		if err := s.cli.Get(ctx, "/api/dashboard/system-health", nil, &raw); err != nil {
 			return err
 		}
@@ -183,19 +183,22 @@ func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolReque
 }
 
 // withAudit is the standard wrapper for tool handlers: it measures latency,
-// enforces per-tool rate limits (Phase 3 B), and emits one AuditEntry per
-// call regardless of success/failure.
-func (s *server) withAudit(tool string, argKeys []string, fn func() error) error {
+// enforces per-tenant per-tool rate limits (Phase 3 B), and emits one
+// AuditEntry per call regardless of success/failure.
+func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, fn func() error) error {
 	start := time.Now()
 
-	// Rate limit gate. Caller resolution: stdio is currently "stdio" (single
-	// bucket per tool); HTTP/SSE transports will resolve caller from bearer
-	// token in a follow-up. On deny, write a ratelimited audit entry and
-	// short-circuit. s.limiter is nil when rate limiting is disabled.
+	tenantID := TenantIDFromContext(ctx)
+	agentID := AgentIDFromContext(ctx)
+
+	// Rate limit gate. Caller is resolved from context; stdio or missing
+	// identity defaults to "anonymous".
 	if s.limiter != nil {
-		if r := s.limiter.Allow(tool, "stdio"); !r.Allowed {
+		if r := s.limiter.Allow(tool, tenantID); !r.Allowed {
 			entry := AuditEntry{
 				Tool:       tool,
+				TenantID:   tenantID,
+				AgentID:    agentID,
 				ArgKeys:    argKeys,
 				DurationMS: time.Since(start).Milliseconds(),
 				Status:     "ratelimited",
@@ -209,6 +212,8 @@ func (s *server) withAudit(tool string, argKeys []string, fn func() error) error
 	err := fn()
 	entry := AuditEntry{
 		Tool:       tool,
+		TenantID:   tenantID,
+		AgentID:    agentID,
 		ArgKeys:    argKeys,
 		DurationMS: time.Since(start).Milliseconds(),
 		Status:     "ok",

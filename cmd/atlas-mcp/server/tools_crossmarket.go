@@ -32,7 +32,7 @@ type crossmarketBaseOutput struct {
 
 func (s *server) handleCrossmarketGetStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, crossmarketBaseOutput, error) {
 	var out crossmarketBaseOutput
-	if err := s.withAudit("crossmarket_get_status", nil, func() error {
+	if err := s.withAudit(ctx, "crossmarket_get_status", nil, func() error {
 		return s.cli.Get(ctx, "/api/cross-market/status", nil, &out.Result)
 	}); err != nil {
 		return nil, crossmarketBaseOutput{}, err
@@ -42,7 +42,7 @@ func (s *server) handleCrossmarketGetStatus(ctx context.Context, _ *mcp.CallTool
 
 func (s *server) handleCrossmarketGetCorrelation(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, crossmarketBaseOutput, error) {
 	var out crossmarketBaseOutput
-	if err := s.withAudit("crossmarket_get_correlation", nil, func() error {
+	if err := s.withAudit(ctx, "crossmarket_get_correlation", nil, func() error {
 		return s.cli.Get(ctx, "/api/cross-market/correlation", nil, &out.Result)
 	}); err != nil {
 		return nil, crossmarketBaseOutput{}, err
@@ -52,7 +52,7 @@ func (s *server) handleCrossmarketGetCorrelation(ctx context.Context, _ *mcp.Cal
 
 func (s *server) handleCrossmarketGetUsIndices(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, crossmarketBaseOutput, error) {
 	var out crossmarketBaseOutput
-	if err := s.withAudit("crossmarket_get_us_indices", nil, func() error {
+	if err := s.withAudit(ctx, "crossmarket_get_us_indices", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/us-indices", nil, &out.Result)
 	}); err != nil {
 		return nil, crossmarketBaseOutput{}, err

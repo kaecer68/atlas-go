@@ -4,30 +4,28 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Config is the immutable configuration for a server. Build via New, never mutate
-// after construction.
+// Config is the immutable configuration for a server.
 type Config struct {
 	AtlasBaseURL       string        // atlas HTTP base, e.g. http://127.0.0.1:8080
 	APIToken           string        // admin API key forwarded to atlas HTTP API (ATLAS_API_KEY)
 	AuditLogPath       string        // JSONL audit log file path
 	HTTPTimeout        time.Duration // per-call timeout to atlas HTTP (default 10s)
-	AuditRetentionDays int           // 0 = disabled; >0 = remove entries older than N days (default 30 in main.go)
-	RateLimitPerMinute int           // per-(tool, caller) requests per minute; 0 = disabled
+	AuditRetentionDays int           // 0 = disabled; >0 = remove entries older than N days (default 30)
+	RateLimitPerMinute int           // per-(tool, tenant) requests per minute; 0 = disabled
 	RateLimitBurst     int           // burst capacity; 0 = defaults to PerMinute
+	MCPToken           string        // env-var fallback token (ATLAS_MCP_TOKEN)
+	TokenStore         TokenStore    // optional DB-backed token store (nil = env-only)
+	AdminAddr          string        // admin HTTP listen address, e.g. "127.0.0.1:9090" (empty = disabled)
+	AdminToken         string        // admin API token (ATLAS_ADMIN_TOKEN)
 }
 
-// Run constructs a server with config, registers the five core tools and
-// runs the stdio transport to completion. Returns the first transport error.
-//
-// If cfg.AuditRetentionDays > 0, Run also (a) prunes the existing audit log
-// on startup and (b) starts a background goroutine that prunes daily. A
-// failed prune is logged to stderr but does NOT abort startup — stale audit
-// data is preferable to no MCP server at all.
+// Run constructs a server with config and runs the stdio transport to completion.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.AtlasBaseURL == "" {
 		return fmt.Errorf("server: AtlasBaseURL is required")
@@ -45,31 +43,51 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	if cfg.AuditRetentionDays > 0 {
-		// Prune once at startup. Failure is non-fatal.
 		if removed, cErr := audit.Cleanup(cfg.AuditRetentionDays, time.Now()); cErr != nil {
 			fmt.Fprintf(os.Stderr, "atlas-mcp: startup audit cleanup failed: %v\n", cErr)
 		} else if removed > 0 {
 			fmt.Fprintf(os.Stderr, "atlas-mcp: startup audit cleanup removed %d entries\n", removed)
 		}
-		// Schedule daily cleanup until ctx is cancelled.
 		go runRetentionLoop(ctx, audit, cfg.AuditRetentionDays)
 	}
 
-	// Rate limiter: token-bucket per (tool, caller). Phase 3 B — closes
-	// roadmap §4 risk "agent triggers destructive operations". Disabled when
-	// RateLimitPerMinute == 0 (no-op, all calls allowed). Background sweeper
-	// evicts idle buckets to bound memory.
 	limiter := NewRateLimiter(RateLimiterConfig{
 		PerMinute: cfg.RateLimitPerMinute,
 		Burst:     cfg.RateLimitBurst,
 	})
 	limiter.Run(ctx)
 
+	auth := NewTokenAuth(cfg.MCPToken)
+	if cfg.TokenStore != nil {
+		auth.SetStore(cfg.TokenStore)
+	}
+
+	// Start admin HTTP handler if configured. It requires a TokenStore and
+	// must bind loopback only.
+	if cfg.AdminAddr != "" {
+		if cfg.TokenStore == nil {
+			return fmt.Errorf("server: TokenStore is required when AdminAddr is set")
+		}
+		if cfg.AdminToken == "" {
+			return fmt.Errorf("server: AdminToken is required when AdminAddr is set")
+		}
+		if !strings.HasPrefix(cfg.AdminAddr, "127.0.0.1:") {
+			return fmt.Errorf("server: admin addr %q must bind 127.0.0.1", cfg.AdminAddr)
+		}
+		adminHandler := NewTokenAdminHandler(cfg.TokenStore, cfg.AdminToken)
+		go func() {
+			if err := StartAdminServer(ctx, cfg.AdminAddr, adminHandler); err != nil && err != context.Canceled {
+				fmt.Fprintf(os.Stderr, "atlas-mcp: admin server: %v\n", err)
+			}
+		}()
+	}
+
 	srv := &server{
 		cfg:     cfg,
 		audit:   audit,
 		cli:     newHTTPClient(cfg),
 		limiter: limiter,
+		auth:    auth,
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp", Version: "v0.1.0"}
@@ -82,8 +100,7 @@ func Run(ctx context.Context, cfg Config) error {
 	return mcpSrv.Run(ctx, &mcp.StdioTransport{})
 }
 
-// runRetentionLoop prunes the audit log every 24h until ctx is done. Errors
-// are logged to stderr; cleanup failure is non-fatal.
+// runRetentionLoop prunes the audit log every 24h until ctx is done.
 func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
@@ -101,17 +118,20 @@ func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 	}
 }
 
-// server holds shared state for all tool handlers. All fields are
-// read-only after construction; readers may proceed without external locking.
+// server holds shared state for all tool handlers.
 type server struct {
 	cfg     Config
 	audit   *AuditWriter
 	cli     *httpClient
 	limiter *RateLimiter
+	auth    *TokenAuth
 }
 
-// HTTPClient returns the shared HTTP client. Used by tool handlers and tests.
+// HTTPClient returns the shared HTTP client.
 func (s *server) HTTPClient() *httpClient { return s.cli }
 
-// Audit returns the audit writer. Used by tool handlers and tests.
+// Audit returns the audit writer.
 func (s *server) Audit() *AuditWriter { return s.audit }
+
+// Auth returns the token authenticator.
+func (s *server) Auth() *TokenAuth { return s.auth }

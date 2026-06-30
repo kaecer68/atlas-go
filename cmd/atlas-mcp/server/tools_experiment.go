@@ -30,7 +30,7 @@ type experimentBaseOutput struct {
 
 func (s *server) handleExperimentDiff(ctx context.Context, _ *mcp.CallToolRequest, in experimentIDInput) (*mcp.CallToolResult, experimentBaseOutput, error) {
 	var out experimentBaseOutput
-	if err := s.withAudit("experiment_diff", []string{"experiment_id"}, func() error {
+	if err := s.withAudit(ctx, "experiment_diff", []string{"experiment_id"}, func() error {
 		return s.cli.Get(ctx, "/api/experiment/diff", nil, &out.Result)
 	}); err != nil {
 		return nil, experimentBaseOutput{}, err
@@ -40,7 +40,7 @@ func (s *server) handleExperimentDiff(ctx context.Context, _ *mcp.CallToolReques
 
 func (s *server) handleExperimentHistory(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, experimentBaseOutput, error) {
 	var out experimentBaseOutput
-	if err := s.withAudit("experiment_history", nil, func() error {
+	if err := s.withAudit(ctx, "experiment_history", nil, func() error {
 		return s.cli.Get(ctx, "/api/experiment/history", nil, &out.Result)
 	}); err != nil {
 		return nil, experimentBaseOutput{}, err
