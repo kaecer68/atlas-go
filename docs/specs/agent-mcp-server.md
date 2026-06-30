@@ -4,9 +4,9 @@
 > **狀態**：P1 設計階段（Stage 3 產出）
 > **範圍決策**：「完整暴露」atlas-go 能力（使用者於 2026-06-30 確認）
 > **關聯文件**：
-> - [`WORKFLOW_MAP.md`](../../WORKFLOW_MAP.md)（workflow 總覽）
+> - [`WORKFLOW_MAP.md`](../WORKFLOW_MAP.md)（workflow 總覽）
 > - [`AGENTS.md`](../../AGENTS.md)（跨工具 AI 共用指引）
-> - [`../specs/agent-loop-state-machine.md`](../specs/agent-loop-state-machine.md)（AgentLoop 細節）
+> - [`./agent-loop-state-machine.md`](./agent-loop-state-machine.md)（AgentLoop 細節）
 
 ---
 
@@ -52,7 +52,7 @@
 
 ## 3. MCP Tools 清單
 
-下表為 atlas-go 全量 HTTP endpoints → MCP tool 映射。所有工具依照 **Workflow Area (WA-XXX)** 分群，與 [`WORKFLOW_MAP.md`](../../WORKFLOW_MAP.md) §3 對齊。
+下表為 atlas-go 全量 HTTP endpoints → MCP tool 映射。所有工具依照 **Workflow Area (WA-XXX)** 分群，與 [`WORKFLOW_MAP.md`](../WORKFLOW_MAP.md) §3 對齊。
 
 ### 3.1 MCP Tools 全清單
 

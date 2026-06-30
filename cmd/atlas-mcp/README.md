@@ -5,7 +5,7 @@
 ## Phase 1 (this release)
 
 Phase 1 ships **stdio transport only** with five core tools. Phase 2 will add
-SSE and streamable-HTTP transports (see [`docs/plans/agent-interface-roadmap.md`](../../plans/agent-interface-roadmap.md)).
+SSE and streamable-HTTP transports (see [`docs/plans/agent-interface-roadmap.md`](../../docs/plans/agent-interface-roadmap.md)).
 
 | Tool | Trigger | Action |
 |------|---------|--------|
@@ -15,7 +15,7 @@ SSE and streamable-HTTP transports (see [`docs/plans/agent-interface-roadmap.md`
 | `alert_list_unacknowledged` | Agent asks about open alerts | GET `/api/alerts/unacknowledged` |
 | `system_get_health` | Agent asks about overall system health | GET `/api/dashboard/system-health` |
 
-Reference catalog (70 tools total in the long run, with rationale + decision flow): [`docs/AGENT_TOOLS.md`](../../AGENT_TOOLS.md).
+Reference catalog (70 tools total in the long run, with rationale + decision flow): [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md).
 
 ## Configuration
 
