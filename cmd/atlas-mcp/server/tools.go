@@ -19,6 +19,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerMacroTools(mcpSrv, s)
 	registerCrossmarketTools(mcpSrv, s)
 	registerNarrativeTools(mcpSrv, s)
+	registerRiskAlertTools(mcpSrv, s)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
