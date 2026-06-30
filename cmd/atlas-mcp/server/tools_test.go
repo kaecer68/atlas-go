@@ -27,6 +27,12 @@ type reqRecorder struct {
 	responseBody []byte // overridable; default `[]`
 }
 
+func (r *reqRecorder) SetResponseBody(b []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.responseBody = b
+}
+
 func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	t.Helper()
 	rec := &reqRecorder{responseBody: []byte(`[]`)}
@@ -167,7 +173,7 @@ func TestHandleExperimentJudge_MissingID(t *testing.T) {
 func TestHandleExperimentJudge_PostsJSON(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
-	rec.responseBody = []byte(`{}`)
+	rec.SetResponseBody([]byte(`{}`))
 	_, _, err := s.handleExperimentJudge(context.Background(), nil, ExperimentJudgeInput{ExperimentID: "exp-42"})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
