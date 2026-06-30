@@ -44,7 +44,7 @@
     "/api/dashboard/agent-names": {
       "get": {
         "summary": "Agent display-name registry",
-        "description": "Returns the agent display-name registry from configs/agents.json. Single source of truth for the performance-report frontend, replacing two competing static maps (web/static/js/names.js and web/static/js/shared/constants.js). Returns an empty agents array when the registry file is absent (graceful degradation).",
+        "description": "Returns the agent display-name registry from configs/agents.json. Single source of truth for the performance-report frontend, replacing legacy static maps. Returns an empty agents array when the registry file is absent (graceful degradation).",
         "responses": {
           "200": {
             "description": "Agent registry response",
