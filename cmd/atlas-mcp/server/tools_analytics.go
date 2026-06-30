@@ -33,7 +33,7 @@ func percentile64(sorted []int64, p float64) int64 {
 	if p >= 100 {
 		return sorted[len(sorted)-1]
 	}
-	fidx := (float64(len(sorted)-1)) * p / 100.0
+	fidx := (float64(len(sorted) - 1)) * p / 100.0
 	lo := int(fidx)
 	hi := lo + 1
 	if hi >= len(sorted) {
