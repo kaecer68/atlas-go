@@ -325,12 +325,16 @@ func run(args []string, deps appDeps) error {
 			} else {
 				gateway = gw
 				log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
-				gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, error) {
+				gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, monitoring.FetchMeta, error) {
 					result, err := gateway.Fetch(ctx, channelID)
 					if err != nil {
-						return nil, err
+						return nil, monitoring.FetchMeta{}, err
 					}
-					return result.Data, nil
+					return result.Data, monitoring.FetchMeta{
+						Stale:     result.Stale,
+						Fallback:  result.Fallback,
+						LastError: result.LastError,
+					}, nil
 				}
 				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}

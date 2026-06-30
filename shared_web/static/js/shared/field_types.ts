@@ -539,6 +539,7 @@ export interface CrossMarketStatus {
   correlation_spx_vix: number | null;
   data_status: string;
   failed_channels?: string[];
+  stale_channels?: string[];
 }
 
 export interface CustomerConcentration {

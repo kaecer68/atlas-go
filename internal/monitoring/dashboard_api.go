@@ -57,9 +57,20 @@ import (
 	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
+// FetchMeta carries Gateway-side quality metadata that must be surfaced to
+// the L2 adapter so channel failures (CB-open stale, fallback, transient
+// errors) propagate up to the 4-layer data-visibility safeguard. Without
+// this, gateway.Fetch returns stale bytes with nil error on the CB-open
+// path (gateway.go:107), and the L2 adapter silently treats them as fresh.
+type FetchMeta struct {
+	Stale     bool
+	Fallback  bool
+	LastError string
+}
+
 // DataFetcher is a Gateway-compatible data fetch function injected via SetGateway.
 // It breaks the import cycle between monitoring and apigateway packages.
-type DataFetcher func(ctx context.Context, channelID string) ([]byte, error)
+type DataFetcher func(ctx context.Context, channelID string) ([]byte, FetchMeta, error)
 
 type DashboardAPI struct {
 	workDir                    string

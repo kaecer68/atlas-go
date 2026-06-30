@@ -92,7 +92,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		wg.Add(1)
 		go func(ch channelMapping) {
 			defer wg.Done()
-			data, err := a.fetcher(ctx, ch.channelID)
+			data, meta, err := a.fetcher(ctx, ch.channelID)
 			if err != nil {
 				a.mu.Lock()
 				a.lastErrors[ch.channelID] = err.Error()
@@ -100,7 +100,15 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 				return
 			}
 			a.mu.Lock()
-			delete(a.lastErrors, ch.channelID)
+			if meta.Stale {
+				msg := "stale: gateway returned cached data (CB-open or fallback)"
+				if meta.LastError != "" {
+					msg = "stale: " + meta.LastError
+				}
+				a.lastErrors[ch.channelID] = msg
+			} else {
+				delete(a.lastErrors, ch.channelID)
+			}
 			ch.apply(&merged, data)
 			a.mu.Unlock()
 		}(ch)
@@ -112,11 +120,20 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 	}
 
 	a.mu.Lock()
-	allFailed := len(a.lastErrors) > 0 && len(a.lastErrors) == len(channels)
+	// Count "real" errors only (exclude stale: channels, which still
+	// returned usable cached data). Without this filter, a CB-open
+	// across all channels would be misclassified as "all failed"
+	// even though stale data is still populated.
+	realErrCount := 0
 	errMsgs := make([]string, 0, len(a.lastErrors))
-	for _, e := range a.lastErrors {
-		errMsgs = append(errMsgs, e)
+	for ch, e := range a.lastErrors {
+		if len(e) >= 6 && e[:6] == "stale:" {
+			continue
+		}
+		realErrCount++
+		errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", ch, e))
 	}
+	allFailed := realErrCount > 0 && realErrCount == len(channels)
 	a.mu.Unlock()
 
 	if allFailed {
@@ -385,7 +402,7 @@ func (a *geopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.
 	// Use a short timeout — store fallback preferred over slow live fetch.
 	fastCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	data, err := a.fetcher(fastCtx, "geopolitical")
+	data, _, err := a.fetcher(fastCtx, "geopolitical")
 	if err != nil {
 		return narrative.GeopoliticalRiskScore{}, err
 	}
@@ -424,7 +441,7 @@ func (a *taiwanGeopoliticalGatewayAdapter) Name() string {
 
 // FetchScore fetches Taiwan-specific geopolitical risk data from the Gateway.
 func (a *taiwanGeopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
-	data, err := a.fetcher(ctx, "geopolitical_taiwan")
+	data, _, err := a.fetcher(ctx, "geopolitical_taiwan")
 	if err != nil {
 		return narrative.GeopoliticalRiskScore{}, err
 	}
@@ -439,7 +456,7 @@ func (a *taiwanGeopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narr
 // Returns a function that fetches DayTradingStats from the day_trading channel.
 func NewDayTradingFetcher(fetcher DataFetcher) func(ctx context.Context) (*marketdata.DayTradingStats, error) {
 	return func(ctx context.Context) (*marketdata.DayTradingStats, error) {
-		data, err := fetcher(ctx, "day_trading")
+		data, _, err := fetcher(ctx, "day_trading")
 		if err != nil {
 			return nil, err
 		}
@@ -461,7 +478,7 @@ var (
 // NewTaifexFetcher creates a fetcher for TAIFEX PCR and retail futures OI data.
 func NewTaifexFetcher(fetcher DataFetcher) apisystem.TaifexFetcher {
 	return func(ctx context.Context) (*marketdata.PCRStats, *marketdata.RetailFuturesOI, error) {
-		data, err := fetcher(ctx, "taifex_daily")
+		data, _, err := fetcher(ctx, "taifex_daily")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -479,7 +496,7 @@ func NewTaifexFetcher(fetcher DataFetcher) apisystem.TaifexFetcher {
 // NewOddLotFetcher creates a fetcher for TWSE odd-lot trading data.
 func NewOddLotFetcher(fetcher DataFetcher) apisystem.OddLotFetcher {
 	return func(ctx context.Context) (*marketdata.OddLotStats, error) {
-		data, err := fetcher(ctx, "twse_oddlot")
+		data, _, err := fetcher(ctx, "twse_oddlot")
 		if err != nil {
 			return nil, err
 		}
@@ -494,7 +511,7 @@ func NewOddLotFetcher(fetcher DataFetcher) apisystem.OddLotFetcher {
 // NewETFFetcher creates a fetcher for TWSE ETF subscription data.
 func NewETFFetcher(fetcher DataFetcher) apisystem.ETFFetcher {
 	return func(ctx context.Context) (*marketdata.ETFStats, error) {
-		data, err := fetcher(ctx, "twse_etf")
+		data, _, err := fetcher(ctx, "twse_etf")
 		if err != nil {
 			return nil, err
 		}

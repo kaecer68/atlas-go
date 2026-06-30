@@ -6,7 +6,7 @@ export async function loadCrossMarketData() {
     fetch('/api/dashboard/us-indices').then(r => r.json()).catch(() => null),
     fetch('/api/cross-market/correlation').then(r => r.json()).catch(() => null),
   ]);
-  // renderDegradedBanner: surface channel failures before rendering US cards
+  renderStaleBanner(status);
   renderDegradedBanner(status);
   renderUSIndices(status);
   renderTechStocks(status);
@@ -201,6 +201,30 @@ function emptyState(msg) {
     '<div style="color:var(--text);font-weight:600;margin-bottom:4px">' + escapeHtml(msg || '等待資料') + '</div>' +
     '<div style="color:var(--muted);font-size:var(--text-base)">美台連動監控資料每 5 分鐘自動更新一次。</div>' +
     '</div>';
+}
+
+function renderStaleBanner(status) {
+  if (!status || status.data_status !== 'stale') return;
+
+  const stale = status.stale_channels || [];
+  const staleList = stale.length > 0
+    ? stale.map(ch => `<code style="background:var(--panel-l2);padding:2px 6px;border-radius:3px;margin:0 2px">${escapeHtml(ch)}</code>`).join('')
+    : '<em>(部分美國市場通道)</em>';
+
+  const html = `<div class="cm-stale-banner" style="background:color-mix(in srgb, var(--status-stale) 14%, transparent);border:1px solid color-mix(in srgb, var(--status-stale) 30%, transparent);border-radius:8px;padding:var(--space-md);margin-bottom:var(--space-md)">
+    <strong style="color:var(--status-stale)">⏱ 部分美國市場資料為快取值</strong>
+    <div class="cm-stale-list" style="font-size:var(--text-sm);color:var(--text);margin-top:6px">以下通道回傳快取（電路熔斷器開啟或 fallback），數值仍顯示但可能過時: ${staleList}</div>
+    <div class="cm-stale-recovery" style="font-size:var(--text-xs);color:var(--muted);margin-top:6px">系統正在使用 CB 開啟前的最後一筆快取，等待通道恢復後將自動更新為新鮮資料。</div>
+  </div>`;
+
+  const firstGrid = document.querySelector('#cm-us-indices');
+  if (firstGrid && firstGrid.parentNode) {
+    const existing = firstGrid.parentNode.querySelector('.cm-stale-banner');
+    if (existing) existing.remove();
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    firstGrid.parentNode.insertBefore(wrapper.firstChild, firstGrid);
+  }
 }
 
 function renderDegradedBanner(status) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -71,11 +72,16 @@ type CrossMarketStatus struct {
 
 	// Data visibility (Layer 3 of data-visibility safeguard).
 	// DataStatus is "ok" when all 10 US index/tech/macro fields have real data,
-	// "degraded" when at least one is missing. FailedChannels lists the
-	// specific channelIDs that returned empty (frontend uses this to
-	// render error badges).
+	// "stale" when at least one channel returned cached data (CB-open / fallback)
+	// but no channel fully failed, or "degraded" when at least one channel
+	// failed (no data at all). FailedChannels lists the specific channelIDs
+	// that returned empty (frontend uses this to render error badges).
+	// StaleChannels lists channelIDs that returned cached data — the values
+	// are present but may be outdated. Frontend shows an amber warning so
+	// users see the CB-open state even when numbers are present.
 	DataStatus     string   `json:"data_status"`
 	FailedChannels []string `json:"failed_channels,omitempty"`
+	StaleChannels  []string `json:"stale_channels,omitempty"`
 }
 
 // CrossMarketIndex bundles an index/stock value with its metadata.
@@ -122,8 +128,9 @@ type CrossMarketService struct {
 	// callbackMu protects degradedCallback reads/writes and last-degraded state.
 	callbackMu         sync.Mutex
 	degradedCallback   func(string, []string)
-	lastDegradedStatus string   // previous status string ("ok"/"degraded")
+	lastDegradedStatus string   // previous status string ("ok"/"stale"/"degraded")
 	lastFailedChannels []string // previous failed channel list for dedup
+	lastStaleChannels  []string // previous stale channel list for dedup
 
 	// cacheMu + cachedSnapshot + cacheTime implement a TTL cache for
 	// FetchSnapshot, preventing the 2x redundant ~15-20s HTTP cascade
@@ -219,8 +226,8 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 		return snap, nil, err
 	}
 
-	status, failed := detectDegradedUSStatus(snap)
-	meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed}
+	status, failed, stale := detectDegradedUSStatus(snap, channelErrorsFromProvider(s.provider))
+	meta := &snapshotStatusMeta{DataStatus: status, FailedChannels: failed, StaleChannels: stale}
 
 	// Debounce: only fire callback on state transition
 	// (ok↔degraded) or when the failed-channel list changes.
@@ -231,11 +238,15 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	cb := s.degradedCallback
 	prevStatus := s.lastDegradedStatus
 	prevFailed := s.lastFailedChannels
-	changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed)
-	shouldFire := cb != nil && status == "degraded" && (changed || prevStatus == "")
+	prevStale := s.lastStaleChannels
+	changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed) || !stringSlicesEqual(stale, prevStale)
+	// Fire when status leaves "ok" (covers both "stale" and "degraded") so the
+	// monitor.Warning() path is taken for CB-open serving cached data too.
+	shouldFire := cb != nil && status != "ok" && (changed || prevStatus == "")
 	if changed || prevStatus == "" {
 		s.lastDegradedStatus = status
 		s.lastFailedChannels = failed
+		s.lastStaleChannels = stale
 	}
 	s.callbackMu.Unlock()
 	if shouldFire {
@@ -245,7 +256,7 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 		}
 	}
 
-	if status == "degraded" && s.degradedMetrics != nil {
+	if status != "ok" && s.degradedMetrics != nil {
 		s.degradedMetrics.DegradedActivations.WithLabelValues("crossmarket", "missing_us_index_data").Inc()
 	}
 
@@ -333,6 +344,7 @@ func (s *CrossMarketService) GetStatus(ctx context.Context) (*CrossMarketStatus,
 	if meta != nil {
 		status.DataStatus = meta.DataStatus
 		status.FailedChannels = meta.FailedChannels
+		status.StaleChannels = meta.StaleChannels
 	}
 
 	return status, nil
@@ -414,18 +426,24 @@ func toIndex(dp marketdata.MacroDataPoint) CrossMarketIndex {
 	}
 }
 
-// detectDegradedUSStatus returns the data status and list of failed channels
-// for the 10 US index/tech/macro fields in MacroDataSnapshot. A field is "failed"
-// when its Symbol is empty (meaning the channel returned an error or no data)
-// or its Value is ≤ 0 (meaning the provider returned garbage/zero data).
+// detectDegradedUSStatus returns the data status, failed channels, and stale
+// channels for the 10 US index/tech/macro fields in MacroDataSnapshot.
+// A field is "failed" when its Symbol is empty (meaning the channel returned
+// an error or no data) or its Value is ≤ 0 (meaning the provider returned
+// garbage/zero data). "Stale" channels are those the L2 gateway adapter
+// marked with a "stale:" prefix (CB-open / fallback serving cached data) —
+// they still produced a value, but it may be outdated.
 //
 // This is Layer 3 of the 4-layer data-visibility safeguard
 // (see .claude/skills/atlas-data-visibility/SKILL.md).
 //
-// Returns:
-//   - "ok" + nil when all 10 fields are populated and non-zero
-//   - "degraded" + list of failed channelIDs otherwise
-func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot) (string, []string) {
+// Taxonomy:
+//   - "ok"        + nil          when all 10 fields fresh and no channel stale
+//   - "stale"     + staleList    when no failures but at least one channel stale
+//   - "degraded"  + failedList   when at least one field failed (stale list still
+//     returned alongside, since users benefit from
+//     knowing which subset is fresh vs cached)
+func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot, channelErrors map[string]string) (string, []string, []string) {
 	failed := []string{}
 	checks := []struct {
 		channelID string
@@ -447,10 +465,16 @@ func detectDegradedUSStatus(snap marketdata.MacroDataSnapshot) (string, []string
 			failed = append(failed, c.channelID)
 		}
 	}
-	if len(failed) == 0 {
-		return "ok", nil
+	stale := extractStaleChannels(channelErrors)
+
+	switch {
+	case len(failed) > 0:
+		return "degraded", failed, stale
+	case len(stale) > 0:
+		return "stale", nil, stale
+	default:
+		return "ok", nil, nil
 	}
-	return "degraded", failed
 }
 
 // stringSlicesEqual reports whether two string slices have identical
@@ -475,4 +499,44 @@ func stringSlicesEqual(a, b []string) bool {
 type snapshotStatusMeta struct {
 	DataStatus     string
 	FailedChannels []string
+	StaleChannels  []string
+}
+
+// channelErrorsProvider is the optional L2 capability that exposes the
+// gateway adapter's per-channel error map (with "stale:" prefixes for
+// CB-open / fallback channels). The production wiring uses
+// *macroDataGatewayAdapter which implements this; test fakes may not.
+type channelErrorsProvider interface {
+	ChannelErrors() map[string]string
+}
+
+func channelErrorsFromProvider(p marketdata.MacroDataProvider) map[string]string {
+	if p == nil {
+		return nil
+	}
+	if cep, ok := p.(channelErrorsProvider); ok {
+		return cep.ChannelErrors()
+	}
+	return nil
+}
+
+// extractStaleChannels filters a channel-errors map for entries whose
+// message starts with "stale:" (set by the L2 gateway adapter when the
+// CB served cached data). Returns a deterministic, lexicographically
+// sorted slice so tests and dedup logic see a stable order.
+func extractStaleChannels(channelErrors map[string]string) []string {
+	if len(channelErrors) == 0 {
+		return nil
+	}
+	stale := make([]string, 0, len(channelErrors))
+	for ch, msg := range channelErrors {
+		if len(msg) >= 6 && msg[:6] == "stale:" {
+			stale = append(stale, ch)
+		}
+	}
+	if len(stale) == 0 {
+		return nil
+	}
+	sort.Strings(stale)
+	return stale
 }
