@@ -9,43 +9,43 @@ import (
 func registerNarrativeTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_events",
-		Description: "Latest narrative events (regime shifts, capital flows, macro shocks).",
+		Description: autoDescOr("narrative_get_events", "Latest narrative events (regime shifts, capital flows, macro shocks)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeGetEvents)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_chains",
-		Description: "Current narrative chains (cause-effect graphs) for the latest detected event.",
+		Description: autoDescOr("narrative_get_chains", "Current narrative chains (cause-effect graphs) for the latest detected event."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeGetChains)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_models",
-		Description: "Active narrative models (regime detector, flow forecaster, etc.).",
+		Description: autoDescOr("narrative_get_models", "Active narrative models (regime detector, flow forecaster, etc.)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeGetModels)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_templates",
-		Description: "Cause-effect templates available to the narrative model registry.",
+		Description: autoDescOr("narrative_get_templates", "Cause-effect templates available to the narrative model registry."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeGetTemplates)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_seasonal",
-		Description: "Latest seasonal narrative packet (regime-by-month statistics).",
+		Description: autoDescOr("narrative_get_seasonal", "Latest seasonal narrative packet (regime-by-month statistics)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeGetSeasonal)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_bundle",
-		Description: "Compiled 'briefing bundle' (events + chains + templates) suitable for an LLM agent's morning summary.",
+		Description: autoDescOr("narrative_get_bundle", "Compiled 'briefing bundle' (events + chains + templates) suitable for an LLM agent's morning summary."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeGetBundle)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_stress_index_thresholds",
-		Description: "Configurable thresholds for the stress index (used by the narrative engine to flag regime shifts).",
+		Description: autoDescOr("narrative_stress_index_thresholds", "Configurable thresholds for the stress index (used by the narrative engine to flag regime shifts)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeStressIndexThresholds)
 }

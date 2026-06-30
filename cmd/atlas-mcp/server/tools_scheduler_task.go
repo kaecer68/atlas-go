@@ -9,25 +9,25 @@ import (
 func registerSchedulerTaskTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "scheduler_get_status",
-		Description: "Background scheduler status: which tasks ran, when, last result. Read-only overview of the dispatcher state.",
+		Description: autoDescOr("scheduler_get_status", "Background scheduler status: which tasks ran, when, last result. Read-only overview of the dispatcher state."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSchedulerGetStatus)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "task_list",
-		Description: "List background tasks (filtered by status).",
+		Description: autoDescOr("task_list", "List background tasks (filtered by status)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTaskList)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "task_get",
-		Description: "Single task by id (status, progress, last result).",
+		Description: autoDescOr("task_get", "Single task by id (status, progress, last result)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTaskGet)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "task_get_events",
-		Description: "Event stream of a single task (ordered lifecycle events).",
+		Description: autoDescOr("task_get_events", "Event stream of a single task (ordered lifecycle events)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTaskGetEvents)
 }

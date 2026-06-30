@@ -9,25 +9,25 @@ import (
 func registerStrategyTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_layers",
-		Description: "All strategy layers (L1-L5) currently configured in the system.",
+		Description: autoDescOr("strategy_get_layers", "All strategy layers (L1-L5) currently configured in the system."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyGetLayers)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get",
-		Description: "Fetch a single strategy by id (returns full config + state metadata).",
+		Description: autoDescOr("strategy_get", "Fetch a single strategy by id (returns full config + state metadata)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyGet)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_attribution",
-		Description: "Performance attribution for a strategy over the requested window.",
+		Description: autoDescOr("strategy_get_attribution", "Performance attribution for a strategy over the requested window."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyGetAttribution)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_summary",
-		Description: "Compact summary of a strategy (hit rate, Sharpe, drawdown, regime behavior).",
+		Description: autoDescOr("strategy_get_summary", "Compact summary of a strategy (hit rate, Sharpe, drawdown, regime behavior)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyGetSummary)
 }

@@ -9,19 +9,19 @@ import (
 func registerCrossmarketTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "crossmarket_get_status",
-		Description: "Cross-market data feed status (US indices source, freshness, error count).",
+		Description: autoDescOr("crossmarket_get_status", "Cross-market data feed status (US indices source, freshness, error count)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleCrossmarketGetStatus)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "crossmarket_get_correlation",
-		Description: "Latest cross-market correlation matrix (Taiwan sector vs US indices).",
+		Description: autoDescOr("crossmarket_get_correlation", "Latest cross-market correlation matrix (Taiwan sector vs US indices)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleCrossmarketGetCorrelation)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "crossmarket_get_us_indices",
-		Description: "Latest US index snapshots (S&P 500, NASDAQ, Dow Jones).",
+		Description: autoDescOr("crossmarket_get_us_indices", "Latest US index snapshots (S&P 500, NASDAQ, Dow Jones)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleCrossmarketGetUsIndices)
 }

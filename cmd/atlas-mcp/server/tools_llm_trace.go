@@ -9,37 +9,37 @@ import (
 func registerLLMTraceTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "llm_get_cost",
-		Description: "LLM cost snapshot — recent spend, by model, by capability.",
+		Description: autoDescOr("llm_get_cost", "LLM cost snapshot — recent spend, by model, by capability."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleLLMGetCost)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "llm_get_health",
-		Description: "LLM router health — provider status (DeepSeek, MiniMax/M3), circuit-breaker, fallback chain.",
+		Description: autoDescOr("llm_get_health", "LLM router health — provider status (DeepSeek, MiniMax/M3), circuit-breaker, fallback chain."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleLLMGetHealth)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_sim_latest",
-		Description: "Latest simulation reasoning trace (most recent agent run).",
+		Description: autoDescOr("trace_get_sim_latest", "Latest simulation reasoning trace (most recent agent run)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTraceGetSimLatest)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_agent_observatory",
-		Description: "Current agent activity observatory (which agents are active, what they're working on).",
+		Description: autoDescOr("trace_get_agent_observatory", "Current agent activity observatory (which agents are active, what they're working on)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTraceGetAgentObservatory)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_decision_chain",
-		Description: "Decision chain for a symbol (full causal trace from macro → sector → agent recommendation).",
+		Description: autoDescOr("trace_get_decision_chain", "Decision chain for a symbol (full causal trace from macro → sector → agent recommendation)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTraceGetDecisionChain)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_reasoning",
-		Description: "Reasoning trace (RAG/CoT steps) for a recent recommendation.",
+		Description: autoDescOr("trace_get_reasoning", "Reasoning trace (RAG/CoT steps) for a recent recommendation."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTraceGetReasoning)
 }
