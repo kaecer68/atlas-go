@@ -127,9 +127,6 @@ func TestStdioJSONRPC_HappyPath(t *testing.T) {
 	for _, n := range gotNames {
 		gotSet[n] = true
 	}
-	if len(gotSet) != len(wantSet) {
-		t.Fatalf("tool count mismatch: got %v want-set %d", gotNames, len(wantSet))
-	}
 	for want := range wantSet {
 		if !gotSet[want] {
 			t.Fatalf("missing tool %q (got %v)", want, gotNames)

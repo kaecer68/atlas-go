@@ -1,0 +1,61 @@
+package server
+
+import (
+	"context"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+func registerCrossmarketTools(mcpSrv *mcp.Server, s *server) {
+	mcp.AddTool(mcpSrv, &mcp.Tool{
+		Name:        "crossmarket_get_status",
+		Description: "Cross-market data feed status (US indices source, freshness, error count).",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleCrossmarketGetStatus)
+
+	mcp.AddTool(mcpSrv, &mcp.Tool{
+		Name:        "crossmarket_get_correlation",
+		Description: "Latest cross-market correlation matrix (Taiwan sector vs US indices).",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleCrossmarketGetCorrelation)
+
+	mcp.AddTool(mcpSrv, &mcp.Tool{
+		Name:        "crossmarket_get_us_indices",
+		Description: "Latest US index snapshots (S&P 500, NASDAQ, Dow Jones).",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleCrossmarketGetUsIndices)
+}
+
+type crossmarketBaseOutput struct {
+	Result *map[string]any `json:"result"`
+}
+
+func (s *server) handleCrossmarketGetStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, crossmarketBaseOutput, error) {
+	var out crossmarketBaseOutput
+	if err := s.withAudit("crossmarket_get_status", nil, func() error {
+		return s.cli.Get(ctx, "/api/cross-market/status", nil, &out.Result)
+	}); err != nil {
+		return nil, crossmarketBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+func (s *server) handleCrossmarketGetCorrelation(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, crossmarketBaseOutput, error) {
+	var out crossmarketBaseOutput
+	if err := s.withAudit("crossmarket_get_correlation", nil, func() error {
+		return s.cli.Get(ctx, "/api/cross-market/correlation", nil, &out.Result)
+	}); err != nil {
+		return nil, crossmarketBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+func (s *server) handleCrossmarketGetUsIndices(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, crossmarketBaseOutput, error) {
+	var out crossmarketBaseOutput
+	if err := s.withAudit("crossmarket_get_us_indices", nil, func() error {
+		return s.cli.Get(ctx, "/api/dashboard/us-indices", nil, &out.Result)
+	}); err != nil {
+		return nil, crossmarketBaseOutput{}, err
+	}
+	return nil, out, nil
+}

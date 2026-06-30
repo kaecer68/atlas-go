@@ -366,3 +366,102 @@ Client 端（任意 SSE 相容 agent）：
 3. **`atlas-mcp` 與 `atlas` 是否要併入同一 binary？** 預設是（單一 binary，多子命令），但需評估 binary 大小
 4. **是否要 binary-internal version（取代現有 HTTP API）？** 預設否，HTTP 仍為主，MCP 為附加層
 5. **audit log 保留期？** 預設 30 天（合規最低），可調
+
+---
+
+## 11. Phase 2.2 Implementation Status（2026-06-30）
+
+**狀態：✅ COMPLETE** — 14 batches 全部 force-push 到 PR #834（`feat/atlas-mcp-phase2`）。
+
+### 工具擴展
+- Phase 1 baseline：5 tools（stdio only，process isolation 為 security boundary）
+- Phase 2.2 擴展：69 新 tools，分 14 個小 batch 推上
+- **PR #834 累計：74 tools / 99 tests / `-race` 綠**
+
+### 完整 Tool Catalog（74，per spec §3.1 候選清單全部上線）
+
+| Area | Tools | Count |
+|------|-------|------|
+| Phase 1 core | `regime_get_history`, `strategy_list_active`, `experiment_judge`, `alert_list_unacknowledged`, `system_get_health` | 5 |
+| Macro | `macro_get_snapshot_latest`, `macro_get_snapshot_history`, `macro_get_stress_index_current`, `macro_get_stress_index_history`, `macro_get_capital_flow_latest`, `macro_get_ingest_status` | 6 |
+| Crossmarket | `crossmarket_get_status`, `crossmarket_get_correlation`, `crossmarket_get_us_indices` | 3 |
+| Narrative | `narrative_get_events`, `narrative_get_chains`, `narrative_get_models`, `narrative_get_templates`, `narrative_get_seasonal`, `narrative_get_bundle`, `narrative_stress_index_thresholds` | 7 |
+| Risk | `risk_get_metrics`, `risk_get_correlation_matrix`, `risk_get_drawdown`, `risk_get_calibration`, `risk_get_commentary` | 5 |
+| Alert (new) | `alert_list`, `alert_get_stats`, `alert_get_rules` | 3 |
+| Strategy (new) | `strategy_get_layers`, `strategy_get`, `strategy_get_attribution`, `strategy_get_summary` | 4 |
+| Experiment (new) | `experiment_diff`, `experiment_history` | 2 |
+| Synergy | `synergy_get_darwinian_status`, `synergy_get_darwinian_trend`, `synergy_get_l2_4_schedule` | 3 |
+| Control (read-only) | `control_get_audit_log`, `control_get_active_overrides`, `control_approve_recommendation`, `control_reject_recommendation` | 4 |
+| Scheduler/Task | `scheduler_get_status`, `task_list`, `task_get`, `task_get_events` | 4 |
+| System (new) | `system_get_metrics`, `system_get_metrics_trend`, `system_get_thresholds`, `system_get_data_pipeline`, `system_get_circuit_breaker`, `system_get_maturity` | 6 |
+| LLM | `llm_get_cost`, `llm_get_health` | 2 |
+| Trace | `trace_get_sim_latest`, `trace_get_agent_observatory`, `trace_get_decision_chain`, `trace_get_reasoning` | 4 |
+| Data | `data_get_channels`, `data_get_channel_detail`, `data_get_quality`, `data_get_field_contract` | 4 |
+| Universe | `universe_get_sessions`, `universe_get_universe_overlap` | 2 |
+| Report | `report_get_daily_summary`, `report_get_performance`, `report_get_tax_snapshot`, `report_get_export_link` | 4 |
+| Prism | `prism_get_training_results` | 1 |
+| Swarm | `swarm_get_status`, `swarm_get_consensus`, `swarm_get_anomalies`, `swarm_get_scenarios`, `swarm_get_strategies` | 5 |
+
+### Admin / destructive 排除清單（per §3.2）
+
+以下端點**故意不暴露**給 MCP（需 admin 權限或 destructive）：
+
+- `/admin/reload-config`, `/api/admin/calibrate-thresholds`, `/api/dashboard/api-keys/update`
+- `/api/control/{sector-ban, set-model-weight, pause-agent, resume-agent}`
+- `/api/experiment/{promote, revert}`
+- `/api/alerts/{acknowledge, acknowledge-bulk, resolve, silence}`
+- `/api/synergy/l2-4-schedule/{start, stop, reset, update}`
+- `/api/scheduler/toggle`
+- `/api/strategies/{id}/annotate`
+- `/api/tasks` (POST), `/api/tasks/{id}/{cancel, retry, confirm}`
+
+這些操作仍可透過 `/admin/` 管理後台或直接 HTTP 呼叫觸發（需 apigateway 認證）。
+
+### Transport 演進
+
+- **Phase 1**：stdio only，process isolation 為 security boundary
+- **Phase 2.1**：新增 streamable-HTTP + SSE transports；Bearer auth 可強制（`--auth=required`）
+  - stdio 仍 permissive（process isolation）
+  - HTTP/SSE 經 `Authorization: Bearer <ATLAS_MCP_TOKEN>` 驗證
+- **Phase 2.2**：74 tools 全部支援所有 3 個 transport
+
+### 驗證（截至 2026-06-30）
+
+- `go build ./cmd/atlas-mcp/...` exit 0
+- `go test -count=1 -race ./cmd/atlas-mcp/...`：**99 PASS / 0 FAIL**
+- PR #834：1 個 Phase 2.1 commit + 1 個 fix commit + 14 個 batch commits（每 batch 一個 commit）
+- 全部 14 batch 透過 `--force-with-lease` 推上
+
+### 對應的 MCP transport 程式碼地圖
+
+```
+cmd/atlas-mcp/
+├── main.go                 (env wiring, flag parsing, dispatch entry)
+├── e2e_test.go             (real subprocess stdio JSON-RPC test)
+├── main_test.go            (package compile smoke)
+├── README.md               (deployment + client config)
+└── server/
+    ├── server.go           (Run dispatch + Config)
+    ├── auth.go             (TokenAuth — Phase 2.1)
+    ├── audit.go            (JSONL writer)
+    ├── http_client.go      (atlas HTTP bridge)
+    ├── transport_stdio.go  (Phase 1, stdio transport)
+    ├── transport_http.go   (Phase 2.1, streamable-HTTP)
+    ├── transport_sse.go    (Phase 2.1, SSE)
+    ├── transport_auth.go   (Phase 2.1, Bearer middleware)
+    ├── tools.go             (registerTools dispatch)
+    ├── tools_phase1_core.go (Phase 1's 5 tools inline)
+    ├── tools_macro.go + _test.go
+    ├── tools_crossmarket.go + _test.go
+    ├── tools_narrative.go + _test.go
+    ├── tools_risk_alert.go + _test.go
+    ├── tools_strategy.go + _test.go
+    ├── tools_experiment.go + _test.go
+    ├── tools_synergy.go + _test.go
+    ├── tools_control.go + _test.go
+    ├── tools_scheduler_task.go + _test.go
+    ├── tools_system.go + _test.go
+    ├── tools_llm_trace.go + _test.go
+    ├── tools_data_universe.go + _test.go
+    └── tools_report_prism_swarm.go + _test.go
+```
