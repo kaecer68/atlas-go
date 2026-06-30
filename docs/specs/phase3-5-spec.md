@@ -10,7 +10,7 @@
 
 ## 1. 設計目標
 
-完成 [.planning/phase3-4-reassessment.md](../../.planning/phase3-4-reassessment.md) §3 揭示的 4 個整合缺口,目標:
+完成 `.planning/phase3-4-reassessment.md` §3 揭示的 4 個整合缺口,目標:
 
 1. **M1 deployment-gateway** (rank 4, 2d): 把 live / gateway-health / live-metrics 三個獨立 endpoint 收進單一 dashboard
 2. **M2 narrative-taxonomy** (rank 2, 3d): narrative event 分類標準化,event-driven weights 輸入得到結構化處理
@@ -100,7 +100,7 @@ admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,�
 
 #### 3.2.1 問題
 
-narrative event 目前分類不一致 — [`internal/narrative/event.go`](../../internal/narrative/event.go) 的 `EventType` 是 free-form string,沒有強制分層結構。詳見 `.planning/phase3-4-reassessment.md` §3 C2。影響:
+narrative event 目前分類不一致 — `internal/narrative/event.go` 的 `EventType` 是 free-form string,沒有強制分層結構。詳見 `.planning/phase3-4-reassessment.md` §3 C2。影響:
 
 - [`atlas-event-driven-weights`](../../.claude/skills/atlas-event-driven-weights/SKILL.md) factor bridge 對應表依賴 narrative event 分類,目前是 hardcoded lookup table
 - 新 narrative 加入時,需要有人手動擴充 enum + 加 mapping rule,容易漏
