@@ -16,6 +16,9 @@ import (
 // reading agent recognizes them. JSON schemas are derived automatically from
 // the Input structs (per OFFICIAL go-sdk convention with `jsonschema` tags).
 func registerTools(mcpSrv *mcp.Server, s *server) {
+	registerMacroTools(mcpSrv, s)
+	registerCrossmarketTools(mcpSrv, s)
+
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
 		Description: "Return the market regime history for the last N days. Regimes are RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL.",
