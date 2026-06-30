@@ -13,7 +13,7 @@ import (
 // invokes atlas-go via the shared httpClient and writes one AuditEntry.
 //
 // The tool descriptions follow docs/AGENT_TOOLS.md §"高頻工具 Top 15" so a
-// reading agent recognises them. JSON schemas are derived automatically from
+// reading agent recognizes them. JSON schemas are derived automatically from
 // the Input structs (per OFFICIAL go-sdk convention with `jsonschema` tags).
 func registerTools(mcpSrv *mcp.Server, s *server) {
 	mcp.AddTool(mcpSrv, &mcp.Tool{
@@ -82,7 +82,7 @@ type AlertListUnacknowledgedOutput struct {
 }
 
 type SystemHealthOutput struct {
-	Status string `json:"status"`
+	Status string         `json:"status"`
 	Info   map[string]any `json:"info,omitempty"`
 }
 

@@ -5,10 +5,11 @@
 // SSE and streamable-HTTP transports are deferred to Phase 2.
 //
 // Configuration via environment:
-//   ATLAS_BASE_URL       atlas core HTTP base (default: http://127.0.0.1:8080)
-//   ATLAS_API_KEY        admin API key (passed through when invoking atlas HTTP API)
-//   ATLAS_MCP_TOKEN      required token for MCP clients (when set)
-//   ATLAS_MCP_AUDIT_LOG  JSONL audit-log path (default: $TMPDIR/atlas-mcp-audit.log)
+//
+//	ATLAS_BASE_URL       atlas core HTTP base (default: http://127.0.0.1:8080)
+//	ATLAS_API_KEY        admin API key (passed through when invoking atlas HTTP API)
+//	ATLAS_MCP_TOKEN      required token for MCP clients (when set)
+//	ATLAS_MCP_AUDIT_LOG  JSONL audit-log path (default: $TMPDIR/atlas-mcp-audit.log)
 //
 // When ATLAS_MCP_TOKEN is unset the server runs in dev mode (no auth check).
 package main

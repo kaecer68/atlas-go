@@ -70,7 +70,7 @@ func (c *httpClient) do(ctx context.Context, method, fullURL string, body io.Rea
 	if err != nil {
 		return fmt.Errorf("httpClient: do: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("httpClient: read body: %w", err)

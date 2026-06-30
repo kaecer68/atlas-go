@@ -399,13 +399,10 @@ func TestE2E_PythonZombieOrphanReclaimed(t *testing.T) {
 		t.Fatalf("atlas never came up after reclaim attempt; L1 zombie kill may have failed")
 	}
 
-	// The python zombie should now be killed by atlas's reclaim path.
-	// We give portprobe.KillOccupant's SIGTERM+1s+SIGKILL escalation a
-	// moment to complete.
-	if !waitPortReleased(zombiePort, 5*time.Second) {
-		stopAtlas(t, atlas, 3*time.Second)
-		t.Fatalf("python zombie did not release port %d after reclaim", zombiePort)
-	}
+	// A healthy /health means the fake fubon-proxy managed to bind the port
+	// after atlas reclaimed it from the zombie. We intentionally do not check
+	// waitPortReleased here because the fake proxy re-binds the same port
+	// immediately, so "port occupied" is expected and correct.
 
 	stopAtlas(t, atlas, 5*time.Second)
 }
