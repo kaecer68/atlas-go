@@ -1,0 +1,61 @@
+package server
+
+import (
+	"context"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+func registerSynergyTools(mcpSrv *mcp.Server, s *server) {
+	mcp.AddTool(mcpSrv, &mcp.Tool{
+		Name:        "synergy_get_darwinian_status",
+		Description: "Current Darwinian weight state (which strategies are being promoted/demoted, current weight delta).",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleSynergyGetDarwinianStatus)
+
+	mcp.AddTool(mcpSrv, &mcp.Tool{
+		Name:        "synergy_get_darwinian_trend",
+		Description: "Historical Darwinian weight trend per strategy (last N days).",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleSynergyGetDarwinianTrend)
+
+	mcp.AddTool(mcpSrv, &mcp.Tool{
+		Name:        "synergy_get_l2_4_schedule",
+		Description: "L2.4 observation window schedule (current state, next boundary).",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleSynergyGetL24Schedule)
+}
+
+type synergyBaseOutput struct {
+	Result *map[string]any `json:"result"`
+}
+
+func (s *server) handleSynergyGetDarwinianStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, synergyBaseOutput, error) {
+	var out synergyBaseOutput
+	if err := s.withAudit("synergy_get_darwinian_status", nil, func() error {
+		return s.cli.Get(ctx, "/api/synergy/darwinian/status", nil, &out.Result)
+	}); err != nil {
+		return nil, synergyBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+func (s *server) handleSynergyGetDarwinianTrend(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, synergyBaseOutput, error) {
+	var out synergyBaseOutput
+	if err := s.withAudit("synergy_get_darwinian_trend", nil, func() error {
+		return s.cli.Get(ctx, "/api/synergy/darwinian/trend", nil, &out.Result)
+	}); err != nil {
+		return nil, synergyBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+func (s *server) handleSynergyGetL24Schedule(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, synergyBaseOutput, error) {
+	var out synergyBaseOutput
+	if err := s.withAudit("synergy_get_l2_4_schedule", nil, func() error {
+		return s.cli.Get(ctx, "/api/synergy/l2-4-schedule", nil, &out.Result)
+	}); err != nil {
+		return nil, synergyBaseOutput{}, err
+	}
+	return nil, out, nil
+}
