@@ -44,6 +44,15 @@ type ChannelFetchLogEntry struct {
 // fetchLogCap bounds the persistent recent-fetches ring buffer per ChannelHealthStore.
 const fetchLogCap = 50
 
+// DefaultStaleThreshold is the default maximum age of a non-ok
+// ChannelHealthRecord before Alerts() filters it out. Channels refresh
+// every 5min-1hr; records older than this window are no longer
+// actionable signals (e.g., a transient DNS failure that resolved hours
+// ago should not surface as a current alert in the dashboard).
+//
+// Set to 0 to disable stale filtering (return all records regardless of age).
+const DefaultStaleThreshold = 1 * time.Hour
+
 // ChannelHealthStore persists channel fetch outcomes.
 //
 // Originally declared in internal/monitoring/channel_health.go; relocated
@@ -56,6 +65,18 @@ type ChannelHealthStore struct {
 	data         map[string]*ChannelHealthRecord
 	fetchLog     []ChannelFetchLogEntry
 	pool         *pgxpool.Pool
+
+	// staleThreshold filters non-ok records from Alerts() when the record's
+	// LastFetchAt is older than this duration from nowFunc(). Set to 0 to
+	// disable filtering (return all records regardless of age). Default:
+	// DefaultStaleThreshold (1 hour). Configurable via WithStaleThreshold.
+	staleThreshold time.Duration
+
+	// nowFunc returns the current time. Defaults to time.Now; injectable
+	// for tests via WithNowFunc. Matches the CircuitBreaker.WithNowFunc
+	// pattern (Wave 12 Phase 2, Issue #731) for deterministic clock in
+	// stale-threshold boundary tests.
+	nowFunc func() time.Time
 }
 
 // NewChannelHealthStore creates or loads a health store at the given directory.
@@ -66,11 +87,35 @@ func NewChannelHealthStore(dir string) *ChannelHealthStore {
 // NewChannelHealthStoreWithPool creates a health store with an optional DB pool.
 func NewChannelHealthStoreWithPool(dir string, pool *pgxpool.Pool) *ChannelHealthStore {
 	return &ChannelHealthStore{
-		path:         filepath.Join(dir, "channel_health.json"),
-		fetchLogPath: filepath.Join(dir, "channel_fetch_log.json"),
-		data:         make(map[string]*ChannelHealthRecord),
-		pool:         pool,
+		path:           filepath.Join(dir, "channel_health.json"),
+		fetchLogPath:   filepath.Join(dir, "channel_fetch_log.json"),
+		data:           make(map[string]*ChannelHealthRecord),
+		pool:           pool,
+		staleThreshold: DefaultStaleThreshold,
+		nowFunc:        time.Now,
 	}
+}
+
+// WithStaleThreshold configures the maximum age of a non-ok record before
+// Alerts() filters it out. Pass 0 to disable filtering. Returns the store
+// for chaining. Safe to call concurrently with Alerts() — both reads and
+// writes are guarded by the store's RWMutex.
+func (s *ChannelHealthStore) WithStaleThreshold(d time.Duration) *ChannelHealthStore {
+	s.mu.Lock()
+	s.staleThreshold = d
+	s.mu.Unlock()
+	return s
+}
+
+// WithNowFunc replaces the clock used by Alerts() to determine record age.
+// Defaults to time.Now. Used by tests to inject deterministic time for
+// boundary assertions (mirrors CircuitBreaker.WithNowFunc, Wave 12 Phase 2).
+// Returns the store for chaining.
+func (s *ChannelHealthStore) WithNowFunc(now func() time.Time) *ChannelHealthStore {
+	s.mu.Lock()
+	s.nowFunc = now
+	s.mu.Unlock()
+	return s
 }
 
 func (s *ChannelHealthStore) load() error {
@@ -308,14 +353,32 @@ func (s *ChannelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
 	return &rec
 }
 
-// Alerts returns all channels with non-ok status.
+// Alerts returns all non-ok channels whose LastFetchAt is within the
+// configured staleThreshold (default: DefaultStaleThreshold = 1 hour).
+// Records older than the threshold are filtered out — they represent
+// historical errors that are no longer actionable signals (the channel
+// may have recovered, or the error condition may have changed). Set
+// staleThreshold to 0 via WithStaleThreshold to disable filtering.
 func (s *ChannelHealthStore) Alerts() []ChannelAlert {
 	_ = s.load()
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	threshold := s.staleThreshold
+	now := s.nowFunc()
+	s.mu.RUnlock()
+
 	var alerts []ChannelAlert
 	for id, rec := range s.data {
 		if rec.Status != "ok" && rec.Status != "inactive" {
+			// Skip stale records when threshold > 0 and LastFetchAt is
+			// parseable. Unparseable timestamps are kept (defensive:
+			// prefer showing over hiding when in doubt).
+			if threshold > 0 && rec.LastFetchAt != "" {
+				if ts, err := time.Parse(time.RFC3339, rec.LastFetchAt); err == nil {
+					if now.Sub(ts) > threshold {
+						continue
+					}
+				}
+			}
 			alerts = append(alerts, ChannelAlert{
 				ChannelID: id,
 				Status:    rec.Status,
