@@ -18,6 +18,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/portprobe"
 	"github.com/kaecer68/atlas-go/internal/screener"
 )
 
@@ -52,8 +53,20 @@ func defaultAppDeps() appDeps {
 		newDashboardAPI: func(workDir, ledgerDir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
 		},
-		listenAndServe: func(srv *http.Server) error { return srv.ListenAndServe() },
-		shutdown:       make(chan struct{}),
+		listenAndServe: func(srv *http.Server) error {
+			// http.Server default Addr is "" which ListenAndServe maps to ":http".
+			// Skip portprobe for empty Addr: lsof + classification assume bindable
+			// loopback and would probe port 80, which needs root on most systems.
+			if srv.Addr == "" {
+				return srv.ListenAndServe()
+			}
+			ln, err := portprobe.Listen(srv.Addr)
+			if err != nil {
+				return err
+			}
+			return srv.Serve(ln)
+		},
+		shutdown: make(chan struct{}),
 	}
 }
 
