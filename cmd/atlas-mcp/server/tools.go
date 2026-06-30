@@ -23,6 +23,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerStrategyTools(mcpSrv, s)
 	registerExperimentTools(mcpSrv, s)
 	registerSynergyTools(mcpSrv, s)
+	registerControlTools(mcpSrv, s)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
