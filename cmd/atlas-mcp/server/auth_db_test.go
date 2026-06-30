@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // mapTokenStore is an in-memory TokenStore for testing.
@@ -370,4 +371,29 @@ func strContains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+func TestPGTokenStore_DBClosedFailsAuth(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Connect to a non-existent port so Lookup triggers a connection failure.
+	poolCfg, err := pgxpool.ParseConfig("postgres://127.0.0.1:1/postgres?connect_timeout=1")
+	if err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+	if err != nil {
+		t.Fatalf("new pool: %v", err)
+	}
+	defer pool.Close()
+
+	store := NewPGTokenStore(pool)
+	_, err = store.Lookup(ctx, "any-token")
+	if err == nil {
+		t.Fatal("expected error from closed DB")
+	}
+	if !errors.Is(err, ErrDBUnavailable) {
+		t.Fatalf("expected ErrDBUnavailable, got %v (type=%T)", err, err)
+	}
 }

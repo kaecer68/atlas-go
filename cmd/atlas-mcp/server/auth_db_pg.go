@@ -41,7 +41,7 @@ func (s *PGTokenStore) Lookup(ctx context.Context, rawToken string) (*TokenInfo,
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTokenNotFound
 		}
-		return nil, fmt.Errorf("lookup token: %w", err)
+		return nil, fmt.Errorf("%w: lookup token: %v", ErrDBUnavailable, err)
 	}
 	if err := json.Unmarshal(scopesRaw, &info.Scopes); err != nil {
 		return nil, fmt.Errorf("lookup token: decode scopes: %w", err)
