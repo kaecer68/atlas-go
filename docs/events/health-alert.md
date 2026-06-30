@@ -117,9 +117,9 @@ if len(alerts) > 0 {
 
 | 項目 | 檔案 | 說明 |
 |------|------|------|
-| EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
-| 既有健康面板 | `web/static/js/components/circuit-breaker.js`、`sim-health.js` | 顯示系統狀態，**非 SSE-driven**（polling-based） |
-| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('monitor.health.alert', handler)` 訂閱 |
+| EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
+| 既有健康面板 | `shared_web/static/js/components/circuit-breaker.js`、`shared_web/static/js/components/sim-health.js` | 顯示系統狀態，**非 SSE-driven**（polling-based） |
+| 即時訂閱 | `admin_web/static/js/event-listeners.js` | 透過 `eventSource.on('monitor.health.alert', handler)` 訂閱 |
 
 **渲染建議**（Wave 8.10 整合測試階段）：
 - 健康監控頁新增「Health Alert Stream」區塊，依 `Severity` 區分色塊

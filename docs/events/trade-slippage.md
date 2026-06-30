@@ -102,9 +102,9 @@ if status == "filled" {
 
 | 項目 | 檔案 | 說明 |
 |------|------|------|
-| EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
-| 既有訂單面板 | `web/static/js/components/risk-gate-panel.js` | 操作面板，**非 SSE-driven** |
-| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('trade.slippage', handler)` 訂閱 |
+| EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
+| 既有訂單面板 | `shared_web/static/js/components/risk-gate-panel.js` | 操作面板，**非 SSE-driven** |
+| 即時訂閱 | `admin_web/static/js/event-listeners.js` | 透過 `eventSource.on('trade.slippage', handler)` 訂閱 |
 
 **渲染建議**（Wave 8.10 整合測試階段）：
 - 訂單監控頁新增「Slippage Monitor」區塊

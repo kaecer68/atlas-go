@@ -124,7 +124,7 @@ return nil
 
 | 項目 | 檔案 | 說明 |
 |------|------|------|
-| EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
+| EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
 | 既有組件 | 待 Wave 8.10 新增 | 建議在 backtest 頁面新增「Recent Backtests」section |
 
 **渲染建議**（Wave 8.10 整合測試階段）：

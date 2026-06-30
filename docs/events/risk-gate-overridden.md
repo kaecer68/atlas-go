@@ -98,9 +98,9 @@ case "REDUCE", "ALERT_ONLY":
 
 | 項目 | 檔案 | 說明 |
 |------|------|------|
-| EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
-| 既有組件 | `web/static/js/components/risk-gate-panel.js` | 操作面板，**非 SSE-driven**，定期 fetch `/api/dashboard/risk` |
-| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('monitor.risk_gate.overridden', handler)` 訂閱 |
+| EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
+| 既有組件 | `shared_web/static/js/components/risk-gate-panel.js` | 操作面板，**非 SSE-driven**，定期 fetch `/api/dashboard/risk` |
+| 即時訂閱 | `admin_web/static/js/event-listeners.js` | 透過 `eventSource.on('monitor.risk_gate.overridden', handler)` 訂閱 |
 
 **渲染建議**（Wave 8.10 整合測試階段）：
 - 風控操作面板新增「Recent Overrides」section，列出最近 10 筆 overridden 事件（橘色 badge）

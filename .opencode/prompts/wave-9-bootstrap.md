@@ -30,7 +30,7 @@
 - `internal/monitoring/service/`（**新增** debouncer、drift_detector、channel_health_synthesizer；**不修改** `crossmarket.go` 與 `pipeline.go`）
 - `internal/monitoring/handlers.go`（SSE endpoints）
 - `internal/apigateway/background.go`（**只加** Prometheus histogram struct field）
-- `web/static/js/services/event-source.js`、`web/static/js/event-listeners.js`
+- `shared_web/static/js/services/event-source.js`、`admin_web/static/js/event-listeners.js`
 - `monitoring/rules/`
 - `docs/events/`、`docs/roadmap.md`、`docs/wave-9-plan.md`
 

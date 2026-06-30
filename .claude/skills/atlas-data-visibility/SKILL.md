@@ -211,11 +211,11 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (*CachedSnap
 
 ---
 
-### Layer 4: Frontend (`web/static/js/pages/crossmarket.js`)
+### Layer 4: Frontend (`shared_web/static/js/pages/crossmarket.js`)
 
 Frontend 層負責「用戶可見的錯誤表達」。當收到 `data_status === "degraded"` 或個別欄位 `failed: true` 時，必須讓用戶一眼就知道資料有問題，而不是默默顯示 0。
 
-**檔案**: `web/static/js/pages/crossmarket.js`
+**檔案**: `shared_web/static/js/pages/crossmarket.js`
 
 `getField()` 在欄位缺少 symbol 時回傳 `failed: true`：
 
@@ -440,9 +440,9 @@ cache.Set("snapshot", snapshot.Data) // status 被丟掉了
 | `internal/monitoring/service/channel_health_synthesizer.go` | Wave 9 | 將 `ChannelErrors()` 轉為 `EventChannelIndividualHealth` |
 | `internal/monitoring/service/ingestion_lag_provider.go` | Wave 9 | `ChannelHealthIngestionLagProvider` 生產實作 |
 | `internal/monitoring/wave9_runtime.go` | Wave 9 | 5 個偵測器協調器 |
-| `web/static/js/pages/crossmarket.js` | Layer 4 | `getField()`、`kpiCard()`、degraded banner |
-| `web/static/css/components/error-banner.css` | Layer 4 | 錯誤 banner 樣式 |
-| `web/static/css/components/badge.css` | Layer 4 | 紅色錯誤徽章樣式 |
+| `shared_web/static/js/pages/crossmarket.js` | Layer 4 | `getField()`、`kpiCard()`、degraded banner |
+| `shared_web/static/css/components/error-banner.css` | Layer 4 | 錯誤 banner 樣式 |
+| `shared_web/static/css/components/badge.css` | Layer 4 | 紅色錯誤徽章樣式 |
 
 ---
 

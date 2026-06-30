@@ -25,7 +25,7 @@
 
 ### 1.2 Phase 3: Frontend [DONE]
 
-**檔案**：`web/static/js/pages/alerts.js`（413 行）
+**檔案**：`shared_web/static/js/pages/alerts.js`（413 行）
 
 **驗證**：完整 UI 實作（per VALIDATION-REPORT Part 2.1）
 
@@ -90,7 +90,7 @@ type AlertRecord struct {
 }
 ```
 
-**新增 Dashboard panel**（`web/static/js/pages/alerts.js`）：
+**新增 Dashboard panel**（`shared_web/static/js/pages/alerts.js`）：
 - `alert_ack_latency_p50` — 中位數 ack 延遲
 - `alert_ack_latency_p95` — P95 ack 延遲
 - `sla_compliance_rate` — SLA 達標率（%）
@@ -251,7 +251,7 @@ type AlertRecord struct {
 
 **實作難度**：MEDIUM / **工作量**：12-16 小時（2 個 PR）
 
-**Owner 條件**：熟悉 `internal/monitoring/` + `internal/domain/` + `web/static/js/`
+**Owner 條件**：熟悉 `internal/monitoring/` + `internal/domain/` + `shared_web/static/js/`
 
 **Acceptance**（詳見 Part 2.2）：
 - `AlertRecord` 新增 `AcknowledgedWithinSec` + `SLAViolated` 欄位

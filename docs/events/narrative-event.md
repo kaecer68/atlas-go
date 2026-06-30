@@ -169,9 +169,9 @@ func (b *ChannelEventBus) PublishNarrativeEvent(
 
 | 項目 | 檔案 | 說明 |
 |------|------|------|
-| EventSource listener | `web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
-| 既有敘事面板 | `web/static/js/components/narrative-panel.js` | 宏觀敘事頁面，透過 `/api/narrative/bundle` 載入初始資料 |
-| 即時訂閱 | `web/static/js/event-listeners.js` | 透過 `eventSource.on('narrative.event', handler)` 訂閱 |
+| EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
+| 既有敘事面板 | `shared_web/static/js/components/narrative-panel.js` | 宏觀敘事頁面，透過 `/api/narrative/bundle` 載入初始資料 |
+| 即時訂閱 | `admin_web/static/js/event-listeners.js` | 透過 `eventSource.on('narrative.event', handler)` 訂閱 |
 
 **渲染建議**（敘事頁面整合）：
 - 敘事事件卡片顯示 `Theme` + `Region` + `SentimentText` badge

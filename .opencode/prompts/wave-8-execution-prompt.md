@@ -50,7 +50,7 @@ git switch -c feat/wave-8-risk-gate-rejected origin/main
 # - internal/monitoring/api/events/
 # - internal/monitoring/service/
 # - internal/monitoring/handlers.go
-# - web/static/js/services/event-source.js, web/static/js/event-listeners.js
+# - shared_web/static/js/services/event-source.js, admin_web/static/js/event-listeners.js
 # - monitoring/rules/
 
 git add internal/monitoring/api/events/risk_gate_rejected.go
