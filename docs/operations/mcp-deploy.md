@@ -319,10 +319,10 @@ stdio 模式無 HTTP endpoint，傳統 curl-based healthcheck 不適用。SSE/HT
 
 ## 12. 對應的文件
 
-- 完整 tool catalog（74 tools）：[`docs/AGENT_TOOLS.md`](../../AGENT_TOOLS.md)
+- 完整 tool catalog（74 tools）：[`docs/AGENT_TOOLS.md`](../AGENT_TOOLS.md)
 - 設計規格（Phase 2.2 狀態）：[`docs/specs/agent-mcp-server.md`](../specs/agent-mcp-server.md)
-- 系統 workflow 對應（WA-XXX）：[`docs/WORKFLOW_MAP.md`](../../WORKFLOW_MAP.md)
-- 計劃藍圖： [`docs/plans/agent-interface-roadmap.md`](../../plans/agent-interface-roadmap.md)
-- Go core coding rules： [`.github/instructions/go-core.instructions.md`](../../../.github/instructions/go-core.instructions.md)
-- Live trading guardrails： [`.github/instructions/live-trading.guardrails.instructions.md`](../../../.github/instructions/live-trading.guardrails.instructions.md)
+- 系統 workflow 對應（WA-XXX）：[`docs/WORKFLOW_MAP.md`](../WORKFLOW_MAP.md)
+- 計劃藍圖： [`docs/plans/agent-interface-roadmap.md`](../plans/agent-interface-roadmap.md)
+- Go core coding rules： [`.github/instructions/go-core.instructions.md`](../../.github/instructions/go-core.instructions.md)
+- Live trading guardrails： [`.github/instructions/live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md)
 - Constitution： [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md)
