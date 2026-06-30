@@ -1,9 +1,8 @@
 # Atlas Agent Tools — 實戰指南
 
-> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（Phase 2.2: 74 tools）。
-> **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
+> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表（非完整 schema）。
+> **完整工具 schema / 安全 / 部署**：[`agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
-> **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [README.md](../specs/agent-mcp-server.md) §3。
 
 ---
 
@@ -12,205 +11,109 @@
 ```
 你要做什麼？
 ├── 回答「現在市場怎樣？」
-│   ├── 整體 regime  → regime_get_history
-│   ├── 跨市場狀態  → crossmarket_get_status
-│   └── 個股敘事    → narrative_get_events
+│   ├── 整體 regime  → regime_get_history, macro_get_snapshot_latest
+│   ├── 跨市場狀態  → crossmarket_get_status, crossmarket_get_us_indices
+│   └── 個股敘事    → narrative_get_events, narrative_get_stress_index_current
 │
 ├── 查 portfolio 狀態
-│   ├── 風險指標    → risk_get_metrics
-│   ├── Drawdown    → risk_get_drawdown
-│   └── 持倉健康    → strategy_list_active
+│   ├── 風險指標    → risk_get_metrics, risk_get_correlation_matrix
+│   ├── Drawdown    → dashboard_get_drawdown
+│   └── 持倉健康    → control_get_agent_health
 │
 ├── 觸發動作（需 audit）
-│   ├── 跑回測      → task_list → task_get_events
-│   ├── 評分策略     → experiment_judge
-│   ├── 凍結/解凍   → control_* (read-only, audit-only)
-│   └── 警報確認     → alert_list
+│   ├── 跑回測       → task_create (kind=backtest_run), task_poll until done
+│   ├── 評分策略     → experiment_judge (low risk, needs P1 MCP token)
+│   ├── 凍結/解凍 agent → control_pause_agent / control_resume_agent
+│   └── 警報確認     → alert_acknowledge / alert_resolve
 │
 └── 監控系統健康
-    ├── LLM router  → llm_get_health
-    ├── 整體        → system_get_health
-    ├── 資料品質    → data_get_quality
-    └── 警報計數    → alert_get_stats
+    ├── LLM router    → llm_get_health
+    ├── 整體          → system_get_health, system_get_metrics
+    ├── 資料品質      → dashboard_get_data_quality, macro_get_data_health
+    └── 警報計數      → alert_get_stats
 ```
 
 ---
 
-## 完整工具 Catalog（74 tools，Phase 2.2 全部上線）
+## 高頻工具 Top 15（按真實使用頻率）
 
-### Macro（6 個）
-| Tool | 用途 |
-|------|------|
-| `macro_get_snapshot_latest` | 最新 macro snapshot |
-| `macro_get_snapshot_history` | Macro snapshot 歷史（days 參數）|
-| `macro_get_stress_index_current` | 當前 stress index |
-| `macro_get_stress_index_history` | Stress index 歷史 |
-| `macro_get_capital_flow_latest` | 外資/法人/散戶資金流 snapshot |
-| `macro_get_ingest_status` | 通道 ingest 狀態 |
-
-### Crossmarket（3 個）
-| Tool | 用途 |
-|------|------|
-| `crossmarket_get_status` | 跨市場資料源狀態 |
-| `crossmarket_get_correlation` | 台股 sector vs US indices 相關性 |
-| `crossmarket_get_us_indices` | S&P 500 / NASDAQ / Dow Jones snapshot |
-
-### Narrative（7 個）
-| Tool | 用途 |
-|------|------|
-| `narrative_get_events` | 最新敘事事件 |
-| `narrative_get_chains` | 因果鏈 |
-| `narrative_get_models` | 敘事模型清單 |
-| `narrative_get_templates` | 因果模板 |
-| `narrative_get_seasonal` | 季節性敘事 |
-| `narrative_get_bundle` | 編譯好的 briefing bundle |
-| `narrative_stress_index_thresholds` | Stress index 門檻值 |
-
-### Risk（5 個）
-| Tool | 用途 |
-|------|------|
-| `risk_get_metrics` | 風險聚合指標 |
-| `risk_get_correlation_matrix` | 跨策略相關性 |
-| `risk_get_drawdown` | 當前 / 最大 drawdown |
-| `risk_get_calibration` | 風險模型校準 |
-| `risk_get_commentary` | 風險敘事 |
-
-### Alert（4 個：1 Phase 1 + 3 Phase 2.2）
-| Tool | 用途 |
-|------|------|
-| `alert_list_unacknowledged` | 未確認警報（Phase 1）|
-| `alert_list` | 所有警報 |
-| `alert_get_stats` | 警報統計 |
-| `alert_get_rules` | 警報規則配置 |
-
-### Strategy（5 個：1 Phase 1 + 4 Phase 2.2）
-| Tool | 用途 |
-|------|------|
-| `strategy_list_active` | Production 線上策略（Phase 1）|
-| `strategy_get_layers` | L1-L5 層級清單 |
-| `strategy_get` | 單筆策略 |
-| `strategy_get_attribution` | 績效歸因 |
-| `strategy_get_summary` | 策略摘要 |
-
-### Experiment（3 個：1 Phase 1 + 2 Phase 2.2）
-| Tool | 用途 |
-|------|------|
-| `experiment_judge` | 觸發 LLM judge 評分（Phase 1，destructiveHint=true）|
-| `experiment_diff` | 候選 vs baseline 差異 |
-| `experiment_history` | 歷史實驗清單 |
-
-### Synergy（3 個）
-| Tool | 用途 |
-|------|------|
-| `synergy_get_darwinian_status` | 達爾文權重當前狀態 |
-| `synergy_get_darwinian_trend` | 達爾文權重歷史趨勢 |
-| `synergy_get_l2_4_schedule` | L2.4 觀察窗口時程 |
-
-### Control（4 個，皆 read-only）
-| Tool | 用途 |
-|------|------|
-| `control_get_audit_log` | 控制覆寫 audit log |
-| `control_get_active_overrides` | 當前 active 覆寫 |
-| `control_approve_recommendation` | 批准推薦狀態 |
-| `control_reject_recommendation` | 拒絕推薦狀態 |
-
-### Scheduler / Task（4 個）
-| Tool | 用途 |
-|------|------|
-| `scheduler_get_status` | 背景排程器狀態 |
-| `task_list` | 背景任務清單 |
-| `task_get` | 單筆任務 |
-| `task_get_events` | 任務 lifecycle events |
-
-### System（6 個：1 Phase 1 + 5 Phase 2.2）
-| Tool | 用途 |
-|------|------|
-| `system_get_health` | 系統健康總覽（Phase 1）|
-| `system_get_metrics` | 即時 metrics |
-| `system_get_metrics_trend` | Metrics 趨勢 |
-| `system_get_thresholds` | SLO 門檻值 |
-| `system_get_data_pipeline` | Data pipeline 狀態 |
-| `system_get_circuit_breaker` | Circuit-breaker 狀態 |
-| `system_get_maturity` | 模組成熟度評分 |
-
-### LLM（2 個）
-| Tool | 用途 |
-|------|------|
-| `llm_get_cost` | LLM 成本 snapshot |
-| `llm_get_health` | LLM router health |
-
-### Trace（4 個）
-| Tool | 用途 |
-|------|------|
-| `trace_get_sim_latest` | 最新 simulation trace |
-| `trace_get_agent_observatory` | Agent 活動觀測 |
-| `trace_get_decision_chain` | 決策因果鏈 |
-| `trace_get_reasoning` | 推理 trace |
-
-### Data（4 個）
-| Tool | 用途 |
-|------|------|
-| `data_get_channels` | 資料通道清單 |
-| `data_get_channel_detail` | 單一通道 detail |
-| `data_get_quality` | 資料品質 metrics |
-| `data_get_field_contract` | Field contract schema |
-
-### Universe（2 個）
-| Tool | 用途 |
-|------|------|
-| `universe_get_sessions` | Simulation session 清單 |
-| `universe_get_universe_overlap` | Universe overlap 分析 |
-
-### Report（4 個）
-| Tool | 用途 |
-|------|------|
-| `report_get_daily_summary` | 每日摘要報告 |
-| `report_get_performance` | 績效報告 |
-| `report_get_tax_snapshot` | 稅務 snapshot |
-| `report_get_export_link` | 匯出連結（短 TTL）|
-
-### Prism（1 個）
-| Tool | 用途 |
-|------|------|
-| `prism_get_training_results` | PRISM cohort 訓練結果 |
-
-### Swarm（5 個）
-| Tool | 用途 |
-|------|------|
-| `swarm_get_status` | MiroFish swarm 狀態 |
-| `swarm_get_consensus` | Fish 多數決共識 |
-| `swarm_get_anomalies` | 異常偵測 |
-| `swarm_get_scenarios` | 監控中 scenario |
-| `swarm_get_strategies` | Swarm 策略組合 |
+| Tool | 觸發情境 | 範例呼叫 |
+|------|---------|---------|
+| `regime_get_history` | 用戶問「最近市場怎樣」、「今天體制？」 | `{"days": 30}` |
+| `macro_get_snapshot_latest` | 用戶問「台股壓力指標 / 外资 / 法人動態」 | `{}` |
+| `risk_get_metrics` | 用戶問「目前風險等級、可進場嗎？」 | `{}` |
+| `control_get_agent_health` | 「哪些 agent 被靜音 / 哪些最健康」 | `{}` |
+| `strategy_list_active` | 「現在上線哪些策略？」 | `{}` |
+| `strategy_get` | 「策略 X 的 hit rate / Sharpe？」 | `{"id": "xxx"}` |
+| `dashboard_get_reasoning_trace` | 「為什麼推薦 2330？」 | `{"symbol": "2330"}` |
+| `narrative_get_events` | 「最近有什麼大事件？」 | `{"days": 7}` |
+| `alert_get_unacknowledged` | 「有未確認警報嗎？」 | `{}` |
+| `alert_acknowledge` | 確認警報 | `{"alert_id": "..."}` |
+| `experiment_judge` | 在 P1 MCP 觸發下，評分候選 vs baseline | `{"experiment_id": "..."}` |
+| `system_get_health` | 定期健康檢查 | `{}` |
+| `task_create` | 觸發回測 / 重新計算 / 批次 ingest | `{"kind": "backtest", "args": {...}}` |
+| `task_get` | 取得 task 進度 | `{"id": "..."}` |
+| `crossmarket_get_us_indices` | 「NVDA 怎樣影響台股？」 | `{}` |
 
 ---
 
-## 排除的 admin / destructive 端點（per spec §3.2）
+## 不可呼叫的工具（安全邊界）
 
-以下端點**不暴露給 MCP**（需要 admin 權限或屬於 destructive 操作）：
+詳見 [`agent-mcp-server.md`](./specs/agent-mcp-server.md) §3.2。重要邊界：
 
-| 類別 | 排除清單 |
-|------|---------|
-| Admin 配置 | `/admin/reload-config`、`/api/admin/calibrate-thresholds`、`/api/dashboard/api-keys/update` |
-| Control mutations | `/api/control/sector-ban`、`/api/control/set-model-weight`、`/api/control/pause-agent`、`/api/control/resume-agent` |
-| Experiment mutations | `/api/experiment/promote`、`/api/experiment/revert` |
-| Alert mutations | `/api/alerts/acknowledge`、`/api/alerts/acknowledge-bulk`、`/api/alerts/resolve`、`/api/alerts/silence` |
-| Synergy mutations | `/api/synergy/l2-4-schedule/{start,stop,reset,update}` |
-| Scheduler mutations | `/api/scheduler/toggle` |
-| Strategy mutations | `/api/strategies/{id}/annotate` |
-| Task mutations | `/api/tasks`（POST）、`/api/tasks/{id}/{cancel,retry,confirm}` |
+| 不暴露 | 原因 |
+|--------|------|
+| `*_api_keys_update` | 直接改 secrets |
+| `*_silence` (alert) | 易被誤用屏蔽 alert |
+| `*_set-model-weight` | 達爾文權重變更 |
+| `*_revert` (experiment) | baseline 還原風險 |
+| `*_ingest` (macro/channel) | 觸發重算 |
+| `experiment_judge_*_silent` | 默默評分不 log |
 
-這些操作仍可透過 `/admin/` 管理後台或 HTTP 呼叫觸發（需通過 apigateway 認證）。
+這些只能透過 **graphical admin UI** (`/admin/`) 或人工 CLI 觸發。
 
 ---
 
-## 對應的底層 Workflow
+## 典型對話流程（範例）
 
-每個 tool 都對應 atlas-go 一條 workflow（WA-XXX），見 [`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md) §3。
-例如：
-- `regime_get_history` → WA-200（體制判定）
-- `strategy_get_summary` → WA-500（策略演化）
-- `risk_get_metrics` → WA-400..403（風險閘門）
-- `trace_get_reasoning` → WA-302（推理 trace）
+### 場景 A：用戶問「今天可以進場嗎？」
+```
+1. llm_get_health                    → router 是否正常
+2. regime_get_history {days:7}       → 近期體制
+3. risk_get_metrics                  → 當前風險
+4. control_get_agent_health          → 被禁用的 agent
+5. alert_get_unacknowledged          → 未處理警報
+6. (如都通過) → 給出「可進場 / 觀望 / 減倉」建議 + 因果說明
+```
 
-完整對照表見 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md) §3.1。
+### 場景 B：用戶問「為什麼推薦 2330？」
+```
+1. dashboard_get_reasoning_trace {symbol:"2330"}
+2. strategy_get_attribution {id:"..."}  （如 trace 揭示用的是某策略）
+3. narrative_get_events {symbol:"2330", days:3}
+4. 組合說明：信號來源 + 觸發敘事 + 評分依據
+```
+
+### 場景 C：用戶要暫停某個失控的 agent
+```
+1. control_get_agent_health          → 確認該 agent 真的失控
+2. control_pause_agent {agent_id, reason, duration_h}
+3. alert_get_unacknowledged          → 確認有 alert 觸發 pause
+4. （pause 動作已 log 到 audit-log，無需再描述）
+```
+
+---
+
+## 錯誤處理慣例
+
+atlas-mcp 對錯誤自動轉譯：
+
+| atlas HTTP 狀態 | MCP 錯誤碼 | Agent 應該做 |
+|----------------|------------|-------------|
+| 401 / 403 | `auth/unauthorized` | 重新確認 token；不應繼續 retry |
+| 404 | `tool/not-found` | URL/ID 錯誤，調整後重試 |
+| 429 | `rate/limited` | 指數退避後重試 |
+| 500+ | `internal/error` | 顯示「atlas 暫時無法回應」給用戶 |
+| 400 | `params/invalid` | 修正參數格式 |
+
+完整錯誤轉譯規則見 [`agent-mcp-server.md`](./specs/agent-mcp-server.md) §6。
