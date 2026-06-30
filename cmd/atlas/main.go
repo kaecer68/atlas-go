@@ -150,7 +150,11 @@ func run(args []string, deps appDeps) error {
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
-	marketdata.SetFubonProxyPort(*fubonProxyPort)
+	// -fubon-port flag 注入 fubonproxy 內部 listen port(單一真相來源);
+	// PR #837 user prompt A1 root cause:之前 marketdata 與 fubonproxy 各自有
+	// package-level port var,任一處忘記同步就 drift → channel recurring failure。
+	// 此處直接寫 fubonproxy,移除中間的 marketdata.SetFubonProxyPort deprecated wrapper。
+	fubonproxy.SetFubonProxyPort(*fubonProxyPort)
 
 	cfg := deps.loadConfig()
 	logging.Init(*logFormat, slog.LevelInfo)

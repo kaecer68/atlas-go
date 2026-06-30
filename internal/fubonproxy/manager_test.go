@@ -1409,3 +1409,86 @@ func TestGetFubonProxyPort_ReflectsNewManagerOverride(t *testing.T) {
 		t.Errorf("post-NewManager GetFubonProxyPort() = %d, want %d", got, customPort)
 	}
 }
+
+// TestProxyBaseURL_DefaultAndCustomPort (PR #837 follow-up, A1 single source of truth)
+// 驗證 ProxyBaseURL() 回傳值:
+//   - 預設:http://host.docker.internal:8081
+//   - 自訂 port (透過 NewManager override):http://host.docker.internal:<custom>
+//
+// 若未來 dev 把 host (defaultProxyHost) 或預設 port 改錯,本 test 會抓到。
+// 對應 guard test `marketdata.TestFubon_URLDriftGuard` 防的是「其他檔案自行構造」,
+// 本 test 防的是「canonical owner 本身的構造邏輯正確」。
+func TestProxyBaseURL_DefaultAndCustomPort(t *testing.T) {
+	t.Cleanup(func() {
+		proxyListenPort = defaultFubonProxyPort
+	})
+
+	if got := ProxyBaseURL(); got != "http://host.docker.internal:8081" {
+		t.Errorf("default ProxyBaseURL() = %q, want %q", got, "http://host.docker.internal:8081")
+	}
+
+	const customPort = 19090
+	_ = NewManager(t.TempDir(), customPort)
+	want := "http://host.docker.internal:19090"
+	if got := ProxyBaseURL(); got != want {
+		t.Errorf("custom-port ProxyBaseURL() = %q, want %q", got, want)
+	}
+}
+
+// TestProxyHostPort_DefaultAndCustomPort (PR #837 follow-up, A1 single source of truth)
+// 驗證 ProxyHostPort() 回傳純 host:port 字串(無 http:// prefix),
+// 供 net.Dial / net.Listen probe 使用。
+//
+// 與 TestProxyBaseURL_DefaultAndCustomPort 互補:兩者共用同一個
+// defaultProxyHost 與 proxyListenPort,任何一邊 drift 會被任一 test 抓到。
+func TestProxyHostPort_DefaultAndCustomPort(t *testing.T) {
+	t.Cleanup(func() {
+		proxyListenPort = defaultFubonProxyPort
+	})
+
+	if got := ProxyHostPort(); got != "host.docker.internal:8081" {
+		t.Errorf("default ProxyHostPort() = %q, want %q", got, "host.docker.internal:8081")
+	}
+
+	const customPort = 19091
+	_ = NewManager(t.TempDir(), customPort)
+	want := "host.docker.internal:19091"
+	if got := ProxyHostPort(); got != want {
+		t.Errorf("custom-port ProxyHostPort() = %q, want %q", got, want)
+	}
+}
+
+// TestSetFubonProxyPort_NoOpForNonPositivePort 驗證 SetFubonProxyPort 的 no-op 契約:
+// port <= 0 不覆寫 proxyListenPort(保留測試 helper 預設值)。
+//
+// 對應 Oracle 4th-round verdict F13:port 必須顯式注入(>0),避免誤把 0 / -1
+// 當有效 port 寫入,造成後續 caller 全打到 8080 / 失敗。
+func TestSetFubonProxyPort_NoOpForNonPositivePort(t *testing.T) {
+	t.Cleanup(func() {
+		proxyListenPort = defaultFubonProxyPort
+	})
+
+	// 起點:預設值
+	if got := GetFubonProxyPort(); got != defaultFubonProxyPort {
+		t.Fatalf("precondition: GetFubonProxyPort() = %d, want default %d", got, defaultFubonProxyPort)
+	}
+
+	// port = 0 → 不覆寫
+	SetFubonProxyPort(0)
+	if got := GetFubonProxyPort(); got != defaultFubonProxyPort {
+		t.Errorf("after SetFubonProxyPort(0): GetFubonProxyPort() = %d, want default %d (no-op contract violated)", got, defaultFubonProxyPort)
+	}
+
+	// port < 0 → 不覆寫
+	SetFubonProxyPort(-1)
+	if got := GetFubonProxyPort(); got != defaultFubonProxyPort {
+		t.Errorf("after SetFubonProxyPort(-1): GetFubonProxyPort() = %d, want default %d (no-op contract violated)", got, defaultFubonProxyPort)
+	}
+
+	// port > 0 → 覆寫
+	const customPort = 19192
+	SetFubonProxyPort(customPort)
+	if got := GetFubonProxyPort(); got != customPort {
+		t.Errorf("after SetFubonProxyPort(%d): GetFubonProxyPort() = %d, want %d", customPort, got, customPort)
+	}
+}

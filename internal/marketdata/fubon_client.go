@@ -14,46 +14,29 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 )
 
-// fubonProxyBaseURL 是 fubon-proxy listen URL prefix 的預設常數。
-// PR 2 後改用 currentFubonPort 動態構造;此常數保留供測試與唯讀驗證使用。
+// fubonProxyBaseURL 是 fubon-proxy listen URL 的**文件/測試參考字串**。
+// PR #837 user prompt 列為 A1 root cause:此字串以前散落在 3 個 source files
+// (fubon_client.go / hybrid_provider.go / register_adapters.go) 各自硬編碼,
+// 任一處忘記同步就會造成 port drift → channel recurring failure。
 //
-// host.docker.internal 而非 127.0.0.1,因為 fubon-proxy 在 macOS host 上執行
-// (原生 Python),atlas 容器必須透過 Docker Desktop 的 host-gateway 別名連線到 host。
-// Docker Desktop 4.13+ (macOS/Windows) 支援 host.docker.internal 自動解析為 host gateway IP。
-// 注意:不使用 localhost 避免 macOS / Linux 雙棧環境下 Go net.Dial 優先走 IPv6 [::1]。
+// 唯一 runtime 構造點已搬到 `fubonproxy.ProxyBaseURL()`,本檔案禁止再以
+// `fmt.Sprintf("http://...:%d", ...)` 構造 proxyURL — 違反將被
+// `fubon_url_guard_test.go` 的 AST 字串禁制擋下。
+//
+// `host.docker.internal` 而非 `127.0.0.1`/`localhost` 的理由(RCA: PR #495):
+//
+//   - fubon-proxy Python 在 macOS host 原生執行,atlas Go 程序跑在 Docker container。
+//   - 從 container 端用 `127.0.0.1` 會 hit container 自身的 loopback(錯的)。
+//   - 用 `localhost` 在 macOS / Linux 雙棧環境下,Go `net.Dial` 預設優先走 IPv6 [::1],
+//     而 fubon-proxy 只綁 IPv4 0.0.0.0 → [::1]:8081: connect: connection refused。
+//   - `host.docker.internal` 由 Docker Desktop 4.13+ 自動注入 /etc/hosts
+//     解析為 host gateway IP,跨 macOS/Windows 統一。
 //
 //lint:ignore U1000 kept for documentation and test reference
 const fubonProxyBaseURL = "http://host.docker.internal:8081"
-
-// defaultFubonProxyPort 是 fubon-proxy listen port 的預設值(8081)。
-// 對應 internal/fubonproxy.manager.go 的 defaultFubonProxyPort 常數(互相鏡像,
-// 避免雙邊漂移)。cmd/atlas -fubon-port flag 透過 SetFubonProxyPort 動態覆寫。
-const defaultFubonProxyPort = 8081
-
-// currentFubonPort 是 FubonClient 構造時實際使用的 proxy listen port。
-// 由 cmd/atlas/main.go 的 -fubon-port flag 透過 SetFubonProxyPort 設定。
-// PR 2 Oracle 4th-round verdict F12:FubonClient.proxyURL 與
-// ProcessManager.healthURL 必須來自同一個 port 值,確保 Atlas 與 fubon-proxy
-// 在 alt-port 模式下仍是同一個服務。
-var currentFubonPort = defaultFubonProxyPort
-
-// SetFubonProxyPort 設定 fubon-proxy listen port,影響所有後續 newFubonClient()
-// 構造的 proxyURL。port <= 0 → 不覆寫(保留測試用 helper 的預設值)。
-// PR 2 F11:port != 8081 必須 log INFO,告知 user 實際的 listen port。
-func SetFubonProxyPort(port int) {
-	if port > 0 {
-		if port != defaultFubonProxyPort {
-			logging.Info("marketdata", "fubon_client_custom_port",
-				"port", port,
-				"message", "FubonClient 將透過 host.docker.internal 連線到非預設 port(預設 8081)",
-			)
-		}
-		currentFubonPort = port
-	}
-}
 
 type FubonClient struct {
 	proxyURL        string
@@ -127,11 +110,8 @@ func NewFubonClient() *FubonClient {
 
 func newFubonClient() *FubonClient {
 	params := config.GetParametersConfig()
-	// fubonProxyBaseURL 保留供文件/測試唯讀使用;實際 proxyURL 改用 currentFubonPort
-	// 動態構造,以支援 -fubon-port flag(PR 2 Oracle 4th-round verdict F12)。
-	proxyURL := fmt.Sprintf("http://host.docker.internal:%d", currentFubonPort)
 	return &FubonClient{
-		proxyURL:        proxyURL,
+		proxyURL:        fubonproxy.ProxyBaseURL(),
 		httpClient:      httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second),
 		intradayLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
 	}
