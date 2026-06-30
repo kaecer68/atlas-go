@@ -9,6 +9,45 @@ import (
 	"time"
 )
 
+// --- NewV2Entry constructor tests ---
+
+func TestNewV2Entry_ComputesArgsHash(t *testing.T) {
+	entry := NewV2Entry("test-agent", "regime_get_history", []string{"days", "threshold"}, 42)
+
+	if entry.SchemaVersion != 2 {
+		t.Errorf("SchemaVersion = %d, want 2", entry.SchemaVersion)
+	}
+	if entry.AgentID != "test-agent" {
+		t.Errorf("AgentID = %q, want test-agent", entry.AgentID)
+	}
+	if entry.Tool != "regime_get_history" {
+		t.Errorf("Tool = %q, want regime_get_history", entry.Tool)
+	}
+	if entry.Transport != "stdio" {
+		t.Errorf("Transport = %q, want stdio", entry.Transport)
+	}
+	if entry.ArgsHash == "" {
+		t.Error("ArgsHash should not be empty when argKeys provided")
+	}
+	if entry.LatencyMS != 42 {
+		t.Errorf("LatencyMS = %d, want 42", entry.LatencyMS)
+	}
+	if entry.Status != "ok" {
+		t.Errorf("Status = %q, want ok", entry.Status)
+	}
+}
+
+func TestNewV2Entry_EmptyArgKeys(t *testing.T) {
+	entry := NewV2Entry("agent-1", "tool-x", nil, 0)
+
+	if entry.ArgsHash != "" {
+		t.Errorf("ArgsHash = %q, want empty for nil argKeys", entry.ArgsHash)
+	}
+	if len(entry.ArgKeys) != 0 {
+		t.Errorf("ArgKeys = %v, want empty", entry.ArgKeys)
+	}
+}
+
 func TestAuditV2Schema_WritesSchemaVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "v2.log")
 	w, err := NewAuditWriter(path)

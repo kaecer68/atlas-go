@@ -336,3 +336,20 @@ func TenantIDFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(tenantIDKey).(string)
 	return v
 }
+
+// NewV2Entry is the canonical constructor for AuditEntry v2 records.
+// It sets SchemaVersion=2, Transport="stdio", Status="ok", and computes
+// ArgsHash from argKeys via CanonicalizeArgsHash.
+func NewV2Entry(agentID, tool string, argKeys []string, latencyMS int64) *AuditEntry {
+	return &AuditEntry{
+		SchemaVersion: 2,
+		AgentID:       agentID,
+		Tool:          tool,
+		ArgKeys:       argKeys,
+		ArgsHash:      CanonicalizeArgsHash(argKeys),
+		LatencyMS:     latencyMS,
+		DurationMS:    latencyMS,
+		Transport:     "stdio",
+		Status:        "ok",
+	}
+}
