@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.0.0.25] - 2026-07-01
+
+### Added
+- **Auto-generated tool descriptions** (PR #857, Item 1 of `docs/specs/agent-mcp-phase3-residual.md` §3.1): `cmd/atlas-mcp/internal/descgen/extract.go` parses `mcp.AddTool` registrations with `go/ast` and produces `cmd/atlas-mcp/auto-desc.gen.json` (74/74 tools covered) + `auto-desc.gen.go` binding. `//go:generate go run ./cmd/atlas-mcp/descgen` triggers regen; CI `generate` job runs `git diff --exit-code` to block schema drift when handler sources change. `// gen:manual-override` doc comment opts out per-tool. Reduces 74-tool description hand-maintenance burden — every handler param change now stays in sync automatically.
+- **Multi-tenant MCP token management** (PR #858, Item 3 of `docs/specs/agent-mcp-phase3-residual.md` §3.3): PostgreSQL `atlas_mcp_tokens` table (10 cols + 2 indexes, sha256 hash only — raw token never persisted) + admin HTTP API (`POST/GET/DELETE /api/admin/mcp/tokens`, `POST .../{id}/rotate`) gated by `X-Admin-Token` and bound 127.0.0.1 only. `ATLAS_MCP_TOKEN` env-var retained as fallback (dev-mode and DB-unavailable path). Token revoke + rotate is immediate (no in-memory cache). `crypto/subtle.ConstantTimeCompare` used throughout (no timing-attack leak on secret comparison). Spec §3.3.5 note: `ATLAS_MCP_TOKEN` is not an external data-source key, exempt from `internal/apigateway/CONSTITUTION.md` §1.1.
+- **Audit log v2 schema + 2 analytics tools** (PR #859, Item 2 of `docs/specs/agent-mcp-phase3-residual.md` §3.2): `AuditEntry` extends v1 with `SchemaVersion` (int, no omitempty — v1 entries unmarshal to 0 and backfill to 1), `SessionID`, `ArgsHash` (sha256 of canonical `argKeys` JSON via new `CanonicalizeArgsHash()`), `LatencyMS` (preferred over `DurationMS` for v2), `Transport`. `withAudit` signature now takes `ctx context.Context` (first param) for tenant/agent identity; rate-limit key switched from `tool` to `tenant_id:tool` for per-tenant isolation. New tools `mcp_get_call_stats` (count / p50 / error rate) + `mcp_get_session_topology` (agent × tool call matrix) backed by 30-day in-memory aggregator (`AggregateCallStats`, `BuildSessionTopology`).
+
+### Changed
+- `cmd/atlas-mcp/server/tools.go` `withAudit` now takes `ctx` (context-aware) and reads `TenantIDFromContext` + `AgentIDFromContext` from `auth.go` (canonical contextKey types, single source of truth — Phase 3 殘餘 Item 3 unifies these).
+- All 13 `tools_*.go` files updated to pass `ctx` into `withAudit` and the `withAudit` body now writes `TenantID` + `AgentID` into every `AuditEntry`.
+- `internal/risk/...` and `internal/marketdata/...` etc. — no changes, but **constitution check** (`scripts/ci/check_constitution.sh`) now whitelists `ATLAS_MCP_ADMIN_TOKEN` + `ATLAS_MCP_ADMIN_ADDR` for the new admin server env-var pair (`configs/allowed_env_vars.md` updated).
+
+### Documentation
+- `docs/operations/mcp-deploy.md` and `docs/specs/agent-mcp-server.md` — Item 3 admin API + Item 2 analytics tool descriptions to be updated in follow-up (deferred to v0.0.0.26).
+- `docs/specs/agent-mcp-phase3-residual.md` — all 3 spec items marked ✅ shipped (was 🟡 DRAFT before this release).
+
+### Known Limitations (P1, by-design, documented in commit `c01f1d88` and T3 PR #858)
+- **Item 3 — auth context not wired into transports**: `TokenAuth` builds correctly but is not invoked from any transport layer; `AgentIDFromContext` returns `"anonymous"` for stdio today. SSE/HTTP transport wiring is the next milestone (Phase 4 candidate).
+- **Item 3 — `rate_limit_per_min` column stored but not enforced**: schema reserves the field for per-token override; current `RateLimiter` only honors global capacity. Per-token enforcement is a Phase 4+ item.
+- **Item 2 — `agent_id` matrix shows `"anonymous"` rows**: same root cause as Item 3 above. Resolves automatically when transports ship.
+- 5 P2 nice-to-fix from T2 Oracle audit (stale comment, `synchronised` spelling, dead-code `HashArgs`/`NewV2Entry`, `ReadAuditEntries` 0% coverage) — planned as v0.0.0.26 follow-up (≈30 min work).
+
+### Oracle Audit Summary
+- T1 (PR #857): 0 P0 / 0 P1 / 1 P2 — READY TO MERGE
+- T2 (PR #859): 0 P0 / 0 P1 / 5 P2 — READY TO MERGE
+- T3 (PR #858): 0 P0 / 2 P1 (by-design, see above) / 3 P2 — READY TO MERGE
+
+All 3 PRs passed 5-section Oracle audit and the constitution check (gateway + rate-limit both PASS, only WARN-level pre-existing violations in `internal/marketdata/...` and `internal/llm_annotator/...` not in PR diff).
+
 ## [0.0.0.24] - 2026-06-28
 
 ### Fixed
