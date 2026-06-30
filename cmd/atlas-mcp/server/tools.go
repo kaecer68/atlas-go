@@ -26,6 +26,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerControlTools(mcpSrv, s)
 	registerSchedulerTaskTools(mcpSrv, s)
 	registerSystemTools(mcpSrv, s)
+	registerLLMTraceTools(mcpSrv, s)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
