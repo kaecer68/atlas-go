@@ -517,3 +517,161 @@ To run strict governance verification with scenario diversity:
 ```bash
 ./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
 ```
+
+---
+
+## Port 8080 Conflict Recovery
+
+atlas 啟動時撞到 host port 8080 已被佔用,是最常見的本機與 Docker 啟動失敗情境之一。本節列出症狀辨識、兇手定位、修法選擇與驗證清單,涵蓋本機 binary 與 Docker 雙路徑。
+
+### 1. Symptom
+
+以下任一現象出現,即可判定為 port 8080 衝突:
+
+- atlas 啟動 log 出現 `bind: address already in use` 後退出。
+- `docker compose up` 啟動 atlas container 後反覆 restart loop,`docker compose ps` 顯示 atlas 狀態在 `restarting` 與 `exited` 之間反覆切換。
+- `curl -fsS http://localhost:8080/health` 連線失敗(connection refused 或 timeout)。
+- `docker compose logs atlas` 出現 atlas 抱怨 8080 bind 失敗的 stack trace。
+
+### 2. Detection
+
+先找出佔住 8080 的行程 PID,再判斷它的身分。
+
+```bash
+# macOS / Linux:列出 LISTEN 中的 8080
+lsof -i :8080
+
+# 或更精準,只列 LISTEN 狀態
+sudo lsof -nP -iTCP:8080 -sTCP:LISTEN
+```
+
+拿到 PID 後,確認是哪個 process:
+
+```bash
+ps -p <PID> -o pid,command
+```
+
+根據 `command` 欄位判斷身分:
+
+- 含 `atlas` 或 `cmd/atlas` → atlas zombie(上一次啟動沒清乾淨)。
+- 含 `fubon` 或 `fubonproxy` → fubon-proxy(別直接殺,見 §3 Decision Tree 分支 B)。
+- 含 `node`、`python`、`webpack`、`vite`、`next dev` 等 → 開發伺服器。
+- 其他 → foreign process,可能是 IDE preview、舊版應用或背景工具。
+
+### 3. Decision Tree
+
+依兇手身分決定處置方式。三條分支互斥,選一條執行。
+
+#### 3.1 atlas zombie
+
+代表上次啟動沒正常結束,8080 仍被舊行程咬住。
+
+```bash
+# 優雅終止(預期 SIGTERM 會讓 graceful shutdown 跑完)
+kill <PID>
+
+# 若 SIGTERM 無效(行程沒反應或已死鎖),改用 SIGKILL
+kill -9 <PID>
+
+# 然後重啟 atlas
+go run ./cmd/atlas
+```
+
+驗證 `lsof -i :8080` 應回空。
+
+#### 3.2 fubon-proxy
+
+fubon-proxy 是另一個獨立服務,啟動時若與 atlas 撞 8080 也不奇怪。重點是:**不要直接 `kill`**,可能導致它的 supervision 狀態損壞或留孤兒行程。
+
+正確處置(三選一):
+
+1. **用 fubon-supervisor graceful stop**:若 supervisor 已啟動,呼叫它的 stop API 或 CLI,讓它走完整 shutdown 流程,8080 釋出後再啟動 atlas。
+2. **改 fubon-proxy 啟動 port**:若環境支援,暫時把 fubon-proxy 綁到 8082(`-addr :8082` 之類的 flag,視 fubonproxy 套件啟動方式而定),讓 atlas 拿回 8080。
+3. **重啟 atlas container 等 supervisor 重試**:若 atlas 是 Docker 啟動而 fubon-proxy 是 host process,先關 fubon-proxy 後 `docker compose restart atlas`,atlas 啟動時若仍撞 8080 會在 supervisor 的 backoff 後重試,等到 8080 釋出就成功。
+
+#### 3.3 foreign process
+
+不是 atlas 也不是 fubon-proxy,是其他開發工具或舊 process 佔住 8080。兩個選擇:
+
+**c1. 停掉那個 process**(若你知道它是什麼且可停):
+
+```bash
+kill <PID>      # 優雅終止
+kill -9 <PID>   # 必要時強制
+```
+
+**c2. 改 atlas 啟動 port**(若不適合停 foreign process):
+
+本機 binary:
+
+```bash
+go run ./cmd/atlas -addr :8082
+```
+
+Docker compose:編輯 `docker-compose.yml`,把 atlas service 的 host port 從 `8080:8080` 改成 `8082:8080`:
+
+```yaml
+services:
+  atlas:
+    ports:
+      - "8082:8080"
+```
+
+改完後 `docker compose up -d atlas`,驗證時用 `curl http://localhost:8082/health`。
+
+### 4. Docker Mode Caveat
+
+container 內的 `localhost:8080` 永遠是空閒的(每個 container 有自己的 loopback 介面)。以下情境很常誤導:
+
+> `docker compose up` atlas container 顯示啟動成功,`docker compose ps` atlas 是 `Up`,但 host 端 `curl localhost:8080/health` 失敗。
+
+這不是 atlas container 內部 port 被佔,而是 **host port 8080** 已經被另一個 process 咬住,Docker daemon 無法把 host 8080 轉發到 container 8080。Docker log 不會報錯,因為 container 內 bind 的是 container 自己的 8080,完全沒問題。
+
+修法是操作 host 上的舊容器或 process:
+
+```bash
+# 先看哪個舊容器還掛著 8080
+docker ps --filter expose=8080
+
+# 停掉所有 atlas 相關舊容器
+docker compose down
+
+# 或強制刪除所有 expose 8080 的容器
+docker rm -f $(docker ps -aq --filter expose=8080)
+
+# 然後重新啟動
+docker compose up -d atlas
+```
+
+### 5. Recovery Steps
+
+依執行路徑選擇對應的精準命令。
+
+#### 5.1 本機 binary
+
+```bash
+# 一行殺光所有 LISTEN 8080 的行程(謹慎使用,確認沒有重要 process)
+lsof -ti :8080 | xargs kill -9
+
+# 重啟 atlas
+go run ./cmd/atlas
+```
+
+#### 5.2 Docker
+
+```bash
+# 完整重啟 atlas 服務
+docker compose down && docker compose up -d atlas
+
+# 驗證 health
+curl -fsS http://localhost:8080/health
+```
+
+### 6. Verify
+
+確認衝突解除且 atlas 正常服務:
+
+- [ ] `curl -fsS http://localhost:8080/health` 回 200,內容 `{"status":"ok",...}`。
+- [ ] `docker compose ps` atlas 狀態為 `Up` / `healthy`(若用 Docker)。
+- [ ] `lsof -i :8080` 顯示 atlas 行程(或 docker-proxy)為唯一 LISTEN 進程。
+- [ ] Dashboard 可訪問:`http://localhost:8080/admin/` 與 `http://localhost:8080/client/` 都能載入。
