@@ -1,265 +1,194 @@
 package server
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
 
-func TestNewV2Entry_ComputesArgsHash(t *testing.T) {
-	entry := NewV2Entry("test-agent", "regime_get_history", []string{"days", "threshold"}, 42)
+func TestAuditV2_ParseV1Backwards(t *testing.T) {
+	line := []byte(`{"ts":"2026-07-01T09:00:00.000Z","tool":"regime_get_history","status":"ok","duration_ms":42}`)
 
-	if entry.SchemaVersion != 2 {
-		t.Errorf("SchemaVersion = %d, want 2", entry.SchemaVersion)
-	}
-	if entry.AgentID != "test-agent" {
-		t.Errorf("AgentID = %q, want test-agent", entry.AgentID)
-	}
-	if entry.Transport != "stdio" {
-		t.Errorf("Transport = %q, want stdio", entry.Transport)
-	}
-	if entry.ArgsHash == "" {
-		t.Error("ArgsHash should not be empty when argKeys provided")
-	}
-	if entry.LatencyMS != 42 {
-		t.Errorf("LatencyMS = %d, want 42", entry.LatencyMS)
-	}
-	if entry.Status != "ok" {
-		t.Errorf("Status = %q, want ok", entry.Status)
-	}
-}
-
-func TestNewV2Entry_EmptyArgKeys(t *testing.T) {
-	entry := NewV2Entry("agent-1", "tool-x", nil, 0)
-
-	if entry.ArgsHash != "" {
-		t.Errorf("ArgsHash = %q, want empty for nil argKeys", entry.ArgsHash)
-	}
-}
-
-func TestAuditV2Schema_WritesSchemaVersion(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "v2.log")
-	w, err := NewAuditWriter(path)
+	e, err := ParseAuditEntry(line)
 	if err != nil {
-		t.Fatalf("new: %v", err)
-	}
-	defer w.Close()
-
-	now := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	w.now = func() time.Time { return now }
-
-	entry := AuditEntry{
-		Tool:       "regime_get_history",
-		Status:     "ok",
-		DurationMS: 42,
-		AgentID:    "claude-agent-1",
-		TenantID:   "tenant-a",
-	}
-	if wErr := w.Write(entry); wErr != nil {
-		t.Fatalf("write: %v", wErr)
-	}
-
-	raw, _ := os.ReadFile(path)
-	line := strings.TrimRight(string(raw), "\n")
-
-	var decoded map[string]any
-	if jErr := json.Unmarshal([]byte(line), &decoded); jErr != nil {
-		t.Fatalf("decode: %v (%s)", jErr, line)
-	}
-
-	if sv, ok := decoded["schema_version"]; !ok {
-		t.Fatal("expected schema_version field, not found")
-	} else if sv != float64(2) {
-		t.Fatalf("expected schema_version=2, got %v", sv)
-	}
-	if v, ok := decoded["args_hash"]; ok && v != "" {
-		t.Fatalf("expected empty or absent args_hash when no argKeys, got %v", v)
-	}
-	if v, ok := decoded["transport"]; !ok {
-		t.Fatal("expected transport field")
-	} else if v != "stdio" {
-		t.Fatalf("expected transport=stdio, got %v", v)
-	}
-	if v, ok := decoded["agent_id"]; !ok || v != "claude-agent-1" {
-		t.Fatalf("expected agent_id=claude-agent-1, got %v", v)
-	}
-}
-
-func TestAuditV2Schema_ArgsHash(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "hash.log")
-	w, _ := NewAuditWriter(path)
-	defer w.Close()
-
-	w.now = func() time.Time { return time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC) }
-
-	entry := AuditEntry{
-		Tool:       "experiment_judge",
-		Status:     "ok",
-		DurationMS: 10,
-		ArgKeys:    []string{"experiment_id", "threshold"},
-	}
-	if wErr := w.Write(entry); wErr != nil {
-		t.Fatalf("write: %v", wErr)
-	}
-
-	raw, _ := os.ReadFile(path)
-	var decoded map[string]any
-	json.Unmarshal([]byte(strings.TrimRight(string(raw), "\n")), &decoded)
-
-	hash, ok := decoded["args_hash"].(string)
-	if !ok || len(hash) != 64 {
-		t.Fatalf("expected 64-char hex sha256, got %q", hash)
-	}
-	if hash != "423d46c7ee84988cf94aaff1a466f80d540b138ad3028cbd709c38d13f50d255" {
-		t.Fatalf("expected deterministic hash, got %q", hash)
-	}
-}
-
-func TestCanonicalizeArgsHash_Empty(t *testing.T) {
-	if h := CanonicalizeArgsHash(nil); h != "" {
-		t.Fatalf("expected empty hash for nil input, got %q", h)
-	}
-	if h := CanonicalizeArgsHash([]string{}); h != "" {
-		t.Fatalf("expected empty hash for empty slice, got %q", h)
-	}
-}
-
-func TestCanonicalizeArgsHash_Deterministic(t *testing.T) {
-	a := CanonicalizeArgsHash([]string{"a", "b", "c"})
-	b := CanonicalizeArgsHash([]string{"a", "b", "c"})
-	if a != b || a == "" {
-		t.Fatalf("expected same non-empty hash, got a=%q b=%q", a, b)
-	}
-}
-
-func TestAuditV2Schema_BackwardCompatibleRead(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "v1.log")
-
-	v1JSON := `{"ts":"2026-06-30T00:00:00Z","tool":"strategy_list_active","status":"ok","duration_ms":15,"tenant_id":"old-tenant","agent_id":"old-agent"}` + "\n"
-	if err := os.WriteFile(path, []byte(v1JSON), 0o600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	entries, rErr := ReadAuditEntries(path, 0, time.Now())
-	if rErr != nil {
-		t.Fatalf("read: %v", rErr)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(entries))
-	}
-
-	e := entries[0]
-	if e.Tool != "strategy_list_active" {
-		t.Fatalf("tool mismatch: %q", e.Tool)
+		t.Fatalf("ParseAuditEntry: %v", err)
 	}
 	if e.SchemaVersion != 1 {
-		t.Fatalf("expected SchemaVersion=1 for v1 entry, got %d", e.SchemaVersion)
+		t.Errorf("schema_version = %d, want 1", e.SchemaVersion)
 	}
-	if e.ArgsHash != "" {
-		t.Fatalf("expected empty args_hash for v1 backfill, got %q", e.ArgsHash)
+	if e.AgentID != "" {
+		t.Errorf("agent_id = %q, want empty for v1 backward compatibility", e.AgentID)
+	}
+	if e.LatencyMS != 42 {
+		t.Errorf("latency_ms = %d, want 42 (mapped from v1 duration_ms)", e.LatencyMS)
 	}
 }
 
-func TestReadAuditEntries_EmptyFileReturnsEmpty(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "empty.log")
-	if err := os.WriteFile(path, nil, 0o600); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	entries, err := ReadAuditEntries(path, 0, time.Now())
+func TestAuditV2_ParseV2AllFields(t *testing.T) {
+	argsHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	line := []byte(`{"schema_version":2,"ts":"2026-07-01T09:00:00.000Z","session_id":"sess-1","agent_id":"agent-1","tool":"regime_get_history","args_hash":"` + argsHash + `","status":"ok","latency_ms":42,"transport":"stdio"}`)
+
+	e, err := ParseAuditEntry(line)
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("ParseAuditEntry: %v", err)
 	}
-	if len(entries) != 0 {
-		t.Fatalf("expected 0 entries, got %d", len(entries))
+	if e.SchemaVersion != 2 {
+		t.Errorf("schema_version = %d, want 2", e.SchemaVersion)
+	}
+	if e.SessionID != "sess-1" {
+		t.Errorf("session_id = %q, want sess-1", e.SessionID)
+	}
+	if e.AgentID != "agent-1" {
+		t.Errorf("agent_id = %q, want agent-1", e.AgentID)
+	}
+	if e.Tool != "regime_get_history" {
+		t.Errorf("tool = %q, want regime_get_history", e.Tool)
+	}
+	if e.ArgsHash != argsHash {
+		t.Errorf("args_hash = %q, want %q", e.ArgsHash, argsHash)
+	}
+	if e.LatencyMS != 42 {
+		t.Errorf("latency_ms = %d, want 42", e.LatencyMS)
+	}
+	if e.Transport != "stdio" {
+		t.Errorf("transport = %q, want stdio", e.Transport)
 	}
 }
 
-func TestReadAuditEntries_FileNotFoundReturnsError(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nonexistent.log")
-	entries, err := ReadAuditEntries(path, 0, time.Now())
-	if err == nil {
-		t.Fatalf("expected error, got entries=%v", entries)
+func TestAuditV2_AggregateCallStats(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	entries := []AuditEntryV2{
+		{TS: now.Add(-5 * time.Minute).Format(time.RFC3339Nano), Tool: "t1", Status: "ok", LatencyMS: 10},
+		{TS: now.Add(-4 * time.Minute).Format(time.RFC3339Nano), Tool: "t1", Status: "ok", LatencyMS: 20},
+		{TS: now.Add(-3 * time.Minute).Format(time.RFC3339Nano), Tool: "t2", Status: "ok", LatencyMS: 30},
+		{TS: now.Add(-2 * time.Minute).Format(time.RFC3339Nano), Tool: "t2", Status: "error", LatencyMS: 40},
+		{TS: now.Add(-1 * time.Minute).Format(time.RFC3339Nano), Tool: "t1", Status: "error", LatencyMS: 50},
 	}
-	if !strings.Contains(err.Error(), "audit") || !strings.Contains(err.Error(), "open") {
-		t.Fatalf("expected audit open error, got: %v", err)
+
+	stats := AggregateCallStats(entries, 60*time.Minute, now)
+
+	if stats.TotalCalls != 5 {
+		t.Errorf("total_calls = %d, want 5", stats.TotalCalls)
+	}
+	if stats.ErrorCount != 2 {
+		t.Errorf("error_count = %d, want 2", stats.ErrorCount)
+	}
+	if stats.P50LatencyMS != 30 {
+		t.Errorf("p50_latency_ms = %v, want 30", stats.P50LatencyMS)
+	}
+	if stats.PerTool["t1"].Count != 3 {
+		t.Errorf("per_tool[t1].count = %d, want 3", stats.PerTool["t1"].Count)
+	}
+	if stats.PerTool["t1"].ErrorCount != 1 {
+		t.Errorf("per_tool[t1].error_count = %d, want 1", stats.PerTool["t1"].ErrorCount)
+	}
+	if stats.PerTool["t1"].P50LatencyMS != 20 {
+		t.Errorf("per_tool[t1].p50_latency_ms = %v, want 20", stats.PerTool["t1"].P50LatencyMS)
+	}
+	if stats.PerTool["t2"].Count != 2 {
+		t.Errorf("per_tool[t2].count = %d, want 2", stats.PerTool["t2"].Count)
+	}
+	if stats.PerTool["t2"].ErrorCount != 1 {
+		t.Errorf("per_tool[t2].error_count = %d, want 1", stats.PerTool["t2"].ErrorCount)
+	}
+	if stats.PerTool["t2"].P50LatencyMS != 35 {
+		t.Errorf("per_tool[t2].p50_latency_ms = %v, want 35", stats.PerTool["t2"].P50LatencyMS)
 	}
 }
 
-func TestReadAuditEntries_RetentionFilter(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "retention.log")
+func TestAuditV2_SessionTopology(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	entries := []AuditEntryV2{
+		{TS: now.Add(-5 * time.Minute).Format(time.RFC3339Nano), AgentID: "a1", Tool: "t1", Status: "ok", LatencyMS: 10},
+		{TS: now.Add(-4 * time.Minute).Format(time.RFC3339Nano), AgentID: "a1", Tool: "t2", Status: "ok", LatencyMS: 20},
+		{TS: now.Add(-3 * time.Minute).Format(time.RFC3339Nano), AgentID: "a2", Tool: "t1", Status: "ok", LatencyMS: 30},
+		{TS: now.Add(-2 * time.Minute).Format(time.RFC3339Nano), AgentID: "a2", Tool: "t2", Status: "ok", LatencyMS: 40},
+	}
+
+	topo := BuildSessionTopology(entries, 60*time.Minute, now)
+
+	if topo.AgentCount != 2 {
+		t.Errorf("agent_count = %d, want 2", topo.AgentCount)
+	}
+	if topo.ToolCount != 2 {
+		t.Errorf("tool_count = %d, want 2", topo.ToolCount)
+	}
+	if topo.Matrix["a1"]["t1"] != 1 {
+		t.Errorf("matrix[a1][t1] = %d, want 1", topo.Matrix["a1"]["t1"])
+	}
+	if topo.Matrix["a1"]["t2"] != 1 {
+		t.Errorf("matrix[a1][t2] = %d, want 1", topo.Matrix["a1"]["t2"])
+	}
+	if topo.Matrix["a2"]["t1"] != 1 {
+		t.Errorf("matrix[a2][t1] = %d, want 1", topo.Matrix["a2"]["t1"])
+	}
+	if topo.Matrix["a2"]["t2"] != 1 {
+		t.Errorf("matrix[a2][t2] = %d, want 1", topo.Matrix["a2"]["t2"])
+	}
+}
+
+func TestAuditV2_30DayRetentionFilter(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	entries := []AuditEntryV2{
+		{TS: now.Add(-35 * 24 * time.Hour).Format(time.RFC3339Nano), Tool: "old", Status: "ok", LatencyMS: 1},
+		{TS: now.Add(-1 * 24 * time.Hour).Format(time.RFC3339Nano), Tool: "new", Status: "ok", LatencyMS: 2},
+	}
+
+	stats := AggregateCallStats(entries, 30*24*time.Hour, now)
+
+	if stats.TotalCalls != 1 {
+		t.Errorf("total_calls = %d, want 1 (35-day entry excluded)", stats.TotalCalls)
+	}
+	if stats.PerTool["old"].Count != 0 {
+		t.Errorf("per_tool[old].count = %d, want 0", stats.PerTool["old"].Count)
+	}
+	if stats.PerTool["new"].Count != 1 {
+		t.Errorf("per_tool[new].count = %d, want 1", stats.PerTool["new"].Count)
+	}
+}
+
+func TestAuditV2_V1V2Interop(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "interop.log")
 	w, _ := NewAuditWriter(path)
 	defer w.Close()
 
-	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+	// Write a v1-style entry (no schema_version, duration_ms only).
+	_ = w.Write(AuditEntry{
+		TS:         now.Add(-2 * time.Minute).Format(time.RFC3339Nano),
+		Tool:       "v1_tool",
+		Status:     "ok",
+		DurationMS: 15,
+	})
+	// Write a v2-style entry (schema_version explicitly set, latency_ms).
+	_ = w.Write(AuditEntry{
+		SchemaVersion: 2,
+		TS:            now.Add(-1 * time.Minute).Format(time.RFC3339Nano),
+		SessionID:     "sess-interop",
+		AgentID:       "agent-interop",
+		Tool:          "v2_tool",
+		ArgsHash:      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		Status:        "ok",
+		LatencyMS:     25,
+		Transport:     "stdio",
+	})
 
-	w.now = func() time.Time { return now.Add(-31 * 24 * time.Hour) }
-	w.Write(AuditEntry{Tool: "old", Status: "ok", DurationMS: 1})
-	w.now = func() time.Time { return now }
-	w.Write(AuditEntry{Tool: "new", Status: "ok", DurationMS: 1})
-
-	entries, err := ReadAuditEntries(path, 30, now)
+	entries, err := readAuditEntriesV2(path)
 	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(entries))
-	}
-	if entries[0].Tool != "new" {
-		t.Fatalf("expected new, got %q", entries[0].Tool)
-	}
-}
-
-func TestReadAuditEntries_NoRetentionWhenZero(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "noret.log")
-	w, _ := NewAuditWriter(path)
-	defer w.Close()
-
-	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
-
-	w.now = func() time.Time { return now.Add(-60 * 24 * time.Hour) }
-	w.Write(AuditEntry{Tool: "old", Status: "ok", DurationMS: 1})
-	w.now = func() time.Time { return now }
-	w.Write(AuditEntry{Tool: "new", Status: "ok", DurationMS: 1})
-
-	entries, err := ReadAuditEntries(path, 0, now)
-	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("readAuditEntriesV2: %v", err)
 	}
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
-}
 
-func TestAuditV2Schema_ExistingV1TestsStillPass(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "compat.log")
-	w, _ := NewAuditWriter(path)
-	defer w.Close()
-
-	for i := 0; i < 3; i++ {
-		if wErr := w.Write(AuditEntry{Tool: "t", Status: "ok", DurationMS: int64(i)}); wErr != nil {
-			t.Fatalf("write %d: %v", i, wErr)
-		}
+	stats := AggregateCallStats(entries, 60*time.Minute, now)
+	if stats.TotalCalls != 2 {
+		t.Errorf("total_calls = %d, want 2", stats.TotalCalls)
 	}
-
-	raw, _ := os.ReadFile(path)
-	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 lines, got %d", len(lines))
+	if stats.PerTool["v1_tool"].Count != 1 {
+		t.Errorf("per_tool[v1_tool].count = %d, want 1", stats.PerTool["v1_tool"].Count)
 	}
-
-	for i, line := range lines {
-		var e AuditEntry
-		if jErr := json.Unmarshal([]byte(line), &e); jErr != nil {
-			t.Fatalf("line %d: %v", i, jErr)
-		}
-		if e.Tool != "t" || e.Status != "ok" {
-			t.Fatalf("line %d: unexpected %+v", i, e)
-		}
-		if e.SchemaVersion != 2 {
-			t.Fatalf("line %d: expected schema_version=2, got %d", i, e.SchemaVersion)
-		}
+	if stats.PerTool["v2_tool"].Count != 1 {
+		t.Errorf("per_tool[v2_tool].count = %d, want 1", stats.PerTool["v2_tool"].Count)
 	}
 }

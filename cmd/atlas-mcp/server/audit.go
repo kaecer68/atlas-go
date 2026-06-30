@@ -233,8 +233,8 @@ func (w *AuditWriter) Cleanup(retentionDays int, now time.Time) (int, error) {
 // parseable. Best-effort: malformed lines are kept (audit log integrity
 // takes priority over cleanup aggression).
 func extractTS(line []byte) *time.Time {
-	var e AuditEntry
-	if err := json.Unmarshal(line, &e); err != nil {
+	e, err := ParseAuditEntry(line)
+	if err != nil {
 		return nil
 	}
 	if e.TS == "" {
