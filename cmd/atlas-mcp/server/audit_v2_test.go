@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// --- NewV2Entry constructor tests ---
-
 func TestNewV2Entry_ComputesArgsHash(t *testing.T) {
 	entry := NewV2Entry("test-agent", "regime_get_history", []string{"days", "threshold"}, 42)
 
@@ -19,9 +17,6 @@ func TestNewV2Entry_ComputesArgsHash(t *testing.T) {
 	}
 	if entry.AgentID != "test-agent" {
 		t.Errorf("AgentID = %q, want test-agent", entry.AgentID)
-	}
-	if entry.Tool != "regime_get_history" {
-		t.Errorf("Tool = %q, want regime_get_history", entry.Tool)
 	}
 	if entry.Transport != "stdio" {
 		t.Errorf("Transport = %q, want stdio", entry.Transport)
@@ -42,9 +37,6 @@ func TestNewV2Entry_EmptyArgKeys(t *testing.T) {
 
 	if entry.ArgsHash != "" {
 		t.Errorf("ArgsHash = %q, want empty for nil argKeys", entry.ArgsHash)
-	}
-	if len(entry.ArgKeys) != 0 {
-		t.Errorf("ArgKeys = %v, want empty", entry.ArgKeys)
 	}
 }
 

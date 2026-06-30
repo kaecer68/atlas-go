@@ -31,6 +31,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerLLMTraceTools(mcpSrv, s)
 	registerDataUniverseTools(mcpSrv, s)
 	registerReportPrismSwarmTools(mcpSrv, s)
+	registerAnalyticsTools(mcpSrv, s)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",

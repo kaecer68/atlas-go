@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // withMockAtlas spins up an httptest server that records every request. The
@@ -294,22 +295,126 @@ func TestRun_RequiresAuditPath(t *testing.T) {
 var _ = errors.New
 
 // --- audit v2: withAudit writes schema_version=2 entries ----------------------
-// TODO: uncomment after implementing ContextWithAgentID/ContextWithTenantID and
-// updating withAudit to accept context.Context as the first parameter.
 
-/*
 func TestWithAudit_WritesV2Schema(t *testing.T) {
-	// ... requires ContextWithAgentID + context-aware withAudit
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"date":"2026-07-01","regime":"RISK_ON","score":8}]`))
+	}))
+	defer ts.Close()
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "audit.log")
+	audit, err := NewAuditWriter(path)
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	defer audit.Close()
+
+	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
+	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+
+	ctx := ContextWithAgentID(context.Background(), "test-agent")
+	ctx = ContextWithTenantID(ctx, "test-tenant")
+	err = s.withAudit(ctx, "regime_get_history", []string{"days"}, func() error {
+		var raw []RegimePoint
+		return s.cli.Get(ctx, "/api/dashboard/regime-history", nil, &raw)
+	})
+	if err != nil {
+		t.Fatalf("withAudit: %v", err)
+	}
+
+	raw, _ := os.ReadFile(path)
+	var decoded map[string]any
+	json.Unmarshal([]byte(strings.TrimRight(string(raw), "\n")), &decoded)
+
+	if sv := decoded["schema_version"]; sv != float64(2) {
+		t.Fatalf("expected schema_version=2, got %v", sv)
+	}
+	if hash := decoded["args_hash"]; hash == nil || hash == "" {
+		t.Fatal("expected non-empty args_hash")
+	}
+	if lat := decoded["latency_ms"]; lat == nil {
+		t.Fatal("expected latency_ms")
+	}
+	if tp := decoded["transport"]; tp != "stdio" {
+		t.Fatalf("expected transport=stdio, got %v", tp)
+	}
+	if aid := decoded["agent_id"]; aid != "test-agent" {
+		t.Fatalf("expected agent_id=test-agent, got %v", aid)
+	}
 }
 
 func TestWithAudit_V2LatencyMS(t *testing.T) {
-	// ... requires context-aware withAudit
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	}))
+	defer ts.Close()
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "audit.log")
+	audit, _ := NewAuditWriter(path)
+	defer audit.Close()
+
+	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
+	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+
+	err := s.withAudit(context.Background(), "strategy_list_active", nil, func() error {
+		var strategies []map[string]any
+		return s.cli.Get(context.Background(), "/api/strategies/active", nil, &strategies)
+	})
+	if err != nil {
+		t.Fatalf("withAudit: %v", err)
+	}
+
+	raw, _ := os.ReadFile(path)
+	var decoded map[string]any
+	json.Unmarshal([]byte(strings.TrimRight(string(raw), "\n")), &decoded)
+
+	lat, ok := decoded["latency_ms"].(float64)
+	if !ok || lat < 50 {
+		t.Fatalf("expected latency_ms >= 50, got %v", lat)
+	}
+	dur := decoded["duration_ms"].(float64)
+	if dur != lat {
+		t.Fatalf("expected duration_ms == latency_ms, got dur=%v lat=%v", dur, lat)
+	}
 }
 
 func TestWithAudit_V2OnError(t *testing.T) {
-	// ... requires context-aware withAudit
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "audit.log")
+	audit, _ := NewAuditWriter(path)
+	defer audit.Close()
+
+	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
+	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+
+	_ = s.withAudit(context.Background(), "system_get_health", nil, func() error {
+		return s.cli.Get(context.Background(), "/api/dashboard/system-health", nil, nil)
+	})
+
+	raw, _ := os.ReadFile(path)
+	var decoded map[string]any
+	json.Unmarshal([]byte(strings.TrimRight(string(raw), "\n")), &decoded)
+
+	if decoded["status"] != "error" {
+		t.Fatalf("expected status=error, got %v", decoded["status"])
+	}
+	if decoded["schema_version"] != float64(2) {
+		t.Fatalf("expected schema_version=2, got %v", decoded["schema_version"])
+	}
+	if errMsg := decoded["error"]; errMsg == nil || errMsg == "" {
+		t.Fatal("expected error field populated")
+	}
 }
-*/
 
 // TestNoToolWithoutDescription verifies that every auto-generated tool descriptor has a non-empty description.
 func TestNoToolWithoutDescription(t *testing.T) {
