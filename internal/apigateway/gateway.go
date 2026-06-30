@@ -92,6 +92,12 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 			// the data is last-known-good and not a fresh fetch (Layer 1 of the
 			// 4-layer data-visibility safeguard).
 			if stale := g.cache.Get(channelID); stale != nil {
+				// Update last_fetch_at on the health record so stale
+				// threshold (PR #844) can determine record freshness.
+				// Without this, CB-open channels with transient failures
+				// retain ancient last_fetch_at timestamps that look
+				// like current alerts forever.
+				_ = g.health.Record(channelID, "warn", callErr.Error())
 				stale.Stale = true
 				stale.Fallback = true
 				stale.LastError = callErr.Error()
