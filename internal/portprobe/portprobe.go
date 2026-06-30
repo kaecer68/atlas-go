@@ -67,6 +67,14 @@ func Probe(addr string) (State, Occupant, error) {
 		ln6, err6 := net.Listen("tcp", "[::]:"+portStr)
 		if err6 == nil {
 			_ = ln6.Close()
+			// net.Listen reports free, but on macOS a listener that set
+			// SO_REUSEADDR can coexist with our transient bind, producing a
+			// false negative. Cross-check with lsof before declaring the port
+			// free; on systems without lsof we keep the net.Listen result.
+			occ, lookupErr := lookupOccupantByPort(port)
+			if lookupErr == nil && occ.PID > 0 {
+				return classifyOccupied(port, host)
+			}
 			return StateFree, Occupant{}, nil
 		}
 		err4 = err6
@@ -111,6 +119,35 @@ func IsFubonZombie(occ Occupant) bool {
 // SIGKILL if the process is still alive.
 func KillOccupant(pid int) error {
 	return killOccupantImpl(pid)
+}
+
+// WaitForPortFree polls until no TCP listener is bound on any local address
+// for the given port. It returns true once the port is free, or false if the
+// timeout expires. This is useful after KillOccupant because a process may
+// have exited while its listening socket is still held by the kernel or by a
+// zombie child that has not yet been reaped.
+func WaitForPortFree(port int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	portStr := strconv.Itoa(port)
+	for time.Now().Before(deadline) {
+		free := true
+		for _, addr := range []string{"127.0.0.1:" + portStr, "0.0.0.0:" + portStr, "[::]:" + portStr} {
+			ln, err := net.Listen("tcp", addr)
+			if err == nil {
+				_ = ln.Close()
+				continue
+			}
+			if errors.Is(err, syscall.EADDRINUSE) {
+				free = false
+				break
+			}
+		}
+		if free {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
 }
 
 const healthPath = "/health"

@@ -47,6 +47,10 @@ var (
 	foreignHolderOnce sync.Once
 	foreignHolderPath string
 	foreignHolderErr  error
+
+	fakeFubonPythonOnce sync.Once
+	fakeFubonPythonPath string
+	fakeFubonPythonErr  error
 )
 
 // setupE2EBinary builds atlas once per `go test` invocation and returns the
@@ -137,6 +141,53 @@ func main() {
 	return foreignHolderPath
 }
 
+// setupFakeFubonProxyPython builds a tiny Python script that stands in for
+// services/fubon-proxy/main.py during E2E tests. The fubon proxy manager
+// resolves Python via FUBON_PROXY_PYTHON and spawns this script; the script
+// ignores the real main.py argument and starts a minimal HTTP server on
+// FUBON_PROXY_PORT so the atlas health check sees a healthy fubon_proxy.
+//
+// This avoids needing the real fubon SDK / venv / credentials in CI, and
+// avoids the local macOS issue where a dummy FUBON_API_KEY would start the
+// real Python proxy and spin-retry on invalid credentials.
+func setupFakeFubonProxyPython(t *testing.T) string {
+	t.Helper()
+	fakeFubonPythonOnce.Do(func() {
+		tmpDir, err := os.MkdirTemp("", "atlas-fake-fubon-python-")
+		if err != nil {
+			fakeFubonPythonErr = err
+			return
+		}
+		fakeFubonPythonPath = filepath.Join(tmpDir, "fake-fubon-python")
+		code := `#!/usr/bin/env python3
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+port = int(os.environ.get("FUBON_PROXY_PORT", "8081"))
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, format, *args):
+        pass
+
+server = HTTPServer(("0.0.0.0", port), Handler)
+server.serve_forever()
+`
+		if err := os.WriteFile(fakeFubonPythonPath, []byte(code), 0o755); err != nil {
+			fakeFubonPythonErr = err
+			return
+		}
+	})
+	if fakeFubonPythonErr != nil {
+		t.Skipf("fake fubon python helper unavailable: %v", fakeFubonPythonErr)
+	}
+	return fakeFubonPythonPath
+}
+
 func freePort(t *testing.T) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -211,7 +262,12 @@ func launchAtlas(t *testing.T, bin string, args ...string) *exec.Cmd {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = e2eRepoRoot
-	cmd.Env = append(os.Environ(), "FUBON_PROXY_PORT="+lastFlagValue(args, "-fubon-port"))
+	fakePython := setupFakeFubonProxyPython(t)
+	cmd.Env = append(os.Environ(),
+		"FUBON_PROXY_PORT="+lastFlagValue(args, "-fubon-port"),
+		"FUBON_API_KEY=atlas-e2e-dummy",
+		"FUBON_PROXY_PYTHON="+fakePython,
+	)
 	// Discard stdout in tests to keep test logs readable; stderr is kept so
 	// atlas error / preflight_zombie_killed events are visible for debugging.
 	cmd.Stdout = io.Discard
@@ -338,7 +394,7 @@ func TestE2E_PythonZombieOrphanReclaimed(t *testing.T) {
 		"-fubon-port", strconv.Itoa(zombiePort),
 	)
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(apiPort) + "/health"
-	if _, _, ok := waitForHealth(t, baseURL, 25*time.Second); !ok {
+	if _, _, ok := waitForHealth(t, baseURL, 60*time.Second); !ok {
 		stopAtlas(t, atlas, 3*time.Second)
 		t.Fatalf("atlas never came up after reclaim attempt; L1 zombie kill may have failed")
 	}
@@ -430,6 +486,11 @@ func TestE2E_NonZombieForeignHolder_AtlasErrors(t *testing.T) {
 		"-api",
 		"-addr", "127.0.0.1:"+strconv.Itoa(freePort(t)),
 		"-fubon-port", strconv.Itoa(foreignPort),
+	)
+	fakePython := setupFakeFubonProxyPython(t)
+	atlas.Env = append(os.Environ(),
+		"FUBON_API_KEY=atlas-e2e-dummy",
+		"FUBON_PROXY_PYTHON="+fakePython,
 	)
 	atlas.Stdout = io.Discard
 	var atlasErr bytes.Buffer

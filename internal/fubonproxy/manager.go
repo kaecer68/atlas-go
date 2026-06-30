@@ -153,8 +153,20 @@ func GetFubonProxyPort() int {
 }
 
 // resolvePythonBin 偵測 Python 可執行檔路徑。
-// 優先檢查 ~/.config/atlas-go/.fubon-env/bin/python，回退至系統 python3。
+// 優先檢查 FUBON_PROXY_PYTHON 環境變數（測試/開發覆蓋），
+// 然後檢查 ~/.config/atlas-go/.fubon-env/bin/python，最後回退至系統 python3。
 func resolvePythonBin() string {
+	if envPath := os.Getenv("FUBON_PROXY_PYTHON"); envPath != "" {
+		if info, err := os.Stat(envPath); err == nil && !info.IsDir() {
+			logging.Info("fubonproxy", "env_python_found", "path", envPath)
+			return envPath
+		}
+		logging.Warn("fubonproxy", "env_python_invalid",
+			"path", envPath,
+			"message", "FUBON_PROXY_PYTHON set but not a valid file; falling back",
+		)
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		venvPython := filepath.Join(homeDir, ".config", "atlas-go", ".fubon-env", "bin", "python")
@@ -169,7 +181,7 @@ func resolvePythonBin() string {
 		return path
 	}
 
-	logging.Warn("fubonproxy", "no_python_found", "message", "neither venv python nor system python3 found")
+	logging.Warn("fubonproxy", "no_python_found", "message", "neither env python, venv python nor system python3 found")
 	return ""
 }
 
@@ -234,8 +246,14 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 				// Kill successful — re-probe
 				logging.Info("fubonproxy", "zombie_killed",
 					"pid", occupant.PID,
-					"message", "re-probing port after zombie kill",
+					"message", "waiting for port release after zombie kill",
 				)
+				if !portprobe.WaitForPortFree(proxyListenPort, 5*time.Second) {
+					logging.Warn("fubonproxy", "zombie_port_still_held",
+						"port", proxyListenPort,
+						"message", "port not free after zombie kill; proceeding with re-probe",
+					)
+				}
 				newState, newOccupant, probeErr := m.probePort8081()
 				if probeErr != nil {
 					logging.Warn("fubonproxy", "reprobe_failed_after_zombie_kill",
