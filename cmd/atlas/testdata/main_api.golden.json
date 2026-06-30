@@ -3,7 +3,7 @@
   "funcs": [
     {
       "name": "RegisterAdminRoutes",
-      "params": "(mux *http.ServeMux, cfg config.Config)",
+      "params": "(mux *http.ServeMux, cfg config.Config, pm *fubonproxy.ProcessManager)",
       "results": ""
     },
     {
