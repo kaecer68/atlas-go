@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"fmt"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -159,6 +160,16 @@ func (p *TWSECalendarProvider) fetchExDividendMonth(ctx context.Context, dateStr
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
+	// TWSE calendar API deprecation (2026-06): exRight endpoint 回 HTML body
+	// (302 → /page-not-found.html)。偵測 HTML 並優雅降級回空 events。
+	if isHTMLContentType(resp.Header.Get("Content-Type")) {
+		logging.Warn("twse_calendar", "endpoint_html_response_deprecated",
+			logging.FStr("endpoint", "exRight"),
+			logging.FStr("date", dateStr),
+		)
+		return nil, nil
+	}
+
 	var apiResp twseCalendarResponse
 	if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
@@ -262,6 +273,15 @@ func (p *TWSECalendarProvider) fetchMeetingMonth(ctx context.Context, dateStr st
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
+	// TWSE calendar API deprecation (2026-06): meeting endpoint 同樣 deprecated。
+	if isHTMLContentType(resp.Header.Get("Content-Type")) {
+		logging.Warn("twse_calendar", "endpoint_html_response_deprecated",
+			logging.FStr("endpoint", "meeting"),
+			logging.FStr("date", dateStr),
+		)
+		return nil, nil
+	}
+
 	var apiResp twseCalendarResponse
 	if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
@@ -316,6 +336,25 @@ func (p *TWSECalendarProvider) fetchMeetingMonth(ctx context.Context, dateStr st
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// isHTMLContentType reports whether the Content-Type header indicates an
+// HTML response (vs. JSON). Used to detect TWSE calendar API deprecation:
+// as of 2026-06, exRight and meeting endpoints return HTML (302 redirect
+// to /page-not-found.html) instead of JSON. Callers should treat HTML
+// responses as graceful empty results rather than propagating JSON
+// decode errors downstream.
+//
+// Case-insensitive match per RFC 7231 §3.1.1.1 (media type is case-insensitive).
+func isHTMLContentType(contentType string) bool {
+	if contentType == "" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(mediaType, "text/html")
+}
 
 // normalizeTWDate converts TWSE date formats to ISO 8601 (2006-01-02).
 // TWSE uses multiple formats:

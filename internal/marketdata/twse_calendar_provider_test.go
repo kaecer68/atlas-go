@@ -131,9 +131,72 @@ func TestNormalizeTWDate_Empty(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// CompositeCalendarProvider tests
-// ---------------------------------------------------------------------------
+func TestTWSECalendarProvider_FetchExDividendMonth_HTMLResponseDeprecated(t *testing.T) {
+	// TWSE deprecated exRight endpoint (2026-06): returns 302 → /page-not-found.html
+	// with text/html body. Provider must return empty events gracefully, not error.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>404 Not Found</title></head><body>...</body></html>`))
+	}))
+	defer server.Close()
+
+	p := NewTWSECalendarProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+
+	events, err := p.fetchExDividendMonth(context.Background(), "20260501")
+	if err != nil {
+		t.Fatalf("expected nil error for HTML response (graceful deprecation), got: %v", err)
+	}
+	if events != nil {
+		t.Errorf("expected nil events for deprecated endpoint, got %d events", len(events))
+	}
+}
+
+func TestTWSECalendarProvider_FetchMeetingMonth_HTMLResponseDeprecated(t *testing.T) {
+	// TWSE deprecated meeting endpoint (2026-06): same HTML fallback behavior.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		_, _ = w.Write([]byte(`<html><body>Not Found</body></html>`))
+	}))
+	defer server.Close()
+
+	p := NewTWSECalendarProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+
+	events, err := p.fetchMeetingMonth(context.Background(), "20260601")
+	if err != nil {
+		t.Fatalf("expected nil error for HTML response (graceful deprecation), got: %v", err)
+	}
+	if events != nil {
+		t.Errorf("expected nil events for deprecated endpoint, got %d events", len(events))
+	}
+}
+
+func TestIsHTMLContentType(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"empty", "", false},
+		{"json app", "application/json", false},
+		{"json app with charset", "application/json; charset=UTF-8", false},
+		{"html lowercase", "text/html", true},
+		{"html uppercase", "text/HTML; charset=utf-8", true},
+		{"html mixed case", "Text/Html", true},
+		{"xhtml", "application/xhtml+xml", false},
+		{"malformed", "this is not a mime type", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isHTMLContentType(tt.in); got != tt.want {
+				t.Errorf("isHTMLContentType(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
 
 // mockCalendarProvider is a simple in-memory provider for testing.
 type mockCalendarProvider struct {
