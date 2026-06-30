@@ -120,6 +120,45 @@ jobs:
         # only-new-issues patch fetch. Run the full linter instead.
         only-new-issues: false
 
+  # Generate — Verify auto-generated files are up-to-date.
+  # Runs go generate for both gentags (field_types.ts / valid_fields.json)
+  # and atlas-mcp descgen (auto-desc.gen.json / auto-desc.gen.go).
+  # If generation produces a diff, the job fails to signal drift.
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+      with:
+        node-version: '22'
+
+    - name: Build frontends
+      run: bash scripts/ci/build_all_frontends.sh
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Generate field_types.ts and valid_fields.json
+      run: go generate ./...
+
+    - name: Generate MCP auto-desc
+      run: go generate ./cmd/atlas-mcp/...
+
+    - name: Check for drift
+      run: |
+        if ! git diff --exit-code; then
+          echo "::error:: Generated files are out of date. Run 'go generate ./...' and commit the changes."
+          git diff --stat
+          exit 1
+        fi
+
   # Security Scan
   security:
     runs-on: ubuntu-latest
@@ -266,7 +305,7 @@ jobs:
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration]
+    needs: [build, test-cmd-atlas, lint, security, integration, generate]
     if: github.event_name == 'pull_request' && always()
     permissions:
       pull-requests: write
@@ -276,7 +315,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         STATUS_FLAG=":white_check_mark:"
-        if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test-cmd-atlas.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ]; then
+        if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test-cmd-atlas.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.generate.result }}" != "success" ]; then
           STATUS_FLAG=":x:"
         fi
         cat <<EOF | gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file -
@@ -289,6 +328,7 @@ jobs:
         | lint | ${{ needs.lint.result }} |
         | security | ${{ needs.security.result }} |
         | integration | ${{ needs.integration.result }} |
+        | generate | ${{ needs.generate.result }} |
 
         \`\`\`
         Triggered by: ${{ github.event_name }} on ${{ github.ref }}
