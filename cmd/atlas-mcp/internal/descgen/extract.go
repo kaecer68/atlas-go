@@ -10,6 +10,14 @@ import (
 	"strings"
 )
 
+// ToolDesc is one tool's extracted metadata for auto-generated MCP tool
+// descriptions. InputSchema is the JSON Schema as a Go value (map[string]any
+// for an object schema, nil for tools with no input). We deliberately use any
+// instead of json.RawMessage so that the AST extractor and unit tests can
+// operate on the schema as Go-typed values (e.g. []string for "required")
+// without a json.Marshal/Unmarshal round trip that would lose slice element
+// types. The schema's runtime invariant (always map[string]any or nil) is
+// enforced by buildSchema() in extract.go and the schemaMap() test helper.
 type ToolDesc struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
