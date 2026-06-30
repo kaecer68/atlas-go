@@ -3,7 +3,7 @@
 > **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（Phase 2.2: 74 tools）。
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
-> **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [agent-mcp-server.md](../../specs/agent-mcp-server.md) §3。
+> **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [agent-mcp-server.md](specs/agent-mcp-server.md) §3。
 
 ---
 
