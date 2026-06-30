@@ -792,6 +792,28 @@ export interface DayResult {
   fallback_events?: string[];
 }
 
+export interface DeploymentConfig {
+  binary: string;
+  args: string[];
+  auto_restart: boolean;
+  max_restarts: number;
+  listen_port: number;
+}
+
+export interface DeploymentStatus {
+  supervisor_running: boolean;
+  process_alive: boolean;
+  pid: number;
+  port: number;
+  started_at: string;
+  restart_count: number;
+  last_beat_at: string;
+  last_beat_age_sec: number;
+  last_error: string;
+  recent_events: string[];
+  config: string;
+}
+
 export interface DividendRecord {
   symbol: string;
   year: number;
@@ -3373,6 +3395,12 @@ export interface ThresholdViolation {
   threshold: number;
   severity: string;
   message: string;
+}
+
+export interface TimelineEvent {
+  at: string;
+  kind: string;
+  detail: string;
 }
 
 export interface TradeRecord {
