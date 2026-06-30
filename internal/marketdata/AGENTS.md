@@ -69,6 +69,53 @@
 
 **數據源優先級**：富邦證券 → TWSE OpenAPI → Fugle → TEJ → FinMind（遵循 `internal/apigateway/CONSTITUTION.md` 規範）。
 
+## TWSE Charset 解碼
+
+TWSE 部分 endpoint（monthly statistics、除權息日曆、股東會日曆、MI_INDEX 等）會以 **Big5** 或 **GB2312** 而非 UTF-8 編碼回應 JSON payload，違反 RFC 8259 §8.1 的 UTF-8 強制規範。若直接用 `json.NewDecoder` / `json.Unmarshal` 解析，中文欄位會出現 `'æ'` 風格的 mojibake 或直接 decode failure。TAIFEX（台灣期貨交易所）為同類風險，亦已 refactor。
+
+### 統一入口：`charset_decoder.go::DecodeJSON`
+
+**TWSE 與 TAIFEX provider 解析 HTTP JSON 回應時，一律**透過 `DecodeJSON(body io.Reader, contentType string, dst any) error` 解析。**禁止**在 TWSE / TAIFEX 檔案內直接呼叫 `json.NewDecoder` 或 `json.Unmarshal` 處理外部 API body。
+
+```go
+// ✅ 正確（charset-aware）
+var apiResp twseCalendarResponse
+if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &apiResp); err != nil {
+    return nil, fmt.Errorf("decode response: %w", err)
+}
+
+// ❌ 錯誤（會 mojibake）
+var apiResp twseCalendarResponse
+if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil { ... }
+```
+
+`DecodeJSON` 行為：
+- 解析 `Content-Type` 的 `charset=` 參數
+- UTF-8 / ASCII / 缺省 → 直接 `json.NewDecoder` 解析（零開銷）
+- 其他 charset（Big5、GB2312、Shift_JIS 等）→ `golang.org/x/text/encoding/htmlindex` 查表 + `transform.NewReader` 串流轉碼後解析
+- 未知 charset → 回 error（含 charset 名稱 + 原始 Content-Type）
+
+### 已 refactor 的 call site（2026-06-30）
+
+| 檔案 | 函式 | 模式 |
+|------|------|------|
+| `twse_openapi.go` | `GetQuotes`, `GetDailyQuote` | streaming |
+| `twse_calendar_provider.go` | `fetchExDividendMonth`, `fetchMeetingMonth` | streaming |
+| `twse_sector_index_provider.go` | `fetchSingleDay` | streaming（line 246 cache file read 跳過） |
+| `twse_capital_flow_provider.go` | `fetchDate` | bytes-read（`io.ReadAll` + `bytes.NewReader`） |
+| `twse_margin_provider.go` | `fetchDateExpanded` | bytes-read |
+| `twse_oddlot_provider.go` | `fetchDate` | bytes-read |
+| `twse_etf_provider.go` | `fetchDate` | bytes-read |
+| `taifex_provider.go` | `FetchPCR`, `FetchRetailFuturesOI`, `FetchFutures` | bytes-read |
+
+**注意**：cache file 讀取（`twse_sector_index_provider.go:246` 的 `loadFromCache`）**不要**用 `DecodeJSON` — 那是我們自己寫入的 UTF-8 cache，繼續用 `json.Unmarshal`。
+
+### 已知未 refactor 的外部 source（follow-up）
+
+- **Fugle、FinMind、Fubon、TEJ、Yahoo、BDI、frankfurter 等**：目前仍用 raw `json.Unmarshal` / `json.NewDecoder` 解析 HTTP body。這些 provider 目前回 UTF-8 故無 bug，但若日後發現 mojibake 應比照 TWSE / TAIFEX 套用 `DecodeJSON`。
+
+測試覆蓋：`charset_decoder_test.go` 含 11 個 helper 測試（含 Big5 round-trip、未知 charset error、mojibake 防護），既有 8 個 provider 的 mock test 全部沿用 UTF-8 payload 故向後相容。
+
 ## fubonproxy 連線位址
 
 Fubon-proxy URL 由 `internal/fubonproxy/manager.go` 的 `ProxyBaseURL()` / `ProxyHostPort()` 統一提供 — **禁止其他 .go 檔案以 `fmt.Sprintf("http://...:%d", ...)` 自行構造**，`fubon_url_guard_test.go::TestFubon_URLDriftGuard` AST 禁制會擋下。

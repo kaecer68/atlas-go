@@ -1,8 +1,8 @@
 package marketdata
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -100,8 +100,8 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 	}
 
 	var rawList []taifexPCRRaw
-	if err := json.Unmarshal(body, &rawList); err != nil {
-		return nil, fmt.Errorf("unmarshal pcr response: %w", err)
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &rawList); err != nil {
+		return nil, fmt.Errorf("decode pcr response: %w", err)
 	}
 
 	if len(rawList) == 0 {
@@ -155,8 +155,8 @@ func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFutur
 	}
 
 	var rawList []taifexLargeTraderRaw
-	if err := json.Unmarshal(body, &rawList); err != nil {
-		return nil, fmt.Errorf("unmarshal large trader response: %w", err)
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &rawList); err != nil {
+		return nil, fmt.Errorf("decode large trader response: %w", err)
 	}
 
 	// Find the latest TX futures all-months record for all traders (TypeOfTraders="0").
@@ -310,8 +310,8 @@ func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, erro
 	}
 
 	var rawList []taifexFuturesRaw
-	if err := json.Unmarshal(body, &rawList); err != nil {
-		return nil, fmt.Errorf("unmarshal futures response: %w", err)
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &rawList); err != nil {
+		return nil, fmt.Errorf("decode futures response: %w", err)
 	}
 
 	var latest *taifexFuturesRaw

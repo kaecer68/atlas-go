@@ -1,6 +1,7 @@
 package marketdata
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -112,8 +113,8 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 	}
 
 	var apiResp twseMarginResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return 0, 0, 0, 0, fmt.Errorf("unmarshal response: %w", err)
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("decode response: %w", err)
 	}
 
 	if apiResp.Stat != "OK" || len(apiResp.Tables) == 0 {

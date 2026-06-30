@@ -140,7 +140,7 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 	}
 
 	var apiResp []twseIndexItem
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 

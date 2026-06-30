@@ -2,7 +2,6 @@ package marketdata
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -122,7 +121,7 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	}
 
 	var twseResp TWSEDailyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&twseResp); err != nil {
+	if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &twseResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -229,7 +228,7 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 	}
 
 	var dailyResp TWSEDailyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&dailyResp); err != nil {
+	if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &dailyResp); err != nil {
 		return domain.Quote{}, fmt.Errorf("decode response: %w", err)
 	}
 

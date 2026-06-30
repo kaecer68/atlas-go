@@ -1,8 +1,8 @@
 package marketdata
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,8 +88,8 @@ func (p *TWSEOddLotProvider) fetchDate(ctx context.Context, dateStr string) (*Od
 	}
 
 	var apiResp twseOddLotResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
 	if apiResp.Stat != "OK" || len(apiResp.Tables) == 0 {
