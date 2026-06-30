@@ -69,6 +69,40 @@
 
 **數據源優先級**：富邦證券 → TWSE OpenAPI → Fugle → TEJ → FinMind（遵循 `internal/apigateway/CONSTITUTION.md` 規範）。
 
+## TWSE Calendar API deprecation（2026-06-30）
+
+TWSE 已 **整段 deprecate** calendar 相關 endpoint：
+
+| Endpoint | 狀態 |
+|---------|------|
+| `https://www.twse.com.tw/rwd/zh/exRight?...` | 302 → `/rwd/` |
+| `https://www.twse.com.tw/rwd/zh/meeting?...` | 302 → `/page-not-found.html` |
+| `https://www.twse.com.tw/exchangeReport/TWTBA?...` | 307 → `/page-not-found.html` |
+| `https://www.twse.com.tw/exchangeReport/TWTB9U?...` | 307 → `/page-not-found.html` |
+| `https://openapi.twse.com.tw/v1/exchangeReport/TWTBA` | 302 → `/openapi.twse.com.tw/404.html` |
+| `https://openapi.twse.com.tw/v1/exchangeReport/TWTB9U` | 302 → `/openapi.twse.com.tw/404.html` |
+| `https://www.twse.com.tw/rwd/zh/calendar/{exRight,meeting}?...` | 302 → `/page-not-found.html` |
+
+所有 endpoint 都回 HTML body（不是 JSON），導致 `json.NewDecoder` / `DecodeJSON` 解碼失敗 → dashboard 顯示 `'æ'` mojibake-shaped error。
+
+### 優雅降級處理（PR #842+）
+
+`twse_calendar_provider.go::fetchExDividendMonth` 與 `fetchMeetingMonth` 在拿到 `Content-Type: text/html` 時：
+- log `warn level` `endpoint_html_response_deprecated`（含 endpoint + date + content_type）
+- 回 `(nil, nil)` 給下游（empty events, no error）
+- 不傳播 JSON decode error，避免 dashboard 出現 hard failure
+
+下游（`AggregatedCorporateActionProvider`、`industry.EventCalendar`、`monitoring/dashboard_api.go` 等）本來就處理空 events 場景，行為完全向後相容。
+
+### 復原策略
+
+若 TWSE 重新提供 calendar endpoint：
+1. 移除 `isHTMLContentType` 偵測區塊
+2. 確認 TWSE 確實回 JSON 而非 HTML
+3. 重跑 `TestTWSECalendarProvider_Fetch*Month` 既有 tests（用真實 JSON fixture）
+
+**不要** disable `twse_calendar_provider.go`（10+ downstream callers 依賴），也不要替換成其他 source（目前無替代 data source）。
+
 ## TWSE Charset 解碼
 
 TWSE 部分 endpoint（monthly statistics、除權息日曆、股東會日曆、MI_INDEX 等）會以 **Big5** 或 **GB2312** 而非 UTF-8 編碼回應 JSON payload，違反 RFC 8259 §8.1 的 UTF-8 強制規範。若直接用 `json.NewDecoder` / `json.Unmarshal` 解析，中文欄位會出現 `'æ'` 風格的 mojibake 或直接 decode failure。TAIFEX（台灣期貨交易所）為同類風險，亦已 refactor。
