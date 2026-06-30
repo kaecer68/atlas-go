@@ -103,7 +103,7 @@ func tailAuditLog(path string, n int) ([]auditEntryView, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err != nil {
