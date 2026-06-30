@@ -180,10 +180,30 @@ func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolReque
 	return nil, out, nil
 }
 
-// withAudit is the standard wrapper for tool handlers: it measures latency and
-// emits one AuditEntry per call, regardless of success/failure.
+// withAudit is the standard wrapper for tool handlers: it measures latency,
+// enforces per-tool rate limits (Phase 3 B), and emits one AuditEntry per
+// call regardless of success/failure.
 func (s *server) withAudit(tool string, argKeys []string, fn func() error) error {
 	start := time.Now()
+
+	// Rate limit gate. Caller resolution: stdio is currently "stdio" (single
+	// bucket per tool); HTTP/SSE transports will resolve caller from bearer
+	// token in a follow-up. On deny, write a ratelimited audit entry and
+	// short-circuit. s.limiter is nil when rate limiting is disabled.
+	if s.limiter != nil {
+		if r := s.limiter.Allow(tool, "stdio"); !r.Allowed {
+			entry := AuditEntry{
+				Tool:       tool,
+				ArgKeys:    argKeys,
+				DurationMS: time.Since(start).Milliseconds(),
+				Status:     "ratelimited",
+				Error:      fmt.Sprintf("retry after %s", r.RetryAfter),
+			}
+			_ = s.audit.Write(entry)
+			return fmt.Errorf("rate limited: %s: retry after %s", tool, r.RetryAfter)
+		}
+	}
+
 	err := fn()
 	entry := AuditEntry{
 		Tool:       tool,

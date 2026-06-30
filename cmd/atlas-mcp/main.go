@@ -3,6 +3,7 @@
 // It bridges external AI agents (Claude Desktop, Cursor, OpenCode, etc.) to
 // the atlas-go HTTP API via JSON-RPC 2.0 over stdio. Phase 1 supports stdio;
 // Phase 2 added SSE + streamable-HTTP transports with Bearer auth.
+// Phase 3 added audit log retention and per-tool rate limiting.
 //
 // Configuration via environment:
 //
@@ -10,10 +11,12 @@
 //	ATLAS_API_KEY                   admin API key (passed through when invoking atlas HTTP API)
 //	ATLAS_MCP_AUDIT_LOG             JSONL audit-log path (default: $TMPDIR/atlas-mcp-audit.log)
 //	ATLAS_MCP_AUDIT_RETENTION_DAYS  prune audit entries older than N days (default 30, 0 = disabled)
+//	ATLAS_MCP_RATE_LIMIT_PER_MINUTE per-(tool, caller) requests per minute (default 0 = disabled)
+//	ATLAS_MCP_RATE_LIMIT_BURST     burst capacity (default = per minute)
 //
 // Phase 2 security: stdio relies on process isolation; SSE/HTTP enforce
-// Bearer token via ATLAS_MCP_TOKEN. Audit retention runs daily in the
-// background when configured.
+// Bearer token via ATLAS_MCP_TOKEN. Phase 3 hardening: rate limiting + audit
+// retention.
 package main
 
 import (
@@ -31,6 +34,8 @@ func main() {
 		APIToken:           os.Getenv("ATLAS_API_KEY"),
 		AuditLogPath:       envOr("ATLAS_MCP_AUDIT_LOG", defaultAuditLogPath()),
 		AuditRetentionDays: envIntOr("ATLAS_MCP_AUDIT_RETENTION_DAYS", 30),
+		RateLimitPerMinute: envIntOr("ATLAS_MCP_RATE_LIMIT_PER_MINUTE", 0),
+		RateLimitBurst:     envIntOr("ATLAS_MCP_RATE_LIMIT_BURST", 0),
 	}
 	if err := server.Run(context.Background(), cfg); err != nil {
 		log.Fatalf("atlas-mcp: %v", err)

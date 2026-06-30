@@ -17,6 +17,8 @@ type Config struct {
 	AuditLogPath       string        // JSONL audit log file path
 	HTTPTimeout        time.Duration // per-call timeout to atlas HTTP (default 10s)
 	AuditRetentionDays int           // 0 = disabled; >0 = remove entries older than N days (default 30 in main.go)
+	RateLimitPerMinute int           // per-(tool, caller) requests per minute; 0 = disabled
+	RateLimitBurst     int           // burst capacity; 0 = defaults to PerMinute
 }
 
 // Run constructs a server with config, registers the five core tools and
@@ -53,10 +55,21 @@ func Run(ctx context.Context, cfg Config) error {
 		go runRetentionLoop(ctx, audit, cfg.AuditRetentionDays)
 	}
 
+	// Rate limiter: token-bucket per (tool, caller). Phase 3 B — closes
+	// roadmap §4 risk "agent triggers destructive operations". Disabled when
+	// RateLimitPerMinute == 0 (no-op, all calls allowed). Background sweeper
+	// evicts idle buckets to bound memory.
+	limiter := NewRateLimiter(RateLimiterConfig{
+		PerMinute: cfg.RateLimitPerMinute,
+		Burst:     cfg.RateLimitBurst,
+	})
+	limiter.Run(ctx)
+
 	srv := &server{
-		cfg:   cfg,
-		audit: audit,
-		cli:   newHTTPClient(cfg),
+		cfg:     cfg,
+		audit:   audit,
+		cli:     newHTTPClient(cfg),
+		limiter: limiter,
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp", Version: "v0.1.0"}
@@ -89,9 +102,10 @@ func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 // server holds shared state for all tool handlers. All fields are
 // read-only after construction; readers may proceed without external locking.
 type server struct {
-	cfg   Config
-	audit *AuditWriter
-	cli   *httpClient
+	cfg     Config
+	audit   *AuditWriter
+	cli     *httpClient
+	limiter *RateLimiter
 }
 
 // HTTPClient returns the shared HTTP client. Used by tool handlers and tests.
