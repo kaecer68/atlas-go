@@ -46,10 +46,17 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		// Port comes from fubonproxy (set by NewManager or -fubon-port flag) so
 		// the probe follows the L2 alt-port contract: when -fubon-port=8080 is
 		// passed, we dial 8080, not the hardcoded default.
+		//
+		// 雙位址 probe 是 by design:host 原生執行時 127.0.0.1 直連,Docker container
+		// 執行時需走 host.docker.internal(Docker Desktop 注入的 host gateway 別名)。
+		// 任一成功即視為 proxy 可達。
+		//
+		// Host 來源已統一從 fubonproxy 取得(PR #837 user prompt A1 root cause:
+		// 原本 3 個 source files 各自硬編碼 "host.docker.internal:8081")。
 		fubonPort := fubonproxy.GetFubonProxyPort()
 		probeAddrs := []string{
 			fmt.Sprintf("127.0.0.1:%d", fubonPort),
-			fmt.Sprintf("host.docker.internal:%d", fubonPort),
+			fubonproxy.ProxyHostPort(),
 		}
 		var dialed bool
 		for _, addr := range probeAddrs {

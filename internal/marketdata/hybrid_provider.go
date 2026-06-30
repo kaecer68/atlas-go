@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -57,8 +58,11 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 	var fubonProvider *FubonProvider
 	// Probe the proxy before creating the client to avoid constant
 	// "connection refused" warnings when the proxy is not running.
-	proxyAddr := "host.docker.internal:8081"
-	if conn, err := net.DialTimeout("tcp", proxyAddr, 2*time.Second); err != nil {
+	//
+	// 使用 fubonproxy.ProxyHostPort() 而非硬編碼 "host.docker.internal:8081",
+	// 確保與 cmd/atlas -fubon-port flag 同步(歷史 bug:此處原本硬編碼 8081,
+	// 當 fubon-proxy 跑在 alt-port 時 probe 仍打 8081 → 永遠 "not reachable")。
+	if conn, err := net.DialTimeout("tcp", fubonproxy.ProxyHostPort(), 2*time.Second); err != nil {
 		logging.Info("hybrid_provider", "fubon_proxy_not_reachable", "msg", "skipping fubon fallback — proxy not running")
 	} else {
 		_ = conn.Close()

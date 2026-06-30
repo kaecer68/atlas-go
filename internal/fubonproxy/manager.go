@@ -152,6 +152,56 @@ func GetFubonProxyPort() int {
 	return proxyListenPort
 }
 
+// SetFubonProxyPort 是 cmd/atlas -fubon-port flag 的早期注入點。
+// 用於 NewManager 啟動前先設定 listen port(例如 main.go 在 flags.Parse
+// 後立即呼叫,讓後續 GetFubonProxyPort() 立即生效)。
+// port <= 0 → 不覆寫(保留測試 helper 預設值)。
+// 與 NewManager(workDir, port) 兩者皆可設定 port;若兩者皆被呼叫,
+// NewManager 為最終決定(它會 log INFO 標示 custom port)。
+func SetFubonProxyPort(port int) {
+	if port > 0 {
+		if port != defaultFubonProxyPort {
+			logging.Info("fubonproxy", "custom_listen_port_setter",
+				"port", port,
+				"message", "fubon-proxy listen port 由 SetFubonProxyPort 設定為非預設值(預設 8081)",
+			)
+		}
+		proxyListenPort = port
+	}
+}
+
+// defaultProxyHost 是 fubon-proxy HTTP 服務的主機別名。
+// 在容器化環境(Go 程序跑在 Docker container,fubon-proxy Python 跑在
+// macOS host)時,Go 端必須透過 Docker Desktop 提供的 host.docker.internal
+// 別名連到 host gateway IP,而不是 127.0.0.1(container loopback 錯的)。
+// host.docker.internal 由 Docker Desktop 4.13+ 在 macOS/Windows 自動注入
+// /etc/hosts;Linux 容器需在 daemon.json 設定 extra_hosts。
+// 為何不寫死 127.0.0.1:fubon-proxy Python 服務綁 host="0.0.0.0",
+// 從 container 端用 127.0.0.1 會 hit 到 container 自身的 loopback,
+// 而 Python proxy 沒在 container 內。
+//
+// 注意:這裡不使用 localhost,因為 macOS / Linux 雙棧環境下,Go net.Dial
+// 對 "localhost" 預設優先解析為 IPv6 [::1],而 fubon-proxy 只綁 IPv4 0.0.0.0,
+// 會出現 [::1]:8081: connect: connection refused(RCA: PR #495)。
+const defaultProxyHost = "host.docker.internal"
+
+// ProxyBaseURL 回傳 fubon-proxy HTTP 客戶端的 canonical URL
+// (e.g. "http://host.docker.internal:8081")。
+// **單一真相來源**:所有需要跟 fubon-proxy 通訊的 .go 程式碼(FubonClient、
+// HybridProvider、apigateway register_adapters probe)都必須呼叫此函式,
+// 禁止再以 fmt.Sprintf("http://%s:%d", ...) 自行構造,避免 host/port
+// 硬編碼重複造成 drift(歷史 RCA:PR #837 user prompt 列為 A1 root cause)。
+func ProxyBaseURL() string {
+	return fmt.Sprintf("http://%s:%d", defaultProxyHost, GetFubonProxyPort())
+}
+
+// ProxyHostPort 回傳純 host:port 字串(e.g. "host.docker.internal:8081"),
+// 供 net.Dial / net.Listen probe 等場景使用(不需要 "http://" prefix)。
+// 與 ProxyBaseURL 共享同一個 host + port 來源,保證永遠同步。
+func ProxyHostPort() string {
+	return fmt.Sprintf("%s:%d", defaultProxyHost, GetFubonProxyPort())
+}
+
 // resolvePythonBin 偵測 Python 可執行檔路徑。
 // 優先檢查 FUBON_PROXY_PYTHON 環境變數（測試/開發覆蓋），
 // 然後檢查 ~/.config/atlas-go/.fubon-env/bin/python，最後回退至系統 python3。

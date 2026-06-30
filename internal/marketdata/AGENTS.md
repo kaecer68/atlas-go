@@ -71,4 +71,12 @@
 
 ## fubonproxy 連線位址
 
-`FubonClient` 與 `HybridProvider` 預設使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`；Python proxy 綁定固定 IPv4 `host="0.0.0.0"`。proxy 位址固定為 `127.0.0.1:8081`，不再支援環境變數覆寫（`FUBON_PROXY_URL` 已於 PR #572 移除）。若需 Docker/遠端部署支援，請參閱 `configs/parameters.json`。歷史 RCA（PR #495 uvicorn/uvloop `IPV6_V6ONLY` 問題）見 `docs/investigations/2026-06-fubonproxy-ipv4-uvloop.md`。
+Fubon-proxy URL 由 `internal/fubonproxy/manager.go` 的 `ProxyBaseURL()` / `ProxyHostPort()` 統一提供 — **禁止其他 .go 檔案以 `fmt.Sprintf("http://...:%d", ...)` 自行構造**，`fubon_url_guard_test.go::TestFubon_URLDriftGuard` AST 禁制會擋下。
+
+- **host**：`host.docker.internal`（macOS / Windows Docker Desktop 自動注入；Linux 容器需 `daemon.json` 設 `extra_hosts`）。**不是 `127.0.0.1`** — 從 container 端用 `127.0.0.1` 會 hit container 自身 loopback，而非 host Python proxy。
+- **port**：`8081` 預設，由 `cmd/atlas -fubon-port` flag 動態覆寫（同步注入 `fubonproxy.NewManager()`，確保 client URL 與 supervisor health URL 同源 — PR 2 Oracle F12）。
+- **環境變數**：不再支援 `FUBON_PROXY_URL` 覆寫（PR #572 移除）。
+
+歷史 RCA（PR #495 uvicorn/uvloop `IPV6_V6ONLY` 問題）見 `docs/investigations/2026-06-fubonproxy-ipv4-uvloop.md`。
+
+**PR #837 follow-up**：原本 3 個 source files（`fubon_client.go`、`hybrid_provider.go`、`register_adapters.go`）各自硬編碼 `host.docker.internal:8081`，其中 `hybrid_provider.go` 完全忽略 `-fubon-port` flag → port drift → channel recurring failure。重構後統一從 `fubonproxy` 取得，並以 `TestFubon_URLDriftGuard` AST 禁制防止復發。
