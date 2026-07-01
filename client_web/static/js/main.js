@@ -420,28 +420,34 @@ window.toggleAutoRefresh = function() {
 if (typeof window !== 'undefined') {
   populateAgentSelect();
   initBacktestDates();
-  loadAll();
   startAutoRefresh();
   initEventStream();
-  var initialPath = window.location.pathname
-    .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
-    .replace(/\/$/, '');
-  if (!initialPath) {
-    history.replaceState({page: 'home'}, '', basePath + '/home');
-    switchPage('home', true);
-  } else if (initialPath === 'home') {
-    switchPage('home', true);
-  }
-  // Redirect old hash URLs to clean URLs
-  if (window.location.hash && window.location.hash.startsWith('#page-')) {
-    var pageId = window.location.hash.replace('#page-', '');
-    window.location.replace(basePath + '/' + pageId);
-  } else if (initialPath && initialPath !== 'home' && initialPath !== 'evolution_panel') {
-    history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
-    switchPage(initialPath, true);
-  } else if (initialPath === 'evolution_panel') {
-    switchPage('evolution_panel', true);
-  }
+  (async () => {
+    try {
+      await loadAll();
+    } catch (e) {
+      console.warn('[init] loadAll failed:', e);
+    }
+    var initialPath = window.location.pathname
+      .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
+      .replace(/\/$/, '');
+    if (!initialPath) {
+      history.replaceState({page: 'home'}, '', basePath + '/home');
+      switchPage('home', true);
+    } else if (initialPath === 'home') {
+      switchPage('home', true);
+    }
+    // Redirect old hash URLs to clean URLs
+    if (window.location.hash && window.location.hash.startsWith('#page-')) {
+      var pageId = window.location.hash.replace('#page-', '');
+      window.location.replace(basePath + '/' + pageId);
+    } else if (initialPath && initialPath !== 'home' && initialPath !== 'evolution_panel') {
+      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
+      switchPage(initialPath, true);
+    } else if (initialPath === 'evolution_panel') {
+      switchPage('evolution_panel', true);
+    }
+  })();
 }
 
 function initEventStream() {
