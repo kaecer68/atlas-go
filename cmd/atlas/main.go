@@ -317,6 +317,13 @@ func run(args []string, deps appDeps) error {
 			defer fubonMgr.Stop()
 		}
 
+		// Readiness state is populated during startup and consumed by the
+		// GET /ready handler installed by registerSimpleRoutes.
+		rc := readyChecker{
+			dbDSN:      os.Getenv("DATABASE_URL"),
+			replayPath: config.GetReplayDataPath(cfg.WorkDir),
+		}
+
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
 		var gateway *apigateway.Gateway
 		var gatewayFetcher monitoring.DataFetcher
@@ -346,6 +353,9 @@ func run(args []string, deps appDeps) error {
 				}
 				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
+		}
+		if gateway != nil {
+			rc.gatewayChan = len(gateway.ChannelIDs())
 		}
 
 		mux := http.NewServeMux()
@@ -474,7 +484,7 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Fatalf("failed to get client dist sub FS: %v", err)
 		}
-		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
+		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
 
 		dashboard.SetHealthAddrs(*apiAddr, *fubonProxyPort)
 		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
@@ -1684,7 +1694,11 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 	// Static routes and basic probes are registered through the same helper
 	// used by api-mode so live trading and simulation behave identically.
-	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
+	rc := readyChecker{
+		dbDSN:      os.Getenv("DATABASE_URL"),
+		replayPath: config.GetReplayDataPath(cfg.WorkDir),
+	}
+	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
 	srv := &http.Server{
 		Addr:              apiAddr,
 		Handler:           mux,

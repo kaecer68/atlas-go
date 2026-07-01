@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"os"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
@@ -81,9 +86,10 @@ func newHealthHandler(cfg healthConfig) http.Handler {
 //
 // All routes are best-effort and unconditional — they must not block
 // startup if any of them fails to install.
-func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, adminFS, clientFS fs.FS) {
+func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, adminFS, clientFS fs.FS, rc readyChecker) {
 	mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 	mux.Handle("/health", newHealthHandler(healthConfig{}))
+	mux.Handle("/ready", newReadyHandler(rc))
 
 	// Redirect root to the client-facing UI. Bare /admin and /client are
 	// also redirected so the trailing-slash relative asset paths in
@@ -103,4 +109,71 @@ func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsColle
 	})
 	mux.Handle("/admin/", http.StripPrefix("/admin/", staticHandler(adminFS)))
 	mux.Handle("/client/", http.StripPrefix("/client/", staticHandler(clientFS)))
+}
+
+// readyResponse is the GET /ready JSON body. Unlike /health (liveness),
+// /ready checks whether the system is ready to serve traffic: database
+// connectivity, replay data availability, and Gateway channel readiness.
+type readyResponse struct {
+	Status string            `json:"status"` // "ready" or "not_ready"
+	Checks map[string]string `json:"checks"` // check name → "ok" | "failed: reason"
+}
+
+// readyChecker holds the state needed by newReadyHandler. Fields are set
+// by run() during startup and remain immutable after the server starts.
+type readyChecker struct {
+	dbDSN       string
+	replayPath  string
+	gatewayChan int // number of registered Gateway channels (0 = not ready)
+}
+
+func newReadyHandler(rc readyChecker) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := readyResponse{
+			Status: "ready",
+			Checks: make(map[string]string, 3),
+		}
+
+		// Check 1: PostgreSQL connectivity
+		if rc.dbDSN != "" {
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			defer cancel()
+			conn, err := pgx.Connect(ctx, rc.dbDSN)
+			if err != nil {
+				resp.Checks["postgres"] = "failed: " + err.Error()
+				resp.Status = "not_ready"
+			} else {
+				_ = conn.Close(ctx)
+				resp.Checks["postgres"] = "ok"
+			}
+		} else {
+			resp.Checks["postgres"] = "skipped (DATABASE_URL unset)"
+		}
+
+		// Check 2: Replay data availability
+		if rc.replayPath != "" {
+			if _, err := os.Stat(rc.replayPath); os.IsNotExist(err) {
+				resp.Checks["replay_data"] = "failed: file not found at " + rc.replayPath
+				resp.Status = "not_ready"
+			} else {
+				resp.Checks["replay_data"] = "ok"
+			}
+		}
+
+		// Check 3: Gateway channel count
+		if rc.gatewayChan > 0 {
+			resp.Checks["gateway_channels"] = "ok"
+		} else {
+			resp.Checks["gateway_channels"] = "failed: 0 channels registered"
+			resp.Status = "not_ready"
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if resp.Status == "ready" {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	})
 }
