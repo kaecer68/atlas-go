@@ -61,7 +61,7 @@
 1. 將 inline style 全部抽到 CSS（43 處 → 0）
 2. 6 個 page 區塊改為動態注入（`switchPage` 內 `import('./pages/xxx.js')` 已存在模式）
 3. 5 個 modal 改為 `<div class="modal" data-modal="xxx">` template + JS 動態注入內容
-4. `cycleLegendModal` 內容改為 fetch `/content/cycle-legend.md` 或常數檔
+4. `cycleLegendModal` 內容改為 fetch `content/cycle-legend.md` 或常數檔
 5. 目標：**< 150 行、0 inline style、5 modal 骨架統一**
 
 ---
