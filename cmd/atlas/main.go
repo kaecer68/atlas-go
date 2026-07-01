@@ -196,7 +196,14 @@ func run(args []string, deps appDeps) error {
 	// Ensure PostgreSQL is reachable before we try to connect.
 	// If DATABASE_URL is unset or postgres is already running, this is a no-op.
 	// On failure, the app continues without DB (bootstrap handles graceful degradation).
-	ensurePostgres()
+	if diag := ensurePostgres(); diag != "" {
+		logging.Warn("main", "postgres_startup_diag",
+			"message", "ensurePostgres did not fully succeed; bootstrap may fail",
+			"diagnostics", diag,
+		)
+	} else {
+		logging.Info("main", "postgres_ready")
+	}
 
 	if err := bootstrap.ApplyBrokerConfig(&cfg, bootstrap.BrokerOverrides{
 		Mode:                *brokerMode,
