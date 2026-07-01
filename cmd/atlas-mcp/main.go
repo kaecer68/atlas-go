@@ -56,10 +56,7 @@ func main() {
 		MetricsAddr:        os.Getenv("ATLAS_MCP_METRICS_ADDR"),
 		SamplingEnabled:    envBoolOr("ATLAS_MCP_SAMPLING_ENABLED", false),
 		ElicitationEnabled: envBoolOr("ATLAS_MCP_ELICITATION_ENABLED", false),
-		Roots: server.RootsConfig{
-			AllowedRoots: parseAllowedRoots(os.Getenv("ATLAS_MCP_ROOTS_ALLOWED")),
-			ReadSizeCap:  envInt64Or("ATLAS_MCP_ROOTS_READ_SIZE_CAP", 0),
-		},
+		Roots:              resolveRootsConfig(),
 	}
 
 	// Initialize PostgreSQL and run migrations if DATABASE_URL is configured.
@@ -129,6 +126,40 @@ func parseAllowedRoots(raw string) []string {
 		}
 	}
 	return out
+}
+
+// defaultParamsPath returns the conventional repo-relative path to
+// configs/parameters.json. main callers can override via ATLAS_MCP_PARAMS.
+func defaultParamsPath() string {
+	return "configs/parameters.json"
+}
+
+// resolveRootsConfig merges parameters.json (mcp.roots section) with
+// environment variable overrides. Precedence: env > parameters.json > zero.
+func resolveRootsConfig() server.RootsConfig {
+	var base *mcpRootsConfig
+	if path := os.Getenv("ATLAS_MCP_PARAMS"); path != "" {
+		if loaded, err := loadMCPConfig(path); err != nil {
+			log.Printf("atlas-mcp: warning: failed to load %s: %v (using env-only)", path, err)
+		} else {
+			base = loaded
+		}
+	} else if loaded, err := loadMCPConfig(defaultParamsPath()); err != nil {
+		log.Printf("atlas-mcp: warning: failed to load %s: %v (using env-only)", defaultParamsPath(), err)
+	} else {
+		base = loaded
+	}
+
+	env := envMCPRootsConfig{
+		AllowedRoots:  parseAllowedRoots(os.Getenv("ATLAS_MCP_ROOTS_ALLOWED")),
+		ReadSizeCap:   envInt64Or("ATLAS_MCP_ROOTS_READ_SIZE_CAP", 0),
+		AlertOnChange: envBoolOr("ATLAS_MCP_ROOTS_ALERT_ON_CHANGE", false),
+	}
+	merged := mergeMCPConfig(base, env)
+	return server.RootsConfig{
+		AllowedRoots: merged.AllowedRoots,
+		ReadSizeCap:  merged.ReadSizeCap,
+	}
 }
 
 func defaultAuditLogPath() string {
