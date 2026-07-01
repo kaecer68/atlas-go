@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // RedisConfig Redis PubSub 設定
@@ -249,7 +250,10 @@ func (r *RealtimeRouter) failoverLoop() {
 		select {
 		case failedIdx := <-r.failoverCh:
 			if int(failedIdx) < len(r.providers) {
-				_ = r.providers[failedIdx].Disconnect(r.cancelCtx) //nolint:gosec // G104: provider disconnect, retry handled in failover loop
+				if err := r.providers[failedIdx].Disconnect(r.cancelCtx); err != nil {
+					logging.Warn("realtime_router", "provider_disconnect_failed",
+						logging.Err(err))
+				}
 			}
 		case <-r.cancelCtx.Done():
 			return

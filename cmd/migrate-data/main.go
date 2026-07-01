@@ -352,7 +352,9 @@ func migrateScreeningRejectsData(ctx context.Context, pool *pgxpool.Pool, stateD
 				count += len(batch)
 			}
 		}
-		_ = f.Close() //nolint:gosec // G104: file close on shutdown path, errors not actionable
+		if err := f.Close(); err != nil {
+			log.Printf("Warning: failed to close %s: %v", filePath, err)
+		}
 	}
 
 	log.Printf("Migrated %d screening rejects", count)
