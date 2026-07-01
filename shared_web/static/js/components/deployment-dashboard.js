@@ -23,11 +23,14 @@
 import { escapeHtml, fmt } from '../shared/utils.js';
 
 const TIMELINE_BADGE = {
-  started:   { cls: 'badge info', label: '啟動', color: 'var(--color-info)' },
-  stopped:   { cls: 'badge err',  label: '停止', color: 'var(--color-danger)' },
-  restarted: { cls: 'badge warn', label: '重啟', color: 'var(--color-warning)' },
-  error:     { cls: 'badge err',  label: '錯誤', color: 'var(--color-danger)' },
-  info:      { cls: 'badge info', label: '資訊', color: 'var(--color-info)' },
+  process_started:   { cls: 'badge info', label: '啟動', color: 'var(--color-info)' },
+  process_exited:    { cls: 'badge err',  label: '停止', color: 'var(--color-danger)' },
+  process_restarted: { cls: 'badge warn', label: '重啟', color: 'var(--color-warning)' },
+  health_failed:     { cls: 'badge err',  label: '健康檢查失敗', color: 'var(--color-danger)' },
+  health_passed:     { cls: 'badge ok',   label: '健康檢查通過', color: 'var(--color-success)' },
+  restart_failed:    { cls: 'badge err',  label: '重啟失敗', color: 'var(--color-danger)' },
+  error:             { cls: 'badge err',  label: '錯誤', color: 'var(--color-danger)' },
+  info:              { cls: 'badge info', label: '資訊', color: 'var(--color-info)' },
 };
 
 function freshnessColor(ageSec) {
@@ -283,7 +286,10 @@ export class DeploymentDashboard {
 
     const events = Array.isArray(status.recent_events) ? status.recent_events : [];
     const errors = events
-      .filter(ev => (ev.kind || '').toLowerCase() === 'error')
+      .filter(ev => {
+        const k = (ev.kind || '').toLowerCase();
+        return k === 'health_failed' || k === 'restart_failed' || k === 'process_exited';
+      })
       .slice(-5)
       .reverse();
 
