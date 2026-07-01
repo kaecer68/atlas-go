@@ -269,9 +269,20 @@ dev-stop:
 	@echo "🛑 Stopping dev deps (postgres + redis + fubon-proxy)..."
 	@docker compose stop postgres redis fubon-proxy
 	@docker compose down postgres redis fubon-proxy --remove-orphans
-	@echo "✅ Dev deps stopped. (Note: native atlas-go 'go run' process is NOT killed — use CTRL+C or kill \$$(pgrep -f 'cmd/atlas') to stop it)"
+	@echo "🧹 Killing any leftover native 'atlas -api' process (prevents port 8080 leak)..."
+	@if pgrep -f 'cmd/atlas -api' >/dev/null 2>&1; then \
+		PIDS=$$(pgrep -f 'cmd/atlas -api'); \
+		echo "    found atlas -api PIDs: $$PIDS"; \
+		pkill -f 'cmd/atlas -api' 2>/dev/null || true; \
+		sleep 1; \
+		if pgrep -f 'cmd/atlas -api' >/dev/null 2>&1; then \
+			echo "    ⚠️  still alive after SIGTERM, sending SIGKILL"; \
+			pkill -9 -f 'cmd/atlas -api' 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo "✅ Dev deps stopped. (Note: native atlas-go 'go run' process is also auto-killed above.)"
 	@if pgrep -f 'cmd/atlas' >/dev/null 2>&1; then \
-		echo "    atlas-go still running (PID: $$(pgrep -f 'cmd/atlas'))"; \
+		echo "    ⚠️  cmd/atlas still running (PID: $$(pgrep -f 'cmd/atlas'))"; \
 	fi
 
 dev-status:
