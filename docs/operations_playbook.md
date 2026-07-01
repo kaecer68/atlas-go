@@ -248,6 +248,69 @@ v0.0.0.18（PR #704，`feat/wave-10-l1-l2-iteration`）修了 v0.0.0.17 Wave 9 o
 **運維檢查**：若 `started component=wave9_observability` 出現後隨即出現 error log，檢查 error chain 中是否包含 `errors.Join` 的多個 error。cleanup 乾淨的情況下 retry `Start` 應能成功。
 
 
+## 啟動 readiness 與 startup deadline v0.0.0.23 運維指引
+
+v0.0.0.23（PR #886，`fix/review-fixes-round1`）新增 `GET /ready` readiness 端點，並在 server goroutine 加上 10 秒 startup deadline。同時把 SSE 相容性所需的 `WriteTimeout` 從 10s 放寬到 30s。運維在解讀 healthcheck 或啟動耗時時需注意以下場景：
+
+### 1. `/health` 與 `/ready` 的差別
+
+**症狀**：Docker / K8s 把 `/health` 與 `/ready` 都當作 liveness probe，但同一個容器可能 `/health=200` 且 `/ready=503`。
+
+**根因**：兩個端點檢查不同面向：
+- `GET /health`（`cmd/atlas/api_routes.go:91`）：只檢查 atlas_http / fubon_proxy port 是否有在 listen（liveness）
+- `GET /ready`（`cmd/atlas/api_routes.go:92`）：檢查 Postgres 連線、replay data 檔案存在、Gateway channel 數量（readiness）
+
+**v0.0.0.23 設計意圖**：Docker healthcheck 用 `/health` 做 liveness（短輪詢，失敗 = kill container），用 `/ready` 做 readiness（長輪詢，失敗 = 暫時不送流量但容器繼續跑）。兩者皆已加入 `isPublicPath` 白名單，不需要 API key 即可訪問。
+
+**運維檢查**：K8s deployment 應分開設定兩種 probe：
+```yaml
+livenessProbe:
+  httpGet: { path: /health, port: 8080 }
+  initialDelaySeconds: 10
+  periodSeconds: 30
+readinessProbe:
+  httpGet: { path: /ready, port: 8080 }
+  initialDelaySeconds: 30
+  periodSeconds: 10
+```
+
+`/ready` 回 503 時，response body 的 `checks` map 會列出失敗原因（例如 `"postgres": "failed: connection refused"`），可用於 alerting 判斷哪個 dependency 出問題。
+
+### 2. 啟動時固定 10 秒延遲
+
+**症狀**：`run_api` 或 `runLiveTrading` 啟動後 log 顯示 `server_startup_ok component=main addr=:8080` 總是在啟動後約 10 秒才出現，期間無任何 progress log。
+
+**根因**：v0.0.0.23 引入 server goroutine 兩階段 lifecycle：
+1. **Startup window（10s）**：goroutine 啟動後主流程等待 `time.NewTimer(10s)` 或 `srvErr` / signal / `deps.shutdown` 任一觸發
+2. **Running phase**：進入 graceful shutdown select loop
+
+第一階段 timer 會**固定等到 10 秒**才記錄 `server_startup_ok`，因為 listener 的 first `Accept` 發生在 goroutine 內部（`deps.listenAndServe(srv)`），主流程無法從外部感知「伺服器已開始 accept 連線」的瞬間。
+
+**這不是 bug**：是 trade-off。10s 是保守的安全預設 — 若 `portprobe.Listen` 或 `srv.Serve` 阻塞（DNS 解析、kernel backlog 飽和），程序會在 10 秒內 noise-exit，而非永久 hang。
+
+**運維檢查**：若 startup 耗時成為性能問題（例如 K8s rolling deploy 太慢），可考慮：
+- 短期：把 `cmd/atlas/main.go:1422` 的 `10 * time.Second` 提取為 `time.Duration` flag（CLI 參數）
+- 長期：改為 event-driven — listener first Accept 透過 channel 通知主流程（需先包裝 `net.Listener` 為 `trackingListener`）
+
+### 3. `WriteTimeout: 30s` 對 SSE 的影響
+
+**症狀**：`internal/monitoring/api/events/sse_handler.go` 的 SSE long-lived 連線在 dashboard 長時間停留時偶爾被切斷。
+
+**根因**：v0.0.0.23 之前 api 模式 `http.Server` 只設 `ReadHeaderTimeout: 10s`，`WriteTimeout` 預設為 0（無限）。v0.0.0.23 為了 slowloris 防護補上 `WriteTimeout: 30s`（覆蓋 api 與 live 模式）。SSE handler 共用同一個 `http.Server`，30s 對 SSE 心跳（典型 15-25s）足夠緩衝。
+
+**運維檢查**：若 SSE 仍被切斷，確認 client 端 heartbeat interval < 25s。若 client 端無法控制（如瀏覽器原生 EventSource），可考慮把 SSE path 改用獨立 `http.Server` with separate timeout config（後續 PR）。
+
+### 4. Live mode `/ready` 的 `gateway_channels: skipped`
+
+**症狀**：live mode 啟動後 `GET /ready` 回 `checks.gateway_channels = "skipped (mode does not initialize Gateway)"`，status 仍是 `ready`。
+
+**根因**：v0.0.0.23 新增 `readyChecker.skipGateway` 欄位（`cmd/atlas/api_routes.go:130` 附近）。live mode（`runLiveTrading`）不初始化 `apigateway.Gateway`，所以 `gatewayChan=0` 是預期行為，不應該 fail readiness。`runLiveTrading()` 在 `cmd/atlas/main.go:1747` 設 `skipGateway: true`。
+
+**運維檢查**：這是預期行為，不需要處理。若看到 api mode 也回 `skipped`，則是 bug — `run()` 應該永遠不設 `skipGateway`。
+
+---
+
+
 ## Operator Techniques
 
 ### Start small
