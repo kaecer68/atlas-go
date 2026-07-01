@@ -66,15 +66,15 @@
 
     <!-- 宏觀敘事 -->
     <div class="page" id="page-narrative">
-      <div class="narrative-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
-        <div class="panel" style="border-color:rgba(var(--accent-rgb),0.2);"><h2 style="color:var(--accent)">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
-        <div class="panel" style="border-color:rgba(var(--color-danger-rgb),0.2);"><h2 style="color:var(--color-danger)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
+      <div class="grid-2col-md mb-lg">
+        <div class="panel panel-accent-border"><h2 class="text-accent">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
+        <div class="panel panel-danger-border"><h2 class="text-danger">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
       </div>
-      <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
+      <div class="two-col-grid mb-lg">
         <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性分析</h2><div id="narrativeSeasonal" class="empty loading">載入中…</div></div>
       </div>
-      <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);">
+      <div class="two-col-grid">
         <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>投資模型</h2><div id="narrativeModels" class="empty loading">載入中…</div></div>
@@ -88,22 +88,22 @@
         本頁呈現<strong>風控層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
         若風控長阻擋率高，請檢查【宏觀敘事】的外資出逃指數是否飆升（紅燈）；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
       </details>
-      <div class="panel wide mb-sm" style="padding:10px var(--space-md);"><h2 style="margin-bottom:4px;">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading" style="padding:4px 0;">載入中…</div></div>
+      <div class="panel wide mb-sm panel-padded-sm"><h2 class="mb-4">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading p-4-v">載入中…</div></div>
       <div class="live-grid">
         <div class="panel panel--compact"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
         <div class="panel panel--compact"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
       </div>
-      <div class="panel wide" id="riskCardsPanel" style="display:none;">
+      <div class="panel wide hidden" id="riskCardsPanel">
         <h2>風險指標</h2>
         <div id="riskCards" class="kpi-grid"></div>
         <div id="riskPositionConcentration"></div>
         <div id="riskSectorDistribution"></div>
       </div>
-      <div class="panel wide" id="riskCalibrationPanel" style="display:none;">
+      <div class="panel wide hidden" id="riskCalibrationPanel">
         <h2>自主校準</h2>
         <div id="riskCalibration" class="empty loading">載入中…</div>
       </div>
-      <div class="panel wide" id="liveRiskCommentaryPanel" style="display:none;">
+      <div class="panel wide hidden" id="liveRiskCommentaryPanel">
         <h2>🧠 風控長評語（Risk Commentary）</h2>
         <div id="liveRiskCommentary" class="empty loading">載入中…</div>
       </div>
@@ -185,7 +185,7 @@
     <div id="page-portfolio" class="page">
       <h1 id="portfolioPageTitle">📂 組合持倉</h1>
       <div class="kpi-grid" id="portfolioKPIs"></div>
-      <div class="panel wide" id="equityCurvePanel" style="display:none">
+      <div class="panel wide hidden" id="equityCurvePanel">
         <h2>淨值趨勢</h2>
         <canvas id="equityChart" height="200"></canvas>
       </div>
@@ -245,18 +245,18 @@
       </div>
     </div>
     <div class="page" id="page-evolution_panel">
-      <div class="panel wide" style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap" id="evolutionViews">
-           <span style="font-size:13px;font-weight:700">視覺圖：</span>
+      <div class="panel wide mb-12">
+        <div class="evo-views-row" id="evolutionViews">
+           <span class="evo-views-label">視覺圖：</span>
            <button class="view-btn active" id="evView-compact">總覽儀表板</button>
            </div>
       </div>
-      <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>
+      <div id="evolutionCatContent" class="hidden mt-12"></div>
       <div id="evolutionContent" class="empty loading">載入中…</div>
-      <div class="panel wide" id="evolutionEquityCurvePanel" style="display:none;margin-top:12px">
-        <h3>權益曲線</h3>
-        <canvas id="evolutionEquityChart" style="width:100%"></canvas>
-      </div>
+      <div class="panel wide hidden mt-12" id="evolutionEquityCurvePanel">
+         <h3>權益曲線</h3>
+         <canvas id="evolutionEquityChart" class="w-full"></canvas>
+       </div>
     </div>
     <!-- 信息通道 -->
     <div class="page" id="page-industry">
@@ -266,20 +266,20 @@
       </details>
       <div class="two-col-grid">
         <div class="panel"><div class="panel-header"><h2>產業地圖</h2><div class="panel-header-actions"><span id="sectorLastUpdated" class="last-updated" title="最後更新時間">--</span><button type="button" id="sectorRefreshBtn" class="refresh-btn" title="手動刷新" aria-label="手動刷新">↻</button></div></div><div id="industryMap" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" title="週期燈號計算說明" style="font-size:14px">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" data-open-modal="cycleLegend" title="週期燈號計算說明">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
       </div>
       <div class="panel wide mt-16">
         <h2>供應鏈網路圖</h2>
-        <div id="industryGraph" class="empty loading" style="height: 400px;">載入中…</div>
+        <div id="industryGraph" class="empty loading graph-stub">載入中…</div>
       </div>
       <div class="panel mt-16"><h2>衝擊模擬</h2>
-        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-          <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
-          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
-          <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--accent);cursor:pointer">▶ 執行模擬</button>
+        <div class="shock-form-row">
+          <select id="shockSource" class="shock-select"><option value="">選擇來源產業</option></select>
+          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" class="shock-input shock-input--wide">
+          <input type="number" id="shockDepth" value="3" min="1" max="5" class="shock-input shock-input--narrow" title="傳導深度">
+          <button id="btnRunShockSim" class="shock-button">▶ 執行模擬</button>
         </div>
         <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
       </div>
@@ -323,10 +323,10 @@
 
 <!-- Modal: Promote Confirm -->
 <div class="modal-overlay" id="promoteModal" role="dialog" aria-modal="true">
-  <div class="modal" style="width:min(520px,94vw)">
+  <div class="modal modal--narrow">
     <h3>確認晉升 Baseline Policy</h3>
     <p class="text-muted-md">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
-    <div id="promotePreview" style="font-size:12px;margin:10px 0"></div>
+    <div id="promotePreview" class="text-12-muted mt-10 mb-10"></div>
     <div class="control-group justify-end">
       <button>取消</button>
       <button class="primary">確認晉升</button>
@@ -336,9 +336,9 @@
 
 <!-- Modal: KPI Help -->
 <div class="modal-overlay" id="infoModal" role="dialog" aria-modal="true">
-  <div class="modal" style="width:min(560px,94vw)">
+  <div class="modal modal--medium">
     <h3 id="infoTitle">說明</h3>
-    <div id="infoContent" style="font-size:13px;line-height:1.7"></div>
+    <div id="infoContent" class="info-text-block"></div>
     <div class="control-group mt-14 justify-end">
       <button>關閉</button>
     </div>
@@ -348,7 +348,7 @@
 <script type="module" src="js/bootstrap-utils.js"></script>
 
 <div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true">
-  <div class="modal" style="width:min(720px,94vw)">
+  <div class="modal modal--wide">
     <h3 id="industryModalTitle">產業詳細分析</h3>
     <div class="industry-tabs" id="industryTabs">
       <button class="tab-btn active" data-tab="cycle">週期定位</button>
@@ -364,81 +364,8 @@
 </div>
 
 <div class="modal-overlay" id="cycleLegendModal" role="dialog" aria-modal="true">
-  <div class="modal" style="width:min(600px,94vw);max-height:85vh;overflow-y:auto">
-    <h3>📊 週期羅盤 — 燈號計算說明</h3>
-
-    <div class="mb-14">
-      <h4 class="h4-section-title">🟢 燈號顏色</h4>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:13px">
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--color-success);margin-right:6px"></span>復甦 (綠)</div>
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--color-info);margin-right:6px"></span>擴張 (藍)</div>
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--color-warning);margin-right:6px"></span>成熟 (橙)</div>
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--color-danger);margin-right:6px"></span>衰退 (紅)</div>
-      </div>
-    </div>
-
-    <div class="mb-14">
-      <h4 class="h4-section-title">🔍 週期判定</h4>
-      <p class="text-muted-md" style="margin:0 0 6px">
-        用 <b>營收年增率</b> 和 <b>獲利年增率</b> 與產業閾值比較：
-      </p>
-      <table style="font-size:12px;width:100%">
-        <thead><tr><th>判定</th><th>營收閾值</th><th>獲利閾值</th><th>範例</th></tr></thead>
-        <tbody>
-          <tr><td>擴張</td><td>&gt; 20%</td><td>&gt; 20%</td><td>AI供應鏈 rev 45%</td></tr>
-          <tr><td>復甦</td><td>&gt; 5%</td><td>&gt; 5%</td><td>電子零組件 rev 12%</td></tr>
-          <tr><td>成熟</td><td>&gt; -5%</td><td>&gt; -5%</td><td>傳產/消費 rev 3%</td></tr>
-          <tr><td>衰退</td><td>其餘</td><td>其餘</td><td>航運 rev -5%</td></tr>
-        </tbody>
-      </table>
-      <p style="font-size:11px;color:var(--muted);margin:4px 0 0">
-        半導體 / 金融 / 航運 有獨立閾值（高波動產業閾值更高）
-      </p>
-    </div>
-
-    <div class="mb-14">
-      <h4 class="h4-section-title">📈 信心度 — 週期判斷可靠度</h4>
-      <p class="text-muted-md" style="margin:0 0 6px">
-        <b>信心度不是「產業強弱」，而是「週期定位的可信程度」</b>（0%～100%）。<br>
-        數值越高，代表當前產業處於該週期階段的證據越充分。
-      </p>
-      <p class="text-muted-md" style="margin:6px 0 6px">
-        <b>信心度 = 邊界距離 × 45% + 訊號新鮮度 × 20% + 季節性契合 × 15% + 供應鏈穩定度 × 10% + 敘事事件吻合 × 10%</b>
-      </p>
-      <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
-        <li><b>邊界距離（45%）</b>：營收/獲利離週期閾值多遠。越遠越確定</li>
-        <li><b>訊號新鮮度（20%）</b>：指標更新時間。數據越新越可靠</li>
-        <li><b>季節性契合（15%）</b>：當前月份與歷史季節模式匹配程度</li>
-        <li><b>供應鏈穩定度（10%）</b>：產業上下游集中度與相關性結構。連動越少、集中度越低 → 週期判斷越可靠</li>
-        <li><b>敘事事件吻合（10%）</b>：宏觀敘事（如 AI 資本支出、地緣政治）與週期定位的一致性</li>
-      </ul>
-      <p style="font-size:12px;color:var(--muted);margin:6px 0 0">
-        🎨 <b>燈號顏色深淺 = 信心度</b>。深 = 高信心（數據強烈支持）；淺 = 邊界搖擺（需謹慎解讀）。<br>
-        💡 例：半導體顯示「擴張」但信心度僅 35%，代表雖然營收&gt;20%，但供應鏈波動大或季節性異常，實際可能處於擴張末期。
-      </p>
-    </div>
-
-    <div class="mb-14">
-      <h4 class="h4-section-title">🔗 進階機制</h4>
-      <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
-        <li><b>衰退期相關性提升</b>：當系統偵測到「衰退」時，產業間的衝擊傳導相關性自動提升 30%（Ang &amp; Chen 2002 實證），反映系統性風險主導下「同漲同跌」現象</li>
-        <li><b>動態環境調變</b>：原油、美元指數、BDI 的 90 日滾動中位數基準，自動適應市場結構變化，消除靜態基準漂移</li>
-        <li><b>方向性感知敘事</b>：油價暴漲 vs 暴跌對能源股的影響相反；系統依據實際 macro 數據偏差方向動態調整</li>
-      </ul>
-    </div>
-
-    <div class="mb-14">
-      <h4 class="h4-section-title">⚠️ 使用須知</h4>
-      <p style="font-size:12px;color:var(--color-warning);margin:0">
-        週期羅盤是<b>輔助判斷工具</b>，非買賣建議。低信心度（&lt;40%）的燈號僅供參考，建議搭配產業詳情頁的供應鏈連動、季節性模式與風險指標綜合評估。
-        產業週期具有慣性，單一月份數據異常不一定代表階段轉換。
-      </p>
-    </div>
-
-    <div class="control-group mt-14 justify-end">
-      <button>關閉</button>
-    </div>
-  </div>
+  <div class="modal modal--scrollable" data-modal-content></div>
+  <div class="control-group mt-14 justify-end"><button data-close-modal>關閉</button></div>
 </div>
 
 <script type="module">import "./js/main.js";</script>
