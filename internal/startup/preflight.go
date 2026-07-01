@@ -6,6 +6,7 @@ package startup
 import (
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
@@ -48,7 +49,18 @@ var (
 // AllowZombieKill=true a recognized fubon-proxy zombie is auto-killed
 // before producing an error. Probe failures are logged as warnings and
 // do not stop the startup sequence.
+//
+// T-104 test escape hatch: setting ATLAS_SKIP_PORT_PREFLIGHT to a non-empty
+// value skips the entire check. Used by cmd/atlas TestMain so the 4
+// live-broker tests don't wedge on port 8080 occupied by a leftover
+// native `atlas -api` or a parallel atlas.test binary. Not for prod.
 func Preflight(claims []PortClaim) error {
+	if os.Getenv("ATLAS_SKIP_PORT_PREFLIGHT") != "" {
+		logging.Warn("startup", "preflight_skipped",
+			"reason", "ATLAS_SKIP_PORT_PREFLIGHT set",
+			"claims_skipped", len(claims))
+		return nil
+	}
 	for _, claim := range claims {
 		if err := checkClaim(claim); err != nil {
 			return err

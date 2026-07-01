@@ -66,6 +66,14 @@ FILE_EXCEPTIONS=(
   "data/state/atlas.db|待 P2.1 決策處理的 SQLite 資料庫"
   "data/state/recommendation_outcomes.jsonl.backup.20260414062052|待 P2.2 清理的備份檔案"
   "data/state-archive/|歸檔目錄內所有檔案"
+  "data/state/approvals/_metadata.json|目錄 metadata，非資料檔（T-303）"
+  "data/state/capital_flow/_metadata.json|目錄 metadata，非資料檔（T-303）"
+  "data/state/experiments/_metadata.json|目錄 metadata，非資料檔（T-303）"
+  "data/state/macro/_metadata.json|目錄 metadata，非資料檔（T-303）"
+  "data/state/margin/_metadata.json|目錄 metadata，非資料檔（T-303）"
+  "data/state/sessions/_metadata.json|目錄 metadata，非資料檔（T-303）"
+  "data/fundamentals.json|single-object JSON config（5351 行），不是 JSONL append-only（T-303）"
+  "data/sector_data/sector_data.json|single-object JSON config（6 行），不是 JSONL append-only（T-303）"
 )
 
 # =============================================================================
