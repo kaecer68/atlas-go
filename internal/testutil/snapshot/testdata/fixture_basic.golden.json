@@ -1,0 +1,60 @@
+{
+  "consts": [
+    {
+      "name": "MaxRetries",
+      "value": "3"
+    },
+    {
+      "name": "StatusError",
+      "value": "500"
+    },
+    {
+      "name": "StatusOK",
+      "value": "200"
+    }
+  ],
+  "funcs": [
+    {
+      "name": "Host",
+      "params": "",
+      "receiver": "Config",
+      "results": "(string)"
+    },
+    {
+      "name": "Port",
+      "params": "",
+      "receiver": "Config",
+      "results": "(int)"
+    },
+    {
+      "name": "New",
+      "params": "",
+      "results": "(*Config)"
+    }
+  ],
+  "package": "fixture_basic",
+  "types": [
+    {
+      "fields": [
+        "Host string",
+        "Port int"
+      ],
+      "kind": "struct",
+      "name": "Config"
+    }
+  ],
+  "vars": [
+    {
+      "name": "Debug",
+      "type": ""
+    },
+    {
+      "name": "DefaultName",
+      "type": ""
+    },
+    {
+      "name": "Version",
+      "type": ""
+    }
+  ]
+}
