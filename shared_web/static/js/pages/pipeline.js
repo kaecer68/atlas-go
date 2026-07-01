@@ -159,6 +159,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
   if (showAll === undefined) showAll = false;
   if (showScreened === undefined) showScreened = false;
   const el = document.getElementById('recommendationPipeline');
+  if (!el) return;
   if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測場次資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
 

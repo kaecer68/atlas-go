@@ -6,10 +6,8 @@
 
 import { getJSON, silentGetJSON, escapeHtml } from '../shared/app-utils.js';
 import { metricCard } from '../components/metric-card.js';
-import { actionCard } from '../components/action-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
-import { Tooltip } from '../components/tooltip.js';
 import { fmtSignedPct, fmtDrawdown, fmtHHI, riskLevelLabel, formatNumber } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 
@@ -176,27 +174,26 @@ function renderMarketPulse(health, macro, stress) {
     metricCard({
       label: '大盤趨勢',
       value: marketTrendValue,
-      change: macro && macro.taiwan_ex_change_pct ? fmtSignedPct(macro.taiwan_ex_change_pct) : null,
+      delta: macro && macro.taiwan_ex_change_pct ? fmtSignedPct(macro.taiwan_ex_change_pct) : null,
       tone: marketTrendClass,
       tooltip: '加權指數近期趨勢方向，資料來自 replay 與市場資料。'
     }),
     metricCard({
       label: '外資動向',
       value: foreignText,
-      change: null,
+      delta: null,
       tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral',
       tooltip: '外資近一交易日淨買賣超（億元）。'
     }),
     metricCard({
       label: '市場壓力',
       value: stressLabel,
-      change: stressLevel ? `${(stressLevel * 100).toFixed(0)}%` : null,
+      delta: stressLevel ? `${(stressLevel * 100).toFixed(0)}%` : null,
       tone: stressLevel >= 0.7 ? 'negative' : stressLevel >= 0.4 ? 'warning' : 'positive',
       tooltip: '綜合波動、資金流與信用風險的壓力指數。'
     })
   ].join('');
 
-  Tooltip.init(grid);
 }
 
 function renderRecommendation(pipeline, stress) {
@@ -293,14 +290,17 @@ function fmtNTD(value) {
 }
 
 function renderDemoPortfolio(container) {
-  container.innerHTML = actionCard({
-    title: '尚無投資組合資料',
-    message: '您可載入示範組合，快速體驗平台如何呈現持倉、風險與建議。',
-    actionLabel: '載入示範組合',
-    actionId: 'home-load-demo',
-    secondaryLabel: '前往組合頁面',
-    secondaryId: 'home-goto-portfolio'
-  });
+  container.innerHTML = `
+    <div class="action-card">
+      <div class="action-card__icon">📋</div>
+      <h3 class="action-card__title">尚無投資組合資料</h3>
+      <p class="action-card__message">您可載入示範組合，快速體驗平台如何呈現持倉、風險與建議。</p>
+      <div class="action-card__actions">
+        <button class="btn btn--primary" id="home-load-demo">載入示範組合</button>
+        <button class="btn btn--secondary" id="home-goto-portfolio">前往組合頁面</button>
+      </div>
+    </div>
+  `;
 
   document.getElementById('home-load-demo').addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('atlas:load-demo-portfolio'));
@@ -362,10 +362,8 @@ function renderTrustFooter() {
   const container = document.getElementById('home-trust-footer');
   container.innerHTML = trustFooter({
     version: DASHBOARD_VERSION,
-    dataSources: DATA_SOURCES,
-    disclaimer: '本平台為研究模擬用途，不構成投資建議。投資人應獨立判斷並自負風險。',
-    githubUrl: 'https://github.com/kaecer68/atlas-go',
-    docsUrl: '/docs'
+    sources: DATA_SOURCES,
+    disclaimer: '本平台為研究模擬用途，不構成投資建議。投資人應獨立判斷並自負風險。'
   });
 }
 
