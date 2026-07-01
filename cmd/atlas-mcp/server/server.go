@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/anomaly"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/metrics"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -25,6 +27,7 @@ type Config struct {
 	AdminAddr          string        // admin HTTP listen address, e.g. "127.0.0.1:9090" (empty = disabled)
 	AdminToken         string        // admin API token (ATLAS_ADMIN_TOKEN)
 	MetricsAddr        string        // metrics HTTP listen address, e.g. "127.0.0.1:9091" (empty = disabled)
+	AnomalyConfig      anomaly.Config
 }
 
 // Run constructs a server with config and runs the stdio transport to completion.
@@ -84,6 +87,16 @@ func Run(ctx context.Context, cfg Config) error {
 		}()
 	}
 
+	anomalyCfg := cfg.AnomalyConfig
+	if anomalyCfg.DetectIntervalSec == 0 {
+		anomalyCfg = anomaly.DefaultConfig()
+	}
+	anomalyBus := eventbus.NewChannelEventBus(100)
+	anomalyRegistry := anomaly.NewRegistry(anomalyCfg, &anomalyEventPublisher{bus: anomalyBus}, anomaly.NoopAlerter{})
+	anomalyRegistry.Register(anomaly.NewBaseline5m24hDetector(anomalyCfg))
+	anomalyRegistry.Register(anomaly.NewPerToolErrorDetector(anomalyCfg))
+	anomalyRegistry.Register(anomaly.NewPerTenantErrorDetector(anomalyCfg))
+
 	srv := &server{
 		cfg:     cfg,
 		audit:   audit,
@@ -91,7 +104,15 @@ func Run(ctx context.Context, cfg Config) error {
 		limiter: limiter,
 		auth:    auth,
 		metrics: metrics.NewRegistry(),
+		anomaly: anomalyRegistry,
 	}
+
+	go anomalyRegistry.RunLoop(ctx, srv.fetchAuditEntriesForAnomaly)
+
+	go func() {
+		<-ctx.Done()
+		_ = anomalyBus.Close()
+	}()
 
 	// Start metrics HTTP endpoint if configured.
 	if cfg.MetricsAddr != "" {
@@ -139,6 +160,7 @@ type server struct {
 	limiter *RateLimiter
 	auth    *TokenAuth
 	metrics *metrics.Registry
+	anomaly *anomaly.Registry
 }
 
 // HTTPClient returns the shared HTTP client.
@@ -149,3 +171,52 @@ func (s *server) Audit() *AuditWriter { return s.audit }
 
 // Auth returns the token authenticator.
 func (s *server) Auth() *TokenAuth { return s.auth }
+
+// Anomaly returns the anomaly detector registry.
+func (s *server) Anomaly() *anomaly.Registry { return s.anomaly }
+
+// anomalyEventPublisher adapts anomaly events to the project event bus.
+type anomalyEventPublisher struct {
+	bus *eventbus.ChannelEventBus
+}
+
+func (p *anomalyEventPublisher) Publish(_ context.Context, eventType string, payload any) error {
+	p.bus.Publish(eventbus.BusEvent{
+		ID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:          eventbus.EventType(eventType),
+		Timestamp:     time.Now(),
+		Payload:       payload,
+		Severity:      "warning",
+		SchemaVersion: 1,
+	})
+	return nil
+}
+
+func (s *server) fetchAuditEntriesForAnomaly(ctx context.Context) ([]anomaly.AuditEntryV2, error) {
+	entries, err := ReadAuditEntries(s.cfg.AuditLogPath, 1, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("read audit entries: %w", err)
+	}
+	return toAnomalyEntries(entries), nil
+}
+
+func toAnomalyEntries(entries []AuditEntry) []anomaly.AuditEntryV2 {
+	out := make([]anomaly.AuditEntryV2, len(entries))
+	for i, e := range entries {
+		out[i] = anomaly.AuditEntryV2{
+			SchemaVersion: e.SchemaVersion,
+			TS:            e.TS,
+			SessionID:     e.SessionID,
+			AgentID:       e.AgentID,
+			TenantID:      e.TenantID,
+			Tool:          e.Tool,
+			ArgsHash:      e.ArgsHash,
+			Status:        e.Status,
+			LatencyMS:     e.LatencyMS,
+			DurationMS:    e.DurationMS,
+			Transport:     e.Transport,
+			Error:         e.Error,
+		}
+	}
+	return out
+}
