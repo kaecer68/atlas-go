@@ -85,6 +85,24 @@
 - [`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md) — 文件歸屬規範與生命週期
 - [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md) — 文件當前位置地圖
 
+## 🤖 Agent Interface（AI Agent 操作入口）
+
+atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透過 **MCP protocol** 操作 atlas：
+
+| 層級 | 入口 | 文件 |
+|------|------|------|
+| Roadmap | `docs/plans/agent-interface-roadmap.md` | P0–P4 規劃與開放議題 |
+| Workflow Map | `docs/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
+| Process 標註 | `docs/PROCESSES.yaml` | 結構化 workflow metadata |
+| MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 70+ tools、auth、audit |
+| Agent 工具指南 | `docs/AGENT_TOOLS.md` | Top 15 tool 決策樹 |
+| 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
+| Onboarding | `docs/AGENT_ONBOARDING.md` | 5 分鐘上手 |
+
+**P0 狀態**：PROCESSES.yaml + AGENTS.md 本章節已補齊。  
+**P1 殘留**：SSE/streamable-HTTP transport wiring；audit log retention。  
+**P2 殘留**：binary merge、retention period、license、WebSocket 決策。
+
 ## ⚠️ 高頻陷阱速查
 
 > 完整列表 → **[`docs/TRAPS.md`](docs/TRAPS.md)**（單一權威來源）。以下僅列最常觸發的陷阱：
