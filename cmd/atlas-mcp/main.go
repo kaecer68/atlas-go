@@ -17,6 +17,7 @@
 //	ATLAS_MCP_TOKEN                 env-var fallback token (unused when DB token store is active)
 //	ATLAS_MCP_ADMIN_TOKEN           admin API token for token management API (empty = disabled)
 //	ATLAS_MCP_ADMIN_ADDR            admin HTTP listen address (default: 127.0.0.1:9090 when token is set)
+//	ATLAS_MCP_METRICS_ADDR          Prometheus metrics listen address (default: disabled; use 127.0.0.1:9091)
 //	PGHOST/PGPORT/PGUSER/...        PostgreSQL connection (standard libpq env vars)
 package main
 
@@ -47,6 +48,7 @@ func main() {
 		MCPToken:           os.Getenv("ATLAS_MCP_TOKEN"),
 		AdminAddr:          adminAddr,
 		AdminToken:         adminToken,
+		MetricsAddr:        os.Getenv("ATLAS_MCP_METRICS_ADDR"),
 	}
 
 	// Initialize PostgreSQL and run migrations if DATABASE_URL is configured.
