@@ -111,8 +111,10 @@ func ensurePostgres() {
 	if user != "" && pass != "" {
 		logPostgres("authentication failed — attempting password repair via docker exec...")
 		if fixPostgresPassword(postgresContainerName, user, pass) {
-			logPostgres("password repaired, retrying connection...")
-			if tryAuthPostgres(dsn, 5*time.Second) {
+			logPostgres("password repaired, retrying connection (up to 3 attempts with backoff)...")
+			// PostgreSQL SCRAM/MD5 auth cache settles ~2s after ALTER ROLE;
+			// single probe misses this. Linear backoff retries cover it.
+			if tryAuthPostgresWithRetry(dsn, 3, 5*time.Second) {
 				logPostgres("ready")
 				return
 			}
@@ -135,6 +137,22 @@ func tryAuthPostgres(dsn string, timeout time.Duration) bool {
 	}
 	_ = conn.Close(ctx)
 	return true
+}
+
+// tryAuthPostgresWithRetry is the post-password-repair variant. After a
+// successful ALTER ROLE the server may need a few seconds to refresh its
+// auth cache; a single probe is unreliable. We retry with linear backoff
+// (1s, 2s, 3s, ...) up to `attempts` times, each with the same per-call
+// context deadline.
+func tryAuthPostgresWithRetry(dsn string, attempts int, perCallTimeout time.Duration) bool {
+	for i := 1; i <= attempts; i++ {
+		time.Sleep(time.Duration(i) * time.Second)
+		if tryAuthPostgres(dsn, perCallTimeout) {
+			return true
+		}
+		logPostgres(fmt.Sprintf("retry %d/%d: auth still failing", i, attempts))
+	}
+	return false
 }
 
 // fixPostgresPassword resets the postgres user's password inside the Docker container
