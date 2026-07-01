@@ -32,6 +32,9 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerDataUniverseTools(mcpSrv, s)
 	registerReportPrismSwarmTools(mcpSrv, s)
 	registerAnomalyTools(mcpSrv, s)
+	registerSamplingTools(mcpSrv, s)
+	registerRootsTools(mcpSrv, s)
+	registerElicitationTools(mcpSrv, s)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
@@ -187,6 +190,10 @@ func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolReque
 // enforces per-tenant per-tool rate limits (Phase 3 B), and emits one
 // AuditEntry per call regardless of success/failure.
 func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, fn func() error) error {
+	return s.withAuditExtra(ctx, tool, argKeys, nil, fn)
+}
+
+func (s *server) withAuditExtra(ctx context.Context, tool string, argKeys []string, extraFn func() map[string]any, fn func() error) error {
 	start := time.Now()
 
 	tenantID := TenantIDFromContext(ctx)
@@ -235,6 +242,9 @@ func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, f
 		entry.Error = err.Error()
 	}
 	s.observeAuditEntry(&entry, start)
+	if extraFn != nil {
+		entry.Extra = extraFn()
+	}
 	if wErr := s.audit.Write(entry); wErr != nil {
 		// audit failure must not mask the original error.
 		if err == nil {

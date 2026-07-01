@@ -19,6 +19,10 @@
 //	ATLAS_MCP_ADMIN_ADDR            admin HTTP listen address (default: 127.0.0.1:9090 when token is set)
 //	ATLAS_MCP_METRICS_ADDR          Prometheus metrics listen address (default: disabled; use 127.0.0.1:9091)
 //	PGHOST/PGPORT/PGUSER/...        PostgreSQL connection (standard libpq env vars)
+//	ATLAS_MCP_SAMPLING_ENABLED      enable mcp_sample_llm (default false)
+//	ATLAS_MCP_ELICITATION_ENABLED   enable mcp_elicit_user (default false)
+//	ATLAS_MCP_ROOTS_ALLOWED         comma-separated file:// roots allowed when client declares none
+//	ATLAS_MCP_ROOTS_READ_SIZE_CAP   max bytes per roots file read (default 1048576)
 package main
 
 import (
@@ -26,6 +30,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/cmd/atlas-mcp/server"
 	"github.com/kaecer68/atlas-go/internal/db"
@@ -49,6 +54,12 @@ func main() {
 		AdminAddr:          adminAddr,
 		AdminToken:         adminToken,
 		MetricsAddr:        os.Getenv("ATLAS_MCP_METRICS_ADDR"),
+		SamplingEnabled:    envBoolOr("ATLAS_MCP_SAMPLING_ENABLED", false),
+		ElicitationEnabled: envBoolOr("ATLAS_MCP_ELICITATION_ENABLED", false),
+		Roots: server.RootsConfig{
+			AllowedRoots: parseAllowedRoots(os.Getenv("ATLAS_MCP_ROOTS_ALLOWED")),
+			ReadSizeCap:  envInt64Or("ATLAS_MCP_ROOTS_READ_SIZE_CAP", 0),
+		},
 	}
 
 	// Initialize PostgreSQL and run migrations if DATABASE_URL is configured.
@@ -83,6 +94,41 @@ func envIntOr(key string, def int) int {
 		return def
 	}
 	return n
+}
+
+func envBoolOr(key string, def bool) bool {
+	v := strings.ToLower(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	return v == "1" || v == "true" || v == "yes"
+}
+
+func envInt64Or(key string, def int64) int64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 {
+		return def
+	}
+	return n
+}
+
+func parseAllowedRoots(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func defaultAuditLogPath() string {
