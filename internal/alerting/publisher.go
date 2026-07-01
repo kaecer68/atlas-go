@@ -1,7 +1,7 @@
 // Package alerting receives Alertmanager webhooks and emits outbound
 // security/lifecycle events for atlas-go.
 //
-// # Publisher
+// # Publisher (Alert-level)
 //
 // Publisher is the outbound event sink for code paths that detect
 // significant state changes (e.g. MCP Roots list changed, MCP Elicitation
@@ -9,6 +9,15 @@
 // must not block the caller indefinitely. The default implementation
 // NoopPublisher discards all events and is the safe choice when alerting
 // has not been configured.
+//
+// # AnomalyPublisher (AnomalyEvent-level)
+//
+// AnomalyPublisher is the outbound sink for the MCP anomaly detector
+// (burst, tool_error_spike, tenant_error_anomaly). It is intentionally a
+// separate interface from Publisher because AnomalyEvent carries its own
+// schema (UUID v4 id, derived severity, raw score). The default
+// implementation NoopAnomalyPublisher discards events and is safe to use
+// when alert integration is disabled or in tests.
 //
 // # Webhook handler
 //
@@ -65,7 +74,7 @@ type Alert struct {
 	Timestamp   time.Time
 }
 
-// Publisher emits alert events. Implementations must be safe for
+// Publisher emits Alert-level events. Implementations must be safe for
 // concurrent use; Publish should not panic on nil/empty Alert.
 type Publisher interface {
 	Publish(ctx context.Context, alert Alert) error
@@ -78,5 +87,50 @@ type NoopPublisher struct{}
 
 // Publish implements Publisher. It always returns nil.
 func (NoopPublisher) Publish(_ context.Context, _ Alert) error {
+	return nil
+}
+
+// AnomalyEvent is the cross-package event envelope published when the MCP
+// anomaly detector emits a result. It is intentionally distinct from the
+// in-process anomaly.AnomalyEvent (which lives in internal/mcp/anomaly and
+// already has audit-pipeline coupling) so the alerting package has no
+// dependency on the MCP subsystem.
+type AnomalyEvent struct {
+	AnomalyID  string    // unique id (UUID v4) for the detected anomaly
+	Type       string    // "burst" | "tool_error_spike" | "tenant_error_anomaly"
+	TenantID   string    // owning tenant; "anonymous" if unset
+	Tool       string    // empty for tenant/burst-level anomalies
+	Score      float64   // raw score (z-score, error-rate, etc.)
+	DetectedAt time.Time // UTC timestamp the detector emitted
+	Severity   string    // "low" | "medium" | "high" — derived from Score
+}
+
+// AnomalyPublisher accepts anomaly events and dispatches them to an alert
+// sink (Alertmanager webhook, Slack, PagerDuty, log-only, etc.).
+// Implementations MUST be safe for concurrent use.
+//
+// The contract: PublishAnomaly is fire-and-forget on the happy path but
+// returns an error so callers can decide whether to retry. A nil return value
+// means the sink acknowledged receipt.
+//
+// Note: AnomalyPublisher is the rename applied during the pr866 rebase to
+// coexist with main's Alert-level Publisher interface. Originally the PR
+// introduced this as `Publisher`; renamed here so both surfaces share the
+// package without a name collision.
+type AnomalyPublisher interface {
+	PublishAnomaly(ctx context.Context, ev AnomalyEvent) error
+}
+
+// NoopAnomalyPublisher is the default AnomalyPublisher when alert
+// integration is disabled (no webhook configured, feature flag off,
+// tests). It satisfies the AnomalyPublisher contract without performing
+// any I/O.
+//
+// Note: original PR name was `NoOpPublisher`; renamed to `NoopAnomalyPublisher`
+// to align with main's capitalization (`NoopPublisher`) and to encode scope.
+type NoopAnomalyPublisher struct{}
+
+// PublishAnomaly returns nil unconditionally and discards the event.
+func (n *NoopAnomalyPublisher) PublishAnomaly(_ context.Context, _ AnomalyEvent) error {
 	return nil
 }

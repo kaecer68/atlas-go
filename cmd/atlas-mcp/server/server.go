@@ -29,10 +29,16 @@ type Config struct {
 	AdminAddr          string        // admin HTTP listen address, e.g. "127.0.0.1:9090" (empty = disabled)
 	AdminToken         string        // admin API token (ATLAS_ADMIN_TOKEN)
 	MetricsAddr        string        // Prometheus metrics listen address, e.g. "127.0.0.1:9091" (empty = disabled)
+	SamplingEnabled    bool          // ATLAS_MCP_SAMPLING_ENABLED (default false)
+	ElicitationEnabled bool          // ATLAS_MCP_ELICITATION_ENABLED (default false)
+	Roots              RootsConfig   // roots filesystem boundary configuration
 
-	SamplingEnabled    bool        // ATLAS_MCP_SAMPLING_ENABLED (default false)
-	ElicitationEnabled bool        // ATLAS_MCP_ELICITATION_ENABLED (default false)
-	Roots              RootsConfig // roots filesystem boundary configuration
+	// Phase 4 T1.4 — anomaly alert integration. Empty AnomalyAlertWebhook
+	// means the emitter uses NoopAnomalyPublisher (no alert side-effects).
+	AnomalyAlertWebhook     string        // Alertmanager-style webhook URL
+	AnomalyAlertHTTPTimeout time.Duration // per-POST timeout; default 5s
+	AnomalyAlertInterval    time.Duration // emitter tick interval; default 1s
+	AnomalyStoreCapacity    int           // in-memory ack store cap; default 1000
 }
 
 // Run constructs a server with config and runs the stdio transport to completion.
@@ -76,6 +82,29 @@ func Run(ctx context.Context, cfg Config) error {
 	detector := anomaly.NewDetector(anomaly.Config{}, metrics, nil)
 	auth.SetMetrics(metrics)
 
+	// Phase 4 T1.4 — anomaly alert/eventbus integration. The emitter
+	// polls the detector's ring buffer at AnomalyAlertInterval and fans
+	// out to (a) alert publisher, (b) ack store, (c) event bus (nil if
+	// standalone), (d) metrics. A blank AnomalyAlertWebhook selects the
+	// NoopAnomalyPublisher so the rest of the pipeline still runs in
+	// tests.
+	anomalyAckStore := anomaly.NewMemoryStore(cfg.AnomalyStoreCapacity)
+	var anomalyPub alerting.AnomalyPublisher = &alerting.NoopAnomalyPublisher{}
+	if cfg.AnomalyAlertWebhook != "" {
+		anomalyPub = alerting.NewWebhookPublisher(alerting.WebhookPublisherConfig{
+			URL:         cfg.AnomalyAlertWebhook,
+			HTTPTimeout: cfg.AnomalyAlertHTTPTimeout,
+		})
+	}
+	anomalyEmitter := anomaly.NewEmitter(anomaly.EmitterConfig{
+		Detector:  detector,
+		Publisher: anomalyPub,
+		AckStore:  anomalyAckStore,
+		Observer:  metrics,
+		Interval:  cfg.AnomalyAlertInterval,
+	})
+	go anomalyEmitter.Run(ctx)
+
 	if cfg.MetricsAddr != "" {
 		go func() {
 			if err := StartMetricsServer(ctx, cfg.MetricsAddr, metrics); err != nil && !errors.Is(err, context.Canceled) {
@@ -102,13 +131,14 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	srv := &server{
-		cfg:      cfg,
-		audit:    audit,
-		cli:      newHTTPClient(cfg),
-		limiter:  limiter,
-		auth:     auth,
-		metrics:  metrics,
-		detector: detector,
+		cfg:          cfg,
+		audit:        audit,
+		cli:          newHTTPClient(cfg),
+		limiter:      limiter,
+		auth:         auth,
+		metrics:      metrics,
+		detector:     detector,
+		anomalyStore: anomalyAckStore,
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp", Version: "v0.1.0"}
@@ -147,16 +177,17 @@ func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 
 // server holds shared state for all tool handlers.
 type server struct {
-	cfg        Config
-	audit      *AuditWriter
-	cli        *httpClient
-	limiter    *RateLimiter
-	auth       *TokenAuth
-	metrics    *Metrics
-	detector   *anomaly.Detector
-	alerter    alerting.Publisher
-	rootsMu    sync.RWMutex
-	rootsCache []string
+	cfg          Config
+	audit        *AuditWriter
+	cli          *httpClient
+	limiter      *RateLimiter
+	auth         *TokenAuth
+	metrics      *Metrics
+	detector     *anomaly.Detector
+	alerter      alerting.Publisher
+	rootsMu      sync.RWMutex
+	rootsCache   []string
+	anomalyStore anomaly.AnomalyStore
 }
 
 func (s *server) cachedRoots() []string {
@@ -173,3 +204,6 @@ func (s *server) Audit() *AuditWriter { return s.audit }
 
 // Auth returns the token authenticator.
 func (s *server) Auth() *TokenAuth { return s.auth }
+
+// AnomalyStore returns the anomaly ack store (Phase 4 T1.4).
+func (s *server) AnomalyStore() anomaly.AnomalyStore { return s.anomalyStore }
