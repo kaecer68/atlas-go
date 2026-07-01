@@ -8,5 +8,6 @@
 /* Market direction (Taiwan: 紅漲綠跌). Use for PnL / price / direction badges. */
 .badge.up { background: rgba(239,68,68,.18); color: var(--bullish); border: 1px solid rgba(239,68,68,.4); }
 .badge.down { background: rgba(38,161,123,.18); color: var(--bearish); border: 1px solid rgba(38,161,123,.4); }
+.badge.demo { background: rgba(139,92,246,.15); color: var(--color-info); border: 1px solid rgba(139,92,246,.35); }
 .ghost-agent { opacity: 0.6; }
 .ghost-agent .badge { font-style: italic; }

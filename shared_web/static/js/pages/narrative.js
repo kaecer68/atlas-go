@@ -3,6 +3,25 @@ import { narrativeThemeLabel } from '../shared/constants.js';
 import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
+/**
+ * 包裝 renderEmptyState，附加可執行的行動按鈕。
+ * @param {string} title
+ * @param {string} message
+ * @param {Array<{label:string, page?:string, href?:string}>} [actions]
+ * @returns {string}
+ */
+function renderActionEmptyState(title, message, actions) {
+  let html = renderEmptyState(title, message);
+  if (!actions || !actions.length) return html;
+  const buttons = actions.map(a => {
+    if (a.page) {
+      return `<button class="btn btn-primary btn-sm action-empty-btn" onclick="window.switchPage('${escapeHtml(a.page)}')" type="button">${escapeHtml(a.label)}</button>`;
+    }
+    return `<a class="btn btn-primary btn-sm" href="${escapeHtml(a.href || '#')}" target="_blank" rel="noopener">${escapeHtml(a.label)}</a>`;
+  }).join('');
+  return html.replace('</div>', `<div class="empty-actions">${buttons}</div></div>`);
+}
+
 let templateAccordionState = { openTemplateId: null };
 let modelAccordionState = { openModelId: null };
 
@@ -176,7 +195,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   const macroEl = document.getElementById('narrativeMacro');
   if (macroEl) {
     macroEl.classList.remove('loading');
-    if (!snapshot) { macroEl.innerHTML = renderEmptyState('無可用快照', '執行回測後將自動產生'); }
+    if (!snapshot) { macroEl.innerHTML = renderActionEmptyState('無可用快照', '執行回測後將自動產生。', [{label: '執行模擬', page: 'pipeline'}, {label: '查看示範', page: 'crossmarket'}]); }
     else {
       const rows = [
         ['DXY-美元指數', snapshot.dxy], ['US10Y-美債10年期', snapshot.us10y], ['VIX-波動率指數', snapshot.vix],
@@ -241,7 +260,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           <span class="font-bold text-sm text-accent">台股三大法人資金流</span>
           <span class="text-sm font-bold" style="color:${capitalStatus.color}">${capitalStatus.text}</span>
           <span class="text-muted text-sm">更新於 ${capitalTimeStr}</span>
-        </div>${renderEmptyState('暫無可用資料', '')}`;
+        </div>${renderActionEmptyState('暫無可用資料', '執行第一次宏觀分析後將自動更新。', [{label: '執行宏觀分析', page: 'pipeline'}])}`;
       }
       macroEl.innerHTML = html;
     }
@@ -250,7 +269,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   const stressEl = document.getElementById('narrativeStress');
   if (stressEl) {
     stressEl.classList.remove('loading');
-    if (!stress) { stressEl.innerHTML = renderEmptyState('無可用壓力資料', ''); }
+    if (!stress) { stressEl.innerHTML = renderActionEmptyState('無可用壓力資料', '執行回測或模擬後將顯示壓力測試結果。', [{label: '執行模擬', page: 'pipeline'}]); }
     else {
       const score = typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
       const sLabel = stressLabel(stress.regime || '-');
@@ -288,7 +307,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     const list = (events && events.events) || [];
     // 同樣按強度排序，讓最劇烈的事件優先呈現
     const sortedList = sortNarrativeEvents(list.slice());
-    if (!sortedList.length) { eventsEl.innerHTML = renderEmptyState('目前無觸發的宏觀敘事', ''); }
+    if (!sortedList.length) { eventsEl.innerHTML = renderActionEmptyState('目前無觸發的宏觀敘事', '當市場出現顯著事件時，此處會列出敘事與影響。', [{label: '查看市場概覽', page: 'home'}]); }
     else {
       eventsEl.innerHTML = sortedList.map((e, idx) => {
         const sClass = e.sentiment > 0 ? 'up' : 'down';
@@ -352,7 +371,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   if (chainsEl) {
     chainsEl.classList.remove('loading');
     const list = (chains && chains.chains) || [];
-    if (!list.length) { chainsEl.innerHTML = renderEmptyState('目前無匹配的因果鏈', ''); }
+    if (!list.length) { chainsEl.innerHTML = renderActionEmptyState('目前無匹配的因果鏈', '因果鏈會在執行宏觀分析後產生。', [{label: '執行宏觀分析', page: 'pipeline'}]); }
     else {
       chainsEl.innerHTML = list.map(c => `
         <div style="margin:12px 0;padding:12px;background:var(--panel-l2);border-radius:10px;border:1px solid var(--border)">
@@ -386,7 +405,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   if (modelsEl) {
     modelsEl.classList.remove('loading');
     const list = (models && models.models) || [];
-    if (!list.length) { modelsEl.innerHTML = renderEmptyState('目前無活躍模型', ''); }
+    if (!list.length) { modelsEl.innerHTML = renderActionEmptyState('目前無活躍模型', '模型會在回測或模擬運行後啟動。', [{label: '執行模擬', page: 'pipeline'}]); }
     else {
       modelsEl.innerHTML = list.map((m, idx) => {
         const w = m.weight || 0;
@@ -437,7 +456,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   if (templatesEl) {
     templatesEl.classList.remove('loading');
     const items = (templates && templates.templates) || [];
-    if (!items.length) { templatesEl.innerHTML = renderEmptyState('無模板資料', ''); }
+    if (!items.length) { templatesEl.innerHTML = renderActionEmptyState('無模板資料', '模板庫會隨著策略演化自動累積。', [{label: '查看策略演化', page: 'evolution_panel'}]); }
     else {
       templatesEl.innerHTML = `<table class="template-table">
         <thead><tr><th style="width:40%">模板名稱</th><th style="width:12%">歷史命中率</th><th style="width:36%">資料來源</th><th style="width:12%">操作</th></tr></thead>
@@ -459,7 +478,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   const retailEl = document.getElementById('narrativeRetailSentiment');
   if (retailEl) {
     retailEl.classList.remove('loading');
-    if (!retailSentiment) { retailEl.innerHTML = renderEmptyState('無散戶情緒資料', ''); }
+    if (!retailSentiment) { retailEl.innerHTML = renderActionEmptyState('無散戶情緒資料', '執行市場分析後將顯示散戶情緒指標。', [{label: '執行分析', page: 'pipeline'}]); }
     else {
       const hasValidData = retailSentiment.margin_balance > 0;
       const readingMap = { frenzy: '狂熱', neutral: '中性', fear: '恐慌' };
@@ -610,7 +629,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   const seasonalEl = document.getElementById('narrativeSeasonal');
   if (seasonalEl) {
     seasonalEl.classList.remove('loading');
-    if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = renderEmptyState('無季節性事件', ''); }
+    if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = renderActionEmptyState('無季節性事件', '執行回測後將顯示季節性預期與事件。', [{label: '執行模擬', page: 'pipeline'}]); }
     else {
       const rows = seasonal.expectations.map(e => {
         const statusBadge = e.already_priced_in ? '<span class="badge">已反應</span>' : '<span class="badge ok">有驚喜潛力</span>';

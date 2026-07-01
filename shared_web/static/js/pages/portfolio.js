@@ -6,6 +6,18 @@ import { renderRiskPanel } from '../components/risk-panel.js';
 import { renderRiskGatePanel } from '../components/risk-gate-panel.js';
 
 import { renderStockCell } from '../names.js';
+import { formatMaxDrawdown, formatHHI } from '../shared/format-metric.js';
+
+function renderActionEmptyState(title, description, pageId, buttonText) {
+  return `
+    <div class="action-empty-state">
+      <div class="action-empty-state-icon">📂</div>
+      <div class="action-empty-state-title">${title}</div>
+      <div class="action-empty-state-description">${description}</div>
+      <button class="action-empty-state-button" data-nav="${pageId}" type="button">${buttonText}</button>
+    </div>
+  `;
+}
 
 export async function loadPortfolioPage(getJSON, agentNameFn) {
   const kpis = document.getElementById('portfolioKPIs');
@@ -59,7 +71,10 @@ function kpiNum(v) {
   return v.toString();
 }
 
-kpis.innerHTML = `
+    const hhi = formatHHI(concentrationRatio);
+    const hhiLabel = { low: '分散', medium: '中等', high: '集中' }[hhi.level] || '—';
+
+    kpis.innerHTML = `
       <div class="kpi-card">
         <div class="kpi-label">稅前淨值</div>
         <div class="kpi-value">${kpiNTD(state.portfolio_value)}</div>
@@ -92,12 +107,12 @@ kpis.innerHTML = `
       </div>
       <div class="kpi-card">
         <div class="kpi-label">持倉集中度 (HHI)</div>
-        <div class="kpi-value">${kpiPct(concentrationRatio)}</div>
-        <div class="kpi-hint">0~1，越高越集中</div>
+        <div class="kpi-value">${hhi.value}</div>
+        <div class="kpi-hint">${hhiLabel}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">最大回撤</div>
-        <div class="kpi-value text-danger">${kpiPct(currentDrawdown)}</div>
+        <div class="kpi-value text-danger">${formatMaxDrawdown(currentDrawdown, { asAbsolute: true })}</div>
         <div class="kpi-hint">歷史最大回撤</div>
       </div>
     `;
@@ -108,7 +123,7 @@ kpis.innerHTML = `
     renderDualEquityCurve(preTaxPoints, afterTaxPoints);
 
     if (!positions.length) {
-      tableEl.innerHTML = window.emptyState ? window.emptyState('尚無持倉資料', '') : '<div style="padding:20px;text-align:center;color:var(--muted)">尚無持倉資料</div>';
+      tableEl.innerHTML = renderActionEmptyState('尚無持倉資料', '執行一次模擬交易以建立示範持倉', 'evolution_panel', '前往策略演化');
     } else {
       const fmtF = window.fmtFloat || (v => v.toFixed(2));
       const fmtI = window.fmtInt || (v => v.toString());

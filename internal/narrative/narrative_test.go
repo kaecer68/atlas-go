@@ -201,6 +201,8 @@ func TestKnowledgeBaseRegisterAndMatch(t *testing.T) {
 func TestNarrativeEngineDetectEvents(t *testing.T) {
 	nowUnix = func() int64 { return 123456789 }
 	defer func() { nowUnix = func() int64 { return time.Now().UnixNano() } }()
+	nowUTC = func() time.Time { return time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC) }
+	defer func() { nowUTC = func() time.Time { return time.Now().UTC() } }()
 
 	ne := NewNarrativeEngine()
 	data := MarketNarrativeData{

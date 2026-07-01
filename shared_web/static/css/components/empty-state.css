@@ -8,3 +8,19 @@
 .empty-state-guidance .title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
 .empty-state-guidance .desc { font-size: 12px; margin-bottom: 12px; }
 .empty-state-guidance .action { font-size: 11px; color: var(--accent); }
+
+/* 空白狀態行動按鈕群組 */
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.empty-actions .btn {
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
