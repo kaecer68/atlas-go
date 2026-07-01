@@ -130,11 +130,11 @@ go test -count=1 -race ./cmd/atlas-mcp/...   # 99 tests, -race 綠
 
 **告警整合**：當 `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE=true`（預設），server 端的 `RootsListChangedHandler` 會透過 `internal/alerting.Publisher` 發出 `security_roots_changed` 事件（成功為 `SeverityInfo`、失敗為 `SeverityWarning`），下游 Alertmanager 或 webhook 訂閱者可即時收到 roots 變動通知。
 
-**完整規格**：[`docs/specs/agent-mcp-phase4.md` §6.2.B](../../specs/agent-mcp-phase4.md)、[`internal/apigateway/CONSTITUTION.md` 附錄 D](../../internal/apigateway/CONSTITUTION.md)
+**完整規格**：[`docs/specs/agent-mcp-phase4.md` §6.2.B](../specs/agent-mcp-phase4.md)、[`internal/apigateway/CONSTITUTION.md` 附錄 D](../internal/apigateway/CONSTITUTION.md)
 
 ### 註冊狀態
 
-`ATLAS_BASE_URL`、`ATLAS_API_KEY`、`ATLAS_MCP_AUDIT_LOG` 已於 [`configs/allowed_env_vars.md`](../../configs/allowed_env_vars.md) 白名單；`ATLAS_MCP_TOKEN` 為 Phase 2 新增，正在本 doc 標頭 commit 同步註冊。
+`ATLAS_BASE_URL`、`ATLAS_API_KEY`、`ATLAS_MCP_AUDIT_LOG` 已於 [`configs/allowed_env_vars.md`](../configs/allowed_env_vars.md) 白名單；`ATLAS_MCP_TOKEN` 為 Phase 2 新增，正在本 doc 標頭 commit 同步註冊。
 
 ---
 
