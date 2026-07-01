@@ -78,7 +78,10 @@ for JS_DIR in "${JS_DIRS[@]}"; do
         core_indicators|last_24h|next_run|\
         empty_state|gate_mode|\
         action_type|action_description|confidence_commentary|\
-        agent_skill|signals_count) continue ;;
+        agent_skill|signals_count|\
+        foreign_capital_signal|foreign_investor_net_billions|\
+        taiwan_ex_change_pct|taiwan_ex_direction|\
+        total_pnl|total_value) continue ;;
       esac
 
       echo "$field" >> "$FOUND_FIELDS"
