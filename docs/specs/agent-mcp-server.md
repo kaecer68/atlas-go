@@ -445,6 +445,8 @@ cmd/atlas-mcp/
     ├── auth.go             (TokenAuth — Phase 2.1)
     ├── audit.go            (JSONL writer)
     ├── http_client.go      (atlas HTTP bridge)
+    ├── metrics.go          (Phase 4A: Prometheus metrics)
+    ├── tools_anomaly.go    (Phase 4A: anomaly tools)
     ├── transport_stdio.go  (Phase 1, stdio transport)
     ├── transport_http.go   (Phase 2.1, streamable-HTTP)
     ├── transport_sse.go    (Phase 2.1, SSE)
@@ -465,3 +467,37 @@ cmd/atlas-mcp/
     ├── tools_data_universe.go + _test.go
     └── tools_report_prism_swarm.go + _test.go
 ```
+
+## 12. Phase 4 Direction A — Observability（2026-07-01）
+
+**狀態：✅ IMPLEMENTED** — 內建 Prometheus `/metrics` + 自訂 anomaly detector + alert integration。
+
+### 新增元件
+
+| 元件 | 位置 | 職責 |
+|------|------|------|
+| Prometheus Exporter | `cmd/atlas-mcp/server/metrics.go` | `/metrics` endpoint；暴露 5 種 metrics |
+| Anomaly Detector | `internal/mcp/anomaly/` | rolling-window z-score + per-tool/per-tenant error rate |
+| Anomaly Tools | `cmd/atlas-mcp/server/tools_anomaly.go` | `mcp_anomaly_get_recent`、`mcp_anomaly_ack` |
+
+### 新增 Tools
+
+| Tool | 類型 | 說明 |
+|------|------|------|
+| `mcp_anomaly_get_recent` | read | 列出最近 N 條 anomaly event |
+| `mcp_anomaly_ack` | destructive | 透過 `/api/alerts/acknowledge` 確認 anomaly |
+
+### Metrics
+
+- `mcp_calls_total{tool, transport, status}` — Counter
+- `mcp_call_duration_seconds{tool, transport}` — Histogram
+- `mcp_active_sessions{transport}` — Gauge
+- `mcp_token_usage_total{tenant_id}` — Counter
+- `mcp_anomaly_score{tenant_id, anomaly_type}` — Gauge
+
+### 驗證
+
+- `go test ./cmd/atlas-mcp/... ./internal/mcp/anomaly/...`：**23 個新增測試 PASS / 0 FAIL**
+- `/metrics` 綁定 `127.0.0.1`，獨立於 MCP transport port
+- anomaly detector 3 種基線 unit test 通過
+

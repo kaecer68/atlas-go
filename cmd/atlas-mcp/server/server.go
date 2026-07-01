@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/kaecer68/atlas-go/internal/mcp/anomaly"
 )
 
 // Config is the immutable configuration for a server.
@@ -23,6 +26,7 @@ type Config struct {
 	TokenStore         TokenStore    // optional DB-backed token store (nil = env-only)
 	AdminAddr          string        // admin HTTP listen address, e.g. "127.0.0.1:9090" (empty = disabled)
 	AdminToken         string        // admin API token (ATLAS_ADMIN_TOKEN)
+	MetricsAddr        string        // Prometheus metrics listen address, e.g. "127.0.0.1:9091" (empty = disabled)
 }
 
 // Run constructs a server with config and runs the stdio transport to completion.
@@ -62,8 +66,17 @@ func Run(ctx context.Context, cfg Config) error {
 		auth.SetStore(cfg.TokenStore)
 	}
 
-	// Start admin HTTP handler if configured. It requires a TokenStore and
-	// must bind loopback only.
+	metrics := NewMetrics()
+	detector := anomaly.NewDetector(anomaly.Config{}, metrics, nil)
+	auth.SetMetrics(metrics)
+
+	if cfg.MetricsAddr != "" {
+		go func() {
+			if err := StartMetricsServer(ctx, cfg.MetricsAddr, metrics); err != nil && !errors.Is(err, context.Canceled) {
+				fmt.Fprintf(os.Stderr, "atlas-mcp: metrics server: %v\n", err)
+			}
+		}()
+	}
 	if cfg.AdminAddr != "" {
 		if cfg.TokenStore == nil {
 			return fmt.Errorf("server: TokenStore is required when AdminAddr is set")
@@ -83,11 +96,13 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	srv := &server{
-		cfg:     cfg,
-		audit:   audit,
-		cli:     newHTTPClient(cfg),
-		limiter: limiter,
-		auth:    auth,
+		cfg:      cfg,
+		audit:    audit,
+		cli:      newHTTPClient(cfg),
+		limiter:  limiter,
+		auth:     auth,
+		metrics:  metrics,
+		detector: detector,
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp", Version: "v0.1.0"}
@@ -95,6 +110,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	registerTools(mcpSrv, srv)
 	registerAuditTools(mcpSrv, srv)
+	registerAnomalyTools(mcpSrv, srv)
 	registerResources(mcpSrv, srv)
 	registerPrompts(mcpSrv)
 
@@ -121,11 +137,13 @@ func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 
 // server holds shared state for all tool handlers.
 type server struct {
-	cfg     Config
-	audit   *AuditWriter
-	cli     *httpClient
-	limiter *RateLimiter
-	auth    *TokenAuth
+	cfg      Config
+	audit    *AuditWriter
+	cli      *httpClient
+	limiter  *RateLimiter
+	auth     *TokenAuth
+	metrics  *Metrics
+	detector *anomaly.Detector
 }
 
 // HTTPClient returns the shared HTTP client.

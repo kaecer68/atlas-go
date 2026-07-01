@@ -96,7 +96,7 @@ func (w *AuditWriter) Close() error {
 
 // Write serializes entry as one JSON line and flushes it to disk. It
 // auto-populates TS, SchemaVersion, Transport, and ArgsHash when empty.
-// DurationMS and LatencyMS are synchronised for backward compatibility.
+// DurationMS and LatencyMS are synchronized for backward compatibility.
 func (w *AuditWriter) Write(entry AuditEntry) error {
 	if entry.TS == "" {
 		entry.TS = w.now().UTC().Format(time.RFC3339Nano)
@@ -305,7 +305,37 @@ func ReadAuditEntries(path string, retentionDays int, now time.Time) ([]AuditEnt
 	return entries, nil
 }
 
-// --- context keys for AgentID / TenantID ---
+// AuditEntry implements anomaly.Entry so the anomaly detector can consume
+// freshly-written audit records without an extra translation layer.
+func (e *AuditEntry) Version() int { return e.SchemaVersion }
+
+// ObservedAt parses the audit timestamp. A zero value means the detector will
+// fall back to its own clock.
+func (e *AuditEntry) ObservedAt() time.Time {
+	if e.TS == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse(time.RFC3339Nano, e.TS); err == nil {
+		return t
+	}
+	if t, err := time.Parse(time.RFC3339, e.TS); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
+func (e *AuditEntry) GetTool() string { return e.Tool }
+
+func (e *AuditEntry) GetTenantID() string {
+	if e.TenantID == "" {
+		return "anonymous"
+	}
+	return e.TenantID
+}
+
+func (e *AuditEntry) GetStatus() string { return e.Status }
+
+func (e *AuditEntry) GetError() string { return e.Error }
 
 // NewV2Entry is the canonical constructor for AuditEntry v2 records.
 // It sets SchemaVersion=2, Transport="stdio", Status="ok", and computes

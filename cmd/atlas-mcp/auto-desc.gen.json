@@ -220,6 +220,70 @@
       "type": "object"
     }
   },
+  "mcp_anomaly_ack": {
+    "name": "mcp_anomaly_ack",
+    "description": "Acknowledge an anomaly alert via the atlas alert store.",
+    "inputSchema": {
+      "properties": {
+        "alert_id": {
+          "description": "the alert id to acknowledge",
+          "type": "string"
+        }
+      },
+      "required": [
+        "alert_id"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_anomaly_get_recent": {
+    "name": "mcp_anomaly_get_recent",
+    "description": "List the most recent anomaly events detected by the MCP observability subsystem.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "description": "how many events to return; default 10, max 100",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "limit"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_get_call_stats": {
+    "name": "mcp_get_call_stats",
+    "description": "Return call statistics for the recent window: total calls, error count, p50 latency, and per-tool breakdown. window_minutes defaults to 60 and is capped at 1440 (24h).",
+    "inputSchema": {
+      "properties": {
+        "window_minutes": {
+          "description": "query window in minutes; default 60, max 1440",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "window_minutes"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_get_session_topology": {
+    "name": "mcp_get_session_topology",
+    "description": "Return the agent_id to tool call matrix for the recent window. window_minutes defaults to 60 and is capped at 1440 (24h). Empty agent_id falls back to 'anonymous'.",
+    "inputSchema": {
+      "properties": {
+        "window_minutes": {
+          "description": "query window in minutes; default 60, max 1440",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "window_minutes"
+      ],
+      "type": "object"
+    }
+  },
   "narrative_get_bundle": {
     "name": "narrative_get_bundle",
     "description": "Compiled 'briefing bundle' (events + chains + templates) suitable for an LLM agent's morning summary.",
