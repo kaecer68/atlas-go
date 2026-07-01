@@ -251,12 +251,14 @@ export async function renderStrategiesPage(root) {
   }
 
   function renderKPIs() {
+    const kpiStrip = document.getElementById('kpiStrip');
+    if (!kpiStrip) return;
     const total = STATE.strategies.length;
     const active = STATE.strategies.filter(s => s.status === 'active').length;
     const layersCovered = STATE.layers.filter(l => l.count > 0).length;
     const avgHitRate = total === 0 ? 0 :
       STATE.strategies.reduce((sum, s) => sum + (s.hit_rate || 0), 0) / total;
-    document.getElementById('kpiStrip').innerHTML = `
+    kpiStrip.innerHTML = `
       <div class="kpi-card"><div class="kpi-label">總心法數</div>
         <div class="kpi-value">${total}</div></div>
       <div class="kpi-card"><div class="kpi-label">活躍心法</div>
@@ -269,6 +271,8 @@ export async function renderStrategiesPage(root) {
   }
 
   function renderCoreIndicators() {
+    const coreIndicatorStrip = document.getElementById('coreIndicatorStrip');
+    if (!coreIndicatorStrip) return;
     const c = STATE.coreIndicators;
     const failed = c === null;
     const items = [
@@ -278,7 +282,7 @@ export async function renderStrategiesPage(root) {
       { label: 'NVDA (%)',      value: c ? c.nvda_pct     : 0, fmt: v => v.toFixed(2) + '%' },
       { label: 'DXY (%)',       value: c ? c.dxy_pct      : 0, fmt: v => v.toFixed(2) + '%' },
     ];
-    document.getElementById('coreIndicatorStrip').innerHTML = items.map(it => {
+    coreIndicatorStrip.innerHTML = items.map(it => {
       const display = failed ? '--' : it.fmt(it.value);
       const cls = failed ? 'kpi-value kpi-value--error' :
         `kpi-value ${(it.value > 0 ? 'text-up' : it.value < 0 ? 'text-down' : '')}`;
@@ -294,6 +298,8 @@ export async function renderStrategiesPage(root) {
   }
 
   function renderLayerTabs() {
+    const layerTabs = document.getElementById('layerTabs');
+    if (!layerTabs) return;
     const tabs = LAYER_FILTERS.map(layer => {
       const count = layer === 'all'
         ? STATE.strategies.length
@@ -303,19 +309,21 @@ export async function renderStrategiesPage(root) {
       const active = STATE.activeLayer === layer ? 'active' : '';
       return `<button class="view-btn ${active}" data-layer="${layer}">${escapeHtml(label)} (${count})</button>`;
     }).join('');
-    document.getElementById('layerTabs').innerHTML = tabs;
+    layerTabs.innerHTML = tabs;
   }
 
   function renderStrategyCards() {
+    const strategyCards = document.getElementById('strategyCards');
+    if (!strategyCards) return;
     const filtered = STATE.activeLayer === 'all'
       ? STATE.strategies
       : STATE.strategies.filter(s => s.layer === STATE.activeLayer);
     if (filtered.length === 0) {
-      document.getElementById('strategyCards').innerHTML =
+      strategyCards.innerHTML =
         '<div class="empty">此層尚無心法，點擊下方「＋ 新增心法」開始建立</div>';
       return;
     }
-    document.getElementById('strategyCards').innerHTML = filtered.map(renderCard).join('');
+    strategyCards.innerHTML = filtered.map(renderCard).join('');
   }
 
   function renderCard(s) {
