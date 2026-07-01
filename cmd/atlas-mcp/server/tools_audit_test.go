@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -73,5 +74,44 @@ func TestMCPGetSessionTopology_ReturnsAgentToolMatrix(t *testing.T) {
 	}
 	if topo.Matrix["a2"]["t2"] != 1 {
 		t.Errorf("matrix[a2][t2] = %d, want 1", topo.Matrix["a2"]["t2"])
+	}
+}
+
+func TestReadAuditEntriesV2_ConcurrentSafe(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit_concurrent.log")
+	w, err := NewAuditWriter(path)
+	if err != nil {
+		t.Fatalf("new audit writer: %v", err)
+	}
+	now := time.Now().UTC()
+	for i := 0; i < 100; i++ {
+		_ = w.Write(AuditEntry{
+			TS:         now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano),
+			AgentID:    "agent1",
+			Tool:       "tool1",
+			Status:     "ok",
+			DurationMS: int64(i % 50),
+		})
+	}
+	_ = w.Close()
+
+	s := &server{audit: w}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := readAuditEntriesV2(s.audit)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent read: %v", err)
 	}
 }
