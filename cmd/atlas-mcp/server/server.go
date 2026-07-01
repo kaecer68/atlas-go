@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/alerting"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/kaecer68/atlas-go/internal/mcp/anomaly"
