@@ -243,7 +243,7 @@ func TestLiveModePropagatesBrokerConfig(t *testing.T) {
 	}
 }
 
-func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
+func TestLiveModeCallsListenAndServeViaDeps(t *testing.T) {
 	ledgerDir := t.TempDir()
 	var listenAndServeCalled atomic.Bool
 
@@ -273,8 +273,8 @@ func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if listenAndServeCalled.Load() {
-			t.Fatalf("live mode should not call deps.listenAndServe")
+		if !listenAndServeCalled.Load() {
+			t.Fatal("live mode should call deps.listenAndServe (runLiveTrading now routes through the dep)")
 		}
 	case <-done:
 	}
