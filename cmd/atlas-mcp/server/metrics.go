@@ -21,6 +21,7 @@ type Metrics struct {
 	activeSessions *prometheus.GaugeVec
 	tokenUsage     *prometheus.CounterVec
 	anomalyScore   *prometheus.GaugeVec
+	anomalyEmitted *prometheus.CounterVec
 }
 
 // NewMetrics builds a Metrics instance with the five required MCP metrics:
@@ -58,7 +59,12 @@ func NewMetrics() *Metrics {
 		Help: "Current anomaly score by tenant_id and anomaly_type.",
 	}, []string{"tenant_id", "anomaly_type"})
 
-	reg.MustRegister(callsTotal, callDuration, activeSessions, tokenUsage, anomalyScore)
+	anomalyEmitted := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mcp_anomaly_emitted_total",
+		Help: "Total anomaly events emitted, by tenant_id, anomaly_type, and severity.",
+	}, []string{"tenant_id", "anomaly_type", "severity"})
+
+	reg.MustRegister(callsTotal, callDuration, activeSessions, tokenUsage, anomalyScore, anomalyEmitted)
 
 	return &Metrics{
 		registry:       reg,
@@ -67,6 +73,7 @@ func NewMetrics() *Metrics {
 		activeSessions: activeSessions,
 		tokenUsage:     tokenUsage,
 		anomalyScore:   anomalyScore,
+		anomalyEmitted: anomalyEmitted,
 	}
 }
 
@@ -130,6 +137,26 @@ func (m *Metrics) SetAnomalyScore(tenantID, anomalyType string, score float64) {
 		anomalyType = "unknown"
 	}
 	m.anomalyScore.WithLabelValues(tenantID, anomalyType).Set(score)
+}
+
+// ObserveAnomaly records an emitted anomaly: sets the score gauge and
+// increments the per-severity emission counter. Use this from the anomaly
+// emitter; SetAnomalyScore alone is only useful for periodic re-emission.
+func (m *Metrics) ObserveAnomaly(tenantID, anomalyType, severity string, score float64) {
+	if m == nil {
+		return
+	}
+	m.SetAnomalyScore(tenantID, anomalyType, score)
+	if tenantID == "" {
+		tenantID = "anonymous"
+	}
+	if anomalyType == "" {
+		anomalyType = "unknown"
+	}
+	if severity == "" {
+		severity = "unknown"
+	}
+	m.anomalyEmitted.WithLabelValues(tenantID, anomalyType, severity).Inc()
 }
 
 // Handler returns the Prometheus scrape handler.
