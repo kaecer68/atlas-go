@@ -306,6 +306,7 @@ curl -s http://127.0.0.1:9091/metrics
 - `mcp_active_sessions{transport}` — 當前活躍 session 數
 - `mcp_token_usage_total{tenant_id}` — 成功 token 驗證次數
 - `mcp_anomaly_score{tenant_id, anomaly_type}` — anomaly detector 即時分數
+- `mcp_anomaly_emitted_total{tenant_id, anomaly_type, severity}` — anomaly 發射累計（Phase 4 T1.4 新增）
 
 `/metrics` 僅 bind `127.0.0.1`，不對外暴露；若需外部 Prometheus scrape，請透過 reverse proxy / TLS / WAF。
 
@@ -314,7 +315,82 @@ curl -s http://127.0.0.1:9091/metrics
 - `mcp_anomaly_get_recent`：列出最近 N 條 anomaly event
 - `mcp_anomaly_ack`：透過 `/api/alerts/acknowledge` 確認 anomaly alert
 
-### 9.5 升級流程
+### 9.5 T1.4 Alert / Eventbus 整合（Phase 4 Direction A）
+
+**目的**：把 anomaly detector 的輸出，從「只在 process 內部可見」升級為「可在 Alertmanager 收單 + 跨進程 SSE 訂閱 + Prometheus 計算 rate」。
+
+**資料流（偵測 → 四個 sink）**：
+
+```
+audit entry ─► detector (3 baselines) ─► ring-buffer Store
+                                            │
+                                            ▼
+                                       Emitter (poll 1s)
+                                            │
+                ┌─────────────────┬──────────┼──────────┐
+                ▼                 ▼          ▼          ▼
+           alert publisher   ack store   event bus   metrics
+           (Alertmanager)   (MemoryStore) (SSE bus)  (Prometheus)
+```
+
+每一個 anomaly 事件都會被 fan-out 到四個目的地（依序，alert publisher 失敗不擋其他三個）：
+
+| Sink | 介面 / 套件 | 預設行為 | 上線後行為 |
+|------|------------|---------|-----------|
+| Alert publisher | `internal/alerting.Publisher` | `NoOpPublisher`（空 URL） | `WebhookPublisher` POST 到 `alert_webhook_url` |
+| Ack store | `internal/mcp/anomaly.AnomalyStore` | `MemoryStore` 容量 1000 | 容量 1000，operator dashboard 用 `ListUnacked` 拉未確認事件 |
+| Event bus | `internal/eventbus.ChannelEventBus` | （獨立 atlas-mcp process 無 bus） | `EventMCPAnomalyDetected` 事件帶 `MCPAnomalyEventPayload` 給 SSE 訂閱者 |
+| Metrics | `cmd/atlas-mcp/server.Metrics` | 既有 | `mcp_anomaly_emitted_total{tenant_id, anomaly_type, severity}` counter 累計 |
+
+**設定（`configs/parameters.json` 的 `mcp_anomaly` 段）**：
+
+| 鍵 | 預設 | 說明 |
+|----|------|------|
+| `alert_webhook_url` | `""` | Alertmanager 風格 webhook URL。空字串 = NoOpPublisher，僅本地有 ack store + metrics。**生產環境強烈建議設為 `http://alertmanager:9093/api/v1/alerts`**。 |
+| `alert_http_timeout_seconds` | `5` | 每次 POST 給 webhook 的 timeout。**設計理由**：避免 Alertmanager 緩慢時拖慢 emitter poll loop。 |
+| `emitter_interval_seconds` | `1` | Emitter 多久 poll 一次 detector 的 ring buffer。**設計理由**：1s 是 operator alerting 可接受的最大 lag；更低 = 換 CPU 換 latency。 |
+| `ack_store_capacity` | `1000` | 記憶體 ack store 容量上限。**設計理由**：1000 筆 ≈ 1Hz burst 持續 17 分鐘，遠超過任何 operator 合理的確認回應時間。 |
+
+**Alertmanager 端的建議 rule**：
+
+```yaml
+# prometheus rules fed by mcp_anomaly_emitted_total
+groups:
+  - name: mcp_anomaly
+    rules:
+      - alert: MCPAnomalyBurst
+        expr: rate(mcp_anomaly_emitted_total{severity="high"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MCP 高嚴重度異常持續觸發"
+          description: "tenant {{ $labels.tenant_id }} 在 5 分鐘內多次觸發 {{ $labels.anomaly_type }}"
+```
+
+**失敗模式與容錯**：
+
+| 失敗 | 行為 | 設計理由 |
+|------|------|---------|
+| Webhook 5xx | 該次 publish 記 `logging.Warn`，但**仍寫入 ack store + 更新 metrics + 發 bus 事件** | 一個慢/壞的 alert sink 不能把整個 pipeline 拖死；operator 仍能在 dashboard 看到事件 |
+| Webhook 連線拒絕 | 同上 | 同上 |
+| Context cancel | emitter goroutine 在下一次 tick 退出 | 對齊 server graceful shutdown |
+| `mcp_anomaly_ack` 收到未知 id | 回 `ErrAnomalyNotFound` (HTTP 400) | 與 T1.5 contract 一致 |
+| 同一個 event 重複 poll | 5 次 `ProcessOnce` 仍只 POST 1 次 | dedup by `TS \| type \| tenant \| tool` |
+
+**SRE 操作 SOP**：
+
+1. **確認 alert 收到**：deploy 後主動製造 burst（送 20 個 audit entry 給同 tenant 同 tool），觀察 `mcp_anomaly_emitted_total` 與 Alertmanager 是否同時更新。
+2. **Ack 驗證**：在 `mcp_anomaly_get_recent` 看到事件後用 `mcp_anomaly_ack` 確認，確認後 `ListUnacked` 應少 1、`ListAll` 仍顯示 1 筆（保留 audit）。
+3. **降級**：若 Alertmanager 完全不可用，把 `alert_webhook_url` 設回 `""` 切回 NoOpPublisher，ack store + metrics 仍可用，operator 不會失明。
+
+**測試覆蓋**：
+
+- 單元測試：`internal/alerting/` 4 個 test、`internal/mcp/anomaly/` 30+ 個 test（含 emitter 6 個、severity mapping、MemoryStore 12 個）
+- 整合測試：`internal/mcp/anomaly/integration_test.go` 三個情境（full pipeline、idempotency、ack list semantics）
+- 全部 `-race` 通過；publisher 失敗不擋其他 sink 是用 `t.Run` 內的失敗注入驗證
+
+### 9.6 升級流程
 
 1. `git pull` + `go build`（本機）或 `docker build`（容器）
 2. graceful shutdown：atlas-mcp 在收到 SIGTERM 後等當前 in-flight tool call 完成（≤ 30s timeout）— Phase 3 強化
