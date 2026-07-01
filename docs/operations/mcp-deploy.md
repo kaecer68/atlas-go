@@ -100,6 +100,37 @@ go test -count=1 -race ./cmd/atlas-mcp/...   # 99 tests, -race 綠
 
 | `ATLAS_MCP_SAMPLING_ENABLED` | 啟用 Sampling (server→client LLM 呼叫) | `false` |
 | `ATLAS_MCP_ELICITATION_ENABLED` | 啟用 Elicitation (server 主動向使用者提問) | `false` |
+| `ATLAS_MCP_ROOTS_ALLOWED` | 逗號分隔 `file://` URI 清單;當 client 未宣告 roots 時作為 fallback allow-list | （未設時無 fallback）|
+| `ATLAS_MCP_ROOTS_READ_SIZE_CAP` | 單次 `mcp_roots_read_file` 最大讀取位元組 | `1048576`（1 MiB）|
+| `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE` | client 端 roots 變動時發出 `security_roots_changed` 事件至 `internal/alerting` Publisher | `true` |
+| `ATLAS_MCP_PARAMS` | 自訂 `parameters.json` 路徑;未設時 fallback 到 `configs/parameters.json` | （未設時使用預設路徑）|
+
+### 4.3 Roots（Phase 4 Direction B）
+
+> **Phase 4 Direction B 新增**：client 透過 MCP `RootsV2` capability 宣告 `file://` 根目錄，atlas-mcp 對其下的檔案提供 **唯讀** 讀取（`mcp_roots_list` + `mcp_roots_read_file`）。
+
+**唯讀邊界（read-only boundary）**：根據 [`internal/apigateway/CONSTITUTION.md` 附錄 D](../../internal/apigateway/CONSTITUTION.md) — Phase 4 B 的 narrow exception，**禁止**對宣告根目錄內的任何檔案進行寫入、修改、刪除、重新命名；任何 write flag 或 query fragment（`?write=`、`#delete`）會被 `handleMCPRootsReadFile` 拒絕並回傳 explicit error。
+
+**啟用方式**：預設 roots 工具 **永遠註冊**（依 client capability 決定是否啟用）。client 必須在 MCP `initialize` 階段宣告 `RootsV2` capability 才能使用 roots 系列工具。
+
+**配置優先級（top wins）**：
+1. 環境變數 `ATLAS_MCP_ROOTS_ALLOWED`、`ATLAS_MCP_ROOTS_READ_SIZE_CAP`、`ATLAS_MCP_ROOTS_ALERT_ON_CHANGE`
+2. `configs/parameters.json` 的 `mcp.roots` section
+3. 內建預設（size cap `1048576`、無 allowed roots、alert on change `true`）
+
+**自訂 params 檔案位置**：透過 `ATLAS_MCP_PARAMS` env var 覆寫；未設時使用 `configs/parameters.json`（相對於 atlas-mcp binary 啟動時的工作目錄）。
+
+**安全特性**：
+- **Path-traversal hardening**：`filepath.Clean` + `filepath.Abs` + `filepath.EvalSymlinks`（symlink escape 防護）— `isUnderRoots` 比對前套用
+- **檔案大小上限**：預設 1 MiB；`info.Size()` 雙重把關 + `io.LimitReader`
+- **常規檔案限制**：僅允許 `Mode().IsRegular()`，拒絕 device/socket/FIFO/symlink-to-non-regular
+- **Audit 強制**：每次讀取寫入 audit log JSONL（含 `path`、`size_bytes`、`ts`、`tenant_id`）
+- **綁定位址**：SSE/HTTP 模式必綁 `127.0.0.1`
+- **Capability gate**：client 未宣告 `RootsV2` 時回傳 explicit error，不走 soft fallback
+
+**告警整合**：當 `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE=true`（預設），server 端的 `RootsListChangedHandler` 會透過 `internal/alerting.Publisher` 發出 `security_roots_changed` 事件（成功為 `SeverityInfo`、失敗為 `SeverityWarning`），下游 Alertmanager 或 webhook 訂閱者可即時收到 roots 變動通知。
+
+**完整規格**：[`docs/specs/agent-mcp-phase4.md` §6.2.B](../../specs/agent-mcp-phase4.md)、[`internal/apigateway/CONSTITUTION.md` 附錄 D](../../internal/apigateway/CONSTITUTION.md)
 
 ### 註冊狀態
 
