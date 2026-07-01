@@ -1407,12 +1407,12 @@ func run(args []string, deps appDeps) error {
 		sigCh := registerShutdownSignal()
 		select {
 		case <-sigCh:
-			log.Printf("received signal, shutting down api server...")
+			logging.Info("main", "shutdown_signal_received", "mode", "api")
 		case err := <-srvErr:
 			sysCancel()
 			return err
 		case <-deps.shutdown:
-			log.Printf("shutdown signal received, shutting down api server...")
+			logging.Info("main", "shutdown_deps_triggered", "mode", "api")
 		}
 
 		sysCancel()
@@ -1423,9 +1423,9 @@ func run(args []string, deps appDeps) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("api server graceful shutdown failed: %v", err)
+			logging.Error("main", "graceful_shutdown_failed", "mode", "api", logging.Err(err))
 		} else {
-			log.Printf("api server stopped")
+			logging.Info("main", "server_stopped", "mode", "api")
 		}
 		return nil
 	}
@@ -1710,7 +1710,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	go func() {
 		log.Printf("dashboard api listening on %s", apiAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("dashboard api server failed: %v", err)
+			logging.Error("main", "server_failed", "mode", "live", logging.Err(err))
 		}
 	}()
 
@@ -1765,7 +1765,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx2); err != nil {
-		log.Printf("dashboard api graceful shutdown failed: %v", err)
+		logging.Error("main", "graceful_shutdown_failed", "mode", "live", logging.Err(err))
 	}
 	if err := o.Stop(); err != nil {
 		return fmt.Errorf("stop live orchestrator: %w", err)
