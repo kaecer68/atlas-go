@@ -14,6 +14,38 @@ import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
 import './modals/modal.js';
 
+const PAGE_SHELL_IDS = ['narrative', 'live', 'pipeline', 'decision', 'portfolio', 'crossmarket', 'evolution_panel', 'industry', 'performance-report', 'strategies'];
+
+async function loadPageShells() {
+  const shellPromises = [
+    import('./page-shells/narrative.js'),
+    import('./page-shells/live.js'),
+    import('./page-shells/pipeline.js'),
+    import('./page-shells/decision.js'),
+    import('./page-shells/portfolio.js'),
+    import('./page-shells/crossmarket.js'),
+    import('./page-shells/evolution_panel.js'),
+    import('./page-shells/industry.js'),
+    import('./page-shells/performance-report.js'),
+    import('./page-shells/strategies.js')
+  ];
+  const results = await Promise.allSettled(shellPromises);
+  results.forEach((r, i) => {
+    if (r.status !== 'fulfilled') {
+      console.warn('[loadPageShells] failed:', PAGE_SHELL_IDS[i], r.reason);
+      return;
+    }
+    const el = document.getElementById('page-' + PAGE_SHELL_IDS[i]);
+    if (el && typeof r.value.template === 'string') el.innerHTML = r.value.template;
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadPageShells);
+} else {
+  loadPageShells();
+}
+
 export { getJSON, escapeHtml };
 
 const pageLoadStatus = {};

@@ -65,240 +65,36 @@
     </div>
 
     <!-- 宏觀敘事 -->
-    <div class="page" id="page-narrative">
-      <div class="grid-2col-md mb-lg">
-        <div class="panel panel-accent-border"><h2 class="text-accent">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
-        <div class="panel panel-danger-border"><h2 class="text-danger">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="two-col-grid mb-lg">
-        <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>季節性分析</h2><div id="narrativeSeasonal" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="two-col-grid">
-        <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>投資模型</h2><div id="narrativeModels" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>因果模板庫</h2><div id="narrativeTemplates" class="empty loading">載入中…</div></div>
-      </div>
-    </div>
+    <div class="page" id="page-narrative" data-page-src="narrative"></div>
 
     <!-- 投資風險總覽 -->
-    <div class="page" id="page-live">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁呈現<strong>風控層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
-        若風控長阻擋率高，請檢查【宏觀敘事】的外資出逃指數是否飆升（紅燈）；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
-      </details>
-      <div class="panel wide mb-sm panel-padded-sm"><h2 class="mb-4">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading p-4-v">載入中…</div></div>
-      <div class="live-grid">
-        <div class="panel panel--compact"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
-        <div class="panel panel--compact"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="panel wide hidden" id="riskCardsPanel">
-        <h2>風險指標</h2>
-        <div id="riskCards" class="kpi-grid"></div>
-        <div id="riskPositionConcentration"></div>
-        <div id="riskSectorDistribution"></div>
-      </div>
-      <div class="panel wide hidden" id="riskCalibrationPanel">
-        <h2>自主校準</h2>
-        <div id="riskCalibration" class="empty loading">載入中…</div>
-      </div>
-      <div class="panel wide hidden" id="liveRiskCommentaryPanel">
-        <h2>🧠 風控長評語（Risk Commentary）</h2>
-        <div id="liveRiskCommentary" class="empty loading">載入中…</div>
-      </div>
-    </div>
+    <div class="page" id="page-live" data-page-src="live"></div>
 
     <!-- 投資管線 -->
-    <div class="page" id="page-pipeline">
-      <div class="workflow mb-sm">
-        <div class="step">AI 推薦</div><span class="arrow">→</span>
-        <div class="step clickable" id="workflowScreening" title="點擊顯示/隱藏被篩選層排除的標的">篩選層</div><span class="arrow">→</span>
-        <div class="step">控制層</div><span class="arrow">→</span>
-        <div class="step">模擬投組</div>
-      </div>
-      <button class="filter-toggle" id="filterToggle" title="點擊展開/收合進階篩選">
-        <span class="icon">⚙</span> 進階篩選
-        <span id="filterBadge"></span>
-      </button>
-      <div class="filter-panel" id="filterPanel">
-        <div class="filter-row">
-          <div class="filter-group">
-            <label>P/E 比（最小～最大）</label>
-            <div class="flex-gap-6">
-              <input type="number" id="peMin" placeholder="0" min="0" step="0.1" aria-label="P/E 最小值">
-              <span class="text-xs-muted">～</span>
-              <input type="number" id="peMax" placeholder="無上限" min="0" step="0.1" aria-label="P/E 最大值">
-            </div>
-          </div>
-          <div class="filter-group">
-            <label>P/B 比（最小～最大）</label>
-            <div class="flex-gap-6">
-              <input type="number" id="pbMin" placeholder="0" min="0" step="0.1" aria-label="P/B 最小值">
-              <span class="text-xs-muted">～</span>
-              <input type="number" id="pbMax" placeholder="無上限" min="0" step="0.1" aria-label="P/B 最大值">
-            </div>
-          </div>
-          <div class="filter-group">
-            <label>股息率（最小～最大）%</label>
-            <div class="flex-gap-6">
-              <input type="number" id="dyMin" placeholder="0" min="0" step="0.1" aria-label="股息率最小值">
-              <span class="text-xs-muted">～</span>
-              <input type="number" id="dyMax" placeholder="無上限" min="0" step="0.1" aria-label="股息率最大值">
-            </div>
-          </div>
-          <div class="filter-group">
-            <label>報酬率範圍 %</label>
-            <div class="flex-gap-6">
-              <input type="number" id="retMin" placeholder="-100" step="0.1" aria-label="報酬率最小值">
-              <span class="text-xs-muted">～</span>
-              <input type="number" id="retMax" placeholder="100" step="0.1" aria-label="報酬率最大值">
-            </div>
-          </div>
-        </div>
-        <div class="filter-actions">
-          <button class="primary">套用篩選</button>
-          <button>清除條件</button>
-          <span id="filterResultCount" class="ml-auto text-xs-muted"></span>
-        </div>
-      </div>
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
-        若勾選「顯示全部被過濾項目」，<span class="text-up">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
-        <br><span class="text-muted">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
-      </details>
-      <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
-    </div>
+    <div class="page" id="page-pipeline" data-page-src="pipeline"></div>
 
     <!-- 決策鏈 -->
-    <div class="page" id="page-decision">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁將 Atlas 的完整決策過程攤開在陽光下，從<strong>宏觀環境 → 行業趨勢 → 個股篩選 → 控制決策 → 實際績效</strong>一路追蹤。
-        每一層的參數、條件與結果都必須可被稽核。若推薦虧損，你可以在這裡直接看到是哪一層的判斷出了問題。
-      </details>
-      <div class="panel wide mb-md"><h2>AI 自我進化狀態</h2><div id="aiEvolution" class="empty loading">載入中…</div></div>
-      <div id="decisionChain" class="empty loading">載入中…</div>
-    </div>
+    <div class="page" id="page-decision" data-page-src="decision"></div>
 
     <!-- 決策追蹤 -->
     <!-- 組合持倉 -->
-    <div id="page-portfolio" class="page">
-      <h1 id="portfolioPageTitle">📂 組合持倉</h1>
-      <div class="kpi-grid" id="portfolioKPIs"></div>
-      <div class="panel wide hidden" id="equityCurvePanel">
-        <h2>淨值趨勢</h2>
-        <canvas id="equityChart" height="200"></canvas>
-      </div>
-      <div class="panel wide" id="positionsPanel">
-        <h2>持倉明細</h2>
-        <div id="positionsTable"></div>
-      </div>
-      <div class="panel wide" id="tradeHistoryPanel">
-        <h2>交易時間軸</h2>
-        <div id="tradeHistoryContainer"></div>
-      </div>
-      <div class="panel wide" id="pnlAttributionPanel">
-        <h2>損益歸因 (PnL Attribution)</h2>
-        <div id="pnlAttribution" class="empty loading">載入中…</div>
-      </div>
-      <div class="panel wide"><h2>基準比較</h2><div id="benchmarkComparison" class="loading">載入中…</div></div>
-<div class="panel wide"><h2>風控閘道</h2><div id="riskGatePanel" class="loading">載入中…</div></div>
-      <div class="panel wide"><h2>風險分析</h2><div id="riskPanel" class="loading">載入中…</div></div>
-      <details class="help-details">
-        <summary><strong>📖 如何解讀本頁</strong></summary>
-        <p><strong>投組稅前淨值</strong> = 可用現金 + 所有持倉市值（未扣除稅負）</p>
-        <p><strong>投組稅後淨值</strong> = 稅前淨值 - 累積稅負（已實現獲利所產生的稅負）</p>
-        <p><strong>淨值趨勢</strong> = 每日回測的投組總值變化曲線（含稅前與稅後）</p>
-        <p>損益為未實現損益，實際損益需待部位平倉後確認。</p>
-        <p class="text-muted text-sm">資料來源：live state store（data/state/live/）。若無持倉資料，代表尚未執行模擬或所有部位已平倉。</p>
-      </details>
-    </div>
+    <div id="page-portfolio" class="page" data-page-src="portfolio"></div>
 
     <!-- AI 觀測台 -->
     <!-- 模擬交易 -->
     <!-- 最新回測 -->
     <!-- 控制與稽核 -->
     <!-- 美台連動監控 -->
-    <div class="page" id="page-crossmarket">
-      <div class="page-header">
-        <p class="page-desc">美股對台股傳導通道即時觀測 — 指數、科技股、波動率、相關性、危機信號</p>
-      </div>
-      <div class="section">
-        <h3>🚨 危機信號</h3>
-        <div class="panel" id="cm-crisis"></div>
-      </div>
-      <div class="section mt-16">
-        <h3>📊 美國主要指數</h3>
-        <div class="kpi-grid" id="cm-us-indices"></div>
-      </div>
-      <div class="section mt-16">
-        <h3>💻 半導體與科技股</h3>
-        <div class="kpi-grid" id="cm-tech-stocks"></div>
-      </div>
-      <div class="section mt-16">
-        <h3>🌐 跨市場宏觀指標</h3>
-        <div class="kpi-grid" id="cm-macro"></div>
-      </div>
-      <div class="section mt-16">
-        <h3>📈 動態相關性</h3>
-        <div class="panel" id="cm-correlation"></div>
-      </div>
-    </div>
-    <div class="page" id="page-evolution_panel">
-      <div class="panel wide mb-12">
-        <div class="evo-views-row" id="evolutionViews">
-           <span class="evo-views-label">視覺圖：</span>
-           <button class="view-btn active" id="evView-compact">總覽儀表板</button>
-           </div>
-      </div>
-      <div id="evolutionCatContent" class="hidden mt-12"></div>
-      <div id="evolutionContent" class="empty loading">載入中…</div>
-      <div class="panel wide hidden mt-12" id="evolutionEquityCurvePanel">
-         <h3>權益曲線</h3>
-         <canvas id="evolutionEquityChart" class="w-full"></canvas>
-       </div>
-    </div>
+    <div class="page" id="page-crossmarket" data-page-src="crossmarket"></div>
+    <div class="page" id="page-evolution_panel" data-page-src="evolution_panel"></div>
     <!-- 信息通道 -->
-    <div class="page" id="page-industry">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁呈現 Atlas 對台灣產業的<strong>多維度分析</strong>，包含產業分類樹、週期定位、供應鏈連動與季節性模式。
-        點擊產業卡片可查看詳細的週期羅盤與衝擊傳導分析。
-      </details>
-      <div class="two-col-grid">
-        <div class="panel"><div class="panel-header"><h2>產業地圖</h2><div class="panel-header-actions"><span id="sectorLastUpdated" class="last-updated" title="最後更新時間">--</span><button type="button" id="sectorRefreshBtn" class="refresh-btn" title="手動刷新" aria-label="手動刷新">↻</button></div></div><div id="industryMap" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" data-open-modal="cycleLegend" title="週期燈號計算說明">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="panel wide mt-16">
-        <h2>供應鏈網路圖</h2>
-        <div id="industryGraph" class="empty loading graph-stub">載入中…</div>
-      </div>
-      <div class="panel mt-16"><h2>衝擊模擬</h2>
-        <div class="shock-form-row">
-          <select id="shockSource" class="shock-select"><option value="">選擇來源產業</option></select>
-          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" class="shock-input shock-input--wide">
-          <input type="number" id="shockDepth" value="3" min="1" max="5" class="shock-input shock-input--narrow" title="傳導深度">
-          <button id="btnRunShockSim" class="shock-button">▶ 執行模擬</button>
-        </div>
-        <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
-      </div>
-    </div>
+    <div class="page" id="page-industry" data-page-src="industry"></div>
 
     <!-- 人機協同 -->
     <!-- 指標監控 -->
-    <div class="page" id="page-performance-report">
-      <div id="performanceReportContainer"></div>
-    </div>
+    <div class="page" id="page-performance-report" data-page-src="performance-report"></div>
 
-    <div class="page" id="page-strategies">
-  <details class="help-details"><summary><strong>💡 什麼是投資心法庫？</strong></summary>
-    本頁是 <strong>Atlas 5 層框架</strong>（L1~L5）的投資心法看板，搭配
-    <strong>4 核心短線指標</strong>（外資現貨 / TSM ADR / NVDA / DXY），
-    作為快速掌握投資策略的入口。
-  </details>
-  <div id="strategiesContent" class="empty loading">載入中…</div>
-</div>
+    <div class="page" id="page-strategies" data-page-src="strategies"></div>
 
     </div>
 
