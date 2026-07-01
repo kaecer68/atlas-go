@@ -16,12 +16,13 @@ type AuditEntryV2 struct {
 	SchemaVersion int    `json:"schema_version,omitempty"`
 	TS            string `json:"ts"`
 	SessionID     string `json:"session_id,omitempty"`
+	TenantID      string `json:"tenant_id,omitempty"`
 	AgentID       string `json:"agent_id,omitempty"`
 	Tool          string `json:"tool"`
 	ArgsHash      string `json:"args_hash,omitempty"`
 	Status        string `json:"status"`
 	LatencyMS     int64  `json:"latency_ms"`
-	DurationMS    int64  `json:"duration_ms,omitempty"` // v1 backward compatibility
+	DurationMS    int64  `json:"duration_ms,omitempty"`
 	Transport     string `json:"transport,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
