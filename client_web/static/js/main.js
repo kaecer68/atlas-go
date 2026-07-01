@@ -31,8 +31,10 @@ export function switchPage(id, silent) {
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
   const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
   if (btn) btn.classList.add('active');
-  const titles = { narrative: '宏觀敘事',
+  const titles = { home: '總覽',
+    narrative: '宏觀敘事', live: '風險總覽',
     pipeline: '投資管線', decision: '決策鏈', portfolio: '組合持倉',
+    performance_report: '績效報告',
     evolution_panel: '演化透視', strategies: '投資心法', crossmarket: '美台連動監控'};
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -92,6 +94,7 @@ var modules = {};
 async function loadModules() {
   if (modules._loaded) return modules;
   var imports = [
+    import('./pages/home.js'),
     import('./pages/dashboard.js'),
     import('./pages/risk.js'),
     import('./pages/narrative.js'),
@@ -105,7 +108,7 @@ async function loadModules() {
     import('./pages/crossmarket.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'evolution_panel', 'decision', 'strategies', 'crossmarket'];
+  var keys = ['home', 'dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'evolution_panel', 'decision', 'strategies', 'crossmarket'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -292,6 +295,13 @@ async function loadPageData(pageId) {
   
   
   
+  else if (pageId === 'home') {
+    try {
+      if (m.home && m.home.renderHomePage) {
+        await m.home.renderHomePage(document.getElementById('page-home'));
+      }
+    } catch(e) { console.error('[home] load failed:', e); }
+  }
   else if (pageId === 'live') {
     try {
       var liveResults = await Promise.all([
@@ -309,7 +319,13 @@ async function loadPageData(pageId) {
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
       if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
       if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(liveResults[9]);
-      if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
+      try {
+        if (m.risk.renderRiskCommentary) await m.risk.renderRiskCommentary();
+      } catch (err) {
+        var rc = document.getElementById('risk-commentary');
+        if (rc) rc.innerHTML = '<div class="empty-state"><h4>風險評論暫時無法載入</h4><p>資料源可能正在更新，請稍後重試。</p></div>';
+        console.warn('[live] risk commentary unavailable:', err.message || err);
+      }
       if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
       if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
     } catch(e) { console.error(e); }
@@ -411,14 +427,16 @@ if (typeof window !== 'undefined') {
     .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
     .replace(/\/$/, '');
   if (!initialPath) {
-    history.replaceState({page: 'evolution_panel'}, '', basePath + '/evolution_panel');
-    switchPage('evolution_panel', true);
+    history.replaceState({page: 'home'}, '', basePath + '/home');
+    switchPage('home', true);
+  } else if (initialPath === 'home') {
+    switchPage('home', true);
   }
   // Redirect old hash URLs to clean URLs
   if (window.location.hash && window.location.hash.startsWith('#page-')) {
     var pageId = window.location.hash.replace('#page-', '');
     window.location.replace(basePath + '/' + pageId);
-  } else if (initialPath && initialPath !== 'evolution_panel') {
+  } else if (initialPath && initialPath !== 'home' && initialPath !== 'evolution_panel') {
     history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
     switchPage(initialPath, true);
   } else if (initialPath === 'evolution_panel') {

@@ -62,6 +62,19 @@
   --font-medium: 500;
   --font-semibold: 600;
   --font-bold: 700;
+
+  /* Editorial design tokens — 零售投資人介面 */
+  --editorial-ink: #0F172A;
+  --editorial-ink-muted: #475569;
+  --editorial-paper: #F5F3EF;
+  --editorial-paper-elevated: #FFFFFF;
+  --editorial-amber: #D97706;
+  --editorial-amber-soft: #FEF3C7;
+  --editorial-border: rgba(15, 23, 42, 0.08);
+  --editorial-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.05);
+  --editorial-radius: 12px;
+  --editorial-radius-sm: 8px;
+  --editorial-serif: 'Noto Serif TC', 'Source Han Serif TC', 'Songti SC', serif;
 }
 :root[data-theme="light"] {
   --bg: #f5f5f5; --panel: #ffffff; --border: #e0e0e0; --text: #1a1a1a; --muted: #666666;
