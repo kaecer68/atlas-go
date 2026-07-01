@@ -1404,7 +1404,33 @@ func run(args []string, deps appDeps) error {
 			}
 		}()
 
+		// Startup deadline: if the server goroutine hasn't reported an error
+		// within 10 seconds, assume startup succeeded and proceed to the
+		// graceful shutdown select loop. If srvErr fires during this window,
+		// treat it as a startup failure.
+		startupTimer := time.NewTimer(10 * time.Second)
 		sigCh := registerShutdownSignal()
+		select {
+		case <-startupTimer.C:
+			// Server started successfully — proceed to long-running shutdown loop
+			logging.Info("main", "server_startup_ok", "addr", *apiAddr)
+		case err := <-srvErr:
+			startupTimer.Stop()
+			sysCancel()
+			return err
+		case <-sigCh:
+			startupTimer.Stop()
+			logging.Info("main", "shutdown_during_startup", "addr", *apiAddr)
+			sysCancel()
+			return nil
+		case <-deps.shutdown:
+			startupTimer.Stop()
+			logging.Info("main", "deps_shutdown_during_startup", "addr", *apiAddr)
+			sysCancel()
+			return nil
+		}
+
+		// Server is running — enter long-running graceful shutdown select
 		select {
 		case <-sigCh:
 			logging.Info("main", "shutdown_signal_received", "mode", "api")
