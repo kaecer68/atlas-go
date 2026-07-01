@@ -57,6 +57,7 @@
 | `ATLAS_MCP_ADMIN_ADDR` | MCP admin HTTP API bind 位址（強制 127.0.0.1，server.go 檢查 prefix） | `127.0.0.1:9090` |
 | `ATLAS_MCP_METRICS_ADDR` | MCP Prometheus metrics HTTP API bind 位址（強制 127.0.0.1，獨立於 transport port） | 空（未設定時停用） |
 | `ATLAS_MCP_ROOTS_ALLOWED` | MCP 客戶端宣告的 roots 路徑白名單（CSV 格式，Phase 4 B 引入） | 空（不限制） |
+| `ATLAS_MCP_PARAMS` | MCP 設定檔路徑（讀取 `mcp.roots` section，Phase 4 B 引入） | `configs/parameters.json` |
 
 ---
 
