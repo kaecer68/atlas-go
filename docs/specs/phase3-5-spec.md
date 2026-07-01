@@ -42,9 +42,9 @@
 
 | Endpoint | 檔案 | 顯示位置 |
 |----------|------|---------|
-| `GET /api/admin/live/state` | `internal/admin/live_state.go` | 已於 admin Web 顯示,但獨立 section |
-| `GET /api/admin/live/metrics` | `internal/admin/live_metrics.go` | 獨立 panel |
-| `GET /api/admin/gateway/health` | `internal/apigateway/admin_handler.go` | 另一個 panel |
+| `GET /api/admin/live/state` | `internal/admin/live_state.go` ⚠️ | 已於 admin Web 顯示,但獨立 section |
+| `GET /api/admin/live/metrics` | `internal/admin/live_metrics.go` ⚠️ | 獨立 panel |
+| `GET /api/admin/gateway/health` | `internal/apigateway/admin_handler.go` ⚠️ | 另一個 panel |
 
 admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,違反 `.planning/phase3-4-reassessment.md` §4.1 「live deployment 應是整體可觀測」。也讓 on-call 一次看到 deployment 全貌的成本變高。
 
@@ -55,7 +55,7 @@ admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,�
 #### 3.1.3 設計方案
 
 **後端**:
-- 新檔 `internal/admin/live_deployment_dashboard.go`
+- 新檔 `internal/adminapi/deployment/dashboard.go`（PR #852 實際位置；2026-06 adminapi/live 子套件拆分後不在 `internal/admin/`）
 - 新 struct `LiveDeploymentDashboard` 聚合:
   ```go
   type LiveDeploymentDashboard struct {
@@ -70,7 +70,7 @@ admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,�
 - 既有 3 endpoint 保留(向下相容 dashboard 模組化區塊)
 
 **前端**:
-- 新檔 `admin_web/static/js/pages/live-deployment.js`
+- 新檔 `shared_web/static/js/components/deployment-dashboard.js`（PR #852 實際位置；2026-06 frontend 三拆 `admin_web`/`client_web`/`shared_web` 後已不在 `admin_web/`）
 - 整合進 `main.js` 的 pageId 路由(取代 live-ops 或新增 live-deployment tab)
 - 5 個 section:Data source health / Gateway throughput / Live engine state / Recent metrics / Last action log
 - 30s polling,Refresh 按鈕
@@ -388,7 +388,7 @@ M2 ──→ event_bridge SQL-driven
 | Macro data stale 時 macro flow 拒絕 → portfolio 永遠不 rebalance | 中 | 預設保留「若 macro data 超過 7 天 stale,允許以 default RiskLevel=balanced 跑一次」fallback |
 | Forecast bridge 持續失敗 → 大量 warn log | 中 | Circuit breaker(見 3.4.4),防 log spam 也防垃圾 trade signal |
 | M2 event_bridge SQL-driven:慢於 hardcoded mapping | 低 | 加 index(`narrative_taxonomy_factor_map.l1_l2_idx`),SLA 設 50ms p95 |
-| M1 dashboard 30s polling 對 gateway 壓力 | 低 | 共用既有 `internal/admin/live_metrics.go` 的 polling 機制(若存在);若不存在,加 simple cache TTL 5s |
+| M1 dashboard 30s polling 對 gateway 壓力 | 低 | 共用既有 polling 機制(若 `internal/admin/live_metrics.go` 存在;若不存在,加 simple cache TTL 5s)— **⚠️ 待確認實際位置**,`internal/admin/` 2026-06 後已不存在 |
 | 4 個 PR 跨 3 週 → merge conflict 機率 | 中 | 各 M 改檔不重疊;但 `daily_pipeline.go` 同時被 M3 + M4 改,須協調整合 commit |
 
 ---
@@ -431,14 +431,16 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 ### 7.2 來源程式碼(已存在,本 spec 引用不修改)
 
-- `internal/narrative/event.go`(M2 改)
-- `internal/macro/assessment/macro_assessment.go:158` `MacroRiskAssessmentEngine.determineRiskLevel`(M3 引用)
-- `internal/orchestrator/daily_pipeline.go`(M3/M4 改)
-- `internal/forecast/engine.go`(M4 引用,不修改)
-- `internal/strategy/directional_trade_layer.go`(M4 改)
-- `internal/admin/live_state.go` / `live_metrics.go`(M1 引用,沿用)
-- `internal/apigateway/admin_handler.go`(M1 引用,沿用)
-- `internal/factor/event_bridge.go`(M2 改 hardcoded → SQL)
+> **⚠ 2026-07-02 路徑稽核校正（Oracle 二階稽核後）**：以下 8 條目中 6 條目路徑經 deep-verify 報告 + Oracle 二階稽核驗證修正，2 條目（rows 7-8）原標記「沿用 ✓」為誤判（`internal/admin/` 與 `internal/apigateway/admin_handler.go` 均已不存在，Oracle P0-1）。校正後路徑與現況落差詳見 §7.5 稽核報告。
+
+- `internal/narrative/types.go`(M2 改: 在 `NarrativeEvent` struct 加 `TaxonomyL1`/`TaxonomyL2` 欄位)
+- `internal/narrative/macro_assessment.go:60` `MacroRiskAssessmentEngine.Assess()`（M3 引用；`determineRiskLevel` 為內部 method，line 158）
+- `internal/orchestrator/executor_pipeline.go`(M3/M4 改: hook 插在 `inferRegime` 與 `collectRecommendations` 之間，line 76-77)
+- `internal/forecast/engine.go`(**尚未存在**, M4 須從零建立，建議位置 `internal/forecast_bridge/`)
+- `internal/strategy/directional_trade_layer.go`(**尚未存在**, M4 須從零建立)
+- `internal/admin/live_state.go` / `live_metrics.go`(M1 引用,**沿用聲明錯誤**) ⚠️ **路徑不存在**：`internal/admin/` 已於 2026-06 adminapi/live 拆分後不存在，疑隨之搬移，待確認實際位置
+- `internal/apigateway/admin_handler.go`(M1 引用,**沿用聲明錯誤**) ⚠️ **路徑不存在**：`internal/apigateway/` 內無 `admin_handler.go`，待確認實際位置
+- `internal/portfolio/factor_weight_engine.go:288-357`(M2 改: hardcoded `switch event.Theme` → SQL-driven mapping；**注意**：原 spec 假設 key 是 L1/L2 taxonomy，實作現況是 Theme string 硬切，重構前需先定義 taxonomy 並設計向下相容路徑)
 
 ### 7.3 提案 / 議題
 
@@ -456,4 +458,39 @@ Phase 3.5 全部 4 個 M merge 後,將:
 1. 建立 `docs/operations/phase3-5-runbook.md`(對齊 L2.4 runbook 模式) — 見同目錄 stub 檔案
 2. 更新 `.planning/phase3-4-reassessment.md` §9 Q&A 標示「Phase 3.5 ship」
 3. 重新評估 Phase 4.A/B 優先順序(基於實際 M1-M4 結果)
+
+### 7.5 2026-07-02 路徑稽核報告
+
+> **觸發**：發現原 spec §7.2 引用的 8 個檔案路徑中，僅 2 個仍正確。其餘 6 個路徑在前述各節校正時已替換為實際位置。
+
+**方法**：deep-verify 子代理（subagent_type=general, 5m1s）使用：
+- `gitnexus_query` / `gitnexus_context`：call graph 與 execution flow 跨檔搜尋
+- `codegraph_explore` / `codebase-memory_explore`：檔案內容 + 鄰近 symbol 一次取回
+- 逐檔 `read`：對 gitnexus 回傳的關鍵檔案做 line-numbered source 確認
+
+**全報告**：`.planning/phase3-5-verify-report.md` (203 行，gitignored)
+
+**Cross-M 摘要**：
+
+| M | Spec 涵蓋率 | Ship 狀態 | 主要差距 |
+|---|---|---|---|
+| M1 deployment-gateway | 100% (logic) / 0% (filenames) | ✅ PR #852 (2026-06-30) | §3.1.3 檔名全錯（已校正：adminapi 子套件 + shared_web 三拆）；§3.1.1 既有 endpoint 對應檔案 (`live_state.go`/`live_metrics.go`/`admin_handler.go`) 也已不存在（待確認實際位置） |
+| M2 narrative-taxonomy | ~20% (adjacent infra) | ❌ 未 ship | 3 個檔名全錯；hardcoded 切換表實在 `factor_weight_engine.go:288-357`（key 是 Theme 非 L1/L2） |
+| M3 macro-flow | ~40% (assessment + sector rotation) | ❌ 未 ship | `daily_pipeline.go` 不存在，hook 點在 `executor_pipeline.go:76-77` |
+| M4 forecast-bridge | ~15% (JANUS/swarm analog) | ❌ 未 ship | 4 個目錄/檔全缺；最近 analog 為 `swarmPlugin.ProcessRecommendations` ±5 nudge |
+
+**校正動作**：
+- §3.1.3 校正 M1 後端/前端檔名 2 處
+- §7.2 校正 8 條目 + 加 audit intro 標註
+- 本節（§7.5）新增稽核報告
+
+**未校正**（保留為後續 work）：
+- §3.1.1 table（lines 44-47）— 既有 endpoint 對應檔案路徑（`live_state.go`/`live_metrics.go`/`admin_handler.go`）已不存在，標註 ⚠️ 待實際位置確認
+- §5 風險表 line 391 — `internal/admin/live_metrics.go` 路徑待確認
+- §3.2.3 M2 設計方案假設 `internal/factor/event_bridge.go` 存在 — 待 M2 啟動時重寫
+- §3.3.3 M3 設計方案假設 `internal/orchestrator/daily_pipeline.go` + `internal/macroflow/` — 待 M3 啟動時重寫
+- §3.4.3 M4 設計方案假設 `internal/forecast/` + `internal/forecast_bridge/` + `internal/strategy/directional_trade_layer.go` — 待 M4 啟動時重寫
+- §4 依賴圖時程表與 §5 風險表的檔名引用 — 待各 M 啟動時同步校正
+
+**Oracle 二階稽核 P0 補正紀錄**：2026-07-02 Oracle audit（session bg_fda7734e, 3m10s）對初版 PR 提出 NEEDS-REVISION，原標記 rows 7-8 為「沿用 ✓」實為誤判。PR 補上 6 處標註、修正 intro 措辭、擴充 §7.5 摘要與未校正清單。所有 P0/P1 修正完成後即可 merge。
 4. 若 sortino 改善達標(> 5%),考慮 Promotion 路線
