@@ -509,6 +509,62 @@ echo "✅ os.Getenv 檢查通過"
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
 | v1.0 | 2026-05-13 | 初版，經 Oracle 審核後發布 |
+| v1.1 | 2026-07-01 | 新增附錄 D：Roots Sanctioned Exception（Phase 4 Direction B — MCP Protocol Extensions） |
+
+## 附錄 D：Roots Sanctioned Exception（MCP Server 客戶端宣告檔案根目錄之唯讀例外）
+
+> **定位**：本附錄記錄對「第一條：統一入口原則」之狹義、有限度例外。`atlas-mcp` server 透過 MCP RootsV2 capability 接收 client 宣告的 `file://` 根目錄，並對其下的檔案提供 read-only 讀取（`mcp_roots_read_file` 與 `mcp_roots_list`）。此例外不同於「對外資料源整合」——它是用戶本地端工作目錄的直觀代理（intuitive proxy），不屬於 atlas-go 之資料源治理範疇。
+
+### D.1 例外之嚴格條件
+
+下列條件**必須同時滿足**，違反任一項即視同違反第一條：
+
+1. **方向性**：僅允許 client → server 的 read-only 操作。任何寫入、修改、刪除、重新命名、副本外洩（透過 URL/Path 注入）皆在禁止之列。
+2. **路徑遍歷硬化（Path Traversal Hardening）**：
+   - `filepath.Clean` 必須在比對前套用
+   - `filepath.Abs` 必須解析為絕對路徑
+   - **`filepath.EvalSymlinks` 必須在 prefix check 之前呼叫**，以防止 symlink 逃逸出宣告的根目錄（attacker 在宣告根目錄內建立指向 `/etc/passwd` 的 symlink 即構成逃逸）
+3. **檔案大小上限**：預設 1 MiB；超過 cap 一律拒絕（`io.LimitReader` + `info.Size()` 雙重把關）。
+4. **常規檔案限制**：僅允許 regular file（`Mode().IsRegular()`），拒絕 device、socket、FIFO、symlink-to-non-regular。
+5. **Audit 強制**：每一次讀取都必須寫入 audit log（JSONL），欄位包含 `path`、`size_bytes`、`ts`、`tenant_id`，事後可追溯。
+6. **綁定位址**：SSE/HTTP 模式必須 bind `127.0.0.1`（不對外暴露），依循既有部署規範（`docs/operations/mcp-deploy.md`）。
+7. **Capability 缺失處理**：client 未宣告 `RootsV2` capability 時，回傳 **explicit error**（`errors.New("mcp_roots_list: client does not support roots")`）而非 soft fallback（與 `mcp_sample_llm`、`mcp_elicit_user` 之處理一致）。
+
+### D.2 適用工具
+
+| 工具 | 說明 | Capability Gate |
+|------|------|-----------------|
+| `mcp_roots_list` | 列出 client 宣告的 `file://` 根目錄 | `RootsV2` |
+| `mcp_roots_read_file` | 讀取宣告根目錄下之檔案（唯讀） | `RootsV2` |
+
+### D.3 預設值與環境旗標
+
+| 環境變數 | 用途 | 預設 |
+|----------|------|------|
+| `ATLAS_MCP_ROOTS_ENABLED` | 啟用 roots 工具（Phase 4 B 已 ship，預設跟隨 server 註冊流程） | `true`（與 RootsConfig 並用） |
+| `RootsConfig.ReadSizeCap` | 單次 read size cap（bytes） | `1048576`（1 MiB） |
+| `RootsConfig.AllowedRoots` | Client 未宣告 roots 時的靜態 allow-list fallback | `[]` |
+
+### D.4 變更紀律與修訂程序
+
+本例外之任何擴張（新增 write capability、放寬 size cap、放棄 `EvalSymlinks`、新增路徑 glob 支援等）**必須**：
+
+1. 走本憲法第六條（憲法優先原則）之修訂流程（見 附錄 B：違規處理流程）
+2. 提交 PR 並於 description 明列「擴張附錄 D 例外邊界」字樣
+3. 經 Atlas 數據源治理委員會（或同等架構審查會議）簽核
+4. 在「附錄 C：修訂歷史」新增一行
+
+### D.5 對應的 PR / 變更
+
+| PR / Branch | 日期 | 變更摘要 |
+|-------------|------|---------|
+| `feat/mcp-protoext`（Phase 4 Direction B） | 2026-07-01 | 新增 `mcp_roots_list` + `mcp_roots_read_file` + 本附錄 D；Oracle 審核發現 P0 後追加 `EvalSymlinks` 對稱防護與 capability-miss explicit error |
+
+### D.6 後續追蹤（Follow-up）
+
+- [ ] **架構審查簽核**：本附錄 D 為初始草擬版本，須於下次 Atlas 數據源治理委員會會議提交正式簽核。會議結論將以本附錄之 v1.2 條目記錄。
+- [ ] **Audit retention 政策**：目前 audit log 預設無 fsync；長期保留（≥ 90 天）政策待制定。
+- [ ] **Symlink escape regression test**：`TestMCPRootsReadFile_SymlinkEscape_Rejected` 已於 PR #B（Phase 4 B）新增；後續需在 CI 增加 fuzz 測試（隨機路徑）。
 
 ---
 
