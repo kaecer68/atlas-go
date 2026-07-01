@@ -187,6 +187,7 @@ check_jsonl_extension() {
   local found_any=0
 
   # Check: all JSONL content uses .jsonl extension
+  # T-401 perf: prune high-volume subdirs (mutation briefs accumulate hundreds/day)
   while IFS= read -r file; do
     local fname
     fname=$(basename "$file")
@@ -209,7 +210,17 @@ check_jsonl_extension() {
         fi
       fi
     fi
-  done < <(find data/ -type f \( -name "*.json" -o -name "*.jsonl" \) 2>/dev/null | sort)
+  done < <(find data/ \
+      \( -path 'data/state/sessions' -o \
+         -path 'data/state/mutation-briefs' -o \
+         -path 'data/state/parameter-snapshots' -o \
+         -path 'data/state/sector_index' -o \
+         -path 'data/state/baseline_reports' -o \
+         -path 'data/state/backtest_results' -o \
+         -path 'data/state/live/state' -o \
+         -path 'data/state/experiments/archive' -o \
+         -path 'data/state-archive' \) -prune -o \
+      -type f \( -name "*.json" -o -name "*.jsonl" \) -print 2>/dev/null | sort)
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "所有 JSONL 檔案使用正確的 .jsonl 副檔名"
@@ -331,6 +342,27 @@ main() {
       printf "${YELLOW}發現 %d 處警告${NC} (暫不阻擋 CI)\n" "$WARNINGS"
     else
       printf "${GREEN}所有檢查通過${NC}\n"
+    fi
+  fi
+
+  # T-402: per-check breakdown so the user sees the unique-violation count
+  # (matching the JSON_VIOLATIONS array length) instead of a single rolled-up
+  # number. The JSON output above already exposes the per-file detail; this
+  # gives the text output the same fidelity.
+  if [ "$OUTPUT_MODE" != "json" ] && [ -n "${JSON_VIOLATIONS:-}" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      local r1_count r2_count r4_count r6_count r8_count
+      r1_count=$(echo "$JSON_VIOLATIONS" | jq '[.[] | select(.check=="state_flat_file" or .check=="kebab_case_dir")] | length' 2>/dev/null || echo 0)
+      r2_count=$(echo "$JSON_VIOLATIONS" | jq '[.[] | select(.check=="daily_no_descriptor" or .check=="daily_nonstandard")] | length' 2>/dev/null || echo 0)
+      r4_count=$(echo "$JSON_VIOLATIONS" | jq '[.[] | select(.check=="jsonl_extension")] | length' 2>/dev/null || echo 0)
+      r6_count=$(echo "$JSON_VIOLATIONS" | jq '[.[] | select(.check=="backup_in_main")] | length' 2>/dev/null || echo 0)
+      r8_count=$(echo "$JSON_VIOLATIONS" | jq '[.[] | select(.check=="kebab_case_dir")] | length' 2>/dev/null || echo 0)
+      printf "\n各檢查違規統計（unique files）:\n"
+      printf "  R1 平面檔遷移: %s\n" "$r1_count"
+      printf "  R2 每日檔格式:  %s\n" "$r2_count"
+      printf "  R4 JSONL 副檔名: %s\n" "$r4_count"
+      printf "  R6 備份檔位置:  %s\n" "$r6_count"
+      printf "  R8 目錄 kebab-case: %s\n" "$r8_count"
     fi
   fi
 

@@ -1736,7 +1736,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 	go func() {
 		log.Printf("dashboard api listening on %s", apiAddr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := deps.listenAndServe(srv); err != nil && err != http.ErrServerClosed {
 			logging.Error("main", "server_failed", "mode", "live", logging.Err(err))
 		}
 	}()

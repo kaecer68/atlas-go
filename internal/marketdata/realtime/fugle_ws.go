@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 const (
@@ -156,12 +157,16 @@ func (p *FugleWebSocketProvider) Disconnect(ctx context.Context) error {
 		p.cancelFunc()
 	}
 	if p.conn != nil {
-		p.conn.WriteControl(
+		if err := p.conn.WriteControl(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 			time.Now().Add(writeWait),
-		)
-		p.conn.Close()
+		); err != nil {
+			logging.Warn("fugle_ws", "close_frame_failed", logging.Err(err))
+		}
+		if err := p.conn.Close(); err != nil {
+			logging.Warn("fugle_ws", "ws_close_failed", logging.Err(err))
+		}
 		p.conn = nil
 	}
 	p.connMu.Unlock()

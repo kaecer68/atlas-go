@@ -126,15 +126,15 @@ test: test-frontend test-backend
 lint: lint-backend
 
 ci:
-	@echo "🛡️  Running all scripts/ci/check_*.sh (per-script timeout: 30s)..."
+	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
-	for script in scripts/ci/check_*.sh; do \
+	for script in $$(ls scripts/ci/check_*.sh 2>/dev/null | grep -vE 'data_naming|layer3_|markdown_links' | sort); do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 30 bash $$script > /dev/null 2>&1; then \
 				passed=$$((passed+1)); \
 			elif [ $$? -eq 124 ]; then \
-				echo "    ⏱️  TIMEOUT (>30s): $$script — 用 make ci-slow 個別跑"; \
+				echo "    ⏱️  TIMEOUT (>30s): $$script"; \
 				skipped=$$((skipped+1)); \
 			else \
 				echo "    ❌ FAILED: $$script"; \
@@ -144,6 +144,7 @@ ci:
 	done; \
 	echo ""; \
 	echo "✅ CI: $$passed passed, ❌ $$failed failed, ⏱️  $$skipped timed out"; \
+	echo "    (slow scripts excluded — run 'make ci-slow' separately for those)"; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
 ci-quick:
@@ -269,9 +270,20 @@ dev-stop:
 	@echo "🛑 Stopping dev deps (postgres + redis + fubon-proxy)..."
 	@docker compose stop postgres redis fubon-proxy
 	@docker compose down postgres redis fubon-proxy --remove-orphans
-	@echo "✅ Dev deps stopped. (Note: native atlas-go 'go run' process is NOT killed — use CTRL+C or kill \$$(pgrep -f 'cmd/atlas') to stop it)"
+	@echo "🧹 Killing any leftover native 'atlas -api' process (prevents port 8080 leak)..."
+	@if pgrep -f 'cmd/atlas -api' >/dev/null 2>&1; then \
+		PIDS=$$(pgrep -f 'cmd/atlas -api'); \
+		echo "    found atlas -api PIDs: $$PIDS"; \
+		pkill -f 'cmd/atlas -api' 2>/dev/null || true; \
+		sleep 1; \
+		if pgrep -f 'cmd/atlas -api' >/dev/null 2>&1; then \
+			echo "    ⚠️  still alive after SIGTERM, sending SIGKILL"; \
+			pkill -9 -f 'cmd/atlas -api' 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo "✅ Dev deps stopped. (Note: native atlas-go 'go run' process is also auto-killed above.)"
 	@if pgrep -f 'cmd/atlas' >/dev/null 2>&1; then \
-		echo "    atlas-go still running (PID: $$(pgrep -f 'cmd/atlas'))"; \
+		echo "    ⚠️  cmd/atlas still running (PID: $$(pgrep -f 'cmd/atlas'))"; \
 	fi
 
 dev-status:

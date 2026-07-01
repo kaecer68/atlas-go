@@ -352,7 +352,9 @@ func migrateScreeningRejectsData(ctx context.Context, pool *pgxpool.Pool, stateD
 				count += len(batch)
 			}
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			log.Printf("Warning: failed to close %s: %v", filePath, err)
+		}
 	}
 
 	log.Printf("Migrated %d screening rejects", count)
