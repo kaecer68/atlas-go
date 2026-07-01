@@ -96,7 +96,7 @@ func (w *AuditWriter) Close() error {
 
 // Write serializes entry as one JSON line and flushes it to disk. It
 // auto-populates TS, SchemaVersion, Transport, and ArgsHash when empty.
-// DurationMS and LatencyMS are synchronised for backward compatibility.
+// DurationMS and LatencyMS are synchronized for backward compatibility.
 func (w *AuditWriter) Write(entry AuditEntry) error {
 	if entry.TS == "" {
 		entry.TS = w.now().UTC().Format(time.RFC3339Nano)

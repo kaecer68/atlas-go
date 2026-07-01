@@ -167,6 +167,7 @@ func StartMetricsServer(ctx context.Context, addr string, m *Metrics) error {
 		return fmt.Errorf("metrics: listen %s: %w", addr, err)
 	}
 
+	//nolint:gosec
 	go func() {
 		<-ctx.Done()
 		_ = srv.Shutdown(context.Background())

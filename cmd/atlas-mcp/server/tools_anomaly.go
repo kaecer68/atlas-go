@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/kaecer68/atlas-go/internal/mcp/anomaly"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/kaecer68/atlas-go/internal/mcp/anomaly"
 )
 
 func registerAnomalyTools(mcpSrv *mcp.Server, s *server) {
