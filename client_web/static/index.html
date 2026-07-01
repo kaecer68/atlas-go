@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -8,12 +7,10 @@
 <meta name="author" content="Atlas-Go">
 <meta name="robots" content="noindex, nofollow">
 <title>Atlas-Go 投資人平台</title>
-  <link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-
 <div id="loadingBar"></div>
-
 <aside id="sidebar" role="complementary" aria-label="側邊導航">
   <div class="brand">
     <h1>Atlas-Go</h1>
@@ -26,7 +23,6 @@
     <a data-page="live" tabindex="0" title="投資風險總覽"><span aria-hidden="true">🛡️</span> 風險總覽</a>
     <a data-page="portfolio" tabindex="0" title="組合持倉"><span aria-hidden="true">📂</span> 我的組合</a>
     <a data-page="performance-report" tabindex="0" title="績效報告"><span aria-hidden="true">📊</span> 績效報告</a>
-
     <span class="nav-label nav-label--secondary">進階</span>
     <a data-page="crossmarket" tabindex="0" title="美台連動監控"><span aria-hidden="true">🇺🇸</span> 美台連動</a>
     <a data-page="evolution_panel" tabindex="0" title="策略演化儀表板"><span aria-hidden="true">🧬</span> 策略演化</a>
@@ -36,11 +32,8 @@
     <a data-page="decision" tabindex="0" title="決策鏈"><span aria-hidden="true">🔗</span> 決策鏈</a>
     <a data-page="strategies" tabindex="0" title="投資心法庫"><span aria-hidden="true">🧠</span> 投資心法</a>
   </nav>
-  <div class="foot">
-    <span class="text-muted">v8 · 統一介面</span>
-  </div>
+  <div class="foot"><span class="text-muted">v8 · 統一介面</span></div>
 </aside>
-
 <main id="main" role="main">
   <div id="topbar">
     <div class="flex-center-gap">
@@ -52,58 +45,28 @@
       <span id="refreshTime">等待更新…</span>
       <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新">⏸</button>
     </div>
-  <div class="role-switcher">
-  <a href="/admin/" class="role-link">管理者</a>
-  <span class="role-divider">|</span>
-  <a href="/client/" class="role-link active">投資人</a>
-</div></div>
-
-  <div id="content">
-    <!-- 總覽 -->
-    <div class="page active" id="page-home">
-      <div id="home-root" class="editorial-home"></div>
+    <div class="role-switcher">
+      <a href="/admin/" class="role-link">管理者</a>
+      <span class="role-divider">|</span>
+      <a href="/client/" class="role-link active">投資人</a>
     </div>
-
-    <!-- 宏觀敘事 -->
+  </div>
+  <div id="content">
+    <div class="page active" id="page-home"><div id="home-root" class="editorial-home"></div></div>
     <div class="page" id="page-narrative" data-page-src="narrative"></div>
-
-    <!-- 投資風險總覽 -->
     <div class="page" id="page-live" data-page-src="live"></div>
-
-    <!-- 投資管線 -->
     <div class="page" id="page-pipeline" data-page-src="pipeline"></div>
-
-    <!-- 決策鏈 -->
     <div class="page" id="page-decision" data-page-src="decision"></div>
-
-    <!-- 決策追蹤 -->
-    <!-- 組合持倉 -->
     <div id="page-portfolio" class="page" data-page-src="portfolio"></div>
-
-    <!-- AI 觀測台 -->
-    <!-- 模擬交易 -->
-    <!-- 最新回測 -->
-    <!-- 控制與稽核 -->
-    <!-- 美台連動監控 -->
     <div class="page" id="page-crossmarket" data-page-src="crossmarket"></div>
     <div class="page" id="page-evolution_panel" data-page-src="evolution_panel"></div>
-    <!-- 信息通道 -->
     <div class="page" id="page-industry" data-page-src="industry"></div>
-
-    <!-- 人機協同 -->
-    <!-- 指標監控 -->
     <div class="page" id="page-performance-report" data-page-src="performance-report"></div>
-
     <div class="page" id="page-strategies" data-page-src="strategies"></div>
-
-    </div>
-
-
-<button class="refresh" title="手動重新整理">🔄 重新整理</button>
-
-<div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
-
-<!-- Modal: Prompt Diff -->
+  </div>
+  <button class="refresh" title="手動重新整理">🔄 重新整理</button>
+  <div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
+</main>
 <div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>提示詞差異比對</h3>
@@ -111,38 +74,25 @@
       <div><strong>基線</strong><pre id="diffBaseline"></pre></div>
       <div><strong>候選</strong><pre id="diffCandidate"></pre></div>
     </div>
-    <div class="control-group mt-10 justify-end">
-      <button>關閉</button>
-    </div>
+    <div class="control-group mt-10 justify-end"><button>關閉</button></div>
   </div>
 </div>
-
-<!-- Modal: Promote Confirm -->
 <div class="modal-overlay" id="promoteModal" role="dialog" aria-modal="true">
   <div class="modal modal--narrow">
     <h3>確認晉升 Baseline Policy</h3>
     <p class="text-muted-md">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
     <div id="promotePreview" class="text-12-muted mt-10 mb-10"></div>
-    <div class="control-group justify-end">
-      <button>取消</button>
-      <button class="primary">確認晉升</button>
-    </div>
+    <div class="control-group justify-end"><button>取消</button><button class="primary">確認晉升</button></div>
   </div>
 </div>
-
-<!-- Modal: KPI Help -->
 <div class="modal-overlay" id="infoModal" role="dialog" aria-modal="true">
   <div class="modal modal--medium">
     <h3 id="infoTitle">說明</h3>
     <div id="infoContent" class="info-text-block"></div>
-    <div class="control-group mt-14 justify-end">
-      <button>關閉</button>
-    </div>
+    <div class="control-group mt-14 justify-end"><button>關閉</button></div>
   </div>
 </div>
-
 <script type="module" src="js/bootstrap-utils.js"></script>
-
 <div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true">
   <div class="modal modal--wide">
     <h3 id="industryModalTitle">產業詳細分析</h3>
@@ -153,20 +103,15 @@
       <button class="tab-btn" data-tab="risk">風險</button>
     </div>
     <div id="industryModalContent"><div class="empty">載入中…</div></div>
-    <div class="control-group mt-14 justify-end">
-      <button>關閉</button>
-    </div>
+    <div class="control-group mt-14 justify-end"><button>關閉</button></div>
   </div>
 </div>
-
 <div class="modal-overlay" id="cycleLegendModal" role="dialog" aria-modal="true">
   <div class="modal modal--scrollable" data-modal-content></div>
   <div class="control-group mt-14 justify-end"><button data-close-modal>關閉</button></div>
 </div>
-
 <script type="module">import "./js/main.js";</script>
-
 <script type="module" src="js/component-init.js"></script>
 <script type="module" src="js/event-listeners.js"></script>
-</main></body>
+</body>
 </html>
