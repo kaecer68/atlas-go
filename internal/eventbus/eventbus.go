@@ -101,6 +101,9 @@ const (
 	EventFactorWeightRegression  EventType = "portfolio.factor.regression"
 	EventDriftDetected           EventType = "portfolio.drift.detected"
 	EventIngestionLagSpike       EventType = "apigateway.ingestion.lag.spike"
+
+	// MCP observability (Phase 4 T1.4) — anomaly detector 偵測到異常時發布
+	EventMCPAnomalyDetected EventType = "mcp.anomaly.detected"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -377,6 +380,21 @@ type PromotionRecordedPayload struct {
 	Timestamp          time.Time `json:"timestamp"`
 }
 
+// MCPAnomalyEventPayload carries the structured fields of a detected MCP
+// anomaly from the detector to SSE subscribers and downstream handlers.
+// The field set matches alerting.AnomalyEvent 1:1 (minus the DetectedAt
+// naming) so a single JSON-marshal path serves both the alert webhook and
+// the event bus.
+type MCPAnomalyEventPayload struct {
+	AnomalyID   string  `json:"anomaly_id"`
+	TenantID    string  `json:"tenant_id"`
+	AnomalyType string  `json:"anomaly_type"`
+	Tool        string  `json:"tool,omitempty"`
+	Score       float64 `json:"score"`
+	Severity    string  `json:"severity"`
+	DetectedAt  string  `json:"detected_at"`
+}
+
 // BusEvent 总线事件
 type BusEvent struct {
 	ID            string    `json:"id"`
@@ -440,6 +458,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventFactorWeightRegression:     {"因子權重回歸偵測（regime 變化後權重位移超過閾值 0.5）", "info"},
 	EventDriftDetected:              {"投資組合部位漂移偵測（單一持倉集中度 > 25% 或週轉率 > 15%）", "info"},
 	EventIngestionLagSpike:          {"API Gateway ingestion p99 latency 超過 5 秒閾值", "warning"},
+	EventMCPAnomalyDetected:         {"MCP 異常偵測：agent 行為或錯誤率超過閾值", "warning"},
 }
 
 var narrativeThemeLabels = map[string]string{
