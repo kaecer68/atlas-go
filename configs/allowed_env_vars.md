@@ -3,7 +3,7 @@
 本文件為 Constitution 1.2 要求之環境變數白名單。  
 任何 `os.Getenv()` 調用必須在本文件中有對應條目，否則為憲法違規。
 
-**最後更新**：2026-06-25  
+**最後更新**：2026-07-01  
 **維護者**：Atlas 數據源治理委員會
 
 ---
@@ -49,6 +49,7 @@
 | `ATLAS_MCP_AUDIT_LOG` | MCP server 用：JSONL audit log 路徑 | `$TMPDIR/atlas-mcp-audit.log` |
 | `ATLAS_ENV` | 環境模式（`production`/`development`） | 空 |
 | `ATLAS_SKIP_DOCKER` | 跳過 Docker-based PostgreSQL 啟動 | 空 |
+| `ATLAS_SKIP_PORT_PREFLIGHT` | 測試環境用：跳過 `internal/startup.Preflight` TCP port 檢查（`cmd/atlas` TestMain 設定；CI 環境常因殘留 `atlas -api` 或平行 atlas.test binary 佔住 port 8080，導致 4 個 live-broker 測試 wedge） | 空 |
 | `DATABASE_URL` | PostgreSQL 連線字串 | 空（需手動設定） |
 | `HOME` | 使用者家目錄（用於 CLI 工具路徑建構） | 系統預設 |
 | `TMPDIR` | 系統臨時目錄（用於 MCP audit log 等預設路徑） | 系統預設 |
@@ -135,3 +136,4 @@ grep -r "os.Getenv" --include="*.go" . \
 | v1.1 | 2026-07-01 | 新增 `ATLAS_MCP_ADMIN_TOKEN` 與 `ATLAS_MCP_ADMIN_ADDR`（Phase 3 殘餘 Item 3 — multi-tenant MCP token 管理） |
 | v1.2 | 2026-07-01 | 新增 `ATLAS_MCP_METRICS_ADDR`（Phase 4 Direction A — MCP observability）|
 | v1.3 | 2026-07-01 | 新增 `ATLAS_MCP_ROOTS_ALLOWED`（Phase 4 B — protocol extensions roots 白名單） |
+| v1.4 | 2026-07-01 | 新增 `ATLAS_SKIP_PORT_PREFLIGHT`（測試環境 escape hatch，配套 Phase C T-104） |
