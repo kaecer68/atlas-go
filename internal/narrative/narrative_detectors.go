@@ -533,7 +533,7 @@ func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent 
 }
 
 func detectSeasonalEvent() *NarrativeEvent {
-	now := nowTime()
+	now := nowUTC()
 	month := now.Month()
 	day := now.Day()
 	params := config.GetParametersConfig().Narrative
@@ -1169,12 +1169,12 @@ func getThemeDuration(theme string) time.Duration {
 	}
 }
 
+var nowUTC = func() time.Time {
+	// Overridden in tests.
+	return time.Now().UTC()
+}
+
 var nowUnix = func() int64 {
 	// Overridden in tests.
 	return time.Now().UnixNano()
-}
-
-var nowTime = func() time.Time {
-	// Overridden in tests.
-	return time.Now().UTC()
 }
