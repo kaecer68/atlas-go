@@ -458,6 +458,7 @@ Phase 3.5 全部 4 個 M merge 後,將:
 1. 建立 `docs/operations/phase3-5-runbook.md`(對齊 L2.4 runbook 模式) — 見同目錄 stub 檔案
 2. 更新 `.planning/phase3-4-reassessment.md` §9 Q&A 標示「Phase 3.5 ship」
 3. 重新評估 Phase 4.A/B 優先順序(基於實際 M1-M4 結果)
+4. 若 sortino 改善達標(> 5%),考慮 Promotion 路線
 
 ### 7.5 2026-07-02 路徑稽核報告
 
