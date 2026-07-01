@@ -249,7 +249,7 @@ func (r *RealtimeRouter) failoverLoop() {
 		select {
 		case failedIdx := <-r.failoverCh:
 			if int(failedIdx) < len(r.providers) {
-				r.providers[failedIdx].Disconnect(r.cancelCtx)
+				_ = r.providers[failedIdx].Disconnect(r.cancelCtx) //nolint:gosec // G104: provider disconnect, retry handled in failover loop
 			}
 		case <-r.cancelCtx.Done():
 			return

@@ -156,12 +156,12 @@ func (p *FugleWebSocketProvider) Disconnect(ctx context.Context) error {
 		p.cancelFunc()
 	}
 	if p.conn != nil {
-		p.conn.WriteControl(
+		_ = p.conn.WriteControl( //nolint:gosec // G104: best-effort close frame
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 			time.Now().Add(writeWait),
 		)
-		p.conn.Close()
+		_ = p.conn.Close() //nolint:gosec // G104: websocket close on shutdown, errors logged via connection state
 		p.conn = nil
 	}
 	p.connMu.Unlock()

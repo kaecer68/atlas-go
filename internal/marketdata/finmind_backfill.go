@@ -120,7 +120,7 @@ func FetchWithRetry(ctx context.Context, client *http.Client, url string, apiKey
 		}
 
 		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close() //nolint:gosec // G104: response body close on best-effort cleanup
 
 		if resp.StatusCode == 429 {
 			retryAfter := resp.Header.Get("Retry-After")
