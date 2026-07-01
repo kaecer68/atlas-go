@@ -1,0 +1,34 @@
+{
+  "consts": null,
+  "funcs": [
+    {
+      "name": "Map",
+      "params": "(in []T)",
+      "results": "([]U)"
+    },
+    {
+      "name": "Zero",
+      "params": "",
+      "results": "(T)"
+    }
+  ],
+  "package": "fixture_generic",
+  "types": [
+    {
+      "fields": [
+        "Value T"
+      ],
+      "kind": "struct",
+      "name": "Box"
+    },
+    {
+      "fields": [
+        "Key K",
+        "Val V"
+      ],
+      "kind": "struct",
+      "name": "Pair"
+    }
+  ],
+  "vars": null
+}

@@ -1,0 +1,39 @@
+{
+  "consts": null,
+  "funcs": null,
+  "package": "fixture_aliases",
+  "types": [
+    {
+      "fields": [
+        "ID int"
+      ],
+      "kind": "struct",
+      "name": "Base"
+    },
+    {
+      "fields": [
+        "Base",
+        "Name string"
+      ],
+      "kind": "struct",
+      "name": "Derived"
+    },
+    {
+      "kind": "alias",
+      "name": "MyInt"
+    },
+    {
+      "kind": "alias",
+      "name": "MyMap"
+    },
+    {
+      "kind": "alias",
+      "name": "MySlice"
+    },
+    {
+      "kind": "alias",
+      "name": "MyString"
+    }
+  ],
+  "vars": null
+}
