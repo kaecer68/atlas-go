@@ -10,7 +10,7 @@ export async function silentGetJSON(url) {
   try {
     return await getJSON(url);
   } catch (err) {
-    console.error('API ' + url + ': ' + err.message);
+    console.warn('API ' + url + ': ' + err.message);
     return null;
   }
 }
