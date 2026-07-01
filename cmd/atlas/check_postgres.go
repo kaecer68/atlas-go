@@ -19,22 +19,17 @@ import (
 const postgresContainerName = "atlas-postgres"
 
 // ensurePostgres attempts to make PostgreSQL available before the application
-// initializes its database connection. It uses a progressive escalation:
-//
-//  1. Fast path — TCP-dial postgres; if reachable, verify real credentials.
-//  2. Docker path — start docker daemon if needed, run "docker compose up -d postgres".
-//  3. Password repair — if authentication fails, attempt ALTER USER via docker exec.
-//  4. If all attempts fail, print structured fix hints and return (caller degrades gracefully).
-//
-// The function exits early if DATABASE_URL is empty or ATLAS_SKIP_DOCKER is set.
-func ensurePostgres() {
+// initializes its database connection. It returns an empty string on success
+// (or when no action was needed), or a diagnostic message describing which
+// recovery steps were attempted and why they failed.
+func ensurePostgres() string {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		return // no database needed
+		return "" // no database needed
 	}
 	if os.Getenv("ATLAS_SKIP_DOCKER") != "" {
 		logPostgres("ATLAS_SKIP_DOCKER set — skipping automated PostgreSQL startup")
-		return
+		return ""
 	}
 
 	logPostgres("connecting...")
@@ -42,85 +37,95 @@ func ensurePostgres() {
 	// Fast path: TCP reachable + credentials valid
 	if tryAuthPostgres(dsn, 3*time.Second) {
 		logPostgres("connected")
-		return
+		return ""
 	}
 
-	// TCP reachable but auth failed — needs Docker-assisted repair
+	var diags []string
 	needsDocker := false
 	if tryConnectPostgres(dsn, 3*time.Second) {
 		logPostgres("TCP reachable but authentication failed — attempting password repair...")
+		diags = append(diags, "auth failed; attempted password repair")
 		needsDocker = true
 	} else {
 		logPostgres("not reachable — checking Docker...")
+		diags = append(diags, "not reachable")
 		needsDocker = true
 	}
 
 	if !needsDocker {
-		return
+		return ""
 	}
 
 	dockerPath, err := exec.LookPath("docker")
 	if err != nil {
+		diags = append(diags, "docker CLI not found")
 		logPostgres("docker CLI not found (install Docker Desktop or set DATABASE_URL= to skip)")
 		printPostgresHints()
-		return
+		return strings.Join(diags, "; ")
 	}
 
 	if !isDockerDaemonRunning(dockerPath) {
+		diags = append(diags, "Docker daemon not running; attempted auto-start")
 		logPostgres("Docker daemon not running — attempting to start...")
 		if err := startDockerDaemon(); err != nil {
+			diags = append(diags, fmt.Sprintf("Docker daemon start failed: %s", err.Error()))
 			logPostgres("could not start Docker daemon: " + err.Error())
 			printPostgresHints()
-			return
+			return strings.Join(diags, "; ")
 		}
 		logPostgres("waiting for Docker daemon...")
 		if !waitForDockerDaemon(dockerPath, 60*time.Second) {
+			diags = append(diags, "Docker daemon start timeout (60s)")
 			logPostgres("Docker daemon did not start within 60s")
 			printPostgresHints()
-			return
+			return strings.Join(diags, "; ")
 		}
+		diags = append(diags, "Docker daemon started")
 		logPostgres("Docker daemon ready")
 	}
 
-	// Start postgres if TCP was not reachable
 	containerRunning := isPostgresContainerRunning(dockerPath)
 	if !containerRunning {
+		diags = append(diags, "postgres container not running; attempted compose up")
 		logPostgres("starting postgres service...")
 		if err := startPostgresService(); err != nil {
+			diags = append(diags, fmt.Sprintf("compose up failed: %s", err.Error()))
 			logPostgres("could not start postgres: " + err.Error())
 			printPostgresHints()
-			return
+			return strings.Join(diags, "; ")
 		}
 	}
 
 	logPostgres("waiting for postgres to become healthy...")
 	if !waitForPostgres(dsn, 45*time.Second) {
+		diags = append(diags, "postgres healthy wait timeout (45s)")
 		logPostgres("postgres did not become ready within 45s")
 		printPostgresHints()
-		return
+		return strings.Join(diags, "; ")
 	}
 
-	// Verify real credentials
 	if tryAuthPostgres(dsn, 5*time.Second) {
 		logPostgres("ready")
-		return
+		return ""
 	}
 
-	// Auth still failing — attempt password repair via docker exec
 	user, pass := parsePostgresCredentials(dsn)
 	if user != "" && pass != "" {
+		diags = append(diags, "auth failed; attempted password repair via docker exec")
 		logPostgres("authentication failed — attempting password repair via docker exec...")
 		if fixPostgresPassword(postgresContainerName, user, pass) {
 			logPostgres("password repaired, retrying connection...")
 			if tryAuthPostgres(dsn, 5*time.Second) {
 				logPostgres("ready")
-				return
+				return ""
 			}
 		}
+		diags = append(diags, "password repair failed or did not resolve auth")
 	}
 
 	logPostgres("postgres did not become ready")
 	printPostgresHints()
+	return strings.Join(diags, "; ")
 }
 
 // tryAuthPostgres attempts a real PostgreSQL connection to verify credentials.

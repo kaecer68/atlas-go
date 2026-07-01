@@ -196,7 +196,14 @@ func run(args []string, deps appDeps) error {
 	// Ensure PostgreSQL is reachable before we try to connect.
 	// If DATABASE_URL is unset or postgres is already running, this is a no-op.
 	// On failure, the app continues without DB (bootstrap handles graceful degradation).
-	ensurePostgres()
+	if diag := ensurePostgres(); diag != "" {
+		logging.Warn("main", "postgres_startup_diag",
+			"message", "ensurePostgres did not fully succeed; bootstrap may fail",
+			"diagnostics", diag,
+		)
+	} else {
+		logging.Info("main", "postgres_ready")
+	}
 
 	if err := bootstrap.ApplyBrokerConfig(&cfg, bootstrap.BrokerOverrides{
 		Mode:                *brokerMode,
@@ -310,6 +317,13 @@ func run(args []string, deps appDeps) error {
 			defer fubonMgr.Stop()
 		}
 
+		// Readiness state is populated during startup and consumed by the
+		// GET /ready handler installed by registerSimpleRoutes.
+		rc := readyChecker{
+			dbDSN:      os.Getenv("DATABASE_URL"),
+			replayPath: config.GetReplayDataPath(cfg.WorkDir),
+		}
+
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
 		var gateway *apigateway.Gateway
 		var gatewayFetcher monitoring.DataFetcher
@@ -339,6 +353,9 @@ func run(args []string, deps appDeps) error {
 				}
 				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
+		}
+		if gateway != nil {
+			rc.gatewayChan = len(gateway.ChannelIDs())
 		}
 
 		mux := http.NewServeMux()
@@ -467,7 +484,7 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Fatalf("failed to get client dist sub FS: %v", err)
 		}
-		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
+		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
 
 		dashboard.SetHealthAddrs(*apiAddr, *fubonProxyPort)
 		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
@@ -1375,6 +1392,9 @@ func run(args []string, deps appDeps) error {
 		srv := &http.Server{
 			Addr:              *apiAddr,
 			Handler:           finalMux,
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			IdleTimeout:       120 * time.Second,
 			ReadHeaderTimeout: 10 * time.Second,
 		}
 		srvErr := make(chan error, 1)
@@ -1387,12 +1407,12 @@ func run(args []string, deps appDeps) error {
 		sigCh := registerShutdownSignal()
 		select {
 		case <-sigCh:
-			log.Printf("received signal, shutting down api server...")
+			logging.Info("main", "shutdown_signal_received", "mode", "api")
 		case err := <-srvErr:
 			sysCancel()
 			return err
 		case <-deps.shutdown:
-			log.Printf("shutdown signal received, shutting down api server...")
+			logging.Info("main", "shutdown_deps_triggered", "mode", "api")
 		}
 
 		sysCancel()
@@ -1403,9 +1423,9 @@ func run(args []string, deps appDeps) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("api server graceful shutdown failed: %v", err)
+			logging.Error("main", "graceful_shutdown_failed", "mode", "api", logging.Err(err))
 		} else {
-			log.Printf("api server stopped")
+			logging.Info("main", "server_stopped", "mode", "api")
 		}
 		return nil
 	}
@@ -1674,16 +1694,23 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 	// Static routes and basic probes are registered through the same helper
 	// used by api-mode so live trading and simulation behave identically.
-	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS)
+	rc := readyChecker{
+		dbDSN:      os.Getenv("DATABASE_URL"),
+		replayPath: config.GetReplayDataPath(cfg.WorkDir),
+	}
+	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
 	srv := &http.Server{
 		Addr:              apiAddr,
 		Handler:           mux,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
 		log.Printf("dashboard api listening on %s", apiAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("dashboard api server failed: %v", err)
+			logging.Error("main", "server_failed", "mode", "live", logging.Err(err))
 		}
 	}()
 
@@ -1738,7 +1765,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx2); err != nil {
-		log.Printf("dashboard api graceful shutdown failed: %v", err)
+		logging.Error("main", "graceful_shutdown_failed", "mode", "live", logging.Err(err))
 	}
 	if err := o.Stop(); err != nil {
 		return fmt.Errorf("stop live orchestrator: %w", err)

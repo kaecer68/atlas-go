@@ -32,13 +32,16 @@ cd "$REPO_ROOT"
 
 declare -a TARGETS=(
     "internal/config"
-    "cmd/atlas"
     "internal/narrative"
     "internal/orchestrator"
     "internal/portfolio"
     "internal/sim"
     "internal/risk"
 )
+# Note: cmd/atlas intentionally excluded — its snapshot/golden tests run
+# under preflight (port 8080 + postgres), and are covered by the main
+# `go test ./cmd/atlas/...` CI job plus the dedicated live-broker tests.
+# Including it here would duplicate run cost and race with port 8080.
 
 # 1) Capture pre-run state of all testdata/ JSON golden files.
 PRE_SNAPSHOTS="$(mktemp)"
