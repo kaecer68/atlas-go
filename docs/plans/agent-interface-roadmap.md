@@ -1,8 +1,9 @@
 # Atlas-go Agent Interface — 完整 Roadmap
 
 > **規劃日期**：2026-06-30
+> **最後更新**：2026-07-01
 > **範圍**：將 atlas-go 從「人類導向 web UI 為主」升級為「AI Agent 可操作性雙軌」
-> **使用者決策紀錄**：分階段執行、完整暴露 MCP 範圍、每階段 review、全 P0-P4 完整規劃
+> **使用者決策紀錄**：分階段執行、完整暴露 MCP 範圍、每階段 review、全 P0-P4 完整規劃；實作進度同步更新
 
 ---
 
@@ -15,8 +16,9 @@
 | P2 | Agent Tools 實戰指南（決策樹 + Top 15） | [`AGENT_TOOLS.md`](../AGENT_TOOLS.md) | ✅ 已交付 |
 | P3 | GitNexus Process 標註 SOP | [`PROCESS_ANNOTATION_SOP.md`](../PROCESS_ANNOTATION_SOP.md) | ✅ 已交付 |
 | P4 | Agent 5 分鐘 Onboarding | [`AGENT_ONBOARDING.md`](../AGENT_ONBOARDING.md) | ✅ 已交付 |
+| P5 | Agent 介面章節併入 `AGENTS.md` | [`AGENTS.md`](../../AGENTS.md) | ✅ PR #875 |
 
-**結論**：規劃完整（5/5 文件落地）。**實作未開始** — 本 roadmap 是「設計 → 實作」的橋樑，列出實作時程建議。
+**結論**：規劃完整（5/5 文件落地 + P5 已進主文件）。**實作已進行中** — `cmd/atlas-mcp/` 已實作約 84 個 tools、stdio transport、auth/audit/anomaly/協議擴充；SSE/streamable-HTTP transport 與 `cmd/atlas` binary 合併仍待辦。本 roadmap 同步更新為「規劃 + 實作狀態」的單一真相來源。
 
 ---
 
@@ -36,41 +38,39 @@ AI Agent ↔ MCP protocol ↔ atlas-mcp (Go binary) ↔ atlas core (via HTTP)
 
 ### Phase 1 — 短期（建議 1-2 週 sprint）
 
-| Task | 工時估算 | 依賴 | 風險 |
-|------|---------|------|------|
-| `cmd/atlas-mcp/` 雛型（**OFFICIAL `go-sdk` v1.6.1** + stdio transport + auth + audit log） | 3 工作天 | 無（SDK 決策已 spike 完成）| 低（使用官方 stable API） |
-| 5 個核心 tool 實作（regime / strategy / experiment / alert / health） | 4 工作天 | 上一行 | 低 |
-| README + 完整測試覆蓋 | 2 工作天 | 上一行 | 低 |
-| Cursor / Claude Desktop 端到端測試 | 1 工作天 | 上一行 | 中 |
-| **小計** | **~10 工作天** | | |
+| Task | 狀態 | 實際進度 |
+|------|------|---------|
+| `cmd/atlas-mcp/` 雛型（**OFFICIAL `go-sdk` v1.6.1** + stdio transport + auth + audit log） | ✅ 已完成 | `cmd/atlas-mcp/` binary 可編譯；stdio transport 為唯一生產 transport；TokenAuth + optional DB TokenStore + admin HTTP API（127.0.0.1）已實作；audit log v2（含 retention、cleanup、ArgsHash、SessionID、Transport）已上線。 |
+| 核心 tool 實作（regime / strategy / experiment / alert / health 等） | ✅ 已完成 | 目前註冊約 **84 個 tools**（橫跨 19 個檔案），涵蓋 regime、strategy、experiment、alert、health、macro、narrative、risk、portfolio、llm、swarm、anomaly 等群組。 |
+| README + 完整測試覆蓋 | ⚠️ 部分完成 | README 與 server 測試存在；transport 與部分 handler 仍需補齊測試。 |
+| Cursor / Claude Desktop 端到端測試 | ⏳ 待進行 | 受 stdio-only transport 限制，尚未進行桌面 client 端對端驗證。 |
 
-**交付**：`bin/atlas-mcp` 可用 + 5 個 tool + 文件，可讓 `daily briefing` 類 agent 跑通。
+**交付**：`bin/atlas-mcp` 可用 + ~84 個 tool + 文件，可讓 `daily briefing` 類 agent 跑通。
 
-> **✅ MCP SDK Spike Gate 已通過**（[`docs/spikes/mcp-go-sdk-spike.md`](../spikes/mcp-go-sdk-spike.md)）— Go 版本完全相符、API stable、License 相容。**GO 進入 Phase 1 實作**
+> **✅ MCP SDK Spike Gate 已通過**（[`docs/spikes/mcp-go-sdk-spike.md`](../spikes/mcp-go-sdk-spike.md)）— Go 版本完全相符、API stable、License 相容。**Phase 1 實作已完成**
 
 ### Phase 2 — 中期（建議 2-4 週 sprint）
 
-| Task | 工時估算 | 依賴 |
-|------|---------|------|
-| SSE + streamable-HTTP transport | 2 天 | Phase 1 |
-| macro / narrative / risk 群組 tool 完整實作 | 5 天 | Phase 1 |
-| JSON Schema 完整化 + 3 個整合測試 | 3 天 | 上一行 |
-| Audit log retention + 合規檢查 | 1 天 | Phase 1 |
-| `docs/PROCESSES.yaml` 建立（含 21 條 workflow 標註） | 3 天 | PROCESS_ANNOTATION_SOP §3 |
-| **`AGENTS.md` 加入「Agent 介面」章節**（指向新文件） | 0.5 天 | 全部 |
-| **小計** | **~14 工作天** | |
+| Task | 狀態 | 實際進度 |
+|------|------|---------|
+| SSE + streamable-HTTP transport | ⏳ 待辦 | `main.go` 註解聲稱 Phase 2 已加入 SSE + streamable-HTTP，但實際 production 路徑僅 `mcp.StdioTransport{}`；相關 transport 程式碼尚未實作或啟用。 |
+| macro / narrative / risk 群組 tool 完整實作 | ✅ 已完成 | 已隨 84 tools 一併上線；涵蓋 macro、narrative、risk、portfolio、industry 等群組。 |
+| JSON Schema 完整化 + 3 個整合測試 | ⚠️ 部分完成 | tool schema 透過 SDK 註冊；整合測試覆蓋率仍需補強。 |
+| Audit log retention + 合規檢查 | ✅ 已完成 | v2 schema 含 retention、cleanup loop；SessionID / ArgsHash / Transport 欄位已落地。 |
+| `docs/PROCESSES.yaml` 建立（含 21 條 workflow 標註） | ✅ 已完成 | PR #875 併入 `docs/PROCESSES.yaml`（35 WA entries）與 `AGENTS.md`「Agent 介面」章節。 |
 
-**交付**：完整 75 個 tool + 三種 transport + 標註流程上線。
+**交付**：完整 ~84 個 tool + stdio transport 上線；SSE/streamable-HTTP 為 Phase 2 唯一剩餘大項。
 
 ### Phase 3 — 長期（建議 1-3 月）
 
-| Task | 工時估算 | 說明 |
-|------|---------|------|
-| 自動生成 tool description（基於 handler source） | 5 天 | 減少維護成本 |
-| Agent 行為分析（追蹤實際 MCP call patterns） | 5 天 | 用於 audit + 優化 |
-| MCP Resources / Prompts 支援（目前只支援 Tools） | 3 天 | 升級 MCP protocol |
-| Multi-tenant MCP token 管理 | 5 天 | 支援多 agent 並行 |
-| **小計** | **~18 工作天** | |
+| Task | 狀態 | 實際進度 |
+|------|------|---------|
+| 自動生成 tool description（基於 handler source） | ✅ 已完成 | `cmd/atlas-mcp/descgen/` 已實作；目前約 84 tools 的 description 由 descgen 產生。 |
+| Agent 行為分析（追蹤實際 MCP call patterns） | ⚠️ 部分完成 | audit/anomaly/metrics 已記錄 call patterns；專屬分析報告與 dashboard 未建立。 |
+| MCP Resources / Prompts 支援（目前只支援 Tools） | ✅ 已完成 | `registerResources()` 與 `registerPrompts()` 已在 `cmd/atlas-mcp/server/server.go` 註冊並呼叫。 |
+| Multi-tenant MCP token 管理 | ⚠️ 部分完成 | DB-backed token store 與 admin HTTP API 已存在；多 tenant 隔離與權限模型未完整定義。 |
+
+**交付**：自動化 description、Resources/Prompts、audit/anomaly 已上線；multi-tenant 權限與行為分析報告為長期優化項。
 
 ---
 
@@ -88,21 +88,23 @@ AI Agent ↔ MCP protocol ↔ atlas-mcp (Go binary) ↔ atlas core (via HTTP)
 
 ## 5. 開放議題（待決策）
 
-1. **`atlas-mcp` 是否併入 `atlas` 主 binary？**
-   - 選 A：分開 binary（單一職責）— 預設
-   - 選 B：併入，子命令 `--mcp-server` — 部署簡化但 binary 變大
-2. **audit log 保留期？** 預設 30 天，需符合金管會規範？
-3. **是否開源 `atlas-mcp`？** 與 atlas-go 採用同樣 Apache 2.0？
-4. **是否要支援 WebSocket MCP transport？** 部分 agent 偏好 WS
+1. **`atlas-mcp` 是否併入 `cmd/atlas` 主 binary？**
+   - 選 A：分開 binary（單一職責）— **目前現狀**
+   - 選 B：併入，子命令 `--mcp-server` — 部署簡化但 binary 變大；目前程式碼中 **未發現** 任何併入實作或子命令註冊
+2. **SSE + streamable-HTTP transport 是否要啟用？** 程式碼註解聲稱 Phase 2 已加入，但實際 production 路徑仍只有 stdio。
+3. **audit log 保留期？** 預設 30 天，需符合金管會規範？
+4. **是否開源 `atlas-mcp`？** 與 atlas-go 採用同樣 Apache 2.0？
+5. **是否要支援 WebSocket MCP transport？** 部分 agent 偏好 WS
 
 ---
 
 ## 6. 下一步（建議立即行動）
 
-1. ✅ **你 review 本 roadmap**（5 個文件）
-2. ⏳ **決定要不要進入實作 Phase 1**
-3. ⏳ **如要實作**：先跑 `spike` 驗證 Go 端 MCP SDK 可用性
-4. ⏳ **spike 通過後**：照 Phase 1 schedule 開 1-2 週 sprint
+1. ✅ **你 review 本 roadmap**（5 個文件 + 實作現狀）
+2. ✅ **Phase 1 實作已完成**（~84 tools、stdio、auth/audit/anomaly）
+3. ⏳ **決定 Phase 2 剩餘大項**：SSE + streamable-HTTP transport 是否要實作與啟用
+4. ⏳ **決定 binary 合併議題**：`atlas-mcp` 維持獨立 binary，或併入 `cmd/atlas --mcp-server`
+5. ⏳ **補強測試與端到端驗證**：特別是 transport 層與桌面 client（Cursor / Claude Desktop）整合測試
 
 ---
 
@@ -119,5 +121,5 @@ AI Agent ↔ MCP protocol ↔ atlas-mcp (Go binary) ↔ atlas core (via HTTP)
 
 ---
 
-**文件版本**：v1（2026-06-30）
-**下次 review**：實作 Phase 1 完成後（約 2 週）
+**文件版本**：v2（2026-07-01）
+**下次 review**：SSE + streamable-HTTP transport 與 binary 合併議題決策後（預計 1-2 週內）
