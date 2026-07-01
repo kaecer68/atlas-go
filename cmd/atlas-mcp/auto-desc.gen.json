@@ -220,6 +220,38 @@
       "type": "object"
     }
   },
+  "mcp_anomaly_ack": {
+    "name": "mcp_anomaly_ack",
+    "description": "Acknowledge an anomaly alert via the atlas alert store.",
+    "inputSchema": {
+      "properties": {
+        "alert_id": {
+          "description": "the alert id to acknowledge",
+          "type": "string"
+        }
+      },
+      "required": [
+        "alert_id"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_anomaly_get_recent": {
+    "name": "mcp_anomaly_get_recent",
+    "description": "List the most recent anomaly events detected by the MCP observability subsystem.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "description": "how many events to return; default 10, max 100",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "limit"
+      ],
+      "type": "object"
+    }
+  },
   "mcp_get_call_stats": {
     "name": "mcp_get_call_stats",
     "description": "Return call statistics for the recent window: total calls, error count, p50 latency, and per-tool breakdown. window_minutes defaults to 60 and is capped at 1440 (24h).",

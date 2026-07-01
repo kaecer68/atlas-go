@@ -10,7 +10,8 @@ import { ActionCard } from '../components/action-card.js';
 import { TrustFooter } from '../components/trust-footer.js';
 import { RiskBadge } from '../components/risk-badge.js';
 import { Tooltip } from '../components/tooltip.js';
-import { fmtSignedPct, fmtDrawdown, fmtHHI, riskLevelLabel } from '../shared/format-metric.js';
+import { fmtSignedPct, fmtDrawdown, fmtHHI, riskLevelLabel, formatNumber } from '../shared/format-metric.js';
+import { getDemoPortfolio } from '../services/demo-data.js';
 
 const DASHBOARD_VERSION = 'v0.0.0.24';
 const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
@@ -256,7 +257,7 @@ async function loadPortfolioSnapshot() {
     renderRealPortfolio(container, data);
   } catch (err) {
     console.warn('[home] portfolio snapshot unavailable:', err);
-    renderDemoPortfolio(container);
+    renderDemoPortfolioWithData(container);
   }
 }
 
@@ -286,6 +287,11 @@ function renderRealPortfolio(container, data) {
   document.getElementById('home-portfolio-detail').addEventListener('click', () => window.switchPage('portfolio'));
 }
 
+function fmtNTD(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return `NT$ ${formatNumber(value, { decimals: 0 })}`;
+}
+
 function renderDemoPortfolio(container) {
   container.innerHTML = ActionCard({
     title: '尚無投資組合資料',
@@ -301,6 +307,55 @@ function renderDemoPortfolio(container) {
     loadPortfolioSnapshot();
   });
   document.getElementById('home-goto-portfolio').addEventListener('click', () => window.switchPage('portfolio'));
+}
+
+function renderDemoPortfolioWithData(container) {
+  const positions = getDemoPortfolio();
+  const totalValue = positions.reduce((sum, p) => sum + p.shares * p.price, 0);
+  const totalCost = positions.reduce((sum, p) => sum + p.shares * p.avgCost, 0);
+  const totalPnl = totalValue - totalCost;
+  const pnlPct = totalCost > 0 ? totalPnl / totalCost : 0;
+  const topPositions = positions.slice(0, 3);
+
+  container.innerHTML = `
+    <div class="home-portfolio-summary home-portfolio-summary--demo">
+      <div class="home-portfolio-summary__item">
+        <span class="home-portfolio-summary__label">示範總市值 <span class="badge demo">DEMO</span></span>
+        <span class="home-portfolio-summary__value">${fmtNTD(totalValue)}</span>
+      </div>
+      <div class="home-portfolio-summary__item">
+        <span class="home-portfolio-summary__label">損益</span>
+        <span class="home-portfolio-summary__value ${totalPnl >= 0 ? 'positive' : 'negative'}">${fmtSignedPct(pnlPct)}</span>
+      </div>
+      <div class="home-portfolio-summary__item">
+        <span class="home-portfolio-summary__label">持倉檔數</span>
+        <span class="home-portfolio-summary__value">${positions.length}</span>
+      </div>
+    </div>
+    <div class="home-demo-positions">
+      ${topPositions.map(p => {
+        const mkt = p.shares * p.price;
+        const pnl = p.price - p.avgCost;
+        const pnlPct = p.avgCost > 0 ? pnl / p.avgCost : 0;
+        return `
+          <div class="home-demo-position">
+            <div class="home-demo-position__meta">
+              <span class="home-demo-position__symbol">${escapeHtml(p.symbol)}</span>
+              <span class="home-demo-position__name">${escapeHtml(p.name)}</span>
+              <span class="home-demo-position__sector">${escapeHtml(p.sector)}</span>
+            </div>
+            <div class="home-demo-position__values">
+              <span class="home-demo-position__weight">${formatNumber(p.weight * 100, { decimals: 0 })}%</span>
+              <span class="home-demo-position__pnl ${pnl >= 0 ? 'positive' : 'negative'}">${fmtSignedPct(pnlPct)}</span>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>
+  `;
+
+  document.getElementById('home-portfolio-detail').addEventListener('click', () => window.switchPage('portfolio'));
 }
 
 function renderTrustFooter() {

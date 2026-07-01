@@ -31,6 +31,10 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerLLMTraceTools(mcpSrv, s)
 	registerDataUniverseTools(mcpSrv, s)
 	registerReportPrismSwarmTools(mcpSrv, s)
+	registerAnomalyTools(mcpSrv, s)
+	registerSamplingTools(mcpSrv, s)
+	registerRootsTools(mcpSrv, s)
+	registerElicitationTools(mcpSrv, s)
 
 	mcp.AddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
@@ -186,6 +190,10 @@ func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolReque
 // enforces per-tenant per-tool rate limits (Phase 3 B), and emits one
 // AuditEntry per call regardless of success/failure.
 func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, fn func() error) error {
+	return s.withAuditExtra(ctx, tool, argKeys, nil, fn)
+}
+
+func (s *server) withAuditExtra(ctx context.Context, tool string, argKeys []string, extraFn func() map[string]any, fn func() error) error {
 	start := time.Now()
 
 	tenantID := TenantIDFromContext(ctx)
@@ -195,36 +203,47 @@ func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, f
 	// identity defaults to "anonymous".
 	if s.limiter != nil {
 		if r := s.limiter.Allow(tool, tenantID); !r.Allowed {
+			elapsed := time.Since(start)
 			entry := AuditEntry{
-				Tool:       tool,
-				TenantID:   tenantID,
-				AgentID:    agentID,
-				ArgKeys:    argKeys,
-				ArgsHash:   CanonicalizeArgsHash(argKeys),
-				DurationMS: time.Since(start).Milliseconds(),
-				LatencyMS:  time.Since(start).Milliseconds(),
-				Status:     "ratelimited",
-				Error:      fmt.Sprintf("retry after %s", r.RetryAfter),
+				SchemaVersion: 2,
+				Tool:          tool,
+				TenantID:      tenantID,
+				AgentID:       agentID,
+				ArgKeys:       argKeys,
+				ArgsHash:      CanonicalizeArgsHash(argKeys),
+				DurationMS:    elapsed.Milliseconds(),
+				LatencyMS:     elapsed.Milliseconds(),
+				Transport:     "stdio",
+				Status:        "ratelimited",
+				Error:         fmt.Sprintf("retry after %s", r.RetryAfter),
 			}
+			s.observeAuditEntry(&entry, start)
 			_ = s.audit.Write(entry)
 			return fmt.Errorf("rate limited: %s: retry after %s", tool, r.RetryAfter)
 		}
 	}
 
 	err := fn()
+	elapsed := time.Since(start)
 	entry := AuditEntry{
-		Tool:       tool,
-		TenantID:   tenantID,
-		AgentID:    agentID,
-		ArgKeys:    argKeys,
-		ArgsHash:   CanonicalizeArgsHash(argKeys),
-		DurationMS: time.Since(start).Milliseconds(),
-		LatencyMS:  time.Since(start).Milliseconds(),
-		Status:     "ok",
+		SchemaVersion: 2,
+		Tool:          tool,
+		TenantID:      tenantID,
+		AgentID:       agentID,
+		ArgKeys:       argKeys,
+		ArgsHash:      CanonicalizeArgsHash(argKeys),
+		DurationMS:    elapsed.Milliseconds(),
+		LatencyMS:     elapsed.Milliseconds(),
+		Transport:     "stdio",
+		Status:        "ok",
 	}
 	if err != nil {
 		entry.Status = "error"
 		entry.Error = err.Error()
+	}
+	s.observeAuditEntry(&entry, start)
+	if extraFn != nil {
+		entry.Extra = extraFn()
 	}
 	if wErr := s.audit.Write(entry); wErr != nil {
 		// audit failure must not mask the original error.
@@ -233,4 +252,13 @@ func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, f
 		}
 	}
 	return err
+}
+
+func (s *server) observeAuditEntry(entry *AuditEntry, start time.Time) {
+	if s.metrics != nil {
+		_ = s.metrics.ObserveCall(entry.Tool, entry.Transport, entry.Status, time.Since(start))
+	}
+	if s.detector != nil {
+		s.detector.Observe(entry)
+	}
 }

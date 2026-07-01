@@ -432,7 +432,62 @@ Client 端（任意 SSE 相容 agent）：
 - PR #834：1 個 Phase 2.1 commit + 1 個 fix commit + 14 個 batch commits（每 batch 一個 commit）
 - 全部 14 batch 透過 `--force-with-lease` 推上
 
-### 對應的 MCP transport 程式碼地圖
+---
+
+## 12. Phase 4 B — Protocol Extensions（2026-07-01）
+
+**狀態：✅ IMPLEMENTED** — PR #B（`feat/mcp-protoext`，Phase 4 B 單一 commit，1421 insertions）。
+
+### 新增 Primitives
+
+| Primitive | MCP SDK 1.6.1 | Tool | Default | 說明 |
+|-----------|---------------|------|---------|------|
+| **Sampling** | `CreateMessage` / `CreateMessageWithTools` | `mcp_sample_llm` | `false` | server 端向 client LLM 發起取樣請求；需 ATLAS_MCP_SAMPLING_ENABLED=true |
+| **Roots** | `ListRoots` / `RootsListChangedHandler` | `mcp_roots_list`、`mcp_roots_read_file` | always on | read-only filesystem access；強制 O_RDONLY + path traversal hardening + symlink escape 防護 + per-read audit + 1MB size cap |
+| **Elicitation** | `Elicit` with Mode="form" | `mcp_elicit_user` | `false` | server 向使用者主動提問；需 ATLAS_MCP_ELICITATION_ENABLED=true |
+
+### 安全邊界
+
+| 機制 | 說明 |
+|------|------|
+| Roots read-only | `os.OpenFile(O_RDONLY)` only, write flag → error |
+| Path traversal | `filepath.EvalSymlinks` + `filepath.Clean` + prefix check |
+| Symlink escape | RED test `TestMCPRootsReadFile_SymlinkEscape_Rejected` (CI 強制) |
+| Audit per read | `withAuditExtra` 記錄 `{path, size_bytes, ts, tenant_id}` |
+| Size cap | 1MB (`io.LimitReader`) |
+| Sampling opt-in | Default OFF, env flag required |
+| Elicitation opt-in | Default OFF, env flag required |
+| Capability miss | Explicit error (no silent fallback) |
+
+### 新增檔案
+
+```
+cmd/atlas-mcp/server/
+├── sampling.go + _test.go      (Sampling: 124 + 176 LOC)
+├── roots.go + _test.go         (Roots: 239 + 165 LOC)
+├── elicitation.go + _test.go   (Elicitation: 103 + 135 LOC)
+└── mcp_session_test.go         (SDK session accessor test: 63 LOC)
+
+internal/apigateway/
+└── CONSTITUTION.md 附錄 D 新增 Roots Sanctioned Exception
+```
+
+### 驗證（2026-07-01）
+
+- `go test -count=1 -race ./cmd/atlas-mcp/...`：**121 PASS / 0 FAIL**
+- `go vet` / `gofmt -l .` / `staticcheck`：clean
+- Coverage：63.3%（≥ 60%)
+- oracle audit：P0（CONSTITUTION 附錄 D）+ 3×P1 → **ALL FIXED → READY TO MERGE**
+
+### 對應的 MCP server 程式碼地圖（新增項目）
+
+```
+cmd/atlas-mcp/server/
+├── sampling.go + _test.go       (B.1 Sampling — opt-in LLM call)   ← NEW
+├── roots.go + _test.go          (B.2 Roots — read-only fs)         ← NEW
+├── elicitation.go + _test.go    (B.3 Elicitation — user prompt)     ← NEW
+└── mcp_session_test.go          (SDK helper coverage)               ← NEW
+```
 
 ```
 cmd/atlas-mcp/
@@ -445,6 +500,8 @@ cmd/atlas-mcp/
     ├── auth.go             (TokenAuth — Phase 2.1)
     ├── audit.go            (JSONL writer)
     ├── http_client.go      (atlas HTTP bridge)
+    ├── metrics.go          (Phase 4A: Prometheus metrics)
+    ├── tools_anomaly.go    (Phase 4A: anomaly tools)
     ├── transport_stdio.go  (Phase 1, stdio transport)
     ├── transport_http.go   (Phase 2.1, streamable-HTTP)
     ├── transport_sse.go    (Phase 2.1, SSE)
@@ -465,3 +522,37 @@ cmd/atlas-mcp/
     ├── tools_data_universe.go + _test.go
     └── tools_report_prism_swarm.go + _test.go
 ```
+
+## 12. Phase 4 Direction A — Observability（2026-07-01）
+
+**狀態：✅ IMPLEMENTED** — 內建 Prometheus `/metrics` + 自訂 anomaly detector + alert integration。
+
+### 新增元件
+
+| 元件 | 位置 | 職責 |
+|------|------|------|
+| Prometheus Exporter | `cmd/atlas-mcp/server/metrics.go` | `/metrics` endpoint；暴露 5 種 metrics |
+| Anomaly Detector | `internal/mcp/anomaly/` | rolling-window z-score + per-tool/per-tenant error rate |
+| Anomaly Tools | `cmd/atlas-mcp/server/tools_anomaly.go` | `mcp_anomaly_get_recent`、`mcp_anomaly_ack` |
+
+### 新增 Tools
+
+| Tool | 類型 | 說明 |
+|------|------|------|
+| `mcp_anomaly_get_recent` | read | 列出最近 N 條 anomaly event |
+| `mcp_anomaly_ack` | destructive | 透過 `/api/alerts/acknowledge` 確認 anomaly |
+
+### Metrics
+
+- `mcp_calls_total{tool, transport, status}` — Counter
+- `mcp_call_duration_seconds{tool, transport}` — Histogram
+- `mcp_active_sessions{transport}` — Gauge
+- `mcp_token_usage_total{tenant_id}` — Counter
+- `mcp_anomaly_score{tenant_id, anomaly_type}` — Gauge
+
+### 驗證
+
+- `go test ./cmd/atlas-mcp/... ./internal/mcp/anomaly/...`：**23 個新增測試 PASS / 0 FAIL**
+- `/metrics` 綁定 `127.0.0.1`，獨立於 MCP transport port
+- anomaly detector 3 種基線 unit test 通過
+
