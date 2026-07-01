@@ -213,6 +213,7 @@ func TestNarrativeEngineDetectEvents(t *testing.T) {
 		VIXLevel:         30,
 	}
 	events := ne.DetectEvents(data)
+	// 11 events: 9 original + semiconductor_downturn + 1 calendar-bound theme
 	if len(events) != 11 {
 		t.Fatalf("expected 11 events, got %d", len(events))
 	}

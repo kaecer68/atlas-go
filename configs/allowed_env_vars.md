@@ -56,6 +56,7 @@
 | `ATLAS_MCP_ADMIN_TOKEN` | MCP admin 管理 API 認證 token（非資料源；空時拒絕所有 admin 請求） | 空 |
 | `ATLAS_MCP_ADMIN_ADDR` | MCP admin HTTP API bind 位址（強制 127.0.0.1，server.go 檢查 prefix） | `127.0.0.1:9090` |
 | `ATLAS_MCP_METRICS_ADDR` | MCP Prometheus metrics HTTP API bind 位址（強制 127.0.0.1，獨立於 transport port） | 空（未設定時停用） |
+| `ATLAS_MCP_ROOTS_ALLOWED` | MCP 客戶端宣告的 roots 路徑白名單（CSV 格式，Phase 4 B 引入） | 空（不限制） |
 
 ---
 
@@ -132,3 +133,4 @@ grep -r "os.Getenv" --include="*.go" . \
 | v1.0 | 2026-05-22 | 初版，依據 Constitution 1.2 建立完整白名單 |
 | v1.1 | 2026-07-01 | 新增 `ATLAS_MCP_ADMIN_TOKEN` 與 `ATLAS_MCP_ADMIN_ADDR`（Phase 3 殘餘 Item 3 — multi-tenant MCP token 管理） |
 | v1.2 | 2026-07-01 | 新增 `ATLAS_MCP_METRICS_ADDR`（Phase 4 Direction A — MCP observability）|
+| v1.3 | 2026-07-01 | 新增 `ATLAS_MCP_ROOTS_ALLOWED`（Phase 4 B — protocol extensions roots 白名單） |
