@@ -1,4 +1,70 @@
-/* Atlas Dashboard - Typography */
+/* Atlas Dashboard - Typography
+ * Mobile-first rules: 確保 < 768px viewport 下 body font ≥ 18px、heading 對比清晰。
+ * PR-1: 加入 mobile 響應式字型規則（audit P1 補完）
+ */
+
 .panel h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
 .section h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 /* .text-caption, .text-body, .text-heading removed — unused semantic classes */
+
+/* ===== Mobile Typography (≤ 768px) =====
+ * 規範：WCAG + AAA mobile readability
+ * - body ≥ 18px
+ * - heading scale 1.125x
+ * - line-height ≥ 1.4 for body, ≥ 1.25 for heading
+ */
+@media (max-width: 768px) {
+  body {
+    font-size: 18px;
+    line-height: 1.5;
+  }
+
+  /* panel / section heading 在 mobile 放大 */
+  .panel h3 { font-size: 18px; }
+  .section h3 { font-size: 16px; }
+
+  /* 通用 inline heading 放大 */
+  h1 { font-size: clamp(1.5rem, 5vw, 2rem); line-height: 1.25; }
+  h2 { font-size: clamp(1.25rem, 4vw, 1.625rem); line-height: 1.3; }
+  h3 { font-size: clamp(1.125rem, 3.5vw, 1.375rem); line-height: 1.35; }
+
+  /* hero / page title */
+  .home-hero__title,
+  .page-title {
+    font-size: clamp(1.5rem, 6vw, 2.25rem);
+    line-height: 1.2;
+  }
+
+  /* metric value 在 mobile 仍可讀 */
+  .metric-card__value,
+  .metric-value {
+    font-size: clamp(1.25rem, 4vw, 1.75rem);
+  }
+
+  /* small text (caption) 至少 14px（mobile minimum） */
+  .caption,
+  small,
+  .text-sm {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  /* form input 在 mobile 至少 16px（避免 iOS 自動縮放） */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* ===== Tablet (769–1024px) ===== */
+@media (min-width: 769px) and (max-width: 1024px) {
+  body { font-size: 16px; }
+  .panel h3 { font-size: 16px; }
+}
+
+/* ===== Print ===== */
+@media print {
+  body { font-size: 12pt; line-height: 1.4; }
+  .nav-group-label { color: #000; }
+}

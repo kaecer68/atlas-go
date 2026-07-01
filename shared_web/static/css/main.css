@@ -49,8 +49,9 @@
 @import url("layout/responsive.css");
 @import url("layout/animations.css");
 
-/* Base - Typography */
+/* Base - Typography & Motion */
 @import url("base/typography.css");
+@import url("base/motion.css");
 
 /* Components - UI Panels */
 @import url("components/filter-panel.css");

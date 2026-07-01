@@ -1,0 +1,56 @@
+/* Atlas Dashboard - Motion & Reduced Motion
+ * Canonical source for prefers-reduced-motion handling.
+ * PR-1: 將零散 @media (prefers-reduced-motion: reduce) 規則統一於此檔。
+ * 主檔 import 位置：main.css line 53 後
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* 全域：壓制所有 animation / transition 到 0.01ms（而非 0，讓瀏覽器仍能觸發 transitionend） */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* 平滑捲動降級為瞬間跳轉 */
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  /* 部分動畫效果需明確關閉（避免閃爍） */
+  .metric-card:hover {
+    transform: none !important;
+  }
+
+  .home-confidence-bar__fill,
+  .risk-gate-fill,
+  .pipeline-progress-fill {
+    transition: none !important;
+  }
+
+  .tooltip__content,
+  .modal,
+  .dropdown-menu {
+    transition: none !important;
+  }
+
+  /* loading spinner 改為靜態 */
+  .loading-spinner,
+  .spinner,
+  .sse-pulse {
+    animation: none !important;
+  }
+}
+
+/* 標準 motion（不在 reduced-motion 時也提供合理的基礎時長） */
+:root {
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 400ms;
+  --motion-confidence: 800ms;
+  --easing-standard: ease;
+  --easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}
