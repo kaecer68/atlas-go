@@ -1375,6 +1375,9 @@ func run(args []string, deps appDeps) error {
 		srv := &http.Server{
 			Addr:              *apiAddr,
 			Handler:           finalMux,
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			IdleTimeout:       120 * time.Second,
 			ReadHeaderTimeout: 10 * time.Second,
 		}
 		srvErr := make(chan error, 1)
@@ -1678,6 +1681,9 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	srv := &http.Server{
 		Addr:              apiAddr,
 		Handler:           mux,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
