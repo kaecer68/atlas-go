@@ -7,9 +7,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/alerting"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -61,7 +63,9 @@ func (s *server) handleRootsListChanged(ctx context.Context, req *mcp.RootsListC
 	if req == nil || req.Session == nil {
 		return errors.New("roots_list_changed: missing session")
 	}
-	return s.refreshRootsCache(ctx, req.Session)
+	err := s.refreshRootsCache(ctx, req.Session)
+	s.publishRootsChangedAlert(ctx, err)
+	return err
 }
 
 func (s *server) refreshRootsCache(ctx context.Context, ss *mcp.ServerSession) error {
@@ -77,6 +81,37 @@ func (s *server) refreshRootsCache(ctx context.Context, ss *mcp.ServerSession) e
 	s.rootsCache = uris
 	s.rootsMu.Unlock()
 	return nil
+}
+
+func (s *server) publishRootsChangedAlert(ctx context.Context, refreshErr error) {
+	if s.alerter == nil {
+		return
+	}
+	severity := alerting.SeverityInfo
+	var message string
+	annotations := map[string]string{}
+	if refreshErr != nil {
+		severity = alerting.SeverityWarning
+		message = "MCP roots list_changed refresh failed"
+		annotations["error"] = refreshErr.Error()
+	} else {
+		uris := s.cachedRoots()
+		message = fmt.Sprintf("MCP roots list_changed applied: %d root(s)", len(uris))
+		if len(uris) > 0 {
+			annotations["root_uri"] = uris[0]
+		}
+		annotations["root_count"] = strconv.Itoa(len(uris))
+	}
+	alert := alerting.Alert{
+		Type:        alerting.EventSecurityRootsChanged,
+		Severity:    severity,
+		Source:      "atlas-mcp",
+		Message:     message,
+		Labels:      map[string]string{"alertname": "security_roots_changed"},
+		Annotations: annotations,
+		Timestamp:   time.Now().UTC(),
+	}
+	_ = s.alerter.Publish(ctx, alert)
 }
 
 func (s *server) handleMCPRootsList(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, MCPRootsListOutput, error) {

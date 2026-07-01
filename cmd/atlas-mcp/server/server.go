@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/alerting"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/kaecer68/atlas-go/internal/mcp/anomaly"
@@ -29,9 +30,9 @@ type Config struct {
 	AdminToken         string        // admin API token (ATLAS_ADMIN_TOKEN)
 	MetricsAddr        string        // Prometheus metrics listen address, e.g. "127.0.0.1:9091" (empty = disabled)
 
-	SamplingEnabled    bool          // ATLAS_MCP_SAMPLING_ENABLED (default false)
-	ElicitationEnabled bool          // ATLAS_MCP_ELICITATION_ENABLED (default false)
-	Roots              RootsConfig   // roots filesystem boundary configuration
+	SamplingEnabled    bool        // ATLAS_MCP_SAMPLING_ENABLED (default false)
+	ElicitationEnabled bool        // ATLAS_MCP_ELICITATION_ENABLED (default false)
+	Roots              RootsConfig // roots filesystem boundary configuration
 }
 
 // Run constructs a server with config and runs the stdio transport to completion.
@@ -153,6 +154,7 @@ type server struct {
 	auth       *TokenAuth
 	metrics    *Metrics
 	detector   *anomaly.Detector
+	alerter    alerting.Publisher
 	rootsMu    sync.RWMutex
 	rootsCache []string
 }
