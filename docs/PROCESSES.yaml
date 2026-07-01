@@ -1,0 +1,488 @@
+# Atlas-go Process Metadata
+# Schema: see docs/PROCESS_ANNOTATION_SOP.md §1.2
+# Source: docs/WORKFLOW_MAP.md v1 (Wave 11, 2026-06-29)
+# Purpose: structured workflow annotations for AI agents and GitNexus
+version: "1.0.0"
+last_updated: "2026-07-01"
+verified_by: "agent-interface-audit"
+
+workflows:
+  # 2. 入口 Run Mode（5 個）
+  - id: WA-001
+    symbol: "cmd/atlas/main.go::runAPIServer"
+    description: |
+      API 服務入口。啟動 Dashboard API server、Gateway、Plugin chain 與 Fubon-proxy，
+      預設 listen :8080，是 atlas-go 主要長生命週期入口。
+    triggers:
+      - cli: "--api"
+    depends_on: []
+    produces: "HTTP API server"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-002
+    symbol: "cmd/atlas/main.go::runLiveTrading"
+    description: |
+      Live Trading 入口。啟動 broker-aware live trading orchestrator，
+      支援 dry-run / paper / live 模式。
+    triggers:
+      - cli: "--live"
+    depends_on: [WA-001]
+    produces: "live trading session"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-003
+    symbol: "cmd/atlas/main.go::runSimulation"
+    description: |
+      模擬入口。執行一次性 daily simulation，完成後 exit。
+    triggers:
+      - cli: "--simulate"
+    depends_on: []
+    produces: "simulation report"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-004
+    symbol: "cmd/atlas/main.go::runBuildUniverse"
+    description: |
+      建構 Universe 入口。執行 SmartUniverseBuilder pipeline（run/map/scrape/status），
+      完成後 exit。
+    triggers:
+      - cli: "--build-universe"
+    depends_on: []
+    produces: "universe build result"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-005
+    symbol: "cmd/atlas/main.go::runPrismWorker"
+    description: |
+      PRISM Worker 入口。輕量 daemon，執行 PRISM cohort 訓練子任務。
+    triggers:
+      - cli: "prism worker"
+    depends_on: []
+    produces: "cohort training result"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  # 3.1 資料與市場層
+  - id: WA-100
+    symbol: "internal/marketdata/provider.go::Provider"
+    description: |
+      市場資料攝取總入口。透過 Gateway 呼叫 56+ provider，
+      將 TWSE/TPEX/Fugle/Yahoo/Fubon 等資料寫入 Redis cache 與 PostgreSQL。
+    triggers:
+      - cron: daily
+      - event: gateway channel adapter startup
+    depends_on: []
+    produces: "channel snapshots"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-101
+    symbol: "internal/marketdata/realtime/"
+    description: |
+      即時體制偵測。透過 websocket 推播接收即時市場訊號，
+      需 `-allow-realtime` flag 啟用。
+    triggers:
+      - cli: "-allow-realtime"
+      - event: websocket push
+    depends_on: [WA-100]
+    produces: "real-time regime signal"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-102
+    symbol: "internal/apigateway/us_market_refresh.go::NewUSMarketRefreshTask"
+    description: |
+      美股資料刷新。由 BackgroundTaskFunc 排程觸發，刷新美股指數與個股資料。
+    triggers:
+      - cron: scheduled
+    depends_on: [WA-100]
+    produces: "US market data refresh"
+    criticality: P2
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-103
+    symbol: "internal/monitoring/ingestion_lag_monitor.go::NewIngestionLagMonitor"
+    description: |
+      資料攝取延遲監控。訂閱 eventbus 每個 ingestion event，
+      計算並發出落後指標事件。
+    triggers:
+      - event: ingestion event
+    depends_on: [WA-100]
+    produces: "lag metric event"
+    criticality: P2
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  # 3.2 體制與智能層
+  - id: WA-200
+    symbol: "internal/janus/engine.go::NewEngine"
+    description: |
+      JANUS 體制偵測。API 啟動時呼叫 EnsureAllRegimes + Update，
+      輸出 RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL。
+    triggers:
+      - event: API startup
+      - cron: periodic
+    depends_on: [WA-100]
+    produces: "regime classification"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-201
+    symbol: "internal/macro_pipeline/"
+    description: |
+      總經資料攝取管線。由 daily macro cron 觸發，產出 MacroDataSnapshot。
+    triggers:
+      - cron: daily
+    depends_on: [WA-100]
+    produces: "MacroDataSnapshot"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-202
+    symbol: "internal/orchestrator/narrative_conviction_modulator.go"
+    description: |
+      敘事信念調變器（L2.4 觀察期功能）。
+      接收 planreflect loop event，調整 narrative conviction。
+    triggers:
+      - event: planreflect loop event
+    depends_on: [WA-201, WA-301]
+    produces: "conviction adjustment"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  # 3.3 決策與執行層
+  - id: WA-300
+    symbol: "internal/orchestrator/sector_agent_llm.go::SemiconductorLLMAgent.Supports"
+    description: |
+      確定性產業執行器（以半導體為例）。依 per-symbol 排程執行，
+      產出 Recommendation。可切換為 LLM 模式。
+    triggers:
+      - cron: per-symbol schedule
+    depends_on: [WA-200, WA-201]
+    produces: "domain.Recommendation"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-301
+    symbol: "internal/orchestrator/agent_loop.go::AgentLoop"
+    description: |
+      LLM 產業 Agent Loop。對單一標的執行 Plan → ToolCall → Reflect loop，
+      直到產出最終 conviction。
+    triggers:
+      - event: per-symbol LLM schedule
+      - cli: "-use-llm-sector-agents"
+    depends_on: [WA-200, WA-201, WA-302]
+    produces: "final conviction"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-302
+    symbol: "internal/strategy/registry.go::Register"
+    description: |
+      多策略配置器。由 orchestrator 整合，依 regime 與策略集選擇策略。
+    triggers:
+      - event: recommendation cycle
+    depends_on: [WA-200]
+    produces: "strategy selection"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-303
+    symbol: "internal/orchestrator/conviction_builder.go"
+    description: |
+      信念建構器。接收 recommendation event，計算最終 conviction score。
+    triggers:
+      - event: recommendation event
+    depends_on: [WA-300, WA-301, WA-302]
+    produces: "final conviction score"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  # 3.4 風險與控制層
+  - id: WA-400
+    symbol: "internal/risk/gate.go::RiskGate"
+    description: |
+      風險閘門。每筆訂單經過 pre/in/post-trade 檢查，
+      輸出 RiskDecision（Phase / Verdict / Mode / Action）。
+    triggers:
+      - event: per-order
+    depends_on: [WA-303, WA-403]
+    produces: "domain.RiskDecision"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-401
+    symbol: "internal/risk/gate.go::RiskGate.SetMode"
+    description: |
+      風險模式變更發布。RiskGate 內部模式切換時發布 RiskDecision event。
+    triggers:
+      - event: mode change
+    depends_on: [WA-400]
+    produces: "RiskDecision event"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-402
+    symbol: "internal/risk/approval_workflow.go::ApprovalWorkflow"
+    description: |
+      審批工作流。RiskDecision 需人工 review 時產出 ApprovalRequest。
+    triggers:
+      - event: RiskDecision requires review
+    depends_on: [WA-400]
+    produces: "ApprovalRequest"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-403
+    symbol: "internal/domain/maturity_tracker.go::MaturityTracker"
+    description: |
+      成熟度追蹤器。API 啟動時載入，決定系統模式（BurnIn / Calibrating / FullAuto）。
+    triggers:
+      - event: API startup
+    depends_on: []
+    produces: "system mode"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  # 3.5 校準與演化層
+  - id: WA-500
+    symbol: "cmd/atlas/calibration_tasks.go::registerCalibrationCycle"
+    description: |
+      信念校準。由 daily 排程觸發，結合 CycleCalibration 產出 CalibrationTask report。
+    triggers:
+      - cron: daily
+    depends_on: [WA-303]
+    produces: "CalibrationTask report"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-501
+    symbol: "cmd/atlas::prism worker"
+    description: |
+      PRISM Cohort 訓練。獨立 daemon，執行 cohort 訓練任務。
+    triggers:
+      - cli: "prism worker"
+    depends_on: []
+    produces: "cohort training result"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-502
+    symbol: "internal/scheduler/strategy_evolution.go"
+    description: |
+      策略演化 / Agent 生成。定期檢查策略表現，執行突變、淘汰、新生。
+    triggers:
+      - cron: periodic
+    depends_on: [WA-303, WA-500]
+    produces: "strategy mutations"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-503
+    symbol: "internal/scheduler/ml_retrain.go"
+    description: |
+      ML 模型重訓。由排程觸發，重訓 ML model。
+    triggers:
+      - cron: scheduled
+    depends_on: [WA-100]
+    produces: "retrained ML model"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-504
+    symbol: "internal/scheduler/auto_rollback.go"
+    description: |
+      自動回滾。偵測策略表現下降時退回 baseline。
+    triggers:
+      - event: strategy performance degradation
+    depends_on: [WA-303, WA-500]
+    produces: "rollback decision"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-505
+    symbol: "internal/scheduler/seasonal_task.go"
+    description: |
+      季節性任務。依 season-bound cron 執行季節性校準。
+    triggers:
+      - cron: seasonal
+    depends_on: [WA-500]
+    produces: "seasonal calibration"
+    criticality: P2
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  # 3.6 監控與維運層
+  - id: WA-600
+    symbol: "cmd/atlas/main.go::run"
+    description: |
+      過期告警清理。API 啟動時清理 24h+ gateway alert。
+    triggers:
+      - event: API startup
+    depends_on: []
+    produces: "stale alert cleanup"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-601
+    symbol: "internal/monitoring/drift_detector.go::NewDriftDetector"
+    description: |
+      漂移偵測。訂閱 eventbus，偵測 factor / strategy 漂移並發出 alert。
+    triggers:
+      - event: eventbus
+    depends_on: [WA-303]
+    produces: "drift alert"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-602
+    symbol: "internal/monitoring/factor_weight_regression.go::NewFactorWeightRegressionDetector"
+    description: |
+      因子權重回歸偵測。訂閱 eventbus，偵測因子 weight 回歸並發出警示。
+    triggers:
+      - event: eventbus
+    depends_on: [WA-303]
+    produces: "regression alert"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-603
+    symbol: "internal/monitoring/channel_health_synthesizer.go::NewChannelHealthSynthesizer"
+    description: |
+      Channel 健康度綜合器。訂閱 eventbus，綜合各 channel 健康度。
+    triggers:
+      - event: eventbus
+    depends_on: [WA-100]
+    produces: "channel health score"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-604
+    symbol: "internal/scheduler/system_health.go"
+    description: |
+      系統健康檢查。由 cron 觸發，評估系統整體健康度。
+    triggers:
+      - cron: periodic
+    depends_on: []
+    produces: "system health report"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-605
+    symbol: "docs/operations/l2-4-runbook.md"
+    description: |
+      L2.4 觀察窗口。啟用 LLM sector agents 時收集 slog event 進行觀察。
+    triggers:
+      - cli: "-use-llm-sector-agents=true"
+      - env: "LLM_SECTOR_AGENTS_ENABLED=true"
+    depends_on: [WA-301]
+    produces: "L2.4 observation log"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-606
+    symbol: "internal/orchestrator/factory.go::NewDrawdownConsumer"
+    description: |
+      回撤觸發消費者。訂閱 eventbus，觸發停損決策。
+    triggers:
+      - event: drawdown breach
+    depends_on: [WA-303, WA-400]
+    produces: "stop-loss decision"
+    criticality: P0
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  # 3.7 系統內部 sub-daemon
+  - id: WA-700
+    symbol: ".claude/skills/atlas-fubon-supervisor-invariants/SKILL.md"
+    description: |
+      Fubon-proxy 行程管理器。API 啟動時監督 python proxy 子行程，
+      遵循 F1-F9 invariants。
+    triggers:
+      - event: API startup
+    depends_on: []
+    produces: "fubon-proxy subprocess"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
+
+  - id: WA-701
+    symbol: "internal/observability/otel.go::Init"
+    description: |
+      OTel / 可觀測性。啟動時初始化 distributed trace。
+    triggers:
+      - event: startup
+    depends_on: []
+    produces: "distributed trace"
+    criticality: P1
+    test_coverage: unknown
+    last_verified: "2026-07-01"
+    verified_by: "agent-interface-audit"
