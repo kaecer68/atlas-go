@@ -125,6 +125,11 @@ type readyChecker struct {
 	dbDSN       string
 	replayPath  string
 	gatewayChan int // number of registered Gateway channels (0 = not ready)
+	// skipGateway bypasses the gateway_channels check. Set to true in
+	// modes (e.g. live trading) that do not initialize an apigateway.Gateway,
+	// where a 0 channel count is expected and should not mark the system
+	// as not_ready.
+	skipGateway bool
 }
 
 func newReadyHandler(rc readyChecker) http.Handler {
@@ -160,8 +165,10 @@ func newReadyHandler(rc readyChecker) http.Handler {
 			}
 		}
 
-		// Check 3: Gateway channel count
-		if rc.gatewayChan > 0 {
+		// Check 3: Gateway channel count (skipped in modes without Gateway)
+		if rc.skipGateway {
+			resp.Checks["gateway_channels"] = "skipped (mode does not initialize Gateway)"
+		} else if rc.gatewayChan > 0 {
 			resp.Checks["gateway_channels"] = "ok"
 		} else {
 			resp.Checks["gateway_channels"] = "failed: 0 channels registered"

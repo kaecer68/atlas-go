@@ -98,7 +98,7 @@ func isPrismWorkerCmd(args []string) bool {
 // path here is a security boundary change.
 func isPublicPath(p string) bool {
 	switch {
-	case p == "/" || p == "/health" || p == "/metrics":
+	case p == "/" || p == "/health" || p == "/ready" || p == "/metrics":
 		return true
 	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
 		return true
@@ -1393,7 +1393,7 @@ func run(args []string, deps appDeps) error {
 			Addr:              *apiAddr,
 			Handler:           finalMux,
 			ReadTimeout:       5 * time.Second,
-			WriteTimeout:      10 * time.Second,
+			WriteTimeout:      30 * time.Second,
 			IdleTimeout:       120 * time.Second,
 			ReadHeaderTimeout: 10 * time.Second,
 		}
@@ -1721,15 +1721,16 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	// Static routes and basic probes are registered through the same helper
 	// used by api-mode so live trading and simulation behave identically.
 	rc := readyChecker{
-		dbDSN:      os.Getenv("DATABASE_URL"),
-		replayPath: config.GetReplayDataPath(cfg.WorkDir),
+		dbDSN:       os.Getenv("DATABASE_URL"),
+		replayPath:  config.GetReplayDataPath(cfg.WorkDir),
+		skipGateway: true, // live mode does not initialize apigateway.Gateway
 	}
 	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
 	srv := &http.Server{
 		Addr:              apiAddr,
 		Handler:           mux,
 		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
