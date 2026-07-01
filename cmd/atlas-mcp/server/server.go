@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/metrics"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -23,6 +24,7 @@ type Config struct {
 	TokenStore         TokenStore    // optional DB-backed token store (nil = env-only)
 	AdminAddr          string        // admin HTTP listen address, e.g. "127.0.0.1:9090" (empty = disabled)
 	AdminToken         string        // admin API token (ATLAS_ADMIN_TOKEN)
+	MetricsAddr        string        // metrics HTTP listen address, e.g. "127.0.0.1:9091" (empty = disabled)
 }
 
 // Run constructs a server with config and runs the stdio transport to completion.
@@ -88,6 +90,16 @@ func Run(ctx context.Context, cfg Config) error {
 		cli:     newHTTPClient(cfg),
 		limiter: limiter,
 		auth:    auth,
+		metrics: metrics.NewRegistry(),
+	}
+
+	// Start metrics HTTP endpoint if configured.
+	if cfg.MetricsAddr != "" {
+		go func() {
+			if err := srv.metrics.StartServer(ctx, cfg.MetricsAddr); err != nil && err != context.Canceled {
+				fmt.Fprintf(os.Stderr, "atlas-mcp: metrics server: %v\n", err)
+			}
+		}()
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp", Version: "v0.1.0"}
@@ -126,6 +138,7 @@ type server struct {
 	cli     *httpClient
 	limiter *RateLimiter
 	auth    *TokenAuth
+	metrics *metrics.Registry
 }
 
 // HTTPClient returns the shared HTTP client.

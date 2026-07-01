@@ -142,6 +142,29 @@ ATLAS_MCP_TOKEN=$(openssl rand -hex 32) \
 | `ATLAS_MCP_AUDIT_LOG` | `/var/log/atlas-mcp/audit.log` |
 | `ATLAS_MCP_TOKEN` | `<32-byte hex>`（必帶 `--auth=required`）|
 
+### 5.6 Metrics endpoint
+
+| 變數 | 用途 | 預設 |
+|------|------|------|
+| `MCP_METRICS_ADDR` | Prometheus `/metrics` bind 位址 | `127.0.0.1:9091` |
+
+設定 `MCP_METRICS_ADDR=""`（空字串）關閉 metrics endpoint。
+
+#### 驗證
+
+```bash
+# 確認 metrics endpoint 回應
+curl -fsS http://127.0.0.1:9091/metrics | grep mcp_
+```
+
+預期輸出至少包含：
+- `mcp_calls_total{tool, transport, status}` — Counter
+- `mcp_call_duration_seconds{tool, transport}` — Histogram
+
+metrics 命名空間以 `mcp_` 前綴隔離，不與 atlas-go 主系統的監控指標（`internal/monitoring/prometheus.go`）衝突。
+
+> **安全注意**：預設 bind 127.0.0.1，不暴露到外部網路。若需外部 Prometheus scrape 或 Grafana Agent，請在反向代理層（nginx/Caddy）加 IP allowlist。
+
 ---
 
 ## 6. Docker compose（同容器模式）

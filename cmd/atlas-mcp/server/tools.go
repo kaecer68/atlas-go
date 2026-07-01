@@ -207,6 +207,7 @@ func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, f
 				Error:      fmt.Sprintf("retry after %s", r.RetryAfter),
 			}
 			_ = s.audit.Write(entry)
+			s.metrics.RecordCall(tool, getTransport(ctx), "ratelimited", time.Since(start).Milliseconds())
 			return fmt.Errorf("rate limited: %s: retry after %s", tool, r.RetryAfter)
 		}
 	}
@@ -232,5 +233,29 @@ func (s *server) withAudit(ctx context.Context, tool string, argKeys []string, f
 			return fmt.Errorf("audit: %w", wErr)
 		}
 	}
+	s.metrics.RecordCall(tool, getTransport(ctx), entry.Status, time.Since(start).Milliseconds())
 	return err
+}
+
+// transportKey is a context value key for the MCP transport name.
+type transportKey struct{}
+
+// TransportFromContext returns the transport name stored in ctx. If not set,
+// returns "stdio" (the default transport).
+func TransportFromContext(ctx context.Context) string {
+	if v := ctx.Value(transportKey{}); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return "stdio"
+}
+
+// WithTransport stores the transport name in ctx.
+func WithTransport(ctx context.Context, transport string) context.Context {
+	return context.WithValue(ctx, transportKey{}, transport)
+}
+
+func getTransport(ctx context.Context) string {
+	return TransportFromContext(ctx)
 }

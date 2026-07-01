@@ -7923,5 +7923,14 @@
       "rationale": "Risk-off regime 0.8% daily vol reflects compressed trading ranges",
       "source": "heuristic"
     }
+  },
+  "mcp": {
+    "metrics": {
+      "bind_addr": {
+        "value": "127.0.0.1:9091",
+        "rationale": "Metrics endpoint bound to loopback only (default), separate from atlas main port 8080",
+        "source": "security"
+      }
+    }
   }
 }
