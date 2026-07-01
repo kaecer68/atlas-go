@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -216,5 +217,44 @@ func TestMCPGetTenantUsage_EmptyAuditReturnsEmpty(t *testing.T) {
 	}
 	if len(out.Tenants) != 0 {
 		t.Errorf("got %d tenants, want 0", len(out.Tenants))
+	}
+}
+
+func TestReadAuditEntriesV2_ConcurrentSafe(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit_concurrent.log")
+	w, err := NewAuditWriter(path)
+	if err != nil {
+		t.Fatalf("new audit writer: %v", err)
+	}
+	now := time.Now().UTC()
+	for i := 0; i < 100; i++ {
+		_ = w.Write(AuditEntry{
+			TS:         now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano),
+			AgentID:    "agent1",
+			Tool:       "tool1",
+			Status:     "ok",
+			DurationMS: int64(i % 50),
+		})
+	}
+	_ = w.Close()
+
+	s := &server{audit: w}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := readAuditEntriesV2(s.audit)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent read: %v", err)
 	}
 }

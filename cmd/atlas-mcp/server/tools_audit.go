@@ -98,7 +98,7 @@ func (s *server) handleMCPGetCallStats(ctx context.Context, _ *mcp.CallToolReque
 		return nil, CallStats{}, fmt.Errorf("mcp_get_call_stats: window too large")
 	}
 
-	entries, err := readAuditEntriesV2(s.audit.path)
+	entries, err := readAuditEntriesV2(s.audit)
 	if err != nil {
 		return nil, CallStats{}, fmt.Errorf("mcp_get_call_stats: %w", err)
 	}
@@ -116,7 +116,7 @@ func (s *server) handleMCPGetSessionTopology(ctx context.Context, _ *mcp.CallToo
 		return nil, SessionTopology{}, fmt.Errorf("mcp_get_session_topology: window too large")
 	}
 
-	entries, err := readAuditEntriesV2(s.audit.path)
+	entries, err := readAuditEntriesV2(s.audit)
 	if err != nil {
 		return nil, SessionTopology{}, fmt.Errorf("mcp_get_session_topology: %w", err)
 	}
@@ -141,7 +141,7 @@ func (s *server) handleMCPGetTopSlowTools(ctx context.Context, _ *mcp.CallToolRe
 		limit = 20
 	}
 
-	entries, err := readAuditEntriesV2(s.audit.path)
+	entries, err := readAuditEntriesV2(s.audit)
 	if err != nil {
 		return nil, TopSlowToolsOutput{}, fmt.Errorf("mcp_get_top_slow_tools: %w", err)
 	}
@@ -176,7 +176,7 @@ func (s *server) handleMCPGetTenantUsage(ctx context.Context, _ *mcp.CallToolReq
 		return nil, TenantUsageOutput{}, fmt.Errorf("mcp_get_tenant_usage: window too large")
 	}
 
-	entries, err := readAuditEntriesV2(s.audit.path)
+	entries, err := readAuditEntriesV2(s.audit)
 	if err != nil {
 		return nil, TenantUsageOutput{}, fmt.Errorf("mcp_get_tenant_usage: %w", err)
 	}
@@ -211,6 +211,9 @@ func (s *server) handleMCPGetTenantUsage(ctx context.Context, _ *mcp.CallToolReq
 		tenants = append(tenants, *tus)
 	}
 	sort.Slice(tenants, func(i, j int) bool {
+		if tenants[i].ErrorCount != tenants[j].ErrorCount {
+			return tenants[i].ErrorCount > tenants[j].ErrorCount
+		}
 		return tenants[i].TotalCalls > tenants[j].TotalCalls
 	})
 
@@ -242,8 +245,12 @@ func countDistinctTools(entries []AuditEntryV2, tenantID string, cutoff time.Tim
 // values. Malformed lines are skipped (audit log may contain injected test
 // lines). A missing file returns an empty slice and no error so the tools
 // return zero-count results instead of failing.
-func readAuditEntriesV2(path string) ([]AuditEntryV2, error) {
-	f, err := os.Open(path)
+// The caller must hold w.mu (read lock) for the duration of the call to
+// serialize against concurrent Write and Cleanup operations.
+func readAuditEntriesV2(w *AuditWriter) ([]AuditEntryV2, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	f, err := os.Open(w.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

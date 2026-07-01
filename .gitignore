@@ -6,6 +6,7 @@
 /coverage.out
 /atlas
 /atlas-go
+/atlas-mcp-server-sdk-spike
 /tmp/
 /.gocache/
 /data/cache/

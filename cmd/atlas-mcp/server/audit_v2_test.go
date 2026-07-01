@@ -173,7 +173,7 @@ func TestAuditV2_V1V2Interop(t *testing.T) {
 		Transport:     "stdio",
 	})
 
-	entries, err := readAuditEntriesV2(path)
+	entries, err := readAuditEntriesV2(w)
 	if err != nil {
 		t.Fatalf("readAuditEntriesV2: %v", err)
 	}
