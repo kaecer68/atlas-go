@@ -220,6 +220,38 @@
       "type": "object"
     }
   },
+  "mcp_get_call_stats": {
+    "name": "mcp_get_call_stats",
+    "description": "Return call statistics for the recent window: total calls, error count, p50 latency, and per-tool breakdown. window_minutes defaults to 60 and is capped at 1440 (24h).",
+    "inputSchema": {
+      "properties": {
+        "window_minutes": {
+          "description": "query window in minutes; default 60, max 1440",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "window_minutes"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_get_session_topology": {
+    "name": "mcp_get_session_topology",
+    "description": "Return the agent_id to tool call matrix for the recent window. window_minutes defaults to 60 and is capped at 1440 (24h). Empty agent_id falls back to 'anonymous'.",
+    "inputSchema": {
+      "properties": {
+        "window_minutes": {
+          "description": "query window in minutes; default 60, max 1440",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "window_minutes"
+      ],
+      "type": "object"
+    }
+  },
   "narrative_get_bundle": {
     "name": "narrative_get_bundle",
     "description": "Compiled 'briefing bundle' (events + chains + templates) suitable for an LLM agent's morning summary.",
