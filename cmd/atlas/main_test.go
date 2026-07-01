@@ -53,8 +53,16 @@ func freePort(t *testing.T) int {
 // 如果只 `os.Unsetenv` 那 .env 載入後 ATLAS_API_KEY 會被設回去,
 // AuthMiddleware 看到非空 → 401,test 失敗。詳見
 // docs/investigations/2026-06-28-boot-loop-multi-service.md § 6。
+//
+// T-104: also set ATLAS_SKIP_PORT_PREFLIGHT=1 to bypass the TCP port
+// preflight in startup.Preflight. CI environments frequently have
+// leftover native `atlas -api` (port 8080) or self-port-bound
+// atlas.test binaries that wedge the 4 live-broker tests. The
+// preflight's `atlas-http address :8080 is held by a foreign process`
+// error would otherwise make the 4 tests flaky across CI hosts.
 func TestMain(m *testing.M) {
 	os.Setenv("ATLAS_API_KEY", "")
+	os.Setenv("ATLAS_SKIP_PORT_PREFLIGHT", "1")
 	os.Exit(m.Run())
 }
 
