@@ -7931,6 +7931,33 @@
         "rationale": "Metrics endpoint bound to loopback only (default), separate from atlas main port 8080",
         "source": "security"
       }
+    },
+    "anomaly": {
+      "detect_interval_sec": {
+        "value": 60,
+        "rationale": "Run anomaly detectors once per minute to balance freshness and audit-log I/O cost",
+        "source": "heuristic"
+      },
+      "baseline_window_min": {
+        "value": 1440,
+        "rationale": "24-hour baseline captures a full trading day plus overnight context for MCP call patterns",
+        "source": "heuristic"
+      },
+      "current_window_min": {
+        "value": 5,
+        "rationale": "5-minute current window is short enough to catch bursts while smoothing transient spikes",
+        "source": "heuristic"
+      },
+      "zscore_threshold": {
+        "value": 2.5,
+        "rationale": "Conservative z-score threshold reduces false positives during normal volatility; user-tunable via env",
+        "source": "heuristic"
+      },
+      "min_baseline_samples": {
+        "value": 30,
+        "rationale": "Require at least 30 baseline buckets (5-minute buckets over 24h) before declaring an anomaly",
+        "source": "heuristic"
+      }
     }
   }
 }
