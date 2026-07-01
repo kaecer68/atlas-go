@@ -206,7 +206,7 @@ func dedupKey(ev AnomalyEvent) string {
 // 3.0 <= score < 5.0 -> medium
 // score >= 5.0  -> high
 //
-// Centralised so SREs have one place to tune the mapping.
+// Centralized so SREs have one place to tune the mapping.
 func defaultSeverityFn(_ string, score float64) string {
 	switch {
 	case score >= 5.0:

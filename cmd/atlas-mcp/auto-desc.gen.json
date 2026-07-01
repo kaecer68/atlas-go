@@ -284,6 +284,43 @@
       "type": "object"
     }
   },
+  "mcp_get_tenant_usage": {
+    "name": "mcp_get_tenant_usage",
+    "description": "Return per-tenant usage stats for the recent window: total calls, error count, tool count. window_minutes defaults to 60 and is capped at 1440 (24h).",
+    "inputSchema": {
+      "properties": {
+        "window_minutes": {
+          "description": "query window in minutes; default 60, max 1440",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "window_minutes"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_get_top_slow_tools": {
+    "name": "mcp_get_top_slow_tools",
+    "description": "Return the slowest tools by p50 latency for the recent window. window_minutes defaults to 60 and is capped at 1440 (24h). limit defaults to 5 and is capped at 20.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "description": "number of slowest tools to return; default 5, max 20",
+          "type": "integer"
+        },
+        "window_minutes": {
+          "description": "query window in minutes; default 60, max 1440",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "limit",
+        "window_minutes"
+      ],
+      "type": "object"
+    }
+  },
   "narrative_get_bundle": {
     "name": "narrative_get_bundle",
     "description": "Compiled 'briefing bundle' (events + chains + templates) suitable for an LLM agent's morning summary.",
