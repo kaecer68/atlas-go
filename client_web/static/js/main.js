@@ -14,36 +14,35 @@ import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
 import './modals/modal.js';
 
-const PAGE_SHELL_IDS = ['narrative', 'live', 'pipeline', 'decision', 'portfolio', 'crossmarket', 'evolution_panel', 'industry', 'performance-report', 'strategies'];
+const SHELL_LOADERS = {
+  narrative: () => import('./page-shells/narrative.js'),
+  live: () => import('./page-shells/live.js'),
+  pipeline: () => import('./page-shells/pipeline.js'),
+  decision: () => import('./page-shells/decision.js'),
+  portfolio: () => import('./page-shells/portfolio.js'),
+  crossmarket: () => import('./page-shells/crossmarket.js'),
+  evolution_panel: () => import('./page-shells/evolution_panel.js'),
+  industry: () => import('./page-shells/industry.js'),
+  'performance-report': () => import('./page-shells/performance-report.js'),
+  strategies: () => import('./page-shells/strategies.js')
+};
+const _shellsLoaded = new Set();
 
-async function loadPageShells() {
-  const shellPromises = [
-    import('./page-shells/narrative.js'),
-    import('./page-shells/live.js'),
-    import('./page-shells/pipeline.js'),
-    import('./page-shells/decision.js'),
-    import('./page-shells/portfolio.js'),
-    import('./page-shells/crossmarket.js'),
-    import('./page-shells/evolution_panel.js'),
-    import('./page-shells/industry.js'),
-    import('./page-shells/performance-report.js'),
-    import('./page-shells/strategies.js')
-  ];
-  const results = await Promise.allSettled(shellPromises);
-  results.forEach((r, i) => {
-    if (r.status !== 'fulfilled') {
-      console.warn('[loadPageShells] failed:', PAGE_SHELL_IDS[i], r.reason);
-      return;
-    }
-    const el = document.getElementById('page-' + PAGE_SHELL_IDS[i]);
-    if (el && typeof r.value.template === 'string') el.innerHTML = r.value.template;
-  });
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', loadPageShells);
-} else {
-  loadPageShells();
+async function _ensureShellLoaded(id) {
+  if (_shellsLoaded.has(id)) return;
+  const loader = SHELL_LOADERS[id];
+  if (!loader) return;
+  _shellsLoaded.add(id);
+  try {
+    const mod = await loader();
+    const el = document.getElementById('page-' + id);
+    if (el && typeof mod.template === 'string') el.innerHTML = mod.template;
+  } catch (e) {
+    _shellsLoaded.delete(id);
+    console.warn('[switchPage] shell load failed:', id, e);
+    const el = document.getElementById('page-' + id);
+    if (el && !el.innerHTML) el.innerHTML = '<div class="empty">頁面載入失敗，請重新整理</div>';
+  }
 }
 
 export { getJSON, escapeHtml };
@@ -55,9 +54,10 @@ const basePath = (typeof window !== 'undefined')
   ? window.location.pathname.replace(/\/[^/]*$/, '') || ''
   : '';
 
-export function switchPage(id, silent) {
+export async function switchPage(id, silent) {
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }
+  await _ensureShellLoaded(id);
   if (pageEl.classList.contains('active')) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
