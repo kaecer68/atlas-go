@@ -95,6 +95,7 @@ go test -count=1 -race ./cmd/atlas-mcp/...   # 99 tests, -race 綠
 |------|------|------|
 | `ATLAS_API_KEY` | 轉發為 `X-API-Key` header 給 atlas-go admin endpoints | （未設時停用）|
 | `ATLAS_MCP_TOKEN` | Bearer token required by HTTP/SSE 傳輸 | （未設時 dev mode）|
+| `ATLAS_MCP_METRICS_ADDR` | Prometheus metrics listen address | （未設時停用；建議 `127.0.0.1:9091`）|
 | `TMPDIR` | audit log 預設目錄 | 系統預設 |
 
 ### 註冊狀態
@@ -284,7 +285,36 @@ JSONL 格式（每行一筆 tool 呼叫）：
 
 stdio 模式無 HTTP endpoint，傳統 curl-based healthcheck 不適用。SSE/HTTP 模式可加 `/healthz`（Phase 3 規劃中）。
 
-### 9.3 升級流程
+### 9.3 Prometheus Metrics（Phase 4 Direction A）
+
+設定 `ATLAS_MCP_METRICS_ADDR=127.0.0.1:9091` 後，atlas-mcp 會在同 process 內啟動獨立的 Prometheus HTTP endpoint：
+
+```bash
+ATLAS_MCP_METRICS_ADDR=127.0.0.1:9091 ./atlas-mcp
+```
+
+Scrape：
+
+```bash
+curl -s http://127.0.0.1:9091/metrics
+```
+
+暴露的 metrics：
+
+- `mcp_calls_total{tool, transport, status}` — 各 tool 呼叫次數
+- `mcp_call_duration_seconds{tool, transport}` — tool 呼叫 latency 分佈
+- `mcp_active_sessions{transport}` — 當前活躍 session 數
+- `mcp_token_usage_total{tenant_id}` — 成功 token 驗證次數
+- `mcp_anomaly_score{tenant_id, anomaly_type}` — anomaly detector 即時分數
+
+`/metrics` 僅 bind `127.0.0.1`，不對外暴露；若需外部 Prometheus scrape，請透過 reverse proxy / TLS / WAF。
+
+### 9.4 Anomaly Tools（Phase 4 Direction A）
+
+- `mcp_anomaly_get_recent`：列出最近 N 條 anomaly event
+- `mcp_anomaly_ack`：透過 `/api/alerts/acknowledge` 確認 anomaly alert
+
+### 9.5 升級流程
 
 1. `git pull` + `go build`（本機）或 `docker build`（容器）
 2. graceful shutdown：atlas-mcp 在收到 SIGTERM 後等當前 in-flight tool call 完成（≤ 30s timeout）— Phase 3 強化
