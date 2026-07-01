@@ -98,6 +98,9 @@ go test -count=1 -race ./cmd/atlas-mcp/...   # 99 tests, -race 綠
 | `ATLAS_MCP_METRICS_ADDR` | Prometheus metrics listen address | （未設時停用；建議 `127.0.0.1:9091`）|
 | `TMPDIR` | audit log 預設目錄 | 系統預設 |
 
+| `ATLAS_MCP_SAMPLING_ENABLED` | 啟用 Sampling (server→client LLM 呼叫) | `false` |
+| `ATLAS_MCP_ELICITATION_ENABLED` | 啟用 Elicitation (server 主動向使用者提問) | `false` |
+
 ### 註冊狀態
 
 `ATLAS_BASE_URL`、`ATLAS_API_KEY`、`ATLAS_MCP_AUDIT_LOG` 已於 [`configs/allowed_env_vars.md`](../../configs/allowed_env_vars.md) 白名單；`ATLAS_MCP_TOKEN` 為 Phase 2 新增，正在本 doc 標頭 commit 同步註冊。
