@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/kaecer68/atlas-go/internal/alerting"
 	"github.com/kaecer68/atlas-go/internal/mcp/anomaly"
 )
 
@@ -27,6 +29,10 @@ type Config struct {
 	AdminAddr          string        // admin HTTP listen address, e.g. "127.0.0.1:9090" (empty = disabled)
 	AdminToken         string        // admin API token (ATLAS_ADMIN_TOKEN)
 	MetricsAddr        string        // Prometheus metrics listen address, e.g. "127.0.0.1:9091" (empty = disabled)
+
+	SamplingEnabled    bool        // ATLAS_MCP_SAMPLING_ENABLED (default false)
+	ElicitationEnabled bool        // ATLAS_MCP_ELICITATION_ENABLED (default false)
+	Roots              RootsConfig // roots filesystem boundary configuration
 }
 
 // Run constructs a server with config and runs the stdio transport to completion.
@@ -106,7 +112,11 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp", Version: "v0.1.0"}
-	mcpSrv := mcp.NewServer(impl, &mcp.ServerOptions{})
+	mcpSrv := mcp.NewServer(impl, &mcp.ServerOptions{
+		RootsListChangedHandler: func(ctx context.Context, req *mcp.RootsListChangedRequest) {
+			_ = srv.handleRootsListChanged(ctx, req)
+		},
+	})
 
 	registerTools(mcpSrv, srv)
 	registerAuditTools(mcpSrv, srv)
@@ -137,13 +147,22 @@ func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 
 // server holds shared state for all tool handlers.
 type server struct {
-	cfg      Config
-	audit    *AuditWriter
-	cli      *httpClient
-	limiter  *RateLimiter
-	auth     *TokenAuth
-	metrics  *Metrics
-	detector *anomaly.Detector
+	cfg        Config
+	audit      *AuditWriter
+	cli        *httpClient
+	limiter    *RateLimiter
+	auth       *TokenAuth
+	metrics    *Metrics
+	detector   *anomaly.Detector
+	alerter    alerting.Publisher
+	rootsMu    sync.RWMutex
+	rootsCache []string
+}
+
+func (s *server) cachedRoots() []string {
+	s.rootsMu.RLock()
+	defer s.rootsMu.RUnlock()
+	return s.rootsCache
 }
 
 // HTTPClient returns the shared HTTP client.

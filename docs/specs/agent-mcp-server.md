@@ -432,7 +432,62 @@ Client 端（任意 SSE 相容 agent）：
 - PR #834：1 個 Phase 2.1 commit + 1 個 fix commit + 14 個 batch commits（每 batch 一個 commit）
 - 全部 14 batch 透過 `--force-with-lease` 推上
 
-### 對應的 MCP transport 程式碼地圖
+---
+
+## 12. Phase 4 B — Protocol Extensions（2026-07-01）
+
+**狀態：✅ IMPLEMENTED** — PR #B（`feat/mcp-protoext`，Phase 4 B 單一 commit，1421 insertions）。
+
+### 新增 Primitives
+
+| Primitive | MCP SDK 1.6.1 | Tool | Default | 說明 |
+|-----------|---------------|------|---------|------|
+| **Sampling** | `CreateMessage` / `CreateMessageWithTools` | `mcp_sample_llm` | `false` | server 端向 client LLM 發起取樣請求；需 ATLAS_MCP_SAMPLING_ENABLED=true |
+| **Roots** | `ListRoots` / `RootsListChangedHandler` | `mcp_roots_list`、`mcp_roots_read_file` | always on | read-only filesystem access；強制 O_RDONLY + path traversal hardening + symlink escape 防護 + per-read audit + 1MB size cap |
+| **Elicitation** | `Elicit` with Mode="form" | `mcp_elicit_user` | `false` | server 向使用者主動提問；需 ATLAS_MCP_ELICITATION_ENABLED=true |
+
+### 安全邊界
+
+| 機制 | 說明 |
+|------|------|
+| Roots read-only | `os.OpenFile(O_RDONLY)` only, write flag → error |
+| Path traversal | `filepath.EvalSymlinks` + `filepath.Clean` + prefix check |
+| Symlink escape | RED test `TestMCPRootsReadFile_SymlinkEscape_Rejected` (CI 強制) |
+| Audit per read | `withAuditExtra` 記錄 `{path, size_bytes, ts, tenant_id}` |
+| Size cap | 1MB (`io.LimitReader`) |
+| Sampling opt-in | Default OFF, env flag required |
+| Elicitation opt-in | Default OFF, env flag required |
+| Capability miss | Explicit error (no silent fallback) |
+
+### 新增檔案
+
+```
+cmd/atlas-mcp/server/
+├── sampling.go + _test.go      (Sampling: 124 + 176 LOC)
+├── roots.go + _test.go         (Roots: 239 + 165 LOC)
+├── elicitation.go + _test.go   (Elicitation: 103 + 135 LOC)
+└── mcp_session_test.go         (SDK session accessor test: 63 LOC)
+
+internal/apigateway/
+└── CONSTITUTION.md 附錄 D 新增 Roots Sanctioned Exception
+```
+
+### 驗證（2026-07-01）
+
+- `go test -count=1 -race ./cmd/atlas-mcp/...`：**121 PASS / 0 FAIL**
+- `go vet` / `gofmt -l .` / `staticcheck`：clean
+- Coverage：63.3%（≥ 60%)
+- oracle audit：P0（CONSTITUTION 附錄 D）+ 3×P1 → **ALL FIXED → READY TO MERGE**
+
+### 對應的 MCP server 程式碼地圖（新增項目）
+
+```
+cmd/atlas-mcp/server/
+├── sampling.go + _test.go       (B.1 Sampling — opt-in LLM call)   ← NEW
+├── roots.go + _test.go          (B.2 Roots — read-only fs)         ← NEW
+├── elicitation.go + _test.go    (B.3 Elicitation — user prompt)     ← NEW
+└── mcp_session_test.go          (SDK helper coverage)               ← NEW
+```
 
 ```
 cmd/atlas-mcp/
