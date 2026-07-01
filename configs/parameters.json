@@ -7923,5 +7923,27 @@
       "rationale": "Risk-off regime 0.8% daily vol reflects compressed trading ranges",
       "source": "heuristic"
     }
+  },
+  "mcp_anomaly": {
+    "alert_webhook_url": {
+      "value": "",
+      "rationale": "Alertmanager-style webhook URL. Empty = NoOpPublisher (no alert side-effects, ack store + metrics still work). Set to e.g. http://alertmanager:9093/api/v1/alerts in production.",
+      "source": "operator-config"
+    },
+    "alert_http_timeout_seconds": {
+      "value": 5,
+      "rationale": "Per-POST timeout to the alert webhook. Short enough to keep the detector polling loop responsive even when Alertmanager is slow.",
+      "source": "operator-config"
+    },
+    "emitter_interval_seconds": {
+      "value": 1,
+      "rationale": "How often the Emitter polls the detector's ring buffer. 1s is the maximum acceptable lag for operator alerting; lower values trade CPU for latency.",
+      "source": "operator-config"
+    },
+    "ack_store_capacity": {
+      "value": 1000,
+      "rationale": "In-memory ring buffer for the AnomalyStore (operator dashboard + ack trail). 1000 covers ~17 minutes of burst anomalies at 1Hz, well over any realistic operator ack window.",
+      "source": "operator-config"
+    }
   }
 }
