@@ -369,6 +369,9 @@ func TestSeasonalEventUsesParametersConfig(t *testing.T) {
 		t.Fatalf("expected non-zero YearEndWindowDressingConfidence default")
 	}
 
+	nowUTC = func() time.Time { return time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC) }
+	defer func() { nowUTC = func() time.Time { return time.Now().UTC() } }()
+
 	event := detectSeasonalEvent()
 	if event == nil {
 		t.Log("no seasonal event matched current date — parameter defaults verified above")
