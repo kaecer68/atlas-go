@@ -140,11 +140,13 @@ func resolveRootsConfig() server.RootsConfig {
 	var base *mcpRootsConfig
 	if path := os.Getenv("ATLAS_MCP_PARAMS"); path != "" {
 		if loaded, err := loadMCPConfig(path); err != nil {
+			//nolint:gosec // G706: path is from a trusted admin env-var; logging it for diagnostics is intentional.
 			log.Printf("atlas-mcp: warning: failed to load %s: %v (using env-only)", path, err)
 		} else {
 			base = loaded
 		}
 	} else if loaded, err := loadMCPConfig(defaultParamsPath()); err != nil {
+		//nolint:gosec // G706: defaultParamsPath is a constant "configs/parameters.json"; not user-controlled.
 		log.Printf("atlas-mcp: warning: failed to load %s: %v (using env-only)", defaultParamsPath(), err)
 	} else {
 		base = loaded
