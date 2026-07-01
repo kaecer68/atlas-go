@@ -16,7 +16,7 @@
 | P2 | Agent Tools 實戰指南（決策樹 + Top 15） | [`AGENT_TOOLS.md`](../AGENT_TOOLS.md) | ✅ 已交付 |
 | P3 | GitNexus Process 標註 SOP | [`PROCESS_ANNOTATION_SOP.md`](../PROCESS_ANNOTATION_SOP.md) | ✅ 已交付 |
 | P4 | Agent 5 分鐘 Onboarding | [`AGENT_ONBOARDING.md`](../AGENT_ONBOARDING.md) | ✅ 已交付 |
-| P5 | Agent 介面章節併入 `AGENTS.md` | [`AGENTS.md`](../AGENTS.md) | ✅ PR #875 |
+| P5 | Agent 介面章節併入 `AGENTS.md` | [`AGENTS.md`](../../AGENTS.md) | ✅ PR #875 |
 
 **結論**：規劃完整（5/5 文件落地 + P5 已進主文件）。**實作已進行中** — `cmd/atlas-mcp/` 已實作約 84 個 tools、stdio transport、auth/audit/anomaly/協議擴充；SSE/streamable-HTTP transport 與 `cmd/atlas` binary 合併仍待辦。本 roadmap 同步更新為「規劃 + 實作狀態」的單一真相來源。
 
