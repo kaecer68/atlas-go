@@ -13,13 +13,14 @@ import (
 )
 
 // AuditEntryV2 is the read model consumed by anomaly detectors. It mirrors
-// cmd/atlas-mcp/server.AuditEntryV2 so the server package can translate audit
-// records without anomaly depending on server.
+// cmd/atlas-mcp/server.AuditEntryV2 and adds TenantID so per-tenant detectors
+// can operate without the anomaly package importing the server package.
 type AuditEntryV2 struct {
 	SchemaVersion int    `json:"schema_version,omitempty"`
 	TS            string `json:"ts"`
 	SessionID     string `json:"session_id,omitempty"`
 	AgentID       string `json:"agent_id,omitempty"`
+	TenantID      string `json:"tenant_id,omitempty"`
 	Tool          string `json:"tool"`
 	ArgsHash      string `json:"args_hash,omitempty"`
 	Status        string `json:"status"`
