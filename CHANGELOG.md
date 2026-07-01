@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.0.0.26] - 2026-07-01
+
+### Added
+- **Phase 4 Direction A — MCP Observability** (PR #863): Prometheus metrics (`mcp_tool_call_total`, `mcp_tool_latency_seconds`, `mcp_anomaly_emitted_total`) + anomaly detector library (`internal/mcp/anomaly/`: rate/tenant/error-rate detectors + `MemoryStore` ack/persist) + 2 MCP alert tools (`mcp_get_recent_anomalies`, `mcp_get_anomaly_stats`). End-to-end wiring: metrics → eventbus `MCPAnomalyDetected` → `Publisher` (NoOp / Webhook → Alertmanager) → server lifecycle integration. 38 檔案 / +3758 / -316 行。
+- **Phase 4 Direction B — MCP Protocol Extensions** (PR #865 + PR #868): MCP 2025-07-28 協議擴充 — `roots` (client file root registration, whitelist via `parameters.json` mcp.roots、附錄 D Roots Sanctioned Exception — no-read boundary)、`sampling` (server-initiated LLM sampling)、`elicitation` (server → user 互動確認, PR #868 T2.4 schema 驗證 + timeout + decline)。`cmd/atlas-mcp-server-sdk-spike/` SDK prototype + main.go 整合 + RootsListChanged handler 接入 alerting.Publisher。
+- **v0.0.0.25.1 hotfix — readAuditEntriesV2 mutex** (PR #860): `AuditWriter` mutex 保護 `readAuditEntriesV2` 與寫入路徑，避免 SSE/HTTP transport wiring 後 read/write race。原預定 hotfix 釋出，因後續 PR 多 follow-up 而併入 0.0.0.26。
+- **Retail investor landing** (PR #864 + PR #871): `/client/landing` 新頁面 + Phase 2 modal 模組化 (`cycleLegendModal`) + page section lazy-load（index.html 171 → 117 行）+ async race fix (await `loadAll()` before `switchPage`，PR #874)。
+- **Internal alerting module** (`internal/alerting/`): `Publisher` interface + `NoopPublisher` + `WebhookPublisher` (Alertmanager schema, retry/log delegated to server.go)。
+- **MCP SDK spike** (PR #862): `cmd/atlas-mcp-server-sdk-spike/` 驗證 sampling/roots/elicitation primitives，建立 main.go 整合基礎。
+
+### Fixed
+- **Async race in home page init** (PR #874): `home.js` lazy per-page shell load on switchPage，確保 `loadAll()` 完成才切頁。
+- **Client null guards** (commits `e5e15320`, `a6fa9aad`, `8790a6bd`): strategies/pipeline 加 null guards before DOM writes、`renderPerformanceReport` guard for missing container、移除 dead `action-card.js` (0 consumers, superseded by inline HTML in home.js)。
+- **Console noise** (multiple commits): `silentGetJSON` console.error → console.warn，避免 silent data fetch failure 噴成 error。
+- **Narrative test pindown** (commit `ce8c8824`): `dividend_season` engine rule 實作前先 disable 對應 assertion，避免 CI flake。
+- **TIMELINE_BADGE keys alignment** (PR #856): 對齊 Go event kinds。
+- **Lint unblocks** (commits `a0807768`, `e9ea8dbc`, `9acbab5d`, `74a53994`, `b745097f`): gci import order (roots.go、server.go)、gosec G118、misspell、main.go G706 nolint、dividend_season field-contract 6 unknown fields。
+
+### Changed
+- `cmd/atlas-mcp/main.go` wired to `loadMCPConfig` + `mcp.roots` 從 `parameters.json` 讀 (新增 `mcpconfig.go` + `mcpconfig_test.go`)。
+- `cmd/atlas-mcp/server/server.go` 接入 anomaly eventbus emitter + RootsListChanged handler + Publisher wiring (commit `11aa433a` + `f1cbfac8` + `3120f1e5`)。
+- `configs/parameters.json` 新增 `mcp_anomaly` section + `mcp.roots` whitelist。
+- `configs/allowed_env_vars.md` 新增 `ATLAS_MCP_PARAMS` 等 Phase 4 B env vars + `ATLAS_MCP_ALERT_WEBHOOK_URL` whitelist（constitution check 同步）。
+- `internal/apigateway/CONSTITUTION.md` 附錄 D — Roots Sanctioned Exception (Phase 4 B, no-read boundary，sanctioned by data-source governance)。
+- `internal/AGENTS_INDEX.md` + `internal/MATURITY.md` — 新模組 `internal/mcp/anomaly/` 與 `internal/alerting/` 索引。
+- `go.mod` / `go.sum` — MCP SDK 依賴升版。
+
+### Documentation
+- `docs/operations/mcp-deploy.md` — Phase 4 metrics + anomaly detector + Roots env vars deployment guide（66 行增量）。
+- `docs/specs/agent-mcp-server.md` — Phase 4 Direction A/B 工具與協議擴充章節（93 行增量）。
+- `docs/operations/retail-investor-landing-audit.md` — Phase 2 retail-investor-landing audit report（PR #873，b296dac8）。
+- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/WORKFLOW_MAP.md` / `docs/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）+ `docs/PROCESSES.yaml`（488 行結構化 workflow metadata）。P0 補齊。
+- **Agent Interface roadmap v2** (PR #876): `docs/plans/agent-interface-roadmap.md` 從「實作未開始」更新為反映 `cmd/atlas-mcp/` 真實進度（Phase 1 核心橋接 ~84 tools / stdio transport / TokenAuth / audit v2 / anomaly / 協議擴充標記完成；Phase 2 SSE/streamable-HTTP transport 與 binary merge 至 `cmd/atlas` 標記 TODO；新增 P5 列「PR #875 已併入主文件」；文件版本升 v2）。
+
+### Known Limitations (deferred to v0.0.0.27)
+- **T1.5 observability follow-ups** (from `feat/mcp-obsv` WIP, 9 commits, +304 lines): `mcp_get_top_slow_tools` + `mcp_get_tenant_usage` tools + T1.4 alert/eventbus 整合章節 + end-to-end integration test — 計畫隨 v0.0.0.27 observability follow-up ship。註：Phase 4 B 的 `Publisher` 介面、`WebhookPublisher`、`AnomalyStore` 主體已隨 PR #863/#865 ship，本批 WIP 為工具層增量。
+- **SSE/HTTP transport wiring** (`TokenAuth` builds correctly but not invoked from any transport layer; `AgentIDFromContext` returns `"anonymous"` for stdio today) — Phase 4+ follow-up。
+- **Per-token rate-limit enforcement** (`rate_limit_per_min` column reserved in `atlas_mcp_tokens` schema but `RateLimiter` only honors global capacity) — Phase 4+。
+
+### Oracle Audit Summary
+- T1 (PR #863 Phase 4 A Observability): constitution check PASS（`ATLAS_MCP_ALERT_WEBHOOK_URL` whitelisted）。READY TO MERGE。
+- T2 (PR #865 + PR #868 Phase 4 B Protocol Extensions): constitution check PASS（附錄 D Roots Sanctioned Exception）。READY TO MERGE。
+- T3 (PR #860 v0.0.0.25.1 hotfix mutex): READY TO MERGE, 0 P0 / 0 P1 / 0 P2。
+- T4 (PR #871 retail-investor landing Phase 2): client-only，no constitution check required。
+- T5 (PR #875 + #876 Agent Interface docs): docs-only，no Oracle audit needed。
+
 ## [0.0.0.25] - 2026-07-01
 
 ### Added
