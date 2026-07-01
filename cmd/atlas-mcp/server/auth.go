@@ -16,8 +16,9 @@ import (
 // returns ErrTokenNotFound, the env-var token is used as fallback. If the
 // store returns ErrRevoked, auth is denied.
 type TokenAuth struct {
-	token string
-	store TokenStore
+	token   string
+	store   TokenStore
+	metrics *Metrics
 }
 
 // NewTokenAuth constructs a TokenAuth. token == "" enables dev mode (no check).
@@ -26,6 +27,8 @@ func NewTokenAuth(token string) *TokenAuth { return &TokenAuth{token: token} }
 // SetStore configures a database-backed token store. When nil, only the
 // environment-variable token is checked (legacy mode).
 func (a *TokenAuth) SetStore(store TokenStore) { a.store = store }
+
+func (a *TokenAuth) SetMetrics(m *Metrics) { a.metrics = m }
 
 // ErrUnauthorized is returned for an invalid or missing token.
 var ErrUnauthorized = errors.New("unauthorized")
@@ -75,6 +78,9 @@ func (a *TokenAuth) Authenticate(ctx context.Context, presented string) (context
 		if err == nil {
 			ctx = ContextWithTenantID(ctx, info.TenantID)
 			ctx = ContextWithAgentID(ctx, info.AgentID)
+			if a.metrics != nil {
+				a.metrics.IncTokenUsage(info.TenantID)
+			}
 			return ctx, nil
 		}
 		if errors.Is(err, ErrDBUnavailable) {
@@ -93,6 +99,9 @@ func (a *TokenAuth) Authenticate(ctx context.Context, presented string) (context
 	}
 	ctx = ContextWithTenantID(ctx, "env-fallback")
 	ctx = ContextWithAgentID(ctx, "env-fallback")
+	if a.metrics != nil {
+		a.metrics.IncTokenUsage("env-fallback")
+	}
 	return ctx, nil
 }
 

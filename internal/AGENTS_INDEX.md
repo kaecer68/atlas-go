@@ -61,6 +61,7 @@
 | `robustness` | 穩健性與敏感度測試（SK-20~22） |
 | `stress` | 壓力測試場景 |
 | `swarm` | MiroFish swarm 模擬 + GARCH 波動率 |
+| `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A）|
 
 ### U · Utility（輔助工具）
 
