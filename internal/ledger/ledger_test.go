@@ -378,11 +378,12 @@ func TestBuildScorecards_OOS_InsufficientTestSamples(t *testing.T) {
 
 func TestBuildScorecards_OOS_NormalCase(t *testing.T) {
 	// 25 outcomes across 25 windows → 20 train / 5 test → IS & OOS computed
+	// IS returns have slight positive variance so IsSharpe is well-defined (not 0/NaN from constant inputs).
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	outcomes := make([]domain.RecommendationOutcome, 25)
 	oosReturns := []float64{-0.02, -0.03, 0.01, -0.04, -0.01} // variance so ComputeSharpe works
 	for i := range 25 {
-		r := 0.01
+		r := 0.01 + 0.0001*float64(i)
 		if i >= 20 {
 			r = oosReturns[i-20]
 		}
