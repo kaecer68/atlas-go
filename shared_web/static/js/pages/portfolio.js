@@ -222,7 +222,7 @@ function kpiNum(v) {
     const riskGateContainer = document.getElementById('riskGatePanel');
     if (riskGateContainer) { renderRiskGatePanel(riskGateContainer, getJSON); }
   } catch (e) {
-    console.error(e);
+    console.warn(e);
     kpis.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-danger)">載入失敗</div>';
     tableEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-danger)">載入失敗</div>';
     historyEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-danger)">載入失敗</div>';

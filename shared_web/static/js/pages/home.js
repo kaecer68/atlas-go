@@ -5,10 +5,10 @@
  */
 
 import { getJSON, silentGetJSON, escapeHtml } from '../shared/app-utils.js';
-import { MetricCard } from '../components/metric-card.js';
-import { ActionCard } from '../components/action-card.js';
-import { TrustFooter } from '../components/trust-footer.js';
-import { RiskBadge } from '../components/risk-badge.js';
+import { metricCard } from '../components/metric-card.js';
+import { actionCard } from '../components/action-card.js';
+import { trustFooter } from '../components/trust-footer.js';
+import { renderRiskBadge } from '../components/risk-badge.js';
 import { Tooltip } from '../components/tooltip.js';
 import { fmtSignedPct, fmtDrawdown, fmtHHI, riskLevelLabel, formatNumber } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
@@ -156,7 +156,7 @@ function renderHero(macro, stress, alerts) {
   }
 
   summaryEl.textContent = summary;
-  badgeEl.innerHTML = RiskBadge({ level: risk, label: riskLevelLabel(risk) });
+  badgeEl.innerHTML = renderRiskBadge(risk, riskLevelLabel(risk));
 }
 
 function renderMarketPulse(health, macro, stress) {
@@ -173,21 +173,21 @@ function renderMarketPulse(health, macro, stress) {
   const stressLabel = riskLevelLabel(stressLevel >= 0.7 ? 'high' : stressLevel >= 0.4 ? 'medium' : 'low');
 
   grid.innerHTML = [
-    MetricCard({
+    metricCard({
       label: '大盤趨勢',
       value: marketTrendValue,
       change: macro && macro.taiwan_ex_change_pct ? fmtSignedPct(macro.taiwan_ex_change_pct) : null,
       tone: marketTrendClass,
       tooltip: '加權指數近期趨勢方向，資料來自 replay 與市場資料。'
     }),
-    MetricCard({
+    metricCard({
       label: '外資動向',
       value: foreignText,
       change: null,
       tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral',
       tooltip: '外資近一交易日淨買賣超（億元）。'
     }),
-    MetricCard({
+    metricCard({
       label: '市場壓力',
       value: stressLabel,
       change: stressLevel ? `${(stressLevel * 100).toFixed(0)}%` : null,
@@ -293,7 +293,7 @@ function fmtNTD(value) {
 }
 
 function renderDemoPortfolio(container) {
-  container.innerHTML = ActionCard({
+  container.innerHTML = actionCard({
     title: '尚無投資組合資料',
     message: '您可載入示範組合，快速體驗平台如何呈現持倉、風險與建議。',
     actionLabel: '載入示範組合',
@@ -360,7 +360,7 @@ function renderDemoPortfolioWithData(container) {
 
 function renderTrustFooter() {
   const container = document.getElementById('home-trust-footer');
-  container.innerHTML = TrustFooter({
+  container.innerHTML = trustFooter({
     version: DASHBOARD_VERSION,
     dataSources: DATA_SOURCES,
     disclaimer: '本平台為研究模擬用途，不構成投資建議。投資人應獨立判斷並自負風險。',
