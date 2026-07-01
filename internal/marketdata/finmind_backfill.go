@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type RateLimiter struct {
@@ -120,7 +122,10 @@ func FetchWithRetry(ctx context.Context, client *http.Client, url string, apiKey
 		}
 
 		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			logging.Warn("marketdata", "http_close_failed",
+				logging.Component("finmind"), logging.Err(err))
+		}
 
 		if resp.StatusCode == 429 {
 			retryAfter := resp.Header.Get("Retry-After")
