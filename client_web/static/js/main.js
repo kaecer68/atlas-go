@@ -250,13 +250,13 @@ async function loadPageData(pageId) {
         getJSONWithTimeout('/api/narrative/seasonal'),
       ]);
       if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], results[6], results[7]);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.warn(e); }
   }
   else if (pageId === 'pipeline') {
     try {
       var p = await silentGetJSON('/api/dashboard/recommendation-pipeline');
       if (m.pipe.renderPipeline) m.pipe.renderPipeline(p, false, '');
-    } catch(e) { console.error(e); }
+    } catch(e) { console.warn(e); }
   }
   else if (pageId === 'decision') {
     try {
@@ -281,7 +281,7 @@ async function loadPageData(pageId) {
         );
       }
       if (m.decision && m.decision.loadDecisionChain) m.decision.loadDecisionChain();
-    } catch(e) { console.error(e); }
+    } catch(e) { console.warn(e); }
   }
   else if (pageId === 'reasoning-trace') {
     loadReasoningTrace(window._currentSessionId);
@@ -300,7 +300,7 @@ async function loadPageData(pageId) {
       if (m.home && m.home.renderHomePage) {
         await m.home.renderHomePage(document.getElementById('page-home'));
       }
-    } catch(e) { console.error('[home] load failed:', e); }
+    } catch(e) { console.warn('[home] load failed:', e); }
   }
   else if (pageId === 'live') {
     try {
@@ -328,19 +328,19 @@ async function loadPageData(pageId) {
       }
       if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
       if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.warn(e); }
   }
   else if (pageId === 'industry') {
-    try { if (m.industry && m.industry.loadIndustryData) m.industry.loadIndustryData(); } catch(e) { console.error(e); }
+    try { if (m.industry && m.industry.loadIndustryData) m.industry.loadIndustryData(); } catch(e) { console.warn(e); }
   }
   else if (pageId === 'portfolio') {
     try {
       var portfolioModule = await import('./pages/portfolio.js').catch(function(err) {
-        console.error('[Dynamic import] portfolio module load failed:', err);
+        console.warn('[Dynamic import] portfolio module load failed:', err);
         return null;
       });
       if (portfolioModule) portfolioModule.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
-    } catch(e) { console.error(e); }
+    } catch(e) { console.warn(e); }
   }
   else if (pageId === 'parameters') {
     try {
@@ -353,15 +353,15 @@ async function loadPageData(pageId) {
       if (m.parameters && m.parameters.renderParametersPage) {
         m.parameters.renderParametersPage(pData[0], pData[1], pData[2], pData[3]);
       }
-    } catch(e) { console.error(e); }
+    } catch(e) { console.warn(e); }
   }
   
   else if (pageId === 'strategies') {
-    try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(document.getElementById('page-strategies')); } catch(e) { console.error(e); }
+    try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(document.getElementById('page-strategies')); } catch(e) { console.warn(e); }
   }
   
   else if (pageId === 'crossmarket') {
-    try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.error(e); }
+    try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.warn(e); }
   }
   
   else if (pageId === 'evolution_panel') {
@@ -369,9 +369,9 @@ async function loadPageData(pageId) {
       import('./pages/evolution_panel.js').then(function(evo) {
         if (evo.loadEvolutionData) evo.loadEvolutionData();
       }).catch(function(err) {
-        console.error('[Dynamic import] evolution_panel module load failed:', err);
+        console.warn('[Dynamic import] evolution_panel module load failed:', err);
       });
-    } catch(e) { console.error(e); }
+    } catch(e) { console.warn(e); }
   }
 }
 
