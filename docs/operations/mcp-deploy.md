@@ -165,6 +165,50 @@ metrics 命名空間以 `mcp_` 前綴隔離，不與 atlas-go 主系統的監控
 
 > **安全注意**：預設 bind 127.0.0.1，不暴露到外部網路。若需外部 Prometheus scrape 或 Grafana Agent，請在反向代理層（nginx/Caddy）加 IP allowlist。
 
+### 5.7 Anomaly detector
+
+`atlas-mcp` runs a built-in anomaly detector loop that compares recent audit
+patterns against a 24-hour baseline. Detected anomalies are published to the
+project event bus (`mcp.anomaly.detected`) and can be consumed by dashboard SSE
+streams or alerting integrations.
+
+**Detectors**:
+
+| Detector | Baseline | Current | Purpose |
+|----------|----------|---------|---------|
+| `baseline_5m_24h` | 24h call volume | 5m call volume | Burst detection (e.g., runaway agent loop) |
+| `per_tool_error` | 24h error count per tool | 5m error count per tool | Tool-level failure spike |
+| `per_tenant_error` | 24h error count per tenant | 5m error count per tenant | Tenant misuse or misconfiguration |
+
+**Configuration**:
+
+Parameters live in `configs/parameters.json` under `mcp.anomaly`:
+
+| Parameter | Default | Meaning |
+|-----------|---------|---------|
+| `detect_interval_sec` | 60 | How often detectors run |
+| `baseline_window_min` | 1440 | Baseline window in minutes (24h) |
+| `current_window_min` | 5 | Current window in minutes |
+| `zscore_threshold` | 2.5 | Minimum z-score to emit an anomaly |
+| `min_baseline_samples` | 30 | Minimum populated baseline buckets before evaluating |
+
+The loop is always on when the server starts; there is no dedicated env var to
+disable it. Tune sensitivity via `configs/parameters.json` or by overriding
+`server.Config.AnomalyConfig` at startup.
+
+**Verification**:
+
+Anomaly events are internal-only in T1.2. To observe them, subscribe to the
+project event bus or check structured logs for `mcp.anomaly.detected` payloads.
+Future tools (`mcp_anomaly_get_recent`, `mcp_anomaly_ack`) will expose them via
+MCP in T1.5.
+
+**False positives**:
+
+The default `zscore_threshold=2.5` is conservative. If you see too many
+anomalies during normal traffic, raise the threshold or widen
+`current_window_min` in `configs/parameters.json`.
+
 ---
 
 ## 6. Docker compose（同容器模式）
