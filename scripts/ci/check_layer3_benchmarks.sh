@@ -57,10 +57,13 @@ TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 FAILED=0
+SKIPPED=0
+PASSED=0
 
 for target in "${TARGETS[@]}"; do
     if [ ! -d "${target}/testdata" ]; then
         echo "[layer3-bench] SKIP ${target}: no testdata/ directory"
+        SKIPPED=$((SKIPPED + 1))
         continue
     fi
 
@@ -68,6 +71,7 @@ for target in "${TARGETS[@]}"; do
     baselines=$(find "${target}/testdata" -maxdepth 1 -name '*_bench.txt' -type f 2>/dev/null)
     if [ -z "${baselines}" ]; then
         echo "[layer3-bench] SKIP ${target}: no *_bench.txt baselines in testdata/"
+        SKIPPED=$((SKIPPED + 1))
         continue
     fi
 
@@ -94,13 +98,15 @@ for target in "${TARGETS[@]}"; do
             FAILED=1
         else
             echo "[layer3-bench] PASS ${target}/${baseline_name}"
+            PASSED=$((PASSED + 1))
         fi
     done <<< "${baselines}"
 done
 
 if [ "${FAILED}" -ne 0 ]; then
+    echo "[layer3-bench] FAIL summary: ${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped" >&2
     echo "[layer3-bench] one or more benchmarks regressed" >&2
     exit 1
 fi
 
-echo "[layer3-bench] all benchmarks within ${ALPHA_PCT}% threshold"
+echo "[layer3-bench] all benchmarks within ${ALPHA_PCT}% threshold (${PASSED} passed, ${SKIPPED} skipped)"
