@@ -88,13 +88,13 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 		if macroFlowResult != nil && ctx.Scratchpad != nil {
 			ctx.Scratchpad.Record(ReasoningTrace{
-				SessionID:  ctx.SessionID,
-				Timestamp:  time.Now().UTC(),
-				Phase:      PhaseMacroFlow,
-				Step:       6,
-				Component:  "macroflow",
-				Action:     "macro_flow.applied",
-				Reasoning:  fmt.Sprintf("macro_flow applied: risk_level=%s defensive=%+.1f%% aggressive=%+.1f%% cash=%+.1f%%",
+				SessionID: ctx.SessionID,
+				Timestamp: time.Now().UTC(),
+				Phase:     PhaseMacroFlow,
+				Step:      6,
+				Component: "macroflow",
+				Action:    "macro_flow.applied",
+				Reasoning: fmt.Sprintf("macro_flow applied: risk_level=%s defensive=%+.1f%% aggressive=%+.1f%% cash=%+.1f%%",
 					macroFlowResult.RiskLevel, macroFlowResult.Adjustment.Defensive,
 					macroFlowResult.Adjustment.Aggressive, macroFlowResult.Adjustment.Cash),
 				Data: map[string]any{

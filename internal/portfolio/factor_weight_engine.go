@@ -385,7 +385,7 @@ func (e *FactorWeightEngine) applyTaxonomyAdjustment(event *narrative.NarrativeE
 		return false
 	}
 	fw := fwConfig()
-	var sevCritical, sevHigh, sevMedium, sevLow = 0.10, 0.05, 0.02, 0.01
+	sevCritical, sevHigh, sevMedium, sevLow := 0.10, 0.05, 0.02, 0.01
 	if fw != nil {
 		sevCritical = fw.SeverityCritical.Value
 		sevHigh = fw.SeverityHigh.Value
@@ -394,11 +394,16 @@ func (e *FactorWeightEngine) applyTaxonomyAdjustment(event *narrative.NarrativeE
 	}
 	var delta float64
 	switch event.Severity {
-	case "critical": delta = sevCritical
-	case "high": delta = sevHigh
-	case "medium": delta = sevMedium
-	case "low": delta = sevLow
-	default: delta = sevMedium
+	case "critical":
+		delta = sevCritical
+	case "high":
+		delta = sevHigh
+	case "medium":
+		delta = sevMedium
+	case "low":
+		delta = sevLow
+	default:
+		delta = sevMedium
 	}
 	weights := make(map[FactorType]float64, len(deltaMap))
 	for ft, factorDelta := range deltaMap {

@@ -22,7 +22,7 @@ func validateElicitSchema(raw map[string]any) error {
 	if len(b) > maxElicitSchemaBytes {
 		return fmt.Errorf("schema exceeds %d bytes (got %d)", maxElicitSchemaBytes, len(b))
 	}
-	if hasExternalRef(raw, "") {
+	if hasExternalRef(raw) {
 		return fmt.Errorf("schema contains external $ref or $dynamicRef (not allowed in elicitation)")
 	}
 	props, ok := raw["properties"]
@@ -43,7 +43,7 @@ func validateElicitSchema(raw map[string]any) error {
 	return nil
 }
 
-func hasExternalRef(v any, key string) bool {
+func hasExternalRef(v any) bool {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, vv := range t {
@@ -52,13 +52,13 @@ func hasExternalRef(v any, key string) bool {
 					return true
 				}
 			}
-			if hasExternalRef(vv, k) {
+			if hasExternalRef(vv) {
 				return true
 			}
 		}
 	case []any:
 		for _, item := range t {
-			if hasExternalRef(item, "") {
+			if hasExternalRef(item) {
 				return true
 			}
 		}

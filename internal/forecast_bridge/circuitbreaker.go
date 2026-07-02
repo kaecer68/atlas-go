@@ -9,12 +9,12 @@ import (
 // After 10 consecutive failures, the breaker opens for 1 hour, after
 // which it auto-resets to half-open (allowing one probe attempt).
 type CircuitBreaker struct {
-	mu              sync.Mutex
-	consecutiveFail int
-	openedAt        time.Time
-	openDuration    time.Duration
+	mu               sync.Mutex
+	consecutiveFail  int
+	openedAt         time.Time
+	openDuration     time.Duration
 	failureThreshold int
-	nowFn           func() time.Time
+	nowFn            func() time.Time
 }
 
 // NewCircuitBreaker creates a breaker that opens after threshold consecutive
