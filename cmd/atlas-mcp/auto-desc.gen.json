@@ -252,6 +252,38 @@
       "type": "object"
     }
   },
+  "mcp_elicit_user": {
+    "name": "mcp_elicit_user",
+    "description": "Ask the connected MCP client to elicit input from the user (form or url). Requires client elicitation capability.",
+    "inputSchema": {
+      "properties": {
+        "elicitation_id": {
+          "description": "unique id for url mode",
+          "type": "string"
+        },
+        "message": {
+          "description": "message to present to the user",
+          "type": "string"
+        },
+        "mode": {
+          "description": "elicitation mode: form or url; inferred from other fields if empty",
+          "type": "string"
+        },
+        "schema": {
+          "description": "JSON schema for form mode (top-level properties only)",
+          "type": "object"
+        },
+        "url": {
+          "description": "URL to present for url mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    }
+  },
   "mcp_get_call_stats": {
     "name": "mcp_get_call_stats",
     "description": "Return call statistics for the recent window: total calls, error count, p50 latency, and per-tool breakdown. window_minutes defaults to 60 and is capped at 1440 (24h).",
@@ -317,6 +349,68 @@
       "required": [
         "limit",
         "window_minutes"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_roots_list": {
+    "name": "mcp_roots_list",
+    "description": "List the file:// roots declared by the connected MCP client.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "mcp_roots_read_file": {
+    "name": "mcp_roots_read_file",
+    "description": "Read a file under a declared file:// root. Read-only, path-traversal hardened, and audited.",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "description": "file:// URI to read, must be under a declared root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "mcp_sample_llm": {
+    "name": "mcp_sample_llm",
+    "description": "Request the connected MCP client to sample a message from its LLM. Requires client sampling capability.",
+    "inputSchema": {
+      "properties": {
+        "max_tokens": {
+          "description": "maximum tokens to sample",
+          "type": "integer"
+        },
+        "messages": {
+          "description": "conversation messages to send to the client LLM",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "system_prompt": {
+          "description": "optional system prompt",
+          "type": "string"
+        },
+        "temperature": {
+          "description": "optional sampling temperature",
+          "type": "number"
+        },
+        "tools": {
+          "description": "optional tools available to the model",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "messages",
+        "max_tokens"
       ],
       "type": "object"
     }
