@@ -41,6 +41,7 @@ ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
 | `ATLAS_API_KEY` | （未設） | 以 `X-API-Key` header 轉發至 atlas-go admin endpoints |
 | `ATLAS_MCP_TOKEN` | （未設） | MCP transport 層 token（stdio 為 forward-looking，SSE/HTTP 啟用後強制） |
 | `ATLAS_MCP_AUDIT_LOG` | `/tmp/atlas-mcp-audit.log` | JSONL audit log 路徑。父目錄自動建立（mode 0700） |
+| `ATLAS_MCP_ALLOWED_ROOTS` | （未設） | MCP client roots 白名單（CSV 格式路徑清單，未設時無限制，見 Phase 4 B roots 擴充協議） |
 
 > **stdio 安全模型**：目前無 transport 層 token 強制執行。process isolation（僅 parent process 可觸及 stdin/stdout）即安全邊界。`TokenAuth` + DB TokenStore 已實作，SSE/streamable-HTTP transport 啟用後強制驗證。
 

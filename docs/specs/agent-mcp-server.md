@@ -453,6 +453,8 @@ Client 端（任意 SSE 相容 agent）：
 | Roots read-only | `os.OpenFile(O_RDONLY)` only, write flag → error |
 | Path traversal | `filepath.EvalSymlinks` + `filepath.Clean` + prefix check |
 | Symlink escape | RED test `TestMCPRootsReadFile_SymlinkEscape_Rejected` (CI 強制) |
+| Symlink TOCTOU | `OpenFile` 使用 `O_NOFOLLOW` flag 關閉 re-resolve TOCTOU 視窗（#901/#902） |
+| AllowedRoots gate | Server-side `validateAllowedRoots` 拒絕系統根目錄（`/`、`/etc`、`/proc` 等），`ATLAS_MCP_ROOTS_ALLOW_UNSAFE=1` escape hatch（#903） |
 | Audit per read | `withAuditExtra` 記錄 `{path, size_bytes, ts, tenant_id}` |
 | Size cap | 1MB (`io.LimitReader`) |
 | Sampling opt-in | Default OFF, env flag required |
