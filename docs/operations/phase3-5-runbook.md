@@ -15,7 +15,7 @@
 
 ## 相關連結
 
-- 起點: `.planning/phase3-4-reassessment.md` §0
+- 起點: 同目錄 `phase3-5-spec.md` §1 (設計目標)
 - 規格: `docs/specs/phase3-5-spec.md` §3.1
 - L2.4 對齊: `docs/operations/l2-4-runbook.md`
 - 部署 dashboard: `internal/adminapi/deployment/dashboard.go`
