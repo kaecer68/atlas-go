@@ -4,6 +4,8 @@
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
 > **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [agent-mcp-server.md](specs/agent-mcp-server.md) §3。
+>
+> ⚠️ **先讀這條**：atlas-mcp 的 tool 定義是 compile-time 產生的，反映 `atlas-mcp` binary **建置時**的 Go 程式碼。若你發現 tool 行為與本文件不符，可能是 atlas-mcp binary 未在 Go 程式碼變更後重新 `go build`。程式碼層級的查詢（callers、dependencies、implementation details）請改用 **即時索引**的程式碼智慧工具：GitNexus、codebase-memory、codegraph。詳見 [`docs/TOOLS.md`](./TOOLS.md)。
 
 ---
 

@@ -83,7 +83,8 @@
 
 ### 環境與工具
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — 外部依賴與環境狀態
-- [`docs/TOOLS.md`](docs/TOOLS.md) — 完整工具列表（GitNexus / codebase-memory）
+- [`docs/TOOLS.md`](docs/TOOLS.md) — 程式碼智慧工具（GitNexus / codebase-memory / codegraph 路由決策樹）
+- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
 - [`CLAUDE.md`](CLAUDE.md) — Claude Code 專屬設定（部署、前端架構、token 效率規則）
 
 ### 文件治理
@@ -128,9 +129,23 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 
 ## 🔧 程式碼智慧工具（強制規則）
 
+atlas-go 有三套互補的程式碼智慧工具，各司其職。詳細能力對照與路由決策樹見 **[`docs/TOOLS.md`](docs/TOOLS.md)**。
+
+### GitNexus（改動風險評估 + Process 抽象，**改 code 前必用**）
 - 修改任何 function/class/method 前，執行 `gitnexus_impact({target, direction:"upstream"})`
 - commit 前執行 `gitnexus_detect_changes()`
 - impact 回傳 HIGH/CRITICAL 風險時，必須警告使用者並取得確認
 - 若 GitNexus 提示 index stale，執行 `npx gitnexus analyze --skip-agents-md`
 
-> 完整工具列表見 **[`docs/TOOLS.md`](docs/TOOLS.md)**；GitNexus 技能見 **[`.claude/skills/gitnexus/`](.claude/skills/gitnexus/)**。
+### codebase-memory（深度圖分析 + 語意搜尋，**補充 GitNexus**）
+- 新增功能前，用 `codebase-memory_search_graph({semantic_query:[...]})` 檢查是否已有語意相似的實作
+- 複雜度熱點掃描、跨服務資料流追蹤、ADR 管理 → 用 codebase-memory 的 Cypher / `trace_path` / `manage_adr`
+- Fork 強化版（`codebase-memory-mcp-pro`）提供 `explore()` 和 `detect_changes({depth:N})` 作為輕量替代
+
+### codegraph（輕量快速源碼探索，**快速瀏覽用**）
+- 用 `codegraph_explore()` 快速理解一段程式碼的源碼 + 呼叫路徑（單次 call，Read-equivalent）
+- 動態分派 hop 追蹤（callbacks、React re-render）是 codegraph 獨有強項
+- 與 codebase-memory 重疊的功能（單次源碼查詢），**優先使用 codebase-memory**
+
+> GitNexus 技能見 **[`.claude/skills/gitnexus/`](.claude/skills/gitnexus/)**。  
+> codegraph 官方 docs：[github.com/colbymchenry/codegraph](https://github.com/colbymchenry/codegraph)。

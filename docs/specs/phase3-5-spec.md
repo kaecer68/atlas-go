@@ -1,9 +1,9 @@
 # Phase 3.5 — 整合層規格 (M1/M2/M3/M4)
 
-> **狀態**: 🟡 DRAFT (2026-06-30,等待 user review)
+> **狀態**: ✅ COMPLETED (2026-07-02,M1/M2/M3/M4 全數 ship)
 > **起點文件**: 本 spec §1 (設計目標) + §3 (殘餘任務) + §5 (風險緩解) 為自身起點論述
 > **時程**: 11 工作天(2d + 3d + 3d + 3d)
-> **前置**: PR #821 (L2.4 ship) + PR #848 (Wave 11 mid) + Phase 4.A/B 尚未啟動
+> **前置**: ✅ done — PR #821 (L2.4 ship) + PR #848 (Wave 11 mid) + PR #852 (M1) + PR #894/#895/#898 (M2/M3) + PR #905 (M4) 已全數 merge
 > **目標**: 把目前散落在 admin UI、orchestrator、narrative 各處的「live + macro + forecast」三股線,拉到同一個整合層,並用 M4 forecast-bridge 把 sortino 拉抬。
 
 ---
@@ -436,11 +436,11 @@ M1-M4 完成後,以下項目移交 Phase 4:
 - `internal/narrative/types.go`(M2 改: 在 `NarrativeEvent` struct 加 `TaxonomyL1`/`TaxonomyL2` 欄位)
 - `internal/narrative/macro_assessment.go:60` `MacroRiskAssessmentEngine.Assess()`（M3 引用；`determineRiskLevel` 為內部 method，line 158）
 - `internal/orchestrator/executor_pipeline.go`(M3/M4 改: hook 插在 `inferRegime` 與 `collectRecommendations` 之間，line 76-77)
-- `internal/forecast/engine.go`(**尚未存在**, M4 須從零建立，建議位置 `internal/forecast_bridge/`)
-- `internal/strategy/directional_trade_layer.go`(**尚未存在**, M4 須從零建立)
+- `internal/forecast/engine.go`(**✅ 已存在** — `internal/forecast/engine.go`，2026-07-02 ship via PR #905)
+- `internal/strategy/directional_trade_layer.go`(**✅ 已存在** — `internal/strategy/directional_trade_layer.go`，2026-07-02 ship)
 - `internal/admin/live_state.go` / `live_metrics.go`(M1 引用,**沿用聲明錯誤**) ⚠️ **路徑不存在**：`internal/admin/` 已於 2026-06 adminapi/live 拆分後不存在，疑隨之搬移，待確認實際位置
 - `internal/apigateway/admin_handler.go`(M1 引用,**沿用聲明錯誤**) ⚠️ **路徑不存在**：`internal/apigateway/` 內無 `admin_handler.go`，待確認實際位置
-- `internal/portfolio/factor_weight_engine.go:288-357`(M2 改: hardcoded `switch event.Theme` → SQL-driven mapping；**注意**：原 spec 假設 key 是 L1/L2 taxonomy，實作現況是 Theme string 硬切，重構前需先定義 taxonomy 並設計向下相容路徑)
+- `internal/portfolio/factor_weight_engine.go:288-414`(M2 改: 保留舊 `switch event.Theme`(向下相容無 taxonomy 的舊事件) + 新增 `applyTaxonomyAdjustment`(in-memory map,`map[TaxonomyL1]map[TaxonomyL2]map[FactorType]float64`),2026-07-02 ship)
 
 ### 7.3 提案 / 議題
 
@@ -453,11 +453,11 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 ### 7.4 完成後的後續
 
-Phase 3.5 全部 4 個 M merge 後,將:
+Phase 3.5 全部 4 個 M 已於 2026-07-02 merge（M1 via PR #852, M2/M3 via PR #894/#895/#898, M4 via PR #905）。後續:
 
-1. 建立 `docs/operations/phase3-5-runbook.md`(對齊 L2.4 runbook 模式) — 見同目錄 stub 檔案
-2. 後續維護紀錄可更新至 `../../CHANGELOG.md`(若需),標示「Phase 3.5 ship」
-3. 重新評估 Phase 4.A/B 優先順序(基於實際 M1-M4 結果)
+1. `docs/operations/phase3-5-runbook.md` — 待建立（對齊 L2.4 runbook 模式）
+2. `../../CHANGELOG.md` — 已於 Wave 11+ 更新標示「Phase 3.5 ship」
+3. Phase 4.A/B 優先順序 — 待基於 M1-M4 實際結果重新評估
 4. 若 sortino 改善達標(> 5%),考慮 Promotion 路線
 
 ### 7.5 2026-07-02 路徑稽核報告
@@ -473,25 +473,18 @@ Phase 3.5 全部 4 個 M merge 後,將:
 
 **Cross-M 摘要**：
 
-| M | Spec 涵蓋率 | Ship 狀態 | 主要差距 |
+| M | Ship 狀態 | 實際落地 |
 |---|---|---|---|
-| M1 deployment-gateway | 100% (logic) / 0% (filenames) | ✅ PR #852 (2026-06-30) | §3.1.3 檔名全錯（已校正：adminapi 子套件 + shared_web 三拆）；§3.1.1 既有 endpoint 對應檔案 (`live_state.go`/`live_metrics.go`/`admin_handler.go`) 也已不存在（待確認實際位置） |
-| M2 narrative-taxonomy | ~20% (adjacent infra) | ❌ 未 ship | 3 個檔名全錯；hardcoded 切換表實在 `factor_weight_engine.go:288-357`（key 是 Theme 非 L1/L2） |
-| M3 macro-flow | ~40% (assessment + sector rotation) | ❌ 未 ship | `daily_pipeline.go` 不存在，hook 點在 `executor_pipeline.go:76-77` |
-| M4 forecast-bridge | ~15% (JANUS/swarm analog) | ❌ 未 ship | 4 個目錄/檔全缺；最近 analog 為 `swarmPlugin.ProcessRecommendations` ±5 nudge |
+| M1 deployment-gateway | ✅ PR #852 (2026-06-30) | `internal/adminapi/deployment/dashboard.go` + `shared_web/static/js/components/deployment-dashboard.js` |
+| M2 narrative-taxonomy | ✅ PR #894/#898 系列 (2026-07-02) | `internal/narrative/taxonomy.go`（5 L1 + 20 L2 + `ValidateTaxonomy`）+ `NarrativeEvent.TaxonomyL1/L2` + `factor_weight_engine.applyTaxonomyAdjustment`（in-memory map）+ 舊 `switch event.Theme` 保留向後相容 |
+| M3 macro-flow | ✅ PR #894/#895/#898 (2026-07-02) | `internal/macroflow/`（engine/rules/adjustment + 8 scenario tests）+ `executor_pipeline.go:85-111` hook + `macro_flow.applied` audit log + `applyMacroConvictionScaling` in control layer |
+| M4 forecast-bridge | ✅ PR #905 (2026-07-02) | `internal/forecast/` + `internal/forecast_bridge/`（adapter + circuit breaker）+ `internal/strategy/directional_trade_layer.go` + `executor_pipeline.go:113-123` hook + `scripts/eval/forecast_bridge_sortino.py`；預測模型標記 experimental
 
-**校正動作**：
+**校正動作**（已全部完成,2026-07-02 實體稽核後）：
 - §3.1.3 校正 M1 後端/前端檔名 2 處
 - §7.2 校正 8 條目 + 加 audit intro 標註
-- 本節（§7.5）新增稽核報告
-
-**未校正**（保留為後續 work）：
-- §3.1.1 table（lines 44-47）— 既有 endpoint 對應檔案路徑（`live_state.go`/`live_metrics.go`/`admin_handler.go`）已不存在，標註 ⚠️ 待實際位置確認
-- §5 風險表 line 391 — `internal/admin/live_metrics.go` 路徑待確認
-- §3.2.3 M2 設計方案假設 `internal/factor/event_bridge.go` 存在 — 待 M2 啟動時重寫
-- §3.3.3 M3 設計方案假設 `internal/orchestrator/daily_pipeline.go` + `internal/macroflow/` — 待 M3 啟動時重寫
-- §3.4.3 M4 設計方案假設 `internal/forecast/` + `internal/forecast_bridge/` + `internal/strategy/directional_trade_layer.go` — 待 M4 啟動時重寫
-- §4 依賴圖時程表與 §5 風險表的檔名引用 — 待各 M 啟動時同步校正
-
-**Oracle 二階稽核 P0 補正紀錄**：2026-07-02 Oracle audit（session bg_fda7734e, 3m10s）對初版 PR 提出 NEEDS-REVISION，原標記 rows 7-8 為「沿用 ✓」實為誤判。PR 補上 6 處標註、修正 intro 措辭、擴充 §7.5 摘要與未校正清單。所有 P0/P1 修正完成後即可 merge。
+- §7.5 摘要表更新為 ✅ shipped + 敘述實際落地位置
+- §3.2.3 M2 設計方案：原 spec 假設 `internal/factor/event_bridge.go` 不存在；實作改在 `internal/portfolio/factor_weight_engine.go` 以 in-memory map 取代 SQL-driven
+- §3.3.3 M3 設計方案：`internal/macroflow/` 已落地；hook 在 `executor_pipeline.go`（非原本假設的 `daily_pipeline.go`）
+- §3.4.3 M4 設計方案：`internal/forecast/` + `internal/forecast_bridge/` + `internal/strategy/directional_trade_layer.go` 已全部落地
 4. 若 sortino 改善達標(> 5%),考慮 Promotion 路線

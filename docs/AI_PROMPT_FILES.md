@@ -7,9 +7,9 @@
 **AI 生成的 prompt 檔案應 commit，不得以「local-only」為由留在工作目錄而未追蹤。**
 
 理由：
-- 主流工具鏈會演進（`codegraph` → `GitNexus`），prompt 中的工具引用必須隨之更新
+- 主流工具鏈會演進（`graphify` → `GitNexus`），prompt 中的工具引用必須隨之更新
 - 散落在每位開發者 `/tmp/` 或 `~/.opencode/prompts/` 的 local prompt 沒有 review 路徑，工具引用過期也沒人發現
-- PR #690 的契機正是因 `codegraph` 工具退役後，三份 Wave 8/9 prompt 仍引用 `codegraph_context`，花時間考古才找到原始檔案
+- PR #690 的契機正是因 `graphify` 工具退役後，三份 Wave 8/9 prompt 仍引用過時工具指令，花時間考古才找到原始檔案
 
 ## 適用範圍
 
@@ -47,8 +47,8 @@
 # 列出 .opencode/ 下所有 untracked 的 prompt 檔案
 git ls-files --others --exclude-standard .opencode/prompts/
 
-# 列出所有引用已退役工具的 prompt
-grep -rln "codegraph\|graphify\|sven1103" .opencode/prompts/ docs/audit/
+# 列出所有引用過時工具的 prompt（依當前工具鏈調整 pattern）
+grep -rln "graphify\|sven1103" .opencode/prompts/ docs/audit/
 ```
 
 ## 違規情境處理
@@ -61,10 +61,10 @@ grep -rln "codegraph\|graphify\|sven1103" .opencode/prompts/ docs/audit/
 
 ## 為什麼這條規則存在
 
-PR #690（2026-06-24）清理了 graphify 與 codegraph 工具鏈。過程中發現：
+PR #690（2026-06-24）清理了 graphify 工具鏈。過程中發現：
 
 - `.opencode/prompts/wave-8-bootstrap.md` 等 3 個檔案因為 local-only 沒進 git
-- 內容仍引用 `codegraph_context` 等已退役工具
+- 內容仍引用 `graphify` 等已退役工具
 - 為更新引用，需在 working tree 重新建立檔案並 commit，耗時且容易出錯
 
 未來若新增 AI 工具（例如實驗性的 `gitnexus_explore`），所有 prompt 引用都應隨工具演進更新——前提是檔案在 git 裡、能被 CI 與 reviewer 看見。

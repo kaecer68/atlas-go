@@ -1,26 +1,28 @@
 # 開發工具指南 — 程式碼知識圖譜
 
-> 本文件介紹 atlas-go 專案的兩套程式碼智慧工具：**GitNexus** + **codebase-memory**。
+> 本文件介紹 atlas-go 專案的三套程式碼智慧工具：**GitNexus** + **codebase-memory** + **codegraph**。
 >
 > 適用對象：需要理解專案架構、進行重構、或做複雜度分析的**人類開發者**與 **AI Agent**。
 
 ---
 
-## 雙工具總覽
+## 三工具總覽
 
-atlas-go 專案同時被兩個 MCP 索引，並提供互補能力：
+atlas-go 專案同時被三個 MCP 索引，並提供互補能力：
 
 | 工具 | MCP 名稱 | 索引名稱 | 節點 / 邊 | 獨特能力 |
 |------|---------|---------|----------|---------|
 | **GitNexus** | `gitnexus` | `atlas-go` | 請執行 `npx gitnexus status` 取得 live 數字（2026-06-25 快照：53,385 symbols / 169,008 edges / 約 300 execution flows） | 執行流（Process）、功能社群（Community）、API 路由映射、影響範圍分級、安全重命名 |
 | **codebase-memory** | `codebase-memory` | `Users-kaecer-workspace-atlas` | 請執行 `codebase-memory_list_projects()` 取得 live 數字（2026-06-25 快照：29,757 nodes / 127,367 edges） | 開放 Cypher 查詢、向量語意搜尋、Louvain 叢集偵測、ADR 管理、跨服務資料流追蹤 |
+| **codegraph** | `codegraph` | `.codegraph/`（本機 daemon） | 即時索引（file watcher ~2s debounce），`codegraph status` 取得 live 數字 | 輕量單次查詢（`codegraph_explore` 一 call 回源碼+呼叫路徑+blast radius）、staleness banner 透明度 |
 
-> **上述數字為 2026-06-25 歷史快照**。由於 `scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op），這些數字不再被 CI 自動驗證。**需要 live 數字時，請手動執行** `npx gitnexus status`（GitNexus）或 `codebase-memory_list_projects()`（codebase-memory）。
+> **上述數字為 2026-06-25 歷史快照**。由於 `scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op），這些數字不再被 CI 自動驗證。**需要 live 數字時，請手動執行** `npx gitnexus status`（GitNexus）、`codebase-memory_list_projects()`（codebase-memory）、或 `codegraph status`（codegraph）。
 
-**為什麼要兩個？**
+**為什麼要三個？**
 - **GitNexus** 強在「**process + community**」抽象與 PR 安全閘（impact / detect_changes / rename）。
 - **codebase-memory** 強在「**Cypher + 語意搜尋 + Louvain 叢集**」的圖分析能力。
-- 兩者互補：複雜度熱點掃描、跨模組統計分析 → codebase-memory；改動前 blast radius、跨檔案重命名 → GitNexus。
+- **codegraph** 強在「**輕量快速**」：單一 `codegraph_explore` 呼叫同時回傳源碼 + 呼叫路徑 + blast radius，適合快速理解一段程式碼。但缺少 Process 抽象、Cypher 查詢、語意搜尋等進階功能。
+- 三者互補：改動前 blast radius + 風險分級 → GitNexus；深度圖分析 + 語意搜尋 → codebase-memory；輕量快速源碼探索 → codegraph。
 
 ---
 
@@ -224,6 +226,56 @@ gitnexus_detect_changes()
 
 ---
 
+## codegraph
+
+### 核心能力
+
+codegraph 提供 SQLite 知識圖譜，透過單一 MCP tool `codegraph_explore` 實作「Read-equivalent」查詢。一次呼叫同時回傳符號的逐行源碼 + 呼叫路徑 + blast radius（包含動態分派 hop，如 callbacks、React re-render 等）。底層以 tree-sitter AST 解析索引，搭配 file watcher 維持 ~2s debounce 即時同步。
+
+**索引範圍：** `.codegraph/` 目錄內的 SQLite DB，由 daemon 程序自動維護。
+
+### 常用指令
+
+```bash
+# 查看索引狀態
+codegraph status
+
+# 手動重建索引
+codegraph index --force
+
+# 主要查詢工具（也是唯一的 MCP tool）
+codegraph_explore({query: "auth middleware login"})
+```
+
+### 使用場景
+
+| 場景 | 指令 | 說明 |
+|------|------|------|
+| 快速理解程式碼 | `codegraph_explore()` | 一 call 拿源碼 + 呼叫路徑 + blast radius，取代多次 Read/grep |
+| 動態分派追蹤 | `codegraph_explore()` | 支援 callbacks、React re-render、JSX children 等 grep 無法追蹤的 hop |
+| 編輯前了解 blast radius | `codegraph_explore()` | 回傳 callers + fan-in flags，幫助評估改動影響範圍 |
+
+### 唯一擁有（codegraph 獨佔）
+
+- **單 tool 極簡介面** — 只有 `codegraph_explore` 一個 MCP tool，心智負擔最低
+- **動態分派 hop 追蹤** — callbacks、React re-render、interface→impl 動態綁定，grep 無法捕捉
+- **staleness banner** — 若檔案被編輯後尚未重新索引，MCP 回應會主動標記 `⚠️` 提醒 agent 直接 `Read`
+- **connect-time catch-up** — 重連時自動跑 `(size, mtime) + content-hash` 對齊
+
+### 與 codebase-memory 的關係
+
+codegraph 與 codebase-memory 在「src code 探索」功能上有明顯重疊（兩者都有 `explore`-like 的單次查詢能力）。
+
+**優先級規則**：
+- codegraph 是**輕量快速入口** — 適合「快速看一眼這段 code 在做什麼」
+- codebase-memory 是**深度分析引擎** — 適合需要 Cypher、語意搜尋、複雜度掃描、ADR 管理的場景
+- **重疊功能（單次源碼+呼叫路徑查詢）：codebase-memory 優先**，因其 Hybrid LSP 型別解析能力更強，且支援 158 語言
+- **動態分派追蹤（callbacks、re-render）：codegraph 優先**，此為其獨有強項
+
+> **核心原則**：把 codegraph 想成「快速瀏覽器」，把 codebase-memory 想成「完整 IDE」。日常輕量查詢可用 codegraph；深度分析用 codebase-memory。
+
+---
+
 ## codebase-memory
 
 ### 核心能力
@@ -308,7 +360,8 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
 需要改動符號？
 ├─ 是 → 改前評估 blast radius
 │       ├─ 需要風險等級 + 受影響 Process → GitNexus `impact()` + `detect_changes()`
-│       ├─ 需要源碼 + 鄰居（中低風險） → codebase-memory `explore()`
+│       ├─ 需要源碼 + 鄰居（中低風險） → codebase-memory `explore()` ⬅ 優先
+│       ├─ 需要源碼 + 鄰居（輕量快速） → codegraph `codegraph_explore()`
 │       ├─ 需要 transitive caller blast radius（hop 控制） → codebase-memory `detect_changes({depth:N})`
 │       └─ 跨檔案改名 → GitNexus `rename()`
 └─ 否 → 純查詢？
@@ -318,7 +371,8 @@ codebase-memory_manage_adr({mode: "update", content: "..."})
          ├─ 架構叢集 → codebase-memory `get_architecture()`
          ├─ API 路由 → GitNexus `route_map()` / `shape_check()`
          ├─ ADR → codebase-memory `manage_adr()`
-         └─ 跨倉分析 → GitNexus `query({repo:"@<group>"})`
+         ├─ 跨倉分析 → GitNexus `query({repo:"@<group>"})`
+         └─ 快速源碼瀏覽 → codegraph `codegraph_explore()`（動態分派 hop 追蹤）
 ```
 
 ---
@@ -379,9 +433,13 @@ codebase-memory_get_graph_schema({project: "Users-kaecer-workspace-atlas"})
 
 ## 相關文件
 
-- `AGENTS.md` — AI 工具使用規則（AI 專用速查表）
-- `CLAUDE.md` — GitNexus 完整規範與工具使用準則（Always Do / Never Do）
+- `AGENTS.md` — AI 工具使用規則（AI 專用速查表，含「程式碼智慧工具」強制規則）
+- `CLAUDE.md` — Claude Code 專屬設定（Token 效率規則、部署）
+- `docs/AGENT_TOOLS.md` — **atlas-mcp 業務工具**（80 個 MCP tool，市場查詢/風險/策略操作）— 與本文件（程式碼智慧工具）用途不同
 - `internal/AGENTS_INDEX.md` — 模組索引與成熟度
 - `docs/architecture.md` — 系統架構詳細說明
+- [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph) — codegraph 官方 repository
+- [win4r/codebase-memory-mcp-pro](https://github.com/win4r/codebase-memory-mcp-pro) — codebase-memory-mcp-pro fork（本專案使用的版本）
+- [abhigyanpatwari/GitNexus](https://github.com/abhigyanpatwari/GitNexus) — GitNexus 官方 repository
 
-> 註：`scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op script，從未檢查到任何 doc 中的 pattern）。GitNexus 索引大小請直接用 `npx gitnexus status` 查詢。
+> 註：`scripts/verify-gitnexus-stats.sh` 已於 2026-06 移除（no-op script，從未檢查到任何 doc 中的 pattern）。索引大小請直接用 `npx gitnexus status`、`codebase-memory_list_projects()`、或 `codegraph status` 查詢。

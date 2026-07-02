@@ -58,7 +58,7 @@
 
 ## KEY TYPES
 
-`NarrativeEvent`（`types.go`）、`KnowledgeBase`（`knowledge_base.go`）、`CausalChain`（`types.go`）、`EventLifecycleManager`（`lifecycle.go`）、`TaiwanStressIndex`（`taiwan_stress_index.go`）、`SeasonalBridge`（`seasonal_bridge.go`）、`ValidateTaxonomy`（`taxonomy.go`，5 L1 × 5 L2 分類，Phase 3.5 M4 引入）。
+`NarrativeEvent`（`types.go`）、`KnowledgeBase`（`knowledge_base.go`）、`CausalChain`（`types.go`）、`EventLifecycleManager`（`lifecycle.go`）、`TaiwanStressIndex`（`taiwan_stress_index.go`）、`SeasonalBridge`（`seasonal_bridge.go`）、`ValidateTaxonomy`（`taxonomy.go`，5 L1 × 5 L2 分類，Phase 3.5 M2 引入）。
 
 ---
 

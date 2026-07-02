@@ -4,6 +4,10 @@
 > **目標**：5 分鐘內取得四個問題的答案：能做什麼、怎麼連、邊界在哪、接下來讀哪。
 > **不涵蓋**：內部 tool 開發細節、codegen、CI 流程。
 
+> ⚠️ **重要提示：atlas-mcp 的 tool 定義是 compile-time 產生的**，反映的是 `atlas-mcp` binary **建置時**的 Go 程式碼狀態。若 Go 程式碼變更後未重新 `go build` atlas-mcp binary，MCP client 看到的 tool schema 可能與實際系統行為有落差。agent 若發現 tool 行為與文件不符，請先檢查 atlas-mcp binary 是否已重新建置。
+>
+> 程式碼智慧工具（GitNexus / codebase-memory / codegraph）則不受此限制 — 它們是**即時索引**，隨時反映程式碼最新狀態。工具選擇指引見 [`docs/TOOLS.md`](./TOOLS.md)。
+
 ---
 
 ## 一句話：atlas-mcp 是什麼
