@@ -11,9 +11,9 @@
 
 ## 版本資訊
 
-- **Wave**：Wave 11（L2.3 PoC 已 ship + L2.4 觀察窗口已 ship via PR #821，文件永久化於 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md`）
-- **最後更新**：2026-06-28
-- **對應版本**：v0.0.0.23+
+- **Wave**：Wave 11+（L2.3 PoC 已 ship，L2.4 觀察窗口已 ship via PR #821，Phase 3.5 forecast-bridge PoC 已合併 via PR #905）
+- **最後更新**：2026-07-02
+- **對應版本**：v0.0.0.27+
 
 ## 專案概覽
 
@@ -29,8 +29,8 @@
 | 數字 | 含義 | 出處 |
 |------|------|------|
 | **21** | 保留 `AGENTS.md` 的內部模組（hot-path 陷阱寫在裡面） | 本文件原 57→Wave 11 精簡至 21 |
-| **45** | 全部模組索引（含無 `AGENTS.md` 者，按成熟度 S/E/X/U 分組） | [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) |
-| **60** | `internal/` 下全部目錄數 | 檔案系統 `ls internal/*/` |
+| **52** | 全部模組索引（含無 `AGENTS.md` 者，按成熟度 S/E/X/U 分組） | [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) |
+| **67** | `internal/` 下全部目錄數 | 檔案系統 `ls internal/*/` |
 
 ## 📜 內容歸屬規則
 
