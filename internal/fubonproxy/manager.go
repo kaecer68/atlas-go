@@ -431,9 +431,11 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 		m.mu.Unlock()
 		_ = cmd.Process.Kill()
 		// macOS zombie 陷阱：必須 cmd.Wait() 真正回收 SIGKILL 後的 zombie
-		// （syscall.Kill(pid, 0) 對 zombie 仍回 nil）。
-		_, _ = cmd.Process.Wait()
-		cancel() // 與 cmd.Start 失敗路徑一致,釋放 WithCancel 資源
+		// （syscall.Kill(pid, 0) 對 zombie 仍回 nil），同時 wait 內部
+		// context-watcher 與 stdout/stderr pipe-read goroutine 結束，
+		// 否則留下 leak（CI Linux busy runner 觀察到 baseline+3 超過 +2 slack）。
+		_ = cmd.Wait() // F1 cleanup：忽略 wait error，主要目的是把 cmd 內部 context-watcher 與 pipe-read goroutine 釋放掉
+		cancel()       // 與 cmd.Start 失敗路徑一致,釋放 WithCancel 資源
 		m.mu.Lock()
 		close(m.done)
 		m.ctx = nil
