@@ -1479,6 +1479,8 @@
   "tax",
   "tax_paid",
   "tax_snapshots",
+  "taxonomy_l1",
+  "taxonomy_l2",
   "tech_peak_season_confidence",
   "tech_stocks",
   "technical_breakout",

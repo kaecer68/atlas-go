@@ -70,6 +70,9 @@ func (s *server) handleMCPElicitUser(ctx context.Context, req *mcp.CallToolReque
 		if len(in.Schema) == 0 {
 			return nil, MCPElicitUserOutput{}, errors.New("mcp_elicit_user: form mode requires schema")
 		}
+		if err := validateElicitSchema(in.Schema); err != nil {
+			return nil, MCPElicitUserOutput{}, fmt.Errorf("mcp_elicit_user: invalid schema: %w", err)
+		}
 		params.RequestedSchema = in.Schema
 	case "url":
 		if in.URL == "" {

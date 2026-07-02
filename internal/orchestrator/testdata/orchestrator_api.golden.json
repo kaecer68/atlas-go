@@ -181,6 +181,10 @@
       "name": "DefaultWeightApplicationStrategy"
     },
     {
+      "kind": "interface",
+      "name": "DirectionalTradeWeightProvider"
+    },
+    {
       "fields": [
         "Registry domain.AgentRegistry",
         "Quotes []domain.Quote",
@@ -201,10 +205,16 @@
         "WeightApplication WeightApplicationStrategy",
         "MacroFlow MacroFlowStrategy",
         "ControlLayer ControlLayerStrategy",
+        "ForecastBridge ForecastBridgeStrategy",
+        "DirectionalTradeLayer DirectionalTradeWeightProvider",
         "MacroDataSnapshot *marketdata.MacroDataSnapshot"
       ],
       "kind": "struct",
       "name": "ExecutionContext"
+    },
+    {
+      "kind": "interface",
+      "name": "ForecastBridgeStrategy"
     },
     {
       "kind": "interface",

@@ -94,8 +94,8 @@ check_maturity_tags() {
 
   while IFS= read -r pkg; do
     local docfile="internal/$pkg/doc.go"
-    local count
-    count=$(grep -c "Maturity:" "$docfile" 2>/dev/null || echo "0")
+    local count=0
+    count=$(grep -c "Maturity:" "$docfile" 2>/dev/null) || true
 
     if [ "$count" -eq 0 ]; then
       log_fail "$docfile — 缺少 Maturity: 標記"

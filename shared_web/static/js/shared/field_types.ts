@@ -1946,6 +1946,8 @@ export interface NarrativeEvent {
   expires_at: string;
   severity: string;
   status: string;
+  taxonomy_l1: string;
+  taxonomy_l2: string;
   explanation?: string;
   sentiment_explanation?: string;
 }
