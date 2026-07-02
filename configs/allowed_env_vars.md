@@ -3,7 +3,7 @@
 本文件為 Constitution 1.2 要求之環境變數白名單。  
 任何 `os.Getenv()` 調用必須在本文件中有對應條目，否則為憲法違規。
 
-**最後更新**：2026-07-01  
+**最後更新**：2026-07-02  
 **維護者**：Atlas 數據源治理委員會
 
 ---
@@ -59,6 +59,7 @@
 | `ATLAS_MCP_METRICS_ADDR` | MCP Prometheus metrics HTTP API bind 位址（強制 127.0.0.1，獨立於 transport port） | 空（未設定時停用） |
 | `ATLAS_MCP_ROOTS_ALLOWED` | MCP 客戶端宣告的 roots 路徑白名單（CSV 格式，Phase 4 B 引入） | 空（不限制） |
 | `ATLAS_MCP_PARAMS` | MCP 設定檔路徑（讀取 `mcp.roots` section，Phase 4 B 引入） | `configs/parameters.json` |
+| `ATLAS_MCP_ROOTS_ALLOW_UNSAFE` | MCP roots 危險路徑驗證的 escape hatch（設為 `1` 時跳過 `/`、`/etc`、`/proc` 等系統根目錄拒絕邏輯；給理解風險的進階使用者使用，issue #903 引入） | 空（預設啟用驗證） |
 
 ---
 
@@ -137,3 +138,4 @@ grep -r "os.Getenv" --include="*.go" . \
 | v1.2 | 2026-07-01 | 新增 `ATLAS_MCP_METRICS_ADDR`（Phase 4 Direction A — MCP observability）|
 | v1.3 | 2026-07-01 | 新增 `ATLAS_MCP_ROOTS_ALLOWED`（Phase 4 B — protocol extensions roots 白名單） |
 | v1.4 | 2026-07-01 | 新增 `ATLAS_SKIP_PORT_PREFLIGHT`（測試環境 escape hatch，配套 Phase C T-104） |
+| v1.5 | 2026-07-02 | 新增 `ATLAS_MCP_ROOTS_ALLOW_UNSAFE`（issue #903 — MCP roots 危險路徑驗證 escape hatch） |
