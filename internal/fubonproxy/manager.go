@@ -402,6 +402,7 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	// 之前在 m.mu.Lock() 內呼叫 cmd.Start() 違反 F7；改為 lock-check-unlock-work-lock
 	// pattern，與 supervise() 重啟路徑（manager.go:supervise）一致。
 	cmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Dir = filepath.Dir(m.scriptPath)
 	cmd.Env = os.Environ()
 
@@ -861,6 +862,9 @@ func (m *ProcessManager) supervise() {
 
 		// 在鎖外建構與啟動程序 — 若 exec.Cmd.Start() panic 不會卡死 mutex（F7）
 		newCmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
+		// bound cmd.Wait() under load：同 Start() 路徑，避免 grandchild 持 pipe
+		// 造成 supervise restart 卡在 waitForHealthy 之前的 Wait（見 manager.go:404）。
+		newCmd.WaitDelay = 5 * time.Second
 		newCmd.Dir = filepath.Dir(m.scriptPath)
 		newCmd.Env = os.Environ()
 		newCmd.Stdout = &logWriter{component: "fubonproxy.stdout"}
