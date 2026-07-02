@@ -1126,65 +1126,43 @@ func run(args []string, deps appDeps) error {
 			// Phase 2: LLM Capability Wiring (opt-in via LLM_*_ENABLED flags)
 			// =============================================================================
 
-			// Provider clients (created only if API keys are set)
-			var (
-				deepseekClient *clients.DeepSeekClient
-				minimaxClient  *clients.MiniMaxClient
-				kimiClient     *clients.KimiClient
-			)
-
-			if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
-				deepseekClient = clients.NewDeepSeekClient(apiKey, nil)
-			}
-			if apiKey := config.GetSecret("LLM_MINIMAX_API_KEY"); apiKey != "" {
-				minimaxClient = clients.NewMiniMaxClient(apiKey, nil)
-			}
-			if apiKey := config.GetSecret("LLM_KIMI_API_KEY"); apiKey != "" {
-				kimiClient = clients.NewKimiClient(apiKey, nil)
-			}
-
-			// Wire the runtime metrics collector into any Phase 2 clients.
-			// New*Client now supplies a default BaseClient when nil, but that
-			// default uses a no-op metrics recorder; attach the real collector
-			// so LLM requests are observable in production.
-			if collector != nil {
-				if deepseekClient != nil {
-					deepseekClient.Metrics = collector
+			// Mirrors buildRouter pattern from cmd/lint-pr/lint-prompts.
+			// Only *llm.ProviderImpl escapes the closure; *clients.XxxClient
+			// never lives in this scope (constitution: clients/* usage must
+			// be adapter-bounded).
+			registerProvider := func(secret string, build func(string) llm.ProviderImpl) {
+				apiKey := config.GetSecret(secret)
+				if apiKey == "" {
+					return
 				}
-				if minimaxClient != nil {
-					minimaxClient.Metrics = collector
+				impl := build(apiKey)
+				if impl == nil {
+					return
 				}
-				if kimiClient != nil {
-					kimiClient.Metrics = collector
-				}
+				_ = llmRouter.Register(impl)
 			}
 
-			// ProviderImpl adapters (created only if client exists)
-			var (
-				deepseekAdapter *llmAdapters.DeepSeekAdapter
-				minimaxAdapter  *llmAdapters.MiniMaxAdapter
-				kimiPhase2      *llmAdapters.KimiAdapter
-			)
-			if deepseekClient != nil {
-				deepseekAdapter = llmAdapters.NewDeepSeekAdapter(deepseekClient, "deepseek-v4-pro")
-			}
-			if minimaxClient != nil {
-				minimaxAdapter = llmAdapters.NewMiniMaxAdapter(minimaxClient)
-			}
-			if kimiClient != nil {
-				kimiPhase2 = llmAdapters.NewKimiAdapter(kimiClient)
-			}
-
-			// Register adapters with Router (llmRouter is always non-nil after Phase 1)
-			if deepseekAdapter != nil {
-				_ = llmRouter.Register(deepseekAdapter)
-			}
-			if minimaxAdapter != nil {
-				_ = llmRouter.Register(minimaxAdapter)
-			}
-			if kimiPhase2 != nil {
-				_ = llmRouter.Register(kimiPhase2)
-			}
+			registerProvider("LLM_DEEPSEEK_API_KEY", func(apiKey string) llm.ProviderImpl {
+				c := clients.NewDeepSeekClient(apiKey, nil)
+				if collector != nil {
+					c.Metrics = collector
+				}
+				return llmAdapters.NewDeepSeekAdapter(c, "deepseek-v4-pro")
+			})
+			registerProvider("LLM_MINIMAX_API_KEY", func(apiKey string) llm.ProviderImpl {
+				c := clients.NewMiniMaxClient(apiKey, nil)
+				if collector != nil {
+					c.Metrics = collector
+				}
+				return llmAdapters.NewMiniMaxAdapter(c)
+			})
+			registerProvider("LLM_KIMI_API_KEY", func(apiKey string) llm.ProviderImpl {
+				c := clients.NewKimiClient(apiKey, nil)
+				if collector != nil {
+					c.Metrics = collector
+				}
+				return llmAdapters.NewKimiAdapter(c)
+			})
 
 			// Wire 4 module hooks (only if flag enabled AND Router exists)
 			if cfg.LLMRationaleTranslationEnabled {
