@@ -6,6 +6,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/macroflow"
 	"github.com/kaecer68/atlas-go/internal/ml"
 )
 
@@ -80,9 +81,15 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	controlInput, weightData := ctx.WeightApplication.ApplyWeights(raw, ctx.WeightManager, ctx.ConvictionClampingCallback)
 
+	var macroFlowResult *macroflow.AdjustmentResult
+	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
+		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, macroflow.RiskYellow)
+	}
+
 	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
 
 	return ResearchResult{
+		MacroFlowAdjustment:  macroFlowResult,
 		Regime:               regime,
 		RawRecommendations:   raw,
 		FinalRecommendations: final,

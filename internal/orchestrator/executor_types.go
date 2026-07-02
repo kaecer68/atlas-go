@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/macroflow"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -79,7 +81,12 @@ type ExecutionContext struct {
 	RecommendationCollection RecommendationCollectionStrategy
 	MomentumCrashProtection  MomentumCrashProtectionStrategy
 	WeightApplication        WeightApplicationStrategy
+	MacroFlow                MacroFlowStrategy // nil → skip macro flow adjustment
 	ControlLayer             ControlLayerStrategy
+
+	// MacroDataSnapshot is the latest macro snapshot for macro flow adjustment.
+	// When non-nil, the MacroFlowStrategy can use it to compute allocation-tier deltas.
+	MacroDataSnapshot *marketdata.MacroDataSnapshot
 }
 
 // ResearchResult holds all outputs from executing registry research.
@@ -90,4 +97,5 @@ type ResearchResult struct {
 	GuardOutcomes        []domain.GuardOutcome
 	ScreeningRejects     []domain.ScreeningReject
 	DarwinianWeights     []*portfolio.DarwinianAgentWeight
+	MacroFlowAdjustment  *macroflow.AdjustmentResult // non-nil when both MacroFlow and MacroDataSnapshot were set and compute succeeded
 }

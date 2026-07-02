@@ -41,6 +41,7 @@
 | `feature` | 命名特徵萃取、Registry |
 | `fubonproxy` | Python FastAPI 微服務生命週期管理 |
 | `globalmarket` | 全球總經資料管理 |
+| `macroflow` | 宏觀 regime → factor weight 調整引擎（6 rules × VIX stress，consumed by orchestrator pipeline 第 7 步） |
 | `metalearning` | 元學習協調器、策略選擇優化 |
 | `ml` | 監督式學習模型 OLS/ElasticNet/PCR/PLS |
 | `portfolio` | Darwinian 權重、FactorEngine、FactorType 變更流程 |
