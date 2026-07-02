@@ -36,7 +36,12 @@
 
 ---
 
-## 完整工具 Catalog（74 tools，Phase 2.2 全部上線）
+## 完整工具 Catalog（80 tools，Phase 2.2 全部上線）
+
+### Regime（1 個）
+| Tool | 用途 |
+|------|------|
+| `regime_get_history` | 指定期間的市場體制歷史（RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL） |
 
 ### Macro（6 個）
 | Tool | 用途 |
@@ -122,7 +127,7 @@
 | `task_get` | 單筆任務 |
 | `task_get_events` | 任務 lifecycle events |
 
-### System（6 個：1 Phase 1 + 5 Phase 2.2）
+### System（7 個：1 Phase 1 + 6 Phase 2.2）
 | Tool | 用途 |
 |------|------|
 | `system_get_health` | 系統健康總覽（Phase 1）|
@@ -169,6 +174,19 @@
 | `report_get_tax_snapshot` | 稅務 snapshot |
 | `report_get_export_link` | 匯出連結（短 TTL）|
 
+### MCP Audit / Observability（6 個 — agent 自我觀測）
+
+| Tool | 用途 |
+|------|------|
+| `mcp_get_session_topology` | 回傳 Agent×Tool 呼叫矩陣（哪個 agent 用了哪些 tool） |
+| `mcp_get_call_stats` | Tool 呼叫頻率與延遲統計 |
+| `mcp_get_tenant_usage` | Multi-tenant 用量報表 |
+| `mcp_get_top_slow_tools` | 最慢的 N 個 tool（延遲排行） |
+| `mcp_anomaly_get_recent` | 近期異常事件（error spike、延遲飆升） |
+| `mcp_anomaly_ack` | 標記異常為已確認 |
+
+> 這些 tool 屬於 atlas-mcp 的自我觀測層，供 agent 了解自己的呼叫模式與系統健康。
+
 ### Prism（1 個）
 | Tool | 用途 |
 |------|------|
@@ -214,3 +232,24 @@
 - `trace_get_reasoning` → WA-302（推理 trace）
 
 完整對照表見 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md) §3.1。
+
+---
+
+## 任務 → Tool 反向索引
+
+不知道該用哪個 tool？依任務查表：
+
+| Agent 任務 | 首選 tool | 備選 / companion | 注意 |
+|-----------|----------|-----------------|------|
+| **Daily Briefing**（每日簡報） | `regime_get_history` + `crossmarket_get_status` + `narrative_get_bundle` | `macro_get_stress_index_current` + `alert_list_unacknowledged` | 早晚各跑一次 |
+| **市場全景** | `macro_get_snapshot_latest` + `regime_get_history` | `crossmarket_get_us_indices` + `macro_get_capital_flow_latest` | 開盤前必跑 |
+| **Risk Review**（風險審查） | `risk_get_metrics` + `risk_get_drawdown` | `risk_get_correlation_matrix` + `risk_get_commentary` | 若 drawdown > threshold 觸發 alert |
+| **Portfolio Health**（持倉健康） | `strategy_list_active` + `strategy_get_summary` | `strategy_get_attribution` + `synergy_get_darwinian_status` | 確認線上策略狀態 |
+| **Experiment Eval**（實驗評審） | `experiment_diff` + `experiment_judge` | `experiment_history` + `synergy_get_darwinian_trend` | `experiment_judge` 有 side-effect |
+| **System Health**（系統健康） | `system_get_health` | `system_get_circuit_breaker` + `system_get_data_pipeline` | 任何任務的第一步 |
+| **LLM Health** | `llm_get_health` + `llm_get_cost` | `trace_get_agent_observatory` | 路由異常時用 |
+| **Alert Triage**（警報分類） | `alert_list_unacknowledged` + `alert_get_stats` | `alert_get_rules` | 確認後用 admin API acknowledge |
+| **自我觀測**（我的呼叫紀錄） | `mcp_get_session_topology` + `mcp_get_call_stats` | `mcp_get_top_slow_tools` + `mcp_anomaly_get_recent` | audit 用途，非日常操作 |
+| **稅務查詢** | `report_get_tax_snapshot` | `report_get_performance` | 僅在需要稅務報告時 |
+| **Swarm 分析** | `swarm_get_status` + `swarm_get_consensus` | `swarm_get_anomalies` | 理解市場共識時用 |
+| **排程管理** | `scheduler_get_status` + `task_list` | `task_get_events` | 查看背景任務狀態 |

@@ -51,6 +51,7 @@
 | `scheduler` | ML 模型重訓排程 |
 | `startup` | 一次性啟動期 preflight 檢查（`Preflight(claims)`，`portprobe` 上層 consumer）— S-tier（Maturity: stable） |
 | `strategy` | 策略選擇器與登錄 |
+| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（84 tools、stdio transport、auth/audit/anomaly、descgen）。SSE transport 與 binary merge 仍開放（見 roadmap P1/P2 殘留） |
 
 ### X · Experimental（實驗中）
 

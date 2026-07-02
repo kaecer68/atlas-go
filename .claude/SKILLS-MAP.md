@@ -13,10 +13,11 @@
 | 🔧 除錯維護迭代 | 3 | 修改前必用、資料可見性防護、Fubon supervisor 不變式 |
 | 📊 邏輯計算 | 8 | 策略、風控、宏觀、因子、權重 |
 | 🚀 功能拓展 | 2 | LLM Provider / Capability 新增 SOP、Factor Change Protocol |
+| 🌐 外部 Agent 整合 | 2 | 外部 AI Agent 接入 atlas-mcp 與 tool 導覽 |
 | 🤖 機器人溝通 | 4 | OpenClaw/Hermes Agent 投資人互動 |
 | 🔗 第三方工具 | 6 | GitNexus 程式碼智慧 |
 
-**總計: 23 技能**（13 手寫 + 6 GitNexus + 4 機器人溝通）
+**總計: 25 技能**（15 手寫 + 6 GitNexus + 4 機器人溝通）
 
 > ⚠️ **Token 節省提示**: 程式碼導航請優先使用 GitNexus 工具或 `internal/<mod>/AGENTS.md`，不再維護自動生成技能索引。
 
@@ -47,6 +48,10 @@
 ├── 🚀 功能拓展
 │   ├── atlas-llm-provider-capability/ # 新增 LLM Provider / Capability SOP
 │   └── atlas-factor-change-protocol/  # FactorType 變更 8 步協議
+│
+├── 🌐 外部 Agent 整合
+│   ├── atlas-mcp-integration/    # 外部 AI Agent 接入 atlas-mcp：配置、認證、首次呼叫
+│   └── atlas-mcp-tool-tour/      # 84 tool 任務導向分群導覽：入門 tool、companion 關係
 │
 ├── 🤖 robot-communication/        # 機器人溝通專用技能（OpenClaw/Hermes）
 │   ├── README.md                  # 機器人溝通技能使用說明
@@ -100,6 +105,17 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 |------|------|------|
 | `atlas-llm-provider-capability` | 新增 LLM Provider client 或 Capability handler 的完整 SOP：BaseClient 嵌入、ProviderImpl 實作、routing table 同步、四處 capability 註冊、測試規範 | v1.0 |
 | `atlas-factor-change-protocol` | FactorType 變更 8 步協議：同步 optimizer 常數、factor weight engine、domain structs、pipeline score、aggregate breakdown 與事件調整 | v1.0 |
+
+### 🌐 外部 Agent 整合（External Agent Integration）
+
+供外部 MCP-compatible AI Agent（Claude Desktop、Cursor、OpenCode、OpenClaw 等）接入 atlas-go 的操作技能。本類技能 `auto_load: false`，僅在 agent 需要接入或瀏覽 atlas-mcp 時手動載入。
+
+| 技能 | 用途 | 版本 |
+|------|------|------|
+| `atlas-mcp-integration` | 教外部 agent 如何配置 MCP client（Claude/Cursor/OpenCode）、認證、首次呼叫、常見任務範例 | v1.0 |
+| `atlas-mcp-tool-tour` | 84 個 MCP tool 的任務導向分群導覽：12 群組的入門 tool、companion 關係、3 個任務組合範例 | v1.0 |
+
+> **使用注意**: 接入 atlas-mcp 後建議先載入 `atlas-mcp-tool-tour` 建立工具全貌認知，再依任務需求載入對應的金融背景 skill（如 `atlas-risk-management`、`atlas-macro-narrative`）。
 
 ### 🛡️ 資料安全（Data Security）
 

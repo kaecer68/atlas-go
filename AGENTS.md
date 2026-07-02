@@ -52,6 +52,11 @@
 
 ## 🔗 文件路由
 
+### Agent 入門（外部 AI 優先讀）
+- [`docs/AGENT_ONBOARDING.md`](docs/AGENT_ONBOARDING.md) — 5 分鐘速讀 atlas 全貌
+- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — 74+ tool 決策樹與完整 catalog
+- [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — MCP server 部署、配置、84 tool 總覽
+
 ### 啟動必讀
 - [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — 首次啟動、CI 指令、系統初始化順序
 
@@ -92,14 +97,17 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | 層級 | 入口 | 文件 |
 |------|------|------|
 | Roadmap | `docs/plans/agent-interface-roadmap.md` | P0–P4 規劃與開放議題 |
+| MCP 接入（外部 agent） | `[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) + [skill](.claude/skills/atlas-mcp-integration/SKILL.md) | 部署配置、Claude/Cursor/OpenCode 設定 |
+| Tool 導覽 | `[`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 80 tools 決策樹與 task→tool 反向索引 |
 | Workflow Map | `docs/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
 | Process 標註 | `docs/PROCESSES.yaml` | 結構化 workflow metadata |
-| MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 70+ tools、auth、audit |
-| Agent 工具指南 | `docs/AGENT_TOOLS.md` | Top 15 tool 決策樹 |
+| MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 80+ tools、auth、audit、JSON Schema 模板 |
+| MCP 模組陷阱 | `[`cmd/atlas-mcp/server/AGENTS.md`](cmd/atlas-mcp/server/AGENTS.md) | 60 .go 檔案的 hot-path 陷阱（命名/相依/稽核/認證） |
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
 | Onboarding | `docs/AGENT_ONBOARDING.md` | 5 分鐘上手 |
 
 **P0 狀態**：PROCESSES.yaml + AGENTS.md 本章節已補齊。  
+**P0 補遺（2026-07-02）**：增加 2 個 atlas-mcp-* skill、`cmd/atlas-mcp/server/AGENTS.md` 模組陷阱、`cmd/atlas-mcp/README.md` 全面更新、`AGENT_TOOLS.md` 補完至 80 tool 並加入 task→tool 反向索引。  
 **P1 殘留**：SSE/streamable-HTTP transport wiring；audit log retention。  
 **P2 殘留**：binary merge、retention period、license、WebSocket 決策。
 
