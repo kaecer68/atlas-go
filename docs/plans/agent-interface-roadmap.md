@@ -12,13 +12,21 @@
 | 階段 | 交付物 | 檔案 | 狀態 |
 |------|--------|------|------|
 | P0 | Workflow Map（21 條 workflow 盤查） | [`WORKFLOW_MAP.md`](../WORKFLOW_MAP.md) | ✅ v1 已交付 |
-| P1 | MCP Server 設計規格（70+ tools） | [`specs/agent-mcp-server.md`](../specs/agent-mcp-server.md) | ✅ 規格已交付 |
-| P2 | Agent Tools 實戰指南（決策樹 + Top 15） | [`AGENT_TOOLS.md`](../AGENT_TOOLS.md) | ✅ 已交付 |
+| P1 | MCP Server 設計規格（80+ tools） | [`specs/agent-mcp-server.md`](../specs/agent-mcp-server.md) | ✅ 規格已交付 |
+| P2 | Agent Tools 實戰指南（決策樹 + 80 tool catalog） | [`AGENT_TOOLS.md`](../AGENT_TOOLS.md) | ✅ 已交付 |
 | P3 | GitNexus Process 標註 SOP | [`PROCESS_ANNOTATION_SOP.md`](../PROCESS_ANNOTATION_SOP.md) | ✅ 已交付 |
 | P4 | Agent 5 分鐘 Onboarding | [`AGENT_ONBOARDING.md`](../AGENT_ONBOARDING.md) | ✅ 已交付 |
 | P5 | Agent 介面章節併入 `AGENTS.md` | [`AGENTS.md`](../../AGENTS.md) | ✅ PR #875 |
+| **P6** | **Atlas-mcp 文件深層補完**（2026-07-02） | 多檔案 | ✅ 已落地 |
+| P6.1 | 外部 agent 接入 skill | [`.claude/skills/atlas-mcp-integration/SKILL.md`](../../.claude/skills/atlas-mcp-integration/SKILL.md) | ✅ |
+| P6.2 | 84 tool 分群導覽 skill | [`.claude/skills/atlas-mcp-tool-tour/SKILL.md`](../../.claude/skills/atlas-mcp-tool-tour/SKILL.md) | ✅ |
+| P6.3 | `cmd/atlas-mcp/server/` 模組陷阱文件 | [`server/AGENTS.md`](../../cmd/atlas-mcp/server/AGENTS.md) | ✅ 61 行 / 7 章節 |
+| P6.4 | `cmd/atlas-mcp/README.md` 全面更新（5→80 tool、繁中、Agent 導向） | [`cmd/atlas-mcp/README.md`](../../cmd/atlas-mcp/README.md) | ✅ |
+| P6.5 | `AGENT_TOOLS.md` 補完（74→80 tool、新增 task→tool 反向索引） | [`AGENT_TOOLS.md`](../AGENT_TOOLS.md) | ✅ |
+| P6.6 | `SKILLS-MAP.md` 新增 🌐 外部 Agent 整合分類 | [`.claude/SKILLS-MAP.md`](../../.claude/SKILLS-MAP.md) | ✅ 23→25 skills |
+| P6.7 | `internal/AGENTS_INDEX.md` 補錄 `cmd/atlas-mcp/server` | [`internal/AGENTS_INDEX.md`](../../internal/AGENTS_INDEX.md) | ✅ E·Evolving |
 
-**結論**：規劃完整（5/5 文件落地 + P5 已進主文件）。**實作已進行中** — `cmd/atlas-mcp/` 已實作約 84 個 tools、stdio transport、auth/audit/anomaly/協議擴充；SSE/streamable-HTTP transport 與 `cmd/atlas` binary 合併仍待辦。本 roadmap 同步更新為「規劃 + 實作狀態」的單一真相來源。
+**結論**：規劃完整（P0–P6 全部文件落地）。**實作已進行中** — `cmd/atlas-mcp/` 已實作約 84 個 tools、stdio transport、auth/audit/anomaly/協議擴充；SSE/streamable-HTTP transport 與 `cmd/atlas` binary 合併仍待辦。本 roadmap 同步更新為「規劃 + 實作狀態」的單一真相來源。
 
 ---
 

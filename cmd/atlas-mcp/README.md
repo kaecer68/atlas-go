@@ -1,49 +1,52 @@
 # atlas-mcp
 
-`atlas-mcp` is the Model Context Protocol (MCP) server for [atlas-go](https://github.com/kaecer68/atlas-go). It exposes atlas-go's HTTP API as MCP tools so external AI agents (Claude Desktop, Cursor, OpenCode, etc.) can query and lightly trigger atlas-go through a standard JSON-RPC 2.0 interface.
+`atlas-mcp` 是 [atlas-go](https://github.com/kaecer68/atlas-go) 的 MCP (Model Context Protocol) 伺服器。讓任何 MCP-compatible AI Agent（Claude Desktop、Cursor、OpenCode、OpenClaw、Hermes 等）透過標準 JSON-RPC 2.0 協議查詢與輕度觸發 atlas-go 的台股投資研究能力。
 
-## Phase 1 (this release)
+> **Agent 入門** — 第一次使用？先讀 [`docs/AGENT_ONBOARDING.md`](../../docs/AGENT_ONBOARDING.md)（5 分鐘速讀），再看 [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md)（80 個 tool 的決策樹與完整 catalog）。
+> **完整規格** — 80 個 tool 的設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server.md`](../../docs/specs/agent-mcp-server.md)。
+> **開發者** — 若要在 `cmd/atlas-mcp/server/` 內新增或修改 tool，**必先讀** [`server/AGENTS.md`](./server/AGENTS.md)（模組陷阱文件）。
 
-Phase 1 ships **stdio transport only** with five core tools. Phase 2 will add
+## 目前規模
 
-| Tool | Trigger | Action |
-|------|---------|--------|
-| `regime_get_history` | Agent asks about past market regimes | GET `/api/dashboard/regime-history` |
-| `strategy_list_active` | Agent asks which strategies are live | GET `/api/strategies/active` |
-| `experiment_judge` | Agent wants to score a candidate experiment | POST `/api/experiment/judge` (side-effect) |
-| `alert_list_unacknowledged` | Agent asks about open alerts | GET `/api/alerts/unacknowledged` |
-| `system_get_health` | Agent asks about overall system health | GET `/api/dashboard/system-health` |
+| 面向 | 現狀 |
+|------|------|
+| MCP Tools | **80 個**（16 個 `tools_*.go` 檔案按領域分群 + 5 個核心 entry-point 在 `tools.go`） |
+| Tool description | `auto-desc.gen.json`（713 行，由 `cmd/atlas-mcp/descgen/` 自動生成） |
+| Transport | **stdio**（生產）；SSE / streamable-HTTP（程式碼就緒，待啟用，見 roadmap P1 殘留） |
+| Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
+| Audit | v2 schema（retention、cleanup、ArgsHash、SessionID、Transport，`audit_v2.go`；v1 `audit.go` 為向後相容 shim） |
+| 擴充協議 | Resources（`resources.go`）、Prompts（`prompts.go`）、Elicitation（`elicitation.go`）、Sampling（`sampling.go`）、Roots（`roots.go`） |
+| 觀測 | Rate limiting（`ratelimit.go`）、Metrics（`metrics.go`）、Anomaly detection（`tools_anomaly.go`） |
+| 工具分類 | Macro（6）、Crossmarket（3）、Regime（1）、Narrative（7）、Risk（5）、Alert（4）、Strategy（5）、Experiment（3）、Synergy（3）、Control（4）、Scheduler/Task（4）、System/Health（9）、Data（4）、Universe（2）、LLM（2）、Trace（4）、PRISM/Swarm（6）、Report（4）、Audit（4）、Anomaly（2）= 80 |
 
-Reference catalog (70 tools total in the long run, with rationale + decision flow): [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md).
-
-## Configuration
-
-All configuration via environment variables:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `ATLAS_BASE_URL` | `http://127.0.0.1:8080` | atlas-go HTTP base URL |
-| `ATLAS_API_KEY` | (unset) | Forwarded as `X-API-Key` header to atlas-go admin endpoints |
-| `ATLAS_MCP_AUDIT_LOG` | `/tmp/atlas-mcp-audit.log` | JSONL audit log path. Parent dir auto-created with mode 0700 |
-
-> **Phase 1 stdio security model**: there is no transport-level token
-> enforcement. Process isolation (only the parent can reach stdin/stdout)
-> is the security boundary. `TokenAuth` is forward-looking scaffolding for
-> Phase 2 SSE/HTTP transports — do NOT advertise token enforcement for
-> stdio.
-
-## Build & Run
+## 快速啟動
 
 ```bash
+# 建置
 go build -o bin/atlas-mcp ./cmd/atlas-mcp/
+
+# 啟動（stdio transport）
 ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
 ```
 
-The server reads JSON-RPC requests from stdin and writes responses to stdout.
+伺服器從 stdin 讀取 JSON-RPC 請求、往 stdout 寫入回應。`ATLAS_BASE_URL` 指向 atlas-go HTTP API（預設 `http://127.0.0.1:8080`）。
 
-## Client Configuration Examples
+## 配置
 
-### Claude Desktop (`~/.config/Claude Desktop/claude_desktop_config.json`)
+全部透過環境變數：
+
+| 變數 | 預設值 | 用途 |
+|------|--------|------|
+| `ATLAS_BASE_URL` | `http://127.0.0.1:8080` | atlas-go HTTP API 基底 URL |
+| `ATLAS_API_KEY` | （未設） | 以 `X-API-Key` header 轉發至 atlas-go admin endpoints |
+| `ATLAS_MCP_TOKEN` | （未設） | MCP transport 層 token（stdio 為 forward-looking，SSE/HTTP 啟用後強制） |
+| `ATLAS_MCP_AUDIT_LOG` | `/tmp/atlas-mcp-audit.log` | JSONL audit log 路徑。父目錄自動建立（mode 0700） |
+
+> **stdio 安全模型**：目前無 transport 層 token 強制執行。process isolation（僅 parent process 可觸及 stdin/stdout）即安全邊界。`TokenAuth` + DB TokenStore 已實作，SSE/streamable-HTTP transport 啟用後強制驗證。
+
+## MCP Client 配置範例
+
+### Claude Desktop（`~/.config/Claude Desktop/claude_desktop_config.json`）
 
 ```json
 {
@@ -62,21 +65,47 @@ The server reads JSON-RPC requests from stdin and writes responses to stdout.
 }
 ```
 
-### Cursor (Settings → MCP)
+### Cursor（Settings → MCP）
 
-Same shape. Add via `+ Add new MCP server`.
+與 Claude Desktop 同樣 JSON 格式。透過 `+ Add new MCP server` 新增。
 
-## Audit Log Format (JSONL)
+### OpenCode（`opencode.json`）
 
-Each line is one tool call:
+```json
+{
+  "mcp": {
+    "atlas-go": {
+      "type": "local",
+      "command": ["/absolute/path/to/bin/atlas-mcp"],
+      "env": {
+        "ATLAS_BASE_URL": "http://127.0.0.1:8080",
+        "ATLAS_API_KEY": "xxx"
+      }
+    }
+  }
+}
+```
+
+## Tool 命名慣例
+
+```
+<area>_<verb>_<noun>?
+例：regime_get_history  /  strategy_list_active  /  experiment_judge
+```
+
+全 snake_case（與 atlas-go 全專案 JSON tag 慣例一致）。`area` 與 `verb` 必填，`noun` 視 `verb` 是否需要區分對象而定。
+
+## Audit Log 格式（JSONL）
+
+每行一個 tool call：
 
 ```json
 {"ts":"2026-06-30T08:00:13Z","tool":"regime_get_history","arg_keys":["days"],"status":"ok","duration_ms":42}
 {"ts":"2026-06-30T08:00:14Z","tool":"experiment_judge","arg_keys":["experiment_id"],"status":"error","duration_ms":120,"error":"..."}
 ```
 
-Required fields: `ts`, `tool`, `status` (`ok` | `error` | `unauthorized`), `duration_ms`. `arg_keys` is the list of input keys but values are never logged. `error` is included only when `status != "ok"`.
+必填欄位：`ts`、`tool`、`status`（`ok` | `error` | `unauthorized`）、`duration_ms`。`arg_keys` 只記錄 key 名稱、不記錄值。`error` 僅在 `status != "ok"` 時輸出。
 
 ## License
 
-Apache 2.0 — same as atlas-go.
+Apache 2.0 — 與 atlas-go 一致。
