@@ -569,6 +569,11 @@ func TestProcessManager_F7_CmdStartFailure_StopDoesNotHang(t *testing.T) {
 		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort),
 	}
 
+	// 捕捉 baseline goroutine 數(在 Start() 之前)— 用於後續 leak 偵測
+	// (對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck 風格)
+	baseline := runtime.NumGoroutine()
+	t.Logf("baseline goroutines (before Start): %d", baseline)
+
 	// Start() 必須回傳錯誤(不 panic、不阻塞)
 	start := time.Now()
 	err := m.Start(context.Background())
@@ -632,6 +637,18 @@ func TestProcessManager_F7_CmdStartFailure_StopDoesNotHang(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Fatal("second Stop() hung > 1s after cmd.Start() failure")
 	}
+
+	// goroutine 洩漏檢查(對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck
+	// 風格):cmd.Start() 失敗路徑不應 spawn supervise 或健康檢查 goroutine
+	time.Sleep(100 * time.Millisecond) // 讓任何 race 條件下的 goroutine 落地
+	final := runtime.NumGoroutine()
+	t.Logf("after 100ms idle (post cmd.Start() failure): %d (delta=%d, baseline=%d)",
+		final, final-baseline, baseline)
+	// 允許少量 slack(+2)給 test 本身的 goroutine 排程誤差
+	if final > baseline+2 {
+		t.Errorf("goroutine leak after cmd.Start() failure: baseline=%d final=%d (delta=%d, want <=%d)",
+			baseline, final, final-baseline, baseline+2)
+	}
 }
 
 // TestProcessManager_F1_StartPostStartRecheck_AbortsNewProcess 驗證 F1
@@ -673,6 +690,11 @@ func TestProcessManager_F1_StartPostStartRecheck_AbortsNewProcess(t *testing.T) 
 		scriptPath: fakeScript,
 		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort),
 	}
+
+	// 捕捉 baseline goroutine 數(在 Start() 之前)— 用於後續 leak 偵測
+	// (對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck 風格)
+	baseline := runtime.NumGoroutine()
+	t.Logf("baseline goroutines (before F1 abort): %d", baseline)
 
 	// 在 Start() 進到 post-start re-check 之前手動設 m.stopping=true,
 	// 模擬「Stop() 在 Start() unlock/Start 視窗被呼叫」的情境。
@@ -717,13 +739,18 @@ func TestProcessManager_F1_StartPostStartRecheck_AbortsNewProcess(t *testing.T) 
 	// m.stopping 仍是 true(沒人 reset,因為 Start() 的 abort 路徑不 reset stopping)
 	// 這是預期行為 — abort 表示「已 stop 過,不要再 spawn」
 
-	// goroutine 洩漏檢查:Start() 的 abort 路徑不會啟動 supervise(),所以
-	// 不應有額外的背景 goroutine 留下來
-	time.Sleep(200 * time.Millisecond)
-	// 簡單檢查 — 若有 supervise goroutine 跑,會留下 cmd.Wait 的 syscall
-	// 阻塞;由於 cmd 已被 Kill+Wait,supervise 沒被啟動,所以這個 sleep
-	// 不會有副作用。
-	t.Logf("no goroutine leak verification: 200ms idle (no supervise started on abort path)")
+	// goroutine 洩漏檢查(對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck
+	// 風格):Start() 的 abort 路徑不會啟動 supervise,也不應 spawn 任何
+	// 健康檢查 goroutine;若 baseline+slack 內有殘留,F1 修補就破了。
+	time.Sleep(100 * time.Millisecond) // 讓任何 race 條件下的 goroutine 落地
+	final := runtime.NumGoroutine()
+	t.Logf("after 100ms idle (post F1 abort): %d (delta=%d, baseline=%d)",
+		final, final-baseline, baseline)
+	// 允許少量 slack(+2)給 test 本身的 goroutine 排程誤差
+	if final > baseline+2 {
+		t.Errorf("goroutine leak after F1 abort: baseline=%d final=%d (delta=%d, want <=%d)",
+			baseline, final, final-baseline, baseline+2)
+	}
 
 	// 二次 Stop() 必須不阻塞(m.stopping=true 早退守衛應立即返回)
 	done2 := make(chan struct{})
