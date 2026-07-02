@@ -396,7 +396,11 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	m.ctx = ctx
 	m.cancel = cancel
 	m.done = make(chan struct{})
+	m.mu.Unlock()
 
+	// 在鎖外建構與啟動程序 — 若 exec.Cmd.Start() panic 不會卡死 mutex（F7）。
+	// 之前在 m.mu.Lock() 內呼叫 cmd.Start() 違反 F7；改為 lock-check-unlock-work-lock
+	// pattern，與 supervise() 重啟路徑（manager.go:supervise）一致。
 	cmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
 	cmd.Dir = filepath.Dir(m.scriptPath)
 	cmd.Env = os.Environ()
@@ -407,7 +411,9 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 
 	if err := cmd.Start(); err != nil {
 		cancel()
-		// 關閉 m.done 以避免 Stop() 永久阻塞 (no-supervise edge case)
+		// no-supervise edge case: 關閉 m.done 並重置 ctx/cancel/done，
+		// 避免 Stop() 永久阻塞（F7）。
+		m.mu.Lock()
 		close(m.done)
 		m.ctx = nil
 		m.cancel = nil
@@ -416,6 +422,26 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 		return fmt.Errorf("fubonproxy: failed to start process: %w", err)
 	}
 
+	// 啟動成功 — 在鎖內更新狀態；若同時被要求停止，立即終止新程序（F1）。
+	// 解決 lock-check-unlock-work-lock 之後的視窗：若 Stop() 在我們 unlock
+	// 之後、Start() 期間被呼叫，新程序會被孤兒化。此 re-check 與 supervise()
+	// 重啟路徑的 post-start re-check 對齊。
+	m.mu.Lock()
+	if m.stopping {
+		m.mu.Unlock()
+		_ = cmd.Process.Kill()
+		// macOS zombie 陷阱：必須 cmd.Wait() 真正回收 SIGKILL 後的 zombie
+		// （syscall.Kill(pid, 0) 對 zombie 仍回 nil）。
+		_, _ = cmd.Process.Wait()
+		cancel() // 與 cmd.Start 失敗路徑一致,釋放 WithCancel 資源
+		m.mu.Lock()
+		close(m.done)
+		m.ctx = nil
+		m.cancel = nil
+		m.done = nil
+		m.mu.Unlock()
+		return nil
+	}
 	m.cmd = cmd
 	m.running = true
 	m.startedAt = time.Now()

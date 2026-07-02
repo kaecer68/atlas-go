@@ -538,6 +538,239 @@ func TestProcessManager_F7_StartFailureThenStopDoesNotHang(t *testing.T) {
 	})
 }
 
+// TestProcessManager_F7_CmdStartFailure_StopDoesNotHang 驗證 F7 不變式在
+// cmd.Start() 失敗路徑下也成立：
+//
+//   - pythonBin 指到不存在的可執行檔（繞過 early-return 早退）
+//   - scriptPath 是有效檔案（繞過 script-not-found 早退）
+//   - Start() 必須在 cmd.Start() 內部失敗後回傳 error
+//   - 失敗路徑必須 close(m.done) 並重置 m.ctx/m.cancel/m.done,避免 Stop()
+//     永久阻塞
+//
+// 與 TestProcessManager_F7_StartFailureThenStopDoesNotHang 的差異：後者只
+// 覆蓋 early-return 早退路徑（pythonBin empty / script not found）;本測試
+// 覆蓋 cmd.Start() 真的被呼叫且失敗的場景,直接驗證 Start() 內部 m.done 與
+// m.ctx 清理邏輯。
+//
+// Reference: F7 不變式（atlas-fubon-supervisor-invariants/SKILL.md）— 「Start()
+// 錯誤路徑必須關閉 m.done 並重置 ctx/cancel/done」;以及 lock-check-unlock-work-lock
+// pattern — exec.Cmd.Start() 必須在鎖外執行。
+func TestProcessManager_F7_CmdStartFailure_StopDoesNotHang(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/nonexistent/atlas-go-fubonproxy-test/python", // cmd.Start() 會在這裡失敗
+		scriptPath: fakeScript,                                     // 存在,繞過 script-not-found 早退
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort),
+	}
+
+	// 捕捉 baseline goroutine 數(在 Start() 之前)— 用於後續 leak 偵測
+	// (對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck 風格)
+	baseline := runtime.NumGoroutine()
+	t.Logf("baseline goroutines (before Start): %d", baseline)
+
+	// Start() 必須回傳錯誤(不 panic、不阻塞)
+	start := time.Now()
+	err := m.Start(context.Background())
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("Start() with non-existent pythonBin should return error")
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("Start() blocked %v on cmd.Start() failure; expected < 2s", elapsed)
+	}
+	t.Logf("Start() correctly returned error in %v: %v", elapsed, err)
+
+	// 關鍵 F7 不變式:失敗路徑必須重置 m.ctx/m.cancel/m.done,
+	// 否則 Stop() 會在 done channel 上永久阻塞。
+	m.mu.Lock()
+	if m.ctx != nil {
+		t.Error("expected m.ctx=nil after cmd.Start() failure (F7 cleanup)")
+	}
+	if m.cancel != nil {
+		t.Error("expected m.cancel=nil after cmd.Start() failure (F7 cleanup)")
+	}
+	if m.done != nil {
+		t.Error("expected m.done=nil after cmd.Start() failure (F7 cleanup)")
+	}
+	if m.running {
+		t.Error("expected m.running=false after cmd.Start() failure")
+	}
+	if m.cmd != nil {
+		t.Errorf("expected m.cmd=nil after cmd.Start() failure, got %+v", m.cmd)
+	}
+	m.mu.Unlock()
+
+	// Stop() 必須不阻塞(即使失敗路徑沒啟動 supervise,Stop 仍可能嘗試
+	// 等待一個已 close 的 channel;若 m.done 沒被 close + nil 化,Stop 會 hang)
+	done := make(chan struct{})
+	start = time.Now()
+	go func() {
+		m.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		stopElapsed := time.Since(start)
+		if stopElapsed > 1*time.Second {
+			t.Errorf("Stop() took %v after cmd.Start() failure; expected < 1s", stopElapsed)
+		}
+		t.Logf("Stop() returned in %v after cmd.Start() failure — OK", stopElapsed)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() hung > 2s after cmd.Start() failure — F7 cleanup broken?")
+	}
+
+	// 二次 Stop() 也必須不阻塞(re-entrant 守衛:第二次呼叫應立即返回)
+	done2 := make(chan struct{})
+	go func() {
+		m.Stop()
+		close(done2)
+	}()
+	select {
+	case <-done2:
+		t.Logf("second Stop() returned immediately — OK")
+	case <-time.After(1 * time.Second):
+		t.Fatal("second Stop() hung > 1s after cmd.Start() failure")
+	}
+
+	// goroutine 洩漏檢查(對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck
+	// 風格):cmd.Start() 失敗路徑不應 spawn supervise 或健康檢查 goroutine
+	time.Sleep(100 * time.Millisecond) // 讓任何 race 條件下的 goroutine 落地
+	final := runtime.NumGoroutine()
+	t.Logf("after 100ms idle (post cmd.Start() failure): %d (delta=%d, baseline=%d)",
+		final, final-baseline, baseline)
+	// 允許少量 slack(+2)給 test 本身的 goroutine 排程誤差
+	if final > baseline+2 {
+		t.Errorf("goroutine leak after cmd.Start() failure: baseline=%d final=%d (delta=%d, want <=%d)",
+			baseline, final, final-baseline, baseline+2)
+	}
+}
+
+// TestProcessManager_F1_StartPostStartRecheck_AbortsNewProcess 驗證 F1
+// 不變式在 Start() 自己的 post-start re-check 路徑下也成立:
+//
+//   - Start() 在 unlock 後呼叫 cmd.Start(),若期間 Stop() 被呼叫(或手動
+//     設 m.stopping=true),新程序必須被 Kill+Wait(cancel 釋放 ctx)
+//   - m.cmd/m.running 必須保持未設定狀態(新程序不能被 supervise 接手)
+//   - m.ctx/m.cancel/m.done 必須被 close 並重置為 nil
+//   - Start() 在此場景下回傳 nil(屬於「乾淨 abort」,非錯誤)
+//
+// 與 TestProcessManager_F1_PostStartRecheck_NoOrphanAfterRestart 的差異:
+// 後者覆蓋 supervise() 重啟路徑的 post-start re-check;本測試覆蓋 Start()
+// 第一次啟動路徑的 post-start re-check(對應 manager.go:429-443 新增的
+// 區塊)。雖然機制相同(Kill+Wait+close(done)+reset),程式碼路徑是
+// 獨立的,因此需要獨立測試。
+//
+// 測試策略:手動設定 m.stopping=true(同 package 可直接寫入 struct 欄位),
+// 模擬「Stop() 在 Start() unlock/Start 視窗被呼叫」的情境。Start() 走到
+// 自己的 re-check,看到 m.stopping=true,啟動 abort cleanup 路徑。
+//
+// Reference: F1 不變式(atlas-fubon-supervisor-invariants/SKILL.md) —
+// post-start re-check 必須在 Start() 與 supervise() 兩處對齊;以及
+// lock-check-unlock-work-lock pattern 引入的 race window 修補。
+func TestProcessManager_F1_StartPostStartRecheck_AbortsNewProcess(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	// trap '' INT + sleep 30:即使 SIGINT 也不會優雅退出,確保 Kill 是唯一路徑
+	script := "#!/bin/sh\n" +
+		"trap '' INT\n" +
+		"sleep 30\n"
+	if err := os.WriteFile(fakeScript, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort),
+	}
+
+	// 捕捉 baseline goroutine 數(在 Start() 之前)— 用於後續 leak 偵測
+	// (對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck 風格)
+	baseline := runtime.NumGoroutine()
+	t.Logf("baseline goroutines (before F1 abort): %d", baseline)
+
+	// 在 Start() 進到 post-start re-check 之前手動設 m.stopping=true,
+	// 模擬「Stop() 在 Start() unlock/Start 視窗被呼叫」的情境。
+	// (同 package 測試可寫入 struct 欄位)
+	m.stopping = true
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Start() 必須回傳 nil(屬於「乾淨 abort」,不是 error)
+	start := time.Now()
+	err := m.Start(ctx)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Errorf("Start() with pre-set m.stopping should return nil (clean abort), got: %v", err)
+	}
+	if elapsed > 3*time.Second {
+		t.Errorf("Start() blocked %v on F1 re-check path; expected < 3s", elapsed)
+	}
+	t.Logf("Start() correctly returned nil in %v (clean abort via F1 re-check)", elapsed)
+
+	// 關鍵 F1 不變式:新程序絕對不能被註冊到 m.cmd,supervise() 也不應
+	// 被啟動(避免留下孤兒 goroutine)。
+	m.mu.Lock()
+	if m.cmd != nil {
+		t.Errorf("expected m.cmd=nil after F1 re-check abort, got %+v (process leaked to supervisor!)", m.cmd)
+	}
+	if m.running {
+		t.Error("expected m.running=false after F1 re-check abort")
+	}
+	if m.ctx != nil {
+		t.Error("expected m.ctx=nil after F1 re-check abort (F1 cleanup)")
+	}
+	if m.cancel != nil {
+		t.Error("expected m.cancel=nil after F1 re-check abort (F1 cleanup)")
+	}
+	if m.done != nil {
+		t.Error("expected m.done=nil after F1 re-check abort (F1 cleanup)")
+	}
+	m.mu.Unlock()
+
+	// m.stopping 仍是 true(沒人 reset,因為 Start() 的 abort 路徑不 reset stopping)
+	// 這是預期行為 — abort 表示「已 stop 過,不要再 spawn」
+
+	// goroutine 洩漏檢查(對齊 TestProcessManager_F2F4_NoFireAndForgetHealthCheck
+	// 風格):Start() 的 abort 路徑不會啟動 supervise,也不應 spawn 任何
+	// 健康檢查 goroutine;若 baseline+slack 內有殘留,F1 修補就破了。
+	time.Sleep(100 * time.Millisecond) // 讓任何 race 條件下的 goroutine 落地
+	final := runtime.NumGoroutine()
+	t.Logf("after 100ms idle (post F1 abort): %d (delta=%d, baseline=%d)",
+		final, final-baseline, baseline)
+	// 允許少量 slack(+2)給 test 本身的 goroutine 排程誤差
+	if final > baseline+2 {
+		t.Errorf("goroutine leak after F1 abort: baseline=%d final=%d (delta=%d, want <=%d)",
+			baseline, final, final-baseline, baseline+2)
+	}
+
+	// 二次 Stop() 必須不阻塞(m.stopping=true 早退守衛應立即返回)
+	done2 := make(chan struct{})
+	start = time.Now()
+	go func() {
+		m.Stop()
+		close(done2)
+	}()
+	select {
+	case <-done2:
+		stopElapsed := time.Since(start)
+		if stopElapsed > 1*time.Second {
+			t.Errorf("Stop() took %v after F1 abort; expected < 1s (m.stopping guard should early-return)", stopElapsed)
+		}
+		t.Logf("Stop() returned in %v after F1 abort — OK", stopElapsed)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() hung > 2s after F1 abort — m.stopping guard broken?")
+	}
+}
+
 // TestProcessManager_BackoffStateMachine_3sThen10s 驗證 backoff 狀態機：
 // - 1st 重啟：restartInitialDelay (3s)
 // - 連續 Start() 失敗：restartBackoffDelay (10s)
