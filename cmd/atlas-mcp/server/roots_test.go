@@ -115,7 +115,7 @@ func TestMCPRootsReadFile_RejectsSymlinkEscape(t *testing.T) {
 	require.Contains(t, err.Error(), "outside")
 }
 
-func TestMCPRootsReadFile_AcceptsInRootSymlink(t *testing.T) {
+func TestMCPRootsReadFile_RejectsInRootSymlinkViaNoFollow(t *testing.T) {
 	rootPath, rootURI := makeRootDir(t)
 	require.NoError(t, os.WriteFile(filepath.Join(rootPath, "real.txt"), []byte("in-root"), 0o600))
 
@@ -130,9 +130,8 @@ func TestMCPRootsReadFile_AcceptsInRootSymlink(t *testing.T) {
 	inRootLink := filepath.Join(rootPath, "link.txt")
 	require.NoError(t, os.Symlink(filepath.Join(rootPath, "real.txt"), inRootLink))
 
-	_, out, err := s.handleMCPRootsReadFile(context.Background(), &mcp.CallToolRequest{Session: ss}, MCPRootsReadFileInput{Path: rootURI + "/link.txt"})
-	require.NoError(t, err)
-	require.Equal(t, "in-root", out.Content)
+	_, _, err := s.handleMCPRootsReadFile(context.Background(), &mcp.CallToolRequest{Session: ss}, MCPRootsReadFileInput{Path: rootURI + "/link.txt"})
+	require.Error(t, err)
 }
 
 func TestMCPRootsReadFile_RejectsWriteFlagPath(t *testing.T) {
