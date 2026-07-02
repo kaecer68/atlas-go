@@ -38,10 +38,10 @@
 Top 15 高頻工具，含「何時該呼叫」決策樹與 3 個範例對話流程。
 
 ### 我要找完整 MCP 規格 → 看 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
-所有 75 個 tool 的 JSON Schema 設計範本、安全邊界、部署指引。
+所有 80 個 tool 的 JSON Schema 設計範本、安全邊界、部署指引。
 
 ### 我要理解模組 → 看 [`internal/AGENTS_INDEX.md`](./../internal/AGENTS_INDEX.md)
-45 個內部模組按 S/E/X/U 成熟度分組。
+52 個內部模組按 S/E/X/U 成熟度分組。
 
 ### 我要避坑 → 看 [`TRAPS.md`](./TRAPS.md)
 跨模組陷阱完整參考（單一權威來源）。

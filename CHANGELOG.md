@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.0.0.27] - 2026-07-02
+
+### Security
+- **MCP roots TOCTOU fix** (PR #902): `OpenFile` 改用 `O_NOFOLLOW` flag 關閉 symlink TOCTOU 視窗。修正 `Issue #901`。
+
+### Added
+- **MCP AllowedRoots validation** (PR #903): 新增 `ATLAS_MCP_ROOTS_ALLOW_UNSAFE` escape hatch env var，預設拒絕 `/`、`/etc`、`/proc` 等系統根目錄路徑。
+- **MCP elicit_user schema pre-validation** (PR #905): `mcp_elicit_user` tool 的 `schema` 參數在 server 端新增格式驗證（大小上限 16KB、屬性上限 20、屬性名稱上限 64 字元、禁止外部 `$ref`/`$dynamicRef`）。由 `cmd/atlas-mcp/server/elicitation_validate.go` 實作，handler 端 `elicitation.go:form` case 在 SDK call 前先行驗證。
+- **Phase 3.5 forecast-bridge** (PR #905 via 36cd37c9 + 3fb5e714): 新增 `internal/forecast/`（個股方向性預測）與 `internal/forecast_bridge/`（Forecast → TradeSignal 轉換層）兩套件，並在 `internal/narrative/taxonomy.go` 建立 5×5 敘事分類。orchestrator pipeline 第 7 步接入 `DirectionalTradeLayer`。全部標記為 Experimental（M4 PoC）。
+
+### Fixed
+- **Fubonproxy cmd.Start()** (PR #906): `cmd.Start()` 移出 mutex lock 並在 goroutine 啟動後 re-check `m.stopping`，符合 F7（啟動 preflight）+ F1（shutdown cancel）supervisor invariants。
+- **Phase 3.5 quality cleanup** (3fb5e714): `factor_weight_engine.go` severity locals `:=` 修正（原程式碼在 `fwConfig()` non-nil 分支內以 `var ... =` 重新宣告導致零值）、`check_maturity.sh` `local count=` race 修正、`hasExternalRef` unused `key` parameter 移除、gofmt 對齊。
+
+### Documentation
+- **移除 .planning/ 死鏈** (PR #907): `docs/specs/phase3-5-spec.md` 9 處 `.planning/phase3-4-reassessment.md` 引用改寫為自指或 inline 設計原則。`docs/operations/phase3-5-runbook.md` 起點改指同目錄 spec。同時刪除 `.planning/` 目錄。
+- **Wave 11+ index sync** (PR #908): `AGENTS.md` header 更新 Wave/版本/模組計數（45→52, 60→67）；`internal/AGENTS_INDEX.md` 補 `forecast` + `forecast_bridge` 兩模組。
+- **Constitution F1-F9 alignment** (PR #909): fubonproxy manager 加入 `check_constitution.sh` allowlist，並移除 head-20 上限（cap）。`docs/specs/phase3-5-spec.md` CHANGELOG 路徑修正。
+
+### Known Limitations (deferred to v0.0.0.28)
+- Phase 3.5 forecast-bridge 為 M4 PoC 階段，`DirectionalTradeLayer` API 可能在 follow-up PR 中調整。
+- MCP elicit schema validation 僅限 `form` mode，`url` mode 不觸發 pre-validation。
+- `internal/forecast/` 與 `internal/forecast_bridge/` 無 AGENTS.md（Experimental 層級非強制）。
+
 ## [0.0.0.26] - 2026-07-01
 
 ### Added

@@ -16,6 +16,7 @@
 | `auth_db_pg.go` | PostgreSQL 實作，只存 SHA-256 hash |
 | `metrics.go` | Prometheus 註冊與 `ObserveCall`/`ObserveAnomaly` |
 | `auto-desc.gen.go` | descgen 產出，禁止手動編輯 |
+| `elicitation_validate.go` | elicit_user schema server-side pre-validation（大小/屬性/外部 $ref 過濾）|
 
 ## 命名陷阱
 
