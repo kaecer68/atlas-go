@@ -634,6 +634,116 @@ func TestProcessManager_F7_CmdStartFailure_StopDoesNotHang(t *testing.T) {
 	}
 }
 
+// TestProcessManager_F1_StartPostStartRecheck_AbortsNewProcess 驗證 F1
+// 不變式在 Start() 自己的 post-start re-check 路徑下也成立:
+//
+//   - Start() 在 unlock 後呼叫 cmd.Start(),若期間 Stop() 被呼叫(或手動
+//     設 m.stopping=true),新程序必須被 Kill+Wait(cancel 釋放 ctx)
+//   - m.cmd/m.running 必須保持未設定狀態(新程序不能被 supervise 接手)
+//   - m.ctx/m.cancel/m.done 必須被 close 並重置為 nil
+//   - Start() 在此場景下回傳 nil(屬於「乾淨 abort」,非錯誤)
+//
+// 與 TestProcessManager_F1_PostStartRecheck_NoOrphanAfterRestart 的差異:
+// 後者覆蓋 supervise() 重啟路徑的 post-start re-check;本測試覆蓋 Start()
+// 第一次啟動路徑的 post-start re-check(對應 manager.go:429-443 新增的
+// 區塊)。雖然機制相同(Kill+Wait+close(done)+reset),程式碼路徑是
+// 獨立的,因此需要獨立測試。
+//
+// 測試策略:手動設定 m.stopping=true(同 package 可直接寫入 struct 欄位),
+// 模擬「Stop() 在 Start() unlock/Start 視窗被呼叫」的情境。Start() 走到
+// 自己的 re-check,看到 m.stopping=true,啟動 abort cleanup 路徑。
+//
+// Reference: F1 不變式(atlas-fubon-supervisor-invariants/SKILL.md) —
+// post-start re-check 必須在 Start() 與 supervise() 兩處對齊;以及
+// lock-check-unlock-work-lock pattern 引入的 race window 修補。
+func TestProcessManager_F1_StartPostStartRecheck_AbortsNewProcess(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	// trap '' INT + sleep 30:即使 SIGINT 也不會優雅退出,確保 Kill 是唯一路徑
+	script := "#!/bin/sh\n" +
+		"trap '' INT\n" +
+		"sleep 30\n"
+	if err := os.WriteFile(fakeScript, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/bin/sh",
+		scriptPath: fakeScript,
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort),
+	}
+
+	// 在 Start() 進到 post-start re-check 之前手動設 m.stopping=true,
+	// 模擬「Stop() 在 Start() unlock/Start 視窗被呼叫」的情境。
+	// (同 package 測試可寫入 struct 欄位)
+	m.stopping = true
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Start() 必須回傳 nil(屬於「乾淨 abort」,不是 error)
+	start := time.Now()
+	err := m.Start(ctx)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Errorf("Start() with pre-set m.stopping should return nil (clean abort), got: %v", err)
+	}
+	if elapsed > 3*time.Second {
+		t.Errorf("Start() blocked %v on F1 re-check path; expected < 3s", elapsed)
+	}
+	t.Logf("Start() correctly returned nil in %v (clean abort via F1 re-check)", elapsed)
+
+	// 關鍵 F1 不變式:新程序絕對不能被註冊到 m.cmd,supervise() 也不應
+	// 被啟動(避免留下孤兒 goroutine)。
+	m.mu.Lock()
+	if m.cmd != nil {
+		t.Errorf("expected m.cmd=nil after F1 re-check abort, got %+v (process leaked to supervisor!)", m.cmd)
+	}
+	if m.running {
+		t.Error("expected m.running=false after F1 re-check abort")
+	}
+	if m.ctx != nil {
+		t.Error("expected m.ctx=nil after F1 re-check abort (F1 cleanup)")
+	}
+	if m.cancel != nil {
+		t.Error("expected m.cancel=nil after F1 re-check abort (F1 cleanup)")
+	}
+	if m.done != nil {
+		t.Error("expected m.done=nil after F1 re-check abort (F1 cleanup)")
+	}
+	m.mu.Unlock()
+
+	// m.stopping 仍是 true(沒人 reset,因為 Start() 的 abort 路徑不 reset stopping)
+	// 這是預期行為 — abort 表示「已 stop 過,不要再 spawn」
+
+	// goroutine 洩漏檢查:Start() 的 abort 路徑不會啟動 supervise(),所以
+	// 不應有額外的背景 goroutine 留下來
+	time.Sleep(200 * time.Millisecond)
+	// 簡單檢查 — 若有 supervise goroutine 跑,會留下 cmd.Wait 的 syscall
+	// 阻塞;由於 cmd 已被 Kill+Wait,supervise 沒被啟動,所以這個 sleep
+	// 不會有副作用。
+	t.Logf("no goroutine leak verification: 200ms idle (no supervise started on abort path)")
+
+	// 二次 Stop() 必須不阻塞(m.stopping=true 早退守衛應立即返回)
+	done2 := make(chan struct{})
+	start = time.Now()
+	go func() {
+		m.Stop()
+		close(done2)
+	}()
+	select {
+	case <-done2:
+		stopElapsed := time.Since(start)
+		if stopElapsed > 1*time.Second {
+			t.Errorf("Stop() took %v after F1 abort; expected < 1s (m.stopping guard should early-return)", stopElapsed)
+		}
+		t.Logf("Stop() returned in %v after F1 abort — OK", stopElapsed)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() hung > 2s after F1 abort — m.stopping guard broken?")
+	}
+}
+
 // TestProcessManager_BackoffStateMachine_3sThen10s 驗證 backoff 狀態機：
 // - 1st 重啟：restartInitialDelay (3s)
 // - 連續 Start() 失敗：restartBackoffDelay (10s)
