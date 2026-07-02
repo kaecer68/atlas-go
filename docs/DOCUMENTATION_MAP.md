@@ -75,6 +75,7 @@
 |------|------|
 | `ENVIRONMENT.md` | 外部依賴與環境 |
 | `TOOLS.md` | 工具清單 |
+| `MCP_INDEX.md` | 外部 AI Agent 透過 MCP 接入 atlas 的入口指南（PR #911 新增） |
 | `AUDIT_TRAIL.md` | 稽核軌跡 |
 | `calibration-loop.md` | 校準循環 |
 

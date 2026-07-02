@@ -95,6 +95,7 @@ Tool 命名遵循 `<area>_<verb>_<noun?>` 慣例,全 snake_case。完整 catalog
 | MCP server 設計原理、JSON Schema 模板、安全邊界、可擴充協議（Resources / Prompts / Sampling / Elicitation / Roots） | [`docs/specs/agent-mcp-server.md`](./specs/agent-mcp-server.md) |
 | 21 個 workflow（WA-001 ~ WA-701）與 MCP tool 對應、流程設計 | [`docs/WORKFLOW_MAP.md`](./WORKFLOW_MAP.md) |
 | 第一次使用 atlas 的 5 分鐘速讀（市場＋策略＋MCP 整體脈絡） | [`docs/AGENT_ONBOARDING.md`](./AGENT_ONBOARDING.md) |
+| 所有 atlas 文件分類與路由（含本檔） | [`docs/DOCUMENTATION_MAP.md`](./DOCUMENTATION_MAP.md) |
 
 ---
 
