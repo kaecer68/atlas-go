@@ -89,8 +89,8 @@
 | Package | 描述 | 關鍵型別/介面 | 備註 |
 |---------|------|--------------|------|
 | `adversarial` | 對抗性訓練 — `AdversarialTrainer`、`BattleResult`、`StressTest` | `AdversarialTrainer` | 探索性研究 |
-| `forecast` | 個股方向性預測 — per-symbol forecast（directional bias、confidence、severity），給 Phase 3.5 M4 forecast-bridge 消費 | `ForecastResult`, `Predictor`, `SymbolForecast` | Phase 3.5 M4 PoC，experimental；下游 `forecast_bridge` 尚未穩定 |
-| `forecast_bridge` | Forecast → TradeSignal 轉換層 — 依 conviction thresholds 將 `forecast.ForecastResult` 升級為可下單的 `TradeSignal` | `Bridge`, `TradeSignal` | Phase 3.5 M4 PoC，experimental；依賴 `forecast` |
+| `forecast` | 個股方向性預測 — per-symbol forecast（directional bias、confidence、severity），給 Phase 3.5 M4 forecast-bridge 消費 | `ForecastResult`, `ForecastEngine`, `TradeSignal` | Phase 3.5 M4 ✅ shipped（2026-07-02）；預測模型標記 experimental，infra 完整 |
+| `forecast_bridge` | Forecast → TradeSignal 轉換層 — 依 conviction thresholds 將 `forecast.ForecastResult` 升級為可下單的 `TradeSignal` | `Adapter`, `CircuitBreaker`, `TradeSignal` | Phase 3.5 M4 ✅ shipped（2026-07-02）；adapter + circuit breaker + directional trade layer wire 完整 |
 | `reflexivity` | 自反性價格動態引擎 | `Engine` | 探索性研究 |
 | `retail` | RSI-tw 散戶情緒指數 — 複合零售情緒指標（保證金、VIX、機構流向） | `Calculator` | Phase 1 基準實作，Phase 2 擴充中 |
 | `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，實驗中 |
