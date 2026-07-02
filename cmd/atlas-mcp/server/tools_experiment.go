@@ -7,13 +7,13 @@ import (
 )
 
 func registerExperimentTools(mcpSrv *mcp.Server, s *server) {
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_diff",
 		Description: autoDescOr("experiment_diff", "Diff between a candidate experiment and the baseline (config + metrics comparison)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleExperimentDiff)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_history",
 		Description: autoDescOr("experiment_history", "Historical list of experiments (judge results, promotions, reverts)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},

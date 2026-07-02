@@ -170,6 +170,30 @@ jobs:
     - name: Check markdown links
       run: bash scripts/ci/check_markdown_links.sh
 
+  # MCP tool count doc-code alignment — prevents drift between
+  # AGENT_TOOLS.md documented count and actual AddTool registrations.
+  mcp-tool-count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Check MCP tool count doc-code alignment
+        run: |
+          CODE_COUNT=$(grep -rhF 'mcp.AddTool(' cmd/atlas-mcp/server/*.go | grep -v '_test.go' | wc -l | tr -d ' ')
+          DOC_MIN=$(grep -oP '基礎\s*\d+' docs/AGENT_TOOLS.md | grep -oP '\d+' | head -1)
+          DOC_MAX=$(grep -oP '\+2' docs/AGENT_TOOLS.md | sed 's/+//')
+          if [ -z "$DOC_MIN" ] || [ -z "$DOC_MAX" ]; then
+            echo "ERROR: Could not parse tool count range from docs/AGENT_TOOLS.md"
+            exit 1
+          fi
+          DOC_MAX=$((DOC_MIN + DOC_MAX))
+          if [ "$CODE_COUNT" -lt "$DOC_MIN" ] || [ "$CODE_COUNT" -gt "$DOC_MAX" ]; then
+            echo "ERROR: docs/AGENT_TOOLS.md says $DOC_MIN–$DOC_MAX tools, but code registers $CODE_COUNT tools."
+            echo "Update AGENT_TOOLS.md, or fix tool registration drift."
+            exit 1
+          fi
+          echo "OK: doc ($DOC_MIN–$DOC_MAX) matches code ($CODE_COUNT registered tools)."
+
   # AGENTS.md line count gate — prevents token bloat by enforcing
   # ≤ 160 lines of human-written content (before auto-injected blocks).
   # Warning at 155 lines, hard fail at 160.

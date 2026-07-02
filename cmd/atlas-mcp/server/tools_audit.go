@@ -21,25 +21,25 @@ const maxAuditWindow = 30 * 24 * time.Hour
 // fallback is intentional (no panic) and will be removed once SSE/streamable-
 // HTTP transports wire authenticated agent identity.
 func registerAuditTools(mcpSrv *mcp.Server, s *server) {
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_call_stats",
 		Description: "Return call statistics for the recent window: total calls, error count, p50 latency, and per-tool breakdown. window_minutes defaults to 60 and is capped at 1440 (24h).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMCPGetCallStats)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_session_topology",
 		Description: "Return the agent_id to tool call matrix for the recent window. window_minutes defaults to 60 and is capped at 1440 (24h). Empty agent_id falls back to 'anonymous'.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMCPGetSessionTopology)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_top_slow_tools",
 		Description: "Return the slowest tools by p50 latency for the recent window. window_minutes defaults to 60 and is capped at 1440 (24h). limit defaults to 5 and is capped at 20.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMCPGetTopSlowTools)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_tenant_usage",
 		Description: "Return per-tenant usage stats for the recent window: total calls, error count, tool count. window_minutes defaults to 60 and is capped at 1440 (24h).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},

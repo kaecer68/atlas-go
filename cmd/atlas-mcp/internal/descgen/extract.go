@@ -39,7 +39,8 @@ func Extract(toolsDir string) (map[string]ToolDesc, error) {
 			continue
 		}
 		name := e.Name()
-		isToolsFile := name == "tools.go" || (strings.HasPrefix(name, "tools_") && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go"))
+		isToolsFile := name == "tools.go" || (strings.HasPrefix(name, "tools_") && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")) ||
+			name == "sampling.go" || name == "roots.go" || name == "elicitation.go"
 		if !isToolsFile {
 			continue
 		}
@@ -99,8 +100,17 @@ func Extract(toolsDir string) (map[string]ToolDesc, error) {
 			if !ok {
 				return true
 			}
-			sel, ok := ce.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "AddTool" {
+			// Match both countedAddTool(...) (new wrapper) and mcp.AddTool(...) (legacy pattern).
+			switch fun := ce.Fun.(type) {
+			case *ast.SelectorExpr:
+				if fun.Sel.Name != "AddTool" {
+					return true
+				}
+			case *ast.Ident:
+				if fun.Name != "countedAddTool" {
+					return true
+				}
+			default:
 				return true
 			}
 			if len(ce.Args) < 3 {
