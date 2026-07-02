@@ -6,7 +6,30 @@
 <meta name="description" content="Atlas-Go 投資人平台：台股模擬、風險監控與績效追蹤。">
 <meta name="author" content="Atlas-Go">
 <meta name="robots" content="noindex, nofollow">
+<meta name="keywords" content="台股,模擬投資,風險監控,績效追蹤,投資組合,Atlas,台灣股市,因子投資,策略演化,投資心法">
+<meta name="theme-color" content="#0b0d10">
+<meta name="format-detection" content="telephone=no">
 <title>Atlas-Go 投資人平台</title>
+<!-- TODO(prod-domain): 替換 atlas-go.example.com 為 production 域名; 同步放 og-image.png / logo.png 到 client_web/static/ -->
+<link rel="canonical" href="https://atlas-go.example.com/client/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Atlas-Go 投資人平台">
+<meta property="og:title" content="Atlas-Go 投資人平台 — 台股模擬、風險監控與績效追蹤">
+<meta property="og:description" content="台股模擬投資、風險監控、績效追蹤一站整合。提供投資組合管理、策略演化分析與宏觀敘事儀表板。">
+<meta property="og:url" content="https://atlas-go.example.com/client/">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:image" content="https://atlas-go.example.com/static/og-image.png">
+<meta property="og:image:secure_url" content="https://atlas-go.example.com/static/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Atlas-Go 投資人平台 — 台股模擬、風險監控與績效追蹤">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Atlas-Go 投資人平台 — 台股模擬、風險監控與績效追蹤">
+<meta name="twitter:description" content="台股模擬投資、風險監控、績效追蹤一站整合。">
+<meta name="twitter:image" content="https://atlas-go.example.com/static/og-image.png">
+<meta name="twitter:image:alt" content="Atlas-Go 投資人平台 — 台股模擬、風險監控與績效追蹤">
 <script>
   // 簡化模式：早期同步執行避免 FOUC（在 CSS 載入前設定 :root[data-simplified]）
   (function() {
@@ -18,6 +41,62 @@
   })();
 </script>
 <link rel="stylesheet" href="css/main.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://atlas-go.example.com/#organization",
+      "name": "Atlas-Go",
+      "url": "https://atlas-go.example.com/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://atlas-go.example.com/static/logo.png",
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://atlas-go.example.com/#website",
+      "url": "https://atlas-go.example.com/",
+      "name": "Atlas-Go",
+      "description": "台股模擬投資、風險監控、績效追蹤一站整合。",
+      "inLanguage": "zh-TW",
+      "publisher": {"@id": "https://atlas-go.example.com/#organization"}
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Atlas-Go 投資人平台",
+      "applicationCategory": "FinanceApplication",
+      "applicationSubCategory": "Investment Portfolio Management",
+      "operatingSystem": "Web",
+      "description": "台股模擬投資、風險監控、績效追蹤一站整合。提供投資組合管理、策略演化分析、宏觀敘事與風險控管。",
+      "url": "https://atlas-go.example.com/client/",
+      "image": "https://atlas-go.example.com/static/og-image.png",
+      "inLanguage": "zh-TW",
+      "publisher": {"@id": "https://atlas-go.example.com/#organization"},
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "TWD",
+        "availability": "https://schema.org/PreOrder",
+        "description": "模擬投資模式免費使用,Live 交易功能依券商計費"
+      },
+      "featureList": [
+        "台股模擬投資組合",
+        "即時風險監控(VaR/Drawdown)",
+        "績效歸因報告",
+        "策略演化儀表板",
+        "宏觀敘事分析",
+        "產業生態系分析",
+        "因子投資模型"
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
 <div id="loadingBar"></div>
