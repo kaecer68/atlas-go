@@ -7,7 +7,15 @@
 // retention, per-tool rate limiting, multi-tenant token management, and
 // the admin HTTP API.
 //
-// Configuration via environment:
+// Configuration precedence (highest first): CLI flag > environment > default.
+//
+// CLI flags:
+//
+//	-transport stdio|sse|streamable-http   MCP transport (env: ATLAS_MCP_TRANSPORT, default: stdio)
+//	-addr     127.0.0.1:9090              listen address for sse/streamable-http
+//	                                       (env: ATLAS_MCP_ADDR, default: 127.0.0.1:9090)
+//
+// Environment:
 //
 //	ATLAS_BASE_URL                  atlas core HTTP base (default: http://127.0.0.1:8080)
 //	ATLAS_API_KEY                   admin API key (passed through when invoking atlas HTTP API)
@@ -30,6 +38,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"strconv"
@@ -40,6 +49,19 @@ import (
 )
 
 func main() {
+	// CLI flags take precedence over env vars; env vars fall back to defaults.
+	// Flags default to "" so we can distinguish "user passed nothing" from
+	// "user passed the default value".
+	fs := flag.NewFlagSet("atlas-mcp", flag.ExitOnError)
+	transportFlag := fs.String("transport", "",
+		"MCP transport: stdio | sse | streamable-http (CLI > env ATLAS_MCP_TRANSPORT > stdio)")
+	addrFlag := fs.String("addr", "",
+		"listen address for sse/streamable-http (CLI > env ATLAS_MCP_ADDR > 127.0.0.1:9090)")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		// ExitOnError already exits; this branch is defensive.
+		log.Fatalf("atlas-mcp: parse flags: %v", err)
+	}
+
 	adminToken := os.Getenv("ATLAS_MCP_ADMIN_TOKEN")
 	adminAddr := os.Getenv("ATLAS_MCP_ADMIN_ADDR")
 	if adminToken != "" && adminAddr == "" {
@@ -57,8 +79,8 @@ func main() {
 		AdminAddr:          adminAddr,
 		AdminToken:         adminToken,
 		MetricsAddr:        os.Getenv("ATLAS_MCP_METRICS_ADDR"),
-		Transport:          envOr("ATLAS_MCP_TRANSPORT", server.TransportStdio),
-		Addr:               envOr("ATLAS_MCP_ADDR", "127.0.0.1:9090"),
+		Transport:          firstNonEmpty(*transportFlag, os.Getenv("ATLAS_MCP_TRANSPORT"), server.TransportStdio),
+		Addr:               firstNonEmpty(*addrFlag, os.Getenv("ATLAS_MCP_ADDR"), "127.0.0.1:9090"),
 		SamplingEnabled:    envBoolOr("ATLAS_MCP_SAMPLING_ENABLED", false),
 		ElicitationEnabled: envBoolOr("ATLAS_MCP_ELICITATION_ENABLED", false),
 		Roots: func() server.RootsConfig {
@@ -90,6 +112,17 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// firstNonEmpty returns the first non-empty string in values. Used for
+// CLI-flag > env-var > default precedence: pass (cliValue, envValue, default).
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func envIntOr(key string, def int) int {
