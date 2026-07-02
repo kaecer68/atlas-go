@@ -85,4 +85,4 @@ We follow standard Go conventions:
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-Apache License 2.0.
+GNU Affero General Public License v3 (AGPL v3) — see the root `LICENSE` file.

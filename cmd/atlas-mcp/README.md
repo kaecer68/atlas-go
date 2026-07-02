@@ -12,7 +12,7 @@
 |------|------|
 | MCP Tools | **80 個**（16 個 `tools_*.go` 檔案按領域分群 + 5 個核心 entry-point 在 `tools.go`） |
 | Tool description | `auto-desc.gen.json`（713 行，由 `cmd/atlas-mcp/descgen/` 自動生成） |
-| Transport | **stdio**（生產）；SSE / streamable-HTTP（程式碼就緒，待啟用，見 roadmap P1 殘留） |
+| Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
 | Audit | v2 schema（retention、cleanup、ArgsHash、SessionID、Transport，`audit_v2.go`；v1 `audit.go` 為向後相容 shim） |
 | 擴充協議 | Resources（`resources.go`）、Prompts（`prompts.go`）、Elicitation（`elicitation.go`）、Sampling（`sampling.go`）、Roots（`roots.go`） |
@@ -25,11 +25,31 @@
 # 建置
 go build -o bin/atlas-mcp ./cmd/atlas-mcp/
 
-# 啟動（stdio transport）
+# 啟動（stdio transport — 預設，Claude Desktop / Cursor / OpenCode 用）
 ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
+
+# 啟動（streamable-HTTP transport，Bearer auth 強制）
+ATLAS_MCP_TRANSPORT=streamable-http \
+ATLAS_MCP_ADDR=127.0.0.1:9090 \
+ATLAS_MCP_TOKEN=$(openssl rand -hex 32) \
+ATLAS_BASE_URL=http://127.0.0.1:8080 \
+ATLAS_API_KEY=xxx \
+./bin/atlas-mcp
+
+# 啟動（SSE transport，Bearer auth 強制；deprecated by MCP spec，但保留相容）
+ATLAS_MCP_TRANSPORT=sse \
+ATLAS_MCP_ADDR=127.0.0.1:9090 \
+ATLAS_MCP_TOKEN=$(openssl rand -hex 32) \
+ATLAS_BASE_URL=http://127.0.0.1:8080 \
+ATLAS_API_KEY=xxx \
+./bin/atlas-mcp
 ```
 
-伺服器從 stdin 讀取 JSON-RPC 請求、往 stdout 寫入回應。`ATLAS_BASE_URL` 指向 atlas-go HTTP API（預設 `http://127.0.0.1:8080`）。
+stdio 模式從 stdin 讀取 JSON-RPC 請求、往 stdout 寫入回應。`ATLAS_BASE_URL` 指向 atlas-go HTTP API（預設 `http://127.0.0.1:8080`）。
+
+streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`），所有請求需帶 `Authorization: Bearer <ATLAS_MCP_TOKEN>` header，否則回傳 401。dev mode（`ATLAS_MCP_TOKEN=""`）允許無 token 存取，僅供本機開發使用。
+
+> **安全提醒**：HTTP transport 一律 bind 127.0.0.1，不要對外暴露。若需遠端使用，請放在具備 TLS 終止與速率限制的 reverse proxy（例如 nginx、Caddy）後方。
 
 ## 配置
 
@@ -39,11 +59,13 @@ ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
 |------|--------|------|
 | `ATLAS_BASE_URL` | `http://127.0.0.1:8080` | atlas-go HTTP API 基底 URL |
 | `ATLAS_API_KEY` | （未設） | 以 `X-API-Key` header 轉發至 atlas-go admin endpoints |
-| `ATLAS_MCP_TOKEN` | （未設） | MCP transport 層 token（stdio 為 forward-looking，SSE/HTTP 啟用後強制） |
+| `ATLAS_MCP_TOKEN` | （未設） | Bearer token；SSE/HTTP transport 啟用後強制驗證（401 if missing/wrong） |
 | `ATLAS_MCP_AUDIT_LOG` | `/tmp/atlas-mcp-audit.log` | JSONL audit log 路徑。父目錄自動建立（mode 0700） |
 | `ATLAS_MCP_ALLOWED_ROOTS` | （未設） | MCP client roots 白名單（CSV 格式路徑清單，未設時無限制，見 Phase 4 B roots 擴充協議） |
+| `ATLAS_MCP_TRANSPORT` | `stdio` | 傳輸層：`stdio` / `sse` / `streamable-http` |
+| `ATLAS_MCP_ADDR` | `127.0.0.1:9090` | 監聽位址，僅 `sse` / `streamable-http` 使用 |
 
-> **stdio 安全模型**：目前無 transport 層 token 強制執行。process isolation（僅 parent process 可觸及 stdin/stdout）即安全邊界。`TokenAuth` + DB TokenStore 已實作，SSE/streamable-HTTP transport 啟用後強制驗證。
+> **stdio 安全模型**：stdio 模式不強制 Bearer token（process isolation 即安全邊界），但仍接受 token 標頭作為多租戶 routing。SSE / streamable-HTTP 模式 `Authorization: Bearer <token>` **必填**，未帶或錯誤回傳 401。
 
 ## MCP Client 配置範例
 
@@ -109,4 +131,4 @@ ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
 
 ## License
 
-Apache 2.0 — 與 atlas-go 一致。
+GNU AGPL v3 — 與 atlas-go 一致（見根目錄 `LICENSE`）。

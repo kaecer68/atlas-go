@@ -1,12 +1,21 @@
 // Command atlas-mcp is the Model Context Protocol (MCP) server for atlas-go.
 //
 // It bridges external AI agents (Claude Desktop, Cursor, OpenCode, etc.) to
-// the atlas-go HTTP API via JSON-RPC 2.0 over stdio. Phase 1 supports stdio;
-// Phase 2 added SSE + streamable-HTTP transports with Bearer auth.
-// Phase 3 added audit log retention, per-tool rate limiting,
-// multi-tenant token management (Item 3), and admin HTTP API.
+// the atlas-go HTTP API via JSON-RPC 2.0. Phase 1 wired stdio (default).
+// Phase 4 wired SSE + streamable-HTTP transports with Bearer auth (see
+// cmd/atlas-mcp/server/transport.go). Earlier phases added audit log
+// retention, per-tool rate limiting, multi-tenant token management, and
+// the admin HTTP API.
 //
-// Configuration via environment:
+// Configuration precedence (highest first): CLI flag > environment > default.
+//
+// CLI flags:
+//
+//	-transport stdio|sse|streamable-http   MCP transport (env: ATLAS_MCP_TRANSPORT, default: stdio)
+//	-addr     127.0.0.1:9090              listen address for sse/streamable-http
+//	                                       (env: ATLAS_MCP_ADDR, default: 127.0.0.1:9090)
+//
+// Environment:
 //
 //	ATLAS_BASE_URL                  atlas core HTTP base (default: http://127.0.0.1:8080)
 //	ATLAS_API_KEY                   admin API key (passed through when invoking atlas HTTP API)
@@ -18,6 +27,8 @@
 //	ATLAS_MCP_ADMIN_TOKEN           admin API token for token management API (empty = disabled)
 //	ATLAS_MCP_ADMIN_ADDR            admin HTTP listen address (default: 127.0.0.1:9090 when token is set)
 //	ATLAS_MCP_METRICS_ADDR          Prometheus metrics listen address (default: disabled; use 127.0.0.1:9091)
+//	ATLAS_MCP_TRANSPORT             transport: stdio | sse | streamable-http (default: stdio)
+//	ATLAS_MCP_ADDR                  listen address for sse/streamable-http (default: 127.0.0.1:9090)
 //	PGHOST/PGPORT/PGUSER/...        PostgreSQL connection (standard libpq env vars)
 //	ATLAS_MCP_SAMPLING_ENABLED      enable mcp_sample_llm (default false)
 //	ATLAS_MCP_ELICITATION_ENABLED   enable mcp_elicit_user (default false)
@@ -27,6 +38,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"strconv"
@@ -37,6 +49,19 @@ import (
 )
 
 func main() {
+	// CLI flags take precedence over env vars; env vars fall back to defaults.
+	// Flags default to "" so we can distinguish "user passed nothing" from
+	// "user passed the default value".
+	fs := flag.NewFlagSet("atlas-mcp", flag.ExitOnError)
+	transportFlag := fs.String("transport", "",
+		"MCP transport: stdio | sse | streamable-http (CLI > env ATLAS_MCP_TRANSPORT > stdio)")
+	addrFlag := fs.String("addr", "",
+		"listen address for sse/streamable-http (CLI > env ATLAS_MCP_ADDR > 127.0.0.1:9090)")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		// ExitOnError already exits; this branch is defensive.
+		log.Fatalf("atlas-mcp: parse flags: %v", err)
+	}
+
 	adminToken := os.Getenv("ATLAS_MCP_ADMIN_TOKEN")
 	adminAddr := os.Getenv("ATLAS_MCP_ADMIN_ADDR")
 	if adminToken != "" && adminAddr == "" {
@@ -54,6 +79,8 @@ func main() {
 		AdminAddr:          adminAddr,
 		AdminToken:         adminToken,
 		MetricsAddr:        os.Getenv("ATLAS_MCP_METRICS_ADDR"),
+		Transport:          firstNonEmpty(*transportFlag, os.Getenv("ATLAS_MCP_TRANSPORT"), server.TransportStdio),
+		Addr:               firstNonEmpty(*addrFlag, os.Getenv("ATLAS_MCP_ADDR"), "127.0.0.1:9090"),
 		SamplingEnabled:    envBoolOr("ATLAS_MCP_SAMPLING_ENABLED", false),
 		ElicitationEnabled: envBoolOr("ATLAS_MCP_ELICITATION_ENABLED", false),
 		Roots: func() server.RootsConfig {
@@ -85,6 +112,17 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// firstNonEmpty returns the first non-empty string in values. Used for
+// CLI-flag > env-var > default precedence: pass (cliValue, envValue, default).
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func envIntOr(key string, def int) int {

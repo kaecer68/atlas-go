@@ -6,7 +6,8 @@
 
 | 檔案 | 責任 |
 |------|------|
-| `server.go` | 生命週期、設定驗證、rate limiter / metrics / anomaly emitter 啟動 |
+| `server.go` | 生命週期、設定驗證、rate limiter / metrics / anomaly emitter 啟動、transport 分派 |
+| `transport.go` | Transport 實作：`ServeStdio` / `ServeSSE` / `ServeStreamableHTTP` + 共用 `BearerAuth` middleware |
 | `tools.go` | 總註冊入口、`countedAddTool` 計數包裝、`RegisteredToolCount`、`withAudit`/`withAuditExtra` 包裝 |
 | `tools_*.go` | 各業務領域 tool 註冊與 handler（macro / crossmarket / narrative / risk_alert / strategy / experiment / synergy / control / scheduler_task / system / llm_trace / data_universe / report_prism_swarm），共 14 個檔案 |
 | `sampling.go` | MCP protocol 層：`mcp_sample_llm`（feature-gated，`SamplingEnabled` 控制） |
@@ -65,6 +66,19 @@
 - env token 為空時是 dev mode：`Authenticate` 直接回傳原 context，不檢查 bearer。
 - `auth_db_pg.go` 永遠只存 `hashTokenRaw(raw)`，回傳的 raw token 只會出現在 `Register` / `Rotate` 回傳值，不會再出現第二次。
 - `AdminAddr` 啟用時，`server.go` 強制要求 `TokenStore != nil` 且 `AdminToken != ""`，且只能 bind `127.0.0.1`。
+
+## Transport 陷阱（Phase 4）
+
+- `transport.go` 提供三個 dispatcher：
+  - `ServeStdio(ctx, mcpSrv)` — 預設，`mcpSrv.Run(ctx, &mcp.StdioTransport{})` 的薄包裝，向後相容 Claude Desktop / Cursor / OpenCode。
+  - `ServeSSE(ctx, mcpSrv, addr, auth)` — MCP 2024-11-05 SSE 規格；**spec 已標 deprecation**，僅作相容保留。
+  - `ServeStreamableHTTP(ctx, mcpSrv, addr, auth)` — MCP 2025-03-26 規格，當前 MCP 標準；新部署優先採用。
+- HTTP transports 一律走 `BearerAuth(auth)` middleware，token 錯誤回 401；`TokenAuth` 在 dev mode（`MCPToken == ""`）會放行所有請求。
+- `extractBearer` 嚴格區分 `Bearer ` prefix（大小寫敏感）；其他 scheme（Basic / Digest / bare）一律回空 token 走 401 路徑。
+- HTTP transports 一律 bind `127.0.0.1:`（推薦 `127.0.0.1:9090`），不暴露 0.0.0.0；遠端使用請放 reverse proxy 後。
+- `listenHTTP` graceful shutdown 用 5s timeout 處理 ctx cancellation，確保 in-flight request 結束後才退出。
+- 設定 `Config.Transport` 為空字串時 fallback 至 `TransportStdio`（向後相容舊部署）。
+- HTTP transport 不修改 audit 的 `transport` 欄位邏輯（v2 schema 已預留欄位，目前由 `withAudit` 從 ctx 取值，stdio 為 `"stdio"`，HTTP 路徑在 audit 中標為 `"http"`）。
 
 ## 測試陷阱
 

@@ -32,7 +32,7 @@
 | **MCP 規格支援** | 預期 2025-11-25 | 2025-11-25 + 向下相容 2024-11-05 | **2025-11-25 完整** + v1.7.0+ 預備 2026-07-28 | 部分 |
 | **Transports** | 需 stdio/SSE/HTTP | ✅ 全部 | ✅ **全部（StdioTransport 等）** | 全部 |
 | **Stars** | — | 8.9k | 4.7k（更年輕但官方）| 較小 |
-| **License** | Apache 2.0 | MIT | **Apache-2.0 / MIT / CC-BY-4.0**（含 Apache ✓）| MIT |
+| **License** | **GNU AGPL v3** | MIT | **Apache-2.0 / MIT / CC-BY-4.0**（上游獨立授權，與 atlas-go AGPL v3 並存；僅作相依評估）| MIT |
 | **Maintainer** | — | Mark Phelps + 210 contributors | **官方 + Google 合作** | Tencent trpc 群組 |
 | **Open issues** | — | 9 | 49 | n/a |
 | **Active development** | — | 持續（v0.55.0 = 2026-06-16） | **持續（v1.7.0-pre = 2026-06-25）** | 中 |
@@ -176,7 +176,7 @@ OFFICIAL SDK 提供 `transport.StreamableHTTPTransport`，SSE 仍在設計中（
 
 - [x] **Go 版本確認**：atlas-go 1.25.0 ↔ OFFICIAL SDK 1.25.0 完整相符 ✅
 - [x] **Transports 確認**：stdio / SSE / HTTP 三種 OFFICIAL SDK 都支援 ✅
-- [x] **License 確認**：Apache-2.0 ✅（與 atlas-go Apache 2.0 相容）
+- [x] **License 確認**：上游 SDK `Apache-2.0` ✅；atlas-go 本體 `GNU AGPL v3` ✅（兩者並存，上游授權不污染 atlas-go 本體授權）
 - [x] **MCP 規格確認**：OFFICIAL SDK v1.6.1 完整覆蓋 2025-11-25 spec ✅
 - [x] **Active development**：最近 30 天有 release（v1.7.0-pre.1 = 2026-06-25）✅
 - [x] **社群活躍**：4.7k+ stars、穩定貢獻者群 ✅
