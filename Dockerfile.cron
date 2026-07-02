@@ -16,12 +16,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-instituti
 
 FROM alpine:latest
 
-# Install cron and curl
-RUN apk add --no-cache dcron curl bash
-
-# Create non-root user for cron jobs
-RUN addgroup -g 1000 atlas && \
-    adduser -u 1000 -G atlas -s /bin/sh -D atlas
+# Install runtime deps (bash for cron-entrypoint.sh shell scheduler, curl for health checks)
+RUN apk add --no-cache curl bash
 
 # Create app directory
 WORKDIR /app
@@ -48,14 +44,8 @@ COPY --from=builder /build/sql /app/sql
 COPY --from=builder /build/scripts/cron-entrypoint.sh /app/cron-entrypoint.sh
 RUN chmod +x /app/cron-entrypoint.sh
 
-# Create log directory and set ownership
-RUN mkdir -p /var/log/cron && chown -R atlas:atlas /app /var/log/cron
-
-# Allow atlas user to use crontab (dcron requires explicit allowlist for non-root)
-RUN echo "atlas" > /etc/cron.allow
-
-# Switch to non-root user
-USER atlas
+# Create log directory
+RUN mkdir -p /var/log/cron
 
 # Start cron in foreground via entrypoint
 CMD ["/app/cron-entrypoint.sh"]

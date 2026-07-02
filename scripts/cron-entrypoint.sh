@@ -1,13 +1,43 @@
 #!/bin/sh
+# cron-entrypoint.sh — lightweight cron scheduler for Docker (no crond dependency)
+# Replaces dcron to avoid Docker Desktop macOS seccomp setpgid block.
+# Checks schedule every 60s; matches cron fields (min hour day month weekday).
 set -e
 
-if [ -n "$CRON_SCHEDULE" ] && [ -n "$CRON_COMMAND" ]; then
-    echo "$CRON_SCHEDULE $CRON_COMMAND >> /var/log/cron/cron.log 2>&1" | crontab -
-    echo "Installed cron job: $CRON_SCHEDULE $CRON_COMMAND"
-else
+if [ -z "$CRON_SCHEDULE" ] || [ -z "$CRON_COMMAND" ]; then
     echo "WARN: CRON_SCHEDULE or CRON_COMMAND not set. No cron job installed."
+    echo "Sleeping forever to keep container alive."
+    exec tail -f /dev/null
 fi
 
+echo "Cron job scheduled: $CRON_SCHEDULE $CRON_COMMAND"
 mkdir -p /var/log/cron
 
-exec crond -f -l 2
+SCHED_MIN=$(echo "$CRON_SCHEDULE" | awk '{print $1}')
+SCHED_HOUR=$(echo "$CRON_SCHEDULE" | awk '{print $2}')
+SCHED_DAY=$(echo "$CRON_SCHEDULE" | awk '{print $3}')
+SCHED_MONTH=$(echo "$CRON_SCHEDULE" | awk '{print $4}')
+SCHED_WDAY=$(echo "$CRON_SCHEDULE" | awk '{print $5}')
+
+while true; do
+    NOW_MIN=$(date +%M)
+    NOW_HOUR=$(date +%H)
+    NOW_DAY=$(date +%d)
+    NOW_MONTH=$(date +%m)
+    NOW_WDAY=$(date +%w)
+
+    MATCH=1
+    [ "$SCHED_MIN" != "*" ] && [ "$NOW_MIN" != "$SCHED_MIN" ] && MATCH=0
+    [ "$SCHED_HOUR" != "*" ] && [ "$NOW_HOUR" != "$SCHED_HOUR" ] && MATCH=0
+    [ "$SCHED_DAY" != "*" ] && [ "$NOW_DAY" != "$SCHED_DAY" ] && MATCH=0
+    [ "$SCHED_MONTH" != "*" ] && [ "$NOW_MONTH" != "$SCHED_MONTH" ] && MATCH=0
+    [ "$SCHED_WDAY" != "*" ] && [ "$NOW_WDAY" != "$SCHED_WDAY" ] && MATCH=0
+
+    if [ $MATCH -eq 1 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Running: $CRON_COMMAND" >> /var/log/cron/cron.log
+        eval "$CRON_COMMAND" >> /var/log/cron/cron.log 2>&1 || true
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Done" >> /var/log/cron/cron.log
+    fi
+
+    sleep 60
+done
