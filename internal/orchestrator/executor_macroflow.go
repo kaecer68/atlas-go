@@ -11,11 +11,3 @@ func NewDefaultMacroFlowStrategy() DefaultMacroFlowStrategy {
 		engine: macroflow.NewEngine(0), // 0 → default 7d
 	}
 }
-
-// resolveMacroRiskLevel is a pass-through identity placeholder for future
-// regime → macroflow.RiskLevel mapping (e.g., incorporating regime-confidence,
-// narrative-event fusion, or an external risk signal). Currently returns the
-// input unchanged; the pipeline uses a safe default of macroflow.RiskYellow.
-func resolveMacroRiskLevel(regime macroflow.RiskLevel) macroflow.RiskLevel {
-	return regime
-}

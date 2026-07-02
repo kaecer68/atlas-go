@@ -89,7 +89,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
 
 	return ResearchResult{
-		MacroFlowAdjustment: macroFlowResult,
+		MacroFlowAdjustment:  macroFlowResult,
 		Regime:               regime,
 		RawRecommendations:   raw,
 		FinalRecommendations: final,
