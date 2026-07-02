@@ -402,10 +402,6 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	// 之前在 m.mu.Lock() 內呼叫 cmd.Start() 違反 F7；改為 lock-check-unlock-work-lock
 	// pattern，與 supervise() 重啟路徑（manager.go:supervise）一致。
 	cmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
-	// bound cmd.Wait() under load: shell grandchild（例如 fake_proxy.sh 裡的 sleep 30）
-	// 持 pipe 不關時，CI Linux busy runner 的 cmd.Wait() 可卡 30+ 秒。
-	// WaitDelay 超時強制關閉 pipe 仍保留 goroutine 釋放語意（F9 zombie reaping）。
-	cmd.WaitDelay = 5 * time.Second
 	cmd.Dir = filepath.Dir(m.scriptPath)
 	cmd.Env = os.Environ()
 
