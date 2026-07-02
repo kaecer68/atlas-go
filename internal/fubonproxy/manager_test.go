@@ -538,6 +538,102 @@ func TestProcessManager_F7_StartFailureThenStopDoesNotHang(t *testing.T) {
 	})
 }
 
+// TestProcessManager_F7_CmdStartFailure_StopDoesNotHang 驗證 F7 不變式在
+// cmd.Start() 失敗路徑下也成立：
+//
+//   - pythonBin 指到不存在的可執行檔（繞過 early-return 早退）
+//   - scriptPath 是有效檔案（繞過 script-not-found 早退）
+//   - Start() 必須在 cmd.Start() 內部失敗後回傳 error
+//   - 失敗路徑必須 close(m.done) 並重置 m.ctx/m.cancel/m.done,避免 Stop()
+//     永久阻塞
+//
+// 與 TestProcessManager_F7_StartFailureThenStopDoesNotHang 的差異：後者只
+// 覆蓋 early-return 早退路徑（pythonBin empty / script not found）;本測試
+// 覆蓋 cmd.Start() 真的被呼叫且失敗的場景,直接驗證 Start() 內部 m.done 與
+// m.ctx 清理邏輯。
+//
+// Reference: F7 不變式（atlas-fubon-supervisor-invariants/SKILL.md）— 「Start()
+// 錯誤路徑必須關閉 m.done 並重置 ctx/cancel/done」;以及 lock-check-unlock-work-lock
+// pattern — exec.Cmd.Start() 必須在鎖外執行。
+func TestProcessManager_F7_CmdStartFailure_StopDoesNotHang(t *testing.T) {
+	_ = withFreeEphemeralPort(t)
+	tmpDir := t.TempDir()
+	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
+	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	m := &ProcessManager{
+		pythonBin:  "/nonexistent/atlas-go-fubonproxy-test/python", // cmd.Start() 會在這裡失敗
+		scriptPath: fakeScript,                                     // 存在,繞過 script-not-found 早退
+		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", proxyListenPort),
+	}
+
+	// Start() 必須回傳錯誤(不 panic、不阻塞)
+	start := time.Now()
+	err := m.Start(context.Background())
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("Start() with non-existent pythonBin should return error")
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("Start() blocked %v on cmd.Start() failure; expected < 2s", elapsed)
+	}
+	t.Logf("Start() correctly returned error in %v: %v", elapsed, err)
+
+	// 關鍵 F7 不變式:失敗路徑必須重置 m.ctx/m.cancel/m.done,
+	// 否則 Stop() 會在 done channel 上永久阻塞。
+	m.mu.Lock()
+	if m.ctx != nil {
+		t.Error("expected m.ctx=nil after cmd.Start() failure (F7 cleanup)")
+	}
+	if m.cancel != nil {
+		t.Error("expected m.cancel=nil after cmd.Start() failure (F7 cleanup)")
+	}
+	if m.done != nil {
+		t.Error("expected m.done=nil after cmd.Start() failure (F7 cleanup)")
+	}
+	if m.running {
+		t.Error("expected m.running=false after cmd.Start() failure")
+	}
+	if m.cmd != nil {
+		t.Errorf("expected m.cmd=nil after cmd.Start() failure, got %+v", m.cmd)
+	}
+	m.mu.Unlock()
+
+	// Stop() 必須不阻塞(即使失敗路徑沒啟動 supervise,Stop 仍可能嘗試
+	// 等待一個已 close 的 channel;若 m.done 沒被 close + nil 化,Stop 會 hang)
+	done := make(chan struct{})
+	start = time.Now()
+	go func() {
+		m.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		stopElapsed := time.Since(start)
+		if stopElapsed > 1*time.Second {
+			t.Errorf("Stop() took %v after cmd.Start() failure; expected < 1s", stopElapsed)
+		}
+		t.Logf("Stop() returned in %v after cmd.Start() failure — OK", stopElapsed)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() hung > 2s after cmd.Start() failure — F7 cleanup broken?")
+	}
+
+	// 二次 Stop() 也必須不阻塞(re-entrant 守衛:第二次呼叫應立即返回)
+	done2 := make(chan struct{})
+	go func() {
+		m.Stop()
+		close(done2)
+	}()
+	select {
+	case <-done2:
+		t.Logf("second Stop() returned immediately — OK")
+	case <-time.After(1 * time.Second):
+		t.Fatal("second Stop() hung > 1s after cmd.Start() failure")
+	}
+}
+
 // TestProcessManager_BackoffStateMachine_3sThen10s 驗證 backoff 狀態機：
 // - 1st 重啟：restartInitialDelay (3s)
 // - 連續 Start() 失敗：restartBackoffDelay (10s)
