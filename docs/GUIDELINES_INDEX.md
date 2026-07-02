@@ -128,6 +128,8 @@
 | `docs/operations/l2-4-followup.md` | L2.4 後續工作報告（auto-cron / CLI flag / promotion 4 步） |
 | `docs/plans/l2-4-cli-flag-wiring.md` | L2.4 CLI flag 實作規劃（`--use-llm-sector-agents`；PR #828 plan + scaffold）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
+| `docs/TOOLS.md` | 程式碼智慧工具（GitNexus / codebase-memory / CodeGraph）路由決策樹 |
+| `docs/AGENT_TOOLS.md` | MCP tool 決策樹與完整 catalog（84 tools,供外部 AI agent） |
 
 ---
 

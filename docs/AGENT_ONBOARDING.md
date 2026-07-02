@@ -37,6 +37,9 @@
 ### 我要找工具該怎麼呼叫 → 看 [`AGENT_TOOLS.md`](./AGENT_TOOLS.md)
 Top 15 高頻工具，含「何時該呼叫」決策樹與 3 個範例對話流程。
 
+### 我要查程式碼實作 / 相依性 → 看 [`TOOLS.md`](./TOOLS.md)
+GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決策樹 — 改 code 前該用哪個工具。
+
 ### 我要找完整 MCP 規格 → 看 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 所有 80 個 tool 的 JSON Schema 設計範本、安全邊界、部署指引。
 

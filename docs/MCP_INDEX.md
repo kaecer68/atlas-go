@@ -59,7 +59,7 @@ Claude Desktop 與 Cursor 採用相同 JSON schema,放置於各自的 MCP 設定
 
 ## 能做什麼
 
-`atlas-mcp` 約 80 個 tool,依任務群組織如下：
+`atlas-mcp` 約 84 個 tool,依任務群組織如下：
 
 | 任務群組 | 入口 tool |
 |---------|----------|
@@ -94,7 +94,7 @@ Tool 命名遵循 `<area>_<verb>_<noun?>` 慣例,全 snake_case。完整 catalog
 
 | 想深入了解... | 讀這份 |
 |--------------|--------|
-| 80 個 tool 完整 catalog、5 分鐘決策樹、調用範例 | [`docs/AGENT_TOOLS.md`](./AGENT_TOOLS.md) |
+| 84 個 tool 完整 catalog、5 分鐘決策樹、調用範例 | [`docs/AGENT_TOOLS.md`](./AGENT_TOOLS.md) |
 | atlas-mcp 建置、所有環境變數、Claude/Cursor/OpenCode 配置範例、audit log 格式 | [`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md) |
 | MCP server 設計原理、JSON Schema 模板、安全邊界、可擴充協議（Resources / Prompts / Sampling / Elicitation / Roots） | [`docs/specs/agent-mcp-server.md`](./specs/agent-mcp-server.md) |
 | 21 個 workflow（WA-001 ~ WA-701）與 MCP tool 對應、流程設計 | [`docs/WORKFLOW_MAP.md`](./WORKFLOW_MAP.md) |
@@ -103,4 +103,4 @@ Tool 命名遵循 `<area>_<verb>_<noun?>` 慣例,全 snake_case。完整 catalog
 
 ---
 
-**最後更新**：2026-07-02（Wave 11+,atlas-go v0.0.0.27+,atlas-mcp Phase 2.2 全部 80 tool 上線）
+**最後更新**：2026-07-03（Wave 11+,atlas-go v0.0.0.27+,atlas-mcp Phase 2.2 全部 84 tool 上線）

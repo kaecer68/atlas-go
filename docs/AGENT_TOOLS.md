@@ -34,6 +34,9 @@
     ├── 整體        → system_get_health
     ├── 資料品質    → data_get_quality
     └── 警報計數    → alert_get_stats
+
+├── 查程式碼實作 / 相依性
+│   └── → 見 [`docs/TOOLS.md`](./TOOLS.md)（GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決策樹）
 ```
 
 ---

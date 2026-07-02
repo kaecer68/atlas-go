@@ -237,6 +237,8 @@ services:
     depends_on:
       - atlas
       - postgres
+    healthcheck:
+      disable: true
 
   # Daily cron job for macro data ingestion (after US market close, Taiwan time)
   cron-macro-ingest:
@@ -258,6 +260,8 @@ services:
     depends_on:
       - atlas
       - postgres
+    healthcheck:
+      disable: true
 
   # Daily cron job for replay data sync (Taiwan market close + 30 min)
   cron-replay-sync:
@@ -279,6 +283,8 @@ services:
     depends_on:
       - atlas
       - postgres
+    healthcheck:
+      disable: true
 
   # Daily cron job for Darwinian weights adjustment
   cron-darwinian:
@@ -300,6 +306,8 @@ services:
     depends_on:
       - atlas
       - postgres
+    healthcheck:
+      disable: true
 
   # Monthly cron job for month revenue backfill (1st of each month)
   cron-backfill-month-revenue:
@@ -321,6 +329,8 @@ services:
     depends_on:
       - atlas
       - postgres
+    healthcheck:
+      disable: true
 
   # Monthly cron job for financial statements backfill (1st of each month)
   cron-backfill-financial-statements:
@@ -342,6 +352,8 @@ services:
     depends_on:
       - atlas
       - postgres
+    healthcheck:
+      disable: true
 
   # Monthly cron job for institutional investors backfill (1st of each month)
   cron-backfill-institutional-investors:
@@ -363,6 +375,8 @@ services:
     depends_on:
       - atlas
       - postgres
+    healthcheck:
+      disable: true
 
   # PRISM training queue processor
   prism-worker:
