@@ -1,10 +1,11 @@
 // Command atlas-mcp is the Model Context Protocol (MCP) server for atlas-go.
 //
 // It bridges external AI agents (Claude Desktop, Cursor, OpenCode, etc.) to
-// the atlas-go HTTP API via JSON-RPC 2.0 over stdio. Phase 1 supports stdio;
-// Phase 2 added SSE + streamable-HTTP transports with Bearer auth.
-// Phase 3 added audit log retention, per-tool rate limiting,
-// multi-tenant token management (Item 3), and admin HTTP API.
+// the atlas-go HTTP API via JSON-RPC 2.0. Phase 1 wired stdio (default).
+// Phase 4 wired SSE + streamable-HTTP transports with Bearer auth (see
+// cmd/atlas-mcp/server/transport.go). Earlier phases added audit log
+// retention, per-tool rate limiting, multi-tenant token management, and
+// the admin HTTP API.
 //
 // Configuration via environment:
 //
@@ -18,6 +19,8 @@
 //	ATLAS_MCP_ADMIN_TOKEN           admin API token for token management API (empty = disabled)
 //	ATLAS_MCP_ADMIN_ADDR            admin HTTP listen address (default: 127.0.0.1:9090 when token is set)
 //	ATLAS_MCP_METRICS_ADDR          Prometheus metrics listen address (default: disabled; use 127.0.0.1:9091)
+//	ATLAS_MCP_TRANSPORT             transport: stdio | sse | streamable-http (default: stdio)
+//	ATLAS_MCP_ADDR                  listen address for sse/streamable-http (default: 127.0.0.1:9090)
 //	PGHOST/PGPORT/PGUSER/...        PostgreSQL connection (standard libpq env vars)
 //	ATLAS_MCP_SAMPLING_ENABLED      enable mcp_sample_llm (default false)
 //	ATLAS_MCP_ELICITATION_ENABLED   enable mcp_elicit_user (default false)
@@ -54,6 +57,8 @@ func main() {
 		AdminAddr:          adminAddr,
 		AdminToken:         adminToken,
 		MetricsAddr:        os.Getenv("ATLAS_MCP_METRICS_ADDR"),
+		Transport:          envOr("ATLAS_MCP_TRANSPORT", server.TransportStdio),
+		Addr:               envOr("ATLAS_MCP_ADDR", "127.0.0.1:9090"),
 		SamplingEnabled:    envBoolOr("ATLAS_MCP_SAMPLING_ENABLED", false),
 		ElicitationEnabled: envBoolOr("ATLAS_MCP_ELICITATION_ENABLED", false),
 		Roots: func() server.RootsConfig {

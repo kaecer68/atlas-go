@@ -33,6 +33,12 @@ type Config struct {
 	ElicitationEnabled bool          // ATLAS_MCP_ELICITATION_ENABLED (default false)
 	Roots              RootsConfig   // roots filesystem boundary configuration
 
+	// Phase 4 transport wiring. Empty Transport defaults to "stdio" for
+	// backwards compatibility with existing deployments (Claude Desktop,
+	// Cursor, OpenCode). Addr is required for SSE and streamable-HTTP.
+	Transport string // one of TransportStdio (default), TransportSSE, TransportStreamableHTTP
+	Addr      string // listen address for HTTP transports, e.g. "127.0.0.1:9090"
+
 	// Phase 4 T1.4 — anomaly alert integration. Empty AnomalyAlertWebhook
 	// means the emitter uses NoopAnomalyPublisher (no alert side-effects).
 	AnomalyAlertWebhook     string        // Alertmanager-style webhook URL
@@ -161,7 +167,24 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("server: tool count drift: got %d, expected 82-84", n)
 	}
 
-	return mcpSrv.Run(ctx, &mcp.StdioTransport{})
+	// Phase 4 transport dispatch. Empty Transport defaults to stdio for
+	// backwards compatibility with prior deployments (Claude Desktop,
+	// Cursor, OpenCode that pipe JSON-RPC over stdin/stdout).
+	transport := cfg.Transport
+	if transport == "" {
+		transport = TransportStdio
+	}
+	switch transport {
+	case TransportStdio:
+		return ServeStdio(ctx, mcpSrv)
+	case TransportSSE:
+		return ServeSSE(ctx, mcpSrv, cfg.Addr, auth)
+	case TransportStreamableHTTP:
+		return ServeStreamableHTTP(ctx, mcpSrv, cfg.Addr, auth)
+	default:
+		return fmt.Errorf("server: unknown transport %q (must be %s|%s|%s)",
+			transport, TransportStdio, TransportSSE, TransportStreamableHTTP)
+	}
 }
 
 // runRetentionLoop prunes the audit log every 24h until ctx is done.
