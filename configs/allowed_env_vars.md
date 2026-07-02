@@ -60,6 +60,8 @@
 | `ATLAS_MCP_ROOTS_ALLOWED` | MCP 客戶端宣告的 roots 路徑白名單（CSV 格式，Phase 4 B 引入） | 空（不限制） |
 | `ATLAS_MCP_PARAMS` | MCP 設定檔路徑（讀取 `mcp.roots` section，Phase 4 B 引入） | `configs/parameters.json` |
 | `ATLAS_MCP_ROOTS_ALLOW_UNSAFE` | MCP roots 危險路徑驗證的 escape hatch（設為 `1` 時跳過 `/`、`/etc`、`/proc` 等系統根目錄拒絕邏輯；給理解風險的進階使用者使用，issue #903 引入） | 空（預設啟用驗證） |
+| `ATLAS_MCP_TRANSPORT` | MCP transport 選擇（`stdio` / `sse` / `streamable-http`；CLI flag `-transport` 優先，env 為 fallback；PR #912 引入） | `stdio` |
+| `ATLAS_MCP_ADDR` | MCP sse/streamable-http listen 位址（CLI flag `-addr` 優先，env 為 fallback；PR #912 引入；server.go 強制 127.0.0.1 prefix） | `127.0.0.1:9090` |
 
 ---
 
