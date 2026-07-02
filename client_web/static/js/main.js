@@ -67,7 +67,7 @@ export async function switchPage(id, silent) {
   const titles = { home: '總覽',
     narrative: '宏觀敘事', live: '風險總覽',
     pipeline: '投資管線', decision: '決策鏈', portfolio: '組合持倉',
-    performance_report: '績效報告',
+    'performance-report': '績效報告',
     evolution_panel: '演化透視', strategies: '投資心法', crossmarket: '美台連動監控'};
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -403,6 +403,15 @@ async function loadPageData(pageId) {
         if (evo.loadEvolutionData) evo.loadEvolutionData();
       }).catch(function(err) {
         console.warn('[Dynamic import] evolution_panel module load failed:', err);
+      });
+    } catch(e) { console.warn(e); }
+  }
+  else if (pageId === 'performance-report') {
+    try {
+      import('./pages/performance-report.js').then(function(mod) {
+        if (mod.loadPerformanceReport) mod.loadPerformanceReport();
+      }).catch(function(err) {
+        console.warn('[Dynamic import] performance-report module load failed:', err);
       });
     } catch(e) { console.warn(e); }
   }
