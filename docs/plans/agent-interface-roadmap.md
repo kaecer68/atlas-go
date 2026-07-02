@@ -101,7 +101,7 @@ AI Agent ↔ MCP protocol ↔ atlas-mcp (Go binary) ↔ atlas core (via HTTP)
    - 選 B：併入，子命令 `--mcp-server` — 部署簡化但 binary 變大；目前程式碼中 **未發現** 任何併入實作或子命令註冊
 2. **SSE + streamable-HTTP transport 是否要啟用？** 程式碼註解聲稱 Phase 2 已加入，但實際 production 路徑仍只有 stdio。
 3. **audit log 保留期？** 預設 30 天，需符合金管會規範？
-4. **是否開源 `atlas-mcp`？** 與 atlas-go 採用同樣 Apache 2.0？
+4. **是否開源 `atlas-mcp`？** 與 atlas-go 採用同樣 **GNU AGPL v3**（見根目錄 `LICENSE`）— ✅ 已決策
 5. **是否要支援 WebSocket MCP transport？** 部分 agent 偏好 WS
 
 ---

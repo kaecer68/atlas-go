@@ -109,4 +109,4 @@ ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
 
 ## License
 
-Apache 2.0 — 與 atlas-go 一致。
+GNU AGPL v3 — 與 atlas-go 一致（見根目錄 `LICENSE`）。
