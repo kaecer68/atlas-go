@@ -83,10 +83,10 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	var macroFlowResult *macroflow.AdjustmentResult
 	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
-		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, macroflow.RiskYellow)
+		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime))
 	}
 
-	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
+	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID, macroFlowResult)
 
 	return ResearchResult{
 		MacroFlowAdjustment:  macroFlowResult,
@@ -96,6 +96,17 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		GuardOutcomes:        guardOutcomes,
 		ScreeningRejects:     rejects,
 		DarwinianWeights:     weightData,
+	}
+}
+
+func regimeToRiskLevel(regime domain.Regime) macroflow.RiskLevel {
+	switch regime {
+	case domain.RegimeRiskOff:
+		return macroflow.RiskRed
+	case domain.RegimeRiskOn, domain.RegimeNeutral:
+		return macroflow.RiskYellow
+	default:
+		return macroflow.RiskYellow
 	}
 }
 

@@ -2,14 +2,50 @@ package orchestrator
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/macroflow"
 )
 
-func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string) ([]domain.Recommendation, []domain.GuardOutcome) {
+func applyMacroConvictionScaling(recs []domain.Recommendation, adj *macroflow.AdjustmentResult) []domain.Recommendation {
+	if adj == nil || len(recs) == 0 {
+		return recs
+	}
+	a := adj.Adjustment
+	conservative := math.Max(a.Defensive, 0) + math.Max(a.Cash, 0) + math.Max(-a.Aggressive, 0)
+	riskOn := math.Max(a.Aggressive, 0)
+	net := riskOn - conservative
+	scale := 1.0 + net/100*0.3
+	if scale < 0.5 {
+		scale = 0.5
+	}
+	if scale > 1.5 {
+		scale = 1.5
+	}
+	out := make([]domain.Recommendation, len(recs))
+	for i, rec := range recs {
+		adjRec := rec
+		adjRec.Conviction = clampConvictionInt(int(float64(rec.Conviction) * scale))
+		out[i] = adjRec
+	}
+	return out
+}
+
+func clampConvictionInt(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
+}
+
+func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult) ([]domain.Recommendation, []domain.GuardOutcome) {
 	if !policy.RequireCROPass {
 		return recs, []domain.GuardOutcome{{
 			GuardID:     "control-bypass",
@@ -22,7 +58,7 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 		}}
 	}
 
-	current := recs
+	current := applyMacroConvictionScaling(recs, macroAdjustment)
 	outcomes := make([]domain.GuardOutcome, 0)
 	for _, agent := range registry.Agents {
 		if !agent.Enabled || (agent.Layer != domain.LayerControl && agent.Layer != domain.LayerSuperinvestor) {

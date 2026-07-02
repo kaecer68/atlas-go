@@ -17,7 +17,7 @@ func TestControlLayerAppliesCROAndCIO(t *testing.T) {
 		{Agent: "c", Skill: "ai_supply_chain_desk", Symbol: "2382.TW", Conviction: 70, Side: domain.SideBuy, Reason: "good"},
 	}
 
-	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "")
+	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "", nil)
 	if len(out) != 2 {
 		t.Fatalf("expected 2 aggregated control outputs, got %d", len(out))
 	}
@@ -45,7 +45,7 @@ func TestControlLayerCanBypassCROWhenPolicyAllows(t *testing.T) {
 	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, domain.ExecutionPolicy{
 		ConvictionFloor: 50,
 		RequireCROPass:  false,
-	}, nil, "")
+	}, nil, "", nil)
 	if len(out) != 1 {
 		t.Fatalf("expected raw recommendation to bypass control when CRO pass is disabled")
 	}
@@ -63,7 +63,7 @@ func TestControlLayerProducesGuardOutcomes(t *testing.T) {
 		{Agent: "b", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 80, Side: domain.SideBuy, Reason: "strong"},
 	}
 
-	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "")
+	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "", nil)
 	if len(outcomes) != 2 {
 		t.Fatalf("expected 2 guard outcomes for CRO and CIO, got %d", len(outcomes))
 	}
@@ -87,7 +87,7 @@ func TestControlLayerHardGuardCanBlockAllRecommendations(t *testing.T) {
 	final, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, domain.ExecutionPolicy{
 		ConvictionFloor: 50,
 		RequireCROPass:  true,
-	}, nil, "")
+	}, nil, "", nil)
 	if len(final) != 0 {
 		t.Fatalf("expected hard guard to block all recommendations")
 	}
@@ -187,7 +187,7 @@ func TestSuperinvestorExecutorIntegrationInControlLayer(t *testing.T) {
 		{Agent: "b", Skill: "semiconductor", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "medium"},
 	}
 
-	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "")
+	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "", nil)
 
 	found := false
 	for _, o := range outcomes {
