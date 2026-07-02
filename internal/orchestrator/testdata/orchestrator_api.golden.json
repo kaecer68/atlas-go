@@ -155,7 +155,7 @@
     },
     {
       "fields": [
-        "Engine *macroflow.Engine"
+        "engine *macroflow.Engine"
       ],
       "kind": "struct",
       "name": "DefaultMacroFlowStrategy"

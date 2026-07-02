@@ -114,12 +114,12 @@ type MacroFlowStrategy interface {
 
 // DefaultMacroFlowStrategy delegates to macroflow.Engine.Compute.
 type DefaultMacroFlowStrategy struct {
-	Engine *macroflow.Engine
+	engine *macroflow.Engine
 }
 
 func (s DefaultMacroFlowStrategy) ComputeAdjustment(snapshot *marketdata.MacroDataSnapshot, level macroflow.RiskLevel) *macroflow.AdjustmentResult {
-	if s.Engine == nil {
+	if s.engine == nil {
 		return nil
 	}
-	return s.Engine.Compute(snapshot, level)
+	return s.engine.Compute(snapshot, level)
 }
