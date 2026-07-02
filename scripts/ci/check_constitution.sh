@@ -139,7 +139,7 @@ check_gateway_registration() {
       add_json_violation "gateway_registration" "$file" "$line" "direct provider instantiation: $provider_name"
       found_any=1
     fi
-  done < <(grep -rn 'New[A-Z][a-zA-Z]*\(Provider\|Client\)(' --include="*.go" . | grep -v '_test.go' | grep -v 'internal/apigateway/' | head -20)
+  done < <(grep -rn 'New[A-Z][a-zA-Z]*\(Provider\|Client\)(' --include="*.go" . | grep -v '_test.go' | grep -v 'internal/apigateway/')
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "未發現繞過 Gateway 的 Provider 直接建立"
@@ -200,6 +200,7 @@ check_background_tasks() {
     "internal/monitoring/monitor.go"              # per-alert one-shot handlers
     "internal/monitoring/service/backtest.go"     # timeout-based one-shots
     "internal/marketdata/realtime/redis_subscriber.go"  # connection lifecycle
+    "internal/fubonproxy/manager.go"              # F1-F9 supervisor invariants govern Start() health check + supervise() main loop
   )
 
   while IFS= read -r match; do
@@ -216,7 +217,7 @@ check_background_tasks() {
     log_warn "$file:$line — 可能繞過 BackgroundTaskManager 的獨立 goroutine"
     add_json_violation "background_tasks" "$file" "$line" "potential unregistered background goroutine"
     found_any=1
-  done < <(grep -rn 'go func()' --include="*.go" internal/ | head -30)
+  done < <(grep -rn 'go func()' --include="*.go" internal/)
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "未發現繞過 BackgroundTaskManager 的背景 goroutine"

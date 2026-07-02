@@ -257,6 +257,7 @@ bash scripts/ci/check_constitution.sh
 | **Live-mode 狀態評估器** | 需要即時 `stateStore` 的長期存活評估器，僅在 live mode 使用 | `ruleEngine.Start(ctx, stateStore)`（live mode 專用；api mode 已透過 TaskManager `rule_engine_check` 使用 `EvaluateRules(nil)`）|
 | **元件依賴注入** | Provider 作為內部元件的依賴傳入，而非直接發送 API 請求 | `industry.NewDataAggregator(..., finmindClient)`、`margin_history_loader.go` 的 `MarginHistoryBackfiller`—這些是元件組合，非資料擷取 |
 | **Simulation 路徑** | 不經 Gateway 的離線模擬路徑，直接建立 Provider 進行回測 | `orchestrator/system.go`、`orchestrator/composition.go` 中的 provider 建立（無可用 Gateway）|
+| **Supervisor 模式 goroutine** | 受 F1-F9 supervisor invariants 管轄的 lifecycle-bound goroutine，與 `Start()`/`Stop()` 配對，使用 cancel context 而非固定 interval | `internal/fubonproxy/manager.go` 的 `supervise()` 主迴圈與 `Start()` 內 `m.waitForHealthy(ctx)` 健康檢查 goroutine（詳見 `.claude/skills/atlas-fubon-supervisor-invariants/SKILL.md`）|
 
 **例外原則**：若該 goroutine 在 `Start()` 時啟動、在 `Stop()` 時結束、且有明確的排程間隔 → **不例外，必須使用 TaskManager**。
 
