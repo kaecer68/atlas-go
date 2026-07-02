@@ -274,7 +274,7 @@ function renderRealPortfolio(container, data) {
         <span class="home-portfolio-summary__label">損益</span>
         <span class="home-portfolio-summary__value ${pnl >= 0 ? 'positive' : 'negative'}">${fmtSignedPct(pnlPct)}</span>
       </div>
-      <div class="home-portfolio-summary__item">
+      <div class="home-portfolio-summary__item advanced-only">
         <span class="home-portfolio-summary__label">集中度</span>
         <span class="home-portfolio-summary__value">${escapeHtml(fmtHHI(hhi))}</span>
       </div>

@@ -52,6 +52,9 @@
 /* Base - Typography */
 @import url("base/typography.css");
 
+/* Base - Simplified Mode (toggle + .advanced-only hook) */
+@import url("base/simplified.css");
+
 /* Components - UI Panels */
 @import url("components/filter-panel.css");
 @import url("components/empty-state.css");
