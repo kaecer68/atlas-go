@@ -861,6 +861,9 @@ func (m *ProcessManager) supervise() {
 
 		// 在鎖外建構與啟動程序 — 若 exec.Cmd.Start() panic 不會卡死 mutex（F7）
 		newCmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
+		// bound cmd.Wait() under load：同 Start() 路徑，避免 grandchild 持 pipe
+		// 造成 supervise restart 卡在 waitForHealthy 之前的 Wait（見 manager.go:404）。
+		newCmd.WaitDelay = 5 * time.Second
 		newCmd.Dir = filepath.Dir(m.scriptPath)
 		newCmd.Env = os.Environ()
 		newCmd.Stdout = &logWriter{component: "fubonproxy.stdout"}
