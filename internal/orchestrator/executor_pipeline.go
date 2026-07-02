@@ -86,7 +86,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime))
 	}
 
-	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
+	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID, macroFlowResult)
 
 	return ResearchResult{
 		MacroFlowAdjustment:  macroFlowResult,
