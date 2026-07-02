@@ -30,7 +30,7 @@ const (
 // token), the middleware is permissive — useful for local development.
 //
 // Bearer extraction is intentionally strict: only `Bearer <token>` with
-// a literal space is recognised. Any other scheme (Basic, Digest, bare
+// a literal space is recognized. Any other scheme (Basic, Digest, bare
 // token) is rejected as 401. Case-sensitive per RFC 6750 §2.1.
 func BearerAuth(auth *TokenAuth) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
