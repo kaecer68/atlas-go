@@ -457,6 +457,7 @@ Client 端（任意 SSE 相容 agent）：
 | Size cap | 1MB (`io.LimitReader`) |
 | Sampling opt-in | Default OFF, env flag required |
 | Elicitation opt-in | Default OFF, env flag required |
+| Elicitation schema validate | Server-side `validateElicitSchema` rejects oversized (>16KB), external `$ref`, >20 properties, >64-char property names — defense-in-depth over SDK's own structural check |
 | Capability miss | Explicit error (no silent fallback) |
 
 ### 新增檔案
