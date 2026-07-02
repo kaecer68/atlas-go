@@ -56,7 +56,13 @@ func main() {
 		MetricsAddr:        os.Getenv("ATLAS_MCP_METRICS_ADDR"),
 		SamplingEnabled:    envBoolOr("ATLAS_MCP_SAMPLING_ENABLED", false),
 		ElicitationEnabled: envBoolOr("ATLAS_MCP_ELICITATION_ENABLED", false),
-		Roots:              resolveRootsConfig(),
+		Roots: func() server.RootsConfig {
+			cfg, err := resolveRootsConfig()
+			if err != nil {
+				log.Fatalf("atlas-mcp: invalid MCP roots config: %v", err)
+			}
+			return cfg
+		}(),
 	}
 
 	// Initialize PostgreSQL and run migrations if DATABASE_URL is configured.
@@ -136,7 +142,11 @@ func defaultParamsPath() string {
 
 // resolveRootsConfig merges parameters.json (mcp.roots section) with
 // environment variable overrides. Precedence: env > parameters.json > zero.
-func resolveRootsConfig() server.RootsConfig {
+// Returns an error if the merged AllowedRoots fails validation (see
+// issue #870 / #903). The caller is expected to fail-fast on the error;
+// this is intentional: granting the MCP server read access to system
+// paths is a security-critical misconfiguration.
+func resolveRootsConfig() (server.RootsConfig, error) {
 	var base *mcpRootsConfig
 	if path := os.Getenv("ATLAS_MCP_PARAMS"); path != "" {
 		if loaded, err := loadMCPConfig(path); err != nil {
@@ -158,10 +168,13 @@ func resolveRootsConfig() server.RootsConfig {
 		AlertOnChange: envBoolOr("ATLAS_MCP_ROOTS_ALERT_ON_CHANGE", false),
 	}
 	merged := mergeMCPConfig(base, env)
+	if err := validateAllowedRoots(merged.AllowedRoots); err != nil {
+		return server.RootsConfig{}, err
+	}
 	return server.RootsConfig{
 		AllowedRoots: merged.AllowedRoots,
 		ReadSizeCap:  merged.ReadSizeCap,
-	}
+	}, nil
 }
 
 func defaultAuditLogPath() string {
