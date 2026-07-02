@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/macroflow"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -99,4 +101,25 @@ type DefaultMutedAgentFilterStrategy struct{}
 
 func (DefaultMutedAgentFilterStrategy) Filter(registry domain.AgentRegistry, plugins *PluginRegistry) domain.AgentRegistry {
 	return filterMutedAgents(registry, plugins)
+}
+
+// MacroFlowStrategy computes macro regime–based factor weight adjustments
+// (defensive/aggressive/cash allocation tier deltas) from market data + risk level.
+// Runs after WeightApplication and before ControlLayer in the pipeline.
+type MacroFlowStrategy interface {
+	// ComputeAdjustment returns the macro flow adjustment result given a snapshot
+	// and a risk level, or nil when data is unavailable / stale.
+	ComputeAdjustment(snapshot *marketdata.MacroDataSnapshot, level macroflow.RiskLevel) *macroflow.AdjustmentResult
+}
+
+// DefaultMacroFlowStrategy delegates to macroflow.Engine.Compute.
+type DefaultMacroFlowStrategy struct {
+	Engine *macroflow.Engine
+}
+
+func (s DefaultMacroFlowStrategy) ComputeAdjustment(snapshot *marketdata.MacroDataSnapshot, level macroflow.RiskLevel) *macroflow.AdjustmentResult {
+	if s.Engine == nil {
+		return nil
+	}
+	return s.Engine.Compute(snapshot, level)
 }

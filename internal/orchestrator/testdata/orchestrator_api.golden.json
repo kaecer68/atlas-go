@@ -43,6 +43,12 @@
       "results": "([]domain.AgentSpec)"
     },
     {
+      "name": "ComputeAdjustment",
+      "params": "(snapshot *marketdata.MacroDataSnapshot, level macroflow.RiskLevel)",
+      "receiver": "DefaultMacroFlowStrategy",
+      "results": "(*macroflow.AdjustmentResult)"
+    },
+    {
       "name": "Apply",
       "params": "(recs []domain.Recommendation, quotes map[string]domain.Quote, policy domain.ExecutionPolicy)",
       "receiver": "DefaultMomentumCrashProtectionStrategy",
@@ -148,6 +154,13 @@
       "name": "DefaultLayerRouter"
     },
     {
+      "fields": [
+        "Engine *macroflow.Engine"
+      ],
+      "kind": "struct",
+      "name": "DefaultMacroFlowStrategy"
+    },
+    {
       "kind": "struct",
       "name": "DefaultMomentumCrashProtectionStrategy"
     },
@@ -186,7 +199,9 @@
         "RecommendationCollection RecommendationCollectionStrategy",
         "MomentumCrashProtection MomentumCrashProtectionStrategy",
         "WeightApplication WeightApplicationStrategy",
-        "ControlLayer ControlLayerStrategy"
+        "MacroFlow MacroFlowStrategy",
+        "ControlLayer ControlLayerStrategy",
+        "MacroDataSnapshot *marketdata.MacroDataSnapshot"
       ],
       "kind": "struct",
       "name": "ExecutionContext"
@@ -194,6 +209,10 @@
     {
       "kind": "interface",
       "name": "LayerRouter"
+    },
+    {
+      "kind": "interface",
+      "name": "MacroFlowStrategy"
     },
     {
       "kind": "interface",
@@ -218,7 +237,8 @@
         "FinalRecommendations []domain.Recommendation",
         "GuardOutcomes []domain.GuardOutcome",
         "ScreeningRejects []domain.ScreeningReject",
-        "DarwinianWeights []*portfolio.DarwinianAgentWeight"
+        "DarwinianWeights []*portfolio.DarwinianAgentWeight",
+        "MacroFlowAdjustment *macroflow.AdjustmentResult"
       ],
       "kind": "struct",
       "name": "ResearchResult"
