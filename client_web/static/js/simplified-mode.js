@@ -36,6 +36,7 @@ export function setEnabled(next) {
 function updateButton(btn, enabled) {
   if (!btn) return;
   btn.setAttribute('aria-pressed', String(enabled));
+  btn.setAttribute('aria-label', enabled ? '切換到簡化模式' : '切換到完整模式');
   btn.textContent = enabled ? '🔬 完整模式' : '🔰 簡化模式';
   btn.title = enabled
     ? '切換到完整模式（顯示所有指標）'
