@@ -2082,7 +2082,8 @@
         "lifecycle *narrative.EventLifecycleManager",
         "strategyAdjustment map[FactorType]float64",
         "weightSource string",
-        "currentRegime string"
+        "currentRegime string",
+        "taxonomyAdjust map[narrative.TaxonomyL1]map[narrative.TaxonomyL2]map[FactorType]float64"
       ],
       "kind": "struct",
       "name": "FactorWeightEngine"

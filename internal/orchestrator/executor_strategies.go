@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/forecast"
 	"github.com/kaecer68/atlas-go/internal/macroflow"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -125,4 +126,18 @@ func (s DefaultMacroFlowStrategy) ComputeAdjustment(snapshot *marketdata.MacroDa
 		return nil
 	}
 	return s.engine.Compute(snapshot, level)
+}
+
+// ForecastBridgeStrategy runs per-symbol forecast predictions and returns trade signals.
+// nil → skip forecast bridge entirely in the pipeline.
+type ForecastBridgeStrategy interface {
+	PredictAll(symbols []string) ([]forecast.TradeSignal, error)
+}
+
+// DirectionalTradeWeightProvider returns a weight multiplier for a symbol.
+// Defaults to 1.0 when no trade signal exists.
+type DirectionalTradeWeightProvider interface {
+	WeightFor(symbol string) float64
+	ApplySignal(signal forecast.TradeSignal)
+	Reset()
 }

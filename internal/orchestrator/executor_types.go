@@ -83,6 +83,8 @@ type ExecutionContext struct {
 	WeightApplication        WeightApplicationStrategy
 	MacroFlow                MacroFlowStrategy // nil → skip macro flow adjustment
 	ControlLayer             ControlLayerStrategy
+	ForecastBridge           ForecastBridgeStrategy            // nil → skip forecast bridge step
+	DirectionalTradeLayer    DirectionalTradeWeightProvider    // nil → signals not recorded
 
 	// MacroDataSnapshot is the latest macro snapshot for macro flow adjustment.
 	// When non-nil, the MacroFlowStrategy can use it to compute allocation-tier deltas.

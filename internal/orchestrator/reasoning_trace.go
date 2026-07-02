@@ -10,6 +10,7 @@ const (
 	PhaseControlFilter       = "control_filter"
 	PhasePortfolioBuild      = "portfolio_build"
 	PhaseSystem              = "system_flow"
+	PhaseMacroFlow           = "macro_flow"
 )
 
 type ReasoningTrace struct {

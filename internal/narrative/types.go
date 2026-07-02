@@ -20,6 +20,9 @@ type NarrativeEvent struct {
 	Severity         string             `json:"severity"`
 	Status           string             `json:"status"`
 
+	TaxonomyL1 TaxonomyL1 `json:"taxonomy_l1"`
+	TaxonomyL2 TaxonomyL2 `json:"taxonomy_l2"`
+
 	// Explanation is an optional LLM-generated regime explanation for this
 	// event, populated by RegimeExplainer when LLM_NARRATIVE_EXPLAIN_ENABLED
 	// is true. Uses var indirection to avoid narrative→llm import cycle.
@@ -29,6 +32,15 @@ type NarrativeEvent struct {
 	// for this event, populated by SentimentExplainer when
 	// LLM_NARRATIVE_EXPLAIN_ENABLED is true.
 	SentimentExplanation string `json:"sentiment_explanation,omitempty"`
+}
+
+func (e *NarrativeEvent) NormalizeTaxonomy() {
+	if e.TaxonomyL1 == "" {
+		e.TaxonomyL1 = TaxonomyL1Uncategorized
+	}
+	if e.TaxonomyL2 == "" {
+		e.TaxonomyL2 = TaxonomyL2Uncategorized
+	}
 }
 
 // CausalStep represents one step in a causal transmission chain.

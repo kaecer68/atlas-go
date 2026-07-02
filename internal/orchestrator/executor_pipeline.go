@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -84,6 +85,41 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	var macroFlowResult *macroflow.AdjustmentResult
 	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
 		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime))
+
+		if macroFlowResult != nil && ctx.Scratchpad != nil {
+			ctx.Scratchpad.Record(ReasoningTrace{
+				SessionID:  ctx.SessionID,
+				Timestamp:  time.Now().UTC(),
+				Phase:      PhaseMacroFlow,
+				Step:       6,
+				Component:  "macroflow",
+				Action:     "macro_flow.applied",
+				Reasoning:  fmt.Sprintf("macro_flow applied: risk_level=%s defensive=%+.1f%% aggressive=%+.1f%% cash=%+.1f%%",
+					macroFlowResult.RiskLevel, macroFlowResult.Adjustment.Defensive,
+					macroFlowResult.Adjustment.Aggressive, macroFlowResult.Adjustment.Cash),
+				Data: map[string]any{
+					"risk_level": string(macroFlowResult.RiskLevel),
+					"is_stress":  macroFlowResult.IsStress,
+					"defensive":  macroFlowResult.Adjustment.Defensive,
+					"aggressive": macroFlowResult.Adjustment.Aggressive,
+					"cash":       macroFlowResult.Adjustment.Cash,
+					"reasoning":  macroFlowResult.Reasoning,
+				},
+				Confidence: -1,
+			})
+		}
+	}
+
+	if ctx.ForecastBridge != nil && ctx.DirectionalTradeLayer != nil {
+		symbols := make([]string, 0, len(ctx.Quotes))
+		for _, q := range ctx.Quotes {
+			symbols = append(symbols, q.Symbol)
+		}
+		if signals, err := ctx.ForecastBridge.PredictAll(symbols); err == nil {
+			for _, sig := range signals {
+				ctx.DirectionalTradeLayer.ApplySignal(sig)
+			}
+		}
 	}
 
 	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID, macroFlowResult)

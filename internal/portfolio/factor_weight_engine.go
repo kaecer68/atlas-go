@@ -19,6 +19,8 @@ type FactorWeightEngine struct {
 	strategyAdjustment map[FactorType]float64
 	weightSource       string
 	currentRegime      string
+
+	taxonomyAdjust map[narrative.TaxonomyL1]map[narrative.TaxonomyL2]map[FactorType]float64
 }
 
 func (e *FactorWeightEngine) WeightSource() string {
@@ -239,7 +241,11 @@ func (e *FactorWeightEngine) AddEvent(event *narrative.NarrativeEvent) {
 	defer e.mu.Unlock()
 	e.activeEvents[event.ID] = event
 	e.lifecycle.AddEvent(event)
-	e.applyEventAdjustment(event)
+
+	event.NormalizeTaxonomy()
+	if !e.applyTaxonomyAdjustment(event) {
+		e.applyEventAdjustment(event)
+	}
 }
 
 func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEvent) {
@@ -364,6 +370,42 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 			FactorNarrative: delta * 0.5,
 		}
 	}
+}
+
+func (e *FactorWeightEngine) applyTaxonomyAdjustment(event *narrative.NarrativeEvent) bool {
+	if e.taxonomyAdjust == nil {
+		return false
+	}
+	l2Map, ok := e.taxonomyAdjust[event.TaxonomyL1]
+	if !ok {
+		return false
+	}
+	deltaMap, ok := l2Map[event.TaxonomyL2]
+	if !ok || len(deltaMap) == 0 {
+		return false
+	}
+	fw := fwConfig()
+	var sevCritical, sevHigh, sevMedium, sevLow = 0.10, 0.05, 0.02, 0.01
+	if fw != nil {
+		sevCritical = fw.SeverityCritical.Value
+		sevHigh = fw.SeverityHigh.Value
+		sevMedium = fw.SeverityMedium.Value
+		sevLow = fw.SeverityLow.Value
+	}
+	var delta float64
+	switch event.Severity {
+	case "critical": delta = sevCritical
+	case "high": delta = sevHigh
+	case "medium": delta = sevMedium
+	case "low": delta = sevLow
+	default: delta = sevMedium
+	}
+	weights := make(map[FactorType]float64, len(deltaMap))
+	for ft, factorDelta := range deltaMap {
+		weights[ft] = delta * factorDelta
+	}
+	e.eventWeights[event.ID] = weights
+	return true
 }
 
 func (e *FactorWeightEngine) RemoveEvent(id string) {
