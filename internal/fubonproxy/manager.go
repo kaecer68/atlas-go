@@ -402,6 +402,7 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	// 之前在 m.mu.Lock() 內呼叫 cmd.Start() 違反 F7；改為 lock-check-unlock-work-lock
 	// pattern，與 supervise() 重啟路徑（manager.go:supervise）一致。
 	cmd := exec.CommandContext(ctx, m.pythonBin, m.scriptPath)
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Dir = filepath.Dir(m.scriptPath)
 	cmd.Env = os.Environ()
 
