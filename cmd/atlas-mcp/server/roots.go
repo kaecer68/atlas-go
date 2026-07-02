@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -181,7 +180,7 @@ func (s *server) handleMCPRootsReadFile(ctx context.Context, req *mcp.CallToolRe
 	}
 
 	if err := s.withAuditExtra(ctx, "mcp_roots_read_file", []string{"path"}, extraFn, func() error {
-		f, openErr := os.OpenFile(absPath, os.O_RDONLY, 0)
+		f, openErr := readFileNoFollow(absPath)
 		if openErr != nil {
 			return fmt.Errorf("open: %w", openErr)
 		}
