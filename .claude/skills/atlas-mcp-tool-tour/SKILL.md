@@ -1,6 +1,6 @@
 ---
 name: atlas-mcp-tool-tour
-description: "Navigable guide to atlas-go's 84 MCP tools — grouped by task domain, with entry-point tools, companion relationships, and common task combinations."
+description: "Navigable guide to atlas-go's 80 MCP tools — grouped by task domain, with entry-point tools, companion relationships, and common task combinations."
 version: "1.0"
 category: "feature"
 auto_load: false
@@ -10,11 +10,11 @@ updated: "2026-07-02"
 target_audience: "developer"
 ---
 
-# Atlas MCP Tool Tour — 84 工具分群導覽
+# Atlas MCP Tool Tour — 80 工具分群導覽
 
 ## 描述（Description）
 
-本技能提供 atlas-mcp 的 84 個 MCP tool 的**任務導向分群導覽**。不重複 [`docs/AGENT_TOOLS.md`](../../../docs/AGENT_TOOLS.md) 的完整 catalog — 本技能聚焦於：
+本技能提供 atlas-mcp 的 80 個 MCP tool 的**任務導向分群導覽**。不重複 [`docs/AGENT_TOOLS.md`](../../../docs/AGENT_TOOLS.md) 的完整 catalog — 本技能聚焦於：
 1. **入門 tool**：每個任務群組「第一個該呼叫的 tool」
 2. **工具關係**：哪些是 companion（該一起用）、哪些是 alternative（擇一）
 3. **常見組合**：daily briefing、risk review、experiment evaluation 等典型任務的 tool 序列
@@ -23,19 +23,19 @@ target_audience: "developer"
 
 - 當 agent 說「atlas 有哪些 tool」「我能用 atlas 做什麼」「有哪些 MCP tool 可用」
 - 當 agent 接入 atlas-mcp 後，需要快速定位「做 X 任務該用哪個 tool」
-- 當 agent 面對 84 個 tool 不知從何開始、需要導覽
+- 當 agent 面對 80 個 tool 不知從何開始、需要導覽
 - 當 agent 呼叫了一個 tool 但回傳結果不夠、想知道「下一步該用哪個 companion tool」
 
 ## 核心概念（Core Concepts）
 
 ### 任務群組（Task Domain）
-84 個 tool 依任務領域分為 12 個群組，每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
+80 個 tool 依任務領域分為 16 個群組（從 16 個 `tools_*.go` 檔案 + 5 個 `tools.go` 核心 entry-point），每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
 
 | 群組 | Tool 數 | 入門 tool | 用途 |
 |------|--------|----------|------|
 | 市場狀態（Macro） | 6 | `macro_get_snapshot_latest` | 總經 snapshot、stress index、資金流 |
 | 跨市場（Crossmarket） | 3 | `crossmarket_get_status` | 美股連動、相關性、S&P/NASDAQ/Dow |
-| 體制（Regime） | 2 | `regime_get_history` | 市場體制演變（RISK_ON/OFF/NEUTRAL） |
+| 體制（Regime） | 1 | `regime_get_history` | 市場體制演變（RISK_ON/OFF/NEUTRAL） |
 | 敘事（Narrative） | 7 | `narrative_get_bundle` | 因果鏈、敘事事件、季節性、briefing bundle |
 | 風險（Risk） | 5 | `risk_get_metrics` | 風險聚合、drawdown、相關矩陣、校準 |
 | 策略（Strategy） | 5 | `strategy_list_active` | 線上策略、歸因、摘要、層級 |
@@ -43,12 +43,12 @@ target_audience: "developer"
 | 達爾文（Synergy） | 3 | `synergy_get_darwinian_status` | 達爾文權重、趨勢、L2.4 觀察窗口 |
 | 警報（Alert） | 4 | `alert_list_unacknowledged` | 未確認警報、統計、規則 |
 | 控制平面（Control） | 4 | `control_get_active_overrides` | 覆寫狀態、稽核記錄（皆 read-only） |
-| 排程（Scheduler/Task） | 6 | `scheduler_get_status` | 背景排程、任務 CRUD |
-| 系統健康（System/Health） | 10+ | `system_get_health` | 整體健康、LLM router、資料品質、circuit breaker |
-| 資料源（Data） | 4 | `data_get_channel_health` | Channel 健康、pipeline 監控 |
+| 排程（Scheduler/Task） | 4 | `scheduler_get_status` | 背景排程、任務 CRUD |
+| 系統健康（System/Health） | 9 | `system_get_health` | 整體健康、LLM router、資料品質、circuit breaker、anomaly 觀測 |
+| 資料源（Data） | 4 | `data_get_channels` | Channel 健康、pipeline 監控 |
 | LLM/Trace | 6 | `llm_get_health` | LLM router 健康、cost、推理追蹤 |
 | PRISM/Swarm | 6 | `swarm_get_status` | 訓練結果、共識、異常、情境 |
-| 報告/稅務 | 4 | `report_get_summary` | 績效報告、稅務 snapshot |
+| 報告/稅務 | 4 | `report_get_daily_summary` | 績效報告、稅務 snapshot |
 
 ### Companion Tool 關係
 某些 tool 天然成對使用：
@@ -66,9 +66,9 @@ target_audience: "developer"
 
 | 數據 | 模組/檔案 | 說明 |
 |------|----------|------|
-| Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（19 個檔案） | 84 個 tool handler |
+| Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（16 個檔案）+ `cmd/atlas-mcp/server/tools.go`（5 個核心 entry-point） | 80 個 tool handler |
 | 自動描述 | `cmd/atlas-mcp/auto-desc.gen.json`（713 行） | descgen 生成的 tool description |
-| Tool catalog | `docs/AGENT_TOOLS.md` | 74 個 tool 的完整清單與決策樹 |
+| Tool catalog | `docs/AGENT_TOOLS.md` | 80 個 tool 的完整清單與決策樹 |
 | MCP 規格 | `docs/specs/agent-mcp-server.md` | 設計規格、安全邊界、命名慣例 |
 
 ## 實作位置（Implementation Locations）
@@ -130,10 +130,10 @@ target_audience: "developer"
 | `atlas-macro-narrative` | 宏觀敘事 tool 的金融背景 |
 | `atlas-strategy-evolution` | 策略/實驗 tool 的金融背景 |
 
-> **完整 catalog + 任務→工具反向索引** — 見 [`docs/AGENT_TOOLS.md`](../../../docs/AGENT_TOOLS.md)（80 tools × 12 種典型任務矩陣）。
+> **完整 catalog + 任務→工具反向索引** — 見 [`docs/AGENT_TOOLS.md`](../../../docs/AGENT_TOOLS.md)（80 tools × 16 種典型任務矩陣）。
 
 ## 版本歷史
 
 | 版本 | 日期 | 變更 |
 |------|------|------|
-| 1.0 | 2026-07-02 | 初版 — 12 群組分群、入門 tool、companion 關係、3 個任務組合範例 |
+| 1.0 | 2026-07-02 | 初版 — 16 群組分群（80 tools）、入門 tool、companion 關係、3 個任務組合範例 |

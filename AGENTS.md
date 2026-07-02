@@ -54,8 +54,8 @@
 
 ### Agent 入門（外部 AI 優先讀）
 - [`docs/AGENT_ONBOARDING.md`](docs/AGENT_ONBOARDING.md) — 5 分鐘速讀 atlas 全貌
-- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — 74+ tool 決策樹與完整 catalog
-- [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — MCP server 部署、配置、84 tool 總覽
+- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — 80 個 tool 決策樹與完整 catalog
+- [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — MCP server 部署、配置、80 tool 總覽
 
 ### 啟動必讀
 - [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — 首次啟動、CI 指令、系統初始化順序
@@ -102,7 +102,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | Workflow Map | `docs/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
 | Process 標註 | `docs/PROCESSES.yaml` | 結構化 workflow metadata |
 | MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 80+ tools、auth、audit、JSON Schema 模板 |
-| MCP 模組陷阱 | `[`cmd/atlas-mcp/server/AGENTS.md`](cmd/atlas-mcp/server/AGENTS.md) | 60 .go 檔案的 hot-path 陷阱（命名/相依/稽核/認證） |
+| MCP 模組陷阱 | `[`cmd/atlas-mcp/server/AGENTS.md`](cmd/atlas-mcp/server/AGENTS.md) | 66 .go 檔案的 hot-path 陷阱（34 非測試 + 32 測試,命名/相依/稽核/認證） |
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
 | Onboarding | `docs/AGENT_ONBOARDING.md` | 5 分鐘上手 |
 

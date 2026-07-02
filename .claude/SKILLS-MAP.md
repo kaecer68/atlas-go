@@ -51,7 +51,7 @@
 │
 ├── 🌐 外部 Agent 整合
 │   ├── atlas-mcp-integration/    # 外部 AI Agent 接入 atlas-mcp：配置、認證、首次呼叫
-│   └── atlas-mcp-tool-tour/      # 84 tool 任務導向分群導覽：入門 tool、companion 關係
+│   └── atlas-mcp-tool-tour/      # 80 tool 任務導向分群導覽：入門 tool、companion 關係
 │
 ├── 🤖 robot-communication/        # 機器人溝通專用技能（OpenClaw/Hermes）
 │   ├── README.md                  # 機器人溝通技能使用說明
@@ -113,7 +113,7 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 | 技能 | 用途 | 版本 |
 |------|------|------|
 | `atlas-mcp-integration` | 教外部 agent 如何配置 MCP client（Claude/Cursor/OpenCode）、認證、首次呼叫、常見任務範例 | v1.0 |
-| `atlas-mcp-tool-tour` | 84 個 MCP tool 的任務導向分群導覽：12 群組的入門 tool、companion 關係、3 個任務組合範例 | v1.0 |
+| `atlas-mcp-tool-tour` | 80 個 MCP tool 的任務導向分群導覽：16 群組的入門 tool、companion 關係、3 個任務組合範例 | v1.0 |
 
 > **使用注意**: 接入 atlas-mcp 後建議先載入 `atlas-mcp-tool-tour` 建立工具全貌認知，再依任務需求載入對應的金融背景 skill（如 `atlas-risk-management`、`atlas-macro-narrative`）。
 
