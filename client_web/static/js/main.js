@@ -12,6 +12,7 @@ import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
+import { init as initSimplifiedMode } from './simplified-mode.js';
 import './modals/modal.js';
 
 const SHELL_LOADERS = {
@@ -464,6 +465,7 @@ if (typeof window !== 'undefined') {
   initBacktestDates();
   startAutoRefresh();
   initEventStream();
+  initSimplifiedMode();
   (async () => {
     try {
       await loadAll();

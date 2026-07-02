@@ -105,12 +105,12 @@ function kpiNum(v) {
         <div class="kpi-value ${unrealizedPnLTotal > 0 ? 'text-up' : (unrealizedPnLTotal < 0 ? 'text-down' : '')}">${kpiNTD(unrealizedPnLTotal)}</div>
         <div class="kpi-hint">持倉未實現總損益</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card advanced-only">
         <div class="kpi-label">持倉集中度 (HHI)</div>
         <div class="kpi-value">${hhi.value}</div>
         <div class="kpi-hint">${hhiLabel}</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card advanced-only">
         <div class="kpi-label">最大回撤</div>
         <div class="kpi-value text-danger">${formatMaxDrawdown(currentDrawdown, { asAbsolute: true })}</div>
         <div class="kpi-hint">歷史最大回撤</div>

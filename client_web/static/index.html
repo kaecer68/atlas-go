@@ -7,6 +7,16 @@
 <meta name="author" content="Atlas-Go">
 <meta name="robots" content="noindex, nofollow">
 <title>Atlas-Go 投資人平台</title>
+<script>
+  // 簡化模式：早期同步執行避免 FOUC（在 CSS 載入前設定 :root[data-simplified]）
+  (function() {
+    try {
+      if (localStorage.getItem('atlas-simplified') === '1') {
+        document.documentElement.setAttribute('data-simplified', 'true');
+      }
+    } catch (e) { /* 隱私模式 / localStorage 禁用時忽略 */ }
+  })();
+</script>
 <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
@@ -44,6 +54,9 @@
       <span class="dot"></span>
       <span id="refreshTime">等待更新…</span>
       <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新">⏸</button>
+    </div>
+    <div class="simplified-control">
+      <button id="simplifiedToggle" class="simplified-toggle" type="button" aria-pressed="false" title="切換到簡化模式（隱藏進階指標）">🔰 簡化模式</button>
     </div>
     <div class="role-switcher">
       <a href="/admin/" class="role-link">管理者</a>
