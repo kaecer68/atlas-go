@@ -31,7 +31,7 @@ func registerElicitationTools(mcpSrv *mcp.Server, s *server) {
 		return
 	}
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_elicit_user",
 		Description: autoDescOr("mcp_elicit_user", "Ask the connected MCP client to elicit input from the user (form or url). Requires client elicitation capability."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},

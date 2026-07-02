@@ -7,25 +7,25 @@ import (
 )
 
 func registerSchedulerTaskTools(mcpSrv *mcp.Server, s *server) {
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "scheduler_get_status",
 		Description: autoDescOr("scheduler_get_status", "Background scheduler status: which tasks ran, when, last result. Read-only overview of the dispatcher state."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSchedulerGetStatus)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "task_list",
 		Description: autoDescOr("task_list", "List background tasks (filtered by status)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTaskList)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "task_get",
 		Description: autoDescOr("task_get", "Single task by id (status, progress, last result)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTaskGet)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "task_get_events",
 		Description: autoDescOr("task_get_events", "Event stream of a single task (ordered lifecycle events)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},

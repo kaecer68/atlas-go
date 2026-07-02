@@ -11,6 +11,19 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// RegisteredToolCount is incremented by countedAddTool for every successfully
+// registered MCP tool. It is used by server.go to assert the tool inventory
+// has not drifted at startup.
+var RegisteredToolCount int
+
+// countedAddTool is a thin wrapper around mcp.AddTool that tracks the total
+// tool count for startup assertions. It MUST be used instead of calling
+// mcp.AddTool directly in all tool registration functions.
+func countedAddTool[In any, Out any](mcpSrv *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
+	mcp.AddTool(mcpSrv, tool, handler)
+	RegisteredToolCount++
+}
+
 // registerTools attaches the five Phase 1 core tools to mcpSrv. Each handler
 // invokes atlas-go via the shared httpClient and writes one AuditEntry.
 //
@@ -36,31 +49,31 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerRootsTools(mcpSrv, s)
 	registerElicitationTools(mcpSrv, s)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
 		Description: autoDescOr("regime_get_history", "Return the market regime history for the last N days. Regimes are RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRegimeGetHistory)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_list_active",
 		Description: autoDescOr("strategy_list_active", "List the strategy set currently active in production (per docs/WORKFLOW_MAP.md WA-500)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyListActive)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_judge",
 		Description: autoDescOr("experiment_judge", "Trigger LLM judge scoring for a candidate experiment vs the baseline. Side-effect: writes to experiment history."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
 	}, s.handleExperimentJudge)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_list_unacknowledged",
 		Description: autoDescOr("alert_list_unacknowledged", "List all unacknowledged alerts. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleAlertListUnacknowledged)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_health",
 		Description: autoDescOr("system_get_health", "Return overall system health status (per docs/WORKFLOW_MAP.md WA-606)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},

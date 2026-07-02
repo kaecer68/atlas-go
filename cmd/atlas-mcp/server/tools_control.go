@@ -7,25 +7,25 @@ import (
 )
 
 func registerControlTools(mcpSrv *mcp.Server, s *server) {
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_get_audit_log",
 		Description: autoDescOr("control_get_audit_log", "Control override audit log (which agents were paused/banned, by which operator). Read-only by design."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleControlGetAuditLog)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_get_active_overrides",
 		Description: autoDescOr("control_get_active_overrides", "Currently active control overrides (paused agents, sector bans, weight overrides)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleControlGetActiveOverrides)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_approve_recommendation",
 		Description: autoDescOr("control_approve_recommendation", "Status of an approve-recommendation override (read-only state inspection; actual approval is admin-only)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleControlApproveRecommendation)
 
-	mcp.AddTool(mcpSrv, &mcp.Tool{
+	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_reject_recommendation",
 		Description: autoDescOr("control_reject_recommendation", "Status of a reject-recommendation override (read-only state inspection)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},

@@ -7,8 +7,11 @@
 | 檔案 | 責任 |
 |------|------|
 | `server.go` | 生命週期、設定驗證、rate limiter / metrics / anomaly emitter 啟動 |
-| `tools.go` | 總註冊入口與 `withAudit`/`withAuditExtra` 包裝 |
-| `tools_*.go` | 各領域 tool 註冊與 handler（control / audit / anomaly / crossmarket ...） |
+| `tools.go` | 總註冊入口、`countedAddTool` 計數包裝、`RegisteredToolCount`、`withAudit`/`withAuditExtra` 包裝 |
+| `tools_*.go` | 各業務領域 tool 註冊與 handler（macro / crossmarket / narrative / risk_alert / strategy / experiment / synergy / control / scheduler_task / system / llm_trace / data_universe / report_prism_swarm），共 14 個檔案 |
+| `sampling.go` | MCP protocol 層：`mcp_sample_llm`（feature-gated，`SamplingEnabled` 控制） |
+| `roots.go` | MCP protocol 層：`mcp_roots_list` + `mcp_roots_read_file`（filesystem boundary） |
+| `elicitation.go` | MCP protocol 層：`mcp_elicit_user`（feature-gated，`ElicitationEnabled` 控制） |
 | `audit.go` | 寫入模型 `AuditEntry` + `AuditWriter`（v2 格式為主） |
 | `audit_v2.go` | 讀取模型 `AuditEntryV2` + 聚合函式 |
 | `auth.go` | `TokenAuth`：env token / DB store fallback / dev mode |
@@ -18,10 +21,19 @@
 | `auto-desc.gen.go` | descgen 產出，禁止手動編輯 |
 | `elicitation_validate.go` | elicit_user schema server-side pre-validation（大小/屬性/外部 $ref 過濾）|
 
+## 工具計數
+
+- 總 tool handler = **80 個**，對應 81 個 tool 名稱（`mcp_sample_llm` 與 `mcp_elicit_user` 各有一個 handler，但 feature gate 關閉時不掛載）。
+- `server.Run()` 在所有 tool 註冊完成後 assert `RegisteredToolCount` 在 82–84 範圍內；**若不在範圍內直接 return error 阻止啟動**，防止文件↔程式碼漂移。
+- `countedAddTool[In, Out any]()` 是 `mcp.AddTool` 的泛型包裝，自動累加 `RegisteredToolCount`；所有 tool 註冊都必須經過它（含 `registerTools` 的 80 個 + `registerAuditTools` 的 4 個）。
+- 新增 tool 時：`countedAddTool()` 會自動遞增計數器，但仍應確認總數仍在 82–84 範圍，否則需同步更新 `server.go` assertion 的上下界。
+- 實際掛載數 = 80（`registerTools`，含 sampling/elicitation/roots/anomaly）+ 4（`registerAuditTools`），範圍 84（sampling + elicitation off 時為 82）。
+- `registerTokenAdminTools`（admin.go）不計入，因為它用獨立的 `mcp.Server` 實例。
+
 ## 命名陷阱
 
 - Tool 名稱慣例為 `area_verb_noun`：例如 `regime_get_history`、`control_get_active_overrides`、`mcp_anomaly_get_recent`。
-- `tools.go` 裡 `registerTools` 會再呼叫 `registerMacroTools`、`registerControlTools` 等；新增領域時要在這裡加一行，否則 tool 不會掛載。
+- `tools.go` 裡 `registerTools` 會再呼叫 **17 個 registerXXX**（14 個 `tools_*.go` + `sampling.go` + `roots.go` + `elicitation.go`）；新增領域時要在這裡加一行，否則 tool 不會掛載。
 - handler 簽名固定為 `func (s *server) handleXXX(ctx, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error)`；目前實作一律回傳 `nil` 作為第一個值，由 go-sdk 自動轉 `Out` 為 JSON。
 
 ## 相依陷阱
