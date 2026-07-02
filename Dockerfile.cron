@@ -51,6 +51,9 @@ RUN chmod +x /app/cron-entrypoint.sh
 # Create log directory and set ownership
 RUN mkdir -p /var/log/cron && chown -R atlas:atlas /app /var/log/cron
 
+# Allow atlas user to use crontab (dcron requires explicit allowlist for non-root)
+RUN echo "atlas" > /etc/cron.allow
+
 # Switch to non-root user
 USER atlas
 
