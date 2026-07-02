@@ -8,6 +8,7 @@ import { getJSON, silentGetJSON, escapeHtml } from '../shared/app-utils.js';
 import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
+import { renderTooltip, glossaryTooltip } from '../components/tooltip.js';
 import { fmtSignedPct, fmtDrawdown, fmtHHI, riskLevelLabel, formatNumber } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 
@@ -222,11 +223,11 @@ function renderRecommendation(pipeline, stress) {
 
   card.innerHTML = `
     <div class="home-recommendation__action">
-      <span class="home-recommendation__label">建議行動</span>
+      <span class="home-recommendation__label">${renderTooltip('建議行動', '模型根據當日市場壓力、外資流向與趨勢評分，給出的今日操作傾向（配置 / 觀望 / 減碼）。')}</span>
       <span class="home-recommendation__value home-recommendation__value--${tone}">${escapeHtml(action)}</span>
     </div>
     <div class="home-recommendation__confidence">
-      <span class="home-recommendation__label">信心分數</span>
+      <span class="home-recommendation__label">${renderTooltip('信心分數', '模型對今日建議的把握程度（0–100%）。數值越高代表多項指標方向一致，越值得參考。')}</span>
       <div class="home-confidence-bar" aria-label="信心分數 ${confidence}%" role="img">
         <div class="home-confidence-bar__fill home-confidence-bar__fill--${tone}" style="width: ${confidence}%"></div>
       </div>
