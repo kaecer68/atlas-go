@@ -260,14 +260,22 @@ func fileURIToPath(uri string) (string, error) {
 }
 
 func isUnderRoots(target string, roots []string) bool {
-	target = filepath.Clean(target)
+	realTarget, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		return false
+	}
+	realTarget = filepath.Clean(realTarget)
 	for _, r := range roots {
-		r = filepath.Clean(r)
-		if target == r {
+		realR, err := filepath.EvalSymlinks(r)
+		if err != nil {
+			continue
+		}
+		realR = filepath.Clean(realR)
+		if realTarget == realR {
 			return true
 		}
 		sep := string(filepath.Separator)
-		if strings.HasPrefix(target+sep, r+sep) {
+		if strings.HasPrefix(realTarget+sep, realR+sep) {
 			return true
 		}
 	}
