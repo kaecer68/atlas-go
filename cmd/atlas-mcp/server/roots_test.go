@@ -93,6 +93,48 @@ func TestMCPRootsReadFile_RejectsPathOutsideRoots(t *testing.T) {
 	require.Contains(t, err.Error(), "outside")
 }
 
+func TestMCPRootsReadFile_RejectsSymlinkEscape(t *testing.T) {
+	rootPath, rootURI := makeRootDir(t)
+	secretDir := t.TempDir()
+	secretFile := filepath.Join(secretDir, "passwd")
+	require.NoError(t, os.WriteFile(secretFile, []byte("secret-payload"), 0o600))
+
+	clientOpts := &mcp.ClientOptions{
+		Capabilities: &mcp.ClientCapabilities{RootsV2: &mcp.RootCapabilities{}},
+	}
+	s, client, ss, done := newTestServerWithClient(t, clientOpts, Config{})
+	defer done()
+
+	client.AddRoots(&mcp.Root{URI: rootURI})
+
+	escapeLink := filepath.Join(rootPath, "escape")
+	require.NoError(t, os.Symlink(secretFile, escapeLink))
+
+	_, _, err := s.handleMCPRootsReadFile(context.Background(), &mcp.CallToolRequest{Session: ss}, MCPRootsReadFileInput{Path: rootURI + "/escape"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "outside")
+}
+
+func TestMCPRootsReadFile_AcceptsInRootSymlink(t *testing.T) {
+	rootPath, rootURI := makeRootDir(t)
+	require.NoError(t, os.WriteFile(filepath.Join(rootPath, "real.txt"), []byte("in-root"), 0o600))
+
+	clientOpts := &mcp.ClientOptions{
+		Capabilities: &mcp.ClientCapabilities{RootsV2: &mcp.RootCapabilities{}},
+	}
+	s, client, ss, done := newTestServerWithClient(t, clientOpts, Config{})
+	defer done()
+
+	client.AddRoots(&mcp.Root{URI: rootURI})
+
+	inRootLink := filepath.Join(rootPath, "link.txt")
+	require.NoError(t, os.Symlink(filepath.Join(rootPath, "real.txt"), inRootLink))
+
+	_, out, err := s.handleMCPRootsReadFile(context.Background(), &mcp.CallToolRequest{Session: ss}, MCPRootsReadFileInput{Path: rootURI + "/link.txt"})
+	require.NoError(t, err)
+	require.Equal(t, "in-root", out.Content)
+}
+
 func TestMCPRootsReadFile_RejectsWriteFlagPath(t *testing.T) {
 	rootPath, rootURI := makeRootDir(t)
 	clientOpts := &mcp.ClientOptions{
