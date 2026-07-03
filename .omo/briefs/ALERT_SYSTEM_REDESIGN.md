@@ -1,6 +1,6 @@
 # Alert System Redesign — Phase 1 Design Document
 
-**Status**: ✅ Approved by user (2026-06-10)  
+**Status**: ✅ Approved by user (2026-06-10) → 🔴 Now HISTORICAL (superseded by v2 redesign 2026-06-26). Preserved per PR #756.  
 **PR**: #459 (design document)  
 **Target**: 3–5 PRs across 8–10 work days  
 **Epic**: Full 4-phase implementation (backend → API → Dashboard → automation)

@@ -71,3 +71,4 @@
 - **recovery.md source**: `.omo/notepads/frontend-refactor-recovery.md` (325L, gitignored)
 - **驗證日期**: 2026-07-04 (兩輪 grep)
 - **設計審計方法論**: user m00091 修正 + m00110 二次修正 — 必須逐個 verify 才能假定 work 是需要的
+- **注意**: 若日後需執行 git recovery 操作（e.g. reflog 已過期被 gc），請先嘗試 `git fsck --lost-found` 搜尋 dangling commits，或從 `.planning/` 備份還原；90 天預設 gc 可能導致 reflog 無法復原
