@@ -52,6 +52,7 @@ func registerDataSyncAndHealthTasks(
 	gateway *apigateway.Gateway,
 	monitor *monitoring.Monitor,
 	pool *pgxpool.Pool,
+	collector *monitoring.MetricsCollector,
 ) {
 	// Register channel_health_sync task (DB sync, not a data fetcher).
 	if pool != nil {
@@ -108,6 +109,9 @@ func registerDataSyncAndHealthTasks(
 		healthChecker := monitoring.NewHealthChecker(monitor, nil)
 		if gateway != nil {
 			healthChecker.SetGateway(gateway)
+		}
+		if collector != nil {
+			healthChecker.SetCollector(collector)
 		}
 		_ = taskMgr.Register(&apigateway.ScheduledTask{
 			Name:     "health_check",

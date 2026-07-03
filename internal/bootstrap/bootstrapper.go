@@ -34,7 +34,7 @@ func InitMetrics() *monitoring.MetricsCollector {
 	return monitoring.NewMetricsCollector()
 }
 
-func InitDatabase(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
+func InitDatabase(ctx context.Context, cfg Config, collector *monitoring.MetricsCollector) (*pgxpool.Pool, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		return nil, nil
@@ -44,6 +44,7 @@ func InitDatabase(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 		pool, err := db.Init(context.Background(), dsn, migrationsPath)
 		if err != nil {
 			logging.Error("bootstrap", "db_init_failed", "err", err)
+			monitoring.RecordDBInitFailure(collector)
 			return nil, err
 		}
 		logging.Info("bootstrap", "db_connected_migrations_applied")
@@ -152,7 +153,7 @@ func InitRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	rt.MetricsCollector = InitMetrics()
 	logging.Info("bootstrap", "metrics_collector_initialized")
 
-	pool, err := InitDatabase(ctx, cfg)
+	pool, err := InitDatabase(ctx, cfg, rt.MetricsCollector)
 	if err != nil {
 		logging.Warn("bootstrap", "db_init_warning", "err", err)
 	}
