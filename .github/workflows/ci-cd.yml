@@ -16,19 +16,30 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Frontend build (reusable) — builds admin_web + client_web once,
+  # uploads dist artifacts. Downstream jobs download instead of rebuilding.
+  frontend-build:
+    uses: ./.github/workflows/_frontend-build.yml
+    permissions:
+      contents: read
+      actions: write
+
   # Build and Test
   build:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -74,18 +85,21 @@ jobs:
   # cmd/atlas tests spin up full SystemCore with real providers (TWSE, GDELT, etc.)
   # — needs 20min timeout, no -race (race detector makes goroutine cleanup stall)
   test-cmd-atlas:
+    needs: frontend-build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -103,17 +117,20 @@ jobs:
 
   # Lint
   lint:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -134,17 +151,20 @@ jobs:
   # and atlas-mcp descgen (auto-desc.gen.json / auto-desc.gen.go).
   # If generation produces a diff, the job fails to signal drift.
   generate:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -262,9 +282,33 @@ jobs:
         # Example: kubectl apply -f k8s/production/
 
   # Integration Tests
+  # Use paths-filter to skip heavy service containers (postgres+redis) for
+  # PRs that don't touch the database layer.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      integration: ${{ steps.filter.outputs.integration }}
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+      id: filter
+      with:
+        filters: |
+          integration:
+            - 'internal/db/**'
+            - 'internal/repository/**'
+            - 'internal/storage/**'
+            - 'internal/ledger/**'
+            - 'migrations/**'
+            - '**/*.sql'
+
   integration:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build, frontend-build, changes]
+    if: needs.changes.outputs.integration == 'true'
     services:
       redis:
         image: redis:7-alpine
@@ -291,13 +335,15 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5

@@ -10,6 +10,14 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Frontend build (reusable) — builds admin_web + client_web once,
+  # uploads dist artifacts. Downstream jobs download instead of rebuilding.
+  frontend-build:
+    uses: ./.github/workflows/_frontend-build.yml
+    permissions:
+      contents: read
+      actions: write
+
   # Code formatting check
   fmt:
     runs-on: ubuntu-latest
@@ -31,17 +39,20 @@ jobs:
 
   # Lint — runs all 9 enabled linters (govet, staticcheck, errcheck, gosec, ineffassign, unused, misspell, unconvert, unparam)
   lint:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -118,17 +129,20 @@ jobs:
 
   # Test coverage
   coverage:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -421,11 +435,22 @@ jobs:
   # Derives target pages from PR diff; falls back to overview+narrative+live+portfolio.
   # Skips (exit 0) if diff doesn't touch any monitored path.
   frontend-smoke:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         fetch-depth: 0
+
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Node.js
       uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
@@ -484,9 +509,20 @@ jobs:
   # the admin_web / client_web split. Kept separate from smoke so failures are
   # scoped to the new SPAs.
   frontend-tests:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Node.js
       uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
