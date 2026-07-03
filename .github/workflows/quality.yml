@@ -48,12 +48,12 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: admin-web-dist
         path: admin_web/dist
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: client-web-dist
         path: client_web/dist
@@ -138,12 +138,12 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: admin-web-dist
         path: admin_web/dist
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: client-web-dist
         path: client_web/dist
@@ -446,12 +446,12 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: admin-web-dist
         path: admin_web/dist
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: client-web-dist
         path: client_web/dist
@@ -518,12 +518,12 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: admin-web-dist
         path: admin_web/dist
 
-    - uses: actions/download-artifact@95815c38e636a4bc9f521e47a5641a6d4f09a335 # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
         name: client-web-dist
         path: client_web/dist
