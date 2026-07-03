@@ -214,7 +214,7 @@ func TestRunEnvOnlyNoBrokerFlagSucceeds(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded"}
 		},
-		dataFetcher:    monitoring.NoopFetcher(),
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
@@ -235,7 +235,7 @@ func TestRunNoBrokerEnvOrFlagSucceeds(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded"}
 		},
-		dataFetcher:    monitoring.NoopFetcher(),
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
