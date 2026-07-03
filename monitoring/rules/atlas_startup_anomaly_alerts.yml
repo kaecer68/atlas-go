@@ -1,0 +1,26 @@
+groups:
+  - name: atlas_startup_anomalies
+    interval: 30s
+    rules:
+      - alert: AtlasGoDBInitFailed
+        expr: increase(log_messages_total{level="ERROR",msg="db_init_failed"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: bootstrap
+          source: 2026-07-03-investigation
+        annotations:
+          summary: "atlas-go 啟動時 DB 連線失敗"
+          description: "atlas-go 在 {{ $labels.instance }} 啟動時 db_init_failed — 觸發 in-memory fallback。檢查 ~/.config/atlas-go/.env 的 DATABASE_URL 與 docker-compose.yml 的 ${DB_PASSWORD}。"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/"
+
+      - alert: AtlasChannelYahooErrorSustained
+        expr: increase(log_messages_total{level="INFO",msg="us_yahoo:error"}[1h]) > 30
+        for: 30m
+        labels:
+          severity: warning
+          component: marketdata
+          source: 2026-07-03-investigation
+        annotations:
+          summary: "us_yahoo channel 持續錯誤超過 30 分鐘"
+          description: "us_yahoo channel 30 分鐘內 > 30 次 error。可能是 Yahoo Finance API 端 rate limit（之前 P1-2 驗證確認 host 也 429）或 session crumb 過期。"
