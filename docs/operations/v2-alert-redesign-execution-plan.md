@@ -1,7 +1,7 @@
 # v2 alert-redesign 升級真實路徑 (post-verification 2026-07-04)
 
 > 設計 todo 基於 `.omo/briefs/alert-redesign-v2.md` Part 6 P0 優先序,但**經過 2026-07-04 真實驗證**,範圍已大幅縮小。
-> 目標: 完成剩餘真實 gap → 將 `.omo/briefs/alert-redesign-v2.md` 升為 `docs/alerts-redesign.md`。
+> 目標: 完成剩餘真實 gap → 把 v2 working draft 升為正式 docs/ 規格。
 
 ## 1. 驗證結果摘要
 
@@ -45,7 +45,7 @@ v2 寫於 2026-06-26 (10 天前)。本驗證用 grep 確認每個 v2 claim 的�
 ### PR-4 (升級執行): v2 lift to docs/alerts-redesign.md
 - **前置**: PR-1/2/3 全部完成 + 4. 待驗證 items 全部釐清
 - **動作**:
-  1. 建立 `docs/alerts-redesign.md`(從 v2 內容,但更新所有 v2 過時的 line number + 引用)
+  1. 建立升級版 alert-redesign 規格(從 v2 內容,但更新所有 v2 過時的 line number + 引用)
   2. 刪除 `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` (v1, 15468B, gitignored — PR #756 故意保留)
   3. 刪除 `.omo/briefs/alert-redesign-v2.md` (v2 working copy, gitignored)
 - **估時**: 2-4h
