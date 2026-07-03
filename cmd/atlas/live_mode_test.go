@@ -141,6 +141,7 @@ func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
 				BrokerAdapter:    "http",
 				BrokerMaxRetries: 1,
 				BrokerSigner:     "placeholder",
+				AllowLiveBroker:  true,
 			}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
@@ -152,7 +153,6 @@ func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
 		},
 	}
 
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	err := run([]string{"-live", "-allow-live-broker"}, deps)
 	if err == nil {
 		t.Fatalf("expected error for http adapter without allow flag, got nil")

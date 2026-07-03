@@ -175,7 +175,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 	listenDone := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
+			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1, AllowLiveBroker: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -197,7 +197,6 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		close(shutdown)
 	}()
 
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker"}, deps)
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
@@ -275,7 +274,7 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, AllowLiveBroker: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -286,7 +285,6 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		},
 	}
 
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	err := run([]string{"-api", "-allow-live-broker", "-broker-adapter", "http"}, deps)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -303,7 +301,7 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1, AllowLiveBroker: true, AllowHTTPBroker: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -320,8 +318,6 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		close(shutdown)
 	}()
 
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
 	err := run([]string{
 		"-api",
 		"-broker-mode", "live",
@@ -338,7 +334,7 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder", AllowLiveBroker: true, AllowHTTPBroker: true, AllowRealSigner: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -349,9 +345,6 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		},
 	}
 
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -365,7 +358,7 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder", AllowLiveBroker: true, AllowHTTPBroker: true, AllowRealSigner: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -381,10 +374,6 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		close(shutdown)
 	}()
-
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 
 	err := run([]string{
 		"-api",
