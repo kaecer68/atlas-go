@@ -2,10 +2,10 @@
 
 > **Audience**：Go 工程師接手 Phase 3 殘餘工作。
 > **狀態**：🟡 DRAFT（2026-06-30，等待 user review）
-> **範圍決策**：PR #842 (`feat/atlas-mcp-phase3`, 9428ef40) 已完成 Phase 3 上半 (audit retention + Phase 3B rate-limiting + Resources + Prompts + 2 errcheck fixes)。殘餘工作對齊 [`agent-interface-roadmap.md` §3](../plans/agent-interface-roadmap.md) 原 4 項中扣除 Resources/Prompts 後的剩餘 3 項。
+> **範圍決策**：PR #842 (`feat/atlas-mcp-phase3`, 9428ef40) 已完成 Phase 3 上半 (audit retention + Phase 3B rate-limiting + Resources + Prompts + 2 errcheck fixes)。殘餘工作對齊 agent-interface-roadmap.md §3 原 4 項中扣除 Resources/Prompts 後的剩餘 3 項(roadmap snapshot 詳見 PR #876)。
 > **關聯文件**：
 > - [`agent-mcp-server.md`](./agent-mcp-server.md)（核心 spec，含 §11 Phase 2.2 Status）
-> - [`agent-interface-roadmap.md`](../plans/agent-interface-roadmap.md)（roadmap §3 Phase 3 原 4 項規劃）
+> - 對齊 agent-interface-roadmap.md roadmap §3 Phase 3 原 4 項規劃(snapshot 詳見 PR #876)
 > - [`docs/operations/mcp-deploy.md`](../operations/mcp-deploy.md)（部署守則）
 > - PR #842: <https://github.com/kaecer68/atlas-go/pull/842>
 
@@ -35,7 +35,7 @@
 
 #### 3.1.1 問題
 
-當前 74 個 tool 的 `description` / `inputSchema` 是手寫的（位於 `cmd/atlas-mcp/server/tools_*.go` 各 handler 內）。每次 handler 改 input 參數，必須同步更新 schema — 是 high-maintenance 痛點（[`agent-interface-roadmap.md` §4](../plans/agent-interface-roadmap.md#4-風險與緩解) 列為「高」風險）。
+當前 74 個 tool 的 `description` / `inputSchema` 是手寫的（位於 `cmd/atlas-mcp/server/tools_*.go` 各 handler 內）。每次 handler 改 input 參數，必須同步更新 schema — 是 high-maintenance 痛點（agent-interface-roadmap.md §4 列為「高」風險,snapshot 詳見 PR #876）。
 
 #### 3.1.2 目標
 
@@ -255,7 +255,7 @@ PR #842 + Phase 3 殘餘 3-item 全數完成後：
 | 文件 | 路徑 |
 |------|------|
 | Phase 2.2 Status | [`agent-mcp-server.md` §11](./agent-mcp-server.md) |
-| Phase 3 roadmap 原規劃 | [`agent-interface-roadmap.md` §3](../plans/agent-interface-roadmap.md) |
+| Phase 3 roadmap 原規劃 | 詳見 `docs/specs/agent-mcp-server.md` §11 |
 | Phase 3 PR (上半) | [#842](https://github.com/kaecer68/atlas-go/pull/842) |
 | Phase 2.1 transports PR | [#834](https://github.com/kaecer68/atlas-go/pull/834) |
 | Apigateway 數據源憲法 | [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md) |
