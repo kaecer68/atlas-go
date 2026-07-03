@@ -15,6 +15,10 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   # Frontend build (reusable) — builds admin_web + client_web once,
   # uploads dist artifacts. Downstream jobs download instead of rebuilding.
