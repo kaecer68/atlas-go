@@ -1,89 +1,73 @@
-# Frontend-Refactor Recovery Items 執行計畫 (post-verification 2026-07-04)
+# frontend-refactor recovery 真實路徑 (post-verification 2026-07-04, two rounds)
 
-> 來源: `.omo/notepads/frontend-refactor-recovery.md` (最後更新 2026-06-28,共 325 行)
-> 本檔基於 2026-07-04 真實驗證,提出剩餘需要實際工作的 items + 已完成的確認。
+> 設計 todo 基於 `.omo/notepads/frontend-refactor-recovery.md`(原 `docs/branch-hygiene/frontend-refactor-recovery.md`)B/D 段項目。經 2026-07-04 **兩輪 grep 驗證** 後修正。
+> 結論: **11 items 中 8 個已 ✅ 完成, 3 個改為正式關檔 (B-1 + B-2 + D-2), 沒有實際實作工作需要做**。
 
-## 1. 驗證結果總表
+## 1. 驗證結果摘要(兩輪修正後)
 
-| Item | 等級 | recovery.md 聲稱 | 2026-07-04 實際狀態 | 結論 |
-|---|---|---|---|---|
-| **B-1 e2e 驗證** | P0 | 缺 backend e2e 驗證 3 個 endpoints | e2e infra 存在 (`admin_web/playwright.config.ts`, `client_web/playwright.config.ts`, `cmd/atlas-mcp/e2e_test.go`, `internal/fubonproxy/e2e_test.go`), 但**未確認 3 個特定 endpoint 的 e2e 是否跑過** | **需快速 spot-check** |
-| **B-2 用戶誤報確認** | P0 | 用戶報 macroRadar/strategiesContent 為誤報,需與用戶確認 | 無 git commits 確認;屬於用戶互動任務,**無法用程式碼解決** | **建議正式關閉**(無新報案就當 resolved) |
-| **D-2 shared_web components/ dead code scan** | P2 | 缺 dead code scan | **REAL GAP** — 掃描發現 5 個 component 0 refs: `circuit-breaker`, `deployment-dashboard`, `live-progress`, `reasoning-trace`, `tool-events` | **需實作** |
-| B-3 client_web 風險總覽轉圈圈 | P0 | 待修 | ✅ 已於 2026-06-27 第二輪完成(`client_web/static/js/main.js` L92-107 補 import + L275-298 補 render) | DONE |
-| C-1 shared_web drift backport | P1 | 待 backport | ✅ 已於 2026-06-28 完成 | DONE |
-| C-2 inline style 色碼遷移 | P1 | 待遷移 | ✅ 部分完成 (variables.css L24/L68/L73 + 6 處 inline rgba) | DONE |
-| C-3 ESM 動態 import path 檢查 | P1 | 缺 CI script | ✅ 已建 `scripts/ci/check_frontend_imports.sh` (74 行) | DONE |
-| C-4 AGENTS.md 路徑不一致 | P1 | 路徑不一致 | ✅ 已修 (admin_web/AGENTS.md L72 + client_web/AGENTS.md L72) | DONE |
-| D-1 README/CLAUDE.md 補充 | P2 | 待補 | ✅ 部分完成 (CLAUDE.md L23-67 完整段已寫;L165 殘留瑕疵待修) | DONE (partial) |
-| H-1 task-executor 平行重複 | P2 | 待刪 | ✅ 已刪 (commits `22949fa0` shared_web + `454d9721` web) | DONE |
-| H-2 CLAUDE.md 補 atlas-pre-change-protocol 入口 | P2 | 待補 | ✅ 已修 (CLAUDE.md 加 1 行指引 + L165 stale path) | DONE |
+| Item | 原始 recovery.md claim | 第 1 輪 (m00102) | 第 2 輪 (m00110-112) **最終** |
+|---|---|---|---|
+| **B-1 (e2e verification)** | 3 endpoints `/api/agents/observatory` / `/api/metrics/trend` / `/api/prism/results` 缺驗證 | "spot-check needed" | "frontend **0 calls** to these paths; backend uses different paths (`/api/dashboard/agent-observatory` etc.). **Recovery.md claim WRONG; was user misreport**" → **FORMALLY CLOSE** |
+| **B-2 (user misreport 確認)** | 3 modules (`liveRadar`/`strategiesContent`) 報案需確認 | "closure recommended" | unchanged → **FORMALLY CLOSE** (需 user 確認後存檔) |
+| **D-2 (dead code scan)** | 5 components 可能有 dead code | "5 dead components found" | "all 5 have refs from admin_web/component-init.js + main.js + dist/meta.json. **My m00102 scan WRONG** (只搜 shared_web/, missed admin_web/ + client_web/ refs)" → **NOT a gap; formal closure recommended** |
 
-## 2. 建議 PR 清單
+## 2. 修正版建議事項
 
-### PR-1: D-2 Dead Components Cleanup (P2)
-- **目標**: 移除 5 個 0-ref components,遵循 H-1 task-executor 模式
-- **對象**:
-  - `shared_web/static/js/components/circuit-breaker.js`
-  - `shared_web/static/js/components/deployment-dashboard.js`
-  - `shared_web/static/js/components/live-progress.js`
-  - `shared_web/static/js/components/reasoning-trace.js`
-  - `shared_web/static/js/components/tool-events.js`
-- **驗證步驟**(每個 component):
-  1. `git log --all --oneline -- "<file>"` — 確認引入 commit + 無外部引用
-  2. grep 確認非 plugin registry / config-driven / reflect dynamic load
-  3. grep 確認無 `pages/*.js` / `main.js` / 其他 component 引用
-- **刪除步驟**(每個 component):
-  1. `git rm <file>`
-  2. `git rm legacy/web/static/js/components/<name>.js` (如果存在)
-  3. 三邊 `npm run build` 驗證 dist 不變
-- **估時**: 2-4h (5 components × 30 分鐘)
+### Item-1: B-2 正式關檔
+- **動作**: 在 recovery.md(目前 `.omo/notepads/`)新增 section "Closed Items", 記錄 B-2 為「已用戶確認為誤報」
+- **前置**: user 口頭或書面確認 macroRadar 已涵蓋 liveRadar 報案 + page-strategies 已涵蓋 strategiesContent 報案
+- **估時**: 0h (等 user 確認後我執行)
+- **action**: 將 recovery.md B-2 段移至 "Closed (用戶確認誤報)" section
 
-### PR-2 (optional): B-1 Endpoint Spot-Check (P0 收尾)
-- **目標**: 確認 3 個 endpoint 是否已存在 + 是否有 e2e 覆蓋
-- **方法**:
-  ```bash
-  grep -rn "agents/observatory\|metrics/trend\|prism/results" cmd/atlas/api*.go internal/api/ 2>/dev/null
-  grep -rln "agents/observatory\|metrics/trend\|prism/results" --include="*_test.go" . 2>/dev/null | grep -v ".git/"
-  ```
-- **可能結果**:
-  - handler 存在 + test 覆蓋 → 0 PR (僅記錄,正式關閉 B-1)
-  - handler 不存在 → 需新增 (1 PR)
-  - handler 存在但無 test → 需補 e2e (1 PR)
-- **估時**: 1-2h (僅調查)
+### Item-2: D-2 正式關檔
+- **動作**: 在 recovery.md 新增 "Closed Items" section, 記錄 D-2 為「掃描完成, 0 dead code」
+- **現有 refs (per m00112 verification)**:
+  - `circuit-breaker`: `admin_web/static/js/component-init.js:1` static-import + `main.css:81` CSS import
+  - `deployment-dashboard`: `component-init.js:4` static-import
+  - `live-progress`: `dist/meta.json` refs (production)
+  - `reasoning-trace`: `admin_web/static/js/main.js:9` static-import (production)
+  - `tool-events`: `dist/meta.json` refs (production)
+- **估時**: 0h
+- **action**: 將 D-2 段更新為「✅ 掃描完成, 5 個 components 均有 refs」
 
-### B-2: 無 PR (用戶互動任務)
-- **狀態**: 用戶報案「liveRadar」(實為 macroRadar) +「strategiesContent」(在 page-strategies) 經盤點為誤報
-- **處置**: 在本檔正式標記為「不會修」(除非用戶重新回報)
-- **未來**: 若用戶重新報相同症狀,需啟新追蹤流程
+### Item-3: B-1 正式關檔
+- **動作**: 與 B-2 一起, 新增 "Closed Items" section
+- **說明**: recovery.md B-1 段的 3 endpoints 路徑是誤報。實際 frontend 用的是 `/api/dashboard/...` 系列, backend handlers 已在對應位置:
+  - `/api/dashboard/agent-observatory` (`internal/monitoring/api/pipeline/handlers.go:31`)
+  - `/api/dashboard/metrics/trend` (`internal/monitoring/api/metrics/handlers.go:32`)
+  - `/api/prism/training-results` (`internal/monitoring/api/prism/handlers.go:23`)
+- **action**: 將 B-1 段更新為「✅ 用戶報案基於錯誤假設, frontend 從未呼叫所述路徑」
 
-## 3. 排除項目 (already done per recovery.md + 2026-07-04 驗證)
+## 3. 排除項目(verified done)
 
-| Item | 驗證證據 |
+| Item | 當前狀態 (2026-07-04 驗證後) |
 |---|---|
-| B-3 client_web 風險總覽 | `client_web/static/js/main.js` L92-107 + L275-298 已有 import + render 呼叫 |
-| C-1 shared_web drift backport | `diff -q web vs shared_web` 無差異 (`903971e6` 已關檔) |
-| C-2 inline style 色碼遷移 | variables.css L24/L68/L73 + 6 處 inline rgba 已改 `var(--xxx-rgb)` |
-| C-3 ESM dynamic import path | `scripts/ci/check_frontend_imports.sh` 存在 (74 行) |
-| C-4 AGENTS.md 路徑 | `admin_web/AGENTS.md` L72 + `client_web/AGENTS.md` L72 都指向 `shared_web/...` |
-| D-1 README/CLAUDE.md 補充 | CLAUDE.md L23-67 完整;L165 殘留瑕疵為 separate issue |
-| H-1 task-executor | commits `22949fa0` + `454d9721` 已刪除兩個位置 (shared_web + web) |
-| H-2 CLAUDE.md 補指引 | 已加 1 行指向 atlas-pre-change-protocol |
+| **B-3** (client_web 投資風險總覽轉圈圈) | ✅ 2026-06-27 第二輪已修 |
+| **C-1** (shared_web drift backport) | ✅ 2026-06-28 backport 完成 |
+| **C-2** (inline style 寫死色碼遷移) | ✅ 部分完成 (variables.css + 6 處 inline rgba) |
+| **C-3** (ESM 動態 import CI script) | ✅ 2026-06-28 已建 `scripts/ci/check_frontend_imports.sh` |
+| **C-4** (AGENTS.md 路徑修正) | ✅ 2026-06-28 三個 AGENTS.md 統一改為 shared_web/ |
+| **D-1** (README/CLAUDE.md 補充) | ✅ 部分完成 (CLAUDE.md L23-67 完整) |
+| **H-1** (task-executor.js 平行重複) | ✅ 2026-06-28 刪除 + commits 22949fa0 + 454d9721 |
+| **H-2** (CLAUDE.md 補 atlas-pre-change-protocol 入口) | ✅ 2026-06-28 完成 |
 
-## 4. 時間預估
+## 4. 最終工作量估算
 
-| Item | 樂觀估計 |
-|---|---|
-| PR-1 D-2 dead components (5 個) | 2-4h |
-| PR-2 B-1 endpoint spot-check | 1-2h |
-| B-2 closure | 0h |
-| **總計** | **3-6h (約半天)** |
+| | 第 1 輪 (m00102) **錯誤** | 第 2 輪 (m00112) **最終** |
+|---|---|---|
+| 實作 PR | 2 (D-2 刪 5 個 components + B-1 spot-check) | **0** |
+| 關檔 action | 1 (B-2 closure) | 3 (B-1 + B-2 + D-2 closure) |
+| 總時間 | 3-6h | <1h (只是更新 recovery.md 文件) |
 
-## 5. 參考資料
+## 5. 設計審計教訓(從兩輪驗證學到)
 
-- **來源 recovery.md**: `.omo/notepads/frontend-refactor-recovery.md` (gitignored, 325 行, 最後更新 2026-06-28)
-- **驗證日期**: 2026-07-04
-- **驗證方法**: `git log --since="2026-06-28"` + grep + 文件 read
-- **對照**: PR #933 docs cleanup (2026-07-03) 將 recovery.md 從 `docs/branch-hygiene/` 移到 `.omo/notepads/frontend-refactor-recovery.md`,狀態從「active tracker in docs/」改為「active working file in .omo/」
-- **H-1 模式參考**: commits `903971e6` (docs) + `22949fa0` (shared_web) + `454d9721` (web),共 3 個 commit + PR #918 合併
-- **設計審計方法論**: user m00091 修正 — 必須逐個 verify 才能假定 work 是需要的
+1. **不要只看單一目錄搜 refs**: `shared_web/` 的 grep 結果不能代表整個 repo; admin_web/ + client_web/ 也有 refs (esbuild plugin fallback targets)
+2. **grep filter 要謹慎**: 排除 `internal/eventbus/` 雖然避免噪音, 但也遮蔽了 EventExperiment 定義的真實位置
+3. **recovery.md 報案可能是誤報**: 用戶報案時, 實際前端可能根本沒呼叫所述路徑; 需要 grep frontend code 驗證
+4. **user m00091 + m00110 修正關鍵**: 「若要實作那些過去未實作的工作, 一定要檢查是否真的沒有做過」
+
+## 6. 參考資料
+
+- **recovery.md source**: `.omo/notepads/frontend-refactor-recovery.md` (325L, gitignored)
+- **驗證日期**: 2026-07-04 (兩輪 grep)
+- **設計審計方法論**: user m00091 修正 + m00110 二次修正 — 必須逐個 verify 才能假定 work 是需要的
