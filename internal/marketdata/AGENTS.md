@@ -133,7 +133,7 @@ if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil { ... }
 
 | 檔案 | 函式 | 模式 |
 |------|------|------|
-| `twse_openapi.go` | `GetQuotes`, `GetDailyQuote` | streaming |
+| `twse_openapi.go` | `GetQuotes`, `GetDailyQuote` | bytes-read（PR #917, 2026-07-03） |
 | `twse_calendar_provider.go` | `fetchExDividendMonth`, `fetchMeetingMonth` | streaming |
 | `twse_sector_index_provider.go` | `fetchSingleDay` | streaming（line 246 cache file read 跳過） |
 | `twse_capital_flow_provider.go` | `fetchDate` | bytes-read（`io.ReadAll` + `bytes.NewReader`） |
