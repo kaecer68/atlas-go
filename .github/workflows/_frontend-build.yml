@@ -1,0 +1,45 @@
+name: Frontend Build (Reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+    - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+      with:
+        node-version: '22'
+
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-npm-${{ hashFiles('admin_web/package-lock.json', 'client_web/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-npm-
+
+    - name: Build admin_web
+      working-directory: admin_web
+      run: |
+        npm ci --no-audit --no-fund
+        npm run build
+
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+        retention-days: 1
+
+    - name: Build client_web
+      working-directory: client_web
+      run: |
+        npm ci --no-audit --no-fund
+        npm run build
+
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: client-web-dist
+        path: client_web/dist
+        retention-days: 1

@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
   merge_group:
     types: [ checks_requested ]
   release:
@@ -15,20 +15,35 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
+  # Frontend build (reusable) — builds admin_web + client_web once,
+  # uploads dist artifacts. Downstream jobs download instead of rebuilding.
+  frontend-build:
+    uses: ./.github/workflows/_frontend-build.yml
+    permissions:
+      contents: read
+      actions: write
+
   # Build and Test
   build:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -55,6 +70,15 @@ jobs:
     - name: Test (excluding cmd/atlas — heavy integration, separate job)
       run: go test -v -race -coverprofile=coverage.out -coverpkg=./... $(go list ./... | grep -v '/cmd/atlas$')
 
+    - name: Check coverage threshold (≥ 60%)
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '\r' | sed 's/%//')
+        echo "Total coverage: ${COVERAGE}%"
+        if echo "$COVERAGE 60" | awk '{exit !($1 < $2)}'; then
+          echo "::error::Coverage ${COVERAGE}% is below 60% threshold"
+          exit 1
+        fi
+
     - name: Upload coverage
       uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
       with:
@@ -65,18 +89,21 @@ jobs:
   # cmd/atlas tests spin up full SystemCore with real providers (TWSE, GDELT, etc.)
   # — needs 20min timeout, no -race (race detector makes goroutine cleanup stall)
   test-cmd-atlas:
+    needs: frontend-build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -94,17 +121,20 @@ jobs:
 
   # Lint
   lint:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -125,17 +155,20 @@ jobs:
   # and atlas-mcp descgen (auto-desc.gen.json / auto-desc.gen.go).
   # If generation produces a diff, the job fails to signal drift.
   generate:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -253,9 +286,32 @@ jobs:
         # Example: kubectl apply -f k8s/production/
 
   # Integration Tests
+  # Use paths-filter to skip heavy service containers (postgres+redis) for
+  # PRs that don't touch the database layer.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      integration: ${{ steps.filter.outputs.integration }}
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+      id: filter
+      with:
+        filters: |
+          integration:
+            - 'internal/db/**'
+            - 'internal/repository/**'
+            - 'internal/storage/**'
+            - 'migrations/**'
+            - '**/*.sql'
+
   integration:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build, frontend-build, changes]
+    if: needs.changes.outputs.integration == 'true'
     services:
       redis:
         image: redis:7-alpine
@@ -282,13 +338,15 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -302,10 +360,42 @@ jobs:
       run: |
         go test -v -tags=integration ./...
 
+  # Semantic commit message validation (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        fetch-depth: 0
+    - name: Check semantic commit messages
+      run: bash ./scripts/ci/check_commit_messages.sh "origin/${{ github.base_ref }}" "HEAD"
+
+  # Governance gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+    - name: Verify Governance Gates
+      run: bash ./scripts/openclaw/verify_governance_gates.sh
+
+  # Operations gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
+  operations:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+    - name: Verify Operations Gate
+      run: bash ./scripts/openclaw/verify_operations_gate.sh
+
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration, generate]
+    needs: [build, test-cmd-atlas, lint, security, integration, generate, commitlint, governance, operations]
     if: github.event_name == 'pull_request' && always()
     permissions:
       pull-requests: write
@@ -329,6 +419,9 @@ jobs:
         | security | ${{ needs.security.result }} |
         | integration | ${{ needs.integration.result }} |
         | generate | ${{ needs.generate.result }} |
+        | commitlint | ${{ needs.commitlint.result }} |
+        | governance | ${{ needs.governance.result }} |
+        | operations | ${{ needs.operations.result }} |
 
         \`\`\`
         Triggered by: ${{ github.event_name }} on ${{ github.ref }}

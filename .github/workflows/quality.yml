@@ -4,12 +4,24 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
+  # Frontend build (reusable) — builds admin_web + client_web once,
+  # uploads dist artifacts. Downstream jobs download instead of rebuilding.
+  frontend-build:
+    uses: ./.github/workflows/_frontend-build.yml
+    permissions:
+      contents: read
+      actions: write
+
   # Code formatting check
   fmt:
     runs-on: ubuntu-latest
@@ -31,22 +43,33 @@ jobs:
 
   # Lint — runs all 9 enabled linters (govet, staticcheck, errcheck, gosec, ineffassign, unused, misspell, unconvert, unparam)
   lint:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
     - name: golangci-lint
       uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
@@ -110,22 +133,33 @@ jobs:
 
   # Test coverage
   coverage:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+    - uses: actions/download-artifact@v4 # v4
       with:
-        node-version: '22'
+        name: admin-web-dist
+        path: admin_web/dist
 
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
     - name: Run tests with coverage (exclude cmd/atlas — heavy integration, see ci-cd.yml:test-cmd-atlas)
       run: |
@@ -405,11 +439,22 @@ jobs:
   # Derives target pages from PR diff; falls back to overview+narrative+live+portfolio.
   # Skips (exit 0) if diff doesn't touch any monitored path.
   frontend-smoke:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         fetch-depth: 0
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Node.js
       uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
@@ -468,9 +513,20 @@ jobs:
   # the admin_web / client_web split. Kept separate from smoke so failures are
   # scoped to the new SPAs.
   frontend-tests:
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
 
     - name: Set up Node.js
       uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
@@ -493,3 +549,27 @@ jobs:
     - name: Run client_web E2E tests
       working-directory: client_web
       run: npm run test:e2e
+
+  # Data directory naming convention check — validates data/ files follow
+  # DATA_NAMING_CONVENTION.md (R1 snake_case dirs, R2 daily file format,
+  # R4 JSONL extension, R6 backup files). Previously only in Makefile;
+  # activated in CI per 2026-07-03 pipeline audit.
+  data-naming:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check data naming conventions
+      run: bash scripts/ci/check_data_naming.sh
+
+  # Data catalog freshness check — ensures DATA_CATALOG.md entries
+  # match actual data/ files on disk. --warn-only during probation;
+  # TODO(2026-07-17): escalate to hard fail after 2-week observation window.
+  # Previously dead code; activated per 2026-07-03 pipeline audit.
+  data-catalog:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check data catalog freshness
+      run: bash scripts/ci/check_data_catalog.sh --warn-only
