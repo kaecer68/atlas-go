@@ -283,6 +283,32 @@ func TestAuthMiddleware_ProbingPathsBypassAuth(t *testing.T) {
 	}
 }
 
+// TestAuthMiddleware_LLMHealthBypassAuth verifies that /api/llm/health
+// is reachable without X-API-Key. The endpoint is consumed by the
+// atlas-mcp server (handleLLMGetHealth) and by the health endpoint of
+// the LLM router; the MCP client may not always carry the API token,
+// and LLM health is treated as a probing path like /health and /metrics.
+func TestAuthMiddleware_LLMHealthBypassAuth(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	t.Setenv("ATLAS_API_KEY", "secret-key")
+
+	hits := 0
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/llm/health", nil))
+	if w.Code != http.StatusOK {
+		t.Errorf("/api/llm/health without auth: status = %d, want %d (body=%s)",
+			w.Code, http.StatusOK, w.Body.String())
+	}
+	if hits != 1 {
+		t.Errorf("next handler invocations = %d, want 1", hits)
+	}
+}
+
 // TestAuthMiddleware_WebUIPathsBypassAuth verifies that /admin, /client,
 // and their sub-paths (served via http.StripPrefix on /admin/, /client/)
 // are reachable without any auth header. The browser loads the HTML and
