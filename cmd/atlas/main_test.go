@@ -1071,6 +1071,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"empty path", "", false},
 		{"double slash", "//", false},
 		{"admin with trailing slash extra", "/admin//foo", true},
+		{"llm health", "/api/llm/health", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
