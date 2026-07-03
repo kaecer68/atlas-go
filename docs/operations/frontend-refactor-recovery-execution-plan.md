@@ -1,6 +1,6 @@
 # frontend-refactor recovery 真實路徑 (post-verification 2026-07-04, two rounds)
 
-> 設計 todo 基於 `.omo/notepads/frontend-refactor-recovery.md`(原 `docs/branch-hygiene/frontend-refactor-recovery.md`)B/D 段項目。經 2026-07-04 **兩輪 grep 驗證** 後修正。
+> 設計 todo 基於 `.omo/notepads/frontend-refactor-recovery.md`(原存於 `docs/branch-hygiene/` 子目錄,2026-07-03 PR #933 移至此處)B/D 段項目。經 2026-07-04 **兩輪 grep 驗證** 後修正。
 > 結論: **11 items 中 8 個已 ✅ 完成, 3 個改為正式關檔 (B-1 + B-2 + D-2), 沒有實際實作工作需要做**。
 
 ## 1. 驗證結果摘要(兩輪修正後)
