@@ -308,6 +308,9 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		},
 	}
 
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
