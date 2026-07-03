@@ -110,6 +110,9 @@ func TestNewWiredIndustryServiceWithReplay(t *testing.T) {
 }
 
 func TestHandleRiskCalibration_NoGate(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "")
+	t.Setenv("ATLAS_ADMIN_KEY", "")
+	t.Setenv("ATLAS_ENV", "")
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
@@ -124,6 +127,9 @@ func TestHandleRiskCalibration_NoGate(t *testing.T) {
 }
 
 func TestHandleRiskCalibration_NoReportYet(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "")
+	t.Setenv("ATLAS_ADMIN_KEY", "")
+	t.Setenv("ATLAS_ENV", "")
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 	d.SetRiskGate(gate)
@@ -141,6 +147,9 @@ func TestHandleRiskCalibration_NoReportYet(t *testing.T) {
 }
 
 func TestHandleRiskCalibration_WithReport(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "")
+	t.Setenv("ATLAS_ADMIN_KEY", "")
+	t.Setenv("ATLAS_ENV", "")
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 	gate.SetLastCalibration(&risk.CalibrationReport{
@@ -163,6 +172,9 @@ func TestHandleRiskCalibration_WithReport(t *testing.T) {
 }
 
 func TestHandleIndustryLinkage_ReturnsLeoAndMining(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "")
+	t.Setenv("ATLAS_ADMIN_KEY", "")
+	t.Setenv("ATLAS_ENV", "")
 	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -229,6 +241,9 @@ func TestHandleIndustryLinkage_ReturnsLeoAndMining(t *testing.T) {
 }
 
 func TestHandleIndustryOverview_ReturnsLeoAndMining(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "")
+	t.Setenv("ATLAS_ADMIN_KEY", "")
+	t.Setenv("ATLAS_ENV", "")
 	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)

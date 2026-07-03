@@ -236,12 +236,6 @@ func TestCaptureAPI_EmptyFile(t *testing.T) {
 	}
 }
 
-// writeFile is a tiny helper used by TestCaptureAPI_EmptyFile to create
-// a temp fixture without a real on-disk file.
-func writeFile(path, content string) error {
-	return os.WriteFile(path, []byte(content), 0o644)
-}
-
 // helpers
 func boolStr(b bool) string {
 	if b {

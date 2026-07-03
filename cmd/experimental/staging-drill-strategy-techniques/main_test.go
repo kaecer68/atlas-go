@@ -265,6 +265,11 @@ func TestRun_Phase4_And_5(t *testing.T) {
 		// Given: a real /annotate endpoint (httptest) with a wired mock
 		// annotator, and LLM_ANNOTATOR_API_KEY set in the env.
 		withEnv(t, "LLM_ANNOTATOR_API_KEY", "test-key-xxx")
+		// Given: ATLAS_API_KEY unset — AuthMiddleware captures env at mux-
+		// handle time and would gate /annotate behind X-API-Key otherwise.
+		withEnv(t, "ATLAS_API_KEY", "")
+		withEnv(t, "ATLAS_ADMIN_KEY", "")
+		withEnv(t, "ATLAS_ENV", "")
 
 		mock := llm_annotator.NewMock("ok: simulated LLM annotation")
 		srv := startAnnotateServer(t, reg, mock)
@@ -286,6 +291,9 @@ func TestRun_Phase4_And_5(t *testing.T) {
 
 		// When: runPhase4And5WithEndpoint runs to completion.
 		withEnv(t, "LLM_ANNOTATOR_API_KEY", "test-key-cleanup")
+		withEnv(t, "ATLAS_API_KEY", "")
+		withEnv(t, "ATLAS_ADMIN_KEY", "")
+		withEnv(t, "ATLAS_ENV", "")
 		mock := llm_annotator.NewMock("cleanup probe")
 		srv := startAnnotateServer(t, reg, mock)
 		if err := runPhase4And5WithEndpoint(reg, frameID, srv.URL); err != nil {
