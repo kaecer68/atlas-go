@@ -208,6 +208,47 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 	}
 }
 
+func TestRunEnvOnlyNoBrokerFlagSucceeds(t *testing.T) {
+	shutdown := make(chan struct{})
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded"}
+		},
+		dataFetcher:    monitoring.NoopFetcher(),
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
+		},
+		listenAndServe: func(srv *http.Server) error { return nil },
+		shutdown:       shutdown,
+	}
+	go func() { time.Sleep(50 * time.Millisecond); close(shutdown) }()
+
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	if err := run([]string{"-api"}, deps); err != nil {
+		t.Fatalf("env-only (no flag) should not fail: %v", err)
+	}
+}
+
+func TestRunNoBrokerEnvOrFlagSucceeds(t *testing.T) {
+	shutdown := make(chan struct{})
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded"}
+		},
+		dataFetcher:    monitoring.NoopFetcher(),
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
+		},
+		listenAndServe: func(srv *http.Server) error { return nil },
+		shutdown:       shutdown,
+	}
+	go func() { time.Sleep(50 * time.Millisecond); close(shutdown) }()
+
+	if err := run([]string{"-api"}, deps); err != nil {
+		t.Fatalf("neither env nor flag should not fail: %v", err)
+	}
+}
+
 func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 	deps := appDeps{
 		loadConfig: func() config.Config {

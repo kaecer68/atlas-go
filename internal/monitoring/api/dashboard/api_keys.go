@@ -36,7 +36,9 @@ func (h *Handlers) HandleAPIKeyUpdate(r *http.Request) (int, any) {
 	}
 
 	key := strings.ToUpper(req.Provider) + "_API_KEY"
-	_ = os.Setenv(key, req.APIKey)
+	if err := os.Setenv(key, req.APIKey); err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": "setenv failed", "provider": req.Provider}
+	}
 
 	logging.Info("security", "api_key_updated",
 		logging.FStr("provider", req.Provider),

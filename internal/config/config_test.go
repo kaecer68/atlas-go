@@ -359,3 +359,24 @@ func TestGetReplayDataPath_EnvOverride(t *testing.T) {
 		t.Errorf("GetReplayDataPath = %q, want %q", got, want)
 	}
 }
+
+func TestSafeKey(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+		want string
+	}{
+		{"empty", "", "(not set)"},
+		{"short", "ab", "****"},
+		{"exactly_eight", "12345678", "****"},
+		{"long_sk_key", "sk-abc123xyz789", "sk-a****789"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SafeKey(tt.key)
+			if got != tt.want {
+				t.Errorf("SafeKey(%q) = %q, want %q", tt.key, got, tt.want)
+			}
+		})
+	}
+}
