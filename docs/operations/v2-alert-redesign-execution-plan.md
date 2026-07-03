@@ -96,6 +96,6 @@ v2 寫於 2026-06-26 (10 天前)。本驗證用 grep 確認每個 v2 claim 的�
 - **v2 source (working draft)**: `.omo/briefs/alert-redesign-v2.md` (gitignored)
 - **v1 (superseded but preserved)**: `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` (15468B, PR #756 故意保留作為長壽規劃)
 - **驗證日期**: 2026-07-04 (grep 驗證所有 v2 line numbers + symbol existence)
-- **升級觸發條件** (v2 Part 9): 完成 P0 全部 4 個 PR 後(估 4-6 PR、2-3 工作天),把本檔升級到 `docs/alerts-redesign.md`,刪除 `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` 與 `.omo/briefs/alert-redesign-v2.md` 副本
+- **升級觸發條件** (v2 Part 9): 完成 P0 全部 4 個 PR 後(估 4-6 PR、2-3 工作天),把 v2 working draft 升為正式 docs/ 規格,刪除 v1 與 v2 副本(皆於 `.omo/briefs/`)
 - **關聯**: `docs/spikes/mcp-go-sdk-spike.md` (L163 提及 roadmap snapshot)
 - **設計審計方法論**: user m00091 修正 — 必須逐個 verify 才能假定 work 是需要的
