@@ -24,10 +24,12 @@ func TestTaiwanRSSGeopoliticalProvider_Feeds(t *testing.T) {
 		t.Fatalf("feeds should not be empty")
 	}
 
-	// Verify expected feeds are present
+	// Verify expected financial news feeds are present
 	expectedFeeds := []string{
-		"https://www.cna.com.tw/cna/rss/rssfa.xml",
-		"https://news.ltn.com.tw/rss/focus.xml",
+		"https://www.digitimes.com/rss/daily.xml",
+		"https://money.udn.com/rssfeed/lists/1001",
+		"https://news.ustv.com.tw/feed",
+		"https://wwwc.twse.com.tw/rwd/zh/news/feed?type=rss",
 	}
 
 	found := 0
