@@ -22,7 +22,7 @@
 ### Item-2: D-2 正式關檔
 - **動作**: 在 recovery.md 新增 "Closed Items" section, 記錄 D-2 為「掃描完成, 0 dead code」
 - **現有 refs (per m00112 verification)**:
-  - `circuit-breaker`: `admin_web/static/js/component-init.js:1` static-import + `main.css:81` CSS import
+  - `circuit-breaker`: `admin_web/static/js/component-init.js:1` static-import + bundled in `admin_web/dist/` (8 dist/meta.json refs at L583/608/610/819/1061/1063/1211/1385)
   - `deployment-dashboard`: `component-init.js:4` static-import
   - `live-progress`: `dist/meta.json` refs (production)
   - `reasoning-trace`: `admin_web/static/js/main.js:9` static-import (production)
