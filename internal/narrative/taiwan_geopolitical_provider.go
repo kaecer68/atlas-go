@@ -27,16 +27,17 @@ type TaiwanRSSGeopoliticalProvider struct {
 }
 
 // NewTaiwanRSSGeopoliticalProvider creates a Taiwan geopolitical risk monitor.
-// Uses CNA (Central News Agency) and Liberty Times RSS feeds with cross-strait keywords.
+// Uses mainstream financial news RSS feeds (DIGITIMES, 經濟日報, 非凡新聞) for
+// market-relevant cross-strait / sanctions / macro keywords.
 func NewTaiwanRSSGeopoliticalProvider() *TaiwanRSSGeopoliticalProvider {
 	return &TaiwanRSSGeopoliticalProvider{
 		client:  httpclient.NewFactory().NewClient(15 * time.Second),
 		limiter: rate.NewLimiter(rate.Every(10*time.Second), 1),
 		feeds: []string{
-			"https://www.cna.com.tw/cna/rss/rssfa.xml",     // CNA All News
-			"https://news.ltn.com.tw/rss/focus.xml",        // Liberty Times Focus
-			"https://www.cna.com.tw/cna/rss/pol/rssfa.xml", // CNA Politics
-			"https://news.tvbs.com.tw/rss/news.xml",        // TVBS News
+			"https://www.digitimes.com/rss/daily.xml",   // DIGITIMES 科技供應鏈
+			"https://money.udn.com/rssfeed/lists/1001", // 經濟日報(聯合報系)
+			"https://news.ustv.com.tw/feed",            // 非凡新聞
+			"https://wwwc.twse.com.tw/rwd/zh/news/feed?type=rss", // TWSE 證交所新聞
 		},
 		keywords: []string{
 			// Chinese keywords
