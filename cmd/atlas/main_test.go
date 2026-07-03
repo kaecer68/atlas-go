@@ -168,7 +168,6 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	ledgerDir := t.TempDir()
 	var gotAddr string
 
@@ -176,7 +175,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 	listenDone := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
+			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1, AllowLiveBroker: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -232,10 +231,9 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 }
 
 func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, AllowLiveBroker: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -256,15 +254,13 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
 	// Avoid the default :8081 which may be occupied by Docker Desktop or other
 	// local services; use an ephemeral port for the fubon-proxy preflight check.
 	fubonPort := freePort(t)
 	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1, AllowLiveBroker: true, AllowHTTPBroker: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -295,12 +291,9 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 }
 
 func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder", AllowLiveBroker: true, AllowHTTPBroker: true, AllowRealSigner: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
@@ -321,13 +314,10 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 }
 
 func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
-	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder", AllowLiveBroker: true, AllowHTTPBroker: true, AllowRealSigner: true}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {

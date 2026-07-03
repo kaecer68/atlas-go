@@ -208,13 +208,13 @@ func run(args []string, deps appDeps) error {
 	// Security gate: live broker requires both the CLI flag AND the
 	// ATLAS_ALLOW_LIVE_BROKER=true env var. This prevents accidental
 	// live-broker activation from a mistyped CLI flag or stale alias.
-	if *allowLiveBroker && config.GetSecret("ATLAS_ALLOW_LIVE_BROKER") != "true" {
+	if *allowLiveBroker && !cfg.AllowLiveBroker {
 		return fmt.Errorf("live broker requires ATLAS_ALLOW_LIVE_BROKER=true env var in addition to --allow-live-broker flag")
 	}
-	if *allowHTTPBroker && config.GetSecret("ATLAS_ALLOW_HTTP_BROKER") != "true" {
+	if *allowHTTPBroker && !cfg.AllowHTTPBroker {
 		return fmt.Errorf("http broker requires ATLAS_ALLOW_HTTP_BROKER=true env var in addition to --allow-http-broker flag")
 	}
-	if *allowRealSigner && config.GetSecret("ATLAS_ALLOW_REAL_SIGNER") != "true" {
+	if *allowRealSigner && !cfg.AllowRealSigner {
 		return fmt.Errorf("real signer requires ATLAS_ALLOW_REAL_SIGNER=true env var in addition to --allow-real-signer flag")
 	}
 

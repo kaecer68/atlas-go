@@ -133,7 +133,6 @@ func TestLiveModeRejectsUnsupportedBrokerAdapter(t *testing.T) {
 }
 
 func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
-	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -142,6 +141,7 @@ func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
 				BrokerAdapter:    "http",
 				BrokerMaxRetries: 1,
 				BrokerSigner:     "placeholder",
+				AllowLiveBroker:  true,
 			}
 		},
 		dataFetcher: monitoring.NoopFetcher(),
