@@ -50,7 +50,7 @@
 ### PR-4 (升級執行): v2 lift to docs/alerts-redesign.md
 - **前置**: PR-1/2/3 全部完成
 - **動作**:
-  1. 建立 `docs/alerts-redesign.md`(從 v2 內容,但更新所有 v2 過時引用)
+  1. 建立升級版 alert-redesign 規格(從 v2 內容,但更新所有 v2 過時引用)
   2. 刪除 `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` (v1, 15468B, PR #756 故意保留)
   3. 刪除 `.omo/briefs/alert-redesign-v2.md` (v2 working copy, gitignored)
 - **估時**: 2-4h
