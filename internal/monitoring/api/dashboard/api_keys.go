@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // HandleAPIKeyUpdate updates an API key in the environment.
@@ -35,6 +37,11 @@ func (h *Handlers) HandleAPIKeyUpdate(r *http.Request) (int, any) {
 
 	key := strings.ToUpper(req.Provider) + "_API_KEY"
 	_ = os.Setenv(key, req.APIKey)
+
+	logging.Info("security", "api_key_updated",
+		logging.FStr("provider", req.Provider),
+		logging.FStr("operator", r.RemoteAddr),
+	)
 
 	return http.StatusOK, map[string]any{
 		"provider": req.Provider,

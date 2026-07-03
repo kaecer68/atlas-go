@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +15,17 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
+// sha256HexKey returns the hex-encoded SHA-256 of s, or empty if s is empty.
+// Local helper mirroring internal/monitoring/api/shared.sha256Hex for the
+// atlas main binary's wrapAdminAuth guard.
+func sha256HexKey(s string) string {
+	if s == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
+
 // wrapAdminAuth returns an http.HandlerFunc that enforces an API key
 // guard around h. If ATLAS_API_KEY is unset, the guard is a no-op
 // (intended for local development). Otherwise, requests must supply
@@ -21,6 +34,7 @@ func wrapAdminAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		apiKey := os.Getenv("ATLAS_API_KEY")
 		if apiKey != "" {
+			expectedHash := sha256HexKey(apiKey)
 			provided := r.Header.Get("X-API-Key")
 			if provided == "" {
 				auth := r.Header.Get("Authorization")
@@ -28,7 +42,7 @@ func wrapAdminAuth(h http.HandlerFunc) http.HandlerFunc {
 					provided = strings.TrimPrefix(auth, "Bearer ")
 				}
 			}
-			if provided != apiKey {
+			if sha256HexKey(provided) != expectedHash {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				//nolint:errcheck

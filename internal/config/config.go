@@ -171,6 +171,22 @@ func envOrKeychain(key string) string {
 	return envOr(key, "")
 }
 
+// SafeKey returns a redacted version of an API key suitable for logging,
+// preventing accidental key exposure in log output. Returns "(not set)"
+// for empty keys. For keys ≤ 8 chars, returns "****" to avoid leaking
+// the entire value. Otherwise returns "XXXX****YYY" (first 4 + last 3).
+//
+// Usage: logging.Info("config", "key_loaded", logging.FStr("key", config.SafeKey(cfg.FubonAPIKey)))
+func SafeKey(key string) string {
+	if key == "" {
+		return "(not set)"
+	}
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-3:]
+}
+
 func envOrInt(key string, fallback int) int {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
