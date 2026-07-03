@@ -151,4 +151,4 @@ function renderSkeleton() {
 
 ## 八、給實作者的具體建議
 
-見 `docs/plans/2026-06-23-strategies-page-repair.md`（同一分支內）。
+見 `.omo/plans/2026-06-23-strategies-page-repair.md`（同一分支內；路徑修正 2026-07-03：原 `docs/plans/` 引用為 dangling link，檔案實際位於 `.omo/plans/`，原因見 IMPL-9 盤查）。

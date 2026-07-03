@@ -160,7 +160,7 @@ OFFICIAL SDK 提供 `transport.StreamableHTTPTransport`，SSE 仍在設計中（
 |------|------|
 | `docs/specs/agent-mcp-server.md:42-47` | 把「mark3labs/mcp-go」改為「**OFFICIAL modelcontextprotocol/go-sdk v1.6.1**」+ 加上本 spike 的 findings |
 | `docs/specs/agent-mcp-server.md §5 架構圖` | 重寫範例（從 mark3labs API 改為 OFFICIAL API）|
-| `docs/plans/agent-interface-roadmap.md §3.1` | 把「Go MCP SDK spike」改為「**已完成：採用 OFFICIAL SDK**」 |
+| `.omo/notepads/agent-interface-roadmap.md §3.1` | 把「Go MCP SDK spike」改為「**已完成：採用 OFFICIAL SDK**」 |
 
 ---
 

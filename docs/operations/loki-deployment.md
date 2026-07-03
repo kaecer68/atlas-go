@@ -14,7 +14,7 @@
 - 集中化 atlas-go 所有服務 log 於 Grafana 可查詢
 - 啟用 log-based alert: panic / 5xx spike / circuit breaker open
 - 降低 MTTR(mean time to recovery)透過 log search 而非 SSH + grep
-- 補齊 `docs/briefs/roadmap.md` 提到的「Production 環境需要 structured logging」需求
+- 補齊 `.omo/briefs/roadmap-v2.md` 提到的「Production 環境需要 structured logging」需求
 
 ### 1.2 非目標
 
