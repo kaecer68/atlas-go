@@ -133,6 +133,7 @@ func TestLiveModeRejectsUnsupportedBrokerAdapter(t *testing.T) {
 }
 
 func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{

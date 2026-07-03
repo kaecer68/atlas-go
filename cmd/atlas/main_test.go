@@ -168,6 +168,7 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	ledgerDir := t.TempDir()
 	var gotAddr string
 
@@ -231,6 +232,7 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 }
 
 func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
@@ -254,6 +256,8 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
 	// Avoid the default :8081 which may be occupied by Docker Desktop or other
 	// local services; use an ephemeral port for the fubon-proxy preflight check.
 	fubonPort := freePort(t)
@@ -291,6 +295,9 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 }
 
 func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
@@ -314,6 +321,9 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 }
 
 func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {

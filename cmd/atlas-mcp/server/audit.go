@@ -127,6 +127,11 @@ func (w *AuditWriter) Write(entry AuditEntry) error {
 	if err := w.enc.Encode(&entry); err != nil {
 		return fmt.Errorf("audit: encode: %w", err)
 	}
+	if entry.Status == "error" || entry.Status == "unauthorized" {
+		if err := w.f.Sync(); err != nil {
+			return fmt.Errorf("audit: sync after %s: %w", entry.Status, err)
+		}
+	}
 	return nil
 }
 

@@ -1,9 +1,14 @@
 package shared
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // Handler is the new handler signature for monitoring API handlers.
@@ -42,6 +47,32 @@ func isAuthFreePath(p string) bool {
 	return false
 }
 
+// sha256Hex returns the hex-encoded SHA-256 hash of s, or empty string if s is empty.
+// Used to compare API keys via hash rather than plaintext, preventing plaintext key
+// exposure in process memory if an env-var dump occurs.
+func sha256Hex(s string) string {
+	if s == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
+}
+
+// AuthStatus returns the current authentication posture for system health reporting:
+// "production" (key set + prod env), "authenticated" (key set + non-prod),
+// or "dev_no_auth" (key not set — all /api/* endpoints are open).
+func AuthStatus() string {
+	apiKey := config.GetSecret("ATLAS_API_KEY")
+	isProduction := strings.ToLower(config.GetSecret("ATLAS_ENV")) == "production"
+	if isProduction && apiKey != "" {
+		return "production"
+	}
+	if apiKey != "" {
+		return "authenticated"
+	}
+	return "dev_no_auth"
+}
+
 // AuthMiddleware checks API key authentication.
 // In production (ATLAS_ENV=production), ATLAS_API_KEY is mandatory.
 // It accepts either Authorization: Bearer <key> or X-API-Key: <key>.
@@ -62,8 +93,10 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		})
 	}
 	if apiKey == "" {
+		log.Println("[WARNING] ATLAS_API_KEY not set — all /api/* endpoints are unauthenticated (dev mode)")
 		return next
 	}
+	expectedHash := sha256Hex(apiKey)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isAuthFreePath(r.URL.Path) {
 			next.ServeHTTP(w, r)
@@ -76,7 +109,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 				provided = strings.TrimPrefix(auth, "Bearer ")
 			}
 		}
-		if provided != apiKey {
+		if sha256Hex(provided) != expectedHash {
 			WriteJSONError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
@@ -156,6 +189,7 @@ func RequireAdmin(h Handler) Handler {
 		if adminKey == "" {
 			return h(r)
 		}
+		expectedHash := sha256Hex(adminKey)
 		provided := r.Header.Get("X-Admin-Key")
 		if provided == "" {
 			auth := r.Header.Get("Authorization")
@@ -163,7 +197,7 @@ func RequireAdmin(h Handler) Handler {
 				provided = strings.TrimPrefix(auth, "Admin ")
 			}
 		}
-		if provided != adminKey {
+		if sha256Hex(provided) != expectedHash {
 			return http.StatusUnauthorized, map[string]string{"error": "admin access required"}
 		}
 		return h(r)
