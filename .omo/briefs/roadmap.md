@@ -1,4 +1,6 @@
-# Roadmap
+# Roadmap v1
+
+> **Status**: 🔴 HISTORICAL (superseded by v2 redesign 2026-06-26). Preserved per PR #756.
 
 ## Phase 1: Foundation
 
