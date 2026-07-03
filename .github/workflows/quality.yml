@@ -560,7 +560,7 @@ jobs:
 
   # Data catalog freshness check — ensures DATA_CATALOG.md entries
   # match actual data/ files on disk. --warn-only during probation;
-  # will escalate to hard fail after 2-week observation window.
+  # TODO(2026-07-17): escalate to hard fail after 2-week observation window.
   # Previously dead code; activated per 2026-07-03 pipeline audit.
   data-catalog:
     runs-on: ubuntu-latest

@@ -301,7 +301,6 @@ jobs:
             - 'internal/db/**'
             - 'internal/repository/**'
             - 'internal/storage/**'
-            - 'internal/ledger/**'
             - 'migrations/**'
             - '**/*.sql'
 
