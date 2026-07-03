@@ -311,10 +311,42 @@ jobs:
       run: |
         go test -v -tags=integration ./...
 
+  # Semantic commit message validation (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        fetch-depth: 0
+    - name: Check semantic commit messages
+      run: bash ./scripts/ci/check_commit_messages.sh "origin/${{ github.base_ref }}" "HEAD"
+
+  # Governance gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+    - name: Verify Governance Gates
+      run: bash ./scripts/openclaw/verify_governance_gates.sh
+
+  # Operations gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
+  operations:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+    - name: Verify Operations Gate
+      run: bash ./scripts/openclaw/verify_operations_gate.sh
+
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration, generate]
+    needs: [build, test-cmd-atlas, lint, security, integration, generate, commitlint, governance, operations]
     if: github.event_name == 'pull_request' && always()
     permissions:
       pull-requests: write
@@ -338,6 +370,9 @@ jobs:
         | security | ${{ needs.security.result }} |
         | integration | ${{ needs.integration.result }} |
         | generate | ${{ needs.generate.result }} |
+        | commitlint | ${{ needs.commitlint.result }} |
+        | governance | ${{ needs.governance.result }} |
+        | operations | ${{ needs.operations.result }} |
 
         \`\`\`
         Triggered by: ${{ github.event_name }} on ${{ github.ref }}
