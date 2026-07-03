@@ -2,7 +2,7 @@ groups:
   - name: wave9_channel_individual_health
     rules:
       - alert: ChannelHighErrorRatePerChannel
-        expr: rate(channel_errors_total[5m]) > 0.1
+        expr: sum by (channel) (rate(atlas_channel_health_errors_total[5m])) > 0.1
         for: 5m
         labels:
           severity: warning
@@ -12,7 +12,7 @@ groups:
         annotations:
           summary: "個別監控通道錯誤率超過閾值"
           description: |
-            Channel {{ $labels.channel_id }} 5m error rate: {{ $value | humanizePercentage }}.
+            Channel {{ $labels.channel }} 5m error rate: {{ $value | humanizePercentage }}.
             建議檢查該 channel 對應的 data provider 狀態。
           runbook_url: "https://wiki.internal/runbooks/wave9-channel-individual-health"
 
