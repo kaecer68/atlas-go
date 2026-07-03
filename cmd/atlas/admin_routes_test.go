@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -37,21 +38,6 @@ func TestWrapAdminAuth_HashComparison(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected 401, got %d", rec.Code)
-		}
-		if called {
-			t.Error("handler should NOT have been called")
-		}
-	})
-
-	t.Run("production without key returns 503", func(t *testing.T) {
-		called = false
-		t.Setenv("ATLAS_ENV", "production")
-		t.Setenv("ATLAS_API_KEY", "")
-		req := httptest.NewRequest(http.MethodGet, "/admin/reload-config", nil)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Errorf("expected 503, got %d", rec.Code)
 		}
 		if called {
 			t.Error("handler should NOT have been called")
@@ -102,4 +88,29 @@ func TestWrapAdminAuth_HashComparison(t *testing.T) {
 			t.Error("handler should have been called")
 		}
 	})
+}
+
+// TestWrapAdminAuth_ProductionGuard operates standalone (not as subtest)
+// because t.Setenv("", "") is unreliable in CI when other tests call
+// config.Load() → loadEnvFile() which re-sets ATLAS_API_KEY from ~/.env.
+func TestWrapAdminAuth_ProductionGuard(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	os.Unsetenv("ATLAS_API_KEY")
+
+	called := false
+	handler := wrapAdminAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/reload-config", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d: body=%s", rec.Code, rec.Body.String())
+	}
+	if called {
+		t.Error("handler should NOT have been called")
+	}
 }

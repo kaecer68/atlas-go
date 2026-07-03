@@ -27,12 +27,21 @@ func sha256HexKey(s string) string {
 }
 
 // wrapAdminAuth returns an http.HandlerFunc that enforces an API key
-// guard around h. If ATLAS_API_KEY is unset, the guard is a no-op
-// (intended for local development). Otherwise, requests must supply
-// the key via X-API-Key header or Authorization: Bearer <key>.
+// guard around h. In production (ATLAS_ENV=production), ATLAS_API_KEY is
+// mandatory — the guard returns 503 if the key is unset, matching the
+// AuthMiddleware production fail-closed policy. In non-production
+// environments without a key set, the guard is a no-op.
 func wrapAdminAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		apiKey := os.Getenv("ATLAS_API_KEY")
+		isProduction := strings.ToLower(os.Getenv("ATLAS_ENV")) == "production"
+		if isProduction && apiKey == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			//nolint:errcheck
+			fmt.Fprintf(w, `{"error":"server misconfigured: ATLAS_API_KEY required in production"}`+"\n")
+			return
+		}
 		if apiKey != "" {
 			expectedHash := sha256HexKey(apiKey)
 			provided := r.Header.Get("X-API-Key")
