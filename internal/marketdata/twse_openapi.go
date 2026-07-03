@@ -1,6 +1,7 @@
 package marketdata
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -122,13 +123,24 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
+	// Buffer body to bytes (bytes-read pattern) so the CSV fallback below can
+	// re-parse from a fresh reader. Previously, DecodeJSON's json.NewDecoder
+	// would partially consume resp.Body on failure, leaving the CSV fallback
+	// to choke on a truncated header → "csv header: parse error on line 1,
+	// column 3: extraneous or missing \" in quoted-field".
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
 	var twseResp TWSEDailyResponse
-	decodeErr := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &twseResp)
+	contentType := resp.Header.Get("Content-Type")
+	decodeErr := DecodeJSON(bytes.NewReader(body), contentType, &twseResp)
 	if decodeErr != nil {
 		// TWSE changed STOCK_DAY_ALL from JSON to CSV (2026-06-30).
 		// Fallback: parse CSV rows directly instead of failing.
-		if isCSVContentType(resp.Header.Get("Content-Type")) {
-			return c.parseStockCSV(resp.Body)
+		if isCSVContentType(contentType) {
+			return c.parseStockCSV(bytes.NewReader(body))
 		}
 		return nil, fmt.Errorf("decode response: %w", decodeErr)
 	}
@@ -235,8 +247,15 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
+	// Buffer body to bytes (bytes-read pattern) so charset transcoding via
+	// DecodeJSON uses a fresh reader. Mirrors twse_margin_provider.go:110-118.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return domain.Quote{}, fmt.Errorf("read body: %w", err)
+	}
+
 	var dailyResp TWSEDailyResponse
-	if err := DecodeJSON(resp.Body, resp.Header.Get("Content-Type"), &dailyResp); err != nil {
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &dailyResp); err != nil {
 		return domain.Quote{}, fmt.Errorf("decode response: %w", err)
 	}
 

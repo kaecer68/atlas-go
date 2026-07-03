@@ -218,11 +218,29 @@ jobs:
     if: always()
     steps:
     - name: Cleanup old artifacts
-      uses: actions/delete-artifact@v4
+      uses: actions/github-script@v7
       with:
-        name: |
-          darwinian-report
-          prism-report
-          reflexivity-report
-          swarm-results
+        script: |
+          const artifactNames = [
+            'darwinian-report',
+            'prism-report',
+            'reflexivity-report',
+            'swarm-results',
+          ];
+          const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: context.runId,
+            per_page: 100,
+          });
+          for (const artifact of artifacts) {
+            if (artifactNames.includes(artifact.name)) {
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+              });
+              console.log(`Deleted artifact: ${artifact.name} (id=${artifact.id})`);
+            }
+          }
       continue-on-error: true
