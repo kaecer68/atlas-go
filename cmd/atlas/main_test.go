@@ -197,6 +197,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		close(shutdown)
 	}()
 
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker"}, deps)
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
@@ -244,6 +245,7 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		},
 	}
 
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
 	err := run([]string{"-api", "-allow-live-broker", "-broker-adapter", "http"}, deps)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -277,6 +279,8 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		close(shutdown)
 	}()
 
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
 	err := run([]string{
 		"-api",
 		"-broker-mode", "live",
@@ -304,6 +308,9 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		},
 	}
 
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -333,6 +340,10 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		close(shutdown)
 	}()
+
+	t.Setenv("ATLAS_ALLOW_LIVE_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_HTTP_BROKER", "true")
+	t.Setenv("ATLAS_ALLOW_REAL_SIGNER", "true")
 
 	err := run([]string{
 		"-api",

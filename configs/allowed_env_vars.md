@@ -44,6 +44,9 @@
 | `ATLAS_YAHOO_ENABLED` | Yahoo Finance 功能開關 | `false` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP HTTP exporter endpoint（功能開關：未設定時 fallback stdout） | 空（未設定時使用 stdout） |
 | `ATLAS_API_KEY` | API 認證金鑰（非資料源） | 空（未設定時停用認證） |
+| `ATLAS_ALLOW_LIVE_BROKER` | Live broker 啟用 env double-gate（需與 `--allow-live-broker` CLI flag 同時設定；PR #918 引入） | 空（未設定時拒絕 live broker） |
+| `ATLAS_ALLOW_HTTP_BROKER` | HTTP broker adapter env double-gate（需與 `--allow-http-broker` CLI flag 同時設定；PR #918 引入） | 空（未設定時拒絕 http broker） |
+| `ATLAS_ALLOW_REAL_SIGNER` | Real signer env double-gate（需與 `--allow-real-signer` CLI flag 同時設定；PR #918 引入） | 空（未設定時拒絕 real signer） |
 | `ATLAS_ADMIN_KEY` | 管理員認證金鑰（admin-only 操作） | 空（未設定時停用 admin 驗證） |
 | `ATLAS_BASE_URL` | MCP server 用：atlas-go HTTP API 基準 URL（`cmd/atlas-mcp` 端點，非資料源） | `http://127.0.0.1:8080` |
 | `ATLAS_MCP_AUDIT_LOG` | MCP server 用：JSONL audit log 路徑 | `$TMPDIR/atlas-mcp-audit.log` |
