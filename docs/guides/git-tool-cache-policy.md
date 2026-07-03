@@ -10,6 +10,8 @@
 | `.gitnexus/` (含 `meta.json`, `lbug`, `lbug.wal`, `parse-cache/`) | GitNexus indexer | `npx gitnexus analyze --skip-agents-md` | 335MB LadybugDB binary + metadata snapshot |
 | `.opencode/package.json` | opencode CLI 內部狀態 | (opencode 自動 sync) | 2 個 size,本來就無害 |
 | `admin_web/static/` 與 `client_web/static/` 的 dedup 前殘檔 (pages/、components/、services/、css/、__tests__/、shared/components/、bootstrap-utils.js、names.js、shared/app-utils.js 等) | web split dedup (`1635acb2`) 刪除後殘留在磁碟的副本 | `rm -rf ...` (見下方 alias) | 權威來源在 `shared_web/static/js/`;這些是 git 已 rm 的舊版檔案 |
+| `.ocx/receipt.jsonc` | opencode CLI 內部狀態(同 `.opencode/package.json` 性質) | `git rm --cached .ocx/receipt.jsonc` | 3447B,被 gitignore line 68 逆邏輯 whitelist (`!/.ocx/`) 誤 tracked;2026-07-03 改為 `/.ocx/` 忽略 |
+| `.omo/` 散落檔 (`handoff-ci-fixes.md`, `session-summary-2026-05-07.md`) | AI session 自由生成(MAP.md line 229 「❌ 已清」紀錄與事實不符) | `mkdir -p .omo/handoffs/; mv .omo/<file> .omo/handoffs/` | 違反 `.omo/handoffs/` 命名規範;2026-07-03 搬遷 |
 
 ## 判斷原則 (Decision Heuristic)
 
@@ -46,6 +48,11 @@ git config --global alias.cleanup-tools '!f() {
   echo "→ Resetting known tool caches...";
   git checkout -- .gitnexus/ 2>/dev/null;
   git checkout -- .opencode/package.json 2>/dev/null;
+  git rm --cached .ocx/receipt.jsonc 2>/dev/null;
+  # 2 個 .omo/ 散落檔(若出現在 root):搬入 handoffs/
+  mkdir -p .omo/handoffs/ 2>/dev/null;
+  test -f .omo/handoff-ci-fixes.md && mv .omo/handoff-ci-fixes.md .omo/handoffs/;
+  test -f .omo/session-summary-2026-05-07.md && mv .omo/session-summary-2026-05-07.md .omo/handoffs/;
   echo "→ Removing dedup stale checkout remnants...";
   # 整目錄殘檔(HEAD 中完全不存在這些目錄)
   rm -rf \

@@ -65,7 +65,7 @@ cmd/experimental/*/data/
 !/.opencode/ocx.jsonc
 !/.opencode/package.json
 !/.opencode/worktree.jsonc
-!/.ocx/
+/.ocx/
 /.planning/
 /.playwright-mcp/
 /.sisyphus/

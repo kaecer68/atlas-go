@@ -6,7 +6,7 @@
 > **關聯文件**：
 > - [`agent-mcp-server.md`](./agent-mcp-server.md)（核心 spec，含 §11 Phase 2.2 Status）
 > - [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual.md)（先決）
-> - [`agent-interface-roadmap.md`](../plans/agent-interface-roadmap.md)（roadmap；本 Phase 4 沒列）
+> - 對齊 agent-interface-roadmap.md roadmap;本 Phase 4 為推導新增(未列於 roadmap,roadmap snapshot 詳見 PR #876)
 > - MCP 2026-07-28 spec: <https://modelcontextprotocol.io/specification/2026-07-28>
 
 ---
@@ -217,7 +217,7 @@ Reasoning：sandbox 涉及 OS-level 隔離（gVisor / nsjail / bwrap），工作
 | Phase 3 PR (上半) | [#842](https://github.com/kaecer68/atlas-go/pull/842) |
 | Phase 2.1 transports PR | [#834](https://github.com/kaecer68/atlas-go/pull/834) |
 | MCP 2026-07-28 spec | <https://modelcontextprotocol.io/specification/2026-07-28> |
-| Roadmap | [`agent-interface-roadmap.md`](../plans/agent-interface-roadmap.md) |
+| Roadmap (規劃藍圖) | 詳見 `docs/specs/agent-mcp-server.md` §11 |
 | Apigateway 數據源憲法 | [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md) |
 | Alert system | [`internal/alerting/`](../../internal/alerting/) |
 | 部署守則 | [`docs/operations/mcp-deploy.md`](../operations/mcp-deploy.md) |

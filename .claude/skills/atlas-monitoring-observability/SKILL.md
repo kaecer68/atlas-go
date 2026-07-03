@@ -29,8 +29,8 @@ atlas-go 啟動流程曾有兩個系統性盲點:
 
 ### 決策記錄(brief)
 
-- `docs/briefs/rss-feed-replacement.md` — PR-930 RSS feed 替換決策
-- `docs/briefs/alert-redesign.md` — Wave 9 alert rule 設計與 P0-P2 backlog
+- `docs/operations/rss-feed-replacement.md` — PR-930 RSS feed 替換決策
+- `.omo/briefs/alert-redesign-v2.md` — Wave 9 alert rule 設計與 P0-P2 backlog（v2 active draft,參照 `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` v1）
 
 ### 規範文件(normative)
 

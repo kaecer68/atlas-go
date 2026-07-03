@@ -113,7 +113,7 @@
 | `llm-integration-strategy-framework.md` | LLM 整合策略框架（主檔，§4.2-4.5/6/8/10 已抽離）|
 | `llm-adr-log.md` | LLM 整合架構決策紀錄（ADR-001 ~ ADR-010）|
 | `agents-md-audit.md` | **Wave 11 AGENTS.md 整合決策表**（57 → 15 → 21 演化歷程 + 遷移計畫）|
-| `plans/l2-4-cli-flag-wiring.md` | L2.4 CLI flag 實作規劃（`--use-llm-sector-agents`；PR #828 plan + scaffold）|
+| _（shipped via PR #828,詳見 `operations/l2-4-followup.md`）_ | L2.4 CLI flag 實作：`--use-llm-sector-agents` |
 | `specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics；PR #821 永久化）|
 
 ### 金融工程 / 操作 playbook
@@ -141,7 +141,7 @@
 
 Wave-11 L2.4 觀察期 implementation 已 ship(PR #821 merged 2026-06-29)。規劃文件已從 `.omo/wave-11-l2-4/` 永久化到 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md` + `docs/operations/l2-4-followup.md`(見此 PR)。Wave 目錄生命週期規則見 `docs/DOCUMENTATION_STANDARD.md` § Wave 工作目錄。
 
-**Wave 9 Observability + Monitoring 補強(2026-07-03)**:`briefs/rss-feed-replacement.md` 記錄 PR-930 RSS feed 替換決策(為何換 4 個財經源、為何排除 工商時報)。相關 PR:#926(落地 `atlas_db_init_failures_total` + `atlas_channel_health_errors_total`)、#928(修正 Issue #927 dead metric)、#929(Loki 部署 spec)、#930(RSS 替換)、#931(`/api/llm/health` 401 修復)。
+**Wave 9 Observability + Monitoring 補強(2026-07-03)**:`operations/rss-feed-replacement.md` 記錄 PR-930 RSS feed 替換決策(為何換 4 個財經源、為何排除 工商時報)。相關 PR:#926(落地 `atlas_db_init_failures_total` + `atlas_channel_health_errors_total`)、#928(修正 Issue #927 dead metric)、#929(Loki 部署 spec)、#930(RSS 替換)、#931(`/api/llm/health` 401 修復)。
 
 ### 歸檔 `docs/archive/`
 
@@ -206,11 +206,11 @@ ls .omo/traces/         # sim 輸出
 
 | 子目錄 | 用途 | 命名規範 | 生命週期 | 範例（若有）|
 |--------|------|---------|---------|------------|
-| `briefs/` | **長壽** phase 規劃 | `<topic>-brief.md` 或 `<topic>.md`（無日期）| active → 升級到 `docs/` | `roadmap.md`, `ALERT_SYSTEM_REDESIGN.md` |
+| `briefs/` | **長壽** phase 規劃 | v1: `<topic>.md`; v2 redesigns: `<topic>-v2.md`(與 v1 並存)| v1 為 source/working; v2 為 refined → 升 `docs/<topic>.md` 後刪 v1+v2 | v1: `roadmap.md`, `ALERT_SYSTEM_REDESIGN.md`; v2: `roadmap-v2.md`, `alert-redesign-v2.md` |
 | `plans/` | **短壽** PR 待辦 | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` | **merge 後必須刪除** | `2026-06-26-llm-router-fix.md` |
 | `evidence/` | **短壽** 驗證報告 | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` | 驗證完即刪 | `f4-scope-fidelity.md` |
 | `traces/` | sim JSONL | `sim-YYYYMMDD.jsonl` | 保留最新 5 個 | `sim-20260626.jsonl` |
-| `notepads/` | 跨 session 決策筆記 | `<topic>/<file>.md` | 寫滿/過時歸檔或刪 | `decision-chain-evolution-v2/learnings.md` |
+| `notepads/` | 跨 session 決策筆記 | `<topic>/<file>.md` 或 flat `<topic>.md` | 寫滿/過時歸檔或刪 | `decision-chain-evolution-v2/learnings.md`, `frontend-refactor-recovery.md`, `agent-interface-roadmap.md` |
 | `handoffs/` | session 交接 | `YYYY-MM-DD-<topic>.md` | session 結束即刪 | `2026-06-25-f1-handoff.md` |
 | `workspaces/` | 跨 session 工作區 | `<workspace-name>/` | merged 後刪 | `wave-11-l2-4/` |
 | `run-continuation/` | session state | `session-<id>.json` | session 結束即刪 | `session-abc123.json` |
@@ -249,6 +249,30 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 ---
 
 ## 動作紀錄
+
+### 2026-07-03 docs cleanup（本次）
+
+- **觸發**:User 評估 `docs/{briefs,branch-hygiene,investigations,plans}` 對 STANDARD + MAP 合規性 + 3 新任務(.omo/.ocx/.opencode gitignore + cleanup 規範一致性 + audit_assets/ 整併)。
+
+- **docs/ 4 dirs cleanup** (14 verifications evidence-based):
+  - `docs/briefs/` 整個移除 (3 v2 → `.omo/briefs/*-v2.md` 與 v1 並存)
+  - `docs/plans/` 整個移除 (l2-4 PR #828 已 merge + roadmap → `.omo/notepads/`)
+  - `docs/branch-hygiene/` 縮為 1 檔 (6 PNG 0 引用 4.2MB 釋放 + recovery.md → `.omo/notepads/`)
+  - `docs/investigations/` 不動 (4 檔全 OK)
+  - quick fixes:investigations L154 dangling link + main.go L2.4 註解 + GUIDELINES_INDEX/MAP 表格更新
+  - 7 個 dangling refs 修復 (.claude/skills/, docs/operations/, docs/spikes/, .omo/notepads/)
+
+- **v1/v2 關鍵發現**:PR #756 刻意保留 v1 sources 於 `.omo/briefs/` 作為「長壽規劃」(見本節 2026-06-26 PR #756 紀錄)。v2 redesigns 加 `-v2.md` 後綴與 v1 並存,保留演化關係;IMPL-9 DRY 驗證 DUP-A~G 全部 verdict,內容去重+一致性驗證協議完成。
+
+- **Index sync**:`GUIDELINES_INDEX.md` L161 `手寫技能文件 | 10` → `20` (實際 .claude/skills/* = 20 dirs: 16 atlas-* + codebase-memory + codegraph + gitnexus + robot-communication);`MAP.md` L209/213 範例更新;本 entry。
+
+- **audit_assets/ 整併**:`audit_assets/phase2-retail-investor-landing-audit.md` (13428B Phase 2 投資人介面審計,2026-07-01) → `docs/audit/2026-07-01-phase2-retail-investor-landing-audit.md`(原 audit_assets/ 為 gitignored ROOT dir,違反 STANDARD 原則)。
+
+- **gitignore 修正**:`.gitignore` L68 `!/.ocx/` (whitelist 逆邏輯) → `/.ocx/` (untrack `receipt.jsonc` 3447B);`.omo/handoffs/` mkdir + 收容 2 散落檔 (`handoff-ci-fixes.md` 5090B + `session-summary-2026-05-07.md` 2936B),解本節「❌ session-summary-2026-05-07.md (應放 handoffs/ → 已清)」紀錄與事實不符的違規。
+
+- **cleanup 規範一致性**:`docs/branch-hygiene/2026-06-26-cleanup.md` (歷史記錄,PR #756 刪 16 stale branch) vs `docs/guides/git-tool-cache-policy.md` (canonical guide) **scope 不同,無衝突**;後者「已知清單」+ `git cleanup-tools` alias 補 `.ocx/receipt.jsonc` + `.omo/` 散落檔條目。
+
+- **PR**:見 PR 編號
 
 ### 2026-06-29 SECURITY.md refresh（本次）
 
