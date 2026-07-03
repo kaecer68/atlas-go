@@ -22,10 +22,10 @@ type Handler func(r *http.Request) (status int, data any)
 // These lists mirror that decision so AuthMiddleware stays
 // self-contained for direct callers.
 var authFreeExactPaths = map[string]bool{
-	"/health":          true,
-	"/metrics":         true,
-	"/admin":           true,
-	"/client":          true,
+	"/health":         true,
+	"/metrics":        true,
+	"/admin":          true,
+	"/client":         true,
 	"/api/llm/health": true,
 }
 
