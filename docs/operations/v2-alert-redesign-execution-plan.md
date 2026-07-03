@@ -76,14 +76,14 @@
 
 `roadmap-v2.md` Part 3 Bucket B 有 4 個更高戰略價值的 items:
 
-| Item | 評估狀態 |
+| Item | 評估狀態(2026-07-04 二次驗證後) |
 |---|---|
-| **B1 Data Access Layer** | 無 pattern match (未實作) |
-| **B2 Backtest-Live Consistency** | 無 pattern match (未實作) |
-| **B3 HITL Regime** | 2 file ref (concept only, not complete) |
-| **B4 Tax/Liquidity Sizing** | 1 file ref (`docs/specs/taiwan-tax.md` spec exists, implementation 待查) |
+| **B1 Data Access Layer** | grep `DataAccess\|data_access` 0 results → **真的未實作** |
+| **B2 Backtest-Live Consistency** | grep `backtest.*live\|paper_trading` 7 hits including `internal/autobacktest/runner.go` → **部分實作**(深度待評估,是否涵蓋 paper trading vs live trading 一致性待查)|
+| **B3 HITL Regime** | grep `HITL\|HumanInTheLoop` 0 results → **真的未實作**(roadmap v2 提到的只是概念性註記) |
+| **B4 Tax/Liquidity Sizing** | grep `tax.*siz\|liquidity.*siz` 3 hits including `internal/tax/tax_aware_sizing.go` + `internal/config/defaults_portfolio.go` + `docs/specs/taiwan-tax.md` → **有實作**(深度待評估)|
 
-需各自獨立設計 + 評估 + 排程。B1 尤其關鍵(影響所有下游 Backtest/Live/HITL/Tax work),應優先單獨評估。
+需各自獨立設計 + 評估 + 排程。B1 尤其關鍵(影響所有下游 Backtest/Live/HITL/Tax work),應優先單獨評估。B2 與 B4 因有部分實作,評估範圍可縮小(只需確認現有實作是否涵蓋 roadmap v2 的目標)。
 
 ## 6. 時間預估(最終版)
 
