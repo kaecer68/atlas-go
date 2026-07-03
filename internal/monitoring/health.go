@@ -20,11 +20,12 @@ type GatewayHealthChecker interface {
 // checkDataProvider() was removed as redundant — Gateway UnifiedHealthStore
 // already tracks all 14 channels. Channel-level health is verified by
 // background tasks (see cmd/atlas/main.go) that call gateway.Fetch().
-// HealthChecker provides a hook (gateway) for future integration.
+// HealthChecker provides hooks (gateway, collector) for future integration.
 type HealthChecker struct {
 	monitor    *Monitor
 	stateStore *livestore.StateStore
 	gateway    GatewayHealthChecker
+	collector  *MetricsCollector
 }
 
 // NewHealthChecker creates a health checker.
@@ -34,6 +35,13 @@ func NewHealthChecker(monitor *Monitor, stateStore *livestore.StateStore) *Healt
 		monitor:    monitor,
 		stateStore: stateStore,
 	}
+}
+
+// SetCollector wires the Prometheus MetricsCollector so checkGateway can
+// emit per-channel error counters (atlas_channel_health_errors_total).
+// Safe to call with nil — metric emission is skipped when collector is not available.
+func (h *HealthChecker) SetCollector(c *MetricsCollector) {
+	h.collector = c
 }
 
 // SetGateway wires the API Gateway for channel-level health monitoring.
@@ -52,6 +60,8 @@ func (h *HealthChecker) RunOnce(ctx context.Context) error {
 // checkGateway verifies the API Gateway's channel health records.
 // Logs a structured summary to the logging system — does NOT create alerts
 // (channel health is tracked by ChannelHealthStore, not the alert stream).
+// For each channel whose status != "ok", emits a counter increment to the
+// Prometheus collector so external alerts can fire on sustained errors.
 func (h *HealthChecker) checkGateway() {
 	if h.gateway == nil {
 		return
@@ -60,6 +70,15 @@ func (h *HealthChecker) checkGateway() {
 	logging.Info("health", "channel_health_summary",
 		"channels", summary,
 	)
+	if h.collector == nil {
+		return
+	}
+	for channel, status := range summary {
+		if status == "ok" {
+			continue
+		}
+		RecordChannelHealthError(h.collector, channel)
+	}
 }
 
 // checkStateStore verifies the live state store is operational.

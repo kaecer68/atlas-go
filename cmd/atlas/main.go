@@ -658,7 +658,7 @@ func run(args []string, deps appDeps) error {
 					paramsCfg.Realtime.UpdateIntervalMs.Value, 60)
 			}
 
-			registerDataSyncAndHealthTasks(taskMgr, cfg, gateway, monitor, pool)
+			registerDataSyncAndHealthTasks(taskMgr, cfg, gateway, monitor, pool, collector)
 
 			registerCapitalTasks(capitalDeps{
 				taskMgr:           taskMgr,

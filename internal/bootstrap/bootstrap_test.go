@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
 func TestNewConfig(t *testing.T) {
@@ -33,13 +34,60 @@ func TestInitDatabaseNoDSN(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	pool, err := InitDatabase(ctx, Config{WorkDir: t.TempDir()})
+	pool, err := InitDatabase(ctx, Config{WorkDir: t.TempDir()}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if pool != nil {
 		t.Error("expected nil pool when no DATABASE_URL")
 	}
+}
+
+func TestInitDatabase_FailureRecordsMetric(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	workDir := t.TempDir()
+	migrationsPath := filepath.Join(workDir, "sql", "migrations")
+	if err := os.MkdirAll(migrationsPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll migrations: %v", err)
+	}
+
+	t.Setenv("DATABASE_URL", "postgresql://invalid_user:invalid_pass@127.0.0.1:1/nonexistent?sslmode=disable&connect_timeout=1")
+
+	collector := monitoring.NewMetricsCollector()
+	_, err := InitDatabase(ctx, Config{WorkDir: workDir}, collector)
+	if err == nil {
+		t.Fatal("expected error from InitDatabase with bogus DSN")
+	}
+
+	m, ok := collector.GetMetric(monitoring.MetricDBInitFailures, map[string]string{"phase": "startup"})
+	if !ok {
+		t.Fatalf("expected atlas_db_init_failures_total to be recorded, but metric not found")
+	}
+	if m.Value != 1 {
+		t.Errorf("expected value 1, got %v", m.Value)
+	}
+}
+
+func TestInitDatabase_NilCollectorDoesNotPanic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	workDir := t.TempDir()
+	migrationsPath := filepath.Join(workDir, "sql", "migrations")
+	if err := os.MkdirAll(migrationsPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll migrations: %v", err)
+	}
+
+	t.Setenv("DATABASE_URL", "postgresql://invalid:invalid@127.0.0.1:1/x?sslmode=disable&connect_timeout=1")
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("InitDatabase with nil collector panicked: %v", r)
+		}
+	}()
+	_, _ = InitDatabase(ctx, Config{WorkDir: workDir}, nil)
 }
 
 func TestInitStores(t *testing.T) {
