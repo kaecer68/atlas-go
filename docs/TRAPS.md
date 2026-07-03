@@ -87,6 +87,88 @@
 
 ---
 
+## Health Endpoint 401 防回歸(2026-07-03,PR #931 修復)
+
+**症狀**:`curl http://localhost:8080/api/llm/health` 回 `{"error":"unauthorized"}`(HTTP 401)。
+
+**根因**:`/api/llm/health` 是觀測型端點,需在兩處**同步**列入 auth-free path,只改一處仍 401:
+
+1. `internal/monitoring/api/shared/handler.go` 的 `authFreeExactPaths` map(直接被 `AuthMiddleware` 檢查)
+2. `cmd/atlas/main.go` 的 `isPublicPath()` switch case(在 top-level mux final 繞過 AuthMiddleware)
+
+**修法**:兩處都加,順序:
+
+```go
+// 檔案 1: internal/monitoring/api/shared/handler.go
+var authFreeExactPaths = map[string]bool{
+    "/health":          true,
+    "/metrics":         true,
+    "/admin":           true,
+    "/client":          true,
+    "/api/llm/health":  true,  // ← 必加
+}
+
+// 檔案 2: cmd/atlas/main.go
+func isPublicPath(p string) bool {
+    switch {
+    case p == "/" || p == "/health" || p == "/ready" || p == "/metrics":
+        return true
+    case p == "/api/llm/health":  // ← 必加
+        return true
+    case p == "/admin" || ...
+    }
+}
+```
+
+**為何需要兩處**:handler.go 的 `authFreeExactPaths` 給 `Adapt()` 與其他直接 wrap `AuthMiddleware` 的呼叫端用;main.go 的 `isPublicPath` 是 top-level mux 繞過,語意不同但需保持 sync(handler.go 註解已明示)。
+
+**回歸偵測**:本地或 CI 加一個 grep guard:
+
+```bash
+test -n "$(grep -c '"/api/llm/health"' internal/monitoring/api/shared/handler.go)" || \
+  (echo "ERROR: /api/llm/health missing from authFreeExactPaths" && exit 1)
+test -n "$(grep -c '/api/llm/health' cmd/atlas/main.go)" || \
+  (echo "ERROR: /api/llm/health missing from isPublicPath" && exit 1)
+```
+
+**T11 E2E 驗證**:PR #931 merge 後,rebuild `atlas` image,`curl /api/llm/health` 應回 200 與 providers 狀態(200 + `{"providers":{...}}`)。若回 401 即表示有步驟遺漏。
+
+**參考**:
+- PR #931:commit `82e26982`
+- `docs/specs/wave9-observability.md` §7
+- `docs/operations/wave9-runbook.md` §3.4
+
+---
+
+## Prometheus Metric 命名空間(2026-07-03,PR #926 + Issue #927)
+
+**症狀**:`/metrics` 端點回 200 但 body 為空,**或** alert rule 永遠不觸發(dead code)。
+
+**根因**:atlas-go 的 Prometheus 框架就位但業務邏輯端從未 increment counter,或使用無 `atlas_` 前綴的 metric 名稱(與 Prometheus default metric 衝突)。
+
+**修法**:新增 metric 必須遵循 `atlas_<feature>_<measurement>_total` 格式:
+
+| 情境 | 範例 |
+|------|------|
+| ✅ 正確 | `atlas_db_init_failures_total`, `atlas_channel_health_errors_total` |
+| ❌ 錯誤 | `db_init_failures_total`(無前綴,可能與 Prom default 衝突), `channel_errors_total`(Issue #927 經典案例,dead code) |
+
+**規則**:
+1. `_total` 後綴標示 counter(Prometheus 慣例)
+2. `atlas_` 前綴避免衝突
+3. label 名小寫 snake_case;值域受限避免 cardinality 爆炸
+4. helper function 必須 nil collector 安全(bootstrap 早期 collector 可能尚未建立,參考 `startup_metrics.go` 的 `RecordDBInitFailure`)
+
+**回歸偵測**:CI `generate` job 已檢查 Go struct JSON tag drift;建議加 `monitoring/rules/*` 對 metric 名稱的 grep guard(Issue #927 那種 dead reference 自動偵測)。
+
+**參考**:
+- PR #926:commit `9d9a1502`
+- Issue #927:`channel_errors_total` dead code 案例
+- `docs/specs/wave9-observability.md` §5
+- `internal/monitoring/startup_metrics.go`
+
+---
+
 ## 模組特定陷阱
 
 以下陷阱屬於特定模組範圍，詳見各模組的 `AGENTS.md`：

@@ -101,6 +101,7 @@
 | `specs/llm-routing.md` | LLM Provider 路由策略 + 備援鏈（架構藍圖 §6 抽離）|
 | `specs/llm-interface-contract.md` | LLM 統一介面合約（架構藍圖 §4.2-4.5 抽離）|
 | `specs/domain-types.md` | Domain Canonical Types 規格（Wave 11 Batch 5a 從原 domain 模組的 AGENTS.md 抽離）|
+| `specs/wave9-observability.md` | Wave 9 Observability 設計規格(5 偵測器架構、PR-926 metric、PR-931 auth 修復) |
 | `specs/sim-engine.md` | 模擬引擎 7 步執行序 + 8 陷阱（Wave 11 Batch 5a）|
 | `specs/janus-regime-detection.md` | JANUS meta-layer + Risk Gate 校準（Wave 11 Batch 5a）|
 | `specs/prism-cohort-training.md` | PRISM 5-Regime queue + Synthetic flag（Wave 11 Batch 5a）|
@@ -120,6 +121,8 @@
 | 檔案 | 用途 |
 |------|------|
 | `guides/retail-sentiment.md` | RSI-tw 台灣散戶情緒指數規格（Wave 11 Batch 5c 從原 retail 模組的 AGENTS.md 抽離）|
+| `operations/wave9-runbook.md` | Wave 9 Observability 操作手冊(5 偵測器啟用、troubleshoot、PR-931 LLM health 修復後的 probe path 規則) |
+| `operations/loki-deployment.md` | Loki 集中式 log 部署設計(3 階段:Promtail + Loki + 4 LogQL rules、Alertmanager 整合、自監控 SOP) |
 
 ### 審計 / 交接 / 調查 / 修復計畫（時序敏感）
 
@@ -137,6 +140,8 @@
 ### Wave-specific（active）
 
 Wave-11 L2.4 觀察期 implementation 已 ship(PR #821 merged 2026-06-29)。規劃文件已從 `.omo/wave-11-l2-4/` 永久化到 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md` + `docs/operations/l2-4-followup.md`(見此 PR)。Wave 目錄生命週期規則見 `docs/DOCUMENTATION_STANDARD.md` § Wave 工作目錄。
+
+**Wave 9 Observability + Monitoring 補強(2026-07-03)**:`briefs/rss-feed-replacement.md` 記錄 PR-930 RSS feed 替換決策(為何換 4 個財經源、為何排除 工商時報)。相關 PR:#926(落地 `atlas_db_init_failures_total` + `atlas_channel_health_errors_total`)、#928(修正 Issue #927 dead metric)、#929(Loki 部署 spec)、#930(RSS 替換)、#931(`/api/llm/health` 401 修復)。
 
 ### 歸檔 `docs/archive/`
 

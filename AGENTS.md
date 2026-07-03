@@ -126,6 +126,8 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | 資安設定 | 修改 security 相關配置（API key、sslmode、live broker、data source channel）前必看 [SECURITY.md](SECURITY.md) 與 [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) |
 | 平行重複實作 | 新增功能前用 GitNexus `query` + codebase-memory 檢查重疊 |
+| **LLM health 401** | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處 rebuild 後仍 401。見 `docs/TRAPS.md` 對應 entry 與 PR #931。 |
+| **Prometheus metric 命名空間** | 新 metric 必須 `atlas_<feature>_<measurement>_total` 格式，無前綴的舊名（如 `channel_errors_total`）會與 Prometheus default metric 衝突。見 PR #926 + Issue #927。 |
 
 ## 🔧 程式碼智慧工具（強制規則）
 
