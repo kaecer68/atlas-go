@@ -34,9 +34,9 @@ func NewTaiwanRSSGeopoliticalProvider() *TaiwanRSSGeopoliticalProvider {
 		client:  httpclient.NewFactory().NewClient(15 * time.Second),
 		limiter: rate.NewLimiter(rate.Every(10*time.Second), 1),
 		feeds: []string{
-			"https://www.digitimes.com/rss/daily.xml",   // DIGITIMES 科技供應鏈
-			"https://money.udn.com/rssfeed/lists/1001", // 經濟日報(聯合報系)
-			"https://news.ustv.com.tw/feed",            // 非凡新聞
+			"https://www.digitimes.com/rss/daily.xml",            // DIGITIMES 科技供應鏈
+			"https://money.udn.com/rssfeed/lists/1001",           // 經濟日報(聯合報系)
+			"https://news.ustv.com.tw/feed",                      // 非凡新聞
 			"https://wwwc.twse.com.tw/rwd/zh/news/feed?type=rss", // TWSE 證交所新聞
 		},
 		keywords: []string{
