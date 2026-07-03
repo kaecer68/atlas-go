@@ -1,7 +1,7 @@
 # v2 alert-redesign 升級真實路徑 (post-verification 2026-07-04, three rounds)
 
 > 設計 todo 基於 `.omo/briefs/alert-redesign-v2.md` Part 6 P0 優先序。經 2026-07-04 **三輪 grep 驗證** 後修正的真實路徑。
-> 目標: 完成真實 gaps → 升 `.omo/briefs/alert-redesign-v2.md` 為 `docs/alerts-redesign.md`。
+> 目標: 完成真實 gaps → 把 v2 working draft 升為正式 docs/ 規格。
 
 ## 1. 驗證結果摘要(三次修正後)
 
