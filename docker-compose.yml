@@ -65,7 +65,7 @@ services:
     container_name: atlas-fubon-proxy
     restart: unless-stopped
     ports:
-      - "8081:8081"
+      - "18081:18081"
     # env_file loads FUBON_PERSONAL_ID / FUBON_PASSWORD / FUBON_API_KEY /
     # FUBON_CERT_PATH / FUBON_CERT_PASSWORD from ~/.config/atlas-go/.env.
     # Earlier the values used `${...}` shell expansion, which silently
@@ -79,7 +79,7 @@ services:
     environment:
       # FUBON_PROXY_PORT stays in environment (not env_file) because
       # it is a service-port constant owned by this compose file.
-      - FUBON_PROXY_PORT=8081
+      - FUBON_PROXY_PORT=18081
       # .p12 凭证书放在 ~/.config/atlas-go/.fubon-env/,挂进容器对应路径
       # 让 main.py:_find_cert() 的 glob 搜尋(默认 ~/.config/atlas-go/.fubon-env)
       # 可以找到。SDK 本身由 Dockerfile 从官方下載 manylinux wheel install,
@@ -90,7 +90,7 @@ services:
       - atlas-network
     healthcheck:
       # fubon-proxy 容器自身的健康檢查 (本機 loopback)
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18081/health')"]  
       interval: 30s
       timeout: 10s
       retries: 3
