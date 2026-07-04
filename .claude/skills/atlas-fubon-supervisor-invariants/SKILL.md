@@ -71,6 +71,7 @@ target_audience: developer
 - Production `proxyListenPort` 預設值仍為 8081（`manager.go:74`）,不變。
 - ephemeral port 永遠可用,無需 `t.Skip`;若 ephemeral bind 失敗（極罕見,僅在 fd 耗盡時）視為環境異常 `t.Fatal`。
 - 涵蓋：Free → spawn、Healthy（bind + /health=200）→ 跳過 spawn 且 `m.running=false`、Foreign（bind + /health=404）→ error 含 `"port %d"`（用 `proxyListenPort`）/ `"foreign"` / `"kill"`。
+- **PR #943 變更**：fubon-proxy 的 `/health` 端點改為快速 process-only check（不再呼叫上游 Fubon API，永遠回 200 只要 FastAPI 活著）。此變更**強化** ProcessManager 的偵測準確度 — 不再因上游故障將活的 proxy 誤判為 unhealthy。
 - `lookupPortOccupant` 單元測試可在 lsof 不可用時 skip。
 
 > 由於 `proxyListenPort` 是 package-level var,這些 helper **不可** 用於 `t.Parallel()` 測試（race）。

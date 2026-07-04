@@ -89,3 +89,13 @@ manager、circuit breaker、apigateway 通道 — 但**沒有人檢查 `.env`**�
    檢查「設定指向哪」。
 3. **症狀修補的警訊** — 同一通道出現 5+ 個獨立修復 commit,代表
    根本問題未被解決,需要回溯到第一個 commit 之前的設計意圖。
+
+## Resolution (PR #943 — 2026-07-04)
+
+三層韌性修復，從根源解決 fubon 通道脆弱性：
+
+- **Layer 1**：`/health` 改為 fast process-only check；SDK 初始化延遲到第一個請求；in-memory quote cache（30s TTL, stale-while-revalidate）
+- **Layer 2**：`FubonClient.healthClient`（2s timeout）隔離健康檢查；背景探測 goroutine（15s）；`IsHealthy()` + pre-flight fast-fail
+- **Layer 3**：TCP pre-flight check — `socket.connect(neoapi.fbs.com.tw:443, timeout=5s)` 在 SDK init 前檢測上游是否可達，不可達時直接回 503 而不呼叫 C extension（C extension 在 macOS 上無法被 Python timeout 中斷）
+
+此前 19 個 fubon 相關 PR 全屬 process management 修補，本 PR 是第一個處理**資料通道韌性**的修復。

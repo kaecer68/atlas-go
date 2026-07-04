@@ -103,3 +103,26 @@ fubonproxy 內只保留兩個型別別名（`portState = portprobe.State`、`por
 2. 改 supervisor 邏輯或測試：重檢 **`.claude/skills/atlas-fubon-supervisor-invariants/SKILL.md`** 的 F1~F9
 3. 改 port 探測 / 殭屍判定 / 強制終止邏輯：只動 `internal/portprobe/`,勿在 fubonproxy 重複實作
 4. 改介面：更新 `doc.go` 保持一致
+
+---
+
+## Proxy 健康檢查行為變更 (PR #943)
+
+### /health（快速，process-only）
+- 只檢查 process alive，**不呼叫上游 Fubon API**
+- 永遠回 200（只要 FastAPI 活著）
+- Docker healthcheck 使用此 endpoint → container 不再因上游斷線顯示 unhealthy
+
+### /health/deep（上游連線驗證）
+- 實際呼叫 Fubon SDK 取得 0050 報價
+- 上游不可達時回 503
+- 用於手動除錯／外部監控，不影響 Docker lifecycle
+
+### SDK 初始化 deferred
+- lifespan handler 不再在啟動時呼叫 `get_sdk()`
+- SDK 初始化延遲到第一個 API 請求
+- TCP pre-flight check（socket.connect neoapi.fbs.com.tw:443）在 SDK init 前檢測上游是否可達
+
+### In-memory Quote Cache
+- 30s TTL，thread-safe
+- SDK 成功時更新 cache，SDK 失敗時 serve stale data

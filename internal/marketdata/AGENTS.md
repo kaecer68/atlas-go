@@ -161,3 +161,21 @@ Fubon-proxy URL 由 `internal/fubonproxy/manager.go` 的 `ProxyBaseURL()` / `Pro
 歷史 RCA（PR #495 uvicorn/uvloop `IPV6_V6ONLY` 問題）見 `docs/investigations/2026-06-fubonproxy-ipv4-uvloop.md`。
 
 **PR #837 follow-up**：原本 3 個 source files（`fubon_client.go`、`hybrid_provider.go`、`register_adapters.go`）各自硬編碼 `host.docker.internal:8081`，其中 `hybrid_provider.go` 完全忽略 `-fubon-port` flag → port drift → channel recurring failure。重構後統一從 `fubonproxy` 取得，並以 `TestFubon_URLDriftGuard` AST 禁制防止復發。
+
+---
+
+## FubonClient 韌性機制 (PR #943)
+
+### Health Client 隔離
+- `healthClient`：2s timeout，專用於 `HealthCheck()`／健康探測
+- `httpClient`：`FubonAPITimeoutSec` timeout，用於資料請求
+- `SetHealthClient()`：測試注入
+
+### 背景健康探測
+- `GetSharedFubonClient()` 自動啟動 15s 間隔 goroutine
+- 連續 3 次失敗 → `IsHealthy() = false` → `Fetch()` fast-fail
+- `ResetSharedFubonClient()` 自動停止探測
+
+### TCP Pre-flight Check (Layer 3)
+- fubon-proxy 在 SDK init 前用 `socket.connect(neoapi.fbs.com.tw:443, timeout=5s)` 做 pre-flight
+- 不可達時直接回 503，不呼叫 C extension（C extension 在 macOS 上無法被 Python timeout 中斷）
