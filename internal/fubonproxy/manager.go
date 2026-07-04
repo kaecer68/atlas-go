@@ -32,11 +32,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
 
-// defaultFubonProxyPort 是 fubon-proxy 的預設 listen port(8081)。
+// defaultFubonProxyPort 是 fubon-proxy 的預設 listen port(18081)。
 // PR 2 Oracle 4th-round verdict F13:不指定 -fubon-port flag 時行為完全一致;
 // marketdata 套件與本套件共用這常數以避免 port 漂移(F12:healthURL/proxyURL
 // 必須同步來源)。
-const defaultFubonProxyPort = 8081
+const defaultFubonProxyPort = 18081
 
 const (
 	// healthCheckTimeout 是單次健康檢查 HTTP 請求的超時時間。
@@ -71,10 +71,10 @@ var (
 	// proxyListenPort 是 fubon-proxy 服務綁定的 TCP 埠。Start() 在 spawn
 	// 之前會預先探測此埠的占用情況（F9 不變式），避免在 supervise() 內部
 	// 才發現 EADDRINUSE 而陷入 backoff-loop。
-	proxyListenPort = 8081
+	proxyListenPort = 18081
 )
 
-// portState 表達 port 8081 在 Start() 預先探測後的占用狀態。
+// portState 表達 port 18081 在 Start() 預先探測後的占用狀態。
 // 設計目的：區分「可 spawn」、「外部 fubon-proxy 已管理」、「外部進程佔住」
 // 三種情況，避免在 spawn() 內部才發現 EADDRINUSE 而延遲到 supervise() 才反應。
 type portState = portprobe.State
@@ -85,7 +85,7 @@ const (
 	portStateForeign
 )
 
-// portOccupant 描述佔住 port 8081 的程序。用於構造 actionable error。
+// portOccupant 描述佔住 port 18081 的程序。用於構造 actionable error。
 type portOccupant = portprobe.Occupant
 
 // maxRecentEvents 是 deployment dashboard 保留的最近 timeline 事件數量上限。
@@ -187,7 +187,7 @@ func NewManager(workDir string, port int) *ProcessManager {
 
 // GetFubonProxyPort returns the TCP port fubon-proxy is configured to listen
 // on, set by NewManager when port > 0 or by the cmd/atlas -fubon-port flag
-// before NewManager is called. Returns defaultFubonProxyPort (8081) when
+// before NewManager is called. Returns defaultFubonProxyPort (18081) when
 // NewManager has not yet been called with a non-zero port — callers that
 // probe before fubonproxy.NewManager runs will see the default, which is
 // the documented L1/L2 contract (Oracle F13).
