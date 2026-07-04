@@ -132,7 +132,7 @@ function kpiNum(v) {
         const pnl = pos.unrealized_pnl || 0;
         const pct = pos.pnl_pct || 0;
         const costBasis = (pos.average_cost || 0) * (pos.quantity || 0);
-        const colorClass = window.pnlColor ? window.pnlColor(pnl) : (pnl > 0 ? 'text-up' : (pnl < 0 ? 'text-down' : ''));
+        const colorClass = window.financialColor ? window.financialColor(pnl, 'pnl') : (window.pnlColor ? window.pnlColor(pnl) : (pnl > 0 ? 'text-up' : (pnl < 0 ? 'text-down' : '')));
 
         return `
           <tr>

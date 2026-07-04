@@ -1,55 +1,39 @@
 /**
- * Atlas Dashboard - Simplified Mode Toggle
- *
- * 依 audit_assets/phase2-retail-investor-landing-audit.md §3.2 落地雙軌介面：
- *   進階使用者（顯示所有 HHI、Drawdown、Sharpe 等指標）
- *   ↔ 一般投資人（隱藏進階指標，保留 Risk Badge + Trust Footer）
- *
- * 切換 :root 的 data-simplified 屬性，並由 base/simplified.css 隱藏 .advanced-only 元素。
- * 狀態持久化到 localStorage（key: 'atlas-simplified'）。
- *
- * 為避免 FOUC（Flash of Unstyled Content），index.html <head> 內有一段同步早期腳本
- * 會在 CSS 載入前先設定 data-simplified 屬性。
+ * 向後相容層 — 獨立運作，不 import mode-manager.js。
+ * 與 mode-manager.js 共用 localStorage('atlas-mode') + data-atlas-mode attribute。
  */
 
-const STORAGE_KEY = 'atlas-simplified';
-const root = typeof document !== 'undefined' ? document.documentElement : null;
+const MODES = ['simple', 'standard', 'pro'];
+const LABELS = { simple: '🔰 簡易', standard: '📊 標準', pro: '🔬 專業' };
 
-export function isEnabled() {
-  return Boolean(root && root.getAttribute('data-simplified') === 'true');
+function getMode() {
+  if (typeof document === 'undefined') return 'standard';
+  const m = document.documentElement.getAttribute('data-atlas-mode');
+  return MODES.includes(m) ? m : 'standard';
 }
 
-export function setEnabled(next) {
-  if (!root) return;
-  if (next) {
-    root.setAttribute('data-simplified', 'true');
-  } else {
-    root.removeAttribute('data-simplified');
-  }
-  try {
-    localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
-  } catch (_) {
-    // localStorage 不可用（隱私模式 / 禁用）時靜默忽略
-  }
+function setMode(mode) {
+  if (typeof document === 'undefined' || !MODES.includes(mode)) return;
+  document.documentElement.setAttribute('data-atlas-mode', mode);
+  if (mode === 'simple') document.documentElement.setAttribute('data-simplified', 'true');
+  else document.documentElement.removeAttribute('data-simplified');
+  try { localStorage.setItem('atlas-mode', mode); } catch (_) {}
 }
 
-function updateButton(btn, enabled) {
+export function isEnabled() { return getMode() === 'simple'; }
+
+function updateButton(btn) {
   if (!btn) return;
-  btn.setAttribute('aria-pressed', String(enabled));
-  btn.setAttribute('aria-label', enabled ? '切換到簡化模式' : '切換到完整模式');
-  btn.textContent = enabled ? '🔬 完整模式' : '🔰 簡化模式';
-  btn.title = enabled
-    ? '切換到完整模式（顯示所有指標）'
-    : '切換到簡化模式（隱藏進階指標）';
+  const m = getMode();
+  btn.textContent = LABELS[m] || LABELS.standard;
+  btn.setAttribute('aria-pressed', String(m !== 'simple'));
 }
 
 export function toggle() {
-  const next = !isEnabled();
-  setEnabled(next);
-  const btn = typeof document !== 'undefined'
-    ? document.getElementById('simplifiedToggle')
-    : null;
-  updateButton(btn, next);
+  const cur = getMode();
+  const idx = MODES.indexOf(cur);
+  setMode(MODES[(idx + 1) % MODES.length]);
+  updateButton(document.getElementById('simplifiedToggle'));
 }
 
 export function init() {
@@ -57,7 +41,7 @@ export function init() {
   const btn = document.getElementById('simplifiedToggle');
   if (!btn) return;
   btn.addEventListener('click', toggle);
-  updateButton(btn, isEnabled());
+  updateButton(btn);
 }
 
 if (typeof window !== 'undefined') {
