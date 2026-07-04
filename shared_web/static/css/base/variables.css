@@ -36,6 +36,12 @@
   --metric-bad: var(--bearish);
   --risk-high: var(--color-danger);
   --risk-low: var(--color-success);
+  /* 資金流向語意 Token（台股：紅流入/綠流出） */
+  --capital-inflow: var(--bullish);
+  --capital-outflow: var(--bearish);
+  /* 事件信號語意 Token（紅利多/綠利空） */
+  --signal-bullish: var(--bullish);
+  --signal-bearish: var(--bearish);
   /* 系統狀態：國際通用綠OK紅ERR */
   --color-success: #10b981; --color-danger: #ef4444; --color-warning: #f59e0b; --color-info: #3b82f6;
   --space-xs: 4px; --space-sm: 8px; --space-md: 14px; --space-lg: 20px; --space-xl: 32px;
@@ -58,6 +64,8 @@
   
   /* 字重系統 */
   --font-light: 300;
+  --font-tabular: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  --text-lede: 20px;
   --font-normal: 400;
   --font-medium: 500;
   --font-semibold: 600;
