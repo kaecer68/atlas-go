@@ -55,7 +55,9 @@
 
 - 全部 CSS 變數定義於 `shared_web/static/css/base/variables.css`(canonical)
 - Canvas 繪圖色彩用 `getThemeColor()` + `hexToRgba()` 橋接(`shared_web/static/js/shared/utils.js`)
-- 金融語意 Token:`--pnl-profit`/`--pnl-loss`、`--trend-bullish`/`--trend-bearish`、`--metric-good`/`--metric-bad`、`--risk-high`/`--risk-low`
+- **JS 端統一色彩邏輯**：`shared_web/static/js/shared/color-tokens.js` 提供 `financialColor()` / `regimeColor()` / `severityColor()` / `confidenceColor()`，為所有頁面色彩判斷的單一權威來源（PR #944 引入）
+- 金融語意 Token:`--pnl-profit`/`--pnl-loss`、`--trend-bullish`/`--trend-bearish`、`--metric-good`/`--metric-bad`、`--risk-high`/`--risk-low`、`--capital-inflow`/`--capital-outflow`、`--signal-bullish`/`--signal-bearish`
+- **投資人角色模式**：`data-atlas-mode="simple|standard|pro"` 控制頁面內容密度，後向相容 `data-simplified`（PR #946 引入）
 - 顏色一律用 `var(--...)`,不寫死 hex/rgba
 
 ### 路由 + 後端整合

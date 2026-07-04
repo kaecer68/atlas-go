@@ -99,6 +99,7 @@ _ = taskMgr.Register(&apigateway.ScheduledTask{
 | EventSource listener | `shared_web/static/js/services/event-source.js:73-83` | `handleMessage()` 解析 `data.type` → `emit(eventType, data)`，generic handler |
 | 既有組件 | `shared_web/static/js/pages/industry.js` | 透過 `/api/dashboard/industry-seasonality-calendar` 取得年度行事曆（非 SSE-driven） |
 | 即時訂閱 | `admin_web/static/js/event-listeners.js` | 透過 `eventSource.on('industry.calendar.event', handler)` 訂閱 |
+| **首頁行事曆組件**（PR #945 新增） | `shared_web/static/js/components/event-calendar.js` | 串接 `/api/dashboard/calendar-events`，以 responsive grid 在首頁顯示近期市場事件（除權息、法說會、財報公布等 14 種類型），含 direction 方向標記、影響產業標籤、active 狀態邊框 |
 
 **渲染建議**（Wave 8.10 整合測試階段）：
 - Industry Calendar 頁面新增「Active Events (Live)」section，列出當前 active 的日曆事件
