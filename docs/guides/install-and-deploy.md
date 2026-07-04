@@ -151,7 +151,7 @@ docker compose up -d   # postgres, redis, atlas-go, prism worker, swarm, grafana
 ```bash
 make dev          # 起 docker deps(postgres+redis)+ stop atlas container + go run ./cmd/atlas -api
                   # CTRL+C 結束;postgres/redis 留 docker 跑
-make dev-status   # 看容器狀態 + port 8080/8081 占用 + native process
+make dev-status   # 看容器狀態 + port 8080/18081 占用 + native process
 make dev-logs     # tail atlas-go 啟動 log(若 go run 在背景)
 make dev-stop     # 收尾:停 docker deps(注意:不會 kill native atlas-go,用 CTRL+C 或 kill <pid>)
 ```
@@ -162,7 +162,7 @@ make dev-stop     # 收尾:停 docker deps(注意:不會 kill native atlas-go,�
 - Port 8080 在 host 沒被其他程式佔用(`make dev-status` 會查;若被佔用會 error 讓你手動處理 — 因為 ProcessManager 也不 auto-kill 8080 衝突,可能誤殺 Chrome devtools / IDE)
 
 **不該做的事**:
-- **不要** `docker compose up -d fubon-proxy` 跟 `make dev` 同時跑 → ProcessManager 看到 8081 healthy 跳過 spawn 看似 OK,但若 docker fubon-proxy 在 restart 中(暫時 unhealthy),ProcessManager 會 spawn 撞 8081 EADDRINUSE 進入 supervisor loop。dev 時讓 ProcessManager 唯一管 fubon-proxy。
+- **不要** `docker compose up -d fubon-proxy` 跟 `make dev` 同時跑 → ProcessManager 看到 18081 healthy 跳過 spawn 看似 OK,但若 docker fubon-proxy 在 restart 中(暫時 unhealthy),ProcessManager 會 spawn 撞 18081 EADDRINUSE 進入 supervisor loop。dev 時讓 ProcessManager 唯一管 fubon-proxy。
 - **不要**修改 `internal/fubonproxy/manager.go` 試圖加「auto-kill port 8080 佔用者」邏輯 — port 8080 可能被 Chrome devtools / IDE LISTEN,自動 kill 風險太高。改由 user 手動 `docker compose stop atlas` 即可。
 
 **驗證**(2026-06-28 實測):
