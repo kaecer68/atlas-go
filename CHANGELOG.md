@@ -2,6 +2,15 @@
 
 ## [0.0.0.27] - 2026-07-02
 
+## [0.0.0.28] - 2026-07-04
+
+### Added
+- **Fubon channel three-layer resilience** (PR #943): fubon-proxy /health 改為快速 process-only check、SDK 初始化 deferred、in-memory cache (30s TTL)、TCP pre-flight check (5s)。Go 端新增 healthClient (2s)、背景健康探測、IsHealthy() fast-fail。從根源解決 fubon 通道上游斷線時 hang 10+ 秒的問題，改為 5 秒內回 clear error。
+
+### Docs
+- 全面同步 fubon-proxy 行為描述至 10 份文件，修正過時說明。
+
+
 ### Security
 - **MCP roots TOCTOU fix** (PR #902): `OpenFile` 改用 `O_NOFOLLOW` flag 關閉 symlink TOCTOU 視窗。修正 `Issue #901`。
 
