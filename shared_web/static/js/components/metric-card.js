@@ -18,21 +18,20 @@ export class MetricCard {
   }
 
   render() {
-    const { label, value, delta, tone = 'neutral', tooltip, href } = this.opts;
-    const toneClass = tone === 'positive' ? 'metric-card__value--positive'
-      : tone === 'negative' ? 'metric-card__value--negative'
+    const { label, value, delta, tone = 'neutral', tooltip, href, extraClasses } = this.opts;
+    const toneClass = tone === 'positive' ? 'kpi-value--positive'
+      : tone === 'negative' ? 'kpi-value--negative'
+      : tone === 'warning' ? 'kpi-value--warning'
       : '';
-    const deltaHtml = delta ? `<span class="metric-card__delta metric-card__delta--${tone}">${delta}</span>` : '';
-    const tooltipHtml = tooltip ? `<span class="metric-card__tooltip" data-tooltip="${escapeHtml(tooltip)}">?</span>` : '';
+    const classes = ['kpi-card', extraClasses || ''].filter(Boolean).join(' ');
+    const deltaHtml = delta ? `<span class="kpi-card__delta kpi-card__delta--${tone}">${delta}</span>` : '';
     const tag = href ? 'a' : 'div';
     const hrefAttr = href ? ` href="${escapeHtml(href)}"` : '';
+    const titleAttr = tooltip ? ` title="${escapeHtml(tooltip)}"` : '';
 
-    return `<${tag} class="metric-card"${hrefAttr}>
-      <div class="metric-card__header">
-        <span class="metric-card__label">${escapeHtml(label)}${tooltipHtml}</span>
-      </div>
-      <div class="metric-card__value ${toneClass}">${value != null ? escapeHtml(String(value)) : '--'}</div>
-      ${deltaHtml}
+    return `<${tag} class="${escapeHtml(classes)}"${hrefAttr}${titleAttr}>
+      <div class="kpi-label">${escapeHtml(label)}</div>
+      <div class="kpi-value ${toneClass}">${value != null ? escapeHtml(String(value)) : '--'}${deltaHtml}</div>
     </${tag}>`;
   }
 }

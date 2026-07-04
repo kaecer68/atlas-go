@@ -42,6 +42,9 @@
 @import url("pages/overview.css");
 @import url("pages/home.css");
 
+/* Pages - Home */
+@import url("pages/home.css");
+
 /* Components - Utilities & Chain */
 @import url("components/utilities.css");
 @import url("components/chain.css");
