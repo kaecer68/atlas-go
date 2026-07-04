@@ -12,7 +12,6 @@ import { renderTooltip } from '../components/tooltip.js';
 import { renderEventCalendar } from '../components/event-calendar.js';
 import { fmtSignedPct, fmtDrawdown, riskLevelLabel, formatNumber } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
-import { financialColor, regimeColor, severityColor, confidenceColor } from '../shared/color-tokens.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
 
 const DASHBOARD_VERSION = 'v0.0.0.24';
@@ -330,7 +329,7 @@ function renderSignalStrip(events) {
   }
 
   el.innerHTML = active.map(e => {
-    const label = getThemeLabel(e.theme);
+    const label = escapeHtml(getThemeLabel(e.theme));
     const sent = (e.sentiment || 0) >= 0 ? 'bullish' : 'bearish';
     const conf = e.confidence ? `${(e.confidence * 100).toFixed(0)}%` : '—';
     const sev = e.severity || 'low';

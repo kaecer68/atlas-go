@@ -3,8 +3,6 @@
  * 集中管理所有漲跌/資金流/風險/信號的顏色判斷邏輯
  * 取代分散各處的 pnlColor / convColor / inline color 判斷
  */
-import { getThemeColor } from './utils.js';
-
 /**
  * financialColor — 根據數值和語意類別回傳對應 CSS 變數顏色
  *
