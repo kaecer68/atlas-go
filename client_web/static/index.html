@@ -31,20 +31,17 @@
 <meta name="twitter:image" content="https://atlas-go.example.com/static/og-image.png">
 <meta name="twitter:image:alt" content="Atlas-Go 投資人平台 — 台股模擬、風險監控與績效追蹤">
 <script>
-  // 早期同步模式初始化避免 FOUC（在 CSS 載入前設定 data-atlas-mode + data-simplified）
+  // 三級模式：早期同步執行避免 FOUC（在 CSS 載入前設定 :root[data-atlas-mode]）
   (function() {
     try {
       var mode = localStorage.getItem('atlas-mode');
-      // Backward compat: migrate old 'atlas-simplified' → 'atlas-mode'
-      if (!mode && localStorage.getItem('atlas-simplified') === '1') {
-        mode = 'simple';
-        localStorage.setItem('atlas-mode', 'simple');
-      }
-      if (mode === 'simple') {
-        document.documentElement.setAttribute('data-simplified', 'true');
-      }
-      if (mode) {
+      if (mode === 'simple' || mode === 'standard' || mode === 'pro') {
         document.documentElement.setAttribute('data-atlas-mode', mode);
+        if (mode === 'simple') document.documentElement.setAttribute('data-simplified', 'true');
+      } else if (localStorage.getItem('atlas-simplified') === '1') {
+        // 向後相容：舊版 boolean toggle → simple mode
+        document.documentElement.setAttribute('data-atlas-mode', 'simple');
+        document.documentElement.setAttribute('data-simplified', 'true');
       }
     } catch (e) { /* 隱私模式 / localStorage 禁用時忽略 */ }
   })();
