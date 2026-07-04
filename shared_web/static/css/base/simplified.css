@@ -1,8 +1,13 @@
 /* Atlas Dashboard - Simplified Mode */
-/* 依 audit §3.2 落地雙軌介面：進階使用者 vs 一般投資人。
-   切換 :root[data-simplified="true"] 屬性後，自動隱藏 .advanced-only 元素
-   （HUI、Drawdown、Sharpe 等進階指標），保留 Risk Badge + Trust Footer。 */
+/* 三級模式：simple（隱藏進階） / standard（完整） / pro（+額外風控指標）
+   data-atlas-mode 是 canonical attribute，[data-simplified="true"] 為向後相容。 */
 
+/* Canonical: data-atlas-mode */
+:root[data-atlas-mode="simple"] .advanced-only {
+  display: none !important;
+}
+
+/* Backward compat: data-simplified (legacy boolean toggle) */
 :root[data-simplified="true"] .advanced-only {
   display: none !important;
 }
