@@ -467,11 +467,7 @@ if (typeof window !== 'undefined') {
   initEventStream();
   initSimplifiedMode();
   (async () => {
-    try {
-      await loadAll();
-    } catch (e) {
-      console.warn('[init] loadAll failed:', e);
-    }
+    loadAll().catch(e => console.warn('[init] loadAll failed:', e));
     var initialPath = window.location.pathname
       .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
       .replace(/\/$/, '');
