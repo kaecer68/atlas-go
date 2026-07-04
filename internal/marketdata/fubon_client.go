@@ -26,17 +26,17 @@ import (
 // `fmt.Sprintf("http://...:%d", ...)` 構造 proxyURL — 違反將被
 // `fubon_url_guard_test.go` 的 AST 字串禁制擋下。
 //
-// `host.docker.internal` 而非 `127.0.0.1`/`localhost` 的理由(RCA: PR #495):
+// `fubon-proxy` (Docker compose service name,PR #941) 取代 `host.docker.internal`。
+// 在容器內 Docker DNS 解析 service name 到 bridge network 的 container IP,
+// 不再依賴 Docker Desktop host→container port forwarding (有可靠度問題)。
+// 本機開發時 register_adapters.go 會自動呼叫 fubonproxy.SetProxyHost("127.0.0.1")。
 //
-//   - fubon-proxy Python 在 macOS host 原生執行,atlas Go 程序跑在 Docker container。
-//   - 從 container 端用 `127.0.0.1` 會 hit container 自身的 loopback(錯的)。
-//   - 用 `localhost` 在 macOS / Linux 雙棧環境下,Go `net.Dial` 預設優先走 IPv6 [::1],
-//     而 fubon-proxy 只綁 IPv4 0.0.0.0 → [::1]:8081: connect: connection refused。
-//   - `host.docker.internal` 由 Docker Desktop 4.13+ 自動注入 /etc/hosts
-//     解析為 host gateway IP,跨 macOS/Windows 統一。
+// 歷史:原本用 host.docker.internal 的理由(RCA: PR #495)是因為 fubon-proxy Python
+// 跑在 macOS host 而非容器內,而從 container 用 127.0.0.1 會 hit 自己 loopback(錯的)。
+// 2026-07-04 PR #940 把 fubon-proxy 也容器化後,情境已改變。
 //
 //lint:ignore U1000 kept for documentation and test reference
-const fubonProxyBaseURL = "http://host.docker.internal:18081"
+const fubonProxyBaseURL = "http://fubon-proxy:18081"
 
 type FubonClient struct {
 	proxyURL        string

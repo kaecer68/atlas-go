@@ -99,31 +99,36 @@ export async function renderHomePage(container) {
 }
 
 async function loadHomeData() {
-  const now = new Date();
-  document.getElementById('home-last-update').textContent =
-    `最後更新：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
   try {
-    const [health, macro, stress, pipeline] = await Promise.all([
-      silentGetJSON('/api/dashboard/system-health'),
-      silentGetJSON('/api/macro/snapshot/latest'),
-      silentGetJSON('/api/taiwan/stress-index'),
-      silentGetJSON('/api/dashboard/recommendation-pipeline'),
-    ]);
+    const now = new Date();
+    document.getElementById('home-last-update').textContent =
+      `最後更新：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-    renderHero(macro, stress, pipeline);
-    renderMarketPulse(health, macro, stress);
-    renderRecommendation(pipeline, stress);
+    try {
+      const [health, macro, stress, pipeline] = await Promise.all([
+        silentGetJSON('/api/dashboard/system-health'),
+        silentGetJSON('/api/macro/snapshot/latest'),
+        silentGetJSON('/api/taiwan/stress-index'),
+        silentGetJSON('/api/dashboard/recommendation-pipeline'),
+      ]);
+
+      renderHero(macro, stress, pipeline);
+      renderMarketPulse(health, macro, stress);
+      renderRecommendation(pipeline, stress);
+    } catch (err) {
+      console.warn('[home] failed to load dashboard data:', err);
+      renderHero(null, null, null);
+      renderMarketPulse(null, null, null);
+      renderRecommendation(null, null);
+    }
+
+    // Portfolio snapshot is loaded independently; it may be empty/demo.
+    await loadPortfolioSnapshot();
   } catch (err) {
-    console.warn('[home] failed to load dashboard data:', err);
-    renderHero(null, null, null);
-    renderMarketPulse(null, null, null);
-    renderRecommendation(null, null);
+    console.error('[home] unexpected error loading home data:', err);
+  } finally {
+    renderTrustFooter();
   }
-
-  // Portfolio snapshot is loaded independently; it may be empty/demo.
-  await loadPortfolioSnapshot();
-  renderTrustFooter();
 }
 
 function pickRiskFromStress(stress) {

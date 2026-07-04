@@ -213,36 +213,47 @@ func SetFubonProxyPort(port int) {
 	}
 }
 
-// defaultProxyHost 是 fubon-proxy HTTP 服務的主機別名。
-// 在容器化環境(Go 程序跑在 Docker container,fubon-proxy Python 跑在
-// macOS host)時,Go 端必須透過 Docker Desktop 提供的 host.docker.internal
-// 別名連到 host gateway IP,而不是 127.0.0.1(container loopback 錯的)。
-// host.docker.internal 由 Docker Desktop 4.13+ 在 macOS/Windows 自動注入
-// /etc/hosts;Linux 容器需在 daemon.json 設定 extra_hosts。
-// 為何不寫死 127.0.0.1:fubon-proxy Python 服務綁 host="0.0.0.0",
-// 從 container 端用 127.0.0.1 會 hit 到 container 自身的 loopback,
-// 而 Python proxy 沒在 container 內。
+// defaultProxyHost 是 fubon-proxy HTTP 服務的主機別名 (docker compose service name)。
+// 在容器化環境(Go 程序跑在 Docker container,fubon-proxy Python 也跑在容器內)時,
+// Docker DNS 解析 service name "fubon-proxy" 到同一個 bridge network 的 container IP。
+// 不再使用 host.docker.internal — 那需依賴 Docker Desktop host→container port forwarding,
+// 而 Docker Desktop 對非 8080 的 port 轉發有時不可靠(見 PR #940 residual)。
 //
-// 注意:這裡不使用 localhost,因為 macOS / Linux 雙棧環境下,Go net.Dial
+// 本機開發(go run ./cmd/atlas 在 macOS host 上):register_adapters.go 的 probe 會偵測到
+// fubon-proxy 在 127.0.0.1 可達但 fubon-proxy DNS 不解析,並自動呼叫 SetProxyHost("127.0.0.1"),
+// 讓 FubonClient 走 http://127.0.0.1:<port> 而非 http://fubon-proxy:<port>。
+//
+// 注意:不使用 localhost,因為 macOS / Linux 雙棧環境下,Go net.Dial
 // 對 "localhost" 預設優先解析為 IPv6 [::1],而 fubon-proxy 只綁 IPv4 0.0.0.0,
 // 會出現 [::1]:8081: connect: connection refused(RCA: PR #495)。
-const defaultProxyHost = "host.docker.internal"
+const defaultProxyHost = "fubon-proxy"
+
+// defaultProxyHostVar 是執行期可覆寫的 proxy host,預設來自 const defaultProxyHost。
+// register_adapters.go 可根據 probe 結果呼叫 SetProxyHost() 切換(例如本機開發走 127.0.0.1)。
+var defaultProxyHostVar = defaultProxyHost
+
+// SetProxyHost 覆寫 fubon-proxy 主機名,供 register_adapters.go 根據 probe 結果調整。
+// 範例:probe 發現 127.0.0.1 可達但 fubon-proxy(Docker DNS)不可達 → 設為 "127.0.0.1"。
+// 必須在任何 GetSharedFubonClient() 首次呼叫前設定,否則 sync.Once 已鎖定舊值。
+func SetProxyHost(host string) {
+	defaultProxyHostVar = host
+}
 
 // ProxyBaseURL 回傳 fubon-proxy HTTP 客戶端的 canonical URL
-// (e.g. "http://host.docker.internal:8081")。
+// (e.g. "http://fubon-proxy:18081")。
 // **單一真相來源**:所有需要跟 fubon-proxy 通訊的 .go 程式碼(FubonClient、
 // HybridProvider、apigateway register_adapters probe)都必須呼叫此函式,
 // 禁止再以 fmt.Sprintf("http://%s:%d", ...) 自行構造,避免 host/port
 // 硬編碼重複造成 drift(歷史 RCA:PR #837 user prompt 列為 A1 root cause)。
 func ProxyBaseURL() string {
-	return fmt.Sprintf("http://%s:%d", defaultProxyHost, GetFubonProxyPort())
+	return fmt.Sprintf("http://%s:%d", defaultProxyHostVar, GetFubonProxyPort())
 }
 
-// ProxyHostPort 回傳純 host:port 字串(e.g. "host.docker.internal:8081"),
+// ProxyHostPort 回傳純 host:port 字串(e.g. "fubon-proxy:18081"),
 // 供 net.Dial / net.Listen probe 等場景使用(不需要 "http://" prefix)。
-// 與 ProxyBaseURL 共享同一個 host + port 來源,保證永遠同步。
+// 與 ProxyBaseURL 共用同一個 host + port 來源,保證永遠同步。
 func ProxyHostPort() string {
-	return fmt.Sprintf("%s:%d", defaultProxyHost, GetFubonProxyPort())
+	return fmt.Sprintf("%s:%d", defaultProxyHostVar, GetFubonProxyPort())
 }
 
 // resolvePythonBin 偵測 Python 可執行檔路徑。

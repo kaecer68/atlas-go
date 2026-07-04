@@ -213,7 +213,7 @@ func TestFubon_URLDriftGuard(t *testing.T) {
 	if len(violations) > 0 {
 		t.Errorf("Fubon URL drift guard FAILED — found %d violation(s):\n  %s\n\n"+
 			"為什麼失敗:PR #837 user prompt 列出 A1 root cause 為 3 個 source files "+
-			"各自硬編碼 host.docker.internal:8081,任一處忘記同步即造成 port drift。"+
+			"各自硬編碼 fubon-proxy URL,任一處忘記同步即造成 drift。"+
 			"修正:所有 fubon-proxy URL 構造點統一至 internal/fubonproxy/manager.go "+
 			"的 ProxyBaseURL() / ProxyHostPort() helpers。",
 			len(violations), strings.Join(violations, "\n  "))
