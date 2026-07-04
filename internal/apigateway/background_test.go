@@ -1387,7 +1387,7 @@ func TestBackgroundTaskManager_RunTask_AppliesStartupJitter(t *testing.T) {
 // 所有 task 會在 t=0 同時執行，差距趨近於 0，本測試會失敗。
 func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T) {
 	const (
-		numTasks     = 5
+		numTasks     = 10
 		targetJitter = 300 * time.Millisecond
 		minSpread    = 50 * time.Millisecond // 最晚 - 最早 的最小期望值
 	)
