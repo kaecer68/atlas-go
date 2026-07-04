@@ -52,11 +52,11 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 # 暴露端口
-EXPOSE 8081
+EXPOSE 18081
 
 # 健康检查 (使用 127.0.0.1 對齊 Go client 硬編碼,避免雙棧 IPv6 歧義)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18081/health')" || exit 1
 
 # 启动命令
 CMD ["python", "main.py"]
