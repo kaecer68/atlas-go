@@ -322,19 +322,10 @@ function renderRealPortfolio(container, data) {
   const drawdown = data.current_drawdown || 0;
 
   container.innerHTML = `
-    <div class="home-portfolio-summary">
-      <div class="home-portfolio-summary__item">
-        <span class="home-portfolio-summary__label">總市值</span>
-        <span class="home-portfolio-summary__value">${escapeHtml(fmtNTD(total))}</span>
-      </div>
-      <div class="home-portfolio-summary__item">
-        <span class="home-portfolio-summary__label">損益</span>
-        <span class="home-portfolio-summary__value ${pnl >= 0 ? 'positive' : 'negative'}">${fmtSignedPct(pnlPct)}</span>
-      </div>
-      <div class="home-portfolio-summary__item advanced-only">
-        <span class="home-portfolio-summary__label">最大回撤</span>
-        <span class="home-portfolio-summary__value">${escapeHtml(fmtDrawdown(drawdown))}</span>
-      </div>
+    <div class="kpi-grid">
+      ${metricCard({ label: '總市值', value: fmtNTD(total), tone: 'neutral' })}
+      ${metricCard({ label: '損益', value: fmtSignedPct(pnlPct), tone: pnl >= 0 ? 'positive' : 'negative' })}
+      ${metricCard({ label: '最大回撤', value: fmtDrawdown(drawdown), tone: 'neutral', extraClasses: 'advanced-only' })}
     </div>
     <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>
   `;
@@ -375,19 +366,10 @@ function renderDemoPortfolioWithData(container) {
   const topPositions = positions.slice(0, 3);
 
   container.innerHTML = `
-    <div class="home-portfolio-summary home-portfolio-summary--demo">
-      <div class="home-portfolio-summary__item">
-        <span class="home-portfolio-summary__label">示範總市值 <span class="badge demo">DEMO</span></span>
-        <span class="home-portfolio-summary__value">${fmtNTD(totalValue)}</span>
-      </div>
-      <div class="home-portfolio-summary__item">
-        <span class="home-portfolio-summary__label">損益</span>
-        <span class="home-portfolio-summary__value ${totalPnl >= 0 ? 'positive' : 'negative'}">${fmtSignedPct(pnlPct)}</span>
-      </div>
-      <div class="home-portfolio-summary__item">
-        <span class="home-portfolio-summary__label">持倉檔數</span>
-        <span class="home-portfolio-summary__value">${positions.length}</span>
-      </div>
+    <div class="kpi-grid">
+      ${metricCard({ label: '示範總市值', value: fmtNTD(totalValue), tone: 'neutral', tooltip: 'DEMO 資料' })}
+      ${metricCard({ label: '損益', value: fmtSignedPct(pnlPct), tone: totalPnl >= 0 ? 'positive' : 'negative' })}
+      ${metricCard({ label: '持倉檔數', value: positions.length, tone: 'neutral' })}
     </div>
     <div class="home-demo-positions">
       ${topPositions.map(p => {

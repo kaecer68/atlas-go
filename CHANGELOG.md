@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.0.28] - 2026-07-04
+
+### Fixed
+- **Shared web home.css import** (PR #942): 在 `shared_web/static/css/main.css` 加入 `@import url("pages/home.css")`，使 client web home page 樣式正確載入。
+
 ## [0.0.0.27] - 2026-07-02
 
 ### Security
