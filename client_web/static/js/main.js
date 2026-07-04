@@ -59,7 +59,7 @@ export async function switchPage(id, silent) {
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }
   await _ensureShellLoaded(id);
-  if (pageEl.classList.contains('active')) return;
+  if (pageEl.classList.contains('active') && !silent) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));

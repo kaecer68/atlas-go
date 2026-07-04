@@ -27,11 +27,18 @@ var authFreeExactPaths = map[string]bool{
 	"/admin":          true,
 	"/client":         true,
 	"/api/llm/health": true,
+	"/api/alerts":     true,
 }
 
 var authFreePrefixPaths = []string{
 	"/admin/",
 	"/client/",
+	"/api/dashboard/",
+	"/api/taiwan/",
+	"/api/narrative/",
+	"/api/macro/",
+	"/api/alerts/",
+	"/api/synergy/",
 }
 
 func isAuthFreePath(p string) bool {

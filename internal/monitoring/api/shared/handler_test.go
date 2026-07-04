@@ -277,7 +277,7 @@ func TestAuthMiddleware_ProbingPathsBypassAuth(t *testing.T) {
 
 	// Non-probing paths still require auth
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/dashboard/x", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/control/audit-log", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("protected path without auth: status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
@@ -348,7 +348,79 @@ func TestAuthMiddleware_WebUIPathsBypassAuth(t *testing.T) {
 		t.Errorf("next handler invocations = %d, want %d", hits, len(paths))
 	}
 
-	for _, path := range []string{"/api/dashboard/x", "/adminfoo", "/adminx"} {
+	for _, path := range []string{"/api/control/audit-log", "/api/experiment/judge", "/adminfoo", "/adminx"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("protected path %s without auth: status = %d, want %d",
+				path, w.Code, http.StatusUnauthorized)
+		}
+	}
+}
+
+// TestAuthMiddleware_DashboardAPIsBypassAuth verifies that the dashboard
+// read-only API prefixes (/api/dashboard, /api/taiwan, /api/narrative,
+// /api/macro, /api/alerts, /api/synergy) bypass auth without X-API-Key.
+//
+// The investor /client/ pages do not carry the API token in browser
+// fetches, and these endpoints expose only public-read summary data
+// (regime, channel health, narrative bundles, macro snapshot, etc.).
+// Without these exemptions the dashboard's <main> panel renders empty
+// because every panel fetch returns 401. Parallels PR #931, which added
+// /api/llm/health with the same reasoning.
+//
+// Regression guard: AGENTS.md §關鍵跨模組陷阱 requires these bypass
+// lists to be mirrored in BOTH cmd/atlas/main.go isPublicPath AND
+// internal/monitoring/api/shared/handler.go authFree{Exact,Prefix}Paths.
+// Forgetting either side leaves the dashboard 401.
+func TestAuthMiddleware_DashboardAPIsBypassAuth(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	t.Setenv("ATLAS_API_KEY", "secret-key")
+
+	hits := 0
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	prefixPaths := []string{
+		"/api/dashboard/system-health",
+		"/api/dashboard/macro-radar",
+		"/api/dashboard/agent-observatory",
+		"/api/taiwan/stress-index",
+		"/api/narrative/bundle",
+		"/api/macro/snapshot/latest",
+		"/api/alerts/unacknowledged",
+		"/api/synergy/darwinian-status",
+	}
+	exactPaths := []string{
+		"/api/alerts",
+	}
+
+	for _, path := range prefixPaths {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusOK {
+			t.Errorf("prefix %s without auth: status = %d, want %d (body=%s)",
+				path, w.Code, http.StatusOK, w.Body.String())
+		}
+	}
+	for _, path := range exactPaths {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusOK {
+			t.Errorf("exact %s without auth: status = %d, want %d (body=%s)",
+				path, w.Code, http.StatusOK, w.Body.String())
+		}
+	}
+
+	wantHits := len(prefixPaths) + len(exactPaths)
+	if hits != wantHits {
+		t.Errorf("next handler invocations = %d, want %d", hits, wantHits)
+	}
+
+	// Unrelated /api/ paths still require auth (positive control).
+	for _, path := range []string{"/api/control/audit-log", "/api/experiment/judge"} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
 		if w.Code != http.StatusUnauthorized {
