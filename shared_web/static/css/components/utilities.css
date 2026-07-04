@@ -13,6 +13,10 @@
 .text-metric-bad { color: var(--metric-bad); }
 .text-risk-high { color: var(--risk-high); }
 .text-risk-low { color: var(--risk-low); }
+.text-capital-inflow { color: var(--capital-inflow); }
+.text-capital-outflow { color: var(--capital-outflow); }
+.text-signal-bullish { color: var(--signal-bullish); }
+.text-signal-bearish { color: var(--signal-bearish); }
 .text-success { color: var(--color-success); }
 .text-danger { color: var(--color-danger); }
 .text-warn { color: var(--warn); }

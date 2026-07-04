@@ -27,8 +27,12 @@ export function convColor(v) {
   return typeof v === 'number' ? (v >= 0.7 ? 'var(--metric-good)' : (v >= 0.4 ? 'var(--warn)' : 'var(--muted)')) : 'var(--muted)';
 }
 
-export function getThemeColor(varName) {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+export function getThemeColor(varName, fallbackHex) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  if (v) return v;
+  if (fallbackHex) return fallbackHex;
+  console.warn('[getThemeColor] CSS variable not found:', varName);
+  return '#000000';
 }
 
 export function escapeHtml(str) {
