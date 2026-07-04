@@ -25,6 +25,8 @@ rest_client = None
 login_time = None
 SESSION_TIMEOUT = 3600
 SDK_INIT_TIMEOUT = 5
+FUBON_WS_HOST = "neoapi.fbs.com.tw"
+FUBON_WS_PORT = 443
 _cache: Dict[str, Dict[str, Any]] = {}
 _cache_lock = threading.Lock()
 CACHE_TTL = 30
@@ -43,6 +45,27 @@ class QuoteResponse(BaseModel):
 
 class MarketStatusResponse(BaseModel):
     status: str; is_open: bool; timestamp: int
+
+
+def _preflight_check():
+    """TCP pre-flight: test upstream reachability before SDK init.
+
+    Uses standard socket.connect() with timeout. This is a pure Python
+    call that respects settimeout(), unlike the fubon_neo C extension
+    which holds the GIL and ignores Python-level timeouts on macOS.
+    """
+    import socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(SDK_INIT_TIMEOUT)
+        sock.connect((FUBON_WS_HOST, FUBON_WS_PORT))
+        sock.close()
+        logger.info("Pre-flight OK: %s:%s", FUBON_WS_HOST, FUBON_WS_PORT)
+        return True
+    except (socket.timeout, OSError) as e:
+        logger.warning("Pre-flight FAIL: %s:%s (%s)", FUBON_WS_HOST, FUBON_WS_PORT, e)
+        return False
+
 
 def _find_cert():
     cert_path = os.getenv("FUBON_CERT_PATH")
@@ -65,6 +88,12 @@ def _find_cert():
 def _init_sdk_sync():
     global sdk, rest_client, login_time
     import socket
+    # TCP pre-flight: detect unreachable upstream BEFORE calling C extension.
+    # On macOS, signal.alarm / asyncio.wait_for / socket.setdefaulttimeout cannot
+    # interrupt a C extension holding the GIL. This pre-flight is the only reliable
+    # defense — it uses pure-Python socket.connect() which respects settimeout().
+    if not _preflight_check():
+        raise ConnectionError(f"Fubon upstream {FUBON_WS_HOST}:{FUBON_WS_PORT} unreachable")
     socket.setdefaulttimeout(SDK_INIT_TIMEOUT)
     from fubon_neo.sdk import FubonSDK
     personal_id = os.getenv("FUBON_PERSONAL_ID")
@@ -91,6 +120,9 @@ def _init_sdk_sync():
 
 async def _init_sdk_async():
     global sdk, rest_client, login_time
+    # signal.alarm is best-effort on macOS (SA_RESTART blocks SIGALRM during
+    # C-level I/O). The TCP pre-flight check in _init_sdk_sync() is the primary
+    # defense; this signal timeout is a secondary safety net for non-I/O hangs.
     old_handler = signal.signal(signal.SIGALRM, _sdk_alarm_handler)
     signal.alarm(SDK_INIT_TIMEOUT)
     try:

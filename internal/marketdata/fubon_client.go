@@ -325,20 +325,20 @@ func (c *FubonClient) IsHealthy() bool {
 func (c *FubonClient) runHealthProbe(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	failures := 0
+	var failures atomic.Int32
 	probe := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		if err := c.HealthCheck(ctx); err != nil {
-			failures++
-			if failures >= healthProbeConsecutiveFailures {
+			n := failures.Add(1)
+			if n >= healthProbeConsecutiveFailures {
 				c.healthy.Store(false)
 			}
 			logging.Warn("fubon_client", "health_probe_failed",
 				logging.Err(err),
-				logging.FInt("consecutive_failures", failures))
+				logging.FInt("consecutive_failures", int(n)))
 		} else {
-			failures = 0
+			failures.Store(0)
 			c.healthy.Store(true)
 		}
 	}
