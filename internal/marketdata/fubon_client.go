@@ -36,7 +36,7 @@ import (
 //     解析為 host gateway IP,跨 macOS/Windows 統一。
 //
 //lint:ignore U1000 kept for documentation and test reference
-const fubonProxyBaseURL = "http://host.docker.internal:8081"
+const fubonProxyBaseURL = "http://host.docker.internal:18081"
 
 type FubonClient struct {
 	proxyURL        string
