@@ -102,6 +102,18 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/api/llm/health":
 		return true
+	case p == "/api/dashboard" || strings.HasPrefix(p, "/api/dashboard/"):
+		return true
+	case p == "/api/taiwan" || strings.HasPrefix(p, "/api/taiwan/"):
+		return true
+	case p == "/api/narrative" || strings.HasPrefix(p, "/api/narrative/"):
+		return true
+	case p == "/api/macro" || strings.HasPrefix(p, "/api/macro/"):
+		return true
+	case p == "/api/alerts" || strings.HasPrefix(p, "/api/alerts/"):
+		return true
+	case p == "/api/synergy" || strings.HasPrefix(p, "/api/synergy/"):
+		return true
 	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
 		return true
 	case p == "/client" || strings.HasPrefix(p, "/client/"):
