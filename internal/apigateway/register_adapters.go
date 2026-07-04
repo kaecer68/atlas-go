@@ -35,42 +35,42 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	// Startup probe: skip registration if the local proxy is not reachable,
 	// avoiding constant connection-refused errors at runtime.
 	//
-	// Probe 127.0.0.1 first (host run + Docker Desktop port forwarder),
-	// then host.docker.internal (container run, Docker special DNS). Either
-	// success means a fubon-proxy is reachable.
+	// 雙位址 probe:127.0.0.1 (本機開發,go run in macOS host) 先測,
+	// 再測 fubon-proxy (Docker DNS,容器內).根據結果選取正確的 proxy host:
+	//   - 只有 127.0.0.1 可達 → 叫 SetProxyHost("127.0.0.1")
+	//   - fubon-proxy 可達 → 用預設值(不需覆寫)
 	fubonKey := cfg.FubonAPIKey
 	if fubonKey == "" {
 		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
 	}
 	if fubonKey != "" {
-		// Port comes from fubonproxy (set by NewManager or -fubon-port flag) so
-		// the probe follows the L2 alt-port contract: when -fubon-port=8080 is
-		// passed, we dial 8080, not the hardcoded default.
-		//
-		// 雙位址 probe 是 by design:host 原生執行時 127.0.0.1 直連,Docker container
-		// 執行時需走 host.docker.internal(Docker Desktop 注入的 host gateway 別名)。
-		// 任一成功即視為 proxy 可達。
-		//
-		// Host 來源已統一從 fubonproxy 取得(PR #837 user prompt A1 root cause:
-		// 原本 3 個 source files 各自硬編碼 "host.docker.internal:8081")。
 		fubonPort := fubonproxy.GetFubonProxyPort()
-		probeAddrs := []string{
-			fmt.Sprintf("127.0.0.1:%d", fubonPort),
-			fubonproxy.ProxyHostPort(),
-		}
-		var dialed bool
-		for _, addr := range probeAddrs {
+		localAddr := fmt.Sprintf("127.0.0.1:%d", fubonPort)
+		dockerAddr := fubonproxy.ProxyHostPort()
+
+		// probeAddr 嘗試一次 TCP dial,回傳成功/失敗.
+		probeAddr := func(addr string) bool {
 			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 			if err != nil {
-				continue
+				return false
 			}
 			_ = conn.Close()
-			dialed = true
-			break
+			return true
 		}
-		if !dialed {
-			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", fmt.Sprintf("skipping fubon adapter registration — fubon-proxy not reachable on 127.0.0.1:%d or host.docker.internal:%d", fubonPort, fubonPort))
+
+		localOK := probeAddr(localAddr)
+		proxyOK := probeAddr(dockerAddr)
+
+		if !localOK && !proxyOK {
+			logging.Info("apigateway", "fubon_proxy_not_reachable",
+				"msg", fmt.Sprintf("skipping fubon adapter registration — fubon-proxy not reachable on %s or %s", localAddr, dockerAddr))
 		} else {
+			// 若只有本機 loopback 可達,覆寫 proxy host 為 127.0.0.1
+			if localOK && !proxyOK {
+				fubonproxy.SetProxyHost("127.0.0.1")
+				logging.Info("apigateway", "fubon_proxy_host_override",
+					"msg", "fubon-proxy only reachable on 127.0.0.1, overriding proxy host")
+			}
 			fubonClient := marketdata.GetSharedFubonClient()
 			fubonAdapter := NewFubonChannelAdapter(fubonClient)
 			g.registry.Register("fubon", fubonAdapter)

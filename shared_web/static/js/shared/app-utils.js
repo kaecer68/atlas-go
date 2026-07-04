@@ -1,7 +1,7 @@
 import { escapeHtml } from './utils.js';
 
 export async function getJSON(url) {
-  var res = await fetch(url);
+  const res = await fetch(url, { credentials: 'include' });
   if (!res.ok) throw new Error(url + ': ' + res.status);
   return res.json();
 }
@@ -16,7 +16,12 @@ export async function silentGetJSON(url) {
 }
 
 export async function postJSON(url, body) {
-  var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
   if (!res.ok) throw new Error(url + ': ' + res.status);
   return res.json();
 }
@@ -26,7 +31,12 @@ export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + 
 export { escapeHtml };
 
 export async function putJSON(url, body) {
-  var res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(url, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
   if (!res.ok) throw new Error(url + ': ' + res.status);
   return res.json();
 }
@@ -51,7 +61,7 @@ export function renderSkeleton(lines) {
 export function sortNarrativeEvents(events) {
   return events.sort(function(a, b) {
     var strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1) * (a.hit_rate || 0.5);
-    var strengthB = Math.abs(a.sentiment || 0) * (b.confidence || 1) * (b.hit_rate || 0.5);
+    var strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1) * (b.hit_rate || 0.5);
     return strengthB - strengthA;
   });
 }

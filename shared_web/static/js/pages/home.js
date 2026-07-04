@@ -64,8 +64,8 @@ export async function renderHomePage(container) {
 
     <section class="home-section" id="home-recommendation">
       <div class="home-section__header">
-        <h2>今日建議</h2>
-        <span class="home-section__subtitle">模型輸出與信心分數</span>
+        <h2>模型觀點</h2>
+        <span class="home-section__subtitle">綜合市場資料後的今日傾向</span>
       </div>
       <div class="home-recommendation__card" id="home-rec-card">
         <div class="home-loading-card">載入中…</div>
@@ -99,58 +99,81 @@ export async function renderHomePage(container) {
 }
 
 async function loadHomeData() {
-  const now = new Date();
-  document.getElementById('home-last-update').textContent =
-    `最後更新：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
   try {
-    const [health, macro, stress, pipeline, alerts] = await Promise.all([
-      silentGetJSON('/api/dashboard/system-health'),
-      silentGetJSON('/api/macro/snapshot/latest'),
-      silentGetJSON('/api/taiwan/stress-index'),
-      silentGetJSON('/api/dashboard/recommendation-pipeline'),
-      silentGetJSON('/api/alerts'),
-    ]);
+    const now = new Date();
+    document.getElementById('home-last-update').textContent =
+      `最後更新：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-    renderHero(macro, stress, alerts);
-    renderMarketPulse(health, macro, stress);
-    renderRecommendation(pipeline, stress);
+    try {
+      const [health, macro, stress, pipeline] = await Promise.all([
+        silentGetJSON('/api/dashboard/system-health'),
+        silentGetJSON('/api/macro/snapshot/latest'),
+        silentGetJSON('/api/taiwan/stress-index'),
+        silentGetJSON('/api/dashboard/recommendation-pipeline'),
+      ]);
+
+      renderHero(macro, stress, pipeline);
+      renderMarketPulse(health, macro, stress);
+      renderRecommendation(pipeline, stress);
+    } catch (err) {
+      console.warn('[home] failed to load dashboard data:', err);
+      renderHero(null, null, null);
+      renderMarketPulse(null, null, null);
+      renderRecommendation(null, null);
+    }
+
+    // Portfolio snapshot is loaded independently; it may be empty/demo.
+    await loadPortfolioSnapshot();
   } catch (err) {
-    console.warn('[home] failed to load dashboard data:', err);
-    renderHero(null, null, null);
-    renderMarketPulse(null, null, null);
-    renderRecommendation(null, null);
+    console.error('[home] unexpected error loading home data:', err);
+  } finally {
+    renderTrustFooter();
   }
-
-  // Portfolio snapshot is loaded independently; it may be empty/demo.
-  await loadPortfolioSnapshot();
-  renderTrustFooter();
 }
 
-function renderHero(macro, stress, alerts) {
+function pickRiskFromStress(stress) {
+  const score = pointValue(stress, 'score');
+  if (score === null) return 'unknown';
+  // Stress index is 0–100; higher score = more stress.
+  if (score >= 70) return 'high';
+  if (score >= 40) return 'medium';
+  return 'low';
+}
+
+function stressSummary(stress) {
+  const score = pointValue(stress, 'score');
+  if (score === null) return { summary: '市場資料載入中，請稍候。', risk: 'unknown' };
+  const risk = pickRiskFromStress(stress);
+  if (risk === 'high') {
+    return { summary: '市場壓力偏高，建議降低曝險、保留現金。', risk };
+  }
+  if (risk === 'medium') {
+    return { summary: '市場處於中性震盪，建議觀望並控制倉位。', risk };
+  }
+  return { summary: '市場壓力偏低，可留意配置機會。', risk };
+}
+
+function renderHero(macro, stress, pipeline) {
   const summaryEl = document.getElementById('home-summary');
   const badgeEl = document.getElementById('home-risk-badge');
 
-  let risk = 'unknown';
-  let summary = '市場資料載入中，請稍候。';
+  let { summary, risk } = stressSummary(stress);
 
-  if (alerts && Array.isArray(alerts.items) && alerts.items.length > 0) {
-    const top = alerts.items[0];
-    summary = top.title || '市場出現值得關注的訊號。';
-    risk = top.severity || 'medium';
-  } else if (stress && typeof stress.level === 'number') {
-    if (stress.level >= 0.7) {
-      summary = '市場壓力偏高，建議降低曝險、保留現金。';
+  // If pipeline has a clear directional view, use it to refine the hero text.
+  if (pipeline && Array.isArray(pipeline.items) && pipeline.items.length > 0) {
+    const top = pipeline.items[0];
+    const side = top.side || '';
+    if (side.toLowerCase() === 'buy') {
+      summary = '模型觀察到偏多訊號，可留意配置機會。';
+      risk = pickRiskFromStress(stress) === 'high' ? 'high' : 'low';
+    } else if (side.toLowerCase() === 'sell') {
+      summary = '模型觀察到偏空訊號，建議降低曝險。';
       risk = 'high';
-    } else if (stress.level >= 0.4) {
-      summary = '市場處於中性震盪，建議觀望並控制倉位。';
-      risk = 'medium';
-    } else {
-      summary = '市場壓力偏低，可留意配置機會。';
-      risk = 'low';
     }
-  } else if (macro && macro.foreign_capital_signal) {
-    summary = `外資動向：${macro.foreign_capital_signal}。`;
+  }
+
+  if (risk === 'unknown' && macro && pointValue(macro, 'foreign_investor_net') !== null) {
+    summary = '外資與大盤資料已載入，請觀察下方指標。';
     risk = 'medium';
   }
 
@@ -158,26 +181,54 @@ function renderHero(macro, stress, alerts) {
   badgeEl.innerHTML = renderRiskBadge(risk, riskLevelLabel(risk));
 }
 
+function pointValue(obj, key) {
+  if (!obj) return null;
+  if (obj[key] !== undefined && obj[key] !== null) {
+    const n = Number(obj[key]);
+    return Number.isNaN(n) ? null : n;
+  }
+  if (obj[key] && typeof obj[key] === 'object' && obj[key].value !== undefined) {
+    const n = Number(obj[key].value);
+    return Number.isNaN(n) ? null : n;
+  }
+  return null;
+}
+
+function pointChange(obj, key) {
+  if (!obj || !obj[key] || typeof obj[key] !== 'object') return null;
+  const n = Number(obj[key].change_pct);
+  return Number.isNaN(n) ? null : n;
+}
+
+function marketTrendDirection(changePct) {
+  if (changePct === null) return { value: '持平', tone: 'neutral' };
+  return changePct > 0
+    ? { value: '+偏多', tone: 'positive' }
+    : changePct < 0
+      ? { value: '-偏空', tone: 'negative' }
+      : { value: '持平', tone: 'neutral' };
+}
+
 function renderMarketPulse(health, macro, stress) {
   const grid = document.getElementById('home-market-grid');
 
-  const marketTrend = (macro && macro.taiwan_ex_direction) || '—';
-  const marketTrendValue = marketTrend === 'up' ? '+偏多' : marketTrend === 'down' ? '-偏空' : '持平';
-  const marketTrendClass = marketTrend === 'up' ? 'positive' : marketTrend === 'down' ? 'negative' : 'neutral';
+  const taiexChange = pointChange(macro, 'taiex');
+  const trend = marketTrendDirection(taiexChange);
 
-  const foreign = (macro && macro.foreign_investor_net_billions) || null;
+  const foreign = pointValue(macro, 'foreign_investor_net');
   const foreignText = foreign !== null ? fmtSignedPct(foreign / 100, true) : '—';
 
-  const stressLevel = (stress && stress.level) || 0;
-  const stressLabel = riskLevelLabel(stressLevel >= 0.7 ? 'high' : stressLevel >= 0.4 ? 'medium' : 'low');
+  const stressScore = pointValue(stress, 'score') || 0;
+  const stressRisk = stressScore >= 70 ? 'high' : stressScore >= 40 ? 'medium' : 'low';
+  const stressLabel = riskLevelLabel(stressRisk);
 
   grid.innerHTML = [
     metricCard({
       label: '大盤趨勢',
-      value: marketTrendValue,
-      delta: macro && macro.taiwan_ex_change_pct ? fmtSignedPct(macro.taiwan_ex_change_pct) : null,
-      tone: marketTrendClass,
-      tooltip: '加權指數近期趨勢方向，資料來自 replay 與市場資料。'
+      value: trend.value,
+      delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null,
+      tone: trend.tone,
+      tooltip: '加權指數近期漲跌幅，資料來自 TWSE 與 replay 市場資料。'
     }),
     metricCard({
       label: '外資動向',
@@ -189,12 +240,11 @@ function renderMarketPulse(health, macro, stress) {
     metricCard({
       label: '市場壓力',
       value: stressLabel,
-      delta: stressLevel ? `${(stressLevel * 100).toFixed(0)}%` : null,
-      tone: stressLevel >= 0.7 ? 'negative' : stressLevel >= 0.4 ? 'warning' : 'positive',
-      tooltip: '綜合波動、資金流與信用風險的壓力指數。'
+      delta: stressScore ? `${stressScore.toFixed(0)}%` : null,
+      tone: stressRisk === 'high' ? 'negative' : stressRisk === 'medium' ? 'warning' : 'positive',
+      tooltip: '綜合波動、資金流與信用風險的壓力指數（0–100）。'
     })
   ].join('');
-
 }
 
 function renderRecommendation(pipeline, stress) {
@@ -205,20 +255,24 @@ function renderRecommendation(pipeline, stress) {
   let confidence = 0;
   let tone = 'neutral';
 
-  if (pipeline && typeof pipeline.score === 'number') {
-    const score = pipeline.score;
-    if (score >= 0.6) {
+  if (pipeline && Array.isArray(pipeline.items) && pipeline.items.length > 0) {
+    const top = pipeline.items[0];
+    const conviction = typeof top.conviction === 'number' ? top.conviction : 0;
+    const side = (top.side || '').toLowerCase();
+
+    if (side === 'buy') {
       action = '配置';
       tone = 'positive';
-    } else if (score <= -0.6) {
+    } else if (side === 'sell') {
       action = '減碼';
       tone = 'negative';
     } else {
       action = '觀望';
       tone = 'neutral';
     }
-    confidence = Math.min(100, Math.max(0, Math.round(Math.abs(score) * 100)));
-    reason = pipeline.rationale || `模型綜合評分 ${score.toFixed(2)}，對應建議為「${action}」。`;
+
+    confidence = Math.min(100, Math.max(0, Math.round(conviction * 100)));
+    reason = top.reason || `模型對 ${escapeHtml(top.symbol || '市場')} 的綜合評估為「${action}」，信心 ${confidence}%。`;
   }
 
   card.innerHTML = `
@@ -247,8 +301,8 @@ function renderRecommendation(pipeline, stress) {
 async function loadPortfolioSnapshot() {
   const container = document.getElementById('home-portfolio-content');
   try {
-    const data = await silentGetJSON('/api/portfolio/current');
-    if (!data || !data.positions || data.positions.length === 0) {
+    const data = await silentGetJSON('/api/dashboard/portfolio-state');
+    if (!data || !Array.isArray(data.positions) || data.positions.length === 0) {
       renderDemoPortfolio(container);
       return;
     }
@@ -260,10 +314,12 @@ async function loadPortfolioSnapshot() {
 }
 
 function renderRealPortfolio(container, data) {
-  const total = data.total_value || 0;
-  const pnl = data.total_pnl || 0;
-  const pnlPct = total > 0 ? (pnl / (total - pnl)) * 100 : 0;
-  const hhi = data.hhi || 0;
+  const total = data.portfolio_value || 0;
+  const pnl = data.cumulative_pnl || 0;
+  const pnlPct = typeof data.cumulative_pnl_pct === 'number'
+    ? data.cumulative_pnl_pct
+    : (total > 0 && total !== pnl ? (pnl / (total - pnl)) : 0);
+  const drawdown = data.current_drawdown || 0;
 
   container.innerHTML = `
     <div class="home-portfolio-summary">
@@ -276,8 +332,8 @@ function renderRealPortfolio(container, data) {
         <span class="home-portfolio-summary__value ${pnl >= 0 ? 'positive' : 'negative'}">${fmtSignedPct(pnlPct)}</span>
       </div>
       <div class="home-portfolio-summary__item advanced-only">
-        <span class="home-portfolio-summary__label">集中度</span>
-        <span class="home-portfolio-summary__value">${escapeHtml(fmtHHI(hhi))}</span>
+        <span class="home-portfolio-summary__label">最大回撤</span>
+        <span class="home-portfolio-summary__value">${escapeHtml(fmtDrawdown(drawdown))}</span>
       </div>
     </div>
     <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>

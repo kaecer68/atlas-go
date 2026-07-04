@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -983,9 +984,10 @@ func TestProcessManager_NewManager_ScriptPathIsAbsolute(t *testing.T) {
 		t.Errorf("scriptPath resolves to %q, want %q", resolved, expected)
 	}
 
-	// 3. healthURL 預設應為 127.0.0.1:8081（PR #495 IPv4 hardcode）
-	if m.healthURL != "http://127.0.0.1:8081/health" {
-		t.Errorf("healthURL = %q, want %q (PR #495 IPv4 hardcode)", m.healthURL, "http://127.0.0.1:8081/health")
+	// 3. healthURL 預設應為 127.0.0.1（PR #495 IPv4 hardcode），
+	//    port 為預設值 18081（PR #940 migration）。
+	if m.healthURL != "http://127.0.0.1:18081/health" {
+		t.Errorf("healthURL = %q, want %q (PR #495 IPv4 hardcode)", m.healthURL, "http://127.0.0.1:18081/health")
 	}
 }
 
@@ -1558,14 +1560,14 @@ func TestKillOccupant_NonExistentPID(t *testing.T) {
 	}
 }
 
-// bindPort8081IPv6Wildcard 佔住 [::]:8081 (IPv6 wildcard) 模擬 IPv6-only
+// bindPort8081IPv6Wildcard 佔住 [::]:<proxyListenPort> (IPv6 wildcard) 模擬 IPv6-only
 // 外部進程（對應 Docker Desktop IPv6-only port forwarder）。handler 給
 // 測試控制 /health 行為。
 func bindPort8081IPv6Wildcard(t *testing.T, h http.Handler) (net.Listener, *http.Server) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "[::]:8081")
+	ln, err := net.Listen("tcp", "[::]:"+strconv.Itoa(proxyListenPort))
 	if err != nil {
-		t.Skipf("IPv6 wildcard port 8081 unavailable on test host: %v — skipping", err)
+		t.Skipf("IPv6 wildcard port %d unavailable on test host: %v — skipping", proxyListenPort, err)
 	}
 	srv := &http.Server{Handler: h}
 	go func() {
@@ -1579,10 +1581,10 @@ func bindPort8081IPv6Wildcard(t *testing.T, h http.Handler) (net.Listener, *http
 }
 
 func TestProcessManager_F9_PortIPv6WildcardHeld_ReportsForeign(t *testing.T) {
-	if ln, err := net.Listen("tcp", "0.0.0.0:8081"); err == nil {
+	if ln, err := net.Listen("tcp", "0.0.0.0:"+strconv.Itoa(proxyListenPort)); err == nil {
 		_ = ln.Close()
 	} else {
-		t.Skipf("0.0.0.0:8081 unavailable: %v — cannot isolate IPv6 case", err)
+		t.Skipf("0.0.0.0:%d unavailable: %v — cannot isolate IPv6 case", proxyListenPort, err)
 	}
 
 	bindPort8081IPv6Wildcard(t, http.NotFoundHandler())
@@ -1593,20 +1595,20 @@ func TestProcessManager_F9_PortIPv6WildcardHeld_ReportsForeign(t *testing.T) {
 		t.Fatalf("probePort8081() error: %v", err)
 	}
 	if state != portStateForeign {
-		t.Errorf("probePort8081() with [::]:8081 held = %v, want portStateForeign", state)
+		t.Errorf("probePort8081() with [::]:%d held = %v, want portStateForeign", proxyListenPort, state)
 	}
 }
 
 func TestProcessManager_F9_PortBothWildcardsFree_ReturnsFree(t *testing.T) {
-	if ln, err := net.Listen("tcp", "0.0.0.0:8081"); err == nil {
+	if ln, err := net.Listen("tcp", "0.0.0.0:"+strconv.Itoa(proxyListenPort)); err == nil {
 		_ = ln.Close()
 	} else {
-		t.Skipf("0.0.0.0:8081 in use: %v", err)
+		t.Skipf("0.0.0.0:%d in use: %v", proxyListenPort, err)
 	}
-	if ln, err := net.Listen("tcp", "[::]:8081"); err == nil {
+	if ln, err := net.Listen("tcp", "[::]:"+strconv.Itoa(proxyListenPort)); err == nil {
 		_ = ln.Close()
 	} else {
-		t.Skipf("[::]:8081 in use: %v", err)
+		t.Skipf("[::]:%d in use: %v", proxyListenPort, err)
 	}
 
 	m := &ProcessManager{}
@@ -1645,24 +1647,25 @@ func TestGetFubonProxyPort_ReflectsNewManagerOverride(t *testing.T) {
 
 // TestProxyBaseURL_DefaultAndCustomPort (PR #837 follow-up, A1 single source of truth)
 // 驗證 ProxyBaseURL() 回傳值:
-//   - 預設:http://host.docker.internal:8081
-//   - 自訂 port (透過 NewManager override):http://host.docker.internal:<custom>
+//   - 預設:http://fubon-proxy:18081
+//   - 自訂 port (透過 NewManager override):http://fubon-proxy:<custom>
 //
-// 若未來 dev 把 host (defaultProxyHost) 或預設 port 改錯,本 test 會抓到。
+// 若未來 dev 把 host (defaultProxyHostVar) 或預設 port 改錯,本 test 會抓到。
 // 對應 guard test `marketdata.TestFubon_URLDriftGuard` 防的是「其他檔案自行構造」,
 // 本 test 防的是「canonical owner 本身的構造邏輯正確」。
 func TestProxyBaseURL_DefaultAndCustomPort(t *testing.T) {
 	t.Cleanup(func() {
 		proxyListenPort = defaultFubonProxyPort
+		defaultProxyHostVar = defaultProxyHost
 	})
 
-	if got := ProxyBaseURL(); got != "http://host.docker.internal:8081" {
-		t.Errorf("default ProxyBaseURL() = %q, want %q", got, "http://host.docker.internal:8081")
+	if got := ProxyBaseURL(); got != "http://fubon-proxy:18081" {
+		t.Errorf("default ProxyBaseURL() = %q, want %q", got, "http://fubon-proxy:18081")
 	}
 
 	const customPort = 19090
 	_ = NewManager(t.TempDir(), customPort)
-	want := "http://host.docker.internal:19090"
+	want := "http://fubon-proxy:19090"
 	if got := ProxyBaseURL(); got != want {
 		t.Errorf("custom-port ProxyBaseURL() = %q, want %q", got, want)
 	}
@@ -1673,19 +1676,20 @@ func TestProxyBaseURL_DefaultAndCustomPort(t *testing.T) {
 // 供 net.Dial / net.Listen probe 使用。
 //
 // 與 TestProxyBaseURL_DefaultAndCustomPort 互補:兩者共用同一個
-// defaultProxyHost 與 proxyListenPort,任何一邊 drift 會被任一 test 抓到。
+// defaultProxyHostVar 與 proxyListenPort,任何一邊 drift 會被任一 test 抓到。
 func TestProxyHostPort_DefaultAndCustomPort(t *testing.T) {
 	t.Cleanup(func() {
 		proxyListenPort = defaultFubonProxyPort
+		defaultProxyHostVar = defaultProxyHost
 	})
 
-	if got := ProxyHostPort(); got != "host.docker.internal:8081" {
-		t.Errorf("default ProxyHostPort() = %q, want %q", got, "host.docker.internal:8081")
+	if got := ProxyHostPort(); got != "fubon-proxy:18081" {
+		t.Errorf("default ProxyHostPort() = %q, want %q", got, "fubon-proxy:18081")
 	}
 
 	const customPort = 19091
 	_ = NewManager(t.TempDir(), customPort)
-	want := "host.docker.internal:19091"
+	want := "fubon-proxy:19091"
 	if got := ProxyHostPort(); got != want {
 		t.Errorf("custom-port ProxyHostPort() = %q, want %q", got, want)
 	}

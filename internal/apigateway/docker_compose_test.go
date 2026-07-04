@@ -14,7 +14,7 @@ import (
 //	  - "host.docker.internal:host-gateway"
 //
 // on the atlas service. This enables the atlas container to reach the
-// fubon-proxy running on the macOS host via host.docker.internal:8081.
+// fubon-proxy and atlas are both Docker containers on the same bridge network.
 // The host-gateway special value is supported on Docker Desktop 4.13+
 // (macOS/Windows) and resolves to the host's gateway IP.
 func TestDockerCompose_HasHostDockerInternalAlias(t *testing.T) {
@@ -42,14 +42,14 @@ func TestDockerCompose_HasHostDockerInternalAlias(t *testing.T) {
 
 	content := string(data)
 
-	// Primary check: "host.docker.internal" must appear in the file.
+	// Primary check: "host.docker.internal" (extra_hosts entry) must appear in docker-compose.yml.
 	if !strings.Contains(content, "host.docker.internal") {
 		t.Fatalf("docker-compose.yml is missing 'host.docker.internal'")
 	}
 
 	// Secondary check: it must be within the atlas service section
 	// (not accidentally in another service). Find "atlas:" line and
-	// the next top-level service line, then verify host.docker.internal
+	// the next top-level service line, then verify host.docker.internal extra_hosts entry
 	// appears between them.
 	lines := strings.Split(content, "\n")
 	inAtlas := false
@@ -76,8 +76,8 @@ func TestDockerCompose_HasHostDockerInternalAlias(t *testing.T) {
 
 	if !foundInAtlas {
 		t.Errorf("'host.docker.internal' not found within atlas service section\n\n" +
-			"原因：atlas 容器需要透過 host.docker.internal 連線至 macOS host 上的 fubon-proxy。" +
-			"Docker Desktop macOS/Windows 4.13+ 支援 host-gateway 特殊值。",
+			"原因：atlas 容器需要 host.docker.internal extra_hosts 條目作為 host gateway fallback。" +
+			"（PR #941 後 fubon-proxy 主要走 Docker DNS fubon-proxy。）",
 		)
 	}
 }
