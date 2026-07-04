@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -15,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/fubonproxy"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // fubonProxyBaseURL 是 fubon-proxy listen URL 的**文件/測試參考字串**。
@@ -41,7 +43,12 @@ const fubonProxyBaseURL = "http://fubon-proxy:18081"
 type FubonClient struct {
 	proxyURL        string
 	httpClient      *http.Client
+	healthClient    *http.Client
 	intradayLimiter *rate.Limiter
+
+	healthy       atomic.Bool
+	healthStop    chan struct{}
+	healthRunning atomic.Bool
 }
 
 type FubonQuoteResponse struct {
@@ -89,6 +96,7 @@ var (
 func GetSharedFubonClient() *FubonClient {
 	sharedFubonClientOnce.Do(func() {
 		sharedFubonClient = newFubonClient()
+		sharedFubonClient.StartHealthProbe(15 * time.Second)
 	})
 	return sharedFubonClient
 }
@@ -97,6 +105,9 @@ func GetSharedFubonClient() *FubonClient {
 func ResetSharedFubonClient() {
 	sharedFubonClientMu.Lock()
 	defer sharedFubonClientMu.Unlock()
+	if sharedFubonClient != nil {
+		sharedFubonClient.StopHealthProbe()
+	}
 	sharedFubonClient = nil
 	sharedFubonClientOnce = sync.Once{}
 }
@@ -110,15 +121,22 @@ func NewFubonClient() *FubonClient {
 
 func newFubonClient() *FubonClient {
 	params := config.GetParametersConfig()
-	return &FubonClient{
+	c := &FubonClient{
 		proxyURL:        fubonproxy.ProxyBaseURL(),
 		httpClient:      httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second),
+		healthClient:    httpclient.NewFactory().NewClient(2 * time.Second),
 		intradayLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
 	}
+	c.healthy.Store(true)
+	return c
 }
 
 func (c *FubonClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
+}
+
+func (c *FubonClient) SetHealthClient(client *http.Client) {
+	c.healthClient = client
 }
 
 func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
@@ -269,7 +287,7 @@ func (c *FubonClient) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("fubon proxy: create health request: %w", err)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.healthClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fubon proxy: health check failed: %w", err)
 	}
@@ -280,4 +298,57 @@ func (c *FubonClient) HealthCheck(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+const healthProbeConsecutiveFailures = 3
+
+func (c *FubonClient) StartHealthProbe(interval time.Duration) {
+	if c.healthRunning.Swap(true) {
+		return
+	}
+	c.healthStop = make(chan struct{})
+	c.healthy.Store(true)
+	go c.runHealthProbe(interval)
+}
+
+func (c *FubonClient) StopHealthProbe() {
+	if !c.healthRunning.Swap(false) {
+		return
+	}
+	close(c.healthStop)
+}
+
+func (c *FubonClient) IsHealthy() bool {
+	return c.healthy.Load()
+}
+
+func (c *FubonClient) runHealthProbe(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	failures := 0
+	probe := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := c.HealthCheck(ctx); err != nil {
+			failures++
+			if failures >= healthProbeConsecutiveFailures {
+				c.healthy.Store(false)
+			}
+			logging.Warn("fubon_client", "health_probe_failed",
+				logging.Err(err),
+				logging.FInt("consecutive_failures", failures))
+		} else {
+			failures = 0
+			c.healthy.Store(true)
+		}
+	}
+	probe()
+	for {
+		select {
+		case <-c.healthStop:
+			return
+		case <-ticker.C:
+			probe()
+		}
+	}
 }

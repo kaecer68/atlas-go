@@ -52,6 +52,8 @@ func TestFubonChannelAdapter_Fetch(t *testing.T) {
 
 	client := marketdata.NewFubonClient()
 	client.SetHTTPClient(withClientMockTransport(server, "fubon-proxy:18081"))
+	client.SetHealthClient(withClientMockTransport(server, "fubon-proxy:18081"))
+	client.SetHealthClient(withClientMockTransport(server, "fubon-proxy:18081"))
 
 	adapter := NewFubonChannelAdapter(client)
 	res, err := adapter.Fetch(context.Background())
@@ -84,6 +86,7 @@ func TestFubonChannelAdapter_HealthCheck(t *testing.T) {
 
 	client := marketdata.NewFubonClient()
 	client.SetHTTPClient(withClientMockTransport(server, "fubon-proxy:18081"))
+	client.SetHealthClient(withClientMockTransport(server, "fubon-proxy:18081"))
 
 	adapter := NewFubonChannelAdapter(client)
 	status, err := adapter.HealthCheck(context.Background())
