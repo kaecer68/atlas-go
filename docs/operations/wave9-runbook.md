@@ -235,3 +235,42 @@ docker logs atlas-go --since 10m > /tmp/atlas-incident.log
 - `docs/TRAPS.md` — `/api/llm/health` 401 防回歸
 - `internal/monitoring/AGENTS.md` — 模組 hot-path
 - `internal/monitoring/wave9_runtime.go` — coordinator 原始碼
+
+---
+
+## 10. Alert Rules 啟用狀態（2026-07-05）
+
+| Rule | Metric | Severity | 當前狀態 | 啟用條件 |
+|------|--------|----------|---------|---------|
+| `wave9_channel_individual_health` | `atlas_channel_health_errors_total` | warning | `enabled: false`（PD-W9-1 placeholder） | Wave 9.1 `EventChannelIndividualHealth` emit 確認後手動啟用 |
+| `wave9_factor_weight_regression` | —（event-driven） | warning | `enabled: false` | `FactorWeightRegressionDetector` emit 驗證完成 |
+| `wave9_drift_detected` | —（event-driven） | warning | `enabled: false` | `DriftDetector` v2 target drift 驗證完成 |
+| `wave9_regime_change_confirmed` | —（event-driven） | warning | `enabled: false` | `RegimeDebouncer` confirm 邏輯驗證完成 |
+| `wave9_ingestion_lag_spike` | —（event-driven） | warning | `enabled: false` | `IngestionLagMonitor` 30min lag threshold 確認有效觸發 |
+
+### 啟用順序建議
+
+1. **`channel_individual_health`**（優先啟動）— 此 metric 已在 PR #926/PR #948 完成 emit，對應 8 個 Yahoo 通道的錯誤計數。low-noise、可量化、false-positive 極低。
+2. **`ingestion_lag_spike`** — 已有 `IngestionLagMonitor`，不依賴市場事件。確認 30min threshold 在正常運作下不會誤觸。
+3. **`factor_weight_regression`** — 依賴 event-driven，需觀察 histogram baseline。
+4. **`drift_detected`** — v2 target drift 需更多 replay 驗證。
+5. **`regime_change_confirmed`** — regime shift 為低頻事件，驗證週期較長。
+
+### 啟用流程（SOP）
+
+```bash
+# Step 1: 確認 metric/service emit
+curl http://localhost:8080/metrics | grep atlas_channel_health_errors_total
+
+# Step 2: Alertmanager routing 加抑制標籤（避免歷史噪音誤觸）
+# 在 Alertmanager config 加:
+#   match:
+#     enabled: "false"
+#   receiver: "null"
+
+# Step 3: 改 alert rule enabled="true"
+# 編輯 monitoring/rules/wave9_channel_individual_health.yml
+
+# Step 4: 試跑 severity: info 1 週，觀察 false positive rate
+# Step 5: 若 1 週內 false positive < 1/week，升為 severity: warning
+```

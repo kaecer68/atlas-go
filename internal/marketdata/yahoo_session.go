@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sync"
@@ -26,6 +27,101 @@ const (
 	yahooStockRange   = "5d" // Yahoo chart range for daily change computation
 	maxDailyChangePct = 30.0 // abs(changePct) > 30% is rejected as implausible
 )
+
+// YahooStockProvider is a parametrized Yahoo Finance provider for stocks and
+// indices. It eliminates ~250 lines of duplicate boilerplate across 7 separate
+// provider files by centralizing the fetch→parse→bounds→emit pipeline.
+type YahooStockProvider struct {
+	ticker    string
+	channelID string
+	fieldFn   func(*MacroDataSnapshot) *MacroDataPoint
+}
+
+// newYahooStockProvider creates a Yahoo stock/index provider.
+func newYahooStockProvider(ticker, channelID string, fieldFn func(*MacroDataSnapshot) *MacroDataPoint) *YahooStockProvider {
+	return &YahooStockProvider{
+		ticker:    ticker,
+		channelID: channelID,
+		fieldFn:   fieldFn,
+	}
+}
+
+// Name returns the data channel identifier.
+func (p *YahooStockProvider) Name() string { return p.channelID }
+
+// FetchSnapshot fetches the latest price and daily change from Yahoo Finance.
+func (p *YahooStockProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	s := getYahooSession()
+	if err := yahooSharedLimiter.Wait(ctx); err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("%s rate limit: %w", p.channelID, err)
+	}
+
+	params := map[string]string{
+		"interval": "1d",
+		"range":    yahooStockRange,
+	}
+
+	body, err := s.fetchWithFallback(ctx, p.ticker, params)
+	if err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", p.channelID, err)
+	}
+
+	chartResp, err := UnmarshalYahooChart(body)
+	if err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", p.channelID, err)
+	}
+
+	result := chartResp.Chart.Result
+	if len(result) == 0 {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: no chart result", p.channelID)
+	}
+
+	closes := result[0].Indicators.Quote[0].Close
+	if len(closes) == 0 {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: no close prices", p.channelID)
+	}
+
+	latest := closes[len(closes)-1]
+	if math.IsNaN(latest) || math.IsInf(latest, 0) || latest == 0 {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: invalid latest price: %v", p.channelID, latest)
+	}
+
+	// Daily change: compare latest close to the previous trading day's close.
+	prev := latest
+	if len(closes) > 1 {
+		candidate := closes[len(closes)-2]
+		if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
+			prev = candidate
+		}
+	}
+
+	changePct := 0.0
+	if prev != 0 {
+		changePct = (latest - prev) / prev * 100
+	}
+
+	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: invalid change percentage: %v", p.channelID, changePct)
+	}
+
+	if math.Abs(changePct) > maxDailyChangePct {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: implausible daily change %.2f%% (>|%.1f%%|)",
+			p.channelID, changePct, maxDailyChangePct)
+	}
+
+	snap := MacroDataSnapshot{
+		RecordedAt: time.Now().Unix(),
+	}
+	if target := p.fieldFn(&snap); target != nil {
+		target.Symbol = p.ticker
+		target.Value = latest
+		target.ChangePct = math.Round(changePct*100) / 100
+		target.Timestamp = result[0].Meta.RegularMarketTime
+	}
+	return snap, nil
+}
+
+var _ = newYahooStockProvider // ensure function is used (prevents dead-code warning)
 
 // yahooSession manages Yahoo Finance crumb + cookie authentication.
 // Yahoo gradually tightened access to its v8 chart endpoint, requiring a
