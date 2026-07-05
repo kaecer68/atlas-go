@@ -122,8 +122,10 @@ export async function renderHomePage(container) {
 async function loadHomeData() {
   try {
     const now = new Date();
-    document.getElementById('home-last-update').textContent =
-      `最後更新：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    try {
+      document.getElementById('home-last-update').textContent =
+        `最後更新：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    } catch (_e) {}
 
     if (isMockMode()) {
       const m = mockData();
@@ -566,7 +568,11 @@ function renderTrustFooter(availableSources = []) {
 }
 
 function isMockMode() {
-  return new URLSearchParams(window.location.search).has('mock');
+  try {
+    return new URLSearchParams(window.location.search).has('mock');
+  } catch (_e) {
+    return false;
+  }
 }
 
 function mockData() {
