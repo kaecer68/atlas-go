@@ -1,11 +1,11 @@
 /* Home page — Refined Financial Editorial */
 
 .home-hero {
-  padding: var(--space-xl);
-  margin-bottom: var(--space-xl);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
   background:
-    radial-gradient(ellipse at top right, rgba(217, 119, 6, 0.08), transparent 40%),
-    radial-gradient(ellipse at bottom left, rgba(15, 23, 42, 0.04), transparent 40%),
+    radial-gradient(ellipse at top right, rgba(79, 193, 255, 0.04), transparent 40%),
+    radial-gradient(ellipse at bottom left, rgba(139, 92, 246, 0.03), transparent 40%),
     var(--editorial-hero-bg);
   border: 1px solid var(--editorial-border);
   border-radius: var(--editorial-radius-lg);
@@ -24,7 +24,7 @@
 
 .home-hero__title {
   font-family: var(--editorial-font-display);
-  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
   line-height: 1.25;
   color: var(--editorial-ink);
@@ -52,8 +52,8 @@
 }
 
 .home-section {
-  margin-bottom: var(--space-xl);
-  padding: var(--space-xl);
+  margin-bottom: var(--space-lg);
+  padding: var(--space-lg);
   background: var(--editorial-panel);
   border: 1px solid var(--editorial-border);
   border-radius: var(--editorial-radius-lg);
@@ -91,7 +91,7 @@
 
 .home-grid {
   display: grid;
-  gap: var(--space-lg);
+  gap: var(--space-md);
 }
 
 .home-grid--3 {
@@ -134,7 +134,7 @@
   background: var(--editorial-surface);
   border-color: var(--editorial-border);
   border-radius: var(--editorial-radius-md);
-  padding: var(--space-lg);
+  padding: var(--space-md);
   box-shadow: var(--editorial-shadow-sm);
 }
 
@@ -155,7 +155,7 @@
 
 .home-section .kpi-card .kpi-value {
   font-family: var(--editorial-font-display);
-  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-size: var(--text-xl);
 }
 
 .home-section .kpi-card .kpi-value--positive { color: var(--editorial-bullish); }
@@ -164,7 +164,7 @@
 
 /* Recommendation card */
 .home-recommendation__card {
-  padding: var(--space-xl);
+  padding: var(--space-lg);
   background:
     linear-gradient(135deg, var(--editorial-surface) 0%, var(--editorial-hero-bg) 100%);
   border: 1px solid var(--editorial-border);
@@ -186,7 +186,7 @@
 
 .home-recommendation__value {
   font-family: var(--editorial-font-display);
-  font-size: clamp(2rem, 5vw, 3rem);
+  font-size: var(--text-2xl);
   font-weight: var(--font-bold);
 }
 
