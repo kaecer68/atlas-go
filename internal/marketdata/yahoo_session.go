@@ -23,8 +23,8 @@ import (
 // These values are package-level constants so all Yahoo providers stay
 // synchronized; a single-source-of-truth prevents drift across 7 providers.
 const (
-	yahooStockRange   = "5d"   // Yahoo chart range for daily change computation
-	maxDailyChangePct = 30.0   // abs(changePct) > 30% is rejected as implausible
+	yahooStockRange   = "5d" // Yahoo chart range for daily change computation
+	maxDailyChangePct = 30.0 // abs(changePct) > 30% is rejected as implausible
 )
 
 // yahooSession manages Yahoo Finance crumb + cookie authentication.
