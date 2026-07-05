@@ -65,11 +65,13 @@ export async function switchPage(id, silent) {
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
   const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
   if (btn) btn.classList.add('active');
-  const titles = { home: '總覽',
-    narrative: '宏觀敘事', live: '風險總覽',
-    pipeline: '投資管線', decision: '決策鏈', portfolio: '組合持倉',
+  const titles = {
+    home: '市場總覽', narrative: '宏觀視野', live: '風險總覽',
+    crossmarket: '美台連動', industry: '產業地圖',
+    pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
-    evolution_panel: '演化透視', strategies: '投資心法', crossmarket: '美台連動監控'};
+    evolution_panel: '策略演化', strategies: '投資心法'
+  };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
