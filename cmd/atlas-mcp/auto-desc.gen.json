@@ -71,7 +71,7 @@
   },
   "crossmarket_get_us_indices": {
     "name": "crossmarket_get_us_indices",
-    "description": "Latest US index snapshots (S\u0026P 500, NASDAQ, Dow Jones).",
+    "description": "Latest US index and tech stock snapshots — live-fetched from Yahoo Finance (real-time freshness). Includes S\u0026P 500, NASDAQ, Dow Jones, SOX, NVDA, AAPL, MSFT, TSM ADR. Prefer this over macro_get_snapshot_latest when you need the most current data.",
     "inputSchema": {
       "type": "object"
     }
@@ -195,7 +195,7 @@
   },
   "macro_get_snapshot_latest": {
     "name": "macro_get_snapshot_latest",
-    "description": "Return the latest macro data snapshot (cross-channel aggregate: foreign capital, regime, chips, etc.).",
+    "description": "Return the latest macro data snapshot — from on-disk cache (5-min refresh cycle, may lag real-time data). Use crossmarket_get_us_indices for real-time US stock/index data. Covers: foreign capital, regime, chips, US indices, tech stocks, FX, commodities.",
     "inputSchema": {
       "type": "object"
     }
