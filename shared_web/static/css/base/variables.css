@@ -96,6 +96,20 @@
   --editorial-bullish: var(--bullish);
   --editorial-bearish: var(--bearish);
   --editorial-warning: var(--color-warning);
+
+  /* 優先級語意 Token — P0/P1/P2 視覺階層 */
+  --priority-high: var(--accent);
+  --priority-medium: var(--color-info);
+  --priority-low: var(--muted);
+  --priority-high-rgb: var(--accent-rgb);
+  --priority-medium-rgb: 59,130,246; /* --color-info RGB */
+  --priority-low-rgb: 184,196,208;   /* --muted RGB, derived from dark theme value */
+  --priority-high-bg: rgba(var(--priority-high-rgb), 0.08);
+  --priority-high-border: var(--priority-high);
+  --priority-medium-bg: rgba(var(--priority-medium-rgb), 0.06);
+  --priority-medium-border: var(--priority-medium);
+  --priority-low-bg: rgba(var(--priority-low-rgb), 0.04);
+  --priority-low-border: var(--border);
 }
 :root[data-theme="light"] {
   --bg: #f5f5f5; --panel: #ffffff; --border: #e0e0e0; --text: #1a1a1a; --muted: #666666;

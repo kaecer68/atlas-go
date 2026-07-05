@@ -23,6 +23,26 @@ const EVENT_TYPE_LABELS = {
   position_building: '法人布局',
 };
 
+// Category mapping: event_type → filter category
+const EVENT_TYPE_CATEGORIES = {
+  ex_dividend: '除權息',
+  dividend_payout: '除權息',
+  financial_report: '法說會/財報',
+  investor_conference: '法說會/財報',
+  monthly_revenue: '法說會/財報',
+  shareholder_meeting: '其他',
+  spring_festival: '其他',
+  window_dressing: '其他',
+  election: '總經事件',
+  msci_rebalance: '總經事件',
+  taiwan50_rebalance: '總經事件',
+  futures_settlement: '總經事件',
+  position_building: '總經事件',
+  long_holiday: '其他',
+};
+
+const DEFAULT_VISIBLE_LIMIT = 7;
+
 const DIRECTION_ICONS = {
   bullish: '📈',
   bearish: '📉',
@@ -32,6 +52,29 @@ const DIRECTION_ICONS = {
 
 // Default calendar window: ±15 days from today
 const CALENDAR_WINDOW_DAYS = 15;
+
+function getCategory(event) {
+  return EVENT_TYPE_CATEGORIES[event.event_type] || '其他';
+}
+
+function filterByCategory(events, activeCategories) {
+  if (!activeCategories || activeCategories.length === 0) return events;
+  return events.filter(evt => activeCategories.includes(getCategory(evt)));
+}
+
+function sortByImportance(events) {
+  return [...events].sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    const aDays = Math.abs(daysFromToday(a.start_date));
+    const bDays = Math.abs(daysFromToday(b.start_date));
+    if (aDays !== bDays) return aDays - bDays;
+    const MAGNITUDE = { ex_dividend: 3, dividend_payout: 3, financial_report: 3, investor_conference: 3, monthly_revenue: 2, shareholder_meeting: 2, taiwan50_rebalance: 2, msci_rebalance: 2, futures_settlement: 1, position_building: 1, election: 1, window_dressing: 1, spring_festival: 0, long_holiday: 0 };
+    const aMag = MAGNITUDE[a.event_type] ?? 0;
+    const bMag = MAGNITUDE[b.event_type] ?? 0;
+    if (aMag !== bMag) return bMag - aMag;
+    return new Date(a.start_date) - new Date(b.start_date);
+  });
+}
 
 function daysFromToday(dateStr) {
   const d = new Date(dateStr);
@@ -111,7 +154,7 @@ function sortEvents(events) {
   });
 }
 
-export async function renderEventCalendar(container) {
+export async function renderEventCalendar(container, activeCategories = []) {
   container.innerHTML = '<div class="home-loading-card">載入市場行事曆…</div>';
 
   try {
@@ -123,34 +166,38 @@ export async function renderEventCalendar(container) {
       return;
     }
 
-    const { visible, hidden } = partitionEvents(events);
-    const sortedVisible = sortEvents(visible);
+    const filtered = filterByCategory(events, activeCategories);
+    const { visible, hidden } = partitionEvents(filtered);
+    const sortedVisible = sortByImportance(visible);
+
+    const defaultVisible = sortedVisible.slice(0, DEFAULT_VISIBLE_LIMIT);
+    const defaultHidden = sortedVisible.slice(DEFAULT_VISIBLE_LIMIT);
+    const allHidden = [...defaultHidden, ...hidden];
 
     const buildGrid = (evts) => `<div class="cal-grid">${evts.map(renderEventCard).join('')}</div>`;
 
-    const expandHTML = hidden.length > 0
+    const expandHTML = allHidden.length > 0
       ? `<button class="btn btn--secondary cal-expand-btn" id="cal-expand-toggle">
-         展開全部（+${hidden.length} 個事件）
+         展開全部（+${allHidden.length} 個事件）
        </button>`
       : '';
 
-    const allHiddenHTML = hidden.length > 0
+    const allHiddenHTML = allHidden.length > 0
       ? `<div id="cal-hidden-events" style="display:none">
-          <div class="cal-section-label">其他事件</div>
-          ${buildGrid(sortEvents(hidden))}
+          ${buildGrid(sortByImportance(allHidden))}
          </div>`
       : '';
 
-    container.innerHTML = buildGrid(sortedVisible) + allHiddenHTML + expandHTML;
+    container.innerHTML = buildGrid(defaultVisible) + allHiddenHTML + expandHTML;
 
-    if (hidden.length > 0) {
+    if (allHidden.length > 0) {
       const btn = document.getElementById('cal-expand-toggle');
       const hiddenDiv = document.getElementById('cal-hidden-events');
       let expanded = false;
       btn.addEventListener('click', () => {
         expanded = !expanded;
         hiddenDiv.style.display = expanded ? 'block' : 'none';
-        btn.textContent = expanded ? '收起' : `展開全部（+${hidden.length} 個事件）`;
+        btn.textContent = expanded ? '收起' : `展開全部（+${allHidden.length} 個事件）`;
       });
     }
   } catch (err) {

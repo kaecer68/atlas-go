@@ -18,6 +18,7 @@ const DASHBOARD_VERSION = 'v0.0.0.24';
 const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
 
 let homeLoaded = false;
+let calActiveCategories = [];
 
 function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -41,21 +42,18 @@ function animateValue(el, target, suffix = '', duration = 800) {
 
 export async function renderHomePage(container) {
   container.innerHTML = `
-    <section class="home-hero" id="home-hero">
-      <div class="home-hero__kicker">Atlas-Go 每日市場摘要</div>
-      <h1 class="home-hero__title" id="home-summary">載入市場摘要…</h1>
-      <p class="home-hero__subtitle" id="home-summary-reason"></p>
-      <div class="home-hero__meta">
+    <section class="home-today-summary card-priority-high" id="home-hero">
+      <div class="home-today-summary__top">
+        <h1 class="home-today-summary__title" id="home-summary">載入市場摘要…</h1>
         <span id="home-risk-badge"></span>
-        <span class="home-hero__update" id="home-last-update">最後更新：--</span>
+        <span class="home-today-summary__update" id="home-last-update">最後更新：--</span>
       </div>
-      <div class="home-hero__rec" id="home-rec-content">
+      <p class="home-today-summary__reason" id="home-summary-reason"></p>
+      <div class="home-today-summary__indicators" id="home-today-indicators">
         <div class="home-loading-card">載入中…</div>
       </div>
-      <div class="home-hero__actions">
+      <div class="home-today-summary__actions">
         <button class="btn btn--primary" id="home-view-market">查看市場詳情</button>
-        <button class="btn btn--secondary" id="home-view-portfolio">查看策略績效</button>
-        <button class="btn btn--secondary" id="home-view-decision" style="display:none">查看決策鏈</button>
       </div>
     </section>
 
@@ -94,6 +92,12 @@ export async function renderHomePage(container) {
         <h2>市場行事曆</h2>
         <span class="home-section__subtitle">近期除權息、法說會、財報等重要事件</span>
       </div>
+      <div class="cal-filter-bar" id="cal-filter-bar">
+        <button class="cal-filter-pill active" data-category="">全部</button>
+        <button class="cal-filter-pill" data-category="除權息">除權息</button>
+        <button class="cal-filter-pill" data-category="法說會/財報">法說會</button>
+        <button class="cal-filter-pill" data-category="總經事件">總經</button>
+      </div>
       <div id="home-calendar-content">
         <div class="home-loading-card">載入中…</div>
       </div>
@@ -107,12 +111,31 @@ export async function renderHomePage(container) {
   document.getElementById('home-view-market').addEventListener('click', () => {
     window.switchPage('crossmarket');
   });
-  document.getElementById('home-view-portfolio').addEventListener('click', () => {
-    window.switchPage('portfolio');
-  });
-  const decisionBtn = document.getElementById('home-view-decision');
-  if (decisionBtn) {
-    decisionBtn.addEventListener('click', () => window.switchPage('decision'));
+
+  const calContainer = document.getElementById('home-calendar-content');
+  const filterBar = document.getElementById('cal-filter-bar');
+  if (filterBar && calContainer) {
+    filterBar.addEventListener('click', (e) => {
+      const pill = e.target.closest('.cal-filter-pill');
+      if (!pill) return;
+      const category = pill.dataset.category;
+      if (category === '') {
+        calActiveCategories = [];
+      } else {
+        const idx = calActiveCategories.indexOf(category);
+        if (idx >= 0) {
+          calActiveCategories.splice(idx, 1);
+        } else {
+          calActiveCategories.push(category);
+        }
+      }
+      filterBar.querySelectorAll('.cal-filter-pill').forEach(p => {
+        const c = p.dataset.category;
+        p.classList.toggle('active', c === '' ? calActiveCategories.length === 0 : calActiveCategories.includes(c));
+      });
+      renderEventCalendar(calContainer, calActiveCategories).catch(err =>
+        console.warn('[home] calendar render failed:', err));
+    });
   }
 
   await loadHomeData();
@@ -129,7 +152,7 @@ async function loadHomeData() {
 
     if (isMockMode()) {
       const m = mockData();
-      renderHero(m.macro, m.stress, m.pipeline, m.narrative, null);
+      renderTodaySummary(m.macro, m.stress, m.pipeline, m.narrative, null);
       renderSignalStrip(m.narrative);
       renderMarketPulse(m.macro, m.stress, null);
       renderRecommendation(m.pipeline, m.stress);
@@ -151,7 +174,7 @@ async function loadHomeData() {
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
-      renderHero(macro, stress, pipeline, events, crossStatus);
+      renderTodaySummary(macro, stress, pipeline, events, crossStatus);
       renderSignalStrip(events);
       renderMarketPulse(macro, stress, crossStatus);
       renderRecommendation(pipeline, stress);
@@ -159,12 +182,12 @@ async function loadHomeData() {
       // Event calendar — fetched independently, non-blocking
       const calContainer = document.getElementById('home-calendar-content');
       if (calContainer) {
-        renderEventCalendar(calContainer).catch(err =>
+        renderEventCalendar(calContainer, calActiveCategories).catch(err =>
           console.warn('[home] calendar render failed:', err));
       }
     } catch (err) {
       console.warn('[home] failed to load dashboard data:', err);
-      renderHero(null, null, null, [], null);
+      renderTodaySummary(null, null, null, [], null);
       renderSignalStrip([]);
       renderMarketPulse(null, null, null);
       renderRecommendation(null, null);
@@ -238,20 +261,34 @@ function heroRecommendation(stress, pipeline, events) {
   return { rec: '觀望', reason: '資料已載入，等待明確信號', risk: stressRisk, hasRec: false };
 }
 
-function renderHero(macro, stress, pipeline, events, crossStatus) {
+function renderTodaySummary(macro, stress, pipeline, events, crossStatus) {
   const summaryEl = document.getElementById('home-summary');
   const reasonEl = document.getElementById('home-summary-reason');
   const badgeEl = document.getElementById('home-risk-badge');
-  const decisionBtn = document.getElementById('home-view-decision');
+  const indicatorsEl = document.getElementById('home-today-indicators');
 
-  const { rec, reason, risk, hasRec } = heroRecommendation(stress, pipeline, events);
+  const { rec, reason, risk } = heroRecommendation(stress, pipeline, events);
 
-  summaryEl.textContent = `今日建議：${rec}`;
+  summaryEl.textContent = rec;
   reasonEl.textContent = reason;
   badgeEl.innerHTML = renderRiskBadge(risk, riskLevelLabel(risk));
 
-  if (decisionBtn) {
-    decisionBtn.style.display = hasRec ? '' : 'none';
+  if (indicatorsEl) {
+    const dirTone = rec === '偏多' ? 'bullish' : rec === '偏空' ? 'bearish' : 'neutral';
+    const dirLabel = rec === '偏多' ? '↑偏多' : rec === '偏空' ? '↓偏空' : '→觀望';
+    const stressVal = stress && stress.index != null ? stress.index.toFixed(0) : '—';
+    const stressLabel = stress && stress.index != null ? `${stressVal}` : '—';
+    const foreignChange = macro ? pointChange(macro, 'foreign_investor_net') : null;
+    const foreignLabel = foreignChange !== null ? fmtSignedPct(foreignChange) : '—';
+    const taiexVal = macro ? pointValue(macro, 'taiex') : null;
+    const taiexLabel = taiexVal !== null ? formatNumber(taiexVal) : '—';
+
+    indicatorsEl.innerHTML = [
+      `<div class="home-today-indicator home-today-indicator--${dirTone}" title="今日建議方向">${dirLabel}</div>`,
+      `<div class="home-today-indicator" title="壓力指數">壓力 ${stressLabel}</div>`,
+      `<div class="home-today-indicator" title="外資買賣超">外資 ${foreignLabel}</div>`,
+      `<div class="home-today-indicator" title="加權指數">加權 ${taiexLabel}</div>`,
+    ].join('');
   }
 }
 
@@ -326,18 +363,18 @@ function renderMarketPulse(macro, stress, crossStatus) {
   const marginVal = pointValue(macro, 'retail_margin_balance');
 
   const cards = [
-    metricCard({ label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。' }),
-    metricCard({ label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'advanced-only' }),
-    metricCard({ label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'advanced-only' }),
-    metricCard({ label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'advanced-only' }),
-    metricCard({ label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'advanced-only' }),
-    metricCard({ label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'advanced-only' }),
-    metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'pro-only' }),
-    metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'pro-only' }),
-    metricCard({ label: '投信動向', value: '—', tone: 'neutral', tooltip: '投信買賣超（進階數據）。', extraClasses: 'pro-only' }),
-    metricCard({ label: '自營商', value: '—', tone: 'neutral', tooltip: '自營商買賣超（進階數據）。', extraClasses: 'pro-only' }),
-    metricCard({ label: '歷史波動', value: '—', tone: 'neutral', tooltip: '20 日歷史波動率（進階數據）。', extraClasses: 'pro-only' }),
-    metricCard({ label: '散戶情緒', value: '—', tone: 'neutral', tooltip: '散戶多空比（進階數據）。', extraClasses: 'pro-only' }),
+    metricCard({ label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high' }),
+    metricCard({ label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'advanced-only card-priority-high' }),
+    metricCard({ label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'advanced-only card-priority-high' }),
+    metricCard({ label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'advanced-only card-priority-medium' }),
+    metricCard({ label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'advanced-only card-priority-medium' }),
+    metricCard({ label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'advanced-only card-priority-medium' }),
+    metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '投信動向', value: '—', tone: 'neutral', tooltip: '投信買賣超（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '自營商', value: '—', tone: 'neutral', tooltip: '自營商買賣超（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '歷史波動', value: '—', tone: 'neutral', tooltip: '20 日歷史波動率（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '散戶情緒', value: '—', tone: 'neutral', tooltip: '散戶多空比（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
   ];
 
   grid.innerHTML = cards.join('');

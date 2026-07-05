@@ -114,6 +114,28 @@ test('renderHomePage: dashboard API failures render fallback without crashing', 
   );
 });
 
+test('renderHomePage: hero has exactly 1 primary CTA', async () => {
+  const container = { innerHTML: '' };
+  await renderHomePage(container);
+
+  // Primary CTA button must exist and be registered
+  const marketBtn = elements.get('home-view-market');
+  assert.ok(marketBtn, 'primary CTA button must exist');
+  assert.ok(marketBtn._listeners.some(l => l.type === 'click'), 'primary CTA must have click listener');
+
+  // Exactly 1 CTA button in today-summary actions
+  const actionsMatch = container.innerHTML.match(/class="home-today-summary__actions"([\s\S]*?)<\/div>/);
+  assert.ok(actionsMatch, 'today-summary actions section must exist');
+  const btnCount = (actionsMatch[1].match(/<button/g) || []).length;
+  assert.strictEqual(btnCount, 1, 'hero must have exactly 1 CTA button');
+
+  // Remaining CTA is 查看市場詳情 linking to crossmarket
+  assert.ok(
+    container.innerHTML.includes('查看市場詳情') && container.innerHTML.includes('home-view-market'),
+    'primary CTA text must be 查看市場詳情'
+  );
+});
+
 test('renderHomePage: renders trust footer after unexpected synchronous error', async () => {
   // Simulate an unexpected failure in the date-update path by making the
   // last-update element throw on textContent assignment. The outer try/catch

@@ -20,6 +20,7 @@
 @import url("components/modal.css");
 @import url("components/tabs.css");
 @import url("components/risk-gate-panel.css");
+@import url("components/priority.css");
 
 /* Pages - Industry */
 @import url("pages/industry.css");

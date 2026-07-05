@@ -1,0 +1,24 @@
+/* Atlas Dashboard - Priority Card Utilities (P0/P1/P2) */
+.card-priority-high {
+  border-left: 3px solid var(--priority-high-border);
+  background: var(--priority-high-bg);
+}
+.card-priority-high .kpi-value {
+  font-weight: var(--font-semibold);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card-priority-high:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transform: translateY(-1px);
+  }
+}
+
+.card-priority-medium {
+  border-left: 1px solid var(--priority-medium-border);
+  background: var(--priority-medium-bg);
+}
+
+.card-priority-low {
+  opacity: 0.7;
+  padding: calc(var(--space-md) - 4px) calc(var(--space-sm) - 2px);
+}
