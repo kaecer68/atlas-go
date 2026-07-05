@@ -32,15 +32,16 @@ export function switchPage(id, silent) {
   const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
   if (btn) btn.classList.add('active');
   const titles = {
-    overview: '總覽', narrative: '宏觀敘事', live: '風控結果', agents: 'AI 觀測台',
-    'reasoning-trace': '決策追蹤',
-    experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
-    datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
-    metrics: '指標監控', industry: '產業生態系', parameters: '參數管理', config: '部署配置',
-    evolution_panel: '演化透視',
+  home: '系統總覽', live: '風控營運台', alerts: '系統警報',
+  evolution_panel: '策略演化', experiments: '模擬交易',
+  datachannels: '資料通道', parameters: '參數管理',
   swarm: 'Swarm 模擬',
+  narrative: '宏觀敘事', industry: '產業生態系',
+  'reasoning-trace': '決策追蹤', agents: 'AI 觀測台',
+  reports: '最新回測', controls: '控制與稽核',
+  metrics: '指標監控', config: '部署配置', synergy: '人機協同',
   prism: 'PRISM 訓練結果'
-  };
+};
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
@@ -474,18 +475,18 @@ if (typeof window !== 'undefined') {
     .replace(/\/$/, '');
   if (initialPath === 'control') initialPath = 'controls';
   if (!initialPath) {
-    history.replaceState({page: 'overview'}, '', basePath + '/overview');
-    switchPage('overview', true);
+    history.replaceState({page: 'home'}, '', basePath + '/home');
+    switchPage('home', true);
   }
   // Redirect old hash URLs to clean URLs
   if (window.location.hash && window.location.hash.startsWith('#page-')) {
     var pageId = window.location.hash.replace('#page-', '');
     window.location.replace(basePath + '/' + pageId);
-  } else if (initialPath && initialPath !== 'overview') {
+  } else if (initialPath && initialPath !== 'home') {
     history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
     switchPage(initialPath, true);
-  } else if (initialPath === 'overview') {
-    switchPage('overview', true);
+  } else if (initialPath === 'home') {
+    switchPage('home', true);
   }
 }
 

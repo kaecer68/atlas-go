@@ -18,24 +18,21 @@
     <button class="theme-toggle" title="切換主題">🌓</button>
   </div>
   <nav role="navigation" aria-label="主要導航">
-    <a class="active" data-page="overview" tabindex="0" title="總覽">📊 總覽</a>
-    <a data-page="evolution_panel" tabindex="0" title="AI 競爭分析">🧬 AI 競爭分析</a>
-    <a data-page="synergy" tabindex="0" title="人機協同">🤝 人機協同</a>
-    <a data-page="narrative" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
-    <a data-page="industry" tabindex="0" title="產業生態系">🏭 產業生態系</a>
-    <a data-page="reasoning-trace" tabindex="0" title="決策追蹤">🔍 決策追蹤</a>
-    <a data-page="live" tabindex="0" title="風控營運台">🛡️ 風控營運台</a>
-    <a data-page="agents" tabindex="0" title="AI 觀測台">🤖 AI 觀測台</a>
-    <a data-page="experiments" tabindex="0" title="模擬交易">🧪 模擬交易</a>
-    <a data-page="reports" tabindex="0" title="最新回測">📈 最新回測</a>
-    <a data-page="controls" tabindex="0" title="控制與稽核">⚙️ 控制與稽核</a>
-    <a data-page="datachannels" tabindex="0" title="信息通道">📡 信息通道</a>
-    <a data-page="alerts" tabindex="0" title="系統警報">🚨 系統警報</a>
-    <a data-page="metrics" tabindex="0" title="指標監控">📉 指標監控</a>
-    <a data-page="parameters" tabindex="0" title="參數管理">🎛️ 參數管理</a>
-   <a data-page="config" tabindex="0" title="部署配置">⚙️ 部署配置</a>
-    <a data-page="swarm" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
-    <a data-page="prism" tabindex="0" title="PRISM 訓練結果">🧪 PRISM 訓練結果</a>
+        <span class="nav-group-label">監控</span>
+        <a data-page="home" class="active">📊 系統總覽</a>
+        <a data-page="live">🛡️ 風控營運台</a>
+        <a data-page="alerts">🚨 系統警報</a>
+
+        <span class="nav-group-label">研究</span>
+        <a data-page="evolution_panel">🧬 策略演化</a>
+        <a data-page="experiments">🧪 模擬交易</a>
+
+        <span class="nav-group-label">維運</span>
+        <a data-page="datachannels">📡 資料通道</a>
+        <a data-page="parameters">🎛️ 參數管理</a>
+
+        <span class="nav-group-label">系統</span>
+        <a data-page="swarm">🐟 Swarm 模擬</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -61,7 +58,7 @@
 
   <div id="content">
     <!-- 總覽 -->
-    <div class="page active" id="page-overview">
+    <div class="page active" id="page-home">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         本頁呈現的是基於最新回測窗口計算出的<strong>系統狀態快照</strong>。這不是即時行情，而是 Atlas 在指定 replay 資料區間內，透過多層 AI Agent 模擬與風控後匯總出的「當前體制判斷」。
         下方的每一張卡片都是一個獨立指標；點擊卡片（除資料時間與基線版本外）可查看該指標的詳細解讀與操作建議。
