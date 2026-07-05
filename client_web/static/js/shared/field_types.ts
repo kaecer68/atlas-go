@@ -3428,6 +3428,9 @@ export interface USIndicesResponse {
   generated_at: string;
   indices: string[];
   tech_stocks: string[];
+  data_status?: string;
+  failed_channels?: string[];
+  stale_channels?: string[];
 }
 
 export interface UniverseOverlapResponse {

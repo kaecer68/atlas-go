@@ -63,7 +63,7 @@
 |------|------|
 | `crossmarket_get_status` | 跨市場資料源狀態 |
 | `crossmarket_get_correlation` | 台股 sector vs US indices 相關性 |
-| `crossmarket_get_us_indices` | S&P 500 / NASDAQ / Dow Jones snapshot |
+| `crossmarket_get_us_indices` | S&P 500 / NASDAQ / Dow Jones / SOX / NVDA / AAPL / MSFT / TSM ADR 即時 snapshot（live-fetched from Yahoo Finance） |
 
 ### Narrative（7 個）
 | Tool | 用途 |
