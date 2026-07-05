@@ -125,6 +125,45 @@
   border-radius: var(--editorial-radius-md);
 }
 
+/* Skeleton loading animation */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.home-skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.home-skeleton-bar {
+  height: 14px;
+  background: var(--panel-l2);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.home-skeleton-bar--short { width: 60%; }
+
+.home-skeleton-bar--medium { width: 80%; }
+
+.home-skeleton-circle {
+  width: 40px;
+  height: 40px;
+  background: var(--panel-l2);
+  border-radius: 50%;
+  margin: 0 auto 12px;
+}
+
+.home-signal-empty {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--editorial-muted);
+  font-size: var(--text-sm);
+  background: var(--editorial-surface);
+  border-radius: var(--editorial-radius-md);
+  border: 1px solid var(--editorial-border);
+}
+
 /* KPI cards (base styles live in overview.css) */
 .home-section .kpi-grid {
   margin-bottom: var(--space-lg);
@@ -309,28 +348,34 @@
 .risk-badge--unknown { color: var(--editorial-muted); }
 .risk-badge--unknown .risk-badge__dot { background: var(--editorial-muted); }
 
-/* Trust footer */
+/* Trust footer — compact */
 .trust-footer {
-  padding: var(--space-lg);
-  background: var(--editorial-surface);
-  border: 1px solid var(--editorial-border);
-  border-radius: var(--editorial-radius-md);
-  font-size: var(--text-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: transparent;
+  border: none;
+  font-size: var(--text-xs);
   color: var(--editorial-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
 }
 
 .trust-footer__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md) var(--space-xl);
-  align-items: center;
-  justify-content: center;
-  margin-bottom: var(--space-md);
+  display: inline;
+  white-space: nowrap;
+}
+
+.trust-footer__row:not(:last-child)::after {
+  content: '·';
+  margin-left: var(--space-md);
 }
 
 .trust-footer__disclaimer {
-  text-align: center;
-  line-height: 1.5;
+  display: inline;
+  white-space: nowrap;
   margin: 0;
 }
 
@@ -341,6 +386,10 @@
 
 .trust-footer a:hover {
   text-decoration: underline;
+}
+
+.trust-footer__links {
+  display: none;
 }
 
 /* Tooltip */

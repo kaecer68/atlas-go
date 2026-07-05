@@ -30,6 +30,23 @@ const DIRECTION_ICONS = {
   neutral: '➖',
 };
 
+// Default calendar window: ±15 days from today
+const CALENDAR_WINDOW_DAYS = 15;
+
+function daysFromToday(dateStr) {
+  const d = new Date(dateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d - today) / (1000 * 60 * 60 * 24));
+}
+
+function isWithinWindow(event, windowDays) {
+  const sd = daysFromToday(event.start_date);
+  const ed = daysFromToday(event.end_date);
+  // Show if event starts within window or spans the window
+  return (sd >= -windowDays && sd <= windowDays) || (ed >= -windowDays && ed <= windowDays) || (sd <= -windowDays && ed >= windowDays);
+}
+
 function fmtDateRange(start, end) {
   const s = new Date(start);
   const e = new Date(end);
@@ -60,6 +77,40 @@ function renderEventCard(evt) {
   `;
 }
 
+function partitionEvents(events) {
+  const visible = [];
+  const hidden = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const evt of events) {
+    const sd = new Date(evt.start_date);
+    const ed = new Date(evt.end_date);
+    const dayStart = Math.round((sd - today) / (1000 * 60 * 60 * 24));
+    const dayEnd = Math.round((ed - today) / (1000 * 60 * 60 * 24));
+
+    if (ed < today) {
+      hidden.push(evt);
+    } else if (dayStart >= -CALENDAR_WINDOW_DAYS && dayStart <= CALENDAR_WINDOW_DAYS) {
+      visible.push(evt);
+    } else if (dayEnd >= -CALENDAR_WINDOW_DAYS && dayEnd <= CALENDAR_WINDOW_DAYS) {
+      visible.push(evt);
+    } else if (dayStart <= -CALENDAR_WINDOW_DAYS && dayEnd >= CALENDAR_WINDOW_DAYS) {
+      visible.push(evt);
+    } else {
+      hidden.push(evt);
+    }
+  }
+  return { visible, hidden };
+}
+
+function sortEvents(events) {
+  return [...events].sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    return new Date(a.start_date) - new Date(b.start_date);
+  });
+}
+
 export async function renderEventCalendar(container) {
   container.innerHTML = '<div class="home-loading-card">載入市場行事曆…</div>';
 
@@ -72,17 +123,36 @@ export async function renderEventCalendar(container) {
       return;
     }
 
-    // Sort by start_date ascending, active events first
-    const sorted = [...events].sort((a, b) => {
-      if (a.active !== b.active) return a.active ? -1 : 1;
-      return new Date(a.start_date) - new Date(b.start_date);
-    });
+    const { visible, hidden } = partitionEvents(events);
+    const sortedVisible = sortEvents(visible);
 
-    container.innerHTML = `
-      <div class="cal-grid">
-        ${sorted.map(renderEventCard).join('')}
-      </div>
-    `;
+    const buildGrid = (evts) => `<div class="cal-grid">${evts.map(renderEventCard).join('')}</div>`;
+
+    const expandHTML = hidden.length > 0
+      ? `<button class="btn btn--secondary cal-expand-btn" id="cal-expand-toggle">
+         展開全部（+${hidden.length} 個事件）
+       </button>`
+      : '';
+
+    const allHiddenHTML = hidden.length > 0
+      ? `<div id="cal-hidden-events" style="display:none">
+          <div class="cal-section-label">其他事件</div>
+          ${buildGrid(sortEvents(hidden))}
+         </div>`
+      : '';
+
+    container.innerHTML = buildGrid(sortedVisible) + allHiddenHTML + expandHTML;
+
+    if (hidden.length > 0) {
+      const btn = document.getElementById('cal-expand-toggle');
+      const hiddenDiv = document.getElementById('cal-hidden-events');
+      let expanded = false;
+      btn.addEventListener('click', () => {
+        expanded = !expanded;
+        hiddenDiv.style.display = expanded ? 'block' : 'none';
+        btn.textContent = expanded ? '收起' : `展開全部（+${hidden.length} 個事件）`;
+      });
+    }
   } catch (err) {
     console.warn('[event-calendar] failed to load:', err);
     container.innerHTML = '<div class="home-signal-empty">行事曆資料暫時無法載入</div>';

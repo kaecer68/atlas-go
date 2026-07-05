@@ -11,7 +11,7 @@
 
 const STORAGE_KEY = 'atlas-mode';
 const VALID_MODES = ['simple', 'standard', 'pro'];
-const DEFAULT_MODE = 'standard';
+const DEFAULT_MODE = 'simple';
 
 export function getMode() {
   if (typeof document === 'undefined') return DEFAULT_MODE;
@@ -38,29 +38,24 @@ export function isStandard(){ return getMode() === 'standard'; }
 export function isPro()     { return getMode() === 'pro'; }
 
 export function modeLabel(mode) {
-  const map = { simple: '簡易', standard: '標準', pro: '專業' };
+  const map = { simple: '簡單', standard: '標準', pro: '專業' };
   return map[mode] || map[DEFAULT_MODE];
 }
 
-export function nextMode(current) {
-  const idx = VALID_MODES.indexOf(current || DEFAULT_MODE);
-  return VALID_MODES[(idx + 1) % VALID_MODES.length];
-}
-
-export function toggleMode() {
-  const current = getMode();
-  setMode(nextMode(current));
+export function selectMode(mode) {
+  if (!VALID_MODES.includes(mode)) mode = DEFAULT_MODE;
+  setMode(mode);
   updateUI();
 }
 
 function updateUI() {
-  const btn = document.getElementById('simplifiedToggle');
-  if (!btn) return;
-  const mode = getMode();
-  const labels = { simple: '🔰 簡易', standard: '📊 標準', pro: '🔬 專業' };
-  btn.textContent = labels[mode] || labels[DEFAULT_MODE];
-  btn.setAttribute('aria-pressed', String(mode !== 'simple'));
-  btn.setAttribute('aria-label', `目前模式：${modeLabel(mode)} — 點擊切換`);
+  const btns = document.querySelectorAll('.mode-btn');
+  const current = getMode();
+  btns.forEach(b => {
+    const match = b.dataset.mode === current;
+    b.classList.toggle('active', match);
+    b.setAttribute('aria-pressed', String(match));
+  });
 }
 
 export function init() {
@@ -73,14 +68,13 @@ export function init() {
     document.documentElement.setAttribute('data-atlas-mode', stored);
   }
 
-  // Wire up toggle button
-  const btn = document.getElementById('simplifiedToggle');
-  if (btn) {
-    btn.addEventListener('click', toggleMode);
-    updateUI();
-  }
+  // Wire up mode buttons
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectMode(btn.dataset.mode));
+  });
+  updateUI();
 }
 
 if (typeof window !== 'undefined') {
-  window.toggleSimplifiedMode = toggleMode;
+  window.toggleSimplifiedMode = () => {}; // Legacy no-op — replaced by selectMode
 }

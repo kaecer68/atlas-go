@@ -141,7 +141,11 @@
       <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新">⏸</button>
     </div>
     <div class="simplified-control">
-      <button id="simplifiedToggle" class="simplified-toggle" type="button" aria-pressed="false" title="切換到簡化模式（隱藏進階指標）">🔰 簡化模式</button>
+      <div class="mode-selector" id="modeSelector">
+        <button class="mode-btn mode-btn--simple" data-mode="simple" aria-label="簡單模式 — 核心資訊">簡單</button>
+        <button class="mode-btn mode-btn--standard active" data-mode="standard" aria-label="標準模式 — 完整儀表板">標準</button>
+        <button class="mode-btn mode-btn--pro" data-mode="pro" aria-label="專業模式 — 進階分析">專業</button>
+      </div>
     </div>
     <div class="role-switcher">
       <a href="/admin/" class="role-link">管理者</a>
