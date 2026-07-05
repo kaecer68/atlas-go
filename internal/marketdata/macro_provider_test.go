@@ -9,18 +9,18 @@ import (
 // failingMacroProvider returns an error from FetchSnapshot.
 type failingMacroProvider struct{ name string }
 
-func (f *failingMacroProvider) Name() string                                         { return f.name }
+func (f *failingMacroProvider) Name() string { return f.name }
 func (f *failingMacroProvider) FetchSnapshot(_ context.Context) (MacroDataSnapshot, error) {
 	return MacroDataSnapshot{}, errors.New("mock failure")
 }
 
 func TestCompositeMacroProvider_AllSucceed(t *testing.T) {
 	p1 := &MockMacroProvider{Snapshot: MacroDataSnapshot{
-		NVDA:   MacroDataPoint{Symbol: "NVDA", Value: 100, ChangePct: 2.5},
+		NVDA:     MacroDataPoint{Symbol: "NVDA", Value: 100, ChangePct: 2.5},
 		SOXIndex: MacroDataPoint{Symbol: "^SOX", Value: 5000, ChangePct: -1.2},
 	}}
 	p2 := &MockMacroProvider{Snapshot: MacroDataSnapshot{
-		US10Y: MacroDataPoint{Symbol: "^TNX", Value: 4.5, ChangePct: 0.1},
+		US10Y:    MacroDataPoint{Symbol: "^TNX", Value: 4.5, ChangePct: 0.1},
 		SPXIndex: MacroDataPoint{Symbol: "^GSPC", Value: 5500, ChangePct: 0.5},
 	}}
 

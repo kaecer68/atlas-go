@@ -121,8 +121,6 @@ func (p *YahooStockProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 	return snap, nil
 }
 
-
-
 // yahooSession manages Yahoo Finance crumb + cookie authentication.
 // Yahoo gradually tightened access to its v8 chart endpoint, requiring a
 // crumb token tied to a session cookie. This manager performs the handshake
