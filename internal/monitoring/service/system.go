@@ -65,6 +65,7 @@ type SystemHealthResponse struct {
 	Warnings              []string          `json:"warnings"`
 	Regime                domain.Regime     `json:"regime"`
 	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
+	DegradedChannels      []string          `json:"degraded_channels,omitempty"`
 	CycleStale            bool              `json:"cycle_stale"`
 }
 
@@ -192,8 +193,19 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		Warnings:              warnings,
 		Regime:                regime,
 		DataChannels:          channels,
+		DegradedChannels:      degradedFrom(channels),
 		CycleStale:            s.checkCycleStale(),
 	}, nil
+}
+
+func degradedFrom(channels []DataChannelInfo) []string {
+	var d []string
+	for _, c := range channels {
+		if c.Status != "ok" {
+			d = append(d, c.ChannelID)
+		}
+	}
+	return d
 }
 
 func buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time, healthStore *ChannelHealthStoreAdapter) DataChannelInfo {

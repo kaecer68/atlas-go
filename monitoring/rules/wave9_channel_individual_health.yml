@@ -5,10 +5,10 @@ groups:
         expr: sum by (channel) (rate(atlas_channel_health_errors_total[5m])) > 0.1
         for: 5m
         labels:
-          severity: warning
+          severity: info
           service: atlas-monitoring
           wave: "9.1"
-          enabled: "false"  # Wave 9.0a placeholder，預設不啟用（PD-W9-1）
+          enabled: "true"  # Enabled 2026-07-05 per PR #950 Wave 9 audit — metric emit verified by PR #926/#948.
         annotations:
           summary: "個別監控通道錯誤率超過閾值"
           description: |
