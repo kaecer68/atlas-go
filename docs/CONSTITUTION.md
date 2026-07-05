@@ -128,3 +128,25 @@ w_max	0.15	現有 constraints.MaxPositionPct
 ### 如果一個任務在 3 輪迭代後仍無法通過：
 - 輸出：卡住的具體數學問題、嘗試過的方法、建議的替代方案
 - **不要繼續硬寫程式碼**
+
+---
+
+## 第八條：校準 Artifact 治理（2026-07-06 補遺）
+
+### 背景
+
+系統參數（`configs/parameters.json`）由背景校準任務（auto_calibrate 7d、factor_weight_calibrator、self_calibrate 等）定期更新，這些任務會在寫入前產生 `*.snapshot.bak` 備份。這不是 AI agent 的工作產物，而是**系統執行期的校正結果**。
+
+### 規則
+
+1. **`configs/parameters.json` 應定期 commit**：這是校準 SOTA 的 source of truth（歷史已 commit 13 次），不是 generated artifact。
+
+2. **`*.snapshot.bak` 絕不 commit**：這是 SaveWithRollback 的快照備份（供 RestoreFromBackup 復原用），已在 `.gitignore` 中排除。若 `git status` 顯示，刪除即可。
+
+3. **Agent 遇到未知修改時的處理流程**：
+   - Step 1：確認來源（`git log --all --oneline -- <file>`）
+   - Step 2：確認是否為背景任務產物（查 AGENTS.md 快速對照表）
+   - Step 3：若為校準結果 → 提交；若為快照備份 → 忽略/刪除
+   - **禁止猜測、禁止未經確認直接刪除、禁止 stash/checkout 掩蓋問題**
+
+4. **跨 agent 一致性**：`docs/TOOLS.md` §「本地修改標準作業」與 `AGENTS.md` §「快速對照表」互為備援，確保不同 model/tool 的 agent 都能找到正確判斷依據。

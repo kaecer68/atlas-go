@@ -128,6 +128,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | 平行重複實作 | 新增功能前用 GitNexus `query` + codebase-memory 檢查重疊 |
 | **LLM health 401** | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處 rebuild 後仍 401。見 `docs/TRAPS.md` 對應 entry 與 PR #931。 |
 | **Prometheus metric 命名空間** | 新 metric 必須 `atlas_<feature>_<measurement>_total` 格式，無前綴的舊名（如 `channel_errors_total`）會與 Prometheus default metric 衝突。見 PR #926 + Issue #927。 |
+| **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果（非 AI 工作產物）。`.snapshot.bak` 已在 `.gitignore` 排除（刪除即可）；`parameters.json` 應 commit（校準 SOTA 的 source of truth）。判斷流程見 `docs/CONSTITUTION.md` §第八條。 |
 
 ## 🔧 程式碼智慧工具（強制規則）
 
