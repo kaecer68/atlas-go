@@ -13,6 +13,9 @@ import { renderEventCalendar } from '../components/event-calendar.js';
 import { fmtSignedPct, fmtDrawdown, riskLevelLabel, formatNumber } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
+import { scrollToSection } from '../shared/scroll-utils.js';
+
+window.scrollToSection = scrollToSection;
 
 const DASHBOARD_VERSION = 'v0.0.0.24';
 const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
@@ -363,12 +366,12 @@ function renderMarketPulse(macro, stress, crossStatus) {
   const marginVal = pointValue(macro, 'retail_margin_balance');
 
   const cards = [
-    metricCard({ label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high' }),
-    metricCard({ label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'advanced-only card-priority-high' }),
-    metricCard({ label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'advanced-only card-priority-high' }),
-    metricCard({ label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'advanced-only card-priority-medium' }),
-    metricCard({ label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'advanced-only card-priority-medium' }),
-    metricCard({ label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'advanced-only card-priority-medium' }),
+    metricCard({ id: 'market-taiwan', label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high' }),
+    metricCard({ id: 'market-foreign', label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'advanced-only card-priority-high' }),
+    metricCard({ id: 'market-tsm', label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'advanced-only card-priority-high' }),
+    metricCard({ id: 'market-sox', label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'advanced-only card-priority-medium' }),
+    metricCard({ id: 'market-nasdaq', label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'advanced-only card-priority-medium' }),
+    metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'advanced-only card-priority-medium' }),
     metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'pro-only card-priority-low' }),
     metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'pro-only card-priority-low' }),
     metricCard({ label: '投信動向', value: '—', tone: 'neutral', tooltip: '投信買賣超（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
@@ -421,7 +424,9 @@ function renderSignalStrip(events) {
     const sev = e.severity || 'low';
     const explain = escapeHtml(explainFromEvent(e));
     const link = escapeHtml(linkFromEvent(e));
-    return `<div class="signal-chip signal-chip--${sent} signal-chip--sev-${sev}" title="信心: ${conf} | 嚴重度: ${sev}">
+    const marketId = signalToMarket(e.theme);
+    const onclick = marketId ? ` onclick="window.scrollToSection?.('%23${marketId}')"` : '';
+    return `<div class="signal-chip signal-chip--${sent} signal-chip--sev-${sev}"${onclick} title="信心:${conf}|嚴重度:${sev}${marketId?' |點擊查看⇣':''}">
       <div class="signal-chip__row">
         <span class="signal-chip__label">${label}</span>
         <span class="signal-chip__meta">${sent === 'bullish' ? '↑利多' : '↓利空'} · ${conf}</span>
@@ -430,6 +435,18 @@ function renderSignalStrip(events) {
       ${link ? `<span class="signal-chip__link">${link}</span>` : ''}
     </div>`;
   }).join('');
+}
+
+function signalToMarket(theme) {
+  const map = {
+    ai_capex: 'market-tsm',
+    yen_carry: 'market-foreign',
+    earnings_surprise: 'market-taiwan',
+    tech_cycle: 'market-sox',
+    macro_risk: 'market-usdtwd',
+    sentiment_shift: 'market-taiwan',
+  };
+  return map[theme] || null;
 }
 
 function renderRecommendation(pipeline, stress) {

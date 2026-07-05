@@ -18,7 +18,7 @@ export class MetricCard {
   }
 
   render() {
-    const { label, value, delta, tone = 'neutral', tooltip, href, extraClasses } = this.opts;
+    const { label, value, delta, tone = 'neutral', tooltip, href, extraClasses, id } = this.opts;
     const toneClass = tone === 'positive' ? 'kpi-value--positive'
       : tone === 'negative' ? 'kpi-value--negative'
       : tone === 'warning' ? 'kpi-value--warning'
@@ -28,8 +28,9 @@ export class MetricCard {
     const tag = href ? 'a' : 'div';
     const hrefAttr = href ? ` href="${escapeHtml(href)}"` : '';
     const titleAttr = tooltip ? ` title="${escapeHtml(tooltip)}"` : '';
+    const idAttr = id ? ` id="${escapeHtml(id)}"` : '';
 
-    return `<${tag} class="${escapeHtml(classes)}"${hrefAttr}${titleAttr}>
+    return `<${tag} class="${escapeHtml(classes)}"${idAttr}${hrefAttr}${titleAttr}>
       <div class="kpi-label">${escapeHtml(label)}</div>
       <div class="kpi-value ${toneClass}">${value != null ? escapeHtml(String(value)) : '--'}${deltaHtml}</div>
     </${tag}>`;
