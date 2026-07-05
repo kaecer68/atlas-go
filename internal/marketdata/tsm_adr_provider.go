@@ -32,7 +32,7 @@ func (p *TSMADRProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 
 	params := map[string]string{
 		"interval": "1d",
-		"range":    "5d",
+		"range":    yahooStockRange,
 	}
 
 	body, err := p.session.fetchWithFallback(ctx, "TSM", params)

@@ -32,7 +32,7 @@ func (p *SOXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot
 
 	params := map[string]string{
 		"interval": "1d",
-		"range":    "5d",
+		"range":    yahooStockRange,
 	}
 
 	body, err := p.session.fetchWithFallback(ctx, "^SOX", params)
