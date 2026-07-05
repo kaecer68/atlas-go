@@ -78,9 +78,8 @@ func (p *TSMADRProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 		return MacroDataSnapshot{}, fmt.Errorf("tsm_adr: invalid change percentage: %v", changePct)
 	}
 
-	// Reject implausible daily changes (typical TSM ADR daily range ±10%,
+	// Reject implausible daily changes (typical TSM ADR daily range ±5%,
 	// allowing ±30% as a conservative hard cap for extreme market events).
-	const maxDailyChangePct = 30.0
 	if math.Abs(changePct) > maxDailyChangePct {
 		return MacroDataSnapshot{}, fmt.Errorf("tsm_adr: implausible daily change %.2f%% (>|%.1f%%|)",
 			changePct, maxDailyChangePct)

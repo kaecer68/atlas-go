@@ -80,7 +80,6 @@ func (p *SOXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot
 
 	// Reject implausible daily changes (typical SOX daily range ±5%,
 	// allowing ±30% as a conservative hard cap for extreme market events).
-	const maxDailyChangePct = 30.0
 	if math.Abs(changePct) > maxDailyChangePct {
 		return MacroDataSnapshot{}, fmt.Errorf("sox_index: implausible daily change %.2f%% (>|%.1f%%|)",
 			changePct, maxDailyChangePct)

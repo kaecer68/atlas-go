@@ -113,7 +113,6 @@ func fetchUSTechSnapshot(ctx context.Context, ticker, channelName string, target
 
 	// Reject implausible daily changes (typical US tech daily range ±10%,
 	// allowing ±30% as a conservative hard cap for extreme market events).
-	const maxDailyChangePct = 30.0
 	if math.Abs(changePct) > maxDailyChangePct {
 		return MacroDataSnapshot{}, fmt.Errorf("%s: implausible daily change %.2f%% (>|%.1f%%|)",
 			channelName, changePct, maxDailyChangePct)

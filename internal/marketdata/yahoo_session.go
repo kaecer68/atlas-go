@@ -14,6 +14,19 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
+// Yahoo stock/index provider conventions:
+//   - Range: "5d" (previous trading day comparison) — NEVER use "1y" which
+//     produces year-over-year change instead of daily change.
+//   - ChangePct bounds: ±30% hard cap — implausible daily changes are
+//     rejected as a safety gate against data corruption.
+//
+// These values are package-level constants so all Yahoo providers stay
+// synchronized; a single-source-of-truth prevents drift across 7 providers.
+const (
+	yahooStockRange   = "5d"   // Yahoo chart range for daily change computation
+	maxDailyChangePct = 30.0   // abs(changePct) > 30% is rejected as implausible
+)
+
 // yahooSession manages Yahoo Finance crumb + cookie authentication.
 // Yahoo gradually tightened access to its v8 chart endpoint, requiring a
 // crumb token tied to a session cookie. This manager performs the handshake
