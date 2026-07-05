@@ -61,14 +61,11 @@ function updateUI() {
 export function init() {
   if (typeof document === 'undefined') return;
 
-  // Restore from localStorage on cold start
   let stored;
   try { stored = localStorage.getItem(STORAGE_KEY); } catch (_) {}
-  if (VALID_MODES.includes(stored)) {
-    document.documentElement.setAttribute('data-atlas-mode', stored);
-  }
+  const mode = VALID_MODES.includes(stored) ? stored : DEFAULT_MODE;
+  document.documentElement.setAttribute('data-atlas-mode', mode);
 
-  // Wire up mode buttons
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => selectMode(btn.dataset.mode));
   });

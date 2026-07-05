@@ -133,7 +133,8 @@ async function loadHomeData() {
       renderSignalStrip(m.narrative);
       renderMarketPulse(m.macro, m.stress, null);
       renderRecommendation(m.pipeline, m.stress);
-      renderPortfolioSnapshot(m.portfolio);
+      loadPortfolioSnapshot();
+
       renderTrustFooter(['Fugle', 'TWSE', 'FRED']);
       return;
     }
@@ -327,13 +328,17 @@ function renderMarketPulse(macro, stress, crossStatus) {
 
   const cards = [
     metricCard({ label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。' }),
-    metricCard({ label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。' }),
-    metricCard({ label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。' }),
-    metricCard({ label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。' }),
-    metricCard({ label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。' }),
-    metricCard({ label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。' }),
-    metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。' }),
-    metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。' }),
+    metricCard({ label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'advanced-only' }),
+    metricCard({ label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'advanced-only' }),
+    metricCard({ label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'advanced-only' }),
+    metricCard({ label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'advanced-only' }),
+    metricCard({ label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'advanced-only' }),
+    metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'pro-only' }),
+    metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'pro-only' }),
+    metricCard({ label: '投信動向', value: '—', tone: 'neutral', tooltip: '投信買賣超（進階數據）。', extraClasses: 'pro-only' }),
+    metricCard({ label: '自營商', value: '—', tone: 'neutral', tooltip: '自營商買賣超（進階數據）。', extraClasses: 'pro-only' }),
+    metricCard({ label: '歷史波動', value: '—', tone: 'neutral', tooltip: '20 日歷史波動率（進階數據）。', extraClasses: 'pro-only' }),
+    metricCard({ label: '散戶情緒', value: '—', tone: 'neutral', tooltip: '散戶多空比（進階數據）。', extraClasses: 'pro-only' }),
   ];
 
   grid.innerHTML = cards.join('');
@@ -479,7 +484,7 @@ function renderRealPortfolio(container, data) {
   container.innerHTML = `
     <div class="kpi-grid">
       ${metricCard({ label: '總市值', value: fmtNTD(total), tone: 'neutral' })}
-      ${pnlMetricCard('損益', fmtSignedPct(pnlPct), pnl >= 0)}
+      ${pnlMetricCard('損益', fmtSignedPct(pnlPct * 100), pnl >= 0)}
       ${metricCard({ label: '最大回撤', value: fmtDrawdown(drawdown), tone: 'neutral', extraClasses: 'advanced-only' })}
     </div>
     ${portfolioReassurance(pnl)}
@@ -525,8 +530,10 @@ function renderDemoPortfolioWithData(container) {
     <div class="home-demo-badge">示範數據</div>
     <div class="kpi-grid">
       ${metricCard({ label: '示範總市值', value: fmtNTD(totalValue), tone: 'neutral', tooltip: 'DEMO 資料' })}
-      ${pnlMetricCard('損益', fmtSignedPct(pnlPct), totalPnl >= 0)}
-      ${metricCard({ label: '持倉檔數', value: positions.length, tone: 'neutral' })}
+      ${pnlMetricCard('損益', fmtSignedPct(pnlPct * 100), totalPnl >= 0)}
+      ${metricCard({ label: '最大回撤', value: '−8.5%', tone: 'neutral', tooltip: '示範組合歷史最大回撤', extraClasses: 'advanced-only' })}
+      ${metricCard({ label: '夏普比率', value: '1.62', tone: 'neutral', tooltip: '風險調整後報酬', extraClasses: 'pro-only' })}
+      ${metricCard({ label: '勝率', value: '62%', tone: 'neutral', tooltip: '示範組合交易勝率', extraClasses: 'pro-only' })}
     </div>
     <div class="home-demo-positions">
       ${topPositions.map(p => {
@@ -542,7 +549,7 @@ function renderDemoPortfolioWithData(container) {
             </div>
             <div class="home-demo-position__values">
               <span class="home-demo-position__weight">${formatNumber(p.weight * 100, { decimals: 0 })}%</span>
-              <span class="home-demo-position__pnl ${pnl >= 0 ? 'home-pnl-profit' : 'home-pnl-loss'}">${fmtSignedPct(pnlPct)}</span>
+              <span class="home-demo-position__pnl ${pnl >= 0 ? 'home-pnl-profit' : 'home-pnl-loss'}">${fmtSignedPct(pnlPct * 100)}</span>
             </div>
           </div>
         `;

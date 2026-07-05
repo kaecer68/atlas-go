@@ -35,10 +35,9 @@ export function formatMaxDrawdown(value, options = {}) {
   const { asAbsolute = false } = options;
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
   const pct = value * 100;
-  if (asAbsolute || pct === 0) {
-    return `${Math.abs(pct).toFixed(1)}%`;
-  }
-  return formatSigned(pct, { decimals: 1, suffix: '%', forceSign: false });
+  const abs = Math.abs(pct).toFixed(1);
+  if (pct === 0) return `0.0%`;
+  return asAbsolute ? `${abs}%` : `−${abs}%`;
 }
 
 /**

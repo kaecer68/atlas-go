@@ -7,6 +7,11 @@
   display: none !important;
 }
 
+:root[data-atlas-mode="simple"] .pro-only,
+:root[data-atlas-mode="standard"] .pro-only {
+  display: none !important;
+}
+
 /* Backward compat: data-simplified (legacy boolean toggle) */
 :root[data-simplified="true"] .advanced-only {
   display: none !important;
