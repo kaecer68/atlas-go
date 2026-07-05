@@ -48,6 +48,9 @@ export async function renderHomePage(container) {
         <span id="home-risk-badge"></span>
         <span class="home-hero__update" id="home-last-update">最後更新：--</span>
       </div>
+      <div class="home-hero__rec" id="home-rec-content">
+        <div class="home-loading-card">載入中…</div>
+      </div>
       <div class="home-hero__actions">
         <button class="btn btn--primary" id="home-view-market">查看市場詳情</button>
         <button class="btn btn--secondary" id="home-view-portfolio">我的組合</button>
@@ -64,6 +67,16 @@ export async function renderHomePage(container) {
       </div>
     </section>
 
+    <section class="home-section" id="home-portfolio-snapshot">
+      <div class="home-section__header">
+        <h2>我的組合快覽</h2>
+        <span class="home-section__subtitle">持倉摘要或示範資料</span>
+      </div>
+      <div id="home-portfolio-content">
+        <div class="home-loading-card">載入中…</div>
+      </div>
+    </section>
+
     <section class="home-section" id="home-market-pulse">
       <div class="home-section__header">
         <h2>市場脈動</h2>
@@ -74,32 +87,12 @@ export async function renderHomePage(container) {
       </div>
     </section>
 
-    <section class="home-section" id="home-recommendation">
-      <div class="home-section__header">
-        <h2>模型觀點</h2>
-        <span class="home-section__subtitle">綜合市場資料後的今日傾向</span>
-      </div>
-      <div class="home-recommendation__card" id="home-rec-card">
-        <div class="home-loading-card">載入中…</div>
-      </div>
-    </section>
-
     <section class="home-section" id="home-event-calendar">
       <div class="home-section__header">
         <h2>市場行事曆</h2>
         <span class="home-section__subtitle">近期除權息、法說會、財報等重要事件</span>
       </div>
       <div id="home-calendar-content">
-        <div class="home-loading-card">載入中…</div>
-      </div>
-    </section>
-
-    <section class="home-section" id="home-portfolio-snapshot">
-      <div class="home-section__header">
-        <h2>我的組合快覽</h2>
-        <span class="home-section__subtitle">持倉摘要或示範資料</span>
-      </div>
-      <div id="home-portfolio-content">
         <div class="home-loading-card">載入中…</div>
       </div>
     </section>
@@ -341,7 +334,7 @@ function renderSignalStrip(events) {
 }
 
 function renderRecommendation(pipeline, stress) {
-  const card = document.getElementById('home-rec-card');
+  const card = document.getElementById('home-rec-content');
 
   let action = '觀望';
   let reason = '目前資料不足以產生明確建議，請確認模擬已執行或查看市場頁面。';

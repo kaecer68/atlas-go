@@ -24,8 +24,8 @@
 
 .home-hero__title {
   font-family: var(--editorial-font-display);
-  font-size: var(--text-2xl);
-  font-weight: var(--font-semibold);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
   line-height: 1.25;
   color: var(--editorial-ink);
   margin: 0 0 var(--space-md) 0;
@@ -51,9 +51,59 @@
   flex-wrap: wrap;
 }
 
+.home-hero__rec {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  margin: var(--space-md) 0 var(--space-lg) 0;
+  padding: var(--space-md);
+  background: var(--editorial-surface);
+  border: 1px solid var(--editorial-border);
+  border-radius: var(--editorial-radius-md);
+}
+
+.home-hero__rec .home-recommendation__action,
+.home-hero__rec .home-recommendation__confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.home-hero__rec .home-recommendation__value {
+  font-size: var(--text-xl);
+}
+
+.home-hero__rec .home-confidence-bar {
+  width: 80px;
+  min-width: 60px;
+  flex: none;
+}
+
+.home-hero__rec .home-recommendation__reason {
+  flex-basis: 100%;
+  font-size: var(--text-sm);
+  margin: 0;
+  max-width: none;
+}
+
+.home-hero__rec .home-recommendation__actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+.home-hero__rec .btn {
+  padding: 6px 12px;
+  min-height: 44px;
+  font-size: var(--text-sm);
+}
+
 .home-section {
-  margin-bottom: var(--space-lg);
-  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+  padding: 16px;
   background: var(--editorial-panel);
   border: 1px solid var(--editorial-border);
   border-radius: var(--editorial-radius-lg);
@@ -65,6 +115,15 @@
   border: none;
   box-shadow: none;
   padding: 0;
+}
+
+#home-portfolio-snapshot {
+  border-left: 3px solid var(--editorial-accent);
+}
+
+#home-market-pulse .kpi-card {
+  min-height: auto;
+  padding: var(--space-sm) var(--space-md);
 }
 
 .home-section__header {
@@ -488,9 +547,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: 999px;
-  font-size: var(--text-sm);
+  font-size: var(--text-lg);
   font-weight: var(--font-medium);
   border: 1px solid;
 }

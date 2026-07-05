@@ -91,10 +91,10 @@ test('renderHomePage: dashboard API failures render fallback without crashing', 
     'market pulse should render fallback values when data is unavailable'
   );
 
-  const recCard = elements.get('home-rec-card');
-  assert.ok(recCard, 'recommendation card should exist');
+  const recContent = elements.get('home-rec-content');
+  assert.ok(recContent, 'recommendation content should exist inside hero');
   assert.ok(
-    recCard.innerHTML.includes('觀望'),
+    recContent.innerHTML.includes('觀望'),
     'recommendation should default to 觀望 when pipeline data is unavailable'
   );
 
