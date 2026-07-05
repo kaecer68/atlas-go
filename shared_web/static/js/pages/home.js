@@ -575,11 +575,9 @@ function renderTrustFooter(availableSources = []) {
 }
 
 function isMockMode() {
-  try {
-    return new URLSearchParams(window.location.search).has('mock');
-  } catch (_e) {
-    return false;
-  }
+  try { if (new URLSearchParams(window.location.search).has('mock')) return true; } catch (_e) {}
+  try { if (localStorage.getItem('atlas-mock') === 'true') return true; } catch (_e) {}
+  return false;
 }
 
 function mockData() {
