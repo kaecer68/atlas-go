@@ -1,6 +1,7 @@
 package narrative
 
 // DefaultTemplates returns the built-in causal narrative templates.
+// sync: TriggerTheme values must match shared_web/static/js/shared/theme-labels.js THEME_LABELS keys.
 func DefaultTemplates() []CausalTemplate {
 	return []CausalTemplate{
 		{
