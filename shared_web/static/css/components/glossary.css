@@ -1,0 +1,47 @@
+/**
+ * Glossary Component Styles
+ * 術語底線 + popover 泡泡樣式
+ */
+
+/* ── 術語底線 ────────────────────────────────────────────── */
+.glossary-term {
+  border-bottom: 1px dotted var(--accent);
+  cursor: help;
+  color: var(--text);
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.glossary-term:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Popover 泡泡 ────────────────────────────────────────── */
+.glossary-popover {
+  position: absolute;
+  z-index: 9999;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: var(--space-sm) var(--space-md);
+  max-width: 280px;
+  min-width: 160px;
+  pointer-events: none; /* 不影響滑鼠事件 */
+}
+
+.glossary-popover__brief {
+  display: block;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.glossary-popover__detail {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}

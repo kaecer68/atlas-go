@@ -21,6 +21,8 @@
 @import url("components/tabs.css");
 @import url("components/risk-gate-panel.css");
 @import url("components/priority.css");
+@import url("components/glossary.css");
+@import url("components/onboarding.css");
 
 /* Pages - Industry */
 @import url("pages/industry.css");

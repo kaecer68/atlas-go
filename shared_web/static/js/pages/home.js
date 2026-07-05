@@ -13,6 +13,7 @@ import { renderEventCalendar } from '../components/event-calendar.js';
 import { fmtSignedPct, fmtDrawdown, riskLevelLabel, formatNumber } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
+import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 
 window.scrollToSection = scrollToSection;
@@ -143,6 +144,7 @@ export async function renderHomePage(container) {
 
   await loadHomeData();
   homeLoaded = true;
+  initOnboarding();
 }
 
 async function loadHomeData() {

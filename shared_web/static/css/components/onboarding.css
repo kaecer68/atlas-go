@@ -1,0 +1,64 @@
+.onboard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: ob-fade-in 0.25s ease;
+}
+@keyframes ob-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.onboard-card {
+  background: var(--panel-l1);
+  border-radius: var(--editorial-radius, 10px);
+  padding: 24px;
+  max-width: 360px;
+  width: calc(100vw - 32px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+}
+.onboard-card__step {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.onboard-card__title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.onboard-card__body {
+  font-size: var(--text-base);
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.onboard-card__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.onboard-card__btn {
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  border: none;
+  cursor: pointer;
+  font-weight: var(--font-medium);
+  transition: opacity 0.15s;
+}
+.onboard-card__btn:hover {
+  opacity: 0.85;
+}
+.onboard-card__btn--primary {
+  background: var(--accent);
+  color: #fff;
+}
+.onboard-card__btn--skip {
+  background: transparent;
+  color: var(--muted);
+}
