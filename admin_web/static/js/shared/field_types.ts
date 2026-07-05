@@ -3289,6 +3289,7 @@ export interface SystemHealthResponse {
   warnings: string[];
   regime: string;
   data_channels?: string[];
+  degraded_channels?: string[];
   cycle_stale: boolean;
 }
 

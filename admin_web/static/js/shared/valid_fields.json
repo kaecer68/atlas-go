@@ -425,6 +425,7 @@
   "default_win_rate",
   "degradation",
   "degradation_msg",
+  "degraded_channels",
   "delta",
   "delta_pct",
   "delta_value",
