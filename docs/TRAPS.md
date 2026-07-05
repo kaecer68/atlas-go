@@ -24,6 +24,7 @@
 | **同一件事不可有三種算法** | orchestrator | 放行/過濾筆數必須由單一權威來源（如 `GuardOutcomes`）計算，前端不可各自重算。 |
 | **Darwinian 權重靜默夾制** | portfolio | 權重限制在 `[0.3, 2.5]`，超界會靜默正規化，不報錯。 |
 | **重複使用 mutable `[]Recommendation`** | sim | 多次 simulation run 之間不可共用同一個 slice。 |
+| **Yahoo Provider range=1y 產出 YoY 而非 daily change** | marketdata | US 股票/指數 provider 若使用 `range: "1y"` + `prev := closes[0]`，會計算「年增率 (YoY)」而非「日增率 (daily change)」，導致 ChangePct 出現 +84.9% 等荒謬數值。正確模式：`range: "5d"` + `prev := closes[len(closes)-2]`，並對 `abs(changePct) > 30%` 做 bounds reject。詳見 PR #948。 |
 
 ### 架構規範（Constitution 違反）
 

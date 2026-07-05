@@ -103,10 +103,13 @@ type CorrelationResponse struct {
 
 // USIndicesResponse returns snapshot of US market indices.
 type USIndicesResponse struct {
-	RecordedAt  int64              `json:"recorded_at"`
-	GeneratedAt string             `json:"generated_at"`
-	Indices     []CrossMarketIndex `json:"indices"`
-	TechStocks  []CrossMarketIndex `json:"tech_stocks"`
+	RecordedAt     int64              `json:"recorded_at"`
+	GeneratedAt    string             `json:"generated_at"`
+	Indices        []CrossMarketIndex `json:"indices"`
+	TechStocks     []CrossMarketIndex `json:"tech_stocks"`
+	DataStatus     string             `json:"data_status,omitempty"`
+	FailedChannels []string           `json:"failed_channels,omitempty"`
+	StaleChannels  []string           `json:"stale_channels,omitempty"`
 }
 
 // CrossMarketService provides cross-market data from the composite macro provider.
@@ -365,7 +368,7 @@ func (s *CrossMarketService) GetCorrelation() (*CorrelationResponse, error) {
 
 // GetUSIndices returns the current US market indices snapshot.
 func (s *CrossMarketService) GetUSIndices(ctx context.Context) (*USIndicesResponse, error) {
-	snap, _, err := s.getCachedSnapshot(ctx)
+	snap, meta, err := s.getCachedSnapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch macro snapshot: %w", err)
 	}
@@ -373,6 +376,12 @@ func (s *CrossMarketService) GetUSIndices(ctx context.Context) (*USIndicesRespon
 	resp := &USIndicesResponse{
 		RecordedAt:  snap.RecordedAt,
 		GeneratedAt: time.Now().Format(time.RFC3339),
+	}
+
+	if meta != nil {
+		resp.DataStatus = meta.DataStatus
+		resp.FailedChannels = meta.FailedChannels
+		resp.StaleChannels = meta.StaleChannels
 	}
 
 	resp.Indices = []CrossMarketIndex{

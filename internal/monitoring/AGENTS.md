@@ -54,7 +54,8 @@
 `CrossMarketService` 採用 4 層模式，確保通道靜默失敗時資料缺失能被看見：
 - **L1 Gateway**：`internal/apigateway/provider.go` 標記 `FetchResult.Fallback` / `LastError`
 - **L2 Adapter**：`internal/monitoring/gateway_adapter.go` 暴露 `ChannelErrors()`
-- **L3 Service**：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`
+- **L3 Service**：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`，覆蓋以下 8 個 Yahoo 通道：<br>
+  `us_spx` / `us_ndx` / `us_dji` / `sox_index` / `us_nvda` / `us_aapl` / `us_msft` / `tsm_adr`
 - **L4 Frontend**：`shared_web/static/js/pages/crossmarket.js` 顯示降級 badge/banner
 
 完整設計與技能指引見 **`.claude/skills/atlas-data-visibility/SKILL.md`**。

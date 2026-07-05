@@ -42,7 +42,7 @@ description: "Use when working with the 4 core leading indicators for short-term
 - **數據源**：Yahoo Finance TSM（US 上市 ADR）
 - **Channel ID**：`tsm_adr`
 - **Provider**：`YahooMacroProvider`（macro batch）
-- **MacroDataSnapshot 欄位**：`TSMADR.Value`（美元股價）、`TSMADR.ChangePct`（漲跌幅）
+- **MacroDataSnapshot 欄位**：`TSMADR.Value`（美元股價）、`TSMADR.ChangePct`（每日漲跌幅，daily change — 非年增率）
 - **更新頻率**：美股盤中即時（9:30-16:00 EST = 22:30-05:00 CST）
 - **判斷邏輯**：
   - TSMADR 漲 > 0.3% → 台股開盤多半高開

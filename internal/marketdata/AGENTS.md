@@ -34,7 +34,11 @@
 | `TWSEOpenAPIProvider` | 使用 證交所 OpenAPI 獲取當日行情。 | 每日更新，無需 Key，有速率限制。 |
 | `HybridProvider` | 優先使用 Fugle，失敗時自動回退至 TWSE。 | 系統預設建議路徑。 |
 | `TWSECapitalFlowProvider` | 獲取三大法人買賣超數據。 | 爬取 T86 報表。 |
-| `YahooMacroProvider` | 透過 Yahoo Finance 獲取美債、DXY、VIX 等指標。 | |
+| `YahooMacroProvider` | 透過 Yahoo Finance 獲取美債、DXY、VIX 等指標。 | 使用 range=5d + closes[len-2] 計算 daily change（非 YoY） |
+| `TSMADRProvider` | 台積電 ADR（TSM）每日漲跌幅。 | range=5d，±30% bounds cap |
+| `NVDAProvider` / `AAPLProvider` / `MSFTProvider` | US 科技股每日漲跌幅（`us_tech_provider.go`）。 | 共用 `fetchUSTechSnapshot` helper |
+| `SPXIndexProvider` / `NDXIndexProvider` / `DJIIndexProvider` | US 指數每日漲跌幅（`us_index_provider.go`）。 | 共用 `fetchUSIndexSnapshot` helper |
+| `SOXIndexProvider` | 費城半導體指數每日漲跌幅。 | range=5d，±30% bounds cap |
 | `CompositeMacroProvider` | 組合多個總經提供者的數據快照。 | 採 Last-write-wins 合併策略。 |
 | `BDIProvider` | 透過 CNBC JSON API 獲取波羅的海乾散貨指數 (`.BADI`) | 5s rate limit，回退至前一快照值 |
 
@@ -57,6 +61,7 @@
 - **TWSE OpenAPI 只提供批量接口**：`GetQuote` (單支) 實際上是抓取全市場數據後過濾，頻繁呼叫會極速消耗 Rate Limit。
 - **Fugle 符號格式**：Fugle 盤中 API 符號通常為純數字 (如 `2330`)，不帶 `.TW`。
 - **Yahoo Macro 符號映射**：美債 10 年期請使用 `^TNX`，匯率請確認 `USD/TWD` 的載入正確性。
+- **Yahoo Provider 每日漲跌幅計算**：US 股票/指數 provider 必須使用 `range: "5d"` + `prev := closes[len(closes)-2]`（前一日收盤價），**禁止**使用 `range: "1y"` + `closes[0]`（會產出年增率而非日增率）。日漲跌幅超過 ±30% 應 reject（bounds cap）。詳見 PR #948。
 - **ETF NAV 資料來源**：目前無任何 API channel 提供即時 ETF 淨值。`TWSEETFNAVScraper` 使用分層策略：Tier 1 (TWSE scrape) 為 stub，Tier 2 (收盤價代理) 為唯一可用路徑。台股 ETF 追蹤誤差通常 <0.5%。詳細通道調查見 `docs/investigations/2026-05-29-etf-nav-data-source.md`；待 FinMind 付費註冊後的接入計劃（未實作、工作區限定）見 `.omo/plans/2026-05-29-etf-nav-finmind.md`。
 - **providerBreaker 泛化熔斷器**：`circuit_breaker.go` 提供 `providerBreaker` + `newProviderBreaker(name, cfg)`。新增 provider 熔斷：(1) 構造 `providerBreaker`，(2) 註冊到 `HybridProvider.breakers` map，(3) 在 `GetQuotes` 對應位置呼叫 `shouldTry()` + `recordSuccess()` / `recordFailure()`。Fubon 與 Fugle 熔斷完全獨立。
 
