@@ -24,9 +24,7 @@ func (p *SOXIndexProvider) Name() string {
 	return "sox_index"
 }
 
-// FetchSnapshot retrieves the latest ^SOX value and year-over-year change percentage.
-// Fetches 1 year of daily data and compares the latest close to the close from
-// approximately 252 trading days ago (or the earliest available if fewer days exist).
+// FetchSnapshot retrieves the latest ^SOX value and daily change percentage.
 func (p *SOXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("sox_index rate limit: %w", err)
@@ -34,7 +32,7 @@ func (p *SOXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot
 
 	params := map[string]string{
 		"interval": "1d",
-		"range":    "1y",
+		"range":    "5d",
 	}
 
 	body, err := p.session.fetchWithFallback(ctx, "^SOX", params)
@@ -62,13 +60,13 @@ func (p *SOXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot
 		return MacroDataSnapshot{}, fmt.Errorf("sox_index: invalid latest price: %v", latest)
 	}
 
-	// Year-over-year: compare latest close to the earliest available close.
-	// With "range": "1y" and "interval": "1d", the earliest close is
-	// approximately 252 trading days ago. If fewer than 2 data points
-	// exist (edge case), fall back to 0% YoY.
-	prev := closes[0]
-	if prev == 0 || math.IsNaN(prev) || math.IsInf(prev, 0) {
-		prev = latest
+	// Daily change: compare latest close to the previous trading day's close.
+	prev := latest
+	if len(closes) > 1 {
+		candidate := closes[len(closes)-2]
+		if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
+			prev = candidate
+		}
 	}
 
 	changePct := 0.0
@@ -78,6 +76,14 @@ func (p *SOXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot
 
 	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
 		return MacroDataSnapshot{}, fmt.Errorf("sox_index: invalid change percentage: %v", changePct)
+	}
+
+	// Reject implausible daily changes (typical SOX daily range ±5%,
+	// allowing ±30% as a conservative hard cap for extreme market events).
+	const maxDailyChangePct = 30.0
+	if math.Abs(changePct) > maxDailyChangePct {
+		return MacroDataSnapshot{}, fmt.Errorf("sox_index: implausible daily change %.2f%% (>|%.1f%%|)",
+			changePct, maxDailyChangePct)
 	}
 
 	return MacroDataSnapshot{

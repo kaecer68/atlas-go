@@ -3,10 +3,12 @@ package service
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 func TestCheckTSMCRevenueHealth(t *testing.T) {
@@ -388,5 +390,122 @@ func TestIsWeekendGap_DefaultMaxWeekendHours(t *testing.T) {
 	dataTime := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC)
 	if got := isWeekendGap(dataTime, now, 0); !got {
 		t.Error("zero maxWeekendHours should use default 72h")
+	}
+}
+
+func TestCheckMacroPointHealth(t *testing.T) {
+	cst := time.FixedZone("CST", 8*60*60)
+	now := time.Date(2026, 7, 5, 10, 0, 0, 0, cst)
+	recentTs := now.Add(-2 * time.Hour).Unix()
+	warnTs := now.Add(-3 * 24 * time.Hour).Unix()
+	errorTs := now.Add(-8 * 24 * time.Hour).Unix()
+
+	t.Run("missing file returns error", func(t *testing.T) {
+		status, updated := checkMacroPointHealth("/nonexistent/latest.json", now, "S&P 500", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.SPXIndex })
+		if status != "error" {
+			t.Errorf("expected error, got %s", status)
+		}
+		if !containsAny(updated, "檔案不存在") {
+			t.Errorf("expected file-not-found message, got %s", updated)
+		}
+	})
+
+	t.Run("missing timestamp returns error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		p := filepath.Join(tmpDir, "latest.json")
+		os.WriteFile(p, []byte(`{"spx_index":{"symbol":"^GSPC","value":0,"change_pct":0,"timestamp":0}}`), 0o644)
+		status, updated := checkMacroPointHealth(p, now, "S&P 500", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.SPXIndex })
+		if status != "error" {
+			t.Errorf("expected error, got %s", status)
+		}
+		if !containsAny(updated, "無 S&P 500 資料") {
+			t.Errorf("expected missing-data message, got %s", updated)
+		}
+	})
+
+	t.Run("fresh data returns ok", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		p := filepath.Join(tmpDir, "latest.json")
+		os.WriteFile(p, []byte(`{"spx_index":{"symbol":"^GSPC","value":5400,"change_pct":1.2,"timestamp":`+strconv.FormatInt(recentTs, 10)+`}}`), 0o644)
+		status, updated := checkMacroPointHealth(p, now, "S&P 500", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.SPXIndex })
+		if status != "ok" {
+			t.Errorf("expected ok, got %s (updated=%s)", status, updated)
+		}
+	})
+
+	t.Run("stale data returns warn", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		p := filepath.Join(tmpDir, "latest.json")
+		os.WriteFile(p, []byte(`{"spx_index":{"symbol":"^GSPC","value":5400,"change_pct":1.2,"timestamp":`+strconv.FormatInt(warnTs, 10)+`}}`), 0o644)
+		status, updated := checkMacroPointHealth(p, now, "S&P 500", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.SPXIndex })
+		if status != "warn" {
+			t.Errorf("expected warn, got %s (updated=%s)", status, updated)
+		}
+		if !containsAny(updated, "天前") {
+			t.Errorf("expected age message, got %s", updated)
+		}
+	})
+
+	t.Run("very stale data returns error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		p := filepath.Join(tmpDir, "latest.json")
+		os.WriteFile(p, []byte(`{"spx_index":{"symbol":"^GSPC","value":5400,"change_pct":1.2,"timestamp":`+strconv.FormatInt(errorTs, 10)+`}}`), 0o644)
+		status, updated := checkMacroPointHealth(p, now, "S&P 500", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.SPXIndex })
+		if status != "error" {
+			t.Errorf("expected error, got %s (updated=%s)", status, updated)
+		}
+		if !containsAny(updated, "已超過 7 天閾值") {
+			t.Errorf("expected threshold message, got %s", updated)
+		}
+	})
+}
+
+func TestLoadSystemHealth_YahooChannels(t *testing.T) {
+	tmpDir := t.TempDir()
+	macroDir := filepath.Join(tmpDir, "data", "state", "macro")
+	os.MkdirAll(macroDir, 0o755)
+	now := time.Now()
+	macroJSON := `{
+		"recorded_at": ` + strconv.FormatInt(now.Unix(), 10) + `,
+		"spx_index":{"symbol":"^GSPC","value":5400,"change_pct":1.2,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `},
+		"ndx_index":{"symbol":"^NDX","value":19500,"change_pct":1.5,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `},
+		"dji_index":{"symbol":"^DJI","value":39000,"change_pct":0.8,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `},
+		"sox_index":{"symbol":"^SOX","value":4500,"change_pct":2.1,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `},
+		"nvda":{"symbol":"NVDA","value":135,"change_pct":3.0,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `},
+		"aapl":{"symbol":"AAPL","value":220,"change_pct":0.5,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `},
+		"msft":{"symbol":"MSFT","value":440,"change_pct":0.9,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `},
+		"tsm_adr":{"symbol":"TSM","value":180,"change_pct":1.1,"timestamp":` + strconv.FormatInt(now.Unix(), 10) + `}
+	}`
+	os.WriteFile(filepath.Join(macroDir, "latest.json"), []byte(macroJSON), 0o644)
+
+	svc := NewSystemService(tmpDir, filepath.Join(tmpDir, "ledger"), "", nil, nil, nil)
+	health, err := svc.LoadSystemHealth()
+	if err != nil {
+		t.Fatalf("LoadSystemHealth: %v", err)
+	}
+
+	expectedIDs := map[string]bool{
+		"us_spx":    true,
+		"us_ndx":    true,
+		"us_dji":    true,
+		"sox_index": true,
+		"us_nvda":   true,
+		"us_aapl":   true,
+		"us_msft":   true,
+		"tsm_adr":   true,
+	}
+	found := make(map[string]bool)
+	for _, ch := range health.DataChannels {
+		if expectedIDs[ch.ChannelID] {
+			found[ch.ChannelID] = true
+			if ch.Status != "ok" {
+				t.Errorf("channel %s expected ok, got %s (%s)", ch.ChannelID, ch.Status, ch.StatusText)
+			}
+		}
+	}
+	for id := range expectedIDs {
+		if !found[id] {
+			t.Errorf("expected channel %s not found in DataChannels", id)
+		}
 	}
 }

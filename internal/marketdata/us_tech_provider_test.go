@@ -9,8 +9,8 @@ import (
 )
 
 // US tech providers use Yahoo Finance as the source.
-// Reference prices (2026-04-29, illustrative):
-//   - NVDA: $950.00 → $1010.00 (+6.32% over 1y window)
+// Reference prices (illustrative daily change: previous close → latest close):
+//   - NVDA: $950.00 → $1010.00 (+6.32%)
 //   - AAPL: $195.00 → $215.00 (+10.26%)
 //   - MSFT: $410.00 → $445.00 (+8.54%)
 
@@ -37,8 +37,8 @@ func TestNVDAProvider_FetchSnapshot_Success(t *testing.T) {
 		if !strings.Contains(r.URL.Path, "NVDA") {
 			t.Errorf("unexpected path: %s, expected NVDA", r.URL.Path)
 		}
-		if r.URL.Query().Get("range") != "1y" {
-			t.Errorf("expected range=1y, got %s", r.URL.Query().Get("range"))
+		if r.URL.Query().Get("range") != "5d" {
+			t.Errorf("expected range=5d, got %s", r.URL.Query().Get("range"))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -61,8 +61,8 @@ func TestNVDAProvider_FetchSnapshot_Success(t *testing.T) {
 	if snap.NVDA.Value != 1010.0 {
 		t.Errorf("Value = %v, want 1010.0", snap.NVDA.Value)
 	}
-	// (1010-950)/950*100 = 6.315...
-	expectedPct := (1010.0 - 950.0) / 950.0 * 100
+	// (1010-950)/950*100 = 6.315..., rounded to 2 decimal places
+	expectedPct := 6.32
 	if snap.NVDA.ChangePct != expectedPct {
 		t.Errorf("ChangePct = %v, want %v", snap.NVDA.ChangePct, expectedPct)
 	}
@@ -147,8 +147,8 @@ func TestAAPLProvider_FetchSnapshot_Success(t *testing.T) {
 	if snap.AAPL.Value != 215.0 {
 		t.Errorf("Value = %v, want 215.0", snap.AAPL.Value)
 	}
-	// (215-195)/195*100 = 10.256410...
-	expectedPct := (215.0 - 195.0) / 195.0 * 100
+	// (215-195)/195*100 = 10.256..., rounded to 2 decimal places
+	expectedPct := 10.26
 	if diff := snap.AAPL.ChangePct - expectedPct; diff > 1e-9 || diff < -1e-9 {
 		t.Errorf("ChangePct = %v, want %v (diff %v)", snap.AAPL.ChangePct, expectedPct, diff)
 	}
@@ -213,8 +213,8 @@ func TestMSFTProvider_FetchSnapshot_Success(t *testing.T) {
 	if snap.MSFT.Value != 445.0 {
 		t.Errorf("Value = %v, want 445.0", snap.MSFT.Value)
 	}
-	// (445-410)/410*100 = 8.536...
-	expectedPct := (445.0 - 410.0) / 410.0 * 100
+	// (445-410)/410*100 = 8.536..., rounded to 2 decimal places
+	expectedPct := 8.54
 	if snap.MSFT.ChangePct != expectedPct {
 		t.Errorf("ChangePct = %v, want %v", snap.MSFT.ChangePct, expectedPct)
 	}

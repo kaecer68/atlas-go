@@ -18,6 +18,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -149,6 +150,14 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	now := time.Now()
 	channels := []DataChannelInfo{
 		buildChannelInfo("us_yahoo", "Yahoo Finance Macro", checkMacroHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("us_spx", "S&P 500", makeMacroPointChecker("S&P 500", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.SPXIndex }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("us_ndx", "NASDAQ 100", makeMacroPointChecker("NASDAQ 100", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.NDXIndex }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("us_dji", "道瓊工業指數", makeMacroPointChecker("道瓊工業指數", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.DJIIndex }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("sox_index", "費城半導體指數 (SOX)", makeMacroPointChecker("費城半導體指數 (SOX)", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.SOXIndex }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("us_nvda", "NVIDIA (NVDA)", makeMacroPointChecker("NVIDIA (NVDA)", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.NVDA }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("us_aapl", "Apple (AAPL)", makeMacroPointChecker("Apple (AAPL)", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.AAPL }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("us_msft", "Microsoft (MSFT)", makeMacroPointChecker("Microsoft (MSFT)", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.MSFT }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
+		buildChannelInfo("tsm_adr", "TSMC ADR", makeMacroPointChecker("TSMC ADR", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.TSMADR }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
 		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now, s.healthStore),
 		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now, s.healthStore),
 		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, config.GetReplayDataPath(s.WorkDir), now, s.healthStore),
@@ -620,6 +629,44 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		return "warn", fmt.Sprintf("%s（%d 天前）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
 	}
 	return "error", fmt.Sprintf("%s（%d 天前，已超過 7 天閾值）— Frankfurter API 連線失敗", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+}
+
+// checkMacroPointHealth evaluates freshness for a single MacroDataPoint field
+// within the latest macro snapshot. It mirrors checkJPYHealth's thresholds.
+func checkMacroPointHealth(path string, now time.Time, label string, extractor func(marketdata.MacroDataSnapshot) marketdata.MacroDataPoint) (string, string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "error", fmt.Sprintf("%s 總經快照檔案不存在: %s", label, err)
+	}
+	var snap marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		logging.Warn("system_service", "parse_macro_point_health", logging.FStr("label", label), logging.Err(err))
+	}
+	point := extractor(snap)
+	if point.Timestamp == 0 {
+		return "error", fmt.Sprintf("無 %s 資料", label)
+	}
+	t := time.Unix(point.Timestamp, 0)
+	age := now.Sub(t)
+	if age < 24*time.Hour {
+		return "ok", t.Format("2006-01-02 15:04:05")
+	}
+	if age < 7*24*time.Hour {
+		if isWeekendGap(t, now, 72) {
+			return "expected_delay", fmt.Sprintf("%s（%d 天前，週末非交易日）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+		}
+		return "warn", fmt.Sprintf("%s（%d 天前）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+	}
+	return "error", fmt.Sprintf("%s（%d 天前，已超過 7 天閾值）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+}
+
+// makeMacroPointChecker returns a channel-health checker for a specific
+// MacroDataSnapshot field. The returned closure has the signature expected by
+// buildChannelInfo.
+func makeMacroPointChecker(label string, extractor func(marketdata.MacroDataSnapshot) marketdata.MacroDataPoint) func(string, time.Time) (string, string) {
+	return func(path string, now time.Time) (string, string) {
+		return checkMacroPointHealth(path, now, label, extractor)
+	}
 }
 
 func checkJanusHealth(engine *janus.Engine, now time.Time) (string, string) {

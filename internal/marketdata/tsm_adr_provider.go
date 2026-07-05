@@ -24,7 +24,7 @@ func (p *TSMADRProvider) Name() string {
 	return "tsm_adr"
 }
 
-// FetchSnapshot retrieves the latest TSM (ADR) value and year-over-year change percentage.
+// FetchSnapshot retrieves the latest TSM (ADR) value and daily change percentage.
 func (p *TSMADRProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("tsm_adr rate limit: %w", err)
@@ -32,7 +32,7 @@ func (p *TSMADRProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 
 	params := map[string]string{
 		"interval": "1d",
-		"range":    "1y",
+		"range":    "5d",
 	}
 
 	body, err := p.session.fetchWithFallback(ctx, "TSM", params)
@@ -60,9 +60,13 @@ func (p *TSMADRProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 		return MacroDataSnapshot{}, fmt.Errorf("tsm_adr: invalid latest price: %v", latest)
 	}
 
-	prev := closes[0]
-	if prev == 0 || math.IsNaN(prev) || math.IsInf(prev, 0) {
-		prev = latest
+	// Daily change: compare latest close to the previous trading day's close.
+	prev := latest
+	if len(closes) > 1 {
+		candidate := closes[len(closes)-2]
+		if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
+			prev = candidate
+		}
 	}
 
 	changePct := 0.0
@@ -72,6 +76,14 @@ func (p *TSMADRProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 
 	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
 		return MacroDataSnapshot{}, fmt.Errorf("tsm_adr: invalid change percentage: %v", changePct)
+	}
+
+	// Reject implausible daily changes (typical TSM ADR daily range ±10%,
+	// allowing ±30% as a conservative hard cap for extreme market events).
+	const maxDailyChangePct = 30.0
+	if math.Abs(changePct) > maxDailyChangePct {
+		return MacroDataSnapshot{}, fmt.Errorf("tsm_adr: implausible daily change %.2f%% (>|%.1f%%|)",
+			changePct, maxDailyChangePct)
 	}
 
 	return MacroDataSnapshot{

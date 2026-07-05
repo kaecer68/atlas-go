@@ -50,6 +50,9 @@ type MacroDataSnapshot struct {
 	AAPL                MacroDataPoint `json:"aapl"`
 	MSFT                MacroDataPoint `json:"msft"`
 	TAIEX               MacroDataPoint `json:"taiex"`
+	DataStatus          string         `json:"data_status,omitempty"` // "ok" | "degraded" | "stale"
+	FailedChannels      []string       `json:"failed_channels,omitempty"`
+	StaleChannels       []string       `json:"stale_channels,omitempty"`
 	RecordedAt          int64          `json:"recorded_at"`
 }
 
@@ -80,6 +83,7 @@ func (c *CompositeMacroProvider) Name() string {
 func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	var merged MacroDataSnapshot
 	var errs []error
+	var failedChannels []string
 	providerTimeout := 10 * time.Second
 
 	for _, p := range c.providers {
@@ -96,9 +100,11 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		select {
 		case <-ctx.Done():
 			errs = append(errs, ctx.Err())
+			failedChannels = append(failedChannels, p.Name())
 			continue
 		case <-time.After(providerTimeout):
 			errs = append(errs, fmt.Errorf("%s: timed out after %v", p.Name(), providerTimeout))
+			failedChannels = append(failedChannels, p.Name())
 			logging.Warn("marketdata", "provider_timeout",
 				"provider", p.Name(),
 				"timeout", providerTimeout.String(),
@@ -107,6 +113,7 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		case r := <-ch:
 			if r.err != nil {
 				errs = append(errs, r.err)
+				failedChannels = append(failedChannels, p.Name())
 				logging.Warn("marketdata", "provider_fetch_failed",
 					"provider", p.Name(),
 					"err", r.err.Error(),
@@ -114,11 +121,17 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 				continue
 			}
 			mergeSnapshot(&merged, r.snap)
+			merged.StaleChannels = append(merged.StaleChannels, r.snap.StaleChannels...)
 		}
 	}
 	if merged.RecordedAt == 0 {
 		merged.RecordedAt = time.Now().Unix()
 	}
+
+	merged.FailedChannels = failedChannels
+	merged.DataStatus = computeMacroDataStatus(len(c.providers), len(failedChannels))
+	merged.StaleChannels = uniqueStrings(merged.StaleChannels)
+
 	if len(errs) > 0 && len(errs) == len(c.providers) {
 		return merged, errors.Join(errs...)
 	}
@@ -220,4 +233,27 @@ func mergeSnapshot(dst *MacroDataSnapshot, src MacroDataSnapshot) {
 	if src.RecordedAt > dst.RecordedAt {
 		dst.RecordedAt = src.RecordedAt
 	}
+}
+
+func computeMacroDataStatus(totalProviders, failedCount int) string {
+	if failedCount == 0 {
+		return "ok"
+	}
+	if totalProviders > 0 && failedCount == totalProviders {
+		return "stale"
+	}
+	return "degraded"
+}
+
+func uniqueStrings(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }

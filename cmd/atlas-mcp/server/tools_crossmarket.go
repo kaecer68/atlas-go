@@ -21,7 +21,7 @@ func registerCrossmarketTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "crossmarket_get_us_indices",
-		Description: autoDescOr("crossmarket_get_us_indices", "Latest US index snapshots (S&P 500, NASDAQ, Dow Jones)."),
+		Description: autoDescOr("crossmarket_get_us_indices", "Latest US index and tech stock snapshots — live-fetched from Yahoo Finance (real-time freshness). Includes S&P 500, NASDAQ, Dow Jones, SOX, NVDA, AAPL, MSFT, TSM ADR. Prefer this over macro_get_snapshot_latest when you need the most current data."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleCrossmarketGetUsIndices)
 }

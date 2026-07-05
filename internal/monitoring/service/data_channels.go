@@ -339,6 +339,11 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 		mergeEnabled(s.buildTEJChannel()),
 	}
 
+	channels = append(channels, s.buildUSMacroChannels(now, s.latestMacroSnapshotOrZero())...)
+	for i, c := range channels {
+		channels[i] = mergeEnabled(c)
+	}
+
 	return channels, nil
 }
 
