@@ -49,6 +49,7 @@ export async function renderHomePage(container) {
     <section class="home-today-summary card-priority-high" id="home-hero">
       <div class="home-today-summary__top">
         <h1 class="home-today-summary__title" id="home-summary">載入市場摘要…</h1>
+        <span class="home-today-summary__help" data-tip="建議方向基於 AI 資本支出、外資流向、壓力指數、與多個市場信號的一致性計算。分數越高，信號一致性越好。若資料不足或信號互相矛盾，會顯示觀望。"></span>
         <span id="home-risk-badge"></span>
         <span class="home-today-summary__update" id="home-last-update">最後更新：--</span>
       </div>
