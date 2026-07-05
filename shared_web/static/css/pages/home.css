@@ -739,3 +739,116 @@
   background: var(--editorial-panel);
   border-radius: var(--editorial-radius-sm);
 }
+
+/* =============================================
+   Phase 4 — Responsive + Accessibility
+   ============================================= */
+
+/* --- tablet (≤1024px): stack layout, reduce gaps --- */
+@media (max-width: 1024px) {
+  .home-hero {
+    padding: var(--space-lg) var(--space-md);
+  }
+  .home-hero__title {
+    font-size: var(--text-xl);
+  }
+  .home-hero__buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .home-section {
+    padding: var(--space-md);
+  }
+  .signal-grid,
+  .calendar-grid {
+    grid-template-columns: 1fr;
+  }
+  .home-footer-trust {
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: var(--text-xs);
+  }
+}
+
+/* --- phone (≤768px): single-column, minimal padding --- */
+@media (max-width: 768px) {
+  .home-hero {
+    padding: var(--space-md) var(--space-sm);
+  }
+  .home-hero__title {
+    font-size: var(--text-lg);
+  }
+  .home-hero__subtitle {
+    font-size: var(--text-sm);
+  }
+  .home-hero__rec {
+    font-size: var(--text-sm);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+  }
+  .home-hero__buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  .home-hero__btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .home-section {
+    padding: var(--space-sm);
+  }
+  .home-section__title {
+    font-size: var(--text-base);
+  }
+  .market-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .signal-grid,
+  .calendar-grid {
+    grid-template-columns: 1fr;
+  }
+  .home-footer-trust {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+}
+
+/* --- accessibility: focus rings --- */
+.home-hero__btn:focus-visible,
+.home-mode-btn:focus-visible,
+.home-expand-btn:focus-visible,
+.cal-show-more:focus-visible {
+  outline: 2px solid var(--editorial-accent);
+  outline-offset: 2px;
+}
+
+/* --- accessibility: skip-link (hidden until focused) --- */
+.home-skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--editorial-accent);
+  color: #000;
+  font-size: var(--text-sm);
+  z-index: 100;
+  border-radius: var(--editorial-radius-sm);
+  transition: top 0.2s;
+}
+.home-skip-link:focus {
+  top: var(--space-xs);
+}
+
+/* --- reduced-motion preference --- */
+@media (prefers-reduced-motion: reduce) {
+  .home-skeleton,
+  .home-skeleton::after,
+  .home-hero__btn,
+  .home-mode-btn,
+  .home-expand-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}

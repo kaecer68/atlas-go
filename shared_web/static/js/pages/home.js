@@ -125,6 +125,17 @@ async function loadHomeData() {
     document.getElementById('home-last-update').textContent =
       `最後更新：${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
+    if (isMockMode()) {
+      const m = mockData();
+      renderHero(m.macro, m.stress, m.pipeline, m.narrative, null);
+      renderSignalStrip(m.narrative);
+      renderMarketPulse(m.macro, m.stress, null);
+      renderRecommendation(m.pipeline, m.stress);
+      renderPortfolioSnapshot(m.portfolio);
+      renderTrustFooter(['Fugle', 'TWSE', 'FRED']);
+      return;
+    }
+
     try {
       const [health, macro, stress, pipeline, bundle, crossStatus, calData] = await Promise.all([
         silentGetJSON('/api/dashboard/system-health'),
@@ -542,18 +553,51 @@ function renderDemoPortfolioWithData(container) {
   document.getElementById('home-portfolio-detail').addEventListener('click', () => window.switchPage('portfolio'));
 }
 
-function renderTrustFooter() {
+function renderTrustFooter(availableSources = []) {
   const container = document.getElementById('home-trust-footer');
+  const sources = availableSources.length > 0
+    ? DATA_SOURCES.filter(s => availableSources.includes(s.key))
+    : DATA_SOURCES;
   container.innerHTML = trustFooter({
     version: DASHBOARD_VERSION,
-    sources: DATA_SOURCES,
+    sources,
     disclaimer: '本平台為研究模擬用途，不構成投資建議。投資人應獨立判斷並自負風險。'
   });
+}
+
+function isMockMode() {
+  return new URLSearchParams(window.location.search).has('mock');
+}
+
+function mockData() {
+  return {
+    macro: { MarketIndex: 23100.5, ChangePct: 0.35, ForeignNetBuy: 45.2, MarginBalance: 3250, VIX: 14.3, USDD: 32.15 },
+    pipeline: {
+      items: [
+        { theme: 'ai_capex', sentiment: 0.92, confidence: 0.88, severity: 'high', affected_industries: ['半導體', 'AI伺服器'] },
+        { theme: 'yen_carry', sentiment: 0.87, confidence: 0.82, severity: 'medium', affected_industries: ['金融', '外銷'] },
+        { theme: 'earnings_surprise', sentiment: 0.85, confidence: 0.90, severity: 'high', affected_industries: ['半導體', '電子零組件'] },
+        { theme: 'stress_low', sentiment: 0.90, confidence: 0.85, severity: 'low', affected_industries: [] },
+      ],
+    },
+    stress: { index: 28.5, regime: 'risk_on' },
+    narrative: [
+      { theme: '除權息旺季', sentiment: 0.6, confidence: 0.7, severity: 'medium' },
+      { theme: '台指期結算', sentiment: 0.3, confidence: 0.8, severity: 'low' },
+      { theme: '台積電法說會', sentiment: 0.7, confidence: 0.85, severity: 'high' },
+    ],
+    portfolio: { totalValue: 3028000, cumulativePnL: 0.032, cumulativePnLAmount: 96000, monthlyPnL: 0.015, sharpeRatio: 1.8, maxDrawdown: -0.021, winRate: 0.62 },
+  };
 }
 
 export function initHomePage() {
   if (homeLoaded) return;
   const container = document.getElementById('page-home');
   if (!container) return;
+
+  if (isMockMode()) {
+    container.setAttribute('data-mock', 'true');
+  }
+
   renderHomePage(container).catch(err => console.error('[home] init failed:', err));
 }
