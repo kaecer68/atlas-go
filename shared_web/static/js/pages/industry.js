@@ -473,7 +473,17 @@ export function renderIndustryGraph(data) {
   const height = rect.height || 400;
 
   const dpr = window.devicePixelRatio || 1;
-  el.innerHTML = `<canvas width="${width * dpr}" height="${height * dpr}" style="width:${width}px;height:${height}px;display:block;"></canvas>`;
+  el.innerHTML =
+    `<div class="industry-graph__title">產業關聯網路<div class="industry-graph__subtitle">節點大小反映系統重要性，線條顏色代表相關性方向</div></div>` +
+    `<div class="industry-graph__canvas-wrap" style="position:relative;width:100%;flex:1;min-height:0;">` +
+      `<canvas width="${width * dpr}" height="${height * dpr}" style="width:${width}px;height:${height}px;display:block;"></canvas>` +
+      `<div class="industry-graph__tooltip" id="industryGraphTip"></div>` +
+    `</div>` +
+    `<div class="industry-graph__legend">` +
+      `<span class="industry-graph__legend-item"><span class="industry-graph__legend-line" style="background:var(--pnl-profit);"></span>紅線：正向相關</span>` +
+      `<span class="industry-graph__legend-item"><span class="industry-graph__legend-line" style="background:var(--pnl-loss);"></span>綠線：負向相關</span>` +
+      `<span class="industry-graph__legend-item">節點大小：系統重要性</span>` +
+    `</div>`;
   const canvas = el.querySelector("canvas");
   const ctx = canvas.getContext("2d");
   ctx.scale(dpr, dpr);
@@ -593,6 +603,38 @@ export function renderIndustryGraph(data) {
     const name = sectorName(n.id) || n.id;
     ctx.fillText(name, n.x, n.y + n.radius + 12);
   }
+
+  // Tooltip: hover detection via distance check
+  const tip = document.getElementById("industryGraphTip");
+  canvas.addEventListener("mousemove", function(e) {
+    const cr = canvas.getBoundingClientRect();
+    const mx = e.clientX - cr.left;
+    const my = e.clientY - cr.top;
+    let found = null;
+    for (const n of nodes) {
+      const dx = mx - n.x;
+      const dy = my - n.y;
+      if (Math.sqrt(dx * dx + dy * dy) < n.radius + 4) { found = n; break; }
+    }
+    if (found && tip) {
+      // Count connected edges
+      const connectedCount = edges.filter(
+        e => e.sourceNode === found || e.targetNode === found
+      ).length;
+      tip.innerHTML =
+        `<strong>${sectorName(found.id) || found.id}</strong>` +
+        `<div class="ind-tip-row"><span>系統重要性</span><span>${(found.systemic_importance || 0).toFixed(2)}</span></div>` +
+        `<div class="ind-tip-row"><span>連接產業</span><span>${connectedCount} 個</span></div>`;
+      tip.style.display = "block";
+      tip.style.left = Math.min(mx + 14, width - 140) + "px";
+      tip.style.top = Math.max(my - 40, 4) + "px";
+    } else if (tip) {
+      tip.style.display = "none";
+    }
+  });
+  canvas.addEventListener("mouseleave", function() {
+    if (tip) tip.style.display = "none";
+  });
 }
 
 function renderCycleTab(detail) {

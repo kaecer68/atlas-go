@@ -1,6 +1,7 @@
 // sparkline.js — Darwinian weight sparkline + equity curve + agent scoreboard
 // Standalone component, importable into dashboard.js or portfolio pages.
 import { fmt, fmtPct, fmtFloat, fmtNTD, getThemeColor } from '../shared/utils.js';
+import { pnlProfitColor, pnlLossColor, regimeColor } from '../shared/color-tokens.js';
 
 export { renderEquityCurve, renderDualEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance };
 
@@ -231,7 +232,7 @@ function renderAgentScoreboard(dw, agentNameFn) {
 
   for (const a of agents) {
     const sharpe = a.rolling_sharpe || 0;
-    const sharpeColor = sharpe > 1 ? 'var(--up)' : (sharpe < 0 ? 'var(--down)' : 'var(--warn)');
+    const sharpeColor = sharpe > 1 ? pnlProfitColor() : (sharpe < 0 ? pnlLossColor() : 'var(--warn)');
     html += '<tr>';
     html += `<td>${nameFn(a.agent_id)}</td>`;
     html += `<td>${fmtFloat(a.weight)}</td>`;
@@ -253,8 +254,7 @@ function renderRegimeContext(ps, regimeData) {
   const el = document.getElementById('regimeContext');
   if (!el) return;
   const regime = (ps && ps.regime) || 'UNKNOWN';
-  const colors = { RISK_ON: 'var(--up)', RISK_OFF: 'var(--down)', NEUTRAL: 'var(--warn)' };
-  const color = colors[regime] || 'var(--muted)';
+  const color = regimeColor(regime);
   let html = `<span class="regime-badge" style="background:${color}">${regime}</span>`;
   if (ps && ps.regime_since) {
     html += ` <span class="regime-since">since ${ps.regime_since}</span>`;
@@ -631,17 +631,11 @@ export function renderRegimeVolumeChart(containerId, sessions, volumes = []) {
   
   ctx.clearRect(0, 0, W, H);
   
-  const colors = {
-    RISK_ON: getCssVar('--up', '#ef4444'),
-    RISK_OFF: getCssVar('--down', '#10b981'),
-    NEUTRAL: getCssVar('--warn', '#f59e0b')
-  };
-  
   const barW = chartW / sessions.length;
   
   sessions.forEach((s, i) => {
     const x = pad.left + i * barW;
-    const c = colors[s.regime] || getCssVar('--muted', '#6b7280');
+    const c = getCssVar(regimeColor(s.regime), getCssVar('--muted', '#6b7280'));
     
     // Volume bar
     let vol = volumes[i] || 0.5; // fallback 0.5

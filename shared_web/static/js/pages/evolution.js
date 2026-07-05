@@ -75,6 +75,12 @@ function renderInlineEquityCurve(containerId, points) {
   canvas.style.width = '100%'; canvas.style.height = '200px';
   container.appendChild(canvas);
 
+  let tooltip = document.createElement('div');
+  tooltip.className = 'chart-tooltip';
+  tooltip.style.cssText = 'position:absolute;pointer-events:none;background:var(--panel-l2,#1a2030);border:1px solid var(--border,#333);border-radius:6px;padding:6px 10px;font-size:11px;color:var(--text,#f0f4f8);z-index:10;opacity:0;transition:opacity 0.15s;white-space:nowrap;';
+  container.style.position = 'relative';
+  container.appendChild(tooltip);
+
   let ctx = canvas.getContext('2d');
   let dpr = window.devicePixelRatio || 1;
   let rect = container.getBoundingClientRect();
@@ -138,6 +144,50 @@ function renderInlineEquityCurve(containerId, points) {
     ctx.fillStyle = accentColor;
     pts.forEach(function(p) { ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill(); });
   }
+
+  let tooltipVisible = false;
+  canvas.addEventListener('mousemove', function(e) {
+    let canvasRect = canvas.getBoundingClientRect();
+    let mx = e.clientX - canvasRect.left;
+    let my = e.clientY - canvasRect.top;
+
+    // 找到最近的資料點
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
+    pts.forEach(function(p, i) {
+      let dist = Math.sqrt(Math.pow(p.x - mx, 2) + Math.pow(p.y - my, 2));
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIdx = i;
+      }
+    });
+
+    // 計算 tooltip 位置（避免超出 canvas 範圍）
+    let tpX = pts[nearestIdx].x + 12;
+    let tpY = pts[nearestIdx].y - 10;
+    if (tpX + 120 > W) tpX = pts[nearestIdx].x - 130;
+    if (tpY < 10) tpY = 10;
+    tooltip.style.left = tpX + 'px';
+    tooltip.style.top = tpY + 'px';
+
+    // 格式化 X 軸標籤：嘗試顯示日期，若無則顯示「第N筆」
+    let label = points[nearestIdx].label || '';
+    let isDateLabel = /^\d{4}[-/]\d{2}[-/]\d{2}/.test(label) || /^\d{2}[-/]\d{2}[-/]\d{4}/.test(label);
+    let xLabel = isDateLabel ? label : '第' + (nearestIdx + 1) + '筆';
+
+    // 格式化金額（NT$）
+    let val = points[nearestIdx].value;
+    let formattedValue = 'NT$ ' + (val >= 0 ? '+' : '') + val.toFixed(4);
+
+    tooltip.innerHTML = '<div style="color:var(--muted)">' + xLabel + '</div><div style="font-weight:600;color:var(--pnl-profit)">' + formattedValue + '</div>';
+    tooltip.style.opacity = '1';
+    tooltipVisible = true;
+  });
+
+  canvas.addEventListener('mouseout', function() {
+    tooltip.style.opacity = '0';
+    tooltipVisible = false;
+  });
 }
 
 function renderCompact() {
@@ -177,6 +227,14 @@ function renderCompact() {
     '<div style="text-align:center"><div style="font-size:20px;font-weight:700">' + scorecards.length + '</div><div style="font-size:11px;color:var(--muted)">活躍 Agent</div></div>' +
     '</div>';
 
+  // 繪製內嵌權益曲線（需在 innerHTML 設定前提取資料）
+  let sortedForCurve = sorted.slice().sort(function(a, b) {
+    return (a.last_updated_at || '').localeCompare(b.last_updated_at || '');
+  });
+  let curvePoints = sortedForCurve.map(function(a, i) {
+    return { value: a.average_return || 0, label: (i + 1).toString() };
+  });
+
   el.innerHTML = '<div class="panel wide" style="margin-bottom:12px;padding:10px 14px">' +
     '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Agent 回報分佈</div>' +
     '<div id="inlineEquityCurve"></div>' +
@@ -188,15 +246,6 @@ function renderCompact() {
     '</div>' +
     regimeHtml +
     '</div>' +
-
-  // 繪製內嵌權益曲線
-  let sortedForCurve = sorted.slice().sort(function(a, b) {
-    return (a.last_updated_at || '').localeCompare(b.last_updated_at || '');
-  });
-  let curvePoints = sortedForCurve.map(function(a, i) {
-    return { value: a.average_return || 0, label: (i + 1).toString() };
-  });
-  setTimeout(function() { renderInlineEquityCurve('inlineEquityCurve', curvePoints); }, 100);
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
       '<div class="panel" style="padding:10px 14px">' +
         '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Agent 表現 Top 5</div>' +
@@ -212,6 +261,8 @@ function renderCompact() {
         '</div>' +
       '</div>' +
     '</div>';
+
+  setTimeout(function() { renderInlineEquityCurve('inlineEquityCurve', curvePoints); }, 100);
 }
 
 function renderDetailed() {

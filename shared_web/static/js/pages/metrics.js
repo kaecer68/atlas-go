@@ -156,7 +156,9 @@ export async function updateMetricsTrend(data) {
       else pathD += ` L ${x} ${y}`;
     });
 
-    html += `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:120px;display:block;overflow:visible;">`;
+    html += `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:120px;display:block;overflow:visible;" id="metricsTrendSvg">`;
+    
+    html += `<title>系統指標趨勢 (24h)</title>`;
     
     html += `<text x="${padding.left - 5}" y="${padding.top + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${maxVal.toFixed(0)}%</text>`;
     html += `<text x="${padding.left - 5}" y="${padding.top + innerHeight + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${minVal.toFixed(0)}%</text>`;
@@ -172,6 +174,12 @@ export async function updateMetricsTrend(data) {
     }
     
     html += `<path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
+    
+
+    html += `<rect x="${padding.left}" y="${padding.top}" width="${innerWidth}" height="${innerHeight}" fill="transparent" stroke="none" style="cursor:crosshair" id="metricsHoverRect" />`;
+    html += `<circle r="4" fill="var(--color-accent)" stroke="var(--bg-primary)" stroke-width="1.5" id="metricsHoverCircle" style="display:none;pointer-events:none" />`;
+    html += `<text font-size="11" fill="var(--text-primary)" id="metricsHoverLabel" text-anchor="middle" style="display:none;pointer-events:none" />`;
+    
     html += `</svg>`;
   }
   html += '</div>';
@@ -193,6 +201,41 @@ export async function updateMetricsTrend(data) {
   html += '</tbody></table></div>';
   html += '</div>';
   trendDiv.innerHTML = html;
+
+  const svg = document.getElementById('metricsTrendSvg');
+  const hoverRect = document.getElementById('metricsHoverRect');
+  const hoverCircle = document.getElementById('metricsHoverCircle');
+  const hoverLabel = document.getElementById('metricsHoverLabel');
+  if (!svg || !hoverRect || !hoverCircle || !hoverLabel) return;
+
+  hoverRect.addEventListener('mousemove', (e) => {
+    const rect = svg.getBoundingClientRect();
+    const scaleX = width / rect.width;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const relX = mouseX - padding.left;
+    const idx = Math.round((relX / innerWidth) * (points.length - 1));
+    const clampedIdx = Math.max(0, Math.min(points.length - 1, idx));
+    const p = points[clampedIdx];
+    const x = padding.left + (clampedIdx / (points.length - 1 || 1)) * innerWidth;
+    const val = values[clampedIdx];
+    const y = padding.top + innerHeight - ((val - minVal) / range) * innerHeight;
+    const date = new Date(p.timestamp);
+    const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    const pct = val.toFixed(1);
+    const labelY = y > 20 ? y - 10 : y + 14;
+    hoverCircle.setAttribute('cx', x);
+    hoverCircle.setAttribute('cy', y);
+    hoverCircle.style.display = 'block';
+    hoverLabel.textContent = `${pct}% @ ${timeStr}`;
+    hoverLabel.setAttribute('x', x);
+    hoverLabel.setAttribute('y', labelY);
+    hoverLabel.style.display = 'block';
+  });
+
+  hoverRect.addEventListener('mouseleave', () => {
+    hoverCircle.style.display = 'none';
+    hoverLabel.style.display = 'none';
+  });
 }
 
 export async function loadThresholdViolations() {
