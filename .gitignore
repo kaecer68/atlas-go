@@ -198,3 +198,4 @@ client_web/test-results/
 admin_web/web/
 client_web/web/
 .screenshots/
+*.snapshot.bak

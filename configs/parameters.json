@@ -1,6 +1,6 @@
 {
   "version": "1.3",
-  "updated_at": "2026-07-04T11:29:59.105998+08:00",
+  "updated_at": "2026-07-06T01:43:01.149397+08:00",
   "fallback_price_targets": {
     "_default": {
       "target_multiplier": {
@@ -345,8 +345,8 @@
       "value": 0.7251908396946565,
       "rationale": "60% hit rate is good in TW equity market",
       "source": "calibrated",
-      "last_calibrated": "2026-07-04T11:29:59.104809+08:00",
-      "calibration_timestamp": "2026-07-04T11:29:59.104809+08:00",
+      "last_calibrated": "2026-07-06T01:43:01.149253+08:00",
+      "calibration_timestamp": "2026-07-06T01:43:01.149253+08:00",
       "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
@@ -362,8 +362,8 @@
       "value": 0.5838323353293413,
       "rationale": "40% hit rate is poor and warrants reduction",
       "source": "calibrated",
-      "last_calibrated": "2026-07-04T11:29:59.10481+08:00",
-      "calibration_timestamp": "2026-07-04T11:29:59.10481+08:00",
+      "last_calibrated": "2026-07-06T01:43:01.149254+08:00",
+      "calibration_timestamp": "2026-07-06T01:43:01.149254+08:00",
       "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
@@ -2727,11 +2727,11 @@
       }
     },
     "max_position_size": {
-      "value": 0.000025389989167103973,
+      "value": 0.000009140396100157428,
       "rationale": "15% max single position size",
       "source": "literature",
-      "last_calibrated": "2026-07-04T10:21:48.35604+08:00",
-      "calibration_timestamp": "2026-07-04T10:21:48.35604+08:00",
+      "last_calibrated": "2026-07-06T00:11:32.773444+08:00",
+      "calibration_timestamp": "2026-07-06T00:11:32.773444+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "literature",
@@ -2744,11 +2744,11 @@
       }
     },
     "max_daily_loss_pct": {
-      "value": 0.000005077997833420798,
+      "value": 0.0000018280792200314869,
       "rationale": "3% max daily loss",
       "source": "heuristic",
-      "last_calibrated": "2026-07-04T10:21:48.35604+08:00",
-      "calibration_timestamp": "2026-07-04T10:21:48.35604+08:00",
+      "last_calibrated": "2026-07-06T00:11:32.773444+08:00",
+      "calibration_timestamp": "2026-07-06T00:11:32.773444+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
