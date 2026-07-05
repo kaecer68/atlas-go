@@ -257,15 +257,14 @@ function renderHero(macro, stress, pipeline, events, crossStatus) {
 
 function pointValue(obj, key) {
   if (!obj) return null;
-  if (obj[key] !== undefined && obj[key] !== null) {
-    const n = Number(obj[key]);
+  const v = obj[key];
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'object' && v.value !== undefined) {
+    const n = Number(v.value);
     return Number.isNaN(n) ? null : n;
   }
-  if (obj[key] && typeof obj[key] === 'object' && obj[key].value !== undefined) {
-    const n = Number(obj[key].value);
-    return Number.isNaN(n) ? null : n;
-  }
-  return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
 }
 
 function pointChange(obj, key) {
@@ -320,8 +319,8 @@ function renderMarketPulse(macro, stress, crossStatus) {
   }
 
   const tsmChange = cmChange(macro, crossStatus, 'tsm_adr');
-  const soxChange = cmChange(macro, crossStatus, 'sox');
-  const ndxChange = cmChange(macro, crossStatus, 'ndx');
+  const soxChange = cmChange(macro, crossStatus, 'sox_index');
+  const ndxChange = cmChange(macro, crossStatus, 'ndx_index');
   const usdtwd = cmField(macro, crossStatus, 'usd_twd');
   const vixVal = cmField(macro, crossStatus, 'vix');
   const marginVal = pointValue(macro, 'retail_margin_balance');
