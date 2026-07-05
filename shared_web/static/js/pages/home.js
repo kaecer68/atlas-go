@@ -44,6 +44,7 @@ export async function renderHomePage(container) {
     <section class="home-hero" id="home-hero">
       <div class="home-hero__kicker">Atlas-Go 每日市場摘要</div>
       <h1 class="home-hero__title" id="home-summary">載入市場摘要…</h1>
+      <p class="home-hero__subtitle" id="home-summary-reason"></p>
       <div class="home-hero__meta">
         <span id="home-risk-badge"></span>
         <span class="home-hero__update" id="home-last-update">最後更新：--</span>
@@ -53,7 +54,8 @@ export async function renderHomePage(container) {
       </div>
       <div class="home-hero__actions">
         <button class="btn btn--primary" id="home-view-market">查看市場詳情</button>
-        <button class="btn btn--secondary" id="home-view-portfolio">我的組合</button>
+        <button class="btn btn--secondary" id="home-view-portfolio">查看策略績效</button>
+        <button class="btn btn--secondary" id="home-view-decision" style="display:none">查看決策鏈</button>
       </div>
     </section>
 
@@ -69,8 +71,8 @@ export async function renderHomePage(container) {
 
     <section class="home-section" id="home-portfolio-snapshot">
       <div class="home-section__header">
-        <h2>我的組合快覽</h2>
-        <span class="home-section__subtitle">持倉摘要或示範資料</span>
+        <h2>AI 策略績效（300 萬示範組合）</h2>
+        <span class="home-section__subtitle">此為模擬交易績效展示，非真實帳戶</span>
       </div>
       <div id="home-portfolio-content">
         <div class="home-loading-card">載入中…</div>
@@ -108,6 +110,10 @@ export async function renderHomePage(container) {
   document.getElementById('home-view-portfolio').addEventListener('click', () => {
     window.switchPage('portfolio');
   });
+  const decisionBtn = document.getElementById('home-view-decision');
+  if (decisionBtn) {
+    decisionBtn.addEventListener('click', () => window.switchPage('decision'));
+  }
 
   await loadHomeData();
   homeLoaded = true;
@@ -168,62 +174,71 @@ function pickRiskFromStress(stress) {
   return 'low';
 }
 
-function stressSummary(stress) {
-  const score = pointValue(stress, 'score');
-  if (score === null) return { summary: '市場資料載入中，請稍候。', risk: 'unknown' };
-  const risk = pickRiskFromStress(stress);
-  if (risk === 'high') {
-    return { summary: '市場壓力偏高，建議降低曝險、保留現金。', risk };
+function heroRecommendation(stress, pipeline, events) {
+  const activeEvents = events.filter(e => e && e.status === 'active');
+  const hasPipeline = pipeline && Array.isArray(pipeline.items) && pipeline.items.length > 0;
+  const hasMacro = stress && pointValue(stress, 'score') !== null;
+
+  if (!activeEvents.length && !hasPipeline && !hasMacro) {
+    return { rec: '觀望', reason: '資料更新中 — 請稍後再訪', risk: 'unknown', hasRec: false };
   }
-  if (risk === 'medium') {
-    return { summary: '市場處於中性震盪，建議觀望並控制倉位。', risk };
+
+  const stressRisk = pickRiskFromStress(stress);
+
+  if (activeEvents.length > 0) {
+    const topEvent = activeEvents.reduce((best, e) =>
+      ((e.confidence || 0) >= (best.confidence || 0) ? e : best), activeEvents[0]);
+    const confidence = topEvent.confidence || 0;
+    const bullish = (topEvent.sentiment || 0) >= 0;
+
+    if (confidence < 0.7) {
+      return { rec: '觀望', reason: '市場方向不明，建議觀望', risk: stressRisk, hasRec: true };
+    }
+    if (bullish) {
+      const reason = stressRisk === 'low' ? '信號一致看多，壓力低位' : '偏多訊號出現，留意機會';
+      return { rec: '偏多', reason, risk: stressRisk, hasRec: true };
+    }
+    const reason = stressRisk === 'high' ? '壓力偏高，降低曝險' : '偏空訊號出現，保守因應';
+    return { rec: '偏空', reason, risk: stressRisk, hasRec: true };
   }
-  return { summary: '市場壓力偏低，可留意配置機會。', risk };
+
+  if (hasPipeline) {
+    const top = pipeline.items[0];
+    const conviction = typeof top.conviction === 'number' ? top.conviction : 0;
+    const side = (top.side || '').toLowerCase();
+
+    if (conviction < 0.7) {
+      return { rec: '觀望', reason: '市場方向不明，建議觀望', risk: stressRisk, hasRec: true };
+    }
+    if (side === 'buy') {
+      const reason = stressRisk === 'low' ? '信號一致看多，壓力低位' : '模型偏多，控制倉位';
+      return { rec: '偏多', reason, risk: stressRisk, hasRec: true };
+    }
+    if (side === 'sell') {
+      const reason = stressRisk === 'high' ? '壓力偏高，降低曝險' : '模型偏空，降低曝險';
+      return { rec: '偏空', reason, risk: 'high', hasRec: true };
+    }
+    return { rec: '觀望', reason: '市場方向不明，建議觀望', risk: stressRisk, hasRec: true };
+  }
+
+  return { rec: '觀望', reason: '資料已載入，等待明確信號', risk: stressRisk, hasRec: false };
 }
 
 function renderHero(macro, stress, pipeline, events, crossStatus) {
   const summaryEl = document.getElementById('home-summary');
+  const reasonEl = document.getElementById('home-summary-reason');
   const badgeEl = document.getElementById('home-risk-badge');
+  const decisionBtn = document.getElementById('home-view-decision');
 
-  let { summary, risk } = stressSummary(stress);
+  const { rec, reason, risk, hasRec } = heroRecommendation(stress, pipeline, events);
 
-  // Use narrative events to refine hero: pick the highest severity active event
-  const activeEvents = events.filter(e => e && e.status === 'active');
-  if (activeEvents.length > 0) {
-    const topEvent = activeEvents.reduce((best, e) =>
-      ((e.confidence || 0) >= (best.confidence || 0) ? e : best), activeEvents[0]);
-    const label = getThemeLabel(topEvent.theme);
-    const sent = (topEvent.sentiment || 0) >= 0 ? '偏多' : '偏空';
-    const sevMap = { low: '輕微', medium: '中等', high: '重大', critical: '緊急' };
-    const sevLabel = sevMap[topEvent.severity] || '';
-    summary = `${sevLabel}信號「${label}」${sent} — ${topEvent.confidence >= 0.7 ? '多項指標方向一致' : '建議觀察後續發展'}`;
-    risk = pickRiskFromStress(stress) === 'high' ? 'high'
-         : (topEvent.sentiment || 0) < 0 ? 'medium'
-         : 'low';
-  }
-
-  // Fallback: pipeline view
-  if (!activeEvents.length && pipeline && Array.isArray(pipeline.items) && pipeline.items.length > 0) {
-    const top = pipeline.items[0];
-    const side = top.side || '';
-    if (side.toLowerCase() === 'buy') {
-      summary = '模型觀察到偏多訊號，可留意配置機會。';
-      risk = pickRiskFromStress(stress) === 'high' ? 'high' : 'low';
-    } else if (side.toLowerCase() === 'sell') {
-      summary = '模型觀察到偏空訊號，建議降低曝險。';
-      risk = 'high';
-    }
-  }
-
-  // Fallback: macro data loaded
-  if (!activeEvents.length && !(pipeline && Array.isArray(pipeline.items) && pipeline.items.length > 0)
-      && risk === 'unknown' && macro && pointValue(macro, 'foreign_investor_net') !== null) {
-    summary = '外資與大盤資料已載入，請觀察下方指標。';
-    risk = 'medium';
-  }
-
-  summaryEl.textContent = summary;
+  summaryEl.textContent = `今日建議：${rec}`;
+  reasonEl.textContent = reason;
   badgeEl.innerHTML = renderRiskBadge(risk, riskLevelLabel(risk));
+
+  if (decisionBtn) {
+    decisionBtn.style.display = hasRec ? '' : 'none';
+  }
 }
 
 function pointValue(obj, key) {
@@ -311,6 +326,30 @@ function renderMarketPulse(macro, stress, crossStatus) {
   grid.innerHTML = cards.join('');
 }
 
+function explainFromEvent(e) {
+  if (e.description && typeof e.description === 'string' && e.description.trim()) {
+    return truncate(e.description.trim(), 50);
+  }
+  const label = getThemeLabel(e.theme);
+  const bullish = (e.sentiment || 0) >= 0;
+  return bullish ? `${label}面向正面，可關注相關持股` : `${label}面臨壓力，留意風險`;
+}
+
+function linkFromEvent(e) {
+  if (!e.affected_industries) return '';
+  const industries = Array.isArray(e.affected_industries)
+    ? e.affected_industries
+    : [e.affected_industries];
+  const valid = industries.filter(x => x && typeof x === 'string').map(x => x.trim()).filter(Boolean);
+  if (!valid.length) return '';
+  return `相關：${valid.join('、')}`;
+}
+
+function truncate(str, max) {
+  if (str.length <= max) return str;
+  return str.slice(0, max - 1) + '…';
+}
+
 function renderSignalStrip(events) {
   const el = document.getElementById('home-signal-strip-content');
   if (!el) return;
@@ -326,9 +365,15 @@ function renderSignalStrip(events) {
     const sent = (e.sentiment || 0) >= 0 ? 'bullish' : 'bearish';
     const conf = e.confidence ? `${(e.confidence * 100).toFixed(0)}%` : '—';
     const sev = e.severity || 'low';
+    const explain = escapeHtml(explainFromEvent(e));
+    const link = escapeHtml(linkFromEvent(e));
     return `<div class="signal-chip signal-chip--${sent} signal-chip--sev-${sev}" title="信心: ${conf} | 嚴重度: ${sev}">
-      <span class="signal-chip__label">${label}</span>
-      <span class="signal-chip__meta">${sent === 'bullish' ? '↑利多' : '↓利空'} · ${conf}</span>
+      <div class="signal-chip__row">
+        <span class="signal-chip__label">${label}</span>
+        <span class="signal-chip__meta">${sent === 'bullish' ? '↑利多' : '↓利空'} · ${conf}</span>
+      </div>
+      <span class="signal-chip__explain">${explain}</span>
+      ${link ? `<span class="signal-chip__link">${link}</span>` : ''}
     </div>`;
   }).join('');
 }
@@ -399,6 +444,17 @@ async function loadPortfolioSnapshot() {
   }
 }
 
+function pnlMetricCard(label, value, isProfit) {
+  const cls = isProfit ? 'home-pnl-profit' : 'home-pnl-loss';
+  const card = metricCard({ label, value, tone: 'neutral' });
+  return card.replace(/class="kpi-value\s*"/, `class="kpi-value ${cls} "`);
+}
+
+function portfolioReassurance(pnl) {
+  if (pnl >= 0) return '';
+  return '<p class="home-portfolio-note">短期回撤 — 策略持續運作中，過去績效不代表未來結果</p>';
+}
+
 function renderRealPortfolio(container, data) {
   const total = data.portfolio_value || 0;
   const pnl = data.cumulative_pnl || 0;
@@ -410,9 +466,10 @@ function renderRealPortfolio(container, data) {
   container.innerHTML = `
     <div class="kpi-grid">
       ${metricCard({ label: '總市值', value: fmtNTD(total), tone: 'neutral' })}
-      ${metricCard({ label: '損益', value: fmtSignedPct(pnlPct), tone: pnl >= 0 ? 'positive' : 'negative' })}
+      ${pnlMetricCard('損益', fmtSignedPct(pnlPct), pnl >= 0)}
       ${metricCard({ label: '最大回撤', value: fmtDrawdown(drawdown), tone: 'neutral', extraClasses: 'advanced-only' })}
     </div>
+    ${portfolioReassurance(pnl)}
     <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>
   `;
   document.getElementById('home-portfolio-detail').addEventListener('click', () => window.switchPage('portfolio'));
@@ -452,9 +509,10 @@ function renderDemoPortfolioWithData(container) {
   const topPositions = positions.slice(0, 3);
 
   container.innerHTML = `
+    <div class="home-demo-badge">示範數據</div>
     <div class="kpi-grid">
       ${metricCard({ label: '示範總市值', value: fmtNTD(totalValue), tone: 'neutral', tooltip: 'DEMO 資料' })}
-      ${metricCard({ label: '損益', value: fmtSignedPct(pnlPct), tone: totalPnl >= 0 ? 'positive' : 'negative' })}
+      ${pnlMetricCard('損益', fmtSignedPct(pnlPct), totalPnl >= 0)}
       ${metricCard({ label: '持倉檔數', value: positions.length, tone: 'neutral' })}
     </div>
     <div class="home-demo-positions">
@@ -471,12 +529,13 @@ function renderDemoPortfolioWithData(container) {
             </div>
             <div class="home-demo-position__values">
               <span class="home-demo-position__weight">${formatNumber(p.weight * 100, { decimals: 0 })}%</span>
-              <span class="home-demo-position__pnl ${pnl >= 0 ? 'positive' : 'negative'}">${fmtSignedPct(pnlPct)}</span>
+              <span class="home-demo-position__pnl ${pnl >= 0 ? 'home-pnl-profit' : 'home-pnl-loss'}">${fmtSignedPct(pnlPct)}</span>
             </div>
           </div>
         `;
       }).join('')}
     </div>
+    ${portfolioReassurance(totalPnl)}
     <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>
   `;
 
