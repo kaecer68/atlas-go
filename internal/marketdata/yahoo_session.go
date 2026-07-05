@@ -121,7 +121,7 @@ func (p *YahooStockProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 	return snap, nil
 }
 
-var _ = newYahooStockProvider // ensure function is used (prevents dead-code warning)
+
 
 // yahooSession manages Yahoo Finance crumb + cookie authentication.
 // Yahoo gradually tightened access to its v8 chart endpoint, requiring a
