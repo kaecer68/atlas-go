@@ -277,7 +277,7 @@ function renderTodaySummary(macro, stress, pipeline, events, crossStatus) {
 
   summaryEl.textContent = rec;
   reasonEl.textContent = reason;
-  badgeEl.innerHTML = renderRiskBadge(risk, riskLevelLabel(risk));
+  if (badgeEl) badgeEl.innerHTML = renderRiskBadge(risk, riskLevelLabel(risk));
 
   if (indicatorsEl) {
     const dirTone = rec === '偏多' ? 'bullish' : rec === '偏空' ? 'bearish' : 'neutral';
