@@ -403,7 +403,7 @@ func TestComputeExitAlerts_WithPositions(t *testing.T) {
 	workDir := t.TempDir()
 	ledgerDir := t.TempDir()
 
-	liveStateDir := filepath.Join(workDir, "data/state/live/state")
+	liveStateDir := filepath.Join(workDir, "data/state/live")
 	os.MkdirAll(liveStateDir, 0o755)
 
 	portState := map[string]any{"cash": 500000, "available_cash": 400000}
@@ -445,7 +445,7 @@ func TestComputeExitAlerts_WithPositions(t *testing.T) {
 func TestComputeExitAlerts_PositionsBelowThreshold(t *testing.T) {
 	workDir := t.TempDir()
 	ledgerDir := t.TempDir()
-	liveStateDir := filepath.Join(workDir, "data/state/live/state")
+	liveStateDir := filepath.Join(workDir, "data/state/live")
 	os.MkdirAll(liveStateDir, 0o755)
 
 	portState := map[string]any{"cash": 100000, "available_cash": 100000}
@@ -470,7 +470,7 @@ func TestComputeExitAlerts_PositionsBelowThreshold(t *testing.T) {
 func TestComputeExitAlerts_NegativePnl(t *testing.T) {
 	workDir := t.TempDir()
 	ledgerDir := t.TempDir()
-	liveStateDir := filepath.Join(workDir, "data/state/live/state")
+	liveStateDir := filepath.Join(workDir, "data/state/live")
 	os.MkdirAll(liveStateDir, 0o755)
 
 	portState := map[string]any{"cash": 100000}
@@ -498,7 +498,7 @@ func TestComputeExitAlerts_NegativePnl(t *testing.T) {
 func TestHandleDecisionChain_WithExitAlerts(t *testing.T) {
 	workDir := t.TempDir()
 	ledgerDir := t.TempDir()
-	liveStateDir := filepath.Join(workDir, "data/state/live/state")
+	liveStateDir := filepath.Join(workDir, "data/state/live")
 	os.MkdirAll(liveStateDir, 0o755)
 
 	portState := map[string]any{"cash": 500000, "available_cash": 400000}

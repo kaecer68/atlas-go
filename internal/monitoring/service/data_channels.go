@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -412,7 +413,7 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChannel {
-	capFlowDir := filepath.Join(s.WorkDir, "data/state/capital_flow")
+	capFlowDir := filepath.Join(s.WorkDir, constants.StateCapitalFlow)
 	fileStatus, fileUpdated := checkCapitalFlowHealth(capFlowDir, now)
 	status, updated, _ := s.resolveStatusFromStore("twse_capital_flow", fileStatus, fileUpdated)
 	return DataChannel{
@@ -548,7 +549,7 @@ func (s *DataChannelService) buildTWSEMarginChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataChannel {
-	exportDir := filepath.Join(s.WorkDir, "data/state/export")
+	exportDir := filepath.Join(s.WorkDir, constants.StateExport)
 	fileStatus, fileUpdated := checkExportHealth(exportDir, now)
 	status, updated, lastError := s.resolveStatusFromStore("export_statistics", fileStatus, fileUpdated)
 	return DataChannel{

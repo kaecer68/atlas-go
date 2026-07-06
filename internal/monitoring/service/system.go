@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -159,12 +160,12 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		buildChannelInfo("us_aapl", "Apple (AAPL)", makeMacroPointChecker("Apple (AAPL)", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.AAPL }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
 		buildChannelInfo("us_msft", "Microsoft (MSFT)", makeMacroPointChecker("Microsoft (MSFT)", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.MSFT }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
 		buildChannelInfo("tsm_adr", "TSMC ADR", makeMacroPointChecker("TSMC ADR", func(s marketdata.MacroDataSnapshot) marketdata.MacroDataPoint { return s.TSMADR }), filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
-		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now, s.healthStore),
+		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, constants.StateCapitalFlow), now, s.healthStore),
 		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now, s.healthStore),
 		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, config.GetReplayDataPath(s.WorkDir), now, s.healthStore),
 		buildChannelInfo("frankfurter_fx", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now, s.healthStore),
 		buildChannelInfo("twse_margin", "TWSE 融資融券", checkMarginHealth, filepath.Join(s.WorkDir, "data/state/margin"), now, s.healthStore),
-		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, "data/state/export"), now, s.healthStore),
+		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, constants.StateExport), now, s.healthStore),
 		buildChannelInfo("tsmc_revenue", "台積電月營收", checkTSMCRevenueHealth, filepath.Join(s.WorkDir, "data/state/tsmc_revenue"), now, s.healthStore),
 		buildChannelInfo("geopolitical_taiwan", "台灣地緣政治", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json"), now, s.healthStore),
 	}

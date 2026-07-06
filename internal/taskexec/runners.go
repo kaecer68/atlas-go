@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
@@ -109,7 +110,7 @@ func (r *judgeExperimentRunner) Name() string {
 func (r *judgeExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
 	resultPath, _ := req.Payload["result_path"].(string)
 	if resultPath == "" {
-		resultPath = experiment.FindLatestExperiment("data/state/experiments")
+		resultPath = experiment.FindLatestExperiment(constants.StateExperiments)
 		if resultPath == "" {
 			resultPath = "data/state/experiments/exec-value-yield-01-1776084503.json"
 		}
@@ -182,7 +183,7 @@ func (r *promoteBaselineRunner) Name() string {
 func (r *promoteBaselineRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
 	resultPath, _ := req.Payload["result_path"].(string)
 	if resultPath == "" {
-		resultPath = experiment.FindLatestExperiment("data/state/experiments")
+		resultPath = experiment.FindLatestExperiment(constants.StateExperiments)
 		if resultPath == "" {
 			resultPath = "data/state/experiments/exec-value-yield-01-1776084503.json"
 		}

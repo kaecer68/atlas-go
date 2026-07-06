@@ -2,6 +2,8 @@ package marketdata
 
 import (
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 func TestParseTWDVolume(t *testing.T) {
@@ -23,7 +25,7 @@ func TestParseTWDVolume(t *testing.T) {
 }
 
 func TestNewTWSECapitalFlowProvider(t *testing.T) {
-	p := NewTWSECapitalFlowProvider("data/state/capital_flow")
+	p := NewTWSECapitalFlowProvider(constants.StateCapitalFlow)
 	if p.Name() != "twse_capital_flow" {
 		t.Fatalf("unexpected name: %s", p.Name())
 	}

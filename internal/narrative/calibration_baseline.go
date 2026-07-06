@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -139,7 +140,9 @@ func stdDev(values []float64) float64 {
 
 const BaselinesFileName = "baselines.json"
 
-const BaselinesDir = "data/state/calibration"
+// BaselinesDir is an alias for constants.StateCalibration to preserve
+// backward compatibility for external callers.
+const BaselinesDir = constants.StateCalibration
 
 func SaveBaselines(workDir string, cfg *BaselineConfig) error {
 	if cfg == nil {
