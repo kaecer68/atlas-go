@@ -71,7 +71,9 @@ func main() {
 	} else {
 		// At least one provider succeeded. Individual provider failures are masked here;
 		// the health store records "ok" for both channels even if one failed.
-		// TODO: Implement per-provider status tracking so partial failures surface
+		// [INTENTIONAL STUB] TODO: Implement per-provider status tracking so partial failures surface
+		// Audit 2026-07-06: currently only composite ok/error is recorded;
+		// individual provider failures are masked.
 		// as "warn" instead of "ok" on the data channels dashboard.
 		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "ok", "", pool)
 		monitoring.RecordChannelFetchWithPool(stateDir, "frankfurter_fx", "ok", "", pool)

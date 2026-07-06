@@ -395,7 +395,8 @@ func (c *Calculator) computeAdjustmentFactor(data RSITwInput, subs map[string]RS
 	// D3: Credit Control Signal (multiplier 0.80)
 	factor *= c.factorD3(data, subs, params)
 
-	// D4: Military / Flash Crash (multiplier 1.15, placeholder)
+	// [INTENTIONAL PLACEHOLDER] D4: Military / Flash Crash (multiplier 1.15).
+	// Audit 2026-07-06: hardcoded return in factorD4(); no data integration yet.
 	factor *= c.factorD4(subs)
 
 	return clamp(factor, 0.8, 1.2)

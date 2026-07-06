@@ -55,7 +55,7 @@ func (c *StructuralTrendCalibrator) ParamBounds() map[string][2]float64 {
 //     min_confidence and subordinate thresholds is large enough to provide clean
 //     separation between detection and action thresholds.
 //
-// The semiconductor_index_threshold is a placeholder (value 0.0). Any deviation from
+// [INTENTIONAL PLACEHOLDER] The semiconductor_index_threshold is a placeholder (value 0.0). Any deviation from
 // zero receives a heavy penalty, effectively locking the optimizer away from it.
 func (c *StructuralTrendCalibrator) BuildEvaluator() func(cfg *ParametersConfig) (float64, error) {
 	return func(cfg *ParametersConfig) (float64, error) {

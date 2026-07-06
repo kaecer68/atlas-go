@@ -75,6 +75,20 @@ func (s placeholderSigner) Sign(payload []byte, secret string, timestamp string,
 	return "placeholder-" + hex.EncodeToString(h[:])
 }
 
+// deadSigner is a fail-closed signer. It produces an empty signature that will
+// be rejected by any broker API with a 401/403 before any order is submitted.
+// It is used when selectSigner receives an unrecognized signer name (typo or
+// misconfiguration), preventing silent fallback to a working placeholder.
+// (CRIT-2 fix, audit 2026-07-06)
+type deadSigner struct{}
+
+func (s deadSigner) Name() string    { return "dead" }
+func (s deadSigner) Version() string { return "v0" }
+
+func (s deadSigner) Sign(payload []byte, secret string, timestamp string, nonce string) string {
+	return ""
+}
+
 type hmacSHA256Signer struct{}
 
 func (s hmacSHA256Signer) Name() string { return "hmac-sha256" }
@@ -353,7 +367,11 @@ func selectSigner(signer string) (string, requestSigner) {
 	case "placeholder", "":
 		return "placeholder", placeholderSigner{}
 	default:
-		return "placeholder", placeholderSigner{}
+		// Fail-closed: unrecognized signer name (typo or misconfiguration).
+		// Returns deadSigner whose Sign() returns empty string, causing the
+		// broker API to reject with 401 before any order is submitted.
+		// (CRIT-2 fix, audit 2026-07-06)
+		return "dead", deadSigner{}
 	}
 }
 

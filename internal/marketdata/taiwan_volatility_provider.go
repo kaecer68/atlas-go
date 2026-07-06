@@ -83,14 +83,15 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 		return MacroDataSnapshot{}, fmt.Errorf("%s: invalid volatility result: %v", taiwanVolatilityChannel, vol)
 	}
 
+	latest := validCloses[len(validCloses)-1]
 	timestamp := result[0].Meta.RegularMarketTime
 
 	return MacroDataSnapshot{
 		RecordedAt: time.Now().Unix(),
 		HistoricalVolatility: MacroDataPoint{
 			Symbol:    taiwanVolatilitySymbol,
-			Value:     vol,
-			ChangePct: 0,
+			Value:     latest,
+			ChangePct: vol,
 			Timestamp: timestamp,
 		},
 	}, nil
