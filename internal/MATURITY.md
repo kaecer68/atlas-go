@@ -83,7 +83,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 14 packages
+## X · Experimental（實驗中）— 13 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -96,7 +96,6 @@
 | `retail` | RSI-tw 散戶情緒指數 — 複合零售情緒指標（保證金、VIX、機構流向） | `Calculator` | Phase 1 基準實作，Phase 2 擴充中 |
 | `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，實驗中 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | 情境模擬 |
-| `swarm` | Swarm 狀態容器 + API（模擬引擎已降級為 pass-through，PR #963） | `SwarmState` | archived（pass-through） |
 | `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（base × cycle × seasonal × linkage × narrative × macro × factor） | `WeightEngine`, `ComputeWeights()`, `ComputeWeight()`, 6 `InputProvider` adapters | 取代硬編碼 12 個 switch case；deprecated: `monitoring/service.calculateWeightDerivation` |
 | `alerting` | Alertmanager webhook receiver — 接收 Alertmanager firing/resolved 警報，in-memory ring buffer 保留最近 1000 筆供 SSE/UI 消費 | `AlertWebhookHandler`, `AlertmanagerPayload`, `AlertmanagerAlert` | 掛載於 `/api/v1/alerts`；待 Prometheus alertmanager targets 與 docker-compose alertmanager service 補齊後晉升 evolving |
 | `llm` | LLM 多 Provider 統一介面 — 路由器、能力調度、DataClass 閘門、備援鏈，健康端點 | `ProviderImpl`, `DefaultRouter`, `Capability`, `DataClass` | Wave 11 L2.1：effective routing chain 為 3 層（Primary → Backup1 → LastResort）；`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 為 `[PLANNED]` 常數，無 client 實作（Issue #720）。**Phase 2 canonical 介面（Issue #722）**：Phase 2 canonical 介面已就緒（`adapters` + `capabilities`），承接 `llm_annotator` 的角色。詳見 `docs/llm-integration-strategy-framework.md` |
@@ -107,12 +106,13 @@
 
 ---
 
-## A · Archived（封存）— 1 package
+## A · Archived（封存）— 2 packages
 
 已被 Phase 2 canonical 取代；API frozen，僅接受 bug fix 維護；新程式碼禁止依賴。
 
 | Package | 描述 | 關鍵型別/介面 | 封存原因 |
 |---------|------|--------------|----------|
+| `swarm` | Swarm 狀態容器 + API（模擬引擎已降級為 pass-through） | `SwarmState` | PR #963：MiroFish simulation engine 移除（GARCH, copula, jump-diffusion, calibration），僅保留型別別名與 pass-through 容器 |
 | `llm_annotator` | LLM 歸因標註 — 自然語言解釋 StrategyFrame 失效原因（Kimi/Moonshot API） | `Annotator`, `KimiClient`, `MockAnnotator`, `FailureContext`, `CircuitBreaker`(wrapper), `CircuitState`(alias) | **Wave 11 L2.1（Issue #722）**：Phase 2 canonical 介面（`internal/llm/capabilities/failure_attribution` + `internal/llm/adapters`）已就緒，承接本套件的角色。**Wave 12 Phase 2（Issue #731）**：CircuitBreaker 統一為 `apigateway.CircuitBreaker` canonical owner；本套件保留 `CircuitBreaker` thin wrapper 委派（含 `CircuitState = apigateway.State` 型別別名、`ErrCircuitOpen` sentinel、`Allow()`/`Snapshot()`/`WithNowFunc()`）；4 層 transitive import cycle 已破壞（`monitoring.ChannelHealthStore` 等搬到 `apigateway`）。需 `LLM_ANNOTATOR_API_KEY` 環境變數（透過 apigateway `config.GetSecret` 取得），opt-in 啟用（空時 `/api/strategies/{id}/annotate` 回 503）。 |
 
 ---
