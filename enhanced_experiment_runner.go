@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 type ExperimentResult struct {
@@ -22,7 +20,6 @@ type ExperimentResult struct {
 	DarwinianScore   float64
 	PRISMScore       float64
 	ReflexivityScore float64
-	SwarmScore       float64
 	RiskScore        float64
 	VolatilityScore  float64
 	IntegrationScore float64
@@ -88,12 +85,7 @@ func runEnhancedExperiment(round int) ExperimentResult {
 	result.ReflexivityScore = reflexivityScore
 	result.Errors = append(result.Errors, reflexivityErrors...)
 
-	// 4. Swarm 測試
-	swarmScore, swarmErrors := testSwarm()
-	result.SwarmScore = swarmScore
-	result.Errors = append(result.Errors, swarmErrors...)
-
-	// 5. 風險管理測試 (新增)
+	// 4. 風險管理測試 (新增)
 	riskScore, riskErrors := testRiskManagement()
 	result.RiskScore = riskScore
 	result.Errors = append(result.Errors, riskErrors...)
@@ -309,20 +301,6 @@ func testEnhancedReflexivity() (float64, []string) {
 		score = 100
 	}
 
-	return score, errors
-}
-
-func testSwarm() (float64, []string) {
-	config := swarm.DefaultSwarmConfig()
-	sw := swarm.NewSwarmState(config)
-	_ = sw.Start(context.Background())
-
-	score := 100.0
-	errors := make([]string, 0)
-	if sw == nil {
-		score = 0
-		errors = append(errors, "Swarm initialization failed")
-	}
 	return score, errors
 }
 
@@ -591,7 +569,7 @@ func sqrt(x float64) float64 {
 func printEnhancedSummary(results []ExperimentResult) {
 	var avgReturn, avgSharpe, avgDrawdown, avgWinRate, avgHealth float64
 	var avgRecs float64
-	var totalDarwinian, totalPRISM, totalReflexivity, totalSwarm, totalRisk, totalVol, totalIntegration float64
+	var totalDarwinian, totalPRISM, totalReflexivity, totalRisk, totalVol, totalIntegration float64
 
 	for _, r := range results {
 		avgReturn += r.TotalReturn
@@ -603,7 +581,6 @@ func printEnhancedSummary(results []ExperimentResult) {
 		totalDarwinian += r.DarwinianScore
 		totalPRISM += r.PRISMScore
 		totalReflexivity += r.ReflexivityScore
-		totalSwarm += r.SwarmScore
 		totalRisk += r.RiskScore
 		totalVol += r.VolatilityScore
 		totalIntegration += r.IntegrationScore
@@ -619,7 +596,6 @@ func printEnhancedSummary(results []ExperimentResult) {
 	totalDarwinian /= n
 	totalPRISM /= n
 	totalReflexivity /= n
-	totalSwarm /= n
 	totalRisk /= n
 	totalVol /= n
 	totalIntegration /= n
@@ -636,12 +612,11 @@ func printEnhancedSummary(results []ExperimentResult) {
 	fmt.Printf("  Darwinian Weights: %.1f/100\n", totalDarwinian)
 	fmt.Printf("  PRISM 訓練系統: %.1f/100\n", totalPRISM)
 	fmt.Printf("  Reflexivity 引擎: %.1f/100\n", totalReflexivity)
-	fmt.Printf("  MiroFish Swarm: %.1f/100\n", totalSwarm)
 	fmt.Printf("  風險管理模塊: %.1f/100\n", totalRisk)
 	fmt.Printf("  波動性管理: %.1f/100\n", totalVol)
 	fmt.Printf("  組件整合系統: %.1f/100\n", totalIntegration)
 
-	totalScore := (totalDarwinian + totalPRISM + totalReflexivity + totalSwarm + totalRisk + totalVol + totalIntegration) / 7.0
+	totalScore := (totalDarwinian + totalPRISM + totalReflexivity + totalRisk + totalVol + totalIntegration) / 6.0
 	fmt.Printf("\n🏆 系統總體評分: %.1f/100\n", totalScore)
 
 	var assessment string

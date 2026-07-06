@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"context"
 	"math"
 	"path/filepath"
 	"runtime"
@@ -17,7 +16,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/spawning"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 type mockServiceRegistry struct {
@@ -101,83 +99,6 @@ func waitForCondition(t *testing.T, timeout time.Duration, message string, cond 
 	t.Fatal(message)
 }
 
-func TestSwarmPlugin_ProcessRecommendations_EmptyRecs(t *testing.T) {
-	p := &swarmPlugin{}
-	recs := p.ProcessRecommendations(domain.RegimeRiskOn, nil)
-	if len(recs) != 0 {
-		t.Errorf("expected empty recs, got %d", len(recs))
-	}
-}
-
-func TestSwarmPlugin_ProcessRecommendations_NoData(t *testing.T) {
-	t.Run("both nil", func(t *testing.T) {
-		p := &swarmPlugin{}
-		input := []domain.Recommendation{{Symbol: "2330", Conviction: 50, Side: domain.SideBuy}}
-		recs := p.ProcessRecommendations(domain.RegimeRiskOn, input)
-		if len(recs) != 1 {
-			t.Fatalf("expected 1 rec, got %d", len(recs))
-		}
-		if recs[0].Conviction != 50 {
-			t.Errorf("expected conviction unchanged, got %d", recs[0].Conviction)
-		}
-	})
-
-	t.Run("swarm with no results", func(t *testing.T) {
-		cfg := swarm.DefaultSwarmConfig()
-		cfg.FishCount = 1
-		cfg.SimulationHorizon = time.Nanosecond
-		cfg.TimeStep = time.Hour
-		cfg.Parallelism = 1
-		sw := swarm.NewSwarmState(cfg)
-		p := &swarmPlugin{swarm: sw}
-		input := []domain.Recommendation{{Symbol: "2330", Conviction: 50, Side: domain.SideBuy}}
-		recs := p.ProcessRecommendations(domain.RegimeRiskOn, input)
-		if len(recs) != 1 {
-			t.Fatalf("expected 1 rec, got %d", len(recs))
-		}
-		if recs[0].Conviction != 50 {
-			t.Errorf("expected conviction unchanged for empty swarm, got %d", recs[0].Conviction)
-		}
-	})
-
-	t.Run("unmatched symbol", func(t *testing.T) {
-		sw, done := newSwarmWithSymbol(t, "REAL.TW")
-		defer done()
-
-		p := &swarmPlugin{swarm: sw}
-		input := []domain.Recommendation{{Symbol: "NONEXISTENT", Conviction: 50, Side: domain.SideBuy}}
-		recs := p.ProcessRecommendations(domain.RegimeRiskOn, input)
-		if len(recs) != 1 {
-			t.Fatalf("expected 1 rec, got %d", len(recs))
-		}
-		if recs[0].Conviction != 50 {
-			t.Errorf("expected conviction unchanged for unmatched symbol, got %d", recs[0].Conviction)
-		}
-	})
-}
-
-func TestSwarmPlugin_ProcessRecommendations_WithConsensus(t *testing.T) {
-	sw := swarm.NewSwarmState(swarm.DefaultSwarmConfig())
-
-	p := &swarmPlugin{swarm: sw}
-
-	t.Run("pass-through unchanged conviction", func(t *testing.T) {
-		input := []domain.Recommendation{
-			{Symbol: "SYM.TW", Conviction: 50, Side: domain.SideBuy},
-			{Symbol: "SYM.TW", Conviction: 50, Side: domain.SideSell},
-		}
-		recs := p.ProcessRecommendations(domain.RegimeRiskOn, input)
-		if len(recs) != 2 {
-			t.Fatalf("expected 2 recs, got %d", len(recs))
-		}
-		for _, rec := range recs {
-			if rec.Conviction != 50 {
-				t.Errorf("expected conviction 50 unchanged, got %d (demoted engine pass-through)", rec.Conviction)
-			}
-		}
-	})
-}
-
 func TestJanusPlugin_ProcessRecommendations_NilEngine(t *testing.T) {
 	p := &janusPlugin{}
 	recs := []domain.Recommendation{{Symbol: "2330", Conviction: 50}}
@@ -208,7 +129,7 @@ func TestPrismPlugin_PostSimulation_NilDeps(t *testing.T) {
 	})
 
 	t.Run("manager nil, controller has nil prismManager", func(t *testing.T) {
-		ctrl := NewPhase3Controller(nil, nil, nil, nil, nil, nil)
+		ctrl := NewPhase3Controller(nil, nil, nil, nil, nil)
 		p := &prismPlugin{controller: ctrl}
 		p.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
 	})
@@ -229,7 +150,7 @@ func TestSpawningPlugin_PostSimulation_NilDeps(t *testing.T) {
 	})
 
 	t.Run("controller fallback with nil spawningManager", func(t *testing.T) {
-		ctrl := NewPhase3Controller(nil, nil, nil, nil, nil, nil)
+		ctrl := NewPhase3Controller(nil, nil, nil, nil, nil)
 		p := &spawningPlugin{controller: ctrl}
 		p.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
 	})
@@ -253,7 +174,7 @@ func TestPhase3Plugin_PostSimulation_NilController(t *testing.T) {
 }
 
 func TestPhase3Plugin_PostSimulation_WithController(t *testing.T) {
-	ctrl := NewPhase3Controller(nil, nil, nil, nil, nil, nil)
+	ctrl := NewPhase3Controller(nil, nil, nil, nil, nil)
 	p := &phase3Plugin{controller: ctrl}
 
 	quotes := []domain.Quote{
@@ -428,7 +349,7 @@ func TestPhase3Plugin_Attach_WithReplay(t *testing.T) {
 		ByDate: map[string]map[string]domain.DailyBar{},
 		Dates:  []time.Time{time.Now()},
 	}
-	ctrl := NewPhase3Controller(nil, nil, nil, nil, nil, nil)
+	ctrl := NewPhase3Controller(nil, nil, nil, nil, nil)
 	mock := &mockServiceRegistry{replay: ds}
 	p := &phase3Plugin{controller: ctrl}
 	p.Attach(mock)
@@ -442,7 +363,7 @@ func TestSpawningPlugin_PostSimulation_WithManager(t *testing.T) {
 }
 
 func TestPrismPlugin_ProcessRecommendations_WithController(t *testing.T) {
-	ctrl := NewPhase3Controller(nil, nil, nil, nil, nil, nil)
+	ctrl := NewPhase3Controller(nil, nil, nil, nil, nil)
 	p := &prismPlugin{controller: ctrl}
 	recs := []domain.Recommendation{{Symbol: "2330", Conviction: 50}}
 	got := p.ProcessRecommendations(domain.RegimeRiskOn, recs)
@@ -475,23 +396,10 @@ func TestPrismPlugin_PostSimulation_RegimeCoverage(t *testing.T) {
 
 	t.Run("controller fallback with non-nil prismManager", func(t *testing.T) {
 		pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
-		ctrl := NewPhase3Controller(nil, nil, nil, nil, nil, nil)
+		ctrl := NewPhase3Controller(nil, nil, nil, nil, nil)
 		ctrl.prismManager = pm
 		mock := &mockServiceRegistry{}
 		p := &prismPlugin{controller: ctrl, core: mock}
 		p.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
 	})
-}
-
-func newSwarmWithSymbol(t *testing.T, symbol string) (*swarm.SwarmState, func()) {
-	t.Helper()
-	cfg := swarm.DefaultSwarmConfig()
-	cfg.FishCount = 10
-	cfg.SimulationHorizon = 1 * time.Hour
-	cfg.TimeStep = 1 * time.Hour
-	cfg.Parallelism = 4
-	sw := swarm.NewSwarmState(cfg)
-	// SwarmState.Start does nothing in deprecated mode — no simulation needed.
-	_ = sw.Start(context.Background())
-	return sw, func() {}
 }

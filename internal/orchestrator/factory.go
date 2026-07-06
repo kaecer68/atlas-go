@@ -12,7 +12,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/spawning"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 // NewProductionSystem builds a fully-wired System for dependency-graph visibility
@@ -66,9 +65,6 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
 	system.WithPRISM(pm)
 
-	sw := swarm.NewSwarmState(swarm.DefaultSwarmConfig())
-	system.WithSwarm(sw)
-
 	if janusEngine == nil {
 		janusEngine = janus.NewEngineWithConfig(janus.DefaultJANUSConfig())
 	}
@@ -80,7 +76,7 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	system.WithSpawning(sm)
 
 	re := reflexivity.NewReflexivityEngine()
-	ctrl := NewPhase3Controller(&system.Sim().registry, pm, sw, sm, re, system.Sim().ledger)
+	ctrl := NewPhase3Controller(&system.Sim().registry, pm, sm, re, system.Sim().ledger)
 	system.WithPhase3Controller(ctrl)
 
 	system.WithStrategyEvolver(NewStrategyEvolver())

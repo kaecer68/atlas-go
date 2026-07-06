@@ -7,7 +7,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/spawning"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 // WithJANUS attaches a JANUS engine to the system for backtest validation.
@@ -32,15 +31,6 @@ func (s *System) WithPRISM(pm *prism.PRISMManager) *System {
 		s.host = &PluginHost{}
 	}
 	s.host.Register(&prismPlugin{manager: pm}, s.SystemCore)
-	return s
-}
-
-// WithSwarm attaches a Swarm state container (pass-through; simulation engine demoted in PR #963).
-func (s *System) WithSwarm(sw *swarm.SwarmState) *System {
-	if s.host == nil {
-		s.host = &PluginHost{}
-	}
-	s.host.Register(&swarmPlugin{swarm: sw}, s.SystemCore)
 	return s
 }
 

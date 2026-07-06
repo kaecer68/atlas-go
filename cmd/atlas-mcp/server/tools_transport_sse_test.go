@@ -8,7 +8,7 @@ package server
 //     (parametrised sub-test).
 //  3. Running the full registerTools + registerAuditTools pipeline through a
 //     server equipped for HTTP transport still lands RegisteredToolCount
-//     inside the 82–84 assertion range used by server.Run().
+//     inside the 77–79 assertion range used by server.Run().
 //
 // These tests complement transport_test.go's unit-level coverage of the
 // middleware by exercising the real go-sdk handlers over net/http.
@@ -169,7 +169,7 @@ func TestBearerAuth_RejectionPathsAcrossTransports(t *testing.T) {
 // asserts that running registerTools + registerAuditTools through a
 // server whose Config.Transport is set to an HTTP transport (the path
 // used in production by SSE and streamable-HTTP deployments) still
-// produces 82–84 tools, matching the assertion in server.Run(). The
+// produces 77–79 tools, matching the assertion in server.Run(). The
 // delta check keeps the test robust against other tests in the package
 // that may have already advanced the package-level counter.
 func TestRegisteredToolCount_RemainsInRangeAfterHTTPTransportRegistration(t *testing.T) {
@@ -195,8 +195,8 @@ func TestRegisteredToolCount_RemainsInRangeAfterHTTPTransportRegistration(t *tes
 	registerAuditTools(mcpSrv, srv)
 	delta := RegisteredToolCount - before
 
-	if delta < 82 || delta > 84 {
-		t.Fatalf("tool count drift in HTTP-transport registration: delta=%d (total=%d), expected 82-84",
+	if delta < 77 || delta > 79 {
+		t.Fatalf("tool count drift in HTTP-transport registration: delta=%d (total=%d), expected 77-79",
 			delta, RegisteredToolCount)
 	}
 }
