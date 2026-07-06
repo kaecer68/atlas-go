@@ -415,10 +415,14 @@ func TestComputeExitAlerts_WithPositions(t *testing.T) {
 	// 2330.TW: cost=600, pnl=20400 → PnlPct=34 → 強烈建議獲利了結
 	// 2454.TW: cost=1200, pnl=13200 → PnlPct=11 → 部分獲利了結
 	positions := []map[string]any{
-		{"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 750.0, "market_value": 750, "unrealized_pnl": 20400},
-		{"symbol": "2454.TW", "quantity": 1, "average_cost": 1200.0,
-			"current_price": 1300.0, "market_value": 1300, "unrealized_pnl": 13200},
+		{
+			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
+			"current_price": 750.0, "market_value": 750, "unrealized_pnl": 20400,
+		},
+		{
+			"symbol": "2454.TW", "quantity": 1, "average_cost": 1200.0,
+			"current_price": 1300.0, "market_value": 1300, "unrealized_pnl": 13200,
+		},
 	}
 	posData, _ := json.Marshal(positions)
 	os.WriteFile(filepath.Join(liveStateDir, "positions_current.json"), posData, 0o644)
@@ -454,8 +458,10 @@ func TestComputeExitAlerts_PositionsBelowThreshold(t *testing.T) {
 
 	// PnlPct = 1800/600 = 3.0 < 5.0 → filtered out
 	positions := []map[string]any{
-		{"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 618.0, "market_value": 618, "unrealized_pnl": 1800},
+		{
+			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
+			"current_price": 618.0, "market_value": 618, "unrealized_pnl": 1800,
+		},
 	}
 	posData, _ := json.Marshal(positions)
 	os.WriteFile(filepath.Join(liveStateDir, "positions_current.json"), posData, 0o644)
@@ -479,8 +485,10 @@ func TestComputeExitAlerts_NegativePnl(t *testing.T) {
 
 	// PnlPct = -7200/600 = -12 → absPnl=12 > 5, PnlPct <= -10 → 建議評估停損
 	positions := []map[string]any{
-		{"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 528.0, "market_value": 528, "unrealized_pnl": -7200},
+		{
+			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
+			"current_price": 528.0, "market_value": 528, "unrealized_pnl": -7200,
+		},
 	}
 	posData, _ := json.Marshal(positions)
 	os.WriteFile(filepath.Join(liveStateDir, "positions_current.json"), posData, 0o644)
@@ -507,8 +515,10 @@ func TestHandleDecisionChain_WithExitAlerts(t *testing.T) {
 
 	// PnlPct = 30000/600 = 50 → 強烈建議獲利了結
 	positions := []map[string]any{
-		{"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 750.0, "market_value": 750, "unrealized_pnl": 30000},
+		{
+			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
+			"current_price": 750.0, "market_value": 750, "unrealized_pnl": 30000,
+		},
 	}
 	posData, _ := json.Marshal(positions)
 	os.WriteFile(filepath.Join(liveStateDir, "positions_current.json"), posData, 0o644)
