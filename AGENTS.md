@@ -11,9 +11,9 @@
 
 ## 版本資訊
 
-- **Wave**：Wave 11+（L2.3 PoC 已 ship，L2.4 觀察窗口已 ship via PR #821，Phase 3.5 forecast-bridge PoC 已合併 via PR #905）
-- **最後更新**：2026-07-02
-- **對應版本**：v0.0.0.27+
+- **Wave**：Wave 11+ + Phase 0-7 UX Redesign（IA + 首頁層級 + Onboarding + Design System 全部 ship via PR #945–#950+）
+- **最後更新**：2026-07-06
+- **對應版本**：v0.0.0.30+
 
 ## 專案概覽
 
@@ -129,6 +129,8 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | **LLM health 401** | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處 rebuild 後仍 401。見 `docs/TRAPS.md` 對應 entry 與 PR #931。 |
 | **Prometheus metric 命名空間** | 新 metric 必須 `atlas_<feature>_<measurement>_total` 格式，無前綴的舊名（如 `channel_errors_total`）會與 Prometheus default metric 衝突。見 PR #926 + Issue #927。 |
 | **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果（非 AI 工作產物）。`.snapshot.bak` 已在 `.gitignore` 排除（刪除即可）；`parameters.json` 應 commit（校準 SOTA 的 source of truth）。判斷流程見 `docs/CONSTITUTION.md` §第八條。 |
+| **Page ID rename (overview→home)** | Phase 1 IA redesign 將 `data-page="overview"` 改為 `"home"`。CI smoke test (`client_web/smoke/run.mjs`、`admin_web/smoke/run.mjs`) 必須同步更新 PAGES_ARG 與 PAGE_SELECTORS，否則前端測試 CI 紅燈。 |
+| **Frontend-backend field name mismatch** | CompositeMacroProvider 回傳 `*_index` 後綴（`sox_index`/`spx_index`/`ndx_index`/`dji_index`）與 `score`（非 `index`）；前端若用舊欄位名（`sox`/`index`）會永遠 `null` 導致 silent render failure。改前端前先 `curl /api/macro/snapshot/latest | jq keys` 對齊。 |
 
 ## 🔧 程式碼智慧工具（強制規則）
 
