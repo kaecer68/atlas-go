@@ -54,6 +54,7 @@ func main() {
 		marketdata.NewNVDAProvider(),
 		marketdata.NewAAPLProvider(),
 		marketdata.NewMSFTProvider(),
+		marketdata.NewTaiwanVolatilityProvider(),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)

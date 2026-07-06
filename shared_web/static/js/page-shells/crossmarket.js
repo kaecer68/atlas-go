@@ -22,4 +22,8 @@ export const template = `
     <h3>📈 動態相關性</h3>
     <div class="panel" id="cm-correlation"></div>
   </div>
+  <div class="section mt-16">
+    <h3>🔄 產業相關性矩陣</h3>
+    <div class="panel" id="cm-correlation-matrix"></div>
+  </div>
 `;
