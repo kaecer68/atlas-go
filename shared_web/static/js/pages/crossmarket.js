@@ -74,10 +74,10 @@ function renderUSIndices(status) {
     el.innerHTML = emptyState('等待美台連動監控資料');
     return;
   }
-  const spx = getField(status, 'spx_index');
-  const ndx = getField(status, 'ndx_index');
-  const dji = getField(status, 'dji_index');
-  const sox = getField(status, 'sox_index');
+  const spx = getField(status, 'spx');
+  const ndx = getField(status, 'ndx');
+  const dji = getField(status, 'dji');
+  const sox = getField(status, 'sox');
   const spxColor = spx.failed ? null : (parseFloat(spx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
   const ndxColor = ndx.failed ? null : (parseFloat(ndx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
   const djiColor = dji.failed ? null : (parseFloat(dji.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');

@@ -114,6 +114,8 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/api/synergy" || strings.HasPrefix(p, "/api/synergy/"):
 		return true
+	case p == "/api/cross-market" || strings.HasPrefix(p, "/api/cross-market/"):
+		return true
 	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
 		return true
 	case p == "/client" || strings.HasPrefix(p, "/client/"):
@@ -128,7 +130,7 @@ func run(args []string, deps appDeps) error {
 	flags.SetOutput(io.Discard)
 
 	apiMode := flags.Bool("api", false, "start dashboard api server")
-	apiAddr := flags.String("addr", ":8080", "dashboard api listen address")
+	apiAddr := flags.String("addr", ":18080", "dashboard api listen address")
 	swaggerMode := flags.Bool("swagger", false, "enable swagger docs endpoints")
 	// L2.4 sector-agents CLI flag (delivered via PR #828 merged 2026-06-29).
 	// String flag (not Bool) so empty = no-override, "true"/"false" = explicit override.
