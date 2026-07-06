@@ -1,3 +1,5 @@
+import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
+test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 import { test, expect } from '@playwright/test';
 
 test('risk commentary panel renders on page-live with confidence_commentary', async ({ page }) => {
