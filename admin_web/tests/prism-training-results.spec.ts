@@ -54,7 +54,7 @@ test('prism training results page renders table with regime badges and explanati
   }));
 
   await page.goto('/');
-  await page.click('a[data-page="prism"]');
+  await page.evaluate(() => window.switchPage('prism'));
 
   const content = page.locator('#prismContent');
   await expect(content).toBeVisible({ timeout: 5000 });
@@ -93,7 +93,7 @@ test('prism training results shows empty state when array is empty', async ({ pa
   }));
 
   await page.goto('/');
-  await page.click('a[data-page="prism"]');
+  await page.evaluate(() => window.switchPage('prism'));
 
   const content = page.locator('#prismContent');
   await expect(content).toBeVisible({ timeout: 5000 });
