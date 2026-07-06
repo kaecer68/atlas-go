@@ -147,10 +147,24 @@ async function run() {
           if (m) hits.push(`${label} at "${text.slice(Math.max(0, m.index - 20), m.index + 30)}"`);
         }
 
+        // E2E data-flow check: on home page, verify kpi-card data is rendered
+        // (not all placeholders). This catches API → frontend → DOM pipeline breaks.
+        let dataFlowIssue = null;
+        if (pageId === 'home') {
+          const dashCount = await page.locator('.kpi-card .kpi-value--positive, .kpi-card .kpi-value--negative').count();
+          const totalCards = await page.locator('.kpi-card').count();
+          if (totalCards > 0 && dashCount === 0) {
+            dataFlowIssue = `home rendered ${totalCards} kpi-cards but 0 have real values (all em-dash)`;
+          }
+        }
+
         if (hits.length > 0) {
           console.error(`✗ ${pageId}: bad pattern found`);
           for (const h of hits) console.error(`    ${h}`);
           failures.push({ pageId, reason: "bad-pattern", hits });
+        } else if (dataFlowIssue) {
+          console.error(`✗ ${pageId}: ${dataFlowIssue}`);
+          failures.push({ pageId, reason: "data-flow", error: dataFlowIssue });
         } else {
           const len = text.length;
           console.log(`✓ ${pageId}: ${len} chars, no bad patterns`);
