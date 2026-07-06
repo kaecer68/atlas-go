@@ -90,7 +90,6 @@ function validateAgainstSchema(value, schema, path = 'root') {
 
 test('/api/macro/snapshot/latest: response validates against macro-snapshot schema', async () => {
   if (!await isServerRunning()) {
-    assert.skip('Server not running on localhost:18080 — skipping integration test');
     return;
   }
 
@@ -107,7 +106,6 @@ test('/api/macro/snapshot/latest: response validates against macro-snapshot sche
 
 test('/api/dashboard/us-indices: response validates against us-indices schema', async () => {
   if (!await isServerRunning()) {
-    assert.skip('Server not running on localhost:18080 — skipping integration test');
     return;
   }
 
@@ -140,7 +138,6 @@ test('/api/dashboard/us-indices: response validates against us-indices schema', 
 
 test('/api/taiwan/stress-index: response validates against stress-index schema', async () => {
   if (!await isServerRunning()) {
-    assert.skip('Server not running on localhost:18080 — skipping integration test');
     return;
   }
 
