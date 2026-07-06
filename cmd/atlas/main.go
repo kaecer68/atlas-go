@@ -25,6 +25,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/experiment"
@@ -130,7 +131,7 @@ func run(args []string, deps appDeps) error {
 	flags.SetOutput(io.Discard)
 
 	apiMode := flags.Bool("api", false, "start dashboard api server")
-	apiAddr := flags.String("addr", ":18080", "dashboard api listen address")
+	apiAddr := flags.String("addr", constants.AdminHTTPPort, "dashboard api listen address")
 	swaggerMode := flags.Bool("swagger", false, "enable swagger docs endpoints")
 	// L2.4 sector-agents CLI flag (delivered via PR #828 merged 2026-06-29).
 	// String flag (not Bool) so empty = no-override, "true"/"false" = explicit override.
@@ -161,7 +162,7 @@ func run(args []string, deps appDeps) error {
 	dateOverride := flags.String("date", "", "override simulation session date (format: 2006-01-02)")
 	checkIntegrity := flags.Bool("check-integrity", false, "check configs/parameters.json integrity and exit")
 	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|scrape|status")
-	fubonProxyPort := flags.Int("fubon-port", 8081, "fubon-proxy Python 服務 listen port(同時決定 /health URL 與 FubonClient proxy URL);當 :8081 被 foreign 進程佔住時可換到未佔用 port(Oracle 4th-round F13:預設 8081 行為完全一致)")
+	fubonProxyPort := flags.Int("fubon-port", constants.FubonProxyPort, "fubon-proxy Python 服務 listen port(同時決定 /health URL 與 FubonClient proxy URL)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
@@ -212,7 +213,8 @@ func run(args []string, deps appDeps) error {
 	// If DATABASE_URL is unset or postgres is already running, this is a no-op.
 	// On failure, the app continues without DB (bootstrap handles graceful degradation).
 	if diag := ensurePostgres(); diag != "" {
-		logging.Warn("main", "postgres_startup_diag",
+		logging.Warn(
+			"main", "postgres_startup_diag",
 			"message", "ensurePostgres did not fully succeed; bootstrap may fail",
 			"diagnostics", diag,
 		)
@@ -1753,7 +1755,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if engine := system.Port().FactorWeightEngine(); engine != nil {
 		weightProvider = monitoringservice.NewFactorWeightEngineWeightProvider(engine)
 	}
-	wave9, err := monitoring.NewWave9Observability(eventBus,
+	wave9, err := monitoring.NewWave9Observability(
+		eventBus,
 		monitoring.WithWeightProvider(weightProvider),
 		monitoring.WithChannelHealthProvider(monitoring.NewChannelHealthProviderFromStore(healthStore)),
 		monitoring.WithIngestionLagProvider(monitoringservice.NewChannelHealthIngestionLagProvider(healthStore)),
@@ -1833,7 +1836,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 // returns, wire them through here.
 func runPrismWorker(cfg config.Config, deps appDeps) error { //nolint:unparam
 	cfgPrism := prism.DefaultPRISMConfig()
-	logging.Info("prism_worker", "starting",
+	logging.Info(
+		"prism_worker", "starting",
 		"workdir", cfg.WorkDir,
 		"replay_session_date", cfg.ReplaySessionDate,
 		"queue_size", cfgPrism.QueueSize,

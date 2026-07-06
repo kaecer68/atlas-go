@@ -17,7 +17,7 @@
 //
 // Environment:
 //
-//	ATLAS_BASE_URL                  atlas core HTTP base (default: http://127.0.0.1:8080)
+//	ATLAS_BASE_URL                  atlas core HTTP base (default: same as constants.AtlasBaseURL)
 //	ATLAS_API_KEY                   admin API key (passed through when invoking atlas HTTP API)
 //	ATLAS_MCP_AUDIT_LOG             JSONL audit-log path (default: $TMPDIR/atlas-mcp-audit.log)
 //	ATLAS_MCP_AUDIT_RETENTION_DAYS  prune audit entries older than N days (default 30, 0 = disabled)
@@ -45,6 +45,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/cmd/atlas-mcp/server"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/db"
 )
 
@@ -69,7 +70,7 @@ func main() {
 	}
 
 	cfg := server.Config{
-		AtlasBaseURL:       envOr("ATLAS_BASE_URL", "http://127.0.0.1:8080"),
+		AtlasBaseURL:       envOr("ATLAS_BASE_URL", constants.AtlasBaseURL),
 		APIToken:           os.Getenv("ATLAS_API_KEY"),
 		AuditLogPath:       envOr("ATLAS_MCP_AUDIT_LOG", defaultAuditLogPath()),
 		AuditRetentionDays: envIntOr("ATLAS_MCP_AUDIT_RETENTION_DAYS", 30),

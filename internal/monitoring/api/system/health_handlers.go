@@ -3,6 +3,7 @@ package system
 import (
 	"net/http"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
@@ -27,7 +28,7 @@ type healthResponse struct {
 
 // HealthHandlers provides the /health endpoint.
 // APIAddr and FubonAddr may be left empty to use the defaults
-// (127.0.0.1:8080 and 127.0.0.1:8081).
+// from internal/constants (AdminHTTPAddr and FubonProxyAddr).
 type HealthHandlers struct {
 	APIAddr   string
 	FubonAddr string
@@ -40,11 +41,11 @@ func (h *HealthHandlers) RegisterRoutes(mux *http.ServeMux) {
 func (h *HealthHandlers) HandleHealth(r *http.Request) (int, any) {
 	apiAddr := h.APIAddr
 	if apiAddr == "" {
-		apiAddr = "127.0.0.1:8080"
+		apiAddr = constants.AdminHTTPAddr
 	}
 	fubonAddr := h.FubonAddr
 	if fubonAddr == "" {
-		fubonAddr = "127.0.0.1:8081"
+		fubonAddr = constants.FubonProxyAddr
 	}
 
 	resp := healthResponse{

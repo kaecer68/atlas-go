@@ -99,26 +99,26 @@ else
 
       # admin_web 專用覆蓋表
       declare -A ADMIN_PATH_MAP=(
-        ["admin_web/"]="overview,narrative,live,agents,experiments"
-        ["shared_web/"]="overview,narrative,live,agents,experiments"
-        ["cmd/atlas/"]="overview,narrative,live,agents,experiments"
+        ["admin_web/"]="home,narrative,live,alerts,experiments,parameters"
+        ["shared_web/"]="home,narrative,live,alerts,experiments,parameters"
+        ["cmd/atlas/"]="home,narrative,live,alerts,experiments,parameters"
       )
 
       # client_web 專用覆蓋表
       declare -A CLIENT_PATH_MAP=(
-        ["internal/marketdata/"]="crossmarket,live"
-        ["internal/baseline/"]="crossmarket,live"
+        ["internal/marketdata/"]="crossmarket"
+        ["internal/baseline/"]="crossmarket"
         ["internal/narrative/"]="narrative"
-        ["internal/portfolio/"]="crossmarket,portfolio,decision"
-        ["internal/risk/"]="crossmarket,portfolio,decision"
-        ["internal/recommendation/"]="crossmarket,portfolio,decision"
-        ["internal/orchestrator/"]="crossmarket,portfolio,decision"
+        ["internal/portfolio/"]="crossmarket,portfolio"
+        ["internal/risk/"]="crossmarket,portfolio"
+        ["internal/recommendation/"]="crossmarket,portfolio"
+        ["internal/orchestrator/"]="crossmarket,portfolio"
         ["internal/industry/"]="industry"
-        ["internal/monitoring/"]="crossmarket,narrative,live,portfolio"
-        ["internal/config/"]="crossmarket,narrative,live,portfolio"
-        ["cmd/atlas/"]="crossmarket,narrative,live,portfolio"
-        ["client_web/"]="crossmarket,narrative,live,portfolio,strategies"
-        ["shared_web/"]="crossmarket,narrative,live,portfolio,strategies"
+        ["internal/monitoring/"]="crossmarket,narrative,portfolio"
+        ["internal/config/"]="crossmarket,narrative,portfolio"
+        ["cmd/atlas/"]="crossmarket,narrative,portfolio"
+        ["client_web/"]="crossmarket,narrative,portfolio,strategies"
+        ["shared_web/"]="crossmarket,narrative,portfolio,strategies"
       )
 
       ADMIN_RAW=""

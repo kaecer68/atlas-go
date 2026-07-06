@@ -116,7 +116,7 @@
 
 ---
 
-## U · Utility（輔助工具）— 7 packages
+## U · Utility（輔助工具）— 8 packages
 
 CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 
@@ -130,6 +130,7 @@ CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷 | `cmd/calibrate-parameters` | 工具層，非 runtime |
 | `risktest` | 風險測試場景 — `RunScenario()` | `cmd/stress-test` | 由 orchestrator 測試使用 |
 | `backfill` | 一次性 ledger state 修復工具 — 孤兒 summary.json 補寫、dry-run、安全 idempotent | `cmd/backfill-summaries` | 工具層，非 runtime |
+| `constants` | 跨 binary 共用常數（port、base URL）— 單一權威來源 | 由 `cmd/*` 使用 | 工具層，非 runtime |
 
 ---
 

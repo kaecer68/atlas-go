@@ -37,7 +37,7 @@
 - **非致命失敗**：若 proxy 啟動失敗，僅記錄警告後繼續，不阻擋 atlas 啟動。
 - **Python 依賴**：使用 `~/.config/atlas-go/.fubon-env/bin/python` 或系統 `python3`。
 - **健康檢查位址**：使用 IPv4 `127.0.0.1:8081` 而非 `localhost:8081`；Python proxy 綁定 `host="0.0.0.0"`。
-- **啟動前 port 探測**：委派給 `internal/portprobe.Probe`。`Probe` 用 wildcards `net.Listen("tcp", "0.0.0.0:<port>")` + `[::]:<port>`（避免 IPv4-only bind 漏掉 IPv6 listener 的偽陰性），**無 side effect**（用 `net.Listen` 而非 `net.Dial`，命中後立刻關閉 listener）。`probePort8081()` 傳入的 addr 來自 package-level var `proxyListenPort`（production 預設 `8081`）。Free → fall through；healthy → 視為外部已管理、跳過 spawn；Foreign → 回傳 actionable error（含 PID 與 kill 指令），**不**進入 supervise 3s backoff-loop。**測試**用 `withFreeEphemeralPort(t)` / `bindEphemeralPort(t, handler)` 覆寫 `proxyListenPort` 到 OS-assigned ephemeral port,避免 Docker Desktop / 系統服務佔 `:8081` 導致測試在開發機上 skip 或 fail;production 預設值不變。
+- **啟動前 port 探測**：委派給 `internal/portprobe.Probe`。`Probe` 用 wildcards `net.Listen("tcp", "0.0.0.0:<port>")` + `[::]:<port>`（避免 IPv4-only bind 漏掉 IPv6 listener 的偽陰性），**無 side effect**（用 `net.Listen` 而非 `net.Dial`，命中後立刻關閉 listener）。`probeProxyPort()` 傳入的 addr 來自 package-level var `proxyListenPort`（production 預設 `18081`）。Free → fall through；healthy → 視為外部已管理、跳過 spawn；Foreign → 回傳 actionable error（含 PID 與 kill 指令），**不**進入 supervise 3s backoff-loop。**測試**用 `withFreeEphemeralPort(t)` / `bindEphemeralPort(t, handler)` 覆寫 `proxyListenPort` 到 OS-assigned ephemeral port,避免 Docker Desktop / 系統服務佔 `:18081` 導致測試在開發機上 skip 或 fail;production 預設值不變。
 - **殭屍自動清除**：Foreign 占用若判定為 fubon-proxy 殭屍（command name 含 `python`/`uvicorn`），會先 SIGTERM 再 SIGKILL 清除，然後 re-probe。非 Python 程序不會被 auto-kill。
 - **macOS zombie 陷阱**：行程被 SIGKILL 後可能變成 zombie，`syscall.Kill(pid, 0)` 對 zombie 仍回 `nil`，必須用 `cmd.Wait()` 真正回收。
 
@@ -47,7 +47,7 @@
 
 | Helper | 委派目標 | 契約 |
 |---|---|---|
-| `probePort8081()` | `portprobe.Probe(addr)` | 回 `State{Free/Healthy/Foreign}` + `Occupant` |
+| `probeProxyPort()` | `portprobe.Probe(addr)` | 回 `State{Free/Healthy/Foreign}` + `Occupant` |
 | `lookupPortOccupant(port)` | `portprobe.LookupOccupant(addr)` | `lsof -FpcL` 解析 PID + command |
 | `isFubonZombie(occ)` | `portprobe.IsFubonZombie(occ)` | `python` 或 `uvicorn` lowercase contains |
 | `killOccupant(pid)` | `portprobe.KillOccupant(pid)` | SIGTERM → 1s wait → `signal(0)` → SIGKILL + 500ms |

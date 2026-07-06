@@ -479,7 +479,7 @@ func TestClassifyErrorSeverity(t *testing.T) {
 		{name: "warn: connection reset", errMsg: "read tcp: connection reset by peer", expect: ErrorSeverityWarn},
 
 		// error: infra down — requires operator action
-		{name: "error: connection refused", errMsg: "dial tcp 127.0.0.1:8081: connection refused", expect: ErrorSeverityError},
+		{name: "error: connection refused", errMsg: "dial tcp 127.0.0.1:18081: connection refused", expect: ErrorSeverityError},
 		{name: "error: no such host", errMsg: "lookup api.example.com: no such host", expect: ErrorSeverityError},
 		{name: "error: dial tcp", errMsg: "dial tcp 10.0.0.1:443: i/o timeout", expect: ErrorSeverityError},
 

@@ -43,7 +43,7 @@ type Occupant struct {
 // Probe checks whether addr is free, held by a healthy service, or held by a
 // foreign process. It uses net.Listen (not net.Dial) so it has no side effects
 // on a healthy listener. The addr should be a host:port string such as
-// "127.0.0.1:8081".
+// "127.0.0.1:18081".
 func Probe(addr string) (State, Occupant, error) {
 	port, host, err := parsePort(addr)
 	if err != nil {

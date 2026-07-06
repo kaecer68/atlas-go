@@ -1560,10 +1560,10 @@ func TestKillOccupant_NonExistentPID(t *testing.T) {
 	}
 }
 
-// bindPort8081IPv6Wildcard 佔住 [::]:<proxyListenPort> (IPv6 wildcard) 模擬 IPv6-only
+// bindProxyPortIPv6Wildcard 佔住 [::]:<proxyListenPort> (IPv6 wildcard) 模擬 IPv6-only
 // 外部進程（對應 Docker Desktop IPv6-only port forwarder）。handler 給
 // 測試控制 /health 行為。
-func bindPort8081IPv6Wildcard(t *testing.T, h http.Handler) (net.Listener, *http.Server) {
+func bindProxyPortIPv6Wildcard(t *testing.T, h http.Handler) (net.Listener, *http.Server) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "[::]:"+strconv.Itoa(proxyListenPort))
 	if err != nil {
@@ -1587,15 +1587,15 @@ func TestProcessManager_F9_PortIPv6WildcardHeld_ReportsForeign(t *testing.T) {
 		t.Skipf("0.0.0.0:%d unavailable: %v — cannot isolate IPv6 case", proxyListenPort, err)
 	}
 
-	bindPort8081IPv6Wildcard(t, http.NotFoundHandler())
+	bindProxyPortIPv6Wildcard(t, http.NotFoundHandler())
 
 	m := &ProcessManager{}
-	state, _, err := m.probePort8081()
+	state, _, err := m.probeProxyPort()
 	if err != nil {
-		t.Fatalf("probePort8081() error: %v", err)
+		t.Fatalf("probeProxyPort() error: %v", err)
 	}
 	if state != portStateForeign {
-		t.Errorf("probePort8081() with [::]:%d held = %v, want portStateForeign", proxyListenPort, state)
+		t.Errorf("probeProxyPort() with [::]:%d held = %v, want portStateForeign", proxyListenPort, state)
 	}
 }
 
@@ -1612,12 +1612,12 @@ func TestProcessManager_F9_PortBothWildcardsFree_ReturnsFree(t *testing.T) {
 	}
 
 	m := &ProcessManager{}
-	state, _, err := m.probePort8081()
+	state, _, err := m.probeProxyPort()
 	if err != nil {
-		t.Fatalf("probePort8081() error: %v", err)
+		t.Fatalf("probeProxyPort() error: %v", err)
 	}
 	if state != portStateFree {
-		t.Errorf("probePort8081() = %v, want portStateFree", state)
+		t.Errorf("probeProxyPort() = %v, want portStateFree", state)
 	}
 }
 

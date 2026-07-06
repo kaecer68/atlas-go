@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
@@ -56,8 +57,8 @@ func reportPort(addr string) portHealthReport {
 }
 
 // newHealthHandler returns the JSON /health endpoint that mirrors the
-// legacy "ok" payload while also reporting occupancy of atlas_http (8080)
-// and fubon_proxy (8081) via portprobe.Probe. Oracle 反駁 final plan PR 2.
+// legacy "ok" payload while also reporting occupancy of atlas_http and
+// fubon_proxy via portprobe.Probe. Values sourced from internal/constants.
 func newHealthHandler(cfg healthConfig) http.Handler {
 	probe := cfg.Probe
 	if probe == nil {
@@ -67,8 +68,8 @@ func newHealthHandler(cfg healthConfig) http.Handler {
 		body := healthResponse{
 			Status: "ok",
 			Ports: map[string]portHealthReport{
-				"atlas_http":  probe("127.0.0.1:8080"),
-				"fubon_proxy": probe("127.0.0.1:8081"),
+				"atlas_http":  probe(constants.AdminHTTPAddr),
+				"fubon_proxy": probe(constants.FubonProxyAddr),
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")

@@ -56,9 +56,9 @@ func freePort(t *testing.T) int {
 //
 // T-104: also set ATLAS_SKIP_PORT_PREFLIGHT=1 to bypass the TCP port
 // preflight in startup.Preflight. CI environments frequently have
-// leftover native `atlas -api` (port 8080) or self-port-bound
+// leftover native `atlas -api` (port 18080) or self-port-bound
 // atlas.test binaries that wedge the 4 live-broker tests. The
-// preflight's `atlas-http address :8080 is held by a foreign process`
+// preflight's `atlas-http address :18080 is held by a foreign process`
 // error would otherwise make the 4 tests flaky across CI hosts.
 func TestMain(m *testing.M) {
 	os.Setenv("ATLAS_API_KEY", "")
@@ -202,8 +202,8 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		t.Fatalf("run returned error: %v", err)
 	}
 	<-listenDone
-	if gotAddr != ":8080" {
-		t.Fatalf("listen addr = %q, want %q", gotAddr, ":8080")
+	if gotAddr != ":18080" {
+		t.Fatalf("listen addr = %q, want %q", gotAddr, ":18080")
 	}
 }
 
@@ -1027,7 +1027,7 @@ func TestIsPrismWorkerCmd(t *testing.T) {
 		want bool
 	}{
 		{"empty args", []string{}, false},
-		{"only flags", []string{"-api", "-addr", ":8080"}, false},
+		{"only flags", []string{"-api", "-addr", ":18080"}, false},
 		{"exact prism worker", []string{"prism", "worker"}, true},
 		{"prism only", []string{"prism"}, false},
 		{"worker only", []string{"worker"}, false},

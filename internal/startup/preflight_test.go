@@ -152,7 +152,7 @@ func TestPreflight_AllowZombieKill_ZombieCase(t *testing.T) {
 	)
 
 	if err := Preflight([]PortClaim{
-		{Component: "fubon-proxy", Addr: "127.0.0.1:8081", AllowZombieKill: true},
+		{Component: "fubon-proxy", Addr: "127.0.0.1:18081", AllowZombieKill: true},
 	}); err != nil {
 		t.Fatalf("expected no error after auto-kill, got: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestPreflight_AllowZombieKill_NonZombieForeign(t *testing.T) {
 	)
 
 	err := Preflight([]PortClaim{
-		{Component: "fubon-proxy", Addr: "127.0.0.1:8081", AllowZombieKill: true},
+		{Component: "fubon-proxy", Addr: "127.0.0.1:18081", AllowZombieKill: true},
 	})
 	if err == nil {
 		t.Fatal("expected error for non-zombie foreign holder")
@@ -215,7 +215,7 @@ func TestPreflight_NoAllowZombieKill_ForeignError(t *testing.T) {
 	)
 
 	err := Preflight([]PortClaim{
-		{Component: "atlas-http", Addr: "127.0.0.1:8080"}, // AllowZombieKill defaults to false
+		{Component: "atlas-http", Addr: "127.0.0.1:18080"}, // AllowZombieKill defaults to false
 	})
 	if err == nil {
 		t.Fatal("expected error when AllowZombieKill=false on foreign")
@@ -246,7 +246,7 @@ func TestPreflight_HealthyExternallyManaged_NoError(t *testing.T) {
 	)
 
 	if err := Preflight([]PortClaim{
-		{Component: "fubon-proxy", Addr: "127.0.0.1:8081", AllowZombieKill: true},
+		{Component: "fubon-proxy", Addr: "127.0.0.1:18081", AllowZombieKill: true},
 	}); err != nil {
 		t.Fatalf("healthy external fubon-proxy should pass Preflight, got: %v", err)
 	}

@@ -81,7 +81,7 @@ receivers:
 
   - name: atlas-webhook
     webhook_configs:
-      - url: 'http://localhost:8080/api/v1/alerts'
+      - url: 'http://localhost:18080/api/v1/alerts'
         send_resolved: true
 
 inhibit_rules:

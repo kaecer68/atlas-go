@@ -46,8 +46,8 @@ func TestNewHealthHandler_StatusAndShape(t *testing.T) {
 	if !ok {
 		t.Fatal("missing ports.atlas_http")
 	}
-	if got.Addr != "127.0.0.1:8080" {
-		t.Errorf("atlas_http.addr = %q, want 127.0.0.1:8080", got.Addr)
+	if got.Addr != "127.0.0.1:18080" {
+		t.Errorf("atlas_http.addr = %q, want 127.0.0.1:18080", got.Addr)
 	}
 	if got.State != "free" {
 		t.Errorf("atlas_http.state = %q, want free (stubbed default)", got.State)
@@ -56,17 +56,17 @@ func TestNewHealthHandler_StatusAndShape(t *testing.T) {
 	if !ok {
 		t.Fatal("missing ports.fubon_proxy")
 	}
-	if got.Addr != "127.0.0.1:8081" {
-		t.Errorf("fubon_proxy.addr = %q, want 127.0.0.1:8081", got.Addr)
+	if got.Addr != "127.0.0.1:18081" {
+		t.Errorf("fubon_proxy.addr = %q, want 127.0.0.1:18081", got.Addr)
 	}
 }
 
 func TestNewHealthHandler_ForeignOccupant_EmitsPIDAndCommand(t *testing.T) {
 	// Simulate the dev-machine case the PR #815 body documents:
-	// Docker Desktop holds IPv6 :8081 with com.docker.backend (PID 5866).
+	// Docker Desktop holds IPv6 :18081 with com.docker.backend (PID 5866).
 	probe := stubProbe(map[string]portHealthReport{
-		"127.0.0.1:8081": {
-			Addr:    "127.0.0.1:8081",
+		"127.0.0.1:18081": {
+			Addr:    "127.0.0.1:18081",
 			State:   "foreign",
 			PID:     5866,
 			Command: "com.docker.backend",
@@ -107,7 +107,7 @@ func TestReportPort_ErrorsSurfacedAsUnknown(t *testing.T) {
 
 func TestPortHealthReport_OmitsZeroPIDAndEmptyError(t *testing.T) {
 	// omitempty ensures JSON shape stays lean when State is "free" or "healthy".
-	b, err := json.Marshal(portHealthReport{Addr: "127.0.0.1:8080", State: "free"})
+	b, err := json.Marshal(portHealthReport{Addr: "127.0.0.1:18080", State: "free"})
 	if err != nil {
 		t.Fatal(err)
 	}

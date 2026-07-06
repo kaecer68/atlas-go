@@ -82,11 +82,11 @@ RUN mkdir -p /app/data /app/reports /app/logs && \
 USER atlas
 
 # Expose port
-EXPOSE 8080
+EXPOSE 18080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:18080/health || exit 1
 
 # Run the application
 ENTRYPOINT ["/app/atlas-go"]

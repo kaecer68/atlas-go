@@ -52,7 +52,7 @@ var (
 //
 // T-104 test escape hatch: setting ATLAS_SKIP_PORT_PREFLIGHT to a non-empty
 // value skips the entire check. Used by cmd/atlas TestMain so the 4
-// live-broker tests don't wedge on port 8080 occupied by a leftover
+// live-broker tests don't wedge on port 18080 occupied by a leftover
 // native `atlas -api` or a parallel atlas.test binary. Not for prod.
 func Preflight(claims []PortClaim) error {
 	if os.Getenv("ATLAS_SKIP_PORT_PREFLIGHT") != "" {

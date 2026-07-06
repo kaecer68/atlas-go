@@ -31,8 +31,8 @@ help:
 	@echo "Dev workflow (單一指令 'go run ./cmd/atlas -api' 啟動):"
 	@echo "  dev                啟 docker deps + stop atlas container + go run 原生"
 	@echo "  dev-stop           收尾(停 docker deps)"
-	@echo "  dev-status         看容器狀態 + port 8080/8081 占用 + native process"
-	@echo "  status             只看 port 8080/8081 占用 + PID/命令(對應 /health JSON)"
+	@echo "  dev-status         看容器狀態 + port 18080/18081 占用 + native process"
+	@echo "  status             只看 port 18080/18081 占用 + PID/命令(對應 /health JSON)"
 	@echo "  dev-logs           tail atlas-go 啟動 log"
 	@echo ""
 	@echo "前端管理:"
@@ -206,35 +206,35 @@ clean:
 #
 #   - atlas-go 已有 ProcessManager(internal/fubonproxy/manager.go)自動管 fubon-proxy
 #     subprocess,且 shouldStartFubonProxy(mode, fubonAPIKey) 預設 live mode + 有 FUBON_API_KEY 才 spawn。
-#     → 純 dev workflow 設 mode=-api 不帶 FUBON_API_KEY,ProcessManager 完全 idle,不需要碰 8081。
+#     → 純 dev workflow 設 mode=-api 不帶 FUBON_API_KEY,ProcessManager 完全 idle,不需要碰 18081。
 #
 #   - postgres / redis 用 docker compose 管(隔離乾淨,自動 init,自動 restart)。
 #     不在 Go binary 裡 embedded(記憶體 + init script 維護成本)。
 #
-#   - atlas-go 在 docker 跑會佔 port 8080,跟 `go run` native 搶 port。
+#   - atlas-go 在 docker 跑會佔 port 18080,跟 `go run` native 搶 port。
 #     解法:docker compose stop atlas(只停 atlas container,保留 postgres/redis/fubon-proxy 還在跑)。
 #
 # 用法:
 #   make dev           # 起 docker deps + stop atlas container + go run 原生
 #   make dev-stop      # 收尾(停 docker deps)
-#   make dev-status    # 看容器狀態 + port 8080/8081 占用
+#   make dev-status    # 看容器狀態 + port 18080/18081 占用
 #   make dev-logs      # tail atlas-go 啟動 log
 #
-# 為何這個 target 沒有「自動 kill 8080 佔用者」?
-#   因為 port 8080 可能被 Google Chrome devtools / IDE / 其他 dev tool LISTEN。
-#   atlas-go ProcessManager 也不處理 8080 auto-kill(同樣原因)。
+# 為何這個 target 沒有「自動 kill 18080 佔用者」?
+#   因為 port 18080 可能被 Google Chrome devtools / IDE / 其他 dev tool LISTEN。
+#   atlas-go ProcessManager 也不處理 18080 auto-kill(同樣原因)。
 #   → 用戶自己決定怎麼處理(本 Makefile 至少停掉 docker atlas-go 這個最常見衝突源)。
 
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
 
 # 確保 docker deps(postgres + redis)running,然後停 atlas container
-# 把 port 8080 讓給 native atlas-go,最後 exec 進 go run 把 PID 交給 user。
+# 把 port 18080 讓給 native atlas-go,最後 exec 進 go run 把 PID 交給 user。
 #
 # 不帶 fubon-proxy 到 docker deps — ProcessManager(internal/fubonproxy/manager.go)
 # 會依 shouldStartFubonProxy(mode, fubonAPIKey)自動 spawn 本機 subprocess。
 # ~/.config/atlas-go/.env 通常有 FUBON_API_KEY,ProcessManager 一定會 spawn,
-# 此時若 docker fubon-proxy 還在跑 → port 8081 EADDRINUSE supervisor loop。
+# 此時若 docker fubon-proxy 還在跑 → port 18081 EADDRINUSE supervisor loop。
 # 解法:讓 ProcessManager 唯一管 fubon-proxy,docker 那個停掉。
 dev:
 	@echo "🔧 Starting dev workflow..."
@@ -251,13 +251,13 @@ dev:
 		if [ $$i -eq 30 ]; then echo "❌ timeout waiting for postgres / redis"; exit 1; fi; \
 		sleep 2; \
 	done
-	@echo "  → stopping atlas + fubon-proxy containers to free ports 8080/8081"
+	@echo "  → stopping atlas + fubon-proxy containers to free ports 18080/18081"
 	@docker compose stop atlas fubon-proxy 2>/dev/null || true
-	@echo "  → verifying port 8080 is free"
-	@if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1; then \
-		echo "⚠️  port 8080 still held:"; \
-		lsof -nP -iTCP:8080 -sTCP:LISTEN; \
-		echo "    如要 dev workflow,請手動 kill 上述 process(ProcessManager 也不 auto-kill 8080 衝突 — 同樣原因)"; \
+	@echo "  → verifying port 18080 is free"
+	@if lsof -nP -iTCP:18080 -sTCP:LISTEN >/dev/null 2>&1; then \
+		echo "⚠️  port 18080 still held:"; \
+		lsof -nP -iTCP:18080 -sTCP:LISTEN; \
+		echo "    如要 dev workflow,請手動 kill 上述 process(ProcessManager 也不 auto-kill 18080 衝突 — 同樣原因)"; \
 		exit 1; \
 	fi
 	@echo ""
@@ -270,7 +270,7 @@ dev-stop:
 	@echo "🛑 Stopping dev deps (postgres + redis + fubon-proxy)..."
 	@docker compose stop postgres redis fubon-proxy
 	@docker compose down postgres redis fubon-proxy --remove-orphans
-	@echo "🧹 Killing any leftover native 'atlas -api' process (prevents port 8080 leak)..."
+	@echo "🧹 Killing any leftover native 'atlas -api' process (prevents port 18080 leak)..."
 	@if pgrep -f 'cmd/atlas -api' >/dev/null 2>&1; then \
 		PIDS=$$(pgrep -f 'cmd/atlas -api'); \
 		echo "    found atlas -api PIDs: $$PIDS"; \
@@ -292,11 +292,11 @@ dev-status:
 	@echo "Containers:"
 	@docker compose ps 2>/dev/null | grep -E '(postgres|redis|fubon-proxy|atlas)' || echo "  (none running)"
 	@echo ""
-	@echo "Port 8080 (atlas-go HTTP):"
-	@lsof -nP -iTCP:8080 -sTCP:LISTEN 2>/dev/null | head -3 || echo "  (free)"
+	@echo "Port 18080 (atlas-go HTTP):"
+	@lsof -nP -iTCP:18080 -sTCP:LISTEN 2>/dev/null | head -3 || echo "  (free)"
 	@echo ""
-	@echo "Port 8081 (fubon-proxy):"
-	@lsof -nP -iTCP:8081 -sTCP:LISTEN 2>/dev/null | head -3 || echo "  (free)"
+	@echo "Port 18081 (fubon-proxy):"
+	@lsof -nP -iTCP:18081 -sTCP:LISTEN 2>/dev/null | head -3 || echo "  (free)"
 	@echo ""
 	@echo "atlas-go native process (if 'go run' running):"
 	@pgrep -fl 'go-build.*cmd/atlas|cmd/atlas -api' 2>/dev/null || echo "  (not running)"
@@ -311,12 +311,12 @@ dev-logs:
 	fi
 
 # Oracle 反駁 final plan PR 2: shell target showing PID + command for the
-# atlas HTTP (8080) and fubon-proxy (8081) ports, mirroring the JSON shape
+# atlas HTTP (18080) and fubon-proxy (18081) ports, mirroring the JSON shape
 # emitted by GET /health (internally derived from portprobe.Probe).
 status:
 	@printf "  %-22s %-8s %s\n" "ADDR" "PID" "COMMAND"
 	@printf "  %-22s %-8s %s\n" "----------------------" "--------" "------------------------------"
-	@for p in 8080 8081; do \
+	@for p in 18080 18081; do \
 		pid=$$(lsof -nP -iTCP:$$p -sTCP:LISTEN -Fpc 2>/dev/null | grep '^p' | head -1 | cut -c2-); \
 		cmd=$$(lsof -nP -iTCP:$$p -sTCP:LISTEN -Fc 2>/dev/null | grep '^c' | head -1 | cut -c2-); \
 		if [ -n "$$pid" ]; then \
