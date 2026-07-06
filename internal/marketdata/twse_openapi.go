@@ -17,11 +17,12 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 const (
-	twseAPIBaseURL = "https://www.twse.com.tw"
+	twseAPIBaseURL = constants.TWSEBaseURL
 )
 
 // TWSEClient TWSE OpenAPI 客户端

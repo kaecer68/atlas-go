@@ -10,4 +10,9 @@ const (
 	// institutional investors, replay) and the marketdata FinMind client.
 	// API docs: https://finmindtrade.com
 	FinMindBaseURL = "https://api.finmindtrade.com/api/v4"
+
+	// TWSEBaseURL is the root endpoint for the Taiwan Stock Exchange (TWSE)
+	// web API. Used by marketdata providers (calendar, ETF, OpenAPI, capital
+	// flow, odd lot, margin, day trading) and fetch commands.
+	TWSEBaseURL = "https://www.twse.com.tw"
 )

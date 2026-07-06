@@ -53,8 +53,8 @@ func (s *DataPipelineService) GetPipelineStatus() ([]PipelineSourceStatus, error
 		{"twse_margin", "TWSE API", "RiskManager", "data/state/margin"},
 		{"export_statistics", "Customs API", "NarrativeEngine", constants.StateExport},
 		{"tsmc_revenue", "TWSE API", "IndustryAnalysis", "data/state/tsmc_revenue"},
-		{"geopolitical", "RSS/GDELT", "GeopoliticalProvider", "data/state/geopolitical/latest.json"},
-		{"geopolitical_taiwan", "Taiwan RSS", "GeopoliticalProvider", "data/state/geopolitical/taiwan/latest.json"},
+		{"geopolitical", "RSS/GDELT", "GeopoliticalProvider", constants.StateGeopolitical + "/latest.json"},
+		{"geopolitical_taiwan", "Taiwan RSS", "GeopoliticalProvider", constants.StateGeopolitical + "/taiwan/latest.json"},
 	}
 
 	// Read channel_health.json for last_produced times

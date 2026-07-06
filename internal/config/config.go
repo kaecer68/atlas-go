@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -84,9 +85,9 @@ func Load() Config {
 		MarketDataProvider:         envOr("ATLAS_MARKET_DATA_PROVIDER", "twse"),
 		PrimaryMarket:              envOr("ATLAS_PRIMARY_MARKET", "TW"),
 		ReplayMode:                 envOr("ATLAS_REPLAY_MODE", "daily"),
-		AgentRegistryPath:          envOr("ATLAS_AGENT_REGISTRY_PATH", "configs/agents.json"),
+		AgentRegistryPath:          envOr("ATLAS_AGENT_REGISTRY_PATH", constants.AgentsConfigPath),
 		AgentRegistryExtraPaths:    parseExtraPaths(envOr("ATLAS_AGENT_REGISTRY_EXTRA_PATHS", "")),
-		BaselinePolicyPath:         envOr("ATLAS_BASELINE_POLICY_PATH", "data/state/baseline_policy.json"),
+		BaselinePolicyPath:         envOr("ATLAS_BASELINE_POLICY_PATH", constants.StateBaselinePolicy+".json"),
 		ParametersConfigPath:       envOr("ATLAS_PARAMETERS_CONFIG_PATH", "configs/parameters.json"),
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
 		StoreBackend:               envOr("ATLAS_STORE_BACKEND", "jsonl"),
@@ -138,7 +139,7 @@ func Load() Config {
 
 func Normalize(cfg Config) Config {
 	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
-		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+		cfg.ReplayDataPath = constants.ReplayCSVPath
 	}
 	return cfg
 }

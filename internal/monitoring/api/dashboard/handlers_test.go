@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
@@ -109,7 +110,7 @@ func TestHandleChannelAction_ToggleValid(t *testing.T) {
 	}
 
 	// Verify state file was persisted.
-	path := filepath.Join(h.WorkDir, "data/state/channels.json")
+	path := filepath.Join(h.WorkDir, constants.StateChannels+".json")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read channels.json: %v", err)
@@ -130,7 +131,7 @@ func TestHandleChannelAction_ToggleDisable(t *testing.T) {
 		"fugle": {Enabled: true},
 	}
 	b, _ := json.Marshal(seed)
-	path := filepath.Join(h.WorkDir, "data/state/channels.json")
+	path := filepath.Join(h.WorkDir, constants.StateChannels+".json")
 	if err := os.WriteFile(path, b, 0o644); err != nil {
 		t.Fatalf("seed channels.json: %v", err)
 	}

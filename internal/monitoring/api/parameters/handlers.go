@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
@@ -274,7 +275,7 @@ func (h *Handlers) HandleSweep(r *http.Request) (int, any) {
 
 // HandleSnapshots lists all parameter snapshots.
 func (h *Handlers) HandleSnapshots(r *http.Request) (int, any) {
-	store := config.NewSnapshotStore("data/state/parameter-snapshots")
+	store := config.NewSnapshotStore(constants.StateParameterSnapshots)
 	snaps, err := store.ListSnapshots()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("list snapshots: %v", err)}
@@ -309,7 +310,7 @@ func (h *Handlers) HandleRollback(r *http.Request) (int, any) {
 		return http.StatusBadRequest, map[string]string{"error": "snapshot_id is required"}
 	}
 
-	store := config.NewSnapshotStore("data/state/parameter-snapshots")
+	store := config.NewSnapshotStore(constants.StateParameterSnapshots)
 	rollbackSnap, err := store.RollbackToSnapshot(req.SnapshotID, req.Reason, req.User)
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("rollback failed: %v", err)}
@@ -334,7 +335,7 @@ func (h *Handlers) HandleRollback(r *http.Request) (int, any) {
 
 // HandleAuditLog returns the audit log of all parameter changes.
 func (h *Handlers) HandleAuditLog(r *http.Request) (int, any) {
-	store := config.NewSnapshotStore("data/state/parameter-snapshots")
+	store := config.NewSnapshotStore(constants.StateParameterSnapshots)
 	snaps, err := store.ListSnapshots()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("list snapshots: %v", err)}

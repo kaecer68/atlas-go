@@ -40,7 +40,7 @@ type finmindResp struct {
 }
 
 func main() {
-	csvPath := flag.String("csv", "data/replay/tw_extended_90days.csv", "target CSV path")
+	csvPath := flag.String("csv", constants.ReplayCSVPath, "target CSV path")
 	start := flag.String("start", "2026-04-01", "backfill start date (YYYY-MM-DD)")
 	end := flag.String("end", "2026-04-14", "backfill end date (YYYY-MM-DD)")
 	dryRun := flag.Bool("dry-run", false, "print what would be added without writing")

@@ -91,7 +91,7 @@ func (e *Executor) Run(briefPath string, replayPath string) (domain.PromptExperi
 	paramsCfg, err := config.LoadParametersConfig(constants.ParametersFile)
 	if err == nil {
 		snap := config.SnapshotForExperiment(paramsCfg, expID)
-		store := config.NewSnapshotStore("data/state/parameter-snapshots")
+		store := config.NewSnapshotStore(constants.StateParameterSnapshots)
 		if err := store.SaveSnapshot(snap); err == nil {
 			paramSnapshotID = snap.ID
 		}

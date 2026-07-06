@@ -356,7 +356,7 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 // (silent nil → default-on) — both reads share the same file so the contract is
 // "you get the operator's toggles, or you get default-on; never partial".
 func (s *DataChannelService) loadEnabledStates() map[string]bool {
-	path := filepath.Join(s.WorkDir, "data/state/channels.json")
+	path := filepath.Join(s.WorkDir, constants.StateChannels+".json")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil
@@ -512,7 +512,7 @@ func (s *DataChannelService) buildFrankfurterFXChannel(now time.Time) DataChanne
 }
 
 func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel {
-	geoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json")
+	geoPath := filepath.Join(s.WorkDir, constants.StateGeopolitical+"/latest.json")
 	fileStatus, fileUpdated := checkGeopoliticalHealth(geoPath, now)
 	status, updated, lastError := s.resolveStatusFromStore("geopolitical", fileStatus, fileUpdated)
 	return DataChannel{
@@ -521,7 +521,7 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 		Platform:      "RSS + GDELT",
 		APIFormat:     "RSS / REST JSON",
 		Path:          "feeds.bbci.co.uk / api.gdeltproject.org",
-		Storage:       "data/state/geopolitical/latest.json",
+		Storage:       constants.StateGeopolitical + "/latest.json",
 		Status:        status,
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
@@ -586,7 +586,7 @@ func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel 
 }
 
 func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataChannel {
-	twGeoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json")
+	twGeoPath := filepath.Join(s.WorkDir, constants.StateGeopolitical+"/taiwan/latest.json")
 	fileStatus, fileUpdated := checkGeopoliticalHealth(twGeoPath, now)
 	status, updated, lastError := s.resolveStatusFromStore("geopolitical_taiwan", fileStatus, fileUpdated)
 	return DataChannel{
@@ -595,7 +595,7 @@ func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataC
 		Platform:      "CNA / 自由時報 / TVBS RSS",
 		APIFormat:     "RSS XML",
 		Path:          "www.cna.com.tw / news.ltn.com.tw / news.tvbs.com.tw",
-		Storage:       "data/state/geopolitical/taiwan/latest.json",
+		Storage:       constants.StateGeopolitical + "/taiwan/latest.json",
 		Status:        status,
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,

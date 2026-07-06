@@ -19,7 +19,7 @@ func newSystemHandlers(t *testing.T) (*Handlers, string) {
 	t.Helper()
 	workDir := t.TempDir()
 	ledgerDir := t.TempDir()
-	baselinePath := filepath.Join(workDir, "data/state/baseline_policy.json")
+	baselinePath := filepath.Join(workDir, constants.StateBaselinePolicy+".json")
 
 	store := ledger.NewStore(ledgerDir)
 	svc := service.NewSystemService(workDir, ledgerDir, baselinePath, store, nil, nil)

@@ -42,7 +42,7 @@ func run(args []string) error {
 
 	cfg := config.Load()
 	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
-		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+		cfg.ReplayDataPath = constants.ReplayCSVPath
 	}
 	store := ledger.NewStore(cfg.LedgerDir)
 	judge := experiment.NewJudge(store.(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)

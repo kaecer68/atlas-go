@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -33,8 +34,8 @@ func NewGeopoliticalChannelAdapter(workDir string) *GeopoliticalChannelAdapter {
 
 // Fetch retrieves global and Taiwan geopolitical risk scores.
 func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
-	globalStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical"))
-	taiwanStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical/taiwan"))
+	globalStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
+	taiwanStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical+"/taiwan"))
 
 	type geopoliticalResult struct {
 		Global *narrative.GeopoliticalRiskScore `json:"global,omitempty"`

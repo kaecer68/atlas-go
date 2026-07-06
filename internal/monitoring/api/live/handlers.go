@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
@@ -61,7 +62,7 @@ func (h *Handlers) agentLayer(agentID string) string {
 // builds a map from agent ID to its execution layer string.
 func BuildAgentLayerMap(workDir string) map[string]string {
 	m := make(map[string]string)
-	path := filepath.Join(workDir, "configs/agents.json")
+	path := filepath.Join(workDir, constants.AgentsConfigPath)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return m

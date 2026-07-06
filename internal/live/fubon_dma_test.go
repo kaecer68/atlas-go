@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -27,8 +28,8 @@ func TestFubonDMAAdapterConfigDefaults(t *testing.T) {
 	if adapter.pythonPath != "python3" {
 		t.Errorf("pythonPath = %q, want %q", adapter.pythonPath, "python3")
 	}
-	if adapter.scriptPath != "cmd/fubon-dma/wrapper.py" {
-		t.Errorf("scriptPath = %q, want %q", adapter.scriptPath, "cmd/fubon-dma/wrapper.py")
+	if adapter.scriptPath != constants.FubonDMAScriptPath {
+		t.Errorf("scriptPath = %q, want %q", adapter.scriptPath, constants.FubonDMAScriptPath)
 	}
 	if adapter.connected {
 		t.Error("connected should be false initially")
