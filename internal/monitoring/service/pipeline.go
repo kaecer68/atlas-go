@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -67,7 +68,7 @@ func (s *PipelineService) loadRegistry() (domain.AgentRegistry, error) {
 	if s.registryProvider != nil {
 		return s.registryProvider()
 	}
-	registryPath := filepath.Join(s.WorkDir, "configs/agents.json")
+	registryPath := filepath.Join(s.WorkDir, constants.AgentsConfigPath)
 	return orchestrator.LoadRegistry(registryPath)
 }
 

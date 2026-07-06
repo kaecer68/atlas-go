@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 // channelState tracks enable/disable status for each data channel.
@@ -15,7 +17,7 @@ type channelState struct {
 
 // LoadChannelStates loads channel states from the state file.
 func (h *Handlers) LoadChannelStates() {
-	path := filepath.Join(h.WorkDir, "data/state/channels.json")
+	path := filepath.Join(h.WorkDir, constants.StateChannels+".json")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -37,7 +39,7 @@ func (h *Handlers) saveChannelStates() {
 	h.channelStatesMu.RLock()
 	defer h.channelStatesMu.RUnlock()
 
-	path := filepath.Join(h.WorkDir, "data/state/channels.json")
+	path := filepath.Join(h.WorkDir, constants.StateChannels+".json")
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	b, err := json.MarshalIndent(h.channelStates, "", "  ")
 	if err != nil {

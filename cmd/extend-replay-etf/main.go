@@ -26,11 +26,12 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/marketdata/twse"
 )
 
 // twseBaseURL is overridden in tests to point at mock servers.
-var twseBaseURL = "https://www.twse.com.tw"
+var twseBaseURL = constants.TWSEBaseURL
 
 func main() {
 	symbolsFlag := flag.String("symbols", "", "comma-separated ETF symbols (e.g. 0050,0056,00878)")

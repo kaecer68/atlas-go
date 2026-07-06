@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -40,7 +41,7 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			symbols = slices.Collect(symbolIterator(DefaultSymbols()))
 		} else {
 			// Auto-expand agent universe from CSV data
-			expanded := ExpandUniverse("data/replay/tw_extended_90days.csv", nil)
+			expanded := ExpandUniverse(constants.ReplayCSVPath, nil)
 			if len(expanded) > 0 {
 				seen := make(map[string]bool)
 				for _, s := range symbols {

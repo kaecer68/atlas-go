@@ -11,6 +11,7 @@ import (
 	"time"
 
 	configpkg "github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -385,7 +386,7 @@ func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
 // loadAgentDisplayNames loads the agent display name map from the registry.
 // Returns nil on error (graceful fallback).
 func loadAgentDisplayNames() map[string]string {
-	data, err := os.ReadFile("configs/agents.json")
+	data, err := os.ReadFile(constants.AgentsConfigPath)
 	if err != nil {
 		return nil
 	}

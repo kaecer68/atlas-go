@@ -13,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/acceptance"
 	"github.com/kaecer68/atlas-go/internal/acceptance/builtin"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eval"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
@@ -157,7 +158,7 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 
 	// Load parameter snapshot and perform sensitivity analysis
 	if result.ParameterSnapshotID != "" {
-		snapStore := config.NewSnapshotStore("data/state/parameter-snapshots")
+		snapStore := config.NewSnapshotStore(constants.StateParameterSnapshots)
 		if snap, err := snapStore.LoadSnapshot(result.ParameterSnapshotID); err == nil {
 			checks = append(checks, fmt.Sprintf("parameter snapshot loaded: %s", result.ParameterSnapshotID))
 			if snap.Params != nil {
@@ -789,7 +790,7 @@ func computeWeightDrift(result domain.PromptExperimentResult) float64 {
 	if result.ParameterSnapshotID == "" {
 		return 0
 	}
-	snapStore := config.NewSnapshotStore("data/state/parameter-snapshots")
+	snapStore := config.NewSnapshotStore(constants.StateParameterSnapshots)
 	snap, err := snapStore.LoadSnapshot(result.ParameterSnapshotID)
 	if err != nil || snap.Params == nil {
 		return 0

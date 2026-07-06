@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -55,7 +56,7 @@ func DefaultSymbols() []string {
 	}
 
 	// Auto-sync: merge symbols from replay CSV if available
-	csvSymbols := loadSymbolsFromCSV("data/replay/tw_extended_90days.csv")
+	csvSymbols := loadSymbolsFromCSV(constants.ReplayCSVPath)
 	if len(csvSymbols) > 0 {
 		seen := make(map[string]bool)
 		for _, s := range base {

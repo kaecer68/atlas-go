@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -68,7 +69,7 @@ type csvRecord struct {
 }
 
 func main() {
-	csvPath := flag.String("csv", "data/replay/tw_extended_90days.csv", "target CSV path")
+	csvPath := flag.String("csv", constants.ReplayCSVPath, "target CSV path")
 	backfillStart := flag.String("backfill-start", "", "backfill start date (YYYY-MM-DD)")
 	backfillEnd := flag.String("backfill-end", "", "backfill end date (YYYY-MM-DD)")
 	flag.Parse()

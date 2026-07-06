@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -75,7 +76,7 @@ func NewFubonDMAAdapter(cfg FubonDMAAdapterConfig) *FubonDMAAdapter {
 	}
 	scriptPath := cfg.ScriptPath
 	if scriptPath == "" {
-		scriptPath = "cmd/fubon-dma/wrapper.py"
+		scriptPath = constants.FubonDMAScriptPath
 	}
 	return &FubonDMAAdapter{
 		personalID: cfg.PersonalID,

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -142,7 +143,7 @@ func (s *MacroService) CalculateStressIndex(ctx context.Context) (narrative.Taiw
 		}
 	}
 
-	geoStore := narrative.NewGeopoliticalStore(filepath.Join(s.WorkDir, "data/state/geopolitical"))
+	geoStore := narrative.NewGeopoliticalStore(filepath.Join(s.WorkDir, constants.StateGeopolitical))
 	index, err := s.TaiwanStressCalc.CalculateFromSnapshotWithStore(ctx, snap, prev, geoStore)
 	if err != nil {
 		return narrative.TaiwanStressIndex{}, err

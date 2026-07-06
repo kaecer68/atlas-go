@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -30,7 +31,7 @@ func NewTWSECalendarProvider() *TWSECalendarProvider {
 	params := config.GetParametersConfig()
 	return &TWSECalendarProvider{
 		httpClient:  httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
-		baseURL:     "https://www.twse.com.tw",
+		baseURL:     constants.TWSEBaseURL,
 		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value), params.Marketdata.TWSEAPIRateBurst.Value),
 	}
 }

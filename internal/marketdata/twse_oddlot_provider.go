@@ -13,6 +13,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 // OddLotStats holds after-hours odd-lot trading statistics from TWSE.
@@ -34,7 +35,7 @@ type TWSEOddLotProvider struct {
 func NewTWSEOddLotProvider() *TWSEOddLotProvider {
 	return &TWSEOddLotProvider{
 		client:      httpclient.NewFactory().NewClient(20 * time.Second),
-		baseURL:     "https://www.twse.com.tw",
+		baseURL:     constants.TWSEBaseURL,
 		rateLimiter: rate.NewLimiter(rate.Every(1*time.Second), 1),
 	}
 }

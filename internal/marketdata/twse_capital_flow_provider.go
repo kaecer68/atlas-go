@@ -16,6 +16,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -96,7 +97,7 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 	if err := t.limiter.Wait(ctx); err != nil {
 		return TWSECapitalFlow{}, fmt.Errorf("rate limit: %w", err)
 	}
-	url := fmt.Sprintf("https://www.twse.com.tw/rwd/zh/fund/T86?response=json&date=%s&selectType=ALLBUT0999", dateStr)
+	url := fmt.Sprintf(constants.TWSEBaseURL+"/rwd/zh/fund/T86?response=json&date=%s&selectType=ALLBUT0999", dateStr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return TWSECapitalFlow{}, fmt.Errorf("create request: %w", err)
