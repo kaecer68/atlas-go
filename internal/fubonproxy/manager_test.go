@@ -124,7 +124,7 @@ func TestProcessManager_Start_NonBlocking_WhenProxyUnhealthy(t *testing.T) {
 //
 // F9 改動：原本用 httptest.NewServer 隨機 port + m.healthURL 注入（繞過 probe），
 // 改用 bindEphemeralPort 模擬「healthy fubon-proxy 已佔住該 port」的生產現實;
-// production `proxyListenPort` 預設仍是 8081。
+// production `proxyListenPort` 預設仍是 18081。
 // 此測試在 F9 設計下與 F9_P2 校驗同一不變式，保留為冪等啟動語義的命名錨點。
 func TestProcessManager_Start_SkipsWhenAlreadyHealthy(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -1054,16 +1054,16 @@ func TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel(t *testing.T) {
 }
 
 // ============================================================================
-// F9 — port 8081 pre-flight probe (fix/fubonproxy-port-conflict-probe)
+// F9 — port 18081 pre-flight probe (fix/fubonproxy-port-conflict-probe)
 //
-// 為什麼需要：當 port 8081 被外部進程佔住，supervise() spawn() 內部會遇到
+// 為什麼需要：當 port 18081 被外部進程佔住，supervise() spawn() 內部會遇到
 // EADDRINUSE → backoff-loop → 無限重啟 + 前端拿不到 fubon 資料。
 // 預先探測 port 區分三種狀態：
 //   1. portStateFree     — 走原本 spawn 路徑
 //   2. portStateHealthy  — 已有 fubon-proxy 在跑，跳過 spawn
 //   3. portStateForeign  — 外部進程佔住，回傳 actionable error 含 PID+cmd
 //
-// 測試使用真實的 net.Listen 佔 127.0.0.1:8081 模擬外部占用。所有測試必須
+// 測試使用真實的 net.Listen 佔 127.0.0.1:18081 模擬外部占用。所有測試必須
 // 互相不衝突（依賴 Go test 內建單 goroutine 序列執行；不使用 t.Parallel）。
 // ============================================================================
 
@@ -1171,7 +1171,7 @@ func TestProcessManager_F9_PortFree_ProceedsToExistingPath(t *testing.T) {
 	m.mu.Unlock()
 }
 
-// F9.P2 — port 8081 被健康的 fubon-proxy 佔住（/health=200），probe 回
+// F9.P2 — port 18081 被健康的 fubon-proxy 佔住（/health=200），probe 回
 // portStateHealthy，Start() 立即返回 nil 且不啟動新程序。
 func TestProcessManager_F9_PortHeldByHealthyFubon_SkipsSpawn(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1219,12 +1219,12 @@ func TestProcessManager_F9_PortHeldByHealthyFubon_SkipsSpawn(t *testing.T) {
 	}
 }
 
-// F9.P3 — port 8081 被外部非 fubon 進程佔住（/health=404），probe 回
+// F9.P3 — port 18081 被外部非 fubon 進程佔住（/health=404），probe 回
 // portStateForeign，Start() 回傳 actionable error 含 PID 與 command。
 //
-// 模擬方式：bind 127.0.0.1:8081 + handler 回 404。production 環境下 lsof 會
+// 模擬方式：bind 127.0.0.1:18081 + handler 回 404。production 環境下 lsof 會
 // 抓到真實的占用者 PID+Command；本測試不依賴 lsof 解析內容，只驗證錯誤
-// 訊息的「行動性」關鍵字（port 8081 / foreign / kill）。
+// 訊息的「行動性」關鍵字（port 18081 / foreign / kill）。
 func TestProcessManager_F9_PortHeldByForeign_ReturnsActionableError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -1301,7 +1301,7 @@ func TestProcessManager_F9_LookupPortOccupant_ResolvesOurTestListener(t *testing
 // ============================================================================
 // P0 restart-path tests (fix/fubonproxy-port-conflict)
 //
-// 驗證 supervise() 在重啟前重新探測 port 8081 的行為：
+// 驗證 supervise() 在重啟前重新探測 port 18081 的行為：
 //   - portStateFree   → 可以重啟
 //   - portStateHealthy → 視為外部已管理，supervisor 退出（yield）
 //   - portStateForeign → retry/backoff，連續失敗達上限後放棄
@@ -1386,7 +1386,7 @@ func TestProcessManager_Restart_PortForeign_Retries(t *testing.T) {
 }
 
 // TestProcessManager_Supervise_YieldsToExternalHealthyProxy 驗證：當原本的
-// proxy 程序結束後，supervise() 重啟前發現 port 8081 已有外部 healthy proxy，
+// proxy 程序結束後，supervise() 重啟前發現 port 18081 已有外部 healthy proxy，
 // 會放棄重啟並結束 supervisor goroutine。
 func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 	setFastRestartBackoff(t)
@@ -1432,7 +1432,7 @@ func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 	}
 }
 
-// TestProcessManager_Supervise_RestartFailureCap 驗證：當 port 8081 持續被
+// TestProcessManager_Supervise_RestartFailureCap 驗證：當 port 18081 持續被
 // 外部進程佔用，連續重啟失敗達 maxRestartFailures 次後 supervisor 會放棄。
 func TestProcessManager_Supervise_RestartFailureCap(t *testing.T) {
 	setFastRestartBackoff(t)
@@ -1626,7 +1626,7 @@ func TestProcessManager_F9_PortBothWildcardsFree_ReturnsFree(t *testing.T) {
 //
 // 用途:apigateway.RegisterChannelAdapters 的 startup probe 透過這個 getter
 // 動態構造 dial address(L2 落地的 follow-up 修)。如果 getter 漏掉 NewManager
-// 的 port 設定,probe 會繼續 dial 8081,即使 -fubon-port=8080,fubon adapter
+// 的 port 設定,probe 會繼續 dial 18081,即使 -fubon-port=18080,fubon adapter
 // 就會 silent skip(回 fubon_proxy_not_reachable log)。
 func TestGetFubonProxyPort_ReflectsNewManagerOverride(t *testing.T) {
 	const customPort = 18081
@@ -1699,7 +1699,7 @@ func TestProxyHostPort_DefaultAndCustomPort(t *testing.T) {
 // port <= 0 不覆寫 proxyListenPort(保留測試 helper 預設值)。
 //
 // 對應 Oracle 4th-round verdict F13:port 必須顯式注入(>0),避免誤把 0 / -1
-// 當有效 port 寫入,造成後續 caller 全打到 8080 / 失敗。
+// 當有效 port 寫入,造成後續 caller 全打到 18080 / 失敗。
 func TestSetFubonProxyPort_NoOpForNonPositivePort(t *testing.T) {
 	t.Cleanup(func() {
 		proxyListenPort = defaultFubonProxyPort

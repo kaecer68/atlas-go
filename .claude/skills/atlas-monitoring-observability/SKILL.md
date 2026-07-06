@@ -137,7 +137,7 @@ func isPublicPath(p string) bool {
 
 ```bash
 # 1. 確認 metric 在 /metrics 有輸出
-curl http://localhost:8080/metrics | grep <metric_name>
+curl http://localhost:18080/metrics | grep <metric_name>
 
 # 2. 改 enabled: "false" -> "true"
 sed -i 's/enabled: "false"/enabled: "true"/' monitoring/rules/wave9_<rule>.yml
@@ -160,7 +160,7 @@ grep '/api/llm/health' cmd/atlas/main.go
 docker compose build atlas && docker compose up -d atlas
 
 # 4. 驗證
-curl -s -o /dev/null -w "code=%{http_code}\n" http://localhost:8080/api/llm/health
+curl -s -o /dev/null -w "code=%{http_code}\n" http://localhost:18080/api/llm/health
 # 期望: code=200
 ```
 
@@ -197,9 +197,9 @@ go test ./internal/monitoring/...
 # E2E 驗證(本機 Docker)
 docker compose up -d atlas
 sleep 30
-curl -s -o /dev/null -w "code=%{http_code}\n" http://localhost:8080/health           # 200
-curl -s -o /dev/null -w "code=%{http_code}\n" http://localhost:8080/api/llm/health  # 200(PR-931 修復後)
-curl -s http://localhost:8080/metrics | grep -E "^atlas_"                          # 2+ metric
+curl -s -o /dev/null -w "code=%{http_code}\n" http://localhost:18080/health           # 200
+curl -s -o /dev/null -w "code=%{http_code}\n" http://localhost:18080/api/llm/health  # 200(PR-931 修復後)
+curl -s http://localhost:18080/metrics | grep -E "^atlas_"                          # 2+ metric
 
 # 整合測試(需實際 RSS/事件流)
 go test -run TestTaiwanRSSGeopoliticalProvider_FetchScore ./internal/narrative/  # PR-930 RSS

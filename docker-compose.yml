@@ -403,7 +403,7 @@ services:
     depends_on:
       - redis
       - postgres
-    # Override Dockerfile HEALTHCHECK — it targets localhost:8080 which
+    # Override Dockerfile HEALTHCHECK — it targets localhost:18080 which
     # only the atlas API service exposes. The prism-worker container
     # does not serve HTTP, so the inherited healthcheck always fails.
     # A real readiness probe for the worker would query PRISM queue

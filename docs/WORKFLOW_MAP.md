@@ -230,7 +230,7 @@ Initial → Plan → ToolCall → Reflect
 | `-allow-real-signer` | false | allow non-placeholder signer |
 | `-check-integrity` | false | configs/parameters.json 完整性檢查 |
 | `-date` | "" | 模擬日期 override (2006-01-02) |
-| `-fubon-port` | :8081 | fubon-proxy Python listen port |
+| `-fubon-port` | :18081 | fubon-proxy Python listen port |
 | `-log-format` | text | text / json |
 | `-verbose` | false | color-coded terminal trace |
 

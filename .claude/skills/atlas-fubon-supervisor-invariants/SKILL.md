@@ -36,7 +36,7 @@ target_audience: developer
 
 ### Start() pre-flight probe
 
-- 定義：`Start()` 在 spawn 前以 `net.Listen("tcp", "127.0.0.1:8081")` 探測 port 狀態。
+- 定義：`Start()` 在 spawn 前以 `net.Listen("tcp", "127.0.0.1:18081")` 探測 port 狀態。
 - 關鍵：區分 `portStateFree` / `Healthy` / `Foreign`，Foreign 占用必須回傳 actionable error。
 
 ## 實作位置
@@ -68,7 +68,7 @@ target_audience: developer
 ### F9 port 探測測試標準
 
 - 必須用真實 `net.Listen` 佔位（透過 package-level `proxyListenPort` var;測試用 `withFreeEphemeralPort(t)` / `bindEphemeralPort(t, handler)` 取得 OS-assigned ephemeral port 並覆寫 `proxyListenPort`）,不可用 mock。
-- Production `proxyListenPort` 預設值仍為 8081（`manager.go:74`）,不變。
+- Production `proxyListenPort` 預設值仍為 18081（`manager.go:74`）,不變。
 - ephemeral port 永遠可用,無需 `t.Skip`;若 ephemeral bind 失敗（極罕見,僅在 fd 耗盡時）視為環境異常 `t.Fatal`。
 - 涵蓋：Free → spawn、Healthy（bind + /health=200）→ 跳過 spawn 且 `m.running=false`、Foreign（bind + /health=404）→ error 含 `"port %d"`（用 `proxyListenPort`）/ `"foreign"` / `"kill"`。
 - **PR #943 變更**：fubon-proxy 的 `/health` 端點改為快速 process-only check（不再呼叫上游 Fubon API，永遠回 200 只要 FastAPI 活著）。此變更**強化** ProcessManager 的偵測準確度 — 不再因上游故障將活的 proxy 誤判為 unhealthy。

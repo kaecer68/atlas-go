@@ -60,8 +60,8 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 	// "connection refused" warnings when the proxy is not running.
 	//
 	// 使用 fubonproxy.ProxyHostPort() 而非硬編碼舊值,
-	// 確保與 cmd/atlas -fubon-port flag 同步(歷史 bug:此處原本硬編碼 8081,
-	// 當 fubon-proxy 跑在 alt-port 時 probe 仍打 8081 → 永遠 "not reachable")。
+	// 確保與 cmd/atlas -fubon-port flag 同步(歷史 bug:此處原本硬編碼 18081,
+	// 當 fubon-proxy 跑在 alt-port 時 probe 仍打 18081 → 永遠 "not reachable")。
 	if conn, err := net.DialTimeout("tcp", fubonproxy.ProxyHostPort(), 2*time.Second); err != nil {
 		logging.Info("hybrid_provider", "fubon_proxy_not_reachable", "msg", "skipping fubon fallback — proxy not running")
 	} else {
