@@ -12,6 +12,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
@@ -22,7 +23,7 @@ import (
 // For production, prefer Fugle (real-time) or TWSE OpenAPI (free, no key).
 // To rotate key: update FINMIND_API_KEY in .env and restart the service.
 const (
-	finmindBaseURL   = "https://api.finmindtrade.com/api/v4"
+	finmindBaseURL   = constants.FinMindBaseURL
 	finmindRateLimit = 600 // 600 requests per hour for free tier
 	finmindBurst     = 60
 )

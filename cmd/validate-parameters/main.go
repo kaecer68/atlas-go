@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/paramcheck"
 )
 
 func main() {
-	path, strict := "configs/parameters.json", false
+	path, strict := constants.ParametersFile, false
 	for _, a := range os.Args[1:] {
 		if a == "--strict" {
 			strict = true

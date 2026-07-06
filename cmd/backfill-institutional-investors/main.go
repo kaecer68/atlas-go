@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
 const (
-	finmindBaseURL = "https://api.finmindtrade.com/api/v4"
-	rateLimit      = 600
-	pacingSeconds  = 6
+	rateLimit     = 600
+	pacingSeconds = 6
 )
 
 var (
@@ -76,7 +76,7 @@ func main() {
 		fmt.Printf("[%d/%d] Fetching %s...\n", i+1, len(symbols), symbol)
 
 		reqURL := fmt.Sprintf("%s/data?dataset=TaiwanStockInstitutionalInvestorsBuySell&data_id=%s&start_date=%s&end_date=%s",
-			finmindBaseURL, symbol, targetDate, targetDate)
+			constants.FinMindBaseURL, symbol, targetDate, targetDate)
 
 		body, err := marketdata.FetchWithRetry(context.Background(), client, reqURL, apiKey, limiter, 3)
 		if err != nil {

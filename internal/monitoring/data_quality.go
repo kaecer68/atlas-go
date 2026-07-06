@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 // DataQualityCheck represents a single data quality check result.
@@ -282,7 +284,7 @@ func (dq *DataQualityChecker) checkConfigFiles(ctx context.Context) DataQualityC
 
 	requiredFiles := []string{
 		"configs/agents.json",
-		"configs/parameters.json",
+		constants.ParametersFile,
 	}
 
 	missing := []string{}
