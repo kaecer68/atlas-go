@@ -48,7 +48,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/client`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "crossmarket,narrative,live,portfolio,strategies")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,crossmarket,industry,narrative,pipeline,portfolio,strategies")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
