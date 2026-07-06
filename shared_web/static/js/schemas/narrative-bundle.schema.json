@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "narrative-bundle.schema.json",
+  "type": "object",
+  "required": ["events", "chains", "templates"],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["theme", "sentiment", "confidence", "severity", "status", "description"],
+        "properties": {
+          "theme": { "type": "string" },
+          "sentiment": { "type": "number" },
+          "confidence": { "type": "number" },
+          "severity": { "type": "string" },
+          "status": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "chains": { "type": "array" },
+    "templates": { "type": "array" }
+  }
+}

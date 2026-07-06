@@ -638,7 +638,19 @@ function isMockMode() {
 
 function mockData() {
   return {
-    macro: { MarketIndex: 23100.5, ChangePct: 0.35, ForeignNetBuy: 45.2, MarginBalance: 3250, VIX: 14.3, USDD: 32.15 },
+    // Field names must match what pointValue/pointChange read:
+    // pointValue(macro,'taiex')         → macro['taiex'] (object with .value OR bare number)
+    // pointChange(macro,'foreign_investor_net') → macro['foreign_investor_net'].change_pct (object required)
+    macro: {
+      taiex: { symbol: 'TAIEX', value: 23100.5, change_pct: 0.35, timestamp: new Date().toISOString() },
+      foreign_investor_net: { symbol: 'FOREIGN', value: 45.2, change_pct: 0.012, timestamp: new Date().toISOString() },
+      tsm_adr: { symbol: 'TSM', value: 162.8, change_pct: -0.008, timestamp: new Date().toISOString() },
+      sox_index: { symbol: 'SOX', value: 5820.1, change_pct: 0.022, timestamp: new Date().toISOString() },
+      ndx_index: { symbol: 'NDX', value: 21450.3, change_pct: 0.018, timestamp: new Date().toISOString() },
+      retail_margin_balance: { symbol: 'MARGIN', value: 3250.0, change_pct: 0.05, timestamp: new Date().toISOString() },
+      vix: { symbol: 'VIX', value: 14.3, change_pct: -0.03, timestamp: new Date().toISOString() },
+      usd_twd: { symbol: 'USD/TWD', value: 32.15, change_pct: 0.001, timestamp: new Date().toISOString() },
+    },
     pipeline: {
       items: [
         { theme: 'ai_capex', sentiment: 0.92, confidence: 0.88, severity: 'high', affected_industries: ['半導體', 'AI伺服器'] },

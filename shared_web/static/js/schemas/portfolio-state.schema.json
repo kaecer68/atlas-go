@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "portfolio-state.schema.json",
+  "type": "object",
+  "required": ["positions", "portfolio_value", "cumulative_pnl", "cumulative_pnl_pct", "current_drawdown", "data_status"],
+  "properties": {
+    "positions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "name", "shares", "avg_cost", "current_price", "market_value", "pnl", "pnl_pct"],
+        "properties": {
+          "symbol": { "type": "string" },
+          "name": { "type": "string" },
+          "shares": { "type": "number" },
+          "avg_cost": { "type": "number" },
+          "current_price": { "type": "number" },
+          "market_value": { "type": "number" },
+          "pnl": { "type": "number" },
+          "pnl_pct": { "type": "number" }
+        }
+      }
+    },
+    "portfolio_value": { "type": "number" },
+    "cumulative_pnl": { "type": "number" },
+    "cumulative_pnl_pct": { "type": "number" },
+    "current_drawdown": { "type": "number" },
+    "data_status": { "type": "string" }
+  }
+}

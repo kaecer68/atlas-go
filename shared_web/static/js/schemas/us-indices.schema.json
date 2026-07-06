@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us-indices.schema.json",
+  "type": "object",
+  "required": ["indices", "tech_stocks", "data_status", "failed_channels", "updated_at"],
+  "properties": {
+    "indices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "value", "change_pct"],
+        "properties": {
+          "symbol": { "type": "string" },
+          "value": { "type": "number" },
+          "change_pct": { "type": "number" }
+        }
+      }
+    },
+    "tech_stocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "value", "change_pct"],
+        "properties": {
+          "symbol": { "type": "string" },
+          "value": { "type": "number" },
+          "change_pct": { "type": "number" }
+        }
+      }
+    },
+    "data_status": { "type": "string" },
+    "failed_channels": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "updated_at": { "type": "string" }
+  }
+}

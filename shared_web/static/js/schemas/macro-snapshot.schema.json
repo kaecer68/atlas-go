@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "macro-snapshot.schema.json",
+  "type": "object",
+  "required": ["updated_at", "data_status"],
+  "properties": {
+    "taiex": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "tsm_adr": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "sox_index": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "ndx_index": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "usd_twd": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "vix": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "foreign_investor_net": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "retail_margin_balance": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "dxy": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "us10y": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "oil": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "gold": {
+      "type": "object",
+      "required": ["symbol", "value", "change_pct", "timestamp"],
+      "properties": {
+        "symbol": { "type": "string" },
+        "value": { "type": "number" },
+        "change_pct": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "updated_at": { "type": "string" },
+    "data_status": {
+      "type": ["string", "null"],
+      "default": null
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "recommendation-pipeline.schema.json",
+  "type": "object",
+  "required": ["items", "data_status"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["theme", "sentiment", "confidence", "severity", "affected_industries", "side", "conviction"],
+        "properties": {
+          "theme": { "type": "string" },
+          "sentiment": { "type": "number" },
+          "confidence": { "type": "number" },
+          "severity": { "type": "string" },
+          "affected_industries": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "side": { "type": "string" },
+          "conviction": { "type": "number" }
+        }
+      }
+    },
+    "data_status": { "type": "string" }
+  }
+}

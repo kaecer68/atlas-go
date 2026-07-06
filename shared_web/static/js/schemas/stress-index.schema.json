@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "stress-index.schema.json",
+  "type": "object",
+  "required": ["index", "regime", "updated_at"],
+  "properties": {
+    "index": { "type": "number" },
+    "regime": { "type": "string" },
+    "updated_at": { "type": "string" }
+  }
+}

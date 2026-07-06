@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "calendar-events.schema.json",
+  "type": "object",
+  "required": ["events", "updated_at"],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "title", "category", "importance", "description"],
+        "properties": {
+          "date": { "type": "string" },
+          "title": { "type": "string" },
+          "category": { "type": "string" },
+          "importance": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "updated_at": { "type": "string" }
+  }
+}

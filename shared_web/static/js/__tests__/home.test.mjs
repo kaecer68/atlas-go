@@ -15,12 +15,14 @@ const elements = new Map();
 
 function createElement(id) {
   const listeners = [];
+  const childMap = new Map();
   const el = {
     id,
     innerHTML: '',
     textContent: '',
     style: {},
     _listeners: listeners,
+    _childMap: childMap,
     addEventListener(type, fn) { listeners.push({ type, fn }); },
     dispatchEvent(ev) {
       listeners
@@ -35,6 +37,22 @@ function createElement(id) {
       remove() {},
       contains() { return false; },
     },
+    querySelector(sel) {
+      // Support common selectors used in onboarding.js
+      if (sel.startsWith('#')) {
+        const childId = sel.slice(1);
+        if (!childMap.has(childId)) {
+          const child = createElement(childId);
+          childMap.set(childId, child);
+        }
+        return childMap.get(childId);
+      }
+      return null;
+    },
+    appendChild(child) {
+      if (child && child.id) childMap.set(child.id, child);
+      return child;
+    },
   };
   elements.set(id, el);
   return el;
@@ -48,6 +66,15 @@ global.document = {
   createElement(tag) { return createElement(`create-${tag}`); },
   querySelector() { return null; },
   querySelectorAll() { return []; },
+  addEventListener() {},
+  removeEventListener() {},
+  body: {
+    appendChild(child) {
+      if (child && child.id) elements.set(child.id, child);
+      return child;
+    },
+    addEventListener() {},
+  },
 };
 
 global.window = {
@@ -151,4 +178,47 @@ test('renderHomePage: renders trust footer after unexpected synchronous error', 
 
   const trustFooter = elements.get('home-trust-footer');
   assert.ok(trustFooter.innerHTML.includes('不構成投資建議'), 'trust footer must render despite unexpected error');
+});
+
+// ============================================================================
+// Contract: mockData() field names must match schema / page code expectations
+// ============================================================================
+
+// mockData() is not exported; we verify indirectly by checking that mock mode
+// (localStorage atlas-mock=true) renders actual indicator values (not "—").
+// Phase 0 bug: mockData used { MarketIndex, ChangePct } instead of { taiex,
+// foreign_investor_net }, causing pointValue/macro,'taiex' → null → "—".
+
+// Contract test: mockData() macro field names must match schema / page code expectations.
+// Phase 0 bug: mockData uses { MarketIndex, ChangePct, ForeignNetBuy } but page code
+// calls pointValue(macro,'taiex') and pointChange(macro,'foreign_investor_net').
+// This causes indicators to silently fall back to "—" instead of showing mock values.
+//
+// FIX REQUIRED: In home.js mockData(), rename:
+//   MarketIndex → taiex, ChangePct → change_pct, ForeignNetBuy → foreign_investor_net
+//
+// Until fixed, this test FAILS — proving the contract is violated.
+test('mockData: macro field names must match what page code expects (contract)', async () => {
+  const realLocalStorage = global.localStorage;
+  global.localStorage = { getItem: (k) => (k === 'atlas-mock' ? 'true' : null), setItem() {}, removeItem() {} };
+
+  elements.clear();
+  global.fetch = async () => { throw new Error('force-mock'); };
+
+  const container = { innerHTML: '' };
+  await renderHomePage(container);
+  global.localStorage = realLocalStorage;
+
+  // The indicators section must show real numbers, not "—" fallback.
+  // If mockData() field names are correct, TAIEX shows a number.
+  // If field names are wrong (MarketIndex instead of taiex), pointValue→null→"—".
+  const indicatorsEl = elements.get('home-today-indicators');
+  assert.ok(indicatorsEl, 'today-indicators must exist');
+  const html = indicatorsEl.innerHTML;
+
+  // Assert correct behavior: TAIEX must show a real number
+  assert.match(html, /加權.*\d+/,
+    'contract: taiex must render (mockData must use "taiex" not "MarketIndex")');
+  assert.ok(!html.includes('加權 —'),
+    'contract: taiex must NOT fallback to "—" (indicates wrong field name in mockData)');
 });
