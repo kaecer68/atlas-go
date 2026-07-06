@@ -10,7 +10,7 @@
 
 ## 1. 5 分鐘速覽
 
-atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 HTTP（`:8080`）前必須先理解三層次：
+atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 HTTP（`:18080`）前必須先理解三層次：
 
 - **入口層**：`cmd/atlas/main.go` 提供 5 個 run mode（不是單一 monolith）。
 - **內部基礎設施**：所有跨工作流程通訊都透過 `internal/eventbus`（publish/subscribe）+ `internal/orchestrator/system_plugins.go`（plugin host）。
@@ -26,7 +26,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 
 | Mode | Flag | 用途 | Bootstrap 依賴 |
 |------|------|------|--------------|
-| **WA-001 API 服務** | `--api`（預設 :8080） | 啟 Dashboard API server + Gateway + Plugin chain + Fubon-proxy | 完整（Janus, MaturityTracker, fubon-proxy, Gateway） |
+| **WA-001 API 服務** | `--api`（預設 :18080） | 啟 Dashboard API server + Gateway + Plugin chain + Fubon-proxy | 完整（Janus, MaturityTracker, fubon-proxy, Gateway） |
 | **WA-002 Live Trading** | `--live` | broker mode（dry-run/paper/live）+ 即時 orchestrator | 完整 + broker config |
 | **WA-003 Simulation** | `--simulate` | 一次性 daily simulation，結束後 exit | 簡化（runtime + janus） |
 | **WA-004 Build Universe** | `--build-universe {run\|map\|scrape\|status}` | SmartUniverseBuilder pipeline，exit | 輕量（只跑 universe 子系統） |
@@ -218,7 +218,7 @@ Initial → Plan → ToolCall → Reflect
 | Flag | 預設 | 說明 |
 |------|------|------|
 | `-api` | false | 啟 Dashboard API server |
-| `-addr` | `:8080` | API listen address |
+| `-addr` | `:18080` | API listen address（見 `internal/constants/port.go`）|
 | `-swagger` | false | 啟 Swagger docs endpoints |
 | `-live` | false | 啟 live trading orchestrator |
 | `-simulate` | false | one-shot simulation，exit |

@@ -39,9 +39,9 @@ declare -a TARGETS=(
     "internal/risk"
 )
 # Note: cmd/atlas intentionally excluded — its snapshot/golden tests run
-# under preflight (port 8080 + postgres), and are covered by the main
+# under preflight (port 18080 + postgres), and are covered by the main
 # `go test ./cmd/atlas/...` CI job plus the dedicated live-broker tests.
-# Including it here would duplicate run cost and race with port 8080.
+# Including it here would duplicate run cost and race with port 18080.
 
 # 1) Capture pre-run state of all testdata/ JSON golden files.
 PRE_SNAPSHOTS="$(mktemp)"

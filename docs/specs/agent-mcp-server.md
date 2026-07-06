@@ -194,7 +194,7 @@ func callAtlasAPI(
     method, path string,
     body, result any,
 ) error {
-    // 統一呼叫 atlas-go (http://127.0.0.1:8080)
+    // 統一呼叫 atlas-go (http://127.0.0.1:18080)
     // 自動注入 ATLAS_API_KEY（複用 admin API key 機制）
     // 自動錯誤轉譯（atlas 回傳的 error JSON → MCP error code）
 }

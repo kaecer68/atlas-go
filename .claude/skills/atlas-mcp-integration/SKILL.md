@@ -70,7 +70,7 @@ target_audience: "developer"
     "atlas-go": {
       "command": "/absolute/path/to/bin/atlas-mcp",
       "env": {
-        "ATLAS_BASE_URL": "http://127.0.0.1:8080",
+        "ATLAS_BASE_URL": "http://127.0.0.1:18080",
         "ATLAS_API_KEY": "xxx"
       }
     }
@@ -90,7 +90,7 @@ target_audience: "developer"
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {
-        "ATLAS_BASE_URL": "http://127.0.0.1:8080",
+        "ATLAS_BASE_URL": "http://127.0.0.1:18080",
         "ATLAS_API_KEY": "xxx"
       }
     }
