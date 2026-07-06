@@ -28,6 +28,7 @@ global.document = {
   addEventListener() {},
   removeEventListener() {},
   getElementById() { return null; },
+  body: null,
 };
 
 global.localStorage = {

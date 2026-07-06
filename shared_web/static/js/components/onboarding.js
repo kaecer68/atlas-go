@@ -55,5 +55,5 @@ export function initOnboarding() {
   });
 
   render();
-  document.body.appendChild(overlay);
+  if (document.body) document.body.appendChild(overlay);
 }
