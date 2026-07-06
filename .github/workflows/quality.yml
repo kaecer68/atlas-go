@@ -573,3 +573,16 @@ jobs:
 
     - name: Check data catalog freshness
       run: bash scripts/ci/check_data_catalog.sh --warn-only
+
+  # Port reference consistency check — ensures no file references
+  # legacy 8080/8081 ports that should be 18080/18081 (see
+  # internal/constants/port.go). --warn-only during probation;
+  # TODO(2026-08-01): escalate to hard fail after remaining 31
+  # violations are cleaned.
+  doc-ports:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check port references against constants/port.go
+      run: bash scripts/ci/check_doc_ports.sh --warn-only
