@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 func TestExportStatisticsProvider_Name(t *testing.T) {
