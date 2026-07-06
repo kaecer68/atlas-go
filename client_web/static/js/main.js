@@ -14,6 +14,8 @@ import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
 import { init as initSimplifiedMode } from './simplified-mode.js';
 import './modals/modal.js';
+import { injectSharedHead } from './shared/head-config.js';
+injectSharedHead();
 
 const SHELL_LOADERS = {
   narrative: () => import('./page-shells/narrative.js'),
