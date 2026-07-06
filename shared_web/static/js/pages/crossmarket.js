@@ -1,10 +1,11 @@
 import { escapeHtml } from '../shared/utils.js';
 
 export async function loadCrossMarketData() {
-  const [status, usIndices, correlation] = await Promise.all([
+  const [status, usIndices, correlation, correlationMatrix] = await Promise.all([
     fetch('/api/cross-market/status').then(r => r.json()).catch(() => null),
     fetch('/api/dashboard/us-indices').then(r => r.json()).catch(() => null),
     fetch('/api/cross-market/correlation').then(r => r.json()).catch(() => null),
+    fetch('/api/dashboard/correlation-matrix').then(r => r.json()).catch(() => null),
   ]);
   renderStaleBanner(status);
   renderDegradedBanner(status);
@@ -12,6 +13,7 @@ export async function loadCrossMarketData() {
   renderTechStocks(status);
   renderMacro(status);
   renderCorrelation(correlation, status);
+  renderCorrelationMatrix(correlationMatrix);
   renderCrisis(status);
 }
 
@@ -158,6 +160,53 @@ function renderCorrelation(correlation, status) {
       <tr><td>資料時間</td><td style="font-size:var(--text-base);color:var(--muted)">${escapeHtml(generatedAt)}</td><td>此 ρ 值的計算時間（後端排程每 ${windowSize} 分鐘更新一次）。若超過 1 小時未更新請檢查 correlation 排程狀態。</td></tr>
     </tbody>
   </table></div>`;
+}
+
+function renderCorrelationMatrix(matrixData) {
+  const el = document.getElementById('cm-correlation-matrix');
+  if (!el) return;
+  if (!matrixData || !matrixData.symbols || !Array.isArray(matrixData.matrix) || matrixData.matrix.length === 0) {
+    el.innerHTML = emptyState('等待產業相關性矩陣資料');
+    return;
+  }
+  const symbols = matrixData.symbols;
+  const labels = matrixData.labels || symbols;
+  const matrix = matrixData.matrix;
+  const n = symbols.length;
+
+  function corrColor(v) {
+    if (v == null || isNaN(v)) return 'var(--panel-l2)';
+    const abs = Math.abs(v);
+    if (abs >= 0.7) return v >= 0 ? 'var(--color-danger)' : 'var(--color-success)';
+    if (abs >= 0.3) return v >= 0 ? 'color-mix(in srgb, var(--color-warning) 60%, transparent)' : 'color-mix(in srgb, var(--color-success) 40%, transparent)';
+    return 'var(--panel-l2)';
+  }
+
+  function corrText(v) {
+    if (v == null || isNaN(v)) return '—';
+    return v.toFixed(2);
+  }
+
+  let html = '<div style="overflow-x:auto"><table style="font-size:var(--text-sm);border-collapse:collapse;min-width:100%"><thead><tr><th style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;text-align:left;border-bottom:1px solid var(--panel-l3)">產業</th>';
+  for (let i = 0; i < n; i++) {
+    html += '<th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--panel-l3);white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);min-width:32px">' + escapeHtml(labels[i] || symbols[i]) + '</th>';
+  }
+  html += '</tr></thead><tbody>';
+  for (let i = 0; i < n; i++) {
+    html += '<tr><td style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;border-bottom:1px solid var(--panel-l3);white-space:nowrap;font-weight:600">' + escapeHtml(labels[i] || symbols[i]) + '</td>';
+    for (let j = 0; j < n; j++) {
+      const v = matrix[i] ? matrix[i][j] : null;
+      const bg = corrColor(v);
+      const txt = corrText(v);
+      const isDiagonal = i === j;
+      const style = 'padding:4px 6px;text-align:center;font-family:var(--font-mono);font-size:var(--text-xs);background:' + bg + ';color:' + (isDiagonal || Math.abs(v || 0) >= 0.7 ? '#fff' : 'var(--text)') + ';border-bottom:1px solid var(--panel-l3)';
+      html += '<td style="' + style + '">' + txt + '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  html += '<div style="margin-top:var(--space-sm);font-size:var(--text-xs);color:var(--muted)">色階：|ρ| ≥ 0.7 深色（強相關）、0.3–0.7 淡色（中等相關）、< 0.3 灰色（弱相關）。正相關偏紅，負相關偏綠。</div>';
+  el.innerHTML = html;
 }
 
 function renderCrisis(status) {
