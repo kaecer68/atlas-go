@@ -374,6 +374,10 @@ function renderMarketPulse(macro, stress, crossStatus) {
   const usdtwd = cmField(macro, crossStatus, 'usd_twd');
   const vixVal = cmField(macro, crossStatus, 'vix');
   const marginVal = pointValue(macro, 'retail_margin_balance');
+  const retailChange = pointChange(macro, 'retail_margin_balance');
+  const retailText = retailChange !== null
+    ? (retailChange >= 0 ? '偏多 ' : '偏空 ') + fmtSignedPct(retailChange, 0)
+    : '—';
 
   const cards = [
     metricCard({ id: 'market-taiwan', label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high' }),
@@ -387,7 +391,7 @@ function renderMarketPulse(macro, stress, crossStatus) {
     metricCard({ label: '投信動向', value: fundText, tone: fundVal > 0 ? 'positive' : fundVal < 0 ? 'negative' : 'neutral', tooltip: '投信近一交易日買賣超（億元）。', extraClasses: 'pro-only card-priority-low' }),
     metricCard({ label: '自營商', value: dealerText, tone: dealerVal > 0 ? 'positive' : dealerVal < 0 ? 'negative' : 'neutral', tooltip: '自營商近一交易日買賣超（億元）。', extraClasses: 'pro-only card-priority-low' }),
     metricCard({ label: '歷史波動', value: '—', tone: 'neutral', tooltip: '20 日歷史波動率（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
-    metricCard({ label: '散戶情緒', value: '—', tone: 'neutral', tooltip: '散戶多空比（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '散戶情緒', value: retailText, tone: retailChange === null ? 'neutral' : retailChange >= 0 ? 'positive' : 'negative', tooltip: '散戶融資餘額變化 — 偏多表示融資增加（槓桿意願高），偏空表示融資減少。', extraClasses: 'pro-only card-priority-low' }),
   ];
 
   if (grid) {
