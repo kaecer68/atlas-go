@@ -12,7 +12,9 @@ import (
 //
 // Weights come from fe.params.Factor.InstitutionalSentimentWeights (4 keys).
 // Default weights (per AGENTS.md §2.2): foreign=0.50, domestic=0.30,
-// margin=0.20. Retail weight is currently a placeholder (0.0 by default).
+// margin=0.20. [INTENTIONAL PLACEHOLDER] Retail weight is currently a placeholder
+// (0.0 by default) pending FinMind retail trade registration data integration.
+// Audit 2026-07-06: no timeline for activation.
 //
 // Score is clamped to [-1, 1].
 func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeInput) domain.FactorScoreItem {
