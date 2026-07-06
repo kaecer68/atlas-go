@@ -81,3 +81,24 @@ export function pnlProfitColor()  { return 'var(--pnl-profit)'; }
 export function pnlLossColor()   { return 'var(--pnl-loss)'; }
 export function inflowColor()    { return 'var(--capital-inflow)'; }
 export function outflowColor()   { return 'var(--capital-outflow)'; }
+
+/**
+ * hexToRgba — 將 hex 顏色轉為 rgba 字串（Canvas 繪圖用）
+ * 集中於 color-tokens.js，取代各頁面重複定義的本地版本。
+ *
+ * @param {string} hex - #RGB、#RRGGBB、或無 # 前綴
+ * @param {number} alpha - 透明度，預設 1
+ * @returns {string} rgba(r, g, b, alpha) 或無法解析時回傳原字串
+ */
+export function hexToRgba(hex, alpha = 1) {
+  if (!hex) return `rgba(0, 0, 0, ${alpha})`;
+  if (!hex.startsWith('#')) return hex;
+  let h = hex.slice(1);
+  if (h.length === 3) {
+    h = h.split('').map(c => c + c).join('');
+  }
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}

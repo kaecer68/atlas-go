@@ -110,6 +110,27 @@
   --priority-medium-border: var(--priority-medium);
   --priority-low-bg: rgba(var(--priority-low-rgb), 0.04);
   --priority-low-border: var(--border);
+
+  /* 間距刻度（Phase 5 Design System） */
+  --space-2xs: 2px;
+  --space-2xl: 32px;
+
+  /* 金融語意 RGB 三元組（供 rgba() alpha 合成） */
+  --pnl-profit-rgb: 239, 68, 68;
+  --pnl-loss-rgb: 34, 197, 94;
+  --trend-bullish-rgb: 239, 68, 68;
+  --trend-bearish-rgb: 34, 197, 94;
+  --capital-inflow-rgb: 239, 68, 68;
+  --capital-outflow-rgb: 34, 197, 94;
+  --signal-bullish-rgb: 239, 68, 68;
+  --signal-bearish-rgb: 34, 197, 94;
+
+  /* Surface Alpha Tokens（主題感知著色背景） */
+  --surface-profit: rgba(var(--pnl-profit-rgb), 0.08);
+  --surface-loss: rgba(var(--pnl-loss-rgb), 0.08);
+  --surface-bullish: rgba(var(--trend-bullish-rgb), 0.06);
+  --surface-bearish: rgba(var(--trend-bearish-rgb), 0.06);
+  --surface-warning: rgba(245, 158, 11, 0.06);
 }
 :root[data-theme="light"] {
   --bg: #f5f5f5; --panel: #ffffff; --border: #e0e0e0; --text: #1a1a1a; --muted: #666666;

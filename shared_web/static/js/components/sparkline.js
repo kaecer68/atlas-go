@@ -1,22 +1,9 @@
 // sparkline.js — Darwinian weight sparkline + equity curve + agent scoreboard
 // Standalone component, importable into dashboard.js or portfolio pages.
 import { fmt, fmtPct, fmtFloat, fmtNTD, getThemeColor } from '../shared/utils.js';
-import { pnlProfitColor, pnlLossColor, regimeColor } from '../shared/color-tokens.js';
+import { pnlProfitColor, pnlLossColor, regimeColor, hexToRgba } from '../shared/color-tokens.js';
 
 export { renderEquityCurve, renderDualEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance };
-
-function hexToRgba(hex, alpha = 1) {
-  if (!hex) return `rgba(0, 0, 0, ${alpha})`;
-  if (!hex.startsWith('#')) return hex;
-  let h = hex.slice(1);
-  if (h.length === 3) {
-    h = h.split('').map(c => c + c).join('');
-  }
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 /**
  * Renders a canvas-based equity curve sparkline.

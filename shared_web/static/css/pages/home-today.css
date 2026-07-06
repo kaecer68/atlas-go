@@ -1,0 +1,90 @@
+/* home-today.css — Today Summary styles (extracted from home.css) */
+
+.home-today-summary {
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
+  border-radius: var(--editorial-radius);
+}
+.home-today-summary__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.home-today-summary__title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text);
+}
+.home-today-summary__update {
+  font-size: var(--text-xs);
+  color: var(--editorial-muted);
+  margin-left: auto;
+}
+.home-today-summary__reason {
+  font-size: var(--text-sm);
+  color: var(--editorial-muted);
+  margin-bottom: var(--space-md);
+}
+.home-today-summary__indicators {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+.home-today-indicator {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--editorial-radius);
+  font-size: var(--text-sm);
+  background: var(--panel-l2);
+  color: var(--text);
+  white-space: nowrap;
+}
+.home-today-indicator--bullish {
+  background: color-mix(in srgb, var(--bullish) 15%, transparent);
+  color: var(--bullish);
+}
+.home-today-indicator--bearish {
+  background: color-mix(in srgb, var(--bearish) 15%, transparent);
+  color: var(--bearish);
+}
+.home-today-indicator--neutral {
+  background: var(--panel-l2);
+  color: var(--muted);
+}
+.home-today-summary__help {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--panel-l2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: var(--font-bold);
+  cursor: help;
+  margin-left: 6px;
+  position: relative;
+}
+.home-today-summary__help:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel-l1);
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: var(--font-normal);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  white-space: normal;
+  max-width: 260px;
+  width: max-content;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  pointer-events: none;
+  line-height: 1.4;
+}
