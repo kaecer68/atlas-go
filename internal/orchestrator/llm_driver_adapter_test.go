@@ -21,6 +21,7 @@ func (m *mockProvider) Supports(_ llm.Capability) bool { return true }
 func (m *mockProvider) Call(_ context.Context, _ llm.Request) (llm.Response, error) {
 	return m.resp, m.err
 }
+
 func (m *mockProvider) Health() llm.HealthStatus {
 	return llm.HealthStatus{
 		Provider:    llm.ProviderMock,

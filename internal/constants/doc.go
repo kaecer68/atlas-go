@@ -3,5 +3,5 @@
 // corresponding references in docker-compose.yml, Makefile, monitoring configs,
 // and documentation.
 //
-// Maturity: utility
+// Maturity: stable
 package constants
