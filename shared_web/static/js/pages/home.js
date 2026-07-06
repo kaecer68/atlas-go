@@ -513,6 +513,7 @@ function renderRecommendation(pipeline, stress) {
 
   document.getElementById('home-rec-detail').addEventListener('click', () => window.switchPage('decision'));
   document.getElementById('home-rec-portfolio').addEventListener('click', () => window.switchPage('portfolio'));
+  }
 }
 
 async function loadPortfolioSnapshot() {
