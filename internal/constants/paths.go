@@ -18,16 +18,21 @@ const (
 	StateDir = "data/state"
 
 	// Top state subpaths by occurrence (sorted desc):
-	StateMacro          = StateDir + "/macro"           // macro snapshot cache + TWSECapitalFlow
-	StateGeopolitical   = StateDir + "/geopolitical"    // geopolitical event cache
-	StateCapitalFlow    = StateDir + "/capital_flow"    // TWSE capital flow daily JSON
-	StateExperiments    = StateDir + "/experiments"     // experiment run artifacts
-	StateExport         = StateDir + "/export"          // export statistics cache
-	StateChannels       = StateDir + "/channels"        // data quality channel health
-	StateSessions       = StateDir + "/sessions"        // session snapshots (OOS outcomes)
-	StateParameter      = StateDir + "/parameter"       // parameter mutation history
-	StateLive           = StateDir + "/live"            // live trading state
-	StateBaselinePolicy = StateDir + "/baseline_policy" // baseline policy artifacts
-	StateMargin         = StateDir + "/margin"          // margin balance cache
-	StateCalibration    = StateDir + "/calibration"     // calibration baseline artifacts
+	StateMacro              = StateDir + "/macro"               // macro snapshot cache + TWSECapitalFlow
+	StateGeopolitical       = StateDir + "/geopolitical"        // geopolitical event cache
+	StateCapitalFlow        = StateDir + "/capital_flow"        // TWSE capital flow daily JSON
+	StateExperiments        = StateDir + "/experiments"         // experiment run artifacts
+	StateExport             = StateDir + "/export"              // export statistics cache
+	StateChannels           = StateDir + "/channels"            // data quality channel health
+	StateSessions           = StateDir + "/sessions"            // session snapshots (OOS outcomes)
+	StateParameterSnapshots = StateDir + "/parameter-snapshots" // parameter calibration snapshots
+
+	// Other configuration and data paths:
+	AgentsConfigPath    = "configs/agents.json"                // agent registry
+	ReplayCSVPath       = "data/replay/tw_extended_90days.csv" // default replay CSV universe
+	FubonDMAScriptPath  = "cmd/fubon-dma/wrapper.py"           // fubon DMA wrapper script
+	StateLive           = StateDir + "/live"                   // live trading state
+	StateBaselinePolicy = StateDir + "/baseline_policy"        // baseline policy artifacts
+	StateMargin         = StateDir + "/margin"                 // margin balance cache
+	StateCalibration    = StateDir + "/calibration"            // calibration baseline artifacts
 )
