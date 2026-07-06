@@ -475,8 +475,8 @@ func (d calibrationDeps) registerLinkageCalibrate() {
 			calibrator := &config.LinkageAmplifierCalibrator{}
 			evaluator := func(cfg *config.ParametersConfig) (float64, error) {
 				// [INTENTIONAL STUB] TODO: Implement proper recession shock accuracy scoring
-			// Audit 2026-07-06: evaluator returns neutral score (0.0, nil) so
-			// calibration infra runs end-to-end without changing amplifier value.
+				// Audit 2026-07-06: evaluator returns neutral score (0.0, nil) so
+				// calibration infra runs end-to-end without changing amplifier value.
 				// using historical session data. For now, return a
 				// neutral score so the calibration infrastructure runs
 				// end-to-end without changing the amplifier value.
