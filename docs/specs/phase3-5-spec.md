@@ -83,7 +83,7 @@ admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,�
 
 #### 3.1.5 驗收
 
-- [ ] `curl localhost:8080/api/admin/live/deployment/dashboard` 回 200 + 完整 JSON
+- [ ] `curl localhost:18080/api/admin/live/deployment/dashboard` 回 200 + 完整 JSON
 - [ ] 既有 3 個 endpoint 仍可獨立呼叫(向下相容)
 - [ ] admin Web 新 page 可載入,5 section 全顯示
 - [ ] 30s polling 正常;手動 Refresh 立即觸發

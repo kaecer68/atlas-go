@@ -144,14 +144,14 @@ docker compose up -d   # postgres, redis, atlas-go, prism worker, swarm, grafana
 - **postgre / redis 用 docker**(隔離、init scripts、auto-restart)
 - **atlas-go 用 native `go run`**(原生 debugger、fast reload)
 - **fubon-proxy 由 ProcessManager 自動 spawn**(`internal/fubonproxy/manager.go` + `shouldStartFubonProxy` — 已有完整 lifecycle,不用再寫新的 orchestration)
-- **`docker compose stop atlas`** 釋出 port 8080 給 native 進程
+- **`docker compose stop atlas`** 釋出 port 18080 給 native 進程
 
 **用法**:
 
 ```bash
 make dev          # 起 docker deps(postgres+redis)+ stop atlas container + go run ./cmd/atlas -api
                   # CTRL+C 結束;postgres/redis 留 docker 跑
-make dev-status   # 看容器狀態 + port 8080/18081 占用 + native process
+make dev-status   # 看容器狀態 + port 18080/18081 占用 + native process
 make dev-logs     # tail atlas-go 啟動 log(若 go run 在背景)
 make dev-stop     # 收尾:停 docker deps(注意:不會 kill native atlas-go,用 CTRL+C 或 kill <pid>)
 ```
@@ -159,20 +159,20 @@ make dev-stop     # 收尾:停 docker deps(注意:不會 kill native atlas-go,�
 **前置**:
 - `~/.config/atlas-go/.env` 存在(同 2.3)
 - `~/.config/atlas-go/.fubon-env/bin/python` 存在(若 `.env` 有 `FUBON_API_KEY`,ProcessManager 會用此 venv 的 Python spawn fubon-proxy)
-- Port 8080 在 host 沒被其他程式佔用(`make dev-status` 會查;若被佔用會 error 讓你手動處理 — 因為 ProcessManager 也不 auto-kill 8080 衝突,可能誤殺 Chrome devtools / IDE)
+- Port 18080 在 host 沒被其他程式佔用(`make dev-status` 會查;若被佔用會 error 讓你手動處理 — 因為 ProcessManager 也不 auto-kill 18080 衝突,可能誤殺 Chrome devtools / IDE)
 
 **不該做的事**:
 - **不要** `docker compose up -d fubon-proxy` 跟 `make dev` 同時跑 → ProcessManager 看到 18081 healthy 跳過 spawn 看似 OK,但若 docker fubon-proxy 在 restart 中(暫時 unhealthy),ProcessManager 會 spawn 撞 18081 EADDRINUSE 進入 supervisor loop。dev 時讓 ProcessManager 唯一管 fubon-proxy。
-- **不要**修改 `internal/fubonproxy/manager.go` 試圖加「auto-kill port 8080 佔用者」邏輯 — port 8080 可能被 Chrome devtools / IDE LISTEN,自動 kill 風險太高。改由 user 手動 `docker compose stop atlas` 即可。
+- **不要**修改 `internal/fubonproxy/manager.go` 試圖加「auto-kill port 18080 佔用者」邏輯 — port 18080 可能被 Chrome devtools / IDE LISTEN,自動 kill 風險太高。改由 user 手動 `docker compose stop atlas` 即可。
 
 **驗證**(2026-06-28 實測):
 ```
 $ make dev
 ✅ postgres + redis healthy
-✅ port 8080 free
+✅ port 18080 free
 🚀 go run ./cmd/atlas -api
 ... (啟動 ~5s)
-dashboard api listening on :8080
+dashboard api listening on :18080
 fubonproxy.process_started (spawn native fubon-proxy subprocess)
 fubonproxy.health_check_passed (login Fubon SDK 成功)
 /health → 200 ✓
@@ -186,11 +186,11 @@ fubonproxy.health_check_passed (login Fubon SDK 成功)
 
 ```bash
 # Liveness
-curl -fsS http://localhost:8080/health
+curl -fsS http://localhost:18080/health
 # Expected: {"status":"ok",...}
 
 # LLM provider readiness (deep, requires running pipeline)
-curl -fsS http://localhost:8080/api/llm/health
+curl -fsS http://localhost:18080/api/llm/health
 # Expected: {"providers":{"deepseek":{...},"minimax":{...}},"router_version":"..."}
 
 # Container status
@@ -264,7 +264,7 @@ docker compose up -d atlas-go
 
 # 3. Verify
 docker compose ps
-curl -fsS http://localhost:8080/health
+curl -fsS http://localhost:18080/health
 ```
 
 The image tag in `docker-compose.yml` follows `ghcr.io/kaecer68/atlas-go:<git-sha>`. Update by:
@@ -287,8 +287,8 @@ docker compose up -d atlas-go
 
 # Verify
 docker compose ps  # all containers "healthy"
-curl -fsS http://<host>:8080/health
-curl -fsS http://<host>:8080/api/llm/health
+curl -fsS http://<host>:18080/health
+curl -fsS http://<host>:18080/api/llm/health
 ```
 
 > **Note**: atlas-go is a **single-host Docker deployment**, not a Kubernetes cluster. For multi-host / cloud-managed, you'd need to refactor `docker-compose.yml` to a Helm chart or similar.
@@ -389,7 +389,7 @@ Some scripts (e.g., `check_data_naming.sh`, `check_layer3_benchmarks.sh`) take 3
 ### `docker compose up` fails with "port already in use"
 
 ```bash
-lsof -ti :8080 | xargs kill -9   # kill anything on 8080
+lsof -ti :18080 | xargs kill -9   # kill anything on 18080
 docker compose down              # stop compose-managed containers
 docker compose up -d
 ```

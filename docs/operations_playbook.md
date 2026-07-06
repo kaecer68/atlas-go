@@ -73,8 +73,8 @@ The Unified Control Tower has been split into two SPAs: `admin_web/` (operator) 
 
 ### Entry points
 
-- Admin: `http://localhost:8080/admin/` after starting `go run ./cmd/atlas -api`.
-- Investor (default landing): `http://localhost:8080/` redirects to `/client/`.
+- Admin: `http://localhost:18080/admin/` after starting `go run ./cmd/atlas -api`.
+- Investor (default landing): `http://localhost:18080/` redirects to `/client/`.
 
 ### Page workflow (decision logic)
 
@@ -265,11 +265,11 @@ v0.0.0.23（PR #886，`fix/review-fixes-round1`）新增 `GET /ready` readiness 
 **運維檢查**：K8s deployment 應分開設定兩種 probe：
 ```yaml
 livenessProbe:
-  httpGet: { path: /health, port: 8080 }
+  httpGet: { path: /health, port: 18080 }
   initialDelaySeconds: 10
   periodSeconds: 30
 readinessProbe:
-  httpGet: { path: /ready, port: 8080 }
+  httpGet: { path: /ready, port: 18080 }
   initialDelaySeconds: 30
   periodSeconds: 10
 ```
@@ -278,7 +278,7 @@ readinessProbe:
 
 ### 2. 啟動時固定 10 秒延遲
 
-**症狀**：`run_api` 或 `runLiveTrading` 啟動後 log 顯示 `server_startup_ok component=main addr=:8080` 總是在啟動後約 10 秒才出現，期間無任何 progress log。
+**症狀**：`run_api` 或 `runLiveTrading` 啟動後 log 顯示 `server_startup_ok component=main addr=:18080` 總是在啟動後約 10 秒才出現，期間無任何 progress log。
 
 **根因**：v0.0.0.23 引入 server goroutine 兩階段 lifecycle：
 1. **Startup window（10s）**：goroutine 啟動後主流程等待 `time.NewTimer(10s)` 或 `srvErr` / signal / `deps.shutdown` 任一觸發
@@ -583,29 +583,29 @@ To run strict governance verification with scenario diversity:
 
 ---
 
-## Port 8080 Conflict Recovery
+## Port 18080 Conflict Recovery
 
-atlas 啟動時撞到 host port 8080 已被佔用,是最常見的本機與 Docker 啟動失敗情境之一。本節列出症狀辨識、兇手定位、修法選擇與驗證清單,涵蓋本機 binary 與 Docker 雙路徑。
+atlas 啟動時撞到 host port 18080 已被佔用,是最常見的本機與 Docker 啟動失敗情境之一。本節列出症狀辨識、兇手定位、修法選擇與驗證清單,涵蓋本機 binary 與 Docker 雙路徑。
 
 ### 1. Symptom
 
-以下任一現象出現,即可判定為 port 8080 衝突:
+以下任一現象出現,即可判定為 port 18080 衝突:
 
 - atlas 啟動 log 出現 `bind: address already in use` 後退出。
 - `docker compose up` 啟動 atlas container 後反覆 restart loop,`docker compose ps` 顯示 atlas 狀態在 `restarting` 與 `exited` 之間反覆切換。
-- `curl -fsS http://localhost:8080/health` 連線失敗(connection refused 或 timeout)。
-- `docker compose logs atlas` 出現 atlas 抱怨 8080 bind 失敗的 stack trace。
+- `curl -fsS http://localhost:18080/health` 連線失敗(connection refused 或 timeout)。
+- `docker compose logs atlas` 出現 atlas 抱怨 18080 bind 失敗的 stack trace。
 
 ### 2. Detection
 
-先找出佔住 8080 的行程 PID,再判斷它的身分。
+先找出佔住 18080 的行程 PID,再判斷它的身分。
 
 ```bash
-# macOS / Linux:列出 LISTEN 中的 8080
-lsof -i :8080
+# macOS / Linux:列出 LISTEN 中的 18080
+lsof -i :18080
 
 # 或更精準,只列 LISTEN 狀態
-sudo lsof -nP -iTCP:8080 -sTCP:LISTEN
+sudo lsof -nP -iTCP:18080 -sTCP:LISTEN
 ```
 
 拿到 PID 後,確認是哪個 process:
@@ -627,7 +627,7 @@ ps -p <PID> -o pid,command
 
 #### 3.1 atlas zombie
 
-代表上次啟動沒正常結束,8080 仍被舊行程咬住。
+代表上次啟動沒正常結束,18080 仍被舊行程咬住。
 
 ```bash
 # 優雅終止(預期 SIGTERM 會讓 graceful shutdown 跑完)
@@ -640,21 +640,21 @@ kill -9 <PID>
 go run ./cmd/atlas
 ```
 
-驗證 `lsof -i :8080` 應回空。
+驗證 `lsof -i :18080` 應回空。
 
 #### 3.2 fubon-proxy
 
-fubon-proxy 是另一個獨立服務,啟動時若與 atlas 撞 8080 也不奇怪。重點是:**不要直接 `kill`**,可能導致它的 supervision 狀態損壞或留孤兒行程。
+fubon-proxy 是另一個獨立服務,啟動時若與 atlas 撞 18080 也不奇怪。重點是:**不要直接 `kill`**,可能導致它的 supervision 狀態損壞或留孤兒行程。
 
 正確處置(三選一):
 
-1. **用 fubon-supervisor graceful stop**:若 supervisor 已啟動,呼叫它的 stop API 或 CLI,讓它走完整 shutdown 流程,8080 釋出後再啟動 atlas。
-2. **改 fubon-proxy 啟動 port**:若環境支援,暫時把 fubon-proxy 綁到 8082(`-addr :8082` 之類的 flag,視 fubonproxy 套件啟動方式而定),讓 atlas 拿回 8080。
-3. **重啟 atlas container 等 supervisor 重試**:若 atlas 是 Docker 啟動而 fubon-proxy 是 host process,先關 fubon-proxy 後 `docker compose restart atlas`,atlas 啟動時若仍撞 8080 會在 supervisor 的 backoff 後重試,等到 8080 釋出就成功。
+1. **用 fubon-supervisor graceful stop**:若 supervisor 已啟動,呼叫它的 stop API 或 CLI,讓它走完整 shutdown 流程,18080 釋出後再啟動 atlas。
+2. **改 fubon-proxy 啟動 port**:若環境支援,暫時把 fubon-proxy 綁到 8082(`-addr :8082` 之類的 flag,視 fubonproxy 套件啟動方式而定),讓 atlas 拿回 18080。
+3. **重啟 atlas container 等 supervisor 重試**:若 atlas 是 Docker 啟動而 fubon-proxy 是 host process,先關 fubon-proxy 後 `docker compose restart atlas`,atlas 啟動時若仍撞 18080 會在 supervisor 的 backoff 後重試,等到 18080 釋出就成功。
 
 #### 3.3 foreign process
 
-不是 atlas 也不是 fubon-proxy,是其他開發工具或舊 process 佔住 8080。兩個選擇:
+不是 atlas 也不是 fubon-proxy,是其他開發工具或舊 process 佔住 18080。兩個選擇:
 
 **c1. 停掉那個 process**(若你知道它是什麼且可停):
 
@@ -671,36 +671,36 @@ kill -9 <PID>   # 必要時強制
 go run ./cmd/atlas -addr :8082
 ```
 
-Docker compose:編輯 `docker-compose.yml`,把 atlas service 的 host port 從 `8080:8080` 改成 `8082:8080`:
+Docker compose:編輯 `docker-compose.yml`,把 atlas service 的 host port 從 `18080:18080` 改成 `8082:18080`:
 
 ```yaml
 services:
   atlas:
     ports:
-      - "8082:8080"
+      - "8082:18080"
 ```
 
 改完後 `docker compose up -d atlas`,驗證時用 `curl http://localhost:8082/health`。
 
 ### 4. Docker Mode Caveat
 
-container 內的 `localhost:8080` 永遠是空閒的(每個 container 有自己的 loopback 介面)。以下情境很常誤導:
+container 內的 `localhost:18080` 永遠是空閒的(每個 container 有自己的 loopback 介面)。以下情境很常誤導:
 
-> `docker compose up` atlas container 顯示啟動成功,`docker compose ps` atlas 是 `Up`,但 host 端 `curl localhost:8080/health` 失敗。
+> `docker compose up` atlas container 顯示啟動成功,`docker compose ps` atlas 是 `Up`,但 host 端 `curl localhost:18080/health` 失敗。
 
-這不是 atlas container 內部 port 被佔,而是 **host port 8080** 已經被另一個 process 咬住,Docker daemon 無法把 host 8080 轉發到 container 8080。Docker log 不會報錯,因為 container 內 bind 的是 container 自己的 8080,完全沒問題。
+這不是 atlas container 內部 port 被佔,而是 **host port 18080** 已經被另一個 process 咬住,Docker daemon 無法把 host 18080 轉發到 container 18080。Docker log 不會報錯,因為 container 內 bind 的是 container 自己的 18080,完全沒問題。
 
 修法是操作 host 上的舊容器或 process:
 
 ```bash
-# 先看哪個舊容器還掛著 8080
-docker ps --filter expose=8080
+# 先看哪個舊容器還掛著 18080
+docker ps --filter expose=18080
 
 # 停掉所有 atlas 相關舊容器
 docker compose down
 
-# 或強制刪除所有 expose 8080 的容器
-docker rm -f $(docker ps -aq --filter expose=8080)
+# 或強制刪除所有 expose 18080 的容器
+docker rm -f $(docker ps -aq --filter expose=18080)
 
 # 然後重新啟動
 docker compose up -d atlas
@@ -713,8 +713,8 @@ docker compose up -d atlas
 #### 5.1 本機 binary
 
 ```bash
-# 一行殺光所有 LISTEN 8080 的行程(謹慎使用,確認沒有重要 process)
-lsof -ti :8080 | xargs kill -9
+# 一行殺光所有 LISTEN 18080 的行程(謹慎使用,確認沒有重要 process)
+lsof -ti :18080 | xargs kill -9
 
 # 重啟 atlas
 go run ./cmd/atlas
@@ -727,14 +727,14 @@ go run ./cmd/atlas
 docker compose down && docker compose up -d atlas
 
 # 驗證 health
-curl -fsS http://localhost:8080/health
+curl -fsS http://localhost:18080/health
 ```
 
 ### 6. Verify
 
 確認衝突解除且 atlas 正常服務:
 
-- [ ] `curl -fsS http://localhost:8080/health` 回 200,內容 `{"status":"ok",...}`。
+- [ ] `curl -fsS http://localhost:18080/health` 回 200,內容 `{"status":"ok",...}`。
 - [ ] `docker compose ps` atlas 狀態為 `Up` / `healthy`(若用 Docker)。
-- [ ] `lsof -i :8080` 顯示 atlas 行程(或 docker-proxy)為唯一 LISTEN 進程。
-- [ ] Dashboard 可訪問:`http://localhost:8080/admin/` 與 `http://localhost:8080/client/` 都能載入。
+- [ ] `lsof -i :18080` 顯示 atlas 行程(或 docker-proxy)為唯一 LISTEN 進程。
+- [ ] Dashboard 可訪問:`http://localhost:18080/admin/` 與 `http://localhost:18080/client/` 都能載入。

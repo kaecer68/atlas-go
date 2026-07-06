@@ -24,7 +24,7 @@ go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
 
 其中 live-broker 測試子集（`main_test.go` line 194/281/346 + `live_mode_test.go`）需要：
 - 啟動完整的 Go process
-- 啟動 HTTP server on port 8080
+- 啟動 HTTP server on port 18080
 - 連線 PostgreSQL（用 docker exec repair 機制）
 - 連線 Redis
 - 連線 fubon-proxy（可能 live-broker）
@@ -41,9 +41,9 @@ go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
 - 在 coverage binary instrumentation 環境下，flag 解析與 timing 可能與 prod 不一致，誤判 preflight 行為
 - coverage instrumentation 增加 attack surface 進入 live-broker test 路徑（雖然理論上隔離）
 
-### 2.3 Port 8080 衝突的高敏感度
+### 2.3 Port 18080 衝突的高敏感度
 
-`cmd/atlas` 測試需要獨占 `port 8080`。當 coverage instrumentation 介入時，可能在 coverage dump 階段啟動額外的 process，導致 port 衝突與 flaky test。
+`cmd/atlas` 測試需要獨占 `port 18080`。當 coverage instrumentation 介入時，可能在 coverage dump 階段啟動額外的 process，導致 port 衝突與 flaky test。
 
 ## 3. 已知後果
 
@@ -60,7 +60,7 @@ go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
 
 1. **PostgreSQL test infra race condition 修好後**（見 `.omo/plans/ci-verify-verification-2026-07-01.md` T-103）
    - 4 個 live-broker 測試不再 flaky 時，可考慮收入 coverage
-2. **port 8080 衝突機制強化**（T-104: TestMain 加 `ATLAS_PORT_OVERRIDE` skip 機制）
+2. **port 18080 衝突機制強化**（T-104: TestMain 加 `ATLAS_PORT_OVERRIDE` skip 機制）
    - 環境可重現時，coverage 收集更穩定
 3. **cmd/atlas 內部邏輯大量擴充**（>20% Go 程式碼成長）
    - 排除成本超過整合成本時

@@ -82,7 +82,7 @@
 
 ### 映像來源
 - 註冊表：`ghcr.io/kaecer68/atlas-go`（`ci-cd.yml` main/develop 自動建置推送）
-- Dockerfile：multi-stage（Node.js 前端 + Go 1.26 後端），expose port 8080
+- Dockerfile：multi-stage（Node.js 前端 + Go 1.26 後端），expose port 18080
 - compose 設定：`docker-compose.yml`（healthcheck、env vars、postgres）
 
 ### 環境變數（統一由 `~/.config/atlas-go/.env` 載入）
@@ -124,10 +124,10 @@ docker compose ps
 
 ```bash
 # Liveness（基礎健康）
-curl -fsS http://localhost:8080/health
+curl -fsS http://localhost:18080/health
 
 # LLM Readiness（深度健康 — 含 Provider 狀態、Router 版本）
-curl -fsS http://localhost:8080/api/llm/health
+curl -fsS http://localhost:18080/api/llm/health
 ```
 
 預期回傳：
@@ -141,9 +141,9 @@ curl -fsS http://localhost:8080/api/llm/health
 # scripts/verify_deploy.sh
 set -e
 echo "=== Liveness ==="
-curl -fsS http://localhost:8080/health | jq .
+curl -fsS http://localhost:18080/health | jq .
 echo "=== LLM Health ==="
-curl -fsS http://localhost:8080/api/llm/health | jq .
+curl -fsS http://localhost:18080/api/llm/health | jq .
 echo "=== Container Status ==="
 docker compose ps --format json | jq -s 'map({name, state, health})'
 ```

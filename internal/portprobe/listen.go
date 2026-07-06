@@ -18,7 +18,7 @@ import (
 // On EADDRINUSE, Listen probes the address to identify the occupant and
 // returns a wrapped error describing the state, PID, and command so the
 // operator can act via the runbook (see
-// docs/operations_playbook.md → "Port 8080 Conflict Recovery").
+// docs/operations_playbook.md → "Port 18080 Conflict Recovery").
 //
 // Self-PID guard: the current process is never reported as a killable
 // occupant; the diagnostic message always includes the running pid so the
@@ -31,8 +31,8 @@ import (
 // belongs to the runbook, not the bind path.
 //
 // Probe-before-bind ordering: Probe runs first because on macOS a
-// wildcard listener (e.g. 0.0.0.0:8080) and a loopback listener (e.g.
-// 127.0.0.1:8080) can coexist due to SO_REUSEADDR semantics, producing a
+// wildcard listener (e.g. 0.0.0.0:18080) and a loopback listener (e.g.
+// 127.0.0.1:18080) can coexist due to SO_REUSEADDR semantics, producing a
 // false-positive net.Listen success. Probe cross-checks both wildcard
 // families and lsof, which catches the false-positive before we hand a
 // duplicate listener back to the caller.
@@ -77,7 +77,7 @@ func formatOccupantDiagnostic(addr string, state State, occ Occupant) error {
 		return fmt.Errorf("portprobe: %s already serving by pid %d (%s) (self=%d); refusing to start: another healthy atlas instance may be running",
 			addr, occ.PID, occ.Command, self)
 	case StateForeign:
-		return fmt.Errorf("portprobe: %s occupied by foreign pid %d (%s) (self=%d); see docs/operations_playbook.md → \"Port 8080 Conflict Recovery\" before killing",
+		return fmt.Errorf("portprobe: %s occupied by foreign pid %d (%s) (self=%d); see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\" before killing",
 			addr, occ.PID, occ.Command, self)
 	default:
 		return fmt.Errorf("portprobe: %s in use by pid %d (%s) (self=%d)",

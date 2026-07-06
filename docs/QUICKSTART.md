@@ -6,7 +6,7 @@
 ## 快速啟動
 
 ```bash
-go run ./cmd/atlas                          # HTTP server (port 8080)
+go run ./cmd/atlas                          # HTTP server (port 18080)
 go run ./cmd/run-experiment -brief <file>   # 實驗生命週期
 go run ./cmd/judge-experiment               # 評判 (auto-discovers latest)
 go run ./cmd/promote-baseline               # 升版 (auto-discovers latest accepted)

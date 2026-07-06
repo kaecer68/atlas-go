@@ -52,8 +52,8 @@ Core path:
 # .env
 FUBON_API_KEY=your_api_key
 FUBON_PERSONAL_ID=your_id_number  # Required for DMA login
-# Fubon proxy URL is fixed: host.docker.internal:8081 in containers,
-# 127.0.0.1:8081 when running natively (ProcessManager).
+# Fubon proxy URL is fixed: host.docker.internal:18081 in containers,
+# 127.0.0.1:18081 when running natively (ProcessManager).
 # Env override removed 2026-06 (PR #572).
 ```
 

@@ -19,7 +19,7 @@
 - [ ] **Flag flip**: 編輯 `configs/parameters.json`,把 `orchestrator.use_llm_sector_agents.value` 由 `false` 改為 `true`,`source` 仍保持 `experimental`。
 - [ ] **Env var 設定**: 除 JSON 旗標外,還須設 `LLM_SECTOR_AGENTS_ENABLED=true`(由 `config/config.go` 讀取,傳遞鏈:`LLMSectorAgentsEnabled` → `factory.go` → `WithLLMSectorAgents(driver)` → 註冊 `llmSectorAgentsPlugin`)。缺此 env var plugin 不會註冊,driver 不會注入。
 - [ ] **重啟服務**: flag 在啟動時讀取,無 hot-reload。執行 `docker compose restart atlas` 確認新行程載入配置。
-- [ ] **Health 端點**: `curl -fsS http://localhost:8080/api/llm/health` 回 `router_version: v2.1`,三個 Provider 至少 Primary 為 healthy。
+- [ ] **Health 端點**: `curl -fsS http://localhost:18080/api/llm/health` 回 `router_version: v2.1`,三個 Provider 至少 Primary 為 healthy。
 - [ ] **slog 設定確認**: `recommendation.symbol` 必須出現在 log output(JSON 格式),`agent_loop.start` event 可見。
 - [ ] **Log 檔案建檔**: _待後續 PR 提供觀察記錄範本後,於啟用日建立並標註啟動日期。_
 - [ ] **L2.4 schedule 面板確認**: 開 `http://<host>/admin/#page-synergy`,確認 L2.4 排程面板有渲染(status badge + 預設值 + 4 按鈕)。若「載入中…」持續顯示,代表 `l24Mgr.SetConfig` 沒在 boot 跑成功(見 PR #821 commit `f2c37c61`)。
