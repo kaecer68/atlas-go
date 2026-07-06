@@ -1,7 +1,7 @@
 /* Atlas Dashboard - Workflow */
 .workflow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
-.workflow .step { background: var(--bg); border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; font-size: 12px; color: var(--muted); }
+.workflow .step { background: var(--bg); border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; font-size: var(--text-sm); color: var(--muted); }
 .workflow .step.active { border-color: var(--accent); color: var(--accent); }
 .workflow .step.clickable { cursor: pointer; transition: background .15s, border-color .15s; }
 .workflow .step.clickable:hover { background: rgba(56,189,248,0.08); border-color: var(--accent); color: var(--text); }
-.workflow .arrow { color: var(--muted); font-size: 12px; }
+.workflow .arrow { color: var(--muted); font-size: var(--text-sm); }

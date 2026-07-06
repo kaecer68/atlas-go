@@ -36,7 +36,7 @@
 
 .pr-period-btn.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   box-shadow: 0 2px 8px rgba(79, 193, 255, 0.3);
 }
 

@@ -39,7 +39,7 @@
   background: var(--bg);
   color: var(--fg, inherit);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.3;
   cursor: pointer;
   transition: background-color .12s ease, border-color .12s ease, color .12s ease;
@@ -59,7 +59,7 @@
 .rc-summary__left button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--bg, #fff);
+  color: var(--bg);
 }
 .rc-summary__left button.primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 88%, #000 12%);
@@ -68,7 +68,7 @@
 .rc-summary__left button.danger {
   background: var(--color-danger);
   border-color: var(--color-danger);
-  color: var(--bg, #fff);
+  color: var(--bg);
 }
 .rc-summary__left button.danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-danger) 88%, #000 12%);
@@ -96,7 +96,7 @@
 }
 .rc-summary__score {
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--text-base);
   color: var(--fg, inherit);
   white-space: nowrap;
 }
@@ -105,8 +105,8 @@
    channels.json so users see the channel is intentionally off (vs an outage).
    Token-only; no hex values. */
 .badge.status-disabled {
-  background: color-mix(in srgb, var(--muted, #888) 18%, transparent);
-  color: var(--muted, #888);
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--muted);
   border: 1px solid var(--border);
 }
 

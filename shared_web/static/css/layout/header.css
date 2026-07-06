@@ -2,5 +2,5 @@
 header { padding: 18px 20px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 header h1 { margin: 0 0 4px; font-size: var(--text-2xl); font-weight: var(--font-bold); letter-spacing: -0.02em; }
 header p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
-header a { color: var(--accent); text-decoration: none; font-size: 13px; }
+header a { color: var(--accent); text-decoration: none; font-size: var(--text-base); }
 /* .health-bar and .pill removed — unused across all pages */

@@ -22,6 +22,9 @@
   --accent: #4fc1ff; --accent-secondary: #8b5cf6; --accent-tertiary: #10b981;
   /* RGB triplet 版本,供 rgba(var(--xxx-rgb), alpha) 使用 */
   --accent-rgb: 79,193,255; --color-danger-rgb: 239,68,68;
+  --color-warning-rgb: 245,158,11; /* --color-warning (#f59e0b) RGB */
+  --color-success-rgb: 16,185,129; /* --color-success (#10b981) RGB */
+  --color-info-rgb: 59,130,246; /* --color-info (#3b82f6) RGB */
   /* 市場方向：台股紅漲綠跌 */
   --bullish: #ef4444; --bearish: #10b981;
   --up: var(--bullish); --down: var(--bearish); --warn: var(--color-warning);
@@ -56,6 +59,7 @@
   /* 字體尺寸系統 */
   --text-xs: 10px;
   --text-sm: 11px;
+  --text-md: 15px;
   --text-base: 13px;
   --text-lg: 14px;
   --text-xl: 16px;
@@ -131,6 +135,8 @@
   --surface-bullish: rgba(var(--trend-bullish-rgb), 0.06);
   --surface-bearish: rgba(var(--trend-bearish-rgb), 0.06);
   --surface-warning: rgba(245, 158, 11, 0.06);
+  --surface-success: rgba(var(--color-success-rgb), 0.1);
+  --surface-info: rgba(var(--color-info-rgb), 0.1);
 }
 :root[data-theme="light"] {
   --bg: #f5f5f5; --panel: #ffffff; --border: #e0e0e0; --text: #1a1a1a; --muted: #666666;

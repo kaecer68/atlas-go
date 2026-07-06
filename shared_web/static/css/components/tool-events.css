@@ -25,7 +25,7 @@
   font-size: var(--text-xs);
   color: var(--muted);
 }
-.tool-event-icon { font-size: 16px; }
+.tool-event-icon { font-size: var(--text-xl); }
 .tool-event-desc {
   flex: 1;
   font-size: var(--text-sm);
@@ -34,7 +34,7 @@
   text-overflow: ellipsis;
 }
 .tool-event-badge {
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: 2px 6px;
   border-radius: 4px;
   display: inline-flex;
@@ -55,7 +55,7 @@
   padding: 10px;
   background: var(--panel-l3);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--muted);
   overflow-x: auto;
 }

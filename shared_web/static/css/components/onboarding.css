@@ -56,7 +56,7 @@
 }
 .onboard-card__btn--primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
 }
 .onboard-card__btn--skip {
   background: transparent;

@@ -1,3 +1,3 @@
 /* Atlas Dashboard - View Controls */
-.view-btn { padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:12px;cursor:pointer;transition:all 0.15s }
+.view-btn { padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:var(--text-sm);cursor:pointer;transition:all 0.15s }
 .view-btn.active { background:var(--accent);color:var(--bg);border-color:var(--accent) }

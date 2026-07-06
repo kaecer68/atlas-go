@@ -1,7 +1,7 @@
 /* Atlas Dashboard - Risk Gate Panel */
 .risk-gate-mode-row {
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   border-top: 1px solid var(--border);
 }

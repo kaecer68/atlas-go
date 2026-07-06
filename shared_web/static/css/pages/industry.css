@@ -3,44 +3,44 @@
 .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
 .panel-header h2 { margin: 0; }
 .panel-header-actions { display: flex; align-items: center; gap: 8px; }
-.last-updated { font-size: 11px; color: var(--muted); min-width: 60px; text-align: right; }
-.refresh-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1.2; }
+.last-updated { font-size: var(--text-sm); color: var(--muted); min-width: 60px; text-align: right; }
+.refresh-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; cursor: pointer; color: var(--muted); font-size: var(--text-lg); line-height: 1.2; }
 .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
 .refresh-btn:disabled { cursor: wait; opacity: 0.6; }
 .refresh-btn.spinning { animation: sector-spin 1s linear infinite; display: inline-block; }
 @keyframes sector-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.industry-section h4 { margin: 0 0 8px; font-size: 13px; color: var(--accent); }
+.industry-section h4 { margin: 0 0 8px; font-size: var(--text-base); color: var(--accent); }
 .cycle-visual { display: flex; align-items: center; gap: 8px; margin: 12px 0; padding: 12px; background: var(--bg); border-radius: 8px; flex-wrap: wrap; }
-.cycle-phase { padding: 4px 10px; border-radius: 6px; font-size: 12px; background: var(--border); color: var(--muted); }
+.cycle-phase { padding: 4px 10px; border-radius: 6px; font-size: var(--text-sm); background: var(--border); color: var(--muted); }
 .cycle-phase.active { background: var(--accent); color: var(--bg); }
 .linkage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 600px) { .linkage-grid { grid-template-columns: 1fr; } }
-.linkage-col h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
-.linkage-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; margin-bottom: 6px; }
+.linkage-col h4 { margin: 0 0 6px; font-size: var(--text-sm); color: var(--muted); }
+.linkage-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: var(--text-sm); margin-bottom: 6px; }
 .risk-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
 .risk-item .risk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.risk-severity { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+.risk-severity { font-size: var(--text-sm); padding: 2px 8px; border-radius: 999px; }
 .risk-severity.high { background: rgba(217,58,58,.15); color: var(--color-danger); border: 1px solid rgba(217,58,58,.3); }
 /* .risk-severity.medium removed — unused modifier */
 .risk-severity.low { background: rgba(38,161,123,.15); color: var(--color-success); border: 1px solid rgba(38,161,123,.3); }
 .seasonal-pattern { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
-.seasonal-pattern .pattern-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
-.seasonal-pattern .pattern-meta { font-size: 11px; color: var(--muted); }
-.metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.seasonal-pattern .pattern-name { font-weight: 600; font-size: var(--text-base); margin-bottom: 4px; }
+.seasonal-pattern .pattern-meta { font-size: var(--text-sm); color: var(--muted); }
+.metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: var(--text-base); }
 .metric-row:last-child { border-bottom: none; }
 .metric-row .metric-label { color: var(--muted); }
 .metric-row .metric-value { font-weight: 600; }
 
 /* Industry network graph */
 .industry-graph__title {
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 6px;
   padding: 0 4px;
 }
 .industry-graph__subtitle {
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 400;
   color: var(--muted);
   margin-top: 2px;
@@ -54,7 +54,7 @@
   flex-wrap: wrap;
   gap: 12px;
   padding: 6px 4px 2px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--muted);
 }
 .industry-graph__legend-item {
@@ -78,14 +78,14 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--text);
   box-shadow: 0 4px 12px rgba(0,0,0,.3);
   min-width: 120px;
 }
 .industry-graph__tooltip strong {
-  font-size: 12px;
+  font-size: var(--text-sm);
   display: block;
   margin-bottom: 3px;
 }

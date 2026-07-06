@@ -23,7 +23,7 @@
 .progress-step.completed { opacity: 0.8; }
 .progress-step.active { opacity: 1; transform: scale(1.05); }
 .step-icon {
-  font-size: 20px;
+  font-size: var(--text-2xl);
   background: var(--panel-l3);
   width: 40px;
   height: 40px;
@@ -68,7 +68,7 @@
   padding: 10px 14px;
   background: var(--panel-l3);
   border-radius: 6px;
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.5;
   color: var(--muted);
   text-align: center;

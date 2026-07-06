@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
 }
 .table-pagination button {
@@ -14,7 +14,7 @@
   padding: 4px 10px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 .table-pagination button:disabled { opacity: .4; cursor: not-allowed; }
 .table-pagination button:hover:not(:disabled) { border-color: var(--accent); }

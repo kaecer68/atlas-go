@@ -8,6 +8,7 @@ import {
 } from "../shared/app-utils.js";
 import { renderIndustrySeasonality, renderSeasonalityList, renderSeasonalityCalendar } from '../shared/components/seasonality-panel.js';
 import { getThemeColor } from "../shared/utils.js";
+import { hexToRgba } from "../shared/color-tokens.js";
 
 export async function loadIndustryData() {
   try {
@@ -146,14 +147,6 @@ export function renderIndustryMap(data) {
   });
   html += "</div>";
   el.innerHTML = html;
-}
-
-function hexToRgba(hex, alpha) {
-  if (!hex || !hex.startsWith("#")) return hex;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function confidenceColor(hex, confidence) {

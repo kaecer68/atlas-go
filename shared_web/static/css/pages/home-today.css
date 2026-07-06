@@ -61,7 +61,7 @@
   border-radius: 50%;
   background: var(--panel-l2);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   cursor: help;
   margin-left: 6px;

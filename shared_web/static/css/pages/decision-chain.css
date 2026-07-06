@@ -21,7 +21,7 @@
 }
 .dc-panel-header:hover { background: var(--panel-l3); }
 .dc-arrow {
-  font-size: 11px;
+  font-size: var(--text-sm);
   transition: transform 0.2s;
   flex-shrink: 0;
 }

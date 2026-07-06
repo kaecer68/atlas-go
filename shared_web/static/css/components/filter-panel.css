@@ -7,14 +7,14 @@
   border: 1px solid var(--border);
   padding: 6px 12px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text);
   cursor: pointer;
   transition: border-color .15s, background .15s;
 }
 .filter-toggle:hover { border-color: var(--accent); background: rgba(79,193,255,.05); }
 .filter-toggle.active { border-color: var(--accent); color: var(--accent); background: rgba(79,193,255,.08); }
-.filter-toggle .icon { font-size: 14px; }
+.filter-toggle .icon { font-size: var(--text-lg); }
 .filter-panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -44,7 +44,7 @@
   min-width: 140px;
 }
 .filter-group label {
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--muted);
   font-weight: 500;
   text-transform: uppercase;
@@ -55,7 +55,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text);
   transition: border-color .15s;
 }
@@ -77,7 +77,7 @@
   color: var(--text);
   padding: 5px 12px;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all .15s;
 }
@@ -93,6 +93,6 @@
   color: var(--accent);
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 .filter-active-badge::before { content: '●'; animation: pulseDot 1.5s infinite; }

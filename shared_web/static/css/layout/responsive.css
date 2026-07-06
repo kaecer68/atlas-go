@@ -29,14 +29,14 @@
   .control-group button, .control-group input, .control-group select {
     min-height: 44px;
     padding: 10px 14px;
-    font-size: 14px;
+    font-size: var(--text-lg);
   }
   #sidebar nav a {
     min-height: 44px;
     display: flex;
     align-items: center;
     padding: 10px 14px;
-    font-size: 14px;
+    font-size: var(--text-lg);
   }
   .pipeline-action { min-height: 44px; padding: 8px 12px; }
   .refresh { min-height: 44px; min-width: 44px; }
