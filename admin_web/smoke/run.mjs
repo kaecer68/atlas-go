@@ -48,21 +48,19 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/admin`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "overview,narrative,live,agents,experiments")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,evolution_panel,experiments,parameters,alerts,datachannels,swarm")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-// 允許的 page id 與其關鍵 selector（用來確認 page 已切換 active）
 const PAGE_SELECTORS = {
-  overview: "#page-overview",
+  home: "#page-home",
   evolution_panel: "#page-evolution_panel",
   synergy: "#page-synergy",
   narrative: "#page-narrative",
   industry: "#page-industry",
   "reasoning-trace": "#page-reasoning-trace",
   live: "#page-live",
-  agents: "#page-agents",
   experiments: "#page-experiments",
   reports: "#page-reports",
   controls: "#page-controls",
@@ -72,7 +70,6 @@ const PAGE_SELECTORS = {
   parameters: "#page-parameters",
   config: "#page-config",
   swarm: "#page-swarm",
-  prism: "#page-prism",
 };
 
 // 真正會造成 bug 的字串 pattern：浮點數 / 型別錯誤

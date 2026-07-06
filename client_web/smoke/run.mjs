@@ -53,17 +53,13 @@ const PAGES_ARG = (process.env.SMOKE_PAGES || "crossmarket,narrative,live,portfo
   .map((s) => s.trim())
   .filter(Boolean);
 
-// 允許的 page id 與其關鍵 selector（用來確認 page 已切換 active）
 const PAGE_SELECTORS = {
+  home: "#page-home",
   crossmarket: "#page-crossmarket",
-  evolution_panel: "#page-evolution_panel",
-  narrative: "#page-narrative",
   industry: "#page-industry",
+  narrative: "#page-narrative",
   pipeline: "#page-pipeline",
-  decision: "#page-decision",
-  live: "#page-live",
   portfolio: "#page-portfolio",
-  "performance-report": "#page-performance-report",
   strategies: "#page-strategies",
 };
 
