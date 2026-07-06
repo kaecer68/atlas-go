@@ -26,13 +26,13 @@
 go build -o bin/atlas-mcp ./cmd/atlas-mcp/
 
 # 啟動（stdio transport — 預設，Claude Desktop / Cursor / OpenCode 用）
-ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
+ATLAS_BASE_URL=http://127.0.0.1:18080 ATLAS_API_KEY=xxx ./bin/atlas-mcp
 
 # 啟動（streamable-HTTP transport，Bearer auth 強制）
 ATLAS_MCP_TRANSPORT=streamable-http \
 ATLAS_MCP_ADDR=127.0.0.1:9090 \
 ATLAS_MCP_TOKEN=$(openssl rand -hex 32) \
-ATLAS_BASE_URL=http://127.0.0.1:8080 \
+ATLAS_BASE_URL=http://127.0.0.1:18080 \
 ATLAS_API_KEY=xxx \
 ./bin/atlas-mcp
 
@@ -40,12 +40,12 @@ ATLAS_API_KEY=xxx \
 ATLAS_MCP_TRANSPORT=sse \
 ATLAS_MCP_ADDR=127.0.0.1:9090 \
 ATLAS_MCP_TOKEN=$(openssl rand -hex 32) \
-ATLAS_BASE_URL=http://127.0.0.1:8080 \
+ATLAS_BASE_URL=http://127.0.0.1:18080 \
 ATLAS_API_KEY=xxx \
 ./bin/atlas-mcp
 ```
 
-stdio 模式從 stdin 讀取 JSON-RPC 請求、往 stdout 寫入回應。`ATLAS_BASE_URL` 指向 atlas-go HTTP API（預設 `http://127.0.0.1:8080`）。
+stdio 模式從 stdin 讀取 JSON-RPC 請求、往 stdout 寫入回應。`ATLAS_BASE_URL` 指向 atlas-go HTTP API（預設 `http://127.0.0.1:18080`）。
 
 streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`），所有請求需帶 `Authorization: Bearer <ATLAS_MCP_TOKEN>` header，否則回傳 401。dev mode（`ATLAS_MCP_TOKEN=""`）允許無 token 存取，僅供本機開發使用。
 
@@ -57,7 +57,7 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 
 | 變數 | 預設值 | 用途 |
 |------|--------|------|
-| `ATLAS_BASE_URL` | `http://127.0.0.1:8080` | atlas-go HTTP API 基底 URL |
+| `ATLAS_BASE_URL` | `http://127.0.0.1:18080` | atlas-go HTTP API 基底 URL |
 | `ATLAS_API_KEY` | （未設） | 以 `X-API-Key` header 轉發至 atlas-go admin endpoints |
 | `ATLAS_MCP_TOKEN` | （未設） | Bearer token；SSE/HTTP transport 啟用後強制驗證（401 if missing/wrong） |
 | `ATLAS_MCP_AUDIT_LOG` | `/tmp/atlas-mcp-audit.log` | JSONL audit log 路徑。父目錄自動建立（mode 0700） |
@@ -78,7 +78,7 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
       "command": "/absolute/path/to/bin/atlas-mcp",
       "args": [],
       "env": {
-        "ATLAS_BASE_URL": "http://127.0.0.1:8080",
+        "ATLAS_BASE_URL": "http://127.0.0.1:18080",
         "ATLAS_API_KEY": "xxx",
         "ATLAS_MCP_TOKEN": "yyy",
         "ATLAS_MCP_AUDIT_LOG": "/var/log/atlas-mcp/audit.log"
@@ -101,7 +101,7 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {
-        "ATLAS_BASE_URL": "http://127.0.0.1:8080",
+        "ATLAS_BASE_URL": "http://127.0.0.1:18080",
         "ATLAS_API_KEY": "xxx"
       }
     }

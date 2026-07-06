@@ -83,10 +83,10 @@ grep -c '"annotations":\[\]' data/annotations.jsonl
 
 ```bash
 # 健康端點檢查
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/llm/health
+curl -s -o /dev/null -w "%{http_code}" http://localhost:18080/api/llm/health
 
 # 延遲統計（若有 metrics endpoint）
-curl -s http://localhost:8080/metrics | grep llm_request_duration
+curl -s http://localhost:18080/metrics | grep llm_request_duration
 ```
 
 **閾值**:

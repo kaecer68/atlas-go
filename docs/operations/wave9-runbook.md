@@ -16,7 +16,7 @@ docker ps --format '{{.Names}}: {{.Status}}' | grep atlas-go
 # 期望: Up <N> seconds (healthy)
 
 # 2. Prometheus scrape 成功(2 個 PR-926 metric)
-curl -s http://localhost:8080/metrics | grep -E "^atlas_(db_init|channel_health)"
+curl -s http://localhost:18080/metrics | grep -E "^atlas_(db_init|channel_health)"
 # 期望: 2 個 HELP/TYPE 區塊 + 對應 counter
 
 # 3. 5 個 detector 都 emit event(從 event log / Grafana logs 查)
@@ -112,7 +112,7 @@ docker compose build atlas && docker compose up -d atlas
 # 1. 直接測 us_yahoo 連通
 docker exec atlas-go sh -c 'curl -sS --max-time 5 https://query1.finance.yahoo.com/v7/finance/quote | head -3'
 # 2. 查 circuit breaker 狀態(需登入)
-curl -s -H "X-API-Key: $ATLAS_API_KEY" http://localhost:8080/api/dashboard/cross-market | jq '.data_status'
+curl -s -H "X-API-Key: $ATLAS_API_KEY" http://localhost:18080/api/dashboard/cross-market | jq '.data_status'
 # 3. 暫時解:啟用 wave9 alert rule
 #    改 monitoring/rules/wave9_channel_individual_health.yml 的 enabled: "false" -> "true"
 #    重新部署
@@ -260,7 +260,7 @@ docker logs atlas-go --since 10m > /tmp/atlas-incident.log
 
 ```bash
 # Step 1: 確認 metric/service emit
-curl http://localhost:8080/metrics | grep atlas_channel_health_errors_total
+curl http://localhost:18080/metrics | grep atlas_channel_health_errors_total
 
 # Step 2: Alertmanager routing 加抑制標籤（避免歷史噪音誤觸）
 # 在 Alertmanager config 加:

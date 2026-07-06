@@ -11,7 +11,7 @@
 1. **fubon-proxy supervisor preflight** — `internal/portprobe/` 啟動檢查
 2. **Deployment dashboard 啟用** — `internal/adminapi/deployment/HandleDeploymentDashboard` 註冊到 admin route
 3. **Frontend component 載入** — `shared_web/static/js/components/deployment-dashboard.js` 經 esbuild shared plugin 載入
-4. **驗收** — `curl http://localhost:8080/api/admin/live/deployment/dashboard` 回 supervisor snapshot
+4. **驗收** — `curl http://localhost:18080/api/admin/live/deployment/dashboard` 回 supervisor snapshot
 
 ## 相關連結
 

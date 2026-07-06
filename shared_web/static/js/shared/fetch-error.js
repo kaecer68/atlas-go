@@ -34,7 +34,7 @@ export function classifyFetchError(err, url) {
       kind: 'network',
       message: '後端未啟動或無法連線',
       recoverable: true,
-      hint: '請確認 Go API 服務於 :8080 運行（執行 go run ./cmd/atlas --api）',
+      hint: '請確認 Go API 服務於 :18080 運行（執行 go run ./cmd/atlas --api）',
     };
   }
 

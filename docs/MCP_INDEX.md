@@ -22,7 +22,7 @@
 
 ```bash
 go build -o bin/atlas-mcp ./cmd/atlas-mcp/
-ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=your-key \
+ATLAS_BASE_URL=http://127.0.0.1:18080 ATLAS_API_KEY=your-key \
   ./bin/atlas-mcp
 ```
 
@@ -39,7 +39,7 @@ ATLAS_BASE_URL=http://127.0.0.1:8080 ATLAS_API_KEY=your-key \
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {
-        "ATLAS_BASE_URL": "http://127.0.0.1:8080",
+        "ATLAS_BASE_URL": "http://127.0.0.1:18080",
         "ATLAS_API_KEY": "your-key"
       }
     }
@@ -53,7 +53,7 @@ Claude Desktop 與 Cursor 採用相同 JSON schema,放置於各自的 MCP 設定
 
 呼叫 `system_get_health`。成功回應應包含 LLM provider 狀態、router 版本、系統整體健康度等欄位。
 
-若 timeout 或 4xx：`ATLAS_BASE_URL` / `ATLAS_API_KEY` 不對、或 atlas HTTP API 未啟動。請先確認 `curl http://127.0.0.1:8080/health` 回 `ok`。
+若 timeout 或 4xx：`ATLAS_BASE_URL` / `ATLAS_API_KEY` 不對、或 atlas HTTP API 未啟動。請先確認 `curl http://127.0.0.1:18080/health` 回 `ok`。
 
 ---
 

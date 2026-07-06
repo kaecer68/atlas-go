@@ -12,7 +12,7 @@ workflows:
     symbol: "cmd/atlas/main.go::runAPIServer"
     description: |
       API 服務入口。啟動 Dashboard API server、Gateway、Plugin chain 與 Fubon-proxy，
-      預設 listen :8080，是 atlas-go 主要長生命週期入口。
+      預設 listen :18080，是 atlas-go 主要長生命週期入口（見 internal/constants/port.go）。
     triggers:
       - cli: "--api"
     depends_on: []

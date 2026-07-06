@@ -36,7 +36,7 @@ PostgreSQL / Redis
 |------|-------------|
 | Go（build-time）| 1.26.4+（atlas-go 同版）|
 | Docker（optional）| multi-stage build 支援 1.18+ |
-| atlas-go 服務 | 同一台機或可連線的 HTTP endpoint（port 8080）|
+| atlas-go 服務 | 同一台機或可連線的 HTTP endpoint（port 18080）|
 | filesystem | audit log 寫入路徑（`$TMPDIR` 預設）需可寫 |
 | Network | stdio 無需 port；SSE/HTTP bind `127.0.0.1`（不對外） |
 
@@ -86,7 +86,7 @@ go test -count=1 -race ./cmd/atlas-mcp/...   # 99 tests, -race 綠
 
 | 變數 | 用途 | 預設 |
 |------|------|------|
-| `ATLAS_BASE_URL` | atlas-go HTTP API 基準 URL | `http://127.0.0.1:8080` |
+| `ATLAS_BASE_URL` | atlas-go HTTP API 基準 URL | `http://127.0.0.1:18080` |
 | `ATLAS_MCP_AUDIT_LOG` | JSONL audit log 路徑 | `$TMPDIR/atlas-mcp-audit.log` |
 
 ### 選用
@@ -172,7 +172,7 @@ ATLAS_MCP_TOKEN=$(openssl rand -hex 32) \
 
 | 變數 | 範例 |
 |------|------|
-| `ATLAS_BASE_URL` | `http://atlas-go:8080` |
+| `ATLAS_BASE_URL` | `http://atlas-go:18080` |
 | `ATLAS_API_KEY` | `<atlas-go admin API key>` |
 | `ATLAS_MCP_AUDIT_LOG` | `/var/log/atlas-mcp/audit.log` |
 | `ATLAS_MCP_TOKEN` | `<32-byte hex>`（必帶 `--auth=required`）|
@@ -188,7 +188,7 @@ services:
     build: .
     image: atlas-go:latest
     ports:
-      - "8080:8080"
+      - "18080:18080"
     environment:
       - DATABASE_URL=postgres://atlas:...@db/atlas
       - REDIS_URL=redis://cache:6379
@@ -232,13 +232,13 @@ services:
     command: ["-api"]
     environment:
       - ROLE=api
-    ports: ["8080:8080"]
+    ports: ["18080:18080"]
 
   atlas-mcp:
     image: atlas-go:latest
     environment:
       - ROLE=mcp
-      - ATLAS_BASE_URL=http://atlas-go:8080
+      - ATLAS_BASE_URL=http://atlas-go:18080
       - ATLAS_API_KEY=${ATLAS_API_KEY}
       - ATLAS_MCP_TOKEN=${ATLAS_MCP_TOKEN}
       - ATLAS_MCP_AUDIT_LOG=/var/log/atlas-mcp/audit.log
@@ -260,7 +260,7 @@ services:
       "command": "/usr/local/bin/atlas-mcp",
       "args": [],
       "env": {
-        "ATLAS_BASE_URL": "http://127.0.0.1:8080",
+        "ATLAS_BASE_URL": "http://127.0.0.1:18080",
         "ATLAS_API_KEY": "<your-key>",
         "ATLAS_MCP_AUDIT_LOG": "/tmp/atlas-mcp-audit.log"
       }
