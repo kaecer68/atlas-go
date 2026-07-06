@@ -13,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
@@ -28,7 +29,7 @@ func run(args []string) error {
 	start := fs.String("start", "2026-03-26", "backtest window start date (YYYY-MM-DD)")
 	end := fs.String("end", "2026-03-27", "backtest window end date (YYYY-MM-DD)")
 	serve := fs.Bool("serve", false, "start dashboard API server after backtest completes")
-	addr := fs.String("addr", ":8080", "dashboard API listen address (used with -serve)")
+	addr := fs.String("addr", constants.AdminHTTPPort, "dashboard API listen address (used with -serve)")
 	paramOverride := arrayFlags{}
 	fs.Var(&paramOverride, "param-override", "override a ParametersConfig value (repeatable: -param-override name=value)")
 	if err := fs.Parse(args); err != nil {

@@ -7,7 +7,7 @@
 //
 // 使用方式：
 //
-//	mgr := fubonproxy.NewManager(cfg.WorkDir, 0)            // 用預設 :8081
+//	mgr := fubonproxy.NewManager(cfg.WorkDir, 0)            // 用預設 port
 //	mgr := fubonproxy.NewManager(cfg.WorkDir, 9999)         // 用 -fubon-port flag override
 //	if err := mgr.Start(ctx); err != nil {
 //	    // 非致命：記錄警告後繼續
@@ -165,7 +165,7 @@ func NewManager(workDir string, port int) *ProcessManager {
 		if port != defaultFubonProxyPort {
 			logging.Info("fubonproxy", "custom_listen_port",
 				"port", port,
-				"message", "fubon-proxy 將綁定非預設 port(預設 8081);由 cmd/atlas -fubon-port flag 注入。",
+				"message", "fubon-proxy 將綁定非預設 port;由 cmd/atlas -fubon-port flag 注入。",
 			)
 		}
 		proxyListenPort = port
@@ -206,7 +206,7 @@ func SetFubonProxyPort(port int) {
 		if port != defaultFubonProxyPort {
 			logging.Info("fubonproxy", "custom_listen_port_setter",
 				"port", port,
-				"message", "fubon-proxy listen port 由 SetFubonProxyPort 設定為非預設值(預設 8081)",
+				"message", "fubon-proxy listen port 由 SetFubonProxyPort 設定為非預設值",
 			)
 		}
 		proxyListenPort = port
@@ -225,7 +225,7 @@ func SetFubonProxyPort(port int) {
 //
 // 注意:不使用 localhost,因為 macOS / Linux 雙棧環境下,Go net.Dial
 // 對 "localhost" 預設優先解析為 IPv6 [::1],而 fubon-proxy 只綁 IPv4 0.0.0.0,
-// 會出現 [::1]:8081: connect: connection refused(RCA: PR #495)。
+//	會出現 [::1]:<port>: connect: connection refused(RCA: PR #495)。
 const defaultProxyHost = "fubon-proxy"
 
 // defaultProxyHostVar 是執行期可覆寫的 proxy host,預設來自 const defaultProxyHost。
@@ -304,9 +304,9 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 		return fmt.Errorf("fubonproxy: script not found at %s: %w", m.scriptPath, err)
 	}
 
-	// Pre-flight port 8081 探測（F9 不變式）。
+	// Pre-flight port 探測（F9 不變式）。
 	// 目的：避免 spawn() 在 supervise() 內部 EADDRINUSE 失敗而進入
-	// backoff-loop（原始 bug：外部進程佔住 :8081 導致無限重啟 + 前端拿不到
+	// backoff-loop（原始 bug：外部進程佔住 port 導致無限重啟 + 前端拿不到
 	// fubon 資料）。三種狀態：
 	//   - portStateFree     — 可 spawn，走原本路徑
 	//   - portStateHealthy  — 外部 fubon-proxy 已管理 /health，跳過 spawn
@@ -314,7 +314,7 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	//
 	// probe 失敗時退化為「直接 spawn」，保留舊行為；supervise() 仍會在
 	// EADDRINUSE 時 retry，但我們已先把最常見的 lsof-not-found 情境 log 出來。
-	state, occupant, probeErr := m.probePort8081()
+	state, occupant, probeErr := m.probeProxyPort()
 	if probeErr != nil {
 		logging.Warn("fubonproxy", "port_probe_failed",
 			logging.Err(probeErr),
@@ -358,7 +358,7 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 						"message", "port not free after zombie kill; proceeding with re-probe",
 					)
 				}
-				newState, newOccupant, probeErr := m.probePort8081()
+				newState, newOccupant, probeErr := m.probeProxyPort()
 				if probeErr != nil {
 					logging.Warn("fubonproxy", "reprobe_failed_after_zombie_kill",
 						logging.Err(probeErr),
@@ -651,13 +651,13 @@ func (m *ProcessManager) Status() DeploymentStatus {
 	}
 }
 
-// probePort8081 探測 port 8081 占用狀態（F9 pre-flight）。
+// probeProxyPort 探測 fubon-proxy port 占用狀態（F9 pre-flight）。
 // 同步執行（< 100ms + lsof ~50ms）。
 // 用 wildcard (0.0.0.0, [::]) 而非 loopback (127.0.0.1, [::1]) probe：
 // Docker Desktop port forwarder 綁 wildcard，loopback bind 在 wildcard
 // 被佔時仍會成功，導致誤判 portStateFree。healthEndpoint 仍用 127.0.0.1
 // 因為 Python fubon-proxy 實際 bind target 是 IPv4 wildcard 0.0.0.0。
-func (m *ProcessManager) probePort8081() (portState, portOccupant, error) {
+func (m *ProcessManager) probeProxyPort() (portState, portOccupant, error) {
 	addr := "127.0.0.1:" + strconv.Itoa(proxyListenPort)
 	return portprobe.Probe(addr)
 }
@@ -690,7 +690,7 @@ func killOccupant(pid int) error {
 //   - canProceed=false, shouldStop=true: port 由外部 healthy fubon-proxy 管理，supervisor 應退出
 //   - canProceed=false, shouldStop=false: port 被佔用或探測失敗，應 retry/backoff
 func (m *ProcessManager) preparePortForRestart() (bool, bool) {
-	state, occupant, probeErr := m.probePort8081()
+	state, occupant, probeErr := m.probeProxyPort()
 	if probeErr != nil {
 		logging.Warn("fubonproxy", "restart_port_probe_failed",
 			logging.Err(probeErr),
@@ -724,7 +724,7 @@ func (m *ProcessManager) preparePortForRestart() (bool, bool) {
 				)
 				return false, false
 			}
-			newState, newOccupant, probeErr := m.probePort8081()
+			newState, newOccupant, probeErr := m.probeProxyPort()
 			if probeErr != nil {
 				logging.Warn("fubonproxy", "restart_reprobe_failed_after_zombie_kill",
 					logging.Err(probeErr),

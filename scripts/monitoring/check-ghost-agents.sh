@@ -6,11 +6,11 @@
 #   bash scripts/monitoring/check-ghost-agents.sh           # 一次性檢查
 #   */30 * * * * bash scripts/monitoring/check-ghost-agents.sh  # cron 每 30 分鐘
 #
-# 前置: atlas server 需在 localhost:8080 運行 (go run ./cmd/atlas -api -addr :8080)
+# 前置: atlas server 需在 localhost:18080 運行 (go run ./cmd/atlas -api -addr :18080)
 
 set -e
 
-API="${ATLAS_API:-http://localhost:8080}"
+API="${ATLAS_API:-http://localhost:18080}"
 THRESHOLD_GHOST_DAYS="${THRESHOLD_GHOST_DAYS:-7}"
 DATA_FILE="${ATLAS_DARWIN_STATE:-data/state/darwinian_weights.json}"
 
