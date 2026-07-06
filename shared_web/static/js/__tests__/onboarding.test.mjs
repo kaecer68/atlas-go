@@ -5,7 +5,10 @@ const elements = new Map();
 let localStore = {};
 
 global.document = {
-  body: null,
+  body: {
+    appendChild(el) { global.document._appended = el; },
+  },
+  _appended: null,
   createElement(tag) {
     const el = {
       tagName: tag.toUpperCase(),
@@ -28,7 +31,6 @@ global.document = {
   addEventListener() {},
   removeEventListener() {},
   getElementById() { return null; },
-  body: null,
 };
 
 global.localStorage = {

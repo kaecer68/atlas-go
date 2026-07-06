@@ -15,7 +15,7 @@ const STEPS = [
 ];
 
 export function initOnboarding() {
-  if (typeof document === 'undefined') return;
+  if (typeof document === 'undefined' || !document.body) return;
   try {
     if (localStorage.getItem(STORAGE_KEY) === '1') return;
   } catch (_) { return; }
