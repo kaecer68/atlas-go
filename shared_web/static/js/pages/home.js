@@ -390,7 +390,9 @@ function renderMarketPulse(macro, stress, crossStatus) {
     metricCard({ label: '散戶情緒', value: '—', tone: 'neutral', tooltip: '散戶多空比（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
   ];
 
-  grid.innerHTML = cards.join('');
+  if (grid) {
+    grid.innerHTML = cards.join('');
+  }
 }
 
 function explainFromEvent(e) {
@@ -424,11 +426,12 @@ function renderSignalStrip(events) {
 
   const active = events.filter(e => e && e.status === 'active');
   if (!active.length) {
-    el.innerHTML = '<div class="home-signal-empty">尚無主動信號 — 市場處於平靜期</div>';
-    return;
-  }
-
-  el.innerHTML = active.map(e => {
+if (!el) return;
+  el.innerHTML = '<div class="home-signal-empty">尚無主動信號 — 市場處於平靜期</div>';
+  return;
+ }
+ if (!el) return;
+ el.innerHTML = active.map(e => {
     const label = escapeHtml(getThemeLabel(e.theme));
     const sent = (e.sentiment || 0) >= 0 ? 'bullish' : 'bearish';
     const conf = e.confidence ? `${(e.confidence * 100).toFixed(0)}%` : '—';
@@ -488,8 +491,9 @@ function renderRecommendation(pipeline, stress) {
     reason = top.reason || `模型對 ${escapeHtml(top.symbol || '市場')} 的綜合評估為「${action}」，信心 ${confidence}%。`;
   }
 
-  card.innerHTML = `
-    <div class="home-recommendation__action">
+  if (card) {
+    card.innerHTML = `
+      <div class="home-recommendation__action">
       <span class="home-recommendation__label">${renderTooltip('建議行動', '模型根據當日市場壓力、外資流向與趨勢評分，給出的今日操作傾向（配置 / 觀望 / 減碼）。')}</span>
       <span class="home-recommendation__value home-recommendation__value--${tone}">${escapeHtml(action)}</span>
     </div>
