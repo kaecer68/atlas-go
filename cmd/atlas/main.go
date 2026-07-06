@@ -1549,8 +1549,6 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 	}
 }
 
-// buildBaseState queries the provider for current market state.
-// Falls back to placeholder values if provider fails (with warning log).
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, baselineMgr *baseline.Manager, apiAddr string, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
 	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)

@@ -16,7 +16,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/spawning"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 // TestPhase2Integration validates Darwinian Weights and Superinvestor Layer
@@ -122,7 +121,7 @@ func TestPhase2Integration(t *testing.T) {
 	})
 }
 
-// TestPhase3Integration validates Agent Spawning, PRISM, Reflexivity, and Swarm
+// TestPhase3Integration validates Agent Spawning, PRISM, and Reflexivity
 func TestPhase3Integration(t *testing.T) {
 	t.Run("AgentSpawningLifecycle", func(t *testing.T) {
 		t.Chdir(t.TempDir())
@@ -256,19 +255,6 @@ func TestPhase3Integration(t *testing.T) {
 		t.Logf("✓ Reflexivity engine operational")
 	})
 
-	t.Run("MiroFishSwarm", func(t *testing.T) {
-		config := swarm.DefaultSwarmConfig()
-		swarmInstance := swarm.NewSwarmState(config)
-
-		_ = swarmInstance.Start(context.Background())
-
-		// Verify swarm state is non-nil (deprecated mode)
-		if swarmInstance == nil {
-			t.Fatal("expected non-nil swarm instance")
-		}
-
-		t.Logf("✓ Swarm initialized (deprecated mode)")
-	})
 }
 
 // TestEndToEndWorkflow validates complete system workflow
@@ -398,18 +384,6 @@ func TestPerformance(t *testing.T) {
 		}
 	})
 
-	t.Run("SwarmSimulationPerformance", func(t *testing.T) {
-		config := swarm.DefaultSwarmConfig()
-		config.FishCount = 50
-
-		swarmInstance := swarm.NewSwarmState(config)
-
-		start := time.Now()
-		_ = swarmInstance.Start(context.Background())
-		duration := time.Since(start)
-
-		t.Logf("Swarm start (no-op in deprecated mode) took %v", duration)
-	})
 }
 
 // BenchmarkDarwinianAdjustment benchmarks weight adjustment calculations
