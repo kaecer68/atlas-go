@@ -72,7 +72,7 @@ func TestListen_OccupiedForeign(t *testing.T) {
 	if !strings.Contains(err.Error(), "foreign") {
 		t.Errorf("Listen error = %q, want substring 'foreign'", err.Error())
 	}
-	if !strings.Contains(err.Error(), "Port 8080 Conflict Recovery") {
+	if !strings.Contains(err.Error(), "Port 18080 Conflict Recovery") {
 		t.Errorf("Listen error = %q, want runbook reference", err.Error())
 	}
 }
