@@ -41,6 +41,7 @@
 | `SOXIndexProvider` | 費城半導體指數每日漲跌幅。 | range=5d，±30% bounds cap |
 | `CompositeMacroProvider` | 組合多個總經提供者的數據快照。 | 採 Last-write-wins 合併策略。 |
 | `BDIProvider` | 透過 CNBC JSON API 獲取波羅的海乾散貨指數 (`.BADI`) | 5s rate limit，回退至前一快照值 |
+| `TaiwanVolatilityProvider` | TAIEX (^TWII) 20 日歷史波動率。 | range=3mo (≥21 bars)，年化波動率 = σ(log_returns_20d) × √252。僅在 `cfg.YahooEnabled=true` 時註冊。寫入 `MacroDataSnapshot.HistoricalVolatility`。 |
 
 ---
 
