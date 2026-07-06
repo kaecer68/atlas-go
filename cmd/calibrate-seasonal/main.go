@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -84,7 +85,7 @@ func run(args []string) error {
 }
 
 func updateParametersFile(results []industry.SeasonalCalibration, threshold int, dataSource string) error {
-	paramsPath := "configs/parameters.json"
+	paramsPath := constants.ParametersFile
 
 	data, err := os.ReadFile(paramsPath)
 	if err != nil {

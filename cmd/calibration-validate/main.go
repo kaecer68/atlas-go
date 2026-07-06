@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 func main() {
-	path := flag.String("path", "configs/parameters.json", "path to params.json to validate")
+	path := flag.String("path", constants.ParametersFile, "path to params.json to validate")
 	maxAge := flag.Duration("max-age", 48*time.Hour, "max age for params.json before it's considered stale")
 	format := flag.String("format", "text", "output format: text|json")
 	flag.Parse()

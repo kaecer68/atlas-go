@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
@@ -157,7 +158,7 @@ func (s *IndustryService) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
 // GetCalibrationEvidence returns calibration metadata if seasonal patterns
 // have been calibrated against real market data.
 func (s *IndustryService) GetCalibrationEvidence() map[string]any {
-	return industry.LoadCalibrationEvidence("configs/parameters.json")
+	return industry.LoadCalibrationEvidence(constants.ParametersFile)
 }
 
 // RebuildCorrelations recomputes all pairwise industry correlations from return data.

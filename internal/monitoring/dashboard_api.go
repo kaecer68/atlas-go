@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -873,7 +874,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	taxHandlers := apitax.NewHandlers(a.ledgerDir, dividendProvider)
 	taxHandlers.RegisterRoutes(mux)
 
-	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
+	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, constants.ParametersFile))
 	paramHandlers.RegisterRoutes(mux)
 
 	mux.Handle("GET /api/config", configHandler())

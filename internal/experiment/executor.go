@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
@@ -87,7 +88,7 @@ func (e *Executor) Run(briefPath string, replayPath string) (domain.PromptExperi
 
 	// Capture parameter snapshot for experiment traceability
 	var paramSnapshotID string
-	paramsCfg, err := config.LoadParametersConfig("configs/parameters.json")
+	paramsCfg, err := config.LoadParametersConfig(constants.ParametersFile)
 	if err == nil {
 		snap := config.SnapshotForExperiment(paramsCfg, expID)
 		store := config.NewSnapshotStore("data/state/parameter-snapshots")

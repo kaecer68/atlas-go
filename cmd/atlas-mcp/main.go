@@ -176,7 +176,7 @@ func parseAllowedRoots(raw string) []string {
 // defaultParamsPath returns the conventional repo-relative path to
 // configs/parameters.json. main callers can override via ATLAS_MCP_PARAMS.
 func defaultParamsPath() string {
-	return "configs/parameters.json"
+	return constants.ParametersFile
 }
 
 // resolveRootsConfig merges parameters.json (mcp.roots section) with
@@ -195,7 +195,7 @@ func resolveRootsConfig() (server.RootsConfig, error) {
 			base = loaded
 		}
 	} else if loaded, err := loadMCPConfig(defaultParamsPath()); err != nil {
-		//nolint:gosec // G706: defaultParamsPath is a constant "configs/parameters.json"; not user-controlled.
+		//nolint:gosec // G706: defaultParamsPath is constants.ParametersFile; not user-controlled.
 		log.Printf("atlas-mcp: warning: failed to load %s: %v (using env-only)", defaultParamsPath(), err)
 	} else {
 		base = loaded

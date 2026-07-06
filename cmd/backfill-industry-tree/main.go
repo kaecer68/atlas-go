@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -126,7 +127,7 @@ func main() {
 
 	cfg.Industry.ClassificationTree = updated
 
-	if err := cfg.TryLockedSaveWithRollback("configs/parameters.json", 30*time.Second); err != nil {
+	if err := cfg.TryLockedSaveWithRollback(constants.ParametersFile, 30*time.Second); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to save config (skipping): %v\n", err)
 		return
 	}

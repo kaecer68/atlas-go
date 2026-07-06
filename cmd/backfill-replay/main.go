@@ -18,11 +18,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
-const finmindAPI = "https://api.finmindtrade.com/api/v4/data"
+const finmindAPI = constants.FinMindBaseURL + "/data"
 
 type finmindResp struct {
 	Msg    string `json:"msg"`
