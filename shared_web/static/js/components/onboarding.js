@@ -23,6 +23,7 @@ export function initOnboarding() {
   let step = 0;
   const overlay = document.createElement('div');
   overlay.className = 'onboard-overlay';
+  overlay.setAttribute('aria-label', '新手引導');
 
   function dismiss() {
     overlay.remove();
