@@ -333,8 +333,13 @@ function renderMarketPulse(macro, stress, crossStatus) {
   const trend = marketTrendDirection(taiexChange);
 
   // Foreign investor
+  // Foreign investor
   const foreign = pointValue(macro, 'foreign_investor_net');
   const foreignText = foreign !== null ? fmtSignedPct(foreign / 100, true) : '—';
+  const fundVal = pointValue(macro, 'domestic_fund_net');
+  const fundText = fundVal !== null ? fmtSignedPct(fundVal / 100, true) : '—';
+  const dealerVal = pointValue(macro, 'dealer_net');
+  const dealerText = dealerVal !== null ? fmtSignedPct(dealerVal / 100, true) : '—';
 
   // Stress
   const stressScore = pointValue(stress, 'score') || 0;
@@ -377,8 +382,8 @@ function renderMarketPulse(macro, stress, crossStatus) {
     metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'advanced-only card-priority-medium' }),
     metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'pro-only card-priority-low' }),
     metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'pro-only card-priority-low' }),
-    metricCard({ label: '投信動向', value: '—', tone: 'neutral', tooltip: '投信買賣超（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
-    metricCard({ label: '自營商', value: '—', tone: 'neutral', tooltip: '自營商買賣超（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '投信動向', value: fundText, tone: fundVal > 0 ? 'positive' : fundVal < 0 ? 'negative' : 'neutral', tooltip: '投信近一交易日買賣超（億元）。', extraClasses: 'pro-only card-priority-low' }),
+    metricCard({ label: '自營商', value: dealerText, tone: dealerVal > 0 ? 'positive' : dealerVal < 0 ? 'negative' : 'neutral', tooltip: '自營商近一交易日買賣超（億元）。', extraClasses: 'pro-only card-priority-low' }),
     metricCard({ label: '歷史波動', value: '—', tone: 'neutral', tooltip: '20 日歷史波動率（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
     metricCard({ label: '散戶情緒', value: '—', tone: 'neutral', tooltip: '散戶多空比（進階數據）。', extraClasses: 'pro-only card-priority-low' }),
   ];
