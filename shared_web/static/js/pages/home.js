@@ -328,6 +328,7 @@ function marketTrendDirection(changePct) {
 
 function renderMarketPulse(macro, stress, crossStatus) {
   const grid = document.getElementById('home-market-grid');
+  if (!grid) return;
 
   // TAIEX
   const taiexChange = pointChange(macro, 'taiex');
@@ -418,6 +419,7 @@ function truncate(str, max) {
 
 function renderSignalStrip(events) {
   const el = document.getElementById('home-signal-strip-content');
+  if (!el) return;
   if (!el) return;
 
   const active = events.filter(e => e && e.status === 'active');
@@ -626,6 +628,7 @@ function renderDemoPortfolioWithData(container) {
 
 function renderTrustFooter(availableSources = []) {
   const container = document.getElementById('home-trust-footer');
+  if (!container) return;
   const sources = availableSources.length > 0
     ? DATA_SOURCES.filter(s => availableSources.includes(s.key))
     : DATA_SOURCES;
