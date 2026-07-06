@@ -10,7 +10,7 @@
     "test:smoke": "node smoke/run.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.61.1",
     "esbuild": "^0.25.0",
     "playwright": "^1.60.0"
   }
