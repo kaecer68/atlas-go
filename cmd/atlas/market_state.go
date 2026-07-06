@@ -7,19 +7,18 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
-// buildBaseState constructs the initial swarm.MarketState used by the
+// buildBaseState constructs the initial domain.MarketState used by the
 // simulation's first cycle. It queries provider.GetQuotes for the given
 // symbols with a 5-second timeout; on failure (or per-symbol miss) it
 // falls back to a deterministic placeholder (price=100, volume=5M) so the
 // swarm can proceed even with partial data.
-func buildBaseState(provider marketdata.Provider, symbols []string) swarm.MarketState {
+func buildBaseState(provider marketdata.Provider, symbols []string) domain.MarketState {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	state := swarm.MarketState{
+	state := domain.MarketState{
 		Timestamp: time.Now(),
 		Prices:    make(map[string]float64),
 		Volumes:   make(map[string]float64),

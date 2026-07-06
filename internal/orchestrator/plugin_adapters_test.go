@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"math"
 	"path/filepath"
 	"runtime"
@@ -127,7 +128,7 @@ func TestSwarmPlugin_ProcessRecommendations_NoData(t *testing.T) {
 		cfg.SimulationHorizon = time.Nanosecond
 		cfg.TimeStep = time.Hour
 		cfg.Parallelism = 1
-		sw := swarm.NewMiroFishSwarm(cfg)
+		sw := swarm.NewSwarmState(cfg)
 		p := &swarmPlugin{swarm: sw}
 		input := []domain.Recommendation{{Symbol: "2330", Conviction: 50, Side: domain.SideBuy}}
 		recs := p.ProcessRecommendations(domain.RegimeRiskOn, input)
@@ -156,37 +157,11 @@ func TestSwarmPlugin_ProcessRecommendations_NoData(t *testing.T) {
 }
 
 func TestSwarmPlugin_ProcessRecommendations_WithConsensus(t *testing.T) {
-	sw, done := newSwarmWithSymbol(t, "SYM.TW")
-	defer done()
-
-	result, ok := sw.GetLatestResult()
-	if !ok || len(result.Consensus) == 0 {
-		t.Fatal("swarm should have produced consensus")
-	}
-	cp := result.Consensus["SYM.TW"]
-	t.Logf("consensus direction=%s bullish=%d bearish=%d neutral=%d",
-		cp.ConsensusDirection, cp.BullishCount, cp.BearishCount, cp.NeutralCount)
+	sw := swarm.NewSwarmState(swarm.DefaultSwarmConfig())
 
 	p := &swarmPlugin{swarm: sw}
 
-	expectedDelta := func(side domain.Side) int {
-		switch cp.ConsensusDirection {
-		case "bullish":
-			if side == domain.SideBuy {
-				return 5
-			}
-			return -5
-		case "bearish":
-			if side == domain.SideSell {
-				return 5
-			}
-			return -5
-		default:
-			return 0
-		}
-	}
-
-	t.Run("adjusts conviction by direction", func(t *testing.T) {
+	t.Run("pass-through unchanged conviction", func(t *testing.T) {
 		input := []domain.Recommendation{
 			{Symbol: "SYM.TW", Conviction: 50, Side: domain.SideBuy},
 			{Symbol: "SYM.TW", Conviction: 50, Side: domain.SideSell},
@@ -195,56 +170,9 @@ func TestSwarmPlugin_ProcessRecommendations_WithConsensus(t *testing.T) {
 		if len(recs) != 2 {
 			t.Fatalf("expected 2 recs, got %d", len(recs))
 		}
-		for i, rec := range recs {
-			d := expectedDelta(input[i].Side)
-			want := 50 + d
-			if rec.Conviction != want {
-				t.Errorf("rec[%d] conviction=%d, want=%d (dir=%s, side=%s, delta=%d)",
-					i, rec.Conviction, want, cp.ConsensusDirection, input[i].Side, d)
-			}
-			if rec.Conviction < 0 || rec.Conviction > 100 {
-				t.Errorf("rec[%d] conviction %d out of range [0,100]", i, rec.Conviction)
-			}
-			if rec.Symbol != input[i].Symbol {
-				t.Errorf("rec[%d] symbol changed from %s to %s", i, input[i].Symbol, rec.Symbol)
-			}
-			if rec.Side != input[i].Side {
-				t.Errorf("rec[%d] side changed from %s to %s", i, input[i].Side, rec.Side)
-			}
-		}
-	})
-
-	t.Run("leaves unmatched symbol unchanged", func(t *testing.T) {
-		input := []domain.Recommendation{
-			{Symbol: "SYM.TW", Conviction: 50, Side: domain.SideBuy},
-			{Symbol: "ZZZ.ZZ", Conviction: 30, Side: domain.SideBuy},
-		}
-		recs := p.ProcessRecommendations(domain.RegimeRiskOn, input)
-		if len(recs) != 2 {
-			t.Fatalf("expected 2 recs, got %d", len(recs))
-		}
-		d := expectedDelta(domain.SideBuy)
-		if recs[0].Conviction != 50+d {
-			t.Errorf("SYM.TW conviction=%d, want=%d (dir=%s, delta=%d)",
-				recs[0].Conviction, 50+d, cp.ConsensusDirection, d)
-		}
-		if recs[1].Conviction != 30 {
-			t.Errorf("ZZZ.ZZ conviction=%d, want=30", recs[1].Conviction)
-		}
-	})
-
-	t.Run("clamps conviction at boundaries", func(t *testing.T) {
-		input := []domain.Recommendation{
-			{Symbol: "SYM.TW", Conviction: 97, Side: domain.SideBuy},
-			{Symbol: "SYM.TW", Conviction: 3, Side: domain.SideSell},
-		}
-		recs := p.ProcessRecommendations(domain.RegimeRiskOn, input)
-		if len(recs) != 2 {
-			t.Fatalf("expected 2 recs, got %d", len(recs))
-		}
-		for i, rec := range recs {
-			if rec.Conviction < 0 || rec.Conviction > 100 {
-				t.Errorf("rec[%d] conviction %d out of range [0,100]", i, rec.Conviction)
+		for _, rec := range recs {
+			if rec.Conviction != 50 {
+				t.Errorf("expected conviction 50 unchanged, got %d (demoted engine pass-through)", rec.Conviction)
 			}
 		}
 	})
@@ -555,25 +483,15 @@ func TestPrismPlugin_PostSimulation_RegimeCoverage(t *testing.T) {
 	})
 }
 
-func newSwarmWithSymbol(t *testing.T, symbol string) (*swarm.MiroFishSwarm, func()) {
+func newSwarmWithSymbol(t *testing.T, symbol string) (*swarm.SwarmState, func()) {
 	t.Helper()
 	cfg := swarm.DefaultSwarmConfig()
 	cfg.FishCount = 10
 	cfg.SimulationHorizon = 1 * time.Hour
 	cfg.TimeStep = 1 * time.Hour
 	cfg.Parallelism = 4
-	sw := swarm.NewMiroFishSwarm(cfg)
-	baseState := swarm.MarketState{
-		Timestamp: time.Now(),
-		Prices:    map[string]float64{symbol: 100.0},
-		Volumes:   map[string]float64{symbol: 1000000},
-	}
-	sw.InitializeScenarios(baseState)
-	sw.Start()
-
-	result, ok := sw.GetLatestResult()
-	if !ok || len(result.Consensus) == 0 {
-		t.Log("swarm produced no consensus — test may be brittle with this config")
-	}
+	sw := swarm.NewSwarmState(cfg)
+	// SwarmState.Start does nothing in deprecated mode — no simulation needed.
+	_ = sw.Start(context.Background())
 	return sw, func() {}
 }

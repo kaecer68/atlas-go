@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -256,37 +257,17 @@ func TestPhase3Integration(t *testing.T) {
 	})
 
 	t.Run("MiroFishSwarm", func(t *testing.T) {
-		// Create swarm
 		config := swarm.DefaultSwarmConfig()
-		swarmInstance := swarm.NewMiroFishSwarm(config)
+		swarmInstance := swarm.NewSwarmState(config)
 
-		// Initialize with base state
-		baseState := swarm.MarketState{
-			Timestamp: time.Now(),
-			Prices: map[string]float64{
-				"2330.TW": 850.0,
-				"2317.TW": 105.0,
-				"2881.TW": 45.0,
-			},
-			Volumes: map[string]float64{
-				"2330.TW": 50000000,
-				"2317.TW": 20000000,
-				"2881.TW": 15000000,
-			},
+		_ = swarmInstance.Start(context.Background())
+
+		// Verify swarm state is non-nil (deprecated mode)
+		if swarmInstance == nil {
+			t.Fatal("expected non-nil swarm instance")
 		}
 
-		swarmInstance.InitializeScenarios(baseState)
-
-		// Verify scenarios created
-		for _, scenario := range []string{"bull", "bear", "high-vol", "low-vol", "transition"} {
-			// In real implementation, would check scenario initialization
-			_ = scenario
-		}
-
-		// Get top fish (before any simulation)
-		topFish := swarmInstance.GetTopFish(10)
-
-		t.Logf("✓ Swarm initialized with %d fish", len(topFish))
+		t.Logf("✓ Swarm initialized (deprecated mode)")
 	})
 }
 
@@ -418,25 +399,16 @@ func TestPerformance(t *testing.T) {
 	})
 
 	t.Run("SwarmSimulationPerformance", func(t *testing.T) {
-		config := swarm.SwarmConfig{
-			FishCount:         50, // Reduced for testing
-			SimulationHorizon: time.Hour,
-			TimeStep:          time.Minute,
-		}
+		config := swarm.DefaultSwarmConfig()
+		config.FishCount = 50
 
-		swarmInstance := swarm.NewMiroFishSwarm(config)
-
-		baseState := swarm.MarketState{
-			Timestamp: time.Now(),
-			Prices:    map[string]float64{"TEST": 100.0},
-			Volumes:   map[string]float64{"TEST": 1000000},
-		}
+		swarmInstance := swarm.NewSwarmState(config)
 
 		start := time.Now()
-		swarmInstance.InitializeScenarios(baseState)
+		_ = swarmInstance.Start(context.Background())
 		duration := time.Since(start)
 
-		t.Logf("Initialized swarm with %d fish in %v", config.FishCount, duration)
+		t.Logf("Swarm start (no-op in deprecated mode) took %v", duration)
 	})
 }
 

@@ -43,7 +43,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
-	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	llmHealth "github.com/kaecer68/atlas-go/internal/monitoring/api/llm"
@@ -65,7 +64,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/startup"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 // appDeps is the central dependency-injection struct for run().
@@ -1301,40 +1299,6 @@ func run(args []string, deps appDeps) error {
 			}
 
 			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
-
-			// Register auto_swarm_simulation — periodic swarm simulation
-			// for training data generation and scenario monitoring.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "auto_swarm_simulation",
-				Interval: 30 * time.Minute,
-				Jitter:   3 * time.Minute,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
-					if err != nil {
-						return fmt.Errorf("create system for swarm: %w", err)
-					}
-					provider := orchestrator.NewGatewayBackedProvider(cfg)
-					if gatewayFetcher != nil {
-						sys.Sim().SetProvider(provider)
-					}
-					ctrl := sys.Phase3Controller()
-					if ctrl == nil {
-						return nil
-					}
-					trainingDir := filepath.Join(cfg.WorkDir, "data/state/swarm_training")
-					ctrl.SetTrainingStore(swarm.NewTrainingStore(trainingDir))
-					ctrl.SetSnapshotPath(filepath.Join(cfg.WorkDir, "data/state/swarm_latest.json"))
-					ctrl.SetMetaLearner(metalearning.NewMetaLearner(metalearning.DefaultMetaLearningConfig()),
-						filepath.Join(cfg.WorkDir, "data/state/metalearner_state.json"))
-
-					baseState := buildBaseState(provider, []string{"2330.TW", "2317.TW", "2454.TW", "2412.TW", "2308.TW"})
-					ctrl.RunSwarmCycle(baseState)
-					logging.Info("swarm_btm", "cycle_completed", "symbols", len(baseState.Prices))
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
 
 			if realtimeAdapter != nil {
 				go realtimeAdapter.Start(sysCtx)
