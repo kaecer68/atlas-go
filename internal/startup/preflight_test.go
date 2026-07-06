@@ -130,7 +130,7 @@ type (
 // F10: AllowZombieKill=true + recognised fubon-proxy zombie → KillOccupant
 // called, re-probe returns StateFree → Preflight returns nil. Mirrors the
 // SIGKILL/orphan SIGKILL scenario: previous atlas was SIGKILL'd, fubon-proxy
-// subprocess was orphaned holding :8081; new atlas startup reclaims.
+// subprocess was orphaned holding :18081; new atlas startup reclaims.
 func TestPreflight_AllowZombieKill_ZombieCase(t *testing.T) {
 	var killed []int
 	var probeCalls int

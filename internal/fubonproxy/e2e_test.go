@@ -163,7 +163,7 @@ func setupFakeFubonProxyPython(t *testing.T) string {
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-port = int(os.environ.get("FUBON_PROXY_PORT", "8081"))
+port = int(os.environ.get("FUBON_PROXY_PORT", "18081"))
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -442,7 +442,7 @@ func waitForPortBind(port int, timeout time.Duration) bool {
 // TestE2E_NonZombieForeignHolder documents current behaviour for the
 // "alt-port fallback" Oracle scenario C: when the fubon port is held by
 // a process that is NOT recognised as a fubon-proxy zombie (e.g. Docker
-// Desktop's com.docker.backend holding :8081), current atlas exits with an
+// Desktop's com.docker.backend holding :18081), current atlas exits with an
 // actionable error rather than auto-choosing a different port. Oracle
 // verdict F10 explicitly authorises "non-zombie = no auto-kill". Once
 // alt-port auto-fallback is implemented (future work), this test should

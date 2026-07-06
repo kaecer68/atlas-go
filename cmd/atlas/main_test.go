@@ -24,7 +24,7 @@ import (
 )
 
 // freePort returns an unused TCP port from the kernel. It is used by tests
-// that need to avoid hard-coded ports such as :8081 which may be occupied by
+// that need to avoid hard-coded ports such as :18081 which may be occupied by
 // local services (e.g. Docker Desktop on macOS).
 func freePort(t *testing.T) int {
 	t.Helper()
@@ -295,7 +295,7 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
-	// Avoid the default :8081 which may be occupied by Docker Desktop or other
+	// Avoid the default :18081 which may be occupied by Docker Desktop or other
 	// local services; use an ephemeral port for the fubon-proxy preflight check.
 	fubonPort := freePort(t)
 	shutdown := make(chan struct{})

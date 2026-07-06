@@ -17,7 +17,7 @@ import (
 
 // Config is the immutable configuration for a server.
 type Config struct {
-	AtlasBaseURL       string        // atlas HTTP base, e.g. http://127.0.0.1:8080
+	AtlasBaseURL       string        // atlas HTTP base, e.g. http://127.0.0.1:18080
 	APIToken           string        // admin API key forwarded to atlas HTTP API (ATLAS_API_KEY)
 	AuditLogPath       string        // JSONL audit log file path
 	HTTPTimeout        time.Duration // per-call timeout to atlas HTTP (default 10s)

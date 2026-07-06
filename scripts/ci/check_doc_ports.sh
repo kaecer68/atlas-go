@@ -78,7 +78,7 @@ while IFS=: read -r file line content; do
     internal/industry/representative_stocks.go) continue ;;
     internal/marketdata/fubon_url_guard_test.go) continue ;;
     internal/fubonproxy/AGENTS.md) continue ;;
-    internal/fubonproxy/manager.go) continue ;;
+    internal/fubonproxy/manager.go|scripts/ci/check_doc_ports.sh) continue ;;
   esac
 
   # Skip non-port occurrences: stock codes (8081.TW, 78081, etc.)

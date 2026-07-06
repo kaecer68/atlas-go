@@ -26,7 +26,7 @@ import (
 //     KillOccupant + re-probe; non-zombie occupants still error out.
 //
 // Mirrors fubonproxy.Start() lines 187-242 so a SIGKILL / orphan scenario
-// no longer wedges atlas startup behind a stuck :8081.
+// no longer wedges atlas startup behind a stuck :18081.
 type PortClaim struct {
 	Component       string
 	Addr            string
