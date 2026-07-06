@@ -213,7 +213,8 @@ func run(args []string, deps appDeps) error {
 	// If DATABASE_URL is unset or postgres is already running, this is a no-op.
 	// On failure, the app continues without DB (bootstrap handles graceful degradation).
 	if diag := ensurePostgres(); diag != "" {
-		logging.Warn("main", "postgres_startup_diag",
+		logging.Warn(
+			"main", "postgres_startup_diag",
 			"message", "ensurePostgres did not fully succeed; bootstrap may fail",
 			"diagnostics", diag,
 		)
@@ -1754,7 +1755,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if engine := system.Port().FactorWeightEngine(); engine != nil {
 		weightProvider = monitoringservice.NewFactorWeightEngineWeightProvider(engine)
 	}
-	wave9, err := monitoring.NewWave9Observability(eventBus,
+	wave9, err := monitoring.NewWave9Observability(
+		eventBus,
 		monitoring.WithWeightProvider(weightProvider),
 		monitoring.WithChannelHealthProvider(monitoring.NewChannelHealthProviderFromStore(healthStore)),
 		monitoring.WithIngestionLagProvider(monitoringservice.NewChannelHealthIngestionLagProvider(healthStore)),
@@ -1834,7 +1836,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 // returns, wire them through here.
 func runPrismWorker(cfg config.Config, deps appDeps) error { //nolint:unparam
 	cfgPrism := prism.DefaultPRISMConfig()
-	logging.Info("prism_worker", "starting",
+	logging.Info(
+		"prism_worker", "starting",
 		"workdir", cfg.WorkDir,
 		"replay_session_date", cfg.ReplaySessionDate,
 		"queue_size", cfgPrism.QueueSize,

@@ -163,7 +163,8 @@ type ProcessManager struct {
 func NewManager(workDir string, port int) *ProcessManager {
 	if port > 0 {
 		if port != defaultFubonProxyPort {
-			logging.Info("fubonproxy", "custom_listen_port",
+			logging.Info(
+				"fubonproxy", "custom_listen_port",
 				"port", port,
 				"message", "fubon-proxy 將綁定非預設 port;由 cmd/atlas -fubon-port flag 注入。",
 			)
@@ -204,7 +205,8 @@ func GetFubonProxyPort() int {
 func SetFubonProxyPort(port int) {
 	if port > 0 {
 		if port != defaultFubonProxyPort {
-			logging.Info("fubonproxy", "custom_listen_port_setter",
+			logging.Info(
+				"fubonproxy", "custom_listen_port_setter",
 				"port", port,
 				"message", "fubon-proxy listen port 由 SetFubonProxyPort 設定為非預設值",
 			)
@@ -225,6 +227,7 @@ func SetFubonProxyPort(port int) {
 //
 // 注意:不使用 localhost,因為 macOS / Linux 雙棧環境下,Go net.Dial
 // 對 "localhost" 預設優先解析為 IPv6 [::1],而 fubon-proxy 只綁 IPv4 0.0.0.0,
+//
 //	會出現 [::1]:<port>: connect: connection refused(RCA: PR #495)。
 const defaultProxyHost = "fubon-proxy"
 
@@ -265,7 +268,8 @@ func resolvePythonBin() string {
 			logging.Info("fubonproxy", "env_python_found", "path", envPath)
 			return envPath
 		}
-		logging.Warn("fubonproxy", "env_python_invalid",
+		logging.Warn(
+			"fubonproxy", "env_python_invalid",
 			"path", envPath,
 			"message", "FUBON_PROXY_PYTHON set but not a valid file; falling back",
 		)
@@ -316,7 +320,8 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	// EADDRINUSE 時 retry，但我們已先把最常見的 lsof-not-found 情境 log 出來。
 	state, occupant, probeErr := m.probeProxyPort()
 	if probeErr != nil {
-		logging.Warn("fubonproxy", "port_probe_failed",
+		logging.Warn(
+			"fubonproxy", "port_probe_failed",
 			logging.Err(probeErr),
 			"port", proxyListenPort,
 			"fallback", "spawn_directly",
@@ -324,7 +329,8 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	} else {
 		switch state {
 		case portStateHealthy:
-			logging.Info("fubonproxy", "external_managed",
+			logging.Info(
+				"fubonproxy", "external_managed",
 				"port", proxyListenPort,
 				"occupant_pid", occupant.PID,
 				"message", "port already serves /health; skipping spawn",
@@ -332,13 +338,15 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 			return nil
 		case portStateForeign:
 			if occupant.PID > 0 && isFubonZombie(occupant) {
-				logging.Warn("fubonproxy", "zombie_detected",
+				logging.Warn(
+					"fubonproxy", "zombie_detected",
 					"pid", occupant.PID,
 					"cmd", occupant.Command,
 					"message", "auto-killing zombie fubon proxy on port "+strconv.Itoa(proxyListenPort),
 				)
 				if killErr := killOccupant(occupant.PID); killErr != nil {
-					logging.Error("fubonproxy", "zombie_kill_failed",
+					logging.Error(
+						"fubonproxy", "zombie_kill_failed",
 						logging.Err(killErr),
 						"message", "auto-kill failed; falling through to error",
 					)
@@ -348,19 +356,22 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 						proxyListenPort, occupant.PID, occupant.Command, killErr, occupant.PID)
 				}
 				// Kill successful — re-probe
-				logging.Info("fubonproxy", "zombie_killed",
+				logging.Info(
+					"fubonproxy", "zombie_killed",
 					"pid", occupant.PID,
 					"message", "waiting for port release after zombie kill",
 				)
 				if !portprobe.WaitForPortFree(proxyListenPort, 5*time.Second) {
-					logging.Warn("fubonproxy", "zombie_port_still_held",
+					logging.Warn(
+						"fubonproxy", "zombie_port_still_held",
 						"port", proxyListenPort,
 						"message", "port not free after zombie kill; proceeding with re-probe",
 					)
 				}
 				newState, newOccupant, probeErr := m.probeProxyPort()
 				if probeErr != nil {
-					logging.Warn("fubonproxy", "reprobe_failed_after_zombie_kill",
+					logging.Warn(
+						"fubonproxy", "reprobe_failed_after_zombie_kill",
 						logging.Err(probeErr),
 						"port", proxyListenPort,
 						"fallback", "spawn_directly",
@@ -371,7 +382,8 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 				case portStateFree:
 					break // fall through to spawn
 				case portStateHealthy:
-					logging.Info("fubonproxy", "external_managed_after_kill",
+					logging.Info(
+						"fubonproxy", "external_managed_after_kill",
 						"port", proxyListenPort,
 						"occupant_pid", newOccupant.PID,
 						"message", "port now serves /health after kill; skipping spawn",
@@ -463,7 +475,8 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	m.recordEvent("process_started", fmt.Sprintf("pid=%d", cmd.Process.Pid))
 	m.mu.Unlock()
 
-	logging.Info("fubonproxy", "process_started",
+	logging.Info(
+		"fubonproxy", "process_started",
 		"pid", cmd.Process.Pid,
 		"python", m.pythonBin,
 		"script", m.scriptPath,
@@ -472,7 +485,8 @@ func (m *ProcessManager) Start(ctx context.Context) error {
 	// Circuit breaker: 健康檢查在背景 goroutine 中進行（不阻塞 Start）
 	go func() {
 		if err := m.waitForHealthy(ctx); err != nil {
-			logging.Warn("fubonproxy", "health_check_timeout",
+			logging.Warn(
+				"fubonproxy", "health_check_timeout",
 				logging.Err(err),
 				"message", "proxy started but health check did not pass within timeout",
 			)
@@ -692,7 +706,8 @@ func killOccupant(pid int) error {
 func (m *ProcessManager) preparePortForRestart() (bool, bool) {
 	state, occupant, probeErr := m.probeProxyPort()
 	if probeErr != nil {
-		logging.Warn("fubonproxy", "restart_port_probe_failed",
+		logging.Warn(
+			"fubonproxy", "restart_port_probe_failed",
 			logging.Err(probeErr),
 			"port", proxyListenPort,
 			"fallback", "spawn_directly",
@@ -704,7 +719,8 @@ func (m *ProcessManager) preparePortForRestart() (bool, bool) {
 	case portStateFree:
 		return true, false
 	case portStateHealthy:
-		logging.Info("fubonproxy", "restart_external_managed",
+		logging.Info(
+			"fubonproxy", "restart_external_managed",
 			"port", proxyListenPort,
 			"occupant_pid", occupant.PID,
 			"message", "port serves /health externally; supervisor will not respawn",
@@ -712,13 +728,15 @@ func (m *ProcessManager) preparePortForRestart() (bool, bool) {
 		return false, true
 	case portStateForeign:
 		if occupant.PID > 0 && isFubonZombie(occupant) {
-			logging.Warn("fubonproxy", "restart_zombie_detected",
+			logging.Warn(
+				"fubonproxy", "restart_zombie_detected",
 				"pid", occupant.PID,
 				"cmd", occupant.Command,
 				"message", "auto-killing zombie fubon proxy on port "+strconv.Itoa(proxyListenPort),
 			)
 			if killErr := killOccupant(occupant.PID); killErr != nil {
-				logging.Error("fubonproxy", "restart_zombie_kill_failed",
+				logging.Error(
+					"fubonproxy", "restart_zombie_kill_failed",
 					logging.Err(killErr),
 					"message", "auto-kill failed; will retry",
 				)
@@ -726,7 +744,8 @@ func (m *ProcessManager) preparePortForRestart() (bool, bool) {
 			}
 			newState, newOccupant, probeErr := m.probeProxyPort()
 			if probeErr != nil {
-				logging.Warn("fubonproxy", "restart_reprobe_failed_after_zombie_kill",
+				logging.Warn(
+					"fubonproxy", "restart_reprobe_failed_after_zombie_kill",
 					logging.Err(probeErr),
 					"port", proxyListenPort,
 					"fallback", "spawn_directly",
@@ -737,14 +756,16 @@ func (m *ProcessManager) preparePortForRestart() (bool, bool) {
 			case portStateFree:
 				return true, false
 			case portStateHealthy:
-				logging.Info("fubonproxy", "restart_external_managed_after_kill",
+				logging.Info(
+					"fubonproxy", "restart_external_managed_after_kill",
 					"port", proxyListenPort,
 					"occupant_pid", newOccupant.PID,
 					"message", "port serves /health after kill; supervisor will not respawn",
 				)
 				return false, true
 			case portStateForeign:
-				logging.Error("fubonproxy", "restart_port_still_held_after_kill",
+				logging.Error(
+					"fubonproxy", "restart_port_still_held_after_kill",
 					"port", proxyListenPort,
 					"pid", newOccupant.PID,
 					"cmd", newOccupant.Command,
@@ -753,14 +774,16 @@ func (m *ProcessManager) preparePortForRestart() (bool, bool) {
 				return false, false
 			}
 		} else if occupant.PID > 0 {
-			logging.Error("fubonproxy", "restart_foreign_port",
+			logging.Error(
+				"fubonproxy", "restart_foreign_port",
 				"port", proxyListenPort,
 				"pid", occupant.PID,
 				"cmd", occupant.Command,
 				"message", "restart blocked; stop the process with `kill "+strconv.Itoa(occupant.PID)+"`",
 			)
 		} else {
-			logging.Error("fubonproxy", "restart_foreign_port_unknown",
+			logging.Error(
+				"fubonproxy", "restart_foreign_port_unknown",
 				"port", proxyListenPort,
 				"message", "restart blocked; identify it with `lsof -nP -iTCP:"+strconv.Itoa(proxyListenPort)+" -sTCP:LISTEN` and stop it",
 			)
@@ -825,7 +848,8 @@ func (m *ProcessManager) supervise() {
 			return
 		}
 
-		logging.Warn("fubonproxy", "process_exited",
+		logging.Warn(
+			"fubonproxy", "process_exited",
 			logging.Err(err),
 			"message", "will attempt restart",
 			"backoff", backoff.String(),
@@ -861,7 +885,8 @@ func (m *ProcessManager) supervise() {
 		if !canProceed {
 			m.restartFailures++
 			if m.restartFailures >= maxRestartFailures {
-				logging.Error("fubonproxy", "max_restart_failures_reached",
+				logging.Error(
+					"fubonproxy", "max_restart_failures_reached",
 					"count", m.restartFailures,
 					"message", "giving up restarting fubon-proxy; port conflict or repeated start failures",
 				)
@@ -889,7 +914,8 @@ func (m *ProcessManager) supervise() {
 			m.mu.Unlock()
 			m.restartFailures++
 			if m.restartFailures >= maxRestartFailures {
-				logging.Error("fubonproxy", "max_restart_failures_reached",
+				logging.Error(
+					"fubonproxy", "max_restart_failures_reached",
 					"count", m.restartFailures,
 					"message", "giving up restarting fubon-proxy after repeated start failures",
 				)
@@ -914,7 +940,8 @@ func (m *ProcessManager) supervise() {
 		m.recordEvent("process_restarted", fmt.Sprintf("pid=%d", newCmd.Process.Pid))
 		m.mu.Unlock()
 
-		logging.Info("fubonproxy", "process_restarted",
+		logging.Info(
+			"fubonproxy", "process_restarted",
 			"pid", newCmd.Process.Pid,
 			"backoff", backoff.String(),
 		)
