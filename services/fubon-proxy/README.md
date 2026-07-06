@@ -29,7 +29,7 @@ FUBON_API_KEY=your_api_key_here
 FUBON_PERSONAL_ID=your_id_number
 
 # 微服務 URL：docker-compose 預設 127.0.0.1:18081（環境變數 `FUBON_PROXY_PORT` 覆寫）；
-# 　　　 standalone `python main.py` 走 main.py 內預設值 8081。
+# 　　　 standalone `python main.py` 走 main.py 內預設值 18081。
 # 　　　 註：2026-06 移除的是 URL env override（`FUBON_PROXY_URL`），port env override 仍在。
 ```
 
@@ -114,7 +114,7 @@ curl http://127.0.0.1:18081/market-status
 
 ### 問題：連線超時
 - 確認 fubon-proxy 服務已啟動
-- 確認 proxy 監聽：docker-compose 路徑 `127.0.0.1:18081`（env `FUBON_PROXY_PORT`）；standalone `python main.py` 走 main.py 預設 8081
+- 確認 proxy 監聽：docker-compose 路徑 `127.0.0.1:18081`（env `FUBON_PROXY_PORT`）；standalone `python main.py` 走 main.py 預設 18081
 
 ### 問題：無資料返回
 - 確認為交易日（非週末/假日）
