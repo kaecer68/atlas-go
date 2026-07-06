@@ -169,20 +169,19 @@ async function loadHomeData() {
     }
 
     try {
-      const [health, macro, stress, pipeline, bundle, crossStatus, calData] = await Promise.all([
+      const [health, macro, stress, pipeline, bundle, calData] = await Promise.all([
         silentGetJSON('/api/dashboard/system-health'),
         silentGetJSON('/api/macro/snapshot/latest'),
         silentGetJSON('/api/taiwan/stress-index'),
         silentGetJSON('/api/dashboard/recommendation-pipeline'),
         silentGetJSON('/api/narrative/bundle'),
-        silentGetJSON('/api/dashboard/us-indices'),
         silentGetJSON('/api/dashboard/calendar-events'),
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
-      renderTodaySummary(macro, stress, pipeline, events, crossStatus);
+      renderTodaySummary(macro, stress, pipeline, events);
       renderSignalStrip(events);
-      renderMarketPulse(macro, stress, crossStatus);
+      renderMarketPulse(macro, stress);
       renderRecommendation(pipeline, stress);
 
       // Event calendar — fetched independently, non-blocking
@@ -267,7 +266,7 @@ function heroRecommendation(stress, pipeline, events) {
   return { rec: '觀望', reason: '資料已載入，等待明確信號', risk: stressRisk, hasRec: false };
 }
 
-function renderTodaySummary(macro, stress, pipeline, events, crossStatus) {
+function renderTodaySummary(macro, stress, pipeline, events) {
   const summaryEl = document.getElementById('home-summary');
   const reasonEl = document.getElementById('home-summary-reason');
   const badgeEl = document.getElementById('home-risk-badge');
@@ -326,7 +325,7 @@ function marketTrendDirection(changePct) {
       : { value: '持平', tone: 'neutral' };
 }
 
-function renderMarketPulse(macro, stress, crossStatus) {
+function renderMarketPulse(macro, stress) {
   const grid = document.getElementById('home-market-grid');
   if (!grid) return;
 
@@ -348,31 +347,19 @@ function renderMarketPulse(macro, stress, crossStatus) {
   const stressRisk = stressScore >= 70 ? 'high' : stressScore >= 40 ? 'medium' : 'low';
   const stressLabel = riskLevelLabel(stressRisk);
 
-  // Cross-market helpers (macro snapshot may have these or fallback to crossStatus)
-  function cmField(obj, cross, key) {
-    const v = pointValue(obj, key);
-    if (v !== null) return v;
-    if (cross && cross[key]) {
-      const raw = cross[key];
-      if (raw && typeof raw === 'object' && raw.value != null) return Number(raw.value);
-    }
-    return null;
+  // Cross-market helpers — all fields are available from MacroDataSnapshot.
+  function cmField(obj, key) {
+    return pointValue(obj, key);
   }
-  function cmChange(obj, cross, key) {
-    const c = pointChange(obj, key);
-    if (c !== null) return c;
-    if (cross && cross[key] && typeof cross[key] === 'object') {
-      const n = Number(cross[key].change_pct);
-      return Number.isNaN(n) ? null : n;
-    }
-    return null;
+  function cmChange(obj, key) {
+    return pointChange(obj, key);
   }
 
-  const tsmChange = cmChange(macro, crossStatus, 'tsm_adr');
-  const soxChange = cmChange(macro, crossStatus, 'sox_index');
-  const ndxChange = cmChange(macro, crossStatus, 'ndx_index');
-  const usdtwd = cmField(macro, crossStatus, 'usd_twd');
-  const vixVal = cmField(macro, crossStatus, 'vix');
+  const tsmChange = cmChange(macro, 'tsm_adr');
+  const soxChange = cmChange(macro, 'sox_index');
+  const ndxChange = cmChange(macro, 'ndx_index');
+  const usdtwd = cmField(macro, 'usd_twd');
+  const vixVal = cmField(macro, 'vix');
   const marginVal = pointValue(macro, 'retail_margin_balance');
   const retailChange = pointChange(macro, 'retail_margin_balance');
   const retailText = retailChange !== null
