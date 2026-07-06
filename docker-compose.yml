@@ -411,26 +411,6 @@ services:
     healthcheck:
       disable: true
 
-  # MiroFish swarm simulation runner
-  swarm-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: atlas-swarm-runner
-    restart: "no"
-    # Args-only — see prism-worker for ENTRYPOINT/CMD interaction note.
-    command: ["swarm", "run"]
-    environment:
-      - ATLAS_ENV=production
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-    networks:
-      - atlas-network
-    profiles:
-      - swarm
-
 volumes:
   redis-data:
   postgres-data:

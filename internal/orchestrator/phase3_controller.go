@@ -18,10 +18,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
-// Phase3Controller coordinates PRISM, Swarm, Spawning, and Reflexivity
-// using a swarm-style parallel optimization approach.
-// No background goroutines or tickers are managed here — the caller
-// (e.g., BackgroundTaskManager in main.go) owns the scheduling.
+// Phase3Controller coordinates PRISM, Swarm, Spawning, and Reflexivity.
+// The Swarm field holds a pass-through state container (simulation engine
+// was demoted in PR #963). No background goroutines or tickers are managed
+// here — the caller (e.g., BackgroundTaskManager in main.go) owns the
+// scheduling.
 type Phase3Controller struct {
 	registry        *domain.AgentRegistry
 	prismManager    *prism.PRISMManager

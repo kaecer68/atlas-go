@@ -197,14 +197,14 @@
 |------|------|
 | `prism_get_training_results` | PRISM cohort 訓練結果 |
 
-### Swarm（5 個）
+### Swarm（5 個 — 模擬引擎已降級，PR #963，回傳 deprecated 空值）
 | Tool | 用途 |
 |------|------|
-| `swarm_get_status` | MiroFish swarm 狀態 |
-| `swarm_get_consensus` | Fish 多數決共識 |
-| `swarm_get_anomalies` | 異常偵測 |
-| `swarm_get_scenarios` | 監控中 scenario |
-| `swarm_get_strategies` | Swarm 策略組合 |
+| `swarm_get_status` | Swarm 狀態容器（模擬已停用） |
+| `swarm_get_consensus` | 空共識（模擬已停用） |
+| `swarm_get_anomalies` | 空異常列表（模擬已停用） |
+| `swarm_get_scenarios` | 空 scenario 列表（模擬已停用） |
+| `swarm_get_strategies` | 空策略組合（模擬已停用） |
 
 ---
 

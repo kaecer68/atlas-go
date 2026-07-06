@@ -1,19 +1,16 @@
-// Package swarm implements MiroFish Swarm - parallel simulated futures training.
+// Package swarm provides backward-compatible type aliases and a lightweight
+// state container for MiroFish Swarm consumers.
 //
-// The swarm simulates multiple possible market futures to train agents on diverse
-// scenarios. It runs 100 MiroFish agents across 5 market scenarios (bull, bear,
-// high-volatility, low-volatility, regime transition). Each fish uses a GARCH
-// process for volatility evolution, correlated shocks, and jump-diffusion to
-// generate price paths. Fish predictions are evaluated against actual simulated
-// price movements (not random).
+// The MiroFish simulation engine (GARCH, copula, jump-diffusion, calibration)
+// was removed in PR #963.  This package now only contains:
+//   - SwarmState: a pass-through state container (no-op Start/Stop methods)
+//   - Type aliases (swarm_aliases.go): MarketState, SimulationResult,
+//     ConsensusPrediction, Anomaly, FishPerformance, SwarmConfig
+//   - Snapshot read helpers (snapshot.go): for reading legacy snapshot JSON files
 //
-// Key components:
-//   - MiroFishSwarm: orchestrates parallel batch simulation
-//   - MiroFish: individual simulation unit with PredictionRule and GARCH state
-//   - Calibration framework (calibration.go): compares simulated statistics
-//     against target market data and suggests parameter adjustments
-//   - TrainingScenario export: feeds simulation results into the MetaLearner
-//     via metalearning.SubmitTrainingScenarios for strategy evolution
+// All simulation logic has been retired.  SwarmPlugin.ProcessRecommendations
+// is now pass-through (no conviction adjustment).  The five swarm_get_* MCP
+// tools remain registered for API backward compatibility and return empty results.
 //
-// Maturity: experimental
+// Maturity: archived
 package swarm

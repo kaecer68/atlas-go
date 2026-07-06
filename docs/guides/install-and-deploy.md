@@ -195,7 +195,7 @@ curl -fsS http://localhost:18080/api/llm/health
 
 # Container status
 docker compose ps
-# Expected: atlas-go, atlas-postgres, atlas-redis, atlas-prism-worker, atlas-swarm-runner all "healthy"
+# Expected: atlas-go, atlas-postgres, atlas-redis, atlas-prism-worker all "healthy"
 ```
 
 ### 2.7 Frontend hot-reload (optional, dev only)
