@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -153,7 +154,7 @@ func TestHandleRetailSentiment_NoSnapshot(t *testing.T) {
 func TestHandleRetailSentiment_WithSnapshot(t *testing.T) {
 	h, workDir := newSystemHandlers(t)
 	// Write a minimal latest.json so loadLatestMacroSnapshot succeeds.
-	macroDir := filepath.Join(workDir, "data/state/macro")
+	macroDir := filepath.Join(workDir, constants.StateMacro)
 	if err := os.MkdirAll(macroDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -260,7 +261,7 @@ func TestGetFloatOrZero(t *testing.T) {
 
 func TestCalculateMarginPercentile_SingleDataPoint(t *testing.T) {
 	workDir := t.TempDir()
-	macroDir := filepath.Join(workDir, "data/state/macro")
+	macroDir := filepath.Join(workDir, constants.StateMacro)
 	if err := os.MkdirAll(macroDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

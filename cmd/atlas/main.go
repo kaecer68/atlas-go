@@ -1601,7 +1601,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		log.Printf("[Repository] injected into live trading system")
 	}
 
-	stateStore := livestore.NewStateStore("data/state/live")
+	stateStore := livestore.NewStateStore(constants.StateLive)
 	provider := marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 
 	liveCfg := live.DefaultOrchestratorConfig()

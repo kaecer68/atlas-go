@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -101,7 +102,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	}
 
 	// --- TWSE Capital Flow (no API key required) ---
-	capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
+	capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, constants.StateCapitalFlow))
 	capFlowAdapter := NewTWSECapitalFlowChannelAdapter(capFlowProvider)
 	g.registry.Register("twse_capital_flow", capFlowAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_capital_flow")
@@ -113,7 +114,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_margin")
 
 	// --- Export Statistics (no API key required) ---
-	exportProvider := marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export"))
+	exportProvider := marketdata.NewExportStatisticsProvider(filepath.Join(workDir, constants.StateExport))
 	exportAdapter := NewExportStatisticsChannelAdapter(exportProvider)
 	g.registry.Register("export_statistics", exportAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "export_statistics")

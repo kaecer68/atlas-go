@@ -11,17 +11,19 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 func TestExportStatisticsProvider_Name(t *testing.T) {
-	p := NewExportStatisticsProvider("data/state/export")
+	p := NewExportStatisticsProvider(constants.StateExport)
 	if p.Name() != "export_statistics" {
 		t.Fatalf("unexpected name: %s", p.Name())
 	}
 }
 
 func TestExportStatisticsProvider_FetchSnapshot_RealAPI(t *testing.T) {
-	p := NewExportStatisticsProvider("data/state/export")
+	p := NewExportStatisticsProvider(constants.StateExport)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

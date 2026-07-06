@@ -11,11 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-const DefaultMarginHistoryDir = "data/state/margin"
+// DefaultMarginHistoryDir is an alias for constants.StateMargin to preserve
+// backward compatibility for external callers.
+const DefaultMarginHistoryDir = constants.StateMargin
 
 type MarginHistoryEntry struct {
 	Date          string

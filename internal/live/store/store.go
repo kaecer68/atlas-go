@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
@@ -26,7 +27,7 @@ const (
 const DefaultCircuitBreakerStatePath = "data/state/circuit_breaker_state.json"
 
 // DefaultLiveStateBasePath is the default base directory for live trading state.
-const DefaultLiveStateBasePath = "data/state/live"
+const DefaultLiveStateBasePath = constants.StateLive
 
 // StateStore 管理实时交易状态
 type StateStore struct {

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -105,7 +106,7 @@ func TestBuildUSMacroChannels_NilSnapshot(t *testing.T) {
 
 func TestLatestMacroSnapshotOrZero_FallbackWithoutIngestor(t *testing.T) {
 	tmpDir := t.TempDir()
-	stateDir := filepath.Join(tmpDir, "data/state/macro")
+	stateDir := filepath.Join(tmpDir, constants.StateMacro)
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

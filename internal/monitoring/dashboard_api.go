@@ -145,9 +145,9 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	// The last-write-wins mergeSnapshot would otherwise discard the real
 	// ChangePct from Frankfurter.
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
-	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")))
+	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, constants.StateCapitalFlow)))
 	providers = append(providers, marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")))
-	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")))
+	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, constants.StateExport)))
 	// Sector data from local cache (graceful degradation if file missing).
 	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
 	// TSMC Revenue from FinMind (overwrites cached sector data when available).
@@ -166,7 +166,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		metricsCollector = NewMetricsCollector()
 	}
 	lifecycle := narrative.NewEventLifecycleManager()
-	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
+	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, constants.StateMacro))
 	ingestor.SetLifecycleManager(lifecycle)
 
 	narrativeEng := narrative.NewNarrativeEngine()
@@ -205,7 +205,7 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 	taiwanGeoProvider := NewTaiwanGeopoliticalGatewayAdapter(fetcher)
 
 	lifecycle := narrative.NewEventLifecycleManager()
-	ingestor := narrative.NewMacroIngestor(macroProvider, filepath.Join(workDir, "data/state/macro"))
+	ingestor := narrative.NewMacroIngestor(macroProvider, filepath.Join(workDir, constants.StateMacro))
 	ingestor.SetLifecycleManager(lifecycle)
 
 	narrativeEng := narrative.NewNarrativeEngine()
@@ -1111,7 +1111,7 @@ func (a *DashboardAPI) initGatewayProviders() {
 	a.macroProvider = NewMacroDataGatewayAdapter(a.dataFetcher)
 	a.geoProvider = NewGeopoliticalGatewayAdapter(a.dataFetcher)
 	if a.macroIngestor != nil {
-		a.macroIngestor = narrative.NewMacroIngestor(a.macroProvider, filepath.Join(a.workDir, "data/state/macro"))
+		a.macroIngestor = narrative.NewMacroIngestor(a.macroProvider, filepath.Join(a.workDir, constants.StateMacro))
 	}
 	logging.Info("dashboardapi", "gateway_providers_initialized")
 }

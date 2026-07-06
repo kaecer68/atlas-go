@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -19,7 +20,7 @@ func (s *DataChannelService) loadLatestMacroSnapshot() (*marketdata.MacroDataSna
 		return ms.GetLatestSnapshot()
 	}
 
-	path := filepath.Join(s.WorkDir, "data/state/macro", "latest.json")
+	path := filepath.Join(s.WorkDir, constants.StateMacro, "latest.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read macro snapshot: %w", err)

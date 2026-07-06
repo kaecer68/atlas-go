@@ -8,6 +8,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 )
 
@@ -22,7 +23,7 @@ func findLatestExperiment(dir string) string {
 }
 
 func run(args []string) error {
-	defaultPath := findLatestExperiment("data/state/experiments")
+	defaultPath := findLatestExperiment(constants.StateExperiments)
 	if defaultPath == "" {
 		defaultPath = "data/state/experiments/exec-value-yield-01-1776084503.json"
 	}

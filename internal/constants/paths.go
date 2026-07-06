@@ -12,4 +12,22 @@ const (
 	// The path is relative to the repository root; callers that need an
 	// absolute path should prepend cfg.WorkDir or use filepath.Join.
 	ParametersFile = "configs/parameters.json"
+
+	// State directory and subpaths under data/state/.
+	// All paths are relative to cfg.WorkDir.
+	StateDir = "data/state"
+
+	// Top state subpaths by occurrence (sorted desc):
+	StateMacro          = StateDir + "/macro"           // macro snapshot cache + TWSECapitalFlow
+	StateGeopolitical   = StateDir + "/geopolitical"    // geopolitical event cache
+	StateCapitalFlow    = StateDir + "/capital_flow"    // TWSE capital flow daily JSON
+	StateExperiments    = StateDir + "/experiments"     // experiment run artifacts
+	StateExport         = StateDir + "/export"          // export statistics cache
+	StateChannels       = StateDir + "/channels"        // data quality channel health
+	StateSessions       = StateDir + "/sessions"        // session snapshots (OOS outcomes)
+	StateParameter      = StateDir + "/parameter"       // parameter mutation history
+	StateLive           = StateDir + "/live"            // live trading state
+	StateBaselinePolicy = StateDir + "/baseline_policy" // baseline policy artifacts
+	StateMargin         = StateDir + "/margin"          // margin balance cache
+	StateCalibration    = StateDir + "/calibration"     // calibration baseline artifacts
 )

@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -386,7 +387,7 @@ func calculateMarginPercentile(workDir string, currentValue float64) float64 {
 		return 0
 	}
 
-	pattern := filepath.Join(workDir, "data/state/macro", "*.json")
+	pattern := filepath.Join(workDir, constants.StateMacro, "*.json")
 	matches, err := filepath.Glob(pattern)
 	if err != nil || len(matches) == 0 {
 		return 0

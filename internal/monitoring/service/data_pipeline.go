@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
 // PipelineSourceStatus represents the freshness status of a single data source.
@@ -48,9 +49,9 @@ func (s *DataPipelineService) GetPipelineStatus() ([]PipelineSourceStatus, error
 	}{
 		{"twse_replay", "daily-replay-sync", "orchestrator", config.GetReplayDataPath(s.WorkDir)},
 		{"us_yahoo", "Yahoo Finance API", "MacroEngine", "data/state/macro/latest.json"},
-		{"twse_capital_flow", "TWSE API", "CapitalFlowProvider", "data/state/capital_flow"},
+		{"twse_capital_flow", "TWSE API", "CapitalFlowProvider", constants.StateCapitalFlow},
 		{"twse_margin", "TWSE API", "RiskManager", "data/state/margin"},
-		{"export_statistics", "Customs API", "NarrativeEngine", "data/state/export"},
+		{"export_statistics", "Customs API", "NarrativeEngine", constants.StateExport},
 		{"tsmc_revenue", "TWSE API", "IndustryAnalysis", "data/state/tsmc_revenue"},
 		{"geopolitical", "RSS/GDELT", "GeopoliticalProvider", "data/state/geopolitical/latest.json"},
 		{"geopolitical_taiwan", "Taiwan RSS", "GeopoliticalProvider", "data/state/geopolitical/taiwan/latest.json"},
