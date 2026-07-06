@@ -127,7 +127,8 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 		Side:   domain.SideBuy,
 	}
 
-	a.metricsLogger().Info("agent_loop.start",
+	a.metricsLogger().Info(
+		"agent_loop.start",
 		"symbol", quote.Symbol,
 		"skill", agent.Skill,
 	)
@@ -136,7 +137,8 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 
 	// Issue #740: emit end via defer so it fires on every exit path.
 	defer func() {
-		a.metricsLogger().Info("agent_loop.end",
+		a.metricsLogger().Info(
+			"agent_loop.end",
 			"symbol", quote.Symbol,
 			"conviction", rec.Conviction,
 			"exhausted", loopExhausted,
@@ -152,7 +154,8 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 		steps, err := runner.PlanStep(context.Background(), quote.Symbol, rec)
 		// Issue #740: emit plan metrics BEFORE the err guard so
 		// aggregators see failed plans too.
-		a.metricsLogger().Info("agent_loop.plan",
+		a.metricsLogger().Info(
+			"agent_loop.plan",
 			"size", len(steps),
 			"latency_ms", time.Since(planStart).Milliseconds(),
 			"err", err,
@@ -176,7 +179,8 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 			toolLatencyMs := time.Since(toolStart).Milliseconds()
 			// Issue #740: emit tool metrics BEFORE the err guard so
 			// aggregators see failed tool calls too.
-			a.metricsLogger().Info("agent_loop.tool",
+			a.metricsLogger().Info(
+				"agent_loop.tool",
 				"name", steps[j].ToolName,
 				"success", err == nil,
 				"latency_ms", toolLatencyMs,
@@ -199,7 +203,8 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 			return rec, false
 		}
 		lastReflection = reflection
-		a.metricsLogger().Info("agent_loop.reflect",
+		a.metricsLogger().Info(
+			"agent_loop.reflect",
 			"continue", reflection.Continue,
 			"conviction", reflection.FinalConviction,
 		)

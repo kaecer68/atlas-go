@@ -93,6 +93,11 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 	ext := filepath.Ext(replayCSVPath)
 	jsonlPath := replayCSVPath[:len(replayCSVPath)-len(ext)] + ".jsonl"
 
+	// Derive fundamentals.json path from the replay CSV path. Both files live
+	// in the same data/ directory; this avoids relying on process cwd (which
+	// breaks when atlas is launched from elsewhere, e.g. IDE or container).
+	fundamentalsPath := filepath.Join(filepath.Dir(replayCSVPath), "fundamentals.json")
+
 	hp := portfolio.NewHistoricalPrices()
 
 	// Auto-convert CSV→JSONL if JSONL is missing but CSV exists (P1).
@@ -109,7 +114,7 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 		logging.Warn("composition", "failed to load historical prices", "err", err)
 	}
 	fp := portfolio.NewFundamentalProvider()
-	if err := fp.LoadFromJSON("data/fundamentals.json"); err != nil {
+	if err := fp.LoadFromJSON(fundamentalsPath); err != nil {
 		logging.Warn("composition", "failed to load fundamentals", "err", err)
 	}
 

@@ -33,6 +33,7 @@ type mockPositionEvaluator struct {
 func (m *mockPositionEvaluator) Supports(agent domain.AgentSpec) bool {
 	return m.supports == nil || m.supports(agent)
 }
+
 func (m *mockPositionEvaluator) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	return m.evalResult, m.evalOK
 }

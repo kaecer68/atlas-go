@@ -303,30 +303,41 @@ type humanInterventionStore struct {
 func (s *humanInterventionStore) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 	return s.interventions, s.err
 }
+
 func (s *humanInterventionStore) RecordHumanIntervention(domain.HumanIntervention) error { return nil }
-func (s *humanInterventionStore) RecordOutcomes([]domain.RecommendationOutcome) error    { return nil }
+
+func (s *humanInterventionStore) RecordOutcomes([]domain.RecommendationOutcome) error { return nil }
+
 func (s *humanInterventionStore) RecordSessionOutcomes(domain.ReplaySession, []domain.RecommendationOutcome) error {
 	return nil
 }
+
 func (s *humanInterventionStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (s *humanInterventionStore) LoadSessionOutcomes(string) ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (s *humanInterventionStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (s *humanInterventionStore) RecordSessionScreeningRejects(string, []domain.ScreeningReject) error {
 	return nil
 }
+
 func (s *humanInterventionStore) LoadSessionScreeningRejects(string) ([]domain.ScreeningReject, error) {
 	return nil, nil
 }
+
 func (s *humanInterventionStore) RecordSessionTrades(string, []domain.TradeRecord) error { return nil }
+
 func (s *humanInterventionStore) LoadSessionTrades(string) ([]domain.TradeRecord, error) {
 	return nil, nil
 }
+
 func (s *humanInterventionStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
 	return nil, nil
 }
@@ -334,12 +345,15 @@ func (s *humanInterventionStore) RecordExperiment(domain.ExperimentRecord) error
 func (s *humanInterventionStore) RecordSessionExperiment(domain.ReplaySession, domain.ExperimentRecord) error {
 	return nil
 }
+
 func (s *humanInterventionStore) RecordSessionSummary(domain.ReplaySession, domain.SessionSummary) error {
 	return nil
 }
+
 func (s *humanInterventionStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
 	return nil, nil
 }
+
 func (s *humanInterventionStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
 	return nil, nil, nil
 }

@@ -27,6 +27,7 @@ var (
 	symbolsArg = flag.String("symbols", "", "comma-separated stock IDs (or use fundamentals.json)")
 	date       = flag.String("date", "", "specific date (YYYY-MM-DD), default: yesterday")
 	dryRun     = flag.Bool("dry-run", false, "print what would be added without writing")
+	workDir    = flag.String("workdir", ".", "atlas repo root (data/ + configs/ + state/ live here)")
 )
 
 type InstitutionalInvestorRow struct {
@@ -41,7 +42,7 @@ type InstitutionalInvestorRow struct {
 func main() {
 	flag.Parse()
 
-	stateDir := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "state")
+	stateDir := filepath.Join(*workDir, "data", "state")
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create state dir: %v\n", err)
 		os.Exit(1)
@@ -63,7 +64,7 @@ func main() {
 
 	fmt.Printf("Backfill institutional investors for %d symbols on %s\n", len(symbols), targetDate)
 
-	outputPath := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "replay", "institutional_investors.jsonl")
+	outputPath := filepath.Join(*workDir, "data", "replay", "institutional_investors.jsonl")
 	existing := loadExistingRecords(outputPath)
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -137,7 +138,7 @@ func loadSymbols(symbolsArg string) []string {
 		return strings.Split(symbolsArg, ",")
 	}
 
-	fundamentalsPath := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "fundamentals.json")
+	fundamentalsPath := filepath.Join(*workDir, "data", "fundamentals.json")
 	data, err := os.ReadFile(fundamentalsPath)
 	if err != nil {
 		return nil
