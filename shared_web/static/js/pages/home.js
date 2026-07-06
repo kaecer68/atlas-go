@@ -282,8 +282,9 @@ function renderTodaySummary(macro, stress, pipeline, events, crossStatus) {
   if (indicatorsEl) {
     const dirTone = rec === '偏多' ? 'bullish' : rec === '偏空' ? 'bearish' : 'neutral';
     const dirLabel = rec === '偏多' ? '↑偏多' : rec === '偏空' ? '↓偏空' : '→觀望';
-    const stressVal = stress && stress.index != null ? stress.index.toFixed(0) : '—';
-    const stressLabel = stress && stress.index != null ? `${stressVal}` : '—';
+    const stressScoreVal = pointValue(stress, 'score');
+    const stressVal = stressScoreVal !== null ? stressScoreVal.toFixed(0) : '—';
+    const stressLabel = stressVal;
     const foreignChange = macro ? pointChange(macro, 'foreign_investor_net') : null;
     const foreignLabel = foreignChange !== null ? fmtSignedPct(foreignChange) : '—';
     const taiexVal = macro ? pointValue(macro, 'taiex') : null;
@@ -664,7 +665,7 @@ function mockData() {
         { theme: 'stress_low', sentiment: 0.90, confidence: 0.85, severity: 'low', affected_industries: [] },
       ],
     },
-    stress: { index: 28.5, regime: 'risk_on' },
+    stress: { score: 28.5, regime: 'risk_on' },
     narrative: [
       { theme: '除權息旺季', sentiment: 0.6, confidence: 0.7, severity: 'medium' },
       { theme: '台指期結算', sentiment: 0.3, confidence: 0.8, severity: 'low' },
