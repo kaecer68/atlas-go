@@ -13,7 +13,7 @@ export const template = `
           <input type="password" id="loginPassword" name="password" placeholder="至少 8 碼" required minlength="8" autocomplete="current-password">
         </div>
         <div id="loginError" class="auth-error hidden"></div>
-        <button type="submit" class="btn btn-primary btn-full">登入</button>
+        <button type="submit" class="btn btn--primary btn-full">登入</button>
       </form>
       <p class="auth-footer">還沒有帳號？<a href="/client/register" data-page="register" class="auth-link" onclick="event.preventDefault();window.switchPage('register')">立即註冊</a></p>
     </div>
@@ -21,7 +21,7 @@ export const template = `
 `;
 
 export async function init() {
-  const { login, isLoggedIn } = await import('../services/auth.js');
+  const { login, isLoggedIn, renderNavState } = await import('../services/auth.js');
   const loggedIn = await isLoggedIn();
   if (loggedIn) {
     window.switchPage('home');
@@ -39,6 +39,7 @@ export async function init() {
     btn.textContent = '登入中…';
     try {
       await login(form.email.value, form.loginPassword.value);
+      await renderNavState();
       window.switchPage('home');
     } catch (err) {
       errorEl.textContent = err.message || '登入失敗，請檢查帳號密碼';

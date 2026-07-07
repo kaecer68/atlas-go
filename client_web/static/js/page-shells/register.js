@@ -14,7 +14,7 @@ export const template = `
         </div>
         <div id="registerError" class="auth-error hidden"></div>
         <div id="registerSuccess" class="auth-success hidden"></div>
-        <button type="submit" class="btn btn-primary btn-full">註冊</button>
+        <button type="submit" class="btn btn--primary btn-full">註冊</button>
       </form>
       <p class="auth-footer">已有帳號？<a href="/client/login" data-page="login" class="auth-link" onclick="event.preventDefault();window.switchPage('login')">立即登入</a></p>
     </div>
@@ -22,7 +22,7 @@ export const template = `
 `;
 
 export async function init() {
-  const { register, isLoggedIn } = await import('../services/auth.js');
+  const { register, isLoggedIn, renderNavState } = await import('../services/auth.js');
   const loggedIn = await isLoggedIn();
   if (loggedIn) {
     window.switchPage('home');
@@ -41,6 +41,7 @@ export async function init() {
     btn.textContent = '註冊中…';
     try {
       await register(form.email.value, form.registerPassword.value);
+      await renderNavState();
       successEl.textContent = '註冊成功！7 天 Premium 試用已啟用，正為您導向首頁…';
       successEl.classList.remove('hidden');
       setTimeout(() => window.switchPage('home'), 1500);

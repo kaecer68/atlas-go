@@ -216,3 +216,54 @@
 .nav-auth-item {
   padding-left: 8px;
 }
+
+/* ─── MCP integration page (Phase C) ─── */
+.mcp-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg);
+}
+.mcp-intro {
+  color: var(--editorial-muted);
+  font-size: 0.92rem;
+  margin-bottom: var(--space-lg);
+  line-height: 1.6;
+}
+
+/* ─── 404 error page (Phase C) ─── */
+.error-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  padding: var(--space-xl);
+}
+.error-card {
+  text-align: center;
+  max-width: 420px;
+  width: 100%;
+}
+.error-code {
+  font-family: var(--editorial-font-display);
+  font-size: 4rem;
+  font-weight: 800;
+  color: var(--editorial-muted);
+  margin: 0 0 var(--space-sm);
+  line-height: 1;
+}
+.error-message {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--editorial-text);
+  margin-bottom: var(--space-xs);
+}
+.error-hint {
+  font-size: 0.88rem;
+  color: var(--editorial-muted);
+  margin-bottom: var(--space-xl);
+}
+.error-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-md);
+}
