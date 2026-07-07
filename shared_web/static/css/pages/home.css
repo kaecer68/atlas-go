@@ -494,10 +494,10 @@
   }
 }
 
-/* Progressive disclosure — market-pulse advanced cards */
-#home-market-grid[data-disclosure-state="collapsed"] .disclosure-tier-advanced {
-  display: none;
-}
+/* Progressive disclosure is controlled by lazy-render in home.js
+   (collapsed → not in DOM, expanded → appended). DOM is the single source
+   of truth; a state-attribute-based CSS rule would re-hide cards on JS
+   re-render. */
 
 .disclosure-toggle {
   display: flex;

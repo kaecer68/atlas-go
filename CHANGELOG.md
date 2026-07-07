@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.0.30] - 2026-07-07
+
+### Added
+- **Progressive Disclosure for market-pulse grid** (PR #969): 取代 PR #946 的三級模式（已於 0.0.0.29 移除）。市場脈動 12 張卡改為「5 張核心（始終顯示）+ 7 張進階（預設摺疊，點『展開更多』顯示）」設計。新增 `disclosure-state.js` 管理 localStorage 持久化（prefix: `atlas-disclosure-`），用戶展開狀態記住跨 session。CSS 透過 `[data-disclosure-state="collapsed"] .disclosure-tier-advanced { display: none }` 驅動隱藏，`aria-expanded` / `aria-label` / sr-only live region 處理無障礙。設計意圖：兌現原 mode-manager.js「最少 API 呼叫」承諾（前端摺疊先 ship，後端 fields 過濾為 follow-up）。
+
+### Fixed
+- **進階揭露按鈕 a11y** (PR #970): `home.js` 按鈕新增動態 `aria-label`（`展開/收合 7 張進階指標`，`aria-expanded` 兩狀態切換）、sr-only live region 公告狀態。`utilities.css` 新增 `.sr-only` helper。原始 PR #969 漏做螢幕閱讀器 announce，補上後鍵盤與 NVDA / VoiceOver 使用者可正確感知展開/收合。
+- **Docker embed.FS timing race** (PR #970): `.dockerignore` 新增精準排除 `client_web/dist/` / `admin_web/dist/` / `shared_web/dist/`，避免本地舊 build 污染容器 nodebuilder 階段的 COPY 結果，根除「本地 dist 較新、容器 binary 較舊」導致 served bundle 走 SPA fallback 返回 index.html 的問題。
+
+### Removed
+- **`docs/audit/2026-07-01-phase2-retail-investor-landing-audit.md`** (PR #970): 該文件專門描述已移除的「三級投資人角色模式」設計，繼續保留會誤導新人。同步修正 `docs/DESIGN.md` 與 `docs/DOCUMENTATION_MAP.md` 對該檔案的引用為抽象描述。
+
 ## [0.0.0.29] - 2026-07-07
 
 ### Removed
