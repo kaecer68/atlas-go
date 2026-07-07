@@ -80,8 +80,7 @@
 | WA-604 排程/任務 | `scheduler_*`、`task_*` | 9 | schedule status、task CRUD |
 | WA-606 系統健康 | `system_*`、`health_*`、`metrics_*` | 12 | health/metrics/data-integrity/circuit |
 | WA-700 PRISM | `prism_*` | 1 | training-results |
-| WA-701 Swarm | `swarm_*` | 5 | status/consensus/anomalies/scenarios/strats |
-| **總計** | | **~102** | （其中 32 個為 Admin-only / §3.2 排除；70 個為 MCP tool 候選） |
+| **總計** | | **~97** | （其中 32 個為 Admin-only / §3.2 排除；65 個為 MCP tool 候選） |
 
 ### 3.2 不暴露的 endpoints（安全邊界）
 
@@ -400,7 +399,6 @@ Client 端（任意 SSE 相容 agent）：
 | Universe | `universe_get_sessions`, `universe_get_universe_overlap` | 2 |
 | Report | `report_get_daily_summary`, `report_get_performance`, `report_get_tax_snapshot`, `report_get_export_link` | 4 |
 | Prism | `prism_get_training_results` | 1 |
-| Swarm | `swarm_get_status`, `swarm_get_consensus`, `swarm_get_anomalies`, `swarm_get_scenarios`, `swarm_get_strategies` | 5 |
 
 ### Admin / destructive 排除清單（per §3.2）
 
@@ -523,7 +521,7 @@ cmd/atlas-mcp/
     ├── tools_system.go + _test.go
     ├── tools_llm_trace.go + _test.go
     ├── tools_data_universe.go + _test.go
-    └── tools_report_prism_swarm.go + _test.go
+    └── tools_report_prism.go + _test.go
 ```
 
 ## 12. Phase 4 Direction A — Observability（2026-07-01）

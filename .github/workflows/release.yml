@@ -29,7 +29,7 @@ jobs:
 
           ### Features
           - Phase 2: Darwinian Weights, Superinvestor Layer
-          - Phase 3: Agent Spawning, PRISM, Soros Reflexivity, MiroFish Swarm
+          - Phase 3: Agent Spawning, PRISM, Soros Reflexivity
           - Phase 4: Meta-Learning, Adversarial Training, Global Markets, Real-Time Adaptation
 
           ### Installation

@@ -197,15 +197,6 @@
 |------|------|
 | `prism_get_training_results` | PRISM cohort 訓練結果 |
 
-### Swarm（5 個 — 模擬引擎已降級，PR #963，回傳 deprecated 空值）
-| Tool | 用途 |
-|------|------|
-| `swarm_get_status` | Swarm 狀態容器（模擬已停用） |
-| `swarm_get_consensus` | 空共識（模擬已停用） |
-| `swarm_get_anomalies` | 空異常列表（模擬已停用） |
-| `swarm_get_scenarios` | 空 scenario 列表（模擬已停用） |
-| `swarm_get_strategies` | 空策略組合（模擬已停用） |
-
 ---
 
 ## 排除的 admin / destructive 端點（per spec §3.2）
@@ -256,5 +247,4 @@
 | **Alert Triage**（警報分類） | `alert_list_unacknowledged` + `alert_get_stats` | `alert_get_rules` | 確認後用 admin API acknowledge |
 | **自我觀測**（我的呼叫紀錄） | `mcp_get_session_topology` + `mcp_get_call_stats` | `mcp_get_top_slow_tools` + `mcp_anomaly_get_recent` | audit 用途，非日常操作 |
 | **稅務查詢** | `report_get_tax_snapshot` | `report_get_performance` | 僅在需要稅務報告時 |
-| **Swarm 分析** | `swarm_get_status` + `swarm_get_consensus` | `swarm_get_anomalies` | 理解市場共識時用 |
 | **排程管理** | `scheduler_get_status` + `task_list` | `task_get_events` | 查看背景任務狀態 |
