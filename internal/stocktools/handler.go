@@ -1,0 +1,191 @@
+// Package stocktools exposes per-symbol Taiwan stock endpoints used by atlas-mcp.
+package stocktools
+
+import (
+	"context"
+	"math"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
+)
+
+// Deps holds the data providers required by the stocktools handlers.
+type Deps struct {
+	FugleClient  *marketdata.FugleClient
+	Fundamentals *portfolio.FundamentalProvider
+	CapitalFlow  *marketdata.TWSECapitalFlowProvider
+	QuoteStore   ledger.QuoteStore
+}
+
+// Handler serves per-symbol Taiwan stock endpoints.
+type Handler struct {
+	deps Deps
+}
+
+// NewHandler creates a Handler from the given dependencies.
+func NewHandler(deps Deps) *Handler {
+	return &Handler{deps: deps}
+}
+
+// RegisterRoutes attaches /api/stock/* routes to mux.
+func RegisterRoutes(mux *http.ServeMux, deps Deps) {
+	h := NewHandler(deps)
+	mux.Handle("GET /api/stock/quote", shared.Get(h.HandleQuote))
+	mux.Handle("GET /api/stock/fundamentals", shared.Get(h.HandleFundamentals))
+	mux.Handle("GET /api/stock/chips", shared.Get(h.HandleChips))
+	mux.Handle("GET /api/stock/technical", shared.Get(h.HandleTechnical))
+}
+
+// HandleQuote returns the latest intraday quote for a single symbol.
+func (h *Handler) HandleQuote(r *http.Request) (int, any) {
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
+	}
+	if h.deps.FugleClient == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "quote provider not configured"}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	q, err := h.deps.FugleClient.GetQuote(ctx, symbol)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+	return http.StatusOK, q
+}
+
+// HandleFundamentals returns fundamental metrics for a single symbol.
+func (h *Handler) HandleFundamentals(r *http.Request) (int, any) {
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
+	}
+	if h.deps.Fundamentals == nil || !h.deps.Fundamentals.HasData() {
+		return http.StatusServiceUnavailable, map[string]string{"error": "fundamentals data not loaded"}
+	}
+	return http.StatusOK, h.deps.Fundamentals.Get(symbol)
+}
+
+// HandleChips returns institutional investor flow for a single symbol.
+func (h *Handler) HandleChips(r *http.Request) (int, any) {
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
+	}
+	if h.deps.CapitalFlow == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "capital flow provider not configured"}
+	}
+	date := r.URL.Query().Get("date")
+	if date == "" {
+		date = time.Now().Format("20060102")
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	flow, err := h.fetchLatestSymbolFlow(ctx, symbol, date)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+	return http.StatusOK, flow
+}
+
+func (h *Handler) fetchLatestSymbolFlow(ctx context.Context, symbol, dateStr string) (marketdata.SymbolFlow, error) {
+	// Try up to 7 trading days back to find the most recent data.
+	for i := 0; i < 7; i++ {
+		d, err := time.Parse("20060102", dateStr)
+		if err != nil {
+			return marketdata.SymbolFlow{}, err
+		}
+		d = d.AddDate(0, 0, -i)
+		if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
+			continue
+		}
+		ds := d.Format("20060102")
+		flow, err := h.deps.CapitalFlow.FetchSymbolFlow(ctx, symbol, ds)
+		if err == nil {
+			return flow, nil
+		}
+	}
+	return marketdata.SymbolFlow{}, context.Canceled
+}
+
+// HandleTechnical returns simple technical indicators for a single symbol.
+func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
+	}
+	if h.deps.QuoteStore == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "quote store not configured"}
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	if days <= 0 {
+		days = 90
+	}
+	if days > 365 {
+		days = 365
+	}
+	end := time.Now()
+	start := end.AddDate(0, 0, -days)
+	bars, err := h.deps.QuoteStore.LoadQuotes(symbol, start, end)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+	if len(bars) < 2 {
+		return http.StatusServiceUnavailable, map[string]string{"error": "insufficient historical quote data"}
+	}
+	return http.StatusOK, computeTechnical(bars)
+}
+
+func computeTechnical(bars []domain.DailyBar) map[string]any {
+	closes := make([]float64, len(bars))
+	for i, b := range bars {
+		closes[i] = b.Close
+	}
+	latest := bars[len(bars)-1]
+	return map[string]any{
+		"symbol": latest.Symbol,
+		"date":   latest.Date.Format("2006-01-02"),
+		"close":  latest.Close,
+		"volume": latest.Volume,
+		"sma20":  sma(closes, 20),
+		"sma50":  sma(closes, 50),
+		"rsi14":  rsi(closes, 14),
+	}
+}
+
+func sma(values []float64, n int) float64 {
+	if len(values) < n {
+		return 0
+	}
+	sum := 0.0
+	for i := len(values) - n; i < len(values); i++ {
+		sum += values[i]
+	}
+	return math.Round(sum/float64(n)*100) / 100
+}
+
+func rsi(values []float64, n int) float64 {
+	if len(values) < n+1 {
+		return 0
+	}
+	var gains, losses float64
+	for i := len(values) - n; i < len(values); i++ {
+		diff := values[i] - values[i-1]
+		if diff > 0 {
+			gains += diff
+		} else {
+			losses -= diff
+		}
+	}
+	if losses == 0 {
+		return 100
+	}
+	rs := gains / losses
+	return math.Round(100-(100/(1+rs))*100) / 100
+}
