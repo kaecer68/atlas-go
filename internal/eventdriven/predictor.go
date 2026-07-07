@@ -81,11 +81,13 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 	}
 
 	return PredictionReport{
-		GeneratedAt:  now,
-		Window:       "5-day forward",
-		Predictions:  predictions,
-		ActiveEvents: items,
-		Summary:      buildPredictionSummary(predictions, active, cfScore),
+		GeneratedAt:      now,
+		Window:           "5-day forward",
+		Predictions:      predictions,
+		ActiveEvents:     items,
+		ETFEstimates:     p.buildETFEstimates(timeline),
+		RevenueSurprises: p.buildRevenueSurprises(timeline),
+		Summary:          buildPredictionSummary(predictions, active, cfScore),
 	}
 }
 
@@ -241,4 +243,128 @@ func buildPredictionSummary(predictions []FlowPrediction, active []industry.Cale
 	}
 
 	return strings.Join(parts, "。") + "。"
+}
+
+// buildETFEstimates generates ETF flow estimates from rebalance events.
+// Formula: est_flow = etf_aum (NTD billions) × est_weight → NTD millions.
+func (p *Predictor) buildETFEstimates(timeline []industry.CalendarEvent) []ETFEstimate {
+	var estimates []ETFEstimate
+	for _, e := range timeline {
+		switch e.EventType {
+		case string(industry.EventTaiwan50Rebalance):
+			estimates = append(estimates, p.etfRebalanceEstimates("0050 臺灣50", e)...)
+		default:
+			if strings.Contains(strings.ToLower(e.EventType), "etf") ||
+				strings.Contains(e.Name, "0056") ||
+				strings.Contains(e.Name, "00878") {
+				etfName := guessETFName(e.Name)
+				if etfName != "" {
+					estimates = append(estimates, p.etfRebalanceEstimates(etfName, e)...)
+				}
+			}
+		}
+	}
+	return estimates
+}
+
+// etfRebalanceEstimates returns estimated flow for a known ETF rebalance event.
+func (p *Predictor) etfRebalanceEstimates(etfName string, _ industry.CalendarEvent) []ETFEstimate {
+	type etfProfile struct {
+		name string
+		aum  float64
+	}
+	symbols := map[string]etfProfile{
+		"0050":           {name: "0050 臺灣50", aum: 380},
+		"0056":           {name: "0056 高股息", aum: 320},
+		"00878":          {name: "00878 永續高股息", aum: 280},
+		"0050 臺灣50":    {name: "0050 臺灣50", aum: 380},
+		"0056 高股息":    {name: "0056 高股息", aum: 320},
+		"00878 永續高股息": {name: "00878 永續高股息", aum: 280},
+	}
+
+	pf, ok := symbols[etfName]
+	if !ok {
+		return nil
+	}
+
+	exampleStocks := []struct {
+		symbol, name  string
+		weight        float64
+		direction     string
+	}{
+		{"2330", "台積電", 0.12, "add"},
+		{"2454", "聯發科", 0.06, "add"},
+		{"2317", "鴻海", 0.04, "add"},
+	}
+
+	var out []ETFEstimate
+	for _, s := range exampleStocks {
+		flow := pf.aum * s.weight * 1000
+		out = append(out, ETFEstimate{
+			ETFName:     pf.name,
+			StockSymbol: s.symbol,
+			StockName:   s.name,
+			Direction:   s.direction,
+			EstWeight:   s.weight,
+			ETFAUM:      pf.aum,
+			EstFlow:     flow,
+		})
+	}
+	return out
+}
+
+func guessETFName(eventName string) string {
+	l := strings.ToLower(eventName)
+	switch {
+	case strings.Contains(l, "0050") || strings.Contains(l, "臺灣50") || strings.Contains(l, "台灣50"):
+		return "0050 臺灣50"
+	case strings.Contains(l, "0056") || strings.Contains(l, "高股息"):
+		return "0056 高股息"
+	case strings.Contains(l, "00878") || strings.Contains(l, "永續"):
+		return "00878 永續高股息"
+	default:
+		return ""
+	}
+}
+
+// buildRevenueSurprises evaluates revenue events for >10% surprise.
+func (p *Predictor) buildRevenueSurprises(timeline []industry.CalendarEvent) []RevenueSurprise {
+	var surprises []RevenueSurprise
+	for _, e := range timeline {
+		if e.EventType != string(industry.EventMonthlyRevenue) {
+			continue
+		}
+		rs := p.evaluateRevenueSurprise(e)
+		if rs != nil {
+			surprises = append(surprises, *rs)
+		}
+	}
+	return surprises
+}
+
+func (p *Predictor) evaluateRevenueSurprise(e industry.CalendarEvent) *RevenueSurprise {
+	expected := 100.0
+	actual := expected * (1 + e.SentimentAdjustment)
+	if e.BaseWeight > 0.5 {
+		actual = expected * (1 + e.SentimentAdjustment*1.5)
+	}
+	surprisePct := (actual - expected) / expected
+	impact := "neutral"
+	if surprisePct > 0.1 {
+		impact = "bullish"
+	} else if surprisePct < -0.1 {
+		impact = "bearish"
+	}
+	symbol := ""
+	if len(e.AffectedIndustries) > 0 {
+		symbol = e.AffectedIndustries[0]
+	}
+	return &RevenueSurprise{
+		StockSymbol: symbol,
+		StockName:   e.Name,
+		Expected:    expected,
+		Actual:      actual,
+		SurprisePct: surprisePct,
+		FlowImpact:  impact,
+	}
 }
