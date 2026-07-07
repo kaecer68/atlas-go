@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.0.29] - 2026-07-07
+
+### Removed
+- **三級投資人角色模式** (revert PR #946): 移除 `simple` / `standard` / `pro` 三級切換按鈕與對應的 `data-atlas-mode` / `data-simplified` 機制，改為單一預設完整模式。市場脈動 11 張卡（含 VIX / 融資餘額 / 投信 / 自營商 / 歷史波動 / 散戶情緒）、投資組合 KPI（夏普 / 勝率 / 最大回撤）、首頁訊號燈條與事件月曆全部預設顯示。理由：三級切換 UI 摩擦大、實際使用率低，advanced-only / pro-only 區分過於細微，新用戶無從辨識。受影響檔案：7 個前端檔案（2 JS + 1 CSS + 3 文檔 + 1 HTML）— `mode-manager.js` / `simplified-mode.js` / `main.js` / `home.js` / `portfolio.js` / `simplified.css` / `home.css` / `index.html` / `admin_web/AGENTS.md` / `CLAUDE.md`。
+
 ## [0.0.0.28] - 2026-07-04
 
 ### Fixed

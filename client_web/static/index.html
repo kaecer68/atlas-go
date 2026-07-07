@@ -29,22 +29,6 @@
 <meta name="twitter:description" content="台股模擬投資、風險監控、績效追蹤一站整合。">
 <meta name="twitter:image" content="https://atlas-go.example.com/static/og-image.png">
 <meta name="twitter:image:alt" content="Atlas-Go 投資人平台 — 台股模擬、風險監控與績效追蹤">
-<script>
-  // 三級模式：早期同步執行避免 FOUC（在 CSS 載入前設定 :root[data-atlas-mode]）
-  (function() {
-    try {
-      var mode = localStorage.getItem('atlas-mode');
-      if (mode === 'simple' || mode === 'standard' || mode === 'pro') {
-        document.documentElement.setAttribute('data-atlas-mode', mode);
-        if (mode === 'simple') document.documentElement.setAttribute('data-simplified', 'true');
-      } else if (localStorage.getItem('atlas-simplified') === '1') {
-        // 向後相容：舊版 boolean toggle → simple mode
-        document.documentElement.setAttribute('data-atlas-mode', 'simple');
-        document.documentElement.setAttribute('data-simplified', 'true');
-      }
-    } catch (e) { /* 隱私模式 / localStorage 禁用時忽略 */ }
-  })();
-</script>
 <link rel="stylesheet" href="css/main.css">
 <script type="application/ld+json">
 {
@@ -142,13 +126,6 @@
       <span class="dot"></span>
       <span id="refreshTime">等待更新…</span>
       <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新">⏸</button>
-    </div>
-    <div class="simplified-control">
-      <div class="mode-selector" id="modeSelector">
-        <button class="mode-btn mode-btn--simple" data-mode="simple" aria-label="簡單模式 — 核心資訊">簡單</button>
-        <button class="mode-btn mode-btn--standard active" data-mode="standard" aria-label="標準模式 — 完整儀表板">標準</button>
-        <button class="mode-btn mode-btn--pro" data-mode="pro" aria-label="專業模式 — 進階分析">專業</button>
-      </div>
     </div>
     <div class="role-switcher">
       <a href="/admin/" class="role-link">管理者</a>

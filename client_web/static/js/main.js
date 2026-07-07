@@ -12,7 +12,6 @@ import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
-import { init as initSimplifiedMode } from './simplified-mode.js';
 import './modals/modal.js';
 import { injectSharedHead } from './shared/head-config.js';
 injectSharedHead();
@@ -469,7 +468,6 @@ if (typeof window !== 'undefined') {
   initBacktestDates();
   startAutoRefresh();
   initEventStream();
-  initSimplifiedMode();
   (async () => {
     loadAll().catch(e => console.warn('[init] loadAll failed:', e));
     var initialPath = window.location.pathname

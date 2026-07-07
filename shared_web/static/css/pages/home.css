@@ -341,11 +341,6 @@
   background: var(--editorial-surface);
 }
 
-/* Simplified mode: hide signal strip, calendar & advanced cards */
-[data-simplified] #home-signal-strip { display: none; }
-[data-simplified] #home-event-calendar { display: none; }
-[data-simplified] .advanced-only { display: none; }
-
 .positive { color: var(--editorial-bullish); }
 .negative { color: var(--editorial-bearish); }
 
@@ -463,7 +458,6 @@
 
 /* accessibility: focus rings */
 .home-hero__btn:focus-visible,
-.home-mode-btn:focus-visible,
 .home-expand-btn:focus-visible,
 .cal-show-more:focus-visible {
   outline: 2px solid var(--editorial-accent);
@@ -492,7 +486,6 @@
   .home-skeleton,
   .home-skeleton::after,
   .home-hero__btn,
-  .home-mode-btn,
   .home-expand-btn {
     animation: none !important;
     transition: none !important;
