@@ -139,7 +139,7 @@
     },
     {
       "name": "RunMultiDay",
-      "params": "(quotesByDate map[string][]domain.Quote, recsByDate map[string][]domain.Recommendation, dates []time.Time)",
+      "params": "(regime domain.Regime, quotesByDate map[string][]domain.Quote, recsByDate map[string][]domain.Recommendation, dates []time.Time)",
       "receiver": "Engine",
       "results": "(domain.SimulationReport)"
     },
