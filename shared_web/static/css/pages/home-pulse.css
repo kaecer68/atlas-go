@@ -60,16 +60,22 @@
   grid-template-columns: repeat(4, 1fr);
 }
 
+.home-grid--5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
 @media (max-width: 1024px) {
   .home-grid--3,
-  .home-grid--4 {
+  .home-grid--4,
+  .home-grid--5 {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 640px) {
   .home-grid--3,
-  .home-grid--4 {
+  .home-grid--4,
+  .home-grid--5 {
     grid-template-columns: 1fr;
   }
 }

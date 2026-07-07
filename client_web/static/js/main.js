@@ -518,6 +518,7 @@ async function renderHomeTierSections() {
   // Common data for registered+ and premium+
   var capitalFlow = await silentGetJSON('/api/capital-flow/summary');
   var events = await silentGetJSON('/api/events/prediction');
+  var eventsCal = await silentGetJSON('/api/events/calendar');
 
   if (capitalFlow) {
     var forces = capitalFlow.forces || [];
@@ -536,6 +537,25 @@ async function renderHomeTierSections() {
       return metricCard({ label: label, value: (p.confidence * 100).toFixed(0) + '%', trend: cls, sub: '' });
     }).join('');
     root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>5 日資金流預測</h2></div><div class="home-grid home-grid--5">' + preds + '</div></section>';
+  }
+
+  if (eventsCal && eventsCal.events && eventsCal.events.length > 0) {
+    var eventItems = eventsCal.events.slice(0, 5).map(function (e) {
+      var impact = e.expected_flow_impact || '';
+      var cls = impact === 'bullish' ? 'trend-bullish' : impact === 'bearish' ? 'trend-bearish' : '';
+      var badgeCls = impact === 'bullish' ? 'tier-badge tier-badge--signal tier-badge--bullish' : impact === 'bearish' ? 'tier-badge tier-badge--signal tier-badge--bearish' : 'tier-badge tier-badge--neutral';
+      return '<div class="event-card"><div class="event-card__name">' + escapeHtml(e.name || '') + '</div><div class="event-card__meta"><span class="' + badgeCls + '">' + escapeHtml(impact || 'neutral') + '</span><span class="event-card__date">' + escapeHtml(e.start_date ? e.start_date.slice(0, 10) : '') + '</span></div></div>';
+    }).join('');
+    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>近期事件</h2></div><div class="event-list">' + eventItems + '</div></section>';
+  }
+
+  var recs = await silentGetJSON('/api/recommendations');
+  if (recs && recs.recommendations && recs.recommendations.length > 0) {
+    var recItems = recs.recommendations.slice(0, 3).map(function (r) {
+      var dirCls = r.direction === 'bullish' ? 'trend-bullish' : r.direction === 'bearish' ? 'trend-bearish' : '';
+      return '<div class="rec-card"><div class="rec-card__header"><span class="rec-card__name">' + escapeHtml(r.name || r.strategy || '') + '</span><span class="rec-card__tier tier-badge tier-badge--' + escapeHtml(r.tier || 'public') + '">' + escapeHtml(r.tier || 'public') + '</span></div><div class="rec-card__signal ' + dirCls + '">' + escapeHtml(r.signal || r.summary || '') + '</div></div>';
+    }).join('');
+    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>策略推薦</h2></div><div class="rec-list">' + recItems + '</div></section>';
   }
 
   // Premium-only

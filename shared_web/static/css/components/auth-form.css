@@ -166,6 +166,43 @@
   font-size: 0.72rem;
   font-weight: 700;
 }
+/* tier-badge modifier variants (Phase B — tier-gated home dashboard) */
+.tier-badge--public {
+  background: var(--editorial-muted);
+  color: var(--editorial-surface);
+}
+.tier-badge--registered {
+  background: var(--editorial-accent);
+  color: #fff;
+}
+.tier-badge--premium {
+  background: var(--pnl-profit);
+  color: #fff;
+}
+.tier-badge--signal {
+  position: static;
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.tier-badge--bullish {
+  background: color-mix(in srgb, var(--trend-bullish) 15%, transparent);
+  color: var(--trend-bullish);
+  border: 1px solid color-mix(in srgb, var(--trend-bullish) 40%, transparent);
+}
+.tier-badge--bearish {
+  background: color-mix(in srgb, var(--trend-bearish) 15%, transparent);
+  color: var(--trend-bearish);
+  border: 1px solid color-mix(in srgb, var(--trend-bearish) 40%, transparent);
+}
+.tier-badge--neutral {
+  background: color-mix(in srgb, var(--editorial-muted) 10%, transparent);
+  color: var(--editorial-muted);
+  border: 1px solid color-mix(in srgb, var(--editorial-muted) 30%, transparent);
+}
 .premium-mcp {
   max-width: 680px;
   margin: 0 auto;
