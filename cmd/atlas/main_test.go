@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -435,6 +436,65 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 	cc := rec3.Header().Get("Cache-Control")
 	if !strings.Contains(cc, "immutable") {
 		t.Fatalf("expected immutable cache for hashed asset, got: %s", cc)
+	}
+}
+
+// TestStaticDistPrefixMount guards against the regression where
+// `fs.Sub(DistFS, "dist")` returns a sub-FS that has files at `js/main.js`
+// (no `dist/` prefix), but URL requests still arrive with the `dist/`
+// prefix (e.g. `/client/dist/js/main.js`). Without a second
+// `http.StripPrefix("/dist/", ...)` between the URL prefix strip and the
+// static handler, every asset request falls through to the SPA fallback
+// and returns `index.html` instead of the file. See
+// `cmd/atlas/api_routes.go` `registerSimpleRoutes` for the production
+// mount chain — keep this test in sync with that pattern.
+func TestStaticDistPrefixMount(t *testing.T) {
+	tmpDir := t.TempDir()
+	distDir := filepath.Join(tmpDir, "dist")
+	if err := os.MkdirAll(filepath.Join(distDir, "js"), 0o755); err != nil {
+		t.Fatalf("mkdir dist/js: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(distDir, "js", "main.js"), []byte("console.log('dist-asset');"), 0o644); err != nil {
+		t.Fatalf("write dist/js/main.js: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("<h1>SPA</h1>"), 0o644); err != nil {
+		t.Fatalf("write dist/index.html: %v", err)
+	}
+
+	// Mirror the production setup: caller extracts the `dist/` subdir,
+	// so the staticHandler receives a sub-FS.
+	subFS, err := fs.Sub(os.DirFS(tmpDir), "dist")
+	if err != nil {
+		t.Fatalf("fs.Sub: %v", err)
+	}
+
+	// Keep this mount chain in sync with `registerSimpleRoutes` in
+	// `cmd/atlas/api_routes.go`. If you change one, change both.
+	mux := http.NewServeMux()
+	mux.Handle("/client/", http.StripPrefix("/client/", staticHandler(subFS)))
+
+	cases := []struct {
+		name     string
+		path     string
+		wantCode int
+		wantBody string
+	}{
+		{"asset under dist prefix", "/client/dist/js/main.js", http.StatusOK, "console.log('dist-asset');"},
+		{"root with trailing slash", "/client/", http.StatusOK, "<h1>SPA</h1>"},
+		{"unknown path falls back to SPA", "/client/some-random-page", http.StatusOK, "<h1>SPA</h1>"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("path %s: expected status %d, got %d (body=%q)", tc.path, tc.wantCode, rec.Code, rec.Body.String())
+			}
+			if got := rec.Body.String(); got != tc.wantBody {
+				t.Fatalf("path %s: expected body %q, got %q", tc.path, tc.wantBody, got)
+			}
+		})
 	}
 }
 
