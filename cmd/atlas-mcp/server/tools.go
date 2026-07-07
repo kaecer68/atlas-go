@@ -37,6 +37,10 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerEventTools(mcpSrv, s)
 	registerRiskAlertTools(mcpSrv, s)
 	registerStrategyTools(mcpSrv, s)
+	registerCapitalFlowTools(mcpSrv, s)
+	registerRecommendationTools(mcpSrv, s)
+	registerStockTools(mcpSrv, s)
+	registerStrategyRankerTools(mcpSrv, s)
 	registerExperimentTools(mcpSrv, s)
 	registerSynergyTools(mcpSrv, s)
 	registerControlTools(mcpSrv, s)
@@ -50,9 +54,6 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerRootsTools(mcpSrv, s)
 	registerElicitationTools(mcpSrv, s)
 	registerBriefingTools(mcpSrv, s)
-	registerStockTools(mcpSrv, s)
-	registerCapitalFlowTools(mcpSrv, s)
-	registerStrategyRankerTools(mcpSrv, s)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",

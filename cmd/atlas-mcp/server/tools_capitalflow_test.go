@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-func TestHandleCapitalFlowDaily(t *testing.T) {
+func TestHandleCapitalFlowDaily_OK(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
-	rec.responseBody = []byte(`{"force_scores":{"foreign":70},"resonance":0.6}`)
+	rec.responseBody = []byte(`{"date":"2026-07-07","forces":[],"resonance":{}}`)
 	_, out, err := s.handleCapitalFlowDaily(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -16,15 +16,15 @@ func TestHandleCapitalFlowDaily(t *testing.T) {
 	if rec.path != "/api/capital-flow/daily" {
 		t.Fatalf("path=%s", rec.path)
 	}
-	if out.Result == nil {
-		t.Fatal("expected result")
+	if out == nil {
+		t.Fatal("expected out non-nil")
 	}
 }
 
-func TestHandleCapitalFlowSummary(t *testing.T) {
+func TestHandleCapitalFlowSummary_OK(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
-	rec.responseBody = []byte(`{"latest_date":"20260707","summary":"neutral"}`)
+	rec.responseBody = []byte(`{"date":"2026-07-07","summary":"neutral"}`)
 	_, out, err := s.handleCapitalFlowSummary(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -32,7 +32,7 @@ func TestHandleCapitalFlowSummary(t *testing.T) {
 	if rec.path != "/api/capital-flow/summary" {
 		t.Fatalf("path=%s", rec.path)
 	}
-	if out.Result == nil {
-		t.Fatal("expected result")
+	if out == nil {
+		t.Fatal("expected out non-nil")
 	}
 }

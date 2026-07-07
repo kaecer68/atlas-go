@@ -100,8 +100,8 @@ curl -X POST http://localhost:18080/api/auth/register \
 curl -s http://localhost:18080/api/recommendations -b "token=<JWT>" | jq .
 ```
 
-完整 WA-8xx workflow 對應見 [`docs/PROCESSES.yaml`](docs/PROCESSES.yaml) §9。
+完整 WA-8xx workflow 對應見 [`PROCESSES.yaml`](PROCESSES.yaml) §9。
 
 ---
 
-> **Multi-CLI 並行協議**：[docs/MULTI_CLI_PROTOCOL.md](docs/MULTI_CLI_PROTOCOL.md)
+> **Multi-CLI 並行協議**：[MULTI_CLI_PROTOCOL.md](MULTI_CLI_PROTOCOL.md)

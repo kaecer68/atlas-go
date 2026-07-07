@@ -114,13 +114,19 @@ type DashboardAPI struct {
 	crossMarketSvc             *service.CrossMarketService
 }
 
+// NewDashboardAPI creates a DashboardAPI backed by CompositeMacroProvider.
+//
+// Deprecated: production code should use NewDashboardAPIWithGateway with a
+// monitoring.DataFetcher so that macro data flows through apigateway.Gateway
+// (observability, caching, uniform channel health). This constructor is kept
+// only as a fallback for tools that do not have a Gateway available.
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	cfg := config.Load()
 	var providers []marketdata.MacroDataProvider
 
 	// Yahoo Finance-backed providers — only when enabled.
 	// Legacy constructor: production uses NewDashboardAPIWithGateway() instead.
-	// See docs/GATEWAY_MIGRATION_TRACKING.md.
+	// See docs/archive/GATEWAY_MIGRATION_TRACKING.md.
 	if cfg.YahooEnabled {
 		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 		providers = append(providers, marketdata.NewSOXIndexProvider())
@@ -863,7 +869,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
 		// FinMind dividend provider is tax-utility, not a data channel.
-		// Gateway migration deferred — see docs/GATEWAY_MIGRATION_TRACKING.md.
+		// Gateway migration deferred — see docs/archive/GATEWAY_MIGRATION_TRACKING.md.
 		finMindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)

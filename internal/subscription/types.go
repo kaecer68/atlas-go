@@ -20,6 +20,15 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ProfileResponse is the JSON payload returned by GET /api/user/profile.
+type ProfileResponse struct {
+	User          *User     `json:"user"`
+	Email         string    `json:"email"`
+	Tier          Tier      `json:"tier"`
+	EffectiveTier Tier      `json:"effective_tier"`
+	TrialEnd      time.Time `json:"trial_end"`
+}
+
 // EffectiveTier returns the current tier considering trial status.
 func (u *User) EffectiveTier() Tier {
 	if u.Tier != TierPremium && time.Now().Before(u.TrialEnd) {

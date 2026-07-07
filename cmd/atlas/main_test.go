@@ -622,6 +622,9 @@ func TestAPIModeRegistersMetricsRoute(t *testing.T) {
 }
 
 func TestAPIModeAdminReloadConfigRejectsGet(t *testing.T) {
+	// Avoid 401 from wrapAdminAuth when the outer test environment has
+	// ATLAS_API_KEY set; we specifically want to assert the 405 behavior.
+	t.Setenv("ATLAS_API_KEY", "")
 	ledgerDir := t.TempDir()
 	shutdown := make(chan struct{})
 	listenDone := make(chan struct{})
@@ -1072,6 +1075,14 @@ func TestIsPublicPath(t *testing.T) {
 		{"api macro", "/api/macro/snapshot/latest", true},
 		{"api alerts", "/api/alerts", true},
 		{"api synergy", "/api/synergy/darwinian-status", true},
+		{"api capital flow daily", "/api/capital-flow/daily", true},
+		{"api capital flow summary", "/api/capital-flow/summary", true},
+		{"api events calendar", "/api/events/calendar", true},
+		{"api events prediction", "/api/events/prediction", true},
+		{"api recommendations", "/api/recommendations", true},
+		{"api reports latest", "/api/reports/latest", true},
+		{"api reports archive", "/api/reports/archive", true},
+		{"api reports subscribe", "/api/reports/subscribe", true},
 		{"api dashboard typo", "/api/dashboardx", false},
 		{"api unrelated system", "/api/system/foo", false},
 		{"universe metrics", "/universe/metrics", false},

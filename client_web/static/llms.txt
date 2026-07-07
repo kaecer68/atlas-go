@@ -3,13 +3,11 @@
 
 ## Site Map
 - /client/home — Daily market summary with AI investment signals
-- /client/live — Real-time risk monitoring and live orchestration
 - /client/portfolio — AI strategy performance and demo portfolio
 - /client/crossmarket — Cross-market correlation matrix (Taiwan vs US)
 - /client/industry — Sector ecosystem and supply chain analysis
 - /client/narrative — Macro narrative events and sentiment analysis
-- /client/strategy-evolution — Strategy performance evolution and Darwinian weights
-- /client/decision-chain — Symbol-level causal trace from macro → recommendation
+- /client/strategies — Investment principles and active strategy library
 
 ## API Reference
 - /api/macro/snapshot/latest — Latest macro data snapshot (TAIEX, TSM ADR, VIX, etc.)
@@ -20,4 +18,4 @@
 
 ## Agent Access
 - MCP server available at port 18080 (see cmd/atlas-mcp/README.md)
-- 84 tools for market data, risk analysis, strategy operations, and monitoring
+- 79–81 tools (depending on feature flags) for market data, risk analysis, strategy operations, and monitoring

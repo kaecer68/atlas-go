@@ -50,9 +50,14 @@ export async function register(email, password) {
 }
 
 /**
- * Logout: clear local state. The HttpOnly cookie is cleared by the server if needed.
+ * Logout: clear local state and ask the server to clear the HttpOnly cookie.
  */
-export function logout() {
+export async function logout() {
+  try {
+    await postJSON('/api/auth/logout', {});
+  } catch (e) {
+    // Best-effort server cookie clear; local state is cleared regardless.
+  }
   _token = null;
   _claims = null;
   _authValid = false;
@@ -67,11 +72,13 @@ export async function isLoggedIn() {
   if (_authChecked) return _authValid;
   try {
     const profile = await getJSON(PROFILE_URL);
-    if (profile && profile.email) {
+    const email = profile.email || (profile.user && profile.user.email);
+    const tier = profile.effective_tier || profile.tier || (profile.user && profile.user.tier);
+    if (profile && email) {
       _authValid = true;
-      if (profile.tier) {
+      if (tier) {
         if (!_claims) _claims = {};
-        _claims.tier = profile.tier;
+        _claims.tier = tier;
       }
     }
   } catch (e) {
