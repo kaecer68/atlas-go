@@ -160,14 +160,14 @@ func Run(ctx context.Context, cfg Config) error {
 	registerPrompts(mcpSrv)
 
 	// Verify tool count matches expected range.
-	// registerTools: 79-83 (base 79 + sampling 0-1 + elicitation 0-1, roots=2 always, anomaly=2 inside,
-	//                       capital_flow=2, recommendation=1 added in Phase 2)
+	// registerTools: 85-87 (base + stock 4 + strategy_ranker 1 + sampling 0-1 + elicitation 0-1,
+	//                       roots=2 always, anomaly=2 inside, capital_flow=2 + recommendation=1 added in Phase 2)
 	// registerEventTools: +2
 	// registerBriefingTools: +2
 	// registerAuditTools: +4 (not in registerTools)
-	// Total: 82-84 (min=76+4+2=82, max=78+4+2=84)
-	if n := RegisteredToolCount; n < 82 || n > 84 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 82-84", n)
+	// Total: 89-91
+	if n := RegisteredToolCount; n < 89 || n > 91 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 89-91", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for

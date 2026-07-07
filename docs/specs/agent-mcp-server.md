@@ -56,31 +56,33 @@
 
 ### 3.1 MCP Tools 全清單
 
-**統一數字聲明**：本規格涵蓋 **約 70 個 MCP tool 候選**（最終暴露數）。上限 102（含未篩選的衍生 endpoints）；下限約 50（剔除所有 Admin-only / 副作用後的純讀取工具）。Phase 1 MVP 實作 **5 個核心 tool**。
-
-> 為何是約 70：grep 結果共 268 個 `mux.Handle` / `mux.HandleFunc` match，去重後 HTTP endpoint 約 100-110 個。扣除 §3.2 列出的 10 個 Admin-only / 副作用 endpoint，再扣除 `#/static` 路由、`/admin/`、`/client/` SPA、`/metrics` Prometheus scrape、`/docs` swagger 等非業務 endpoint，最終候選數約 **70**。
+**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/AGENT_TOOLS.md`](../AGENT_TOOLS.md) 為單一權威來源。本節保留 high-level 群組對照；實際數量約 **86 個基礎 tool** + `SamplingEnabled` / `ElicitationEnabled` 啟用時最多再 +2。
 
 | WA | 群組 | Tool 數 | 主要用途 |
 |----|------|---------|---------|
 | WA-101 資料源 | `data_*` | 4 | channel 健康、data pipeline 監控 |
 | WA-102 標的宇宙 | `universe_*` | 2 | session 列表、universe 重疊分析 |
-| WA-103 Macro 鏈 | `macro_*` | 6 | stress index、capital flow、macro snapshot |
+| WA-103 Macro 鏈 | `macro_*` | 6 | stress index、capital flow snapshot、macro snapshot |
+| WA-104 個股 | `stock_*` | 4 | quote、fundamentals、chips、technical |
+| WA-105 資金流 | `capital_flow_*` | 2 | daily Z-score 分解、summary |
 | WA-200 體制 | `regime_*` | 1 | regime 歷史 |
-| WA-201 敘事 | `narrative_*` | 9 | events/chains/models/templates/stress-index |
+| WA-201 敘事 / 事件 | `narrative_*`、`event_*` | 9 | events/chains/models/templates/stress-index + event calendar/prediction |
 | WA-202 跨市場 | `crossmarket_*` | 3 | status/correlation/us-indices |
 | WA-301 LLM Loop | `llm_*` | 2 | health、cost |
 | WA-302 推理/Trace | `trace_*` | 4 | sim-latest、agent observatory、reasoning |
 | WA-400 風險 | `risk_*` | 5 | gate 狀態、correlation、risk-calibration |
-| WA-500 策略 | `strategy_*` | 8 | list/get/validate/annotate/summary |
-| WA-501 達爾文 | `synergy_*` | 6 | darwinian + l2-4 schedule |
-| WA-503 實驗 | `experiment_*` | 5 | promote/revert/judge/diff/history |
-| WA-505 報告/稅務 | `report_*`、`tax_*`、`perf_*` | 4 | report + tax snapshot + perf |
-| WA-601 警報 | `alert_*` | 8 | list/stats/rules/ack/resolve/silence |
-| WA-603 控制平面 | `control_*` | 8 | pause/resume/ban/approve/reject/audit |
-| WA-604 排程/任務 | `scheduler_*`、`task_*` | 9 | schedule status、task CRUD |
-| WA-606 系統健康 | `system_*`、`health_*`、`metrics_*` | 12 | health/metrics/data-integrity/circuit |
+| WA-500 策略 | `strategy_*`、`strategy_ranker` | 6 | list/get/attribution/summary + ranked strategies |
+| WA-501 達爾文 | `synergy_*` | 3 | darwinian + l2-4 schedule |
+| WA-503 實驗 | `experiment_*` | 3 | judge/diff/history |
+| WA-505 報告/稅務 | `report_*` | 4 | report + tax snapshot + perf + export |
+| WA-601 警報 | `alert_*` | 4 | list/stats/rules/unacknowledged |
+| WA-603 控制平面 | `control_*` | 4 | approve/reject/audit/overrides |
+| WA-604 排程/任務 | `scheduler_*`、`task_*` | 4 | schedule status、task CRUD |
+| WA-606 系統健康 | `system_*` | 7 | health/metrics/trends/thresholds/pipeline/circuit/maturity |
 | WA-700 PRISM | `prism_*` | 1 | training-results |
-| **總計** | | **~97** | （其中 32 個為 Admin-only / §3.2 排除；65 個為 MCP tool 候選） |
+| MCP 自我觀測 | `mcp_*` | 6 | session topology、call stats、tenant usage、slow tools、anomaly |
+| Daily Briefing | `mcp_quickstart`、`daily_report` | 2 | 一站式摘要、每日報告 |
+| **總計（基礎）** | | **~86** | 加上 sampling / elicitation 兩個 feature-gated tool 後最高 **88** |
 
 ### 3.2 不暴露的 endpoints（安全邊界）
 
@@ -153,6 +155,20 @@ PR #972 加入 4 個新 tools：
 | `event_calendar` | 近期事件列表 | `/api/events/calendar` |
 | `event_flow_prediction` | 5 日事件驅動資金流預測 | `/api/events/prediction` |
 
+## 3.7 個股 / 資金流 / 策略排名 MCP Tools
+
+本次 PR 新增 7 個個股級與策略排名 tools，統一由後端 `/api/stock/*`、`/api/capital-flow/*`、`/api/strategy-ranker/*` 提供資料：
+
+| Tool 名稱 | 用途 | 對應 API |
+|---------|------|---------|
+| `stock_get_quote` | 個股即時報價 | `/api/stock/quote?symbol={symbol}` |
+| `stock_get_fundamentals` | 個股基本面 | `/api/stock/fundamentals?symbol={symbol}` |
+| `stock_get_chips` | 個股籌碼面 | `/api/stock/chips?symbol={symbol}&date={date}` |
+| `stock_get_technical` | 個股技術面 | `/api/stock/technical?symbol={symbol}&days={days}` |
+| `capital_flow_daily` | 全市場資金流日報 | `/api/capital-flow/daily` |
+| `capital_flow_summary` | 資金流摘要 | `/api/capital-flow/summary` |
+| `strategy_ranker` | 策略排名（依勝率 + tier） | `/api/strategy-ranker/rank` |
+
 ---
 
 ## 4. JSON Schema 設計範本
@@ -206,7 +222,7 @@ cmd/atlas-mcp/
 ├── main.go            // 入口 + flag 解析 + stdio / SSE 啟動
 ├── server/
 │   ├── server.go      // MCP server lifecycle
-│   ├── tools.go       // 70 個候選 tool 註冊（依 §3 定義）
+│   ├── tools.go       // 註冊所有業務 tool（詳見 §3 與 `docs/AGENT_TOOLS.md`）
 │   ├── transport.go   // stdio / SSE / streamable-HTTP 切換
 │   └── auth.go        // ATLAS_MCP_TOKEN 驗證
 ├── tools/

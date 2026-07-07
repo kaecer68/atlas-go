@@ -1,6 +1,6 @@
 # Atlas Agent Tools — 實戰指南
 
-> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 86 個 tool，實際數量依 MCP server config 而定：基礎 84 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
+> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 91 個 tool，實際數量依 MCP server config 而定：基礎 89 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **整合到 Claude Desktop / OpenClaw / Hermes**：[`mcp-integration-guide.md`](./mcp-integration-guide.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
@@ -42,7 +42,7 @@
 
 ---
 
-## 完整工具 Catalog（約 86 個 tool，Phase 2 全部上線）
+## 完整工具 Catalog（約 91 個 tool，Phase 2 全部上線）
 
 ### Regime（1 個）
 | Tool | 用途 |
@@ -106,7 +106,7 @@
 | `alert_get_stats` | 警報統計 |
 | `alert_get_rules` | 警報規則配置 |
 
-### Strategy（5 個：1 Phase 1 + 4 Phase 2.2）
+### Strategy（6 個：1 Phase 1 + 5 Phase 2.2）
 | Tool | 用途 |
 |------|------|
 | `strategy_list_active` | Production 線上策略（Phase 1）|
@@ -114,6 +114,7 @@
 | `strategy_get` | 單筆策略 |
 | `strategy_get_attribution` | 績效歸因 |
 | `strategy_get_summary` | 策略摘要 |
+| `strategy_ranker` | 依勝率排序的策略排名（free / registered / premium tier）|
 
 ### Recommendation（1 個）
 | Tool | 用途 |
@@ -183,6 +184,20 @@
 | `data_get_quality` | 資料品質 metrics |
 | `data_get_field_contract` | Field contract schema |
 
+### Stock（4 個）
+| Tool | 用途 |
+|------|------|
+| `stock_get_quote` | 個股即時報價（最新價、漲跌、成交量） |
+| `stock_get_fundamentals` | 個股基本面（PE、PB、EPS、殖利率等） |
+| `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
+| `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
+
+### Capital Flow（2 個）
+| Tool | 用途 |
+|------|------|
+| `capital_flow_daily` | 七大資金勢力 Z-score 分解 + 共振強度（多/空） |
+| `capital_flow_summary` | 資金流向摘要（品質分數 + 共振 + 主力方向） |
+
 ### Universe（2 個）
 | Tool | 用途 |
 |------|------|
@@ -196,6 +211,12 @@
 | `report_get_performance` | 績效報告 |
 | `report_get_tax_snapshot` | 稅務 snapshot |
 | `report_get_export_link` | 匯出連結（短 TTL）|
+
+### Events（2 個）
+| Tool | 用途 |
+|------|------|
+| `event_calendar` | 近期市場事件日曆（營收、ETF 換股、MSCI、休市） |
+| `event_flow_prediction` | 未來 5 天事件驅動資金流預測（+ ETF 規模×權重預估） |
 
 ### Briefing（2 個）
 | Tool | 用途 |
@@ -263,6 +284,9 @@
 |-----------|----------|-----------------|------|
 | **Daily Briefing**（每日簡報） | `regime_get_history` + `crossmarket_get_status` + `narrative_get_bundle` | `macro_get_stress_index_current` + `alert_list_unacknowledged` | 早晚各跑一次 |
 | **市場全景** | `macro_get_snapshot_latest` + `regime_get_history` | `crossmarket_get_us_indices` + `macro_get_capital_flow_latest` | 開盤前必跑 |
+| **資金流向** | `capital_flow_daily` | `capital_flow_summary` | 確認多空共振與主力方向 |
+| **個股健檢** | `stock_get_quote` + `stock_get_fundamentals` | `stock_get_chips` + `stock_get_technical` | 輸入台股代號，如 `2330` |
+| **策略排名** | `strategy_ranker` | `strategy_list_active` + `strategy_get_summary` | 依勝率排序，注意 tier 標籤 |
 | **Risk Review**（風險審查） | `risk_get_metrics` + `risk_get_drawdown` | `risk_get_correlation_matrix` + `risk_get_commentary` | 若 drawdown > threshold 觸發 alert |
 | **Portfolio Health**（持倉健康） | `strategy_list_active` + `strategy_get_summary` | `strategy_get_attribution` + `synergy_get_darwinian_status` | 確認線上策略狀態 |
 | **Experiment Eval**（實驗評審） | `experiment_diff` + `experiment_judge` | `experiment_history` + `synergy_get_darwinian_trend` | `experiment_judge` 有 side-effect |
