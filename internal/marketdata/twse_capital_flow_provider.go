@@ -57,6 +57,16 @@ func (t *TWSECapitalFlowProvider) Name() string {
 	return "twse_capital_flow"
 }
 
+// SymbolFlow holds per-symbol institutional investor flow from TWSE T86.
+type SymbolFlow struct {
+	Symbol             string  `json:"symbol"`
+	Name               string  `json:"name"`
+	ForeignInvestorNet float64 `json:"foreign_investor_net"`
+	DomesticFundNet    float64 `json:"domestic_fund_net"`
+	DealerNet          float64 `json:"dealer_net"`
+	Date               string  `json:"date"`
+}
+
 // FetchSnapshot retrieves the latest capital flow data and merges into MacroDataSnapshot.
 func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	flow, err := t.fetchLatestTradingDay(ctx)
@@ -80,6 +90,31 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 	return snap, nil
 }
 
+// FetchSymbolFlow retrieves institutional investor flow for a single symbol on a given date.
+func (t *TWSECapitalFlowProvider) FetchSymbolFlow(ctx context.Context, symbol, dateStr string) (SymbolFlow, error) {
+	rows, err := t.fetchDateRows(ctx, dateStr)
+	if err != nil {
+		return SymbolFlow{}, err
+	}
+	for _, row := range rows {
+		if len(row) < 12 {
+			continue
+		}
+		if row[0] != symbol {
+			continue
+		}
+		return SymbolFlow{
+			Symbol:             symbol,
+			Name:               row[1],
+			ForeignInvestorNet: parseTWDVolume(row[4]) / 1e3,
+			DomesticFundNet:    parseTWDVolume(row[10]) / 1e3,
+			DealerNet:          parseTWDVolume(row[11]) / 1e3,
+			Date:               dateStr,
+		}, nil
+	}
+	return SymbolFlow{}, fmt.Errorf("symbol %s not found for %s", symbol, dateStr)
+}
+
 func (t *TWSECapitalFlowProvider) fetchLatestTradingDay(ctx context.Context) (TWSECapitalFlow, error) {
 	now := time.Now().UTC()
 	// Try up to 7 days back to find the most recent trading day with data.
@@ -94,37 +129,13 @@ func (t *TWSECapitalFlowProvider) fetchLatestTradingDay(ctx context.Context) (TW
 }
 
 func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string) (TWSECapitalFlow, error) {
-	if err := t.limiter.Wait(ctx); err != nil {
-		return TWSECapitalFlow{}, fmt.Errorf("rate limit: %w", err)
-	}
-	url := fmt.Sprintf(constants.TWSEBaseURL+"/rwd/zh/fund/T86?response=json&date=%s&selectType=ALLBUT0999", dateStr)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	rows, err := t.fetchDateRows(ctx, dateStr)
 	if err != nil {
-		return TWSECapitalFlow{}, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return TWSECapitalFlow{}, fmt.Errorf("http request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return TWSECapitalFlow{}, fmt.Errorf("read body: %w", err)
-	}
-
-	var apiResp twseT86Response
-	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
-		return TWSECapitalFlow{}, fmt.Errorf("decode response: %w", err)
-	}
-	if apiResp.Stat != "OK" || len(apiResp.Data) == 0 {
-		return TWSECapitalFlow{}, fmt.Errorf("TWSE API returned no data: %s", apiResp.Stat)
+		return TWSECapitalFlow{}, err
 	}
 
 	var totalForeign, totalDomestic, totalDealer float64
-	for _, row := range apiResp.Data {
+	for _, row := range rows {
 		if len(row) < 12 {
 			continue
 		}
@@ -152,6 +163,38 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 		TotalNet:           (totalForeign + totalDomestic + totalDealer) / 1e8,
 	}
 	return flow, nil
+}
+
+func (t *TWSECapitalFlowProvider) fetchDateRows(ctx context.Context, dateStr string) ([][]string, error) {
+	if err := t.limiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limit: %w", err)
+	}
+	url := fmt.Sprintf(constants.TWSEBaseURL+"/rwd/zh/fund/T86?response=json&date=%s&selectType=ALLBUT0999", dateStr)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var apiResp twseT86Response
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	if apiResp.Stat != "OK" || len(apiResp.Data) == 0 {
+		return nil, fmt.Errorf("TWSE API returned no data: %s", apiResp.Stat)
+	}
+	return apiResp.Data, nil
 }
 
 func (t *TWSECapitalFlowProvider) saveFlow(flow TWSECapitalFlow) error {
