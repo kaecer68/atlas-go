@@ -79,18 +79,26 @@ Wave 11 將 admin_web 側邊欄精簡為 7 個核心頁面，但 DOM 與路由�
 
 - `titles` 物件：只保留 10 個頁面的標題對應。
 - `loadModules()`：
-  - 保留 import：`dashboard`、`risk`、`backtest`、`inbox`、`experiments`、`alerts`、`metrics`、`datachannels`、`parameters`、`deployConfig`、`evolution_panel`。
-  - 移除對 `narrative`、`industry`、`synergy`、`prism` 的 import（若原本有）。
+  - 保留 import：`dashboard`、`risk`、`backtest`、`inbox`、`experiments`、`alerts`、`metrics`、`datachannels`、`parameters`、`deployConfig`、`evolution_panel`、`narrative`（`live` 頁面的 narrative strip 仍需要）。
+  - 移除對 `industry`、`synergy`、`prism` 的 import（若原本有）。
 - `loadAll()`：
-  - 移除被刪頁面相關的 API 呼叫（如 `/api/narrative/events`、`/api/synergy/...` 等）。
-  - 移除對應的 render 呼叫。
+  - 移除被刪頁面相關的 API 呼叫（如 `/api/synergy/...` 等）。
+  - 保留 `/api/narrative/events`、`/api/narrative/chains`、`/api/narrative/models` 等供 `live` 頁面的 narrative strip 使用。
+  - 移除對應被刪頁面的 render 呼叫。
 - `loadPageData()`：
-  - 移除 `narrative`、`industry`、`controls`、`synergy`、`prism`、`reasoning-trace`、`agents` 的分支。
+  - 移除 `industry`、`controls`、`synergy`、`prism`、`reasoning-trace`、`agents` 的分支。
+  - 保留 `narrative` 分支（因 `live` 頁面仍會用到 narrative strip，但不再作為獨立頁面）。
+- **清理死連結**：
+  - `home` 頁面「資金階段」卡片原本 `switchPage('controls')`，改為連到 `parameters` 或移除連結。
+  - `home` 頁面「產業週期數據」卡片原本 `switchPage('synergy')`，改為純文字提示或移除連結。
+  - `home` 頁面「敘事脈絡」卡片原本有「開啟宏觀敘事 →」連到 `narrative`，移除該連結。
+  - `sessionSyncAlert` 原本連到 `reasoning-trace`，改為連到 `home` 或移除。
+  - `shared_web/static/js/pages/dashboard.js` 中 `renderMacroRadar` 的「前往【投資管線】」連到 `pipeline`，因 admin_web 無 `pipeline` 頁面，改為純文字或移除連結。
 
 #### `admin_web/static/js/event-listeners.js`
 
-- 移除 `#page-industry`、 `#page-synergy`、 `#page-controls`、 `#page-evolution_panel` 等被刪頁面相關的 event listener。
-- 保留 `evolution_panel` 的 view switch（因該頁面仍保留）。
+- 移除 `#page-industry`、 `#page-synergy`、 `#page-controls`、 `#page-prism`、 `#page-reasoning-trace`、 `#page-agents` 等被刪頁面相關的 event listener。
+- 保留 `#page-evolution_panel` 的 view switch（因該頁面仍保留）。
 
 ---
 
