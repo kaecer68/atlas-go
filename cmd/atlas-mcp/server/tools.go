@@ -49,6 +49,8 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerSamplingTools(mcpSrv, s)
 	registerRootsTools(mcpSrv, s)
 	registerElicitationTools(mcpSrv, s)
+	registerEventTools(mcpSrv, s)
+	registerBriefingTools(mcpSrv, s)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",

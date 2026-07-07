@@ -38,6 +38,27 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 		Description: "Last 50 entries from the JSONL audit log (most recent first). Useful for debugging recent agent activity without a separate log query.",
 		MIMEType:    "application/json",
 	}, s.handleResourceAuditRecent)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://strategies/active",
+		Name:        "Active Strategy Definitions",
+		Description: "Current active strategies in the production strategy set. Live data from /api/strategies/active.",
+		MIMEType:    "application/json",
+	}, s.handleResourceStrategiesActive)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://market/regime",
+		Name:        "Latest Market Regime",
+		Description: "Current market regime classification (RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL). Live data from /api/regime/history.",
+		MIMEType:    "application/json",
+	}, s.handleResourceMarketRegime)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://events/today",
+		Name:        "Today's Market Events",
+		Description: "Upcoming and active Taiwan market events for today. Live data from /api/events/calendar.",
+		MIMEType:    "application/json",
+	}, s.handleResourceEventsToday)
 }
 
 func (s *server) handleResourceConfigParameters(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -153,4 +174,28 @@ type auditEntryView struct {
 	Tool       string `json:"tool"`
 	Status     string `json:"status"`
 	DurationMS int64  `json:"duration_ms"`
+}
+
+func (s *server) handleResourceStrategiesActive(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	var out map[string]any
+	if err := s.cli.Get(ctx, "/api/strategies/active", nil, &out); err != nil {
+		return nil, fmt.Errorf("resource strategies active: %w", err)
+	}
+	return resourceText("atlas://strategies/active", "application/json", mustJSON(out)), nil
+}
+
+func (s *server) handleResourceMarketRegime(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	var out map[string]any
+	if err := s.cli.Get(ctx, "/api/regime/history?days=1", nil, &out); err != nil {
+		return nil, fmt.Errorf("resource market regime: %w", err)
+	}
+	return resourceText("atlas://market/regime", "application/json", mustJSON(out)), nil
+}
+
+func (s *server) handleResourceEventsToday(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	var out map[string]any
+	if err := s.cli.Get(ctx, "/api/events/calendar", nil, &out); err != nil {
+		return nil, fmt.Errorf("resource events today: %w", err)
+	}
+	return resourceText("atlas://events/today", "application/json", mustJSON(out)), nil
 }

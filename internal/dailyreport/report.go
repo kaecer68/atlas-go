@@ -2,10 +2,12 @@ package dailyreport
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -21,7 +23,6 @@ type Report struct {
 	Risk      RiskSection     `json:"risk"`
 }
 
-// GlobalOverview covers global macro conditions.
 type GlobalOverview struct {
 	BondYield string `json:"bond_yield"`
 	USDIndex  string `json:"usd_index"`
@@ -31,7 +32,6 @@ type GlobalOverview struct {
 	Summary   string `json:"summary"`
 }
 
-// CapitalSection covers Taiwan capital flow.
 type CapitalSection struct {
 	Foreign       string  `json:"foreign"`
 	Institutional string  `json:"institutional"`
@@ -42,21 +42,18 @@ type CapitalSection struct {
 	Quality       string  `json:"quality"`
 }
 
-// EventsSection lists upcoming events.
 type EventsSection struct {
 	Tomorrow []string `json:"tomorrow"`
 	ThisWeek []string `json:"this_week"`
 	Count    int      `json:"count"`
 }
 
-// StrategySection covers active strategy signals.
 type StrategySection struct {
 	Active    string `json:"active_strategy"`
 	EntryCond string `json:"entry_condition"`
 	Direction string `json:"direction"`
 }
 
-// RiskSection covers risk warnings.
 type RiskSection struct {
 	StressIndex   float64 `json:"stress_index"`
 	DrawdownAlert bool    `json:"drawdown_alert"`
@@ -64,20 +61,36 @@ type RiskSection struct {
 	Warning       string  `json:"warning,omitempty"`
 }
 
+// ---------- Data providers ------------------------------------------------
+
+// MacroDataProvider feeds global macro snapshot data.
+type DataProvider interface {
+	FetchMacro() (GlobalOverview, error)
+	FetchCapital() (CapitalSection, error)
+	FetchEvents(now time.Time) (EventsSection, error)
+}
+
 // Generator produces daily reports.
 type Generator struct {
-	mu      sync.RWMutex
-	latest  *Report
-	archive map[string]*Report
-	workDir string
+	mu       sync.RWMutex
+	latest   *Report
+	archive  map[string]*Report
+	workDir  string
+	provider DataProvider
 }
 
 // NewGenerator creates a daily report generator.
 func NewGenerator(workDir string) *Generator {
 	return &Generator{
-		workDir: workDir,
-		archive: make(map[string]*Report),
+		workDir:  workDir,
+		archive:  make(map[string]*Report),
+		provider: &defaultProvider{},
 	}
+}
+
+// SetProvider sets the data provider for live data.
+func (g *Generator) SetProvider(p DataProvider) {
+	g.provider = p
 }
 
 // Generate creates the day's report.
@@ -85,31 +98,16 @@ func (g *Generator) Generate() *Report {
 	now := time.Now()
 	date := now.Format("2006-01-02")
 
+	global, _ := g.provider.FetchMacro()
+	capital, _ := g.provider.FetchCapital()
+	events, _ := g.provider.FetchEvents(now)
+
 	r := &Report{
 		Date:      date,
 		Generated: now,
-		Global: GlobalOverview{
-			BondYield: "4.25%",
-			USDIndex:  "104.5",
-			JPY:       "150.2",
-			VIX:       "14.3",
-			Status:    "RISK_ON",
-			Summary:   "全球資金環境偏寬鬆，有利風險資產",
-		},
-		Capital: CapitalSection{
-			Foreign:       "偏多",
-			Institutional: "中性",
-			Dealer:        "偏多",
-			Government:    "中性",
-			Retail:        "偏空",
-			Resonance:     1.0,
-			Quality:       "moderate_inflow",
-		},
-		Events: EventsSection{
-			Tomorrow: []string{"無重大事件"},
-			ThisWeek: []string{"月營收公告期"},
-			Count:    1,
-		},
+		Global:    global,
+		Capital:   capital,
+		Events:    events,
 		Strategy: StrategySection{
 			Active:    "all_weather",
 			EntryCond: "等待回測支撐區間",
@@ -130,6 +128,73 @@ func (g *Generator) Generate() *Report {
 	g.persist(r)
 	return r
 }
+
+// Markdown renders the report as Markdown.
+func (r *Report) Markdown() string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("# 台股每日市場報告 — %s\n\n", r.Date))
+	b.WriteString(fmt.Sprintf("**生成時間**：%s\n\n", r.Generated.Format("2006-01-02 15:04:05")))
+
+	b.WriteString("## 一、全球資金總開關\n\n")
+	b.WriteString(fmt.Sprintf("- 美債殖利率：%s\n", r.Global.BondYield))
+	b.WriteString(fmt.Sprintf("- 美元指數：%s\n", r.Global.USDIndex))
+	b.WriteString(fmt.Sprintf("- 日圓：%s\n", r.Global.JPY))
+	b.WriteString(fmt.Sprintf("- VIX：%s\n", r.Global.VIX))
+	b.WriteString(fmt.Sprintf("- 狀態：**%s**\n", r.Global.Status))
+	b.WriteString(fmt.Sprintf("- %s\n\n", r.Global.Summary))
+
+	b.WriteString("## 二、台股資金流向\n\n")
+	b.WriteString(fmt.Sprintf("- 外資：%s\n", r.Capital.Foreign))
+	b.WriteString(fmt.Sprintf("- 投信：%s\n", r.Capital.Institutional))
+	b.WriteString(fmt.Sprintf("- 自營商：%s\n", r.Capital.Dealer))
+	b.WriteString(fmt.Sprintf("- 公股行庫：%s\n", r.Capital.Government))
+	b.WriteString(fmt.Sprintf("- 散戶：%s\n", r.Capital.Retail))
+	b.WriteString(fmt.Sprintf("- 共振強度：%.2f\n", r.Capital.Resonance))
+	b.WriteString(fmt.Sprintf("- 資金品質：%s\n\n", r.Capital.Quality))
+
+	b.WriteString("## 三、事件日曆\n\n")
+	b.WriteString(fmt.Sprintf("- 明天：%s\n", strings.Join(r.Events.Tomorrow, "、")))
+	b.WriteString(fmt.Sprintf("- 本週：%s\n\n", strings.Join(r.Events.ThisWeek, "、")))
+
+	b.WriteString("## 四、策略訊號\n\n")
+	b.WriteString(fmt.Sprintf("- 推薦策略：%s\n", r.Strategy.Active))
+	b.WriteString(fmt.Sprintf("- 進場條件：%s\n", r.Strategy.EntryCond))
+	b.WriteString(fmt.Sprintf("- 方向：%s\n\n", r.Strategy.Direction))
+
+	b.WriteString("## 五、風險提示\n\n")
+	b.WriteString(fmt.Sprintf("- 壓力指數：%.2f\n", r.Risk.StressIndex))
+	b.WriteString(fmt.Sprintf("- 風險等級：%s\n", r.Risk.RiskLevel))
+	if r.Risk.Warning != "" {
+		b.WriteString(fmt.Sprintf("- ⚠️ %s\n", r.Risk.Warning))
+	}
+
+	return b.String()
+}
+
+// ---------- Default provider (hard-coded fallback) ------------------------
+
+type defaultProvider struct{}
+
+func (d *defaultProvider) FetchMacro() (GlobalOverview, error) {
+	return GlobalOverview{
+		BondYield: "4.25%", USDIndex: "104.5", JPY: "150.2", VIX: "14.3",
+		Status: "RISK_ON", Summary: "全球資金環境偏寬鬆，有利風險資產",
+	}, nil
+}
+
+func (d *defaultProvider) FetchCapital() (CapitalSection, error) {
+	return CapitalSection{
+		Foreign: "偏多", Institutional: "中性", Dealer: "偏多",
+		Government: "中性", Retail: "偏空",
+		Resonance: 1.0, Quality: "moderate_inflow",
+	}, nil
+}
+
+func (d *defaultProvider) FetchEvents(_ time.Time) (EventsSection, error) {
+	return EventsSection{Tomorrow: []string{"無重大事件"}, ThisWeek: []string{"月營收公告期"}, Count: 1}, nil
+}
+
+// ---------- Persist --------------------------------------------------------
 
 func (g *Generator) persist(r *Report) {
 	dir := filepath.Join(g.workDir, "data", "reports")
@@ -165,29 +230,31 @@ func (g *Generator) GetByDate(date string) *Report {
 	return g.archive[date]
 }
 
-// Handler serves daily report endpoints.
+// ---------- HTTP Handlers -------------------------------------------------
+
 type Handler struct {
 	gen *Generator
 }
 
-// NewHandler creates a report API handler.
-func NewHandler(gen *Generator) *Handler {
-	return &Handler{gen: gen}
-}
+func NewHandler(gen *Generator) *Handler { return &Handler{gen: gen} }
 
-// HandleLatest returns the latest report as JSON.
 func (h *Handler) HandleLatest(w http.ResponseWriter, r *http.Request) {
 	rep := h.gen.Latest()
 	if rep == nil {
 		rep = h.gen.Generate()
 	}
+	format := r.URL.Query().Get("format")
 	w.Header().Set("Content-Type", "application/json")
+	if format == "markdown" {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		w.Write([]byte(rep.Markdown()))
+		return
+	}
 	if err := json.NewEncoder(w).Encode(rep); err != nil {
 		log.Printf("[DailyReport] encode latest: %v", err)
 	}
 }
 
-// HandleArchive returns a historical report by date query param.
 func (h *Handler) HandleArchive(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 	if date == "" {
@@ -205,7 +272,6 @@ func (h *Handler) HandleArchive(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleSubscribe registers email subscription.
 func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -217,7 +283,6 @@ func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// RegisterRoutes registers daily report endpoints.
 func RegisterRoutes(mux *http.ServeMux, gen *Generator) {
 	h := NewHandler(gen)
 	mux.HandleFunc("GET /api/reports/latest", h.HandleLatest)

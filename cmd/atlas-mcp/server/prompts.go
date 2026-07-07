@@ -53,7 +53,43 @@ Provide 2-paragraph output:
   (1) regime interpretation,
   (2) recommended action.`
 
-// registerPrompts attaches 3 reusable prompt templates that the agent can
+const promptTaiwanQuickLook = `You are the atlas-mcp Taiwan morning briefing agent. To produce a 台股今日快覽 (Taiwan Market Quick Look), call these tools in order:
+
+1. mcp_quickstart — 一站式取得宏觀快照、策略、壓力指數、事件
+2. capital_flow_daily — 七大資金勢力分解與共振強度
+3. event_calendar — 今日與近期事件
+
+然後用繁體中文輸出 3 段：
+  (1) 總經環境（Risk-On/Off、美元、美債、VIX），
+  (2) 資金流向（外資/投信/公股/散戶 多空方向與共振），
+  (3) 今日關注重點（事件提醒、策略建議）。
+控制在 400 字以內。`
+
+const promptStrategyAdvice = `You are the atlas-mcp strategy advisor. To produce strategy advice, call these tools:
+
+1. strategy_ranker — 取得策略績效排名
+2. risk_get_commentary — 風險評論
+3. regime_get_history — 近期盤勢歷史
+
+Output in 繁體中文:
+  (1) 當前盤勢適合的策略（依排名），
+  (2) 各策略的適用條件與風險，
+  (3) 建議的資金配置比例。
+針對散戶投資人，避免過度專業術語。`
+
+const promptStockHealthCheck = `You are the atlas-mcp stock health inspector. User provides a stock symbol (e.g., "2330"). Call these tools:
+
+1. trace_get_decision_chain — 決策鏈追蹤
+2. universe_get_sessions — 近期模擬 session
+3. strategy_get — 該策略詳細資訊
+
+Then output in 繁體中文:
+  (1) 基本面狀態（來自 decision_chain），
+  (2) 技術面與籌碼面（來自 strategy detail），
+  (3) 綜合評分與建議（強力買進/買進/觀望/減碼）。
+若數據不足，明確告知使用者哪些資料缺失。`
+
+// registerPrompts attaches 6 reusable prompt templates that the agent can
 // invoke by name. Prompts are static text (no HTTP calls) — they describe
 // HOW the agent should use the available tools to answer a question.
 func registerPrompts(mcpSrv *mcp.Server) {
@@ -74,6 +110,24 @@ func registerPrompts(mcpSrv *mcp.Server) {
 			{Name: "regime", Description: "Current regime: RISK_ON | RISK_OFF | NEUTRAL | TRANSITIONAL", Required: true},
 		},
 	}, handleRegimeInterpretation)
+
+	mcpSrv.AddPrompt(&mcp.Prompt{
+		Name:        "taiwan_quick_look",
+		Description: "台股今日快覽：呼叫 macro_snapshot + capital_flow + event_calendar，用繁體中文產出 3 段晨報。",
+	}, handleTaiwanQuickLook)
+
+	mcpSrv.AddPrompt(&mcp.Prompt{
+		Name:        "strategy_advice",
+		Description: "策略建議：呼叫 strategy_ranker + risk_commentary + regime_history，產出繁體中文策略建議。",
+	}, handleStrategyAdvice)
+
+	mcpSrv.AddPrompt(&mcp.Prompt{
+		Name:        "stock_health_check",
+		Description: "持股健檢：輸入股票代號，呼叫 trace + universe + strategy，產出繁體中文健檢報告。",
+		Arguments: []*mcp.PromptArgument{
+			{Name: "symbol", Description: "台股股票代號，例如 2330", Required: true},
+		},
+	}, handleStockHealthCheck)
 }
 
 func handleDailyMarketBriefing(_ context.Context, _ *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
@@ -105,6 +159,41 @@ func handleRegimeInterpretation(_ context.Context, req *mcp.GetPromptRequest) (*
 	body := fmt.Sprintf(promptRegimeInterpretationTmpl, regime)
 	return &mcp.GetPromptResult{
 		Description: "Regime interpretation for " + regime,
+		Messages: []*mcp.PromptMessage{
+			{Role: "user", Content: &mcp.TextContent{Text: body}},
+		},
+	}, nil
+}
+
+func handleTaiwanQuickLook(_ context.Context, _ *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "台股今日快覽",
+		Messages: []*mcp.PromptMessage{
+			{Role: "user", Content: &mcp.TextContent{Text: promptTaiwanQuickLook}},
+		},
+	}, nil
+}
+
+func handleStrategyAdvice(_ context.Context, _ *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "策略建議",
+		Messages: []*mcp.PromptMessage{
+			{Role: "user", Content: &mcp.TextContent{Text: promptStrategyAdvice}},
+		},
+	}, nil
+}
+
+func handleStockHealthCheck(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	if req.Params == nil {
+		return nil, fmt.Errorf("stock_health_check: required argument 'symbol' is missing")
+	}
+	symbol, ok := req.Params.Arguments["symbol"]
+	if !ok || symbol == "" {
+		return nil, fmt.Errorf("stock_health_check: required argument 'symbol' is missing")
+	}
+	body := fmt.Sprintf("股票代號：%s\n\n", symbol) + promptStockHealthCheck
+	return &mcp.GetPromptResult{
+		Description: "持股健檢 for " + symbol,
 		Messages: []*mcp.PromptMessage{
 			{Role: "user", Content: &mcp.TextContent{Text: body}},
 		},
