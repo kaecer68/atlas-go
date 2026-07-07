@@ -32,7 +32,9 @@ const SHELL_LOADERS = {
   strategies: () => import('./page-shells/strategies.js'),
   login: () => import('./page-shells/login.js'),
   register: () => import('./page-shells/register.js'),
-  premium: () => import('./page-shells/premium.js')
+  premium: () => import('./page-shells/premium.js'),
+  mcp: () => import('./page-shells/mcp.js'),
+  'errors/404': () => import('./page-shells/errors/404.js')
 };
 const _shellsLoaded = new Set();
 
@@ -63,6 +65,10 @@ const basePath = (typeof window !== 'undefined')
   : '';
 
 export async function switchPage(id, silent) {
+  // Unknown page — fallback to 404
+  if (!SHELL_LOADERS[id] && id !== 'errors/404') {
+    return switchPage('errors/404', silent);
+  }
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }
   await _ensureShellLoaded(id);
@@ -78,7 +84,8 @@ export async function switchPage(id, silent) {
     pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
     evolution_panel: '策略演化', strategies: '投資心法',
-    login: '登入', register: '註冊', premium: '升級 Premium'
+      login: '登入', register: '註冊', premium: '升級 Premium',
+      mcp: 'MCP 整合', 'errors/404': '404'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
