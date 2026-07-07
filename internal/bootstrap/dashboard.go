@@ -7,8 +7,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
+// NewDashboardAPI is a fallback constructor for environments without a Gateway.
+// Prefer NewDashboardAPIWithGateway in production.
 func NewDashboardAPI(workDir, ledgerDir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-	return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
+	return monitoring.NewDashboardAPIWithGateway(workDir, ledgerDir, collector, monitoring.NoopFetcher())
 }
 
 // NewDashboardAPIWithGateway creates a DashboardAPI backed by the Gateway data fetcher.
