@@ -94,6 +94,16 @@ func defaultPolicies() []RetentionPolicy {
 			MaxAgeDays: 90,
 			Pattern:    "*_revenue.json",
 		},
+		{
+			Dir:        "traces",
+			MaxAgeDays: 7,
+			Pattern:    "sim-*.jsonl",
+		},
+		{
+			Dir:        "traces",
+			MaxAgeDays: 30,
+			Pattern:    "session-*.jsonl",
+		},
 	}
 }
 

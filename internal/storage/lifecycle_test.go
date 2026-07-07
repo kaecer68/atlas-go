@@ -10,8 +10,8 @@ import (
 
 func TestNewLifecycleManager_HasDefaults(t *testing.T) {
 	m := NewLifecycleManager(t.TempDir())
-	if len(m.policies) != 5 {
-		t.Fatalf("expected 5 default policies, got %d", len(m.policies))
+	if len(m.policies) != 7 {
+		t.Fatalf("expected 7 default policies, got %d", len(m.policies))
 	}
 
 	want := map[string]string{
@@ -20,8 +20,13 @@ func TestNewLifecycleManager_HasDefaults(t *testing.T) {
 		"export":       "*_export.json",
 		"capital_flow": "*.json",
 		"tsmc_revenue": "*_revenue.json",
+		"traces":       "sim-*.jsonl",
 	}
 	for _, p := range m.policies {
+		if p.Dir == "traces" && p.Pattern == "session-*.jsonl" {
+			// Two policies share the traces dir; only assert the first one above.
+			continue
+		}
 		if p.Pattern != want[p.Dir] {
 			t.Errorf("policy %s: pattern = %q, want %q", p.Dir, p.Pattern, want[p.Dir])
 		}
