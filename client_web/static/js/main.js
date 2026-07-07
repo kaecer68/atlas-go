@@ -12,7 +12,9 @@ import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
-import { initAuth, isLoggedIn, invalidateAuth, renderNavState } from './services/auth.js';
+import { initAuth, isLoggedIn, invalidateAuth, renderNavState, getTier } from './services/auth.js';
+import { metricCard } from './components/metric-card.js';
+import { fmtSignedPct } from './shared/format-metric.js';
 import './modals/modal.js';
 import { injectSharedHead } from './shared/head-config.js';
 injectSharedHead();
@@ -312,6 +314,7 @@ async function loadPageData(pageId) {
     try {
       if (m.home && m.home.renderHomePage) {
         await m.home.renderHomePage(document.getElementById('page-home'));
+        await renderHomeTierSections();
       }
     } catch(e) { console.warn('[home] load failed:', e); }
   }
@@ -486,6 +489,57 @@ if (typeof window !== 'undefined') {
     }
   })();
   });
+}
+
+async function renderHomeTierSections() {
+  var tier = await getTier();
+  var container = document.getElementById('page-home');
+  if (!container) return;
+
+  var existed = document.getElementById('home-tier-sections');
+  if (existed) existed.remove();
+
+  var root = document.createElement('div');
+  root.id = 'home-tier-sections';
+
+  if (!tier || tier === 'free') {
+    root.innerHTML = '<section class="home-section tier-cta"><div class="home-section__header"><h2>解鎖更多分析</h2><span class="home-section__subtitle">註冊即可獲得 7 天免費 Premium 試用</span></div><div class="tier-cta__actions"><button class="btn btn--primary" onclick="window.switchPage(\'register\')">免費註冊</button></div></section>';
+    container.appendChild(root);
+    return;
+  }
+
+  // Common data for registered+ and premium+
+  var capitalFlow = await silentGetJSON('/api/capital-flow/summary');
+  var events = await silentGetJSON('/api/events/prediction');
+
+  if (capitalFlow) {
+    var forces = capitalFlow.forces || [];
+    var cards = forces.slice(0, 4).map(function (f) {
+      var val = f.z_score ? fmtSignedPct(f.z_score / 10) : '--';
+      var cls = f.z_score > 0.5 ? 'trend-bullish' : f.z_score < -0.5 ? 'trend-bearish' : '';
+      return metricCard({ label: f.name || f.source, value: val, trend: cls, sub: f.direction || '' });
+    }).join('');
+    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>資金流向</h2></div><div class="home-grid home-grid--4">' + cards + '</div></section>';
+  }
+
+  if (events && events.predictions) {
+    var preds = events.predictions.slice(0, 5).map(function (p) {
+      var cls = p.direction === 'inflow' ? 'trend-bullish' : p.direction === 'outflow' ? 'trend-bearish' : '';
+      var label = p.direction === 'inflow' ? '流入' : p.direction === 'outflow' ? '流出' : '中性';
+      return metricCard({ label: label, value: (p.confidence * 100).toFixed(0) + '%', trend: cls, sub: '' });
+    }).join('');
+    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>5 日資金流預測</h2></div><div class="home-grid home-grid--5">' + preds + '</div></section>';
+  }
+
+  // Premium-only
+  if (tier === 'premium') {
+    var report = await silentGetJSON('/api/reports/latest');
+    if (report) {
+      root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>今日市場報告</h2></div><div class="panel"><pre style="white-space:pre-wrap;font-size:0.92rem;line-height:1.6;margin:0;">' + escapeHtml(report.summary || '尚無報告') + '</pre></div></section>';
+    }
+  }
+
+  container.appendChild(root);
 }
 
 function initEventStream() {
