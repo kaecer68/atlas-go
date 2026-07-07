@@ -27,6 +27,20 @@
       "type": "object"
     }
   },
+  "capital_flow_daily": {
+    "name": "capital_flow_daily",
+    "description": "Return the full daily Taiwan market capital flow report: seven force scores, resonance, and quality summary.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "capital_flow_summary": {
+    "name": "capital_flow_summary",
+    "description": "Return a condensed capital flow summary for the latest trading day.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
   "control_approve_recommendation": {
     "name": "control_approve_recommendation",
     "description": "Status of an approve-recommendation override (read-only state inspection; actual approval is admin-only).",
@@ -585,6 +599,78 @@
       "type": "object"
     }
   },
+  "stock_get_chips": {
+    "name": "stock_get_chips",
+    "description": "Return institutional investor flow (foreign, domestic fund, dealer net buy/sell) for a symbol on a given trading day.",
+    "inputSchema": {
+      "properties": {
+        "date": {
+          "description": "trading day in YYYYMMDD; defaults to the most recent trading day with data",
+          "type": "string"
+        },
+        "symbol": {
+          "description": "the Taiwan stock symbol, e.g. 2330",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    }
+  },
+  "stock_get_fundamentals": {
+    "name": "stock_get_fundamentals",
+    "description": "Return fundamental metrics (PE, PB, PS, dividend yield, sector) for a symbol.",
+    "inputSchema": {
+      "properties": {
+        "symbol": {
+          "description": "the Taiwan stock symbol, e.g. 2330",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    }
+  },
+  "stock_get_quote": {
+    "name": "stock_get_quote",
+    "description": "Return the latest intraday quote for a Taiwan stock symbol. Requires FUGLE_API_KEY to be configured on the atlas server.",
+    "inputSchema": {
+      "properties": {
+        "symbol": {
+          "description": "the Taiwan stock symbol, e.g. 2330",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    }
+  },
+  "stock_get_technical": {
+    "name": "stock_get_technical",
+    "description": "Return simple technical indicators (SMA20, SMA50, RSI14) for a symbol over the last N days.",
+    "inputSchema": {
+      "properties": {
+        "days": {
+          "description": "number of trading days to include; default 90, max 365",
+          "type": "integer"
+        },
+        "symbol": {
+          "description": "the Taiwan stock symbol, e.g. 2330",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    }
+  },
   "strategy_get": {
     "name": "strategy_get",
     "description": "Fetch a single strategy by id (returns full config + state metadata).",
@@ -643,6 +729,13 @@
   "strategy_list_active": {
     "name": "strategy_list_active",
     "description": "List the strategy set currently active in production (per docs/WORKFLOW_MAP.md WA-500).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "strategy_ranker": {
+    "name": "strategy_ranker",
+    "description": "Return the current active strategies ranked by performance with free/registered/premium tier labels.",
     "inputSchema": {
       "type": "object"
     }

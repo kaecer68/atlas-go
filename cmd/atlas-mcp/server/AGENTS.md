@@ -9,7 +9,7 @@
 | `server.go` | 生命週期、設定驗證、rate limiter / metrics / anomaly emitter 啟動、transport 分派 |
 | `transport.go` | Transport 實作：`ServeStdio` / `ServeSSE` / `ServeStreamableHTTP` + 共用 `BearerAuth` middleware |
 | `tools.go` | 總註冊入口、`countedAddTool` 計數包裝、`RegisteredToolCount`、`withAudit`/`withAuditExtra` 包裝 |
-| `tools_*.go` | 各業務領域 tool 註冊與 handler（macro / crossmarket / narrative / risk_alert / strategy / experiment / synergy / control / scheduler_task / system / llm_trace / data_universe / report_prism），共 14 個檔案 |
+| `tools_*.go` | 各業務領域 tool 註冊與 handler（macro / crossmarket / narrative / risk_alert / strategy / strategy_ranker / experiment / synergy / control / scheduler_task / system / llm_trace / data_universe / report_prism / anomaly / briefing / events / stock / capital_flow 等），共 20 個檔案 |
 | `sampling.go` | MCP protocol 層：`mcp_sample_llm`（feature-gated，`SamplingEnabled` 控制） |
 | `roots.go` | MCP protocol 層：`mcp_roots_list` + `mcp_roots_read_file`（filesystem boundary） |
 | `elicitation.go` | MCP protocol 層：`mcp_elicit_user`（feature-gated，`ElicitationEnabled` 控制） |
@@ -24,11 +24,13 @@
 
 ## 工具計數
 
-- 總 tool handler = **75 個**，對應 76 個 tool 名稱（`mcp_sample_llm` 與 `mcp_elicit_user` 各有一個 handler，但 feature gate 關閉時不掛載）。
-- `server.Run()` 在所有 tool 註冊完成後 assert `RegisteredToolCount` 在 77–79 範圍內；**若不在範圍內直接 return error 阻止啟動**，防止文件↔程式碼漂移。
-- `countedAddTool[In, Out any]()` 是 `mcp.AddTool` 的泛型包裝，自動累加 `RegisteredToolCount`；所有 tool 註冊都必須經過它（含 `registerTools` 的 75 個 + `registerAuditTools` 的 4 個）。
-- 新增 tool 時：`countedAddTool()` 會自動遞增計數器，但仍應確認總數仍在 77–79 範圍，否則需同步更新 `server.go` assertion 的上下界。
-- 實際掛載數 = 75（`registerTools`，含 sampling/elicitation/roots/anomaly）+ 4（`registerAuditTools`），範圍 79（sampling + elicitation off 時為 77）。
+> **權威來源**：[`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md) 記錄最終對 agent 暴露的 tool 名稱與分類；本節只保留實作層面的計數規則。
+
+- `registerTools()` 內掛載的業務 tool 數量為 **84 個**（sampling / elicitation 兩個 feature-gated tool 關閉時）；`SamplingEnabled` / `ElicitationEnabled` 各再 +1，最高 **86 個**。
+- `registerAuditTools()` 另外掛載 **4 個**自我觀測 tool，不計入 `registerTools()` 的範圍。
+- `server.Run()` 在所有 tool 註冊完成後 assert `RegisteredToolCount` 在 **86–88** 範圍內；**若不在範圍內直接 return error 阻止啟動**，防止文件↔程式碼漂移。
+- `countedAddTool[In, Out any]()` 是 `mcp.AddTool` 的泛型包裝，自動累加 `RegisteredToolCount`；所有 tool 註冊都必須經過它。
+- 新增 tool 時：`countedAddTool()` 會自動遞增計數器，但仍應同步更新 `server.go` 與 `tools_transport_sse_test.go` 的上下界，並確認 `docs/AGENT_TOOLS.md` 已納入新 tool。
 - `registerTokenAdminTools`（admin.go）不計入，因為它用獨立的 `mcp.Server` 實例。
 
 ## 命名陷阱
