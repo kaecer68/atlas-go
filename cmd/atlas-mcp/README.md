@@ -2,22 +2,22 @@
 
 `atlas-mcp` 是 [atlas-go](https://github.com/kaecer68/atlas-go) 的 MCP (Model Context Protocol) 伺服器。讓任何 MCP-compatible AI Agent（Claude Desktop、Cursor、OpenCode、OpenClaw、Hermes 等）透過標準 JSON-RPC 2.0 協議查詢與輕度觸發 atlas-go 的台股投資研究能力。
 
-> **Agent 入門** — 第一次使用？先讀 [`docs/AGENT_ONBOARDING.md`](../../docs/AGENT_ONBOARDING.md)（5 分鐘速讀），再看 [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md)（80 個 tool 的決策樹與完整 catalog）。
-> **完整規格** — 80 個 tool 的設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server.md`](../../docs/specs/agent-mcp-server.md)。
+> **Agent 入門** — 第一次使用？先讀 [`docs/AGENT_ONBOARDING.md`](../../docs/AGENT_ONBOARDING.md)（5 分鐘速讀），再看 [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md)（79 個 tool 的決策樹與完整 catalog）。
+> **完整規格** — 79 個 tool 的設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server.md`](../../docs/specs/agent-mcp-server.md)。
 > **開發者** — 若要在 `cmd/atlas-mcp/server/` 內新增或修改 tool，**必先讀** [`server/AGENTS.md`](./server/AGENTS.md)（模組陷阱文件）。
 
 ## 目前規模
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **80 個**（16 個 `tools_*.go` 檔案按領域分群 + 5 個核心 entry-point 在 `tools.go`） |
+| MCP Tools | **79 個**（16 個 `tools_*.go` 檔案按領域分群 + 5 個核心 entry-point 在 `tools.go`） |
 | Tool description | `auto-desc.gen.json`（713 行，由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
 | Audit | v2 schema（retention、cleanup、ArgsHash、SessionID、Transport，`audit_v2.go`；v1 `audit.go` 為向後相容 shim） |
 | 擴充協議 | Resources（`resources.go`）、Prompts（`prompts.go`）、Elicitation（`elicitation.go`）、Sampling（`sampling.go`）、Roots（`roots.go`） |
 | 觀測 | Rate limiting（`ratelimit.go`）、Metrics（`metrics.go`）、Anomaly detection（`tools_anomaly.go`） |
-| 工具分類 | Macro（6）、Crossmarket（3）、Regime（1）、Narrative（7）、Risk（5）、Alert（4）、Strategy（5）、Experiment（3）、Synergy（3）、Control（4）、Scheduler/Task（4）、System/Health（9）、Data（4）、Universe（2）、LLM（2）、Trace（4）、PRISM/Swarm（6）、Report（4）、Audit（4）、Anomaly（2）= 80 |
+| 工具分類 | Macro（6）、Crossmarket（3）、Regime（1）、Narrative（7）、Risk（5）、Alert（4）、Strategy（5）、Experiment（3）、Synergy（3）、Control（4）、Scheduler/Task（4）、System/Health（9）、Data（4）、Universe（2）、LLM（2）、Trace（4）、PRISM（1）、Report（4）、Audit（4）、Anomaly（2）= 75 |
 
 ## 快速啟動
 

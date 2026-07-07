@@ -71,9 +71,9 @@ CLIENT_PAGES=""
 
 if [[ -n "${SMOKE_FORCE_FRONTENDS:-}" ]]; then
   case "$SMOKE_FORCE_FRONTENDS" in
-    admin)  RUN_ADMIN=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,evolution_panel,experiments,parameters,alerts,datachannels,swarm}" ;;
+    admin)  RUN_ADMIN=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,evolution_panel,experiments,parameters,alerts,datachannels}" ;;
     client) RUN_CLIENT=1; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-home,crossmarket,industry,narrative,pipeline,portfolio,strategies}" ;;
-    both|*) RUN_ADMIN=1; RUN_CLIENT=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,evolution_panel,experiments,parameters,alerts,datachannels,swarm}"; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-home,crossmarket,industry,narrative,pipeline,portfolio,strategies}" ;;
+    both|*) RUN_ADMIN=1; RUN_CLIENT=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,evolution_panel,experiments,parameters,alerts,datachannels}"; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-home,crossmarket,industry,narrative,pipeline,portfolio,strategies}" ;;
   esac
   log "SMOKE_FORCE_FRONTENDS set, using override: admin=$RUN_ADMIN client=$RUN_CLIENT"
 elif [[ -n "${SMOKE_FORCE_PAGES:-}" ]]; then
@@ -87,7 +87,7 @@ else
     warn "Base ref $BASE_REF not found locally; falling back to full smoke"
     RUN_ADMIN=1
     RUN_CLIENT=1
-    ADMIN_PAGES="home,evolution_panel,experiments,parameters,alerts,datachannels,swarm"
+    ADMIN_PAGES="home,evolution_panel,experiments,parameters,alerts,datachannels"
     CLIENT_PAGES="home,crossmarket,industry,narrative,pipeline,portfolio,strategies"
   else
     CHANGED=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null || true)
