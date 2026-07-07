@@ -153,6 +153,16 @@ func main() {
 				structs[k] = v
 			}
 		}
+		// Merge capitalflow structs (e.g. ForceScore, ResonanceResult, CapitalFlowReport).
+		if capitalflowDir != "" {
+			cfStructs := parseStructsWithNames(capitalflowDir, allNames)
+			for k, v := range cfStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and capitalflow; using capitalflow version\n", k)
+				}
+				structs[k] = v
+			}
+		}
 	}
 
 	for _, webDir := range webDirs {

@@ -628,3 +628,6 @@
   line-height: 1.5;
   color: var(--editorial-muted);
 }
+.rec-card__signal--bullish { color: var(--trend-bullish); }
+.rec-card__signal--bearish { color: var(--trend-bearish); }
+.rec-card__signal--neutral { color: var(--editorial-muted); }

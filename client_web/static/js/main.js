@@ -15,6 +15,7 @@ import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
 import { initAuth, isLoggedIn, invalidateAuth, renderNavState, getTier } from './services/auth.js';
 import { metricCard } from './components/metric-card.js';
 import { fmtSignedPct } from './shared/format-metric.js';
+import { renderHomeTierSections } from './components/home-tier-sections.js';
 import './modals/modal.js';
 import { injectSharedHead } from './shared/head-config.js';
 injectSharedHead();
@@ -498,76 +499,6 @@ if (typeof window !== 'undefined') {
   });
 }
 
-async function renderHomeTierSections() {
-  var tier = await getTier();
-  var container = document.getElementById('page-home');
-  if (!container) return;
-
-  var existed = document.getElementById('home-tier-sections');
-  if (existed) existed.remove();
-
-  var root = document.createElement('div');
-  root.id = 'home-tier-sections';
-
-  if (!tier || tier === 'free') {
-    root.innerHTML = '<section class="home-section tier-cta"><div class="home-section__header"><h2>解鎖更多分析</h2><span class="home-section__subtitle">註冊即可獲得 7 天免費 Premium 試用</span></div><div class="tier-cta__actions"><button class="btn btn--primary" onclick="window.switchPage(\'register\')">免費註冊</button></div></section>';
-    container.appendChild(root);
-    return;
-  }
-
-  // Common data for registered+ and premium+
-  var capitalFlow = await silentGetJSON('/api/capital-flow/summary');
-  var events = await silentGetJSON('/api/events/prediction');
-  var eventsCal = await silentGetJSON('/api/events/calendar');
-
-  if (capitalFlow) {
-    var forces = capitalFlow.forces || [];
-    var cards = forces.slice(0, 4).map(function (f) {
-      var val = f.z_score ? fmtSignedPct(f.z_score / 10) : '--';
-      var cls = f.z_score > 0.5 ? 'trend-bullish' : f.z_score < -0.5 ? 'trend-bearish' : '';
-      return metricCard({ label: f.name || f.source, value: val, trend: cls, sub: f.direction || '' });
-    }).join('');
-    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>資金流向</h2></div><div class="home-grid home-grid--4">' + cards + '</div></section>';
-  }
-
-  if (events && events.predictions) {
-    var preds = events.predictions.slice(0, 5).map(function (p) {
-      var cls = p.direction === 'inflow' ? 'trend-bullish' : p.direction === 'outflow' ? 'trend-bearish' : '';
-      var label = p.direction === 'inflow' ? '流入' : p.direction === 'outflow' ? '流出' : '中性';
-      return metricCard({ label: label, value: (p.confidence * 100).toFixed(0) + '%', trend: cls, sub: '' });
-    }).join('');
-    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>5 日資金流預測</h2></div><div class="home-grid home-grid--5">' + preds + '</div></section>';
-  }
-
-  if (eventsCal && eventsCal.events && eventsCal.events.length > 0) {
-    var eventItems = eventsCal.events.slice(0, 5).map(function (e) {
-      var impact = e.expected_flow_impact || '';
-      var cls = impact === 'bullish' ? 'trend-bullish' : impact === 'bearish' ? 'trend-bearish' : '';
-      var badgeCls = impact === 'bullish' ? 'tier-badge tier-badge--signal tier-badge--bullish' : impact === 'bearish' ? 'tier-badge tier-badge--signal tier-badge--bearish' : 'tier-badge tier-badge--neutral';
-      return '<div class="event-card"><div class="event-card__name">' + escapeHtml(e.name || '') + '</div><div class="event-card__meta"><span class="' + badgeCls + '">' + escapeHtml(impact || 'neutral') + '</span><span class="event-card__date">' + escapeHtml(e.start_date ? e.start_date.slice(0, 10) : '') + '</span></div></div>';
-    }).join('');
-    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>近期事件</h2></div><div class="event-list">' + eventItems + '</div></section>';
-  }
-
-  var recs = await silentGetJSON('/api/recommendations');
-  if (recs && recs.recommendations && recs.recommendations.length > 0) {
-    var recItems = recs.recommendations.slice(0, 3).map(function (r) {
-      var dirCls = r.direction === 'bullish' ? 'trend-bullish' : r.direction === 'bearish' ? 'trend-bearish' : '';
-      return '<div class="rec-card"><div class="rec-card__header"><span class="rec-card__name">' + escapeHtml(r.name || r.strategy || '') + '</span><span class="rec-card__tier tier-badge tier-badge--' + escapeHtml(r.tier || 'public') + '">' + escapeHtml(r.tier || 'public') + '</span></div><div class="rec-card__signal ' + dirCls + '">' + escapeHtml(r.signal || r.summary || '') + '</div></div>';
-    }).join('');
-    root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>策略推薦</h2></div><div class="rec-list">' + recItems + '</div></section>';
-  }
-
-  // Premium-only
-  if (tier === 'premium') {
-    var report = await silentGetJSON('/api/reports/latest');
-    if (report) {
-      root.innerHTML += '<section class="home-section"><div class="home-section__header"><h2>今日市場報告</h2></div><div class="panel"><pre style="white-space:pre-wrap;font-size:0.92rem;line-height:1.6;margin:0;">' + escapeHtml(report.summary || '尚無報告') + '</pre></div></section>';
-    }
-  }
-
-  container.appendChild(root);
-}
 
 function initEventStream() {
 function eventDedupKey(ev) {
