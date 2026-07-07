@@ -37,7 +37,6 @@ export function switchPage(id, silent) {
   home: '系統總覽', live: '風控營運台', alerts: '系統警報',
   evolution_panel: '策略演化', experiments: '模擬交易',
   datachannels: '資料通道', parameters: '參數管理',
-  swarm: 'Swarm 模擬',
   narrative: '宏觀敘事', industry: '產業生態系',
   'reasoning-trace': '決策追蹤', agents: 'AI 觀測台',
   reports: '最新回測', controls: '控制與稽核',
@@ -116,11 +115,10 @@ async function loadModules() {
     import('./pages/deploy-config.js'),
     import('./pages/synergy.js'),
     import('./pages/evolution_panel.js'),
-    import('./pages/swarm.js'),
     import('./pages/prism.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'swarm', 'prism'];
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'prism'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -403,9 +401,6 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'strategies') {
     try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(document.getElementById('page-strategies')); } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'swarm') {
-    try { if (m.swarm && m.swarm.loadSwarmData) m.swarm.loadSwarmData(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'crossmarket') {
     try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.error(e); }

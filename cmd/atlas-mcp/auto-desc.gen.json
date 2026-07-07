@@ -619,41 +619,6 @@
       "type": "object"
     }
   },
-  "swarm_get_anomalies": {
-    "name": "swarm_get_anomalies",
-    "description": "Anomalies detected by the swarm over the most recent window.",
-    "inputSchema": {
-      "type": "object"
-    }
-  },
-  "swarm_get_consensus": {
-    "name": "swarm_get_consensus",
-    "description": "Latest swarm consensus (fish majority vote + divergence).",
-    "inputSchema": {
-      "type": "object"
-    }
-  },
-  "swarm_get_scenarios": {
-    "name": "swarm_get_scenarios",
-    "description": "Active scenarios the swarm is monitoring (config + current state).",
-    "inputSchema": {
-      "type": "object"
-    }
-  },
-  "swarm_get_status": {
-    "name": "swarm_get_status",
-    "description": "MiroFish swarm simulator status (running, paused, fish count).",
-    "inputSchema": {
-      "type": "object"
-    }
-  },
-  "swarm_get_strategies": {
-    "name": "swarm_get_strategies",
-    "description": "Strategy swarm composition (how many fish per strategy + voting weights).",
-    "inputSchema": {
-      "type": "object"
-    }
-  },
   "synergy_get_darwinian_status": {
     "name": "synergy_get_darwinian_status",
     "description": "Current Darwinian weight state (which strategies are being promoted/demoted, current weight delta).",

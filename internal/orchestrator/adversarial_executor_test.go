@@ -67,7 +67,7 @@ func TestPhase3ControllerRunsAdversarialStressTests(t *testing.T) {
 	ds, _ := replay.LoadTWSEOpenDataCSV(config.GetReplayDataPath(".."))
 	runner := NewAdversarialScenarioRunner(ds, registry)
 
-	ctrl := NewPhase3Controller(&registry, nil, nil, nil, nil, nil)
+	ctrl := NewPhase3Controller(&registry, nil, nil, nil, nil)
 	ctrl.WithAdversarialRunner(runner)
 	ctrl.prismWeightCache["semi-desk-01"] = 0.1 // mark as weakest
 

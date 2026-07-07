@@ -442,15 +442,6 @@ export interface ConfidenceSignalConfig {
   threshold_range_fallback: number;
 }
 
-export interface ConsensusEntry {
-  symbol: string;
-  bullish_count: number;
-  bearish_count: number;
-  neutral_count: number;
-  consensus_direction: string;
-  average_confidence: number;
-}
-
 export interface ConsensusPrediction {
   symbol: string;
   bullish_count: number;
@@ -3183,14 +3174,6 @@ export interface StrategyStateConfig {
   allow_concentration: boolean;
 }
 
-export interface StrategySummary {
-  id: string;
-  name: string;
-  type: string;
-  score: number;
-  performance?: string | null;
-}
-
 export interface StressIndexScaling {
   dxy: number;
   us10y: number;
@@ -3261,18 +3244,6 @@ export interface SupplyChainNode {
   upstream_of?: string[];
   downstream_of?: string[];
   key_materials?: string[];
-}
-
-export interface SwarmStatusResponse {
-  recorded_at: string | null;
-  total_fish: number;
-  consensus_symbols: number;
-  consensus_confidence: number;
-  top_accuracy: number;
-  anomaly_count: number;
-  scenario_count: number;
-  generations_evolved: number;
-  training_scenarios: number;
 }
 
 export interface SymbolAttribution {

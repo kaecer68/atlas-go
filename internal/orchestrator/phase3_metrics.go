@@ -10,10 +10,8 @@ import (
 	"github.com/kaecer68/atlas-go/internal/spawning"
 )
 
-// Phase3Metrics exposes a serializable snapshot of the 5-track controller state.
+// Phase3Metrics exposes a serializable snapshot of the 4-track controller state (swarm removed in PR #964).
 type Phase3Metrics struct {
-	SwarmRunning               bool      `json:"swarm_running"`
-	SwarmConsensusSymbols      int       `json:"swarm_consensus_symbols"`
 	PRISMQueuedTasks           int       `json:"prism_queued_tasks"`
 	PRISMCompletedResults      int       `json:"prism_completed_results"`
 	PRISMTopAgentID            string    `json:"prism_top_agent_id"`
@@ -32,14 +30,6 @@ var defaultMetricsPath = "data/state/phase3_metrics.json"
 // CollectMetrics gathers the current state of all 5 optimization tracks.
 func (c *Phase3Controller) CollectMetrics() Phase3Metrics {
 	m := Phase3Metrics{RecordedAt: time.Now()}
-
-	// Track A: Swarm
-	if c.swarm != nil {
-		if result, ok := c.swarm.GetLatestResult(); ok {
-			m.SwarmRunning = true
-			m.SwarmConsensusSymbols = len(result.Consensus)
-		}
-	}
 
 	// Track B: PRISM
 	if c.prismManager != nil {

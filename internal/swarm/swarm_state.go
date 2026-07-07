@@ -2,10 +2,7 @@ package swarm
 
 import (
 	"context"
-	"encoding/json"
-	"os"
 	"sync"
-	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -66,29 +63,6 @@ func (s *SwarmState) GetLatestStatus() string {
 // and treat this as "no swarm data available".
 func (s *SwarmState) GetLatestResult() (domain.SwarmSimulationResult, bool) {
 	return domain.SwarmSimulationResult{}, false
-}
-
-// Snapshot returns an empty snapshot for monitoring compatibility.
-func (s *SwarmState) Snapshot() SwarmSnapshot {
-	return SwarmSnapshot{
-		RecordedAt: time.Now(),
-		Scenarios:  []ScenarioSnapshot{},
-	}
-}
-
-// SaveSnapshot writes an empty JSON snapshot. Kept for API compatibility.
-func (s *SwarmState) SaveSnapshot(path string) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	snap := SwarmSnapshot{
-		RecordedAt: time.Now(),
-		Scenarios:  []ScenarioSnapshot{},
-	}
-	data, err := json.MarshalIndent(snap, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
 }
 
 // UpdateScenario is a no-op kept for API compatibility.

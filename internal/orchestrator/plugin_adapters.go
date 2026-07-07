@@ -7,7 +7,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/spawning"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 type janusPlugin struct {
@@ -118,23 +117,6 @@ func (p *janusPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime
 		p.engine.Update()
 	}
 }
-
-type swarmPlugin struct {
-	swarm      *swarm.SwarmState
-	controller *Phase3Controller
-}
-
-func (p *swarmPlugin) Name() string { return "swarm" }
-
-func (p *swarmPlugin) Attach(core ServiceRegistry) {}
-
-func (p *swarmPlugin) SetController(ctrl *Phase3Controller) { p.controller = ctrl }
-
-func (p *swarmPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
-	return recs // No-op: swarm simulation engine demoted in PR #963
-}
-
-func (p *swarmPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {}
 
 type prismPlugin struct {
 	manager    *prism.PRISMManager

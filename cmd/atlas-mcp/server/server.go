@@ -162,9 +162,9 @@ func Run(ctx context.Context, cfg Config) error {
 	// Verify tool count matches expected range.
 	// registerTools: 76-80 (base 76 + sampling 0-1 + elicitation 0-1, roots=2 always, anomaly=2 inside)
 	// registerAuditTools: +4 (not in registerTools)
-	// Total: 82-84 (min=76+4+2=82, max=80+4=84)
-	if n := RegisteredToolCount; n < 82 || n > 84 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 82-84", n)
+	// Total: 77-79 (min=71+4+2=77, max=75+4=79)
+	if n := RegisteredToolCount; n < 77 || n > 79 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 77-79", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for

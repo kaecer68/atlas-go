@@ -15,7 +15,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/spawning"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 // Phase3Controller coordinates PRISM, Swarm, Spawning, and Reflexivity.
@@ -26,7 +25,6 @@ import (
 type Phase3Controller struct {
 	registry        *domain.AgentRegistry
 	prismManager    *prism.PRISMManager
-	swarm           *swarm.SwarmState
 	spawningManager *spawning.SpawningManager
 	reflexEngine    *reflexivity.ReflexivityEngine
 	ledger          ledger.OutcomeStore
@@ -43,7 +41,6 @@ type Phase3Controller struct {
 func NewPhase3Controller(
 	registry *domain.AgentRegistry,
 	prismMgr *prism.PRISMManager,
-	sw *swarm.SwarmState,
 	spawningMgr *spawning.SpawningManager,
 	reflexEng *reflexivity.ReflexivityEngine,
 	ledgerStore ledger.OutcomeStore,
@@ -51,7 +48,6 @@ func NewPhase3Controller(
 	return &Phase3Controller{
 		registry:         registry,
 		prismManager:     prismMgr,
-		swarm:            sw,
 		spawningManager:  spawningMgr,
 		reflexEngine:     reflexEng,
 		ledger:           ledgerStore,
@@ -191,11 +187,6 @@ func (c *Phase3Controller) AutoPromoteSpawnedAgents() {
 			}
 		}
 	}
-}
-
-// GetSwarmConsensus returns empty — swarm simulation engine demoted in PR #963.
-func (c *Phase3Controller) GetSwarmConsensus() (domain.SwarmSimulationResult, bool) {
-	return domain.SwarmSimulationResult{}, false
 }
 
 // GetRecommendedStrategies returns the MetaLearner's top learning strategies,

@@ -43,7 +43,6 @@ import (
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
-	apiswarm "github.com/kaecer68/atlas-go/internal/monitoring/api/swarm"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
 	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
@@ -846,10 +845,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
 
-	swarmSvc := service.NewSwarmService(filepath.Join(a.workDir, "data/state/swarm_latest.json"))
-	swarmSvc.SetTrainingDir(filepath.Join(a.workDir, "data/state/swarm_training"))
-	swarmHandlers := apiswarm.NewHandlers(swarmSvc)
-	swarmHandlers.RegisterRoutes(mux)
+	// Swarm routes removed — simulation engine demoted in PR #963, cleaned in PR #964.
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.WithRiskGate(a.riskGate)
