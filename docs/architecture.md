@@ -81,6 +81,69 @@ Decision agents:
 - 投資長
 - Research Auditor
 
+## Wave 11 投資核心框架（v0.0.0.31）
+
+Layer 1-Layer 4 的決策鏈之上，Wave 11 引入 7 個新模組，圍繞「全球資金流向決定方向，資金勢力共鳴決定強度，事件驅動資金流決定節奏」的投資邏輯：
+
+| 模組 | 角色 | 消費 | 產出 |
+|------|------|------|------|
+| `internal/strategy_validator` | 策略驗證器 | backtest 引擎 | Sharpe/最大回撤/勝率/TAIEX 相關係數 + 排名分層 |
+| `internal/capitalflow` | 資金流向分析 | MacroDataSnapshot (7 勢力原始值) | Z-score + 共振係數 (1.5/0.5) + 品質分數 |
+| `internal/eventdriven` | 事件預測 | `industry.EventCalendar` + `capitalflow` 品質分數 | 5 日 forward 預測 + ETF 規模×權重預估 + 營收驚喜 |
+| `internal/strategy_ranker` | 策略排名 | `strategy_validator` 輸出 | ranked strategies + tier (public/paid) |
+| `internal/subscription` | 使用者訂閱 | — | SQLite users + JWT + 3-tier middleware |
+| `internal/recommender` | 推薦分層 | `subscription` user tier + `strategy_ranker` | tier-gated 策略推薦 + 市場燈號 |
+| `internal/dailyreport` | 每日報告 | `capitalflow` + `eventdriven` + macro | JSON + Markdown 報告 |
+
+**模組關係圖**（從數據到推薦）：
+
+```text
+              ┌──────────────────────────────────────────────────┐
+              │ Market Data → MacroDataSnapshot                 │
+              │ (TWSE, Fugle, FinMind, Fubon, Yahoo, TAIFEX...) │
+              └────────────────────┬─────────────────────────────┘
+                                   │
+              ┌────────────────────▼─────────────────────────────┐
+              │ capitalflow：7 勢力 Z-score + 共振 + 品質分數       │
+              └────────────────────┬─────────────────────────────┘
+                                   │
+              ┌────────────────────▼─────────────────────────────┐
+              │ eventdriven：5 日預測 + ETF 預估 + 營收驚喜        │
+              └────────────────────┬─────────────────────────────┘
+                                   │
+              ┌────────────────────▼─────────────────────────────┐
+              │ dailyreport：每日 JSON + Markdown 報告             │
+              └──────────────────────────────────────────────────┘
+
+              ┌──────────────────────────────────────────────────┐
+              │ backtest 引擎 → strategy_validator               │
+              └────────────────────┬─────────────────────────────┘
+                                   │
+              ┌────────────────────▼─────────────────────────────┐
+              │ strategy_ranker：排名 + tier 標籤                  │
+              └────────────────────┬─────────────────────────────┘
+                                   │
+              ┌────────────────────▼─────────────────────────────┐
+              │ subscription：3-tier + JWT auth + 7 天試用         │
+              └────────────────────┬─────────────────────────────┘
+                                   │
+              ┌────────────────────▼─────────────────────────────┐
+              │ recommender：tier-gated 推薦（Phase B 渲染）     │
+              └──────────────────────────────────────────────────┘
+```
+
+**API 端點**（v0.0.0.31 新增）：
+- `/api/capital-flow/{daily,summary}` — `capitalflow`
+- `/api/events/{calendar,prediction}` — `eventdriven`
+- `/api/recommendations` — `recommender`（需 JWT）
+- `/api/reports/{latest,archive,subscribe}` — `dailyreport`
+- `/api/auth/{register,login}` + `/api/user/{profile,subscription}` — `subscription`
+
+**前端整合**（Phase A/B/C）：
+- `client_web/static/js/services/auth.js` — JWT + tier 解析
+- `client_web/static/js/components/home-tier-sections.js` — 依 tier 渲染 dashboard（`renderHomeTierSections()`，4 個 API 平行呼叫）
+- `client_web/static/js/page-shells/{login,register,premium,mcp,errors/404}.js` — 認證、MCP 整合、404 fallback
+
 ## Data Flow
 
 ```text
@@ -224,4 +287,48 @@ Multi-phase industry cycle tracking:
 - `CycleTracker` manages five phases (expansion/recovery/mature/recession) with confidence scoring
 - `DynamicEnvModulator` ingests macro data (oil, BDI, DXY) for real-time cycle adjustment
 - External validators integrate seasonal engine and linkage analyzer for multi-dimensional confidence
+
+---
+
+## Wave 11 投資核心框架（v0.0.0.31 PR #972）
+
+在 L1-L4 決策鏈之上新增**「資金流向 → 事件 → 推薦」**三層投資邏輯框架。設計哲學：
+
+> 全球資金流向**決定方向**、資金勢力共鳴**決定強度**、事件驅動資金流**決定節奏**。
+
+### 三層次關係
+
+| 層次 | 模組 | 輸入 | 輸出 |
+|------|------|------|------|
+| **流向層**（決定方向） | `internal/capitalflow` | `MacroDataSnapshot` (7 勢力) | Z-score + 共振係數 (1.5/0.5) + 品質分數 |
+| **事件層**（決定節奏） | `internal/eventdriven` | `industry.EventCalendar` + 流向品質分數 | 5 日 forward 預測 + ETF 規模預估 + 營收驚喜 |
+| **推薦層**（決定強度） | `internal/strategy_validator` + `strategy_ranker` + `recommender` | 回測歷史 + 流向 + 事件 + user tier | 三層策略訊號 (public/registered/premium) |
+
+### API 端點（新增）
+
+| Path | Module | 用途 |
+|------|--------|------|
+| `GET /api/capital-flow/daily` | `capitalflow` | 七大資金勢力 Z-score + 共振 |
+| `GET /api/capital-flow/summary` | `capitalflow` | 摘要（品質分數 + 主力方向）|
+| `GET /api/events/calendar` | `eventdriven` | 未來 14 天事件 + 預估方向 |
+| `GET /api/events/prediction` | `eventdriven` | 5 日 forward 預測 + ETF 預估 |
+| `GET /api/recommendations` | `recommender` | 依 user tier 返回分層推薦 |
+| `POST /api/auth/{register,login}` | `subscription` | JWT 認證 + 7 天免費試用 |
+| `GET /api/user/{profile,subscription}` | `subscription` | 使用者資訊查詢 |
+| `GET /api/reports/latest` | `dailyreport` | 最新每日市場報告 (JSON+MD) |
+| `GET /api/reports/archive` | `dailyreport` | 歷史報告查詢 |
+| `POST /api/reports/subscribe` | `dailyreport` | 郵件訂閱 |
+
+### 前端整合（`client_web/` Phase A0/A/B/C）
+
+| 檔案 | 角色 |
+|------|------|
+| `services/auth.js` | JWT + tier 解析、`getTier()` 給 Phase B 渲染依據 |
+| `page-shells/{login,register,premium}.js` | Phase A0 認證 page shells |
+| `page-shells/{mcp,errors/404}.js` | Phase C 整合 + 404 fallback |
+| `components/home-tier-sections.js` | Phase B tier-gated dashboard 渲染 |
+
+### Maturity Tag
+
+全部新模組標記為 **experimental**（X-tier），依照內部 SPEC 規範使用 `cmd/gentags/main.go` 自動產生 `field_types.ts` 與 `valid_fields.json`，搭配 CI `field-contract` 強制對齊 frontend/backend 欄位名稱。
 

@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Atlas parameter system manages 228 tunable parameters across 16 modules. Each parameter includes provenance tracking, calibration metadata, and runtime update capabilities.
+The Atlas parameter system manages 228 tunable parameters across 23 modules. Each parameter includes provenance tracking, calibration metadata, and runtime update capabilities.
+
+> **v0.0.0.31 模組數更新**：從 16 個 S/E-level modules 擴增至 23 個，新增 7 個 experimental 模組（`strategy_validator`、`capitalflow`、`eventdriven`、`strategy_ranker`、`subscription`、`recommender`、`dailyreport`）。新模組的 parameters 暫未進入 health check 流程（P1 殘留），calibration 應使用 `--module=all` 對既有 16 個 S/E module 跑。
 
 ## Quick Reference
 

@@ -171,6 +171,59 @@ test -n "$(grep -c '/api/llm/health' cmd/atlas/main.go)" || \
 
 ---
 
+## v0.0.0.31 Auth/Tier/Cookie 陷阱（Wave 11 PR #972 + #974）
+
+Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recommender`（tier-gated API）+ `client_web` Phase A0/A（401 interceptor + tier-gated home dashboard）。**任何繞過 tier middleware 或錯誤處理 Cookie Secure 旗標都會導致越權存取**，以下列出必須遵守的契約：
+
+### 1. tier middleware bypass（絕對禁止）
+
+`internal/subscription/handler.go` 提供 `ValidateTier(minTier)` middleware，保護 `/api/recommendations` 等敏感端點。**繞過情境與後果**：
+
+- **錯誤示範**：`mux.HandleFunc("GET /api/recommendations", h.HandleRecommendations)` 直接註冊，沒有套 `ValidateTier("public")` wrapper
+- **後果**：未登入使用者可直接呼叫，繞過 tier 限制，premium 級內容（進出場點位、深度回測）外洩
+- **正確做法**：所有 sensitive endpoint 必須透過 `ValidateTier(minTier)` middleware，且 `minTier` 必須是該 endpoint 設計的最低 tier（不能是 `premium`，否則 registered user 會被擋下）
+
+### 2. Cookie Secure 旗標（local dev vs production）
+
+`internal/subscription/handler.go::Login` 設定 cookie 時使用 `Secure: false`，這是**本機開發**（無 HTTPS）的取捨。**production 部署必須改為 `Secure: true`**：
+
+- 開發環境：`Secure: false` + `//nolint:gosec` 標註（CI 不會 fail）
+- Production：`Secure: true` + `SameSite=Strict` + 加 `__Host-` prefix
+- **檢查方式**：搜尋 `setSecure.*false|Secure:\s*false` 應只出現在 dev 配置文件
+
+### 3. JWT 過期與 refresh（v0.0.0.31 已知 P1 殘留）
+
+`internal/subscription/jwt.go::Generate` 發出 HS256 token，TTL 24h。**目前沒有 refresh endpoint**，過期後使用者必須重新登入：
+
+- **症狀**：登入 24 小時後呼叫 `/api/recommendations` 突然回 401，前端 tier badge 從 `premium` 變回 `free`
+- **影響**：client_web 的 `invalidateAuth()` 會被呼叫，UI 退回 login shell
+- **Workaround（v0.0.0.32 計畫）**：加 `/api/auth/refresh` + sliding window JWT
+
+### 4. 401 interceptor 與 `silentGetJSON` 衝突
+
+`client_web/static/js/services/auth.js::invalidateAuth()` 會在收到 401 時清掉 cookie + 重導。但 `shared/app-utils.js::silentGetJSON()` 設計為**不 throw**，會安靜返回 `null`：
+
+- **正確組合**：`getJSON(url)` 用於需要 401 處理的 endpoint（如 `/api/recommendations`），`silentGetJSON(url)` 用於可降級的 endpoint（如 `/api/capital-flow/summary` 失敗仍可顯示 partial dashboard）
+- **錯誤組合**：對 `silentGetJSON('/api/recommendations')` 結果呼叫 `if (recs.tier === 'premium')` 永遠 false，因為 401 時返回 null
+- **規則**：tier-gated API 一律用 `getJSON`，不要用 `silentGetJSON`
+
+### 5. CLI `atlas register` 未實作（v0.0.0.31 已知）
+
+`POST /api/auth/register` 僅透過 HTTP API 暴露。**CLI 無對應指令**。若需要 headless 註冊：
+
+- **臨時**：直接打 `curl -X POST /api/auth/register -d '{"email":"...","password":"..."}'`
+- **永久**：v0.0.0.32 計畫加 `cmd/atlas-user`
+
+### 6. defaultProvider fallback 不寫檔（dailyreport）
+
+`internal/dailyreport/report.go::defaultProvider` 在缺少真實 DataProvider 時返回 `NoDataAvailable: true` 但**不寫入磁碟**：
+
+- **症狀**：`/api/reports/latest` 在剛啟動且 scheduler 還沒跑完時回 503
+- **正確處理**：handler 應回 HTTP 503 + `Retry-After: 60`，而非 500
+- **檢查**：呼叫端用 `if (res.status === 503) showFallback()` 而非 `if (res.status === 200)`
+
+---
+
 ## 模組特定陷阱
 
 以下陷阱屬於特定模組範圍，詳見各模組的 `AGENTS.md`：

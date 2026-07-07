@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.0.0.31] - 2026-07-07
+
+### Added
+- **Wave 11 投資核心框架** (PR #972, 7 模組):
+  - `internal/strategy_validator` — 策略歷史回測驗證（Sharpe/最大回撤/勝率/TAIEX 相關係數 + 排名分層）。
+  - `internal/capitalflow` — 七大資金勢力分解與共振分析（外資/投信/公股/散戶/期貨/ADR Z-score + 共振係數 1.5/0.5）。API: `/api/capital-flow/daily`、`/api/capital-flow/summary`。
+  - `internal/eventdriven` — 事件驅動資金流預測（5 日 forward + ETF 規模×權重預估 + 營收驚喜 >10% 邏輯）。API: `/api/events/calendar`、`/api/events/prediction`。
+  - `internal/strategy_ranker` + `internal/subscription` + `internal/recommender` — 推薦分層系統（3 tiers: public/registered/premium，7 天免費試用，JWT auth）。API: `/api/recommendations`。
+  - `internal/dailyreport` — 每日市場報告（JSON + Markdown）。API: `/api/reports/latest`、`/api/reports/archive`、`/api/reports/subscribe`。
+- **MCP 整合優化** (PR #972):
+  - 4 個新 tools: `mcp_quickstart`、`daily_report`、`event_calendar`、`event_flow_prediction`。
+  - 6 個預設 Prompt 模板: `taiwan_quick_look`、`strategy_advice`、`stock_health_check`、`daily_market_briefing`、`risk_check`、`regime_interpretation`。
+  - 3 個 MCP Resources: `atlas://strategies/active`、`atlas://market/regime`、`atlas://events/today`。
+  - 新增 `docs/mcp-integration-guide.md`（Claude Desktop / OpenClaw / Hermes 整合設定）。
+- **Client Web Phase A0/A/B/C** (PR #974, 24 files):
+  - **Phase A0**: `services/auth.js`（JWT + tier 解析）、3 個 page shells（login/register/premium）、401 interceptor。
+  - **Phase A**: loadAll 瘦身（11 → 6 core APIs）、sidebar 認證導航、tier badge CSS。
+  - **Phase B**: tier-gated home dashboard（capital flow + event prediction + event calendar + recommendations + daily report）。
+  - **Phase C**: MCP 整合頁、404 fallback、switchPage 錯誤處理。
+  - **CSS 架構**: 新增 `components/grid.css` 取代 home-pulse/signals 重複定義（single source of truth）。
+  - **gentags**: `cmd/gentags/main.go` 加入 eventdriven + recommender scan，修復 field-contract CI。
+
+### Fixed
+- **Client /admin/dist/* + /client/dist/* routing regression** (PR #973): 靜態資源路由修復。
+- **Phase A/C audit fixes** (PR #974): `btn-primary` → `btn--primary` BEM 一致性、MCP 頁 CSS、404 頁 CSS、`renderNavState()` 登入後未更新。
+- **field-contract CI** (PR #972, #974): `cmd/gentags/main.go` 補上 eventdriven + recommender + capitalflow scan 列表。
+- **tier-cta / event-card / rec-card CSS** (PR #974): Phase B 渲染依賴的 CSS class 補完（tier-cta__actions、event-card__name、rec-card__tier 等）。
+
+### Quality
+- 全部 7 模組測試通過（52+ tests, 含 capitalflow 7 + eventdriven 8 + recommender 2 + subscription 6 + strategy_validator 17 + strategy_ranker 2 + dailyreport 4）。
+- gofmt clean, go vet clean, golangci-lint 0 issues。
+- 35 CI checks PASS（含 field-contract / fmt / lint / frontend-build / mcp-tool-count / maturity / constitution / coverage）。
+
 ## [0.0.0.30] - 2026-07-07
 
 ### Added

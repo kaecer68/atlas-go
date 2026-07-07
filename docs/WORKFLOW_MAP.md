@@ -106,6 +106,13 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 |----|---------|---------|---------|---------|------|
 | **WA-700** | Fubon-proxy Manager（process supervisor） | `.claude/skills/atlas-fubon-supervisor-invariants` skill + `cmd/atlas/main.go:299` | API 啟動時 | python proxy 子行程 | F1-F9 invariants 細則 |
 | **WA-701** | OTel / observability | `obsotel.Init`（main.go:166） | 啟動時 | distributed trace | sampling policy |
+| **WA-800** | 資金流向日報 | `internal/capitalflow/handler.go` | HTTP `GET /api/capital-flow/daily` | 7 勢力 Z-score + 共振 | Phase B tier-gated dashboard |
+| **WA-801** | 資金流向摘要 | `internal/capitalflow/handler.go` | HTTP `GET /api/capital-flow/summary` | 共振 + 品質分數 + 主力方向 | Phase B 摘要渲染 |
+| **WA-802** | 事件日曆 | `internal/eventdriven/handler.go` | HTTP `GET /api/events/calendar` | 未來 14 天事件 + 預估方向 | Phase B 近期事件區塊 |
+| **WA-803** | 5 日事件預測 | `internal/eventdriven/handler.go` | HTTP `GET /api/events/prediction` | 5 日 forward + ETF 預估 | Phase B 預測區塊 |
+| **WA-804** | 推薦分層 | `internal/recommender/handler.go` | HTTP `GET /api/recommendations`（需 JWT） | tier-gated 策略推薦 + 市場燈號 | Phase B 推薦區塊 |
+| **WA-805** | 訂閱認證 | `internal/subscription/handler.go` | HTTP `POST /api/auth/{register,login}` | JWT token + cookie | Phase A0 frontend auth |
+| **WA-806** | 每日報告 | `internal/dailyreport/report.go` | HTTP `GET /api/reports/latest\|archive` + `POST /api/reports/subscribe` | 報告 JSON + Markdown | Phase B 報告區塊 |
 
 ---
 

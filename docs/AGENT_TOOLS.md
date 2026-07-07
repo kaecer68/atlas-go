@@ -2,6 +2,7 @@
 
 > **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 83 個 tool，實際數量依 MCP server config 而定：基礎 81 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
+> **整合到 Claude Desktop / OpenClaw / Hermes**：[`mcp-integration-guide.md`](./mcp-integration-guide.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
 > **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [agent-mcp-server.md](specs/agent-mcp-server.md) §3。
 >

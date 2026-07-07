@@ -30,7 +30,7 @@
 | 目錄 | 角色 | 對外 URL |
 |------|------|---------|
 | `admin_web/static/js/` | 管理後台專屬 JS(`main.js`、`component-init.js`、`event-listeners.js`) | `/admin/` |
-| `client_web/static/js/` | 投資人介面專屬 JS | `/client/` |
+| `client_web/static/js/` | 投資人介面專屬 JS（`main.js`、`page-shells/`、`components/`） | `/client/` |
 | `shared_web/static/js/` | 共用 JS(pages、components、services、shared、bootstrap-utils) | 經 esbuild plugin fallback 引入 |
 | `shared_web/static/css/` | 全部 CSS(dark/light 主題、components、layout、pages) | 經 esbuild 打包成 `css/main.css` |
 
@@ -42,6 +42,9 @@
 | `component-init.js` | 共用 component 初始化(circuit-breaker、sim-health、performance-report) |
 | `event-listeners.js` | DOM event 綁定(sidebar nav、evView 按鈕、shock sim 互動、modal 關閉) |
 | `pages/*.js` | 每個頁面的 render 函式,由 `main.js` 動態 import |
+| `page-shells/{login,register,premium,mcp,errors/404}.js` | v0.0.0.31 Phase A0/C 新增的 page shell（tier 認證 + MCP 頁 + 404 fallback）|
+| `services/auth.js` | v0.0.0.31 Phase A0 新增：JWT + tier 解析、`initAuth`/`isLoggedIn`/`getTier`/`renderNavState` |
+| `components/home-tier-sections.js` | v0.0.0.31 Phase B 新增：tier-gated home dashboard 渲染（capital flow + event prediction + event calendar + recommendations + daily report）|
 
 ### esbuild plugin fallback 規則
 
@@ -63,6 +66,12 @@
 
 - `cmd/atlas/api_routes.go`:`/admin/` 與 `/client/` 分別掛載 `admin_web.DistFS` 與 `client_web.DistFS`;root `/` 301 導向 `/client/`
 - API 端點統一前綴 `/api/...`(dashboard、narrative、industry、taiwan、...)
+- v0.0.0.31 新增端點（Phase B 對應）：
+  - `/api/capital-flow/{daily,summary}` — 七大資金勢力 + 共振強度（`internal/capitalflow`）
+  - `/api/events/{calendar,prediction}` — 事件日曆 + 5 日預測（`internal/eventdriven`）
+  - `/api/recommendations` — tier-gated 推薦（`internal/recommender`，需 JWT）
+  - `/api/reports/{latest,archive,subscribe}` — 每日報告（`internal/dailyreport`）
+  - `/api/auth/{register,login}` + `/api/user/profile` + `/api/user/subscription` — tier 認證（`internal/subscription`）
 - 靜態資源經 Go `embed.FS` 嵌入 binary,Docker image 由 multi-stage Dockerfile 重新 `npm run build` 產出 dist
 
 ### 前端疑難排解
