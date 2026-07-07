@@ -1,4 +1,5 @@
 /* Home page — Refined Financial Editorial */
+@import url("../components/grid.css");
 @import url("home-today.css");
 @import url("home-signals.css");
 @import url("home-pulse.css");
@@ -537,3 +538,97 @@
 #home-market-grid[data-disclosure-state="expanded"] ~ .disclosure-toggle .disclosure-toggle__icon {
   transform: rotate(180deg);
 }
+
+/* ─── Phase B: tier-gated home dashboard components ─── */
+
+/* CTA banner (free tier) */
+.tier-cta {
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+  background: linear-gradient(135deg, var(--editorial-surface), color-mix(in srgb, var(--editorial-accent) 5%, var(--editorial-surface)));
+  border: 1px dashed var(--editorial-border);
+  border-radius: var(--editorial-radius-lg);
+}
+.tier-cta .home-section__header {
+  margin-bottom: var(--space-md);
+}
+.tier-cta .home-section__subtitle {
+  display: block;
+  color: var(--editorial-muted);
+  font-size: 0.9rem;
+  margin-top: var(--space-xs);
+}
+.tier-cta__actions {
+  margin-top: var(--space-lg);
+}
+
+/* event card list */
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.event-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--editorial-surface);
+  border: 1px solid var(--editorial-border);
+  border-radius: var(--editorial-radius-sm);
+}
+.event-card__name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--editorial-text);
+}
+.event-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.event-card__date {
+  font-size: 0.8rem;
+  color: var(--editorial-muted);
+}
+
+/* recommendation card list */
+.rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.rec-card {
+  padding: var(--space-md);
+  background: var(--editorial-surface);
+  border: 1px solid var(--editorial-border);
+  border-radius: var(--editorial-radius-md);
+}
+.rec-card:hover {
+  border-color: var(--editorial-accent);
+  box-shadow: var(--editorial-shadow-sm);
+}
+.rec-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+.rec-card__name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--editorial-text);
+}
+.rec-card__tier {
+  position: relative;
+  top: 0;
+  right: 0;
+}
+.rec-card__signal {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--editorial-muted);
+}
+.rec-card__signal--bullish { color: var(--trend-bullish); }
+.rec-card__signal--bearish { color: var(--trend-bearish); }
+.rec-card__signal--neutral { color: var(--editorial-muted); }

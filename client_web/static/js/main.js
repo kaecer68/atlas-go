@@ -11,7 +11,11 @@ import { eventSource } from './services/event-source.js';
 import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
-import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
+import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
+import { initAuth, isLoggedIn, invalidateAuth, renderNavState, getTier } from './services/auth.js';
+import { metricCard } from './components/metric-card.js';
+import { fmtSignedPct } from './shared/format-metric.js';
+import { renderHomeTierSections } from './components/home-tier-sections.js';
 import './modals/modal.js';
 import { injectSharedHead } from './shared/head-config.js';
 injectSharedHead();
@@ -26,7 +30,12 @@ const SHELL_LOADERS = {
   evolution_panel: () => import('./page-shells/evolution_panel.js'),
   industry: () => import('./page-shells/industry.js'),
   'performance-report': () => import('./page-shells/performance-report.js'),
-  strategies: () => import('./page-shells/strategies.js')
+  strategies: () => import('./page-shells/strategies.js'),
+  login: () => import('./page-shells/login.js'),
+  register: () => import('./page-shells/register.js'),
+  premium: () => import('./page-shells/premium.js'),
+  mcp: () => import('./page-shells/mcp.js'),
+  'errors/404': () => import('./page-shells/errors/404.js')
 };
 const _shellsLoaded = new Set();
 
@@ -57,6 +66,10 @@ const basePath = (typeof window !== 'undefined')
   : '';
 
 export async function switchPage(id, silent) {
+  // Unknown page — fallback to 404
+  if (!SHELL_LOADERS[id] && id !== 'errors/404') {
+    return switchPage('errors/404', silent);
+  }
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }
   await _ensureShellLoaded(id);
@@ -71,7 +84,9 @@ export async function switchPage(id, silent) {
     crossmarket: '美台連動', industry: '產業地圖',
     pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
-    evolution_panel: '策略演化', strategies: '投資心法'
+    evolution_panel: '策略演化', strategies: '投資心法',
+      login: '登入', register: '註冊', premium: '升級 Premium',
+      mcp: 'MCP 整合', 'errors/404': '404'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -191,7 +206,7 @@ async function loadModules() {
   }
   return modules;
 }
-// --- Main Data Loader ---
+// --- Main Data Loader (investor-facing, Phase A slimmed to 6 core APIs) ---
 async function loadAll() {
   var loadingBar = document.getElementById('loadingBar');
   if (loadingBar) loadingBar.classList.add('active');
@@ -200,37 +215,17 @@ async function loadAll() {
   try {
     var results = await Promise.all([
       getJSONWithTimeout('/api/dashboard/system-health'),
-      getJSONWithTimeout('/api/dashboard/macro-radar'),
-      getJSONWithTimeout('/api/dashboard/agent-observatory'),
-      getJSONWithTimeout('/api/dashboard/recommendation-pipeline'),
-      getJSONWithTimeout('/api/dashboard/live-status'),
-      getJSONWithTimeout('/api/dashboard/risk-exposure'),
-      getJSONWithTimeout('/api/dashboard/experiment-inbox'),
-      getJSONWithTimeout('/api/dashboard/universe-overlap'),
+      getJSONWithTimeout('/api/macro/snapshot/latest'),
       getJSONWithTimeout('/api/taiwan/stress-index'),
       getJSONWithTimeout('/api/narrative/bundle'),
-      getJSONWithTimeout('/api/macro/snapshot/latest'),
-      getJSONWithTimeout('/api/dashboard/data-channels'),
-      getJSONWithTimeout('/api/dashboard/sessions'),
-      getJSONWithTimeout('/api/dashboard/phase3-status'),
-      getJSONWithTimeout('/api/alerts'),
       getJSONWithTimeout('/api/dashboard/retail-sentiment'),
-      getJSONWithTimeout('/api/dashboard/capital-phase'),
-      getJSONWithTimeout('/api/dashboard/tax-snapshot'),
       getJSONWithTimeout('/api/dashboard/regime-history'),
-      getJSONWithTimeout('/api/synergy/darwinian-trend'),
-      getJSONWithTimeout('/api/synergy/darwinian-status'),
-      getJSONWithTimeout('/api/dashboard/risk-calibration'),
     ]);
 
-    var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
-        riskExposure = results[5], inbox = results[6], overlap = results[7], stress = results[8], bundle = results[9],
-        snapshot = results[10], dataChannels = results[11],
-        sessions = results[12], phase3 = results[13], alerts = results[14], retailSentiment = results[15],
-        capitalPhase = results[16], taxSnapshot = results[17], regimeHistory = results[18],
-        darwinianTrend = results[19], darwinianStatus = results[20], riskCalibration = results[21];
+    var health = results[0], snapshot = results[1], stress = results[2], bundle = results[3],
+        retailSentiment = results[4], regimeHistory = results[5];
 
-    // Unwrap narrative bundle into backwards-compatible shapes.
+    // Unwrap narrative bundle
     var events = bundle && bundle.events ? { events: bundle.events } : null;
     var chains = bundle && bundle.chains ? { chains: bundle.chains } : null;
     var models = bundle && bundle.models ? { models: bundle.models } : null;
@@ -245,19 +240,10 @@ async function loadAll() {
       consecutiveFailures = 0; hideErrorBanner();
     }
 
-    var parsed = parseSessionsList(sessions);
-    window.pipelineSessions = parsed.sessions;
-    window.pipelineSessionsStatus = parsed.data_status;
-
     await loadModules();
     var m = modules;
-    if (m.pipe.renderPipeline) m.pipe.renderPipeline(pipeline, false, '');
-
     if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(events, stress, models, chains);
     if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
-    if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);    if (m.experiments.loadOverrides) m.experiments.loadOverrides();
-    if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
-    if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
   } catch (e) {
     console.error(e);
     consecutiveFailures++;
@@ -336,6 +322,7 @@ async function loadPageData(pageId) {
     try {
       if (m.home && m.home.renderHomePage) {
         await m.home.renderHomePage(document.getElementById('page-home'));
+        await renderHomeTierSections();
       }
     } catch(e) { console.warn('[home] load failed:', e); }
   }
@@ -468,7 +455,26 @@ if (typeof window !== 'undefined') {
   initBacktestDates();
   startAutoRefresh();
   initEventStream();
-  (async () => {
+
+  // Auth: check JWT validity before loading data; wrap fetch for 401 detection
+  const _origFetch = window.fetch;
+  window.fetch = function(url, opts) {
+    return _origFetch(url, opts).then(function(res) {
+      if (res.status === 401) {
+        invalidateAuth();
+        var currentPage = window.location.pathname.replace(/^\/client\/?/, '') || 'home';
+        if (currentPage !== 'login' && currentPage !== 'register') {
+          console.warn('[auth] 401 detected, redirecting to login');
+          window.switchPage('login');
+        }
+      }
+      return res;
+    });
+  };
+
+  initAuth().then(function() {
+    renderNavState();
+    (async () => {
     loadAll().catch(e => console.warn('[init] loadAll failed:', e));
     var initialPath = window.location.pathname
       .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
@@ -490,7 +496,9 @@ if (typeof window !== 'undefined') {
       switchPage('evolution_panel', true);
     }
   })();
+  });
 }
+
 
 function initEventStream() {
 function eventDedupKey(ev) {
