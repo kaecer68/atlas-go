@@ -339,7 +339,7 @@ func (e *Engine) RunDay(
 					proceeds = float64(reduceQty) * price
 					e.creditCashWithTPlus2Lock(state, proceeds, day)
 					state.Positions[i].Quantity -= reduceQty
-					state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * q.Last
+					state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * price
 					state.RealizedPnL += float64(reduceQty) * (price - state.Positions[i].AverageCost)
 					orders = append(orders, domain.Order{
 						Symbol:   state.Positions[i].Symbol,
@@ -540,8 +540,9 @@ func (e *Engine) shouldSellPosition(pos domain.Position, quote domain.Quote, rec
 	return false, ""
 }
 
-// RunMultiDay runs a sequential multi-day simulation.
+// RunMultiDay runs a sequential multi-day simulation using the provided regime.
 func (e *Engine) RunMultiDay(
+	regime domain.Regime,
 	quotesByDate map[string][]domain.Quote,
 	recsByDate map[string][]domain.Recommendation,
 	dates []time.Time,
@@ -559,8 +560,6 @@ func (e *Engine) RunMultiDay(
 		key := date.Format("2006-01-02")
 		quotes := quotesByDate[key]
 		recs := recsByDate[key]
-		// Determine regime from recs if available; default to neutral
-		regime := domain.RegimeNeutral
 		result := e.RunDay(&state, date, regime, quotes, recs)
 		totalTrades += len(result.Orders)
 		allFallbackEvents = append(allFallbackEvents, result.FallbackEvents...)

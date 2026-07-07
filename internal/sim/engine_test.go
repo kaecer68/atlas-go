@@ -254,7 +254,7 @@ func TestRunMultiDayTwentyDays(t *testing.T) {
 		}
 	}
 
-	report := engine.RunMultiDay(quotesByDate, recsByDate, dates)
+	report := engine.RunMultiDay(domain.RegimeRiskOn, quotesByDate, recsByDate, dates)
 	if len(report.EquityCurve) != 20 {
 		t.Fatalf("expected 20 equity points, got %d", len(report.EquityCurve))
 	}
@@ -432,5 +432,44 @@ func TestDeriveSimDay_EmptyReturnsZero(t *testing.T) {
 	day := deriveSimDay(nil)
 	if !day.IsZero() {
 		t.Errorf("deriveSimDay(nil) = %v, want zero time", day)
+	}
+}
+
+func TestRunDay_Rebalance_UsesExecutedPriceForMarketValue(t *testing.T) {
+	engine := NewEngine(domain.SimulationConstraints{
+		StartingCash:                1_000_000,
+		MaxPositionWeight:           1.0,
+		MaxOpenPositions:            5,
+		MinTradableVolume:           1,
+		MinRecommendationConviction: 0,
+		TransactionCostBPS:          0,
+		SlippageBPS:                 100, // 1% slippage to make price difference visible
+		ReserveCashFraction:         0,
+	})
+	gate := risk.NewPreTradeGate()
+	if gate.MaxPositionPct() <= 0 {
+		t.Skip("pre-trade gate max position pct is zero in test config")
+	}
+	engine.WithPreTradeGate(gate)
+
+	state := domain.NewSimulationState(1_000_000)
+	state.Positions = []domain.Position{
+		{Symbol: "2330.TW", Quantity: 1000, AverageCost: 100, EntryDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	day := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 1000, Volume: 1000000, IsTradable: true, AsOf: day},
+	}
+
+	engine.RunDay(&state, day, domain.RegimeRiskOn, quotes, nil)
+
+	if len(state.Positions) != 1 {
+		t.Fatalf("expected 1 position, got %d", len(state.Positions))
+	}
+	pos := state.Positions[0]
+	executedPrice := 1000 * (1 - 100/10000.0) // 990
+	wantMV := float64(pos.Quantity) * executedPrice
+	if math.Abs(pos.MarketValue-wantMV) > 0.01 {
+		t.Fatalf("market value = %f, want %f (executed price %f)", pos.MarketValue, wantMV, executedPrice)
 	}
 }
