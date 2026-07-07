@@ -96,22 +96,7 @@ ctx.strokeStyle = hexToRgba(getThemeColor('--trend-bullish'), 0.3);
 | `shared_web/static/js/shared/utils.js` (canonical) | Canvas 橋接函數 (`getThemeColor`, `hexToRgba`) |
 | `shared_web/static/js/shared/color-tokens.js` (canonical) | JS 端統一色彩邏輯（`financialColor`, `regimeColor`, `severityColor`, `confidenceColor`），PR #944 引入 |
 | `shared_web/static/js/shared/theme-labels.js` (canonical) | 24 個 narrative event theme → 中文標籤對映表（從 `internal/narrative/templates.go` 擷取） |
-| `shared_web/static/js/shared/mode-manager.js` (canonical) | 三級投資人角色模式（simple/standard/pro），PR #946 引入 |
 | `shared_web/static/js/components/event-calendar.js` | 市場行事曆組件（除權息、法說會、季節性事件），PR #945 引入 |
-
-## 投資人角色模式
-
-atlas 提供三級投資人角色模式，透過 `data-atlas-mode` 屬性控制頁面內容密度：
-
-| 模式 | data-atlas-mode | 首頁可見內容 |
-|------|----------------|-------------|
-| simple | `"simple"` | Hero + 3 張核心指標卡 + 組合快覽（新手友善） |
-| standard | `"standard"`（預設） | Hero + signal strip + 8 張市場脈動卡 + 組合快覽 |
-| pro | `"pro"` | Hero + signal strip + 8 張卡 + 行事曆 + 組合快覽（專業投資人） |
-
-- **向後相容**：`data-simplified` 屬性仍被支援，`localStorage` 的 `atlas-simplified` 在金鑰首次讀取時自動遷移至 `atlas-mode`。
-- **控制按鈕**：頂部導航欄「簡化模式」按鈕循環切換 simple → standard → pro。
-- **CSS 規則**：`simplified.css` 使用 `[data-simplified]` 和 `[data-atlas-mode="simple"]` 雙重選擇器隱藏進階內容。
 
 ## 市場行事曆組件
 
