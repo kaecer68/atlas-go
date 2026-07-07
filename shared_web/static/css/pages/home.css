@@ -486,8 +486,54 @@
   .home-skeleton,
   .home-skeleton::after,
   .home-hero__btn,
-  .home-expand-btn {
+  .home-expand-btn,
+  .disclosure-toggle,
+  .disclosure-toggle__icon {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Progressive disclosure — market-pulse advanced cards */
+#home-market-grid[data-disclosure-state="collapsed"] .disclosure-tier-advanced {
+  display: none;
+}
+
+.disclosure-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: var(--space-md, 1rem);
+  padding: 0.65rem 1rem;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.disclosure-toggle:hover {
+  background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong, rgba(255, 255, 255, 0.2));
+}
+
+.disclosure-toggle:focus-visible {
+  outline: 2px solid var(--color-accent, #4a9eff);
+  outline-offset: 2px;
+}
+
+.disclosure-toggle__icon {
+  display: inline-block;
+  font-size: 0.75em;
+  transition: transform 0.2s;
+}
+
+#home-market-grid[data-disclosure-state="expanded"] ~ .disclosure-toggle .disclosure-toggle__icon {
+  transform: rotate(180deg);
 }
