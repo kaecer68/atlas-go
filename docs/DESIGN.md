@@ -234,6 +234,6 @@ const html = renderTooltip('信心分數', '模型對今日建議的把握程度
 ## 10. 參考
 
 - Token 來源：`shared_web/static/css/base/variables.css`
-- 設計 audit：`audit_assets/phase2-retail-investor-landing-audit.md`
+- 設計 audit：原 Phase 2 投資人介面審計 (2026-07-01)，已於 PR #970 隨 mode 系統移除一併清掉
 - 計畫原案：`.omo/plans/retail-investor-landing-design.md`
 - 架構：`docs/architecture.md`

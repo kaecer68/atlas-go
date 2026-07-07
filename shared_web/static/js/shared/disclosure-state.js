@@ -1,10 +1,18 @@
-// shared_web/static/js/shared/disclosure-state.js
-// Persistent expand/collapse state for "展開更多" / "收合" disclosure patterns.
-//
-// Generic across any section that needs cross-session state preservation
-// (e.g. market pulse cards, portfolio details, narrative chains).
-// State values are intentionally string-typed ('expanded' | 'collapsed') for
-// forward compatibility — add new states by extending the valid set.
+/**
+ * Atlas Dashboard — Progressive Disclosure 狀態管理器
+ *
+ * 取代舊的「三級投資人角色模式」(PR #946 引入、PR #967 移除)，改為單一模式 + 區塊摺疊。
+ * 狀態持久化到 localStorage（prefix: 'atlas-disclosure-'）。
+ *
+ * collapsed: 預設 — 僅渲染核心卡片、最少 API 呼叫
+ * expanded:  用戶主動展開 — 顯示進階卡片
+ *
+ * 設計目標：兌現原 mode-manager.js「最少 API 呼叫」承諾。目前透過 CSS 隱藏實現，
+ * 真實 API lazy-load 待後端 /api/macro/snapshot 支援 fields 過濾後實作
+ * (見 shared_web/static/js/pages/home.js renderMarketPulse 中的 TODO 註解)。
+ *
+ * State values 為字串型別 ('expanded' | 'collapsed')，向後相容；新增狀態請擴充 VALID_STATES。
+ */
 
 const STORAGE_PREFIX = 'atlas-disclosure-';
 const VALID_STATES = new Set(['expanded', 'collapsed']);
