@@ -25,10 +25,17 @@ vendor/
 Thumbs.db
 
 # Build artifacts
+# Top-level dist/ (catches shared_web/dist if present)
 dist/
 build/
 bin/
 atlas-go
+# Sub-app build outputs — MUST be excluded so Docker nodebuilder stage is the
+# sole source of truth for the embedded dist. Stale local builds otherwise
+# mask newer source when COPY runs (see PR #976 follow-up).
+client_web/dist/
+admin_web/dist/
+shared_web/dist/
 
 # Data and logs (mount as volumes)
 data/*

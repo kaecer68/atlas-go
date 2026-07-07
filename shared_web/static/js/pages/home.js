@@ -91,10 +91,11 @@ export async function renderHomePage(container) {
       <div class="home-grid home-grid--4" id="home-market-grid" data-disclosure-section="market-pulse" data-disclosure-state="collapsed">
         <div class="home-loading-card">載入中…</div>
       </div>
-      <button class="disclosure-toggle" id="market-pulse-toggle" type="button" aria-expanded="false" aria-controls="home-market-grid">
+      <button class="disclosure-toggle" id="market-pulse-toggle" type="button" aria-expanded="false" aria-controls="home-market-grid" aria-label="展開 6 張進階指標">
         <span class="disclosure-toggle__label">展開進階指標</span>
         <span class="disclosure-toggle__icon" aria-hidden="true">▼</span>
       </button>
+      <span class="sr-only" id="market-pulse-status" aria-live="polite" aria-atomic="true"></span>
     </section>
 
     <section class="home-section" id="home-event-calendar">
@@ -410,6 +411,9 @@ function renderMarketPulse(macro, stress) {
   if (grid) {
     const initialState = getDisclosureState('market-pulse', 'collapsed');
     grid.setAttribute('data-disclosure-state', initialState);
+    // TODO(lazy-load): 目前 11 張卡一次 render; collapsed 狀態 CSS 隱藏 6 張進階卡
+    // 但 data 已 fetch 進來。等後端 /api/macro/snapshot 支援 fields=core 過濾後,
+    // 改為 collapsed 只 render 5 張,展開時再 fetch advanced 資料 (見 disclosure-state.js header)。
     grid.innerHTML = cards.join('');
     bindMarketPulseDisclosure();
   }
@@ -428,12 +432,17 @@ function bindMarketPulseDisclosure() {
     btn.setAttribute('aria-expanded', state === 'expanded' ? 'true' : 'false');
     const labelEl = btn.querySelector('.disclosure-toggle__label');
     const iconEl = btn.querySelector('.disclosure-toggle__icon');
+    const statusEl = document.getElementById('market-pulse-status');
     if (state === 'expanded') {
       if (labelEl) labelEl.textContent = '收合進階指標';
       if (iconEl) iconEl.textContent = '▲';
+      btn.setAttribute('aria-label', '收合 6 張進階指標');
+      if (statusEl) statusEl.textContent = '已展開 6 張進階指標';
     } else {
       if (labelEl) labelEl.textContent = '展開進階指標';
       if (iconEl) iconEl.textContent = '▼';
+      btn.setAttribute('aria-label', '展開 6 張進階指標');
+      if (statusEl) statusEl.textContent = '';
     }
   };
 

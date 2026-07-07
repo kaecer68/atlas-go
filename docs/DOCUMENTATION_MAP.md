@@ -266,7 +266,7 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 - **Index sync**:`GUIDELINES_INDEX.md` L161 `手寫技能文件 | 10` → `20` (實際 .claude/skills/* = 20 dirs: 16 atlas-* + codebase-memory + codegraph + gitnexus + robot-communication);`MAP.md` L209/213 範例更新;本 entry。
 
-- **audit_assets/ 整併**:`audit_assets/phase2-retail-investor-landing-audit.md` (13428B Phase 2 投資人介面審計,2026-07-01) → `docs/audit/2026-07-01-phase2-retail-investor-landing-audit.md`(原 audit_assets/ 為 gitignored ROOT dir,違反 STANDARD 原則)。
+- **audit_assets/ 整併**(歷史紀錄,Phase 2 投資人介面審計 13428B,2026-07-01):原 `audit_assets/` 為 gitignored ROOT dir,違反 STANDARD 原則,當時移入 `docs/audit/`。**該檔已於 PR #970 隨 mode 系統移除時一併刪除**。
 
 - **gitignore 修正**:`.gitignore` L68 `!/.ocx/` (whitelist 逆邏輯) → `/.ocx/` (untrack `receipt.jsonc` 3447B);`.omo/handoffs/` mkdir + 收容 2 散落檔 (`handoff-ci-fixes.md` 5090B + `session-summary-2026-05-07.md` 2936B),解本節「❌ session-summary-2026-05-07.md (應放 handoffs/ → 已清)」紀錄與事實不符的違規。
 
