@@ -52,8 +52,10 @@ export function renderInbox(data) {
 
   // Populate promote/revert dropdowns
   const promoteSel = document.getElementById('promoteSelect');
-  promoteSel.innerHTML = '<option value="">-- 選擇已接受的實驗 --</option>' + promotes.map(p => `<option value="data/state/experiments/${escapeHtml(p.experiment_id)}.json">${escapeHtml(p.experiment_id)} (${escapeHtml(agentName(p.target_agent_id))})</option>`).join('');
-  if (promoteSel.options.length > 1 && promoteSel.selectedIndex === 0) {
-    promoteSel.selectedIndex = 1;
+  if (promoteSel) {
+    promoteSel.innerHTML = '<option value="">-- 選擇已接受的實驗 --</option>' + promotes.map(p => `<option value="data/state/experiments/${escapeHtml(p.experiment_id)}.json">${escapeHtml(p.experiment_id)} (${escapeHtml(agentName(p.target_agent_id))})</option>`).join('');
+    if (promoteSel.options.length > 1 && promoteSel.selectedIndex === 0) {
+      promoteSel.selectedIndex = 1;
+    }
   }
 }

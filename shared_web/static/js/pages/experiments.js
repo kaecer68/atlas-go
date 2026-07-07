@@ -1,6 +1,6 @@
 // Experiments and human intervention controls
 import { agentName, sectorName } from '../names.js';
-import { getJSON, notify, formatDate } from '../shared/app-utils.js';
+import { getJSON, notify, formatDate, renderEmptyState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 export async function loadOverrides() {
@@ -51,7 +51,9 @@ export async function loadExperimentHistory() {
       ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${escapeHtml(it.experiment_id) || ''}</td><td>${escapeHtml(agentName(it.target_agent_id)) || (it.target_agent_id ? escapeHtml(it.target_agent_id) : '')}</td><td><span class="badge ${it.status==='accepted'?'ok':(it.status==='rejected'?'err':'warn')}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':escapeHtml(it.status))}</span></td></tr>`).join('')}
     </tbody></table>`;
     const revertSel = document.getElementById('revertSelect');
-    revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${escapeHtml(it.experiment_id)}">v${it.version_after || i} - ${escapeHtml(it.experiment_id)}</option>`).join('');
+    if (revertSel) {
+      revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${escapeHtml(it.experiment_id)}">v${it.version_after || i} - ${escapeHtml(it.experiment_id)}</option>`).join('');
+    }
   } catch (e) { el.innerHTML = '<div class="empty">載入失敗</div>'; }
 }
 

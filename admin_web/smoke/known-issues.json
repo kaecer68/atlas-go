@@ -1,6 +1,11 @@
 {
   "patterns": [
     {
+      "pattern": "SimHealthPanel: failed to fetch traces: Error: HTTP 401",
+      "reason": "Smoke test runs unauthenticated; /api/traces endpoints require auth.",
+      "ticket": "smoke-unauthenticated"
+    },
+    {
       "pattern": "^$",
       "reason": "Placeholder: all known issues resolved (last one was HandleRiskMetrics makeslice panic, fixed in PR #392)",
       "ticket": "atlas-go#392"
