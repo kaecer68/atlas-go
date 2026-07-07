@@ -110,7 +110,10 @@ func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":           user,
+		"email":          user.Email,
+		"tier":           user.Tier,
 		"effective_tier": user.EffectiveTier(),
+		"trial_end":      user.TrialEnd,
 	})
 }
 

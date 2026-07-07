@@ -67,11 +67,13 @@ export async function isLoggedIn() {
   if (_authChecked) return _authValid;
   try {
     const profile = await getJSON(PROFILE_URL);
-    if (profile && profile.email) {
+    const email = profile.email || (profile.user && profile.user.email);
+    const tier = profile.effective_tier || profile.tier || (profile.user && profile.user.tier);
+    if (profile && email) {
       _authValid = true;
-      if (profile.tier) {
+      if (tier) {
         if (!_claims) _claims = {};
-        _claims.tier = profile.tier;
+        _claims.tier = tier;
       }
     }
   } catch (e) {
