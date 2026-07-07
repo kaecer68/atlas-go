@@ -148,7 +148,7 @@ test('/api/taiwan/stress-index: response validates against stress-index schema',
   validateAgainstSchema(data, stressIndexSchema);
 
   // Extra type assertions
-  assert.ok(typeof data.index === 'number', 'index must be a number');
+  assert.ok(typeof data.score === 'number', 'score must be a number');
   assert.ok(typeof data.regime === 'string', 'regime must be a string');
-  assert.ok(typeof data.updated_at === 'string', 'updated_at must be a string');
+  assert.ok(typeof data.timestamp === 'number', 'timestamp must be a number');
 });

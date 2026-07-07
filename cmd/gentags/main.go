@@ -10,6 +10,7 @@
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
 //	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
 //	internal/fubonproxy/**/*.go         — fubon-proxy supervisor types (DeploymentConfig, DeploymentStatus, ...)
+//	internal/marketdata/**/*.go         — market data types (MacroDataPoint, MacroDataSnapshot, ...)
 //	internal/subscription/**/*.go       — subscription/auth types (User, ProfileResponse, ...)
 //
 // Writes (to all active frontend directories so copies don't drift):
@@ -63,15 +64,16 @@ func main() {
 	industryDir := findIndustryDir(rootDir)
 	narrativeDir := findNarrativeDir(rootDir)
 	fubonDir := findFubonDir(rootDir)
+	marketdataDir := findMarketDataDir(rootDir)
 	capitalflowDir := findCapitalFlowDir(rootDir)
 	eventdrivenDir := findEventDrivenDir(rootDir)
 	recommenderDir := findRecommenderDir(rootDir)
 	subscriptionDir := findSubscriptionDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" {
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || marketdataDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, marketdataDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir} {
 			if d == "" {
 				continue
 			}
@@ -142,6 +144,16 @@ func main() {
 			for k, v := range fubonStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and fubonproxy; using fubonproxy version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge marketdata structs (e.g. MacroDataPoint, MacroDataSnapshot, ODMRevenuePoint).
+		if marketdataDir != "" {
+			mdStructs := parseStructsWithNames(marketdataDir, allNames)
+			for k, v := range mdStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and marketdata; using marketdata version\n", k)
 				}
 				structs[k] = v
 			}
@@ -270,6 +282,14 @@ func findNarrativeDir(rootDir string) string {
 
 func findFubonDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "fubonproxy")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findMarketDataDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "marketdata")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
@@ -446,7 +466,11 @@ func goTypeToTSWithStructs(expr ast.Expr, structNames map[string]bool) string {
 			"float32", "float64", "complex64", "complex128":
 			return "number"
 		default:
-			// Custom types (enums like Regime, GuardSeverity) → string
+			// Struct references within the same package resolve to the interface name;
+			// non-struct custom types (enums like Regime, GuardSeverity) fall back to string.
+			if structNames[t.Name] {
+				return t.Name
+			}
 			return "string"
 		}
 	case *ast.StarExpr:

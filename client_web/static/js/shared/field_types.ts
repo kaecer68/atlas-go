@@ -46,7 +46,7 @@ export interface AgentObservatoryResponse {
 
 export interface AgentSpec {
   darwinian_weight?: number;
-  screening_criteria: string;
+  screening_criteria: ScreeningCriteria;
 }
 
 export interface AgentUniverseView {
@@ -109,7 +109,7 @@ export interface AlertRecord {
   message: string;
   value: number;
   threshold: number;
-  breakdown?: string | null;
+  breakdown?: AlertBreakdown | null;
   acknowledged: boolean;
   acknowledged_at?: string | null;
   acknowledged_by?: string;
@@ -152,7 +152,7 @@ export interface BacktestWindowSummary {
 }
 
 export interface BaselineConfig {
-  baselines: Record<string, string | null>;
+  baselines: Record<string, FactorBaseline | null>;
   window: number;
 }
 
@@ -196,7 +196,7 @@ export interface BenchmarkComparisonResponse {
   tracking_error: number;
   sharpe_ratio: number;
   info_ratio: number;
-  equity_curve: string[];
+  equity_curve: BenchmarkPoint[];
 }
 
 export interface BenchmarkPoint {
@@ -243,6 +243,17 @@ export interface CalendarEvent {
   generated_at: string;
 }
 
+export interface CalendarProviderData {
+  date: string;
+  event_type: string;
+  name: string;
+  symbol: string;
+  direction: string;
+  weight: number;
+  description: string;
+  source: string;
+}
+
 export interface CalibrationHealthSummary {
   last_calibrated_at?: string | null;
   pattern_count: number;
@@ -255,8 +266,8 @@ export interface CalibrationHealthSummary {
 }
 
 export interface CalibrationValidation {
-  old_config: string;
-  new_config: string;
+  old_config: StressIndexWeightsConfig;
+  new_config: StressIndexWeightsConfig;
   old_accuracy: number;
   new_accuracy: number;
   improvement: number;
@@ -277,7 +288,7 @@ export interface CalibratorChange {
 export interface CalibratorResult {
   timestamp: string;
   param_count: number;
-  changes: string[];
+  changes: CalibratorChange[];
   baseline_score: number;
   optimized_score: number;
   verdict: string;
@@ -317,7 +328,7 @@ export interface CapitalSnapshot {
 
 export interface CardConfig {
   layer_weights: Record<string, number>;
-  sentiment_thresholds: Record<string, string>;
+  sentiment_thresholds: Record<string, SentimentBounds>;
   clamp_min: number;
   clamp_max: number;
 }
@@ -329,7 +340,7 @@ export interface CausalChain {
   affected_sectors: string[];
   favored_sectors: string[];
   avoided_sectors: string[];
-  steps: string[];
+  steps: CausalStep[];
   score: number;
 }
 
@@ -344,7 +355,7 @@ export interface CausalTemplate {
   name: string;
   trigger_theme: string;
   required_region?: string;
-  steps: string[];
+  steps: CausalStep[];
   historical_hit_rate: number;
   source_references: string[];
   rationale: string;
@@ -390,12 +401,12 @@ export interface CircuitBreakerStatus {
 }
 
 export interface ClassificationTreeConfig {
-  segments: string[];
+  segments: IndustrySegmentConfig[];
 }
 
 export interface CompositeCardConfig {
   layer_weights: Record<string, number>;
-  sentiment_thresholds: Record<string, string>;
+  sentiment_thresholds: Record<string, SentimentBounds>;
   clamp_min: number;
   clamp_max: number;
 }
@@ -439,7 +450,7 @@ export interface ConvictionBreakdown {
   base: number;
   floor: number;
   final: number;
-  steps: string[];
+  steps: ConvictionStep[];
 }
 
 export interface ConvictionStep {
@@ -509,18 +520,18 @@ export interface CrossMarketIndex {
 export interface CrossMarketStatus {
   recorded_at: number;
   generated_at: string;
-  spx: string;
-  ndx: string;
-  dji: string;
-  sox: string;
-  nvda: string;
-  aapl: string;
-  msft: string;
-  tsm_adr: string;
-  vix: string;
-  dxy: string;
-  usd_twd: string;
-  us10y: string;
+  spx: CrossMarketIndex;
+  ndx: CrossMarketIndex;
+  dji: CrossMarketIndex;
+  sox: CrossMarketIndex;
+  nvda: CrossMarketIndex;
+  aapl: CrossMarketIndex;
+  msft: CrossMarketIndex;
+  tsm_adr: CrossMarketIndex;
+  vix: CrossMarketIndex;
+  dxy: CrossMarketIndex;
+  usd_twd: CrossMarketIndex;
+  us10y: CrossMarketIndex;
   crisis_active: boolean;
   correlation_spx_twse: number;
   correlation_ndx_twse: number | null;
@@ -541,6 +552,15 @@ export interface CustomerConcentration {
   risk_score: number;
   last_order_date?: string | null;
   order_visibility_months: number;
+}
+
+export interface CustomsExportImport {
+  year: number;
+  month: number;
+  export_total: number;
+  import_total: number;
+  trade_balance: number;
+  downloaded_at: number;
 }
 
 export interface CycleCalibrationConfig {
@@ -575,8 +595,8 @@ export interface CyclePosition {
   capex_cycle: string;
   confidence: number;
   continuous_phase_score: number;
-  leading_indicators: string[];
-  lagging_indicators: string[];
+  leading_indicators: Indicator[];
+  lagging_indicators: Indicator[];
   revenue_growth_yoy: number;
   profit_growth_yoy: number;
   cycle_duration_days: number;
@@ -590,20 +610,20 @@ export interface CycleStatusCard {
   silicon_phase: number;
   silicon_phase_name: string;
   silicon_score: number;
-  silicon_indicators: string | null;
+  silicon_indicators: SiliconIndicatorSnapshot | null;
   business_cycle: string;
   inventory_cycle: string;
   capex_cycle: string;
   cycle_confidence: number;
   is_favorable: boolean;
-  active_patterns: string[];
+  active_patterns: SeasonalPatternSnapshot[];
   seasonal_adjustment: number;
-  active_events: string[];
+  active_events: CalendarEvent[];
   event_sentiment: number;
   supply_chain_signal: number;
   composite_coefficient: number;
   sentiment_label: string;
-  breakdown: string[];
+  breakdown: LayerAdjustment[];
 }
 
 export interface CycleStatusResponse {
@@ -655,8 +675,8 @@ export interface DailyBar {
 
 export interface DailyReport {
   date: string;
-  forces: string[];
-  resonance: string;
+  forces: ForceScore[];
+  resonance: ResonanceResult;
   quality_score: number;
   quality_label: string;
   summary: string;
@@ -664,8 +684,8 @@ export interface DailyReport {
 
 export interface DailySummaryReport {
   date: string;
-  sections: string[];
-  top_picks: string[];
+  sections: ReportSection[];
+  top_picks: Recommendation[];
   risk_level: string;
   narrative_count: number;
 }
@@ -719,7 +739,7 @@ export interface DarwinianStatusData {
   status: string;
   last_computed?: string;
   agent_count: number;
-  agents: Record<string, string>;
+  agents: Record<string, DarwinianAgentInfo>;
 }
 
 export interface DataAggregatorIndustry {
@@ -731,7 +751,7 @@ export interface DataAggregatorIndustry {
 }
 
 export interface DataAggregatorSummary {
-  industries: string[];
+  industries: DataAggregatorIndustry[];
   count: number;
   fetched_at: string;
 }
@@ -761,7 +781,7 @@ export interface DataChannelInfo {
 
 export interface DataIntegrityResponse {
   overall: string;
-  checks: string[];
+  checks: IntegrityCheck[];
   warnings: string[];
 }
 
@@ -775,7 +795,7 @@ export interface DataQualityCheck {
 }
 
 export interface DataQualityReport {
-  checks: string[];
+  checks: DataQualityCheck[];
   overall: string;
   score: number;
   generated_at: string;
@@ -784,13 +804,23 @@ export interface DataQualityReport {
 export interface DayResult {
   date: string;
   regime: string;
-  orders: string[];
-  trades: string[];
-  positions: string[];
+  orders: Order[];
+  trades: TradeRecord[];
+  positions: Position[];
   cash: number;
   portfolio_value: number;
   daily_pnl: number;
   fallback_events?: string[];
+}
+
+export interface DayTradingStats {
+  date: string;
+  day_trading_volume: number;
+  volume_ratio: number;
+  day_trading_buy_value: number;
+  buy_value_ratio: number;
+  day_trading_sell_value: number;
+  sell_value_ratio: number;
 }
 
 export interface DeploymentConfig {
@@ -811,8 +841,8 @@ export interface DeploymentStatus {
   last_beat_at: string;
   last_beat_age_sec: number;
   last_error: string;
-  recent_events: string[];
-  config: string;
+  recent_events: TimelineEvent[];
+  config: DeploymentConfig;
 }
 
 export interface DividendRecord {
@@ -825,7 +855,7 @@ export interface DividendRecord {
 }
 
 export interface DrawdownConfig {
-  levels: Record<string, string>;
+  levels: Record<string, DrawdownLevel>;
   orange_override_min_score: number;
   red_override_min_score: number;
   sector_constraints_risk_off: Record<string, number>;
@@ -889,6 +919,13 @@ export interface ETFEstimate {
   est_flow: number;
 }
 
+export interface ETFStats {
+  date: string;
+  net_subscription: number;
+  total_nav: number;
+  subscriber_count: number;
+}
+
 export interface EarningsQualityExecutorParameters {
   repeatable_boost: string;
   guidance_penalty: string;
@@ -928,13 +965,13 @@ export interface EngineMacroRiskParameters {
 }
 
 export interface EngineParameters {
-  macro_risk: string;
-  structural_trend: string;
-  drawdown: string;
-  sector_rotation: string;
-  strategy_evolution: string;
-  executors: string;
-  simulation: string;
+  macro_risk: EngineMacroRiskParameters;
+  structural_trend: EngineStructuralTrendParameters;
+  drawdown: EngineDrawdownParameters;
+  sector_rotation: EngineSectorRotationParameters;
+  strategy_evolution: EngineStrategyEvolutionParameters;
+  executors: EngineExecutorsParameters;
+  simulation: EngineSimulationParameters;
 }
 
 export interface EngineSectorRotationParameters {
@@ -975,7 +1012,7 @@ export interface EquityCurvePoint {
 export interface EventBlock {
   today: NarrativeEvent[];
   recent: NarrativeEvent[];
-  premarket?: string | null;
+  premarket?: PremarketData | null;
 }
 
 export interface EventCalendarItem {
@@ -1040,11 +1077,11 @@ export interface ExperimentInboxItem {
 }
 
 export interface ExperimentInboxResponse {
-  pending_judges: string[];
-  pending_promotes: string[];
-  recent_history: string[];
+  pending_judges: ExperimentInboxItem[];
+  pending_promotes: ExperimentInboxItem[];
+  recent_history: ExperimentInboxItem[];
   baseline_version: number;
-  items: string[];
+  items: ExperimentInboxItem[];
 }
 
 export interface ExperimentLineageRecord {
@@ -1109,11 +1146,11 @@ export interface ExperimentRecord {
 }
 
 export interface FactorAttribution {
-  momentum: string;
-  value: string;
-  quality: string;
-  agent: string;
-  total: string;
+  momentum: FactorDetail;
+  value: FactorDetail;
+  quality: FactorDetail;
+  agent: FactorDetail;
+  total: FactorDetail;
 }
 
 export interface FactorBaseline {
@@ -1180,19 +1217,19 @@ export interface FactorParameters {
 }
 
 export interface FactorScoreBreakdown {
-  momentum: string;
-  value: string;
-  quality: string;
-  agent: string;
-  institutional_sentiment: string;
-  liquidity: string;
-  narrative?: string;
-  industry_cycle?: string;
-  precious_metals?: string;
-  etf?: string;
-  linkage?: string;
-  tsmc?: string;
-  total: string;
+  momentum: FactorScoreItem;
+  value: FactorScoreItem;
+  quality: FactorScoreItem;
+  agent: FactorScoreItem;
+  institutional_sentiment: FactorScoreItem;
+  liquidity: FactorScoreItem;
+  narrative?: FactorScoreItem;
+  industry_cycle?: FactorScoreItem;
+  precious_metals?: FactorScoreItem;
+  etf?: FactorScoreItem;
+  linkage?: FactorScoreItem;
+  tsmc?: FactorScoreItem;
+  total: FactorScoreItem;
 }
 
 export interface FactorScoreItem {
@@ -1217,7 +1254,7 @@ export interface FactorScores {
   linkage?: number;
   tsmc?: number;
   total: number;
-  breakdown?: string | null;
+  breakdown?: FactorScoreBreakdown | null;
 }
 
 export interface FactorWeightParameters {
@@ -1264,6 +1301,12 @@ export interface FetcherStatus {
   geopolitical_risk: string;
 }
 
+export interface FinMindResponse {
+  msg: string;
+  status: number;
+  data: Record<string, string>[];
+}
+
 export interface FinancialsExecutorParameters {
   dividend_boost: string;
   balance_sheet_penalty: string;
@@ -1306,8 +1349,8 @@ export interface ForecastVsRealityItem {
 }
 
 export interface ForecastVsRealityResponse {
-  items: string[];
-  symbol_predictions: string[];
+  items: ForecastVsRealityItem[];
+  symbol_predictions: SymbolPredictionItem[];
   broker_runtime: BrokerRuntimeAudit;
 }
 
@@ -1324,6 +1367,42 @@ export interface FreshnessScoresConfig {
   score_stale: number;
   score_fallback: number;
   score_default: number;
+}
+
+export interface FubonMarketStatus {
+  status: string;
+  is_open: boolean;
+  timestamp: number;
+}
+
+export interface FubonQuoteResponse {
+  symbol: string;
+  name: string;
+  last: number;
+  open: number;
+  high: number;
+  low: number;
+  volume: number;
+  reference_price: number;
+  previous_close: number;
+  change: number;
+  change_percent: number;
+  bids: string[];
+  asks: string[];
+  is_open: boolean;
+  is_close: boolean;
+  timestamp: number;
+  source: string;
+}
+
+export interface FugleMetaResponse {
+  apiVersion: string;
+  data: string;
+}
+
+export interface FugleQuoteResponse {
+  apiVersion: string;
+  data: string;
 }
 
 export interface GARCHParameters {
@@ -1447,9 +1526,9 @@ export interface Indicator {
 
 export interface IndustryClassification {
   symbol: string;
-  level1: string;
-  level2: string;
-  level3: string;
+  level1: IndustrySegment;
+  level2: IndustrySegment;
+  level3: IndustrySegment;
   updated_at: string;
 }
 
@@ -1485,11 +1564,11 @@ export interface IndustryDetail {
   weight: number;
   weight_derivation: string;
   representative_stocks: string[];
-  cycle_position: string | null;
-  linkage_info: string | null;
-  risk_info: string | null;
-  seasonal_patterns: string[];
-  recommendation: string | null;
+  cycle_position: CyclePosition | null;
+  linkage_info: LinkageInfo | null;
+  risk_info: RiskInfo | null;
+  seasonal_patterns: SeasonalPattern[];
+  recommendation: IndustryRecommendation | null;
   regime_context: string;
 }
 
@@ -1681,7 +1760,7 @@ export interface JanusParameters {
 }
 
 export interface L24Response {
-  status: string;
+  status: L24ResponseStatus;
   default_start_time: string;
   default_period_days: number;
   override_start_time?: string;
@@ -1700,8 +1779,8 @@ export interface L24ResponseStatus {
 }
 
 export interface L24Schedule {
-  status: string;
-  config: string;
+  status: L24ScheduleStatus;
+  config: L24ScheduleConfig;
   updated_at: string;
 }
 
@@ -1759,7 +1838,7 @@ export interface LayerMetrics {
 }
 
 export interface LayersResponse {
-  layers: string[];
+  layers: LayerCount[];
   total: number;
 }
 
@@ -1804,8 +1883,8 @@ export interface LinkageInfo {
 }
 
 export interface LiveStatusResponse {
-  circuit_breaker: string;
-  portfolio: string;
+  circuit_breaker: CircuitBreakerStatus;
+  portfolio: PortfolioSummary;
   timestamp: string;
 }
 
@@ -1817,7 +1896,53 @@ export interface LockedCashEntry {
 export interface MacroDataHealthResponse {
   recorded_at: number;
   generated_at: string;
-  indicators: string[];
+  indicators: MacroIndicatorHealth[];
+}
+
+export interface MacroDataPoint {
+  symbol: string;
+  value: number;
+  change_pct: number;
+  timestamp: number;
+}
+
+export interface MacroDataSnapshot {
+  us10y: MacroDataPoint;
+  dxy: MacroDataPoint;
+  vix: MacroDataPoint;
+  usd_twd: MacroDataPoint;
+  oil: MacroDataPoint;
+  gold: MacroDataPoint;
+  jpy: MacroDataPoint;
+  foreign_investor_net: MacroDataPoint;
+  domestic_fund_net: MacroDataPoint;
+  dealer_net: MacroDataPoint;
+  export_electronics: MacroDataPoint;
+  retail_margin_balance: MacroDataPoint;
+  retail_short_balance: MacroDataPoint;
+  tsmc_revenue: MacroDataPoint;
+  sox_index: MacroDataPoint;
+  dram_spot_price: MacroDataPoint;
+  taiwan_semi_index: MacroDataPoint;
+  cowos_utilization: MacroDataPoint;
+  capex_growth: MacroDataPoint;
+  cpi_yoy: MacroDataPoint;
+  bdi: MacroDataPoint;
+  silver: MacroDataPoint;
+  copper: MacroDataPoint;
+  tsm_adr: MacroDataPoint;
+  spx_index: MacroDataPoint;
+  ndx_index: MacroDataPoint;
+  dji_index: MacroDataPoint;
+  nvda: MacroDataPoint;
+  aapl: MacroDataPoint;
+  msft: MacroDataPoint;
+  taiex: MacroDataPoint;
+  historical_volatility: MacroDataPoint;
+  data_status?: string;
+  failed_channels?: string[];
+  stale_channels?: string[];
+  recorded_at: number;
 }
 
 export interface MacroIndicatorHealth {
@@ -1861,6 +1986,23 @@ export interface MacroRiskConfig {
   twd_stress_threshold_pct: number;
   outflow_prob_base: number;
   outflow_prob_max: number;
+}
+
+export interface MapperIndustryClassification {
+  symbol: string;
+  level1: MapperIndustrySegment;
+  level2: MapperIndustrySegment;
+  level3: MapperIndustrySegment;
+  updated_at: string;
+}
+
+export interface MapperIndustrySegment {
+  id: string;
+  name: string;
+  name_en: string;
+  level: number;
+  parent_id?: string;
+  representative_stocks?: string[];
 }
 
 export interface MarketLight {
@@ -1912,6 +2054,18 @@ export interface MetricsSnapshot {
   timestamp: string;
 }
 
+export interface MicrostructureSnapshot {
+  symbol: string;
+  as_of: string;
+  liquidity_score: number;
+  spread_estimate: number;
+  volume_surge_ratio: number;
+  realized_volatility: number;
+  abnormal_volume: boolean;
+  price_gap_risk: boolean;
+  tradeability_score: number;
+}
+
 export interface MinFilter {
   min?: number | null;
 }
@@ -1957,7 +2111,7 @@ export interface NarrativeCalibrationReport {
   timestamp: string;
   models_updated: number;
   templates_updated: number;
-  models: string[];
+  models: InvestmentModel[];
   verdict: string;
   summary: string;
 }
@@ -2098,6 +2252,13 @@ export interface NewsSource {
   url?: string;
 }
 
+export interface ODMRevenuePoint {
+  symbol: string;
+  revenue: number;
+  yoy_pct: number;
+  timestamp: number;
+}
+
 export interface OOSResult {
   passed: boolean;
   baseline_score: number;
@@ -2109,6 +2270,13 @@ export interface OOSResult {
   used_fallback: boolean;
   validation_at: string;
   reason: string;
+}
+
+export interface OddLotStats {
+  date: string;
+  buy_volume: number;
+  sell_volume: number;
+  imbalance_ratio: number;
 }
 
 export interface OptimizerParameters {
@@ -2148,7 +2316,17 @@ export interface OrchestratorParameters {
   sector_rotation_flow_adjustments?: string;
   use_ml_scoring: string;
   use_llm_sector_agents: string;
-  l2_4_schedule: string;
+  l2_4_schedule: L2_4ScheduleParameters;
+}
+
+export interface PCRStats {
+  date: string;
+  put_volume: number;
+  call_volume: number;
+  put_call_volume_ratio: number;
+  put_oi: number;
+  call_oi: number;
+  put_call_oi_ratio: number;
 }
 
 export interface ParameterChange {
@@ -2176,7 +2354,7 @@ export interface ParameterMetadata {
   last_calibrated?: string | null;
   calibration_method?: string;
   todo?: string;
-  citation?: string | null;
+  citation?: ParameterCitation | null;
 }
 
 export interface ParameterSnapshot {
@@ -2184,44 +2362,44 @@ export interface ParameterSnapshot {
   timestamp: string;
   reason?: string;
   user?: string;
-  params: string | null;
-  changes?: string[];
+  params: ParametersConfig | null;
+  changes?: ParameterChange[];
 }
 
 export interface ParametersConfig {
   version: string;
   updated_at: string;
-  fallback_price_targets?: Record<string, string>;
-  darwinian: string;
-  factor: string;
-  factor_weight?: string;
-  optimizer: string;
-  sizing: string;
-  health: string;
-  garch: string;
-  experiment: string;
-  baseline: string;
-  orchestrator: string;
-  risk: string;
-  drawdown: string;
-  realtime: string;
-  janus: string;
-  narrative: string;
-  narrative_conviction?: string;
-  marketdata: string;
-  industry: string;
-  strategy: string;
-  precious_metals: string;
-  sector_executor?: string;
-  alert: string;
-  risk_gate?: string;
-  engine?: string;
-  rsi_tw?: string;
-  tax?: string;
-  sector_allocation: string;
-  reporting: string;
-  smart_universe?: string;
-  forward_return?: string;
+  fallback_price_targets?: Record<string, FallbackPriceTarget>;
+  darwinian: DarwinianParameters;
+  factor: FactorParameters;
+  factor_weight?: FactorWeightParameters;
+  optimizer: OptimizerParameters;
+  sizing: SizingParameters;
+  health: HealthParameters;
+  garch: GARCHParameters;
+  experiment: ExperimentParameters;
+  baseline: BaselineParameters;
+  orchestrator: OrchestratorParameters;
+  risk: RiskParameters;
+  drawdown: DrawdownParameters;
+  realtime: RealtimeParameters;
+  janus: JanusParameters;
+  narrative: NarrativeParameters;
+  narrative_conviction?: NarrativeConvictionParameters;
+  marketdata: MarketdataParameters;
+  industry: IndustryParameters;
+  strategy: StrategyParameters;
+  precious_metals: PreciousMetalsParameters;
+  sector_executor?: SectorExecutorParameters;
+  alert: AlertParameters;
+  risk_gate?: RiskGateParameters;
+  engine?: EngineParameters;
+  rsi_tw?: RSITwParameters;
+  tax?: TaxParameters;
+  sector_allocation: SectorAllocationConfig;
+  reporting: ReportingParameters;
+  smart_universe?: SmartUniverseConfig;
+  forward_return?: ForwardReturnParameters;
 }
 
 export interface PerformanceReport {
@@ -2245,9 +2423,9 @@ export interface PerformanceReport {
   profit_factor: number;
   avg_win: number;
   avg_loss: number;
-  top_agents: string[];
-  regime_breakdown: string;
-  monthly_returns: string[];
+  top_agents: AgentContribution[];
+  regime_breakdown: RegimeBreakdown;
+  monthly_returns: MonthlyReturn[];
   generated_at: string;
 }
 
@@ -2262,7 +2440,7 @@ export interface PhaseTransition {
   from_phase: string;
   to_phase: string;
   timestamp: string;
-  indicators: string;
+  indicators: SiliconIndicators;
 }
 
 export interface PipelineItem {
@@ -2285,9 +2463,9 @@ export interface PipelineItem {
   factor_scores: FactorScores;
   conviction_breakdown?: ConvictionBreakdown | null;
   narrative_event_ids?: string[];
-  narrative_context?: string | null;
-  industry_context?: string | null;
-  metrics?: string | null;
+  narrative_context?: NarrativeContextItem | null;
+  industry_context?: IndustryContextItem | null;
+  metrics?: PipelineItemMetrics | null;
 }
 
 export interface PipelineItemMetrics {
@@ -2315,10 +2493,10 @@ export interface PnLAttributionResponse {
   current_value: number;
   cumulative_pnl: number;
   cumulative_return_pct: number;
-  agent_attribution: string[];
-  sector_attribution: string[];
-  factor_attribution: string;
-  symbol_attribution: string[];
+  agent_attribution: AgentAttribution[];
+  sector_attribution: SectorAttribution[];
+  factor_attribution: FactorAttribution;
+  symbol_attribution: SymbolAttribution[];
 }
 
 export interface PortfolioStateResponse {
@@ -2334,9 +2512,9 @@ export interface PortfolioStateResponse {
   concentration_ratio?: number;
   trade_count?: number;
   positions_count: number;
-  positions: string[];
-  equity_curve: string[];
-  cross_foot_pnl: string;
+  positions: PositionDTO[];
+  equity_curve: EquityCurvePoint[];
+  cross_foot_pnl: CrossFootCheck;
 }
 
 export interface PortfolioSummary {
@@ -2406,10 +2584,10 @@ export interface PreciousMetalsParameters {
 export interface PredictionReport {
   generated_at: string;
   window: string;
-  predictions: string[];
-  active_events: string[];
-  etf_estimates?: string[];
-  revenue_surprises?: string[];
+  predictions: FlowPrediction[];
+  active_events: EventCalendarItem[];
+  etf_estimates?: ETFEstimate[];
+  revenue_surprises?: RevenueSurprise[];
   summary: string;
 }
 
@@ -2423,7 +2601,7 @@ export interface PremarketData {
 }
 
 export interface ProfileResponse {
-  user: string | null;
+  user: User | null;
   email: string;
   tier: string;
   effective_tier: string;
@@ -2443,8 +2621,8 @@ export interface PromptControl {
 }
 
 export interface PromptExperimentResult {
-  experiment: string;
-  brief: string;
+  experiment: ExperimentRecord;
+  brief: MutationBrief;
   candidate_prompt: string;
   evaluation_mode: string;
   policy_checks: string[];
@@ -2454,8 +2632,8 @@ export interface PromptExperimentResult {
   candidate_observations: number;
   used_fallback_window: boolean;
   recorded_at: string;
-  data_metadata?: string | null;
-  oos_result?: string | null;
+  data_metadata?: ReplayDataMetadata | null;
+  oos_result?: OOSResult | null;
   baseline_returns?: number[];
   candidate_returns?: number[];
   parameter_snapshot_id?: string;
@@ -2467,6 +2645,19 @@ export interface PromptExperimentResult {
   candidate_monetary_ntd?: number;
   eval_metrics?: string | null;
   importance_result?: string | null;
+}
+
+export interface ProviderStatus {
+  name: string;
+  state: string;
+  subscribed_count: number;
+  reconnect_count: number;
+  last_error?: string;
+}
+
+export interface QuotaState {
+  calls_today: number;
+  last_reset: string;
 }
 
 export interface Quote {
@@ -2548,9 +2739,9 @@ export interface RSITwParameters {
 }
 
 export interface RSITwSubIndicators {
-  category_a?: string | null;
-  category_c?: string | null;
-  category_d?: string | null;
+  category_a?: RSITwCategoryA | null;
+  category_c?: RSITwCategoryC | null;
+  category_d?: RSITwCategoryD | null;
 }
 
 export interface RangeFilter {
@@ -2586,7 +2777,7 @@ export interface ReasoningTraceItem {
 
 export interface ReasoningTraceResponse {
   session_id: string;
-  traces: string[];
+  traces: ReasoningTraceItem[];
 }
 
 export interface RecEntry {
@@ -2637,7 +2828,7 @@ export interface RecommendationOutcome {
 export interface RecommendationPipelineResponse {
   session_id: string;
   regime: string;
-  items: string[];
+  items: PipelineItem[];
   guard_outcomes: GuardOutcome[];
   screened_items: ScreeningReject[];
   recorded_at: string;
@@ -2649,14 +2840,14 @@ export interface RecommendationPipelineResponse {
 }
 
 export interface RegimeBreakdown {
-  regimes: Record<string, string>;
+  regimes: Record<string, RegimePerformance>;
 }
 
 export interface RegimeCalibratedConfig {
-  bull: string;
-  normal: string;
-  bear: string;
-  crisis: string;
+  bull: StressIndexWeightsConfig;
+  normal: StressIndexWeightsConfig;
+  bear: StressIndexWeightsConfig;
+  crisis: StressIndexWeightsConfig;
 }
 
 export interface RegimeCorrelation {
@@ -2667,8 +2858,8 @@ export interface RegimeCorrelation {
 }
 
 export interface RegimeHistoryData {
-  sessions: string[];
-  transitions: string[];
+  sessions: RegimeSessionEntry[];
+  transitions: RegimeTransition[];
   current_regime: string;
 }
 
@@ -2726,6 +2917,19 @@ export interface ResonanceResult {
   direction: string;
 }
 
+export interface RetailFuturesOI {
+  date: string;
+  top5_long_oi: number;
+  top5_short_oi: number;
+  top10_long_oi: number;
+  top10_short_oi: number;
+  total_market_oi: number;
+  retail_long_oi: number;
+  retail_short_oi: number;
+  retail_long_pct: number;
+  retail_short_pct: number;
+}
+
 export interface RetailSentimentResponse {
   sentiment_score: number;
   margin_change_pct: number;
@@ -2742,7 +2946,7 @@ export interface RetailSentimentResponse {
   retail_futures_oi?: number;
   etf_net_subscription?: number;
   sentiment_sub_indicators?: RSITwSubIndicators | null;
-  fetcher_status: string;
+  fetcher_status: FetcherStatus;
 }
 
 export interface RetailSentimentSnapshot {
@@ -2754,7 +2958,7 @@ export interface RetailSentimentSnapshot {
   retail_futures_oi?: number;
   etf_net_subscription?: number;
   composite_sentiment: number;
-  sentiment_sub_indicators?: string | null;
+  sentiment_sub_indicators?: RSITwSubIndicators | null;
 }
 
 export interface RevenueSurprise {
@@ -2789,17 +2993,17 @@ export interface RiskExposureResponse {
   portfolio_value: number;
   cash_ratio: number;
   position_count: number;
-  sector_exposure: string[];
-  factor_exposure: string;
-  concentration: string[];
+  sector_exposure: SectorExposure[];
+  factor_exposure: FactorExposureInline;
+  concentration: PositionConcentration[];
   data_points: number;
   insufficient_data: boolean;
 }
 
 export interface RiskGateParameters {
-  pre_trade: string;
-  in_trade?: string;
-  post_trade?: string;
+  pre_trade: PreTradeGateParameters;
+  in_trade?: InTradeGateParameters;
+  post_trade?: PostTradeGateParameters;
 }
 
 export interface RiskInfo {
@@ -2871,7 +3075,7 @@ export interface Scorecard {
   last_updated_at: string;
   darwinian_weight: number;
   darwinian_sharpe?: number | null;
-  regime_breakdown?: string | null;
+  regime_breakdown?: RegimeBreakdown | null;
   regime_stability?: number | null;
   data_consistency_warning?: string;
   is_sharpe: number;
@@ -2885,12 +3089,12 @@ export interface Scorecard {
 }
 
 export interface ScreeningCriteria {
-  pe?: string | null;
-  pb?: string | null;
-  dividend_yield?: string | null;
-  momentum_20d?: string | null;
-  volatility_20d?: string | null;
-  volume_intraday?: string | null;
+  pe?: RangeFilter | null;
+  pb?: RangeFilter | null;
+  dividend_yield?: RangeFilter | null;
+  momentum_20d?: RangeFilter | null;
+  volatility_20d?: RangeFilter | null;
+  volume_intraday?: MinFilter | null;
   min_total_factor_score?: number | null;
   required_factors?: string[];
 }
@@ -2910,8 +3114,8 @@ export interface ScreeningReject {
 
 export interface SeasonalCalendar {
   year: number;
-  patterns: string[];
-  by_month: Record<number, string[]>;
+  patterns: SeasonalPattern[];
+  by_month: Record<number, SeasonalPattern[]>;
 }
 
 export interface SeasonalCalibration {
@@ -2937,7 +3141,7 @@ export interface SeasonalExpectation {
 }
 
 export interface SeasonalMultiplierConfig {
-  theme_multipliers: Record<string, string>;
+  theme_multipliers: Record<string, IndustryMultiplierMap>;
   theme_correlations: Record<string, Record<string, number>>;
 }
 
@@ -2993,9 +3197,9 @@ export interface SeasonalPerformance {
 export interface SectorAllocationConfig {
   rationale: string;
   source: string;
-  citation?: string | null;
+  citation?: ParameterCitation | null;
   base_weights: Record<string, number>;
-  derivation_factors: Record<string, string[]>;
+  derivation_factors: Record<string, WeightFactorConfig[]>;
   cycle_weight: number;
   seasonal_weight: number;
   linkage_weight: number;
@@ -3014,14 +3218,14 @@ export interface SectorAttribution {
 }
 
 export interface SectorExecutorParameters {
-  leo_satellite?: string;
-  financials?: string;
-  shipping?: string;
-  value_yield?: string;
-  earnings_quality?: string;
-  technical_breakout?: string;
-  growth_momentum?: string;
-  factor_conviction?: string;
+  leo_satellite?: LEOSatelliteExecutorParameters;
+  financials?: FinancialsExecutorParameters;
+  shipping?: ShippingExecutorParameters;
+  value_yield?: ValueYieldExecutorParameters;
+  earnings_quality?: EarningsQualityExecutorParameters;
+  technical_breakout?: TechnicalBreakoutExecutorParameters;
+  growth_momentum?: GrowthMomentumExecutorParameters;
+  factor_conviction?: FactorConvictionParams;
 }
 
 export interface SectorExposure {
@@ -3029,6 +3233,13 @@ export interface SectorExposure {
   sector_label: string;
   weight: number;
   est_value: number;
+}
+
+export interface SectorIndexData {
+  date: string;
+  industry: string;
+  index: number;
+  return_pct: number;
 }
 
 export interface SectorRotationConfig {
@@ -3051,14 +3262,14 @@ export interface SessionSummary {
   ending_cash: number;
   portfolio_value: number;
   outcome_count: number;
-  broker_runtime: string;
+  broker_runtime: BrokerRuntimeAudit;
   next_experiment_agent_id: string;
   proposal_id: string;
   commit_id: string;
   approval_id: string;
-  guard_outcomes: string[];
+  guard_outcomes: GuardOutcome[];
   recorded_at: string;
-  tax_snapshots?: string[];
+  tax_snapshots?: TaxSnapshot[];
   after_tax_pnl: number;
   total_tax_paid: number;
   parameters_version?: string;
@@ -3133,8 +3344,8 @@ export interface SimulationReport {
 }
 
 export interface SimulationResult {
-  risk_snapshot?: string | null;
-  tax_snapshots?: string[];
+  risk_snapshot?: RiskSnapshot | null;
+  tax_snapshots?: TaxSnapshot[];
   before_tax_pnl: number;
   after_tax_pnl: number;
   total_tax_paid: number;
@@ -3144,7 +3355,7 @@ export interface SimulationResult {
 
 export interface SimulationState {
   cash: number;
-  positions: string[];
+  positions: Position[];
   realized_pnl: number;
   starting_cash: number;
   equity_curve: number[];
@@ -3152,7 +3363,7 @@ export interface SimulationState {
   previous_values: Record<string, number>;
   max_equity: number;
   current_drawdown: number;
-  locked_cash: string[];
+  locked_cash: LockedCashEntry[];
 }
 
 export interface SizingParameters {
@@ -3200,14 +3411,21 @@ export interface SmartUniverseConfig {
   supply_chain_expand_depth: string;
 }
 
+export interface StockInfo {
+  stock_id: string;
+  stock_name: string;
+  industry_category: string;
+  type: string;
+}
+
 export interface StrategiesListResponse {
-  strategies: string[];
+  strategies: StrategyFrameSummary[];
   total: number;
 }
 
 export interface StrategyEvolutionConfig {
   cooldown_period_hours: number;
-  configs: Record<string, string>;
+  configs: Record<string, StrategyStateConfig>;
 }
 
 export interface StrategyFrameSummary {
@@ -3282,9 +3500,9 @@ export interface StressIndexWeights {
 }
 
 export interface StressIndexWeightsConfig {
-  scaling: string;
-  weights: string;
-  thresholds: string;
+  scaling: StressIndexScaling;
+  weights: StressIndexWeights;
+  thresholds: StressIndexThresholds;
 }
 
 export interface StructuralTrend {
@@ -3298,8 +3516,8 @@ export interface StructuralTrend {
 }
 
 export interface StructuralTrendAssessment {
-  trends: string[];
-  dominant_trend?: string | null;
+  trends: StructuralTrend[];
+  dominant_trend?: StructuralTrend | null;
   override_score: number;
   should_override_risk: boolean;
   rationale: string;
@@ -3370,9 +3588,71 @@ export interface SystemHealthResponse {
   last_window_generated_at: string;
   warnings: string[];
   regime: string;
-  data_channels?: string[];
+  data_channels?: DataChannelInfo[];
   degraded_channels?: string[];
   cycle_stale: boolean;
+}
+
+export interface TAIFEXFutures {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  settlement: number;
+  change_pct: number;
+}
+
+export interface TEJStockPriceRow {
+  co_id: string;
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  trade_val: number;
+}
+
+export interface TWSECapitalFlow {
+  date: string;
+  foreign_investor_net: number;
+  domestic_fund_net: number;
+  dealer_net: number;
+  total_net: number;
+}
+
+export interface TWSEDailyResponse {
+  stat: string;
+  date: string;
+  title: string;
+  fields: string[];
+  data: string[][];
+}
+
+export interface TWSEQuote {
+  Code: string;
+  Name: string;
+  TradeVolume: string;
+  TradeValue: string;
+  OpeningPrice: string;
+  HighestPrice: string;
+  LowestPrice: string;
+  ClosingPrice: string;
+  Change: string;
+  Transaction: string;
+}
+
+export interface Taiwan5SecIndexBar {
+  date: string;
+  taiex: number;
+}
+
+export interface Taiwan5SecIndexResponse {
+  msg: string;
+  status: number;
+  data: Taiwan5SecIndexBar[];
 }
 
 export interface TaiwanStressIndex {
@@ -3469,9 +3749,9 @@ export interface TechnicalBreakoutExecutorParameters {
 }
 
 export interface ThresholdReport {
-  violations: string[];
+  violations: ThresholdViolation[];
   count: number;
-  threshold: string;
+  threshold: AlertThreshold;
   checked_at: string;
 }
 
@@ -3485,8 +3765,8 @@ export interface ThresholdViolation {
 
 export interface TierRecommendation {
   tier: string;
-  market: string;
-  strategies?: string | null;
+  market: MarketLight;
+  strategies?: StrategyRecommendation | null;
   signals?: string;
 }
 
@@ -3523,15 +3803,15 @@ export interface TrendPoint {
 export interface USIndicesResponse {
   recorded_at: number;
   generated_at: string;
-  indices: string[];
-  tech_stocks: string[];
+  indices: CrossMarketIndex[];
+  tech_stocks: CrossMarketIndex[];
   data_status?: string;
   failed_channels?: string[];
   stale_channels?: string[];
 }
 
 export interface UniverseOverlapResponse {
-  agents: string[];
+  agents: AgentUniverseView[];
   matrix: Record<string, Record<string, number>>;
   warnings: string[];
 }
@@ -3584,6 +3864,23 @@ export interface channelState {
   updated_at: string;
 }
 
+export interface cnbcQuickQuote {
+  symbol: string;
+  last: string;
+  change_pct: string;
+  last_time_msec: string;
+}
+
+export interface cnbcQuickQuoteResponse {
+  QuickQuoteResult: string;
+}
+
+export interface exchangeRateResponse {
+  result: string;
+  base_code: string;
+  rates: Record<string, number>;
+}
+
 export interface fetchLogEntry {
   channel: string;
   status: string;
@@ -3592,9 +3889,53 @@ export interface fetchLogEntry {
   error?: string;
 }
 
+export interface fiveSecIndexLedgerEntry {
+  date: string;
+  taiex: number;
+  type: string;
+}
+
+export interface frankfurterResponse {
+  date: string;
+  base: string;
+  rates: Record<string, number>;
+}
+
+export interface fugleWSAuth {
+  event: string;
+  data: string;
+}
+
+export interface fugleWSMessage {
+  event: string;
+  data: string;
+}
+
+export interface fugleWSSubscribe {
+  event: string;
+  data: string;
+}
+
+export interface fugleWSTradeData {
+  symbol: string;
+  price: number;
+  volume: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  isTrial: boolean;
+  isOdd: boolean;
+}
+
+export interface fugleWSUnsubscribe {
+  event: string;
+  data: string;
+}
+
 export interface healthResponse {
   status: string;
-  ports: Record<string, string>;
+  ports: Record<string, portHealthReport>;
 }
 
 export interface marginHistoryFile {
@@ -3606,6 +3947,14 @@ export interface marginHistoryFile {
 export interface maturityTrackerState {
   first_start_date: string;
   last_checked: string;
+}
+
+export interface odmRevenueRecord {
+  date: string;
+  symbol: string;
+  revenue: number;
+  yoy_pct: number;
+  timestamp: number;
 }
 
 export interface portHealthReport {
@@ -3622,6 +3971,17 @@ export interface providerHealthJSON {
   last_error: string;
   last_success: string;
   breaker_open: boolean;
+}
+
+export interface raw5SecIndexBar {
+  date: string;
+  TAIEX: number;
+}
+
+export interface raw5SecIndexResponse {
+  msg: string;
+  status: number;
+  data: raw5SecIndexBar[];
 }
 
 export interface rawOutcome {
@@ -3645,6 +4005,14 @@ export interface revenueRecord {
   revenue_year: number;
 }
 
+export interface sectorDataJSON {
+  ai_revenue_growth: number;
+  cowos_utilization: number;
+  capex_growth: number;
+  semiconductor_index: number;
+  updated_at: string;
+}
+
 export interface submitTaskRequest {
   task_type: string;
   payload?: Record<string, string>;
@@ -3660,5 +4028,139 @@ export interface submitTaskResponse {
 export interface supplyChainGraphJSON {
   nodes: string[];
   correlations: Record<string, number>;
+}
+
+export interface taifexFuturesRaw {
+  Date: string;
+  Contract: string;
+  Open: string;
+  High: string;
+  Low: string;
+  LastPrice: string;
+  Volume: string;
+  SettlementPrice: string;
+  PreviousSettlementPrice: string;
+}
+
+export interface taifexLargeTraderRaw {
+  Date: string;
+  Contract: string;
+  ContractName: string;
+  SettlementMonth: string;
+  TypeOfTraders: string;
+  Top5Buy: string;
+  Top5Sell: string;
+  Top10Buy: string;
+  Top10Sell: string;
+  OIOfMarket: string;
+}
+
+export interface taifexPCRRaw {
+  Date: string;
+  PutVolume: string;
+  CallVolume: string;
+  PutCallVolumeRatio%: string;
+  PutOI: string;
+  CallOI: string;
+  PutCallOIRatio%: string;
+}
+
+export interface tejResponse {
+  datatable: string;
+  error?: string | null;
+}
+
+export interface tsmcRevenueRecord {
+  date: string;
+  revenue: number;
+  yoy_pct: number;
+  timestamp: number;
+}
+
+export interface twseCalendarResponse {
+  stat: string;
+  date: string;
+  title: string;
+  fields: string[];
+  data: string[][];
+  total: number;
+}
+
+export interface twseDayTradingResponse {
+  stat: string;
+  date: string;
+  tables: twseDayTradingTable[];
+}
+
+export interface twseDayTradingTable {
+  title: string;
+  fields: string[];
+  data: string[][];
+  notes: string[];
+  total: number;
+}
+
+export interface twseETFResponse {
+  stat: string;
+  date: string;
+  tables: twseETFTable[];
+}
+
+export interface twseETFTable {
+  title: string;
+  fields: string[];
+  data: string[][];
+  notes: string[];
+  total: number;
+}
+
+export interface twseIndexItem {
+  指數: string;
+  收盤指數: string;
+  漲跌: string;
+  漲跌點數: string;
+  漲跌百分比: string;
+}
+
+export interface twseMarginResponse {
+  stat: string;
+  date: string;
+  tables: twseMarginTable[];
+}
+
+export interface twseMarginTable {
+  title: string;
+  fields: string[];
+  data: string[][];
+  notes: string[];
+  total: number;
+}
+
+export interface twseOddLotResponse {
+  stat: string;
+  date: string;
+  tables: twseOddLotTable[];
+}
+
+export interface twseOddLotTable {
+  title: string;
+  fields: string[];
+  data: string[][];
+  notes: string[];
+  total: number;
+}
+
+export interface twseT86Response {
+  stat: string;
+  data: string[][];
+}
+
+export interface yahooChartError {
+  code: string;
+  description: string;
+}
+
+export interface yahooChartResult {
+  chart: string;
 }
 

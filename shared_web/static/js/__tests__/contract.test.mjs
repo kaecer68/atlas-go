@@ -79,8 +79,7 @@ test('portfolioStateSchema: valid JSON Schema structure', () => {
 
 test('macroSnapshotSchema: has required top-level fields', () => {
   const required = macroSnapshotSchema.required;
-  assert.ok(required.includes('updated_at'), 'updated_at must be required');
-  assert.ok(required.includes('data_status'), 'data_status must be required');
+  assert.ok(required.includes('recorded_at'), 'recorded_at must be required');
 });
 
 test('macroSnapshotSchema: has all 5 required market indicator properties', () => {
@@ -144,13 +143,14 @@ test('usIndicesSchema: tech_stocks is an array of objects with symbol/value/chan
 // P1: stress-index schema structure
 // ============================================================================
 
-test('stressIndexSchema: has required fields index/regime/updated_at', () => {
+test('stressIndexSchema: has required fields score/regime/timestamp', () => {
   const required = stressIndexSchema.required;
-  assert.ok(required.includes('index'), 'index must be required');
+  assert.ok(required.includes('score'), 'score must be required');
   assert.ok(required.includes('regime'), 'regime must be required');
-  assert.ok(required.includes('updated_at'), 'updated_at must be required');
-  assert.equal(stressIndexSchema.properties.index.type, 'number', 'index must be number');
+  assert.ok(required.includes('timestamp'), 'timestamp must be required');
+  assert.equal(stressIndexSchema.properties.score.type, 'number', 'score must be number');
   assert.equal(stressIndexSchema.properties.regime.type, 'string', 'regime must be string');
+  assert.equal(stressIndexSchema.properties.timestamp.type, 'number', 'timestamp must be number');
 });
 
 // ============================================================================

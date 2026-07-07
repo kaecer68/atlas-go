@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "macro-snapshot.schema.json",
   "type": "object",
-  "required": ["updated_at", "data_status"],
+  "required": ["recorded_at"],
   "properties": {
     "taiex": {
       "type": "object",
@@ -11,7 +11,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "tsm_adr": {
@@ -21,7 +21,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "sox_index": {
@@ -31,7 +31,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "ndx_index": {
@@ -41,7 +41,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "usd_twd": {
@@ -51,7 +51,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "vix": {
@@ -61,7 +61,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "foreign_investor_net": {
@@ -71,7 +71,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "retail_margin_balance": {
@@ -81,7 +81,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "dxy": {
@@ -91,7 +91,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "us10y": {
@@ -101,7 +101,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "oil": {
@@ -111,7 +111,7 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
     "gold": {
@@ -121,10 +121,10 @@
         "symbol": { "type": "string" },
         "value": { "type": "number" },
         "change_pct": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "number" }
       }
     },
-    "updated_at": { "type": "string" },
+    "recorded_at": { "type": "number" },
     "data_status": {
       "type": ["string", "null"],
       "default": null
