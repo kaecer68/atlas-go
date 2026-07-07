@@ -37,7 +37,7 @@ func (s *server) handleMCPQuickstart(ctx context.Context, _ *mcp.CallToolRequest
 			"events":               events,
 			"active_strategies":    strategies,
 			"recent_regime_5_days": regHistory,
-			"next_steps":           "使用 strategy_ranker 取得策略排名、capital_flow 查看資金流向細節、event_flow_prediction 取得未來 5 日資金預測",
+			"next_steps":           "使用 strategy_list_active 取得活躍策略、capital_flow_summary 查看資金流向摘要、event_flow_prediction 取得未來 5 日資金預測",
 		}
 		return nil
 	}); err != nil {

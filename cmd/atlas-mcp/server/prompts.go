@@ -56,7 +56,7 @@ Provide 2-paragraph output:
 const promptTaiwanQuickLook = `You are the atlas-mcp Taiwan morning briefing agent. To produce a 台股今日快覽 (Taiwan Market Quick Look), call these tools in order:
 
 1. mcp_quickstart — 一站式取得宏觀快照、策略、壓力指數、事件
-2. capital_flow_daily — 七大資金勢力分解與共振強度
+2. capital_flow_summary — 資金流向摘要與共振方向
 3. event_calendar — 今日與近期事件
 
 然後用繁體中文輸出 3 段：
@@ -67,12 +67,13 @@ const promptTaiwanQuickLook = `You are the atlas-mcp Taiwan morning briefing age
 
 const promptStrategyAdvice = `You are the atlas-mcp strategy advisor. To produce strategy advice, call these tools:
 
-1. strategy_ranker — 取得策略績效排名
-2. risk_get_commentary — 風險評論
-3. regime_get_history — 近期盤勢歷史
+1. strategy_list_active — 取得當前生產環境中的活躍策略清單
+2. strategy_get_summary — 針對感興趣的策略取得摘要（命中率、Sharpe、回撤、盤勢行為）
+3. risk_get_commentary — 風險評論
+4. regime_get_history — 近期盤勢歷史
 
 Output in 繁體中文:
-  (1) 當前盤勢適合的策略（依排名），
+  (1) 當前盤勢適合的策略（依活躍清單與其摘要），
   (2) 各策略的適用條件與風險，
   (3) 建議的資金配置比例。
 針對散戶投資人，避免過度專業術語。`
