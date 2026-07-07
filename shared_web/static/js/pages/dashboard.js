@@ -422,7 +422,6 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
   const latest = items.slice(0, 3);
 
   const prismCompleted = phase3 && phase3.prism_completed_results != null ? phase3.prism_completed_results : (phase3 && phase3.PRISMCompletedResults != null ? phase3.PRISMCompletedResults : '-');
-  const swarmRunning = phase3 && (phase3.swarm_running || phase3.SwarmRunning) ? '運作中' : '待機';
 
   let agentList = [];
   if (darwinianStatus && darwinianStatus.agents) {
@@ -469,11 +468,6 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
         <div class="text-sm text-muted mb-xs">待評判實驗</div>
         <div class="text-xl font-bold" style="color:${pending.length > 0 ? 'var(--warn)' : 'var(--muted)'}">${pending.length}</div>
         <div class="text-xs text-muted mt-xs">共 ${items.length} 個歷史實驗</div>
-      </div>
-      <div class="panel-card" style="text-align:center">
-        <div class="text-sm text-muted mb-xs">Swarm 狀態</div>
-        <div class="text-xl font-bold">${swarmRunning}</div>
-        <div class="text-xs text-muted mt-xs">MiroFish 共識模擬</div>
       </div>
     </div>
     ${topAgent ? `
