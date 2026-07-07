@@ -28,9 +28,9 @@
 
 | 數字 | 含義 | 出處 |
 |------|------|------|
-| **21** | 保留 `AGENTS.md` 的內部模組（hot-path 陷阱寫在裡面） | 本文件原 57→Wave 11 精簡至 21 |
-| **52** | 全部模組索引（含無 `AGENTS.md` 者，按成熟度 S/E/X/U 分組） | [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) |
-| **67** | `internal/` 下全部目錄數 | 檔案系統 `ls internal/*/` |
+| **22** | 保留 `AGENTS.md` 的內部模組（hot-path 陷阱寫在裡面） | 本文件原 57→Wave 11 精簡至 21（v0.0.0.31 +1: `strategy_validator`） |
+| **59** | 全部模組索引（含無 `AGENTS.md` 者，按成熟度 S/E/X/U 分組） | [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md)（v0.0.0.31 +7: `capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`） |
+| **74** | `internal/` 下全部目錄數 | 檔案系統 `ls internal/*/` |
 
 ## 📜 內容歸屬規則
 
@@ -56,6 +56,7 @@
 - [`docs/AGENT_ONBOARDING.md`](docs/AGENT_ONBOARDING.md) — 5 分鐘速讀 atlas 全貌
 - [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — 84 個 tool 決策樹與完整 catalog
 - [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — MCP server 部署、配置、84 tool 總覽
+- [`docs/mcp-integration-guide.md`](docs/mcp-integration-guide.md) — atlas-mcp 接到 Claude Desktop / OpenClaw / Hermes 的整合設定（v0.0.0.31 新增）
 
 ### 啟動必讀
 - [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — 首次啟動、CI 指令、系統初始化順序

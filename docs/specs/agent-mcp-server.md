@@ -119,6 +119,42 @@ e.g.   regime_get_history
 
 ---
 
+## 3.4 MCP Prompts 清單（v0.0.0.31 PR #972 新增）
+
+6 個預設 Prompt 模板供外部 AI 按名稱調用，分散於 `cmd/atlas-mcp/server/prompts.go`：
+
+| Prompt 名稱 | 用途 | 調用工具 |
+|-----------|------|---------|
+| `taiwan_quick_look` | 台股今日快覽：宏觀快照 + 資金流向 + 壓力指數 + 事件 | macro + capitalflow + stress + events |
+| `strategy_advice` | 策略建議：策略排名 + 風險評論 + 盤勢歷史 | strategy_ranker + risk + regime |
+| `stock_health_check` | 持股健檢：輸入股票代號（`symbol="2330"`） | trace + universe + strategy |
+| `daily_market_briefing` | 每日市場簡報（英文版） | macro + capitalflow + events |
+| `risk_check` | 投資組合風險評估 | risk + darwinian |
+| `regime_interpretation` | 盤勢解讀（`regime="RISK_ON"`） | regime + narrative |
+
+## 3.5 MCP Resources 清單（v0.0.0.31 PR #972 新增）
+
+3 個 MCP Resources 提供結構化資料存取：
+
+| URI | 內容 | Handler |
+|-----|------|---------|
+| `atlas://strategies/active` | 當前活躍策略定義（JSON） | `internal/strategy` 直接讀取 |
+| `atlas://market/regime` | 最新盤勢分類 + 壓力指數 | `internal/regime.GetCurrent` |
+| `atlas://events/today` | 今日事件清單 | `internal/industry.EventCalendar` |
+
+## 3.6 v0.0.0.31 新增 MCP Tools
+
+PR #972 加入 4 個新 tools：
+
+| Tool 名稱 | 用途 | 對應 API |
+|---------|------|---------|
+| `mcp_quickstart` | 一站式開機摘要：macro + 策略 + 壓力 + 事件 + 資金流向 | 多源聚合 |
+| `daily_report` | 最新每日市場報告完整 JSON | `/api/reports/latest` |
+| `event_calendar` | 近期事件列表 | `/api/events/calendar` |
+| `event_flow_prediction` | 5 日事件驅動資金流預測 | `/api/events/prediction` |
+
+---
+
 ## 4. JSON Schema 設計範本
 
 每個 MCP tool 必須附帶完整 JSON Schema（LLM 用於 function calling 推論）。範本如下：

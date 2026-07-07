@@ -486,3 +486,108 @@ workflows:
     test_coverage: unknown
     last_verified: "2026-07-01"
     verified_by: "agent-interface-audit"
+
+  # 9. Wave 11 v0.0.0.31 新增端點（4 個）
+  - id: WA-800
+    symbol: "internal/capitalflow/handler.go::HandleDaily"
+    description: |
+      資金流向日報 API。從 MacroDataSnapshot 提取 7 個資金勢力 Z-score + 共振係數 + 品質分數。
+      v0.0.0.31 新增，搭配 Phase B tier-gated home dashboard 渲染。
+    triggers:
+      - http: "GET /api/capital-flow/daily"
+    depends_on:
+      - WA-001
+    produces: "JSON { forces, resonance, quality_score, summary }"
+    criticality: P1
+    test_coverage: tested
+    last_verified: "2026-07-07"
+    verified_by: "PR #972"
+
+  - id: WA-801
+    symbol: "internal/capitalflow/handler.go::HandleSummary"
+    description: |
+      資金流向摘要 API。回傳當前主力方向、共振強度、品質分數標籤，給予 Phase B tier-gated dashboard 使用。
+    triggers:
+      - http: "GET /api/capital-flow/summary"
+    depends_on:
+      - WA-800
+    produces: "JSON { summary, quality_score, quality_label, resonance, forces }"
+    criticality: P1
+    test_coverage: tested
+    last_verified: "2026-07-07"
+    verified_by: "PR #972"
+
+  - id: WA-802
+    symbol: "internal/eventdriven/handler.go::HandleCalendar"
+    description: |
+      事件日曆 API。從 industry.EventCalendar 取出未來 14 天事件列表，並預估每個事件的資金流方向。
+      Phase B tier-gated home dashboard 渲染「近期事件」區塊使用。
+    triggers:
+      - http: "GET /api/events/calendar"
+    depends_on:
+      - WA-001
+    produces: "JSON { events, total }"
+    criticality: P1
+    test_coverage: tested
+    last_verified: "2026-07-07"
+    verified_by: "PR #972"
+
+  - id: WA-803
+    symbol: "internal/eventdriven/handler.go::HandlePrediction"
+    description: |
+      5 日事件驅動資金流預測 API。結合事件日曆 + 當前資本品質分數，預測未來 5 天資金移動方向 + ETF 規模×權重預估。
+    triggers:
+      - http: "GET /api/events/prediction"
+    depends_on:
+      - WA-802
+    produces: "JSON { predictions, active_events, etf_estimates, summary }"
+    criticality: P1
+    test_coverage: tested
+    last_verified: "2026-07-07"
+    verified_by: "PR #972"
+
+  - id: WA-804
+    symbol: "internal/recommender/handler.go::HandleRecommendations"
+    description: |
+      投資推薦分層 API。JWT 或 X-User-Email header 解析 user tier，回傳對應層級的策略推薦 + 市場燈號。
+      Tier 順序: public < registered < premium，premium 用戶取得完整策略訊號 + 進出場點位。
+    triggers:
+      - http: "GET /api/recommendations"
+    depends_on:
+      - WA-805
+    produces: "JSON { tier, market, strategies }"
+    criticality: P1
+    test_coverage: tested
+    last_verified: "2026-07-07"
+    verified_by: "PR #972"
+
+  - id: WA-805
+    symbol: "internal/subscription/handler.go::RegisterRoutes"
+    description: |
+      使用者訂閱與認證。3-tier (public/registered/premium) + 7 天免費試用 + JWT (HS256)。
+      SQLite store 儲存 users / subscription_events，支援 register / login / profile / subscription 端點。
+    triggers:
+      - http: "POST /api/auth/register", "POST /api/auth/login", "GET /api/user/profile", "GET /api/user/subscription"
+    depends_on: []
+    produces: "JWT token + cookie"
+    criticality: P1
+    test_coverage: tested
+    last_verified: "2026-07-07"
+    verified_by: "PR #972"
+
+  - id: WA-806
+    symbol: "internal/dailyreport/report.go::Generator.HandleLatest"
+    description: |
+      每日市場報告 API。Generator 從 macro/capitalflow/eventdriven 組合當日完整報告
+      （資金流向 + 事件日曆 + 策略訊號 + 風險提示），提供 JSON + Markdown 雙格式輸出。
+      archive 提供歷史查詢，subscribe 提供郵件訂閱。
+    triggers:
+      - http: "GET /api/reports/latest", "GET /api/reports/archive", "POST /api/reports/subscribe"
+    depends_on:
+      - WA-800
+      - WA-803
+    produces: "JSON { date, macro, capital_flow, events, strategies, risk, summary }"
+    criticality: P1
+    test_coverage: tested
+    last_verified: "2026-07-07"
+    verified_by: "PR #972"

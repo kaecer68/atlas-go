@@ -228,6 +228,33 @@ config. The first comment in `.env` says:
 
 ---
 
+## v0.0.0.31 Subscription / JWT Secret (Wave 11 PR #972)
+
+`internal/subscription/jwt.go` 需要 HS256 secret 簽發 token。透過 `config.GetSecret("ATLAS_JWT_SECRET")` 解析（不直接 `os.Getenv`，符合 Constitution）。
+
+| Env Var | 用途 | 預設 |
+|---------|------|------|
+| `ATLAS_JWT_SECRET` | JWT 簽章 secret（HS256，必須 ≥ 32 字元） | dev fallback: `"atlas-dev-secret-do-not-use-in-prod-32chars"` |
+| `ATLAS_SUBSCRIPTION_DB_PATH` | SQLite store 路徑（users + subscription_events） | `${ATLAS_WORK_DIR}/data/subscriptions.db` |
+| `ATLAS_PREMIUM_TRIAL_DAYS` | 新用戶免費試用天數 | `7` |
+
+**dev 設定（macOS Keychain）**：
+
+```bash
+# 寫入 Keychain（一次性）
+security add-generic-password -a ATLAS_JWT_SECRET -s com.kaecer68.atlas-go \
+  -w "$(openssl rand -hex 32)" -U
+
+# 透過 ~/.config/atlas-go/.env 引用
+echo 'ATLAS_JWT_SECRET=$(security find-generic-password -a ATLAS_JWT_SECRET -s com.kaecer68.atlas-go -w)' >> ~/.config/atlas-go/.env
+```
+
+**production 設定**：用 secret manager（GCP Secret Manager / AWS SSM / Vault），**禁止** hardcode 或 commit。
+
+⚠️ **旋轉策略**：secret 變更會讓所有現有 JWT token 失效，使用者被強制重新登入。建議在低流量時段（盤前 8:30 之前）輪換。
+
+---
+
 ## Local data directory
 
 **Path**: `/Users/kaecer/workspace/atlas/data/`

@@ -41,6 +41,8 @@ Top 15 高頻工具，含「何時該呼叫」決策樹與 3 個範例對話流�
 GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決策樹 — 改 code 前該用哪個工具。
 
 ### 我要找完整 MCP 規格 → 看 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
+
+### 我要把 atlas-mcp 接到 Claude Desktop / OpenClaw / Hermes → 看 [`mcp-integration-guide.md`](./mcp-integration-guide.md)
 所有 80 個 tool 的 JSON Schema 設計範本、安全邊界、部署指引。
 
 ### 我要理解模組 → 看 [`internal/AGENTS_INDEX.md`](./../internal/AGENTS_INDEX.md)
@@ -89,8 +91,22 @@ internal/scheduler/            ← 6 個 background task
 internal/portfolio/            ← agent_health / post_trade_analyzer
 internal/alerts/               ← WA-601 alert 系統
 docs/specs/                    ← 17 份設計規格
-docs/AGENTS_INDEX              ← 21 個保留模組清單
+docs/AGENTS_INDEX              ← 22 個保留模組清單
 docs/WORKFLOW_MAP.md           ← 21 條 workflow 總覽（你最該先讀）
+
+# ─── v0.0.0.31 新增（Wave 11 投資核心框架）───
+internal/strategy_validator/   ← 策略歷史回測驗證（Sharpe / 回撤 / 勝率 / TAIEX 相關係數 + 排名分層）
+internal/capitalflow/          ← 七大資金勢力分解與共振分析（外資/投信/公股/散戶/期貨/ADR）
+internal/eventdriven/          ← 事件驅動資金流預測（事件日曆 → 5 日 forward + ETF 規模預估）
+internal/strategy_ranker/      ← 策略排名（消費 strategy_validator 輸出 → 供 recommender 訂閱）
+internal/subscription/         ← 使用者訂閱與認證（SQLite store + JWT + 3-tier + 7 天免費試用）
+internal/recommender/          ← 推薦分層系統（依 user tier 返回 public/registered/premium 內容）
+internal/dailyreport/          ← 每日市場報告自動化（JSON + Markdown + DataProvider + archive）
+cmd/atlas-mcp/                 ← 84 tool MCP server（v0.0.0.31 新增 4 tools + 6 prompts + 3 resources）
+client_web/static/js/
+├── services/auth.js                 ← Phase A0 JWT + tier 解析
+├── page-shells/{login,register,premium,mcp,errors/404}.js  ← Phase A0/C 頁面殼
+└── components/home-tier-sections.js ← Phase B tier-gated 渲染
 ```
 
 ---

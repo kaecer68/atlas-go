@@ -74,4 +74,34 @@ git worktree remove <worktree-path>
 
 警告排查：`branch -d` 報 "not yet merged to HEAD" → 本地 main 落後 origin/main，先跑前兩行 fetch + ff-merge。
 
+---
+
+## v0.0.0.31 新增路由快速驗證
+
+啟動後可立即 curl 驗證 7 個 Wave 11 投資核心框架 endpoint（不需要認證）：
+
+```bash
+# 資金流向 + 共振（無認證）
+curl -s http://localhost:18080/api/capital-flow/summary | jq .
+
+# 事件日曆 + 5 日預測（無認證）
+curl -s http://localhost:18080/api/events/calendar | jq '.events | length'
+curl -s http://localhost:18080/api/events/prediction | jq '.predictions | length'
+
+# 每日報告（premium tier 才有完整內容，未登入回 free tier 簡化版）
+curl -s http://localhost:18080/api/reports/latest | jq '.tier, .summary'
+
+# 認證（測試用，新用戶自動 7 天 premium 試用）
+curl -X POST http://localhost:18080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"test123"}' | jq .
+
+# tier-gated 推薦（需 JWT cookie）
+curl -s http://localhost:18080/api/recommendations -b "token=<JWT>" | jq .
+```
+
+完整 WA-8xx workflow 對應見 [`docs/PROCESSES.yaml`](docs/PROCESSES.yaml) §9。
+
+---
+
 > **Multi-CLI 並行協議**：[docs/MULTI_CLI_PROTOCOL.md](docs/MULTI_CLI_PROTOCOL.md)
