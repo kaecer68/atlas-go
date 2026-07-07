@@ -71,7 +71,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     : '<div class="my-xs text-sm text-muted">-</div>';
 
   gridMarket.innerHTML = `
-    <div class="kpi-card clickable" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value text-lg">${narrativeTitle}</div><div class="kpi-hint">${narrativeSub} · <a href="#" onclick="event.stopPropagation();switchPage('narrative');return false;" class="text-accent">開啟宏觀敘事 →</a></div></div>
+    <div class="kpi-card clickable" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value text-lg">${narrativeTitle}</div><div class="kpi-hint">${narrativeSub}</div></div>
     <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
   `;
   gridRisk.innerHTML = `
@@ -83,8 +83,8 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     <div class="kpi-card ${!health.replay_data_path_ok ? 'alert-err' : ''} clickable" onclick="${!health.replay_data_path_ok ? "openKpiHelp('replay-missing')" : "switchPage('datachannels')"}"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '未匯入'}</div><div class="kpi-hint">${health.replay_data_path_ok ? `最新回放數據<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}` : '⚠️ 回放資料尚未匯入<br><small style="color:var(--color-danger)">點此查看匯入方式 →</small>'}</div></div>
     <div class="kpi-card ${health.baseline_version === '未知' ? 'alert-err' : ''}"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">${health.baseline_version === '未知' ? '⚠️ 基線策略未載入<br><small style="color:var(--muted)">確認 baseline_policy.json 存在</small>' : '目前生效的政策'}</div></div>
     <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
-    <div class="kpi-card clickable" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
-    <div class="kpi-card ${health.cycle_stale ? 'alert-err' : ''} clickable" onclick="switchPage('synergy')"><div class="kpi-label">產業週期數據</div><div class="kpi-value text-lg">${health.cycle_stale ? '⚠️ 數據過期' : '正常'}</div><div class="kpi-hint">${health.cycle_stale ? '點擊前往校正 →' : '定時更新中'}</div></div>
+    <div class="kpi-card clickable" onclick="switchPage('parameters')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
+    <div class="kpi-card ${health.cycle_stale ? 'alert-err' : ''}"><div class="kpi-label">產業週期數據</div><div class="kpi-value text-lg">${health.cycle_stale ? '⚠️ 數據過期' : '正常'}</div><div class="kpi-hint">${health.cycle_stale ? '請檢查資料通道狀態' : '定時更新中'}</div></div>
   `;
 
   // Session sync alert — rendered below the KPI cards
@@ -104,12 +104,10 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     if (diffDays > 1) {
       sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:rgba(245,158,11,0.15);border:1px solid var(--color-warning);color:var(--color-warning);display:flex;align-items:center;gap:8px">' +
         '⚠️ 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
-        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:var(--color-warning);font-weight:600">查看決策追蹤 →</a>' +
         '</div>';
     } else {
       sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:rgba(16,185,129,0.15);border:1px solid var(--color-success);color:var(--color-success);display:flex;align-items:center;gap:8px">' +
         '✅ 場次已同步 · 最新：' + latestDate.toLocaleDateString('zh-TW') +
-        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:var(--color-success);font-weight:600">查看決策追蹤 →</a>' +
         '</div>';
     }
   }
@@ -179,6 +177,7 @@ export function renderMacroRadar(data, pipelineData) {
   const regimeColor = data.regime === 'RISK_ON' ? 'var(--up)' : (data.regime === 'RISK_OFF' ? 'var(--down)' : (data.regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
   const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
   const items = (pipelineData && pipelineData.items) || [];
+  const hasPipelinePage = !!document.getElementById('page-pipeline');
 
   let controlSummary = '';
   if (guard.length) {
@@ -208,7 +207,7 @@ export function renderMacroRadar(data, pipelineData) {
           }).join('')}
         </tbody>
       </table>
-      ${passedItems.length > 5 ? `<div style="margin-top:4px;font-size:12px;color:var(--muted)">尚有 ${passedItems.length - 5} 檔標的，請前往<a href="#" onclick="switchPage('pipeline');return false;" style="color:var(--accent);text-decoration:underline">【投資管線】</a>查看完整清單與操作建議 →</div>` : ''}
+      ${passedItems.length > 5 ? `<div style="margin-top:4px;font-size:12px;color:var(--muted)">尚有 ${passedItems.length - 5} 檔標的${hasPipelinePage ? `，請前往<a href="#" onclick="switchPage('pipeline');return false;" style="color:var(--accent);text-decoration:underline">【投資管線】</a>查看完整清單與操作建議 →` : ''}</div>` : ''}
     `;
   } else if (finalOutputs > 0) {
     symbolTable = `<div style="margin-top:10px;font-size:12px;color:var(--warn)">控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。</div>`;
