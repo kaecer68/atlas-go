@@ -252,6 +252,15 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ## 動作紀錄
 
+### 2026-07-08 docs/superpowers/ 殘留清理（本次）
+
+- **觸發**:PR #984 merge 後發現 `docs/superpowers/` 仍有 2 個檔案，來自 commit `24d1d67e`（atlas-mcp stock/capitalflow/strategy ranker tools），該目錄本應在 2026-07-03 cleanup 移除。
+
+- **修正內容**:
+  - 設計規格（檔名：2026-07-07-atlas-mcp-stock-capitalflow-ranker-tools-design.md）從 `docs/superpowers/specs/` 移動至 `docs/specs/atlas-mcp-stock-capitalflow-ranker-design.md`（穩定 spec，符合 STANDARD）。
+  - 實作計畫（檔名：2026-07-07-atlas-mcp-stock-capitalflow-ranker-tools.md）從 `docs/superpowers/plans/` 移動至 `.omo/plans/`（gitignored 工作區文件）。
+  - `docs/superpowers/` 目錄正式清空並刪除。
+
 ### 2026-07-07 docs/plans/ governance fix（本次）
 
 - **觸發**:User 發現 PR #971–#975 校正工作的規劃文件被置於 `docs/plans/`，且 `docs/plans/` 在 `DOCUMENTATION_MAP.md:261` 已記載「整個移除」但實際仍存在，導致文件歸屬規範與真實目錄 drift，並讓 AI agent 反覆將短期計畫放錯位置。
