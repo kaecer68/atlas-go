@@ -1,6 +1,6 @@
 // Experiments and human intervention controls
 import { agentName, sectorName } from '../names.js';
-import { getJSON, notify, formatDate } from '../shared/app-utils.js';
+import { getJSON, notify, formatDate, renderEmptyState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 export async function loadOverrides() {
@@ -51,7 +51,9 @@ export async function loadExperimentHistory() {
       ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${escapeHtml(it.experiment_id) || ''}</td><td>${escapeHtml(agentName(it.target_agent_id)) || (it.target_agent_id ? escapeHtml(it.target_agent_id) : '')}</td><td><span class="badge ${it.status==='accepted'?'ok':(it.status==='rejected'?'err':'warn')}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':escapeHtml(it.status))}</span></td></tr>`).join('')}
     </tbody></table>`;
     const revertSel = document.getElementById('revertSelect');
-    revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${escapeHtml(it.experiment_id)}">v${it.version_after || i} - ${escapeHtml(it.experiment_id)}</option>`).join('');
+    if (revertSel) {
+      revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${escapeHtml(it.experiment_id)}">v${it.version_after || i} - ${escapeHtml(it.experiment_id)}</option>`).join('');
+    }
   } catch (e) { el.innerHTML = '<div class="empty">載入失敗</div>'; }
 }
 
@@ -292,8 +294,52 @@ export async function unbanSector() {
   }
 }
 
+// --- Forecast vs Reality summary (admin_web experiments page) ---
+export function renderForecastVsRealitySummary(data) {
+  const el = document.getElementById('forecastVsRealitySummary');
+  if (!el) return;
+  el.classList.remove('loading');
+
+  const predictions = data && Array.isArray(data.symbol_predictions) ? data.symbol_predictions : [];
+  if (!predictions.length) {
+    el.innerHTML = renderEmptyState('尚無預測命中資料', '');
+    return;
+  }
+
+  const withHit = predictions.filter(p => p.hit === true || p.hit === false);
+  const hits = withHit.filter(p => p.hit === true).length;
+  const total = withHit.length;
+  const hitRate = total > 0 ? (hits / total * 100).toFixed(1) + '%' : '—';
+
+  const passed = predictions.filter(p => p.passed_guards === true);
+  const passedHits = passed.filter(p => p.hit === true).length;
+  const passedRate = passed.length > 0 ? (passedHits / passed.length * 100).toFixed(1) + '%' : '—';
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">預測總數</div>
+        <div class="kpi-value" style="font-size:20px">${predictions.length}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">整體命中率</div>
+        <div class="kpi-value" style="color:var(--up);font-size:20px">${hitRate}</div>
+        <div class="kpi-hint">${hits} / ${total}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">控制層放行命中率</div>
+        <div class="kpi-value" style="color:var(--color-success);font-size:20px">${passedRate}</div>
+        <div class="kpi-hint">${passedHits} / ${passed.length}</div>
+      </div>
+    </div>
+  `;
+}
+
 // --- Boot ---
 export function populateAgentSelect() {
+  const select = document.getElementById('agentSelect');
+  if (!select) return;
+}
 
 if (typeof window !== "undefined") Object.assign(window, {
   closeModal, closeInfoModal, closePromoteModal, openKpiHelp, openInfoHelp,
@@ -301,6 +347,3 @@ if (typeof window !== "undefined") Object.assign(window, {
   pauseAgent, resumeAgent, banSector, unbanSector,
   judgeExperiment, viewDiff, approveRec, rejectRec
 });
-  const select = document.getElementById('agentSelect');
-  if (!select) return;
-}

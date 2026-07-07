@@ -48,26 +48,21 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/admin`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "home,evolution_panel,experiments,parameters,alerts,datachannels")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,live,reports,experiments,parameters,alerts,datachannels,evolution_panel,metrics,config")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
 const PAGE_SELECTORS = {
   home: "#page-home",
-  evolution_panel: "#page-evolution_panel",
-  synergy: "#page-synergy",
-  narrative: "#page-narrative",
-  industry: "#page-industry",
-  "reasoning-trace": "#page-reasoning-trace",
   live: "#page-live",
-  experiments: "#page-experiments",
   reports: "#page-reports",
-  controls: "#page-controls",
-  datachannels: "#page-datachannels",
-  alerts: "#page-alerts",
-  metrics: "#page-metrics",
+  experiments: "#page-experiments",
   parameters: "#page-parameters",
+  alerts: "#page-alerts",
+  datachannels: "#page-datachannels",
+  evolution_panel: "#page-evolution_panel",
+  metrics: "#page-metrics",
   config: "#page-config",
 };
 

@@ -6,7 +6,6 @@
  * @typedef {import('./shared/field_types.ts').Scorecard} Scorecard
  */
 
-import { loadReasoningTrace } from './components/reasoning-trace.js';
 import { eventSource } from './services/event-source.js';
 import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
@@ -37,11 +36,8 @@ export function switchPage(id, silent) {
   home: '系統總覽', live: '風控營運台', alerts: '系統警報',
   evolution_panel: '策略演化', experiments: '模擬交易',
   datachannels: '資料通道', parameters: '參數管理',
-  narrative: '宏觀敘事', industry: '產業生態系',
-  'reasoning-trace': '決策追蹤', agents: 'AI 觀測台',
-  reports: '最新回測', controls: '控制與稽核',
-  metrics: '指標監控', config: '部署配置', synergy: '人機協同',
-  prism: 'PRISM 訓練結果'
+  reports: '最新回測',
+  metrics: '指標監控', config: '部署配置'
 };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -109,16 +105,13 @@ async function loadModules() {
     import('./pages/experiments.js'),
     import('./pages/alerts.js'),
     import('./pages/metrics.js'),
-    import('./pages/industry.js'),
     import('./pages/datachannels.js'),
     import('./pages/parameters.js'),
     import('./pages/deploy-config.js'),
-    import('./pages/synergy.js'),
     import('./pages/evolution_panel.js'),
-    import('./pages/prism.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'prism'];
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'evolution_panel'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -185,29 +178,19 @@ async function loadAll() {
       getJSONWithTimeout('/api/dashboard/live-status'),
       getJSONWithTimeout('/api/dashboard/risk-exposure'),
       getJSONWithTimeout('/api/dashboard/experiment-inbox'),
-      getJSONWithTimeout('/api/dashboard/universe-overlap'),
       getJSONWithTimeout('/api/taiwan/stress-index'),
       getJSONWithTimeout('/api/narrative/bundle'),
-      getJSONWithTimeout('/api/macro/snapshot/latest'),
       getJSONWithTimeout('/api/dashboard/data-channels'),
       getJSONWithTimeout('/api/dashboard/sessions'),
       getJSONWithTimeout('/api/dashboard/phase3-status'),
       getJSONWithTimeout('/api/alerts'),
-      getJSONWithTimeout('/api/dashboard/retail-sentiment'),
       getJSONWithTimeout('/api/dashboard/capital-phase'),
-      getJSONWithTimeout('/api/dashboard/tax-snapshot'),
-      getJSONWithTimeout('/api/dashboard/regime-history'),
-      getJSONWithTimeout('/api/synergy/darwinian-trend'),
-      getJSONWithTimeout('/api/synergy/darwinian-status'),
-      getJSONWithTimeout('/api/dashboard/risk-calibration'),
     ]);
 
     var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
-        riskExposure = results[5], inbox = results[6], overlap = results[7], stress = results[8], bundle = results[9],
-        snapshot = results[10], dataChannels = results[11],
-        sessions = results[12], phase3 = results[13], alerts = results[14], retailSentiment = results[15],
-        capitalPhase = results[16], taxSnapshot = results[17], regimeHistory = results[18],
-        darwinianTrend = results[19], darwinianStatus = results[20], riskCalibration = results[21];
+        riskExposure = results[5], inbox = results[6], stress = results[7], bundle = results[8],
+        dataChannels = results[9], sessions = results[10], phase3 = results[11], alerts = results[12],
+        capitalPhase = results[13];
 
     // Unwrap narrative bundle into backwards-compatible shapes.
     var events = bundle && bundle.events ? { events: bundle.events } : null;
@@ -231,31 +214,23 @@ async function loadAll() {
     await loadModules();
     var m = modules;
 
-    if (m.dash.renderOverview) m.dash.renderOverview(health, agents, inbox, overlap, events, stress, dataChannels, capitalPhase);
+    if (m.dash.renderOverview) m.dash.renderOverview(health, agents, inbox, events, stress, dataChannels, capitalPhase);
     if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(macro, pipeline);
-    if (m.dash.renderAgentObservatory) m.dash.renderAgentObservatory(agents, overlap, darwinianTrend);
-    if (m.dash.renderUniverseOverlap) m.dash.renderUniverseOverlap(overlap);
-    if (m.dash.renderAIEvolution) m.dash.renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend, agents, macro, stress);
     if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(events, stress, models, chains);
-    if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
 
     if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(live);
     if (m.risk.renderRiskCards) m.risk.renderRiskCards(riskExposure, pipeline, capitalPhase);
-    if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(riskCalibration);
     if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
 
     if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
     if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
     if (m.alerts.renderAlerts) m.alerts.renderAlerts(alerts);
     if (m.metrics.loadMetrics) m.metrics.loadMetrics();
-    if (m.industry.loadIndustryData) m.industry.loadIndustryData();
 
     if (m.back.renderBacktestReport) m.back.renderBacktestReport();
 
-    if (m.experiments.loadOverrides) m.experiments.loadOverrides();
     if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
     if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
-    if (m.synergy.renderSynergyPage) m.synergy.renderSynergyPage(darwinianStatus, darwinianTrend, inbox);
 
   } catch (e) {
     console.error(e);
@@ -273,71 +248,28 @@ async function loadPageData(pageId) {
   await loadModules();
   var m = modules;
 
-  if (pageId === 'narrative') {
-    try {
-      var results = await Promise.all([
-        getJSONWithTimeout('/api/macro/snapshot/latest'),
-        getJSONWithTimeout('/api/taiwan/stress-index'),
-        getJSONWithTimeout('/api/narrative/events'),
-        getJSONWithTimeout('/api/narrative/chains'),
-        getJSONWithTimeout('/api/narrative/models'),
-        getJSONWithTimeout('/api/narrative/templates'),
-        getJSONWithTimeout('/api/dashboard/retail-sentiment'),
-        getJSONWithTimeout('/api/narrative/seasonal'),
-      ]);
-      if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], results[6], results[7]);
-    } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'pipeline') {
-    try {
-      var p = await silentGetJSON('/api/dashboard/recommendation-pipeline');    } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'decision') {
-    try {
-      if (m.decision && m.decision.loadDecisionChain) m.decision.loadDecisionChain();
-    } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'reasoning-trace') {
-    loadReasoningTrace(window._currentSessionId);
-  }
-  else if (pageId === 'agents') {
-    try {
-      var a = await Promise.all([
-        silentGetJSON('/api/dashboard/agent-observatory'),
-        silentGetJSON('/api/dashboard/universe-overlap'),
-      ]);
-      if (m.dash.renderAgentObservatory) m.dash.renderAgentObservatory(a[0], a[1]);
-      if (m.dash.renderUniverseOverlap) m.dash.renderUniverseOverlap(a[1]);
-    } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'experiments') {
+  if (pageId === 'experiments') {
     try {
       var inbox = await silentGetJSON('/api/dashboard/experiment-inbox');
+      var fvrExp = await silentGetJSON('/api/dashboard/forecast-vs-reality');
       if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
       if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
       if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
+      if (m.experiments.renderForecastVsRealitySummary) m.experiments.renderForecastVsRealitySummary(fvrExp);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'reports') {
-    try { if (m.back.renderBacktestReport) m.back.renderBacktestReport(); } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'controls') {
-    try { if (m.experiments.loadOverrides) m.experiments.loadOverrides(); } catch(e) { console.error(e); }
+    try {
+      var signals = await silentGetJSON('/api/backtest/signals');
+      var fvrReport = await silentGetJSON('/api/dashboard/forecast-vs-reality');
+      if (m.back.renderBacktestReport) m.back.renderBacktestReport();
+      if (m.back.renderBacktestSignals) m.back.renderBacktestSignals(signals);
+      if (m.back.renderForecastVsRealityTable) m.back.renderForecastVsRealityTable(fvrReport);
+    } catch(e) { console.error(e); }
   }
   else if (pageId === 'datachannels') {
     try {
       if (m.datachannels.loadDataChannels) m.datachannels.loadDataChannels();
-    } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'synergy') {
-    try {
-      var s = await Promise.all([
-        silentGetJSON('/api/synergy/darwinian-status'),
-        silentGetJSON('/api/synergy/darwinian-trend'),
-        silentGetJSON('/api/dashboard/experiment-inbox'),
-        silentGetJSON('/api/synergy/l2-4-schedule')
-      ]);
-      if (m.synergy && m.synergy.renderSynergyPage) m.synergy.renderSynergyPage(s[0], s[1], s[2], s[3]);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'alerts') {
@@ -345,9 +277,6 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'metrics') {
     try { if (m.metrics.loadMetrics) m.metrics.loadMetrics(); } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'industry') {
-    try { if (m.industry.loadIndustryData) m.industry.loadIndustryData(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'live') {
     try {
@@ -362,6 +291,9 @@ async function loadPageData(pageId) {
         getJSONWithTimeout('/api/narrative/models'),
         getJSONWithTimeout('/api/dashboard/capital-phase'),
         getJSONWithTimeout('/api/dashboard/risk-calibration'),
+        getJSONWithTimeout('/api/macro/snapshot/latest'),
+        getJSONWithTimeout('/api/dashboard/industry-cycle?industry=semiconductor'),
+        getJSONWithTimeout('/api/dashboard/drawdown'),
       ]);
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
       if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
@@ -369,15 +301,8 @@ async function loadPageData(pageId) {
       if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
       if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
       if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
-    } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'portfolio') {
-    try {
-      var portfolioModule = await import('./pages/portfolio.js').catch(function(err) {
-        console.error('[Dynamic import] portfolio module load failed:', err);
-        return null;
-      });
-      if (portfolioModule) portfolioModule.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
+      if (m.risk.renderSemiconductorSentiment) m.risk.renderSemiconductorSentiment(liveResults[10], liveResults[11]);
+      if (m.risk.renderDrawdownPanel) m.risk.renderDrawdownPanel(liveResults[12]);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'parameters') {
@@ -399,15 +324,6 @@ async function loadPageData(pageId) {
       if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg);
     } catch(e) { console.error(e); }
   }
-  else if (pageId === 'strategies') {
-    try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(document.getElementById('page-strategies')); } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'crossmarket') {
-    try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'prism') {
-    try { if (m.prism && m.prism.loadPrismData) m.prism.loadPrismData(); } catch(e) { console.error(e); }
-  }
   else if (pageId === 'evolution_panel') {
     try {
       import('./pages/evolution_panel.js').then(function(evo) {
@@ -420,11 +336,6 @@ async function loadPageData(pageId) {
 }
 
 // --- Initialization ---
-function populateAgentSelect() {
-  var select = document.getElementById('agentSelect');
-  if (!select) return;
-}
-
 function initBacktestDates() {
   var today = new Date(), start = new Date(today);
   start.setDate(start.getDate() - 5);
@@ -462,7 +373,6 @@ window.toggleAutoRefresh = function() {
 };
 
 if (typeof window !== 'undefined') {
-  populateAgentSelect();
   initBacktestDates();
   loadAll();
   startAutoRefresh();
@@ -470,7 +380,6 @@ if (typeof window !== 'undefined') {
   var initialPath = window.location.pathname
     .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
     .replace(/\/$/, '');
-  if (initialPath === 'control') initialPath = 'controls';
   if (!initialPath) {
     history.replaceState({page: 'home'}, '', basePath + '/home');
     switchPage('home', true);
@@ -480,8 +389,13 @@ if (typeof window !== 'undefined') {
     var pageId = window.location.hash.replace('#page-', '');
     window.location.replace(basePath + '/' + pageId);
   } else if (initialPath && initialPath !== 'home') {
-    history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
-    switchPage(initialPath, true);
+    if (titles[initialPath]) {
+      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
+      switchPage(initialPath, true);
+    } else {
+      history.replaceState({page: 'home'}, '', basePath + '/home');
+      switchPage('home', true);
+    }
   } else if (initialPath === 'home') {
     switchPage('home', true);
   }

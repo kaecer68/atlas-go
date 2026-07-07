@@ -123,11 +123,11 @@ func TestHandleDrawdown_NotAvailable(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %v", status, body)
 	}
-	resp := body.(map[string]any)
-	if resp["status"] != "not_available" {
-		t.Errorf("expected status=not_available, got %v", resp["status"])
+	resp := body.(DrawdownResponse)
+	if resp.Status != "not_available" {
+		t.Errorf("expected status=not_available, got %v", resp.Status)
 	}
-	if _, ok := resp["generated"]; !ok {
+	if resp.Generated == "" {
 		t.Error("expected generated timestamp")
 	}
 }
@@ -154,15 +154,15 @@ func TestHandleDrawdown_WithResult(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %v", status, body)
 	}
-	resp := body.(map[string]any)
-	if resp["status"] != nil {
-		t.Errorf("expected no status key when result present, got %v", resp["status"])
+	resp := body.(DrawdownResponse)
+	if resp.Status != "" {
+		t.Errorf("expected no status key when result present, got %v", resp.Status)
 	}
-	if resp["max_drawdown"] != -0.15 {
-		t.Errorf("expected max_drawdown=-0.15, got %v", resp["max_drawdown"])
+	if resp.MaxDrawdown != -0.15 {
+		t.Errorf("expected max_drawdown=-0.15, got %v", resp.MaxDrawdown)
 	}
-	if resp["var_95"] != -0.08 {
-		t.Errorf("expected var_95=-0.08, got %v", resp["var_95"])
+	if resp.VaR95 != -0.08 {
+		t.Errorf("expected var_95=-0.08, got %v", resp.VaR95)
 	}
 }
 

@@ -130,23 +130,6 @@
 
     </div>
 
-    <!-- 宏觀敘事 -->
-    <div class="page" id="page-narrative">
-      <div class="narrative-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
-        <div class="panel" style="border-color:rgba(var(--accent-rgb),0.2);"><h2 style="color:var(--accent)">📊 總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
-        <div class="panel" style="border-color:rgba(var(--color-danger-rgb),0.2);"><h2 style="color:var(--color-danger)">⚡ 外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);margin-bottom:var(--space-lg);">
-        <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>季節性分析</h2><div id="narrativeSeasonal" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="two-col-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-md);">
-        <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>投資模型</h2><div id="narrativeModels" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>因果模板庫</h2><div id="narrativeTemplates" class="empty loading">載入中…</div></div>
-      </div>
-    </div>
 
     <!-- 風控營運台 -->
     <div class="page" id="page-live">
@@ -157,11 +140,13 @@
       <div class="panel wide mb-sm" style="padding:10px var(--space-md);"><h2 style="margin-bottom:4px;">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading" style="padding:4px 0;">載入中…</div></div>
       <div class="live-grid">
         <div class="panel panel--compact"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
+        <div class="panel panel--compact"><h2>市場廣度 / 半導體景氣</h2><div id="semiconductorSentiment" class="empty loading">載入中…</div></div>
         <div class="panel panel--compact"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
       </div>
       <div class="panel wide" id="riskCardsPanel" style="display:none;">
         <h2>風險指標</h2>
         <div id="riskCards" class="kpi-grid"></div>
+        <div id="drawdownPanel" class="empty loading" style="margin-top:12px">載入中…</div>
         <div id="riskPositionConcentration"></div>
         <div id="riskSectorDistribution"></div>
       </div>
@@ -177,16 +162,8 @@
 
     <!-- 投資管線 -->
     <!-- 決策鏈 -->
-    <!-- 決策追蹤 -->
-    <div class="page" id="page-reasoning-trace">
-    </div>
 
     <!-- 組合持倉 -->
-    <!-- AI 觀測台 -->
-    <div class="page" id="page-agents">
-      <div class="panel wide"><h2>績效評估</h2><div id="agentObservatory" class="empty loading">載入中…</div></div>
-      <div class="panel wide"><h2>AI 標的池重疊</h2><div id="universeOverlap" class="empty loading">載入中…</div></div>
-    </div>
 
     <!-- 模擬交易 -->
     <div class="page" id="page-experiments">
@@ -201,6 +178,7 @@
         </div>
         <div class="inbox-grid" id="experimentInbox">載入中…</div>
       </div>
+      <div class="panel wide"><h2>預測命中追蹤</h2><div id="forecastVsRealitySummary" class="empty loading">載入中…</div></div>
       <div class="panel wide"><h2>晉升歷史</h2><div id="experimentHistory" class="empty loading">載入中…</div></div>
     </div>
 
@@ -219,48 +197,10 @@
         <div id="backtestStatusDetail" class="mt-8 text-12-muted"></div>
       </div>
       <div class="panel wide"><h2>回測報告</h2><div id="backtestReport" class="empty loading">載入中…</div></div>
+      <div class="panel wide"><h2>回測信號</h2><div id="backtestSignals" class="empty loading">載入中…</div></div>
+      <div class="panel wide"><h2>預測 vs 實際</h2><div id="forecastVsRealityTable" class="empty loading">載入中…</div></div>
     </div>
 
-    <!-- 控制與稽核 -->
-    <div class="page" id="page-controls">
-      <div class="panel wide">
-        <h2>人工控制</h2>
-        <div class="two-col-grid">
-          <div>
-            <div class="mb-xs text-sm"><strong>AI 覆寫</strong> <span id="overrideBadges"></span></div>
-            <div class="control-group">
-              <select id="agentSelect"></select>
-              <button data-action="pause-agent">暫停</button>
-              <button data-action="resume-agent">恢復</button>
-            </div>
-            <div style="margin-top:8px;font-size:13px"><strong>產業封鎖</strong></div>
-            <div class="control-group">
-              <select id="sectorSelect">
-                <option value="semiconductor">半導體</option>
-                <option value="ai_supply_chain">AI 供應鏈</option>
-                <option value="shipping">航運</option>
-                <option value="high_dividend">高股息</option>
-                <option value="etf_rotation">ETF 輪動</option>
-              </select>
-              <button data-action="ban-sector">封鎖</button>
-              <button data-action="unban-sector">解除</button>
-            </div>
-          </div>
-          <div>
-            <div class="mb-xs text-sm"><strong>基線管理</strong></div>
-            <div class="control-group">
-              <select id="promoteSelect"><option value="">-- 選擇已接受的實驗 --</option></select>
-              <button class="primary" data-action="promote-experiment">晉升</button>
-            </div>
-            <div class="control-group">
-              <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
-              <input id="revertReason" type="text" placeholder="原因" class="input-w-md">
-               <button class="danger" data-action="revert-experiment">回滾</button>
-     </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- 美台連動監控 -->
     <div class="page" id="page-evolution_panel">
@@ -409,65 +349,7 @@
       </div>
     </div>
 
-    <div class="page" id="page-industry">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁呈現 Atlas 對台灣產業的<strong>多維度分析</strong>，包含產業分類樹、週期定位、供應鏈連動與季節性模式。
-        點擊產業卡片可查看詳細的週期羅盤與衝擊傳導分析。
-      </details>
-      <div class="two-col-grid">
-        <div class="panel"><div class="panel-header"><h2>產業地圖</h2><div class="panel-header-actions"><span id="sectorLastUpdated" class="last-updated" title="最後更新時間">--</span><button type="button" id="sectorRefreshBtn" class="refresh-btn" title="手動刷新" aria-label="手動刷新">↻</button></div></div><div id="industryMap" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" title="週期燈號計算說明" style="font-size:14px">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="panel wide mt-16">
-        <h2>供應鏈網路圖</h2>
-        <div id="industryGraph" class="empty loading" style="height: 400px;">載入中…</div>
-      </div>
-      <div class="panel mt-16"><h2>衝擊模擬</h2>
-        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-          <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
-          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
-          <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--accent);cursor:pointer">▶ 執行模擬</button>
-        </div>
-        <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
-      </div>
-    </div>
 
-    <!-- 人機協同 -->
-    <div class="page" id="page-synergy">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁顯示 AI Agent 的 Darwinian 權重（權重越大代表影響力越高），以及新實驗的候選者。
-        如果某個 Agent 表現持續優異，權重會逐漸上升（最高 2.5）；表現不佳則會下降（最低 0.3）。
-      </details>
-      <div class="panel wide mb-md">
-        <h2>Darwinian 權重排行</h2>
-        <div id="synergyLeaderboard" class="empty loading">載入中…</div>
-      </div>
-      <div class="panel wide">
-        <h2>實驗收件匣（新候選者）</h2>
-        <div class="inbox-grid" id="synergyInbox">載入中…</div>
-      </div>
-      <div class="panel wide mt-md" style="border-color:var(--warn)">
-        <h2>🔧 產業週期閾值校正</h2>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6">
-          閾值校正根據歷史營收數據重新計算各產業的擴張/復甦/成熟/衰退門檻。<br>
-          系統<strong>每月自動執行一次</strong>。若需手動校正，可使用以下按鈕或 CLI：<br>
-          <code class="code-inline">go run ./cmd/calibrate-thresholds</code>
-          （需先執行 <code class="code-inline">backfill-month-revenue</code> 累積歷史數據）
-        </div>
-        <div class="flex-gap-8">
-          <button id="btnCalibrateThresholds" style="background:var(--warn);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600">🔄 手動校正閾值</button>
-          <button data-page="parameters" style="background:var(--bg);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer">📋 查看參數管理</button>
-        </div>
-      </div>
-      <div class="panel wide">
-        <h2>系統決策覆寫紀錄</h2>
-        <p class="text-muted text-sm mb-2">多數決策由機器自動產生，下列紀錄為人工覆寫或緊急介入的歷史。此面板只出現在【人機協同】頁面，因為它的目標讀者是系統維護者而非投資人。</p>
-        <div id="auditLog" class="empty loading">載入中…</div>
-      </div>
-    </div>
 
     <!-- 指標監控 -->
     <div class="page" id="page-metrics">
@@ -562,13 +444,6 @@
       <div id="configContent" class="empty loading">載入中…</div>
     </div>
 
-    <div class="page" id="page-prism">
-      <div class="page-header">
-        <h1>🧪 PRISM 訓練結果</h1>
-        <p class="page-desc">Regime-Specific 訓練結果 — 依市場體制（RISK_ON / RISK_OFF / NEUTRAL）分群的 AI 策略績效</p>
-      </div>
-      <div id="prismContent" class="empty loading">載入中…</div>
-    </div>
   </div>
 
 

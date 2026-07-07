@@ -89,6 +89,16 @@ func (h *Handlers) HandleBacktestSnapshots(r *http.Request) (int, any) {
 	}
 }
 
+// BacktestSignalsResponse is the API response shape for GET /api/backtest/signals.
+type BacktestSignalsResponse struct {
+	ActiveSignals []string `json:"active_signals"`
+	VaR95         float64  `json:"var_95"`
+	VaR99         float64  `json:"var_99"`
+	SharpeShort   float64  `json:"sharpe_short"`
+	SharpeLong    float64  `json:"sharpe_long"`
+	DrawdownPct   float64  `json:"drawdown_pct"`
+}
+
 func (h *Handlers) HandleBacktestSignals(r *http.Request) (int, any) {
 	eng, err := autobacktest.NewSignalEngine(h.LedgerDir)
 	if err != nil {
@@ -102,12 +112,12 @@ func (h *Handlers) HandleBacktestSignals(r *http.Request) (int, any) {
 	for _, s := range sigs.Active {
 		active = append(active, string(s))
 	}
-	return http.StatusOK, map[string]any{
-		"active_signals": active,
-		"var_95":         sigs.VaR95,
-		"var_99":         sigs.VaR99,
-		"sharpe_short":   sigs.SharpeShort,
-		"sharpe_long":    sigs.SharpeLong,
-		"drawdown_pct":   sigs.DrawdownPct,
+	return http.StatusOK, BacktestSignalsResponse{
+		ActiveSignals: active,
+		VaR95:         sigs.VaR95,
+		VaR99:         sigs.VaR99,
+		SharpeShort:   sigs.SharpeShort,
+		SharpeLong:    sigs.SharpeLong,
+		DrawdownPct:   sigs.DrawdownPct,
 	}
 }

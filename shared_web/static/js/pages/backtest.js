@@ -1,5 +1,6 @@
 // Backtest rendering module
 import { getJSON, postJSON, notify, escapeHtml, formatDate, renderEmptyState } from '../shared/app-utils.js';
+import { agentName, stockName } from '../names.js';
 
 export function initBacktestDates() {
   const today = new Date();
@@ -206,3 +207,99 @@ export async function pollBacktestStatus() {
 }
 
 if (typeof window !== "undefined") Object.assign(window, { runBacktest });
+
+// --- Backtest signals panel (admin_web reports page) ---
+export function renderBacktestSignals(data) {
+  const el = document.getElementById('backtestSignals');
+  if (!el) return;
+  el.classList.remove('loading');
+
+  if (!data || data.status === 'not_available' || !data.active_signals) {
+    el.innerHTML = renderEmptyState('尚無回測信號', '執行回測後將自動產生');
+    return;
+  }
+
+  const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v * 100).toFixed(1) + '%' : '—';
+  const active = Array.isArray(data.active_signals) ? data.active_signals : [];
+  const signalBadges = active.length
+    ? active.map(s => `<span class="badge" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)">${escapeHtml(String(s))}</span>`).join(' ')
+    : '<span class="text-muted text-sm">無活躍信號</span>';
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:12px">
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">活躍信號數</div>
+        <div class="kpi-value" style="font-size:20px">${active.length}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">VaR 95</div>
+        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtPct(data.var_95)}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">VaR 99</div>
+        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtPct(data.var_99)}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">短期 Sharpe</div>
+        <div class="kpi-value" style="font-size:20px">${data.sharpe_short != null ? data.sharpe_short.toFixed(2) : '—'}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">長期 Sharpe</div>
+        <div class="kpi-value" style="font-size:20px">${data.sharpe_long != null ? data.sharpe_long.toFixed(2) : '—'}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">回撤 %</div>
+        <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtPct(data.drawdown_pct)}</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted)">活躍信號：${signalBadges}</div>
+  `;
+}
+
+// --- Forecast vs Reality symbol-level table (admin_web reports page) ---
+export function renderForecastVsRealityTable(data) {
+  const el = document.getElementById('forecastVsRealityTable');
+  if (!el) return;
+  el.classList.remove('loading');
+
+  const predictions = data && Array.isArray(data.symbol_predictions) ? data.symbol_predictions : [];
+  if (!predictions.length) {
+    el.innerHTML = renderEmptyState('尚無預測 vs 實際資料', '');
+    return;
+  }
+
+  const rows = predictions.map(p => {
+    const retCls = p.forward_return > 0 ? 'up' : (p.forward_return < 0 ? 'down' : '');
+    const hitCls = p.hit === true ? 'ok' : (p.hit === false ? 'err' : '');
+    return `<tr>
+      <td style="padding:4px 8px;font-size:12px">${escapeHtml(p.symbol)}</td>
+      <td style="padding:4px 8px;font-size:12px">${escapeHtml(stockName(p.symbol) || '—')}</td>
+      <td style="padding:4px 8px;font-size:12px">${escapeHtml(agentName(p.agent_id) || p.agent_id || '—')}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center">${escapeHtml(p.side || '—')}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right">${p.conviction != null ? p.conviction.toFixed(1) : '—'}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right">${p.target_price != null ? p.target_price.toFixed(2) : '—'}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right" class="${retCls}">${p.forward_return != null ? (p.forward_return * 100).toFixed(1) + '%' : '—'}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center"><span class="badge ${hitCls}">${p.hit === true ? '命中' : (p.hit === false ? '未命中' : '—')}</span></td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center">${p.passed_guards === true ? '✓' : (p.passed_guards === false ? '✕' : '—')}</td>
+      <td style="padding:4px 8px;font-size:12px">${p.recorded_at ? formatDate(p.recorded_at) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:4px 8px">標的</th>
+        <th style="text-align:left;padding:4px 8px">名稱</th>
+        <th style="text-align:left;padding:4px 8px">AI</th>
+        <th style="text-align:center;padding:4px 8px">方向</th>
+        <th style="text-align:right;padding:4px 8px">信念</th>
+        <th style="text-align:right;padding:4px 8px">目標價</th>
+        <th style="text-align:right;padding:4px 8px">遠期報酬</th>
+        <th style="text-align:center;padding:4px 8px">命中</th>
+        <th style="text-align:center;padding:4px 8px">控制層</th>
+        <th style="text-align:left;padding:4px 8px">時間</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
