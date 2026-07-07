@@ -69,8 +69,7 @@ complexity_top20.txt
 .env/
 
 # 歷史計畫與設計文檔（不影響運行）
-docs/superpowers/plans/
-docs/superpowers/*-plan.md
+docs/plans/
 
 # 配置檔案（不應被 Claude 讀取）
 configs/parameters.json

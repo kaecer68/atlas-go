@@ -8,6 +8,8 @@
 
 `DashboardAPI` 是專案中最大的單一服務組件，聚合 `ledger`、`narrative`、`orchestrator` 與 `sim` 的資料並提供 HTTP 介面。核心邏輯位於 `dashboard_api.go`。
 
+> **Phase 4 變更**：`NewDashboardAPI`（legacy `CompositeMacroProvider` 組裝）已標記為 `Deprecated`；生產環境請使用 `NewDashboardAPIWithGateway` + `monitoring.DataFetcher`，讓 macro 資料統一流經 `apigateway.Gateway`。
+
 ### API 路由（按職責）
 
 | 職責 | 端點 |
