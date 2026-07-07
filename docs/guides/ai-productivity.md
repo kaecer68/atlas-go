@@ -163,7 +163,7 @@ type AgentSpec struct {
 
 ### Darwinian Weight System (Performance-Based Agent Scaling)
 
-Located: [internal/portfolio/darwinian_weights.go](internal/portfolio/darwinian_weights.go)
+Located: [internal/portfolio/darwinian_weights.go](../../internal/portfolio/darwinian_weights.go)
 
 - **Range**: [0.3 (whisper) ... 1.0 (neutral) ... 2.5 (shout)]
 - **Adjustment**: Top 25% agents get +5% multiplier, bottom 25% get -5%
@@ -631,7 +631,7 @@ These are **documentation for prompt design**, not enforced by code.
 | `internal/orchestrator/` | Executor implementations | Dev (rarely; plugin system is stable) |
 | `internal/sim/engine.go` | Order sizing logic | Dev (rarely; architecture-critical) |
 | `internal/portfolio/darwinian_weights.go` | Agent weight adjustment | Dev (rarely; tuning via config) |
-| `AGENTS.md` | Developer operations guide | Dev (when changing build/test process) |
+| [`AGENTS.md`](../../AGENTS.md) | Developer operations guide | Dev (when changing build/test process) |
 | `docs/evolution_loop.md` | Mutation acceptance policy | Dev (when changing acceptance criteria) |
 
 ### Key Utility Scripts
@@ -681,7 +681,7 @@ go run ./cmd/backtest-window -start <date> -end <date>  # Multi-session
 ### Before Writing Code
 
 1. **Always check the instruction files first**:
-   - [AGENTS.md](AGENTS.md) — Build, test, architecture boundaries
+   - [AGENTS.md](../../AGENTS.md) — Build, test, architecture boundaries
    - `.github/instructions/go-core.instructions.md` — Go coding rules
    - `.github/instructions/experiments-guardrails.instructions.md` — Mutation safety
    - `.github/instructions/live-trading.guardrails.instructions.md` — Live path constraints

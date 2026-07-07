@@ -11,7 +11,7 @@
 //
 // 環境變數：
 //   ATLAS_PORT     — atlas server port（預設 18080）
-//   SMOKE_PAGES    — 要 smoke 的 page 清單（逗號分隔，預設 overview,narrative,live,agents,strategies）
+//   SMOKE_PAGES    — 要 smoke 的 page 清單（逗號分隔，預設 home,evolution_panel,experiments,parameters,alerts,datachannels）
 //   SMOKE_TIMEOUT  — 每個 page 切換後等待 fetch 完成的秒數（預設 5）
 
 import { chromium } from "playwright";
@@ -48,7 +48,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/admin`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "home,evolution_panel,experiments,parameters,alerts,datachannels,swarm")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,evolution_panel,experiments,parameters,alerts,datachannels")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -69,7 +69,6 @@ const PAGE_SELECTORS = {
   metrics: "#page-metrics",
   parameters: "#page-parameters",
   config: "#page-config",
-  swarm: "#page-swarm",
 };
 
 // 真正會造成 bug 的字串 pattern：浮點數 / 型別錯誤
