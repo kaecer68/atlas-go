@@ -1,6 +1,10 @@
 package capitalflow
 
-import "github.com/kaecer68/atlas-go/internal/marketdata"
+import (
+	"math"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+)
 
 // ForceExtractor extracts force scores from a MacroDataSnapshot.
 type ForceExtractor struct {
@@ -96,5 +100,5 @@ func round(v float64, decimals int) float64 {
 	for i := 0; i < decimals; i++ {
 		pow *= 10
 	}
-	return float64(int(v*pow+0.5)) / pow
+	return math.Round(v*pow) / pow
 }

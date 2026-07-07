@@ -18,7 +18,9 @@ type contextKey string
 
 const claimsContextKey contextKey = "subscription_claims"
 
-func extractToken(r *http.Request) string {
+// ExtractToken retrieves the JWT from the Authorization header (Bearer)
+// or the "token" cookie. Returns empty string if no token found.
+func ExtractToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
 		return strings.TrimPrefix(auth, "Bearer ")
@@ -128,7 +130,7 @@ func GetClaims(r *http.Request) *TokenClaims {
 // Wrap returns an http.Handler that validates the JWT.
 func (am *AuthMiddleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := extractToken(r)
+		token := ExtractToken(r)
 		if token == "" {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return

@@ -120,6 +120,10 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/api/cross-market" || strings.HasPrefix(p, "/api/cross-market/"):
 		return true
+	case p == "/api/auth" || strings.HasPrefix(p, "/api/auth/"):
+		return true
+	case p == "/api/user" || strings.HasPrefix(p, "/api/user/"):
+		return true
 	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
 		return true
 	case p == "/client" || strings.HasPrefix(p, "/client/"):
@@ -550,7 +554,7 @@ func run(args []string, deps appDeps) error {
 			subHandler := subscription.NewHandler(subStore, jwtMgr)
 			subHandler.RegisterRoutes(mux)
 			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes")
-			recommender.RegisterRoutes(mux, *subStore)
+			recommender.RegisterRoutes(mux, *subStore, jwtMgr)
 			log.Printf("[Recommender] registered /api/recommendations route")
 		}
 

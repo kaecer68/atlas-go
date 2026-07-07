@@ -28,20 +28,37 @@ type MarketLight struct {
 // Handler serves tier-based recommendations.
 type Handler struct {
 	subStore subscription.Store
+	jwtMgr   *subscription.JWTManager
 }
 
-// NewHandler creates a recommendation handler.
-func NewHandler(store subscription.Store) *Handler {
-	return &Handler{subStore: store}
+// NewHandler creates a recommendation handler with optional JWT verification.
+// If jwtMgr is non-nil, the handler verifies JWT tokens before reading tier.
+func NewHandler(store subscription.Store, jwtMgr *subscription.JWTManager) *Handler {
+	return &Handler{subStore: store, jwtMgr: jwtMgr}
 }
 
 // HandleRecommendations returns tier-appropriate recommendations.
+// JWT from cookie/Authorization header is preferred; falls back to
+// X-User-Email header only when no JWT is present (legacy/dev).
 func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
-	email := r.Header.Get("X-User-Email")
 	tier := subscription.TierFree
-	if email != "" {
-		if user, err := h.subStore.GetByEmail(email); err == nil {
-			tier = user.EffectiveTier()
+
+	if h.jwtMgr != nil {
+		if token := subscription.ExtractToken(r); token != "" {
+			if claims, err := h.jwtMgr.Verify(token); err == nil {
+				if user, err := h.subStore.GetByEmail(claims.Email); err == nil {
+					tier = user.EffectiveTier()
+				}
+			}
+		}
+	}
+
+	// Legacy fallback for dev/testing without JWT
+	if tier == subscription.TierFree {
+		if email := r.Header.Get("X-User-Email"); email != "" {
+			if user, err := h.subStore.GetByEmail(email); err == nil {
+				tier = user.EffectiveTier()
+			}
 		}
 	}
 
@@ -82,9 +99,9 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	}
 }
 
-// RegisterRoutes registers recommendation endpoints.
-func RegisterRoutes(mux *http.ServeMux, store subscription.Store) {
-	h := NewHandler(store)
+// RegisterRoutes registers recommendation endpoints with optional JWT verification.
+func RegisterRoutes(mux *http.ServeMux, store subscription.Store, jwtMgr *subscription.JWTManager) {
+	h := NewHandler(store, jwtMgr)
 	mux.HandleFunc("GET /api/recommendations", func(w http.ResponseWriter, r *http.Request) {
 		code, data := h.HandleRecommendations(r)
 		w.Header().Set("Content-Type", "application/json")

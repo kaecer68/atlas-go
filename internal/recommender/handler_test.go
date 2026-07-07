@@ -17,7 +17,7 @@ func TestHandleRecommendations(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	h := NewHandler(*store)
+	h := NewHandler(*store, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	code, data := h.HandleRecommendations(req)
@@ -36,7 +36,7 @@ func TestHandleLoggedInUser(t *testing.T) {
 
 	store, _ := subscription.NewStore(dir)
 	store.Register("premium@test.com", "pass")
-	h := NewHandler(*store)
+	h := NewHandler(*store, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	req.Header.Set("X-User-Email", "premium@test.com")

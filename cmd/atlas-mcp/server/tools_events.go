@@ -22,7 +22,9 @@ func registerEventTools(mcpSrv *mcp.Server, s *server) {
 
 func (s *server) handleEventCalendar(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
 	var out map[string]any
-	if err := s.cli.Get(ctx, "/api/events/calendar", nil, &out); err != nil {
+	if err := s.withAudit(ctx, "event_calendar", nil, func() error {
+		return s.cli.Get(ctx, "/api/events/calendar", nil, &out)
+	}); err != nil {
 		return nil, nil, err
 	}
 	return nil, out, nil
@@ -30,7 +32,9 @@ func (s *server) handleEventCalendar(ctx context.Context, _ *mcp.CallToolRequest
 
 func (s *server) handleEventFlowPrediction(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
 	var out map[string]any
-	if err := s.cli.Get(ctx, "/api/events/prediction", nil, &out); err != nil {
+	if err := s.withAudit(ctx, "event_flow_prediction", nil, func() error {
+		return s.cli.Get(ctx, "/api/events/prediction", nil, &out)
+	}); err != nil {
 		return nil, nil, err
 	}
 	return nil, out, nil
