@@ -1,0 +1,114 @@
+package server
+
+import (
+	"context"
+	"testing"
+)
+
+func TestHandleStockGetQuote(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"symbol":"2330","last":680}`)
+	_, out, err := s.handleStockGetQuote(context.Background(), nil, stockSymbolInput{Symbol: "2330"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/stock/quote" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if rec.query.Get("symbol") != "2330" {
+		t.Fatalf("symbol=%s", rec.query.Get("symbol"))
+	}
+	if out.Result == nil {
+		t.Fatal("expected result")
+	}
+}
+
+func TestHandleStockGetQuoteMissingSymbol(t *testing.T) {
+	s, _, done := newTestHarness(t)
+	defer done()
+	_, _, err := s.handleStockGetQuote(context.Background(), nil, stockSymbolInput{})
+	if err == nil {
+		t.Fatal("expected error for missing symbol")
+	}
+}
+
+func TestHandleStockGetFundamentals(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"PE":25,"PB":6}`)
+	_, out, err := s.handleStockGetFundamentals(context.Background(), nil, stockSymbolInput{Symbol: "2330"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/stock/fundamentals" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if out.Result == nil {
+		t.Fatal("expected result")
+	}
+}
+
+func TestHandleStockGetChips(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"symbol":"2330","foreign_investor_net":100}`)
+	_, out, err := s.handleStockGetChips(context.Background(), nil, stockChipsInput{Symbol: "2330", Date: "20260701"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/stock/chips" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if rec.query.Get("date") != "20260701" {
+		t.Fatalf("date=%s", rec.query.Get("date"))
+	}
+	if out.Result == nil {
+		t.Fatal("expected result")
+	}
+}
+
+func TestHandleStockGetTechnical(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"close":690,"sma20":680}`)
+	_, out, err := s.handleStockGetTechnical(context.Background(), nil, stockTechnicalInput{Symbol: "2330", Days: 30})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/stock/technical" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if rec.query.Get("days") != "30" {
+		t.Fatalf("days=%s", rec.query.Get("days"))
+	}
+	if out.Result == nil {
+		t.Fatal("expected result")
+	}
+}
+
+func TestHandleStockGetTechnicalDefaults(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{}`)
+	_, _, err := s.handleStockGetTechnical(context.Background(), nil, stockTechnicalInput{Symbol: "2330", Days: 0})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.query.Get("days") != "90" {
+		t.Fatalf("expected default days=90, got %s", rec.query.Get("days"))
+	}
+}
+
+func TestHandleStockGetTechnicalClamped(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{}`)
+	_, _, err := s.handleStockGetTechnical(context.Background(), nil, stockTechnicalInput{Symbol: "2330", Days: 9999})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.query.Get("days") != "365" {
+		t.Fatalf("expected clamped days=365, got %s", rec.query.Get("days"))
+	}
+}
