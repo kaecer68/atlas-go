@@ -408,20 +408,28 @@ function renderMarketPulse(macro, stress) {
     metricCard({ label: '散戶情緒', value: retailText, tone: retailChange === null ? 'neutral' : retailChange >= 0 ? 'positive' : 'negative', tooltip: '散戶融資餘額變化 — 偏多表示融資增加（槓桿意願高），偏空表示融資減少。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
   ];
 
+  // Progressive disclosure lazy-render: collapsed state only emits the 5
+  // core cards; the 7 advanced cards are appended on first expand.
+  const advancedCards = cards.filter(c => c.includes('disclosure-tier-advanced'));
+  const coreCards = cards.filter(c => c.includes('disclosure-tier-core'));
+
   if (grid) {
     const initialState = getDisclosureState('market-pulse', 'collapsed');
     grid.setAttribute('data-disclosure-state', initialState);
-    // TODO(lazy-load): 目前 11 張卡一次 render; collapsed 狀態 CSS 隱藏 6 張進階卡
-    // 但 data 已 fetch 進來。等後端 /api/macro/snapshot 支援 fields=core 過濾後,
-    // 改為 collapsed 只 render 5 張,展開時再 fetch advanced 資料 (見 disclosure-state.js header)。
-    grid.innerHTML = cards.join('');
-    bindMarketPulseDisclosure();
+    // TODO(api-lazy-fetch): collapsed 狀態目前仍計算全部 12 張 metricCard 物件,
+    // 只是不寫入 DOM;真正的 API lazy-fetch 待 /api/macro/snapshot 支援 fields
+    // 過濾後,改為 collapsed 只 evaluate coreCards、展開時再 evaluate advanced。
+    grid.innerHTML = (initialState === 'expanded'
+      ? coreCards.concat(advancedCards)
+      : coreCards
+    ).join('');
+    bindMarketPulseDisclosure(advancedCards.join(''));
   }
 }
 
 let _marketPulseDisclosureBound = false;
 
-function bindMarketPulseDisclosure() {
+function bindMarketPulseDisclosure(advancedCardsHTML) {
   if (_marketPulseDisclosureBound) return;
   const btn = document.getElementById('market-pulse-toggle');
   const grid = document.getElementById('home-market-grid');
@@ -436,12 +444,12 @@ function bindMarketPulseDisclosure() {
     if (state === 'expanded') {
       if (labelEl) labelEl.textContent = '收合進階指標';
       if (iconEl) iconEl.textContent = '▲';
-      btn.setAttribute('aria-label', '收合 6 張進階指標');
-      if (statusEl) statusEl.textContent = '已展開 6 張進階指標';
+      btn.setAttribute('aria-label', '收合 7 張進階指標');
+      if (statusEl) statusEl.textContent = '已展開 7 張進階指標';
     } else {
       if (labelEl) labelEl.textContent = '展開進階指標';
       if (iconEl) iconEl.textContent = '▼';
-      btn.setAttribute('aria-label', '展開 6 張進階指標');
+      btn.setAttribute('aria-label', '展開 7 張進階指標');
       if (statusEl) statusEl.textContent = '';
     }
   };
@@ -454,6 +462,13 @@ function bindMarketPulseDisclosure() {
     grid.setAttribute('data-disclosure-state', next);
     setDisclosureState('market-pulse', next);
     updateButton(next);
+    if (next === 'expanded') {
+      if (!grid.querySelector('.disclosure-tier-advanced') && advancedCardsHTML) {
+        grid.insertAdjacentHTML('beforeend', advancedCardsHTML);
+      }
+    } else {
+      grid.querySelectorAll('.disclosure-tier-advanced').forEach(el => el.remove());
+    }
   });
 }
 
