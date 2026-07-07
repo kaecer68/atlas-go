@@ -130,13 +130,6 @@ export interface AlertThreshold {
   max_unacknowledged_alerts: number;
 }
 
-export interface Anomaly {
-  type: string;
-  description: string;
-  severity: number;
-  symbols: string[];
-}
-
 export interface AsymmetricRiskConfig {
   bad_news_threshold: number;
   good_news_threshold: number;
@@ -440,15 +433,6 @@ export interface ConfidenceSignalConfig {
   trend_up_multiplier: number;
   trend_down_multiplier: number;
   threshold_range_fallback: number;
-}
-
-export interface ConsensusPrediction {
-  symbol: string;
-  bullish_count: number;
-  bearish_count: number;
-  neutral_count: number;
-  average_confidence: number;
-  consensus_direction: string;
 }
 
 export interface ConvictionBreakdown {
