@@ -240,4 +240,4 @@
 
 *文件版本: 1.0*
 *最後更新: 2026-06-05*
-*對應計畫書: docs/superpowers/plans/2026-06-05-rolling-calibration-framework.md（可刪除）*
+*對應計畫書：原 `docs/superpowers/plans/2026-06-05-rolling-calibration-framework.md` 已在 PR #756 清理並萃取內容後刪除。*
