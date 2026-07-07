@@ -63,7 +63,7 @@ AGENTS.md 高頻陷阱已明確指出兩個前端問題：
 ### 3.6 文件更新
 
 - `client_web/AGENTS.md`：更新已知陷阱與欄位合約
-- `docs/superpowers/plans/2026-07-07-wave11-phase3-frontend-contract.md`（本文件）
+- `docs/plans/2026-07-07-wave11-phase3-frontend-contract.md`（本文件）
 
 ## 驗收標準
 
