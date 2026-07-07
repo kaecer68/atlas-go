@@ -140,11 +140,13 @@
       <div class="panel wide mb-sm" style="padding:10px var(--space-md);"><h2 style="margin-bottom:4px;">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading" style="padding:4px 0;">載入中…</div></div>
       <div class="live-grid">
         <div class="panel panel--compact"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
+        <div class="panel panel--compact"><h2>市場廣度 / 半導體景氣</h2><div id="semiconductorSentiment" class="empty loading">載入中…</div></div>
         <div class="panel panel--compact"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
       </div>
       <div class="panel wide" id="riskCardsPanel" style="display:none;">
         <h2>風險指標</h2>
         <div id="riskCards" class="kpi-grid"></div>
+        <div id="drawdownPanel" class="empty loading" style="margin-top:12px">載入中…</div>
         <div id="riskPositionConcentration"></div>
         <div id="riskSectorDistribution"></div>
       </div>
@@ -176,6 +178,7 @@
         </div>
         <div class="inbox-grid" id="experimentInbox">載入中…</div>
       </div>
+      <div class="panel wide"><h2>預測命中追蹤</h2><div id="forecastVsRealitySummary" class="empty loading">載入中…</div></div>
       <div class="panel wide"><h2>晉升歷史</h2><div id="experimentHistory" class="empty loading">載入中…</div></div>
     </div>
 
@@ -194,6 +197,8 @@
         <div id="backtestStatusDetail" class="mt-8 text-12-muted"></div>
       </div>
       <div class="panel wide"><h2>回測報告</h2><div id="backtestReport" class="empty loading">載入中…</div></div>
+      <div class="panel wide"><h2>回測信號</h2><div id="backtestSignals" class="empty loading">載入中…</div></div>
+      <div class="panel wide"><h2>預測 vs 實際</h2><div id="forecastVsRealityTable" class="empty loading">載入中…</div></div>
     </div>
 
 

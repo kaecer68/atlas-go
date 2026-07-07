@@ -251,13 +251,21 @@ async function loadPageData(pageId) {
   if (pageId === 'experiments') {
     try {
       var inbox = await silentGetJSON('/api/dashboard/experiment-inbox');
+      var fvrExp = await silentGetJSON('/api/dashboard/forecast-vs-reality');
       if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
       if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
       if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
+      if (m.experiments.renderForecastVsRealitySummary) m.experiments.renderForecastVsRealitySummary(fvrExp);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'reports') {
-    try { if (m.back.renderBacktestReport) m.back.renderBacktestReport(); } catch(e) { console.error(e); }
+    try {
+      var signals = await silentGetJSON('/api/backtest/signals');
+      var fvrReport = await silentGetJSON('/api/dashboard/forecast-vs-reality');
+      if (m.back.renderBacktestReport) m.back.renderBacktestReport();
+      if (m.back.renderBacktestSignals) m.back.renderBacktestSignals(signals);
+      if (m.back.renderForecastVsRealityTable) m.back.renderForecastVsRealityTable(fvrReport);
+    } catch(e) { console.error(e); }
   }
   else if (pageId === 'datachannels') {
     try {
@@ -283,6 +291,9 @@ async function loadPageData(pageId) {
         getJSONWithTimeout('/api/narrative/models'),
         getJSONWithTimeout('/api/dashboard/capital-phase'),
         getJSONWithTimeout('/api/dashboard/risk-calibration'),
+        getJSONWithTimeout('/api/macro/snapshot/latest'),
+        getJSONWithTimeout('/api/dashboard/industry-cycle?industry=semiconductor'),
+        getJSONWithTimeout('/api/dashboard/drawdown'),
       ]);
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
       if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
@@ -290,6 +301,8 @@ async function loadPageData(pageId) {
       if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
       if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
       if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
+      if (m.risk.renderSemiconductorSentiment) m.risk.renderSemiconductorSentiment(liveResults[10], liveResults[11]);
+      if (m.risk.renderDrawdownPanel) m.risk.renderDrawdownPanel(liveResults[12]);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'parameters') {
