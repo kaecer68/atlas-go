@@ -6,8 +6,7 @@
 
 ## 🌐 語言強制
 
-**所有 AI 回覆必須使用繁體中文**。除非使用者明確要求使用英文，否則禁止使用英文回應。
-> 此規則亦載於 `CLAUDE.md`、`.github/copilot-instructions.md`。
+**所有 AI 回覆必須使用繁體中文**；除非使用者明確要求使用英文，否則禁止使用英文回應（亦載於 `CLAUDE.md`、`.github/copilot-instructions.md`）。
 
 ## 版本資訊
 
@@ -108,10 +107,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
 | Onboarding | `docs/AGENT_ONBOARDING.md` | 5 分鐘上手 |
 
-**P0 狀態**：PROCESSES.yaml + AGENTS.md 本章節已補齊。  
-**P0 補遺（2026-07-03）**：增加 2 個 atlas-mcp-* skill、`cmd/atlas-mcp/server/AGENTS.md` 模組陷阱、`cmd/atlas-mcp/README.md` 全面更新、`AGENT_TOOLS.md` 補完至 84 tool 並加入 task→tool 反向索引。  
-**P1 殘留**：SSE/streamable-HTTP transport wiring；audit log retention。  
-**P2 殘留**：binary merge、retention period、license、WebSocket 決策。
+**狀態**：P0 已完成（PROCESSES.yaml + AGENTS.md 本章節）；P0 補遺（2026-07-03）增加 2 個 atlas-mcp-* skill、MCP 模組陷阱、README 更新、AGENT_TOOLS 補完；P1 殘留：SSE/streamable-HTTP transport、audit log retention；P2 殘留：binary merge、retention period、license、WebSocket。
 
 ## ⚠️ 高頻陷阱速查
 

@@ -252,6 +252,16 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ## 動作紀錄
 
+### 2026-07-08 docs audit follow-up（本次）
+
+- **觸發**:2026-07-07 governance fix 遺留中輕度問題：數個 `docs/` 子目錄未在 STANDARD/MAP 定義用途、`docs/operations/*-execution-plan.md` 命名與內容性質不符、`AGENTS.md` 行數觸發警告線。
+
+- **修正內容**:
+  - `docs/DOCUMENTATION_STANDARD.md`: 在 `docs/` 子目錄結構與文件歸屬對照表中正式納入 `INCIDENTS/`、`modules/`、`research/`、`spikes/`、`operations/`，並說明其用途與命名規範。
+  - frontend-refactor-recovery execution plan 重新命名為 `docs/operations/frontend-refactor-recovery-verification-report.md`（內容為 post-verification 報告）。
+  - v2-alert-redesign execution plan 重新命名為 `docs/operations/v2-alert-redesign-verification-report.md`（內容為 post-verification 報告）。
+  - `AGENTS.md`: 精簡文件路由表格，將部分指引改以參考連結呈現，行數從 157 降至 154 以下。
+
 ### 2026-07-08 docs/superpowers/ 殘留清理（本次）
 
 - **觸發**:PR #984 merge 後發現 `docs/superpowers/` 仍有 2 個檔案，來自 commit `24d1d67e`（atlas-mcp stock/capitalflow/strategy ranker tools），該目錄本應在 2026-07-03 cleanup 移除。
@@ -275,7 +285,7 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
   - `docs/archive/ui_optimization_plan.md`: 將對原始 UI 修復計畫書的引用標註為歷史路徑。
   - Phase 3.5 runbook stub: 因內容為 DRAFT/placeholder，從 `docs/operations/` 移動至 `.omo/plans/phase3-5-runbook-stub.md`（gitignored 工作區文件）。
 
-- **審計發現（中輕度問題留待後續 PR）**: `docs/modules/`、`docs/research/`、`docs/spikes/`、`docs/INCIDENTS/` 未在 STANDARD/MAP 定義用途；`docs/operations/*-execution-plan.md` 命名與內容性質（post-verification 報告）不符；`AGENTS.md` 157 行已觸發 155 行警告線。
+- **審計發現（中輕度問題，2026-07-08 follow-up PR 已處理）**: `docs/modules/`、`docs/research/`、`docs/spikes/`、`docs/INCIDENTS/` 未在 STANDARD/MAP 定義用途；`docs/operations/*-execution-plan.md` 命名與內容性質不符；`AGENTS.md` 157 行觸發警告線。
 
 ### 2026-07-03 docs cleanup（本次）
 
