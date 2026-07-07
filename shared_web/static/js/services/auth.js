@@ -50,9 +50,14 @@ export async function register(email, password) {
 }
 
 /**
- * Logout: clear local state. The HttpOnly cookie is cleared by the server if needed.
+ * Logout: clear local state and ask the server to clear the HttpOnly cookie.
  */
-export function logout() {
+export async function logout() {
+  try {
+    await postJSON('/api/auth/logout', {});
+  } catch (e) {
+    // Best-effort server cookie clear; local state is cleared regardless.
+  }
   _token = null;
   _claims = null;
   _authValid = false;
