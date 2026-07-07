@@ -62,11 +62,12 @@ func main() {
 	industryDir := findIndustryDir(rootDir)
 	narrativeDir := findNarrativeDir(rootDir)
 	fubonDir := findFubonDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" {
+	capitalflowDir := findCapitalFlowDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir} {
 			if d == "" {
 				continue
 			}
@@ -137,6 +138,16 @@ func main() {
 			for k, v := range fubonStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and fubonproxy; using fubonproxy version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge capitalflow structs (e.g. ForceScore, ResonanceResult, CapitalFlowReport).
+		if capitalflowDir != "" {
+			cfStructs := parseStructsWithNames(capitalflowDir, allNames)
+			for k, v := range cfStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and capitalflow; using capitalflow version\n", k)
 				}
 				structs[k] = v
 			}
@@ -225,6 +236,14 @@ func findNarrativeDir(rootDir string) string {
 
 func findFubonDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "fubonproxy")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findCapitalFlowDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "capitalflow")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}

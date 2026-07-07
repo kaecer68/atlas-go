@@ -653,6 +653,15 @@ export interface DailyBar {
   source: string;
 }
 
+export interface DailyReport {
+  date: string;
+  forces: string[];
+  resonance: string;
+  quality_score: number;
+  quality_label: string;
+  summary: string;
+}
+
 export interface DailySummaryReport {
   date: string;
   sections: string[];
@@ -1244,6 +1253,13 @@ export interface FinancialsExecutorParameters {
   capital_adequacy_boost: string;
   price_to_open_threshold: string;
   price_to_high_threshold: string;
+}
+
+export interface ForceScore {
+  force: string;
+  raw_value: number;
+  z_score: number;
+  trend: string;
 }
 
 export interface ForecastVsRealityItem {
@@ -2648,6 +2664,13 @@ export interface ReportingParameters {
   sharpe_min_samples: string;
 }
 
+export interface ResonanceResult {
+  coefficient: number;
+  aligned: string[];
+  opposing?: string[];
+  direction: string;
+}
+
 export interface RetailSentimentResponse {
   sentiment_score: number;
   margin_change_pct: number;
@@ -3220,6 +3243,15 @@ export interface StructuralTrendConfig {
   cowos_utilization_threshold: number;
   capex_growth_threshold: number;
   semiconductor_index_threshold: number;
+}
+
+export interface SummaryReport {
+  date: string;
+  quality_score: number;
+  quality_label: string;
+  resonance_dir: string;
+  dominant_force: string;
+  summary: string;
 }
 
 export interface SupplyChainNode {
