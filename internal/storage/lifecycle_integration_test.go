@@ -130,14 +130,15 @@ func TestStorageCleanupIntegration(t *testing.T) {
 	}
 
 	// Verify report: 5 old files deleted, 5 new files + 1 excluded = 6 kept.
+	// Two additional trace policies report empty because no traces dir is seeded.
 	if report.TotalDeleted != 5 {
 		t.Fatalf("expected 5 deleted, got %d", report.TotalDeleted)
 	}
 	if report.TotalKept != 6 {
 		t.Fatalf("expected 6 kept, got %d", report.TotalKept)
 	}
-	if len(report.Policies) != 5 {
-		t.Fatalf("expected 5 policy reports, got %d", len(report.Policies))
+	if len(report.Policies) != 7 {
+		t.Fatalf("expected 7 policy reports, got %d", len(report.Policies))
 	}
 
 	// Step 5: Verify actual filesystem state.
