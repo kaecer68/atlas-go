@@ -20,5 +20,5 @@
 //   - GET /api/capital-flow/daily — daily capital flow report
 //   - GET /api/capital-flow/summary — capital flow summary
 //
-// Maturity: experimental (X-tier)
+// Maturity: experimental
 package capitalflow
