@@ -137,6 +137,15 @@ export interface AsymmetricRiskConfig {
   volume_spike_multiplier: number;
 }
 
+export interface BacktestSignalsResponse {
+  active_signals: string[];
+  var_95: number;
+  var_99: number;
+  sharpe_short: number;
+  sharpe_long: number;
+  drawdown_pct: number;
+}
+
 export interface BacktestWindowSummary {
   window_id: string;
   start_date: string;
@@ -884,6 +893,15 @@ export interface DrawdownParameters {
   sector_constraints_risk_off: string;
   sector_constraints_carry_trade_unwind: string;
   sector_constraints_sector_rotation: string;
+}
+
+export interface DrawdownResponse {
+  status?: string;
+  message?: string;
+  generated: string;
+  max_drawdown?: number;
+  var_95?: number;
+  worst_path?: number[];
 }
 
 export interface DynamicEnvConfig {
