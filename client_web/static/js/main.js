@@ -12,6 +12,7 @@ import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
+import { initAuth, isLoggedIn, invalidateAuth } from './services/auth.js';
 import './modals/modal.js';
 import { injectSharedHead } from './shared/head-config.js';
 injectSharedHead();
@@ -26,7 +27,10 @@ const SHELL_LOADERS = {
   evolution_panel: () => import('./page-shells/evolution_panel.js'),
   industry: () => import('./page-shells/industry.js'),
   'performance-report': () => import('./page-shells/performance-report.js'),
-  strategies: () => import('./page-shells/strategies.js')
+  strategies: () => import('./page-shells/strategies.js'),
+  login: () => import('./page-shells/login.js'),
+  register: () => import('./page-shells/register.js'),
+  premium: () => import('./page-shells/premium.js')
 };
 const _shellsLoaded = new Set();
 
@@ -71,7 +75,8 @@ export async function switchPage(id, silent) {
     crossmarket: '美台連動', industry: '產業地圖',
     pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
-    evolution_panel: '策略演化', strategies: '投資心法'
+    evolution_panel: '策略演化', strategies: '投資心法',
+    login: '登入', register: '註冊', premium: '升級 Premium'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -468,7 +473,25 @@ if (typeof window !== 'undefined') {
   initBacktestDates();
   startAutoRefresh();
   initEventStream();
-  (async () => {
+
+  // Auth: check JWT validity before loading data; wrap fetch for 401 detection
+  const _origFetch = window.fetch;
+  window.fetch = function(url, opts) {
+    return _origFetch(url, opts).then(function(res) {
+      if (res.status === 401) {
+        invalidateAuth();
+        var currentPage = window.location.pathname.replace(/^\/client\/?/, '') || 'home';
+        if (currentPage !== 'login' && currentPage !== 'register') {
+          console.warn('[auth] 401 detected, redirecting to login');
+          window.switchPage('login');
+        }
+      }
+      return res;
+    });
+  };
+
+  initAuth().then(function() {
+    (async () => {
     loadAll().catch(e => console.warn('[init] loadAll failed:', e));
     var initialPath = window.location.pathname
       .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
@@ -490,6 +513,7 @@ if (typeof window !== 'undefined') {
       switchPage('evolution_panel', true);
     }
   })();
+  });
 }
 
 function initEventStream() {

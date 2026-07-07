@@ -48,7 +48,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/client`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "home,crossmarket,industry,narrative,pipeline,portfolio,strategies")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,crossmarket,industry,narrative,pipeline,portfolio,strategies,login,register,premium")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -61,6 +61,9 @@ const PAGE_SELECTORS = {
   pipeline: "#page-pipeline",
   portfolio: "#page-portfolio",
   strategies: "#page-strategies",
+  login: "#page-login",
+  register: "#page-register",
+  premium: "#page-premium",
 };
 
 // 真正會造成 bug 的字串 pattern：浮點數 / 型別錯誤
