@@ -1,6 +1,6 @@
 # Atlas Agent Tools — 實戰指南
 
-> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 83 個 tool，實際數量依 MCP server config 而定：基礎 81 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
+> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 86 個 tool，實際數量依 MCP server config 而定：基礎 84 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **整合到 Claude Desktop / OpenClaw / Hermes**：[`mcp-integration-guide.md`](./mcp-integration-guide.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
@@ -42,7 +42,7 @@
 
 ---
 
-## 完整工具 Catalog（約 83 個 tool，Phase 2.2 全部上線）
+## 完整工具 Catalog（約 86 個 tool，Phase 2 全部上線）
 
 ### Regime（1 個）
 | Tool | 用途 |
@@ -58,6 +58,12 @@
 | `macro_get_stress_index_history` | Stress index 歷史 |
 | `macro_get_capital_flow_latest` | 外資/法人/散戶資金流 snapshot |
 | `macro_get_ingest_status` | 通道 ingest 狀態 |
+
+### Capital Flow（2 個）
+| Tool | 用途 |
+|------|------|
+| `capital_flow_daily` | 台股每日七大資金勢力分解 + 共振強度 |
+| `capital_flow_summary` | 資金流向摘要（適合晨報） |
 
 ### Crossmarket（3 個）
 | Tool | 用途 |
@@ -76,6 +82,12 @@
 | `narrative_get_seasonal` | 季節性敘事 |
 | `narrative_get_bundle` | 編譯好的 briefing bundle |
 | `narrative_stress_index_thresholds` | Stress index 門檻值 |
+
+### Events（2 個）
+| Tool | 用途 |
+|------|------|
+| `event_calendar` | 近期市場事件日曆（營收、ETF 換股、MSCI、休市） |
+| `event_flow_prediction` | 未來 5 天事件驅動資金流預測 |
 
 ### Risk（5 個）
 | Tool | 用途 |
@@ -102,6 +114,11 @@
 | `strategy_get` | 單筆策略 |
 | `strategy_get_attribution` | 績效歸因 |
 | `strategy_get_summary` | 策略摘要 |
+
+### Recommendation（1 個）
+| Tool | 用途 |
+|------|------|
+| `get_recommendations` | 依訂閱層級回傳市場 overview、活躍策略與排序建議 |
 
 ### Experiment（3 個：1 Phase 1 + 2 Phase 2.2）
 | Tool | 用途 |
@@ -180,6 +197,12 @@
 | `report_get_tax_snapshot` | 稅務 snapshot |
 | `report_get_export_link` | 匯出連結（短 TTL）|
 
+### Briefing（2 個）
+| Tool | 用途 |
+|------|------|
+| `mcp_quickstart` | 一站式市場速覽：macro snapshot、活躍策略、壓力指數、事件、資金流向 |
+| `daily_report` | 最新每日市場報告（JSON + Markdown） |
+
 ### MCP Audit / Observability（6 個 — agent 自我觀測）
 
 | Tool | 用途 |
@@ -190,12 +213,6 @@
 | `mcp_get_top_slow_tools` | 最慢的 N 個 tool（延遲排行） |
 | `mcp_anomaly_get_recent` | 近期異常事件（error spike、延遲飆升） |
 | `mcp_anomaly_ack` | 標記異常為已確認 |
-| `event_calendar` | 近期市場事件日曆（營收、ETF換股、MSCI） |
-| `event_flow_prediction` | 未來 5 天事件驅動資金流預測（+ ETF 規模×權重預估） |
-| `capital_flow_daily` | 七大資金勢力 Z-score 分解 + 共振強度（多/空） |
-| `capital_flow_summary` | 資金流向摘要（品質分數 + 共振 + 主力方向） |
-| `mcp_quickstart` | 一站式開機摘要：同時回傳 macro、策略排名、壓力指數、事件、資金流向 |
-| `daily_report` | 最新每日市場報告（JSON + Markdown） |
 
 > 這些 tool 屬於 atlas-mcp 的自我觀測層，供 agent 了解自己的呼叫模式與系統健康。
 

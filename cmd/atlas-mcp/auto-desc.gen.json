@@ -27,6 +27,20 @@
       "type": "object"
     }
   },
+  "capital_flow_daily": {
+    "name": "capital_flow_daily",
+    "description": "Full daily Taiwan stock market capital flow report: foreign, proprietary, public bank, retail and other forces with resonance score and direction.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "capital_flow_summary": {
+    "name": "capital_flow_summary",
+    "description": "Condensed capital flow summary suitable for a quick Taiwan market briefing.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
   "control_approve_recommendation": {
     "name": "control_approve_recommendation",
     "description": "Status of an approve-recommendation override (read-only state inspection; actual approval is admin-only).",
@@ -170,6 +184,13 @@
       "required": [
         "experiment_id"
       ],
+      "type": "object"
+    }
+  },
+  "get_recommendations": {
+    "name": "get_recommendations",
+    "description": "Tier-appropriate investment recommendations: market light, active strategy and ranked suggestions based on the caller's subscription tier.",
+    "inputSchema": {
       "type": "object"
     }
   },

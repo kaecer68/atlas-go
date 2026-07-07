@@ -2600,6 +2600,14 @@ export interface PremarketData {
   stress_index?: Record<string, string>;
 }
 
+export interface ProfileResponse {
+  user: User | null;
+  email: string;
+  tier: string;
+  effective_tier: string;
+  trial_end: string;
+}
+
 export interface PromptControl {
   volume_floor?: number;
   volume_downgrade?: number;

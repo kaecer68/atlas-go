@@ -32,6 +32,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /api/auth/register", h.handleRegister)
 	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
+	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
 	mux.Handle("GET /api/user/profile", mid.Wrap(http.HandlerFunc(h.handleProfile)))
 	mux.Handle("GET /api/user/subscription", mid.Wrap(http.HandlerFunc(h.handleSubscription)))
 }
@@ -97,6 +98,22 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	//nolint:gosec // local dev without HTTPS; Secure flag is environment-dependent
+	c := &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	}
+	http.SetCookie(w, c)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
 func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 	claims := GetClaims(r)
 	if claims == nil {
@@ -108,9 +125,12 @@ func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user lookup failed"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"user":           user,
-		"effective_tier": user.EffectiveTier(),
+	writeJSON(w, http.StatusOK, ProfileResponse{
+		User:          user,
+		Email:         user.Email,
+		Tier:          user.Tier,
+		EffectiveTier: user.EffectiveTier(),
+		TrialEnd:      user.TrialEnd,
 	})
 }
 
