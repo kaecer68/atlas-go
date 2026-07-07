@@ -653,15 +653,6 @@ export interface DailyBar {
   source: string;
 }
 
-export interface DailyReport {
-  date: string;
-  forces: string[];
-  resonance: string;
-  quality_score: number;
-  quality_label: string;
-  summary: string;
-}
-
 export interface DailySummaryReport {
   date: string;
   sections: string[];
@@ -879,6 +870,16 @@ export interface DynamicEnvConfig {
   jpy_carry_dxy_threshold: number;
 }
 
+export interface ETFEstimate {
+  etf_name: string;
+  stock_symbol: string;
+  stock_name: string;
+  direction: string;
+  est_weight: number;
+  etf_aum: number;
+  est_flow: number;
+}
+
 export interface EarningsQualityExecutorParameters {
   repeatable_boost: string;
   guidance_penalty: string;
@@ -966,6 +967,17 @@ export interface EventBlock {
   today: NarrativeEvent[];
   recent: NarrativeEvent[];
   premarket?: string | null;
+}
+
+export interface EventCalendarItem {
+  name: string;
+  event_type: string;
+  direction: string;
+  start_date: string;
+  end_date: string;
+  affected_industries?: string[];
+  expected_flow_impact: string;
+  confidence: number;
 }
 
 export interface EventCalendarRule {
@@ -1255,11 +1267,12 @@ export interface FinancialsExecutorParameters {
   price_to_high_threshold: string;
 }
 
-export interface ForceScore {
-  force: string;
-  raw_value: number;
-  z_score: number;
-  trend: string;
+export interface FlowPrediction {
+  date: string;
+  direction: string;
+  confidence: number;
+  driving_events: string[];
+  predicted_forces: string[];
 }
 
 export interface ForecastVsRealityItem {
@@ -2366,6 +2379,16 @@ export interface PreciousMetalsParameters {
   comex_default_net_long: string;
 }
 
+export interface PredictionReport {
+  generated_at: string;
+  window: string;
+  predictions: string[];
+  active_events: string[];
+  etf_estimates?: string[];
+  revenue_surprises?: string[];
+  summary: string;
+}
+
 export interface PremarketData {
   us_market: Record<string, string>;
   foreign_flow: Record<string, string>;
@@ -2664,13 +2687,6 @@ export interface ReportingParameters {
   sharpe_min_samples: string;
 }
 
-export interface ResonanceResult {
-  coefficient: number;
-  aligned: string[];
-  opposing?: string[];
-  direction: string;
-}
-
 export interface RetailSentimentResponse {
   sentiment_score: number;
   margin_change_pct: number;
@@ -2700,6 +2716,15 @@ export interface RetailSentimentSnapshot {
   etf_net_subscription?: number;
   composite_sentiment: number;
   sentiment_sub_indicators?: string | null;
+}
+
+export interface RevenueSurprise {
+  stock_symbol: string;
+  stock_name: string;
+  expected: number;
+  actual: number;
+  surprise_pct: number;
+  flow_impact: string;
 }
 
 export interface RiskEvent {
@@ -3243,15 +3268,6 @@ export interface StructuralTrendConfig {
   cowos_utilization_threshold: number;
   capex_growth_threshold: number;
   semiconductor_index_threshold: number;
-}
-
-export interface SummaryReport {
-  date: string;
-  quality_score: number;
-  quality_label: string;
-  resonance_dir: string;
-  dominant_force: string;
-  summary: string;
 }
 
 export interface SupplyChainNode {

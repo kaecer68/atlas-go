@@ -63,11 +63,12 @@ func main() {
 	narrativeDir := findNarrativeDir(rootDir)
 	fubonDir := findFubonDir(rootDir)
 	capitalflowDir := findCapitalFlowDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" {
+	eventdrivenDir := findEventDrivenDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" || eventdrivenDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir, eventdrivenDir} {
 			if d == "" {
 				continue
 			}
@@ -142,12 +143,12 @@ func main() {
 				structs[k] = v
 			}
 		}
-		// Merge capitalflow structs (e.g. ForceScore, ResonanceResult, CapitalFlowReport).
-		if capitalflowDir != "" {
-			cfStructs := parseStructsWithNames(capitalflowDir, allNames)
-			for k, v := range cfStructs {
+		// Merge eventdriven structs (e.g. EventCalendarItem, FlowPrediction, PredictionReport).
+		if eventdrivenDir != "" {
+			edStructs := parseStructsWithNames(eventdrivenDir, allNames)
+			for k, v := range edStructs {
 				if _, exists := structs[k]; exists {
-					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and capitalflow; using capitalflow version\n", k)
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and eventdriven; using eventdriven version\n", k)
 				}
 				structs[k] = v
 			}
@@ -244,6 +245,14 @@ func findFubonDir(rootDir string) string {
 
 func findCapitalFlowDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "capitalflow")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findEventDrivenDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "eventdriven")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
