@@ -1,6 +1,6 @@
 # Atlas Agent Tools — 實戰指南
 
-> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 79 個 tool，實際數量依 MCP server config 而定：基礎 77 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
+> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 83 個 tool，實際數量依 MCP server config 而定：基礎 81 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
 > **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [agent-mcp-server.md](specs/agent-mcp-server.md) §3。
@@ -41,7 +41,7 @@
 
 ---
 
-## 完整工具 Catalog（約 79 個 tool，Phase 2.2 全部上線）
+## 完整工具 Catalog（約 83 個 tool，Phase 2.2 全部上線）
 
 ### Regime（1 個）
 | Tool | 用途 |
@@ -189,6 +189,12 @@
 | `mcp_get_top_slow_tools` | 最慢的 N 個 tool（延遲排行） |
 | `mcp_anomaly_get_recent` | 近期異常事件（error spike、延遲飆升） |
 | `mcp_anomaly_ack` | 標記異常為已確認 |
+| `event_calendar` | 近期市場事件日曆（營收、ETF換股、MSCI） |
+| `event_flow_prediction` | 未來 5 天事件驅動資金流預測（+ ETF 規模×權重預估） |
+| `capital_flow_daily` | 七大資金勢力 Z-score 分解 + 共振強度（多/空） |
+| `capital_flow_summary` | 資金流向摘要（品質分數 + 共振 + 主力方向） |
+| `mcp_quickstart` | 一站式開機摘要：同時回傳 macro、策略排名、壓力指數、事件、資金流向 |
+| `daily_report` | 最新每日市場報告（JSON + Markdown） |
 
 > 這些 tool 屬於 atlas-mcp 的自我觀測層，供 agent 了解自己的呼叫模式與系統健康。
 

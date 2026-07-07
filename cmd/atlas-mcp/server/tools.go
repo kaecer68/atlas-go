@@ -34,6 +34,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerMacroTools(mcpSrv, s)
 	registerCrossmarketTools(mcpSrv, s)
 	registerNarrativeTools(mcpSrv, s)
+	registerEventTools(mcpSrv, s)
 	registerRiskAlertTools(mcpSrv, s)
 	registerStrategyTools(mcpSrv, s)
 	registerExperimentTools(mcpSrv, s)
@@ -48,6 +49,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerSamplingTools(mcpSrv, s)
 	registerRootsTools(mcpSrv, s)
 	registerElicitationTools(mcpSrv, s)
+	registerBriefingTools(mcpSrv, s)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",

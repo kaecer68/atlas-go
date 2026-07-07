@@ -24,10 +24,13 @@ import (
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
+	"github.com/kaecer68/atlas-go/internal/dailyreport"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -58,12 +61,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/realtime"
+	"github.com/kaecer68/atlas-go/internal/recommender"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/startup"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
+	"github.com/kaecer68/atlas-go/internal/subscription"
 )
 
 // appDeps is the central dependency-injection struct for run().
@@ -114,6 +119,10 @@ func isPublicPath(p string) bool {
 	case p == "/api/synergy" || strings.HasPrefix(p, "/api/synergy/"):
 		return true
 	case p == "/api/cross-market" || strings.HasPrefix(p, "/api/cross-market/"):
+		return true
+	case p == "/api/auth" || strings.HasPrefix(p, "/api/auth/"):
+		return true
+	case p == "/api/user" || strings.HasPrefix(p, "/api/user/"):
 		return true
 	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
 		return true
@@ -310,6 +319,8 @@ func run(args []string, deps appDeps) error {
 		janusEngine = janus.NewEngine()
 		janusEngine.EnsureAllRegimes()
 		janusEngine.Update()
+
+		eventCalendar := industry.NewEventCalendar()
 
 		// Initialize MaturityTracker for burn-in / calibrating / full-auto gating.
 		maturityTracker, _ := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
@@ -522,6 +533,34 @@ func run(args []string, deps appDeps) error {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
 			alertAPI.RegisterRoutes(mux)
 		}
+
+		if gatewayFetcher != nil {
+			macroProvider := monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
+			capitalflow.RegisterRoutes(mux, macroProvider)
+			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
+			eventdriven.RegisterRoutes(mux, eventCalendar)
+			log.Printf("[EventDriven] registered /api/events/* routes")
+		}
+
+		subStore, err := subscription.NewStore(cfg.WorkDir)
+		if err != nil {
+			log.Printf("[Subscription] store init failed: %v", err)
+		} else {
+			jwtSecret := config.GetSecret("ATLAS_JWT_SECRET")
+			if jwtSecret == "" {
+				jwtSecret = "atlas-dev-secret-change-in-prod"
+			}
+			jwtMgr := subscription.NewJWTManager(jwtSecret)
+			subHandler := subscription.NewHandler(subStore, jwtMgr)
+			subHandler.RegisterRoutes(mux)
+			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes")
+			recommender.RegisterRoutes(mux, *subStore, jwtMgr)
+			log.Printf("[Recommender] registered /api/recommendations route")
+		}
+
+		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
+		dailyreport.RegisterRoutes(mux, dailyRptGen)
+		log.Printf("[DailyReport] registered /api/reports/* routes")
 
 		alertWebhook := alerting.NewAlertWebhookHandler(1000)
 		mux.Handle("/api/v1/alerts", alertWebhook)

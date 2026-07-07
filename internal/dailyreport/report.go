@@ -1,0 +1,291 @@
+package dailyreport
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Report is a daily market report.
+type Report struct {
+	Date      string          `json:"date"`
+	Generated time.Time       `json:"generated_at"`
+	Global    GlobalOverview  `json:"global"`
+	Capital   CapitalSection  `json:"capital"`
+	Events    EventsSection   `json:"events"`
+	Strategy  StrategySection `json:"strategy"`
+	Risk      RiskSection     `json:"risk"`
+}
+
+type GlobalOverview struct {
+	BondYield string `json:"bond_yield"`
+	USDIndex  string `json:"usd_index"`
+	JPY       string `json:"jpy"`
+	VIX       string `json:"vix"`
+	Status    string `json:"status"`
+	Summary   string `json:"summary"`
+}
+
+type CapitalSection struct {
+	Foreign       string  `json:"foreign"`
+	Institutional string  `json:"institutional"`
+	Dealer        string  `json:"dealer"`
+	Government    string  `json:"government"`
+	Retail        string  `json:"retail"`
+	Resonance     float64 `json:"resonance"`
+	Quality       string  `json:"quality"`
+}
+
+type EventsSection struct {
+	Tomorrow []string `json:"tomorrow"`
+	ThisWeek []string `json:"this_week"`
+	Count    int      `json:"count"`
+}
+
+type StrategySection struct {
+	Active    string `json:"active_strategy"`
+	EntryCond string `json:"entry_condition"`
+	Direction string `json:"direction"`
+}
+
+type RiskSection struct {
+	StressIndex   float64 `json:"stress_index"`
+	DrawdownAlert bool    `json:"drawdown_alert"`
+	RiskLevel     string  `json:"risk_level"`
+	Warning       string  `json:"warning,omitempty"`
+}
+
+// ---------- Data providers ------------------------------------------------
+
+// MacroDataProvider feeds global macro snapshot data.
+type DataProvider interface {
+	FetchMacro() (GlobalOverview, error)
+	FetchCapital() (CapitalSection, error)
+	FetchEvents(now time.Time) (EventsSection, error)
+}
+
+// Generator produces daily reports.
+type Generator struct {
+	mu       sync.RWMutex
+	latest   *Report
+	archive  map[string]*Report
+	workDir  string
+	provider DataProvider
+}
+
+// NewGenerator creates a daily report generator.
+func NewGenerator(workDir string) *Generator {
+	return &Generator{
+		workDir:  workDir,
+		archive:  make(map[string]*Report),
+		provider: &defaultProvider{},
+	}
+}
+
+// SetProvider sets the data provider for live data.
+func (g *Generator) SetProvider(p DataProvider) {
+	g.provider = p
+}
+
+// Generate creates the day's report.
+func (g *Generator) Generate() *Report {
+	now := time.Now()
+	date := now.Format("2006-01-02")
+
+	global, _ := g.provider.FetchMacro()
+	capital, _ := g.provider.FetchCapital()
+	events, _ := g.provider.FetchEvents(now)
+
+	r := &Report{
+		Date:      date,
+		Generated: now,
+		Global:    global,
+		Capital:   capital,
+		Events:    events,
+		Strategy: StrategySection{
+			Active:    "all_weather",
+			EntryCond: "等待回測支撐區間",
+			Direction: "偏多",
+		},
+		Risk: RiskSection{
+			StressIndex:   0.3,
+			DrawdownAlert: false,
+			RiskLevel:     "moderate",
+		},
+	}
+
+	g.mu.Lock()
+	g.latest = r
+	g.archive[date] = r
+	g.mu.Unlock()
+
+	g.persist(r)
+	return r
+}
+
+// Markdown renders the report as Markdown.
+func (r *Report) Markdown() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# 台股每日市場報告 — %s\n\n", r.Date)
+	fmt.Fprintf(&b, "**生成時間**：%s\n\n", r.Generated.Format("2006-01-02 15:04:05"))
+
+	b.WriteString("## 一、全球資金總開關\n\n")
+	fmt.Fprintf(&b, "- 美債殖利率：%s\n", r.Global.BondYield)
+	fmt.Fprintf(&b, "- 美元指數：%s\n", r.Global.USDIndex)
+	fmt.Fprintf(&b, "- 日圓：%s\n", r.Global.JPY)
+	fmt.Fprintf(&b, "- VIX：%s\n", r.Global.VIX)
+	fmt.Fprintf(&b, "- 狀態：**%s**\n", r.Global.Status)
+	fmt.Fprintf(&b, "- %s\n\n", r.Global.Summary)
+
+	b.WriteString("## 二、台股資金流向\n\n")
+	fmt.Fprintf(&b, "- 外資：%s\n", r.Capital.Foreign)
+	fmt.Fprintf(&b, "- 投信：%s\n", r.Capital.Institutional)
+	fmt.Fprintf(&b, "- 自營商：%s\n", r.Capital.Dealer)
+	fmt.Fprintf(&b, "- 公股行庫：%s\n", r.Capital.Government)
+	fmt.Fprintf(&b, "- 散戶：%s\n", r.Capital.Retail)
+	fmt.Fprintf(&b, "- 共振強度：%.2f\n", r.Capital.Resonance)
+	fmt.Fprintf(&b, "- 資金品質：%s\n\n", r.Capital.Quality)
+
+	b.WriteString("## 三、事件日曆\n\n")
+	fmt.Fprintf(&b, "- 明天：%s\n", strings.Join(r.Events.Tomorrow, "、"))
+	fmt.Fprintf(&b, "- 本週：%s\n\n", strings.Join(r.Events.ThisWeek, "、"))
+
+	b.WriteString("## 四、策略訊號\n\n")
+	fmt.Fprintf(&b, "- 推薦策略：%s\n", r.Strategy.Active)
+	fmt.Fprintf(&b, "- 進場條件：%s\n", r.Strategy.EntryCond)
+	fmt.Fprintf(&b, "- 方向：%s\n\n", r.Strategy.Direction)
+
+	b.WriteString("## 五、風險提示\n\n")
+	fmt.Fprintf(&b, "- 壓力指數：%.2f\n", r.Risk.StressIndex)
+	fmt.Fprintf(&b, "- 風險等級：%s\n", r.Risk.RiskLevel)
+	if r.Risk.Warning != "" {
+		fmt.Fprintf(&b, "- ⚠️ %s\n", r.Risk.Warning)
+	}
+
+	return b.String()
+}
+
+// ---------- Default provider (hard-coded fallback) ------------------------
+
+type defaultProvider struct{}
+
+func (d *defaultProvider) FetchMacro() (GlobalOverview, error) {
+	return GlobalOverview{
+		BondYield: "4.25%", USDIndex: "104.5", JPY: "150.2", VIX: "14.3",
+		Status: "RISK_ON", Summary: "全球資金環境偏寬鬆，有利風險資產",
+	}, nil
+}
+
+func (d *defaultProvider) FetchCapital() (CapitalSection, error) {
+	return CapitalSection{
+		Foreign: "偏多", Institutional: "中性", Dealer: "偏多",
+		Government: "中性", Retail: "偏空",
+		Resonance: 1.0, Quality: "moderate_inflow",
+	}, nil
+}
+
+func (d *defaultProvider) FetchEvents(_ time.Time) (EventsSection, error) {
+	return EventsSection{Tomorrow: []string{"無重大事件"}, ThisWeek: []string{"月營收公告期"}, Count: 1}, nil
+}
+
+// ---------- Persist --------------------------------------------------------
+
+func (g *Generator) persist(r *Report) {
+	dir := filepath.Join(g.workDir, "data", "reports")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	path := filepath.Join(dir, r.Date+".json")
+	f, err := os.Create(path)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("[DailyReport] close persist file: %v", err)
+		}
+	}()
+	if err := json.NewEncoder(f).Encode(r); err != nil {
+		log.Printf("[DailyReport] encode persist: %v", err)
+	}
+}
+
+// Latest returns the most recent report.
+func (g *Generator) Latest() *Report {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.latest
+}
+
+// GetByDate returns a specific date's report.
+func (g *Generator) GetByDate(date string) *Report {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.archive[date]
+}
+
+// ---------- HTTP Handlers -------------------------------------------------
+
+type Handler struct {
+	gen *Generator
+}
+
+func NewHandler(gen *Generator) *Handler { return &Handler{gen: gen} }
+
+func (h *Handler) HandleLatest(w http.ResponseWriter, r *http.Request) {
+	rep := h.gen.Latest()
+	if rep == nil {
+		rep = h.gen.Generate()
+	}
+	format := r.URL.Query().Get("format")
+	w.Header().Set("Content-Type", "application/json")
+	if format == "markdown" {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		_, _ = w.Write([]byte(rep.Markdown()))
+		return
+	}
+	if err := json.NewEncoder(w).Encode(rep); err != nil {
+		log.Printf("[DailyReport] encode latest: %v", err)
+	}
+}
+
+func (h *Handler) HandleArchive(w http.ResponseWriter, r *http.Request) {
+	date := r.URL.Query().Get("date")
+	if date == "" {
+		http.Error(w, "?date=YYYY-MM-DD required", http.StatusBadRequest)
+		return
+	}
+	rep := h.gen.GetByDate(date)
+	if rep == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(rep); err != nil {
+		log.Printf("[DailyReport] encode archive: %v", err)
+	}
+}
+
+func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "subscribed"}); err != nil {
+		log.Printf("[DailyReport] encode subscribe: %v", err)
+	}
+}
+
+func RegisterRoutes(mux *http.ServeMux, gen *Generator) {
+	h := NewHandler(gen)
+	mux.HandleFunc("GET /api/reports/latest", h.HandleLatest)
+	mux.HandleFunc("GET /api/reports/archive", h.HandleArchive)
+	mux.HandleFunc("POST /api/reports/subscribe", h.HandleSubscribe)
+}

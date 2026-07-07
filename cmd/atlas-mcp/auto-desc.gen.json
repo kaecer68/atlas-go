@@ -76,6 +76,13 @@
       "type": "object"
     }
   },
+  "daily_report": {
+    "name": "daily_report",
+    "description": "回傳最新每日市場報告 JSON，含全球資金總開關、台股七大資金勢力分解與共振、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
   "data_get_channel_detail": {
     "name": "data_get_channel_detail",
     "description": "Detail for a single data channel by name (latency, error rate, last fetch).",
@@ -109,6 +116,20 @@
   "data_get_quality": {
     "name": "data_get_quality",
     "description": "Data quality metrics (gaps, stale symbols, completeness by source).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "event_calendar": {
+    "name": "event_calendar",
+    "description": "Upcoming Taiwan market events calendar (ETF rebalances, MSCI adjustments, revenue announcements, window dressing, holidays). 14-day forward look.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "event_flow_prediction": {
+    "name": "event_flow_prediction",
+    "description": "5-day event-driven capital flow prediction. Maps upcoming events (ETF rebalances, revenue, MSCI, etc.) to predicted capital flow directions by day with confidence scores.",
     "inputSchema": {
       "type": "object"
     }
@@ -350,6 +371,13 @@
         "limit",
         "window_minutes"
       ],
+      "type": "object"
+    }
+  },
+  "mcp_quickstart": {
+    "name": "mcp_quickstart",
+    "description": "一站式市場速覽：回傳最新宏觀快照、當前推薦策略、壓力指數與資金流向摘要、今日事件。外部 AI 首次接入時調用此 tool 即可取得完整操作脈絡，無需多次調用。",
+    "inputSchema": {
       "type": "object"
     }
   },

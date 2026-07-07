@@ -83,7 +83,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 13 packages
+## X · Experimental（實驗中）— 20 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -103,6 +103,13 @@
 | `llm/clients` | LLM Provider HTTP 客戶端 — DeepSeek V4、MiniMax M3 + 共享 `BaseClient`（retry / rate limit / circuit breaker） | `BaseClient`, `DeepSeekClient`, `MiniMaxClient`, `Message`, `ChatOptions`, `ChatResponse` | Phase 2 新增；MiniMax 附中國國家安全法資料主權警告 |
 | `llm/capabilities` | LLM 能力處理器 — 10 個 capability handler（failure_attribution + 9 個新），每個封裝 prompt template + schema-typed I/O + Router 呼叫 | `FailureAttributionHandler`, `RationaleGenerationHandler`, `StrategySummaryHandler`, `PromptLintHandler`, `ScenarioSimulationHandler`, `RiskSurfaceExtractionHandler`, `RegimeExplanationHandler`, `PerformanceForensicsHandler`, `CodeReviewAnnotationHandler`, `SentimentExplanationHandler` | Phase 2 從 1 個擴充至 10 個；Kimi K2.7 已移除（coding plan key 限制 CLI 工具，不可用於 app-level 呼叫） |
 | `mcp/anomaly` | MCP audit event 異常偵測 — rolling-window z-score、per-tool/per-tenant error-rate、in-memory ring buffer | `Detector`, `Store`, `AnomalyEvent` | Wave 11 Phase 4 Direction A：僅供 `cmd/atlas-mcp` 消費，不應被其他 stable/evolving 模組依賴 |
+| `strategy_validator` | 策略歷史回測驗證 — Sharpe/最大回撤/勝率/TAIEX 相關係數、排名與分層 | `Validator`, `StrategyReport`, `BatchReport` | Wave 11 新增；消費 backtest + strategy；產出供 strategy_ranker 使用 |
+| `strategy_ranker` | 策略排名與分層 — 依 backtest 績效對 5 策略排名並分配 public/paid tier | `Ranker`, `RankedStrategy` | Wave 11 新增；消費 strategy_validator；產出供 recommender 使用 |
+| `capitalflow` | 七大資金勢力分解與共振分析 — 外資/投信/公股/散戶/期貨/ADR Z-score、共振係數、品質分數 | `ForceExtractor`, `ResonanceEngine`, `CapitalFlowReport` | Wave 11 新增；API: /api/capital-flow/daily + /summary |
+| `eventdriven` | 事件驅動資金流預測 — 事件日曆→資金流方向 + ETF 規模×權重預估 + 營收驚喜 | `Predictor`, `FlowPrediction`, `ETFEstimate`, `RevenueSurprise` | Wave 11 新增；消費 industry.EventCalendar + capitalflow；API: /api/events/prediction + /calendar |
+| `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | Wave 11 新增；僅供 recommender + MCP token auth 內部消費 |
+| `recommender` | 投資推薦分層系統 — 依 user tier 返回不同層級推薦內容（public/registered/premium） | `Handler`, `TierRecommendation` | Wave 11 新增；消費 subscription + strategy_ranker |
+| `dailyreport` | 每日市場報告自動化 — 模板化報告生成（JSON + Markdown）、歷史 archive、郵件訂閱 | `Generator`, `Handler`, `DataProvider` | Wave 11 新增；API: /api/reports/latest + /archive + /subscribe |
 
 ---
 
