@@ -343,7 +343,7 @@ func (e *Engine) RunDay(
 				if reduceQty > 0 && reduceQty < state.Positions[i].Quantity {
 					slippageBPS := e.getSlippageBPS(state.Positions[i].Symbol, quoteBySymbol, &fallbackEvents)
 					proceeds := float64(reduceQty) * q.Last
-					impactBPS := e.getImpactBPS(state.Positions[i].Symbol, proceeds, q)
+					impactBPS := e.getImpactBPS(proceeds, q)
 					price := applyBPS(q.Last, -(slippageBPS + e.transactionCostBPS(proceeds) + impactBPS))
 					proceeds = float64(reduceQty) * price
 					e.creditCashWithTPlus2Lock(state, proceeds, day)
@@ -463,7 +463,7 @@ func (e *Engine) getSlippageBPS(symbol string, quotes map[string]domain.Quote, f
 
 // getImpactBPS estimates additional market impact cost for an order.
 // Uses today's volume as a rough ADV proxy when no historical ADV is available.
-func (e *Engine) getImpactBPS(symbol string, orderNotional float64, quote domain.Quote) float64 {
+func (e *Engine) getImpactBPS(orderNotional float64, quote domain.Quote) float64 {
 	if e.marketImpactModel == nil {
 		return 0
 	}
@@ -515,7 +515,7 @@ func (e *Engine) executeSells(
 		if shouldSell {
 			slippageBPS := e.getSlippageBPS(pos.Symbol, quoteBySymbol, fallbackEvents)
 			notional := float64(pos.Quantity) * quote.Last
-			impactBPS := e.getImpactBPS(pos.Symbol, notional, quote)
+			impactBPS := e.getImpactBPS(notional, quote)
 			price := applyBPS(quote.Last, -(slippageBPS + e.transactionCostBPS(notional) + impactBPS))
 			proceeds := float64(pos.Quantity) * price
 			e.creditCashWithTPlus2Lock(state, proceeds, day)
@@ -688,7 +688,7 @@ func (e *Engine) executeOptimizerBuys(
 
 		slippageBPS := e.getSlippageBPS(order.Symbol, quoteBySymbol, fallbackEvents)
 		notional := float64(order.Quantity) * quote.Last
-		impactBPS := e.getImpactBPS(order.Symbol, notional, quote)
+		impactBPS := e.getImpactBPS(notional, quote)
 		price := applyBPS(quote.Last, slippageBPS+e.transactionCostBPS(notional)+impactBPS)
 		quantity := order.Quantity
 		if quantity <= 0 {
@@ -778,7 +778,7 @@ func (e *Engine) executeLegacyBuys(
 
 		slippageBPS := e.getSlippageBPS(rec.Symbol, quoteBySymbol, fallbackEvents)
 		notional := maxPerPosition
-		impactBPS := e.getImpactBPS(rec.Symbol, notional, quote)
+		impactBPS := e.getImpactBPS(notional, quote)
 		price := applyBPS(quote.Last, slippageBPS+e.transactionCostBPS(notional)+impactBPS)
 		quantity := int(math.Floor(maxPerPosition/price/100.0) * 100)
 		if quantity <= 0 {
