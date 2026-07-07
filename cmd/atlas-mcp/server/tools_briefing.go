@@ -33,12 +33,12 @@ func (s *server) handleMCPQuickstart(ctx context.Context, _ *mcp.CallToolRequest
 	_ = s.cli.Get(ctx, "/api/regime/history?days=5", nil, &regHistory)
 
 	return nil, map[string]any{
-		"macro_snapshot":          macro,
-		"stress_index":            stress,
-		"events":                  events,
-		"active_strategies":       strategies,
-		"recent_regime_5_days":    regHistory,
-		"next_steps": "使用 strategy_ranker 取得策略排名、capital_flow 查看資金流向細節、event_flow_prediction 取得未來 5 日資金預測",
+		"macro_snapshot":       macro,
+		"stress_index":         stress,
+		"events":               events,
+		"active_strategies":    strategies,
+		"recent_regime_5_days": regHistory,
+		"next_steps":           "使用 strategy_ranker 取得策略排名、capital_flow 查看資金流向細節、event_flow_prediction 取得未來 5 日資金預測",
 	}, nil
 }
 

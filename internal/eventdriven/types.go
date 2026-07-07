@@ -38,19 +38,19 @@ type ETFEstimate struct {
 type RevenueSurprise struct {
 	StockSymbol string  `json:"stock_symbol"`
 	StockName   string  `json:"stock_name"`
-	Expected    float64 `json:"expected"`    // expected revenue (NTD millions)
-	Actual      float64 `json:"actual"`      // actual revenue (NTD millions)
+	Expected    float64 `json:"expected"`     // expected revenue (NTD millions)
+	Actual      float64 `json:"actual"`       // actual revenue (NTD millions)
 	SurprisePct float64 `json:"surprise_pct"` // (actual - expected) / expected
 	FlowImpact  string  `json:"flow_impact"`  // "bullish" if >10%, "bearish" if <-10%, else "neutral"
 }
 
 // PredictionReport is the complete 5-day event-driven prediction.
 type PredictionReport struct {
-	GeneratedAt      time.Time          `json:"generated_at"`
-	Window           string             `json:"window"` // "5-day forward"
-	Predictions      []FlowPrediction   `json:"predictions"`
+	GeneratedAt      time.Time           `json:"generated_at"`
+	Window           string              `json:"window"` // "5-day forward"
+	Predictions      []FlowPrediction    `json:"predictions"`
 	ActiveEvents     []EventCalendarItem `json:"active_events"`
 	ETFEstimates     []ETFEstimate       `json:"etf_estimates,omitempty"`
-	RevenueSurprises []RevenueSurprise  `json:"revenue_surprises,omitempty"`
-	Summary          string             `json:"summary"`
+	RevenueSurprises []RevenueSurprise   `json:"revenue_surprises,omitempty"`
+	Summary          string              `json:"summary"`
 }

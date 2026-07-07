@@ -132,40 +132,40 @@ func (g *Generator) Generate() *Report {
 // Markdown renders the report as Markdown.
 func (r *Report) Markdown() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("# 台股每日市場報告 — %s\n\n", r.Date))
-	b.WriteString(fmt.Sprintf("**生成時間**：%s\n\n", r.Generated.Format("2006-01-02 15:04:05")))
+	fmt.Fprintf(&b, "# 台股每日市場報告 — %s\n\n", r.Date)
+	fmt.Fprintf(&b, "**生成時間**：%s\n\n", r.Generated.Format("2006-01-02 15:04:05"))
 
 	b.WriteString("## 一、全球資金總開關\n\n")
-	b.WriteString(fmt.Sprintf("- 美債殖利率：%s\n", r.Global.BondYield))
-	b.WriteString(fmt.Sprintf("- 美元指數：%s\n", r.Global.USDIndex))
-	b.WriteString(fmt.Sprintf("- 日圓：%s\n", r.Global.JPY))
-	b.WriteString(fmt.Sprintf("- VIX：%s\n", r.Global.VIX))
-	b.WriteString(fmt.Sprintf("- 狀態：**%s**\n", r.Global.Status))
-	b.WriteString(fmt.Sprintf("- %s\n\n", r.Global.Summary))
+	fmt.Fprintf(&b, "- 美債殖利率：%s\n", r.Global.BondYield)
+	fmt.Fprintf(&b, "- 美元指數：%s\n", r.Global.USDIndex)
+	fmt.Fprintf(&b, "- 日圓：%s\n", r.Global.JPY)
+	fmt.Fprintf(&b, "- VIX：%s\n", r.Global.VIX)
+	fmt.Fprintf(&b, "- 狀態：**%s**\n", r.Global.Status)
+	fmt.Fprintf(&b, "- %s\n\n", r.Global.Summary)
 
 	b.WriteString("## 二、台股資金流向\n\n")
-	b.WriteString(fmt.Sprintf("- 外資：%s\n", r.Capital.Foreign))
-	b.WriteString(fmt.Sprintf("- 投信：%s\n", r.Capital.Institutional))
-	b.WriteString(fmt.Sprintf("- 自營商：%s\n", r.Capital.Dealer))
-	b.WriteString(fmt.Sprintf("- 公股行庫：%s\n", r.Capital.Government))
-	b.WriteString(fmt.Sprintf("- 散戶：%s\n", r.Capital.Retail))
-	b.WriteString(fmt.Sprintf("- 共振強度：%.2f\n", r.Capital.Resonance))
-	b.WriteString(fmt.Sprintf("- 資金品質：%s\n\n", r.Capital.Quality))
+	fmt.Fprintf(&b, "- 外資：%s\n", r.Capital.Foreign)
+	fmt.Fprintf(&b, "- 投信：%s\n", r.Capital.Institutional)
+	fmt.Fprintf(&b, "- 自營商：%s\n", r.Capital.Dealer)
+	fmt.Fprintf(&b, "- 公股行庫：%s\n", r.Capital.Government)
+	fmt.Fprintf(&b, "- 散戶：%s\n", r.Capital.Retail)
+	fmt.Fprintf(&b, "- 共振強度：%.2f\n", r.Capital.Resonance)
+	fmt.Fprintf(&b, "- 資金品質：%s\n\n", r.Capital.Quality)
 
 	b.WriteString("## 三、事件日曆\n\n")
-	b.WriteString(fmt.Sprintf("- 明天：%s\n", strings.Join(r.Events.Tomorrow, "、")))
-	b.WriteString(fmt.Sprintf("- 本週：%s\n\n", strings.Join(r.Events.ThisWeek, "、")))
+	fmt.Fprintf(&b, "- 明天：%s\n", strings.Join(r.Events.Tomorrow, "、"))
+	fmt.Fprintf(&b, "- 本週：%s\n\n", strings.Join(r.Events.ThisWeek, "、"))
 
 	b.WriteString("## 四、策略訊號\n\n")
-	b.WriteString(fmt.Sprintf("- 推薦策略：%s\n", r.Strategy.Active))
-	b.WriteString(fmt.Sprintf("- 進場條件：%s\n", r.Strategy.EntryCond))
-	b.WriteString(fmt.Sprintf("- 方向：%s\n\n", r.Strategy.Direction))
+	fmt.Fprintf(&b, "- 推薦策略：%s\n", r.Strategy.Active)
+	fmt.Fprintf(&b, "- 進場條件：%s\n", r.Strategy.EntryCond)
+	fmt.Fprintf(&b, "- 方向：%s\n\n", r.Strategy.Direction)
 
 	b.WriteString("## 五、風險提示\n\n")
-	b.WriteString(fmt.Sprintf("- 壓力指數：%.2f\n", r.Risk.StressIndex))
-	b.WriteString(fmt.Sprintf("- 風險等級：%s\n", r.Risk.RiskLevel))
+	fmt.Fprintf(&b, "- 壓力指數：%.2f\n", r.Risk.StressIndex)
+	fmt.Fprintf(&b, "- 風險等級：%s\n", r.Risk.RiskLevel)
 	if r.Risk.Warning != "" {
-		b.WriteString(fmt.Sprintf("- ⚠️ %s\n", r.Risk.Warning))
+		fmt.Fprintf(&b, "- ⚠️ %s\n", r.Risk.Warning)
 	}
 
 	return b.String()
@@ -247,7 +247,7 @@ func (h *Handler) HandleLatest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if format == "markdown" {
 		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-		w.Write([]byte(rep.Markdown()))
+		_, _ = w.Write([]byte(rep.Markdown()))
 		return
 	}
 	if err := json.NewEncoder(w).Encode(rep); err != nil {

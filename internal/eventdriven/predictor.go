@@ -274,10 +274,10 @@ func (p *Predictor) etfRebalanceEstimates(etfName string, _ industry.CalendarEve
 		aum  float64
 	}
 	symbols := map[string]etfProfile{
-		"0050":           {name: "0050 臺灣50", aum: 380},
-		"0056":           {name: "0056 高股息", aum: 320},
-		"00878":          {name: "00878 永續高股息", aum: 280},
-		"0050 臺灣50":    {name: "0050 臺灣50", aum: 380},
+		"0050":        {name: "0050 臺灣50", aum: 380},
+		"0056":        {name: "0056 高股息", aum: 320},
+		"00878":       {name: "00878 永續高股息", aum: 280},
+		"0050 臺灣50":   {name: "0050 臺灣50", aum: 380},
 		"0056 高股息":    {name: "0056 高股息", aum: 320},
 		"00878 永續高股息": {name: "00878 永續高股息", aum: 280},
 	}
@@ -288,9 +288,9 @@ func (p *Predictor) etfRebalanceEstimates(etfName string, _ industry.CalendarEve
 	}
 
 	exampleStocks := []struct {
-		symbol, name  string
-		weight        float64
-		direction     string
+		symbol, name string
+		weight       float64
+		direction    string
 	}{
 		{"2330", "台積電", 0.12, "add"},
 		{"2454", "聯發科", 0.06, "add"},

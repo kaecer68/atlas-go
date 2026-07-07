@@ -542,7 +542,7 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Printf("[Subscription] store init failed: %v", err)
 		} else {
-			jwtSecret := os.Getenv("ATLAS_JWT_SECRET")
+			jwtSecret := config.GetSecret("ATLAS_JWT_SECRET")
 			if jwtSecret == "" {
 				jwtSecret = "atlas-dev-secret-change-in-prod"
 			}
