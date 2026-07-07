@@ -2,6 +2,7 @@
 // Extracted from index.html - DO NOT EDIT inline
 import { sectorName, renderStockCell } from '../names.js';
 import { escapeHtml } from '../shared/utils.js';
+import { renderEmptyState, formatDate } from '../shared/app-utils.js';
 
 export function renderLiveStatus(data) {
   const el = document.getElementById('liveStatus');
@@ -357,4 +358,113 @@ export function inferSectorFromAgent(agentID, layer) {
     'cio': 'control'
   };
   return agentSectorMap[agentID] || (layer === 'sector' ? agentID : null);
+}
+
+// --- Semiconductor sentiment & market breadth panel (admin_web live page) ---
+export function renderSemiconductorSentiment(snapshot, industryCycle) {
+  const el = document.getElementById('semiconductorSentiment');
+  if (!el) return;
+  el.classList.remove('loading');
+
+  const sox = snapshot && snapshot.sox_index ? snapshot.sox_index : null;
+  const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%' : '—';
+  const soxValue = sox && typeof sox.value === 'number' ? sox.value.toFixed(2) : '—';
+  const soxChange = fmtPct(sox && sox.change_pct);
+  const soxColor = sox && sox.change_pct > 0 ? 'var(--up)' : (sox && sox.change_pct < 0 ? 'var(--down)' : 'var(--muted)');
+
+  const cycle = industryCycle || {};
+  const phaseMap = {
+    expansion: { label: '擴張', color: 'var(--up)' },
+    recovery: { label: '復甦', color: 'var(--color-success)' },
+    mature: { label: '成熟', color: 'var(--warn)' },
+    downturn: { label: '衰退', color: 'var(--down)' }
+  };
+  const phase = phaseMap[cycle.business_cycle] || { label: cycle.business_cycle || '—', color: 'var(--muted)' };
+
+  const rows = [
+    { label: '庫存週期', value: cycle.inventory_cycle || '—' },
+    { label: '資本支出週期', value: cycle.capex_cycle || '—' },
+    { label: '信心指數', value: typeof cycle.confidence === 'number' ? cycle.confidence.toFixed(2) : '—' },
+    { label: '趨勢', value: cycle.trend || '—' }
+  ];
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:12px">
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">SOX 費城半導體</div>
+        <div class="kpi-value" style="color:${soxColor};font-size:20px">${soxValue}</div>
+        <div class="kpi-hint" style="color:${soxColor}">${soxChange}</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">半導體景氣週期</div>
+        <div class="kpi-value" style="color:${phase.color};font-size:20px">${phase.label}</div>
+        <div class="kpi-hint">business_cycle</div>
+      </div>
+    </div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:4px 8px">指標</th>
+        <th style="text-align:right;padding:4px 8px">數值</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr><td style="padding:4px 8px">${r.label}</td><td style="padding:4px 8px;text-align:right;font-family:monospace">${escapeHtml(String(r.value))}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// --- Drawdown stress-test panel (admin_web live page) ---
+export function renderDrawdownPanel(data) {
+  const el = document.getElementById('drawdownPanel');
+  if (!el) return;
+  el.classList.remove('loading');
+
+  if (!data || data.status === 'not_available') {
+    el.innerHTML = renderEmptyState('尚無回撤模擬資料', '等待回測完成後將自動產生');
+    return;
+  }
+
+  const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v * 100).toFixed(1) + '%' : '—';
+  const maxDD = data.max_drawdown != null ? data.max_drawdown : data.maxDrawdown;
+  const var95 = data.var_95 != null ? data.var_95 : data.var95;
+  const worstPath = Array.isArray(data.worst_path) ? data.worst_path : [];
+
+  let pathHtml = '';
+  if (worstPath.length > 1) {
+    const minV = Math.min(...worstPath);
+    const maxV = Math.max(...worstPath);
+    const range = maxV - minV || 1;
+    const width = 300;
+    const height = 60;
+    const points = worstPath.map((v, i) => {
+      const x = (i / (worstPath.length - 1)) * width;
+      const y = height - ((v - minV) / range) * height;
+      return `${x},${y}`;
+    }).join(' ');
+    pathHtml = `
+      <div style="margin-top:10px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Worst Path（累積報酬）</div>
+        <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:${height}px;background:var(--panel-l2);border-radius:4px">
+          <polyline points="${points}" fill="none" stroke="var(--down)" stroke-width="2"/>
+        </svg>
+      </div>
+    `;
+  }
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">模擬最大回撤</div>
+        <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtPct(maxDD)}</div>
+        <div class="kpi-hint">Monte Carlo 壓力測試</div>
+      </div>
+      <div class="panel" style="text-align:center">
+        <div class="kpi-label">模擬 VaR 95</div>
+        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtPct(var95)}</div>
+        <div class="kpi-hint">5% 尾端損失</div>
+      </div>
+    </div>
+    ${pathHtml}
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:right">產生時間：${data.generated ? formatDate(data.generated) : '—'}</div>
+  `;
 }
