@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "us-indices.schema.json",
   "type": "object",
-  "required": ["indices", "tech_stocks", "data_status", "failed_channels", "updated_at"],
+  "required": ["recorded_at", "generated_at", "indices", "tech_stocks", "data_status"],
   "properties": {
     "indices": {
       "type": "array",
@@ -29,10 +29,15 @@
       }
     },
     "data_status": { "type": "string" },
+    "recorded_at": { "type": "number" },
+    "generated_at": { "type": "string" },
     "failed_channels": {
       "type": "array",
       "items": { "type": "string" }
     },
-    "updated_at": { "type": "string" }
+    "stale_channels": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
   }
 }

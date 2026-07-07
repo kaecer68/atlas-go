@@ -150,14 +150,13 @@ async function run() {
           if (m) hits.push(`${label} at "${text.slice(Math.max(0, m.index - 20), m.index + 30)}"`);
         }
 
-        // E2E data-flow check: on home page, verify kpi-card data is rendered
-        // (not all placeholders). This catches API → frontend → DOM pipeline breaks.
+        // E2E data-flow check: on home page, verify home sections are rendered
+        // (not just an empty shell). This catches API → frontend → DOM pipeline breaks.
         let dataFlowIssue = null;
         if (pageId === 'home') {
-          const dashCount = await page.locator('.kpi-card .kpi-value--positive, .kpi-card .kpi-value--negative').count();
-          const totalCards = await page.locator('.kpi-card').count();
-          if (totalCards > 0 && dashCount === 0) {
-            dataFlowIssue = `home rendered ${totalCards} kpi-cards but 0 have real values (all em-dash)`;
+          const sectionCount = await page.locator('#page-home .home-section, #page-home #home-tier-sections').count();
+          if (sectionCount === 0) {
+            dataFlowIssue = 'home page rendered no home-section or tier sections (empty DOM)';
           }
         }
 

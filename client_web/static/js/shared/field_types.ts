@@ -509,18 +509,18 @@ export interface CrossMarketIndex {
 export interface CrossMarketStatus {
   recorded_at: number;
   generated_at: string;
-  spx: string;
-  ndx: string;
-  dji: string;
-  sox: string;
-  nvda: string;
-  aapl: string;
-  msft: string;
-  tsm_adr: string;
-  vix: string;
-  dxy: string;
-  usd_twd: string;
-  us10y: string;
+  spx: CrossMarketIndex;
+  ndx: CrossMarketIndex;
+  dji: CrossMarketIndex;
+  sox: CrossMarketIndex;
+  nvda: CrossMarketIndex;
+  aapl: CrossMarketIndex;
+  msft: CrossMarketIndex;
+  tsm_adr: CrossMarketIndex;
+  vix: CrossMarketIndex;
+  dxy: CrossMarketIndex;
+  usd_twd: CrossMarketIndex;
+  us10y: CrossMarketIndex;
   crisis_active: boolean;
   correlation_spx_twse: number;
   correlation_ndx_twse: number | null;
@@ -3498,11 +3498,17 @@ export interface TrendPoint {
   value: number;
 }
 
+export interface USIndexItem {
+  symbol: string;
+  value: number;
+  change_pct: number;
+}
+
 export interface USIndicesResponse {
   recorded_at: number;
   generated_at: string;
-  indices: string[];
-  tech_stocks: string[];
+  indices: USIndexItem[];
+  tech_stocks: USIndexItem[];
   data_status?: string;
   failed_channels?: string[];
   stale_channels?: string[];

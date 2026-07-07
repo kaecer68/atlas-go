@@ -65,6 +65,31 @@ ctx.strokeStyle = hexToRgba(getThemeColor('--trend-bullish'), 0.3);
   → 用 --metric-good/--metric-bad
 ```
 
+## 前端 API 欄位合約（source of truth: Go backend）
+
+以下 schema / TypeScript type 必須與後端 struct 對齊，修改前請先確認後端欄位：
+
+| API | Schema | 後端 Struct | 關鍵欄位 |
+|-----|--------|-------------|----------|
+| `/api/macro/snapshot/latest` | `shared_web/static/js/schemas/macro-snapshot.schema.json` | `internal/marketdata.MacroDataSnapshot` | `recorded_at` (int64), `data_status` (omitempty), indicator `timestamp` (int64) |
+| `/api/dashboard/us-indices` | `shared_web/static/js/schemas/us-indices.schema.json` | `internal/monitoring/service.USIndicesResponse` | `recorded_at` (int64), `generated_at` (string), `indices[]/tech_stocks[]` 物件陣列 |
+| `/api/taiwan/stress-index` | `shared_web/static/js/schemas/stress-index.schema.json` | `internal/narrative.TaiwanStressIndex` | `score` (number), `regime` (string), `timestamp` (int64) |
+
+### Wave 11 Phase 3 已對齊的變更
+- `macro-snapshot.schema.json`：`required` 改為 `recorded_at`；移除 `updated_at`；各 indicator `timestamp` 改為 `number`。
+- `us-indices.schema.json`：`required` 改為 `recorded_at/generated_at/indices/tech_stocks/data_status`；`generated_at` 為 `string`；`failed_channels` / `stale_channels` optional。
+- `stress-index.schema.json`：`required` 改為 `score/regime/timestamp`；移除舊欄位 `index` / `updated_at`。
+- `CrossMarketStatus` 中的跨市場指標（`spx`, `ndx`, `dji`, `sox`, `nvda`, `aapl`, `msft`, `tsm_adr`, `vix`, `dxy`, `usd_twd`, `us10y`）已從 `string` 改為 `CrossMarketIndex` 物件（含 `symbol/value/change_pct/timestamp`）。
+- `USIndicesResponse.indices` / `tech_stocks` 已從 `string[]` 修正為 `USIndexItem[]` 物件陣列。
+
+## shared_web fallback 機制
+
+`client_web/` 與 `admin_web/` 並不複製所有頁面與型別檔案。esbuild shared plugin 會在解析不到本機檔案時自動 fallback 到 `shared_web/static/js/`。因此：
+
+- **不要**在 `client_web/static/js/` 建立空 stub 去 shadow `shared_web` 的實作。
+- 共用型別（如 `field_types.ts`）若兩邊都存在，必須同步修改，避免型別漂移。
+- 頁面模組優先在 `shared_web/static/js/pages/` 維護；`client_web` 僅放客製化覆寫。
+
 ## 重要參考檔案
 
 | 檔案 | 內容 |
@@ -72,3 +97,5 @@ ctx.strokeStyle = hexToRgba(getThemeColor('--trend-bullish'), 0.3);
 | `shared_web/static/css/base/variables.css` (canonical) | 所有 CSS 變數定義（色彩、字體、間距） |
 | `shared_web/static/css/components/utilities.css` (canonical) | Utility class 定義 |
 | `shared_web/static/js/shared/utils.js` (canonical) | Canvas 橋接函數 (`getThemeColor`, `hexToRgba`) |
+| `shared_web/static/js/schemas/*.schema.json` (canonical) | API response 欄位合約 |
+| `shared_web/static/js/shared/field_types.ts` (canonical) | 共用 TypeScript interface |
