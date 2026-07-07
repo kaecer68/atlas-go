@@ -15,7 +15,7 @@
 - `IsHealthy()` — 向 `/health` 端點發 GET
 - `waitForHealthy(ctx)` — 同步輪詢；deadline = `min(startupTimeout, ctx.Deadline())`
 - `supervise()` — 背景 goroutine；崩潰時 backoff 重啟
-- `healthURL` — struct 欄位（測試注入用，預設 `http://127.0.0.1:8081/health`，見 `manager.go:40`）
+- `healthURL` — struct 欄位（測試注入用，預設 `http://127.0.0.1:18081/health`，見 `manager.go:40`）
 
 ### fubon-proxy URL 單一真相來源（PR #837 A1 root cause fix）
 

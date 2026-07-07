@@ -22,14 +22,10 @@ injectSharedHead();
 
 const SHELL_LOADERS = {
   narrative: () => import('./page-shells/narrative.js'),
-  live: () => import('./page-shells/live.js'),
   pipeline: () => import('./page-shells/pipeline.js'),
-  decision: () => import('./page-shells/decision.js'),
   portfolio: () => import('./page-shells/portfolio.js'),
   crossmarket: () => import('./page-shells/crossmarket.js'),
-  evolution_panel: () => import('./page-shells/evolution_panel.js'),
   industry: () => import('./page-shells/industry.js'),
-  'performance-report': () => import('./page-shells/performance-report.js'),
   strategies: () => import('./page-shells/strategies.js'),
   login: () => import('./page-shells/login.js'),
   register: () => import('./page-shells/register.js'),
