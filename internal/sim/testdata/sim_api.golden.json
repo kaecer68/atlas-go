@@ -162,6 +162,12 @@
       "results": "(*Engine)"
     },
     {
+      "name": "WithMarketImpactModel",
+      "params": "(m *MarketImpactModel)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
       "name": "WithOptimizer",
       "params": "(o *portfolio.Optimizer)",
       "receiver": "Engine",
@@ -289,6 +295,7 @@
         "reflexRules []reflexivity.Rule",
         "ctx context.Context",
         "slippageModel *SlippageModel",
+        "marketImpactModel *MarketImpactModel",
         "taxCalc *tax.TaiwanTaxCalculator",
         "dividends map[string]float64",
         "thresholdEngine *DynamicThresholdEngine",

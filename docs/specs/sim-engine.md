@@ -19,6 +19,7 @@
 | **動態閾值減少部位** | `DynamicThresholdEngine` 對高度相關的訊號套用相關性過濾，可能移除被判斷為冗餘的建議，導致實際持倉少於預期。 |
 | **買入執行順序（legacy 路徑）** | `executeLegacyBuys` 對建議排序：`Conviction` 降冪 → `Symbol` → `Agent` → `Reason`。此順序是確定性的；optimizer 路徑則由 optimizer 決定。 |
 | **`DynamicThresholdEngine` 重複符號過濾** | 若 `thresholdEngine` 已設定，`RunDay` 會過濾重複符號的建議，保留信心度最高者。若預期同符號有不同方向的建議，信心度較低者會被跳過。 |
+| **無 `MarketImpactModel` = 忽略大單衝擊** | 若不呼叫 `WithMarketImpactModel()`，大額訂單相對於 ADV 仍會以收盤價成交，導致回測績效過度樂觀。建議在流動性較差的標的上啟用。 |
 
 ---
 
