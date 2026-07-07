@@ -236,14 +236,22 @@ func (s *PipelineService) loadForecastVsRealityItems(agentID string, limit int) 
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
-		path := filepath.Join(experimentsDir, entry.Name())
+		name := entry.Name()
+		// Skip metadata/index files that are not experiment results.
+		// Experiment result files follow the exec-<agent>-<timestamp>.json convention.
+		if name == "_metadata.json" || !strings.HasPrefix(name, "exec-") {
+			continue
+		}
+		path := filepath.Join(experimentsDir, name)
 		bytes, err := os.ReadFile(path)
 		if err != nil {
-			return nil, err
+			logging.Warn("pipeline_service", "read_experiment_file_failed", logging.FStr("file", name), logging.Err(err))
+			continue
 		}
 		var result domain.PromptExperimentResult
 		if err := json.Unmarshal(bytes, &result); err != nil {
-			return nil, err
+			logging.Warn("pipeline_service", "experiment_file_unmarshal_failed", logging.FStr("file", name), logging.Err(err))
+			continue
 		}
 		if agentID != "" && result.Experiment.TargetAgentID != agentID {
 			continue
