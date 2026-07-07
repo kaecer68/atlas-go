@@ -15,6 +15,7 @@ import { getDemoPortfolio } from '../services/demo-data.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
 import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
+import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
 
 window.scrollToSection = scrollToSection;
 
@@ -87,9 +88,13 @@ export async function renderHomePage(container) {
         <h2>市場脈動</h2>
         <span class="home-section__subtitle">核心觀察指標</span>
       </div>
-      <div class="home-grid home-grid--4" id="home-market-grid">
+      <div class="home-grid home-grid--4" id="home-market-grid" data-disclosure-section="market-pulse" data-disclosure-state="collapsed">
         <div class="home-loading-card">載入中…</div>
       </div>
+      <button class="disclosure-toggle" id="market-pulse-toggle" type="button" aria-expanded="false" aria-controls="home-market-grid">
+        <span class="disclosure-toggle__label">展開進階指標</span>
+        <span class="disclosure-toggle__icon" aria-hidden="true">▼</span>
+      </button>
     </section>
 
     <section class="home-section" id="home-event-calendar">
@@ -388,23 +393,59 @@ function renderMarketPulse(macro, stress) {
     : '—';
 
   const cards = [
-    metricCard({ id: 'market-taiwan', label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high' }),
-    metricCard({ id: 'market-foreign', label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'card-priority-high' }),
-    metricCard({ id: 'market-tsm', label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'card-priority-high' }),
-    metricCard({ id: 'market-sox', label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'card-priority-medium' }),
-    metricCard({ id: 'market-nasdaq', label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'card-priority-medium' }),
-    metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'card-priority-medium' }),
-    metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'card-priority-low' }),
-    metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'card-priority-low' }),
-    metricCard({ label: '投信動向', value: fundText, tone: fundVal > 0 ? 'positive' : fundVal < 0 ? 'negative' : 'neutral', tooltip: '投信近一交易日買賣超（億元）。', extraClasses: 'card-priority-low' }),
-    metricCard({ label: '自營商', value: dealerText, tone: dealerVal > 0 ? 'positive' : dealerVal < 0 ? 'negative' : 'neutral', tooltip: '自營商近一交易日買賣超（億元）。', extraClasses: 'card-priority-low' }),
-    metricCard({ label: '歷史波動', value: formatVolatility(pointValue(macro, 'historical_volatility')), tone: volatilityTone(pointValue(macro, 'historical_volatility')), tooltip: 'TAIEX 20 日年化波動率。<20% 低波動、20-30% 中等、>30% 高波動警戒。', extraClasses: 'card-priority-low' }),
-    metricCard({ label: '散戶情緒', value: retailText, tone: retailChange === null ? 'neutral' : retailChange >= 0 ? 'positive' : 'negative', tooltip: '散戶融資餘額變化 — 偏多表示融資增加（槓桿意願高），偏空表示融資減少。', extraClasses: 'card-priority-low' }),
+    metricCard({ id: 'market-taiwan', label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high disclosure-tier-core' }),
+    metricCard({ id: 'market-foreign', label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'card-priority-high disclosure-tier-core' }),
+    metricCard({ id: 'market-tsm', label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'card-priority-high disclosure-tier-core' }),
+    metricCard({ id: 'market-sox', label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
+    metricCard({ id: 'market-nasdaq', label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'card-priority-medium disclosure-tier-advanced' }),
+    metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
+    metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ label: '融資餘額', value: marginVal !== null ? `${(marginVal / 100).toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ label: '投信動向', value: fundText, tone: fundVal > 0 ? 'positive' : fundVal < 0 ? 'negative' : 'neutral', tooltip: '投信近一交易日買賣超（億元）。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ label: '自營商', value: dealerText, tone: dealerVal > 0 ? 'positive' : dealerVal < 0 ? 'negative' : 'neutral', tooltip: '自營商近一交易日買賣超（億元）。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ label: '歷史波動', value: formatVolatility(pointValue(macro, 'historical_volatility')), tone: volatilityTone(pointValue(macro, 'historical_volatility')), tooltip: 'TAIEX 20 日年化波動率。<20% 低波動、20-30% 中等、>30% 高波動警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ label: '散戶情緒', value: retailText, tone: retailChange === null ? 'neutral' : retailChange >= 0 ? 'positive' : 'negative', tooltip: '散戶融資餘額變化 — 偏多表示融資增加（槓桿意願高），偏空表示融資減少。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
   ];
 
   if (grid) {
+    const initialState = getDisclosureState('market-pulse', 'collapsed');
+    grid.setAttribute('data-disclosure-state', initialState);
     grid.innerHTML = cards.join('');
+    bindMarketPulseDisclosure();
   }
+}
+
+let _marketPulseDisclosureBound = false;
+
+function bindMarketPulseDisclosure() {
+  if (_marketPulseDisclosureBound) return;
+  const btn = document.getElementById('market-pulse-toggle');
+  const grid = document.getElementById('home-market-grid');
+  if (!btn || !grid) return;
+  _marketPulseDisclosureBound = true;
+
+  const updateButton = (state) => {
+    btn.setAttribute('aria-expanded', state === 'expanded' ? 'true' : 'false');
+    const labelEl = btn.querySelector('.disclosure-toggle__label');
+    const iconEl = btn.querySelector('.disclosure-toggle__icon');
+    if (state === 'expanded') {
+      if (labelEl) labelEl.textContent = '收合進階指標';
+      if (iconEl) iconEl.textContent = '▲';
+    } else {
+      if (labelEl) labelEl.textContent = '展開進階指標';
+      if (iconEl) iconEl.textContent = '▼';
+    }
+  };
+
+  updateButton(grid.getAttribute('data-disclosure-state') || 'collapsed');
+
+  btn.addEventListener('click', () => {
+    const current = grid.getAttribute('data-disclosure-state') || 'collapsed';
+    const next = current === 'expanded' ? 'collapsed' : 'expanded';
+    grid.setAttribute('data-disclosure-state', next);
+    setDisclosureState('market-pulse', next);
+    updateButton(next);
+  });
 }
 
 function explainFromEvent(e) {
