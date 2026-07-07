@@ -24,7 +24,7 @@
 
 ## 工具計數
 
-> **權威來源**：[`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md) 記錄最終對 agent 暴露的 tool 名稱與分類；本節只保留實作層面的計數規則。
+> **權威來源**：[`docs/AGENT_TOOLS.md`](/docs/AGENT_TOOLS.md) 記錄最終對 agent 暴露的 tool 名稱與分類；本節只保留實作層面的計數規則。
 
 - 目前 `registerTools()` 內掛載的業務 tool handler 數量為 **85 個**（sampling / elicitation 兩個 feature-gated tool 關閉時）；`SamplingEnabled` / `ElicitationEnabled` 各再 +1，最高 **87 個**。
 - `registerAuditTools()` 另外掛載 **4 個**自我觀測 tool，不計入 `registerTools()` 的範圍。
