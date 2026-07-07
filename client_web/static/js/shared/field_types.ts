@@ -3567,6 +3567,15 @@ export interface SymbolAttribution {
   side: string;
 }
 
+export interface SymbolFlow {
+  symbol: string;
+  name: string;
+  foreign_investor_net: number;
+  domestic_fund_net: number;
+  dealer_net: number;
+  date: string;
+}
+
 export interface SymbolPredictionItem {
   agent_id: string;
   symbol: string;
