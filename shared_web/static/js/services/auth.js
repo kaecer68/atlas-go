@@ -158,5 +158,33 @@ function readCookie(name) {
   return match ? decodeURIComponent(match[2]) : null;
 }
 
+// ─── Sidebar nav state ───
+
+/**
+ * Update sidebar auth navigation based on current login state.
+ * Call after initAuth() completes or after login/logout.
+ */
+export async function renderNavState() {
+  const loggedIn = await isLoggedIn();
+  const tier = await getTier();
+  const guestItems = document.querySelectorAll('.nav-guest');
+  const userItems = document.querySelectorAll('.nav-user');
+  const tierBadge = document.getElementById('navTierBadge');
+  const tierLabel = document.getElementById('navTierLabel');
+
+  guestItems.forEach(function(el) { el.classList.toggle('hidden', loggedIn); });
+  userItems.forEach(function(el) { el.classList.toggle('hidden', !loggedIn); });
+
+  if (tierBadge && tier) {
+    tierBadge.textContent = tier === 'premium' ? 'Premium' : tier === 'registered' ? '已註冊' : '免費';
+    tierBadge.className = 'tier-badge tier-' + tier;
+  }
+  if (tierLabel && tier) {
+    tierLabel.textContent = tier === 'premium' ? 'Premium' : tier === 'registered' ? '已註冊' : '免費';
+    tierLabel.className = 'tier-label tier-' + tier;
+    tierLabel.classList.remove('hidden');
+  }
+}
+
 // ─── Re-export for convenience ───
 export { postJSON, getJSON };

@@ -35,6 +35,7 @@
 @import url("components/loading-bar.css");
 @import url("components/error-banner.css");
 @import url("components/table-pagination.css");
+@import url("components/auth-form.css");
 
 /* Layout - Sidebar & SPA Shell */
 @import url("layout/sidebar.css");

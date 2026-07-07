@@ -1,0 +1,181 @@
+/* ─── Auth form (login / register) ─── */
+.auth-page {
+  display: flex;
+  justify-content: center;
+  padding-top: 48px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+.auth-card h2 {
+  margin-bottom: 4px;
+}
+.auth-subtitle {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+.auth-form {
+  text-align: left;
+}
+.auth-form .form-group {
+  margin-bottom: 14px;
+}
+.auth-form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 0.88rem;
+}
+.auth-form input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: var(--bg-card);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.auth-error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+.auth-success {
+  color: var(--color-success);
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+.hidden { display: none !important; }
+.auth-footer {
+  margin-top: 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.auth-link {
+  color: var(--link-color);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.btn-full { width: 100%; }
+
+/* ─── Tier badge ─── */
+.tier-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tier-free { background: var(--bg-muted); color: var(--muted); }
+.tier-registered { background: var(--metric-good); color: #fff; }
+.tier-premium { background: var(--pnl-profit); color: #fff; }
+.tier-active {
+  background: var(--color-success);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.tier-label {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* ─── Premium page ─── */
+.premium-hero {
+  text-align: center;
+  padding: 32px 0 24px;
+}
+.premium-subtitle {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.premium-tiers {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+.tier-card {
+  flex: 1;
+  max-width: 320px;
+  text-align: center;
+  position: relative;
+}
+.tier-card h3 {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+.tier-price {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.tier-price small {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+.tier-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  text-align: left;
+  font-size: 0.88rem;
+}
+.tier-features li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.tier-features li::before {
+  content: "✓ ";
+  color: var(--color-success);
+  font-weight: 700;
+}
+.tier-features .tier-disabled {
+  color: var(--muted);
+}
+.tier-features .tier-disabled::before {
+  content: "✗ ";
+  color: var(--muted);
+}
+.tier-current {
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.tier-premium {
+  border: 2px solid var(--pnl-profit);
+}
+.tier-badge {
+  position: absolute;
+  top: -12px;
+  right: 16px;
+  background: var(--pnl-profit);
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.premium-mcp {
+  max-width: 680px;
+  margin: 0 auto;
+}
+.premium-mcp h3 {
+  margin-bottom: 8px;
+}
+
+/* ─── Sidebar auth nav ─── */
+.nav-auth-item.hidden { display: none; }
+.nav-auth-item {
+  padding-left: 8px;
+}
