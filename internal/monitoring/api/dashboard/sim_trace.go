@@ -14,7 +14,7 @@ import (
 
 // HandleSimLatest returns the latest simulation trace records.
 func (h *Handlers) HandleSimLatest(r *http.Request) (int, any) {
-	pattern := filepath.Join(h.WorkDir, ".omo", "traces", "sim-*.jsonl")
+	pattern := filepath.Join(h.LedgerDir, "traces", "sim-*.jsonl")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		logging.Error("dashboardapi", "sim_trace_glob_failed",

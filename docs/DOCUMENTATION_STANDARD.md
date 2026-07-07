@@ -107,7 +107,7 @@ docs/
 | `briefs/` | **長壽** phase 規劃 brief（roadmap、跨模組設計） | `<topic>-brief.md`（無日期前綴） | active → 設計穩定後升級到 `docs/` |
 | `plans/` | **短壽** 執行計畫（具體 PR 的待辦） | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` | merge 後**必須刪除** |
 | `evidence/` | **短壽** 驗證報告（f1-f4 通過證明） | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` | 驗證完即刪 |
-| `traces/` | sim 執行 JSONL | `sim-YYYYMMDD.jsonl` | 保留最新 5 個，其餘刪 |
+| `traces/` | ~~sim 執行 JSONL~~ （已遷移至 `data/state/traces/`） | — | — |
 | `notepads/` | 跨 session 決策筆記 | `<topic>/learnings.md` 等子目錄 + 檔案 | 寫滿或過時即歸檔或刪 |
 | `handoffs/` | session 交接 | `YYYY-MM-DD-<topic>.md` | session 結束即刪 |
 | `workspaces/` | 跨 session 工作區協調 | `<workspace-name>/` | merged 後刪 |
@@ -198,8 +198,11 @@ Wave 完成 → 文件分類 →
 │   ├─ 是、且穩定 → 進 docs/
 │   └─ 是、但還在變 → 進 .omo/briefs/（長壽）
 │
-├─ 短期的 PR 待辦、驗證報告、sim 輸出？
-│   └─ 是 → 進 .omo/plans/ 或 .omo/evidence/ 或 .omo/traces/（短壽）
+├─ 短期的 PR 待辦、驗證報告？
+│   └─ 是 → 進 .omo/plans/ 或 .omo/evidence/（短壽）
+│
+├─ sim 執行追蹤 JSONL？
+│   └─ 是 → 進 data/state/traces/（由 `LifecycleManager` 管理保留）
 │
 └─ session 內的工作記憶、交接？
     └─ 是 → 進 .omo/notepads/ 或 .omo/handoffs/（transient）
@@ -265,7 +268,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 | **長壽 brief（跨 session 規劃）** | `.omo/briefs/` | `<topic>-brief.md` 或 `<topic>.md` |
 | **短期 PR 待辦 / 修復計畫** | `.omo/plans/` | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
 | 驗證報告 | `.omo/evidence/` | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` |
-| sim 輸出 | `.omo/traces/` | `sim-YYYYMMDD.jsonl` |
+| sim 輸出 | `data/state/traces/` | `sim-YYYYMMDD.jsonl` |
 | session 交接 | `.omo/handoffs/` | `YYYY-MM-DD-<topic>.md` |
 | 決策筆記 | `.omo/notepads/` | `<topic>/learnings.md` 等 |
 | Skills / AI 引導 | `.claude/skills/` | `atlas-<topic>/SKILL.md` |

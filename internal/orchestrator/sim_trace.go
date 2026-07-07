@@ -30,7 +30,7 @@ type SimTraceWriter struct {
 }
 
 // NewSimTraceWriter creates a new SimTraceWriter.
-// baseDir is the project root directory. date must be in "20060102" format.
+// baseDir is the state root directory (typically cfg.LedgerDir). date must be in "20060102" format.
 // When verbose is true, each Record() call prints color-coded output to terminal.
 func NewSimTraceWriter(baseDir string, date string, verbose bool) *SimTraceWriter {
 	return &SimTraceWriter{
@@ -70,13 +70,13 @@ func (w *SimTraceWriter) Record(step int, layer, status string, meta map[string]
 	}
 }
 
-// ExportJSONL flushes all records to {baseDir}/.omo/traces/sim-{date}.jsonl.
+// ExportJSONL flushes all records to {baseDir}/traces/sim-{date}.jsonl.
 // Returns the absolute file path on success.
 func (w *SimTraceWriter) ExportJSONL() (string, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	tracesDir := filepath.Join(w.baseDir, ".omo", "traces")
+	tracesDir := filepath.Join(w.baseDir, "traces")
 	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
 		return "", fmt.Errorf("create traces directory: %w", err)
 	}

@@ -195,7 +195,7 @@ func TestHandleDataPipeline_HappyPath(t *testing.T) {
 
 func TestHandleSimLatest_NoTraces(t *testing.T) {
 	dir := t.TempDir()
-	h := &Handlers{WorkDir: dir}
+	h := &Handlers{LedgerDir: dir}
 	req := httptest.NewRequest(http.MethodGet, "/api/traces/sim-latest", nil)
 
 	status, body := h.HandleSimLatest(req)
@@ -217,7 +217,7 @@ func TestHandleSimLatest_NoTraces(t *testing.T) {
 
 func TestHandleSimLatest_HappyPath(t *testing.T) {
 	dir := t.TempDir()
-	tracesDir := filepath.Join(dir, ".omo", "traces")
+	tracesDir := filepath.Join(dir, "traces")
 	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
 		t.Fatalf("mkdir traces: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestHandleSimLatest_HappyPath(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	h := &Handlers{WorkDir: dir}
+	h := &Handlers{LedgerDir: dir}
 	req := httptest.NewRequest(http.MethodGet, "/api/traces/sim-latest", nil)
 	status, body := h.HandleSimLatest(req)
 
@@ -268,7 +268,7 @@ func TestHandleSimLatest_HappyPath(t *testing.T) {
 
 func TestHandleSimLatest_PicksLatestOfMultiple(t *testing.T) {
 	dir := t.TempDir()
-	tracesDir := filepath.Join(dir, ".omo", "traces")
+	tracesDir := filepath.Join(dir, "traces")
 	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestHandleSimLatest_PicksLatestOfMultiple(t *testing.T) {
 	writeTrace(older, "old-layer")
 	writeTrace(newer, "new-layer")
 
-	h := &Handlers{WorkDir: dir}
+	h := &Handlers{LedgerDir: dir}
 	req := httptest.NewRequest(http.MethodGet, "/api/traces/sim-latest", nil)
 	status, body := h.HandleSimLatest(req)
 
@@ -300,7 +300,7 @@ func TestHandleSimLatest_PicksLatestOfMultiple(t *testing.T) {
 
 func TestHandleSimLatest_ParseFail(t *testing.T) {
 	dir := t.TempDir()
-	tracesDir := filepath.Join(dir, ".omo", "traces")
+	tracesDir := filepath.Join(dir, "traces")
 	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestHandleSimLatest_ParseFail(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	h := &Handlers{WorkDir: dir}
+	h := &Handlers{LedgerDir: dir}
 	req := httptest.NewRequest(http.MethodGet, "/api/traces/sim-latest", nil)
 	status, body := h.HandleSimLatest(req)
 

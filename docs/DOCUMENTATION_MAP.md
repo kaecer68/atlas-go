@@ -201,7 +201,7 @@ ls .omo/plans/          # 短期 PR 待辦
 ls .omo/evidence/       # 驗證報告
 ls .omo/handoffs/       # session 交接
 ls .omo/notepads/       # 決策筆記
-ls .omo/traces/         # sim 輸出
+# sim 輸出已遷移至 data/state/traces/
 ```
 
 ### `.omo/` 白名單與生命週期
@@ -211,7 +211,7 @@ ls .omo/traces/         # sim 輸出
 | `briefs/` | **長壽** phase 規劃 | v1: `<topic>.md`; v2 redesigns: `<topic>-v2.md`(與 v1 並存)| v1 為 source/working; v2 為 refined → 升 `docs/<topic>.md` 後刪 v1+v2 | v1: `roadmap.md`, `ALERT_SYSTEM_REDESIGN.md`; v2: `roadmap-v2.md`, `alert-redesign-v2.md` |
 | `plans/` | **短壽** PR 待辦 | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` | **merge 後必須刪除** | `2026-06-26-llm-router-fix.md` |
 | `evidence/` | **短壽** 驗證報告 | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` | 驗證完即刪 | `f4-scope-fidelity.md` |
-| `traces/` | sim JSONL | `sim-YYYYMMDD.jsonl` | 保留最新 5 個 | `sim-20260626.jsonl` |
+| `traces/` | ~~sim JSONL~~ （已遷移至 `data/state/traces/`） | — | — | — |
 | `notepads/` | 跨 session 決策筆記 | `<topic>/<file>.md` 或 flat `<topic>.md` | 寫滿/過時歸檔或刪 | `decision-chain-evolution-v2/learnings.md`, `frontend-refactor-recovery.md`, `agent-interface-roadmap.md` |
 | `handoffs/` | session 交接 | `YYYY-MM-DD-<topic>.md` | session 結束即刪 | `2026-06-25-f1-handoff.md` |
 | `workspaces/` | 跨 session 工作區 | `<workspace-name>/` | merged 後刪 | `wave-11-l2-4/` |
@@ -245,7 +245,7 @@ rm -rf .omo/handoffs/*  # 已交接或無用的
 rm -rf .omo/run-continuation/*  # session state 不需保留
 
 # 定期
-du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
+du -sh .omo/            # 監控 AI 工作區總大小
 ```
 
 ---
