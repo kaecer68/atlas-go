@@ -3228,6 +3228,14 @@ export interface StrategyParameters {
   fallback_strategy: string;
 }
 
+export interface StrategyRecommendation {
+  active?: string;
+  available?: string[];
+  ranked?: string[];
+  entry_signal?: string;
+  stop_loss?: string;
+}
+
 export interface StrategyStateConfig {
   max_position_size: number;
   max_sector_exposure: number;
@@ -3463,7 +3471,7 @@ export interface ThresholdViolation {
 export interface TierRecommendation {
   tier: string;
   market: string;
-  strategies?: string;
+  strategies?: string | null;
   signals?: string;
 }
 

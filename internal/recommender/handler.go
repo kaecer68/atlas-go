@@ -10,10 +10,20 @@ import (
 
 // TierRecommendation wraps tier-specific recommendation content.
 type TierRecommendation struct {
-	Tier       string      `json:"tier"`
-	Market     MarketLight `json:"market"`
-	Strategies any         `json:"strategies,omitempty"`
-	Signals    any         `json:"signals,omitempty"`
+	Tier       string               `json:"tier"`
+	Market     MarketLight          `json:"market"`
+	Strategies *StrategyRecommendation `json:"strategies,omitempty"`
+	Signals    any                  `json:"signals,omitempty"`
+}
+
+// StrategyRecommendation is the structured strategies payload (replaces
+// map[string]any so cmd/gentags can extract JSON tags for field-contract CI).
+type StrategyRecommendation struct {
+	Active      string   `json:"active,omitempty"`
+	Available   []string `json:"available,omitempty"`
+	Ranked      []string `json:"ranked,omitempty"`
+	EntrySignal string   `json:"entry_signal,omitempty"`
+	StopLoss    string   `json:"stop_loss,omitempty"`
 }
 
 // MarketLight is the free/public tier market overview.
@@ -79,18 +89,18 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 		return http.StatusOK, rec
 
 	case subscription.TierRegistered:
-		rec.Strategies = map[string]any{
-			"active":    "all_weather",
-			"available": []string{"all_weather", "defensive"},
+		rec.Strategies = &StrategyRecommendation{
+			Active:    "all_weather",
+			Available: []string{"all_weather", "defensive"},
 		}
 		return http.StatusOK, rec
 
 	case subscription.TierPremium:
-		rec.Strategies = map[string]any{
-			"active":       "growth",
-			"ranked":       []string{"growth", "momentum", "all_weather", "value", "defensive"},
-			"entry_signal": "等待回測支撐區間",
-			"stop_loss":    "-5%",
+		rec.Strategies = &StrategyRecommendation{
+			Active:      "growth",
+			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
+			EntrySignal: "等待回測支撐區間",
+			StopLoss:    "-5%",
 		}
 		return http.StatusOK, rec
 
