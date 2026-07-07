@@ -252,6 +252,18 @@ du -sh .omo/            # 若超過 100MB 幾乎確定有 stale traces
 
 ## 動作紀錄
 
+### 2026-07-07 docs/plans/ governance fix（本次）
+
+- **觸發**:User 發現 PR #971–#975 校正工作的規劃文件被置於 `docs/plans/`，且 `docs/plans/` 在 `DOCUMENTATION_MAP.md:261` 已記載「整個移除」但實際仍存在，導致文件歸屬規範與真實目錄 drift，並讓 AI agent 反覆將短期計畫放錯位置。
+
+- **修正內容**:
+  - `git rm -r docs/plans/`，刪除 `2026-07-07-wave11-phase3-frontend-contract.md` 與 `2026-07-07-wave11-phase4-provider-wiring.md`（已實作完畢，git reflog 可恢復）。
+  - `docs/DOCUMENTATION_STANDARD.md`: 從 `docs/` 子目錄結構與文件歸屬對照表中移除 `docs/plans/`；將「短期 PR 待辦」與「修復計畫」統一歸入 `.omo/plans/`；更新「單數 vs 複數」例外說明。
+  - `AGENTS.md`: 將「規範性 / 設計文件」列明確區分為「穩定 reference → `docs/`」與「短期 PR 計畫 → `.omo/plans/`」，避免 agent 泛化解讀。
+  - `docs/archive/2026-04-16-dashboard-screening-sync.md`: 歷史引用 `docs/plans/2026-04-16-dashboard-screening-sync.md` 加註「歷史路徑，現行規範已移至 `.omo/plans/`」。
+
+- **後續**：進入文件體系全面審計，彙整其他 drift 與 dangling reference 後統一修復。
+
 ### 2026-07-03 docs cleanup（本次）
 
 - **觸發**:User 評估 `docs/{briefs,branch-hygiene,investigations,plans}` 對 STANDARD + MAP 合規性 + 3 新任務(.omo/.ocx/.opencode gitignore + cleanup 規範一致性 + audit_assets/ 整併)。
