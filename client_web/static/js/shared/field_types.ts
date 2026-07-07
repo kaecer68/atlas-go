@@ -1863,6 +1863,14 @@ export interface MacroRiskConfig {
   outflow_prob_max: number;
 }
 
+export interface MarketLight {
+  regime: string;
+  regime_label: string;
+  stress_index: number;
+  capital_flow_summary: string;
+  events_today: string[];
+}
+
 export interface MarketdataParameters {
   twse_api_rate_limit: string;
   twse_api_rate_burst: string;
@@ -3450,6 +3458,13 @@ export interface ThresholdViolation {
   threshold: number;
   severity: string;
   message: string;
+}
+
+export interface TierRecommendation {
+  tier: string;
+  market: string;
+  strategies?: string;
+  signals?: string;
 }
 
 export interface TimelineEvent {

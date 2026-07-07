@@ -64,11 +64,12 @@ func main() {
 	fubonDir := findFubonDir(rootDir)
 	capitalflowDir := findCapitalFlowDir(rootDir)
 	eventdrivenDir := findEventDrivenDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" || eventdrivenDir != "" {
+	recommenderDir := findRecommenderDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir, eventdrivenDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir, eventdrivenDir, recommenderDir} {
 			if d == "" {
 				continue
 			}
@@ -159,6 +160,16 @@ func main() {
 			for k, v := range cfStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and capitalflow; using capitalflow version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge recommender structs (e.g. TierRecommendation, MarketLight).
+		if recommenderDir != "" {
+			recStructs := parseStructsWithNames(recommenderDir, allNames)
+			for k, v := range recStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and recommender; using recommender version\n", k)
 				}
 				structs[k] = v
 			}
@@ -263,6 +274,14 @@ func findCapitalFlowDir(rootDir string) string {
 
 func findEventDrivenDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "eventdriven")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findRecommenderDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "recommender")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
