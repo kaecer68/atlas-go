@@ -37,6 +37,8 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerEventTools(mcpSrv, s)
 	registerRiskAlertTools(mcpSrv, s)
 	registerStrategyTools(mcpSrv, s)
+	registerCapitalFlowTools(mcpSrv, s)
+	registerRecommendationTools(mcpSrv, s)
 	registerExperimentTools(mcpSrv, s)
 	registerSynergyTools(mcpSrv, s)
 	registerControlTools(mcpSrv, s)
