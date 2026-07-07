@@ -84,7 +84,9 @@ func run(args []string) error {
 
 	if *serve {
 		mux := http.NewServeMux()
-		dashboard := monitoring.NewDashboardAPI(cfg.WorkDir, cfg.LedgerDir, nil)
+		// backtest-window serve mode only displays backtest reports; macro data is not required.
+		// Use the Gateway-backed constructor with a no-op fetcher to avoid the legacy CompositeMacroProvider path.
+		dashboard := monitoring.NewDashboardAPIWithGateway(cfg.WorkDir, cfg.LedgerDir, nil, monitoring.NoopFetcher())
 		dashboard.RegisterRoutes(mux)
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)
