@@ -549,6 +549,7 @@
   "earnings_surprise_threshold",
   "effective_period_days",
   "effective_start_time",
+  "effective_tier",
   "election_cycle_confidence",
   "ema_alpha",
   "email",
