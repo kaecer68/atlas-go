@@ -43,11 +43,14 @@ async function _ensureShellLoaded(id) {
   if (_shellsLoaded.has(id)) return;
   const loader = SHELL_LOADERS[id];
   if (!loader) return;
-  _shellsLoaded.add(id);
   try {
     const mod = await loader();
     const el = document.getElementById('page-' + id);
     if (el && typeof mod.template === 'string') el.innerHTML = mod.template;
+    if (typeof mod.init === 'function') {
+      await mod.init();
+    }
+    _shellsLoaded.add(id);
   } catch (e) {
     _shellsLoaded.delete(id);
     console.warn('[switchPage] shell load failed:', id, e);
