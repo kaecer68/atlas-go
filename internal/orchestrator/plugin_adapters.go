@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"math"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -121,7 +120,7 @@ func (p *janusPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime
 }
 
 type swarmPlugin struct {
-	swarm      *swarm.MiroFishSwarm
+	swarm      *swarm.SwarmState
 	controller *Phase3Controller
 }
 
@@ -132,43 +131,7 @@ func (p *swarmPlugin) Attach(core ServiceRegistry) {}
 func (p *swarmPlugin) SetController(ctrl *Phase3Controller) { p.controller = ctrl }
 
 func (p *swarmPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
-	if len(recs) == 0 {
-		return recs
-	}
-	var result swarm.SimulationResult
-	var ok bool
-	if p.controller != nil {
-		result, ok = p.controller.GetSwarmConsensus()
-	}
-	if !ok && p.swarm != nil {
-		result, ok = p.swarm.GetLatestResult()
-	}
-	if !ok || len(result.Consensus) == 0 {
-		return recs
-	}
-	adjusted := make([]domain.Recommendation, len(recs))
-	for i, rec := range recs {
-		adjusted[i] = rec
-		cp, ok := result.Consensus[rec.Symbol]
-		if !ok {
-			continue
-		}
-		switch cp.ConsensusDirection {
-		case "bullish":
-			if rec.Side == domain.SideBuy {
-				adjusted[i].Conviction = min(100, rec.Conviction+5)
-			} else {
-				adjusted[i].Conviction = max(0, rec.Conviction-5)
-			}
-		case "bearish":
-			if rec.Side == domain.SideSell {
-				adjusted[i].Conviction = min(100, rec.Conviction+5)
-			} else {
-				adjusted[i].Conviction = max(0, rec.Conviction-5)
-			}
-		}
-	}
-	return adjusted
+	return recs // No-op: swarm simulation engine demoted in PR #963
 }
 
 func (p *swarmPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {}
@@ -271,30 +234,8 @@ func (p *phase3Plugin) PostSimulation(quotes []domain.Quote, regime domain.Regim
 	if p.controller == nil {
 		return
 	}
-	baseState := swarm.MarketState{
-		Timestamp: asOf,
-		Prices:    make(map[string]float64, len(quotes)),
-		Volumes:   make(map[string]float64, len(quotes)),
-		// RealizedVolatility is approximated from intraday High/Low ranges.
-		// This is a coarse proxy since only current quotes (no historical series)
-		// are available in this context. Falls back to scenario.Volatility when
-		// no valid quotes are present.
-	}
-	var totalRange float64
-	var validQuotes int
-	for _, q := range quotes {
-		baseState.Prices[q.Symbol] = q.Last
-		baseState.Volumes[q.Symbol] = float64(q.Volume)
-		if q.Last > 0 && q.High > q.Low {
-			totalRange += (q.High - q.Low) / q.Last
-			validQuotes++
-		}
-	}
-	if validQuotes > 0 {
-		avgRange := totalRange / float64(validQuotes)
-		baseState.RealizedVolatility = avgRange * math.Sqrt(252.0)
-	}
-	p.controller.RunParallelOptimization(baseState, regime)
+	p.controller.AutoPromoteSpawnedAgents()
+	p.controller.runAdversarialStressTests()
 }
 
 // SectorAgentLLMDriver bundles PlanDriver + ReflectDriver behind a single

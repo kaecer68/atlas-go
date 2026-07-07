@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -312,19 +313,16 @@ func testEnhancedReflexivity() (float64, []string) {
 }
 
 func testSwarm() (float64, []string) {
-	errors := make([]string, 0)
-
 	config := swarm.DefaultSwarmConfig()
-	swarm := swarm.NewMiroFishSwarm(config)
-
-	swarm.Start()
+	sw := swarm.NewSwarmState(config)
+	_ = sw.Start(context.Background())
 
 	score := 100.0
-	if swarm == nil {
+	errors := make([]string, 0)
+	if sw == nil {
 		score = 0
 		errors = append(errors, "Swarm initialization failed")
 	}
-
 	return score, errors
 }
 

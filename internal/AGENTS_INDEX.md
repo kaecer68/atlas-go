@@ -62,7 +62,7 @@
 | `retail` | RSI-tw 散戶情緒指數 |
 | `robustness` | 穩健性與敏感度測試（SK-20~22） |
 | `stress` | 壓力測試場景 |
-| `swarm` | MiroFish swarm 模擬 + GARCH 波動率 |
+| `swarm` | Swarm 狀態容器（模擬引擎已降級為 pass-through，PR #963） |
 | `forecast` | 個股方向性預測 — per-symbol directional forecasts（Phase 3.5 M4 PoC）|
 | `forecast_bridge` | Forecast → TradeSignal 轉換層（Phase 3.5 M4 PoC）|
 | `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A）|

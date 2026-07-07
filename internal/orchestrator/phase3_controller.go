@@ -1,11 +1,9 @@
 package orchestrator
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
-	"os"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/adversarial"
@@ -17,28 +15,25 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/spawning"
-	"github.com/kaecer68/atlas-go/internal/stress"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
-// Phase3Controller coordinates PRISM, Swarm, Spawning, and Reflexivity
-// using a swarm-style parallel optimization approach.
-// No background goroutines or tickers are managed here — the caller
-// (e.g., BackgroundTaskManager in main.go) owns the scheduling.
+// Phase3Controller coordinates PRISM, Swarm, Spawning, and Reflexivity.
+// The Swarm field holds a pass-through state container (simulation engine
+// was demoted in PR #963). No background goroutines or tickers are managed
+// here — the caller (e.g., BackgroundTaskManager in main.go) owns the
+// scheduling.
 type Phase3Controller struct {
 	registry        *domain.AgentRegistry
 	prismManager    *prism.PRISMManager
-	swarm           *swarm.MiroFishSwarm
+	swarm           *swarm.SwarmState
 	spawningManager *spawning.SpawningManager
 	reflexEngine    *reflexivity.ReflexivityEngine
 	ledger          ledger.OutcomeStore
 	advRunner       *AdversarialScenarioRunner
 	lastAdvResult   *adversarial.StressTestResult
-	trainingStore   *swarm.TrainingStore
-	snapshotPath    string
 	metaLearner     *metalearning.MetaLearner
 	metaLearnPath   string
-	calibrationPath string
 
 	mu               sync.RWMutex
 	prismWeightCache map[string]float64 // agentID -> weight multiplier
@@ -48,7 +43,7 @@ type Phase3Controller struct {
 func NewPhase3Controller(
 	registry *domain.AgentRegistry,
 	prismMgr *prism.PRISMManager,
-	sw *swarm.MiroFishSwarm,
+	sw *swarm.SwarmState,
 	spawningMgr *spawning.SpawningManager,
 	reflexEng *reflexivity.ReflexivityEngine,
 	ledgerStore ledger.OutcomeStore,
@@ -70,17 +65,7 @@ func (c *Phase3Controller) WithAdversarialRunner(r *AdversarialScenarioRunner) *
 	return c
 }
 
-// SetTrainingStore attaches a training data store for swarm output persistence.
-func (c *Phase3Controller) SetTrainingStore(ts *swarm.TrainingStore) {
-	c.trainingStore = ts
-}
-
-// SetSnapshotPath sets the file path where swarm snapshots are persisted.
-func (c *Phase3Controller) SetSnapshotPath(path string) {
-	c.snapshotPath = path
-}
-
-// SetMetaLearner attaches a MetaLearner for swarm-driven strategy optimization.
+// SetMetaLearner attaches a MetaLearner for strategy optimization.
 // metaLearnPath is the file path for persisting/restoring MetaLearner state.
 func (c *Phase3Controller) SetMetaLearner(ml *metalearning.MetaLearner, persistPath string) {
 	c.metaLearner = ml
@@ -92,87 +77,6 @@ func (c *Phase3Controller) SetMetaLearner(ml *metalearning.MetaLearner, persistP
 			logging.Debug("phase3_controller", "metalearner_load_skipped", "path", persistPath, "err", err)
 		} else {
 			logging.Info("phase3_controller", "metalearner_restored", "strategies", len(ml.Strategies()), "path", persistPath)
-		}
-	}
-}
-
-// SetCalibrationPath sets the file path where swarm calibration reports are persisted.
-func (c *Phase3Controller) SetCalibrationPath(path string) {
-	c.calibrationPath = path
-}
-
-// RunSwarmCycle runs one complete swarm simulation cycle synchronously:
-//  1. Apply reflexivity mutations to scenarios
-//  2. Initialize and run swarm simulation
-//  3. Export training data for downstream consumption
-//
-// No goroutines or tickers. The caller is responsible for scheduling.
-func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
-	if c.swarm == nil {
-		return
-	}
-
-	c.mu.Lock()
-	c.syncReflexivityToSwarmUnsafe()
-	c.mu.Unlock()
-
-	// Using stress scenarios derived from historical market data.
-	// Revert to InitializeScenarios(baseState) to restore hardcoded defaults.
-	c.swarm.InitializeScenariosFromStress(baseState, stress.AllScenarios())
-	c.swarm.Start()
-	c.swarm.EvolveGeneration()
-
-	// Calibrate simulation statistics against market targets.
-	targetStats := swarm.SimulationStatistics{
-		Volatility:  0.20,
-		MeanReturn:  0.0002,
-		Skewness:    -0.3,
-		Kurtosis:    3.5,
-		MaxDrawdown: 0.15,
-	}
-	calReport := c.swarm.CalibrateAgainstTarget(targetStats)
-	logging.Info("phase3_controller", "swarm_calibrated",
-		"error", calReport.CalibrationError,
-		"adjustments", len(calReport.ParameterAdjustments))
-
-	if c.calibrationPath != "" {
-		if err := c.saveCalibrationReport(calReport); err != nil {
-			logging.Warn("phase3_controller", "calibration_save_failed", "err", err)
-		}
-	}
-
-	// Export training data for downstream consumption
-	if c.trainingStore != nil {
-		trainingData := c.swarm.ExportTrainingData()
-		if err := c.trainingStore.Store(trainingData); err != nil {
-			logging.Warn("phase3_controller", "training_store_failed", "err", err)
-		} else {
-			logging.Info("phase3_controller", "training_data_stored", "scenarios", len(trainingData))
-		}
-	}
-
-	logging.Info("phase3_controller", "swarm_cycle_completed")
-
-	// Save snapshot for dashboard API consumption
-	if c.snapshotPath != "" {
-		if err := c.swarm.SaveSnapshot(c.snapshotPath); err != nil {
-			logging.Warn("phase3_controller", "snapshot_save_failed", "err", err)
-		}
-	}
-
-	// Feed training data into MetaLearner for strategy evolution
-	if c.metaLearner != nil {
-		trainingData := c.swarm.ExportTrainingData()
-		if len(trainingData) > 0 {
-			c.metaLearner.SubmitTrainingScenarios(trainingData)
-			logging.Info("phase3_controller", "metalearner_updated", "scenarios", len(trainingData))
-
-			// Persist MetaLearner state
-			if c.metaLearnPath != "" {
-				if err := c.metaLearner.Save(c.metaLearnPath); err != nil {
-					logging.Warn("phase3_controller", "metalearner_save_failed", "err", err)
-				}
-			}
 		}
 	}
 }
@@ -289,65 +193,9 @@ func (c *Phase3Controller) AutoPromoteSpawnedAgents() {
 	}
 }
 
-// syncReflexivityToSwarmUnsafe reads active reflexivity loops and mutates swarm scenarios.
-// Must be called under lock or when swarm is stopped.
-func (c *Phase3Controller) syncReflexivityToSwarmUnsafe() {
-	if c.reflexEngine == nil || c.swarm == nil {
-		return
-	}
-
-	loops := c.reflexEngine.GetActiveLoops()
-	if len(loops) == 0 {
-		// No active loops: drift toward complacency (lower vol on high_vol, raise low_vol calm)
-		c.swarm.UpdateScenario("high_vol", -0.03, 0)
-		c.swarm.UpdateScenario("low_vol", -0.01, 0)
-		return
-	}
-
-	bullStrength := 0.0
-	bearStrength := 0.0
-	meanRevStrength := 0.0
-	crashStrength := 0.0
-	bubbleStrength := 0.0
-
-	for _, loop := range loops {
-		switch loop.Direction {
-		case reflexivity.PositiveFeedback:
-			if loop.Bias != nil && loop.Bias.Magnitude > 0 {
-				bubbleStrength += loop.Strength
-				bullStrength += loop.Strength
-			} else {
-				crashStrength += loop.Strength
-				bearStrength += loop.Strength
-			}
-		case reflexivity.NegativeFeedback:
-			meanRevStrength += loop.Strength
-		}
-	}
-
-	if bubbleStrength > 0 {
-		c.swarm.UpdateScenario("bull_trend", bubbleStrength*0.05, bubbleStrength*0.001)
-	}
-	if crashStrength > 0 {
-		c.swarm.UpdateScenario("bear_trend", crashStrength*0.08, -crashStrength*0.002)
-	}
-	if meanRevStrength > 0 {
-		c.swarm.UpdateScenario("transition", meanRevStrength*0.04, 0)
-	}
-	if bullStrength+bearStrength > 0.7 {
-		c.swarm.UpdateScenario("high_vol", 0.05, 0)
-	}
-	if bubbleStrength > 0.8 || crashStrength > 0.8 {
-		c.swarm.UpdateScenario("low_vol", 0.02, 0)
-	}
-}
-
-// GetSwarmConsensus returns the latest swarm consensus.
-func (c *Phase3Controller) GetSwarmConsensus() (swarm.SimulationResult, bool) {
-	if c.swarm == nil {
-		return swarm.SimulationResult{}, false
-	}
-	return c.swarm.GetLatestResult()
+// GetSwarmConsensus returns empty — swarm simulation engine demoted in PR #963.
+func (c *Phase3Controller) GetSwarmConsensus() (domain.SwarmSimulationResult, bool) {
+	return domain.SwarmSimulationResult{}, false
 }
 
 // GetRecommendedStrategies returns the MetaLearner's top learning strategies,
@@ -357,47 +205,6 @@ func (c *Phase3Controller) GetRecommendedStrategies() []*metalearning.LearningSt
 		return nil
 	}
 	return c.metaLearner.GetTopStrategies(5)
-}
-
-// RunParallelOptimization executes all five Phase 3 optimization tracks.
-func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, regime domain.Regime) {
-	var wg sync.WaitGroup
-	wg.Add(5)
-
-	go func() {
-		defer wg.Done()
-		c.RunSwarmCycle(baseState)
-	}()
-
-	go func() {
-		defer wg.Done()
-		c.ApplyPRISMWeights(nil, regime)
-		// Note: ApplyPRISMWeights returns []Recommendation, not error.
-		// When called with nil recs it is a no-op (internal guards return immediately).
-		// Failures are surfaced via PRISM manager logs, not via this callsite.
-	}()
-
-	go func() {
-		defer wg.Done()
-		c.AutoPromoteSpawnedAgents()
-	}()
-
-	go func() {
-		defer wg.Done()
-		c.mu.Lock()
-		c.syncReflexivityToSwarmUnsafe()
-		c.mu.Unlock()
-	}()
-
-	go func() {
-		defer wg.Done()
-		c.runAdversarialStressTests()
-	}()
-
-	wg.Wait()
-	if err := c.SaveMetrics(""); err != nil {
-		logging.Warn("Phase3Controller", "SaveMetrics failed", "err", err)
-	}
 }
 
 // runAdversarialStressTests finds the weakest agent and runs real stress scenarios.
@@ -442,19 +249,4 @@ func (c *Phase3Controller) GetLastAdversarialResult() *adversarial.StressTestRes
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastAdvResult
-}
-
-// saveCalibrationReport persists a calibration report as JSON to calibrationPath.
-func (c *Phase3Controller) saveCalibrationReport(report swarm.CalibrationReport) error {
-	f, err := os.Create(c.calibrationPath)
-	if err != nil {
-		return fmt.Errorf("save calibration report: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(report); err != nil {
-		return fmt.Errorf("encode calibration report: %w", err)
-	}
-	return nil
 }

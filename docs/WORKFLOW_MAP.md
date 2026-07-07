@@ -158,7 +158,7 @@ PostSimulation(...)           // 每輪 simulation 結束
 ```
 
 已確認 plugin（依 `internal/orchestrator/system_plugins.go` 的 `With*` 方法，共 7 個）：
-`janusPlugin` (WithJANUS)、`prismPlugin` (WithPRISM)、`swarmPlugin` (WithSwarm)、`spawningPlugin` (WithSpawning)、`phase3Plugin` (WithPhase3Controller)、`strategyTechniquesPlugin` (WithStrategyTechniques)、`llmSectorAgentsPlugin` (WithLLMSectorAgents)。
+`janusPlugin` (WithJANUS)、`prismPlugin` (WithPRISM)、`swarmPlugin` (WithSwarm, pass-through since PR #963)、`spawningPlugin` (WithSpawning)、`phase3Plugin` (WithPhase3Controller)、`strategyTechniquesPlugin` (WithStrategyTechniques)、`llmSectorAgentsPlugin` (WithLLMSectorAgents)。
 
 > **命名慣例**：原始碼使用 lowerCamelCase（小寫開頭）。文件中也沿用 lowerCamelCase，與 struct 引用一致。
 
@@ -295,7 +295,7 @@ Broker config 旗標（10 個）：`-broker-mode`、`-broker-adapter`、`-broker
 | Wave 11（L2.3 / L2.4） | L2.3 shipped, L2.4 觀察期 active via PR #821 | `docs/specs/llm-sector-agent.md`、`docs/operations/l2-4-runbook.md` |
 | Wave 11 L2.4 followup | 未來工作 | `docs/operations/l2-4-followup.md` |
 | Phase A3（gateway alert cleanup） | shipped | main.go:233 註解 |
-| Orchestrator plugin 進化 | active（janus/prism/phase3/swarm/spawning） | `internal/orchestrator/system_plugins.go` |
+| Orchestrator plugin 進化 | active（janus/prism/phase3/spawning）；swarm pass-through since PR #963 | `internal/orchestrator/system_plugins.go` |
 
 ---
 

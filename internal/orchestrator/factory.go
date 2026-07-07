@@ -66,7 +66,7 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
 	system.WithPRISM(pm)
 
-	sw := swarm.NewMiroFishSwarm(swarm.DefaultSwarmConfig())
+	sw := swarm.NewSwarmState(swarm.DefaultSwarmConfig())
 	system.WithSwarm(sw)
 
 	if janusEngine == nil {

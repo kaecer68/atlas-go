@@ -35,8 +35,8 @@ func (s *System) WithPRISM(pm *prism.PRISMManager) *System {
 	return s
 }
 
-// WithSwarm attaches a MiroFish swarm simulator to the system.
-func (s *System) WithSwarm(sw *swarm.MiroFishSwarm) *System {
+// WithSwarm attaches a Swarm state container (pass-through; simulation engine demoted in PR #963).
+func (s *System) WithSwarm(sw *swarm.SwarmState) *System {
 	if s.host == nil {
 		s.host = &PluginHost{}
 	}

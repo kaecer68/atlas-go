@@ -17,10 +17,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 // freePort returns an unused TCP port from the kernel. It is used by tests
@@ -955,7 +955,7 @@ func TestBuildBaseState_RealProviderQuotes_NotPlaceholder(t *testing.T) {
 		},
 	}
 
-	var state swarm.MarketState = buildBaseState(provider, []string{"2330.TW", "2317.TW"})
+	var state domain.MarketState = buildBaseState(provider, []string{"2330.TW", "2317.TW"})
 
 	if state.Prices["2330.TW"] != 575.0 {
 		t.Fatalf("2330.TW price = %.1f, want 575.0 (got placeholder fallback)", state.Prices["2330.TW"])
@@ -975,7 +975,7 @@ func TestBuildBaseState_ProviderError_FallsBackToPlaceholder(t *testing.T) {
 		err: errors.New("network timeout"),
 	}
 
-	var state swarm.MarketState = buildBaseState(provider, []string{"2330.TW", "2317.TW"})
+	var state domain.MarketState = buildBaseState(provider, []string{"2330.TW", "2317.TW"})
 
 	// Should fall back to placeholder values (100.0), NOT panic.
 	if state.Prices["2330.TW"] != 100.0 {
@@ -1088,4 +1088,50 @@ func TestIsPublicPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+// buildBaseState constructs the initial domain.MarketState used by the
+// simulation's first cycle. It queries provider.GetQuotes for the given
+// symbols with a 5-second timeout; on failure (or per-symbol miss) it
+// falls back to a deterministic placeholder (price=100, volume=5M) so the
+// swarm can proceed even with partial data.
+func buildBaseState(provider marketdata.Provider, symbols []string) domain.MarketState {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	state := domain.MarketState{
+		Timestamp: time.Now(),
+		Prices:    make(map[string]float64),
+		Volumes:   make(map[string]float64),
+	}
+
+	quotes, err := provider.GetQuotes(ctx, time.Now(), symbols)
+	if err != nil {
+		logging.Warn("buildBaseState", "get_quotes_failed",
+			logging.Err(err),
+			"symbols", len(symbols))
+		for _, sym := range symbols {
+			state.Prices[sym] = 100.0
+			state.Volumes[sym] = 5_000_000.0
+		}
+		return state
+	}
+
+	quoteMap := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		quoteMap[q.Symbol] = q
+	}
+
+	for _, sym := range symbols {
+		if q, ok := quoteMap[sym]; ok {
+			state.Prices[sym] = q.Last
+			state.Volumes[sym] = float64(q.Volume)
+		} else {
+			logging.Warn("buildBaseState", "symbol_not_in_quotes",
+				"symbol", sym)
+			state.Prices[sym] = 100.0
+			state.Volumes[sym] = 5_000_000.0
+		}
+	}
+	return state
 }
