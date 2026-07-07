@@ -66,7 +66,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/startup"
+	"github.com/kaecer68/atlas-go/internal/stocktools"
 	"github.com/kaecer68/atlas-go/internal/storage"
+	strategyRanker "github.com/kaecer68/atlas-go/internal/strategy_ranker"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
@@ -119,6 +121,10 @@ func isPublicPath(p string) bool {
 	case p == "/api/synergy" || strings.HasPrefix(p, "/api/synergy/"):
 		return true
 	case p == "/api/cross-market" || strings.HasPrefix(p, "/api/cross-market/"):
+		return true
+	case p == "/api/stock" || strings.HasPrefix(p, "/api/stock/"):
+		return true
+	case p == "/api/strategy-ranker" || strings.HasPrefix(p, "/api/strategy-ranker/"):
 		return true
 	case p == "/api/auth" || strings.HasPrefix(p, "/api/auth/"):
 		return true
@@ -524,6 +530,28 @@ func run(args []string, deps appDeps) error {
 			log.Fatalf("failed to get client dist sub FS: %v", err)
 		}
 		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
+
+		// Per-symbol stock endpoints for atlas-mcp.
+		stockDeps := stocktools.Deps{}
+		if cfg.FugleAPIKey != "" {
+			stockDeps.FugleClient = marketdata.GetSharedFugleClient(cfg.FugleAPIKey)
+		}
+		if fp := portfolio.NewFundamentalProvider(); true {
+			fundamentalsPath := filepath.Join(cfg.WorkDir, "data", "fundamentals.json")
+			if err := fp.LoadFromJSON(fundamentalsPath); err == nil {
+				stockDeps.Fundamentals = fp
+			} else {
+				log.Printf("[StockTools] fundamentals load failed: %v", err)
+			}
+		}
+		if qs, err := ledger.NewQuoteStore(cfg); err == nil {
+			stockDeps.QuoteStore = qs
+		} else {
+			log.Printf("[StockTools] quote store init failed: %v", err)
+		}
+		stockDeps.CapitalFlow = marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, constants.StateCapitalFlow))
+		stocktools.RegisterRoutes(mux, stockDeps)
+		log.Printf("[StockTools] registered /api/stock/* routes")
 
 		dashboard.SetHealthAddrs(*apiAddr, *fubonProxyPort)
 		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
@@ -1133,6 +1161,8 @@ func run(args []string, deps appDeps) error {
 				// so the original call encountered a nil handler. nil-safe.
 				dashboard.RegisterStrategiesRoutes(mux)
 				logging.Info("main", "strategy_techniques_loaded", "count", stRegistry.Count(), "path", stSeedsPath)
+				strategyRanker.RegisterRoutes(mux, stRegistry)
+				log.Printf("[StrategyRanker] registered /api/strategy-ranker/* routes")
 			} else {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
 			}
