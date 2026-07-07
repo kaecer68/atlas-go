@@ -1,6 +1,6 @@
 # Atlas Agent Tools — 實戰指南
 
-> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 89 個 tool，實際數量依 MCP server config 而定：基礎 87 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
+> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 91 個 tool，實際數量依 MCP server config 而定：基礎 89 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **整合到 Claude Desktop / OpenClaw / Hermes**：[`mcp-integration-guide.md`](./mcp-integration-guide.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
@@ -42,7 +42,7 @@
 
 ---
 
-## 完整工具 Catalog（約 89 個 tool，Phase 2 全部上線）
+## 完整工具 Catalog（約 91 個 tool，Phase 2 全部上線）
 
 ### Regime（1 個）
 | Tool | 用途 |
