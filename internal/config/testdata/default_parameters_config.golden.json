@@ -2954,7 +2954,7 @@
       "value": 0.55
     },
     "earnings_surprise_confidence": {
-      "rationale": "Confidence baseline for externally-triggered earnings surprise events (consumed by ingestor/swarm detectors, not calendar-based); default before empirical calibration",
+      "rationale": "Confidence baseline for externally-triggered earnings surprise events (consumed by ingestor detectors, not calendar-based); default before empirical calibration",
       "source": "heuristic",
       "todo": "Calibrate from earnings surprise frequency and market reaction data",
       "value": 0.65
