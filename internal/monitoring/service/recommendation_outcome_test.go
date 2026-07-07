@@ -224,6 +224,76 @@ func TestLoadForecastVsRealityReadsPredictionsFromSelectedSession(t *testing.T) 
 	}
 }
 
+// TestLoadForecastVsRealitySkipsMetadataFiles verifies that non-experiment JSON
+// files (such as _metadata.json) and malformed experiment files are skipped
+// instead of causing the entire endpoint to fail with a 500.
+func TestLoadForecastVsRealitySkipsMetadataFiles(t *testing.T) {
+	baseDir := t.TempDir()
+	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
+	experimentsDir := filepath.Join(baseDir, "experiments")
+	if err := os.MkdirAll(experimentsDir, 0o755); err != nil {
+		t.Fatalf("mkdir experiments dir: %v", err)
+	}
+
+	// Valid experiment result file.
+	valid := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			ID:             "exec-test-01-1234567890",
+			ProposalID:     "proposal-test",
+			CommitID:       "commit-test",
+			ApprovalID:     "approval-test",
+			TargetAgentID:  "test-agent",
+			Skill:          "test_skill",
+			MutationType:   "prompt_tightening",
+			BaselineValue:  0.01,
+			CandidateValue: 0.02,
+			Status:         domain.ExperimentAccepted,
+		},
+		RecordedAt: recordedAt,
+	}
+	validBytes, err := json.Marshal(valid)
+	if err != nil {
+		t.Fatalf("marshal valid experiment: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(experimentsDir, "exec-test-01-1234567890.json"), validBytes, 0o644); err != nil {
+		t.Fatalf("write valid experiment file: %v", err)
+	}
+
+	// _metadata.json is a data catalog file, not an experiment result.
+	metadata := map[string]any{
+		"$schema":     "../../../../schemas/data_metadata.schema.json",
+		"name":        "experiments",
+		"description": "metadata file that should be ignored",
+	}
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatalf("marshal metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(experimentsDir, "_metadata.json"), metadataBytes, 0o644); err != nil {
+		t.Fatalf("write metadata file: %v", err)
+	}
+
+	// Malformed experiment file that starts with the exec- prefix.
+	if err := os.WriteFile(filepath.Join(experimentsDir, "exec-malformed.json"), []byte("{not valid json"), 0o644); err != nil {
+		t.Fatalf("write malformed file: %v", err)
+	}
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadForecastVsReality("", 50)
+	if err != nil {
+		t.Fatalf("LoadForecastVsReality: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data")
+	}
+	if len(data.Items) != 1 {
+		t.Fatalf("expected 1 experiment item, got %d", len(data.Items))
+	}
+	if data.Items[0].ExperimentID != "exec-test-01-1234567890" {
+		t.Fatalf("experiment_id: got %q", data.Items[0].ExperimentID)
+	}
+}
+
 func TestReportServiceLoadRecommendationsForDateSupportsCanonicalOutcomeJSON(t *testing.T) {
 	baseDir := t.TempDir()
 	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
