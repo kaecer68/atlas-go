@@ -1,8 +1,4 @@
-// Package metalearning implements learning-to-learn optimization for agent strategies
-// Based on MiroFish swarm results and training data to optimize learning strategies.
-//
-// The MetaLearner ingests swarm simulation data via SubmitSwarmData() and evolves
-// LearningStrategy configurations via a genetic algorithm (population, elite selection,
+// Package metalearning implements learning-to-learn optimization for agent strategies.
 // crossover, mutation). Top strategies are available via GetTopStrategies() and
 // RecommendStrategyForAgent(). Results persist via Save()/Load().
 package metalearning
@@ -84,25 +80,10 @@ type MetaLearner struct {
 	population      []*LearningStrategy
 	eliteStrategies []*LearningStrategy
 	config          *MetaLearningConfig
-	swarmData       chan SwarmLearningData
 	trainingResults chan TrainingResult
 	stopChan        chan struct{}
 	mu              sync.RWMutex
 	wg              sync.WaitGroup
-}
-
-// SwarmLearningData represents feedback from MiroFish swarm
-type SwarmLearningData struct {
-	FishID           string             `json:"fish_id"`
-	Scenario         string             `json:"scenario"`
-	LearningRate     float64            `json:"learning_rate"`
-	BatchSize        int                `json:"batch_size"`
-	Epochs           int                `json:"epochs"`
-	FinalAccuracy    float64            `json:"final_accuracy"`
-	ConvergenceSpeed float64            `json:"convergence_speed"`
-	Stability        float64            `json:"stability"`
-	Timestamp        time.Time          `json:"timestamp"`
-	StrategyParams   map[string]float64 `json:"strategy_params"`
 }
 
 // TrainingResult captures outcome of applying a learning strategy
@@ -128,7 +109,6 @@ func NewMetaLearner(config *MetaLearningConfig) *MetaLearner {
 		population:      make([]*LearningStrategy, 0, config.PopulationSize),
 		eliteStrategies: make([]*LearningStrategy, 0),
 		config:          config,
-		swarmData:       make(chan SwarmLearningData, 100),
 		trainingResults: make(chan TrainingResult, 100),
 		stopChan:        make(chan struct{}),
 	}
@@ -296,9 +276,6 @@ func (ml *MetaLearner) Start() {
 	go ml.adaptationLoop()
 
 	ml.wg.Add(1)
-	go ml.swarmDataProcessor()
-
-	ml.wg.Add(1)
 	go ml.trainingResultProcessor()
 }
 
@@ -419,82 +396,6 @@ func (ml *MetaLearner) calculateStrategyScore(s *LearningStrategy) float64 {
 func (ml *MetaLearner) evaluateStrategies() {
 	// In real implementation, would aggregate all historical data
 	// For now, strategies are evaluated on-demand via their performance tracking
-}
-
-// swarmDataProcessor handles feedback from MiroFish swarm
-func (ml *MetaLearner) swarmDataProcessor() {
-	defer ml.wg.Done()
-
-	for {
-		select {
-		case data := <-ml.swarmData:
-			ml.processSwarmData(data)
-		case <-ml.stopChan:
-			return
-		}
-	}
-}
-
-// processSwarmData updates strategies based on swarm results
-func (ml *MetaLearner) processSwarmData(data SwarmLearningData) {
-	ml.mu.Lock()
-	defer ml.mu.Unlock()
-
-	// Find matching strategies by similarity to swarm parameters
-	for _, strategy := range ml.population {
-		similarity := ml.calculateParameterSimilarity(strategy.Parameters, data.StrategyParams)
-
-		if similarity > 0.8 {
-			// Update strategy performance based on swarm outcome
-			if strategy.Performance == nil {
-				strategy.Performance = &StrategyPerformance{StrategyID: strategy.ID}
-			}
-
-			perf := strategy.Performance
-			perf.TotalApplications++
-
-			// Success if accuracy is good and converged quickly
-			improvement := data.FinalAccuracy - 0.5 // Assuming 0.5 baseline
-			if data.FinalAccuracy > 0.7 && data.ConvergenceSpeed < 100 {
-				perf.SuccessCount++
-				perf.AvgImprovement = (perf.AvgImprovement*float64(perf.SuccessCount-1) + improvement) / float64(perf.SuccessCount)
-			} else {
-				perf.FailureCount++
-			}
-
-			perf.LastEvaluated = time.Now()
-			strategy.UpdatedAt = time.Now()
-		}
-	}
-}
-
-// calculateParameterSimilarity computes similarity between two parameter sets
-func (ml *MetaLearner) calculateParameterSimilarity(p1, p2 map[string]float64) float64 {
-	if len(p1) == 0 || len(p2) == 0 {
-		return 0.0
-	}
-
-	var totalDiff, count float64
-
-	for key, val1 := range p1 {
-		if val2, exists := p2[key]; exists {
-			diff := math.Abs(val1 - val2)
-			avg := (math.Abs(val1) + math.Abs(val2)) / 2
-			if avg > 1e-9 {
-				totalDiff += diff / avg
-			}
-			count++
-		}
-	}
-
-	if count == 0 {
-		return 0.0
-	}
-
-	avgDiff := totalDiff / count
-	similarity := math.Max(0, 1-avgDiff)
-
-	return similarity
 }
 
 // trainingResultProcessor handles training outcomes
@@ -625,15 +526,6 @@ func (ml *MetaLearner) RecommendStrategyForAgent(agentID string, agentType Strat
 	})
 
 	return candidates[0]
-}
-
-// SubmitSwarmData sends swarm results to meta-learner
-func (ml *MetaLearner) SubmitSwarmData(data SwarmLearningData) {
-	select {
-	case ml.swarmData <- data:
-	default:
-		// Channel full, drop data
-	}
 }
 
 // SubmitTrainingResult sends training outcome to meta-learner

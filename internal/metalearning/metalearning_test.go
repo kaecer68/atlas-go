@@ -3,7 +3,6 @@ package metalearning
 import (
 	"os"
 	"testing"
-	"time"
 )
 
 func TestMetaLearnerPersistence(t *testing.T) {
@@ -79,19 +78,6 @@ func TestMetaLearner_Load_ErrorOnNonexistentFile(t *testing.T) {
 	err := ml.Load("/nonexistent/file.json")
 	if err == nil {
 		t.Error("expected error loading nonexistent file")
-	}
-}
-
-func TestMetaLearner_SubmitSwarmData(t *testing.T) {
-	ml := NewMetaLearner(DefaultMetaLearningConfig())
-	// SubmitSwarmData should not panic on valid data
-	ml.SubmitSwarmData(SwarmLearningData{
-		FishID:    "test-fish",
-		Scenario:  "Test Scenario",
-		Timestamp: time.Now(),
-	})
-	if len(ml.Strategies()) == 0 {
-		t.Error("expected strategies still available after submission")
 	}
 }
 
