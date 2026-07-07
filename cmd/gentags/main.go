@@ -11,7 +11,6 @@
 //	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
 //	internal/fubonproxy/**/*.go         — fubon-proxy supervisor types (DeploymentConfig, DeploymentStatus, ...)
 //	internal/marketdata/**/*.go         — market data types (MacroDataPoint, MacroDataSnapshot, ...)
-//	internal/subscription/**/*.go       — subscription/auth types (User, ProfileResponse, ...)
 //
 // Writes (to all active frontend directories so copies don't drift):
 //
