@@ -11,6 +11,12 @@ func NewDashboardAPI(workDir, ledgerDir string, collector *monitoring.MetricsCol
 	return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
 }
 
+// NewDashboardAPIWithGateway creates a DashboardAPI backed by the Gateway data fetcher.
+// Prefer this constructor in production; it routes macro data through apigateway.Gateway.
+func NewDashboardAPIWithGateway(workDir, ledgerDir string, collector *monitoring.MetricsCollector, fetcher monitoring.DataFetcher) *monitoring.DashboardAPI {
+	return monitoring.NewDashboardAPIWithGateway(workDir, ledgerDir, collector, fetcher)
+}
+
 func RegisterDashboardRoutes(mux *http.ServeMux, dashboard *monitoring.DashboardAPI, enableSwagger, includeLive bool, rt *Runtime) {
 	if rt.Repository != nil {
 		dashboard.SetRepository(rt.Repository)

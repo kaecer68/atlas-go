@@ -15,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -51,7 +52,10 @@ func defaultAppDeps() appDeps {
 	return appDeps{
 		loadConfig: config.Load,
 		newDashboardAPI: func(workDir, ledgerDir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
+			// Gateway initialization failed; use a no-op fetcher instead of silently falling back
+			// to the legacy CompositeMacroProvider path. This makes the degraded state explicit.
+			logging.Warn("bootstrap", "gateway_unavailable_using_noop_fetcher")
+			return monitoring.NewDashboardAPIWithGateway(workDir, ledgerDir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			// http.Server default Addr is "" which ListenAndServe maps to ":http".
