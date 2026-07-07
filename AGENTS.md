@@ -43,7 +43,7 @@
 | 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
 | CI / pipeline 設定 | `.github/workflows/`、`.github/instructions/` |
 | 憲法級強制規範 | `docs/CONSTITUTION.md`、`docs/ITERATION_GATE.md`、`internal/apigateway/CONSTITUTION.md` |
-| 規範性 / 設計文件 | `docs/`（**不應放 `.omo/`** — `.gitignore` 排除） |
+| 規範性 / 設計文件 / 穩定 reference | `docs/`（**不應放 `.omo/`**）；**短期 PR 計畫 → `.omo/plans/`** |
 
 **防膨脹規則**：
 - 本文件不超過 **160 行**

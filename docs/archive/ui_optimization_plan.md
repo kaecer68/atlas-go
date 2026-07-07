@@ -170,7 +170,7 @@ staticcheck ./...
 
 - 6-Pillar Visual Audit 完整稽核報告（已歸檔）
 - `web/static/index.html` — 主 SPA 檔案
-- `docs/superpowers/plans/2026-04-21-atlas-ui-fixes.md` — 原始實作計畫
+- 原 `docs/superpowers/plans/2026-04-21-atlas-ui-fixes.md` — 原始實作計畫（歷史路徑，已隨 `docs/superpowers/` 清理移除）
 
 ### 6.2 參考資源
 

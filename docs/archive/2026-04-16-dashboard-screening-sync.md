@@ -968,7 +968,7 @@ git commit -m "chore: ci alignment and final fixes for screening dashboard sync"
 
 ## Execution Choice
 
-**Plan complete and saved to `docs/plans/2026-04-16-dashboard-screening-sync.md`.**
+**Plan complete and saved to `docs/plans/2026-04-16-dashboard-screening-sync.md`（歷史路徑；依現行 `docs/DOCUMENTATION_STANDARD.md` 規劃文件應置於 `.omo/plans/`）。**
 
 Two execution options:
 

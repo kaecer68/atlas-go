@@ -455,7 +455,7 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 Phase 3.5 全部 4 個 M 已於 2026-07-02 merge（M1 via PR #852, M2/M3 via PR #894/#895/#898, M4 via PR #905）。後續:
 
-1. `docs/operations/phase3-5-runbook.md` — 待建立（對齊 L2.4 runbook 模式）
+1. `.omo/plans/phase3-5-runbook-stub.md` — 已建立 stub，待 M1 實作完成後補齊為正式 runbook（對齊 L2.4 runbook 模式）
 2. `../../CHANGELOG.md` — 已於 Wave 11+ 更新標示「Phase 3.5 ship」
 3. Phase 4.A/B 優先順序 — 待基於 M1-M4 實際結果重新評估
 4. 若 sortino 改善達標(> 5%),考慮 Promotion 路線

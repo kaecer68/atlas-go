@@ -55,8 +55,8 @@ docs/
 ├── audit/                       # 審計報告（YYYY-MM-DD-slug.md）
 ├── handoff/                     # 任務交接（YYYY-MM-DD-topic.md）
 ├── investigations/              # 根因調查（YYYY-MM-DD-symptom.md）
-├── plans/                       # 修復計畫（YYYY-MM-DD-topic-repair.md）
 ├── specs/                       # 規格（topic-spec.md）
+# 注意：docs/plans/ 已移除。所有具體修復/執行計畫請放 .omo/plans/（短期，merge 後刪）。
 ├── guides/                      # 指南（topic-guide.md）
 └── archive/                     # 歸檔（見下方專節）
 ```
@@ -252,10 +252,9 @@ grep -E "(\.omo|\.opencode)" .gitignore
 | 審計報告 | `docs/audit/` | `YYYY-MM-DD-<slug>.md` |
 | 任務交接（穩定版） | `docs/handoff/` | `YYYY-MM-DD-<topic>.md` |
 | 根因調查 | `docs/investigations/` | `YYYY-MM-DD-<symptom>.md` |
-| 修復計畫（穩定） | `docs/plans/` | `YYYY-MM-DD-<topic>-repair.md` |
 | 歸檔（教學價值） | `docs/archive/` | `<slug>.md` 或 `YYYY/<slug>.md` |
 | **長壽 brief（跨 session 規劃）** | `.omo/briefs/` | `<topic>-brief.md` 或 `<topic>.md` |
-| **短期 PR 待辦** | `.omo/plans/` | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
+| **短期 PR 待辦 / 修復計畫** | `.omo/plans/` | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
 | 驗證報告 | `.omo/evidence/` | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` |
 | sim 輸出 | `.omo/traces/` | `sim-YYYYMMDD.jsonl` |
 | session 交接 | `.omo/handoffs/` | `YYYY-MM-DD-<topic>.md` |
@@ -267,7 +266,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 - **日期前綴 `YYYY-MM-DD-`**：時序敏感（handoff、investigation、audit、plan）
 - **無日期前綴**：通用 reference（architecture、conventions、QUICKSTART、brief）
 - **slug**：小寫、`-` 分隔、無空格、無大寫
-- **單數 vs 複數**：用單數，例外是已存在的複數目錄（`docs/events/`、`docs/plans/`）保留不動
+- **單數 vs 複數**：用單數，例外是已存在的複數目錄（`docs/events/`）保留不動
 - **P<n> 編號**：plans 與 evidence 的 P0-1、P0-2 編號可選，但建議用於大型 multi-PR 規劃
 
 ---
