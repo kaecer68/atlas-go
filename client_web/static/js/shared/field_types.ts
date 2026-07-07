@@ -2422,6 +2422,14 @@ export interface PremarketData {
   stress_index?: Record<string, string>;
 }
 
+export interface ProfileResponse {
+  user: string | null;
+  email: string;
+  tier: string;
+  effective_tier: string;
+  trial_end: string;
+}
+
 export interface PromptControl {
   volume_floor?: number;
   volume_downgrade?: number;
@@ -3309,6 +3317,13 @@ export interface StructuralTrendConfig {
   semiconductor_index_threshold: number;
 }
 
+export interface SubscriptionEvent {
+  id: number;
+  user_id: number;
+  event: string;
+  timestamp: string;
+}
+
 export interface SummaryReport {
   date: string;
   quality_score: number;
@@ -3481,6 +3496,13 @@ export interface TimelineEvent {
   detail: string;
 }
 
+export interface TokenClaims {
+  sub: number;
+  email: string;
+  tier: string;
+  exp: number;
+}
+
 export interface TradeRecord {
   trade_id: string;
   session_id: string;
@@ -3512,6 +3534,14 @@ export interface UniverseOverlapResponse {
   agents: string[];
   matrix: Record<string, Record<string, number>>;
   warnings: string[];
+}
+
+export interface User {
+  id: number;
+  email: string;
+  tier: string;
+  trial_end: string;
+  created_at: string;
 }
 
 export interface ValidateRequest {

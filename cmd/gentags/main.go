@@ -10,6 +10,7 @@
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
 //	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
 //	internal/fubonproxy/**/*.go         — fubon-proxy supervisor types (DeploymentConfig, DeploymentStatus, ...)
+//	internal/subscription/**/*.go       — subscription/auth types (User, ProfileResponse, ...)
 //
 // Writes (to all active frontend directories so copies don't drift):
 //
@@ -65,11 +66,12 @@ func main() {
 	capitalflowDir := findCapitalFlowDir(rootDir)
 	eventdrivenDir := findEventDrivenDir(rootDir)
 	recommenderDir := findRecommenderDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" {
+	subscriptionDir := findSubscriptionDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir, eventdrivenDir, recommenderDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir} {
 			if d == "" {
 				continue
 			}
@@ -170,6 +172,16 @@ func main() {
 			for k, v := range recStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and recommender; using recommender version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge subscription structs (e.g. User, ProfileResponse, SubscriptionEvent).
+		if subscriptionDir != "" {
+			subStructs := parseStructsWithNames(subscriptionDir, allNames)
+			for k, v := range subStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and subscription; using subscription version\n", k)
 				}
 				structs[k] = v
 			}
@@ -282,6 +294,14 @@ func findEventDrivenDir(rootDir string) string {
 
 func findRecommenderDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "recommender")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findSubscriptionDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "subscription")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}

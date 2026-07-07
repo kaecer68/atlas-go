@@ -125,12 +125,12 @@ func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user lookup failed"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"user":           user,
-		"email":          user.Email,
-		"tier":           user.Tier,
-		"effective_tier": user.EffectiveTier(),
-		"trial_end":      user.TrialEnd,
+	writeJSON(w, http.StatusOK, ProfileResponse{
+		User:          user,
+		Email:         user.Email,
+		Tier:          user.Tier,
+		EffectiveTier: user.EffectiveTier(),
+		TrialEnd:      user.TrialEnd,
 	})
 }
 
