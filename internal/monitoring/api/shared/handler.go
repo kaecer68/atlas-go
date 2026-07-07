@@ -40,6 +40,8 @@ var authFreePrefixPaths = []string{
 	"/api/alerts/",
 	"/api/synergy/",
 	"/api/cross-market/",
+	"/api/capital-flow/",
+	"/api/events/",
 }
 
 func isAuthFreePath(p string) bool {

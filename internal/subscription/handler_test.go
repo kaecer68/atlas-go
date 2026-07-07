@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -116,6 +117,24 @@ func TestTierRegistration(t *testing.T) {
 	}
 	if u.EffectiveTier() != TierPremium {
 		t.Errorf("expected premium trial effective tier, got %s", u.EffectiveTier())
+	}
+}
+
+func TestLogout(t *testing.T) {
+	s := newTestStore(t)
+	jwt := NewJWTManager("test-secret-min-32-characters-long")
+	h := NewHandler(s, jwt)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	rec := httptest.NewRecorder()
+	h.handleLogout(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	cookie := rec.Header().Get("Set-Cookie")
+	if !strings.Contains(cookie, "token=;") && !strings.Contains(cookie, "Max-Age=0") && !strings.Contains(cookie, "Expires=Thu, 01 Jan 1970") {
+		t.Fatalf("expected token cookie to be cleared, got %q", cookie)
 	}
 }
 
