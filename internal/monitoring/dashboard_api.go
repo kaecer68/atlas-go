@@ -114,6 +114,12 @@ type DashboardAPI struct {
 	crossMarketSvc             *service.CrossMarketService
 }
 
+// NewDashboardAPI creates a DashboardAPI backed by CompositeMacroProvider.
+//
+// Deprecated: production code should use NewDashboardAPIWithGateway with a
+// monitoring.DataFetcher so that macro data flows through apigateway.Gateway
+// (observability, caching, uniform channel health). This constructor is kept
+// only as a fallback for tools that do not have a Gateway available.
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	cfg := config.Load()
 	var providers []marketdata.MacroDataProvider
