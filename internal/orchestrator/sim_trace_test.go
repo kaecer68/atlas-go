@@ -65,7 +65,7 @@ func TestSimTrace_ExportJSONL(t *testing.T) {
 		t.Fatalf("ExportJSONL failed: %v", err)
 	}
 
-	expectedPath := filepath.Join(dir, ".omo", "traces", "sim-20260526.jsonl")
+	expectedPath := filepath.Join(dir, "traces", "sim-20260526.jsonl")
 	if filePath != expectedPath {
 		t.Errorf("path mismatch: got %s, want %s", filePath, expectedPath)
 	}

@@ -30,7 +30,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, sessionDate)
 	}
 
-	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, sessionDate.Format("20060102"), s.traceVerbose)
+	tw := NewSimTraceWriter(s.Sim().cfg.LedgerDir, sessionDate.Format("20060102"), s.traceVerbose)
 	defer func() { _, _ = tw.ExportJSONL() }()
 	s.Sim().engine.WithTraceWriter(tw)
 	if s.plugins != nil {

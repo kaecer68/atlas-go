@@ -326,7 +326,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	// SimTraceWriter for pipeline layer transparency audit trail.
-	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, asOf.Format("20060102"), s.traceVerbose)
+	tw := NewSimTraceWriter(s.Sim().cfg.LedgerDir, asOf.Format("20060102"), s.traceVerbose)
 	defer func() { _, _ = tw.ExportJSONL() }()
 	// Wire trace writer to engine and screener for internal trace events.
 	s.Sim().engine.WithTraceWriter(tw)
