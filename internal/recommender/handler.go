@@ -10,10 +10,10 @@ import (
 
 // TierRecommendation wraps tier-specific recommendation content.
 type TierRecommendation struct {
-	Tier       string               `json:"tier"`
-	Market     MarketLight          `json:"market"`
+	Tier       string                  `json:"tier"`
+	Market     MarketLight             `json:"market"`
 	Strategies *StrategyRecommendation `json:"strategies,omitempty"`
-	Signals    any                  `json:"signals,omitempty"`
+	Signals    any                     `json:"signals,omitempty"`
 }
 
 // StrategyRecommendation is the structured strategies payload (replaces
