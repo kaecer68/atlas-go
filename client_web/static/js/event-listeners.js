@@ -1,12 +1,25 @@
 // Atlas Dashboard — Event Listeners (extracted from inline onclick)
 // All functions called here are on window.* (set by main.js during module load).
 
+import { logout, renderNavState } from './services/auth.js';
+
 document.addEventListener('DOMContentLoaded', () => {
 
   // === Sidebar Navigation (22 pages) ===
   document.querySelectorAll('#sidebar nav a[data-page]').forEach(a => {
     a.addEventListener('click', () => window.switchPage(a.dataset.page));
   });
+
+  // === Sidebar Logout ===
+  const logoutBtn = document.getElementById('navLogoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await logout();
+      await renderNavState();
+      window.location.hash = '#home';
+    });
+  }
 
   // === Global page navigation (inline links with data-page, e.g. alert health panel)
   document.addEventListener('click', (e) => {
