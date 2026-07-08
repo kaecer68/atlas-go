@@ -30,34 +30,122 @@ func TestNewNarrativeAdapterFunc_NilNil_EmptyReturn(t *testing.T) {
 }
 
 func TestNewCapitalFlowFunc_NilNil_Graceful(t *testing.T) {
-	a := NewCapitalFlowFunc(nil)
+	a := NewCapitalFlowFunc(nil, nil)
 	if a == nil {
 		t.Fatal("adapter must not be nil")
 	}
-	got, err := a.LatestDaily(context.Background())
+	daily, err := a.LatestDaily(context.Background())
 	if err != nil {
 		t.Errorf("nil-func LatestDaily should be graceful, got %v", err)
 	}
-	if got.Summary != "" {
-		t.Errorf("expected zero-value DailyReport, got %+v", got)
+	if daily.Summary != "" {
+		t.Errorf("expected zero-value DailyReport, got %+v", daily)
+	}
+	summary, err := a.Summary(context.Background())
+	if err != nil {
+		t.Errorf("nil-func Summary should be graceful, got %v", err)
+	}
+	if summary.DominantForce != "" || summary.QualityLabel != "" {
+		t.Errorf("expected zero-value SummaryReport, got %+v", summary)
 	}
 }
 
 func TestNewCapitalFlowFunc_PassThrough(t *testing.T) {
-	want := capitalflow.DailyReport{
+	wantDaily := capitalflow.DailyReport{
 		Date:         time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
 		QualityLabel: "inflow",
 		Summary:      "test pass-through",
 	}
-	a := NewCapitalFlowFunc(func(ctx context.Context) (capitalflow.DailyReport, error) {
-		return want, nil
-	})
+	wantSummary := capitalflow.SummaryReport{
+		Date:          wantDaily.Date,
+		QualityLabel:  "inflow",
+		DominantForce: capitalflow.ForceForeign,
+		Summary:       "foreign-led inflow",
+	}
+	a := NewCapitalFlowFunc(
+		func(ctx context.Context) (capitalflow.DailyReport, error) { return wantDaily, nil },
+		func(ctx context.Context) (capitalflow.SummaryReport, error) { return wantSummary, nil },
+	)
+	gotDaily, err := a.LatestDaily(context.Background())
+	if err != nil {
+		t.Fatalf("LatestDaily: %v", err)
+	}
+	if gotDaily.Summary != wantDaily.Summary {
+		t.Errorf("DailyReport.Summary = %q, want %q", gotDaily.Summary, wantDaily.Summary)
+	}
+	gotSummary, err := a.Summary(context.Background())
+	if err != nil {
+		t.Fatalf("Summary: %v", err)
+	}
+	if gotSummary.DominantForce != wantSummary.DominantForce {
+		t.Errorf("SummaryReport.DominantForce = %q, want %q", gotSummary.DominantForce, wantSummary.DominantForce)
+	}
+}
+
+func TestNewCapitalFlowFunc_LatestOnlyOptIn(t *testing.T) {
+	wantDaily := capitalflow.DailyReport{
+		Date:    time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
+		Summary: "latest only",
+	}
+	a := NewCapitalFlowFunc(
+		func(ctx context.Context) (capitalflow.DailyReport, error) { return wantDaily, nil },
+		nil,
+	)
 	got, err := a.LatestDaily(context.Background())
 	if err != nil {
 		t.Fatalf("LatestDaily: %v", err)
 	}
-	if got.Summary != want.Summary {
-		t.Errorf("Summary = %q, want %q", got.Summary, want.Summary)
+	if got.Summary != wantDaily.Summary {
+		t.Errorf("LatestDaily.Summary = %q, want %q", got.Summary, wantDaily.Summary)
+	}
+	summary, err := a.Summary(context.Background())
+	if err != nil {
+		t.Errorf("nil Summary func should be graceful, got %v", err)
+	}
+	if summary.DominantForce != "" {
+		t.Errorf("Summary fallback should be zero-value, got %+v", summary)
+	}
+}
+
+func TestNewCapitalFlowAdapter_NilProvider_Graceful(t *testing.T) {
+	a := NewCapitalFlowAdapter(nil)
+	if a == nil {
+		t.Fatal("adapter must not be nil")
+	}
+	daily, err := a.LatestDaily(context.Background())
+	if err != nil {
+		t.Errorf("nil provider LatestDaily should be graceful, got %v", err)
+	}
+	if daily.Summary != "" {
+		t.Errorf("expected zero-value DailyReport, got %+v", daily)
+	}
+	summary, err := a.Summary(context.Background())
+	if err != nil {
+		t.Errorf("nil provider Summary should be graceful, got %v", err)
+	}
+	if summary.DominantForce != "" {
+		t.Errorf("expected zero-value SummaryReport, got %+v", summary)
+	}
+}
+
+func TestNewCapitalFlowAdapter_SummaryPassThrough(t *testing.T) {
+	p := &fakeCapitalFlowProvider{
+		summary: capitalflow.SummaryReport{
+			Date:          time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
+			QualityLabel:  "strong_inflow",
+			DominantForce: capitalflow.ForceForeign,
+		},
+	}
+	a := NewCapitalFlowAdapter(p)
+	got, err := a.Summary(context.Background())
+	if err != nil {
+		t.Fatalf("Summary: %v", err)
+	}
+	if got.DominantForce != p.summary.DominantForce {
+		t.Errorf("DominantForce = %q, want %q", got.DominantForce, p.summary.DominantForce)
+	}
+	if got.QualityLabel != p.summary.QualityLabel {
+		t.Errorf("QualityLabel = %q, want %q", got.QualityLabel, p.summary.QualityLabel)
 	}
 }
 
@@ -134,6 +222,21 @@ func TestNewComparisonEngineAdapter_PassThrough(t *testing.T) {
 }
 
 // --- fakes ---
+
+type fakeCapitalFlowProvider struct {
+	daily      capitalflow.DailyReport
+	dailyErr   error
+	summary    capitalflow.SummaryReport
+	summaryErr error
+}
+
+func (f *fakeCapitalFlowProvider) LatestDaily(context.Context) (capitalflow.DailyReport, error) {
+	return f.daily, f.dailyErr
+}
+
+func (f *fakeCapitalFlowProvider) Summary(context.Context) (capitalflow.SummaryReport, error) {
+	return f.summary, f.summaryErr
+}
 
 type fakePredictor struct {
 	report eventdriven.PredictionReport
