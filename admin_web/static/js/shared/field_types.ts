@@ -311,6 +311,14 @@ export interface CapexCycleThresholdConfig {
   maintenance_revenue_min: number;
 }
 
+export interface CapitalFlowDetail {
+  date: string;
+  quality_label: string;
+  quality_score: number;
+  resonance_dir: string;
+  dominant_force: string;
+}
+
 export interface CapitalPhaseConfig {
   current_phase: string;
   phase_start_date: string;
@@ -2028,6 +2036,7 @@ export interface MarketLight {
   regime_label: string;
   stress_index: number;
   capital_flow_summary: string;
+  capital_flow_detail?: CapitalFlowDetail | null;
   events_today: string[];
 }
 
