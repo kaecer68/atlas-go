@@ -25,7 +25,7 @@
 
 完整清單見 `doc.go:15-30`。最常用入口：`NewDefaultRouter(impls ...ProviderImpl)`（啟動時 wiring）、`NewDefaultRouterFromConfig(cfg, impls)`（載入 `configs/llm_router.yaml` 後呼叫）、`DefaultRouter.Call(ctx, Request)`（所有 LLM 呼叫的唯一入口）、`DefaultRouter.Health() map[Provider]HealthStatus`（`/api/llm/health`）。
 
-> 12 個 `Capability` 常數列於 `provider.go:28-41`，新增 capability 必須同步 4 個位置（見 skill）。
+> 12 個 `Capability` 常數列於 `provider.go:30-41`（type 在 L28，常數從 L30 開始），新增 capability 必須同步 4 個位置（見 skill）。
 
 ---
 
