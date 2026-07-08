@@ -12,7 +12,7 @@
 | `Handler` | `handler.go` | HTTP handler：`HandleDaily` / `HandleSummary` |
 | `TWSECapitalFlowChannelAdapter` | (apigateway) | TWSE 三大法人資料抓取 |
 | `DailyReport` | `types.go:55` | 七大資金勢力彙整：`Forces` 內含 Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
-| `ResonanceResult` | `types.go:38` | 共振結果（含 `Coefficient` 強度 −1 to +1，越大表示買方一致；`Direction` 字串標籤） |
+| `ResonanceResult` | `types.go:38` | 共振結果（含 `Coefficient` 強度 [0.5, 1.5]：1.5=三勢力全對齊、0.5=foreign vs government 對立、1.0=其他；`Direction` 字串標籤） |
 
 ## 七大資金勢力
 
@@ -46,15 +46,17 @@ JSON response
 
 Sprint 2 T9 將使 `internal/recommender::HandleRecommendations::CapitalFlow` 欄位接入 `Handler.HandleDaily`。
 
-預期介面（已對齊 `service.go:33` 真實簽名）：
+介面契約（部分 ship / 部分規劃中）：
 ```go
 type CapitalFlow interface {
-    LatestDaily(ctx context.Context) (DailyReport, error)
-    Summary(ctx context.Context) (SummaryReport, error)
+    LatestDaily(ctx context.Context) (DailyReport, error)        // SHIP（service.go:33）
+    // Summary(ctx context.Context) (SummaryReport, error)        // TODO: 規劃中，尚未實作
 }
 ```
 
-`Service` struct 已在 `service.go` ship（PR #999），提供 `LatestDaily` / `Summary` 兩個非 HTTP accessor method 給 `internal/recommender` adapter 使用（繞過 `Handler.HandleDaily` 需 `*http.Request` 的限制）。
+**`LatestDaily`** 已 ship：`Service.LatestDaily` 在 `service.go:33`，可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler.HandleDaily` 需 `*http.Request` 的限制。
+
+**`Summary`** 尚未 ship：`Service` 目前只有 `LatestDaily` 一個 method。`SummaryReport` 由 `report.go:43` 的自由函式 `GenerateSummaryReport(date, forces, resonance)` 產生，呼叫路徑是 `Handler.HandleSummary`（handler.go:57）→ `GenerateSummaryReport`。如 recommender 需要 `Summary` non-HTTP accessor，**需另開 PR** 把 `GenerateSummaryReport` 包成 `Service.Summary(ctx)` method（內部可重用 `LatestDaily` 已算好的 `forces` + `resonance` 避免重算）。
 
 ## 已知陷阱
 
