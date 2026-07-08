@@ -207,6 +207,21 @@ func TestHandleRecommendations_CapitalFlowFromService(t *testing.T) {
 	if rec.Market.CapitalFlow != "外資連續買超 3 日，共振 0.85" {
 		t.Errorf("CapitalFlow = %q, want from capitalFlow mock", rec.Market.CapitalFlow)
 	}
+	if rec.Market.CapitalFlowDetail == nil {
+		t.Fatalf("CapitalFlowDetail should be populated when SummaryReport has QualityLabel, got nil")
+	}
+	if rec.Market.CapitalFlowDetail.QualityLabel != "inflow" {
+		t.Errorf("CapitalFlowDetail.QualityLabel = %q, want %q", rec.Market.CapitalFlowDetail.QualityLabel, "inflow")
+	}
+	if rec.Market.CapitalFlowDetail.DominantForce != "foreign" {
+		t.Errorf("CapitalFlowDetail.DominantForce = %q, want %q", rec.Market.CapitalFlowDetail.DominantForce, "foreign")
+	}
+	if rec.Market.CapitalFlowDetail.ResonanceDir != "aligned" {
+		t.Errorf("CapitalFlowDetail.ResonanceDir = %q, want %q", rec.Market.CapitalFlowDetail.ResonanceDir, "aligned")
+	}
+	if rec.Market.CapitalFlowDetail.Date == "" {
+		t.Errorf("CapitalFlowDetail.Date should not be empty")
+	}
 }
 
 func TestHandleRecommendations_EventsFromPredictor(t *testing.T) {

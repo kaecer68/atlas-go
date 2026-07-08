@@ -257,6 +257,7 @@
   "capex_growth_threshold",
   "capital_adequacy_boost",
   "capital_flow",
+  "capital_flow_detail",
   "capital_flow_summary",
   "capital_intensity",
   "capital_limits",
