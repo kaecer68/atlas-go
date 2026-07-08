@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"net/http"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
@@ -49,12 +49,18 @@ type Handler struct {
 	strategyComp   ComparisonEngine
 	regimeListener RegimeChangeListener
 	lastSeenRegime string
+	devMode        bool
 }
 
 // NewHandler creates a recommendation handler with optional JWT verification.
 // If jwtMgr is non-nil, the handler verifies JWT tokens before reading tier.
 func NewHandler(store subscription.Store, jwtMgr *subscription.JWTManager) *Handler {
 	return &Handler{subStore: store, jwtMgr: jwtMgr}
+}
+
+func (h *Handler) WithDevMode(enabled bool) *Handler {
+	h.devMode = enabled
+	return h
 }
 
 // NewHandlerWithServices constructs a Handler with Sprint 2 T8-T12 service deps.
@@ -96,7 +102,7 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 		}
 	}
 
-	if !authenticated && devModeEnabled() {
+	if !authenticated && devModeEnabled(h) {
 		if email := r.Header.Get("X-User-Email"); email != "" {
 			if user, err := h.subStore.GetByEmail(email); err == nil {
 				tier = user.EffectiveTier()
@@ -105,7 +111,7 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 		}
 	}
 
-	if !authenticated && !devModeEnabled() && r.Header.Get("X-User-Email") != "" {
+	if !authenticated && !devModeEnabled(h) && r.Header.Get("X-User-Email") != "" {
 		return http.StatusUnauthorized, map[string]string{
 			"error": "X-User-Email header not allowed in production",
 		}
@@ -183,7 +189,8 @@ func stressIndexFromNarrative(p NarrativeProvider, w *[]string) float64 {
 		return 0.0
 	}
 	info, err := p.GetCurrentStressIndex(context.Background())
-	*w = append(*w, "stress_index_unavailable"); if err != nil || !info.HasData {
+	*w = append(*w, "stress_index_unavailable")
+	if err != nil || !info.HasData {
 		return 0.0
 	}
 	return info.Value
@@ -205,7 +212,8 @@ func capitalFlowFromCapitalFlow(p CapitalFlowProvider, w *[]string) string {
 		return "資金流向均衡"
 	}
 	info, err := p.LatestDaily(context.Background())
-	*w = append(*w, "capital_flow_unavailable"); if err != nil || info.Summary == "" {
+	*w = append(*w, "capital_flow_unavailable")
+	if err != nil || info.Summary == "" {
 		return "資金流向均衡"
 	}
 	return info.Summary
@@ -216,7 +224,8 @@ func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 		return nil
 	}
 	preds, err := p.PredictToday(context.Background())
-	*w = append(*w, "events_unavailable"); if err != nil || len(preds) == 0 {
+	*w = append(*w, "events_unavailable")
+	if err != nil || len(preds) == 0 {
 		return nil
 	}
 	out := make([]string, len(preds))
@@ -242,7 +251,8 @@ func signalEntry(e ComparisonEngine, strategyID string, w *[]string) string {
 		return "等待回測支撐區間"
 	}
 	info, err := e.GetScore(strategyID)
-	*w = append(*w, "entry_signal_unavailable"); if err != nil || info.EntrySignal == "" {
+	*w = append(*w, "entry_signal_unavailable")
+	if err != nil || info.EntrySignal == "" {
 		return "等待回測支撐區間"
 	}
 	return info.EntrySignal
@@ -253,7 +263,8 @@ func signalStopLoss(e ComparisonEngine, strategyID string, w *[]string) string {
 		return "-5%"
 	}
 	info, err := e.GetScore(strategyID)
-	*w = append(*w, "stop_loss_unavailable"); if err != nil || info.StopLoss == 0 {
+	*w = append(*w, "stop_loss_unavailable")
+	if err != nil || info.StopLoss == 0 {
 		return "-5%"
 	}
 	return fmt.Sprintf("-%.1f%%", info.StopLoss*100)

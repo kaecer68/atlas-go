@@ -2,8 +2,8 @@ package recommender
 
 import (
 	"context"
-	"net/http"
 	"errors"
+	"net/http"
 	"os"
 	"testing"
 
@@ -32,7 +32,7 @@ func TestHandleRecommendations(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	h := NewHandler(*store, nil)
+	h := NewHandler(*store, nil).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	code, data := h.HandleRecommendations(req)
@@ -52,7 +52,7 @@ func TestHandleLoggedInUser(t *testing.T) {
 
 	store, _ := subscription.NewStore(dir)
 	store.Register("premium@test.com", "pass")
-	h := NewHandler(*store, nil)
+	h := NewHandler(*store, nil).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	req.Header.Set("X-User-Email", "premium@test.com")
@@ -98,7 +98,7 @@ func TestHandleRecommendations_DevModeFallback_Enabled(t *testing.T) {
 
 	store, _ := subscription.NewStore(dir)
 	store.Register("premium@test.com", "pass")
-	h := NewHandler(*store, nil)
+	h := NewHandler(*store, nil).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	req.Header.Set("X-User-Email", "premium@test.com")
@@ -117,7 +117,7 @@ func TestHandleRecommendations_NarrativeIntegration_PopulatesStressIndex(t *test
 	defer os.RemoveAll(dir)
 	store, _ := subscription.NewStore(dir)
 	mock := &mockNarrative{stress: 15.5, regime: "RISK_ON"}
-	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil)
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	code, data := h.HandleRecommendations(req)
@@ -216,7 +216,7 @@ func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
 		stopLoss:    0.05,
 		takeProfit:  0.15,
 	}
-	h := NewHandlerWithServices(*store, nil, nil, nil, nil, mock)
+	h := NewHandlerWithServices(*store, nil, nil, nil, nil, mock).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	req.Header.Set("X-User-Email", "premium@test.com")
@@ -243,7 +243,7 @@ func TestHandleRecommendations_ServiceFailure_AddsWarning(t *testing.T) {
 	store, _ := subscription.NewStore(dir)
 	store.Register("premium@test.com", "pass")
 	mock := &failingNarrative{err: errors.New("taiwan_stress_calc transient failure")}
-	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil)
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithDevMode(true)
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	req.Header.Set("X-User-Email", "premium@test.com")
 	code, data := h.HandleRecommendations(req)
@@ -276,7 +276,7 @@ func TestHandleRecommendations_RegimeChange_FiresListener(t *testing.T) {
 	}
 
 	mock := &mockNarrative{stress: 20.0, regime: "RISK_OFF"}
-	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithRegimeListener(listener)
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithDevMode(true).WithRegimeListener(listener)
 
 	t.Setenv("ATLAS_DEV_MODE", "true")
 	store.Register("free@test.com", "pass")
