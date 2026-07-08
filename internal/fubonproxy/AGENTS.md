@@ -15,7 +15,7 @@
 - `IsHealthy()` — 向 `/health` 端點發 GET
 - `waitForHealthy(ctx)` — 同步輪詢；deadline = `min(startupTimeout, ctx.Deadline())`
 - `supervise()` — 背景 goroutine；崩潰時 backoff 重啟
-- `healthURL` — struct 欄位（測試注入用，預設 `http://127.0.0.1:18081/health`，見 `manager.go:40`）
+- `healthURL` — struct 欄位（測試注入用，預設 `http://127.0.0.1:18081/health`，見 `manager.go:132`）
 
 ### fubon-proxy URL 單一真相來源（PR #837 A1 root cause fix）
 
@@ -95,7 +95,7 @@ fubonproxy 內只保留兩個型別別名（`portState = portprobe.State`、`por
 
 ## 相依關係
 
-由 `cmd/atlas` API 模式使用（`NewManager(cfg.WorkDir)` + `defer mgr.Stop()`）。`healthURL` 可注入為測試替身。在 `cmd/atlas/main.go` 是獨立於 `internal/live` 的啟動路徑，**兩者可同時使用**。
+由 `cmd/atlas` API 模式使用（`NewManager(cfg.WorkDir, port)` + `defer mgr.Stop()`，見 `manager.go:163`，port 由 `cfg.FubonProxyPort` flag 注入）。`healthURL` 可注入為測試替身。在 `cmd/atlas/main.go` 是獨立於 `internal/live` 的啟動路徑，**兩者可同時使用**。
 
 ## 修改前必讀
 
