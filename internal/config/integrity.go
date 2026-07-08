@@ -31,6 +31,7 @@ var requiredParamsKeys = []string{
 	"strategy",
 	"precious_metals",
 	"alert",
+	"capitalflow",
 	"sector_allocation",
 	"reporting",
 }

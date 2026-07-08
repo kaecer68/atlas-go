@@ -343,6 +343,11 @@ export interface CapitalSnapshot {
   advance_reason?: string;
 }
 
+export interface CapitalflowParameters {
+  resonance_coefficient_max: string;
+  resonance_coefficient_min: string;
+}
+
 export interface CardConfig {
   layer_weights: Record<string, number>;
   sentiment_thresholds: Record<string, SentimentBounds>;
@@ -2419,6 +2424,7 @@ export interface ParametersConfig {
   precious_metals: PreciousMetalsParameters;
   sector_executor?: SectorExecutorParameters;
   alert: AlertParameters;
+  capitalflow: CapitalflowParameters;
   risk_gate?: RiskGateParameters;
   engine?: EngineParameters;
   rsi_tw?: RSITwParameters;

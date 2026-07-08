@@ -1,14 +1,18 @@
 package capitalflow
 
+import (
+	"github.com/kaecer68/atlas-go/internal/config"
+)
+
 // ---------------------------------------------------------------------------
 // Resonance calculator — determines force alignment
 // ---------------------------------------------------------------------------
 
 // ComputeResonance calculates resonance strength from a set of force scores.
 //
-// Rules:
-//   - If foreign + institutional + government all share the same direction → coefficient = 1.5
-//   - If foreign and government are opposing → coefficient = 0.5
+// Rules (bounds from config; default to [0.5, 1.5] per PR #1007 invariant test):
+//   - If foreign + institutional + government all share the same direction → coefficient = max bound
+//   - If foreign and government are opposing → coefficient = min bound
 //   - Otherwise → coefficient = 1.0
 func ComputeResonance(forces []ForceScore) ResonanceResult {
 	r := ResonanceResult{
@@ -48,13 +52,13 @@ func ComputeResonance(forces []ForceScore) ResonanceResult {
 
 	// Check alignment
 	if foreignDir == institutionalDir && institutionalDir == governmentDir && foreignDir != "neutral" {
-		// All three major forces aligned
-		r.Coefficient = 1.5
+		// All three major forces aligned → max bound (default 1.5, see config)
+		r.Coefficient = config.GetCapitalflowResonanceCoefficientMax()
 		r.Direction = foreignDir
 	} else if foreignDir == "bullish" && governmentDir == "bearish" ||
 		foreignDir == "bearish" && governmentDir == "bullish" {
-		// Foreign vs government adversarial
-		r.Coefficient = 0.5
+		// Foreign vs government adversarial → min bound (default 0.5, see config)
+		r.Coefficient = config.GetCapitalflowResonanceCoefficientMin()
 		r.Opposing = []ForceName{ForceForeign, ForceGovernment}
 		r.Direction = "mixed"
 	} else {

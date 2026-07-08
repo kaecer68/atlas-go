@@ -78,6 +78,48 @@ func GetUseLLMSectorAgents() bool {
 	return cfg.Orchestrator.UseLLMSectorAgents.Value
 }
 
+// ResonanceCoefficientMaxMetadata is the upper bound of ResonanceResult.Coefficient.
+// Set to 1.5: foreign + institutional + government all share the same direction
+// → 「三勢力全對齊」最強信號。PR #1007 invariant test (handler_test.go) guards this.
+var ResonanceCoefficientMaxMetadata = ParameterMetadata[float64]{
+	Value: 1.5,
+	Rationale: "Resonance coefficient upper bound: 1.5 = 三勢力全對齊 (foreign + " +
+		"institutional + government all aligned). Bound on ComputeResonance in " +
+		"internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
+	Source: SourceHeuristic,
+	Todo:   "Promote to SourceEmpirical after backtest validation across L2.4 observation window.",
+}
+
+// ResonanceCoefficientMinMetadata is the lower bound of ResonanceResult.Coefficient.
+// Set to 0.5: foreign vs government opposing → 「foreign vs government 對立」最弱信號。
+// PR #1007 invariant test guards this.
+var ResonanceCoefficientMinMetadata = ParameterMetadata[float64]{
+	Value: 0.5,
+	Rationale: "Resonance coefficient lower bound: 0.5 = foreign vs government 對立. " +
+		"Bound on ComputeResonance in internal/capitalflow/resonance.go:13. " +
+		"Tied to PR #1007 invariant test.",
+	Source: SourceHeuristic,
+	Todo:   "Promote to SourceEmpirical after backtest validation across L2.4 observation window.",
+}
+
+// GetCapitalflowResonanceCoefficientMax returns the upper bound of ResonanceResult.Coefficient.
+// Falls back to ResonanceCoefficientMaxMetadata.Value (1.5) when config is not yet loaded.
+func GetCapitalflowResonanceCoefficientMax() float64 {
+	if cfg := GetParametersConfig(); cfg != nil {
+		return cfg.Capitalflow.ResonanceCoefficientMax.Value
+	}
+	return ResonanceCoefficientMaxMetadata.Value
+}
+
+// GetCapitalflowResonanceCoefficientMin returns the lower bound of ResonanceResult.Coefficient.
+// Falls back to ResonanceCoefficientMinMetadata.Value (0.5) when config is not yet loaded.
+func GetCapitalflowResonanceCoefficientMin() float64 {
+	if cfg := GetParametersConfig(); cfg != nil {
+		return cfg.Capitalflow.ResonanceCoefficientMin.Value
+	}
+	return ResonanceCoefficientMinMetadata.Value
+}
+
 // L2_4ScheduleParameters holds tunable values for the L2.4 LLM-driven
 // sector agent observation period. Used by the synergy page admin
 // UI to expose manual start/stop controls (auto-cron deferred to a
@@ -1090,6 +1132,16 @@ type AlertParameters struct {
 	SLAViolationMetaAlert ParameterMetadata[bool] `json:"sla_violation_meta_alert"`
 }
 
+// CapitalflowParameters holds tunables for capital-flow analysis pipeline.
+// Currently only the resonance coefficient bounds (see ComputeResonance in
+// internal/capitalflow/resonance.go:13). The bounds are design constants —
+// not statistical fit — so they live under SourceHeuristic until backtest
+// validation promotes them to SourceEmpirical (PR follow-up after L2.4 window).
+type CapitalflowParameters struct {
+	ResonanceCoefficientMax ParameterMetadata[float64] `json:"resonance_coefficient_max"`
+	ResonanceCoefficientMin ParameterMetadata[float64] `json:"resonance_coefficient_min"`
+}
+
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.
 type RiskGateParameters struct {
 	PreTrade  PreTradeGateParameters  `json:"pre_trade"`
@@ -1324,6 +1376,7 @@ type ParametersConfig struct {
 	PreciousMetals       PreciousMetalsParameters       `json:"precious_metals"`
 	SectorExecutor       SectorExecutorParameters       `json:"sector_executor,omitempty"`
 	Alert                AlertParameters                `json:"alert"`
+	Capitalflow          CapitalflowParameters          `json:"capitalflow"`
 	RiskGate             RiskGateParameters             `json:"risk_gate,omitempty"`
 	Engine               EngineParameters               `json:"engine,omitempty"`
 	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
