@@ -48,7 +48,7 @@ MacroAwareDrawdownEngine.Evaluate(riskSnapshot, regime, narrativeEvents)
 **`internal/risk` 統一使用全域 `config.GetParametersConfig()`，禁止 per-module 組態檔。**歷史背景與清理紀錄見 `docs/audit/2026-06-20-risk-orphan-config.md`。
 
 ### 正確做法
-1. 擴充 `ParametersConfig.Risk` 結構於 `internal/config/parameters.go`
+1. 擴充 `ParametersConfig.Risk` 或 `ParametersConfig.RiskGate` 結構於 `internal/config/parameters.go`(兩者皆為 top-level field;`Risk` 是全域風險參數、`RiskGate` 是 trade gate 門檻,兩個獨立 config block 各自有預設值於 `internal/config/parameters_defaults.go`)
 2. 為新欄位加入 `ParameterMetadata[T]` 包裝（含 `Rationale` / `Source` / `Todo`）
 3. 預設值置於 `internal/config/parameters_defaults.go`
 4. 透過 `LockedSaveWithRollback` 寫回 `configs/parameters.json`
