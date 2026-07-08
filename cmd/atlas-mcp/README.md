@@ -10,14 +10,14 @@
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **約 88 個**（實際數量依 config，權威清單見 [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md)） |
+| MCP Tools | **91 個**（業務 87 + audit 4；編譯期 assert ∈ [89, 91]，權威清單見 [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
 | Audit | v2 schema（retention、cleanup、ArgsHash、SessionID、Transport，`audit_v2.go`；v1 `audit.go` 為向後相容 shim） |
 | 擴充協議 | Resources（`resources.go`）、Prompts（`prompts.go`）、Elicitation（`elicitation.go`）、Sampling（`sampling.go`）、Roots（`roots.go`） |
 | 觀測 | Rate limiting（`ratelimit.go`）、Metrics（`metrics.go`）、Anomaly detection（`tools_anomaly.go`） |
-| 工具分類 | Macro（6）、Crossmarket（3）、Regime（1）、Narrative（7）、Risk（5）、Alert（4）、Strategy（6）、Experiment（3）、Synergy（3）、Control（4）、Scheduler/Task（4）、System/Health（7+）、Data（4）、Universe（2）、LLM（2）、Trace（4）、PRISM（1）、Report（4）、Stock（4）、Capital Flow（2）、Events（2）、Daily Briefing（2）、Audit（4）、Anomaly（2） |
+| 工具分類 | Macro（6）、Crossmarket（3）、Regime（1）、Narrative（7）、Risk（5）、Alert（4）、Strategy（6）、Recommendation（1）、Experiment（3）、Synergy（3）、Control（4）、Scheduler/Task（4）、System/Health（7）、Data（4）、Universe（2）、LLM（2）、Trace（4）、PRISM（1）、Report（4）、Stock（4）、Capital Flow（2）、Events（2）、Daily Briefing（2）、Protocol Extensions（4）、Audit（4）、Anomaly（2） |
 
 ## 快速啟動
 
@@ -53,17 +53,51 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 
 ## 配置
 
-全部透過環境變數：
+全部透過環境變數（CLI flag > env > 預設值優先級，見 `cmd/atlas-mcp/main.go`）：
+
+### 連線 / Atlas 後端
 
 | 變數 | 預設值 | 用途 |
 |------|--------|------|
 | `ATLAS_BASE_URL` | `http://127.0.0.1:18080` | atlas-go HTTP API 基底 URL |
 | `ATLAS_API_KEY` | （未設） | 以 `X-API-Key` header 轉發至 atlas-go admin endpoints |
-| `ATLAS_MCP_TOKEN` | （未設） | Bearer token；SSE/HTTP transport 啟用後強制驗證（401 if missing/wrong） |
-| `ATLAS_MCP_AUDIT_LOG` | `/tmp/atlas-mcp-audit.log` | JSONL audit log 路徑。父目錄自動建立（mode 0700） |
-| `ATLAS_MCP_ALLOWED_ROOTS` | （未設） | MCP client roots 白名單（CSV 格式路徑清單，未設時無限制，見 Phase 4 B roots 擴充協議） |
+| `DATABASE_URL` | （未設） | PostgreSQL DSN；啟用後自動跑 migration 並切換至 PG-backed `TokenStore`（v2 schema） |
+
+### MCP Server 本體
+
+| 變數 | 預設值 | 用途 |
+|------|--------|------|
 | `ATLAS_MCP_TRANSPORT` | `stdio` | 傳輸層：`stdio` / `sse` / `streamable-http` |
 | `ATLAS_MCP_ADDR` | `127.0.0.1:9090` | 監聽位址，僅 `sse` / `streamable-http` 使用 |
+| `ATLAS_MCP_TOKEN` | （未設） | Bearer token；SSE/HTTP transport 啟用後強制驗證（401 if missing/wrong）；DB token store 啟用時作為 env-fallback |
+| `ATLAS_MCP_ADMIN_TOKEN` | （未設） | Admin HTTP API token（token management）；未設 = 該 API 停用 |
+| `ATLAS_MCP_ADMIN_ADDR` | `127.0.0.1:9090`（僅在 `ADMIN_TOKEN` 有設時） | Admin HTTP 監聽位址 |
+| `ATLAS_MCP_METRICS_ADDR` | （未設） | Prometheus `/metrics` 監聽位址；典型 `127.0.0.1:9091`；未設 = 不暴露 metrics |
+
+### Audit / Logging
+
+| 變數 | 預設值 | 用途 |
+|------|--------|------|
+| `ATLAS_MCP_AUDIT_LOG` | `$TMPDIR/atlas-mcp-audit.log` | JSONL audit log 路徑；父目錄自動建立（mode 0700） |
+| `ATLAS_MCP_AUDIT_RETENTION_DAYS` | `30` | 超過 N 天的 audit 條目自動 prune；`0` = 停用 retention |
+
+### Rate limiting
+
+| 變數 | 預設值 | 用途 |
+|------|--------|------|
+| `ATLAS_MCP_RATE_LIMIT_PER_MINUTE` | `0`（停用） | 每 `(tool, tenant)` 每分鐘允許的請求數；`0` = 不限流 |
+| `ATLAS_MCP_RATE_LIMIT_BURST` | = `RATE_LIMIT_PER_MINUTE` | 瞬間允許的 burst 量 |
+
+### 擴充協議開關（Phase 4 B）
+
+| 變數 | 預設值 | 用途 |
+|------|--------|------|
+| `ATLAS_MCP_SAMPLING_ENABLED` | `false` | 啟用 `mcp_sample_llm`（透過 atlas LLM router 抽樣） |
+| `ATLAS_MCP_ELICITATION_ENABLED` | `false` | 啟用 `mcp_elicit_user`（向使用者請求結構化輸入） |
+| `ATLAS_MCP_ROOTS_ALLOWED` | （未設） | 當 client 未宣告 roots 時，server 預設允許的 `file://` 白名單（CSV） |
+| `ATLAS_MCP_ROOTS_READ_SIZE_CAP` | `1048576`（1 MiB） | 單次 `mcp_roots_read_file` 讀取上限（bytes） |
+| `ATLAS_MCP_ROOTS_ALLOW_UNSAFE` | `0` | escape hatch（不建議）：`1` = 跳過 root path 驗證（僅限 dev） |
+| `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE` | `false` | client 宣告的 roots 變動時是否 alert |
 
 > **stdio 安全模型**：stdio 模式不強制 Bearer token（process isolation 即安全邊界），但仍接受 token 標頭作為多租戶 routing。SSE / streamable-HTTP 模式 `Authorization: Bearer <token>` **必填**，未帶或錯誤回傳 401。
 
