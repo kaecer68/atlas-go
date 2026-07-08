@@ -473,3 +473,36 @@ func TestRunDay_Rebalance_UsesExecutedPriceForMarketValue(t *testing.T) {
 		t.Fatalf("market value = %f, want %f (executed price %f)", pos.MarketValue, wantMV, executedPrice)
 	}
 }
+
+func TestRun_LargeOrder_AppliesMarketImpact(t *testing.T) {
+	impact := &MarketImpactModel{
+		TemporaryImpactCoef: 1.0,
+		PermanentImpactCoef: 0.0,
+		DefaultADV:          1000, // tiny ADV to force impact
+	}
+	engine := NewEngine(domain.SimulationConstraints{
+		StartingCash:                10_000_000,
+		MaxPositionWeight:           1.0,
+		MaxOpenPositions:            1,
+		MinTradableVolume:           1,
+		MinRecommendationConviction: 0,
+		TransactionCostBPS:          0,
+		SlippageBPS:                 0,
+		ReserveCashFraction:         0,
+	}).WithMarketImpactModel(impact)
+
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 100, Volume: 1000, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 90, Reason: "test"},
+	}
+
+	result := engine.Run(domain.RegimeRiskOn, quotes, recs)
+	if len(result.Orders) == 0 {
+		t.Fatalf("expected an order")
+	}
+	if result.Orders[0].Price <= 100 {
+		t.Fatalf("expected market impact to raise buy price above 100, got %f", result.Orders[0].Price)
+	}
+}
