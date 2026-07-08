@@ -588,7 +588,7 @@ function renderRecommendation(pipeline, stress) {
     </div>
   `;
 
-  document.getElementById('home-rec-detail').addEventListener('click', () => window.switchPage('decision'));
+  document.getElementById('home-rec-detail').addEventListener('click', () => window.switchPage('decision-chain'));
   document.getElementById('home-rec-portfolio').addEventListener('click', () => window.switchPage('portfolio'));
   }
 }

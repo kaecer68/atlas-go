@@ -336,3 +336,78 @@ func TestHandleRSITwCalibration_InternalError(t *testing.T) {
 		t.Error("expected non-empty error message on internal error")
 	}
 }
+
+// ---------- HandleMaturity ----------
+
+func TestHandleMaturity_OK(t *testing.T) {
+	h := newTestHandlers(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/maturity", nil)
+	status, body := h.HandleMaturity(req)
+
+	resp := doRequest(t, status, body, http.StatusOK)
+	if _, ok := resp["phase"]; !ok {
+		t.Errorf("expected 'phase' key in response, got %v", resp)
+	}
+	if _, ok := resp["days_since_start"]; !ok {
+		t.Errorf("expected 'days_since_start' key in response, got %v", resp)
+	}
+	if _, ok := resp["thresholds"]; !ok {
+		t.Errorf("expected 'thresholds' key in response, got %v", resp)
+	}
+}
+
+// ---------- HandleDataChannelDetail ----------
+
+func TestHandleDataChannelDetail_OK(t *testing.T) {
+	h := newTestHandlers(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/data-channels/fugle", nil)
+	req.SetPathValue("name", "fugle")
+
+	status, body := h.HandleDataChannelDetail(req)
+	if status != http.StatusOK {
+		t.Fatalf("expected status 200, got %d (body=%v)", status, body)
+	}
+	channel, ok := body.(service.DataChannel)
+	if !ok {
+		t.Fatalf("expected service.DataChannel, got %T", body)
+	}
+	if channel.ChannelID != "fugle" {
+		t.Errorf("expected channel_id=fugle, got %q", channel.ChannelID)
+	}
+}
+
+func TestHandleDataChannelDetail_MissingName(t *testing.T) {
+	h := newTestHandlers(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/data-channels/", nil)
+	req.SetPathValue("name", "")
+
+	status, body := h.HandleDataChannelDetail(req)
+	if status != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d (body=%v)", status, body)
+	}
+	resp, ok := body.(map[string]string)
+	if !ok {
+		t.Fatalf("expected map[string]string, got %T", body)
+	}
+	if resp["error"] == "" {
+		t.Errorf("expected error message for missing channel name, got %v", resp)
+	}
+}
+
+func TestHandleDataChannelDetail_NotFound(t *testing.T) {
+	h := newTestHandlers(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/data-channels/unknown-channel", nil)
+	req.SetPathValue("name", "unknown-channel")
+
+	status, body := h.HandleDataChannelDetail(req)
+	if status != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d (body=%v)", status, body)
+	}
+	resp, ok := body.(map[string]string)
+	if !ok {
+		t.Fatalf("expected map[string]string, got %T", body)
+	}
+	if resp["error"] == "" {
+		t.Errorf("expected error message for unknown channel, got %v", resp)
+	}
+}

@@ -4,10 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -72,9 +75,32 @@ func (h *Handlers) HandleRSITwCalibration(r *http.Request) (int, any) {
 	}
 }
 
+// HandleMaturity returns the system's current maturity phase and progress.
+func (h *Handlers) HandleMaturity(r *http.Request) (int, any) {
+	statePath := filepath.Join(h.WorkDir, "data", "state", "maturity_tracker.json")
+	tracker, err := domain.NewMaturityTracker(statePath)
+	if err != nil {
+		logging.Error("dashboard", "maturity_tracker_load_failed", "err", err)
+		tracker = domain.NewMaturityTrackerWithStart(time.Now().UTC())
+	}
+	return http.StatusOK, map[string]any{
+		"phase":                  tracker.Current(),
+		"days_since_start":       tracker.DaysSinceStart(),
+		"days_until_calibrating": tracker.DaysUntil(domain.MaturityCalibrating),
+		"days_until_full_auto":   tracker.DaysUntil(domain.MaturityFullAuto),
+		"first_start_date":       tracker.FirstStartDate().Format(time.RFC3339),
+		"thresholds": map[string]int{
+			"burn_in":     0,
+			"calibrating": 60,
+			"full_auto":   252,
+		},
+	}
+}
+
 // RegisterRoutes registers all dashboard management center routes.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/data-channels", shared.Get(h.HandleDataChannels))
+	mux.Handle("GET /api/dashboard/data-channels/{name}", shared.Get(h.HandleDataChannelDetail))
 	mux.Handle("GET /api/dashboard/data-pipeline", shared.Get(h.HandleDataPipeline))
 	mux.Handle("GET /api/dashboard/drawdown", shared.Get(h.HandleDrawdown))
 	mux.Handle("GET /api/dashboard/channel-fetch-log", shared.Get(h.HandleChannelFetchLog))
@@ -82,4 +108,5 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/dashboard/channels/", shared.Adapt(h.HandleChannelAction))
 	mux.Handle("POST /api/dashboard/api-keys/update", shared.Post(h.HandleAPIKeyUpdate))
 	mux.Handle("GET /api/dashboard/rsi-tw-calibration", shared.Get(h.HandleRSITwCalibration))
+	mux.Handle("GET /api/dashboard/maturity", shared.Get(h.HandleMaturity))
 }

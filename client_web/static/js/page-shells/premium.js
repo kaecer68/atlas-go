@@ -46,16 +46,20 @@ export const template = `
 export async function init() {
   const { getTier } = await import('../services/auth.js');
   const tier = await getTier();
+  const btn = document.getElementById('upgradeBtn');
   if (tier === 'premium') {
     const cards = document.querySelectorAll('.tier-current');
     cards.forEach(function(c) {
       c.textContent = '已訂閱';
       c.classList.add('tier-active');
     });
-    const btn = document.getElementById('upgradeBtn');
     if (btn) {
       btn.textContent = '已啟用 Premium';
       btn.disabled = true;
     }
+  } else if (btn) {
+    btn.addEventListener('click', function() {
+      alert('Premium 升級功能開發中，敬請期待！');
+    });
   }
 }

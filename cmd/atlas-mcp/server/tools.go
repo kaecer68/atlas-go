@@ -134,14 +134,27 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 	if in.Days > 365 {
 		in.Days = 365
 	}
-	q := map[string]string{"days": fmt.Sprintf("%d", in.Days)}
+	q := map[string]string{"limit": fmt.Sprintf("%d", in.Days)}
 	var out RegimeGetHistoryOutput
 	if err := s.withAudit(ctx, "regime_get_history", []string{"days"}, func() error {
-		var raw []RegimePoint
+		var raw struct {
+			Sessions []struct {
+				SessionID  string `json:"session_id"`
+				Regime     string `json:"regime"`
+				RecordedAt string `json:"recorded_at"`
+			} `json:"sessions"`
+			Current string `json:"current_regime"`
+		}
 		if err := s.cli.Get(ctx, "/api/dashboard/regime-history", urlValues(q), &raw); err != nil {
 			return err
 		}
-		out.Regimes = raw
+		out.Regimes = make([]RegimePoint, len(raw.Sessions))
+		for i, sess := range raw.Sessions {
+			out.Regimes[i] = RegimePoint{
+				Date:   sess.RecordedAt,
+				Regime: sess.Regime,
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, RegimeGetHistoryOutput{}, err

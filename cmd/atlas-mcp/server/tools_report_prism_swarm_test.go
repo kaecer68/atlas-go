@@ -56,7 +56,7 @@ func TestHandleReportGetTaxSnapshot_OK(t *testing.T) {
 func TestHandleReportGetExportLink_OK(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
-	rec.responseBody = []byte(`{}`)
+	rec.responseBody = []byte("# Performance Report\n\nSample markdown.")
 	_, out, err := s.handleReportGetExportLink(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -66,6 +66,13 @@ func TestHandleReportGetExportLink_OK(t *testing.T) {
 	}
 	if out.Result == nil {
 		t.Fatal("expected Result non-nil")
+	}
+	md, ok := (*out.Result)["markdown"].(string)
+	if !ok {
+		t.Fatalf("expected markdown string in result, got %T", (*out.Result)["markdown"])
+	}
+	if md != "# Performance Report\n\nSample markdown." {
+		t.Fatalf("unexpected markdown content: %q", md)
 	}
 }
 

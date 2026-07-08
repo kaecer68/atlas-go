@@ -75,7 +75,13 @@ func (s *server) handleReportGetTaxSnapshot(ctx context.Context, _ *mcp.CallTool
 func (s *server) handleReportGetExportLink(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismBaseOutput, error) {
 	var out reportPrismBaseOutput
 	if err := s.withAudit(ctx, "report_get_export_link", nil, func() error {
-		return s.cli.Get(ctx, "/api/dashboard/performance-report/export", nil, &out.Result)
+		md, err := s.cli.GetRaw(ctx, "/api/dashboard/performance-report/export", nil)
+		if err != nil {
+			return err
+		}
+		result := map[string]any{"markdown": string(md)}
+		out.Result = &result
+		return nil
 	}); err != nil {
 		return nil, reportPrismBaseOutput{}, err
 	}

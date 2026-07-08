@@ -1074,7 +1074,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"api narrative", "/api/narrative/bundle", true},
 		{"api macro", "/api/macro/snapshot/latest", true},
 		{"api alerts", "/api/alerts", true},
-		{"api synergy", "/api/synergy/darwinian-status", true},
+		{"api synergy", "/api/synergy/darwinian/status", true},
 		{"api capital flow daily", "/api/capital-flow/daily", true},
 		{"api capital flow summary", "/api/capital-flow/summary", true},
 		{"api events calendar", "/api/events/calendar", true},

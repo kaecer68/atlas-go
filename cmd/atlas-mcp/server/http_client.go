@@ -40,6 +40,16 @@ func (c *httpClient) Get(ctx context.Context, path string, query url.Values, res
 	return c.do(ctx, http.MethodGet, u, nil, result)
 }
 
+// GetRaw issues a GET to atlasBaseURL+path?query and returns the raw response
+// body without JSON decoding. Any non-2xx response is treated as an error.
+func (c *httpClient) GetRaw(ctx context.Context, path string, query url.Values) ([]byte, error) {
+	u := c.base + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	return c.doRaw(ctx, http.MethodGet, u, nil)
+}
+
 // PostJSON issues a POST with a JSON body. body may be nil.
 func (c *httpClient) PostJSON(ctx context.Context, path string, body, result any) error {
 	var reader io.Reader
@@ -55,9 +65,24 @@ func (c *httpClient) PostJSON(ctx context.Context, path string, body, result any
 
 // do is shared by Get/PostJSON. result may be nil.
 func (c *httpClient) do(ctx context.Context, method, fullURL string, body io.Reader, result any) error {
+	raw, err := c.doRaw(ctx, method, fullURL, body)
+	if err != nil {
+		return err
+	}
+	if result == nil {
+		return nil
+	}
+	if err := json.Unmarshal(raw, result); err != nil {
+		return fmt.Errorf("httpClient: decode body: %w (raw=%d bytes)", err, len(raw))
+	}
+	return nil
+}
+
+// doRaw performs the HTTP request and returns the response body bytes.
+func (c *httpClient) doRaw(ctx context.Context, method, fullURL string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
 	if err != nil {
-		return fmt.Errorf("httpClient: new request: %w", err)
+		return nil, fmt.Errorf("httpClient: new request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
@@ -68,23 +93,17 @@ func (c *httpClient) do(ctx context.Context, method, fullURL string, body io.Rea
 	}
 	resp, err := c.httpc.Do(req)
 	if err != nil {
-		return fmt.Errorf("httpClient: do: %w", err)
+		return nil, fmt.Errorf("httpClient: do: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("httpClient: read body: %w", err)
+		return nil, fmt.Errorf("httpClient: read body: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("httpClient: %s %s -> %d: %s", method, fullURL, resp.StatusCode, strings.TrimSpace(string(raw)))
+		return nil, fmt.Errorf("httpClient: %s %s -> %d: %s", method, fullURL, resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
-	if result == nil {
-		return nil
-	}
-	if err := json.Unmarshal(raw, result); err != nil {
-		return fmt.Errorf("httpClient: decode body: %w (raw=%d bytes)", err, len(raw))
-	}
-	return nil
+	return raw, nil
 }
 
 // Base reports the configured base URL. Used by tests / dashboards.

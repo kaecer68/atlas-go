@@ -34,8 +34,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/sessions", shared.Get(h.HandleSessions))
 	mux.Handle("GET /api/dashboard/universe-overlap", shared.Get(h.HandleUniverseOverlap))
 	mux.Handle("GET /api/dashboard/reasoning-trace", shared.Get(h.ReasoningHandler.HandleReasoningTrace))
-	mux.Handle("GET /api/synergy/darwinian-status", shared.Get(h.HandleDarwinianStatus))
-	mux.Handle("GET /api/synergy/darwinian-trend", shared.Get(h.HandleDarwinianTrend))
+	mux.Handle("GET /api/synergy/darwinian/status", shared.Get(h.HandleDarwinianStatus))
+	mux.Handle("GET /api/synergy/darwinian/trend", shared.Get(h.HandleDarwinianTrend))
 	mux.Handle("GET /api/dashboard/regime-history", shared.Get(h.HandleRegimeHistory))
 	mux.Handle("GET /api/dashboard/baseline-info", shared.Get(h.HandleBaselineInfo))
 }

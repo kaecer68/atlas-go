@@ -391,7 +391,7 @@ func TestAuthMiddleware_DashboardAPIsBypassAuth(t *testing.T) {
 		"/api/narrative/bundle",
 		"/api/macro/snapshot/latest",
 		"/api/alerts/unacknowledged",
-		"/api/synergy/darwinian-status",
+		"/api/synergy/darwinian/status",
 	}
 	exactPaths := []string{
 		"/api/alerts",

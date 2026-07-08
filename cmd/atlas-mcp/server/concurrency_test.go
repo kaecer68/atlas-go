@@ -125,8 +125,9 @@ func TestHTTPClient_ConcurrentRequests(t *testing.T) {
 // through the same *server and asserts every invocation succeeds. Audit log
 // is shared, so this also exercises AuditWriter under concurrency.
 func TestHandlers_ConcurrentInvocations(t *testing.T) {
-	s, _, done := newTestHarness(t)
+	s, rec, done := newTestHarness(t)
 	defer done()
+	rec.SetResponseBody([]byte(`{"sessions":[]}`))
 
 	const n = concurrentHandlerRounds
 	var wg sync.WaitGroup

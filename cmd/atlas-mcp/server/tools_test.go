@@ -79,6 +79,7 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 func TestHandleRegimeGetHistory_DefaultDays(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
+	rec.responseBody = []byte(`{"sessions":[]}`)
 	_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 0})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -86,20 +87,21 @@ func TestHandleRegimeGetHistory_DefaultDays(t *testing.T) {
 	if rec.path != "/api/dashboard/regime-history" {
 		t.Fatalf("path=%s", rec.path)
 	}
-	if rec.query.Get("days") != "30" {
-		t.Fatalf("expected days=30 default, got %q", rec.query.Get("days"))
+	if rec.query.Get("limit") != "30" {
+		t.Fatalf("expected limit=30 default, got %q", rec.query.Get("limit"))
 	}
 }
 
 func TestHandleRegimeGetHistory_ClampedTo365(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
+	rec.responseBody = []byte(`{"sessions":[]}`)
 	_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 999})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if got := rec.query.Get("days"); got != "365" {
-		t.Fatalf("expected days=365 clamp, got %q", got)
+	if got := rec.query.Get("limit"); got != "365" {
+		t.Fatalf("expected limit=365 clamp, got %q", got)
 	}
 }
 
@@ -111,7 +113,7 @@ func TestHandleRegimeGetHistory_ForwardsAPIToken(t *testing.T) {
 		rec.headers = r.Header.Clone()
 		rec.path = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"date":"2026-06-30","regime":"RISK_OFF","score":-12}]`))
+		_, _ = w.Write([]byte(`{"sessions":[{"session_id":"s1","regime":"RISK_OFF","recorded_at":"2026-06-30T00:00:00Z"}],"current_regime":"RISK_OFF"}`))
 	}))
 	defer ts.Close()
 
@@ -123,12 +125,18 @@ func TestHandleRegimeGetHistory_ForwardsAPIToken(t *testing.T) {
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, APIToken: "secret-token", AuditLogPath: filepath.Join(tmp, "audit.log")}
 	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
-	_, _, err = s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 7})
+	_, out, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 7})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
 	if got := rec.headers.Get("X-API-Key"); got != "secret-token" {
 		t.Fatalf("expected X-API-Key forwarded, got %q", got)
+	}
+	if len(out.Regimes) != 1 {
+		t.Fatalf("expected 1 regime point, got %d", len(out.Regimes))
+	}
+	if out.Regimes[0].Regime != "RISK_OFF" {
+		t.Fatalf("expected RISK_OFF, got %q", out.Regimes[0].Regime)
 	}
 }
 
