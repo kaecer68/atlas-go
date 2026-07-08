@@ -50,7 +50,7 @@ P0-1 重寫 `internal/recommender/handler.go::HandleRecommendations` 所需的�
 - `internal/strategy/selector.go` — `Strategy` 介面（本模組不依賴）
 - `internal/strategy_validator/` — `Rank` / `AssignTiers` 委派對象
 - `cmd/atlas-mcp/server/tools.go` — `strategy_ranker` MCP tool 包裝
-- `cmd/atlas/main.go:1172` — `strategyRanker.RegisterRoutes(mux, stRegistry)`
+- `cmd/atlas/main.go:1175` — `strategyRanker.RegisterRoutes(mux, stRegistry)`
 
 ## 測試
 
