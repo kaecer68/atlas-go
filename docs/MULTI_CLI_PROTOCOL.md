@@ -14,12 +14,13 @@
 
 ## Post-merge cleanup checklist（AI 自動執行）
 
-PR 經 GitHub UI merge 後，**AI 必須自行執行以下 4 步**，不要等使用者指示：
+PR 經 GitHub UI merge 後，**AI 必須自行執行以下 5 步**，不要等使用者指示：
 
 1. `git fetch origin main && git checkout main && git merge --ff-only origin/main`
 2. `git branch -d <merged-branch>`（若本地 main 已 ff，無 "not merged to HEAD" 警告）
 3. `git push origin --delete <merged-branch>`
 4. 若使用獨立 worktree：`git worktree remove <path>`
+5. **Planning artifacts 清理**：`rm .omo/plans/*.md .omo/research/*.md .omo/handoff/*.md`（若該 PR 對應的規劃 .md 已 ship）。**有長期保存價值的內容不要留整份 .md** — 先萃取到 `docs/specs/`、`docs/operations/` 等正式位置,或歸檔到 `docs/archive/<feature>-<date>.md`。`.omo/` 是 gitignored working area,不是 archive。
 
 完整 SOP 見 `docs/QUICKSTART.md` § Git 工作流 §4。批次清理（超過 5 個
 stale branch）見 `docs/branch-hygiene/`。
