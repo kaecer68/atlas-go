@@ -56,7 +56,9 @@
 
 ### 3.1 MCP Tools 全清單
 
-**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/AGENT_TOOLS.md`](../AGENT_TOOLS.md) 為單一權威來源。本節保留 high-level 群組對照；實際數量約 **86 個基礎 tool** + `SamplingEnabled` / `ElicitationEnabled` 啟用時最多再 +2。
+**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/AGENT_TOOLS.md`](../AGENT_TOOLS.md) 為單一權威來源。編譯期權威計數來自 [`cmd/atlas-mcp/auto-desc.gen.json`](../../cmd/atlas-mcp/auto-desc.gen.json)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [89, 91]`，防止文件↔程式碼漂移）。
+
+**當前實際**：**91 個 tool**（87 業務 + 4 audit；sampling / elicitation / roots 在 feature flag 啟用時另計，但**目前已預設掛載**）。本節保留 high-level 群組對照；單一 tool 名稱請以 `auto-desc.gen.json` 為準。
 
 | WA | 群組 | Tool 數 | 主要用途 |
 |----|------|---------|---------|
@@ -75,14 +77,16 @@
 | WA-501 達爾文 | `synergy_*` | 3 | darwinian + l2-4 schedule |
 | WA-503 實驗 | `experiment_*` | 3 | judge/diff/history |
 | WA-505 報告/稅務 | `report_*` | 4 | report + tax snapshot + perf + export |
+| WA-520 推薦 | `get_recommendations` | 1 | tier-gated 投資組合推薦（v0.0.0.31 新；需 JWT） |
 | WA-601 警報 | `alert_*` | 4 | list/stats/rules/unacknowledged |
 | WA-603 控制平面 | `control_*` | 4 | approve/reject/audit/overrides |
 | WA-604 排程/任務 | `scheduler_*`、`task_*` | 4 | schedule status、task CRUD |
 | WA-606 系統健康 | `system_*` | 7 | health/metrics/trends/thresholds/pipeline/circuit/maturity |
 | WA-700 PRISM | `prism_*` | 1 | training-results |
-| MCP 自我觀測 | `mcp_*` | 6 | session topology、call stats、tenant usage、slow tools、anomaly |
+| MCP 自我觀測 | `mcp_get_*`、`mcp_anomaly_*` | 6 | session topology、call stats、tenant usage、slow tools + anomaly |
+| MCP 協議擴充 | `mcp_roots_*`、`mcp_elicit_user`、`mcp_sample_llm` | 4 | Phase 4 protocol extensions（roots/elicitation/sampling）|
 | Daily Briefing | `mcp_quickstart`、`daily_report` | 2 | 一站式摘要、每日報告 |
-| **總計（基礎）** | | **~86** | 加上 sampling / elicitation 兩個 feature-gated tool 後最高 **88** |
+| **總計（v0.0.0.31）** | | **91** | 87 業務 + 4 audit（`mcp_get_*`） |
 
 ### 3.2 不暴露的 endpoints（安全邊界）
 
@@ -144,30 +148,41 @@ e.g.   regime_get_history
 | `atlas://market/regime` | 最新盤勢分類 + 壓力指數 | `internal/regime.GetCurrent` |
 | `atlas://events/today` | 今日事件清單 | `internal/industry.EventCalendar` |
 
-## 3.6 v0.0.0.31 新增 MCP Tools
+## 3.6 v0.0.0.31 新增 MCP Tools（合計 +12）
 
-PR #972 加入 4 個新 tools：
+本節彙整 v0.0.0.31 全部新增工具（已併入 §3.1 表格的對應 WA 群組）；§3.7（個股/資金流/排名）已併入 §3.6，依「主題分類」重新編排為四個小節，便於按場景查找。
+
+**一站式摘要 + 每日報告（2 個）**：
 
 | Tool 名稱 | 用途 | 對應 API |
 |---------|------|---------|
 | `mcp_quickstart` | 一站式開機摘要：macro + 策略 + 壓力 + 事件 + 資金流向 | 多源聚合 |
 | `daily_report` | 最新每日市場報告完整 JSON | `/api/reports/latest` |
-| `event_calendar` | 近期事件列表 | `/api/events/calendar` |
-| `event_flow_prediction` | 5 日事件驅動資金流預測 | `/api/events/prediction` |
 
-## 3.7 個股 / 資金流 / 策略排名 MCP Tools
-
-本次 PR 新增 7 個個股級與策略排名 tools，統一由後端 `/api/stock/*`、`/api/capital-flow/*`、`/api/strategy-ranker/*` 提供資料：
+**事件日曆與事件驅動資金流（2 個）**：
 
 | Tool 名稱 | 用途 | 對應 API |
 |---------|------|---------|
-| `stock_get_quote` | 個股即時報價 | `/api/stock/quote?symbol={symbol}` |
-| `stock_get_fundamentals` | 個股基本面 | `/api/stock/fundamentals?symbol={symbol}` |
-| `stock_get_chips` | 個股籌碼面 | `/api/stock/chips?symbol={symbol}&date={date}` |
-| `stock_get_technical` | 個股技術面 | `/api/stock/technical?symbol={symbol}&days={days}` |
-| `capital_flow_daily` | 全市場資金流日報 | `/api/capital-flow/daily` |
-| `capital_flow_summary` | 資金流摘要 | `/api/capital-flow/summary` |
-| `strategy_ranker` | 策略排名（依勝率 + tier） | `/api/strategy-ranker/rank` |
+| `event_calendar` | 近期事件列表（14 日 forward） | `/api/events/calendar` |
+| `event_flow_prediction` | 5 日事件驅動資金流預測 | `/api/events/prediction` |
+
+**個股四件套（4 個）**：
+
+| Tool 名稱 | 用途 | 對應 API |
+|---------|------|---------|
+| `stock_get_quote` | 個股即時報價（Fugle） | `/api/stock/quote?symbol={symbol}` |
+| `stock_get_fundamentals` | 個股基本面（PE/PB/PS/Yield/Sector） | `/api/stock/fundamentals?symbol={symbol}` |
+| `stock_get_chips` | 個股籌碼面（外資/投信/自營商） | `/api/stock/chips?symbol={symbol}&date={date}` |
+| `stock_get_technical` | 個股技術面（SMA20/50/RSI14） | `/api/stock/technical?symbol={symbol}&days={days}` |
+
+**資金流日報 + 策略排名 + tier-gated 推薦（4 個）**：
+
+| Tool 名稱 | 用途 | 對應 API |
+|---------|------|---------|
+| `capital_flow_daily` | 全市場七大資金勢力共振分析 | `/api/capital-flow/daily` |
+| `capital_flow_summary` | 資金流摘要（給 morning briefing） | `/api/capital-flow/summary` |
+| `strategy_ranker` | 策略排名（依勝率 + tier 標 free/registered/premium） | `/api/strategy-ranker/rank` |
+| `get_recommendations` | tier-gated 投資組合推薦（**需 JWT**） | `/api/recommendations` |
 
 ---
 
@@ -608,4 +623,57 @@ cmd/atlas-mcp/
 - `go test ./cmd/atlas-mcp/... ./internal/mcp/anomaly/...`：**23 個新增測試 PASS / 0 FAIL**
 - `/metrics` 綁定 `127.0.0.1`，獨立於 MCP transport port
 - anomaly detector 3 種基線 unit test 通過
+
+---
+
+## 13. 後續版本演進（v0.0.0.30+ → v0.0.0.31+）
+
+> §11 與 §12 為 PR #834 / Phase 4 當時的快照（截至 2026-07-01）。v0.0.0.31 起持續擴展，本節追蹤增量。
+
+### 13.1 v0.0.0.31（2026-07-06 PR #945–#950+）
+
+**Tool 演進**：74（§11 末）→ 87（v0.0.0.31 baseline，含 Phase 4 B extensions）→ **91（當前）**
+
+| 變更類型 | 增量 | 對應 WA / Primitive |
+|---------|------|--------------------|
+| 新增 | 4 | `capital_flow_*` (WA-105)、`event_*` (WA-201) |
+| 新增 | 4 | `stock_*` 四件套 (WA-104) |
+| 新增 | 2 | `mcp_quickstart`、`daily_report` (Daily Briefing 群組) |
+| 新增 | 1 | `strategy_ranker` (WA-500) |
+| 新增 | 1 | `get_recommendations` (WA-520，需 JWT) |
+| 新增 | 4 | `mcp_get_*` audit metrics（Phase 4 A 補入） |
+| 已含 | 3 | `mcp_roots_*` (2) + `mcp_elicit_user` (1)（Phase 4 B extensions） |
+| 已含 | 1 | `mcp_sample_llm`（Phase 4 B，opt-in via `ATLAS_MCP_SAMPLING_ENABLED=true`） |
+| 已含 | 2 | `mcp_anomaly_*`（Phase 4 A） |
+
+**計數規則**（v0.0.0.31 起）：
+
+- 業務 tool：87 個（不含 audit）
+- audit tool：4 個（`mcp_get_call_stats`、`mcp_get_session_topology`、`mcp_get_tenant_usage`、`mcp_get_top_slow_tools`）
+- **總計**：91 個
+- 編譯期 assert：`server.Run()` 啟動時檢查 `RegisteredToolCount ∈ [89, 91]`（`cmd/atlas-mcp/server/server.go`），防止文件↔程式碼漂移
+
+**Module 演進**（同步參考 `internal/AGENTS_INDEX.md`）：59 模組（22 S / 23 E / 9 X / 5 U），新增 7 個 v0.0.0.31 模組（`capitalflow`、`eventdriven`、`recommender`、`dailyreport`、`strategy_ranker`、`strategy_validator`、`subscription`）。
+
+**Protocol extensions 啟用狀態**：
+
+- Sampling：預設 OFF，`ATLAS_MCP_SAMPLING_ENABLED=true` 啟用
+- Elicitation：預設 OFF，`ATLAS_MCP_ELICITATION_ENABLED=true` 啟用
+- Roots：always on（`ATLAS_MCP_ROOTS_ALLOW_UNSAFE=1` 為系統根目錄 escape hatch）
+- Anomaly detector：always on（Phase 4 A）
+
+### 13.2 規範變更（v0.0.0.31）
+
+- §3.1 表格新增 `WA-520 推薦` 與「MCP 協議擴充」群組（4 個：roots/elicitation/sampling）
+- §3.6 重構為「按主題分類」的四小節；§3.7（個股/資金流/排名）合併入 §3.6
+- §3.4 MCP Prompts（6 個）、§3.5 MCP Resources（3 個）為 v0.0.0.31 起的標準配備
+- §3.2 不暴露 endpoint 維持原樣（live broker、calibrate、sector-ban、revert 等）
+
+### 13.3 參考
+
+- 工具單一名稱 / 數量：`cmd/atlas-mcp/auto-desc.gen.json`（編譯期權威）
+- 模組成熟度：`internal/MATURITY.md`
+- 模組索引：`internal/AGENTS_INDEX.md`
+- 工具操作導覽（agent 友善）：`docs/AGENT_TOOLS.md`
+- 部署與客戶端配置：`cmd/atlas-mcp/README.md`
 

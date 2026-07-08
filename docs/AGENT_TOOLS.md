@@ -192,12 +192,6 @@
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
 
-### Capital Flow（2 個）
-| Tool | 用途 |
-|------|------|
-| `capital_flow_daily` | 七大資金勢力 Z-score 分解 + 共振強度（多/空） |
-| `capital_flow_summary` | 資金流向摘要（品質分數 + 共振 + 主力方向） |
-
 ### Universe（2 個）
 | Tool | 用途 |
 |------|------|
@@ -212,17 +206,22 @@
 | `report_get_tax_snapshot` | 稅務 snapshot |
 | `report_get_export_link` | 匯出連結（短 TTL）|
 
-### Events（2 個）
-| Tool | 用途 |
-|------|------|
-| `event_calendar` | 近期市場事件日曆（營收、ETF 換股、MSCI、休市） |
-| `event_flow_prediction` | 未來 5 天事件驅動資金流預測（+ ETF 規模×權重預估） |
-
 ### Briefing（2 個）
 | Tool | 用途 |
 |------|------|
 | `mcp_quickstart` | 一站式市場速覽：macro snapshot、活躍策略、壓力指數、事件、資金流向 |
 | `daily_report` | 最新每日市場報告（JSON + Markdown） |
+
+### Protocol Extensions（4 個 — Phase 4 B，agent 友善擴充）
+
+| Tool | 用途 | 啟用狀態 |
+|------|------|---------|
+| `mcp_roots_list` | 列出 MCP client 宣告的 file:// roots | always on |
+| `mcp_roots_read_file` | 讀取 root 內檔案（O_RDONLY、path-traversal + symlink escape 防護） | always on |
+| `mcp_elicit_user` | 向使用者請求結構化輸入（schema validate） | 預設 OFF，`ATLAS_MCP_ELICITATION_ENABLED=true` |
+| `mcp_sample_llm` | 透過 atlas LLM router 抽樣（讓 server 呼叫 LLM 完成 model-assisted 工具） | 預設 OFF，`ATLAS_MCP_SAMPLING_ENABLED=true` |
+
+> 安全邊界：`mcp_roots_read_file` 強制 O_RDONLY、TOCTOU 防護、size cap、AllowedRoots 檢查；詳見 [spec Phase 4 B](./specs/agent-mcp-server.md)。
 
 ### MCP Audit / Observability（6 個 — agent 自我觀測）
 
