@@ -7,6 +7,11 @@
       "results": ""
     },
     {
+      "name": "WireRecommenderDeps",
+      "params": "(in WireDeps)",
+      "results": "(recommender.HandlerDeps)"
+    },
+    {
       "name": "Alert",
       "params": "(level string, category,message string, details map[string]any)",
       "receiver": "experimentMonitorAdapter",
@@ -14,6 +19,16 @@
     }
   ],
   "package": "main",
-  "types": null,
+  "types": [
+    {
+      "fields": [
+        "WorkDir string",
+        "MacroProvider marketdata.MacroDataProvider",
+        "EventCalendar *industry.EventCalendar"
+      ],
+      "kind": "struct",
+      "name": "WireDeps"
+    }
+  ],
   "vars": null
 }
