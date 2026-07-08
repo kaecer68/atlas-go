@@ -43,4 +43,3 @@ func (s *Service) LatestDaily(ctx context.Context) (DailyReport, error) {
 	resonance := ComputeResonance(forces)
 	return GenerateDailyReport(date, forces, resonance), nil
 }
-

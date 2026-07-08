@@ -22,7 +22,7 @@ func (s *stubProvider) FetchSnapshot(_ context.Context) (marketdata.MacroDataSna
 func TestService_LatestDaily_AssemblesReport(t *testing.T) {
 	recordedAt := time.Date(2026, 7, 8, 9, 0, 0, 0, time.UTC).Unix()
 	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
-		RecordedAt:        recordedAt,
+		RecordedAt:         recordedAt,
 		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
 		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
 		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
