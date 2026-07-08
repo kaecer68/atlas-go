@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -38,6 +39,11 @@ func main() {
 	baseURL := defaultAtlasURL
 	if len(os.Args) > 1 {
 		baseURL = os.Args[1]
+	}
+	if err := validateLocalhostURL(baseURL); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: base URL %q rejected: %v\n", baseURL, err)
+		fmt.Fprintf(os.Stderr, "       preflight MUST run against localhost atlas (SSRF guard).\n")
+		os.Exit(2)
 	}
 
 	checks := []checkResult{
@@ -142,7 +148,7 @@ func checkParametersJSON() checkResult {
 		return checkResult{
 			Name:    "use_llm_sector_agents.value state",
 			OK:      true,
-			Message: fmt.Sprintf("⚠️  value is already TRUE — pre-flight assumes flag NOT yet flipped. If you're starting a new observation, flip back to false first."),
+			Message: "⚠️  value is already TRUE — pre-flight assumes flag NOT yet flipped. If you're starting a new observation, flip back to false first.",
 		}
 	}
 	if cfg.Orchestrator.UseLLMSectorAgents.Source == "" {
@@ -281,12 +287,20 @@ func checkObservationLog() checkResult {
 }
 
 func httpGet(url string) (*httpResp, error) {
+	// Self-defending: re-validate URL is localhost before each call.
+	// Catches caller mistakes where a derived URL drifts from baseURL.
+	if err := validateLocalhostURL(url); err != nil {
+		return nil, fmt.Errorf("http URL failed localhost validation: %w", err)
+	}
 	client := &http.Client{Timeout: httpTimeout}
+	//nolint:gosec // G704: URL validated as localhost-only at L295 + main() L43.
+	// validateLocalhostURL allows only localhost/127.0.0.1/0.0.0.0/::1 + http/https.
+	// gosec taint analysis does not recognize our custom validator as a sanitizer.
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -304,4 +318,32 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// validateLocalhostURL enforces that the base URL points to a localhost
+// atlas instance. This is the SSRF guard (gosec G704): the preflight tool
+// must never be tricked into probing production/internal hosts.
+//
+// Allowed hosts: localhost, 127.0.0.1, [::1], 0.0.0.0 (loopback only).
+// Schemes: http, https (we accept https for reverse-proxied local atlas).
+//
+// Per cmd/experimental/AGENTS.md anti-patterns: this tool must not run
+// against live broker or production endpoints — validation enforces that.
+func validateLocalhostURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	switch u.Scheme {
+	case "http", "https":
+	default:
+		return fmt.Errorf("scheme %q not allowed (want http or https)", u.Scheme)
+	}
+	host := u.Hostname()
+	switch host {
+	case "localhost", "127.0.0.1", "0.0.0.0", "::1":
+		return nil
+	default:
+		return fmt.Errorf("host %q not in localhost loopback (refused to probe non-local atlas)", host)
+	}
 }
