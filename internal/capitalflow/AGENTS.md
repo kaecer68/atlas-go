@@ -11,8 +11,8 @@
 |------|------|------|
 | `Handler` | `handler.go` | HTTP handler：`HandleDaily` / `HandleSummary` |
 | `TWSECapitalFlowChannelAdapter` | (apigateway) | TWSE 三大法人資料抓取 |
-| `DailySnapshot` | `types.go` | 七大資金勢力：Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
-| `ResonanceScore` | `types.go` | 共振強度 −1 to +1，越大表示買方一致 |
+| `DailyReport` | `types.go:55` | 七大資金勢力彙整：`Forces` 內含 Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
+| `ResonanceResult` | `types.go:38` | 共振結果（含 `Coefficient` 強度 −1 to +1，越大表示買方一致；`Direction` 字串標籤） |
 
 ## 七大資金勢力
 
@@ -46,18 +46,21 @@ JSON response
 
 Sprint 2 T9 將使 `internal/recommender::HandleRecommendations::CapitalFlow` 欄位接入 `Handler.HandleDaily`。
 
-預期介面：
+預期介面（已對齊 `service.go:33` 真實簽名）：
 ```go
 type CapitalFlow interface {
-    LatestDaily() (*DailySnapshot, error)
+    LatestDaily(ctx context.Context) (DailyReport, error)
+    Summary(ctx context.Context) (SummaryReport, error)
 }
 ```
+
+`Service` struct 已在 `service.go` ship（PR #999），提供 `LatestDaily` / `Summary` 兩個非 HTTP accessor method 給 `internal/recommender` adapter 使用（繞過 `Handler.HandleDaily` 需 `*http.Request` 的限制）。
 
 ## 已知陷阱
 
 | 陷阱 | 說明 |
 |------|------|
-| **共振計算公式變更** | `ResonanceScore` 算法若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
+| **共振計算公式變更** | `ResonanceResult` 算法（`ComputeResonance` in `handler.go:48`/`service.go:43`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
 | **TWSE 假日不發布** | 週末/假日無資料；前端應 fallback 至上週五資料。 |
 | **PublicBank 欄位歷史較短** | 公股行庫資料 TWSE 約 2018+ 才完整；早期資料空值。 |
 
