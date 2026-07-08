@@ -46,17 +46,17 @@ JSON response
 
 Sprint 2 T9 將使 `internal/recommender::HandleRecommendations::CapitalFlow` 欄位接入 `Handler.HandleDaily`。
 
-介面契約（部分 ship / 部分規劃中）：
+介面契約（已全部 ship）：
 ```go
 type CapitalFlow interface {
     LatestDaily(ctx context.Context) (DailyReport, error)        // SHIP（service.go:33）
-    // Summary(ctx context.Context) (SummaryReport, error)        // TODO: 規劃中，尚未實作
+    Summary(ctx context.Context) (SummaryReport, error)          // SHIP（service.go:48）
 }
 ```
 
 **`LatestDaily`** 已 ship：`Service.LatestDaily` 在 `service.go:33`，可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler.HandleDaily` 需 `*http.Request` 的限制。
 
-**`Summary`** 尚未 ship：`Service` 目前只有 `LatestDaily` 一個 method。`SummaryReport` 由 `report.go:43` 的自由函式 `GenerateSummaryReport(date, forces, resonance)` 產生，呼叫路徑是 `Handler.HandleSummary`（handler.go:57）→ `GenerateSummaryReport`。如 recommender 需要 `Summary` non-HTTP accessor，**需另開 PR** 把 `GenerateSummaryReport` 包成 `Service.Summary(ctx)` method（內部可重用 `LatestDaily` 已算好的 `forces` + `resonance` 避免重算）。
+**`Summary`** 已 ship：`Service.Summary` 在 `service.go:48`，內部呼叫 `LatestDaily` 重用 pipeline (FetchSnapshot → Extract → ComputeResonance)，再用 `GenerateSummaryReport(date, forces, resonance)`（`report.go:43`）派生 `SummaryReport`。Caller cost 等同一次 `LatestDaily` 呼叫。繞過 `Handler.HandleSummary`（handler.go:57）需 `*http.Request` 的限制。
 
 ## 已知陷阱
 
@@ -77,4 +77,4 @@ type CapitalFlow interface {
 
 - `handler_test.go` 測試 HandleDaily / HandleSummary 回應格式
 - 七大勢力 completeness test（驗證 7 個欄位都有值）
-- 共振分數範圍測試 [−1, +1]
+- 共振分數範圍測試 [0.5, 1.5]

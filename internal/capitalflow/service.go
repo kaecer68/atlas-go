@@ -2,6 +2,7 @@ package capitalflow
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -42,4 +43,22 @@ func (s *Service) LatestDaily(ctx context.Context) (DailyReport, error) {
 	forces := s.extractor.Extract(snap)
 	resonance := ComputeResonance(forces)
 	return GenerateDailyReport(date, forces, resonance), nil
+}
+
+// Summary returns the latest summary report by reusing LatestDaily's
+// FetchSnapshot → Extract → ComputeResonance pipeline. It exists to give
+// non-HTTP consumers (background jobs, internal adapters such as
+// internal/recommender) a SummaryReport without routing through
+// Handler.HandleSummary (which requires *http.Request).
+//
+// Caller cost: a single provider fetch + Extract + ComputeResonance,
+// shared with LatestDaily if both are called on the same snapshot.
+// SummaryReport is derived deterministically from the same
+// (date, forces, resonance) tuple that feeds DailyReport.
+func (s *Service) Summary(ctx context.Context) (SummaryReport, error) {
+	daily, err := s.LatestDaily(ctx)
+	if err != nil {
+		return SummaryReport{}, fmt.Errorf("capitalflow: build summary from latest daily: %w", err)
+	}
+	return GenerateSummaryReport(daily.Date, daily.Forces, daily.Resonance), nil
 }
