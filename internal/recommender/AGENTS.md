@@ -11,7 +11,7 @@
 |------|------|------|
 | `TierRecommendation` | handler.go | 對外 response：`Tier`/`Regime`/`StressIndex`/`CapitalFlow`/`EventsToday`/`Strategies`/`Warning` |
 | `StrategyRecommendation` | handler.go | 結構化推薦：`Active`/`Available`/`Ranked`/`EntrySignal`/`StopLoss`/`TakeProfit` |
-| `MarketLight` | handler.go | 市場速覽：regime + 壓力指數 + 資金流 + 事件 |
+| `MarketLight` | handler.go | 市場速覽：regime + 壓力指數 + 資金流 + 事件。`CapitalFlow` 為字串摘要(向後相容);`CapitalFlowDetail` 為結構化欄位(PR #1004 新增,來源 capitalflow.SummaryReport,新消費者優先用此欄位) |
 | `Handler` | handler.go | 主 handler：`subStore`, `jwtMgr`, `narrative`, `capitalFlow`, `eventPredictor`, `strategyComp`, `regimeListener`, `lastSeenRegime`, `devMode` |
 | `NewHandler` / `NewHandlerWithServices` | handler.go | old/new constructor (後者帶 4 服務 deps) |
 | `HandlerDeps` | handler.go | deps grouping struct (4 optional services) |

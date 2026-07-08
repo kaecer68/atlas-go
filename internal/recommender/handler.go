@@ -33,11 +33,23 @@ type StrategyRecommendation struct {
 
 // MarketLight is the free/public tier market overview.
 type MarketLight struct {
-	Regime      string   `json:"regime"`
-	RegimeLabel string   `json:"regime_label"`
-	StressIndex float64  `json:"stress_index"`
-	CapitalFlow string   `json:"capital_flow_summary"`
-	EventsToday []string `json:"events_today"`
+	Regime            string             `json:"regime"`
+	RegimeLabel       string             `json:"regime_label"`
+	StressIndex       float64            `json:"stress_index"`
+	CapitalFlow       string             `json:"capital_flow_summary"`
+	CapitalFlowDetail *CapitalFlowDetail `json:"capital_flow_detail,omitempty"`
+	EventsToday       []string           `json:"events_today"`
+}
+
+// CapitalFlowDetail is the structured counterpart to CapitalFlow string.
+// Sourced from capitalflow.SummaryReport. New consumers should prefer
+// this when present; the string field is kept for backward compatibility.
+type CapitalFlowDetail struct {
+	Date          string  `json:"date"`
+	QualityLabel  string  `json:"quality_label"`
+	QualityScore  float64 `json:"quality_score"`
+	ResonanceDir  string  `json:"resonance_dir"`
+	DominantForce string  `json:"dominant_force"`
 }
 
 // Handler serves tier-based recommendations.
@@ -125,11 +137,12 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	rec := TierRecommendation{
 		Tier: string(tier),
 		Market: MarketLight{
-			Regime:      regimeFromNarrative(h.narrative, &warnings),
-			RegimeLabel: "盤勢中性",
-			StressIndex: stressIndexFromNarrative(h.narrative, &warnings),
-			CapitalFlow: capitalFlowFromCapitalFlow(h.capitalFlow, &warnings),
-			EventsToday: eventsFromPredictor(h.eventPredictor, &warnings),
+			Regime:            regimeFromNarrative(h.narrative, &warnings),
+			RegimeLabel:       "盤勢中性",
+			StressIndex:       stressIndexFromNarrative(h.narrative, &warnings),
+			CapitalFlow:       capitalFlowFromCapitalFlow(h.capitalFlow, &warnings),
+			CapitalFlowDetail: capitalFlowDetailFromCapitalFlow(h.capitalFlow, &warnings),
+			EventsToday:       eventsFromPredictor(h.eventPredictor, &warnings),
 		},
 	}
 
@@ -259,6 +272,28 @@ func capitalFlowFromCapitalFlow(p CapitalFlowProvider, w *[]string) string {
 		return "資金流向均衡"
 	}
 	return report.Summary
+}
+
+// capitalFlowDetailFromCapitalFlow reads CapitalFlowProvider.Summary() and
+// returns a structured CapitalFlowDetail, or nil if unavailable. Independent
+// of capitalFlowFromCapitalFlow so callers can opt in to the new shape
+// without forcing both fields to be populated by the same fallback path.
+func capitalFlowDetailFromCapitalFlow(p CapitalFlowProvider, w *[]string) *CapitalFlowDetail {
+	if p == nil {
+		return nil
+	}
+	report, err := p.Summary(context.Background())
+	if err != nil || report.QualityLabel == "" {
+		*w = append(*w, "capital_flow_detail_unavailable")
+		return nil
+	}
+	return &CapitalFlowDetail{
+		Date:          report.Date.Format("2006-01-02"),
+		QualityLabel:  report.QualityLabel,
+		QualityScore:  report.QualityScore,
+		ResonanceDir:  report.ResonanceDir,
+		DominantForce: string(report.DominantForce),
+	}
 }
 
 // eventsFromPredictor reads EventPredictor.PredictToday() + NextNDays(4)
