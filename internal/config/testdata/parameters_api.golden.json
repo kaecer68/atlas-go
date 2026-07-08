@@ -75,6 +75,16 @@
       "results": "(StructuralTrendConfig)"
     },
     {
+      "name": "GetCapitalflowResonanceCoefficientMax",
+      "params": "",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetCapitalflowResonanceCoefficientMin",
+      "params": "",
+      "results": "(float64)"
+    },
+    {
       "name": "GetL2_4Schedule",
       "params": "",
       "results": "(L2_4ScheduleParameters)"
@@ -233,6 +243,14 @@
       ],
       "kind": "struct",
       "name": "CapexCycleThresholdConfig"
+    },
+    {
+      "fields": [
+        "ResonanceCoefficientMax ParameterMetadata[float64]",
+        "ResonanceCoefficientMin ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "CapitalflowParameters"
     },
     {
       "fields": [
@@ -1170,6 +1188,7 @@
         "PreciousMetals PreciousMetalsParameters",
         "SectorExecutor SectorExecutorParameters",
         "Alert AlertParameters",
+        "Capitalflow CapitalflowParameters",
         "RiskGate RiskGateParameters",
         "Engine EngineParameters",
         "RSITw RSITwParameters",
@@ -1583,6 +1602,14 @@
     }
   ],
   "vars": [
+    {
+      "name": "ResonanceCoefficientMaxMetadata",
+      "type": ""
+    },
+    {
+      "name": "ResonanceCoefficientMinMetadata",
+      "type": ""
+    },
     {
       "name": "UseLLMSectorAgentsMetadata",
       "type": ""

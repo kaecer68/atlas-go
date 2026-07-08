@@ -55,6 +55,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeTaxDefaults(&cfg)
 	mergeSectorAllocationDefaults(&cfg)
 	mergeSmartUniverseDefaults(&cfg)
+	mergeCapitalflowDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)

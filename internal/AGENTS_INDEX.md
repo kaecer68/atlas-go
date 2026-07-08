@@ -33,7 +33,7 @@
 | `strategy_techniques` | 投資心法庫 — 5 層框架 + 4 核心指標 + 自我修正 |
 | `tax` | 台灣稅務計算 |
 
-### E · Evolving（演進中，19 個）
+### E · Evolving（演進中，23 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -61,7 +61,7 @@
 | `strategy_validator` | **v0.0.0.31 新 / 保留 AGENTS.md** — 策略啟用前驗證器（invariant/constraint 校驗） |
 | `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**91 tools**、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 89–91 |
 
-> 註：22 個 S-tier + 19 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
+> 註：22 個 S-tier + 23 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 
 ### X · Experimental（實驗中，9 個）
 

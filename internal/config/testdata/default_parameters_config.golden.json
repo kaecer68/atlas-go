@@ -167,6 +167,20 @@
       "value": 14.25
     }
   },
+  "capitalflow": {
+    "resonance_coefficient_max": {
+      "rationale": "Resonance coefficient upper bound: 1.5 = 三勢力全對齊 (foreign + institutional + government all aligned). Bound on ComputeResonance in internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
+      "source": "heuristic",
+      "todo": "Promote to SourceEmpirical after backtest validation across L2.4 observation window.",
+      "value": 1.5
+    },
+    "resonance_coefficient_min": {
+      "rationale": "Resonance coefficient lower bound: 0.5 = foreign vs government 對立. Bound on ComputeResonance in internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
+      "source": "heuristic",
+      "todo": "Promote to SourceEmpirical after backtest validation across L2.4 observation window.",
+      "value": 0.5
+    }
+  },
   "darwinian": {
     "bottom_quartile_multiplier": {
       "rationale": "5% daily cut for bottom performers",

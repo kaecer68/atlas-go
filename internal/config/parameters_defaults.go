@@ -29,6 +29,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		NarrativeConviction:  defaultNarrativeConvictionParameters(),
 		SectorExecutor:       defaultSectorExecutorParameters(),
 		Alert:                defaultAlertParameters(),
+		Capitalflow:          defaultCapitalflowParameters(),
 		RiskGate:             defaultRiskGateParameters(),
 		Engine:               defaultEngineParameters(),
 		RSITw:                defaultRSITwParameters(),
@@ -37,5 +38,30 @@ func DefaultParametersConfig() *ParametersConfig {
 		Reporting:            deriveDefaultReportingConfig(),
 		SmartUniverse:        defaultSmartUniverseParams(),
 		ForwardReturn:        defaultForwardReturnParameters(),
+	}
+}
+
+// defaultCapitalflowParameters returns the canonical defaults for capitalflow.
+// Bounds are design constants (PR #1007 invariant); values live in the
+// top-level *Metadata vars so they are reachable before config load
+// (e.g. in test environments that never call LoadParametersConfig).
+func defaultCapitalflowParameters() CapitalflowParameters {
+	return CapitalflowParameters{
+		ResonanceCoefficientMax: ResonanceCoefficientMaxMetadata,
+		ResonanceCoefficientMin: ResonanceCoefficientMinMetadata,
+	}
+}
+
+// mergeCapitalflowDefaults fills any missing Capitalflow subgroup field with
+// the canonical default from defaultCapitalflowParameters. Called from
+// LoadParametersConfig after JSON unmarshal so old saved configs (that
+// predate the capitalflow section) still resolve to the documented bounds.
+func mergeCapitalflowDefaults(cfg *ParametersConfig) {
+	def := defaultCapitalflowParameters()
+	if cfg.Capitalflow.ResonanceCoefficientMax.Rationale == "" {
+		cfg.Capitalflow.ResonanceCoefficientMax = def.ResonanceCoefficientMax
+	}
+	if cfg.Capitalflow.ResonanceCoefficientMin.Rationale == "" {
+		cfg.Capitalflow.ResonanceCoefficientMin = def.ResonanceCoefficientMin
 	}
 }

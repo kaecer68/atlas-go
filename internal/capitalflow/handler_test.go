@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -73,8 +74,8 @@ func TestResonanceAligned(t *testing.T) {
 	}
 
 	r := ComputeResonance(forces)
-	if r.Coefficient != 1.5 {
-		t.Errorf("expected coefficient 1.5, got %.2f", r.Coefficient)
+	if r.Coefficient != config.GetCapitalflowResonanceCoefficientMax() {
+		t.Errorf("expected coefficient %.2f, got %.2f", config.GetCapitalflowResonanceCoefficientMax(), r.Coefficient)
 	}
 	if r.Direction != "bullish" {
 		t.Errorf("expected direction bullish, got %s", r.Direction)
@@ -90,8 +91,8 @@ func TestResonanceAdversarial(t *testing.T) {
 	}
 
 	r := ComputeResonance(forces)
-	if r.Coefficient != 0.5 {
-		t.Errorf("expected coefficient 0.5, got %.2f", r.Coefficient)
+	if r.Coefficient != config.GetCapitalflowResonanceCoefficientMin() {
+		t.Errorf("expected coefficient %.2f, got %.2f", config.GetCapitalflowResonanceCoefficientMin(), r.Coefficient)
 	}
 }
 
@@ -164,8 +165,10 @@ func TestResonanceCoefficientRange(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			r := ComputeResonance(c.forces)
-			if r.Coefficient < 0.5 || r.Coefficient > 1.5 {
-				t.Errorf("Coefficient %.3f out of documented range [0.5, 1.5]", r.Coefficient)
+			minCoeff := config.GetCapitalflowResonanceCoefficientMin()
+			maxCoeff := config.GetCapitalflowResonanceCoefficientMax()
+			if r.Coefficient < minCoeff || r.Coefficient > maxCoeff {
+				t.Errorf("Coefficient %.3f out of documented range [%.2f, %.2f]", r.Coefficient, minCoeff, maxCoeff)
 			}
 		})
 	}
