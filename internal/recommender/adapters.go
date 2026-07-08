@@ -1,0 +1,177 @@
+package recommender
+
+import (
+	"context"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/eventdriven"
+	"github.com/kaecer68/atlas-go/internal/narrative"
+)
+
+// =====================================================================
+// Adapters — wrap real producer types to satisfy the consumer-defined
+// interfaces in deps.go. Each adapter is NIL-safe: wrapping nil returns
+// zero values with no nil deref, so production wiring can use
+// NewHandlerWithServices(svc, ...) and any unset service degrades
+// gracefully to the fallback hardcoded values in handler.go.
+// =====================================================================
+
+// =====================================================================
+// NarrativeAdapter wraps *monitoring/service.NarrativeService.
+// =====================================================================
+
+// NewNarrativeAdapterFunc wraps getter functions to satisfy the
+// NarrativeProvider interface — useful for tests and decoupled wiring.
+func NewNarrativeAdapterFunc(
+	getStress func() narrative.TaiwanStressIndex,
+	getNarrative func(context.Context) (narrative.MarketNarrativeData, error),
+) NarrativeProvider {
+	if getStress == nil {
+		getStress = func() narrative.TaiwanStressIndex { return narrative.TaiwanStressIndex{} }
+	}
+	if getNarrative == nil {
+		getNarrative = func(context.Context) (narrative.MarketNarrativeData, error) {
+			return narrative.MarketNarrativeData{}, nil
+		}
+	}
+	return &narrativeAdapter{getStress: getStress, getNarrative: getNarrative}
+}
+
+type narrativeAdapter struct {
+	getStress    func() narrative.TaiwanStressIndex
+	getNarrative func(context.Context) (narrative.MarketNarrativeData, error)
+}
+
+func (a *narrativeAdapter) GetCurrentStressIndex() narrative.TaiwanStressIndex {
+	return a.getStress()
+}
+
+func (a *narrativeAdapter) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
+	return a.getNarrative(ctx)
+}
+
+// =====================================================================
+// CapitalFlowAdapter wraps *capitalflow.Service (added in 661f2dc7).
+// =====================================================================
+
+type capitalFlowServiceProvider interface {
+	LatestDaily(ctx context.Context) (capitalflow.DailyReport, error)
+}
+
+// NewCapitalFlowAdapter wires a *capitalflow.Service into
+// CapitalFlowProvider. The provider may be nil; in that case the
+// adapter degrades to the "資金流向均衡" fallback.
+func NewCapitalFlowAdapter(provider capitalFlowServiceProvider) CapitalFlowProvider {
+	if provider == nil {
+		return NewCapitalFlowFunc(nil)
+	}
+	return NewCapitalFlowFunc(provider.LatestDaily)
+}
+
+// NewCapitalFlowFunc wraps a LatestDaily function.
+func NewCapitalFlowFunc(latestDaily func(context.Context) (capitalflow.DailyReport, error)) CapitalFlowProvider {
+	if latestDaily == nil {
+		latestDaily = func(context.Context) (capitalflow.DailyReport, error) {
+			return capitalflow.DailyReport{}, nil
+		}
+	}
+	return &capitalFlowAdapter{latestDaily: latestDaily}
+}
+
+type capitalFlowAdapter struct {
+	latestDaily func(context.Context) (capitalflow.DailyReport, error)
+}
+
+func (a *capitalFlowAdapter) LatestDaily(ctx context.Context) (capitalflow.DailyReport, error) {
+	return a.latestDaily(ctx)
+}
+
+// =====================================================================
+// EventPredictorAdapter wraps *eventdriven.Predictor.
+// =====================================================================
+
+type eventDrivenPredictorProvider interface {
+	Predict(now time.Time) eventdriven.PredictionReport
+}
+
+// NewEventPredictorAdapter wires a *eventdriven.Predictor into
+// EventPredictor. PredictToday() takes the first daily prediction
+// from the 5-day forward report and labels it "today" for display.
+func NewEventPredictorAdapter(predictor eventDrivenPredictorProvider) EventPredictor {
+	return &eventPredictorAdapter{predictor: predictor}
+}
+
+type eventPredictorAdapter struct {
+	predictor eventDrivenPredictorProvider
+}
+
+func (a *eventPredictorAdapter) PredictToday() (eventdriven.FlowPrediction, error) {
+	if a.predictor == nil {
+		return eventdriven.FlowPrediction{}, nil
+	}
+	report := a.predictor.Predict(time.Now())
+	if len(report.Predictions) == 0 {
+		return eventdriven.FlowPrediction{}, nil
+	}
+	return report.Predictions[0], nil
+}
+
+func (a *eventPredictorAdapter) NextNDays(n int) ([]eventdriven.FlowPrediction, error) {
+	if a.predictor == nil {
+		return nil, nil
+	}
+	report := a.predictor.Predict(time.Now())
+	if n > len(report.Predictions) {
+		n = len(report.Predictions)
+	}
+	return report.Predictions[:n], nil
+}
+
+// =====================================================================
+// ComparisonEngineAdapter wraps *strategy.ComparisonEngine.
+// =====================================================================
+
+// NewComparisonEngineAdapter wires a strategy.ComparisonEngine into
+// the ComparisonEngine interface. Internally holds a getter function
+// to decouple from the real producer's package import.
+type comparisonEngineProvider interface {
+	GetScore(strategyID string, days int) (float64, error)
+}
+
+func NewComparisonEngineAdapter(provider comparisonEngineProvider) ComparisonEngine {
+	if provider == nil {
+		return NewComparisonEngineFunc(nil)
+	}
+	return NewComparisonEngineFunc(func(strategyID string) (float64, error) {
+		return provider.GetScore(strategyID, 30) // default 30-day window
+	})
+}
+
+// NewComparisonEngineFunc wraps a single-arg GetScore function.
+func NewComparisonEngineFunc(getScore func(string) (float64, error)) ComparisonEngine {
+	if getScore == nil {
+		getScore = func(string) (float64, error) { return 0, nil }
+	}
+	return &comparisonEngineAdapter{getScore: getScore}
+}
+
+type comparisonEngineAdapter struct {
+	getScore func(string) (float64, error)
+}
+
+func (a *comparisonEngineAdapter) GetScore(strategyID string) (float64, error) {
+	return a.getScore(strategyID)
+}
+
+// =====================================================================
+// Compile-time assertions (caught at build time if a wrapper drifts
+// from its declared interface).
+// =====================================================================
+
+var (
+	_ NarrativeProvider   = (*narrativeAdapter)(nil)
+	_ CapitalFlowProvider = (*capitalFlowAdapter)(nil)
+	_ EventPredictor      = (*eventPredictorAdapter)(nil)
+	_ ComparisonEngine    = (*comparisonEngineAdapter)(nil)
+)

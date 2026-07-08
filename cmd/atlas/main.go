@@ -590,8 +590,11 @@ func run(args []string, deps appDeps) error {
 			subHandler := subscription.NewHandler(subStore, jwtMgr)
 			subHandler.RegisterRoutes(mux)
 			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes")
-			recommender.RegisterRoutes(mux, *subStore, jwtMgr)
-			log.Printf("[Recommender] registered /api/recommendations route")
+			devMode := config.GetSecret("ATLAS_DEV_MODE") == "true"
+			deps := WireRecommenderDeps(WireDeps{WorkDir: cfg.WorkDir})
+			recommender.RegisterRoutesWithDeps(mux, *subStore, jwtMgr, deps, devMode)
+			log.Printf("[Recommender] registered /api/recommendations route (real services: %v)",
+				anyDepsWired(deps))
 		}
 
 		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
