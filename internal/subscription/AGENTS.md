@@ -9,7 +9,7 @@
 
 | 型別 | 檔案 | 功能 |
 |------|------|------|
-| `Store` | `store.go` | 持久化 store (`Register(email, password)` / `GetByEmail`) |
+| `Store` | `store.go` | 持久化 store (`Register(email, passwordHash)` / `GetByEmail`) — **呼叫端負責 hash**（見 L20 認證鏈）,store 只接收已 hash 過的字串 |
 | `Tier` | `types.go` | 列舉：`TierFree` / `TierRegistered` / `TierPremium` |
 | `EffectiveTier` | `types.go` | 從 user 物件解析 tier（Premium 試用期、Trial 處理） |
 | `ExtractToken` / `Verify` | `auth.go` | HTTP 認證：JWT cookie/Authorization header 解析 |
@@ -17,7 +17,9 @@
 ## 認證鏈
 
 ```
-登入: Register(email, pass) → 儲存 hash
+呼叫端: 收到密碼 → 用 argon2/bcrypt hash → Register(email, passwordHash)
+     ↓
+Store 端:  收到 passwordHash → bcrypt 二次 hash (per-user salt) → 寫入磁碟
      ↓
 JWT 簽發 (簽 secret + exp)
      ↓
