@@ -12,12 +12,6 @@ const (
 	DataStatusInsufficientData   DataStatus = "insufficient_data"
 )
 
-type dataResponse struct {
-	DataStatus DataStatus `json:"data_status"`
-	Reason     string     `json:"reason,omitempty"`
-	Detail     string     `json:"detail,omitempty"`
-}
-
 func serviceUnavailable(reason, detail string) (int, any) {
 	return http.StatusServiceUnavailable, map[string]any{
 		"data_status": string(DataStatusServiceUnavailable),

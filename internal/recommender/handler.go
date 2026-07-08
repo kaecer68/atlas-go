@@ -198,10 +198,12 @@ func stressIndexFromNarrative(p NarrativeProvider, w *[]string) float64 {
 
 func regimeFromNarrative(p NarrativeProvider, w *[]string) string {
 	if p == nil {
+		*w = append(*w, "regime_unavailable")
 		return "NEUTRAL"
 	}
 	info, err := p.GetCurrentStressIndex(context.Background())
 	if err != nil || !info.HasData || info.Regime == "" {
+		*w = append(*w, "regime_unavailable")
 		return "NEUTRAL"
 	}
 	return info.Regime
@@ -233,17 +235,6 @@ func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 		out[i] = p.Direction
 	}
 	return out
-}
-
-func signalsFromComparisonEngine(p ComparisonEngine, strategyID string) (entrySignal string, stopLoss, takeProfit float64) {
-	if p == nil {
-		return "", 0, 0
-	}
-	info, err := p.GetScore(strategyID)
-	if err != nil {
-		return "", 0, 0
-	}
-	return info.EntrySignal, info.StopLoss, info.TakeProfit
 }
 
 func signalEntry(e ComparisonEngine, strategyID string, w *[]string) string {
