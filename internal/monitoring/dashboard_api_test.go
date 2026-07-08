@@ -121,8 +121,30 @@ func TestHandleRiskCalibration_NoGate(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 when no risk gate, got %d", w.Code)
+	}
+}
+
+// T4: RegisterAllRoutes must not capture riskGate by value at call time;
+// SetRiskGate called later must still reach the registered handlers.
+func TestDashboardAPI_RiskGate_WiredAfterRegisterAllRoutes(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "")
+	t.Setenv("ATLAS_ADMIN_KEY", "")
+	t.Setenv("ATLAS_ENV", "")
+	d := NewDashboardAPIWithGateway(t.TempDir(), t.TempDir(), nil, NoopFetcher())
+
+	mux := http.NewServeMux()
+	d.RegisterAllRoutes(mux, RouteOptions{IncludeBacktest: false, IncludeSwagger: false})
+
+	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+	d.SetRiskGate(gate)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 OK when no risk gate (returns not_available), got %d", w.Code)
+		t.Errorf("expected 200 (RiskGate wired even after RegisterAllRoutes), got %d", w.Code)
 	}
 }
 
