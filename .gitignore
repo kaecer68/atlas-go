@@ -32,6 +32,7 @@
 /internal/monitoring/data/
 /prompts/agents/spawn_*.md
 /internal/orchestrator/prompts/agents/spawn_*.md
+/internal/orchestrator/traces/
 cmd/atlas/prompts/agents/spawn_*.md
 cmd/experimental/*/prompts/agents/spawn_*.md
 /cmd/run-experiment/prompts/
