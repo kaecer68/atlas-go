@@ -31,7 +31,7 @@
 | HTTP Adapter | `http_adapter.go` — 券商 API（HMAC-SHA256、速率限制、重試） |
 | 事件匯流排 | `eventbus.go` — `ChannelEventBus` 解耦 |
 
-詳細契約見 `doc.go:15-30`。
+詳細契約見 `doc.go:1-23` (package documentation block)。
 
 ---
 
