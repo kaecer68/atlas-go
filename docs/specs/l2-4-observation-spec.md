@@ -3,7 +3,7 @@
 > **Status**: Metrics implementation shipped (PR #821, merge commit `f69b3551`, 2026-06-29).
 > **Predecessor**: [`./llm-sector-agent.md`](./llm-sector-agent.md) (L2.3 PoC design)
 > **Operational guide**: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
-> **Linked log**: _待後續 PR 提供觀察日誌_
+> **Linked log**: `docs/operations/l2-4-observation-log.md`
 > **Future work**: [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md) §3
 > **Issues**: [#740](https://github.com/kaecer68/atlas-go/issues/740) (slog metrics for L2.4 observability in `SemiconductorLLMAgent.Recommend`)
 
@@ -102,7 +102,7 @@ The full promotion procedure (4 steps: Source upgrade → Default flip → LLMDr
 - Predecessor: [`./llm-sector-agent.md`](./llm-sector-agent.md) (L2.3 PoC design)
 - Operational guide: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
 - Future work: [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md) (auto-cron / CLI flag / promotion)
-- Existing log: _待後續 PR 提供觀察日誌_
+- Existing log: `docs/operations/l2-4-observation-log.md`
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711) §L2.4
 - Metrics: [Issue #740](https://github.com/kaecer68/atlas-go/issues/740)
 - Implementation: PR #821 — `internal/orchestrator/semiconductor_llm_agent.go` (orchestrator), `internal/monitoring/api/pipeline/l2_4_*.go` (state + handlers), `cmd/atlas/main.go` (route registration + `SetConfig` seed), `shared_web/static/js/pages/synergy.js` (admin UI)
