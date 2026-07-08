@@ -107,6 +107,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/traces/sim-latest", shared.Get(h.HandleSimLatest))
 	mux.Handle("POST /api/dashboard/channels/", shared.Adapt(h.HandleChannelAction))
 	mux.Handle("POST /api/dashboard/api-keys/update", shared.Post(h.HandleAPIKeyUpdate))
+	// Deprecated: internal calibration; not for web UI or MCP. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/dashboard/rsi-tw-calibration", shared.Get(h.HandleRSITwCalibration))
 	mux.Handle("GET /api/dashboard/maturity", shared.Get(h.HandleMaturity))
 }

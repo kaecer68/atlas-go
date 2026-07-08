@@ -18,8 +18,10 @@ func NewReportHandlers(svc *service.ReportService) *ReportHandlers {
 }
 
 func (h *ReportHandlers) RegisterRoutes(mux *http.ServeMux) {
+	// Deprecated: use /api/reports/latest (plural) instead. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/report/latest", shared.GetRaw(h.HandleLatestReport))
 	mux.Handle("GET /api/report/list", shared.Get(h.HandleReportList))
+	// Deprecated: covered by /api/reports/latest. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/dashboard/daily-summary", shared.Get(h.HandleDailySummary))
 }
 

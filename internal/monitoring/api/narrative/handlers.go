@@ -27,8 +27,11 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/narrative/templates", shared.Get(h.HandleNarrativeTemplates))
 	mux.Handle("GET /api/narrative/seasonal", shared.Get(h.HandleSeasonalAnalysis))
 	mux.Handle("GET /api/narrative/bundle", shared.Get(h.HandleNarrativeBundle))
+	// Deprecated: covered by /api/taiwan/stress-index. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/narrative/stress-index/current", shared.Get(h.HandleStressIndexCurrent))
+	// Deprecated: covered by /api/taiwan/stress-index. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/narrative/stress-index/history", shared.Get(h.HandleStressIndexHistory))
+	// Deprecated: covered by /api/taiwan/stress-index. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/narrative/stress-index/thresholds", shared.Get(h.HandleStressIndexThresholds))
 }
 

@@ -55,12 +55,14 @@ func (h *Handlers) SetSummaryHandler(sh *llmcapabilities.StrategySummaryHandler)
 // RegisterRoutes attaches the strategies routes to mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/strategies", shared.Get(h.listStrategies))
+	// Deprecated: same data as /api/strategies. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/strategies/active", shared.Get(h.listActive))
 	mux.Handle("GET /api/strategies/layers", shared.Get(h.listLayers))
 	mux.Handle("GET /api/strategies/{id}", shared.Get(h.getStrategy))
 	mux.Handle("POST /api/strategies/{id}/validate", shared.Post(h.validateStrategy))
 	mux.Handle("GET /api/strategies/{id}/attribution", shared.Get(h.getAttribution))
 	mux.Handle("POST /api/strategies/{id}/annotate", shared.Post(h.annotate))
+	// Deprecated: covered by /api/strategies/{id} and /attribution. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/strategies/{id}/summary", shared.Get(h.getSummary))
 }
 
