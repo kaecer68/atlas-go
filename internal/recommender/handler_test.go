@@ -191,3 +191,46 @@ func TestHandleRecommendations_EventsFromPredictor(t *testing.T) {
 		t.Errorf("EventsToday[0] = %q, want MSCI 調整", rec.Market.EventsToday[0])
 	}
 }
+
+type mockComparisonEngine struct {
+	score       float64
+	entrySignal string
+	stopLoss    float64
+	takeProfit  float64
+}
+
+func (m *mockComparisonEngine) GetScore(strategyID string) (StrategyScoreInfo, error) {
+	return StrategyScoreInfo{Score: m.score, EntrySignal: m.entrySignal, StopLoss: m.stopLoss, TakeProfit: m.takeProfit}, nil
+}
+
+func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
+	t.Setenv("ATLAS_DEV_MODE", "true")
+	dir, _ := os.MkdirTemp("", "rec-test")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+	store.Register("premium@test.com", "pass")
+	mock := &mockComparisonEngine{
+		score:       0.85,
+		entrySignal: "等回測 1000 元支撐進場",
+		stopLoss:    0.05,
+		takeProfit:  0.15,
+	}
+	h := NewHandlerWithServices(*store, nil, nil, nil, nil, mock)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	req.Header.Set("X-User-Email", "premium@test.com")
+	code, data := h.HandleRecommendations(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	rec := data.(TierRecommendation)
+	if rec.Strategies == nil {
+		t.Fatal("premium tier should have strategy recommendations")
+	}
+	if rec.Strategies.EntrySignal != "等回測 1000 元支撐進場" {
+		t.Errorf("EntrySignal = %q, want from ComparisonEngine", rec.Strategies.EntrySignal)
+	}
+	if rec.Strategies.StopLoss != "-5.0%" {
+		t.Errorf("StopLoss = %q, want from ComparisonEngine", rec.Strategies.StopLoss)
+	}
+}

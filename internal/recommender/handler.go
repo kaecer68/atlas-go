@@ -3,6 +3,7 @@ package recommender
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -132,8 +133,8 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 		rec.Strategies = &StrategyRecommendation{
 			Active:      "growth",
 			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
-			EntrySignal: "等待回測支撐區間",
-			StopLoss:    "-5%",
+			EntrySignal: signalEntry(h.strategyComp, "growth"),
+			StopLoss:    signalStopLoss(h.strategyComp, "growth"),
 		}
 		return http.StatusOK, rec
 
@@ -201,4 +202,37 @@ func eventsFromPredictor(p EventPredictor) []string {
 		out[i] = p.Direction
 	}
 	return out
+}
+
+func signalsFromComparisonEngine(p ComparisonEngine, strategyID string) (entrySignal string, stopLoss, takeProfit float64) {
+	if p == nil {
+		return "", 0, 0
+	}
+	info, err := p.GetScore(strategyID)
+	if err != nil {
+		return "", 0, 0
+	}
+	return info.EntrySignal, info.StopLoss, info.TakeProfit
+}
+
+func signalEntry(e ComparisonEngine, strategyID string) string {
+	if e == nil {
+		return "等待回測支撐區間"
+	}
+	info, err := e.GetScore(strategyID)
+	if err != nil || info.EntrySignal == "" {
+		return "等待回測支撐區間"
+	}
+	return info.EntrySignal
+}
+
+func signalStopLoss(e ComparisonEngine, strategyID string) string {
+	if e == nil {
+		return "-5%"
+	}
+	info, err := e.GetScore(strategyID)
+	if err != nil || info.StopLoss == 0 {
+		return "-5%"
+	}
+	return fmt.Sprintf("-%.1f%%", info.StopLoss*100)
 }
