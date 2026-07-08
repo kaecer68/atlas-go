@@ -20,6 +20,10 @@ This report covers 4 categories of follow-up work:
 
 ### 實作內容
 
+**Status (2026-07-08)**: PR #1029 ships the **defensive 5-condition gate** (`internal/scheduler/l2_4_auto_cron.go`). Cron will NOT fire unless ALL of: (1) env var `L2_4_AUTO_CRON_ENABLED=true`, (2) `parameters.AutoEnabled=true`, (3) observation log exists, (4) Day 7+ entry exists in log, (5) current time in cron window. Default-disabled in every respect. **Gate ships; actual `BackgroundTaskManager.Register()` + `l24Mgr.Start/Stop()` wiring deliberately deferred per prereq #1 + #2** (see 「是否現在可以開始實作？」 below).
+
+Original spec for full implementation (not yet shipped):
+
 - New `internal/scheduler/l2_4.go` package implementing:
   - Cron-style trigger reading `L2_4ScheduleParameters.DefaultStartTime` (HH:MM) on weekdays
   - On trigger: call `l24Mgr.Start()` (which is now seeded from `parameters.json`, see PR #821 commit `f2c37c61`)
@@ -41,19 +45,22 @@ Eliminate the manual Day 0 / Day 14 button clicks. Once the manual flow proves o
 
 ### 是否現在可以開始實作？
 
-**否**。Auto-cron 是「graduation」,不是 v1 必備。Reasons:
-- Manual flow (PR #821) 尚未被任何 staging 跑過一輪完整 7-14 天,沒有成功/失敗的 baseline
+**部分**。Original answer was 「否」(2026-06-29 PR #824);reasoning 仍成立 for prereq #1 + #2:
+
+- Prereq #1 + #2 仍未滿足 — Manual flow (PR #821) 尚未被任何 staging 跑過一輪完整 7-14 天,沒有成功/失敗的 baseline;`AutoEnabled` 開關測試需要 staging 環境(目前 repo 無 staging compose)。
 - Cron 故障模式 (missed trigger、duplicate trigger、out-of-window start) 需先有手動流程當 comparison baseline 才能 debug
 - Risk: 自動 cron 在沒驗證時 launch = 在 production 跑未驗證邏輯
 
+**但 PR #1029 ship 了 defensive gate 作為 defensible-interpreted 部分實作**:gate 邏輯在 main,但要讓 cron 真正 fire 還是要 prereq #1+2(觀察期成功 + staging 測試)。Net effect:即使有人 merge PR #1029 + 亂設 env var,cron 仍 no-op 直到 Day 7 entry 出現。
+
 ### 需要什麼條件才能實作？
 
-1. **手動觀察期成功完成一次**: 至少一次 Day 7 / Day 14 通過(可用任何 sector / symbol)
-2. **`AutoEnabled` 開關測試**: 在 staging 把 `auto_enabled` 翻 `true`,驗證 plugin 不會在 `false` 時觸發
-3. **排程 fault tolerance**: 設計降級策略 (trigger 失敗時 log warning 不 panic、scheduler 重啟後恢復 in-flight window)
-4. **runbook §2 改寫**: Daily Check-in 變成「review auto-triggered window」流程
+1. ⏳ **手動觀察期成功完成一次**: 至少一次 Day 7 / Day 14 通過(可用任何 sector / symbol)
+2. ⏳ **`AutoEnabled` 開關測試**: 在 staging 把 `auto_enabled` 翻 `true`,驗證 plugin 不會在 `false` 時觸發
+3. ✅ **排程 fault tolerance** (2026-07-08 完成,[PR #1023](https://github.com/kaecer68/atlas-go/pull/1023)) — 降級策略已 ship(trigger 失敗時 log warning 不 panic、scheduler 重啟後恢復 in-flight window)
+4. ✅ **runbook §2 改寫** (2026-07-08 完成,[PR #1024](https://github.com/kaecer68/atlas-go/pull/1024)) — Daily Check-in 已改為「review auto-triggered window」流程
 
-**預估時程**: 1 個獨立 PR,中等工作量(2-3 個 review agents 平行)
+**預估時程**: 1 個獨立 PR,中等工作量(2-3 個 review agents 平行)。僅在 prereq #1+2 滿足後啟動;PR #1029 的 defensive gate 可作為前置準備。
 
 ---
 
@@ -164,10 +171,13 @@ PR #821 已經把 L2.4 從「設計階段」推進到「可手動啟用階段」
 
 **前置條件**:
 - 3b 完成 + production 跑過 7+ 天
-- 確認 `grep -r LLMDriver internal/` 沒有非測試用法
+- ✅ 確認 `grep -r LLMDriver internal/` 沒有非測試用法 — 2026-07-08 audit done ([PR #1024](https://github.com/kaecer68/atlas-go/pull/1024));所有 callers 已改用 `SectorAgentLLMDriver`
+- ✅ `sector_agent_llm.go` 介面 split — 2026-07-08 done ([PR #1025](https://github.com/kaecer68/atlas-go/pull/1025)) — `SectorAgentLLMAgent` 已拆出 `PlanDriver` + `ReflectDriver` 兩個獨立介面
 - `sector_agent_llm_test.go` 改用新介面
 
 **預估時程**: 0.5 天工作量,純 refactor(無行為變更),需要完整 test 驗證無 regression
+
+**Note**: PR #1025 已 ship 介面 split,但 `LLMDriver` deprecated alias 仍在(向後相容);正式移除要等 3b 後 production 跑 7+ 天無 regression。
 
 ---
 
@@ -237,15 +247,17 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
 
 ## 5. 總時程與優先序
 
-| 項目 | 預估工時 | 優先序 | 阻塞 |
-|------|---------|--------|------|
-| This PR (docs 遷移) | 1-2 hours | **現在** | 無 |
-| CLI flag wiring | 0.5 day | 下一個 sprint | 無 |
-| Auto-cron scheduler | 2-3 days | Day 14 之後 | 觀察期成功 1 次 |
-| Source 升級 (3a) | 10 min | Day 14 之後 | Day 14 通過 |
-| Default flip (3b) | 1-2 days | 3a 之後 | 3a |
-| LLMDriver 移除 (3c) | 0.5 day | 3b 之後 7+ 天 | 3b + production 7+ 天 |
-| Version tag (3d) | 30 min | 3a/3b/3c 都完成 | 3a/3b/3c |
+| 項目 | 預估工時 | 優先序 | 阻塞 | 狀態 (2026-07-08) |
+|------|---------|--------|------|------|
+| This PR (docs 遷移) | 1-2 hours | **現在** | 無 | ✅ 已 ship |
+| CLI flag wiring | 0.5 day | 下一個 sprint | 無 | ✅ Shipped ([PR #1021](https://github.com/kaecer68/atlas-go/pull/1021)) |
+| Auto-cron scheduler | 2-3 days | Day 14 之後 | 觀察期成功 1 次 | 🟡 Defensive gate shipped ([PR #1029](https://github.com/kaecer68/atlas-go/pull/1029));full impl 等 prereq #1+#2 |
+| Source 升級 (3a) | 10 min | Day 14 之後 | Day 14 通過 | ⏳ 未啟動 |
+| Default flip (3b) | 1-2 days | 3a 之後 | 3a | ⏳ 未啟動 |
+| LLMDriver 移除 (3c) | 0.5 day | 3b 之後 7+ 天 | 3b + production 7+ 天 | 🟡 Split done ([PR #1025](https://github.com/kaecer68/atlas-go/pull/1025));deprecated alias 仍保留(向後相容),等 3b |
+| Version tag (3d) | 30 min | 3a/3b/3c 都完成 | 3a/3b/3c | ⏳ 未啟動 |
+
+**Note**: 此表反映 2026-07-08 實際 ship 狀態。後續 prereq 達成後逐項更新。
 
 ## 6. References
 
