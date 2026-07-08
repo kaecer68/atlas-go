@@ -158,7 +158,6 @@ func run(args []string, deps appDeps) error {
 	// String flag (not Bool) so empty = no-override, "true"/"false" = explicit override.
 	useLLMSectorAgents := flags.String("use-llm-sector-agents", "",
 		"override L2.4 LLM-driven sector agent (true|false|1|0, empty=no-override)")
-	_ = useLLMSectorAgents // scaffold: full override logic deferred — see docs/operations/l2-4-followup.md
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
 	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
 	brokerSigner := flags.String("broker-signer", "", "override broker signer: placeholder|hmac-sha256")
@@ -194,6 +193,26 @@ func run(args []string, deps appDeps) error {
 	fubonproxy.SetFubonProxyPort(*fubonProxyPort)
 
 	cfg := deps.loadConfig()
+
+	// --use-llm-sector-agents CLI override (delivered scaffold via PR #828,
+	// wired here). Tri-state flag: empty = no override (env var / parameters.json
+	// value preserved), explicit true/false = override cfg.LLMSectorAgentsEnabled.
+	if *useLLMSectorAgents != "" {
+		parsed, explicit, err := parseTriStateFlag(*useLLMSectorAgents)
+		if err != nil {
+			return fmt.Errorf("parse --use-llm-sector-agents: %w", err)
+		}
+		if explicit {
+			prev := cfg.LLMSectorAgentsEnabled
+			cfg.LLMSectorAgentsEnabled = parsed
+			logging.Info("main", "cli_override_applied",
+				"flag", "use-llm-sector-agents",
+				"from", prev,
+				"to", parsed,
+				"source", "cli")
+		}
+	}
+
 	logging.Init(*logFormat, slog.LevelInfo)
 
 	// Subcommand dispatch: "prism worker" is a lightweight daemon that
