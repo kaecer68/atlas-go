@@ -192,6 +192,17 @@ jobs:
           exit 1
         fi
 
+  # AGENTS.md doc drift check — verifies all internal/*/AGENTS.md file:line
+  # references point to real files/lines. Catches drift introduced by code
+  # refactors without updating the corresponding AGENTS.md documentation.
+  agents-md-drift:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Run agents.md drift check
+      run: bash scripts/ci/check_agents_md_drift.sh
+
   # Security Scan
   security:
     runs-on: ubuntu-latest
@@ -395,7 +406,7 @@ jobs:
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration, generate, commitlint, governance, operations]
+    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations]
     if: github.event_name == 'pull_request' && always()
     permissions:
       pull-requests: write
@@ -405,7 +416,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         STATUS_FLAG=":white_check_mark:"
-        if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test-cmd-atlas.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.generate.result }}" != "success" ]; then
+        if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test-cmd-atlas.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.generate.result }}" != "success" ] || [ "${{ needs.agents-md-drift.result }}" != "success" ]; then
           STATUS_FLAG=":x:"
         fi
         cat <<EOF | gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file -
@@ -419,6 +430,7 @@ jobs:
         | security | ${{ needs.security.result }} |
         | integration | ${{ needs.integration.result }} |
         | generate | ${{ needs.generate.result }} |
+        | agents-md-drift | ${{ needs.agents-md-drift.result }} |
         | commitlint | ${{ needs.commitlint.result }} |
         | governance | ${{ needs.governance.result }} |
         | operations | ${{ needs.operations.result }} |
