@@ -38,7 +38,7 @@ func TestE2E_RecommendationsEndpoint(t *testing.T) {
 		takeProfit:  0.15,
 	}
 
-	handler := NewHandlerWithServices(*store, nil, narrative, capflow, evts, strategy)
+	handler := NewHandlerWithServices(*store, nil, narrative, capflow, evts, strategy).WithDevMode(true)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/recommendations", func(w http.ResponseWriter, r *http.Request) {
@@ -52,15 +52,13 @@ func TestE2E_RecommendationsEndpoint(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	t.Setenv("ATLAS_DEV_MODE", "true")
-
 	tests := []struct {
-		name        string
-		email       string
-		wantStatus  int
-		wantTier    string
-		wantRegime  string
-		wantSignal  string
+		name       string
+		email      string
+		wantStatus int
+		wantTier   string
+		wantRegime string
+		wantSignal string
 	}{
 		{
 			name:       "premium user gets full wiring",
