@@ -1,6 +1,7 @@
 package recommender
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -107,9 +108,9 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	rec := TierRecommendation{
 		Tier: string(tier),
 		Market: MarketLight{
-			Regime:      "NEUTRAL",
+			Regime:      regimeFromNarrative(h.narrative),
 			RegimeLabel: "盤勢中性",
-			StressIndex: 0.0,
+			StressIndex: stressIndexFromNarrative(h.narrative),
 			CapitalFlow: "資金流向均衡",
 			EventsToday: nil,
 		},
@@ -152,4 +153,26 @@ func RegisterRoutes(mux *http.ServeMux, store subscription.Store, jwtMgr *subscr
 			log.Printf("[Recommender] encode response: %v", err)
 		}
 	})
+}
+
+func stressIndexFromNarrative(p NarrativeProvider) float64 {
+	if p == nil {
+		return 0.0
+	}
+	info, err := p.GetCurrentStressIndex(context.Background())
+	if err != nil || !info.HasData {
+		return 0.0
+	}
+	return info.Value
+}
+
+func regimeFromNarrative(p NarrativeProvider) string {
+	if p == nil {
+		return "NEUTRAL"
+	}
+	info, err := p.GetCurrentStressIndex(context.Background())
+	if err != nil || !info.HasData || info.Regime == "" {
+		return "NEUTRAL"
+	}
+	return info.Regime
 }

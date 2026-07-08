@@ -1,28 +1,24 @@
 package recommender
 
-// 本檔定義 recommender 對外整合的 service interfaces。
-// Sprint 2 T7 引入：handler 可注入這些 deps，但目前僅 NIL-safe (保持 T8-T12 stub)。
-//
-// 設計原則: interface 由 consumer (recommender) 定義, 而不是 producer (narrative/capitalflow/...)
-// — 遵循 Go 的「accept interfaces」原則, 防止循環依賴。
+import "context"
 
 // NarrativeProvider 供 recommender 查詢當前 regime + Taiwan stress index。
 // 對應實作: internal/monitoring/service/narrative.go::NarrativeService。
 type NarrativeProvider interface {
-	GetCurrentStressIndex(ctx interface{}) (StressIndexInfo, error)
-	BuildMarketNarrativeData(ctx interface{}) (MarketNarrativeInfo, error)
+	GetCurrentStressIndex(ctx context.Context) (StressIndexInfo, error)
+	BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error)
 }
 
 // CapitalFlowProvider 供 recommender 查詢當日七大資金勢力 summary。
 // 對應實作: internal/capitalflow.Handler。
 type CapitalFlowProvider interface {
-	LatestDaily(ctx interface{}) (CapitalFlowDailyInfo, error)
+	LatestDaily(ctx context.Context) (CapitalFlowDailyInfo, error)
 }
 
 // EventPredictor 供 recommender 查詢當日事件 + 5 日預測。
 // 對應實作: internal/eventdriven.Predictor。
 type EventPredictor interface {
-	PredictToday(ctx interface{}) ([]EventPredictionInfo, error)
+	PredictToday(ctx context.Context) ([]EventPredictionInfo, error)
 }
 
 // ComparisonEngine 供 recommender 計算策略 EntrySignal/StopLoss。

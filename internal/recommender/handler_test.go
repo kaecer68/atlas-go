@@ -1,12 +1,26 @@
 package recommender
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
+
+type mockNarrative struct {
+	stress float64
+	regime string
+}
+
+func (m *mockNarrative) GetCurrentStressIndex(ctx context.Context) (StressIndexInfo, error) {
+	return StressIndexInfo{Value: m.stress, Regime: m.regime, HasData: true}, nil
+}
+
+func (m *mockNarrative) BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error) {
+	return MarketNarrativeInfo{}, nil
+}
 
 func TestHandleRecommendations(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "rec-test")
@@ -94,5 +108,26 @@ func TestHandleRecommendations_DevModeFallback_Enabled(t *testing.T) {
 	rec := data.(TierRecommendation)
 	if rec.Tier != string(subscription.TierPremium) {
 		t.Errorf("expected premium tier in DEV_MODE, got %s", rec.Tier)
+	}
+}
+
+func TestHandleRecommendations_NarrativeIntegration_PopulatesStressIndex(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-test")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+	mock := &mockNarrative{stress: 15.5, regime: "RISK_ON"}
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	code, data := h.HandleRecommendations(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	rec := data.(TierRecommendation)
+	if rec.Market.StressIndex != 15.5 {
+		t.Errorf("StressIndex = %f, want 15.5 (from narrative mock)", rec.Market.StressIndex)
+	}
+	if rec.Market.Regime != "RISK_ON" {
+		t.Errorf("Regime = %q, want %q (from narrative mock)", rec.Market.Regime, "RISK_ON")
 	}
 }
