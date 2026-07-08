@@ -9,7 +9,7 @@
 
 | 型別 | 檔案 | 功能 |
 |------|------|------|
-| `Handler` | `handler.go` | HTTP handler：`HandleDaily` / `HandleSummary` |
+| `Handler` | `handler.go` | HTTP handler：`HandleDaily` / `HandleSummary`。**PR #1005 後為 `Service` 的 thin layer** — pipeline 邏輯全部在 `Service`（service.go:33/48），Handler 只負責 HTTP 包裝（context 傳遞、error→503 映射） |
 | `TWSECapitalFlowChannelAdapter` | (apigateway) | TWSE 三大法人資料抓取 |
 | `DailyReport` | `types.go:55` | 七大資金勢力彙整：`Forces` 內含 Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
 | `ResonanceResult` | `types.go:38` | 共振結果（含 `Coefficient` 強度 [0.5, 1.5]：1.5=三勢力全對齊、0.5=foreign vs government 對立、1.0=其他；`Direction` 字串標籤） |
