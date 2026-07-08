@@ -160,7 +160,7 @@ if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil { ... }
 
 Fubon-proxy URL 由 `internal/fubonproxy/manager.go` 的 `ProxyBaseURL()` / `ProxyHostPort()` 統一提供 — **禁止其他 .go 檔案（*_test.go 除外）以 `fmt.Sprintf("http://...:%d", ...)` 自行構造**。目前 enforcement 是 **convention + code review only**（PR #837 完成時規劃的 `fubon_url_guard_test.go::TestFubon_URLDriftGuard` AST 禁制尚未 ship — follow-up 項目）。
 
-- **host**：`host.docker.internal`（macOS / Windows Docker Desktop 自動注入；Linux 容器需 `daemon.json` 設 `extra_hosts`）。**不是 `127.0.0.1`** — 從 container 端用 `127.0.0.1` 會 hit container 自身 loopback，而非 host Python proxy。
+- **host**：`fubon-proxy`（docker compose service name，Docker DNS 解析到同 bridge network container IP；**不再使用** `host.docker.internal` — 詳見 `internal/fubonproxy/manager.go:218-232` 註解 + PR #940 residual）。**本機開發**走 `127.0.0.1` — `register_adapters.go` probe 偵測到 `fubon-proxy` DNS 不解析時會自動呼叫 `SetProxyHost("127.0.0.1")`。**不使用 `localhost`**（macOS / Linux 雙棧下 `Go net.Dial` 預設走 IPv6 `[::1]`，fubon-proxy 只綁 IPv4，會 connection refused — RCA: PR #495）。
 - **port**：`18081` 預設，由 `cmd/atlas -fubon-port` flag 動態覆寫（同步注入 `fubonproxy.NewManager()`，確保 client URL 與 supervisor health URL 同源 — PR 2 Oracle F12）。
 - **環境變數**：不再支援 `FUBON_PROXY_URL` 覆寫（PR #572 移除）。
 
