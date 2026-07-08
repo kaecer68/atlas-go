@@ -1,0 +1,53 @@
+#!/bin/sh
+# atlas-go commit-msg hook
+# Blocks commit messages whose scope segment doesn't match the same
+# regex the CI commitlint job enforces (scripts/ci/check_commit_messages.sh).
+# Catches violations BEFORE git records the commit so CI doesn't have to.
+#
+# PR #1001 originally committed `fix(P0-1): ...` and `fix(capitalflow/AGENTS): ...`
+# (uppercase scopes). commitlint rejected them in CI, costing a round trip.
+# This hook catches the same shape locally.
+
+set -e
+
+msg_file="$1"
+subject=$(head -n 1 "$msg_file")
+
+# Allow merge / revert / fixup / squash commits and empty messages.
+case "$subject" in
+  Merge*|Revert*|fixup!*|squash!*|"")
+    exit 0
+    ;;
+esac
+
+# Detect conventional-commits prefix: type(lowercase) optionally followed by (scope).
+# If prefix doesn't look like a conventional commit at all, let upstream CI lint it.
+# We only enforce the *scope* shape here.
+prefix=$(printf '%s' "$subject" | sed -nE 's/^([a-z]+)(\([^)]*\))?: .*/\1\2/p')
+if [ -z "$prefix" ]; then
+  exit 0
+fi
+
+# Extract scope (text between type( and ): ).
+scope=$(printf '%s' "$prefix" | sed -nE 's/^[a-z]+\(([^)]*)\)$/\1/p')
+
+# Empty scope (e.g. `feat: ...`) is allowed by CI rule.
+if [ -z "$scope" ]; then
+  exit 0
+fi
+
+# CI rule (scripts/ci/check_commit_messages.sh line 27):
+#   scope must match ^[a-z0-9][a-z0-9._,\/-]*$
+# i.e. start with lowercase-letter-or-digit, followed by any of
+# lowercase-letter, digit, '.', '_', ',', '/', '-'.
+if ! printf '%s' "$scope" | grep -qE '^[a-z0-9][a-z0-9._,\/-]*$'; then
+  echo "ERROR: commit scope '$scope' violates commitlint rule." >&2
+  echo "  rejected: $subject" >&2
+  echo "" >&2
+  echo "Scope must match: ^[a-z0-9][a-z0-9._,\/-]*$" >&2
+  echo "Allowed chars: lowercase letters, digits, '.', '_', ',', '/', '-'." >&2
+  echo "Examples of valid scopes: recommender, capitalflow/agents, hooks" >&2
+  exit 1
+fi
+
+exit 0
