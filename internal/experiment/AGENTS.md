@@ -39,8 +39,8 @@
 
 **`factor_weight_stability`**：比較實驗快照的因子權重與當前 `ParametersConfig`。偏離 > `factor_weight_drift_threshold`（預設 15%）拒絕，避免把「權重漂移」誤判為「策略改進」。所有 brief 的 `acceptance_gates` 已包含。
 
-**`preserve_downside_protection`**：使用 `candidateDD > baselineDD * ratio`（**非** `baselineDD / ratio`）。`ratio` 是「可承受最大回撤比例」非「放寬倍數」：`ratio=0.8` 表示 candidate 需 ≤ baseline 回撤的 80%。位置 `judge.go:405-411`，預設 `DrawdownProtectionRatio=0.8`。
+**`preserve_downside_protection`**：使用 `candidateDD > baselineDD * ratio`（**非** `baselineDD / ratio`）。`ratio` 是「可承受最大回撤比例」非「放寬倍數」：`ratio=0.8` 表示 candidate 需 ≤ baseline 回撤的 80%。位置 `judge.go:468-475`，預設 `DrawdownProtectionRatio=0.8`。
 
-**`fallback_window` / `UsedFallbackWindow`**：資料洩漏防護。burn-in 階段允許 fallback；進入 `calibrating` / `full_auto` 後一律拒絕。位置 `judge.go:340-347`。**資料完整性 gate**，不接受「稍後手動審查」替代。
+**`fallback_window` / `UsedFallbackWindow`**：資料洩漏防護。burn-in 階段允許 fallback；進入 `calibrating` / `full_auto` 後一律拒絕。位置 `judge.go:370-377`（gate 主邏輯）+ `judge.go:398`（發 `PublishExperimentInsufficientData` 事件）。**資料完整性 gate**，不接受「稍後手動審查」替代。
 
 **OOS Gate Ordering**（`Evaluate()` 內）：1) OOS validation 先跑填入 `result.OOSResult`；2) OOS 硬失敗直接拒絕；3) 才跑 `passesAcceptance()`。**不可重排順序** — 否則 `no_drawdown_spike` gate 看到 nil `OOSResult` 形同關閉。
