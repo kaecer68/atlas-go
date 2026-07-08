@@ -165,8 +165,40 @@ func applyWarning(rec *TierRecommendation, warnings *[]string) {
 }
 
 // RegisterRoutes registers recommendation endpoints with optional JWT verification.
+// HandlerDeps groups optional service dependencies for /api/recommendations.
+// Any nil field falls back to a hardcoded safe default at request time
+// (see helpers in this file). Production wiring happens via main.go.
+type HandlerDeps struct {
+	Narrative      NarrativeProvider
+	CapitalFlow    CapitalFlowProvider
+	EventPredictor EventPredictor
+	StrategyComp   ComparisonEngine
+}
+
+// RegisterRoutes wires /api/recommendations via NewHandler (no services).
+// Call RegisterRoutesWithDeps from main.go to enable live data integration.
 func RegisterRoutes(mux *http.ServeMux, store subscription.Store, jwtMgr *subscription.JWTManager) {
-	h := NewHandler(store, jwtMgr)
+	RegisterRoutesWithDeps(mux, store, jwtMgr, HandlerDeps{}, false)
+}
+
+// RegisterRoutesWithDeps is the production entry point. It instantiates the
+// handler with optional service deps and mounts /api/recommendations.
+//
+// devMode=true enables X-User-Email fallback (legacy/dev only — see Q1 decision);
+// main.go should pass config.LoadBool("ATLAS_DEV_MODE") here, NOT call os.Getenv
+// from this package (per internal/apigateway/CONSTITUTION.md Art.1).
+func RegisterRoutesWithDeps(
+	mux *http.ServeMux,
+	store subscription.Store,
+	jwtMgr *subscription.JWTManager,
+	deps HandlerDeps,
+	devMode bool,
+) {
+	h := NewHandlerWithServices(
+		store, jwtMgr,
+		deps.Narrative, deps.CapitalFlow,
+		deps.EventPredictor, deps.StrategyComp,
+	).WithDevMode(devMode)
 	mux.HandleFunc("GET /api/recommendations", func(w http.ResponseWriter, r *http.Request) {
 		code, data := h.HandleRecommendations(r)
 		w.Header().Set("Content-Type", "application/json")
