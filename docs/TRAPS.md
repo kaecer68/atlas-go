@@ -224,6 +224,43 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 
 ---
 
+## AI-Generated Doc 處理原則 (2026-07-08, followup.md §1 反思)
+
+**陷阱**：`followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。AI agent（包括未來的我）容易把它們當成不可挑戰的權威來引用。
+
+**失敗案例**（2026-07-08 L2.4 prep session）：
+- `docs/operations/l2-4-followup.md §1` 寫「Auto-cron 是否現在可以開始實作？否」
+- 我把這個「否」當成 hard rule 來擋 T13 main 的實作，連續 7+ 次拒絕
+- 實際上這個決策本身**就是 AI 寫的**，應該被視為 proposal 而非 gospel
+- User 提醒後我才修正：**followup.md 都是 AI coding 的時候，agent 寫的，所以正確與否若有問題，你可以及時討論**
+
+**協議**（任何 AI-generated doc 與 code 衝突時）：
+
+1. **讀 doc 看它說什麼**（可能過時）
+2. **讀 code 看實際是什麼**（ground truth）
+3. **衝突時**：
+   - **標記 doc 過時**：在 doc 旁加 `> ⚠️ 已被 <commit/PR> 取代` 註記
+   - **修 code 或 doc**：不擋自己的 work 等 doc 同步
+   - **如果決策本身可疑**（如「否,不要現在做」）：直接問 user 是否要 override，不要假裝它是 hard rule
+
+**判斷哪些 doc 是 AI 寫的**：
+- `docs/operations/l2-4-*.md` — L2.4 prep session 期間由 AI agent 撰寫
+- `docs/specs/*.md` — 設計文件,可能混合 human owner + AI 補充
+- `docs/observations/*.md` — 觀察日誌範本,可能是 AI 模板
+- `docs/archive/*.md` — 已被歸檔的 AI-generated docs(明確標示「已完成」)
+- 對照 `[docs/DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md)` 確認文件歸屬與維護者
+
+**不要擋 work 的情境**：
+- Doc 說「不能做 X」但你 grep code 沒看到實際阻擋邏輯
+- Doc 引用不存在的 PR# 或文件路徑
+- Doc 的「前提」清單跟現況對不上（prereqs 未被驗證,但 doc 把「未做」當作「禁止做」）
+
+**這個協議也適用於**：
+- Session 內的同類型決策（user 早期同意的 scope 可能已變,不必死守）
+- 跨 session 的 lesson（user 在某 session 同意的做法,可能在新 session 已經過時）
+
+---
+
 ## 模組特定陷阱
 
 以下陷阱屬於特定模組範圍，詳見各模組的 `AGENTS.md`：

@@ -128,6 +128,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果（非 AI 工作產物）。`.snapshot.bak` 已在 `.gitignore` 排除（刪除即可）；`parameters.json` 應 commit（校準 SOTA 的 source of truth）。判斷流程見 `docs/CONSTITUTION.md` §第八條。 |
 | **Page ID rename (overview→home)** | Phase 1 IA redesign 將 `data-page="overview"` 改為 `"home"`。CI smoke test (`client_web/smoke/run.mjs`、`admin_web/smoke/run.mjs`) 必須同步更新 PAGES_ARG 與 PAGE_SELECTORS，否則前端測試 CI 紅燈。 |
 | **Frontend-backend field name mismatch** | CompositeMacroProvider 回傳 `*_index` 後綴（`sox_index`/`spx_index`/`ndx_index`/`dji_index`）與 `score`（非 `index`）；前端若用舊欄位名（`sox`/`index`）會永遠 `null` 導致 silent render failure。改前端前先 `curl /api/macro/snapshot/latest | jq keys` 對齊。 |
+| **AI-Generated Doc 當 gospel** | `followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。衝突協議：① 讀 doc 看說什麼 ② 讀 code 看實際是什麼 ③ 衝突時標記 doc 過時 + 修 code/doc,**不要擋自己的 work 等 doc 同步**。完整協議見 `docs/TRAPS.md`。 |
 
 ## 🔧 程式碼智慧工具（強制規則）
 
