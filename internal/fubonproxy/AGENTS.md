@@ -22,11 +22,11 @@
 以下 5 個 exported 符號構成所有 .go 程式碼取得 fubon-proxy URL 的 canonical 路徑。
 **禁止**在其他檔案以 `fmt.Sprintf("http://...:%d", ...)` 自行構造 — `internal/marketdata/fubon_url_guard_test.go::TestFubon_URLDriftGuard` AST 禁制會擋下。
 
-- `defaultProxyHost` — `const "host.docker.internal"`（canonical host，Docker Desktop 注入的 host gateway 別名；**不是** `127.0.0.1` / `localhost`，詳見 PR #495 RCA）
+- `defaultProxyHost` — `const "fubon-proxy"`（canonical host = **docker compose service name**；Docker DNS 解析到同一個 bridge network 的 container IP；**不再使用** `host.docker.internal` — 詳見 `manager.go:218-232` 註解 + PR #940 residual；本機開發由 `register_adapters.go` probe 自動 fallback 至 `127.0.0.1`）
 - `GetFubonProxyPort()` — 回傳目前 listen port（反映 `NewManager(port)` 或 `SetFubonProxyPort(port)` 的最後一次有效設定）
 - `SetFubonProxyPort(port int)` — 早期注入點，供 `cmd/atlas -fubon-port` flag 在 `NewManager` 啟動前先設定；`port <= 0` 不覆寫（no-op 契約）
-- `ProxyBaseURL()` — 回傳 `"http://host.docker.internal:<port>"`，供 HTTP client (`FubonClient`) 使用
-- `ProxyHostPort()` — 回傳純 `"host.docker.internal:<port>"`，供 `net.Dial` / `net.Listen` probe 使用
+- `ProxyBaseURL()` — 回傳 `"http://fubon-proxy:<port>"`（或 fallback `"http://127.0.0.1:<port>"` 視 probe 結果），供 HTTP client (`FubonClient`) 使用
+- `ProxyHostPort()` — 回傳純 `"fubon-proxy:<port>"`（或 `"127.0.0.1:<port>"`），供 `net.Dial` / `net.Listen` probe 使用
 
 **Port 同步契約（PR 2 Oracle F12）**：`fubonproxy.NewManager(workDir, port)` 與 `fubonproxy.SetFubonProxyPort(port)` 兩者皆可設定 port；兩者皆呼叫時，`NewManager` 為最終決定（會 log INFO 標示 custom port）。`fubon_client.go` / `hybrid_provider.go` / `register_adapters.go` 皆透過 `ProxyBaseURL()` / `ProxyHostPort()` 間接取得 port，確保 client URL 與 supervisor health URL 永遠來自同一個 port 值。
 
