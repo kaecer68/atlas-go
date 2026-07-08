@@ -153,6 +153,113 @@ function buildRecCard(rec) {
   return card;
 }
 
+const FORCE_LABEL = {
+  foreign: '外資現貨',
+  futures: '外資期貨',
+  tsm_adr: 'TSM ADR',
+  institutional: '投信',
+  dealer: '自營商',
+  government: '公股行庫',
+  retail: '散戶',
+};
+
+const QUALITY_LABEL = {
+  strong_inflow: '強勁流入',
+  inflow: '流入',
+  neutral: '中性',
+  outflow: '流出',
+  strong_outflow: '強勁流出',
+};
+
+const DIRECTION_LABEL = {
+  bullish: '偏多',
+  bearish: '偏空',
+  mixed: '分歧',
+};
+
+const TREND_CLASS = {
+  bullish: 'trend-bullish',
+  bearish: 'trend-bearish',
+  neutral: '',
+};
+
+async function renderCapitalFlowDetail(host, btn) {
+  try {
+    var resp = await fetch('/api/capital-flow/daily', { credentials: 'same-origin' });
+    if (!resp.ok) {
+      throw new Error('HTTP ' + resp.status);
+    }
+    var daily = await resp.json();
+    host.innerHTML = buildCapitalFlowDetailHTML(daily);
+    host.style.display = '';
+    btn.textContent = '收合明細';
+    btn.setAttribute('aria-expanded', 'true');
+    btn.disabled = false;
+  } catch (err) {
+    host.innerHTML =
+      '<div class="empty error">資金流明細載入失敗：' + escapeHtml(err.message || String(err)) + '</div>';
+    host.style.display = '';
+    btn.textContent = '重試載入明細';
+    btn.disabled = false;
+  }
+}
+
+function buildCapitalFlowDetailHTML(daily) {
+  var forces = Array.isArray(daily.forces) ? daily.forces : [];
+  var rows = forces.map(function (f) {
+    var name = FORCE_LABEL[f.force] || f.force || '--';
+    var z = typeof f.z_score === 'number' ? f.z_score : 0;
+    var raw = typeof f.raw_value === 'number' ? f.raw_value : 0;
+    var trend = f.trend || 'neutral';
+    var cls = TREND_CLASS[trend] || '';
+    return (
+      '<tr>' +
+      '<td>' + escapeHtml(name) + '</td>' +
+      '<td class="text-right ' + cls + '">' + (z >= 0 ? '+' : '') + z.toFixed(2) + '</td>' +
+      '<td class="text-right">' + raw.toFixed(1) + '</td>' +
+      '<td><span class="tier-badge ' + cls + '">' + escapeHtml(trend) + '</span></td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  var r = daily.resonance || {};
+  var aligned = Array.isArray(r.aligned) ? r.aligned.map(function (f) { return FORCE_LABEL[f] || f; }).join('、') : '--';
+  var opposing = Array.isArray(r.opposing) && r.opposing.length > 0
+    ? r.opposing.map(function (f) { return FORCE_LABEL[f] || f; }).join('、')
+    : '無';
+  var dirLabel = DIRECTION_LABEL[r.direction] || r.direction || '--';
+  var coef = typeof r.coefficient === 'number' ? r.coefficient.toFixed(2) : '--';
+
+  var qualityCls = '';
+  var ql = (daily.quality_label || '').toLowerCase();
+  if (ql === 'strong_inflow' || ql === 'inflow') qualityCls = 'trend-bullish';
+  else if (ql === 'strong_outflow' || ql === 'outflow') qualityCls = 'trend-bearish';
+  var qualityText = QUALITY_LABEL[ql] || daily.quality_label || '--';
+  var qScore = typeof daily.quality_score === 'number' ? daily.quality_score.toFixed(2) : '--';
+
+  return (
+    '<div class="panel capital-flow-panel mt-md">' +
+    '  <div class="capital-flow-panel__header">' +
+    '    <div><span class="text-muted">市場品質</span> ' +
+    '      <span class="tier-badge ' + qualityCls + '">' + escapeHtml(qualityText) + '</span> ' +
+    '      <span class="text-muted">（' + qScore + '）</span>' +
+    '    </div>' +
+    '    <div><span class="text-muted">共振</span> ' + escapeHtml(dirLabel) + ' ' +
+    '      <span class="text-muted">（係數 ' + coef + '）</span>' +
+    '    </div>' +
+    '  </div>' +
+    '  <p class="capital-flow-panel__summary">' + escapeHtml(daily.summary || '尚無資料') + '</p>' +
+    '  <table class="capital-flow-table">' +
+    '    <thead><tr><th>勢力</th><th class="text-right">Z-score</th><th class="text-right">原始值（億）</th><th>趨勢</th></tr></thead>' +
+    '    <tbody>' + rows + '</tbody>' +
+    '  </table>' +
+    '  <div class="capital-flow-panel__meta text-muted">' +
+    '    對齊：' + escapeHtml(aligned) + ' ／ 對立：' + escapeHtml(opposing) +
+    '  </div>' +
+    '</div>'
+  );
+}
+
 export async function renderHomeTierSections() {
   var tier = await getTier();
   var container = document.getElementById('page-home');
@@ -191,7 +298,31 @@ export async function renderHomeTierSections() {
       var cls = f.z_score > 0.5 ? 'trend-bullish' : f.z_score < -0.5 ? 'trend-bearish' : '';
       return metricCard({ label: f.name || f.source, value: val, trend: cls, sub: f.direction || '' });
     });
-    root.appendChild(buildTierSection('資金流向', [buildMetricGrid(4, cards)]));
+    var flowSection = buildTierSection('資金流向', []);
+    flowSection.appendChild(buildMetricGrid(4, cards));
+    var expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.className = 'btn btn--ghost btn--sm';
+    expandBtn.textContent = '展開 7 勢力明細';
+    expandBtn.setAttribute('aria-expanded', 'false');
+    expandBtn.addEventListener('click', function () {
+      var detailHost = flowSection.querySelector('.capital-flow-detail');
+      if (!detailHost) {
+        detailHost = document.createElement('div');
+        detailHost.className = 'capital-flow-detail';
+        flowSection.appendChild(detailHost);
+        expandBtn.disabled = true;
+        expandBtn.textContent = '載入中…';
+        renderCapitalFlowDetail(detailHost, expandBtn);
+      } else {
+        var visible = detailHost.style.display !== 'none';
+        detailHost.style.display = visible ? 'none' : '';
+        expandBtn.textContent = visible ? '展開 7 勢力明細' : '收合明細';
+        expandBtn.setAttribute('aria-expanded', visible ? 'false' : 'true');
+      }
+    });
+    flowSection.appendChild(expandBtn);
+    root.appendChild(flowSection);
   }
 
   if (events && Array.isArray(events.predictions) && events.predictions.length > 0) {
