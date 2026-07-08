@@ -11,8 +11,8 @@
 |------|------|------|
 | `Handler` | `handler.go` | HTTP handler：`HandleDaily` / `HandleSummary` |
 | `TWSECapitalFlowChannelAdapter` | (apigateway) | TWSE 三大法人資料抓取 |
-| `DailySnapshot` | `types.go` | 七大資金勢力：Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
-| `ResonanceScore` | `types.go` | 共振強度 −1 to +1，越大表示買方一致 |
+| `DailyReport` | `types.go:55` | 七大資金勢力彙整：`Forces` 內含 Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
+| `ResonanceResult` | `types.go:38` | 共振結果（含 `Coefficient` 強度 [0.5, 1.5]：1.5=三勢力全對齊、0.5=foreign vs government 對立、1.0=其他；`Direction` 字串標籤） |
 
 ## 七大資金勢力
 
@@ -46,18 +46,23 @@ JSON response
 
 Sprint 2 T9 將使 `internal/recommender::HandleRecommendations::CapitalFlow` 欄位接入 `Handler.HandleDaily`。
 
-預期介面：
+介面契約（部分 ship / 部分規劃中）：
 ```go
 type CapitalFlow interface {
-    LatestDaily() (*DailySnapshot, error)
+    LatestDaily(ctx context.Context) (DailyReport, error)        // SHIP（service.go:33）
+    // Summary(ctx context.Context) (SummaryReport, error)        // TODO: 規劃中，尚未實作
 }
 ```
+
+**`LatestDaily`** 已 ship：`Service.LatestDaily` 在 `service.go:33`，可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler.HandleDaily` 需 `*http.Request` 的限制。
+
+**`Summary`** 尚未 ship：`Service` 目前只有 `LatestDaily` 一個 method。`SummaryReport` 由 `report.go:43` 的自由函式 `GenerateSummaryReport(date, forces, resonance)` 產生，呼叫路徑是 `Handler.HandleSummary`（handler.go:57）→ `GenerateSummaryReport`。如 recommender 需要 `Summary` non-HTTP accessor，**需另開 PR** 把 `GenerateSummaryReport` 包成 `Service.Summary(ctx)` method（內部可重用 `LatestDaily` 已算好的 `forces` + `resonance` 避免重算）。
 
 ## 已知陷阱
 
 | 陷阱 | 說明 |
 |------|------|
-| **共振計算公式變更** | `ResonanceScore` 算法若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
+| **共振計算公式變更** | `ResonanceResult` 算法（`ComputeResonance` in `handler.go:48`/`service.go:43`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
 | **TWSE 假日不發布** | 週末/假日無資料；前端應 fallback 至上週五資料。 |
 | **PublicBank 欄位歷史較短** | 公股行庫資料 TWSE 約 2018+ 才完整；早期資料空值。 |
 
