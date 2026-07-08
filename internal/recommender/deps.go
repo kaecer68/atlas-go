@@ -45,7 +45,7 @@ type MarketNarrativeInfo struct {
 
 // CapitalFlowDailyInfo 對應 capitalflow.DailySnapshot 的高階摘要。
 type CapitalFlowDailyInfo struct {
-	Summary  string
+	Summary   string
 	Resonance float64
 }
 
@@ -59,10 +59,10 @@ type EventPredictionInfo struct {
 
 // StrategyScoreInfo 對應 strategy.ComparisonEngine.GetScore 的輸出。
 type StrategyScoreInfo struct {
-	Score      float64
+	Score       float64
 	EntrySignal string
-	StopLoss   float64
-	TakeProfit float64
+	StopLoss    float64
+	TakeProfit  float64
 }
 
 type RegimeChangeListener func(oldRegime, newRegime string)
