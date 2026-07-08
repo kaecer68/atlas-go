@@ -18,6 +18,7 @@ import { fmtSignedPct } from './shared/format-metric.js';
 import { renderHomeTierSections } from './components/home-tier-sections.js';
 import './modals/modal.js';
 import { injectSharedHead } from './shared/head-config.js';
+import { install401Interceptor } from './shared/fetch-wrapper.js';
 injectSharedHead();
 
 const SHELL_LOADERS = {
@@ -456,20 +457,12 @@ if (typeof window !== 'undefined') {
   initEventStream();
 
   // Auth: check JWT validity before loading data; wrap fetch for 401 detection
-  const _origFetch = window.fetch;
-  window.fetch = function(url, opts) {
-    return _origFetch(url, opts).then(function(res) {
-      if (res.status === 401) {
-        invalidateAuth();
-        var currentPage = window.location.pathname.replace(/^\/client\/?/, '') || 'home';
-        if (currentPage !== 'login' && currentPage !== 'register') {
-          console.warn('[auth] 401 detected, redirecting to login');
-          window.switchPage('login');
-        }
-      }
-      return res;
-    });
-  };
+  install401Interceptor({
+    loginPageId: 'login',
+    excludedPages: ['login', 'register'],
+    onUnauthorized: invalidateAuth,
+    switchPage: window.switchPage,
+  });
 
   initAuth().then(function() {
     renderNavState();
