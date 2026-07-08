@@ -9,7 +9,7 @@
 
 | 型別 | 檔案 | 功能 |
 |------|------|------|
-| `Handler` | `handler.go` | HTTP handler：`HandleDaily` / `HandleSummary`。**PR #1005 後為 `Service` 的 thin layer** — pipeline 邏輯全部在 `Service`（service.go:33/48），Handler 只負責 HTTP 包裝（context 傳遞、error→503 映射） |
+| `Handler` | `handler.go` | HTTP handler：`HandleDaily`（handler.go:37）/ `HandleSummary`（handler.go:51）。**PR #1005 後為 `Service` 的 thin layer** — pipeline 邏輯全部在 `Service`（`Service.LatestDaily`@service.go:34、`Service.Summary`@service.go:58），Handler 只負責 HTTP 包裝（context 傳遞、error→503 映射） |
 | `TWSECapitalFlowChannelAdapter` | (apigateway) | TWSE 三大法人資料抓取 |
 | `DailyReport` | `types.go:55` | 七大資金勢力彙整：`Forces` 內含 Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
 | `ResonanceResult` | `types.go:38` | 共振結果（含 `Coefficient` 強度 [0.5, 1.5]：1.5=三勢力全對齊、0.5=foreign vs government 對立、1.0=其他；`Direction` 字串標籤） |
@@ -49,20 +49,20 @@ Sprint 2 T9 將使 `internal/recommender::HandleRecommendations::CapitalFlow` �
 介面契約（已全部 ship）：
 ```go
 type CapitalFlow interface {
-    LatestDaily(ctx context.Context) (DailyReport, error)        // SHIP（service.go:33）
-    Summary(ctx context.Context) (SummaryReport, error)          // SHIP（service.go:48）
+    LatestDaily(ctx context.Context) (DailyReport, error)        // SHIP（service.go:34）
+    Summary(ctx context.Context) (SummaryReport, error)          // SHIP（service.go:58）
 }
 ```
 
-**`LatestDaily`** 已 ship：`Service.LatestDaily` 在 `service.go:33`，可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler.HandleDaily` 需 `*http.Request` 的限制。
+**`LatestDaily`** 已 ship：`Service.LatestDaily` 在 `service.go:34`，可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler.HandleDaily`（handler.go:37）需 `*http.Request` 的限制。
 
-**`Summary`** 已 ship：`Service.Summary` 在 `service.go:48`，內部呼叫 `LatestDaily` 重用 pipeline (FetchSnapshot → Extract → ComputeResonance)，再用 `GenerateSummaryReport(date, forces, resonance)`（`report.go:43`）派生 `SummaryReport`。Caller cost 等同一次 `LatestDaily` 呼叫。繞過 `Handler.HandleSummary`（handler.go:57）需 `*http.Request` 的限制。
+**`Summary`** 已 ship：`Service.Summary` 在 `service.go:58`，內部呼叫 `LatestDaily` 重用 pipeline (FetchSnapshot → Extract → ComputeResonance)，再用 `GenerateSummaryReport(date, forces, resonance)`（`report.go:43`）派生 `SummaryReport`。Caller cost 等同一次 `LatestDaily` 呼叫。繞過 `Handler.HandleSummary`（handler.go:51）需 `*http.Request` 的限制。
 
 ## 已知陷阱
 
 | 陷阱 | 說明 |
 |------|------|
-| **共振計算公式變更** | `ResonanceResult` 算法（`ComputeResonance` in `handler.go:48`/`service.go:43`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
+| **共振計算公式變更** | `ResonanceResult` 算法（`ComputeResonance` in `resonance.go:13`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
 | **TWSE 假日不發布** | 週末/假日無資料；前端應 fallback 至上週五資料。 |
 | **PublicBank 欄位歷史較短** | 公股行庫資料 TWSE 約 2018+ 才完整；早期資料空值。 |
 
@@ -71,7 +71,7 @@ type CapitalFlow interface {
 - `internal/apigateway/adapter_twse_capital_flow.go` — adapter source
 - `internal/marketdata/macro_provider.go` — provider
 - `cmd/atlas-mcp/server/tools_capitalflow.go` — MCP 包裝
-- `cmd/atlas/main.go:575` — `capitalflow.RegisterRoutes(mux, macroProvider)`
+- `cmd/atlas/main.go:594` — `capitalflow.RegisterRoutes(mux, macroProvider)`
 
 ## 測試
 
