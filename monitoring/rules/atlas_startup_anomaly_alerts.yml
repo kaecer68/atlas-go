@@ -1,26 +1,54 @@
 groups:
+  # Atlas-go startup anomaly alerts (Wave 9 alignment)
+  # 設計變更紀錄：原 commit f504a8db (2026-07-03) 引用 log_messages_total{level,msg} 假設的
+  # counter，但 main 採 PR #926 的 Prometheus counter schema（atlas_db_init_failures_total
+  # 與 atlas_channel_health_errors_total）。本檔案於 2026-07-08 重新對齊。
+  #
+  # 觸發條件說明：
+  # - atlas_db_init_failures_total{phase} 由 internal/monitoring/startup_metrics.go
+  #   在 init 階段任一 phase 失敗時 RecordCounter emit。
+  # - atlas_channel_health_errors_total{channel} 由 RecordChannelHealthError emit，
+  #   channel label 為 provider 名稱（us_yahoo / fugle / finmind / twse / yahoo）。
+  # - wave="9.1" 對齊 PR #950 Wave 9 audit 啟用路線。
   - name: atlas_startup_anomalies
     interval: 30s
     rules:
-      - alert: AtlasGoDBInitFailed
-        expr: increase(log_messages_total{level="ERROR",msg="db_init_failed"}[5m]) > 0
+      - alert: AtlasDBInitFailure
+        expr: increase(atlas_db_init_failures_total[5m]) > 0
         for: 1m
         labels:
           severity: critical
+          service: atlas-monitoring
           component: bootstrap
-          source: 2026-07-03-investigation
+          wave: "9.1"
+          enabled: "true"  # 對齊 PR #950；metric emit 由 PR #926 驗證
         annotations:
           summary: "atlas-go 啟動時 DB 連線失敗"
-          description: "atlas-go 在 {{ $labels.instance }} 啟動時 db_init_failed — 觸發 in-memory fallback。檢查 ~/.config/atlas-go/.env 的 DATABASE_URL 與 docker-compose.yml 的 ${DB_PASSWORD}。"
+          description: |
+            atlas-go 在 {{ $labels.instance }} 啟動時，phase={{ $labels.phase }} 觸發 db init 失敗並進入 in-memory fallback。
+            立即檢查：
+            1. ~/.config/atlas-go/.env 的 DATABASE_URL 是否有效
+            2. docker-compose.yml 的 ${DB_PASSWORD} 是否設置
+            3. postgres container 是否 healthy（docker compose ps）
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/"
 
-      - alert: AtlasChannelYahooErrorSustained
-        expr: increase(log_messages_total{level="INFO",msg="us_yahoo:error"}[1h]) > 30
+      - alert: AtlasChannelUsYahooErrorSustained
+        expr: rate(atlas_channel_health_errors_total{channel="us_yahoo"}[15m]) > 0.05
         for: 30m
         labels:
           severity: warning
+          service: atlas-monitoring
           component: marketdata
-          source: 2026-07-03-investigation
+          channel: us_yahoo
+          wave: "9.1"
+          enabled: "true"
         annotations:
           summary: "us_yahoo channel 持續錯誤超過 30 分鐘"
-          description: "us_yahoo channel 30 分鐘內 > 30 次 error。可能是 Yahoo Finance API 端 rate limit（之前 P1-2 驗證確認 host 也 429）或 session crumb 過期。"
+          description: |
+            us_yahoo channel 過去 15 分鐘錯誤率 {{ $value | humanizePercentage }}，已持續 30 分鐘超過閾值（0.05/s ≈ 3/min）。
+            可能原因：
+            1. Yahoo Finance API 端 rate limit（PR #946 驗證確認 host 也回 429）
+            2. session crumb 過期（見 internal/marketdata/yahoo_session.go）
+            3. Cookie/crumb 重新整理失敗
+            建議動作：切換至 FinMind 或 Fugle provider，或暫停 crossmarket_get_us_indices 排程。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/wave9-runbook.md"
