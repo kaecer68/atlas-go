@@ -3795,6 +3795,7 @@ export interface TierRecommendation {
   market: MarketLight;
   strategies?: StrategyRecommendation | null;
   signals?: string;
+  warning?: string;
 }
 
 export interface TimelineEvent {

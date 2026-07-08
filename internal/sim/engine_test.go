@@ -11,6 +11,43 @@ import (
 	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
+type mockRiskCalc struct {
+	var95 float64
+}
+
+func (m *mockRiskCalc) ComputePortfolioVaR(totalValue float64, positions map[string]float64) float64 {
+	return m.var95
+}
+
+func TestBuildPortfolioState_NoRiskCalculator_VaRIsZero(t *testing.T) {
+	e := NewEngine(domain.SimulationConstraints{})
+	pf := e.buildPortfolioState(1_000_000, nil)
+	if pf.Var95 != 0 {
+		t.Errorf("pf.Var95 = %f, want 0 (no calculator, no fake 2%%)", pf.Var95)
+	}
+}
+
+func TestBuildPortfolioState_WithRiskCalculator_UsesRealVaR(t *testing.T) {
+	mock := &mockRiskCalc{var95: 250_000}
+	e := NewEngine(domain.SimulationConstraints{}).WithRiskCalculator(mock)
+	pf := e.buildPortfolioState(1_000_000, nil)
+	if pf.Var95 != 250_000 {
+		t.Errorf("pf.Var95 = %f, want 250000 (from calculator)", pf.Var95)
+	}
+}
+
+func TestBuildPortfolioState_TotalValueSumsCashAndPositions(t *testing.T) {
+	e := NewEngine(domain.SimulationConstraints{})
+	positions := []domain.Position{
+		{Symbol: "2330.TW", MarketValue: 300_000},
+		{Symbol: "2317.TW", MarketValue: 200_000},
+	}
+	pf := e.buildPortfolioState(500_000, positions)
+	if pf.TotalValue != 1_000_000 {
+		t.Errorf("pf.TotalValue = %f, want 1000000", pf.TotalValue)
+	}
+}
+
 func TestRunBuildsPositions(t *testing.T) {
 	engine := NewEngine(domain.SimulationConstraints{
 		StartingCash:                1000000,

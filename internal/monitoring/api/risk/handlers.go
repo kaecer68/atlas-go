@@ -42,6 +42,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
+	if h.RiskGate == nil {
+		return serviceUnavailable("risk_gate_not_injected", "RiskGate 尚未注入, 請檢查 cmd/atlas main.go 的 DI chain")
+	}
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
@@ -192,10 +195,7 @@ func (h *Handlers) WithRiskGate(rg *risk.RiskGate) *Handlers {
 // HandleRiskCalibration serves the latest risk gate calibration report.
 func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
 	if h.RiskGate == nil {
-		return http.StatusOK, map[string]any{
-			"status":  "not_available",
-			"message": "risk gate not configured in this mode",
-		}
+		return serviceUnavailable("risk_gate_not_injected", "")
 	}
 	report := h.RiskGate.LastCalibrationReport()
 	if report == nil {
@@ -214,11 +214,7 @@ func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
 // HandleRiskCommentary returns the latest risk gate decision commentary.
 func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 	if h.RiskGate == nil {
-		return http.StatusOK, map[string]any{
-			"status":    "not_available",
-			"message":   "risk gate not configured in this mode",
-			"generated": false,
-		}
+		return serviceUnavailable("risk_gate_not_injected", "")
 	}
 	dec := h.RiskGate.LastDecision()
 	if dec.Recorded.IsZero() {

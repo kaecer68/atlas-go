@@ -186,6 +186,12 @@
       "results": "(*Engine)"
     },
     {
+      "name": "WithRiskCalculator",
+      "params": "(rc RiskCalculator)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
       "name": "WithSlippageModel",
       "params": "(sm *SlippageModel)",
       "receiver": "Engine",
@@ -301,7 +307,8 @@
         "thresholdEngine *DynamicThresholdEngine",
         "preTradeGate *risk.PreTradeGate",
         "traceWriter TraceWriter",
-        "rotationFunc RotationFunc"
+        "rotationFunc RotationFunc",
+        "riskCalculator RiskCalculator"
       ],
       "kind": "struct",
       "name": "Engine"
@@ -340,6 +347,10 @@
     {
       "kind": "alias",
       "name": "RiskAppetite"
+    },
+    {
+      "kind": "interface",
+      "name": "RiskCalculator"
     },
     {
       "kind": "alias",

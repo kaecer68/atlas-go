@@ -46,6 +46,12 @@ type Engine struct {
 	preTradeGate      *risk.PreTradeGate
 	traceWriter       TraceWriter
 	rotationFunc      RotationFunc
+	riskCalculator    RiskCalculator
+}
+
+// RiskCalculator computes real VaR from portfolio state.
+type RiskCalculator interface {
+	ComputePortfolioVaR(totalValue float64, positions map[string]float64) float64
 }
 
 type sellDetail struct {
@@ -125,6 +131,12 @@ func (e *Engine) WithPreTradeGate(g *risk.PreTradeGate) *Engine {
 	return e
 }
 
+// WithRiskCalculator attaches a risk calculator used by filterByPreTradeGate.
+func (e *Engine) WithRiskCalculator(rc RiskCalculator) *Engine {
+	e.riskCalculator = rc
+	return e
+}
+
 // WithTraceWriter attaches a trace writer for recording pre-trade gate and
 // optimizer fallback events during simulation.
 func (e *Engine) WithTraceWriter(tw TraceWriter) *Engine {
@@ -132,11 +144,9 @@ func (e *Engine) WithTraceWriter(tw TraceWriter) *Engine {
 	return e
 }
 
-func (e *Engine) filterByPreTradeGate(
-	cash float64,
-	positions []domain.Position,
-	recs []domain.Recommendation,
-) []domain.Recommendation {
+// buildPortfolioState assembles the risk.PortfolioState used by the gate.
+// Extracted from filterByPreTradeGate for testability.
+func (e *Engine) buildPortfolioState(cash float64, positions []domain.Position) risk.PortfolioState {
 	totalValue := cash
 	posMap := make(map[string]float64, len(positions))
 	for _, p := range positions {
@@ -146,19 +156,30 @@ func (e *Engine) filterByPreTradeGate(
 	if totalValue <= 0 {
 		totalValue = 3_000_000
 	}
-
-	pf := risk.PortfolioState{
+	var95 := 0.0
+	if e.riskCalculator != nil {
+		var95 = e.riskCalculator.ComputePortfolioVaR(totalValue, posMap)
+	}
+	return risk.PortfolioState{
 		TotalValue:     totalValue,
 		Cash:           cash,
-		Var95:          totalValue * 0.02,
+		Var95:          var95,
 		SectorExposure: make(map[string]float64),
 		Positions:      posMap,
 	}
+}
+
+func (e *Engine) filterByPreTradeGate(
+	cash float64,
+	positions []domain.Position,
+	recs []domain.Recommendation,
+) []domain.Recommendation {
+	pf := e.buildPortfolioState(cash, positions)
 
 	var filtered []domain.Recommendation
 	var blocked int
 	for _, rec := range recs {
-		order := e.buildOrderIntent(rec, totalValue)
+		order := e.buildOrderIntent(rec, pf.TotalValue)
 		decision, err := e.preTradeGate.Check(context.TODO(), order, pf, "NORMAL")
 		if err != nil {
 			logging.Warn("sim", "pre_trade_check_failed", "symbol", rec.Symbol, "err", err)
@@ -169,11 +190,11 @@ func (e *Engine) filterByPreTradeGate(
 			// Auto-size: when blocked by position concentration, reduce order
 			// to fit within the limit instead of rejecting entirely.
 			if strings.Contains(decision.Reason, "position") && strings.Contains(decision.Reason, "would be") {
-				currentPct := posMap[rec.Symbol] / totalValue
+				currentPct := pf.Positions[rec.Symbol] / pf.TotalValue
 				limit := e.preTradeGate.MaxPositionPct()
 				if currentPct < limit {
-					maxNotional := (limit - currentPct) * totalValue
-					if maxNotional > totalValue*0.01 {
+					maxNotional := (limit - currentPct) * pf.TotalValue
+					if maxNotional > pf.TotalValue*0.01 {
 						order.Notional = maxNotional
 						decision2, err2 := e.preTradeGate.Check(context.TODO(), order, pf, "NORMAL")
 						if err2 == nil && decision2.Verdict != risk.VerdictBlock && decision2.Verdict != risk.VerdictHalt {

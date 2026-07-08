@@ -102,6 +102,7 @@ type DashboardAPI struct {
 	storageReport              apimetrics.StorageReporter
 	dataFetcher                DataFetcher
 	riskGate                   *risk.RiskGate
+	riskHandlers               *apirisk.Handlers
 	prismMgr                   *prism.PRISMManager
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
@@ -854,10 +855,13 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	// Swarm routes removed — simulation engine demoted in PR #963, cleaned in PR #964.
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
-	riskHandlers.WithRiskGate(a.riskGate)
+	if a.riskGate != nil {
+		riskHandlers.WithRiskGate(a.riskGate)
+	}
 	if a.industryService != nil && a.industryService.LinkageAnalyzer != nil {
 		riskHandlers.WithCorrelationMatrix(a.industryService.LinkageAnalyzer.GetCorrelationMatrix())
 	}
+	a.riskHandlers = riskHandlers
 	riskHandlers.RegisterRoutes(mux)
 
 	if a.prismMgr != nil {
@@ -1121,6 +1125,9 @@ func (a *DashboardAPI) initGatewayProviders() {
 // SetRiskGate injects a RiskGate instance for serving calibration reports.
 func (a *DashboardAPI) SetRiskGate(g *risk.RiskGate) {
 	a.riskGate = g
+	if a.riskHandlers != nil {
+		a.riskHandlers.WithRiskGate(g)
+	}
 }
 
 // WithPRISMManager injects a PRISMManager and returns the DashboardAPI for
