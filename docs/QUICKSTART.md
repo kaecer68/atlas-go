@@ -72,6 +72,20 @@ git push origin --delete <merged-branch>
 git worktree remove <worktree-path>
 ```
 
+**5. Planning artifacts 清理**（PR merge 後必做）：
+
+`.omo/plans/*.md`、`.omo/research/*.md`、`.omo/handoff/*.md` 這些規劃文件**完成就刪掉**,不要留在 working tree 污染未來 context:
+
+```bash
+# 刪掉所有過期規劃 .md(慎用,只看 done 的)
+rm .omo/plans/*.md .omo/research/*.md .omo/handoff/*.md
+
+# 如果內容有長期保存價值,**不要直接留整份 .md**:
+#   - 應先萃取到正式 docs 位置,例如 docs/specs/<feature>.md 或 docs/operations/<feature>-runbook.md
+#   - 或若屬於已歸檔的 feature,移到 docs/archive/<feature>-<date>.md
+#   - .omo/ 是 gitignored 的「working area」,不是 archive — 不要拿來長期保存
+```
+
 警告排查：`branch -d` 報 "not yet merged to HEAD" → 本地 main 落後 origin/main，先跑前兩行 fetch + ff-merge。
 
 ---
