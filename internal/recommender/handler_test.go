@@ -3,6 +3,7 @@ package recommender
 import (
 	"context"
 	"net/http"
+	"errors"
 	"os"
 	"testing"
 
@@ -233,4 +234,33 @@ func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
 	if rec.Strategies.StopLoss != "-5.0%" {
 		t.Errorf("StopLoss = %q, want from ComparisonEngine", rec.Strategies.StopLoss)
 	}
+}
+
+func TestHandleRecommendations_ServiceFailure_AddsWarning(t *testing.T) {
+	t.Setenv("ATLAS_DEV_MODE", "true")
+	dir, _ := os.MkdirTemp("", "rec-test")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+	store.Register("premium@test.com", "pass")
+	mock := &failingNarrative{err: errors.New("taiwan_stress_calc transient failure")}
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil)
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	req.Header.Set("X-User-Email", "premium@test.com")
+	code, data := h.HandleRecommendations(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 (degraded, not 503) on service failure, got %d", code)
+	}
+	rec := data.(TierRecommendation)
+	if rec.Warning == "" {
+		t.Error("expected Warning field populated when narrative service fails")
+	}
+}
+
+type failingNarrative struct{ err error }
+
+func (f *failingNarrative) GetCurrentStressIndex(ctx context.Context) (StressIndexInfo, error) {
+	return StressIndexInfo{}, f.err
+}
+func (f *failingNarrative) BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error) {
+	return MarketNarrativeInfo{}, f.err
 }

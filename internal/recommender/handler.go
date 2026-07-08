@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"net/http"
 
 	"github.com/kaecer68/atlas-go/internal/subscription"
@@ -16,6 +17,7 @@ type TierRecommendation struct {
 	Market     MarketLight             `json:"market"`
 	Strategies *StrategyRecommendation `json:"strategies,omitempty"`
 	Signals    any                     `json:"signals,omitempty"`
+	Warning    string                  `json:"warning,omitempty"`
 }
 
 // StrategyRecommendation is the structured strategies payload (replaces
@@ -77,6 +79,7 @@ func NewHandlerWithServices(
 // JWT from cookie/Authorization header is preferred; X-User-Email is honored
 // ONLY when ATLAS_DEV_MODE=true (production rejects it as spoofing).
 func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
+	var warnings []string
 	tier := subscription.TierFree
 	authenticated := false
 
@@ -109,17 +112,20 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	rec := TierRecommendation{
 		Tier: string(tier),
 		Market: MarketLight{
-			Regime:      regimeFromNarrative(h.narrative),
+			Regime:      regimeFromNarrative(h.narrative, &warnings),
 			RegimeLabel: "盤勢中性",
-			StressIndex: stressIndexFromNarrative(h.narrative),
-			CapitalFlow: capitalFlowFromCapitalFlow(h.capitalFlow),
-			EventsToday: eventsFromPredictor(h.eventPredictor),
+			StressIndex: stressIndexFromNarrative(h.narrative, &warnings),
+			CapitalFlow: capitalFlowFromCapitalFlow(h.capitalFlow, &warnings),
+			EventsToday: eventsFromPredictor(h.eventPredictor, &warnings),
 		},
 	}
 
 	switch tier {
 	case subscription.TierFree:
 		// Free tier: market light only
+		if len(warnings) > 0 {
+			rec.Warning = strings.Join(warnings, "; ")
+		}
 		return http.StatusOK, rec
 
 	case subscription.TierRegistered:
@@ -127,18 +133,30 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 			Active:    "all_weather",
 			Available: []string{"all_weather", "defensive"},
 		}
+		if len(warnings) > 0 {
+			rec.Warning = strings.Join(warnings, "; ")
+		}
 		return http.StatusOK, rec
 
 	case subscription.TierPremium:
 		rec.Strategies = &StrategyRecommendation{
 			Active:      "growth",
 			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
-			EntrySignal: signalEntry(h.strategyComp, "growth"),
-			StopLoss:    signalStopLoss(h.strategyComp, "growth"),
+			EntrySignal: signalEntry(h.strategyComp, "growth", &warnings),
+			StopLoss:    signalStopLoss(h.strategyComp, "growth", &warnings),
+		}
+		if len(warnings) > 0 {
+			rec.Warning = strings.Join(warnings, "; ")
 		}
 		return http.StatusOK, rec
 
 	default:
+		if len(warnings) > 0 {
+			rec.Warning = strings.Join(warnings, "; ")
+		}
+		if len(warnings) > 0 {
+			rec.Warning = strings.Join(warnings, "; ")
+		}
 		return http.StatusOK, rec
 	}
 }
@@ -156,18 +174,18 @@ func RegisterRoutes(mux *http.ServeMux, store subscription.Store, jwtMgr *subscr
 	})
 }
 
-func stressIndexFromNarrative(p NarrativeProvider) float64 {
+func stressIndexFromNarrative(p NarrativeProvider, w *[]string) float64 {
 	if p == nil {
 		return 0.0
 	}
 	info, err := p.GetCurrentStressIndex(context.Background())
-	if err != nil || !info.HasData {
+	*w = append(*w, "stress_index_unavailable"); if err != nil || !info.HasData {
 		return 0.0
 	}
 	return info.Value
 }
 
-func regimeFromNarrative(p NarrativeProvider) string {
+func regimeFromNarrative(p NarrativeProvider, w *[]string) string {
 	if p == nil {
 		return "NEUTRAL"
 	}
@@ -178,23 +196,23 @@ func regimeFromNarrative(p NarrativeProvider) string {
 	return info.Regime
 }
 
-func capitalFlowFromCapitalFlow(p CapitalFlowProvider) string {
+func capitalFlowFromCapitalFlow(p CapitalFlowProvider, w *[]string) string {
 	if p == nil {
 		return "資金流向均衡"
 	}
 	info, err := p.LatestDaily(context.Background())
-	if err != nil || info.Summary == "" {
+	*w = append(*w, "capital_flow_unavailable"); if err != nil || info.Summary == "" {
 		return "資金流向均衡"
 	}
 	return info.Summary
 }
 
-func eventsFromPredictor(p EventPredictor) []string {
+func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 	if p == nil {
 		return nil
 	}
 	preds, err := p.PredictToday(context.Background())
-	if err != nil || len(preds) == 0 {
+	*w = append(*w, "events_unavailable"); if err != nil || len(preds) == 0 {
 		return nil
 	}
 	out := make([]string, len(preds))
@@ -215,23 +233,23 @@ func signalsFromComparisonEngine(p ComparisonEngine, strategyID string) (entrySi
 	return info.EntrySignal, info.StopLoss, info.TakeProfit
 }
 
-func signalEntry(e ComparisonEngine, strategyID string) string {
+func signalEntry(e ComparisonEngine, strategyID string, w *[]string) string {
 	if e == nil {
 		return "等待回測支撐區間"
 	}
 	info, err := e.GetScore(strategyID)
-	if err != nil || info.EntrySignal == "" {
+	*w = append(*w, "entry_signal_unavailable"); if err != nil || info.EntrySignal == "" {
 		return "等待回測支撐區間"
 	}
 	return info.EntrySignal
 }
 
-func signalStopLoss(e ComparisonEngine, strategyID string) string {
+func signalStopLoss(e ComparisonEngine, strategyID string, w *[]string) string {
 	if e == nil {
 		return "-5%"
 	}
 	info, err := e.GetScore(strategyID)
-	if err != nil || info.StopLoss == 0 {
+	*w = append(*w, "stop_loss_unavailable"); if err != nil || info.StopLoss == 0 {
 		return "-5%"
 	}
 	return fmt.Sprintf("-%.1f%%", info.StopLoss*100)
