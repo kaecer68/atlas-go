@@ -156,9 +156,9 @@ func TestHandleRiskCalibration_NilRiskGate(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk-calibration", nil)
 	status, body := h.HandleRiskCalibration(req)
 	assertStatus(t, status, http.StatusServiceUnavailable)
-	m := assertJSONKey(t, body, "status")
-	if m["status"] != "service_unavailable" {
-		t.Errorf("status = %v, want service_unavailable", m["status"])
+	m := assertJSONKey(t, body, "data_status")
+	if m["data_status"] != "service_unavailable" {
+		t.Errorf("data_status = %v, want service_unavailable", m["data_status"])
 	}
 }
 
@@ -222,9 +222,9 @@ func TestHandleRiskMetrics_RiskGateNotInjected_Returns503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
 	status, body := h.HandleRiskMetrics(req)
 	assertStatus(t, status, http.StatusServiceUnavailable)
-	m := assertJSONKey(t, body, "status")
-	if m["status"] != "service_unavailable" {
-		t.Errorf("status = %v, want service_unavailable", m["status"])
+	m := assertJSONKey(t, body, "data_status")
+	if m["data_status"] != "service_unavailable" {
+		t.Errorf("data_status = %v, want service_unavailable", m["data_status"])
 	}
 }
 
