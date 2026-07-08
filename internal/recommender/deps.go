@@ -27,11 +27,22 @@ type NarrativeProvider interface {
 }
 
 // CapitalFlowProvider 供 recommender 查詢當日七大資金勢力 summary。
-// 對應 producer: capitalflow.Service (added in commit 661f2dc7)。
+// 對應 producer: capitalflow.Service (added in commit 661f2dc7; Summary added
+// in commit b081f2f5 / PR #1002).
 type CapitalFlowProvider interface {
 	// LatestDaily returns the full DailyReport (forces + resonance + quality).
 	// Recommender reads the Summary field for response.market.capital_flow.
 	LatestDaily(ctx context.Context) (capitalflow.DailyReport, error)
+	// Summary returns the condensed SummaryReport (quality score + dominant
+	// force + short summary). Opt-in for callers that need the summary view
+	// without forcing a full DailyReport fetch; if the producer cannot
+	// synthesize a summary independently, it may derive one from LatestDaily
+	// (see capitalflow.Service.Summary for the canonical pattern).
+	//
+	// Nil-safe: nil adapter implementations MUST return (zero, nil) rather
+	// than erroring — see adapters.go and capitalFlowFromCapitalFlow for the
+	// graceful-degradation contract.
+	Summary(ctx context.Context) (capitalflow.SummaryReport, error)
 }
 
 // EventPredictor 供 recommender 查詢當日事件 + 短期預測。

@@ -57,34 +57,50 @@ func (a *narrativeAdapter) BuildMarketNarrativeData(ctx context.Context) (narrat
 
 type capitalFlowServiceProvider interface {
 	LatestDaily(ctx context.Context) (capitalflow.DailyReport, error)
+	Summary(ctx context.Context) (capitalflow.SummaryReport, error)
 }
 
 // NewCapitalFlowAdapter wires a *capitalflow.Service into
 // CapitalFlowProvider. The provider may be nil; in that case the
-// adapter degrades to the "資金流向均衡" fallback.
+// adapter degrades to the "資金流向均衡" fallback for both reports.
 func NewCapitalFlowAdapter(provider capitalFlowServiceProvider) CapitalFlowProvider {
 	if provider == nil {
-		return NewCapitalFlowFunc(nil)
+		return NewCapitalFlowFunc(nil, nil)
 	}
-	return NewCapitalFlowFunc(provider.LatestDaily)
+	return NewCapitalFlowFunc(provider.LatestDaily, provider.Summary)
 }
 
-// NewCapitalFlowFunc wraps a LatestDaily function.
-func NewCapitalFlowFunc(latestDaily func(context.Context) (capitalflow.DailyReport, error)) CapitalFlowProvider {
+// NewCapitalFlowFunc wraps LatestDaily and Summary functions. Either
+// may be nil — the adapter substitutes zero-value fallbacks so callers
+// can opt into one report without wiring the other.
+func NewCapitalFlowFunc(
+	latestDaily func(context.Context) (capitalflow.DailyReport, error),
+	summary func(context.Context) (capitalflow.SummaryReport, error),
+) CapitalFlowProvider {
 	if latestDaily == nil {
 		latestDaily = func(context.Context) (capitalflow.DailyReport, error) {
 			return capitalflow.DailyReport{}, nil
 		}
 	}
-	return &capitalFlowAdapter{latestDaily: latestDaily}
+	if summary == nil {
+		summary = func(context.Context) (capitalflow.SummaryReport, error) {
+			return capitalflow.SummaryReport{}, nil
+		}
+	}
+	return &capitalFlowAdapter{latestDaily: latestDaily, summary: summary}
 }
 
 type capitalFlowAdapter struct {
 	latestDaily func(context.Context) (capitalflow.DailyReport, error)
+	summary     func(context.Context) (capitalflow.SummaryReport, error)
 }
 
 func (a *capitalFlowAdapter) LatestDaily(ctx context.Context) (capitalflow.DailyReport, error) {
 	return a.latestDaily(ctx)
+}
+
+func (a *capitalFlowAdapter) Summary(ctx context.Context) (capitalflow.SummaryReport, error) {
+	return a.summary(ctx)
 }
 
 // =====================================================================

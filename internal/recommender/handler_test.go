@@ -157,6 +157,16 @@ func (m *mockCapitalFlow) LatestDaily(ctx context.Context) (capitalflow.DailyRep
 	}, nil
 }
 
+func (m *mockCapitalFlow) Summary(ctx context.Context) (capitalflow.SummaryReport, error) {
+	return capitalflow.SummaryReport{
+		Date:          time.Now(),
+		Summary:       m.summary,
+		DominantForce: capitalflow.ForceForeign,
+		QualityLabel:  "inflow",
+		ResonanceDir:  "aligned",
+	}, nil
+}
+
 type mockEventPredictor struct {
 	direction string
 }

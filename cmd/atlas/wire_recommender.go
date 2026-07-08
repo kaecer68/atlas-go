@@ -34,7 +34,7 @@ func WireRecommenderDeps(in WireDeps) recommender.HandlerDeps {
 	// 1. capitalflow: needs macroProvider for FetchSnapshot.
 	if in.MacroProvider != nil {
 		cfsvc := capitalflow.NewService(in.MacroProvider, 0)
-		deps.CapitalFlow = recommender.NewCapitalFlowFunc(cfsvc.LatestDaily)
+		deps.CapitalFlow = recommender.NewCapitalFlowFunc(cfsvc.LatestDaily, cfsvc.Summary)
 	}
 
 	// 2. event-driven Predictor: needs event calendar.
