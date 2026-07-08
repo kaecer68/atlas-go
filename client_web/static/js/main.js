@@ -65,8 +65,8 @@ const basePath = (typeof window !== 'undefined')
   : '';
 
 export async function switchPage(id, silent) {
-  // Unknown page — fallback to 404
-  if (!SHELL_LOADERS[id] && id !== 'errors/404') {
+  // Unknown page — fallback to 404. 'home' is a loadAll-rendered page, not a shell.
+  if (!SHELL_LOADERS[id] && id !== 'errors/404' && id !== 'home') {
     return switchPage('errors/404', silent);
   }
   var pageEl = document.getElementById('page-' + id);
