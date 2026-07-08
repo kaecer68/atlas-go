@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
@@ -50,6 +51,7 @@ type Handler struct {
 	regimeListener RegimeChangeListener
 	lastSeenRegime string
 	devMode        bool
+	regimeMu       sync.Mutex
 }
 
 // NewHandler creates a recommendation handler with optional JWT verification.
@@ -270,6 +272,8 @@ func (h *Handler) detectRegimeChange(newRegime string) {
 	if h.regimeListener == nil || newRegime == "" {
 		return
 	}
+	h.regimeMu.Lock()
+	defer h.regimeMu.Unlock()
 	if h.lastSeenRegime == newRegime {
 		return
 	}

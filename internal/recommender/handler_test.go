@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/subscription"
@@ -291,5 +293,46 @@ func TestHandleRecommendations_RegimeChange_FiresListener(t *testing.T) {
 	}
 	if newR != "RISK_OFF" {
 		t.Errorf("first call: newRegime should be RISK_OFF, got %q", newR)
+	}
+}
+
+func TestHandleRecommendations_RegimeChange_ConcurrentSafety(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-race")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+
+	var fireCount int32
+	listener := func(oldRegime, newRegime string) {
+		atomic.AddInt32(&fireCount, 1)
+	}
+
+	mock := &mockNarrative{stress: 20.0, regime: "RISK_ON"}
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).
+		WithRegimeListener(listener).
+		WithDevMode(true)
+	store.Register("free@test.com", "pass")
+
+	// detectRegimeChange no-ops when lastSeenRegime is ""; pre-populate
+	// so concurrent goroutines see a real regime transition.
+	h.lastSeenRegime = "RISK_OFF"
+
+	const N = 100
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+			req.Header.Set("X-User-Email", "free@test.com")
+			_, _ = h.HandleRecommendations(req)
+		}()
+	}
+	wg.Wait()
+
+	// reproduce-flagged: racy read/write in detectRegimeChange lets N goroutines
+	// observe RISK_OFF simultaneously and each fire the listener
+	count := atomic.LoadInt32(&fireCount)
+	if count != 1 {
+		t.Errorf("listener fired %d times, want 1 (race condition)", count)
 	}
 }
