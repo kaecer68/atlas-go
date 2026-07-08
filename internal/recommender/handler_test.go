@@ -131,3 +131,63 @@ func TestHandleRecommendations_NarrativeIntegration_PopulatesStressIndex(t *test
 		t.Errorf("Regime = %q, want %q (from narrative mock)", rec.Market.Regime, "RISK_ON")
 	}
 }
+
+type mockCapitalFlow struct {
+	summary   string
+	resonance float64
+}
+
+func (m *mockCapitalFlow) LatestDaily(ctx context.Context) (CapitalFlowDailyInfo, error) {
+	return CapitalFlowDailyInfo{Summary: m.summary, Resonance: m.resonance}, nil
+}
+
+type mockEventPredictor struct {
+	events []string
+}
+
+func (m *mockEventPredictor) PredictToday(ctx context.Context) ([]EventPredictionInfo, error) {
+	out := make([]EventPredictionInfo, len(m.events))
+	for i, e := range m.events {
+		out[i] = EventPredictionInfo{Date: "today", Direction: e, Magnitude: 0.5, Confidence: 0.8}
+	}
+	return out, nil
+}
+
+func TestHandleRecommendations_CapitalFlowFromService(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-test")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+	mock := &mockCapitalFlow{summary: "外資連續買超 3 日，共振 0.85"}
+	h := NewHandlerWithServices(*store, nil, nil, mock, nil, nil)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	code, data := h.HandleRecommendations(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	rec := data.(TierRecommendation)
+	if rec.Market.CapitalFlow != "外資連續買超 3 日，共振 0.85" {
+		t.Errorf("CapitalFlow = %q, want from capitalFlow mock", rec.Market.CapitalFlow)
+	}
+}
+
+func TestHandleRecommendations_EventsFromPredictor(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-test")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+	mock := &mockEventPredictor{events: []string{"MSCI 調整", "ETF 換股", "月營收公告"}}
+	h := NewHandlerWithServices(*store, nil, nil, nil, mock, nil)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	code, data := h.HandleRecommendations(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	rec := data.(TierRecommendation)
+	if len(rec.Market.EventsToday) != 3 {
+		t.Fatalf("EventsToday len = %d, want 3 (from predictor mock)", len(rec.Market.EventsToday))
+	}
+	if rec.Market.EventsToday[0] != "MSCI 調整" {
+		t.Errorf("EventsToday[0] = %q, want MSCI 調整", rec.Market.EventsToday[0])
+	}
+}

@@ -111,8 +111,8 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 			Regime:      regimeFromNarrative(h.narrative),
 			RegimeLabel: "盤勢中性",
 			StressIndex: stressIndexFromNarrative(h.narrative),
-			CapitalFlow: "資金流向均衡",
-			EventsToday: nil,
+			CapitalFlow: capitalFlowFromCapitalFlow(h.capitalFlow),
+			EventsToday: eventsFromPredictor(h.eventPredictor),
 		},
 	}
 
@@ -175,4 +175,30 @@ func regimeFromNarrative(p NarrativeProvider) string {
 		return "NEUTRAL"
 	}
 	return info.Regime
+}
+
+func capitalFlowFromCapitalFlow(p CapitalFlowProvider) string {
+	if p == nil {
+		return "資金流向均衡"
+	}
+	info, err := p.LatestDaily(context.Background())
+	if err != nil || info.Summary == "" {
+		return "資金流向均衡"
+	}
+	return info.Summary
+}
+
+func eventsFromPredictor(p EventPredictor) []string {
+	if p == nil {
+		return nil
+	}
+	preds, err := p.PredictToday(context.Background())
+	if err != nil || len(preds) == 0 {
+		return nil
+	}
+	out := make([]string, len(preds))
+	for i, p := range preds {
+		out[i] = p.Direction
+	}
+	return out
 }
