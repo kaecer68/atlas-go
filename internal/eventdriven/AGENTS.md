@@ -9,7 +9,7 @@
 
 | 型別 | 檔案 | 功能 |
 |------|------|------|
-| `Predictor` | `predictor.go` | 主服務：`NewPredictor` / `SetCapitalFlow` / `PredictFlow` |
+| `Predictor` | `predictor.go` | 主服務：`NewPredictor` / `SetCapitalFlow` / `Predict` |
 | `Event` | `types.go` | 事件類型：ETF rebalance / MSCI adjustment / revenue / window dressing / holiday |
 | `ExpectedFlow` | (返回) | 5 日預測：每日的方向 + 強度 + 信賴度 |
 | `CalendarEvent` | (event calendar source) | 來源：TWSE 行事曆 + 規則偵測 |
@@ -33,20 +33,21 @@ Event Calendar Service
        ↓
 GET /api/events/prediction             → 5 日 flow prediction
        ↓
-Predictor.PredictFlow
+Predictor.Predict
   ├─ calendar.GetUpcoming(5)
   ├─ events → expectedFlow(events, capitalFlow)
-  └─ return []DailyPrediction {date, direction, magnitude, confidence}
+  └─ return PredictionReport {Date, Predictions []FlowPrediction, Drivers, Summary}
 ```
 
 ## 與 P0-1 的關係
 
-Sprint 2 T9 將使 `recommender::HandleRecommendations::EventsToday` 欄位接入 `Predictor.PredictFlow(day=0)`。
+Sprint 2 T9 將使 `recommender::HandleRecommendations::EventsToday` 欄位接入 `Predictor.Predict(now).Predictions[0]`。
 
-預期介面：
+預期介面（已對齊 `internal/recommender/deps.go` 真實簽名）：
 ```go
 type EventPredictor interface {
-    PredictToday() ([]DailyPrediction, error)
+    PredictToday() (eventdriven.FlowPrediction, error)
+    NextNDays(n int) ([]eventdriven.FlowPrediction, error)
 }
 ```
 
@@ -67,5 +68,5 @@ type EventPredictor interface {
 ## 測試
 
 - `predictor_test.go` 測試事件 → flow 預測映射
-- Confidence 範圍測試 [0, 1]
+- Confidence 範圍測試 (0.5, 1.0]（sigmoid of net weight × (drivers+1),見 predictor.go:131）
 - Calendar edge cases: 跨年/閏年/連假
