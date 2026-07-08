@@ -95,6 +95,82 @@ func TestResonanceAdversarial(t *testing.T) {
 	}
 }
 
+// TestResonanceCoefficientRange guards the [0.5, 1.5] invariant documented
+// in AGENTS.md (ResonanceResult row).
+func TestResonanceCoefficientRange(t *testing.T) {
+	cases := []struct {
+		name   string
+		forces []ForceScore
+	}{
+		{
+			name: "all_bullish_aligned",
+			forces: []ForceScore{
+				{Force: ForceForeign, ZScore: 2.0, Trend: "bullish"},
+				{Force: ForceInstitutional, ZScore: 1.5, Trend: "bullish"},
+				{Force: ForceGovernment, ZScore: 0.8, Trend: "bullish"},
+				{Force: ForceRetail, ZScore: -0.5, Trend: "neutral"},
+			},
+		},
+		{
+			name: "all_bearish_aligned",
+			forces: []ForceScore{
+				{Force: ForceForeign, ZScore: -2.0, Trend: "bearish"},
+				{Force: ForceInstitutional, ZScore: -1.5, Trend: "bearish"},
+				{Force: ForceGovernment, ZScore: -0.8, Trend: "bearish"},
+			},
+		},
+		{
+			name: "adversarial_foreign_vs_government",
+			forces: []ForceScore{
+				{Force: ForceForeign, ZScore: 2.0, Trend: "bullish"},
+				{Force: ForceInstitutional, ZScore: 0.2, Trend: "neutral"},
+				{Force: ForceGovernment, ZScore: -1.5, Trend: "bearish"},
+			},
+		},
+		{
+			name: "neutral_foreign",
+			forces: []ForceScore{
+				{Force: ForceForeign, ZScore: 0.1, Trend: "neutral"},
+				{Force: ForceInstitutional, ZScore: 1.0, Trend: "bullish"},
+				{Force: ForceGovernment, ZScore: 0.5, Trend: "bullish"},
+			},
+		},
+		{
+			name: "mixed_no_three_aligned",
+			forces: []ForceScore{
+				{Force: ForceForeign, ZScore: 2.0, Trend: "bullish"},
+				{Force: ForceInstitutional, ZScore: 1.0, Trend: "bullish"},
+				{Force: ForceGovernment, ZScore: -0.5, Trend: "bearish"},
+			},
+		},
+		{
+			name: "missing_government",
+			forces: []ForceScore{
+				{Force: ForceForeign, ZScore: 2.0, Trend: "bullish"},
+				{Force: ForceInstitutional, ZScore: 1.0, Trend: "bullish"},
+			},
+		},
+		{
+			name:   "empty_forces",
+			forces: nil,
+		},
+		{
+			name: "single_force_extreme",
+			forces: []ForceScore{
+				{Force: ForceForeign, ZScore: 5.0, Trend: "bullish"},
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := ComputeResonance(c.forces)
+			if r.Coefficient < 0.5 || r.Coefficient > 1.5 {
+				t.Errorf("Coefficient %.3f out of documented range [0.5, 1.5]", r.Coefficient)
+			}
+		})
+	}
+}
+
 func TestQualityScore(t *testing.T) {
 	forces := []ForceScore{
 		{Force: ForceForeign, ZScore: 2.5},
