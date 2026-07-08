@@ -37,14 +37,38 @@ type MarketLight struct {
 
 // Handler serves tier-based recommendations.
 type Handler struct {
-	subStore subscription.Store
-	jwtMgr   *subscription.JWTManager
+	subStore       subscription.Store
+	jwtMgr         *subscription.JWTManager
+	narrative      NarrativeProvider
+	capitalFlow    CapitalFlowProvider
+	eventPredictor EventPredictor
+	strategyComp   ComparisonEngine
 }
 
 // NewHandler creates a recommendation handler with optional JWT verification.
 // If jwtMgr is non-nil, the handler verifies JWT tokens before reading tier.
 func NewHandler(store subscription.Store, jwtMgr *subscription.JWTManager) *Handler {
 	return &Handler{subStore: store, jwtMgr: jwtMgr}
+}
+
+// NewHandlerWithServices constructs a Handler with Sprint 2 T8-T12 service deps.
+// All services may be nil; real integration is T8-T12 work.
+func NewHandlerWithServices(
+	store subscription.Store,
+	jwtMgr *subscription.JWTManager,
+	narrative NarrativeProvider,
+	capitalFlow CapitalFlowProvider,
+	eventPredictor EventPredictor,
+	strategy ComparisonEngine,
+) *Handler {
+	return &Handler{
+		subStore:       store,
+		jwtMgr:         jwtMgr,
+		narrative:      narrative,
+		capitalFlow:    capitalFlow,
+		eventPredictor: eventPredictor,
+		strategyComp:   strategy,
+	}
 }
 
 // HandleRecommendations returns tier-appropriate recommendations.
