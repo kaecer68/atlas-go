@@ -153,5 +153,7 @@ func (f fakeProvider) GetScore(string, int) (float64, error) {
 	return f.score, f.err
 }
 
-var _ narrative.TaiwanStressIndex // doc-only reference to ensure import path stays
-var _ = errors.New              // doc-only reference
+var (
+	_ narrative.TaiwanStressIndex // doc-only reference to ensure import path stays
+	_ = errors.New                // doc-only reference
+)

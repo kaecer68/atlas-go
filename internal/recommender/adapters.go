@@ -21,11 +21,6 @@ import (
 // NarrativeAdapter wraps *monitoring/service.NarrativeService.
 // =====================================================================
 
-type narrativeServiceProvider interface {
-	GetCurrentStressIndex() narrative.TaiwanStressIndex
-	BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error)
-}
-
 // NewNarrativeAdapterFunc wraps getter functions to satisfy the
 // NarrativeProvider interface — useful for tests and decoupled wiring.
 func NewNarrativeAdapterFunc(
@@ -175,8 +170,8 @@ func (a *comparisonEngineAdapter) GetScore(strategyID string) (float64, error) {
 // =====================================================================
 
 var (
-	_ NarrativeProvider = (*narrativeAdapter)(nil)
+	_ NarrativeProvider   = (*narrativeAdapter)(nil)
 	_ CapitalFlowProvider = (*capitalFlowAdapter)(nil)
-	_ EventPredictor = (*eventPredictorAdapter)(nil)
-	_ ComparisonEngine = (*comparisonEngineAdapter)(nil)
+	_ EventPredictor      = (*eventPredictorAdapter)(nil)
+	_ ComparisonEngine    = (*comparisonEngineAdapter)(nil)
 )

@@ -1,13 +1,3 @@
-// Package main — wireRecommenderDeps 構造真實 services 包成 consumer HandlerDeps.
-//
-// 此檔集中在 main.go 不動 1938 行 init flow 的前提下,完成 recommender 真實資料接入。
-// main.go 只需 +1 行 imports + 1 行 wire 呼叫。
-//
-// 構造規則 (per .omo/research/2026-07-08-recommender-wiring-gaps.md):
-//   narrative:     no-deps constructor (always wire)
-//   capitalflow:   needs macroProvider; nil → graceful fallback
-//   event-driven:  needs *industry.EventCalendar; nil → graceful fallback
-//   comparison:    needs *strategy.ComparisonEngine; default fresh per-call
 package main
 
 import (
@@ -20,6 +10,13 @@ import (
 	"github.com/kaecer68/atlas-go/internal/recommender"
 	"github.com/kaecer68/atlas-go/internal/strategy"
 )
+
+// 構造規則 (per .omo/research/2026-07-08-recommender-wiring-gaps.md):
+//
+//	narrative:     no-deps constructor (always wire)
+//	capitalflow:   needs macroProvider; nil → graceful fallback
+//	event-driven:  needs *industry.EventCalendar; nil → graceful fallback
+//	comparison:    needs *strategy.ComparisonEngine; default fresh per-call
 
 // WireDeps bundles the inputs needed to construct production HandlerDeps.
 // nil for any field = that producer isn't wired (handlers fall back to safe defaults).
