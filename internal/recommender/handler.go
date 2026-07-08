@@ -48,27 +48,35 @@ func NewHandler(store subscription.Store, jwtMgr *subscription.JWTManager) *Hand
 }
 
 // HandleRecommendations returns tier-appropriate recommendations.
-// JWT from cookie/Authorization header is preferred; falls back to
-// X-User-Email header only when no JWT is present (legacy/dev).
+// JWT from cookie/Authorization header is preferred; X-User-Email is honored
+// ONLY when ATLAS_DEV_MODE=true (production rejects it as spoofing).
 func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	tier := subscription.TierFree
+	authenticated := false
 
 	if h.jwtMgr != nil {
 		if token := subscription.ExtractToken(r); token != "" {
 			if claims, err := h.jwtMgr.Verify(token); err == nil {
 				if user, err := h.subStore.GetByEmail(claims.Email); err == nil {
 					tier = user.EffectiveTier()
+					authenticated = true
 				}
 			}
 		}
 	}
 
-	// Legacy fallback for dev/testing without JWT
-	if tier == subscription.TierFree {
+	if !authenticated && devModeEnabled() {
 		if email := r.Header.Get("X-User-Email"); email != "" {
 			if user, err := h.subStore.GetByEmail(email); err == nil {
 				tier = user.EffectiveTier()
+				authenticated = true
 			}
+		}
+	}
+
+	if !authenticated && !devModeEnabled() && r.Header.Get("X-User-Email") != "" {
+		return http.StatusUnauthorized, map[string]string{
+			"error": "X-User-Email header not allowed in production",
 		}
 	}
 
