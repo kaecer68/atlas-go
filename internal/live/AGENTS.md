@@ -8,12 +8,13 @@
 
 ## 已知結構債務（P3）
 
-`doc.go` 明確標記本套件為混合職責，未來將拆分為：
-- `live/broker/` — 券商執行、訂單管理（業務邏輯）
-- `live/store/` — Redis nonce store、狀態持久化（基礎設施）
-- `live/http/` — HTTP broker adapter（基礎設施）
+`doc.go` 明確標記本套件為混合職責，部分拆分已 ship、剩餘仍 TODO：
 
-**Same-package 拆分原則**：新增功能應註明屬於哪一類（業務 vs 基礎設施），為未來拆分做準備。
+- `live/store/` — Redis nonce store、狀態持久化（基礎設施）**已 ship**（見 `store/store.go` + `store/nonce_store.go`，package alias `livestore`，從 `agent_runner.go:9` import）
+- `live/broker/` — 券商執行、訂單管理（業務邏輯）**TODO**
+- `live/http/` — HTTP broker adapter（基礎設施）**TODO**
+
+**Same-package 拆分原則**：新增功能應註明屬於哪一類（業務 vs 基礎設施），為剩餘拆分做準備。
 
 ---
 
@@ -25,8 +26,8 @@
 | 券商抽象 | `broker.go` — `Broker` 介面；`DryRunBroker` 不送真實委託；`GuardedLiveBroker` 無 adapter 拒單 |
 | 訂單管理 | `order_manager.go` — pending → submitted → filled/rejected/cancelled |
 | 熔斷 | `circuit_breaker.go` — 連續錯誤達閾值暫停；持久化 `circuit_breaker_state.json` |
-| 狀態持久化 | `store.go` — `StateStore` 原子寫入（部位/訂單/現金） |
-| Nonce 管理 | `nonce_store.go` — 防重放；預設 Redis，測試可換記憶體實作 |
+| 狀態持久化 | `store/store.go` — `livestore.StateStore` 原子寫入（部位/訂單/現金） |
+| Nonce 管理 | `store/nonce_store.go` — 防重放；預設 Redis，測試可換記憶體實作 |
 | HTTP Adapter | `http_adapter.go` — 券商 API（HMAC-SHA256、速率限制、重試） |
 | 事件匯流排 | `eventbus.go` — `ChannelEventBus` 解耦 |
 
