@@ -68,7 +68,7 @@ func TestHandleRiskMetrics_NoSessionsDir(t *testing.T) {
 
 func TestHandleRiskMetrics_EmptySessionsDir(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0o755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
 	h := (&Handlers{LedgerDir: dir}).WithRiskGate(risk.NewRiskGate(nil, nil, nil))
@@ -82,17 +82,17 @@ func TestHandleRiskMetrics_EmptySessionsDir(t *testing.T) {
 func TestHandleRiskMetrics_WithSessions(t *testing.T) {
 	dir := t.TempDir()
 	sessionsDir := filepath.Join(dir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
 	// Create a session with summary.json
 	sessionDir := filepath.Join(sessionsDir, "session-20260101-daily")
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatalf("mkdir session: %v", err)
 	}
 	summary := map[string]any{"portfolio_value": 1000000.0}
 	b, _ := json.Marshal(summary)
-	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), b, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), b, 0o644); err != nil {
 		t.Fatalf("write summary: %v", err)
 	}
 
@@ -136,7 +136,7 @@ func TestHandleCorrelationMatrix_WithNilMatrix(t *testing.T) {
 
 func TestHandleRiskMetrics_GateMode_WithRiskGate(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0o755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
 	rg := risk.NewRiskGate(nil, nil, nil)

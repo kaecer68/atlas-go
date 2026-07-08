@@ -261,6 +261,7 @@ type failingNarrative struct{ err error }
 func (f *failingNarrative) GetCurrentStressIndex(ctx context.Context) (StressIndexInfo, error) {
 	return StressIndexInfo{}, f.err
 }
+
 func (f *failingNarrative) BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error) {
 	return MarketNarrativeInfo{}, f.err
 }
