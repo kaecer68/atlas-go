@@ -3903,12 +3903,6 @@ export interface cnbcQuickQuoteResponse {
   QuickQuoteResult: string;
 }
 
-export interface dataResponse {
-  data_status: string;
-  reason?: string;
-  detail?: string;
-}
-
 export interface exchangeRateResponse {
   result: string;
   base_code: string;
