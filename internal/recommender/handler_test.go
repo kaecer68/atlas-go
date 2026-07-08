@@ -264,3 +264,31 @@ func (f *failingNarrative) GetCurrentStressIndex(ctx context.Context) (StressInd
 func (f *failingNarrative) BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error) {
 	return MarketNarrativeInfo{}, f.err
 }
+
+func TestHandleRecommendations_RegimeChange_FiresListener(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-test")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+
+	var oldR, newR string
+	listener := func(oldRegime, newRegime string) {
+		oldR, newR = oldRegime, newRegime
+	}
+
+	mock := &mockNarrative{stress: 20.0, regime: "RISK_OFF"}
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithRegimeListener(listener)
+
+	t.Setenv("ATLAS_DEV_MODE", "true")
+	store.Register("free@test.com", "pass")
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	req.Header.Set("X-User-Email", "free@test.com")
+	_, _ = h.HandleRecommendations(req)
+
+	if oldR != "" {
+		t.Errorf("first call: oldRegime should be empty, got %q", oldR)
+	}
+	if newR != "RISK_OFF" {
+		t.Errorf("first call: newRegime should be RISK_OFF, got %q", newR)
+	}
+}

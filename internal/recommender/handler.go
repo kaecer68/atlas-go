@@ -47,6 +47,8 @@ type Handler struct {
 	capitalFlow    CapitalFlowProvider
 	eventPredictor EventPredictor
 	strategyComp   ComparisonEngine
+	regimeListener RegimeChangeListener
+	lastSeenRegime string
 }
 
 // NewHandler creates a recommendation handler with optional JWT verification.
@@ -119,6 +121,8 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 			EventsToday: eventsFromPredictor(h.eventPredictor, &warnings),
 		},
 	}
+
+	h.detectRegimeChange(rec.Market.Regime)
 
 	switch tier {
 	case subscription.TierFree:
@@ -253,4 +257,20 @@ func signalStopLoss(e ComparisonEngine, strategyID string, w *[]string) string {
 		return "-5%"
 	}
 	return fmt.Sprintf("-%.1f%%", info.StopLoss*100)
+}
+
+func (h *Handler) WithRegimeListener(l RegimeChangeListener) *Handler {
+	h.regimeListener = l
+	return h
+}
+
+func (h *Handler) detectRegimeChange(newRegime string) {
+	if h.regimeListener == nil || newRegime == "" {
+		return
+	}
+	if h.lastSeenRegime == newRegime {
+		return
+	}
+	h.regimeListener(h.lastSeenRegime, newRegime)
+	h.lastSeenRegime = newRegime
 }
