@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -67,9 +66,6 @@ func realWiredDeps(t *testing.T) (NarrativeProvider, CapitalFlowProvider, EventP
 	t.Helper()
 
 	workDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(workDir, "data"), 0o755); err != nil {
-		t.Fatalf("mkdir data: %v", err)
-	}
 
 	mp := &cannedMacroProvider{snap: buildRISKOFFSnapshot(time.Now().Unix())}
 
@@ -122,8 +118,9 @@ func realWiredDeps(t *testing.T) (NarrativeProvider, CapitalFlowProvider, EventP
 //     flow string) — those are tested in handler_test.go and adapters_test.go
 //     where inputs are deterministic.
 //
-// Replaces: PR #998's mock-based e2e_test.go (kept for legacy smoke as
-// e2e_mock_test.go if needed; this file becomes the canonical wired E2E).
+// Companion: PR #998's mock-based e2e_test.go remains in the repo as the
+// fast smoke variant; this file is the integration-confidence test that
+// exercises real wired services.
 func TestE2E_RecommendationsWiredFlow(t *testing.T) {
 	dir, err := os.MkdirTemp("", "rec-e2e-wired")
 	if err != nil {
