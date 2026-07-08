@@ -3795,6 +3795,7 @@ export interface TierRecommendation {
   market: MarketLight;
   strategies?: StrategyRecommendation | null;
   signals?: string;
+  warning?: string;
 }
 
 export interface TimelineEvent {
@@ -3900,6 +3901,12 @@ export interface cnbcQuickQuote {
 
 export interface cnbcQuickQuoteResponse {
   QuickQuoteResult: string;
+}
+
+export interface dataResponse {
+  data_status: string;
+  reason?: string;
+  detail?: string;
 }
 
 export interface exchangeRateResponse {

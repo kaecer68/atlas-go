@@ -1808,6 +1808,7 @@
   "volume_surge_ratio",
   "volume_weight",
   "walk_forward_embargo_days",
+  "warning",
   "warnings",
   "weak_close_penalty",
   "weak_close_threshold",

@@ -64,3 +64,5 @@ type StrategyScoreInfo struct {
 	StopLoss   float64
 	TakeProfit float64
 }
+
+type RegimeChangeListener func(oldRegime, newRegime string)
