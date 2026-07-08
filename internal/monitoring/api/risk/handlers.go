@@ -42,6 +42,15 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
+	if h.RiskGate == nil {
+		// P0-3: 503 instead of 200+empty gate_mode so frontend can distinguish
+		// "no data" from "backend not initialized".
+		return http.StatusServiceUnavailable, map[string]any{
+			"status": "service_unavailable",
+			"reason": "risk_gate_not_injected",
+			"detail": "RiskGate 尚未注入, 請檢查 cmd/atlas main.go 的 DI chain",
+		}
+	}
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
@@ -192,9 +201,10 @@ func (h *Handlers) WithRiskGate(rg *risk.RiskGate) *Handlers {
 // HandleRiskCalibration serves the latest risk gate calibration report.
 func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
 	if h.RiskGate == nil {
-		return http.StatusOK, map[string]any{
-			"status":  "not_available",
-			"message": "risk gate not configured in this mode",
+		// P0-3: 503 surfaces backend init state to frontend.
+		return http.StatusServiceUnavailable, map[string]any{
+			"status": "service_unavailable",
+			"reason": "risk_gate_not_injected",
 		}
 	}
 	report := h.RiskGate.LastCalibrationReport()
@@ -214,10 +224,10 @@ func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
 // HandleRiskCommentary returns the latest risk gate decision commentary.
 func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 	if h.RiskGate == nil {
-		return http.StatusOK, map[string]any{
-			"status":    "not_available",
-			"message":   "risk gate not configured in this mode",
-			"generated": false,
+		// P0-3: 503 surfaces backend init state to frontend.
+		return http.StatusServiceUnavailable, map[string]any{
+			"status": "service_unavailable",
+			"reason": "risk_gate_not_injected",
 		}
 	}
 	dec := h.RiskGate.LastDecision()

@@ -49,7 +49,7 @@ func TestNewHandlers(t *testing.T) {
 
 func TestHandleRiskMetrics_NoSessionsDir(t *testing.T) {
 	dir := t.TempDir()
-	h := &Handlers{LedgerDir: dir}
+	h := (&Handlers{LedgerDir: dir}).WithRiskGate(risk.NewRiskGate(nil, nil, nil))
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
 	status, body := h.HandleRiskMetrics(req)
 	assertStatus(t, status, http.StatusOK)
@@ -71,7 +71,7 @@ func TestHandleRiskMetrics_EmptySessionsDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
-	h := &Handlers{LedgerDir: dir}
+	h := (&Handlers{LedgerDir: dir}).WithRiskGate(risk.NewRiskGate(nil, nil, nil))
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
 	status, body := h.HandleRiskMetrics(req)
 	assertStatus(t, status, http.StatusOK)
@@ -96,7 +96,7 @@ func TestHandleRiskMetrics_WithSessions(t *testing.T) {
 		t.Fatalf("write summary: %v", err)
 	}
 
-	h := &Handlers{LedgerDir: dir}
+	h := (&Handlers{LedgerDir: dir}).WithRiskGate(risk.NewRiskGate(nil, nil, nil))
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
 	status, body := h.HandleRiskMetrics(req)
 	assertStatus(t, status, http.StatusOK)
@@ -134,21 +134,6 @@ func TestHandleCorrelationMatrix_WithNilMatrix(t *testing.T) {
 	assertJSONKey(t, body, "matrix")
 }
 
-func TestHandleRiskMetrics_GateMode_NilRiskGate(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0755); err != nil {
-		t.Fatalf("mkdir sessions: %v", err)
-	}
-	h := &Handlers{LedgerDir: dir} // RiskGate intentionally nil
-	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
-	status, body := h.HandleRiskMetrics(req)
-	assertStatus(t, status, http.StatusOK)
-	m := assertJSONKey(t, body, "gate_mode")
-	if m["gate_mode"] != "" {
-		t.Errorf("gate_mode = %v, want empty string when RiskGate is nil", m["gate_mode"])
-	}
-}
-
 func TestHandleRiskMetrics_GateMode_WithRiskGate(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0755); err != nil {
@@ -170,10 +155,10 @@ func TestHandleRiskCalibration_NilRiskGate(t *testing.T) {
 	h := &Handlers{LedgerDir: t.TempDir()}
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk-calibration", nil)
 	status, body := h.HandleRiskCalibration(req)
-	assertStatus(t, status, http.StatusOK)
+	assertStatus(t, status, http.StatusServiceUnavailable)
 	m := assertJSONKey(t, body, "status")
-	if m["status"] != "not_available" {
-		t.Errorf("status = %v, want not_available", m["status"])
+	if m["status"] != "service_unavailable" {
+		t.Errorf("status = %v, want service_unavailable", m["status"])
 	}
 }
 
@@ -227,4 +212,32 @@ func TestRegisterRoutes(t *testing.T) {
 			t.Errorf("route %s %s not registered (no handler)", r.method, r.path)
 		}
 	}
+}
+
+// T2 RED: P0-3 Layer 1 — RiskGate 未注入時應回 503
+// 行為變更: 從 200 + gate_mode="" 改為 503 + status=service_unavailable
+// 理由: 前端需要明確區分「無數據」(200) 與「服務未就緒」(503)
+func TestHandleRiskMetrics_RiskGateNotInjected_Returns503(t *testing.T) {
+	h := &Handlers{LedgerDir: t.TempDir()}
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk", nil)
+	status, body := h.HandleRiskMetrics(req)
+	assertStatus(t, status, http.StatusServiceUnavailable)
+	m := assertJSONKey(t, body, "status")
+	if m["status"] != "service_unavailable" {
+		t.Errorf("status = %v, want service_unavailable", m["status"])
+	}
+}
+
+func TestHandleRiskCalibration_RiskGateNotInjected_Returns503(t *testing.T) {
+	h := &Handlers{LedgerDir: t.TempDir()}
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk-calibration", nil)
+	status, _ := h.HandleRiskCalibration(req)
+	assertStatus(t, status, http.StatusServiceUnavailable)
+}
+
+func TestHandleRiskCommentary_RiskGateNotInjected_Returns503(t *testing.T) {
+	h := &Handlers{LedgerDir: t.TempDir()}
+	req := httptest.NewRequest(http.MethodGet, "/api/risk/commentary", nil)
+	status, _ := h.HandleRiskCommentary(req)
+	assertStatus(t, status, http.StatusServiceUnavailable)
 }
