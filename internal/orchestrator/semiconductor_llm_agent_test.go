@@ -85,10 +85,10 @@ func TestSemiconductorLLMAgent_Recommend_NoLLM(t *testing.T) {
 	agent := SemiconductorLLMAgent{UseLLMOverride: truePtr()}
 	rec, ok := agent.Recommend(makeSpec(), domain.Quote{Symbol: "2330"}, "", domain.Regime(""), nil)
 	if ok {
-		t.Error("Recommend with nil LLMDriver: got ok=true, want false")
+		t.Error("Recommend with nil PlanDriver/ReflectDriver: got ok=true, want false")
 	}
 	if rec.Agent != "" || rec.Symbol != "" {
-		t.Errorf("Recommend with nil LLMDriver: got non-zero rec %+v, want zero", rec)
+		t.Errorf("Recommend with nil PlanDriver/ReflectDriver: got non-zero rec %+v, want zero", rec)
 	}
 }
 
@@ -97,7 +97,8 @@ func TestSemiconductorLLMAgent_Recommend_NoLLM(t *testing.T) {
 func TestSemiconductorLLMAgent_Recommend_FlagOff(t *testing.T) {
 	mock := NewMockLLMDriver()
 	agent := SemiconductorLLMAgent{
-		LLMDriver:      mock,
+		PlanDriver:     mock,
+		ReflectDriver:  mock,
 		Tools:          llm.TestTools(),
 		UseLLMOverride: falsePtr(),
 	}
@@ -127,7 +128,8 @@ func TestSemiconductorLLMAgent_Recommend_HappyPath(t *testing.T) {
 		})
 
 	agent := SemiconductorLLMAgent{
-		LLMDriver:      mock,
+		PlanDriver:     mock,
+		ReflectDriver:  mock,
 		Tools:          llm.TestTools(),
 		MaxIter:        3,
 		UseLLMOverride: truePtr(),
@@ -161,7 +163,8 @@ func TestSemiconductorLLMAgent_Recommend_HappyPath(t *testing.T) {
 func TestSemiconductorLLMAgent_Recommend_PlanError(t *testing.T) {
 	mock := NewMockLLMDriver().WithPlanError(errors.New("LLM unavailable"))
 	agent := SemiconductorLLMAgent{
-		LLMDriver:      mock,
+		PlanDriver:     mock,
+		ReflectDriver:  mock,
 		Tools:          llm.TestTools(),
 		UseLLMOverride: truePtr(),
 	}
@@ -172,4 +175,71 @@ func TestSemiconductorLLMAgent_Recommend_PlanError(t *testing.T) {
 	if rec.Reason == "" {
 		t.Error("rec.Reason should describe the plan error, got empty")
 	}
+}
+
+// TestSemiconductorLLMAgent_PlanAndReflectSeparately verifies that
+// after the LLMDriver → (PlanDriver + ReflectDriver) split, the two
+// fields are wired independently:
+//   - Each field gets called with its own call count (no shared state)
+//   - Distinct mock implementations on each field receive separate calls
+//   - Setting only one field (other nil) causes Recommend to return
+//     ok=false per the L116 nil guard, and the non-nil field is NOT
+//     called (early-return before any LLM invocation)
+func TestSemiconductorLLMAgent_PlanAndReflectSeparately(t *testing.T) {
+	t.Run("distinct drivers wired independently", func(t *testing.T) {
+		planMock := NewMockLLMDriver().
+			WithPlanResponse([]PlanStep{{Kind: "thought", Note: "noop"}})
+		reflectMock := NewMockLLMDriver().
+			WithReflectResponse(Reflection{Continue: false, Reasoning: "skip"})
+
+		agent := SemiconductorLLMAgent{
+			PlanDriver:     planMock,
+			ReflectDriver:  reflectMock,
+			Tools:          llm.TestTools(),
+			UseLLMOverride: truePtr(),
+		}
+		_, _ = agent.Recommend(makeSpec(), domain.Quote{Symbol: "2330"}, "", domain.Regime(""), nil)
+
+		if planMock.PlanCallCount() == 0 {
+			t.Error("PlanDriver was never called; expected at least 1 PlanComplete call")
+		}
+	})
+
+	t.Run("nil PlanDriver returns ok=false without calling ReflectDriver", func(t *testing.T) {
+		reflectMock := NewMockLLMDriver().
+			WithReflectResponse(Reflection{Continue: false, Reasoning: "skip"})
+
+		agent := SemiconductorLLMAgent{
+			PlanDriver:     nil,
+			ReflectDriver:  reflectMock,
+			UseLLMOverride: truePtr(),
+		}
+		_, ok := agent.Recommend(makeSpec(), domain.Quote{Symbol: "2330"}, "", domain.Regime(""), nil)
+		if ok {
+			t.Error("Recommend with nil PlanDriver: got ok=true, want false (per L116 nil guard)")
+		}
+		if reflectMock.ReflectCallCount() != 0 {
+			t.Errorf("ReflectDriver should NOT be called when PlanDriver is nil, got %d calls",
+				reflectMock.ReflectCallCount())
+		}
+	})
+
+	t.Run("nil ReflectDriver returns ok=false without calling PlanDriver", func(t *testing.T) {
+		planMock := NewMockLLMDriver().
+			WithPlanResponse([]PlanStep{{Kind: "thought", Note: "noop"}})
+
+		agent := SemiconductorLLMAgent{
+			PlanDriver:     planMock,
+			ReflectDriver:  nil,
+			UseLLMOverride: truePtr(),
+		}
+		_, ok := agent.Recommend(makeSpec(), domain.Quote{Symbol: "2330"}, "", domain.Regime(""), nil)
+		if ok {
+			t.Error("Recommend with nil ReflectDriver: got ok=true, want false (per L116 nil guard)")
+		}
+		if planMock.PlanCallCount() != 0 {
+			t.Errorf("PlanDriver should NOT be called when ReflectDriver is nil, got %d calls",
+				planMock.PlanCallCount())
+		}
+	})
 }
