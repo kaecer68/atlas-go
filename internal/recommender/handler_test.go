@@ -6,21 +6,32 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/eventdriven"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
 
 type mockNarrative struct {
 	stress float64
 	regime string
+	err    error
 }
 
-func (m *mockNarrative) GetCurrentStressIndex(ctx context.Context) (StressIndexInfo, error) {
-	return StressIndexInfo{Value: m.stress, Regime: m.regime, HasData: true}, nil
+func (m *mockNarrative) GetCurrentStressIndex() narrative.TaiwanStressIndex {
+	if m.err != nil {
+		return narrative.TaiwanStressIndex{}
+	}
+	return narrative.TaiwanStressIndex{
+		Score:  m.stress,
+		Regime: m.regime,
+	}
 }
 
-func (m *mockNarrative) BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error) {
-	return MarketNarrativeInfo{}, nil
+func (m *mockNarrative) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
+	return narrative.MarketNarrativeData{}, nil
 }
 
 func TestHandleRecommendations(t *testing.T) {
@@ -134,22 +145,36 @@ func TestHandleRecommendations_NarrativeIntegration_PopulatesStressIndex(t *test
 }
 
 type mockCapitalFlow struct {
-	summary   string
-	resonance float64
+	summary string
 }
 
-func (m *mockCapitalFlow) LatestDaily(ctx context.Context) (CapitalFlowDailyInfo, error) {
-	return CapitalFlowDailyInfo{Summary: m.summary, Resonance: m.resonance}, nil
+func (m *mockCapitalFlow) LatestDaily(ctx context.Context) (capitalflow.DailyReport, error) {
+	return capitalflow.DailyReport{
+		Date:    time.Now(),
+		Summary: m.summary,
+	}, nil
 }
 
 type mockEventPredictor struct {
-	events []string
+	direction string
 }
 
-func (m *mockEventPredictor) PredictToday(ctx context.Context) ([]EventPredictionInfo, error) {
-	out := make([]EventPredictionInfo, len(m.events))
-	for i, e := range m.events {
-		out[i] = EventPredictionInfo{Date: "today", Direction: e, Magnitude: 0.5, Confidence: 0.8}
+func (m *mockEventPredictor) PredictToday() (eventdriven.FlowPrediction, error) {
+	return eventdriven.FlowPrediction{
+		Date:       time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
+		Direction:  m.direction,
+		Confidence: 0.8,
+	}, nil
+}
+
+func (m *mockEventPredictor) NextNDays(n int) ([]eventdriven.FlowPrediction, error) {
+	out := make([]eventdriven.FlowPrediction, n)
+	for i := 0; i < n; i++ {
+		out[i] = eventdriven.FlowPrediction{
+			Date:       time.Date(2026, 7, 8+i+1, 0, 0, 0, 0, time.UTC),
+			Direction:  m.direction,
+			Confidence: 0.8,
+		}
 	}
 	return out, nil
 }
@@ -176,7 +201,7 @@ func TestHandleRecommendations_EventsFromPredictor(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "rec-test")
 	defer os.RemoveAll(dir)
 	store, _ := subscription.NewStore(dir)
-	mock := &mockEventPredictor{events: []string{"MSCI 調整", "ETF 換股", "月營收公告"}}
+	mock := &mockEventPredictor{direction: "inflow"}
 	h := NewHandlerWithServices(*store, nil, nil, nil, mock, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
@@ -185,23 +210,20 @@ func TestHandleRecommendations_EventsFromPredictor(t *testing.T) {
 		t.Fatalf("expected 200, got %d", code)
 	}
 	rec := data.(TierRecommendation)
-	if len(rec.Market.EventsToday) != 3 {
-		t.Fatalf("EventsToday len = %d, want 3 (from predictor mock)", len(rec.Market.EventsToday))
+	if len(rec.Market.EventsToday) != 1 {
+		t.Fatalf("EventsToday len = %d, want 1 (today's prediction)", len(rec.Market.EventsToday))
 	}
-	if rec.Market.EventsToday[0] != "MSCI 調整" {
-		t.Errorf("EventsToday[0] = %q, want MSCI 調整", rec.Market.EventsToday[0])
+	if rec.Market.EventsToday[0] != "today:inflow" {
+		t.Errorf("EventsToday[0] = %q, want %q", rec.Market.EventsToday[0], "today:inflow")
 	}
 }
 
 type mockComparisonEngine struct {
-	score       float64
-	entrySignal string
-	stopLoss    float64
-	takeProfit  float64
+	score float64
 }
 
-func (m *mockComparisonEngine) GetScore(strategyID string) (StrategyScoreInfo, error) {
-	return StrategyScoreInfo{Score: m.score, EntrySignal: m.entrySignal, StopLoss: m.stopLoss, TakeProfit: m.takeProfit}, nil
+func (m *mockComparisonEngine) GetScore(strategyID string) (float64, error) {
+	return m.score, nil
 }
 
 func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
@@ -210,12 +232,7 @@ func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
 	defer os.RemoveAll(dir)
 	store, _ := subscription.NewStore(dir)
 	store.Register("premium@test.com", "pass")
-	mock := &mockComparisonEngine{
-		score:       0.85,
-		entrySignal: "等回測 1000 元支撐進場",
-		stopLoss:    0.05,
-		takeProfit:  0.15,
-	}
+	mock := &mockComparisonEngine{score: 0.85}
 	h := NewHandlerWithServices(*store, nil, nil, nil, nil, mock).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
@@ -228,11 +245,11 @@ func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
 	if rec.Strategies == nil {
 		t.Fatal("premium tier should have strategy recommendations")
 	}
-	if rec.Strategies.EntrySignal != "等回測 1000 元支撐進場" {
-		t.Errorf("EntrySignal = %q, want from ComparisonEngine", rec.Strategies.EntrySignal)
+	if rec.Strategies.EntrySignal != "Score=0.85 — 等回測支撐區間" {
+		t.Errorf("EntrySignal = %q, want hardcoded 'Score=0.85 — 等回測支撐區間'", rec.Strategies.EntrySignal)
 	}
-	if rec.Strategies.StopLoss != "-5.0%" {
-		t.Errorf("StopLoss = %q, want from ComparisonEngine", rec.Strategies.StopLoss)
+	if rec.Strategies.StopLoss != "-5%" {
+		t.Errorf("StopLoss = %q, want hardcoded '-5%%'", rec.Strategies.StopLoss)
 	}
 }
 
@@ -258,12 +275,12 @@ func TestHandleRecommendations_ServiceFailure_AddsWarning(t *testing.T) {
 
 type failingNarrative struct{ err error }
 
-func (f *failingNarrative) GetCurrentStressIndex(ctx context.Context) (StressIndexInfo, error) {
-	return StressIndexInfo{}, f.err
+func (f *failingNarrative) GetCurrentStressIndex() narrative.TaiwanStressIndex {
+	return narrative.TaiwanStressIndex{}
 }
 
-func (f *failingNarrative) BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error) {
-	return MarketNarrativeInfo{}, f.err
+func (f *failingNarrative) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
+	return narrative.MarketNarrativeData{}, f.err
 }
 
 func TestHandleRecommendations_RegimeChange_FiresListener(t *testing.T) {

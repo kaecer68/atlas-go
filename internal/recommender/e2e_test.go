@@ -29,14 +29,9 @@ func TestE2E_RecommendationsEndpoint(t *testing.T) {
 	_, _ = store.Register("premium@test.com", "pass")
 
 	narrative := &mockNarrative{stress: 22.5, regime: "RISK_OFF"}
-	capflow := &mockCapitalFlow{summary: "外資連三買超 800 億", resonance: 0.75}
-	evts := &mockEventPredictor{events: []string{"MSCI 調整", "ETF 換股", "月營收公告"}}
-	strategy := &mockComparisonEngine{
-		score:       0.85,
-		entrySignal: "等回測 1000 元支撐進場",
-		stopLoss:    0.05,
-		takeProfit:  0.15,
-	}
+	capflow := &mockCapitalFlow{summary: "外資連三買超 800 億"}
+	evts := &mockEventPredictor{direction: "MSCI 調整"}
+	strategy := &mockComparisonEngine{score: 0.85}
 
 	handler := NewHandlerWithServices(*store, nil, narrative, capflow, evts, strategy).WithDevMode(true)
 
@@ -66,7 +61,7 @@ func TestE2E_RecommendationsEndpoint(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantTier:   "premium",
 			wantRegime: "RISK_OFF",
-			wantSignal: "等回測 1000 元支撐進場",
+			wantSignal: "Score=0.85 — 等回測支撐區間",
 		},
 	}
 
@@ -101,8 +96,8 @@ func TestE2E_RecommendationsEndpoint(t *testing.T) {
 			if rec.Market.CapitalFlow != "外資連三買超 800 億" {
 				t.Errorf("capital_flow = %q, want from mock", rec.Market.CapitalFlow)
 			}
-			if len(rec.Market.EventsToday) != 3 {
-				t.Errorf("events_today len = %d, want 3 (from events mock)", len(rec.Market.EventsToday))
+			if len(rec.Market.EventsToday) != 1 {
+				t.Errorf("events_today len = %d, want 1 (from PredictToday mock)", len(rec.Market.EventsToday))
 			}
 			if rec.Strategies == nil {
 				t.Errorf("Strategies nil for premium tier")

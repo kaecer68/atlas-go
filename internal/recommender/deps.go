@@ -1,68 +1,57 @@
 package recommender
 
-import "context"
+import (
+	"context"
+
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/eventdriven"
+	"github.com/kaecer68/atlas-go/internal/narrative"
+)
+
+// =====================================================================
+// Service consumer interfaces (definitions owned by recommender, the
+// consumer side). Implementations live in adapters.go and wrap real
+// producers in monitoring/capitalflow/eventdriven/strategy packages.
+// =====================================================================
 
 // NarrativeProvider 供 recommender 查詢當前 regime + Taiwan stress index。
-// 對應實作: internal/monitoring/service/narrative.go::NarrativeService。
+// 對應 producer: monitoring/service.NarrativeService。
 type NarrativeProvider interface {
-	GetCurrentStressIndex(ctx context.Context) (StressIndexInfo, error)
-	BuildMarketNarrativeData(ctx context.Context) (MarketNarrativeInfo, error)
+	// GetCurrentStressIndex wraps narrative.NarrativeService.GetCurrentStressIndex().
+	// Returns narrative.TaiwanStressIndex — the project canonical type for
+	// regime + score; recommender reads Regime + Value fields.
+	GetCurrentStressIndex() narrative.TaiwanStressIndex
+	// BuildMarketNarrativeData returns the snapshot of US/DXY/VIX/macro inputs.
+	// May return (zero, err) if macro provider is not wired.
+	BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error)
 }
 
 // CapitalFlowProvider 供 recommender 查詢當日七大資金勢力 summary。
-// 對應實作: internal/capitalflow.Handler。
+// 對應 producer: capitalflow.Service (added in commit 661f2dc7)。
 type CapitalFlowProvider interface {
-	LatestDaily(ctx context.Context) (CapitalFlowDailyInfo, error)
+	// LatestDaily returns the full DailyReport (forces + resonance + quality).
+	// Recommender reads the Summary field for response.market.capital_flow.
+	LatestDaily(ctx context.Context) (capitalflow.DailyReport, error)
 }
 
-// EventPredictor 供 recommender 查詢當日事件 + 5 日預測。
-// 對應實作: internal/eventdriven.Predictor。
+// EventPredictor 供 recommender 查詢當日事件 + 短期預測。
+// 對應 producer: eventdriven.Predictor。
 type EventPredictor interface {
-	PredictToday(ctx context.Context) ([]EventPredictionInfo, error)
+	PredictToday() (eventdriven.FlowPrediction, error)
+	NextNDays(n int) ([]eventdriven.FlowPrediction, error)
 }
 
-// ComparisonEngine 供 recommender 計算策略 EntrySignal/StopLoss。
-// 對應實作: internal/strategy.ComparisonEngine。
+// ComparisonEngine 供 recommender 查詢策略分數。
+// 對應 producer: strategy.ComparisonEngine。
+// returns float64 only; EntrySignal/StopLoss 由 RISK layer 推導 (見 risk_signal.go)。
 type ComparisonEngine interface {
-	GetScore(strategyID string) (StrategyScoreInfo, error)
+	GetScore(strategyID string) (float64, error)
 }
 
-// 下面是 consumer-side 的 value types (推薦器市場信號的最小 surface):
-// 這些型別獨立於 producer, 之後可手動 mapping 從真實 service types。
+// =====================================================================
+// Functional types
+// =====================================================================
 
-// StressIndexInfo 對應 narrative.TaiwanStressIndex 的關鍵欄位。
-type StressIndexInfo struct {
-	Value   float64
-	Regime  string
-	HasData bool
-}
-
-// MarketNarrativeInfo 對應 narrative.MarketNarrativeData 的關鍵欄位。
-type MarketNarrativeInfo struct {
-	Events []string
-	Chains []string
-}
-
-// CapitalFlowDailyInfo 對應 capitalflow.DailySnapshot 的高階摘要。
-type CapitalFlowDailyInfo struct {
-	Summary   string
-	Resonance float64
-}
-
-// EventPredictionInfo 對應 eventdriven.DailyPrediction。
-type EventPredictionInfo struct {
-	Date       string
-	Direction  string
-	Magnitude  float64
-	Confidence float64
-}
-
-// StrategyScoreInfo 對應 strategy.ComparisonEngine.GetScore 的輸出。
-type StrategyScoreInfo struct {
-	Score       float64
-	EntrySignal string
-	StopLoss    float64
-	TakeProfit  float64
-}
-
+// RegimeChangeListener fires when HandleRecommendations observes a regime
+// transition (e.g. RISK_ON → RISK_OFF); caller decides what to trigger.
 type RegimeChangeListener func(oldRegime, newRegime string)

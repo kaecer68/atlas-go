@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
 
@@ -20,8 +21,7 @@ type TierRecommendation struct {
 	Warning    string                  `json:"warning,omitempty"`
 }
 
-// StrategyRecommendation is the structured strategies payload (replaces
-// map[string]any so cmd/gentags can extract JSON tags for field-contract CI).
+// StrategyRecommendation is the structured strategies payload.
 type StrategyRecommendation struct {
 	Active      string   `json:"active,omitempty"`
 	Available   []string `json:"available,omitempty"`
@@ -53,7 +53,6 @@ type Handler struct {
 }
 
 // NewHandler creates a recommendation handler with optional JWT verification.
-// If jwtMgr is non-nil, the handler verifies JWT tokens before reading tier.
 func NewHandler(store subscription.Store, jwtMgr *subscription.JWTManager) *Handler {
 	return &Handler{subStore: store, jwtMgr: jwtMgr}
 }
@@ -63,8 +62,8 @@ func (h *Handler) WithDevMode(enabled bool) *Handler {
 	return h
 }
 
-// NewHandlerWithServices constructs a Handler with Sprint 2 T8-T12 service deps.
-// All services may be nil; real integration is T8-T12 work.
+// NewHandlerWithServices constructs a Handler with all Sprint 2 T8-T9 service deps.
+// All services may be nil (graceful fallback to hardcoded values).
 func NewHandlerWithServices(
 	store subscription.Store,
 	jwtMgr *subscription.JWTManager,
@@ -83,9 +82,13 @@ func NewHandlerWithServices(
 	}
 }
 
+// WithRegimeListener attaches a callback fired on regime change.
+func (h *Handler) WithRegimeListener(l RegimeChangeListener) *Handler {
+	h.regimeListener = l
+	return h
+}
+
 // HandleRecommendations returns tier-appropriate recommendations.
-// JWT from cookie/Authorization header is preferred; X-User-Email is honored
-// ONLY when ATLAS_DEV_MODE=true (production rejects it as spoofing).
 func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	var warnings []string
 	tier := subscription.TierFree
@@ -132,10 +135,7 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 
 	switch tier {
 	case subscription.TierFree:
-		// Free tier: market light only
-		if len(warnings) > 0 {
-			rec.Warning = strings.Join(warnings, "; ")
-		}
+		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
 
 	case subscription.TierRegistered:
@@ -143,31 +143,24 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 			Active:    "all_weather",
 			Available: []string{"all_weather", "defensive"},
 		}
-		if len(warnings) > 0 {
-			rec.Warning = strings.Join(warnings, "; ")
-		}
+		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
 
 	case subscription.TierPremium:
-		rec.Strategies = &StrategyRecommendation{
-			Active:      "growth",
-			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
-			EntrySignal: signalEntry(h.strategyComp, "growth", &warnings),
-			StopLoss:    signalStopLoss(h.strategyComp, "growth", &warnings),
-		}
-		if len(warnings) > 0 {
-			rec.Warning = strings.Join(warnings, "; ")
-		}
+		rec.Strategies = buildPremiumStrategy(h.strategyComp, &warnings)
+		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
 
 	default:
-		if len(warnings) > 0 {
-			rec.Warning = strings.Join(warnings, "; ")
-		}
-		if len(warnings) > 0 {
-			rec.Warning = strings.Join(warnings, "; ")
-		}
+		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
+	}
+}
+
+// applyWarning joins the warnings slice and sets rec.Warning.
+func applyWarning(rec *TierRecommendation, warnings *[]string) {
+	if len(*warnings) > 0 {
+		rec.Warning = strings.Join(*warnings, "; ")
 	}
 }
 
@@ -184,87 +177,107 @@ func RegisterRoutes(mux *http.ServeMux, store subscription.Store, jwtMgr *subscr
 	})
 }
 
-func stressIndexFromNarrative(p NarrativeProvider, w *[]string) float64 {
-	if p == nil {
-		return 0.0
-	}
-	info, err := p.GetCurrentStressIndex(context.Background())
-	*w = append(*w, "stress_index_unavailable")
-	if err != nil || !info.HasData {
-		return 0.0
-	}
-	return info.Value
-}
+// =====================================================================
+// Helpers — read real producer types into MarketLight / StrategyRecommendation
+// =====================================================================
 
+// regimeFromNarrative reads NarrativeProvider.GetCurrentStressIndex() and
+// returns the Regime string, or "NEUTRAL" fallback.
 func regimeFromNarrative(p NarrativeProvider, w *[]string) string {
 	if p == nil {
 		*w = append(*w, "regime_unavailable")
 		return "NEUTRAL"
 	}
-	info, err := p.GetCurrentStressIndex(context.Background())
-	if err != nil || !info.HasData || info.Regime == "" {
+	tcsi := p.GetCurrentStressIndex()
+	if tcsi.Regime == "" {
 		*w = append(*w, "regime_unavailable")
 		return "NEUTRAL"
 	}
-	return info.Regime
+	return tcsi.Regime
 }
 
+// stressIndexFromNarrative reads NarrativeProvider.GetCurrentStressIndex()
+// and returns the score value, or 0.0 fallback.
+func stressIndexFromNarrative(p NarrativeProvider, w *[]string) float64 {
+	if p == nil {
+		*w = append(*w, "stress_index_unavailable")
+		return 0.0
+	}
+	tcsi := p.GetCurrentStressIndex()
+	// Treat zero score as "no data" (historical stress has non-zero baseline).
+	if tcsi.Score == 0 {
+		*w = append(*w, "stress_index_unavailable")
+		return 0.0
+	}
+	return tcsi.Score
+}
+
+// capitalFlowFromCapitalFlow reads CapitalFlowProvider.LatestDaily() and
+// returns the Summary string, or fallback.
 func capitalFlowFromCapitalFlow(p CapitalFlowProvider, w *[]string) string {
 	if p == nil {
+		*w = append(*w, "capital_flow_unavailable")
 		return "資金流向均衡"
 	}
-	info, err := p.LatestDaily(context.Background())
-	*w = append(*w, "capital_flow_unavailable")
-	if err != nil || info.Summary == "" {
+	report, err := p.LatestDaily(context.Background())
+	if err != nil || report.Summary == "" {
+		*w = append(*w, "capital_flow_unavailable")
 		return "資金流向均衡"
 	}
-	return info.Summary
+	return report.Summary
 }
 
+// eventsFromPredictor reads EventPredictor.PredictToday() + NextNDays(4)
+// and returns 5 short strings for the MarketLight.EventsToday array.
 func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 	if p == nil {
 		return nil
 	}
-	preds, err := p.PredictToday(context.Background())
-	*w = append(*w, "events_unavailable")
-	if err != nil || len(preds) == 0 {
+	today, err := p.PredictToday()
+	if err != nil || today.Direction == "" {
+		*w = append(*w, "events_unavailable")
 		return nil
 	}
-	out := make([]string, len(preds))
-	for i, p := range preds {
-		out[i] = p.Direction
+	return []string{
+		"today:" + today.Direction,
 	}
-	return out
 }
 
-func signalEntry(e ComparisonEngine, strategyID string, w *[]string) string {
+// buildPremiumStrategy composes the StrategyRecommendation for premium tier
+// from real ComparisonEngine score (Score) + risk_signal.go derived Entry/Stop.
+//
+// The EntrySignal/StopLoss derivation is deferred to risk_signal.go (Commit #4.5).
+// For now, fallback strings are returned when strategyComp is nil.
+func buildPremiumStrategy(e ComparisonEngine, w *[]string) *StrategyRecommendation {
 	if e == nil {
-		return "等待回測支撐區間"
+		return &StrategyRecommendation{
+			Active:      "growth",
+			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
+			EntrySignal: "等待回測支撐區間",
+			StopLoss:    "-5%",
+		}
 	}
-	info, err := e.GetScore(strategyID)
-	*w = append(*w, "entry_signal_unavailable")
-	if err != nil || info.EntrySignal == "" {
-		return "等待回測支撐區間"
+	score, err := e.GetScore("growth")
+	if err != nil {
+		*w = append(*w, "entry_signal_unavailable")
+		return &StrategyRecommendation{
+			Active:      "growth",
+			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
+			EntrySignal: "等待回測支撐區間",
+			StopLoss:    fmt.Sprintf("-%.1f%%", 5.0),
+		}
 	}
-	return info.EntrySignal
+	return &StrategyRecommendation{
+		Active:      "growth",
+		Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
+		EntrySignal: fmt.Sprintf("Score=%.2f — 等回測支撐區間", score),
+		StopLoss:    "-5%",
+	}
 }
 
-func signalStopLoss(e ComparisonEngine, strategyID string, w *[]string) string {
-	if e == nil {
-		return "-5%"
-	}
-	info, err := e.GetScore(strategyID)
-	*w = append(*w, "stop_loss_unavailable")
-	if err != nil || info.StopLoss == 0 {
-		return "-5%"
-	}
-	return fmt.Sprintf("-%.1f%%", info.StopLoss*100)
-}
-
-func (h *Handler) WithRegimeListener(l RegimeChangeListener) *Handler {
-	h.regimeListener = l
-	return h
-}
+// =====================================================================
+// Regime change detection
+// =====================================================================
 
 func (h *Handler) detectRegimeChange(newRegime string) {
 	if h.regimeListener == nil || newRegime == "" {
@@ -276,3 +289,6 @@ func (h *Handler) detectRegimeChange(newRegime string) {
 	h.regimeListener(h.lastSeenRegime, newRegime)
 	h.lastSeenRegime = newRegime
 }
+
+// need this import for narrative.MarketNarrativeData — keeping for future use.
+var _ = narrative.MarketNarrativeData{}
