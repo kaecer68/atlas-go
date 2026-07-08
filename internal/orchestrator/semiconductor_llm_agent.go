@@ -29,11 +29,13 @@ import (
 // File: internal/orchestrator/semiconductor_llm_agent.go
 // Plan: PR5b of 7 in the Wave 10 L2.3 execution plan.
 type SemiconductorLLMAgent struct {
-	// LLMDriver is the combined plan+reflect LLM backend (the
-	// deprecated LLMDriver alias from PR3, which is the intersection
-	// of PlanDriver + ReflectDriver). May be nil — in that case
-	// Recommend returns false (the agent is not actually wired).
-	LLMDriver
+	// PlanDriver is the LLM backend for the Plan phase of the
+	// agent loop. May be nil — in that case Recommend returns false
+	// (the agent is not actually wired).
+	PlanDriver PlanDriver
+	// ReflectDriver is the LLM backend for the Reflect phase. Same
+	// nil semantics as PlanDriver.
+	ReflectDriver ReflectDriver
 	// Tools is the registry of tools the agent may invoke during the
 	// plan/reflect loop. If empty and LLM is non-nil, RunToolCall
 	// (in SectorAgentLLM) panics — see Issue #711 #4.
@@ -100,7 +102,7 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 	if !a.Supports(agent) {
 		return domain.Recommendation{}, false
 	}
-	if a.LLMDriver == nil {
+	if a.PlanDriver == nil || a.ReflectDriver == nil {
 		return domain.Recommendation{}, false
 	}
 
@@ -110,8 +112,8 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 	}
 	runner := &SectorAgentLLM{
 		AgentLoop:     NewAgentLoop(maxIter),
-		PlanDriver:    a.LLMDriver,
-		ReflectDriver: a.LLMDriver,
+		PlanDriver:    a.PlanDriver,
+		ReflectDriver: a.ReflectDriver,
 		Tools:         a.Tools,
 		Skill:         agent.Skill,
 	}

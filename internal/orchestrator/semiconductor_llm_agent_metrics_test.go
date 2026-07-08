@@ -61,7 +61,8 @@ func TestSemiconductorLLMAgent_Metrics_HappyPath(t *testing.T) {
 		})
 
 	agent := SemiconductorLLMAgent{
-		LLMDriver:      mock,
+		PlanDriver:     mock,
+		ReflectDriver:  mock,
 		Tools:          llm.TestTools(),
 		MaxIter:        3,
 		UseLLMOverride: truePtr(),
@@ -203,7 +204,8 @@ func TestSemiconductorLLMAgent_Metrics_ToolFailure(t *testing.T) {
 		WithReflectResponse(Reflection{Continue: false, FinalConviction: 50})
 
 	agent := SemiconductorLLMAgent{
-		LLMDriver:      mock,
+		PlanDriver:     mock,
+		ReflectDriver:  mock,
 		Tools:          llm.TestTools(),
 		UseLLMOverride: truePtr(),
 		Metrics:        logger,
@@ -233,7 +235,8 @@ func TestSemiconductorLLMAgent_Metrics_PlanFailure(t *testing.T) {
 	mock := NewMockLLMDriver().WithPlanError(planErr)
 
 	agent := SemiconductorLLMAgent{
-		LLMDriver:      mock,
+		PlanDriver:     mock,
+		ReflectDriver:  mock,
 		Tools:          llm.TestTools(),
 		UseLLMOverride: truePtr(),
 		Metrics:        logger,
