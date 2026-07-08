@@ -107,6 +107,28 @@ function buildRecCard(rec) {
     card.appendChild(ctx);
   }
 
+  if (rec.market && rec.market.capital_flow_detail) {
+    var d = rec.market.capital_flow_detail;
+    var detail = document.createElement('div');
+    var dClass = 'rec-card__signal';
+    var ql = (d.quality_label || '').toLowerCase();
+    if (ql === 'strong_inflow' || ql === 'inflow') {
+      dClass += ' rec-card__signal--bullish';
+    } else if (ql === 'strong_outflow' || ql === 'outflow') {
+      dClass += ' rec-card__signal--bearish';
+    } else {
+      dClass += ' rec-card__signal--neutral';
+    }
+    detail.className = dClass;
+    var dParts = [];
+    if (d.quality_label) dParts.push(d.quality_label);
+    if (d.dominant_force) dParts.push('主力: ' + d.dominant_force);
+    if (d.resonance_dir) dParts.push('共振: ' + d.resonance_dir);
+    if (d.date) dParts.push(d.date);
+    detail.textContent = dParts.join(' · ');
+    card.appendChild(detail);
+  }
+
   if (rec.strategies) {
     if (rec.strategies.entry_signal) {
       var signal = document.createElement('div');
