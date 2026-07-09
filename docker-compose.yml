@@ -378,6 +378,28 @@ services:
     healthcheck:
       disable: true
 
+  # Daily cron job for stock quote backfill (nightly 3am)
+  cron-quote-backfill:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: atlas-cron-quote-backfill
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 3 * * *
+      - CRON_COMMAND=/app/cron-quote-backfill
+      - FINMIND_API_KEY=${FINMIND_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    networks:
+      - atlas-network
+    depends_on:
+      - atlas
+    healthcheck:
+      disable: true
+
   # PRISM training queue processor
   prism-worker:
     build:
