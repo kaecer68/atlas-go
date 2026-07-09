@@ -32,7 +32,7 @@ func (s *JSONLQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 
 	// First-wins dedup on (symbol, date), matching SQLiteQuoteStore's INSERT OR REPLACE.
 	quoteKey := func(q domain.DailyBar) string {
-		return q.Symbol + "|" + q.Date.Format("2006-01-02")
+		return q.Symbol + "|" + q.Date.UTC().Format("2006-01-02")
 	}
 
 	seen := make(map[string]struct{})
