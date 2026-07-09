@@ -15,12 +15,14 @@ import (
 )
 
 var (
-	startDate = flag.String("start", "", "backfill start date (YYYY-MM-DD); default = today - 30 days")
+	startDate = flag.String("start", "", "backfill start date (YYYY-MM-DD); default = today - defaultLookbackDays")
 	endDate   = flag.String("end", "", "backfill end date (YYYY-MM-DD); default = today")
 	symbols   = flag.String("symbols", "", "comma-separated stock IDs; empty = all from fundamentals.json")
 	workDir   = flag.String("workdir", ".", "atlas repo root")
 	dryRun    = flag.Bool("dry-run", false, "print plan without writing")
 )
+
+const defaultLookbackDays = 30
 
 func main() {
 	flag.Parse()
@@ -33,7 +35,7 @@ func main() {
 		}
 		end = t
 	}
-	start := end.AddDate(0, 0, -30)
+	start := end.AddDate(0, 0, -defaultLookbackDays)
 	if *startDate != "" {
 		t, err := time.Parse("2006-01-02", *startDate)
 		if err != nil {
