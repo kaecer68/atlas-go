@@ -79,6 +79,17 @@ func TestHandleQuoteMissingSymbol(t *testing.T) {
 	}
 }
 
+func TestHandleQuoteNoProvidersReturns503(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/quote?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 (no providers), got %d", rec.Code)
+	}
+}
+
 func TestHandleFundamentals(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fundamentals.json")
