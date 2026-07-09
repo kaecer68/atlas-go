@@ -27,7 +27,7 @@ const opts = {
   ],
   bundle: true,
   format: "esm",
-  splitting: false,
+  splitting: true,
   outdir: dist,
   metafile: true,
   // Stable entry names for index.html compatibility

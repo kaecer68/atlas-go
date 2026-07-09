@@ -28,6 +28,7 @@ var authFreeExactPaths = map[string]bool{
 	"/client":         true,
 	"/api/llm/health": true,
 	"/api/alerts":     true,
+	"/api/stock":      true,
 }
 
 var authFreePrefixPaths = []string{
@@ -42,6 +43,7 @@ var authFreePrefixPaths = []string{
 	"/api/cross-market/",
 	"/api/capital-flow/",
 	"/api/events/",
+	"/api/stock/",
 }
 
 func isAuthFreePath(p string) bool {
