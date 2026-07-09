@@ -5,8 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -28,6 +31,10 @@ const defaultLookbackDays = 30
 
 func main() {
 	flag.Parse()
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	end := time.Now()
 	if *endDate != "" {
 		t, err := time.Parse("2006-01-02", *endDate)
@@ -90,26 +97,23 @@ func main() {
 	close(jobs)
 
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	total := 0
+	var total atomic.Int64
 	for i := 0; i < conc; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for sym := range jobs {
-				n, err := backfillSymbol(context.Background(), client, store, sym, start, end, *dryRun)
+				n, err := backfillSymbol(ctx, client, store, sym, start, end, *dryRun)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "  %s: %v\n", sym, err)
 					continue
 				}
-				mu.Lock()
-				total += n
-				mu.Unlock()
+				total.Add(int64(n))
 			}
 		}()
 	}
 	wg.Wait()
-	fmt.Printf("wrote %d bars across %d symbols\n", total, len(syms))
+	fmt.Printf("wrote %d bars across %d symbols\n", total.Load(), len(syms))
 }
 
 func backfillSymbol(ctx context.Context, c *marketdata.FinMindClient, s ledger.QuoteStore, sym string, start, end time.Time, dry bool) (int, error) {
