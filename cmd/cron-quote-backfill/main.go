@@ -16,12 +16,12 @@ import (
 )
 
 var (
-	startDate    = flag.String("start", "", "backfill start date (YYYY-MM-DD); default = today - defaultLookbackDays")
-	endDate      = flag.String("end", "", "backfill end date (YYYY-MM-DD); default = today")
-	symbols      = flag.String("symbols", "", "comma-separated stock IDs; empty = all from fundamentals.json")
-	workDir      = flag.String("workdir", ".", "atlas repo root")
-	dryRun       = flag.Bool("dry-run", false, "print plan without writing")
-	concurrency  = flag.Int("concurrency", 1, "symbol workers (1-60; FinMind burst=60 is the upper bound; rate limit is the real bottleneck)")
+	startDate   = flag.String("start", "", "backfill start date (YYYY-MM-DD); default = today - defaultLookbackDays")
+	endDate     = flag.String("end", "", "backfill end date (YYYY-MM-DD); default = today")
+	symbols     = flag.String("symbols", "", "comma-separated stock IDs; empty = all from fundamentals.json")
+	workDir     = flag.String("workdir", ".", "atlas repo root")
+	dryRun      = flag.Bool("dry-run", false, "print plan without writing")
+	concurrency = flag.Int("concurrency", 1, "symbol workers (1-60; FinMind burst=60 is the upper bound; rate limit is the real bottleneck)")
 )
 
 const defaultLookbackDays = 30
