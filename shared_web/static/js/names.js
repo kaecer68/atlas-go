@@ -107,16 +107,18 @@ export function renderStockCell(symbol, opts = {}) {
   if (symbol == null) return '';
   const sym = String(symbol);
   const safeSym = escape ? sym.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) : sym;
+  const pureSym = safeSym.replace('.TW', '');
+  const linkHref = `/client/quote?symbol=${pureSym}`;
   const name = stockName(sym);
   const cls = ['stock-cell', className].filter(Boolean).join(' ');
-  if (!name) return `<span class="${cls}"><span class="stock-cell-symbol">${safeSym}</span></span>`;
+  if (!name) return `<a href="${linkHref}" class="${cls}" style="text-decoration:none;"><span class="stock-cell-symbol" style="color:var(--color-primary);">${safeSym}</span></a>`;
   if (variant === 'stacked') {
-    return `<span class="${cls} stock-cell-stacked">
-      <span class="stock-cell-symbol">${safeSym}</span>
+    return `<a href="${linkHref}" class="${cls} stock-cell-stacked" style="text-decoration:none;">
+      <span class="stock-cell-symbol" style="color:var(--color-primary);">${safeSym}</span>
       <span class="stock-cell-name">${name}</span>
-    </span>`;
+    </a>`;
   }
-  return `<span class="${cls}"><span class="stock-cell-symbol">${safeSym}</span> <span class="stock-cell-name">${name}</span></span>`;
+  return `<a href="${linkHref}" class="${cls}" style="text-decoration:none;"><span class="stock-cell-symbol" style="color:var(--color-primary);">${safeSym}</span> <span class="stock-cell-name">${name}</span></a>`;
 }
 
 // Regime name mapping

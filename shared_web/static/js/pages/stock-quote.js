@@ -1,0 +1,102 @@
+import { fetchStockBundle } from '../services/stock-api-client.js';
+import { renderSearch } from '../components/stock-quote-search.js';
+import { renderHeader } from '../components/stock-quote-header.js';
+import { renderFundamentals } from '../components/stock-quote-fundamentals.js';
+import { renderChips } from '../components/stock-quote-chips.js';
+import { renderTechnical } from '../components/stock-quote-technical.js';
+
+let state = {
+  currentSymbol: null,
+  status: 'idle', // idle | loading | loaded | error
+  results: null
+};
+
+let _container = null;
+
+async function doSearch(symbol) {
+  state.currentSymbol = symbol;
+  state.status = 'loading';
+  render();
+
+  try {
+    const results = await fetchStockBundle(symbol);
+    state.status = 'loaded';
+    state.results = results;
+  } catch (e) {
+    state.status = 'error';
+    state.results = null;
+  }
+  
+  // Update URL if supported
+  if (window.history && window.history.pushState) {
+    const newUrl = window.location.pathname + '?symbol=' + encodeURIComponent(symbol);
+    window.history.pushState({ path: newUrl }, '', newUrl);
+  }
+  
+  render();
+}
+
+function render() {
+  if (!_container) return;
+  
+  const searchSection = renderSearch(doSearch, state.currentSymbol || '');
+  
+  let contentHtml = '';
+  if (state.status === 'idle') {
+    contentHtml = '<div style="text-align:center;padding:40px;color:var(--text-secondary)">請輸入股票代號進行查詢</div>';
+  } else if (state.status === 'error') {
+    contentHtml = '<div class="sq-error-box">網路連線失敗或發生錯誤,請稍後再試</div>';
+  } else {
+    // loading or loaded
+    const res = state.results || {};
+    contentHtml = `
+      ${renderHeader(state.status, res.quote, res.chips)}
+      <div class="stock-quote-grid">
+        ${renderFundamentals(state.status, res.fundamentals)}
+        ${renderChips(state.status, res.chips)}
+        ${renderTechnical(state.status, res.technical)}
+      </div>
+    `;
+  }
+  
+  const disclaimerHtml = `
+    <div class="sq-disclaimer">
+      ⚠️ 本系統資料僅供研究參考,不構成投資建議。<br>
+      投資決策應自行評估風險,並諮詢專業顧問。
+    </div>
+  `;
+
+  _container.innerHTML = '';
+  const pageWrapper = document.createElement('div');
+  pageWrapper.className = 'stock-quote-page';
+  
+  pageWrapper.appendChild(searchSection);
+  
+  const contentWrapper = document.createElement('div');
+  contentWrapper.innerHTML = contentHtml;
+  pageWrapper.appendChild(contentWrapper);
+  
+  const disclaimerWrapper = document.createElement('div');
+  disclaimerWrapper.innerHTML = disclaimerHtml;
+  pageWrapper.appendChild(disclaimerWrapper);
+  
+  _container.appendChild(pageWrapper);
+}
+
+export async function renderPage(container) {
+  _container = container;
+  
+
+
+  // Check URL params
+  const urlParams = new URLSearchParams(window.location.search);
+  const symbol = urlParams.get('symbol');
+  
+  if (symbol && /^\d{4,6}$/.test(symbol)) {
+    state.currentSymbol = symbol;
+    await doSearch(symbol);
+  } else {
+    state.status = 'idle';
+    render();
+  }
+}
