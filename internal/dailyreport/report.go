@@ -286,6 +286,8 @@ func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 func RegisterRoutes(mux *http.ServeMux, gen *Generator) {
 	h := NewHandler(gen)
 	mux.HandleFunc("GET /api/reports/latest", h.HandleLatest)
+	// Deprecated: not yet implemented; reserved for v0.0.0.32. See docs/operations/tier-boundary.md.
 	mux.HandleFunc("GET /api/reports/archive", h.HandleArchive)
+	// Deprecated: not yet implemented; reserved for v0.0.0.32. See docs/operations/tier-boundary.md.
 	mux.HandleFunc("POST /api/reports/subscribe", h.HandleSubscribe)
 }

@@ -21,18 +21,25 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/industry-seasonality", shared.Get(h.HandleIndustrySeasonality))
 	mux.Handle("GET /api/dashboard/industry-seasonality-calendar", shared.Get(h.HandleIndustrySeasonalityCalendar))
 	mux.Handle("GET /api/dashboard/industry-cycle", shared.Get(h.HandleIndustryCycle))
+	// Deprecated: internal linkage data; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-linkage", shared.Get(h.HandleIndustryLinkage))
+	// Deprecated: internal risk surface; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-risk", shared.Get(h.HandleIndustryRisk))
 	mux.Handle("GET /api/dashboard/industry-overview", shared.Get(h.HandleIndustryOverview))
 	mux.Handle("POST /api/dashboard/industry-shock-simulation", shared.Post(h.HandleShockSimulation))
 	mux.Handle("GET /api/dashboard/industry-graph", shared.Get(h.HandleIndustryGraph))
 	mux.Handle("GET /api/dashboard/industry-detail", shared.Get(h.HandleIndustryDetail))
 	mux.Handle("GET /api/dashboard/cycle-status-card", shared.Get(h.HandleCycleStatusCard))
+	// Deprecated: internal calibration; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-calibration", shared.Get(h.HandleIndustryCalibration))
 	mux.Handle("GET /api/dashboard/calendar-events", shared.Get(h.HandleCalendarEvents))
+	// Deprecated: internal ODM channel data; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-odm-channel", shared.Get(h.HandleODMChannel))
+	// Deprecated: internal data aggregator; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-data-aggregator", shared.Get(h.HandleDataAggregator))
+	// Deprecated: internal seasonal health; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-seasonal-health", shared.Get(h.HandleSeasonalHealth))
+	// Deprecated: internal correlation loader; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-correlation-loader", shared.Get(h.HandleCorrelationLoader))
 	mux.Handle("GET /api/dashboard/sector-allocation-plan", shared.Get(h.HandleSectorAllocationPlan))
 }

@@ -19,7 +19,9 @@ func NewSwaggerHandlers(workDir string) *SwaggerHandlers {
 }
 
 func (h *SwaggerHandlers) RegisterRoutes(mux *http.ServeMux) {
+	// Deprecated: dev-only Swagger UI; not for production traffic. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/docs", shared.GetRaw(h.HandleSwaggerUI))
+	// Deprecated: dev-only OpenAPI spec; not for production traffic. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/docs/swagger.json", shared.GetRaw(h.HandleSwaggerJSON))
 }
 

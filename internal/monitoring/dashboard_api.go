@@ -850,6 +850,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	// shared_web/static/js/names.js and shared_web/static/js/shared/constants.js).
 	mux.HandleFunc("/api/dashboard/agent-names", a.handleAgentNames)
 
+	// Deprecated: dev-only health check; not for web UI or MCP. See docs/operations/tier-boundary.md.
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
 
 	// Swarm routes removed — simulation engine demoted in PR #963, cleaned in PR #964.
