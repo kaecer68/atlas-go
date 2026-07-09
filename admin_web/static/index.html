@@ -129,6 +129,12 @@
         </div>
       </div>
 
+      <div class="panel mt-md" id="schedulerStatusPanel">
+        <h2 class="m-0">⏰ 背景排程狀態</h2>
+        <div class="text-muted text-sm">資料來源：<code>/api/scheduler/status</code></div>
+        <div id="schedulerStatusContent" class="empty loading">載入中…</div>
+      </div>
+
 
     </div>
 
@@ -296,6 +302,13 @@
         <summary><strong>📋 抓取日誌（最近 10 筆）</strong></summary>
         <div id="dcFetchLog" class="mt-sm text-muted text-sm">尚無記錄</div>
       </details>
+
+      <!-- 資料管線狀態 -->
+      <div class="panel mt-md">
+        <h2 class="m-0">🔄 資料管線狀態</h2>
+        <div class="text-muted text-sm">資料來源：<code>/api/dashboard/data-pipeline</code> · 各 source 的最後產出/消費時間 + 延遲</div>
+        <div id="dataPipelineContent" class="empty loading">載入中…</div>
+      </div>
     </div>
 
     

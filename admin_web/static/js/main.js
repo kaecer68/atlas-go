@@ -250,7 +250,19 @@ async function loadPageData(pageId) {
   await loadModules();
   var m = modules;
 
-  if (pageId === 'experiments') {
+  if (pageId === 'home') {
+    try {
+      var tasks = await silentGetJSON('/api/scheduler/status');
+      if (m.dash.renderSchedulerStatus) m.dash.renderSchedulerStatus(tasks);
+    } catch (e) {
+      var el = document.getElementById('schedulerStatusContent');
+      if (el) {
+        el.classList.remove('loading');
+        el.innerHTML = '<div class="empty error">排程狀態載入失敗</div>';
+      }
+    }
+  }
+  else if (pageId === 'experiments') {
     try {
       var inbox = await silentGetJSON('/api/dashboard/experiment-inbox');
       var fvrExp = await silentGetJSON('/api/dashboard/forecast-vs-reality');
