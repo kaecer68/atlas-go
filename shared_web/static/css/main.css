@@ -85,3 +85,4 @@
 /* Existing standalone modules (backward compatibility) */
 @import url("components/circuit-breaker.css");
 @import url("components/performance-report.css");
+@import url("pages/stock-quote.css");

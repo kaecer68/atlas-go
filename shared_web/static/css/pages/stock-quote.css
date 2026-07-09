@@ -1,0 +1,151 @@
+.stock-quote-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+  padding: var(--spacing-4);
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.stock-quote-grid {
+  display: grid;
+  gap: var(--spacing-6);
+}
+
+@media (min-width: 1024px) {
+  .stock-quote-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sq-full-width {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .stock-quote-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Header Component */
+.sq-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+.sq-header-title {
+  font-size: var(--text-2xl);
+  font-weight: bold;
+}
+.sq-header-price {
+  font-size: 60px;
+  font-weight: bold;
+  line-height: 1;
+}
+.sq-header-details {
+  display: flex;
+  gap: var(--spacing-6);
+  color: var(--text-secondary);
+}
+.sq-price-up { color: var(--pnl-profit); }
+.sq-price-down { color: var(--pnl-loss); }
+.sq-price-neutral { color: var(--text-secondary); }
+
+/* Table for fundamentals */
+.sq-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.sq-table th, .sq-table td {
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+.sq-table th { color: var(--text-secondary); font-weight: normal; }
+
+/* Chips Chart */
+.sq-chip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-2);
+}
+.sq-chip-label { width: 60px; }
+.sq-chip-bar-container {
+  flex-grow: 1;
+  height: 20px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+.sq-chip-bar {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.sq-chip-inflow { background-color: var(--capital-inflow); }
+.sq-chip-outflow { background-color: var(--capital-outflow); }
+.sq-chip-value { width: 100px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Technical cards */
+.sq-tech-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--spacing-4);
+}
+
+.sq-search-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
+}
+.sq-search-row {
+  display: flex;
+  gap: var(--spacing-2);
+}
+.sq-search-input {
+  flex-grow: 1;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.sq-search-btn {
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  border: none;
+  color: var(--text-primary);
+}
+.sq-search-hot {
+  display: flex;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+.sq-search-tag {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.sq-disclaimer {
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-4);
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-md);
+}
+
+.sq-error-box {
+  padding: var(--spacing-4);
+  background: var(--bg-tertiary);
+  color: var(--pnl-loss);
+  border-radius: var(--radius-md);
+  text-align: center;
+}

@@ -67,7 +67,7 @@ const basePath = (typeof window !== 'undefined')
 
 export async function switchPage(id, silent) {
   // Unknown page — fallback to 404. 'home' is a loadAll-rendered page, not a shell.
-  if (!SHELL_LOADERS[id] && id !== 'errors/404' && id !== 'home') {
+  if (!SHELL_LOADERS[id] && id !== 'errors/404' && id !== 'home' && id !== 'stock-quote') {
     return switchPage('errors/404', silent);
   }
   var pageEl = document.getElementById('page-' + id);
@@ -86,7 +86,7 @@ export async function switchPage(id, silent) {
     'performance-report': '績效報告',
     evolution_panel: '策略演化', strategies: '投資心法',
       login: '登入', register: '註冊', premium: '升級 Premium',
-      mcp: 'MCP 整合', 'errors/404': '404'
+      mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -356,6 +356,17 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'industry') {
     try { if (m.industry && m.industry.loadIndustryData) m.industry.loadIndustryData(); } catch(e) { console.warn(e); }
+  }
+  else if (pageId === 'stock-quote') {
+    try {
+      var sqModule = await import('./pages/stock-quote.js').catch(function(err) {
+        console.warn('[Dynamic import] stock-quote module load failed:', err);
+        return null;
+      });
+      if (sqModule && sqModule.renderPage) {
+        await sqModule.renderPage(document.getElementById('page-stock-quote'));
+      }
+    } catch(e) { console.warn(e); }
   }
   else if (pageId === 'portfolio') {
     try {
