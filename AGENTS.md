@@ -85,6 +85,7 @@
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — 外部依賴與環境狀態
 - [`docs/TOOLS.md`](docs/TOOLS.md) — 程式碼智慧工具（GitNexus / codebase-memory / codegraph 路由決策樹）
 - [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
+- [`docs/operations/version-bumping.md`](docs/operations/version-bumping.md) — **Version bump SOP**（AI coding release 必走 `make bump-version` + `make sync-version` + `make ci` 三步）
 - [`CLAUDE.md`](CLAUDE.md) — Claude Code 專屬設定（部署、前端架構、token 效率規則）
 
 ### 文件治理
