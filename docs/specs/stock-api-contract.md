@@ -1,8 +1,7 @@
 # Atlas Stock API Contract（前端單一權威來源）
 
 > **文件角色**：定義 `/api/stock/*` 4 個 endpoint 的 HTTP contract（路徑、查詢、回應、錯誤、單位、Source-of-truth），供 client_web 與 atlas-mcp 共用。
-> **狀態**：v1.1（2026-07-09 新增 Symbol normalization + Technical 7 欄位修正）
-> **關聯**：[`.omo/plans/2026-07-09-stock-quote-frontend.md`](../../.omo/plans/2026-07-09-stock-quote-frontend.md) | [`docs/specs/stock-quote-page.md`](stock-quote-page.md)
+> **狀態**：v1.1.1（2026-07-09 移除失效關聯連結,新增 Symbol normalization + Technical 7 欄位修正）
 > **Source-of-truth**：handler 源碼 `internal/stocktools/handler.go` + 各資料源 struct
 
 ---
