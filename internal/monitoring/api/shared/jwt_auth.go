@@ -22,8 +22,8 @@ const JWTError = `{"error":"unauthorized"}`
 //
 // Typical wiring (cmd/atlas/main.go):
 //
-//   stockDeps.JWT = subscription.GetSharedJWTManager()
-//   stocktools.RegisterUserRoutes(mux, stockDeps) // separate from RegisterRoutes
+//	stockDeps.JWT = subscription.GetSharedJWTManager()
+//	stocktools.RegisterUserRoutes(mux, stockDeps) // separate from RegisterRoutes
 //
 // The middleware is intentionally not the default for /api/stock/* —
 // existing public endpoints must keep working. New user-specific stock
