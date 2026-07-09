@@ -143,6 +143,54 @@ export function renderSkeleton(lines=4) {
   return `<div class="skeleton-block"></div><div style="padding:8px">${html}</div>`;
 }
 
+
+export function renderSchedulerStatus(tasks) {
+  const el = document.getElementById('schedulerStatusContent');
+  if (!el) return;
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    el.classList.remove('loading');
+    el.innerHTML = '<div class="empty">目前無背景排程</div>';
+    return;
+  }
+  const rows = tasks.map(t => {
+    const enabledBadge = t.enabled
+      ? '<span class="tier-badge tier-badge--bullish">啟用</span>'
+      : '<span class="tier-badge tier-badge--neutral">停用</span>';
+    const failCls = (t.consecutive_failures || 0) > 0 ? 'text-warn' : 'text-muted';
+    const failText = (t.consecutive_failures || 0) > 0
+      ? `${t.consecutive_failures} 次連續失敗`
+      : '正常';
+    return `<tr>
+      <td>${escapeHtml(t.name || '-')}</td>
+      <td><code>${escapeHtml(t.channel_id || '-')}</code></td>
+      <td>${enabledBadge}</td>
+      <td class="text-mono">${escapeHtml(t.interval || '-')}</td>
+      <td>${formatDate(t.last_run)}</td>
+      <td>${formatDate(t.next_run)}</td>
+      <td class="${failCls}">${failText}</td>
+    </tr>`;
+  }).join('');
+  el.classList.remove('loading');
+  el.innerHTML = `
+    <div class="table-scroll mt-sm">
+      <table class="ranker-table">
+        <thead>
+          <tr>
+            <th>任務</th>
+            <th>Channel</th>
+            <th>狀態</th>
+            <th>間隔</th>
+            <th>上次執行</th>
+            <th>下次執行</th>
+            <th>連續失敗</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 export function computePipelineSummary(guardOutcomes, items) {
   const guard = guardOutcomes || [];
   const itemList = items || [];

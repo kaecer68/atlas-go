@@ -3,7 +3,61 @@ import { silentGetJSON, notify } from '../shared/app-utils.js';
 export async function loadDataChannels() {
   const data = await silentGetJSON('/api/dashboard/data-channels');
   renderDataChannels(data);
-  await Promise.all([loadMacroDataHealth(), loadFetchLogs()]);
+  await Promise.all([loadMacroDataHealth(), loadFetchLogs(), loadDataPipeline()]);
+}
+
+export async function loadDataPipeline() {
+  const data = await silentGetJSON('/api/dashboard/data-pipeline');
+  renderDataPipeline(data);
+}
+
+export function renderDataPipeline(data) {
+  const el = document.getElementById('dataPipelineContent');
+  if (!el) return;
+  const sources = (data && Array.isArray(data.sources)) ? data.sources : [];
+  if (sources.length === 0) {
+    el.classList.remove('loading');
+    el.innerHTML = '<div class="empty">目前無資料管線狀態</div>';
+    return;
+  }
+  const STATUS_BADGE = {
+    fresh:  { class: 'tier-badge tier-badge--bullish', label: '最新' },
+    stale:  { class: 'tier-badge tier-badge--warn',    label: '延遲' },
+    error:  { class: 'tier-badge tier-badge--bearish', label: '異常' },
+    paused: { class: 'tier-badge tier-badge--neutral', label: '暫停' },
+  };
+  const rows = sources.map(s => {
+    const meta = STATUS_BADGE[s.status] || STATUS_BADGE.stale;
+    return `<tr>
+      <td><code>${escapeHtml(s.source_id || '-')}</code></td>
+      <td>${escapeHtml(s.producer || '-')}</td>
+      <td>${escapeHtml(s.consumer || '-')}</td>
+      <td>${escapeHtml(s.last_produced || '-')}</td>
+      <td>${escapeHtml(s.last_consumed || '-')}</td>
+      <td>${escapeHtml(s.lag_human || '-')}</td>
+      <td><span class="${meta.class}">${escapeHtml(meta.label)}</span></td>
+    </tr>`;
+  }).join('');
+  el.classList.remove('loading');
+  el.innerHTML = `
+    <div class="table-scroll mt-sm">
+      <table class="ranker-table">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Producer</th>
+            <th>Consumer</th>
+            <th>最後產出</th>
+            <th>最後消費</th>
+            <th>延遲</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="text-muted text-sm mt-xs">最後更新：${escapeHtml(data.generated || '-')}</div>
+  `;
 }
 
 export async function loadMacroDataHealth() {
