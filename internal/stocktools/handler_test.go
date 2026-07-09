@@ -105,6 +105,50 @@ func TestHandleFundamentals(t *testing.T) {
 	}
 }
 
+func TestHandleFundamentalsRawSymbolNormalized(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fundamentals.json")
+	if err := os.WriteFile(path, []byte(`{"2330.TW":{"PE":25,"PB":6,"PS":8,"DividendYield":1.5,"Sector":"semiconductor"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fp := portfolio.NewFundamentalProvider()
+	if err := fp.LoadFromJSON(path); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Fundamentals: fp})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/fundamentals?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !contains(body, `"PE":25`) {
+		t.Fatalf("expected PE in response after raw-symbol normalization: %s", body)
+	}
+}
+
+func TestNormalizeFundamentalsSymbol(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"2330", "2330.TW"},
+		{"2330.TW", "2330.TW"},
+		{"AAPL.US", "AAPL.US"},
+		{"00700.HK", "00700.HK"},
+		{"", ""},
+		{"TW", "TW.TW"},
+	}
+	for _, tc := range cases {
+		if got := normalizeFundamentalsSymbol(tc.in); got != tc.want {
+			t.Errorf("normalizeFundamentalsSymbol(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestHandleChips(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

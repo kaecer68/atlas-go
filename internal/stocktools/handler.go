@@ -42,6 +42,21 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/technical", shared.Get(h.HandleTechnical))
 }
 
+// normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
+// format used by data/fundamentals.json, decoupling the storage layout from
+// the API contract. Empty input and other exchange suffixes are passed through.
+func normalizeFundamentalsSymbol(s string) string {
+	if s == "" {
+		return s
+	}
+	for _, suf := range []string{".TW", ".US", ".HK", ".JP", ".CN"} {
+		if len(s) > len(suf) && s[len(s)-len(suf):] == suf {
+			return s
+		}
+	}
+	return s + ".TW"
+}
+
 // HandleQuote returns the latest intraday quote for a single symbol.
 func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 	symbol := r.URL.Query().Get("symbol")
@@ -69,7 +84,7 @@ func (h *Handler) HandleFundamentals(r *http.Request) (int, any) {
 	if h.deps.Fundamentals == nil || !h.deps.Fundamentals.HasData() {
 		return http.StatusServiceUnavailable, map[string]string{"error": "fundamentals data not loaded"}
 	}
-	return http.StatusOK, h.deps.Fundamentals.Get(symbol)
+	return http.StatusOK, h.deps.Fundamentals.Get(normalizeFundamentalsSymbol(symbol))
 }
 
 // HandleChips returns institutional investor flow for a single symbol.
