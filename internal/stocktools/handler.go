@@ -41,6 +41,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/fundamentals", shared.Get(h.HandleFundamentals))
 	mux.Handle("GET /api/stock/chips", shared.Get(h.HandleChips))
 	mux.Handle("GET /api/stock/technical", shared.Get(h.HandleTechnical))
+	mux.Handle("GET /api/stock/sector-median-pe", shared.Get(h.HandleSectorMedianPE))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -87,6 +88,22 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 		return http.StatusOK, quotes[0]
 	}
 	return http.StatusServiceUnavailable, map[string]string{"error": "quote provider failed"}
+}
+
+// HandleSectorMedianPE returns the median P/E for a given sector; 0 if no data.
+func (h *Handler) HandleSectorMedianPE(r *http.Request) (int, any) {
+	sector := r.URL.Query().Get("sector")
+	if sector == "" {
+		return http.StatusBadRequest, map[string]string{"error": "sector is required"}
+	}
+	if h.deps.Fundamentals == nil || !h.deps.Fundamentals.HasData() {
+		return http.StatusServiceUnavailable, map[string]string{"error": "fundamentals data not loaded"}
+	}
+	median := h.deps.Fundamentals.SectorMedianPE(sector)
+	return http.StatusOK, map[string]any{
+		"sector":    sector,
+		"median_pe": median,
+	}
 }
 
 // HandleFundamentals returns fundamental metrics for a single symbol.
