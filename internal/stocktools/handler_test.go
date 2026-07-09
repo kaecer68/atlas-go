@@ -220,3 +220,33 @@ func TestComputeTechnical(t *testing.T) {
 		t.Fatal("expected non-zero rsi14")
 	}
 }
+
+func TestRSI(t *testing.T) {
+	cases := []struct {
+		name   string
+		values []float64
+		n      int
+		want   float64
+	}{
+		{"equal gains/losses (RS=1) → 50", []float64{10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10}, 14, 50},
+		{"all losses (RS=0) → 0", []float64{20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6}, 14, 0},
+		{"all gains (losses=0) → 100", []float64{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}, 14, 100},
+	}
+	for _, tc := range cases {
+		got := rsi(tc.values, tc.n)
+		if got != tc.want {
+			t.Errorf("rsi(%v, %d) = %v, want %v", tc.name, tc.n, got, tc.want)
+		}
+	}
+}
+
+func TestRSIBugRegression(t *testing.T) {
+	values := []float64{10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10}
+	got := rsi(values, 14)
+	if got < 0 || got > 100 {
+		t.Fatalf("rsi out of [0, 100] range: got %v (pre-fix bug returned negative values)", got)
+	}
+	if got != 50 {
+		t.Fatalf("rsi(equal gains/losses) = %v, want 50 (standard formula)", got)
+	}
+}

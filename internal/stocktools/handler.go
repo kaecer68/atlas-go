@@ -202,5 +202,5 @@ func rsi(values []float64, n int) float64 {
 		return 100
 	}
 	rs := gains / losses
-	return math.Round(100-(100/(1+rs))*100) / 100
+	return math.Round((100-100/(1+rs))*100) / 100
 }
