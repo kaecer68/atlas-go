@@ -142,6 +142,12 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/client" || strings.HasPrefix(p, "/client/"):
 		return true
+	case strings.HasSuffix(p, ".js"):
+		// Hashed frontend chunks (stock-quote-*.js, portfolio-*.js, etc.)
+		// are served at root level (not under /client/) because main.js
+		// at /client/js/main.js imports them with a relative ../ path.
+		// Standard API routes never end in .js, so this catch-all is safe.
+		return true
 	default:
 		return false
 	}
