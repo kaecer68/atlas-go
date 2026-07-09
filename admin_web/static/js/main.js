@@ -12,6 +12,8 @@ import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
 import { injectSharedHead } from './shared/head-config.js';
+import { install401Interceptor } from './shared/fetch-wrapper.js';
+import { initAuth, invalidateAuth } from './services/auth.js';
 injectSharedHead();
 
 export { getJSON, escapeHtml };
@@ -373,6 +375,12 @@ window.toggleAutoRefresh = function() {
 };
 
 if (typeof window !== 'undefined') {
+  install401Interceptor({
+    loginPageId: 'login',
+    excludedPages: ['login'],
+    onUnauthorized: invalidateAuth,
+    switchPage: window.switchPage,
+  });
   initBacktestDates();
   loadAll();
   startAutoRefresh();
