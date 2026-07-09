@@ -24,6 +24,29 @@
 FRONTENDS := admin_web client_web
 GO_PKGS   := ./cmd/... ./internal/...
 
+# ---- 版本管理(VERSION 檔為 single source of truth)----
+# 用法:
+#   make version           印當前 VERSION
+#   make sync-version      從 VERSION 同步所有 hardcoded 版本字串到 doc files
+#   make bump-version      互動式 bump VERSION(prompt 輸入新版本)
+# 在 cmd/*/main.go 用 ldflags 注入 -X main.Version=$(VERSION),見 build-backend。
+VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]' || echo dev)
+LDFLAGS_VERSION := -X main.Version=$(VERSION)
+
+.PHONY: version sync-version bump-version
+
+version:
+	@echo "$(VERSION)"
+
+sync-version:
+	@bash scripts/sync-version.sh
+
+bump-version:
+	@read -p "Bump from $(VERSION) to (e.g. 0.0.0.30): " v; \
+	echo "$$v" > VERSION; \
+	echo "✓ Updated VERSION to $$v"; \
+	echo "→ Run 'make sync-version' to update hardcoded doc references"
+
 # 預設 target: 顯示 help
 help:
 	@echo "atlas-go root Makefile"
@@ -100,7 +123,7 @@ watch-frontend-%:
 
 build-backend:
 	@echo "🔨 Building Go backend (cmd/atlas)..."
-	go build -o bin/atlas ./cmd/atlas
+	go build -ldflags "$(LDFLAGS_VERSION)" -o bin/atlas ./cmd/atlas
 
 test-backend:
 	@echo "🧪 Testing Go backend..."
