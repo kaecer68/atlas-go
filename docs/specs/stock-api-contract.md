@@ -1,7 +1,8 @@
 # Atlas Stock API Contract（前端單一權威來源）
 
 > **文件角色**：定義 `/api/stock/*` 4 個 endpoint 的 HTTP contract（路徑、查詢、回應、錯誤、單位、Source-of-truth），供 client_web 與 atlas-mcp 共用。
-> **狀態**：v1.1.1（2026-07-09 移除失效關聯連結,新增 Symbol normalization + Technical 7 欄位修正）
+> **狀態**：v1.2（2026-07-09 恢復 wireframe 關聯連結）
+> **關聯**：[`docs/specs/stock-quote-page.md`](stock-quote-page.md) — 前端頁面 wireframe + Component Tree + 5 類最終 AC
 > **Source-of-truth**：handler 源碼 `internal/stocktools/handler.go` + 各資料源 struct
 
 ---
