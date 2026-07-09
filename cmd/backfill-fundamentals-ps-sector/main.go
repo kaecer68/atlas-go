@@ -5,8 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 )
 
 func main() {
@@ -19,17 +17,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "read: %v\n", err)
 		os.Exit(1)
 	}
-	var m map[string]map[string]float64
-	if err := json.Unmarshal(data, &m); err != nil {
-		fmt.Fprintf(os.Stderr, "parse: %v\n", err)
-		os.Exit(1)
-	}
 
-	// Inject PS=0 and Sector="" via separate maps; we need string values for Sector
-	// Re-decode as map[string]map[string]any to preserve flexible types.
+	// Decode as map[string]map[string]any to preserve flexible types
+	// (PS is float64, Sector is string). The output must stay a
+	// `map[string]FundamentalData` because FundamentalProvider.LoadFromJSON
+	// unmarshals into a map — an array shape would break HasData() and
+	// return 503 on every /api/stock/fundamentals request.
 	var raw map[string]map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
-		fmt.Fprintf(os.Stderr, "reparse: %v\n", err)
+		fmt.Fprintf(os.Stderr, "parse: %v\n", err)
 		os.Exit(1)
 	}
 	addedPS, addedSector := 0, 0
@@ -53,22 +49,12 @@ func main() {
 		return
 	}
 
-	// Stable output: sort keys
-	type kvp struct {
-		key string
-		val map[string]any
-	}
-	out := make([]kvp, 0, len(raw))
-	for k, v := range raw {
-		out = append(out, kvp{k, v})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].key < out[j].key })
-
-	out2, _ := json.MarshalIndent(out, "", "  ")
-	if err := os.WriteFile(*path, out2, 0o644); err != nil {
+	// Emit the map directly. json.MarshalIndent sorts keys
+	// alphabetically, so the produced file is deterministic.
+	out, _ := json.MarshalIndent(raw, "", "  ")
+	if err := os.WriteFile(*path, out, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write: %v\n", err)
 		os.Exit(1)
 	}
-	_ = filepath.Join // touch import
 	fmt.Printf("wrote %s\n", *path)
 }
