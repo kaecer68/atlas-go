@@ -101,6 +101,11 @@ func (c *FinMindClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
 }
 
+// SetRateLimiter overrides the rate limiter (tests only; use rate.Inf to disable pacing).
+func (c *FinMindClient) SetRateLimiter(limiter *rate.Limiter) {
+	c.rateLimiter = limiter
+}
+
 // RateLimiter returns the rate limiter for Gateway adapter registration.
 func (c *FinMindClient) RateLimiter() *rate.Limiter {
 	return c.rateLimiter
