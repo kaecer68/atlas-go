@@ -66,6 +66,8 @@ const basePath = (typeof window !== 'undefined')
   : '';
 
 export async function switchPage(id, silent) {
+  // Alias /client/quote URL path to 'stock-quote' page module.
+  if (id === 'quote') id = 'stock-quote';
   // Unknown page — fallback to 404. 'home' is a loadAll-rendered page, not a shell.
   if (!SHELL_LOADERS[id] && id !== 'errors/404' && id !== 'home' && id !== 'stock-quote') {
     return switchPage('errors/404', silent);
