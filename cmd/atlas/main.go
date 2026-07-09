@@ -577,6 +577,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[StockTools] quote store init failed: %v", err)
 		}
 		stockDeps.CapitalFlow = marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, constants.StateCapitalFlow))
+		stockDeps.TWSEQuote = marketdata.NewTWSEOpenAPIProvider()
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")
 

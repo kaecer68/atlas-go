@@ -18,6 +18,7 @@ import (
 // Deps holds the data providers required by the stocktools handlers.
 type Deps struct {
 	FugleClient  *marketdata.FugleClient
+	TWSEQuote    *marketdata.TWSEOpenAPIProvider
 	Fundamentals *portfolio.FundamentalProvider
 	CapitalFlow  *marketdata.TWSECapitalFlowProvider
 	QuoteStore   ledger.QuoteStore
@@ -57,22 +58,35 @@ func normalizeFundamentalsSymbol(s string) string {
 	return s + ".TW"
 }
 
-// HandleQuote returns the latest intraday quote for a single symbol.
+// HandleQuote returns the latest intraday quote for a single symbol, with
+// TWSE OpenAPI fallback when Fugle is unavailable.
 func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 	symbol := r.URL.Query().Get("symbol")
 	if symbol == "" {
 		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
 	}
-	if h.deps.FugleClient == nil {
+	if h.deps.FugleClient == nil && h.deps.TWSEQuote == nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": "quote provider not configured"}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	q, err := h.deps.FugleClient.GetQuote(ctx, symbol)
-	if err != nil {
-		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+
+	if h.deps.FugleClient != nil {
+		if q, err := h.deps.FugleClient.GetQuote(ctx, symbol); err == nil {
+			return http.StatusOK, q
+		}
 	}
-	return http.StatusOK, q
+	if h.deps.TWSEQuote != nil {
+		quotes, err := h.deps.TWSEQuote.GetQuotes(ctx, time.Now(), []string{symbol})
+		if err != nil {
+			return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+		}
+		if len(quotes) == 0 {
+			return http.StatusNotFound, map[string]string{"error": "symbol not found"}
+		}
+		return http.StatusOK, quotes[0]
+	}
+	return http.StatusServiceUnavailable, map[string]string{"error": "quote provider failed"}
 }
 
 // HandleFundamentals returns fundamental metrics for a single symbol.
