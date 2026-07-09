@@ -193,7 +193,7 @@
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
 
 > **API Contract**：[`docs/specs/stock-api-contract.md`](specs/stock-api-contract.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
-> **Frontend 狀態**：client_web 「個股快查」頁面（Issue #1038）的後端 blocker 已解（PR-A，Symbol normalization #1044），前端實作（PR-B）尚未 ship，待後續。
+> **Frontend 狀態**：client_web「個股快查」頁面（Issue #1038）已 ship — 後端 normalize（PR-A #1044）+ 前端 14 檔（PR-B #1045）+ 文件同步（PR-C #1046）+ RSI pre-existing bug fix（PR #1047）。頁面路徑 `/client/quote?symbol=<4-6 digit symbol>`。剩餘 follow-up 見 `.omo/plans/2026-07-09-stock-quote-followup.md`。
 
 ### Universe（2 個）
 | Tool | 用途 |
