@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -15,11 +16,12 @@ import (
 )
 
 var (
-	startDate = flag.String("start", "", "backfill start date (YYYY-MM-DD); default = today - defaultLookbackDays")
-	endDate   = flag.String("end", "", "backfill end date (YYYY-MM-DD); default = today")
-	symbols   = flag.String("symbols", "", "comma-separated stock IDs; empty = all from fundamentals.json")
-	workDir   = flag.String("workdir", ".", "atlas repo root")
-	dryRun    = flag.Bool("dry-run", false, "print plan without writing")
+	startDate    = flag.String("start", "", "backfill start date (YYYY-MM-DD); default = today - defaultLookbackDays")
+	endDate      = flag.String("end", "", "backfill end date (YYYY-MM-DD); default = today")
+	symbols      = flag.String("symbols", "", "comma-separated stock IDs; empty = all from fundamentals.json")
+	workDir      = flag.String("workdir", ".", "atlas repo root")
+	dryRun       = flag.Bool("dry-run", false, "print plan without writing")
+	concurrency  = flag.Int("concurrency", 1, "symbol workers (1-60; FinMind burst=60 is the upper bound; rate limit is the real bottleneck)")
 )
 
 const defaultLookbackDays = 30
@@ -61,21 +63,52 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := marketdata.NewFinMindClient(finmindKey)
+	client := marketdata.GetSharedFinMindClient(finmindKey)
 	store := ledger.NewJSONLQuoteStore(filepath.Join(*workDir, "data", "state", "quotes"))
 
-	fmt.Printf("cron-quote-backfill: %d symbols, %s → %s (dry=%v)\n",
-		len(syms), start.Format("2006-01-02"), end.Format("2006-01-02"), *dryRun)
-
-	total := 0
-	for _, sym := range syms {
-		n, err := backfillSymbol(context.Background(), client, store, sym, start, end, *dryRun)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s: %v\n", sym, err)
-			continue
-		}
-		total += n
+	conc := *concurrency
+	if conc < 1 {
+		conc = 1
 	}
+	if conc > 60 {
+		conc = 60
+	}
+
+	days := int(end.Sub(start).Hours()/24) + 1
+	calls := len(syms) * days
+	estHours := float64(calls) * 6.0 / 3600.0
+	fmt.Fprintf(os.Stderr, "Estimated runtime: %d symbols × %d days = %d FinMind calls × ~6s/call = ~%.1f hours (FinMind free tier 600/hr; -concurrency=%d helps only within burst window)\n",
+		len(syms), days, calls, estHours, conc)
+
+	fmt.Printf("cron-quote-backfill: %d symbols, %s → %s (dry=%v, concurrency=%d)\n",
+		len(syms), start.Format("2006-01-02"), end.Format("2006-01-02"), *dryRun, conc)
+
+	jobs := make(chan string, len(syms))
+	for _, sym := range syms {
+		jobs <- sym
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	total := 0
+	for i := 0; i < conc; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for sym := range jobs {
+				n, err := backfillSymbol(context.Background(), client, store, sym, start, end, *dryRun)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "  %s: %v\n", sym, err)
+					continue
+				}
+				mu.Lock()
+				total += n
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
 	fmt.Printf("wrote %d bars across %d symbols\n", total, len(syms))
 }
 
