@@ -282,3 +282,44 @@ func TestJSONLQuoteStoreConcurrentWrites(t *testing.T) {
 		t.Errorf("expected all %d goroutines to succeed, got %d winners: %v", goroutines, len(seen), seen)
 	}
 }
+
+func TestJSONLQuoteStoreRecordQuotesDedup(t *testing.T) {
+	tmp := t.TempDir()
+	store := NewJSONLQuoteStore(tmp)
+
+	date := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	nextDate := date.AddDate(0, 0, 1)
+
+	if err := store.RecordQuotes([]domain.DailyBar{
+		{Date: date, Symbol: "2330", Name: "台積電", Open: 1000, High: 1010, Low: 990, Close: 1005, Volume: 1000000, Source: "FinMind"},
+	}); err != nil {
+		t.Fatalf("first RecordQuotes failed: %v", err)
+	}
+
+	if err := store.RecordQuotes([]domain.DailyBar{
+		// Same (symbol, date) — must be ignored (first wins).
+		{Date: date, Symbol: "2330", Name: "台積電", Open: 2000, High: 2010, Low: 1990, Close: 2005, Volume: 9999999, Source: "DifferentSource"},
+		// New (symbol, date) — must be appended.
+		{Date: nextDate, Symbol: "2330", Name: "台積電", Open: 1006, High: 1020, Low: 1001, Close: 1015, Volume: 1100000, Source: "FinMind"},
+	}); err != nil {
+		t.Fatalf("second RecordQuotes failed: %v", err)
+	}
+
+	loaded, err := store.LoadQuotes("2330", date, nextDate)
+	if err != nil {
+		t.Fatalf("LoadQuotes failed: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 unique bars after dedup, got %d", len(loaded))
+	}
+	if loaded[0].Close != 1005 {
+		t.Errorf("expected first bar Close=1005 (first-wins preserved original), got %f", loaded[0].Close)
+	}
+	if loaded[0].Source != "FinMind" {
+		t.Errorf("expected first bar Source=FinMind (first-wins preserved original), got %s", loaded[0].Source)
+	}
+	if loaded[1].Date != nextDate || loaded[1].Close != 1015 {
+		t.Errorf("expected second bar to be 2026-07-02 Close=1015, got %s Close=%f",
+			loaded[1].Date.Format("2006-01-02"), loaded[1].Close)
+	}
+}

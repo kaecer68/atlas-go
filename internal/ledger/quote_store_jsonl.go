@@ -30,20 +30,37 @@ func (s *JSONLQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 
 	path := filepath.Join(s.baseDir, "quotes.jsonl")
 
-	// Read existing quotes to preserve accumulated data
-	var existing []domain.DailyBar
+	// First-wins dedup on (symbol, date), matching SQLiteQuoteStore's INSERT OR REPLACE.
+	quoteKey := func(q domain.DailyBar) string {
+		return q.Symbol + "|" + q.Date.UTC().Format("2006-01-02")
+	}
+
+	seen := make(map[string]struct{})
+	var ordered []domain.DailyBar
 	if f, err := os.Open(path); err == nil {
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			var quote domain.DailyBar
 			if err := json.Unmarshal(scanner.Bytes(), &quote); err == nil {
-				existing = append(existing, quote)
+				k := quoteKey(quote)
+				if _, dup := seen[k]; dup {
+					continue
+				}
+				seen[k] = struct{}{}
+				ordered = append(ordered, quote)
 			}
 		}
 		_ = f.Close()
 	}
 
-	all := append(existing, quotes...)
+	for _, q := range quotes {
+		k := quoteKey(q)
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		ordered = append(ordered, q)
+	}
 
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
@@ -51,7 +68,7 @@ func (s *JSONLQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 		return fmt.Errorf("open file: %w", err)
 	}
 	enc := json.NewEncoder(f)
-	for _, quote := range all {
+	for _, quote := range ordered {
 		if err := enc.Encode(quote); err != nil {
 			_ = f.Close()
 			_ = os.Remove(tmp)
