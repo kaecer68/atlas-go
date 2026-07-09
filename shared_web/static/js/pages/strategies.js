@@ -231,6 +231,13 @@ export async function renderStrategiesPage(root) {
     return `
       <div class="kpi-grid" id="kpiStrip"></div>
       <div class="kpi-grid mt-sm" id="coreIndicatorStrip"></div>
+      <section class="strategy-ranker mt-md" id="rankerStrip" aria-label="策略排名">
+        <div class="strategy-ranker__header">
+          <h3>策略排名（依回測表現）</h3>
+          <span class="text-muted" id="rankerMeta"></span>
+        </div>
+        <div class="strategy-ranker__list" id="rankerList"></div>
+      </section>
       <div class="filter-tabs mt-md" id="layerTabs"></div>
       <div class="strategy-grid mt-md" id="strategyCards"></div>
     `;
@@ -246,8 +253,78 @@ export async function renderStrategiesPage(root) {
     renderCoreIndicators();
     renderLayerTabs();
     renderStrategyCards();
+    renderStrategyRanker();
     renderModalPlaceholders();
     bindGlobalHandlers();
+  }
+
+  function renderStrategyRanker() {
+    const meta = document.getElementById('rankerMeta');
+    const list = document.getElementById('rankerList');
+    if (!meta || !list) return;
+    meta.textContent = '載入中…';
+    list.innerHTML = '<div class="text-muted">策略排名載入中…</div>';
+    fetchJSON('/api/strategy-ranker/rank')
+      .then((rows) => {
+        if (!Array.isArray(rows) || rows.length === 0) {
+          meta.textContent = '';
+          list.innerHTML = '<div class="empty">目前沒有活躍策略排名資料</div>';
+          return;
+        }
+        meta.textContent = '共 ' + rows.length + ' 個活躍策略 · 依綜合評分排序';
+        list.innerHTML = renderRankerRows(rows);
+      })
+      .catch((err) => {
+        const classified = classifyFetchError(err, '/api/strategy-ranker/rank');
+        meta.textContent = '';
+        list.innerHTML =
+          '<div class="error-banner error-banner--warning" role="status">' +
+            '<div><strong>策略排名無法顯示</strong>：' + escapeHtml(classified.message) + '</div>' +
+            (classified.hint ? '<small class="text-muted">' + escapeHtml(classified.hint) + '</small>' : '') +
+          '</div>';
+      });
+  }
+
+  function renderRankerRows(rows) {
+    return '<table class="ranker-table"><thead><tr>' +
+      '<th>#</th><th>策略</th><th>分數</th>' +
+      '<th class="text-right">年化報酬</th><th class="text-right">Sharpe</th>' +
+      '<th class="text-right">最大回撤</th><th class="text-right">勝率</th>' +
+      '<th class="text-right">樣本天數</th>' +
+      '</tr></thead><tbody>' +
+      rows.map(formatRankerRow).join('') +
+      '</tbody></table>';
+  }
+
+  function formatRankerRow(r) {
+    const rank = typeof r.rank === 'number' ? r.rank : '--';
+    const name = r.strategy_name || r.strategy_id || '--';
+    const score = typeof r.score === 'number' ? r.score : null;
+    const annRet = typeof r.annualized_return === 'number' ? r.annualized_return : null;
+    const sharpe = typeof r.sharpe_ratio === 'number' ? r.sharpe_ratio : null;
+    const maxDD = typeof r.max_drawdown === 'number' ? r.max_drawdown : null;
+    const winRate = typeof r.win_rate === 'number' ? r.win_rate : null;
+    const sample = typeof r.sample_days === 'number' ? r.sample_days : null;
+    const tierKey = (r.tier || 'free').replace(/[^a-z]/g, '') || 'free';
+    const scoreClass = score == null ? '' :
+      score >= 80 ? 'ranker-score ranker-score--high' :
+      score >= 60 ? 'ranker-score ranker-score--mid' :
+      'ranker-score ranker-score--low';
+    const retClass = annRet == null ? '' :
+      annRet > 0 ? 'text-up' : annRet < 0 ? 'text-down' : '';
+    const fmtPct = (v) => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    return '<tr>' +
+      '<td><span class="ranker-rank">#' + escapeHtml(String(rank)) + '</span></td>' +
+      '<td><div class="ranker-name">' + escapeHtml(name) +
+        '<span class="tier-badge tier-badge--' + tierKey + '">' + escapeHtml(r.tier || 'free') + '</span>' +
+      '</div></td>' +
+      '<td><span class="' + scoreClass + '">' + (score == null ? '--' : score.toFixed(0)) + '</span></td>' +
+      '<td class="text-right ' + retClass + '">' + (annRet == null ? '--' : fmtPct(annRet)) + '</td>' +
+      '<td class="text-right">' + (sharpe == null ? '--' : sharpe.toFixed(2)) + '</td>' +
+      '<td class="text-right">' + (maxDD == null ? '--' : fmtPct(maxDD)) + '</td>' +
+      '<td class="text-right">' + (winRate == null ? '--' : (winRate * 100).toFixed(1) + '%') + '</td>' +
+      '<td class="text-right">' + (sample == null ? '--' : sample) + '</td>' +
+      '</tr>';
   }
 
   function renderKPIs() {
