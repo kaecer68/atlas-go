@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
-	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -44,11 +43,7 @@ func main() {
 		start = t
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "config: %v\n", err)
-		os.Exit(1)
-	}
+	cfg := config.Load()
 	finmindKey := cfg.FinMindAPIKey
 	if finmindKey == "" {
 		fmt.Fprintln(os.Stderr, "FINMIND_API_KEY not set; required for quote backfill")
@@ -65,11 +60,7 @@ func main() {
 	}
 
 	client := marketdata.NewFinMindClient(finmindKey)
-	store, err := ledger.NewJSONLQuoteStore(filepath.Join(*workDir, "data", "state", "quotes"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "quote store: %v\n", err)
-		os.Exit(1)
-	}
+	store := ledger.NewJSONLQuoteStore(filepath.Join(*workDir, "data", "state", "quotes"))
 
 	fmt.Printf("cron-quote-backfill: %d symbols, %s → %s (dry=%v)\n",
 		len(syms), start.Format("2006-01-02"), end.Format("2006-01-02"), *dryRun)
