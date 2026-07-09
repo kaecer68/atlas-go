@@ -32,6 +32,7 @@ const opts = {
   metafile: true,
   // Stable entry names for index.html compatibility
   entryNames: "[dir]/[name]",
+  chunkNames: "js/[name]-[hash]",
   assetNames: "assets/[name]-[hash]",
   minify: true,
   sourcemap: false,
