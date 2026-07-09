@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 )
 
 func main() {
@@ -53,22 +52,16 @@ func main() {
 		return
 	}
 
-	// Stable output: sort keys
-	type kvp struct {
-		key string
-		val map[string]any
-	}
-	out := make([]kvp, 0, len(raw))
-	for k, v := range raw {
-		out = append(out, kvp{k, v})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].key < out[j].key })
-
-	out2, _ := json.MarshalIndent(out, "", "  ")
+	// Stable output: emit the map directly. json.MarshalIndent sorts keys
+	// alphabetically, so the produced file is deterministic without an
+	// explicit sort step. Critically, the output format must stay a
+	// `map[string]FundamentalData` because FundamentalProvider.LoadFromJSON
+	// unmarshals into a map — an array shape would break HasData() and
+	// return 503 on every /api/stock/fundamentals request.
+	out2, _ := json.MarshalIndent(raw, "", "  ")
 	if err := os.WriteFile(*path, out2, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write: %v\n", err)
 		os.Exit(1)
 	}
-	_ = filepath.Join // touch import
 	fmt.Printf("wrote %s\n", *path)
 }
