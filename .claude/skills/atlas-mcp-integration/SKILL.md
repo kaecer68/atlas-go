@@ -47,7 +47,7 @@ target_audience: "developer"
 |------|----------|------|
 | MCP server binary | `cmd/atlas-mcp/main.go` | 入口，flag 解析，transport 啟動 |
 | Tool 實作 | `cmd/atlas-mcp/server/tools_*.go`（16 個檔案）+ `cmd/atlas-mcp/server/tools.go`（5 個核心 entry-point） | 80 個 tool 的 handler |
-| Agent 文件 | `docs/AGENT_ONBOARDING.md`、`docs/REFERENCE/tool-catalog.md` | 入門 + tool catalog |
+| Agent 文件 | `docs/INVESTOR/README.md`、`docs/REFERENCE/tool-catalog.md` | 入門 + tool catalog |
 | MCP 規格 | `docs/specs/agent-mcp-server.md` | 設計規格、安全邊界、JSON Schema |
 
 ## 實作位置（Implementation Locations）
