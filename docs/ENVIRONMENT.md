@@ -319,4 +319,4 @@ prevents the recurring "AI assumes it's not there" issue.
 - `internal/apigateway/CONSTITUTION.md` — data source governance
 - `.claude/skills/atlas-data-visibility/SKILL.md` — silent failure detection
 - `docs/investigations/2026-06-28-boot-loop-multi-service.md` — 2026-06 啟動崩潰連環事件完整根因分析(含 fubon-neo PyPI 404 + wheel 平台限制 + 跨平台 deploy 限制)
-- `docs/TRAPS.md` § Deploy/Docker — 跨模組部署陷阱(ENTRYPOINT 衝突、env_file precedence、hardcoded healthcheck)
+- `docs/REFERENCE/TRAPS.md` § Deploy/Docker — 跨模組部署陷阱(ENTRYPOINT 衝突、env_file precedence、hardcoded healthcheck)

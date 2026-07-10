@@ -268,18 +268,18 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Check docs/TRAPS.md line count
+    - name: Check docs/REFERENCE/TRAPS.md line count
       run: |
-        TRAP_LINES=$(wc -l < docs/TRAPS.md | tr -d ' ')
-        echo "docs/TRAPS.md lines: $TRAP_LINES"
+        TRAP_LINES=$(wc -l < docs/REFERENCE/TRAPS.md | tr -d ' ')
+        echo "docs/REFERENCE/TRAPS.md lines: $TRAP_LINES"
         if [ "$TRAP_LINES" -gt 300 ]; then
-          echo "ERROR: docs/TRAPS.md has $TRAP_LINES lines (limit: 300)."
+          echo "ERROR: docs/REFERENCE/TRAPS.md has $TRAP_LINES lines (limit: 300)."
           echo "Split or consolidate trap entries."
           exit 1
         fi
-        echo "OK: docs/TRAPS.md is within 300-line budget."
+        echo "OK: docs/REFERENCE/TRAPS.md is within 300-line budget."
 
-    - name: Check docs/TRAPS.md module attribution
+    - name: Check docs/REFERENCE/TRAPS.md module attribution
       run: |
         echo "Checking TRAPS.md module column..."
         # Count table rows that are missing module attribution
@@ -297,7 +297,7 @@ jobs:
             echo "❌ Missing module column: $line"
             MISSING=$((MISSING + 1))
           fi
-        done < <(grep '^|' docs/TRAPS.md)
+        done < <(grep '^|' docs/REFERENCE/TRAPS.md)
         if [ "$MISSING" -gt 0 ]; then
           echo "ERROR: $MISSING trap row(s) missing module attribution."
           exit 1

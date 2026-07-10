@@ -74,7 +74,7 @@ gh pr create --base main --title "chore(release): bump VERSION to X.Y.Z" --body 
 | CHANGELOG | `CHANGELOG.md` | 手寫歷史,由 release 工具自動產生 |
 | 歷史文件 | `docs/archive/`、`docs/investigations/`、`docs/audit/` | 版本 ref 是內容的一部分 |
 | 規範文件 | `docs/specs/`,`docs/operations/{l2-4-*,tier-boundary}` | 記錄特定 version 的設計決策 |
-| 事件文件 | `docs/events/` | 記錄事件首次上線的版本 |
+| 事件文件 | `docs/REFERENCE/events/` | 記錄事件首次上線的版本 |
 | 測試 fixtures | `*_test.go` 內 `"0.0.0.X"` 字串常數 | test 資料,非文件 |
 | IP:port 配置 | `monitoring/otel-collector.yaml` | `0.0.0.0:4318` 是 OTLP endpoint |
 

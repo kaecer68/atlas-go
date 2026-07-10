@@ -56,7 +56,7 @@ GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決�
 
 ### 我要找建置/部署指令 → 看 [`QUICKSTART.md`](./QUICKSTART.md)
 
-### 我要看即時系統狀態 → 看 [`docs/WORKFLOW_MAP.md`](./WORKFLOW_MAP.md) §5 觸發條件總表
+### 我要看即時系統狀態 → 看 [`docs/REFERENCE/WORKFLOW_MAP.md`](./WORKFLOW_MAP.md) §5 觸發條件總表
 
 ---
 
@@ -92,7 +92,7 @@ internal/portfolio/            ← agent_health / post_trade_analyzer
 internal/alerts/               ← WA-601 alert 系統
 docs/specs/                    ← 17 份設計規格
 docs/AGENTS_INDEX              ← 22 個保留模組清單
-docs/WORKFLOW_MAP.md           ← 21 條 workflow 總覽（你最該先讀）
+docs/REFERENCE/WORKFLOW_MAP.md           ← 21 條 workflow 總覽（你最該先讀）
 
 # ─── v0.0.0.31 新增（Wave 11 投資核心框架）───
 internal/strategy_validator/   ← 策略歷史回測驗證（Sharpe / 回撤 / 勝率 / TAIEX 相關係數 + 排名分層）

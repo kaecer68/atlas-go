@@ -83,7 +83,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 |----|---------|---------|---------|---------|------|
 | **WA-500** | Conviction Calibration | `cmd/atlas/calibration_tasks.go:registerCalibrationCycle` + `internal/scheduler/auto_calibration.go` | daily 排程 + `CycleCalibration:internal/industry/cycle_calibration.go` | CalibrationTask report | 校正演算法 |
 | **WA-501** | PRISM Cohort Training | `cmd/atlas` 中的 `prism worker` subcommand + `internal/prism` | 獨立 daemon | cohort 訓練結果 | train trigger 機制 |
-| **WA-502** | Strategy Evolution / Agent Spawn | `internal/scheduler/strategy_evolution.go` + `internal/spawning/agent_factory.go` | 定期檢查 | 突變 / 淘汰 / 新生 | 接受閾值（docs/PARAMETER_SYSTEM.md） |
+| **WA-502** | Strategy Evolution / Agent Spawn | `internal/scheduler/strategy_evolution.go` + `internal/spawning/agent_factory.go` | 定期檢查 | 突變 / 淘汰 / 新生 | 接受閾值（docs/REFERENCE/PARAMETER_SYSTEM.md） |
 | **WA-503** | ML Retrain | `internal/scheduler/ml_retrain.go` | 排程 | ML model 重訓 | 觸發條件 |
 | **WA-504** | Auto Rollback | `internal/scheduler/auto_rollback.go` | strategy 表現下降偵測 | 退回 baseline | 判斷條件 |
 | **WA-505** | Seasonal Task | `internal/scheduler/seasonal_task.go` | season-bound cron | 季節性校正 | 細則 |
@@ -308,7 +308,7 @@ Broker config 旗標（10 個）：`-broker-mode`、`-broker-adapter`、`-broker
 
 ## 10. 不要做的事（給 Agent 安全邊界）
 
-來自 `AGENTS.md` + `docs/TRAPS.md` + `internal/apigateway/CONSTITUTION.md`：
+來自 `AGENTS.md` + `docs/REFERENCE/TRAPS.md` + `internal/apigateway/CONSTITUTION.md`：
 
 1. ❌ **不要啟用 `-allow-live-broker` 做本地測試**（生產金融指令會真實送出）
 2. ❌ **不要繞過 BackgroundTaskManager** 自行啟動 goroutine

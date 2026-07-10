@@ -1,7 +1,7 @@
 # Atlas-Go 快速啟動與 CI 指令
 
 > 從 `AGENTS.md` 遷移（避免根 AGENTS.md 超過 160 行預算）。
-> 完整規範階層見 `docs/GUIDELINES_INDEX.md`。
+> 完整規範階層見 `docs/REFERENCE/GUIDELINES_INDEX.md`。
 
 ## 快速啟動
 

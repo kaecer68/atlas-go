@@ -190,7 +190,7 @@ Loki 上線後,operator 可從 log 快速定位 5 個偵測器哪個出問題。
 - `docs/handoff/2026-wave9-observability-coordinator.md` — 設計演進
 - `docs/operations/wave9-runbook.md` — 操作手冊(姊妹文件)
 - `docs/operations/loki-deployment.md` — 集中式 log 設計
-- `docs/TRAPS.md` — `/api/llm/health` 401 防回歸 entry
+- `docs/REFERENCE/TRAPS.md` — `/api/llm/health` 401 防回歸 entry
 
 ---
 
