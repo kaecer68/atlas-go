@@ -238,6 +238,49 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 
 必填欄位：`ts`、`tool`、`status`（`ok` | `error` | `unauthorized`）、`duration_ms`。`arg_keys` 只記錄 key 名稱、不記錄值。`error` 僅在 `status != "ok"` 時輸出。
 
+## 開發者場景（已有本地 binary）
+
+適用：已 clone atlas-go repo、Go build 出 `bin/atlas-mcp`、想接到 hermes 驗證開發。
+
+```bash
+# 1. 確認 binary 可執行
+ls -la ~/workspace/atlas/bin/atlas-mcp
+
+# 2. 確認 dev key 已 source
+set -a; . ~/.config/atlas-go/.env; set +a
+
+# 3. 加進 hermes（可選：用 --enable-all 或後續手動 --enable 開特定 tool）
+hermes mcp add atlas-mcp \
+  --command "$HOME/workspace/atlas/bin/atlas-mcp" \
+  --env ATLAS_BASE_URL="${ATLAS_BASE_URL}" \
+  --env ATLAS_API_KEY="${ATLAS_API_KEY}" \
+  --env ATLAS_MCP_AUDIT_LOG="$HOME/.hermes/logs/atlas-mcp-audit.log" \
+  --connect-timeout 30
+
+# 4. 驗證
+hermes mcp list
+# 在 hermes session 內呼叫 mcp__atlas_mcp__mcp_quickstart 確認
+```
+
+> 若 `~/.config/atlas-go/.env` 存在，hermes 自動 source，**可省 `--env ATLAS_API_KEY=...`**；但顯式帶上避免路徑耦合（見下節「升級 SOP」）。
+
+## atlas-go 升級 SOP（更新源碼後重啟 hermes 端）
+
+當你更新了 `atlas-go` 源碼（不管是改 `cmd/atlas-mcp/` 或 `internal/`），需要讓 hermes 端的 atlas-mcp 看到新 binary：
+
+```bash
+# 1. 重新編譯
+cd ~/workspace/atlas && make build-mcp
+
+# 2. 重啟 hermes 端的 atlas-mcp
+hermes mcp restart atlas-mcp
+
+# 3. 驗證
+hermes mcp list  # 確認 tool 數量無異常變化（91±2）
+```
+
+> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（編譯期 `RegisteredToolCount ∈ [89, 91]` assert 強制）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
+
 ## License
 
 GNU AGPL v3 — 與 atlas-go 一致（見根目錄 `LICENSE`）。

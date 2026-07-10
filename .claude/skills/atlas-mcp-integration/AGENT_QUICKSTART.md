@@ -40,11 +40,20 @@ test -f ~/.config/atlas-go/.env && echo "OK" || echo "❌ 找不到 .env"
 # 2. 看 dev key 內容（脫敏顯示）
 grep '^ATLAS_API_KEY=' ~/.config/atlas-go/.env | sed 's/=.*/=***REDACTED***/'
 
-# 3. 一條龍（自動 source env）
+# 3. 一條龍（自動 source env + hermes mcp add 含所有 env 變數）
 make setup-mcp-agent
 
 # 4. 驗證 hermes 真的能用
 make verify-mcp-setup
+
+# 4.5 若不想用 make，可手動 hermes mcp add（顯式帶 env，自包含不依賴 .env 自動 source）
+hermes mcp add atlas-mcp \
+  --command "$(command -v atlas-mcp)" \
+  --env ATLAS_BASE_URL="${ATLAS_BASE_URL:-http://127.0.0.1:18080}" \
+  --env ATLAS_API_KEY="${ATLAS_API_KEY}" \
+  --env ATLAS_MCP_AUDIT_LOG="$HOME/.hermes/logs/atlas-mcp-audit.log" \
+  --connect-timeout 30
+hermes mcp configure atlas-mcp --enable-all 2>/dev/null || true
 ```
 
 **限制**：
