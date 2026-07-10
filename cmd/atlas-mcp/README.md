@@ -6,6 +6,41 @@
 > **完整規格** — 設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server.md`](../../docs/specs/agent-mcp-server.md)。
 > **開發者** — 若要在 `cmd/atlas-mcp/server/` 內新增或修改 tool，**必先讀** [`server/AGENTS.md`](./server/AGENTS.md)（模組陷阱文件）。
 
+## For AI Agent Operators（Hermes / OpenClaw / Claude Desktop / Cursor / OpenCode）
+
+> **你是替投資人用戶接入 atlas-mcp 的 agent operator？從一行 installer 開始。**
+
+```bash
+# 一行安裝（不需 Go toolchain、不需 clone repo）
+curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash
+
+# 或鎖定版本
+curl -fsSL ... | bash -s -- --version v0.0.0.33
+```
+
+自動下載預編譯 binary + SHA256 驗證 + 安裝到 `~/.local/bin/atlas-mcp`。
+
+MCP client config 路徑：
+
+| Client | Config 檔 |
+|--------|-----------|
+| Hermes | `~/.hermes/config.yaml` |
+| OpenClaw | `~/.openclaw/mcp.json` |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）|
+| Cursor | `~/.cursor/mcp.json` |
+| OpenCode | `~/.config/opencode/opencode.json` |
+
+> **重要：設定檔的 server entry key 是 `'atlas-mcp'`，不是 `'atlas-go'`**（與本 repo 早期 PR 系列混用 'atlas-go' 為 server key 對齊 — 詳見本 README §MCP Client 配置範例）。
+
+**你的投資人用戶可以問**（呼叫 `mcp_quickstart` 開始）：
+
+- `「2330 現在多少？」` → `stock_get_quote {symbol: "2330"}`
+- `「現在市場風險怎樣？」` → `risk_get_metrics`
+- `「今天要關注什麼？」` → `narrative_get_events`
+- 更多自然語言範本見 [`docs/operations/stock-mcp-query-templates.md`](../../docs/operations/stock-mcp-query-templates.md)
+
+或用 [`make setup-mcp`](../atlas-mcp-setup/) 啟動互動式 wizard 自動偵測已安裝的 client 並寫入 config。
+
 ## 目前規模
 
 | 面向 | 現狀 |
@@ -20,6 +55,16 @@
 | 工具分類 | Macro（6）、Crossmarket（3）、Regime（1）、Narrative（7）、Risk（5）、Alert（4）、Strategy（6）、Recommendation（1）、Experiment（3）、Synergy（3）、Control（4）、Scheduler/Task（4）、System/Health（7）、Data（4）、Universe（2）、LLM（2）、Trace（4）、PRISM（1）、Report（4）、Stock（4）、Capital Flow（2）、Events（2）、Daily Briefing（2）、Protocol Extensions（4）、Audit（4）、Anomaly（2） |
 
 ## 快速啟動
+
+**路徑 A — 一行 installer（推薦，給 agent operator）**：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash
+```
+
+詳見上面 §For AI Agent Operators。
+
+**路徑 B — 開發者（已 clone repo + 有 Go）**：
 
 ```bash
 # 建置
