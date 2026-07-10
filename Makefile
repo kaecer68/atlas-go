@@ -74,7 +74,7 @@ help:
 	@echo "  build-mcp          編譯 bin/atlas-mcp"
 	@echo "  install-mcp        安裝到 ~/.local/bin (MCP client command 路徑)"
 	@echo "  mcp-status         檢查 binary / atlas-go / LLM router 三項健康"
-	@echo "  setup-mcp          啟動互動式 wizard (需 PR #3 合併後生效)"
+	@echo "  setup-mcp          啟動互動式 wizard"
 	@echo ""
 	@echo "整合:"
 	@echo "  install            install-frontend + 下載 Go 模組"
@@ -140,7 +140,7 @@ build-backend:
 #   make build-mcp    編譯 bin/atlas-mcp
 #   make install-mcp  編譯後安裝到 ~/.local/bin (給 MCP client command 設定用)
 #   make mcp-status   檢查 binary 存在 + atlas-go backend + LLM health 三項
-#   make setup-mcp    啟動互動式 wizard (需 PR #3 合併後才生效)
+#   make setup-mcp    啟動互動式 wizard
 
 build-mcp:
 	@echo "🔨 Building atlas-mcp binary..."
@@ -176,14 +176,8 @@ mcp-status:
 	fi
 
 setup-mcp:
-	@if [ -d "./cmd/atlas-mcp-setup" ]; then \
-		echo "🚀 Launching atlas-mcp-setup wizard..."; \
-		go run ./cmd/atlas-mcp-setup; \
-	else \
-		echo "⚠️  setup-mcp requires PR #3 (cmd/atlas-mcp-setup) to be merged first."; \
-		echo "    After PR #3 merges, run: make setup-mcp to start the wizard."; \
-		echo "    Until then, follow: .claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md"; \
-	fi
+	@echo "🚀 Launching atlas-mcp-setup wizard..."
+	go run ./cmd/atlas-mcp-setup
 
 test-backend:
 	@echo "🧪 Testing Go backend..."
@@ -191,11 +185,7 @@ test-backend:
 
 test-integration:
 	@echo "🧪 Running integration tests (mock backend, no external services)..."
-	@if [ ! -d "./cmd/atlas-mcp-setup" ]; then \
-		echo "⚠️  No integration tests yet (PR #1066 adds cmd/atlas-mcp-setup/integration_test.go)"; \
-	else \
-		go test -tags=integration -timeout=60s ./cmd/atlas-mcp-setup/; \
-	fi
+	go test -tags=integration -timeout=60s ./cmd/atlas-mcp-setup/
 
 lint-backend:
 	@echo "🔍 Linting Go backend..."
