@@ -36,7 +36,7 @@
 | 知識類型 | 歸屬位置 |
 |----------|---------|
 | 跨模組全域規則 | 本文件 + `docs/REFERENCE/TRAPS.md` |
-| 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**21 個保留模組**） |
+| 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**22 個保留模組**） |
 | 模組技術規格 | `docs/specs/<topic>.md` |
 | 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
 | 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
@@ -72,7 +72,7 @@
 - [`internal/apigateway/CONSTITUTION.md`](internal/apigateway/CONSTITUTION.md) — 數據源憲法（6 條文 + 3 附錄）
 
 ### 模組索引
-- [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) — 全部模組索引（45 個，按成熟度 S/E/X/U 分組）
+- [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) — 全部模組索引（59 個，按成熟度 S/E/X/U 分組）
 - [`internal/MATURITY.md`](internal/MATURITY.md) — 模組成熟度對照
 - 修改程式碼前必跑：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)
 
@@ -108,7 +108,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
 | Onboarding | `docs/INVESTOR/README.md` | 5 分鐘上手 |
 
-**狀態**：P0 已完成（PROCESSES.yaml + AGENTS.md 本章節）；P0 補遺（2026-07-03）增加 2 個 atlas-mcp-* skill、MCP 模組陷阱、README 更新、AGENT_TOOLS 補完；SSE/streamable-HTTP transport + audit log retention 已 ship（Phase 4, PR #807 / PR #1064）；P1 殘留：atlas-mcp onboarding 改進（PR 系列，2026-07-10 啟動）；P2 殘留：binary merge、retention period、license、WebSocket。
+**狀態**：P0 已完成（PROCESSES.yaml + AGENTS.md 本章節）；P0 補遺（2026-07-03）增加 2 個 atlas-mcp-* skill、MCP 模組陷阱、README 更新、AGENT_TOOLS 補完；SSE/streamable-HTTP transport + audit log retention 已 ship（Phase 4, PR #807 / PR #1064）；P1 殘留：atlas-mcp onboarding 改進；P2 殘留：binary merge、retention period、license、WebSocket。
 
 ## ⚠️ 高頻陷阱速查
 
@@ -126,10 +126,8 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | 平行重複實作 | 新增功能前用 GitNexus `query` + codebase-memory 檢查重疊 |
 | **LLM health 401** | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處 rebuild 後仍 401。見 `docs/REFERENCE/TRAPS.md` 對應 entry 與 PR #931。 |
 | **Prometheus metric 命名空間** | 新 metric 必須 `atlas_<feature>_<measurement>_total` 格式，無前綴的舊名（如 `channel_errors_total`）會與 Prometheus default metric 衝突。見 PR #926 + Issue #927。 |
-| **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果（非 AI 工作產物）。`.snapshot.bak` 已在 `.gitignore` 排除（刪除即可）；`parameters.json` 應 commit（校準 SOTA 的 source of truth）。判斷流程見 `docs/REFERENCE/CONSTITUTION.md` §第八條。 |
-| **Page ID rename (overview→home)** | Phase 1 IA redesign 將 `data-page="overview"` 改為 `"home"`。CI smoke test (`client_web/smoke/run.mjs`、`admin_web/smoke/run.mjs`) 必須同步更新 PAGES_ARG 與 PAGE_SELECTORS，否則前端測試 CI 紅燈。 |
-| **Frontend-backend field name mismatch** | CompositeMacroProvider 回傳 `*_index` 後綴（`sox_index`/`spx_index`/`ndx_index`/`dji_index`）與 `score`（非 `index`）；前端若用舊欄位名（`sox`/`index`）會永遠 `null` 導致 silent render failure。改前端前先 `curl /api/macro/snapshot/latest | jq keys` 對齊。 |
-| **AI-Generated Doc 當 gospel** | `followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。衝突協議：① 讀 doc 看說什麼 ② 讀 code 看實際是什麼 ③ 衝突時標記 doc 過時 + 修 code/doc,**不要擋自己的 work 等 doc 同步**。完整協議見 `docs/REFERENCE/TRAPS.md`。 |
+| **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果。`.snapshot.bak` 已 gitignore；`parameters.json` 應 commit。見 `docs/REFERENCE/CONSTITUTION.md` §第八條。 |
+| **AI-Generated Doc 當 gospel** | `followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等為 AI agent 產出，非 human owner hard rule。衝突時：① 讀 doc ② 讀 code ③ 標記 doc 過時 + 修 code/doc。完整協議見 `docs/REFERENCE/TRAPS.md`。 |
 
 ## 🔧 程式碼智慧工具（強制規則）
 
@@ -145,10 +143,8 @@ atlas-go 有三套互補的程式碼智慧工具，各司其職。詳細能力�
 - 新增功能前，用 `codebase-memory_search_graph({semantic_query:[...]})` 檢查是否已有語意相似的實作
 - 複雜度熱點掃描、跨服務資料流追蹤、ADR 管理 → 用 codebase-memory 的 Cypher / `trace_path` / `manage_adr`
 - Fork 強化版（`codebase-memory-mcp-pro`）提供 `explore()` 和 `detect_changes({depth:N})` 作為輕量替代
-
 ### codegraph（輕量快速源碼探索，**快速瀏覽用**）
-- 用 `codegraph_explore()` 快速理解一段程式碼的源碼 + 呼叫路徑（單次 call，Read-equivalent）
-- 動態分派 hop 追蹤（callbacks、React re-render）是 codegraph 獨有強項
+- 用 `codegraph_explore()` 快速理解源碼 + 呼叫路徑（單次 call，Read-equivalent）；動態分派 hop 追蹤（callbacks、React re-render）是其獨有強項
 - 與 codebase-memory 重疊的功能（單次源碼查詢），**優先使用 codebase-memory**
 
 > GitNexus 技能見 **[`.claude/skills/gitnexus/`](.claude/skills/gitnexus/)**。  

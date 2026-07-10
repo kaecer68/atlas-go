@@ -103,15 +103,6 @@ Main packages:
 
 > **Effective routing chain**: RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串（等效於 3 層 fallback）。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 標記為 `[PLANNED]` 常數，等未來 client 實作後可重用。參見 Issue #720（Wave 11 L2.1 doc audit）。
 
-- `internal/llm`: LLM capability-based multi-provider router with effective 3-tier fallback chain (Primary → Backup1 → LastResort; Backup2 reserved for [PLANNED] OpenCode providers), DataClass governance gate, and 12 capability handlers (see [LLM Framework](#llm-framework))
-
-## LLM Framework
-
-`internal/llm/` 是 capability-based 多 Provider 路由層，提供 fallback chain 與 DataClass 治理閘門。
-
-> **Effective routing chain**: RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串（等效於 3 層 fallback）。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 標記為 `[PLANNED]` 常數，等未來 client 實作後可重用。參見 Issue #720（Wave 11 L2.1 doc audit）。
->>>>>>> 62e7a3bc (fix(llm): remove OpenCode-Go/Zen from routing chain (Issue #720))
-
 **架構分層**：
 
 - `provider.go` — `ProviderImpl` 介面、`Capability`（能力描述）、`DataClass`（資料分級）、`RoutingChain`（備援鏈）
