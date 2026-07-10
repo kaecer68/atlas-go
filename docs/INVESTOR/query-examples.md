@@ -2,7 +2,7 @@
 
 > **給 hermes / openclaw agent 的「自然語言 → tool 對照表」**。投資人問什麼、怎麼呼叫、回什麼。
 >
-> 涵蓋 ~25 個高頻率查詢（從 91 tool 中篩選，投資人每天都會用到的）。其他 66+ tool 見 [`REFERENCE/tool-catalog.md`](REFERENCE/tool-catalog.md)（待 PR-5）。
+> 涵蓋 ~25 個高頻率查詢（從 91 tool 中篩選，投資人每天都會用到的）。其他 66+ tool 見 [`REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md)（待 PR-5）。
 >
 > tier 標記（public / registered / premium）待 [#1068](https://github.com/kaecer68/atlas-go/issues/1068) 商業化確認 — 目前共用 dev key 全部可呼叫（PR #1069）。
 
@@ -330,5 +330,5 @@ system_get_health
 4. **多 tool 組合**時（如「2330 為什麼漲」需 calendar + narrative），平行呼叫
 
 不確定的話：
-- 91 tool 完整 catalog 見 [`REFERENCE/tool-catalog.md`](REFERENCE/tool-catalog.md)
+- 91 tool 完整 catalog 見 [`REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md)
 - 自然語言 → use case 對應見 [`README.md`](README.md)

@@ -83,7 +83,7 @@
 
 5 個服務(prism-worker、grafana、alertmanager、otel-collector、atlas-go 的 `/health`)同時 crash loop 的完整根因分析見:
 
-**[`docs/investigations/2026-06-28-boot-loop-multi-service.md`](investigations/2026-06-28-boot-loop-multi-service.md)**
+**[`docs/../investigations/2026-06-28-boot-loop-multi-service.md`](../investigations/2026-06-28-boot-loop-multi-service.md)**
 
 涵蓋:docker-compose `command` 跟 ENTRYPOINT 衝突、`env_file` vs `environment` precedence、Dockerfile 硬編碼 healthcheck 繼承、PRISM system 實作但不完整、fubon-neo PyPI 404、兩個 .env 模板 stale orphan。
 
@@ -248,7 +248,7 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 - `docs/specs/*.md` — 設計文件,可能混合 human owner + AI 補充
 - `docs/observations/*.md` — 觀察日誌範本,可能是 AI 模板
 - `docs/archive/*.md` — 已被歸檔的 AI-generated docs(明確標示「已完成」)
-- 對照 `[docs/DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md)` 確認文件歸屬與維護者
+- 對照 `[docs/../DOCUMENTATION_MAP.md](../DOCUMENTATION_MAP.md)` 確認文件歸屬與維護者
 
 **不要擋 work 的情境**：
 - Doc 說「不能做 X」但你 grep code 沒看到實際阻擋邏輯

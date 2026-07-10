@@ -52,7 +52,7 @@
 ## 🔗 文件路由
 
 ### Agent 入門（外部 AI 優先讀）
-- [`docs/AGENT_ONBOARDING.md`](docs/AGENT_ONBOARDING.md) — 5 分鐘速讀 atlas 全貌
+- [`docs/INVESTOR/README.md`](docs/INVESTOR/README.md) — 5 分鐘速讀 atlas 全貌
 - [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) — **91** 個 tool 完整 catalog
 - [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — **MCP 給 agent 的唯一入口**，部署/配置/91 tool 總覽
 - [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md) — 50 行 MCP 設定 SOP（Hermes/OpenClaw/Claude/Cursor/OpenCode 5 種 client）
@@ -84,7 +84,7 @@
 ### 環境與工具
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — 外部依賴與環境狀態
 - [`docs/TOOLS.md`](docs/TOOLS.md) — 程式碼智慧工具（GitNexus / codebase-memory / codegraph 路由決策樹）
-- [`docs/INVESTOR/api-reference.md`](docs/INVESTOR/api-reference.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
+- [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
 - [`docs/operations/version-bumping.md`](docs/operations/version-bumping.md) — **Version bump SOP**（AI coding release 必走 `make bump-version` + `make sync-version` + `make ci` 三步）
 - [`CLAUDE.md`](CLAUDE.md) — Claude Code 專屬設定（部署、前端架構、token 效率規則）
 
@@ -106,7 +106,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 84+ tools、auth、audit、JSON Schema 模板 |
 | MCP 模組陷阱 | `[`cmd/atlas-mcp/server/AGENTS.md`](cmd/atlas-mcp/server/AGENTS.md) | 66 .go 檔案的 hot-path 陷阱（34 非測試 + 32 測試,命名/相依/稽核/認證） |
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
-| Onboarding | `docs/AGENT_ONBOARDING.md` | 5 分鐘上手 |
+| Onboarding | `docs/INVESTOR/README.md` | 5 分鐘上手 |
 
 **狀態**：P0 已完成（PROCESSES.yaml + AGENTS.md 本章節）；P0 補遺（2026-07-03）增加 2 個 atlas-mcp-* skill、MCP 模組陷阱、README 更新、AGENT_TOOLS 補完；SSE/streamable-HTTP transport + audit log retention 已 ship（Phase 4, PR #807 / PR #1064）；P1 殘留：atlas-mcp onboarding 改進（PR 系列，2026-07-10 啟動）；P2 殘留：binary merge、retention period、license、WebSocket。
 
