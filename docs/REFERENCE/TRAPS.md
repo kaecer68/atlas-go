@@ -30,7 +30,7 @@
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
-| **繞過共變異數優化回到線性加權** | portfolio | `optimizer.go` 已升級為 Ledoit-Wolf 共變異數矩陣 + Active-set QP。當 `o.history` 非 nil 時必須走共變異數路徑。修改 optimizer 前必須先閱讀 `docs/CONSTITUTION.md`。 |
+| **繞過共變異數優化回到線性加權** | portfolio | `optimizer.go` 已升級為 Ledoit-Wolf 共變異數矩陣 + Active-set QP。當 `o.history` 非 nil 時必須走共變異數路徑。修改 optimizer 前必須先閱讀 `../CONSTITUTION.md`。 |
 | **繞過 BackgroundTaskManager 建立獨立排程** | apigateway | 所有定時任務**必須且只能**透過 `BackgroundTaskManager` 註冊。禁止在 goroutine 中直接啟動 `time.Ticker`。參見 `internal/apigateway/CONSTITUTION.md` 第四條。 |
 | **繞過 ParametersConfig 硬編碼參數** | config | 所有可調整參數必須透過 `internal/config/parameters.go` 管理，禁止 magic number。參數必須包含 `Rationale`、`Source`、`Todo`。 |
 | **建立獨立資料抓取通道** | marketdata | 所有外部資料抓取必須通過已註冊的 `marketdata.Provider`，禁止直接建立 HTTP client。參見 `internal/apigateway/CONSTITUTION.md` 第一條。 |
