@@ -15,7 +15,7 @@
 | 職責 | 端點 |
 |------|------|
 | 核心儀表板 | `/api/dashboard/macro-radar`, `/api/dashboard/recommendation-pipeline` |
-| 產業生態系 | `/api/industry/cycles`, `/api/industry/seasonality`, `/api/industry/linkage`, `/api/industry/classification`, `/api/industry/detail` |
+| 產業生態系 | `/api/dashboard/industry-classification`, `/api/dashboard/industry-seasonality`, `/api/dashboard/industry-seasonality-calendar`, `/api/dashboard/industry-cycle`, `/api/dashboard/industry-linkage`, `/api/dashboard/industry-risk`, `/api/dashboard/industry-overview`, `/api/dashboard/industry-graph`, `/api/dashboard/industry-shock-simulation` |
 | 敘事分析 | `/api/narrative/events`, `/api/narrative/chains` |
 | 人工干預 | `/api/control/approve-recommendation`, `/api/control/reject-recommendation`, `/api/control/audit-log` |
 | 實驗與回測 | `/api/experiment/*`, `/api/backtest/*` |
