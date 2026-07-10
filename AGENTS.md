@@ -99,12 +99,12 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | 層級 | 入口 | 文件 |
 |------|------|------|
 | Roadmap (規劃藍圖) | `docs/specs/agent-mcp-server.md` | canonical spec + 開放議題(roadmap v2 內容已併入此 spec) |
-| MCP 接入（外部 agent） | `[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) + [skill](.claude/skills/atlas-mcp-integration/SKILL.md) | 部署配置、Claude/Cursor/OpenCode 設定 |
-| Tool 導覽 | `[`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 89–91 tools 決策樹與完整 catalog |
+| MCP 接入（外部 agent） | [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) + [skill](.claude/skills/atlas-mcp-integration/SKILL.md) | 部署配置、Claude/Cursor/OpenCode 設定 |
+| Tool 導覽 | [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 89–91 tools 決策樹與完整 catalog |
 | Workflow Map | `docs/REFERENCE/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
 | Process 標註 | `docs/REFERENCE/PROCESSES.yaml` | 結構化 workflow metadata |
 | MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 84+ tools、auth、audit、JSON Schema 模板 |
-| MCP 模組陷阱 | `[`cmd/atlas-mcp/server/AGENTS.md`](cmd/atlas-mcp/server/AGENTS.md) | 66 .go 檔案的 hot-path 陷阱（34 非測試 + 32 測試,命名/相依/稽核/認證） |
+| MCP 模組陷阱 | [`cmd/atlas-mcp/server/AGENTS.md`](cmd/atlas-mcp/server/AGENTS.md) | 66 .go 檔案的 hot-path 陷阱
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
 | Onboarding | `docs/INVESTOR/README.md` | 5 分鐘上手 |
 

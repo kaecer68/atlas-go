@@ -1,8 +1,11 @@
-# agents.md — web (Frontend)
+# AGENTS.md — admin_web（管理後台）
 
-> 修改 web 目錄下的程式碼前請先閱讀此文件。
+> 修改 admin_web 目錄下的程式碼前請先閱讀此文件。
+> CSS 色彩語意系統與 Canvas 繪圖橋接的完整規範見 **[`docs/guides/frontend-architecture.md`](../../docs/guides/frontend-architecture.md)**（單一權威來源）。
 
-## CSS 色彩語意系統
+## CSS 色彩語意系統（摘要）
+
+完整定義見 `docs/guides/frontend-architecture.md`。本節僅列 admin_web 特有陷阱。
 
 atlas-go 使用**台股紅漲綠跌**慣例（與國際相反），系統有兩套並行的色彩體系：
 

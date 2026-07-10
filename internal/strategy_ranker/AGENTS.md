@@ -16,20 +16,9 @@
 ## 資料流
 
 ```
-Input: []strategy_validator.StrategyReport (回測結果)
-       ↓
-strategy_ranker.Ranker.RankAndTier(reports)
-       ↓
-       strategy_validator.Rank(reports)
-       ↓
-       strategy_validator.AssignTiers(ranked)
-       ↓
-Output: []strategy_validator.RankedReport
-       ↓
-GET /api/strategy-ranker
-       ↓
-handleRank (HTTP layer)
+reports ([]strategy_validator.StrategyReport) → Rank() → AssignTiers() → []RankedReport
 ```
+Rank 與 AssignTiers 由 `strategy_validator` 提供，本模組為包裝層。
 
 ## 與 P0-1 的關係
 

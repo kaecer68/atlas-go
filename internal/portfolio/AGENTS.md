@@ -1,4 +1,4 @@
-# internal/portfolio AGENTS.md
+# AGENTS.md — internal/portfolio
 
 `internal/portfolio` 負責台股投資組合的權重管理與因子計算，是系統「模擬優先」與「稽核導向」的核心。
 
