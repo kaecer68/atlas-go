@@ -20,6 +20,36 @@ curl -fsSL ... | bash -s -- --version v0.0.0.33
 
 自動下載預編譯 binary + SHA256 驗證 + 安裝到 `~/.local/bin/atlas-mcp`。
 
+### 短期共用 dev key（**推薦**給 hermes / openclaw agent 短期使用）
+
+atlas-go 商業化前（見 [#1068](https://github.com/kaecer68/atlas-go/issues/1068)），為降低維護成本，目前所有 hermes / openclaw agent **共用一組 dev key** 放在 `~/.config/atlas-go/.env`（已 gitignore）。
+
+```bash
+# 一條龍：自動 source env + 安裝 + 設定 + 驗證 hermes
+make setup-mcp-agent
+
+# 單獨驗證 hermes 真的能用
+make verify-mcp-setup
+```
+
+**短期限制**（等 #1068 解）：
+- 這是 dev key，**不要拿來做 live trading**
+- 商業化後改用個人 key：`hermes mcp add atlas-mcp --env ATLAS_API_KEY=$YOUR_PERSONAL_KEY`
+
+**沒有 `make` 環境時的 fallback**（純 hermes CLI）：
+```bash
+# 1. 讀 dev key 進當前 shell
+set -a; . ~/.config/atlas-go/.env; set +a
+
+# 2. 一條龍加入 hermes（自動 enable 全部 89 tools）
+printf "Y\n" | hermes mcp add atlas-mcp \
+  --command "$(command -v atlas-mcp)" \
+  --env ATLAS_BASE_URL="${ATLAS_BASE_URL:-http://127.0.0.1:18080}" \
+  --env ATLAS_API_KEY="${ATLAS_API_KEY}" \
+  --connect-timeout 30
+hermes mcp configure atlas-mcp --enable-all 2>/dev/null || true
+```
+
 MCP client config 路徑：
 
 | Client | Config 檔 |

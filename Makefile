@@ -74,7 +74,10 @@ help:
 	@echo "  build-mcp          編譯 bin/atlas-mcp"
 	@echo "  install-mcp        安裝到 ~/.local/bin (MCP client command 路徑)"
 	@echo "  mcp-status         檢查 binary / atlas-go / LLM router 三項健康"
-	@echo "  setup-mcp          啟動互動式 wizard"
+	@echo "  setup-mcp          啟動互動式 wizard (開發者用)"
+	@echo "  setup-mcp-agent    hermes 等 agent 用的一條龍安裝 + 設定 + 驗證"
+	@echo "                    (自動 source ~/.config/atlas-go/.env 取共用 dev key)"
+	@echo "  verify-mcp-setup   驗證 hermes 真的能用 atlas-mcp (89 tools 連線)"
 	@echo "  install-atlas-mcp-from-release"
 	@echo "                    從 GitHub Release 下載 atlas-mcp + SHA256 verify"
 	@echo ""
@@ -183,6 +186,60 @@ mcp-status:
 setup-mcp:
 	@echo "🚀 Launching atlas-mcp-setup wizard..."
 	go run ./cmd/atlas-mcp-setup
+
+# 給投資人 hermes/openclaw agent 用的「一條龍」安裝 + 設定 + 驗證
+#
+# 自動從 ~/.config/atlas-go/.env 取共用 dev key（短期階段，#1068 商業化後
+# 改用個人 key）。不需 Go toolchain / source tree，只需：
+#   1. 已安裝的 atlas-mcp binary（make install-atlas-mcp-from-release）
+#   2. hermes CLI（hermes mcp add / list / test 子命令）
+#
+# 對 hermes 等 agent:跑一次 `make setup-mcp-agent` 即可完成安裝 + 設定。
+# 後續用 `make verify-mcp-setup` 驗證是否真的能用。
+setup-mcp-agent:
+	@ATLAS_MCP_BIN=$$(command -v atlas-mcp 2>/dev/null || echo $(HOME)/.local/bin/atlas-mcp); \
+	if [ ! -x "$$ATLAS_MCP_BIN" ]; then \
+		echo "❌ atlas-mcp binary not found at $$ATLAS_MCP_BIN"; \
+		echo "   跑: make install-atlas-mcp-from-release"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(HOME)/.config/atlas-go/.env" ]; then \
+		echo "⚠️  $(HOME)/.config/atlas-go/.env not found"; \
+		echo "   安裝時不帶 ATLAS_API_KEY（只能跑 public tier tools）"; \
+		ENV_VARS=""; \
+	else \
+		echo "✓ 從 $(HOME)/.config/atlas-go/.env 讀取 ATLAS_* 環境變數"; \
+		ENV_VARS=$$(grep -E '^ATLAS_' $(HOME)/.config/atlas-go/.env | sed 's/^/--env /' | tr '\n' ' '); \
+	fi
+	@echo "🚀 hermes mcp add atlas-mcp (command: $$ATLAS_MCP_BIN)..."
+	@printf "Y\n" | hermes mcp add atlas-mcp \
+		--command $$ATLAS_MCP_BIN \
+		$$ENV_VARS \
+		--connect-timeout 30
+	@hermes mcp configure atlas-mcp --enable-all 2>/dev/null || true
+	@echo ""
+	@echo "✅ Done. Verify with: make verify-mcp-setup"
+
+# 驗證 hermes 真的能用 atlas-mcp（hermes agent 自己跑這個檢查）
+verify-mcp-setup:
+	@if ! command -v hermes >/dev/null 2>&1; then \
+		echo "❌ hermes CLI not found in PATH"; \
+		exit 1; \
+	fi
+	@if ! hermes mcp list 2>/dev/null | grep -q atlas-mcp; then \
+		echo "❌ atlas-mcp 不在 hermes config"; \
+		echo "   跑: make setup-mcp-agent"; \
+		exit 1; \
+	fi
+	@if [ ! -f $(HOME)/.hermes/config.yaml ]; then \
+		echo "❌ $(HOME)/.hermes/config.yaml not found"; \
+		exit 1; \
+	fi
+	@echo "✓ hermes config.yaml (atlas-mcp section):"
+	@grep -A5 "atlas-mcp:" $(HOME)/.hermes/config.yaml | head -8
+	@echo ""
+	@echo "✓ server response (should show 89 tools):"
+	@hermes mcp test atlas-mcp 2>&1 | tail -3
 
 # 給投資人 hermes/openclaw agent 用的單行安裝器（從 GitHub Release）
 # 不需要 Go toolchain 或 source tree。詳見 scripts/install-atlas-mcp-from-release.sh。
