@@ -88,6 +88,31 @@ go test -count=1 ./cmd/atlas-mcp-setup/
 - 寫入的設定檔 mode 0600（不含 group-readable）
 - 一次只設定一個 client（多 client 設定需重跑 wizard）
 
+## 測試
+
+**單元測試**（11 個，60% 覆蓋率；預設 `go test ./...` 會跑）：
+- `render_test.go`：4 種 client config 格式 round-trip、merge 邏輯
+- `detect_test.go`：5 種 client 路徑探測（用 `t.TempDir()` mock home dir）
+- `coverage_test.go`：14 個補完測試（parseFlags、resolvePaths、Run、printBanner、effectiveBinaryPath 等）
+
+**整合測試**（`//go:build integration` tag；opt-in）：
+- `integration_test.go`：mock atlas-go HTTP backend（`httptest.NewServer`）→ 編譯 `bin/atlas-mcp` → 啟動 subprocess → 走 MCP `initialize` → `initialized` → `tools/list` → `tools/call` 完整 round-trip
+- 驗證：89 tool count、mock backend 確實被 hit、無外部依賴
+
+執行：
+```bash
+# 單元測試
+go test -count=1 -coverprofile=cov.out ./cmd/atlas-mcp-setup/
+go tool cover -func=cov.out
+
+# 整合測試（CI 自動跑，本機 opt-in）
+make test-integration
+# 或
+go test -tags=integration -v -count=1 ./cmd/atlas-mcp-setup/
+```
+
+> 整合測試用 `httptest.NewServer` mock backend + newline-delimited JSON-RPC over stdio（**非** LSP-style Content-Length — go-mcp SDK 拒絕 Content-Length framing）。無需 Redis / PostgreSQL / 外部網路。
+
 ## 相關資源
 
 - **5 分鐘 SOP**: [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
