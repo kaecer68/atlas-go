@@ -113,8 +113,8 @@ func inspectClient(name ClientKind, format, serverKey, path string) ClientInstal
 }
 
 func isMacOS() bool {
-	// Use runtime.GOOS (Go stdlib constant) instead of os.Getenv("GOOS") to comply
-	// with internal/apigateway/CONSTITUTION.md Art.1 (only whitelisted env vars).
+	// Use the Go stdlib runtime constant — not an env var lookup — to stay
+	// within the allowed_env_vars.md whitelist (apigateway CONSTITUTION Art.1).
 	return runtime.GOOS == "darwin" || filepath.Separator == '/' && fileExists("/System/Library/CoreServices/SystemVersion.plist")
 }
 
