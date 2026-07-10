@@ -1,19 +1,26 @@
 import { escapeHtml, renderEmptyState, renderSkeleton } from '../shared/app-utils.js';
 
+function isValidNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
 function renderBar(label, value, maxAbs) {
-  const isPositive = value > 0;
-  const sign = isPositive ? '▲ +' : (value < 0 ? '▼ ' : '');
-  const colorClass = isPositive ? 'sq-chip-inflow' : (value < 0 ? 'sq-chip-outflow' : '');
-  const widthPct = maxAbs ? (Math.abs(value) / maxAbs * 100) : 0;
-  
+  const hasValue = isValidNumber(value);
+  const isPositive = hasValue && value > 0;
+  const isNegative = hasValue && value < 0;
+  const sign = isPositive ? '▲ +' : (isNegative ? '▼ ' : '');
+  const colorClass = isPositive ? 'sq-chip-inflow' : (isNegative ? 'sq-chip-outflow' : '');
+  const widthPct = hasValue && maxAbs ? (Math.abs(value) / maxAbs * 100) : 0;
+  const displayValue = hasValue ? `${sign}${Math.abs(value).toLocaleString()} 張` : '—';
+
   return `
     <div class="sq-chip-row">
       <div class="sq-chip-label">${escapeHtml(label)}</div>
       <div class="sq-chip-bar-container">
         <div class="sq-chip-bar ${colorClass}" style="width: ${widthPct}%"></div>
       </div>
-      <div class="sq-chip-value ${isPositive ? 'sq-price-up' : (value < 0 ? 'sq-price-down' : 'sq-price-neutral')}">
-        ${sign}${Math.abs(value).toLocaleString()} 張
+      <div class="sq-chip-value ${isPositive ? 'sq-price-up' : (isNegative ? 'sq-price-down' : 'sq-price-neutral')}">
+        ${displayValue}
       </div>
     </div>
   `;
@@ -31,12 +38,15 @@ export function renderChips(state, chipsResult) {
   }
 
   const data = chipsResult.data;
-  const foreign = data.foreign_investor_net || 0;
-  const domestic = data.domestic_fund_net || 0;
-  const dealer = data.dealer_net || 0;
-  const total = foreign + domestic + dealer;
+  const foreign = isValidNumber(data.foreign_investor_net) ? data.foreign_investor_net : null;
+  const domestic = isValidNumber(data.domestic_fund_net) ? data.domestic_fund_net : null;
+  const dealer = isValidNumber(data.dealer_net) ? data.dealer_net : null;
+  const total = foreign !== null && domestic !== null && dealer !== null
+    ? foreign + domestic + dealer
+    : null;
 
-  const maxAbs = Math.max(Math.abs(foreign), Math.abs(domestic), Math.abs(dealer), Math.abs(total)) || 1;
+  const values = [foreign, domestic, dealer, total].filter(isValidNumber);
+  const maxAbs = values.length > 0 ? Math.max(...values.map(Math.abs)) : 1;
 
   let dateDisplay = data.date ? escapeHtml(data.date) : '未知';
   if (dateDisplay.length === 8) {

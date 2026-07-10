@@ -1,7 +1,8 @@
 import { agentName, stockName, regimeLabel, stressLabel, sectorName } from '../names.js';
 import { narrativeThemeLabel } from '../shared/constants.js';
 import { getJSON, notify, sortNarrativeEvents } from '../shared/app-utils.js';
-import { escapeHtml } from '../shared/utils.js';
+import { escapeHtml, fmtFloat, fmtPct, fmtInt } from '../shared/utils.js';
+import { formatNumber, formatMaxDrawdown, fmtSignedPct } from '../shared/format-metric.js';
 
 
 // Main overview dashboard
@@ -16,7 +17,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const scorecards = cards.scorecards || [];
   const weakestEntry = scorecards[0];
   const weakest = weakestEntry ? weakestEntry.agent_id : '-';
-  const weakSharpe = weakestEntry && weakestEntry.sharpe != null ? weakestEntry.sharpe.toFixed(3) : '-';
+  const weakSharpe = formatNumber(weakestEntry && weakestEntry.sharpe, { decimals: 3 });
 
   const warnings = health.warnings || [];
   const crowdingWarnings = warnings.filter(w => w.toLowerCase().includes('crowded trade') || w.toLowerCase().includes('high overlap'));
@@ -67,7 +68,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
   const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--color-success)' : 'var(--warn)') : 'inherit';
   const phaseHtml = capitalPhase
-    ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${(capitalPhase.rolling_sharpe || 0).toFixed(2)}</div>`
+    ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${fmtFloat(capitalPhase.rolling_sharpe)}</div>`
     : '<div class="my-xs text-sm text-muted">-</div>';
 
   gridMarket.innerHTML = `
@@ -122,7 +123,6 @@ function formatDate(d) {
   if (isNaN(date.getTime()) || date.getFullYear() < 2000) return '-';
   return date.toLocaleString('zh-TW');
 }
-function fmt(num, digits=3) { return (num ?? 0).toFixed(digits); }
 
 
 export function renderEmptyState(message, action, hint) {
@@ -251,7 +251,7 @@ export function renderMacroRadar(data, pipelineData) {
         <tbody>
           ${topItems.map(it => {
             const retCls = it.forward_return > 0 ? 'up' : (it.forward_return < 0 ? 'down' : '');
-            return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}</td><td>${it.conviction != null ? escapeHtml(String(it.conviction)) : '-'}</td><td class="${retCls}">${(it.forward_return*100).toFixed(1)}%</td></tr>`;
+            return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}</td><td>${it.conviction != null ? escapeHtml(String(it.conviction)) : '-'}</td><td class="${retCls}">${fmtSignedPct(it.forward_return)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -326,8 +326,8 @@ export function renderAgentObservatory(data, overlapData) {
       ${cards.map(c => {
         const isWeak = c.agent_id === weakest;
         const sigWarn = (c.windows || 0) < 20 ? '<span title="窗口數不足，統計信心有限" style="color:var(--warn);font-size:10px">⚠️</span>' : '';
-        const ciLow = (c.confidence_low != null && c.confidence_low !== 0) ? c.confidence_low.toFixed(3) : '-';
-        const ciHigh = (c.confidence_high != null && c.confidence_high !== 0) ? c.confidence_high.toFixed(3) : '-';
+        const ciLow = formatNumber(c.confidence_low, { decimals: 3 });
+        const ciHigh = formatNumber(c.confidence_high, { decimals: 3 });
         const trendVal = c.rolling_sharpe_trend;
         let trendIcon = '';
         if (trendVal != null && Math.abs(trendVal) > 0.001) {
@@ -341,21 +341,21 @@ export function renderAgentObservatory(data, overlapData) {
         }
         const oosWarn = c.oos_sample_warning ? `<span title="${escapeHtml(c.oos_sample_warning)}" style="color:var(--warn);font-size:10px">⚠️</span>` : '';
         const overfitBadge = c.overfit_warning ? `<span title="${escapeHtml(c.overfit_reason || '')}" style="color:var(--color-danger);font-size:10px;margin-left:4px">⚠️</span>` : '';
-        const isSharpeStr = c.is_sharpe != null ? c.is_sharpe.toFixed(3) : '-';
-        const oosSharpeStr = c.oos_sharpe != null ? c.oos_sharpe.toFixed(3) : '-';
-        const isOosStr = c.is_oos_ratio != null && c.is_oos_ratio > 0 ? c.is_oos_ratio.toFixed(2) : '-';
+        const isSharpeStr = formatNumber(c.is_sharpe, { decimals: 3 });
+        const oosSharpeStr = formatNumber(c.oos_sharpe, { decimals: 3 });
+        const isOosStr = formatNumber(c.is_oos_ratio, { decimals: 2 });
         return `<tr class="${isWeak ? 'weak' : ''}">
           <td>${agentName(c.agent_id) || ''} ${trendIcon} ${sigWarn}</td>
           <td>${c.layer || '-'}</td>
-          <td>${c.windows || 0}</td>
-          <td>${c.observations || 0}</td>
-          <td>${((c.hit_rate || 0) * 100).toFixed(1)}%</td>
-          <td style="${(c.sharpe || 0) < 0 ? 'color:var(--color-danger)' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
+          <td>${fmtInt(c.windows)}</td>
+          <td>${fmtInt(c.observations)}</td>
+          <td>${fmtPct(c.hit_rate)}</td>
+          <td style="${c.sharpe != null && c.sharpe < 0 ? 'color:var(--color-danger)' : ''}">${formatNumber(c.sharpe, { decimals: 3 })}</td>
           <td class="text-muted text-xs">[${ciLow}, ${ciHigh}]</td>
-          <td>${((c.average_return || 0) * 100).toFixed(2)}%</td>
-          <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
-          <td style="${(c.is_sharpe || 0) < 0 ? 'color:var(--color-danger)' : ''}">${isSharpeStr}${oosWarn}</td>
-          <td style="${(c.oos_sharpe || 0) < 0 ? 'color:var(--color-danger)' : ''}">${oosSharpeStr}${overfitBadge}</td>
+          <td>${fmtSignedPct(c.average_return)}</td>
+          <td>${formatMaxDrawdown(c.max_drawdown)}</td>
+          <td style="${c.is_sharpe != null && c.is_sharpe < 0 ? 'color:var(--color-danger)' : ''}">${isSharpeStr}${oosWarn}</td>
+          <td style="${c.oos_sharpe != null && c.oos_sharpe < 0 ? 'color:var(--color-danger)' : ''}">${oosSharpeStr}${overfitBadge}</td>
           <td>${isOosStr}</td>
         </tr>`;
       }).join('')}
@@ -475,7 +475,7 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
     agentList = Object.keys(darwinianStatus.agents).map(id => Object.assign({agent_id: id}, darwinianStatus.agents[id]));
   }
   const topAgent = agentList.length > 0 ? agentList.reduce((a, b) => (b.weight || 0) > (a.weight || 0) ? b : a) : null;
-  const avgWeight = agentList.length > 0 ? (agentList.reduce((s, a) => s + (a.weight || 0), 0) / agentList.length).toFixed(2) : '-';
+  const avgWeight = agentList.length > 0 ? fmtFloat(agentList.reduce((s, a) => s + (a.weight || 0), 0) / agentList.length) : '-';
 
   const regime = (macro && macro.regime) || 'NEUTRAL';
   const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : 'var(--warn)');
@@ -493,7 +493,7 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px">
       <div class="panel-card" style="text-align:center">
         <div class="text-sm text-muted mb-xs">市場狀態</div>
-        <div class="text-xl font-bold" style="color:${regimeColor}">${regimeLabel}</div>
+        <div class="text-xl font-bold" style="color:${regimeColor}">${regimeLabel(regime)}</div>
         <div class="text-xs text-muted mt-xs">Regime 訊號</div>
       </div>
       <div class="panel-card" style="text-align:center">
@@ -521,7 +521,7 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
     <div style="display:flex;gap:12px;align-items:center;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:12px;border-left:3px solid var(--up)">
       <span style="font-size:12px;color:var(--muted)">🏆 最強 Agent</span>
       <span style="font-size:13px;font-weight:700">${escapeHtml(agentName(topAgent.agent_id))}</span>
-      <span style="font-size:11px;color:var(--muted)">權重 ${topAgent.weight.toFixed(2)} · 命中率 ${((topAgent.hit_rate || 0) * 100).toFixed(0)}%</span>
+      <span style="font-size:11px;color:var(--muted)">權重 ${fmtFloat(topAgent.weight)} · 命中率 ${fmtPct(topAgent.hit_rate)}</span>
     </div>` : ''}
     ${latest.length ? `
     <div>

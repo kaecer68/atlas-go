@@ -333,8 +333,12 @@ export async function renderStrategiesPage(root) {
     const total = STATE.strategies.length;
     const active = STATE.strategies.filter(s => s.status === 'active').length;
     const layersCovered = STATE.layers.filter(l => l.count > 0).length;
-    const avgHitRate = total === 0 ? 0 :
-      STATE.strategies.reduce((sum, s) => sum + (s.hit_rate || 0), 0) / total;
+    const validHitRates = STATE.strategies
+      .map(s => s.hit_rate)
+      .filter(v => typeof v === 'number' && Number.isFinite(v));
+    const avgHitRate = validHitRates.length > 0
+      ? validHitRates.reduce((sum, v) => sum + v, 0) / validHitRates.length
+      : null;
     kpiStrip.innerHTML = `
       <div class="kpi-card"><div class="kpi-label">總心法數</div>
         <div class="kpi-value">${total}</div></div>
@@ -343,7 +347,7 @@ export async function renderStrategiesPage(root) {
       <div class="kpi-card"><div class="kpi-label">5 層覆蓋</div>
         <div class="kpi-value">${layersCovered}/5</div></div>
       <div class="kpi-card"><div class="kpi-label">平均命中率</div>
-        <div class="kpi-value">${(avgHitRate * 100).toFixed(1)}%</div></div>
+        <div class="kpi-value">${avgHitRate === null ? '—' : (avgHitRate * 100).toFixed(1) + '%'}</div></div>
     `;
   }
 
@@ -352,17 +356,20 @@ export async function renderStrategiesPage(root) {
     if (!coreIndicatorStrip) return;
     const c = STATE.coreIndicators;
     const failed = c === null;
+    const isValid = v => typeof v === 'number' && Number.isFinite(v);
     const items = [
-      { label: '外資現貨 (TWD 億)', value: c ? c.foreign_capital_net_twd : 0,
+      { label: '外資現貨 (TWD 億)', key: 'foreign_capital_net_twd',
         fmt: v => (v / 1e8).toFixed(1) },
-      { label: 'TSM ADR (%)',   value: c ? c.tsm_adr_pct  : 0, fmt: v => v.toFixed(2) + '%' },
-      { label: 'NVDA (%)',      value: c ? c.nvda_pct     : 0, fmt: v => v.toFixed(2) + '%' },
-      { label: 'DXY (%)',       value: c ? c.dxy_pct      : 0, fmt: v => v.toFixed(2) + '%' },
+      { label: 'TSM ADR (%)',   key: 'tsm_adr_pct',  fmt: v => v.toFixed(2) + '%' },
+      { label: 'NVDA (%)',      key: 'nvda_pct',     fmt: v => v.toFixed(2) + '%' },
+      { label: 'DXY (%)',       key: 'dxy_pct',      fmt: v => v.toFixed(2) + '%' },
     ];
     coreIndicatorStrip.innerHTML = items.map(it => {
-      const display = failed ? '--' : it.fmt(it.value);
+      const raw = c ? c[it.key] : null;
+      const hasValue = isValid(raw);
+      const display = failed || !hasValue ? '—' : it.fmt(raw);
       const cls = failed ? 'kpi-value kpi-value--error' :
-        `kpi-value ${(it.value > 0 ? 'text-up' : it.value < 0 ? 'text-down' : '')}`;
+        `kpi-value ${(hasValue ? (raw > 0 ? 'text-up' : raw < 0 ? 'text-down' : '') : '')}`;
       return `
       <div class="kpi-card">
         <div class="kpi-label">${escapeHtml(it.label)}</div>

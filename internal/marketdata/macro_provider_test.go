@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -104,5 +105,34 @@ func TestCompositeMacroProvider_EmptyNoProviders(t *testing.T) {
 	}
 	if len(merged.FailedChannels) != 0 {
 		t.Errorf("FailedChannels = %v, want empty", merged.FailedChannels)
+	}
+}
+
+func TestMacroDataSnapshot_MarshalJSON_OmitsEmptySymbolPoints(t *testing.T) {
+	snap := MacroDataSnapshot{
+		US10Y:      MacroDataPoint{Symbol: "^TNX", Value: 4.5, ChangePct: 0.1},
+		TAIEX:      MacroDataPoint{}, // missing indicator
+		NVDA:       MacroDataPoint{Symbol: "NVDA", Value: 0, ChangePct: 0},
+		RecordedAt: 1234567890,
+	}
+	b, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("MarshalJSON() error = %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("Unmarshal error = %v", err)
+	}
+	if _, ok := raw["taiex"]; ok {
+		t.Errorf("taiex should be omitted when Symbol is empty, got %v", raw["taiex"])
+	}
+	if _, ok := raw["us10y"]; !ok {
+		t.Error("us10y should be present when Symbol is set")
+	}
+	if _, ok := raw["nvda"]; !ok {
+		t.Error("nvda should be present even when Value/ChangePct are zero")
+	}
+	if raw["recorded_at"] != 1234567890.0 {
+		t.Errorf("recorded_at = %v, want 1234567890", raw["recorded_at"])
 	}
 }

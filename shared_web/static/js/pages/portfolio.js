@@ -6,7 +6,11 @@ import { renderRiskPanel } from '../components/risk-panel.js';
 import { renderRiskGatePanel } from '../components/risk-gate-panel.js';
 
 import { renderStockCell } from '../names.js';
-import { formatMaxDrawdown, formatHHI } from '../shared/format-metric.js';
+import { formatMaxDrawdown, formatHHI, formatNumber, fmtSignedPct } from '../shared/format-metric.js';
+
+function isValidNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
 
 function renderActionEmptyState(title, description, pageId, buttonText) {
   return `
@@ -43,13 +47,14 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     const tax = taxData || {};
     const trades = Array.isArray(tradeHistory) ? tradeHistory : [];
 
-    const totalTaxPaid = tax.total_tax_paid || 0;
-    const afterTaxValue = (state.portfolio_value || 0) - totalTaxPaid;
-    const realizedPnL = state.realized_pnl || 0;
-    const tradeCount = state.trade_count || trades.length;
-    const unrealizedPnLTotal = state.unrealized_pnl_total || 0;
-    const concentrationRatio = state.concentration_ratio || 0;
-    const currentDrawdown = state.current_drawdown || 0;
+    const portfolioValue = isValidNumber(state.portfolio_value) ? state.portfolio_value : null;
+    const totalTaxPaid = isValidNumber(tax.total_tax_paid) ? tax.total_tax_paid : null;
+    const afterTaxValue = portfolioValue !== null && totalTaxPaid !== null ? portfolioValue - totalTaxPaid : null;
+    const realizedPnL = isValidNumber(state.realized_pnl) ? state.realized_pnl : null;
+    const tradeCount = typeof state.trade_count === 'number' ? state.trade_count : trades.length;
+    const unrealizedPnLTotal = isValidNumber(state.unrealized_pnl_total) ? state.unrealized_pnl_total : null;
+    const concentrationRatio = isValidNumber(state.concentration_ratio) ? state.concentration_ratio : null;
+    const currentDrawdown = isValidNumber(state.current_drawdown) ? state.current_drawdown : null;
 
     const sectorLabels = {
       'semiconductor': '半導體', 'ai_supply_chain': 'AI供應鏈',
@@ -59,17 +64,16 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     };
 
     function kpiNTD(v) {
-  if (v == null) return '—';
-  return window.fmtNTD ? window.fmtNTD(v) : v.toFixed(0);
-}
-function kpiPct(v) {
-  if (v == null) return '—';
-  return window.fmtPct ? window.fmtPct(v) : (v * 100).toFixed(2) + '%';
-}
-function kpiNum(v) {
-  if (v == null) return '—';
-  return v.toString();
-}
+      if (!isValidNumber(v)) return '—';
+      return window.fmtNTD ? window.fmtNTD(v) : v.toFixed(0);
+    }
+    function kpiNum(v) {
+      return typeof v === 'number' ? v.toString() : '—';
+    }
+    function pnlToneClass(v) {
+      if (!isValidNumber(v)) return '';
+      return v > 0 ? 'text-up' : (v < 0 ? 'text-down' : '');
+    }
 
     const hhi = formatHHI(concentrationRatio);
     const hhiLabel = { low: '分散', medium: '中等', high: '集中' }[hhi.level] || '—';
@@ -77,7 +81,7 @@ function kpiNum(v) {
     kpis.innerHTML = `
       <div class="kpi-card">
         <div class="kpi-label">稅前淨值</div>
-        <div class="kpi-value">${kpiNTD(state.portfolio_value)}</div>
+        <div class="kpi-value">${kpiNTD(portfolioValue)}</div>
         <div class="kpi-hint">可用現金: ${kpiNTD(state.cash)}</div>
       </div>
       <div class="kpi-card">
@@ -87,7 +91,7 @@ function kpiNum(v) {
       </div>
       <div class="kpi-card">
         <div class="kpi-label">已實現損益</div>
-        <div class="kpi-value ${realizedPnL > 0 ? 'text-up' : (realizedPnL < 0 ? 'text-down' : '')}">${kpiNTD(realizedPnL)}</div>
+        <div class="kpi-value ${pnlToneClass(realizedPnL)}">${kpiNTD(realizedPnL)}</div>
         <div class="kpi-hint">模擬累積已平倉損益</div>
       </div>
       <div class="kpi-card">
@@ -102,7 +106,7 @@ function kpiNum(v) {
       </div>
       <div class="kpi-card">
         <div class="kpi-label">未實現損益</div>
-        <div class="kpi-value ${unrealizedPnLTotal > 0 ? 'text-up' : (unrealizedPnLTotal < 0 ? 'text-down' : '')}">${kpiNTD(unrealizedPnLTotal)}</div>
+        <div class="kpi-value ${pnlToneClass(unrealizedPnLTotal)}">${kpiNTD(unrealizedPnLTotal)}</div>
         <div class="kpi-hint">持倉未實現總損益</div>
       </div>
       <div class="kpi-card">
@@ -125,26 +129,30 @@ function kpiNum(v) {
     if (!positions.length) {
       tableEl.innerHTML = renderActionEmptyState('尚無持倉資料', '執行一次模擬交易以建立示範持倉', 'evolution_panel', '前往策略演化');
     } else {
-      const fmtF = window.fmtFloat || (v => v.toFixed(2));
-      const fmtI = window.fmtInt || (v => v.toString());
-      const fmtP = window.fmtPct || (v => (v * 100).toFixed(2) + '%');
+      const fmtF = (v) => formatNumber(v, { decimals: 2 });
+      const fmtI = (v) => isValidNumber(v) ? v.toLocaleString('en-US') : '—';
+      const fmtP = (v) => fmtSignedPct(v, 2);
       const rows = positions.map(pos => {
-        const pnl = pos.unrealized_pnl || 0;
-        const pct = pos.pnl_pct || 0;
-        const costBasis = (pos.average_cost || 0) * (pos.quantity || 0);
-        const colorClass = window.pnlColor ? window.pnlColor(pnl) : (pnl > 0 ? 'text-up' : (pnl < 0 ? 'text-down' : ''));
+        const quantity = isValidNumber(pos.quantity) ? pos.quantity : null;
+        const avgCost = isValidNumber(pos.average_cost) ? pos.average_cost : null;
+        const currentPrice = isValidNumber(pos.current_price) ? pos.current_price : null;
+        const marketValue = isValidNumber(pos.market_value) ? pos.market_value : null;
+        const pnl = isValidNumber(pos.unrealized_pnl) ? pos.unrealized_pnl : null;
+        const pct = isValidNumber(pos.pnl_pct) ? pos.pnl_pct : null;
+        const costBasis = quantity !== null && avgCost !== null ? quantity * avgCost : null;
+        const colorClass = pnl !== null ? (pnl > 0 ? 'text-up' : (pnl < 0 ? 'text-down' : '')) : '';
 
         return `
           <tr>
             <td>${renderStockCell(pos.symbol)}</td>
             <td>${sectorLabels[pos.sector] || pos.sector || '—'}</td>
-            <td style="text-align:right">${fmtI(pos.quantity)}</td>
-            <td style="text-align:right">${fmtF(pos.average_cost)}</td>
+            <td style="text-align:right">${fmtI(quantity)}</td>
+            <td style="text-align:right">${fmtF(avgCost)}</td>
             <td style="text-align:right">${fmtF(costBasis)}</td>
-            <td style="text-align:right">${fmtF(pos.current_price)}</td>
-            <td style="text-align:right">${fmtF(pos.market_value)}</td>
-            <td style="text-align:right" class="${colorClass}">${pnl > 0 ? '+' : ''}${fmtF(pnl)}</td>
-            <td style="text-align:right" class="${colorClass}">${pnl > 0 ? '+' : ''}${fmtP(pct)}</td>
+            <td style="text-align:right">${fmtF(currentPrice)}</td>
+            <td style="text-align:right">${fmtF(marketValue)}</td>
+            <td style="text-align:right" class="${colorClass}">${fmtF(pnl)}</td>
+            <td style="text-align:right" class="${colorClass}">${fmtP(pct)}</td>
           </tr>
         `;
       }).join('');
@@ -174,9 +182,11 @@ function kpiNum(v) {
     if (!trades.length) {
       historyEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">尚無交易歷史</div>';
     } else {
-      const fmtI = window.fmtInt || (v => v.toString());
+      const fmtI = (v) => isValidNumber(v) ? v.toLocaleString('en-US') : '—';
       const tradeRows = trades.map(trade => {
-        const amount = trade.amount ?? ((trade.quantity || 0) * (trade.price || 0));
+        const quantity = isValidNumber(trade.quantity) ? trade.quantity : null;
+        const price = isValidNumber(trade.price) ? trade.price : null;
+        const amount = isValidNumber(trade.amount) ? trade.amount : (quantity !== null && price !== null ? quantity * price : null);
         const sideClass = trade.side === 'BUY' ? 'text-up' : 'text-down';
         const sideLabel = trade.side === 'BUY' ? '買入' : '賣出';
         const ts = trade.timestamp ? new Date(trade.timestamp).toLocaleString() : '—';
@@ -185,9 +195,9 @@ function kpiNum(v) {
             <td>${ts}</td>
             <td>${trade.symbol ? renderStockCell(trade.symbol) : '—'}</td>
             <td class="${sideClass}">${sideLabel}</td>
-            <td style="text-align:right">${fmtI(trade.quantity || 0)}</td>
-            <td style="text-align:right">${window.fmtFloat ? window.fmtFloat(trade.price || 0) : (trade.price || 0).toFixed(2)}</td>
-            <td style="text-align:right">${window.fmtNTD ? window.fmtNTD(amount) : amount.toFixed(0)}</td>
+            <td style="text-align:right">${fmtI(quantity)}</td>
+            <td style="text-align:right">${formatNumber(price, { decimals: 2 })}</td>
+            <td style="text-align:right">${isValidNumber(amount) ? (window.fmtNTD ? window.fmtNTD(amount) : amount.toFixed(0)) : '—'}</td>
             <td>${trade.reason || '—'}</td>
           </tr>
         `;

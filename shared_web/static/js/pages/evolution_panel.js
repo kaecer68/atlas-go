@@ -2,6 +2,11 @@ import { agentName, regimeLabel } from '../names.js';
 import { silentGetJSON } from '../shared/app-utils.js';
 import { getThemeColor } from '../shared/utils.js';
 import { hexToRgba } from '../shared/color-tokens.js';
+import { formatNumber, fmtSignedPct } from '../shared/format-metric.js';
+
+function isValidNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
 
 let evolutionData = null;
 let currentView = 'compact';
@@ -10,12 +15,13 @@ let currentView = 'compact';
 
 function renderTrendSummary(scorecards, sessions) {
   if (!scorecards.length) return '';
-  const sharpeValues = scorecards.map(function(a) { return a.sharpe || 0; }).sort(function(a, b) { return a - b; });
+  const sharpeValues = scorecards.map(function(a) { return a.sharpe; }).filter(isValidNumber).sort(function(a, b) { return a - b; });
   const mid = Math.floor(sharpeValues.length / 2);
   const medianSharpe = sharpeValues.length % 2 === 0
     ? (sharpeValues[mid - 1] + sharpeValues[mid]) / 2
     : sharpeValues[mid];
-  const avgHitRate = scorecards.reduce(function(s, a) { return s + (a.hit_rate || 0); }, 0) / scorecards.length;
+  const hitRateValues = scorecards.map(function(a) { return a.hit_rate; }).filter(isValidNumber);
+  const avgHitRate = hitRateValues.length ? hitRateValues.reduce(function(s, v) { return s + v; }, 0) / hitRateValues.length : null;
   const healthyCount = scorecards.filter(function(a) { return (a.sharpe || 0) > 0.5 && (a.hit_rate || 0) > 0.3; }).length;
   const weakCount = scorecards.filter(function(a) { return (a.sharpe || 0) < 0.5; }).length;
   const healthPct = Math.round(healthyCount / scorecards.length * 100);
@@ -48,12 +54,12 @@ function renderTrendSummary(scorecards, sessions) {
     '<div class="ev-summary-title">📊 演化趨勢摘要</div>' +
     '<div class="ev-summary-grid">' +
       '<div class="ev-summary-card ' + sharpeCls + '">' +
-        '<div class="ev-summary-value">' + medianSharpe.toFixed(2) + '</div>' +
+        '<div class="ev-summary-value">' + formatNumber(medianSharpe, { decimals: 2 }) + '</div>' +
         '<div class="ev-summary-label">Sharpe 中位數</div>' +
         '<div class="ev-summary-tag">' + (medianSharpe > 1 ? '✅ 良好' : (medianSharpe > 0.5 ? '⚠ 一般' : '❌ 偏弱')) + '</div>' +
       '</div>' +
       '<div class="ev-summary-card ' + hitCls + '">' +
-        '<div class="ev-summary-value">' + Math.round(avgHitRate * 100) + '%</div>' +
+        '<div class="ev-summary-value">' + formatNumber(avgHitRate, { decimals: 0, suffix: '%', percent: true }) + '</div>' +
         '<div class="ev-summary-label">命中率 整體</div>' +
         '<div class="ev-summary-tag">' + (avgHitRate > 0.6 ? '✅ 優秀' : (avgHitRate > 0.4 ? '⚠ 一般' : '❌ 偏低')) + '</div>' +
       '</div>' +
@@ -171,11 +177,10 @@ function evolutionState(judgeCount, promoteCount) {
 }
 
 function formatDelta(baseline, candidate) {
-  if (!baseline || baseline === 0) return { cls: 'neutral', text: '—', value: 0 };
+  if (!isValidNumber(baseline) || !isValidNumber(candidate)) return { cls: 'neutral', text: '—', value: 0 };
   const delta = ((candidate - baseline) / Math.abs(baseline)) * 100;
   const cls = delta > 1 ? 'positive' : (delta < -1 ? 'negative' : 'neutral');
-  const arrow = delta > 1 ? '▲' : (delta < -1 ? '▼' : '—');
-  return { cls, text: arrow + ' ' + Math.abs(delta).toFixed(1) + '%', value: delta };
+  return { cls, text: fmtSignedPct(delta, 1), value: delta };
 }
 
 // ====== Cold-Start Empty State ======
@@ -230,8 +235,8 @@ function renderExperimentList(judges, promotes, showStatus) {
       '</div>' +
       '<div class="ev-exp-detail">' + escapeHtml(e.mutation_summary || '') + '</div>' +
       '<div class="ev-exp-metrics">' +
-        '<span class="baseline">基線: ' + (e.baseline_value || 0).toFixed(3) + '</span>' +
-        '<span class="candidate">候選: ' + (e.candidate_value || 0).toFixed(3) + '</span>' +
+        '<span class="baseline">基線: ' + formatNumber(e.baseline_value, { decimals: 3 }) + '</span>' +
+        '<span class="candidate">候選: ' + formatNumber(e.candidate_value, { decimals: 3 }) + '</span>' +
         '<span class="ev-exp-delta ' + delta.cls + '">' + delta.text + '</span>' +
         (showStatus ? '<span class="ev-exp-id">' + escapeHtml(e.experiment_id || '') + '</span>' : '') +
       '</div></div>';
@@ -365,8 +370,8 @@ stateHtml +
       '<span class="ev-agent-name">' + escapeHtml(agentName(a.agent_id)) + '</span>' +
       '<span class="ev-agent-layer" data-layer="' + escapeHtml(a.layer || '') + '">' + escapeHtml(a.layer || '-') + '</span>' +
       '<div class="ev-agent-bar-track"><div class="ev-agent-bar-fill ' + barCls + '" style="width:' + barW + '%"></div></div>' +
-      '<span class="ev-agent-stat">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</span>' +
-      '<span class="ev-agent-stat ' + sharpeClass(a.sharpe) + '">S:' + (a.sharpe || 0).toFixed(2) + '</span>' +
+      '<span class="ev-agent-stat">' + formatNumber(a.hit_rate, { decimals: 0, suffix: '%', percent: true }) + '</span>' +
+      '<span class="ev-agent-stat ' + sharpeClass(a.sharpe) + '">S:' + formatNumber(a.sharpe, { decimals: 2 }) + '</span>' +
       '</div>';
   }
   let agentSection = '<div class="panel" style="padding:14px 16px">' +
@@ -394,8 +399,8 @@ stateHtml +
       '<span class="ev-agent-name">' + escapeHtml(agentName(a.agent_id)) + '</span>' +
       '<span class="ev-agent-layer" data-layer="' + escapeHtml(a.layer || '') + '">' + escapeHtml(a.layer || '-') + '</span>' +
       '<div class="ev-agent-bar-track"><div class="ev-agent-bar-fill ' + barCls + '" style="width:' + barW + '%"></div></div>' +
-      '<span class="ev-agent-stat">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</span>' +
-      '<span class="ev-agent-stat value-down">S:' + (a.sharpe || 0).toFixed(2) + '</span>' +
+      '<span class="ev-agent-stat">' + formatNumber(a.hit_rate, { decimals: 0, suffix: '%', percent: true }) + '</span>' +
+      '<span class="ev-agent-stat value-down">S:' + formatNumber(a.sharpe, { decimals: 2 }) + '</span>' +
       '</div>';
   }
   let elimSection = '<div class="panel ev-elim-panel" style="padding:14px 16px">' +
@@ -448,9 +453,9 @@ function renderAiAnalysis() {
       '<td class="text-muted">' + escapeHtml(a.skill || '-') + '</td>' +
       '<td style="text-align:center"><span class="badge info">' + escapeHtml(a.layer || '-') + '</span></td>' +
       '<td style="text-align:right">' + (a.observations || 0) + '</td>' +
-      '<td style="text-align:right;color:' + hColor + '">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</td>' +
-      '<td style="text-align:right"><span class="' + sClass + '">' + (a.sharpe || 0).toFixed(2) + '</span></td>' +
-      '<td style="text-align:right;color:var(--risk-high)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
+      '<td style="text-align:right;color:' + hColor + '">' + formatNumber(a.hit_rate, { decimals: 0, suffix: '%', percent: true }) + '</td>' +
+      '<td style="text-align:right"><span class="' + sClass + '">' + formatNumber(a.sharpe, { decimals: 2 }) + '</span></td>' +
+      '<td style="text-align:right;color:var(--risk-high)">' + formatNumber(a.max_drawdown, { decimals: 1, suffix: '%', percent: true }) + '</td>' +
       '</tr>';
     }
     tableHtml += '</tbody></table>';
@@ -653,8 +658,8 @@ function renderScatterPlot(scorecards) {
     if (found && tip) {
       tip.innerHTML = '<strong>' + agentName(found.agent_id) + '</strong>' +
         '<span class="ev-tip-layer">' + escapeHtml(found.layer || '?') + '</span>' +
-        '<div class="ev-tip-row"><span>命中率</span><span style="color:' + (found.hit_rate > 0.6 ? 'var(--metric-good)' : (found.hit_rate > 0.3 ? 'var(--warn)' : 'var(--muted)')) + '">' + ((found.hit_rate || 0) * 100).toFixed(0) + '%</span></div>' +
-        '<div class="ev-tip-row"><span>Sharpe</span><span style="color:' + (found.sharpe > 1 ? 'var(--metric-good)' : (found.sharpe > 0 ? 'var(--warn)' : 'var(--metric-bad)')) + '">' + (found.sharpe || 0).toFixed(2) + '</span></div>' +
+        '<div class="ev-tip-row"><span>命中率</span><span style="color:' + (found.hit_rate > 0.6 ? 'var(--metric-good)' : (found.hit_rate > 0.3 ? 'var(--warn)' : 'var(--muted)')) + '">' + formatNumber(found.hit_rate, { decimals: 0, suffix: '%', percent: true }) + '</span></div>' +
+        '<div class="ev-tip-row"><span>Sharpe</span><span style="color:' + (found.sharpe > 1 ? 'var(--metric-good)' : (found.sharpe > 0 ? 'var(--warn)' : 'var(--metric-bad)')) + '">' + formatNumber(found.sharpe, { decimals: 2 }) + '</span></div>' +
         (found.observations ? '<div class="ev-tip-row"><span>觀察數</span><span>' + found.observations + '</span></div>' : '');
       tip.style.display = 'block';
       tip.style.left = Math.min(mx + 14, rect.width - 130) + 'px';

@@ -18,6 +18,8 @@ func mp(value, changePct float64) marketdata.MacroDataPoint {
 	return marketdata.MacroDataPoint{Symbol: "TEST", Value: value, ChangePct: changePct}
 }
 
+func float64Ptr(v float64) *float64 { return &v }
+
 func TestResolveSymbolName(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -136,8 +138,8 @@ func TestBuildPremarketData_SetsStressIndex(t *testing.T) {
 func TestBuildCoreIndicators_Nil(t *testing.T) {
 	h := &Handlers{}
 	got := h.buildCoreIndicators(nil)
-	if got != (CoreIndicators{}) {
-		t.Errorf("expected zero-value CoreIndicators, got %+v", got)
+	if got != nil {
+		t.Errorf("expected nil CoreIndicators, got %+v", got)
 	}
 }
 
@@ -150,16 +152,19 @@ func TestBuildCoreIndicators_Valid(t *testing.T) {
 	}
 	h := &Handlers{}
 	got := h.buildCoreIndicators(snap)
-	if got.ForeignCapitalNetTWD != 10000 {
+	if got == nil {
+		t.Fatal("expected non-nil CoreIndicators")
+	}
+	if got.ForeignCapitalNetTWD == nil || *got.ForeignCapitalNetTWD != 10000 {
 		t.Errorf("ForeignCapitalNetTWD = %v, want 10000", got.ForeignCapitalNetTWD)
 	}
-	if got.TSMADRpct != 3.5 {
+	if got.TSMADRpct == nil || *got.TSMADRpct != 3.5 {
 		t.Errorf("TSMADRpct = %v, want 3.5", got.TSMADRpct)
 	}
-	if got.NVDApct != 2.0 {
+	if got.NVDApct == nil || *got.NVDApct != 2.0 {
 		t.Errorf("NVDApct = %v, want 2.0", got.NVDApct)
 	}
-	if got.DXYpct != -0.3 {
+	if got.DXYpct == nil || *got.DXYpct != -0.3 {
 		t.Errorf("DXYpct = %v, want -0.3", got.DXYpct)
 	}
 }
@@ -302,12 +307,12 @@ func TestHandleDecisionChain_WithMacroProvider(t *testing.T) {
 	if events.Premarket == nil {
 		t.Error("Premarket should not be nil when macro snapshot available")
 	}
-	indicators, ok := m["core_indicators"].(CoreIndicators)
+	indicators, ok := m["core_indicators"].(*CoreIndicators)
 	if !ok {
 		t.Fatalf("core_indicators is %T", m["core_indicators"])
 	}
-	if indicators.DXYpct != -0.3 {
-		t.Errorf("DXYpct = %v, want -0.3", indicators.DXYpct)
+	if indicators == nil || indicators.DXYpct == nil || *indicators.DXYpct != -0.3 {
+		t.Errorf("DXYpct = %v, want -0.3", indicators)
 	}
 }
 
@@ -564,7 +569,7 @@ func TestStrategyFrameSummary_JSONTags(t *testing.T) {
 }
 
 func TestExitAlert_JSONTags(t *testing.T) {
-	ea := ExitAlert{Symbol: "2330.TW", Name: "台積電", DaysHeld: 10, PnlPct: 15.0, Suggestion: "部分獲利了結"}
+	ea := ExitAlert{Symbol: "2330.TW", Name: "台積電", DaysHeld: 10, PnlPct: float64Ptr(15.0), Suggestion: "部分獲利了結"}
 	b, err := json.Marshal(ea)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -578,7 +583,12 @@ func TestExitAlert_JSONTags(t *testing.T) {
 }
 
 func TestCoreIndicators_JSONTags(t *testing.T) {
-	ci := CoreIndicators{ForeignCapitalNetTWD: 5000, TSMADRpct: 2.5, NVDApct: 1.5, DXYpct: -0.3}
+	ci := CoreIndicators{
+		ForeignCapitalNetTWD: float64Ptr(5000),
+		TSMADRpct:            float64Ptr(2.5),
+		NVDApct:              float64Ptr(1.5),
+		DXYpct:               float64Ptr(-0.3),
+	}
 	b, err := json.Marshal(ci)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

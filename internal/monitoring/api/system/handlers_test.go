@@ -1,7 +1,9 @@
 package system
 
 import (
+	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
@@ -34,6 +37,16 @@ func mustDecode(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	var m map[string]any
 	json.Unmarshal(w.Body.Bytes(), &m)
 	return m
+}
+
+func assertFloatPtr(t *testing.T, name string, got *float64, want float64) {
+	t.Helper()
+	if got == nil {
+		t.Fatalf("%s is nil, want %v", name, want)
+	}
+	if math.Abs(*got-want) > 1e-9 {
+		t.Errorf("%s = %v, want %v", name, *got, want)
+	}
 }
 
 func TestHandlePhase3Status_NoFile(t *testing.T) {
@@ -143,8 +156,23 @@ func TestHandleRetailSentiment_NoSnapshot(t *testing.T) {
 	if resp.Interpretation != "no macro snapshot available" {
 		t.Errorf("interpretation = %q, want 'no macro snapshot available'", resp.Interpretation)
 	}
-	if resp.SentimentScore != 0 {
-		t.Errorf("SentimentScore = %v, want 0", resp.SentimentScore)
+	if resp.SentimentScore != nil {
+		t.Errorf("SentimentScore = %v, want nil", resp.SentimentScore)
+	}
+	if resp.MarginBalance != nil {
+		t.Errorf("MarginBalance = %v, want nil", resp.MarginBalance)
+	}
+	if resp.ShortBalance != nil {
+		t.Errorf("ShortBalance = %v, want nil", resp.ShortBalance)
+	}
+	if resp.DayTradingRatio != nil {
+		t.Errorf("DayTradingRatio = %v, want nil", resp.DayTradingRatio)
+	}
+	if resp.RetailFuturesOI != nil {
+		t.Errorf("RetailFuturesOI = %v, want nil", resp.RetailFuturesOI)
+	}
+	if resp.ETFNetSubscription != nil {
+		t.Errorf("ETFNetSubscription = %v, want nil", resp.ETFNetSubscription)
 	}
 	if resp.FetcherStatus.DayTrading != "no_data" {
 		t.Errorf("DayTrading fetcher status = %q, want no_data", resp.FetcherStatus.DayTrading)
@@ -159,8 +187,8 @@ func TestHandleRetailSentiment_WithSnapshot(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	snap := map[string]any{
-		"retail_margin_balance": map[string]any{"value": 2500, "change_pct": 0.05},
-		"retail_short_balance":  map[string]any{"value": 800, "change_pct": 0.02},
+		"retail_margin_balance": map[string]any{"value": 2500, "change_pct": 0.05, "symbol": "MARGIN"},
+		"retail_short_balance":  map[string]any{"value": 800, "change_pct": 0.02, "symbol": "SHORT"},
 		"vix":                   map[string]any{"value": 18.5},
 		"foreign_investor_net":  map[string]any{"value": 5000},
 		"domestic_fund_net":     map[string]any{"value": 2000},
@@ -182,11 +210,168 @@ func TestHandleRetailSentiment_WithSnapshot(t *testing.T) {
 	if !ok {
 		t.Fatalf("body is %T", body)
 	}
-	if resp.MarginBalance != 2500 {
-		t.Errorf("MarginBalance = %v, want 2500", resp.MarginBalance)
+	assertFloatPtr(t, "MarginBalance", resp.MarginBalance, 2500)
+	assertFloatPtr(t, "MarginChangePct", resp.MarginChangePct, 0.0005)
+	assertFloatPtr(t, "ShortBalance", resp.ShortBalance, 800)
+	assertFloatPtr(t, "ShortChangePct", resp.ShortChangePct, 0.02)
+	if resp.SentimentScore == nil {
+		t.Error("SentimentScore is nil, want non-nil")
 	}
-	if resp.MarginPercentile > 0 {
-		t.Logf("margin percentile with single data point: %v", resp.MarginPercentile)
+	if resp.Score == nil {
+		t.Error("Score is nil, want non-nil")
+	}
+	if resp.ChangePct == nil {
+		t.Error("ChangePct is nil, want non-nil")
+	}
+	if resp.CompositeSentiment == nil {
+		t.Error("CompositeSentiment is nil, want non-nil")
+	}
+	if resp.MarginPercentile == nil {
+		t.Error("MarginPercentile is nil, want non-nil")
+	}
+	if resp.DayTradingRatio != nil {
+		t.Errorf("DayTradingRatio = %v, want nil (no fetcher)", *resp.DayTradingRatio)
+	}
+	if resp.RetailFuturesOI != nil {
+		t.Errorf("RetailFuturesOI = %v, want nil (no fetcher)", *resp.RetailFuturesOI)
+	}
+	if resp.ETFNetSubscription != nil {
+		t.Errorf("ETFNetSubscription = %v, want nil (no fetcher)", *resp.ETFNetSubscription)
+	}
+}
+
+func TestHandleRetailSentiment_WithFetchers(t *testing.T) {
+	h, workDir := newSystemHandlers(t)
+	macroDir := filepath.Join(workDir, constants.StateMacro)
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	snap := map[string]any{
+		"retail_margin_balance": map[string]any{"value": 2500, "change_pct": 0.05, "symbol": "MARGIN"},
+		"retail_short_balance":  map[string]any{"value": 800, "change_pct": 0.02, "symbol": "SHORT"},
+		"vix":                   map[string]any{"value": 18.5},
+		"foreign_investor_net":  map[string]any{"value": 5000},
+		"domestic_fund_net":     map[string]any{"value": 2000},
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(macroDir, "latest.json"), data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	h.DayTradingFetcher = func(ctx context.Context) (*marketdata.DayTradingStats, error) {
+		return &marketdata.DayTradingStats{DayTradingVolume: 1000, VolumeRatio: 0.15}, nil
+	}
+	h.TaifexFetcher = func(ctx context.Context) (*marketdata.PCRStats, *marketdata.RetailFuturesOI, error) {
+		return &marketdata.PCRStats{PutCallVolumeRatio: 0.9},
+			&marketdata.RetailFuturesOI{RetailLongPct: 0.6, RetailShortPct: 0.4},
+			nil
+	}
+	h.OddLotFetcher = func(ctx context.Context) (*marketdata.OddLotStats, error) {
+		return &marketdata.OddLotStats{ImbalanceRatio: 0.05}, nil
+	}
+	h.ETFFetcher = func(ctx context.Context) (*marketdata.ETFStats, error) {
+		return &marketdata.ETFStats{NetSubscription: 1_000_000}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/retail-sentiment", nil)
+	status, body := h.HandleRetailSentiment(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	resp, ok := body.(RetailSentimentResponse)
+	if !ok {
+		t.Fatalf("body is %T", body)
+	}
+
+	assertFloatPtr(t, "DayTradingRatio", resp.DayTradingRatio, 0.15)
+	assertFloatPtr(t, "RetailFuturesOI", resp.RetailFuturesOI, 0.2)
+	assertFloatPtr(t, "ETFNetSubscription", resp.ETFNetSubscription, 1_000_000)
+	if resp.FetcherStatus.DayTrading != "ok" {
+		t.Errorf("DayTrading status = %q, want ok", resp.FetcherStatus.DayTrading)
+	}
+	if resp.FetcherStatus.Taifex != "ok" {
+		t.Errorf("Taifex status = %q, want ok", resp.FetcherStatus.Taifex)
+	}
+	if resp.FetcherStatus.OddLot != "ok" {
+		t.Errorf("OddLot status = %q, want ok", resp.FetcherStatus.OddLot)
+	}
+	if resp.FetcherStatus.ETF != "ok" {
+		t.Errorf("ETF status = %q, want ok", resp.FetcherStatus.ETF)
+	}
+
+	// Verify JSON serialization: optional fields with data are present and nil fields are omitted/null.
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(encoded, &m); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if _, ok := m["retail_futures_oi"]; !ok {
+		t.Error("expected retail_futures_oi in JSON when fetcher returns data")
+	}
+	if _, ok := m["etf_net_subscription"]; !ok {
+		t.Error("expected etf_net_subscription in JSON when fetcher returns data")
+	}
+	if _, ok := m["day_trading_ratio"]; !ok {
+		t.Error("expected day_trading_ratio in JSON when fetcher returns data")
+	}
+}
+
+func TestHandleRetailSentiment_MissingShortBalance(t *testing.T) {
+	h, workDir := newSystemHandlers(t)
+	macroDir := filepath.Join(workDir, constants.StateMacro)
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	snap := map[string]any{
+		"retail_margin_balance": map[string]any{"value": 2500, "change_pct": 0.05, "symbol": "MARGIN"},
+		"vix":                   map[string]any{"value": 18.5},
+		"foreign_investor_net":  map[string]any{"value": 5000},
+		"domestic_fund_net":     map[string]any{"value": 2000},
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(macroDir, "latest.json"), data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/retail-sentiment", nil)
+	status, body := h.HandleRetailSentiment(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	resp, ok := body.(RetailSentimentResponse)
+	if !ok {
+		t.Fatalf("body is %T", body)
+	}
+	assertFloatPtr(t, "MarginBalance", resp.MarginBalance, 2500)
+	if resp.ShortBalance != nil {
+		t.Errorf("ShortBalance = %v, want nil", *resp.ShortBalance)
+	}
+	if resp.ShortChangePct != nil {
+		t.Errorf("ShortChangePct = %v, want nil", *resp.ShortChangePct)
+	}
+
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(encoded, &m); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if m["short_balance"] != nil {
+		t.Errorf("short_balance = %v, want null", m["short_balance"])
+	}
+	if m["short_change_pct"] != nil {
+		t.Errorf("short_change_pct = %v, want null", m["short_change_pct"])
 	}
 }
 

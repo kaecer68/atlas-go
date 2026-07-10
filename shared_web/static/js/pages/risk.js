@@ -1,8 +1,13 @@
 // Risk Control Page - Enhanced Risk Indicators
 // Extracted from index.html - DO NOT EDIT inline
 import { sectorName, renderStockCell } from '../names.js';
-import { escapeHtml } from '../shared/utils.js';
+import { escapeHtml, fmtNTD, fmtInt, fmtFloat, pnlColor } from '../shared/utils.js';
+import { formatNumber, formatMaxDrawdown, fmtSignedPct } from '../shared/format-metric.js';
 import { renderEmptyState, formatDate } from '../shared/app-utils.js';
+
+function isFiniteNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
 
 export function renderLiveStatus(data) {
   const el = document.getElementById('liveStatus');
@@ -14,10 +19,8 @@ export function renderLiveStatus(data) {
   }
   const cb = data.circuit_breaker;
   const pf = data.portfolio || {};
-  const pnl = pf.unrealized_pnl || 0;
-  const dayPnl = pf.day_pnl || 0;
-  const pnlClass = pnl >= 0 ? 'up' : 'down';
-  const dayPnlClass = dayPnl >= 0 ? 'up' : 'down';
+  const pnl = pf.unrealized_pnl;
+  const dayPnl = pf.day_pnl;
   const cbState = cb.state === 'tripped' ? '已觸發' : '正常';
   const cbStateColor = cb.state === 'tripped' ? 'var(--color-danger)' : 'var(--color-success)';
 
@@ -34,16 +37,16 @@ export function renderLiveStatus(data) {
   let slWarning = '';
   if (cb.consecutive_sl > 0) {
     const slColor = cb.consecutive_sl >= 3 ? 'var(--color-danger)' : 'var(--color-warning)';
-    slWarning = `<div class="metric"><div class="label">連續止損</div><div class="value" style="color:${slColor}">${cb.consecutive_sl} 次</div></div>`;
+    slWarning = `<div class="metric"><div class="label">連續止損</div><div class="value" style="color:${slColor}">${fmtInt(cb.consecutive_sl)} 次</div></div>`;
   }
 
   el.innerHTML = `
     <div class="metric"><div class="label">熔斷機制</div><div class="value" style="color:${cbStateColor}">${cbState}</div></div>
-    <div class="metric"><div class="label">現金</div><div class="value">${(pf.cash || 0).toLocaleString()}</div></div>
-    <div class="metric"><div class="label">持倉市值</div><div class="value">${(pf.total_exposure || 0).toLocaleString()}</div></div>
-    <div class="metric"><div class="label">持倉數</div><div class="value">${pf.positions_count || 0}</div></div>
-    <div class="metric"><div class="label">未實現損益</div><div class="value ${pnlClass}">${pnl.toLocaleString()}</div></div>
-    <div class="metric"><div class="label">當日損益</div><div class="value ${dayPnlClass}">${dayPnl.toLocaleString()}</div></div>
+    <div class="metric"><div class="label">現金</div><div class="value">${fmtNTD(pf.cash)}</div></div>
+    <div class="metric"><div class="label">持倉市值</div><div class="value">${fmtNTD(pf.total_exposure)}</div></div>
+    <div class="metric"><div class="label">持倉數</div><div class="value">${fmtInt(pf.positions_count)}</div></div>
+    <div class="metric"><div class="label">未實現損益</div><div class="value" style="color:${pnlColor(pnl)}">${fmtNTD(pnl)}</div></div>
+    <div class="metric"><div class="label">當日損益</div><div class="value" style="color:${pnlColor(dayPnl)}">${fmtNTD(dayPnl)}</div></div>
     ${slWarning}
     ${cooldownInfo}
   `;
@@ -65,35 +68,37 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
   el.classList.remove('loading');
 
   const re = riskExposure;
-  const insufficient = re.insufficient_data || (re.data_points < 30);
-  const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v * 100).toFixed(1) + '%' : '—';
+  const insufficient = re.insufficient_data || (typeof re.data_points === 'number' && re.data_points < 30);
 
   const cp = capitalPhase || {};
   const phaseLabel = { advance: '🚀 推進', reduce: '🔻 縮減', standby: '⏸️ 觀望' };
   const phase = phaseLabel[cp.phase] || cp.phase || '—';
-  const rollingSharpe = (cp.rolling_sharpe != null && !isNaN(cp.rolling_sharpe)) ? cp.rolling_sharpe.toFixed(2) : null;
-  const consecLosses = cp.consecutive_losses || 0;
-  const daysInPhase = cp.days_in_phase || 0;
+  const rollingSharpeRaw = cp.rolling_sharpe;
+  const rollingSharpe = fmtFloat(rollingSharpeRaw);
+  const rollingSharpeColor = isFiniteNumber(rollingSharpeRaw)
+    ? (rollingSharpeRaw > 0.5 ? 'var(--up)' : (rollingSharpeRaw < 0 ? 'var(--down)' : 'var(--warn)'))
+    : 'var(--muted)';
+  const consecLosses = cp.consecutive_losses;
+  const daysInPhase = cp.days_in_phase;
   const canAdvance = cp.can_advance;
 
   let concentrationHtml = '';
   const conc = re.concentration || [];
   if (conc.length > 0) {
-    const top5Weight = conc.reduce((s, c) => s + (c.weight || 0), 0);
-    const top1Weight = conc.length > 0 ? (conc[0].weight || 0) : 0;
-    const top3Weight = conc.slice(0, 3).reduce((s, c) => s + (c.weight || 0), 0);
+    const top5Weight = conc.reduce((s, c) => s + (isFiniteNumber(c.weight) ? c.weight : 0), 0);
+    const top1Weight = isFiniteNumber(conc[0].weight) ? conc[0].weight : 0;
+    const top3Weight = conc.slice(0, 3).reduce((s, c) => s + (isFiniteNumber(c.weight) ? c.weight : 0), 0);
 
     const rows = conc.map((c, idx) => {
-      const w = ((c.weight || 0) * 100).toFixed(1);
-      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${c.symbol ? renderStockCell(c.symbol) : '—'}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${w}%</td><td style="padding:3px 8px;font-size:12px;text-align:right">${(c.market_value || 0).toLocaleString()}</td></tr>`;
+      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${c.symbol ? renderStockCell(c.symbol) : '—'}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${formatNumber(c.weight, { percent: true, decimals: 1 })}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${fmtNTD(c.market_value)}</td></tr>`;
     }).join('');
 
     concentrationHtml = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:180px">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">持倉集中度（市值）</div>
-          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--color-danger)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--color-success)')}">${(top5Weight * 100).toFixed(1)}%</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">前 3 大 ${(top3Weight * 100).toFixed(1)}% · 最大 ${(top1Weight * 100).toFixed(1)}%</div>
+          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--color-danger)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--color-success)')}">${formatNumber(top5Weight, { percent: true, decimals: 1 })}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">前 3 大 ${formatNumber(top3Weight, { percent: true, decimals: 1 })} · 最大 ${formatNumber(top1Weight, { percent: true, decimals: 1 })}</div>
         </div>
         <div style="flex:2;min-width:300px">
           <table style="width:100%;font-size:12px;border-collapse:collapse">
@@ -109,21 +114,21 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
 
   let sectorHtml = '';
   const sectors = (re.sector_exposure || [])
-    .filter(s => s.weight > 0)
-    .sort((a, b) => (b.weight || 0) - (a.weight || 0));
+    .filter(s => isFiniteNumber(s.weight) && s.weight > 0)
+    .sort((a, b) => b.weight - a.weight);
 
   if (sectors.length > 0) {
-    const maxW = Math.max(...sectors.map(s => s.weight || 0), 0.01);
+    const maxW = Math.max(...sectors.map(s => s.weight), 0.01);
     const sectorBars = sectors.map(s => {
-      const w = s.weight || 0;
-      const pct = (w * 100).toFixed(1);
+      const w = s.weight;
+      const pct = formatNumber(w, { percent: true, decimals: 1 });
       const barPct = ((w / maxW) * 100).toFixed(1);
       const color = w > 0.3 ? 'var(--accent)' : (w > 0.15 ? 'var(--warn)' : 'var(--muted)');
       return `
         <div style="margin:4px 0">
           <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
             <span>${escapeHtml(sectorName(s.sector) || s.sector)}</span>
-            <span>${pct}%</span>
+            <span>${pct}</span>
           </div>
           <div style="width:100%;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
             <div style="width:${barPct}%;height:100%;background:${color};border-radius:3px;transition:width 0.3s"></div>
@@ -142,57 +147,59 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
     sectorHtml = `<div style="font-size:12px;color:var(--muted);margin-top:16px">暫無板塊曝險資料</div>`;
   }
 
-  const cashRatioPct = re.cash_ratio != null ? (re.cash_ratio * 100).toFixed(1) : null;
-  const portfolioValue = re.portfolio_value ? re.portfolio_value.toLocaleString() : '—';
-  const deployedCapital = cp.deployed_capital || 0;
-  const totalCapital = cp.total_capital || 0;
-  const exposureRatio = totalCapital > 0 ? ((deployedCapital / totalCapital) * 100).toFixed(1) : null;
+  const cashRatioPct = formatNumber(re.cash_ratio, { percent: true, decimals: 1 });
+  const portfolioValue = fmtNTD(re.portfolio_value);
+  const deployedCapital = cp.deployed_capital;
+  const totalCapital = cp.total_capital;
+  const exposureRatio = isFiniteNumber(deployedCapital) && isFiniteNumber(totalCapital) && totalCapital > 0
+    ? formatNumber(deployedCapital / totalCapital, { percent: true, decimals: 1 })
+    : null;
 
   el.innerHTML = `
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 95%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtPct(re.var_95)}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : formatNumber(re.var_95, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">日頻 · 95% 信賴水準</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 99%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtPct(re.var_99)}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : formatNumber(re.var_99, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">日頻 · 極端事件壓力</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">CVaR 95%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtPct(re.cvar_95)}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : formatNumber(re.cvar_95, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">95% 條件期望虧損</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">最大回撤</div>
-      <div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : fmtPct(re.max_drawdown_pct)}</div>
+      <div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : formatMaxDrawdown(re.max_drawdown_pct, { asAbsolute: true })}</div>
       <div class="kpi-hint">歷史峰值回撤幅度</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">Rolling Sharpe</div>
-      <div class="kpi-value" style="color:${rollingSharpe !== null ? (rollingSharpe > 0.5 ? 'var(--up)' : (rollingSharpe < 0 ? 'var(--down)' : 'var(--warn)')) : 'var(--muted)'}">${rollingSharpe !== null ? rollingSharpe : '—'}</div>
-      <div class="kpi-hint">${rollingSharpe !== null ? '風險調整後收益' : '尚無資金階段資料'}</div>
+      <div class="kpi-value" style="color:${rollingSharpeColor}">${rollingSharpe}</div>
+      <div class="kpi-hint">${isFiniteNumber(rollingSharpeRaw) ? '風險調整後收益' : '尚無資金階段資料'}</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">投組淨值</div>
       <div class="kpi-value">${portfolioValue}</div>
-      <div class="kpi-hint">${cashRatioPct !== null ? '現金 ' + cashRatioPct + '%' : ''}${exposureRatio !== null ? ' · 曝險 ' + exposureRatio + '%' : ''}</div>
+      <div class="kpi-hint">${cashRatioPct !== null && cashRatioPct !== '—' ? '現金 ' + cashRatioPct : ''}${exposureRatio !== null ? ' · 曝險 ' + exposureRatio : ''}</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">資金階段</div>
       <div class="kpi-value" style="font-size:16px">${phase}</div>
-      <div class="kpi-hint">${daysInPhase > 0 ? '持續 ' + daysInPhase + ' 天' : ''}${consecLosses > 0 ? ' · 連續虧損 ' + consecLosses + ' 次' : ''}${canAdvance ? ' · 可推進' : ''}</div>
+      <div class="kpi-hint">${daysInPhase > 0 ? '持續 ' + fmtInt(daysInPhase) + ' 天' : ''}${consecLosses > 0 ? ' · 連續虧損 ' + fmtInt(consecLosses) + ' 次' : ''}${canAdvance ? ' · 可推進' : ''}</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">持倉數</div>
-      <div class="kpi-value">${re.position_count || 0}</div>
-      <div class="kpi-hint">${re.data_points >= 30 ? '資料點 ' + re.data_points + ' · 可信' : '資料點 ' + (re.data_points || 0) + ' · 統計不足'}</div>
+      <div class="kpi-value">${fmtInt(re.position_count)}</div>
+      <div class="kpi-hint">${typeof re.data_points === 'number' && re.data_points >= 30 ? '資料點 ' + fmtInt(re.data_points) + ' · 可信' : '資料點 ' + fmtInt(re.data_points) + ' · 統計不足'}</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">保留現金</div>
-      <div class="kpi-value">${cp.reserve_cash ? cp.reserve_cash.toLocaleString() : '—'}</div>
-      <div class="kpi-hint">總資本 ${totalCapital ? totalCapital.toLocaleString() : '—'}</div>
+      <div class="kpi-value">${fmtNTD(cp.reserve_cash)}</div>
+      <div class="kpi-hint">總資本 ${fmtNTD(totalCapital)}</div>
     </div>
   `;
 
@@ -236,10 +243,10 @@ export function renderRiskCalibration(data) {
       var confidenceColor = c.confidence === 'high' ? 'var(--up)' : (c.confidence === 'medium' ? 'var(--warn)' : 'var(--muted)');
       return '<tr>' +
         '<td style="padding:4px 8px;font-size:12px;font-family:monospace">' + escapeHtml(c.name) + '</td>' +
-        '<td style="padding:4px 8px;font-size:12px;text-align:right">' + c.before.toFixed(4) + '</td>' +
-        '<td style="padding:4px 8px;font-size:12px;text-align:right;color:var(--up)">' + c.after.toFixed(4) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:right">' + formatNumber(c.before, { decimals: 4 }) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:right;color:var(--up)">' + formatNumber(c.after, { decimals: 4 }) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;color:var(--muted)">' + escapeHtml(c.rationale) + '</td>' +
-        '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:color-mix(in srgb, ' + confidenceColor + ' 13%, transparent);color:' + confidenceColor + '">' + c.confidence + '</span></td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:color-mix(in srgb, ' + confidenceColor + ' 13%, transparent);color:' + confidenceColor + '">' + escapeHtml(c.confidence) + '</span></td>' +
         '</tr>';
     }).join('');
     changesHtml =
@@ -263,7 +270,7 @@ export function renderRiskCalibration(data) {
     '<div style="font-size:11px;color:var(--muted)">' + (generated ? '校準時間 ' + new Date(generated).toLocaleString('zh-TW') : '') + '</div>' +
     '</div>' +
     '<div style="margin-left:auto;text-align:right;font-size:12px;color:var(--muted)">' +
-    '<div>評估 ' + (report.orders_evaluated || 0) + ' 筆訂單</div>' +
+    '<div>評估 ' + fmtInt(report.orders_evaluated) + ' 筆訂單</div>' +
     '<div>區間 ' + (report.session_span || '—') + '</div>' +
     '</div>' +
     '</div>' +
@@ -367,10 +374,12 @@ export function renderSemiconductorSentiment(snapshot, industryCycle) {
   el.classList.remove('loading');
 
   const sox = snapshot && snapshot.sox_index ? snapshot.sox_index : null;
-  const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%' : '—';
-  const soxValue = sox && typeof sox.value === 'number' ? sox.value.toFixed(2) : '—';
-  const soxChange = fmtPct(sox && sox.change_pct);
-  const soxColor = sox && sox.change_pct > 0 ? 'var(--up)' : (sox && sox.change_pct < 0 ? 'var(--down)' : 'var(--muted)');
+  const soxChangeRaw = sox ? sox.change_pct : null;
+  const soxValue = fmtFloat(sox && sox.value);
+  const soxChange = fmtSignedPct(soxChangeRaw, 2);
+  const soxColor = isFiniteNumber(soxChangeRaw)
+    ? (soxChangeRaw > 0 ? 'var(--up)' : (soxChangeRaw < 0 ? 'var(--down)' : 'var(--muted)'))
+    : 'var(--muted)';
 
   const cycle = industryCycle || {};
   const phaseMap = {
@@ -384,7 +393,7 @@ export function renderSemiconductorSentiment(snapshot, industryCycle) {
   const rows = [
     { label: '庫存週期', value: cycle.inventory_cycle || '—' },
     { label: '資本支出週期', value: cycle.capex_cycle || '—' },
-    { label: '信心指數', value: typeof cycle.confidence === 'number' ? cycle.confidence.toFixed(2) : '—' },
+    { label: '信心指數', value: fmtFloat(cycle.confidence) },
     { label: '趨勢', value: cycle.trend || '—' }
   ];
 
@@ -424,7 +433,6 @@ export function renderDrawdownPanel(data) {
     return;
   }
 
-  const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v * 100).toFixed(1) + '%' : '—';
   const maxDD = data.max_drawdown != null ? data.max_drawdown : data.maxDrawdown;
   const var95 = data.var_95 != null ? data.var_95 : data.var95;
   const worstPath = Array.isArray(data.worst_path) ? data.worst_path : [];
@@ -455,12 +463,12 @@ export function renderDrawdownPanel(data) {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
       <div class="panel" style="text-align:center">
         <div class="kpi-label">模擬最大回撤</div>
-        <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtPct(maxDD)}</div>
+        <div class="kpi-value" style="color:var(--down);font-size:20px">${formatMaxDrawdown(maxDD, { asAbsolute: true })}</div>
         <div class="kpi-hint">Monte Carlo 壓力測試</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">模擬 VaR 95</div>
-        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtPct(var95)}</div>
+        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${formatNumber(var95, { percent: true, decimals: 1 })}</div>
         <div class="kpi-hint">5% 尾端損失</div>
       </div>
     </div>

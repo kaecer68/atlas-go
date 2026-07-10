@@ -1,3 +1,5 @@
+import { fmtPct, fmtInt } from '../shared/utils.js';
+
 export async function renderRiskPanel(container, getJSON) {
   // 1. 讀取 portfolio-state 取得 current_drawdown, concentration_ratio
   const state = await getJSON('/api/dashboard/portfolio-state').catch(() => ({}));
@@ -5,9 +7,17 @@ export async function renderRiskPanel(container, getJSON) {
   // 2. 讀取 correlation-matrix (if available)
   const corr = await getJSON('/api/dashboard/correlation-matrix').catch(() => null);
 
-  const fmtP = window.fmtPct || (v => (v * 100).toFixed(2) + '%');
-  const dd = state.current_drawdown || 0;
-  const conc = state.concentration_ratio || 0;
+  const dd = state.current_drawdown;
+  const conc = state.concentration_ratio;
+
+  let leverage = null;
+  if (
+    Number.isFinite(state.portfolio_value) &&
+    Number.isFinite(state.cash) &&
+    state.cash !== 0
+  ) {
+    leverage = (state.portfolio_value - state.cash) / state.cash;
+  }
 
   let matrixHtml = '';
   if (corr && corr.matrix && corr.matrix.length > 0) {
@@ -16,6 +26,9 @@ export async function renderRiskPanel(container, getJSON) {
     const rows = corr.matrix.map((row, i) => {
       const cells = row.map((v, j) => {
         let color = 'inherit';
+        if (typeof v !== 'number') {
+          return '<td class="corr-cell">—</td>';
+        }
         if (i === j) color = 'var(--muted)';
         else if (v > 0.7) color = 'var(--color-danger)';
         else if (v > 0.4) color = 'var(--warn)';
@@ -31,10 +44,10 @@ export async function renderRiskPanel(container, getJSON) {
     <div class="panel-content">
       <div class="section-title">風險指標</div>
       <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-        <div class="kpi-card"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--color-danger)">${fmtP(dd)}</div></div>
-        <div class="kpi-card"><div class="kpi-label">持倉集中度</div><div class="kpi-value">${fmtP(conc)}</div><div class="kpi-hint">HHI 指數</div></div>
-        <div class="kpi-card"><div class="kpi-label">部位數</div><div class="kpi-value">${state.positions_count || 0}</div></div>
-        <div class="kpi-card"><div class="kpi-label">槓桿率</div><div class="kpi-value">${fmtP((state.portfolio_value || 0) > 0 ? (state.portfolio_value - state.cash) / state.cash : 0)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--color-danger)">${fmtPct(dd)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">持倉集中度</div><div class="kpi-value">${fmtPct(conc)}</div><div class="kpi-hint">HHI 指數</div></div>
+        <div class="kpi-card"><div class="kpi-label">部位數</div><div class="kpi-value">${fmtInt(state.positions_count)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">槓桿率</div><div class="kpi-value">${fmtPct(leverage)}</div></div>
       </div>
       ${matrixHtml}
     </div>`;

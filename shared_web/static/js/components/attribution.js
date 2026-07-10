@@ -1,3 +1,9 @@
+import { formatNumber, fmtSignedPct } from '../shared/format-metric.js';
+
+function isValidNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
 export async function renderPnLAttribution(container, getJSON) {
   const data = await getJSON('/api/dashboard/pnl-attribution').catch(() => null);
   if (!data || !data.agent_attribution) {
@@ -5,26 +11,26 @@ export async function renderPnLAttribution(container, getJSON) {
     return;
   }
 
-  const fmtP = window.fmtPct || (v => (v * 100).toFixed(2) + '%');
-  const fmtF = window.fmtFloat || (v => v.toFixed(4));
+  const fmtP = (v) => fmtSignedPct(v, 2);
+  const fmtF = (v) => formatNumber(v, { decimals: 4 });
 
   const agentRows = (data.agent_attribution || [])
     .sort((a, b) => (b.avg_return || 0) - (a.avg_return || 0))
     .map(a => {
       const layerColors = { macro: 'var(--layer-4)', sector: 'var(--layer-1)', style: 'var(--layer-2)' };
       const color = layerColors[a.layer] || 'var(--muted)';
-      return `<tr><td>${a.agent_name || a.agent_id}</td><td style="color:${color}">${a.layer || '-'}</td><td style="text-align:right">${fmtP(a.avg_return || 0)}</td><td style="text-align:right">${a.count || 0}</td></tr>`;
+      return `<tr><td>${a.agent_name || a.agent_id}</td><td style="color:${color}">${a.layer || '-'}</td><td style="text-align:right">${fmtP(a.avg_return)}</td><td style="text-align:right">${a.count || 0}</td></tr>`;
     }).join('');
 
   const sectorRows = (data.sector_attribution || [])
     .sort((a, b) => (b.avg_return || 0) - (a.avg_return || 0))
-    .map(s => `<tr><td>${s.sector_label || s.sector}</td><td style="text-align:right">${fmtP(s.avg_return || 0)}</td><td style="text-align:right">${s.count || 0}</td></tr>`).join('');
+    .map(s => `<tr><td>${s.sector_label || s.sector}</td><td style="text-align:right">${fmtP(s.avg_return)}</td><td style="text-align:right">${s.count || 0}</td></tr>`).join('');
 
   const fa = data.factor_attribution || {};
   const factorRows = ['momentum', 'value', 'quality', 'agent']
     .map(k => {
       const f = fa[k] || {};
-      return `<tr><td style="font-weight:600">${k}</td><td style="text-align:right">${fmtF(f.avg_score || 0)}</td><td style="text-align:right">${fmtP(f.avg_return || 0)}</td><td style="text-align:right">${fmtF(f.contribution || 0)}</td></tr>`;
+      return `<tr><td style="font-weight:600">${k}</td><td style="text-align:right">${fmtF(f.avg_score)}</td><td style="text-align:right">${fmtP(f.avg_return)}</td><td style="text-align:right">${fmtF(f.contribution)}</td></tr>`;
     }).join('');
 
   container.innerHTML = `

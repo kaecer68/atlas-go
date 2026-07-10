@@ -1,7 +1,8 @@
 import { stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName, confidenceSourceName, severityName, statusName } from '../names.js';
 import { narrativeThemeLabel } from '../shared/constants.js';
 import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
-import { escapeHtml } from '../shared/utils.js';
+import { escapeHtml, fmtFloat, fmtPct, fmtInt } from '../shared/utils.js';
+import { formatNumber, formatMaxDrawdown, fmtSignedPct, formatSigned } from '../shared/format-metric.js';
 
 /**
  * 包裝 renderEmptyState，附加可執行的行動按鈕。
@@ -351,7 +352,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         }
         return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:var(--panel-l2);border-radius:8px">
           <div class="font-bold">${escapeHtml(narrativeThemeLabel(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
-          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confidence || 0) * 100).toFixed(0)}% · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
+          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${fmtPct(e.confidence)} · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
           <div class="text-muted text-sm mt-xs">資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)} · 信心來源：${escapeHtml(cs)}</div>
           ${sourceDataHtml}
           ${e.explanation ? `<details class="mt-sm">
@@ -376,7 +377,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       chainsEl.innerHTML = list.map(c => `
         <div style="margin:12px 0;padding:12px;background:var(--panel-l2);border-radius:10px;border:1px solid var(--border)">
           <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--text)">${escapeHtml(templateName(c.template_id))}</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">匹配分數 <span style="color:var(--accent);font-weight:600">${(c.score || 0).toFixed(3)}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">匹配分數 <span style="color:var(--accent);font-weight:600">${formatNumber(c.score, { decimals: 3 })}</span></div>
           ${(c.favored_sectors || []).length || (c.avoided_sectors || []).length ? `
             <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
               ${(c.favored_sectors || []).map(s => '<span class="badge ok">+ ' + escapeHtml(sectorName(s) || s) + '</span>').join('')}
@@ -384,8 +385,9 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
             </div>
           ` : ''}
           ${(c.steps || []).map((s, i) => {
-            const impClass = s.impact > 0 ? 'positive' : 'negative';
-            const impLabel = s.impact > 0 ? '+' + s.impact : s.impact;
+            const impactVal = typeof s.impact === 'number' && Number.isFinite(s.impact) ? s.impact : null;
+            const impClass = impactVal != null && impactVal > 0 ? 'positive' : (impactVal != null && impactVal < 0 ? 'negative' : '');
+            const impLabel = impactVal != null ? formatSigned(impactVal, { decimals: 0, forceSign: true }) : '—';
             const affected = (s.affected || []).map(a => `<span class="sector-tag">${escapeHtml(sectorName(a) || a)}</span>`).join('');
             return `<div class="chain-step">
               <div style="display:flex;align-items:center;gap:8px">
@@ -418,7 +420,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <div class="weight-panel" style="border-left-color:${weightColor}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
             <div style="font-weight:700;font-size:15px">${escapeHtml(modelName(m.name))}</div>
-            <div style="font-size:12px;color:var(--muted);white-space:nowrap">誤差 <span style="color:${errColor};font-weight:700">${(e*100).toFixed(1)}% ${errText}</span></div>
+            <div style="font-size:12px;color:var(--muted);white-space:nowrap">誤差 <span style="color:${errColor};font-weight:700">${formatNumber(m.recent_error, { percent: true, decimals: 1, suffix: '%' })} ${errText}</span></div>
           </div>
           <div style="margin:8px 0">
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
@@ -426,16 +428,16 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
               <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
                 <div style="width:${weightPct}%;height:100%;background:${weightColor}"></div>
               </div>
-              <span class="min-w-40 text-right">${w.toFixed(3)}</span>
+              <span class="min-w-40 text-right">${fmtFloat(m.weight)}</span>
             </div>
           </div>
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>歷史命中率</span>
-            <span style="color:${(m.hit_rate || 0) >= 0.7 ? 'var(--color-success)' : ((m.hit_rate || 0) >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)')};font-weight:700">${((m.hit_rate || 0) * 100).toFixed(1)}%</span>
+            <span style="color:${typeof m.hit_rate === 'number' && Number.isFinite(m.hit_rate) ? ((m.hit_rate >= 0.7 ? 'var(--color-success)' : (m.hit_rate >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)'))) : 'var(--muted)'};font-weight:700">${fmtPct(m.hit_rate)}</span>
           </div>
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>近期預測報酬差</span>
-            <span style="color:${(m.recent_prediction || 0) > 0 ? 'var(--up)' : ((m.recent_prediction || 0) < 0 ? 'var(--down)' : 'var(--muted)')};font-weight:700">${(m.recent_prediction || 0).toFixed(4)}</span>
+            <span style="color:${typeof m.recent_prediction === 'number' && Number.isFinite(m.recent_prediction) ? (m.recent_prediction > 0 ? 'var(--up)' : (m.recent_prediction < 0 ? 'var(--down)' : 'var(--muted)')) : 'var(--muted)'};font-weight:700">${fmtFloat(m.recent_prediction)}</span>
           </div>
           <div class="text-muted text-sm mt-xs">${escapeHtml(m.description || '')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
@@ -463,7 +465,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <tbody>
           ${items.map((t, idx) => `<tr>
             <td><span style="font-weight:600;color:var(--text)">${escapeHtml(templateName(t.name))}</span></td>
-            <td><span style="font-weight:500;color:var(--color-success)">${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</span></td>
+            <td><span style="font-weight:500;color:var(--color-success)">${fmtPct(t.historical_hit_rate)}</span></td>
             <td class="text-muted text-xs">${escapeHtml((t.source_references || []).join(', '))}</td>
             <td><button id="tmpl-btn-${idx}" onclick="toggleTemplateAccordion(${idx})" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
           </tr>
@@ -480,43 +482,52 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     retailEl.classList.remove('loading');
     if (!retailSentiment) { retailEl.innerHTML = renderActionEmptyState('無散戶情緒資料', '執行市場分析後將顯示散戶情緒指標。', [{label: '執行分析', page: 'pipeline'}]); }
     else {
-      const hasValidData = retailSentiment.margin_balance > 0;
+      const hasValidData = typeof retailSentiment.margin_balance === 'number' && retailSentiment.margin_balance > 0;
       const readingMap = { frenzy: '狂熱', neutral: '中性', fear: '恐慌' };
       const readingClass = retailSentiment.extreme_reading === 'frenzy' ? 'err' : retailSentiment.extreme_reading === 'fear' ? 'warn' : 'ok';
-      const score = (retailSentiment.sentiment_score || 0).toFixed(2);
-      const changeStr = (retailSentiment.margin_change_pct || 0) >= 0 ? '+' + (retailSentiment.margin_change_pct * 100).toFixed(1) + '%' : (retailSentiment.margin_change_pct * 100).toFixed(1) + '%';
-      const changeClass = (retailSentiment.margin_change_pct || 0) >= 0 ? 'up' : 'down';
+
+      const sentimentScoreRaw = retailSentiment.sentiment_score;
+      const marginChangeRaw = retailSentiment.margin_change_pct;
+      const marginBalanceRaw = retailSentiment.margin_balance;
+      const dayTradingRatioRaw = retailSentiment.day_trading_ratio;
+      const marginPercentileRaw = retailSentiment.margin_percentile;
+      const shortBalanceRaw = retailSentiment.short_balance;
+      const shortChangeRaw = retailSentiment.short_change_pct;
+      const compositeScoreRaw = retailSentiment.composite_sentiment;
+
+      const score = fmtFloat(sentimentScoreRaw);
+      const changeStr = fmtSignedPct(marginChangeRaw);
+      const changeClass = marginChangeRaw != null && marginChangeRaw >= 0 ? 'up' : 'down';
       const dataStatusBadge = hasValidData
         ? '<span class="badge ok">🟢 資料正常</span>'
         : '<span class="badge">🟡 資料待更新</span>';
 
-      const sentimentScore = retailSentiment.sentiment_score || 0;
-      const marginChange = retailSentiment.margin_change_pct || 0;
-      const marginBalance = retailSentiment.margin_balance || 0;
-      const dayTradingRatio = retailSentiment.day_trading_ratio || 0;
-      const marginPercentile = (retailSentiment.margin_percentile || 0) * 100;
-      const shortBalance = retailSentiment.short_balance || 0;
-      const shortChangePct = retailSentiment.short_change_pct || 0;
-      const shortChangeStr = shortChangePct >= 0 ? '+' + (shortChangePct * 100).toFixed(1) + '%' : (shortChangePct * 100).toFixed(1) + '%';
-      const shortChangeClass = shortChangePct >= 0 ? 'up' : 'down';
+      const marginPercentileValue = marginPercentileRaw != null ? marginPercentileRaw * 100 : null;
+      const marginPercentileStr = formatNumber(marginPercentileValue, { decimals: 0 });
+      const marginBalanceStr = formatNumber(marginBalanceRaw, { decimals: 0 });
+      const dayTradingRatioValue = dayTradingRatioRaw != null ? dayTradingRatioRaw * 100 : null;
+      const dayTradingRatioStr = formatNumber(dayTradingRatioValue, { decimals: 1, suffix: '%' });
+      const shortBalanceStr = formatNumber(shortBalanceRaw, { decimals: 0 });
+      const shortChangeStr = fmtSignedPct(shortChangeRaw);
+      const shortChangeClass = shortChangeRaw != null && shortChangeRaw >= 0 ? 'up' : 'down';
+      const compositeScore = fmtFloat(compositeScoreRaw);
 
-      const sentimentHelp = `綜合融資餘額變化、當沖比率、散戶交易行為等指標計算出的散戶市場情緒指標。\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5（狂熱）：散戶過度樂觀，融資大增、當沖猖獗，市場可能接近短期頂部\\n• 0.0 ~ +0.5（偏多）：散戶積極參與，市場熱絡但尚未過熱\\n• -0.5 ~ 0.0（偏空）：散戶趨於保守，融資減少，市場觀望氣氛濃厚\\n• ＜-0.5（恐慌）：散戶極度悲觀，恐慌砍倉，歷史上常是階段性底部訊號\\n\\n當前數值：${score} — ${sentimentScore > 0.5 ? '市場狂熱，建議減碼' : sentimentScore > 0 ? '散戶偏多' : sentimentScore > -0.5 ? '散戶偏空觀望' : '市場恐慌，可能接近底部'}`;
+      const sentimentHelp = `綜合融資餘額變化、當沖比率、散戶交易行為等指標計算出的散戶市場情緒指標。\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5（狂熱）：散戶過度樂觀，融資大增、當沖猖獗，市場可能接近短期頂部\\n• 0.0 ~ +0.5（偏多）：散戶積極參與，市場熱絡但尚未過熱\\n• -0.5 ~ 0.0（偏空）：散戶趨於保守，融資減少，市場觀望氣氛濃厚\\n• ＜-0.5（恐慌）：散戶極度悲觀，恐慌砍倉，歷史上常是階段性底部訊號\\n\\n當前數值：${score} — ${sentimentScoreRaw != null && sentimentScoreRaw > 0.5 ? '市場狂熱，建議減碼' : sentimentScoreRaw != null && sentimentScoreRaw > 0 ? '散戶偏多' : sentimentScoreRaw != null && sentimentScoreRaw > -0.5 ? '散戶偏空觀望' : '市場恐慌，可能接近底部'}`;
 
-      const marginChangeHelp = `融資餘額相對前一交易日的變化百分比。融資是散戶向券商借錢買股票的行為，是觀察散戶槓桿程度的重要指標。\\n\\n解讀標準：\\n• ＞+5%：散戶瘋狂加碼，槓桿急速攀升，系統性風險劇增\\n• +2% ~ +5%：散戶積極加槓桿，市場過熱跡象浮現\\n• -2% ~ +2%：正常波動區間，散戶情緒平穩\\n• -5% ~ -2%：散戶開始去槓桿，市場降溫\\n• ＜-5%：散戶恐慌砍倉，融資大減，常伴隨市場急跌，但也可能是底部訊號\\n\\n當前數值：${changeStr} — ${Math.abs(marginChange * 100) > 5 ? '散戶情緒劇烈波動' : Math.abs(marginChange * 100) > 2 ? '散戶情緒明顯變化' : '正常波動範圍'}`;
+      const marginChangeHelp = `融資餘額相對前一交易日的變化百分比。融資是散戶向券商借錢買股票的行為，是觀察散戶槓桿程度的重要指標。\\n\\n解讀標準：\\n• ＞+5%：散戶瘋狂加碼，槓桿急速攀升，系統性風險劇增\\n• +2% ~ +5%：散戶積極加槓桿，市場過熱跡象浮現\\n• -2% ~ +2%：正常波動區間，散戶情緒平穩\\n• -5% ~ -2%：散戶開始去槓桿，市場降溫\\n• ＜-5%：散戶恐慌砍倉，融資大減，常伴隨市場急跌，但也可能是底部訊號\\n\\n當前數值：${changeStr} — ${marginChangeRaw != null && Math.abs(marginChangeRaw * 100) > 5 ? '散戶情緒劇烈波動' : marginChangeRaw != null && Math.abs(marginChangeRaw * 100) > 2 ? '散戶情緒明顯變化' : '正常波動範圍'}`;
 
-      const marginBalanceHelp = `全市場散戶向券商融資買股票的總金額（單位：億元）。融資餘額越高代表散戶槓桿越大，市場風險越高。\\n\\n歷史百分位解讀：\\n• ＞90th：極高水位，散戶槓桿處於歷史高檔，系統性回調風險極高\\n• 70th ~ 90th：偏高水位，市場過熱，建議逐步降低持股\\n• 30th ~ 70th：正常區間，風險可控\\n• 10th ~ 30th：偏低水位，市場冷清，但可能是佈局時機\\n• ＜10th：極低水位，散戶幾乎離場，歷史上常是長期底部區域\\n\\n當前數值：${marginBalance.toFixed(0)} 億（歷史 ${marginPercentile.toFixed(0)}th 百分位）\\n${marginPercentile > 90 ? '⚠️ 融資處於歷史極高水位，系統性風險極高，建議大幅減碼' : marginPercentile > 70 ? '⚡ 融資偏高，市場過熱，建議逐步獲利了結' : marginPercentile > 30 ? '✅ 融資水位正常，風險可控' : marginPercentile > 10 ? '💡 融資偏低，市場冷清，可關注佈局機會' : '📉 融資極低，散戶幾乎離場，可能是長期底部'}`;
+      const marginBalanceHelp = `全市場散戶向券商融資買股票的總金額（單位：億元）。融資餘額越高代表散戶槓桿越大，市場風險越高。\\n\\n歷史百分位解讀：\\n• ＞90th：極高水位，散戶槓桿處於歷史高檔，系統性回調風險極高\\n• 70th ~ 90th：偏高水位，市場過熱，建議逐步降低持股\\n• 30th ~ 70th：正常區間，風險可控\\n• 10th ~ 30th：偏低水位，市場冷清，但可能是佈局時機\\n• ＜10th：極低水位，散戶幾乎離場，歷史上常是長期底部區域\\n\\n當前數值：${marginBalanceStr} 億（歷史 ${marginPercentileStr}th 百分位）\\n${marginPercentileValue != null && marginPercentileValue > 90 ? '⚠️ 融資處於歷史極高水位，系統性風險極高，建議大幅減碼' : marginPercentileValue != null && marginPercentileValue > 70 ? '⚡ 融資偏高，市場過熱，建議逐步獲利了結' : marginPercentileValue != null && marginPercentileValue > 30 ? '✅ 融資水位正常，風險可控' : marginPercentileValue != null && marginPercentileValue > 10 ? '💡 融資偏低，市場冷清，可關注佈局機會' : '📉 融資極低，散戶幾乎離場，可能是長期底部'}`;
 
-      const dayTradingHelp = `當日沖銷（Day Trading）成交量占總成交量的比例。當沖是散戶在同一天內買進又賣出的交易行為，是觀察市場投機程度的重要指標。\\n\\n解讀標準：\\n• ＞40%：市場極度投機，散戶狂熱當沖，類似2021年航運股狂潮，短期崩盤風險極高\\n• 30% ~ 40%：當沖比率偏高，市場投機氣氛濃厚，注意追高空單風險\\n• 20% ~ 30%：正常偏高的當沖活動，市場熱絡但尚屬健康\\n• 15% ~ 20%：當沖比率正常，市場交易穩定\\n• ＜15%：當沖冷清，市場缺乏投機動能，散戶參與度低\\n\\n當前數值：${(dayTradingRatio * 100).toFixed(1)}% — ${dayTradingRatio * 100 > 40 ? '市場極度投機，高風險警戒！' : dayTradingRatio * 100 > 30 ? '當沖比率偏高，注意風險' : dayTradingRatio * 100 > 20 ? '當沖活躍，市場熱絡' : dayTradingRatio * 100 > 15 ? '當沖比率正常' : '當沖冷清，市場觀望'}`;
+      const dayTradingHelp = `當日沖銷（Day Trading）成交量占總成交量的比例。當沖是散戶在同一天內買進又賣出的交易行為，是觀察市場投機程度的重要指標。\\n\\n解讀標準：\\n• ＞40%：市場極度投機，散戶狂熱當沖，類似2021年航運股狂潮，短期崩盤風險極高\\n• 30% ~ 40%：當沖比率偏高，市場投機氣氛濃厚，注意追高空單風險\\n• 20% ~ 30%：正常偏高的當沖活動，市場熱絡但尚屬健康\\n• 15% ~ 20%：當沖比率正常，市場交易穩定\\n• ＜15%：當沖冷清，市場缺乏投機動能，散戶參與度低\\n\\n當前數值：${dayTradingRatioStr} — ${dayTradingRatioValue != null && dayTradingRatioValue > 40 ? '市場極度投機，高風險警戒！' : dayTradingRatioValue != null && dayTradingRatioValue > 30 ? '當沖比率偏高，注意風險' : dayTradingRatioValue != null && dayTradingRatioValue > 20 ? '當沖活躍，市場熱絡' : dayTradingRatioValue != null && dayTradingRatioValue > 15 ? '當沖比率正常' : '當沖冷清，市場觀望'}`;
 
-      const shortBalanceHelp = `全市場散戶向券商融券賣股票的總金額（單位：億元）。融券餘額越高代表散戶看空力道越強，是觀察市場空方情緒的重要指標。\\n\\n解讀標準：\\n• 融券餘額大幅上升：散戶積極做空，市場看空情緒濃厚\\n• 融券餘額大幅下降：散戶回補空單，空方力道減弱，可能出現軋空行情\\n• 融資/融券比率異常：若融資高但融券也高，代表市場分歧加大\\n\\n當前數值：${shortBalance.toFixed(0)} 億（變化 ${shortChangeStr}）\\n${shortChangePct > 0.05 ? '⚠️ 融券大幅增加，散戶積極做空' : shortChangePct < -0.05 ? '📈 融券大幅減少，空方回補，注意軋空風險' : '✅ 融券變化正常'}`;
+      const shortBalanceHelp = `全市場散戶向券商融券賣股票的總金額（單位：億元）。融券餘額越高代表散戶看空力道越強，是觀察市場空方情緒的重要指標。\\n\\n解讀標準：\\n• 融券餘額大幅上升：散戶積極做空，市場看空情緒濃厚\\n• 融券餘額大幅下降：散戶回補空單，空方力道減弱，可能出現軋空行情\\n• 融資/融券比率異常：若融資高但融券也高，代表市場分歧加大\\n\\n當前數值：${shortBalanceStr} 億（變化 ${shortChangeStr}）\\n${shortChangeRaw != null && shortChangeRaw > 0.05 ? '⚠️ 融券大幅增加，散戶積極做空' : shortChangeRaw != null && shortChangeRaw < -0.05 ? '📈 融券大幅減少，空方回補，注意軋空風險' : '✅ 融券變化正常'}`;
 
       const hasSubIndicators = retailSentiment.sentiment_sub_indicators &&
           (retailSentiment.sentiment_sub_indicators.category_a || retailSentiment.sentiment_sub_indicators.category_c);
 
-      const compositeScore = retailSentiment.composite_sentiment || 0;
-      const compositeClass = compositeScore > 0 ? 'up' : compositeScore < 0 ? 'down' : 'warn';
-      const compositeLabel = compositeScore > 0.5 ? '極度樂觀' : compositeScore > 0 ? '偏多' : compositeScore > -0.5 ? '偏空' : '極度恐慌';
-      const compositeHelp = `RSI-tw 綜合散戶情緒指數（Retail Sentiment Index — Taiwan）\\n\\nPart A（40%）：融資維持率、當沖比率、融資餘額變化、VIX風險映射、週選擇權PCR、零股失衡\\nPart C（25%）：散戶期貨未平倉、券商分點流向、ETF申購\\nPart D：事件調整乘數（0.8-1.2）\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5：散戶狂熱，市場接近短期頂部\\n• +0.2 ~ +0.5：散戶偏多\\n• -0.2 ~ +0.2：中性\\n• -0.5 ~ -0.2：散戶偏空\\n• ＜-0.5：散戶恐慌，可能是底部訊號\\n\\n當前數值：${compositeScore.toFixed(2)} — ${compositeLabel}`;
+      const compositeClass = compositeScoreRaw != null && compositeScoreRaw > 0 ? 'up' : compositeScoreRaw != null && compositeScoreRaw < 0 ? 'down' : 'warn';
+      const compositeLabel = compositeScoreRaw != null && compositeScoreRaw > 0.5 ? '極度樂觀' : compositeScoreRaw != null && compositeScoreRaw > 0 ? '偏多' : compositeScoreRaw != null && compositeScoreRaw > -0.5 ? '偏空' : '極度恐慌';
+      const compositeHelp = `RSI-tw 綜合散戶情緒指數（Retail Sentiment Index — Taiwan）\\n\\nPart A（40%）：融資維持率、當沖比率、融資餘額變化、VIX風險映射、週選擇權PCR、零股失衡\\nPart C（25%）：散戶期貨未平倉、券商分點流向、ETF申購\\nPart D：事件調整乘數（0.8-1.2）\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5：散戶狂熱，市場接近短期頂部\\n• +0.2 ~ +0.5：散戶偏多\\n• -0.2 ~ +0.2：中性\\n• -0.5 ~ -0.2：散戶偏空\\n• ＜-0.5：散戶恐慌，可能是底部訊號\\n\\n當前數值：${compositeScore} — ${compositeLabel}`;
 
       var subIndicatorHTML = '';
       if (hasSubIndicators) {
@@ -533,8 +544,9 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           ['週選擇權 PCR', ca.weekly_pcr],
           ['零股交易失衡', ca.odd_lot_imbalance]
         ].map(function(r) {
-          var v = (r[1] || 0).toFixed(3);
-          var cls = r[1] > 0.5 ? 'up' : r[1] < -0.5 ? 'down' : '';
+          var raw = r[1];
+          var v = fmtFloat(raw);
+          var cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
           return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
         }).join('');
 
@@ -543,8 +555,9 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           ['券商分點流向', cc.broker_flow_score],
           ['ETF 申購分數', cc.etf_subscription_score]
         ].map(function(r) {
-          var v = (r[1] || 0).toFixed(3);
-          var cls = r[1] > 0.5 ? 'up' : r[1] < -0.5 ? 'down' : '';
+          var raw = r[1];
+          var v = fmtFloat(raw);
+          var cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
           return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
         }).join('');
 
@@ -560,15 +573,15 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
             </div>
             <div id="subIndicatorBody" style="display:none;padding:10px 12px;border-top:1px solid var(--border)">
               <div style="margin-bottom:10px">
-                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part A（40%）— 散戶情緒 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">A Score: ${(ca.a_score || 0).toFixed(3)}</span></div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part A（40%）— 散戶情緒 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">A Score: ${formatNumber(ca.a_score, { decimals: 3 })}</span></div>
                 <table style="width:100%;border-collapse:collapse">${aIndicatorRows}</table>
               </div>
               <div style="margin-bottom:10px">
-                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part C（25%）— 機構/衍生品流向 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">C Score: ${(cc.c_score || 0).toFixed(3)}</span></div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part C（25%）— 機構/衍生品流向 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">C Score: ${formatNumber(cc.c_score, { decimals: 3 })}</span></div>
                 <table style="width:100%;border-collapse:collapse">${cIndicatorRows}</table>
               </div>
               <div>
-                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part D — 事件調整 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">乘數: <span class="${dAdjClass}">${dAdj.toFixed(3)}</span></span></div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part D — 事件調整 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">乘數: <span class="${dAdjClass}">${formatNumber(dAdj, { decimals: 3 })}</span></span></div>
                 <div style="font-size:11px;color:var(--text)">${dEvents}</div>
               </div>
             </div>
@@ -584,7 +597,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
           <div class="kpi-card" style="cursor:pointer;" data-help="${compositeHelp.replace(/"/g, '&quot;')}" data-title="RSI-tw 綜合指數說明">
             <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">RSI-tw 綜合 ℹ️</div>
-            <div class="kpi-value ${compositeClass}" class="text-lg">${compositeScore.toFixed(2)}</div>
+            <div class="kpi-value ${compositeClass}" class="text-lg">${compositeScore}</div>
           </div>
           <div class="kpi-card" style="cursor:pointer;" data-help="${sentimentHelp.replace(/"/g, '&quot;')}" data-title="情緒分數說明">
             <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">情緒分數 ℹ️</div>
@@ -596,18 +609,18 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           </div>
           <div class="kpi-card" style="cursor:pointer;" data-help="${marginBalanceHelp.replace(/"/g, '&quot;')}" data-title="融資餘額說明">
             <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">融資餘額 ℹ️</div>
-            <div class="kpi-value" class="text-lg">${marginBalance.toFixed(0)} 億</div>
+            <div class="kpi-value" class="text-lg">${marginBalanceStr} 億</div>
           </div>
           <div class="kpi-card" style="cursor:pointer;" data-help="${dayTradingHelp.replace(/"/g, '&quot;')}" data-title="當沖比率說明">
             <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">當沖比率 ℹ️</div>
-            <div class="kpi-value" class="text-lg">${(dayTradingRatio * 100).toFixed(1)}%</div>
+            <div class="kpi-value" class="text-lg">${dayTradingRatioStr}</div>
           </div>
           <div class="kpi-card" style="cursor:pointer;" data-help="${shortBalanceHelp.replace(/"/g, '&quot;')}" data-title="融券餘額說明">
             <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">融券餘額 ℹ️</div>
-            <div class="kpi-value ${shortChangeClass}" class="text-lg">${shortBalance.toFixed(0)} 億</div>
+            <div class="kpi-value ${shortChangeClass}" class="text-lg">${shortBalanceStr} 億</div>
           </div>
         </div>
-        <div class="mt-sm text-muted text-sm">歷史百分位: ${marginPercentile.toFixed(0)}th</div>
+        <div class="mt-sm text-muted text-sm">歷史百分位: ${marginPercentileStr}th</div>
         ${subIndicatorHTML}
       `;
 
@@ -633,7 +646,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     else {
       const rows = seasonal.expectations.map(e => {
         const statusBadge = e.already_priced_in ? '<span class="badge">已反應</span>' : '<span class="badge ok">有驚喜潛力</span>';
-        return `<tr><td>${escapeHtml(narrativeThemeLabel(e.theme))}</td><td>${(e.historical_avg_return * 100).toFixed(1)}%</td><td>${(e.current_return * 100).toFixed(1)}%</td><td>${(e.expectation_gap * 100).toFixed(1)}%</td><td>${statusBadge}</td></tr>`;
+        return `<tr><td>${escapeHtml(narrativeThemeLabel(e.theme))}</td><td>${fmtSignedPct(e.historical_avg_return)}</td><td>${fmtSignedPct(e.current_return)}</td><td>${fmtSignedPct(e.expectation_gap)}</td><td>${statusBadge}</td></tr>`;
       }).join('');
       seasonalEl.innerHTML = `<table><thead><tr><th>主題</th><th>歷史平均</th><th>當前報酬</th><th>預期差</th><th>狀態</th></tr></thead><tbody>${rows}</tbody></table>`;
     }

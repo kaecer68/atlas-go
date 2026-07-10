@@ -1,30 +1,44 @@
 // Shared utility functions for Atlas dashboard
+
+const MISSING = '—';
+
+function isValidNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
 export function fmt(v) {
-  return typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '-';
+  return isValidNumber(v) ? v.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : MISSING;
 }
 
 export function fmtPct(v) {
-  return typeof v === 'number' ? (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%' : '-';
+  if (!isValidNumber(v)) return MISSING;
+  return (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
 }
 
 export function fmtFloat(v) {
-  return typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
+  return isValidNumber(v) ? v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : MISSING;
 }
 
 export function fmtInt(v) {
-  return typeof v === 'number' ? v.toLocaleString('en-US') : '-';
+  return isValidNumber(v) ? v.toLocaleString('en-US') : MISSING;
 }
 
 export function pnlColor(v) {
-  return typeof v === 'number' ? (v >= 0 ? 'var(--pnl-profit)' : 'var(--pnl-loss)') : '';
+  if (!isValidNumber(v)) return '';
+  if (v === 0) return 'var(--muted)';
+  return v > 0 ? 'var(--pnl-profit)' : 'var(--pnl-loss)';
 }
 
 export function pnlSign(v) {
-  return typeof v === 'number' ? (v >= 0 ? '+' : '') : '';
+  if (!isValidNumber(v) || v === 0) return '';
+  return v > 0 ? '+' : '−';
 }
 
 export function convColor(v) {
-  return typeof v === 'number' ? (v >= 0.7 ? 'var(--metric-good)' : (v >= 0.4 ? 'var(--warn)' : 'var(--muted)')) : 'var(--muted)';
+  if (!isValidNumber(v)) return 'var(--muted)';
+  if (v >= 0.7) return 'var(--metric-good)';
+  if (v >= 0.4) return 'var(--warn)';
+  return 'var(--muted)';
 }
 
 export function getThemeColor(varName, fallbackHex) {
@@ -41,7 +55,7 @@ export function escapeHtml(str) {
 }
 
 export function fmtNTD(v) {
-  if (typeof v !== 'number' || isNaN(v)) return 'NT$—';
+  if (!isValidNumber(v)) return 'NT$—';
   const sign = v < 0 ? '-' : '';
   const abs = Math.abs(v);
   const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

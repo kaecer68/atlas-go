@@ -1,5 +1,5 @@
 import { metricCard } from './metric-card.js';
-import { fmtSignedPct } from '../shared/format-metric.js';
+import { fmtSignedPct, formatSigned, formatNumber } from '../shared/format-metric.js';
 import { escapeHtml } from '../shared/utils.js';
 import { getTier } from '../services/auth.js';
 import { silentGetJSON } from '../shared/app-utils.js';
@@ -207,16 +207,16 @@ async function renderCapitalFlowDetail(host, btn) {
 function buildCapitalFlowDetailHTML(daily) {
   var forces = Array.isArray(daily.forces) ? daily.forces : [];
   var rows = forces.map(function (f) {
-    var name = FORCE_LABEL[f.force] || f.force || '--';
-    var z = typeof f.z_score === 'number' ? f.z_score : 0;
-    var raw = typeof f.raw_value === 'number' ? f.raw_value : 0;
+    var name = FORCE_LABEL[f.force] || f.force || '—';
+    var z = typeof f.z_score === 'number' ? formatSigned(f.z_score, { decimals: 2, forceSign: true }) : '—';
+    var raw = typeof f.raw_value === 'number' ? formatNumber(f.raw_value, { decimals: 1 }) : '—';
     var trend = f.trend || 'neutral';
     var cls = TREND_CLASS[trend] || '';
     return (
       '<tr>' +
       '<td>' + escapeHtml(name) + '</td>' +
-      '<td class="text-right ' + cls + '">' + (z >= 0 ? '+' : '') + z.toFixed(2) + '</td>' +
-      '<td class="text-right">' + raw.toFixed(1) + '</td>' +
+      '<td class="text-right ' + cls + '">' + z + '</td>' +
+      '<td class="text-right">' + raw + '</td>' +
       '<td><span class="tier-badge ' + cls + '">' + escapeHtml(trend) + '</span></td>' +
       '</tr>'
     );
@@ -228,14 +228,14 @@ function buildCapitalFlowDetailHTML(daily) {
     ? r.opposing.map(function (f) { return FORCE_LABEL[f] || f; }).join('、')
     : '無';
   var dirLabel = DIRECTION_LABEL[r.direction] || r.direction || '--';
-  var coef = typeof r.coefficient === 'number' ? r.coefficient.toFixed(2) : '--';
+  var coef = typeof r.coefficient === 'number' ? formatNumber(r.coefficient, { decimals: 2 }) : '—';
 
   var qualityCls = '';
   var ql = (daily.quality_label || '').toLowerCase();
   if (ql === 'strong_inflow' || ql === 'inflow') qualityCls = 'trend-bullish';
   else if (ql === 'strong_outflow' || ql === 'outflow') qualityCls = 'trend-bearish';
   var qualityText = QUALITY_LABEL[ql] || daily.quality_label || '--';
-  var qScore = typeof daily.quality_score === 'number' ? daily.quality_score.toFixed(2) : '--';
+  var qScore = typeof daily.quality_score === 'number' ? formatNumber(daily.quality_score, { decimals: 2 }) : '—';
 
   return (
     '<div class="panel capital-flow-panel mt-md">' +
@@ -294,9 +294,10 @@ export async function renderHomeTierSections() {
 
   if (capitalFlow && Array.isArray(capitalFlow.forces) && capitalFlow.forces.length > 0) {
     var cards = capitalFlow.forces.slice(0, 4).map(function (f) {
-      var val = f.z_score ? fmtSignedPct(f.z_score / 10) : '--';
+      var val = typeof f.z_score === 'number' ? fmtSignedPct(f.z_score / 10) : '—';
       var cls = f.z_score > 0.5 ? 'trend-bullish' : f.z_score < -0.5 ? 'trend-bearish' : '';
-      return metricCard({ label: f.name || f.source, value: val, trend: cls, sub: f.direction || '' });
+      var label = FORCE_LABEL[f.force] || f.force || '—';
+      return metricCard({ label: label, value: val, trend: cls, sub: f.direction || '' });
     });
     var flowSection = buildTierSection('資金流向', []);
     flowSection.appendChild(buildMetricGrid(4, cards));
@@ -329,7 +330,8 @@ export async function renderHomeTierSections() {
     var preds = events.predictions.slice(0, 5).map(function (p) {
       var cls = p.direction === 'inflow' ? 'trend-bullish' : p.direction === 'outflow' ? 'trend-bearish' : '';
       var label = p.direction === 'inflow' ? '流入' : p.direction === 'outflow' ? '流出' : '中性';
-      return metricCard({ label: label, value: (p.confidence * 100).toFixed(0) + '%', trend: cls, sub: '' });
+      var pct = typeof p.confidence === 'number' ? formatNumber(p.confidence, { decimals: 0, suffix: '%', percent: true }) : '—';
+      return metricCard({ label: label, value: pct, trend: cls, sub: '' });
     });
     root.appendChild(buildTierSection('5 日資金流預測', [buildMetricGrid(5, preds)]));
   }

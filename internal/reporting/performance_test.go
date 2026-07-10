@@ -184,18 +184,29 @@ func TestCalculateSharpeRatio(t *testing.T) {
 	tests := []struct {
 		name    string
 		returns []float64
-		want    float64
+		want    *float64
 	}{
-		{"empty", []float64{}, 0},
-		{"zero variance", []float64{0.01, 0.01, 0.01}, 0},
-		{"normal", []float64{0.01, -0.005, 0.02, -0.01, 0.015}, 7.360},
+		{"empty", []float64{}, nil},
+		{"single", []float64{0.01}, nil},
+		{"zero variance", []float64{0.01, 0.01, 0.01}, float64Ptr(0)},
+		{"normal", []float64{0.01, -0.005, 0.02, -0.01, 0.015}, float64Ptr(7.360)},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := CalculateSharpeRatio(tt.returns)
-			if math.Abs(got-tt.want) > 0.001 {
-				t.Errorf("CalculateSharpeRatio() = %f, want %f", got, tt.want)
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("CalculateSharpeRatio() = %v, want nil", *got)
+				}
+				return
+			}
+			if got == nil {
+				t.Errorf("CalculateSharpeRatio() = nil, want %f", *tt.want)
+				return
+			}
+			if math.Abs(*got-*tt.want) > 0.001 {
+				t.Errorf("CalculateSharpeRatio() = %f, want %f", *got, *tt.want)
 			}
 		})
 	}

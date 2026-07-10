@@ -125,20 +125,20 @@ func (h *Handlers) HandleCapitalPhase(r *http.Request) (int, any) {
 }
 
 type RetailSentimentResponse struct {
-	SentimentScore         float64                    `json:"sentiment_score"`
-	MarginChangePct        float64                    `json:"margin_change_pct"`
-	MarginBalance          float64                    `json:"margin_balance"`
-	ShortBalance           float64                    `json:"short_balance"`
-	ShortChangePct         float64                    `json:"short_change_pct"`
-	DayTradingRatio        float64                    `json:"day_trading_ratio"`
-	MarginPercentile       float64                    `json:"margin_percentile"`
+	SentimentScore         *float64                   `json:"sentiment_score"`
+	MarginChangePct        *float64                   `json:"margin_change_pct"`
+	MarginBalance          *float64                   `json:"margin_balance"`
+	ShortBalance           *float64                   `json:"short_balance"`
+	ShortChangePct         *float64                   `json:"short_change_pct"`
+	DayTradingRatio        *float64                   `json:"day_trading_ratio"`
+	MarginPercentile       *float64                   `json:"margin_percentile"`
 	ExtremeReading         string                     `json:"extreme_reading"`
-	Score                  float64                    `json:"score"`
-	ChangePct              float64                    `json:"change_pct"`
+	Score                  *float64                   `json:"score"`
+	ChangePct              *float64                   `json:"change_pct"`
 	Interpretation         string                     `json:"interpretation"`
-	CompositeSentiment     float64                    `json:"composite_sentiment"`
-	RetailFuturesOI        float64                    `json:"retail_futures_oi,omitempty"`
-	ETFNetSubscription     float64                    `json:"etf_net_subscription,omitempty"`
+	CompositeSentiment     *float64                   `json:"composite_sentiment"`
+	RetailFuturesOI        *float64                   `json:"retail_futures_oi,omitempty"`
+	ETFNetSubscription     *float64                   `json:"etf_net_subscription,omitempty"`
 	SentimentSubIndicators *domain.RSITwSubIndicators `json:"sentiment_sub_indicators,omitempty"`
 	FetcherStatus          FetcherStatus              `json:"fetcher_status"`
 }
@@ -166,29 +166,25 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	snap, err := loadLatestMacroSnapshot(h.Svc.WorkDir)
 	if err != nil {
 		return http.StatusOK, RetailSentimentResponse{
-			SentimentScore:   0,
-			MarginChangePct:  0,
-			MarginBalance:    0,
-			ShortBalance:     0,
-			ShortChangePct:   0,
-			DayTradingRatio:  0,
-			MarginPercentile: 0,
-			ExtremeReading:   "neutral",
-			Score:            0,
-			ChangePct:        0,
-			Interpretation:   "no macro snapshot available",
-			FetcherStatus:    FetcherStatus{DayTrading: "no_data", Taifex: "no_data", OddLot: "no_data", ETF: "no_data", GeopoliticalRisk: "no_data"},
+			ExtremeReading: "neutral",
+			Interpretation: "no macro snapshot available",
+			FetcherStatus:  FetcherStatus{DayTrading: "no_data", Taifex: "no_data", OddLot: "no_data", ETF: "no_data", GeopoliticalRisk: "no_data"},
 		}
 	}
 
-	marginPercentile := calculateMarginPercentile(h.Svc.WorkDir, snap.RetailMarginBalance.Value)
+	var marginPercentile *float64
+	if snap.RetailMarginBalance.Symbol != "" && snap.RetailMarginBalance.Value > 0 {
+		p := calculateMarginPercentile(h.Svc.WorkDir, snap.RetailMarginBalance.Value)
+		marginPercentile = &p
+	}
 
-	dayTradingRatio := 0.0
+	var dayTradingRatio *float64
 	var dtStats *retail.DayTradingStats
 	fetcherStatus := FetcherStatus{DayTrading: "not_available", Taifex: "not_available", OddLot: "not_available", ETF: "not_available", GeopoliticalRisk: "not_available"}
 	if h.DayTradingFetcher != nil {
 		if stats, err := h.DayTradingFetcher(r.Context()); err == nil {
-			dayTradingRatio = stats.VolumeRatio
+			ratio := stats.VolumeRatio
+			dayTradingRatio = &ratio
 			dtStats = &retail.DayTradingStats{
 				Volume:      float64(stats.DayTradingVolume),
 				VolumeRatio: stats.VolumeRatio,
@@ -203,11 +199,17 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	var futuresOIData *marketdata.RetailFuturesOI
 	var oddLotData *marketdata.OddLotStats
 	var etfData *marketdata.ETFStats
+	var retailFuturesOI *float64
+	var etfNetSubscription *float64
 
 	if h.TaifexFetcher != nil {
 		if pcr, futures, err := h.TaifexFetcher(r.Context()); err == nil {
 			pcrData = pcr
 			futuresOIData = futures
+			if futuresOIData != nil {
+				foi := futuresOIData.RetailLongPct - futuresOIData.RetailShortPct
+				retailFuturesOI = &foi
+			}
 			fetcherStatus.Taifex = "ok"
 		} else {
 			fetcherStatus.Taifex = "error"
@@ -224,6 +226,10 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	if h.ETFFetcher != nil {
 		if data, err := h.ETFFetcher(r.Context()); err == nil {
 			etfData = data
+			if etfData != nil {
+				sub := float64(etfData.NetSubscription)
+				etfNetSubscription = &sub
+			}
 			fetcherStatus.ETF = "ok"
 		} else {
 			fetcherStatus.ETF = "error"
@@ -248,7 +254,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 
 	rsiInput := retail.RSITwInput{
 		MarginBalance:      snap.RetailMarginBalance.Value,
-		MarginPercentile:   marginPercentile,
+		MarginPercentile:   getFloatOrZero(marginPercentile, func(p *float64) float64 { return *p }),
 		DayTrading:         dtStats,
 		VIXLevel:           snap.VIX.Value,
 		ForeignInvestorNet: snap.ForeignInvestorNet.Value,
@@ -264,22 +270,29 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	calc.UpdateHistory(rsiInput)
 
 	interpretation := interpretRetailSentiment(rsiResult.Score)
-	return http.StatusOK, RetailSentimentResponse{
-		SentimentScore:         rsiResult.Score,
-		MarginChangePct:        snap.RetailMarginBalance.ChangePct / 100,
-		MarginBalance:          snap.RetailMarginBalance.Value,
-		ShortBalance:           snap.RetailShortBalance.Value,
-		ShortChangePct:         snap.RetailShortBalance.ChangePct,
-		DayTradingRatio:        dayTradingRatio,
-		MarginPercentile:       marginPercentile,
+	resp := RetailSentimentResponse{
 		ExtremeReading:         extremeReadingFromScore(rsiResult.Score),
-		Score:                  rsiResult.Score,
-		ChangePct:              snap.RetailMarginBalance.ChangePct,
 		Interpretation:         interpretation,
-		CompositeSentiment:     rsiResult.Score,
 		SentimentSubIndicators: convertRSITwSubIndicators(rsiResult),
 		FetcherStatus:          fetcherStatus,
+		RetailFuturesOI:        retailFuturesOI,
+		ETFNetSubscription:     etfNetSubscription,
+		DayTradingRatio:        dayTradingRatio,
+		MarginPercentile:       marginPercentile,
 	}
+	if snap.RetailMarginBalance.Symbol != "" {
+		resp.SentimentScore = float64Ptr(rsiResult.Score)
+		resp.MarginChangePct = float64Ptr(snap.RetailMarginBalance.ChangePct / 100)
+		resp.MarginBalance = float64Ptr(snap.RetailMarginBalance.Value)
+		resp.Score = float64Ptr(rsiResult.Score)
+		resp.ChangePct = float64Ptr(snap.RetailMarginBalance.ChangePct)
+		resp.CompositeSentiment = float64Ptr(rsiResult.Score)
+	}
+	if snap.RetailShortBalance.Symbol != "" {
+		resp.ShortBalance = float64Ptr(snap.RetailShortBalance.Value)
+		resp.ShortChangePct = float64Ptr(snap.RetailShortBalance.ChangePct)
+	}
+	return http.StatusOK, resp
 }
 
 // convertRSITwSubIndicators maps the retail calculator's flat sub-indicator map
@@ -449,4 +462,8 @@ func getFloatOrZero[T any](data *T, fn func(*T) float64) float64 {
 		return 0
 	}
 	return fn(data)
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
 }
