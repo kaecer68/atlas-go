@@ -1,80 +1,73 @@
-# AGENTS.md — internal/capitalflow
+# AGENTS.md — finance cluster
 
-**成熟度**: experimental (X-tier, Wave 11)
-**模組職責**: 台股七大資金勢力日內流量 + 共振強度計算 + API 輸出
+> 合併 `capitalflow` / `eventdriven` / `recommender` / `subscription` 的模組陷阱。完整 API 與流程見 `docs/`。
 
 ---
 
-## 核心型別
+## capitalflow（資金流）
 
-| 型別 | 檔案 | 功能 |
-|------|------|------|
-| `Handler` | `handler.go` | HTTP handler：`HandleDaily`（handler.go:37）/ `HandleSummary`（handler.go:51）。**PR #1005 後為 `Service` 的 thin layer** — pipeline 邏輯全部在 `Service`（`Service.LatestDaily`@service.go:34、`Service.Summary`@service.go:58），Handler 只負責 HTTP 包裝（context 傳遞、error→503 映射） |
-| `TWSECapitalFlowChannelAdapter` | (apigateway) | TWSE 三大法人資料抓取 |
-| `DailyReport` | `types.go:55` | 七大資金勢力彙整：`Forces` 內含 Foreign / InvestmentTrust / Dealer / Proprietary / PublicBank / Retail / Other |
-| `ResonanceResult` | `types.go:38` | 共振結果（含 `Coefficient` 強度 [0.5, 1.5]：1.5=三勢力全對齊、0.5=foreign vs government 對立、1.0=其他；`Direction` 字串標籤） |
-
-## 七大資金勢力
-
-```
-Foreign (外資) — 國際資本動向，最強追蹤信號
-Dealer (自營商) — 短期投機
-InvestmentTrust (投信) — 台股本土法人
-Proprietary (券商自營) — 子集
-PublicBank (公股銀行) — 政府護盤指標
-Retail (散戶) — 反指標
-Other (其他) — 餘額
-```
-
-## 資料流
-
-```
-GET /api/capital-flow/daily
-       ↓
-Handler.HandleDaily
-       ↓
-TWSECapitalFlowChannelAdapter.Fetch
-       ↓
-macro_provider.ComposeSnapshot
-       ↓
-Resonance(七勢力) → 共振分數
-       ↓
-JSON response
-```
-
-## 與 P0-1 的關係
-
-Sprint 2 T9 將使 `internal/recommender::HandleRecommendations::CapitalFlow` 欄位接入 `Handler.HandleDaily`。
-
-介面契約（已全部 ship）：
-```go
-type CapitalFlow interface {
-    LatestDaily(ctx context.Context) (DailyReport, error)        // SHIP（service.go:34）
-    Summary(ctx context.Context) (SummaryReport, error)          // SHIP（service.go:58）
-}
-```
-
-**`LatestDaily`** 已 ship：`Service.LatestDaily` 在 `service.go:34`，可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler.HandleDaily`（handler.go:37）需 `*http.Request` 的限制。
-
-**`Summary`** 已 ship：`Service.Summary` 在 `service.go:58`，內部呼叫 `LatestDaily` 重用 pipeline (FetchSnapshot → Extract → ComputeResonance)，再用 `GenerateSummaryReport(date, forces, resonance)`（`report.go:43`）派生 `SummaryReport`。Caller cost 等同一次 `LatestDaily` 呼叫。繞過 `Handler.HandleSummary`（handler.go:51）需 `*http.Request` 的限制。
-
-## 已知陷阱
+模組職責：台股七大資金勢力日內流量 + 共振強度計算 + API 輸出。
 
 | 陷阱 | 說明 |
 |------|------|
-| **共振計算公式變更** | `ResonanceResult` 算法（`ComputeResonance` in `resonance.go:13`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
+| **共振計算公式變更** | `ComputeResonance`（`resonance.go`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
 | **TWSE 假日不發布** | 週末/假日無資料；前端應 fallback 至上週五資料。 |
 | **PublicBank 欄位歷史較短** | 公股行庫資料 TWSE 約 2018+ 才完整；早期資料空值。 |
+| **Service 為 pipeline 入口** | `Service.LatestDaily` / `Service.Summary` 可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler` 需 `*http.Request` 的限制。 |
 
-## 與其他模組整合
+---
 
-- `internal/apigateway/adapter_twse_capital_flow.go` — adapter source
-- `internal/marketdata/macro_provider.go` — provider
-- `cmd/atlas-mcp/server/tools_capitalflow.go` — MCP 包裝
-- `cmd/atlas/main.go:594` — `capitalflow.RegisterRoutes(mux, macroProvider)`
+## eventdriven（事件預測）
+
+模組職責：5 日事件驅動資金流預測（ETF 換股 / MSCI 調整 / 月營收 / 季底作帳 / 國定假日）。
+
+| 陷阱 | 說明 |
+|------|------|
+| **假日效應 lag** | 假日前/後一日的特殊流動模式需要 historical window ≥ 3 年才穩定，目前可能未達。 |
+| **MSCI pre-positioning** | 公告當日才反映，但 smart money 通常前一週就 position；可考慮加上 pre-window。 |
+| **月營收解盲差** | 電子/傳產/金融的營收截止日不同，需用 calendar 區分產業別。 |
+| **Confidence 範圍** | 預測信心度為 `(0.5, 1.0]`，由 sigmoid(net weight × (drivers+1)) 算出。 |
+
+---
+
+## recommender（推薦 API）
+
+模組職責：為 `/api/recommendations` 提供 tier-aware 投資建議（Free / Registered / Premium）。
+
+| 陷阱 | 說明 |
+|------|------|
+| **NIL deps 回 hardcoded fallback** | `Narrative` / `CapitalFlow` / `EventPredictor` / `ComparisonEngine` 任一為 nil 時回傳安全值（如 `Regime=NEUTRAL`、`Score=0`），不會 panic。 |
+| **X-User-Email 僅 dev mode** | Production 預設 401（`devMode=false`）；dev mode 需 `ATLAS_DEV_MODE=true` 且必須透過 `config.GetSecret()` 讀取，**不可直接 `os.Getenv`**。 |
+| **`lastSeenRegime` race** | regime-change listener 的 `lastSeenRegime` 讀寫無 mutex；並發請求可能丟/多觸發。 |
+| **StrategyScoreInfo 暫為 float** | `ComparisonEngine.GetScore()` 只回 float；`EntrySignal` / `StopLoss` 目前由 handler 模板寫死。 |
+
+---
+
+## subscription（認證與 tier）
+
+模組職責：使用者註冊/登入 + JWT 簽發/驗證 + tier 解析。
+
+| 陷阱 | 說明 |
+|------|------|
+| **JWT secret 環境變數** | Production 必須設置 `ATLAS_JWT_SECRET`；dev mode 未設定時會降級為 unsign token（不安全）。 |
+| **Trial 試用期** | `Premium` 有試用期邏輯，到期自動降級；`EffectiveTier` 處理這層。 |
+| **無 rate limit** | `Register` endpoint 沒有爆破防護；生產部署需 reverse-proxy 層補。 |
+| **Store 只接收已 hash 密碼** | `Store.Register` 接收 `passwordHash`；呼叫端必須先用 argon2/bcrypt hash，store 再 bcrypt 二次 hash。 |
+
+---
+
+## 整合速查
+
+- `capitalflow.Service` → `recommender` adapter 直接呼叫。
+- `eventdriven.Predictor` → `recommender` adapter 的 `PredictToday()` / `NextNDays()`。
+- `subscription.EffectiveTier()` → `recommender` tier 判定；`subscription.JWTManager` → MCP auth。
+- 路由註冊：`cmd/atlas/main.go` 的 `capitalflow.RegisterRoutes`、`eventdriven.RegisterRoutes`、`subHandler.RegisterRoutes`、`recommender.RegisterRoutesWithDeps`。
+
+---
 
 ## 測試
 
-- `handler_test.go` 測試 HandleDaily / HandleSummary 回應格式
-- 七大勢力 completeness test（驗證 7 個欄位都有值）
-- 共振分數範圍測試 [0.5, 1.5]
+- `capitalflow`：HandleDaily / HandleSummary 回應格式、七大勢力 completeness、共振範圍 `[0.5, 1.5]`。
+- `eventdriven`：事件 → flow 映射、confidence 範圍、calendar edge cases。
+- `recommender`：handler_test.go（13 tests）、e2e_test.go、adapters_test.go（nil-safety）。
+- `subscription`：handler_test.go（Register/Login/ExtractToken/Verify）、trial expiry tests。

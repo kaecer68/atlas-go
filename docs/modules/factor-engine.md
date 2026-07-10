@@ -101,7 +101,7 @@ breakdown, scores := engine.CalculateAllScoresWithBreakdown(
 1. **缺失報價**會觸發 fallback，分數會降低。
 2. **fallback 因子**會自動降低權重。
 3. 總分範圍：0-100（`CalculateAllScores` 的 `total` 為加權平均後轉換）。
-4. 修改或新增 `FactorType` 時，必須同步 8 個位置（詳見 `internal/portfolio/AGENTS.md` §12）。
+4. 修改或新增 `FactorType` 時，必須同步 8 個位置（詳見 `.claude/skills/atlas-factor-change-protocol/SKILL.md`）。
 5. 動態權重與事件調整請參考 `factor_weight_engine.go` 與 `.claude/skills/atlas-event-driven-weights/SKILL.md`。
 
 ## 測試

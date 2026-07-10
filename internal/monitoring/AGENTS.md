@@ -79,3 +79,13 @@
 ## Live 偵測器協調器
 
 `internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。詳見 `docs/handoff/2026-wave9-observability-coordinator.md`。
+
+---
+
+## API 共享中介層認證白名單
+
+`internal/monitoring/api/shared/` 提供 `AuthMiddleware`（API-key）與 `RequireUserJWT`（JWT）兩套 middleware，用途不同，勿混用。`AuthMiddleware` 在無 `ATLAS_API_KEY` 的 dev 環境會 pass through。
+
+| 陷阱 | 說明 |
+|------|------|
+| **公開端點需同步加白名單** | 任何新增的 `/api/*` 公開端點必須**同步**加到 `cmd/atlas/main.go isPublicPath` + `internal/monitoring/api/shared/handler.go authFreeExactPaths/authFreePrefixPaths`，只改一處會 404/401。 |

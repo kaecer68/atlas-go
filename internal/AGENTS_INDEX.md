@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。v0.0.0.32 新增 7 個：`capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`。保留 AGENTS.md 的 hot-path 模組共 **27** 個（清單見下方）。
+> **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 >
 > **與 MATURITY.md 的差異**：AGENTS_INDEX 計算頂層模組（59 個）；`internal/MATURITY.md` 計算所有 Go packages（含 sub-packages 如 `domain/shared`、`llm/clients`，約 80 個）。兩者 scope 不同，數字差異是正常的。
 
@@ -91,41 +91,29 @@
 
 > 註：U-tier 為 CLI 工具、測試輔助、或非 runtime 路徑模組；上方所列為跨 workflow 顯著參與者。
 
-## 27 個保留 AGENTS.md 模組
+## 15 個保留 AGENTS.md（2026-07-11 從 27 合併精簡）
 
-以下為所有目錄下含有 `AGENTS.md` 的模組（hot-path 陷阱寫在裡面，修改前必讀）：
+以下為所有目錄下含有 `AGENTS.md` 的位置。多個模組的陷阱已合併至集群檔案：
 
-| 模組 | 成熟度 | 關鍵陷阱主題 |
-|------|--------|-------------|
-| `apigateway` | S | CONSTITUTION.md — API Gateway、BackgroundTaskManager |
-| `baseline` | S | Policy 升降級、版本控制 |
-| `config` | S | 環境變數、ParametersConfig |
-| `db` | E | PostgreSQL 連線管理 |
-| `eventbus` | S | 事件匯流排 Publish/Subscribe |
-| `experiment` | S | 實驗生命週期 mutation→judge→promote |
-| `industry` | S | 產業輪動、季節性、供應鏈 |
-| `ledger` | S | JSONL append-only、OutcomeCount 計算 |
-| `live` | S | 即時交易、broker execution（需 flag 啟用）|
-| `llm` | X | 多 Provider 路由、能力調度、DataClass 閘門 |
-| `logging` | S | 統一日誌介面 |
-| `marketdata` | S | Provider 抽象、TWSE/FinMind/Fugle |
-| `monitoring` | S | Dashboard API、Wave 9 observability |
-| `narrative` | S | 宏觀敘事、因果鏈、台灣壓力指數 |
-| `orchestrator` | S | 三層 executor 路由、PluginHost |
-| `portfolio` | E | Darwinian 權重、FactorEngine |
-| `realtime` | E | 即時資料轉接器 |
-| `risk` | S | RiskManager、VaR、宏觀回撤 |
-| `strategy` | E | 策略選擇器與登錄 |
-| `strategy_techniques` | S | 5 層投資心法庫 |
-| `capitalflow` | E | 七大資金勢力共振分析 |
-| `eventdriven` | E | 事件日曆 + 5 日預測 |
-| `fubonproxy` | E | Python FastAPI 微服務生命週期 |
-| `recommender` | E | tier-gated 投資組合推薦 |
-| `strategy_ranker` | X | 策略表現排名引擎 |
-| `strategy_validator` | X | 策略啟用前驗證器 |
-| `subscription` | X | JWT tier 認證 + 使用者訂閱 |
+| 檔案位置 | 涵蓋模組 | 關鍵陷阱主題 |
+|---------|---------|-------------|
+| `AGENTS.md`（root） | db / config / logging / eventbus / realtime / experiment / baseline / ledger / portfolio / risk / industry / narrative | 跨模組高頻陷阱速查表（單行濃縮） |
+| `internal/apigateway/` | apigateway | Gateway.Fetch、BackgroundTaskManager、CircuitBreaker |
+| `internal/capitalflow/` | capitalflow + eventdriven + recommender + subscription | 資金流/事件日曆/推薦/認證集群 |
+| `internal/fubonproxy/` | fubonproxy | ProcessManager supervisor F1-F9、Stop/backoff |
+| `internal/live/` | live | broker execution、nonce、EventPositionUpdate |
+| `internal/llm/` | llm | Router唯一入口、DataClass gate、capability SOP |
+| `internal/marketdata/` | marketdata | Provider抽象、DecodeJSON、fubon URL guard |
+| `internal/monitoring/` | monitoring + api/shared | Dashboard API、auth whitelist、Wave 9 |
+| `internal/orchestrator/` | orchestrator | Executor路由、PluginHost、ANTIPATTERNS |
+| `internal/strategy_techniques/` | strategy + strategy_ranker + strategy_validator + strategy_techniques | 策略集群（選擇/排名/驗證/心法） |
+| `admin_web/` | admin_web | 行事曆組件、參考檔案 |
+| `client_web/` | client_web | API field contract、shared_web fallback |
+| `cmd/experimental/` | cmd/experimental | dry-run禁令、dummy mode、live broker |
+| `cmd/atlas-mcp/server/` | cmd/atlas-mcp/server | tool註冊、audit、auth、transport |
+| `scripts/openclaw/` | scripts/openclaw | baseline政策、閘門、dry-run |
 
-> 共 27 個。`cmd/atlas-mcp/server/AGENTS.md` 為跨 `internal/` 與 `cmd/` 的特殊位置，不計入此表。
+> 共 15 個。被刪除的 19 個模組級 AGENTS.md 的陷阱已搬遷至集群檔案或 root AGENTS.md 陷阱表。
 
 ## 成熟度定義
 
@@ -152,5 +140,5 @@
 - 完整成熟度對照表：`internal/MATURITY.md`
 - 跨模組陷阱詳細參考：`docs/REFERENCE/TRAPS.md`
 - 根路由與全域規則：`AGENTS.md`
-- 保留 AGENTS.md 模組清單：見下方「27 個保留模組」
+- 保留 AGENTS.md 模組清單：見下方「15 個保留模組」
 - v0.0.0.32 完整 release notes：`CHANGELOG.md` v0.0.0.32 區段

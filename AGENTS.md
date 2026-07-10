@@ -27,7 +27,7 @@
 
 | 數字 | 含義 | 出處 |
 |------|------|------|
-| **27** | 保留 `AGENTS.md` 的內部模組（hot-path 陷阱寫在裡面） | 完整清單見 [`internal/AGENTS_INDEX.md § 保留模組 AGENTS.md`](internal/AGENTS_INDEX.md) |
+| **15** | 保留 `AGENTS.md` 的覆蓋位置（2026-07-11 從 27 合併精簡） | 完整清單見 [`internal/AGENTS_INDEX.md § 15 個保留模組`](internal/AGENTS_INDEX.md) |
 | **59** | 全部模組索引（含無 `AGENTS.md` 者，按成熟度 S/E/X/U 分組） | [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md)（v0.0.0.32 +7: `capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`） |
 | **73** | `internal/` 下全部模組目錄數（不含 testdata/testutil） | 檔案系統 `ls internal/*/` |
 
@@ -36,7 +36,7 @@
 | 知識類型 | 歸屬位置 |
 |----------|---------|
 | 跨模組全域規則 | 本文件 + `docs/REFERENCE/TRAPS.md` |
-| 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**27 個保留模組**，清單見 `internal/AGENTS_INDEX.md`） |
+| 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**15 個保留位置**，清單見 `internal/AGENTS_INDEX.md`） |
 | 模組技術規格 | `docs/specs/<topic>.md` |
 | 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
 | 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
@@ -47,7 +47,7 @@
 **防膨脹規則**：
 - 本文件不超過 **160 行**
 - **155 行時觸發警告**，160 行時 PR 被拒絕
-- 新知識預設加入 `internal/<mod>/AGENTS.md`（限 27 保留模組）或 `docs/`，**不要**加到這裡
+- 新知識預設加入 `internal/<mod>/AGENTS.md`（限 15 保留位置）或 `docs/`，**不要**加到這裡
 
 ## 🔗 文件路由
 
@@ -118,16 +118,22 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 |------|--------|
 | JSON tag snake_case | API parsing struct 必須對齊 `domain.*` 的 snake_case JSON tag |
 | Session 日期 | 以 `SessionID` 中的交易日為準，非 `RecordedAt` |
-| Constitution 違反 | 不得繞過 BackgroundTaskManager、ParametersConfig、marketdata.Provider |
 | FactorType 變更 | 必須同步 8 個位置，見 `.claude/skills/atlas-factor-change-protocol/SKILL.md` |
 | LLM 路由繞過 | 不可直接呼叫 `clients/*Provider`，須透過 `DefaultRouter` |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
-| 資安設定 | 修改 security 相關配置（API key、sslmode、live broker、data source channel）前必看 [SECURITY.md](SECURITY.md) 與 [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) |
-| 平行重複實作 | 新增功能前用 GitNexus `query` + codebase-memory 檢查重疊 |
-| **LLM health 401** | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處 rebuild 後仍 401。見 `docs/REFERENCE/TRAPS.md` 對應 entry 與 PR #931。 |
-| **Prometheus metric 命名空間** | 新 metric 必須 `atlas_<feature>_<measurement>_total` 格式，無前綴的舊名（如 `channel_errors_total`）會與 Prometheus default metric 衝突。見 PR #926 + Issue #927。 |
-| **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果。`.snapshot.bak` 已 gitignore；`parameters.json` 應 commit。見 `docs/REFERENCE/CONSTITUTION.md` §第八條。 |
-| **AI-Generated Doc 當 gospel** | `followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等為 AI agent 產出，非 human owner hard rule。衝突時：① 讀 doc ② 讀 code ③ 標記 doc 過時 + 修 code/doc。完整協議見 `docs/REFERENCE/TRAPS.md`。 |
+| LLM health 401 | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處仍 401 |
+| db migration 路徑 | `runMigrations()` 使用 `file://` + 絕對路徑，相對路徑會找不到檔案 |
+| config 參數系統 | 禁止硬編碼 magic number；`ParametersConfig` 無效 JSON 會靜默回退 |
+| logging context | `Info`/`Error` 非 context-aware；要用 context 請用 `InfoContext`/`ErrorContext` |
+| eventbus fire-and-forget | `Publish` 不回傳 error；SSE 斷線未 `Cancel()` 會 goroutine 洩漏 |
+| realtime regime 區分 | `RegimeType`（7 種細分盤勢）與 `domain.Regime`（risk_on/off/neutral）不同 |
+| experiment baseline | 執行/評判前必須載入 Baseline；視窗稀疏時 Judge 強制拒絕 |
+| baseline JSON | 嚴禁手動編輯 `data/state/baseline_policy.json`；應透過 promote/revert CLI |
+| ledger 時間語義 | `RecordedAt` 是計算完成時間；交易日請從 `SessionID` 解析 |
+| portfolio 靜默夾制 | Darwinian weights 強制夾制 `[0.3, 2.5]`；conviction 夾制 `[1, 250]` |
+| risk 靜默升級 | `MacroAwareDrawdownEngine.escalateAction()` 會將 `monitor` 靜默升級為 `halt` |
+| industry 雙向邊 | 部分節點 upstream/downstream 不對稱；`PropagateShock` 假設雙向索引 |
+| narrative HitRate | `HitRate` 必須透過 `hitRateForTheme()` 從 `DefaultTemplates` 取得 |
 
 ## 🔧 程式碼智慧工具（強制規則）
 

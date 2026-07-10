@@ -1,26 +1,82 @@
-# AGENTS.md — internal/strategy_techniques
+# AGENTS.md — strategy cluster
 
-**成熟度**: stable (S-tier)
-**模組職責**: 投資心法庫（`StrategyFrame` 規則引擎）
+> 合併 `strategy` / `strategy_ranker` / `strategy_validator` / `strategy_techniques` 的模組陷阱。完整架構與流程見 `docs/`。
 
-> 五層框架、短線指標、自我修正機制為通用規格（規劃建立獨立規格文件）。本節僅保留 hot-path 陷阱。
+---
 
-## 核心型別
+## strategy_techniques（心法庫）
 
-| 型別 | 功用 |
+`strategy_techniques` 提供以 `StrategyFrame` 為核心的規則引擎，作為台股投資心法看板與系統決策依據。
+
+### 五層框架（L1～L5）
+
+| Layer | 中文 | 對應 Atlas 模組 | Theme 範例 |
+|-------|------|----------------|-----------|
+| L1 | 全球流動性 | narrative/templates.go | US_rates_up, JPY_carry_unwind |
+| L2 | 外資行為 | taiwan_stress_index.go, narrative | foreign_inflow_*, foreign_outflow_* |
+| L3 | 產業催化 | narrative | AI_capex_surge, semiconductor_downturn, NVDA_earnings |
+| L4 | 匯率籌碼 | narrative, marketdata | USD_TWD_volatility, margin_balance_* |
+| L5 | 地緣政治 | narrative, taiwan_stress_index | geopolitical_risk_spike, tariff_shock, taiwan_political_risk |
+
+### 4 核心短線指標
+
+| 指標 | MacroDataSnapshot 欄位 | Provider | Channel |
+|------|----------------------|----------|---------|
+| 外資現貨買賣超 | ForeignInvestorNet | TWSE T86 | twse_capital_flow |
+| 台積電 ADR | TSMADR | Yahoo Finance TSM | tsm_adr |
+| 輝達股價 | NVDA | Yahoo Finance NVDA | us_nvda |
+| 美元指數 | DXY | Yahoo Finance DX-Y.NYB | us_yahoo (macro batch) |
+
+### 關鍵陷阱
+
+| 陷阱 | 說明 |
 |------|------|
-| `Layer` | L1-L5 分層 enum |
-| `StrategyFrame` | 心法主結構 |
-| `Condition` | 觸發條件（Timeframe/Source） |
-| `Registry` | 心法儲存（JSON 外部化 `data/seeds/strategy_techniques.json`） |
+| **FactorType 變更協議** | 新增/刪除/改名 `FactorType` 必須執行 8 步同步協議，見 `.claude/skills/atlas-factor-change-protocol/SKILL.md`。 |
+| **StrategyFrame 取代 EventRule** | `StrategyFrame` 為心法主結構；`Registry` 外部化至 `data/seeds/strategy_techniques.json`。 |
+| **HitRate 來源** | 主題 HitRate 必須從 `DefaultTemplates` / `hitRateForTheme()` 取得，禁止手動計算。 |
 
-## 已知陷阱
+---
 
-- 已穩定生產，L4/L5 與 LLM 歸因已接入
-- 歷史 `internal/eventlogic/` 已取代
-- 修改 `data/seeds/strategy_techniques.json` 需同步更新 `Registry.Load()`
+## strategy（策略選擇與配置）
 
-## 相依關係
+模組職責：策略註冊、選擇與比較，依據盤勢與績效動態切換投資策略。
 
-- `cmd/atlas/main.go` 匯入
-- 與 `internal/narrative/`、`internal/portfolio/`、`internal/monitoring/` 互動
+| 陷阱 | 說明 |
+|------|------|
+| **策略切換有冷卻期** | `Selector.shouldSwitch()` 檢查 `MinSwitchInterval`，短時間內不會反覆切換。 |
+| **無候選時 fallback** | `Selector.Select()` 無 regime 匹配策略時回傳 `all_weather`；若無 all_weather 則回傳 `fallback`。 |
+| **ComparisonEngine 分數公式** | `GetScore()` = Sharpe×0.4 + DailyReturn×30×0.3 + WinRate×0.3，歷史不足 days 時回傳 0.5。 |
+| **Allocator 權重夾制** | `StrategyAllocator` 預設 `maxWeight=0.50`、`minWeight=0.05`，以迭代方式重新正規化。 |
+
+---
+
+## strategy_ranker（回測排名）
+
+模組職責：策略回測結果排名 + tier 標記（free/registered/premium）。
+
+| 陷阱 | 說明 |
+|------|------|
+| **非即時推薦入口** | 此模組處理**回測結果排名**，不是 `/api/recommendations` 的修復點；即時建議應呼叫 `strategy.ComparisonEngine.GetScore()`。 |
+| **Tier 判定在 validator** | 任何 tier 規則變更需修 `internal/strategy_validator/assign_tiers.go`，非本模組。 |
+| **空輸入回傳空陣列** | `RankAndTier` 期望 `[]StrategyReport`；input 空時回傳空陣列，caller 需檢查。 |
+
+---
+
+## strategy_validator（回測驗證）
+
+模組職責：策略歷史回測驗證、績效指標計算、排名與分層。
+
+| 陷阱 | 說明 |
+|------|------|
+| **Sharpe 計算委託 shared** | 不自行實作年化 Sharpe，統一用 `internal/domain/shared.ComputeSharpe`，避免不同模組產出不同 Sharpe。 |
+| **TAIEX 相關係數可能 NaN** | Pearson 相關係數在樣本不足或 TAIEX 持平時可能為 NaN，程式碼已防禦為 0。 |
+| **排名邏輯在本包內** | `Rank()` 與 `AssignTiers()` 操作 `StrategyReport` 欄位，因此位於 validator 包內；外部透過 `strategy_ranker.Ranker` 呼叫。 |
+
+---
+
+## 測試
+
+- `strategy`：Registry CRUD、Selector 切換邏輯、Allocator 風險平價、ComparisonEngine 分數。
+- `strategy_ranker`：`ranker_test.go` 的 TestRankAndTier / TestFreePremiumFilters。
+- `strategy_validator`：totalReturnPct、maxDrawdownPct、winRate、pearsonCorrelation、Validate 端到端、Rank/AssignTiers。
+- `strategy_techniques`：`go test ./internal/strategy_techniques/...`。
