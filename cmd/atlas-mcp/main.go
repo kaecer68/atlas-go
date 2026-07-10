@@ -41,6 +41,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -94,13 +95,22 @@ func main() {
 	}
 
 	// Initialize PostgreSQL and run migrations if DATABASE_URL is configured.
+	// Resolve migrations path to absolute to support running from any CWD
+	// (e.g., CI built binary in temp dir). Skip gracefully if not found.
 	if pgURL := os.Getenv("DATABASE_URL"); pgURL != "" {
-		pool, err := db.Init(context.Background(), pgURL, "sql/migrations")
-		if err != nil {
-			log.Fatalf("atlas-mcp: connect to postgres: %v", err)
+		migrationsPath := resolveMigrationsPath("sql/migrations")
+		if _, err := os.Stat(migrationsPath); err == nil {
+			log.Printf("atlas-mcp: running migrations from %s", migrationsPath)
+			pool, err := db.Init(context.Background(), pgURL, migrationsPath)
+			if err != nil {
+				log.Printf("atlas-mcp: connect to postgres (non-fatal): %v", err)
+			} else {
+				defer pool.Close()
+				cfg.TokenStore = server.NewPGTokenStore(pool)
+			}
+		} else {
+			log.Printf("atlas-mcp: sql/migrations not found at %s, skipping token store init", migrationsPath)
 		}
-		defer pool.Close()
-		cfg.TokenStore = server.NewPGTokenStore(pool)
 	}
 
 	if err := server.Run(context.Background(), cfg); err != nil {
@@ -221,4 +231,12 @@ func defaultAuditLogPath() string {
 		return tmp + "atlas-mcp-audit.log"
 	}
 	return "/tmp/atlas-mcp-audit.log"
+}
+
+func resolveMigrationsPath(rel string) string {
+	abs, err := filepath.Abs(rel)
+	if err != nil {
+		return rel
+	}
+	return abs
 }
