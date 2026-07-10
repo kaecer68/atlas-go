@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"syscall"
 )
 
@@ -74,8 +75,8 @@ func formatOccupantDiagnostic(addr string, state State, occ Occupant) error {
 	self := os.Getpid()
 	switch state {
 	case StateHealthy:
-		return fmt.Errorf("portprobe: %s already serving by pid %d (%s) (self=%d); refusing to start: another healthy atlas instance may be running",
-			addr, occ.PID, occ.Command, self)
+		return fmt.Errorf("portprobe: %s already serving by pid %d (%s) (self=%d); refusing to start: another healthy atlas instance may be running%s",
+			addr, occ.PID, occ.Command, self, dockerRecoverySuffix(occ.Command))
 	case StateForeign:
 		return fmt.Errorf("portprobe: %s occupied by foreign pid %d (%s) (self=%d); see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\" before killing",
 			addr, occ.PID, occ.Command, self)
@@ -83,4 +84,12 @@ func formatOccupantDiagnostic(addr string, state State, occ Occupant) error {
 		return fmt.Errorf("portprobe: %s in use by pid %d (%s) (self=%d)",
 			addr, occ.PID, occ.Command, self)
 	}
+}
+
+func dockerRecoverySuffix(command string) string {
+	cmd := strings.ToLower(command)
+	if strings.Contains(cmd, "docker") || strings.Contains(cmd, "com.docker") {
+		return "; stop Docker atlas (`docker compose stop atlas`) or use a different -addr (docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")"
+	}
+	return ""
 }

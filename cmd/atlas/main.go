@@ -374,18 +374,27 @@ func run(args []string, deps appDeps) error {
 		var stRegistry *strategy_techniques.Registry
 		var stSeedsPath string
 
+		// Exclusive atlas-http claim always runs first so a healthy Docker
+		// (or leftover native) instance fails fast before expensive bootstrap.
+		// fubon-proxy is shared and only claimed when we intend to manage it.
+		claims := []startup.PortClaim{
+			{Component: "atlas-http", Addr: *apiAddr},
+		}
+		if shouldStartFubonProxy(cfg.BrokerMode, cfg.FubonAPIKey) {
+			claims = append(claims, startup.PortClaim{
+				Component:       "fubon-proxy",
+				Addr:            fmt.Sprintf("127.0.0.1:%d", *fubonProxyPort),
+				AllowZombieKill: true,
+			})
+		}
+		if err := startup.Preflight(claims); err != nil {
+			return fmt.Errorf("preflight failed: %w", err)
+		}
+
 		// Start fubon-proxy process manager BEFORE Gateway adapter registration,
 		// so the fubon TCP probe in RegisterChannelAdapters finds fubon-port already running.
 		var fubonMgr *fubonproxy.ProcessManager
 		if shouldStartFubonProxy(cfg.BrokerMode, cfg.FubonAPIKey) {
-			fubonListenAddr := fmt.Sprintf("127.0.0.1:%d", *fubonProxyPort)
-			if err := startup.Preflight([]startup.PortClaim{
-				{Component: "atlas-http", Addr: *apiAddr},
-				{Component: "fubon-proxy", Addr: fubonListenAddr, AllowZombieKill: true},
-			}); err != nil {
-				return fmt.Errorf("preflight failed: %w", err)
-			}
-
 			fubonMgr = fubonproxy.NewManager(cfg.WorkDir, *fubonProxyPort)
 			if err := fubonMgr.Start(context.Background()); err != nil {
 				log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
