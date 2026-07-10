@@ -184,7 +184,7 @@ func TestRegisteredToolCount_RemainsInRangeAfterHTTPTransportRegistration(t *tes
 			Addr:      "127.0.0.1:0",
 		},
 		audit: audit,
-		cli:   newHTTPClient(Config{AtlasBaseURL: "http://127.0.0.1:0"}),
+		cli:   NewHTTPClient(Config{AtlasBaseURL: "http://127.0.0.1:0"}),
 	}
 
 	impl := &mcp.Implementation{Name: "atlas-mcp-it-registration", Version: "v0.0.1"}

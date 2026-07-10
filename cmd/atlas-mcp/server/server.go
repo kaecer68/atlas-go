@@ -139,7 +139,7 @@ func Run(ctx context.Context, cfg Config) error {
 	srv := &server{
 		cfg:          cfg,
 		audit:        audit,
-		cli:          newHTTPClient(cfg),
+		cli:          NewHTTPClient(cfg),
 		limiter:      limiter,
 		auth:         auth,
 		metrics:      metrics,
@@ -212,7 +212,7 @@ func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 type server struct {
 	cfg          Config
 	audit        *AuditWriter
-	cli          *httpClient
+	cli          *HttpClient
 	limiter      *RateLimiter
 	auth         *TokenAuth
 	metrics      *Metrics
@@ -230,7 +230,7 @@ func (s *server) cachedRoots() []string {
 }
 
 // HTTPClient returns the shared HTTP client.
-func (s *server) HTTPClient() *httpClient { return s.cli }
+func (s *server) HTTPClient() *HttpClient { return s.cli }
 
 // Audit returns the audit writer.
 func (s *server) Audit() *AuditWriter { return s.audit }

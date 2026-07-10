@@ -65,7 +65,7 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	s := &server{
 		cfg:   cfg,
 		audit: audit,
-		cli:   newHTTPClient(cfg),
+		cli:   NewHTTPClient(cfg),
 	}
 	cleanup := func() {
 		_ = audit.Close()
@@ -124,7 +124,7 @@ func TestHandleRegimeGetHistory_ForwardsAPIToken(t *testing.T) {
 	}
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, APIToken: "secret-token", AuditLogPath: filepath.Join(tmp, "audit.log")}
-	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
 	_, out, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 7})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -218,7 +218,7 @@ func TestHandleSystemGetHealth_ParsesStatus(t *testing.T) {
 	audit, _ := NewAuditWriter(filepath.Join(tmp, "a.log"))
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: filepath.Join(tmp, "a.log")}
-	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
 	_, out, err := s.handleSystemGetHealth(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -234,7 +234,7 @@ func TestHandleSystemGetHealth_ParsesStatus(t *testing.T) {
 	}
 }
 
-// --- error path surfaced from httpClient -------------------------------------
+// --- error path surfaced from HttpClient -------------------------------------
 
 func TestHandle_AtlasErrorSurfacesAsMCPError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -245,7 +245,7 @@ func TestHandle_AtlasErrorSurfacesAsMCPError(t *testing.T) {
 	audit, _ := NewAuditWriter(filepath.Join(tmp, "a.log"))
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: filepath.Join(tmp, "a.log")}
-	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
 	_, _, err := s.handleStrategyListActive(context.Background(), nil, struct{}{})
 	if err == nil || !strings.Contains(err.Error(), "500") {
 		t.Fatalf("expected 500 error, got %v", err)
@@ -268,7 +268,7 @@ func TestAuditEntry_WrittenOnBothSuccessAndError(t *testing.T) {
 	}
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
-	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
 
 	if _, _, err := s.handleStrategyListActive(context.Background(), nil, struct{}{}); err == nil {
 		t.Fatal("expected error from atlas")
@@ -320,7 +320,7 @@ func TestWithAudit_WritesV2Schema(t *testing.T) {
 	defer audit.Close()
 
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
-	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
 
 	ctx := ContextWithAgentID(context.Background(), "test-agent")
 	ctx = ContextWithTenantID(ctx, "test-tenant")
@@ -367,7 +367,7 @@ func TestWithAudit_V2LatencyMS(t *testing.T) {
 	defer audit.Close()
 
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
-	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
 
 	err := s.withAudit(context.Background(), "strategy_list_active", nil, func() error {
 		var strategies []map[string]any
@@ -403,7 +403,7 @@ func TestWithAudit_V2OnError(t *testing.T) {
 	defer audit.Close()
 
 	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: path}
-	s := &server{cfg: cfg, audit: audit, cli: newHTTPClient(cfg)}
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
 
 	_ = s.withAudit(context.Background(), "system_get_health", nil, func() error {
 		return s.cli.Get(context.Background(), "/api/dashboard/system-health", nil, nil)

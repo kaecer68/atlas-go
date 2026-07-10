@@ -45,7 +45,7 @@ func newAnomalyTestHarness(t *testing.T) (*server, *anomaly.Detector, *reqRecord
 	s := &server{
 		cfg:      cfg,
 		audit:    audit,
-		cli:      newHTTPClient(cfg),
+		cli:      NewHTTPClient(cfg),
 		metrics:  metrics,
 		detector: detector,
 	}
