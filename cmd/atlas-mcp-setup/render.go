@@ -37,10 +37,7 @@ func renderConfig(target RenderTarget) (RenderResult, error) {
 	}
 
 	// Build the atlas-mcp entry for this client's wire format.
-	entry, err := buildEntry(target)
-	if err != nil {
-		return RenderResult{}, err
-	}
+	entry := buildEntry(target)
 
 	// Read existing config if any.
 	existing := map[string]any{}
@@ -93,7 +90,8 @@ func renderConfig(target RenderTarget) (RenderResult, error) {
 
 // buildEntry assembles the atlas-mcp entry value for the given client.
 // Each client has a slightly different wire format for env var encoding.
-func buildEntry(target RenderTarget) (map[string]any, error) {
+// Never returns an error today (kept signature-less to satisfy unparam).
+func buildEntry(target RenderTarget) map[string]any {
 	env := map[string]string{
 		"ATLAS_BASE_URL": target.AtlasBase,
 	}
@@ -121,7 +119,7 @@ func buildEntry(target RenderTarget) (map[string]any, error) {
 		// Default stdio (no explicit type needed for these clients).
 	}
 
-	return entry, nil
+	return entry
 }
 
 // entryName returns the server name used to key the entry in the config.
@@ -140,7 +138,7 @@ func serverKeyOrTop(key string) string {
 // We Chmod after OpenFile so existing files are also tightened to 0600
 // (OpenFile only applies the mode bits on file creation).
 func writeConfig(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)

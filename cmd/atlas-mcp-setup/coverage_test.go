@@ -137,9 +137,9 @@ func evalSymlink(t *testing.T, p string) string {
 
 func TestBuildEntry_AllClients(t *testing.T) {
 	clients := []struct {
-		name     string
-		typeKey  string
-		hasList  bool
+		name    string
+		typeKey string
+		hasList bool
 	}{
 		{"hermes", "", false},
 		{"openclaw", "stdio", false},
@@ -155,10 +155,7 @@ func TestBuildEntry_AllClients(t *testing.T) {
 				AtlasBase:   "http://127.0.0.1:18080",
 				AtlasAPIKey: "k",
 			}
-			entry, err := buildEntry(target)
-			if err != nil {
-				t.Fatalf("buildEntry: %v", err)
-			}
+			entry := buildEntry(target)
 			if c.typeKey != "" {
 				if entry["type"] != c.typeKey {
 					t.Errorf("type: %v, want %q", entry["type"], c.typeKey)
@@ -190,7 +187,7 @@ func TestProbeAll_BinaryCheck(t *testing.T) {
 	}
 
 	cfg := SetupConfig{
-		REPOROOT:  tmpRepo,
+		REPOROOT:   tmpRepo,
 		BinaryPath: binary,
 	}
 	result := probeAll(cfg, ClientInstall{})
@@ -379,8 +376,8 @@ func TestRun_NoClientsInstalled(t *testing.T) {
 	defer func() { os.Stderr = origStderr }()
 
 	cfg := SetupConfig{
-		HomeDir:  tmpHome,
-		REPOROOT: "/nonexistent",
+		HomeDir:   tmpHome,
+		REPOROOT:  "/nonexistent",
 		AtlasBase: "http://127.0.0.1:18080",
 		Force:     true,
 	}

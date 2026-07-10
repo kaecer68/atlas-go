@@ -62,7 +62,7 @@ func TestRenderConfig_Hermes_TopLevelMap(t *testing.T) {
 		Client: ClientInstall{
 			Name:       "hermes",
 			Format:     "yaml", // wizard writes JSON (valid YAML subset)
-			ServerKey:  "", // Hermes: top-level map
+			ServerKey:  "",     // Hermes: top-level map
 			ConfigPath: cfgPath,
 		},
 		BinaryPath:  "/tmp/atlas-mcp",
@@ -202,10 +202,7 @@ func TestBuildEntry_OpenCode_TypeAndArray(t *testing.T) {
 		AtlasBase:   "http://127.0.0.1:18080",
 		AtlasAPIKey: "k",
 	}
-	entry, err := buildEntry(target)
-	if err != nil {
-		t.Fatalf("buildEntry: %v", err)
-	}
+	entry := buildEntry(target)
 	if entry["type"] != "local" {
 		t.Errorf("OpenCode entry should have type=local, got %v", entry["type"])
 	}

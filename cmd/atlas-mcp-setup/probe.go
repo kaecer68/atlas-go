@@ -54,7 +54,7 @@ func probeAll(cfg SetupConfig, target ClientInstall) ProbeResult {
 		r.AtlasMCPBinary = ProbeCheck{
 			OK:     false,
 			Detail: fmt.Sprintf("atlas-mcp binary not found at %s — run: make build-mcp", binaryPath),
-			Err:     err,
+			Err:    err,
 		}
 	}
 

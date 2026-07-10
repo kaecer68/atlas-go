@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // ClientKind enumerates the 5 MCP clients this wizard can configure.
@@ -112,7 +113,9 @@ func inspectClient(name ClientKind, format, serverKey, path string) ClientInstal
 }
 
 func isMacOS() bool {
-	return os.Getenv("GOOS") == "darwin" || filepath.Separator == '/' && fileExists("/System/Library/CoreServices/SystemVersion.plist")
+	// Use runtime.GOOS (Go stdlib constant) instead of os.Getenv("GOOS") to comply
+	// with internal/apigateway/CONSTITUTION.md Art.1 (only whitelisted env vars).
+	return runtime.GOOS == "darwin" || filepath.Separator == '/' && fileExists("/System/Library/CoreServices/SystemVersion.plist")
 }
 
 func fileExists(path string) bool {

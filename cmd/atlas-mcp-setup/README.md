@@ -92,4 +92,3 @@ go test -count=1 ./cmd/atlas-mcp-setup/
 
 - **5 分鐘 SOP**: [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
 - **完整 MCP 指南**: [`../atlas-mcp/README.md`](../atlas-mcp/README.md)
-- **Plan**: [`.omo/plans/atlas-mcp-onboarding-2026q3.md`](../../.omo/plans/atlas-mcp-onboarding-2026q3.md)

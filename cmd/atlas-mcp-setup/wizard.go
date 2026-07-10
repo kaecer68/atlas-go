@@ -61,6 +61,10 @@ func Run(cfg SetupConfig) error {
 		return fmt.Errorf("atlas-go backend not reachable on :18080; " +
 			"start it with 'go run ./cmd/atlas' or pass --force to proceed anyway")
 	}
+	if !probes.WritableTarget.OK && !cfg.Force {
+		return fmt.Errorf("target config not writeable: %s — check dir permissions, or pass --force to override",
+			selected.ConfigPath)
+	}
 
 	// Step 4: Generate + write config.
 	fmt.Fprintf(os.Stderr, "\n[4/4] Generating config for %s...\n", selected.Name)
@@ -80,11 +84,17 @@ func Run(cfg SetupConfig) error {
 		fmt.Fprintf(os.Stderr, "\n  --dry-run: would write %d bytes to %s\n",
 			len(result.Content), result.Path)
 		fmt.Fprintf(os.Stderr, "  Content preview:\n")
-		os.Stdout.Write(result.Content)
+		if _, err := os.Stdout.Write(result.Content); err != nil {
+			return fmt.Errorf("write dry-run preview to stdout: %w", err)
+		}
 		return nil
 	}
 
-	if !cfg.NoPrompt && fileExists(result.Path) {
+	if cfg.NoPrompt && fileExists(result.Path) {
+		// --no-prompt skips ConfirmAction; surface overwrite explicitly so
+		// CI/script users see it. Merge logic preserves other MCP entries.
+		fmt.Fprintf(os.Stderr, "  ⚠️  --no-prompt: overwriting %s (merge-preserves other entries)\n", result.Path)
+	} else if !cfg.NoPrompt && fileExists(result.Path) {
 		if !ConfirmAction(fmt.Sprintf("Overwrite existing config at %s?", result.Path)) {
 			fmt.Fprintf(os.Stderr, "  Aborted by user.\n")
 			return nil
