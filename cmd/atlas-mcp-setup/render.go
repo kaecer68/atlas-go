@@ -137,6 +137,8 @@ func serverKeyOrTop(key string) string {
 
 // writeConfig writes config bytes to path with mode 0600 (private).
 // Per go-core.instructions.md: write paths use closure+logging for Close.
+// We Chmod after OpenFile so existing files are also tightened to 0600
+// (OpenFile only applies the mode bits on file creation).
 func writeConfig(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
@@ -152,6 +154,9 @@ func writeConfig(path string, data []byte) error {
 			fmt.Fprintf(os.Stderr, "atlas-mcp-setup: WARN: close %s: %v\n", path, cerr)
 		}
 	}()
+	if err := f.Chmod(0o600); err != nil {
+		return fmt.Errorf("chmod %s: %w", path, err)
+	}
 	if _, err := f.Write(data); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
