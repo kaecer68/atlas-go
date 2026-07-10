@@ -119,6 +119,13 @@ jobs:
     - name: Test cmd/atlas (20min timeout, no -race)
       run: go test -v -timeout=20m ./cmd/atlas/...
 
+    - name: Test cmd/atlas-mcp-setup integration (mock backend)
+      # 2026-07-10: PR #1066 (Finding #4 follow-up). Build tag `integration`
+      # gates this so regular `go test ./...` does not spawn subprocesses.
+      # Uses newline-delimited JSON-RPC (the go-mcp SDK's stdio framing);
+      # mock backend via httptest.NewServer (no external services needed).
+      run: go test -v -tags=integration -timeout=60s ./cmd/atlas-mcp-setup/
+
   # Lint
   lint:
     needs: frontend-build

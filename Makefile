@@ -189,6 +189,14 @@ test-backend:
 	@echo "🧪 Testing Go backend..."
 	go test $(GO_PKGS)
 
+test-integration:
+	@echo "🧪 Running integration tests (mock backend, no external services)..."
+	@if [ ! -d "./cmd/atlas-mcp-setup" ]; then \
+		echo "⚠️  No integration tests yet (PR #1066 adds cmd/atlas-mcp-setup/integration_test.go)"; \
+	else \
+		go test -tags=integration -timeout=60s ./cmd/atlas-mcp-setup/; \
+	fi
+
 lint-backend:
 	@echo "🔍 Linting Go backend..."
 	@command -v gofmt >/dev/null && gofmt -l $(GO_PKGS) | (read; if [ $$? -ne 0 ]; then echo "❌ gofmt issues found"; exit 1; fi) || echo "  (gofmt skipped)"
