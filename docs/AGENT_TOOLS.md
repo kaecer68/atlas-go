@@ -4,6 +4,7 @@
 > **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 > **整合到 Claude Desktop / OpenClaw / Hermes**：[`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)
 > **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
+> **投資人查詢範本**（自然語言 → tool）：[`docs/operations/stock-mcp-query-templates.md`](./operations/stock-mcp-query-templates.md)
 > **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [agent-mcp-server.md](specs/agent-mcp-server.md) §3。
 >
 > ⚠️ **先讀這條**：atlas-mcp 的 tool 定義是 compile-time 產生的，反映 `atlas-mcp` binary **建置時**的 Go 程式碼。若你發現 tool 行為與本文件不符，可能是 atlas-mcp binary 未在 Go 程式碼變更後重新 `go build`。程式碼層級的查詢（callers、dependencies、implementation details）請改用 **即時索引**的程式碼智慧工具：GitNexus、codebase-memory、codegraph。詳見 [`docs/TOOLS.md`](./TOOLS.md)。
@@ -39,6 +40,31 @@
 ├── 查程式碼實作 / 相依性
 │   └── → 見 [`docs/TOOLS.md`](./TOOLS.md)（GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決策樹）
 ```
+
+---
+
+## 任務 → Tool 反向索引（**給 hermes/openclaw agent 投資人查詢直接看這張表**）
+
+不知道該用哪個 tool？依任務查表：
+
+| Agent 任務 | 首選 tool | 備選 / companion | 注意 |
+|-----------|----------|-----------------|------|
+| **Daily Briefing**（每日簡報） | `regime_get_history` + `crossmarket_get_status` + `narrative_get_bundle` | `macro_get_stress_index_current` + `alert_list_unacknowledged` | 早晚各跑一次 |
+| **市場全景** | `macro_get_snapshot_latest` + `regime_get_history` | `crossmarket_get_us_indices` + `macro_get_capital_flow_latest` | 開盤前必跑 |
+| **資金流向** | `capital_flow_daily` | `capital_flow_summary` | 確認多空共振與主力方向 |
+| **個股健檢** | `stock_get_quote` + `stock_get_fundamentals` | `stock_get_chips` + `stock_get_technical` | 輸入台股代號，如 `2330` |
+| **策略排名** | `strategy_ranker` | `strategy_list_active` + `strategy_get_summary` | 依勝率排序，注意 tier 標籤 |
+| **Risk Review**（風險審查） | `risk_get_metrics` + `risk_get_drawdown` | `risk_get_correlation_matrix` + `risk_get_commentary` | 若 drawdown > threshold 觸發 alert |
+| **Portfolio Health**（持倉健康） | `strategy_list_active` + `strategy_get_summary` | `strategy_get_attribution` + `synergy_get_darwinian_status` | 確認線上策略狀態 |
+| **Experiment Eval**（實驗評審） | `experiment_diff` + `experiment_judge` | `experiment_history` + `synergy_get_darwinian_trend` | `experiment_judge` 有 side-effect |
+| **System Health**（系統健康） | `system_get_health` | `system_get_circuit_breaker` + `system_get_data_pipeline` | 任何任務的第一步 |
+| **LLM Health** | `llm_get_health` + `llm_get_cost` | `trace_get_agent_observatory` | 路由異常時用 |
+| **Alert Triage**（警報分類） | `alert_list_unacknowledged` + `alert_get_stats` | `alert_get_rules` | 確認後用 admin API acknowledge |
+| **自我觀測**（我的呼叫紀錄） | `mcp_get_session_topology` + `mcp_get_call_stats` | `mcp_get_top_slow_tools` + `mcp_anomaly_get_recent` | audit 用途，非日常操作 |
+| **稅務查詢** | `report_get_tax_snapshot` | `report_get_performance` | 僅在需要稅務報告時 |
+| **排程管理** | `scheduler_get_status` + `task_list` | `task_get_events` | 查看背景任務狀態 |
+
+> 完整「自然語言 → tool」範本見 [`docs/operations/stock-mcp-query-templates.md`](./operations/stock-mcp-query-templates.md)（給投資人 agent 用：一句話「2330 現在能不能買」對應到 `stock_get_quote`）。
 
 ---
 
@@ -275,26 +301,3 @@
 - `trace_get_reasoning` → WA-302（推理 trace）
 
 完整對照表見 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md) §3.1。
-
----
-
-## 任務 → Tool 反向索引
-
-不知道該用哪個 tool？依任務查表：
-
-| Agent 任務 | 首選 tool | 備選 / companion | 注意 |
-|-----------|----------|-----------------|------|
-| **Daily Briefing**（每日簡報） | `regime_get_history` + `crossmarket_get_status` + `narrative_get_bundle` | `macro_get_stress_index_current` + `alert_list_unacknowledged` | 早晚各跑一次 |
-| **市場全景** | `macro_get_snapshot_latest` + `regime_get_history` | `crossmarket_get_us_indices` + `macro_get_capital_flow_latest` | 開盤前必跑 |
-| **資金流向** | `capital_flow_daily` | `capital_flow_summary` | 確認多空共振與主力方向 |
-| **個股健檢** | `stock_get_quote` + `stock_get_fundamentals` | `stock_get_chips` + `stock_get_technical` | 輸入台股代號，如 `2330` |
-| **策略排名** | `strategy_ranker` | `strategy_list_active` + `strategy_get_summary` | 依勝率排序，注意 tier 標籤 |
-| **Risk Review**（風險審查） | `risk_get_metrics` + `risk_get_drawdown` | `risk_get_correlation_matrix` + `risk_get_commentary` | 若 drawdown > threshold 觸發 alert |
-| **Portfolio Health**（持倉健康） | `strategy_list_active` + `strategy_get_summary` | `strategy_get_attribution` + `synergy_get_darwinian_status` | 確認線上策略狀態 |
-| **Experiment Eval**（實驗評審） | `experiment_diff` + `experiment_judge` | `experiment_history` + `synergy_get_darwinian_trend` | `experiment_judge` 有 side-effect |
-| **System Health**（系統健康） | `system_get_health` | `system_get_circuit_breaker` + `system_get_data_pipeline` | 任何任務的第一步 |
-| **LLM Health** | `llm_get_health` + `llm_get_cost` | `trace_get_agent_observatory` | 路由異常時用 |
-| **Alert Triage**（警報分類） | `alert_list_unacknowledged` + `alert_get_stats` | `alert_get_rules` | 確認後用 admin API acknowledge |
-| **自我觀測**（我的呼叫紀錄） | `mcp_get_session_topology` + `mcp_get_call_stats` | `mcp_get_top_slow_tools` + `mcp_anomaly_get_recent` | audit 用途，非日常操作 |
-| **稅務查詢** | `report_get_tax_snapshot` | `report_get_performance` | 僅在需要稅務報告時 |
-| **排程管理** | `scheduler_get_status` + `task_list` | `task_get_events` | 查看背景任務狀態 |
