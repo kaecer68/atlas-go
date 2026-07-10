@@ -25,7 +25,6 @@ VERSION=$(tr -d '[:space:]' < VERSION)
 # Files where version is hardcoded and should be synced from VERSION
 TARGETS=(
     "AGENTS.md"
-    "internal/AGENTS.md"
     "internal/AGENTS_INDEX.md"
     "internal/MATURITY.md"
     "internal/fubonproxy/AGENTS.md"

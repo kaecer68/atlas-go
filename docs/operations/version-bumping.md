@@ -60,7 +60,6 @@ gh pr create --base main --title "chore(release): bump VERSION to X.Y.Z" --body 
 | 檔案 | 用途 |
 |------|------|
 | `AGENTS.md` | 專案 constitution 的版本欄 |
-| `internal/AGENTS.md` | (預留) |
 | `internal/AGENTS_INDEX.md` | 模組索引(59 模組) |
 | `internal/MATURITY.md` | 模組成熟度對照 |
 | `internal/fubonproxy/AGENTS.md` | fubonproxy 模組 |

@@ -27,7 +27,6 @@ PATTERN='v0\.[0-9]+\.[0-9]+\.[0-9]+(\+?)'
 # Files that sync-version.sh keeps in sync.
 TARGETS=(
     "AGENTS.md"
-    "internal/AGENTS.md"
     "internal/AGENTS_INDEX.md"
     "internal/MATURITY.md"
     "internal/fubonproxy/AGENTS.md"
