@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.0.32] - 2026-07-10
+
+### Fixed
+- **Atlas-http 啟動時正確拒絕 healthy port 衝突** (`internal/startup/preflight.go`、`internal/portprobe/listen.go`、`cmd/atlas/main.go`):
+  - 修正 `internal/startup/preflight.go:checkClaim` 對 exclusive claim（`AllowZombieKill=false`）把 `StateHealthy` 當作 pass 的邏輯——若 Docker Desktop（或殘留 native process）已健康佔用 :18080，現在會在 bootstrap 前 fail-fast，回傳 actionable error（附 PID、command 與 docker / kill 復原指示），而不是跑完整昂貴 bootstrap 後才在 `portprobe.Listen` 失敗。
+  - 修正 `cmd/atlas/main.go` 只在 `shouldStartFubonProxy` 內呼叫 preflight 的語意錯誤：atlas-http 的 exclusive claim 現在無論 fubon-proxy 是否啟動都會先驗證。
+  - `internal/portprobe/listen.go:formatOccupantDiagnostic` 在偵測到 `com.docker.backend` / `docker-proxy` 時，於錯誤訊息結尾附加 `docker compose stop atlas` 復原指示。
+- **Unit tests**: 新增 `TestPreflight_ExclusiveHealthy_Errors`、`TestPreflight_ExclusiveHealthy_NativeHint`、`TestDockerRecoverySuffix` 覆蓋 docker vs native occupant 兩條復原路徑。
+
 ## [0.0.0.31] - 2026-07-07
 
 ### Added
