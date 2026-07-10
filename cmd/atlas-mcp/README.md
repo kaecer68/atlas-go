@@ -108,7 +108,7 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 ```json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "command": "/absolute/path/to/bin/atlas-mcp",
       "args": [],
       "env": {
@@ -131,7 +131,7 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 ```json
 {
   "mcp": {
-    "atlas-go": {
+    "atlas-mcp": {
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {

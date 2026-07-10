@@ -134,7 +134,7 @@ make setup-mcp        # 互動式 wizard
 # OpenCode:   ~/.config/opencode/opencode.json
 
 # 4. 驗證
-hermes mcp test atlas-go    # 應列出 91 個 tool
+hermes mcp test atlas-mcp    # 應列出 91 個 tool
 ```
 
 ### Tool 速覽

@@ -67,7 +67,7 @@ target_audience: "developer"
 // ~/.config/Claude Desktop/claude_desktop_config.json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "command": "/absolute/path/to/bin/atlas-mcp",
       "env": {
         "ATLAS_BASE_URL": "http://127.0.0.1:18080",
@@ -86,7 +86,7 @@ target_audience: "developer"
 // opencode.json
 {
   "mcp": {
-    "atlas-go": {
+    "atlas-mcp": {
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {

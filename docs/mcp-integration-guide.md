@@ -45,7 +45,7 @@
 ```json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "command": "/absolute/path/to/bin/atlas-mcp",
       "args": [],
       "env": {

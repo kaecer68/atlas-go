@@ -25,7 +25,7 @@
 
 ```yaml
 mcp_servers:
-  atlas-go:
+  atlas-mcp:
     command: "/absolute/path/to/bin/atlas-mcp"
     env:
       ATLAS_BASE_URL: "http://127.0.0.1:18080"
@@ -38,7 +38,7 @@ mcp_servers:
 
 ```json
 {
-  "atlas-go": {
+  "atlas-mcp": {
     "type": "stdio",
     "command": "/absolute/path/to/bin/atlas-mcp",
     "env": {
@@ -54,7 +54,7 @@ mcp_servers:
 ```json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "command": "/absolute/path/to/bin/atlas-mcp",
       "args": [],
       "env": {
@@ -77,7 +77,7 @@ mcp_servers:
 ```json
 {
   "mcp": {
-    "atlas-go": {
+    "atlas-mcp": {
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {
