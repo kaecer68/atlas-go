@@ -263,16 +263,16 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 
 ## 模組特定陷阱
 
-以下陷阱屬於特定模組範圍，詳見各模組的 `AGENTS.md`：
+以下陷阱屬於特定模組範圍，詳見集群 AGENTS.md 或 root `AGENTS.md` 陷阱速查表：
 
-- **Portfolio**: 權重、FactorEngine、FactorType 變更流程 → `internal/portfolio/AGENTS.md`
+- **Portfolio**: 權重、FactorEngine、FactorType 變更流程 → root `AGENTS.md` 陷阱表
 - **Orchestrator**: 三層 executor 路由、GuardOutcomes 對齊 → `internal/orchestrator/AGENTS.md`
 - **Live**: 交易安全旗標 → `internal/live/AGENTS.md`
 - **MarketData**: Provider 註冊規則 → `internal/marketdata/AGENTS.md`
-- **Experiment**: Mutation → execute → judge → promote 生命週期 → `internal/experiment/AGENTS.md`
-- **Baseline**: 升降級與版本控制 → `internal/baseline/AGENTS.md`
+- **Experiment**: Mutation → judge → promote 生命週期 → root `AGENTS.md` 陷阱表
+- **Baseline**: 升降級與版本控制 → root `AGENTS.md` 陷阱表
 - **Monitoring**: Dashboard API、人工干預 → `internal/monitoring/AGENTS.md`
-- **Narrative**: 宏觀敘事、因果鏈 → `internal/narrative/AGENTS.md`
+- **Narrative**: 宏觀敘事、因果鏈 → root `AGENTS.md` 陷阱表
 
 ---
 
