@@ -42,8 +42,8 @@ GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決�
 
 ### 我要找完整 MCP 規格 → 看 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 
-### 我要把 atlas-mcp 接到 Claude Desktop / OpenClaw / Hermes → 看 [`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md) + [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
-91 個 tool 的 JSON Schema 設計範本、env var 速查、5 種 client (Hermes/OpenClaw/Claude/Cursor/OpenCode) 設定範例。**注意**：[`mcp-integration-guide.md`](./mcp-integration-guide.md) 已於 2026-07-10 標記 deprecated，內容過時（錯誤 env var 名），請改用上方兩份新文件。
+### 我要把 atlas-mcp 接到 Claude Desktop / OpenClaw / Hermes → 看 [`docs/mcp-integration-LOCAL.md`](./mcp-integration-LOCAL.md)（本機模式完整指南）+ [`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)（91 tool + env var 速查）+ [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)（50 行 SOP）
+5 種 client (Hermes/OpenClaw/Claude/Cursor/OpenCode) 設定範例。**注意**：[`mcp-integration-guide.md`](./mcp-integration-guide.md) 已於 2026-07-10 標記 deprecated，內容過時（錯誤 env var 名），請改用上方新文件。雲端部署場景見 [`docs/mcp-integration-CLOUD.md`](./mcp-integration-CLOUD.md)。
 
 ### 我要理解模組 → 看 [`internal/AGENTS_INDEX.md`](./../internal/AGENTS_INDEX.md)
 52 個內部模組按 S/E/X/U 成熟度分組。

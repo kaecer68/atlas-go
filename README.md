@@ -111,8 +111,8 @@ atlas-go 同時也是 **MCP (Model Context Protocol) server**，提供 **91 個 
 
 ### 你的場景
 
-- **本機開發 / 個人 agent**：atlas-go backend 與 agent 在同一台 → 見 [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) + [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)（50 行 SOP）
-- **雲端接入**（規劃中，2026 Q4）：atlas-go 部署到雲端、外部 agent 透過 reverse proxy → 見 [`docs/mcp-integration-CLOUD.md`](docs/mcp-integration-CLOUD.md)
+- **本機開發 / 個人 agent**：atlas-go backend 與 agent 在同一台 → 見 [`docs/mcp-integration-LOCAL.md`](docs/mcp-integration-LOCAL.md)（完整指南）+ [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)（50 行 SOP）
+- **雲端接入**（規劃中，2026 Q4）：atlas-go 部署到雲端、外部 agent 透過 reverse proxy → 見 [`docs/mcp-integration-CLOUD.md`](docs/mcp-integration-CLOUD.md)（scaffold，待雲端部署穩定後補細節）
 
 ### 5 分鐘接入（任選 1 種 client）
 
