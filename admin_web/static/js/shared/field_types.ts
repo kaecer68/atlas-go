@@ -198,13 +198,13 @@ export interface BenchmarkComparisonResponse {
   snapshot_time: string;
   session_count: number;
   portfolio_return: number;
-  taiex_return: number;
-  outperformance: number;
-  alpha: number;
-  beta: number;
-  tracking_error: number;
-  sharpe_ratio: number;
-  info_ratio: number;
+  taiex_return?: number | null;
+  outperformance?: number | null;
+  alpha?: number | null;
+  beta?: number | null;
+  tracking_error?: number | null;
+  sharpe_ratio?: number | null;
+  info_ratio?: number | null;
   equity_curve: BenchmarkPoint[];
 }
 
@@ -486,10 +486,10 @@ export interface ConvictionStep {
 }
 
 export interface CoreIndicators {
-  foreign_capital_net_twd: number;
-  tsm_adr_pct: number;
-  nvda_pct: number;
-  dxy_pct: number;
+  foreign_capital_net_twd?: number | null;
+  tsm_adr_pct?: number | null;
+  nvda_pct?: number | null;
+  dxy_pct?: number | null;
 }
 
 export interface CorporateAction {
@@ -1087,7 +1087,7 @@ export interface ExitAlert {
   symbol: string;
   name: string;
   days_held: number;
-  pnl_pct: number;
+  pnl_pct?: number | null;
   suggestion: string;
 }
 
@@ -2106,6 +2106,7 @@ export interface MonthlyReturn {
   year: number;
   month: number;
   return: number;
+  cumulative?: number | null;
   label: string;
 }
 
@@ -2964,20 +2965,20 @@ export interface RetailFuturesOI {
 }
 
 export interface RetailSentimentResponse {
-  sentiment_score: number;
-  margin_change_pct: number;
-  margin_balance: number;
-  short_balance: number;
-  short_change_pct: number;
-  day_trading_ratio: number;
-  margin_percentile: number;
+  sentiment_score: number | null;
+  margin_change_pct: number | null;
+  margin_balance: number | null;
+  short_balance: number | null;
+  short_change_pct: number | null;
+  day_trading_ratio: number | null;
+  margin_percentile: number | null;
   extreme_reading: string;
-  score: number;
-  change_pct: number;
+  score: number | null;
+  change_pct: number | null;
   interpretation: string;
-  composite_sentiment: number;
-  retail_futures_oi?: number;
-  etf_net_subscription?: number;
+  composite_sentiment: number | null;
+  retail_futures_oi?: number | null;
+  etf_net_subscription?: number | null;
   sentiment_sub_indicators?: RSITwSubIndicators | null;
   fetcher_status: FetcherStatus;
 }
@@ -3581,6 +3582,7 @@ export interface SummaryReport {
   quality_label: string;
   resonance_dir: string;
   dominant_force: string;
+  forces: ForceScore[];
   summary: string;
 }
 

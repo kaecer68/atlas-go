@@ -1,6 +1,7 @@
 // sparkline.js — Darwinian weight sparkline + equity curve + agent scoreboard
 // Standalone component, importable into dashboard.js or portfolio pages.
-import { fmt, fmtPct, fmtFloat, fmtNTD, getThemeColor } from '../shared/utils.js';
+import { fmtPct, fmtFloat, fmtInt, fmtNTD, getThemeColor } from '../shared/utils.js';
+import { formatNumber } from '../shared/format-metric.js';
 import { pnlProfitColor, pnlLossColor, regimeColor, hexToRgba } from '../shared/color-tokens.js';
 
 export { renderEquityCurve, renderDualEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance };
@@ -25,7 +26,8 @@ function renderEquityCurve(points) {
   const pad = {top: 20, right: 20, bottom: 28, left: 50};
   const chartW = W - pad.left - pad.right, chartH = H - pad.top - pad.bottom;
 
-  const values = points.map(p => p.value);
+  const values = points.map(p => p.value).filter(Number.isFinite);
+  if (values.length < 2) { panel.style.display = 'none'; return; }
   const minV = Math.min(...values), maxV = Math.max(...values), range = maxV - minV || 1;
   ctx.clearRect(0, 0, W, H);
 
@@ -115,10 +117,11 @@ function renderDualEquityCurve(preTaxPoints, afterTaxPoints) {
   const pad = {top: 20, right: 20, bottom: 28, left: 80}; // Wider left pad for NT$ labels
   const chartW = W - pad.left - pad.right, chartH = H - pad.top - pad.bottom;
 
-  const preTaxValues = preTaxPoints.map(p => p.value);
-  const afterTaxValues = hasAfterTax ? afterTaxPoints.map(p => p.value) : [];
+  const preTaxValues = preTaxPoints.map(p => p.value).filter(Number.isFinite);
+  const afterTaxValues = hasAfterTax ? afterTaxPoints.map(p => p.value).filter(Number.isFinite) : [];
   const allValues = [...preTaxValues, ...afterTaxValues];
-  
+
+  if (allValues.length === 0) { panel.style.display = 'none'; return; }
   const minV = Math.min(...allValues), maxV = Math.max(...allValues), range = maxV - minV || 1;
   ctx.clearRect(0, 0, W, H);
 
@@ -218,14 +221,17 @@ function renderAgentScoreboard(dw, agentNameFn) {
   html += '</tr></thead><tbody>';
 
   for (const a of agents) {
-    const sharpe = a.rolling_sharpe || 0;
-    const sharpeColor = sharpe > 1 ? pnlProfitColor() : (sharpe < 0 ? pnlLossColor() : 'var(--warn)');
+    const sharpe = a.rolling_sharpe;
+    let sharpeColor = 'var(--muted)';
+    if (typeof sharpe === 'number') {
+      sharpeColor = sharpe > 1 ? pnlProfitColor() : (sharpe < 0 ? pnlLossColor() : 'var(--warn)');
+    }
     html += '<tr>';
     html += `<td>${nameFn(a.agent_id)}</td>`;
     html += `<td>${fmtFloat(a.weight)}</td>`;
-    html += `<td style="color:${sharpeColor}">${sharpe.toFixed(2)}</td>`;
+    html += `<td style="color:${sharpeColor}">${fmtFloat(sharpe)}</td>`;
     html += `<td>${fmtPct(a.hit_rate)}</td>`;
-    html += `<td>${a.signal_count || 0}</td>`;
+    html += `<td>${fmtInt(a.signal_count)}</td>`;
     html += '</tr>';
   }
   html += '</tbody></table>';
@@ -346,10 +352,12 @@ export function renderComparisonChart(containerId, datasets, options = {}) {
   let maxLen = 0;
   datasets.forEach(ds => {
     if (ds.data.length > maxLen) maxLen = ds.data.length;
-    ds.data.forEach(p => allValues.push(p.value));
+    ds.data.forEach(p => {
+      if (Number.isFinite(p.value)) allValues.push(p.value);
+    });
   });
-  
-  if (maxLen < 2) {
+
+  if (maxLen < 2 || allValues.length === 0) {
      ctx.fillStyle = getCssVar('--muted', '#6b7280');
      ctx.font = '12px system-ui';
      ctx.textAlign = 'center';
@@ -577,7 +585,7 @@ export function renderRadarChart(containerId, metrics, labels) {
       const py = cy + Math.sin(a) * (radius * val);
       // If mouse near point
       if (Math.hypot(mx - px, my - py) < 15) {
-        html = `<strong>${labels[i]}</strong>: ${(metrics[i]*100).toFixed(1)}%`;
+        html = `<strong>${labels[i]}</strong>: ${formatNumber(metrics[i], { percent: true, decimals: 1 })}`;
         break;
       }
     }

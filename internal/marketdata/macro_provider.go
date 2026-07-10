@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -55,6 +56,150 @@ type MacroDataSnapshot struct {
 	FailedChannels       []string       `json:"failed_channels,omitempty"`
 	StaleChannels        []string       `json:"stale_channels,omitempty"`
 	RecordedAt           int64          `json:"recorded_at"`
+}
+
+// MarshalJSON omits MacroDataPoint fields that have no symbol, preventing
+// zero-value sentinel objects (e.g. {"symbol":"","value":0,"change_pct":0})
+// from being serialized as valid readings. Backend consumers continue to use
+// value-type fields; this only affects the API wire format.
+func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
+	type Alias MacroDataSnapshot
+	aux := &struct {
+		*Alias
+		US10Y                *MacroDataPoint `json:"us10y,omitempty"`
+		DXY                  *MacroDataPoint `json:"dxy,omitempty"`
+		VIX                  *MacroDataPoint `json:"vix,omitempty"`
+		USD_TWD              *MacroDataPoint `json:"usd_twd,omitempty"`
+		Oil                  *MacroDataPoint `json:"oil,omitempty"`
+		Gold                 *MacroDataPoint `json:"gold,omitempty"`
+		JPY                  *MacroDataPoint `json:"jpy,omitempty"`
+		ForeignInvestorNet   *MacroDataPoint `json:"foreign_investor_net,omitempty"`
+		DomesticFundNet      *MacroDataPoint `json:"domestic_fund_net,omitempty"`
+		DealerNet            *MacroDataPoint `json:"dealer_net,omitempty"`
+		ExportElectronics    *MacroDataPoint `json:"export_electronics,omitempty"`
+		RetailMarginBalance  *MacroDataPoint `json:"retail_margin_balance,omitempty"`
+		RetailShortBalance   *MacroDataPoint `json:"retail_short_balance,omitempty"`
+		TSMCRevenue          *MacroDataPoint `json:"tsmc_revenue,omitempty"`
+		SOXIndex             *MacroDataPoint `json:"sox_index,omitempty"`
+		DRAMSpotPrice        *MacroDataPoint `json:"dram_spot_price,omitempty"`
+		TaiwanSemiIndex      *MacroDataPoint `json:"taiwan_semi_index,omitempty"`
+		CoWoSUtilization     *MacroDataPoint `json:"cowos_utilization,omitempty"`
+		CapexGrowth          *MacroDataPoint `json:"capex_growth,omitempty"`
+		CPIYoY               *MacroDataPoint `json:"cpi_yoy,omitempty"`
+		Bdi                  *MacroDataPoint `json:"bdi,omitempty"`
+		Silver               *MacroDataPoint `json:"silver,omitempty"`
+		Copper               *MacroDataPoint `json:"copper,omitempty"`
+		TSMADR               *MacroDataPoint `json:"tsm_adr,omitempty"`
+		SPXIndex             *MacroDataPoint `json:"spx_index,omitempty"`
+		NDXIndex             *MacroDataPoint `json:"ndx_index,omitempty"`
+		DJIIndex             *MacroDataPoint `json:"dji_index,omitempty"`
+		NVDA                 *MacroDataPoint `json:"nvda,omitempty"`
+		AAPL                 *MacroDataPoint `json:"aapl,omitempty"`
+		MSFT                 *MacroDataPoint `json:"msft,omitempty"`
+		TAIEX                *MacroDataPoint `json:"taiex,omitempty"`
+		HistoricalVolatility *MacroDataPoint `json:"historical_volatility,omitempty"`
+	}{
+		Alias: (*Alias)(&s),
+	}
+
+	if s.US10Y.Symbol != "" {
+		aux.US10Y = &s.US10Y
+	}
+	if s.DXY.Symbol != "" {
+		aux.DXY = &s.DXY
+	}
+	if s.VIX.Symbol != "" {
+		aux.VIX = &s.VIX
+	}
+	if s.USD_TWD.Symbol != "" {
+		aux.USD_TWD = &s.USD_TWD
+	}
+	if s.Oil.Symbol != "" {
+		aux.Oil = &s.Oil
+	}
+	if s.Gold.Symbol != "" {
+		aux.Gold = &s.Gold
+	}
+	if s.JPY.Symbol != "" {
+		aux.JPY = &s.JPY
+	}
+	if s.ForeignInvestorNet.Symbol != "" {
+		aux.ForeignInvestorNet = &s.ForeignInvestorNet
+	}
+	if s.DomesticFundNet.Symbol != "" {
+		aux.DomesticFundNet = &s.DomesticFundNet
+	}
+	if s.DealerNet.Symbol != "" {
+		aux.DealerNet = &s.DealerNet
+	}
+	if s.ExportElectronics.Symbol != "" {
+		aux.ExportElectronics = &s.ExportElectronics
+	}
+	if s.RetailMarginBalance.Symbol != "" {
+		aux.RetailMarginBalance = &s.RetailMarginBalance
+	}
+	if s.RetailShortBalance.Symbol != "" {
+		aux.RetailShortBalance = &s.RetailShortBalance
+	}
+	if s.TSMCRevenue.Symbol != "" {
+		aux.TSMCRevenue = &s.TSMCRevenue
+	}
+	if s.SOXIndex.Symbol != "" {
+		aux.SOXIndex = &s.SOXIndex
+	}
+	if s.DRAMSpotPrice.Symbol != "" {
+		aux.DRAMSpotPrice = &s.DRAMSpotPrice
+	}
+	if s.TaiwanSemiIndex.Symbol != "" {
+		aux.TaiwanSemiIndex = &s.TaiwanSemiIndex
+	}
+	if s.CoWoSUtilization.Symbol != "" {
+		aux.CoWoSUtilization = &s.CoWoSUtilization
+	}
+	if s.CapexGrowth.Symbol != "" {
+		aux.CapexGrowth = &s.CapexGrowth
+	}
+	if s.CPIYoY.Symbol != "" {
+		aux.CPIYoY = &s.CPIYoY
+	}
+	if s.Bdi.Symbol != "" {
+		aux.Bdi = &s.Bdi
+	}
+	if s.Silver.Symbol != "" {
+		aux.Silver = &s.Silver
+	}
+	if s.Copper.Symbol != "" {
+		aux.Copper = &s.Copper
+	}
+	if s.TSMADR.Symbol != "" {
+		aux.TSMADR = &s.TSMADR
+	}
+	if s.SPXIndex.Symbol != "" {
+		aux.SPXIndex = &s.SPXIndex
+	}
+	if s.NDXIndex.Symbol != "" {
+		aux.NDXIndex = &s.NDXIndex
+	}
+	if s.DJIIndex.Symbol != "" {
+		aux.DJIIndex = &s.DJIIndex
+	}
+	if s.NVDA.Symbol != "" {
+		aux.NVDA = &s.NVDA
+	}
+	if s.AAPL.Symbol != "" {
+		aux.AAPL = &s.AAPL
+	}
+	if s.MSFT.Symbol != "" {
+		aux.MSFT = &s.MSFT
+	}
+	if s.TAIEX.Symbol != "" {
+		aux.TAIEX = &s.TAIEX
+	}
+	if s.HistoricalVolatility.Symbol != "" {
+		aux.HistoricalVolatility = &s.HistoricalVolatility
+	}
+
+	return json.Marshal(aux)
 }
 
 // MacroDataProvider fetches macroeconomic indicators.

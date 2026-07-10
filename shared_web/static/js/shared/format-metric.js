@@ -13,9 +13,13 @@
  * @param {boolean} [options.invertSign=false]  true 時反轉正負號（用於回撤、損失等）
  * @returns {string}
  */
+function isValidNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function formatSigned(value, options = {}) {
   const { decimals = 2, suffix = '', forceSign = false, invertSign = false } = options;
-  if (value === null || value === undefined || Number.isNaN(value)) return `— ${suffix}`.trim();
+  if (!isValidNumber(value)) return `— ${suffix}`.trim();
   const v = invertSign ? -value : value;
   const sign = v > 0 ? '+' : v < 0 ? '−' : '';
   const displaySign = forceSign || v !== 0 ? sign : '';
@@ -33,7 +37,7 @@ export function formatSigned(value, options = {}) {
  */
 export function formatMaxDrawdown(value, options = {}) {
   const { asAbsolute = false } = options;
-  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  if (!isValidNumber(value)) return '—';
   const pct = value * 100;
   const abs = Math.abs(pct).toFixed(1);
   if (pct === 0) return `0.0%`;
@@ -47,7 +51,7 @@ export function formatMaxDrawdown(value, options = {}) {
  * @returns {{value: string, level: 'low'|'medium'|'high'|null}}
  */
 export function formatHHI(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+  if (!isValidNumber(value)) {
     return { value: '—', level: null };
   }
   let level = 'low';
@@ -67,7 +71,7 @@ export function formatHHI(value) {
  */
 export function formatNumber(value, options = {}) {
   const { decimals = 2, suffix = '', percent = false } = options;
-  if (value === null || value === undefined || Number.isNaN(value)) return `— ${suffix}`.trim();
+  if (!isValidNumber(value)) return `— ${suffix}`.trim();
   const v = percent ? value * 100 : value;
   return `${v.toFixed(decimals)}${suffix}`;
 }

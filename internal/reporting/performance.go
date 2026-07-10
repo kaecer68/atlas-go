@@ -51,10 +51,11 @@ type RegimePerformance struct {
 
 // MonthlyReturn represents a single month's return.
 type MonthlyReturn struct {
-	Year   int     `json:"year"`
-	Month  int     `json:"month"`
-	Return float64 `json:"return"`
-	Label  string  `json:"label"`
+	Year       int      `json:"year"`
+	Month      int      `json:"month"`
+	Return     float64  `json:"return"`
+	Cumulative *float64 `json:"cumulative,omitempty"`
+	Label      string   `json:"label"`
 }
 
 // PerformanceReport is the structured performance report for a given period.
@@ -144,11 +145,7 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 		annualizedReturn = math.Pow(1+totalReturn, 365.0/days) - 1
 	}
 
-	sharpeValue := CalculateSharpeRatio(dailyReturns)
-	var sharpeRatio *float64
-	if sharpeValue != 0 {
-		sharpeRatio = &sharpeValue
-	}
+	sharpeRatio := CalculateSharpeRatio(dailyReturns)
 
 	sortinoRatio := shared.ComputeSortino(dailyReturns, shared.SortinoConfig{
 		Frequency:  shared.FrequencyPerDay,
@@ -402,11 +399,16 @@ func loadAgentDisplayNames() map[string]string {
 }
 
 // CalculateSharpeRatio computes the annualized Sharpe ratio from daily returns.
-func CalculateSharpeRatio(dailyReturns []float64) float64 {
-	return portfolio.ComputeSharpe(dailyReturns, portfolio.SharpeConfig{
+// Returns nil when there are fewer than 2 daily returns.
+func CalculateSharpeRatio(dailyReturns []float64) *float64 {
+	if len(dailyReturns) < 2 {
+		return nil
+	}
+	v := portfolio.ComputeSharpe(dailyReturns, portfolio.SharpeConfig{
 		Frequency:  portfolio.FrequencyPerDay,
 		MinSamples: 2,
 	})
+	return &v
 }
 
 func calculateCalmarRatio(annualizedReturn, maxDrawdown float64) float64 {
@@ -571,38 +573,49 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[
 // CalculateBeta computes the CAPM beta of the portfolio relative to the benchmark.
 // Uses the ratio of portfolio volatility to benchmark return magnitude,
 // consistent with benchmark.go's simplified approach.
-func CalculateBeta(portfolioReturns []float64, benchmarkReturn float64) float64 {
-	if len(portfolioReturns) < 60 || benchmarkReturn == 0 {
-		return 1.0
+// Returns nil when there are insufficient samples or the benchmark return is unavailable.
+func CalculateBeta(portfolioReturns []float64, benchmarkReturn *float64) *float64 {
+	if len(portfolioReturns) < 60 || benchmarkReturn == nil || *benchmarkReturn == 0 {
+		return nil
 	}
 	portVol := stdDev(portfolioReturns)
-	benchVol := math.Abs(benchmarkReturn)
+	benchVol := math.Abs(*benchmarkReturn)
 	if benchVol == 0 {
-		return 1.0
+		return nil
 	}
-	return portVol / benchVol
+	v := portVol / benchVol
+	return &v
 }
 
 // CalculateAlpha computes the risk-adjusted excess return.
-func CalculateAlpha(portfolioReturn, beta, benchmarkReturn float64) float64 {
-	return portfolioReturn - beta*benchmarkReturn
+// Returns nil when either beta or benchmark return is unavailable.
+func CalculateAlpha(portfolioReturn float64, beta *float64, benchmarkReturn *float64) *float64 {
+	if beta == nil || benchmarkReturn == nil {
+		return nil
+	}
+	v := portfolioReturn - *beta**benchmarkReturn
+	return &v
 }
 
 // CalculateTrackingError computes the standard deviation of portfolio returns
 // as a measure of tracking error relative to the benchmark.
-func CalculateTrackingError(portfolioReturns []float64) float64 {
+// Returns nil when there are fewer than 2 portfolio returns.
+func CalculateTrackingError(portfolioReturns []float64) *float64 {
 	if len(portfolioReturns) < 2 {
-		return 0
+		return nil
 	}
-	return stdDev(portfolioReturns)
+	v := stdDev(portfolioReturns)
+	return &v
 }
 
 // CalculateInfoRatio computes the information ratio (outperformance / tracking error).
-func CalculateInfoRatio(outperformance, trackingError float64) float64 {
-	if trackingError == 0 {
-		return 0
+// Returns nil when either input is nil or tracking error is zero.
+func CalculateInfoRatio(outperformance *float64, trackingError *float64) *float64 {
+	if outperformance == nil || trackingError == nil || *trackingError == 0 {
+		return nil
 	}
-	return outperformance / trackingError
+	v := *outperformance / *trackingError
+	return &v
 }
 
 func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []domain.RecommendationOutcome) RegimeBreakdown {
@@ -724,6 +737,14 @@ func calculateMonthlyReturns(summaries []domain.SessionSummary, portfolioValues 
 		}
 		return a.Month - b.Month
 	})
+
+	// Compute cumulative return from the sorted monthly returns.
+	cumulative := 1.0
+	for i := range monthlyReturns {
+		cumulative *= 1 + monthlyReturns[i].Return
+		c := cumulative - 1
+		monthlyReturns[i].Cumulative = &c
+	}
 
 	return monthlyReturns
 }

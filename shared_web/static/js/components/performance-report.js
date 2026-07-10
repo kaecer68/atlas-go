@@ -1,3 +1,7 @@
+import { fmtPct, fmtFloat, fmtNTD, fmtInt, escapeHtml } from '../shared/utils.js';
+import { formatMaxDrawdown } from '../shared/format-metric.js';
+import { agentName as agentNameEsm, regimeLabel as regimeLabelEsm } from '../shared/constants.js';
+
 export function renderPerformanceReport(container) {
   if (typeof container === 'string') container = document.getElementById(container);
   if (!container) { console.error('performance-report: container not found'); return; }
@@ -109,23 +113,28 @@ function exportPerformanceReport(format, period) {
   window.open(`/api/dashboard/performance-report/export?format=${format}&period=${period}`, '_blank');
 }
 
-function renderReportData(data) {
-  const { fmtNTD, fmtPct, fmtFloat, agentNameEsm, regimeLabelEsm } = window;
+function pnlColorStyle(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v === 0) return 'var(--text)';
+  return v > 0 ? 'var(--up)' : 'var(--down)';
+}
 
+function drawdownSign(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v === 0) return 0;
+  return v > 0 ? -1 : 1;
+}
+
+function renderReportData(data) {
   document.getElementById('prDateRange').textContent = `${(data.start_date || '--').slice(0,10)} ～ ${(data.end_date || '--').slice(0,10)}`;
 
-  var drawdownVal = data.max_drawdown || 0;
-  var drawdownSign = drawdownVal > 0 ? -1 : 0;
-
   const kpis = [
-    { label: '總報酬', value: fmtPct ? fmtPct(data.total_return || 0) : ((data.total_return||0)*100).toFixed(2)+'%', sign: data.total_return },
-    { label: '年化報酬', value: fmtPct ? fmtPct(data.annualized_return || 0) : ((data.annualized_return||0)*100).toFixed(2)+'%', sign: data.annualized_return },
-    { label: '夏普比率', value: data.sharpe_ratio == null ? 'N/A' : (fmtFloat ? fmtFloat(data.sharpe_ratio, 2) : (data.sharpe_ratio).toFixed(2)) },
-    { label: '最大回撤', value: data.max_drawdown == null ? '—' : (drawdownVal > 0 ? ('-' + (fmtPct ? fmtPct(drawdownVal) : (drawdownVal*100).toFixed(2)+'%')) : '0.00%'), sign: drawdownSign },
-    { label: '稅後價值', value: fmtNTD ? fmtNTD(data.after_tax_value || 0) : (data.after_tax_value||0).toFixed(0) },
-    { label: '已繳稅額', value: fmtNTD ? fmtNTD(data.total_tax_paid || 0) : (data.total_tax_paid||0).toFixed(0), hint: '累積' },
-    { label: '勝率', value: fmtPct ? fmtPct(data.win_rate || 0) : ((data.win_rate||0)*100).toFixed(1)+'%' },
-    { label: '總交易數', value: data.total_trades || 0 }
+    { label: '總報酬', value: fmtPct(data.total_return), sign: data.total_return },
+    { label: '年化報酬', value: fmtPct(data.annualized_return), sign: data.annualized_return },
+    { label: '夏普比率', value: fmtFloat(data.sharpe_ratio) },
+    { label: '最大回撤', value: formatMaxDrawdown(data.max_drawdown), sign: drawdownSign(data.max_drawdown) },
+    { label: '稅後價值', value: fmtNTD(data.after_tax_value) },
+    { label: '已繳稅額', value: fmtNTD(data.total_tax_paid), hint: '累積' },
+    { label: '勝率', value: fmtPct(data.win_rate), sign: data.win_rate },
+    { label: '總交易數', value: fmtInt(data.total_trades) }
   ];
 
   const gridHtml = kpis.map(function(k) {
@@ -144,13 +153,12 @@ function renderReportData(data) {
   const agentsBody = document.getElementById('prAgentsBody');
   if (data.top_agents && data.top_agents.length > 0) {
     agentsBody.innerHTML = data.top_agents.map(function(a) {
-      var ret = a.aggregate_forward_return || 0;
-      var cls = ret > 0 ? 'positive' : (ret < 0 ? 'negative' : '');
-      var sharpeCell = a.sharpe_like == null ? 'N/A' : (fmtFloat ? fmtFloat(a.sharpe_like, 2) : (a.sharpe_like).toFixed(2));
+      var ret = a.aggregate_forward_return;
+      var sharpeCell = fmtFloat(a.sharpe_like);
       return '<tr>' +
-        '<td>' + (a.display_name || (agentNameEsm ? agentNameEsm(a.agent_id) : a.agent_id)) + '</td>' +
-        '<td style="color:' + (ret > 0 ? 'var(--up)' : (ret < 0 ? 'var(--down)' : 'var(--text)')) + '">' + (fmtPct ? fmtPct(ret) : (ret*100).toFixed(2)+'%') + '</td>' +
-        '<td>' + (fmtPct ? fmtPct(a.win_rate || 0) : ((a.win_rate||0)*100).toFixed(1)+'%') + '</td>' +
+        '<td>' + escapeHtml(a.display_name || agentNameEsm(a.agent_id) || a.agent_id) + '</td>' +
+        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtPct(ret) + '</td>' +
+        '<td>' + fmtPct(a.win_rate) + '</td>' +
         '<td>' + sharpeCell + '</td>' +
         '</tr>';
     }).join('');
@@ -164,13 +172,13 @@ function renderReportData(data) {
   if (regimes.length > 0) {
     regimesBody.innerHTML = regimes.map(function(entry) {
       var id = entry[0], r = entry[1];
-      var avgRet = r.avg_return || 0;
-      var sessions = r.session_count || 0;
+      var avgRet = r.avg_return;
+      var sessions = r.session_count;
       return '<tr>' +
-        '<td>' + (regimeLabelEsm ? regimeLabelEsm(id) : id) + '</td>' +
-        '<td>' + sessions + '</td>' +
-        '<td style="color:' + (avgRet > 0 ? 'var(--up)' : (avgRet < 0 ? 'var(--down)' : 'var(--text)')) + '">' + (fmtPct ? fmtPct(avgRet) : (avgRet*100).toFixed(2)+'%') + '</td>' +
-        '<td>' + (fmtPct ? fmtPct(r.win_rate || 0) : ((r.win_rate||0)*100).toFixed(1)+'%') + '</td>' +
+        '<td>' + escapeHtml(regimeLabelEsm(id) || id) + '</td>' +
+        '<td>' + fmtInt(sessions) + '</td>' +
+        '<td style="color:' + pnlColorStyle(avgRet) + '">' + fmtPct(avgRet) + '</td>' +
+        '<td>' + fmtPct(r.win_rate) + '</td>' +
         '</tr>';
     }).join('');
   } else {
@@ -180,11 +188,11 @@ function renderReportData(data) {
   const monthsBody = document.getElementById('prMonthsBody');
   if (data.monthly_returns && data.monthly_returns.length > 0) {
     monthsBody.innerHTML = data.monthly_returns.map(function(m) {
-      var ret = m.return || 0;
+      var ret = m.return;
       return '<tr>' +
-        '<td>' + (m.month || '--') + '</td>' +
-        '<td style="color:' + (ret > 0 ? 'var(--up)' : (ret < 0 ? 'var(--down)' : 'var(--text)')) + '">' + (fmtPct ? fmtPct(ret) : (ret*100).toFixed(2)+'%') + '</td>' +
-        '<td>' + (fmtPct ? fmtPct(m.cumulative || 0) : ((m.cumulative||0)*100).toFixed(2)+'%') + '</td>' +
+        '<td>' + escapeHtml(m.label || m.month || '--') + '</td>' +
+        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtPct(ret) + '</td>' +
+        '<td>' + fmtPct(m.cumulative) + '</td>' +
         '</tr>';
     }).join('');
   } else {

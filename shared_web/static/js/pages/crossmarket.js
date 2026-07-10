@@ -1,4 +1,5 @@
-import { escapeHtml } from '../shared/utils.js';
+import { escapeHtml, fmtFloat } from '../shared/utils.js';
+import { formatNumber } from '../shared/format-metric.js';
 
 export async function loadCrossMarketData() {
   const [status, usIndices, correlation, correlationMatrix] = await Promise.all([
@@ -33,22 +34,18 @@ function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey, failed)
 }
 
 function fmtPct(v) {
-  if (v == null) return '—';
-  const n = Number(v);
-  if (isNaN(n)) return '—';
-  return n.toFixed(2) + '%';
-}
-
-function fmtNum(v, digits) {
-  if (v == null) return '—';
-  const n = Number(v);
-  if (isNaN(n)) return '—';
-  return n.toFixed(digits || 2);
+  return Number.isFinite(v) ? formatNumber(v, { decimals: 2, suffix: '%' }) : '—';
 }
 
 function fmtTs(v) {
   if (!v) return '—';
   return new Date(v).toLocaleString();
+}
+
+function changeColor(pct) {
+  const n = Number(pct);
+  if (!Number.isFinite(n)) return null;
+  return n >= 0 ? 'var(--bullish)' : 'var(--bearish)';
 }
 
 function getField(status, key) {
@@ -80,15 +77,15 @@ function renderUSIndices(status) {
   const ndx = getField(status, 'ndx');
   const dji = getField(status, 'dji');
   const sox = getField(status, 'sox');
-  const spxColor = spx.failed ? null : (parseFloat(spx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
-  const ndxColor = ndx.failed ? null : (parseFloat(ndx.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
-  const djiColor = dji.failed ? null : (parseFloat(dji.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
-  const soxColor = sox.failed ? null : (parseFloat(sox.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const spxColor = spx.failed ? null : changeColor(spx.changePct);
+  const ndxColor = ndx.failed ? null : changeColor(ndx.changePct);
+  const djiColor = dji.failed ? null : changeColor(dji.changePct);
+  const soxColor = sox.failed ? null : changeColor(sox.changePct);
   el.innerHTML =
-    kpiCard('S&P 500', spx.value, fmtNum, spxColor, null, spx.symbol, 'cm_spx', spx.failed) +
-    kpiCard('Nasdaq', ndx.value, fmtNum, ndxColor, null, ndx.symbol, 'cm_ndx', ndx.failed) +
-    kpiCard('Dow Jones', dji.value, fmtNum, djiColor, null, dji.symbol, 'cm_dji', dji.failed) +
-    kpiCard('SOX 半導體', sox.value, fmtNum, soxColor, null, sox.symbol, 'cm_sox', sox.failed);
+    kpiCard('S&P 500', spx.value, fmtFloat, spxColor, null, spx.symbol, 'cm_spx', spx.failed) +
+    kpiCard('Nasdaq', ndx.value, fmtFloat, ndxColor, null, ndx.symbol, 'cm_ndx', ndx.failed) +
+    kpiCard('Dow Jones', dji.value, fmtFloat, djiColor, null, dji.symbol, 'cm_dji', dji.failed) +
+    kpiCard('SOX 半導體', sox.value, fmtFloat, soxColor, null, sox.symbol, 'cm_sox', sox.failed);
 }
 
 function renderTechStocks(status) {
@@ -102,15 +99,15 @@ function renderTechStocks(status) {
   const aapl = getField(status, 'aapl');
   const msft = getField(status, 'msft');
   const tsm = getField(status, 'tsm_adr');
-  const nvdaColor = nvda.failed ? null : (parseFloat(nvda.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
-  const aaplColor = aapl.failed ? null : (parseFloat(aapl.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
-  const msftColor = msft.failed ? null : (parseFloat(msft.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
-  const tsmColor = tsm.failed ? null : (parseFloat(tsm.changePct) >= 0 ? 'var(--bullish)' : 'var(--bearish)');
+  const nvdaColor = nvda.failed ? null : changeColor(nvda.changePct);
+  const aaplColor = aapl.failed ? null : changeColor(aapl.changePct);
+  const msftColor = msft.failed ? null : changeColor(msft.changePct);
+  const tsmColor = tsm.failed ? null : changeColor(tsm.changePct);
   el.innerHTML =
-    kpiCard('NVDA', nvda.value, fmtNum, nvdaColor, null, nvda.symbol, 'cm_nvda', nvda.failed) +
-    kpiCard('AAPL', aapl.value, fmtNum, aaplColor, null, aapl.symbol, 'cm_aapl', aapl.failed) +
-    kpiCard('MSFT', msft.value, fmtNum, msftColor, null, msft.symbol, 'cm_msft', msft.failed) +
-    kpiCard('TSM ADR', tsm.value, fmtNum, tsmColor, 'color-mix(in srgb, var(--accent) 30%, transparent)', tsm.symbol, 'cm_tsm', tsm.failed);
+    kpiCard('NVDA', nvda.value, fmtFloat, nvdaColor, null, nvda.symbol, 'cm_nvda', nvda.failed) +
+    kpiCard('AAPL', aapl.value, fmtFloat, aaplColor, null, aapl.symbol, 'cm_aapl', aapl.failed) +
+    kpiCard('MSFT', msft.value, fmtFloat, msftColor, null, msft.symbol, 'cm_msft', msft.failed) +
+    kpiCard('TSM ADR', tsm.value, fmtFloat, tsmColor, 'color-mix(in srgb, var(--accent) 30%, transparent)', tsm.symbol, 'cm_tsm', tsm.failed);
 }
 
 function renderMacro(status) {
@@ -125,10 +122,10 @@ function renderMacro(status) {
   const usdTwd = getField(status, 'usd_twd');
   const us10y = getField(status, 'us10y');
   el.innerHTML =
-    kpiCard('VIX 恐慌指數', vix.value, fmtNum, null, null, vix.symbol, 'cm_vix') +
-    kpiCard('DXY 美元指數', dxy.value, fmtNum, null, null, dxy.symbol, 'cm_dxy') +
-    kpiCard('USD/TWD 匯率', usdTwd.value, fmtNum, null, null, usdTwd.symbol, 'cm_usd_twd') +
-    kpiCard('US 10Y 殖利率', us10y.value, fmtPct, null, null, us10y.symbol, 'cm_us10y');
+    kpiCard('VIX 恐慌指數', vix.value, fmtFloat, null, null, vix.symbol, 'cm_vix', vix.failed) +
+    kpiCard('DXY 美元指數', dxy.value, fmtFloat, null, null, dxy.symbol, 'cm_dxy', dxy.failed) +
+    kpiCard('USD/TWD 匯率', usdTwd.value, fmtFloat, null, null, usdTwd.symbol, 'cm_usd_twd', usdTwd.failed) +
+    kpiCard('US 10Y 殖利率', us10y.value, fmtPct, null, null, us10y.symbol, 'cm_us10y', us10y.failed);
 }
 
 function renderCorrelation(correlation, status) {
@@ -138,12 +135,12 @@ function renderCorrelation(correlation, status) {
   const fallback = correlation && correlation.is_fallback;
   const observations = correlation && correlation.observations != null ? correlation.observations : '—';
   const windowSize = correlation && correlation.window_size != null ? correlation.window_size : '—';
-  const generatedAt = correlation && correlation.generated_at ? new Date(correlation.generated_at).toLocaleString() : (status && status.generated_at ? new Date(status.generated_at).toLocaleString() : '—');
+  const generatedAt = correlation && correlation.computed_at ? new Date(correlation.computed_at).toLocaleString() : (status && status.generated_at ? new Date(status.generated_at).toLocaleString() : '—');
 
   let rhoColor = 'var(--text)';
   let rhoLabel = '—';
-  if (rho != null && !isNaN(rho)) {
-    rhoLabel = rho.toFixed(4);
+  if (rho != null && Number.isFinite(rho)) {
+    rhoLabel = formatNumber(rho, { decimals: 4 });
     if (rho >= 0.8) rhoColor = 'var(--color-danger)';
     else if (rho >= 0.6) rhoColor = 'var(--color-warning)';
     else if (rho >= 0.3) rhoColor = 'var(--muted)';
@@ -183,8 +180,8 @@ function renderCorrelationMatrix(matrixData) {
   }
 
   function corrText(v) {
-    if (v == null || isNaN(v)) return '—';
-    return v.toFixed(2);
+    if (!Number.isFinite(v)) return '—';
+    return fmtFloat(v);
   }
 
   let html = '<div style="overflow-x:auto"><table style="font-size:var(--text-sm);border-collapse:collapse;min-width:100%"><thead><tr><th style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;text-align:left;border-bottom:1px solid var(--panel-l3)">產業</th>';
@@ -219,7 +216,7 @@ function renderCrisis(status) {
   const active = status.crisis_active;
   const vixField = getField(status, 'vix');
   const vix = vixField.value != null ? parseFloat(vixField.value) : null;
-  const vixLabel = vix != null ? vix.toFixed(2) : '—';
+  const vixLabel = Number.isFinite(vix) ? fmtFloat(vix) : '—';
 
   let bg, icon, title, desc;
   if (active) {

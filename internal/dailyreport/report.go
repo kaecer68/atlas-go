@@ -16,6 +16,7 @@ import (
 type Report struct {
 	Date      string          `json:"date"`
 	Generated time.Time       `json:"generated_at"`
+	Summary   string          `json:"summary"` // mirrored from Global.Summary for frontend convenience
 	Global    GlobalOverview  `json:"global"`
 	Capital   CapitalSection  `json:"capital"`
 	Events    EventsSection   `json:"events"`
@@ -105,6 +106,7 @@ func (g *Generator) Generate() *Report {
 	r := &Report{
 		Date:      date,
 		Generated: now,
+		Summary:   global.Summary,
 		Global:    global,
 		Capital:   capital,
 		Events:    events,

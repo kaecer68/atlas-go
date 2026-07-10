@@ -63,6 +63,7 @@ func GenerateSummaryReport(date time.Time, forces []ForceScore, resonance Resona
 		QualityLabel:  label,
 		ResonanceDir:  resonance.Direction,
 		DominantForce: dominant,
+		Forces:        forces,
 		Summary:       buildShortSummary(label, resonance, dominant),
 	}
 }

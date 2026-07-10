@@ -17,17 +17,18 @@ import (
 )
 
 // BenchmarkComparisonResponse is the response for GET /api/dashboard/benchmark-comparison.
+// Optional metrics use *float64 so missing/insufficient data serializes as null.
 type BenchmarkComparisonResponse struct {
 	SnapshotTime    time.Time        `json:"snapshot_time"`
 	SessionCount    int              `json:"session_count"`
 	PortfolioReturn float64          `json:"portfolio_return"`
-	TAIEXReturn     float64          `json:"taiex_return"`
-	Outperformance  float64          `json:"outperformance"`
-	Alpha           float64          `json:"alpha"`
-	Beta            float64          `json:"beta"`
-	TrackingError   float64          `json:"tracking_error"`
-	SharpeRatio     float64          `json:"sharpe_ratio"`
-	InfoRatio       float64          `json:"info_ratio"`
+	TAIEXReturn     *float64         `json:"taiex_return,omitempty"`
+	Outperformance  *float64         `json:"outperformance,omitempty"`
+	Alpha           *float64         `json:"alpha,omitempty"`
+	Beta            *float64         `json:"beta,omitempty"`
+	TrackingError   *float64         `json:"tracking_error,omitempty"`
+	SharpeRatio     *float64         `json:"sharpe_ratio,omitempty"`
+	InfoRatio       *float64         `json:"info_ratio,omitempty"`
 	EquityCurve     []BenchmarkPoint `json:"equity_curve"`
 }
 
@@ -107,27 +108,26 @@ func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
 		}
 	}
 
-	var taiexReturn float64
+	var taiexReturn *float64
 	calc := h.getTAIEXCalculator()
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	if ret, err := calc.Get1MonthReturn(ctx); err == nil {
-		taiexReturn = ret
+		taiexReturn = &ret
 	} else {
 		logging.Warn("benchmark", "taiex_return_fetch_failed", logging.Err(err))
 	}
 
-	outperformance := portfolioReturn - taiexReturn
+	var outperformance *float64
+	if taiexReturn != nil {
+		v := portfolioReturn - *taiexReturn
+		outperformance = &v
+	}
 
 	beta := reporting.CalculateBeta(dailyReturns, taiexReturn)
 	alpha := reporting.CalculateAlpha(portfolioReturn, beta, taiexReturn)
 	trackingError := reporting.CalculateTrackingError(dailyReturns)
-
-	var sharpeRatio float64
-	if len(dailyReturns) > 0 {
-		sharpeRatio = reporting.CalculateSharpeRatio(dailyReturns)
-	}
-
+	sharpeRatio := reporting.CalculateSharpeRatio(dailyReturns)
 	infoRatio := reporting.CalculateInfoRatio(outperformance, trackingError)
 
 	equityCurve := buildBenchmarkEquityCurve(points, taiexReturn)
@@ -154,7 +154,7 @@ func (h *Handlers) getTAIEXCalculator() *marketdata.TAIEXReturnCalculator {
 
 // buildBenchmarkEquityCurve constructs normalized equity curves for portfolio and benchmark.
 // Portfolio is normalized starting at 100, benchmark grows at a constant rate.
-func buildBenchmarkEquityCurve(points []sessionPoint, taiexReturn float64) []BenchmarkPoint {
+func buildBenchmarkEquityCurve(points []sessionPoint, taiexReturn *float64) []BenchmarkPoint {
 	if len(points) == 0 {
 		return nil
 	}
@@ -169,7 +169,13 @@ func buildBenchmarkEquityCurve(points []sessionPoint, taiexReturn float64) []Ben
 	if n < 1 {
 		n = 1
 	}
-	dailyBenchRet := math.Pow(1+taiexReturn, 1.0/n) - 1
+
+	// When TAIEX return is unavailable, render a flat benchmark at 100.
+	benchRet := 0.0
+	if taiexReturn != nil {
+		benchRet = *taiexReturn
+	}
+	dailyBenchRet := math.Pow(1+benchRet, 1.0/n) - 1
 
 	benchVal := 100.0
 	for i, p := range points {

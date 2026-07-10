@@ -1,10 +1,11 @@
 // Metrics monitoring page
 import { getJSON, silentGetJSON } from '../shared/app-utils.js';
+import { formatNumber } from '../shared/format-metric.js';
 
 export async function loadMetrics() {
   try {
     const data = await getJSON('/api/dashboard/metrics?type=all');
-    const screeningRate = data && data.screening_rate != null ? (data.screening_rate * 100).toFixed(1) + '%' : '-';
+    const screeningRate = formatNumber(data && data.screening_rate, { percent: true, decimals: 1, suffix: '%' });
     const screeningRateEl = document.getElementById('screeningRate');
     if (screeningRateEl) screeningRateEl.textContent = screeningRate;
     const alertsTriggeredEl = document.getElementById('alertsTriggered');
@@ -127,17 +128,18 @@ export async function updateMetricsTrend(data) {
   let html = '';
 
   html += '<div class="panel mb-md"><h3>指標趨勢 (24h)</h3>';
-  if (!trendData || !trendData.trend || trendData.trend.length === 0) {
+  const points = (trendData && trendData.trend) || [];
+  const validPoints = points.filter(p => typeof p.value === 'number' && Number.isFinite(p.value));
+  if (validPoints.length === 0) {
     html += '<div class="empty" style="font-size:12px;color:var(--muted);padding:20px 0;text-align:center;">目前尚無 24 小時內的趨勢資料，請稍後再查看。</div>';
   } else {
-    const points = trendData.trend;
     const width = 800;
     const height = 120;
     const padding = { top: 10, right: 10, bottom: 20, left: 40 };
     const innerWidth = width - padding.left - padding.right;
     const innerHeight = height - padding.top - padding.bottom;
 
-    const values = points.map(p => p.value * 100);
+    const values = validPoints.map(p => p.value * 100);
     const minVal = Math.min(...values, 0);
     const maxVal = Math.max(...values, 100);
     const range = maxVal - minVal || 1;
@@ -149,37 +151,37 @@ export async function updateMetricsTrend(data) {
     else if (lastVal < firstVal) strokeColor = 'var(--trend-bearish)';
 
     let pathD = '';
-    points.forEach((p, i) => {
-      const x = padding.left + (i / (points.length - 1 || 1)) * innerWidth;
+    validPoints.forEach((p, i) => {
+      const x = padding.left + (i / (validPoints.length - 1 || 1)) * innerWidth;
       const y = padding.top + innerHeight - ((values[i] - minVal) / range) * innerHeight;
       if (i === 0) pathD += `M ${x} ${y}`;
       else pathD += ` L ${x} ${y}`;
     });
 
     html += `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:120px;display:block;overflow:visible;" id="metricsTrendSvg">`;
-    
+
     html += `<title>系統指標趨勢 (24h)</title>`;
-    
+
     html += `<text x="${padding.left - 5}" y="${padding.top + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${maxVal.toFixed(0)}%</text>`;
     html += `<text x="${padding.left - 5}" y="${padding.top + innerHeight + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${minVal.toFixed(0)}%</text>`;
-    
-    const tickCount = Math.min(6, points.length);
+
+    const tickCount = Math.min(6, validPoints.length);
     for (let i = 0; i < tickCount; i++) {
-      const idx = Math.floor(i * (points.length - 1) / (tickCount - 1 || 1));
-      const p = points[idx];
-      const x = padding.left + (idx / (points.length - 1 || 1)) * innerWidth;
+      const idx = Math.floor(i * (validPoints.length - 1) / (tickCount - 1 || 1));
+      const p = validPoints[idx];
+      const x = padding.left + (idx / (validPoints.length - 1 || 1)) * innerWidth;
       const date = new Date(p.timestamp);
       const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
       html += `<text x="${x}" y="${height - 2}" fill="var(--muted)" font-size="10" text-anchor="middle">${timeStr}</text>`;
     }
-    
+
     html += `<path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
-    
+
 
     html += `<rect x="${padding.left}" y="${padding.top}" width="${innerWidth}" height="${innerHeight}" fill="transparent" stroke="none" style="cursor:crosshair" id="metricsHoverRect" />`;
     html += `<circle r="4" fill="var(--color-accent)" stroke="var(--bg-primary)" stroke-width="1.5" id="metricsHoverCircle" style="display:none;pointer-events:none" />`;
     html += `<text font-size="11" fill="var(--text-primary)" id="metricsHoverLabel" text-anchor="middle" style="display:none;pointer-events:none" />`;
-    
+
     html += `</svg>`;
   }
   html += '</div>';
@@ -213,10 +215,10 @@ export async function updateMetricsTrend(data) {
     const scaleX = width / rect.width;
     const mouseX = (e.clientX - rect.left) * scaleX;
     const relX = mouseX - padding.left;
-    const idx = Math.round((relX / innerWidth) * (points.length - 1));
-    const clampedIdx = Math.max(0, Math.min(points.length - 1, idx));
-    const p = points[clampedIdx];
-    const x = padding.left + (clampedIdx / (points.length - 1 || 1)) * innerWidth;
+    const idx = Math.round((relX / innerWidth) * (validPoints.length - 1));
+    const clampedIdx = Math.max(0, Math.min(validPoints.length - 1, idx));
+    const p = validPoints[clampedIdx];
+    const x = padding.left + (clampedIdx / (validPoints.length - 1 || 1)) * innerWidth;
     const val = values[clampedIdx];
     const y = padding.top + innerHeight - ((val - minVal) / range) * innerHeight;
     const date = new Date(p.timestamp);

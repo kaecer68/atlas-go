@@ -63,13 +63,16 @@ type DailyReport struct {
 }
 
 // SummaryReport is a condensed version for the /api/capital-flow/summary endpoint.
+// It includes the top forces so the home page can render metric cards without a
+// second round-trip to /api/capital-flow/daily.
 type SummaryReport struct {
-	Date          time.Time `json:"date"`
-	QualityScore  float64   `json:"quality_score"`
-	QualityLabel  string    `json:"quality_label"`
-	ResonanceDir  string    `json:"resonance_dir"`
-	DominantForce ForceName `json:"dominant_force"` // force with highest absolute Z-score
-	Summary       string    `json:"summary"`
+	Date          time.Time    `json:"date"`
+	QualityScore  float64      `json:"quality_score"`
+	QualityLabel  string       `json:"quality_label"`
+	ResonanceDir  string       `json:"resonance_dir"`
+	DominantForce ForceName    `json:"dominant_force"` // force with highest absolute Z-score
+	Forces        []ForceScore `json:"forces"`
+	Summary       string       `json:"summary"`
 }
 
 // ---------------------------------------------------------------------------

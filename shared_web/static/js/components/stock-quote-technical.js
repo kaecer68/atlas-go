@@ -1,4 +1,9 @@
 import { renderEmptyState, renderSkeleton } from '../shared/app-utils.js';
+import { formatNumber } from '../shared/format-metric.js';
+
+function isValidNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
 
 export function renderTechnical(state, techResult) {
   if (state === 'loading') {
@@ -12,28 +17,33 @@ export function renderTechnical(state, techResult) {
   }
 
   const data = techResult.data;
-  const sma20 = data.sma20 || 0;
-  const sma50 = data.sma50 || 0;
-  const rsi = data.rsi14 || data.rsi || 0;
+  const sma20 = isValidNumber(data.sma20) ? data.sma20 : null;
+  const sma50 = isValidNumber(data.sma50) ? data.sma50 : null;
+  const rsi = isValidNumber(data.rsi14) ? data.rsi14 : isValidNumber(data.rsi) ? data.rsi : null;
 
   let smaSignal = '無訊號';
   let smaColor = 'sq-price-neutral';
-  if (sma20 > sma50) {
-    smaSignal = '短期偏多';
-    smaColor = 'sq-price-up';
-  } else if (sma20 < sma50) {
-    smaSignal = '短期偏空';
-    smaColor = 'sq-price-down';
+  if (sma20 !== null && sma50 !== null) {
+    if (sma20 > sma50) {
+      smaSignal = '短期偏多';
+      smaColor = 'sq-price-up';
+    } else if (sma20 < sma50) {
+      smaSignal = '短期偏空';
+      smaColor = 'sq-price-down';
+    }
   }
 
-  let rsiZone = '中性區';
+  let rsiZone = '—';
   let rsiColor = 'sq-price-neutral';
-  if (rsi >= 70) {
-    rsiZone = '超買區';
-    rsiColor = 'risk-badge risk-high'; // Using risk-high for warning, not red
-  } else if (rsi <= 30) {
-    rsiZone = '超賣區';
-    rsiColor = 'risk-badge risk-low';
+  if (rsi !== null) {
+    rsiZone = '中性區';
+    if (rsi >= 70) {
+      rsiZone = '超買區';
+      rsiColor = 'risk-badge risk-high'; // Using risk-high for warning, not red
+    } else if (rsi <= 30) {
+      rsiZone = '超賣區';
+      rsiColor = 'risk-badge risk-low';
+    }
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -47,17 +57,17 @@ export function renderTechnical(state, techResult) {
       <div class="sq-tech-cards">
         <div class="metric-card">
           <div class="metric-card__label">SMA20</div>
-          <div class="metric-card__value">${sma20.toFixed(2)}</div>
+          <div class="metric-card__value">${formatNumber(sma20, { decimals: 2 })}</div>
           <div class="${smaColor}" style="margin-top:var(--spacing-1);font-size:var(--text-sm)">${smaSignal}</div>
         </div>
         <div class="metric-card">
           <div class="metric-card__label">SMA50</div>
-          <div class="metric-card__value">${sma50.toFixed(2)}</div>
-          <div class="${smaColor}" style="margin-top:var(--spacing-1);font-size:var(--text-sm)">${sma20 > sma50 ? '中期偏多' : '中期偏空'}</div>
+          <div class="metric-card__value">${formatNumber(sma50, { decimals: 2 })}</div>
+          <div class="${smaColor}" style="margin-top:var(--spacing-1);font-size:var(--text-sm)">${sma20 !== null && sma50 !== null ? (sma20 > sma50 ? '中期偏多' : '中期偏空') : '—'}</div>
         </div>
         <div class="metric-card">
           <div class="metric-card__label">RSI14</div>
-          <div class="metric-card__value">${rsi.toFixed(2)}</div>
+          <div class="metric-card__value">${formatNumber(rsi, { decimals: 2 })}</div>
           <div style="margin-top:var(--spacing-1);font-size:var(--text-sm)"><span class="${rsiColor}">${rsiZone}</span></div>
         </div>
       </div>

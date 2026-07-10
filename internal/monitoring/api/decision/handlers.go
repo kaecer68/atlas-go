@@ -109,21 +109,21 @@ type StrategyFrameSummary struct {
 // CoreIndicators is the explicit "4 leading indicators" view that the
 // 5-layer framework's short-term judgment depends on. Units match
 // MacroDataSnapshot: ForeignCapitalNetTWD is in TWD millions, the others
-// are percent change.
+// are percent change. Fields are *float64 so missing macro data serializes as null.
 type CoreIndicators struct {
-	ForeignCapitalNetTWD float64 `json:"foreign_capital_net_twd"`
-	TSMADRpct            float64 `json:"tsm_adr_pct"`
-	NVDApct              float64 `json:"nvda_pct"`
-	DXYpct               float64 `json:"dxy_pct"`
+	ForeignCapitalNetTWD *float64 `json:"foreign_capital_net_twd,omitempty"`
+	TSMADRpct            *float64 `json:"tsm_adr_pct,omitempty"`
+	NVDApct              *float64 `json:"nvda_pct,omitempty"`
+	DXYpct               *float64 `json:"dxy_pct,omitempty"`
 }
 
 // ExitAlert represents a position that warrants an exit consideration.
 type ExitAlert struct {
-	Symbol     string  `json:"symbol"`
-	Name       string  `json:"name"`
-	DaysHeld   int     `json:"days_held"`
-	PnlPct     float64 `json:"pnl_pct"`
-	Suggestion string  `json:"suggestion"`
+	Symbol     string   `json:"symbol"`
+	Name       string   `json:"name"`
+	DaysHeld   int      `json:"days_held"`
+	PnlPct     *float64 `json:"pnl_pct,omitempty"`
+	Suggestion string   `json:"suggestion"`
 }
 
 // PremarketData holds pre-market key indicator readings.
@@ -416,11 +416,12 @@ func (h *Handlers) computeExitAlerts() []ExitAlert {
 			suggestion = "注意虧損擴大"
 		}
 
+		pnl := pos.PnlPct
 		alerts = append(alerts, ExitAlert{
 			Symbol:     pos.Symbol,
 			Name:       resolveSymbolName(pos.Symbol),
 			DaysHeld:   -1, // TODO: not tracked in current position DTO; derive from ledger/trade history
-			PnlPct:     pos.PnlPct,
+			PnlPct:     &pnl,
 			Suggestion: suggestion,
 		})
 	}
@@ -461,14 +462,16 @@ func (h *Handlers) buildStrategiesSummary() []StrategyFrameSummary {
 // buildCoreIndicators exposes the 4 leading indicators (ForeignInvestorNet,
 // TSMADR, NVDA, DXY) used by the strategy_techniques seeds. Frontend can
 // highlight them as a "core 4" strip on the strategy techniques dashboard.
-func (h *Handlers) buildCoreIndicators(snap *marketdata.MacroDataSnapshot) CoreIndicators {
+// Returns nil when the macro snapshot is unavailable so the frontend can show
+// a missing-data state instead of zeros.
+func (h *Handlers) buildCoreIndicators(snap *marketdata.MacroDataSnapshot) *CoreIndicators {
 	if snap == nil {
-		return CoreIndicators{}
+		return nil
 	}
-	return CoreIndicators{
-		ForeignCapitalNetTWD: snap.ForeignInvestorNet.Value,
-		TSMADRpct:            snap.TSMADR.ChangePct,
-		NVDApct:              snap.NVDA.ChangePct,
-		DXYpct:               snap.DXY.ChangePct,
+	return &CoreIndicators{
+		ForeignCapitalNetTWD: &snap.ForeignInvestorNet.Value,
+		TSMADRpct:            &snap.TSMADR.ChangePct,
+		NVDApct:              &snap.NVDA.ChangePct,
+		DXYpct:               &snap.DXY.ChangePct,
 	}
 }

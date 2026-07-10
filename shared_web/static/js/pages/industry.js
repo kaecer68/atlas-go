@@ -7,7 +7,8 @@ import {
   renderEmptyState,
 } from "../shared/app-utils.js";
 import { renderIndustrySeasonality, renderSeasonalityList, renderSeasonalityCalendar } from '../shared/components/seasonality-panel.js';
-import { getThemeColor } from "../shared/utils.js";
+import { getThemeColor, fmtFloat } from "../shared/utils.js";
+import { formatNumber, formatSigned, fmtSignedPct } from "../shared/format-metric.js";
 import { hexToRgba } from "../shared/color-tokens.js";
 
 export async function loadIndustryData() {
@@ -137,12 +138,17 @@ export function renderIndustryMap(data) {
   const industries = data.industries;
   let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
   industries.forEach((ind) => {
-    const weightPct = Math.round((ind.adjusted_weight || ind.base_weight || 0) * 100);
+    const weightValue = typeof ind.adjusted_weight === "number"
+      ? ind.adjusted_weight
+      : typeof ind.base_weight === "number"
+        ? ind.base_weight
+        : null;
+    const weightPct = weightValue != null ? Math.round(weightValue * 100) : null;
     html += `<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer" onclick="showIndustryDetail('${ind.id}')">`;
     html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name || ind.id}</div>`;
-    html += `<div style="font-size:12px;color:var(--muted)">權重 ${weightPct}%</div>`;
+    html += `<div style="font-size:12px;color:var(--muted)">權重 ${weightPct != null ? weightPct + "%" : "—"}</div>`;
     html += `<div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">`;
-    html += `<div style="width:${weightPct}%;height:100%;background:var(--accent)"></div></div>`;
+    html += `<div style="width:${weightPct != null ? weightPct : 0}%;height:100%;background:var(--accent)"></div></div>`;
     html += `</div>`;
   });
   html += "</div>";
@@ -174,16 +180,15 @@ function cycleStatusText(value) {
 }
 
 function cycleNumber(value, digits) {
-  return typeof value === "number" && isFinite(value) ? value.toFixed(digits) : "-";
+  return formatNumber(value, { decimals: digits });
 }
 
 function cycleDelta(value) {
-  if (typeof value !== "number" || !isFinite(value)) {
-    return { text: "-", color: "var(--muted)" };
-  }
   return {
-    text: (value > 0 ? "+" : "") + value.toFixed(3),
-    color: value > 0 ? "var(--up)" : value < 0 ? "var(--down)" : "var(--muted)",
+    text: formatSigned(value, { decimals: 3, forceSign: true }),
+    color: typeof value === "number" && Number.isFinite(value)
+      ? value > 0 ? "var(--up)" : value < 0 ? "var(--down)" : "var(--muted)"
+      : "var(--muted)",
   };
 }
 
@@ -257,7 +262,7 @@ export function renderCycleStatusCard(card) {
   const sentiment = card.sentiment_label || "中性";
   const sentimentColor = sentimentColors[sentiment] || sentimentColors["中性"];
   const generatedAt = card.generated_at ? new Date(card.generated_at).toLocaleString("zh-TW") : "-";
-  const confidence = card.cycle_confidence || 0;
+  const confidence = card.cycle_confidence;
   const phaseIndex = Math.max(0, Math.min(3, Number(card.silicon_phase || 0)));
   const activeEvents = card.active_events || [];
   const activePatterns = card.active_patterns || [];
@@ -283,7 +288,7 @@ export function renderCycleStatusCard(card) {
   layerDefs.forEach((layer) => {
     const item = breakdownByLayer.get(layer.key) || {};
     const delta = cycleDelta(item.contribution);
-    const weight = typeof item.weight === "number" ? `${(item.weight * 100).toFixed(0)}%` : "-";
+    const weight = formatNumber(item.weight, { percent: true, decimals: 0 });
     html += `<div style="flex:1;min-width:132px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px">`;
     html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${layer.label}</div>`;
     html += `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:6px"><span style="font-size:18px;font-weight:800">${cycleNumber(item.raw_value, 3)}</span><span style="font-size:13px;font-weight:800;color:${delta.color}">${delta.text}</span></div>`;
@@ -310,10 +315,20 @@ export function renderCycleStatusCard(card) {
     html += `<div style="overflow-x:auto;max-width:100%"><table style="font-size:11px;width:100%"><thead><tr><th>指標</th><th>值</th><th>趨勢</th></tr></thead><tbody>`;
     indicatorEntries.forEach(([key, raw]) => {
       const value = raw && typeof raw === "object" ? raw.value : raw;
-      const trend = raw && typeof raw === "object" ? raw.trend : value;
-      const arrow = trend === "down" || trend < 0 ? "↓" : trend === "neutral" || trend === 0 ? "→" : "↑";
-      const color = arrow === "↑" ? "var(--up)" : arrow === "↓" ? "var(--down)" : "var(--muted)";
-      html += `<tr><td>${INDICATOR_LABELS[key] || key}</td><td style="white-space:nowrap">${typeof value === "number" ? value.toFixed(2) : value}</td><td style="color:${color};font-weight:800">${arrow}</td></tr>`;
+      const trend = raw && typeof raw === "object" && raw.trend !== undefined ? raw.trend : value;
+      let arrow = "—";
+      let color = "var(--muted)";
+      if (trend === "down" || (typeof trend === "number" && trend < 0)) {
+        arrow = "↓";
+        color = "var(--down)";
+      } else if (trend === "up" || (typeof trend === "number" && trend > 0)) {
+        arrow = "↑";
+        color = "var(--up)";
+      } else if (trend === "neutral" || trend === 0) {
+        arrow = "→";
+        color = "var(--muted)";
+      }
+      html += `<tr><td>${INDICATOR_LABELS[key] || key}</td><td style="white-space:nowrap">${fmtFloat(value)}</td><td style="color:${color};font-weight:800">${arrow}</td></tr>`;
     });
     html += `</tbody></table></div>`;
   } else {
@@ -339,11 +354,11 @@ export function renderCycleStatusCard(card) {
   html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
   html += `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div style="font-weight:800;font-size:14px">商業週期與季節性</div><div style="font-size:11px;color:var(--muted)">季節調整 ${cycleNumber(card.seasonal_adjustment, 3)}x · 事件情緒 ${cycleNumber(card.event_sentiment, 3)}x · 供應鏈 ${cycleNumber(card.supply_chain_signal, 3)}</div></div>`;
   html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><div style="font-size:12px">商業 ${cyclePhaseBadge(card.business_cycle)}</div><div style="font-size:12px">庫存 ${cyclePhaseBadge(card.inventory_cycle)}</div><div style="font-size:12px">資本支出 ${cyclePhaseBadge(card.capex_cycle)}</div></div>`;
-  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:11px;color:var(--muted);width:70px">信心度</span><div style="flex:1;height:10px;background:var(--border);border-radius:999px;overflow:hidden"><div style="width:${Math.min(100, Math.max(0, confidence * 100))}%;height:100%;background:var(--accent)"></div></div><span style="font-size:12px;font-weight:800">${Math.round(confidence * 100)}%</span></div>`;
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:11px;color:var(--muted);width:70px">信心度</span><div style="flex:1;height:10px;background:var(--border);border-radius:999px;overflow:hidden"><div style="width:${typeof confidence === "number" && Number.isFinite(confidence) ? Math.min(100, Math.max(0, confidence * 100)) : 0}%;height:100%;background:var(--accent)"></div></div><span style="font-size:12px;font-weight:800">${formatNumber(confidence, { percent: true, decimals: 0 })}</span></div>`;
   if (activePatterns.length > 0) {
     html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
     activePatterns.forEach((pattern) => {
-      html += `<span style="font-size:11px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.24);color:var(--accent);border-radius:999px;padding:3px 8px">${pattern.name || pattern.id || "季節模式"} ${(pattern.adjustment_factor || 1).toFixed(2)}x</span>`;
+      html += `<span style="font-size:11px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.24);color:var(--accent);border-radius:999px;padding:3px 8px">${pattern.name || pattern.id || "季節模式"} ${formatNumber(pattern.adjustment_factor, { decimals: 2, suffix: "x" })}</span>`;
     });
     html += `</div>`;
   } else {
@@ -360,7 +375,7 @@ export function renderCycleStatusCard(card) {
       const delta = cycleDelta(item.contribution);
       let reason = item.reason || "";
       reason = reason.replace(/silicon phase=/,"矽階段=").replace(/^phase=/,"階段=").replace(/score=/g,"評分=").replace(/confidence=/g,"信賴度=").replace(/(\d+) active patterns/,"$1 個活躍模式").replace(/(\d+) active events/,"$1 個活躍事件").replace("upstream-downstream momentum","上下游動能") || "-";
-      html += `<tr><td>${layerLabels[item.layer] || item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${typeof item.weight === "number" ? (item.weight * 100).toFixed(0) + "%" : "-"}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${reason}</td></tr>`;
+      html += `<tr><td>${layerLabels[item.layer] || item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${formatNumber(item.weight, { percent: true, decimals: 0 })}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${reason}</td></tr>`;
     });
     html += `</tbody></table>`;
   } else {
@@ -383,26 +398,32 @@ export function renderIndustryLinkage(data) {
   el.classList.remove("loading");
   const industries = data.industries;
 
-  // Calculate historical averages across all industries
+  // Calculate historical averages across all industries (skip missing values)
   let totalSystemicImportance = 0;
   let totalPropagationSpeed = 0;
-  let maxSystemic = 0;
-  let maxPropagation = 0;
-  let count = 0;
+  let maxSystemic = -Infinity;
+  let maxPropagation = -Infinity;
+  let siCount = 0;
+  let spCount = 0;
 
   industries.forEach((ind) => {
     const score = ind.linkage_score || {};
-    const si = score.systemic_importance || 0;
-    const sp = score.shock_propagation_speed || 0;
-    totalSystemicImportance += si;
-    totalPropagationSpeed += sp;
-    if (si > maxSystemic) maxSystemic = si;
-    if (sp > maxPropagation) maxPropagation = sp;
-    count++;
+    const si = score.systemic_importance;
+    const sp = score.shock_propagation_speed;
+    if (typeof si === "number" && Number.isFinite(si)) {
+      totalSystemicImportance += si;
+      if (si > maxSystemic) maxSystemic = si;
+      siCount++;
+    }
+    if (typeof sp === "number" && Number.isFinite(sp)) {
+      totalPropagationSpeed += sp;
+      if (sp > maxPropagation) maxPropagation = sp;
+      spCount++;
+    }
   });
 
-  const avgSystemic = count > 0 ? totalSystemicImportance / count : 0;
-  const avgPropagation = count > 0 ? totalPropagationSpeed / count : 0;
+  const avgSystemic = siCount > 0 ? totalSystemicImportance / siCount : null;
+  const avgPropagation = spCount > 0 ? totalPropagationSpeed / spCount : null;
 
   let html =
     '<div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px;background:var(--bg);border-radius:6px">' +
@@ -413,15 +434,15 @@ export function renderIndustryLinkage(data) {
   html += '<div style="display:flex;gap:8px;margin-bottom:12px">';
   html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
   html += `<div style="font-size:11px;color:var(--muted)">平均系統重要性</div>`;
-  html += `<div style="font-size:16px;font-weight:700">${avgSystemic.toFixed(2)}</div>`;
+  html += `<div style="font-size:16px;font-weight:700">${fmtFloat(avgSystemic)}</div>`;
   html += `</div>`;
   html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
   html += `<div style="font-size:11px;color:var(--muted)">平均連動分數</div>`;
-  html += `<div style="font-size:16px;font-weight:700">${avgPropagation.toFixed(2)}</div>`;
+  html += `<div style="font-size:16px;font-weight:700">${fmtFloat(avgPropagation)}</div>`;
   html += `</div>`;
   html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
   html += `<div style="font-size:11px;color:var(--muted)">最高系統重要性</div>`;
-  html += `<div style="font-size:16px;font-weight:700">${maxSystemic.toFixed(2)}</div>`;
+  html += `<div style="font-size:16px;font-weight:700">${fmtFloat(maxSystemic !== -Infinity ? maxSystemic : null)}</div>`;
   html += `</div>`;
   html += "</div>";
 
@@ -429,23 +450,27 @@ export function renderIndustryLinkage(data) {
     "<table><thead><tr><th>產業</th><th>系統重要性</th><th>連動分數</th><th>相對強度</th></tr></thead><tbody>";
   industries.forEach((ind) => {
     const score = ind.linkage_score || {};
-    const si = score.systemic_importance || 0;
-    const sp = score.shock_propagation_speed || 0;
-    const siRelative = avgSystemic > 0 ? si / avgSystemic : 1;
-    const spRelative = avgPropagation > 0 ? sp / avgPropagation : 1;
-    const overallStrength = (siRelative + spRelative) / 2;
+    const si = score.systemic_importance;
+    const sp = score.shock_propagation_speed;
+    const siRelative = avgSystemic != null && avgSystemic > 0 && typeof si === "number" ? si / avgSystemic : null;
+    const spRelative = avgPropagation != null && avgPropagation > 0 && typeof sp === "number" ? sp / avgPropagation : null;
+    const overallStrength = siRelative != null && spRelative != null ? (siRelative + spRelative) / 2 : null;
 
-    let strengthLabel = "平均";
+    let strengthLabel = "—";
     let strengthColor = "var(--muted)";
-    if (overallStrength > 1.3) {
-      strengthLabel = "高";
-      strengthColor = "var(--up)";
-    } else if (overallStrength < 0.7) {
-      strengthLabel = "低";
-      strengthColor = "var(--down)";
+    if (overallStrength != null) {
+      strengthLabel = "平均";
+      strengthColor = "var(--muted)";
+      if (overallStrength > 1.3) {
+        strengthLabel = "高";
+        strengthColor = "var(--up)";
+      } else if (overallStrength < 0.7) {
+        strengthLabel = "低";
+        strengthColor = "var(--down)";
+      }
     }
 
-    html += `<tr><td>${ind.name}</td><td>${si.toFixed(2)}</td><td>${sp.toFixed(2)}</td><td style="color:${strengthColor}">${strengthLabel}</td></tr>`;
+    html += `<tr><td>${ind.name}</td><td>${fmtFloat(si)}</td><td>${fmtFloat(sp)}</td><td style="color:${strengthColor}">${strengthLabel}</td></tr>`;
   });
   html += "</tbody></table>";
   el.innerHTML = html;
@@ -527,7 +552,9 @@ export function renderIndustryGraph(data) {
       const dx = n1.x - n2.x;
       const dy = n1.y - n2.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const corr = Math.abs(edge.correlation || 0.5);
+      const corr = typeof edge.correlation === "number" && Number.isFinite(edge.correlation)
+        ? Math.abs(edge.correlation)
+        : 0.5;
       const force = (dist * dist) / k * attraction * (0.5 + corr);
       const fx = (dx / dist) * force;
       const fy = (dy / dist) * force;
@@ -616,7 +643,7 @@ export function renderIndustryGraph(data) {
       ).length;
       tip.innerHTML =
         `<strong>${sectorName(found.id) || found.id}</strong>` +
-        `<div class="ind-tip-row"><span>系統重要性</span><span>${(found.systemic_importance || 0).toFixed(2)}</span></div>` +
+        `<div class="ind-tip-row"><span>系統重要性</span><span>${fmtFloat(found.systemic_importance)}</span></div>` +
         `<div class="ind-tip-row"><span>連接產業</span><span>${connectedCount} 個</span></div>`;
       tip.style.display = "block";
       tip.style.left = Math.min(mx + 14, width - 140) + "px";
@@ -656,12 +683,11 @@ function renderCycleTab(detail) {
     { label: "趨勢方向", value: cp.trend || "-" },
     {
       label: "週期分數",
-      value: cp.phase_score != null ? cp.phase_score.toFixed(2) : "-",
+      value: formatNumber(cp.phase_score, { decimals: 2 }),
     },
     {
       label: "信心度",
-      value:
-        cp.confidence != null ? `${(cp.confidence * 100).toFixed(0)}%` : "-",
+      value: formatNumber(cp.confidence, { percent: true, decimals: 0 }),
     },
     { label: "是否有利", value: cp.is_favorable ? "✅ 有利" : "⚠️ 不利" },
   ];
@@ -683,18 +709,19 @@ function renderCycleTab(detail) {
       { key: "narrative", label: "宏觀敘事", weight: cb.weights ? cb.weights.narrative : 0 },
     ];
     html += '<div class="industry-section"><h4>📐 信心度分解</h4>';
-    html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">各維度信心分數 × 配置權重 → 複合信心 <strong>' + ((cb.composite || 0) * 100).toFixed(0) + '%</strong></div>';
+    html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">各維度信心分數 × 配置權重 → 複合信心 <strong>' + formatNumber(cb.composite, { percent: true, decimals: 0 }) + '</strong></div>';
     dims.forEach(function(d) {
-      const val = cb[d.key] || 0;
-      if (val <= 0) return;
-      const barW = Math.min(val * 100, 100);
-      const wPct = d.weight ? (d.weight * 100).toFixed(0) : 0;
+      const val = cb[d.key];
+      const valStr = formatNumber(val, { percent: true, decimals: 0 });
+      if (valStr === '—') return;
+      const barW = Math.min(Math.max(0, val) * 100, 100);
+      const wPct = formatNumber(d.weight, { percent: true, decimals: 0 });
       html += '<div style="display:flex;align-items:center;gap:6px;margin:3px 0;font-size:11px">';
       html += '<span style="width:80px;color:var(--muted)">' + d.label + '</span>';
       html += '<div style="flex:1;height:14px;background:rgba(0,0,0,0.04);border-radius:3px;overflow:hidden">';
       html += '<div style="width:' + barW + '%;height:100%;background:var(--accent);opacity:0.5;border-radius:3px"></div></div>';
-      html += '<span style="width:40px;text-align:right">' + (val * 100).toFixed(0) + '%</span>';
-      html += '<span style="width:30px;color:var(--muted);font-size:10px;text-align:right">w=' + wPct + '%</span>';
+      html += '<span style="width:40px;text-align:right">' + valStr + '</span>';
+      html += '<span style="width:30px;color:var(--muted);font-size:10px;text-align:right">w=' + wPct + '</span>';
       html += '</div>';
     });
     html += "</div>";
@@ -714,9 +741,9 @@ function renderCycleTab(detail) {
     if (rec.conviction)
       html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">信念</span><span>${rec.conviction}</span></div>`;
     if (rec.target_weight != null)
-      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">目標權重</span><span>${(rec.target_weight * 100).toFixed(1)}%</span></div>`;
+      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">目標權重</span><span>${formatNumber(rec.target_weight, { percent: true, decimals: 1 })}</span></div>`;
     if (rec.delta != null)
-      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">調整幅度</span><span>${(rec.delta * 100).toFixed(1)}%</span></div>`;
+      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">調整幅度</span><span>${fmtSignedPct(rec.delta, 1)}</span></div>`;
     if (rec.rationale)
       html += `<div style="margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6">${rec.rationale}</div>`;
     html += "</div></div>";
@@ -746,10 +773,10 @@ function renderLinkageTab(detail) {
     html += '<div style="display:flex;gap:8px;margin-bottom:12px">';
     html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
     html += `<div style="font-size:11px;color:var(--muted)">系統重要性</div>`;
-    html += `<div style="font-size:16px;font-weight:700">${(ls.systemic_importance || 0).toFixed(2)}</div></div>`;
+    html += `<div style="font-size:16px;font-weight:700">${fmtFloat(ls.systemic_importance)}</div></div>`;
     html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
     html += `<div style="font-size:11px;color:var(--muted)">衝擊傳導速度</div>`;
-    html += `<div style="font-size:16px;font-weight:700">${(ls.shock_propagation_speed || 0).toFixed(2)}</div></div>`;
+    html += `<div style="font-size:16px;font-weight:700">${fmtFloat(ls.shock_propagation_speed)}</div></div>`;
     html += "</div>";
   }
 
@@ -781,12 +808,14 @@ function renderLinkageTab(detail) {
     html +=
       '<table style="font-size:12px"><thead><tr><th>產業</th><th>相關性</th><th>強度</th></tr></thead><tbody>';
     li.correlations.forEach((c) => {
-      const corr = c.correlation != null ? c.correlation : 0;
-      const absCorr = Math.abs(corr);
-      const strength = absCorr > 0.7 ? "高" : absCorr > 0.4 ? "中" : "低";
-      const color = corr > 0 ? "var(--up)" : "var(--down)";
+      const corr = c.correlation;
+      const absCorr = typeof corr === "number" && Number.isFinite(corr) ? Math.abs(corr) : null;
+      const strength = absCorr == null ? "—" : absCorr > 0.7 ? "高" : absCorr > 0.4 ? "中" : "低";
+      const color = typeof corr === "number" && Number.isFinite(corr)
+        ? corr > 0 ? "var(--up)" : corr < 0 ? "var(--down)" : "var(--muted)"
+        : "var(--muted)";
       html += `<tr><td>${sectorName(c.industry) || c.industry || "-"}</td>`;
-      html += `<td style="color:${color}">${corr.toFixed(2)}</td>`;
+      html += `<td style="color:${color}">${fmtFloat(corr)}</td>`;
       html += `<td>${strength}</td></tr>`;
     });
     html += "</tbody></table></div>";
@@ -805,8 +834,10 @@ function renderSeasonalityTab(detail) {
     '⚠️ 以下數值基於經驗法則，尚未經過回測校準。' +
     '</div>';
   patterns.forEach((p) => {
-    const accuracy = Math.round((p.historical_accuracy || 0) * 100);
-    const returnPct = ((p.avg_market_return || 0) * 100).toFixed(1);
+    const accuracyStr = formatNumber(p.historical_accuracy, { percent: true, decimals: 0 });
+    const returnColor = typeof p.avg_market_return === "number" && Number.isFinite(p.avg_market_return)
+      ? p.avg_market_return > 0 ? "var(--up)" : p.avg_market_return < 0 ? "var(--down)" : "var(--muted)"
+      : "var(--muted)";
     const period = `${p.start_month}/${p.start_day} ~ ${p.end_month}/${p.end_day}`;
     const impactColor =
       p.impact === "positive"
@@ -823,11 +854,11 @@ function renderSeasonalityTab(detail) {
     const accBadge = calEvidence && calEvidence.calibrated
       ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px">已校準</span>`
       : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px">待驗證</span>`;
-    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}% ${accBadge}</span></div>`;
+    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracyStr} ${accBadge}</span></div>`;
     html += '<div class="metric-row">';
-    html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnPct >= 0 ? "var(--up)" : "var(--down)"}">${returnPct}%</span></div>`;
+    html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnColor}">${fmtSignedPct(p.avg_market_return, 1)}</span></div>`;
     html += '<div class="metric-row">';
-    html += `<span class="metric-label">調整因子</span><span class="metric-value">${(p.adjustment_factor || 1.0).toFixed(2)}x</span></div>`;
+    html += `<span class="metric-label">調整因子</span><span class="metric-value">${formatNumber(p.adjustment_factor, { decimals: 2, suffix: "x" })}</span></div>`;
     if (p.impact) {
       html += '<div class="metric-row">';
       html += `<span class="metric-label">影響方向</span><span class="metric-value" style="color:${impactColor}">${p.impact}</span></div>`;
@@ -869,11 +900,11 @@ function renderRiskTab(detail) {
       html += `<div style="font-size:12px;margin-bottom:4px">${r.description}</div>`;
     if (r.impact_estimate != null) {
       html += '<div class="metric-row">';
-      html += `<span class="metric-label">預估衝擊</span><span class="metric-value" style="color:${impactColor}">${(r.impact_estimate * 100).toFixed(1)}%</span></div>`;
+      html += `<span class="metric-label">預估衝擊</span><span class="metric-value" style="color:${impactColor}">${formatNumber(r.impact_estimate, { percent: true, decimals: 1 })}</span></div>`;
     }
     if (r.confidence != null) {
       html += '<div class="metric-row">';
-      html += `<span class="metric-label">信心度</span><span class="metric-value">${(r.confidence * 100).toFixed(0)}%</span></div>`;
+      html += `<span class="metric-label">信心度</span><span class="metric-value">${formatNumber(r.confidence, { percent: true, decimals: 0 })}</span></div>`;
     }
     if (r.source) {
       html += '<div class="metric-row">';
@@ -1006,16 +1037,18 @@ function renderShockSimulationResult(data) {
   }
   const sorted = [...data.impacts].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
   let html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">';
-  html += `<strong>${data.source}</strong> 遭受 <strong>${(data.shock * 100).toFixed(1)}%</strong> 衝擊 → 影響 ${data.impact_count} 個關聯產業</div>`;
+  html += `<strong>${data.source}</strong> 遭受 <strong>${formatNumber(data.shock, { percent: true, decimals: 1 })}</strong> 衝擊 → 影響 ${data.impact_count} 個關聯產業</div>`;
   html += '<table style="font-size:12px"><thead><tr><th>產業</th><th>影響幅度</th><th>衝擊傳導</th></tr></thead><tbody>';
   for (const imp of sorted) {
-    const pct = (imp.impact * 100).toFixed(1);
-    const absPct = Math.abs(imp.impact * 100);
-    const color = imp.impact < 0 ? "var(--down)" : "var(--up)";
+    const pctStr = fmtSignedPct(imp.impact, 1);
+    const absPct = typeof imp.impact === "number" && Number.isFinite(imp.impact) ? Math.abs(imp.impact * 100) : 0;
+    const color = typeof imp.impact === "number" && Number.isFinite(imp.impact)
+      ? imp.impact < 0 ? "var(--down)" : imp.impact > 0 ? "var(--up)" : "var(--muted)"
+      : "var(--muted)";
     const barW = Math.min(100, absPct * 8);
     html += `<tr>`;
     html += `<td>${imp.industry}</td>`;
-    html += `<td style="color:${color};font-weight:600">${pct}%</td>`;
+    html += `<td style="color:${color};font-weight:600">${pctStr}</td>`;
     html += `<td><div style="width:${barW}%;height:8px;background:${color};border-radius:4px;min-width:4px"></div></td>`;
     html += `</tr>`;
   }

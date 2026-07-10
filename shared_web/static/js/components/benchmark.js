@@ -1,3 +1,5 @@
+import { fmtPct, fmtFloat } from '../shared/utils.js';
+
 export async function renderBenchmarkComparison(container, getJSON) {
   const data = await getJSON('/api/dashboard/benchmark-comparison').catch(() => null);
   if (!data || data.session_count < 1) {
@@ -5,19 +7,20 @@ export async function renderBenchmarkComparison(container, getJSON) {
     return;
   }
 
-  const fmtNTD = window.fmtNTD || (v => v.toFixed(0));
-  const fmtP = window.fmtPct || (v => (v * 100).toFixed(2) + '%');
-  const fmtF = window.fmtFloat || (v => v.toFixed(3));
+  const signedCls = (v) => {
+    if (typeof v !== 'number') return '';
+    return v > 0 ? 'text-up' : v < 0 ? 'text-down' : '';
+  };
 
   const kpis = [
-    { label: '投組累積報酬', value: fmtP(data.portfolio_return || 0) },
-    { label: 'TAIEX 報酬', value: fmtP(data.taiex_return || 0) },
-    { label: '超額報酬', value: fmtP(data.outperformance || 0), cls: data.outperformance > 0 ? 'text-up' : 'text-down' },
-    { label: 'Alpha', value: fmtP(data.alpha || 0), cls: data.alpha > 0 ? 'text-up' : 'text-down' },
-    { label: 'Beta', value: fmtF(data.beta || 0) },
-    { label: 'Tracking Error', value: fmtP(data.tracking_error || 0) },
-    { label: 'Sharpe Ratio', value: data.sharpe_ratio == null ? 'N/A' : fmtF(data.sharpe_ratio) },
-    { label: 'Info Ratio', value: fmtF(data.info_ratio || 0) },
+    { label: '投組累積報酬', value: fmtPct(data.portfolio_return) },
+    { label: 'TAIEX 報酬', value: fmtPct(data.taiex_return) },
+    { label: '超額報酬', value: fmtPct(data.outperformance), cls: signedCls(data.outperformance) },
+    { label: 'Alpha', value: fmtPct(data.alpha), cls: signedCls(data.alpha) },
+    { label: 'Beta', value: fmtFloat(data.beta) },
+    { label: 'Tracking Error', value: fmtPct(data.tracking_error) },
+    { label: 'Sharpe Ratio', value: fmtFloat(data.sharpe_ratio) },
+    { label: 'Info Ratio', value: fmtFloat(data.info_ratio) },
   ];
 
   const kpiCards = kpis.map(k =>
@@ -26,8 +29,8 @@ export async function renderBenchmarkComparison(container, getJSON) {
 
   const curve = data.equity_curve || [];
   const curveRows = curve.map(p => {
-    const outCls = (p.outperf || 0) > 0 ? 'text-up' : 'text-down';
-    return `<tr><td>${p.label}</td><td style="text-align:right">${fmtP(p.portfolio || 0)}</td><td style="text-align:right">${fmtP(p.benchmark || 0)}</td><td style="text-align:right" class="${outCls}">${(p.outperf > 0 ? '+' : '')}${fmtP(p.outperf || 0)}</td></tr>`;
+    const outCls = signedCls(p.outperf);
+    return `<tr><td>${p.label}</td><td style="text-align:right">${fmtPct(p.portfolio)}</td><td style="text-align:right">${fmtPct(p.benchmark)}</td><td style="text-align:right" class="${outCls}">${fmtPct(p.outperf)}</td></tr>`;
   }).join('');
 
   container.innerHTML = `

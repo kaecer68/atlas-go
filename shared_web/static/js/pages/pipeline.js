@@ -1,7 +1,8 @@
 import { agentName, stockName, regimeLabel } from '../names.js';
 import { computePipelineSummary, factorBar, renderFactorMini, renderFactorBreakdown, toggleBreakdown } from './dashboard.js';
 import { formatDate, getJSON, notify, renderEmptyState } from '../shared/app-utils.js';
-import { escapeHtml } from '../shared/utils.js';
+import { escapeHtml, fmtFloat } from '../shared/utils.js';
+import { fmtSignedPct, formatNumber } from '../shared/format-metric.js';
 
 function negStyle(val) {
   const num = typeof val === 'number' ? val : parseFloat(val);
@@ -257,9 +258,9 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     const crowded = (it.reason || '').includes('[crowded:');
     const badge = crowded ? `<span class="badge warn">擁擠</span> ` : '';
     const sideLabel = it.side === 'BUY' ? '<span style="color:var(--up);font-weight:700">買入</span>' : (it.side === 'SELL' ? '<span style="color:var(--down);font-weight:700">賣出</span>' : (it.side === 'REDUCE' ? '<span style="color:var(--warn);font-weight:700">減持</span>' : '-'));
-    const priceLabel = it.price ? it.price.toFixed(2) : '-';
-    const targetPriceLabel = it.target_price > 0 ? it.target_price.toFixed(2) : '-';
-    const stopLossPriceLabel = it.stop_loss_price > 0 ? it.stop_loss_price.toFixed(2) : '-';
+    const priceLabel = typeof it.price === 'number' ? fmtFloat(it.price) : '—';
+    const targetPriceLabel = typeof it.target_price === 'number' ? fmtFloat(it.target_price) : '—';
+    const stopLossPriceLabel = typeof it.stop_loss_price === 'number' ? fmtFloat(it.stop_loss_price) : '—';
     let frCls = 'color:var(--muted)';
     let frIcon = '➖ ';
     if (it.forward_return > 0) { frCls = 'color:var(--up);font-weight:700'; frIcon = '📈 '; }
@@ -280,9 +281,9 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     const industryCtx = it.industry_context;
     const hasIndustry = industryCtx && industryCtx.business_cycle;
     const industryBadge = hasIndustry
-      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:var(--accent-secondary)">${escapeHtml(industryCtx.business_cycle)} ${industryCtx.cycle_confidence != null ? (industryCtx.cycle_confidence * 100).toFixed(0) + '%' : ''}</span>`
+      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:var(--accent-secondary)">${escapeHtml(industryCtx.business_cycle)} ${industryCtx.cycle_confidence != null ? formatNumber(industryCtx.cycle_confidence, { percent: true, decimals: 0, suffix: '%' }) : ''}</span>`
       : '';
-    return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}（${escapeHtml(it.skill)}）</td><td>${escapeHtml(layerName)}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction != null ? it.conviction : '-'}</td><td>${narrativeBadge}${industryBadge ? ' ' + industryBadge : ''}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason ? escapeHtml(it.reason) : '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + escapeHtml(it.guard_reason) + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
+    return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}（${escapeHtml(it.skill)}）</td><td>${escapeHtml(layerName)}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction != null ? it.conviction : '-'}</td><td>${narrativeBadge}${industryBadge ? ' ' + industryBadge : ''}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${typeof it.forward_return === 'number' ? fmtSignedPct(it.forward_return, 1) : '—'}</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason ? escapeHtml(it.reason) : '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + escapeHtml(it.guard_reason) + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
   }).join('');
 
   const paginationControls = totalItems > PAGE_SIZE ? `
