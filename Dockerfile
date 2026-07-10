@@ -39,10 +39,16 @@ COPY --from=nodebuilder /build/admin_web/dist ./admin_web/dist
 COPY --from=nodebuilder /build/client_web/dist ./client_web/dist
 
 ARG TARGETARCH
+ARG VERSION
+ARG BUILDTIME
 
-# Build the application
+# Build the application.
+# VERSION/BUILDTIME are injected via build-args (CI or docker compose) so the
+# binary embeds meaningful metadata even though .git is excluded from the
+# Docker build context. When not provided, VERSION defaults to "dev" and
+# BUILDTIME defaults to the current UTC timestamp.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X main.version=$(git describe --tags --always) -X main.buildTime=$(date -u +%Y%m%d%H%M%S)" \
+    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.buildTime=${BUILDTIME:-$(date -u +%Y%m%d%H%M%S)}" \
     -o atlas-go \
     ./cmd/atlas
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o daily-replay-sync ./cmd/daily-replay-sync
