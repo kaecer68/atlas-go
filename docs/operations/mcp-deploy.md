@@ -256,7 +256,7 @@ services:
 ```json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "command": "/usr/local/bin/atlas-mcp",
       "args": [],
       "env": {
@@ -280,7 +280,7 @@ services:
 ```json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "url": "http://127.0.0.1:9090/mcp",
       "transport": "streamable-http",
       "headers": {

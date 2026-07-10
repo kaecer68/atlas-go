@@ -32,6 +32,32 @@ This README is an operational entrypoint, not a frozen performance report.
 	- `internal/sim/*`
 	- `data/state/experiments/*.json`
 
+## For AI Agent Operators (Hermes / OpenClaw / Claude Desktop / Cursor / OpenCode)
+
+> **你是替投資人用戶接入的 AI agent？從這裡開始。**
+
+atlas-go 同時也是 **MCP server**，提供 91 個 tool 讓 agent 直接查詢台股市場、策略、風險、個股等資訊。**你的投資人用戶可以問：「2330 現在能不能買？」、「現在市場風險如何？」、「今天的策略表現？」** — 你用 atlas-mcp 的 tool 回答。
+
+### 你的場景
+
+| 場景 | 入口 |
+|------|------|
+| **本機**：atlas-go backend 跑在你這台 | → [§Atlas as MCP Server](#atlas-as-mcp-server)（含 installer + setup wizard）|
+| **雲端**（規劃中，2026 Q4）：atlas-go 部署在遠端 | → [`docs/mcp-integration-CLOUD.md`](docs/mcp-integration-CLOUD.md)|
+
+### 投資人能問什麼（範例）
+
+| 用戶問 | 呼叫哪個 tool | 顯示範例 |
+|--------|---------------|----------|
+| 「台積電現在多少？」 | `stock_get_quote {symbol: "2330"}` | `台積電(2330) 收盤 $680.0，漲 $5.0 (+0.74%)` |
+| 「今天外資在買 2330 嗎？」 | `stock_get_chips {symbol: "2330"}` | `外資今日淨買 +12,500 張` |
+| 「現在市場風險怎樣？」 | `risk_get_metrics` | `VaR 95%: -2.3%, 最大回撤 -8.1%` |
+| 「今天應該關注什麼？」 | `narrative_get_bundle` | `今日重點: <摘要>` |
+
+完整「任務 → Tool」對照表見 [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md)；投資人常見查詢範本見 [`docs/operations/stock-mcp-query-templates.md`](docs/operations/stock-mcp-query-templates.md)。
+
+> **設定只用一行**：`curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash` — 不需 Go toolchain，詳見下面 §Atlas as MCP Server。
+
 ## Architecture
 
 Core path:
@@ -116,25 +142,40 @@ atlas-go 同時也是 **MCP (Model Context Protocol) server**，提供 **91 個 
 
 ### 5 分鐘接入（任選 1 種 client）
 
-```bash
-# 1. 編譯 MCP server binary
-make build-mcp
+**路徑 A — 一行 installer（推薦，給沒有 Go toolchain 的 agent operator）**：
 
-# 2. 確認 atlas-go backend 在 :18080
+```bash
+# 1. 下載並安裝 atlas-mcp binary（不需 Go、不需 clone repo）
+curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash
+
+# 或鎖定版本
+curl -fsSL ... | bash -s -- --version v0.0.0.33
+
+# 2. 確認 atlas-go backend 在 :18080（hermes agent 通常不需要自己跑，
+#    但若需要驗證 backend 是否活著）
 curl -fsS http://127.0.0.1:18080/health
 
-# 3a. 自動設定（推薦，需先合併 PR #3）
-make setup-mcp        # 互動式 wizard
+# 3a. 自動寫入你的 MCP client config（互動）
+make setup-mcp        # 互動式 wizard（會自動偵測已安裝的 client）
 
-# 3b. 手刻設定（見 AGENT_QUICKSTART.md §3 的 5 種範例）
+# 3b. 或手刻設定（5 種範例見 AGENT_QUICKSTART.md §3）
 # Hermes:     ~/.hermes/config.yaml
 # OpenClaw:   ~/.openclaw/mcp.json
 # Claude:     ~/Library/Application Support/Claude/claude_desktop_config.json
 # Cursor:     ~/.cursor/mcp.json
 # OpenCode:   ~/.config/opencode/opencode.json
+# （設定檔的 server entry key 是 'atlas-mcp'，不是 'atlas-go'）
 
 # 4. 驗證
-hermes mcp test atlas-go    # 應列出 91 個 tool
+hermes mcp test atlas-mcp    # 應列出 91 個 tool
+```
+
+**路徑 B — 開發者（有 Go toolchain + 已 clone repo）**：
+
+```bash
+make build-mcp        # 編譯 bin/atlas-mcp
+make install-mcp      # 編譯後安裝到 ~/.local/bin
+# 然後用路徑 A 的 3a / 3b / 4
 ```
 
 ### Tool 速覽

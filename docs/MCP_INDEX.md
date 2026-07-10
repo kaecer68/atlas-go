@@ -35,7 +35,7 @@ ATLAS_BASE_URL=http://127.0.0.1:18080 ATLAS_API_KEY=your-key \
 ```json
 {
   "mcp": {
-    "atlas-go": {
+    "atlas-mcp": {
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {

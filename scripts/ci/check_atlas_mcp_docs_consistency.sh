@@ -2,10 +2,10 @@
 # =============================================================================
 # check_atlas_mcp_docs_consistency.sh — 驗證 MCP 文件中無錯誤 env var
 #
-# 背景:2026-07-10 hermes agent 反映 docs/mcp-integration-guide.md 使用了錯誤
-# 的 env var (ATLAS_WORK_DIR/ATLAS_DATABASE_URL/ATLAS_REDIS_URL/ATLAS_API_TOKEN),
-# 浪費 30+ 分鐘摸索。實際 main.go 讀的是 ATLAS_BASE_URL/ATLAS_API_KEY/
-# ATLAS_MCP_TOKEN。
+# 背景:2026-07-10 hermes agent 反映早期 docs/mcp-integration-guide.md
+# 使用了錯誤的 env var (ATLAS_WORK_DIR/ATLAS_DATABASE_URL/
+# ATLAS_REDIS_URL/ATLAS_API_TOKEN), 浪費 30+ 分鐘摸索。實際 main.go
+# 讀的是 ATLAS_BASE_URL/ATLAS_API_KEY/ATLAS_MCP_TOKEN。
 #
 # 本腳本確保:
 #   1. 權威文件 (cmd/atlas-mcp/README.md + AGENT_QUICKSTART.md + 根 README +
@@ -14,8 +14,8 @@
 #   3. 工具數應為 91 (grep "91 tool" 在至少 3 個檔案)
 #
 # 排除:
-#   - docs/mcp-integration-guide.md 的 DEPRECATED 歷史區段 (有 ❌ 標記, 故意保留)
 #   - docs/ENVIRONMENT.md / docs/specs/security-audit.md (backend 用, 非 atlas-mcp)
+#   - CHANGELOG.md (歷史紀錄, 不可改)
 #
 # 用法:
 #   bash scripts/ci/check_atlas_mcp_docs_consistency.sh          # 失敗即 exit 1
@@ -34,7 +34,7 @@ if [ "${1:-}" = "--warn-only" ]; then
     WARN_ONLY=true
 fi
 
-# 錯誤的 env var (來自舊版 mcp-integration-guide.md 的殘留)
+# 錯誤的 env var (這 4 個是舊版文件曾誤用的,實際 main.go 不讀)
 WRONG_VARS=(
     "ATLAS_WORK_DIR"        # 不存在 (backend 才有,不是 atlas-mcp)
     "ATLAS_DATABASE_URL"    # 應為 DATABASE_URL (libpq 標準)
@@ -112,19 +112,6 @@ if [ "$files_with_91" -lt "$TOOL_COUNT_MIN" ]; then
     FAIL_COUNT=$((FAIL_COUNT + 1))
 else
     echo "    ✓ '91 tools' appears in $files_with_91 files (≥ $TOOL_COUNT_MIN)"
-fi
-
-# 4. 排除清單: docs/mcp-integration-guide.md 的 DEPRECATED 區段應保留但有 ❌ 標記
-echo ""
-echo "  → Verifying docs/mcp-integration-guide.md is marked DEPRECATED..."
-if [ -f "docs/mcp-integration-guide.md" ]; then
-    if grep -q "DEPRECATED" "docs/mcp-integration-guide.md" && \
-       grep -qE "已廢棄|過時|已棄用" "docs/mcp-integration-guide.md"; then
-        echo "    ✓ DEPRECATED banner present"
-    else
-        echo "    ⚠️  docs/mcp-integration-guide.md exists but missing DEPRECATED banner"
-        WARN_COUNT=$((WARN_COUNT + 1))
-    fi
 fi
 
 # 總結

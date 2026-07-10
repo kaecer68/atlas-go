@@ -10,8 +10,13 @@ env:
 
 jobs:
   # Create Release
+  # 2026-07-10: 加上 permissions: contents: write — softprops/action-gh-release
+  # 需要寫權限才能建立 release。前一版沒寫, 在新 repo 預設 GITHUB_TOKEN
+  # 是 contents: read, 會 silently fail。詳見 PR #1067 (hermes onboarding)。
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -37,13 +42,22 @@ jobs:
           docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
           ```
 
+          ### atlas-mcp (for AI agents like Hermes / OpenClaw / Claude Desktop)
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install-atlas-mcp-from-release.sh | bash
+          ```
+
           ### Changelog
           See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
-  # Build Binaries
-  build-binaries:
+  # Build atlas (main server) binaries
+  # 2026-07-10: rename from build-binaries (加上 atlas 前綴, 與新加的
+  # build-atlas-mcp-binaries job 區分); 加 permissions: contents: write
+  build-atlas-binaries:
     runs-on: ubuntu-latest
     needs: create-release
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -93,6 +107,58 @@ jobs:
         tag_name: ${{ github.ref }}
         files: |
           atlas-go-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+
+  # Build atlas-mcp (MCP server for AI agents) binaries
+  # 2026-07-10: NEW job (PR #1067). 投資人 hermes/openclaw agent 用,
+  # 不需 Go toolchain 或 source tree。詳見 scripts/install-atlas-mcp-from-release.sh
+  # 與 docs/mcp-integration-LOCAL.md。
+  #
+  # 為何不用 matrix: checksums.txt 必須包含所有平台的 binary, matrix 跑會
+  # 各自產生一份 (覆蓋問題)。改用 sequential build 5 平台, 最後一次
+  # sha256sum 產出完整 checksums.txt。
+  build-atlas-mcp-binaries:
+    runs-on: ubuntu-latest
+    needs: create-release
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Build all platforms + generate checksums.txt
+      run: |
+        set -e
+        PLATFORMS=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64" "windows/amd64")
+        for platform in "${PLATFORMS[@]}"; do
+          goos="${platform%/*}"
+          goarch="${platform#*/}"
+          output="atlas-mcp-${goos}-${goarch}"
+          if [ "$goos" = "windows" ]; then
+            output="${output}.exe"
+          fi
+          echo "  building ${platform} -> ${output}.tar.gz"
+          GOOS="$goos" GOARCH="$goarch" go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o "$output" ./cmd/atlas-mcp
+          tar czvf "${output}.tar.gz" "$output"
+          rm -f "$output"
+        done
+        echo ""
+        echo "Generating checksums.txt..."
+        sha256sum atlas-mcp-*.tar.gz > checksums.txt
+        cat checksums.txt
+
+    - name: Upload Release Assets (atlas-mcp binaries + checksums)
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        files: |
+          atlas-mcp-*.tar.gz
+          checksums.txt
 
   # Publish Docker Image
   publish-docker:

@@ -369,7 +369,7 @@ Cursor / Claude Desktop 的 `mcp.json`：
 ```json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "command": "/path/to/atlas-mcp",
       "args": ["--transport=stdio"],
       "env": {

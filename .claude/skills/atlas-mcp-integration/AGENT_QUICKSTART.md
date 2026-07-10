@@ -4,9 +4,21 @@
 
 ## 1. 前置需求
 
-- atlas-go backend 已啟動於 `http://127.0.0.1:18080`（`curl http://127.0.0.1:18080/health` 應回 `{"status":"ok"}`）
-- 已編譯的 atlas-mcp binary 位於 `/absolute/path/to/bin/atlas-mcp`（執行 `make build-mcp` 或 `go build -o bin/atlas-mcp ./cmd/atlas-mcp/`）
-- 環境變數 `ATLAS_API_KEY`（聯絡 atlas-go 管理員取得 admin key）
+- atlas-go backend 已啟動於 `http://127.0.0.1:18080`（`curl http://127.0.0.1:18080/health` 應回 `{"status":"ok"}`）。若你只是 hermes/openclaw agent 的 operator 且 backend 不在你這台，跳過此項 —— 由 atlas-go 管理員負責 backend。
+- **atlas-mcp binary**（擇一）：
+  - **路徑 A — 一行 installer（推薦，給沒有 Go toolchain 的 agent operator）**：
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash
+    # 或鎖定版本
+    curl -fsSL ... | bash -s -- --version v0.0.0.33
+    ```
+    自動下載預編譯 binary + SHA256 驗證 + 安裝到 `~/.local/bin/atlas-mcp`。
+  - **路徑 B — 開發者（已 clone repo + 有 Go）**：
+    ```bash
+    make build-mcp
+    make install-mcp    # 或直接用 bin/atlas-mcp
+    ```
+- 環境變數 `ATLAS_API_KEY`（聯絡 atlas-go 管理員取得 admin key；若 backend 設為 public 可省）
 
 ## 2. 必要環境變數
 
@@ -25,7 +37,7 @@
 
 ```yaml
 mcp_servers:
-  atlas-go:
+  atlas-mcp:
     command: "/absolute/path/to/bin/atlas-mcp"
     env:
       ATLAS_BASE_URL: "http://127.0.0.1:18080"
@@ -38,7 +50,7 @@ mcp_servers:
 
 ```json
 {
-  "atlas-go": {
+  "atlas-mcp": {
     "type": "stdio",
     "command": "/absolute/path/to/bin/atlas-mcp",
     "env": {
@@ -54,7 +66,7 @@ mcp_servers:
 ```json
 {
   "mcpServers": {
-    "atlas-go": {
+    "atlas-mcp": {
       "command": "/absolute/path/to/bin/atlas-mcp",
       "args": [],
       "env": {
@@ -77,7 +89,7 @@ mcp_servers:
 ```json
 {
   "mcp": {
-    "atlas-go": {
+    "atlas-mcp": {
       "type": "local",
       "command": ["/absolute/path/to/bin/atlas-mcp"],
       "env": {
@@ -123,7 +135,7 @@ hermes mcp test atlas-go          # 應列出 91 個 tool
 
 ## 7. 互動式 Wizard（推薦）
 
-若不想手刻 config，可用 `make setup-mcp` 啟動互動式 wizard，自動偵測 client、產生 config、驗證連線。需先合併 PR #3（`cmd/atlas-mcp-setup`）。
+若不想手刻 config，可用 `make setup-mcp` 啟動互動式 wizard，自動偵測 client、產生 config、驗證連線。
 
 ---
 
