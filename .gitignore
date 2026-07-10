@@ -204,3 +204,9 @@ client_web/web/
 # L2.4 pre-flight validator build artifact (cmd/experimental/l2-4-preflight/main.go)
 # Build via: go run ./cmd/experimental/l2-4-preflight
 l2-4-preflight
+
+# Local backfill binary build artifact (prevent build-leftover pollution)
+/backfill-fundamentals-ps-sector
+
+# Stale esbuild CSS output to shared_web/static/js/ (canonical CSS is in shared_web/static/css/)
+/shared_web/static/js/css/

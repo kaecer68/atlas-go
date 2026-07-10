@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。v0.0.0.31 新增 7 個：`capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`。`strategy_validator` 同步升級為 22 個保留 `AGENTS.md` 的 hot-path 模組之一。
+> **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。v0.0.0.29 新增 7 個：`capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`。`strategy_validator` 同步升級為 22 個保留 `AGENTS.md` 的 hot-path 模組之一。
 
 ## 索引（按成熟度分組）
 
@@ -39,10 +39,10 @@
 |------|---------|
 | `autobacktest` | 自動回測定時任務 |
 | `backtest` | 視窗回測 Window.Run() |
-| `capitalflow` | **v0.0.0.31 新** — 七大資金勢力分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源） |
-| `dailyreport` | **v0.0.0.31 新** — 每日市場報告 JSON 組裝（`daily_report` MCP tool 來源，agent morning briefing 入口） |
+| `capitalflow` | **v0.0.0.29 新** — 七大資金勢力分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源） |
+| `dailyreport` | **v0.0.0.29 新** — 每日市場報告 JSON 組裝（`daily_report` MCP tool 來源，agent morning briefing 入口） |
 | `eval` | 模型評估指標、可解釋性工具（SK-12~15） |
-| `eventdriven` | **v0.0.0.31 新** — 事件日曆 + 5 日事件驅動資金流預測（`event_calendar` / `event_flow_prediction` MCP tool 來源） |
+| `eventdriven` | **v0.0.0.29 新** — 事件日曆 + 5 日事件驅動資金流預測（`event_calendar` / `event_flow_prediction` MCP tool 來源） |
 | `feature` | 命名特徵萃取、Registry |
 | `fubonproxy` | Python FastAPI 微服務生命週期管理 |
 | `globalmarket` | 全球總經資料管理 |
@@ -53,12 +53,12 @@
 | `portprobe` | Stateless TCP port 探測 helper（`Probe`/`LookupOccupant`/`IsFubonZombie`/`KillOccupant`）— S-tier（Maturity: stable） |
 | `prism` | Regime-specific 訓練佇列 |
 | `realtime` | 即時資料轉接器 |
-| `recommender` | **v0.0.0.31 新** — tier-gated 投資組合推薦（`get_recommendations` MCP tool 來源，需 JWT） |
+| `recommender` | **v0.0.0.29 新** — tier-gated 投資組合推薦（`get_recommendations` MCP tool 來源，需 JWT） |
 | `scheduler` | ML 模型重訓排程 |
 | `startup` | 一次性啟動期 preflight 檢查（`Preflight(claims)`，`portprobe` 上層 consumer）— S-tier（Maturity: stable） |
 | `strategy` | 策略選擇器與登錄 |
-| `strategy_ranker` | **v0.0.0.31 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
-| `strategy_validator` | **v0.0.0.31 新 / 保留 AGENTS.md** — 策略啟用前驗證器（invariant/constraint 校驗） |
+| `strategy_ranker` | **v0.0.0.29 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
+| `strategy_validator` | **v0.0.0.29 新 / 保留 AGENTS.md** — 策略啟用前驗證器（invariant/constraint 校驗） |
 | `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**91 tools**、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 89–91 |
 
 > 註：22 個 S-tier + 23 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
@@ -75,7 +75,7 @@
 | `forecast` | 個股方向性預測 — per-symbol directional forecasts（Phase 3.5 M4 PoC）|
 | `forecast_bridge` | Forecast → TradeSignal 轉換層（Phase 3.5 M4 PoC）|
 | `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A）|
-| `swarm` | Swarm 狀態容器（模擬引擎已降級為 pass-through，PR #963；非 v0.0.0.31 重點）|
+| `swarm` | Swarm 狀態容器（模擬引擎已降級為 pass-through，PR #963；非 v0.0.0.29 重點）|
 
 ### U · Utility（輔助工具，5 個）
 
@@ -84,7 +84,7 @@
 | `importer` | CSV → JSONL 資料匯入 |
 | `replay` | TWSE CSV 載入與 forward return 計算 |
 | `reporting` | 報告生成 Markdown/ASCII chart |
-| `subscription` | **v0.0.0.31 新** — JWT tier 認證 + 使用者訂閱狀態解析（`/api/auth/*` + `/api/user/profile` 來源） |
+| `subscription` | **v0.0.0.29 新** — JWT tier 認證 + 使用者訂閱狀態解析（`/api/auth/*` + `/api/user/profile` 來源） |
 | `taskexec` | 非同步任務執行 Manager |
 
 > 註：U-tier 為 CLI 工具、測試輔助、或非 runtime 路徑模組；上方所列為跨 workflow 顯著參與者。
@@ -96,7 +96,7 @@
 - `experimental` — 功能未完全穩定，不應被其他模組依賴
 - `utility` — CLI 工具、測試輔助或非 runtime 一部分
 
-## v0.0.0.31 變更摘要
+## v0.0.0.29 變更摘要
 
 | 變更 | 模組 | 說明 |
 |------|------|------|
@@ -115,4 +115,4 @@
 - 跨模組陷阱詳細參考：`docs/TRAPS.md`
 - 根路由與全域規則：`AGENTS.md`
 - 21 保留 AGENTS.md 模組清單：`AGENTS.md` §「模組數量對照」
-- v0.0.0.31 完整 release notes：`CHANGELOG.md` v0.0.0.31 區段
+- v0.0.0.29 完整 release notes：`CHANGELOG.md` v0.0.0.29 區段
