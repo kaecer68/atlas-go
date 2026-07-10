@@ -128,9 +128,9 @@ cmd/atlas-mcp/server
 - `cmd/atlas-mcp/server/server.go`（更新 `RegisteredToolCount` assertion 範圍）
 - `cmd/atlas-mcp/server/prompts.go`（將 prompt 中的佔位 tool 名稱替換為正式名稱）
 - `docs/REFERENCE/tool-catalog.md`（新增 catalog 區塊、更新總數）
-- `cmd/atlas-mcp/README.md`（移除重複數字，指向 AGENT_TOOLS.md）
+- `cmd/atlas-mcp/README.md`（移除重複數字，指向 REFERENCE/tool-catalog.md）
 - `cmd/atlas-mcp/server/AGENTS.md`（更新 assertion 範圍與說明）
-- `docs/specs/agent-mcp-server.md`（調整總數描述，指向 AGENT_TOOLS.md）
+- `docs/specs/agent-mcp-server.md`（調整總數描述，指向 REFERENCE/tool-catalog.md）
 
 ---
 

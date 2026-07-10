@@ -75,9 +75,9 @@
 |------|------|
 | `ENVIRONMENT.md` | 外部依賴與環境 |
 | `TOOLS.md` | 工具清單 |
-| `MCP_INDEX.md` | 外部 AI Agent 透過 MCP 接入 atlas 的入口指南（PR #911 新增） |
-| `AGENT_TOOLS.md` | Agent MCP tool 決策樹與完整 catalog（84 tools, task→tool 反向索引） |
-| `AGENT_ONBOARDING.md` | 5 分鐘速讀 atlas 全貌（AI agent 入門） |
+| `cmd/atlas-mcp/README.md` | 外部 AI Agent 透過 MCP 接入 atlas 的入口指南（含 For AI Agent Operators 段） |
+| `docs/REFERENCE/tool-catalog.md` | Agent MCP tool 完整 catalog（91 tools, 自動從 cmd/atlas-mcp/server/tools*.go 生成） |
+| `docs/INVESTOR/README.md` | 投資人 5 分鐘入門（For AI Agent Operators 段, 91 tools use cases） |
 | `WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
 | `AUDIT_TRAIL.md` | 稽核軌跡 |
 | `calibration-loop.md` | 校準循環 |
