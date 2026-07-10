@@ -1,7 +1,7 @@
 # AGENTS.md — admin_web（管理後台）
 
 > 修改 admin_web 目錄下的程式碼前請先閱讀此文件。
-> CSS 色彩語意系統與 Canvas 繪圖橋接的完整規範見 **[`docs/guides/frontend-architecture.md`](../../docs/guides/frontend-architecture.md)**（單一權威來源）。
+> CSS 色彩語意系統與 Canvas 繪圖橋接的完整規範見 **[`docs/guides/frontend-architecture.md`](../docs/guides/frontend-architecture.md)**（單一權威來源）。
 
 ## CSS 色彩語意系統（摘要）
 

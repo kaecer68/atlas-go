@@ -3,7 +3,7 @@
 **成熟度**: stable (S-tier)
 **模組職責**: 投資心法庫（`StrategyFrame` 規則引擎）
 
-> 五層框架、短線指標、自我修正機制的完整規格見 **[`docs/specs/strategy-techniques.md`](../../docs/specs/strategy-techniques.md)**。本節僅保留 hot-path 陷阱。
+> 五層框架、短線指標、自我修正機制的完整規格見 **`docs/specs/strategy-techniques.md`**（尚未建立，規劃中）。本節僅保留 hot-path 陷阱。
 
 ## 核心型別
 
