@@ -18,7 +18,38 @@
     make build-mcp
     make install-mcp    # 或直接用 bin/atlas-mcp
     ```
-- 環境變數 `ATLAS_API_KEY`（聯絡 atlas-go 管理員取得 admin key；若 backend 設為 public 可省）
+- 環境變數 `ATLAS_API_KEY`（**短期可省**，見下面「短期共用 dev key」段；正式商業化見 [#1068](https://github.com/kaecer68/atlas-go/issues/1068)）
+
+## 1.5 短期共用 dev key（推薦給 hermes / openclaw agent 短期使用）
+
+atlas-go 商業化前（見 [#1068](https://github.com/kaecer68/atlas-go/issues/1068)），為了降低維護成本與摩擦點，目前使用**一組共用 dev key** 放在 `~/.config/atlas-go/.env`（這檔已 gitignore）。短期**所有 hermes / openclaw agent 都用同一組 key**：
+
+```bash
+# 一條龍安裝 + 設定 + 驗證
+make setup-mcp-agent
+# 內部自動 source ~/.config/atlas-go/.env → 取得 ATLAS_API_KEY →
+# 用 hermes mcp add --env ATLAS_API_KEY=... 寫入 ~/.hermes/config.yaml
+```
+
+**底層細節**（給好奇的 agent）：
+
+```bash
+# 1. 確認 dev key 存在
+test -f ~/.config/atlas-go/.env && echo "OK" || echo "❌ 找不到 .env"
+
+# 2. 看 dev key 內容（脫敏顯示）
+grep '^ATLAS_API_KEY=' ~/.config/atlas-go/.env | sed 's/=.*/=***REDACTED***/'
+
+# 3. 一條龍（自動 source env）
+make setup-mcp-agent
+
+# 4. 驗證 hermes 真的能用
+make verify-mcp-setup
+```
+
+**限制**：
+- 這是 dev key（標記為 not-for-prod），不要拿來做 live trading
+- 等 #1068 商業化後改用個人 key：`hermes mcp add atlas-mcp --env ATLAS_API_KEY=$YOUR_PERSONAL_KEY`
 
 ## 2. 必要環境變數
 
