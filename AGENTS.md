@@ -27,7 +27,7 @@
 
 | 數字 | 含義 | 出處 |
 |------|------|------|
-| **22** | 保留 `AGENTS.md` 的內部模組（hot-path 陷阱寫在裡面） | 本文件原 57→Wave 11 精簡至 21（v0.0.0.32 +1: `strategy_validator`） |
+| **27** | 保留 `AGENTS.md` 的內部模組（hot-path 陷阱寫在裡面） | 完整清單見 [`internal/AGENTS_INDEX.md § 保留模組 AGENTS.md`](internal/AGENTS_INDEX.md) |
 | **59** | 全部模組索引（含無 `AGENTS.md` 者，按成熟度 S/E/X/U 分組） | [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md)（v0.0.0.32 +7: `capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`） |
 | **74** | `internal/` 下全部目錄數 | 檔案系統 `ls internal/*/` |
 
@@ -36,7 +36,7 @@
 | 知識類型 | 歸屬位置 |
 |----------|---------|
 | 跨模組全域規則 | 本文件 + `docs/REFERENCE/TRAPS.md` |
-| 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**22 個保留模組**） |
+| 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**27 個保留模組**，清單見 `internal/AGENTS_INDEX.md`） |
 | 模組技術規格 | `docs/specs/<topic>.md` |
 | 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
 | 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
@@ -47,7 +47,7 @@
 **防膨脹規則**：
 - 本文件不超過 **160 行**
 - **155 行時觸發警告**，160 行時 PR 被拒絕
-- 新知識預設加入 `internal/<mod>/AGENTS.md`（限 21 保留模組）或 `docs/`，**不要**加到這裡
+- 新知識預設加入 `internal/<mod>/AGENTS.md`（限 27 保留模組）或 `docs/`，**不要**加到這裡
 
 ## 🔗 文件路由
 

@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。v0.0.0.32 新增 7 個：`capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`。`strategy_validator` 同步升級為 22 個保留 `AGENTS.md` 的 hot-path 模組之一。
+> **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。v0.0.0.32 新增 7 個：`capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`。保留 AGENTS.md 的 hot-path 模組共 **27** 個（清單見下方）。
 
 ## 索引（按成熟度分組）
 
@@ -89,6 +89,42 @@
 
 > 註：U-tier 為 CLI 工具、測試輔助、或非 runtime 路徑模組；上方所列為跨 workflow 顯著參與者。
 
+## 27 個保留 AGENTS.md 模組
+
+以下為所有目錄下含有 `AGENTS.md` 的模組（hot-path 陷阱寫在裡面，修改前必讀）：
+
+| 模組 | 成熟度 | 關鍵陷阱主題 |
+|------|--------|-------------|
+| `apigateway` | S | CONSTITUTION.md — API Gateway、BackgroundTaskManager |
+| `baseline` | S | Policy 升降級、版本控制 |
+| `config` | S | 環境變數、ParametersConfig |
+| `db` | E | PostgreSQL 連線管理 |
+| `eventbus` | S | 事件匯流排 Publish/Subscribe |
+| `experiment` | S | 實驗生命週期 mutation→judge→promote |
+| `industry` | S | 產業輪動、季節性、供應鏈 |
+| `ledger` | S | JSONL append-only、OutcomeCount 計算 |
+| `live` | S | 即時交易、broker execution（需 flag 啟用）|
+| `llm` | X | 多 Provider 路由、能力調度、DataClass 閘門 |
+| `logging` | S | 統一日誌介面 |
+| `marketdata` | S | Provider 抽象、TWSE/FinMind/Fugle |
+| `monitoring` | S | Dashboard API、Wave 9 observability |
+| `narrative` | S | 宏觀敘事、因果鏈、台灣壓力指數 |
+| `orchestrator` | S | 三層 executor 路由、PluginHost |
+| `portfolio` | E | Darwinian 權重、FactorEngine |
+| `realtime` | E | 即時資料轉接器 |
+| `risk` | S | RiskManager、VaR、宏觀回撤 |
+| `strategy` | E | 策略選擇器與登錄 |
+| `strategy_techniques` | S | 5 層投資心法庫 |
+| `capitalflow` | E | 七大資金勢力共振分析 |
+| `eventdriven` | E | 事件日曆 + 5 日預測 |
+| `fubonproxy` | E | Python FastAPI 微服務生命週期 |
+| `recommender` | E | tier-gated 投資組合推薦 |
+| `strategy_ranker` | X | 策略表現排名引擎 |
+| `strategy_validator` | X | 策略啟用前驗證器 |
+| `subscription` | X | JWT tier 認證 + 使用者訂閱 |
+
+> 共 27 個。`cmd/atlas-mcp/server/AGENTS.md` 為跨 `internal/` 與 `cmd/` 的特殊位置，不計入此表。
+
 ## 成熟度定義
 
 - `stable` — 介面與行為穩定，可安全使用
@@ -105,7 +141,7 @@
 | 新增 | `recommender` | tier-gated 投資組合推薦 |
 | 新增 | `dailyreport` | 每日報告 JSON |
 | 新增 | `strategy_ranker` | 策略排名 + tier 標籤 |
-| 新增 | `strategy_validator` | 啟用前驗證（同時升級至 22 保留 AGENTS.md 模組） |
+| 新增 | `strategy_validator` | 啟用前驗證（保留 AGENTS.md 模組之一） |
 | 新增 | `subscription` | JWT tier 認證 |
 | 升級 | `cmd/atlas-mcp/server` | 工具數 84 → **91**（+4 audit + 2 anomaly + 2 elicitation/roots） |
 
@@ -114,5 +150,5 @@
 - 完整成熟度對照表：`internal/MATURITY.md`
 - 跨模組陷阱詳細參考：`docs/REFERENCE/TRAPS.md`
 - 根路由與全域規則：`AGENTS.md`
-- 21 保留 AGENTS.md 模組清單：`AGENTS.md` §「模組數量對照」
+- 保留 AGENTS.md 模組清單：見下方「27 個保留模組」
 - v0.0.0.32 完整 release notes：`CHANGELOG.md` v0.0.0.32 區段

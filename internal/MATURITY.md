@@ -48,7 +48,7 @@
 
 ---
 
-## E · Evolving（演進中）— 15 packages
+## E · Evolving（演進中）— 26 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -83,7 +83,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 20 packages
+## X · Experimental（實驗中）— 22 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -124,7 +124,7 @@
 
 ---
 
-## U · Utility（輔助工具）— 7 packages
+## U · Utility（輔助工具）— 8 packages
 
 CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 
