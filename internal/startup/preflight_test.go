@@ -254,3 +254,64 @@ func TestPreflight_HealthyExternallyManaged_NoError(t *testing.T) {
 		t.Errorf("killFn must NOT be called when state is Healthy, got calls: %v", killed)
 	}
 }
+
+func TestPreflight_ExclusiveHealthy_Errors(t *testing.T) {
+	var killed []int
+	withStubProbes(t,
+		func(addr string) (portprobe.State, portprobe.Occupant, error) {
+			return portprobe.StateHealthy, portprobe.Occupant{PID: 71689, Command: "com.docker.backend"}, nil
+		},
+		func(pid int) error {
+			killed = append(killed, pid)
+			return nil
+		},
+		func(occ portprobe.Occupant) bool { return false },
+	)
+
+	err := Preflight([]PortClaim{
+		{Component: "atlas-http", Addr: ":18080"},
+	})
+	if err == nil {
+		t.Fatal("exclusive healthy occupant must fail Preflight")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "atlas-http") {
+		t.Errorf("error should mention component, got: %q", msg)
+	}
+	if !strings.Contains(msg, "already served") {
+		t.Errorf("error should mention healthy conflict, got: %q", msg)
+	}
+	if !strings.Contains(msg, "docker compose stop atlas") {
+		t.Errorf("docker occupant should suggest compose recovery, got: %q", msg)
+	}
+	if !strings.Contains(msg, "71689") {
+		t.Errorf("error should mention pid, got: %q", msg)
+	}
+	if len(killed) != 0 {
+		t.Errorf("killFn must NOT be called for exclusive healthy, got: %v", killed)
+	}
+}
+
+func TestPreflight_ExclusiveHealthy_NativeHint(t *testing.T) {
+	withStubProbes(t,
+		func(addr string) (portprobe.State, portprobe.Occupant, error) {
+			return portprobe.StateHealthy, portprobe.Occupant{PID: 44141, Command: "atlas"}, nil
+		},
+		func(pid int) error { return nil },
+		func(occ portprobe.Occupant) bool { return false },
+	)
+
+	err := Preflight([]PortClaim{
+		{Component: "atlas-http", Addr: ":18080"},
+	})
+	if err == nil {
+		t.Fatal("expected exclusive healthy error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "kill 44141") {
+		t.Errorf("native occupant should suggest kill, got: %q", msg)
+	}
+	if strings.Contains(msg, "docker compose") {
+		t.Errorf("native occupant must not suggest docker recovery, got: %q", msg)
+	}
+}

@@ -54,6 +54,31 @@ func TestListen_OccupiedHealthy(t *testing.T) {
 	}
 }
 
+func TestDockerRecoverySuffix(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want bool
+	}{
+		{"com.docker.backend", true},
+		{"docker-proxy", true},
+		{"Docker Desktop", true},
+		{"atlas", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		got := dockerRecoverySuffix(tc.cmd)
+		if tc.want && got == "" {
+			t.Errorf("dockerRecoverySuffix(%q) = empty, want docker hint", tc.cmd)
+		}
+		if !tc.want && got != "" {
+			t.Errorf("dockerRecoverySuffix(%q) = %q, want empty", tc.cmd, got)
+		}
+		if tc.want && !strings.Contains(got, "docker compose stop atlas") {
+			t.Errorf("dockerRecoverySuffix(%q) = %q, want compose stop hint", tc.cmd, got)
+		}
+	}
+}
+
 func TestListen_OccupiedForeign(t *testing.T) {
 	addr := freeLocalAddr(t)
 	// Handler that does NOT respond to /health, so Probe classifies the

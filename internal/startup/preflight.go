@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -43,12 +44,19 @@ var (
 	isFubonZombieFn = portprobe.IsFubonZombie
 )
 
-// Preflight checks that every claimed address is free or healthy. If any
-// address is held by a foreign process, it returns an actionable error
-// identifying the occupant and a kill command; for claims with
-// AllowZombieKill=true a recognized fubon-proxy zombie is auto-killed
-// before producing an error. Probe failures are logged as warnings and
-// do not stop the startup sequence.
+// Preflight checks that every claimed address is free (or, for shared
+// services, already healthy). Semantics by claim type:
+//
+//   - Exclusive claims (AllowZombieKill=false, e.g. atlas-http): the address
+//     must be free. StateHealthy and StateForeign both fail — a healthy
+//     occupant means another atlas instance (often Docker-published) already
+//     owns the port; starting a second exclusive listener would only fail
+//     later at portprobe.Listen after expensive bootstrap.
+//   - Shared claims (AllowZombieKill=true, e.g. fubon-proxy): StateHealthy is
+//     OK (externally managed service we can reuse). StateForeign triggers
+//     zombie reclaim when the occupant looks like a fubon-proxy leftover.
+//
+// Probe failures are logged as warnings and do not stop the startup sequence.
 //
 // T-104 test escape hatch: setting ATLAS_SKIP_PORT_PREFLIGHT to a non-empty
 // value skips the entire check. Used by cmd/atlas TestMain so the 4
@@ -78,7 +86,13 @@ func checkClaim(claim PortClaim) error {
 			logging.Err(err))
 		return nil
 	}
-	if state != portprobe.StateForeign {
+	if state == portprobe.StateFree {
+		return nil
+	}
+	if state == portprobe.StateHealthy && !claim.AllowZombieKill {
+		return actionableHealthyError(claim, occupant)
+	}
+	if state == portprobe.StateHealthy {
 		return nil
 	}
 	if !claim.AllowZombieKill {
@@ -154,4 +168,25 @@ func actionableForeignError(claim PortClaim, occupant portprobe.Occupant) error 
 	}
 	return fmt.Errorf("%s address %s is held by an unknown process; identify it with `lsof -nP -iTCP:%s -sTCP:LISTEN` and stop it",
 		claim.Component, claim.Addr, claim.Addr)
+}
+
+func actionableHealthyError(claim PortClaim, occupant portprobe.Occupant) error {
+	hint := recoveryHint(occupant)
+	if occupant.PID > 0 {
+		return fmt.Errorf("%s address %s is already served by a healthy instance (pid=%d cmd=%q); %s",
+			claim.Component, claim.Addr, occupant.PID, occupant.Command, hint)
+	}
+	return fmt.Errorf("%s address %s is already served by a healthy instance; %s",
+		claim.Component, claim.Addr, hint)
+}
+
+func recoveryHint(occupant portprobe.Occupant) string {
+	cmd := strings.ToLower(occupant.Command)
+	if strings.Contains(cmd, "docker") || strings.Contains(cmd, "com.docker") {
+		return "stop the Docker atlas service (`docker compose stop atlas`) or start with a different -addr (see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")"
+	}
+	if occupant.PID > 0 {
+		return fmt.Sprintf("stop the existing instance (`kill %d`) or start with a different -addr (see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")", occupant.PID)
+	}
+	return "stop the existing instance or start with a different -addr (see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")"
 }
