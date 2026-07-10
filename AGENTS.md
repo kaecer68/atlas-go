@@ -53,9 +53,9 @@
 
 ### Agent 入門（外部 AI 優先讀）
 - [`docs/AGENT_ONBOARDING.md`](docs/AGENT_ONBOARDING.md) — 5 分鐘速讀 atlas 全貌
-- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — 84 個 tool 決策樹與完整 catalog
-- [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — MCP server 部署、配置、84 tool 總覽
-- [`docs/mcp-integration-guide.md`](docs/mcp-integration-guide.md) — atlas-mcp 接到 Claude Desktop / OpenClaw / Hermes 的整合設定（v0.0.0.32 新增）
+- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — **91** 個 tool 決策樹與完整 catalog
+- [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — **MCP 給 agent 的唯一入口**，部署/配置/91 tool 總覽
+- [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md) — 50 行 MCP 設定 SOP（Hermes/OpenClaw/Claude/Cursor/OpenCode 5 種 client）
 
 ### 啟動必讀
 - [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — 首次啟動、CI 指令、系統初始化順序
@@ -100,7 +100,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 |------|------|------|
 | Roadmap (規劃藍圖) | `docs/specs/agent-mcp-server.md` | canonical spec + 開放議題(roadmap v2 內容已併入此 spec) |
 | MCP 接入（外部 agent） | `[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) + [skill](.claude/skills/atlas-mcp-integration/SKILL.md) | 部署配置、Claude/Cursor/OpenCode 設定 |
-| Tool 導覽 | `[`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 84 tools 決策樹與 task→tool 反向索引 |
+| Tool 導覽 | `[`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 91 tools 決策樹與 task→tool 反向索引 |
 | Workflow Map | `docs/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
 | Process 標註 | `docs/PROCESSES.yaml` | 結構化 workflow metadata |
 | MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 84+ tools、auth、audit、JSON Schema 模板 |
@@ -108,7 +108,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
 | Onboarding | `docs/AGENT_ONBOARDING.md` | 5 分鐘上手 |
 
-**狀態**：P0 已完成（PROCESSES.yaml + AGENTS.md 本章節）；P0 補遺（2026-07-03）增加 2 個 atlas-mcp-* skill、MCP 模組陷阱、README 更新、AGENT_TOOLS 補完；P1 殘留：SSE/streamable-HTTP transport、audit log retention；P2 殘留：binary merge、retention period、license、WebSocket。
+**狀態**：P0 已完成（PROCESSES.yaml + AGENTS.md 本章節）；P0 補遺（2026-07-03）增加 2 個 atlas-mcp-* skill、MCP 模組陷阱、README 更新、AGENT_TOOLS 補完；SSE/streamable-HTTP transport + audit log retention 已 ship（Phase 4, PR #807 / PR #1064）；P1 殘留：atlas-mcp onboarding 改進（PR 系列，2026-07-10 啟動）；P2 殘留：binary merge、retention period、license、WebSocket。
 
 ## ⚠️ 高頻陷阱速查
 

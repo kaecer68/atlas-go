@@ -25,7 +25,7 @@ func countedAddTool[In any, Out any](mcpSrv *mcp.Server, tool *mcp.Tool, handler
 }
 
 // registerTools attaches the five Phase 1 core tools to mcpSrv. Each handler
-// invokes atlas-go via the shared httpClient and writes one AuditEntry.
+// invokes atlas-go via the shared HttpClient and writes one AuditEntry.
 //
 // The tool descriptions follow docs/AGENT_TOOLS.md §"高頻工具 Top 15" so a
 // reading agent recognizes them. JSON schemas are derived automatically from

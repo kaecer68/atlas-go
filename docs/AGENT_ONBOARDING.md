@@ -42,8 +42,8 @@ GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決�
 
 ### 我要找完整 MCP 規格 → 看 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
 
-### 我要把 atlas-mcp 接到 Claude Desktop / OpenClaw / Hermes → 看 [`mcp-integration-guide.md`](./mcp-integration-guide.md)
-所有 80 個 tool 的 JSON Schema 設計範本、安全邊界、部署指引。
+### 我要把 atlas-mcp 接到 Claude Desktop / OpenClaw / Hermes → 看 [`docs/mcp-integration-LOCAL.md`](./mcp-integration-LOCAL.md)（本機模式完整指南）+ [`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)（91 tool + env var 速查）+ [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)（50 行 SOP）
+5 種 client (Hermes/OpenClaw/Claude/Cursor/OpenCode) 設定範例。**注意**：[`mcp-integration-guide.md`](./mcp-integration-guide.md) 已於 2026-07-10 標記 deprecated，內容過時（錯誤 env var 名），請改用上方新文件。雲端部署場景見 [`docs/mcp-integration-CLOUD.md`](./mcp-integration-CLOUD.md)。
 
 ### 我要理解模組 → 看 [`internal/AGENTS_INDEX.md`](./../internal/AGENTS_INDEX.md)
 52 個內部模組按 S/E/X/U 成熟度分組。
@@ -102,7 +102,7 @@ internal/strategy_ranker/      ← 策略排名（消費 strategy_validator 輸�
 internal/subscription/         ← 使用者訂閱與認證（SQLite store + JWT + 3-tier + 7 天免費試用）
 internal/recommender/          ← 推薦分層系統（依 user tier 返回 public/registered/premium 內容）
 internal/dailyreport/          ← 每日市場報告自動化（JSON + Markdown + DataProvider + archive）
-cmd/atlas-mcp/                 ← 84 tool MCP server（v0.0.0.31 新增 4 tools + 6 prompts + 3 resources）
+cmd/atlas-mcp/                 ← 91 tool MCP server（v0.0.0.31 新增 4 tools + 6 prompts + 3 resources；v0.0.0.32 補遺至 91）
 client_web/static/js/
 ├── services/auth.js                 ← Phase A0 JWT + tier 解析
 ├── page-shells/{login,register,premium,mcp,errors/404}.js  ← Phase A0/C 頁面殼

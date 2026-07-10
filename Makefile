@@ -17,6 +17,7 @@
 .PHONY: help install build test lint ci clean watch-frontend smoke
 .PHONY: install-frontend build-frontend test-frontend
 .PHONY: build-backend test-backend lint-backend
+.PHONY: build-mcp install-mcp mcp-status setup-mcp
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
 
@@ -68,6 +69,12 @@ help:
 	@echo "  build-backend      編譯 Go backend (cmd/atlas)"
 	@echo "  test-backend       跑 Go 單元測試"
 	@echo "  lint-backend       跑 gofmt / go vet / staticcheck"
+	@echo ""
+	@echo "MCP server (atlas-mcp) — 給外部 AI agent 接入用:"
+	@echo "  build-mcp          編譯 bin/atlas-mcp"
+	@echo "  install-mcp        安裝到 ~/.local/bin (MCP client command 路徑)"
+	@echo "  mcp-status         檢查 binary / atlas-go / LLM router 三項健康"
+	@echo "  setup-mcp          啟動互動式 wizard (需 PR #3 合併後生效)"
 	@echo ""
 	@echo "整合:"
 	@echo "  install            install-frontend + 下載 Go 模組"
@@ -124,6 +131,59 @@ watch-frontend-%:
 build-backend:
 	@echo "🔨 Building Go backend (cmd/atlas)..."
 	go build -ldflags "$(LDFLAGS_VERSION)" -o bin/atlas ./cmd/atlas
+
+# ---- MCP server (atlas-mcp) management ----
+# 給外部 AI agent (Hermes/OpenClaw/Claude Desktop/Cursor/OpenCode) 用的 binary。
+# 對應 PR 系列: feature/atlas-mcp-onboarding-2026q3
+#
+# 用法:
+#   make build-mcp    編譯 bin/atlas-mcp
+#   make install-mcp  編譯後安裝到 ~/.local/bin (給 MCP client command 設定用)
+#   make mcp-status   檢查 binary 存在 + atlas-go backend + LLM health 三項
+#   make setup-mcp    啟動互動式 wizard (需 PR #3 合併後才生效)
+
+build-mcp:
+	@echo "🔨 Building atlas-mcp binary..."
+	@mkdir -p bin
+	go build -ldflags "$(LDFLAGS_VERSION)" -o bin/atlas-mcp ./cmd/atlas-mcp
+
+install-mcp: build-mcp
+	@echo "📦 Installing atlas-mcp to $(HOME)/.local/bin/..."
+	@install -m 0755 bin/atlas-mcp $(HOME)/.local/bin/atlas-mcp
+	@echo "  ✓ Installed to $$(command -v atlas-mcp 2>/dev/null || echo '$(HOME)/.local/bin/atlas-mcp')"
+	@echo "  → Make sure $(HOME)/.local/bin is in your PATH (add to ~/.zshrc or ~/.bashrc)"
+
+mcp-status:
+	@echo "🔍 atlas-mcp status:"
+	@echo ""
+	@if [ -x bin/atlas-mcp ]; then \
+		size=$$(ls -lh bin/atlas-mcp | awk '{print $$5}'); \
+		echo "  ✓ binary:        bin/atlas-mcp ($$size)"; \
+	else \
+		echo "  ✗ binary:        NOT BUILT  → run: make build-mcp"; \
+	fi
+	@if curl -fsS --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then \
+		status=$$(curl -fsS --max-time 2 http://127.0.0.1:18080/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "ok"); \
+		echo "  ✓ atlas-go:      http://127.0.0.1:18080 (status: $$status)"; \
+	else \
+		echo "  ✗ atlas-go:      http://127.0.0.1:18080 DOWN  → run: go run ./cmd/atlas"; \
+	fi
+	@if curl -fsS --max-time 2 http://127.0.0.1:18080/api/llm/health >/dev/null 2>&1; then \
+		router=$$(curl -fsS --max-time 2 http://127.0.0.1:18080/api/llm/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('router_version','unknown'))" 2>/dev/null || echo "unknown"); \
+		echo "  ✓ LLM router:    http://127.0.0.1:18080/api/llm/health (router: $$router)"; \
+	else \
+		echo "  ✗ LLM router:    http://127.0.0.1:18080/api/llm/health DOWN"; \
+	fi
+
+setup-mcp:
+	@if [ -d "./cmd/atlas-mcp-setup" ]; then \
+		echo "🚀 Launching atlas-mcp-setup wizard..."; \
+		go run ./cmd/atlas-mcp-setup; \
+	else \
+		echo "⚠️  setup-mcp requires PR #3 (cmd/atlas-mcp-setup) to be merged first."; \
+		echo "    After PR #3 merges, run: make setup-mcp to start the wizard."; \
+		echo "    Until then, follow: .claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md"; \
+	fi
 
 test-backend:
 	@echo "🧪 Testing Go backend..."

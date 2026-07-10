@@ -105,6 +105,53 @@ Main packages:
 
 > 設計權威：`docs/llm-integration-strategy-framework.md` · `internal/llm/AGENTS.md`
 
+## Atlas as MCP Server
+
+atlas-go 同時也是 **MCP (Model Context Protocol) server**，提供 **91 個 tool** 給外部 AI agent（Hermes / OpenClaw / Claude Desktop / Cursor / OpenCode）調用。三種 transport 全部已 ship：stdio（預設）、SSE、streamable-HTTP。
+
+### 你的場景
+
+- **本機開發 / 個人 agent**：atlas-go backend 與 agent 在同一台 → 見 [`docs/mcp-integration-LOCAL.md`](docs/mcp-integration-LOCAL.md)（完整指南）+ [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)（50 行 SOP）
+- **雲端接入**（規劃中，2026 Q4）：atlas-go 部署到雲端、外部 agent 透過 reverse proxy → 見 [`docs/mcp-integration-CLOUD.md`](docs/mcp-integration-CLOUD.md)（scaffold，待雲端部署穩定後補細節）
+
+### 5 分鐘接入（任選 1 種 client）
+
+```bash
+# 1. 編譯 MCP server binary
+make build-mcp
+
+# 2. 確認 atlas-go backend 在 :18080
+curl -fsS http://127.0.0.1:18080/health
+
+# 3a. 自動設定（推薦，需先合併 PR #3）
+make setup-mcp        # 互動式 wizard
+
+# 3b. 手刻設定（見 AGENT_QUICKSTART.md §3 的 5 種範例）
+# Hermes:     ~/.hermes/config.yaml
+# OpenClaw:   ~/.openclaw/mcp.json
+# Claude:     ~/Library/Application Support/Claude/claude_desktop_config.json
+# Cursor:     ~/.cursor/mcp.json
+# OpenCode:   ~/.config/opencode/opencode.json
+
+# 4. 驗證
+hermes mcp test atlas-go    # 應列出 91 個 tool
+```
+
+### Tool 速覽
+
+| 分類 | 代表 tool | 用途 |
+|------|----------|------|
+| 市場總覽 | `mcp_quickstart`、`macro_get_snapshot_latest`、`crossmarket_get_us_indices` | 一次拿到當前市場快照 |
+| 策略 | `strategy_ranker`、`strategy_list_active`、`strategy_get` | 策略排名與定義 |
+| 風險 | `risk_get_metrics`、`risk_get_drawdown`、`risk_get_commentary` | VaR、回撤、風險評論 |
+| 事件 | `event_calendar`、`event_flow_prediction`、`narrative_get_events` | 事件日曆 + 5 日預測 |
+| 個股 | `stock_get_quote`、`stock_get_fundamentals`、`stock_get_chips`、`stock_get_technical` | 報價 / 基本面 / 籌碼 / 技術 |
+| 系統 | `system_get_health`、`llm_get_health`、`data_get_channels` | 服務健康 |
+
+完整 91 tool 決策樹見 [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md)。
+
+> **重要 env var**（不要再用舊版）：`ATLAS_BASE_URL`、`ATLAS_API_KEY`、`ATLAS_MCP_TOKEN`（取代已廢棄的 `ATLAS_WORK_DIR` / `ATLAS_DATABASE_URL` / `ATLAS_REDIS_URL` / `ATLAS_API_TOKEN`）。完整清單見 [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) §配置。
+
 ## Quick Start
 
 Run application simulation entrypoint:

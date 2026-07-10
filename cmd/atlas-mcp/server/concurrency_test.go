@@ -81,7 +81,7 @@ func TestAuditWriter_ConcurrentWrites(t *testing.T) {
 }
 
 // TestHTTPClient_ConcurrentRequests drives N parallel GETs through one
-// httpClient (which wraps Go's stdlib *http.Client, documented safe for
+// HttpClient (which wraps Go's stdlib *http.Client, documented safe for
 // concurrent use). Asserts no errors and that the upstream saw exactly N
 // requests.
 func TestHTTPClient_ConcurrentRequests(t *testing.T) {
@@ -94,7 +94,7 @@ func TestHTTPClient_ConcurrentRequests(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cli := newHTTPClient(Config{AtlasBaseURL: ts.URL})
+	cli := NewHTTPClient(Config{AtlasBaseURL: ts.URL})
 
 	const n = concurrentHandlerRounds
 	var wg sync.WaitGroup

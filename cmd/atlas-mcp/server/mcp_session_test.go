@@ -44,7 +44,7 @@ func newTestServerWithClient(t *testing.T, clientOpts *mcp.ClientOptions, cfg Co
 	s := &server{
 		cfg:   cfg,
 		audit: audit,
-		cli:   newHTTPClient(cfg),
+		cli:   NewHTTPClient(cfg),
 	}
 
 	cleanup := func() {
