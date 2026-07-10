@@ -1,14 +1,27 @@
 # atlas-mcp 整合指南
 
-## 總覽
+> **⚠️ DEPRECATED（2026-07-10）**：本文件保留作為歷史參考，但**內容已分散到下方兩份權威文件**。Agent 與開發者請改讀新文件：
+>
+> - **部署、配置、env var 速查**：[`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)（source of truth — 與 `cmd/atlas-mcp/main.go` 對齊）
+> - **Agent 5 分鐘設定 SOP**：[`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)（50 行 copy-paste-ready 範例）
+>
+> 本文件存在的理由：避免外部 bookmark 404；內部已知內容過時，新整合請用上方兩份文件。
 
-`cmd/atlas-mcp` 是 atlas-go 的 MCP (Model Context Protocol) server，提供 80+ tools 供外部 AI Agent 調用。支援 **stdio** transport（已實作）及 **SSE/streamable-HTTP**（開發中）。
+---
 
-## 快速開始
+## 總覽（歷史快照，內容已過時）
 
-### Claude Desktop
+`cmd/atlas-mcp` 是 atlas-go 的 MCP (Model Context Protocol) server，提供 **91 個** tools（業務 87 + audit 4，編譯期 assert ∈ [89, 91]），透過 JSON-RPC 2.0 與外部 AI Agent 通訊。支援 **三種 transport**：
 
-編輯 `claude_desktop_config.json`：
+- **stdio**（預設，向後相容 Claude Desktop / Cursor / OpenCode）
+- **SSE**（已 ship，Phase 4；deprecated by MCP spec 但保留相容）
+- **streamable-HTTP**（已 ship，Phase 4；推薦用於 HTTP transport）
+
+## 歷史設定（已過時，僅供考古）
+
+> **下方 JSON 範例的 env var 名稱全部錯誤**。正確的 env var 見 [`cmd/atlas-mcp/README.md` §配置](../cmd/atlas-mcp/README.md#配置)。歷史紀錄保留是為了讓曾經照這份文件設定的人能快速找到「我哪裡做錯了」。
+
+### Claude Desktop（歷史錯誤版本）
 
 ```json
 {
@@ -17,19 +30,36 @@
       "command": "/path/to/atlas-go/cmd/atlas-mcp",
       "args": [],
       "env": {
-        "ATLAS_WORK_DIR": "/path/to/atlas-go",
-        "ATLAS_DATABASE_URL": "postgres://user:pass@localhost:5432/atlas?sslmode=disable",
-        "ATLAS_REDIS_URL": "redis://localhost:6379",
-        "ATLAS_API_TOKEN": "your-mcp-token"
+        "ATLAS_WORK_DIR": "/path/to/atlas-go",                      // ❌ 不存在
+        "ATLAS_DATABASE_URL": "postgres://...",                     // ❌ 應為 DATABASE_URL
+        "ATLAS_REDIS_URL": "redis://localhost:6379",               // ❌ 不存在
+        "ATLAS_API_TOKEN": "your-mcp-token"                        // ❌ 應為 ATLAS_API_KEY
       }
     }
   }
 }
 ```
 
-### OpenClaw / Hermes
+**修正後**（見 `cmd/atlas-mcp/README.md` line 108-123）：
 
-在 `~/.openclaw/mcp.json` 或 `~/.hermes/mcp.json`：
+```json
+{
+  "mcpServers": {
+    "atlas-go": {
+      "command": "/absolute/path/to/bin/atlas-mcp",
+      "args": [],
+      "env": {
+        "ATLAS_BASE_URL": "http://127.0.0.1:18080",
+        "ATLAS_API_KEY": "xxx",
+        "ATLAS_MCP_TOKEN": "yyy",
+        "ATLAS_MCP_AUDIT_LOG": "/var/log/atlas-mcp/audit.log"
+      }
+    }
+  }
+}
+```
+
+### OpenClaw / Hermes（歷史錯誤版本）
 
 ```json
 {
@@ -37,106 +67,36 @@
     "type": "stdio",
     "command": "/path/to/atlas-go/cmd/atlas-mcp",
     "env": {
-      "ATLAS_WORK_DIR": "/path/to/atlas-go",
-      "ATLAS_API_TOKEN": "your-mcp-token"
+      "ATLAS_WORK_DIR": "/path/to/atlas-go",        // ❌ 不存在
+      "ATLAS_API_TOKEN": "your-mcp-token"          // ❌ 應為 ATLAS_API_KEY
     }
   }
 }
 ```
 
-### OpenCode CLI
-
-在 `.opencode/opencode.json` 內 MCP server 區新增：
+### OpenCode CLI（歷史錯誤版本）
 
 ```json
 {
   "name": "atlas-mcp",
-  "command": "/path/to/atlas-go/cmd/atlas-mcp"
+  "command": "/path/to/atlas-go/cmd/atlas-mcp"     // ❌ OpenCode 應為 type/command 結構
 }
 ```
 
-## 工具分類
+> 上述三個 client 的**正確** JSON/YAML 範例見 [`AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)。
 
-| 分類 | 工具 | 用途 |
-|------|------|------|
-| **市場總覽** | `mcp_quickstart`、`macro_get_snapshot_latest`、`crossmarket_get_us_indices`、`capital_flow_daily`、`capital_flow_summary` | 快速取得當前市場快照 |
-| **策略推薦** | `strategy_ranker`、`strategy_list_active`、`strategy_get`、`strategy_get_attribution` | 策略績效排名與進出場判斷 |
-| **風險管理** | `risk_get_metrics`、`risk_get_drawdown`、`risk_get_correlation_matrix`、`risk_get_commentary` | VaR、回撤、相關係數矩陣 |
-| **事件監控** | `event_calendar`、`event_flow_prediction`、`narrative_get_events`、`alert_list_unacknowledged` | 事件日曆、資金流預測、警報 |
-| **回測分析** | `experiment_history`、`experiment_diff`、`strategy_get_attribution` | 實驗對比、策略歸因 |
-| **系統狀態** | `system_get_health`、`system_get_circuit_breaker`、`data_get_channels`、`llm_get_health` | 服務健康、資料管線、LLM 路由 |
+## 為什麼這份文件被棄用
 
-## Prompt 模板
+2026-07-10 hermes agent 嘗試按本文件設定時，發現所有 env var 都是舊版殘留（`ATLAS_WORK_DIR` / `ATLAS_DATABASE_URL` / `ATLAS_REDIS_URL` / `ATLAS_API_TOKEN`），但 `cmd/atlas-mcp/main.go` 實際讀的是 `ATLAS_BASE_URL` / `ATLAS_API_KEY` / `ATLAS_MCP_TOKEN`。文件未跟上 Phase 4 transport 實作（仍寫「開發中」）、工具數從 80+ 增到 91 卻未更新、且未指向 `cmd/atlas-mcp/README.md`（source of truth）。
 
-MCP server 提供 6 個預設 Prompt 模板，外部 AI 可按名稱調用：
+修訂：見 PR 系列「atlas-mcp onboarding 2026 Q3」。
 
-| Prompt | 用途 |
-|--------|------|
-| `taiwan_quick_look` | 台股今日快覽：宏觀快照 + 資金流向 + 壓力指數 + 事件 |
-| `strategy_advice` | 策略建議：策略排名 + 風險評論 + 盤勢歷史 |
-| `stock_health_check` | 持股健檢：輸入股票代號（`symbol="2330"`） |
-| `daily_market_briefing` | 每日市場簡報（英文） |
-| `risk_check` | 投資組合風險評估 |
-| `regime_interpretation` | 盤勢解讀（`regime="RISK_ON"`） |
+## 給文件的維護者
 
-## MCP Resources
+- **新增 MCP 設定說明**：請改寫到 `cmd/atlas-mcp/README.md`（與 main.go 同 package，最容易保持同步）
+- **新增 client 範例**：請改寫到 `.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`
+- **不建議**更新本文件（已標 deprecated，留作歷史）
 
-| URI | 內容 |
-|-----|------|
-| `atlas://strategies/active` | 當前活躍策略定義（JSON） |
-| `atlas://market/regime` | 最新盤勢分類與壓力指數 |
-| `atlas://events/today` | 今日事件清單 |
+---
 
-## 常用任務組合
-
-### 每日摘要
-
-```
-1. 調用 mcp_quickstart → 取得當前市場快照 + 策略排名 + 壓力指數 + 事件
-2. 調用 capital_flow_daily → 七大資金勢力分解
-3. 調用 narrative_get_events → 宏觀事件敘事
-```
-
-### 策略訊號判斷
-
-```
-1. 調用 strategy_ranker → 取得排名
-2. 調用 strategy_get(id="all_weather") → 取得詳細定義
-3. 調用 risk_get_metrics → 確認風險閾值
-4. 調用 event_flow_prediction → 確認事件驅動方向
-```
-
-### 個股健檢
-
-```
-1. 調用 trace_get_decision_chain → 該股因果鏈
-2. 調用 universe_get_sessions → 歷史模擬 session
-3. 調用 strategy_get(id="growth") → 對應策略詳情
-```
-
-## 認證與 Tier 權限
-
-- **Public tier**：mcp_quickstart、macro_get_snapshot_latest、event_calendar、capital_flow_summary
-- **Registered tier**：+ strategy_ranker、risk_get_metrics、narrative_get_events
-- **Premium tier**：全部 80+ tools
-
-Token 透過 `ATLAS_API_TOKEN` 環境變數或在 settings 中傳入 `Authorization: Bearer <token>`。
-
-## 常見問題
-
-### tools 列表顯示不完整
-
-確認 token 的 tier 層級是否有足夠權限。premium token 可看到全部 tools。
-
-### 連接失敗
-
-1. 確認 `ATLAS_WORK_DIR` 指向正確的 atlas-go 根目錄
-2. 確認 PostgreSQL + Redis 運行中
-3. 確認 `ATLAS_API_TOKEN` 與 token store 內一致
-4. 查看 server log：`atlas-mcp` 啟動時會輸出 tool count
-
-### 數據為空
-
-1. 確認 Gateway 初始化成功（log 會顯示 `[Gateway] initialized with N channels`）
-2. `crossmarket_get_us_indices` 使用 Yahoo Finance 即時資料，需要網路連線
-3. 盤中資料可能延遲 5-15 分鐘
+**檔案歷史**：建立於 v0.0.0.32（2026-06-30），於 v0.0.0.32 補遺（2026-07-10）標記 deprecated。
