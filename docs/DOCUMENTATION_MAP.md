@@ -386,8 +386,8 @@ du -sh .omo/            # 監控 AI 工作區總大小
 
 ### 2026-06-26 PR #752 修復文件斷裂
 
-- `git mv .omo/CONSTITUTION.md → docs/CONSTITUTION.md`
-- `git mv .omo/ITERATION_GATE.md → docs/ITERATION_GATE.md`
+- `git mv .omo/CONSTITUTION.md → docs/REFERENCE/CONSTITUTION.md`
+- `git mv .omo/ITERATION_GATE.md → docs/REFERENCE/ITERATION_GATE.md`
 - 更新 `AGENTS.md` 引用
 
 ### 2026-06-26 PR #749 建立文件存放標準

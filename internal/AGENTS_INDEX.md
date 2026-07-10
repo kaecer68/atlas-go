@@ -112,7 +112,7 @@
 ## 參考
 
 - 完整成熟度對照表：`internal/MATURITY.md`
-- 跨模組陷阱詳細參考：`docs/TRAPS.md`
+- 跨模組陷阱詳細參考：`docs/REFERENCE/TRAPS.md`
 - 根路由與全域規則：`AGENTS.md`
 - 21 保留 AGENTS.md 模組清單：`AGENTS.md` §「模組數量對照」
 - v0.0.0.32 完整 release notes：`CHANGELOG.md` v0.0.0.32 區段

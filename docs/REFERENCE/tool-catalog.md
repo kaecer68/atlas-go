@@ -1,74 +1,20 @@
-# Atlas Agent Tools — 實戰指南
+## 工具數量
 
-> **本文件**：給 AI agent 看的「何時該呼叫哪個 tool」決策表 + 完整 catalog（約 91 個 tool，實際數量依 MCP server config 而定：基礎 89 個，`SamplingEnabled` / `ElicitationEnabled` 啟用最多 +2）。確切數字由 `mcp/tools/list` 或 `system_get_health` 回傳。
-> **完整 schema / 安全 / 部署**：[`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md)
-> **整合到 Claude Desktop / OpenClaw / Hermes**：[`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)
-> **底層 workflow 對應**：[`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md)
-> **投資人查詢範本**（自然語言 → tool）：[`docs/operations/stock-mcp-query-templates.md`](./operations/stock-mcp-query-templates.md)
-> **Phase 1 stdio vs Phase 2 SSE/HTTP**：見 [agent-mcp-server.md](specs/agent-mcp-server.md) §3。
+業務 87 + audit 4 = 91（基礎 87, +2, 編譯期 assert ∈ [89, 91]）
+
+# atlas-mcp Tool Catalog
+
+> **91 tools** grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
+> For natural language query examples, see [`docs/INVESTOR/query-examples.md`](../INVESTOR/query-examples.md).
 >
-> ⚠️ **先讀這條**：atlas-mcp 的 tool 定義是 compile-time 產生的，反映 `atlas-mcp` binary **建置時**的 Go 程式碼。若你發現 tool 行為與本文件不符，可能是 atlas-mcp binary 未在 Go 程式碼變更後重新 `go build`。程式碼層級的查詢（callers、dependencies、implementation details）請改用 **即時索引**的程式碼智慧工具：GitNexus、codebase-memory、codegraph。詳見 [`docs/TOOLS.md`](./TOOLS.md)。
-
----
-
-## 5 分鐘決策樹
-
-```
-你要做什麼？
-├── 回答「現在市場怎樣？」
-│   ├── 整體 regime  → regime_get_history
-│   ├── 跨市場狀態  → crossmarket_get_status
-│   └── 個股敘事    → narrative_get_events
-│
-├── 查 portfolio 狀態
-│   ├── 風險指標    → risk_get_metrics
-│   ├── Drawdown    → risk_get_drawdown
-│   └── 持倉健康    → strategy_list_active
-│
-├── 觸發動作（需 audit）
-│   ├── 跑回測      → task_list → task_get_events
-│   ├── 評分策略     → experiment_judge
-│   ├── 凍結/解凍   → control_* (read-only, audit-only)
-│   └── 警報確認     → alert_list
-│
-└── 監控系統健康
-    ├── LLM router  → llm_get_health
-    ├── 整體        → system_get_health
-    ├── 資料品質    → data_get_quality
-    └── 警報計數    → alert_get_stats
-
-├── 查程式碼實作 / 相依性
-│   └── → 見 [`docs/TOOLS.md`](./TOOLS.md)（GitNexus / codebase-memory / CodeGraph 三套程式碼智慧工具的路由決策樹）
-```
-
----
-
-## 任務 → Tool 反向索引（**給 hermes/openclaw agent 投資人查詢直接看這張表**）
-
-不知道該用哪個 tool？依任務查表：
-
-| Agent 任務 | 首選 tool | 備選 / companion | 注意 |
-|-----------|----------|-----------------|------|
-| **Daily Briefing**（每日簡報） | `regime_get_history` + `crossmarket_get_status` + `narrative_get_bundle` | `macro_get_stress_index_current` + `alert_list_unacknowledged` | 早晚各跑一次 |
-| **市場全景** | `macro_get_snapshot_latest` + `regime_get_history` | `crossmarket_get_us_indices` + `macro_get_capital_flow_latest` | 開盤前必跑 |
-| **資金流向** | `capital_flow_daily` | `capital_flow_summary` | 確認多空共振與主力方向 |
-| **個股健檢** | `stock_get_quote` + `stock_get_fundamentals` | `stock_get_chips` + `stock_get_technical` | 輸入台股代號，如 `2330` |
-| **策略排名** | `strategy_ranker` | `strategy_list_active` + `strategy_get_summary` | 依勝率排序，注意 tier 標籤 |
-| **Risk Review**（風險審查） | `risk_get_metrics` + `risk_get_drawdown` | `risk_get_correlation_matrix` + `risk_get_commentary` | 若 drawdown > threshold 觸發 alert |
-| **Portfolio Health**（持倉健康） | `strategy_list_active` + `strategy_get_summary` | `strategy_get_attribution` + `synergy_get_darwinian_status` | 確認線上策略狀態 |
-| **Experiment Eval**（實驗評審） | `experiment_diff` + `experiment_judge` | `experiment_history` + `synergy_get_darwinian_trend` | `experiment_judge` 有 side-effect |
-| **System Health**（系統健康） | `system_get_health` | `system_get_circuit_breaker` + `system_get_data_pipeline` | 任何任務的第一步 |
-| **LLM Health** | `llm_get_health` + `llm_get_cost` | `trace_get_agent_observatory` | 路由異常時用 |
-| **Alert Triage**（警報分類） | `alert_list_unacknowledged` + `alert_get_stats` | `alert_get_rules` | 確認後用 admin API acknowledge |
-| **自我觀測**（我的呼叫紀錄） | `mcp_get_session_topology` + `mcp_get_call_stats` | `mcp_get_top_slow_tools` + `mcp_anomaly_get_recent` | audit 用途，非日常操作 |
-| **稅務查詢** | `report_get_tax_snapshot` | `report_get_performance` | 僅在需要稅務報告時 |
-| **排程管理** | `scheduler_get_status` + `task_list` | `task_get_events` | 查看背景任務狀態 |
-
-> 完整「自然語言 → tool」範本見 [`docs/operations/stock-mcp-query-templates.md`](./operations/stock-mcp-query-templates.md)（給投資人 agent 用：一句話「2330 現在能不能買」對應到 `stock_get_quote`）。
-
----
+> This is the authoritative catalog (moved from `docs/REFERENCE/tool-catalog.md` which is deprecated).
 
 ## 完整工具 Catalog（約 91 個 tool，Phase 2 全部上線）
+
+## 工具數量
+
+業務 87 + audit 4 = 91（**基礎 87**, **+2** sampling/elicitation, 編譯期 assert ∈ [89, 91]）
+
 
 ### Regime（1 個）
 | Tool | 用途 |
@@ -218,7 +164,7 @@
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
 
-> **API Contract**：[`docs/specs/stock-api-contract.md`](specs/stock-api-contract.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
+> **API Contract**：[`../specs/stock-api-contract.md`](../specs/stock-api-contract.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
 > **Frontend 狀態**：client_web「個股快查」頁面（Issue #1038）已 ship — 後端 normalize（PR-A #1044）+ 前端 14 檔（PR-B #1045）+ 文件同步（PR-C #1046）+ RSI pre-existing bug fix（PR #1047）。頁面路徑 `/client/quote?symbol=<4-6 digit symbol>`。剩餘 follow-up 見 `.omo/plans/2026-07-09-stock-quote-followup.md`。
 
 ### Universe（2 個）
@@ -250,7 +196,7 @@
 | `mcp_elicit_user` | 向使用者請求結構化輸入（schema validate） | 預設 OFF，`ATLAS_MCP_ELICITATION_ENABLED=true` |
 | `mcp_sample_llm` | 透過 atlas LLM router 抽樣（讓 server 呼叫 LLM 完成 model-assisted 工具） | 預設 OFF，`ATLAS_MCP_SAMPLING_ENABLED=true` |
 
-> 安全邊界：`mcp_roots_read_file` 強制 O_RDONLY、TOCTOU 防護、size cap、AllowedRoots 檢查；詳見 [spec Phase 4 B](./specs/agent-mcp-server.md)。
+> 安全邊界：`mcp_roots_read_file` 強制 O_RDONLY、TOCTOU 防護、size cap、AllowedRoots 檢查；詳見 [spec Phase 4 B](../specs/agent-mcp-server.md)。
 
 ### MCP Audit / Observability（6 個 — agent 自我觀測）
 
@@ -271,33 +217,3 @@
 | `prism_get_training_results` | PRISM cohort 訓練結果 |
 
 ---
-
-## 排除的 admin / destructive 端點（per spec §3.2）
-
-以下端點**不暴露給 MCP**（需要 admin 權限或屬於 destructive 操作）：
-
-| 類別 | 排除清單 |
-|------|---------|
-| Admin 配置 | `/admin/reload-config`、`/api/admin/calibrate-thresholds`、`/api/dashboard/api-keys/update` |
-| Control mutations | `/api/control/sector-ban`、`/api/control/set-model-weight`、`/api/control/pause-agent`、`/api/control/resume-agent` |
-| Experiment mutations | `/api/experiment/promote`、`/api/experiment/revert` |
-| Alert mutations | `/api/alerts/acknowledge`、`/api/alerts/acknowledge-bulk`、`/api/alerts/resolve`、`/api/alerts/silence` |
-| Synergy mutations | `/api/synergy/l2-4-schedule/{start,stop,reset,update}` |
-| Scheduler mutations | `/api/scheduler/toggle` |
-| Strategy mutations | `/api/strategies/{id}/annotate` |
-| Task mutations | `/api/tasks`（POST）、`/api/tasks/{id}/{cancel,retry,confirm}` |
-
-這些操作仍可透過 `/admin/` 管理後台或 HTTP 呼叫觸發（需通過 apigateway 認證）。
-
----
-
-## 對應的底層 Workflow
-
-每個 tool 都對應 atlas-go 一條 workflow（WA-XXX），見 [`WORKFLOW_MAP.md`](./WORKFLOW_MAP.md) §3。
-例如：
-- `regime_get_history` → WA-200（體制判定）
-- `strategy_get_summary` → WA-500（策略演化）
-- `risk_get_metrics` → WA-400..403（風險閘門）
-- `trace_get_reasoning` → WA-302（推理 trace）
-
-完整對照表見 [`specs/agent-mcp-server.md`](./specs/agent-mcp-server.md) §3.1。

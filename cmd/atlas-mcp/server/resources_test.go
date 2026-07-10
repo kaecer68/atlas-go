@@ -47,13 +47,13 @@ func TestHandleResourceToolsCatalog_OK(t *testing.T) {
 	s, _, done := newTestHarness(t)
 	defer done()
 
-	// Create a temp AGENT_TOOLS.md and chdir into it
+	// Create a temp tool-catalog.md in docs/REFERENCE/ and chdir into it
 	tmp := t.TempDir()
-	catalogDir := filepath.Join(tmp, "docs")
-	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
+	refDir := filepath.Join(tmp, "docs", "REFERENCE")
+	if err := os.MkdirAll(refDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(catalogDir, "AGENT_TOOLS.md"), []byte("# Test catalog\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(refDir, "tool-catalog.md"), []byte("# Test catalog\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	origCwd, _ := os.Getwd()
@@ -80,7 +80,7 @@ func TestHandleResourceToolsCatalog_MissingFile(t *testing.T) {
 
 	_, err := s.handleResourceToolsCatalog(context.Background(), nil)
 	if err == nil {
-		t.Fatal("expected error when docs/AGENT_TOOLS.md missing")
+		t.Fatal("expected error when docs/REFERENCE/tool-catalog.md missing")
 	}
 }
 

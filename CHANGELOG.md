@@ -128,7 +128,7 @@
 - `docs/operations/mcp-deploy.md` — Phase 4 metrics + anomaly detector + Roots env vars deployment guide（66 行增量）。
 - `docs/specs/agent-mcp-server.md` — Phase 4 Direction A/B 工具與協議擴充章節（93 行增量）。
 - `docs/operations/retail-investor-landing-audit.md` — Phase 2 retail-investor-landing audit report（PR #873，b296dac8）。
-- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/WORKFLOW_MAP.md` / `docs/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）+ `docs/PROCESSES.yaml`（488 行結構化 workflow metadata）。P0 補齊。
+- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/WORKFLOW_MAP.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）+ `docs/REFERENCE/PROCESSES.yaml`（488 行結構化 workflow metadata）。P0 補齊。
 - **Agent Interface roadmap v2** (PR #876): `docs/plans/agent-interface-roadmap.md` 從「實作未開始」更新為反映 `cmd/atlas-mcp/` 真實進度（Phase 1 核心橋接 ~84 tools / stdio transport / TokenAuth / audit v2 / anomaly / 協議擴充標記完成；Phase 2 SSE/streamable-HTTP transport 與 binary merge 至 `cmd/atlas` 標記 TODO；新增 P5 列「PR #875 已併入主文件」；文件版本升 v2）。
 
 ### Known Limitations (deferred to v0.0.0.27)
@@ -158,7 +158,7 @@
 ### Documentation
 - `docs/operations/mcp-deploy.md` and `docs/specs/agent-mcp-server.md` — Item 3 admin API + Item 2 analytics tool descriptions to be updated in follow-up (deferred to v0.0.0.26).
 - `docs/specs/agent-mcp-phase3-residual.md` — all 3 spec items marked ✅ shipped (was 🟡 DRAFT before this release).
-- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/WORKFLOW_MAP.md` / `docs/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）；`docs/PROCESSES.yaml` 新增（488 行結構化 workflow metadata，21 條 workflow × Name / Description / Inputs / Outputs / Tools / Owner / Phase / Tags）。P0 補齊。
+- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/WORKFLOW_MAP.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）；`docs/REFERENCE/PROCESSES.yaml` 新增（488 行結構化 workflow metadata，21 條 workflow × Name / Description / Inputs / Outputs / Tools / Owner / Phase / Tags）。P0 補齊。
 - **Agent Interface roadmap v2** (PR #876): `docs/plans/agent-interface-roadmap.md` 從「實作未開始」更新為反映 `cmd/atlas-mcp/` 真實進度 — Phase 1（核心橋接，~84 tools / stdio transport / TokenAuth / audit v2 / anomaly / 協議擴充）標記完成；Phase 2 SSE/streamable-HTTP transport 與 binary merge 至 `cmd/atlas` 標記 TODO；新增 P5 列（PR #875 已併入主文件）；文件版本升 v2。
 
 ### Known Limitations (P1, by-design, documented in commit `c01f1d88` and T3 PR #858)
@@ -189,7 +189,7 @@ All 3 PRs passed 5-section Oracle audit and the constitution check (gateway + ra
 - **`make dev` would have hit EADDRINUSE on port 8081**: dev target used container_name `atlas-fubon-proxy` in `docker compose stop` instead of service name `fubon-proxy`. `2>/dev/null || true` masked the error, fubon-proxy container kept running, then ProcessManager tried to spawn its own local subprocess on port 8081 → crash. Self-consistent with `dev-stop` target and the TRAPS.md warning about this exact pitfall (auto-fixed during `/review`).
 
 ### Documentation
-- `docs/TRAPS.md` — added "Search Before Building" principle (Layer 1/2/3 check before generating new infra).
+- `docs/REFERENCE/TRAPS.md` — added "Search Before Building" principle (Layer 1/2/3 check before generating new infra).
 - `docs/guides/install-and-deploy.md` — added "Local development workflow" section documenting `make dev` and the postgres race gotcha.
 
 ## [0.0.0.22] - 2026-06-28
@@ -212,7 +212,7 @@ All 3 PRs passed 5-section Oracle audit and the constitution check (gateway + ra
 
 ### Documentation
 - `docs/investigations/2026-06-28-boot-loop-multi-service.md` — full RCA: 9 root causes with docker events, code evidence, commit references, and the 5-min boot test protocol.
-- `docs/TRAPS.md` Deploy/Docker section: ENTRYPOINT vs command conflict, env_file precedence, Dockerfile hardcoded healthcheck.
+- `docs/REFERENCE/TRAPS.md` Deploy/Docker section: ENTRYPOINT vs command conflict, env_file precedence, Dockerfile hardcoded healthcheck.
 - `docs/ENVIRONMENT.md` § Fubon SDK: revised away from "PyPI 404" speculation to accurate description (not on PyPI, official CDN only, wheel platform distribution table).
 - `docs/guides/install-and-deploy.md`: env_file gotcha + `openssl rand -hex 32` for `ATLAS_API_KEY`.
 - `services/fubon-proxy/README.md`: Docker deploy design section (wheel install, .p12 mount).
@@ -453,7 +453,7 @@ Wave 10 L2.1 (OTel OTLP production) + L2.2 polish complete. App traces now flow 
 
 ### Changed — Documentation polish (PR #713 + #718)
 
-- CHANGELOG v0.0.0.18 entry corrected: `internal/monitoring/AGENTS.md` line counts, `docs/ENVIRONMENT.md` Fubon AI discoverability, `docs/events/drift-detector.md` test count (15: 13 V2 + 2 V1), `docs/roadmap.md` Wave 9 PR structure (5 PRs #695-#700), `docs/modules/README.md` version header.
+- CHANGELOG v0.0.0.18 entry corrected: `internal/monitoring/AGENTS.md` line counts, `docs/ENVIRONMENT.md` Fubon AI discoverability, `docs/REFERENCE/events/drift-detector.md` test count (15: 13 V2 + 2 V1), `docs/roadmap.md` Wave 9 PR structure (5 PRs #695-#700), `docs/modules/README.md` version header.
 - README + `docs/operations_playbook.md` updated with v0.0.0.18 entries and Wave 10 L2.1/L2.2 references.
 
 ### Verification
@@ -497,7 +497,7 @@ The v0.0.0.17 Wave 9 observability wire passed a 5-second dry-run smoke test, bu
 - `internal/monitoring/AGENTS.md:194` — replaced pre-#704 `只回傳第一個` description with v0.0.0.18+ behavior: `errors.Join` aggregation + defer LIFO cleanup + reference clearing on retry.
 - `internal/monitoring/AGENTS.md:209` — added `sse_handler_subscriptions.go` reference and the cross-mode `RegisterDashboardBufferSubs` re-registration pattern (`run()` + `runLiveTrading()` both call on their respective buses).
 - `docs/ENVIRONMENT.md` — added "Story so far" paragraph describing how the 5-second dry-run smoke test could not exercise the 3 production bugs v0.0.0.18 closes.
-- `docs/events/drift-detector.md` — added "v0.0.0.18+ 整合測試" section listing the 2 new bus-level integration tests.
+- `docs/REFERENCE/events/drift-detector.md` — added "v0.0.0.18+ 整合測試" section listing the 2 new bus-level integration tests.
 - `docs/roadmap.md` — extended Wave 9 version list to include v0.0.0.18.
 - `docs/modules/README.md` — bumped to v0.0.0.18 (Wave 9 gap fixes 收尾版).
 - `README.md` (PR #718) — added v0.0.0.18 entry in Recent updates.
@@ -671,8 +671,8 @@ PR #695 + PR #696 land in main, completing the v0.0.0.8 (2026-06-22) Wave 9 obse
 
 #### 文件同步
 
-- `docs/events/drift-detector.md`:Schema Version 2 + 5 個 v2 欄位 + 9 個 v2 測試描述
-- `docs/events/INDEX.md`:EventDriftDetected 標記為 v2,Schema Version 說明段落更新
+- `docs/REFERENCE/events/drift-detector.md`:Schema Version 2 + 5 個 v2 欄位 + 9 個 v2 測試描述
+- `docs/REFERENCE/events/INDEX.md`:EventDriftDetected 標記為 v2,Schema Version 說明段落更新
 - `internal/monitoring/AGENTS.md`:新增 DriftDetector v2 段落(Architecture、Event Subscriptions、9 個模組陷阱、向後相容保證)
 
 #### 與 PR #632 Wave 9 plan 的關聯
@@ -806,7 +806,7 @@ PR #695 + PR #696 land in main, completing the v0.0.0.8 (2026-06-22) Wave 9 obse
 - 5 EventType constants + `eventDescriptions` entries in `internal/eventbus/eventbus.go` (Wave 9.0a)
 - 4 service framework interfaces in `internal/monitoring/service/` (Wave 9.0b): `WeightProvider`, `RegimeDebouncer`, `DriftDetector`, `ChannelHealthSynthesizer` (replaced with full implementations in 9.1-9.5)
 - 5 Prometheus alert rules in `monitoring/rules/wave9_*.yml` (all `enabled: false` by default per PD-W9-1)
-- 5 new docs in `docs/events/`: `channel-individual-health.md`, `regime-change-confirmed.md`, `factor-weight-regression.md`, `drift-detector.md`, `ingestion-lag-spike.md`
+- 5 new docs in `docs/REFERENCE/events/`: `channel-individual-health.md`, `regime-change-confirmed.md`, `factor-weight-regression.md`, `drift-detector.md`, `ingestion-lag-spike.md`
 
 ### Changed — Forward-Compat Design Verified
 
@@ -849,8 +849,8 @@ This preserves the semantic distinction between "fully allowed", "modified after
 ### Documentation — Wave 8.10 Docs 收尾 + Wave 8.2 收尾
 
 - PR #627: 補寫 3 個既有事件 doc（`narrative-event.md`, `health-alert.md`, `promotion-recorded.md`）+ 更新 INDEX.md + P3 編號對齊。
-- Wave 8.2 收尾: 新建 `docs/events/risk-gate-overridden.md`；更新 `docs/events/risk-gate-allowed.md` 反映純 ALLOW 語意。
-- `docs/events/INDEX.md`: 加入 `EventRiskGateOverridden` 列 + Wave 8.11+ LLM 事件推遲註記。
+- Wave 8.2 收尾: 新建 `docs/REFERENCE/events/risk-gate-overridden.md`；更新 `docs/REFERENCE/events/risk-gate-allowed.md` 反映純 ALLOW 語意。
+- `docs/REFERENCE/events/INDEX.md`: 加入 `EventRiskGateOverridden` 列 + Wave 8.11+ LLM 事件推遲註記。
 
 ### Deferred — LLMAnnotator 3 events pushed to Wave 8.11+
 

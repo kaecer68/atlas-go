@@ -54,7 +54,7 @@ atlas-go 同時也是 **MCP server**，提供 91 個 tool 讓 agent 直接查詢
 | 「現在市場風險怎樣？」 | `risk_get_metrics` | `VaR 95%: -2.3%, 最大回撤 -8.1%` |
 | 「今天應該關注什麼？」 | `narrative_get_bundle` | `今日重點: <摘要>` |
 
-完整「任務 → Tool」對照表見 [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md)；投資人常見查詢範本見 [`docs/operations/stock-mcp-query-templates.md`](docs/operations/stock-mcp-query-templates.md)。
+完整「任務 → Tool」對照表見 [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)；投資人常見查詢範本見 [`docs/operations/stock-mcp-query-templates.md`](docs/operations/stock-mcp-query-templates.md)。
 
 > **設定只用一行**：`curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash` — 不需 Go toolchain，詳見下面 §Atlas as MCP Server。
 
@@ -189,7 +189,7 @@ make install-mcp      # 編譯後安裝到 ~/.local/bin
 | 個股 | `stock_get_quote`、`stock_get_fundamentals`、`stock_get_chips`、`stock_get_technical` | 報價 / 基本面 / 籌碼 / 技術 |
 | 系統 | `system_get_health`、`llm_get_health`、`data_get_channels` | 服務健康 |
 
-完整 91 tool 決策樹見 [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md)。
+完整 91 tool 決策樹見 [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)。
 
 > **重要 env var**（不要再用舊版）：`ATLAS_BASE_URL`、`ATLAS_API_KEY`、`ATLAS_MCP_TOKEN`（取代已廢棄的 `ATLAS_WORK_DIR` / `ATLAS_DATABASE_URL` / `ATLAS_REDIS_URL` / `ATLAS_API_TOKEN`）。完整清單見 [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) §配置。
 

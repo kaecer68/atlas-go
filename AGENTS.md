@@ -35,13 +35,13 @@
 
 | 知識類型 | 歸屬位置 |
 |----------|---------|
-| 跨模組全域規則 | 本文件 + `docs/TRAPS.md` |
+| 跨模組全域規則 | 本文件 + `docs/REFERENCE/TRAPS.md` |
 | 模組內部陷阱/API/流程（hot-path） | `internal/<mod>/AGENTS.md`（**21 個保留模組**） |
 | 模組技術規格 | `docs/specs/<topic>.md` |
 | 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
 | 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
 | CI / pipeline 設定 | `.github/workflows/`、`.github/instructions/` |
-| 憲法級強制規範 | `docs/CONSTITUTION.md`、`docs/ITERATION_GATE.md`、`internal/apigateway/CONSTITUTION.md` |
+| 憲法級強制規範 | `docs/REFERENCE/CONSTITUTION.md`、`docs/REFERENCE/ITERATION_GATE.md`、`internal/apigateway/CONSTITUTION.md` |
 | 規範性 / 設計文件 / 穩定 reference | `docs/`（**不應放 `.omo/`**）；**短期 PR 計畫 → `.omo/plans/`** |
 
 **防膨脹規則**：
@@ -52,8 +52,8 @@
 ## 🔗 文件路由
 
 ### Agent 入門（外部 AI 優先讀）
-- [`docs/AGENT_ONBOARDING.md`](docs/AGENT_ONBOARDING.md) — 5 分鐘速讀 atlas 全貌
-- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — **91** 個 tool 決策樹與完整 catalog
+- [`docs/INVESTOR/README.md`](docs/INVESTOR/README.md) — 5 分鐘速讀 atlas 全貌
+- [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) — **91** 個 tool 完整 catalog
 - [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — **MCP 給 agent 的唯一入口**，部署/配置/91 tool 總覽
 - [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md) — 50 行 MCP 設定 SOP（Hermes/OpenClaw/Claude/Cursor/OpenCode 5 種 client）
 
@@ -61,14 +61,14 @@
 - [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — 首次啟動、CI 指令、系統初始化順序
 
 ### 規則體系
-- [`docs/TRAPS.md`](docs/TRAPS.md) — **跨模組陷阱完整參考**（單一權威來源）
-- [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) — 深度開發憲法
-- [`docs/ITERATION_GATE.md`](docs/ITERATION_GATE.md) — 5 Gate 自我檢查規範
-- [`docs/GUIDELINES_INDEX.md`](docs/GUIDELINES_INDEX.md) — 規範階層與使用情境路由
+- [`docs/REFERENCE/TRAPS.md`](docs/REFERENCE/TRAPS.md) — **跨模組陷阱完整參考**（單一權威來源）
+- [`docs/REFERENCE/CONSTITUTION.md`](docs/REFERENCE/CONSTITUTION.md) — 深度開發憲法
+- [`docs/REFERENCE/ITERATION_GATE.md`](docs/REFERENCE/ITERATION_GATE.md) — 5 Gate 自我檢查規範
+- [`docs/REFERENCE/GUIDELINES_INDEX.md`](docs/REFERENCE/GUIDELINES_INDEX.md) — 規範階層與使用情境路由
 
 ### 架構與設計
 - [`docs/architecture.md`](docs/architecture.md) — 分層設計原則
-- [`docs/PARAMETER_SYSTEM.md`](docs/PARAMETER_SYSTEM.md) — 參數管理系統（禁止硬編碼 magic number）
+- [`docs/REFERENCE/PARAMETER_SYSTEM.md`](docs/REFERENCE/PARAMETER_SYSTEM.md) — 參數管理系統（禁止硬編碼 magic number）
 - [`internal/apigateway/CONSTITUTION.md`](internal/apigateway/CONSTITUTION.md) — 數據源憲法（6 條文 + 3 附錄）
 
 ### 模組索引
@@ -84,7 +84,7 @@
 ### 環境與工具
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — 外部依賴與環境狀態
 - [`docs/TOOLS.md`](docs/TOOLS.md) — 程式碼智慧工具（GitNexus / codebase-memory / codegraph 路由決策樹）
-- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
+- [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
 - [`docs/operations/version-bumping.md`](docs/operations/version-bumping.md) — **Version bump SOP**（AI coding release 必走 `make bump-version` + `make sync-version` + `make ci` 三步）
 - [`CLAUDE.md`](CLAUDE.md) — Claude Code 專屬設定（部署、前端架構、token 效率規則）
 
@@ -100,19 +100,19 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 |------|------|------|
 | Roadmap (規劃藍圖) | `docs/specs/agent-mcp-server.md` | canonical spec + 開放議題(roadmap v2 內容已併入此 spec) |
 | MCP 接入（外部 agent） | `[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) + [skill](.claude/skills/atlas-mcp-integration/SKILL.md) | 部署配置、Claude/Cursor/OpenCode 設定 |
-| Tool 導覽 | `[`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 91 tools 決策樹與 task→tool 反向索引 |
-| Workflow Map | `docs/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
-| Process 標註 | `docs/PROCESSES.yaml` | 結構化 workflow metadata |
+| Tool 導覽 | `[`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 91 tools 決策樹與完整 catalog |
+| Workflow Map | `docs/REFERENCE/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
+| Process 標註 | `docs/REFERENCE/PROCESSES.yaml` | 結構化 workflow metadata |
 | MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 84+ tools、auth、audit、JSON Schema 模板 |
 | MCP 模組陷阱 | `[`cmd/atlas-mcp/server/AGENTS.md`](cmd/atlas-mcp/server/AGENTS.md) | 66 .go 檔案的 hot-path 陷阱（34 非測試 + 32 測試,命名/相依/稽核/認證） |
 | 標註 SOP | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml |
-| Onboarding | `docs/AGENT_ONBOARDING.md` | 5 分鐘上手 |
+| Onboarding | `docs/INVESTOR/README.md` | 5 分鐘上手 |
 
 **狀態**：P0 已完成（PROCESSES.yaml + AGENTS.md 本章節）；P0 補遺（2026-07-03）增加 2 個 atlas-mcp-* skill、MCP 模組陷阱、README 更新、AGENT_TOOLS 補完；SSE/streamable-HTTP transport + audit log retention 已 ship（Phase 4, PR #807 / PR #1064）；P1 殘留：atlas-mcp onboarding 改進（PR 系列，2026-07-10 啟動）；P2 殘留：binary merge、retention period、license、WebSocket。
 
 ## ⚠️ 高頻陷阱速查
 
-> 完整列表 → **[`docs/TRAPS.md`](docs/TRAPS.md)**（單一權威來源）。以下僅列最常觸發的陷阱：
+> 完整列表 → **[`docs/REFERENCE/TRAPS.md`](docs/REFERENCE/TRAPS.md)**（單一權威來源）。以下僅列最常觸發的陷阱：
 
 | 陷阱 | 一句話 |
 |------|--------|
@@ -124,12 +124,12 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | 資安設定 | 修改 security 相關配置（API key、sslmode、live broker、data source channel）前必看 [SECURITY.md](SECURITY.md) 與 [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) |
 | 平行重複實作 | 新增功能前用 GitNexus `query` + codebase-memory 檢查重疊 |
-| **LLM health 401** | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處 rebuild 後仍 401。見 `docs/TRAPS.md` 對應 entry 與 PR #931。 |
+| **LLM health 401** | `/api/llm/health` 必須**同步**加到 `handler.go authFreeExactPaths` + `main.go isPublicPath`，只改一處 rebuild 後仍 401。見 `docs/REFERENCE/TRAPS.md` 對應 entry 與 PR #931。 |
 | **Prometheus metric 命名空間** | 新 metric 必須 `atlas_<feature>_<measurement>_total` 格式，無前綴的舊名（如 `channel_errors_total`）會與 Prometheus default metric 衝突。見 PR #926 + Issue #927。 |
-| **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果（非 AI 工作產物）。`.snapshot.bak` 已在 `.gitignore` 排除（刪除即可）；`parameters.json` 應 commit（校準 SOTA 的 source of truth）。判斷流程見 `docs/CONSTITUTION.md` §第八條。 |
+| **校準 Artifact 遺留** | `parameters.json` + `*.snapshot.bak` 為背景校準任務的執行結果（非 AI 工作產物）。`.snapshot.bak` 已在 `.gitignore` 排除（刪除即可）；`parameters.json` 應 commit（校準 SOTA 的 source of truth）。判斷流程見 `docs/REFERENCE/CONSTITUTION.md` §第八條。 |
 | **Page ID rename (overview→home)** | Phase 1 IA redesign 將 `data-page="overview"` 改為 `"home"`。CI smoke test (`client_web/smoke/run.mjs`、`admin_web/smoke/run.mjs`) 必須同步更新 PAGES_ARG 與 PAGE_SELECTORS，否則前端測試 CI 紅燈。 |
 | **Frontend-backend field name mismatch** | CompositeMacroProvider 回傳 `*_index` 後綴（`sox_index`/`spx_index`/`ndx_index`/`dji_index`）與 `score`（非 `index`）；前端若用舊欄位名（`sox`/`index`）會永遠 `null` 導致 silent render failure。改前端前先 `curl /api/macro/snapshot/latest | jq keys` 對齊。 |
-| **AI-Generated Doc 當 gospel** | `followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。衝突協議：① 讀 doc 看說什麼 ② 讀 code 看實際是什麼 ③ 衝突時標記 doc 過時 + 修 code/doc,**不要擋自己的 work 等 doc 同步**。完整協議見 `docs/TRAPS.md`。 |
+| **AI-Generated Doc 當 gospel** | `followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。衝突協議：① 讀 doc 看說什麼 ② 讀 code 看實際是什麼 ③ 衝突時標記 doc 過時 + 修 code/doc,**不要擋自己的 work 等 doc 同步**。完整協議見 `docs/REFERENCE/TRAPS.md`。 |
 
 ## 🔧 程式碼智慧工具（強制規則）
 

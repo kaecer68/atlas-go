@@ -54,7 +54,7 @@ defer func() {
 }()
 ```
 
-> 完整 Go 反模式（mutable slice / Session 日期 / Darwinian 權重 / JSON tag 大小寫）見根 `AGENTS.md` §「關鍵跨模組陷阱」與 `docs/TRAPS.md`。
+> 完整 Go 反模式（mutable slice / Session 日期 / Darwinian 權重 / JSON tag 大小寫）見根 `AGENTS.md` §「關鍵跨模組陷阱」與 `docs/REFERENCE/TRAPS.md`。
 
 ## 測試規則
 
@@ -66,7 +66,7 @@ defer func() {
 
 修改 `internal/` 下任何 Go struct 的 JSON tag 後，**必須執行 `go generate .`**（CI `generate` job 強制）。`cmd/gentags` 會自動從 struct JSON tag 產出 `field_types.ts` 與 `valid_fields.json`，輸出到活躍前端目錄（`admin_web/`、`client_web/`、`shared_web/`）。
 
-> **禁止手動編輯**任何一份 `field_types.ts` 或 `valid_fields.json` — 下次 `go generate .` 會覆寫。完整規範見 `docs/TRAPS.md` §「手動編輯 field_types.ts」。
+> **禁止手動編輯**任何一份 `field_types.ts` 或 `valid_fields.json` — 下次 `go generate .` 會覆寫。完整規範見 `docs/REFERENCE/TRAPS.md` §「手動編輯 field_types.ts」。
 
 ## 驗證清單
 
@@ -94,8 +94,8 @@ go tool cover -func=coverage.out | grep total   # 須 ≥ 60%
 ## 參考文件
 
 - `AGENTS.md`：倉庫層級邊界、21 模組路由、關鍵跨模組陷阱
-- `docs/TRAPS.md`：高危陷阱完整參考（mutable slice、Session 日期、Darwinian 權重、JSON tag 大小寫等）
+- `docs/REFERENCE/TRAPS.md`：高危陷阱完整參考（mutable slice、Session 日期、Darwinian 權重、JSON tag 大小寫等）
 - `docs/QUICKSTART.md`：快速啟動 + CI 完整指令 + 系統初始化順序
 - `internal/apigateway/CONSTITUTION.md`：數據源治理規範 — 6 條憲法，禁止直接 `os.Getenv`/`&http.Client{}`，強制 Gateway 模式
-- `docs/PARAMETER_SYSTEM.md`：參數管理系統 — 禁止硬編碼 magic number，強制使用 `ParametersConfig`
+- `docs/REFERENCE/PARAMETER_SYSTEM.md`：參數管理系統 — 禁止硬編碼 magic number，強制使用 `ParametersConfig`
 - `docs/architecture.md`：分層設計原則

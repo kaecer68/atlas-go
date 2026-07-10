@@ -21,7 +21,7 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://tools/catalog",
 		Name:        "atlas-mcp Tool Catalog",
-		Description: "74 read-only MCP tools grouped by area. Source: docs/AGENT_TOOLS.md on disk. Use to enumerate capabilities without tools/list round-trip.",
+		Description: "74 read-only MCP tools grouped by area. Source: docs/REFERENCE/tool-catalog.md on disk. Use to enumerate capabilities without tools/list round-trip.",
 		MIMEType:    "text/markdown",
 	}, s.handleResourceToolsCatalog)
 
@@ -72,9 +72,9 @@ func (s *server) handleResourceConfigParameters(ctx context.Context, _ *mcp.Read
 }
 
 func (s *server) handleResourceToolsCatalog(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-	raw, err := os.ReadFile("docs/AGENT_TOOLS.md")
+	raw, err := os.ReadFile("docs/REFERENCE/tool-catalog.md")
 	if err != nil {
-		return nil, fmt.Errorf("resource tools catalog (docs/AGENT_TOOLS.md): %w", err)
+		return nil, fmt.Errorf("resource tools catalog (docs/REFERENCE/tool-catalog.md): %w", err)
 	}
 	return resourceText("atlas://tools/catalog", "text/markdown", string(raw)), nil
 }

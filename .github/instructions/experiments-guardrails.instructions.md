@@ -41,8 +41,8 @@ go test ./internal/baseline/...
 ## 參考文件
 
 - `internal/apigateway/CONSTITUTION.md`：實驗中涉及資料源操作須遵循 Gateway 規範
-- `docs/CONSTITUTION.md`：深度開發憲法 — 涉及 optimizer / portfolio 數學驗證時的必要參考
-- `docs/PARAMETER_SYSTEM.md`：實驗門檻與判斷參數的權威來源
+- `docs/REFERENCE/CONSTITUTION.md`：深度開發憲法 — 涉及 optimizer / portfolio 數學驗證時的必要參考
+- `docs/REFERENCE/PARAMETER_SYSTEM.md`：實驗門檻與判斷參數的權威來源
 - `docs/operations_playbook.md`：日常 mutation 工作流程
 - `docs/evolution_loop.md`：接受門檻與循環機制
 - `docs/archive/experiment-baseline-report.md`：稀疏資料教訓與門檻調整背景

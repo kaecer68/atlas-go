@@ -41,7 +41,7 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 - `RegimeChangeConfirmed`（regime 轉換穩定後 30 秒 emit）
 - `IngestionLagSpike`（ingestion → processing > 5s）
 
-> 詳見 `docs/roadmap.md` 與 `docs/events/INDEX.md`。
+> 詳見 `docs/roadmap.md` 與 `docs/REFERENCE/events/INDEX.md`。
 
 ## 3. Boundary（嚴格）
 
@@ -52,7 +52,7 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 - `internal/monitoring/handlers.go`（SSE endpoints）
 - `web/services/sse.js`、`web/components/event-list.js`（frontend 擴展）
 - `monitoring/rules/`（alertmanager rules）
-- `docs/roadmap.md`、`docs/events/`（文件）
+- `docs/roadmap.md`、`docs/REFERENCE/events/`（文件）
 
 ### ⛔ 不可動
 - `internal/llm/`、`internal/llm_annotator/`、`internal/narrative/`、`internal/spawning/`、`internal/orchestrator/`
@@ -177,7 +177,7 @@ Wave 8 目標：把 audit 識別的高優先事件實作成統一的事件流（
 - [ ] 5 個 YELLOW 事件在 Wave 9 plan 中排隊（不必本 wave 完成）
 - [ ] 所有事件都有對應 frontend component render
 - [ ] 所有事件都有對應 Prometheus alert rule
-- [ ] 所有事件都有對應 `docs/events/<event-name>.md` 說明
+- [ ] 所有事件都有對應 `docs/REFERENCE/events/<event-name>.md` 說明
 - [ ] `docs/roadmap.md` 更新為 v0.0.0.7 + Wave 8 段落
 - [ ] [`CHANGELOG.md`](../../CHANGELOG.md) 加入 v0.0.0.7 entry
 - [ ] `VERSION` 從 0.0.0.6 bump 到 0.0.0.7

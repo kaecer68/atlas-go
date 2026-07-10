@@ -32,7 +32,7 @@
 - `internal/apigateway/background.go`（**只加** Prometheus histogram struct field）
 - `shared_web/static/js/services/event-source.js`、`admin_web/static/js/event-listeners.js`
 - `monitoring/rules/`
-- `docs/events/`、`docs/roadmap.md`、`docs/wave-9-plan.md`
+- `docs/REFERENCE/events/`、`docs/roadmap.md`、`docs/wave-9-plan.md`
 
 ### ⛔ 不可動（#611 refactor 範圍）
 - P0 4 檔：`internal/config/parameters_defaults.go`、`internal/config/parameters.go`、`cmd/atlas/main.go`、`internal/narrative/knowledge_base.go`

@@ -355,9 +355,9 @@ Repo 根目錄有兩個 env 模板:
 
 | 議題 | 歸屬 |
 |------|------|
-| ENTRYPOINT/command 衝突 | `docs/TRAPS.md` § Deploy/Docker |
-| env_file vs environment precedence | `docs/TRAPS.md` § Deploy/Docker |
-| Dockerfile 硬編碼 healthcheck | `docs/TRAPS.md` § Deploy/Docker |
+| ENTRYPOINT/command 衝突 | `docs/REFERENCE/TRAPS.md` § Deploy/Docker |
+| env_file vs environment precedence | `docs/REFERENCE/TRAPS.md` § Deploy/Docker |
+| Dockerfile 硬編碼 healthcheck | `docs/REFERENCE/TRAPS.md` § Deploy/Docker |
 | fubon-neo PyPI 404 + Linux wheel 限制 | `docs/ENVIRONMENT.md` § Fubon SDK |
 | .env.example dev defaults | `.env.example` 內嵌註解 + `docs/guides/install-and-deploy.md` § Generate ATLAS_API_KEY |
 | fubon-proxy mount 機制 | `services/fubon-proxy/README.md` § Docker 部署的關鍵設計 |
@@ -369,7 +369,7 @@ Repo 根目錄有兩個 env 模板:
 
 ## 相關文件
 
-- `docs/TRAPS.md` — 跨模組陷阱(含本次新增 Deploy/Docker 章節)
+- `docs/REFERENCE/TRAPS.md` — 跨模組陷阱(含本次新增 Deploy/Docker 章節)
 - `docs/ENVIRONMENT.md` § Fubon SDK — SDK 位置 + 官方下載頁 + wheel 平台分發(含 arm64 / x86_64 對應)
 - `services/fubon-proxy/README.md` — fubon-proxy 部署指南(含 wheel build 機制 + TARGETARCH 自動切)
 - `services/fubon-proxy/requirements.txt` — 故意不含 fubon-neo

@@ -4,7 +4,7 @@
 > **狀態**：P1 設計階段（Stage 3 產出）
 > **範圍決策**：「完整暴露」atlas-go 能力（使用者於 2026-06-30 確認）
 > **關聯文件**：
-> - [`WORKFLOW_MAP.md`](../WORKFLOW_MAP.md)（workflow 總覽）
+> - [`WORKFLOW_MAP.md`](../REFERENCE/WORKFLOW_MAP.md)（workflow 總覽）
 > - [`AGENTS.md`](../../AGENTS.md)（跨工具 AI 共用指引）
 > - [`agent-loop-state-machine.md`](./agent-loop-state-machine.md)（AgentLoop 細節）
 
@@ -52,11 +52,11 @@
 
 ## 3. MCP Tools 清單
 
-下表為 atlas-go 全量 HTTP endpoints → MCP tool 映射。所有工具依照 **Workflow Area (WA-XXX)** 分群，與 [`WORKFLOW_MAP.md`](../WORKFLOW_MAP.md) §3 對齊。
+下表為 atlas-go 全量 HTTP endpoints → MCP tool 映射。所有工具依照 **Workflow Area (WA-XXX)** 分群，與 [`WORKFLOW_MAP.md`](../REFERENCE/WORKFLOW_MAP.md) §3 對齊。
 
 ### 3.1 MCP Tools 全清單
 
-**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/AGENT_TOOLS.md`](../AGENT_TOOLS.md) 為單一權威來源。編譯期權威計數來自 [`cmd/atlas-mcp/auto-desc.gen.json`](../../cmd/atlas-mcp/auto-desc.gen.json)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [89, 91]`，防止文件↔程式碼漂移）。
+**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md) 為單一權威來源。編譯期權威計數來自 [`cmd/atlas-mcp/auto-desc.gen.json`](../../cmd/atlas-mcp/auto-desc.gen.json)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [89, 91]`，防止文件↔程式碼漂移）。
 
 **當前實際**：**91 個 tool**（87 業務 + 4 audit；sampling / elicitation / roots 在 feature flag 啟用時另計，但**目前已預設掛載**）。本節保留 high-level 群組對照；單一 tool 名稱請以 `auto-desc.gen.json` 為準。
 
@@ -237,7 +237,7 @@ cmd/atlas-mcp/
 ├── main.go            // 入口 + flag 解析 + stdio / SSE 啟動
 ├── server/
 │   ├── server.go      // MCP server lifecycle
-│   ├── tools.go       // 註冊所有業務 tool（詳見 §3 與 `docs/AGENT_TOOLS.md`）
+│   ├── tools.go       // 註冊所有業務 tool（詳見 §3 與 `docs/REFERENCE/tool-catalog.md`）
 │   ├── transport.go   // stdio / SSE / streamable-HTTP 切換
 │   └── auth.go        // ATLAS_MCP_TOKEN 驗證
 ├── tools/
@@ -674,6 +674,6 @@ cmd/atlas-mcp/
 - 工具單一名稱 / 數量：`cmd/atlas-mcp/auto-desc.gen.json`（編譯期權威）
 - 模組成熟度：`internal/MATURITY.md`
 - 模組索引：`internal/AGENTS_INDEX.md`
-- 工具操作導覽（agent 友善）：`docs/AGENT_TOOLS.md`
+- 工具操作導覽（agent 友善）：`docs/REFERENCE/tool-catalog.md`
 - 部署與客戶端配置：`cmd/atlas-mcp/README.md`
 
