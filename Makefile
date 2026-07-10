@@ -17,7 +17,7 @@
 .PHONY: help install build test lint ci clean watch-frontend smoke
 .PHONY: install-frontend build-frontend test-frontend
 .PHONY: build-backend test-backend lint-backend
-.PHONY: build-mcp install-mcp mcp-status setup-mcp
+.PHONY: build-mcp install-mcp mcp-status setup-mcp install-atlas-mcp-from-release
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
 
@@ -75,6 +75,8 @@ help:
 	@echo "  install-mcp        安裝到 ~/.local/bin (MCP client command 路徑)"
 	@echo "  mcp-status         檢查 binary / atlas-go / LLM router 三項健康"
 	@echo "  setup-mcp          啟動互動式 wizard"
+	@echo "  install-atlas-mcp-from-release"
+	@echo "                    從 GitHub Release 下載 atlas-mcp + SHA256 verify"
 	@echo ""
 	@echo "整合:"
 	@echo "  install            install-frontend + 下載 Go 模組"
@@ -141,6 +143,9 @@ build-backend:
 #   make install-mcp  編譯後安裝到 ~/.local/bin (給 MCP client command 設定用)
 #   make mcp-status   檢查 binary 存在 + atlas-go backend + LLM health 三項
 #   make setup-mcp    啟動互動式 wizard
+#   make install-atlas-mcp-from-release [-- VERSION=vX.Y.Z]
+#                     從 GitHub Release 下載 atlas-mcp binary + SHA256 verify
+#                     (給投資人 agent 用，不需 Go toolchain / source tree)
 
 build-mcp:
 	@echo "🔨 Building atlas-mcp binary..."
@@ -178,6 +183,17 @@ mcp-status:
 setup-mcp:
 	@echo "🚀 Launching atlas-mcp-setup wizard..."
 	go run ./cmd/atlas-mcp-setup
+
+# 給投資人 hermes/openclaw agent 用的單行安裝器（從 GitHub Release）
+# 不需要 Go toolchain 或 source tree。詳見 scripts/install-atlas-mcp-from-release.sh。
+install-atlas-mcp-from-release:
+	@if [ ! -x "./scripts/install-atlas-mcp-from-release.sh" ]; then \
+		echo "❌ scripts/install-atlas-mcp-from-release.sh not found or not executable"; \
+		exit 1; \
+	fi
+	@VERSION_FLAG=""; \
+	if [ -n "$(VERSION)" ]; then VERSION_FLAG="--version $(VERSION)"; fi; \
+	./scripts/install-atlas-mcp-from-release.sh $$VERSION_FLAG
 
 test-backend:
 	@echo "🧪 Testing Go backend..."
