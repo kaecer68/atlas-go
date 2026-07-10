@@ -4,6 +4,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Allow local builds to embed a meaningful version and build timestamp.
+        # Defaults keep the image buildable without any extra env vars; override
+        # ATLAS_VERSION / ATLAS_BUILDTIME before running docker compose build.
+        VERSION: ${ATLAS_VERSION:-dev}
+        BUILDTIME: ${ATLAS_BUILDTIME:-}
     container_name: atlas-go
     restart: unless-stopped
     command: ["-api", "-live", "-addr", ":18080", "-fubon-port", "18081"]  
