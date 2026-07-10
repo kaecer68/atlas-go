@@ -3,7 +3,7 @@
 > **91 tools** grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
 > For natural language query examples, see [`docs/INVESTOR/query-examples.md`](../INVESTOR/query-examples.md).
 >
-> This is the authoritative catalog (moved from `docs/AGENT_TOOLS.md` which is deprecated).
+> This is the authoritative catalog (moved from `docs/REFERENCE/tool-catalog.md` which is deprecated).
 
 ## 完整工具 Catalog（約 91 個 tool，Phase 2 全部上線）
 

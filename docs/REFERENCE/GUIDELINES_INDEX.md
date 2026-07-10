@@ -12,10 +12,10 @@
 
 ```
 階層 1: 憲法（Constitution）
-  └── docs/CONSTITUTION.md
+  └── docs/REFERENCE/CONSTITUTION.md
       深度工作與數學/實證約束；非 CI 強制，但對 optimizer / portfolio / risk 具關鍵約束。
       註：原位於 `.omo/CONSTITUTION.md`（2026-06-26 PR #751 移至此處，`.omo/` 為 .gitignore 排除，新 clone 不可見）。
-  └── docs/ITERATION_GATE.md
+  └── docs/REFERENCE/ITERATION_GATE.md
       迭代閘門（5 Gate 自我檢查：數學深度、資產通用性、Falsifiability、程式碼預算、回歸測試）。
   └── internal/apigateway/CONSTITUTION.md
       強制規範，CI 自動檢查。違反會阻斷 PR。
@@ -52,7 +52,7 @@
 
 | 文件 | 範圍 | AI 入口可達性 |
 |------|------|-------------|
-| `docs/CONSTITUTION.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `AGENTS.md` 索引 |
+| `docs/REFERENCE/CONSTITUTION.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `AGENTS.md` 索引 |
 | `internal/apigateway/CONSTITUTION.md` | 數據源管理：Gateway 模式、限流、熔斷、背景任務、環境變數 | ✅ 從 `agents.md` → `copilot-instructions.md` |
 
 ### 階層 2：領域守則（Instructions）
@@ -115,7 +115,7 @@
 | `docs/architecture.md` | 分層設計、元件職責 |
 | `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態單一真相來源（PR #700） |
 | `docs/ai_agent_architecture.md` | 代理協調、決策流程 |
-| `docs/PARAMETER_SYSTEM.md` | 參數管理、權威溯源 |
+| `docs/REFERENCE/PARAMETER_SYSTEM.md` | 參數管理、權威溯源 |
 | `docs/operations_playbook.md` | 日常運維、mutation 工作流程 |
 | `docs/evolution_loop.md` | 接受門檻、循環機制 |
 | `docs/iteration_playbook.md` | Mutation 策略模式 |
@@ -129,7 +129,7 @@
 | _（shipped via PR #828,merged 2026-06-29）_ | L2.4 CLI flag 實作：`--use-llm-sector-agents`（plan 內容已併入 `docs/operations/l2-4-followup.md`）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
 | `docs/TOOLS.md` | 程式碼智慧工具（GitNexus / codebase-memory / CodeGraph）路由決策樹 |
-| `docs/AGENT_TOOLS.md` | MCP tool 決策樹與完整 catalog（84 tools,供外部 AI agent） |
+| `docs/REFERENCE/tool-catalog.md` | MCP tool 決策樹與完整 catalog（84 tools,供外部 AI agent） |
 
 ---
 
@@ -144,7 +144,7 @@
 | **新增資料源/API 調用** | `CONSTITUTION.md`（全部 6 條） | `marketdata/AGENTS.md` |
 | **執行實驗** | `experiments-guardrails.instructions.md` | `experiment/AGENTS.md`，`baseline/AGENTS.md` |
 | **Live Trading** | `live-trading.guardrails.instructions.md` | `CONSTITUTION.md`，`live/AGENTS.md` |
-| **新增參數** | `docs/PARAMETER_SYSTEM.md` | `go-core.instructions.md` |
+| **新增參數** | `docs/REFERENCE/PARAMETER_SYSTEM.md` | `go-core.instructions.md` |
 | **新增背景任務** | `CONSTITUTION.md` 第四條 | 無 |
 | **修改前端** | `monitoring/AGENTS.md`（snake_case 契約） | 無 |
 | **理解系統架構** | `docs/architecture.md`、`.claude/SKILLS-MAP.md` | `docs/ai_agent_architecture.md` |
@@ -174,7 +174,7 @@
 |------|------|---------|
 | 1.6.1 | 2026-06-27 | 修正統計數字（docs/specs 9→14、docs/guides 1→6）— follow-up to PR #793 |
 | 1.6 | 2026-06-27 | 同步 Batch 5a-6 AGENTS.md 精簡：內模組 49→21、新增 docs/specs/ 與 docs/guides/ 分類（PR #784-#788）|
-| 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/CONSTITUTION.md` → `docs/CONSTITUTION.md`，新增 `docs/ITERATION_GATE.md`（PR #752）|
+| 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/CONSTITUTION.md` → `docs/REFERENCE/CONSTITUTION.md`，新增 `docs/REFERENCE/ITERATION_GATE.md`（PR #752）|
 | 1.4 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 索引；更新版本/日期以反映 PR #700 |
 | 1.3 | 2026-06-17 | 修正不存在技能引用（atlas-core-architecture → SKILLS-MAP.md + docs/architecture.md）；更新技能數量為實際值（手寫 10 + 生成 21 + 機器人 4 + GitNexus 6）；新增機器人溝通與自動生成技能分類說明 |
 | 1.2 | 2026-06-02 | 修正統計數字：技能文件 5→16、模組指南 21→34、移除 sim 缺失標記（已補齊） |

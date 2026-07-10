@@ -100,15 +100,15 @@ cmd/atlas-mcp/server
 
 目前文件數字不一致：
 
-- `docs/AGENT_TOOLS.md`：約 83
+- `docs/REFERENCE/tool-catalog.md`：約 83
 - `cmd/atlas-mcp/README.md`：79
 - `cmd/atlas-mcp/server/AGENTS.md`：75 / 79
 - `docs/specs/agent-mcp-server.md`：約 70
 
 **決議**：
 
-1. `docs/AGENT_TOOLS.md` 為**唯一權威 catalog**，所有新增/刪除 tool 必須同步更新該文件。
-2. 其他文件不再重複寫死數字，改以「詳見 `docs/AGENT_TOOLS.md`」或「以 `mcp/tools/list` / `system_get_health` 回傳為準」取代。
+1. `docs/REFERENCE/tool-catalog.md` 為**唯一權威 catalog**，所有新增/刪除 tool 必須同步更新該文件。
+2. 其他文件不再重複寫死數字，改以「詳見 `docs/REFERENCE/tool-catalog.md`」或「以 `mcp/tools/list` / `system_get_health` 回傳為準」取代。
 3. `cmd/atlas-mcp/server/AGENTS.md` 的 assertion 範圍（目前 77–79）更新為 84–86，以反映新增 7 個 tool。
 
 ---
@@ -127,7 +127,7 @@ cmd/atlas-mcp/server
 - `cmd/atlas-mcp/server/tools.go`（加入 `registerStockTools`、`registerCapitalFlowTools`、`registerStrategyRankerTools`）
 - `cmd/atlas-mcp/server/server.go`（更新 `RegisteredToolCount` assertion 範圍）
 - `cmd/atlas-mcp/server/prompts.go`（將 prompt 中的佔位 tool 名稱替換為正式名稱）
-- `docs/AGENT_TOOLS.md`（新增 catalog 區塊、更新總數）
+- `docs/REFERENCE/tool-catalog.md`（新增 catalog 區塊、更新總數）
 - `cmd/atlas-mcp/README.md`（移除重複數字，指向 AGENT_TOOLS.md）
 - `cmd/atlas-mcp/server/AGENTS.md`（更新 assertion 範圍與說明）
 - `docs/specs/agent-mcp-server.md`（調整總數描述，指向 AGENT_TOOLS.md）
@@ -149,4 +149,4 @@ cmd/atlas-mcp/server
 - **API key**：`stock_get_quote` 需要 `FUGLE_API_KEY`；未配置時回傳 503。
 - **憲法合規**：所有外部 API 呼叫沿用既有 `marketdata` provider 與 rate limiter，不新增直接 `os.Getenv` 抓取。
 - **Public path**：新增 `/api/stock` 與 `/api/strategy-ranker` 前綴至 `isPublicPath`（與 `/api/macro`、`/api/strategies` 同等級）。
-- **Tool 數 drift**：新增 tool 後務必同步更新 `server.go` assertion 與 `docs/AGENT_TOOLS.md`。
+- **Tool 數 drift**：新增 tool 後務必同步更新 `server.go` assertion 與 `docs/REFERENCE/tool-catalog.md`。

@@ -423,7 +423,7 @@ M1-M4 完成後,以下項目移交 Phase 4:
   - [`atlas-taiwan-leading-indicators`](../../.claude/skills/atlas-taiwan-leading-indicators/SKILL.md)(M3 MacroDataSnapshot 來源)
   - [`atlas-macro-narrative`](../../.claude/skills/atlas-macro-narrative/SKILL.md)
 - Constitution / Guardrails:
-  - [`docs/REFERENCE/CONSTITUTION.md`](../CONSTITUTION.md)
+  - [`docs/REFERENCE/CONSTITUTION.md`](../REFERENCE/CONSTITUTION.md)
   - [`live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md)
   - [`go-core.instructions.md`](../../.github/instructions/go-core.instructions.md)
   - [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md)

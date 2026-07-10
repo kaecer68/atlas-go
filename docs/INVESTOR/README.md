@@ -32,6 +32,6 @@ make verify-mcp-setup  # 驗證 91 tools 連線成功
 
 ## Full Reference
 
-- [`api-reference.md`](api-reference.md) — 91 tool 完整 catalog
+- [`REFERENCE/tool-catalog.md`](REFERENCE/tool-catalog.md) — 91 tool 完整 catalog
 - [`query-examples.md`](query-examples.md) — 自然語言 → tool 對照 (20-30 高頻範本，待 PR-2)
 - [`tier-guide.md`](tier-guide.md) — public / registered / premium 差異 *(待 [#1068](https://github.com/kaecer68/atlas-go/issues/1068) 商業化確認)*

@@ -1,7 +1,7 @@
 # Atlas-Go Install / Deploy Guide
 
 > **Audience**: developers onboarding to atlas-go + operators deploying it.
-> **Related**: [`../../AGENTS.md`](../../AGENTS.md), [`../../CLAUDE.md`](../../CLAUDE.md), [`../ENVIRONMENT.md`](../ENVIRONMENT.md), [`../TRAPS.md`](../TRAPS.md)
+> **Related**: [`../../AGENTS.md`](../../AGENTS.md), [`../../CLAUDE.md`](../../CLAUDE.md), [`../ENVIRONMENT.md`](../ENVIRONMENT.md), [`../REFERENCE/TRAPS.md`](../REFERENCE/TRAPS.md)
 
 This guide covers:
 1. **Prerequisites** — 3rd party dependencies you must install
@@ -420,5 +420,5 @@ docker compose up -d
 - [`git-tool-cache-policy.md`](git-tool-cache-policy.md) — which tool caches to never commit
 - [`ai-productivity.md`](ai-productivity.md) — execution tips for AI agents
 - [`opencode-oh-my-openagent-tuning.md`](opencode-oh-my-openagent-tuning.md) — token injection防护
-- [`../TRAPS.md`](../TRAPS.md) — high-stakes traps reference
+- [`../REFERENCE/TRAPS.md`](../REFERENCE/TRAPS.md) — high-stakes traps reference
 - [`../ENVIRONMENT.md`](../ENVIRONMENT.md) — this dev environment's status

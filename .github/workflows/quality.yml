@@ -225,16 +225,16 @@ jobs:
             grep -rnF --include='*.go' --exclude='*_test.go' 'mcp.AddTool(' cmd/atlas-mcp/server | grep -vF 'mcp.AddTool(mcpSrv, tool, handler)' || true
             exit 1
           fi
-          DOC_MIN=$(grep -oP '基礎\s*\d+' docs/AGENT_TOOLS.md | grep -oP '\d+' | head -1)
-          DOC_MAX=$(grep -oP '\+2' docs/AGENT_TOOLS.md | sed 's/+//')
+          DOC_MIN=$(grep -oP '基礎\s*\d+' docs/REFERENCE/tool-catalog.md | grep -oP '\d+' | head -1)
+          DOC_MAX=$(grep -oP '\+2' docs/REFERENCE/tool-catalog.md | sed 's/+//')
           if [ -z "$DOC_MIN" ] || [ -z "$DOC_MAX" ]; then
-            echo "ERROR: Could not parse tool count range from docs/AGENT_TOOLS.md"
+            echo "ERROR: Could not parse tool count range from docs/REFERENCE/tool-catalog.md"
             exit 1
           fi
           DOC_MAX=$((DOC_MIN + DOC_MAX))
           if [ "$CODE_COUNT" -lt "$DOC_MIN" ] || [ "$CODE_COUNT" -gt "$DOC_MAX" ]; then
-            echo "ERROR: docs/AGENT_TOOLS.md says $DOC_MIN–$DOC_MAX tools, but code registers $CODE_COUNT tools."
-            echo "Update AGENT_TOOLS.md, or fix tool registration drift."
+            echo "ERROR: docs/REFERENCE/tool-catalog.md says $DOC_MIN–$DOC_MAX tools, but code registers $CODE_COUNT tools."
+            echo "Update tool-catalog.md, or fix tool registration drift."
             exit 1
           fi
           echo "OK: doc ($DOC_MIN–$DOC_MAX) matches code ($CODE_COUNT registered tools via countedAddTool wrapper)."

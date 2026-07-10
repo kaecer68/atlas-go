@@ -177,9 +177,9 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 | Live trading 守則 | [`.github/instructions/live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md) |
 | Go 程式碼守則 | [`.github/instructions/go-core.instructions.md`](../../.github/instructions/go-core.instructions.md) |
 | 高頻陷阱 | [`AGENTS.md`](../../AGENTS.md) § 高頻陷阱速查 |
-| 跨模組陷阱完整版 | [`docs/REFERENCE/TRAPS.md`](../TRAPS.md) |
+| 跨模組陷阱完整版 | [`docs/REFERENCE/TRAPS.md`](../REFERENCE/TRAPS.md) |
 | 環境變數管理 | [`docs/ENVIRONMENT.md`](../ENVIRONMENT.md) |
-| 參數管理系統 | [`docs/REFERENCE/PARAMETER_SYSTEM.md`](../PARAMETER_SYSTEM.md) |
+| 參數管理系統 | [`docs/REFERENCE/PARAMETER_SYSTEM.md`](../REFERENCE/PARAMETER_SYSTEM.md) |
 | LLM 路由規格 | [`docs/specs/llm-routing.md`](llm-routing.md) |
 | 數據可見性四層防護 | [`.claude/skills/atlas-data-visibility/SKILL.md`](../../.claude/skills/atlas-data-visibility/SKILL.md) |
 | CI/CD 安全掃描 (gosec) | [`.github/workflows/ci-cd.yml`](../../.github/workflows/ci-cd.yml) § security job |
