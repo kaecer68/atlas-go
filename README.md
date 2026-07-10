@@ -1,341 +1,98 @@
 # atlas-go
 
-`atlas-go` is a simulation-first investment research system focused on Taiwan equities.
-
-It provides an auditable workflow for:
-
-- orchestrating layered research agents
-- replaying market data
-- running bounded simulations
-- evaluating mutations (prompt/risk/constraint)
-- accepting or rejecting candidates with explicit gates
-
-## Recent updates
-
-- **v0.0.0.21 (Wave 10 L2.3 PoC complete + Wave 11 L2.1 doc audit closure)** — `SemiconductorLLMAgent` wired behind `UseLLMSectorAgents` feature flag (PR #733), `LLMDriver` split into `PlanDriver` + `ReflectDriver` (PR #726), `LLM_OPENCODE_GO_API_KEY` and routing chain demoted to 3-tier effective fallback (PR #723), `llm_annotator` deprecation boundary documented (PR #730), and LLM sector agent plugin wired (PR #734). See [CHANGELOG.md](CHANGELOG.md).
-- **v0.0.0.18 (Wave 9 gap fixes)** — Closed 3 production bugs (SSE catchup dead in `runLiveTrading`, `Start` partial-failure cleanup without defer, `errs` channel dropping errors after first), added v2/chain integration tests, and made `risk.NewAuditSubscriber` idempotent. See [CHANGELOG.md](CHANGELOG.md).
-- **v0.0.0.17 (Wave 9 wire)** — Completed Wave 9 observability wiring (`Wave9Observability`, five detectors, `ChannelHealthSynthesizer`), `BaselineTrigger` policy enforcement, and `docs/ENVIRONMENT.md`. See [CHANGELOG.md](CHANGELOG.md).
-- **v0.0.0.16 (Wave 9 trigger)** — Baseline runtime policy enforcement (`baseline.Trigger`), StopLoss/TakeProfit/MaxHoldingDays violations, and Layer 3 baseline tests. See [CHANGELOG.md](CHANGELOG.md).
-- **v0.0.0.8 (Wave 9 schema)** — Wave 9 event schema: `EventPositionUpdate`, `EventRegimeChangeConfirmed`, `EventFactorWeightRegression`, `EventIngestionLagSpike`, `EventDriftDetected`, `EventChannelIndividualHealth`. See [CHANGELOG.md](CHANGELOG.md).
-- **v0.0.0.7 (Wave 8 events)** — Event bus integration, regime debouncing, and DriftDetector v2. See [CHANGELOG.md](CHANGELOG.md).
-- **v0.0.0.6 (Wave 7.5)** — Risk gate safety wiring, orphan config rejection, `AutoJudgePromoter` scheduler integration, promotion-recorded SSE events, and dashboard channel fetch log. See [CHANGELOG.md](CHANGELOG.md).
-
-## Current-First Readme
-
-This README is an operational entrypoint, not a frozen performance report.
-
-- If prose conflicts with code or experiment artifacts, treat code and runtime outputs as source of truth.
-- Primary truth sources:
-	- `configs/agents.json`
-	- `internal/experiment/*`
-	- `internal/orchestrator/*`
-	- `internal/sim/*`
-	- `data/state/experiments/*.json`
-
-## For AI Agent Operators (Hermes / OpenClaw / Claude Desktop / Cursor / OpenCode)
-
-> **你是替投資人用戶接入的 AI agent？從這裡開始。**
-
-atlas-go 同時也是 **MCP server**，提供 91 個 tool 讓 agent 直接查詢台股市場、策略、風險、個股等資訊。**你的投資人用戶可以問：「2330 現在能不能買？」、「現在市場風險如何？」、「今天的策略表現？」** — 你用 atlas-mcp 的 tool 回答。
-
-### 你的場景
-
-| 場景 | 入口 |
-|------|------|
-| **本機**：atlas-go backend 跑在你這台 | → [§Atlas as MCP Server](#atlas-as-mcp-server)（含 installer + setup wizard）|
-| **雲端**（規劃中，2026 Q4）：atlas-go 部署在遠端 | → [`docs/mcp-integration-CLOUD.md`](docs/mcp-integration-CLOUD.md)|
-
-### 投資人能問什麼（範例）
-
-| 用戶問 | 呼叫哪個 tool | 顯示範例 |
-|--------|---------------|----------|
-| 「台積電現在多少？」 | `stock_get_quote {symbol: "2330"}` | `台積電(2330) 收盤 $680.0，漲 $5.0 (+0.74%)` |
-| 「今天外資在買 2330 嗎？」 | `stock_get_chips {symbol: "2330"}` | `外資今日淨買 +12,500 張` |
-| 「現在市場風險怎樣？」 | `risk_get_metrics` | `VaR 95%: -2.3%, 最大回撤 -8.1%` |
-| 「今天應該關注什麼？」 | `narrative_get_bundle` | `今日重點: <摘要>` |
-
-完整「任務 → Tool」對照表見 [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)；投資人常見查詢範本見 [`docs/operations/stock-mcp-query-templates.md`](docs/operations/stock-mcp-query-templates.md)。
-
-> **設定只用一行**：`curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash` — 不需 Go toolchain，詳見下面 §Atlas as MCP Server。
-
-## Architecture
-
-Core path:
-
-`market data -> orchestrator -> layered executors -> control filters (CRO/CIO) -> simulator -> ledger`
-
-### Data Providers (Priority Order)
-
-1. **TWSE OpenAPI** (Free, no auth) - Primary
-2. **FinMind** (Free, API key) - Historical data
-3. **Fubon** (Free, account required) - Real-time via Python proxy
-4. **Fugle** (Paid, circuit breaker protected) - Last resort
-
-**Fubon Integration**: Since Fubon's Go SDK does not support market data APIs, we use a Python FastAPI microservice (`services/fubon-proxy/`) that wraps the official Python SDK. The Go application communicates with this proxy via HTTP.
-
-**Configuration**:
-```bash
-# .env
-FUBON_API_KEY=your_api_key
-FUBON_PERSONAL_ID=your_id_number  # Required for DMA login
-# Fubon proxy URL is fixed: host.docker.internal:18081 in containers,
-# 127.0.0.1:18081 when running natively (ProcessManager).
-# Env override removed 2026-06 (PR #572).
-```
-
-Main packages:
-
-- `internal/domain`: canonical types
-- `internal/orchestrator`: routing and plugin execution
-- `internal/sim`: portfolio/execution simulation
-- `internal/experiment`: mutation execution and judging
-- `internal/baseline`: baseline policy management; `baseline.Trigger` enforces StopLoss/TakeProfit/MaxHoldingDays in live trading
-- `internal/marketdata`: provider abstraction and adapters
-- `internal/ledger`: outcomes and scorecard persistence
-- `internal/monitoring`: Dashboard API, Wave 9 observability runtime, and channel health synthesis
-- `internal/eventbus`: pub/sub event bus wiring for Wave 8/9 events
-- `internal/risk`: RiskManager, VaR, and macro drawdown guards
-- `internal/llm`: LLM capability-based multi-provider router with effective 3-tier fallback chain (Primary → Backup1 → LastResort; Backup2 reserved for [PLANNED] OpenCode providers), DataClass governance gate, and 12 capability handlers (see [LLM Framework](#llm-framework))
-
-## LLM Framework
-
-`internal/llm/` 是 capability-based 多 Provider 路由層，提供 fallback chain 與 DataClass 治理閘門。
-
-> **Effective routing chain**: RoutingChain 結構保留 4 層（Primary/Backup1/Backup2/LastResort）以維持向後相容，但 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串（等效於 3 層 fallback）。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 標記為 `[PLANNED]` 常數，等未來 client 實作後可重用。參見 Issue #720（Wave 11 L2.1 doc audit）。
-
-**架構分層**：
-
-- `provider.go` — `ProviderImpl` 介面、`Capability`（能力描述）、`DataClass`（資料分級）、`RoutingChain`（備援鏈）
-- `router.go` — `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort（Backup2 預設空字串，等效 3 層）；強制執行 DataClass 閘門（ADR-010：MiniMax M3 對 regulated 資料強制 skip）
-- `clients/` — 3 個 Provider HTTP 客戶端（DeepSeek V4、MiniMax M3、Kimi K2.7）+ 共享 `BaseClient`（retry / rate-limit / circuit breaker）
-- `capabilities/` — 12 個 capability handlers（failure_attribution、code_review_annotation、prompt_lint、rationale_generation、strategy_summary、risk_surface_extraction、regime_explanation、scenario_simulation、sentiment_explanation、performance_forensics、contra_attribution、confidence_commentary）
-- `schemas/` — typed I/O contract（JSON-serialized, Zod-compatible JSON Schema）
-- `adapters/` — Annotator / Router 整合層
-
-**配置**：`configs/llm_router.yaml` 為 runtime 來源（`TryLoadRouterConfig()` 載入）；fallback 預設見 `router.go:defaultRoutingTable()`。
-
-**健康端點**：`GET /api/llm/health` 暴露所有 Provider 的 `HealthStatus` 與 circuit breaker 狀態。
-
-**Sector Agent LLM**：`internal/orchestrator/sector_agent_llm.go` 定義 `SectorAgentLLM` 骨架（plan → tool_call → reflect loop）。在觀察窗口內 `LLM == nil` 回 `ErrNotImplemented`，deterministic 路徑保留以保證 backtest 可重現。Feature flag `UseLLMSectorAgents` 控制啟用。
-
-**熱路徑護欄**：`internal/sim/` 與 `internal/experiment/` 不可 import `internal/llm` 做同步呼叫（見 `internal/llm/AGENTS.md` §2）。
-
-> 設計權威：`docs/llm-integration-strategy-framework.md` · `internal/llm/AGENTS.md`
-
-## Atlas as MCP Server
-
-atlas-go 同時也是 **MCP (Model Context Protocol) server**，提供 **91 個 tool** 給外部 AI agent（Hermes / OpenClaw / Claude Desktop / Cursor / OpenCode）調用。三種 transport 全部已 ship：stdio（預設）、SSE、streamable-HTTP。
-
-### 你的場景
-
-- **本機開發 / 個人 agent**：atlas-go backend 與 agent 在同一台 → 見 [`docs/mcp-integration-LOCAL.md`](docs/mcp-integration-LOCAL.md)（完整指南）+ [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)（50 行 SOP）
-- **雲端接入**（規劃中，2026 Q4）：atlas-go 部署到雲端、外部 agent 透過 reverse proxy → 見 [`docs/mcp-integration-CLOUD.md`](docs/mcp-integration-CLOUD.md)（scaffold，待雲端部署穩定後補細節）
-
-### 5 分鐘接入（任選 1 種 client）
-
-**路徑 A — 一行 installer（推薦，給沒有 Go toolchain 的 agent operator）**：
-
-```bash
-# 1. 下載並安裝 atlas-mcp binary（不需 Go、不需 clone repo）
-curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash
-
-# 或鎖定版本
-curl -fsSL ... | bash -s -- --version v0.0.0.33
-
-# 2. 確認 atlas-go backend 在 :18080（hermes agent 通常不需要自己跑，
-#    但若需要驗證 backend 是否活著）
-curl -fsS http://127.0.0.1:18080/health
-
-# 3a. 自動寫入你的 MCP client config（互動）
-make setup-mcp        # 互動式 wizard（會自動偵測已安裝的 client）
-
-# 3b. 或手刻設定（5 種範例見 AGENT_QUICKSTART.md §3）
-# Hermes:     ~/.hermes/config.yaml
-# OpenClaw:   ~/.openclaw/mcp.json
-# Claude:     ~/Library/Application Support/Claude/claude_desktop_config.json
-# Cursor:     ~/.cursor/mcp.json
-# OpenCode:   ~/.config/opencode/opencode.json
-# （設定檔的 server entry key 是 'atlas-mcp'，不是 'atlas-go'）
-
-# 4. 驗證
-hermes mcp test atlas-mcp    # 應列出 91 個 tool
-```
-
-**路徑 B — 開發者（有 Go toolchain + 已 clone repo）**：
-
-```bash
-make build-mcp        # 編譯 bin/atlas-mcp
-make install-mcp      # 編譯後安裝到 ~/.local/bin
-# 然後用路徑 A 的 3a / 3b / 4
-```
-
-### Tool 速覽
-
-| 分類 | 代表 tool | 用途 |
-|------|----------|------|
-| 市場總覽 | `mcp_quickstart`、`macro_get_snapshot_latest`、`crossmarket_get_us_indices` | 一次拿到當前市場快照 |
-| 策略 | `strategy_ranker`、`strategy_list_active`、`strategy_get` | 策略排名與定義 |
-| 風險 | `risk_get_metrics`、`risk_get_drawdown`、`risk_get_commentary` | VaR、回撤、風險評論 |
-| 事件 | `event_calendar`、`event_flow_prediction`、`narrative_get_events` | 事件日曆 + 5 日預測 |
-| 個股 | `stock_get_quote`、`stock_get_fundamentals`、`stock_get_chips`、`stock_get_technical` | 報價 / 基本面 / 籌碼 / 技術 |
-| 系統 | `system_get_health`、`llm_get_health`、`data_get_channels` | 服務健康 |
-
-完整 91 tool 決策樹見 [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)。
-
-> **重要 env var**（不要再用舊版）：`ATLAS_BASE_URL`、`ATLAS_API_KEY`、`ATLAS_MCP_TOKEN`（取代已廢棄的 `ATLAS_WORK_DIR` / `ATLAS_DATABASE_URL` / `ATLAS_REDIS_URL` / `ATLAS_API_TOKEN`）。完整清單見 [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) §配置。
+`atlas-go` is a simulation-first, audit-driven investment research system for Taiwan equities.
+It orchestrates layered research agents, replays market data, runs bounded simulations,
+and evaluates mutations with explicit acceptance gates.
 
 ## Quick Start
 
-Run application simulation entrypoint:
-
 ```bash
+# Run the application
 go run ./cmd/atlas
-```
 
-Run experiment flow:
-
-```bash
+# Run experiments
 go run ./cmd/run-experiment -brief <brief-file>
-go run ./cmd/judge-experiment              # auto-discovers latest experiment
-# or: go run ./cmd/judge-experiment -result <experiment-result-file>
-```
+go run ./cmd/judge-experiment
 
-Run baseline operations:
-
-```bash
-go run ./cmd/promote-baseline              # auto-discovers latest experiment
-# or: go run ./cmd/promote-baseline -result <accepted-result-file>
+# Baseline management
+go run ./cmd/promote-baseline
 go run ./cmd/revert-baseline --list
 ```
 
+Full setup guide: [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
+
+## Atlas as MCP Server
+
+atlas-go doubles as a **MCP (Model Context Protocol) server** with **89–91 tools**,
+allowing external AI agents to query Taiwan stock market data, strategies, risks, and more.
+
+```bash
+# One-line installer (no Go toolchain needed)
+curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash
+```
+
+See: [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) · [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
+Tool catalog: [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)
+
+## Architecture
+
+```
+market data → orchestrator → layered executors → control filters → simulator → ledger
+```
+
+- **Language**: Go 1.26 · **DB**: PostgreSQL 15 + Redis 8
+- **CI**: `gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec` · coverage ≥ 60%
+- **Data Providers** (priority): TWSE OpenAPI → FinMind → Fubon (Python proxy) → Fugle
+- **Key packages**: `internal/domain` (types), `internal/orchestrator` (routing), `internal/sim` (simulation), `internal/experiment` (mutations), `internal/risk` (VaR/guards), `internal/llm` (multi-provider router)
+
+Deep dive: [`docs/architecture.md`](docs/architecture.md) · [`docs/llm-integration-strategy-framework.md`](docs/llm-integration-strategy-framework.md)
+
+## Frontend
+
+Three-directory SPA with History API routing:
+- **`client_web/`** — Investor dashboard (`/client/`, default landing)
+- **`admin_web/`** — Operator dashboard (`/admin/`)
+- **`shared_web/`** — Shared CSS/JS assets (dark/light theme, components)
+
+Root `/` redirects to `/client/`. Full frontend architecture: [`CLAUDE.md` §前端架構](CLAUDE.md)
+
 ## Validation
 
-CI-aligned checks:
-
 ```bash
-test -z "$(gofmt -l .)"
-go build ./...
-go test ./...
-go vet ./...
-staticcheck ./...
+test -z "$(gofmt -l .)"       # format check
+go build ./...                 # build
+go test ./...                  # full test suite
+go vet ./...                   # vet
+staticcheck ./...              # static analysis
 ```
 
-Focused checks:
+Focused: `go test ./internal/experiment/... ./internal/orchestrator/... ./internal/sim/...`
 
-```bash
-go test ./internal/experiment/...
-go test ./internal/orchestrator/...
-go test ./internal/sim/...
-```
+## Where to Go Next
 
-## Data Notes
-
-- Default judge replay path comes from config (`ATLAS_REPLAY_DATA_PATH`).
-- Small replay files can cause low-observation outcomes; recent judge logic now records:
-	- `BaselineObservations`
-	- `CandidateObservations`
-	- `UsedFallbackWindow`
-- Acceptance now distinguishes:
-	- insufficient observations
-	- no improvement over baseline
-
-## Agent and Skill Mapping
-
-For the complete operating skill map and guardrails, see:
-
-- `.claude/SKILLS-MAP.md` — **統一技能地圖入口**
-- `docs/ENVIRONMENT.md` — 外部依賴與開發環境狀態（PR #700）
-
-Current hand-written `atlas-*` skills:
-
-- `.claude/skills/atlas-pre-change-protocol/SKILL.md` — 修改前 7 步驟強制檢查清單
-- `.claude/skills/atlas-data-visibility/SKILL.md` — 四層資料可見性防護
-- `.claude/skills/atlas-macro-narrative/SKILL.md` — 宏觀敘事
-- `.claude/skills/atlas-risk-management/SKILL.md` — 風險管理
-- `.claude/skills/atlas-strategy-evolution/SKILL.md` — 策略進化
-- `.claude/skills/atlas-strategy-techniques/SKILL.md` — 投資心法庫
-- `.claude/skills/atlas-multi-strategy/SKILL.md` — 多策略框架
-- `.claude/skills/atlas-event-driven-weights/SKILL.md` — 事件驅動權重
-- `.claude/skills/atlas-swarm-analyst/SKILL.md` — Swarm 分析
-- `.claude/skills/atlas-taiwan-leading-indicators/SKILL.md` — 短線領先指標
-
-Operational playbooks:
-
-- `docs/operations_playbook.md` — 操作手冊
-- `docs/iteration_playbook.md` — 迭代指南
-- `docs/evolution_loop.md` — 演化循環
-
-## Web Dashboard
-
-The frontend has been split into two SPAs served by Go's `http.FileServer`:
-
-- **`client_web/`** — Investor-facing dashboard (`/client/`), default landing page.
-- **`admin_web/`** — Operator/admin dashboard (`/admin/`).
-- **`shared_web/`** — Shared CSS, JS pages, components, and services used by both apps.
-
-Root `/` redirects to `/client/` so general users land on the investor interface by default.
-
-### Navigation
-
-Each SPA uses the **History API** for clean URL routing (e.g., `/client/portfolio`, `/admin/agents`).
-The Go backend serves `index.html` for unmatched paths under `/client/` and `/admin/`,
-enabling direct URL access and refresh on any route. Legacy hash URLs (`#page-overview`) are
-automatically redirected.
-
-### CSS Architecture
-
-Styles are modularized into 50+ files under `shared_web/static/css/` and bundled by each app:
-
-```text
-shared_web/static/css/
-|-- main.css                # @import aggregator (cascade-order)
-|-- base/                   # Design tokens and resets
-|   |-- variables.css       # CSS custom properties (theme)
-|   |-- reset.css           # Element resets
-|   |-- tables.css          # Table base styles
-|   `-- typography.css      # Font and text utilities
-|-- layout/                 # Structural layout
-|   |-- animations.css, grid.css, header.css, page-shell.css
-|   |-- responsive.css, sidebar.css, topbar.css
-|-- components/             # Reusable UI components
-|   |-- badge, chain, circuit-breaker, controls, empty-state
-|   |-- error-banner, filter-panel, inbox-card, live-progress
-|   |-- loading-bar, metric, misc, modal, notification
-|   |-- notification-colors, panel, performance-report, pipeline
-|   |-- refresh, refresh-pill, sse-status, table-pagination
-|   |-- tabs, tool-events, utilities, view-controls, workflow
-`-- pages/                  # Page-specific styles
-    |-- decision-chain.css, evolution-panel.css, industry.css
-    |-- overview.css, parameters.css
-```
-
-### JavaScript Modules
-
-Key JS files live in `shared_web/static/js/` and are consumed by `admin_web/` and `client_web/`:
-
-| File | Purpose |
-|------|---------|
-| `main.js` (per app) | SPA router (`switchPage()`), navigation, auto-refresh |
-| `bootstrap-utils.js` | Utility imports and `window.*` assignments |
-| `component-init.js` (admin) | CircuitBreaker, PerformanceReport, SimHealth panel init |
-| `event-listeners.js` (admin) | `DOMContentLoaded`-bound event delegation (~80 handlers) |
-| `pages/*.js` | Page-specific data loading modules |
-
-All inline `onclick` handlers have been extracted to `event-listeners.js` using `addEventListener`.
+| You are... | Start here |
+|------------|-----------|
+| External AI agent connecting to atlas | [`docs/INVESTOR/README.md`](docs/INVESTOR/README.md) (5-min overview) |
+| Developer modifying code | `AGENTS.md` (cross-tool AI guide) + [`docs/REFERENCE/TRAPS.md`](docs/REFERENCE/TRAPS.md) |
+| Debugging or troubleshooting | [`CLAUDE.md`](CLAUDE.md) (deploy, frontend, token rules) |
+| Understanding module maturity | [`internal/MATURITY.md`](internal/MATURITY.md) → [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) |
+| Learning about MCP integration | [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) |
+| Exploring architecture details | [`docs/architecture.md`](docs/architecture.md) |
 
 ## Repository Structure
 
 ```text
 .
-|-- cmd/                    # CLI entrypoints
-|-- internal/               # Core system packages
-|-- configs/                # Agent and runtime configuration
-|-- prompts/                # Agent and experiment prompts
-|-- data/                   # Runtime state and replay data
-|-- admin_web/              # Admin/operator SPA
-|-- client_web/             # Investor-facing SPA
-|-- shared_web/             # Shared frontend assets
-|-- web/                    # Legacy monolithic SPA (deprecated, not served)
-|-- docs/                   # Architecture and operations docs
-`-- scripts/                # Operational helper scripts
+├── cmd/                    # CLI entrypoints (atlas, atlas-mcp, run-experiment, …)
+├── internal/               # ~70 Go packages (domain, orchestrator, sim, risk, llm, …)
+├── configs/                # Agent config, LLM routing table
+├── admin_web/ client_web/ shared_web/  # Frontend SPAs
+├── docs/                   # Architecture, specs, playbooks, audit trails
+├── scripts/                # CI helpers, installer, smoke tests
+├── .claude/skills/         # AI coding standard operating procedures
+└── services/               # Python microservices (fubon-proxy)
 ```
+
+---
+
+*[CHANGELOG](CHANGELOG.md) · [AGENTS.md](AGENTS.md) · [SECURITY.md](SECURITY.md) · [CONTRIBUTING.md](CONTRIBUTING.md)*
