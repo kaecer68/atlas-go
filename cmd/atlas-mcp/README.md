@@ -2,7 +2,7 @@
 
 `atlas-mcp` 是 [atlas-go](https://github.com/kaecer68/atlas-go) 的 MCP (Model Context Protocol) 伺服器。讓任何 MCP-compatible AI Agent（Claude Desktop、Cursor、OpenCode、OpenClaw、Hermes 等）透過標準 JSON-RPC 2.0 協議查詢與輕度觸發 atlas-go 的台股投資研究能力。
 
-> **Agent 入門** — 第一次使用？先讀 [`docs/AGENT_ONBOARDING.md`](../../docs/AGENT_ONBOARDING.md)（5 分鐘速讀），再看 [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md)（tool 決策樹與完整 catalog，為 tool 數量與清單的權威來源）。
+> **Agent 入門** — 第一次使用？先讀 [`docs/INVESTOR/README.md`](../../docs/INVESTOR/README.md)（5 分鐘速讀），再看 [`docs/REFERENCE/tool-catalog.md`](../../docs/REFERENCE/tool-catalog.md)（tool 決策樹與完整 catalog，為 tool 數量與清單的權威來源）。
 > **完整規格** — 設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server.md`](../../docs/specs/agent-mcp-server.md)。
 > **開發者** — 若要在 `cmd/atlas-mcp/server/` 內新增或修改 tool，**必先讀** [`server/AGENTS.md`](./server/AGENTS.md)（模組陷阱文件）。
 
@@ -75,7 +75,7 @@ MCP client config 路徑：
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **91 個**（業務 87 + audit 4；編譯期 assert ∈ [89, 91]，權威清單見 [`docs/AGENT_TOOLS.md`](../../docs/AGENT_TOOLS.md)） |
+| MCP Tools | **91 個**（業務 87 + audit 4；編譯期 assert ∈ [89, 91]，權威清單見 [`docs/REFERENCE/tool-catalog.md`](../../docs/REFERENCE/tool-catalog.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |

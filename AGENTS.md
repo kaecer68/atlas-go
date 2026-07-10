@@ -53,7 +53,7 @@
 
 ### Agent 入門（外部 AI 優先讀）
 - [`docs/AGENT_ONBOARDING.md`](docs/AGENT_ONBOARDING.md) — 5 分鐘速讀 atlas 全貌
-- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — **91** 個 tool 決策樹與完整 catalog
+- [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) — **91** 個 tool 完整 catalog
 - [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) — **MCP 給 agent 的唯一入口**，部署/配置/91 tool 總覽
 - [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md) — 50 行 MCP 設定 SOP（Hermes/OpenClaw/Claude/Cursor/OpenCode 5 種 client）
 
@@ -84,7 +84,7 @@
 ### 環境與工具
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — 外部依賴與環境狀態
 - [`docs/TOOLS.md`](docs/TOOLS.md) — 程式碼智慧工具（GitNexus / codebase-memory / codegraph 路由決策樹）
-- [`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
+- [`docs/INVESTOR/api-reference.md`](docs/INVESTOR/api-reference.md) — **atlas-mcp 業務工具**（市場查詢、風險、策略操作 — 與 TOOLS.md 用途不同）
 - [`docs/operations/version-bumping.md`](docs/operations/version-bumping.md) — **Version bump SOP**（AI coding release 必走 `make bump-version` + `make sync-version` + `make ci` 三步）
 - [`CLAUDE.md`](CLAUDE.md) — Claude Code 專屬設定（部署、前端架構、token 效率規則）
 
@@ -100,7 +100,7 @@ atlas-go 從「人類 web UI 為主」升級為「人機雙軌」。AI Agent 透
 |------|------|------|
 | Roadmap (規劃藍圖) | `docs/specs/agent-mcp-server.md` | canonical spec + 開放議題(roadmap v2 內容已併入此 spec) |
 | MCP 接入（外部 agent） | `[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) + [skill](.claude/skills/atlas-mcp-integration/SKILL.md) | 部署配置、Claude/Cursor/OpenCode 設定 |
-| Tool 導覽 | `[`docs/AGENT_TOOLS.md`](docs/AGENT_TOOLS.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 91 tools 決策樹與 task→tool 反向索引 |
+| Tool 導覽 | `[`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md) + [skill](.claude/skills/atlas-mcp-tool-tour/SKILL.md) | 91 tools 決策樹與完整 catalog |
 | Workflow Map | `docs/REFERENCE/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
 | Process 標註 | `docs/REFERENCE/PROCESSES.yaml` | 結構化 workflow metadata |
 | MCP Server 規格 | `docs/specs/agent-mcp-server.md` | 84+ tools、auth、audit、JSON Schema 模板 |

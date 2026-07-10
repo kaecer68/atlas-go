@@ -80,7 +80,7 @@ func TestHandleResourceToolsCatalog_MissingFile(t *testing.T) {
 
 	_, err := s.handleResourceToolsCatalog(context.Background(), nil)
 	if err == nil {
-		t.Fatal("expected error when docs/AGENT_TOOLS.md missing")
+		t.Fatal("expected error when docs/REFERENCE/tool-catalog.md missing")
 	}
 }
 
