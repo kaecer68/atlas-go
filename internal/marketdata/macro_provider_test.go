@@ -110,9 +110,9 @@ func TestCompositeMacroProvider_EmptyNoProviders(t *testing.T) {
 
 func TestMacroDataSnapshot_MarshalJSON_OmitsEmptySymbolPoints(t *testing.T) {
 	snap := MacroDataSnapshot{
-		US10Y:  MacroDataPoint{Symbol: "^TNX", Value: 4.5, ChangePct: 0.1},
-		TAIEX:  MacroDataPoint{}, // missing indicator
-		NVDA:   MacroDataPoint{Symbol: "NVDA", Value: 0, ChangePct: 0},
+		US10Y:      MacroDataPoint{Symbol: "^TNX", Value: 4.5, ChangePct: 0.1},
+		TAIEX:      MacroDataPoint{}, // missing indicator
+		NVDA:       MacroDataPoint{Symbol: "NVDA", Value: 0, ChangePct: 0},
 		RecordedAt: 1234567890,
 	}
 	b, err := json.Marshal(snap)
