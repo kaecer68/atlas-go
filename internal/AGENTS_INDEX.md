@@ -3,8 +3,6 @@
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
 > **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。v0.0.0.32 新增 7 個：`capitalflow`、`eventdriven`、`strategy_ranker`、`strategy_validator`、`subscription`、`recommender`、`dailyreport`。保留 AGENTS.md 的 hot-path 模組共 **27** 個（清單見下方）。
->
-> **與 MATURITY.md 的差異**：AGENTS_INDEX 計算頂層模組（59 個）；`internal/MATURITY.md` 計算所有 Go packages（含 sub-packages 如 `domain/shared`、`llm/clients`，約 80 個）。兩者 scope 不同，數字差異是正常的。
 
 ## 索引（按成熟度分組）
 
