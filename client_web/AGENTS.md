@@ -1,6 +1,7 @@
-# agents.md — web (Frontend)
+# AGENTS.md — client_web（投資人介面）
 
-> 修改 web 目錄下的程式碼前請先閱讀此文件。
+> 修改 client_web 目錄下的程式碼前請先閱讀此文件。
+> CSS 色彩語意系統的完整規範見 **[`docs/guides/frontend-architecture.md`](../docs/guides/frontend-architecture.md)**。本節僅列 client_web 特有陷阱。
 
 ## CSS 色彩語意系統
 
