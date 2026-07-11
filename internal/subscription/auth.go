@@ -110,15 +110,26 @@ func (m *JWTManager) sign(data string) []byte {
 	return h.Sum(nil)
 }
 
-// AuthMiddleware validates the bearer token from Authorization header
-// or "token" cookie, injecting claims into the request context.
-type AuthMiddleware struct {
-	jwt *JWTManager
+// guestClaims returns synthetic TierFree claims used when allowGuest
+// mode is on and the request has no/invalid token. The fallback keeps
+// demos alive without minting a user row or surfacing email leakage.
+func guestClaims() *TokenClaims {
+	return &TokenClaims{UserID: 0, Email: "", Tier: string(TierFree)}
 }
 
-// NewAuthMiddleware creates an auth middleware.
-func NewAuthMiddleware(jwt *JWTManager) *AuthMiddleware {
-	return &AuthMiddleware{jwt: jwt}
+// AuthMiddleware validates the bearer token from Authorization header
+// or "token" cookie, injecting claims into the request context.
+//
+// With allowGuest=true, missing OR invalid tokens downgrade to
+// TierFree instead of 401 — useful for pre-commercialisation demos.
+// With allowGuest=false, behavior is strict.
+type AuthMiddleware struct {
+	jwt        *JWTManager
+	allowGuest bool
+}
+
+func NewAuthMiddleware(jwt *JWTManager, allowGuest bool) *AuthMiddleware {
+	return &AuthMiddleware{jwt: jwt, allowGuest: allowGuest}
 }
 
 // GetClaims extracts token claims from the request context.
@@ -132,11 +143,24 @@ func (am *AuthMiddleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := ExtractToken(r)
 		if token == "" {
+			if am.allowGuest {
+				ctx := contextWithClaims(r, guestClaims())
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 		claims, err := am.jwt.Verify(token)
 		if err != nil {
+			if am.allowGuest {
+				// Invalid token (expired / rotated secret) also falls
+				// through to guest to avoid kicking demo users out
+				// every server restart.
+				ctx := contextWithClaims(r, guestClaims())
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
 			http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusUnauthorized)
 			return
 		}

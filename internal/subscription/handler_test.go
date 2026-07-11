@@ -76,7 +76,7 @@ func TestProfileAndSubscription(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec = httptest.NewRecorder()
-	mid := NewAuthMiddleware(jwt)
+	mid := NewAuthMiddleware(jwt, false)
 	mid.Wrap(http.HandlerFunc(h.handleProfile)).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -140,7 +140,7 @@ func TestLogout(t *testing.T) {
 
 func TestAuthRejectInvalidToken(t *testing.T) {
 	jwt := NewJWTManager("test-secret")
-	mid := NewAuthMiddleware(jwt)
+	mid := NewAuthMiddleware(jwt, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
 	req.Header.Set("Authorization", "Bearer invalid.token.here")
@@ -156,7 +156,7 @@ func TestAuthRejectInvalidToken(t *testing.T) {
 
 func TestAuthRejectNoToken(t *testing.T) {
 	jwt := NewJWTManager("test-secret")
-	mid := NewAuthMiddleware(jwt)
+	mid := NewAuthMiddleware(jwt, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
 	rec := httptest.NewRecorder()
@@ -166,6 +166,51 @@ func TestAuthRejectNoToken(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestAuthGuestModeAllowsAnon(t *testing.T) {
+	s := newTestStore(t)
+	jwt := NewJWTManager("test-secret")
+	h := NewHandler(s, jwt)
+	mid := NewAuthMiddleware(jwt, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
+	rec := httptest.NewRecorder()
+	mid.Wrap(http.HandlerFunc(h.handleProfile)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got["tier"] != string(TierFree) {
+		t.Errorf("expected tier=free, got %v", got["tier"])
+	}
+	if got["email"] != "" {
+		t.Errorf("expected empty email for guest, got %v", got["email"])
+	}
+}
+
+func TestAuthGuestModeDemotesInvalidToken(t *testing.T) {
+	jwt := NewJWTManager("test-secret")
+	mid := NewAuthMiddleware(jwt, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
+	req.Header.Set("Authorization", "Bearer invalid.token")
+	rec := httptest.NewRecorder()
+	mid.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := GetClaims(r)
+		if claims == nil || claims.Tier != string(TierFree) {
+			t.Errorf("expected guest claims, got %+v", claims)
+		}
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 (guest fallback), got %d", rec.Code)
 	}
 }
 

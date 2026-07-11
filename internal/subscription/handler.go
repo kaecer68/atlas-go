@@ -27,14 +27,32 @@ func hashPassword(email, password string) string {
 }
 
 // RegisterRoutes registers subscription endpoints.
-func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mid := NewAuthMiddleware(h.jwt)
+//
+// allowGuest=true downgrades missing/invalid tokens to TierFree
+// instead of 401 — see cmd/atlas/main.go ATLAS_REQUIRE_USER_AUTH.
+func (h *Handler) RegisterRoutes(mux *http.ServeMux, allowGuest bool) {
+	mid := NewAuthMiddleware(h.jwt, allowGuest)
 
 	mux.HandleFunc("POST /api/auth/register", h.handleRegister)
 	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
 	mux.Handle("GET /api/user/profile", mid.Wrap(http.HandlerFunc(h.handleProfile)))
 	mux.Handle("GET /api/user/subscription", mid.Wrap(http.HandlerFunc(h.handleSubscription)))
+}
+
+// setAuthCookie writes the HttpOnly token cookie. Shared by /register
+// and /login so both endpoints produce identical session state.
+func setAuthCookie(w http.ResponseWriter, token string) {
+	//nolint:gosec // local dev without HTTPS; Secure flag is environment-dependent
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(24 * time.Hour.Seconds()),
+	})
 }
 
 func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +76,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	token, _ := h.jwt.Generate(user, 24*time.Hour)
 	logging.Info("subscription", "user_registered", "email", req.Email)
+	setAuthCookie(w, token)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"user":  user,
 		"token": token,
@@ -81,17 +100,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	token, _ := h.jwt.Generate(user, 24*time.Hour)
 	logging.Info("subscription", "user_login", "email", req.Email)
-	//nolint:gosec // local dev without HTTPS; Secure flag is environment-dependent
-	c := &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(24 * time.Hour.Seconds()),
-	}
-	http.SetCookie(w, c)
+	setAuthCookie(w, token)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":  user,
 		"token": token,
@@ -120,6 +129,17 @@ func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	// Guest claims have no matching user row; synthesize a TierFree profile.
+	if claims.Email == "" {
+		writeJSON(w, http.StatusOK, ProfileResponse{
+			User:          nil,
+			Email:         "",
+			Tier:          TierFree,
+			EffectiveTier: TierFree,
+			TrialEnd:      time.Time{},
+		})
+		return
+	}
 	user, err := h.store.GetByEmail(claims.Email)
 	if err != nil || user == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user lookup failed"})
@@ -138,6 +158,16 @@ func (h *Handler) handleSubscription(w http.ResponseWriter, r *http.Request) {
 	claims := GetClaims(r)
 	if claims == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	// Guest path mirrors handleProfile — see comment there.
+	if claims.Email == "" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"tier":      TierFree,
+			"effective": TierFree,
+			"trial_end": nil,
+			"guest":     true,
+		})
 		return
 	}
 	user, err := h.store.GetByEmail(claims.Email)
