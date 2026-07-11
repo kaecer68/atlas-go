@@ -5,6 +5,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -189,6 +190,12 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 }
 
 func computeTechnical(bars []domain.DailyBar) map[string]any {
+	// Defensive sort: QuoteStore implementations may return bars in any order,
+	// but SMA/RSI and the "latest" bar must be chronological.
+	sort.Slice(bars, func(i, j int) bool {
+		return bars[i].Date.Before(bars[j].Date)
+	})
+
 	closes := make([]float64, len(bars))
 	for i, b := range bars {
 		closes[i] = b.Close

@@ -21,9 +21,11 @@ export function renderFundamentals(state, fundResult) {
   }
 
   const pbDisplay = data.PB ? data.PB.toFixed(2) : '—';
-  const psDisplay = data.PS ? data.PS.toFixed(2) : '—';
+  const psDisplay = data.PS ? data.PS.toFixed(2) : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
   const divDisplay = data.DividendYield ? data.DividendYield.toFixed(2) + '%' : '—';
-  const sectorDisplay = data.Sector ? escapeHtml(data.Sector) : '未分類';
+  const sectorDisplay = data.Sector
+    ? escapeHtml(data.Sector)
+    : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
 
   return `
     <div class="card">

@@ -12,35 +12,18 @@ let state = {
 };
 
 let _container = null;
+let _searchInput = null;
+let _contentWrapper = null;
 
-async function doSearch(symbol) {
-  state.currentSymbol = symbol;
-  state.status = 'loading';
-  render();
-
-  try {
-    const results = await fetchStockBundle(symbol);
-    state.status = 'loaded';
-    state.results = results;
-  } catch (e) {
-    state.status = 'error';
-    state.results = null;
+function updateSearchInput(symbol) {
+  if (_searchInput) {
+    _searchInput.value = symbol || '';
   }
-  
-  // Update URL if supported
-  if (window.history && window.history.pushState) {
-    const newUrl = window.location.pathname + '?symbol=' + encodeURIComponent(symbol);
-    window.history.pushState({ path: newUrl }, '', newUrl);
-  }
-  
-  render();
 }
 
-function render() {
-  if (!_container) return;
-  
-  const searchSection = renderSearch(doSearch, state.currentSymbol || '');
-  
+function renderContent() {
+  if (!_contentWrapper) return;
+
   let contentHtml = '';
   if (state.status === 'idle') {
     contentHtml = '<div style="text-align:center;padding:40px;color:var(--text-secondary)">請輸入股票代號進行查詢</div>';
@@ -58,8 +41,47 @@ function render() {
       </div>
     `;
   }
-  
-  const disclaimerHtml = `
+
+  _contentWrapper.innerHTML = contentHtml;
+}
+
+async function doSearch(symbol) {
+  state.currentSymbol = symbol;
+  state.status = 'loading';
+  state.results = null;
+  updateSearchInput(symbol);
+  renderContent();
+
+  try {
+    const results = await fetchStockBundle(symbol);
+    state.status = 'loaded';
+    state.results = results;
+  } catch (e) {
+    state.status = 'error';
+    state.results = null;
+  }
+
+  // Update URL if supported
+  if (window.history && window.history.pushState) {
+    const newUrl = window.location.pathname + '?symbol=' + encodeURIComponent(symbol);
+    window.history.pushState({ path: newUrl }, '', newUrl);
+  }
+
+  updateSearchInput(symbol);
+  renderContent();
+}
+
+function initPageStructure() {
+  if (!_container) return;
+
+  const searchSection = renderSearch(doSearch, state.currentSymbol || '');
+  _searchInput = searchSection.querySelector('#sqSearchInput');
+
+  _contentWrapper = document.createElement('div');
+  _contentWrapper.className = 'stock-quote-content';
+
+  const disclaimerWrapper = document.createElement('div');
+  disclaimerWrapper.innerHTML = `
     <div class="sq-disclaimer">
       ⚠️ 本系統資料僅供研究參考,不構成投資建議。<br>
       投資決策應自行評估風險,並諮詢專業顧問。
@@ -69,34 +91,29 @@ function render() {
   _container.innerHTML = '';
   const pageWrapper = document.createElement('div');
   pageWrapper.className = 'stock-quote-page';
-  
+
   pageWrapper.appendChild(searchSection);
-  
-  const contentWrapper = document.createElement('div');
-  contentWrapper.innerHTML = contentHtml;
-  pageWrapper.appendChild(contentWrapper);
-  
-  const disclaimerWrapper = document.createElement('div');
-  disclaimerWrapper.innerHTML = disclaimerHtml;
+  pageWrapper.appendChild(_contentWrapper);
   pageWrapper.appendChild(disclaimerWrapper);
-  
+
   _container.appendChild(pageWrapper);
 }
 
 export async function renderPage(container) {
   _container = container;
-  
 
+  initPageStructure();
 
   // Check URL params
   const urlParams = new URLSearchParams(window.location.search);
   const symbol = urlParams.get('symbol');
-  
+
   if (symbol && /^\d{4,6}$/.test(symbol)) {
     state.currentSymbol = symbol;
+    updateSearchInput(symbol);
     await doSearch(symbol);
   } else {
     state.status = 'idle';
-    render();
+    renderContent();
   }
 }

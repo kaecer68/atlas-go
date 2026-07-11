@@ -10,7 +10,11 @@ export function renderTechnical(state, techResult) {
     return `<div>${renderSkeleton(3)}</div>`;
   }
   if (state === 'error' || techResult.status === 'error') {
-    return `<div class="sq-error-box">技術指標暫時無法取得</div>`;
+    const isDataMissing = techResult.error && /insufficient historical quote data/i.test(techResult.error);
+    const message = isDataMissing
+      ? '歷史股價資料尚未回填，無法計算技術指標。'
+      : '技術指標暫時無法取得';
+    return `<div class="sq-error-box">${message}</div>`;
   }
   if (!techResult.data) {
     return renderEmptyState('無技術指標資料');

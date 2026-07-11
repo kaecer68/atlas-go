@@ -297,8 +297,8 @@ function renderTodaySummary(macro, stress, pipeline, events) {
     const stressScoreVal = pointValue(stress, 'score');
     const stressVal = stressScoreVal !== null ? stressScoreVal.toFixed(0) : '—';
     const stressLabel = stressVal;
-    const foreignChange = macro ? pointChange(macro, 'foreign_investor_net') : null;
-    const foreignLabel = foreignChange !== null ? fmtSignedPct(foreignChange) : '—';
+    const foreignValue = macro ? pointValue(macro, 'foreign_investor_net') : null;
+    const foreignLabel = foreignValue !== null ? formatSigned(foreignValue, { decimals: 1, suffix: ' 億', forceSign: true }) : '—';
     const taiexVal = macro ? pointValue(macro, 'taiex') : null;
     const taiexLabel = taiexVal !== null ? formatNumber(taiexVal) : '—';
 
@@ -664,7 +664,7 @@ function renderRealPortfolio(container, data) {
 
 function fmtNTD(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
-  return `NT$ ${formatNumber(value, { decimals: 0 })}`;
+  return `NT$ ${formatNumber(value, { decimals: 0, useGrouping: true })}`;
 }
 
 function renderDemoPortfolio(container) {
