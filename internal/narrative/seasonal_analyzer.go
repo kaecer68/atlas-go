@@ -3,12 +3,12 @@ package narrative
 import "math"
 
 type SeasonalExpectation struct {
-	HistoricalAvgReturn float64 `json:"historical_avg_return"`
-	CurrentReturn       float64 `json:"current_return"`
-	ExpectationGap      float64 `json:"expectation_gap"`
-	AlreadyPricedIn     bool    `json:"already_priced_in"`
-	SurprisePotential   float64 `json:"surprise_potential"`
-	Confidence          float64 `json:"confidence"`
+	HistoricalAvgReturn float64  `json:"historical_avg_return"`
+	CurrentReturn       *float64 `json:"current_return"`
+	ExpectationGap      float64  `json:"expectation_gap"`
+	AlreadyPricedIn     bool     `json:"already_priced_in"`
+	SurprisePotential   float64  `json:"surprise_potential"`
+	Confidence          float64  `json:"confidence"`
 }
 
 type SeasonalAnalyzer struct {
@@ -32,7 +32,7 @@ func (sa *SeasonalAnalyzer) CalculateExpectationGap(historicalAvg, currentReturn
 
 	return SeasonalExpectation{
 		HistoricalAvgReturn: historicalAvg,
-		CurrentReturn:       currentReturn,
+		CurrentReturn:       &currentReturn,
 		ExpectationGap:      gap,
 		AlreadyPricedIn:     currentReturn > historicalAvg,
 		SurprisePotential:   surprisePotential,
