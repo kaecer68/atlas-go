@@ -623,8 +623,10 @@ func run(args []string, deps appDeps) error {
 			}
 			jwtMgr := subscription.NewJWTManager(jwtSecret)
 			subHandler := subscription.NewHandler(subStore, jwtMgr)
-			subHandler.RegisterRoutes(mux)
-			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes")
+			// ATLAS_REQUIRE_USER_AUTH=true forces JWT; default is guest TierFree.
+			allowGuest := config.GetSecret("ATLAS_REQUIRE_USER_AUTH") != "true"
+			subHandler.RegisterRoutes(mux, allowGuest)
+			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
 			devMode := config.GetSecret("ATLAS_DEV_MODE") == "true"
 			deps := WireRecommenderDeps(WireDeps{WorkDir: cfg.WorkDir})
 			recommender.RegisterRoutesWithDeps(mux, *subStore, jwtMgr, deps, devMode)

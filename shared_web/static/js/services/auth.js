@@ -5,11 +5,20 @@
  *   1. Cookie-based JWT (HttpOnly, auto-sent via credentials: 'include')
  *   2. Memory-cached token (from POST /api/auth/login response, for Authorization header)
  *
+ * Guest mode (GUEST_MODE = true):
+ *   When the backend is started without ATLAS_REQUIRE_USER_AUTH, every
+ *   visitor is treated as an anonymous TierFree "guest". login/register
+ *   are still callable, but the UI hides the auth sidebar entries and
+ *   isLoggedIn() returns true for everyone. Flip back to false when
+ *   commercialising.
+ *
  * Usage:
  *   import { login, register, logout, isLoggedIn, getTier, getClaims, getToken, initAuth } from '../services/auth.js';
  */
 
 import { postJSON, getJSON } from '../shared/app-utils.js';
+
+const GUEST_MODE = true;
 
 let _token = null;
 let _claims = null;
@@ -126,6 +135,9 @@ export function invalidateAuth() {
 /**
  * Initialize auth state. Called once on page load.
  * Checks cookie-based JWT validity, handles expired tokens.
+ *
+ * In GUEST_MODE, every visitor is auto-promoted to anonymous TierFree
+ * when no JWT is present so the rest of the app can run unmodified.
  */
 export async function initAuth() {
   const loggedIn = await isLoggedIn();
@@ -136,7 +148,6 @@ export async function initAuth() {
       if (claims && claims.exp) {
         const expired = Date.now() >= claims.exp * 1000;
         if (expired) {
-          // Token expired — clear stale cookie and local state
           _token = null;
           _claims = null;
           _authValid = false;
@@ -144,6 +155,12 @@ export async function initAuth() {
         }
       }
     }
+  }
+  if (GUEST_MODE && !_authValid) {
+    _authValid = true;
+    _claims = { tier: 'free', email: '', sub: 0 };
+    _token = 'guest';
+    _authChecked = true;
   }
   return _authValid;
 }
@@ -170,10 +187,21 @@ function readCookie(name) {
 /**
  * Update sidebar auth navigation based on current login state.
  * Call after initAuth() completes or after login/logout.
+ *
+ * In GUEST_MODE the entire "帳戶" sidebar section is hidden — the
+ * login/register/profile/premium/logout nav block is meaningless when
+ * every visitor is anonymous.
  */
 export async function renderNavState() {
   const loggedIn = await isLoggedIn();
   const tier = await getTier();
+
+  if (GUEST_MODE) {
+    const accountSection = document.getElementById('navAccountSection');
+    if (accountSection) accountSection.classList.add('hidden');
+    return;
+  }
+
   const guestItems = document.querySelectorAll('.nav-guest');
   const userItems = document.querySelectorAll('.nav-user');
   const tierBadge = document.getElementById('navTierBadge');
