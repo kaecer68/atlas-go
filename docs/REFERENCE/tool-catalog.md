@@ -1,17 +1,17 @@
 ## 工具數量
 
-業務 87 + audit 4 = 91（基礎 87, +2, 編譯期 assert ∈ [89, 91]）
+業務 102 + audit 4 + sampling/elicitation（0-2）= 106-108（**基礎 106**, **+2** sampling/elicitation, 編譯期 assert ∈ [106, 108]）
 
 # atlas-mcp Tool Catalog
 
-> **91 tools** grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
+> **108 tools** grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
 > For natural language query examples, see [`docs/INVESTOR/query-examples.md`](../INVESTOR/query-examples.md).
 
-## 完整工具 Catalog（約 91 個 tool，Phase 2 全部上線）
+## 完整工具 Catalog（約 108 個 tool，Phase 2+PR 1+2+3 全部上線）
 
 ## 工具數量
 
-業務 87 + audit 4 = 91（**基礎 87**, **+2** sampling/elicitation, 編譯期 assert ∈ [89, 91]）
+業務 102 + audit 4 = 106（**基礎 102**, **+4** audit/sampling/elicitation, 編譯期 assert ∈ [102, 106]）
 
 
 ### Regime（1 個）
@@ -91,12 +91,14 @@
 |------|------|
 | `get_recommendations` | 依訂閱層級回傳市場 overview、活躍策略與排序建議 |
 
-### Experiment（3 個：1 Phase 1 + 2 Phase 2.2）
+### Experiment（5 個：1 Phase 1 + 2 Phase 2.2 + 2 PR 3）
 | Tool | 用途 |
 |------|------|
 | `experiment_judge` | 觸發 LLM judge 評分（Phase 1，destructiveHint=true）|
 | `experiment_diff` | 候選 vs baseline 差異 |
 | `experiment_history` | 歷史實驗清單 |
+| `experiment_promote` | 候選實驗 promote 為 baseline（PR 3，destructiveHint=true，需 ATLAS_API_KEY）|
+| `experiment_revert` | 候選實驗 revert（PR 3，destructiveHint=true，需 ATLAS_API_KEY）|
 
 ### Synergy（3 個）
 | Tool | 用途 |
@@ -105,13 +107,18 @@
 | `synergy_get_darwinian_trend` | 達爾文權重歷史趨勢 |
 | `synergy_get_l2_4_schedule` | L2.4 觀察窗口時程 |
 
-### Control（4 個，皆 read-only）
-| Tool | 用途 |
-|------|------|
-| `control_get_audit_log` | 控制覆寫 audit log |
-| `control_get_active_overrides` | 當前 active 覆寫 |
-| `control_approve_recommendation` | 批准推薦狀態 |
-| `control_reject_recommendation` | 拒絕推薦狀態 |
+### Control（7 個：4 read-only + 3 write — PR 3）
+| Tool | 用途 | 備註 |
+|------|------|------|
+| `control_get_audit_log` | 控制覆寫 audit log | read-only |
+| `control_get_active_overrides` | 當前 active 覆寫 | read-only |
+| `control_approve_recommendation` | 批准推薦狀態 | read-only |
+| `control_reject_recommendation` | 拒絕推薦狀態 | read-only |
+| `control_pause_agent` | 暫停特定 agent（PR 3）| destructiveHint=true，需 ATLAS_API_KEY |
+| `control_resume_agent` | 恢復已暫停 agent（PR 3）| destructiveHint=true，需 ATLAS_API_KEY |
+| `control_sector_ban` | 禁止特定 sector 新倉位（PR 3）| destructiveHint=true，需 ATLAS_API_KEY |
+
+> 寫入操作（pause/resume-agent、sector-ban）需後端 auth 強制保護，ATLAS_API_KEY 必須設定。MCP server 透過 `X-API-Key` header 轉發 API key。
 
 ### Scheduler / Task（4 個）
 | Tool | 用途 |
@@ -165,6 +172,32 @@
 > **API Contract**：[`../specs/stock-api-contract.md`](../specs/stock-api-contract.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
 > **Frontend 狀態**：client_web「個股快查」頁面（Issue #1038）已 ship — 後端 normalize（PR-A #1044）+ 前端 14 檔（PR-B #1045）+ 文件同步（PR-C #1046）+ RSI pre-existing bug fix（PR #1047）。頁面路徑 `/client/quote?symbol=<4-6 digit symbol>`。剩餘 follow-up 見 `.omo/plans/2026-07-09-stock-quote-followup.md`。
 
+### Parameters（5 個 — PR 2 新增）
+| Tool | 用途 |
+|------|------|
+| `parameters_get` | 當前參數 flat map（key → type）|
+| `parameters_get_categories` | 參數分類清單（darwinian/factor/optimizer/sizing/health 等）|
+| `parameters_get_audit_log` | 參數變更稽核紀錄 |
+| `parameters_get_metadata` | 參數含 provenance（rationale、source、citation）|
+| `parameters_get_snapshots` | 參數歷史快照（days 參數，預設 20、上限 365）|
+
+### Backtest（2 個 — PR 2 新增）
+| Tool | 用途 |
+|------|------|
+| `backtest_status` | 回測執行狀態摘要（最後一次自動回測日期與 portfolio 值）|
+| `backtest_signals` | 當前 auto-backtest 訊號（active_signals、VaR、Sharpe、drawdown）|
+
+### Industry Extension（5 個 — PR 2 新增）
+| Tool | 用途 |
+|------|------|
+| `calendar_events` | 14 天事件日曆（ETF rebalances、MSCI、營收、股東會、window dressing、holiday）|
+| `sector_allocation_plan` | 產業配置計畫（base_weight、adjusted_weight、derivation_factors）|
+| `channel_health` | 通道健康（channel_id、status、updated_at）|
+| `taiwan_stress_index` | 台灣壓力指數（score、regime、components）|
+| `risk_exposure` | 投資組合風險敞口（VaR/CVaR、sector/factor/concentration breakdown）|
+
+> 這 5 個 tool 提供 MCP 對 frontend `industry.js`、`pipeline.js`、`risk.js` 等頁面所需資料的鏡像存取。
+
 ### Universe（2 個）
 | Tool | 用途 |
 |------|------|
@@ -215,3 +248,5 @@
 | `prism_get_training_results` | PRISM cohort 訓練結果 |
 
 ---
+
+

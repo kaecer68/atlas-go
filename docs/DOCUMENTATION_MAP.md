@@ -42,7 +42,7 @@
 | `docs/DOCUMENTATION_MAP.md` | 本文件 | ✅ |
 | `docs/CONVENTIONS_CHECKLIST.md` | 慣例檢查清單 | ✅ |
 | `docs/REFERENCE/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） | ✅ |
-| `docs/REFERENCE/tool-catalog.md` | atlas-mcp 91 tools 完整 catalog | ✅ |
+| `docs/REFERENCE/tool-catalog.md` | atlas-mcp 108 tools 完整 catalog | ✅ |
 
 ### 🏗️ 架構 / 領域知識
 
@@ -229,7 +229,7 @@
 | 檔案 | 用途 |
 |------|------|
 | `docs/REFERENCE/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） |
-| `docs/REFERENCE/tool-catalog.md` | atlas-mcp 91 tools 完整 catalog |
+| `docs/REFERENCE/tool-catalog.md` | atlas-mcp 108 tools 完整 catalog |
 | `docs/REFERENCE/PROCESSES.yaml` | 結構化 workflow metadata |
 | `cmd/atlas-mcp/README.md` | MCP 給 agent 的唯一入口 |
 | `docs/INVESTOR/README.md` | 投資人 5 分鐘入門 |

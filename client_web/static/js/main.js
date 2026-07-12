@@ -288,8 +288,8 @@ async function loadPageData(pageId) {
       var decisionResults = await Promise.all([
         silentGetJSON('/api/dashboard/experiment-inbox'),
         silentGetJSON('/api/dashboard/phase3-status'),
-        silentGetJSON('/api/synergy/darwinian-status'),
-        silentGetJSON('/api/synergy/darwinian-trend'),
+        silentGetJSON('/api/synergy/darwinian/status'),
+        silentGetJSON('/api/synergy/darwinian/trend'),
         silentGetJSON('/api/dashboard/agent-observatory'),
         silentGetJSON('/api/dashboard/macro-radar'),
         silentGetJSON('/api/taiwan/stress-index'),
