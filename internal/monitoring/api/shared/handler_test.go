@@ -277,7 +277,7 @@ func TestAuthMiddleware_ProbingPathsBypassAuth(t *testing.T) {
 
 	// Non-probing paths still require auth
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/control/audit-log", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/control/approve-recommendation", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("protected path without auth: status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
@@ -348,7 +348,7 @@ func TestAuthMiddleware_WebUIPathsBypassAuth(t *testing.T) {
 		t.Errorf("next handler invocations = %d, want %d", hits, len(paths))
 	}
 
-	for _, path := range []string{"/api/control/audit-log", "/api/experiment/judge", "/adminfoo", "/adminx"} {
+	for _, path := range []string{"/api/control/approve-recommendation", "/api/experiment/judge", "/adminfoo", "/adminx"} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
 		if w.Code != http.StatusUnauthorized {
@@ -392,9 +392,27 @@ func TestAuthMiddleware_DashboardAPIsBypassAuth(t *testing.T) {
 		"/api/macro/snapshot/latest",
 		"/api/alerts/unacknowledged",
 		"/api/synergy/darwinian/status",
+		"/api/strategies/active",
+		"/api/risk/metrics",
+		"/api/regime/history",
+		"/api/scheduler/status",
+		"/api/tasks",
+		"/api/traces/sim-latest",
+		"/api/llm/cost",
+		"/api/llm_annotator/cost",
+		"/api/prism/training-results",
+		"/api/recommendations",
+		"/api/reports/latest",
+		"/api/strategy-ranker/rank",
+		"/api/universe/sessions",
 	}
 	exactPaths := []string{
 		"/api/alerts",
+		"/api/field-contract",
+		"/api/control/audit-log",
+		"/api/control/active-overrides",
+		"/api/experiment/history",
+		"/api/experiment/diff",
 	}
 
 	for _, path := range prefixPaths {
@@ -419,8 +437,17 @@ func TestAuthMiddleware_DashboardAPIsBypassAuth(t *testing.T) {
 		t.Errorf("next handler invocations = %d, want %d", hits, wantHits)
 	}
 
-	// Unrelated /api/ paths still require auth (positive control).
-	for _, path := range []string{"/api/control/audit-log", "/api/experiment/judge"} {
+	// Write operations and other sensitive paths still require auth.
+	for _, path := range []string{
+		"/api/control/approve-recommendation",
+		"/api/control/reject-recommendation",
+		"/api/control/pause-agent",
+		"/api/control/resume-agent",
+		"/api/control/sector-ban",
+		"/api/experiment/judge",
+		"/api/experiment/promote",
+		"/api/experiment/revert",
+	} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
 		if w.Code != http.StatusUnauthorized {

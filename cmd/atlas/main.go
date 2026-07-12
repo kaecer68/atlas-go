@@ -138,6 +138,32 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/api/user" || strings.HasPrefix(p, "/api/user/"):
 		return true
+	case p == "/api/strategies" || strings.HasPrefix(p, "/api/strategies/"):
+		return true
+	case p == "/api/risk" || strings.HasPrefix(p, "/api/risk/"):
+		return true
+	case p == "/api/regime" || strings.HasPrefix(p, "/api/regime/"):
+		return true
+	case p == "/api/scheduler" || strings.HasPrefix(p, "/api/scheduler/"):
+		return true
+	case p == "/api/tasks" || strings.HasPrefix(p, "/api/tasks/"):
+		return true
+	case p == "/api/traces" || strings.HasPrefix(p, "/api/traces/"):
+		return true
+	case strings.HasPrefix(p, "/api/llm/"):
+		return true
+	case strings.HasPrefix(p, "/api/llm_annotator/"):
+		return true
+	case strings.HasPrefix(p, "/api/prism/"):
+		return true
+	case p == "/api/field-contract":
+		return true
+	case p == "/api/control/audit-log" || p == "/api/control/active-overrides":
+		return true
+	case p == "/api/experiment/history" || p == "/api/experiment/diff":
+		return true
+	case strings.HasPrefix(p, "/api/universe/"):
+		return true
 	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
 		return true
 	case p == "/client" || strings.HasPrefix(p, "/client/"):

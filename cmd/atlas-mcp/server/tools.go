@@ -192,7 +192,14 @@ func (s *server) handleExperimentJudge(ctx context.Context, _ *mcp.CallToolReque
 func (s *server) handleAlertListUnacknowledged(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, AlertListUnacknowledgedOutput, error) {
 	var out AlertListUnacknowledgedOutput
 	if err := s.withAudit(ctx, "alert_list_unacknowledged", nil, func() error {
-		return s.cli.Get(ctx, "/api/alerts/unacknowledged", nil, &out.Alerts)
+		var wrapper struct {
+			Alerts []map[string]any `json:"alerts"`
+		}
+		if err := s.cli.Get(ctx, "/api/alerts/unacknowledged", nil, &wrapper); err != nil {
+			return err
+		}
+		out.Alerts = wrapper.Alerts
+		return nil
 	}); err != nil {
 		return nil, AlertListUnacknowledgedOutput{}, err
 	}
