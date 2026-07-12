@@ -164,6 +164,14 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("sox_index", soxAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "sox_index")
 
+	// --- TAIEX (Taiwan Stock Exchange Capitalization Weighted Stock Index) ---
+	if cfg.YahooEnabled {
+		taiexProvider := marketdata.NewTAIEXIndexProvider()
+		taiexAdapter := NewTAIEXIndexChannelAdapter(taiexProvider)
+		g.registry.Register("taiex_index", taiexAdapter)
+		logging.Info("apigateway", "adapter_registered", "channel", "taiex_index")
+	}
+
 	// --- US Indexes (S&P 500, Nasdaq Composite, Dow Jones) ---
 	if cfg.YahooEnabled {
 		spxProvider := marketdata.NewSPXIndexProvider()

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "portfolio-state.schema.json",
   "type": "object",
-  "required": ["positions", "portfolio_value", "cumulative_pnl", "cumulative_pnl_pct", "current_drawdown", "data_status"],
+  "required": ["positions", "portfolio_value", "cumulative_pnl", "cumulative_pnl_pct", "current_drawdown", "max_drawdown", "data_status"],
   "properties": {
     "positions": {
       "type": "array",
@@ -25,6 +25,7 @@
     "cumulative_pnl": { "type": "number" },
     "cumulative_pnl_pct": { "type": "number" },
     "current_drawdown": { "type": "number" },
+    "max_drawdown": { "type": "number" },
     "data_status": { "type": "string" }
   }
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
@@ -164,6 +165,7 @@ type PortfolioStateResponse struct {
 	CumulativePnL      float64            `json:"cumulative_pnl"`
 	CumulativePnLPct   float64            `json:"cumulative_pnl_pct"`
 	CurrentDrawdown    float64            `json:"current_drawdown"`
+	MaxDrawdown        float64            `json:"max_drawdown"`
 	UnrealizedPnLTotal float64            `json:"unrealized_pnl_total,omitempty"`
 	ConcentrationRatio float64            `json:"concentration_ratio,omitempty"`
 	TradeCount         int                `json:"trade_count,omitempty"`
@@ -287,6 +289,9 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		currentDrawdown = ps.CurrentDrawdown
 	}
 
+	// Historical max drawdown from the equity curve (peak-to-trough decline).
+	maxDrawdown := calculateMaxDrawdownFromEquityCurve(equityCurve)
+
 	resp := PortfolioStateResponse{
 		SnapshotTime:       portfolio.LastUpdated,
 		Cash:               portfolio.Cash,
@@ -296,6 +301,7 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		CumulativePnL:      realizedPnL + portfolio.UnrealizedPnL,
 		CumulativePnLPct:   0,
 		CurrentDrawdown:    currentDrawdown,
+		MaxDrawdown:        maxDrawdown,
 		UnrealizedPnLTotal: totalUnrealizedPnL,
 		ConcentrationRatio: hhi,
 		TradeCount:         tradeCount,
@@ -386,6 +392,20 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 		}
 	}
 	return curve
+}
+
+// calculateMaxDrawdownFromEquityCurve computes the peak-to-trough decline
+// from a series of equity-curve values. Returns a positive magnitude
+// (e.g., 0.20 = 20% drawdown). Empty curve returns 0.
+func calculateMaxDrawdownFromEquityCurve(curve []EquityCurvePoint) float64 {
+	if len(curve) == 0 {
+		return 0.0
+	}
+	values := make([]float64, len(curve))
+	for i, p := range curve {
+		values[i] = p.Value
+	}
+	return risk.CalculateMaxDrawdown(values)
 }
 
 // buildSymbolSectorMap builds a symbol→sector mapping from the classifier.

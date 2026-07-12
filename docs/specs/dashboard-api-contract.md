@@ -74,6 +74,7 @@
 | `cumulative_pnl` | float64 | 累計損益 = realized + unrealized |
 | `cumulative_pnl_pct` | float64 | 累計損益%（相對 starting_cash；starting_cash 為 0 時為 0） |
 | `current_drawdown` | float64 | 當前回撤 |
+| `max_drawdown` | float64 | 歷史最大回撤（由 equity_curve 計算） |
 | `unrealized_pnl_total` | float64 | 未實現損益總計（omitempty） |
 | `concentration_ratio` | float64 | HHI 集中度 [0,1] |
 | `trade_count` | int | 交易筆數（omitempty） |
@@ -654,3 +655,4 @@ admin/client 首頁同時發出 10+ 請求。所有 endpoint 互相獨立，前�
 | 版本 | 日期 | 變更 |
 | --- | --- | --- |
 | v1.0 | 2026-07-12 | P2-3 初版：涵蓋 admin/client 常用 dashboard 與 macro endpoint |
+| v1.1 | 2026-07-12 | 新增 `portfolio-state.max_drawdown`；TAIEX 資料源透過 `taiex_index` channel 提供 |

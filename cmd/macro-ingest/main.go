@@ -51,6 +51,7 @@ func main() {
 		marketdata.NewNDXIndexProvider(),
 		marketdata.NewDJIIndexProvider(),
 		marketdata.NewTSMADRProvider(),
+		marketdata.NewTAIEXIndexProvider(),
 		marketdata.NewNVDAProvider(),
 		marketdata.NewAAPLProvider(),
 		marketdata.NewMSFTProvider(),
