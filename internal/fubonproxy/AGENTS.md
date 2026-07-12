@@ -53,4 +53,4 @@ Fubon-proxy 生命週期管理：non-blocking supervisor pattern，`Start()` 立
 - 改 supervisor：重檢 F1~F9 skill。
 - 改 port 探測：只動 `internal/portprobe/`。
 - 改介面：更新 `doc.go`。
-- 必跑：`go test -race -count=1 ./internal/fubonproxy/ ./internal/portprobe/ ./internal/startup/` + `go vet ./...` + `staticcheck`。
+- 必跑：`go test -race -count=1 ./internal/fubonproxy/ ./internal/portprobe/ ./internal/startup/`（專案 CI 已強制執行 `go vet` 與 `staticcheck`）。
