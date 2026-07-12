@@ -58,7 +58,7 @@
 
 **統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md) 為單一權威來源。編譯期權威計數來自 [`cmd/atlas-mcp/auto-desc.gen.json`](../../cmd/atlas-mcp/auto-desc.gen.json)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [89, 91]`，防止文件↔程式碼漂移）。
 
-**當前實際**：**91 個 tool**（87 業務 + 4 audit；sampling / elicitation / roots 在 feature flag 啟用時另計，但**目前已預設掛載**）。本節保留 high-level 群組對照；單一 tool 名稱請以 `auto-desc.gen.json` 為準。
+**當前實際**：**108 個 tool**(102 業務 + 4 audit；sampling / elicitation / roots 在 feature flag 啟用時另計，但**目前已預設掛載**）。本節保留 high-level 群組對照；單一 tool 名稱請以 `auto-desc.gen.json` 為準。
 
 | WA | 群組 | Tool 數 | 主要用途 |
 |----|------|---------|---------|
@@ -650,7 +650,7 @@ cmd/atlas-mcp/
 
 - 業務 tool：87 個（不含 audit）
 - audit tool：4 個（`mcp_get_call_stats`、`mcp_get_session_topology`、`mcp_get_tenant_usage`、`mcp_get_top_slow_tools`）
-- **總計**：91 個
+- **總計**：108 個
 - 編譯期 assert：`server.Run()` 啟動時檢查 `RegisteredToolCount ∈ [89, 91]`（`cmd/atlas-mcp/server/server.go`），防止文件↔程式碼漂移
 
 **Module 演進**（同步參考 `internal/AGENTS_INDEX.md`）：59 模組（22 S / 23 E / 9 X / 5 U），新增 7 個 v0.0.0.31 模組（`capitalflow`、`eventdriven`、`recommender`、`dailyreport`、`strategy_ranker`、`strategy_validator`、`subscription`）。

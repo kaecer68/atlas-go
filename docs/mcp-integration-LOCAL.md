@@ -82,7 +82,7 @@ mcp_servers:
 ```bash
 hermes mcp reload
 hermes mcp test atlas-mcp
-# 預期: 列出 91 個 tool
+# 預期: 列出 108 個 tool
 ```
 
 ### 3.2 OpenClaw（`~/.openclaw/mcp.json`）
@@ -191,7 +191,7 @@ curl -fsS http://127.0.0.1:18080/health
 
 # 3. MCP server 啟動時 tool count ∈ [89, 91]
 bin/atlas-mcp 2>&1 | head -3
-# 預期: 看到 "registered N tools" 且 N 在 89-91 之間
+# 預期: 看到 "registered N tools" 且 N 在 106-108 之間
 ```
 
 ---
@@ -214,9 +214,9 @@ bin/atlas-mcp 2>&1 | head -3
 
 - **5 分鐘 SOP（給 agent 用）**: [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
 - **完整 MCP 指南**: [`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)
-- **91 個 tool 總覽**: [`docs/REFERENCE/tool-catalog.md`](./REFERENCE/tool-catalog.md)
+- **108 個 tool 總覽**: [`docs/REFERENCE/tool-catalog.md`](./REFERENCE/tool-catalog.md)
 - **Setup wizard 詳解**: [`cmd/atlas-mcp-setup/README.md`](../cmd/atlas-mcp-setup/README.md)
 
 ---
 
-**版本**: v0.0.0.32+（91 tools）| **授權**: GNU AGPL v3
+**版本**: v0.0.0.32+（108 tools）| **授權**: GNU AGPL v3

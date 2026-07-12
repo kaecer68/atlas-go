@@ -121,7 +121,7 @@
 | _（shipped via PR #828,merged 2026-06-29）_ | L2.4 CLI flag 實作：`--use-llm-sector-agents`（plan 內容已併入 `docs/operations/l2-4-followup.md`）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
 | `docs/TOOLS.md` | ACI 工具（GitNexus / codebase-memory / CodeGraph / atlas-mcp）路由決策樹 |
-| `docs/REFERENCE/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（91 tools,供外部 AI agent） |
+| `docs/REFERENCE/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（108 tools,供外部 AI agent） |
 
 ---
 

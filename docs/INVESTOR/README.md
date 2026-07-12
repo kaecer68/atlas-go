@@ -1,6 +1,6 @@
 # atlas-go for Investors
 
-atlas-go is a Taiwan stock investment research system. Through **atlas-mcp** (Model Context Protocol), AI agents like Hermes / OpenClaw can answer your investment questions by querying 91 tools that cover quotes, fundamentals, market regime, portfolio risk, and strategy performance.
+atlas-go is a Taiwan stock investment research system. Through **atlas-mcp** (Model Context Protocol), AI agents like Hermes / OpenClaw can answer your investment questions by querying 108 tools that cover quotes, fundamentals, market regime, portfolio risk, and strategy performance.
 
 ## 8 Use Cases — Pick Yours
 
@@ -25,12 +25,12 @@ atlas-go is a Taiwan stock investment research system. Through **atlas-mcp** (Mo
 
 ```bash
 make setup-mcp-agent   # 自動安裝 + 設定 + 共用 dev key
-make verify-mcp-setup  # 驗證 91 tools 連線成功
+make verify-mcp-setup  # 驗證 108 tools 連線成功
 ```
 
 （詳見 [`cmd/atlas-mcp/README.md`](../../cmd/atlas-mcp/README.md)）
 
 ## Full Reference
 
-- [`REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md) — 91 tool 完整 catalog
+- [`REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md) — 108 tool 完整 catalog
 - [`query-examples.md`](query-examples.md) — 自然語言 → tool 對照 (~25 高頻範本)
