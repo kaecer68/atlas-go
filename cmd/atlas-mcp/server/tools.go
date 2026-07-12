@@ -184,7 +184,7 @@ func fetchRegimeCompositeScore(ctx context.Context, s *server) (int, bool) {
 			Value float64 `json:"value"`
 		} `json:"vix"`
 	}
-	if err := s.cli.Get(ctx, "/api/macro/snapshot", nil, &snap); err != nil {
+	if err := s.cli.Get(ctx, "/api/macro/snapshot/latest", nil, &snap); err != nil {
 		return 0, false
 	}
 	score := 0.0
