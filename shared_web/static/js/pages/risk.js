@@ -1,8 +1,8 @@
 // Risk Control Page - Enhanced Risk Indicators
 // Extracted from index.html - DO NOT EDIT inline
 import { sectorName, renderStockCell } from '../names.js';
-import { escapeHtml, fmtNTD, fmtInt, fmtFloat, pnlColor } from '../shared/utils.js';
-import { formatNumber, formatMaxDrawdown, fmtSignedPct } from '../shared/format-metric.js';
+import { escapeHtml, fmtNTD, fmtInt, pnlColor } from '../shared/utils.js';
+import { fmtSafeNumber, fmtSafeDrawdown, fmtSafeSignedPct } from '../shared/format-metric.js';
 import { renderEmptyState, formatDate } from '../shared/app-utils.js';
 
 function isFiniteNumber(v) {
@@ -74,7 +74,7 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
   const phaseLabel = { advance: '🚀 推進', reduce: '🔻 縮減', standby: '⏸️ 觀望' };
   const phase = phaseLabel[cp.phase] || cp.phase || '—';
   const rollingSharpeRaw = cp.rolling_sharpe;
-  const rollingSharpe = fmtFloat(rollingSharpeRaw);
+  const rollingSharpe = fmtSafeNumber(rollingSharpeRaw, { decimals: 2, useGrouping: true });
   const rollingSharpeColor = isFiniteNumber(rollingSharpeRaw)
     ? (rollingSharpeRaw > 0.5 ? 'var(--up)' : (rollingSharpeRaw < 0 ? 'var(--down)' : 'var(--warn)'))
     : 'var(--muted)';
@@ -90,15 +90,15 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
     const top3Weight = conc.slice(0, 3).reduce((s, c) => s + (isFiniteNumber(c.weight) ? c.weight : 0), 0);
 
     const rows = conc.map((c, idx) => {
-      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${c.symbol ? renderStockCell(c.symbol) : '—'}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${formatNumber(c.weight, { percent: true, decimals: 1 })}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${fmtNTD(c.market_value)}</td></tr>`;
+      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${c.symbol ? renderStockCell(c.symbol) : '—'}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${fmtSafeNumber(c.weight, { percent: true, decimals: 1 })}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${fmtNTD(c.market_value)}</td></tr>`;
     }).join('');
 
     concentrationHtml = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:180px">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">持倉集中度（市值）</div>
-          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--color-danger)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--color-success)')}">${formatNumber(top5Weight, { percent: true, decimals: 1 })}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">前 3 大 ${formatNumber(top3Weight, { percent: true, decimals: 1 })} · 最大 ${formatNumber(top1Weight, { percent: true, decimals: 1 })}</div>
+          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--color-danger)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--color-success)')}">${fmtSafeNumber(top5Weight, { percent: true, decimals: 1 })}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">前 3 大 ${fmtSafeNumber(top3Weight, { percent: true, decimals: 1 })} · 最大 ${fmtSafeNumber(top1Weight, { percent: true, decimals: 1 })}</div>
         </div>
         <div style="flex:2;min-width:300px">
           <table style="width:100%;font-size:12px;border-collapse:collapse">
@@ -121,8 +121,8 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
     const maxW = Math.max(...sectors.map(s => s.weight), 0.01);
     const sectorBars = sectors.map(s => {
       const w = s.weight;
-      const pct = formatNumber(w, { percent: true, decimals: 1 });
-      const barPct = formatNumber(w / maxW, { percent: true, decimals: 1 });
+      const pct = fmtSafeNumber(w, { percent: true, decimals: 1 });
+      const barPct = fmtSafeNumber(w / maxW, { percent: true, decimals: 1 });
       const color = w > 0.3 ? 'var(--accent)' : (w > 0.15 ? 'var(--warn)' : 'var(--muted)');
       return `
         <div style="margin:4px 0">
@@ -147,33 +147,33 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
     sectorHtml = `<div style="font-size:12px;color:var(--muted);margin-top:16px">暫無板塊曝險資料</div>`;
   }
 
-  const cashRatioPct = formatNumber(re.cash_ratio, { percent: true, decimals: 1 });
+  const cashRatioPct = fmtSafeNumber(re.cash_ratio, { percent: true, decimals: 1 });
   const portfolioValue = fmtNTD(re.portfolio_value);
   const deployedCapital = cp.deployed_capital;
   const totalCapital = cp.total_capital;
   const exposureRatio = isFiniteNumber(deployedCapital) && isFiniteNumber(totalCapital) && totalCapital > 0
-    ? formatNumber(deployedCapital / totalCapital, { percent: true, decimals: 1 })
+    ? fmtSafeNumber(deployedCapital / totalCapital, { percent: true, decimals: 1 })
     : null;
 
   el.innerHTML = `
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 95%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : formatNumber(re.var_95, { percent: true, decimals: 1 })}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtSafeNumber(re.var_95, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">日頻 · 95% 信賴水準</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 99%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : formatNumber(re.var_99, { percent: true, decimals: 1 })}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtSafeNumber(re.var_99, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">日頻 · 極端事件壓力</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">CVaR 95%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : formatNumber(re.cvar_95, { percent: true, decimals: 1 })}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtSafeNumber(re.cvar_95, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">95% 條件期望虧損</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">最大回撤</div>
-      <div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : formatMaxDrawdown(re.max_drawdown_pct, { asAbsolute: true })}</div>
+      <div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : fmtSafeDrawdown(re.max_drawdown_pct, { asAbsolute: true })}</div>
       <div class="kpi-hint">歷史峰值回撤幅度</div>
     </div>
     <div class="panel" style="text-align:center">
@@ -243,8 +243,8 @@ export function renderRiskCalibration(data) {
       var confidenceColor = c.confidence === 'high' ? 'var(--up)' : (c.confidence === 'medium' ? 'var(--warn)' : 'var(--muted)');
       return '<tr>' +
         '<td style="padding:4px 8px;font-size:12px;font-family:monospace">' + escapeHtml(c.name) + '</td>' +
-        '<td style="padding:4px 8px;font-size:12px;text-align:right">' + formatNumber(c.before, { decimals: 4 }) + '</td>' +
-        '<td style="padding:4px 8px;font-size:12px;text-align:right;color:var(--up)">' + formatNumber(c.after, { decimals: 4 }) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:right">' + fmtSafeNumber(c.before, { decimals: 4 }) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:right;color:var(--up)">' + fmtSafeNumber(c.after, { decimals: 4 }) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;color:var(--muted)">' + escapeHtml(c.rationale) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:color-mix(in srgb, ' + confidenceColor + ' 13%, transparent);color:' + confidenceColor + '">' + escapeHtml(c.confidence) + '</span></td>' +
         '</tr>';
@@ -375,8 +375,8 @@ export function renderSemiconductorSentiment(snapshot, industryCycle) {
 
   const sox = snapshot && snapshot.sox_index ? snapshot.sox_index : null;
   const soxChangeRaw = sox ? sox.change_pct : null;
-  const soxValue = fmtFloat(sox && sox.value);
-  const soxChange = fmtSignedPct(soxChangeRaw, 2);
+  const soxValue = fmtSafeNumber(sox && sox.value, { decimals: 2, useGrouping: true });
+  const soxChange = fmtSafeSignedPct(soxChangeRaw, 2);
   const soxColor = isFiniteNumber(soxChangeRaw)
     ? (soxChangeRaw > 0 ? 'var(--up)' : (soxChangeRaw < 0 ? 'var(--down)' : 'var(--muted)'))
     : 'var(--muted)';
@@ -393,7 +393,7 @@ export function renderSemiconductorSentiment(snapshot, industryCycle) {
   const rows = [
     { label: '庫存週期', value: cycle.inventory_cycle || '—' },
     { label: '資本支出週期', value: cycle.capex_cycle || '—' },
-    { label: '信心指數', value: fmtFloat(cycle.confidence) },
+    { label: '信心指數', value: fmtSafeNumber(cycle.confidence, { decimals: 2, useGrouping: true }) },
     { label: '趨勢', value: cycle.trend || '—' }
   ];
 
@@ -463,12 +463,12 @@ export function renderDrawdownPanel(data) {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
       <div class="panel" style="text-align:center">
         <div class="kpi-label">模擬最大回撤</div>
-        <div class="kpi-value" style="color:var(--down);font-size:20px">${formatMaxDrawdown(maxDD, { asAbsolute: true })}</div>
+        <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtSafeDrawdown(maxDD, { asAbsolute: true })}</div>
         <div class="kpi-hint">Monte Carlo 壓力測試</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">模擬 VaR 95</div>
-        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${formatNumber(var95, { percent: true, decimals: 1 })}</div>
+        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtSafeNumber(var95, { percent: true, decimals: 1 })}</div>
         <div class="kpi-hint">5% 尾端損失</div>
       </div>
     </div>

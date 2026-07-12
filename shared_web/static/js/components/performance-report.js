@@ -1,5 +1,5 @@
-import { fmtPct, fmtFloat, fmtNTD, fmtInt, escapeHtml } from '../shared/utils.js';
-import { formatMaxDrawdown } from '../shared/format-metric.js';
+import { fmtNTD, fmtInt, escapeHtml } from '../shared/utils.js';
+import { fmtSafePct, fmtSafeNumber, fmtSafeDrawdown } from '../shared/format-metric.js';
 import { agentName as agentNameEsm, regimeLabel as regimeLabelEsm } from '../shared/constants.js';
 
 export function renderPerformanceReport(container) {
@@ -127,13 +127,13 @@ function renderReportData(data) {
   document.getElementById('prDateRange').textContent = `${(data.start_date || '--').slice(0,10)} ～ ${(data.end_date || '--').slice(0,10)}`;
 
   const kpis = [
-    { label: '總報酬', value: fmtPct(data.total_return), sign: data.total_return },
-    { label: '年化報酬', value: fmtPct(data.annualized_return), sign: data.annualized_return },
-    { label: '夏普比率', value: fmtFloat(data.sharpe_ratio) },
-    { label: '最大回撤', value: formatMaxDrawdown(data.max_drawdown), sign: drawdownSign(data.max_drawdown) },
+    { label: '總報酬', value: fmtSafePct(data.total_return), sign: data.total_return },
+    { label: '年化報酬', value: fmtSafePct(data.annualized_return), sign: data.annualized_return },
+    { label: '夏普比率', value: fmtSafeNumber(data.sharpe_ratio, { decimals: 2, useGrouping: true }) },
+    { label: '最大回撤', value: fmtSafeDrawdown(data.max_drawdown), sign: drawdownSign(data.max_drawdown) },
     { label: '稅後價值', value: fmtNTD(data.after_tax_value) },
     { label: '已繳稅額', value: fmtNTD(data.total_tax_paid), hint: '累積' },
-    { label: '勝率', value: fmtPct(data.win_rate), sign: data.win_rate },
+    { label: '勝率', value: fmtSafePct(data.win_rate), sign: data.win_rate },
     { label: '總交易數', value: fmtInt(data.total_trades) }
   ];
 
@@ -154,11 +154,11 @@ function renderReportData(data) {
   if (data.top_agents && data.top_agents.length > 0) {
     agentsBody.innerHTML = data.top_agents.map(function(a) {
       var ret = a.aggregate_forward_return;
-      var sharpeCell = fmtFloat(a.sharpe_like);
+      var sharpeCell = fmtSafeNumber(a.sharpe_like, { decimals: 2, useGrouping: true });
       return '<tr>' +
         '<td>' + escapeHtml(a.display_name || agentNameEsm(a.agent_id) || a.agent_id) + '</td>' +
-        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtPct(ret) + '</td>' +
-        '<td>' + fmtPct(a.win_rate) + '</td>' +
+        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtSafePct(ret) + '</td>' +
+        '<td>' + fmtSafePct(a.win_rate) + '</td>' +
         '<td>' + sharpeCell + '</td>' +
         '</tr>';
     }).join('');
@@ -177,8 +177,8 @@ function renderReportData(data) {
       return '<tr>' +
         '<td>' + escapeHtml(regimeLabelEsm(id) || id) + '</td>' +
         '<td>' + fmtInt(sessions) + '</td>' +
-        '<td style="color:' + pnlColorStyle(avgRet) + '">' + fmtPct(avgRet) + '</td>' +
-        '<td>' + fmtPct(r.win_rate) + '</td>' +
+        '<td style="color:' + pnlColorStyle(avgRet) + '">' + fmtSafePct(avgRet) + '</td>' +
+        '<td>' + fmtSafePct(r.win_rate) + '</td>' +
         '</tr>';
     }).join('');
   } else {
@@ -191,8 +191,8 @@ function renderReportData(data) {
       var ret = m.return;
       return '<tr>' +
         '<td>' + escapeHtml(m.label || m.month || '--') + '</td>' +
-        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtPct(ret) + '</td>' +
-        '<td>' + fmtPct(m.cumulative) + '</td>' +
+        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtSafePct(ret) + '</td>' +
+        '<td>' + fmtSafePct(m.cumulative) + '</td>' +
         '</tr>';
     }).join('');
   } else {

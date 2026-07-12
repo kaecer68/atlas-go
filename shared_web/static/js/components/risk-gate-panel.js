@@ -1,13 +1,13 @@
 // Risk Gate Panel — 風控閘道狀態顯示（操作面板）
 // 與 risk-panel.js（分析展示）分工明確
 
-import { fmtPct, fmtInt } from '../shared/utils.js';
-import { formatMaxDrawdown } from '../shared/format-metric.js';
+import { fmtInt } from '../shared/utils.js';
+import { fmtSafePct, fmtSafeDrawdown } from '../shared/format-metric.js';
 
 export function renderRiskGatePanel(container, getJSON) {
   container.innerHTML = '<div class="loading">載入風控狀態…</div>';
 
-  Promise.all([
+  return Promise.all([
     getJSON('/api/dashboard/risk').catch(() => null),
     getJSON('/api/dashboard/risk-exposure').catch(() => null),
   ])
@@ -18,8 +18,8 @@ export function renderRiskGatePanel(container, getJSON) {
       }
 
       const snap = risk.risk_snapshot;
-      const var95 = fmtPct(snap.var_95);
-      const drawdown = formatMaxDrawdown(snap.max_drawdown_pct);
+      const var95 = fmtSafePct(snap.var_95);
+      const drawdown = fmtSafeDrawdown(snap.max_drawdown_pct);
       const positions = fmtInt(exposure && exposure.position_count);
       const gateMode = typeof risk.gate_mode === 'string' && risk.gate_mode ? risk.gate_mode : '—';
       const gateModeClass =

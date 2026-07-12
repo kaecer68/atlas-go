@@ -13,7 +13,7 @@
 
 import { escapeHtml } from '../shared/app-utils.js';
 import { classifyFetchError } from '../shared/fetch-error.js';
-import { formatNumber, fmtPct, fmtSignedPct, formatSigned } from '../shared/format-metric.js';
+import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeSigned } from '../shared/format-metric.js';
 
 const STATE = {
   strategies: [],
@@ -318,11 +318,11 @@ export async function renderStrategiesPage(root) {
       '<td><div class="ranker-name">' + escapeHtml(name) +
         '<span class="tier-badge tier-badge--' + tierKey + '">' + escapeHtml(r.tier || 'free') + '</span>' +
       '</div></td>' +
-      '<td><span class="' + scoreClass + '">' + (score == null ? '--' : formatNumber(score, { decimals: 0 })) + '</span></td>' +
-      '<td class="text-right ' + retClass + '">' + (annRet == null ? '--' : fmtSignedPct(annRet, 2)) + '</td>' +
-      '<td class="text-right">' + (sharpe == null ? '--' : formatNumber(sharpe, { decimals: 2 })) + '</td>' +
-      '<td class="text-right">' + (maxDD == null ? '--' : fmtSignedPct(maxDD, 2)) + '</td>' +
-      '<td class="text-right">' + (winRate == null ? '--' : fmtPct(winRate, 1)) + '</td>' +
+      '<td><span class="' + scoreClass + '">' + (score == null ? '--' : fmtSafeNumber(score, { decimals: 0 })) + '</span></td>' +
+      '<td class="text-right ' + retClass + '">' + (annRet == null ? '--' : fmtSafeSignedPct(annRet, 2)) + '</td>' +
+      '<td class="text-right">' + (sharpe == null ? '--' : fmtSafeNumber(sharpe, { decimals: 2 })) + '</td>' +
+      '<td class="text-right">' + (maxDD == null ? '--' : fmtSafeSignedPct(maxDD, 2)) + '</td>' +
+      '<td class="text-right">' + (winRate == null ? '--' : fmtSafePct(winRate, 1)) + '</td>' +
       '<td class="text-right">' + (sample == null ? '--' : sample) + '</td>' +
       '</tr>';
   }
@@ -347,7 +347,7 @@ export async function renderStrategiesPage(root) {
       <div class="kpi-card"><div class="kpi-label">5 層覆蓋</div>
         <div class="kpi-value">${layersCovered}/5</div></div>
       <div class="kpi-card"><div class="kpi-label">平均命中率</div>
-        <div class="kpi-value">${avgHitRate === null ? '—' : fmtPct(avgHitRate, 1)}</div></div>
+        <div class="kpi-value">${avgHitRate === null ? '—' : fmtSafePct(avgHitRate, 1)}</div></div>
     `;
   }
 
@@ -359,10 +359,10 @@ export async function renderStrategiesPage(root) {
     const isValid = v => typeof v === 'number' && Number.isFinite(v);
     const items = [
       { label: '外資現貨 (TWD 億)', key: 'foreign_capital_net_twd',
-        fmt: v => formatSigned(v / 1e8, { decimals: 1, suffix: ' 億', forceSign: true }) },
-      { label: 'TSM ADR (%)',   key: 'tsm_adr_pct',  fmt: v => fmtSignedPct(v, 2) },
-      { label: 'NVDA (%)',      key: 'nvda_pct',     fmt: v => fmtSignedPct(v, 2) },
-      { label: 'DXY (%)',       key: 'dxy_pct',      fmt: v => fmtSignedPct(v, 2) },
+        fmt: v => fmtSafeSigned(v / 1e8, { decimals: 1, suffix: ' 億', forceSign: true }) },
+      { label: 'TSM ADR (%)',   key: 'tsm_adr_pct',  fmt: v => fmtSafeSignedPct(v, 2) },
+      { label: 'NVDA (%)',      key: 'nvda_pct',     fmt: v => fmtSafeSignedPct(v, 2) },
+      { label: 'DXY (%)',       key: 'dxy_pct',      fmt: v => fmtSafeSignedPct(v, 2) },
     ];
     coreIndicatorStrip.innerHTML = items.map(it => {
       const raw = c ? c[it.key] : null;
@@ -437,7 +437,7 @@ export async function renderStrategiesPage(root) {
           <div>
             <span class="kpi-label">命中率</span>
             <span class="text-${s.hit_rate >= 0.6 ? 'up' : s.hit_rate < 0.4 ? 'down' : 'muted'}">
-              ${fmtPct(s.hit_rate, 0)}
+              ${fmtSafePct(s.hit_rate, 0)}
             </span>
           </div>
           <div>

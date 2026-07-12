@@ -1,5 +1,5 @@
-import { escapeHtml, fmtFloat } from '../shared/utils.js';
-import { formatNumber } from '../shared/format-metric.js';
+import { escapeHtml } from '../shared/utils.js';
+import { fmtSafeNumber, fmtSafePct } from '../shared/format-metric.js';
 
 export async function loadCrossMarketData() {
   const [status, usIndices, correlation, correlationMatrix] = await Promise.all([
@@ -34,7 +34,11 @@ function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey, failed)
 }
 
 function fmtPct(v) {
-  return Number.isFinite(v) ? formatNumber(v, { decimals: 2, suffix: '%' }) : '—';
+  return fmtSafePct(v, 2);
+}
+
+function fmtFloat(v) {
+  return fmtSafeNumber(v, { decimals: 2, useGrouping: true });
 }
 
 function fmtTs(v) {
@@ -140,7 +144,7 @@ function renderCorrelation(correlation, status) {
   let rhoColor = 'var(--text)';
   let rhoLabel = '—';
   if (rho != null && Number.isFinite(rho)) {
-    rhoLabel = formatNumber(rho, { decimals: 4 });
+    rhoLabel = fmtSafeNumber(rho, { decimals: 4 });
     if (rho >= 0.8) rhoColor = 'var(--color-danger)';
     else if (rho >= 0.6) rhoColor = 'var(--color-warning)';
     else if (rho >= 0.3) rhoColor = 'var(--muted)';
@@ -180,8 +184,7 @@ function renderCorrelationMatrix(matrixData) {
   }
 
   function corrText(v) {
-    if (!Number.isFinite(v)) return '—';
-    return fmtFloat(v);
+    return fmtSafeNumber(v, { decimals: 2, useGrouping: true });
   }
 
   let html = '<div style="overflow-x:auto"><table style="font-size:var(--text-sm);border-collapse:collapse;min-width:100%"><thead><tr><th style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;text-align:left;border-bottom:1px solid var(--panel-l3)">產業</th>';

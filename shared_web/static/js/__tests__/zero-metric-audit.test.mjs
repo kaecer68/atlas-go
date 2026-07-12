@@ -108,3 +108,122 @@ test('renderSeasonalityTab: legitimate zero accuracy is preserved', () => {
 });
 
 
+
+// =============================================================================
+// Benchmark comparison (async component)
+// =============================================================================
+
+import { renderBenchmarkComparison } from '../components/benchmark.js';
+
+test('renderBenchmarkComparison: missing KPIs render em-dash, not 0.0%', async () => {
+  const container = { innerHTML: '' };
+  const getJSON = async () => ({
+    session_count: 1,
+    portfolio_return: null,
+    taiex_return: null,
+    outperformance: null,
+    alpha: null,
+    beta: null,
+    tracking_error: null,
+    sharpe_ratio: null,
+    info_ratio: null,
+    equity_curve: [],
+  });
+  await renderBenchmarkComparison(container, getJSON);
+  assertNoMisleadingZero(container.innerHTML, 'benchmark-comparison missing KPIs');
+  assertContainsEmDash(container.innerHTML, 'benchmark-comparison missing KPIs');
+});
+
+test('renderBenchmarkComparison: legitimate zeros are preserved', async () => {
+  const container = { innerHTML: '' };
+  const getJSON = async () => ({
+    session_count: 1,
+    portfolio_return: 0,
+    taiex_return: 0,
+    outperformance: 0,
+    alpha: 0,
+    beta: 1,
+    tracking_error: 0.05,
+    sharpe_ratio: 1.5,
+    info_ratio: 0.2,
+    equity_curve: [],
+  });
+  await renderBenchmarkComparison(container, getJSON);
+  assert.ok(container.innerHTML.includes('0.0%'), 'benchmark zero returns preserved');
+});
+
+// =============================================================================
+// Risk panel (async component)
+// =============================================================================
+
+import { renderRiskPanel } from '../components/risk-panel.js';
+
+test('renderRiskPanel: missing risk metrics render em-dash, not 0.0%', async () => {
+  const container = { innerHTML: '' };
+  const getJSON = async (url) => {
+    if (url === '/api/dashboard/portfolio-state') {
+      return { max_drawdown: null, concentration_ratio: null, portfolio_value: null, cash: null, positions_count: null };
+    }
+    return null;
+  };
+  await renderRiskPanel(container, getJSON);
+  assertNoMisleadingZero(container.innerHTML, 'risk-panel missing metrics');
+  assertContainsEmDash(container.innerHTML, 'risk-panel missing metrics');
+});
+
+// =============================================================================
+// PnL attribution (async component)
+// =============================================================================
+
+import { renderPnLAttribution } from '../components/attribution.js';
+
+test('renderPnLAttribution: missing attribution values render em-dash, not 0.0%', async () => {
+  const container = { innerHTML: '' };
+  const getJSON = async () => ({
+    agent_attribution: [{ agent_id: 'a1', agent_name: 'Test', avg_return: null, count: 0 }],
+    sector_attribution: [{ sector: 'tech', sector_label: '科技', avg_return: null, count: 0 }],
+    factor_attribution: {
+      momentum: { avg_score: null, avg_return: null, contribution: null },
+      value: {},
+      quality: {},
+      agent: {},
+    },
+  });
+  await renderPnLAttribution(container, getJSON);
+  assertNoMisleadingZero(container.innerHTML, 'pnl-attribution missing values');
+  assertContainsEmDash(container.innerHTML, 'pnl-attribution missing values');
+});
+
+// =============================================================================
+// Risk gate panel (async component)
+// =============================================================================
+
+import { renderRiskGatePanel } from '../components/risk-gate-panel.js';
+
+test('renderRiskGatePanel: missing VaR/drawdown render em-dash, not 0.0%', async () => {
+  const container = { innerHTML: '' };
+  const getJSON = async () => ({
+    risk_snapshot: { var_95: null, max_drawdown_pct: null },
+    gate_mode: 'normal',
+  });
+  await renderRiskGatePanel(container, getJSON);
+  assertNoMisleadingZero(container.innerHTML, 'risk-gate-panel missing metrics');
+  assertContainsEmDash(container.innerHTML, 'risk-gate-panel missing metrics');
+});
+
+// =============================================================================
+// Strategies: pure result processor
+// =============================================================================
+
+import { processStrategiesResults } from '../pages/strategies.js';
+
+test('processStrategiesResults: surfaces schema errors without throwing', () => {
+  const results = [
+    { status: 'fulfilled', value: {} },
+    { status: 'fulfilled', value: {} },
+    { status: 'fulfilled', value: {} },
+  ];
+  const out = processStrategiesResults(results);
+  assert.equal(out.dataStatus, 'failed');
+  assert.ok(Object.keys(out.errors).length > 0);
+});

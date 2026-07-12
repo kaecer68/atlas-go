@@ -1,8 +1,8 @@
 import { agentName, stockName, regimeLabel, stressLabel, sectorName } from '../names.js';
 import { narrativeThemeLabel } from '../shared/constants.js';
 import { getJSON, notify, sortNarrativeEvents } from '../shared/app-utils.js';
-import { escapeHtml, fmtFloat, fmtPct, fmtInt } from '../shared/utils.js';
-import { formatNumber, formatMaxDrawdown, fmtSignedPct } from '../shared/format-metric.js';
+import { escapeHtml, fmtInt } from '../shared/utils.js';
+import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeDrawdown } from '../shared/format-metric.js';
 
 
 // Main overview dashboard
@@ -17,7 +17,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const scorecards = cards.scorecards || [];
   const weakestEntry = scorecards[0];
   const weakest = weakestEntry ? weakestEntry.agent_id : '-';
-  const weakSharpe = formatNumber(weakestEntry && weakestEntry.sharpe, { decimals: 3 });
+  const weakSharpe = fmtSafeNumber(weakestEntry && weakestEntry.sharpe, { decimals: 3 });
 
   const warnings = health.warnings || [];
   const crowdingWarnings = warnings.filter(w => w.toLowerCase().includes('crowded trade') || w.toLowerCase().includes('high overlap'));
@@ -33,7 +33,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   // 以「情緒絕對值 × 信心度 × 命中率」排序，取最強烈的事件作為代表
   const sortedEvents = sortNarrativeEvents(nev.slice());
   const topEvent = sortedEvents[0];
-  const stressScore = formatNumber(stress && stress.score, { decimals: 1 });
+  const stressScore = fmtSafeNumber(stress && stress.score, { decimals: 1 });
   const stressRegime = stress ? stressLabel(stress.regime || '-') : '-';
   const narrativeTitle = topEvent ? escapeHtml(narrativeThemeLabel(topEvent.theme)) : '無活躍事件';
   const narrativeSub = `外資出逃指數 ${stressScore}分（${stressRegime}）· ${nev.length} 個事件`;
@@ -68,7 +68,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
   const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--color-success)' : 'var(--warn)') : 'inherit';
   const phaseHtml = capitalPhase
-    ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${fmtFloat(capitalPhase.rolling_sharpe)}</div>`
+    ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${fmtSafeNumber(capitalPhase.rolling_sharpe, { decimals: 2, useGrouping: true })}</div>`
     : '<div class="my-xs text-sm text-muted">-</div>';
 
   gridMarket.innerHTML = `
@@ -251,7 +251,7 @@ export function renderMacroRadar(data, pipelineData) {
         <tbody>
           ${topItems.map(it => {
             const retCls = it.forward_return > 0 ? 'up' : (it.forward_return < 0 ? 'down' : '');
-            return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}</td><td>${it.conviction != null ? escapeHtml(String(it.conviction)) : '-'}</td><td class="${retCls}">${fmtSignedPct(it.forward_return)}</td></tr>`;
+            return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}</td><td>${it.conviction != null ? escapeHtml(String(it.conviction)) : '-'}</td><td class="${retCls}">${fmtSafeSignedPct(it.forward_return)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -311,7 +311,7 @@ export function renderAgentObservatory(data, overlapData) {
           if (sc.pb && sc.pb.max != null) badges.push(`P/B≤${sc.pb.max}`);
           if (sc.pb && sc.pb.min != null && sc.pb.max == null) badges.push(`P/B≥${sc.pb.min}`);
           if (sc.dividend_yield && sc.dividend_yield.min != null) badges.push(`股息≥${sc.dividend_yield.min}%`);
-          if (sc.volume_intraday && sc.volume_intraday.min != null) badges.push(`Vol≥${formatNumber(sc.volume_intraday.min / 10000, { decimals: 0 })}萬`);
+          if (sc.volume_intraday && sc.volume_intraday.min != null) badges.push(`Vol≥${fmtSafeNumber(sc.volume_intraday.min / 10000, { decimals: 0 })}萬`);
           if (sc.momentum_20d && sc.momentum_20d.min != null) badges.push(`動能≥${sc.momentum_20d.min}`);
           if (sc.min_total_factor_score != null) badges.push(`因子≥${sc.min_total_factor_score}`);
           if (!badges.length) return '';
@@ -326,34 +326,34 @@ export function renderAgentObservatory(data, overlapData) {
       ${cards.map(c => {
         const isWeak = c.agent_id === weakest;
         const sigWarn = (c.windows || 0) < 20 ? '<span title="窗口數不足，統計信心有限" style="color:var(--warn);font-size:10px">⚠️</span>' : '';
-        const ciLow = formatNumber(c.confidence_low, { decimals: 3 });
-        const ciHigh = formatNumber(c.confidence_high, { decimals: 3 });
+        const ciLow = fmtSafeNumber(c.confidence_low, { decimals: 3 });
+        const ciHigh = fmtSafeNumber(c.confidence_high, { decimals: 3 });
         const trendVal = c.rolling_sharpe_trend;
         let trendIcon = '';
         if (trendVal != null && Math.abs(trendVal) > 0.001) {
           if (trendVal > 0) {
-            trendIcon = `<span title="趨勢向上 (rolling_sharpe_trend=${formatNumber(trendVal, { decimals: 4 })})" style="color:var(--up);font-size:12px">↗</span>`;
+            trendIcon = `<span title="趨勢向上 (rolling_sharpe_trend=${fmtSafeNumber(trendVal, { decimals: 4 })})" style="color:var(--up);font-size:12px">↗</span>`;
           } else {
-            trendIcon = `<span title="趨勢向下 (rolling_sharpe_trend=${formatNumber(trendVal, { decimals: 4 })})" style="color:var(--down);font-size:12px">↘</span>`;
+            trendIcon = `<span title="趨勢向下 (rolling_sharpe_trend=${fmtSafeNumber(trendVal, { decimals: 4 })})" style="color:var(--down);font-size:12px">↘</span>`;
           }
         } else if (trendVal != null) {
-          trendIcon = `<span title="趨勢平穩 (rolling_sharpe_trend=${formatNumber(trendVal, { decimals: 4 })})" style="color:var(--muted);font-size:12px">→</span>`;
+          trendIcon = `<span title="趨勢平穩 (rolling_sharpe_trend=${fmtSafeNumber(trendVal, { decimals: 4 })})" style="color:var(--muted);font-size:12px">→</span>`;
         }
         const oosWarn = c.oos_sample_warning ? `<span title="${escapeHtml(c.oos_sample_warning)}" style="color:var(--warn);font-size:10px">⚠️</span>` : '';
         const overfitBadge = c.overfit_warning ? `<span title="${escapeHtml(c.overfit_reason || '')}" style="color:var(--color-danger);font-size:10px;margin-left:4px">⚠️</span>` : '';
-        const isSharpeStr = formatNumber(c.is_sharpe, { decimals: 3 });
-        const oosSharpeStr = formatNumber(c.oos_sharpe, { decimals: 3 });
-        const isOosStr = formatNumber(c.is_oos_ratio, { decimals: 2 });
+        const isSharpeStr = fmtSafeNumber(c.is_sharpe, { decimals: 3 });
+        const oosSharpeStr = fmtSafeNumber(c.oos_sharpe, { decimals: 3 });
+        const isOosStr = fmtSafeNumber(c.is_oos_ratio, { decimals: 2 });
         return `<tr class="${isWeak ? 'weak' : ''}">
           <td>${agentName(c.agent_id) || ''} ${trendIcon} ${sigWarn}</td>
           <td>${c.layer || '-'}</td>
           <td>${fmtInt(c.windows)}</td>
           <td>${fmtInt(c.observations)}</td>
-          <td>${fmtPct(c.hit_rate)}</td>
-          <td style="${c.sharpe != null && c.sharpe < 0 ? 'color:var(--color-danger)' : ''}">${formatNumber(c.sharpe, { decimals: 3 })}</td>
+          <td>${fmtSafePct(c.hit_rate)}</td>
+          <td style="${c.sharpe != null && c.sharpe < 0 ? 'color:var(--color-danger)' : ''}">${fmtSafeNumber(c.sharpe, { decimals: 3 })}</td>
           <td class="text-muted text-xs">[${ciLow}, ${ciHigh}]</td>
-          <td>${fmtSignedPct(c.average_return)}</td>
-          <td>${formatMaxDrawdown(c.max_drawdown)}</td>
+          <td>${fmtSafeSignedPct(c.average_return)}</td>
+          <td>${fmtSafeDrawdown(c.max_drawdown)}</td>
           <td style="${c.is_sharpe != null && c.is_sharpe < 0 ? 'color:var(--color-danger)' : ''}">${isSharpeStr}${oosWarn}</td>
           <td style="${c.oos_sharpe != null && c.oos_sharpe < 0 ? 'color:var(--color-danger)' : ''}">${oosSharpeStr}${overfitBadge}</td>
           <td>${isOosStr}</td>
@@ -411,7 +411,7 @@ export function factorBar(score, minVal, maxVal) {
   let color = 'var(--warn)';
   if (score >= (minVal + range * 0.6)) color = 'var(--up)';
   else if (score <= (minVal + range * 0.4)) color = 'var(--down)';
-  return `<div class="factor-bar-bg" title="${formatNumber(score, { decimals: 3 })}"><div style="width:${pct}%;height:100%;background:${color}"></div></div>`;
+  return `<div class="factor-bar-bg" title="${fmtSafeNumber(score, { decimals: 3 })}"><div style="width:${pct}%;height:100%;background:${color}"></div></div>`;
 }
 export function renderFactorMini(fs) {
   if (!fs || fs.total == null || isNaN(fs.total)) return '<span class="text-muted">-</span>';
@@ -420,17 +420,17 @@ export function renderFactorMini(fs) {
   if (t >= 0.5) color = 'var(--up)';
   else if (t <= 0) color = 'var(--down)';
   const pct = Math.max(0, Math.min(100, ((t + 1) / 2) * 100));
-  return `<div class="factor-mini"><div class="factor-mini-bar"><div style="width:${pct}%;background:${color}"></div></div><span class="factor-mini-val" style="${t >= 0.5 ? 'color:var(--up)' : (t <= 0 ? 'color:var(--down)' : '')}">${formatNumber(t, { decimals: 2 })}</span></div>`;
+  return `<div class="factor-mini"><div class="factor-mini-bar"><div style="width:${pct}%;background:${color}"></div></div><span class="factor-mini-val" style="${t >= 0.5 ? 'color:var(--up)' : (t <= 0 ? 'color:var(--down)' : '')}">${fmtSafeNumber(t, { decimals: 2 })}</span></div>`;
 }
 export function renderFactorBreakdown(breakdown) {
   if (!breakdown) return '<div class="text-muted text-xs">無計算明細</div>';
   const item = (label, it) => {
     if (!it) return '';
-    const inputs = it.raw_inputs ? Object.entries(it.raw_inputs).map(([k, v]) => `${k}: ${typeof v === 'number' ? formatNumber(v, { decimals: 3 }) : v}`).join(', ') : '';
+    const inputs = it.raw_inputs ? Object.entries(it.raw_inputs).map(([k, v]) => `${k}: ${typeof v === 'number' ? fmtSafeNumber(v, { decimals: 3 }) : v}`).join(', ') : '';
     const fallback = it.is_fallback ? '<span style="color:var(--warn);font-size:10px">fallback</span> ' : '';
-    const weight = it.weight ? `<span style="color:var(--muted);font-size:10px">權重 ${formatNumber(it.weight, { decimals: 2 })}</span> ` : '';
+    const weight = it.weight ? `<span style="color:var(--muted);font-size:10px">權重 ${fmtSafeNumber(it.weight, { decimals: 2 })}</span> ` : '';
     return `<div style="margin:4px 0;padding:4px 6px;background:var(--bg);border-radius:4px">
-      <div class="text-xs font-semibold">${label} ${fallback}${weight}= <span class="text-accent">${it.score != null ? formatNumber(it.score, { decimals: 3 }) : '-'}</span></div>
+      <div class="text-xs font-semibold">${label} ${fallback}${weight}= <span class="text-accent">${it.score != null ? fmtSafeNumber(it.score, { decimals: 3 }) : '-'}</span></div>
       <div style="font-size:10px;color:var(--muted);margin-top:2px">公式: ${it.formula || '-'}</div>
       ${inputs ? `<div class="text-muted text-xs">原始輸入: ${inputs}</div>` : ''}
     </div>`;
@@ -498,7 +498,7 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
       </div>
       <div class="panel-card" style="text-align:center">
         <div class="text-sm text-muted mb-xs">外資出逃指數</div>
-        <div class="text-xl font-bold" style="color:${stressColor}">${formatNumber(stressVal, { decimals: 1 })}</div>
+        <div class="text-xl font-bold" style="color:${stressColor}">${fmtSafeNumber(stressVal, { decimals: 1 })}</div>
         <div class="text-xs text-muted mt-xs">${stressVal != null ? stressLabel : '無資料'}</div>
       </div>
       <div class="panel-card" style="text-align:center">
@@ -521,7 +521,7 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
     <div style="display:flex;gap:12px;align-items:center;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:12px;border-left:3px solid var(--up)">
       <span style="font-size:12px;color:var(--muted)">🏆 最強 Agent</span>
       <span style="font-size:13px;font-weight:700">${escapeHtml(agentName(topAgent.agent_id))}</span>
-      <span style="font-size:11px;color:var(--muted)">權重 ${fmtFloat(topAgent.weight)} · 命中率 ${fmtPct(topAgent.hit_rate)}</span>
+      <span style="font-size:11px;color:var(--muted)">權重 ${fmtSafeNumber(topAgent.weight, { decimals: 2, useGrouping: true })} · 命中率 ${fmtSafePct(topAgent.hit_rate)}</span>
     </div>` : ''}
     ${latest.length ? `
     <div>
