@@ -86,5 +86,5 @@
 5. 在 `internal/monitoring/api/events/sse_handler.go` 加入 6-component buffer
 6. 在 `ServeHTTP` 加入 replay loop
 7. 加入測試（eventbus_test.go + sse_handler_test.go）
-8. 建立 `docs/events/<event-name>.md` 說明文件
+8. 建立 `docs/REFERENCE/events/<event-name>.md` 說明文件
 9. 更新本 INDEX.md

@@ -242,9 +242,9 @@ GOTOOLCHAIN=go1.26.4 ~/go/bin/govulncheck ./... 2>&1 | tail -3
 |------|------|------|
 | 2026-06-30 | Spike 完成（v1，Adobe P0-P4 + Oracle 稽核 + 修補）| 21 workflow + 5 規劃文件完成 |
 | 2026-06-30 | MCP SDK 評估 | 採用 **OFFICIAL `modelcontextprotocol/go-sdk v1.6.1`**（spike + matrix） |
-| 2026-06-30 | 政府檢查 v1 | 4 個 stdlib CVE 被發現（Go 1.26.2）|
+| 2026-06-30 | `govulncheck` v1 | 4 個 stdlib CVE 被發現（Go 1.26.2）|
 | 2026-06-30 | 升 Go 1.25.0 → 1.26.4 | go.mod + Dockerfile + Dockerfile.cron 同步升級 |
-| 2026-06-30 | 政府檢查 v2 | 新發現 **GO-2026-5004**（pgx/v5 SQL injection） |
+| 2026-06-30 | `govulncheck` v2 | 新發現 **GO-2026-5004**（pgx/v5 SQL injection） |
 | 2026-06-30 | 升 pgx/v5 v5.9.1 → v5.9.2 | 該 CVE 修復；`go build ./...` exit=0 |
-| 2026-06-30 | 政府檢查 v3（最終）| **No vulnerabilities found** ✅ |
+| 2026-06-30 | `govulncheck` v3（最終）| **No vulnerabilities found** ✅ |
 | **Next**：進入 Phase 1 開工 | `cmd/atlas-mcp/` scaffold | sprint kickoff |

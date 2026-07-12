@@ -1,7 +1,7 @@
 # Atlas-Go 規範文件索引（Guidelines Index）
 
-**版本**：1.5  
-**日期**：2026-06-26  
+**版本**：1.6.1  
+**日期**：2026-07-12  
 **用途**：所有規範文件的統一入口與權威階層定義。
 
 ---
@@ -80,33 +80,25 @@
 
 ### 階層 4：模組指南（AGENTS.md）
 
-> **經 PR #779 審計 + PR #784-#788 精簡**：從 50 個 `internal/*/AGENTS.md` 精簡至 21 個保留。已遷移模組見 `docs/specs/` 與 `docs/guides/`。
+> **2026-07-11 精簡後**：保留 **15 個** `AGENTS.md` 位置（含根目錄與跨模組集群檔案）。完整清單與涵蓋模組見 [`internal/AGENTS_INDEX.md`](../../internal/AGENTS_INDEX.md)。
 
-| 模組 | 文件 | 獨特內容 |
-|------|------|---------|
-| `internal/orchestrator/` | `AGENTS.md` | 分層執行順序、註冊陷阱 |
-| `internal/experiment/` | `AGENTS.md` | Maturity-Aware 門檻、Mutation 漂移 |
-| `internal/portfolio/` | `AGENTS.md` | Darwinian/FactorEngine/Optimizer 細節 |
-| `internal/ledger/` | `AGENTS.md` | JSONL 持久化、狀態寫入、審計軌跡 |
-| `internal/eventbus/` | `AGENTS.md` | 發布/訂閱、事件流、背壓處理 |
-| `internal/apigateway/` | `AGENTS.md` | Gateway 規範、背景任務、環境變數 |
-| `internal/logging/` | `AGENTS.md` | 統一日誌介面、結構化輸出 |
-| `internal/marketdata/` | `AGENTS.md` | Provider 抽象、Rate Limiting、符號格式 |
-| `internal/monitoring/` | `AGENTS.md` | API 結構分類、snake_case 契約 |
-| `internal/narrative/` | `AGENTS.md` | Event 狀態機、命中率表 |
-| `internal/baseline/` | `AGENTS.md` | Policy 生命週期、Promotion/Reversion |
-| `internal/industry/` | `AGENTS.md` | 供應鏈圖/季節性/週期 |
-| `internal/live/` | `AGENTS.md` | Broker 模式、Nonce、原子寫入 |
-| `internal/llm/` | `AGENTS.md` | DataClass 閘門、hot-path 護欄 |
-| `internal/config/` | `AGENTS.md` | 雙重設定系統、env 陷阱 |
-| `internal/db/` | `AGENTS.md` | pgxpool 初始化、migration 陷阱 |
-| `internal/realtime/` | `AGENTS.md` | 即時資料流、WebSocket 生命週期 |
-| `internal/risk/` | `AGENTS.md` | VaR 計算、drawdown 保護、自校準 |
-| `internal/strategy/` | `AGENTS.md` | Selector/Allocator 策略框架 |
-| `internal/strategy_techniques/` | `AGENTS.md` | 5 層投資技法庫 |
-| `internal/fubonproxy/` | `AGENTS.md` | ProcessManager supervisor 生命週期 |
-| `cmd/experimental/` | `AGENTS.md` | 驗證命令職責、隔離狀態 |
-| `scripts/openclaw/` | `AGENTS.md` | 治理腳本、閘門驗證 |
+| 位置 | 涵蓋範圍 | 獨特內容 |
+|------|---------|---------|
+| `./AGENTS.md` | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/REFERENCE/TRAPS.md` |
+| `internal/apigateway/` | apigateway | Gateway.Fetch、BackgroundTaskManager、CircuitBreaker |
+| `internal/capitalflow/` | capitalflow / eventdriven / recommender / subscription | 資金流、事件日曆、推薦、認證集群 |
+| `internal/fubonproxy/` | fubonproxy | ProcessManager supervisor F1-F9、Stop/backoff |
+| `internal/live/` | live | broker execution、nonce、EventPositionUpdate |
+| `internal/llm/` | llm | Router 唯一入口、DataClass gate、capability SOP |
+| `internal/marketdata/` | marketdata | Provider 抽象、DecodeJSON、fubon URL guard |
+| `internal/monitoring/` | monitoring / api/shared | Dashboard API、auth whitelist、Wave 9 |
+| `internal/orchestrator/` | orchestrator | Executor 路由、PluginHost、ANTIPATTERNS |
+| `internal/strategy_techniques/` | strategy / strategy_ranker / strategy_validator / strategy_techniques | 策略集群（選擇/排名/驗證/心法） |
+| `admin_web/` | admin_web | 行事曆組件、參考檔案 |
+| `client_web/` | client_web | API field contract、shared_web fallback |
+| `cmd/experimental/` | cmd/experimental | dry-run 禁令、dummy mode、live broker |
+| `cmd/atlas-mcp/server/` | cmd/atlas-mcp/server | tool 註冊、audit、auth、transport |
+| `scripts/openclaw/` | scripts/openclaw | baseline 政策、閘門、dry-run |
 
 ### 階層 5：參考文件（Reference Docs）
 
@@ -128,8 +120,8 @@
 | `docs/operations/l2-4-followup.md` | L2.4 後續工作報告（auto-cron / CLI flag / promotion 4 步） |
 | _（shipped via PR #828,merged 2026-06-29）_ | L2.4 CLI flag 實作：`--use-llm-sector-agents`（plan 內容已併入 `docs/operations/l2-4-followup.md`）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
-| `docs/TOOLS.md` | 程式碼智慧工具（GitNexus / codebase-memory / CodeGraph）路由決策樹 |
-| `docs/REFERENCE/tool-catalog.md` | MCP tool 決策樹與完整 catalog（84 tools,供外部 AI agent） |
+| `docs/TOOLS.md` | ACI 工具（GitNexus / codebase-memory / CodeGraph / atlas-mcp）路由決策樹 |
+| `docs/REFERENCE/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（91 tools,供外部 AI agent） |
 
 ---
 
@@ -159,10 +151,10 @@
 | `internal/*/CONSTITUTION.md` | 憲法（最高權威） | 1 |
 | `.github/instructions/*.md` | 領域守則 | 3 |
 | `.claude/skills/*/SKILL.md` | 手寫技能文件 | 20 |
-| `internal/*/AGENTS.md` | 模組指南（經 #779 審計精簡） | 21 |
+| `internal/*/AGENTS.md` | 模組指南（經 2026-07-11 精簡） | 15 |
 | `docs/*.md` | 參考文件 | 10+ |
-| `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 14 |
-| `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 6 |
+| `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 31 |
+| `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 8 |
 | `.claude/skills/robot-communication/*/SKILL.md` | 機器人溝通技能 | 4 |
 | `.claude/skills/gitnexus/*/SKILL.md` | GitNexus 工具技能 | 6 |
 

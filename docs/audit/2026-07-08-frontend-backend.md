@@ -3,7 +3,7 @@
 **稽核日期**: 2026-07-08
 **稽核執行**: Sisyphus (OhMyOpenCode)
 **稽核範圍**: atlas-go v0.0.0.31 — client_web / admin_web 前端 vs internal/monitoring 後端 + cmd/atlas-mcp MCP server
-**主索引**: [docs/operations/README.md](README.md)
+**主索引**: [docs/operations/README.md](../operations/README.md)
 
 ---
 

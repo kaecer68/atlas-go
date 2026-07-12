@@ -2,7 +2,7 @@
 
 > **Owner**: AI coding agent(本專案完全由 AI 編碼,本文件是 canonical SOP)
 > **Introduced**: PR #1062(2026-07-09,VERSION 升級為 single source of truth)
-> **對應版本**: v0.0.0.29+
+> **對應版本**: v0.0.0.32+
 
 ## TL;DR
 

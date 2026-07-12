@@ -21,4 +21,4 @@
 ## 下一步
 
 - 詳細自然語言 → tool 範本：見 [`../query-examples.md`](../query-examples.md)（待 PR-2）
-- 完整 tool schema：見 [`../REFERENCE/tool-catalog.md`](../../REFERENCE/tool-catalog.md)
+- 完整 tool schema：見 [`docs/REFERENCE/tool-catalog.md`](../../REFERENCE/tool-catalog.md)

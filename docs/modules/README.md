@@ -1,6 +1,6 @@
 # 模組操作手冊
 
-本目錄包含 atlas-go v0.0.0.18（Wave 9 observability gap fixes 收尾版）各模組的操作手冊。
+本目錄包含 atlas-go v0.0.0.32+（Wave 11+）各模組的操作手冊。Wave 9 的 "detectors" 命名已併入 monitoring 模組，視為歷史名稱。
 
 ## 模組列表
 

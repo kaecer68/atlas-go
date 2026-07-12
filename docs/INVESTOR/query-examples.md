@@ -2,9 +2,9 @@
 
 > **給 hermes / openclaw agent 的「自然語言 → tool 對照表」**。投資人問什麼、怎麼呼叫、回什麼。
 >
-> 涵蓋 ~25 個高頻率查詢（從 91 tool 中篩選，投資人每天都會用到的）。其他 66+ tool 見 [`REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md)（待 PR-5）。
+> 涵蓋 ~25 個高頻率查詢（從 91 tool 中篩選，投資人每天都會用到的）。其他 66+ tool 見 [`REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md)。
 >
-> tier 標記（public / registered / premium）待 [#1068](https://github.com/kaecer68/atlas-go/issues/1068) 商業化確認 — 目前共用 dev key 全部可呼叫（PR #1069）。
+> tier 標記（public / registered / premium）待 [#1068](https://github.com/kaecer68/atlas-go/issues/1068) 商業化確認；dev key 模式已上線（PR #1069）。
 
 ## 快速導覽（按 use case 分組）
 
@@ -314,9 +314,9 @@ report_get_tax_snapshot { year: 2026 }
 system_get_health
 ```
 
-**回傳**：`{ status: "ok" | "degraded" | "down", tools_count: 89, uptime, last_audit }`
+**回傳**：`{ status: "ok" | "degraded" | "down", tools_count: 91, uptime, last_audit }`
 
-**顯示範例**：`✓ atlas-mcp ok | 89 tools registered | uptime 4h 23m`
+**顯示範例**：`✓ atlas-mcp ok | 91 tools registered | uptime 4h 23m`
 
 **注意**：任何任務的第一步 — 確認 backend / atlas-mcp / LLM router 都活著
 
