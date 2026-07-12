@@ -211,18 +211,54 @@ func TestHandleNewReadOnlyTools_HitCorrectBackendPath(t *testing.T) {
 		invoke func(s *server) error
 		want   string
 	}{
-		{"parameters_get", func(s *server) error { _, _, e := s.handleParametersGet(context.Background(), nil, struct{}{}); return e }, "/api/parameters"},
-		{"parameters_get_categories", func(s *server) error { _, _, e := s.handleParametersGetCategories(context.Background(), nil, struct{}{}); return e }, "/api/parameters/categories"},
-		{"parameters_get_audit_log", func(s *server) error { _, _, e := s.handleParametersGetAuditLog(context.Background(), nil, struct{}{}); return e }, "/api/parameters/audit-log"},
-		{"parameters_get_metadata", func(s *server) error { _, _, e := s.handleParametersGetMetadata(context.Background(), nil, struct{}{}); return e }, "/api/parameters/metadata"},
-		{"parameters_get_snapshots_default", func(s *server) error { _, _, e := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: 0}); return e }, "/api/parameters/snapshots"},
-		{"backtest_status", func(s *server) error { _, _, e := s.handleBacktestStatus(context.Background(), nil, struct{}{}); return e }, "/api/backtest/status"},
-		{"backtest_signals", func(s *server) error { _, _, e := s.handleBacktestSignals(context.Background(), nil, struct{}{}); return e }, "/api/backtest/signals"},
-		{"calendar_events", func(s *server) error { _, _, e := s.handleCalendarEvents(context.Background(), nil, struct{}{}); return e }, "/api/dashboard/calendar-events"},
-		{"sector_allocation_plan", func(s *server) error { _, _, e := s.handleSectorAllocationPlan(context.Background(), nil, struct{}{}); return e }, "/api/dashboard/sector-allocation-plan"},
-		{"channel_health", func(s *server) error { _, _, e := s.handleChannelHealth(context.Background(), nil, struct{}{}); return e }, "/api/dashboard/channel-health"},
-		{"taiwan_stress_index", func(s *server) error { _, _, e := s.handleTaiwanStressIndex(context.Background(), nil, struct{}{}); return e }, "/api/taiwan/stress-index"},
-		{"risk_exposure", func(s *server) error { _, _, e := s.handleRiskExposure(context.Background(), nil, struct{}{}); return e }, "/api/dashboard/risk-exposure"},
+		{"parameters_get", func(s *server) error {
+			_, _, e := s.handleParametersGet(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters"},
+		{"parameters_get_categories", func(s *server) error {
+			_, _, e := s.handleParametersGetCategories(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters/categories"},
+		{"parameters_get_audit_log", func(s *server) error {
+			_, _, e := s.handleParametersGetAuditLog(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters/audit-log"},
+		{"parameters_get_metadata", func(s *server) error {
+			_, _, e := s.handleParametersGetMetadata(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters/metadata"},
+		{"parameters_get_snapshots_default", func(s *server) error {
+			_, _, e := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: 0})
+			return e
+		}, "/api/parameters/snapshots"},
+		{"backtest_status", func(s *server) error {
+			_, _, e := s.handleBacktestStatus(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/backtest/status"},
+		{"backtest_signals", func(s *server) error {
+			_, _, e := s.handleBacktestSignals(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/backtest/signals"},
+		{"calendar_events", func(s *server) error {
+			_, _, e := s.handleCalendarEvents(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/calendar-events"},
+		{"sector_allocation_plan", func(s *server) error {
+			_, _, e := s.handleSectorAllocationPlan(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/sector-allocation-plan"},
+		{"channel_health", func(s *server) error {
+			_, _, e := s.handleChannelHealth(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/channel-health"},
+		{"taiwan_stress_index", func(s *server) error {
+			_, _, e := s.handleTaiwanStressIndex(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/taiwan/stress-index"},
+		{"risk_exposure", func(s *server) error {
+			_, _, e := s.handleRiskExposure(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/risk-exposure"},
 	}
 
 	for _, tc := range cases {
