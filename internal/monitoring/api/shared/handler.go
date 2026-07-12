@@ -22,15 +22,27 @@ type Handler func(r *http.Request) (status int, data any)
 // These lists mirror that decision so AuthMiddleware stays
 // self-contained for direct callers.
 var authFreeExactPaths = map[string]bool{
-	"/health":         true,
-	"/metrics":        true,
-	"/admin":          true,
-	"/client":         true,
-	"/api/llm/health": true,
-	"/api/alerts":     true,
-	"/api/stock":      true,
+	"/health":                       true,
+	"/metrics":                      true,
+	"/admin":                        true,
+	"/client":                       true,
+	"/api/llm/health":               true,
+	"/api/alerts":                   true,
+	"/api/stock":                    true,
+	"/api/recommendations":          true,
+	"/api/tasks":                    true,
+	"/api/field-contract":           true,
+	"/api/control/audit-log":        true,
+	"/api/control/active-overrides": true,
+	"/api/experiment/history":       true,
+	"/api/experiment/diff":          true,
 }
 
+// Per internal/monitoring/AGENTS.md, these prefix lists must mirror
+// cmd/atlas/main.go isPublicPath. Write operations under /api/control/
+// and /api/experiment/ (approve-recommendation, reject-recommendation,
+// pause/resume-agent, sector-ban, promote, revert, judge) intentionally
+// remain outside this whitelist and continue to require an API key.
 var authFreePrefixPaths = []string{
 	"/admin/",
 	"/client/",
@@ -44,6 +56,19 @@ var authFreePrefixPaths = []string{
 	"/api/capital-flow/",
 	"/api/events/",
 	"/api/stock/",
+	"/api/strategies/",
+	"/api/risk/",
+	"/api/regime/",
+	"/api/scheduler/",
+	"/api/tasks/",
+	"/api/traces/",
+	"/api/llm/",
+	"/api/llm_annotator/",
+	"/api/prism/",
+	"/api/recommendations/",
+	"/api/reports/",
+	"/api/strategy-ranker/",
+	"/api/universe/",
 }
 
 func isAuthFreePath(p string) bool {

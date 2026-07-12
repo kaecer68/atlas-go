@@ -193,6 +193,7 @@ func TestHandleExperimentJudge_PostsJSON(t *testing.T) {
 func TestHandleAlertListUnacknowledged(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
+	rec.responseBody = []byte(`{"alerts":[]}`)
 	_, _, err := s.handleAlertListUnacknowledged(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
