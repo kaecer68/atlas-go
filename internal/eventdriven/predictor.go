@@ -254,8 +254,10 @@ func forcesForDirection(drivers []string) []string {
 			strings.Contains(dl, "taiwan50"):
 			forceSet["institutional"] = true
 		case strings.Contains(dl, "投信"),
-			strings.Contains(dl, "基金"):
+			strings.Contains(dl, "基金"),
+			strings.Contains(dl, "法說"):
 			forceSet["institutional"] = true
+			forceSet["foreign"] = true
 		case strings.Contains(dl, "做帳"),
 			strings.Contains(dl, "季底"),
 			strings.Contains(dl, "window_dressing"):
@@ -264,6 +266,18 @@ func forcesForDirection(drivers []string) []string {
 		case strings.Contains(dl, "融資"),
 			strings.Contains(dl, "散戶"):
 			forceSet["retail"] = true
+		case strings.Contains(dl, "結算"),
+			strings.Contains(dl, "settlement"):
+			forceSet["dealer"] = true
+		case strings.Contains(dl, "配息"),
+			strings.Contains(dl, "除權息"),
+			strings.Contains(dl, "股利"),
+			strings.Contains(dl, "dividend"):
+			forceSet["retail"] = true
+			forceSet["institutional"] = true
+		case strings.Contains(dl, "股東會"),
+			strings.Contains(dl, "shareholder"):
+			forceSet["institutional"] = true
 		}
 	}
 	forces := make([]string, 0, len(forceSet))
