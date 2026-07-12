@@ -8,7 +8,7 @@
 
 `DashboardAPI` 是專案中最大的單一服務組件，聚合 `ledger`、`narrative`、`orchestrator` 與 `sim` 的資料並提供 HTTP 介面。核心邏輯位於 `dashboard_api.go`。
 
-> **Phase 4 變更**：`NewDashboardAPI`（legacy `CompositeMacroProvider` 組裝）已標記為 `Deprecated`；生產環境請使用 `NewDashboardAPIWithGateway` + `monitoring.DataFetcher`，讓 macro 資料統一流經 `apigateway.Gateway`。
+> **Legacy API 變更**：`NewDashboardAPI`（legacy `CompositeMacroProvider` 組裝）已標記為 `Deprecated`；生產環境請使用 `NewDashboardAPIWithGateway` + `monitoring.DataFetcher`，讓 macro 資料統一流經 `apigateway.Gateway`。
 
 ### API 路由（按職責）
 
@@ -56,7 +56,7 @@
 `CrossMarketService` 採用 4 層模式，確保通道靜默失敗時資料缺失能被看見：
 - **L1 Gateway**：`internal/apigateway/provider.go` 標記 `FetchResult.Fallback` / `LastError`
 - **L2 Adapter**：`internal/monitoring/gateway_adapter.go` 暴露 `ChannelErrors()`
-- **L3 Service**：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`，覆蓋以下 8 個 Yahoo 通道：<br>
+- **L3 Service**：`internal/monitoring/service/crossmarket.go` 產出 `DataStatus` + `FailedChannels`，覆蓋以下 8 個 Yahoo 通道：
   `us_spx` / `us_ndx` / `us_dji` / `sox_index` / `us_nvda` / `us_aapl` / `us_msft` / `tsm_adr`
 - **L4 Frontend**：`shared_web/static/js/pages/crossmarket.js` 顯示降級 badge/banner
 
@@ -78,7 +78,7 @@
 
 ## Live 偵測器協調器
 
-`internal/monitoring/wave9_runtime.go` 的 `Wave9Observability` 在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。詳見 `docs/handoff/2026-wave9-observability-coordinator.md`。
+Live 偵測器協調器（原始檔案仍保留 `wave9` 命名）在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。歷史設計詳見 `docs/handoff/2026-wave9-observability-coordinator.md`。
 
 ---
 

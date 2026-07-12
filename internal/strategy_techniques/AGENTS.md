@@ -6,26 +6,7 @@
 
 ## strategy_techniques（心法庫）
 
-`strategy_techniques` 提供以 `StrategyFrame` 為核心的規則引擎，作為台股投資心法看板與系統決策依據。
-
-### 五層框架（L1～L5）
-
-| Layer | 中文 | 對應 Atlas 模組 | Theme 範例 |
-|-------|------|----------------|-----------|
-| L1 | 全球流動性 | narrative/templates.go | US_rates_up, JPY_carry_unwind |
-| L2 | 外資行為 | taiwan_stress_index.go, narrative | foreign_inflow_*, foreign_outflow_* |
-| L3 | 產業催化 | narrative | AI_capex_surge, semiconductor_downturn, NVDA_earnings |
-| L4 | 匯率籌碼 | narrative, marketdata | USD_TWD_volatility, margin_balance_* |
-| L5 | 地緣政治 | narrative, taiwan_stress_index | geopolitical_risk_spike, tariff_shock, taiwan_political_risk |
-
-### 4 核心短線指標
-
-| 指標 | MacroDataSnapshot 欄位 | Provider | Channel |
-|------|----------------------|----------|---------|
-| 外資現貨買賣超 | ForeignInvestorNet | TWSE T86 | twse_capital_flow |
-| 台積電 ADR | TSMADR | Yahoo Finance TSM | tsm_adr |
-| 輝達股價 | NVDA | Yahoo Finance NVDA | us_nvda |
-| 美元指數 | DXY | Yahoo Finance DX-Y.NYB | us_yahoo (macro batch) |
+`strategy_techniques` 提供以 `StrategyFrame` 為核心的規則引擎，作為台股投資心法看板與系統決策依據。五層框架與 4 核心短線指標的完整對應表見 [`docs/specs/strategy-techniques.md`](docs/specs/strategy-techniques.md)。
 
 ### 關鍵陷阱
 

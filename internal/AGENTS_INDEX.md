@@ -97,7 +97,7 @@
 
 | 檔案位置 | 涵蓋模組 | 關鍵陷阱主題 |
 |---------|---------|-------------|
-| `AGENTS.md`（root） | db / config / logging / eventbus / realtime / experiment / baseline / ledger / portfolio / risk / industry / narrative | 跨模組高頻陷阱速查表（單行濃縮） |
+| `AGENTS.md`（root） | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/REFERENCE/TRAPS.md` |
 | `internal/apigateway/` | apigateway | Gateway.Fetch、BackgroundTaskManager、CircuitBreaker |
 | `internal/capitalflow/` | capitalflow + eventdriven + recommender + subscription | 資金流/事件日曆/推薦/認證集群 |
 | `internal/fubonproxy/` | fubonproxy | ProcessManager supervisor F1-F9、Stop/backoff |
