@@ -49,7 +49,9 @@ func TestExchangeRateProvider_FetchSnapshot_BothRates(t *testing.T) {
 		t.Errorf("USD_TWD.Value = %v, want 32.45", snap.USD_TWD.Value)
 	}
 	if snap.USD_TWD.ChangePct != 0 {
-		t.Errorf("USD_TWD.ChangePct = %v, want 0 (free tier no historical)", snap.USD_TWD.ChangePct)
+		// Single-call baseline: cache empty on first fetch, so ChangePct=0 by design.
+		// For the two-call cache-diff behavior see TestExchangeRateProvider_ChangePctFromCache.
+		t.Errorf("USD_TWD.ChangePct = %v, want 0 (cold start, single fetch)", snap.USD_TWD.ChangePct)
 	}
 	if snap.JPY.Symbol != "JPY=X" {
 		t.Errorf("JPY.Symbol = %q, want JPY=X", snap.JPY.Symbol)

@@ -144,14 +144,21 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 
 	providers = append(providers, marketdata.NewBDIProvider())
-	// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
+	// ExchangeRate-API provides TWD (not in ECB/Frankfurter). DO NOT reorder the
+	// next three providers without reading
+	// ~/workspace/atlas-notes/05-decisions/2026-07-13-usd-twd-routing-recurring-bug-root-cause.md
+	// — this list has been regressed 3+ times by independent fixes.
+	//
+	// Ordering rationale (last-write-wins mergeSnapshot):
+	//   1. ExchangeRate: current value for USD/TWD (free tier, no historical ChangePct)
+	//   2. Frankfurter:  current value + daily ChangePct for JPY/EUR (ECB dataset)
+	//   3. Yahoo:        MUST be LAST. Yahoo uses range=1mo to compute reliable daily
+	//                   ChangePct for ALL tickers incl. forex. Placing Yahoo last ensures
+	//                   its (value, ChangePct) wins, and its ChangePct is non-zero.
+	//                   Without this, ExchangeRate's ChangePct=0 overwrites Yahoo's.
 	providers = append(providers, marketdata.NewExchangeRateProvider())
-	// FrankfurterFXProvider MUST come after ExchangeRateProvider; both
-	// provide JPY, but Frankfurter computes a real daily ChangePct while
-	// ExchangeRate always writes ChangePct=0 (free-tier limitation).
-	// The last-write-wins mergeSnapshot would otherwise discard the real
-	// ChangePct from Frankfurter.
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
+	providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, constants.StateCapitalFlow)))
 	providers = append(providers, marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")))
 	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, constants.StateExport)))
