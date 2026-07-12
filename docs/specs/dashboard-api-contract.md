@@ -43,10 +43,27 @@
 | 表示方式 | 意義 | 前端處理 |
 | --- | --- | --- |
 | `null` / 欄位 omitted | 該指標無資料或未就緒 | 顯示「—」 |
+| `NaN` / `Infinity` | 計算失敗或上游資料異常 | 顯示「—」 |
 | `0` | 數值型欄位合法零值或資料未就緒 | **不可視為有效數值**；應顯示「—」並檢查 `data_status` / `insufficient_data` |
+| 空字串 `""` | 字串型欄位無資料 | 視同 `null`，顯示「—」 |
 | 空陣列 `[]` | 該維度尚無紀錄 | 顯示「無資料」 |
 | HTTP 200 + `status: "not_available"` | 後端服務存在但資料尚未產生 | 顯示「載入中 / 無資料」 |
 | HTTP 503 | 後端依賴未注入 | 顯示 API 錯誤，禁止以 `0` 渲染 |
+
+#### 前端安全格式化層
+
+所有頁面應透過 `shared_web/static/js/shared/format-metric.js` 的 `fmtSafe*` 系列函數渲染數值：
+
+- `fmtSafeNumber(value, opts)` — 一般數值；無效值回傳「—」。
+- `fmtSafePct(value, decimals)` — 百分比；無效值回傳「—」。
+- `fmtSafeSignedPct(value, decimals)` — 帶正負號百分比；無效值回傳「—」。
+- `fmtSafeSigned(value, opts)` — 帶正負號數值（非百分比）；無效值回傳「—」。
+- `fmtSafeDrawdown(value)` — 最大回撤；無效值回傳「—」。
+- `fmtSafeCurrency(value, opts)` — 幣別；無效值回傳「—」。
+- `fmtSafeLargeNumber(value)` — 大數縮放；無效值回傳「—」。
+- `isEmptyMetric(value)` — 統一判斷 `null` / `undefined` / `NaN` / `''`。
+
+禁止在 `pages/*.js` / `components/*.js` 中直接呼叫底層 `formatNumber` / `fmtPct` / `fmtSignedPct` / `fmtDrawdown` 等函數後再補 `if (value == null)` 判斷。所有新頁面必須先 import `fmtSafe*`；既有頁面應隨重構逐步遷移。
 
 ### 0.5 Regime 列舉
 
