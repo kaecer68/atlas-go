@@ -8,6 +8,17 @@ function isValidNumber(value) {
 }
 
 /**
+ * 統一判斷數值是否為「缺失資料」。
+ * 後端缺失資料通常以 null / undefined / NaN / 空字串表示；
+ * 此函數讓所有頁面對「無效值」有一致的定義。
+ * @param {*} value
+ * @returns {boolean}
+ */
+export function isEmptyMetric(value) {
+  return value === null || value === undefined || value === '' || (typeof value === 'number' && Number.isNaN(value));
+}
+
+/**
  * 將數值格式化為帶正負號的字串。
  * @param {number|null|undefined} value
  * @param {Object} options
@@ -160,6 +171,88 @@ export const fmtSignedPct = (value, decimals = 1) => {
 
 export const fmtDrawdown = (value) => formatMaxDrawdown(value);
 export const fmtHHI = (value) => formatHHI(value);
+
+// ============================================================================
+// Safe formatting wrappers (P2 structural refactor)
+// These aliases make the "validity check before format" convention explicit.
+// They behave like their non-safe counterparts but are the preferred entry
+// point for page code so that missing data never renders as 0.0 / 0.0%.
+// ============================================================================
+
+/**
+ * 安全格式化帶正負號數值（非百分比）。無效值回傳 '—'。
+ * @param {number|null|undefined} value
+ * @param {Object} options 同 formatSigned
+ * @returns {string}
+ */
+export function fmtSafeSigned(value, options = {}) {
+  if (isEmptyMetric(value)) return '—';
+  return formatSigned(value, options);
+}
+
+/**
+ * 安全格式化一般數值。無效值回傳 '—'，真正的 0 顯示為 '0.00'。
+ * @param {number|null|undefined} value
+ * @param {Object} options 同 formatNumber
+ * @returns {string}
+ */
+export function fmtSafeNumber(value, options = {}) {
+  if (isEmptyMetric(value)) return '—';
+  return formatNumber(value, options);
+}
+
+/**
+ * 安全格式化百分比。無效值回傳 '—'，真正的 0 顯示為 '0.0%'。
+ * @param {number|null|undefined} value
+ * @param {number} [decimals=1]
+ * @returns {string}
+ */
+export function fmtSafePct(value, decimals = 1) {
+  if (isEmptyMetric(value)) return '—';
+  return fmtPct(value, decimals);
+}
+
+/**
+ * 安全格式化帶正負號百分比。無效值回傳 '—'，真正的 0 顯示為 '0.0%'。
+ * @param {number|null|undefined} value
+ * @param {number} [decimals=1]
+ * @returns {string}
+ */
+export function fmtSafeSignedPct(value, decimals = 1) {
+  if (isEmptyMetric(value)) return '—';
+  return fmtSignedPct(value, decimals);
+}
+
+/**
+ * 安全格式化最大回撤。無效值回傳 '—'，真正的 0 顯示為 '0.0%'。
+ * @param {number|null|undefined} value
+ * @returns {string}
+ */
+export function fmtSafeDrawdown(value) {
+  if (isEmptyMetric(value)) return '—';
+  return fmtDrawdown(value);
+}
+
+/**
+ * 安全格式化幣別。無效值回傳 '—'，真正的 0 顯示為 'NT$0'。
+ * @param {number|null|undefined} value
+ * @param {Object} options 同 fmtCurrency
+ * @returns {string}
+ */
+export function fmtSafeCurrency(value, options = {}) {
+  if (isEmptyMetric(value)) return '—';
+  return fmtCurrency(value, options);
+}
+
+/**
+ * 安全格式化大數。無效值回傳 '—'。
+ * @param {number|null|undefined} value
+ * @returns {string}
+ */
+export function fmtSafeLargeNumber(value) {
+  if (isEmptyMetric(value)) return '—';
+  return fmtLargeNumber(value);
+}
 
 /**
  * 依據風險等級回傳本地化標籤。

@@ -8,7 +8,9 @@ import {
 } from "../shared/app-utils.js";
 import { renderIndustrySeasonality, renderSeasonalityList, renderSeasonalityCalendar } from '../shared/components/seasonality-panel.js';
 import { getThemeColor, fmtFloat } from "../shared/utils.js";
-import { formatNumber, formatSigned, fmtSignedPct } from "../shared/format-metric.js";
+import {
+  fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeSigned,
+} from "../shared/format-metric.js";
 import { hexToRgba } from "../shared/color-tokens.js";
 
 export async function loadIndustryData() {
@@ -161,7 +163,7 @@ function confidenceColor(hex, confidence) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  return "rgba(" + r + "," + g + "," + b + "," + formatNumber(alpha, { decimals: 2 }) + ")";
+  return "rgba(" + r + "," + g + "," + b + "," + fmtSafeNumber(alpha, { decimals: 2 }) + ")";
 }
 
 function cycleStatusText(value) {
@@ -180,12 +182,12 @@ function cycleStatusText(value) {
 }
 
 function cycleNumber(value, digits) {
-  return formatNumber(value, { decimals: digits });
+  return fmtSafeNumber(value, { decimals: digits });
 }
 
 function cycleDelta(value) {
   return {
-    text: formatSigned(value, { decimals: 3, forceSign: true }),
+    text: fmtSafeSigned(value, { decimals: 3, forceSign: true }),
     color: typeof value === "number" && Number.isFinite(value)
       ? value > 0 ? "var(--up)" : value < 0 ? "var(--down)" : "var(--muted)"
       : "var(--muted)",
@@ -288,7 +290,7 @@ export function renderCycleStatusCard(card) {
   layerDefs.forEach((layer) => {
     const item = breakdownByLayer.get(layer.key) || {};
     const delta = cycleDelta(item.contribution);
-    const weight = formatNumber(item.weight, { percent: true, decimals: 0 });
+    const weight = fmtSafePct(item.weight, 0);
     html += `<div style="flex:1;min-width:132px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px">`;
     html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${layer.label}</div>`;
     html += `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:6px"><span style="font-size:18px;font-weight:800">${cycleNumber(item.raw_value, 3)}</span><span style="font-size:13px;font-weight:800;color:${delta.color}">${delta.text}</span></div>`;
@@ -354,11 +356,11 @@ export function renderCycleStatusCard(card) {
   html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
   html += `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div style="font-weight:800;font-size:14px">商業週期與季節性</div><div style="font-size:11px;color:var(--muted)">季節調整 ${cycleNumber(card.seasonal_adjustment, 3)}x · 事件情緒 ${cycleNumber(card.event_sentiment, 3)}x · 供應鏈 ${cycleNumber(card.supply_chain_signal, 3)}</div></div>`;
   html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><div style="font-size:12px">商業 ${cyclePhaseBadge(card.business_cycle)}</div><div style="font-size:12px">庫存 ${cyclePhaseBadge(card.inventory_cycle)}</div><div style="font-size:12px">資本支出 ${cyclePhaseBadge(card.capex_cycle)}</div></div>`;
-  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:11px;color:var(--muted);width:70px">信心度</span><div style="flex:1;height:10px;background:var(--border);border-radius:999px;overflow:hidden"><div style="width:${typeof confidence === "number" && Number.isFinite(confidence) ? Math.min(100, Math.max(0, confidence * 100)) : 0}%;height:100%;background:var(--accent)"></div></div><span style="font-size:12px;font-weight:800">${formatNumber(confidence, { percent: true, decimals: 0 })}</span></div>`;
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:11px;color:var(--muted);width:70px">信心度</span><div style="flex:1;height:10px;background:var(--border);border-radius:999px;overflow:hidden"><div style="width:${typeof confidence === "number" && Number.isFinite(confidence) ? Math.min(100, Math.max(0, confidence * 100)) : 0}%;height:100%;background:var(--accent)"></div></div><span style="font-size:12px;font-weight:800">${fmtSafePct(confidence, 0)}</span></div>`;
   if (activePatterns.length > 0) {
     html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
     activePatterns.forEach((pattern) => {
-      html += `<span style="font-size:11px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.24);color:var(--accent);border-radius:999px;padding:3px 8px">${pattern.name || pattern.id || "季節模式"} ${formatNumber(pattern.adjustment_factor, { decimals: 2, suffix: "x" })}</span>`;
+      html += `<span style="font-size:11px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.24);color:var(--accent);border-radius:999px;padding:3px 8px">${pattern.name || pattern.id || "季節模式"} ${fmtSafeNumber(pattern.adjustment_factor, { decimals: 2, suffix: "x" })}</span>`;
     });
     html += `</div>`;
   } else {
@@ -375,7 +377,7 @@ export function renderCycleStatusCard(card) {
       const delta = cycleDelta(item.contribution);
       let reason = item.reason || "";
       reason = reason.replace(/silicon phase=/,"矽階段=").replace(/^phase=/,"階段=").replace(/score=/g,"評分=").replace(/confidence=/g,"信賴度=").replace(/(\d+) active patterns/,"$1 個活躍模式").replace(/(\d+) active events/,"$1 個活躍事件").replace("upstream-downstream momentum","上下游動能") || "-";
-      html += `<tr><td>${layerLabels[item.layer] || item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${formatNumber(item.weight, { percent: true, decimals: 0 })}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${reason}</td></tr>`;
+      html += `<tr><td>${layerLabels[item.layer] || item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${fmtSafePct(item.weight, 0)}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${reason}</td></tr>`;
     });
     html += `</tbody></table>`;
   } else {
@@ -683,11 +685,11 @@ function renderCycleTab(detail) {
     { label: "趨勢方向", value: cp.trend || "-" },
     {
       label: "週期分數",
-      value: formatNumber(cp.phase_score, { decimals: 2 }),
+      value: fmtSafeNumber(cp.phase_score, { decimals: 2 }),
     },
     {
       label: "信心度",
-      value: formatNumber(cp.confidence, { percent: true, decimals: 0 }),
+      value: fmtSafePct(cp.confidence, 0),
     },
     { label: "是否有利", value: cp.is_favorable ? "✅ 有利" : "⚠️ 不利" },
   ];
@@ -709,13 +711,13 @@ function renderCycleTab(detail) {
       { key: "narrative", label: "宏觀敘事", weight: cb.weights ? cb.weights.narrative : 0 },
     ];
     html += '<div class="industry-section"><h4>📐 信心度分解</h4>';
-    html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">各維度信心分數 × 配置權重 → 複合信心 <strong>' + formatNumber(cb.composite, { percent: true, decimals: 0 }) + '</strong></div>';
+    html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">各維度信心分數 × 配置權重 → 複合信心 <strong>' + fmtSafePct(cb.composite, 0) + '</strong></div>';
     dims.forEach(function(d) {
       const val = cb[d.key];
-      const valStr = formatNumber(val, { percent: true, decimals: 0 });
+      const valStr = fmtSafePct(val, 0);
       if (valStr === '—') return;
       const barW = Math.min(Math.max(0, val) * 100, 100);
-      const wPct = formatNumber(d.weight, { percent: true, decimals: 0 });
+      const wPct = fmtSafePct(d.weight, 0);
       html += '<div style="display:flex;align-items:center;gap:6px;margin:3px 0;font-size:11px">';
       html += '<span style="width:80px;color:var(--muted)">' + d.label + '</span>';
       html += '<div style="flex:1;height:14px;background:rgba(0,0,0,0.04);border-radius:3px;overflow:hidden">';
@@ -741,9 +743,9 @@ function renderCycleTab(detail) {
     if (rec.conviction)
       html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">信念</span><span>${rec.conviction}</span></div>`;
     if (rec.target_weight != null)
-      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">目標權重</span><span>${formatNumber(rec.target_weight, { percent: true, decimals: 1 })}</span></div>`;
+      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">目標權重</span><span>${fmtSafePct(rec.target_weight, 1)}</span></div>`;
     if (rec.delta != null)
-      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">調整幅度</span><span>${fmtSignedPct(rec.delta, 1)}</span></div>`;
+      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">調整幅度</span><span>${fmtSafeSignedPct(rec.delta, 1)}</span></div>`;
     if (rec.rationale)
       html += `<div style="margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6">${rec.rationale}</div>`;
     html += "</div></div>";
@@ -824,7 +826,7 @@ function renderLinkageTab(detail) {
   return html;
 }
 
-function renderSeasonalityTab(detail) {
+export function renderSeasonalityTab(detail) {
   const patterns = detail.seasonal_patterns;
   if (!patterns || patterns.length === 0)
     return renderEmptyState("尚無季節性模式資料", "");
@@ -834,7 +836,7 @@ function renderSeasonalityTab(detail) {
     '⚠️ 以下數值基於經驗法則，尚未經過回測校準。' +
     '</div>';
   patterns.forEach((p) => {
-    const accuracyStr = formatNumber(p.historical_accuracy, { percent: true, decimals: 0 });
+    const accuracyStr = fmtSafePct(p.historical_accuracy, 0);
     const returnColor = typeof p.avg_market_return === "number" && Number.isFinite(p.avg_market_return)
       ? p.avg_market_return > 0 ? "var(--up)" : p.avg_market_return < 0 ? "var(--down)" : "var(--muted)"
       : "var(--muted)";
@@ -850,15 +852,15 @@ function renderSeasonalityTab(detail) {
     html += `<div class="pattern-name">${p.name}</div>`;
     html += `<div class="pattern-meta">${period}</div>`;
     html += '<div class="metric-row" style="margin-top:6px">';
-    const calEvidence = (window.seasonalityData && window.seasonalityData.calibration_evidence);
+    const calEvidence = (typeof window !== 'undefined' && window.seasonalityData && window.seasonalityData.calibration_evidence);
     const accBadge = calEvidence && calEvidence.calibrated
       ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px">已校準</span>`
       : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px">待驗證</span>`;
     html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracyStr} ${accBadge}</span></div>`;
     html += '<div class="metric-row">';
-    html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnColor}">${fmtSignedPct(p.avg_market_return, 1)}</span></div>`;
+    html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnColor}">${fmtSafeSignedPct(p.avg_market_return, 1)}</span></div>`;
     html += '<div class="metric-row">';
-    html += `<span class="metric-label">調整因子</span><span class="metric-value">${formatNumber(p.adjustment_factor, { decimals: 2, suffix: "x" })}</span></div>`;
+    html += `<span class="metric-label">調整因子</span><span class="metric-value">${fmtSafeNumber(p.adjustment_factor, { decimals: 2, suffix: "x" })}</span></div>`;
     if (p.impact) {
       html += '<div class="metric-row">';
       html += `<span class="metric-label">影響方向</span><span class="metric-value" style="color:${impactColor}">${p.impact}</span></div>`;
@@ -900,11 +902,11 @@ function renderRiskTab(detail) {
       html += `<div style="font-size:12px;margin-bottom:4px">${r.description}</div>`;
     if (r.impact_estimate != null) {
       html += '<div class="metric-row">';
-      html += `<span class="metric-label">預估衝擊</span><span class="metric-value" style="color:${impactColor}">${formatNumber(r.impact_estimate, { percent: true, decimals: 1 })}</span></div>`;
+      html += `<span class="metric-label">預估衝擊</span><span class="metric-value" style="color:${impactColor}">${fmtSafePct(r.impact_estimate, 1)}</span></div>`;
     }
     if (r.confidence != null) {
       html += '<div class="metric-row">';
-      html += `<span class="metric-label">信心度</span><span class="metric-value">${formatNumber(r.confidence, { percent: true, decimals: 0 })}</span></div>`;
+      html += `<span class="metric-label">信心度</span><span class="metric-value">${fmtSafePct(r.confidence, 0)}</span></div>`;
     }
     if (r.source) {
       html += '<div class="metric-row">';
@@ -998,7 +1000,7 @@ function populateShockSourceDropdown(classification) {
   }
 }
 
-window.runShockSimulation = async function () {
+async function runShockSimulation() {
   const source = document.getElementById("shockSource").value;
   const magnitude = parseFloat(document.getElementById("shockMagnitude").value);
   const depth = parseInt(document.getElementById("shockDepth").value) || 3;
@@ -1026,7 +1028,7 @@ window.runShockSimulation = async function () {
     el.classList.remove("loading");
     el.innerHTML = renderEmptyState("模擬失敗: " + (e.message || e), "");
   }
-};
+}
 
 function renderShockSimulationResult(data) {
   const el = document.getElementById("industryShockSim");
@@ -1037,10 +1039,10 @@ function renderShockSimulationResult(data) {
   }
   const sorted = [...data.impacts].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
   let html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">';
-  html += `<strong>${data.source}</strong> 遭受 <strong>${formatNumber(data.shock, { percent: true, decimals: 1 })}</strong> 衝擊 → 影響 ${data.impact_count} 個關聯產業</div>`;
+  html += `<strong>${data.source}</strong> 遭受 <strong>${fmtSafePct(data.shock, 1)}</strong> 衝擊 → 影響 ${data.impact_count} 個關聯產業</div>`;
   html += '<table style="font-size:12px"><thead><tr><th>產業</th><th>影響幅度</th><th>衝擊傳導</th></tr></thead><tbody>';
   for (const imp of sorted) {
-    const pctStr = fmtSignedPct(imp.impact, 1);
+    const pctStr = fmtSafeSignedPct(imp.impact, 1);
     const absPct = typeof imp.impact === "number" && Number.isFinite(imp.impact) ? Math.abs(imp.impact * 100) : 0;
     const color = typeof imp.impact === "number" && Number.isFinite(imp.impact)
       ? imp.impact < 0 ? "var(--down)" : imp.impact > 0 ? "var(--up)" : "var(--muted)"
