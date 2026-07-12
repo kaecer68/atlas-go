@@ -133,6 +133,8 @@ cmd/atlas/data/state/
 cmd/atlas/channel_health.json
 /staging.pid
 internal/marketdata/data/state/
+/users.db
+/subscriptions.db
 # Migration tool binaries
 /archive-state
 /check-persistence-format
