@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
@@ -17,11 +18,18 @@ const exchangeRateEndpoint = "https://open.er-api.com/v6/latest/USD"
 // ExchangeRateProvider fetches exchange rates from the free ExchangeRate-API.
 // Supports TWD (not available in ECB/Frankfurter dataset) and JPY.
 // No API key required, rate-limited to ~1 request/minute on free tier.
-// Historical rates require paid plan — ChangePct falls back to 0 with a
-// warning log. Use FrankfurterFXProvider for daily change tracking on JPY.
+// ChangePct is derived from an in-memory cache of the previous fetch
+// (Bug#5 fix — the free tier API has no historical endpoint, so the previous
+// implementation hardcoded ChangePct=0). Use FrankfurterFXProvider for
+// daily change tracking on JPY when freshness matters more than rate-limit cost.
 type ExchangeRateProvider struct {
 	client    *http.Client
 	latestURL string
+
+	mu sync.RWMutex
+	// Last-fetched rates cached for ChangePct derivation.
+	lastUSDTWD float64
+	lastUSDJPY float64
 }
 
 func NewExchangeRateProvider() *ExchangeRateProvider {
@@ -75,13 +83,17 @@ func (e *ExchangeRateProvider) FetchSnapshot(ctx context.Context) (MacroDataSnap
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
 
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if twdRate, ok := fxResp.Rates["TWD"]; ok && twdRate > 0 {
 		snap.USD_TWD = MacroDataPoint{
 			Symbol:    "USD/TWD=X",
 			Value:     twdRate,
-			ChangePct: 0,
+			ChangePct: pctChange(twdRate, e.lastUSDTWD),
 			Timestamp: time.Now().Unix(),
 		}
+		e.lastUSDTWD = twdRate
 	} else {
 		logging.Warn("exchangerate_provider", "missing_or_zero_rate", "currency", "TWD")
 	}
@@ -90,9 +102,11 @@ func (e *ExchangeRateProvider) FetchSnapshot(ctx context.Context) (MacroDataSnap
 		snap.JPY = MacroDataPoint{
 			Symbol:    "JPY=X",
 			Value:     jpyRate,
-			ChangePct: 0,
+			ChangePct: pctChange(jpyRate, e.lastUSDJPY),
 			Timestamp: time.Now().Unix(),
 		}
+		e.lastUSDJPY = jpyRate
+	} else {
 		logging.Info("exchangerate_provider", "jpy_change_pct_unavailable",
 			"reason", "free tier lacks historical endpoint",
 			"recommendation", "use FrankfurterFXProvider for daily change tracking")
