@@ -1,5 +1,6 @@
 // Shared seasonality panel component — used by industry ecosystem and macro narrative pages.
 import { renderEmptyState } from '../app-utils.js';
+import { formatNumber, fmtSignedPct } from '../format-metric.js';
 
 
 function isValidNumber(v) {
@@ -82,8 +83,8 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
       ? `<span style="font-size:10px;color:var(--ok);background:color-mix(in srgb, var(--accent) 10%, transparent);padding:1px 4px;border-radius:3px" title="已透過回測校準">已校準</span>`
       : `<span style="font-size:10px;color:var(--warn);background:color-mix(in srgb, var(--warn) 10%, transparent);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span>`;
     html += `<td>${accuracy !== null ? accuracy + '%' : '—'} ${evidenceBadge}</td>`;
-    html += `<td style="color:${returnColor}">${returnPct !== null ? returnPct.toFixed(1) + '%' : '—'}</td>`;
-    html += `<td style="color:${adjColor}">${adjustment !== null ? adjustment.toFixed(2) + 'x' : '—'}</td>`;
+    html += `<td style="color:${returnColor}">${returnPct !== null ? fmtSignedPct(returnPct, 1) : '—'}</td>`;
+    html += `<td style="color:${adjColor}">${adjustment !== null ? formatNumber(adjustment, { decimals: 2, suffix: 'x' }) : '—'}</td>`;
     html += `<td>${statusBadge}</td>`;
     html += "</tr>";
   });
@@ -100,14 +101,14 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
     ];
     const comp = isValidNumber(breakdown.composite) ? breakdown.composite : null;
     html += '<div style="margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">';
-    html += '<div style="font-weight:700;font-size:13px;margin-bottom:8px">調整因子分解（複合值 ' + (comp !== null ? comp.toFixed(4) + 'x' : '—') + '）</div>';
+    html += '<div style="font-weight:700;font-size:13px;margin-bottom:8px">調整因子分解（複合值 ' + (comp !== null ? formatNumber(comp, { decimals: 4, suffix: 'x' }) : '—') + '）</div>';
     layers.forEach(function(layer) {
       const val = breakdown[layer.key];
       const hasVal = isValidNumber(val);
       const barW = hasVal ? Math.min(Math.abs((val - 1) * 100), 30) : 0;
       const color = hasVal ? (val >= 1 ? "var(--up)" : "var(--down)") : "var(--muted)";
       const direction = hasVal ? (val >= 1 ? "+" : "") : "";
-      const pctText = hasVal ? direction + ((val - 1) * 100).toFixed(1) + '%' : '—';
+      const pctText = hasVal ? fmtSignedPct((val - 1) * 100, 1) : '—';
       html += '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px">';
       html += '<span style="width:80px;color:var(--muted)">' + layer.label + '</span>';
       html += '<div style="flex:1;height:16px;background:var(--border);border-radius:3px;overflow:hidden">';
@@ -164,13 +165,13 @@ export function renderSeasonalityCalendar(data) {
     if (hasPatterns) {
       m.patterns.forEach((p) => {
         const accuracy = isValidNumber(p.historical_accuracy) ? Math.round(p.historical_accuracy * 100) : null;
-        const returnPct = isValidNumber(p.avg_market_return) ? (p.avg_market_return * 100).toFixed(1) : null;
-        const adjustment = isValidNumber(p.adjustment_factor) ? p.adjustment_factor.toFixed(2) : null;
+        const returnPct = isValidNumber(p.avg_market_return) ? p.avg_market_return * 100 : null;
+        const adjustment = isValidNumber(p.adjustment_factor) ? p.adjustment_factor : null;
         html += `<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">`;
         html +=
           `<div style="font-weight:600">${p.name}</div>`;
         html +=
-          `<div style="color:var(--muted)">準確度 ${accuracy !== null ? accuracy + '%' : '—'} · 報酬 ${returnPct !== null ? returnPct + '%' : '—'} · 因子 ${adjustment !== null ? adjustment + 'x' : '—'}</div>`;
+          `<div style="color:var(--muted)">準確度 ${accuracy !== null ? accuracy + '%' : '—'} · 報酬 ${returnPct !== null ? fmtSignedPct(returnPct, 1) : '—'} · 因子 ${adjustment !== null ? formatNumber(adjustment, { decimals: 2, suffix: 'x' }) : '—'}</div>`;
         html += `</div>`;
       });
     } else {

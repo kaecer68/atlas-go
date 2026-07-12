@@ -10,7 +10,7 @@ import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
 import { renderTooltip } from '../components/tooltip.js';
 import { renderEventCalendar } from '../components/event-calendar.js';
-import { fmtSignedPct, fmtDrawdown, riskLevelLabel, formatNumber, formatSigned } from '../shared/format-metric.js';
+import { fmtSignedPct, fmtDrawdown, riskLevelLabel, formatNumber, formatSigned, fmtCurrency, fmtLargeNumber } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
 import { initOnboarding } from '../components/onboarding.js';
@@ -34,8 +34,9 @@ function animateValue(el, target, suffix = '', duration = 800) {
     el.textContent = '—';
     return;
   }
+  const decimals = Number.isInteger(target) ? 0 : 1;
   if (prefersReducedMotion()) {
-    el.textContent = (Number.isInteger(target) ? target : target.toFixed(1)) + suffix;
+    el.textContent = formatNumber(target, { decimals, suffix });
     return;
   }
   const start = 0;
@@ -43,7 +44,7 @@ function animateValue(el, target, suffix = '', duration = 800) {
   function step(now) {
     const progress = Math.min((now - startTime) / duration, 1);
     const current = start + (target - start) * (progress * (2 - progress));
-    el.textContent = (Number.isInteger(target) ? Math.round(current) : current.toFixed(1)) + suffix;
+    el.textContent = formatNumber(current, { decimals, suffix });
     if (progress < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -295,7 +296,7 @@ function renderTodaySummary(macro, stress, pipeline, events) {
     const dirTone = rec === '偏多' ? 'bullish' : rec === '偏空' ? 'bearish' : 'neutral';
     const dirLabel = rec === '偏多' ? '↑偏多' : rec === '偏空' ? '↓偏空' : '→觀望';
     const stressScoreVal = pointValue(stress, 'score');
-    const stressVal = stressScoreVal !== null ? stressScoreVal.toFixed(0) : '—';
+    const stressVal = formatNumber(stressScoreVal, { decimals: 0 });
     const stressLabel = stressVal;
     const foreignValue = macro ? pointValue(macro, 'foreign_investor_net') : null;
     const foreignLabel = foreignValue !== null ? formatSigned(foreignValue, { decimals: 1, suffix: ' 億', forceSign: true }) : '—';
@@ -409,9 +410,9 @@ function renderMarketPulse(macro, stress) {
     metricCard({ id: 'market-tsm', label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange === null ? 'neutral' : tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'card-priority-high disclosure-tier-core' }),
     metricCard({ id: 'market-sox', label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange === null ? 'neutral' : soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
     metricCard({ id: 'market-nasdaq', label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange === null ? 'neutral' : ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'card-priority-medium disclosure-tier-advanced' }),
-    metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: usdtwd !== null ? usdtwd.toFixed(2) : '—', tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
-    metricCard({ label: 'VIX', value: vixVal !== null ? vixVal.toFixed(1) : '—', tone: vixVal === null ? 'neutral' : vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
-    metricCard({ label: '融資餘額', value: marginVal !== null ? `${marginVal.toFixed(0)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: formatNumber(usdtwd, { decimals: 2 }), tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
+    metricCard({ label: 'VIX', value: formatNumber(vixVal, { decimals: 1 }), tone: vixVal === null ? 'neutral' : vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ label: '融資餘額', value: marginVal !== null ? `${fmtLargeNumber(marginVal)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
     metricCard({ label: '投信動向', value: fundText, tone: fundVal > 0 ? 'positive' : fundVal < 0 ? 'negative' : 'neutral', tooltip: '投信近一交易日買賣超（億元）。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
     metricCard({ label: '自營商', value: dealerText, tone: dealerVal > 0 ? 'positive' : dealerVal < 0 ? 'negative' : 'neutral', tooltip: '自營商近一交易日買賣超（億元）。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
     metricCard({ label: '歷史波動', value: formatVolatility(pointValue(macro, 'historical_volatility')), tone: volatilityTone(pointValue(macro, 'historical_volatility')), tooltip: 'TAIEX 20 日年化波動率。<20% 低波動、20-30% 中等、>30% 高波動警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
@@ -663,8 +664,7 @@ function renderRealPortfolio(container, data) {
 }
 
 function fmtNTD(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return '—';
-  return `NT$ ${formatNumber(value, { decimals: 0, useGrouping: true })}`;
+  return fmtCurrency(value, { decimals: 0, prefix: 'NT$ ' });
 }
 
 function renderDemoPortfolio(container) {

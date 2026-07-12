@@ -101,7 +101,7 @@ function updateAckRate(data) {
     return;
   }
   const rate = (acknowledged / triggered) * 100;
-  countEl.textContent = rate.toFixed(1) + '%';
+  countEl.textContent = formatNumber(rate, { decimals: 1, suffix: '%' });
   if (rate >= 80) {
     labelEl.textContent = '回應良好';
     countEl.style.color = 'var(--metric-good)';
@@ -162,8 +162,8 @@ export async function updateMetricsTrend(data) {
 
     html += `<title>系統指標趨勢 (24h)</title>`;
 
-    html += `<text x="${padding.left - 5}" y="${padding.top + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${maxVal.toFixed(0)}%</text>`;
-    html += `<text x="${padding.left - 5}" y="${padding.top + innerHeight + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${minVal.toFixed(0)}%</text>`;
+    html += `<text x="${padding.left - 5}" y="${padding.top + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${formatNumber(maxVal, { decimals: 0, suffix: '%' })}</text>`;
+    html += `<text x="${padding.left - 5}" y="${padding.top + innerHeight + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${formatNumber(minVal, { decimals: 0, suffix: '%' })}</text>`;
 
     const tickCount = Math.min(6, validPoints.length);
     for (let i = 0; i < tickCount; i++) {
@@ -223,7 +223,7 @@ export async function updateMetricsTrend(data) {
     const y = padding.top + innerHeight - ((val - minVal) / range) * innerHeight;
     const date = new Date(p.timestamp);
     const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-    const pct = val.toFixed(1);
+    const pct = formatNumber(val, { decimals: 1, suffix: '%' });
     const labelY = y > 20 ? y - 10 : y + 14;
     hoverCircle.setAttribute('cx', x);
     hoverCircle.setAttribute('cy', y);
@@ -310,8 +310,8 @@ export async function loadDataQuality() {
     if (v == null) return '-';
     const ns = Number(v);
     if (!Number.isFinite(ns)) return '-';
-    if (ns >= 1000000) return (ns / 1000000).toFixed(2) + ' ms';
-    if (ns >= 1000) return (ns / 1000).toFixed(2) + ' µs';
+    if (ns >= 1000000) return formatNumber(ns / 1000000, { decimals: 2 }) + ' ms';
+    if (ns >= 1000) return formatNumber(ns / 1000, { decimals: 2 }) + ' µs';
     return ns + ' ns';
   };
 

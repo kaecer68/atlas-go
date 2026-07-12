@@ -1,4 +1,5 @@
 import { escapeHtml } from '../shared/app-utils.js';
+import { formatNumber } from '../shared/format-metric.js';
 
 function isEditable(val) {
   if (typeof val === 'number') return true;
@@ -26,7 +27,7 @@ function formatValue(key, val, maxLen) {
   if (typeof val === 'object' && !Array.isArray(val)) {
     const entries = Object.entries(val);
     const count = entries.length;
-    const preview = entries.slice(0, 2).map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(2) : v}`).join(', ');
+    const preview = entries.slice(0, 2).map(([k, v]) => `${k}: ${typeof v === 'number' ? formatNumber(v, { decimals: 2 }) : v}`).join(', ');
     return `<span class="param-map-collapsed" onclick="window._paramMapExpand(this)" data-key="${escapeHtml(key)}" data-val="${escapeHtml(JSON.stringify(val))}" title="點擊展開">${count} entries{${preview}…}</span>`;
   }
   let s = val;
@@ -148,7 +149,7 @@ window._paramMapExpand = function(span) {
     const subKey = key + '.' + k;
     html += `<tr>
       <td class="param-key">${escapeHtml(k)}</td>
-      <td class="param-val-editable" title="點擊編輯" data-key="${escapeHtml(subKey)}" data-val="${escapeHtml(String(v))}" onclick="window._paramEdit(this)">${escapeHtml(typeof v === 'number' ? v.toFixed(4) : String(v))}</td>
+      <td class="param-val-editable" title="點擊編輯" data-key="${escapeHtml(subKey)}" data-val="${escapeHtml(String(v))}" onclick="window._paramEdit(this)">${escapeHtml(typeof v === 'number' ? formatNumber(v, { decimals: 4 }) : String(v))}</td>
     </tr>`;
   }
   html += '</tbody></table>';

@@ -278,7 +278,7 @@ function renderRegimeTimeline(sessions, maxDots) {
   for (const item of statItems) {
     const cnt = counts[item.key] || 0;
     if (cnt === 0) continue;
-    const pct = (cnt / total * 100).toFixed(0);
+    const pct = formatNumber(cnt / total, { percent: true, decimals: 0, suffix: '%' });
     statsHtml += '<div class="ev-regime-stat"><span class="ev-regime-stat-dot ' + item.cls + '"></span>' +
       '<span class="ev-regime-stat-label">' + item.label + '</span>' +
       '<span class="ev-regime-stat-pct ' + item.cls + '">' + pct + '%</span>' +
@@ -531,13 +531,13 @@ function renderScatterPlot(scorecards) {
   for (let v = 0; v <= 1; v += 0.25) {
     const x = toX(v);
     ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + plotH); ctx.stroke();
-    ctx.fillText((v * 100).toFixed(0) + '%', x, pad.top + plotH + 14);
+    ctx.fillText(formatNumber(v, { percent: true, decimals: 0, suffix: '%' }), x, pad.top + plotH + 14);
   }
   ctx.textAlign = 'right';
   for (let v = -1; v <= 3; v += 1) {
     const y = toY(v);
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + plotW, y); ctx.stroke();
-    ctx.fillText(v.toFixed(0), pad.left - 6, y + 4);
+    ctx.fillText(formatNumber(v, { decimals: 0 }), pad.left - 6, y + 4);
   }
 
   ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#b8c4d0';

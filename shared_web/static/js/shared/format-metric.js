@@ -3,6 +3,10 @@
  * 統一格式化投資人介面中的金融數值，避免語義錯誤（如最大回撤顯示為 +0.0%）。
  */
 
+function isValidNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /**
  * 將數值格式化為帶正負號的字串。
  * @param {number|null|undefined} value
@@ -13,10 +17,6 @@
  * @param {boolean} [options.invertSign=false]  true 時反轉正負號（用於回撤、損失等）
  * @returns {string}
  */
-function isValidNumber(value) {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
 export function formatSigned(value, options = {}) {
   const { decimals = 2, suffix = '', forceSign = false, invertSign = false } = options;
   if (!isValidNumber(value)) return `—${suffix ? ' ' + suffix : ''}`;
@@ -24,6 +24,8 @@ export function formatSigned(value, options = {}) {
   // 先依指定精度四捨五入，再決定正負號，避免 -0.0001 顯示成 -0.0。
   const factor = 10 ** decimals;
   v = Math.round(v * factor) / factor;
+  // 消除 IEEE -0
+  if (v === 0) v = 0;
   const sign = v > 0 ? '+' : v < 0 ? '−' : '';
   const displaySign = forceSign || v !== 0 ? sign : '';
   const abs = Math.abs(v).toFixed(decimals);
@@ -70,6 +72,7 @@ export function formatHHI(value) {
  * @param {number} [options.decimals=2]
  * @param {string} [options.suffix='']
  * @param {boolean} [options.percent=false] true 時將 value 視為 0.15 並乘 100
+ * @param {boolean} [options.useGrouping=false] true 時加入千分位
  * @returns {string}
  */
 export function formatNumber(value, options = {}) {
@@ -79,11 +82,84 @@ export function formatNumber(value, options = {}) {
   // 同樣先四捨五入，避免 -0.0001 在四捨五入後變成 -0.0。
   const factor = 10 ** decimals;
   v = Math.round(v * factor) / factor;
+  if (v === 0) v = 0;
   const formatted = useGrouping
     ? v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
     : v.toFixed(decimals);
   return `${formatted}${suffix}`;
 }
+
+/**
+ * 格式化幣別（預設 NTD）。
+ * @param {number|null|undefined} value
+ * @param {Object} options
+ * @param {number} [options.decimals=0]
+ * @param {string} [options.prefix='NT$']
+ * @param {boolean} [options.useGrouping=true]
+ * @returns {string}
+ */
+export function fmtCurrency(value, options = {}) {
+  const { decimals = 0, prefix = 'NT$', useGrouping = true } = options;
+  if (!isValidNumber(value)) return '—';
+  const formatted = value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+    useGrouping,
+  });
+  return `${prefix}${formatted}`;
+}
+
+/**
+ * 格式化百分比（無正負號）。value 為小數，例如 0.15 → 15.0%。
+ * @param {number|null|undefined} value
+ * @param {number} [decimals=1]
+ * @returns {string}
+ */
+export function fmtPct(value, decimals = 1) {
+  return formatNumber(value, { percent: true, decimals, suffix: '%' });
+}
+
+/**
+ * 格式化大數：自動縮放為 萬 / 億，並保留千分位。
+ * @param {number|null|undefined} value
+ * @returns {string}
+ */
+export function fmtLargeNumber(value) {
+  if (!isValidNumber(value)) return '—';
+  const abs = Math.abs(value);
+  if (abs >= 1e8) {
+    return (value / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 億';
+  }
+  if (abs >= 1e4) {
+    return (value / 1e4).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' 萬';
+  }
+  return value.toLocaleString('en-US');
+}
+
+/**
+ * 帶正負號百分比。value 為已乘 100 的百分點，例如 0.35 → +0.4%。
+ * 對極小值自動提升精度，避免出現 -0.0%。
+ * @param {number|null|undefined} value
+ * @param {number} [decimals=1]
+ * @returns {string}
+ */
+export const fmtSignedPct = (value, decimals = 1) => {
+  let effectiveDecimals = decimals;
+  if (isValidNumber(value) && value !== 0) {
+    const abs = Math.abs(value);
+    for (let d = decimals; d <= 3; d += 1) {
+      const rounded = Math.round(abs * (10 ** d)) / (10 ** d);
+      if (rounded !== 0) {
+        effectiveDecimals = d;
+        break;
+      }
+    }
+  }
+  return formatSigned(value, { decimals: effectiveDecimals, suffix: '%', forceSign: true });
+};
+
+export const fmtDrawdown = (value) => formatMaxDrawdown(value);
+export const fmtHHI = (value) => formatHHI(value);
 
 /**
  * 依據風險等級回傳本地化標籤。
@@ -105,22 +181,3 @@ export function toNumber(v) {
   const n = Number(v);
   return Number.isNaN(n) ? null : n;
 }
-
-// 簡潔別名，方便頁面層 import。
-export const fmtSignedPct = (value, decimals = 1) => {
-  // 對極小百分比自動增加精度，避免 -0.011% 四捨五入後變成 -0.0%。
-  let effectiveDecimals = decimals;
-  if (isValidNumber(value) && value !== 0) {
-    const abs = Math.abs(value);
-    for (let d = decimals; d <= 3; d += 1) {
-      const rounded = Math.round(abs * (10 ** d)) / (10 ** d);
-      if (rounded !== 0) {
-        effectiveDecimals = d;
-        break;
-      }
-    }
-  }
-  return formatSigned(value, { decimals: effectiveDecimals, suffix: '%', forceSign: true });
-};
-export const fmtDrawdown = (value) => formatMaxDrawdown(value);
-export const fmtHHI = (value) => formatHHI(value);
