@@ -645,8 +645,15 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = renderActionEmptyState('無季節性事件', '執行回測後將顯示季節性預期與事件。', [{label: '執行模擬', page: 'pipeline'}]); }
     else {
       const rows = seasonal.expectations.map(e => {
-        const statusBadge = e.already_priced_in ? '<span class="badge">已反應</span>' : '<span class="badge ok">有驚喜潛力</span>';
-        return `<tr><td>${escapeHtml(narrativeThemeLabel(e.theme))}</td><td>${fmtSignedPct(e.historical_avg_return)}</td><td>${fmtSignedPct(e.current_return)}</td><td>${fmtSignedPct(e.expectation_gap)}</td><td>${statusBadge}</td></tr>`;
+        const hasCurrent = e.current_return !== null && e.current_return !== undefined;
+        const currentLabel = hasCurrent ? fmtSignedPct(e.current_return) : '—';
+        const gapLabel = hasCurrent ? fmtSignedPct(e.expectation_gap) : '—';
+        const statusBadge = !hasCurrent
+          ? '<span class="badge">資料不足</span>'
+          : e.already_priced_in
+            ? '<span class="badge">已反應</span>'
+            : '<span class="badge ok">有驚喜潛力</span>';
+        return `<tr><td>${escapeHtml(narrativeThemeLabel(e.theme))}</td><td>${fmtSignedPct(e.historical_avg_return)}</td><td>${currentLabel}</td><td>${gapLabel}</td><td>${statusBadge}</td></tr>`;
       }).join('');
       seasonalEl.innerHTML = `<table><thead><tr><th>主題</th><th>歷史平均</th><th>當前報酬</th><th>預期差</th><th>狀態</th></tr></thead><tbody>${rows}</tbody></table>`;
     }

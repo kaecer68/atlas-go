@@ -117,11 +117,11 @@ func (h *Handlers) HandleNarrativeTemplates(r *http.Request) (int, any) {
 }
 
 type SeasonalExpectation struct {
-	Theme               string  `json:"theme"`
-	HistoricalAvgReturn float64 `json:"historical_avg_return"`
-	CurrentReturn       float64 `json:"current_return"`
-	ExpectationGap      float64 `json:"expectation_gap"`
-	AlreadyPricedIn     bool    `json:"already_priced_in"`
+	Theme               string   `json:"theme"`
+	HistoricalAvgReturn float64  `json:"historical_avg_return"`
+	CurrentReturn       *float64 `json:"current_return"`
+	ExpectationGap      float64  `json:"expectation_gap"`
+	AlreadyPricedIn     bool     `json:"already_priced_in"`
 }
 
 // approxPatternDays returns the approximate duration in days for a seasonal
@@ -138,16 +138,17 @@ func approxPatternDays(p service.SeasonalPattern) int {
 }
 
 // getPatternReturn fetches the TAIEX return for a duration matching the
-// seasonal pattern's typical window.
-func getPatternReturn(ctx context.Context, calc *marketdata.TAIEXReturnCalculator, p service.SeasonalPattern) float64 {
+// seasonal pattern's typical window. Returns nil when historical quote data is
+// insufficient so the caller can distinguish "no data" from a genuine 0% return.
+func getPatternReturn(ctx context.Context, calc *marketdata.TAIEXReturnCalculator, p service.SeasonalPattern) *float64 {
 	days := approxPatternDays(p)
 	if days <= 0 {
 		days = 30
 	}
 	if ret, err := calc.GetNDayReturn(ctx, days); err == nil {
-		return ret
+		return &ret
 	}
-	return 0
+	return nil
 }
 
 func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
@@ -159,13 +160,18 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 		expectations := make([]SeasonalExpectation, len(active))
 		for i, p := range active {
 			currentReturn := getPatternReturn(r.Context(), calc, p)
-			gap := currentReturn - p.AvgMarketReturn
+			var gap float64
+			pricedIn := false
+			if currentReturn != nil {
+				gap = *currentReturn - p.AvgMarketReturn
+				pricedIn = *currentReturn > p.AvgMarketReturn
+			}
 			expectations[i] = SeasonalExpectation{
 				Theme:               p.Name,
 				HistoricalAvgReturn: p.AvgMarketReturn,
 				CurrentReturn:       currentReturn,
 				ExpectationGap:      gap,
-				AlreadyPricedIn:     currentReturn > p.AvgMarketReturn,
+				AlreadyPricedIn:     pricedIn,
 			}
 		}
 		return http.StatusOK, map[string]any{
@@ -235,13 +241,18 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 			expectations := make([]SeasonalExpectation, len(active))
 			for i, p := range active {
 				currentReturn := getPatternReturn(ctx, calc, p)
-				gap := currentReturn - p.AvgMarketReturn
+				var gap float64
+				pricedIn := false
+				if currentReturn != nil {
+					gap = *currentReturn - p.AvgMarketReturn
+					pricedIn = *currentReturn > p.AvgMarketReturn
+				}
 				expectations[i] = SeasonalExpectation{
 					Theme:               p.Name,
 					HistoricalAvgReturn: p.AvgMarketReturn,
 					CurrentReturn:       currentReturn,
 					ExpectationGap:      gap,
-					AlreadyPricedIn:     currentReturn > p.AvgMarketReturn,
+					AlreadyPricedIn:     pricedIn,
 				}
 			}
 			seasonal = map[string]any{

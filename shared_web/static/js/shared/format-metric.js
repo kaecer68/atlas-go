@@ -19,8 +19,11 @@ function isValidNumber(value) {
 
 export function formatSigned(value, options = {}) {
   const { decimals = 2, suffix = '', forceSign = false, invertSign = false } = options;
-  if (!isValidNumber(value)) return `— ${suffix}`.trim();
-  const v = invertSign ? -value : value;
+  if (!isValidNumber(value)) return `—${suffix ? ' ' + suffix : ''}`;
+  let v = invertSign ? -value : value;
+  // 先依指定精度四捨五入，再決定正負號，避免 -0.0001 顯示成 -0.0。
+  const factor = 10 ** decimals;
+  v = Math.round(v * factor) / factor;
   const sign = v > 0 ? '+' : v < 0 ? '−' : '';
   const displaySign = forceSign || v !== 0 ? sign : '';
   const abs = Math.abs(v).toFixed(decimals);
@@ -70,10 +73,16 @@ export function formatHHI(value) {
  * @returns {string}
  */
 export function formatNumber(value, options = {}) {
-  const { decimals = 2, suffix = '', percent = false } = options;
-  if (!isValidNumber(value)) return `— ${suffix}`.trim();
-  const v = percent ? value * 100 : value;
-  return `${v.toFixed(decimals)}${suffix}`;
+  const { decimals = 2, suffix = '', percent = false, useGrouping = false } = options;
+  if (!isValidNumber(value)) return `—${suffix ? ' ' + suffix : ''}`;
+  let v = percent ? value * 100 : value;
+  // 同樣先四捨五入，避免 -0.0001 在四捨五入後變成 -0.0。
+  const factor = 10 ** decimals;
+  v = Math.round(v * factor) / factor;
+  const formatted = useGrouping
+    ? v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : v.toFixed(decimals);
+  return `${formatted}${suffix}`;
 }
 
 /**
@@ -98,6 +107,20 @@ export function toNumber(v) {
 }
 
 // 簡潔別名，方便頁面層 import。
-export const fmtSignedPct = (value, decimals = 1) => formatSigned(value, { decimals, suffix: '%', forceSign: true });
+export const fmtSignedPct = (value, decimals = 1) => {
+  // 對極小百分比自動增加精度，避免 -0.011% 四捨五入後變成 -0.0%。
+  let effectiveDecimals = decimals;
+  if (isValidNumber(value) && value !== 0) {
+    const abs = Math.abs(value);
+    for (let d = decimals; d <= 3; d += 1) {
+      const rounded = Math.round(abs * (10 ** d)) / (10 ** d);
+      if (rounded !== 0) {
+        effectiveDecimals = d;
+        break;
+      }
+    }
+  }
+  return formatSigned(value, { decimals: effectiveDecimals, suffix: '%', forceSign: true });
+};
 export const fmtDrawdown = (value) => formatMaxDrawdown(value);
 export const fmtHHI = (value) => formatHHI(value);

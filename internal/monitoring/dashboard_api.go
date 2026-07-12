@@ -139,6 +139,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		providers = append(providers, marketdata.NewNVDAProvider())
 		providers = append(providers, marketdata.NewAAPLProvider())
 		providers = append(providers, marketdata.NewMSFTProvider())
+		providers = append(providers, marketdata.NewTAIEXIndexProvider())
 		providers = append(providers, marketdata.NewTaiwanVolatilityProvider())
 	}
 

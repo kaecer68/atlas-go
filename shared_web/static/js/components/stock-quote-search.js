@@ -34,7 +34,10 @@ export function renderSearch(onSearch, initialSymbol = '') {
   const input = container.querySelector('#sqSearchInput');
   const btn = container.querySelector('#sqSearchBtn');
 
+  let debounceTimer;
+
   const doSearch = (symbol) => {
+    clearTimeout(debounceTimer);
     const clean = symbol.trim();
     if (/^\d{4,6}$/.test(clean)) {
       // Save recent
@@ -62,7 +65,6 @@ export function renderSearch(onSearch, initialSymbol = '') {
     });
   });
 
-  let debounceTimer;
   input.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
@@ -70,7 +72,7 @@ export function renderSearch(onSearch, initialSymbol = '') {
       if (/^\d{4,6}$/.test(val)) {
         doSearch(val);
       }
-    }, 500);
+    }, 800);
   });
 
   return container;

@@ -18,6 +18,20 @@ func NewSQLiteQuoteStore(db *sql.DB) *SQLiteQuoteStore {
 	return &SQLiteQuoteStore{db: db}
 }
 
+// NewSQLiteQuoteStoreFromPath opens a SQLite database at the given path,
+// initializes the ledger schema if needed, and returns a QuoteStore backed by it.
+func NewSQLiteQuoteStoreFromPath(path string) (*SQLiteQuoteStore, error) {
+	db, err := OpenSQLiteDB(path)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite db: %w", err)
+	}
+	if err := InitSchema(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("init schema: %w", err)
+	}
+	return NewSQLiteQuoteStore(db), nil
+}
+
 // Compile-time assertion: SQLiteQuoteStore implements QuoteStore.
 var _ QuoteStore = (*SQLiteQuoteStore)(nil)
 

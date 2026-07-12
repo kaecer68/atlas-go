@@ -51,7 +51,16 @@ async function fetchWithAuth(url) {
   }
   const res = await fetch(url, { headers, credentials: 'include' });
   if (!res.ok) {
-    throw new Error(`${res.status} ${res.statusText}`);
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body && typeof body.error === 'string' && body.error) {
+        message = body.error;
+      }
+    } catch (e) {
+      // ignore parse failure, keep status-based message
+    }
+    throw new Error(message);
   }
   return res.json();
 }

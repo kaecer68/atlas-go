@@ -11,7 +11,7 @@ function renderBar(label, value, maxAbs) {
   const sign = isPositive ? '▲ +' : (isNegative ? '▼ ' : '');
   const colorClass = isPositive ? 'sq-chip-inflow' : (isNegative ? 'sq-chip-outflow' : '');
   const widthPct = hasValue && maxAbs ? (Math.abs(value) / maxAbs * 100) : 0;
-  const displayValue = hasValue ? `${sign}${Math.abs(value).toLocaleString()} 張` : '—';
+  const displayValue = hasValue ? `${sign}${Math.round(Math.abs(value)).toLocaleString()} 張` : '—';
 
   return `
     <div class="sq-chip-row">

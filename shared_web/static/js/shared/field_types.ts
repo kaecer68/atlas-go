@@ -3167,7 +3167,7 @@ export interface SeasonalCalibration {
 
 export interface SeasonalExpectation {
   historical_avg_return: number;
-  current_return: number;
+  current_return: number | null;
   expectation_gap: number;
   already_priced_in: boolean;
   surprise_potential: number;
