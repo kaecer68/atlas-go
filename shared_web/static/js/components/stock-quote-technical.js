@@ -1,5 +1,5 @@
 import { renderEmptyState, renderSkeleton } from '../shared/app-utils.js';
-import { formatNumber } from '../shared/format-metric.js';
+import { fmtSafeNumber } from '../shared/format-metric.js';
 
 function isValidNumber(v) {
   return typeof v === 'number' && Number.isFinite(v);
@@ -61,17 +61,17 @@ export function renderTechnical(state, techResult) {
       <div class="sq-tech-cards">
         <div class="metric-card">
           <div class="metric-card__label">SMA20</div>
-          <div class="metric-card__value">${formatNumber(sma20, { decimals: 2 })}</div>
+          <div class="metric-card__value">${fmtSafeNumber(sma20, { decimals: 2 })}</div>
           <div class="${smaColor}" style="margin-top:var(--spacing-1);font-size:var(--text-sm)">${smaSignal}</div>
         </div>
         <div class="metric-card">
           <div class="metric-card__label">SMA50</div>
-          <div class="metric-card__value">${formatNumber(sma50, { decimals: 2 })}</div>
+          <div class="metric-card__value">${fmtSafeNumber(sma50, { decimals: 2 })}</div>
           <div class="${smaColor}" style="margin-top:var(--spacing-1);font-size:var(--text-sm)">${sma20 !== null && sma50 !== null ? (sma20 > sma50 ? '中期偏多' : '中期偏空') : '—'}</div>
         </div>
         <div class="metric-card">
           <div class="metric-card__label">RSI14</div>
-          <div class="metric-card__value">${formatNumber(rsi, { decimals: 2 })}</div>
+          <div class="metric-card__value">${fmtSafeNumber(rsi, { decimals: 2 })}</div>
           <div style="margin-top:var(--spacing-1);font-size:var(--text-sm)"><span class="${rsiColor}">${rsiZone}</span></div>
         </div>
       </div>
