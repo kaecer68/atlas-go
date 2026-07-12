@@ -137,3 +137,25 @@ func TestSigmoidBounds(t *testing.T) {
 		t.Errorf("sigmoid(-100) = %f, want 0.0", sigmoid(-100))
 	}
 }
+
+// Stage 1 PR#1 整合測試：wired factory → handler → 非空 calendar 回傳。
+func TestHandlerCalendar_WithWiredFactory(t *testing.T) {
+	cal := industry.NewEventCalendarWithProvider(nil)
+	h := NewHandler(cal)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/events/calendar", nil)
+	code, data := h.HandleCalendar(req)
+
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	resp, ok := data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map, got %T", data)
+	}
+	total, _ := resp["total"].(int)
+	if total == 0 {
+		t.Fatalf("wired factory must yield non-empty calendar (Stage 1 PR#1 root cause: %v)", resp)
+	}
+	t.Logf("wired factory + handler yielded %d events", total)
+}

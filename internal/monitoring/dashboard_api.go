@@ -435,19 +435,16 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 }
 
 func newWiredEventCalendar(provider marketdata.CalendarEventProvider) *industry.EventCalendar {
-	ec := industry.NewEventCalendar()
-	// Always generate default-rule events for the current year.
-	ec.RefreshEvents(time.Now())
-	if provider == nil {
-		return ec
+	// Stage 1 PR#1 改用 industry 公開 factory，確保 RefreshEvents 一定會被呼叫。
+	// provider 非 nil 時另外排 background refresh（避免 startup block）。
+	ec := industry.NewEventCalendarWithProvider(provider)
+	if provider != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			ec.UpdateFromProvider(ctx, provider)
+		}()
 	}
-	// Load TWSE calendar events asynchronously — don't block API startup.
-	// EventCalendar is protected by sync.RWMutex so concurrent access is safe.
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		defer cancel()
-		ec.UpdateFromProvider(ctx, provider)
-	}()
 	return ec
 }
 

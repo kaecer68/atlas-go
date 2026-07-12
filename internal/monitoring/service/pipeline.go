@@ -1086,13 +1086,13 @@ func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, erro
 		sessions[i] = RegimeSessionEntry{
 			SessionID:  sum.SessionID,
 			Regime:     string(sum.Regime),
-			RecordedAt: sum.RecordedAt.Format(time.RFC3339),
+			RecordedAt: sum.RecordedAt.UTC().Format(time.RFC3339),
 		}
 		if i > 0 && string(sum.Regime) != prevRegime {
 			transitions = append(transitions, RegimeTransition{
 				From:      prevRegime,
 				To:        string(sum.Regime),
-				Timestamp: sum.RecordedAt.Format(time.RFC3339),
+				Timestamp: sum.RecordedAt.UTC().Format(time.RFC3339),
 			})
 		}
 		prevRegime = string(sum.Regime)

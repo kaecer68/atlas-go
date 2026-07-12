@@ -753,6 +753,43 @@ func TestLoadRegimeHistory_LimitRespected(t *testing.T) {
 	}
 }
 
+func TestLoadRegimeHistory_TimestampsAreUTC(t *testing.T) {
+	cst := time.FixedZone("CST", 8*3600)
+	recordedAt := time.Date(2026, 4, 22, 12, 0, 0, 0, cst)
+	summaries := []domain.SessionSummary{
+		{SessionID: "session-cst", Regime: domain.RegimeRiskOn, RecordedAt: recordedAt},
+		{SessionID: "session-utc", Regime: domain.RegimeRiskOff,
+			RecordedAt: time.Date(2026, 4, 23, 4, 0, 0, 0, time.UTC)},
+	}
+	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{summaries: summaries})
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	for i, sess := range data.Sessions {
+		parsed, parseErr := time.Parse(time.RFC3339, sess.RecordedAt)
+		if parseErr != nil {
+			t.Fatalf("session %d: not RFC3339-parseable: %v", i, parseErr)
+		}
+		if parsed.Location().String() != "UTC" {
+			t.Errorf("session %d: timezone %s, want UTC (raw=%s)",
+				i, parsed.Location().String(), sess.RecordedAt)
+		}
+	}
+	if data.Transitions != nil {
+		for i, tr := range data.Transitions {
+			parsed, parseErr := time.Parse(time.RFC3339, tr.Timestamp)
+			if parseErr != nil {
+				t.Fatalf("transition %d: not RFC3339-parseable: %v", i, parseErr)
+			}
+			if parsed.Location().String() != "UTC" {
+				t.Errorf("transition %d: timezone %s, want UTC (raw=%s)",
+					i, parsed.Location().String(), tr.Timestamp)
+			}
+		}
+	}
+}
+
 // =============================================================================
 // extractPipelineMetrics (pure helper)
 // =============================================================================
