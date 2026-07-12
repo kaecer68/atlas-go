@@ -6,12 +6,14 @@ Capital Management 提供階段式資金管理，從 simulation 逐步晉升至 
 
 ## 資金階段
 
-| 階段 | 說明 | 資金上限 | 晉升條件 |
-|------|------|----------|----------|
-| Simulation | 純模擬 | 無限制 | 累積 30 天數據 |
-| Paper | 模擬交易 | 100 萬 | 最大回撤 < 10% |
-| Live | 小額實盤 | 500 萬 | Sharpe > 1.0 |
-| Full | 全額交易 | 無限制 | 人工審批通過 |
+預設比例來自 [`domain.DefaultCapitalPhaseConfig()`](../../internal/domain/types.go)。實際部署資本由 `TotalCapital × CapitalLimits[phase]` 決定。
+
+| 階段 | 說明 | 資金上限比例 | 晉升條件 |
+|------|------|--------------|----------|
+| Simulation | 純模擬 | 100% | 累積 30 天數據 |
+| Paper | 模擬交易 | 10% | 最大回撤 < 10% |
+| Live | 小額實盤 | 30% | Sharpe > 1.0 |
+| Full | 全額交易 | 100% | 人工審批通過 |
 
 ## 使用方法
 

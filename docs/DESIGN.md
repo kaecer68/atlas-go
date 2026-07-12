@@ -2,9 +2,8 @@
 
 > **單一權威來源**：所有 UI 設計決策以此文件為準。`shared_web/static/css/base/variables.css` 是 token 的可執行規範；本文檔是設計意圖的規範化記錄。
 
-**狀態**：Active（PR #864 / #871 / #874 完成後 + PR-1 補強中）
-**對應版本**：v0.0.0.27+
-**對應分支**：`feature/retail-landing-pr1-p1-touches`
+**狀態**：Shipped（PR #864 / #871 / #874 / PR-1 已完成）
+**對應版本**：v0.0.0.32+
 
 ---
 
@@ -26,7 +25,7 @@ Atlas 同時服務兩個受眾：
 1. **同源不分裂**：顏色、字型、間距、陰影、圓角皆由 CSS 變數驅動；禁止 hard-coded hex/rgba。
 2. **台股在地化**：市場方向紅漲綠跌；系統狀態綠 OK 紅 ERR。詳見 `variables.css` 開頭註解。
 3. **無障礙優先**：所有可互動元素 ≥44px 觸控目標；尊重 `prefers-reduced-motion`；WCAG AA 對比度。
-4. **可逆增量**：PR-1 只補缺口（Glossary 接線、motion.css、44px、mobile font），不重寫既有頁面。
+4. **可逆增量**：PR-1 已補齊缺口（Glossary 接線、motion.css、44px、mobile font），不重寫既有頁面。
 
 ---
 

@@ -2,9 +2,9 @@
 
 > **AI MUST READ THIS FIRST** before assuming any external dependency is missing.
 >
-> Last verified: 2026-06-25 (Wave 9 observability wire smoke test → v0.0.0.17; integration-test audit → v0.0.0.18 gap fixes pending in PR #704 on `feat/wave-10-l1-l2-iteration`).
+> Last verified: 2026-07-12 (Wave 11 / v0.0.0.32).
 >
-> **Story so far**: v0.0.0.17's 5-second dry-run smoke test could only confirm the wire powered on (dry-run produces no symbols). A follow-up integration-test review then caught three real production bugs in the v0.0.0.17 wire that the smoke test could not exercise: (1) the 15 dashboard buffer subscriptions (including 5 Wave 9 outputs) were wired against the simulation bus only, so SSE catchup was permanently empty in `runLiveTrading`; (2) `Wave9Observability.Start` left partially-started detectors running on partial failure; (3) the parallel-start `errs` channel dropped all errors after the first. v0.0.0.18 (PR #704) closes all three plus adds v2 + chain integration tests, and adds idempotency to `risk.NewAuditSubscriber` to prevent duplicate JSONL records on double-registration.
+> **Story so far**: v0.0.0.17's 5-second dry-run smoke test confirmed the Wave 9 observability wire powered on; v0.0.0.18 (PR #704) closed the integration-test gaps (simulation-only SSE subscriptions, partial-start detector leaks, dropped parallel-start errors) and added v2 + chain integration tests plus idempotency for `risk.NewAuditSubscriber`. Subsequent Waves (9→11) shipped subscription/JWT (PR #972), capital-flow/eventdriven tools, and the 91-tool atlas-mcp catalog.
 > All items marked "✅ SET UP" have been verified working in this dev environment.
 > For older sessions or different machines, re-run the verification commands in each section.
 

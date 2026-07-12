@@ -7,8 +7,8 @@
 > - [`SECURITY.md`](../../SECURITY.md) — 通用安全政策
 > - [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md) — 數據源憲法（6 條）
 > - [`docs/specs/security-audit.md`](../specs/security-audit.md) — 細項安全檢查
-> - [`docs/operations/l2-4-runbook.md`](l2-4-runbook.md) — L2.4 操作 SOP（live trading 範本）
-> - [`docs/operations/mcp-deploy.md`](mcp-deploy.md) — atlas-mcp 部署細節
+> - [`docs/operations/l2-4-runbook.md`](../operations/l2-4-runbook.md) — L2.4 操作 SOP（live trading 範本）
+> - [`docs/operations/mcp-deploy.md`](../operations/mcp-deploy.md) — atlas-mcp 部署細節
 
 ---
 

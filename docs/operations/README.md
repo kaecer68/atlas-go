@@ -1,20 +1,21 @@
 # docs/operations/ — 操作文件索引
 
-本目錄收錄 atlas-go 的 **操作 runbook、稽核報告、事件後續追蹤文件**。規範性 / 設計文件請見 [`docs/`](../) 根目錄；模組技術規格見 [`docs/specs/`](../specs/)。
+本目錄收錄 atlas-go 的 **操作 runbook 與事件後續追蹤文件**；稽核報告請見 [`docs/audit/`](../audit/)。規範性 / 設計文件請見 [`docs/`](../) 根目錄；模組技術規格見 [`docs/specs/`](../specs/)。
 
 ---
 
 ## 稽核與盤查報告 (Audits)
 
+操作相關稽核報告已統一收錄於 [`docs/audit/`](../audit/)。本目錄保留操作 runbook 與事件追蹤文件：
+
 | 檔案 | 主題 | 對應 PR |
 |------|------|---------|
-| [audit-2026-07-08-frontend-backend.md](audit-2026-07-08-frontend-backend.md) | 2026-07-08 前後端能力交叉稽核（91 MCP tools × client/admin 前端呼叫 × 後端 110+ 路由） | [#1039](https://github.com/kaecer68/atlas-go/pull/1039) [#1040](https://github.com/kaecer68/atlas-go/pull/1040) [#1041](https://github.com/kaecer68/atlas-go/pull/1041) [#1042](https://github.com/kaecer68/atlas-go/pull/1042) [#1043](https://github.com/kaecer68/atlas-go/pull/1043) |
 | [tier-boundary.md](tier-boundary.md) | MCP tool / HTTP 端點 / Web UI 三層對照表 + Tier 3 Deprecated 標記彙整 | [#1041](https://github.com/kaecer68/atlas-go/pull/1041) |
 | [stock-mcp-query-templates.md](stock-mcp-query-templates.md) | 投資人透過 OpenClaw/Hermes bot 查詢 stock_get_* 工具的查詢模板 | [#1039](https://github.com/kaecer68/atlas-go/pull/1039) |
-| [l2-4-llmdriver-usage-audit.md](l2-4-llmdriver-usage-audit.md) | L2.4 LLM driver 使用稽核 | L2.4 系列 |
-| [pre-deployment-security-audit.md](pre-deployment-security-audit.md) | 部署前資安稽核流程 | — |
 | [v2-alert-redesign-verification-report.md](v2-alert-redesign-verification-report.md) | V2 警報改版驗證報告 | — |
 | [frontend-refactor-recovery-verification-report.md](frontend-refactor-recovery-verification-report.md) | 前端 refactor 後 recovery 驗證報告 | — |
+
+> 已搬移的 audit：[`docs/audit/2026-07-08-frontend-backend.md`](../audit/2026-07-08-frontend-backend.md)、[`docs/audit/2026-07-08-l2-4-llmdriver-usage.md`](../audit/2026-07-08-l2-4-llmdriver-usage.md)、[`docs/audit/2026-07-08-pre-deployment-security-audit.md`](../audit/2026-07-08-pre-deployment-security-audit.md)。
 
 ## Runbook（操作手冊）
 
@@ -47,6 +48,6 @@
 
 ## 維護原則
 
-- 任何 PR 引用本目錄的檔案時，commit message 必須附實際檔名（例如 `Refs: docs/operations/audit-2026-07-08-frontend-backend.md`）
+- 任何 PR 引用本目錄的檔案時，commit message 必須附實際檔名（例如 `Refs: docs/operations/l2-4-runbook.md`）
 - 本目錄文件若引用其他文件，連結路徑必須以 `bash scripts/ci/check_markdown_links.sh` 驗證通過（CI 強制）
 - 規範性內容優先放 [`docs/`](../) 根目錄；本目錄只放 **操作相關** 文件

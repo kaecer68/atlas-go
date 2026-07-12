@@ -1,7 +1,7 @@
 # 文件地圖 (Documentation Map)
 
 > **用途**：本文件為 `docs/` 全部文檔的**結構化目錄索引**。與 [`DOCUMENTATION_STANDARD.md`](DOCUMENTATION_STANDARD.md) 配套使用。
-> **最後驗證**：2026-07-10
+> **最後驗證**：2026-07-12
 > **原則**：每個路徑均為相對於 repo root 的**完整路徑**；檔案必須可被驗證存在。
 
 ---
@@ -11,7 +11,7 @@
 | 檔案 | 用途 |
 |------|------|
 | `README.md` | 專案快速入口（~100 行 gateway） |
-| `AGENTS.md` | 跨工具 AI 共用指引（151 行，≤ 155 行警告線） |
+| `AGENTS.md` | 跨工具 AI 共用指引（72 行，≤ 155 行警告線） |
 | `CLAUDE.md` | Claude Code 專屬設定（前端架構、部署、token 效率） |
 | `CHANGELOG.md` | 版本變更記錄 |
 | `LICENSE`, `NOTICE` | 法務文件 |
@@ -41,6 +41,8 @@
 | `docs/DOCUMENTATION_STANDARD.md` | 文件存放規範 | ✅ |
 | `docs/DOCUMENTATION_MAP.md` | 本文件 | ✅ |
 | `docs/CONVENTIONS_CHECKLIST.md` | 慣例檢查清單 | ✅ |
+| `docs/REFERENCE/WORKFLOW_MAP.md` | 21 條 workflow 盤查（WA-001–WA-701） | ✅ |
+| `docs/REFERENCE/tool-catalog.md` | atlas-mcp 91 tools 完整 catalog | ✅ |
 
 ### 🏗️ 架構 / 領域知識
 
@@ -57,7 +59,6 @@
 | `docs/llm-promotion-evaluation.md` | LLM 功能晉升評估 | ✅ |
 | `docs/calibration-loop.md` | 校準循環 | ✅ |
 | `docs/evolution_loop.md` | 演化循環 | ✅ |
-| `docs/zero-metric-audit-findings.md` | Zero-metric 審計發現 | ✅ |
 
 ### 📖 Playbook / 指南
 
@@ -73,11 +74,10 @@
 | `docs/DESIGN.md` | 設計文件 | ✅ |
 | `docs/PROCESS_ANNOTATION_SOP.md` | 如何維護 PROCESSES.yaml | ✅ |
 | `docs/audit-trail.md` | 稽核軌跡 | ✅ |
-| `docs/agents-md-audit.md` | Wave 11 AGENTS.md 整合決策表 | ✅ |
 | `docs/mcp-integration-LOCAL.md` | MCP 本機接入完整指南 | ✅ |
-| `docs/mcp-integration-CLOUD.md` | MCP 雲端接入（scaffold） | ✅ |
 | `docs/guides/adding-sector-agents.md` | 新增 sector agent 指南 | ✅ |
 | `docs/guides/ai-productivity.md` | AI 生產力指南 | ✅ |
+| `docs/guides/frontend-architecture.md` | 前端架構指南 | ✅ |
 | `docs/guides/git-tool-cache-policy.md` | Git 工具快取原則 | ✅ |
 | `docs/guides/new-workspace-startup.md` | 新工作區起步 SOP | ✅ |
 | `docs/guides/install-and-deploy.md` | 安裝/部署指南 | ✅ |
@@ -94,18 +94,15 @@
 | `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊 | ✅ |
 | `docs/operations/l2-4-followup.md` | L2.4 後續工作報告 | ✅ |
 | `docs/operations/l2-4-observation-log.md` | L2.4 觀察日誌 | ✅ |
-| `docs/operations/l2-4-llmdriver-usage-audit.md` | L2.4 LLM driver 使用審計 | ✅ |
 | `docs/operations/l2-4-fault-tolerance-design.md` | L2.4 容錯設計 | ✅ |
 | `docs/operations/l2-4-unblocking-roadmap.md` | L2.4 解鎖路線圖 | ✅ |
 | `docs/operations/loki-deployment.md` | Loki 集中式 log 部署 | ✅ |
 | `docs/operations/mcp-deploy.md` | MCP 部署指南 | ✅ |
 | `docs/operations/cmd-atlas-coverage-policy.md` | cmd/atlas 覆蓋率政策 | ✅ |
-| `docs/operations/pre-deployment-security-audit.md` | 部署前資安審計 | ✅ |
 | `docs/operations/tier-boundary.md` | Tier 邊界定義 | ✅ |
 | `docs/operations/stock-mcp-query-templates.md` | 個股 MCP 查詢範本 | ✅ |
 | `docs/operations/sprint3-rollout-runbook.md` | Sprint 3 部署手冊 | ✅ |
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
-| `docs/operations/audit-2026-07-08-frontend-backend.md` | 前端後端欄位對齊審計 | ✅ |
 | `docs/operations/frontend-refactor-recovery-verification-report.md` | 前端重構恢復驗證報告 | ✅ |
 | `docs/operations/v2-alert-redesign-verification-report.md` | v2 警報重設計驗證報告 | ✅ |
 
@@ -139,6 +136,8 @@
 | `docs/specs/phase3-5-spec.md` | Phase 3.5 規格 | ✅ |
 | `docs/specs/mcp-sdk-api-surface.md` | MCP SDK API surface | ✅ |
 | `docs/specs/atlas-mcp-stock-capitalflow-ranker-design.md` | atlas-mcp stock/capitalflow/ranker 設計 | ✅ |
+| `docs/specs/dashboard-api-contract.md` | Dashboard API 合約 | ✅ |
+| `docs/specs/guest-mode.md` | Guest mode 規格 | ✅ |
 
 ### 📋 數據標準
 
@@ -194,13 +193,14 @@
 
 | 目錄 | 用途 |
 |------|------|
-| `docs/audit/` | 審計報告（10 個檔案） |
-| `docs/archive/` | 歷史歸檔（36 個檔案，見 archive/README.md） |
-| `docs/handoff/` | 任務交接（4 個檔案） |
-| `docs/investigations/` | 根因調查（4 個檔案） |
+| `docs/audit/` | 審計報告（15 個檔案） |
+| `docs/archive/` | 歷史歸檔（42 個檔案，見 archive/README.md） |
+| `docs/branch-hygiene/` | Branch 清理紀錄（1 個檔案） |
+| `docs/handoff/` | 任務交接（3 個檔案） |
+| `docs/investigations/` | 根因調查（5 個檔案） |
 | `docs/INCIDENTS/` | 事故記錄（2 個檔案） |
 | `docs/INVESTOR/` | 投資人入口 + use cases（10 個檔案） |
-| `docs/observations/` | 觀察記錄（1 個檔案） |
+| `docs/observations/` | 觀察記錄（0 個檔案；內容已移至 `.omo/handoffs/`） |
 | `docs/research/` | 研究文件（1 個檔案） |
 | `docs/spikes/` | 技術 spike（1 個檔案） |
 
@@ -208,7 +208,7 @@
 
 ## 內部模組 AGENTS.md 索引
 
-共 **27 個**保留 AGENTS.md 的 hot-path 模組。完整清單與成熟度見 [`internal/AGENTS_INDEX.md`](../internal/AGENTS_INDEX.md)。
+共 **15 個**保留 AGENTS.md 的 hot-path 模組。完整清單與成熟度見 [`internal/AGENTS_INDEX.md`](../internal/AGENTS_INDEX.md)。
 
 ---
 
@@ -238,4 +238,4 @@
 
 ---
 
-> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-10。
+> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-12。

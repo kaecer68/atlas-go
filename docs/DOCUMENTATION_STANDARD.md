@@ -34,7 +34,7 @@
 
 ```
 docs/
-├── CONSTITUTION.md              # 深度開發憲法（7 條文）
+├── CONSTITUTION.md              # 深度開發憲法（8 條文）
 ├── ITERATION_GATE.md            # 5 Gate 自我檢查
 ├── QUICKSTART.md                # 5 分鐘入門（單一權威）
 ├── GUIDELINES_INDEX.md          # 規範階層
@@ -285,4 +285,4 @@ grep -E "(\.omo|\.opencode)" .gitignore
 
 ## 動作紀錄
 
-完整當前地圖見 `docs/DOCUMENTATION_MAP.md`「動作紀錄」段。建立 audit 流程見 `docs/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。
+完整當前地圖見 `docs/DOCUMENTATION_MAP.md`。清理 SOP 模式見 `docs/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。

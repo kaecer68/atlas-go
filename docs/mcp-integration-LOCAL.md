@@ -4,7 +4,7 @@
 >
 > **前提**: atlas-go backend 已在本機 port 18080 跑起來；`bin/atlas-mcp` 已編譯完成。
 >
-> **雲端模式**: 如果你的 atlas-go 部署在遠端伺服器，請改讀 [`mcp-integration-CLOUD.md`](./mcp-integration-CLOUD.md)。
+> **雲端模式**: 如果你的 atlas-go 部署在遠端伺服器，雲端整合指南尚在規劃中；請先參考 [`docs/operations/mcp-deploy.md`](./operations/mcp-deploy.md) 與 `internal/apigateway/CONSTITUTION.md`。
 
 ---
 

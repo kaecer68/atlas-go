@@ -122,7 +122,7 @@
 |------|------|------|
 | 根 | `./AGENTS.md` | 唯一不變 |
 | 前端（3 個）| `web/AGENTS.md`、`admin_web/AGENTS.md`、`client_web/AGENTS.md` | 前端專屬 |
-| 文件索引 | `docs/wave-11/README.md` | 目錄索引（2026-06 從 AGENTS.md 重命名）|
+| 文件索引 | ~~`docs/wave-11/README.md`~~ | Wave 11 工作目錄已於 2026-06-28 解散，內容永久化為 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md` + `docs/operations/l2-4-followup.md`（PR #824）|
 | 工具（2 個）| `cmd/experimental/AGENTS.md`、`scripts/openclaw/AGENTS.md` | 跨模組工具 |
 | LLM（5 個）| `internal/llm/AGENTS.md`、`internal/portfolio/AGENTS.md`、`internal/narrative/AGENTS.md`、`internal/live/AGENTS.md`、`internal/experiment/AGENTS.md` | 已保留，PR #776 後 |
 | 數據 | `internal/marketdata/AGENTS.md` | Provider 優先級 + ETF NAV |
@@ -153,7 +153,7 @@
 | 2 | `web/AGENTS.md` | 前端 SPA |
 | 3 | `admin_web/AGENTS.md` | 後台 |
 | 4 | `client_web/AGENTS.md` | client |
-| 5 | `docs/wave-11/README.md` | Wave 11 目錄（2026-06 從 AGENTS.md 重命名）|
+| 5 | ~~`docs/wave-11/README.md`~~ | Wave 11 工作目錄已於 2026-06-28 解散並永久化（PR #824）|
 | 6 | `scripts/openclaw/AGENTS.md` | 跨模組工具 |
 | 7 | `cmd/experimental/AGENTS.md` | CLI |
 | 8 | `internal/llm/AGENTS.md` | DataClass 閘門 + hot-path |
@@ -179,7 +179,7 @@
 
 **等等 — 11+9+5+4+13 = 42，但 44-15 = 29**。重新計算：
 
-**實際最終保留 = 15 個 `AGENTS.md`**（含 8 個 internal + 4 個非 internal + 1 個根 + 1 個 docs/wave-11 + 1 個 cmd/experimental）
+**實際最終保留 = 15 個 `AGENTS.md`**（含 8 個 internal + 4 個非 internal + 1 個根 + 1 個 cmd/experimental；原 `docs/wave-11/` 已於 2026-06-28 解散）
 
 但用戶說「15 個以內」是針對 `internal/*/AGENTS.md` 還是全部？看用戶原話：「**看看是不是有可能減少到 10 個以內**」。所以目標是 `internal/*/AGENTS.md`。
 
