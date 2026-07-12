@@ -1,11 +1,11 @@
 // Metrics monitoring page
 import { getJSON, silentGetJSON } from '../shared/app-utils.js';
-import { formatNumber } from '../shared/format-metric.js';
+import { fmtSafeNumber } from '../shared/format-metric.js';
 
 export async function loadMetrics() {
   try {
     const data = await getJSON('/api/dashboard/metrics?type=all');
-    const screeningRate = formatNumber(data && data.screening_rate, { percent: true, decimals: 1, suffix: '%' });
+    const screeningRate = fmtSafeNumber(data && data.screening_rate, { percent: true, decimals: 1, suffix: '%' });
     const screeningRateEl = document.getElementById('screeningRate');
     if (screeningRateEl) screeningRateEl.textContent = screeningRate;
     const alertsTriggeredEl = document.getElementById('alertsTriggered');
@@ -101,7 +101,7 @@ function updateAckRate(data) {
     return;
   }
   const rate = (acknowledged / triggered) * 100;
-  countEl.textContent = formatNumber(rate, { decimals: 1, suffix: '%' });
+  countEl.textContent = fmtSafeNumber(rate, { decimals: 1, suffix: '%' });
   if (rate >= 80) {
     labelEl.textContent = '回應良好';
     countEl.style.color = 'var(--metric-good)';
@@ -162,8 +162,8 @@ export async function updateMetricsTrend(data) {
 
     html += `<title>系統指標趨勢 (24h)</title>`;
 
-    html += `<text x="${padding.left - 5}" y="${padding.top + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${formatNumber(maxVal, { decimals: 0, suffix: '%' })}</text>`;
-    html += `<text x="${padding.left - 5}" y="${padding.top + innerHeight + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${formatNumber(minVal, { decimals: 0, suffix: '%' })}</text>`;
+    html += `<text x="${padding.left - 5}" y="${padding.top + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${fmtSafeNumber(maxVal, { decimals: 0, suffix: '%' })}</text>`;
+    html += `<text x="${padding.left - 5}" y="${padding.top + innerHeight + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${fmtSafeNumber(minVal, { decimals: 0, suffix: '%' })}</text>`;
 
     const tickCount = Math.min(6, validPoints.length);
     for (let i = 0; i < tickCount; i++) {
@@ -223,7 +223,7 @@ export async function updateMetricsTrend(data) {
     const y = padding.top + innerHeight - ((val - minVal) / range) * innerHeight;
     const date = new Date(p.timestamp);
     const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-    const pct = formatNumber(val, { decimals: 1, suffix: '%' });
+    const pct = fmtSafeNumber(val, { decimals: 1, suffix: '%' });
     const labelY = y > 20 ? y - 10 : y + 14;
     hoverCircle.setAttribute('cx', x);
     hoverCircle.setAttribute('cy', y);
@@ -310,8 +310,8 @@ export async function loadDataQuality() {
     if (v == null) return '-';
     const ns = Number(v);
     if (!Number.isFinite(ns)) return '-';
-    if (ns >= 1000000) return formatNumber(ns / 1000000, { decimals: 2 }) + ' ms';
-    if (ns >= 1000) return formatNumber(ns / 1000, { decimals: 2 }) + ' µs';
+    if (ns >= 1000000) return fmtSafeNumber(ns / 1000000, { decimals: 2 }) + ' ms';
+    if (ns >= 1000) return fmtSafeNumber(ns / 1000, { decimals: 2 }) + ' µs';
     return ns + ' ns';
   };
 

@@ -227,3 +227,54 @@ test('processStrategiesResults: surfaces schema errors without throwing', () => 
   assert.equal(out.dataStatus, 'failed');
   assert.ok(Object.keys(out.errors).length > 0);
 });
+
+// =============================================================================
+// Pipeline: pure helpers (P2 batch3 migration regression)
+// =============================================================================
+
+import {
+  renderConvictionBreakdown,
+  buildPipelineStatusBanner,
+  countFilteredItems,
+} from '../pages/pipeline.js';
+
+test('renderConvictionBreakdown: missing breakdown returns placeholder', () => {
+  const html = renderConvictionBreakdown(null);
+  assert.ok(html.includes('無計算明細'));
+  assertNoMisleadingZero(html, 'pipeline-conviction-breakdown');
+});
+
+test('buildPipelineStatusBanner: unknown status renders escaped text without zero', () => {
+  const html = buildPipelineStatusBanner({ status: 'weird', status_message: 'custom msg' });
+  assert.ok(html.includes('未知的管線狀態'));
+  assert.ok(html.includes('weird'));
+  assertNoMisleadingZero(html, 'pipeline-status-banner');
+});
+
+test('countFilteredItems: empty list returns 0 as legitimate count', () => {
+  assert.equal(countFilteredItems([]), 0);
+  assert.equal(countFilteredItems(null), 0);
+});
+
+// =============================================================================
+// Experiments: forecast-vs-reality summary (P2 batch3 migration regression)
+// =============================================================================
+
+import { renderForecastVsRealitySummary } from '../pages/experiments.js';
+
+test('renderForecastVsRealitySummary: missing hit flags render em-dash, not 0.0%', () => {
+  const el = { classList: { remove: () => {} }, innerHTML: '' };
+  const originalDocument = globalThis.document;
+  globalThis.document = { getElementById: () => el };
+  try {
+    renderForecastVsRealitySummary({ symbol_predictions: [{ symbol: '2330', hit: null, passed_guards: null }] });
+    assertNoMisleadingZero(el.innerHTML, 'experiments-missing-hits');
+    assertContainsEmDash(el.innerHTML, 'experiments-missing-hits');
+  } finally {
+    if (originalDocument === undefined) {
+      delete globalThis.document;
+    } else {
+      globalThis.document = originalDocument;
+    }
+  }
+});
