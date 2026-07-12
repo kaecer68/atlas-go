@@ -28,9 +28,11 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -56,6 +58,8 @@ type operationsDeps struct {
 	collector       *monitoring.MetricsCollector
 	// eventCalendar 服務 eventdriven.RegisterRoutes(/api/events/*)。
 	eventCalendar *industry.EventCalendar
+	capitalFlow   *capitalflow.Service
+	janusEngine   *janus.Engine
 }
 
 // registerOperationsTasks wires the operational probes / data ingest /
@@ -195,7 +199,13 @@ func registerOperationsTasks(d operationsDeps) {
 	})
 	log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
 
-	if svc := d.dashboard.GetIndustryService(); svc != nil || d.eventCalendar != nil {
+	var dashboardEC *industry.EventCalendar
+	if d.dashboard != nil {
+		if svc := d.dashboard.GetIndustryService(); svc != nil {
+			dashboardEC = svc.EventCalendar
+		}
+	}
+	if dashboardEC != nil || d.eventCalendar != nil {
 		calendarProvider := marketdata.NewTWSECalendarProvider()
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 			Name:     "auto_calendar_refresh",
@@ -213,7 +223,7 @@ func registerOperationsTasks(d operationsDeps) {
 					logging.Info("calendar", "auto_calendar_refresh_instance",
 						logging.FStr("instance", label))
 				}
-				refreshOne(svc.EventCalendar, "dashboard_industry")
+				refreshOne(dashboardEC, "dashboard_industry")
 				refreshOne(d.eventCalendar, "eventdriven_mcp")
 				return nil
 			},
@@ -299,16 +309,18 @@ func registerOperationsTasks(d operationsDeps) {
 	// Silicon cycle indicator update (10m, offset from macro_ingest 5m
 	// to ensure fresh TSMC/SOX data). Uses the macro data pipeline already
 	// maintained by macro_ingest — no additional external API calls.
-	if industrySvc := d.dashboard.GetIndustryService(); industrySvc != nil && industrySvc.SiliconTracker != nil {
-		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
-			Name:     "silicon_cycle_update",
-			Interval: 10 * time.Minute,
-			Enabled:  true,
-			Task: func(ctx context.Context) error {
-				return industrySvc.UpdateSiliconIndicators(ctx)
-			},
-		})
-		log.Printf("[Gateway] registered silicon_cycle_update background task (10m interval)")
+	if d.dashboard != nil {
+		if industrySvc := d.dashboard.GetIndustryService(); industrySvc != nil && industrySvc.SiliconTracker != nil {
+			_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "silicon_cycle_update",
+				Interval: 10 * time.Minute,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					return industrySvc.UpdateSiliconIndicators(ctx)
+				},
+			})
+			log.Printf("[Gateway] registered silicon_cycle_update background task (10m interval)")
+		}
 	}
 
 	if d.repo != nil {
@@ -331,5 +343,32 @@ func registerOperationsTasks(d operationsDeps) {
 			},
 		})
 		log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
+	}
+
+	if d.capitalFlow != nil {
+		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "capital_flow_refresh",
+			Interval: 5 * time.Minute,
+			Enabled:  true,
+			Task: func(_ context.Context) error {
+				d.capitalFlow.QualityScore()
+				d.capitalFlow.QualityLabel()
+				return nil
+			},
+		})
+		log.Printf("[Gateway] registered capital_flow_refresh background task (5m interval)")
+	}
+
+	if d.janusEngine != nil {
+		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "janus_regime_refresh",
+			Interval: 6 * time.Hour,
+			Enabled:  true,
+			Task: func(_ context.Context) error {
+				d.janusEngine.Update()
+				return nil
+			},
+		})
+		log.Printf("[Gateway] registered janus_regime_refresh background task (6h interval)")
 	}
 }

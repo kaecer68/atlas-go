@@ -869,6 +869,7 @@ func run(args []string, deps appDeps) error {
 				repo:            repo,
 				collector:       collector,
 				eventCalendar:   eventCalendar,
+				janusEngine:     janusEngine,
 			})
 
 			// Register auto_daily_simulation — runs daily simulation at market close.
