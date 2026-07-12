@@ -1744,6 +1744,7 @@
   "us_exposure_threshold_2",
   "us_market",
   "us_rates_dxy_threshold",
+  "usd_jpy",
   "usd_twd",
   "usdtwd_change_pct_threshold",
   "use_llm_sector_agents",

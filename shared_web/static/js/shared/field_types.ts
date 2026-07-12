@@ -3921,6 +3921,12 @@ export interface cnbcQuickQuoteResponse {
   QuickQuoteResult: string;
 }
 
+export interface dailyRateSnapshot {
+  date: string;
+  usd_twd: number;
+  usd_jpy: number;
+}
+
 export interface exchangeRateResponse {
   result: string;
   base_code: string;
