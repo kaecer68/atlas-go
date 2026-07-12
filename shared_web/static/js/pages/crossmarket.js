@@ -33,11 +33,11 @@ function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey, failed)
   return `<div class="kpi-card${clickable}" style="${borderStyle}"><div class="kpi-label">${label}${symbolHtml}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
 }
 
-function fmtPct(v) {
+function fmtRate(v) {
   return fmtSafePct(v, 2);
 }
 
-function fmtFloat(v) {
+function fmtPrice(v) {
   return fmtSafeNumber(v, { decimals: 2, useGrouping: true });
 }
 
@@ -86,10 +86,10 @@ function renderUSIndices(status) {
   const djiColor = dji.failed ? null : changeColor(dji.changePct);
   const soxColor = sox.failed ? null : changeColor(sox.changePct);
   el.innerHTML =
-    kpiCard('S&P 500', spx.value, fmtFloat, spxColor, null, spx.symbol, 'cm_spx', spx.failed) +
-    kpiCard('Nasdaq', ndx.value, fmtFloat, ndxColor, null, ndx.symbol, 'cm_ndx', ndx.failed) +
-    kpiCard('Dow Jones', dji.value, fmtFloat, djiColor, null, dji.symbol, 'cm_dji', dji.failed) +
-    kpiCard('SOX 半導體', sox.value, fmtFloat, soxColor, null, sox.symbol, 'cm_sox', sox.failed);
+    kpiCard('S&P 500', spx.value, fmtPrice, spxColor, null, spx.symbol, 'cm_spx', spx.failed) +
+    kpiCard('Nasdaq', ndx.value, fmtPrice, ndxColor, null, ndx.symbol, 'cm_ndx', ndx.failed) +
+    kpiCard('Dow Jones', dji.value, fmtPrice, djiColor, null, dji.symbol, 'cm_dji', dji.failed) +
+    kpiCard('SOX 半導體', sox.value, fmtPrice, soxColor, null, sox.symbol, 'cm_sox', sox.failed);
 }
 
 function renderTechStocks(status) {
@@ -108,10 +108,10 @@ function renderTechStocks(status) {
   const msftColor = msft.failed ? null : changeColor(msft.changePct);
   const tsmColor = tsm.failed ? null : changeColor(tsm.changePct);
   el.innerHTML =
-    kpiCard('NVDA', nvda.value, fmtFloat, nvdaColor, null, nvda.symbol, 'cm_nvda', nvda.failed) +
-    kpiCard('AAPL', aapl.value, fmtFloat, aaplColor, null, aapl.symbol, 'cm_aapl', aapl.failed) +
-    kpiCard('MSFT', msft.value, fmtFloat, msftColor, null, msft.symbol, 'cm_msft', msft.failed) +
-    kpiCard('TSM ADR', tsm.value, fmtFloat, tsmColor, 'color-mix(in srgb, var(--accent) 30%, transparent)', tsm.symbol, 'cm_tsm', tsm.failed);
+    kpiCard('NVDA', nvda.value, fmtPrice, nvdaColor, null, nvda.symbol, 'cm_nvda', nvda.failed) +
+    kpiCard('AAPL', aapl.value, fmtPrice, aaplColor, null, aapl.symbol, 'cm_aapl', aapl.failed) +
+    kpiCard('MSFT', msft.value, fmtPrice, msftColor, null, msft.symbol, 'cm_msft', msft.failed) +
+    kpiCard('TSM ADR', tsm.value, fmtPrice, tsmColor, 'color-mix(in srgb, var(--accent) 30%, transparent)', tsm.symbol, 'cm_tsm', tsm.failed);
 }
 
 function renderMacro(status) {
@@ -126,10 +126,10 @@ function renderMacro(status) {
   const usdTwd = getField(status, 'usd_twd');
   const us10y = getField(status, 'us10y');
   el.innerHTML =
-    kpiCard('VIX 恐慌指數', vix.value, fmtFloat, null, null, vix.symbol, 'cm_vix', vix.failed) +
-    kpiCard('DXY 美元指數', dxy.value, fmtFloat, null, null, dxy.symbol, 'cm_dxy', dxy.failed) +
-    kpiCard('USD/TWD 匯率', usdTwd.value, fmtFloat, null, null, usdTwd.symbol, 'cm_usd_twd', usdTwd.failed) +
-    kpiCard('US 10Y 殖利率', us10y.value, fmtPct, null, null, us10y.symbol, 'cm_us10y', us10y.failed);
+    kpiCard('VIX 恐慌指數', vix.value, fmtPrice, null, null, vix.symbol, 'cm_vix', vix.failed) +
+    kpiCard('DXY 美元指數', dxy.value, fmtPrice, null, null, dxy.symbol, 'cm_dxy', dxy.failed) +
+    kpiCard('USD/TWD 匯率', usdTwd.value, fmtPrice, null, null, usdTwd.symbol, 'cm_usd_twd', usdTwd.failed) +
+    kpiCard('US 10Y 殖利率', us10y.value, fmtRate, null, null, us10y.symbol, 'cm_us10y', us10y.failed);
 }
 
 function renderCorrelation(correlation, status) {
@@ -219,7 +219,7 @@ function renderCrisis(status) {
   const active = status.crisis_active;
   const vixField = getField(status, 'vix');
   const vix = vixField.value != null ? parseFloat(vixField.value) : null;
-  const vixLabel = Number.isFinite(vix) ? fmtFloat(vix) : '—';
+  const vixLabel = Number.isFinite(vix) ? fmtPrice(vix) : '—';
 
   let bg, icon, title, desc;
   if (active) {

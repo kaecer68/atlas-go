@@ -1,10 +1,14 @@
 // Decision-chain page — single aggregate API → 5 collapsible panels.
 // Each panel shows progressive insight: event radar → rules → sectors → stocks → exits.
 import { getJSON } from '../shared/app-utils.js';
-import { escapeHtml, fmtFloat } from '../shared/utils.js';
-import { formatSigned, formatNumber, fmtSignedPct } from '../shared/format-metric.js';
+import { escapeHtml } from '../shared/utils.js';
+import { fmtSafeSigned, fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 import { narrativeThemeLabel } from '../shared/constants.js';
 import { renderStockCell, stockName } from '../names.js';
+
+function fmtPrice(v) {
+  return fmtSafeNumber(v, { decimals: 2, useGrouping: true });
+}
 
 let lastData = null;
 let currentTime = '--:--';
@@ -92,7 +96,7 @@ function renderEventsRadar(data) {
     const sox = pm.us_market && pm.us_market.sox_pct;
     if (isNum(sox)) {
       const cl = sox >= 0 ? 'color:var(--bullish);font-weight:600' : 'color:var(--bearish);font-weight:600';
-      kvs.push(`<span>SOX <span style="${cl}">${fmtSignedPct(sox)}</span></span>`);
+      kvs.push(`<span>SOX <span style="${cl}">${fmtSafeSignedPct(sox)}</span></span>`);
     }
 
     if (pm.fx) {
@@ -100,14 +104,14 @@ function renderEventsRadar(data) {
       const fxChange = pm.fx.change_pct;
       if (isNum(usdTwd)) {
         const fxCl = isNum(fxChange) ? (fxChange >= 0 ? 'color:var(--bearish)' : 'color:var(--bullish)') : 'color:var(--muted)';
-        kvs.push(`<span>USD/TWD ${fmtFloat(usdTwd)} <span style="${fxCl}">${isNum(fxChange) ? fmtSignedPct(fxChange) : '—'}</span></span>`);
+        kvs.push(`<span>USD/TWD ${fmtPrice(usdTwd)} <span style="${fxCl}">${isNum(fxChange) ? fmtSafeSignedPct(fxChange) : '—'}</span></span>`);
       }
     }
 
     if (pm.foreign_flow) {
       const netBuy = pm.foreign_flow.net_buy_twd;
       if (isNum(netBuy)) {
-        kvs.push(`<span>外資淨買超 ${formatSigned(netBuy / 1e8, { decimals: 2, suffix: ' 億', forceSign: true })}</span>`);
+        kvs.push(`<span>外資淨買超 ${fmtSafeSigned(netBuy / 1e8, { decimals: 2, suffix: ' 億', forceSign: true })}</span>`);
       }
     }
 
@@ -116,7 +120,7 @@ function renderEventsRadar(data) {
       const bdiDev = pm.bdi.deviation_pct;
       if (isNum(bdiVal)) {
         const bdiCl = isNum(bdiDev) ? (bdiDev >= 0 ? 'color:var(--bullish);font-weight:600' : 'color:var(--bearish);font-weight:600') : 'color:var(--muted)';
-        kvs.push(`<span>BDI ${formatNumber(bdiVal, { decimals: 0 })} <span style="${bdiCl}">${isNum(bdiDev) ? fmtSignedPct(bdiDev) : '—'}</span></span>`);
+        kvs.push(`<span>BDI ${fmtSafeNumber(bdiVal, { decimals: 0 })} <span style="${bdiCl}">${isNum(bdiDev) ? fmtSafeSignedPct(bdiDev) : '—'}</span></span>`);
       }
     }
 
@@ -127,7 +131,7 @@ function renderEventsRadar(data) {
         let vixCl = 'color:var(--color-success)';
         if (vixVal >= 25) vixCl = 'color:var(--color-danger);font-weight:600';
         else if (vixVal >= 20) vixCl = 'color:var(--color-warning);font-weight:600';
-        kvs.push(`<span>VIX ${formatNumber(vixVal, { decimals: 1 })} <span style="${vixCl}">${isNum(vixChange) ? fmtSignedPct(vixChange) : '—'}</span></span>`);
+        kvs.push(`<span>VIX ${fmtSafeNumber(vixVal, { decimals: 1 })} <span style="${vixCl}">${isNum(vixChange) ? fmtSafeSignedPct(vixChange) : '—'}</span></span>`);
       }
     }
 
@@ -135,7 +139,7 @@ function renderEventsRadar(data) {
       const stress = pm.stress_index;
       const stressCl = isNum(stress.vix_level) && stress.vix_level >= 25 ? 'color:var(--color-danger)' : 'color:var(--muted)';
       const oil = stress.oil_pct;
-      kvs.push(`<span title="DXY ${formatNumber(stress.dxy, { decimals: 2 })} · Oil ${isNum(oil) ? fmtSignedPct(oil) : '—'}" style="cursor:help;${stressCl}">壓力指數</span>`);
+      kvs.push(`<span title="DXY ${fmtSafeNumber(stress.dxy, { decimals: 2 })} · Oil ${isNum(oil) ? fmtSafeSignedPct(oil) : '—'}" style="cursor:help;${stressCl}">壓力指數</span>`);
     }
 
     if (kvs.length) {
@@ -148,14 +152,14 @@ function renderEventsRadar(data) {
     const sevEmoji = sev === 'critical' ? '🔴' : sev === 'high' ? '🟠' : sev === 'medium' ? '🟡' : '🟢';
     return `<div class="dc-event-row">
       <span>${sevEmoji} <strong title="${escapeHtml(e.theme)}">${escapeHtml(narrativeThemeLabel(e.theme))}</strong></span>
-      <span class="text-muted" style="font-size:11px">Conf ${formatNumber(e.confidence, { percent: true, decimals: 0 })} · Hit ${formatNumber(e.hit_rate, { percent: true, decimals: 0 })} · ${escapeHtml(e.status || 'active')}</span>
+      <span class="text-muted" style="font-size:11px">Conf ${fmtSafeNumber(e.confidence, { percent: true, decimals: 0 })} · Hit ${fmtSafeNumber(e.hit_rate, { percent: true, decimals: 0 })} · ${escapeHtml(e.status || 'active')}</span>
     </div>`;
   }).join('');
 
   const recentRows = (events.recent || []).slice(0, 5).map(e => {
     return `<div class="dc-event-row" style="opacity:0.7">
       <span>📌 <strong title="${escapeHtml(e.theme)}">${escapeHtml(narrativeThemeLabel(e.theme))}</strong></span>
-      <span class="text-muted" style="font-size:11px">${timeAgo(e.timestamp)} · Conf ${formatNumber(e.confidence, { percent: true, decimals: 0 })}</span>
+      <span class="text-muted" style="font-size:11px">${timeAgo(e.timestamp)} · Conf ${fmtSafeNumber(e.confidence, { percent: true, decimals: 0 })}</span>
     </div>`;
   }).join('');
 
@@ -172,10 +176,10 @@ function renderStrategiesPanel(data) {
   const ci = data && data.core_indicators;
   const ciStrip = ci ? `
     <div class="dc-section" style="display:flex;gap:6px;flex-wrap:wrap;padding:6px 8px;background:var(--surface-2);border-radius:4px;margin-bottom:6px">
-      <span class="badge ${isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd > 0 ? 'up' : isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd < 0 ? 'down' : 'muted'}" title="外資現貨 (TWD 億)">外資 ${isNum(ci.foreign_capital_net_twd) ? formatSigned(ci.foreign_capital_net_twd / 1e8, { decimals: 1, suffix: ' 億', forceSign: true }) : '—'}</span>
-      <span class="badge ${isNum(ci.tsm_adr_pct) && ci.tsm_adr_pct > 0 ? 'up' : isNum(ci.tsm_adr_pct) && ci.tsm_adr_pct < 0 ? 'down' : 'muted'}" title="TSM ADR (%)">TSM ${isNum(ci.tsm_adr_pct) ? fmtSignedPct(ci.tsm_adr_pct) : '—'}</span>
-      <span class="badge ${isNum(ci.nvda_pct) && ci.nvda_pct > 0 ? 'up' : isNum(ci.nvda_pct) && ci.nvda_pct < 0 ? 'down' : 'muted'}" title="NVDA (%)">NVDA ${isNum(ci.nvda_pct) ? fmtSignedPct(ci.nvda_pct) : '—'}</span>
-      <span class="badge ${isNum(ci.dxy_pct) && ci.dxy_pct < 0 ? 'up' : isNum(ci.dxy_pct) && ci.dxy_pct > 0 ? 'down' : 'muted'}" title="DXY (% change, 跌=資金回流)">DXY ${isNum(ci.dxy_pct) ? fmtSignedPct(ci.dxy_pct) : '—'}</span>
+      <span class="badge ${isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd > 0 ? 'up' : isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd < 0 ? 'down' : 'muted'}" title="外資現貨 (TWD 億)">外資 ${isNum(ci.foreign_capital_net_twd) ? fmtSafeSigned(ci.foreign_capital_net_twd / 1e8, { decimals: 1, suffix: ' 億', forceSign: true }) : '—'}</span>
+      <span class="badge ${isNum(ci.tsm_adr_pct) && ci.tsm_adr_pct > 0 ? 'up' : isNum(ci.tsm_adr_pct) && ci.tsm_adr_pct < 0 ? 'down' : 'muted'}" title="TSM ADR (%)">TSM ${isNum(ci.tsm_adr_pct) ? fmtSafeSignedPct(ci.tsm_adr_pct) : '—'}</span>
+      <span class="badge ${isNum(ci.nvda_pct) && ci.nvda_pct > 0 ? 'up' : isNum(ci.nvda_pct) && ci.nvda_pct < 0 ? 'down' : 'muted'}" title="NVDA (%)">NVDA ${isNum(ci.nvda_pct) ? fmtSafeSignedPct(ci.nvda_pct) : '—'}</span>
+      <span class="badge ${isNum(ci.dxy_pct) && ci.dxy_pct < 0 ? 'up' : isNum(ci.dxy_pct) && ci.dxy_pct > 0 ? 'down' : 'muted'}" title="DXY (% change, 跌=資金回流)">DXY ${isNum(ci.dxy_pct) ? fmtSafeSignedPct(ci.dxy_pct) : '—'}</span>
     </div>` : '';
   if (!strategies || !strategies.length) return ciStrip + empty('尚無投資心法（9 條 seeds 未載入或非活躍）');
   const LAYER_COLORS = { L1: 'var(--color-info)', L2: '#a855f7', L3: 'var(--color-success)', L4: 'var(--color-warning)', L5: 'var(--color-danger)' };
@@ -198,7 +202,7 @@ function renderStrategiesPanel(data) {
         <div class="dc-hitbar" style="flex:1;height:6px;background:var(--border);border-radius:3px">
           <div style="width:${hitPct ?? 0}%;height:100%;background:${barColor};border-radius:3px;transition:width 0.3s"></div>
         </div>
-        <span style="font-size:11px;font-weight:600;min-width:36px;text-align:right">${hitValid ? formatNumber(s.hit_rate, { percent: true, decimals: 0 }) : '—'}</span>
+        <span style="font-size:11px;font-weight:600;min-width:36px;text-align:right">${hitValid ? fmtSafeNumber(s.hit_rate, { percent: true, decimals: 0 }) : '—'}</span>
       </div>
       <div style="margin-top:2px;font-size:10px;color:var(--muted)">
         ${themes}
@@ -229,7 +233,7 @@ function renderSectorHeatmap(data) {
           <div style="width:${Math.round(score * 100)}%;height:100%;background:${border}"></div>
         </div>
       </div>
-      <span class="badge ${s.confidence === 'high' ? 'ok' : s.confidence === 'medium' ? 'warn' : 'muted'}" title="信心度 ${formatNumber(score, { percent: true, decimals: 0 })}">${s.confidence}</span>
+      <span class="badge ${s.confidence === 'high' ? 'ok' : s.confidence === 'medium' ? 'warn' : 'muted'}" title="信心度 ${fmtSafeNumber(score, { percent: true, decimals: 0 })}">${s.confidence}</span>
     </div>`;
   }).join('');
 
@@ -246,9 +250,9 @@ function renderRecommendations(data) {
     const confPct = confValid ? Math.round(r.confidence * 100) : null;
     const confColor = confPct === null ? 'var(--muted)' : confPct >= 80 ? 'var(--color-success)' : confPct >= 60 ? 'var(--color-warning)' : 'var(--muted)';
     const actionBadge = r.action === 'buy' ? 'ok' : r.action === 'sell' || r.action === 'short' ? 'err' : 'warn';
-    const price = isNum(r.price) ? fmtFloat(r.price) : '—';
-    const target = isNum(r.target_price) ? fmtFloat(r.target_price) : '—';
-    const stop = isNum(r.stop_loss_price) ? fmtFloat(r.stop_loss_price) : '—';
+    const price = isNum(r.price) ? fmtPrice(r.price) : '—';
+    const target = isNum(r.target_price) ? fmtPrice(r.target_price) : '—';
+    const stop = isNum(r.stop_loss_price) ? fmtPrice(r.stop_loss_price) : '—';
     return `<tr>
       <td>${renderStockCell(r.symbol)}</td>
       <td>${escapeHtml(r.name || stockName(r.symbol))}</td>
@@ -256,7 +260,7 @@ function renderRecommendations(data) {
       <td style="font-size:11px;text-align:right">${price}</td>
       <td style="font-size:11px;text-align:right">${target}</td>
       <td style="font-size:11px;text-align:right">${stop}</td>
-      <td><span style="color:${confColor};font-weight:600">${confValid ? formatNumber(r.confidence, { percent: true, decimals: 0 }) : '—'}</span></td>
+      <td><span style="color:${confColor};font-weight:600">${confValid ? fmtSafeNumber(r.confidence, { percent: true, decimals: 0 }) : '—'}</span></td>
       <td style="font-size:11px;color:var(--muted)">${(r.reasons || []).map(escapeHtml).join(', ')}</td>
     </tr>`;
   }).join('');
@@ -274,7 +278,7 @@ function renderExitAlerts(data) {
 
   const rows = alerts.map(a => {
     const pnlValid = isNum(a.pnl_pct);
-    const pnlText = pnlValid ? fmtSignedPct(a.pnl_pct) : '—';
+    const pnlText = pnlValid ? fmtSafeSignedPct(a.pnl_pct) : '—';
     const badgeClass = !pnlValid ? 'muted' : a.pnl_pct >= 10 ? 'up' : a.pnl_pct <= -5 ? 'down' : 'warn';
     return `<div class="dc-exit-row">
       <span>🔔 ${renderStockCell(a.symbol)} ${escapeHtml(a.name && a.name !== a.symbol ? a.name : '')}</span>
