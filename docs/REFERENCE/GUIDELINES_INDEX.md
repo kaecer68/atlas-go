@@ -113,7 +113,7 @@
 | `docs/iteration_playbook.md` | Mutation 策略模式 |
 | `docs/data_sources.md` | 資料匯入、Replay 格式 |
 | `docs/script_usage_guide.md` | 輔助腳本使用方式 |
-| `docs/archive/GATEWAY_MIGRATION_TRACKING.md` | 遷移 TODO 追蹤（已封存） |
+| `docs/archive/2026-06-26-gateway-migration-tracking.md` | 遷移 TODO 追蹤（已封存） |
 | `docs/AI_PROMPT_FILES.md` | AI prompt 檔案追蹤政策（避免 local-only 漂移） |
 | `docs/MULTI_CLI_PROTOCOL.md` | 多 CLI 並行 worktree 協議 |
 | `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊（pre-flight / daily check-in / acceptance / rollback） |

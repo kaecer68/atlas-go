@@ -64,7 +64,7 @@
 
 | 項目 | 文件 | 狀態 |
 |------|------|------|
-| 完整設計文檔 | `docs/archive/warmup_auto_evolution_design.md` | ✅ |
+| 完整設計文檔 | `docs/archive/2026-06-26-warmup-auto-evolution-design.md` | ✅ |
 
 ---
 
@@ -223,7 +223,7 @@ bgManager.Register(healthMonitorTask)
 ### 新增文件（12 個）
 
 ```
-docs/archive/warmup_auto_evolution_design.md
+docs/archive/2026-06-26-warmup-auto-evolution-design.md
 internal/domain/maturity.go
 internal/domain/maturity_test.go
 internal/experiment/auto_judge_promoter.go

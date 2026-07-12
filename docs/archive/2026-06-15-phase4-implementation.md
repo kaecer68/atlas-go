@@ -408,7 +408,7 @@ confidence := adapter.GetRegimeConfidence("2330.TW")
 | Adversarial Training | `internal/adversarial/adversarial_trainer.go` |
 | Global Markets | `internal/globalmarket/global_market.go` |
 | Real-Time Adapter | `internal/realtime/regime_adapter.go` |
-| Phase 4 Doc | `docs/phase4-implementation.md` |
+| Phase 4 Doc | `docs/2026-06-15-phase4-implementation.md` |
 
 ---
 

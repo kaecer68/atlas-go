@@ -26,7 +26,7 @@
 - **範圍**：從 PR #56 新程式碼擴大到「全倉庫硬編碼審計」（所有 internal/ 下影響投資模型行為的魔術數字）
 - **結構設計**：新增 `FactorWeightParameters` 和 `NarrativeConvictionParameters` 獨立結構，不修改既有 `FactorParameters` 和 `NarrativeParameters`
 - **測試策略**：TDD — 每個遷移任務先寫測試驗證原有行為 → 遷移 → 測試確認零回歸
-- **分支**：`feat/hardcoded-params-config-migration`
+- **分支**：`feat/2026-06-28-hardcoded-params-config-migration`
 - **約束**：omitempty 向後相容、所有新參數附帶溯源、禁止修改既有結構
 
 **Research Findings**:

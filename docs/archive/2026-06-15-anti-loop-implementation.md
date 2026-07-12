@@ -17,7 +17,7 @@
 ---
 
 ### ✅ 方案1：工具歷史追蹤模板（15分鐘完成）
-**檔案**：`.claude/dispatch-templates.md`
+**檔案**：`.claude/2026-06-15-dispatch-templates.md`
 
 **內容**：
 - 派遣提示的標準結構（任務、背景、已執行工具、已知資訊、具體問題、限制條件、完成標準）
@@ -85,7 +85,7 @@ PASS
 ```
 .claude/
 ├── orchestrator-checklist.md      # 方案4：派遣前檢查清單
-├── dispatch-templates.md          # 方案1：工具歷史追蹤模板
+├── 2026-06-15-dispatch-templates.md          # 方案1：工具歷史追蹤模板
 └── task-state/
     ├── state.go                   # 方案2：任務狀態追蹤系統
     └── state_test.go              # 測試檔案
@@ -104,7 +104,7 @@ PASS
    - 檢查是否有進行中的類似任務
    - 檢查是否已執行過相同工具
 
-2. **準備派遣提示**（使用 `dispatch-templates.md` 模板）
+2. **準備派遣提示**（使用 `2026-06-15-dispatch-templates.md` 模板）
    - 記錄已執行的工具
    - 設定具體問題和限制條件
 

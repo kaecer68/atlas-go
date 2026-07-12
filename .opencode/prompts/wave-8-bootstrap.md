@@ -86,7 +86,7 @@
 
 ## 權威 Plan 來源
 
-- `docs/archive/wave-8-plan.md`（歷史 plan，已封存）
+- `docs/archive/2026-07-10-wave-8-plan.md`（歷史 plan，已封存）
 - `.omo/plans/wave-9-plan.md`（Wave 9 權威來源）
 
 ## 衝突預防

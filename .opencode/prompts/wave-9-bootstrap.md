@@ -89,7 +89,7 @@
 ## 權威 Plan 來源
 
 - `.omo/plans/wave-9-plan.md`（**本 plan 為權威來源**）
-- `docs/archive/wave-8-plan.md`（歷史 plan，已封存）
+- `docs/archive/2026-07-10-wave-8-plan.md`（歷史 plan，已封存）
 - github.com/kaecer68/atlas-go/issues/611
 
 ## 衝突預防

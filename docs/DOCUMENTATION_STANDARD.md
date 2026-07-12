@@ -71,10 +71,10 @@ docs/
 
 | 該放 | 不該放 |
 |------|--------|
-| 重大架構演進最終快照（phase5-architecture 最終狀態）| 短期 plan/spec（merge 後 git reflog 是真相）|
+| 重大架構演進最終快照（2026-06-15-phase5-architecture 最終狀態）| 短期 plan/spec（merge 後 git reflog 是真相）|
 | 重大決策的 audit 報告（避免重蹈覆轍）| 觀察期日誌（過渡性）|
 | 有歷史教訓的 incident postmortem | 過時 migration（CHANGELOG 已有）|
-| 重大規則演進（experiment-baseline-report 稀疏資料教訓）| 純粹 snapshot（無結論、無教訓）|
+| 重大規則演進（2026-06-15-experiment-baseline-report 稀疏資料教訓）| 純粹 snapshot（無結論、無教訓）|
 
 **入 archive 前必答**：「新 clone 用戶 6 個月後會從這份檔案學到 CHANGELOG 看不到的東西嗎？」
 
