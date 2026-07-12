@@ -83,6 +83,32 @@ type appDeps struct {
 	dataFetcher     monitoring.DataFetcher // when non-nil, skips Gateway init and uses this fetcher
 }
 
+type narrativeAdapter struct {
+	eng *narrative.NarrativeEngine
+}
+
+func (a narrativeAdapter) ListModels() []eventdriven.ModelView {
+	raw := a.eng.ListModels()
+	out := make([]eventdriven.ModelView, 0, len(raw))
+	for _, m := range raw {
+		dir := "neutral"
+		switch {
+		case len(m.FavoredSectors) > 0 && len(m.AvoidedSectors) == 0:
+			dir = "bullish"
+		case len(m.AvoidedSectors) > 0 && len(m.FavoredSectors) == 0:
+			dir = "bearish"
+		}
+		out = append(out, eventdriven.ModelView{
+			ID:           m.ID,
+			Name:         m.Name,
+			Weight:       m.Weight,
+			Direction:    dir,
+			ActiveThemes: m.ActiveThemes,
+		})
+	}
+	return out
+}
+
 func main() {
 	if err := run(os.Args[1:], defaultAppDeps()); err != nil {
 		log.Fatalf("%v", err)
@@ -641,8 +667,9 @@ func run(args []string, deps appDeps) error {
 			capitalflow.RegisterRoutes(mux, macroProvider)
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
 			capitalflowSvc := capitalflow.NewService(macroProvider, 0)
-			eventdriven.RegisterRoutesWithCapitalFlow(mux, eventCalendar, capitalflowSvc)
-			log.Printf("[EventDriven] registered /api/events/* routes (capital flow wired)")
+			narrativeEngine := narrative.NewNarrativeEngine()
+			eventdriven.RegisterRoutesWithNarrative(mux, eventCalendar, capitalflowSvc, narrativeAdapter{eng: narrativeEngine})
+			log.Printf("[EventDriven] registered /api/events/* routes (capital flow + narrative wired)")
 		}
 
 		subStore, err := subscription.NewStore(cfg.WorkDir)

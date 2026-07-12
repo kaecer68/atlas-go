@@ -29,19 +29,35 @@ func (h *Handler) SetCapitalFlow(cf CapitalFlowProvider) {
 	h.predictor.SetCapitalFlow(cf)
 }
 
+// SetNarrativeProvider wires the predictor's narrative model provider,
+// typically *narrative.NarrativeEngine via a thin adapter.
+func (h *Handler) SetNarrativeProvider(np NarrativeModelProvider) {
+	h.predictor.SetNarrativeProvider(np)
+}
+
 // RegisterRoutes registers event-driven endpoints using the default static
 // capital flow provider. Preserves v0.0.0.32 API.
 func RegisterRoutes(mux *http.ServeMux, cal *industry.EventCalendar) {
-	RegisterRoutesWithCapitalFlow(mux, cal, &staticCF{score: 0, label: "neutral"})
+	RegisterRoutesWithNarrative(mux, cal, &staticCF{score: 0, label: "neutral"}, nil)
 }
 
 // RegisterRoutesWithCapitalFlow registers event-driven endpoints with a
 // real capital flow provider (typically *capitalflow.Service). nil cf
 // falls back to the staticCF baseline so tests can omit it.
 func RegisterRoutesWithCapitalFlow(mux *http.ServeMux, cal *industry.EventCalendar, cf CapitalFlowProvider) {
+	RegisterRoutesWithNarrative(mux, cal, cf, nil)
+}
+
+// RegisterRoutesWithNarrative is the full production wiring: real capital
+// flow + Darwinian narrative models. nil providers fall back to
+// event-only predictions.
+func RegisterRoutesWithNarrative(mux *http.ServeMux, cal *industry.EventCalendar, cf CapitalFlowProvider, np NarrativeModelProvider) {
 	h := NewHandler(cal)
 	if cf != nil {
 		h.SetCapitalFlow(cf)
+	}
+	if np != nil {
+		h.SetNarrativeProvider(np)
 	}
 	mux.Handle("GET /api/events/prediction", shared.Adapt(shared.Handler(h.HandlePrediction)))
 	mux.Handle("GET /api/events/calendar", shared.Adapt(shared.Handler(h.HandleCalendar)))

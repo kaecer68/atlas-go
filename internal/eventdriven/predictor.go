@@ -12,8 +12,9 @@ import (
 
 // Predictor maps upcoming events to capital flow predictions.
 type Predictor struct {
-	calendar    *industry.EventCalendar
-	capitalFlow CapitalFlowProvider
+	calendar        *industry.EventCalendar
+	capitalFlow     CapitalFlowProvider
+	narrativeModels []ModelView
 }
 
 // CapitalFlowProvider provides the current capital quality score.
@@ -31,6 +32,25 @@ type staticCF struct {
 func (s *staticCF) QualityScore() float64 { return s.score }
 func (s *staticCF) QualityLabel() string  { return s.label }
 
+// ModelView is a flat projection of narrative.InvestmentModel.
+// Defined here (not imported from internal/narrative) to avoid a
+// package dependency cycle. main.go's narrative adapter maps the
+// narrative type to ModelView.
+type ModelView struct {
+	ID           string
+	Name         string
+	Weight       float64
+	Direction    string
+	ActiveThemes []string
+}
+
+// NarrativeModelProvider exposes Darwinian-evolved narrative models to
+// the predictor. ListModels is called once at wiring time; the
+// predictor caches the snapshot and filters by per-day active themes.
+type NarrativeModelProvider interface {
+	ListModels() []ModelView
+}
+
 // NewPredictor creates an event-driven flow predictor.
 func NewPredictor(cal *industry.EventCalendar) *Predictor {
 	return &Predictor{
@@ -42,6 +62,16 @@ func NewPredictor(cal *industry.EventCalendar) *Predictor {
 // SetCapitalFlow sets the capital flow provider for scoring.
 func (p *Predictor) SetCapitalFlow(cf CapitalFlowProvider) {
 	p.capitalFlow = cf
+}
+
+// SetNarrativeProvider caches a snapshot of Darwinian-evolved models.
+// nil provider clears the cache (reverts to event-only predictions).
+func (p *Predictor) SetNarrativeProvider(np NarrativeModelProvider) {
+	if np == nil {
+		p.narrativeModels = nil
+		return
+	}
+	p.narrativeModels = np.ListModels()
 }
 
 // Predict generates a 5-day capital flow prediction report.
@@ -95,6 +125,7 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent, cfScore float64) (dir string, conf float64, drivers []string) {
 	var bullishWeight, bearishWeight float64
 	var driverNames []string
+	var activeThemes []string
 
 	for _, e := range timeline {
 		if day.After(e.EndDate) || day.Before(e.StartDate) {
@@ -111,6 +142,19 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 		case "mixed":
 			bullishWeight += w * 0.3
 			bearishWeight += w * 0.3
+		}
+		activeThemes = append(activeThemes, eventTypeToThemes(e.EventType)...)
+	}
+
+	for _, m := range p.narrativeModels {
+		if !themeMatchesAny(m.ActiveThemes, activeThemes) {
+			continue
+		}
+		switch m.Direction {
+		case "bullish":
+			bullishWeight += m.Weight
+		case "bearish":
+			bearishWeight += m.Weight
 		}
 	}
 
@@ -133,6 +177,45 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 	conf = math.Round(conf*100) / 100
 
 	return dir, conf, driverNames
+}
+
+func eventTypeToThemes(eventType string) []string {
+	switch eventType {
+	case string(industry.EventMSCIRebalance), string(industry.EventTaiwan50Rebalance):
+		return []string{"msci_rebalance", "tw50_rebalance", "index_rebalance"}
+	case string(industry.EventMonthlyRevenue):
+		return []string{"monthly_revenue", "earnings_surprise"}
+	case string(industry.EventFinancialReport):
+		return []string{"financial_report", "earnings_surprise"}
+	case string(industry.EventExDividend), string(industry.EventDividendPayout):
+		return []string{"ex_dividend", "dividend_season"}
+	case string(industry.EventFuturesSettlement):
+		return []string{"futures_settlement"}
+	case string(industry.EventWindowDressing):
+		return []string{"window_dressing"}
+	case string(industry.EventShareholderMeeting):
+		return []string{"shareholders_meeting"}
+	case string(industry.EventInvestorConf):
+		return []string{"investor_conference"}
+	default:
+		return nil
+	}
+}
+
+func themeMatchesAny(modelThemes, activeThemes []string) bool {
+	if len(modelThemes) == 0 || len(activeThemes) == 0 {
+		return false
+	}
+	active := make(map[string]struct{}, len(activeThemes))
+	for _, t := range activeThemes {
+		active[t] = struct{}{}
+	}
+	for _, t := range modelThemes {
+		if _, ok := active[t]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // expectedFlow maps event types to their expected capital flow impact.
