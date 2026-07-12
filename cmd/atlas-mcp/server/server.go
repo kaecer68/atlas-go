@@ -160,14 +160,15 @@ func Run(ctx context.Context, cfg Config) error {
 	registerPrompts(mcpSrv)
 
 	// Verify tool count matches expected range.
-	// registerTools: 85-87 (base + stock 4 + strategy_ranker 1 + sampling 0-1 + elicitation 0-1,
-	//                       roots=2 always, anomaly=2 inside, capital_flow=2 + recommendation=1 added in Phase 2)
-	// registerEventTools: +2
-	// registerBriefingTools: +2
-	// registerAuditTools: +4 (not in registerTools)
-	// Total: 89-91
-	if n := RegisteredToolCount; n < 89 || n > 91 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 89-91", n)
+	// registerTools (called just above): 97 base business tools + roots (2) +
+	// 0-2 sampling/elicitation (feature-gated) = 97..99 tools.
+	// registerAuditTools: +4 (separate, not in registerTools).
+	// Total at this point: 101 (both feature-gated off) to 103 (both on).
+	// PR 2 (2026-07-12) added 12 read-only tools (parameters_*, backtest_*,
+	// calendar_events, sector_allocation_plan, channel_health, taiwan_stress_index,
+	// risk_exposure), raising the base from 85 to 97.
+	if n := RegisteredToolCount; n < 101 || n > 103 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 101-103", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for

@@ -27,6 +27,27 @@
       "type": "object"
     }
   },
+  "backtest_signals": {
+    "name": "backtest_signals",
+    "description": "Active backtest signals (active_signals, var_95/99, sharpe_short/long, drawdown_pct).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "backtest_status": {
+    "name": "backtest_status",
+    "description": "Latest backtest run summary (last_auto_date, last_auto_portfolio_val).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "calendar_events": {
+    "name": "calendar_events",
+    "description": "Industry / market calendar events (ETF rebalances, MSCI, revenue, holidays, shareholder meetings). 14-day forward window.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
   "capital_flow_daily": {
     "name": "capital_flow_daily",
     "description": "Full daily Taiwan stock market capital flow report: foreign, proprietary, public bank, retail and other forces with resonance score and direction.",
@@ -37,6 +58,13 @@
   "capital_flow_summary": {
     "name": "capital_flow_summary",
     "description": "Condensed capital flow summary suitable for a quick Taiwan market briefing.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "channel_health": {
+    "name": "channel_health",
+    "description": "Channel-level health summary (channel_id, status, updated_at) for the data ingestion pipeline.",
     "inputSchema": {
       "type": "object"
     }
@@ -513,6 +541,50 @@
       "type": "object"
     }
   },
+  "parameters_get": {
+    "name": "parameters_get",
+    "description": "Current parameters (flat key → type map, e.g. {\\\"alert.sla_warning_sec\\\":\\\"int\\\"}). Mirrors dashboard parameters page.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "parameters_get_audit_log": {
+    "name": "parameters_get_audit_log",
+    "description": "Parameter change audit log (who/when/why). Empty list when no changes recorded yet.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "parameters_get_categories": {
+    "name": "parameters_get_categories",
+    "description": "Available parameter categories with id/name/description (darwinian, factor, optimizer, sizing, health, garch, experiment, baseline, ...).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "parameters_get_metadata": {
+    "name": "parameters_get_metadata",
+    "description": "Parameters with full provenance metadata (value, rationale, source, citation, last_calibrated).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "parameters_get_snapshots": {
+    "name": "parameters_get_snapshots",
+    "description": "Historical parameter snapshots (default last 20 days, max 365).",
+    "inputSchema": {
+      "properties": {
+        "days": {
+          "description": "how many snapshots back; default 20, max 365",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "days"
+      ],
+      "type": "object"
+    }
+  },
   "prism_get_training_results": {
     "name": "prism_get_training_results",
     "description": "Latest PRISM cohort training results (config + metrics per cohort).",
@@ -564,6 +636,13 @@
       "type": "object"
     }
   },
+  "risk_exposure": {
+    "name": "risk_exposure",
+    "description": "Current portfolio risk exposure: var_95/99, cvar_95, max_drawdown_pct, cash_ratio, sector/factor/concentration breakdown.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
   "risk_get_calibration": {
     "name": "risk_get_calibration",
     "description": "Risk model calibration metrics (predicted vs realized VaR).",
@@ -602,6 +681,13 @@
   "scheduler_get_status": {
     "name": "scheduler_get_status",
     "description": "Background scheduler status: which tasks ran, when, last result. Read-only overview of the dispatcher state.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "sector_allocation_plan": {
+    "name": "sector_allocation_plan",
+    "description": "Current sector allocation plan with adjusted weights and derivation factors per industry.",
     "inputSchema": {
       "type": "object"
     }
@@ -813,6 +899,13 @@
   "system_get_thresholds": {
     "name": "system_get_thresholds",
     "description": "Configured SLO thresholds (latency, error rate, saturation).",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "taiwan_stress_index": {
+    "name": "taiwan_stress_index",
+    "description": "Taiwan market stress index (TRJ narrative) — score, regime, components by source. Use for risk appetite assessment.",
     "inputSchema": {
       "type": "object"
     }
