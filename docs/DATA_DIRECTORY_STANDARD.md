@@ -220,4 +220,4 @@ data/
 | `docs/DATA_MATURITY_STANDARD.md` | `_metadata.json` 格式定義 |
 | `docs/DATA_CATALOG.md` | 完整資料資產目錄 |
 | `docs/DATA_ARCHITECTURE.md` | 資料架構與讀寫路徑 |
-| `docs/audit/P0.2_root_cause_analysis.md` | 根因分析（FG-1: 無規範） |
+| `docs/audit/2026-06-02-p0-2-root-cause-analysis.md` | 根因分析（FG-1: 無規範） |

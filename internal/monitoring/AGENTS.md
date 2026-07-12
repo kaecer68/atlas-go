@@ -78,7 +78,7 @@
 
 ## Live 偵測器協調器
 
-Live 偵測器協調器（原始檔案仍保留 `wave9` 命名）在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。歷史設計詳見 `docs/handoff/2026-wave9-observability-coordinator.md`。
+Live 偵測器協調器（原始檔案仍保留 `wave9` 命名）在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。歷史設計詳見 `docs/handoff/2026-06-26-wave9-observability-coordinator.md`。
 
 ---
 

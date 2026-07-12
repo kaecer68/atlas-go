@@ -38,4 +38,4 @@
 
 `internal/live/AGENTS.md` 保留的決策性規則：
 
-> live orchestrator 透過 `EventPositionUpdate` 發布部位更新，下游為 `BaselineTrigger` 與 `DriftDetector`。詳見 `docs/handoff/2026-wave9-event-position-update.md`。
+> live orchestrator 透過 `EventPositionUpdate` 發布部位更新，下游為 `BaselineTrigger` 與 `DriftDetector`。詳見 `docs/handoff/2026-06-26-wave9-event-position-update.md`。
