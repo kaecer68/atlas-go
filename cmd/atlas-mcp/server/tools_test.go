@@ -38,7 +38,7 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	t.Helper()
 	rec := &reqRecorder{responseBody: []byte(`[]`)}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/macro/snapshot" {
+		if r.URL.Path == "/api/macro/snapshot/latest" {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"foreign_investor_net":{"value":1.0},"vix":{"value":15}}`))
 			return
