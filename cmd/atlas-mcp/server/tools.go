@@ -96,10 +96,14 @@ type RegimeGetHistoryInput struct {
 	Days int `json:"days" jsonschema:"how many days back; default 30, max 365"`
 }
 
+// RegimePoint represents one session in regime_get_history output. Score is a
+// pointer with omitempty: when the handler cannot supply a meaningful score
+// (e.g., before Layer B wires Engine.UpdateFromMacro into the pipeline), the
+// field is omitted rather than emitting 0 — honest "unknown" vs misleading "0".
 type RegimePoint struct {
 	Date   string `json:"date"`
 	Regime string `json:"regime"`
-	Score  int    `json:"score"`
+	Score  *int   `json:"score,omitempty"`
 }
 
 type RegimeGetHistoryOutput struct {
@@ -157,11 +161,42 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 				Regime: sess.Regime,
 			}
 		}
+		// Formulas must stay in sync with janus.Engine.synthesizeCompositeScore.
+		if score, ok := fetchRegimeCompositeScore(ctx, s); ok {
+			for i := range out.Regimes {
+				s := score
+				out.Regimes[i].Score = &s
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, RegimeGetHistoryOutput{}, err
 	}
 	return nil, out, nil
+}
+
+func fetchRegimeCompositeScore(ctx context.Context, s *server) (int, bool) {
+	var snap struct {
+		ForeignInvestorNet struct {
+			Value float64 `json:"value"`
+		} `json:"foreign_investor_net"`
+		VIX struct {
+			Value float64 `json:"value"`
+		} `json:"vix"`
+	}
+	if err := s.cli.Get(ctx, "/api/macro/snapshot", nil, &snap); err != nil {
+		return 0, false
+	}
+	score := 0.0
+	if snap.ForeignInvestorNet.Value > 0 {
+		score += 30
+	} else if snap.ForeignInvestorNet.Value < 0 {
+		score -= 30
+	}
+	if snap.VIX.Value > 20 {
+		score -= (snap.VIX.Value - 20) * 0.5
+	}
+	return int(score), true
 }
 
 func (s *server) handleStrategyListActive(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, StrategyListActiveOutput, error) {

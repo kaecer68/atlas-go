@@ -245,6 +245,9 @@ func registerOperationsTasks(d operationsDeps) {
 					logging.Warn("main", "macro_ingest_failed", "err", err)
 					return err
 				}
+				if d.janusEngine != nil {
+					d.janusEngine.UpdateFromMacro(snap)
+				}
 				// Crisis circuit break: VIX >= 35 triggers force-open on live channels.
 				if d.gateway != nil && snap.VIX.Value >= 35.0 {
 					liveChannels := []string{"fugle", "fubon", "finmind"}
