@@ -647,8 +647,8 @@ function renderRealPortfolio(container, data) {
   const pnlPct = typeof data.cumulative_pnl_pct === 'number' && Number.isFinite(data.cumulative_pnl_pct)
     ? data.cumulative_pnl_pct
     : (total !== null && pnl !== null && total !== pnl ? (pnl / (total - pnl)) : null);
-  const drawdown = typeof data.current_drawdown === 'number' && Number.isFinite(data.current_drawdown)
-    ? data.current_drawdown
+  const drawdown = typeof data.max_drawdown === 'number' && Number.isFinite(data.max_drawdown)
+    ? data.max_drawdown
     : null;
 
   container.innerHTML = `

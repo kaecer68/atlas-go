@@ -297,6 +297,45 @@ func TestApplyTSMADR(t *testing.T) {
 	})
 }
 
+func TestApplyTAIEX(t *testing.T) {
+	t.Run("populates_field", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{"taiex":{"symbol":"^TWII","value":23100.50,"change_pct":0.35,"timestamp":1700000000}}`)
+		a.applyTAIEX(snap, data)
+		if snap.TAIEX.Symbol != "^TWII" {
+			t.Fatalf("expected Symbol=^TWII, got %q", snap.TAIEX.Symbol)
+		}
+		if snap.TAIEX.Value != 23100.50 {
+			t.Fatalf("expected Value=23100.50, got %f", snap.TAIEX.Value)
+		}
+		if snap.TAIEX.ChangePct != 0.35 {
+			t.Fatalf("expected ChangePct=0.35, got %f", snap.TAIEX.ChangePct)
+		}
+	})
+
+	t.Run("empty_data_no_crash", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		a.applyTAIEX(snap, nil)
+		a.applyTAIEX(snap, []byte{})
+		a.applyTAIEX(snap, []byte(`{}`))
+		if snap.TAIEX.Symbol != "" {
+			t.Fatalf("expected empty Symbol for empty data, got %q", snap.TAIEX.Symbol)
+		}
+	})
+
+	t.Run("symbol_only_no_value", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{"taiex":{"symbol":"^TWII","value":0,"change_pct":0}}`)
+		a.applyTAIEX(snap, data)
+		if snap.TAIEX.Symbol != "^TWII" {
+			t.Fatalf("expected Symbol=^TWII when value is 0, got %q", snap.TAIEX.Symbol)
+		}
+		if snap.TAIEX.Value != 0 {
+			t.Fatalf("expected Value=0, got %f", snap.TAIEX.Value)
+		}
+	})
+}
+
 func TestMacroDataGatewayAdapter_ChannelErrors_AllSuccess(t *testing.T) {
 	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 		snap := marketdata.MacroDataSnapshot{US10Y: marketdata.MacroDataPoint{Symbol: "^TNX"}}

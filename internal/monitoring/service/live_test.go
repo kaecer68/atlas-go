@@ -320,3 +320,49 @@ func TestGetSectorForSymbol(t *testing.T) {
 		t.Errorf("expected other, got %q", got)
 	}
 }
+
+func TestCalculateMaxDrawdownFromEquityCurve(t *testing.T) {
+	tests := []struct {
+		name     string
+		curve    []EquityCurvePoint
+		want     float64
+		wantZero bool
+	}{
+		{
+			name:     "empty curve",
+			curve:    []EquityCurvePoint{},
+			wantZero: true,
+		},
+		{
+			name:     "monotonically increasing",
+			curve:    []EquityCurvePoint{{Value: 100}, {Value: 110}, {Value: 120}},
+			wantZero: true,
+		},
+		{
+			name:  "single peak then trough",
+			curve: []EquityCurvePoint{{Value: 100}, {Value: 120}, {Value: 90}},
+			want:  0.25, // (120 - 90) / 120
+		},
+		{
+			name:  "new peak after first drawdown",
+			curve: []EquityCurvePoint{{Value: 100}, {Value: 80}, {Value: 130}, {Value: 100}},
+			want:  30.0 / 130.0, // second decline (130-100)/130 is larger than first drawdown
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := calculateMaxDrawdownFromEquityCurve(tt.curve)
+			if tt.wantZero {
+				if got != 0 {
+					t.Errorf("calculateMaxDrawdownFromEquityCurve() = %v, want 0", got)
+				}
+				return
+			}
+			const eps = 1e-9
+			if diff := got - tt.want; diff < -eps || diff > eps {
+				t.Errorf("calculateMaxDrawdownFromEquityCurve() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

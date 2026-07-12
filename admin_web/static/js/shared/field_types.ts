@@ -2542,6 +2542,7 @@ export interface PortfolioStateResponse {
   cumulative_pnl: number;
   cumulative_pnl_pct: number;
   current_drawdown: number;
+  max_drawdown: number;
   unrealized_pnl_total?: number;
   concentration_ratio?: number;
   trade_count?: number;

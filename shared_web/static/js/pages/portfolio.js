@@ -54,7 +54,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     const tradeCount = typeof state.trade_count === 'number' ? state.trade_count : trades.length;
     const unrealizedPnLTotal = isValidNumber(state.unrealized_pnl_total) ? state.unrealized_pnl_total : null;
     const concentrationRatio = isValidNumber(state.concentration_ratio) ? state.concentration_ratio : null;
-    const currentDrawdown = isValidNumber(state.current_drawdown) ? state.current_drawdown : null;
+    const maxDrawdown = isValidNumber(state.max_drawdown) ? state.max_drawdown : null;
 
     const sectorLabels = {
       'semiconductor': '半導體', 'ai_supply_chain': 'AI供應鏈',
@@ -115,7 +115,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
       </div>
       <div class="kpi-card">
         <div class="kpi-label">最大回撤</div>
-        <div class="kpi-value text-danger">${formatMaxDrawdown(currentDrawdown, { asAbsolute: true })}</div>
+        <div class="kpi-value text-danger">${formatMaxDrawdown(maxDrawdown, { asAbsolute: true })}</div>
         <div class="kpi-hint">歷史最大回撤</div>
       </div>
     `;

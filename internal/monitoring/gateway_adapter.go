@@ -81,6 +81,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "us_aapl", apply: a.applyUSAAPL},
 		{channelID: "us_msft", apply: a.applyUSMSFT},
 		{channelID: "tsm_adr", apply: a.applyTSMADR},
+		{channelID: "taiex_index", apply: a.applyTAIEX},
 	}
 
 	var (
@@ -376,6 +377,16 @@ func (a *macroDataGatewayAdapter) applyTSMADR(snap *marketdata.MacroDataSnapshot
 	}
 	if s.TSMADR.Symbol != "" {
 		snap.TSMADR = s.TSMADR
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyTAIEX(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.TAIEX.Symbol != "" {
+		snap.TAIEX = s.TAIEX
 	}
 }
 

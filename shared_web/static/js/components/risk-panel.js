@@ -8,7 +8,7 @@ export async function renderRiskPanel(container, getJSON) {
   // 2. 讀取 correlation-matrix (if available)
   const corr = await getJSON('/api/dashboard/correlation-matrix').catch(() => null);
 
-  const dd = state.current_drawdown;
+  const dd = state.max_drawdown;
   const conc = state.concentration_ratio;
 
   let leverage = null;
