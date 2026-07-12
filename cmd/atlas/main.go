@@ -389,7 +389,8 @@ func run(args []string, deps appDeps) error {
 		janusEngine.EnsureAllRegimes()
 		janusEngine.Update()
 
-		eventCalendar := industry.NewEventCalendar()
+		// Stage 1 PR#1：改用 wired factory 確保 RefreshEvents 一定會被呼叫。
+		eventCalendar := industry.NewEventCalendarWithProvider(marketdata.NewTWSECalendarProvider())
 
 		// Initialize MaturityTracker for burn-in / calibrating / full-auto gating.
 		maturityTracker, _ := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
@@ -839,6 +840,7 @@ func run(args []string, deps appDeps) error {
 				realtimeAdapter: realtimeAdapter,
 				repo:            repo,
 				collector:       collector,
+				eventCalendar:   eventCalendar,
 			})
 
 			// Register auto_daily_simulation — runs daily simulation at market close.

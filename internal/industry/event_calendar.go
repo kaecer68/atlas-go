@@ -1146,3 +1146,24 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		logging.FInt("added_events", len(events)),
 	)
 }
+
+// NewEventCalendarWithProvider 是「wired」版 EventCalendar factory，
+// 與 NewEventCalendar() 的差異在於會同步呼叫 RefreshEvents(time.Now()) 載入當年預設事件。
+//
+// 設計理由（Stage 1 缺口補齊 PR#1）：
+//   - 舊的 NewEventCalendar() 只載入 annualRules，events slice 為空，
+//     必須另呼叫 RefreshEvents 才會有資料。
+//   - 過往各 caller 各自記得呼叫 RefreshEvents，容易遺漏（PR#1 root cause）。
+//   - 此 factory 把「載入預設事件」內建為不可分割的一步，杜絕漏呼叫。
+//
+// 注意：provider 為 nil 時只載入預設事件。如需從外部 provider 拉資料（例如 TWSE 營收公布日），
+// 請在 caller 端啟動背景 goroutine，以 app context 驅動週期性呼叫 UpdateFromProvider；
+// 不建議在 factory 內同步呼叫 provider.FetchEvents（會 block API startup）。
+//
+// Maturity: stable（v0.0.0.33+ 公開 API）。
+func NewEventCalendarWithProvider(provider marketdata.CalendarEventProvider) *EventCalendar {
+	ec := NewEventCalendar()
+	ec.RefreshEvents(time.Now())
+	_ = provider // provider 為非 nil 時，caller 須自行啟動背景 refresh。
+	return ec
+}

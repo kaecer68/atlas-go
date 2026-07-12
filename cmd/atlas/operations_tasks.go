@@ -30,6 +30,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/importer"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -53,6 +54,8 @@ type operationsDeps struct {
 	realtimeAdapter *realtime.RealTimeAdapter
 	repo            *repository.DualWriteRepository
 	collector       *monitoring.MetricsCollector
+	// eventCalendar 服務 eventdriven.RegisterRoutes(/api/events/*)。
+	eventCalendar *industry.EventCalendar
 }
 
 // registerOperationsTasks wires the operational probes / data ingest /
@@ -192,7 +195,7 @@ func registerOperationsTasks(d operationsDeps) {
 	})
 	log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
 
-	if svc := d.dashboard.GetIndustryService(); svc != nil {
+	if svc := d.dashboard.GetIndustryService(); svc != nil || d.eventCalendar != nil {
 		calendarProvider := marketdata.NewTWSECalendarProvider()
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 			Name:     "auto_calendar_refresh",
@@ -201,9 +204,17 @@ func registerOperationsTasks(d operationsDeps) {
 			Task: func(ctx context.Context) error {
 				bgCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 				defer cancel()
-				svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
-				svc.EventCalendar.RefreshEvents(time.Now())
-				logging.Info("calendar", "auto_calendar_refresh completed")
+				refreshOne := func(ec *industry.EventCalendar, label string) {
+					if ec == nil {
+						return
+					}
+					ec.UpdateFromProvider(bgCtx, calendarProvider)
+					ec.RefreshEvents(time.Now())
+					logging.Info("calendar", "auto_calendar_refresh_instance",
+						logging.FStr("instance", label))
+				}
+				refreshOne(svc.EventCalendar, "dashboard_industry")
+				refreshOne(d.eventCalendar, "eventdriven_mcp")
 				return nil
 			},
 		})
