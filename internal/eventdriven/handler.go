@@ -23,9 +23,26 @@ func NewHandler(cal *industry.EventCalendar) *Handler {
 	}
 }
 
-// RegisterRoutes registers event-driven endpoints on the mux.
+// SetCapitalFlow wires the predictor's capital flow provider so predictions
+// deviate from the default neutral/staticCF baseline.
+func (h *Handler) SetCapitalFlow(cf CapitalFlowProvider) {
+	h.predictor.SetCapitalFlow(cf)
+}
+
+// RegisterRoutes registers event-driven endpoints using the default static
+// capital flow provider. Preserves v0.0.0.32 API.
 func RegisterRoutes(mux *http.ServeMux, cal *industry.EventCalendar) {
+	RegisterRoutesWithCapitalFlow(mux, cal, &staticCF{score: 0, label: "neutral"})
+}
+
+// RegisterRoutesWithCapitalFlow registers event-driven endpoints with a
+// real capital flow provider (typically *capitalflow.Service). nil cf
+// falls back to the staticCF baseline so tests can omit it.
+func RegisterRoutesWithCapitalFlow(mux *http.ServeMux, cal *industry.EventCalendar, cf CapitalFlowProvider) {
 	h := NewHandler(cal)
+	if cf != nil {
+		h.SetCapitalFlow(cf)
+	}
 	mux.Handle("GET /api/events/prediction", shared.Adapt(shared.Handler(h.HandlePrediction)))
 	mux.Handle("GET /api/events/calendar", shared.Adapt(shared.Handler(h.HandleCalendar)))
 }

@@ -640,8 +640,9 @@ func run(args []string, deps appDeps) error {
 			macroProvider := monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
 			capitalflow.RegisterRoutes(mux, macroProvider)
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
-			eventdriven.RegisterRoutes(mux, eventCalendar)
-			log.Printf("[EventDriven] registered /api/events/* routes")
+			capitalflowSvc := capitalflow.NewService(macroProvider, 0)
+			eventdriven.RegisterRoutesWithCapitalFlow(mux, eventCalendar, capitalflowSvc)
+			log.Printf("[EventDriven] registered /api/events/* routes (capital flow wired)")
 		}
 
 		subStore, err := subscription.NewStore(cfg.WorkDir)
