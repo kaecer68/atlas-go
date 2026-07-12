@@ -16,6 +16,12 @@
       "params": "(level string, category,message string, details map[string]any)",
       "receiver": "experimentMonitorAdapter",
       "results": ""
+    },
+    {
+      "name": "ListModels",
+      "params": "",
+      "receiver": "narrativeAdapter",
+      "results": "([]eventdriven.ModelView)"
     }
   ],
   "package": "main",
