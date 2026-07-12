@@ -128,7 +128,12 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 
 	params := map[string]string{
 		"interval": "1d",
-		"range":    "5d",
+		// range=1mo (vs 5d) ensures Yahoo Finance returns ≥2 daily closes for
+		// sparse forex tickers (USDTWD=X, USDMXN=X, etc.) where range=5d
+		// sometimes returns only the latest close — making ChangePct=0 and
+		// breaking USD_TWD routing downstream (see decision
+		// 2026-07-13-usd-twd-routing-recurring-bug-root-cause.md).
+		"range": "1mo",
 	}
 
 	body, err := y.session.fetchWithFallback(ctx, ticker, params)
@@ -179,6 +184,12 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 
 	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
 		return MacroDataPoint{}, fmt.Errorf("invalid change percentage for %s: %v", ticker, changePct)
+	}
+	// Bounds check: per marketdata/AGENTS.md, daily moves > ±30% are data
+	// errors (stock split, parser glitch, forex holiday gap). Reject so we
+	// don't pollute stress-index / yield-spread / US-TW spread downstream.
+	if math.Abs(changePct) > 30 {
+		return MacroDataPoint{}, fmt.Errorf("outlier daily change for %s: %.2f%% (likely data error)", ticker, changePct)
 	}
 
 	point := MacroDataPoint{
