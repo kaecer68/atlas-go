@@ -868,7 +868,7 @@ Wave 8.11+ 規劃待 Wave 8 v0.0.0.7 合併後再開新 plan。
 ### Added — PR #630 SmartUniverseBuilder pipeline (related infra)
 
 - 4-layer universe pipeline (`IndustryFilter` / `ScoringScreener` / `RiskExclusionFilter` / `NarrativeEventBridge`) with `WriteUniverseRegistry` atomic-write + `.bak` rollback. Wired into `cmd/atlas/main.go` with `WatchlistMu` serialization.
-- Review audit trail archived to `docs/archive/REVIEW_PR630.md`.
+- Review audit trail archived to `docs/archive/2026-06-22-review-pr630.md`.
 
 ## [0.0.0.6] - 2026-06-20
 

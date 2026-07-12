@@ -484,7 +484,7 @@ test -f web/static/css/components/performance-report.css && echo "OK"
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" present — 無 <style>，main.css 存在，所有頁面樣式正確
+- [ ] All "Must Have" present — 無 `<style>`，main.css 存在，所有頁面樣式正確
 - [ ] All "Must NOT Have" absent — 無 Go 改動，無 JS 改動，無 CSS 值改動
 - [ ] Go build + test pass
 - [ ] index.html 從 2,246 行降至 < 800 行

@@ -29,7 +29,7 @@
 
 | 组件 | 文件 | 状态 |
 |------|------|------|
-| 实时架构设计 | `docs/phase4-architecture.md` | ✅ |
+| 实时架构设计 | `docs/2026-06-15-phase4-architecture.md` | ✅ |
 | Live State Store | `internal/live/store.go` | ✅ |
 | Event Bus | `internal/live/eventbus.go` | ✅ |
 | Fugle API 客户端 | `internal/marketdata/fugle_client.go` | ✅ |
@@ -106,7 +106,7 @@ FUGLE_API_KEY=your_api_key_here
 - `internal/marketdata/fugle_client.go` - Fugle API 客户端
 - `internal/marketdata/twse_openapi.go` - TWSE OpenAPI 客户端
 - `internal/marketdata/hybrid_provider.go` - Hybrid Provider
-- `docs/phase4-architecture.md` - Phase 4 架构文档
+- `docs/2026-06-15-phase4-architecture.md` - Phase 4 架构文档
 - `cmd/experimental/test-fugle/main.go` - Fugle 测试工具
 - `cmd/experimental/test-hybrid/main.go` - Hybrid 测试工具
 

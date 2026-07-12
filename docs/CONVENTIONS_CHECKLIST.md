@@ -131,9 +131,9 @@ logging.Info("apigateway", "adapter_registered", "channel", "my_provider")
 - **背景任務**：若有註冊排程任務，寫 `✅ (interval)`；否則寫 `否`
 - **熔斷啟用**：`✅` 或 `❌`
 
-#### 步驟 8：更新 GATEWAY_MIGRATION_TRACKING.md
+#### 步驟 8：更新 2026-06-26-gateway-migration-tracking.md
 
-在 `docs/archive/GATEWAY_MIGRATION_TRACKING.md` 中記錄新增的 channel 及其狀態。
+在 `docs/archive/2026-06-26-gateway-migration-tracking.md` 中記錄新增的 channel 及其狀態。
 
 ---
 
@@ -386,9 +386,9 @@ func (a *macroDataGatewayAdapter) applyMyProvider(snap *marketdata.MacroDataSnap
 
 在 `internal/apigateway/CONSTITUTION.md` 的附錄 A 通道規範表（第 479-498 行）中新增一列。
 
-#### 步驟 7：更新 GATEWAY_MIGRATION_TRACKING.md
+#### 步驟 7：更新 2026-06-26-gateway-migration-tracking.md
 
-在 `docs/archive/GATEWAY_MIGRATION_TRACKING.md` 中記錄新增狀態。
+在 `docs/archive/2026-06-26-gateway-migration-tracking.md` 中記錄新增狀態。
 
 ---
 
@@ -707,7 +707,7 @@ var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 - [ ] 在 `gateway.go` 的 `channelIDs()` 中加入
 - [ ] 在 `register_adapters.go` 中註冊 adapter
 - [ ] 更新 `CONSTITUTION.md` 附錄 A
-- [ ] 更新 `docs/archive/GATEWAY_MIGRATION_TRACKING.md`
+- [ ] 更新 `docs/archive/2026-06-26-gateway-migration-tracking.md`
 
 ### 新增 ParameterMetadata
 
@@ -727,7 +727,7 @@ var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 - [ ] 若為總經資料：在 `gateway_adapter.go` 中加入 channel mapping
 - [ ] 在 `gateway.go` 的 `channelIDs()` 中加入
 - [ ] 更新 `CONSTITUTION.md` 附錄 A
-- [ ] 更新 `docs/archive/GATEWAY_MIGRATION_TRACKING.md`
+- [ ] 更新 `docs/archive/2026-06-26-gateway-migration-tracking.md`
 
 ### 檔案寫入
 
@@ -751,7 +751,7 @@ var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 | 文件 | 路徑 |
 |------|------|
 | 數據源憲法 | `internal/apigateway/CONSTITUTION.md` |
-| Gateway 遷移追蹤（已封存） | `docs/archive/GATEWAY_MIGRATION_TRACKING.md` |
+| Gateway 遷移追蹤（已封存） | `docs/archive/2026-06-26-gateway-migration-tracking.md` |
 | 參數預設值 | `internal/config/parameters_defaults.go` |
 | 參數結構定義 | `internal/config/parameters.go` |
 | 速率限制設定 | `internal/apigateway/limits.go` |

@@ -57,7 +57,7 @@ go tool cover -func=coverage.out | tail -n 1
 - [docs/evolution_loop.md](docs/evolution_loop.md) — Acceptance gate logic
 - [docs/data_sources.md](docs/data_sources.md) — Market data import, replay format (JSONL)
 - [docs/REFERENCE/PARAMETER_SYSTEM.md](docs/REFERENCE/PARAMETER_SYSTEM.md) — Parameter management with provenance tracking
-- `docs/archive/phase2-implementation.md` ~ `phase5-architecture.md` — Historical phase decisions
+- `docs/archive/2026-06-15-phase2-implementation.md` ~ `2026-06-15-phase5-architecture.md` — Historical phase decisions
 
 ## 📝 History & Context
 

@@ -388,7 +388,7 @@ cat reports/gap_detection_$(date +%Y%m%d).json
 - Atlas-GIC Architecture: https://github.com/chrisworsey55/atlas-gic
 - Soros Reflexivity Theory: "The Alchemy of Finance"
 - Agent Spawning Design: `docs/skills-map.md` (Layer 4)
-- Phase 2 Documentation: `docs/phase2-implementation.md`
+- Phase 2 Documentation: `docs/2026-06-15-phase2-implementation.md`
 
 ---
 

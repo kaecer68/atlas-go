@@ -241,7 +241,7 @@ atlas/
 │   ├── judge_latest.sh     # 判斷最新實驗
 │   └── decide.sh           # Promote/Revert 決策
 ├── docs/
-│   └── openclaw-protocol.md # 本文件
+│   └── 2026-06-15-openclaw-protocol.md # 本文件
 └── data/state/
     ├── baseline_policy.json   # 當前 baseline
     ├── experiments.jsonl      # 實驗記錄

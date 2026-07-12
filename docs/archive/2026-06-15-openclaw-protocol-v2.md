@@ -172,7 +172,7 @@ atlas-go/
 |
 |-- OPENCLAW_PROMPT_V2.md   # Updated role definition
 |-- docs/
-|   |-- openclaw-protocol-v2.md  # This file
+|   |-- 2026-06-15-openclaw-protocol-v2.md  # This file
 |   |-- advanced-operations.md     # Detailed procedures
 |   |-- strategic-decisions.md     # Decision framework
 |   `-- emergency-procedures.md    # Crisis management

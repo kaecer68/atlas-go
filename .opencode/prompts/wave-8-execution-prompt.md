@@ -1,6 +1,6 @@
 # Wave 8 Execution Prompt — 給新 CLI 工作區的裁決後指令
 
-> **用途**：當新 Wave 8 CLI 找到 `docs/archive/wave-8-plan.md` 的錯誤並修正後，由使用者把這份 prompt 貼到那個 CLI 的下一則 user message。
+> **用途**：當新 Wave 8 CLI 找到 `docs/archive/2026-07-10-wave-8-plan.md` 的錯誤並修正後，由使用者把這份 prompt 貼到那個 CLI 的下一則 user message。
 > **建立日期**：2026-06-20
 > **核心原則**：plan 是輕量文件，code 在 main 上的獨立 PR
 
@@ -10,37 +10,37 @@
 
 ## 分支策略（重要）
 
-**不要把所有 Wave 8 程式碼塞在 docs/wave-8-plan 分支**。改用以下結構：
+**不要把所有 Wave 8 程式碼塞在 docs/2026-07-10-wave-8-plan 分支**。改用以下結構：
 
 ```
 main
-├── docs/wave-8-plan        ← 只放計劃文件（修正後合併到 main）
+├── docs/2026-07-10-wave-8-plan        ← 只放計劃文件（修正後合併到 main）
 ├── feat/wave-8-risk-gate-rejected
 ├── feat/wave-8-risk-gate-override
 ├── feat/wave-8-industry-calendar-event
 └── ... (9 RED + 5 YELLOW = 14 個 PR，全部基於 origin/main)
 ```
 
-## 第一步：先把 docs/archive/wave-8-plan.md 的修正 commit + push
+## 第一步：先把 docs/archive/2026-07-10-wave-8-plan.md 的修正 commit + push
 
 ```bash
 git status
-git diff docs/archive/wave-8-plan.md
-git add docs/archive/wave-8-plan.md
+git diff docs/archive/2026-07-10-wave-8-plan.md
+git add docs/archive/2026-07-10-wave-8-plan.md
 git commit -m "docs: correct Wave 8 plan based on code verification"
-git push origin docs/wave-8-plan
+git push origin docs/2026-07-10-wave-8-plan
 ```
 
 合併到 main 的時機：等 `atlas-feature-llm-phase1-core-plumbing` worktree 釋放 main 後，由這個 CLI 做 admin-squash merge：
 
 ```bash
-gh pr create --base main --head docs/wave-8-plan
+gh pr create --base main --head docs/2026-07-10-wave-8-plan
 gh pr merge --squash --admin --delete-branch
 ```
 
 ## 第二步：每個事件開新分支 + PR 到 main
 
-禁止在 docs/wave-8-plan 分支上寫程式碼。每個事件開新分支，從 `origin/main` 切出：
+禁止在 docs/2026-07-10-wave-8-plan 分支上寫程式碼。每個事件開新分支，從 `origin/main` 切出：
 
 ```bash
 git fetch origin main
@@ -77,7 +77,7 @@ gh pr merge --squash --admin --delete-branch
 如果中途發現某個事件的設計需要大改：
 1. 在當前 PR branch 上 commit 修正
 2. 不要合併未通過 review 的版本
-3. 若錯誤跨多個 PR 已合併：在 `docs/archive/wave-8-plan.md` 加「修訂紀錄」段落，開新的 fix PR
+3. 若錯誤跨多個 PR 已合併：在 `docs/archive/2026-07-10-wave-8-plan.md` 加「修訂紀錄」段落，開新的 fix PR
 
 ## 第一個事件開工順序（建議）
 
@@ -103,9 +103,9 @@ Wave 8.10: frontend 整合測試 + docs 收尾
 # 1. 確認目前狀態
 git status
 git log --oneline -5
-git diff docs/archive/wave-8-plan.md | head -100
+git diff docs/archive/2026-07-10-wave-8-plan.md | head -100
 
-# 2. 照「第一步」commit + push docs/archive/wave-8-plan 修正
+# 2. 照「第一步」commit + push docs/archive/2026-07-10-wave-8-plan 修正
 # 3. 然後：
 git fetch origin main
 git switch -c feat/wave-8-risk-gate-rejected origin/main
@@ -115,8 +115,8 @@ git switch -c feat/wave-8-risk-gate-rejected origin/main
 ## 不要做的事
 
 - ❌ 不要把 9 個事件的程式碼塞同一個 PR
-- ❌ 不要基於 docs/wave-8-plan 分支開新分支（要從 origin/main）
-- ❌ 不要修改 `docs/archive/wave-8-plan.md` 之外的 docs/ 檔案
+- ❌ 不要基於 docs/2026-07-10-wave-8-plan 分支開新分支（要從 origin/main）
+- ❌ 不要修改 `docs/archive/2026-07-10-wave-8-plan.md` 之外的 docs/ 檔案
 - ❌ 不要重新生成整套 Wave 8 plan
 - ❌ 不要動 internal/llm/、internal/llm_annotator/、internal/narrative/、internal/spawning/、internal/orchestrator/
 - ❌ 不要動 cmd/atlas/main.go 的 provider 區段
@@ -137,6 +137,6 @@ grep -n "type RiskGate" internal/risk/gate.go
 
 請輸出：
 1. `git status` 結果
-2. `docs/archive/wave-8-plan.md` 的 diff 摘要
+2. `docs/archive/2026-07-10-wave-8-plan.md` 的 diff 摘要
 3. 你建議的第一個事件開工順序
 4. 是否有額外的 plan 修正需要在合併前處理

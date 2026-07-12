@@ -247,7 +247,7 @@ data/
 cat docs/script_usage_guide.md
 
 # 協議文件
-cat docs/openclaw-protocol.md
+cat docs/2026-06-15-openclaw-protocol.md
 ```
 
 ---

@@ -6,11 +6,11 @@
 
 這些文件記錄了 atlas-go 開發過程中的階段性文檔（Phase 2-5），包含架構決策、實作記錄、協定說明等。
 
-- `phase2-implementation.md` ~ `phase5-architecture.md` — 各階段實作與架構記錄
-- `openclaw-protocol*.md` — OpenClaw 協定說明
+- `2026-06-15-phase2-implementation.md` ~ `2026-06-15-phase5-architecture.md` — 各階段實作與架構記錄
+- `2026-06-15-openclaw-protocol*.md` — OpenClaw 協定說明
 - `experiment-*.md` — 實驗相關報告
-- `COMPLETION_SUMMARY.md` — 階段完成摘要
-- 2026-06-25 搬移的歷史文件：`FIN_SKILLS_GAP_ANALYSIS.md`、`alert-frontend-audit-report.md`、`alert_monitoring_audit_report.md`、`risk_audit_report_2026-05.md`、`portfolio_frontend_audit_report_2026-05.md`、`repair-plan.md`、`ui_optimization_plan.md`、`warmup_auto_evolution_design.md`、`warmup_auto_evolution_progress.md`、`warmup_auto_evolution_todo.md`、`wave-8-plan.md`、`investor-repurposing-audit.md`、`live-mode-us-market-audit.md`、`GATEWAY_MIGRATION_TRACKING.md`
+- `2026-06-15-completion-summary.md` — 階段完成摘要
+- 2026-06-25 搬移的歷史文件：`2026-06-26-fin-skills-gap-analysis.md`、`2026-06-26-alert-frontend-audit-report.md`、`2026-06-26-alert-monitoring-audit-report.md`、`2026-06-26-risk-audit-report-2026-05.md`、`2026-06-26-portfolio-frontend-audit-report-2026-05.md`、`2026-06-26-repair-plan.md`、`2026-07-08-ui-optimization-plan.md`、`2026-06-26-warmup-auto-evolution-design.md`、`2026-06-26-warmup-auto-evolution-progress.md`、`2026-06-26-warmup-auto-evolution-todo.md`、`2026-07-10-wave-8-plan.md`、`2026-06-26-investor-repurposing-audit.md`、`2026-06-26-live-mode-us-market-audit.md`、`2026-06-26-gateway-migration-tracking.md`
 
 ## 注意
 
