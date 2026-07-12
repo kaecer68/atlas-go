@@ -10,7 +10,10 @@ import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
 import { renderTooltip } from '../components/tooltip.js';
 import { renderEventCalendar } from '../components/event-calendar.js';
-import { fmtSignedPct, fmtDrawdown, riskLevelLabel, formatNumber, formatSigned, fmtCurrency, fmtLargeNumber } from '../shared/format-metric.js';
+import {
+  riskLevelLabel,
+  fmtSafeSigned, fmtSafeNumber, fmtSafeSignedPct, fmtSafePct, fmtSafeDrawdown, fmtSafeCurrency, fmtSafeLargeNumber,
+} from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
 import { initOnboarding } from '../components/onboarding.js';
@@ -36,7 +39,7 @@ function animateValue(el, target, suffix = '', duration = 800) {
   }
   const decimals = Number.isInteger(target) ? 0 : 1;
   if (prefersReducedMotion()) {
-    el.textContent = formatNumber(target, { decimals, suffix });
+    el.textContent = fmtSafeNumber(target, { decimals, suffix });
     return;
   }
   const start = 0;
@@ -44,7 +47,7 @@ function animateValue(el, target, suffix = '', duration = 800) {
   function step(now) {
     const progress = Math.min((now - startTime) / duration, 1);
     const current = start + (target - start) * (progress * (2 - progress));
-    el.textContent = formatNumber(current, { decimals, suffix });
+    el.textContent = fmtSafeNumber(current, { decimals, suffix });
     if (progress < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -296,12 +299,12 @@ function renderTodaySummary(macro, stress, pipeline, events) {
     const dirTone = rec === '偏多' ? 'bullish' : rec === '偏空' ? 'bearish' : 'neutral';
     const dirLabel = rec === '偏多' ? '↑偏多' : rec === '偏空' ? '↓偏空' : '→觀望';
     const stressScoreVal = pointValue(stress, 'score');
-    const stressVal = formatNumber(stressScoreVal, { decimals: 0 });
+    const stressVal = fmtSafeNumber(stressScoreVal, { decimals: 0 });
     const stressLabel = stressVal;
     const foreignValue = macro ? pointValue(macro, 'foreign_investor_net') : null;
-    const foreignLabel = foreignValue !== null ? formatSigned(foreignValue, { decimals: 1, suffix: ' 億', forceSign: true }) : '—';
+    const foreignLabel = fmtSafeSigned(foreignValue, { decimals: 1, suffix: ' 億', forceSign: true });
     const taiexVal = macro ? pointValue(macro, 'taiex') : null;
-    const taiexLabel = taiexVal !== null ? formatNumber(taiexVal) : '—';
+    const taiexLabel = fmtSafeNumber(taiexVal);
 
     indicatorsEl.innerHTML = [
       `<div class="home-today-indicator home-today-indicator--${dirTone}" title="今日建議方向">${dirLabel}</div>`,
@@ -339,7 +342,7 @@ function pointChange(obj, key) {
 
 // Format annualized volatility (decimal, e.g. 0.18) as percentage (e.g. "18.0%").
 function formatVolatility(val) {
-  return formatNumber(val, { decimals: 1, suffix: '%', percent: true });
+  return fmtSafeNumber(val, { decimals: 1, suffix: '%', percent: true });
 }
 
 // Tone mapping for volatility:
@@ -374,11 +377,11 @@ function renderMarketPulse(macro, stress) {
 
   // Foreign investor — values are absolute net buy/sell in 億元, not ratios.
   const foreign = pointValue(macro, 'foreign_investor_net');
-  const foreignText = foreign !== null ? formatSigned(foreign, { decimals: 1, suffix: ' 億', forceSign: true }) : '—';
+  const foreignText = fmtSafeSigned(foreign, { decimals: 1, suffix: ' 億', forceSign: true });
   const fundVal = pointValue(macro, 'domestic_fund_net');
-  const fundText = fundVal !== null ? formatSigned(fundVal, { decimals: 1, suffix: ' 億', forceSign: true }) : '—';
+  const fundText = fmtSafeSigned(fundVal, { decimals: 1, suffix: ' 億', forceSign: true });
   const dealerVal = pointValue(macro, 'dealer_net');
-  const dealerText = dealerVal !== null ? formatSigned(dealerVal, { decimals: 1, suffix: ' 億', forceSign: true }) : '—';
+  const dealerText = fmtSafeSigned(dealerVal, { decimals: 1, suffix: ' 億', forceSign: true });
 
   // Stress
   const stressScore = pointValue(stress, 'score');
@@ -400,19 +403,19 @@ function renderMarketPulse(macro, stress) {
   const vixVal = cmField(macro, 'vix');
   const marginVal = pointValue(macro, 'retail_margin_balance');
   const retailChange = pointChange(macro, 'retail_margin_balance');
-  const retailText = retailChange !== null
-    ? (retailChange >= 0 ? '偏多 ' : '偏空 ') + fmtSignedPct(retailChange, 0)
+  const retailText = retailChange !== null && !Number.isNaN(retailChange)
+    ? (retailChange >= 0 ? '偏多 ' : '偏空 ') + fmtSafeSignedPct(retailChange, 0)
     : '—';
 
   const cards = [
-    metricCard({ id: 'market-taiwan', label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high disclosure-tier-core' }),
+    metricCard({ id: 'market-taiwan', label: '大盤', value: trend.value, delta: taiexChange !== null ? fmtSafeSignedPct(taiexChange) : null, tone: trend.tone, tooltip: '加權指數近期漲跌幅。', extraClasses: 'card-priority-high disclosure-tier-core' }),
     metricCard({ id: 'market-foreign', label: '外資', value: foreignText, tone: foreign > 0 ? 'positive' : foreign < 0 ? 'negative' : 'neutral', tooltip: '外資近一交易日淨買賣超（億元）。', extraClasses: 'card-priority-high disclosure-tier-core' }),
-    metricCard({ id: 'market-tsm', label: 'TSM ADR', value: tsmChange !== null ? fmtSignedPct(tsmChange) : '—', tone: tsmChange === null ? 'neutral' : tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'card-priority-high disclosure-tier-core' }),
-    metricCard({ id: 'market-sox', label: 'SOX 半導體', value: soxChange !== null ? fmtSignedPct(soxChange) : '—', tone: soxChange === null ? 'neutral' : soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
-    metricCard({ id: 'market-nasdaq', label: 'NASDAQ', value: ndxChange !== null ? fmtSignedPct(ndxChange) : '—', tone: ndxChange === null ? 'neutral' : ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'card-priority-medium disclosure-tier-advanced' }),
-    metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: formatNumber(usdtwd, { decimals: 2 }), tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
-    metricCard({ label: 'VIX', value: formatNumber(vixVal, { decimals: 1 }), tone: vixVal === null ? 'neutral' : vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
-    metricCard({ label: '融資餘額', value: marginVal !== null ? `${fmtLargeNumber(marginVal)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ id: 'market-tsm', label: 'TSM ADR', value: fmtSafeSignedPct(tsmChange), tone: tsmChange === null ? 'neutral' : tsmChange >= 0 ? 'positive' : 'negative', tooltip: '台積電 ADR 漲跌幅，領先台股現貨。', extraClasses: 'card-priority-high disclosure-tier-core' }),
+    metricCard({ id: 'market-sox', label: 'SOX 半導體', value: fmtSafeSignedPct(soxChange), tone: soxChange === null ? 'neutral' : soxChange >= 0 ? 'positive' : 'negative', tooltip: '費城半導體指數，台股科技股先行指標。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
+    metricCard({ id: 'market-nasdaq', label: 'NASDAQ', value: fmtSafeSignedPct(ndxChange), tone: ndxChange === null ? 'neutral' : ndxChange >= 0 ? 'positive' : 'negative', tooltip: '那斯達克指數漲跌幅。', extraClasses: 'card-priority-medium disclosure-tier-advanced' }),
+    metricCard({ id: 'market-usdtwd', label: 'USD/TWD', value: fmtSafeNumber(usdtwd, { decimals: 2 }), tone: 'neutral', tooltip: '美元兌台幣匯率，影響外資進出意願。', extraClasses: 'card-priority-medium disclosure-tier-core' }),
+    metricCard({ label: 'VIX', value: fmtSafeNumber(vixVal, { decimals: 1 }), tone: vixVal === null ? 'neutral' : vixVal >= 25 ? 'negative' : vixVal >= 20 ? 'warning' : 'positive', tooltip: '恐慌指數，>20 風險升高、>25 警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
+    metricCard({ label: '融資餘額', value: marginVal !== null && !Number.isNaN(marginVal) ? `${fmtSafeLargeNumber(marginVal)} 億` : '—', tone: 'neutral', tooltip: '散戶融資餘額（億元），反映市場熱度。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
     metricCard({ label: '投信動向', value: fundText, tone: fundVal > 0 ? 'positive' : fundVal < 0 ? 'negative' : 'neutral', tooltip: '投信近一交易日買賣超（億元）。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
     metricCard({ label: '自營商', value: dealerText, tone: dealerVal > 0 ? 'positive' : dealerVal < 0 ? 'negative' : 'neutral', tooltip: '自營商近一交易日買賣超（億元）。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
     metricCard({ label: '歷史波動', value: formatVolatility(pointValue(macro, 'historical_volatility')), tone: volatilityTone(pointValue(macro, 'historical_volatility')), tooltip: 'TAIEX 20 日年化波動率。<20% 低波動、20-30% 中等、>30% 高波動警戒。', extraClasses: 'card-priority-low disclosure-tier-advanced' }),
@@ -524,8 +527,8 @@ if (!el) return;
     const sent = typeof e.sentiment === 'number'
       ? (e.sentiment >= 0 ? 'bullish' : 'bearish')
       : 'bullish';
-    const conf = typeof e.confidence === 'number'
-      ? formatNumber(e.confidence * 100, { decimals: 0, suffix: '%' })
+    const conf = typeof e.confidence === 'number' && !Number.isNaN(e.confidence)
+      ? fmtSafeNumber(e.confidence * 100, { decimals: 0, suffix: '%' })
       : '—';
     const sev = e.severity || 'low';
     const explain = escapeHtml(explainFromEvent(e));
@@ -654,8 +657,8 @@ function renderRealPortfolio(container, data) {
   container.innerHTML = `
     <div class="kpi-grid">
       ${metricCard({ label: '總市值', value: fmtNTD(total), tone: 'neutral' })}
-      ${pnlMetricCard('損益', fmtSignedPct(pnlPct !== null ? pnlPct * 100 : null), pnl)}
-      ${metricCard({ label: '最大回撤', value: fmtDrawdown(drawdown), tone: 'neutral' })}
+      ${pnlMetricCard('損益', fmtSafeSignedPct(pnlPct !== null ? pnlPct * 100 : null), pnl)}
+      ${metricCard({ label: '最大回撤', value: fmtSafeDrawdown(drawdown), tone: 'neutral' })}
     </div>
     ${portfolioReassurance(pnl)}
     <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>
@@ -664,7 +667,7 @@ function renderRealPortfolio(container, data) {
 }
 
 function fmtNTD(value) {
-  return fmtCurrency(value, { decimals: 0, prefix: 'NT$ ' });
+  return fmtSafeCurrency(value, { decimals: 0, prefix: 'NT$ ' });
 }
 
 function renderDemoPortfolio(container) {
@@ -699,7 +702,7 @@ function renderDemoPortfolioWithData(container) {
     <div class="home-demo-badge">示範數據</div>
     <div class="kpi-grid">
       ${metricCard({ label: '示範總市值', value: fmtNTD(totalValue), tone: 'neutral', tooltip: 'DEMO 資料' })}
-      ${pnlMetricCard('損益', fmtSignedPct(pnlPct * 100), totalPnl)}
+      ${pnlMetricCard('損益', fmtSafeSignedPct(pnlPct * 100), totalPnl)}
       ${metricCard({ label: '最大回撤', value: '−8.5%', tone: 'neutral', tooltip: '示範組合歷史最大回撤' })}
       ${metricCard({ label: '夏普比率', value: '1.62', tone: 'neutral', tooltip: '風險調整後報酬' })}
       ${metricCard({ label: '勝率', value: '62%', tone: 'neutral', tooltip: '示範組合交易勝率' })}
@@ -717,8 +720,8 @@ function renderDemoPortfolioWithData(container) {
               <span class="home-demo-position__sector">${escapeHtml(p.sector)}</span>
             </div>
             <div class="home-demo-position__values">
-              <span class="home-demo-position__weight">${formatNumber(p.weight * 100, { decimals: 0 })}%</span>
-              <span class="home-demo-position__pnl ${pnl >= 0 ? 'home-pnl-profit' : 'home-pnl-loss'}">${fmtSignedPct(pnlPct * 100)}</span>
+              <span class="home-demo-position__weight">${fmtSafeNumber(p.weight * 100, { decimals: 0 })}%</span>
+              <span class="home-demo-position__pnl ${pnl >= 0 ? 'home-pnl-profit' : 'home-pnl-loss'}">${fmtSafeSignedPct(pnlPct * 100)}</span>
             </div>
           </div>
         `;
