@@ -248,3 +248,4 @@
 | `prism_get_training_results` | PRISM cohort 訓練結果 |
 
 ---
+
