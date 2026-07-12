@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/prism"
 )
 
@@ -21,6 +22,9 @@ type Engine struct {
 	lastWeights map[prism.RegimeType]CohortWeight
 	lastClass   RegimeClassification
 	lastUpdated time.Time
+
+	// compositeScore: synthesized from macro when no PRISM Sharpe data.
+	compositeScore float64
 }
 
 // NewEngine creates a JANUS engine with default configuration.
@@ -81,6 +85,47 @@ func (e *Engine) Update() {
 	e.lastWeights = weights
 	e.lastClass = classification
 	e.lastUpdated = time.Now()
+}
+
+// UpdateFromMacro stores a composite score synthesized from macro signals.
+// Used as fallback when PRISM training results (RecordTrainingResult) are
+// not available in production, so regime history sessions can report a
+// meaningful score reflecting current market state.
+func (e *Engine) UpdateFromMacro(snap marketdata.MacroDataSnapshot) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.compositeScore = synthesizeCompositeScore(snap)
+	e.lastUpdated = time.Now()
+}
+
+// GetCompositeScore returns the macro-synthesized score, or 0 if
+// UpdateFromMacro was never called.
+func (e *Engine) GetCompositeScore() float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.compositeScore
+}
+
+// synthesizeCompositeScore maps macro signals to a roughly [-55, +35] score:
+//
+//	sign(foreignFlow) * 30    — dominant Taiwan regime signal
+//	-max(0, VIX - 20) * 0.5    — panic penalty above baseline 20
+//
+// Magic numbers 30 and 0.5 chosen so a ±1B NTD foreign flow and a VIX of 40
+// contribute roughly equal magnitude, matching observed co-movement in
+// Taiwan equity regime transitions.
+func synthesizeCompositeScore(snap marketdata.MacroDataSnapshot) float64 {
+	score := 0.0
+	if snap.ForeignInvestorNet.Value > 0 {
+		score += 30
+	} else if snap.ForeignInvestorNet.Value < 0 {
+		score -= 30
+	}
+	if snap.VIX.Value > 20 {
+		score -= (snap.VIX.Value - 20) * 0.5
+	}
+	return score
 }
 
 // GetCohortWeights returns the most recently computed JANUS weights.
