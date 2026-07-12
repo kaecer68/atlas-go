@@ -1,5 +1,5 @@
-import { fmtPct, fmtInt } from '../shared/utils.js';
-import { formatNumber } from '../shared/format-metric.js';
+import { fmtInt } from '../shared/utils.js';
+import { fmtSafeNumber, fmtSafePct, fmtSafeDrawdown } from '../shared/format-metric.js';
 
 export async function renderRiskPanel(container, getJSON) {
   // 1. 讀取 portfolio-state 取得 current_drawdown, concentration_ratio
@@ -34,7 +34,7 @@ export async function renderRiskPanel(container, getJSON) {
         else if (v > 0.7) color = 'var(--color-danger)';
         else if (v > 0.4) color = 'var(--warn)';
         else if (v < 0) color = 'var(--color-success)';
-        return `<td class="corr-cell" style="color:${color}">${formatNumber(v, { decimals: 2 })}</td>`;
+        return `<td class="corr-cell" style="color:${color}">${fmtSafeNumber(v, { decimals: 2 })}</td>`;
       }).join('');
       return `<tr><td class="corr-header">${labels[i]}</td>${cells}</tr>`;
     }).join('');
@@ -45,10 +45,10 @@ export async function renderRiskPanel(container, getJSON) {
     <div class="panel-content">
       <div class="section-title">風險指標</div>
       <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-        <div class="kpi-card"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--color-danger)">${fmtPct(dd)}</div></div>
-        <div class="kpi-card"><div class="kpi-label">持倉集中度</div><div class="kpi-value">${fmtPct(conc)}</div><div class="kpi-hint">HHI 指數</div></div>
+        <div class="kpi-card"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--color-danger)">${fmtSafeDrawdown(dd)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">持倉集中度</div><div class="kpi-value">${fmtSafePct(conc)}</div><div class="kpi-hint">HHI 指數</div></div>
         <div class="kpi-card"><div class="kpi-label">部位數</div><div class="kpi-value">${fmtInt(state.positions_count)}</div></div>
-        <div class="kpi-card"><div class="kpi-label">槓桿率</div><div class="kpi-value">${fmtPct(leverage)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">槓桿率</div><div class="kpi-value">${fmtSafePct(leverage)}</div></div>
       </div>
       ${matrixHtml}
     </div>`;

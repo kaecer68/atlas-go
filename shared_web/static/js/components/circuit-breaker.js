@@ -1,4 +1,4 @@
-import { formatNumber } from '../shared/format-metric.js';
+import { fmtSafeNumber } from '../shared/format-metric.js';
 
 export class CircuitBreakerPanel {
     constructor(containerId) {
@@ -128,7 +128,7 @@ export class CircuitBreakerPanel {
         if (this.intradayPeak) {
             if (data.intraday_peak !== undefined && data.day_start_value !== undefined && data.day_start_value > 0) {
                 const drawdown = ((data.intraday_peak - data.day_start_value) / data.day_start_value * 100);
-                this.intradayPeak.textContent = formatNumber(drawdown, { decimals: 2, suffix: '%' });
+                this.intradayPeak.textContent = fmtSafeNumber(drawdown, { decimals: 2, suffix: '%' });
             } else if (state === 'normal') {
                 this.intradayPeak.textContent = '—';
             } else {

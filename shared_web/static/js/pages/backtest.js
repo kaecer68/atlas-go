@@ -1,7 +1,7 @@
 // Backtest rendering module
 import { getJSON, postJSON, notify, escapeHtml, formatDate, renderEmptyState } from '../shared/app-utils.js';
 import { agentName, stockName } from '../names.js';
-import { formatNumber, fmtPct, fmtSignedPct } from '../shared/format-metric.js';
+import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct } from '../shared/format-metric.js';
 
 export function initBacktestDates() {
   const today = new Date();
@@ -220,7 +220,7 @@ export function renderBacktestSignals(data) {
     return;
   }
 
-  const fmtBacktestPct = v => fmtPct(v, 1);
+  const fmtBacktestPct = v => fmtSafePct(v, 1);
   const active = Array.isArray(data.active_signals) ? data.active_signals : [];
   const signalBadges = active.length
     ? active.map(s => `<span class="badge" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)">${escapeHtml(String(s))}</span>`).join(' ')
@@ -242,11 +242,11 @@ export function renderBacktestSignals(data) {
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">短期 Sharpe</div>
-        <div class="kpi-value" style="font-size:20px">${formatNumber(data.sharpe_short, { decimals: 2 })}</div>
+        <div class="kpi-value" style="font-size:20px">${fmtSafeNumber(data.sharpe_short, { decimals: 2 })}</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">長期 Sharpe</div>
-        <div class="kpi-value" style="font-size:20px">${formatNumber(data.sharpe_long, { decimals: 2 })}</div>
+        <div class="kpi-value" style="font-size:20px">${fmtSafeNumber(data.sharpe_long, { decimals: 2 })}</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">回撤 %</div>
@@ -277,9 +277,9 @@ export function renderForecastVsRealityTable(data) {
       <td style="padding:4px 8px;font-size:12px">${escapeHtml(stockName(p.symbol) || '—')}</td>
       <td style="padding:4px 8px;font-size:12px">${escapeHtml(agentName(p.agent_id) || p.agent_id || '—')}</td>
       <td style="padding:4px 8px;font-size:12px;text-align:center">${escapeHtml(p.side || '—')}</td>
-      <td style="padding:4px 8px;font-size:12px;text-align:right">${formatNumber(p.conviction, { decimals: 1 })}</td>
-      <td style="padding:4px 8px;font-size:12px;text-align:right">${formatNumber(p.target_price, { decimals: 2 })}</td>
-      <td style="padding:4px 8px;font-size:12px;text-align:right" class="${retCls}">${p.forward_return != null ? fmtSignedPct(p.forward_return * 100, 1) : '—'}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right">${fmtSafeNumber(p.conviction, { decimals: 1 })}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right">${fmtSafeNumber(p.target_price, { decimals: 2 })}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right" class="${retCls}">${fmtSafeSignedPct(p.forward_return != null ? p.forward_return * 100 : null, 1)}</td>
       <td style="padding:4px 8px;font-size:12px;text-align:center"><span class="badge ${hitCls}">${p.hit === true ? '命中' : (p.hit === false ? '未命中' : '—')}</span></td>
       <td style="padding:4px 8px;font-size:12px;text-align:center">${p.passed_guards === true ? '✓' : (p.passed_guards === false ? '✕' : '—')}</td>
       <td style="padding:4px 8px;font-size:12px">${p.recorded_at ? formatDate(p.recorded_at) : '—'}</td>

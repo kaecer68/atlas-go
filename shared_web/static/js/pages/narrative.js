@@ -1,8 +1,8 @@
 import { stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName, confidenceSourceName, severityName, statusName } from '../names.js';
 import { narrativeThemeLabel } from '../shared/constants.js';
 import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
-import { escapeHtml, fmtFloat, fmtPct, fmtInt } from '../shared/utils.js';
-import { formatNumber, formatMaxDrawdown, fmtSignedPct, formatSigned } from '../shared/format-metric.js';
+import { escapeHtml, fmtInt } from '../shared/utils.js';
+import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeSigned } from '../shared/format-metric.js';
 
 /**
  * 包裝 renderEmptyState，附加可執行的行動按鈕。
@@ -99,7 +99,7 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const eventList = (events && events.events) || [];
   const sortedEvents = sortNarrativeEvents(eventList.slice());
   const topEvent = sortedEvents[0];
-  const stressScore = formatNumber(stress && stress.score, { decimals: 1 });
+  const stressScore = fmtSafeNumber(stress && stress.score, { decimals: 1 });
   const sLabel = stress ? stressLabel(stress.regime || '-') : '-';
   const stressColor = stress && stress.regime === 'crisis' ? 'var(--color-danger)' : (stress && stress.regime === 'high' ? 'var(--warn)' : 'var(--color-success)');
 
@@ -229,8 +229,8 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       html += '<table><thead><tr><th>指標</th><th>數值</th><th>日變動%</th></tr></thead><tbody>' +
         rows.map(([name, pt]) => {
           if (!pt) return '';
-          const val = formatNumber(pt.value, { decimals: 3 });
-          const chg = fmtSignedPct(pt.change_pct, 2);
+          const val = fmtSafeNumber(pt.value, { decimals: 3 });
+          const chg = fmtSafeSignedPct(pt.change_pct, 2);
           const cls = pt.change_pct > 0 ? 'up' : (pt.change_pct < 0 ? 'down' : '');
           return `<tr><td>${name}</td><td>${val}</td><td class="${cls}">${chg}</td></tr>`;
         }).join('') + '</tbody></table>';
@@ -252,7 +252,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         html += '<table><thead><tr><th>法人</th><th>淨買超(億)</th></tr></thead><tbody>' +
           capitalRows.map(([name, pt]) => {
             if (!pt) return '';
-            const val = formatNumber(pt.value, { decimals: 2 });
+            const val = fmtSafeNumber(pt.value, { decimals: 2 });
             const cls = pt.value > 0 ? 'up' : (pt.value < 0 ? 'down' : '');
             return `<tr><td>${name}</td><td class="${cls}">${val}</td></tr>`;
           }).join('') + '</tbody></table>';
@@ -272,7 +272,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     stressEl.classList.remove('loading');
     if (!stress) { stressEl.innerHTML = renderActionEmptyState('無可用壓力資料', '執行回測或模擬後將顯示壓力測試結果。', [{label: '執行模擬', page: 'pipeline'}]); }
     else {
-      const score = formatNumber(stress && stress.score, { decimals: 1 });
+      const score = fmtSafeNumber(stress && stress.score, { decimals: 1 });
       const sLabel = stressLabel(stress.regime || '-');
       const regimeColor = stress.regime === 'crisis' ? 'var(--color-danger)' : (stress.regime === 'high' ? 'var(--warn)' : 'var(--color-success)');
       const comps = stress.components || {};
@@ -283,7 +283,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       html += `<table><thead><tr><th>子項</th><th>壓力貢獻 <span class="cursor-pointer text-accent" data-help="<p><strong>分數代表什麼？</strong></p><p>外商出逃指數由六個因子加權構成。每個子項的分數代表該因子對「外商撤離台灣」這個現象的貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>分數越高</strong>：該因子越可能導致外商賣超台股（例如美元走強→外商匯出獲利、VIX飆升→全球避險情緒）。</li><li><strong>分數為 0</strong>：該因子目前沒有施壓（例如外商買超時，外商流向因子為 0）。</li><li><strong>所有子項皆為正值</strong>：指數只累加壓力，不扣除「助力」。這是單向指標。</li></ul><p><strong>為什麼是單向指標？</strong><br>因為外商買超時，系統不會顯示「負壓力」，而是讓總分維持低位（綠燈）。這樣設計是為了突出「危險訊號」，而非平衡呈現多空。</p><p><strong>總分區間意義：</strong><br>• 0-29分（綠燈）：外商流出壓力小，資金面寬鬆<br>• 30-49分（黃燈）：外商開始流出，注意波動<br>• 50-69分（橙燈）：外商明顯出逃，台股下跌機率高<br>• 70-100分（紅燈）：外商大量出逃，系統性風險高</p>" data-title="外商出逃指數分數說明">ℹ️</span></th></tr></thead><tbody>`;
       const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險', oil: '原油價格衝擊', gold: '黃金避險需求' };
       for (const k of Object.keys(comps)) {
-        html += `<tr><td>${names[k] || k}</td><td>${formatNumber(comps[k], { decimals: 2 })}</td></tr>`;
+        html += `<tr><td>${names[k] || k}</td><td>${fmtSafeNumber(comps[k], { decimals: 2 })}</td></tr>`;
       }
       html += '</tbody></table>';
       stressEl.innerHTML = html;
@@ -345,14 +345,14 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           };
           const sdItems = Object.entries(e.source_data).map(([k, v]) => {
             const label = keyMap[k] || k;
-            const val = typeof v === 'number' ? formatSigned(v, { decimals: 2, forceSign: true }) : v;
+            const val = typeof v === 'number' ? fmtSafeSigned(v, { decimals: 2, forceSign: true }) : v;
             return `${label}: ${val}`;
           }).join(' · ');
           sourceDataHtml = `<div class="text-muted text-sm mt-xs" style="font-size:11px">觸發條件：${escapeHtml(sdItems)}</div>`;
         }
         return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:var(--panel-l2);border-radius:8px">
           <div class="font-bold">${escapeHtml(narrativeThemeLabel(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
-          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${fmtPct(e.confidence)} · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
+          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${fmtSafePct(e.confidence)} · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
           <div class="text-muted text-sm mt-xs">資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)} · 信心來源：${escapeHtml(cs)}</div>
           ${sourceDataHtml}
           ${e.explanation ? `<details class="mt-sm">
@@ -377,7 +377,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       chainsEl.innerHTML = list.map(c => `
         <div style="margin:12px 0;padding:12px;background:var(--panel-l2);border-radius:10px;border:1px solid var(--border)">
           <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--text)">${escapeHtml(templateName(c.template_id))}</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">匹配分數 <span style="color:var(--accent);font-weight:600">${formatNumber(c.score, { decimals: 3 })}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">匹配分數 <span style="color:var(--accent);font-weight:600">${fmtSafeNumber(c.score, { decimals: 3 })}</span></div>
           ${(c.favored_sectors || []).length || (c.avoided_sectors || []).length ? `
             <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
               ${(c.favored_sectors || []).map(s => '<span class="badge ok">+ ' + escapeHtml(sectorName(s) || s) + '</span>').join('')}
@@ -387,7 +387,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           ${(c.steps || []).map((s, i) => {
             const impactVal = typeof s.impact === 'number' && Number.isFinite(s.impact) ? s.impact : null;
             const impClass = impactVal != null && impactVal > 0 ? 'positive' : (impactVal != null && impactVal < 0 ? 'negative' : '');
-            const impLabel = impactVal != null ? formatSigned(impactVal, { decimals: 0, forceSign: true }) : '—';
+            const impLabel = impactVal != null ? fmtSafeSigned(impactVal, { decimals: 0, forceSign: true }) : '—';
             const affected = (s.affected || []).map(a => `<span class="sector-tag">${escapeHtml(sectorName(a) || a)}</span>`).join('');
             return `<div class="chain-step">
               <div style="display:flex;align-items:center;gap:8px">
@@ -412,7 +412,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       modelsEl.innerHTML = list.map((m, idx) => {
         const w = m.weight || 0;
         const e = m.recent_error || 0;
-        const weightPct = formatNumber(w, { percent: true, decimals: 1, suffix: '%' });
+        const weightPct = fmtSafeNumber(w, { percent: true, decimals: 1, suffix: '%' });
         const weightColor = w >= 0.5 ? 'var(--color-success)' : (w >= 0.25 ? 'var(--color-warning)' : 'var(--color-danger)');
         const errColor = e <= 0.3 ? 'var(--color-success)' : (e <= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)');
         const errText = e <= 0.3 ? '優秀' : (e <= 0.5 ? '一般' : '偏高');
@@ -420,7 +420,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <div class="weight-panel" style="border-left-color:${weightColor}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
             <div style="font-weight:700;font-size:15px">${escapeHtml(modelName(m.name))}</div>
-            <div style="font-size:12px;color:var(--muted);white-space:nowrap">誤差 <span style="color:${errColor};font-weight:700">${formatNumber(m.recent_error, { percent: true, decimals: 1, suffix: '%' })} ${errText}</span></div>
+            <div style="font-size:12px;color:var(--muted);white-space:nowrap">誤差 <span style="color:${errColor};font-weight:700">${fmtSafeNumber(m.recent_error, { percent: true, decimals: 1, suffix: '%' })} ${errText}</span></div>
           </div>
           <div style="margin:8px 0">
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
@@ -428,16 +428,16 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
               <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
                 <div style="width:${weightPct}%;height:100%;background:${weightColor}"></div>
               </div>
-              <span class="min-w-40 text-right">${fmtFloat(m.weight)}</span>
+              <span class="min-w-40 text-right">${fmtSafeNumber(m.weight, { decimals: 2, useGrouping: true })}</span>
             </div>
           </div>
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>歷史命中率</span>
-            <span style="color:${typeof m.hit_rate === 'number' && Number.isFinite(m.hit_rate) ? ((m.hit_rate >= 0.7 ? 'var(--color-success)' : (m.hit_rate >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)'))) : 'var(--muted)'};font-weight:700">${fmtPct(m.hit_rate)}</span>
+            <span style="color:${typeof m.hit_rate === 'number' && Number.isFinite(m.hit_rate) ? ((m.hit_rate >= 0.7 ? 'var(--color-success)' : (m.hit_rate >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)'))) : 'var(--muted)'};font-weight:700">${fmtSafePct(m.hit_rate)}</span>
           </div>
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>近期預測報酬差</span>
-            <span style="color:${typeof m.recent_prediction === 'number' && Number.isFinite(m.recent_prediction) ? (m.recent_prediction > 0 ? 'var(--up)' : (m.recent_prediction < 0 ? 'var(--down)' : 'var(--muted)')) : 'var(--muted)'};font-weight:700">${fmtFloat(m.recent_prediction)}</span>
+            <span style="color:${typeof m.recent_prediction === 'number' && Number.isFinite(m.recent_prediction) ? (m.recent_prediction > 0 ? 'var(--up)' : (m.recent_prediction < 0 ? 'var(--down)' : 'var(--muted)')) : 'var(--muted)'};font-weight:700">${fmtSafeNumber(m.recent_prediction, { decimals: 2, useGrouping: true })}</span>
           </div>
           <div class="text-muted text-sm mt-xs">${escapeHtml(m.description || '')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
@@ -465,7 +465,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <tbody>
           ${items.map((t, idx) => `<tr>
             <td><span style="font-weight:600;color:var(--text)">${escapeHtml(templateName(t.name))}</span></td>
-            <td><span style="font-weight:500;color:var(--color-success)">${fmtPct(t.historical_hit_rate)}</span></td>
+            <td><span style="font-weight:500;color:var(--color-success)">${fmtSafePct(t.historical_hit_rate)}</span></td>
             <td class="text-muted text-xs">${escapeHtml((t.source_references || []).join(', '))}</td>
             <td><button id="tmpl-btn-${idx}" onclick="toggleTemplateAccordion(${idx})" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
           </tr>
@@ -495,22 +495,22 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const shortChangeRaw = retailSentiment.short_change_pct;
       const compositeScoreRaw = retailSentiment.composite_sentiment;
 
-      const score = fmtFloat(sentimentScoreRaw);
-      const changeStr = fmtSignedPct(marginChangeRaw);
+      const score = fmtSafeNumber(sentimentScoreRaw, { decimals: 2, useGrouping: true });
+      const changeStr = fmtSafeSignedPct(marginChangeRaw);
       const changeClass = marginChangeRaw != null && marginChangeRaw >= 0 ? 'up' : 'down';
       const dataStatusBadge = hasValidData
         ? '<span class="badge ok">🟢 資料正常</span>'
         : '<span class="badge">🟡 資料待更新</span>';
 
       const marginPercentileValue = marginPercentileRaw != null ? marginPercentileRaw * 100 : null;
-      const marginPercentileStr = formatNumber(marginPercentileValue, { decimals: 0 });
-      const marginBalanceStr = formatNumber(marginBalanceRaw, { decimals: 0 });
+      const marginPercentileStr = fmtSafeNumber(marginPercentileValue, { decimals: 0 });
+      const marginBalanceStr = fmtSafeNumber(marginBalanceRaw, { decimals: 0 });
       const dayTradingRatioValue = dayTradingRatioRaw != null ? dayTradingRatioRaw * 100 : null;
-      const dayTradingRatioStr = formatNumber(dayTradingRatioValue, { decimals: 1, suffix: '%' });
-      const shortBalanceStr = formatNumber(shortBalanceRaw, { decimals: 0 });
-      const shortChangeStr = fmtSignedPct(shortChangeRaw);
+      const dayTradingRatioStr = fmtSafeNumber(dayTradingRatioValue, { decimals: 1, suffix: '%' });
+      const shortBalanceStr = fmtSafeNumber(shortBalanceRaw, { decimals: 0 });
+      const shortChangeStr = fmtSafeSignedPct(shortChangeRaw);
       const shortChangeClass = shortChangeRaw != null && shortChangeRaw >= 0 ? 'up' : 'down';
-      const compositeScore = fmtFloat(compositeScoreRaw);
+      const compositeScore = fmtSafeNumber(compositeScoreRaw, { decimals: 2, useGrouping: true });
 
       const sentimentHelp = `綜合融資餘額變化、當沖比率、散戶交易行為等指標計算出的散戶市場情緒指標。\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5（狂熱）：散戶過度樂觀，融資大增、當沖猖獗，市場可能接近短期頂部\\n• 0.0 ~ +0.5（偏多）：散戶積極參與，市場熱絡但尚未過熱\\n• -0.5 ~ 0.0（偏空）：散戶趨於保守，融資減少，市場觀望氣氛濃厚\\n• ＜-0.5（恐慌）：散戶極度悲觀，恐慌砍倉，歷史上常是階段性底部訊號\\n\\n當前數值：${score} — ${sentimentScoreRaw != null && sentimentScoreRaw > 0.5 ? '市場狂熱，建議減碼' : sentimentScoreRaw != null && sentimentScoreRaw > 0 ? '散戶偏多' : sentimentScoreRaw != null && sentimentScoreRaw > -0.5 ? '散戶偏空觀望' : '市場恐慌，可能接近底部'}`;
 
@@ -545,7 +545,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           ['零股交易失衡', ca.odd_lot_imbalance]
         ].map(function(r) {
           var raw = r[1];
-          var v = fmtFloat(raw);
+          var v = fmtSafeNumber(raw, { decimals: 2, useGrouping: true });
           var cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
           return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
         }).join('');
@@ -556,7 +556,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           ['ETF 申購分數', cc.etf_subscription_score]
         ].map(function(r) {
           var raw = r[1];
-          var v = fmtFloat(raw);
+          var v = fmtSafeNumber(raw, { decimals: 2, useGrouping: true });
           var cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
           return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
         }).join('');
@@ -573,15 +573,15 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
             </div>
             <div id="subIndicatorBody" style="display:none;padding:10px 12px;border-top:1px solid var(--border)">
               <div style="margin-bottom:10px">
-                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part A（40%）— 散戶情緒 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">A Score: ${formatNumber(ca.a_score, { decimals: 3 })}</span></div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part A（40%）— 散戶情緒 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">A Score: ${fmtSafeNumber(ca.a_score, { decimals: 3 })}</span></div>
                 <table style="width:100%;border-collapse:collapse">${aIndicatorRows}</table>
               </div>
               <div style="margin-bottom:10px">
-                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part C（25%）— 機構/衍生品流向 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">C Score: ${formatNumber(cc.c_score, { decimals: 3 })}</span></div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part C（25%）— 機構/衍生品流向 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">C Score: ${fmtSafeNumber(cc.c_score, { decimals: 3 })}</span></div>
                 <table style="width:100%;border-collapse:collapse">${cIndicatorRows}</table>
               </div>
               <div>
-                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part D — 事件調整 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">乘數: <span class="${dAdjClass}">${formatNumber(dAdj, { decimals: 3 })}</span></span></div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part D — 事件調整 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">乘數: <span class="${dAdjClass}">${fmtSafeNumber(dAdj, { decimals: 3 })}</span></span></div>
                 <div style="font-size:11px;color:var(--text)">${dEvents}</div>
               </div>
             </div>
@@ -646,14 +646,14 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     else {
       const rows = seasonal.expectations.map(e => {
         const hasCurrent = e.current_return !== null && e.current_return !== undefined;
-        const currentLabel = hasCurrent ? fmtSignedPct(e.current_return) : '—';
-        const gapLabel = hasCurrent ? fmtSignedPct(e.expectation_gap) : '—';
+        const currentLabel = hasCurrent ? fmtSafeSignedPct(e.current_return) : '—';
+        const gapLabel = hasCurrent ? fmtSafeSignedPct(e.expectation_gap) : '—';
         const statusBadge = !hasCurrent
           ? '<span class="badge">資料不足</span>'
           : e.already_priced_in
             ? '<span class="badge">已反應</span>'
             : '<span class="badge ok">有驚喜潛力</span>';
-        return `<tr><td>${escapeHtml(narrativeThemeLabel(e.theme))}</td><td>${fmtSignedPct(e.historical_avg_return)}</td><td>${currentLabel}</td><td>${gapLabel}</td><td>${statusBadge}</td></tr>`;
+        return `<tr><td>${escapeHtml(narrativeThemeLabel(e.theme))}</td><td>${fmtSafeSignedPct(e.historical_avg_return)}</td><td>${currentLabel}</td><td>${gapLabel}</td><td>${statusBadge}</td></tr>`;
       }).join('');
       seasonalEl.innerHTML = `<table><thead><tr><th>主題</th><th>歷史平均</th><th>當前報酬</th><th>預期差</th><th>狀態</th></tr></thead><tbody>${rows}</tbody></table>`;
     }

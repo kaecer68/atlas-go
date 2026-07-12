@@ -1,7 +1,7 @@
 // sparkline.js — Darwinian weight sparkline + equity curve + agent scoreboard
 // Standalone component, importable into dashboard.js or portfolio pages.
-import { fmtPct, fmtFloat, fmtInt, fmtNTD, getThemeColor } from '../shared/utils.js';
-import { formatNumber } from '../shared/format-metric.js';
+import { fmtInt, fmtNTD, getThemeColor } from '../shared/utils.js';
+import { fmtSafeNumber, fmtSafePct } from '../shared/format-metric.js';
 // formatNumber is used for canvas axis labels to avoid scattered toFixed() calls.
 import { pnlProfitColor, pnlLossColor, regimeColor, hexToRgba } from '../shared/color-tokens.js';
 
@@ -47,7 +47,7 @@ function renderEquityCurve(points) {
   ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.6); ctx.font = '10px system-ui'; ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + (chartH / 4) * i;
-    ctx.fillText(formatNumber(maxV - (range / 4) * i, { decimals: 0 }), pad.left - 8, y + 3);
+    ctx.fillText(fmtSafeNumber(maxV - (range / 4) * i, { decimals: 0 }), pad.left - 8, y + 3);
   }
 
   // Compute points
@@ -229,9 +229,9 @@ function renderAgentScoreboard(dw, agentNameFn) {
     }
     html += '<tr>';
     html += `<td>${nameFn(a.agent_id)}</td>`;
-    html += `<td>${fmtFloat(a.weight)}</td>`;
-    html += `<td style="color:${sharpeColor}">${fmtFloat(sharpe)}</td>`;
-    html += `<td>${fmtPct(a.hit_rate)}</td>`;
+    html += `<td>${fmtSafeNumber(a.weight, { decimals: 2, useGrouping: true })}</td>`;
+    html += `<td style="color:${sharpeColor}">${fmtSafeNumber(sharpe, { decimals: 2, useGrouping: true })}</td>`;
+    html += `<td>${fmtSafePct(a.hit_rate)}</td>`;
     html += `<td>${fmtInt(a.signal_count)}</td>`;
     html += '</tr>';
   }
@@ -586,7 +586,7 @@ export function renderRadarChart(containerId, metrics, labels) {
       const py = cy + Math.sin(a) * (radius * val);
       // If mouse near point
       if (Math.hypot(mx - px, my - py) < 15) {
-        html = `<strong>${labels[i]}</strong>: ${formatNumber(metrics[i], { percent: true, decimals: 1 })}`;
+        html = `<strong>${labels[i]}</strong>: ${fmtSafeNumber(metrics[i], { percent: true, decimals: 1 })}`;
         break;
       }
     }
@@ -660,7 +660,7 @@ export function renderRegimeVolumeChart(containerId, sessions, volumes = []) {
       const vol = volumes[i] || 0.5;
       let html = `<strong>${s.session_id}</strong><br/>`;
       html += `Regime: ${s.regime}<br/>`;
-      html += `Intensity: ${formatNumber(vol, { percent: true, decimals: 0, suffix: '%' })}`;
+      html += `Intensity: ${fmtSafeNumber(vol, { percent: true, decimals: 0, suffix: '%' })}`;
       showTooltip(e, html);
     } else {
       hideTooltip();

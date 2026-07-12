@@ -1,4 +1,4 @@
-import { formatNumber, fmtSignedPct } from '../shared/format-metric.js';
+import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 
 function isValidNumber(v) {
   return typeof v === 'number' && Number.isFinite(v);
@@ -11,8 +11,8 @@ export async function renderPnLAttribution(container, getJSON) {
     return;
   }
 
-  const fmtP = (v) => fmtSignedPct(v, 2);
-  const fmtF = (v) => formatNumber(v, { decimals: 4 });
+  const fmtP = (v) => fmtSafeSignedPct(v, 2);
+  const fmtF = (v) => fmtSafeNumber(v, { decimals: 4 });
 
   const agentRows = (data.agent_attribution || [])
     .sort((a, b) => (b.avg_return || 0) - (a.avg_return || 0))

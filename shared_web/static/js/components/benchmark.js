@@ -1,4 +1,4 @@
-import { fmtPct, fmtFloat } from '../shared/utils.js';
+import { fmtSafePct, fmtSafeNumber } from '../shared/format-metric.js';
 
 export async function renderBenchmarkComparison(container, getJSON) {
   const data = await getJSON('/api/dashboard/benchmark-comparison').catch(() => null);
@@ -13,14 +13,14 @@ export async function renderBenchmarkComparison(container, getJSON) {
   };
 
   const kpis = [
-    { label: '投組累積報酬', value: fmtPct(data.portfolio_return) },
-    { label: 'TAIEX 報酬', value: fmtPct(data.taiex_return) },
-    { label: '超額報酬', value: fmtPct(data.outperformance), cls: signedCls(data.outperformance) },
-    { label: 'Alpha', value: fmtPct(data.alpha), cls: signedCls(data.alpha) },
-    { label: 'Beta', value: fmtFloat(data.beta) },
-    { label: 'Tracking Error', value: fmtPct(data.tracking_error) },
-    { label: 'Sharpe Ratio', value: fmtFloat(data.sharpe_ratio) },
-    { label: 'Info Ratio', value: fmtFloat(data.info_ratio) },
+    { label: '投組累積報酬', value: fmtSafePct(data.portfolio_return) },
+    { label: 'TAIEX 報酬', value: fmtSafePct(data.taiex_return) },
+    { label: '超額報酬', value: fmtSafePct(data.outperformance), cls: signedCls(data.outperformance) },
+    { label: 'Alpha', value: fmtSafePct(data.alpha), cls: signedCls(data.alpha) },
+    { label: 'Beta', value: fmtSafeNumber(data.beta, { decimals: 2, useGrouping: true }) },
+    { label: 'Tracking Error', value: fmtSafePct(data.tracking_error) },
+    { label: 'Sharpe Ratio', value: fmtSafeNumber(data.sharpe_ratio, { decimals: 2, useGrouping: true }) },
+    { label: 'Info Ratio', value: fmtSafeNumber(data.info_ratio, { decimals: 2, useGrouping: true }) },
   ];
 
   const kpiCards = kpis.map(k =>
@@ -30,7 +30,7 @@ export async function renderBenchmarkComparison(container, getJSON) {
   const curve = data.equity_curve || [];
   const curveRows = curve.map(p => {
     const outCls = signedCls(p.outperf);
-    return `<tr><td>${p.label}</td><td style="text-align:right">${fmtPct(p.portfolio)}</td><td style="text-align:right">${fmtPct(p.benchmark)}</td><td style="text-align:right" class="${outCls}">${fmtPct(p.outperf)}</td></tr>`;
+    return `<tr><td>${p.label}</td><td style="text-align:right">${fmtSafePct(p.portfolio)}</td><td style="text-align:right">${fmtSafePct(p.benchmark)}</td><td style="text-align:right" class="${outCls}">${fmtSafePct(p.outperf)}</td></tr>`;
   }).join('');
 
   container.innerHTML = `
