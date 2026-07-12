@@ -90,10 +90,87 @@
       "type": "object"
     }
   },
+  "control_pause_agent": {
+    "name": "control_pause_agent",
+    "description": "Pause a specific agent (suspend its recommendations). Side-effect: persists in control store. Requires ATLAS_API_KEY.",
+    "inputSchema": {
+      "properties": {
+        "agent_id": {
+          "description": "agent identifier (required)",
+          "type": "string"
+        },
+        "operator": {
+          "description": "operator identifier (defaults to MCP server's authenticated identity)",
+          "type": "string"
+        },
+        "reason": {
+          "description": "human-readable reason for audit log",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id"
+      ],
+      "type": "object"
+    }
+  },
   "control_reject_recommendation": {
     "name": "control_reject_recommendation",
     "description": "Status of a reject-recommendation override (read-only state inspection).",
     "inputSchema": {
+      "type": "object"
+    }
+  },
+  "control_resume_agent": {
+    "name": "control_resume_agent",
+    "description": "Resume a previously-paused agent. Side-effect: removes pause override. Requires ATLAS_API_KEY.",
+    "inputSchema": {
+      "properties": {
+        "agent_id": {
+          "description": "agent identifier (required)",
+          "type": "string"
+        },
+        "operator": {
+          "description": "operator identifier (defaults to MCP server's authenticated identity)",
+          "type": "string"
+        },
+        "reason": {
+          "description": "human-readable reason for audit log",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id"
+      ],
+      "type": "object"
+    }
+  },
+  "control_sector_ban": {
+    "name": "control_sector_ban",
+    "description": "Ban a sector from new positions. Side-effect: applies sector override. Requires ATLAS_API_KEY.",
+    "inputSchema": {
+      "properties": {
+        "banned": {
+          "description": "true to apply ban, false to lift existing ban",
+          "type": "boolean"
+        },
+        "operator": {
+          "description": "operator identifier",
+          "type": "string"
+        },
+        "reason": {
+          "description": "human-readable reason for audit log",
+          "type": "string"
+        },
+        "sector": {
+          "description": "sector identifier (required)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sector",
+        "banned"
+      ],
       "type": "object"
     }
   },
@@ -206,6 +283,38 @@
       "properties": {
         "experiment_id": {
           "description": "the experiment id to judge",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_id"
+      ],
+      "type": "object"
+    }
+  },
+  "experiment_promote": {
+    "name": "experiment_promote",
+    "description": "Promote a candidate experiment to baseline. Side-effect: rewrites baseline policy. Requires ATLAS_API_KEY.",
+    "inputSchema": {
+      "properties": {
+        "experiment_id": {
+          "description": "the experiment id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_id"
+      ],
+      "type": "object"
+    }
+  },
+  "experiment_revert": {
+    "name": "experiment_revert",
+    "description": "Revert a candidate experiment (cancel promotion / restore prior baseline). Side-effect: rewrites baseline policy. Requires ATLAS_API_KEY.",
+    "inputSchema": {
+      "properties": {
+        "experiment_id": {
+          "description": "the experiment id",
           "type": "string"
         }
       },

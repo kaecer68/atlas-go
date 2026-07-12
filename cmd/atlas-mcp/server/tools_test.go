@@ -302,6 +302,87 @@ func TestHandleParametersGetSnapshots_ClampUpperBound(t *testing.T) {
 	}
 }
 
+// --- PR 3 write MCP tools ---------------------------------------------------
+
+func TestHandleNewWriteTools_HitCorrectBackendPath(t *testing.T) {
+	cases := []struct {
+		name   string
+		invoke func(s *server) error
+		want   string
+	}{
+		{"experiment_promote", func(s *server) error {
+			_, _, err := s.handleExperimentPromote(context.Background(), nil, experimentIDInput{ExperimentID: "exp-001"})
+			return err
+		}, "/api/experiment/promote"},
+		{"experiment_revert", func(s *server) error {
+			_, _, err := s.handleExperimentRevert(context.Background(), nil, experimentIDInput{ExperimentID: "exp-002"})
+			return err
+		}, "/api/experiment/revert"},
+		{"control_pause_agent", func(s *server) error {
+			_, _, err := s.handleControlPauseAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: "semi-desk-01", Reason: "sharpe regression", Operator: "ci-bot"})
+			return err
+		}, "/api/control/pause-agent"},
+		{"control_resume_agent", func(s *server) error {
+			_, _, err := s.handleControlResumeAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: "semi-desk-01"})
+			return err
+		}, "/api/control/resume-agent"},
+		{"control_sector_ban", func(s *server) error {
+			_, _, err := s.handleControlSectorBan(context.Background(), nil, controlSectorBanInput{Sector: "半導體", Banned: true, Reason: "valuation concern"})
+			return err
+		}, "/api/control/sector-ban"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, done := newTestHarness(t)
+			defer done()
+			rec.responseBody = []byte(`{}`)
+			if err := tc.invoke(s); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			if rec.path != tc.want {
+				t.Errorf("%s: path=%q want=%q", tc.name, rec.path, tc.want)
+			}
+		})
+	}
+}
+
+func TestHandleNewWriteTools_RejectEmptyIDs(t *testing.T) {
+	cases := []struct {
+		name   string
+		invoke func(s *server) error
+	}{
+		{"experiment_promote_empty", func(s *server) error {
+			_, _, err := s.handleExperimentPromote(context.Background(), nil, experimentIDInput{ExperimentID: ""})
+			return err
+		}},
+		{"experiment_revert_empty", func(s *server) error {
+			_, _, err := s.handleExperimentRevert(context.Background(), nil, experimentIDInput{ExperimentID: ""})
+			return err
+		}},
+		{"control_pause_agent_empty", func(s *server) error {
+			_, _, err := s.handleControlPauseAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: ""})
+			return err
+		}},
+		{"control_resume_agent_empty", func(s *server) error {
+			_, _, err := s.handleControlResumeAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: ""})
+			return err
+		}},
+		{"control_sector_ban_empty", func(s *server) error {
+			_, _, err := s.handleControlSectorBan(context.Background(), nil, controlSectorBanInput{Sector: ""})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, done := newTestHarness(t)
+			defer done()
+			if err := tc.invoke(s); err == nil {
+				t.Errorf("expected error for empty input, got nil")
+			}
+		})
+	}
+}
+
 // --- system_get_health --------------------------------------------------------
 
 func TestHandleSystemGetHealth_ParsesStatus(t *testing.T) {
