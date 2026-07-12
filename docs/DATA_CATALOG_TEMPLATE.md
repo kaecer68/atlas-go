@@ -319,4 +319,4 @@
 | `docs/DATA_NAMING_CONVENTION.md` | 檔案命名規則 |
 | `docs/DATA_MATURITY_STANDARD.md` | `_metadata.json` 格式 |
 | `docs/JSON_SCHEMA_STANDARD.md` | JSON Schema 定義標準 |
-| `docs/audit/P0.2_root_cause_analysis.md` | 根因分析 |
+| `docs/audit/2026-06-02-p0-2-root-cause-analysis.md` | 根因分析 |

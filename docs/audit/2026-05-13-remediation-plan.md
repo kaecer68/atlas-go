@@ -2,7 +2,7 @@
 
 **日期**: 2026-05-13（初版）→ 2026-05-22（更新）  
 **狀態**: 部分完成（見下表）  
-**原始違規數**: 97 處（清查報告見 `docs/audit/constitution_violations_2026-05-13.md`）  
+**原始違規數**: 97 處（清查報告見 `docs/audit/2026-05-13-constitution-violations.md`）  
 **目前憲法檢查**: 1 advisory 警告（`autobacktest/loop.go` — 已文件化為合法例外）
 
 ---

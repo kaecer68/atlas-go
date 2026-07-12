@@ -377,5 +377,5 @@ Repo 根目錄有兩個 env 模板:
 - `cmd/atlas/main.go:1690` — `runPrismWorker` daemon
 - `cmd/atlas/main.go:320` — `prismMgr.Start()`
 - `internal/monitoring/api/shared/handler.go:18` — `AuthMiddleware`(ATLAS_API_KEY 邏輯)
-- `docs/INCIDENTS/fubon-channel-recurring-failure-2026-06.md` — 之前的 fubon 事件(IPv4/IPv6 雙棧議題,跟本次無關)
+- `docs/INCIDENTS/2026-06-fubon-channel-recurring-failure.md` — 之前的 fubon 事件(IPv4/IPv6 雙棧議題,跟本次無關)
 - `docs/investigations/2026-06-fubonproxy-ipv4-uvloop.md` — 之前的 fubon-proxy 調查(uvloop 議題,跟本次無關)
