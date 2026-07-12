@@ -1,6 +1,6 @@
 ## 工具數量
 
-業務 102 + audit 4 + sampling/elicitation（0-2）= 106-108（編譯期 assert ∈ [106, 108]）
+業務 102 + audit 4 + sampling/elicitation（0-2）= 106-108（**基礎 106**, **+2** sampling/elicitation, 編譯期 assert ∈ [106, 108]）
 
 # atlas-mcp Tool Catalog
 
@@ -11,7 +11,7 @@
 
 ## 工具數量
 
-業務 102 + audit 4 = 106（**基礎 102**, **+2** sampling/elicitation, 編譯期 assert ∈ [106, 108]）
+業務 102 + audit 4 = 106（**基礎 102**, **+4** audit/sampling/elicitation, 編譯期 assert ∈ [102, 106]）
 
 
 ### Regime（1 個）
