@@ -26,7 +26,9 @@
 |---------|------|--------|
 | `ATLAS_WORK_DIR` | 工作目錄路徑 | `.` |
 | `ATLAS_STATE_DIR` | 狀態目錄路徑 | `data/state` |
+| `ATLAS_DATA_DIR` | 資料根目錄路徑（provider cache files 等寫入此目錄下的 `state/`） | `/app/data` |
 | `ATLAS_LEDGER_DIR` | Ledger 持久化目錄 | `data/state` |
+| `ATLAS_EXCHANGE_RATE_CACHE` | ExchangeRate provider 跨日 daily cache 檔案路徑（覆寫預設 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） | 空（未設定時用 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） |
 | `ATLAS_MIGRATIONS_PATH` | 資料庫遷移腳本路徑 | `sql/migrations` |
 | `ATLAS_SQLITE_PATH` | SQLite 資料庫路徑 | `data/state/atlas.db` |
 | `ATLAS_STORE_BACKEND` | 儲存後端 (`jsonl`/`sqlite`) | `jsonl` |
