@@ -1,6 +1,7 @@
 // Backtest rendering module
 import { getJSON, postJSON, notify, escapeHtml, formatDate, renderEmptyState } from '../shared/app-utils.js';
 import { agentName, stockName } from '../names.js';
+import { formatNumber, fmtPct, fmtSignedPct } from '../shared/format-metric.js';
 
 export function initBacktestDates() {
   const today = new Date();
@@ -219,7 +220,7 @@ export function renderBacktestSignals(data) {
     return;
   }
 
-  const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v * 100).toFixed(1) + '%' : '—';
+  const fmtBacktestPct = v => fmtPct(v, 1);
   const active = Array.isArray(data.active_signals) ? data.active_signals : [];
   const signalBadges = active.length
     ? active.map(s => `<span class="badge" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)">${escapeHtml(String(s))}</span>`).join(' ')
@@ -233,23 +234,23 @@ export function renderBacktestSignals(data) {
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">VaR 95</div>
-        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtPct(data.var_95)}</div>
+        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtBacktestPct(data.var_95)}</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">VaR 99</div>
-        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtPct(data.var_99)}</div>
+        <div class="kpi-value" style="color:var(--color-danger);font-size:20px">${fmtBacktestPct(data.var_99)}</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">短期 Sharpe</div>
-        <div class="kpi-value" style="font-size:20px">${data.sharpe_short != null ? data.sharpe_short.toFixed(2) : '—'}</div>
+        <div class="kpi-value" style="font-size:20px">${formatNumber(data.sharpe_short, { decimals: 2 })}</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">長期 Sharpe</div>
-        <div class="kpi-value" style="font-size:20px">${data.sharpe_long != null ? data.sharpe_long.toFixed(2) : '—'}</div>
+        <div class="kpi-value" style="font-size:20px">${formatNumber(data.sharpe_long, { decimals: 2 })}</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">回撤 %</div>
-        <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtPct(data.drawdown_pct)}</div>
+        <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtBacktestPct(data.drawdown_pct)}</div>
       </div>
     </div>
     <div style="font-size:12px;color:var(--muted)">活躍信號：${signalBadges}</div>
@@ -276,9 +277,9 @@ export function renderForecastVsRealityTable(data) {
       <td style="padding:4px 8px;font-size:12px">${escapeHtml(stockName(p.symbol) || '—')}</td>
       <td style="padding:4px 8px;font-size:12px">${escapeHtml(agentName(p.agent_id) || p.agent_id || '—')}</td>
       <td style="padding:4px 8px;font-size:12px;text-align:center">${escapeHtml(p.side || '—')}</td>
-      <td style="padding:4px 8px;font-size:12px;text-align:right">${p.conviction != null ? p.conviction.toFixed(1) : '—'}</td>
-      <td style="padding:4px 8px;font-size:12px;text-align:right">${p.target_price != null ? p.target_price.toFixed(2) : '—'}</td>
-      <td style="padding:4px 8px;font-size:12px;text-align:right" class="${retCls}">${p.forward_return != null ? (p.forward_return * 100).toFixed(1) + '%' : '—'}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right">${formatNumber(p.conviction, { decimals: 1 })}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right">${formatNumber(p.target_price, { decimals: 2 })}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:right" class="${retCls}">${p.forward_return != null ? fmtSignedPct(p.forward_return * 100, 1) : '—'}</td>
       <td style="padding:4px 8px;font-size:12px;text-align:center"><span class="badge ${hitCls}">${p.hit === true ? '命中' : (p.hit === false ? '未命中' : '—')}</span></td>
       <td style="padding:4px 8px;font-size:12px;text-align:center">${p.passed_guards === true ? '✓' : (p.passed_guards === false ? '✕' : '—')}</td>
       <td style="padding:4px 8px;font-size:12px">${p.recorded_at ? formatDate(p.recorded_at) : '—'}</td>

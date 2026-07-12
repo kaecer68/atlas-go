@@ -1,4 +1,5 @@
 import { silentGetJSON, notify } from '../shared/app-utils.js';
+import { formatNumber, fmtSignedPct } from '../shared/format-metric.js';
 
 export async function loadDataChannels() {
   const data = await silentGetJSON('/api/dashboard/data-channels');
@@ -396,8 +397,8 @@ export function renderMacroDataHealth(data) {
     </tr></thead><tbody>`;
 
   indicators.forEach(ind => {
-    const valStr = typeof ind.value === 'number' ? ind.value.toFixed(3) : '-';
-    const chgStr = typeof ind.change_pct === 'number' ? ind.change_pct.toFixed(4) + '%' : '-';
+    const valStr = formatNumber(ind.value, { decimals: 3 });
+    const chgStr = fmtSignedPct(ind.change_pct, 2);
     const statusColor = ind.status === 'ok' ? 'var(--color-success)' : (ind.status === 'warn' ? 'var(--warn)' : 'var(--color-danger)');
     const symbolHint = ind.symbol ? '' : ' <span class="text-muted text-xs">(無來源)</span>';
     html += `<tr>

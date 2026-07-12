@@ -1,5 +1,7 @@
 // Shared utility functions for Atlas dashboard
 
+import { formatNumber } from './format-metric.js';
+
 const MISSING = '—';
 
 function isValidNumber(v) {
@@ -11,8 +13,9 @@ export function fmt(v) {
 }
 
 export function fmtPct(v) {
-  if (!isValidNumber(v)) return MISSING;
-  return (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+  const s = formatNumber(v, { percent: true, decimals: 1, suffix: '%' });
+  if (!isValidNumber(v) || v === 0) return s;
+  return (v > 0 ? '+' : '') + s;
 }
 
 export function fmtFloat(v) {

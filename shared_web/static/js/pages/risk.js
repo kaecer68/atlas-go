@@ -122,7 +122,7 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
     const sectorBars = sectors.map(s => {
       const w = s.weight;
       const pct = formatNumber(w, { percent: true, decimals: 1 });
-      const barPct = ((w / maxW) * 100).toFixed(1);
+      const barPct = formatNumber(w / maxW, { percent: true, decimals: 1 });
       const color = w > 0.3 ? 'var(--accent)' : (w > 0.15 ? 'var(--warn)' : 'var(--muted)');
       return `
         <div style="margin:4px 0">

@@ -1,4 +1,5 @@
 import { fetchStockBundle } from '../services/stock-api-client.js';
+import { renderMissingState } from '../shared/app-utils.js';
 import { renderSearch } from '../components/stock-quote-search.js';
 import { renderHeader } from '../components/stock-quote-header.js';
 import { renderFundamentals } from '../components/stock-quote-fundamentals.js';
@@ -28,7 +29,7 @@ function renderContent() {
   if (state.status === 'idle') {
     contentHtml = '<div style="text-align:center;padding:40px;color:var(--text-secondary)">請輸入股票代號進行查詢</div>';
   } else if (state.status === 'error') {
-    contentHtml = '<div class="sq-error-box">網路連線失敗或發生錯誤,請稍後再試</div>';
+    contentHtml = renderMissingState('股票報價', 'api-error');
   } else {
     // loading or loaded
     const res = state.results || {};

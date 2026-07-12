@@ -6,7 +6,7 @@ import { renderRiskPanel } from '../components/risk-panel.js';
 import { renderRiskGatePanel } from '../components/risk-gate-panel.js';
 
 import { renderStockCell } from '../names.js';
-import { formatMaxDrawdown, formatHHI, formatNumber, fmtSignedPct } from '../shared/format-metric.js';
+import { formatMaxDrawdown, formatHHI, formatNumber, fmtSignedPct, fmtCurrency } from '../shared/format-metric.js';
 
 function isValidNumber(v) {
   return typeof v === 'number' && Number.isFinite(v);
@@ -64,8 +64,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     };
 
     function kpiNTD(v) {
-      if (!isValidNumber(v)) return '—';
-      return window.fmtNTD ? window.fmtNTD(v) : v.toFixed(0);
+      return window.fmtNTD ? window.fmtNTD(v) : fmtCurrency(v, { decimals: 0 });
     }
     function kpiNum(v) {
       return typeof v === 'number' ? v.toString() : '—';
@@ -197,7 +196,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
             <td class="${sideClass}">${sideLabel}</td>
             <td style="text-align:right">${fmtI(quantity)}</td>
             <td style="text-align:right">${formatNumber(price, { decimals: 2 })}</td>
-            <td style="text-align:right">${isValidNumber(amount) ? (window.fmtNTD ? window.fmtNTD(amount) : amount.toFixed(0)) : '—'}</td>
+            <td style="text-align:right">${isValidNumber(amount) ? (window.fmtNTD ? window.fmtNTD(amount) : fmtCurrency(amount, { decimals: 0 })) : '—'}</td>
             <td>${trade.reason || '—'}</td>
           </tr>
         `;

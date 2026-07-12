@@ -10,7 +10,7 @@ import { eventSource } from './services/event-source.js';
 import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
-import { getJSON, silentGetJSON, escapeHtml, parseSessionsList } from './shared/app-utils.js';
+import { getJSON, silentGetJSON, escapeHtml, parseSessionsList, renderMissingState } from './shared/app-utils.js';
 import { injectSharedHead } from './shared/head-config.js';
 import { install401Interceptor } from './shared/fetch-wrapper.js';
 import { initAuth, invalidateAuth } from './services/auth.js';
@@ -82,15 +82,104 @@ function showSkeletons() {
   document.querySelectorAll('.skeleton-container').forEach(function(el) { el.innerHTML = renderSkeleton(4); });
 }
 
-// Fetch helper: avoid a single slow endpoint blocking the whole dashboard.
+// --- Per-panel loading / error helpers --------------------------------------
+// renderMissingState is imported from shared_web/app-utils.js.
+function panelEl(id) { return id ? document.getElementById(id) : null; }
+
+function setPanelLoading(id, label) {
+  const el = panelEl(id);
+  if (!el) return;
+  el.classList.add('loading');
+  el.innerHTML = renderMissingState(label, 'loading');
+}
+
+function setPanelError(id, label) {
+  const el = panelEl(id);
+  if (!el) return;
+  el.classList.remove('loading');
+  el.innerHTML = renderMissingState(label, 'api-error');
+}
+
+function setPanelNoData(id, label) {
+  const el = panelEl(id);
+  if (!el) return;
+  el.classList.remove('loading');
+  el.innerHTML = renderMissingState(label, 'no-data');
+}
+
+function setPanelStale(id, label) {
+  const el = panelEl(id);
+  if (!el) return;
+  el.classList.remove('loading');
+  el.innerHTML = renderMissingState(label, 'stale-data');
+}
+
+function clearPanelLoading(id) {
+  const el = panelEl(id);
+  if (!el) return;
+  el.classList.remove('loading');
+}
+
+// --- Fetch with timeout, retry and per-panel state --------------------------
+const DEFAULT_TIMEOUT_MS = 10000;
+const MAX_RETRIES = 3;
+const BACKOFF_BASE_MS = 800;
+
+function isTransientError(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError' || err.name === 'TypeError') return true;
+  const msg = err.message || '';
+  if (/timeout|network|abort|failed to fetch/i.test(msg)) return true;
+  const status = err.status || (err.response && err.response.status);
+  if (status >= 500 || status === 429) return true;
+  return false;
+}
+
+async function fetchWithTimeout(url, ms) {
+  ms = ms || DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(function() { controller.abort(); }, ms);
+  try {
+    const res = await fetch(url, { credentials: 'include', signal: controller.signal });
+    if (!res.ok) {
+      const err = new Error(url + ': ' + res.status);
+      err.status = res.status;
+      throw err;
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchWithRetry(url, opts) {
+  const options = opts || {};
+  const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const retries = options.retries != null ? options.retries : MAX_RETRIES;
+  const label = options.label;
+  const panelId = options.panelId;
+  if (panelId) setPanelLoading(panelId, label);
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const data = await fetchWithTimeout(url, timeoutMs);
+      if (panelId) clearPanelLoading(panelId);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= retries || !isTransientError(err)) break;
+      const delay = BACKOFF_BASE_MS * Math.pow(2, attempt) + Math.random() * 500;
+      await new Promise(function(resolve) { setTimeout(resolve, delay); });
+    }
+  }
+  console.warn('[fetchWithRetry] failed', url, lastErr);
+  if (panelId) setPanelError(panelId, label);
+  return null;
+}
+
+// Backwards-compatible helper used by lazy page loaders.
 function getJSONWithTimeout(url, ms) {
-  ms = ms || 10000;
-  return Promise.race([
-    silentGetJSON(url),
-    new Promise(function(resolve) {
-      setTimeout(function() { console.warn('[timeout]', url); resolve(null); }, ms);
-    })
-  ]);
+  return fetchWithTimeout(url, ms || DEFAULT_TIMEOUT_MS).catch(function() { return null; });
 }
 
 // --- Module Registry (all modules loaded once) ---
@@ -165,72 +254,134 @@ async function loadModules() {
 // and `window.dcEnableAll` etc. are still undefined. The `modules._loaded` guard
 // inside loadModules makes subsequent calls a no-op.
 window.__modulesReady = loadModules();
-// --- Main Data Loader ---
+// --- Main Data Loader -------------------------------------------------------
+// Core endpoints block the initial dashboard render; non-core endpoints update
+// their panels independently in the background so a single slow API cannot
+// freeze the whole page.
+
+async function fetchCore() {
+  setPanelLoading('overviewMarket', '市場環境');
+  setPanelLoading('overviewRisk', '風險信號');
+  setPanelLoading('overviewSystem', '系統狀態');
+  setPanelLoading('sessionSyncAlert', '場次同步');
+  setPanelLoading('liveNarrativeStrip', '總經敘事');
+
+  const results = await Promise.all([
+    fetchWithRetry('/api/dashboard/system-health', { label: '系統狀態' }),
+    fetchWithRetry('/api/dashboard/agent-observatory', { label: 'Agent 觀測' }),
+    fetchWithRetry('/api/dashboard/experiment-inbox', { label: '實驗收件匣' }),
+    fetchWithRetry('/api/taiwan/stress-index', { label: '壓力指數' }),
+    fetchWithRetry('/api/narrative/bundle', { label: '敘事 bundle' }),
+    fetchWithRetry('/api/dashboard/data-channels', { label: '資料通道' }),
+    fetchWithRetry('/api/dashboard/sessions', { label: '場次同步' }),
+    fetchWithRetry('/api/dashboard/capital-phase', { label: '資金階段' }),
+  ]);
+  const [health, agents, inbox, stress, bundle, dataChannels, sessions, capitalPhase] = results;
+  const failures = results.filter(function(v) { return v === null; }).length;
+
+  return { health, agents, inbox, stress, bundle, dataChannels, sessions, capitalPhase, failures, total: results.length };
+}
+
+function renderCore(m, core) {
+  const health = core.health, agents = core.agents, inbox = core.inbox,
+        stress = core.stress, bundle = core.bundle, dataChannels = core.dataChannels,
+        sessions = core.sessions, capitalPhase = core.capitalPhase;
+
+  const parsed = parseSessionsList(sessions);
+  window.pipelineSessions = parsed.sessions;
+  window.pipelineSessionsStatus = parsed.data_status;
+
+  if (health === null) {
+    setPanelError('overviewMarket', '市場環境');
+    setPanelError('overviewRisk', '風險信號');
+    setPanelError('overviewSystem', '系統狀態');
+  } else {
+    const events = bundle && bundle.events ? { events: bundle.events } : null;
+    if (m.dash.renderOverview) {
+      m.dash.renderOverview(health, agents, inbox, null, events, stress, dataChannels, capitalPhase);
+    }
+    clearPanelLoading('overviewMarket');
+    clearPanelLoading('overviewRisk');
+    clearPanelLoading('overviewSystem');
+  }
+
+  if (sessions === null) {
+    setPanelError('sessionSyncAlert', '場次同步');
+  } else {
+    clearPanelLoading('sessionSyncAlert');
+  }
+
+  const stripEvents = bundle && bundle.events ? { events: bundle.events } : null;
+  const stripModels = bundle && bundle.models ? { models: bundle.models } : null;
+  const stripChains = bundle && bundle.chains ? { chains: bundle.chains } : null;
+  if (m.narr.renderLiveNarrativeStrip) {
+    m.narr.renderLiveNarrativeStrip(stripEvents, stress, stripModels, stripChains);
+  }
+  clearPanelLoading('liveNarrativeStrip');
+
+  if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
+  if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
+}
+
+async function fetchNonCore(m, core) {
+  setPanelLoading('macroRadar', '總經雷達');
+  setPanelLoading('liveStatus', '即時狀態');
+  setPanelLoading('riskCards', '風險指標');
+  setPanelLoading('alertsPanel', '系統警報');
+
+  const results = await Promise.all([
+    fetchWithRetry('/api/dashboard/macro-radar', { label: '總經雷達' }),
+    fetchWithRetry('/api/dashboard/recommendation-pipeline', { label: '推薦管線' }),
+    fetchWithRetry('/api/dashboard/live-status', { label: '即時狀態' }),
+    fetchWithRetry('/api/dashboard/risk-exposure', { label: '風險曝險' }),
+    fetchWithRetry('/api/dashboard/phase3-status', { label: 'Phase 3 狀態' }),
+    fetchWithRetry('/api/alerts', { label: '系統警報' }),
+  ]);
+  const [macro, pipeline, live, riskExposure, phase3, alerts] = results;
+
+  if (macro === null) setPanelError('macroRadar', '總經雷達');
+  else if (m.dash.renderMacroRadar) { m.dash.renderMacroRadar(macro, pipeline); clearPanelLoading('macroRadar'); }
+
+  if (live === null) setPanelError('liveStatus', '即時狀態');
+  else if (m.risk.renderLiveStatus) { m.risk.renderLiveStatus(live); clearPanelLoading('liveStatus'); }
+
+  if (riskExposure === null) setPanelError('riskCards', '風險指標');
+  else if (m.risk.renderRiskCards) { m.risk.renderRiskCards(riskExposure, pipeline, core.capitalPhase); clearPanelLoading('riskCards'); }
+
+  if (alerts === null) setPanelError('alertsPanel', '系統警報');
+  else if (m.alerts.renderAlerts) { m.alerts.renderAlerts(alerts); clearPanelLoading('alertsPanel'); }
+
+  if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
+
+  if (phase3 === null) console.warn('[non-core] phase3-status unavailable');
+}
+
 async function loadAll() {
   var loadingBar = document.getElementById('loadingBar');
   if (loadingBar) loadingBar.classList.add('active');
   showSkeletons();
 
   try {
-    var results = await Promise.all([
-      getJSONWithTimeout('/api/dashboard/system-health'),
-      getJSONWithTimeout('/api/dashboard/macro-radar'),
-      getJSONWithTimeout('/api/dashboard/agent-observatory'),
-      getJSONWithTimeout('/api/dashboard/recommendation-pipeline'),
-      getJSONWithTimeout('/api/dashboard/live-status'),
-      getJSONWithTimeout('/api/dashboard/risk-exposure'),
-      getJSONWithTimeout('/api/dashboard/experiment-inbox'),
-      getJSONWithTimeout('/api/taiwan/stress-index'),
-      getJSONWithTimeout('/api/narrative/bundle'),
-      getJSONWithTimeout('/api/dashboard/data-channels'),
-      getJSONWithTimeout('/api/dashboard/sessions'),
-      getJSONWithTimeout('/api/dashboard/phase3-status'),
-      getJSONWithTimeout('/api/alerts'),
-      getJSONWithTimeout('/api/dashboard/capital-phase'),
-    ]);
-
-    var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
-        riskExposure = results[5], inbox = results[6], stress = results[7], bundle = results[8],
-        dataChannels = results[9], sessions = results[10], phase3 = results[11], alerts = results[12],
-        capitalPhase = results[13];
-
-    // Unwrap narrative bundle into backwards-compatible shapes.
-    var events = bundle && bundle.events ? { events: bundle.events } : null;
-    var chains = bundle && bundle.chains ? { chains: bundle.chains } : null;
-    var models = bundle && bundle.models ? { models: bundle.models } : null;
-    var templates = bundle && bundle.templates ? { templates: bundle.templates } : null;
-    var seasonal = bundle && bundle.seasonal ? bundle.seasonal : null;
-
-    var failures = results.filter(function(v) { return v === null; }).length;
-    if (failures > results.length * 0.5) {
-      consecutiveFailures++;
-      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) showErrorBanner();
-    } else {
-      consecutiveFailures = 0; hideErrorBanner();
-    }
-
-    var parsed = parseSessionsList(sessions);
-    window.pipelineSessions = parsed.sessions;
-    window.pipelineSessionsStatus = parsed.data_status;
-
     await loadModules();
     var m = modules;
 
-    if (m.dash.renderOverview) m.dash.renderOverview(health, agents, inbox, events, stress, dataChannels, capitalPhase);
-    if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(macro, pipeline);
-    if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(events, stress, models, chains);
+    const core = await fetchCore();
+    if (core.failures > core.total * 0.5) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) showErrorBanner();
+    } else {
+      consecutiveFailures = 0;
+      hideErrorBanner();
+    }
 
-    if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(live);
-    if (m.risk.renderRiskCards) m.risk.renderRiskCards(riskExposure, pipeline, capitalPhase);
-    if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
+    renderCore(m, core);
 
-    if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
-    if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
-    if (m.alerts.renderAlerts) m.alerts.renderAlerts(alerts);
+    // Background non-core updates; do not block the next refresh or the UI.
+    fetchNonCore(m, core).catch(function(e) { console.error('[non-core] background update failed', e); });
+
+    // Independent panels that fetch their own data.
     if (m.metrics.loadMetrics) m.metrics.loadMetrics();
-
     if (m.back.renderBacktestReport) m.back.renderBacktestReport();
-
     if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
     if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
 
@@ -258,7 +409,7 @@ async function loadPageData(pageId) {
       var el = document.getElementById('schedulerStatusContent');
       if (el) {
         el.classList.remove('loading');
-        el.innerHTML = '<div class="empty error">排程狀態載入失敗</div>';
+        el.innerHTML = renderMissingState('排程狀態', 'api-error');
       }
     }
   }

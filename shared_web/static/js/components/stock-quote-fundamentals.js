@@ -1,4 +1,5 @@
 import { escapeHtml, renderEmptyState, renderSkeleton } from '../shared/app-utils.js';
+import { formatNumber, fmtPct } from '../shared/format-metric.js';
 
 export function renderFundamentals(state, fundResult) {
   if (state === 'loading') {
@@ -17,12 +18,12 @@ export function renderFundamentals(state, fundResult) {
   if (data.PE === 0) {
     peDisplay = '<span class="sq-price-down" title="公司目前為虧損狀態">虧損</span>';
   } else if (data.PE) {
-    peDisplay = data.PE.toFixed(2);
+    peDisplay = formatNumber(data.PE, { decimals: 2 });
   }
 
-  const pbDisplay = data.PB ? data.PB.toFixed(2) : '—';
-  const psDisplay = data.PS ? data.PS.toFixed(2) : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
-  const divDisplay = data.DividendYield ? data.DividendYield.toFixed(2) + '%' : '—';
+  const pbDisplay = formatNumber(data.PB, { decimals: 2 });
+  const psDisplay = data.PS ? formatNumber(data.PS, { decimals: 2 }) : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
+  const divDisplay = data.DividendYield ? formatNumber(data.DividendYield, { decimals: 2, suffix: '%' }) : '—';
   const sectorDisplay = data.Sector
     ? escapeHtml(data.Sector)
     : '<span style="color:var(--text-tertiary)">資料待補齊</span>';

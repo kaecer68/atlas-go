@@ -2,6 +2,7 @@
 import { agentName, sectorName } from '../names.js';
 import { getJSON, notify, formatDate, renderEmptyState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
+import { fmtPct } from '../shared/format-metric.js';
 
 export async function loadOverrides() {
   const container = document.getElementById('overrideBadges');
@@ -309,11 +310,11 @@ export function renderForecastVsRealitySummary(data) {
   const withHit = predictions.filter(p => p.hit === true || p.hit === false);
   const hits = withHit.filter(p => p.hit === true).length;
   const total = withHit.length;
-  const hitRate = total > 0 ? (hits / total * 100).toFixed(1) + '%' : '—';
+  const hitRate = total > 0 ? fmtPct(hits / total, 1) : '—';
 
   const passed = predictions.filter(p => p.passed_guards === true);
   const passedHits = passed.filter(p => p.hit === true).length;
-  const passedRate = passed.length > 0 ? (passedHits / passed.length * 100).toFixed(1) + '%' : '—';
+  const passedRate = passed.length > 0 ? fmtPct(passedHits / passed.length, 1) : '—';
 
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">

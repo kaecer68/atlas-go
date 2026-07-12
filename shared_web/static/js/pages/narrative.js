@@ -99,7 +99,7 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const eventList = (events && events.events) || [];
   const sortedEvents = sortNarrativeEvents(eventList.slice());
   const topEvent = sortedEvents[0];
-  const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
+  const stressScore = formatNumber(stress && stress.score, { decimals: 1 });
   const sLabel = stress ? stressLabel(stress.regime || '-') : '-';
   const stressColor = stress && stress.regime === 'crisis' ? 'var(--color-danger)' : (stress && stress.regime === 'high' ? 'var(--warn)' : 'var(--color-success)');
 
@@ -229,8 +229,8 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       html += '<table><thead><tr><th>指標</th><th>數值</th><th>日變動%</th></tr></thead><tbody>' +
         rows.map(([name, pt]) => {
           if (!pt) return '';
-          const val = typeof pt.value === 'number' ? pt.value.toFixed(3) : '-';
-          const chg = typeof pt.change_pct === 'number' ? pt.change_pct.toFixed(2) + '%' : '-';
+          const val = formatNumber(pt.value, { decimals: 3 });
+          const chg = fmtSignedPct(pt.change_pct, 2);
           const cls = pt.change_pct > 0 ? 'up' : (pt.change_pct < 0 ? 'down' : '');
           return `<tr><td>${name}</td><td>${val}</td><td class="${cls}">${chg}</td></tr>`;
         }).join('') + '</tbody></table>';
@@ -252,7 +252,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         html += '<table><thead><tr><th>法人</th><th>淨買超(億)</th></tr></thead><tbody>' +
           capitalRows.map(([name, pt]) => {
             if (!pt) return '';
-            const val = typeof pt.value === 'number' ? pt.value.toFixed(2) : '-';
+            const val = formatNumber(pt.value, { decimals: 2 });
             const cls = pt.value > 0 ? 'up' : (pt.value < 0 ? 'down' : '');
             return `<tr><td>${name}</td><td class="${cls}">${val}</td></tr>`;
           }).join('') + '</tbody></table>';
@@ -272,7 +272,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     stressEl.classList.remove('loading');
     if (!stress) { stressEl.innerHTML = renderActionEmptyState('無可用壓力資料', '執行回測或模擬後將顯示壓力測試結果。', [{label: '執行模擬', page: 'pipeline'}]); }
     else {
-      const score = typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
+      const score = formatNumber(stress && stress.score, { decimals: 1 });
       const sLabel = stressLabel(stress.regime || '-');
       const regimeColor = stress.regime === 'crisis' ? 'var(--color-danger)' : (stress.regime === 'high' ? 'var(--warn)' : 'var(--color-success)');
       const comps = stress.components || {};
@@ -283,7 +283,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       html += `<table><thead><tr><th>子項</th><th>壓力貢獻 <span class="cursor-pointer text-accent" data-help="<p><strong>分數代表什麼？</strong></p><p>外商出逃指數由六個因子加權構成。每個子項的分數代表該因子對「外商撤離台灣」這個現象的貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>分數越高</strong>：該因子越可能導致外商賣超台股（例如美元走強→外商匯出獲利、VIX飆升→全球避險情緒）。</li><li><strong>分數為 0</strong>：該因子目前沒有施壓（例如外商買超時，外商流向因子為 0）。</li><li><strong>所有子項皆為正值</strong>：指數只累加壓力，不扣除「助力」。這是單向指標。</li></ul><p><strong>為什麼是單向指標？</strong><br>因為外商買超時，系統不會顯示「負壓力」，而是讓總分維持低位（綠燈）。這樣設計是為了突出「危險訊號」，而非平衡呈現多空。</p><p><strong>總分區間意義：</strong><br>• 0-29分（綠燈）：外商流出壓力小，資金面寬鬆<br>• 30-49分（黃燈）：外商開始流出，注意波動<br>• 50-69分（橙燈）：外商明顯出逃，台股下跌機率高<br>• 70-100分（紅燈）：外商大量出逃，系統性風險高</p>" data-title="外商出逃指數分數說明">ℹ️</span></th></tr></thead><tbody>`;
       const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險', oil: '原油價格衝擊', gold: '黃金避險需求' };
       for (const k of Object.keys(comps)) {
-        html += `<tr><td>${names[k] || k}</td><td>${typeof comps[k] === 'number' ? comps[k].toFixed(2) : '-'}</td></tr>`;
+        html += `<tr><td>${names[k] || k}</td><td>${formatNumber(comps[k], { decimals: 2 })}</td></tr>`;
       }
       html += '</tbody></table>';
       stressEl.innerHTML = html;
@@ -345,7 +345,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           };
           const sdItems = Object.entries(e.source_data).map(([k, v]) => {
             const label = keyMap[k] || k;
-            const val = typeof v === 'number' ? v.toFixed(2) : v;
+            const val = typeof v === 'number' ? formatSigned(v, { decimals: 2, forceSign: true }) : v;
             return `${label}: ${val}`;
           }).join(' · ');
           sourceDataHtml = `<div class="text-muted text-sm mt-xs" style="font-size:11px">觸發條件：${escapeHtml(sdItems)}</div>`;
@@ -412,7 +412,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       modelsEl.innerHTML = list.map((m, idx) => {
         const w = m.weight || 0;
         const e = m.recent_error || 0;
-        const weightPct = Math.min(100, Math.max(0, w * 100)).toFixed(1);
+        const weightPct = formatNumber(w, { percent: true, decimals: 1, suffix: '%' });
         const weightColor = w >= 0.5 ? 'var(--color-success)' : (w >= 0.25 ? 'var(--color-warning)' : 'var(--color-danger)');
         const errColor = e <= 0.3 ? 'var(--color-success)' : (e <= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)');
         const errText = e <= 0.3 ? '優秀' : (e <= 0.5 ? '一般' : '偏高');

@@ -1,4 +1,5 @@
 import { fmtPct, fmtInt } from '../shared/utils.js';
+import { formatNumber } from '../shared/format-metric.js';
 
 export async function renderRiskPanel(container, getJSON) {
   // 1. 讀取 portfolio-state 取得 current_drawdown, concentration_ratio
@@ -33,7 +34,7 @@ export async function renderRiskPanel(container, getJSON) {
         else if (v > 0.7) color = 'var(--color-danger)';
         else if (v > 0.4) color = 'var(--warn)';
         else if (v < 0) color = 'var(--color-success)';
-        return `<td class="corr-cell" style="color:${color}">${v.toFixed(2)}</td>`;
+        return `<td class="corr-cell" style="color:${color}">${formatNumber(v, { decimals: 2 })}</td>`;
       }).join('');
       return `<tr><td class="corr-header">${labels[i]}</td>${cells}</tr>`;
     }).join('');
