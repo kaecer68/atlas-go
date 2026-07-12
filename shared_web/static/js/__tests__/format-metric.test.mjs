@@ -14,6 +14,14 @@ import {
   formatNumber,
   formatSigned,
   formatMaxDrawdown,
+  isEmptyMetric,
+  fmtSafeSigned,
+  fmtSafeNumber,
+  fmtSafePct,
+  fmtSafeSignedPct,
+  fmtSafeDrawdown,
+  fmtSafeCurrency,
+  fmtSafeLargeNumber,
 } from '../shared/format-metric.js';
 
 test('fmtCurrency formats with thousands grouping and defaults to NTD', () => {
@@ -76,4 +84,60 @@ test('formatSigned handles tiny negative values', () => {
 
 test('formatMaxDrawdown returns absolute when requested', () => {
   assert.equal(formatMaxDrawdown(-0.125, { asAbsolute: true }), '12.5%');
+});
+
+
+// ============================================================================
+// P2 safe-format wrappers
+// ============================================================================
+
+test('isEmptyMetric identifies missing-data sentinels', () => {
+  assert.equal(isEmptyMetric(null), true);
+  assert.equal(isEmptyMetric(undefined), true);
+  assert.equal(isEmptyMetric(''), true);
+  assert.equal(isEmptyMetric(NaN), true);
+  assert.equal(isEmptyMetric(0), false);
+  assert.equal(isEmptyMetric(false), false);
+});
+
+test('fmtSafeSigned returns em-dash for invalid inputs', () => {
+  assert.equal(fmtSafeSigned(null), '—');
+  assert.equal(fmtSafeSigned(undefined), '—');
+  assert.equal(fmtSafeSigned(0, { forceSign: true }), '0.00');
+  assert.equal(fmtSafeSigned(-12.3, { decimals: 1, suffix: ' 億' }), '−12.3 億');
+});
+
+test('fmtSafeNumber mirrors formatNumber and preserves zero', () => {
+  assert.equal(fmtSafeNumber(0), '0.00');
+  assert.equal(fmtSafeNumber(null), '—');
+  assert.equal(fmtSafeNumber(undefined), '—');
+  assert.equal(fmtSafeNumber(1234.567, { decimals: 1, suffix: 'x' }), '1234.6x');
+});
+
+test('fmtSafePct mirrors fmtPct and preserves zero', () => {
+  assert.equal(fmtSafePct(0.15), '15.0%');
+  assert.equal(fmtSafePct(0), '0.0%');
+  assert.equal(fmtSafePct(null), '—');
+});
+
+test('fmtSafeSignedPct mirrors fmtSignedPct and preserves zero', () => {
+  assert.equal(fmtSafeSignedPct(0.36), '+0.4%');
+  assert.equal(fmtSafeSignedPct(0), '0.0%');
+  assert.equal(fmtSafeSignedPct(null), '—');
+});
+
+test('fmtSafeDrawdown mirrors fmtDrawdown and preserves zero', () => {
+  assert.equal(fmtSafeDrawdown(0.15), '−15.0%');
+  assert.equal(fmtSafeDrawdown(0), '0.0%');
+  assert.equal(fmtSafeDrawdown(null), '—');
+});
+
+test('fmtSafeCurrency mirrors fmtCurrency and preserves zero', () => {
+  assert.equal(fmtSafeCurrency(0), 'NT$0');
+  assert.equal(fmtSafeCurrency(null), '—');
+});
+
+test('fmtSafeLargeNumber mirrors fmtLargeNumber and preserves zero', () => {
+  assert.equal(fmtSafeLargeNumber(0), '0');
+  assert.equal(fmtSafeLargeNumber(null), '—');
 });
