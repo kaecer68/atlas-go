@@ -203,6 +203,186 @@ func TestHandleAlertListUnacknowledged(t *testing.T) {
 	}
 }
 
+// --- parameters / industry extension ----------------------------------------
+
+func TestHandleNewReadOnlyTools_HitCorrectBackendPath(t *testing.T) {
+	cases := []struct {
+		name   string
+		invoke func(s *server) error
+		want   string
+	}{
+		{"parameters_get", func(s *server) error {
+			_, _, e := s.handleParametersGet(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters"},
+		{"parameters_get_categories", func(s *server) error {
+			_, _, e := s.handleParametersGetCategories(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters/categories"},
+		{"parameters_get_audit_log", func(s *server) error {
+			_, _, e := s.handleParametersGetAuditLog(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters/audit-log"},
+		{"parameters_get_metadata", func(s *server) error {
+			_, _, e := s.handleParametersGetMetadata(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/parameters/metadata"},
+		{"parameters_get_snapshots_default", func(s *server) error {
+			_, _, e := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: 0})
+			return e
+		}, "/api/parameters/snapshots"},
+		{"backtest_status", func(s *server) error {
+			_, _, e := s.handleBacktestStatus(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/backtest/status"},
+		{"backtest_signals", func(s *server) error {
+			_, _, e := s.handleBacktestSignals(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/backtest/signals"},
+		{"calendar_events", func(s *server) error {
+			_, _, e := s.handleCalendarEvents(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/calendar-events"},
+		{"sector_allocation_plan", func(s *server) error {
+			_, _, e := s.handleSectorAllocationPlan(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/sector-allocation-plan"},
+		{"channel_health", func(s *server) error {
+			_, _, e := s.handleChannelHealth(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/channel-health"},
+		{"taiwan_stress_index", func(s *server) error {
+			_, _, e := s.handleTaiwanStressIndex(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/taiwan/stress-index"},
+		{"risk_exposure", func(s *server) error {
+			_, _, e := s.handleRiskExposure(context.Background(), nil, struct{}{})
+			return e
+		}, "/api/dashboard/risk-exposure"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, done := newTestHarness(t)
+			defer done()
+			rec.responseBody = []byte(`{}`) // handlers unmarshal into *map[string]any
+			if err := tc.invoke(s); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			if rec.path != tc.want {
+				t.Errorf("%s: path=%q want=%q", tc.name, rec.path, tc.want)
+			}
+		})
+	}
+}
+
+func TestHandleParametersGetSnapshots_DefaultDays(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{}`)
+	_, _, err := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: 0})
+	if err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+	if rec.query.Get("days") != "20" {
+		t.Errorf("days default: query=%q want=20", rec.query.Get("days"))
+	}
+}
+
+func TestHandleParametersGetSnapshots_ClampUpperBound(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{}`)
+	_, _, err := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: 9999})
+	if err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+	if rec.query.Get("days") != "365" {
+		t.Errorf("days clamp: query=%q want=365", rec.query.Get("days"))
+	}
+}
+
+// --- PR 3 write MCP tools ---------------------------------------------------
+
+func TestHandleNewWriteTools_HitCorrectBackendPath(t *testing.T) {
+	cases := []struct {
+		name   string
+		invoke func(s *server) error
+		want   string
+	}{
+		{"experiment_promote", func(s *server) error {
+			_, _, err := s.handleExperimentPromote(context.Background(), nil, experimentIDInput{ExperimentID: "exp-001"})
+			return err
+		}, "/api/experiment/promote"},
+		{"experiment_revert", func(s *server) error {
+			_, _, err := s.handleExperimentRevert(context.Background(), nil, experimentIDInput{ExperimentID: "exp-002"})
+			return err
+		}, "/api/experiment/revert"},
+		{"control_pause_agent", func(s *server) error {
+			_, _, err := s.handleControlPauseAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: "semi-desk-01", Reason: "sharpe regression", Operator: "ci-bot"})
+			return err
+		}, "/api/control/pause-agent"},
+		{"control_resume_agent", func(s *server) error {
+			_, _, err := s.handleControlResumeAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: "semi-desk-01"})
+			return err
+		}, "/api/control/resume-agent"},
+		{"control_sector_ban", func(s *server) error {
+			_, _, err := s.handleControlSectorBan(context.Background(), nil, controlSectorBanInput{Sector: "半導體", Banned: true, Reason: "valuation concern"})
+			return err
+		}, "/api/control/sector-ban"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, done := newTestHarness(t)
+			defer done()
+			rec.responseBody = []byte(`{}`)
+			if err := tc.invoke(s); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			if rec.path != tc.want {
+				t.Errorf("%s: path=%q want=%q", tc.name, rec.path, tc.want)
+			}
+		})
+	}
+}
+
+func TestHandleNewWriteTools_RejectEmptyIDs(t *testing.T) {
+	cases := []struct {
+		name   string
+		invoke func(s *server) error
+	}{
+		{"experiment_promote_empty", func(s *server) error {
+			_, _, err := s.handleExperimentPromote(context.Background(), nil, experimentIDInput{ExperimentID: ""})
+			return err
+		}},
+		{"experiment_revert_empty", func(s *server) error {
+			_, _, err := s.handleExperimentRevert(context.Background(), nil, experimentIDInput{ExperimentID: ""})
+			return err
+		}},
+		{"control_pause_agent_empty", func(s *server) error {
+			_, _, err := s.handleControlPauseAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: ""})
+			return err
+		}},
+		{"control_resume_agent_empty", func(s *server) error {
+			_, _, err := s.handleControlResumeAgent(context.Background(), nil, controlAgentInterventionInput{AgentID: ""})
+			return err
+		}},
+		{"control_sector_ban_empty", func(s *server) error {
+			_, _, err := s.handleControlSectorBan(context.Background(), nil, controlSectorBanInput{Sector: ""})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, done := newTestHarness(t)
+			defer done()
+			if err := tc.invoke(s); err == nil {
+				t.Errorf("expected error for empty input, got nil")
+			}
+		})
+	}
+}
+
 // --- system_get_health --------------------------------------------------------
 
 func TestHandleSystemGetHealth_ParsesStatus(t *testing.T) {

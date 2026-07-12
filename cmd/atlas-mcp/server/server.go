@@ -160,14 +160,19 @@ func Run(ctx context.Context, cfg Config) error {
 	registerPrompts(mcpSrv)
 
 	// Verify tool count matches expected range.
-	// registerTools: 85-87 (base + stock 4 + strategy_ranker 1 + sampling 0-1 + elicitation 0-1,
-	//                       roots=2 always, anomaly=2 inside, capital_flow=2 + recommendation=1 added in Phase 2)
-	// registerEventTools: +2
-	// registerBriefingTools: +2
-	// registerAuditTools: +4 (not in registerTools)
-	// Total: 89-91
-	if n := RegisteredToolCount; n < 89 || n > 91 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 89-91", n)
+	// registerTools (called just above): 102 base business tools + roots (2) +
+	// 0-2 sampling/elicitation (feature-gated) = 102..104 tools.
+	// registerAuditTools: +4 (separate, not in registerTools).
+	// Total at this point: 106 (both feature-gated off) to 108 (both on).
+	// PR 2 (2026-07-12) added 12 read-only tools (parameters_*, backtest_*,
+	// calendar_events, sector_allocation_plan, channel_health, taiwan_stress_index,
+	// risk_exposure), raising the base from 85 to 97.
+	// PR 3 (2026-07-12) added 5 write tools (experiment_promote, experiment_revert,
+	// control_pause_agent, control_resume_agent, control_sector_ban), raising the
+	// base from 97 to 102. Write tools use DestructiveHint=true and require
+	// ATLAS_API_KEY (backend enforces auth).
+	if n := RegisteredToolCount; n < 106 || n > 108 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 106-108", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for
