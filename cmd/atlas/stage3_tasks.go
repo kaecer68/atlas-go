@@ -45,8 +45,15 @@ func registerStage3Tasks(d stage3Deps) {
 
 	pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir))
 
+	oncestore, oncestoreErr := scheduler.NewFileOncestampStore(d.cfg.LedgerDir)
+	if oncestoreErr != nil {
+		log.Printf("[Stage3] oncestamp store unavailable, falling back to in-memory: %v", oncestoreErr)
+		oncestore = nil
+	}
+
 	deps := scheduler.Stage3TaskDeps{
-		TimeZone: tz,
+		TimeZone:       tz,
+		OncestampStore: oncestore,
 		RefreshEventCalendar: func(now time.Time) error {
 			d.eventCalendar.RefreshEvents(now)
 			return nil

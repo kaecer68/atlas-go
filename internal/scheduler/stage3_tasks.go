@@ -31,6 +31,10 @@ type Stage3TaskDeps struct {
 	// TimeZone is used for all schedule checks. If nil, UTC is assumed.
 	TimeZone *time.Location
 
+	// OncestampStore persists once-per-period claims across process restarts.
+	// Optional; when nil the once-guards keep all state in-memory.
+	OncestampStore OncestampStore
+
 	// RefreshEventCalendar updates the in-memory event calendar for the
 	// requested local date. The task passes today and today+1.
 	RefreshEventCalendar func(now time.Time) error
@@ -52,7 +56,7 @@ type Stage3TaskDeps struct {
 // SyncEventsDailyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the event calendar for today and tomorrow at 06:00 local time.
 func SyncEventsDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
-	shouldRun := dailyOnceGuard(deps.TimeZone, 6, 0)
+	shouldRun := dailyGuardFor(deps, 6, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
@@ -73,7 +77,7 @@ func SyncEventsDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
 // SyncMacroDailyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the macro snapshot after the US market close at 06:00 local time.
 func SyncMacroDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
-	shouldRun := dailyOnceGuard(deps.TimeZone, 6, 0)
+	shouldRun := dailyGuardFor(deps, 6, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
@@ -90,7 +94,7 @@ func SyncMacroDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
 // SyncCapitalDailyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the TWSE capital-flow / 三法人買賣超 aggregation at 13:30 local time.
 func SyncCapitalDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
-	shouldRun := dailyOnceGuard(deps.TimeZone, 13, 30)
+	shouldRun := dailyGuardFor(deps, 13, 30)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
@@ -107,7 +111,7 @@ func SyncCapitalDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
 // SyncRegimeWeeklyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the regime historical summary every Monday at 08:00 local time.
 func SyncRegimeWeeklyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
-	shouldRun := weeklyOnceGuard(deps.TimeZone, time.Monday, 8, 0)
+	shouldRun := weeklyGuardFor(deps, time.Monday, 8, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
@@ -125,7 +129,7 @@ func SyncRegimeWeeklyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
 // task that recalculates narrative template hit rates on the 1st of every month
 // at 08:00 local time.
 func RecalibrateTemplatesMonthlyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
-	shouldRun := monthlyOnceGuard(deps.TimeZone, 1, 8, 0)
+	shouldRun := monthlyGuardFor(deps, 1, 8, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
@@ -254,4 +258,74 @@ func orTZ(tz *time.Location) *time.Location {
 		return tz
 	}
 	return time.UTC
+}
+
+// dailyGuardFor returns a daily once-guard that delegates to OncestampStore
+// when deps.OncestampStore is non-nil, otherwise falls back to the in-memory
+// closure used by the pre-Stage 3.1 wrappers.
+func dailyGuardFor(deps Stage3TaskDeps, hour, minute int) func() bool {
+	if deps.OncestampStore != nil {
+		return dailyOnceGuardWithStore(deps.TimeZone, hour, minute, "stage3.daily", deps.OncestampStore, sameDay)
+	}
+	return dailyOnceGuard(deps.TimeZone, hour, minute)
+}
+
+// weeklyGuardFor returns a weekly once-guard with optional persistence.
+func weeklyGuardFor(deps Stage3TaskDeps, weekday time.Weekday, hour, minute int) func() bool {
+	if deps.OncestampStore != nil {
+		return weeklyOnceGuardWithStore(deps.TimeZone, weekday, hour, minute, "stage3.weekly.monday", deps.OncestampStore, sameWeek)
+	}
+	return weeklyOnceGuard(deps.TimeZone, weekday, hour, minute)
+}
+
+// monthlyGuardFor returns a monthly once-guard with optional persistence.
+func monthlyGuardFor(deps Stage3TaskDeps, day, hour, minute int) func() bool {
+	if deps.OncestampStore != nil {
+		return monthlyOnceGuardWithStore(deps.TimeZone, day, hour, minute, "stage3.monthly.first", deps.OncestampStore, sameMonth)
+	}
+	return monthlyOnceGuard(deps.TimeZone, day, hour, minute)
+}
+
+// dailyOnceGuardWithStore is the persistent analogue of dailyOnceGuard.
+// On a hit (run=false) the in-memory state is left untouched so the on-disk
+// record remains the single source of truth for the period.
+func dailyOnceGuardWithStore(tz *time.Location, hour, minute int, key string, store OncestampStore, samePeriod func(a, b time.Time) bool) func() bool {
+	return func() bool {
+		now := timeNow().In(orTZ(tz))
+		if now.Hour() != hour || now.Minute() != minute {
+			return false
+		}
+		run, ok := store.TryClaim(key, now, samePeriod)
+		return ok && run
+	}
+}
+
+// weeklyOnceGuardWithStore is the persistent analogue of weeklyOnceGuard.
+// The store key is fixed per (tz, weekday, hour, minute) tuple; the samePeriod
+// comparator is anchored to Monday in tz.
+func weeklyOnceGuardWithStore(tz *time.Location, weekday time.Weekday, hour, minute int, key string, store OncestampStore, samePeriod func(tz *time.Location, a, b time.Time) bool) func() bool {
+	loc := orTZ(tz)
+	comparator := func(a, b time.Time) bool { return samePeriod(loc, a, b) }
+	return func() bool {
+		now := timeNow().In(loc)
+		if now.Weekday() != weekday || now.Hour() != hour || now.Minute() != minute {
+			return false
+		}
+		run, ok := store.TryClaim(key, now, comparator)
+		return ok && run
+	}
+}
+
+// monthlyOnceGuardWithStore is the persistent analogue of monthlyOnceGuard.
+func monthlyOnceGuardWithStore(tz *time.Location, day, hour, minute int, key string, store OncestampStore, samePeriod func(tz *time.Location, a, b time.Time) bool) func() bool {
+	loc := orTZ(tz)
+	comparator := func(a, b time.Time) bool { return samePeriod(loc, a, b) }
+	return func() bool {
+		now := timeNow().In(loc)
+		if now.Day() != day || now.Hour() != hour || now.Minute() != minute {
+			return false
+		}
+		run, ok := store.TryClaim(key, now, comparator)
+		return ok && run
+	}
 }
