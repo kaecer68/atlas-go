@@ -29,10 +29,13 @@ type EventFlowPredictionRecord struct {
 
 // EventFlowPredictionStore persists event-driven capital-flow predictions so
 // the Stage 3 alert evaluator can compare current predictions against recent
-// history without re-deriving them on every tick.
+// history without re-deriving them on every tick. Len and Size exist for
+// warmup logic and Prometheus gauges.
 type EventFlowPredictionStore interface {
 	AppendPrediction(rec EventFlowPredictionRecord) error
 	LoadRecentPredictions(limit int) ([]EventFlowPredictionRecord, error)
+	Len() int
+	Size() int64
 }
 
 // defaultEventFlowPredictionCap bounds the JSONL file size. At ~1
@@ -87,6 +90,31 @@ func (s *JSONLEventFlowPredictionStore) LoadRecentPredictions(limit int) ([]Even
 		records = records[len(records)-limit:]
 	}
 	return records, nil
+}
+
+// Len returns the number of records currently on disk.
+func (s *JSONLEventFlowPredictionStore) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := filepath.Join(s.baseDir, "event_flow_predictions.jsonl")
+	records, err := readPredictionJSONL(path)
+	if err != nil {
+		return 0
+	}
+	return len(records)
+}
+
+// Size returns the on-disk file size in bytes. Returns 0 if the file does
+// not exist (an empty store is a valid state, never a failure).
+func (s *JSONLEventFlowPredictionStore) Size() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := filepath.Join(s.baseDir, "event_flow_predictions.jsonl")
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 func readPredictionJSONL(path string) ([]EventFlowPredictionRecord, error) {
