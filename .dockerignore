@@ -59,6 +59,16 @@ docs/*.md
 test/
 tests/
 
+# Frontend node_modules (npm ci regenerates these inside the image)
+client_web/node_modules/
+admin_web/node_modules/
+shared_web/node_modules/
+
+# Sister service repos (e.g. services/fubon-proxy/) are NOT part of
+# the atlas-go binary or image; excluding them shrinks the build
+# context by ~9 GB.
+services/
+
 # CI/CD
 .github/
 .gitlab-ci.yml
