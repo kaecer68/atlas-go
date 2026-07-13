@@ -392,9 +392,9 @@ func (s *SQLiteHistoricalStore) LoadPredictionBacktestRange(ctx context.Context,
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT date, predicted_direction, predicted_confidence, actual_direction, actual_capital_flow_change, hit, model_version, captured_at, is_synthetic
 		FROM prediction_backtest
-		WHERE date BETWEEN ? AND ?
+		WHERE (? = '' OR date >= ?) AND (? = '' OR date <= ?)
 		ORDER BY date ASC LIMIT ?
-	`, startDate, endDate, limit)
+	`, startDate, startDate, endDate, endDate, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load prediction range %s..%s: %w", startDate, endDate, err)
 	}
