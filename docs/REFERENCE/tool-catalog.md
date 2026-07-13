@@ -1,17 +1,17 @@
 ## 工具數量
 
-業務 102 + audit 4 + sampling/elicitation（0-2）= 106-108（**基礎 106**, **+2** sampling/elicitation, 編譯期 assert ∈ [106, 108]）
+業務 102 + audit 4 + sampling/elicitation（0-2）+ template_detector 2 = 108-110（**基礎 108**, **+2** sampling/elicitation, 編譯期 assert ∈ [108, 110]）
 
 # atlas-mcp Tool Catalog
 
-> **108 tools** grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
+> **110 tools** grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
 > For natural language query examples, see [`docs/INVESTOR/query-examples.md`](../INVESTOR/query-examples.md).
 
-## 完整工具 Catalog（約 108 個 tool，Phase 2+PR 1+2+3 全部上線）
+## 完整工具 Catalog（約 110 個 tool，Phase 2+PR 1+2+3 全部上線）
 
 ## 工具數量
 
-業務 102 + audit 4 = 106（**基礎 102**, **+4** audit/sampling/elicitation, 編譯期 assert ∈ [102, 106]）
+業務 102 + audit 4 + template_detector 2 = 108（**基礎 102**, **+6** audit/sampling/elicitation/template_detector, 編譯期 assert ∈ [108, 110]）
 
 
 ### Regime（1 個）
@@ -58,6 +58,12 @@
 |------|------|
 | `event_calendar` | 近期市場事件日曆（營收、ETF 換股、MSCI、休市） |
 | `event_flow_prediction` | 未來 5 天事件驅動資金流預測 |
+
+### Template Detector（2 個 — Stage 5 PR#4 Stage B 新增）
+| Tool | 用途 |
+|------|------|
+| `template_detector_status` | 最近一次（或前 N 次）trigger theme scan 結果（從 ledger.detector_scan_log 讀取） |
+| `detector_registry_list` | narrative.DetectorRegistry 內所有 detector 的 theme + enable/disable 狀態 |
 
 ### Risk（5 個）
 | Tool | 用途 |

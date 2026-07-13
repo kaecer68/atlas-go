@@ -257,10 +257,6 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 	}
 }
 
-func NewEventFlowPredictionStore(cfg config.Config) (EventFlowPredictionStore, error) {
-	return NewJSONLEventFlowPredictionStore(cfg.LedgerDir), nil
-}
-
 // NewDetectorScanStore returns the SQLite-backed Stage 5 PR#4
 // detector_scan_log store. Unlike other stores, DetectorScanStore has NO
 // JSONL fallback — the plan contract (IMPLEMENTATION_PLAN_STAGE_5.md §PR#4)

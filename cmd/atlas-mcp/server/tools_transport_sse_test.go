@@ -197,8 +197,8 @@ func TestRegisteredToolCount_RemainsInRangeAfterHTTPTransportRegistration(t *tes
 	registerAuditTools(mcpSrv, srv)
 	delta := RegisteredToolCount - before
 
-	if delta < 106 || delta > 108 {
-		t.Fatalf("tool count drift in HTTP-transport registration: delta=%d (total=%d), expected 106-108",
+	if delta < 108 || delta > 110 {
+		t.Fatalf("tool count drift in HTTP-transport registration: delta=%d (total=%d), expected 108-110",
 			delta, RegisteredToolCount)
 	}
 }

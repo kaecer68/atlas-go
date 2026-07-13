@@ -442,8 +442,10 @@ func run(args []string, deps appDeps) error {
 		}
 
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
-		var gateway *apigateway.Gateway
-		var gatewayFetcher monitoring.DataFetcher
+	var gateway *apigateway.Gateway
+	var detectorRegistry *narrative.DetectorRegistry
+	var detectorScanStore ledger.DetectorScanStore
+	var gatewayFetcher monitoring.DataFetcher
 		if deps.dataFetcher != nil {
 			// Test override: skip real Gateway initialization, use injected fetcher.
 			gatewayFetcher = deps.dataFetcher
@@ -641,6 +643,17 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
 			eventdriven.RegisterRoutes(mux, eventCalendar)
 			log.Printf("[EventDriven] registered /api/events/* routes")
+
+			// Stage 5 PR#4 Stage B: register detector scan routes alongside event-driven.
+			// Decoupled from narrativeEngine wiring — only needs the registry + scan store.
+			detectorRegistry = narrative.NewDefaultDetectorRegistry()
+			if store, storeErr := ledger.NewDetectorScanStore(cfg); storeErr == nil {
+				detectorScanStore = store
+				RegisterTemplateDetectorRoutes(mux, detectorRegistry, detectorScanStore)
+				log.Printf("[TemplateDetector] registered /api/detector/* routes (24 detectors + scan store wired)")
+			} else {
+				log.Printf("[TemplateDetector] scan store init failed: %v", storeErr)
+			}
 		}
 
 		subStore, err := subscription.NewStore(cfg.WorkDir)
@@ -828,6 +841,9 @@ func run(args []string, deps appDeps) error {
 				autoJudgePromoter: autoJudgePromoter,
 			})
 
+if detectorRegistry != nil && detectorScanStore != nil {
+				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore)
+			}
 			registerOperationsTasks(operationsDeps{
 				taskMgr:         taskMgr,
 				cfg:             cfg,

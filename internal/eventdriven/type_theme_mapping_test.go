@@ -209,3 +209,19 @@ func TestMappedEventTypes(t *testing.T) {
 		}
 	}
 }
+
+// stringSliceEqual was originally defined in narrative_inject_test.go (the
+// Stage 3 test file). When the file was removed during main refactoring, the
+// helper moved with it. Stage 5 PR#3 reintroduces a private copy here so the
+// type_theme_mapping tests stay self-contained.
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
