@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -199,5 +200,51 @@ func TestJSONLEventFlowPredictionStore_LenAndSizeAfterAppends(t *testing.T) {
 	}
 	if got := store.Size(); got <= 0 {
 		t.Fatalf("Size after 3 appends = %d, want > 0", got)
+	}
+}
+
+// TestJSONLEventFlowPredictionStore_ConcurrentAppendsNoLoss 跑 5 個 goroutine
+// 同時 Append,確認 read-modify-write 內的 Mutex 沒有 race。
+func TestJSONLEventFlowPredictionStore_ConcurrentAppendsNoLoss(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+	const goroutines = 5
+	const perGoroutine = 50
+	allStart := time.Now().Add(-24 * time.Hour)
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < perGoroutine; i++ {
+				rec := EventFlowPredictionRecord{
+					PredictedAt:   allStart.Add(time.Duration(g*perGoroutine+i) * time.Millisecond),
+					DirectionSign: float64(g*perGoroutine + i),
+					Confidence:    0.7,
+					Direction:     "inflow",
+				}
+				if err := store.AppendPrediction(rec); err != nil {
+					t.Errorf("goroutine %d append %d: %v", g, i, err)
+					return
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	want := goroutines * perGoroutine
+	records, err := store.LoadRecentPredictions(0)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions: %v", err)
+	}
+	if len(records) != want {
+		t.Fatalf("record count after %d concurrent appends = %d, want %d", want, len(records), want)
+	}
+	seen := make(map[time.Time]struct{}, want)
+	for _, r := range records {
+		if _, dup := seen[r.PredictedAt]; dup {
+			t.Fatalf("duplicated PredictedAt %s found (race detected)", r.PredictedAt.Format(time.RFC3339Nano))
+		}
+		seen[r.PredictedAt] = struct{}{}
 	}
 }
