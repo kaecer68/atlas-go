@@ -870,6 +870,7 @@ func run(args []string, deps appDeps) error {
 				collector:       collector,
 				eventCalendar:   eventCalendar,
 				janusEngine:     janusEngine,
+				prismMgr:        prismMgr,
 			})
 
 			// Register auto_daily_simulation — runs daily simulation at market close.
