@@ -316,7 +316,7 @@ func monthlyGuardFor(deps Stage3TaskDeps, day, hour, minute int) func() bool {
 	return monthlyOnceGuard(deps.TimeZone, day, hour, minute)
 }
 
-// dailyOnceGuardWithStore is the persistent analogue of dailyOnceGuard.
+// dailyOnceGuardWithStore is the persistent analog of dailyOnceGuard.
 // On a hit (run=false) the in-memory state is left untouched so the on-disk
 // record remains the single source of truth for the period.
 func dailyOnceGuardWithStore(tz *time.Location, hour, minute int, key string, store OncestampStore, samePeriod func(a, b time.Time) bool) func() bool {
@@ -330,7 +330,7 @@ func dailyOnceGuardWithStore(tz *time.Location, hour, minute int, key string, st
 	}
 }
 
-// weeklyOnceGuardWithStore is the persistent analogue of weeklyOnceGuard.
+// weeklyOnceGuardWithStore is the persistent analog of weeklyOnceGuard.
 // The store key is fixed per (tz, weekday, hour, minute) tuple; the samePeriod
 // comparator is anchored to Monday in tz.
 func weeklyOnceGuardWithStore(tz *time.Location, weekday time.Weekday, hour, minute int, key string, store OncestampStore, samePeriod func(tz *time.Location, a, b time.Time) bool) func() bool {
@@ -346,7 +346,7 @@ func weeklyOnceGuardWithStore(tz *time.Location, weekday time.Weekday, hour, min
 	}
 }
 
-// monthlyOnceGuardWithStore is the persistent analogue of monthlyOnceGuard.
+// monthlyOnceGuardWithStore is the persistent analog of monthlyOnceGuard.
 func monthlyOnceGuardWithStore(tz *time.Location, day, hour, minute int, key string, store OncestampStore, samePeriod func(tz *time.Location, a, b time.Time) bool) func() bool {
 	loc := orTZ(tz)
 	comparator := func(a, b time.Time) bool { return samePeriod(loc, a, b) }
