@@ -18,7 +18,7 @@ import (
 
 func TestSynthesizeCompositeScore_Bullish(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1.5e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1.5},
 		VIX:                marketdata.MacroDataPoint{Value: 15},
 	}
 	// tanh(1.5/5) ≈ 0.2913 → 8.74
@@ -29,7 +29,7 @@ func TestSynthesizeCompositeScore_Bullish(t *testing.T) {
 
 func TestSynthesizeCompositeScore_BullishWithPanic(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1.5e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1.5},
 		VIX:                marketdata.MacroDataPoint{Value: 40},
 	}
 	// 8.74 - 30 = -21.26
@@ -40,7 +40,7 @@ func TestSynthesizeCompositeScore_BullishWithPanic(t *testing.T) {
 
 func TestSynthesizeCompositeScore_Bearish(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -2e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -2.0},
 		VIX:                marketdata.MacroDataPoint{Value: 15},
 	}
 	// tanh(-2/5) ≈ -0.380 → -11.40
@@ -51,7 +51,7 @@ func TestSynthesizeCompositeScore_Bearish(t *testing.T) {
 
 func TestSynthesizeCompositeScore_BearishWithPanic(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -2e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -2.0},
 		VIX:                marketdata.MacroDataPoint{Value: 50},
 	}
 	// -11.40 - 45 = -56.40
@@ -72,7 +72,7 @@ func TestSynthesizeCompositeScore_NeutralFlowNoPanic(t *testing.T) {
 
 func TestSynthesizeCompositeScore_VIXAtBaselineNoPenalty(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1.0},
 		VIX:                marketdata.MacroDataPoint{Value: 20},
 	}
 	// tanh(0.2) ≈ 0.1974 → 5.92 (VIX exactly 20 → no penalty)
@@ -84,7 +84,7 @@ func TestSynthesizeCompositeScore_VIXAtBaselineNoPenalty(t *testing.T) {
 func TestEngine_UpdateFromMacro_StoresCompositeScore(t *testing.T) {
 	e := NewEngine()
 	snap := marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 2e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 2.0},
 		VIX:                marketdata.MacroDataPoint{Value: 25},
 	}
 	e.UpdateFromMacro(snap)
@@ -109,13 +109,13 @@ func TestEngine_GetCompositeScore_DefaultZero(t *testing.T) {
 func TestEngine_UpdateFromMacro_OverwritesPreviousScore(t *testing.T) {
 	e := NewEngine()
 	e.UpdateFromMacro(marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 1.0},
 		VIX:                marketdata.MacroDataPoint{Value: 15},
 	})
 	first := e.GetCompositeScore()
 
 	e.UpdateFromMacro(marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -1e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -1.0},
 		VIX:                marketdata.MacroDataPoint{Value: 15},
 	})
 	second := e.GetCompositeScore()
@@ -134,7 +134,7 @@ func TestEngine_GetCurrentRegimeScore_FallsBackToSynthetic(t *testing.T) {
 	e.EnsureAllRegimes()
 
 	e.UpdateFromMacro(marketdata.MacroDataSnapshot{
-		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 5e9},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 5.0},
 		VIX:                marketdata.MacroDataPoint{Value: 15},
 	})
 
