@@ -154,6 +154,7 @@ func registerStage3AlertTasks(d stage3Deps) {
 		TimeZone: tz,
 		OnAlertFired: func(ruleID string, severity monitoring.AlertLevel, metadata map[string]any) {
 			monitoring.RecordStage3AlertFired(d.metricsCollector, ruleID, severity)
+			monitoring.RecordStage3LedgerRecords(d.metricsCollector, d.predictionLedger)
 		},
 		ChannelLastDataAt: func() map[string]time.Time {
 			out := make(map[string]time.Time)
