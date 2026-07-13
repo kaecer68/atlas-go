@@ -15,9 +15,10 @@ func TestRegisterStage3Tasks_RegistersAllFiveTasksInBTM(t *testing.T) {
 	btm := apigateway.NewBackgroundTaskManager(nil)
 
 	cfg := config.Config{
-		WorkDir:    tmp,
-		LedgerDir:  tmp,
-		ReplayMode: "disabled",
+		WorkDir:            tmp,
+		LedgerDir:          tmp,
+		ReplayMode:         "disabled",
+		Stage3TasksEnabled: true,
 	}
 
 	store, err := ledger.NewEventFlowPredictionStore(cfg)
@@ -63,7 +64,13 @@ func TestRegisterStage3AlertTasks_RegistersThreeEvaluatorsInBTM(t *testing.T) {
 	tmp := t.TempDir()
 	btm := apigateway.NewBackgroundTaskManager(nil)
 
-	cfg := config.Config{WorkDir: tmp, LedgerDir: tmp, ReplayMode: "disabled"}
+	cfg := config.Config{
+		WorkDir:             tmp,
+		LedgerDir:           tmp,
+		ReplayMode:          "disabled",
+		Stage3TasksEnabled:  true,
+		Stage3AlertsEnabled: true,
+	}
 	store, err := ledger.NewEventFlowPredictionStore(cfg)
 	if err != nil {
 		t.Fatalf("NewEventFlowPredictionStore: %v", err)
