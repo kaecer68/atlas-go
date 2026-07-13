@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/eventquality"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -106,6 +107,12 @@ type EventCalendar struct {
 	config      *config.ParametersConfig
 	annualRules map[string]EventRule
 	generatedAt time.Time
+
+	// Stage 2 quality gate hooks (PR #1119 + #1120). Both optional; when nil
+	// the calendar falls back to the legacy "accept everything" path so
+	// existing callers don't need to wire a validator.
+	validator  eventquality.EventValidator
+	qualityLog *eventquality.QualityLog
 }
 
 // NewEventCalendar creates a new EventCalendar with default event rules.
@@ -117,6 +124,104 @@ func NewEventCalendar() *EventCalendar {
 		annualRules: defaultEventRules(),
 	}
 	return tec
+}
+
+// WithValidator attaches a Stage 2 eventquality.EventValidator. Events that
+// fail validation are dropped and (if WithQualityLog is also wired) recorded
+// in the quality log. Returns the receiver for chaining.
+func (tec *EventCalendar) WithValidator(v eventquality.EventValidator) *EventCalendar {
+	tec.mu.Lock()
+	tec.validator = v
+	tec.mu.Unlock()
+	return tec
+}
+
+// WithQualityLog attaches a Stage 2 eventquality.QualityLog destination for
+// rejected events. No-op when the validator is nil.
+func (tec *EventCalendar) WithQualityLog(l *eventquality.QualityLog) *EventCalendar {
+	tec.mu.Lock()
+	tec.qualityLog = l
+	tec.mu.Unlock()
+	return tec
+}
+
+// gateEvent runs the quality validator (if wired) and returns (true, "") to
+// accept the event, (false, reason) to reject. Rejection reason is also
+// recorded to the quality log when wired.
+func (tec *EventCalendar) gateEvent(raw eventquality.RawEvent) (bool, string) {
+	if tec.validator == nil {
+		return true, ""
+	}
+	res := tec.validator.Validate(raw)
+	if res.Accepted {
+		return true, ""
+	}
+	if tec.qualityLog != nil {
+		if err := tec.qualityLog.Record(res); err != nil {
+			logging.Warn("event_calendar", "quality_log_write_failed",
+				logging.FStr("event_id", res.EventID),
+				logging.Err(err),
+			)
+		}
+	}
+	return false, res.Reason
+}
+
+// toRawEvent converts a CalendarEvent into the wire-agnostic RawEvent fed to
+// the Stage 2 validator. Confidence is mapped from the provenance Evidence
+// field; trigger_theme is the event_type (the calendar has no separate
+// trigger_theme column).
+func toRawEvent(e CalendarEvent) eventquality.RawEvent {
+	conf := 0.5
+	switch e.EvidenceQuality {
+	case EvidenceRealTime:
+		conf = 1.0
+	case EvidenceEstimated:
+		conf = 0.7
+	case EvidenceUnverified:
+		conf = 0.3
+	}
+	symbol := ""
+	if len(e.AffectedIndustries) > 0 {
+		symbol = e.AffectedIndustries[0]
+	} else if e.EventType != "" {
+		symbol = e.EventType
+	}
+	src := string(e.DataSource)
+	if src == "" {
+		src = "calendar"
+	}
+	ingestedAt := e.GeneratedAt
+	if ingestedAt.IsZero() {
+		ingestedAt = time.Now()
+	}
+	return eventquality.RawEvent{
+		EventID:        e.ID,
+		EventType:      e.EventType,
+		EffectiveDate:  e.PeakDate,
+		SymbolOrSector: symbol,
+		Title:          e.Name,
+		TriggerTheme:   e.EventType,
+		Source:         src,
+		Confidence:     conf,
+		IngestedAt:     ingestedAt,
+	}
+}
+
+// filterByQualityGate runs gateEvent on each event in events and returns the
+// subset that passes validation. When the validator is nil the function is a
+// pass-through (returns the input slice).
+func (tec *EventCalendar) filterByQualityGate(events []CalendarEvent) []CalendarEvent {
+	if tec.validator == nil {
+		return events
+	}
+	out := make([]CalendarEvent, 0, len(events))
+	for _, evt := range events {
+		if ok, _ := tec.gateEvent(toRawEvent(evt)); ok {
+			out = append(out, evt)
+		}
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -688,6 +793,7 @@ func (tec *EventCalendar) RefreshEvents(now time.Time) {
 		allEvents = append(allEvents, evt)
 	}
 
+	allEvents = tec.filterByQualityGate(allEvents)
 	tec.events = allEvents
 }
 
@@ -1122,6 +1228,7 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 
 	tec.mu.Lock()
 	defer tec.mu.Unlock()
+	var newEvents []CalendarEvent
 	for _, pd := range events {
 		startDate, err := time.Parse("2006-01-02", pd.Date)
 		if err != nil {
@@ -1149,11 +1256,14 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 			EvidenceQuality: EvidenceRealTime,
 			GeneratedAt:     time.Now(),
 		}
-		tec.events = append(tec.events, evt)
+		newEvents = append(newEvents, evt)
 	}
+	accepted := tec.filterByQualityGate(newEvents)
+	tec.events = append(tec.events, accepted...)
 	logging.Info("event_calendar", "provider_events_added",
 		logging.FStr("provider", provider.Name()),
 		logging.FInt("added_events", len(events)),
+		logging.FInt("accepted_events", len(accepted)),
 	)
 }
 
