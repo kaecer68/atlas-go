@@ -59,10 +59,10 @@ type operationsDeps struct {
 	repo            *repository.DualWriteRepository
 	collector       *monitoring.MetricsCollector
 	// eventCalendar 服務 eventdriven.RegisterRoutes(/api/events/*)。
-	eventCalendar     *industry.EventCalendar
-	capitalFlow       *capitalflow.Service
-	janusEngine       *janus.Engine
-	prismMgr          *prism.PRISMManager
+	eventCalendar      *industry.EventCalendar
+	capitalFlow        *capitalflow.Service
+	janusEngine        *janus.Engine
+	prismMgr           *prism.PRISMManager
 	vixBaselineTracker *marketdata.VIXBaselineTracker
 }
 
