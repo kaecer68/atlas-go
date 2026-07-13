@@ -38,6 +38,10 @@ type stage3Deps struct {
 // All tasks run at 1-minute interval; the task wrappers contain daily/weekly/
 // monthly once-guards so they only execute at the scheduled time.
 func registerStage3Tasks(d stage3Deps) {
+	if !d.cfg.Stage3TasksEnabled {
+		log.Printf("[Stage3] tasks disabled via STAGE3_TASKS_ENABLED=false; skipping 5 task registrations")
+		return
+	}
 	tz, err := time.LoadLocation("Asia/Taipei")
 	if err != nil {
 		log.Printf("[Stage3] failed to load Asia/Taipei tz, falling back to UTC: %v", err)
@@ -135,6 +139,10 @@ func registerStage3Tasks(d stage3Deps) {
 //   - daily:     every 1 minute (fires 06:30 via internal guard)
 //   - market-close: every 1 minute (fires 13:45 via internal guard)
 func registerStage3AlertTasks(d stage3Deps) {
+	if !d.cfg.Stage3AlertsEnabled {
+		log.Printf("[Stage3] alerts disabled via STAGE3_ALERTS_ENABLED=false; skipping 3 alert registrations")
+		return
+	}
 	tz, err := time.LoadLocation("Asia/Taipei")
 	if err != nil {
 		log.Printf("[Stage3] failed to load Asia/Taipei tz, falling back to UTC: %v", err)
