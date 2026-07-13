@@ -15,6 +15,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
+// WeightAuditHook is called when model weights are updated (Stage 2.3b).
+// modelID identifies the model; weightHash is a SHA-256 hex digest of the
+// canonical JSON representation of all model weights.
+type WeightAuditHook func(modelID, weightHash string)
+
 // NarrativeEngine orchestrates event detection and causal chain matching.
 type NarrativeEngine struct {
 	kb            *KnowledgeBase
@@ -25,6 +30,19 @@ type NarrativeEngine struct {
 	lastMacro     marketdata.MacroDataSnapshot
 	prevMacro     marketdata.MacroDataSnapshot
 	lastGeo       GeopoliticalRiskScore
+	weightHook    WeightAuditHook
+}
+
+// KnowledgeBase returns the underlying template knowledge base.
+func (ne *NarrativeEngine) KnowledgeBase() *KnowledgeBase {
+	return ne.kb
+}
+
+// SetWeightAuditHook wires a mutation audit callback for model weight changes.
+func (ne *NarrativeEngine) SetWeightAuditHook(hook WeightAuditHook) {
+	ne.stressMu.Lock()
+	ne.weightHook = hook
+	ne.stressMu.Unlock()
 }
 
 var defaultSectorSymbolMap = map[string][]string{
@@ -300,6 +318,14 @@ func (ne *NarrativeEngine) UpdateModelWeights() {
 
 	for i := range ne.models {
 		ne.models[i].Weight = weights[i]
+	}
+	// Stage 2.3b: fire weight change audit hook.
+	if ne.weightHook != nil {
+		for i := range ne.models {
+			raw, _ := json.Marshal(ne.models[i])
+			hash := sha256Hex(raw)
+			ne.weightHook(ne.models[i].ID, hash)
+		}
 	}
 }
 

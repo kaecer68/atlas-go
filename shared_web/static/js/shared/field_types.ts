@@ -3906,6 +3906,13 @@ export interface WeightFactorConfig {
   evidence: string;
 }
 
+export interface auditEntry {
+  ts: string;
+  tool: string;
+  args_hash: string;
+  status: string;
+}
+
 export interface channelState {
   enabled: boolean;
   updated_at: string;

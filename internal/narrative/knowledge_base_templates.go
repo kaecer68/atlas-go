@@ -13,14 +13,39 @@ package narrative
 //     helpers; they stay co-located with MatchChains for clarity.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"sync"
 )
 
+// sha256Hex returns the lowercase hex SHA-256 digest of data.
+func sha256Hex(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	h := sha256.Sum256(data)
+	return hex.EncodeToString(h[:])
+}
+
+// TemplateAuditHook is called when a template is registered (added or updated).
+// The templateID identifies the template; contentHash is a SHA-256 hex digest
+// of the canonical JSON representation.
+type TemplateAuditHook func(templateID, contentHash string)
+
 // KnowledgeBase holds causal templates and produces instantiated chains.
 type KnowledgeBase struct {
-	mu        sync.RWMutex
-	templates map[string]CausalTemplate
+	mu         sync.RWMutex
+	templates  map[string]CausalTemplate
+	auditHook  TemplateAuditHook
+}
+
+// SetTemplateAuditHook wires a mutation audit callback (Stage 2.3a).
+func (kb *KnowledgeBase) SetTemplateAuditHook(hook TemplateAuditHook) {
+	kb.mu.Lock()
+	kb.auditHook = hook
+	kb.mu.Unlock()
 }
 
 // NewKnowledgeBase creates a knowledge base preloaded with default templates.
@@ -37,8 +62,17 @@ func NewKnowledgeBase() *KnowledgeBase {
 // RegisterTemplate adds or replaces a template.
 func (kb *KnowledgeBase) RegisterTemplate(t CausalTemplate) {
 	kb.mu.Lock()
-	defer kb.mu.Unlock()
 	kb.templates[t.ID] = t
+	hook := kb.auditHook
+	kb.mu.Unlock()
+
+	// Stage 2.3a: fire template change audit hook outside the lock.
+	if hook != nil {
+		// SHA-256 hex of canonical JSON repr of the template.
+		raw, _ := json.Marshal(t)
+		hash := sha256Hex(raw)
+		hook(t.ID, hash)
+	}
 }
 
 // GetTemplate returns a template by ID.
