@@ -23,13 +23,14 @@ import (
 
 // stage3Deps groups the dependencies needed by Stage 3 tasks and alerts.
 type stage3Deps struct {
-	taskMgr       *apigateway.BackgroundTaskManager
-	cfg           config.Config
-	gateway       *apigateway.Gateway
-	monitor       *monitoring.Monitor
-	dashboard     *monitoring.DashboardAPI
-	eventCalendar *industry.EventCalendar
-	macroProvider marketdata.MacroDataProvider
+	taskMgr          *apigateway.BackgroundTaskManager
+	cfg              config.Config
+	gateway          *apigateway.Gateway
+	monitor          *monitoring.Monitor
+	dashboard        *monitoring.DashboardAPI
+	eventCalendar    *industry.EventCalendar
+	macroProvider    marketdata.MacroDataProvider
+	predictionLedger ledger.EventFlowPredictionStore
 }
 
 // registerStage3Tasks wires the 5 Stage 3 scheduled tasks into BTM.
@@ -144,8 +145,11 @@ func registerStage3AlertTasks(d stage3Deps) {
 			return out
 		},
 		IsTradingDay: func(date time.Time) bool {
-			wd := date.Weekday()
-			return wd != time.Saturday && wd != time.Sunday
+			if d.eventCalendar == nil {
+				wd := date.Weekday()
+				return wd != time.Saturday && wd != time.Sunday
+			}
+			return d.eventCalendar.IsTaiwanTradingDay(date)
 		},
 		EventCalendarEventCount: func(date time.Time) int {
 			return len(d.eventCalendar.GetEventsForDate(date))
@@ -155,7 +159,21 @@ func registerStage3AlertTasks(d stage3Deps) {
 			for i := range out {
 				out[i] = 0.5
 			}
-			return out
+			if d.predictionLedger == nil {
+				return out
+			}
+			records, err := d.predictionLedger.LoadRecentPredictions(days)
+			if err != nil || len(records) == 0 {
+				return out
+			}
+			flows := make([]float64, len(records))
+			for i, r := range records {
+				flows[i] = r.DirectionSign
+			}
+			if len(flows) >= days {
+				return flows[len(flows)-days:]
+			}
+			return flows
 		},
 		LatestCapitalFlowPrediction: func() (float64, bool) {
 			if d.eventCalendar == nil {
@@ -166,7 +184,16 @@ func registerStage3AlertTasks(d stage3Deps) {
 			if len(report.Predictions) == 0 {
 				return 0, false
 			}
-			return report.Predictions[0].Confidence, true
+			pred := report.Predictions[0]
+			if d.predictionLedger != nil {
+				_ = d.predictionLedger.AppendPrediction(ledger.EventFlowPredictionRecord{
+					PredictedAt:   time.Now(),
+					DirectionSign: ledger.DirectionSign(pred.Direction, pred.Confidence),
+					Confidence:    pred.Confidence,
+					Direction:     pred.Direction,
+				})
+			}
+			return pred.Confidence, true
 		},
 		LatestCapitalFlowActual: func() (float64, bool) {
 			if d.macroProvider == nil {

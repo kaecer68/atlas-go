@@ -882,14 +882,19 @@ func run(args []string, deps appDeps) error {
 				prismMgr:        prismMgr,
 			})
 
+			predictionLedger, ledgerErr := ledger.NewEventFlowPredictionStore(cfg)
+			if ledgerErr != nil {
+				log.Printf("[Stage3] failed to create prediction ledger: %v", ledgerErr)
+			}
 			d3 := stage3Deps{
-				taskMgr:       taskMgr,
-				cfg:           cfg,
-				gateway:       gateway,
-				monitor:       monitor,
-				dashboard:     dashboard,
-				eventCalendar: eventCalendar,
-				macroProvider: macroProvider,
+				taskMgr:          taskMgr,
+				cfg:              cfg,
+				gateway:          gateway,
+				monitor:          monitor,
+				dashboard:        dashboard,
+				eventCalendar:    eventCalendar,
+				macroProvider:    macroProvider,
+				predictionLedger: predictionLedger,
 			}
 			registerStage3Tasks(d3)
 			registerStage3AlertTasks(d3)
