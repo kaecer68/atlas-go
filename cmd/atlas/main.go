@@ -866,20 +866,24 @@ func run(args []string, deps appDeps) error {
 				autoJudgePromoter: autoJudgePromoter,
 			})
 
+			vixBaselineTracker := marketdata.NewVIXBaselineTracker(
+				filepath.Join(cfg.WorkDir, "data/state/vix_baseline.json"),
+			)
 			registerOperationsTasks(operationsDeps{
-				taskMgr:         taskMgr,
-				cfg:             cfg,
-				monitor:         monitor,
-				gateway:         gateway,
-				healthMonitor:   healthMonitor,
-				lifecycleMgr:    lifecycleMgr,
-				dashboard:       dashboard,
-				realtimeAdapter: realtimeAdapter,
-				repo:            repo,
-				collector:       collector,
-				eventCalendar:   eventCalendar,
-				janusEngine:     janusEngine,
-				prismMgr:        prismMgr,
+				taskMgr:            taskMgr,
+				cfg:                cfg,
+				monitor:            monitor,
+				gateway:            gateway,
+				healthMonitor:      healthMonitor,
+				lifecycleMgr:       lifecycleMgr,
+				dashboard:          dashboard,
+				realtimeAdapter:    realtimeAdapter,
+				repo:               repo,
+				collector:          collector,
+				eventCalendar:      eventCalendar,
+				janusEngine:        janusEngine,
+				prismMgr:           prismMgr,
+				vixBaselineTracker: vixBaselineTracker,
 			})
 
 			predictionLedger, ledgerErr := ledger.NewEventFlowPredictionStore(cfg)
