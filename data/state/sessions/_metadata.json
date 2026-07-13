@@ -15,7 +15,7 @@
     "cmd/backtest-window"
   ],
   "schema_ref": null,
-  "catalog_ref": "docs/DATA_CATALOG.md#sessions",
+  "catalog_ref": "docs/data-catalog.md#sessions",
   "created_date": "2026-03-30",
   "last_modified": "continuous",
   "estimated_size": {
@@ -25,5 +25,5 @@
   "retention_policy": "indefinite",
   "backup_policy": "gitignored, PostgreSQL dual-write as secondary",
   "tags": ["outcomes", "sessions", "forward-return", "core"],
-  "notes": "每個 session 目錄含 summary.json、recommendation_outcomes.jsonl、screened_symbols.jsonl、positions.json、experiments.jsonl。AI agent 應優先從此目錄讀取（DATA_ARCHITECTURE.md 層級 1）。"
+  "notes": "每個 session 目錄含 summary.json、recommendation_outcomes.jsonl、screened_symbols.jsonl、positions.json、experiments.jsonl。AI agent 應優先從此目錄讀取（data-architecture.md 層級 1）。"
 }

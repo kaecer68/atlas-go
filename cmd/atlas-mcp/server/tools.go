@@ -65,7 +65,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_list_active",
-		Description: autoDescOr("strategy_list_active", "List the strategy set currently active in production (per docs/WORKFLOW_MAP.md WA-500)."),
+		Description: autoDescOr("strategy_list_active", "List the strategy set currently active in production (per docs/workflow-map.md WA-500)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyListActive)
 
@@ -83,7 +83,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_health",
-		Description: autoDescOr("system_get_health", "Return overall system health status (per docs/WORKFLOW_MAP.md WA-606)."),
+		Description: autoDescOr("system_get_health", "Return overall system health status (per docs/workflow-map.md WA-606)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetHealth)
 }

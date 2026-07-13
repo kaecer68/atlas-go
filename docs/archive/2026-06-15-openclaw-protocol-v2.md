@@ -5,9 +5,9 @@
 > This document captures a point-in-time architecture narrative and KPI snapshot.
 > For current operation rules and mutation loop behavior, use these documents first:
 > - `docs/skills-map.md`
-> - `docs/iteration_playbook.md`
-> - `docs/operations_playbook.md`
-> - `docs/evolution_loop.md`
+> - `docs/iteration-playbook.md`
+> - `docs/operations-playbook.md`
+> - `docs/evolution-loop.md`
 
 ## Evolution Summary
 

@@ -33,4 +33,4 @@ codebase-memory 提供 **SQLite-backed 知識圖譜**，開放 **openCypher 查�
 | ADR / 複雜度分析 | **codebase-memory** ⬅️ 這個 | 獨佔功能 |
 | 動態分派追蹤 | **CodeGraph** | 唯一支援 callbacks/re-render hop |
 
-> 完整工具路由決策樹請見 [`docs/TOOLS.md`](../../../docs/TOOLS.md)。
+> 完整工具路由決策樹請見 [`docs/tools.md`](../../../docs/tools.md)。

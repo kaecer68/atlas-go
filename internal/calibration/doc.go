@@ -13,7 +13,7 @@
 //	RecommendUpdates(current, observations) → ParameterMetadata diff
 //
 // All recommendations include Rationale and Source fields per the
-// ParametersConfig contract (see docs/PARAMETER_SYSTEM.md).
+// ParametersConfig contract (see docs/parameter-system.md).
 //
 // Maturity: utility
 package calibration

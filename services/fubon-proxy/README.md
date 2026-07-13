@@ -153,4 +153,4 @@ RUN curl -fsSL "${FUBON_NEO_WHEEL_URL}" -o /tmp/fubon_neo.zip \
 - `internal/marketdata/fubon_client.go` - Go HTTP 客戶端
 - `.env` - 環境變數配置
 - `~/.config/atlas-go/.fubon-env/` - 預編譯的 fubon-neo venv
-- `docs/ENVIRONMENT.md` § Fubon SDK - 套件下架、wheel 平台限制的完整說明
+- `docs/environment.md` § Fubon SDK - 套件下架、wheel 平台限制的完整說明

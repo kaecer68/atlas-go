@@ -12,10 +12,10 @@
 
 ```
 階層 1: 憲法（Constitution）
-  └── docs/REFERENCE/CONSTITUTION.md
+  └── docs/REFERENCE/constitution.md
       深度工作與數學/實證約束；非 CI 強制，但對 optimizer / portfolio / risk 具關鍵約束。
-      註：原位於 `.omo/CONSTITUTION.md`（2026-06-26 PR #751 移至此處，`.omo/` 為 .gitignore 排除，新 clone 不可見）。
-  └── docs/REFERENCE/ITERATION_GATE.md
+      註：原位於 `.omo/constitution.md`（2026-06-26 PR #751 移至此處，`.omo/` 為 .gitignore 排除，新 clone 不可見）。
+  └── docs/REFERENCE/iteration-gate.md
       迭代閘門（5 Gate 自我檢查：數學深度、資產通用性、Falsifiability、程式碼預算、回歸測試）。
   └── internal/apigateway/CONSTITUTION.md
       強制規範，CI 自動檢查。違反會阻斷 PR。
@@ -41,7 +41,7 @@
 
 **衝突處理原則**：
 - 高一階層的規範**覆蓋**低一階層
-- 同階層衝突 → 以 `CONSTITUTION.md` 為最終仲裁者
+- 同階層衝突 → 以 `constitution.md` 為最終仲裁者
 - 若未在任一規範中找到答案 → 以原始碼實作為準
 
 ---
@@ -52,7 +52,7 @@
 
 | 文件 | 範圍 | AI 入口可達性 |
 |------|------|-------------|
-| `docs/REFERENCE/CONSTITUTION.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `AGENTS.md` 索引 |
+| `docs/REFERENCE/constitution.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `AGENTS.md` 索引 |
 | `internal/apigateway/CONSTITUTION.md` | 數據源管理：Gateway 模式、限流、熔斷、背景任務、環境變數 | ✅ 從 `agents.md` → `copilot-instructions.md` |
 
 ### 階層 2：領域守則（Instructions）
@@ -84,7 +84,7 @@
 
 | 位置 | 涵蓋範圍 | 獨特內容 |
 |------|---------|---------|
-| `./AGENTS.md` | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/REFERENCE/TRAPS.md` |
+| `./AGENTS.md` | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/REFERENCE/traps.md` |
 | `internal/apigateway/` | apigateway | Gateway.Fetch、BackgroundTaskManager、CircuitBreaker |
 | `internal/capitalflow/` | capitalflow / eventdriven / recommender / subscription | 資金流、事件日曆、推薦、認證集群 |
 | `internal/fubonproxy/` | fubonproxy | ProcessManager supervisor F1-F9、Stop/backoff |
@@ -105,22 +105,22 @@
 | 文件 | 範圍 |
 |------|------|
 | `docs/architecture.md` | 分層設計、元件職責 |
-| `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態單一真相來源（PR #700） |
-| `docs/ai_agent_architecture.md` | 代理協調、決策流程 |
-| `docs/REFERENCE/PARAMETER_SYSTEM.md` | 參數管理、權威溯源 |
-| `docs/operations_playbook.md` | 日常運維、mutation 工作流程 |
-| `docs/evolution_loop.md` | 接受門檻、循環機制 |
-| `docs/iteration_playbook.md` | Mutation 策略模式 |
-| `docs/data_sources.md` | 資料匯入、Replay 格式 |
-| `docs/script_usage_guide.md` | 輔助腳本使用方式 |
+| `docs/environment.md` | 外部依賴與開發環境狀態單一真相來源（PR #700） |
+| `docs/ai-agent-architecture.md` | 代理協調、決策流程 |
+| `docs/REFERENCE/parameter-system.md` | 參數管理、權威溯源 |
+| `docs/operations-playbook.md` | 日常運維、mutation 工作流程 |
+| `docs/evolution-loop.md` | 接受門檻、循環機制 |
+| `docs/iteration-playbook.md` | Mutation 策略模式 |
+| `docs/data-sources.md` | 資料匯入、Replay 格式 |
+| `docs/script-usage-guide.md` | 輔助腳本使用方式 |
 | `docs/archive/2026-06-26-gateway-migration-tracking.md` | 遷移 TODO 追蹤（已封存） |
-| `docs/AI_PROMPT_FILES.md` | AI prompt 檔案追蹤政策（避免 local-only 漂移） |
-| `docs/MULTI_CLI_PROTOCOL.md` | 多 CLI 並行 worktree 協議 |
+| `docs/ai-prompt-files.md` | AI prompt 檔案追蹤政策（避免 local-only 漂移） |
+| `docs/multi-cli-protocol.md` | 多 CLI 並行 worktree 協議 |
 | `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊（pre-flight / daily check-in / acceptance / rollback） |
 | `docs/operations/l2-4-followup.md` | L2.4 後續工作報告（auto-cron / CLI flag / promotion 4 步） |
 | _（shipped via PR #828,merged 2026-06-29）_ | L2.4 CLI flag 實作：`--use-llm-sector-agents`（plan 內容已併入 `docs/operations/l2-4-followup.md`）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
-| `docs/TOOLS.md` | ACI 工具（GitNexus / codebase-memory / CodeGraph / atlas-mcp）路由決策樹 |
+| `docs/tools.md` | ACI 工具（GitNexus / codebase-memory / CodeGraph / atlas-mcp）路由決策樹 |
 | `docs/REFERENCE/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（108 tools,供外部 AI agent） |
 
 ---
@@ -132,14 +132,14 @@
 | 工作類型 | 必須閱讀 | 建議閱讀 |
 |---------|---------|---------|
 | **修改程式碼前** | `atlas-pre-change-protocol/SKILL.md` | `go-core.instructions.md`，對應模組的 `AGENTS.md` |
-| **新增/修改 Go 程式碼** | `go-core.instructions.md` | 對應模組的 `AGENTS.md`，`CONSTITUTION.md`（若涉及資料源） |
-| **新增資料源/API 調用** | `CONSTITUTION.md`（全部 6 條） | `marketdata/AGENTS.md` |
+| **新增/修改 Go 程式碼** | `go-core.instructions.md` | 對應模組的 `AGENTS.md`，`constitution.md`（若涉及資料源） |
+| **新增資料源/API 調用** | `constitution.md`（全部 6 條） | `marketdata/AGENTS.md` |
 | **執行實驗** | `experiments-guardrails.instructions.md` | `experiment/AGENTS.md`，`baseline/AGENTS.md` |
-| **Live Trading** | `live-trading.guardrails.instructions.md` | `CONSTITUTION.md`，`live/AGENTS.md` |
-| **新增參數** | `docs/REFERENCE/PARAMETER_SYSTEM.md` | `go-core.instructions.md` |
-| **新增背景任務** | `CONSTITUTION.md` 第四條 | 無 |
+| **Live Trading** | `live-trading.guardrails.instructions.md` | `constitution.md`，`live/AGENTS.md` |
+| **新增參數** | `docs/REFERENCE/parameter-system.md` | `go-core.instructions.md` |
+| **新增背景任務** | `constitution.md` 第四條 | 無 |
 | **修改前端** | `monitoring/AGENTS.md`（snake_case 契約） | 無 |
-| **理解系統架構** | `docs/architecture.md`、`.claude/SKILLS-MAP.md` | `docs/ai_agent_architecture.md` |
+| **理解系統架構** | `docs/architecture.md`、`.claude/SKILLS-MAP.md` | `docs/ai-agent-architecture.md` |
 | **跨模組重構** | `docs/architecture.md`、`.claude/SKILLS-MAP.md` | 涉及的所有模組 `AGENTS.md` |
 
 ---
@@ -148,7 +148,7 @@
 
 | 目錄 | 存放內容 | 數量 |
 |------|---------|------|
-| `internal/*/CONSTITUTION.md` | 憲法（最高權威） | 1 |
+| `internal/*/constitution.md` | 憲法（最高權威） | 1 |
 | `.github/instructions/*.md` | 領域守則 | 3 |
 | `.claude/skills/*/SKILL.md` | 手寫技能文件 | 20 |
 | `internal/*/AGENTS.md` | 模組指南（經 2026-07-11 精簡） | 15 |
@@ -166,8 +166,8 @@
 |------|------|---------|
 | 1.6.1 | 2026-06-27 | 修正統計數字（docs/specs 9→14、docs/guides 1→6）— follow-up to PR #793 |
 | 1.6 | 2026-06-27 | 同步 Batch 5a-6 AGENTS.md 精簡：內模組 49→21、新增 docs/specs/ 與 docs/guides/ 分類（PR #784-#788）|
-| 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/CONSTITUTION.md` → `docs/REFERENCE/CONSTITUTION.md`，新增 `docs/REFERENCE/ITERATION_GATE.md`（PR #752）|
-| 1.4 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 索引；更新版本/日期以反映 PR #700 |
+| 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/constitution.md` → `docs/REFERENCE/constitution.md`，新增 `docs/REFERENCE/iteration-gate.md`（PR #752）|
+| 1.4 | 2026-06-25 | 加入 `docs/environment.md` 索引；更新版本/日期以反映 PR #700 |
 | 1.3 | 2026-06-17 | 修正不存在技能引用（atlas-core-architecture → SKILLS-MAP.md + docs/architecture.md）；更新技能數量為實際值（手寫 10 + 生成 21 + 機器人 4 + GitNexus 6）；新增機器人溝通與自動生成技能分類說明 |
 | 1.2 | 2026-06-02 | 修正統計數字：技能文件 5→16、模組指南 21→34、移除 sim 缺失標記（已補齊） |
 | 1.1 | 2026-05-29 | 補齊憲法、技能與模組指南索引，修正缺失清單與使用情境路由 |

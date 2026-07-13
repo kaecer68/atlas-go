@@ -11,7 +11,7 @@
     "internal/orchestrator"
   ],
   "schema_ref": null,
-  "catalog_ref": "docs/DATA_CATALOG.md#approvals",
+  "catalog_ref": "docs/data-catalog.md#approvals",
   "created_date": "2026-05-01",
   "last_modified": "continuous",
   "estimated_size": {

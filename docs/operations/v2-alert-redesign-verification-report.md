@@ -51,7 +51,7 @@
 - **前置**: PR-1/2/3 全部完成
 - **動作**:
   1. 建立升級版 alert-redesign 規格(從 v2 內容,但更新所有 v2 過時引用)
-  2. 刪除 `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` (v1, 15468B, PR #756 故意保留)
+  2. 刪除 `.omo/briefs/ALERT_SYSTEM_REdesign.md` (v1, 15468B, PR #756 故意保留)
   3. 刪除 `.omo/briefs/alert-redesign-v2.md` (v2 working copy, gitignored)
 - **估時**: 2-4h
 
@@ -106,7 +106,7 @@
 ## 8. 參考資料
 
 - **v2 source**: `.omo/briefs/alert-redesign-v2.md` (gitignored working draft)
-- **v1 (superseded but preserved)**: `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` (15468B, PR #756 故意保留)
+- **v1 (superseded but preserved)**: `.omo/briefs/ALERT_SYSTEM_REdesign.md` (15468B, PR #756 故意保留)
 - **驗證日期**: 2026-07-04 (三輪 grep)
 - **升級觸發條件** (v2 Part 9): "完成 P0 全部 4 個 PR 後(估 4-6 PR、2-3 工作天), 把本檔升級到 docs/alerts-redesign.md"
 - **設計審計方法論**: user m00091 修正 (避免重複/衝突工作)

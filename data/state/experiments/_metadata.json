@@ -13,7 +13,7 @@
     "cmd/promote-baseline"
   ],
   "schema_ref": null,
-  "catalog_ref": "docs/DATA_CATALOG.md#experiments",
+  "catalog_ref": "docs/data-catalog.md#experiments",
   "created_date": "2026-03-30",
   "last_modified": "continuous",
   "estimated_size": {

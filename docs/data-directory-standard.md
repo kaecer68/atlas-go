@@ -5,7 +5,7 @@
 **狀態**: 權威標準（authoritative）  
 **適用範圍**: `data/` 目錄下所有子目錄結構  
 **強制性**: CI 強制檢查（`scripts/ci/check_data_naming.sh`，P0.4a 實現）  
-**相關文檔**: `docs/DATA_NAMING_CONVENTION.md`（命名規範）· `docs/DATA_ARCHITECTURE.md`（資料架構）· `docs/DATA_CATALOG.md`（資料目錄）
+**相關文檔**: `docs/data-naming-convention.md`（命名規範）· `docs/data-architecture.md`（資料架構）· `docs/data-catalog.md`（資料目錄）
 
 ---
 
@@ -97,7 +97,7 @@ data/
 ├── schemas/                 # JSON Schema 定義（由數據治理管理）
 │   └── *.schema.json
 │
-└── README.md                # 資料目錄入口（參見 docs/DATA_CATALOG.md）
+└── README.md                # 資料目錄入口（參見 docs/data-catalog.md）
 ```
 
 ---
@@ -121,9 +121,9 @@ data/
 |------|------|
 | **R1: 禁止平面檔案** | `data/state/` 下不允許任何平面檔案（.json/.jsonl/.db），所有檔案必須在子目錄中 |
 | **R2: 一個資產一個子目錄** | 每個子目錄對應一個邏輯資料資產（或一組緊密相關的資產） |
-| **R3: 子目錄命名 snake_case** | 遵循 `docs/DATA_NAMING_CONVENTION.md` R1 規則 |
+| **R3: 子目錄命名 snake_case** | 遵循 `docs/data-naming-convention.md` R1 規則 |
 | **R4: 每日數據子目錄統一格式** | 每日數據（macro/、margin/、capital_flow/）使用相同命名規範 |
-| **R5: 每個子目錄必須有 `_metadata.json`** | 遵循 `docs/DATA_MATURITY_STANDARD.md` |
+| **R5: 每個子目錄必須有 `_metadata.json`** | 遵循 `docs/data-maturity-standard.md` |
 
 ### 3.3 何時需要子目錄
 
@@ -184,8 +184,8 @@ data/
 1. 確認資產分類：replay / cache / reference / state？
 2. 若為 state/，確認是否需要新建子目錄？遵循 R2-R5 規則
 3. 建立子目錄（如需要）
-4. 建立 _metadata.json（遵循 DATA_MATURITY_STANDARD.md）
-5. 更新 docs/DATA_CATALOG.md
+4. 建立 _metadata.json（遵循 data-maturity-standard.md）
+5. 更新 docs/data-catalog.md
 6. 更新 Go 程式碼中的路徑參考
 7. 執行 CI 檢查：bash scripts/ci/check_data_naming.sh
 ```
@@ -216,8 +216,8 @@ data/
 
 | 文檔 | 關係 |
 |------|------|
-| `docs/DATA_NAMING_CONVENTION.md` | 命名規範（R1-R10），被本文件引用 |
-| `docs/DATA_MATURITY_STANDARD.md` | `_metadata.json` 格式定義 |
-| `docs/DATA_CATALOG.md` | 完整資料資產目錄 |
-| `docs/DATA_ARCHITECTURE.md` | 資料架構與讀寫路徑 |
+| `docs/data-naming-convention.md` | 命名規範（R1-R10），被本文件引用 |
+| `docs/data-maturity-standard.md` | `_metadata.json` 格式定義 |
+| `docs/data-catalog.md` | 完整資料資產目錄 |
+| `docs/data-architecture.md` | 資料架構與讀寫路徑 |
 | `docs/audit/2026-06-02-p0-2-root-cause-analysis.md` | 根因分析（FG-1: 無規範） |

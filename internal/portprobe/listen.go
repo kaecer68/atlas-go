@@ -19,7 +19,7 @@ import (
 // On EADDRINUSE, Listen probes the address to identify the occupant and
 // returns a wrapped error describing the state, PID, and command so the
 // operator can act via the runbook (see
-// docs/operations_playbook.md → "Port 18080 Conflict Recovery").
+// docs/operations-playbook.md → "Port 18080 Conflict Recovery").
 //
 // Self-PID guard: the current process is never reported as a killable
 // occupant; the diagnostic message always includes the running pid so the
@@ -78,7 +78,7 @@ func formatOccupantDiagnostic(addr string, state State, occ Occupant) error {
 		return fmt.Errorf("portprobe: %s already serving by pid %d (%s) (self=%d); refusing to start: another healthy atlas instance may be running%s",
 			addr, occ.PID, occ.Command, self, dockerRecoverySuffix(occ.Command))
 	case StateForeign:
-		return fmt.Errorf("portprobe: %s occupied by foreign pid %d (%s) (self=%d); see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\" before killing",
+		return fmt.Errorf("portprobe: %s occupied by foreign pid %d (%s) (self=%d); see docs/operations-playbook.md → \"Port 18080 Conflict Recovery\" before killing",
 			addr, occ.PID, occ.Command, self)
 	default:
 		return fmt.Errorf("portprobe: %s in use by pid %d (%s) (self=%d)",
@@ -89,7 +89,7 @@ func formatOccupantDiagnostic(addr string, state State, occ Occupant) error {
 func dockerRecoverySuffix(command string) string {
 	cmd := strings.ToLower(command)
 	if strings.Contains(cmd, "docker") || strings.Contains(cmd, "com.docker") {
-		return "; stop Docker atlas (`docker compose stop atlas`) or use a different -addr (docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")"
+		return "; stop Docker atlas (`docker compose stop atlas`) or use a different -addr (docs/operations-playbook.md → \"Port 18080 Conflict Recovery\")"
 	}
 	return ""
 }

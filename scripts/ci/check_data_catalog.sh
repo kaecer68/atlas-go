@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# check_data_catalog.sh — 驗證 DATA_CATALOG.md 與實際 data/ 目錄一致
+# check_data_catalog.sh — 驗證 data-catalog.md 與實際 data/ 目錄一致
 #
 # 檢查項目:
 #   1. data/ 目錄下的所有 JSONL/JSON/CSV 檔案都已記錄在 catalog 中
@@ -51,7 +51,7 @@ add_json_violation() {
   fi
 }
 
-CATALOG_MD="docs/DATA_CATALOG.md"
+CATALOG_MD="docs/data-catalog.md"
 CATALOG_JSON="docs/DATA_CATALOG.json"
 
 # =============================================================================
@@ -62,7 +62,7 @@ check_catalog_exists() {
 
   if [ ! -f "$CATALOG_MD" ]; then
     log_fail "$CATALOG_MD 不存在 — 尚未建立資料目錄"
-    log_info "參考: docs/DATA_CATALOG_TEMPLATE.md"
+    log_info "參考: docs/data-catalog-template.md"
     return 1
   fi
 
@@ -165,13 +165,13 @@ check_stale_entries() {
 
 # =============================================================================
 # 檢查 4: data/state/ 下每個子目錄都有 _metadata.json
-# Per DATA_MATURITY_STANDARD.md §4.1
+# Per data-maturity-standard.md §4.1
 # =============================================================================
 check_metadata_files() {
   printf "\n═══ 檢查 4/5: _metadata.json 存在性 ═══\n"
   local found_any=0
 
-  # Skip these directories (known exceptions per DATA_MATURITY_STANDARD.md §4.2)
+  # Skip these directories (known exceptions per data-maturity-standard.md §4.2)
   local skip_dirs=(
     "data/state/sessions"      # Individual sessions don't need metadata
     "data/state/live/state"    # Managed by live module
@@ -200,7 +200,7 @@ check_metadata_files() {
 
     local metadata_file="$dir/_metadata.json"
     if [ ! -f "$metadata_file" ]; then
-      log_warn "$dir — 缺少 _metadata.json (DATA_MATURITY_STANDARD.md §4.1)"
+      log_warn "$dir — 缺少 _metadata.json (data-maturity-standard.md §4.1)"
       add_json_violation "metadata_missing" "$dir" "no _metadata.json in directory"
       found_any=1
     fi
@@ -261,7 +261,7 @@ check_catalog_sync() {
 # =============================================================================
 main() {
   printf "Atlas 資料目錄新鮮度檢查\n"
-  printf "參考文件: docs/DATA_CATALOG.md\n"
+  printf "參考文件: docs/data-catalog.md\n"
   printf "================================\n\n"
 
   local r1=0 r2=0 r3=0 r4=0 r5=0
@@ -307,7 +307,7 @@ main() {
     if [ "$VIOLATIONS" -gt 0 ]; then
       printf "${RED}發現 %d 處違規${NC}\n\n" "$VIOLATIONS"
       printf "修復建議:\n"
-      printf "  1. 建立 $CATALOG_MD (參考 DATA_CATALOG_TEMPLATE.md)\n"
+      printf "  1. 建立 $CATALOG_MD (參考 data-catalog-template.md)\n"
       printf "  2. 記錄未記錄的檔案 (檢查 2)\n"
       printf "  3. 為每個子目錄建立 _metadata.json (檢查 4)\n"
     elif [ "$WARNINGS" -gt 0 ]; then

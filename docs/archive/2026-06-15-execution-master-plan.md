@@ -239,7 +239,7 @@ go test ./...
 Required evidence artifacts:
 - data/state/approvals/<decision-file>.json
 - data/state/sessions/<session-id>/summary.json
-- docs/operations_playbook.md
+- docs/operations-playbook.md
 - .github/workflows/ci.yml
 
 Sign-off criteria:

@@ -31,7 +31,7 @@
 > 跨模組全域規則 → `AGENTS.md`（本檔）
 > 模組內部陷阱/API/流程 → `internal/<mod>/AGENTS.md`
 > 操作程序 / playbook → `docs/`
-> 憲法級強制規範 → `docs/REFERENCE/CONSTITUTION.md`、`internal/apigateway/CONSTITUTION.md`
+> 憲法級強制規範 → `docs/REFERENCE/constitution.md`、`internal/apigateway/CONSTITUTION.md`
 > 技能 / 子代理指引 → `.claude/skills/`
 
 **問題在於「50 個模組都符合第二條」** — 規則本身沒問題，但實作未考慮「內容是否真的獨特」。
@@ -47,7 +47,7 @@
 | 類別 | 含義 | 後續動作 |
 |------|------|---------|
 | **A. 純重疊 doc.go** | 內容已完全被 doc.go + 根 AGENTS.md 涵蓋 | 合併至 doc.go，刪除 AGENTS.md |
-| **B. 已有 skill / CONSTITUTION 涵蓋** | 內容分散到 `.claude/skills/atlas-<x>/SKILL.md` 或 `internal/<mod>/CONSTITUTION.md` | 確認 skill 涵蓋後刪除 AGENTS.md |
+| **B. 已有 skill / CONSTITUTION 涵蓋** | 內容分散到 `.claude/skills/atlas-<x>/SKILL.md` 或 `internal/<mod>/constitution.md` | 確認 skill 涵蓋後刪除 AGENTS.md |
 | **C. 獨特內容** | 有根 AGENTS.md / doc.go / 既有 skill 都沒有的細節 | 保留為 AGENTS.md 或遷移至 docs/specs/、.claude/skills/ |
 | **D. 空殼** | 內容空洞（≤25 行僅列 KEY TYPES）或 X 級實驗性模組 | 直接刪除 |
 
@@ -70,12 +70,12 @@
 | 3 | autobacktest | 35 | **C** | SignalEngine FullStore + 15% 熔斷 + next13_30 timezone — **保留** |
 | 4 | backtest | 30 | **C** | RollingWindowSplit + valid_start.Year 停止 — **保留** |
 | 5 | baseline | 78 | **C** | Policy lifecycle + Trigger 執行期強制 — **保留** |
-| 6 | bootstrap | 42 | **C** | Init 順序 → **遷移至 `docs/QUICKSTART.md`** |
-| 7 | config | 38 | **B** | `docs/REFERENCE/PARAMETER_SYSTEM.md` 涵蓋 .env / Magic number |
+| 6 | bootstrap | 42 | **C** | Init 順序 → **遷移至 `docs/quickstart.md`** |
+| 7 | config | 38 | **B** | `docs/REFERENCE/parameter-system.md` 涵蓋 .env / Magic number |
 | 8 | db | 28 | **A** | 合併 DATABASE_URL / migration path → doc.go |
 | 9 | domain | 56 | **C** | Scorecard OOS 同步鏈 4 位置 + CorporateAction — **保留** |
 | 10 | eval | 25 | **A** | 合併 Fin-Skills 編號 → doc.go |
-| 11 | eventbus | 43 | **B** | `apigateway/CONSTITUTION.md` Article 4 (BackgroundTaskManager) |
+| 11 | eventbus | 43 | **B** | `apigateway/constitution.md` Article 4 (BackgroundTaskManager) |
 | 12 | feature | 23 | **A** | 合併 Registry 簽名 → doc.go |
 | 13 | fubonproxy | 82 | **B** | `atlas-fubon-supervisor-invariants` (F1~F9) 已涵蓋 |
 | 14 | globalmarket | 34 | **C** | 多市場 tier 1 限制 — **遷移至 `internal/industry/AGENTS.md`** |
@@ -209,7 +209,7 @@
 | **1. 純刪除** | adversarial, importer, metalearning, ml, reflexivity, replay, robustness, scheduler, stress, swarm, taskexec | 11 | 直接刪除 AGENTS.md |
 | **2. Skill 涵蓋** | apigateway, config, eventbus, fubonproxy, llm_annotator, monitoring, risk, strategy, strategy_techniques | 9 | 確認 skill/CONSTITUTION 涵蓋後刪除 |
 | **3. 合併 doc.go** | db, eval, feature, logging, realtime | 5 | 補充內容至 doc.go → 刪除 |
-| **4. 邊界 C 類遷移** | bootstrap, globalmarket, spawning, storage | 4 | 遷移至 docs/QUICKSTART.md、industry/AGENTS.md、atlas-strategy-evolution skill、doc.go |
+| **4. 邊界 C 類遷移** | bootstrap, globalmarket, spawning, storage | 4 | 遷移至 docs/quickstart.md、industry/AGENTS.md、atlas-strategy-evolution skill、doc.go |
 | **5. 精選 C 類保留** | ledger, baseline, domain, sim, janus, prism, retail, tax, backtest, autobacktest, screener, reporting, repository | 13 | **最終決定：合併到 10 個保留清單中（見下）** |
 
 **Batch 5 的 13 個模組需進一步精簡為 3 個**（讓 internal 保留清單 = 10 個 + 已存在的 8 個 - 已有重複 = 實際目標 10 個）：
@@ -219,14 +219,14 @@
 | **保留** | ledger | BuildScorecards OOS 5 步驟細節是 UNIQUE |
 | **保留** | baseline | Policy lifecycle + Trigger 評估規則表 |
 | **保留** | sim | RunWithState + RunDay 序列（hot-path） |
-| **併入其他** | domain | Scorecard OOS 同步鏈已於 root AGENTS.md + TRAPS.md 提及，保留**精簡版**（56→30 行）或併入 sim/AGENTS.md |
+| **併入其他** | domain | Scorecard OOS 同步鏈已於 root AGENTS.md + traps.md 提及，保留**精簡版**（56→30 行）或併入 sim/AGENTS.md |
 | **併入 industry** | janus | Regime → Risk Gate 接線 — 併入 `industry/AGENTS.md` §週期卡章節 |
 | **併入 industry** | prism | Synthetic flag — 併入 `industry/AGENTS.md` §實驗檔案 |
 | **併入 monitoring 內容** | retail | RSI-tw 12 子指標 + 11 欄位真實性對照 — 併入 `docs/guides/retail-sentiment.md`（新建） |
 | **併入 config** | tax | NHISurcharge 邏輯 — 併入 `internal/config/AGENTS.md` §Tax 章節（config AGENTS.md 將保留，與 apigateway 一樣） |
 | **併入 portfolio** | backtest | WindowRun 契約 — 併入 `portfolio/AGENTS.md` §backtest 章節 |
 | **併入 portfolio** | autobacktest | SignalEngine FullStore — 併入 `portfolio/AGENTS.md` §autobacktest 章節 |
-| **併入 root AGENTS.md** | screener | 永不回傳錯誤契約已在 `docs/REFERENCE/TRAPS.md` 提及 |
+| **併入 root AGENTS.md** | screener | 永不回傳錯誤契約已在 `docs/REFERENCE/traps.md` 提及 |
 | **併入 root AGENTS.md** | reporting | 欄位完整性契約屬跨模組 |
 | **併入 root AGENTS.md** | repository | DualWriteRepository 是 generic infra 概念 |
 
@@ -268,7 +268,7 @@
 
 | 模組 | 遷移目標 |
 |------|---------|
-| bootstrap | 併入 `docs/QUICKSTART.md` §啟動流程 |
+| bootstrap | 併入 `docs/quickstart.md` §啟動流程 |
 | globalmarket | 併入 `internal/industry/AGENTS.md` §多市場擴展章節 |
 | spawning | 併入 `.claude/skills/atlas-strategy-evolution/SKILL.md` |
 | storage | 合併至 doc.go（保留為內部註解） |
@@ -287,7 +287,7 @@
 | tax | 併入 `internal/config/AGENTS.md`（config 將保留，與 apigateway 一樣）|
 | backtest | 併入 portfolio/AGENTS.md §backtest 章節 |
 | autobacktest | 併入 portfolio/AGENTS.md §autobacktest 章節 |
-| screener | 內容已於 `docs/REFERENCE/TRAPS.md` 提及 |
+| screener | 內容已於 `docs/REFERENCE/traps.md` 提及 |
 | reporting | 欄位完整性契約屬跨模組內容 |
 | repository | DualWriteRepository 是 generic infra |
 
@@ -299,7 +299,7 @@
 
 更新：
 - 根 `AGENTS.md` 模組路由表（移除已刪除的 32 個）
-- `docs/DOCUMENTATION_MAP.md`（反映新結構）
+- `docs/documentation-map.md`（反映新結構）
 - `.claude/SKILLS-MAP.md`（新增 `atlas-retail-sentiment` skill）
 
 ---
@@ -337,6 +337,6 @@
 4. **PR-4**（Batch 3）：合併 5 個 A 類至 doc.go
 5. **PR-5**（Batch 4）：遷移 4 個邊界 C 類
 6. **PR-6**（Batch 5）：13 個精選 C 類合併至 10 個保留 + 新建 `docs/guides/retail-sentiment.md`
-7. **PR-7**（Batch 6-7）：更新根 AGENTS.md + DOCUMENTATION_MAP.md + SKILLS-MAP.md
+7. **PR-7**（Batch 6-7）：更新根 AGENTS.md + documentation-map.md + SKILLS-MAP.md
 
 每個 PR 執行 `bash scripts/ci/check_markdown_links.sh` + `go build ./...` + `go vet ./...` + `staticcheck ./...` 驗證。

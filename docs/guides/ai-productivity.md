@@ -7,8 +7,8 @@
 This guide is an execution productivity reference. For current OpenClaw mutation lifecycle semantics, treat the following as canonical first:
 
 - `.claude/SKILLS-MAP.md`（統一技能地圖入口）
-- `docs/iteration_playbook.md`
-- `docs/operations_playbook.md`
+- `docs/iteration-playbook.md`
+- `docs/operations-playbook.md`
 - `scripts/openclaw/today_start.sh`
 
 Historical reports may contain point-in-time findings and should not override the current guard and acceptance behavior documented above.
@@ -632,7 +632,7 @@ These are **documentation for prompt design**, not enforced by code.
 | `internal/sim/engine.go` | Order sizing logic | Dev (rarely; architecture-critical) |
 | `internal/portfolio/darwinian_weights.go` | Agent weight adjustment | Dev (rarely; tuning via config) |
 | [`AGENTS.md`](../../AGENTS.md) | Developer operations guide | Dev (when changing build/test process) |
-| `docs/evolution_loop.md` | Mutation acceptance policy | Dev (when changing acceptance criteria) |
+| `docs/evolution-loop.md` | Mutation acceptance policy | Dev (when changing acceptance criteria) |
 
 ### Key Utility Scripts
 

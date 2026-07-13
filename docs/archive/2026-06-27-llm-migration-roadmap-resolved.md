@@ -3,7 +3,7 @@
 > **狀態**：✅ **RESOLVED**（2026-06 v0.0.0.21）
 > **文件角色**：atlas-go LLM 整合的歷史遷移計畫。所有 Phase 1-3 已完成、Phase 4+ 已展開。
 > **設計權威**：`docs/llm-integration-strategy-framework.md`（v2.1，本文件為其 §8 抽離，已 archive）
-> **保留理由**：historical record（見 `docs/DOCUMENTATION_STANDARD.md` §archive 用途）
+> **保留理由**：historical record（見 `docs/documentation-standard.md` §archive 用途）
 
 ## 完成狀態
 
@@ -167,7 +167,7 @@
 
 8. **完成條件**：
    - `llm_annotator` 與 `internal/llm` 同時晉升 E 級
-   - `internal/MATURITY.md` 更新並通過一致性檢查（`MATURITY.md:120-122`）
+   - `internal/MATURITY.md` 更新並通過一致性檢查（`maturity.md:120-122`）
    - 備援鏈至少觸發過 1 次（被驗證可運作）
 
 ## Phase 4+（不在本版本承諾範圍）

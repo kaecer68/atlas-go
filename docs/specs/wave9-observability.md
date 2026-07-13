@@ -137,7 +137,7 @@ PR #925 / Issue #927 經典場景:alert rule 引用 `channel_errors_total`,但 r
 - `internal/monitoring/api/shared/handler.go:authFreeExactPaths`
 - `cmd/atlas/main.go:isPublicPath`
 
-**陷阱**:只改其中一處,rebuild 後仍 401。**永遠兩處同步**。見 TRAPS.md 對應 entry。
+**陷阱**:只改其中一處,rebuild 後仍 401。**永遠兩處同步**。見 traps.md 對應 entry。
 
 ---
 
@@ -190,7 +190,7 @@ Loki 上線後,operator 可從 log 快速定位 5 個偵測器哪個出問題。
 - `docs/handoff/2026-06-26-wave9-observability-coordinator.md` — 設計演進
 - `docs/operations/wave9-runbook.md` — 操作手冊(姊妹文件)
 - `docs/operations/loki-deployment.md` — 集中式 log 設計
-- `docs/REFERENCE/TRAPS.md` — `/api/llm/health` 401 防回歸 entry
+- `docs/REFERENCE/traps.md` — `/api/llm/health` 401 防回歸 entry
 
 ---
 

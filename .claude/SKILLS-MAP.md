@@ -221,11 +221,11 @@ GitNexus 程式碼智慧工具技能。
 |------|------|------|
 | `AGENTS.md` | 全域規則與模組路由 | 引用本文件為技能索引 |
 | `CLAUDE.md` | 工具進入點（含 GitNexus 規範） | 存放 GitNexus 完整規範以避免重複 |
-| `docs/REFERENCE/GUIDELINES_INDEX.md` | 規範階層與衝突仲裁 | 技能為階層 3 |
-| `docs/ENVIRONMENT.md` | 外部依賴與開發環境狀態單一真相來源 | 技能使用前先確認環境狀態 |
+| `docs/REFERENCE/guidelines-index.md` | 規範階層與衝突仲裁 | 技能為階層 3 |
+| `docs/environment.md` | 外部依賴與開發環境狀態單一真相來源 | 技能使用前先確認環境狀態 |
 | `.claude/skills/SKILL_TEMPLATE.md` | 統一手寫技能模板 | 新建技能時的格式規範 |
 | `internal/apigateway/CONSTITUTION.md` | 憲法級強制規範 | 技能不可違反憲法 |
-| `docs/REFERENCE/CONSTITUTION.md` | 深度憲法（矩陣運算、證偽） | 策略技能須遵守數學約束（2026-06-26 PR #752 從 `.omo/CONSTITUTION.md` 移入，因 `.gitignore` 排除而新 clone 不可見）|
+| `docs/REFERENCE/constitution.md` | 深度憲法（矩陣運算、證偽） | 策略技能須遵守數學約束（2026-06-26 PR #752 從 `.omo/CONSTITUTION.md` 移入，因 `.gitignore` 排除而新 clone 不可見）|
 
 ---
 
@@ -236,6 +236,6 @@ GitNexus 程式碼智慧工具技能。
 | 5.1 | 2026-06-26 | 新增 🚀 功能拓展分類與 `atlas-llm-provider-capability`、`atlas-factor-change-protocol` skill；新增 `atlas-fubon-supervisor-invariants` skill 歸屬 🔧；總數 20 → 23；更新相關流程與載入規則 |
 | 5.0 | 2026-06-25 | 移除全數 `generated/*` 技能；總數 43 → 20；程式碼導航改由 GitNexus 與 `internal/<mod>/AGENTS.md` 負責 |
 | 4.2 | 2026-06-25 | 加入 `internal/llm/` generated 技能（LLM 路由器、12 capability handlers）；總數 42 → 43 |
-| 4.1 | 2026-06-25 | 加入 `docs/ENVIRONMENT.md` 引用；更新日期以反映 PR #700 |
+| 4.1 | 2026-06-25 | 加入 `docs/environment.md` 引用；更新日期以反映 PR #700 |
 | 4.0 | 2026-06-17 | 全面重寫：建立 6 大分類體系、補齊 3 缺失技能（strategy-techniques, taiwan-leading-indicators, data-visibility）、新增機器人溝通分類（4 個新技能）、加入 Token 節省規範、修正不存在技能引用、更新總數為 42 |
 | 3.0 | 2026-06-03 | 加入 generated/ 和 gitnexus/ 目錄 |

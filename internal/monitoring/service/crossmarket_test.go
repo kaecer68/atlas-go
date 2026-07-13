@@ -758,7 +758,7 @@ func TestGetCachedSnapshot_ProviderError_DoesNotPoisonCache(t *testing.T) {
 // failed channels — proving the safeguard's positive path complements (not
 // duplicates) the channel-registration fix in apigateway/register_adapters.go.
 //
-// See: docs/data_sources.md for the default-flip rationale and
+// See: docs/data-sources.md for the default-flip rationale and
 // .claude/skills/atlas-data-visibility/SKILL.md for the 4-layer model.
 func TestGetStatus_DataStatusOKWhenAllChannelsPopulated(t *testing.T) {
 	healthy := marketdata.MacroDataSnapshot{

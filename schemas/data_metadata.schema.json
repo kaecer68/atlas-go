@@ -50,7 +50,7 @@
     },
     "catalog_ref": {
       "type": "string",
-      "description": "指向 DATA_CATALOG.md 中的對應條目"
+      "description": "指向 data-catalog.md 中的對應條目"
     },
     "created_date": {
       "type": "string",

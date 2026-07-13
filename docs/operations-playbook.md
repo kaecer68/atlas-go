@@ -211,7 +211,7 @@ wave9_observability stopped
 
 ### 外部相依設定
 
-Wave 9 的生產 provider（`ChannelHealthProvider`、`IngestionLagProvider`、`WeightProvider`、`TargetWeightsProvider`）需要正確的環境與外部服務。詳見 `docs/ENVIRONMENT.md`。
+Wave 9 的生產 provider（`ChannelHealthProvider`、`IngestionLagProvider`、`WeightProvider`、`TargetWeightsProvider`）需要正確的環境與外部服務。詳見 `docs/environment.md`。
 
 ## Wave 9 觀測性 v0.0.0.18 修復與運維指引
 

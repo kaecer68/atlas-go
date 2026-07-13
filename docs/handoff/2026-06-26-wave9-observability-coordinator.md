@@ -57,7 +57,7 @@ type detectorFactory interface {
 | `WeightProvider` | 選用 | `WithWeightProvider`；nil 時 factor regression detector no-op |
 | `TargetWeightsProvider` | 選用 | `WithTargetWeightsProvider`；nil 時 drift detector 降級為 v1 |
 
-生產環境的 provider 設定請參考 `docs/ENVIRONMENT.md`。
+生產環境的 provider 設定請參考 `docs/environment.md`。
 
 ## 與 Dashboard API 的關係
 

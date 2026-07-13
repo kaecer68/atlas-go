@@ -19,7 +19,7 @@ go run ./cmd/promote-baseline
 go run ./cmd/revert-baseline --list
 ```
 
-Full setup guide: [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
+Full setup guide: [`docs/quickstart.md`](docs/quickstart.md)
 
 ## Atlas as MCP Server
 
@@ -73,7 +73,7 @@ Focused: `go test ./internal/experiment/... ./internal/orchestrator/... ./intern
 | You are... | Start here |
 |------------|-----------|
 | External AI agent connecting to atlas | [`docs/INVESTOR/README.md`](docs/INVESTOR/README.md) (5-min overview) |
-| Developer modifying code | `AGENTS.md` (cross-tool AI guide) + [`docs/REFERENCE/TRAPS.md`](docs/REFERENCE/TRAPS.md) |
+| Developer modifying code | `AGENTS.md` (cross-tool AI guide) + [`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md) |
 | Debugging or troubleshooting | [`CLAUDE.md`](CLAUDE.md) (deploy, frontend, token rules) |
 | Understanding module maturity | [`internal/MATURITY.md`](internal/MATURITY.md) → [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) |
 | Learning about MCP integration | [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) |

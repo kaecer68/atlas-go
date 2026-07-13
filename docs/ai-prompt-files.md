@@ -73,5 +73,5 @@ PR #690（2026-06-24）清理了 graphify 工具鏈。過程中發現：
 
 - `.opencode/prompts/`：實際 prompt 檔案位置
 - `.claude/SKILLS-MAP.md`：Claude/OpenCode skill 索引
-- `docs/operations_playbook.md`：日常運維流程（包含 prompt 維護節奏）
-- `docs/QUICKSTART.md`：開發者快速上手（提示開發者檢查 prompt 工具引用是否仍有效）
+- `docs/operations-playbook.md`：日常運維流程（包含 prompt 維護節奏）
+- `docs/quickstart.md`：開發者快速上手（提示開發者檢查 prompt 工具引用是否仍有效）

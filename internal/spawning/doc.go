@@ -15,7 +15,7 @@
 //	  → If reject: log + archive spawn record to ledger.SpawnRecord
 //
 // Spawn records are append-only (ledger) and provide the audit trail for
-// agent lineage. See docs/evolution_loop.md for the full evolution contract.
+// agent lineage. See docs/evolution-loop.md for the full evolution contract.
 //
 // Maturity: evolving
 package spawning

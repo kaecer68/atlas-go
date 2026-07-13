@@ -5,7 +5,7 @@
 **狀態**: 權威標準（authoritative）  
 **適用範圍**: `data/` 目錄下所有檔案與目錄  
 **強制性**: CI 強制檢查（`scripts/ci/validate_data_naming.sh`，P0.4a 實現）  
-**相關文檔**: `docs/developer_guide.md`（Go 代碼命名） · `docs/DATA_ARCHITECTURE.md`（資料架構） · `docs/audit/2026-06-02-p0-2-root-cause-analysis.md`（根因分析）
+**相關文檔**: `docs/developer-guide.md`（Go 代碼命名） · `docs/data-architecture.md`（資料架構） · `docs/audit/2026-06-02-p0-2-root-cause-analysis.md`（根因分析）
 
 ---
 
@@ -18,7 +18,7 @@
 - `git log --all --oneline | grep -i 'data.*convent'` → **0 matches**
 - 3 個每日數據目錄使用 3 種不同日期格式（`YYYY-MM-DD`, `YYYYMMDD_margin`, `YYYYMMDD`）
 - 4 個目錄用 kebab-case，4 個用 snake_case，16 個用 plain
-- `developer_guide.md`（2026-05-07）僅規範 Go 源碼檔案的 snake_case，未涵蓋資料檔案
+- `developer-guide.md`（2026-05-07）僅規範 Go 源碼檔案的 snake_case，未涵蓋資料檔案
 - `/data/state/` 自 commit #2（2026-03-30）起被 gitignore，使強制執行不可能
 
 ### 1.2 設計目標
@@ -34,9 +34,9 @@
 ### 1.3 權威層級
 
 ```
-本文件 (DATA_NAMING_CONVENTION.md)  ← 資料檔案命名之最終權威
+本文件 (data-naming-convention.md)  ← 資料檔案命名之最終權威
     ↑
-developer_guide.md (§命名慣例)     ← Go 源碼檔案命名（不相關）
+developer-guide.md (§命名慣例)     ← Go 源碼檔案命名（不相關）
 AGENTS.md                           ← 倉庫級邊界（不覆蓋本文件）
 ```
 
@@ -97,7 +97,7 @@ data/state/branch protection/             ← 空格禁止
 
 #### 特殊例外
 
-- `README.md`、`VERSION` — 工具強制要求（developer_guide.md §例外）
+- `README.md`、`VERSION` — 工具強制要求（developer-guide.md §例外）
 - `state-archive/` — 現有工具產物，遷移至 `data/archive/`（見 §7.3）
 - 標準縮寫可接受（如 `tsmc_revenue` 而非 `taiwan_semiconductor_manufacturing_company_revenue`），但必須全小寫 + 底線
 
@@ -685,13 +685,13 @@ mv data/state/recommendation_outcomes.jsonl.backup.* data/state/backups/
 
 ## 10. 與現有規範的關係
 
-### 10.1 `developer_guide.md`
+### 10.1 `developer-guide.md`
 
-`developer_guide.md` §檔案命名指定 `snake_case` 用於「所有新檔案：`my_module.go`, `data_export.json`」。本文件擴展該規範至 `data/` 目錄內的**所有**檔案與目錄，並補充日期格式、JSONL 區分、備份管理等數據特定規範。
+`developer-guide.md` §檔案命名指定 `snake_case` 用於「所有新檔案：`my_module.go`, `data_export.json`」。本文件擴展該規範至 `data/` 目錄內的**所有**檔案與目錄，並補充日期格式、JSONL 區分、備份管理等數據特定規範。
 
-### 10.2 `DATA_ARCHITECTURE.md`
+### 10.2 `data-architecture.md`
 
-`DATA_ARCHITECTURE.md` 描述**資料儲存架構**（在哪裡、如何讀寫）。本文件描述**資料命名規範**（叫什麼、怎麼叫）。兩者互補，不相衝突。
+`data-architecture.md` 描述**資料儲存架構**（在哪裡、如何讀寫）。本文件描述**資料命名規範**（叫什麼、怎麼叫）。兩者互補，不相衝突。
 
 ### 10.3 `.gitignore`
 
@@ -742,13 +742,13 @@ CI 腳本支援 `.data_naming_exceptions` 檔案（位於 `data/` 根目錄）�
 
 | 編號 | 文件 | 狀態 |
 |------|------|------|
-| P0.3a | `DATA_NAMING_CONVENTION.md`（本文件） | ✅ 完成 |
+| P0.3a | `data-naming-convention.md`（本文件） | ✅ 完成 |
 | P0.3b | `DATA_STORAGE_POLICY.md` | ⏳ P0.3b |
 | P0.3c | `DATA_SCHEMA_STANDARD.md` | ⏳ P0.3c |
 
 ### 更新流程
 
-1. 提出變更 PR，包含 `docs/DATA_NAMING_CONVENTION.md` 修改
+1. 提出變更 PR，包含 `docs/data-naming-convention.md` 修改
 2. 若新增例外，同時更新 `data/.data_naming_exceptions`
 3. CI 檢查：`validate_data_naming.sh` 確保修改後的規範與現有檔案一致（或標記待遷移項目）
 

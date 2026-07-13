@@ -117,7 +117,8 @@ yahooLimiter := rate.NewLimiter(YahooFinanceRate, 1)
 registry.Register("us_yahoo", provider, yahooLimiter)
 registry.Register("frankfurter_fx", provider, fxLimiter)  // 獨立 limiter，非 Yahoo endpoint
 
-// ❌ 違規：各自獨立 limiteregistry.Register("us_yahoo", provider, rate.NewLimiter(YahooFinanceRate, 1))
+// ❌ 違規：各自獨立 limiter
+egistry.Register("us_yahoo", provider, rate.NewLimiter(YahooFinanceRate, 1))
 registry.Register("frankfurter_fx", provider, rate.NewLimiter(YahooFinanceRate, 1))
 ```
 
@@ -422,7 +423,7 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 - [ ] 是否設定 Rate Limiter？→ 是否加入 `internal/apigateway/limits.go`？
 - [ ] 是否實作健康檢查？→ 是否通過 `UnifiedHealthStore` 記錄？
 - [ ] 是否新增 HTTP 調用？→ 是否通過 `gateway.Fetch()`？
-- [ ] 是否更新文件？→ 是否更新 `docs/data_sources.md`？
+- [ ] 是否更新文件？→ 是否更新 `docs/data-sources.md`？
 ```
 
 ### 6.3 CI 檢查流程

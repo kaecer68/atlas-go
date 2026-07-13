@@ -14,7 +14,7 @@
 #   3. 工具數應為 91 (grep "91 tool" 在至少 3 個檔案)
 #
 # 排除:
-#   - docs/ENVIRONMENT.md / docs/specs/security-audit.md (backend 用, 非 atlas-mcp)
+#   - docs/environment.md / docs/specs/security-audit.md (backend 用, 非 atlas-mcp)
 #   - CHANGELOG.md (歷史紀錄, 不可改)
 #
 # 用法:

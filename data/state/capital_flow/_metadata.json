@@ -11,7 +11,7 @@
     "internal/industry"
   ],
   "schema_ref": null,
-  "catalog_ref": "docs/DATA_CATALOG.md#capital_flow",
+  "catalog_ref": "docs/data-catalog.md#capital_flow",
   "created_date": "2025-05-19",
   "last_modified": "continuous",
   "estimated_size": {

@@ -28,22 +28,22 @@ git checkout -b <type>/<task-slug>
 
 ```bash
 # 1.1 必讀精簡版（先看這兩個）
-sed -n '1,80p' docs/DOCUMENTATION_STANDARD.md
-sed -n '1,80p' docs/DOCUMENTATION_MAP.md
+sed -n '1,80p' docs/documentation-standard.md
+sed -n '1,80p' docs/documentation-map.md
 
 # 1.2 模組陷阱（修改 Go 程式碼前）
 cat AGENTS.md
 
 # 1.3 架構與環境
 cat docs/architecture.md
-cat docs/ENVIRONMENT.md
+cat docs/environment.md
 ```
 
 **為何這樣讀**：
-- `DOCUMENTATION_STANDARD.md` 與 `DOCUMENTATION_MAP.md` 決定**檔案該放哪**
+- `documentation-standard.md` 與 `documentation-map.md` 決定**檔案該放哪**
 - `AGENTS.md` 列出**跨模組陷阱**（避免常見錯誤）
 - `architecture.md` 給出**系統全局觀**
-- `ENVIRONMENT.md` 給出**外部依賴狀態**（如 LLM provider 設定）
+- `environment.md` 給出**外部依賴狀態**（如 LLM provider 設定）
 
 ---
 
@@ -78,7 +78,7 @@ git branch --show-current
 # 3.1 列出 .omo/ 內容
 ls -la .omo/
 
-# 3.2 對照白名單（從 DOCUMENTATION_STANDARD.md § .omo/ 子目錄白名單）
+# 3.2 對照白名單（從 documentation-standard.md § .omo/ 子目錄白名單）
 # 白名單內（合規）：
 #   briefs/ plans/ evidence/ traces/ notepads/ handoffs/ workspaces/
 #   run-continuation/ phaseN/ wave-N/ maps/ boulder.json
@@ -115,7 +115,7 @@ find .omo/evidence -mindepth 1 -type d 2>/dev/null | head -5
 ```bash
 # 4.1 長壽規劃（roadmap、跨模組設計）
 ls .omo/briefs/
-# 預期：roadmap.md, ALERT_SYSTEM_REDESIGN.md 等
+# 預期：roadmap.md, ALERT_SYSTEM_REdesign.md 等
 
 # 4.2 短期 PR 待辦
 ls .omo/plans/
@@ -233,8 +233,8 @@ grep -E "(\.omo|\.opencode)" .gitignore
 
 ## 相關文件
 
-- `docs/DOCUMENTATION_STANDARD.md` — 完整文件存放規範
-- `docs/DOCUMENTATION_MAP.md` — 完整文件地圖
+- `docs/documentation-standard.md` — 完整文件存放規範
+- `docs/documentation-map.md` — 完整文件地圖
 - `AGENTS.md` — 跨模組陷阱與模組索引
 - `docs/architecture.md` — 系統架構
-- `docs/ENVIRONMENT.md` — 外部依賴狀態
+- `docs/environment.md` — 外部依賴狀態

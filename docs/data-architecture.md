@@ -2,7 +2,7 @@
 
 **用途**：AI 與開發者的資料使用指南——需要什麼數據、存在哪裡、如何正確獲取。
 
-**權威來源**:本文檔描述原則與流程,具體資產細節見 [`docs/DATA_CATALOG.md`](DATA_CATALOG.md)。
+**權威來源**:本文檔描述原則與流程,具體資產細節見 [`docs/data-catalog.md`](data-catalog.md)。
 
 ---
 
@@ -47,7 +47,7 @@ domain.Recommendation{Symbol, Agent, Conviction, Reason, ...}
 2. **Session 目錄為持久層**：`data/state/sessions/session-YYYYMMDD-daily/` 保存完整記錄
 3. **全域檔案為聚合層**：`data/state/recommendation_outcomes.jsonl` 以 O_APPEND 累積
 4. **AI 優先讀 Session 目錄**：最豐富的 outcome 數據（含 per-agent forward return）
-5. **治理規範**：遵循 `DATA_NAMING_CONVENTION.md`、`DATA_DIRECTORY_STANDARD.md`、`DATA_MATURITY_STANDARD.md`
+5. **治理規範**：遵循 `data-naming-convention.md`、`data-directory-standard.md`、`data-maturity-standard.md`
 
 ---
 
@@ -75,7 +75,7 @@ domain.Recommendation{Symbol, Agent, Conviction, Reason, ...}
 | 18 | `data/state/atlas.db` | SQLite（⚠️ 待處理） | X | 6 tables，與 PostgreSQL 重疊，見 P2.1 |
 | 19 | `data/state-archive/` | 歸檔（⚠️ 空） | U | 所有子目錄為空，見 P2.2 |
 
-> **每層詳細欄位、生產者、消費者、Schema** → 見 `docs/DATA_CATALOG.md`
+> **每層詳細欄位、生產者、消費者、Schema** → 見 `docs/data-catalog.md`
 
 ---
 
@@ -131,7 +131,7 @@ RunDailySimulation()
 
 ## 如何新增資料消費者
 
-1. 確認需要的資料類型 → 查 [`DATA_CATALOG.md`](DATA_CATALOG.md)
+1. 確認需要的資料類型 → 查 [`data-catalog.md`](data-catalog.md)
 2. 讀取 `_metadata.json`（若有）了解成熟度限制
 3. **不要**直接 `os.Open` — 使用 `ledger.NewStore()` 或 repository 介面
 4. **不要**假設單一來源 — 優先順序：Session 目錄 > 全域 JSONL > PostgreSQL
@@ -139,23 +139,23 @@ RunDailySimulation()
 ## 如何新增資料生產者
 
 1. 分類：replay / cache / reference / state？
-2. `state/` 下建立子目錄（遵循 `DATA_DIRECTORY_STANDARD.md`）
-3. 標準命名（遵循 `DATA_NAMING_CONVENTION.md`）
-4. 建立 `_metadata.json`（遵循 `DATA_MATURITY_STANDARD.md`）
-5. JSON/JSONL 建立 Schema（遵循 `JSON_SCHEMA_STANDARD.md`）
-6. 更新 [`DATA_CATALOG.md`](DATA_CATALOG.md)（CI 檢查新鮮度）
-7. 定時寫入透過 `BackgroundTaskManager`（`CONSTITUTION.md` 第四條）
-8. 外部資料透過已註冊 `marketdata.Provider`（`CONSTITUTION.md` 第一條）
+2. `state/` 下建立子目錄（遵循 `data-directory-standard.md`）
+3. 標準命名（遵循 `data-naming-convention.md`）
+4. 建立 `_metadata.json`（遵循 `data-maturity-standard.md`）
+5. JSON/JSONL 建立 Schema（遵循 `json-schema-standard.md`）
+6. 更新 [`data-catalog.md`](data-catalog.md)（CI 檢查新鮮度）
+7. 定時寫入透過 `BackgroundTaskManager`（`constitution.md` 第四條）
+8. 外部資料透過已註冊 `marketdata.Provider`（`constitution.md` 第一條）
 
 ---
 
 ## 相關文件
 
-- [`DATA_CATALOG.md`](DATA_CATALOG.md) — 完整資產目錄（39 個資產，含生產者/消費者/Schema）
-- [`DATA_NAMING_CONVENTION.md`](DATA_NAMING_CONVENTION.md) — 命名規範
-- [`DATA_DIRECTORY_STANDARD.md`](DATA_DIRECTORY_STANDARD.md) — 目錄結構
-- [`DATA_MATURITY_STANDARD.md`](DATA_MATURITY_STANDARD.md) — 成熟度標記
-- [`JSON_SCHEMA_STANDARD.md`](JSON_SCHEMA_STANDARD.md) — Schema 標準
+- [`data-catalog.md`](data-catalog.md) — 完整資產目錄（39 個資產，含生產者/消費者/Schema）
+- [`data-naming-convention.md`](data-naming-convention.md) — 命名規範
+- [`data-directory-standard.md`](data-directory-standard.md) — 目錄結構
+- [`data-maturity-standard.md`](data-maturity-standard.md) — 成熟度標記
+- [`json-schema-standard.md`](json-schema-standard.md) — Schema 標準
 - `internal/apigateway/CONSTITUTION.md` — 通道管理、背景任務、參數管理憲法
 - `internal/ledger/ledger.go` — 檔案型 ledger
 - `internal/repository/dual_write.go` — PostgreSQL + 檔案雙寫

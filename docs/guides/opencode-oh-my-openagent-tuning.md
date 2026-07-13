@@ -253,5 +253,5 @@ ls ~/.config/opencode/logs/acp/
 - `~/.config/opencode/oh-my-openagent.json` — oh-my-openagent 使用者設定
 - `~/.config/opencode/acp.jsonc` — ACP 壓縮設定
 - `~/.config/opencode/opencode.json` — opencode 全域設定
-- `docs/DOCUMENTATION_MAP.md` — 文件地圖
+- `docs/documentation-map.md` — 文件地圖
 - `https://github.com/ranxianglei/opencode-acp` — ACP GitHub

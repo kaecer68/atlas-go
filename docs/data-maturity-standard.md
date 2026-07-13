@@ -5,7 +5,7 @@
 **狀態**: 權威標準（authoritative）  
 **適用範圍**: `data/` 目錄下所有子目錄  
 **強制性**: CI 強制檢查（`scripts/ci/check_data_catalog.sh`，P0.4c 實現）  
-**相關文檔**: `internal/MATURITY.md`（Go code maturity）· `docs/DATA_DIRECTORY_STANDARD.md` · `docs/DATA_CATALOG.md`
+**相關文檔**: `internal/MATURITY.md`（Go code maturity）· `docs/data-directory-standard.md` · `docs/data-catalog.md`
 
 ---
 
@@ -49,7 +49,7 @@ P0.1 審計發現：
     "cmd/backtest-window"
   ],
   "schema_ref": "schemas/recommendation_outcomes.schema.json",
-  "catalog_ref": "docs/DATA_CATALOG.md#recommendation_outcomes",
+  "catalog_ref": "docs/data-catalog.md#recommendation_outcomes",
   "created_date": "2026-03-30",
   "last_modified": "2026-06-02",
   "estimated_size": {
@@ -78,7 +78,7 @@ P0.1 審計發現：
 | `producer_function` | string | 建議 | 寫入函數名稱（如 `RecordOutcomes`） |
 | `consumer_modules` | string[] | ✅ | 讀取此資料的 Go module 列表 |
 | `schema_ref` | string | 條件 | 若有 JSON Schema，指向 `schemas/{name}.schema.json` |
-| `catalog_ref` | string | 建議 | 指向 `docs/DATA_CATALOG.md` 中的對應條目 |
+| `catalog_ref` | string | 建議 | 指向 `docs/data-catalog.md` 中的對應條目 |
 | `created_date` | string | 建議 | 建立日期（ISO 8601） |
 | `last_modified` | string | 建議 | 最後修改日期（ISO 8601） |
 | `estimated_size` | object | 建議 | `{lines, bytes, growth_rate}` — 檔案大小估計 |
@@ -123,7 +123,7 @@ P0.1 審計發現：
 | baseline_policy | `data/state/baseline/` | Baseline 版本控制核心 |
 | experiments | `data/state/experiments/` | 實驗生命週期核心 |
 | human_interventions | `data/state/human_interventions/` | 人工干預稽核軌跡 |
-| sessions/ 目錄 | `data/state/sessions/` | Session 持久層（DATA_ARCHITECTURE.md 層級 1） |
+| sessions/ 目錄 | `data/state/sessions/` | Session 持久層（data-architecture.md 層級 1） |
 | approvals/ 目錄 | `data/state/approvals/` | 人工核准記錄 |
 
 ### 3.2 Evolving（E）
@@ -207,7 +207,7 @@ P0.1 審計發現：
 
 ```
 1. 修改 _metadata.json 中的 maturity 欄位
-2. 更新 docs/DATA_CATALOG.md 中的對應條目
+2. 更新 docs/data-catalog.md 中的對應條目
 3. 執行 CI 檢查：bash scripts/ci/check_data_catalog.sh
 4. X→E 或 E→S 視為晉升，需 PR review
 5. S→E 或任何降級需 migration plan（說明如何處理現有依賴）
@@ -252,7 +252,7 @@ P0.1 審計發現：
 | 文檔 | 關係 |
 |------|------|
 | `internal/MATURITY.md` | Go 程式碼成熟度參考（本文件完全對齊其層級定義） |
-| `docs/DATA_DIRECTORY_STANDARD.md` | 定義哪些目錄需要 `_metadata.json` |
-| `docs/DATA_CATALOG.md` | 資料目錄（`maturity` 欄位與 `_metadata.json` 保持一致） |
-| `docs/JSON_SCHEMA_STANDARD.md` | `schema_ref` 欄位指向的 schema 定義 |
+| `docs/data-directory-standard.md` | 定義哪些目錄需要 `_metadata.json` |
+| `docs/data-catalog.md` | 資料目錄（`maturity` 欄位與 `_metadata.json` 保持一致） |
+| `docs/json-schema-standard.md` | `schema_ref` 欄位指向的 schema 定義 |
 | `docs/audit/2026-06-02-p0-2-root-cause-analysis.md` | 根因分析（FG-1: 無規範） |

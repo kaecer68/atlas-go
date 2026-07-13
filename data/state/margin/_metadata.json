@@ -12,7 +12,7 @@
     "internal/portfolio"
   ],
   "schema_ref": null,
-  "catalog_ref": "docs/DATA_CATALOG.md#margin",
+  "catalog_ref": "docs/data-catalog.md#margin",
   "created_date": "2026-04-20",
   "last_modified": "continuous",
   "estimated_size": {

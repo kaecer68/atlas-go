@@ -86,7 +86,7 @@ atlas-go 目前**只有一條** production runtime LLM 呼叫路徑，其餘所�
 
    目前實作是 32 筆靜態英文→繁中對映（`reasonCorpus`，同檔 `:48-97`），呼叫點在 `TranslateReason`（`:149-210`）。當 corpus miss 時走 step 6 passthrough（`:208-209`），把未匹配的英文原封不動回傳——這正是「fallback LLM translator」的明確插入點。v2.0 將此 fallback 路由到 DeepSeek V4-Flash（最便宜的模型，見 §3.2 決策表）。
 
-2. **`docs/ai_agent_architecture.md:1-213`**：5 層代理階層 + 17 specialists + Agent Spawning System + PRISM Training + Reflexivity Engine + MiroFish Swarm。
+2. **`docs/ai-agent-architecture.md:1-213`**：5 層代理階層 + 17 specialists + Agent Spawning System + PRISM Training + Reflexivity Engine + MiroFish Swarm。
 
    對應程式碼：
    - `internal/spawning/agent_factory.go:33-78`（`CreateAgentForGap`：gap → AgentSpec + prompt content）
@@ -140,7 +140,7 @@ atlas-go 目前**只有一條** production runtime LLM 呼叫路徑，其餘所�
      configs/agents.json + prompts/agents/*.md   ← dev-time 編碼助理 prompt，非 runtime
 ```
 
-**孤立模組**：narrative / spawning / orchestrator 目前**完全沒有**通往 LLM 的路徑——這與「atlas-go is an AI-driven multi-agent system」的設計願景（`docs/ai_agent_architecture.md:1-5`）之間存在顯著張力。
+**孤立模組**：narrative / spawning / orchestrator 目前**完全沒有**通往 LLM 的路徑——這與「atlas-go is an AI-driven multi-agent system」的設計願景（`docs/ai-agent-architecture.md:1-5`）之間存在顯著張力。
 
 ---
 
@@ -377,7 +377,7 @@ atlas-go 目前**只有一條** production runtime LLM 呼叫路徑，其餘所�
 ### 3.1 為何這十個能力是「全部」
 
 判定標準（任一條符合即收錄）：
-1. 程式碼註解明文提到 LLM 擴張點（rationale_corpus.go、ai_agent_architecture.md）。
+1. 程式碼註解明文提到 LLM 擴張點（rationale_corpus.go、ai-agent-architecture.md）。
 2. 已存在「為何還沒有 LLM」的設計張力（例如 PRISM 訓練結果缺 summary）。
 3. 已有呼叫介面但無 LLM（例如 Failure Attribution 已實作、可複用同一介面到其他 capability）。
 4. **v2.0 新增**：程式碼生成 / review 場景明確需要 LLM，但必須隔離於敘事/金融路徑（Code Review Annotation、Agent Prompt Lint 的 code path）。
@@ -923,7 +923,7 @@ groups:
 | `internal/MATURITY.md:75-89` | X 級定義與 `llm_annotator` 條目 |
 | `monitoring/rules/llm_annotator_alerts.yml` | 5 個 alert group |
 | `monitoring/rules/llm_annotator_recording.yml` | 9 條 recording rule |
-| `docs/ai_agent_architecture.md` | 17-agent 設計藍圖（非實作狀態） |
+| `docs/ai-agent-architecture.md` | 17-agent 設計藍圖（非實作狀態） |
 | `configs/agents.json` | 17 agents 註冊（dev-time prompt 對應） |
 | `prompts/agents/*.md` | agent prompt 範例（非 runtime） |
 | `internal/llm/provider.go`（v2.0 新檔） | Provider / Capability / Request / Response 介面 |

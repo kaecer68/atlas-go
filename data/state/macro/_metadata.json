@@ -12,7 +12,7 @@
     "internal/industry"
   ],
   "schema_ref": null,
-  "catalog_ref": "docs/DATA_CATALOG.md#macro",
+  "catalog_ref": "docs/data-catalog.md#macro",
   "created_date": "2026-04-01",
   "last_modified": "continuous",
   "estimated_size": {

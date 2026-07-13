@@ -3,7 +3,7 @@
 > **Audience**: developers touching `/api/auth/*`, `/api/user/*`, `internal/subscription/*`, or any module that needs to know "is this request authenticated?".
 > **Implementation**: `cmd/atlas/main.go`, `internal/subscription/auth.go`, `internal/subscription/handler.go`, `shared_web/static/js/services/auth.js`
 > **Tests**: `internal/subscription/handler_test.go` (`TestAuthGuestMode*`)
-> **Related**: [`tier-boundary.md`](../operations/tier-boundary.md), [`TRAPS.md`](../REFERENCE/TRAPS.md), [`.claude/skills/atlas-guest-mode/SKILL.md`](../../.claude/skills/atlas-guest-mode/SKILL.md)
+> **Related**: [`tier-boundary.md`](../operations/tier-boundary.md), [`traps.md`](../REFERENCE/traps.md), [`.claude/skills/atlas-guest-mode/SKILL.md`](../../.claude/skills/atlas-guest-mode/SKILL.md)
 
 > 對應 PR #1084。  
 > 本文件定義 atlas-go **pre-commercialisation** 階段的「匿名訪客 = free tier」模式，並列出**未來商業化時的單一翻轉點**以及**禁止事項**，避免 AI agent 重複造輪子或引入並行的 user-auth 機制。

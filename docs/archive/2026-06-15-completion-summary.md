@@ -5,9 +5,9 @@
 > 本文是阶段性完成纪要，不应作为当前运行策略或接受门槛的规范来源。
 > 当前流程与规则请优先参考：
 > - `docs/skills-map.md`
-> - `docs/iteration_playbook.md`
-> - `docs/operations_playbook.md`
-> - `docs/evolution_loop.md`
+> - `docs/iteration-playbook.md`
+> - `docs/operations-playbook.md`
+> - `docs/evolution-loop.md`
 
 ## 完成概览
 

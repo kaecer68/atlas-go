@@ -244,7 +244,7 @@ data/
 ./scripts/openclaw/decide.sh --help
 
 # 詳細教學
-cat docs/script_usage_guide.md
+cat docs/script-usage-guide.md
 
 # 協議文件
 cat docs/2026-06-15-openclaw-protocol.md

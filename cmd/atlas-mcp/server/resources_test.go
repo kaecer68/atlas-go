@@ -93,7 +93,7 @@ func TestHandleResourceWorkflowsCatalog_OK(t *testing.T) {
 	if err := os.MkdirAll(wfDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(wfDir, "WORKFLOW_MAP.md"), []byte("# Test workflow map\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(wfDir, "workflow-map.md"), []byte("# Test workflow map\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	origCwd, _ := os.Getwd()

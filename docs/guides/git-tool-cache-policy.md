@@ -130,4 +130,4 @@ git config --global alias.cleanup-tools '!f() {
     1. `verify-gitnexus-stats.sh` 是 permanent no-op (零 markdown 匹配 grep pattern)
     2. `.gitnexus/meta.json` 是 derived artifact (從 binary lbug 衍生)
     3. codebase-memory 已提供 GitNexus 75% 能力
-  - 詳見 PR #749 commit log 與 docs/TOOLS.md 修訂
+  - 詳見 PR #749 commit log 與 docs/tools.md 修訂
