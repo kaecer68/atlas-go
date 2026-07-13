@@ -125,7 +125,7 @@ type RunStats struct {
 	OutOfRange     int
 }
 
-// Run executes the loader end-to-end. Tests call Run with a synthesised
+// Run executes the loader end-to-end. Tests call Run with a synthesized
 // RunOptions; main() wraps Run.
 func Run(opts RunOptions) (RunStats, error) {
 	stats := RunStats{}
@@ -175,24 +175,22 @@ func Run(opts RunOptions) (RunStats, error) {
 	store := ledger.NewSQLiteHistoricalStore(db)
 
 	if wants["regime"] && len(rows.regime) > 0 {
-		if err := upsertRegimes(context.Background(), store, opts, rows.regime, &stats); err != nil {
+		if err := upsertRegimes(context.Background(), store, rows.regime, &stats); err != nil {
 			return stats, fmt.Errorf("regime: %w", err)
 		}
 	}
 	if wants["stress"] && len(rows.stress) > 0 {
-		if err := upsertStress(context.Background(), store, opts, rows.stress, &stats); err != nil {
+		if err := upsertStress(context.Background(), store, rows.stress, &stats); err != nil {
 			return stats, fmt.Errorf("stress: %w", err)
 		}
 	}
 	if wants["events"] && len(rows.event) > 0 {
-		if err := upsertEvents(context.Background(), store, opts, rows.event, &stats); err != nil {
+		if err := upsertEvents(context.Background(), store, rows.event, &stats); err != nil {
 			return stats, fmt.Errorf("events: %w", err)
 		}
 	}
 	if wants["prediction"] && len(rows.prediction) > 0 {
-		if err := upsertPredictions(context.Background(), store, opts, rows.prediction, &stats); err != nil {
-			return stats, fmt.Errorf("prediction: %w", err)
-		}
+		upsertPredictions(context.Background(), store, rows.prediction, &stats)
 	}
 	return stats, nil
 }
@@ -364,7 +362,7 @@ func parseTables(spec string) (map[string]bool, error) {
 // Upsert helpers (one per table).
 // ------------------------------------------------------------------
 
-func upsertRegimes(ctx context.Context, store ledger.HistoricalStore, opts RunOptions, rows []loaderRegime, stats *RunStats) error {
+func upsertRegimes(ctx context.Context, store ledger.HistoricalStore, rows []loaderRegime, stats *RunStats) error {
 	for _, r := range rows {
 		err := store.UpsertRegime(ctx, ledger.RegimeRow{
 			Date:            r.Date,
@@ -382,7 +380,7 @@ func upsertRegimes(ctx context.Context, store ledger.HistoricalStore, opts RunOp
 	return nil
 }
 
-func upsertStress(ctx context.Context, store ledger.HistoricalStore, opts RunOptions, rows []loaderStress, stats *RunStats) error {
+func upsertStress(ctx context.Context, store ledger.HistoricalStore, rows []loaderStress, stats *RunStats) error {
 	for _, r := range rows {
 		err := store.UpsertStress(ctx, ledger.StressRow{
 			Date:        r.Date,
@@ -401,7 +399,7 @@ func upsertStress(ctx context.Context, store ledger.HistoricalStore, opts RunOpt
 	return nil
 }
 
-func upsertEvents(ctx context.Context, store ledger.HistoricalStore, opts RunOptions, rows []loaderEvent, stats *RunStats) error {
+func upsertEvents(ctx context.Context, store ledger.HistoricalStore, rows []loaderEvent, stats *RunStats) error {
 	for _, r := range rows {
 		// Each event_id produces one event_calendar_history row. Themes
 		// and source are duplicated so reads don't need a join.
@@ -436,12 +434,10 @@ func upsertEvents(ctx context.Context, store ledger.HistoricalStore, opts RunOpt
 // PR#3 (cmd/backtest-event-flow) owns prediction_backtest writes; we
 // still parse the file here so the staging format is validated and the
 // read counter stays honest.
-func upsertPredictions(ctx context.Context, store ledger.HistoricalStore, opts RunOptions, rows []loaderPrediction, stats *RunStats) error {
+func upsertPredictions(ctx context.Context, store ledger.HistoricalStore, rows []loaderPrediction, stats *RunStats) {
 	stats.PredictionRead = len(rows)
 	_ = ctx
 	_ = store
-	_ = opts
-	return nil
 }
 
 // ------------------------------------------------------------------
@@ -521,7 +517,7 @@ func validateRun(opts RunOptions) error {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintf(w, `Usage: atlas-stage4-loader [-staging PATH] [-db PATH] [-tables LIST] [-since D] [-until D] [-init-schema] [-dry-run]
+	_, _ = fmt.Fprintf(w, `Usage: atlas-stage4-loader [-staging PATH] [-db PATH] [-tables LIST] [-since D] [-until D] [-init-schema] [-dry-run]
 
 Stage 4 staging-JSONL → data/state/atlas.db loader.
 

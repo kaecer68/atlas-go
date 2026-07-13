@@ -52,10 +52,9 @@ type StagingRecord interface {
 // stampDefaults mutates any StagingRecord to fill captured_at + is_synthetic.
 // We use a marker struct scan rather than reflection to keep dependencies
 // flat; each Record type must implement StagingRecord explicitly.
-func stampDefaults(r StagingRecord, now time.Time) StagingRecord {
+func stampDefaults(r StagingRecord, now time.Time) {
 	r.SetCapturedAt(now)
 	r.SetSyntheticFlag(1)
-	return r
 }
 
 // ------------------------------------------------------------------
@@ -85,7 +84,7 @@ func (r *RegimeRecord) SetSyntheticFlag(v uint8)  { r.IsSynthetic = v }
 // EventCalendarRecord is one row in event_calendar_90d.jsonl.
 //
 // Source: aggregated from recommendation_outcomes.jsonl:supporting_events.
-// Each day's session summarises the events the agents "saw" via the
+// Each day's session summarizes the events the agents "saw" via the
 // supporting_events field. We persist those IDs verbatim; PR#3 will resolve
 // them against internal/industry.EventCalendar for richer context.
 type EventCalendarRecord struct {
@@ -130,7 +129,7 @@ func (r *StressIndexRecord) SetSyntheticFlag(v uint8)  { r.IsSynthetic = v }
 // PredictionActualRecord is one row in prediction_actual_90d.jsonl.
 //
 // Source: aggregated from data/state/sessions/session-*/recommendation_outcomes.jsonl.
-// Fields are derived (NOT raw) — they summarise what the market "actually"
+// Fields are derived (NOT raw) — they summarize what the market "actually"
 // did on that day, which PR#3 will compare against the predictor's output.
 //
 // Definitions:
@@ -199,11 +198,11 @@ func ResolveStagingFiles(stagingDir string) (StagingFiles, error) {
 	}, nil
 }
 
-// EncodeLine is a small helper used by all extractors when serialising a
+// EncodeLine is a small helper used by all extractors when serializing a
 // record through the staging writer. Errors are returned (rather than
 // panicked) so the CLI can exit with status code instead of crashing.
 func EncodeLine(w *atomicJSONLWriter, r StagingRecord) error {
-	if err := w.Encoder.Encode(r); err != nil {
+	if err := w.Encode(r); err != nil {
 		return fmt.Errorf("encode %T: %w", r, err)
 	}
 	return nil

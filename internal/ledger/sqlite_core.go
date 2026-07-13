@@ -13,7 +13,7 @@ import (
 // OpenSQLiteDB opens or creates a SQLite database at the given path,
 // enables WAL mode, enforces foreign keys, and sets busy_timeout so
 // concurrent writers don't deadlock on the default immediate-busy
-// behaviour. busy_timeout is set via the connection string so it
+// behavior. busy_timeout is set via the connection string so it
 // applies to every connection the pool acquires, not just the first.
 func OpenSQLiteDB(path string) (*sql.DB, error) {
 	dsn := path

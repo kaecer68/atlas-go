@@ -103,7 +103,7 @@ type HistoricalStore interface {
 
 // SQLiteHistoricalStore is the canonical implementation backed by the
 // stage-4 tables in data/state/atlas.db. The *sql.DB is reused across all
-// ledger stores in the project (OpenSQLiteDB initialises WAL + FK).
+// ledger stores in the project (OpenSQLiteDB initializes WAL + FK).
 type SQLiteHistoricalStore struct {
 	db *sql.DB
 }

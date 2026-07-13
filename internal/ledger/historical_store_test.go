@@ -2,7 +2,7 @@
 // Package: internal/ledger
 //
 // Tests for SQLiteHistoricalStore. Each test uses a fresh t.TempDir()
-// and initialises a fresh schema; tables are dropped automatically when
+// and initializes a fresh schema; tables are dropped automatically when
 // the test exits via Go's testing.Cleanup chain.
 package ledger
 

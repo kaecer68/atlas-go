@@ -103,14 +103,6 @@ func Run(opts RunOptions) (RunStats, error) {
 	}
 
 	// Pass 1: walk sessions dir.
-	type sessionAgg struct {
-		Date          string // YYYY-MM-DD, Asia/Taipei trading day
-		SessionID     string
-		Summary       *sessionSummaryLite
-		Outcomes      []outcomeLite
-		SupportingIDs []string
-		Themes        []string
-	}
 	sessionsDir := filepath.Join(opts.Source, "sessions")
 	sessionAggs, sessionStats, err := walkSessions(opts, sessionsDir)
 	if err != nil {
@@ -769,7 +761,7 @@ func parseFlags(args []string) (RunOptions, error) {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintf(w, `Usage: atlas-stage4-backfill [-source PATH] [-out PATH] [-lookback-days N] [-dry-run]
+	_, _ = fmt.Fprintf(w, `Usage: atlas-stage4-backfill [-source PATH] [-out PATH] [-lookback-days N] [-dry-run]
 
 Stage 4 historical backfill CLI. Walks data/state/sessions + data/state/macro
 for the lookback window and emits 4 staging JSONL files under -out.
