@@ -452,6 +452,33 @@ func (ne *NarrativeEngine) RecalculateTemplateHitRates() {
 	ne.updateTemplateHitRates()
 }
 
+// RecalculateAllTemplateHitRates — Stage 4 PR#4.
+//
+// Fills the templates that existing RecalculateTemplateHitRates leaves
+// at default 0.5 because no active model touches them. Chained light-EMA
+// pull toward a backtest-derived globalHitRate (typically AVG(hit) from
+// Stage 4 prediction_backtest). Returns templates updated past epsilon.
+func (ne *NarrativeEngine) RecalculateAllTemplateHitRates(globalHitRate float64) int {
+	ne.updateTemplateHitRates()
+
+	const lightAlpha = 0.1
+	const epsilon = 0.001
+	updated := 0
+	for _, tmpl := range ne.kb.ListTemplates() {
+		if math.Abs(tmpl.HistoricalHitRate-globalHitRate) < epsilon {
+			continue
+		}
+		newRate := (1-lightAlpha)*tmpl.HistoricalHitRate + lightAlpha*globalHitRate
+		if math.Abs(newRate-tmpl.HistoricalHitRate) < epsilon {
+			continue
+		}
+		tmpl.HistoricalHitRate = newRate
+		ne.kb.RegisterTemplate(tmpl)
+		updated++
+	}
+	return updated
+}
+
 func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, window int, sectors []string) float64 {
 	var totalReturn float64
 	var count int

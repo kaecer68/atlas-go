@@ -92,6 +92,12 @@
       "results": "([]CausalChain)"
     },
     {
+      "name": "RecalculateAllTemplateHitRates",
+      "params": "(globalHitRate float64)",
+      "receiver": "NarrativeEngine",
+      "results": "(int)"
+    },
+    {
       "name": "RecalculateTemplateHitRates",
       "params": "",
       "receiver": "NarrativeEngine",
