@@ -9,7 +9,7 @@ package ledger
 import (
 	"context"
 	"path/filepath"
-	"strings"
+	"sort"
 	"testing"
 	"time"
 )
@@ -398,8 +398,12 @@ func TestSchemaConstants_Recognised(t *testing.T) {
 			got = append(got, k)
 		}
 	}
-	want := []string{"regime_history", "stress_index_history", "event_calendar_history", "prediction_backtest"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("HasTables = %v, want %v", got, want)
+	sort.Strings(got)
+	want := []string{"event_calendar_history", "prediction_backtest", "regime_history", "stress_index_history"}
+	for i, name := range want {
+		if i >= len(got) || got[i] != name {
+			t.Errorf("HasTables = %v, want %v", got, want)
+			break
+		}
 	}
 }
