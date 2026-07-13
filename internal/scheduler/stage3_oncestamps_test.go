@@ -1,6 +1,8 @@
 package scheduler
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -164,4 +166,42 @@ func readDir(t *testing.T, dir string) []string {
 
 func endsWith(s, suffix string) bool {
 	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
+}
+
+func TestFileOncestampStore_RecoversFromStaleTmpAfterSimulatedCrash(t *testing.T) {
+	dir := t.TempDir()
+	tmpPath := filepath.Join(dir, "stage3_oncestamps.json.tmp")
+	if err := os.WriteFile(tmpPath, []byte("{partial-write-corrupted"), 0o644); err != nil {
+		t.Fatalf("seed stale tmp: %v", err)
+	}
+
+	store, err := NewFileOncestampStore(dir)
+	if err != nil {
+		t.Fatalf("NewFileOncestampStore: %v", err)
+	}
+
+	now := time.Date(2026, 7, 13, 6, 0, 0, 0, time.UTC)
+	run, ok := store.TryClaim("daily-resume", now, sameDay)
+	if !ok || !run {
+		t.Fatalf("expected claim to succeed despite stale tmp; got run=%v ok=%v", run, ok)
+	}
+
+	entries, err := readDirFilenames(dir)
+	if err != nil {
+		t.Fatalf("readDirFilenames: %v", err)
+	}
+	for _, ent := range entries {
+		if endsWith(ent, ".tmp") {
+			t.Fatalf("expected stale .tmp gone after rename; still present: %s", ent)
+		}
+	}
+
+	store2, err := NewFileOncestampStore(dir)
+	if err != nil {
+		t.Fatalf("re-open store: %v", err)
+	}
+	run, ok = store2.TryClaim("daily-resume", now.Add(2*time.Hour), sameDay)
+	if !ok || run {
+		t.Fatalf("post-crash same-day claim should suppress; got run=%v ok=%v", run, ok)
+	}
 }

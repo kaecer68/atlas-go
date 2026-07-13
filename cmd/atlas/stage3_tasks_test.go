@@ -106,3 +106,60 @@ func TestRegisterStage3AlertTasks_RegistersThreeEvaluatorsInBTM(t *testing.T) {
 		}
 	}
 }
+
+func TestRegisterStage3Tasks_RespectsOptOutFlagFalse(t *testing.T) {
+	tmp := t.TempDir()
+	btm := apigateway.NewBackgroundTaskManager(nil)
+
+	cfg := config.Config{
+		WorkDir:            tmp,
+		LedgerDir:          tmp,
+		ReplayMode:         "disabled",
+		Stage3TasksEnabled: false,
+	}
+	store, err := ledger.NewEventFlowPredictionStore(cfg)
+	if err != nil {
+		t.Fatalf("NewEventFlowPredictionStore: %v", err)
+	}
+
+	d := stage3Deps{
+		taskMgr:          btm,
+		cfg:              cfg,
+		predictionLedger: store,
+	}
+	registerStage3Tasks(d)
+
+	if registered := btm.List(); len(registered) != 0 {
+		t.Fatalf("expected 0 tasks registered when Stage3TasksEnabled=false; got %v", registered)
+	}
+}
+
+func TestRegisterStage3AlertTasks_RespectsOptOutFlagFalse(t *testing.T) {
+	tmp := t.TempDir()
+	btm := apigateway.NewBackgroundTaskManager(nil)
+
+	cfg := config.Config{
+		WorkDir:             tmp,
+		LedgerDir:           tmp,
+		ReplayMode:          "disabled",
+		Stage3TasksEnabled:  true,
+		Stage3AlertsEnabled: false,
+	}
+	store, err := ledger.NewEventFlowPredictionStore(cfg)
+	if err != nil {
+		t.Fatalf("NewEventFlowPredictionStore: %v", err)
+	}
+	monitor := monitoring.NewMonitor()
+
+	d := stage3Deps{
+		taskMgr:          btm,
+		cfg:              cfg,
+		monitor:          monitor,
+		predictionLedger: store,
+	}
+	registerStage3AlertTasks(d)
+
+	if registered := btm.List(); len(registered) != 0 {
+		t.Fatalf("expected 0 alerts registered when Stage3AlertsEnabled=false; got %v", registered)
+	}
+}
