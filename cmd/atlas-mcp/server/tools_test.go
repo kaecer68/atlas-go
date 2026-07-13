@@ -38,25 +38,32 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	t.Helper()
 	rec := &reqRecorder{responseBody: []byte(`[]`)}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/macro/snapshot/latest" {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"foreign_investor_net":{"value":1.0},"vix":{"value":15}}`))
-			return
-		}
-		if r.URL.Path == "/api/janus/regime-score" {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"score":7.7,"is_synthetic":true}`))
-			return
-		}
-		rec.mu.Lock()
-		defer rec.mu.Unlock()
-		rec.path = r.URL.Path
-		rec.query = r.URL.Query()
-		rec.headers = r.Header.Clone()
-		b, _ := io.ReadAll(r.Body)
-		rec.body = b
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(rec.responseBody)
+		switch r.URL.Path {
+		case "/api/macro/snapshot/latest":
+			rec.mu.Lock()
+			if rec.path == "" {
+				rec.path = r.URL.Path
+			}
+			rec.mu.Unlock()
+			_, _ = w.Write([]byte(`{"foreign_investor_net":{"value":1.0},"vix":{"value":15}}`))
+		case "/api/janus/regime-score":
+			rec.mu.Lock()
+			if rec.path == "" {
+				rec.path = r.URL.Path
+			}
+			rec.mu.Unlock()
+			_, _ = w.Write([]byte(`{"score":7.7,"is_synthetic":true}`))
+		default:
+			rec.mu.Lock()
+			rec.path = r.URL.Path
+			rec.query = r.URL.Query()
+			rec.headers = r.Header.Clone()
+			b, _ := io.ReadAll(r.Body)
+			rec.body = b
+			rec.mu.Unlock()
+			_, _ = w.Write(rec.responseBody)
+		}
 	}))
 
 	tmpDir := t.TempDir()
