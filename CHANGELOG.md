@@ -128,7 +128,7 @@
 - `docs/operations/mcp-deploy.md` — Phase 4 metrics + anomaly detector + Roots env vars deployment guide（66 行增量）。
 - `docs/specs/agent-mcp-server.md` — Phase 4 Direction A/B 工具與協議擴充章節（93 行增量）。
 - `docs/operations/retail-investor-landing-audit.md` — Phase 2 retail-investor-landing audit report（PR #873，b296dac8）。
-- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/workflow-map.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_tools.md` / `docs/AGENT_ONBOARDING.md`）+ `docs/REFERENCE/PROCESSES.yaml`（488 行結構化 workflow metadata）。P0 補齊。
+- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/workflow-map.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）+ `docs/REFERENCE/PROCESSES.yaml`（488 行結構化 workflow metadata）。P0 補齊。
 - **Agent Interface roadmap v2** (PR #876): `docs/plans/agent-interface-roadmap.md` 從「實作未開始」更新為反映 `cmd/atlas-mcp/` 真實進度（Phase 1 核心橋接 ~84 tools / stdio transport / TokenAuth / audit v2 / anomaly / 協議擴充標記完成；Phase 2 SSE/streamable-HTTP transport 與 binary merge 至 `cmd/atlas` 標記 TODO；新增 P5 列「PR #875 已併入主文件」；文件版本升 v2）。
 
 ### Known Limitations (deferred to v0.0.0.27)
@@ -158,7 +158,7 @@
 ### Documentation
 - `docs/operations/mcp-deploy.md` and `docs/specs/agent-mcp-server.md` — Item 3 admin API + Item 2 analytics tool descriptions to be updated in follow-up (deferred to v0.0.0.26).
 - `docs/specs/agent-mcp-phase3-residual.md` — all 3 spec items marked ✅ shipped (was 🟡 DRAFT before this release).
-- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/workflow-map.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_tools.md` / `docs/AGENT_ONBOARDING.md`）；`docs/REFERENCE/PROCESSES.yaml` 新增（488 行結構化 workflow metadata，21 條 workflow × Name / Description / Inputs / Outputs / Tools / Owner / Phase / Tags）。P0 補齊。
+- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/workflow-map.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）；`docs/REFERENCE/PROCESSES.yaml` 新增（488 行結構化 workflow metadata，21 條 workflow × Name / Description / Inputs / Outputs / Tools / Owner / Phase / Tags）。P0 補齊。
 - **Agent Interface roadmap v2** (PR #876): `docs/plans/agent-interface-roadmap.md` 從「實作未開始」更新為反映 `cmd/atlas-mcp/` 真實進度 — Phase 1（核心橋接，~84 tools / stdio transport / TokenAuth / audit v2 / anomaly / 協議擴充）標記完成；Phase 2 SSE/streamable-HTTP transport 與 binary merge 至 `cmd/atlas` 標記 TODO；新增 P5 列（PR #875 已併入主文件）；文件版本升 v2。
 
 ### Known Limitations (P1, by-design, documented in commit `c01f1d88` and T3 PR #858)

@@ -8,7 +8,7 @@
 # 讀的是 ATLAS_BASE_URL/ATLAS_API_KEY/ATLAS_MCP_TOKEN。
 #
 # 本腳本確保:
-#   1. 權威文件 (cmd/atlas-mcp/README.md + AGENT_quickstart.md + 根 README +
+#   1. 權威文件 (cmd/atlas-mcp/README.md + AGENT_QUICKSTART.md + 根 README +
 #      AGENTS.md) 沒有出現錯誤的 env var 名
 #   2. AGENTS.md 行數 ≤ 155 (避免 160 行 reject)
 #   3. 工具數應為 91 (grep "91 tool" 在至少 3 個檔案)
@@ -45,7 +45,7 @@ WRONG_VARS=(
 # 權威文件清單 (這些檔案不能有錯誤 env var)
 AUTHORITATIVE_FILES=(
     "cmd/atlas-mcp/README.md"
-    ".claude/skills/atlas-mcp-integration/AGENT_quickstart.md"
+    ".claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md"
     "README.md"
     "AGENTS.md"
     "CLAUDE.md"

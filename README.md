@@ -31,7 +31,7 @@ allowing external AI agents to query Taiwan stock market data, strategies, risks
 curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/install-atlas-mcp-from-release.sh | bash
 ```
 
-See: [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) · [`.claude/skills/atlas-mcp-integration/AGENT_quickstart.md`](.claude/skills/atlas-mcp-integration/AGENT_quickstart.md)
+See: [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) · [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
 Tool catalog: [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)
 
 ## Architecture
