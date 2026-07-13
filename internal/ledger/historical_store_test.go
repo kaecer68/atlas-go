@@ -156,8 +156,8 @@ func TestSQLiteHistoricalStore_UpsertStress_RoundTripComponents(t *testing.T) {
 		Score:  0.42,
 		Regime: "medium",
 		Components: map[string]interface{}{
-			"us":      0.5,
-			"asia":    0.3,
+			"us":       0.5,
+			"asia":     0.3,
 			"isString": "ignored-or-kept",
 		},
 		Source:      "macro-file",
@@ -275,7 +275,7 @@ func TestSQLiteHistoricalStore_PredictionBacktest_RoundTrip(t *testing.T) {
 	defer done()
 	capt := time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC)
 	if err := store.UpsertPredictionBacktest(context.Background(), PredictionBacktestRow{
-		Date: "2026-04-15",
+		Date:               "2026-04-15",
 		PredictedDirection: "inflow", PredictedConfidence: 0.78,
 		ActualDirection: "inflow", ActualCapitalFlowChan: 0.012,
 		Hit: true, ModelVersion: "v0.0.0.32",
