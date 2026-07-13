@@ -21,6 +21,8 @@ type EventCalendarItem struct {
 	AffectedIndustries []string  `json:"affected_industries,omitempty"`
 	ExpectedFlowImpact string    `json:"expected_flow_impact"` // "bullish", "bearish", "neutral"
 	Confidence         float64   `json:"confidence"`
+	Backfilled         bool      `json:"backfilled"`
+	CrossSourceStatus  string    `json:"cross_source_status,omitempty"`
 }
 
 // ETFEstimate represents the predicted capital flow from an ETF rebalance event.
