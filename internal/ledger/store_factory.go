@@ -256,3 +256,25 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 		return NewJSONLQuoteStore(cfg.LedgerDir), nil
 	}
 }
+
+func NewEventFlowPredictionStore(cfg config.Config) (EventFlowPredictionStore, error) {
+	return NewJSONLEventFlowPredictionStore(cfg.LedgerDir), nil
+}
+
+// NewDetectorScanStore returns the SQLite-backed Stage 5 PR#4
+// detector_scan_log store. Unlike other stores, DetectorScanStore has NO
+// JSONL fallback — the plan contract (IMPLEMENTATION_PLAN_STAGE_5.md §PR#4)
+// explicitly mandates SQLite so the MCP `template_detector_status` tool
+// can query scan history with efficient LIMIT + ORDER BY.
+func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {
+	switch cfg.StoreBackend {
+	case "sqlite":
+		db, err := getSharedSQLiteDB(cfg.SQLitePath)
+		if err != nil {
+			return nil, fmt.Errorf("detector_scan: shared sqlite: %w", err)
+		}
+		return NewSQLiteDetectorScanStore(db), nil
+	default:
+		return nil, fmt.Errorf("detector_scan: backend %q not supported (sqlite-only per Stage 5 PR#4 contract)", cfg.StoreBackend)
+	}
+}

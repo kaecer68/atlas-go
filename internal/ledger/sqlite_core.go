@@ -145,6 +145,64 @@ func InitSchema(db *sql.DB) error {
 		created_at TEXT NOT NULL
 	);
 
+	-- Stage 4 PR#2 — historical backfill tables. Each row carries is_synthetic
+	-- (always 1 for these tables because they are populated from the
+	-- Stage 4 CLI's staging JSONLs, NOT from live runtime emitters).
+	CREATE TABLE IF NOT EXISTS regime_history (
+		date TEXT PRIMARY KEY,
+		regime TEXT NOT NULL,
+		source_session_id TEXT,
+		recorded_at TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS stress_index_history (
+		date TEXT PRIMARY KEY,
+		score REAL NOT NULL,
+		regime TEXT,
+		components_json TEXT,
+		source TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS event_calendar_history (
+		date TEXT NOT NULL,
+		event_id TEXT NOT NULL,
+		active_theme TEXT,
+		source TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL,
+		PRIMARY KEY (date, event_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS prediction_backtest (
+		date TEXT PRIMARY KEY,
+		predicted_direction TEXT,
+		predicted_confidence REAL,
+		actual_direction TEXT,
+		actual_capital_flow_change REAL,
+		hit INTEGER,
+		model_version TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL
+	);
+
+	-- Stage 5 PR#4: template trigger detector scan results
+	-- One row per DetectionResult from narrative.DetectorRegistry.RunAll().
+	-- scan_batch_id groups all rows from a single RunAll call (UUID per scan).
+	CREATE TABLE IF NOT EXISTS detector_scan_log (
+		scan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+		scan_batch_id TEXT NOT NULL,
+		theme TEXT NOT NULL,
+		severity TEXT NOT NULL,
+		confidence REAL NOT NULL,
+		detected_at TEXT NOT NULL,
+		source TEXT NOT NULL,
+		metadata_json TEXT
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_outcomes_session_id ON outcomes(session_id);
 	CREATE INDEX IF NOT EXISTS idx_outcomes_symbol ON outcomes(symbol);
 	CREATE INDEX IF NOT EXISTS idx_screening_rejects_session_id ON screening_rejects(session_id);
@@ -156,6 +214,12 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_prompt_experiment_results_experiment_id ON prompt_experiment_results(experiment_id);
 	CREATE INDEX IF NOT EXISTS idx_window_summaries_window_id ON window_summaries(window_id);
 	CREATE INDEX IF NOT EXISTS idx_mutation_briefs_window_id ON mutation_briefs(window_id);
+	CREATE INDEX IF NOT EXISTS idx_regime_history_captured_at ON regime_history(captured_at);
+	CREATE INDEX IF NOT EXISTS idx_stress_index_history_captured_at ON stress_index_history(captured_at);
+	CREATE INDEX IF NOT EXISTS idx_event_calendar_history_date ON event_calendar_history(date);
+	CREATE INDEX IF NOT EXISTS idx_prediction_backtest_captured_at ON prediction_backtest(captured_at);
+	CREATE INDEX IF NOT EXISTS idx_detector_scan_log_batch ON detector_scan_log(scan_batch_id);
+	CREATE INDEX IF NOT EXISTS idx_detector_scan_log_theme_time ON detector_scan_log(theme, detected_at);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
