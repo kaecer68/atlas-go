@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"time"
 
@@ -898,7 +897,7 @@ func (tec *EventCalendar) IsTaiwanTradingDay(date time.Time) bool {
 		return false
 	}
 	for _, evt := range tec.GetEventsForDate(date) {
-		if strings.HasPrefix(evt.Name, "連假 - ") {
+		if evt.EventType == string(EventLongHoliday) {
 			return false
 		}
 	}
