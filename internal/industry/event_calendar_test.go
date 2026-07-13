@@ -391,3 +391,74 @@ func TestGetAllEvents(t *testing.T) {
 		t.Logf("  %s: %d events", eventType, count)
 	}
 }
+
+func TestGetEventsForDate(t *testing.T) {
+	tec := NewEventCalendar()
+	tec.RefreshEvents(time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC))
+
+	events := tec.GetEventsForDate(time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC))
+	if len(events) == 0 {
+		t.Fatalf("expected active events on 2026-06-25")
+	}
+	for _, evt := range events {
+		if evt.StartDate.After(time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC)) ||
+			evt.EndDate.Before(time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("event %s outside date range [%s, %s]", evt.Name, evt.StartDate, evt.EndDate)
+		}
+	}
+
+	empty := tec.GetEventsForDate(time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC))
+	if len(empty) != 0 {
+		t.Errorf("expected no events on 1999-01-01, got %d", len(empty))
+	}
+}
+
+func TestIsTaiwanTradingDay(t *testing.T) {
+	tec := NewEventCalendar()
+	tec.RefreshEvents(time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC))
+
+	cases := []struct {
+		name string
+		date time.Time
+		want bool
+	}{
+		{"regular weekday", time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC), true},
+		{"saturday", time.Date(2026, 6, 27, 0, 0, 0, 0, time.UTC), false},
+		{"sunday", time.Date(2026, 6, 28, 0, 0, 0, 0, time.UTC), false},
+		{"early january pre-new-year (no events)", time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), true},
+		{"lunar new year eve within holiday window", time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC), false},
+		{"10/10 national day within holiday window", time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC), false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tec.IsTaiwanTradingDay(tc.date); got != tc.want {
+				t.Errorf("IsTaiwanTradingDay(%v) = %v, want %v", tc.date, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsTaiwanTradingDay_228HolidayWindow(t *testing.T) {
+	tec := NewEventCalendar()
+	tec.RefreshEvents(time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC))
+
+	cases := []struct {
+		name string
+		date time.Time
+		want bool
+	}{
+		{"friday before 228 (in window)", time.Date(2026, 2, 27, 0, 0, 0, 0, time.UTC), false},
+		{"228 saturday itself", time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC), false},
+		{"monday after 228 (in window)", time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC), false},
+		{"regular post-window weekday", time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC), true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tec.IsTaiwanTradingDay(tc.date); got != tc.want {
+				t.Errorf("IsTaiwanTradingDay(%v) = %v, want %v", tc.date, got, tc.want)
+			}
+		})
+	}
+}

@@ -1,0 +1,173 @@
+package ledger
+
+import (
+	"testing"
+	"time"
+)
+
+func TestJSONLEventFlowPredictionStore_AppendAndLoad(t *testing.T) {
+	baseDir := t.TempDir()
+	store := NewJSONLEventFlowPredictionStore(baseDir)
+
+	now := time.Now().UTC()
+	recs := []EventFlowPredictionRecord{
+		{PredictedAt: now.AddDate(0, 0, -3), DirectionSign: 0.3, Confidence: 0.3, Direction: "inflow"},
+		{PredictedAt: now.AddDate(0, 0, -2), DirectionSign: -0.5, Confidence: 0.5, Direction: "outflow"},
+		{PredictedAt: now.AddDate(0, 0, -1), DirectionSign: 0, Confidence: 0.7, Direction: "neutral"},
+	}
+
+	for _, r := range recs {
+		if err := store.AppendPrediction(r); err != nil {
+			t.Fatalf("AppendPrediction failed: %v", err)
+		}
+	}
+
+	got, err := store.LoadRecentPredictions(10)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions failed: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(got))
+	}
+	for i, r := range recs {
+		if r.PredictedAt.Unix() != got[i].PredictedAt.Unix() {
+			t.Errorf("record %d: expected ts %v, got %v", i, r.PredictedAt, got[i].PredictedAt)
+		}
+		if r.DirectionSign != got[i].DirectionSign {
+			t.Errorf("record %d: expected sign %v, got %v", i, r.DirectionSign, got[i].DirectionSign)
+		}
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_LoadRecentRespectsLimit(t *testing.T) {
+	baseDir := t.TempDir()
+	store := NewJSONLEventFlowPredictionStore(baseDir)
+
+	now := time.Now().UTC()
+	for i := 0; i < 5; i++ {
+		if err := store.AppendPrediction(EventFlowPredictionRecord{
+			PredictedAt:   now.AddDate(0, 0, i-5),
+			DirectionSign: float64(i),
+			Confidence:    0.5,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction failed: %v", err)
+		}
+	}
+
+	got, err := store.LoadRecentPredictions(2)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions failed: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected last 2 records, got %d", len(got))
+	}
+	if got[0].DirectionSign != 3 || got[1].DirectionSign != 4 {
+		t.Errorf("expected last two records (3, 4), got (%v, %v)", got[0].DirectionSign, got[1].DirectionSign)
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_RespectsMaxRecordsCap(t *testing.T) {
+	baseDir := t.TempDir()
+	store := &JSONLEventFlowPredictionStore{
+		baseDir:    baseDir,
+		maxRecords: 5,
+	}
+
+	now := time.Now().UTC()
+	for i := 0; i < 10; i++ {
+		if err := store.AppendPrediction(EventFlowPredictionRecord{
+			PredictedAt:   now.Add(time.Duration(i) * time.Second),
+			DirectionSign: float64(i),
+			Confidence:    0.5,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction failed: %v", err)
+		}
+	}
+
+	got, err := store.LoadRecentPredictions(0)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions failed: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("expected cap=5 records, got %d", len(got))
+	}
+	for i, r := range got {
+		want := float64(i + 5)
+		if r.DirectionSign != want {
+			t.Errorf("record %d: expected direction_sign %v, got %v", i, want, r.DirectionSign)
+		}
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_EncodesDirectionSignWhenZero(t *testing.T) {
+	baseDir := t.TempDir()
+	store := NewJSONLEventFlowPredictionStore(baseDir)
+
+	cases := []struct {
+		name      string
+		direction string
+		conf      float64
+		want      float64
+	}{
+		{"inflow positive", "inflow", 0.4, 0.4},
+		{"outflow negative", "outflow", 0.4, -0.4},
+		{"neutral zero", "neutral", 0.6, 0},
+		{"unknown zero", "", 0.7, 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := EventFlowPredictionRecord{
+				PredictedAt:   time.Now().UTC(),
+				DirectionSign: 0,
+				Confidence:    tc.conf,
+				Direction:     tc.direction,
+			}
+			if err := store.AppendPrediction(rec); err != nil {
+				t.Fatalf("AppendPrediction failed: %v", err)
+			}
+		})
+	}
+
+	got, err := store.LoadRecentPredictions(10)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions failed: %v", err)
+	}
+	if len(got) != len(cases) {
+		t.Fatalf("expected %d records, got %d", len(cases), len(got))
+	}
+	for i, tc := range cases {
+		if got[i].DirectionSign != tc.want {
+			t.Errorf("%s: expected DirectionSign %v, got %v", tc.name, tc.want, got[i].DirectionSign)
+		}
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_PersistsAcrossInstances(t *testing.T) {
+	baseDir := t.TempDir()
+	first := NewJSONLEventFlowPredictionStore(baseDir)
+
+	want := EventFlowPredictionRecord{
+		PredictedAt:   time.Now().UTC(),
+		DirectionSign: 0.42,
+		Confidence:    0.42,
+		Direction:     "inflow",
+	}
+	if err := first.AppendPrediction(want); err != nil {
+		t.Fatalf("AppendPrediction failed: %v", err)
+	}
+
+	second := NewJSONLEventFlowPredictionStore(baseDir)
+	got, err := second.LoadRecentPredictions(0)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions failed: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 record after re-open, got %d", len(got))
+	}
+	if got[0].DirectionSign != want.DirectionSign {
+		t.Errorf("expected DirectionSign %v, got %v", want.DirectionSign, got[0].DirectionSign)
+	}
+}

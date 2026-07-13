@@ -256,3 +256,7 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 		return NewJSONLQuoteStore(cfg.LedgerDir), nil
 	}
 }
+
+func NewEventFlowPredictionStore(cfg config.Config) (EventFlowPredictionStore, error) {
+	return NewJSONLEventFlowPredictionStore(cfg.LedgerDir), nil
+}

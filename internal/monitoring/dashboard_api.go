@@ -557,6 +557,13 @@ func (a *DashboardAPI) CalibrateNarrative(replayPath string) (*narrative.Narrati
 	return a.narrativeEngine.SelfCalibrate(replayPath)
 }
 
+// NarrativeEngine returns the underlying narrative engine for callers that
+// need to invoke methods not yet exposed via the DashboardAPI surface
+// (e.g. Stage 3 scheduling of template-hit-rate recalculation).
+func (a *DashboardAPI) NarrativeEngine() *narrative.NarrativeEngine {
+	return a.narrativeEngine
+}
+
 // GetLatestMacroSnapshot reads the macro ingestor's latest.json from disk.
 // Returns (zero, false) when unavailable. Public accessor for consumers that
 // need the raw snapshot without triggering a full ingestion (e.g. RealTimeAdapter).

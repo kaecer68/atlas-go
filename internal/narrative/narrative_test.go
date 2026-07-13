@@ -533,3 +533,27 @@ func TestEarningsSurpriseEvent_MatchesCausalChains(t *testing.T) {
 		t.Fatalf("expected positive score, got %f", chains[0].Score)
 	}
 }
+
+func TestRecalculateTemplateHitRates(t *testing.T) {
+	ne := NewNarrativeEngine()
+	tmpl, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("US_rates_up template must exist in default KB")
+	}
+	tmpl.HistoricalHitRate = 0.70
+	ne.kb.RegisterTemplate(tmpl)
+	ne.models[0].RecentError = 0.2
+	ne.models[0].HitRate = 0.80
+
+	ne.RecalculateTemplateHitRates()
+
+	got, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("US_rates_up template missing after recalculation")
+	}
+	const alpha = 0.2
+	want := (1-alpha)*0.70 + alpha*0.80
+	if got.HistoricalHitRate != want {
+		t.Fatalf("expected HistoricalHitRate %v, got %v", want, got.HistoricalHitRate)
+	}
+}
