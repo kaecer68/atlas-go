@@ -48,7 +48,7 @@
 
 ---
 
-## E · Evolving（演進中）— 26 packages
+## E · Evolving（演進中）— 27 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -59,6 +59,7 @@
 | `backtest` | 視窗回測 — `Window.Run()` | `Runner` | 由 autobacktest 使用 |
 | `db` | PostgreSQL 連線管理 | `DB` | 基礎設施，穩定但未直接出現於 main.go |
 | `eval` | 模型評估指標與可解釋性工具（SK-12~15） — OOS R²、Sharpe、PermutationImportance、PDP | `EvalResult`, `Predictor` | 由 robustness 使用，Fin-Skills 驅動 |
+| `eventquality` | 事件資料品質閘門 — 5 rules validator、quality log、cross-source verify、sanitize | `EventValidator`, `QualityLog`, `CrossSourceStore`, `SanitizeTitle` | Stage 2 新增，evolving |
 | `feature` | 命名特徵萃取（close, volume, return_1d/5d, hl_ratio, ma_ratio, volume_ratio） — 由 `cmd/backtest-pipeline` 和 `internal/experiment` 共用 | `Registry`, `MakeExtractor`, `ForwardReturnLabel` | 由 backtest-pipeline CLI 和 Judge 重要性運算使用 |
 | `fubonproxy` | Fubon-proxy 生命週期管理 — 自動啟動/停止/監控 Python FastAPI 微服務 | `ProcessManager`, `Start()`, `Stop()` | 由 cmd/atlas API 模式使用，非致命失敗 |
 | `globalmarket` | 全球總經資料管理 | `Manager` | 由 narrative/industry 使用 |

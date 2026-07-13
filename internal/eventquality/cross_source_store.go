@@ -25,10 +25,10 @@ type sourceEntry struct {
 // CrossSourceStore tracks unique sources per composite event key.
 // Thread-safe; entries expire after a configurable TTL.
 type CrossSourceStore struct {
-	mu     sync.Mutex
-	seen   map[string][]sourceEntry
-	ttl    time.Duration
-	now    func() time.Time
+	mu   sync.Mutex
+	seen map[string][]sourceEntry
+	ttl  time.Duration
+	now  func() time.Time
 }
 
 // NewCrossSourceStore creates a store with the given TTL. A zero TTL
