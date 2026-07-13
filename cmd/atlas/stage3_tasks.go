@@ -65,6 +65,7 @@ func registerStage3Tasks(d stage3Deps) {
 				result = "failed"
 			}
 			monitoring.RecordStage3TaskRun(d.metricsCollector, taskID, result)
+			monitoring.RecordStage3LedgerRecords(d.metricsCollector, d.predictionLedger)
 		},
 		RefreshEventCalendar: func(now time.Time) error {
 			d.eventCalendar.RefreshEvents(now)

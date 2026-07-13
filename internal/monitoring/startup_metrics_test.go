@@ -2,6 +2,9 @@ package monitoring
 
 import (
 	"testing"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 // TestRecordDBInitFailure_IncrementsCounter 驗證 RecordDBInitFailure 會建立
@@ -216,4 +219,74 @@ func TestRecordStage3AlertFired_NilCollectorAndEmptyRuleIDAreSafe(t *testing.T) 
 	}()
 	RecordStage3AlertFired(nil, "rule", AlertLevelInfo)
 	RecordStage3AlertFired(NewMetricsCollector(), "", AlertLevelInfo)
+}
+
+func TestRecordStage3LedgerRecords_EmitsGaugeValueMatchingStoreLen(t *testing.T) {
+	c := NewMetricsCollector()
+	store := ledger.NewJSONLEventFlowPredictionStore(t.TempDir())
+	for i := 0; i < 7; i++ {
+		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
+			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
+			DirectionSign: float64(i + 1),
+			Confidence:    0.7,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction %d: %v", i, err)
+		}
+	}
+
+	RecordStage3LedgerRecords(c, store)
+
+	m, ok := c.GetMetric(MetricStage3LedgerRecords, map[string]string{"ledger": "event_flow_prediction"})
+	if !ok {
+		t.Fatalf("expected gauge %q to be registered", MetricStage3LedgerRecords)
+	}
+	if m.Value != 7 {
+		t.Fatalf("expected gauge=7 (matches store.Len()), got %v", m.Value)
+	}
+	if m.Type != MetricTypeGauge {
+		t.Fatalf("expected MetricTypeGauge, got %v", m.Type)
+	}
+	if m.Name != MetricStage3LedgerRecords {
+		t.Fatalf("expected Name=%q, got %q", MetricStage3LedgerRecords, m.Name)
+	}
+}
+
+func TestRecordStage3LedgerRecords_GaugeOverwriteSemantics(t *testing.T) {
+	// Gauge overwrites, not accumulates. Two emits on the same store must
+	// produce the latest Len() value, not the sum.
+	c := NewMetricsCollector()
+	store := ledger.NewJSONLEventFlowPredictionStore(t.TempDir())
+
+	RecordStage3LedgerRecords(c, store)
+	if v, _ := c.GetMetric(MetricStage3LedgerRecords, map[string]string{"ledger": "event_flow_prediction"}); v.Value != 0 {
+		t.Fatalf("empty store: expected 0, got %v", v.Value)
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
+			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
+			DirectionSign: float64(i + 1),
+			Confidence:    0.7,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction %d: %v", i, err)
+		}
+	}
+	RecordStage3LedgerRecords(c, store)
+	m, _ := c.GetMetric(MetricStage3LedgerRecords, map[string]string{"ledger": "event_flow_prediction"})
+	if m.Value != 3 {
+		t.Fatalf("after 3 appends: expected gauge=3 (overwrite, not 0+3 or 0+3=accumulate), got %v", m.Value)
+	}
+}
+
+func TestRecordStage3LedgerRecords_NilCollectorAndNilStoreAreSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordStage3LedgerRecords(nil/nil) panicked: %v", r)
+		}
+	}()
+	RecordStage3LedgerRecords(nil, nil)
+	RecordStage3LedgerRecords(NewMetricsCollector(), nil)
+	RecordStage3LedgerRecords(nil, ledger.NewJSONLEventFlowPredictionStore(t.TempDir()))
 }

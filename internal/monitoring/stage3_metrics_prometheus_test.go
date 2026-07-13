@@ -4,6 +4,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 // TestStage3Metrics_PrometheusHandler_ExposesBothCounters exercises the
@@ -57,5 +60,44 @@ func TestStage3Metrics_PrometheusHandler_StableBeforeEmission(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), MetricStage3TaskRuns) {
 		t.Fatalf("metric %q should not appear before first emission (got body lines including %q)", MetricStage3TaskRuns, MetricStage3TaskRuns)
+	}
+}
+
+// TestStage3Metrics_PrometheusHandler_ExposesLedgerGauge verifies the
+// gauge end of the Stage 3 metrics path renders as `# TYPE … gauge`
+// in /metrics body, with the latest store.Len() reflected in the value
+// column. Complements the counter test above; together they cover both
+// metric types the /metrics route exposes for Stage 3.
+func TestStage3Metrics_PrometheusHandler_ExposesLedgerGauge(t *testing.T) {
+	c := NewMetricsCollector()
+	store := ledger.NewJSONLEventFlowPredictionStore(t.TempDir())
+	for i := 0; i < 5; i++ {
+		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
+			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
+			DirectionSign: float64(i + 1),
+			Confidence:    0.7,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction %d: %v", i, err)
+		}
+	}
+	RecordStage3LedgerRecords(c, store)
+
+	rec := httptest.NewRecorder()
+	PrometheusHandler(c).ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+
+	want := []string{
+		`# TYPE atlas_stage3_ledger_records gauge`,
+		`atlas_stage3_ledger_records{ledger="event_flow_prediction"} 5`,
+	}
+	for _, sub := range want {
+		if !strings.Contains(body, sub) {
+			t.Fatalf("missing /metrics gauge line %q\n--- full body ---\n%s", sub, body)
+		}
 	}
 }
