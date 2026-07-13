@@ -387,6 +387,14 @@ func registerOperationsTasks(d operationsDeps) {
 	}
 
 	if d.prismMgr != nil && d.janusEngine != nil {
+		// Event-driven: feed completed results to JANUS immediately instead of
+		// waiting for the 6h cron. This propagates training improvements to
+		// regime detection in near-real-time.
+		d.prismMgr.SetOnCompleted(func(result prism.CompletedTrainingResult) {
+			if result.Result.Error == "" && !result.Result.Synthetic {
+				d.janusEngine.RecordTrainingResult(result.Regime, result.Result)
+			}
+		})
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 			Name:     "prism_training",
 			Interval: 6 * time.Hour,
