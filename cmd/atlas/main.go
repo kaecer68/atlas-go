@@ -670,6 +670,12 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
 			capitalflowSvc := capitalflow.NewService(macroProvider, 0)
 			narrativeEngine := narrative.NewNarrativeEngine()
+			// Stage 2.3: wire narrative mutation audit hooks.
+			auditLogPath := filepath.Join(cfg.WorkDir, "logs", "narrative_audit.jsonl")
+			if auditLogger, err := narrative.NewFileAuditLogger(auditLogPath); err == nil {
+				narrativeEngine.KnowledgeBase().SetTemplateAuditHook(narrative.TemplateAuditHookFromLogger(auditLogger))
+				narrativeEngine.SetWeightAuditHook(narrative.WeightAuditHookFromLogger(auditLogger))
+			}
 			eventdriven.RegisterRoutesWithNarrative(mux, eventCalendar, capitalflowSvc, narrativeAdapter{eng: narrativeEngine})
 			log.Printf("[EventDriven] registered /api/events/* routes (capital flow + narrative wired)")
 		}
