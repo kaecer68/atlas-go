@@ -8,4 +8,4 @@
 - 不可預設 live broker：預設 dry-run/paper，除非顯式傳入 `-allow-live-broker`。
 - 憑證缺失 → dummy mode：自動降級為格式檢查，不報錯退出。
 
-> 完整 CLI 目錄清單見 `docs/QUICKSTART.md`。
+> 完整 CLI 目錄清單見 `docs/quickstart.md`。

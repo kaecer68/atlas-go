@@ -262,26 +262,26 @@ jobs:
           fi
           echo "OK: AGENTS.md is within 160-line budget."
 
-  # TRAPS.md line count gate — prevents bloat in the detailed trap reference.
+  # traps.md line count gate — prevents bloat in the detailed trap reference.
   traps-md-lines:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Check docs/REFERENCE/TRAPS.md line count
+    - name: Check docs/REFERENCE/traps.md line count
       run: |
-        TRAP_LINES=$(wc -l < docs/REFERENCE/TRAPS.md | tr -d ' ')
-        echo "docs/REFERENCE/TRAPS.md lines: $TRAP_LINES"
+        TRAP_LINES=$(wc -l < docs/REFERENCE/traps.md | tr -d ' ')
+        echo "docs/REFERENCE/traps.md lines: $TRAP_LINES"
         if [ "$TRAP_LINES" -gt 300 ]; then
-          echo "ERROR: docs/REFERENCE/TRAPS.md has $TRAP_LINES lines (limit: 300)."
+          echo "ERROR: docs/REFERENCE/traps.md has $TRAP_LINES lines (limit: 300)."
           echo "Split or consolidate trap entries."
           exit 1
         fi
-        echo "OK: docs/REFERENCE/TRAPS.md is within 300-line budget."
+        echo "OK: docs/REFERENCE/traps.md is within 300-line budget."
 
-    - name: Check docs/REFERENCE/TRAPS.md module attribution
+    - name: Check docs/REFERENCE/traps.md module attribution
       run: |
-        echo "Checking TRAPS.md module column..."
+        echo "Checking traps.md module column..."
         # Count table rows that are missing module attribution
         # A valid row should have: | trap | module | description |
         MISSING=0
@@ -297,7 +297,7 @@ jobs:
             echo "❌ Missing module column: $line"
             MISSING=$((MISSING + 1))
           fi
-        done < <(grep '^|' docs/REFERENCE/TRAPS.md)
+        done < <(grep '^|' docs/REFERENCE/traps.md)
         if [ "$MISSING" -gt 0 ]; then
           echo "ERROR: $MISSING trap row(s) missing module attribution."
           exit 1
@@ -551,7 +551,7 @@ jobs:
       run: npm run test:e2e
 
   # Data directory naming convention check — validates data/ files follow
-  # DATA_NAMING_CONVENTION.md (R1 snake_case dirs, R2 daily file format,
+  # data-naming-convention.md (R1 snake_case dirs, R2 daily file format,
   # R4 JSONL extension, R6 backup files). Previously only in Makefile;
   # activated in CI per 2026-07-03 pipeline audit.
   data-naming:
@@ -562,7 +562,7 @@ jobs:
     - name: Check data naming conventions
       run: bash scripts/ci/check_data_naming.sh
 
-  # Data catalog freshness check — ensures DATA_CATALOG.md entries
+  # Data catalog freshness check — ensures data-catalog.md entries
   # match actual data/ files on disk. --warn-only during probation;
   # TODO(2026-07-17): escalate to hard fail after 2-week observation window.
   # Previously dead code; activated per 2026-07-03 pipeline audit.

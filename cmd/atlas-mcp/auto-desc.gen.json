@@ -930,7 +930,7 @@
   },
   "strategy_list_active": {
     "name": "strategy_list_active",
-    "description": "List the strategy set currently active in production (per docs/WORKFLOW_MAP.md WA-500).",
+    "description": "List the strategy set currently active in production (per docs/workflow-map.md WA-500).",
     "inputSchema": {
       "type": "object"
     }
@@ -979,7 +979,7 @@
   },
   "system_get_health": {
     "name": "system_get_health",
-    "description": "Return overall system health status (per docs/WORKFLOW_MAP.md WA-606).",
+    "description": "Return overall system health status (per docs/workflow-map.md WA-606).",
     "inputSchema": {
       "type": "object"
     }

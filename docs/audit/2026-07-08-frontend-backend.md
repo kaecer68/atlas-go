@@ -80,7 +80,7 @@
 | [#1042](https://github.com/kaecer68/atlas-go/pull/1042) | `369b61cd` | Client 資金流明細展開 + strategies 排名嵌入（home-tier-sections.js + strategies.js 改動） |
 | [#1043](https://github.com/kaecer68/atlas-go/pull/1043) | `f2f79fa3` | Admin scheduler status + datachannels data-pipeline 嵌入（dashboard.js + datachannels.js 改動） |
 
-**PR #1041 修補 commit**：`26ed31f8`（修正 `tier-boundary.md:168` 斷掉的內部連結 `AGENT_TOOLS.md` → `../AGENT_TOOLS.md`）。
+**PR #1041 修補 commit**：`26ed31f8`（修正 `tier-boundary.md:168` 斷掉的內部連結 `AGENT_tools.md` → `../AGENT_tools.md`）。
 
 ---
 

@@ -5,7 +5,7 @@
 **狀態**: 權威來源（authoritative）  
 **自動生成**: `scripts/gen_data_catalog.sh`（P2.3 之後）  
 **強制性**: CI 檢查新鮮度（`scripts/ci/check_data_catalog.sh`）  
-**相關文檔**: `docs/DATA_CATALOG_TEMPLATE.md` · `docs/DATA_ARCHITECTURE.md` · `docs/DATA_MATURITY_STANDARD.md`
+**相關文檔**: `docs/data-catalog-template.md` · `docs/data-architecture.md` · `docs/data-maturity-standard.md`
 
 ---
 
@@ -48,7 +48,7 @@
 | **格式** | `session-YYYYMMDD-daily/`，每目錄含 `summary.json`、`recommendation_outcomes.jsonl`、`screened_symbols.jsonl`、`positions.json`、`experiments.jsonl` |
 | **生產者** | `internal/ledger/sessions.go:RecordSessionOutcomes()` |
 | **消費者** | 校準工具、Dashboard API、回測視窗、RiskGate |
-| **描述** | 最完整的 per-session 資料，包含 per-agent forward return（DATA_ARCHITECTURE.md 層級 1） |
+| **描述** | 最完整的 per-session 資料，包含 per-agent forward return（data-architecture.md 層級 1） |
 
 ### darwinian_weights `data/state/darwinian_weights.json`
 
@@ -489,11 +489,11 @@
 
 | 文檔 | 關係 |
 |------|------|
-| `docs/DATA_ARCHITECTURE.md` | 詳細讀寫路徑與資料流 |
-| `docs/DATA_NAMING_CONVENTION.md` | 檔案命名規範（R1-R10） |
-| `docs/DATA_DIRECTORY_STANDARD.md` | 目錄結構規範 |
-| `docs/JSON_SCHEMA_STANDARD.md` | JSON Schema 定義標準 |
-| `docs/DATA_MATURITY_STANDARD.md` | 資料成熟度標記標準 |
-| `docs/DATA_CATALOG_TEMPLATE.md` | Catalog 範本格式定義 |
+| `docs/data-architecture.md` | 詳細讀寫路徑與資料流 |
+| `docs/data-naming-convention.md` | 檔案命名規範（R1-R10） |
+| `docs/data-directory-standard.md` | 目錄結構規範 |
+| `docs/json-schema-standard.md` | JSON Schema 定義標準 |
+| `docs/data-maturity-standard.md` | 資料成熟度標記標準 |
+| `docs/data-catalog-template.md` | Catalog 範本格式定義 |
 | `schemas/recommendation_outcomes.schema.json` | Outcomes JSON Schema |
 | `schemas/data_metadata.schema.json` | _metadata.json Schema |

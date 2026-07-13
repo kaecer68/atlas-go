@@ -54,7 +54,7 @@ MANDATORY for ALL of these:
 
 □ Adding validation/business logic → gitnexus_query({query: "<rule type> validation"})
   → Does risk/, apigateway/, or config/ already enforce this rule?
-  → Check docs/REFERENCE/TRAPS.md for "同一件事不可有三種算法" violations
+  → Check docs/REFERENCE/traps.md for "同一件事不可有三種算法" violations
 
 □ The search returns EMPTY: proceed (new ground — document intention in commit message)
 □ The search returns HITS: STOP. Read the overlapping code FIRST. If intentional overlap
@@ -139,7 +139,7 @@ Verify no constitutional violations before writing code:
 | If touching... | Must read... | Key rules |
 |---------------|--------------|-----------|
 | Data fetching / API calls | `internal/apigateway/CONSTITUTION.md` | Art.1: registered channels only. Art.4: BackgroundTaskManager only. Art.5: ParametersConfig only. |
-| Portfolio / optimizer | `docs/REFERENCE/GUIDELINES_INDEX.md` + module AGENTS.md | Matrix ops required (Ledoit-Wolf), NOT linear weighting. Asset-universal code. |
+| Portfolio / optimizer | `docs/REFERENCE/guidelines-index.md` + module AGENTS.md | Matrix ops required (Ledoit-Wolf), NOT linear weighting. Asset-universal code. |
 | FactorType changes | `AGENTS.md` §高危陷阱 #22 | Must update 8 locations. Verify with `verify_factor_integrity.sh`. |
 
 ### Step 5: PATTERN MATCHING
@@ -226,7 +226,7 @@ Before modifying or removing code, understand WHY it exists:
 ## Architecture Quick Reference
 
 **Truth-source hierarchy** (when docs conflict):
-1. `docs/REFERENCE/GUIDELINES_INDEX.md` — final arbiter
+1. `docs/REFERENCE/guidelines-index.md` — final arbiter
 2. `internal/apigateway/CONSTITUTION.md` — mandatory rules (CI-enforced)
 3. `AGENTS.md` + local `internal/*/AGENTS.md` — module boundaries and pitfalls
 4. Source code — ultimate truth
@@ -236,8 +236,8 @@ Before modifying or removing code, understand WHY it exists:
 | Resource | Purpose |
 |----------|---------|
 | `AGENTS.md` | Project constitution, 22 高危陷阱, git workflow |
-| `docs/REFERENCE/GUIDELINES_INDEX.md` | Authority hierarchy, use-case routing |
-| `docs/ENVIRONMENT.md` | Verified external dependency versions and setup notes |
+| `docs/REFERENCE/guidelines-index.md` | Authority hierarchy, use-case routing |
+| `docs/environment.md` | Verified external dependency versions and setup notes |
 | `.claude/SKILLS-MAP.md` | Full skill inventory (38+ skills) |
 | `docs/architecture.md` | System architecture and data flow |
 | `gitnexus://repo/atlas-go/clusters` | All functional communities detected by GitNexus |
@@ -341,8 +341,8 @@ Read relevant internal/<module>/AGENTS.md for module-specific traps
 4. 若使用獨立 worktree：git worktree remove <path>     # 需先切到其他 worktree
 ```
 
-完整 SOP 見 `docs/QUICKSTART.md` § Git 工作流 § 4。批次清理（>5 個
-stale branch）見 `docs/branch-hygiene/`。MULTI_CLI_PROTOCOL.md 的
+完整 SOP 見 `docs/quickstart.md` § Git 工作流 § 4。批次清理（>5 個
+stale branch）見 `docs/branch-hygiene/`。multi-cli-protocol.md 的
 「Post-merge cleanup checklist」段有對應摘要。
 
 **為什麼加在這裡**：本 skill 在每次「修改程式碼前」必載入（description
@@ -350,6 +350,6 @@ MUST use），AI 進入下一個任務前會看到此段 → 在下一次 PR mer
 觸發執行。
 
 **歷史背景**：Wave 9 完成後遺留 16 個 stale branch（落後 main 30-60
-commits），雖 MULTI_CLI_PROTOCOL.md 早已明列「PR merge → branch 自動
+commits），雖 multi-cli-protocol.md 早已明列「PR merge → branch 自動
 刪除」SOP，但 AI 未主動執行 — 文件有寫但 AI 沒 follow。本段為直接
 觸發點。清理見 PR #748。

@@ -111,7 +111,7 @@ jobs:
   # Build atlas-mcp (MCP server for AI agents) binaries
   # 2026-07-10: NEW job (PR #1067). 投資人 hermes/openclaw agent 用,
   # 不需 Go toolchain 或 source tree。詳見 scripts/install-atlas-mcp-from-release.sh
-  # 與 docs/mcp-integration-LOCAL.md。
+  # 與 docs/mcp-integration-local.md。
   #
   # 為何不用 matrix: checksums.txt 必須包含所有平台的 binary, matrix 跑會
   # 各自產生一份 (覆蓋問題)。改用 sequential build 5 平台, 最後一次

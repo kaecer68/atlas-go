@@ -259,7 +259,7 @@ echo 'ATLAS_JWT_SECRET=$(security find-generic-password -a ATLAS_JWT_SECRET -s c
 
 **Path**: `/Users/kaecer/workspace/atlas/data/`
 
-**Subdirectories** (per `docs/DATA_DIRECTORY_STANDARD.md`):
+**Subdirectories** (per `docs/data-directory-standard.md`):
 - `data/state/` — runtime state (baseline_policy.json, circuit_breaker_state.json, etc.)
 - `data/state/{finmind,fubon,fugle}/` — API response cache
 - `data/replay/` — historical replay data (JSONL)
@@ -314,9 +314,9 @@ prevents the recurring "AI assumes it's not there" issue.
 
 - `AGENTS.md` — cross-module pitfalls, quick commands
 - `configs/allowed_env_vars.md` — full env var reference
-- `docs/QUICKSTART.md` — quick build/test reference (44 lines, not env-focused)
+- `docs/quickstart.md` — quick build/test reference (44 lines, not env-focused)
 - `README.md` — overview + Fubon proxy architecture
 - `internal/apigateway/CONSTITUTION.md` — data source governance
 - `.claude/skills/atlas-data-visibility/SKILL.md` — silent failure detection
 - `docs/investigations/2026-06-28-boot-loop-multi-service.md` — 2026-06 啟動崩潰連環事件完整根因分析(含 fubon-neo PyPI 404 + wheel 平台限制 + 跨平台 deploy 限制)
-- `docs/REFERENCE/TRAPS.md` § Deploy/Docker — 跨模組部署陷阱(ENTRYPOINT 衝突、env_file precedence、hardcoded healthcheck)
+- `docs/REFERENCE/traps.md` § Deploy/Docker — 跨模組部署陷阱(ENTRYPOINT 衝突、env_file precedence、hardcoded healthcheck)

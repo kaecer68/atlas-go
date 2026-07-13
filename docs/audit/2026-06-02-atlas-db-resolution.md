@@ -113,8 +113,8 @@ CREATE TABLE quotes (
 2. 移除 cmd/migrate-jsonl-to-sqlite/（死碼）
 3. 移除 internal/config/config.go 中的 AtlasDBPath（或標記 deprecated）
 4. 移除 internal/ledger/sqlite.go 中的相關程式碼（若有）
-5. 更新 docs/DATA_CATALOG.md — 標記為已移除
-6. 更新 docs/DATA_ARCHITECTURE.md — 移除 atlas.db 層級
+5. 更新 docs/data-catalog.md — 標記為已移除
+6. 更新 docs/data-architecture.md — 移除 atlas.db 層級
 ```
 
 **不執行原因**（若選擇保留）：
@@ -124,5 +124,5 @@ CREATE TABLE quotes (
 
 ## 相關文件
 
-- `docs/DATA_CATALOG.md` — 資料目錄
-- `docs/DATA_ARCHITECTURE.md` §層級 18 — 架構文件
+- `docs/data-catalog.md` — 資料目錄
+- `docs/data-architecture.md` §層級 18 — 架構文件

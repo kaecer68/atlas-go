@@ -6,7 +6,7 @@
 
 ## Purpose
 
-atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式稽核節奏。本文件建立五層稽核節奏(per PR / 每周 / 每月 / 每季 / 每版本),定義九大資安範疇,並對應到既有 canonical 控制項(SECURITY.md、apigateway/CONSTITUTION.md、live-trading.guardrails.instructions.md 等),讓後續每一次稽核有可重複、可驗證的工作底稿。本文件不重述各 canonical 控制項的具體內容,僅作為索引與檢查清單。
+atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式稽核節奏。本文件建立五層稽核節奏(per PR / 每周 / 每月 / 每季 / 每版本),定義九大資安範疇,並對應到既有 canonical 控制項(SECURITY.md、apigateway/constitution.md、live-trading.guardrails.instructions.md 等),讓後續每一次稽核有可重複、可驗證的工作底稿。本文件不重述各 canonical 控制項的具體內容,僅作為索引與檢查清單。
 
 ## Cadence
 
@@ -32,7 +32,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 6. **Dependency vulnerability scanning**: govulncheck、go.mod 直接依賴檢視。
 7. **Data visibility safeguards**: 4 層零值防護(ChannelErrors、FetchResult.Fallback、MacroDataSnapshot)。
 8. **Configuration and environment management**: env var 白名單、ParametersConfig、Keychain 整合。
-9. **Documentation currency**: SECURITY.md、apigateway/CONSTITUTION.md、AGENTS.md、TRAPS.md 同步狀態。
+9. **Documentation currency**: SECURITY.md、apigateway/constitution.md、AGENTS.md、traps.md 同步狀態。
 
 ## Per-Audit Checklist
 
@@ -63,7 +63,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 - [ ] `internal/live/AGENTS.md` 的 ANTI-PATTERNS 段未被任何 PR 違反。
 - [ ] `-allow-live-broker` 旗標預設為關閉,且所有測試在未啟用此旗標下通過(`go test ./internal/live/...`)。
 - [ ] 風險過濾(replay → control → risk → execute)的執行順序在程式碼中可稽核(透過 `trace_path` 驗證)。
-- [ ] 市場資料缺失時 fail-safe 行為已實作(`docs/REFERENCE/TRAPS.md` 的 live trading 安全旗標陷阱)。
+- [ ] 市場資料缺失時 fail-safe 行為已實作(`docs/REFERENCE/traps.md` 的 live trading 安全旗標陷阱)。
 - [ ] `cmd/experimental/validate-broker` 簽名驗證在每次 broker client 變更後重新執行。
 - [ ] live orchestration 變更 PR 同時更新 `.github/instructions/live-trading.guardrails.instructions.md`(若守則變更)。
 - [ ] 至少一次 smoke check:`go run ./cmd/atlas` 在非 live 模式下啟動成功。
@@ -105,14 +105,14 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 - [ ] `FetchResult.Fallback` 機制在 cache miss 時正常運作。
 - [ ] 零值卡片(`ChannelErrors` 為空但 channel 失敗)於前端 UI 顯示明確錯誤訊息,非靜默成功。
 - [ ] 至少一次人工驗證:故意關閉一個 data source,觀察 UI 是否顯示 fallback 狀態而非零值。
-- [ ] Circuit breaker 半開探測正確觸發(`apigateway/CONSTITUTION.md` 第五條)。
+- [ ] Circuit breaker 半開探測正確觸發(`apigateway/constitution.md` 第五條)。
 
 ### 8. Configuration and environment management
 
 - [ ] 所有 env var 在 `configs/allowed_env_vars.md` 白名單內(白名單目前含 `ATLAS_API_KEY`、`ATLAS_STATE_DIR`、`ATLAS_WORK_DIR`,以及其他經過憲法第一條 1.2 節程序新增的變數)。
-- [ ] 新增 env var 已更新 `docs/ENVIRONMENT.md` 與 AGENTS.md 高頻陷阱表(若有)。
+- [ ] 新增 env var 已更新 `docs/environment.md` 與 AGENTS.md 高頻陷阱表(若有)。
 - [ ] `config.Load()` 正確讀取 `.env` 與 `~/.config/atlas-go/.env`(雙路徑)。
-- [ ] `ParametersConfig` 為唯一參數管理入口,無 hardcoded magic number(參考 `docs/REFERENCE/PARAMETER_SYSTEM.md`)。
+- [ ] `ParametersConfig` 為唯一參數管理入口,無 hardcoded magic number(參考 `docs/REFERENCE/parameter-system.md`)。
 - [ ] Docker compose 環境變數與本地 `.env` 同步,無單邊修改。
 - [ ] 生產資料庫連線使用 `sslmode=require`(本地開發可用 `disable`,但生產部署必須修正)。
 - [ ] Grafana 預設 admin 密碼已在生產環境變更(SECURITY.md 已知限制)。
@@ -122,10 +122,10 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 - [ ] `SECURITY.md` 的「Previous Security Audits」段包含最近一次稽核紀錄(YYYY-MM-DD 條目)。
 - [ ] `SECURITY.md` 涵蓋:Secret Management、Dependency Scanning、Data Source Governance、Live Trading Guardrails、LLM Providers、Data Visibility Safeguards 六個段落(PR #817 refresh 後;若未合併則以當前版本為準)。
 - [ ] `internal/apigateway/CONSTITUTION.md` 版本號(v1.0+)與「修訂歷史」附錄 C 一致。
-- [ ] AGENTS.md 高頻陷阱表含「資安設定」一列,指向 SECURITY.md 與 apigateway/CONSTITUTION.md(PR #817 新增;若未合併則此項標 N/A)。
-- [ ] `docs/REFERENCE/TRAPS.md` 包含 live trading 安全旗標陷阱與 apigateway 憲法違反陷阱。
+- [ ] AGENTS.md 高頻陷阱表含「資安設定」一列,指向 SECURITY.md 與 apigateway/constitution.md(PR #817 新增;若未合併則此項標 N/A)。
+- [ ] `docs/REFERENCE/traps.md` 包含 live trading 安全旗標陷阱與 apigateway 憲法違反陷阱。
 - [ ] 本文件(`docs/specs/security-audit.md`)的引用路徑與實際 canonical 檔案位置一致。
-- [ ] 30 天以上未引用的文件已評估是否移至 `docs/archive/`(依 `DOCUMENTATION_STANDARD.md` 生命週期)。
+- [ ] 30 天以上未引用的文件已評估是否移至 `docs/archive/`(依 `documentation-standard.md` 生命週期)。
 
 ## Audit Output
 
@@ -177,14 +177,14 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 | Live trading 守則 | [`.github/instructions/live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md) |
 | Go 程式碼守則 | [`.github/instructions/go-core.instructions.md`](../../.github/instructions/go-core.instructions.md) |
 | 高頻陷阱 | [`AGENTS.md`](../../AGENTS.md) § 高頻陷阱速查 |
-| 跨模組陷阱完整版 | [`docs/REFERENCE/TRAPS.md`](../REFERENCE/TRAPS.md) |
-| 環境變數管理 | [`docs/ENVIRONMENT.md`](../ENVIRONMENT.md) |
-| 參數管理系統 | [`docs/REFERENCE/PARAMETER_SYSTEM.md`](../REFERENCE/PARAMETER_SYSTEM.md) |
+| 跨模組陷阱完整版 | [`docs/REFERENCE/traps.md`](../REFERENCE/traps.md) |
+| 環境變數管理 | [`docs/environment.md`](../environment.md) |
+| 參數管理系統 | [`docs/REFERENCE/parameter-system.md`](../REFERENCE/parameter-system.md) |
 | LLM 路由規格 | [`docs/specs/llm-routing.md`](llm-routing.md) |
 | 數據可見性四層防護 | [`.claude/skills/atlas-data-visibility/SKILL.md`](../../.claude/skills/atlas-data-visibility/SKILL.md) |
 | CI/CD 安全掃描 (gosec) | [`.github/workflows/ci-cd.yml`](../../.github/workflows/ci-cd.yml) § security job |
 | CI 憲法檢查 | [`.github/workflows/constitution.yml`](../../.github/workflows/constitution.yml) |
 | 依賴漏洞掃描 (govulncheck) | `.github/workflows/vuln-scan.yml` (PR #818 新增) |
 | env var 白名單 | [`configs/allowed_env_vars.md`](../../configs/allowed_env_vars.md) |
-| 文件歸屬規範 | [`docs/DOCUMENTATION_STANDARD.md`](../DOCUMENTATION_STANDARD.md) |
-| 文件位置地圖 | [`docs/DOCUMENTATION_MAP.md`](../DOCUMENTATION_MAP.md) |
+| 文件歸屬規範 | [`docs/documentation-standard.md`](../documentation-standard.md) |
+| 文件位置地圖 | [`docs/documentation-map.md`](../documentation-map.md) |

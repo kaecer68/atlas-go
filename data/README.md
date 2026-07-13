@@ -6,12 +6,12 @@
 
 | 你想找什麼？ | 去哪裡？ |
 |-------------|---------|
-| **完整資料目錄**（39 個資產） | [`docs/DATA_CATALOG.md`](../docs/DATA_CATALOG.md) |
-| **資料架構與讀寫路徑** | [`docs/DATA_ARCHITECTURE.md`](../docs/DATA_ARCHITECTURE.md) |
-| **檔案命名規範** | [`docs/DATA_NAMING_CONVENTION.md`](../docs/DATA_NAMING_CONVENTION.md) |
-| **目錄結構規範** | [`docs/DATA_DIRECTORY_STANDARD.md`](../docs/DATA_DIRECTORY_STANDARD.md) |
-| **JSON Schema 標準** | [`docs/JSON_SCHEMA_STANDARD.md`](../docs/JSON_SCHEMA_STANDARD.md) |
-| **資料成熟度標準** | [`docs/DATA_MATURITY_STANDARD.md`](../docs/DATA_MATURITY_STANDARD.md) |
+| **完整資料目錄**（39 個資產） | [`docs/data-catalog.md`](../docs/data-catalog.md) |
+| **資料架構與讀寫路徑** | [`docs/data-architecture.md`](../docs/data-architecture.md) |
+| **檔案命名規範** | [`docs/data-naming-convention.md`](../docs/data-naming-convention.md) |
+| **目錄結構規範** | [`docs/data-directory-standard.md`](../docs/data-directory-standard.md) |
+| **JSON Schema 標準** | [`docs/json-schema-standard.md`](../docs/json-schema-standard.md) |
+| **資料成熟度標準** | [`docs/data-maturity-standard.md`](../docs/data-maturity-standard.md) |
 | **JSON Schema 檔案** | [`schemas/`](../schemas/) |
 
 ## 目錄結構總覽
@@ -46,9 +46,9 @@ data/
 ## 重要提示
 
 - **`data/state/` 已 gitignored** — 本地運行時數據，不納入版本控制
-- **所有 `data/state/` 子目錄必須有 `_metadata.json`** — 遵循 `docs/DATA_MATURITY_STANDARD.md`
-- **命名必須遵循規範** — `docs/DATA_NAMING_CONVENTION.md` 的 R1-R10 規則，CI 強制檢查
-- **新增資料資產** → 更新 `docs/DATA_CATALOG.md`（CI 會檢查）
+- **所有 `data/state/` 子目錄必須有 `_metadata.json`** — 遵循 `docs/data-maturity-standard.md`
+- **命名必須遵循規範** — `docs/data-naming-convention.md` 的 R1-R10 規則，CI 強制檢查
+- **新增資料資產** → 更新 `docs/data-catalog.md`（CI 會檢查）
 
 ## 已知問題
 

@@ -239,7 +239,7 @@ IF 宏觀風險 = 橙色
 - 需要修改 baseline window、target median、validation 比例等校準參數
 - 需要在 `TaiwanStressIndex` 上新增/修改任何校準邏輯
 
-**必讀文件**：`docs/MACRO_CALIBRATION.md`
+**必讀文件**：`docs/macro-calibration.md`
 
 ### 核心概念速查
 
@@ -253,7 +253,7 @@ IF 宏觀風險 = 橙色
 1. **新 factor 走 map**：在 `BaselineConfig`（map）加入新 key，不要加 struct 欄位
 2. **新參數走 `ParametersConfig`**：所有校準閾值一律 `config.GetParametersConfig()` 取得
 3. **新 scheduler 走 `BackgroundTaskManager`**：不要在 narrative 模組內啟 goroutine
-4. **改計算公式前先看偏差備註**：`docs/MACRO_CALIBRATION.md` 第五節記錄了 5 項 vs 原計畫的設計偏差（Mean/Count 替代 Baseline、map 替代 8 欄位、z-score 替代百分比等）
+4. **改計算公式前先看偏差備註**：`docs/macro-calibration.md` 第五節記錄了 5 項 vs 原計畫的設計偏差（Mean/Count 替代 Baseline、map 替代 8 欄位、z-score 替代百分比等）
 5. **Validation 退化不可靜默吞**：必須 log warning + 保留舊 config，不可自動降級
 
 ### 修改前的 7 步 Pre-Change Protocol
@@ -264,7 +264,7 @@ IF 宏觀風險 = 橙色
 2. 確認 `TaiwanStressIndex` 的呼叫者清單（risk/portfolio/monitoring）
 3. 確認 `ParametersConfig` 是否需新增欄位（若是，需同步更新 `parameters.go`、`parameters_defaults.go`、`configs/parameters.json` 三個檔案）
 4. 確認是否影響既有 `*_test.go`（76 packages test pass 為 baseline）
-5. 若改 baseline 演算法：先看 `docs/MACRO_CALIBRATION.md` 第二節「關鍵設計」了解為何選擇 z-score / map / Mean-Count
+5. 若改 baseline 演算法：先看 `docs/macro-calibration.md` 第二節「關鍵設計」了解為何選擇 z-score / map / Mean-Count
 6. 若改 Maturity Gating：先確認 `internal/scheduler/auto_calibration_test.go` 涵蓋 BURN_IN skip 行為
 7. 改完後跑 `go build ./... && go test ./internal/narrative/... ./internal/scheduler/... && gofmt -l . && staticcheck ./...`
 

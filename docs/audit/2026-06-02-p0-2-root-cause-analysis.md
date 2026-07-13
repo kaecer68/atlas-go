@@ -26,7 +26,7 @@ All 14 Issues
     │   └── Made all enforcement structurally impossible
     │
     └── FG-3: Documentation Created Once, Never Maintained (affects 5 issues)
-        └── DATA_ARCHITECTURE.md created 2026-05-29 covering 5 of 39 data types (13%)
+        └── data-architecture.md created 2026-05-29 covering 5 of 39 data types (13%)
         └── No mechanism to keep docs in sync with code growth
 ```
 
@@ -46,7 +46,7 @@ The system has 1,144 commits, 190 graphify communities, robust CI for Go code qu
 
 **Evidence**: Across 1,144 commits spanning 64 days, zero documents define data storage policy, naming conventions, directory organization, or documentation requirements for data assets.
 
-- `docs/developer_guide.md` (created 2026-05-07, commit `4c586e3`) specifies `snake_case` for **Go source files** but does not address data files
+- `docs/developer-guide.md` (created 2026-05-07, commit `4c586e3`) specifies `snake_case` for **Go source files** but does not address data files
 - `docs/DATA_NAMING*.md`, `docs/DATA_DIRECTORY*.md`, `docs/DATA_CATALOG*.md` — zero matches (never created)
 - `AGENTS.md` references `data/state/` only 2 times (baseline_policy.json existence check, approvals path)
 - Git log search for "data governance", "data convention", "data catalog", "data manifest" — zero matches
@@ -124,12 +124,12 @@ Since git can't track data files, we rely on filesystem metadata:
 
 **Evidence**:
 
-- `docs/DATA_ARCHITECTURE.md` — created **2026-05-29** (commit `5557589`, just **4 days** before this audit), covers 5 data types: sessions, recommendation_outcomes, PostgreSQL tables, darwinian_weights, darwinian_history
-- `docs/data_sources.md` — created **2026-05-07** (commit `8a468c6`), last updated 2026-05-29 (commit `9d8df30`), covers external API providers only, zero sections on internal data storage
+- `docs/data-architecture.md` — created **2026-05-29** (commit `5557589`, just **4 days** before this audit), covers 5 data types: sessions, recommendation_outcomes, PostgreSQL tables, darwinian_weights, darwinian_history
+- `docs/data-sources.md` — created **2026-05-07** (commit `8a468c6`), last updated 2026-05-29 (commit `9d8df30`), covers external API providers only, zero sections on internal data storage
 - Neither document has ever been updated to reflect new data types added after creation
 
 **Coverage gap**:
-- DATA_ARCHITECTURE.md: 5 of 39 data types documented = **12.8% coverage**
+- data-architecture.md: 5 of 39 data types documented = **12.8% coverage**
 - When created (2026-05-29): ~15 data types already existed; it documented 5 = **33% coverage at creation time**, already incomplete
 - 24 flat files + subdirectories have NO mention in any documentation
 - Zero documentation for: margin, capital_flow, macro, export, alerts, geopolitical, ml_models, swarm_training, eventlogic, traces, windows, autobacktest, and all kebab-case dirs
@@ -139,7 +139,7 @@ Since git can't track data files, we rely on filesystem metadata:
 - No PR template asks "does this change require data documentation updates?"
 - No `check_data_catalog.sh` or similar script exists in `scripts/ci/`
 
-**Issues caused by FG-3**: B.1 (DATA_ARCHITECTURE.md incomplete), B.2 (data_sources.md scope), B.3 (catalog), C.5 (discovery), C.6 (AI queries)
+**Issues caused by FG-3**: B.1 (data-architecture.md incomplete), B.2 (data-sources.md scope), B.3 (catalog), C.5 (discovery), C.6 (AI queries)
 
 ---
 
@@ -181,7 +181,7 @@ Since git can't track data files, we rely on filesystem metadata:
 | | margin provider: commit `2bcd014` (2026-05-21) `fix(data-pipeline): health check unification + margin/export/tsmc-revenue automation` |
 | | capital_flow provider: commit `2462b83` (2026-04-13) |
 | **Gap** | Each developer chose their own format. No standard existed. Three independent implementations, zero cross-check. |
-| **Would prevent** | DATA_NAMING_CONVENTION.md specifying `YYYYMMDD_descriptor.json` as the standard format |
+| **Would prevent** | data-naming-convention.md specifying `YYYYMMDD_descriptor.json` as the standard format |
 
 ### A.4 — Orphaned/Questionable Files
 
@@ -218,12 +218,12 @@ Since git can't track data files, we rely on filesystem metadata:
 | | 4 snake_case dirs: capital_flow, ml_models, swarm_training, tsmc_revenue |
 | | 4 kebab-case dirs: branch-protection-snapshots, constraint-mutations, mutation-briefs, parameter-snapshots |
 | | 16 plain dirs: alerts, approvals, autobacktest, etc. |
-| **Timeline** | Kebab dirs created Apr 11-14 (earliest data dirs); snake dirs created May 13-30 (later, possibly after developer_guide.md snake_case rule) |
-| **developer_guide.md** | Created 2026-05-07 (commit `4c586e3`), specifies `snake_case` for files — but **only for Go source files**, not for data directories |
+| **Timeline** | Kebab dirs created Apr 11-14 (earliest data dirs); snake dirs created May 13-30 (later, possibly after developer-guide.md snake_case rule) |
+| **developer-guide.md** | Created 2026-05-07 (commit `4c586e3`), specifies `snake_case` for files — but **only for Go source files**, not for data directories |
 | **Evidence** | The kebab-case dirs have ZERO code references in Go files, suggesting they're created by CLI tools or scripts. The snake_case dirs are referenced by code (e.g., `scheduler/ml_retrain.go:156`: `create ml_models dir`). |
 | **Would prevent** | DATA_DIRECTORY_CONVENTION.md specifying "all data directories use snake_case" |
 
-### B.1 — DATA_ARCHITECTURE.md Covers ~13% of Data Types
+### B.1 — data-architecture.md Covers ~13% of Data Types
 
 | Attribute | Finding |
 |-----------|---------|
@@ -234,9 +234,9 @@ Since git can't track data files, we rely on filesystem metadata:
 | **Missing** | 10 flat files + 24 subdirectories = 34 undocumented data types |
 | **Why incomplete at creation** | Document focused on the "core data flow" (outcomes, sessions, Darwinian) — the data pipeline that the author (AI agent fixing PR #240) was working on. Other data types were out of scope. |
 | **Why never updated** | No mechanism exists. No CI check, no PR template prompt, no pre-commit hook. |
-| **Would prevent** | CI gate: `check_data_catalog.sh` that fails if `data/state/` contains directories not listed in DATA_ARCHITECTURE.md |
+| **Would prevent** | CI gate: `check_data_catalog.sh` that fails if `data/state/` contains directories not listed in data-architecture.md |
 
-### B.2 — data_sources.md: External APIs Only, Zero Internal Storage
+### B.2 — data-sources.md: External APIs Only, Zero Internal Storage
 
 | Attribute | Finding |
 |-----------|---------|
@@ -294,7 +294,7 @@ Since git can't track data files, we rely on filesystem metadata:
 | **Root cause** | FG-1 (no doc convention) + FG-3 (no doc at all for these types) |
 | **Category** | `missing_convention` |
 | **Evidence** | "margin" appears in markdown docs only in audit reports and bug fix plans — never in data architecture docs. "capital_flow" appears only in gateway tracking and completion summaries — never as a documented data type. "ml_model" appears only in skill gap analysis — never as a documented data store. |
-| **Would prevent** | Documentation requirement: every data type must have a dedicated section in DATA_ARCHITECTURE.md, making it searchable by AI agents |
+| **Would prevent** | Documentation requirement: every data type must have a dedicated section in data-architecture.md, making it searchable by AI agents |
 
 ---
 
@@ -304,12 +304,12 @@ Since git can't track data files, we rely on filesystem metadata:
 |-------|----------------------|----------------------------------------------------------|
 | **A.1** Dual storage | Two developers independently added PostgreSQL + file writes for same data, 19 days apart, with no coordination | **Data Storage Policy**: "One data type, one authoritative storage. Dual-write only during migration with explicit sunset date and CI-tracked migration plan." CI check: `enforce_storage_policy.sh` verifies each data type has exactly one write path. |
 | **A.2** Flat structure | No directory hierarchy convention; developers placed files wherever convenient | **Directory Hierarchy Convention**: `data/state/<domain>/<subtype>/` with max 1 nesting level below domain. Root level contains only `README.md` and `catalog.json`. CI check: `enforce_directory_structure.sh`. |
-| **A.3/C.2** Inconsistent date formats | Each developer chose their own date format: YYYY-MM-DD, YYYYMMDD, YYYYMMDD_descriptor | **DATA_NAMING_CONVENTION.md**: All daily data files use `YYYYMMDD_descriptor.json`. CI check: `validate_daily_file_naming.sh` with glob pattern enforcement. |
+| **A.3/C.2** Inconsistent date formats | Each developer chose their own date format: YYYY-MM-DD, YYYYMMDD, YYYYMMDD_descriptor | **data-naming-convention.md**: All daily data files use `YYYYMMDD_descriptor.json`. CI check: `validate_daily_file_naming.sh` with glob pattern enforcement. |
 | **A.4** Orphaned files | Backup files and empty archive dirs accumulated with no cleanup mechanism | **Data Lifecycle Policy**: Backup files auto-deleted after 7 days (or never created — use git for version history). Archive dirs must contain data or be removed. CI check: `detect_orphaned_files.sh`. |
 | **A.5** atlas.db abandoned | Phase 7 SQLite experiment was never cleaned up after PostgreSQL migration succeeded | **Artifact Cleanup Policy**: Experimental DB files must be removed within 7 days of migration completion. CI check: `detect_experimental_artifacts.sh`. ATLAS_SQLITE_PATH config removed from config.go. |
 | **A.6** Mixed naming | 4 kebab-case dirs created in April, 4 snake_case dirs created in May — no standard existed | **DATA_DIRECTORY_CONVENTION.md**: All data directories use snake_case. Existing kebab-case dirs migrated. CI check: `validate_directory_naming.sh`. |
-| **B.1** DATA_ARCHITECTURE.md incomplete | Doc created covering 5 of ~15 existing types; never updated as 24 more were added | **DATA_ARCHITECTURE.md as CI Gate**: `check_data_catalog.sh` fails if any `data/state/` directory or flat file lacks a corresponding entry in DATA_ARCHITECTURE.md. |
-| **B.2** data_sources.md scope gap | Document was correctly scoped to external APIs but no complementary internal storage doc existed for 22 days | **Documentation Architecture**: Three-tier doc system — `data_sources.md` (external), `DATA_ARCHITECTURE.md` (internal storage), `DATA_NAMING_CONVENTION.md` (standards). All cross-linked. |
+| **B.1** data-architecture.md incomplete | Doc created covering 5 of ~15 existing types; never updated as 24 more were added | **data-architecture.md as CI Gate**: `check_data_catalog.sh` fails if any `data/state/` directory or flat file lacks a corresponding entry in data-architecture.md. |
+| **B.2** data-sources.md scope gap | Document was correctly scoped to external APIs but no complementary internal storage doc existed for 22 days | **Documentation Architecture**: Three-tier doc system — `data-sources.md` (external), `data-architecture.md` (internal storage), `data-naming-convention.md` (standards). All cross-linked. |
 | **B.3** No data catalog | Zero discovery artifacts in any data directory; 39 data types invisible to tooling | **Mandatory Data Catalog**: `data/state/catalog.json` with entries for every data type, auto-generated by `go run ./cmd/generate-data-catalog`. CI check: `verify_catalog_completeness.sh`. |
 | **C.1** Zero JSON Schema | No schema validation for any of 319+ JSON/JSONL files | **Schema Standard**: Every Go domain type used in persisted data generates `.schema.json` via `go generate`. CI check: `verify_schema_coverage.sh` ensures 100% coverage. |
 | **C.4** Graphify Go-only | Data files correctly excluded from code graph — but no equivalent data graph exists | **Separate Concern**: Graphify for code, data catalog for data. Not a bug — cross-link the two artifacts. |
@@ -338,7 +338,7 @@ Since git can't track data files, we rely on filesystem metadata:
 2026-05-02  1418a6c  PostgreSQL + migrate-data added — dual-write begins
                      → capital_flow now has TWO write paths, zero coordination
 
-2026-05-07  4c586e3  developer_guide.md created (snake_case for Go files only)
+2026-05-07  4c586e3  developer-guide.md created (snake_case for Go files only)
 2026-05-07  (fs)     constraint-mutations, parameter-snapshots (kebab)
 2026-05-09  3143455  Phase 7: atlas.db SQLite experiment added
 2026-05-09  108ac7e  Phases 1-6: massive feature additions
@@ -355,11 +355,11 @@ Since git can't track data files, we rely on filesystem metadata:
                      
                      ⚠️ May 21-27: 6 more data types, still zero documentation
                      
-2026-05-29  5557589  📄 DATA_ARCHITECTURE.md created — covers 5 of ~15 types
-2026-05-29  9d8df30  data_sources.md updated (external APIs only)
+2026-05-29  5557589  📄 data-architecture.md created — covers 5 of ~15 types
+2026-05-29  9d8df30  data-sources.md updated (external APIs only)
 2026-05-30  (fs)     ml_models/ (snake_case)
                      
-                     ⚠️ DATA_ARCHITECTURE.md already stale 1 day after creation
+                     ⚠️ data-architecture.md already stale 1 day after creation
                      
 2026-06-01  (fs)     approvals/, eventlogic/, margin/ (YYYYMMDD_margin format)
 2026-06-02  (fs)     capital_flow/ (YYYYMMDD format), macro/ (YYYY-MM-DD format)
@@ -378,8 +378,8 @@ Since git can't track data files, we rely on filesystem metadata:
 2. **2026-04-07** (09668d0): Add data governance checks to quality.yml when CI was first created
 3. **2026-04-11**: Review first data directory creation — establish convention then
 4. **2026-05-02** (1418a6c): When dual-write was introduced, require storage policy document
-5. **2026-05-07** (4c586e3): Extend developer_guide.md naming convention to data files
-6. **2026-05-29** (5557589): Add CI gate requiring DATA_ARCHITECTURE.md to document ALL existing data types at creation time
+5. **2026-05-07** (4c586e3): Extend developer-guide.md naming convention to data files
+6. **2026-05-29** (5557589): Add CI gate requiring data-architecture.md to document ALL existing data types at creation time
 
 ---
 
@@ -407,9 +407,9 @@ Since git can't track data files, we rely on filesystem metadata:
 
 Based on this root cause analysis, the **P0.3 remediation plan** should address all three fundamental gaps:
 
-1. **FG-1 (No Convention)**: Create DATA_NAMING_CONVENTION.md, DATA_DIRECTORY_CONVENTION.md, DATA_STORAGE_POLICY.md, DATA_SCHEMA_STANDARD.md
+1. **FG-1 (No Convention)**: Create data-naming-convention.md, DATA_DIRECTORY_CONVENTION.md, DATA_STORAGE_POLICY.md, DATA_SCHEMA_STANDARD.md
 2. **FG-2 (Data Gitignored)**: Remove `/data/state/` from .gitignore, add selective gitignore for generated files only, add CI checks for data governance
-3. **FG-3 (Documentation Decay)**: Create CI gate requiring DATA_ARCHITECTURE.md updates on new data additions, auto-generate data catalog from code references
+3. **FG-3 (Documentation Decay)**: Create CI gate requiring data-architecture.md updates on new data additions, auto-generate data catalog from code references
 
 ---
 

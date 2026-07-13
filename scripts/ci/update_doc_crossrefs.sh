@@ -5,10 +5,10 @@
 # 2026-07-10: PR-3 docs architecture 重組.
 # 5 個文件從 docs/ 移到 docs/REFERENCE/:
 #   - CONSTITUTION.md          (46 refs)
-#   - TRAPS.md                 (22 refs)
-#   - ITERATION_GATE.md        ( 4 refs)
-#   - GUIDELINES_INDEX.md      ( 9 refs)
-#   - PARAMETER_SYSTEM.md      (15 refs)
+#   - traps.md                 (22 refs)
+#   - iteration-gate.md        ( 4 refs)
+#   - guidelines-index.md      ( 9 refs)
+#   - parameter-system.md      (15 refs)
 # 合計 96 cross-references 需更新
 #
 # 用法:
@@ -31,11 +31,11 @@ if [ "${1:-}" = "--check" ]; then CHECK_MODE=true; fi
 
 # 移動映射 (from -> to)
 declare -A MOVES=(
-    ["docs/REFERENCE/CONSTITUTION.md"]="docs/REFERENCE/CONSTITUTION.md"
-    ["docs/REFERENCE/TRAPS.md"]="docs/REFERENCE/TRAPS.md"
-    ["docs/REFERENCE/ITERATION_GATE.md"]="docs/REFERENCE/ITERATION_GATE.md"
-    ["docs/REFERENCE/GUIDELINES_INDEX.md"]="docs/REFERENCE/GUIDELINES_INDEX.md"
-    ["docs/REFERENCE/PARAMETER_SYSTEM.md"]="docs/REFERENCE/PARAMETER_SYSTEM.md"
+    ["docs/REFERENCE/constitution.md"]="docs/REFERENCE/constitution.md"
+    ["docs/REFERENCE/traps.md"]="docs/REFERENCE/traps.md"
+    ["docs/REFERENCE/iteration-gate.md"]="docs/REFERENCE/iteration-gate.md"
+    ["docs/REFERENCE/guidelines-index.md"]="docs/REFERENCE/guidelines-index.md"
+    ["docs/REFERENCE/parameter-system.md"]="docs/REFERENCE/parameter-system.md"
 )
 
 # 要掃的副檔名
@@ -94,7 +94,7 @@ for from in "${!MOVES[@]}"; do
                 echo "    $file: $count refs"
             else
                 # 實際更新: 替換 docs/X.md 為 docs/REFERENCE/X.md
-                # 但要避免重複更新 (如 docs/REFERENCE/CONSTITUTION.md 內)
+                # 但要避免重複更新 (如 docs/REFERENCE/constitution.md 內)
                 # 簡化: 用 sed 全文替換 (因為 docs/X.md 字串不會在 REFERENCE/ 內的 X.md 出現)
                 sed -i '' "s|$from|$to|g" "$file"
                 echo "    ✓ $file: $count refs updated"

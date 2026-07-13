@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# check_data_naming.sh — 驗證 data/ 目錄下所有檔案遵循 DATA_NAMING_CONVENTION.md
+# check_data_naming.sh — 驗證 data/ 目錄下所有檔案遵循 data-naming-convention.md
 #
 # 檢查項目:
 #   1. 目錄命名必須是 snake_case（禁止 kebab-case）
@@ -54,7 +54,7 @@ add_json_violation() {
 
 # R1/R2 exceptions — directories/files that are allowed to NOT follow convention
 # Format: "<path>|<reason>"
-# These exceptions serve as a registry of known deviations. See DATA_NAMING_CONVENTION.md §9.
+# These exceptions serve as a registry of known deviations. See data-naming-convention.md §9.
 
 DIR_EXCEPTIONS=(
   "data/state/live/state/|即時交易模組內部結構"
@@ -101,7 +101,7 @@ is_exception() {
 
 # =============================================================================
 # 檢查 1: 目錄命名必須是 snake_case（禁止 kebab-case）
-# R1: snake_case, R8: 禁止 kebab-case. See DATA_NAMING_CONVENTION.md §2.
+# R1: snake_case, R8: 禁止 kebab-case. See data-naming-convention.md §2.
 # =============================================================================
 check_dir_naming() {
   printf "\n═══ 檢查 1/5: 目錄命名 (R1 + R8) ═══\n"
@@ -237,7 +237,7 @@ check_jsonl_extension() {
 }
 
 # =============================================================================
-# 檢查 4: data/state/ 下不允許平面檔案 (DATA_DIRECTORY_STANDARD.md §3.2 R1)
+# 檢查 4: data/state/ 下不允許平面檔案 (data-directory-standard.md §3.2 R1)
 # 警告級別 — P3.0 遷移後才變為錯誤
 # =============================================================================
 check_state_flat_files() {
@@ -300,7 +300,7 @@ check_backup_files() {
 # =============================================================================
 main() {
   printf "Atlas 資料檔案命名規範檢查\n"
-  printf "參考文件: docs/DATA_NAMING_CONVENTION.md\n"
+  printf "參考文件: docs/data-naming-convention.md\n"
   printf "================================\n\n"
 
   local r1=0 r2=0 r3=0 r4=0 r5=0
@@ -343,7 +343,7 @@ main() {
     if [ "$VIOLATIONS" -gt 0 ]; then
       printf "${RED}發現 %d 處違規${NC}\n\n" "$VIOLATIONS"
       printf "修復建議:\n"
-      printf "  1. 目錄命名 → 使用 snake_case (參考 DATA_NAMING_CONVENTION.md §2)\n"
+      printf "  1. 目錄命名 → 使用 snake_case (參考 data-naming-convention.md §2)\n"
       printf "  2. 每日檔案 → 使用 YYYYMMDD_descriptor.json 格式\n"
       printf "  3. JSONL 檔案 → 使用 .jsonl 副檔名\n"
     elif [ "$WARNINGS" -gt 0 ]; then

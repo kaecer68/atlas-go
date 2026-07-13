@@ -14,36 +14,36 @@
 - **技術棧**：Go 1.26，**DB**：PostgreSQL 15 + Redis 8
 - **CI 強制**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
 - **覆蓋率門檻**：60%
-- **啟動入口**：[`docs/QUICKSTART.md`](docs/QUICKSTART.md)
+- **啟動入口**：[`docs/quickstart.md`](docs/quickstart.md)
 
 ## 內容歸屬與防膨脹規則
 
 | 知識類型 | 歸屬位置 |
 |----------|---------|
-| 跨模組全域規則 | [`docs/REFERENCE/TRAPS.md`](docs/REFERENCE/TRAPS.md) |
+| 跨模組全域規則 | [`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md) |
 | 模組內部陷阱/API/流程 | `internal/<mod>/AGENTS.md`（15 個保留位置，見 `internal/AGENTS_INDEX.md`） |
 | 模組技術規格 | `docs/specs/<topic>.md` |
 | 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
 | 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
 | CI / pipeline 設定 | `.github/workflows/`、`.github/instructions/` |
-| 憲法級強制規範 | `docs/REFERENCE/CONSTITUTION.md`、`docs/REFERENCE/ITERATION_GATE.md`、`internal/apigateway/CONSTITUTION.md` |
+| 憲法級強制規範 | `docs/REFERENCE/constitution.md`、`docs/REFERENCE/iteration-gate.md`、`internal/apigateway/CONSTITUTION.md` |
 
 **防膨脹規則**：本文件上限 **160 行**；達到 **155 行**時觸發警告。超過時優先將內容外移到對應文件，而非持續膨脹本檔。
 
 ## 規範與治理
 
-- **開發憲法與流程**：[`docs/REFERENCE/CONSTITUTION.md`](docs/REFERENCE/CONSTITUTION.md)、[`docs/REFERENCE/ITERATION_GATE.md`](docs/REFERENCE/ITERATION_GATE.md)、[`docs/REFERENCE/GUIDELINES_INDEX.md`](docs/REFERENCE/GUIDELINES_INDEX.md)
-- **跨模組陷阱**：[`docs/REFERENCE/TRAPS.md`](docs/REFERENCE/TRAPS.md)
+- **開發憲法與流程**：[`docs/REFERENCE/constitution.md`](docs/REFERENCE/constitution.md)、[`docs/REFERENCE/iteration-gate.md`](docs/REFERENCE/iteration-gate.md)、[`docs/REFERENCE/guidelines-index.md`](docs/REFERENCE/guidelines-index.md)
+- **跨模組陷阱**：[`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md)
 - **CI 與編碼守則**：
   - [`.github/instructions/go-core.instructions.md`](.github/instructions/go-core.instructions.md)
   - [`.github/instructions/experiments-guardrails.instructions.md`](.github/instructions/experiments-guardrails.instructions.md)
   - [`.github/instructions/live-trading.guardrails.instructions.md`](.github/instructions/live-trading.guardrails.instructions.md)
-- **文件治理**：[`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)、[`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
+- **文件治理**：[`docs/documentation-standard.md`](docs/documentation-standard.md)、[`docs/documentation-map.md`](docs/documentation-map.md)
 
 ## 架構與模組入口
 
 - **分層架構**：[`docs/architecture.md`](docs/architecture.md)
-- **參數系統**：[`docs/REFERENCE/PARAMETER_SYSTEM.md`](docs/REFERENCE/PARAMETER_SYSTEM.md)
+- **參數系統**：[`docs/REFERENCE/parameter-system.md`](docs/REFERENCE/parameter-system.md)
 - **數據源憲法**：[`internal/apigateway/CONSTITUTION.md`](internal/apigateway/CONSTITUTION.md)
 - **模組索引**：[`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md)
 - **成熟度對照**：[`internal/MATURITY.md`](internal/MATURITY.md)
@@ -54,14 +54,14 @@
 
 - **MCP 入口**：[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md)
 - **Tool catalog**：[`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)
-- **Workflow map**：[`docs/REFERENCE/WORKFLOW_MAP.md`](docs/REFERENCE/WORKFLOW_MAP.md)
-- **Process 標註**：[`docs/REFERENCE/PROCESSES.yaml`](docs/REFERENCE/PROCESSES.yaml)、[`docs/PROCESS_ANNOTATION_SOP.md`](docs/PROCESS_ANNOTATION_SOP.md)
+- **Workflow map**：[`docs/REFERENCE/workflow-map.md`](docs/REFERENCE/workflow-map.md)
+- **Process 標註**：[`docs/REFERENCE/PROCESSES.yaml`](docs/REFERENCE/PROCESSES.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)
 - **FactorType 變更協議**：[`.claude/skills/atlas-factor-change-protocol/SKILL.md`](.claude/skills/atlas-factor-change-protocol/SKILL.md)
 
 ## 高頻陷阱速查
 
-> 完整列表見 [`docs/REFERENCE/TRAPS.md`](docs/REFERENCE/TRAPS.md)。
+> 完整列表見 [`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md)。
 
 | 陷阱 | 一句話 |
 |------|--------|

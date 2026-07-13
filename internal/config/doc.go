@@ -28,7 +28,7 @@
 //   - LoadParametersConfig() silently falls back to defaults
 //     (parameters_defaults.go) on invalid JSON, before Validate() runs
 //   - Hardcoded magic numbers in business logic are forbidden; add new fields
-//     to ParametersConfig with ParameterMetadata[T]. See docs/PARAMETER_SYSTEM.md
+//     to ParametersConfig with ParameterMetadata[T]. See docs/parameter-system.md
 //   - os.Getenv calls in config.go are grandfathered; new code MUST NOT use them
 //
 // Maturity: stable

@@ -183,10 +183,10 @@ func actionableHealthyError(claim PortClaim, occupant portprobe.Occupant) error 
 func recoveryHint(occupant portprobe.Occupant) string {
 	cmd := strings.ToLower(occupant.Command)
 	if strings.Contains(cmd, "docker") || strings.Contains(cmd, "com.docker") {
-		return "stop the Docker atlas service (`docker compose stop atlas`) or start with a different -addr (see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")"
+		return "stop the Docker atlas service (`docker compose stop atlas`) or start with a different -addr (see docs/operations-playbook.md → \"Port 18080 Conflict Recovery\")"
 	}
 	if occupant.PID > 0 {
-		return fmt.Sprintf("stop the existing instance (`kill %d`) or start with a different -addr (see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")", occupant.PID)
+		return fmt.Sprintf("stop the existing instance (`kill %d`) or start with a different -addr (see docs/operations-playbook.md → \"Port 18080 Conflict Recovery\")", occupant.PID)
 	}
-	return "stop the existing instance or start with a different -addr (see docs/operations_playbook.md → \"Port 18080 Conflict Recovery\")"
+	return "stop the existing instance or start with a different -addr (see docs/operations-playbook.md → \"Port 18080 Conflict Recovery\")"
 }

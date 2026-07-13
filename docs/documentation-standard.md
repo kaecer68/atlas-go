@@ -1,7 +1,7 @@
 # 文件存放規範 (Documentation Standard)
 
 > 取代 AGENTS.md §「內容歸屬規則」中模糊部分。明定每種文件的歸屬位置、命名規範與生命週期。
-> 維護者：見 `docs/DOCUMENTATION_MAP.md` 「動作紀錄」段。
+> 維護者：見 `docs/documentation-map.md` 「動作紀錄」段。
 > 最後更新：2026-06-26（PR #756 重構，補上 `.omo/` 完整紀律與機制）
 
 ## 三層結構原則
@@ -34,22 +34,22 @@
 
 ```
 docs/
-├── CONSTITUTION.md              # 深度開發憲法（8 條文）
-├── ITERATION_GATE.md            # 5 Gate 自我檢查
-├── QUICKSTART.md                # 5 分鐘入門（單一權威）
-├── GUIDELINES_INDEX.md          # 規範階層
-├── MATURITY.md                  # 模組成熟度
+├── constitution.md              # 深度開發憲法（8 條文）
+├── iteration-gate.md            # 5 Gate 自我檢查
+├── quickstart.md                # 5 分鐘入門（單一權威）
+├── guidelines-index.md          # 規範階層
+├── maturity.md                  # 模組成熟度
 ├── architecture.md              # 分層架構
-├── TRAPS.md                     # 跨模組陷阱
-├── CONVENTIONS_CHECKLIST.md     # 慣例檢查表
-├── PARAMETER_SYSTEM.md          # 參數管理
-├── JSON_SCHEMA_STANDARD.md      # JSON schema 規範
-├── operations_playbook.md       # 操作 playbook
-├── iteration_playbook.md        # 迭代 playbook
-├── evolution_loop.md            # 演化循環
-├── data_sources.md              # 資料源說明
-├── ENVIRONMENT.md               # 外部依賴與環境
-├── TOOLS.md                     # 工具清單
+├── traps.md                     # 跨模組陷阱
+├── conventions-checklist.md     # 慣例檢查表
+├── parameter-system.md          # 參數管理
+├── json-schema-standard.md      # JSON schema 規範
+├── operations-playbook.md       # 操作 playbook
+├── iteration-playbook.md        # 迭代 playbook
+├── evolution-loop.md            # 演化循環
+├── data-sources.md              # 資料源說明
+├── environment.md               # 外部依賴與環境
+├── tools.md                     # 工具清單
 ├── AUDIT_TRAIL.md               # 稽核軌跡
 ├── branch-hygiene/              # branch 維護紀錄（PR #748 模式）
 ├── audit/                       # 審計報告（YYYY-MM-DD-slug.md）
@@ -212,10 +212,10 @@ Wave 完成 → 文件分類 →
 
 每次 AI 準備建立新 `.omo/<dir>/` 時，必須：
 
-1. **先 grep** `DOCUMENTATION_STANDARD.md` § `.omo/` 完整子目錄白名單
+1. **先 grep** `documentation-standard.md` § `.omo/` 完整子目錄白名單
 2. **若新目錄不在白名單**：停手，問使用者是否要擴充白名單
 3. **若白名單內已有相似用途**：用既有目錄 + 命名規範
-4. **若確定要新增**：必須在 PR 中同步更新 `DOCUMENTATION_STANDARD.md` 與 `DOCUMENTATION_MAP.md`
+4. **若確定要新增**：必須在 PR 中同步更新 `documentation-standard.md` 與 `documentation-map.md`
 
 **自我檢查指令**：
 
@@ -231,8 +231,8 @@ ls -la .omo/
 
 ```bash
 # 1. 讀規範（精簡版必讀）
-cat docs/DOCUMENTATION_STANDARD.md | head -100
-cat docs/DOCUMENTATION_MAP.md | head -80
+cat docs/documentation-standard.md | head -100
+cat docs/documentation-map.md | head -80
 
 # 2. 確認 .omo/ 結構合規
 ls .omo/
@@ -285,4 +285,4 @@ grep -E "(\.omo|\.opencode)" .gitignore
 
 ## 動作紀錄
 
-完整當前地圖見 `docs/DOCUMENTATION_MAP.md`。清理 SOP 模式見 `docs/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。
+完整當前地圖見 `docs/documentation-map.md`。清理 SOP 模式見 `docs/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。

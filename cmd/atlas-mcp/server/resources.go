@@ -28,7 +28,7 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://workflows/catalog",
 		Name:        "atlas-go Workflow Catalog",
-		Description: "21 WA-XXX workflows in 7 layers. Source: docs/WORKFLOW_MAP.md on disk. Helps an agent decide which Tool maps to a given intent.",
+		Description: "21 WA-XXX workflows in 7 layers. Source: docs/workflow-map.md on disk. Helps an agent decide which Tool maps to a given intent.",
 		MIMEType:    "text/markdown",
 	}, s.handleResourceWorkflowsCatalog)
 
@@ -80,9 +80,9 @@ func (s *server) handleResourceToolsCatalog(_ context.Context, _ *mcp.ReadResour
 }
 
 func (s *server) handleResourceWorkflowsCatalog(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-	raw, err := os.ReadFile("docs/WORKFLOW_MAP.md")
+	raw, err := os.ReadFile("docs/workflow-map.md")
 	if err != nil {
-		return nil, fmt.Errorf("resource workflows catalog (docs/WORKFLOW_MAP.md): %w", err)
+		return nil, fmt.Errorf("resource workflows catalog (docs/workflow-map.md): %w", err)
 	}
 	return resourceText("atlas://workflows/catalog", "text/markdown", string(raw)), nil
 }

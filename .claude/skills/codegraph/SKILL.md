@@ -45,5 +45,5 @@ codegraph_explore({query: "auth middleware login"})
 | 單一工具極簡介面 | ADR 管理、複雜度掃描 |
 | 編輯前 blast radius | 跨服務資料流追蹤（`trace_path`） |
 
-> 完整工具路由決策樹請見 [`docs/TOOLS.md`](../../../docs/TOOLS.md)。
+> 完整工具路由決策樹請見 [`docs/tools.md`](../../../docs/tools.md)。
 > **注意**：codebase-memory 與 codegraph 在「單次源碼＋呼叫路徑查詢」有功能重疊 — **此時優先使用 codebase-memory**（Hybrid LSP 型別解析更強，支援 158 語言）。

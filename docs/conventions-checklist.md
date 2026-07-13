@@ -116,7 +116,7 @@ g.registry.Register("my_provider", myAdapter)
 logging.Info("apigateway", "adapter_registered", "channel", "my_provider")
 ```
 
-#### 步驟 7：更新 CONSTITUTION.md 附錄 A
+#### 步驟 7：更新 constitution.md 附錄 A
 
 在 `internal/apigateway/CONSTITUTION.md` 的附錄 A（15+ 個通道規範表，第 479-498 行）中新增一列：
 
@@ -382,7 +382,7 @@ func (a *macroDataGatewayAdapter) applyMyProvider(snap *marketdata.MacroDataSnap
 
 在 `internal/apigateway/gateway.go` 的 `channelIDs()` 函式（第 143-168 行）中加入新的 channel ID。
 
-#### 步驟 6：更新 CONSTITUTION.md 附錄 A
+#### 步驟 6：更新 constitution.md 附錄 A
 
 在 `internal/apigateway/CONSTITUTION.md` 的附錄 A 通道規範表（第 479-498 行）中新增一列。
 
@@ -487,7 +487,7 @@ os.Rename(tmp.Name(), path)
 
 本節規範所有背景排程任務（資料擷取、健康檢查、維護清理）的註冊方式。
 
-### 核心原則（來自 CONSTITUTION.md 第四條）
+### 核心原則（來自 constitution.md 第四條）
 
 > **禁止獨立 goroutine 直接調用 `New*Provider()`。**
 > 所有背景任務必須註冊到 `BackgroundTaskManager`，統一調度。
@@ -577,7 +577,7 @@ taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) 
 
 ### 例外情況（允許不使用 BackgroundTaskManager）
 
-以下情境不需要註冊到 TaskManager（完整說明請見 `CONSTITUTION.md` 第 247-260 行）：
+以下情境不需要註冊到 TaskManager（完整說明請見 `constitution.md` 第 247-260 行）：
 
 | 情境 | 範例 |
 |------|------|
@@ -706,7 +706,7 @@ var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 - [ ] 在 `limits.go` 中註冊 rate limiter
 - [ ] 在 `gateway.go` 的 `channelIDs()` 中加入
 - [ ] 在 `register_adapters.go` 中註冊 adapter
-- [ ] 更新 `CONSTITUTION.md` 附錄 A
+- [ ] 更新 `constitution.md` 附錄 A
 - [ ] 更新 `docs/archive/2026-06-26-gateway-migration-tracking.md`
 
 ### 新增 ParameterMetadata
@@ -726,7 +726,7 @@ var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 - [ ] 在 `limits.go` 中加入 channel
 - [ ] 若為總經資料：在 `gateway_adapter.go` 中加入 channel mapping
 - [ ] 在 `gateway.go` 的 `channelIDs()` 中加入
-- [ ] 更新 `CONSTITUTION.md` 附錄 A
+- [ ] 更新 `constitution.md` 附錄 A
 - [ ] 更新 `docs/archive/2026-06-26-gateway-migration-tracking.md`
 
 ### 檔案寫入

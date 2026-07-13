@@ -52,7 +52,7 @@
 - **Docker embed.FS timing race** (PR #970): `.dockerignore` 新增精準排除 `client_web/dist/` / `admin_web/dist/` / `shared_web/dist/`，避免本地舊 build 污染容器 nodebuilder 階段的 COPY 結果，根除「本地 dist 較新、容器 binary 較舊」導致 served bundle 走 SPA fallback 返回 index.html 的問題。
 
 ### Removed
-- **`docs/audit/2026-07-01-phase2-retail-investor-landing-audit.md`** (PR #970): 該文件專門描述已移除的「三級投資人角色模式」設計，繼續保留會誤導新人。同步修正 `docs/DESIGN.md` 與 `docs/DOCUMENTATION_MAP.md` 對該檔案的引用為抽象描述。
+- **`docs/audit/2026-07-01-phase2-retail-investor-landing-audit.md`** (PR #970): 該文件專門描述已移除的「三級投資人角色模式」設計，繼續保留會誤導新人。同步修正 `docs/design.md` 與 `docs/documentation-map.md` 對該檔案的引用為抽象描述。
 
 ## [0.0.0.29] - 2026-07-07
 
@@ -128,7 +128,7 @@
 - `docs/operations/mcp-deploy.md` — Phase 4 metrics + anomaly detector + Roots env vars deployment guide（66 行增量）。
 - `docs/specs/agent-mcp-server.md` — Phase 4 Direction A/B 工具與協議擴充章節（93 行增量）。
 - `docs/operations/retail-investor-landing-audit.md` — Phase 2 retail-investor-landing audit report（PR #873，b296dac8）。
-- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/WORKFLOW_MAP.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）+ `docs/REFERENCE/PROCESSES.yaml`（488 行結構化 workflow metadata）。P0 補齊。
+- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/workflow-map.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_tools.md` / `docs/AGENT_ONBOARDING.md`）+ `docs/REFERENCE/PROCESSES.yaml`（488 行結構化 workflow metadata）。P0 補齊。
 - **Agent Interface roadmap v2** (PR #876): `docs/plans/agent-interface-roadmap.md` 從「實作未開始」更新為反映 `cmd/atlas-mcp/` 真實進度（Phase 1 核心橋接 ~84 tools / stdio transport / TokenAuth / audit v2 / anomaly / 協議擴充標記完成；Phase 2 SSE/streamable-HTTP transport 與 binary merge 至 `cmd/atlas` 標記 TODO；新增 P5 列「PR #875 已併入主文件」；文件版本升 v2）。
 
 ### Known Limitations (deferred to v0.0.0.27)
@@ -158,7 +158,7 @@
 ### Documentation
 - `docs/operations/mcp-deploy.md` and `docs/specs/agent-mcp-server.md` — Item 3 admin API + Item 2 analytics tool descriptions to be updated in follow-up (deferred to v0.0.0.26).
 - `docs/specs/agent-mcp-phase3-residual.md` — all 3 spec items marked ✅ shipped (was 🟡 DRAFT before this release).
-- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/WORKFLOW_MAP.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_TOOLS.md` / `docs/AGENT_ONBOARDING.md`）；`docs/REFERENCE/PROCESSES.yaml` 新增（488 行結構化 workflow metadata，21 條 workflow × Name / Description / Inputs / Outputs / Tools / Owner / Phase / Tags）。P0 補齊。
+- **Agent Interface docs bundle** (PR #875, P0 of `docs/plans/agent-interface-roadmap.md`): `AGENTS.md` 增設「🤖 Agent Interface（AI Agent 操作入口）」章節（21 條 workflow 路由 + 5 份文件入口：`docs/REFERENCE/workflow-map.md` / `docs/REFERENCE/PROCESSES.yaml` / `docs/specs/agent-mcp-server.md` / `docs/AGENT_tools.md` / `docs/AGENT_ONBOARDING.md`）；`docs/REFERENCE/PROCESSES.yaml` 新增（488 行結構化 workflow metadata，21 條 workflow × Name / Description / Inputs / Outputs / Tools / Owner / Phase / Tags）。P0 補齊。
 - **Agent Interface roadmap v2** (PR #876): `docs/plans/agent-interface-roadmap.md` 從「實作未開始」更新為反映 `cmd/atlas-mcp/` 真實進度 — Phase 1（核心橋接，~84 tools / stdio transport / TokenAuth / audit v2 / anomaly / 協議擴充）標記完成；Phase 2 SSE/streamable-HTTP transport 與 binary merge 至 `cmd/atlas` 標記 TODO；新增 P5 列（PR #875 已併入主文件）；文件版本升 v2。
 
 ### Known Limitations (P1, by-design, documented in commit `c01f1d88` and T3 PR #858)
@@ -186,10 +186,10 @@ All 3 PRs passed 5-section Oracle audit and the constitution check (gateway + ra
 
 ### Fixed
 - **Postgres WAL race on cold start**: `docker-entrypoint-initdb.d/01-schema.sql` was copied AFTER schema apply, causing `relation "atlas_strategies" does not exist` errors on first `docker compose up`. Move `COPY schema.sql` ahead of any SQL execution.
-- **`make dev` would have hit EADDRINUSE on port 8081**: dev target used container_name `atlas-fubon-proxy` in `docker compose stop` instead of service name `fubon-proxy`. `2>/dev/null || true` masked the error, fubon-proxy container kept running, then ProcessManager tried to spawn its own local subprocess on port 8081 → crash. Self-consistent with `dev-stop` target and the TRAPS.md warning about this exact pitfall (auto-fixed during `/review`).
+- **`make dev` would have hit EADDRINUSE on port 8081**: dev target used container_name `atlas-fubon-proxy` in `docker compose stop` instead of service name `fubon-proxy`. `2>/dev/null || true` masked the error, fubon-proxy container kept running, then ProcessManager tried to spawn its own local subprocess on port 8081 → crash. Self-consistent with `dev-stop` target and the traps.md warning about this exact pitfall (auto-fixed during `/review`).
 
 ### Documentation
-- `docs/REFERENCE/TRAPS.md` — added "Search Before Building" principle (Layer 1/2/3 check before generating new infra).
+- `docs/REFERENCE/traps.md` — added "Search Before Building" principle (Layer 1/2/3 check before generating new infra).
 - `docs/guides/install-and-deploy.md` — added "Local development workflow" section documenting `make dev` and the postgres race gotcha.
 
 ## [0.0.0.22] - 2026-06-28
@@ -212,8 +212,8 @@ All 3 PRs passed 5-section Oracle audit and the constitution check (gateway + ra
 
 ### Documentation
 - `docs/investigations/2026-06-28-boot-loop-multi-service.md` — full RCA: 9 root causes with docker events, code evidence, commit references, and the 5-min boot test protocol.
-- `docs/REFERENCE/TRAPS.md` Deploy/Docker section: ENTRYPOINT vs command conflict, env_file precedence, Dockerfile hardcoded healthcheck.
-- `docs/ENVIRONMENT.md` § Fubon SDK: revised away from "PyPI 404" speculation to accurate description (not on PyPI, official CDN only, wheel platform distribution table).
+- `docs/REFERENCE/traps.md` Deploy/Docker section: ENTRYPOINT vs command conflict, env_file precedence, Dockerfile hardcoded healthcheck.
+- `docs/environment.md` § Fubon SDK: revised away from "PyPI 404" speculation to accurate description (not on PyPI, official CDN only, wheel platform distribution table).
 - `docs/guides/install-and-deploy.md`: env_file gotcha + `openssl rand -hex 32` for `ATLAS_API_KEY`.
 - `services/fubon-proxy/README.md`: Docker deploy design section (wheel install, .p12 mount).
 
@@ -223,7 +223,7 @@ All 3 PRs passed 5-section Oracle audit and the constitution check (gateway + ra
 
 Atlas hosts both `gitnexus` MCP and `codebase-memory` MCP (the latter is the `codebase-memory-mcp-pro` fork — ships no prebuilt binaries, includes fork-exclusive fixes for #528 incremental-reindex correctness, #465 Cypher `WITH` aggregation, the new `explore` MCP tool, etc.). Two complementary code-intelligence tools, not a redundancy. AI agents picking between them blindly wastes tokens and risks parallel duplicate implementations.
 
-This PR rewrites `docs/TOOLS.md` and `.claude/skills/atlas-pre-change-protocol/SKILL.md` so the tool surface, the routing tree, and the 8-step pre-change protocol all reflect this correctly:
+This PR rewrites `docs/tools.md` and `.claude/skills/atlas-pre-change-protocol/SKILL.md` so the tool surface, the routing tree, and the 8-step pre-change protocol all reflect this correctly:
 
 - **Factual error fixes**: `Leiden` → `Louvain` (9 occurrences across both files — codebase-memory uses Louvain, not Leiden); BM25 boost label precision (`Functions/Methods +10 / Routes +8 / Classes/Interfaces +5`).
 - **Fork-exclusive tool exposure**: Step 1.5 `EXPLORE` section added to the pre-change protocol — `codebase-memory_explore` returns blast-radius + nearby-neighbors + verbatim source in one call, complementing `gitnexus_impact` for medium/low-risk changes (HIGH/CRITICAL still must use `gitnexus_impact` for risk levels + Process flow); `detect_changes({depth:N})` transitive caller blast radius; Cypher aggregation fix.
@@ -453,8 +453,8 @@ Wave 10 L2.1 (OTel OTLP production) + L2.2 polish complete. App traces now flow 
 
 ### Changed — Documentation polish (PR #713 + #718)
 
-- CHANGELOG v0.0.0.18 entry corrected: `internal/monitoring/AGENTS.md` line counts, `docs/ENVIRONMENT.md` Fubon AI discoverability, `docs/REFERENCE/events/drift-detector.md` test count (15: 13 V2 + 2 V1), `docs/roadmap.md` Wave 9 PR structure (5 PRs #695-#700), `docs/modules/README.md` version header.
-- README + `docs/operations_playbook.md` updated with v0.0.0.18 entries and Wave 10 L2.1/L2.2 references.
+- CHANGELOG v0.0.0.18 entry corrected: `internal/monitoring/AGENTS.md` line counts, `docs/environment.md` Fubon AI discoverability, `docs/REFERENCE/events/drift-detector.md` test count (15: 13 V2 + 2 V1), `docs/roadmap.md` Wave 9 PR structure (5 PRs #695-#700), `docs/modules/README.md` version header.
+- README + `docs/operations-playbook.md` updated with v0.0.0.18 entries and Wave 10 L2.1/L2.2 references.
 
 ### Verification
 
@@ -496,12 +496,12 @@ The v0.0.0.17 Wave 9 observability wire passed a 5-second dry-run smoke test, bu
 
 - `internal/monitoring/AGENTS.md:194` — replaced pre-#704 `只回傳第一個` description with v0.0.0.18+ behavior: `errors.Join` aggregation + defer LIFO cleanup + reference clearing on retry.
 - `internal/monitoring/AGENTS.md:209` — added `sse_handler_subscriptions.go` reference and the cross-mode `RegisterDashboardBufferSubs` re-registration pattern (`run()` + `runLiveTrading()` both call on their respective buses).
-- `docs/ENVIRONMENT.md` — added "Story so far" paragraph describing how the 5-second dry-run smoke test could not exercise the 3 production bugs v0.0.0.18 closes.
+- `docs/environment.md` — added "Story so far" paragraph describing how the 5-second dry-run smoke test could not exercise the 3 production bugs v0.0.0.18 closes.
 - `docs/REFERENCE/events/drift-detector.md` — added "v0.0.0.18+ 整合測試" section listing the 2 new bus-level integration tests.
 - `docs/roadmap.md` — extended Wave 9 version list to include v0.0.0.18.
 - `docs/modules/README.md` — bumped to v0.0.0.18 (Wave 9 gap fixes 收尾版).
 - `README.md` (PR #718) — added v0.0.0.18 entry in Recent updates.
-- `docs/operations_playbook.md` (PR #718) — added "Wave 9 觀測性 v0.0.0.18 修復與運維指引" section covering SSE catchup, audit subscriber idempotency, and partial-failure cleanup troubleshooting.
+- `docs/operations-playbook.md` (PR #718) — added "Wave 9 觀測性 v0.0.0.18 修復與運維指引" section covering SSE catchup, audit subscriber idempotency, and partial-failure cleanup troubleshooting.
 
 ## [0.0.0.17] - 2026-06-24
 

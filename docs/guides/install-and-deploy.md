@@ -1,7 +1,7 @@
 # Atlas-Go Install / Deploy Guide
 
 > **Audience**: developers onboarding to atlas-go + operators deploying it.
-> **Related**: [`../../AGENTS.md`](../../AGENTS.md), [`../../CLAUDE.md`](../../CLAUDE.md), [`../ENVIRONMENT.md`](../ENVIRONMENT.md), [`../REFERENCE/TRAPS.md`](../REFERENCE/TRAPS.md)
+> **Related**: [`../../AGENTS.md`](../../AGENTS.md), [`../../CLAUDE.md`](../../CLAUDE.md), [`../environment.md`](../environment.md), [`../REFERENCE/traps.md`](../REFERENCE/traps.md)
 
 This guide covers:
 1. **Prerequisites** — 3rd party dependencies you must install
@@ -180,7 +180,7 @@ fubonproxy.health_check_passed (login Fubon SDK 成功)
 
 **為什麼這之前是踩坑**:
 - 第一個版本考慮寫新的 wrapper script / 新 Makefile target 起 fubon-proxy → 查 codebase 才發現 ProcessManager + `shouldStartFubonProxy` 已經在做這件事 → 改用 `make dev` 串接,沒寫任何新 Go code
-- 詳見 `docs/REFERENCE/TRAPS.md` § Dev Workflow / 造輪子陷阱
+- 詳見 `docs/REFERENCE/traps.md` § Dev Workflow / 造輪子陷阱
 
 ### 2.6 Verify the stack is healthy
 
@@ -238,7 +238,7 @@ openssl rand -hex 32
 
 **Do NOT use the development placeholder** `ATLAS_API_KEY=e2e-test-key-not-for-prod` in production. See [Pre-Deployment Checklist](#5-pre-deployment-checklist).
 
-> **⚠️ Critical gotcha — `env_file` vs `environment` precedence** (見 `docs/REFERENCE/TRAPS.md` § Deploy/Docker 完整說明)
+> **⚠️ Critical gotcha — `env_file` vs `environment` precedence** (見 `docs/REFERENCE/traps.md` § Deploy/Docker 完整說明)
 >
 > `docker-compose.yml` 的 `env_file` 跟 `environment` **兩個 section 對同一個變數會衝突**:`environment` 段優先。
 > `environment: ATLAS_API_KEY=${ATLAS_API_KEY}` 是 **shell 變數展開**(讀 host shell 的 `ATLAS_API_KEY`,**不是從 .env 讀**)。
@@ -357,7 +357,7 @@ git add admin_web/static/js/shared/field_types.ts admin_web/static/js/shared/val
 git commit -m "feat(domain): add NewField to Foo"
 ```
 
-For full details see `shared_web/AGENTS.md` "Generated Files" 章節 and `docs/REFERENCE/TRAPS.md` "Build Pipeline / 程式碼生成".
+For full details see `shared_web/AGENTS.md` "Generated Files" 章節 and `docs/REFERENCE/traps.md` "Build Pipeline / 程式碼生成".
 
 ---
 
@@ -420,5 +420,5 @@ docker compose up -d
 - [`git-tool-cache-policy.md`](git-tool-cache-policy.md) — which tool caches to never commit
 - [`ai-productivity.md`](ai-productivity.md) — execution tips for AI agents
 - [`opencode-oh-my-openagent-tuning.md`](opencode-oh-my-openagent-tuning.md) — token injection防护
-- [`../REFERENCE/TRAPS.md`](../REFERENCE/TRAPS.md) — high-stakes traps reference
-- [`../ENVIRONMENT.md`](../ENVIRONMENT.md) — this dev environment's status
+- [`../REFERENCE/traps.md`](../REFERENCE/traps.md) — high-stakes traps reference
+- [`../environment.md`](../environment.md) — this dev environment's status

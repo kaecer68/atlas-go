@@ -1,6 +1,6 @@
 # Atlas-go Process Metadata
-# Schema: see docs/PROCESS_ANNOTATION_SOP.md §1.2
-# Source: docs/WORKFLOW_MAP.md v1 (Wave 11, 2026-06-29)
+# Schema: see docs/process-annotation-sop.md §1.2
+# Source: docs/workflow-map.md v1 (Wave 11, 2026-06-29)
 # Purpose: structured workflow annotations for AI agents and GitNexus
 version: "1.0.0"
 last_updated: "2026-07-01"

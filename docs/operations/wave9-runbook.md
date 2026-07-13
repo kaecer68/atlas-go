@@ -126,7 +126,7 @@ curl -s -H "X-API-Key: $ATLAS_API_KEY" http://localhost:18080/api/dashboard/cros
 
 **這是 PR #931 修正的問題**;若重現表示修正被覆蓋或缺步驟。
 
-**處置**(見 `docs/REFERENCE/TRAPS.md` 對應 entry):
+**處置**(見 `docs/REFERENCE/traps.md` 對應 entry):
 1. 確認 `internal/monitoring/api/shared/handler.go:24-29` 有 `"/api/llm/health": true`
 2. 確認 `cmd/atlas/main.go isPublicPath()` 有 `case p == "/api/llm/health":` 條目
 3. **兩處都要有**,只改一處會 401
@@ -232,7 +232,7 @@ docker logs atlas-go --since 10m > /tmp/atlas-incident.log
 
 - `docs/specs/wave9-observability.md` — 設計規格(姊妹文件)
 - `docs/operations/loki-deployment.md` — 集中式 log
-- `docs/REFERENCE/TRAPS.md` — `/api/llm/health` 401 防回歸
+- `docs/REFERENCE/traps.md` — `/api/llm/health` 401 防回歸
 - `internal/monitoring/AGENTS.md` — 模組 hot-path
 - `internal/monitoring/wave9_runtime.go` — coordinator 原始碼
 

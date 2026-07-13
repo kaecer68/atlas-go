@@ -212,7 +212,7 @@ bin/atlas-mcp 2>&1 | head -3
 
 ## 7. 相關資源
 
-- **5 分鐘 SOP（給 agent 用）**: [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
+- **5 分鐘 SOP（給 agent 用）**: [`.claude/skills/atlas-mcp-integration/AGENT_quickstart.md`](../.claude/skills/atlas-mcp-integration/AGENT_quickstart.md)
 - **完整 MCP 指南**: [`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)
 - **108 個 tool 總覽**: [`docs/REFERENCE/tool-catalog.md`](./REFERENCE/tool-catalog.md)
 - **Setup wizard 詳解**: [`cmd/atlas-mcp-setup/README.md`](../cmd/atlas-mcp-setup/README.md)

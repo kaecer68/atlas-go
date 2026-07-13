@@ -45,15 +45,15 @@
 | ✅ | `configs/allowed_env_vars.md` | 47 個環境變數白名單（基礎設施/Broker/TWSE/資料源） |
 | ✅ | `scripts/ci/check_constitution.sh` | 跨平台憲法合規檢查腳本（4 條規則） |
 | ✅ | `.github/workflows/constitution.yml` | PR 自動觸發憲法檢查 |
-| ✅ | `.github/copilot-instructions.md` 更新 | 加入 CONSTITUTION.md + PARAMETER_SYSTEM.md 至 Core Files |
+| ✅ | `.github/copilot-instructions.md` 更新 | 加入 constitution.md + parameter-system.md 至 Core Files |
 | ✅ | 3 個 `instructions/*.md` 更新 | 補充足跡規範引用 |
 
 ### 權威階層（Phase 2）
 
 | # | 項目 | 說明 |
 |---|------|------|
-| ✅ | `docs/REFERENCE/GUIDELINES_INDEX.md` | 規範總索引，5 階層優先級鏈 + 使用情境路由表 |
-| ✅ | `CONSTITUTION.md` 第四條擴充 | BackgroundTaskManager 操作指引（例外判斷、註冊流程、DI 模式、命名規範、故障處理） |
+| ✅ | `docs/REFERENCE/guidelines-index.md` | 規範總索引，5 階層優先級鏈 + 使用情境路由表 |
+| ✅ | `constitution.md` 第四條擴充 | BackgroundTaskManager 操作指引（例外判斷、註冊流程、DI 模式、命名規範、故障處理） |
 | ✅ | [`internal/domain/AGENTS.md`](../specs/domain-types.md) 精簡（後續於 Wave 11 整併） | 從 49 行減至 27 行，移除重複內容 |
 
 ### 結構修復（Phase 3）
@@ -63,7 +63,7 @@
 | ✅ | 移除 `sysMetrics.Start()` goroutine | 完全冗餘（`metrics_snapshot` task 已涵蓋） |
 | ✅ | 4 個新 `AGENTS.md` | `config/`、`risk/`、`sim/`、`screener/` 模組特有陷阱文件化 |
 | ✅ | `HealthChecker` 完成接線 | 確認為遺漏工作，清理後註冊為 `health_check` TaskManager task |
-| ✅ | `CONSTITUTION.md` 4.5.2 例外表格 | autobacktest + RuleEngine live 模式正式文件化 |
+| ✅ | `constitution.md` 4.5.2 例外表格 | autobacktest + RuleEngine live 模式正式文件化 |
 
 ---
 

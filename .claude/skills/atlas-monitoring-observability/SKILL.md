@@ -30,11 +30,11 @@ atlas-go 啟動流程曾有兩個系統性盲點:
 ### 決策記錄(brief)
 
 - `docs/operations/rss-feed-replacement.md` — PR-930 RSS feed 替換決策
-- `.omo/briefs/alert-redesign-v2.md` — Wave 9 alert rule 設計與 P0-P2 backlog（v2 active draft,參照 `.omo/briefs/ALERT_SYSTEM_REDESIGN.md` v1）
+- `.omo/briefs/alert-redesign-v2.md` — Wave 9 alert rule 設計與 P0-P2 backlog（v2 active draft,參照 `.omo/briefs/ALERT_SYSTEM_REdesign.md` v1）
 
 ### 規範文件(normative)
 
-- `docs/REFERENCE/TRAPS.md` — **必讀**:`/api/llm/health` 401 防回歸 + Prometheus metric 命名空間
+- `docs/REFERENCE/traps.md` — **必讀**:`/api/llm/health` 401 防回歸 + Prometheus metric 命名空間
 - `AGENTS.md`(root) — 高頻陷阱速查表(LLM health 401 + Metric 命名空間 兩條)
 - `internal/apigateway/CONSTITUTION.md` — 6 條數據源治理憲法
 

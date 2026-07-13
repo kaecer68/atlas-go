@@ -115,5 +115,5 @@ go test -tags=integration -v -count=1 ./cmd/atlas-mcp-setup/
 
 ## 相關資源
 
-- **5 分鐘 SOP**: [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
+- **5 分鐘 SOP**: [`.claude/skills/atlas-mcp-integration/AGENT_quickstart.md`](../../.claude/skills/atlas-mcp-integration/AGENT_quickstart.md)
 - **完整 MCP 指南**: [`../atlas-mcp/README.md`](../atlas-mcp/README.md)

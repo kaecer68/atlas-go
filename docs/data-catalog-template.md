@@ -5,7 +5,7 @@
 **狀態**: 權威標準（authoritative）  
 **適用範圍**: 所有 `data/` 目錄下的資料資產  
 **強制性**: CI 強制檢查新鮮度（`scripts/ci/check_data_catalog.sh`，P0.4c 實現）  
-**相關文檔**: `docs/DATA_ARCHITECTURE.md` · `docs/DATA_NAMING_CONVENTION.md` · `docs/DATA_MATURITY_STANDARD.md`
+**相關文檔**: `docs/data-architecture.md` · `docs/data-naming-convention.md` · `docs/data-maturity-standard.md`
 
 ---
 
@@ -32,7 +32,7 @@
 
 | 格式 | 檔案 | 用途 |
 |------|------|------|
-| **Markdown** | `docs/DATA_CATALOG.md` | 人類可讀、導航、快速查找 |
+| **Markdown** | `docs/data-catalog.md` | 人類可讀、導航、快速查找 |
 | **JSON** | `docs/DATA_CATALOG.json` | 機器可讀、AI agent 程式化讀取、CI 驗證 |
 
 兩者內容一致，JSON 版本由 Markdown 版本自動產生或兩者都由產生器腳本維護。
@@ -68,7 +68,7 @@
 
 **建立時間**: 2026-03-30（commit #2 f71c0a2）
 **最近修改**: 持續寫入
-**相關文檔**: `docs/DATA_ARCHITECTURE.md` §層級 2
+**相關文檔**: `docs/data-architecture.md` §層級 2
 ```
 
 ### 2.3 JSON 格式
@@ -129,8 +129,8 @@
   "last_modified": "continuous",
   "ci_check": "scripts/ci/validate_json_schemas.sh",
   "related_docs": [
-    "docs/DATA_ARCHITECTURE.md",
-    "docs/DATA_NAMING_CONVENTION.md"
+    "docs/data-architecture.md",
+    "docs/data-naming-convention.md"
   ]
 }
 ```
@@ -170,7 +170,7 @@
 
 ### 3.2 按成熟度
 
-對齊 `docs/DATA_MATURITY_STANDARD.md`：
+對齊 `docs/data-maturity-standard.md`：
 
 | Tier | 標記 | 說明 |
 |------|------|------|
@@ -190,12 +190,12 @@
    → 獲得所有 39 個資料資產的清單、路徑、格式、描述
    
 2. AI 對特定資產有疑問：
-   → 讀取 docs/DATA_CATALOG.md（人類可讀，含詳細說明）
+   → 讀取 docs/data-catalog.md（人類可讀，含詳細說明）
    → 讀取 data/state/{name}/_metadata.json（每個子目錄的 metadata）
    → 讀取 schemas/{name}.schema.json（結構定義）
 
 3. AI 需要理解資料流：
-   → 讀取 docs/DATA_ARCHITECTURE.md（架構文件）
+   → 讀取 docs/data-architecture.md（架構文件）
    → 使用 catalog 的 producers/consumers 欄位追蹤讀寫關係
 ```
 
@@ -216,8 +216,8 @@
 
 | 觸發條件 | 必須更新 | 建議更新 |
 |---------|---------|---------|
-| 新增資料檔案或目錄 | `DATA_CATALOG.md` + `.json` | — |
-| 刪除資料檔案或目錄 | `DATA_CATALOG.md` + `.json` | — |
+| 新增資料檔案或目錄 | `data-catalog.md` + `.json` | — |
+| 刪除資料檔案或目錄 | `data-catalog.md` + `.json` | — |
 | 變更資料結構（新增/刪除欄位） | Schema 檔案 | catalog 中的 `description` 欄位 |
 | 變更 producers/consumers | catalog 中的對應欄位 | — |
 | 檔案大小顯著變化（>20%） | catalog 中的 `size` 欄位 | — |
@@ -314,9 +314,9 @@
 
 | 文檔 | 關係 |
 |------|------|
-| `docs/DATA_ARCHITECTURE.md` | 各資料類型的詳細讀寫路徑 |
-| `docs/DATA_DIRECTORY_STANDARD.md` | 目錄結構規範 |
-| `docs/DATA_NAMING_CONVENTION.md` | 檔案命名規則 |
-| `docs/DATA_MATURITY_STANDARD.md` | `_metadata.json` 格式 |
-| `docs/JSON_SCHEMA_STANDARD.md` | JSON Schema 定義標準 |
+| `docs/data-architecture.md` | 各資料類型的詳細讀寫路徑 |
+| `docs/data-directory-standard.md` | 目錄結構規範 |
+| `docs/data-naming-convention.md` | 檔案命名規則 |
+| `docs/data-maturity-standard.md` | `_metadata.json` 格式 |
+| `docs/json-schema-standard.md` | JSON Schema 定義標準 |
 | `docs/audit/2026-06-02-p0-2-root-cause-analysis.md` | 根因分析 |

@@ -5,7 +5,7 @@
 **狀態**: 權威標準（authoritative）  
 **適用範圍**: `data/` 目錄下所有 JSON/JSONL 檔案  
 **強制性**: CI 強制檢查（`scripts/ci/validate_json_schemas.sh`，P0.4b 實現）  
-**相關文檔**: `docs/DATA_NAMING_CONVENTION.md` · `docs/DATA_ARCHITECTURE.md` · `internal/domain/`（Go domain types）
+**相關文檔**: `docs/data-naming-convention.md` · `docs/data-architecture.md` · `internal/domain/`（Go domain types）
 
 ---
 
@@ -38,7 +38,7 @@ FG-1（無資料治理規範）：自專案建立以來 1,144 次 commit 中，�
 |------|------|
 | **Schema 版本** | JSON Schema **Draft-07**（相容性最佳、工具支援最廣） |
 | **Schema 目錄** | `schemas/`（專案根目錄下） |
-| **檔案命名** | `{data_type_name}.schema.json`（snake_case，遵循 DATA_NAMING_CONVENTION.md） |
+| **檔案命名** | `{data_type_name}.schema.json`（snake_case，遵循 data-naming-convention.md） |
 | **每行驗證** | JSONL 檔案逐行驗證（每行為獨立 JSON 物件），不是整檔驗證 |
 
 ### 2.1 為什麼選 Draft-07
@@ -274,7 +274,7 @@ done
 2. 當新增 JSONL 檔案類型時：
    → 建立新 schema 檔案於 schemas/{name}.schema.json
    → 遵循本文件第 4 節的範本結構
-   → 更新 docs/DATA_CATALOG.md 中的 schema_ref 欄位
+   → 更新 docs/data-catalog.md 中的 schema_ref 欄位
 
 3. 每次 PR：
    → CI 自動執行 validate_json_schemas.sh
@@ -290,7 +290,7 @@ done
 | `cmd/gentags` | 未來可擴展為 Go struct → JSON Schema 自動生成（類似現有的 Go struct → 前端型別生成） |
 | `internal/domain/` | Schema 的 truth source — 所有 JSON 欄位名稱必須與 Go struct 的 `json:` tag 一致 |
 | `internal/ledger/` | JSONL 寫入的 source of truth — schema 驗證應在此層或 CI 層進行 |
-| `docs/DATA_CATALOG.md` | 每個資料資產的 `schema_ref` 欄位指向對應的 schema 檔案 |
+| `docs/data-catalog.md` | 每個資料資產的 `schema_ref` 欄位指向對應的 schema 檔案 |
 
 ---
 
@@ -298,8 +298,8 @@ done
 
 | 文檔 | 關係 |
 |------|------|
-| `docs/DATA_NAMING_CONVENTION.md` | Schema 檔案命名遵循 R1（snake_case） |
-| `docs/DATA_DIRECTORY_STANDARD.md` | Schema 存放位置定義 |
-| `docs/DATA_ARCHITECTURE.md` | 各資料類型的讀寫路徑 |
-| `docs/DATA_CATALOG.md` | 完整資料目錄，含 `schema_ref` |
+| `docs/data-naming-convention.md` | Schema 檔案命名遵循 R1（snake_case） |
+| `docs/data-directory-standard.md` | Schema 存放位置定義 |
+| `docs/data-architecture.md` | 各資料類型的讀寫路徑 |
+| `docs/data-catalog.md` | 完整資料目錄，含 `schema_ref` |
 | `internal/domain/` | Go domain types（欄位名稱的 truth source） |

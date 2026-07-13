@@ -98,7 +98,7 @@ check_schemas_exist() {
 
   if [ ! -d "$SCHEMAS_DIR" ]; then
     log_warn "$SCHEMAS_DIR/ 目錄不存在 — 尚未建立任何 JSON Schema"
-    log_info "參考: docs/JSON_SCHEMA_STANDARD.md"
+    log_info "參考: docs/json-schema-standard.md"
     return 0
   fi
 
@@ -324,7 +324,7 @@ check_schema_validation() {
 # =============================================================================
 main() {
   printf "Atlas JSON Schema 驗證\n"
-  printf "參考文件: docs/JSON_SCHEMA_STANDARD.md\n"
+  printf "參考文件: docs/json-schema-standard.md\n"
   printf "模式: %s (max %s 行)\n" "$([ "$FULL_MODE" = true ] && echo '完整' || echo '快速')" "$([ "$FULL_MODE" = true ] && echo '全部' || echo "$MAX_LINES")"
   printf "================================\n\n"
 

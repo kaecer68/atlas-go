@@ -76,7 +76,7 @@ Eliminate the manual Day 0 / Day 14 button clicks. Once the manual flow proves o
   ```
 - At config load, if flag is set, override `cfg.Orchestrator.UseLLMSectorAgents.Value = true`
 - Update `scripts/atlas` wrapper (if exists) to pass through
-- Update `docs/QUICKSTART.md`「啟用觀察期」一節加上 CLI 範例
+- Update `docs/quickstart.md`「啟用觀察期」一節加上 CLI 範例
 
 ### 目標與目的
 
@@ -96,7 +96,7 @@ Dev / on-call 可以**不必 commit config 變更**就啟用 L2.4,加快 staging
 
 1. 評估誰會用 (dev sandbox / staging / on-call? — 決定 flag 的 default 行為)
 2. 確認 `flag.Parse()` 在 atlas binary 的執行順序 (避免在 `config.Load()` 之後才 parse)
-3. `docs/QUICKSTART.md` 加上 CLI 範例 (PR 一起)
+3. `docs/quickstart.md` 加上 CLI 範例 (PR 一起)
 
 **預估時程**: 0.5 天工作量,單一 commit,單一 PR
 
@@ -208,15 +208,15 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
 
 - `.omo/wave-11-l2-4/L2_4_RUNBOOK.md` → `docs/operations/l2-4-runbook.md`
   - 清理 file path references (被 PR #821 改動後已移位)
-  - 加 frontmatter 對齊 `docs/QUICKSTART.md` 風格
+  - 加 frontmatter 對齊 `docs/quickstart.md` 風格
   - 更新 metric 來源 references (從 PR #743 改為 PR #821 merge commit `f69b3551`)
 - `.omo/wave-11-l2-4/L2_4_OBSERVATION.md` → `docs/specs/l2-4-observation-spec.md`
   - 拆掉 Promotion / Risk 段落(重複,在 Runbook)
   - 專注在 metrics schema(下游客戶端的 single source of truth)
   - 加 Issue #740 cross-reference
 - 新索引紀錄:
-  - `docs/REFERENCE/GUIDELINES_INDEX.md` 加 L2.4 條目
-  - `docs/DOCUMENTATION_MAP.md` 加 L2.4 文件地圖條目
+  - `docs/REFERENCE/guidelines-index.md` 加 L2.4 條目
+  - `docs/documentation-map.md` 加 L2.4 文件地圖條目
 - `docs/specs/llm-sector-agent.md` 加 L2.4 follow-up cross-link
 - 刪除 `.omo/wave-11-l2-4/*.md`(內容已永久化)
 
@@ -226,8 +226,8 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
 
 `.omo/` 是 gitignored,只給單一 session 用。L2.4 runbook + observation spec 是 **operational/reference 文件**,需要被 ops / on-call / 下游 log 消費端 long-term 看到。永久化到 `docs/` 後:
 - 任何 clone 都能看到完整 L2.4 操作手冊
-- 與既有 `docs/specs/`、`docs/QUICKSTART.md` 整合
-- 索引在 `GUIDELINES_INDEX.md` 中可達
+- 與既有 `docs/specs/`、`docs/quickstart.md` 整合
+- 索引在 `guidelines-index.md` 中可達
 
 ### 創造的價值
 

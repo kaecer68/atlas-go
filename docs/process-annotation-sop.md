@@ -62,7 +62,7 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 
 ### 2.1 第一次標註（一次性 sweep）
 
-1. **盤查所有 entry-points**：對照 [`WORKFLOW_MAP.md`](./REFERENCE/WORKFLOW_MAP.md) §3 的 21 條 workflow
+1. **盤查所有 entry-points**：對照 [`workflow-map.md`](./REFERENCE/workflow-map.md) §3 的 21 條 workflow
 2. **為每個 entry 加 A 方案 tag**（每個 5-15 分鐘，視依賴複雜度）
 3. **同步建立 `docs/REFERENCE/PROCESSES.yaml`** 作為單一真相來源
 4. **驗證**：GitNexus 跑 `npx gitnexus analyze --processes-metadata docs/REFERENCE/PROCESSES.yaml`（需 GitNexus 支援，未來 PR）
@@ -76,7 +76,7 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 
 ---
 
-## 3. 待標註清單（基於 [`WORKFLOW_MAP.md`](./REFERENCE/WORKFLOW_MAP.md) v1）
+## 3. 待標註清單（基於 [`workflow-map.md`](./REFERENCE/workflow-map.md) v1）
 
 | ID | 入口 | Phase |
 |----|------|-------|

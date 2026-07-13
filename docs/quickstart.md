@@ -1,7 +1,7 @@
 # Atlas-Go 快速啟動與 CI 指令
 
 > 從 `AGENTS.md` 遷移（避免根 AGENTS.md 超過 160 行預算）。
-> 完整規範階層見 `docs/REFERENCE/GUIDELINES_INDEX.md`。
+> 完整規範階層見 `docs/REFERENCE/guidelines-index.md`。
 
 ## 快速啟動
 
@@ -118,4 +118,4 @@ curl -s http://localhost:18080/api/recommendations -b "token=<JWT>" | jq .
 
 ---
 
-> **Multi-CLI 並行協議**：[MULTI_CLI_PROTOCOL.md](MULTI_CLI_PROTOCOL.md)
+> **Multi-CLI 並行協議**：[multi-cli-protocol.md](multi-cli-protocol.md)
