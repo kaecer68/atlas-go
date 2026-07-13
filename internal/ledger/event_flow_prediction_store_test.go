@@ -171,3 +171,33 @@ func TestJSONLEventFlowPredictionStore_PersistsAcrossInstances(t *testing.T) {
 		t.Errorf("expected DirectionSign %v, got %v", want.DirectionSign, got[0].DirectionSign)
 	}
 }
+
+func TestJSONLEventFlowPredictionStore_LenAndSizeOnEmptyStore(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+	if got := store.Len(); got != 0 {
+		t.Fatalf("Len on empty store = %d, want 0", got)
+	}
+	if got := store.Size(); got != 0 {
+		t.Fatalf("Size on empty store = %d, want 0", got)
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_LenAndSizeAfterAppends(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+	for i := 0; i < 3; i++ {
+		if err := store.AppendPrediction(EventFlowPredictionRecord{
+			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
+			DirectionSign: float64(i + 1),
+			Confidence:    0.7,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction %d: %v", i, err)
+		}
+	}
+	if got := store.Len(); got != 3 {
+		t.Fatalf("Len after 3 appends = %d, want 3", got)
+	}
+	if got := store.Size(); got <= 0 {
+		t.Fatalf("Size after 3 appends = %d, want > 0", got)
+	}
+}

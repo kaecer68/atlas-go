@@ -69,10 +69,13 @@ func TestMonitor_ConvenienceMethods(t *testing.T) {
 
 	var mu sync.Mutex
 	seen := make(map[AlertLevel]int)
+	var wg sync.WaitGroup
+	wg.Add(4)
 	m.RegisterHandler(func(a Alert) {
 		mu.Lock()
 		seen[a.Level]++
 		mu.Unlock()
+		wg.Done()
 	})
 
 	m.Info("c", "msg", nil)
@@ -80,7 +83,7 @@ func TestMonitor_ConvenienceMethods(t *testing.T) {
 	m.Error("c", "msg", nil)
 	m.Critical("c", "msg", nil)
 
-	time.Sleep(50 * time.Millisecond)
+	wg.Wait()
 
 	mu.Lock()
 	defer mu.Unlock()

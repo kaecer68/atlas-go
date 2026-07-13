@@ -29,6 +29,15 @@ type Stage3AlertDeps struct {
 	// confidence values. A value of 0.5 means neutral / no signal.
 	RecentEventFlowPredictions func(days int) []float64
 
+	// RecentEventFlowPredictionsActualCount counts ledger-backed (not
+	// 0.5-padded) records returned by RecentEventFlowPredictions. Used by
+	// the prediction-drift rule to gate alerts until enough history exists.
+	RecentEventFlowPredictionsActualCount func(days int) int
+
+	// OnAlertFired is invoked after each alert fires past its cooldown.
+	// Optional; production wiring emits atlas_stage3_alerts_fired_total.
+	OnAlertFired func(ruleID string, level AlertLevel, metadata map[string]any)
+
 	// LatestCapitalFlowPrediction returns the most recent capital-flow
 	// prediction value. The bool is false if no prediction is available.
 	LatestCapitalFlowPrediction func() (float64, bool)
@@ -103,6 +112,14 @@ func (e *Stage3AlertEvaluator) recordFired(ruleID string) {
 	e.mu.Unlock()
 }
 
+func (e *Stage3AlertEvaluator) emitAndTrack(ruleID string, level AlertLevel, category, message string, metadata map[string]any) {
+	e.monitor.Alert(level, category, message, metadata)
+	e.recordFired(ruleID)
+	if e.deps.OnAlertFired != nil {
+		e.deps.OnAlertFired(ruleID, level, metadata)
+	}
+}
+
 func (e *Stage3AlertEvaluator) evaluateDataStaleness() {
 	if e.deps.ChannelLastDataAt == nil {
 		return
@@ -112,17 +129,15 @@ func (e *Stage3AlertEvaluator) evaluateDataStaleness() {
 		age := now.Sub(lastData)
 		if age > 6*time.Hour {
 			if e.checkCooldown("data-staleness-critical", 1*time.Hour) {
-				e.monitor.Alert(AlertLevelCritical, "stage3_data_staleness",
+				e.emitAndTrack("data-staleness-critical", AlertLevelCritical, "stage3_data_staleness",
 					fmt.Sprintf("channel %s data is %.0f hours stale", channel, age.Hours()),
 					map[string]any{"channel": channel, "hours": age.Hours(), "severity": "critical"})
-				e.recordFired("data-staleness-critical")
 			}
 		} else if age > 2*time.Hour {
 			if e.checkCooldown("data-staleness-warning", 1*time.Hour) {
-				e.monitor.Alert(AlertLevelWarning, "stage3_data_staleness",
+				e.emitAndTrack("data-staleness-warning", AlertLevelWarning, "stage3_data_staleness",
 					fmt.Sprintf("channel %s data is %.0f hours stale", channel, age.Hours()),
 					map[string]any{"channel": channel, "hours": age.Hours(), "severity": "warning"})
-				e.recordFired("data-staleness-warning")
 			}
 		}
 	}
@@ -141,10 +156,9 @@ func (e *Stage3AlertEvaluator) evaluateEventCalendarSparse() {
 		return
 	}
 	if e.checkCooldown("event-calendar-sparse", 24*time.Hour) {
-		e.monitor.Alert(AlertLevelWarning, "stage3_event_calendar",
+		e.emitAndTrack("event-calendar-sparse", AlertLevelWarning, "stage3_event_calendar",
 			fmt.Sprintf("event calendar has %d events on trading day (expected >= 3)", count),
 			map[string]any{"event_count": count, "date": now.Format("2006-01-02")})
-		e.recordFired("event-calendar-sparse")
 	}
 }
 
@@ -167,12 +181,18 @@ func (e *Stage3AlertEvaluator) evaluateModelConfidenceDegraded() {
 		return
 	}
 	if e.checkCooldown("model-confidence-degraded", 24*time.Hour) {
-		e.monitor.Alert(AlertLevelWarning, "stage3_model_confidence",
+		e.emitAndTrack("model-confidence-degraded", AlertLevelWarning, "stage3_model_confidence",
 			"event flow prediction has been neutral for 5 consecutive days",
 			map[string]any{"consecutive_neutral_days": len(predictions)})
-		e.recordFired("model-confidence-degraded")
 	}
 }
+
+// predictionDriftWarmupThreshold is the minimum number of real (non-padded)
+// historical predictions required before the prediction-drift alert can
+// reason about a non-trivial standard deviation. At fewer than this many
+// records the rule emits a dedicated "insufficient_history" alert instead
+// of either silently skipping or issuing a spurious drift alert.
+const predictionDriftWarmupThreshold = 5
 
 func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 	if e.deps.LatestCapitalFlowPrediction == nil || e.deps.LatestCapitalFlowActual == nil {
@@ -186,8 +206,22 @@ func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 	if !ok {
 		return
 	}
-	// Recent predictions are used to estimate a simple standard deviation.
 	recent := e.deps.RecentEventFlowPredictions(10)
+
+	// Production wiring provides this callback; tests that pre-date the
+	// warmup addition leave it nil and pass through to the legacy path.
+	if e.deps.RecentEventFlowPredictionsActualCount != nil {
+		actualCount := e.deps.RecentEventFlowPredictionsActualCount(10)
+		if actualCount < predictionDriftWarmupThreshold {
+			if e.checkCooldown("prediction-drift-insufficient-history", 24*time.Hour) {
+				e.emitAndTrack("prediction-drift-insufficient-history", AlertLevelInfo, "stage3_prediction_drift",
+					fmt.Sprintf("prediction-drift suppressed: only %d real predictions in last 10 (need %d)", actualCount, predictionDriftWarmupThreshold),
+					map[string]any{"actual_count": actualCount, "threshold": predictionDriftWarmupThreshold, "warmup": true})
+			}
+			return
+		}
+	}
+
 	_, std := meanStd(recent)
 	if std <= 0 {
 		return
@@ -197,10 +231,9 @@ func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 		return
 	}
 	if e.checkCooldown("prediction-drift", 24*time.Hour) {
-		e.monitor.Alert(AlertLevelInfo, "stage3_prediction_drift",
+		e.emitAndTrack("prediction-drift", AlertLevelInfo, "stage3_prediction_drift",
 			fmt.Sprintf("capital flow actual %.2f vs prediction %.2f exceeds 2σ (σ=%.2f)", actual, pred, std),
 			map[string]any{"actual": actual, "prediction": pred, "std": std, "diff": diff})
-		e.recordFired("prediction-drift")
 	}
 }
 

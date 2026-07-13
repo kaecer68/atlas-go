@@ -224,3 +224,51 @@ func TestStage3AlertEvaluator_PredictionDrift_SkipsIfWithinSigma(t *testing.T) {
 		t.Fatalf("expected no drift alert within 2σ, got %d", len(captureHistory(monitor)))
 	}
 }
+
+func TestStage3AlertEvaluator_PredictionDrift_InsufficientHistoryAlert(t *testing.T) {
+	monitor := newStage3TestMonitor(t)
+	now := time.Date(2026, 7, 13, 13, 45, 0, 0, time.UTC)
+	deps := Stage3AlertDeps{
+		RecentEventFlowPredictions: func(days int) []float64 {
+			return []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5}
+		},
+		RecentEventFlowPredictionsActualCount: func(days int) int { return 2 },
+		LatestCapitalFlowPrediction:           func() (float64, bool) { return 0.5, true },
+		LatestCapitalFlowActual:               func() (float64, bool) { return 10.0, true },
+	}
+	eval := NewStage3AlertEvaluator(monitor, deps)
+	eval.now = func() time.Time { return now }
+
+	eval.EvaluateMarketClose()
+	alerts := captureHistory(monitor)
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 insufficient-history alert, got %d", len(alerts))
+	}
+	if got, ok := alerts[0].Metadata["warmup"].(bool); !ok || !got {
+		t.Fatalf("expected warmup=true metadata, got %v", alerts[0].Metadata["warmup"])
+	}
+}
+
+func TestStage3AlertEvaluator_PredictionDrift_NilActualCountCallbackUsesLegacy(t *testing.T) {
+	monitor := newStage3TestMonitor(t)
+	now := time.Date(2026, 7, 13, 13, 45, 0, 0, time.UTC)
+	deps := Stage3AlertDeps{
+		RecentEventFlowPredictions: func(days int) []float64 {
+			return []float64{0.45, 0.55, 0.48, 0.52, 0.49, 0.51, 0.46, 0.54, 0.47, 0.53}
+		},
+		RecentEventFlowPredictionsActualCount: nil,
+		LatestCapitalFlowPrediction:           func() (float64, bool) { return 0.5, true },
+		LatestCapitalFlowActual:               func() (float64, bool) { return 10.0, true },
+	}
+	eval := NewStage3AlertEvaluator(monitor, deps)
+	eval.now = func() time.Time { return now }
+
+	eval.EvaluateMarketClose()
+	alerts := captureHistory(monitor)
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 regular drift alert in legacy mode, got %d", len(alerts))
+	}
+	if _, ok := alerts[0].Metadata["warmup"]; ok {
+		t.Fatalf("legacy mode should not emit warmup metadata")
+	}
+}

@@ -31,12 +31,17 @@ type stage3Deps struct {
 	eventCalendar    *industry.EventCalendar
 	macroProvider    marketdata.MacroDataProvider
 	predictionLedger ledger.EventFlowPredictionStore
+	metricsCollector *monitoring.MetricsCollector
 }
 
 // registerStage3Tasks wires the 5 Stage 3 scheduled tasks into BTM.
 // All tasks run at 1-minute interval; the task wrappers contain daily/weekly/
 // monthly once-guards so they only execute at the scheduled time.
 func registerStage3Tasks(d stage3Deps) {
+	if !d.cfg.Stage3TasksEnabled {
+		log.Printf("[Stage3] tasks disabled via STAGE3_TASKS_ENABLED=false; skipping 5 task registrations")
+		return
+	}
 	tz, err := time.LoadLocation("Asia/Taipei")
 	if err != nil {
 		log.Printf("[Stage3] failed to load Asia/Taipei tz, falling back to UTC: %v", err)
@@ -45,8 +50,22 @@ func registerStage3Tasks(d stage3Deps) {
 
 	pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir))
 
+	oncestore, oncestoreErr := scheduler.NewFileOncestampStore(d.cfg.LedgerDir)
+	if oncestoreErr != nil {
+		log.Printf("[Stage3] oncestamp store unavailable, falling back to in-memory: %v", oncestoreErr)
+		oncestore = nil
+	}
+
 	deps := scheduler.Stage3TaskDeps{
-		TimeZone: tz,
+		TimeZone:       tz,
+		OncestampStore: oncestore,
+		OnTaskComplete: func(taskID string, err error) {
+			result := "success"
+			if err != nil {
+				result = "failed"
+			}
+			monitoring.RecordStage3TaskRun(d.metricsCollector, taskID, result)
+		},
 		RefreshEventCalendar: func(now time.Time) error {
 			d.eventCalendar.RefreshEvents(now)
 			return nil
@@ -120,6 +139,10 @@ func registerStage3Tasks(d stage3Deps) {
 //   - daily:     every 1 minute (fires 06:30 via internal guard)
 //   - market-close: every 1 minute (fires 13:45 via internal guard)
 func registerStage3AlertTasks(d stage3Deps) {
+	if !d.cfg.Stage3AlertsEnabled {
+		log.Printf("[Stage3] alerts disabled via STAGE3_ALERTS_ENABLED=false; skipping 3 alert registrations")
+		return
+	}
 	tz, err := time.LoadLocation("Asia/Taipei")
 	if err != nil {
 		log.Printf("[Stage3] failed to load Asia/Taipei tz, falling back to UTC: %v", err)
@@ -128,6 +151,9 @@ func registerStage3AlertTasks(d stage3Deps) {
 
 	alertDeps := monitoring.Stage3AlertDeps{
 		TimeZone: tz,
+		OnAlertFired: func(ruleID string, severity monitoring.AlertLevel, metadata map[string]any) {
+			monitoring.RecordStage3AlertFired(d.metricsCollector, ruleID, severity)
+		},
 		ChannelLastDataAt: func() map[string]time.Time {
 			out := make(map[string]time.Time)
 			if d.gateway == nil {
@@ -174,6 +200,16 @@ func registerStage3AlertTasks(d stage3Deps) {
 				return flows[len(flows)-days:]
 			}
 			return flows
+		},
+		RecentEventFlowPredictionsActualCount: func(days int) int {
+			if d.predictionLedger == nil {
+				return 0
+			}
+			n := d.predictionLedger.Len()
+			if n > days {
+				return days
+			}
+			return n
 		},
 		LatestCapitalFlowPrediction: func() (float64, bool) {
 			if d.eventCalendar == nil {
