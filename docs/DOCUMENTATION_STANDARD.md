@@ -81,7 +81,7 @@ docs/
 - 是 → 進 archive
 - 否 → 刪除（git reflog 仍可恢復）
 
-**archive 內禁止新增子目錄**（`archive/superpowers/`、`archive/plans/` 都已撤銷）。所有歸檔檔案直接放 `archive/<slug>.md` 或 `archive/YYYY/<slug>.md`。
+**archive 內禁止新增子目錄**（`archive/superpowers/`、`archive/plans/` 都已撤銷）。所有歸檔檔案直接放 `archive/YYYY-MM-DD-<slug>.md`。
 
 ### `docs/` 生命週期
 
@@ -176,7 +176,7 @@ Wave 完成 → 文件分類 →
 ```
 
 **Rollback 路徑**：
-- 失敗 → 帶 status banner 移至 `docs/archive/wave-N-RESOLVED/`
+- 失敗 → 帶 status banner 移至 `docs/archive/YYYY-MM-DD-<wave>-resolved.md`
 - 觀察期結束 → 成功 promotion 升級到 `docs/`；rollback 如上
 
 **規則**：
@@ -264,7 +264,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 | 技術研究報告 | `docs/research/` | `<topic>.md` |
 | spike / PoC 報告 | `docs/spikes/` | `<topic>-spike.md` |
 | 操作 runbook / 驗證報告 | `docs/operations/` | `<topic>-runbook.md` / `<topic>-verification-report.md` |
-| 歸檔（教學價值） | `docs/archive/` | `<slug>.md` 或 `YYYY/<slug>.md` |
+| 歸檔（教學價值） | `docs/archive/` | `YYYY-MM-DD-<slug>.md` |
 | **長壽 brief（跨 session 規劃）** | `.omo/briefs/` | `<topic>-brief.md` 或 `<topic>.md` |
 | **短期 PR 待辦 / 修復計畫** | `.omo/plans/` | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
 | 驗證報告 | `.omo/evidence/` | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` |
