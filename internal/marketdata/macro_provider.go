@@ -56,6 +56,13 @@ type MacroDataSnapshot struct {
 	FailedChannels       []string       `json:"failed_channels,omitempty"`
 	StaleChannels        []string       `json:"stale_channels,omitempty"`
 	RecordedAt           int64          `json:"recorded_at"`
+
+	// VIXBaseline is the 252-day rolling VIX median used by
+	// janus.Engine.synthesizeCompositeScore as the panic threshold.
+	// Zero means "use fixed 20 fallback" (legacy behavior).
+	// Per marketdata/AGENTS.md, Yahoo forbids range:"1y" so this must be
+	// populated by a separate historical-data source, not yahoo_macro_provider.
+	VIXBaseline float64 `json:"vix_baseline,omitempty"`
 }
 
 // MarshalJSON omits MacroDataPoint fields that have no symbol, preventing

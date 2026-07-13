@@ -1974,6 +1974,7 @@ export interface MacroDataSnapshot {
   failed_channels?: string[];
   stale_channels?: string[];
   recorded_at: number;
+  vix_baseline?: number;
 }
 
 export interface MacroIndicatorHealth {

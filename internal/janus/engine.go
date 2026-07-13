@@ -167,9 +167,13 @@ func (e *Engine) realRegimeScoreLocked() (float64, bool) {
 //   - Range asymmetry (-95 to +30) is intentional: downside risk dominates
 //     Taiwan equity regime in historical drawdowns (Chiao et al. 2006).
 func synthesizeCompositeScore(snap marketdata.MacroDataSnapshot) float64 {
+	vixBaseline := 20.0
+	if snap.VIXBaseline > 0 {
+		vixBaseline = snap.VIXBaseline
+	}
 	score := math.Tanh(snap.ForeignInvestorNet.Value/5) * 30
-	if snap.VIX.Value > 20 {
-		score -= (snap.VIX.Value - 20) * 1.5
+	if snap.VIX.Value > vixBaseline {
+		score -= (snap.VIX.Value - vixBaseline) * 1.5
 	}
 	return score
 }

@@ -81,6 +81,28 @@ func TestSynthesizeCompositeScore_VIXAtBaselineNoPenalty(t *testing.T) {
 	}
 }
 
+func TestSynthesizeCompositeScore_VIXBaseline_UsesCustomThreshold(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 0},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		VIXBaseline:        15,
+	}
+	if got, want := synthesizeCompositeScore(snap), -7.5; absDiff(got, want) > 0.1 {
+		t.Errorf("VIXBaseline=15: got %v, want ~%v", got, want)
+	}
+
+	snap.VIXBaseline = 25
+	if got, want := synthesizeCompositeScore(snap), 0.0; absDiff(got, want) > 0.1 {
+		t.Errorf("VIXBaseline=25 (above VIX): got %v, want ~%v", got, want)
+	}
+
+	snap.VIXBaseline = 0
+	snap.VIX.Value = 20
+	if got, want := synthesizeCompositeScore(snap), 0.0; absDiff(got, want) > 0.1 {
+		t.Errorf("VIXBaseline=0 fallback: got %v, want ~%v", got, want)
+	}
+}
+
 func TestEngine_UpdateFromMacro_StoresCompositeScore(t *testing.T) {
 	e := NewEngine()
 	snap := marketdata.MacroDataSnapshot{
