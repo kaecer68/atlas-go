@@ -59,10 +59,11 @@ type operationsDeps struct {
 	repo            *repository.DualWriteRepository
 	collector       *monitoring.MetricsCollector
 	// eventCalendar 服務 eventdriven.RegisterRoutes(/api/events/*)。
-	eventCalendar *industry.EventCalendar
-	capitalFlow   *capitalflow.Service
-	janusEngine   *janus.Engine
-	prismMgr      *prism.PRISMManager
+	eventCalendar     *industry.EventCalendar
+	capitalFlow       *capitalflow.Service
+	janusEngine       *janus.Engine
+	prismMgr          *prism.PRISMManager
+	vixBaselineTracker *marketdata.VIXBaselineTracker
 }
 
 // registerOperationsTasks wires the operational probes / data ingest /
@@ -247,6 +248,13 @@ func registerOperationsTasks(d operationsDeps) {
 				if err != nil {
 					logging.Warn("main", "macro_ingest_failed", "err", err)
 					return err
+				}
+				// VIXBaseline: 252-day rolling median from history tracker.
+				// Stored separately from the macro snapshot and injected here so
+				// JANUS gets a meaningful panic threshold (legacy fallback: 20).
+				if d.vixBaselineTracker != nil {
+					d.vixBaselineTracker.Update(snap.VIX.Value)
+					snap.VIXBaseline = d.vixBaselineTracker.Value()
 				}
 				if d.janusEngine != nil {
 					d.janusEngine.UpdateFromMacro(snap)
