@@ -53,7 +53,7 @@ import (
 )
 
 // RunOptions groups CLI inputs for a single backtest run. Tests build
-// synthesised RunOptions and invoke Run directly.
+// synthesized RunOptions and invoke Run directly.
 type RunOptions struct {
 	StagingDir string
 	DBPath     string
@@ -571,5 +571,5 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintf(w, "usage: backtest-event-flow -staging DIR [-since YYYY-MM-DD] [-until YYYY-MM-DD] -db PATH\n")
+	_, _ = fmt.Fprintf(w, "usage: backtest-event-flow -staging DIR [-since YYYY-MM-DD] [-until YYYY-MM-DD] -db PATH\n")
 }
