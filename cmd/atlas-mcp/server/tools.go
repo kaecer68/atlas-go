@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -161,8 +162,12 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 				Regime: sess.Regime,
 			}
 		}
-		// Formulas must stay in sync with janus.Engine.synthesizeCompositeScore.
-		if score, ok := fetchRegimeCompositeScore(ctx, s); ok {
+		// Formula must stay in sync with janus.Engine.synthesizeCompositeScore.
+		score, ok := fetchRegimeRealScore(ctx, s)
+		if !ok {
+			score, ok = fetchRegimeCompositeScore(ctx, s)
+		}
+		if ok {
 			for i := range out.Regimes {
 				s := score
 				out.Regimes[i].Score = &s
@@ -173,6 +178,21 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 		return nil, RegimeGetHistoryOutput{}, err
 	}
 	return nil, out, nil
+}
+
+// fetchRegimeRealScore queries the new /api/janus/regime-score endpoint
+// (added in PR #1113) for the real engine score. When PRISM training has
+// populated engine.lastScores this returns the real Sharpe average; when
+// not, it returns the macro-synthesized fallback with is_synthetic=true.
+func fetchRegimeRealScore(ctx context.Context, s *server) (int, bool) {
+	var raw struct {
+		Score       float64 `json:"score"`
+		IsSynthetic bool    `json:"is_synthetic"`
+	}
+	if err := s.cli.Get(ctx, "/api/janus/regime-score", nil, &raw); err != nil {
+		return 0, false
+	}
+	return int(raw.Score), true
 }
 
 func fetchRegimeCompositeScore(ctx context.Context, s *server) (int, bool) {
@@ -187,14 +207,12 @@ func fetchRegimeCompositeScore(ctx context.Context, s *server) (int, bool) {
 	if err := s.cli.Get(ctx, "/api/macro/snapshot/latest", nil, &snap); err != nil {
 		return 0, false
 	}
-	score := 0.0
-	if snap.ForeignInvestorNet.Value > 0 {
-		score += 30
-	} else if snap.ForeignInvestorNet.Value < 0 {
-		score -= 30
-	}
+	// Formula mirrors janus.Engine.synthesizeCompositeScore (PR #1110 + #1111):
+	//   score = tanh(foreignFlow/5) * 30 - max(0, VIX-20) * 1.5
+	// foreignFlow is in NTD billions (TWSE daily reports convention).
+	score := math.Tanh(snap.ForeignInvestorNet.Value/5) * 30
 	if snap.VIX.Value > 20 {
-		score -= (snap.VIX.Value - 20) * 0.5
+		score -= (snap.VIX.Value - 20) * 1.5
 	}
 	return int(score), true
 }
