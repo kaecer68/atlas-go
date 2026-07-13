@@ -5,25 +5,33 @@ package ledger
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
 
 // OpenSQLiteDB opens or creates a SQLite database at the given path,
-// enables WAL mode, and enforces foreign keys.
+// enables WAL mode, enforces foreign keys, and sets busy_timeout so
+// concurrent writers don't deadlock on the default immediate-busy
+// behaviour. busy_timeout is set via the connection string so it
+// applies to every connection the pool acquires, not just the first.
 func OpenSQLiteDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	dsn := path
+	if strings.Contains(dsn, "?") {
+		dsn = dsn + "&_pragma=busy_timeout(5000)"
+	} else {
+		dsn = dsn + "?_pragma=busy_timeout(5000)"
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}
 
-	// Enable WAL mode for better concurrency.
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("enable wal mode: %w", err)
 	}
 
-	// Enable foreign key constraints.
 	if _, err := db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("enable foreign keys: %w", err)
@@ -145,6 +153,50 @@ func InitSchema(db *sql.DB) error {
 		created_at TEXT NOT NULL
 	);
 
+	-- Stage 4 PR#2 — historical backfill tables. Each row carries is_synthetic
+	-- (always 1 for these tables because they are populated from the
+	-- Stage 4 CLI's staging JSONLs, NOT from live runtime emitters).
+	CREATE TABLE IF NOT EXISTS regime_history (
+		date TEXT PRIMARY KEY,
+		regime TEXT NOT NULL,
+		source_session_id TEXT,
+		recorded_at TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS stress_index_history (
+		date TEXT PRIMARY KEY,
+		score REAL NOT NULL,
+		regime TEXT,
+		components_json TEXT,
+		source TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS event_calendar_history (
+		date TEXT NOT NULL,
+		event_id TEXT NOT NULL,
+		active_theme TEXT,
+		source TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL,
+		PRIMARY KEY (date, event_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS prediction_backtest (
+		date TEXT PRIMARY KEY,
+		predicted_direction TEXT,
+		predicted_confidence REAL,
+		actual_direction TEXT,
+		actual_capital_flow_change REAL,
+		hit INTEGER,
+		model_version TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_outcomes_session_id ON outcomes(session_id);
 	CREATE INDEX IF NOT EXISTS idx_outcomes_symbol ON outcomes(symbol);
 	CREATE INDEX IF NOT EXISTS idx_screening_rejects_session_id ON screening_rejects(session_id);
@@ -156,6 +208,10 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_prompt_experiment_results_experiment_id ON prompt_experiment_results(experiment_id);
 	CREATE INDEX IF NOT EXISTS idx_window_summaries_window_id ON window_summaries(window_id);
 	CREATE INDEX IF NOT EXISTS idx_mutation_briefs_window_id ON mutation_briefs(window_id);
+	CREATE INDEX IF NOT EXISTS idx_regime_history_captured_at ON regime_history(captured_at);
+	CREATE INDEX IF NOT EXISTS idx_stress_index_history_captured_at ON stress_index_history(captured_at);
+	CREATE INDEX IF NOT EXISTS idx_event_calendar_history_date ON event_calendar_history(date);
+	CREATE INDEX IF NOT EXISTS idx_prediction_backtest_captured_at ON prediction_backtest(captured_at);
 	`
 
 	if _, err := db.Exec(schema); err != nil {

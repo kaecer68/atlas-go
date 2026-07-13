@@ -1,0 +1,405 @@
+// File: historical_store_test.go
+// Package: internal/ledger
+//
+// Tests for SQLiteHistoricalStore. Each test uses a fresh t.TempDir()
+// and initialises a fresh schema; tables are dropped automatically when
+// the test exits via Go's testing.Cleanup chain.
+package ledger
+
+import (
+	"context"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// mustOpenStore returns a fresh SQLiteHistoricalStore backed by a temp
+// DB whose schema is initialised in-line. The returned cleanup func
+// closes the underlying DB.
+func mustOpenStore(t *testing.T) (HistoricalStore, *SQLiteHistoricalStore, string, func()) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+	db, err := OpenSQLiteDB(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := InitSchema(db); err != nil {
+		_ = db.Close()
+		t.Fatalf("init: %v", err)
+	}
+	store := NewSQLiteHistoricalStore(db)
+	cleanup := func() { _ = db.Close() }
+	has, err := store.HasTables(context.Background())
+	if err != nil {
+		cleanup()
+		t.Fatalf("has tables: %v", err)
+	}
+	for _, k := range []string{"regime_history", "stress_index_history", "event_calendar_history", "prediction_backtest"} {
+		if !has[k] {
+			cleanup()
+			t.Fatalf("missing table %s after InitSchema; tables=%v", k, has)
+		}
+	}
+	return store, store, path, cleanup
+}
+
+// ------------------------------------------------------------------
+// Regime
+// ------------------------------------------------------------------
+
+func TestSQLiteHistoricalStore_UpsertRegime_Idempotent(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+
+	row := RegimeRow{
+		Date:            "2026-04-15",
+		Regime:          "RISK_ON",
+		SourceSessionID: "session-20260415-daily",
+		RecordedAt:      time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC),
+		CapturedAt:      time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		IsSynthetic:     1,
+	}
+	for i := 0; i < 3; i++ {
+		if err := store.UpsertRegime(context.Background(), row); err != nil {
+			t.Fatalf("upsert #%d: %v", i, err)
+		}
+	}
+	got, ok, err := store.LoadRegimeByDate(context.Background(), "2026-04-15")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if got.Regime != "RISK_ON" {
+		t.Errorf("regime = %q, want RISK_ON", got.Regime)
+	}
+	if got.SourceSessionID != "session-20260415-daily" {
+		t.Errorf("source SID = %q, want session-20260415-daily", got.SourceSessionID)
+	}
+	if got.IsSynthetic != 1 {
+		t.Errorf("IsSynthetic = %d, want 1", got.IsSynthetic)
+	}
+}
+
+func TestSQLiteHistoricalStore_UpsertRegime_RequiresDate(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	if err := store.UpsertRegime(context.Background(), RegimeRow{}); err == nil {
+		t.Fatal("expected error for empty date")
+	}
+}
+
+func TestSQLiteHistoricalStore_LoadRegimeHistory_OrderedDesc(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	dates := []string{"2026-04-15", "2026-04-16", "2026-04-17", "2026-04-18"}
+	for _, d := range dates {
+		if err := store.UpsertRegime(context.Background(), RegimeRow{
+			Date:        d,
+			Regime:      "NEUTRAL",
+			CapturedAt:  time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+			IsSynthetic: 1,
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", d, err)
+		}
+	}
+	got, err := store.LoadRegimeHistory(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("len = %d, want 4", len(got))
+	}
+	// Order is DESC by date.
+	wantOrder := []string{"2026-04-18", "2026-04-17", "2026-04-16", "2026-04-15"}
+	for i, want := range wantOrder {
+		if got[i].Date != want {
+			t.Errorf("[%d].Date = %q, want %q", i, got[i].Date, want)
+		}
+	}
+}
+
+func TestSQLiteHistoricalStore_LoadRegimeHistory_Limit(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	for i := 1; i <= 5; i++ {
+		date := time.Date(2026, 4, i, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		if err := store.UpsertRegime(context.Background(), RegimeRow{
+			Date: date, Regime: "RISK_ON", IsSynthetic: 1,
+			CapturedAt: time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", date, err)
+		}
+	}
+	got, err := store.LoadRegimeHistory(context.Background(), 3)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 3 {
+		t.Errorf("limit=3 → got %d, want 3", len(got))
+	}
+}
+
+// ------------------------------------------------------------------
+// Stress
+// ------------------------------------------------------------------
+
+func TestSQLiteHistoricalStore_UpsertStress_RoundTripComponents(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+
+	row := StressRow{
+		Date:   "2026-04-15",
+		Score:  0.42,
+		Regime: "medium",
+		Components: map[string]interface{}{
+			"us":      0.5,
+			"asia":    0.3,
+			"isString": "ignored-or-kept",
+		},
+		Source:      "macro-file",
+		CapturedAt:  time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		IsSynthetic: 1,
+	}
+	if err := store.UpsertStress(context.Background(), row); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	got, ok, err := store.LoadStressByDate(context.Background(), "2026-04-15")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if got.Regime != "medium" || got.Score != 0.42 || got.Source != "macro-file" {
+		t.Errorf("round-trip mismatch: %+v", got)
+	}
+	if got.Components["us"] != 0.5 {
+		t.Errorf("components[us] = %v, want 0.5", got.Components["us"])
+	}
+}
+
+func TestSQLiteHistoricalStore_LoadStressHistory_Limit(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	for i := 1; i <= 4; i++ {
+		date := time.Date(2026, 4, i, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		if err := store.UpsertStress(context.Background(), StressRow{
+			Date: date, Score: float64(i) / 10.0, IsSynthetic: 1,
+			CapturedAt: time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", date, err)
+		}
+	}
+	got, err := store.LoadStressHistory(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("limit=2 → got %d, want 2", len(got))
+	}
+}
+
+// ------------------------------------------------------------------
+// Event calendar
+// ------------------------------------------------------------------
+
+func TestSQLiteHistoricalStore_EventCalendar_CompositePK(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	capt := time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC)
+	for i, eid := range []string{"evt-tech-peak-A", "evt-dividend-B", "evt-tech-peak-A"} {
+		theme := "tech-peak"
+		if eid == "evt-dividend-B" {
+			theme = "dividend"
+		}
+		if err := store.UpsertEventCalendar(context.Background(), EventCalendarRow{
+			Date: "2026-04-15", EventID: eid, ActiveTheme: theme,
+			Source: "session-derive", CapturedAt: capt, IsSynthetic: 1,
+		}); err != nil {
+			t.Fatalf("upsert #%d: %v", i, err)
+		}
+	}
+	got, err := store.LoadEventCalendarByDate(context.Background(), "2026-04-15")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	// Composite PK ensures evt-tech-peak-A is deduped.
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2 (PK dedup)", len(got))
+	}
+	ids := map[string]bool{}
+	for _, r := range got {
+		ids[r.EventID] = true
+	}
+	if !ids["evt-tech-peak-A"] || !ids["evt-dividend-B"] {
+		t.Errorf("ids = %v, want both", ids)
+	}
+}
+
+func TestSQLiteHistoricalStore_EventCalendar_RangeQuery(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	capt := time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC)
+	for _, d := range []string{"2026-04-15", "2026-04-16", "2026-04-17"} {
+		if err := store.UpsertEventCalendar(context.Background(), EventCalendarRow{
+			Date: d, EventID: "evt-x", ActiveTheme: "x",
+			Source: "session-derive", CapturedAt: capt, IsSynthetic: 1,
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", d, err)
+		}
+	}
+	got, err := store.LoadEventCalendarRange(context.Background(), "2026-04-15", "2026-04-16", 100)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("len = %d, want 2 (range)", len(got))
+	}
+	for _, r := range got {
+		if r.Date < "2026-04-15" || r.Date > "2026-04-16" {
+			t.Errorf("date %s outside range", r.Date)
+		}
+	}
+}
+
+// ------------------------------------------------------------------
+// Prediction backtest
+// ------------------------------------------------------------------
+
+func TestSQLiteHistoricalStore_PredictionBacktest_RoundTrip(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	capt := time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC)
+	if err := store.UpsertPredictionBacktest(context.Background(), PredictionBacktestRow{
+		Date: "2026-04-15",
+		PredictedDirection: "inflow", PredictedConfidence: 0.78,
+		ActualDirection: "inflow", ActualCapitalFlowChan: 0.012,
+		Hit: true, ModelVersion: "v0.0.0.32",
+		CapturedAt: capt, IsSynthetic: 1,
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	got, err := store.LoadPredictionBacktestRange(context.Background(), "2026-04-15", "2026-04-16", 10)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	r := got[0]
+	if r.Date != "2026-04-15" || r.PredictedDirection != "inflow" || !r.Hit {
+		t.Errorf("unexpected row: %+v", r)
+	}
+	if r.PredictedConfidence != 0.78 {
+		t.Errorf("confidence = %f, want 0.78", r.PredictedConfidence)
+	}
+	if r.ModelVersion != "v0.0.0.32" {
+		t.Errorf("model = %q, want v0.0.0.32", r.ModelVersion)
+	}
+}
+
+// ------------------------------------------------------------------
+// Constraints / sanity
+// ------------------------------------------------------------------
+
+func TestSQLiteHistoricalStore_UpsertEventCalendar_RequiresBoth(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	cases := []EventCalendarRow{
+		{Date: "", EventID: "x"},
+		{Date: "2026-04-15", EventID: ""},
+	}
+	for i, c := range cases {
+		if err := store.UpsertEventCalendar(context.Background(), c); err == nil {
+			t.Errorf("case #%d: expected error for empty key", i)
+		}
+	}
+}
+
+func TestSQLiteHistoricalStore_LoadByDate_NotFound(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	_, ok, err := store.LoadRegimeByDate(context.Background(), "9999-01-01")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if ok {
+		t.Error("expected ok=false for missing date")
+	}
+}
+
+func TestSQLiteHistoricalStore_ConcurrentUpserts(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	capt := time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC)
+	const goroutines = 10
+	const perGoroutine = 5
+	doneCh := make(chan error, goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(grp int) {
+			for i := 0; i < perGoroutine; i++ {
+				date := time.Date(2026, 4, (grp%28)+1, 0, 0, 0, 0, time.UTC).
+					AddDate(0, 0, i).Format("2006-01-02")
+				err := store.UpsertRegime(context.Background(), RegimeRow{
+					Date: date, Regime: "RISK_ON", CapturedAt: capt, IsSynthetic: 1,
+				})
+				if err != nil {
+					doneCh <- err
+					return
+				}
+			}
+			doneCh <- nil
+		}(g)
+	}
+	for g := 0; g < goroutines; g++ {
+		if err := <-doneCh; err != nil {
+			t.Fatalf("goroutine err: %v", err)
+		}
+	}
+	// Some rows were duplicated across goroutines (same date),
+	// so we expect at most goroutines*perGoroutine distinct dates.
+	got, err := store.LoadRegimeHistory(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) == 0 {
+		t.Error("expected at least 1 row after concurrent inserts")
+	}
+	// All rows must carry IsSynthetic=1 — read path integrity.
+	for _, r := range got {
+		if r.IsSynthetic != 1 {
+			t.Errorf("row %s: IsSynthetic = %d, want 1", r.Date, r.IsSynthetic)
+		}
+	}
+}
+
+// ------------------------------------------------------------------
+// Smoke guard — keeps the package from being accidentally pruned by
+// static analysis. Cheap and tells us that nothing got renamed
+// unexpectedly.
+// ------------------------------------------------------------------
+
+func TestSchemaConstants_Recognised(t *testing.T) {
+	// hasTables reports all 4 keys — smoke check the contract.
+	store, raw, _, done := mustOpenStore(t)
+	defer done()
+	_ = store
+	has, err := raw.HasTables(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for k, v := range has {
+		if v {
+			got = append(got, k)
+		}
+	}
+	want := []string{"regime_history", "stress_index_history", "event_calendar_history", "prediction_backtest"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("HasTables = %v, want %v", got, want)
+	}
+}
