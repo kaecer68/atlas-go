@@ -153,8 +153,11 @@ func (e *Engine) realRegimeScoreLocked() (float64, bool) {
 
 // synthesizeCompositeScore maps macro signals to a ~[-95, +30] score:
 //
-//	tanh(foreignFlow / 5e9) * 30           — continuous Taiwan regime signal
+//	tanh(foreignFlow / 5) * 30            — continuous Taiwan regime signal
 //	-max(0, VIX - 20) * 1.5                — panic penalty above baseline 20
+//
+// foreignFlow is in NTD billions (TWSE daily reports convention):
+// ±5B NTD saturates at ±30, so a typical ±1B day yields ~7.
 //
 // Oracle review notes:
 //   - foreign flow as tanh preserves magnitude info that step function loses
@@ -164,7 +167,7 @@ func (e *Engine) realRegimeScoreLocked() (float64, bool) {
 //   - Range asymmetry (-95 to +30) is intentional: downside risk dominates
 //     Taiwan equity regime in historical drawdowns (Chiao et al. 2006).
 func synthesizeCompositeScore(snap marketdata.MacroDataSnapshot) float64 {
-	score := math.Tanh(snap.ForeignInvestorNet.Value/5e9) * 30
+	score := math.Tanh(snap.ForeignInvestorNet.Value/5) * 30
 	if snap.VIX.Value > 20 {
 		score -= (snap.VIX.Value - 20) * 1.5
 	}
