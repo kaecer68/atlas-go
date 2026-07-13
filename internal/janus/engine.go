@@ -131,24 +131,29 @@ func (e *Engine) GetCurrentRegimeScore() (float64, bool) {
 	return 0, false
 }
 
-// realRegimeScoreLocked returns average Sharpe across cohorts when at least one
-// cohort has non-zero Sharpe. EnsureAllRegimes seeds zero-Sharpe snapshots; we
-// must skip those to avoid returning a synthetic-feeling 0. Caller must hold
-// e.mu (read or write).
+// realRegimeScoreLocked returns Observations-weighted average Sharpe across
+// cohorts when at least one cohort has non-zero Sharpe. EnsureAllRegimes
+// seeds zero-Sharpe snapshots; we must skip those to avoid a synthetic-feeling
+// 0. Weighting by Observations gives more reliable cohorts (more samples)
+// proportionally more influence. Caller must hold e.mu (read or write).
 func (e *Engine) realRegimeScoreLocked() (float64, bool) {
 	perf := e.tracker.GetPerformance()
-	var sum float64
-	count := 0
+	var weightedSum, totalWeight float64
 	for _, p := range perf {
-		if p != nil && p.ShortWindow != nil && p.ShortWindow.SharpeRatio != 0 {
-			sum += p.ShortWindow.SharpeRatio
-			count++
+		if p == nil || p.ShortWindow == nil || p.ShortWindow.SharpeRatio == 0 {
+			continue
 		}
+		weight := float64(p.ShortWindow.Observations)
+		if weight == 0 {
+			weight = 1
+		}
+		weightedSum += p.ShortWindow.SharpeRatio * weight
+		totalWeight += weight
 	}
-	if count == 0 {
+	if totalWeight == 0 {
 		return 0, false
 	}
-	return sum / float64(count), true
+	return weightedSum / totalWeight, true
 }
 
 // synthesizeCompositeScore maps macro signals to a ~[-95, +30] score:
