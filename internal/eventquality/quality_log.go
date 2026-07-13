@@ -2,7 +2,10 @@ package eventquality
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -41,3 +44,26 @@ func (l *QualityLog) Record(result ValidationResult) error {
 // QualityLog with their own writers (e.g. multi-writer fan-out) use this
 // to wrap the target writer.
 func (l *QualityLog) Writer() io.Writer { return l.writer }
+
+// NewFileQualityLog returns a QualityLog that appends one JSON object per
+// line to path. The file and its parent directories are created if they
+// don't exist.
+func NewFileQualityLog(path string) (*QualityLog, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir for quality log %s: %w", path, err)
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open quality log %s: %w", path, err)
+	}
+	return NewQualityLog(f), nil
+}
+
+// Close releases the underlying writer if it implements io.Closer (e.g.
+// *os.File from NewFileQualityLog). Safe to call multiple times.
+func (q *QualityLog) Close() error {
+	if c, ok := q.writer.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
+}

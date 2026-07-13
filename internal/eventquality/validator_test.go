@@ -255,9 +255,9 @@ func TestValidator_ReportsFirstFailingRule(t *testing.T) {
 	v := NewValidator(DateRange{}, 0)
 	v.SetClock(fixedNow)
 	e := validRawEvent()
-	e.EventID = ""         // required fields
-	e.Source = ""          // source marking
-	e.Confidence = 5        // confidence
+	e.EventID = ""   // required fields
+	e.Source = ""    // source marking
+	e.Confidence = 5 // confidence
 	r := v.Validate(e)
 	if r.Accepted {
 		t.Fatal("expected rejected")
@@ -305,8 +305,8 @@ func TestQualityLog_ConcurrentSafe(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			_ = log.Record(ValidationResult{
-				EventID:  "ev",
-				Accepted: i%2 == 0,
+				EventID:   "ev",
+				Accepted:  i%2 == 0,
 				CheckedAt: fixedNow(),
 			})
 		}(i)
