@@ -516,8 +516,10 @@ func run(args []string, deps appDeps) error {
 		}
 		runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
 		var dashboard *monitoring.DashboardAPI
+		var macroProvider marketdata.MacroDataProvider
 		if gatewayFetcher != nil {
 			dashboard = monitoring.NewDashboardAPIWithGateway(cfg.WorkDir, cfg.LedgerDir, collector, gatewayFetcher)
+			macroProvider = monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
 		} else {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
@@ -665,7 +667,6 @@ func run(args []string, deps appDeps) error {
 		}
 
 		if gatewayFetcher != nil {
-			macroProvider := monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
 			capitalflow.RegisterRoutes(mux, macroProvider)
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
 			capitalflowSvc := capitalflow.NewService(macroProvider, 0)
@@ -880,6 +881,18 @@ func run(args []string, deps appDeps) error {
 				janusEngine:     janusEngine,
 				prismMgr:        prismMgr,
 			})
+
+			d3 := stage3Deps{
+				taskMgr:       taskMgr,
+				cfg:           cfg,
+				gateway:       gateway,
+				monitor:       monitor,
+				dashboard:     dashboard,
+				eventCalendar: eventCalendar,
+				macroProvider: macroProvider,
+			}
+			registerStage3Tasks(d3)
+			registerStage3AlertTasks(d3)
 
 			// Register auto_daily_simulation — runs daily simulation at market close.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

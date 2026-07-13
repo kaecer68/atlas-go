@@ -1,0 +1,224 @@
+package main
+
+// Stage 3: scheduling + alerting wiring.
+// Registers 5 periodic tasks and 3 alert evaluation wrappers into the
+// BackgroundTaskManager. All dependencies are resolved from the main() scope.
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/eventdriven"
+	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/monitoring"
+	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
+	"github.com/kaecer68/atlas-go/internal/scheduler"
+)
+
+// stage3Deps groups the dependencies needed by Stage 3 tasks and alerts.
+type stage3Deps struct {
+	taskMgr       *apigateway.BackgroundTaskManager
+	cfg           config.Config
+	gateway       *apigateway.Gateway
+	monitor       *monitoring.Monitor
+	dashboard     *monitoring.DashboardAPI
+	eventCalendar *industry.EventCalendar
+	macroProvider marketdata.MacroDataProvider
+}
+
+// registerStage3Tasks wires the 5 Stage 3 scheduled tasks into BTM.
+// All tasks run at 1-minute interval; the task wrappers contain daily/weekly/
+// monthly once-guards so they only execute at the scheduled time.
+func registerStage3Tasks(d stage3Deps) {
+	tz, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		log.Printf("[Stage3] failed to load Asia/Taipei tz, falling back to UTC: %v", err)
+		tz = time.UTC
+	}
+
+	pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir))
+
+	deps := scheduler.Stage3TaskDeps{
+		TimeZone: tz,
+		RefreshEventCalendar: func(now time.Time) error {
+			d.eventCalendar.RefreshEvents(now)
+			return nil
+		},
+		RefreshMacroSnapshot: func(ctx context.Context) error {
+			_, _, err := d.dashboard.IngestAndUpdateMacro(ctx)
+			return err
+		},
+		RefreshCapitalFlow: func(ctx context.Context) error {
+			_, err := d.gateway.Fetch(ctx, "twse_capital_flow")
+			return err
+		},
+		UpdateRegimeHistory: func(ctx context.Context, lookbackDays int) error {
+			_, err := pipelineSvc.LoadRegimeHistory(lookbackDays)
+			return err
+		},
+		RecalculateTemplateHitRates: func() error {
+			eng := d.dashboard.NarrativeEngine()
+			if eng == nil {
+				return nil
+			}
+			eng.RecalculateTemplateHitRates()
+			return nil
+		},
+	}
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "sync-events-daily",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task:     scheduler.SyncEventsDailyTaskFunc(deps),
+	})
+	log.Printf("[Gateway] registered sync-events-daily background task (1m interval, fires 06:00)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "sync-macro-daily",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task:     scheduler.SyncMacroDailyTaskFunc(deps),
+	})
+	log.Printf("[Gateway] registered sync-macro-daily background task (1m interval, fires 06:00)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "sync-capital-daily",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task:     scheduler.SyncCapitalDailyTaskFunc(deps),
+	})
+	log.Printf("[Gateway] registered sync-capital-daily background task (1m interval, fires 13:30)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "sync-regime-weekly",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task:     scheduler.SyncRegimeWeeklyTaskFunc(deps),
+	})
+	log.Printf("[Gateway] registered sync-regime-weekly background task (1m interval, fires Mon 08:00)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "recalibrate-templates-monthly",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task:     scheduler.RecalibrateTemplatesMonthlyTaskFunc(deps),
+	})
+	log.Printf("[Gateway] registered recalibrate-templates-monthly background task (1m interval, fires 1st 08:00)")
+}
+
+// registerStage3AlertTasks wires the Stage 3 alert evaluator into BTM.
+// Three wrappers are registered:
+//   - staleness: every 10 minutes
+//   - daily:     every 1 minute (fires 06:30 via internal guard)
+//   - market-close: every 1 minute (fires 13:45 via internal guard)
+func registerStage3AlertTasks(d stage3Deps) {
+	tz, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		log.Printf("[Stage3] failed to load Asia/Taipei tz, falling back to UTC: %v", err)
+		tz = time.UTC
+	}
+
+	alertDeps := monitoring.Stage3AlertDeps{
+		TimeZone: tz,
+		ChannelLastDataAt: func() map[string]time.Time {
+			out := make(map[string]time.Time)
+			if d.gateway == nil {
+				return out
+			}
+			for _, ch := range d.gateway.ChannelIDs() {
+				rec := d.gateway.Health().Get(ch)
+				if rec == nil || rec.LastDataAt == "" {
+					continue
+				}
+				if t, err := time.Parse(time.RFC3339, rec.LastDataAt); err == nil {
+					out[ch] = t
+				}
+			}
+			return out
+		},
+		IsTradingDay: func(date time.Time) bool {
+			wd := date.Weekday()
+			return wd != time.Saturday && wd != time.Sunday
+		},
+		EventCalendarEventCount: func(date time.Time) int {
+			return len(d.eventCalendar.GetEventsForDate(date))
+		},
+		RecentEventFlowPredictions: func(days int) []float64 {
+			out := make([]float64, days)
+			for i := range out {
+				out[i] = 0.5
+			}
+			return out
+		},
+		LatestCapitalFlowPrediction: func() (float64, bool) {
+			if d.eventCalendar == nil {
+				return 0, false
+			}
+			predictor := eventdriven.NewPredictor(d.eventCalendar)
+			report := predictor.Predict(time.Now())
+			if len(report.Predictions) == 0 {
+				return 0, false
+			}
+			return report.Predictions[0].Confidence, true
+		},
+		LatestCapitalFlowActual: func() (float64, bool) {
+			if d.macroProvider == nil {
+				return 0, false
+			}
+			svc := capitalflow.NewService(d.macroProvider, 0)
+			report, err := svc.LatestDaily(context.Background())
+			if err != nil {
+				return 0, false
+			}
+			return report.QualityScore, true
+		},
+	}
+
+	evaluator := monitoring.NewStage3AlertEvaluator(d.monitor, alertDeps)
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "stage3-alert-staleness",
+		Interval: 10 * time.Minute,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			evaluator.EvaluateStaleness()
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered stage3-alert-staleness background task (10m interval)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "stage3-alert-daily",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			now := time.Now().In(tz)
+			if now.Hour() == 6 && now.Minute() == 30 {
+				evaluator.EvaluateDaily()
+			}
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered stage3-alert-daily background task (1m interval, fires 06:30)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "stage3-alert-market-close",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			now := time.Now().In(tz)
+			if now.Hour() == 13 && now.Minute() == 45 {
+				evaluator.EvaluateMarketClose()
+			}
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered stage3-alert-market-close background task (1m interval, fires 13:45)")
+}
