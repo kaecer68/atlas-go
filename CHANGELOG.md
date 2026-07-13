@@ -1,5 +1,56 @@
 # Changelog
 
+<<<<<<< HEAD
+=======
+## [0.0.0.34] - 2026-07-14
+
+### Added
+- **Stage 5 — Template Trigger Detector 抽象層 + 鏈路驗證** (5 sub-PRs):
+  - **PR#1**: `internal/narrative/detector.go` 新增 `Detector` interface + `DetectorRegistry` + `DetectionResult` 統一輸出 + `DetectorInput`。19 unit tests，coverage 100%。
+  - **PR#2**: `internal/narrative/detector_impls.go` 24 個 Detector impl（17 KB-pipeline + 6 seasonal + 1 snapshot-pipeline）+ `NewDefaultDetectorRegistry()` constructor。23 unit tests。
+  - **PR#3**: `internal/eventdriven/type_theme_mapping.go` 新增 `EventTypeToTriggerThemes(eventType, registry)` 動態對應。8 unit tests，無 regression（legacy `eventTypeToThemes` 不動）。
+  - **PR#4 Stage A**: `internal/ledger/detector_scan_store.go` SQLite-only `DetectorScanStore` (AppendScan/LoadRecentScans) + `internal/scheduler/template_detector_scan.go` 每 1h 排程（遵守 apigateway/CONSTITUTION.md Art.4）。9 store + 6 scheduler tests。
+  - **PR#5**: `internal/narrative/detector_e2e_test.go` 4 個端到端 chain 驗證（snapshot-pipeline / KB-pipeline / 24 themes regression guard / disable propagation）+ `internal/narrative/AGENTS.md`（6 條模組陷阱）+ `docs/specs/eventdriven.md` 擴充（30 行 → 200+ 行）。
+
+### Compliance
+- 全程遵守 atlas-pre-change-protocol 8 步 + 紅線（既有 detect 函式 50+ 個不動 / template trigger_theme 字串不變 / 對外 API 介面相容）。
+- 4 個 Stage 5 決策已在 `IMPLEMENTATION_PLAN_STAGE_5.md` §十一記錄（含 Status + Deferred）。
+- Real-only investigation：3 個並行 explore agents 完整盤查 eventdriven / narrative / MCP tool chain 才開工。
+
+### Known limitations / Deferred
+- 2 個 MCP tools (`template_detector_status`, `detector_registry_list`) 與其 HTTP endpoints deferred — 需擴展 cmd/atlas/narrativeAdapter、wire registry/scanStore、新增 cmd/atlas-mcp tool、tool count hard gate 106-108→108-110、`docs/REFERENCE/tool-catalog.md` 更新、`go generate ./cmd/atlas-mcp`。
+- `tariff_shock` 仍走 snapshot-pipeline（detectTariffShockEventFromSnapshot）；KB pipeline 對應函式待 Stage 6+ 新增（可讀 TradeNews 或 GeopoliticalGPR proxy）。
+- `china_slowdown` detector 暫用 CopperChangePct 當 proxy；Stage 6+ 改用真 PMI 來源。
+
+
+## [0.0.0.33] - 2026-07-14
+
+### Added
+- **Stage 4 歷史資料補齊** (PR #1138 + recovery PR, 4 sub-PRs):
+  - `cmd/atlas-stage4-backfill`：從 `data/state/sessions/*/summary.json` + `recommendation_outcomes.jsonl` + `data/state/macro/*.json` 產出 4 個 staging JSONL (regime_history_90d / event_calendar_90d / stress_index_history_90d / prediction_actual_90d)。9 個 unit tests，coverage 75.4%。
+  - `internal/ledger/historical_store.go` + `cmd/atlas-stage4-loader`：4 個新 SQLite tables (regime_history / stress_index_history / event_calendar_history / prediction_backtest) + 4 個 indexes；`HistoricalStore` interface (13 methods)；loader CLI 含 `-init-schema` / `-since` / `-until` / `-dry-run`。20 個 unit tests (含 1 flake fix)。
+  - `cmd/backtest-event-flow`：把 `internal/eventdriven.Predictor` 重新跑在 90 天歷史快照，把 (predicted, actual, hit) 對寫進 prediction_backtest。12 個 unit tests + 順手修 PR#2 留下的 SQL BETWEEN 字串 bug。Coverage 78.6%。
+  - `internal/narrative.RecalculateAllTemplateHitRates(globalHitRate)`：Stage 4 PR#4 擴充，把所有 24 個 templates 納入重算 (原本只觸及 active-model 路徑)。4 個 unit tests + golden snapshot 更新。Coverage 74.1%。
+
+### Fixed
+- `cmd/atlas-stage4-loader/main.go::upsertPredictions` 改為 no-op 防止污染 `prediction_backtest` (PR#1 的 `prediction_actual_90d.jsonl` schema 不符 `prediction_backtest` 的 pair-schema，避免 54 筆 NULL/zero 污染 row)。
+- `internal/ledger/historical_store.go::LoadPredictionBacktestRange` SQL 改寫：`BETWEEN ? AND ?` 對空字串會被解讀為「BETWEEN '' AND ''」只匹配空字串。改為 `WHERE (? = '' OR date >= ?) AND (? = '' OR date <= ?)`，恢復「空字串 = 無界」語意。
+- `internal/ledger/historical_store_test.go::TestSchemaConstants_Recognised` flake-proof：用 `sort.Strings` + 逐元素比較代替 `strings.Join` 比對 map iteration 隨機順序。
+- `cmd/atlas-stage4-loader` PR#2 留下的 junk SQLite file (`?_pragma=busy_timeout(5000)`) amend commit 移除。
+
+### Compliance
+- 全程遵守紅線：audit log schema 不動 / 既偵測器不關 / 線下 CLI 為主 / 標 `is_synthetic=1` / 91 個既有 MCP tool 介面沒變。
+- 4 個決策檔：`~/workspace/atlas-notes/decisions/2026-07-14-stage-4.{1..4}-*.md`。
+
+### Known limitations
+- `prediction_actual_90d.jsonl` 中 2026-05-05 / 05-06 兩天 aggregate 完全相同 (待 PR#1 區域 follow-up)。
+- v1 hit_rate = 16.18% < random 33% (per-day event 沒注入)。
+- 3 個 MCP read tools (history_regime / history_stress / history_event_calendar) deferred 到 Stage 5。
+
+### Process note
+- 原 `feat/stage-4-historical-backfill` 分支在自動 rebase 中遺失 PR#3 + PR#4 commits。已從 orphan object store 以 `git cherry-pick 58c1c4bc` + `git cherry-pick fed4680b` 完整復原到新分支 `feat/stage-4-recovery` (`50d793ff` PR#3 + `329c77a5` PR#4 on top of `ddd75b0c`)。
+
+>>>>>>> 0521ce4f (feat(stage5): PR#5 e2e chain test + spec + AGENTS + CHANGELOG)
 ## [0.0.0.32] - 2026-07-10
 
 ### Fixed

@@ -472,3 +472,62 @@ PR#5 (P4)  端到端 unit test + spec 文件更新
 *負責人：kaecer + opencode Sisyphus*
 *基礎 commit：61248639（fix(backtest): resolve 2 golangci-lint issues on PR #1140）*
 *真實盤查來源：3 個 explore agents（eventdriven / narrative templates / MCP tool chain）*
+
+---
+
+## 十一、執行狀態（2026-07-14 更新）
+
+### 已 ship commits
+
+| Commit | PR# | 內容 |
+|---|---|---|
+| `9ec34b10` | PR#1 | feat(narrative): template trigger Detector interface + Registry — `detector.go` + `detector_test.go` + field_types.ts regenerated |
+| `41461db6` | PR#2 | feat(narrative): 24 trigger theme Detector impls + `NewDefaultDetectorRegistry()` — `detector_impls.go` + 23 tests |
+| `f7d9552f` | PR#3 | feat(eventdriven): `EventTypeToTriggerThemes` 動態對應 — 8 tests，無 regression |
+| `17f9b6d0` | PR#4A | feat(stage5): detector_scan_log store + template_detector_scan scheduler — 9 store + 6 scheduler tests |
+| （待 commit） | PR#5 | detector_e2e_test.go（4 e2e tests）+ internal/narrative/AGENTS.md + docs/specs/eventdriven.md 擴充 |
+
+### 已驗證的 e2e 鏈路
+
+```
+DetectorRegistry.RunAll(ctx, DetectorInput{MarketNarrativeData})
+  → 17 KB-pipeline detectors fire (US_rates_up / JPY_carry_unwind / oil_price_shock / etc.)
+DetectorRegistry.RunAll(ctx, DetectorInput{MacroDataSnapshot})
+  → 1 snapshot-pipeline detector fires (tariff_shock)
+DetectorRegistry.RunAll
+  → []DetectionResult → ledger.SQLiteDetectorScanStore.AppendScan → SQLite detector_scan_log
+→ LoadRecentScans → JSON via MCP tool (deferred)
+```
+
+### Deferred 到 follow-up PR（原 Stage 5 PR#4 Stage B）
+
+| 項目 | 範圍 | 阻擋原因 |
+|---|---|---|
+| `cmd/atlas/...` 2 個 HTTP endpoint | `/api/detector/scan/status` + `/api/detector/registry/list` | 需要擴展 `narrativeAdapter`、wire registry/scanStore 到 main.go、wiring 侵入性大 |
+| `cmd/atlas-mcp/server/tools_template_detector.go` | 2 個 MCP tool + handler | 需先有 HTTP endpoint |
+| `server.go:174` tool count hard gate | 106-108 → 108-110 | 同上 |
+| `tools_transport_sse_test.go` tool count | 106-108 → 108-110 | 同上 |
+| `docs/REFERENCE/tool-catalog.md` | 新增 2 個 tool 條目 | 同上 |
+| `go generate ./cmd/atlas-mcp` | 重產 auto-desc.gen.json | 同上 |
+| `cmd/atlas/main.go` 註冊 `RegisterTemplateDetectorScanTasks` | wiring | 同上 |
+
+預期 follow-up PR scope：6 檔案 + 1 command，30 分鐘可完成。
+
+### 驗證指令
+
+```bash
+# PR#1+PR#2 既有測試
+go test -count=1 ./internal/narrative/
+
+# PR#3 既有測試
+go test -count=1 ./internal/eventdriven/
+
+# PR#4 Stage A 既有測試
+go test -count=1 ./internal/ledger/ ./internal/scheduler/
+
+# PR#5 e2e chain test
+go test -count=1 -v -run TestE2E ./internal/narrative/
+
+# 全套（無 MCP tool、無 cmd/atlas wiring）
+go test -count=1 ./internal/narrative/... ./internal/eventdriven/... ./internal/ledger/... ./internal/scheduler/...
+```
