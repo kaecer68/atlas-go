@@ -182,6 +182,16 @@ func registerStage3AlertTasks(d stage3Deps) {
 			}
 			return flows
 		},
+		RecentEventFlowPredictionsActualCount: func(days int) int {
+			if d.predictionLedger == nil {
+				return 0
+			}
+			n := d.predictionLedger.Len()
+			if n > days {
+				return days
+			}
+			return n
+		},
 		LatestCapitalFlowPrediction: func() (float64, bool) {
 			if d.eventCalendar == nil {
 				return 0, false

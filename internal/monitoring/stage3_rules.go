@@ -29,6 +29,11 @@ type Stage3AlertDeps struct {
 	// confidence values. A value of 0.5 means neutral / no signal.
 	RecentEventFlowPredictions func(days int) []float64
 
+	// RecentEventFlowPredictionsActualCount counts ledger-backed (not
+	// 0.5-padded) records returned by RecentEventFlowPredictions. Used by
+	// the prediction-drift rule to gate alerts until enough history exists.
+	RecentEventFlowPredictionsActualCount func(days int) int
+
 	// LatestCapitalFlowPrediction returns the most recent capital-flow
 	// prediction value. The bool is false if no prediction is available.
 	LatestCapitalFlowPrediction func() (float64, bool)
@@ -174,6 +179,13 @@ func (e *Stage3AlertEvaluator) evaluateModelConfidenceDegraded() {
 	}
 }
 
+// predictionDriftWarmupThreshold is the minimum number of real (non-padded)
+// historical predictions required before the prediction-drift alert can
+// reason about a non-trivial standard deviation. At fewer than this many
+// records the rule emits a dedicated "insufficient_history" alert instead
+// of either silently skipping or issuing a spurious drift alert.
+const predictionDriftWarmupThreshold = 5
+
 func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 	if e.deps.LatestCapitalFlowPrediction == nil || e.deps.LatestCapitalFlowActual == nil {
 		return
@@ -186,8 +198,23 @@ func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 	if !ok {
 		return
 	}
-	// Recent predictions are used to estimate a simple standard deviation.
 	recent := e.deps.RecentEventFlowPredictions(10)
+
+	// Production wiring provides this callback; tests that pre-date the
+	// warmup addition leave it nil and pass through to the legacy path.
+	if e.deps.RecentEventFlowPredictionsActualCount != nil {
+		actualCount := e.deps.RecentEventFlowPredictionsActualCount(10)
+		if actualCount < predictionDriftWarmupThreshold {
+			if e.checkCooldown("prediction-drift-insufficient-history", 24*time.Hour) {
+				e.monitor.Alert(AlertLevelInfo, "stage3_prediction_drift",
+					fmt.Sprintf("prediction-drift suppressed: only %d real predictions in last 10 (need %d)", actualCount, predictionDriftWarmupThreshold),
+					map[string]any{"actual_count": actualCount, "threshold": predictionDriftWarmupThreshold, "warmup": true})
+				e.recordFired("prediction-drift-insufficient-history")
+			}
+			return
+		}
+	}
+
 	_, std := meanStd(recent)
 	if std <= 0 {
 		return
