@@ -13,9 +13,9 @@ import (
 )
 
 type TSMCRevenueProvider struct {
-	client         *FinMindClient
-	storageDir     string
-	OnDegraded     func(channelID, reason string)
+	client     *FinMindClient
+	storageDir string
+	OnDegraded func(channelID, reason string)
 }
 
 func NewTSMCRevenueProvider(apiKey string) *TSMCRevenueProvider {
