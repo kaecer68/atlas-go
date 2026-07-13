@@ -165,6 +165,72 @@ func TestRunWithRetryAndAudit_ContextCancellation(t *testing.T) {
 	}
 }
 
+// TestRunWithRetryAndAudit_OneRetryThenSuccess covers the 1-retry success path: attempt 0 fails, attempt 1 succeeds.
+func TestRunWithRetryAndAudit_OneRetryThenSuccess(t *testing.T) {
+	oldDelays := stage3RetryDelays
+	stage3RetryDelays = []time.Duration{1 * time.Millisecond, 2 * time.Millisecond, 4 * time.Millisecond}
+	defer func() { stage3RetryDelays = oldDelays }()
+
+	var calls atomic.Int32
+	work := func() error {
+		if calls.Add(1) == 1 {
+			return errors.New("transient failure")
+		}
+		return nil
+	}
+	err := runWithRetryAndAudit(context.Background(), "test-task", work)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("expected 2 calls (1 initial + 1 retry), got %d", calls.Load())
+	}
+}
+
+// TestRunWithRetryAndAudit_TwoRetriesThenSuccess covers the 2-retry success path boundary (vs _RetriesUntilSuccess which is 3).
+func TestRunWithRetryAndAudit_TwoRetriesThenSuccess(t *testing.T) {
+	oldDelays := stage3RetryDelays
+	stage3RetryDelays = []time.Duration{1 * time.Millisecond, 2 * time.Millisecond, 4 * time.Millisecond}
+	defer func() { stage3RetryDelays = oldDelays }()
+
+	var calls atomic.Int32
+	work := func() error {
+		if calls.Add(1) < 3 {
+			return errors.New("transient failure")
+		}
+		return nil
+	}
+	err := runWithRetryAndAudit(context.Background(), "test-task", work)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls.Load() != 3 {
+		t.Fatalf("expected 3 calls (1 initial + 2 retries), got %d", calls.Load())
+	}
+}
+
+// TestRunWithRetryAndAudit_ThreeRetriesThenSuccess covers the maxStage3Retries upper-bound success path; dual to _FailsAfterMaxRetries.
+func TestRunWithRetryAndAudit_ThreeRetriesThenSuccess(t *testing.T) {
+	oldDelays := stage3RetryDelays
+	stage3RetryDelays = []time.Duration{1 * time.Millisecond, 2 * time.Millisecond, 4 * time.Millisecond}
+	defer func() { stage3RetryDelays = oldDelays }()
+
+	var calls atomic.Int32
+	work := func() error {
+		if calls.Add(1) < 4 {
+			return errors.New("transient failure")
+		}
+		return nil
+	}
+	err := runWithRetryAndAudit(context.Background(), "test-task", work)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls.Load() != 4 {
+		t.Fatalf("expected 4 calls (1 initial + 3 retries), got %d", calls.Load())
+	}
+}
+
 func TestSyncEventsDailyTaskFunc_SkipsOutsideWindow(t *testing.T) {
 	loc := fixedTimeZone(t)
 	oldTimeNow := timeNow
