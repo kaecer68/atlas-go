@@ -40,7 +40,7 @@ func TestEventCalendar_RefreshEventsFilteredByValidator(t *testing.T) {
 	var buf bytes.Buffer
 	tec := NewEventCalendar()
 	validator := eventquality.NewValidator(eventquality.DateRange{
-		PastBound:  -30 * 24 * time.Hour,
+		PastBound:   -30 * 24 * time.Hour,
 		FutureBound: 90 * 24 * time.Hour,
 	}, 0)
 	validator.SetClock(func() time.Time {
@@ -60,7 +60,7 @@ func TestEventCalendar_RefreshEventsFilteredByValidator(t *testing.T) {
 func TestEventCalendar_UpdateFromProviderFilteredByValidator(t *testing.T) {
 	now := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
 	validator := eventquality.NewValidator(eventquality.DateRange{
-		PastBound:  -30 * 24 * time.Hour,
+		PastBound:   -30 * 24 * time.Hour,
 		FutureBound: 90 * 24 * time.Hour,
 	}, 0)
 	validator.SetClock(func() time.Time { return now })
@@ -93,7 +93,7 @@ func TestEventCalendar_QualityLogRecordsRejection(t *testing.T) {
 
 	now := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
 	validator := eventquality.NewValidator(eventquality.DateRange{
-		PastBound:  -30 * 24 * time.Hour,
+		PastBound:   -30 * 24 * time.Hour,
 		FutureBound: 90 * 24 * time.Hour,
 	}, 0)
 	validator.SetClock(func() time.Time { return now })

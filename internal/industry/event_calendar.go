@@ -1259,22 +1259,22 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 			continue
 		}
 		evt := CalendarEvent{
-			ID:                 fmt.Sprintf("%s_%s_%s", ds, pd.EventType, pd.Date),
-			Name:               pd.Name,
-			NameEN:             pd.Name,
-			EventType:          pd.EventType,
-			Description:        pd.Description,
-			Direction:          pd.Direction,
-			BaseWeight:         pd.Weight,
-			Active:             true,
-			StartDate:          startDate,
-			EndDate:            startDate.AddDate(0, 0, 1), // default 1-day event
-			PeakDate:           startDate,
-			DecayDays:          7,
-			DataSource:         ds,
-			EvidenceQuality:    EvidenceRealTime,
-			GeneratedAt:        time.Now(),
-			CrossSourceStatus:  string(eventquality.StatusPending),
+			ID:                fmt.Sprintf("%s_%s_%s", ds, pd.EventType, pd.Date),
+			Name:              pd.Name,
+			NameEN:            pd.Name,
+			EventType:         pd.EventType,
+			Description:       pd.Description,
+			Direction:         pd.Direction,
+			BaseWeight:        pd.Weight,
+			Active:            true,
+			StartDate:         startDate,
+			EndDate:           startDate.AddDate(0, 0, 1), // default 1-day event
+			PeakDate:          startDate,
+			DecayDays:         7,
+			DataSource:        ds,
+			EvidenceQuality:   EvidenceRealTime,
+			GeneratedAt:       time.Now(),
+			CrossSourceStatus: string(eventquality.StatusPending),
 		}
 		// Stage 2.2c: mark events whose effective date is in the past as backfilled.
 		if startDate.Before(time.Now().Truncate(24 * time.Hour)) {
