@@ -1788,6 +1788,7 @@
   "version_before",
   "violations",
   "vix",
+  "vix_baseline",
   "vix_level_threshold",
   "vix_momentum_crash_threshold",
   "vix_risk_score",
