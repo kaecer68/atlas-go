@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/constants"
+	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
@@ -409,5 +411,67 @@ func TestHandleDataChannelDetail_NotFound(t *testing.T) {
 	}
 	if resp["error"] == "" {
 		t.Errorf("expected error message for unknown channel, got %v", resp)
+	}
+}
+
+func TestHandleJanusRegimeScore_EngineNotAvailable(t *testing.T) {
+	h := newTestHandlers(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/janus/regime-score", nil)
+	status, body := h.HandleJanusRegimeScore(req)
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d (body=%v)", status, body)
+	}
+}
+
+func TestHandleJanusRegimeScore_SyntheticFallback(t *testing.T) {
+	h := newTestHandlers(t)
+	engine := janus.NewEngine()
+	engine.EnsureAllRegimes()
+	engine.UpdateFromMacro(marketdata.MacroDataSnapshot{
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 5.0},
+		VIX:                marketdata.MacroDataPoint{Value: 15},
+	})
+	h.JanusEngine = engine
+
+	req := httptest.NewRequest(http.MethodGet, "/api/janus/regime-score", nil)
+	status, body := h.HandleJanusRegimeScore(req)
+	resp, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map response, got %T", body)
+	}
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d (body=%v)", status, body)
+	}
+	if resp["is_synthetic"] != true {
+		t.Errorf("expected is_synthetic=true (synthesized fallback), got %v", resp["is_synthetic"])
+	}
+	score, ok := resp["score"].(float64)
+	if !ok {
+		t.Fatalf("expected float64 score, got %T (%v)", resp["score"], resp["score"])
+	}
+	if score < 20 || score > 25 {
+		t.Errorf("expected score ~22.85 (tanh saturated), got %v", score)
+	}
+}
+
+func TestHandleJanusRegimeScore_NoData(t *testing.T) {
+	h := newTestHandlers(t)
+	engine := janus.NewEngine()
+	h.JanusEngine = engine
+
+	req := httptest.NewRequest(http.MethodGet, "/api/janus/regime-score", nil)
+	status, body := h.HandleJanusRegimeScore(req)
+	resp, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map response, got %T", body)
+	}
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d", status)
+	}
+	if resp["score"] != 0.0 {
+		t.Errorf("expected score=0, got %v", resp["score"])
+	}
+	if resp["is_synthetic"] != false {
+		t.Errorf("expected is_synthetic=false (no data at all), got %v", resp["is_synthetic"])
 	}
 }
