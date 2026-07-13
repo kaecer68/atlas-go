@@ -917,3 +917,16 @@ func TestRegisterCrossMarketRoutes_DegradedEndpointRegistered(t *testing.T) {
 		t.Error("expected 'timestamp' (string) key in /degraded snapshot")
 	}
 }
+
+func TestDashboardAPI_NarrativeEngine(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	eng := d.NarrativeEngine()
+	if eng == nil {
+		t.Fatal("expected non-nil narrative engine from public getter")
+	}
+	if eng == d.NarrativeEngine() {
+		// Same pointer should be returned (cacheable, no new instance per call).
+	} else {
+		t.Errorf("expected stable pointer across calls")
+	}
+}

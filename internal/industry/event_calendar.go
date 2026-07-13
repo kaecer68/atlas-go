@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -882,6 +883,26 @@ func (tec *EventCalendar) GetEventTimeline(now time.Time, days int) []CalendarEv
 		}
 	}
 	return timeline
+}
+
+func (tec *EventCalendar) GetEventsForDate(date time.Time) []CalendarEvent {
+	return tec.DetectActiveEvents(date)
+}
+
+// IsTaiwanTradingDay reports whether `date` is a weekday outside every Taiwan
+// public-holiday window (long_holiday event). Used by alert rules to suppress
+// spurious "no events" signals on weekends and lunar/fixed-date holidays.
+func (tec *EventCalendar) IsTaiwanTradingDay(date time.Time) bool {
+	wd := date.Weekday()
+	if wd == time.Saturday || wd == time.Sunday {
+		return false
+	}
+	for _, evt := range tec.GetEventsForDate(date) {
+		if strings.HasPrefix(evt.Name, "連假 - ") {
+			return false
+		}
+	}
+	return true
 }
 
 // GetAllActiveEventNames returns the names of currently active events.

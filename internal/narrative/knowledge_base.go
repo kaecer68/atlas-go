@@ -445,6 +445,13 @@ func (ne *NarrativeEngine) updateTemplateHitRates() {
 	}
 }
 
+// RecalculateTemplateHitRates exposes the EMA-blended template recalculation
+// so external schedulers (Stage 3 BTM) can drive it without exposing
+// updateTemplateHitRates on the engine's private surface.
+func (ne *NarrativeEngine) RecalculateTemplateHitRates() {
+	ne.updateTemplateHitRates()
+}
+
 func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, window int, sectors []string) float64 {
 	var totalReturn float64
 	var count int
