@@ -30,12 +30,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/realtime"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
@@ -60,6 +62,7 @@ type operationsDeps struct {
 	eventCalendar *industry.EventCalendar
 	capitalFlow   *capitalflow.Service
 	janusEngine   *janus.Engine
+	prismMgr      *prism.PRISMManager
 }
 
 // registerOperationsTasks wires the operational probes / data ingest /
@@ -373,5 +376,39 @@ func registerOperationsTasks(d operationsDeps) {
 			},
 		})
 		log.Printf("[Gateway] registered janus_regime_refresh background task (6h interval)")
+	}
+
+	if d.prismMgr != nil && d.janusEngine != nil {
+		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "prism_training",
+			Interval: 6 * time.Hour,
+			Enabled:  true,
+			Task: func(_ context.Context) error {
+				if d.prismMgr == nil || d.janusEngine == nil {
+					return nil
+				}
+				results := d.prismMgr.GetCompletedResults()
+				for _, r := range results {
+					if r.Result.Error != "" || r.Result.Synthetic {
+						continue
+					}
+					d.janusEngine.RecordTrainingResult(r.Regime, r.Result)
+				}
+				now := time.Now()
+				for _, reg := range []prism.RegimeType{prism.RegimeRiskOn, prism.RegimeRiskOff, prism.RegimeHighVolatility, prism.RegimeLowVolatility, prism.RegimeTransition} {
+					_ = d.prismMgr.ScheduleTraining(domain.AgentSpec{
+						ID:      "system-" + reg.String(),
+						Enabled: true,
+					}, []prism.TrainingWindow{{
+						Start:     now.AddDate(0, 0, -30),
+						End:       now,
+						Regime:    reg,
+						RegimeSet: true,
+					}})
+				}
+				return nil
+			},
+		})
+		log.Printf("[Gateway] registered prism_training background task (6h interval)")
 	}
 }

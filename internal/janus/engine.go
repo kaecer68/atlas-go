@@ -3,6 +3,7 @@ package janus
 import (
 	"fmt"
 	"maps"
+	"math"
 	"sync"
 	"time"
 
@@ -25,6 +26,10 @@ type Engine struct {
 
 	// compositeScore: synthesized from macro when no PRISM Sharpe data.
 	compositeScore float64
+	// hasSynthetic tracks whether UpdateFromMacro was called, so
+	// GetCurrentRegimeScore can distinguish "no synthesis attempted"
+	// from "synthesis returned zero".
+	hasSynthetic bool
 }
 
 // NewEngine creates a JANUS engine with default configuration.
@@ -96,6 +101,7 @@ func (e *Engine) UpdateFromMacro(snap marketdata.MacroDataSnapshot) {
 	defer e.mu.Unlock()
 
 	e.compositeScore = synthesizeCompositeScore(snap)
+	e.hasSynthetic = true
 	e.lastUpdated = time.Now()
 }
 
@@ -107,23 +113,60 @@ func (e *Engine) GetCompositeScore() float64 {
 	return e.compositeScore
 }
 
-// synthesizeCompositeScore maps macro signals to a roughly [-55, +35] score:
-//
-//	sign(foreignFlow) * 30    — dominant Taiwan regime signal
-//	-max(0, VIX - 20) * 0.5    — panic penalty above baseline 20
-//
-// Magic numbers 30 and 0.5 chosen so a ±1B NTD foreign flow and a VIX of 40
-// contribute roughly equal magnitude, matching observed co-movement in
-// Taiwan equity regime transitions.
-func synthesizeCompositeScore(snap marketdata.MacroDataSnapshot) float64 {
-	score := 0.0
-	if snap.ForeignInvestorNet.Value > 0 {
-		score += 30
-	} else if snap.ForeignInvestorNet.Value < 0 {
-		score -= 30
+// GetCurrentRegimeScore returns the best available regime score:
+// real Sharpe (averaged across cohorts from PRISM tracker) when at least
+// one cohort has non-zero Sharpe, otherwise macro-synthesized fallback
+// (only if UpdateFromMacro was ever called). Returns (score, isSynthetic).
+// isSynthetic=true means the score is macro-derived, not from PRISM training.
+func (e *Engine) GetCurrentRegimeScore() (float64, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if score, ok := e.realRegimeScoreLocked(); ok {
+		return score, false
 	}
+	if e.hasSynthetic {
+		return e.compositeScore, true
+	}
+	return 0, false
+}
+
+// realRegimeScoreLocked returns average Sharpe across cohorts when at least one
+// cohort has non-zero Sharpe. EnsureAllRegimes seeds zero-Sharpe snapshots; we
+// must skip those to avoid returning a synthetic-feeling 0. Caller must hold
+// e.mu (read or write).
+func (e *Engine) realRegimeScoreLocked() (float64, bool) {
+	perf := e.tracker.GetPerformance()
+	var sum float64
+	count := 0
+	for _, p := range perf {
+		if p != nil && p.ShortWindow != nil && p.ShortWindow.SharpeRatio != 0 {
+			sum += p.ShortWindow.SharpeRatio
+			count++
+		}
+	}
+	if count == 0 {
+		return 0, false
+	}
+	return sum / float64(count), true
+}
+
+// synthesizeCompositeScore maps macro signals to a ~[-95, +30] score:
+//
+//	tanh(foreignFlow / 5e9) * 30           — continuous Taiwan regime signal
+//	-max(0, VIX - 20) * 1.5                — panic penalty above baseline 20
+//
+// Oracle review notes:
+//   - foreign flow as tanh preserves magnitude info that step function loses
+//     (±1B vs ±100B NTD now distinguishable). Scale 5B saturates at ±30.
+//   - VIX coefficient 1.5 not 0.5: VIX 40 (= -30) matches foreign ±5B magnitude,
+//     giving 1:1 balance per Oracle recommendation.
+//   - Range asymmetry (-95 to +30) is intentional: downside risk dominates
+//     Taiwan equity regime in historical drawdowns (Chiao et al. 2006).
+func synthesizeCompositeScore(snap marketdata.MacroDataSnapshot) float64 {
+	score := math.Tanh(snap.ForeignInvestorNet.Value/5e9) * 30
 	if snap.VIX.Value > 20 {
-		score -= (snap.VIX.Value - 20) * 0.5
+		score -= (snap.VIX.Value - 20) * 1.5
 	}
 	return score
 }
