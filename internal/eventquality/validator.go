@@ -44,11 +44,11 @@ func (e RawEvent) dedupKey() string {
 // means the event may proceed to the calendar. Accepted=false means the event
 // must be rejected; Rule, Field and Reason describe the first failure.
 type ValidationResult struct {
-	EventID  string    `json:"event_id"`
-	Accepted bool      `json:"accepted"`
-	Rule     string    `json:"rule,omitempty"`
-	Field    string    `json:"field,omitempty"`
-	Reason   string    `json:"reason,omitempty"`
+	EventID   string    `json:"event_id"`
+	Accepted  bool      `json:"accepted"`
+	Rule      string    `json:"rule,omitempty"`
+	Field     string    `json:"field,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
 	CheckedAt time.Time `json:"checked_at"`
 }
 
@@ -63,7 +63,7 @@ type EventValidator interface {
 // expressed as time.Duration values (negative for past). DefaultConfig() returns
 // a validator with the spec defaults: 30 days past, 90 days future.
 type DateRange struct {
-	PastBound  time.Duration // e.g. -30 * 24 * time.Hour
+	PastBound   time.Duration // e.g. -30 * 24 * time.Hour
 	FutureBound time.Duration // e.g.  90 * 24 * time.Hour
 }
 
@@ -71,11 +71,11 @@ type DateRange struct {
 // (trigger_theme, symbol, date) tuples in an in-memory ring keyed by the
 // dedup key; entries expire after dedupTTL so the map size stays bounded.
 type Validator struct {
-	mu         sync.Mutex
-	seen       map[string]time.Time
-	dedupTTL   time.Duration
-	dateRange  DateRange
-	now        func() time.Time // injectable clock for tests
+	mu        sync.Mutex
+	seen      map[string]time.Time
+	dedupTTL  time.Duration
+	dateRange DateRange
+	now       func() time.Time // injectable clock for tests
 }
 
 // NewValidator returns a Validator configured per spec. Pass dedupTTL = 0
