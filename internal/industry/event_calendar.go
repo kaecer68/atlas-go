@@ -75,6 +75,14 @@ type CalendarEvent struct {
 	EvidenceQuality EventEvidence `json:"evidence_quality"`
 	// GeneratedAt records when this event was created, allowing freshness checks.
 	GeneratedAt time.Time `json:"generated_at"`
+	// Backfilled is true when this event was retroactively added (its effective
+	// date is in the past at ingestion time). The predictor discounts backfilled
+	// events to 0.7x weight (Stage 2.2c).
+	Backfilled bool `json:"backfilled"`
+	// CrossSourceStatus tracks cross-source verification (Stage 2.2b).
+	// "confirmed" when ≥2 distinct sources report the same composite key;
+	// "pending" with only 1 source; empty when not evaluated.
+	CrossSourceStatus string `json:"cross_source_status,omitempty"`
 }
 
 // String returns a human-readable summary of the event.
@@ -108,11 +116,12 @@ type EventCalendar struct {
 	annualRules map[string]EventRule
 	generatedAt time.Time
 
-	// Stage 2 quality gate hooks (PR #1119 + #1120). Both optional; when nil
+	// Stage 2 quality gate hooks (PR #1119 + #1120, #1122). All optional; when nil
 	// the calendar falls back to the legacy "accept everything" path so
 	// existing callers don't need to wire a validator.
-	validator  eventquality.EventValidator
-	qualityLog *eventquality.QualityLog
+	validator        eventquality.EventValidator
+	qualityLog       *eventquality.QualityLog
+	crossSourceStore *eventquality.CrossSourceStore
 }
 
 // NewEventCalendar creates a new EventCalendar with default event rules.
@@ -141,6 +150,16 @@ func (tec *EventCalendar) WithValidator(v eventquality.EventValidator) *EventCal
 func (tec *EventCalendar) WithQualityLog(l *eventquality.QualityLog) *EventCalendar {
 	tec.mu.Lock()
 	tec.qualityLog = l
+	tec.mu.Unlock()
+	return tec
+}
+
+// WithCrossSourceStore attaches a Stage 2 cross-source verification store.
+// When wired, UpdateFromProvider records each provider's source in the store
+// and tags events with their cross-source status (confirmed / pending).
+func (tec *EventCalendar) WithCrossSourceStore(s *eventquality.CrossSourceStore) *EventCalendar {
+	tec.mu.Lock()
+	tec.crossSourceStore = s
 	tec.mu.Unlock()
 	return tec
 }
@@ -1240,21 +1259,34 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 			continue
 		}
 		evt := CalendarEvent{
-			ID:              fmt.Sprintf("%s_%s_%s", ds, pd.EventType, pd.Date),
-			Name:            pd.Name,
-			NameEN:          pd.Name,
-			EventType:       pd.EventType,
-			Description:     pd.Description,
-			Direction:       pd.Direction,
-			BaseWeight:      pd.Weight,
-			Active:          true,
-			StartDate:       startDate,
-			EndDate:         startDate.AddDate(0, 0, 1), // default 1-day event
-			PeakDate:        startDate,
-			DecayDays:       7,
-			DataSource:      ds,
-			EvidenceQuality: EvidenceRealTime,
-			GeneratedAt:     time.Now(),
+			ID:                 fmt.Sprintf("%s_%s_%s", ds, pd.EventType, pd.Date),
+			Name:               pd.Name,
+			NameEN:             pd.Name,
+			EventType:          pd.EventType,
+			Description:        pd.Description,
+			Direction:          pd.Direction,
+			BaseWeight:         pd.Weight,
+			Active:             true,
+			StartDate:          startDate,
+			EndDate:            startDate.AddDate(0, 0, 1), // default 1-day event
+			PeakDate:           startDate,
+			DecayDays:          7,
+			DataSource:         ds,
+			EvidenceQuality:    EvidenceRealTime,
+			GeneratedAt:        time.Now(),
+			CrossSourceStatus:  string(eventquality.StatusPending),
+		}
+		// Stage 2.2c: mark events whose effective date is in the past as backfilled.
+		if startDate.Before(time.Now().Truncate(24 * time.Hour)) {
+			evt.Backfilled = true
+		}
+		// Stage 2.2b: cross-source verification — record the provider source
+		// and tag the event with its cross-source status.
+		if tec.crossSourceStore != nil {
+			theme := pd.EventType
+			symbol := pd.Symbol
+			status := tec.crossSourceStore.Record(provider.Name(), theme, symbol, startDate)
+			evt.CrossSourceStatus = string(status)
 		}
 		newEvents = append(newEvents, evt)
 	}

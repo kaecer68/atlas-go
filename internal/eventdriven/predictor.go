@@ -92,6 +92,8 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 			AffectedIndustries: e.AffectedIndustries,
 			ExpectedFlowImpact: expectedFlow(e.EventType),
 			Confidence:         e.BaseWeight,
+			Backfilled:         e.Backfilled,
+			CrossSourceStatus:  e.CrossSourceStatus,
 		})
 	}
 
@@ -132,6 +134,10 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 			continue
 		}
 		w := e.BaseWeight
+		// Stage 2.2c: backfilled events carry 0.7x weight.
+		if e.Backfilled {
+			w *= 0.7
+		}
 		switch e.Direction {
 		case "bullish":
 			bullishWeight += w

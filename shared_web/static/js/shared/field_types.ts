@@ -250,6 +250,8 @@ export interface CalendarEvent {
   data_source: string;
   evidence_quality: string;
   generated_at: string;
+  backfilled: boolean;
+  cross_source_status?: string;
 }
 
 export interface CalendarProviderData {
@@ -1055,6 +1057,8 @@ export interface EventCalendarItem {
   affected_industries?: string[];
   expected_flow_impact: string;
   confidence: number;
+  backfilled: boolean;
+  cross_source_status?: string;
 }
 
 export interface EventCalendarRule {
