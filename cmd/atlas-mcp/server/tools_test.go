@@ -34,6 +34,12 @@ func (r *reqRecorder) SetResponseBody(b []byte) {
 	r.responseBody = b
 }
 
+func (r *reqRecorder) getResponseBody() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.responseBody
+}
+
 func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	t.Helper()
 	rec := &reqRecorder{responseBody: []byte(`[]`)}
@@ -62,7 +68,7 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 			b, _ := io.ReadAll(r.Body)
 			rec.body = b
 			rec.mu.Unlock()
-			_, _ = w.Write(rec.responseBody)
+			_, _ = w.Write(rec.getResponseBody())
 		}
 	}))
 

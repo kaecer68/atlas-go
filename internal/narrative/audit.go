@@ -22,14 +22,14 @@ type auditEntry struct {
 // FileAuditLogger writes narrative mutation audit entries to a JSONL file.
 // Thread-safe; one writer per file.
 type FileAuditLogger struct {
-	mu     sync.Mutex
-	file   *os.File
-	enc    *json.Encoder
+	mu   sync.Mutex
+	file *os.File
+	enc  *json.Encoder
 }
 
 // NewFileAuditLogger opens (or creates) path for append and returns a logger.
 func NewFileAuditLogger(path string) (*FileAuditLogger, error) {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open audit log: %w", err)
 	}
@@ -37,16 +37,6 @@ func NewFileAuditLogger(path string) (*FileAuditLogger, error) {
 		file: f,
 		enc:  json.NewEncoder(f),
 	}, nil
-}
-
-// record writes one audit entry.
-func (l *FileAuditLogger) record(tool, argsHash string) {
-	_ = l.enc.Encode(auditEntry{
-		TS:       time.Now().UTC().Format(time.RFC3339Nano),
-		Tool:     tool,
-		ArgsHash: argsHash,
-		Status:   "ok",
-	})
 }
 
 // Close flushes and closes the underlying file.

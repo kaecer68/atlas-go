@@ -36,9 +36,9 @@ type TemplateAuditHook func(templateID, contentHash string)
 
 // KnowledgeBase holds causal templates and produces instantiated chains.
 type KnowledgeBase struct {
-	mu         sync.RWMutex
-	templates  map[string]CausalTemplate
-	auditHook  TemplateAuditHook
+	mu        sync.RWMutex
+	templates map[string]CausalTemplate
+	auditHook TemplateAuditHook
 }
 
 // SetTemplateAuditHook wires a mutation audit callback (Stage 2.3a).
