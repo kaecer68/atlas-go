@@ -13,8 +13,9 @@ import (
 )
 
 type TSMCRevenueProvider struct {
-	client     *FinMindClient
-	storageDir string
+	client         *FinMindClient
+	storageDir     string
+	OnDegraded     func(channelID, reason string)
 }
 
 func NewTSMCRevenueProvider(apiKey string) *TSMCRevenueProvider {
@@ -41,7 +42,11 @@ func (p *TSMCRevenueProvider) FetchSnapshot(ctx context.Context) (MacroDataSnaps
 	current, prior, err := p.fetchWithFallback(ctx, year, month)
 	if err != nil {
 		logging.Info("tsmc_revenue_provider", "fetch_failed_falling_back_to_cache", logging.Err(err))
-		return p.loadLatestSnapshot()
+		snap, loadErr := p.loadLatestSnapshot()
+		if loadErr == nil && snap.TSMCRevenue.Symbol != "" && p.OnDegraded != nil {
+			p.OnDegraded("tsmc_revenue", "cache_fallback")
+		}
+		return snap, loadErr
 	}
 
 	var yoyPct float64

@@ -174,6 +174,17 @@ func (a *ChannelHealthStoreAdapter) Get(channelID string) *ChannelHealthRecord {
 	return a.store.Get(channelID)
 }
 
+// MarkDegraded sets a channel's health status to "degraded" without clearing
+// LastError. "degraded" means the channel is serving cached data because the
+// live API fetch failed — data exists but is stale. This is less severe than
+// "error" (no data) but worse than "ok" (live data).
+func (a *ChannelHealthStoreAdapter) MarkDegraded(channelID, reason string) error {
+	a.once.Do(func() {
+		a.store = newChannelHealthStore(a.dir, a.pool)
+	})
+	return a.store.Record(channelID, "degraded", reason)
+}
+
 func (a *ChannelHealthStoreAdapter) Record(channelID, status, errMsg string, opts ...RecordOption) error {
 	a.once.Do(func() {
 		a.store = newChannelHealthStore(a.dir, a.pool)
