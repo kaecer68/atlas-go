@@ -895,6 +895,7 @@ func run(args []string, deps appDeps) error {
 				eventCalendar:    eventCalendar,
 				macroProvider:    macroProvider,
 				predictionLedger: predictionLedger,
+				metricsCollector: collector,
 			}
 			registerStage3Tasks(d3)
 			registerStage3AlertTasks(d3)

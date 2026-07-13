@@ -35,6 +35,11 @@ type Stage3TaskDeps struct {
 	// Optional; when nil the once-guards keep all state in-memory.
 	OncestampStore OncestampStore
 
+	// OnTaskComplete is invoked after each task run (success or failure)
+	// with the static taskID. Optional; nil means no callback. Used by the
+	// production wiring to emit atlas_stage3_task_runs_total.
+	OnTaskComplete func(taskID string, err error)
+
 	// RefreshEventCalendar updates the in-memory event calendar for the
 	// requested local date. The task passes today and today+1.
 	RefreshEventCalendar func(now time.Time) error
@@ -56,12 +61,13 @@ type Stage3TaskDeps struct {
 // SyncEventsDailyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the event calendar for today and tomorrow at 06:00 local time.
 func SyncEventsDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
+	const taskID = "sync-events-daily"
 	shouldRun := dailyGuardFor(deps, 6, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
 		}
-		return runWithRetryAndAudit(ctx, "sync-events-daily", func() error {
+		err := runWithRetryAndAudit(ctx, taskID, func() error {
 			if deps.RefreshEventCalendar == nil {
 				return fmt.Errorf("RefreshEventCalendar dependency is nil")
 			}
@@ -71,57 +77,76 @@ func SyncEventsDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
 			}
 			return deps.RefreshEventCalendar(now.Add(24 * time.Hour))
 		})
+		if deps.OnTaskComplete != nil {
+			deps.OnTaskComplete(taskID, err)
+		}
+		return err
 	}
 }
 
 // SyncMacroDailyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the macro snapshot after the US market close at 06:00 local time.
 func SyncMacroDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
+	const taskID = "sync-macro-daily"
 	shouldRun := dailyGuardFor(deps, 6, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
 		}
-		return runWithRetryAndAudit(ctx, "sync-macro-daily", func() error {
+		err := runWithRetryAndAudit(ctx, taskID, func() error {
 			if deps.RefreshMacroSnapshot == nil {
 				return fmt.Errorf("RefreshMacroSnapshot dependency is nil")
 			}
 			return deps.RefreshMacroSnapshot(ctx)
 		})
+		if deps.OnTaskComplete != nil {
+			deps.OnTaskComplete(taskID, err)
+		}
+		return err
 	}
 }
 
 // SyncCapitalDailyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the TWSE capital-flow / 三法人買賣超 aggregation at 13:30 local time.
 func SyncCapitalDailyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
+	const taskID = "sync-capital-daily"
 	shouldRun := dailyGuardFor(deps, 13, 30)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
 		}
-		return runWithRetryAndAudit(ctx, "sync-capital-daily", func() error {
+		err := runWithRetryAndAudit(ctx, taskID, func() error {
 			if deps.RefreshCapitalFlow == nil {
 				return fmt.Errorf("RefreshCapitalFlow dependency is nil")
 			}
 			return deps.RefreshCapitalFlow(ctx)
 		})
+		if deps.OnTaskComplete != nil {
+			deps.OnTaskComplete(taskID, err)
+		}
+		return err
 	}
 }
 
 // SyncRegimeWeeklyTaskFunc returns a BackgroundTaskManager-compatible task that
 // refreshes the regime historical summary every Monday at 08:00 local time.
 func SyncRegimeWeeklyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
+	const taskID = "sync-regime-weekly"
 	shouldRun := weeklyGuardFor(deps, time.Monday, 8, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
 		}
-		return runWithRetryAndAudit(ctx, "sync-regime-weekly", func() error {
+		err := runWithRetryAndAudit(ctx, taskID, func() error {
 			if deps.UpdateRegimeHistory == nil {
 				return fmt.Errorf("UpdateRegimeHistory dependency is nil")
 			}
 			return deps.UpdateRegimeHistory(ctx, 90)
 		})
+		if deps.OnTaskComplete != nil {
+			deps.OnTaskComplete(taskID, err)
+		}
+		return err
 	}
 }
 
@@ -129,17 +154,22 @@ func SyncRegimeWeeklyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
 // task that recalculates narrative template hit rates on the 1st of every month
 // at 08:00 local time.
 func RecalibrateTemplatesMonthlyTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
+	const taskID = "recalibrate-templates-monthly"
 	shouldRun := monthlyGuardFor(deps, 1, 8, 0)
 	return func(ctx context.Context) error {
 		if !shouldRun() {
 			return nil
 		}
-		return runWithRetryAndAudit(ctx, "recalibrate-templates-monthly", func() error {
+		err := runWithRetryAndAudit(ctx, taskID, func() error {
 			if deps.RecalculateTemplateHitRates == nil {
 				return fmt.Errorf("RecalculateTemplateHitRates dependency is nil")
 			}
 			return deps.RecalculateTemplateHitRates()
 		})
+		if deps.OnTaskComplete != nil {
+			deps.OnTaskComplete(taskID, err)
+		}
+		return err
 	}
 }
 

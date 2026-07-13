@@ -31,6 +31,7 @@ type stage3Deps struct {
 	eventCalendar    *industry.EventCalendar
 	macroProvider    marketdata.MacroDataProvider
 	predictionLedger ledger.EventFlowPredictionStore
+	metricsCollector *monitoring.MetricsCollector
 }
 
 // registerStage3Tasks wires the 5 Stage 3 scheduled tasks into BTM.
@@ -54,6 +55,13 @@ func registerStage3Tasks(d stage3Deps) {
 	deps := scheduler.Stage3TaskDeps{
 		TimeZone:       tz,
 		OncestampStore: oncestore,
+		OnTaskComplete: func(taskID string, err error) {
+			result := "success"
+			if err != nil {
+				result = "failed"
+			}
+			monitoring.RecordStage3TaskRun(d.metricsCollector, taskID, result)
+		},
 		RefreshEventCalendar: func(now time.Time) error {
 			d.eventCalendar.RefreshEvents(now)
 			return nil
@@ -135,6 +143,9 @@ func registerStage3AlertTasks(d stage3Deps) {
 
 	alertDeps := monitoring.Stage3AlertDeps{
 		TimeZone: tz,
+		OnAlertFired: func(ruleID string, severity monitoring.AlertLevel, metadata map[string]any) {
+			monitoring.RecordStage3AlertFired(d.metricsCollector, ruleID, severity)
+		},
 		ChannelLastDataAt: func() map[string]time.Time {
 			out := make(map[string]time.Time)
 			if d.gateway == nil {

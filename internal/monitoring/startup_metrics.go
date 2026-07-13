@@ -1,5 +1,7 @@
 package monitoring
 
+import "strings"
+
 // Startup & runtime 階段的 metrics 埋點 helper。
 //
 // 設計動機：atlas-go 的 Prometheus 框架 (cmd/atlas/api_routes.go 的 /metrics 端點)
@@ -22,6 +24,14 @@ const MetricDBInitFailures = "atlas_db_init_failures_total"
 // Label channel 值域為已知通道名（如 "us_yahoo", "fugle"），由呼叫端傳入。
 const MetricChannelHealthErrors = "atlas_channel_health_errors_total"
 
+// MetricStage3TaskRuns 統計 Stage 3 排程任務執行次數（per task × result label）。
+// Label task 值域固定為 5 個 stage3 task ID；result ∈ {success,failed}。
+const MetricStage3TaskRuns = "atlas_stage3_task_runs_total"
+
+// MetricStage3AlertsFired 統計 Stage 3 alert rule 觸發次數（per rule × severity label）。
+// Label rule 值域固定為 6 個 stage3 rule ID；severity ∈ {critical,warning,info}。
+const MetricStage3AlertsFired = "atlas_stage3_alerts_fired_total"
+
 // RecordDBInitFailure increment db_init failure counter。
 // nil collector 安全（bootstrap 早期 collector 可能尚未建立）。
 func RecordDBInitFailure(c *MetricsCollector) {
@@ -42,5 +52,27 @@ func RecordChannelHealthError(c *MetricsCollector, channel string) {
 	}
 	c.RecordCounter(MetricChannelHealthErrors, 1, map[string]string{
 		"channel": channel,
+	})
+}
+
+// RecordStage3TaskRun nil collector 安全；空 taskID/result 視為無效輸入不寫入。
+func RecordStage3TaskRun(c *MetricsCollector, taskID, result string) {
+	if c == nil || taskID == "" || result == "" {
+		return
+	}
+	c.RecordCounter(MetricStage3TaskRuns, 1, map[string]string{
+		"task":   taskID,
+		"result": result,
+	})
+}
+
+// RecordStage3AlertFired nil collector 安全；severity 自動小寫對齊 Prometheus convention。
+func RecordStage3AlertFired(c *MetricsCollector, ruleID string, severity AlertLevel) {
+	if c == nil || ruleID == "" {
+		return
+	}
+	c.RecordCounter(MetricStage3AlertsFired, 1, map[string]string{
+		"rule":     ruleID,
+		"severity": strings.ToLower(severity.String()),
 	})
 }

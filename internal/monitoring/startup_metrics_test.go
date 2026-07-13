@@ -140,6 +140,8 @@ func TestMetricsNames_FollowPrometheusConvention(t *testing.T) {
 	}{
 		{MetricDBInitFailures, "atlas_db_init_failures_total"},
 		{MetricChannelHealthErrors, "atlas_channel_health_errors_total"},
+		{MetricStage3TaskRuns, "atlas_stage3_task_runs_total"},
+		{MetricStage3AlertsFired, "atlas_stage3_alerts_fired_total"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -148,4 +150,70 @@ func TestMetricsNames_FollowPrometheusConvention(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRecordStage3TaskRun_IncrementsPerTaskResultLabel(t *testing.T) {
+	c := NewMetricsCollector()
+	RecordStage3TaskRun(c, "sync-events-daily", "success")
+	RecordStage3TaskRun(c, "sync-events-daily", "success")
+	RecordStage3TaskRun(c, "sync-events-daily", "failed")
+
+	m, ok := c.GetMetric(MetricStage3TaskRuns, map[string]string{
+		"task":   "sync-events-daily",
+		"result": "success",
+	})
+	if !ok || m.Value != 2 {
+		t.Fatalf("expected success counter=2, got %+v ok=%v", m, ok)
+	}
+	m, ok = c.GetMetric(MetricStage3TaskRuns, map[string]string{
+		"task":   "sync-events-daily",
+		"result": "failed",
+	})
+	if !ok || m.Value != 1 {
+		t.Fatalf("expected failed counter=1, got %+v ok=%v", m, ok)
+	}
+}
+
+func TestRecordStage3TaskRun_NilCollectorAndEmptyArgsAreSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordStage3TaskRun(nil/empty) panicked: %v", r)
+		}
+	}()
+	RecordStage3TaskRun(nil, "sync-events-daily", "success")
+	RecordStage3TaskRun(NewMetricsCollector(), "", "success")
+	RecordStage3TaskRun(NewMetricsCollector(), "sync-events-daily", "")
+}
+
+func TestRecordStage3AlertFired_LowercasesSeverity(t *testing.T) {
+	c := NewMetricsCollector()
+	RecordStage3AlertFired(c, "data-staleness-critical", AlertLevelCritical)
+	RecordStage3AlertFired(c, "data-staleness-warning", AlertLevelWarning)
+	RecordStage3AlertFired(c, "prediction-drift", AlertLevelInfo)
+
+	for _, tc := range []struct {
+		rule, sev string
+	}{
+		{"data-staleness-critical", "critical"},
+		{"data-staleness-warning", "warning"},
+		{"prediction-drift", "info"},
+	} {
+		m, ok := c.GetMetric(MetricStage3AlertsFired, map[string]string{
+			"rule":     tc.rule,
+			"severity": tc.sev,
+		})
+		if !ok || m.Value != 1 {
+			t.Fatalf("expected %s/%s counter=1, got %+v ok=%v", tc.rule, tc.sev, m, ok)
+		}
+	}
+}
+
+func TestRecordStage3AlertFired_NilCollectorAndEmptyRuleIDAreSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordStage3AlertFired(nil/empty) panicked: %v", r)
+		}
+	}()
+	RecordStage3AlertFired(nil, "rule", AlertLevelInfo)
+	RecordStage3AlertFired(NewMetricsCollector(), "", AlertLevelInfo)
 }
