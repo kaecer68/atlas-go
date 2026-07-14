@@ -23,6 +23,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
+
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
@@ -70,6 +72,7 @@ func writeAggregateJSON(w http.ResponseWriter, status int, data any) {
 
 // HandleHealthAggregate fans out to N tiers in-process. Each tier is wrapped
 // in a recovery + latency timer so one failing tier cannot crash the endpoint.
+//nolint:unparam // r is required by shared.Handler interface
 func (h *HealthHandlers) handleHealthAggregate(r *http.Request) (int, any) {
 	resp := aggregateResponse{
 		Tiers: map[string]tierReport{
@@ -172,7 +175,7 @@ type llmReadyDetail struct {
 func (h *HealthHandlers) checkLLMReady() (bool, string, any) {
 	// /api/health/aggregate 不主動打 /api/llm/health（會在 production 拖慢首屏）。
 	// 退化為「配置存在性」檢查。實際 provider 狀態請讀 /api/llm/health。
-	apiKey := os.Getenv("LLM_DEEPSEEK_API_KEY")
+	apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY")
 	if apiKey == "" {
 		return false, "LLM_DEEPSEEK_API_KEY 未設定", llmReadyDetail{Note: "no_live_check"}
 	}

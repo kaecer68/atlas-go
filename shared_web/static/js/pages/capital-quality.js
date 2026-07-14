@@ -63,7 +63,7 @@ export function renderDataChannelsHealth(data) {
     var ok = c.healthy === true || c.status === 'healthy' || c.status === 'fresh';
     return '<tr>'
       + '<td><code>' + escapeHtml(c.name || c.id || c.source_id || '-') + '</code></td>'
-      + '<td>' + escapeHtml(c.last_update || c.last_fetch || c.updated_at || '-') + '</td>'
+      + '<td>' + escapeHtml(c.last_update || c.last_fetch_at || c.updated_at || '-') + '</td>'
       + '<td><span class="' + (ok ? 'ok' : 'fail') + '">' + (ok ? '✓' : '⚠') + '</span></td>'
       + '</tr>';
   }).join('');

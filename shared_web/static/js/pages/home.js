@@ -161,14 +161,14 @@ export async function renderHomePage(container) {
           calActiveCategories.push(category);
         }
       }
-      filterBar.querySelectorAll('.cal-filter-pill').forEach(p => {
+      document.querySelectorAll('#cal-filter-bar .cal-filter-pill').forEach(p => {
         const c = p.dataset.category;
         p.classList.toggle('active', c === '' ? calActiveCategories.length === 0 : calActiveCategories.includes(c));
       });
       applyCalFiltersAndRender();
     });
 
-    filterBar.querySelectorAll('.cal-filter-select').forEach(sel => {
+    document.querySelectorAll('#cal-filter-bar .cal-filter-select').forEach(sel => {
       sel.addEventListener('change', () => {
         const key = sel.dataset.filterType === 'trigger_theme' ? 'triggerThemes' : 'sectors';
         const value = sel.value;
