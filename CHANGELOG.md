@@ -1,8 +1,6 @@
 # Changelog
 
-<<<<<<< HEAD
-=======
-## [0.0.0.34] - 2026-07-14
+## [0.0.0.35] - 2026-07-14
 
 ### Added
 - **Stage 5 — Template Trigger Detector 抽象層 + 鏈路驗證** (5 sub-PRs):
@@ -22,8 +20,11 @@
 - `tariff_shock` 仍走 snapshot-pipeline（detectTariffShockEventFromSnapshot）；KB pipeline 對應函式待 Stage 6+ 新增（可讀 TradeNews 或 GeopoliticalGPR proxy）。
 - `china_slowdown` detector 暫用 CopperChangePct 當 proxy；Stage 6+ 改用真 PMI 來源。
 
+### Process note
+- 本 v0.0.0.35 版本（即原 v0.0.0.34 Stage 5 條目）於 FU-7 release commit 一併重新編號，避免與既有 v0.0.0.34（Stage 4）衝突；內容未變動。
 
-## [0.0.0.33] - 2026-07-14
+
+## [0.0.0.34] - 2026-07-14
 
 ### Added
 - **Stage 4 歷史資料補齊** (PR #1138 + recovery PR, 4 sub-PRs):
@@ -49,8 +50,27 @@
 
 ### Process note
 - 原 `feat/stage-4-historical-backfill` 分支在自動 rebase 中遺失 PR#3 + PR#4 commits。已從 orphan object store 以 `git cherry-pick 58c1c4bc` + `git cherry-pick fed4680b` 完整復原到新分支 `feat/stage-4-recovery` (`50d793ff` PR#3 + `329c77a5` PR#4 on top of `ddd75b0c`)。
+- 本 v0.0.0.34 版本（即原 v0.0.0.33 Stage 4 條目）於 FU-7 release commit 一併重新編號，避免與 v0.0.0.33 FU-7 條目衝突；內容未變動。
 
->>>>>>> 0521ce4f (feat(stage5): PR#5 e2e chain test + spec + AGENTS + CHANGELOG)
+## [0.0.0.33] - 2026-07-15
+
+### Changed
+- **FU-7 Sector Normalization**（6 phases，PR #1159-#1164）：將 `SectorID` 提升為 Taiwan sector 識別之 single source of truth，消除 sector name 字串於 Go source、JSON、MCP、frontend 之間的散落。
+  - **#1159 Phase A（sector.go canonical base）**：新增 `internal/sector/sector.go` 的 `SectorID` type + L1 行業常數（半導體 / AI / 金融等共 20 個），對齊 TWSE 大類；同時新增 `DisplayZHTw` 繁中 label map 與 `DisplayZHAliases` legacy alias 反查表，根治 ~290 個 backend 檔的 string literal 散落。
+  - **#1160 Phase E（frontend canonical display）**：`shared_web/static/js/**` 與 `client_web/**` 共用同一份 sector label map，UI 顯示與 API 完全一致，消除 ~13 個 frontend JS 檔混用三種中文表示法（canonical 中文名 / truncated 前綴 / TWSE-style 後綴 `類`）的歧義。
+  - **#1161 Phase D（L2 sub-industry extension）**：`internal/industry` 擴充 18 個 L2 子類別（半導體設備 / 晶圓代工 / IC 設計 / `ai_supply_chain` / `cooling` / `satellite_*` 等），`internal/cycle.go` 一併 migrate 至 `SectorID` 化。
+  - **#1162 Phase C（TWSE provider `mapIndustryName`）**：`internal/marketdata` 為 `mapIndustryName` 加 docstring + TWSE drift guard test，避免上游 TWSE 大類 / 子類別重新命名或欄位調整時默默失效。
+  - **#1163 Phase B（representative_stocks SectorID migration）**：`internal/industry` 的 `representative_stocks` 全面 migrate 至 `SectorID` 常數，移除字串硬編碼；後續 `6f1d39f` follow-up 移除 `string()` casts，回歸 idiomatic Go。
+  - **#1164 Phase F（MCP sector tools）**：`cmd/atlas-mcp` 新增 2 個 read-only tools — `industry_sector_list`（列出所有 `SectorID` 與 L2 子類別）+ `industry_sector_lookup`（給定 symbol 或 sector name 回傳 canonical 資訊），`docs/reference/tool-catalog.md` 同步更新至 110 base / 112 max。
+
+### Compliance
+- 採 additive migration 策略：六個 Phase 各自只加新東西或鎖單一 contract，任意階段都可單獨 revert；無既設外部 contract 變動。
+- 既設 sector 字串識別路徑不關閉，僅以 `SectorID` 常數為 single source of truth；既有 MCP tool 介面沒變（MCP tool count 110→112，純增量）。
+- 權威定錨文件：`docs/guides/fu-7-sector-norm.md`（於分支 `docs/fu-7-sector-norm-guide`），涵蓋六個 Phase 之間關係、canonical source of truth、MCP 暴露、breaking change 評估與 trade-off 取捨。
+
+### Process note
+- 本次 release 一併清理了 main HEAD 上 commit `8cf45cfa`（Stage 5 PR#5）留下的 `<<<<<<<` / `=======` / `>>>>>>>` 未解決 merge conflict markers，並將文件中既有的 v0.0.0.33 / v0.0.0.34 條目（Stage 4 / Stage 5 紀錄）重新編號為 v0.0.0.34 / v0.0.0.35，騰出 v0.0.0.33 給本次 FU-7 release；既設條目內容均原樣保留，僅 header 數字異動。
+
 ## [0.0.0.32] - 2026-07-10
 
 ### Fixed
