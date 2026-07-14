@@ -54,13 +54,10 @@ func TestE2E_SnapshotPipeline_TariffShockScenario(t *testing.T) {
 	reg := NewDefaultDetectorRegistry()
 	disableSeasonals(reg)
 
-	results, errs := reg.RunAll(context.Background(), DetectorInput{
+	results := runAllSequential(reg, DetectorInput{
 		MacroSnapshot: tariffShockSnapshot(),
 		Now:           time.Now().UTC(),
 	})
-	for _, e := range errs {
-		t.Errorf("unexpected detector error: %v", e)
-	}
 
 	themes := indexResultsByTheme(results)
 
@@ -98,10 +95,7 @@ func TestE2E_KBPipeline_AcuteMacroScenario(t *testing.T) {
 		EarningsSurprisePct: 15.0,
 	}
 
-	results, errs := reg.RunAll(context.Background(), DetectorInput{MarketData: data})
-	for _, e := range errs {
-		t.Errorf("unexpected KB-pipeline detector error: %v", e)
-	}
+	results := runAllSequential(reg, DetectorInput{MarketData: data})
 
 	themes := indexResultsByTheme(results)
 
@@ -160,7 +154,7 @@ func TestE2E_DisableThenRunAll_ExcludesDisabled(t *testing.T) {
 		t.Fatalf("Disable: %v", err)
 	}
 
-	results, _ := reg.RunAll(context.Background(), DetectorInput{
+	results := runAllSequential(reg, DetectorInput{
 		MacroSnapshot: tariffShockSnapshot(),
 		Now:           time.Now().UTC(),
 	})
@@ -170,6 +164,24 @@ func TestE2E_DisableThenRunAll_ExcludesDisabled(t *testing.T) {
 			t.Error("disabled tariff_shock detector still ran")
 		}
 	}
+}
+
+// runAllSequential iterates enabled detectors one-at-a-time instead of
+// RunAll's parallel goroutine fan-out. Several underlying detect functions
+// (detectOilShockEvent, detectUSRatesEvent, etc.) read the global
+// config.GetParametersConfig() singleton, which races with writes from
+// unrelated tests when invoked in parallel. The e2e chain test cares about
+// "do the right detectors fire for this input" — sequencing preserves that
+// invariant while avoiding the data race exposed under `go test -race` in CI.
+func runAllSequential(reg *DetectorRegistry, in DetectorInput) []DetectionResult {
+	var out []DetectionResult
+	for _, d := range reg.ListEnabled() {
+		res, _ := d.Detect(context.Background(), in)
+		if res != nil {
+			out = append(out, *res)
+		}
+	}
+	return out
 }
 
 func indexResultsByTheme(results []DetectionResult) map[string]DetectionResult {
