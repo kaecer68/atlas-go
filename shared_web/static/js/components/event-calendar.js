@@ -62,6 +62,41 @@ function filterByCategory(events, activeCategories) {
   return events.filter(evt => activeCategories.includes(getCategory(evt)));
 }
 
+function filterBySectors(events, activeSectors) {
+  if (!activeSectors || activeSectors.length === 0) return events;
+  return events.filter(evt => {
+    const inds = Array.isArray(evt.affected_industries) ? evt.affected_industries : [];
+    return activeSectors.some(s => inds.includes(s));
+  });
+}
+
+function filterByTriggerThemes(events, activeThemes) {
+  if (!activeThemes || activeThemes.length === 0) return events;
+  return events.filter(evt => activeThemes.includes(evt.trigger_theme));
+}
+
+function collectTriggerThemes(events) {
+  const set = new Set();
+  for (const evt of events) {
+    if (evt.trigger_theme) set.add(evt.trigger_theme);
+  }
+  return Array.from(set).sort();
+}
+
+function collectSectors(events) {
+  const set = new Set();
+  for (const evt of events) {
+    if (Array.isArray(evt.affected_industries)) {
+      for (const s of evt.affected_industries) set.add(s);
+    }
+  }
+  return Array.from(set).sort();
+}
+
+export function gatherCalFilterOptions(events) {
+  return { triggerThemes: collectTriggerThemes(events), sectors: collectSectors(events) };
+}
+
 function sortByImportance(events) {
   return [...events].sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1;
@@ -154,7 +189,7 @@ function sortEvents(events) {
   });
 }
 
-export async function renderEventCalendar(container, activeCategories = []) {
+export async function renderEventCalendar(container, activeCategories = [], extraFilters = {}) {
   container.innerHTML = '<div class="home-loading-card">載入市場行事曆…</div>';
 
   try {
@@ -167,7 +202,9 @@ export async function renderEventCalendar(container, activeCategories = []) {
     }
 
     const filtered = filterByCategory(events, activeCategories);
-    const { visible, hidden } = partitionEvents(filtered);
+    const byTheme = filterByTriggerThemes(filtered, extraFilters.triggerThemes);
+    const finalEvents = filterBySectors(byTheme, extraFilters.sectors);
+    const { visible, hidden } = partitionEvents(finalEvents);
     const sortedVisible = sortByImportance(visible);
 
     const defaultVisible = sortedVisible.slice(0, DEFAULT_VISIBLE_LIMIT);
