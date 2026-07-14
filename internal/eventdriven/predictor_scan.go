@@ -13,11 +13,11 @@ import (
 // but a cluster of high-severity scans within the lookback window can
 // tilt the day in a meaningful direction.
 const (
-	scanThemeLoadLimit       = 50
-	scanThemeMinConfidence   = 0.5
-	scanThemeLookback        = 24 * time.Hour
-	scanThemeTiltDampener    = 0.5
-	scanThemeMaxDriversKept  = 5
+	scanThemeLoadLimit      = 50
+	scanThemeMinConfidence  = 0.5
+	scanThemeLookback       = 24 * time.Hour
+	scanThemeTiltDampener   = 0.5
+	scanThemeMaxDriversKept = 5
 )
 
 // Bullish / bearish theme keyword tables. Lower-case substring match.
@@ -54,7 +54,7 @@ func scanSeverityWeight(severity string) float64 {
 }
 
 // scanThemeDirection returns +1 for bullish themes, -1 for bearish, 0
-// for neutral / unrecognised themes. The first matching keyword wins
+// for neutral / unrecognized themes. The first matching keyword wins
 // (bullish table is checked first).
 func scanThemeDirection(theme string) float64 {
 	tl := strings.ToLower(theme)

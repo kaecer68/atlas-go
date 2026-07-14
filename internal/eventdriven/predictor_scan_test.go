@@ -19,7 +19,7 @@ func TestScanSeverityWeight(t *testing.T) {
 		{"medium", 0.4},
 		{"low", 0.1},
 		{"CRITICAL", 1.0}, // case-insensitive
-		{"  high  ", 0.7},  // whitespace-tolerant
+		{"  high  ", 0.7}, // whitespace-tolerant
 		{"unknown", 0.0},
 		{"", 0.0},
 	}
