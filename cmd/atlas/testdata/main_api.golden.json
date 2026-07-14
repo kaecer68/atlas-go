@@ -21,6 +21,12 @@
       "params": "(level string, category,message string, details map[string]any)",
       "receiver": "experimentMonitorAdapter",
       "results": ""
+    },
+    {
+      "name": "LoadRecentScans",
+      "params": "(ctx context.Context, limit int)",
+      "receiver": "scanStoreAdapter",
+      "results": "([]eventdriven.ScanResult, error)"
     }
   ],
   "package": "main",
