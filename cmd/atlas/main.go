@@ -451,6 +451,7 @@ func run(args []string, deps appDeps) error {
 		var detectorRegistry *narrative.DetectorRegistry
 		var detectorScanStore ledger.DetectorScanStore
 		var gatewayFetcher monitoring.DataFetcher
+		var narrativeEngine *narrative.NarrativeEngine
 		if deps.dataFetcher != nil {
 			// Test override: skip real Gateway initialization, use injected fetcher.
 			gatewayFetcher = deps.dataFetcher
@@ -654,6 +655,7 @@ func run(args []string, deps appDeps) error {
 			// Stage 5 PR#4 Stage B: register detector scan routes alongside event-driven.
 			// Decoupled from narrativeEngine wiring — only needs the registry + scan store.
 			detectorRegistry = narrative.NewDefaultDetectorRegistry()
+			narrativeEngine = narrative.NewNarrativeEngine()
 			if store, storeErr := ledger.NewDetectorScanStore(cfg); storeErr == nil {
 				detectorScanStore = store
 				RegisterTemplateDetectorRoutes(mux, detectorRegistry, detectorScanStore)
@@ -850,6 +852,9 @@ func run(args []string, deps appDeps) error {
 
 			if detectorRegistry != nil && detectorScanStore != nil {
 				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore)
+			}
+			if narrativeEngine != nil {
+				scheduler.RegisterNarrativeWeightUpdateSchedule(taskMgr, narrativeEngine)
 			}
 			registerOperationsTasks(operationsDeps{
 				taskMgr:         taskMgr,
