@@ -3,10 +3,12 @@ package janus
 import (
 	"fmt"
 	"maps"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/prism"
 )
 
@@ -21,6 +23,13 @@ type Engine struct {
 	lastWeights map[prism.RegimeType]CohortWeight
 	lastClass   RegimeClassification
 	lastUpdated time.Time
+
+	// compositeScore: synthesized from macro when no PRISM Sharpe data.
+	compositeScore float64
+	// hasSynthetic tracks whether UpdateFromMacro was called, so
+	// GetCurrentRegimeScore can distinguish "no synthesis attempted"
+	// from "synthesis returned zero".
+	hasSynthetic bool
 }
 
 // NewEngine creates a JANUS engine with default configuration.
@@ -81,6 +90,97 @@ func (e *Engine) Update() {
 	e.lastWeights = weights
 	e.lastClass = classification
 	e.lastUpdated = time.Now()
+}
+
+// UpdateFromMacro stores a composite score synthesized from macro signals.
+// Used as fallback when PRISM training results (RecordTrainingResult) are
+// not available in production, so regime history sessions can report a
+// meaningful score reflecting current market state.
+func (e *Engine) UpdateFromMacro(snap marketdata.MacroDataSnapshot) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.compositeScore = synthesizeCompositeScore(snap)
+	e.hasSynthetic = true
+	e.lastUpdated = time.Now()
+}
+
+// GetCompositeScore returns the macro-synthesized score, or 0 if
+// UpdateFromMacro was never called.
+func (e *Engine) GetCompositeScore() float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.compositeScore
+}
+
+// GetCurrentRegimeScore returns the best available regime score:
+// real Sharpe (averaged across cohorts from PRISM tracker) when at least
+// one cohort has non-zero Sharpe, otherwise macro-synthesized fallback
+// (only if UpdateFromMacro was ever called). Returns (score, isSynthetic).
+// isSynthetic=true means the score is macro-derived, not from PRISM training.
+func (e *Engine) GetCurrentRegimeScore() (float64, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if score, ok := e.realRegimeScoreLocked(); ok {
+		return score, false
+	}
+	if e.hasSynthetic {
+		return e.compositeScore, true
+	}
+	return 0, false
+}
+
+// realRegimeScoreLocked returns Observations-weighted average Sharpe across
+// cohorts when at least one cohort has non-zero Sharpe. EnsureAllRegimes
+// seeds zero-Sharpe snapshots; we must skip those to avoid a synthetic-feeling
+// 0. Weighting by Observations gives more reliable cohorts (more samples)
+// proportionally more influence. Caller must hold e.mu (read or write).
+func (e *Engine) realRegimeScoreLocked() (float64, bool) {
+	perf := e.tracker.GetPerformance()
+	var weightedSum, totalWeight float64
+	for _, p := range perf {
+		if p == nil || p.ShortWindow == nil || p.ShortWindow.SharpeRatio == 0 {
+			continue
+		}
+		weight := float64(p.ShortWindow.Observations)
+		if weight == 0 {
+			weight = 1
+		}
+		weightedSum += p.ShortWindow.SharpeRatio * weight
+		totalWeight += weight
+	}
+	if totalWeight == 0 {
+		return 0, false
+	}
+	return weightedSum / totalWeight, true
+}
+
+// synthesizeCompositeScore maps macro signals to a ~[-95, +30] score:
+//
+//	tanh(foreignFlow / 5) * 30            — continuous Taiwan regime signal
+//	-max(0, VIX - 20) * 1.5                — panic penalty above baseline 20
+//
+// foreignFlow is in NTD billions (TWSE daily reports convention):
+// ±5B NTD saturates at ±30, so a typical ±1B day yields ~7.
+//
+// Oracle review notes:
+//   - foreign flow as tanh preserves magnitude info that step function loses
+//     (±1B vs ±100B NTD now distinguishable). Scale 5B saturates at ±30.
+//   - VIX coefficient 1.5 not 0.5: VIX 40 (= -30) matches foreign ±5B magnitude,
+//     giving 1:1 balance per Oracle recommendation.
+//   - Range asymmetry (-95 to +30) is intentional: downside risk dominates
+//     Taiwan equity regime in historical drawdowns (Chiao et al. 2006).
+func synthesizeCompositeScore(snap marketdata.MacroDataSnapshot) float64 {
+	vixBaseline := 20.0
+	if snap.VIXBaseline > 0 {
+		vixBaseline = snap.VIXBaseline
+	}
+	score := math.Tanh(snap.ForeignInvestorNet.Value/5) * 30
+	if snap.VIX.Value > vixBaseline {
+		score -= (snap.VIX.Value - vixBaseline) * 1.5
+	}
+	return score
 }
 
 // GetCohortWeights returns the most recently computed JANUS weights.

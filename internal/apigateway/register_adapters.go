@@ -143,6 +143,9 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- TSMC Revenue (FinMind, requires API key) ---
 	tsmcProvider := marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(workDir, "data/state/tsmc_revenue"))
+	tsmcProvider.OnDegraded = func(channelID, reason string) {
+		_ = g.Health().Record(channelID, "degraded", reason)
+	}
 	tsmcAdapter := NewTSMCRevenueChannelAdapter(tsmcProvider)
 	g.registry.Register("tsmc_revenue", tsmcAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "tsmc_revenue")

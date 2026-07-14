@@ -34,19 +34,42 @@ func (r *reqRecorder) SetResponseBody(b []byte) {
 	r.responseBody = b
 }
 
+func (r *reqRecorder) getResponseBody() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.responseBody
+}
+
 func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 	t.Helper()
 	rec := &reqRecorder{responseBody: []byte(`[]`)}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rec.mu.Lock()
-		defer rec.mu.Unlock()
-		rec.path = r.URL.Path
-		rec.query = r.URL.Query()
-		rec.headers = r.Header.Clone()
-		b, _ := io.ReadAll(r.Body)
-		rec.body = b
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(rec.responseBody)
+		switch r.URL.Path {
+		case "/api/macro/snapshot/latest":
+			rec.mu.Lock()
+			if rec.path == "" {
+				rec.path = r.URL.Path
+			}
+			rec.mu.Unlock()
+			_, _ = w.Write([]byte(`{"foreign_investor_net":{"value":1.0},"vix":{"value":15}}`))
+		case "/api/janus/regime-score":
+			rec.mu.Lock()
+			if rec.path == "" {
+				rec.path = r.URL.Path
+			}
+			rec.mu.Unlock()
+			_, _ = w.Write([]byte(`{"score":7.7,"is_synthetic":true}`))
+		default:
+			rec.mu.Lock()
+			rec.path = r.URL.Path
+			rec.query = r.URL.Query()
+			rec.headers = r.Header.Clone()
+			b, _ := io.ReadAll(r.Body)
+			rec.body = b
+			rec.mu.Unlock()
+			_, _ = w.Write(rec.getResponseBody())
+		}
 	}))
 
 	tmpDir := t.TempDir()
@@ -102,6 +125,25 @@ func TestHandleRegimeGetHistory_ClampedTo365(t *testing.T) {
 	}
 	if got := rec.query.Get("limit"); got != "365" {
 		t.Fatalf("expected limit=365 clamp, got %q", got)
+	}
+}
+
+func TestHandleRegimeGetHistory_PrefersRealEngineScore(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"sessions":[{"session_id":"s1","regime":"RISK_OFF","recorded_at":"2026-06-30T00:00:00Z"}],"current_regime":"RISK_OFF"}`)
+	_, out, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 7})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(out.Regimes) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(out.Regimes))
+	}
+	if out.Regimes[0].Score == nil {
+		t.Fatal("expected non-nil Score")
+	}
+	if got := *out.Regimes[0].Score; got != 7 {
+		t.Errorf("expected real score 7 from /api/janus/regime-score (int of 7.7), got %d", got)
 	}
 }
 

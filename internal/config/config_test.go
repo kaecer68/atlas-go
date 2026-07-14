@@ -380,3 +380,31 @@ func TestSafeKey(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_Stage3FlagsDefaultTrue(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("STAGE3_TASKS_ENABLED", "")
+	t.Setenv("STAGE3_ALERTS_ENABLED", "")
+
+	cfg := Load()
+	if !cfg.Stage3TasksEnabled {
+		t.Errorf("STAGE3_TASKS_ENABLED default should be true (opt-out), got false")
+	}
+	if !cfg.Stage3AlertsEnabled {
+		t.Errorf("STAGE3_ALERTS_ENABLED default should be true (opt-out), got false")
+	}
+}
+
+func TestLoad_Stage3FlagsEnvOptOut(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("STAGE3_TASKS_ENABLED", "false")
+	t.Setenv("STAGE3_ALERTS_ENABLED", "false")
+
+	cfg := Load()
+	if cfg.Stage3TasksEnabled {
+		t.Errorf("STAGE3_TASKS_ENABLED=false did not take effect")
+	}
+	if cfg.Stage3AlertsEnabled {
+		t.Errorf("STAGE3_ALERTS_ENABLED=false did not take effect")
+	}
+}

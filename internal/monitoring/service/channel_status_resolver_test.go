@@ -95,6 +95,26 @@ func TestResolveChannelStatusFromStore_OtherStatus(t *testing.T) {
 	}
 }
 
+// TestResolveChannelStatusFromStore_Degraded covers the degraded state:
+// the store recorded a degraded fetch (live API failed, cache served).
+// The resolver must show "degraded" — between ok and error.
+func TestResolveChannelStatusFromStore_Degraded(t *testing.T) {
+	store := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	if err := store.MarkDegraded("tsmc_revenue", "cache_fallback"); err != nil {
+		t.Fatalf("mark degraded: %v", err)
+	}
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "tsmc_revenue", "ok", "20260611")
+	if status != "degraded" {
+		t.Fatalf("expected degraded override, got %q", status)
+	}
+	if lastErr != "cache_fallback" {
+		t.Fatalf("expected cache_fallback reason, got %q", lastErr)
+	}
+	if updated != "使用快取: cache_fallback" {
+		t.Fatalf("expected cache fallback message, got %q", updated)
+	}
+}
+
 // TestResolveChannelStatusFromStore_OkFromOldFile is the regression test for
 // the original bug: the file mtime is 2 days old (would be "warn") but the
 // Gateway recorded a successful fetch today. The resolver must report "ok".

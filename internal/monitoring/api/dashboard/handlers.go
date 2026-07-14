@@ -110,4 +110,21 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	// Deprecated: internal calibration; not for web UI or MCP. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/dashboard/rsi-tw-calibration", shared.Get(h.HandleRSITwCalibration))
 	mux.Handle("GET /api/dashboard/maturity", shared.Get(h.HandleMaturity))
+	mux.Handle("GET /api/janus/regime-score", shared.Get(h.HandleJanusRegimeScore))
+}
+
+// HandleJanusRegimeScore returns the current regime score from JANUS engine.
+// Prefers real Sharpe (from PRISM tracker) over macro-synthesized fallback.
+// is_synthetic=true means the score is macro-derived, not from PRISM training.
+func (h *Handlers) HandleJanusRegimeScore(r *http.Request) (int, any) {
+	if h.JanusEngine == nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": "janus engine not available",
+		}
+	}
+	score, isSynthetic := h.JanusEngine.GetCurrentRegimeScore()
+	return http.StatusOK, map[string]any{
+		"score":        score,
+		"is_synthetic": isSynthetic,
+	}
 }

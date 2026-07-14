@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -14,6 +15,17 @@ import (
 // SectorDataProvider reads sector-specific data from JSON files to feed the StructuralTrend engine.
 type SectorDataProvider struct {
 	dataDir string
+
+	mu sync.RWMutex
+	// Last-fetched values are cached in memory so ChangePct can be derived
+	// from the previous fetch (Bug#5 root cause — JSON file has no historical
+	// column, so ChangePct was hardcoded to 0).
+	lastValues struct {
+		AIRevenueGrowth    float64
+		CoWoSUtilization   float64
+		CapexGrowth        float64
+		SemiconductorIndex float64
+	}
 }
 
 type sectorDataJSON struct {
@@ -61,31 +73,51 @@ func (p *SectorDataProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 		ts = time.Now()
 	}
 
+	p.mu.Lock()
+	aiChange := pctChange(parsed.AIRevenueGrowth, p.lastValues.AIRevenueGrowth)
+	cowosChange := pctChange(parsed.CoWoSUtilization, p.lastValues.CoWoSUtilization)
+	capexChange := pctChange(parsed.CapexGrowth, p.lastValues.CapexGrowth)
+	soxChange := pctChange(parsed.SemiconductorIndex, p.lastValues.SemiconductorIndex)
+	p.lastValues.AIRevenueGrowth = parsed.AIRevenueGrowth
+	p.lastValues.CoWoSUtilization = parsed.CoWoSUtilization
+	p.lastValues.CapexGrowth = parsed.CapexGrowth
+	p.lastValues.SemiconductorIndex = parsed.SemiconductorIndex
+	p.mu.Unlock()
+
 	return MacroDataSnapshot{
 		TSMCRevenue: MacroDataPoint{
 			Symbol:    "TSMC_AI_REVENUE",
 			Value:     parsed.AIRevenueGrowth,
-			ChangePct: 0,
+			ChangePct: aiChange,
 			Timestamp: ts.Unix(),
 		},
 		SOXIndex: MacroDataPoint{
 			Symbol:    "^SOX",
 			Value:     parsed.SemiconductorIndex,
-			ChangePct: 0,
+			ChangePct: soxChange,
 			Timestamp: ts.Unix(),
 		},
 		CoWoSUtilization: MacroDataPoint{
 			Symbol:    "COWOS_UTILIZATION",
 			Value:     parsed.CoWoSUtilization,
-			ChangePct: 0,
+			ChangePct: cowosChange,
 			Timestamp: ts.Unix(),
 		},
 		CapexGrowth: MacroDataPoint{
 			Symbol:    "CAPEX_GROWTH",
 			Value:     parsed.CapexGrowth,
-			ChangePct: 0,
+			ChangePct: capexChange,
 			Timestamp: ts.Unix(),
 		},
 		RecordedAt: ts.Unix(),
 	}, nil
+}
+
+// pctChange returns (current-previous)/previous*100, or 0 when previous is 0
+// (cold start) or current is unchanged.
+func pctChange(current, previous float64) float64 {
+	if previous == 0 {
+		return 0
+	}
+	return (current - previous) / previous * 100
 }

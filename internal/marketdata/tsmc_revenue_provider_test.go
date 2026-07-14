@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -97,6 +99,71 @@ func TestTSMCRevenueProvider_FetchSnapshot_ValidData(t *testing.T) {
 
 	if snap.TSMCRevenue.Timestamp == 0 {
 		t.Error("TSMCRevenue.Timestamp should not be zero")
+	}
+}
+
+func TestTSMCRevenueProvider_OnDegradedCalledOnFallback(t *testing.T) {
+	now := time.Now()
+	year, month := now.Year(), int(now.Month())
+
+	// Server returns 400 for all requests (simulate API failure)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	client := NewFinMindClient("test-key")
+	transport := &mockFinMindTransport{serverURL: strings.TrimPrefix(server.URL, "http://")}
+	client.SetHTTPClient(&http.Client{Transport: transport})
+
+	storageDir := t.TempDir()
+
+	// Pre-seed cache with valid revenue data
+	rocYear := year - 1911
+	cacheDate := fmt.Sprintf("%03d%02d", rocYear-1, month) // prior month
+	cacheFile := filepath.Join(storageDir, cacheDate+"_revenue.json")
+	_ = os.MkdirAll(storageDir, 0o755)
+	cacheRecord := tsmcRevenueRecord{
+		Date:      cacheDate,
+		Revenue:   18000000000.0,
+		YoYPct:    15.0,
+		Timestamp: now.Unix(),
+	}
+	data, _ := json.Marshal(cacheRecord)
+	if err := os.WriteFile(cacheFile, data, 0o644); err != nil {
+		t.Fatalf("seed cache: %v", err)
+	}
+
+	var degradedChannel, degradedReason string
+	p := &TSMCRevenueProvider{
+		client:     client,
+		storageDir: storageDir,
+		OnDegraded: func(channelID, reason string) {
+			degradedChannel = channelID
+			degradedReason = reason
+		},
+	}
+
+	ctx := context.Background()
+	snap, err := p.FetchSnapshot(ctx)
+	if err != nil {
+		t.Fatalf("FetchSnapshot() error = %v", err)
+	}
+
+	// Must have served from cache
+	if snap.TSMCRevenue.Symbol == "" {
+		t.Fatal("expected cached data from loadLatestSnapshot")
+	}
+	if snap.TSMCRevenue.Value != 18000000000.0 {
+		t.Fatalf("expected cached revenue 18000000000.0, got %f", snap.TSMCRevenue.Value)
+	}
+
+	// OnDegraded must have been called
+	if degradedChannel != "tsmc_revenue" {
+		t.Fatalf("expected degraded channel 'tsmc_revenue', got %q", degradedChannel)
+	}
+	if degradedReason != "cache_fallback" {
+		t.Fatalf("expected degraded reason 'cache_fallback', got %q", degradedReason)
 	}
 }
 
