@@ -677,8 +677,6 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
-			wireNarrativePipeline(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler))
-			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + narrative models)")
 
 			// Stage 5 PR#4 Stage B: register detector scan routes BEFORE event routes
 			// so the scan store is available for injection.
@@ -695,8 +693,10 @@ func run(args []string, deps appDeps) error {
 			// Wrap detector scan store in adapter to break the
 			// ledger→narrative→eventdriven import cycle.
 			eventScanStore := &scanStoreAdapter{inner: detectorScanStore}
-			eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), nil, eventScanStore)
-			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + detectors)")
+			narrativeAdapter := &eventdriven.NarrativeProvider{Engine: narrativeEngine}
+			eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
+			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + narrative models + detector scans)")
+			log.Printf("[Narrative] wired %d InvestmentModels into predictor", len(narrativeAdapter.ListModels()))
 		}
 
 		subStore, err := subscription.NewStore(cfg.WorkDir)
