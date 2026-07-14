@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
-
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
@@ -72,6 +71,7 @@ func writeAggregateJSON(w http.ResponseWriter, status int, data any) {
 
 // HandleHealthAggregate fans out to N tiers in-process. Each tier is wrapped
 // in a recovery + latency timer so one failing tier cannot crash the endpoint.
+//
 //nolint:unparam // r is required by shared.Handler interface
 func (h *HealthHandlers) handleHealthAggregate(r *http.Request) (int, any) {
 	resp := aggregateResponse{
