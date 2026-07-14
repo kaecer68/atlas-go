@@ -200,6 +200,12 @@
 
 > 這 5 個 tool 提供 MCP 對 frontend `industry.js`、`pipeline.js`、`risk.js` 等頁面所需資料的鏡像存取。
 
+### Sector Canonical（2 個 — FU-7 Phase F 新增）
+| Tool | 用途 |
+|------|------|
+| `industry_sector_list` | 列出所有 20 個 sector 的 canonical ID、中文標籤、代表股 |
+| `industry_sector_lookup` | 依股號（2330）或 sector 名稱（半導體 / semiconductor）查 sector 資訊 |
+
 ### Universe（2 個）
 | Tool | 用途 |
 |------|------|

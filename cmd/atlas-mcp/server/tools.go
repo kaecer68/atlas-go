@@ -56,6 +56,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerBriefingTools(mcpSrv, s)
 	registerParametersBacktestTools(mcpSrv, s)
 	registerIndustryExtTools(mcpSrv, s)
+	registerSectorTools(mcpSrv, s)
 	registerTemplateDetectorTools(mcpSrv, s)
 
 	countedAddTool(mcpSrv, &mcp.Tool{

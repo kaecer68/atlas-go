@@ -169,11 +169,11 @@ func TestBearerAuth_RejectionPathsAcrossTransports(t *testing.T) {
 // asserts that running registerTools + registerAuditTools through a
 // server whose Config.Transport is set to an HTTP transport (the path
 // used in production by SSE and streamable-HTTP deployments) still
-// produces 101–103 tools (97 base business tools + roots (2) +
-// 0-2 sampling/elicitation + 4 audit tools), matching the assertion in
-// server.Run(). The delta check keeps the test robust against other
-// tests in the package that may have already advanced the package-level
-// counter.
+// produces 103–105 business tools (97 base + roots (2) + template_detector (2) +
+// sector (2) + 0-2 sampling/elicitation) + 4 audit tools = 110–112 total,
+// matching the assertion in server.Run(). The delta check keeps the test robust
+// against other tests in the package that may have already advanced the
+// package-level counter.
 func TestRegisteredToolCount_RemainsInRangeAfterHTTPTransportRegistration(t *testing.T) {
 	audit := newTestAuditWriter(t)
 	srv := &server{
@@ -197,8 +197,8 @@ func TestRegisteredToolCount_RemainsInRangeAfterHTTPTransportRegistration(t *tes
 	registerAuditTools(mcpSrv, srv)
 	delta := RegisteredToolCount - before
 
-	if delta < 108 || delta > 110 {
-		t.Fatalf("tool count drift in HTTP-transport registration: delta=%d (total=%d), expected 108-110",
+	if delta < 110 || delta > 112 {
+		t.Fatalf("tool count drift in HTTP-transport registration: delta=%d (total=%d), expected 110-112",
 			delta, RegisteredToolCount)
 	}
 }
