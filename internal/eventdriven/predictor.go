@@ -324,18 +324,25 @@ func (p *Predictor) etfRebalanceEstimates(etfName string, _ industry.CalendarEve
 	return out
 }
 
+var etfKeywordTable = []struct {
+	keywords []string
+	name     string
+}{
+	{keywords: []string{"00878", "永續"}, name: "00878 永續高股息"},
+	{keywords: []string{"0056", "高股息"}, name: "0056 高股息"},
+	{keywords: []string{"0050", "臺灣50", "台灣50"}, name: "0050 臺灣50"},
+}
+
 func guessETFName(eventName string) string {
 	l := strings.ToLower(eventName)
-	switch {
-	case strings.Contains(l, "0050") || strings.Contains(l, "臺灣50") || strings.Contains(l, "台灣50"):
-		return "0050 臺灣50"
-	case strings.Contains(l, "0056") || strings.Contains(l, "高股息"):
-		return "0056 高股息"
-	case strings.Contains(l, "00878") || strings.Contains(l, "永續"):
-		return "00878 永續高股息"
-	default:
-		return ""
+	for _, etf := range etfKeywordTable {
+		for _, kw := range etf.keywords {
+			if strings.Contains(l, kw) {
+				return etf.name
+			}
+		}
 	}
+	return ""
 }
 
 // buildRevenueSurprises evaluates revenue events for >10% surprise.

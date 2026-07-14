@@ -345,13 +345,16 @@ func Test_GuessETFName_KnownNames(t *testing.T) {
 		{name: "0050", want: "0050 臺灣50"},
 		{name: "0056 高股息ETF", want: "0056 高股息"},
 		{name: "高股息調整", want: "0056 高股息"},
-		// 00878 contains "高股息" so prefix-order matches 0056 branch first
-		{name: "00878 永續高股息", want: "0056 高股息"},
+		// 00878 contains "高股息" so longest-prefix lookup must hit 00878 entry first
+		{name: "00878 永續高股息", want: "00878 永續高股息"},
 		{name: "00878", want: "00878 永續高股息"},
 		{name: "永續ETF調整", want: "00878 永續高股息"},
 		{name: "unknown market event", want: ""},
 		{name: "", want: ""},
 		{name: "00880", want: ""},
+		{name: "00878 永續高股息 成分股調整", want: "00878 永續高股息"},
+		{name: "高股息 成分股調整", want: "0056 高股息"},
+		{name: "0050 臺灣50 成分股調整", want: "0050 臺灣50"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
