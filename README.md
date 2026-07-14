@@ -72,7 +72,7 @@ Focused: `go test ./internal/experiment/... ./internal/orchestrator/... ./intern
 
 | You are... | Start here |
 |------------|-----------|
-| External AI agent connecting to atlas | [`docs/INVESTOR/README.md`](docs/INVESTOR/README.md) (5-min overview) |
+| External AI agent connecting to atlas | [`docs/investor/README.md`](docs/investor/README.md) (5-min overview) |
 | Developer modifying code | `AGENTS.md` (cross-tool AI guide) + [`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md) |
 | Debugging or troubleshooting | [`CLAUDE.md`](CLAUDE.md) (deploy, frontend, token rules) |
 | Understanding module maturity | [`internal/MATURITY.md`](internal/MATURITY.md) → [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) |

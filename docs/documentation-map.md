@@ -72,7 +72,7 @@
 | `docs/multi-cli-protocol.md` | 多 CLI 並行協議 | ✅ |
 | `docs/ai-prompt-files.md` | AI Prompt 政策 | ✅ |
 | `docs/design.md` | 設計文件 | ✅ |
-| `docs/process-annotation-sop.md` | 如何維護 PROCESSES.yaml | ✅ |
+| `docs/process-annotation-sop.md` | 如何維護 processes.yaml | ✅ |
 | `docs/audit-trail.md` | 稽核軌跡 | ✅ |
 | `docs/mcp-integration-local.md` | MCP 本機接入完整指南 | ✅ |
 | `docs/guides/adding-sector-agents.md` | 新增 sector agent 指南 | ✅ |
@@ -155,7 +155,7 @@
 
 | 檔案 | 用途 |
 |------|------|
-| `docs/REFERENCE/events/INDEX.md` | 事件目錄入口 |
+| `docs/REFERENCE/events/index.md` | 事件目錄入口 |
 | `docs/REFERENCE/events/backtest-completed.md` | 回測完成事件 |
 | `docs/REFERENCE/events/calibration-completed.md` | 校準完成事件 |
 | `docs/REFERENCE/events/channel-individual-health.md` | 通道個別健康事件 |
@@ -198,8 +198,8 @@
 | `docs/branch-hygiene/` | Branch 清理紀錄（1 個檔案） |
 | `docs/handoff/` | 任務交接（3 個檔案） |
 | `docs/investigations/` | 根因調查（5 個檔案） |
-| `docs/INCIDENTS/` | 事故記錄（2 個檔案） |
-| `docs/INVESTOR/` | 投資人入口 + use cases（10 個檔案） |
+| `docs/incidents/` | 事故記錄（2 個檔案） |
+| `docs/investor/` | 投資人入口 + use cases（10 個檔案） |
 | `docs/observations/` | 觀察記錄（0 個檔案；內容已移至 `.omo/handoffs/`） |
 | `docs/research/` | 研究文件（1 個檔案） |
 | `docs/spikes/` | 技術 spike（1 個檔案） |
@@ -230,9 +230,9 @@
 |------|------|
 | `docs/REFERENCE/workflow-map.md` | 21 條 workflow 盤查（WA-001–WA-701） |
 | `docs/REFERENCE/tool-catalog.md` | atlas-mcp 108 tools 完整 catalog |
-| `docs/REFERENCE/PROCESSES.yaml` | 結構化 workflow metadata |
+| `docs/REFERENCE/processes.yaml` | 結構化 workflow metadata |
 | `cmd/atlas-mcp/README.md` | MCP 給 agent 的唯一入口 |
-| `docs/INVESTOR/README.md` | 投資人 5 分鐘入門 |
+| `docs/investor/README.md` | 投資人 5 分鐘入門 |
 | `internal/AGENTS_INDEX.md` | 59 模組成熟度索引 |
 | `internal/MATURITY.md` | 模組成熟度對照表 |
 

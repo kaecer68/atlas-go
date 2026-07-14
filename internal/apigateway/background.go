@@ -285,7 +285,7 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 	// here, the half-open probe inside breaker.Call() (gateway.Fetch path)
 	// would never fire for tasks that are the channel's only caller,
 	// leaving the breaker permanently open. See
-	// docs/INCIDENTS/fubon-channel-recurring-failure-2026-06.md.
+	// docs/incidents/2026-06-fubon-channel-recurring-failure.md.
 
 	err := func() (err error) {
 		defer func() {

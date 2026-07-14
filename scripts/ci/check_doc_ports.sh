@@ -55,7 +55,7 @@ info "Canonical ports from port.go: atlas=$CANONICAL_HTTP_PORT  fubon=$CANONICAL
 #
 # Allowlist:
 #   docs/archive/          — frozen history
-#   docs/INCIDENTS/        — incident reports
+#   docs/incidents/        — incident reports
 #   docs/investigations/   — historical investigations
 #   docs/audit/            — audit trails
 #   CHANGELOG.md           — historical releases
@@ -73,7 +73,7 @@ TOTAL_FILES=$(git -C "$REPO_ROOT" ls-files | wc -l | tr -d ' ')
 # Search for port-like references: :8080/:8081 or port 8080/8081 or EXPOSE 8080/8081
 while IFS=: read -r file line content; do
   case "$file" in
-    docs/archive/*|docs/INCIDENTS/*|docs/investigations/*|docs/audit/*|CHANGELOG.md|data/*) continue ;;
+    docs/archive/*|docs/incidents/*|docs/investigations/*|docs/audit/*|CHANGELOG.md|data/*) continue ;;
     internal/constants/port.go)  continue ;;
     internal/industry/representative_stocks.go) continue ;;
     internal/marketdata/fubon_url_guard_test.go) continue ;;

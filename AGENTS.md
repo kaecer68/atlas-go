@@ -55,7 +55,7 @@
 - **MCP 入口**：[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md)
 - **Tool catalog**：[`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)
 - **Workflow map**：[`docs/REFERENCE/workflow-map.md`](docs/REFERENCE/workflow-map.md)
-- **Process 標註**：[`docs/REFERENCE/PROCESSES.yaml`](docs/REFERENCE/PROCESSES.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
+- **Process 標註**：[`docs/REFERENCE/processes.yaml`](docs/REFERENCE/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)
 - **FactorType 變更協議**：[`.claude/skills/atlas-factor-change-protocol/SKILL.md`](.claude/skills/atlas-factor-change-protocol/SKILL.md)
 
