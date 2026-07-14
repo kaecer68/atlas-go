@@ -391,7 +391,10 @@ func run(args []string, deps appDeps) error {
 		janusEngine.EnsureAllRegimes()
 		janusEngine.Update()
 
-		eventCalendar := industry.NewEventCalendar()
+		// Stage 8.5 follow-up: use wired factory so default events load on
+		// startup (was empty events slice before stage3 schedule fired).
+		// See internal/industry/event_calendar.go:1326-1328 "PR#1 root cause".
+		eventCalendar := industry.NewEventCalendarWithProvider(nil)
 
 		// Initialize MaturityTracker for burn-in / calibrating / full-auto gating.
 		maturityTracker, _ := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
