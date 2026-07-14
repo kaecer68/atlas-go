@@ -3,6 +3,10 @@
  *
  * 顯示未來 5 日 daily prediction + 信心分數熱度圖。
  * Source: /api/events/prediction
+ *
+ * Backend shape: predictions[] 含 driving_events / predicted_forces;active_events[]
+ * 含 affected_industries。本模組用 mapPredictionForDisplay 從 driving_events 推出
+ * reasons,並以 name-match 從 active_events 取 union 的 affected_industries。
  */
 
 import { silentGetJSON } from '../shared/app-utils.js';
@@ -25,9 +29,37 @@ export const template = `
 <section id="cp-detail" class="cp-detail" hidden></section>
 `;
 
+/**
+ * @param {object|null|undefined} prediction backend FlowPrediction
+ * @param {Array<object>|null|undefined} activeEvents backend active_events
+ * @returns {{ reasons: string[], sectors: string[] }}
+ */
+export function mapPredictionForDisplay(prediction, activeEvents) {
+  if (!prediction || typeof prediction !== 'object') {
+    return { reasons: [], sectors: [] };
+  }
+  const reasons = Array.isArray(prediction.driving_events)
+    ? prediction.driving_events.filter(function (s) { return typeof s === 'string' && s.length > 0; })
+    : [];
+  const safeEvents = Array.isArray(activeEvents) ? activeEvents : [];
+  const drivingSet = new Set(reasons);
+  const sectorSet = new Set();
+  for (const evt of safeEvents) {
+    if (!evt || typeof evt !== 'object') continue;
+    const name = typeof evt.name === 'string' ? evt.name : '';
+    if (!drivingSet.has(name)) continue;
+    const industries = Array.isArray(evt.affected_industries) ? evt.affected_industries : [];
+    for (const ind of industries) {
+      if (typeof ind === 'string' && ind.length > 0) sectorSet.add(ind);
+    }
+  }
+  return { reasons, sectors: Array.from(sectorSet) };
+}
+
 const DAY_LABELS = ['明', '二', '三', '四', '五'];
 
 let _allPredictions = [];
+let _activeEvents = [];
 let _activeDir = 'all';
 
 function dayLabel(prediction, idx) {
@@ -97,8 +129,7 @@ function renderDetail(prediction) {
   const dirLabel = dir === 'inflow' ? '資金流入' : dir === 'outflow' ? '資金流出' : '中性';
   const dirColor = financialColor(dir === 'inflow' ? 1 : dir === 'outflow' ? -1 : 0, 'flow');
   const date = prediction.date ? prediction.date.slice(0, 10) : '—';
-  const reasons = Array.isArray(prediction.reasons) ? prediction.reasons : [];
-  const sectors = Array.isArray(prediction.sectors) ? prediction.sectors : [];
+  const { reasons, sectors } = mapPredictionForDisplay(prediction, _activeEvents);
 
   host.innerHTML =
     '<div class="cp-detail__card">' +
@@ -120,6 +151,7 @@ function renderDetail(prediction) {
 async function loadPredictions() {
   const data = await silentGetJSON('/api/events/prediction');
   _allPredictions = (data && Array.isArray(data.predictions)) ? data.predictions : [];
+  _activeEvents = (data && Array.isArray(data.active_events)) ? data.active_events : [];
   renderGrid();
 }
 
