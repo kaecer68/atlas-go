@@ -136,7 +136,7 @@ func registerStage3Tasks(d stage3Deps) {
 
 // registerStage3AlertTasks wires the Stage 3 alert evaluator into BTM.
 // Three wrappers are registered:
-//   - staleness: every 10 minutes
+//   - staleness: every 5 minutes (aligned with .omo/plans/Atlas 錢潮方向預測實作規劃.md § Stage 3.2 spec)
 //   - daily:     every 1 minute (fires 06:30 via internal guard)
 //   - market-close: every 1 minute (fires 13:45 via internal guard)
 func registerStage3AlertTasks(d stage3Deps) {
@@ -250,14 +250,14 @@ func registerStage3AlertTasks(d stage3Deps) {
 
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:     "stage3-alert-staleness",
-		Interval: 10 * time.Minute,
+		Interval: 5 * time.Minute,
 		Enabled:  true,
 		Task: func(ctx context.Context) error {
 			evaluator.EvaluateStaleness()
 			return nil
 		},
 	})
-	log.Printf("[Gateway] registered stage3-alert-staleness background task (10m interval)")
+	log.Printf("[Gateway] registered stage3-alert-staleness background task (5m interval; aligned with .omo/plans/Atlas 錢潮方向預測實作規劃.md § Stage 3.2 spec)")
 
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:     "stage3-alert-daily",

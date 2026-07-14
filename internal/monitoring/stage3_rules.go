@@ -86,7 +86,9 @@ func (e *Stage3AlertEvaluator) EvaluateMarketClose() {
 }
 
 // EvaluateStaleness runs the data-staleness rules. Intended to be called
-// every 10 minutes.
+// every 5 minutes (aligned with .omo/plans/Atlas 錢潮方向預測實作規劃.md § Stage 3.2:
+// "任一 channel 失效時報警會在 5 分鐘內觸發"; changed from 10m → 5m in Stage 8.1
+// per user decision Q2 option C, 2026-07-15).
 func (e *Stage3AlertEvaluator) EvaluateStaleness() {
 	e.evaluateDataStaleness()
 }

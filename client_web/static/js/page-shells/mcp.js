@@ -2,7 +2,7 @@ export const template = `
   <div class="mcp-page">
     <div class="panel">
       <h2>MCP 外部 AI 整合</h2>
-      <p class="mcp-intro">atlas-mcp 提供 80+ 工具讓外部 AI 直接查詢市場狀態、策略訊號與風險評估。</p>
+      <p class="mcp-intro">atlas-mcp 提供 110+ 工具讓外部 AI 直接查詢市場狀態、策略訊號與風險評估。</p>
     </div>
 
     <div class="mcp-setup panel">
