@@ -9,6 +9,23 @@ import { silentGetJSON } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 import { financialColor } from '../shared/color-tokens.js';
 
+const SECTOR_ALIAS = {
+  '半導體業': '半導體',
+  '半導體產業': '半導體',
+  'AI伺服器產業': 'AI',
+  'AI伺服器': 'AI',
+  '電子零組件業': '電子零組件',
+  '金融業': '金融',
+  '金融股': '金融',
+  '外銷產業': '外銷',
+  '傳產股': '傳產',
+  '傳統產業': '傳產',
+};
+
+function canonicalSector(name) {
+  return SECTOR_ALIAS[name] || name;
+}
+
 export const template = `
 <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
   錢潮看板顯示 atlas narrative engine 目前啟用的模型，每個模型依 weight
@@ -43,8 +60,8 @@ function renderSectors(models) {
   models.forEach(function (m) {
     const favored = Array.isArray(m.favored_sectors) ? m.favored_sectors : [];
     const avoided = Array.isArray(m.avoided_sectors) ? m.avoided_sectors : [];
-    favored.forEach(function (s) { allSectors.push({ name: s, vote: 'favored', weight: m.weight || 0 }); });
-    avoided.forEach(function (s) { allSectors.push({ name: s, vote: 'avoided', weight: m.weight || 0 }); });
+    favored.forEach(function (s) { allSectors.push({ name: canonicalSector(s), vote: 'favored', weight: m.weight || 0 }); });
+    avoided.forEach(function (s) { allSectors.push({ name: canonicalSector(s), vote: 'avoided', weight: m.weight || 0 }); });
   });
 
   if (!allSectors.length) {
