@@ -694,6 +694,10 @@ func run(args []string, deps appDeps) error {
 			// ledger→narrative→eventdriven import cycle.
 			eventScanStore := &scanStoreAdapter{inner: detectorScanStore}
 			narrativeAdapter := &eventdriven.NarrativeProvider{Engine: narrativeEngine}
+			// ⚠️  DO NOT add a second RegisterRoutesWith* call for /api/events/*
+			// below this line — duplicate mux.Handle will panic on startup.
+			// See PR #1173 (commit 7d93e754) for the bug this comment prevents.
+			// All event/* routes are owned by RegisterRoutesWithDetectors.
 			eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
 			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + narrative models + detector scans)")
 			log.Printf("[Narrative] wired %d InvestmentModels into predictor", len(narrativeAdapter.ListModels()))
