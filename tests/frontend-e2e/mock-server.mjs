@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +28,32 @@ function mimeType(ext) {
 
 function hasFileExt(p) {
   return /\.\w{2,4}$/.test(p);
+}
+
+function isDistStale(projectDir) {
+  const distHtml = path.join(projectDir, 'dist', 'index.html');
+  const staticHtml = path.join(projectDir, 'static', 'index.html');
+  try {
+    const distMtime = fs.statSync(distHtml).mtimeMs;
+    const staticMtime = fs.statSync(staticHtml).mtimeMs;
+    return staticMtime > distMtime;
+  } catch (e) {
+    if (e.code === 'ENOENT') return true;
+    throw e;
+  }
+}
+
+function ensureDistFresh(projectDir) {
+  if (!isDistStale(projectDir)) return;
+  const name = path.basename(projectDir);
+  try {
+    console.log(`[mock-server] ${name}/dist stale or missing — rebuilding…`);
+    execSync('node esbuild.config.mjs', { cwd: projectDir, stdio: 'pipe' });
+    console.log(`[mock-server] ${name}/dist rebuilt`);
+  } catch (err) {
+    console.warn(`[mock-server] could not rebuild ${name}/dist: ${err.message}`);
+    console.warn('[mock-server] run `npm run build` in admin_web/ + client_web/ manually if tests misbehave');
+  }
 }
 
 function sendJSON(res, data, status) {
@@ -170,6 +197,8 @@ const server = http.createServer((req, res) => {
 });
 
 const PORT = parseInt(process.env.MOCK_PORT || '8001', 10);
+ensureDistFresh(path.join(ROOT, 'admin_web'));
+ensureDistFresh(path.join(ROOT, 'client_web'));
 server.listen(PORT, () => {
   console.log(`Mock server listening on http://localhost:${PORT}`);
   console.log(`  Admin: http://localhost:${PORT}/admin/`);

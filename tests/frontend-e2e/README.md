@@ -6,7 +6,8 @@ Stage 7 前端 E2E 驗證 — 針對 capital-flows / narrative models 與 predic
 
 - Node.js ≥ 18
 - Playwright（測試腳本會自動尋找 `playwright` npm package）
-- `admin_web/` 與 `client_web/` 已完成 production build（`npm run build`）
+- `admin_web/node_modules/` 與 `client_web/node_modules/` 已安裝(`npm install`)
+  - mock-server.mjs 啟動時會**自動 rebuild stale `dist/`**(比對 `static/index.html` 與 `dist/index.html` 的 mtime — 若 dist 缺失或較舊就跑 `node esbuild.config.mjs` rebuild,通常 < 1 秒),所以**無需手動 npm run build**
 
 ## 快速開始
 
@@ -21,16 +22,16 @@ BASE_URL=http://localhost:18080 node tests/frontend-e2e/stage7_smoke.mjs
 ### 方案 B：Static Mock Server（無需後端）
 
 ```bash
-# 1. Build 前端（如尚未執行）
-cd admin_web && npm install --no-audit --no-fund && npm run build && cd ..
-cd client_web && npm install --no-audit --no-fund && npm run build && cd ..
+# 1. （可選）首次執行需安裝 admin_web/ 與 client_web/ 的 npm deps(只需做一次)
+cd admin_web && npm install --no-audit --no-fund && cd ..
+cd client_web && npm install --no-audit --no-fund && cd ..
 
-# 2. 啟動 Mock Server（背景）
+# 2. 啟動 Mock Server(背景)。它會自動 rebuild stale dist,通常 < 1 秒
 node tests/frontend-e2e/mock-server.mjs &
 MOCK_PID=$!
 sleep 1
 
-# 3. 確認 Mock Server 正常
+# 3. 確認 Mock Server 正常(auto-rebuild log 顯示 "[mock-server] xxx/dist rebuilt" 表示剛 rebuild 過)
 curl -s http://localhost:8001/api/narrative/models | head -c 100
 curl -s http://localhost:8001/api/events/prediction | head -c 100
 
