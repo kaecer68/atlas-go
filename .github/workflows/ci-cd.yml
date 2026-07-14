@@ -236,6 +236,7 @@ jobs:
   # Build Docker Image
   docker:
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     needs: [build, lint]
     permissions:
       contents: read
