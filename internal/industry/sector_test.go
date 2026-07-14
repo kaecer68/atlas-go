@@ -281,3 +281,23 @@ func Test_DisplayZH_L2Fallback_SnakeCaseReturned(t *testing.T) {
 		t.Errorf("DisplayZH(foundry) = %q, want %q", got, string(SubIndustryFoundry))
 	}
 }
+
+// TWSE mapping validation — guards against drift between mapIndustryName string literals
+// and canonical SectorID constants. If a SectorID is renamed, this test catches the gap.
+func Test_TWSEMapping_AllValuesAreValidSectorIDs(t *testing.T) {
+	vals := []string{
+		"semiconductor",
+		"ai_supply_chain",
+		"electronics",
+		"other_electronics",
+		"shipping",
+		"financials",
+		"energy",
+		"robotics",
+	}
+	for _, v := range vals {
+		if !SectorID(v).IsValid() {
+			t.Errorf("TWSE mapping value %q is not a valid SectorID (rename or register it)", v)
+		}
+	}
+}

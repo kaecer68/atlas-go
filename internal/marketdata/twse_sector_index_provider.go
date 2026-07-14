@@ -182,7 +182,7 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 	return result, nil
 }
 
-// mapIndustryName maps TWSE OpenAPI v1 industry names (Chinese) to internal industry IDs.
+// mapIndustryName maps TWSE OpenAPI v1 industry names (Chinese) to canonical SectorID strings.
 func (p *TWSESectorIndexProvider) mapIndustryName(twseName string) string {
 	mapping := map[string]string{
 		"半導體類指數":     "semiconductor",
