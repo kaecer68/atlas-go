@@ -3914,6 +3914,22 @@ export interface WeightFactorConfig {
   evidence: string;
 }
 
+export interface aggregateResponse {
+  tiers: Record<string, tierReport>;
+  overall: tierReport;
+}
+
+export interface authPostureDetail {
+  status: string;
+}
+
+export interface channelHealthFileMeta {
+  path: string;
+  exists: boolean;
+  size_bytes?: number;
+  modified_at?: string;
+}
+
 export interface channelState {
   enabled: boolean;
   updated_at: string;
@@ -3993,6 +4009,10 @@ export interface healthResponse {
   ports: Record<string, portHealthReport>;
 }
 
+export interface llmReadyDetail {
+  note: string;
+}
+
 export interface marginHistoryFile {
   date: string;
   margin_balance: number;
@@ -4018,6 +4038,11 @@ export interface portHealthReport {
   pid?: number;
   command?: string;
   error?: string;
+}
+
+export interface portProbeDetail {
+  atlas_http: string;
+  fubon_proxy: string;
 }
 
 export interface providerHealthJSON {
@@ -4123,6 +4148,13 @@ export interface taifexPCRRaw {
 export interface tejResponse {
   datatable: string;
   error?: string | null;
+}
+
+export interface tierReport {
+  ok: boolean;
+  reason?: string;
+  latency_ms: number;
+  details?: string;
 }
 
 export interface tsmcRevenueRecord {
