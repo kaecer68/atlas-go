@@ -2,6 +2,7 @@ package narrative
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -531,5 +532,108 @@ func TestEarningsSurpriseEvent_MatchesCausalChains(t *testing.T) {
 	}
 	if chains[0].Score <= 0 {
 		t.Fatalf("expected positive score, got %f", chains[0].Score)
+	}
+}
+
+func TestRecalculateTemplateHitRates(t *testing.T) {
+	ne := NewNarrativeEngine()
+	tmpl, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("US_rates_up template must exist in default KB")
+	}
+	tmpl.HistoricalHitRate = 0.70
+	ne.kb.RegisterTemplate(tmpl)
+	ne.models[0].RecentError = 0.2
+	ne.models[0].HitRate = 0.80
+
+	ne.RecalculateTemplateHitRates()
+
+	got, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("US_rates_up template missing after recalculation")
+	}
+	const alpha = 0.2
+	want := (1-alpha)*0.70 + alpha*0.80
+	if got.HistoricalHitRate != want {
+		t.Fatalf("expected HistoricalHitRate %v, got %v", want, got.HistoricalHitRate)
+	}
+}
+
+// Stage 4 PR#4 RecalculateAllTemplateHitRates tests begin here.
+
+func TestRecalculateAllTemplateHitRates_UpdatesEveryTemplate(t *testing.T) {
+	ne := NewNarrativeEngine()
+	all := ne.kb.ListTemplates()
+	if len(all) != 24 {
+		t.Fatalf("default KB should have 24 templates, got %d", len(all))
+	}
+
+	const globalHitRate = 0.62
+	updated := ne.RecalculateAllTemplateHitRates(globalHitRate)
+	if updated == 0 {
+		t.Fatalf("expected non-zero updated count, got 0")
+	}
+}
+
+func TestRecalculateAllTemplateHitRates_IdempotentConvergence(t *testing.T) {
+	ne := NewNarrativeEngine()
+	const globalHitRate = 0.55
+	const iterations = 60
+	for i := 0; i < iterations; i++ {
+		ne.RecalculateAllTemplateHitRates(globalHitRate)
+	}
+	prev := map[string]float64{}
+	for _, tmpl := range ne.kb.ListTemplates() {
+		prev[tmpl.ID] = tmpl.HistoricalHitRate
+	}
+	ne.RecalculateAllTemplateHitRates(globalHitRate)
+	for _, tmpl := range ne.kb.ListTemplates() {
+		delta := math.Abs(tmpl.HistoricalHitRate - prev[tmpl.ID])
+		if delta > 0.02 {
+			t.Errorf("template %q not converged: rate=%.4f, prev=%.4f, delta=%.4f",
+				tmpl.ID, tmpl.HistoricalHitRate, prev[tmpl.ID], delta)
+		}
+		if tmpl.HistoricalHitRate < 0 || tmpl.HistoricalHitRate > 1 {
+			t.Errorf("template %q HistoricalHitRate=%.4f out of [0,1]", tmpl.ID, tmpl.HistoricalHitRate)
+		}
+	}
+}
+
+func TestRecalculateAllTemplateHitRates_BoundsPreserved(t *testing.T) {
+	ne := NewNarrativeEngine()
+	extreme := []float64{-0.5, 0.0, 1.5}
+	for _, g := range extreme {
+		ne.RecalculateAllTemplateHitRates(g)
+		for _, tmpl := range ne.kb.ListTemplates() {
+			if tmpl.HistoricalHitRate < 0 || tmpl.HistoricalHitRate > 1 {
+				t.Errorf("template %q HistoricalHitRate=%.4f out of [0,1] for globalHitRate=%.2f",
+					tmpl.ID, tmpl.HistoricalHitRate, g)
+			}
+		}
+	}
+}
+
+func TestRecalculateAllTemplateHitRates_PreservesExistingRecalc(t *testing.T) {
+	ne := NewNarrativeEngine()
+	tmpl, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("US_rates_up template missing")
+	}
+	tmpl.HistoricalHitRate = 0.65
+	ne.kb.RegisterTemplate(tmpl)
+	ne.models[0].RecentError = 0.2
+	ne.models[0].HitRate = 0.85
+
+	ne.RecalculateAllTemplateHitRates(0.30)
+
+	got, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("US_rates_up missing after recalc-all")
+	}
+	// First active-models chain: (1-0.2)*0.65 + 0.2*0.85 = 0.69
+	// Second global chain: (1-0.1)*0.69 + 0.1*0.30 = 0.651
+	want := 0.9*((1-0.2)*0.65+0.2*0.85) + 0.1*0.30
+	if math.Abs(got.HistoricalHitRate-want) > 0.001 {
+		t.Errorf("US_rates_up after chained recalc: got %.6f, want %.6f", got.HistoricalHitRate, want)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/eventquality"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -74,6 +75,14 @@ type CalendarEvent struct {
 	EvidenceQuality EventEvidence `json:"evidence_quality"`
 	// GeneratedAt records when this event was created, allowing freshness checks.
 	GeneratedAt time.Time `json:"generated_at"`
+	// Backfilled is true when this event was retroactively added (its effective
+	// date is in the past at ingestion time). The predictor discounts backfilled
+	// events to 0.7x weight (Stage 2.2c).
+	Backfilled bool `json:"backfilled"`
+	// CrossSourceStatus tracks cross-source verification (Stage 2.2b).
+	// "confirmed" when ≥2 distinct sources report the same composite key;
+	// "pending" with only 1 source; empty when not evaluated.
+	CrossSourceStatus string `json:"cross_source_status,omitempty"`
 }
 
 // String returns a human-readable summary of the event.
@@ -106,6 +115,13 @@ type EventCalendar struct {
 	config      *config.ParametersConfig
 	annualRules map[string]EventRule
 	generatedAt time.Time
+
+	// Stage 2 quality gate hooks (PR #1119 + #1120, #1122). All optional; when nil
+	// the calendar falls back to the legacy "accept everything" path so
+	// existing callers don't need to wire a validator.
+	validator        eventquality.EventValidator
+	qualityLog       *eventquality.QualityLog
+	crossSourceStore *eventquality.CrossSourceStore
 }
 
 // NewEventCalendar creates a new EventCalendar with default event rules.
@@ -117,6 +133,114 @@ func NewEventCalendar() *EventCalendar {
 		annualRules: defaultEventRules(),
 	}
 	return tec
+}
+
+// WithValidator attaches a Stage 2 eventquality.EventValidator. Events that
+// fail validation are dropped and (if WithQualityLog is also wired) recorded
+// in the quality log. Returns the receiver for chaining.
+func (tec *EventCalendar) WithValidator(v eventquality.EventValidator) *EventCalendar {
+	tec.mu.Lock()
+	tec.validator = v
+	tec.mu.Unlock()
+	return tec
+}
+
+// WithQualityLog attaches a Stage 2 eventquality.QualityLog destination for
+// rejected events. No-op when the validator is nil.
+func (tec *EventCalendar) WithQualityLog(l *eventquality.QualityLog) *EventCalendar {
+	tec.mu.Lock()
+	tec.qualityLog = l
+	tec.mu.Unlock()
+	return tec
+}
+
+// WithCrossSourceStore attaches a Stage 2 cross-source verification store.
+// When wired, UpdateFromProvider records each provider's source in the store
+// and tags events with their cross-source status (confirmed / pending).
+func (tec *EventCalendar) WithCrossSourceStore(s *eventquality.CrossSourceStore) *EventCalendar {
+	tec.mu.Lock()
+	tec.crossSourceStore = s
+	tec.mu.Unlock()
+	return tec
+}
+
+// gateEvent runs the quality validator (if wired) and returns (true, "") to
+// accept the event, (false, reason) to reject. Rejection reason is also
+// recorded to the quality log when wired.
+func (tec *EventCalendar) gateEvent(raw eventquality.RawEvent) (bool, string) {
+	if tec.validator == nil {
+		return true, ""
+	}
+	res := tec.validator.Validate(raw)
+	if res.Accepted {
+		return true, ""
+	}
+	if tec.qualityLog != nil {
+		if err := tec.qualityLog.Record(res); err != nil {
+			logging.Warn("event_calendar", "quality_log_write_failed",
+				logging.FStr("event_id", res.EventID),
+				logging.Err(err),
+			)
+		}
+	}
+	return false, res.Reason
+}
+
+// toRawEvent converts a CalendarEvent into the wire-agnostic RawEvent fed to
+// the Stage 2 validator. Confidence is mapped from the provenance Evidence
+// field; trigger_theme is the event_type (the calendar has no separate
+// trigger_theme column).
+func toRawEvent(e CalendarEvent) eventquality.RawEvent {
+	conf := 0.5
+	switch e.EvidenceQuality {
+	case EvidenceRealTime:
+		conf = 1.0
+	case EvidenceEstimated:
+		conf = 0.7
+	case EvidenceUnverified:
+		conf = 0.3
+	}
+	symbol := ""
+	if len(e.AffectedIndustries) > 0 {
+		symbol = e.AffectedIndustries[0]
+	} else if e.EventType != "" {
+		symbol = e.EventType
+	}
+	src := string(e.DataSource)
+	if src == "" {
+		src = "calendar"
+	}
+	ingestedAt := e.GeneratedAt
+	if ingestedAt.IsZero() {
+		ingestedAt = time.Now()
+	}
+	return eventquality.RawEvent{
+		EventID:        e.ID,
+		EventType:      e.EventType,
+		EffectiveDate:  e.PeakDate,
+		SymbolOrSector: symbol,
+		Title:          e.Name,
+		TriggerTheme:   e.EventType,
+		Source:         src,
+		Confidence:     conf,
+		IngestedAt:     ingestedAt,
+	}
+}
+
+// filterByQualityGate runs gateEvent on each event in events and returns the
+// subset that passes validation. When the validator is nil the function is a
+// pass-through (returns the input slice).
+func (tec *EventCalendar) filterByQualityGate(events []CalendarEvent) []CalendarEvent {
+	if tec.validator == nil {
+		return events
+	}
+	out := make([]CalendarEvent, 0, len(events))
+	for _, evt := range events {
+		if ok, _ := tec.gateEvent(toRawEvent(evt)); ok {
+			out = append(out, evt)
+		}
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -688,6 +812,7 @@ func (tec *EventCalendar) RefreshEvents(now time.Time) {
 		allEvents = append(allEvents, evt)
 	}
 
+	allEvents = tec.filterByQualityGate(allEvents)
 	tec.events = allEvents
 }
 
@@ -759,6 +884,26 @@ func (tec *EventCalendar) GetEventTimeline(now time.Time, days int) []CalendarEv
 	return timeline
 }
 
+func (tec *EventCalendar) GetEventsForDate(date time.Time) []CalendarEvent {
+	return tec.DetectActiveEvents(date)
+}
+
+// IsTaiwanTradingDay reports whether `date` is a weekday outside every Taiwan
+// public-holiday window (long_holiday event). Used by alert rules to suppress
+// spurious "no events" signals on weekends and lunar/fixed-date holidays.
+func (tec *EventCalendar) IsTaiwanTradingDay(date time.Time) bool {
+	wd := date.Weekday()
+	if wd == time.Saturday || wd == time.Sunday {
+		return false
+	}
+	for _, evt := range tec.GetEventsForDate(date) {
+		if evt.EventType == string(EventLongHoliday) {
+			return false
+		}
+	}
+	return true
+}
+
 // GetAllActiveEventNames returns the names of currently active events.
 func (tec *EventCalendar) GetAllActiveEventNames(now time.Time) []string {
 	active := tec.DetectActiveEvents(now)
@@ -822,6 +967,7 @@ func (tec *EventCalendar) buildEventFromRule(rule EventRule, year int, month tim
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("季底作帳 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -848,6 +994,7 @@ func (tec *EventCalendar) buildMonthlyEvent(rule EventRule, year int, month time
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s - %s", rule.Name, month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -876,6 +1023,7 @@ func (tec *EventCalendar) buildHolidayEvent(rule EventRule, h taiwanHoliday, yea
 		ID:                  fmt.Sprintf("%s_%s_%d", rule.EventType, h.Name, year),
 		Name:                fmt.Sprintf("連假 - %s", h.Name),
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s前後交易淡季", h.Name),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -897,6 +1045,7 @@ func (tec *EventCalendar) buildPositionBuildingEvent(rule EventRule, year int, m
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("卡位行情 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -929,6 +1078,7 @@ func (tec *EventCalendar) buildElectionEvent(rule EventRule, year int) CalendarE
 		ID:                  id,
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         desc,
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -949,6 +1099,7 @@ func (tec *EventCalendar) buildMSCIEvent(rule EventRule, year int, month time.Mo
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("MSCI季度調整 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -967,6 +1118,7 @@ func (tec *EventCalendar) buildReportEvent(rule EventRule, deadline time.Time, l
 		ID:                  fmt.Sprintf("%s_%s", rule.EventType, deadline.Format("2006-01-02")),
 		Name:                fmt.Sprintf("%s - %s", rule.Name, label),
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s deadline %s", label, deadline.Format("2006-01-02")),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -987,6 +1139,7 @@ func (tec *EventCalendar) buildTW50Event(rule EventRule, year int, month time.Mo
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("台灣50季度調整 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -1007,6 +1160,7 @@ func (tec *EventCalendar) buildRevenueEvent(rule EventRule, year int, month time
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s monthly revenue", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -1025,6 +1179,7 @@ func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) CalendarEve
 		ID:                  fmt.Sprintf("%s_%d", rule.EventType, year),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         rule.Name,
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -1112,6 +1267,7 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 
 	tec.mu.Lock()
 	defer tec.mu.Unlock()
+	var newEvents []CalendarEvent
 	for _, pd := range events {
 		startDate, err := time.Parse("2006-01-02", pd.Date)
 		if err != nil {
@@ -1123,26 +1279,63 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 			continue
 		}
 		evt := CalendarEvent{
-			ID:              fmt.Sprintf("%s_%s_%s", ds, pd.EventType, pd.Date),
-			Name:            pd.Name,
-			NameEN:          pd.Name,
-			EventType:       pd.EventType,
-			Description:     pd.Description,
-			Direction:       pd.Direction,
-			BaseWeight:      pd.Weight,
-			Active:          true,
-			StartDate:       startDate,
-			EndDate:         startDate.AddDate(0, 0, 1), // default 1-day event
-			PeakDate:        startDate,
-			DecayDays:       7,
-			DataSource:      ds,
-			EvidenceQuality: EvidenceRealTime,
-			GeneratedAt:     time.Now(),
+			ID:                fmt.Sprintf("%s_%s_%s", ds, pd.EventType, pd.Date),
+			Name:              pd.Name,
+			NameEN:            pd.Name,
+			EventType:         pd.EventType,
+			Description:       pd.Description,
+			Direction:         pd.Direction,
+			BaseWeight:        pd.Weight,
+			Active:            true,
+			StartDate:         startDate,
+			EndDate:           startDate.AddDate(0, 0, 1), // default 1-day event
+			PeakDate:          startDate,
+			DecayDays:         7,
+			DataSource:        ds,
+			EvidenceQuality:   EvidenceRealTime,
+			GeneratedAt:       time.Now(),
+			CrossSourceStatus: string(eventquality.StatusPending),
 		}
-		tec.events = append(tec.events, evt)
+		// Stage 2.2c: mark events whose effective date is in the past as backfilled.
+		if startDate.Before(time.Now().Truncate(24 * time.Hour)) {
+			evt.Backfilled = true
+		}
+		// Stage 2.2b: cross-source verification — record the provider source
+		// and tag the event with its cross-source status.
+		if tec.crossSourceStore != nil {
+			theme := pd.EventType
+			symbol := pd.Symbol
+			status := tec.crossSourceStore.Record(provider.Name(), theme, symbol, startDate)
+			evt.CrossSourceStatus = string(status)
+		}
+		newEvents = append(newEvents, evt)
 	}
+	accepted := tec.filterByQualityGate(newEvents)
+	tec.events = append(tec.events, accepted...)
 	logging.Info("event_calendar", "provider_events_added",
 		logging.FStr("provider", provider.Name()),
 		logging.FInt("added_events", len(events)),
+		logging.FInt("accepted_events", len(accepted)),
 	)
+}
+
+// NewEventCalendarWithProvider 是「wired」版 EventCalendar factory，
+// 與 NewEventCalendar() 的差異在於會同步呼叫 RefreshEvents(time.Now()) 載入當年預設事件。
+//
+// 設計理由（Stage 1 缺口補齊 PR#1）：
+//   - 舊的 NewEventCalendar() 只載入 annualRules，events slice 為空，
+//     必須另呼叫 RefreshEvents 才會有資料。
+//   - 過往各 caller 各自記得呼叫 RefreshEvents，容易遺漏（PR#1 root cause）。
+//   - 此 factory 把「載入預設事件」內建為不可分割的一步，杜絕漏呼叫。
+//
+// 注意：provider 為 nil 時只載入預設事件。如需從外部 provider 拉資料（例如 TWSE 營收公布日），
+// 請在 caller 端啟動背景 goroutine，以 app context 驅動週期性呼叫 UpdateFromProvider；
+// 不建議在 factory 內同步呼叫 provider.FetchEvents（會 block API startup）。
+//
+// Maturity: stable（v0.0.0.33+ 公開 API）。
+func NewEventCalendarWithProvider(provider marketdata.CalendarEventProvider) *EventCalendar {
+	ec := NewEventCalendar()
+	ec.RefreshEvents(time.Now())
+	_ = provider // provider 為非 nil 時，caller 須自行啟動背景 refresh。
+	return ec
 }

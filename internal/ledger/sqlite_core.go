@@ -9,24 +9,20 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// OpenSQLiteDB opens or creates a SQLite database at the given path,
-// enables WAL mode, and enforces foreign keys.
+// OpenSQLiteDB opens or creates a SQLite database at the given path
+// with WAL mode, a 5-second busy timeout, and foreign keys enabled.
+// Pragmas are passed via DSN so they apply to every pooled connection;
+// per-connection db.Exec would only reach one of them.
 func OpenSQLiteDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}
 
-	// Enable WAL mode for better concurrency.
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
+	if err := db.Ping(); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("enable wal mode: %w", err)
-	}
-
-	// Enable foreign key constraints.
-	if _, err := db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("enable foreign keys: %w", err)
+		return nil, fmt.Errorf("ping sqlite db: %w", err)
 	}
 
 	return db, nil

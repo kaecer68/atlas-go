@@ -1,5 +1,11 @@
 package monitoring
 
+import (
+	"strings"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
+)
+
 // Startup & runtime 階段的 metrics 埋點 helper。
 //
 // 設計動機：atlas-go 的 Prometheus 框架 (cmd/atlas/api_routes.go 的 /metrics 端點)
@@ -9,7 +15,7 @@ package monitoring
 //
 // 命名慣例：
 //   - 以 atlas_ 前綴避免與 prometheus default metric 衝突
-//   - 以 _total 後綴標示 counter（Prometheus 慣例）
+//   - 以 _total 後綴標示 counter（Prometheus 慣例）；gauge 不加 _total
 //   - label 名小寫 snake_case、值域受限以避免 cardinality 爆炸
 
 // MetricDBInitFailures 統計 bootstrap 階段 db_init 失敗次數。
@@ -21,6 +27,20 @@ const MetricDBInitFailures = "atlas_db_init_failures_total"
 // 用途：偵測單一資料源（如 us_yahoo）持續 error，支援分通道告警。
 // Label channel 值域為已知通道名（如 "us_yahoo", "fugle"），由呼叫端傳入。
 const MetricChannelHealthErrors = "atlas_channel_health_errors_total"
+
+// MetricStage3TaskRuns 統計 Stage 3 排程任務執行次數（per task × result label）。
+// Label task 值域固定為 5 個 stage3 task ID；result ∈ {success,failed}。
+const MetricStage3TaskRuns = "atlas_stage3_task_runs_total"
+
+// MetricStage3AlertsFired 統計 Stage 3 alert rule 觸發次數（per rule × severity label）。
+// Label rule 值域固定為 6 個 stage3 rule ID；severity ∈ {critical,warning,info}。
+const MetricStage3AlertsFired = "atlas_stage3_alerts_fired_total"
+
+// MetricStage3LedgerRecords 暴露目前 ledger 內 record 數量（gauge，不是 counter）。
+// 命名沒有 _total 後綴是因為 gauge 加 _total 違反 Prometheus 慣例。
+// Label ledger 值域目前固定 1 個（"event_flow_prediction"）；未來新增其他 ledger 再擴。
+// 由 cmd/atlas/stage3_tasks.go 的 OnTaskComplete callback 觸發更新,典型 cadence 是 daily。
+const MetricStage3LedgerRecords = "atlas_stage3_ledger_records"
 
 // RecordDBInitFailure increment db_init failure counter。
 // nil collector 安全（bootstrap 早期 collector 可能尚未建立）。
@@ -42,5 +62,39 @@ func RecordChannelHealthError(c *MetricsCollector, channel string) {
 	}
 	c.RecordCounter(MetricChannelHealthErrors, 1, map[string]string{
 		"channel": channel,
+	})
+}
+
+// RecordStage3TaskRun nil collector 安全；空 taskID/result 視為無效輸入不寫入。
+func RecordStage3TaskRun(c *MetricsCollector, taskID, result string) {
+	if c == nil || taskID == "" || result == "" {
+		return
+	}
+	c.RecordCounter(MetricStage3TaskRuns, 1, map[string]string{
+		"task":   taskID,
+		"result": result,
+	})
+}
+
+// RecordStage3AlertFired nil collector 安全;severity 自動小寫對齊 Prometheus convention。
+func RecordStage3AlertFired(c *MetricsCollector, ruleID string, severity AlertLevel) {
+	if c == nil || ruleID == "" {
+		return
+	}
+	c.RecordCounter(MetricStage3AlertsFired, 1, map[string]string{
+		"rule":     ruleID,
+		"severity": strings.ToLower(severity.String()),
+	})
+}
+
+// RecordStage3LedgerRecords 寫入目前 ledger 大小到 gauge。nil collector + nil store 都安全。
+// 透過覆寫語意(RecordGauge)取代累加語意(RecordCounter):連續呼叫會把值改成最新 Len(),
+// 不會誤加成累積值。Prometheus scrape 拉到的值始終 ≤ Len() 上限(1000 records from FIFO cap)。
+func RecordStage3LedgerRecords(c *MetricsCollector, store ledger.EventFlowPredictionStore) {
+	if c == nil || store == nil {
+		return
+	}
+	c.RecordGauge(MetricStage3LedgerRecords, float64(store.Len()), map[string]string{
+		"ledger": "event_flow_prediction",
 	})
 }

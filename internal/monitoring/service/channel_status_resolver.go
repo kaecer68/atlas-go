@@ -34,6 +34,9 @@ func resolveChannelStatusFromStore(
 	case "ok":
 		// Last fetch succeeded — channel is healthy regardless of data age.
 		return "ok", rec.LastFetchAt, ""
+	case "degraded":
+		// Last fetch failed but cache has valid data — between ok and error.
+		return "degraded", "使用快取: " + rec.LastError, rec.LastError
 	case "error":
 		// Last fetch failed — report the actual error.
 		return "error", "上次失敗: " + rec.LastError, rec.LastError

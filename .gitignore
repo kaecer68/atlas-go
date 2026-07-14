@@ -212,3 +212,4 @@ l2-4-preflight
 
 # Stale esbuild CSS output to shared_web/static/js/ (canonical CSS is in shared_web/static/css/)
 /shared_web/static/js/css/
+logs/

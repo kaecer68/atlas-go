@@ -144,14 +144,21 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 
 	providers = append(providers, marketdata.NewBDIProvider())
-	// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
+	// ExchangeRate-API provides TWD (not in ECB/Frankfurter). DO NOT reorder the
+	// next three providers without reading
+	// ~/workspace/atlas-notes/05-decisions/2026-07-13-usd-twd-routing-recurring-bug-root-cause.md
+	// — this list has been regressed 3+ times by independent fixes.
+	//
+	// Ordering rationale (last-write-wins mergeSnapshot):
+	//   1. ExchangeRate: current value for USD/TWD (free tier, no historical ChangePct)
+	//   2. Frankfurter:  current value + daily ChangePct for JPY/EUR (ECB dataset)
+	//   3. Yahoo:        MUST be LAST. Yahoo uses range=1mo to compute reliable daily
+	//                   ChangePct for ALL tickers incl. forex. Placing Yahoo last ensures
+	//                   its (value, ChangePct) wins, and its ChangePct is non-zero.
+	//                   Without this, ExchangeRate's ChangePct=0 overwrites Yahoo's.
 	providers = append(providers, marketdata.NewExchangeRateProvider())
-	// FrankfurterFXProvider MUST come after ExchangeRateProvider; both
-	// provide JPY, but Frankfurter computes a real daily ChangePct while
-	// ExchangeRate always writes ChangePct=0 (free-tier limitation).
-	// The last-write-wins mergeSnapshot would otherwise discard the real
-	// ChangePct from Frankfurter.
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
+	providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, constants.StateCapitalFlow)))
 	providers = append(providers, marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")))
 	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, constants.StateExport)))
@@ -435,19 +442,16 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 }
 
 func newWiredEventCalendar(provider marketdata.CalendarEventProvider) *industry.EventCalendar {
-	ec := industry.NewEventCalendar()
-	// Always generate default-rule events for the current year.
-	ec.RefreshEvents(time.Now())
-	if provider == nil {
-		return ec
+	// Stage 1 PR#1 改用 industry 公開 factory，確保 RefreshEvents 一定會被呼叫。
+	// provider 非 nil 時另外排 background refresh（避免 startup block）。
+	ec := industry.NewEventCalendarWithProvider(provider)
+	if provider != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			ec.UpdateFromProvider(ctx, provider)
+		}()
 	}
-	// Load TWSE calendar events asynchronously — don't block API startup.
-	// EventCalendar is protected by sync.RWMutex so concurrent access is safe.
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		defer cancel()
-		ec.UpdateFromProvider(ctx, provider)
-	}()
 	return ec
 }
 
@@ -551,6 +555,13 @@ func (a *DashboardAPI) CalibrateNarrative(replayPath string) (*narrative.Narrati
 		return nil, fmt.Errorf("narrative calibrate: no narrative engine")
 	}
 	return a.narrativeEngine.SelfCalibrate(replayPath)
+}
+
+// NarrativeEngine returns the underlying narrative engine for callers that
+// need to invoke methods not yet exposed via the DashboardAPI surface
+// (e.g. Stage 3 scheduling of template-hit-rate recalculation).
+func (a *DashboardAPI) NarrativeEngine() *narrative.NarrativeEngine {
+	return a.narrativeEngine
 }
 
 // GetLatestMacroSnapshot reads the macro ingestor's latest.json from disk.

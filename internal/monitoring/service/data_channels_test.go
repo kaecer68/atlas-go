@@ -334,6 +334,30 @@ func TestDataChannelService_getHealthFromStore_NilRecordFallbacks(t *testing.T) 
 }
 
 // =============================================================================
+// MarkDegraded tests
+// =============================================================================
+
+func TestChannelHealthStoreAdapter_MarkDegraded(t *testing.T) {
+	tmpDir := t.TempDir()
+	adapter := NewChannelHealthStoreAdapter(tmpDir, nil)
+
+	if err := adapter.MarkDegraded("tsmc_revenue", "cache_fallback"); err != nil {
+		t.Fatalf("MarkDegraded: %v", err)
+	}
+
+	rec := adapter.Get("tsmc_revenue")
+	if rec == nil {
+		t.Fatal("expected record after MarkDegraded")
+	}
+	if rec.Status != "degraded" {
+		t.Fatalf("expected status degraded, got %q", rec.Status)
+	}
+	if rec.LastError != "cache_fallback" {
+		t.Fatalf("expected last_error cache_fallback, got %q", rec.LastError)
+	}
+}
+
+// =============================================================================
 // NewDataChannelService (0% → covered)
 // =============================================================================
 

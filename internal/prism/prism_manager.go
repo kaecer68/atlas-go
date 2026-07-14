@@ -310,6 +310,17 @@ type PRISMManager struct {
 	completedResults []CompletedTrainingResult
 	resultMu         sync.RWMutex
 	maxResults       int
+
+	// onCompleted fires when a training task completes, so JANUS gets results
+	// immediately instead of waiting for the 6h cron. Set via SetOnCompleted.
+	onCompleted func(CompletedTrainingResult)
+}
+
+// SetOnCompleted registers a callback fired on each training completion.
+func (pm *PRISMManager) SetOnCompleted(fn func(CompletedTrainingResult)) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.onCompleted = fn
 }
 
 // PRISMConfig holds configuration for PRISM
@@ -634,10 +645,11 @@ type TrainingWindow struct {
 	RegimeSet bool       // true when Regime was explicitly provided by the caller
 }
 
-// recordCompletedResult appends a completed training result to the internal buffer.
+// recordCompletedResult appends a completed training result to the internal buffer
+// and fires the OnCompleted callback when set.
 func (pm *PRISMManager) recordCompletedResult(task *TrainingTask, result TrainingResult) {
 	pm.resultMu.Lock()
-	defer pm.resultMu.Unlock()
+	fn := pm.onCompleted
 
 	pm.completedResults = append(pm.completedResults, CompletedTrainingResult{
 		AgentID:    task.AgentID,
@@ -647,6 +659,16 @@ func (pm *PRISMManager) recordCompletedResult(task *TrainingTask, result Trainin
 	})
 	if len(pm.completedResults) > pm.maxResults {
 		pm.completedResults = pm.completedResults[len(pm.completedResults)-pm.maxResults:]
+	}
+	pm.resultMu.Unlock()
+
+	if fn != nil && !result.Synthetic {
+		fn(CompletedTrainingResult{
+			AgentID:    task.AgentID,
+			AgentSkill: task.AgentSkill,
+			Regime:     task.Regime,
+			Result:     result,
+		})
 	}
 }
 

@@ -250,6 +250,8 @@ export interface CalendarEvent {
   data_source: string;
   evidence_quality: string;
   generated_at: string;
+  backfilled: boolean;
+  cross_source_status?: string;
 }
 
 export interface CalendarProviderData {
@@ -1064,6 +1066,8 @@ export interface EventCalendarItem {
   affected_industries?: string[];
   expected_flow_impact: string;
   confidence: number;
+  backfilled: boolean;
+  cross_source_status?: string;
 }
 
 export interface EventCalendarRule {
@@ -1983,6 +1987,7 @@ export interface MacroDataSnapshot {
   failed_channels?: string[];
   stale_channels?: string[];
   recorded_at: number;
+  vix_baseline?: number;
 }
 
 export interface MacroIndicatorHealth {
@@ -3919,6 +3924,13 @@ export interface aggregateResponse {
   overall: tierReport;
 }
 
+export interface auditEntry {
+  ts: string;
+  tool: string;
+  args_hash: string;
+  status: string;
+}
+
 export interface authPostureDetail {
   status: string;
 }
@@ -3944,6 +3956,12 @@ export interface cnbcQuickQuote {
 
 export interface cnbcQuickQuoteResponse {
   QuickQuoteResult: string;
+}
+
+export interface dailyRateSnapshot {
+  date: string;
+  usd_twd: number;
+  usd_jpy: number;
 }
 
 export interface exchangeRateResponse {

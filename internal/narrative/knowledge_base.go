@@ -15,6 +15,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
+// WeightAuditHook is called when model weights are updated (Stage 2.3b).
+// modelID identifies the model; weightHash is a SHA-256 hex digest of the
+// canonical JSON representation of all model weights.
+type WeightAuditHook func(modelID, weightHash string)
+
 // NarrativeEngine orchestrates event detection and causal chain matching.
 type NarrativeEngine struct {
 	kb            *KnowledgeBase
@@ -25,6 +30,19 @@ type NarrativeEngine struct {
 	lastMacro     marketdata.MacroDataSnapshot
 	prevMacro     marketdata.MacroDataSnapshot
 	lastGeo       GeopoliticalRiskScore
+	weightHook    WeightAuditHook
+}
+
+// KnowledgeBase returns the underlying template knowledge base.
+func (ne *NarrativeEngine) KnowledgeBase() *KnowledgeBase {
+	return ne.kb
+}
+
+// SetWeightAuditHook wires a mutation audit callback for model weight changes.
+func (ne *NarrativeEngine) SetWeightAuditHook(hook WeightAuditHook) {
+	ne.stressMu.Lock()
+	ne.weightHook = hook
+	ne.stressMu.Unlock()
 }
 
 var defaultSectorSymbolMap = map[string][]string{
@@ -301,6 +319,14 @@ func (ne *NarrativeEngine) UpdateModelWeights() {
 	for i := range ne.models {
 		ne.models[i].Weight = weights[i]
 	}
+	// Stage 2.3b: fire weight change audit hook.
+	if ne.weightHook != nil {
+		for i := range ne.models {
+			raw, _ := json.Marshal(ne.models[i])
+			hash := sha256Hex(raw)
+			ne.weightHook(ne.models[i].ID, hash)
+		}
+	}
 }
 
 // EvaluateModels computes RecentError for each model by comparing favored vs
@@ -417,6 +443,40 @@ func (ne *NarrativeEngine) updateTemplateHitRates() {
 			}
 		}
 	}
+}
+
+// RecalculateTemplateHitRates exposes the EMA-blended template recalculation
+// so external schedulers (Stage 3 BTM) can drive it without exposing
+// updateTemplateHitRates on the engine's private surface.
+func (ne *NarrativeEngine) RecalculateTemplateHitRates() {
+	ne.updateTemplateHitRates()
+}
+
+// RecalculateAllTemplateHitRates — Stage 4 PR#4.
+//
+// Fills the templates that existing RecalculateTemplateHitRates leaves
+// at default 0.5 because no active model touches them. Chained light-EMA
+// pull toward a backtest-derived globalHitRate (typically AVG(hit) from
+// Stage 4 prediction_backtest). Returns templates updated past epsilon.
+func (ne *NarrativeEngine) RecalculateAllTemplateHitRates(globalHitRate float64) int {
+	ne.updateTemplateHitRates()
+
+	const lightAlpha = 0.1
+	const epsilon = 0.001
+	updated := 0
+	for _, tmpl := range ne.kb.ListTemplates() {
+		if math.Abs(tmpl.HistoricalHitRate-globalHitRate) < epsilon {
+			continue
+		}
+		newRate := (1-lightAlpha)*tmpl.HistoricalHitRate + lightAlpha*globalHitRate
+		if math.Abs(newRate-tmpl.HistoricalHitRate) < epsilon {
+			continue
+		}
+		tmpl.HistoricalHitRate = newRate
+		ne.kb.RegisterTemplate(tmpl)
+		updated++
+	}
+	return updated
 }
 
 func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, window int, sectors []string) float64 {

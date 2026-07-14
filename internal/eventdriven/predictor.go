@@ -12,14 +12,34 @@ import (
 
 // Predictor maps upcoming events to capital flow predictions.
 type Predictor struct {
-	calendar    *industry.EventCalendar
-	capitalFlow CapitalFlowProvider
+	calendar        *industry.EventCalendar
+	capitalFlow     CapitalFlowProvider
+	narrativeModels []ModelView
 }
 
 // CapitalFlowProvider provides the current capital quality score.
 type CapitalFlowProvider interface {
 	QualityScore() float64
 	QualityLabel() string
+}
+
+// ModelView is a flat projection of narrative.InvestmentModel.
+// Defined here (not imported from internal/narrative) to avoid a
+// package dependency cycle. The narrative adapter in main.go maps
+// narrative.InvestmentModel to this struct.
+type ModelView struct {
+	ID           string
+	Name         string
+	Weight       float64
+	Direction    string
+	ActiveThemes []string
+}
+
+// NarrativeModelProvider exposes Darwinian-evolved narrative models to
+// the predictor. ListModels is called once at wiring time; the
+// predictor caches the snapshot and filters by per-day active themes.
+type NarrativeModelProvider interface {
+	ListModels() []ModelView
 }
 
 // staticCF is a simple static implementation for testing.
@@ -42,6 +62,16 @@ func NewPredictor(cal *industry.EventCalendar) *Predictor {
 // SetCapitalFlow sets the capital flow provider for scoring.
 func (p *Predictor) SetCapitalFlow(cf CapitalFlowProvider) {
 	p.capitalFlow = cf
+}
+
+// SetNarrativeProvider caches a snapshot of Darwinian-evolved models.
+// nil provider clears the cache (reverts to event-only predictions).
+func (p *Predictor) SetNarrativeProvider(np NarrativeModelProvider) {
+	if np == nil {
+		p.narrativeModels = nil
+		return
+	}
+	p.narrativeModels = np.ListModels()
 }
 
 // Predict generates a 5-day capital flow prediction report.
@@ -192,6 +222,23 @@ func forcesForDirection(drivers []string) []string {
 		case strings.Contains(dl, "融資"),
 			strings.Contains(dl, "散戶"):
 			forceSet["retail"] = true
+		case strings.Contains(dl, "法說會"),
+			strings.Contains(dl, "investor conf"),
+			strings.Contains(dl, "investor_conf"):
+			forceSet["foreign"] = true
+			forceSet["institutional"] = true
+		case strings.Contains(dl, "期貨"),
+			strings.Contains(dl, "futures"):
+			forceSet["dealer"] = true
+		case strings.Contains(dl, "配息"),
+			strings.Contains(dl, "除權息"),
+			strings.Contains(dl, "ex_dividend"),
+			strings.Contains(dl, "dividend"):
+			forceSet["retail"] = true
+			forceSet["institutional"] = true
+		case strings.Contains(dl, "股東會"),
+			strings.Contains(dl, "shareholders"):
+			forceSet["institutional"] = true
 		}
 	}
 	forces := make([]string, 0, len(forceSet))
@@ -385,4 +432,57 @@ func (p *Predictor) evaluateRevenueSurprise(e industry.CalendarEvent) *RevenueSu
 		SurprisePct: surprisePct,
 		FlowImpact:  impact,
 	}
+}
+
+// eventTypeToThemes maps a Taiwan calendar event type string to its
+// set of legacy calendar-specific theme names used by older
+// InvestmentModel.ActiveThemes. Stage 5 PR#3 introduced a parallel
+// type_theme_mapping.go with the new 24-template trigger theme system;
+// this legacy mapping is preserved for backward compatibility with
+// existing tests and any external callers still using calendar theme
+// names. New callers should prefer EventTypeToTriggerThemes() so that
+// calendar events map to the 24-template trigger themes that drive
+// narrative models.
+func eventTypeToThemes(eventType string) []string {
+	switch eventType {
+	case string(industry.EventMSCIRebalance), string(industry.EventTaiwan50Rebalance):
+		return []string{"msci_rebalance", "tw50_rebalance", "index_rebalance"}
+	case string(industry.EventMonthlyRevenue):
+		return []string{"monthly_revenue", "earnings_surprise"}
+	case string(industry.EventFinancialReport):
+		return []string{"financial_report", "earnings_surprise"}
+	case string(industry.EventExDividend), string(industry.EventDividendPayout):
+		return []string{"ex_dividend", "dividend_season"}
+	case string(industry.EventFuturesSettlement):
+		return []string{"futures_settlement"}
+	case string(industry.EventWindowDressing):
+		return []string{"window_dressing"}
+	case string(industry.EventShareholderMeeting):
+		return []string{"shareholders_meeting"}
+	case string(industry.EventInvestorConf):
+		return []string{"investor_conference"}
+	default:
+		return nil
+	}
+}
+
+// themeMatchesAny returns true if any theme in modelThemes appears in
+// activeThemes. Used to decide whether a given InvestmentModel's
+// ActiveThemes is fired by the calendar event themes. Empty inputs on
+// either side short-circuit to false. Migrated from develop's
+// Stage 3 narrative wiring; kept identical to preserve test coverage.
+func themeMatchesAny(modelThemes, activeThemes []string) bool {
+	if len(modelThemes) == 0 || len(activeThemes) == 0 {
+		return false
+	}
+	active := make(map[string]struct{}, len(activeThemes))
+	for _, t := range activeThemes {
+		active[t] = struct{}{}
+	}
+	for _, t := range modelThemes {
+		if _, ok := active[t]; ok {
+			return true
+		}
+	}
+	return false
 }

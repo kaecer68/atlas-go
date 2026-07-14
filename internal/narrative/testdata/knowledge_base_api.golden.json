@@ -32,6 +32,12 @@
       "results": ""
     },
     {
+      "name": "SetTemplateAuditHook",
+      "params": "(hook TemplateAuditHook)",
+      "receiver": "KnowledgeBase",
+      "results": ""
+    },
+    {
       "name": "ActiveModels",
       "params": "(eventThemes []string)",
       "receiver": "NarrativeEngine",
@@ -68,6 +74,12 @@
       "results": "(StressIndexThresholds)"
     },
     {
+      "name": "KnowledgeBase",
+      "params": "",
+      "receiver": "NarrativeEngine",
+      "results": "(*KnowledgeBase)"
+    },
+    {
       "name": "ListModels",
       "params": "",
       "receiver": "NarrativeEngine",
@@ -80,10 +92,28 @@
       "results": "([]CausalChain)"
     },
     {
+      "name": "RecalculateAllTemplateHitRates",
+      "params": "(globalHitRate float64)",
+      "receiver": "NarrativeEngine",
+      "results": "(int)"
+    },
+    {
+      "name": "RecalculateTemplateHitRates",
+      "params": "",
+      "receiver": "NarrativeEngine",
+      "results": ""
+    },
+    {
       "name": "SelfCalibrate",
       "params": "(replayPath string)",
       "receiver": "NarrativeEngine",
       "results": "(*NarrativeCalibrationReport, error)"
+    },
+    {
+      "name": "SetWeightAuditHook",
+      "params": "(hook WeightAuditHook)",
+      "receiver": "NarrativeEngine",
+      "results": ""
     },
     {
       "name": "UpdateMacro",
@@ -118,7 +148,8 @@
     {
       "fields": [
         "mu sync.RWMutex",
-        "templates map[string]CausalTemplate"
+        "templates map[string]CausalTemplate",
+        "auditHook TemplateAuditHook"
       ],
       "kind": "struct",
       "name": "KnowledgeBase"
@@ -174,10 +205,19 @@
         "stressMu sync.Mutex",
         "lastMacro marketdata.MacroDataSnapshot",
         "prevMacro marketdata.MacroDataSnapshot",
-        "lastGeo GeopoliticalRiskScore"
+        "lastGeo GeopoliticalRiskScore",
+        "weightHook WeightAuditHook"
       ],
       "kind": "struct",
       "name": "NarrativeEngine"
+    },
+    {
+      "kind": "alias",
+      "name": "TemplateAuditHook"
+    },
+    {
+      "kind": "alias",
+      "name": "WeightAuditHook"
     }
   ],
   "vars": null

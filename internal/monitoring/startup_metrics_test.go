@@ -2,6 +2,9 @@ package monitoring
 
 import (
 	"testing"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 // TestRecordDBInitFailure_IncrementsCounter 驗證 RecordDBInitFailure 會建立
@@ -140,6 +143,8 @@ func TestMetricsNames_FollowPrometheusConvention(t *testing.T) {
 	}{
 		{MetricDBInitFailures, "atlas_db_init_failures_total"},
 		{MetricChannelHealthErrors, "atlas_channel_health_errors_total"},
+		{MetricStage3TaskRuns, "atlas_stage3_task_runs_total"},
+		{MetricStage3AlertsFired, "atlas_stage3_alerts_fired_total"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -148,4 +153,140 @@ func TestMetricsNames_FollowPrometheusConvention(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRecordStage3TaskRun_IncrementsPerTaskResultLabel(t *testing.T) {
+	c := NewMetricsCollector()
+	RecordStage3TaskRun(c, "sync-events-daily", "success")
+	RecordStage3TaskRun(c, "sync-events-daily", "success")
+	RecordStage3TaskRun(c, "sync-events-daily", "failed")
+
+	m, ok := c.GetMetric(MetricStage3TaskRuns, map[string]string{
+		"task":   "sync-events-daily",
+		"result": "success",
+	})
+	if !ok || m.Value != 2 {
+		t.Fatalf("expected success counter=2, got %+v ok=%v", m, ok)
+	}
+	m, ok = c.GetMetric(MetricStage3TaskRuns, map[string]string{
+		"task":   "sync-events-daily",
+		"result": "failed",
+	})
+	if !ok || m.Value != 1 {
+		t.Fatalf("expected failed counter=1, got %+v ok=%v", m, ok)
+	}
+}
+
+func TestRecordStage3TaskRun_NilCollectorAndEmptyArgsAreSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordStage3TaskRun(nil/empty) panicked: %v", r)
+		}
+	}()
+	RecordStage3TaskRun(nil, "sync-events-daily", "success")
+	RecordStage3TaskRun(NewMetricsCollector(), "", "success")
+	RecordStage3TaskRun(NewMetricsCollector(), "sync-events-daily", "")
+}
+
+func TestRecordStage3AlertFired_LowercasesSeverity(t *testing.T) {
+	c := NewMetricsCollector()
+	RecordStage3AlertFired(c, "data-staleness-critical", AlertLevelCritical)
+	RecordStage3AlertFired(c, "data-staleness-warning", AlertLevelWarning)
+	RecordStage3AlertFired(c, "prediction-drift", AlertLevelInfo)
+
+	for _, tc := range []struct {
+		rule, sev string
+	}{
+		{"data-staleness-critical", "critical"},
+		{"data-staleness-warning", "warning"},
+		{"prediction-drift", "info"},
+	} {
+		m, ok := c.GetMetric(MetricStage3AlertsFired, map[string]string{
+			"rule":     tc.rule,
+			"severity": tc.sev,
+		})
+		if !ok || m.Value != 1 {
+			t.Fatalf("expected %s/%s counter=1, got %+v ok=%v", tc.rule, tc.sev, m, ok)
+		}
+	}
+}
+
+func TestRecordStage3AlertFired_NilCollectorAndEmptyRuleIDAreSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordStage3AlertFired(nil/empty) panicked: %v", r)
+		}
+	}()
+	RecordStage3AlertFired(nil, "rule", AlertLevelInfo)
+	RecordStage3AlertFired(NewMetricsCollector(), "", AlertLevelInfo)
+}
+
+func TestRecordStage3LedgerRecords_EmitsGaugeValueMatchingStoreLen(t *testing.T) {
+	c := NewMetricsCollector()
+	store := ledger.NewJSONLEventFlowPredictionStore(t.TempDir())
+	for i := 0; i < 7; i++ {
+		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
+			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
+			DirectionSign: float64(i + 1),
+			Confidence:    0.7,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction %d: %v", i, err)
+		}
+	}
+
+	RecordStage3LedgerRecords(c, store)
+
+	m, ok := c.GetMetric(MetricStage3LedgerRecords, map[string]string{"ledger": "event_flow_prediction"})
+	if !ok {
+		t.Fatalf("expected gauge %q to be registered", MetricStage3LedgerRecords)
+	}
+	if m.Value != 7 {
+		t.Fatalf("expected gauge=7 (matches store.Len()), got %v", m.Value)
+	}
+	if m.Type != MetricTypeGauge {
+		t.Fatalf("expected MetricTypeGauge, got %v", m.Type)
+	}
+	if m.Name != MetricStage3LedgerRecords {
+		t.Fatalf("expected Name=%q, got %q", MetricStage3LedgerRecords, m.Name)
+	}
+}
+
+func TestRecordStage3LedgerRecords_GaugeOverwriteSemantics(t *testing.T) {
+	// Gauge overwrites, not accumulates. Two emits on the same store must
+	// produce the latest Len() value, not the sum.
+	c := NewMetricsCollector()
+	store := ledger.NewJSONLEventFlowPredictionStore(t.TempDir())
+
+	RecordStage3LedgerRecords(c, store)
+	if v, _ := c.GetMetric(MetricStage3LedgerRecords, map[string]string{"ledger": "event_flow_prediction"}); v.Value != 0 {
+		t.Fatalf("empty store: expected 0, got %v", v.Value)
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
+			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
+			DirectionSign: float64(i + 1),
+			Confidence:    0.7,
+			Direction:     "inflow",
+		}); err != nil {
+			t.Fatalf("AppendPrediction %d: %v", i, err)
+		}
+	}
+	RecordStage3LedgerRecords(c, store)
+	m, _ := c.GetMetric(MetricStage3LedgerRecords, map[string]string{"ledger": "event_flow_prediction"})
+	if m.Value != 3 {
+		t.Fatalf("after 3 appends: expected gauge=3 (overwrite, not 0+3 or 0+3=accumulate), got %v", m.Value)
+	}
+}
+
+func TestRecordStage3LedgerRecords_NilCollectorAndNilStoreAreSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordStage3LedgerRecords(nil/nil) panicked: %v", r)
+		}
+	}()
+	RecordStage3LedgerRecords(nil, nil)
+	RecordStage3LedgerRecords(NewMetricsCollector(), nil)
+	RecordStage3LedgerRecords(nil, ledger.NewJSONLEventFlowPredictionStore(t.TempDir()))
 }
