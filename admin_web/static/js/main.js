@@ -39,6 +39,7 @@ export function switchPage(id, silent) {
   evolution_panel: '策略演化', experiments: '模擬交易',
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測',
+  capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質',
   metrics: '指標監控', config: '部署配置'
 };
   document.getElementById('pageTitle').textContent = titles[id] || id;
@@ -200,9 +201,12 @@ async function loadModules() {
     import('./pages/parameters.js'),
     import('./pages/deploy-config.js'),
     import('./pages/evolution_panel.js'),
+    import('./pages/capital-models.js'),
+    import('./pages/capital-causality.js'),
+    import('./pages/capital-quality.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'evolution_panel'];
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'evolution_panel', 'capitalModels', 'capitalCausality', 'capitalQuality'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -436,6 +440,15 @@ async function loadPageData(pageId) {
     try {
       if (m.datachannels.loadDataChannels) m.datachannels.loadDataChannels();
     } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'capital_models') {
+    try { if (m.capitalModels && m.capitalModels.loadCapitalModels) m.capitalModels.loadCapitalModels(); } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'capital_causality') {
+    try { if (m.capitalCausality && m.capitalCausality.loadCapitalCausality) m.capitalCausality.loadCapitalCausality(); } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'capital_quality') {
+    try { if (m.capitalQuality && m.capitalQuality.loadCapitalQuality) m.capitalQuality.loadCapitalQuality(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'alerts') {
     try { if (m.alerts.loadAlerts) m.alerts.loadAlerts(); } catch(e) { console.error(e); }

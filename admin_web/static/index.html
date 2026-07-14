@@ -38,6 +38,11 @@
         <span class="nav-group-label">系統</span>
         <a data-page="metrics">📊 指標監控</a>
         <a data-page="config">⚙️ 部署配置</a>
+
+        <span class="nav-group-label">錢潮方向</span>
+        <a data-page="capital_models">🧠 錢潮模型</a>
+        <a data-page="capital_causality">🕸 錢潮因果</a>
+        <a data-page="capital_quality">🔬 資料品質</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -457,6 +462,27 @@
         部署配置來自環境變數（.env 檔），在服務啟動時載入，無法經由本頁修改。請直接編輯 .env 後重啟服務。
       </details>
       <div id="configContent" class="empty loading">載入中…</div>
+    </div>
+
+    <div class="page" id="page-capital_models">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        錢潮模型頁顯示 Atlas narrative engine 目前啟用的 3 個模型（鷹派聯準會 / AI 超級週期 / 財報驚喜），包含 Darwninian weight（動態權重）、recent_error（最近 7 日預測偏差）、hit_rate（命中率）。權重會隨 regime 變動自動調整。
+      </details>
+      <div id="capitalModelsContent" class="empty loading">載入中…</div>
+    </div>
+
+    <div class="page" id="page-capital_causality">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        錢潮因果頁顯示 24 個 narrative template 的因果鏈展開。每個 template 都有 trigger_theme（自動偵測）、required_region（地理限制）、hit_rate（歷史命中率）。點擊展開看 steps — 從訊號偵測到板塊結論的完整推導。
+      </details>
+      <div id="capitalCausalityContent" class="empty loading">載入中…</div>
+    </div>
+
+    <div class="page" id="page-capital_quality">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        資料品質頁顯示 4 個 tier 的健康度（liveness / channel_health / llm_ready / auth_posture），以及各資料通道的最近 fetch 時間、stale alert。tier 失敗不會讓整頁崩潰，每個獨立顯示 ok / reason / latency。
+      </details>
+      <div id="capitalQualityContent" class="empty loading">載入中…</div>
     </div>
 
   </div>
