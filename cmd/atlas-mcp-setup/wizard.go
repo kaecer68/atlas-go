@@ -180,5 +180,5 @@ func printPostSetupHints(c ClientInstall) {
 		fmt.Fprintf(os.Stderr, "  Run: opencode mcp auth atlas-mcp  (if needed)\n")
 		fmt.Fprintf(os.Stderr, "  Verify: opencode mcp list\n")
 	}
-	fmt.Fprintf(os.Stderr, "\nExpected: 91 tools registered (87 business + 4 audit).\n")
+	fmt.Fprintf(os.Stderr, "\nExpected: 108 tools registered (104 business + 4 audit; up to 110 with sampling/elicitation enabled).\n")
 }

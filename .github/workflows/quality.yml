@@ -226,7 +226,9 @@ jobs:
             exit 1
           fi
           DOC_MIN=$(grep -oP '基礎\s*\d+' docs/REFERENCE/tool-catalog.md | grep -oP '\d+' | head -1)
-          DOC_MAX=$(grep -oP '\+2' docs/REFERENCE/tool-catalog.md | sed 's/+//')
+          # head -1: catalog prose may contain other "+2" substrings; only the
+          # first match (the 工具數量 section) is authoritative.
+          DOC_MAX=$(grep -oP '\+2' docs/REFERENCE/tool-catalog.md | sed 's/+//' | head -1)
           if [ -z "$DOC_MIN" ] || [ -z "$DOC_MAX" ]; then
             echo "ERROR: Could not parse tool count range from docs/REFERENCE/tool-catalog.md"
             exit 1
@@ -238,6 +240,17 @@ jobs:
             exit 1
           fi
           echo "OK: doc ($DOC_MIN–$DOC_MAX) matches code ($CODE_COUNT registered tools via countedAddTool wrapper)."
+
+  # atlas-mcp docs consistency — authoritative MCP docs must use correct
+  # env var names, keep AGENTS.md under the line cap, and propagate the
+  # current tool count across README / quickstart / server README.
+  atlas-mcp-docs-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Check atlas-mcp docs consistency
+        run: bash scripts/ci/check_atlas_mcp_docs_consistency.sh
 
   # AGENTS.md line count gate — prevents token bloat by enforcing
   # ≤ 160 lines of human-written content (before auto-injected blocks).

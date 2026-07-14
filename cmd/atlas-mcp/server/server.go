@@ -160,10 +160,11 @@ func Run(ctx context.Context, cfg Config) error {
 	registerPrompts(mcpSrv)
 
 	// Verify tool count matches expected range.
-	// registerTools (called just above): 102 base business tools + roots (2) +
-	// 0-2 sampling/elicitation (feature-gated) = 102..104 tools.
+	// registerTools (called just above): 102 business tools (incl. roots 2) +
+	// template_detector 2 + 0-2 sampling/elicitation (feature-gated, default
+	// off) = 104..106 tools.
 	// registerAuditTools: +4 (separate, not in registerTools).
-	// Total at this point: 106 (both feature-gated off) to 108 (both on).
+	// Total at this point: 108 (both gates off, the default) to 110 (both on).
 	// PR 2 (2026-07-12) added 12 read-only tools (parameters_*, backtest_*,
 	// calendar_events, sector_allocation_plan, channel_health, taiwan_stress_index,
 	// risk_exposure), raising the base from 85 to 97.
