@@ -32,5 +32,5 @@ make verify-mcp-setup  # 驗證 108 tools 連線成功
 
 ## Full Reference
 
-- [`REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md) — 108 tool 完整 catalog
+- [`reference/tool-catalog.md`](../reference/tool-catalog.md) — 108 tool 完整 catalog
 - [`query-examples.md`](query-examples.md) — 自然語言 → tool 對照 (~25 高頻範本)

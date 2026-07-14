@@ -221,11 +221,11 @@ GitNexus 程式碼智慧工具技能。
 |------|------|------|
 | `AGENTS.md` | 全域規則與模組路由 | 引用本文件為技能索引 |
 | `CLAUDE.md` | 工具進入點（含 GitNexus 規範） | 存放 GitNexus 完整規範以避免重複 |
-| `docs/REFERENCE/guidelines-index.md` | 規範階層與衝突仲裁 | 技能為階層 3 |
+| `docs/reference/guidelines-index.md` | 規範階層與衝突仲裁 | 技能為階層 3 |
 | `docs/environment.md` | 外部依賴與開發環境狀態單一真相來源 | 技能使用前先確認環境狀態 |
 | `.claude/skills/SKILL_TEMPLATE.md` | 統一手寫技能模板 | 新建技能時的格式規範 |
 | `internal/apigateway/CONSTITUTION.md` | 憲法級強制規範 | 技能不可違反憲法 |
-| `docs/REFERENCE/constitution.md` | 深度憲法（矩陣運算、證偽） | 策略技能須遵守數學約束（2026-06-26 PR #752 從 `.omo/CONSTITUTION.md` 移入，因 `.gitignore` 排除而新 clone 不可見）|
+| `docs/reference/constitution.md` | 深度憲法（矩陣運算、證偽） | 策略技能須遵守數學約束（2026-06-26 PR #752 從 `.omo/CONSTITUTION.md` 移入，因 `.gitignore` 排除而新 clone 不可見）|
 
 ---
 

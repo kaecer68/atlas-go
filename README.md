@@ -32,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/kaecer68/atlas-go/main/scripts/inst
 ```
 
 See: [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) · [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
-Tool catalog: [`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)
+Tool catalog: [`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)
 
 ## Architecture
 
@@ -73,7 +73,7 @@ Focused: `go test ./internal/experiment/... ./internal/orchestrator/... ./intern
 | You are... | Start here |
 |------------|-----------|
 | External AI agent connecting to atlas | [`docs/investor/README.md`](docs/investor/README.md) (5-min overview) |
-| Developer modifying code | `AGENTS.md` (cross-tool AI guide) + [`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md) |
+| Developer modifying code | `AGENTS.md` (cross-tool AI guide) + [`docs/reference/traps.md`](docs/reference/traps.md) |
 | Debugging or troubleshooting | [`CLAUDE.md`](CLAUDE.md) (deploy, frontend, token rules) |
 | Understanding module maturity | [`internal/MATURITY.md`](internal/MATURITY.md) → [`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md) |
 | Learning about MCP integration | [`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md) |

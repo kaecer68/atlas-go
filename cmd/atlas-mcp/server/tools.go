@@ -27,7 +27,7 @@ func countedAddTool[In any, Out any](mcpSrv *mcp.Server, tool *mcp.Tool, handler
 // registerTools attaches the five Phase 1 core tools to mcpSrv. Each handler
 // invokes atlas-go via the shared HttpClient and writes one AuditEntry.
 //
-// The tool descriptions follow docs/REFERENCE/tool-catalog.md §"高頻工具 Top 15" so a
+// The tool descriptions follow docs/reference/tool-catalog.md §"高頻工具 Top 15" so a
 // reading agent recognizes them. JSON schemas are derived automatically from
 // the Input structs (per OFFICIAL go-sdk convention with `jsonschema` tags).
 func registerTools(mcpSrv *mcp.Server, s *server) {

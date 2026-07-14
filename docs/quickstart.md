@@ -1,7 +1,7 @@
 # Atlas-Go 快速啟動與 CI 指令
 
 > 從 `AGENTS.md` 遷移（避免根 AGENTS.md 超過 160 行預算）。
-> 完整規範階層見 `docs/REFERENCE/guidelines-index.md`。
+> 完整規範階層見 `docs/reference/guidelines-index.md`。
 
 ## 快速啟動
 
@@ -114,7 +114,7 @@ curl -X POST http://localhost:18080/api/auth/register \
 curl -s http://localhost:18080/api/recommendations -b "token=<JWT>" | jq .
 ```
 
-完整 WA-8xx workflow 對應見 [`processes.yaml`](REFERENCE/processes.yaml) §9。
+完整 WA-8xx workflow 對應見 [`processes.yaml`](reference/processes.yaml) §9。
 
 ---
 

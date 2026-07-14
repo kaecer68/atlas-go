@@ -30,19 +30,19 @@
 
 | 檔案 | 用途 | 驗證 |
 |------|------|------|
-| `docs/REFERENCE/constitution.md` | 深度開發憲法（7 條文） | ✅ |
-| `docs/REFERENCE/iteration-gate.md` | 5 Gate 自我檢查規範 | ✅ |
-| `docs/REFERENCE/guidelines-index.md` | 規範階層與使用情境路由 | ✅ |
-| `docs/REFERENCE/traps.md` | 跨模組陷阱完整參考（單一權威來源） | ✅ |
-| `docs/REFERENCE/parameter-system.md` | 參數管理系統（禁止硬編碼） | ✅ |
+| `docs/reference/constitution.md` | 深度開發憲法（7 條文） | ✅ |
+| `docs/reference/iteration-gate.md` | 5 Gate 自我檢查規範 | ✅ |
+| `docs/reference/guidelines-index.md` | 規範階層與使用情境路由 | ✅ |
+| `docs/reference/traps.md` | 跨模組陷阱完整參考（單一權威來源） | ✅ |
+| `docs/reference/parameter-system.md` | 參數管理系統（禁止硬編碼） | ✅ |
 | `docs/quickstart.md` | 5 分鐘入門（單一權威） | ✅ |
 | `docs/environment.md` | 外部依賴與環境狀態 | ✅ |
 | `docs/tools.md` | 程式碼智慧工具（GitNexus/codebase-memory/codegraph 路由決策樹） | ✅ |
 | `docs/documentation-standard.md` | 文件存放規範 | ✅ |
 | `docs/documentation-map.md` | 本文件 | ✅ |
 | `docs/conventions-checklist.md` | 慣例檢查清單 | ✅ |
-| `docs/REFERENCE/workflow-map.md` | 21 條 workflow 盤查（WA-001–WA-701） | ✅ |
-| `docs/REFERENCE/tool-catalog.md` | atlas-mcp 108 tools 完整 catalog | ✅ |
+| `docs/reference/workflow-map.md` | 21 條 workflow 盤查（WA-001–WA-701） | ✅ |
+| `docs/reference/tool-catalog.md` | atlas-mcp 108 tools 完整 catalog | ✅ |
 
 ### 🏗️ 架構 / 領域知識
 
@@ -151,32 +151,32 @@
 | `docs/json-schema-standard.md` | JSON Schema 標準 | ✅ |
 | `docs/maturity.md` | 模組成熟度（規範用） | ✅ |
 
-### 📰 REFERENCE/events（事件規格）
+### 📰 reference/events（事件規格）
 
 | 檔案 | 用途 |
 |------|------|
-| `docs/REFERENCE/events/index.md` | 事件目錄入口 |
-| `docs/REFERENCE/events/backtest-completed.md` | 回測完成事件 |
-| `docs/REFERENCE/events/calibration-completed.md` | 校準完成事件 |
-| `docs/REFERENCE/events/channel-individual-health.md` | 通道個別健康事件 |
-| `docs/REFERENCE/events/drawdown-breach.md` | 回撤突破事件 |
-| `docs/REFERENCE/events/drift-detector.md` | 漂移偵測事件 |
-| `docs/REFERENCE/events/experiment-insufficient-data.md` | 實驗資料不足事件 |
-| `docs/REFERENCE/events/factor-weight-regression.md` | 因子權重回歸事件 |
-| `docs/REFERENCE/events/health-alert.md` | 健康警報事件 |
-| `docs/REFERENCE/events/industry-calendar.md` | 產業日曆事件 |
-| `docs/REFERENCE/events/ingestion-lag-spike.md` | 資料攝取延遲事件 |
-| `docs/REFERENCE/events/narrative-event.md` | 敘事事件 |
-| `docs/REFERENCE/events/promotion-recorded.md` | 晉升記錄事件 |
-| `docs/REFERENCE/events/regime-change-confirmed.md` | Regime 變更確認事件 |
-| `docs/REFERENCE/events/risk-alert.md` | 風險警報事件 |
-| `docs/REFERENCE/events/risk-gate-allowed.md` | 風險閘門放行事件 |
-| `docs/REFERENCE/events/risk-gate-overridden.md` | 風險閘門覆寫事件 |
-| `docs/REFERENCE/events/risk-gate-rejected.md` | 風險閘門拒絕事件 |
-| `docs/REFERENCE/events/risk-stoploss-triggered.md` | 停損觸發事件 |
-| `docs/REFERENCE/events/risk-takeprofit-triggered.md` | 停利觸發事件 |
-| `docs/REFERENCE/events/sharpe-degradation.md` | Sharpe 惡化事件 |
-| `docs/REFERENCE/events/trade-slippage.md` | 交易滑價事件 |
+| `docs/reference/events/index.md` | 事件目錄入口 |
+| `docs/reference/events/backtest-completed.md` | 回測完成事件 |
+| `docs/reference/events/calibration-completed.md` | 校準完成事件 |
+| `docs/reference/events/channel-individual-health.md` | 通道個別健康事件 |
+| `docs/reference/events/drawdown-breach.md` | 回撤突破事件 |
+| `docs/reference/events/drift-detector.md` | 漂移偵測事件 |
+| `docs/reference/events/experiment-insufficient-data.md` | 實驗資料不足事件 |
+| `docs/reference/events/factor-weight-regression.md` | 因子權重回歸事件 |
+| `docs/reference/events/health-alert.md` | 健康警報事件 |
+| `docs/reference/events/industry-calendar.md` | 產業日曆事件 |
+| `docs/reference/events/ingestion-lag-spike.md` | 資料攝取延遲事件 |
+| `docs/reference/events/narrative-event.md` | 敘事事件 |
+| `docs/reference/events/promotion-recorded.md` | 晉升記錄事件 |
+| `docs/reference/events/regime-change-confirmed.md` | Regime 變更確認事件 |
+| `docs/reference/events/risk-alert.md` | 風險警報事件 |
+| `docs/reference/events/risk-gate-allowed.md` | 風險閘門放行事件 |
+| `docs/reference/events/risk-gate-overridden.md` | 風險閘門覆寫事件 |
+| `docs/reference/events/risk-gate-rejected.md` | 風險閘門拒絕事件 |
+| `docs/reference/events/risk-stoploss-triggered.md` | 停損觸發事件 |
+| `docs/reference/events/risk-takeprofit-triggered.md` | 停利觸發事件 |
+| `docs/reference/events/sharpe-degradation.md` | Sharpe 惡化事件 |
+| `docs/reference/events/trade-slippage.md` | 交易滑價事件 |
 
 ### 📦 模組文件
 
@@ -228,9 +228,9 @@
 
 | 檔案 | 用途 |
 |------|------|
-| `docs/REFERENCE/workflow-map.md` | 21 條 workflow 盤查（WA-001–WA-701） |
-| `docs/REFERENCE/tool-catalog.md` | atlas-mcp 108 tools 完整 catalog |
-| `docs/REFERENCE/processes.yaml` | 結構化 workflow metadata |
+| `docs/reference/workflow-map.md` | 21 條 workflow 盤查（WA-001–WA-701） |
+| `docs/reference/tool-catalog.md` | atlas-mcp 108 tools 完整 catalog |
+| `docs/reference/processes.yaml` | 結構化 workflow metadata |
 | `cmd/atlas-mcp/README.md` | MCP 給 agent 的唯一入口 |
 | `docs/investor/README.md` | 投資人 5 分鐘入門 |
 | `internal/AGENTS_INDEX.md` | 59 模組成熟度索引 |

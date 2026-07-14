@@ -205,7 +205,7 @@ jobs:
       run: bash scripts/ci/check_markdown_links.sh
 
   # MCP tool count doc-code alignment — prevents drift between
-  # docs/REFERENCE/tool-catalog.md documents the expected tool count; actual AddTool registrations
+  # docs/reference/tool-catalog.md documents the expected tool count; actual AddTool registrations
   mcp-tool-count:
     runs-on: ubuntu-latest
     steps:
@@ -225,17 +225,17 @@ jobs:
             grep -rnF --include='*.go' --exclude='*_test.go' 'mcp.AddTool(' cmd/atlas-mcp/server | grep -vF 'mcp.AddTool(mcpSrv, tool, handler)' || true
             exit 1
           fi
-          DOC_MIN=$(grep -oP '基礎\s*\d+' docs/REFERENCE/tool-catalog.md | grep -oP '\d+' | head -1)
+          DOC_MIN=$(grep -oP '基礎\s*\d+' docs/reference/tool-catalog.md | grep -oP '\d+' | head -1)
           # head -1: catalog prose may contain other "+2" substrings; only the
           # first match (the 工具數量 section) is authoritative.
-          DOC_MAX=$(grep -oP '\+2' docs/REFERENCE/tool-catalog.md | sed 's/+//' | head -1)
+          DOC_MAX=$(grep -oP '\+2' docs/reference/tool-catalog.md | sed 's/+//' | head -1)
           if [ -z "$DOC_MIN" ] || [ -z "$DOC_MAX" ]; then
-            echo "ERROR: Could not parse tool count range from docs/REFERENCE/tool-catalog.md"
+            echo "ERROR: Could not parse tool count range from docs/reference/tool-catalog.md"
             exit 1
           fi
           DOC_MAX=$((DOC_MIN + DOC_MAX))
           if [ "$CODE_COUNT" -lt "$DOC_MIN" ] || [ "$CODE_COUNT" -gt "$DOC_MAX" ]; then
-            echo "ERROR: docs/REFERENCE/tool-catalog.md says $DOC_MIN–$DOC_MAX tools, but code registers $CODE_COUNT tools."
+            echo "ERROR: docs/reference/tool-catalog.md says $DOC_MIN–$DOC_MAX tools, but code registers $CODE_COUNT tools."
             echo "Update tool-catalog.md, or fix tool registration drift."
             exit 1
           fi
@@ -281,18 +281,18 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Check docs/REFERENCE/traps.md line count
+    - name: Check docs/reference/traps.md line count
       run: |
-        TRAP_LINES=$(wc -l < docs/REFERENCE/traps.md | tr -d ' ')
-        echo "docs/REFERENCE/traps.md lines: $TRAP_LINES"
+        TRAP_LINES=$(wc -l < docs/reference/traps.md | tr -d ' ')
+        echo "docs/reference/traps.md lines: $TRAP_LINES"
         if [ "$TRAP_LINES" -gt 300 ]; then
-          echo "ERROR: docs/REFERENCE/traps.md has $TRAP_LINES lines (limit: 300)."
+          echo "ERROR: docs/reference/traps.md has $TRAP_LINES lines (limit: 300)."
           echo "Split or consolidate trap entries."
           exit 1
         fi
-        echo "OK: docs/REFERENCE/traps.md is within 300-line budget."
+        echo "OK: docs/reference/traps.md is within 300-line budget."
 
-    - name: Check docs/REFERENCE/traps.md module attribution
+    - name: Check docs/reference/traps.md module attribution
       run: |
         echo "Checking traps.md module column..."
         # Count table rows that are missing module attribution
@@ -310,7 +310,7 @@ jobs:
             echo "❌ Missing module column: $line"
             MISSING=$((MISSING + 1))
           fi
-        done < <(grep '^|' docs/REFERENCE/traps.md)
+        done < <(grep '^|' docs/reference/traps.md)
         if [ "$MISSING" -gt 0 ]; then
           echo "ERROR: $MISSING trap row(s) missing module attribution."
           exit 1

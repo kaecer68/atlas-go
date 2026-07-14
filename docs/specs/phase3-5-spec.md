@@ -398,7 +398,7 @@ M2 ──→ event_bridge SQL-driven
 M1-M4 完成後,以下項目移交 Phase 4:
 
 - **Phase 4.A — 參數自動 tuning**(7d):基於 M3 macro flow + M4 forecast bridge 的 sortino 資料,訓練 LLM / statistical 模型調整 6 維 macro 權重(本 spec 未涵蓋,見 reassessment §6)
-- **Phase 4.B — L0/L1/L2 Constitution appendix**(16d):把 M1-M4 對應的「live / macro / forecast / trade」規則正式寫進 `docs/REFERENCE/constitution.md`,對應 reassessment §5 + §6 規劃
+- **Phase 4.B — L0/L1/L2 Constitution appendix**(16d):把 M1-M4 對應的「live / macro / forecast / trade」規則正式寫進 `docs/reference/constitution.md`,對應 reassessment §5 + §6 規劃
 - **Multi-instance MCP federation**:見 [`agent-mcp-phase4.md`](./agent-mcp-phase4.md) §3.3
 - **Promotion 至 production**:見 [`l2-4-observation-spec.md`](./l2-4-observation-spec.md) §「Future work」模式
 
@@ -423,7 +423,7 @@ M1-M4 完成後,以下項目移交 Phase 4:
   - [`atlas-taiwan-leading-indicators`](../../.claude/skills/atlas-taiwan-leading-indicators/SKILL.md)(M3 MacroDataSnapshot 來源)
   - [`atlas-macro-narrative`](../../.claude/skills/atlas-macro-narrative/SKILL.md)
 - Constitution / Guardrails:
-  - [`docs/REFERENCE/constitution.md`](../REFERENCE/constitution.md)
+  - [`docs/reference/constitution.md`](../reference/constitution.md)
   - [`live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md)
   - [`go-core.instructions.md`](../../.github/instructions/go-core.instructions.md)
   - [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md)

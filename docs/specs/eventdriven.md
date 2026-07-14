@@ -117,7 +117,7 @@ CREATE TABLE detector_scan_log (
 - `template_detector_status` — 查詢 detector scan 結果（call `/api/detector/scan/status`）
 - `detector_registry_list` — 列出 24 個 detector 與 enable/disable 狀態（call `/api/detector/registry/list`）
 
-需要新增：cmd/atlas 2 個 HTTP endpoint + cmd/atlas-mcp tools_template_detector.go + tool count hard gate 106-108 → 108-110 + `docs/REFERENCE/tool-catalog.md` 更新 + `go generate ./cmd/atlas-mcp`。
+需要新增：cmd/atlas 2 個 HTTP endpoint + cmd/atlas-mcp tools_template_detector.go + tool count hard gate 106-108 → 108-110 + `docs/reference/tool-catalog.md` 更新 + `go generate ./cmd/atlas-mcp`。
 
 ## 九、事件類型（既有 — Stage 5 前）
 

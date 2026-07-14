@@ -34,7 +34,7 @@ atlas-go 啟動流程曾有兩個系統性盲點:
 
 ### 規範文件(normative)
 
-- `docs/REFERENCE/traps.md` — **必讀**:`/api/llm/health` 401 防回歸 + Prometheus metric 命名空間
+- `docs/reference/traps.md` — **必讀**:`/api/llm/health` 401 防回歸 + Prometheus metric 命名空間
 - `AGENTS.md`(root) — 高頻陷阱速查表(LLM health 401 + Metric 命名空間 兩條)
 - `internal/apigateway/CONSTITUTION.md` — 6 條數據源治理憲法
 

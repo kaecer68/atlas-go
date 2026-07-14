@@ -82,7 +82,7 @@ fi
 # the auto-generated frontend files (field_types.ts, valid_fields.json) in ALL
 # 3 active web directories don't drift. These files MUST only be modified by
 # `go generate`; manual edits get overwritten and break CI.
-# See shared_web/AGENTS.md "Generated Files" section and docs/REFERENCE/traps.md "Build Pipeline".
+# See shared_web/AGENTS.md "Generated Files" section and docs/reference/traps.md "Build Pipeline".
 go_staged=$(echo "$staged_files" | grep -E '^internal/.*\.go$' || true)
 if [ -n "$go_staged" ]; then
   echo ""
@@ -133,7 +133,7 @@ if [ -n "$go_staged" ]; then
               echo "     → To add/change/remove a frontend field, edit the corresponding Go"
               echo "       struct's json:\"...\" tag in internal/<pkg>/, then re-run 'go generate .'"
               echo "       and stage the regenerated file."
-              echo "     → See shared_web/AGENTS.md 'Generated Files' section and docs/REFERENCE/traps.md 'Build Pipeline'."
+              echo "     → See shared_web/AGENTS.md 'Generated Files' section and docs/reference/traps.md 'Build Pipeline'."
               # Restore original (working tree, not index) so commit doesn't include stale content
               cp "$snap_file" "$gen_file"
               had_drift=1

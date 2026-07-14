@@ -12,10 +12,10 @@
 
 ```
 階層 1: 憲法（Constitution）
-  └── docs/REFERENCE/constitution.md
+  └── docs/reference/constitution.md
       深度工作與數學/實證約束；非 CI 強制，但對 optimizer / portfolio / risk 具關鍵約束。
       註：原位於 `.omo/constitution.md`（2026-06-26 PR #751 移至此處，`.omo/` 為 .gitignore 排除，新 clone 不可見）。
-  └── docs/REFERENCE/iteration-gate.md
+  └── docs/reference/iteration-gate.md
       迭代閘門（5 Gate 自我檢查：數學深度、資產通用性、Falsifiability、程式碼預算、回歸測試）。
   └── internal/apigateway/CONSTITUTION.md
       強制規範，CI 自動檢查。違反會阻斷 PR。
@@ -52,7 +52,7 @@
 
 | 文件 | 範圍 | AI 入口可達性 |
 |------|------|-------------|
-| `docs/REFERENCE/constitution.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `AGENTS.md` 索引 |
+| `docs/reference/constitution.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `AGENTS.md` 索引 |
 | `internal/apigateway/CONSTITUTION.md` | 數據源管理：Gateway 模式、限流、熔斷、背景任務、環境變數 | ✅ 從 `agents.md` → `copilot-instructions.md` |
 
 ### 階層 2：領域守則（Instructions）
@@ -84,7 +84,7 @@
 
 | 位置 | 涵蓋範圍 | 獨特內容 |
 |------|---------|---------|
-| `./AGENTS.md` | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/REFERENCE/traps.md` |
+| `./AGENTS.md` | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/reference/traps.md` |
 | `internal/apigateway/` | apigateway | Gateway.Fetch、BackgroundTaskManager、CircuitBreaker |
 | `internal/capitalflow/` | capitalflow / eventdriven / recommender / subscription | 資金流、事件日曆、推薦、認證集群 |
 | `internal/fubonproxy/` | fubonproxy | ProcessManager supervisor F1-F9、Stop/backoff |
@@ -107,7 +107,7 @@
 | `docs/architecture.md` | 分層設計、元件職責 |
 | `docs/environment.md` | 外部依賴與開發環境狀態單一真相來源（PR #700） |
 | `docs/ai-agent-architecture.md` | 代理協調、決策流程 |
-| `docs/REFERENCE/parameter-system.md` | 參數管理、權威溯源 |
+| `docs/reference/parameter-system.md` | 參數管理、權威溯源 |
 | `docs/operations-playbook.md` | 日常運維、mutation 工作流程 |
 | `docs/evolution-loop.md` | 接受門檻、循環機制 |
 | `docs/iteration-playbook.md` | Mutation 策略模式 |
@@ -121,7 +121,7 @@
 | _（shipped via PR #828,merged 2026-06-29）_ | L2.4 CLI flag 實作：`--use-llm-sector-agents`（plan 內容已併入 `docs/operations/l2-4-followup.md`）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
 | `docs/tools.md` | ACI 工具（GitNexus / codebase-memory / CodeGraph / atlas-mcp）路由決策樹 |
-| `docs/REFERENCE/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（108 tools,供外部 AI agent） |
+| `docs/reference/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（108 tools,供外部 AI agent） |
 
 ---
 
@@ -136,7 +136,7 @@
 | **新增資料源/API 調用** | `constitution.md`（全部 6 條） | `marketdata/AGENTS.md` |
 | **執行實驗** | `experiments-guardrails.instructions.md` | `experiment/AGENTS.md`，`baseline/AGENTS.md` |
 | **Live Trading** | `live-trading.guardrails.instructions.md` | `constitution.md`，`live/AGENTS.md` |
-| **新增參數** | `docs/REFERENCE/parameter-system.md` | `go-core.instructions.md` |
+| **新增參數** | `docs/reference/parameter-system.md` | `go-core.instructions.md` |
 | **新增背景任務** | `constitution.md` 第四條 | 無 |
 | **修改前端** | `monitoring/AGENTS.md`（snake_case 契約） | 無 |
 | **理解系統架構** | `docs/architecture.md`、`.claude/SKILLS-MAP.md` | `docs/ai-agent-architecture.md` |
@@ -166,7 +166,7 @@
 |------|------|---------|
 | 1.6.1 | 2026-06-27 | 修正統計數字（docs/specs 9→14、docs/guides 1→6）— follow-up to PR #793 |
 | 1.6 | 2026-06-27 | 同步 Batch 5a-6 AGENTS.md 精簡：內模組 49→21、新增 docs/specs/ 與 docs/guides/ 分類（PR #784-#788）|
-| 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/constitution.md` → `docs/REFERENCE/constitution.md`，新增 `docs/REFERENCE/iteration-gate.md`（PR #752）|
+| 1.5 | 2026-06-26 | 修復文件斷裂：`.omo/constitution.md` → `docs/reference/constitution.md`，新增 `docs/reference/iteration-gate.md`（PR #752）|
 | 1.4 | 2026-06-25 | 加入 `docs/environment.md` 索引；更新版本/日期以反映 PR #700 |
 | 1.3 | 2026-06-17 | 修正不存在技能引用（atlas-core-architecture → SKILLS-MAP.md + docs/architecture.md）；更新技能數量為實際值（手寫 10 + 生成 21 + 機器人 4 + GitNexus 6）；新增機器人溝通與自動生成技能分類說明 |
 | 1.2 | 2026-06-02 | 修正統計數字：技能文件 5→16、模組指南 21→34、移除 sim 缺失標記（已補齊） |

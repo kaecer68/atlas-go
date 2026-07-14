@@ -33,10 +33,10 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 **優點**：維護成本最低（就在程式碼旁邊）、review 時自然看到、無 new format to learn
 **限制**：tag 數量多時易亂；超過 8 個 tag 應改用 YAML
 
-### 1.2 方案 B — 維護 docs/REFERENCE/processes.yaml（推薦 Phase 2）
+### 1.2 方案 B — 維護 docs/reference/processes.yaml（推薦 Phase 2）
 
 ```yaml
-# docs/REFERENCE/processes.yaml
+# docs/reference/processes.yaml
 - id: WA-301-llm-loop
   symbol: internal/orchestrator/sector_agent_llm.go::SectorAgentLLM.PlanStepRunner
   description: |
@@ -62,10 +62,10 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 
 ### 2.1 第一次標註（一次性 sweep）
 
-1. **盤查所有 entry-points**：對照 [`workflow-map.md`](./REFERENCE/workflow-map.md) §3 的 21 條 workflow
+1. **盤查所有 entry-points**：對照 [`workflow-map.md`](./reference/workflow-map.md) §3 的 21 條 workflow
 2. **為每個 entry 加 A 方案 tag**（每個 5-15 分鐘，視依賴複雜度）
-3. **同步建立 `docs/REFERENCE/processes.yaml`** 作為單一真相來源
-4. **驗證**：GitNexus 跑 `npx gitnexus analyze --processes-metadata docs/REFERENCE/processes.yaml`（需 GitNexus 支援，未來 PR）
+3. **同步建立 `docs/reference/processes.yaml`** 作為單一真相來源
+4. **驗證**：GitNexus 跑 `npx gitnexus analyze --processes-metadata docs/reference/processes.yaml`（需 GitNexus 支援，未來 PR）
 
 ### 2.2 後續維護
 
@@ -76,7 +76,7 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 
 ---
 
-## 3. 待標註清單（基於 [`workflow-map.md`](./REFERENCE/workflow-map.md) v1）
+## 3. 待標註清單（基於 [`workflow-map.md`](./reference/workflow-map.md) v1）
 
 | ID | 入口 | Phase |
 |----|------|-------|
@@ -97,6 +97,6 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 
 - [ ] 21 條 workflow 全部有 `WA-XXX` 標籤
 - [ ] 至少 80% 的 entry-point 有 Phase A tag
-- [ ] `docs/REFERENCE/processes.yaml` 與 Phase A tag 同步
+- [ ] `docs/reference/processes.yaml` 與 Phase A tag 同步
 - [ ] CI 檢查「改 entry 必改 yaml」運作
 - [ ] GitNexus 在 query WA-301 時回傳完整 description（驗證標註生效）

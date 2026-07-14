@@ -215,7 +215,7 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
   - 專注在 metrics schema(下游客戶端的 single source of truth)
   - 加 Issue #740 cross-reference
 - 新索引紀錄:
-  - `docs/REFERENCE/guidelines-index.md` 加 L2.4 條目
+  - `docs/reference/guidelines-index.md` 加 L2.4 條目
   - `docs/documentation-map.md` 加 L2.4 文件地圖條目
 - `docs/specs/llm-sector-agent.md` 加 L2.4 follow-up cross-link
 - 刪除 `.omo/wave-11-l2-4/*.md`(內容已永久化)

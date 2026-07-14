@@ -20,20 +20,20 @@
 
 | 知識類型 | 歸屬位置 |
 |----------|---------|
-| 跨模組全域規則 | [`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md) |
+| 跨模組全域規則 | [`docs/reference/traps.md`](docs/reference/traps.md) |
 | 模組內部陷阱/API/流程 | `internal/<mod>/AGENTS.md`（15 個保留位置，見 `internal/AGENTS_INDEX.md`） |
 | 模組技術規格 | `docs/specs/<topic>.md` |
 | 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
 | 技能 / 子代理指引 | `.claude/skills/atlas-<x>/SKILL.md` |
 | CI / pipeline 設定 | `.github/workflows/`、`.github/instructions/` |
-| 憲法級強制規範 | `docs/REFERENCE/constitution.md`、`docs/REFERENCE/iteration-gate.md`、`internal/apigateway/CONSTITUTION.md` |
+| 憲法級強制規範 | `docs/reference/constitution.md`、`docs/reference/iteration-gate.md`、`internal/apigateway/CONSTITUTION.md` |
 
 **防膨脹規則**：本文件上限 **160 行**；達到 **155 行**時觸發警告。超過時優先將內容外移到對應文件，而非持續膨脹本檔。
 
 ## 規範與治理
 
-- **開發憲法與流程**：[`docs/REFERENCE/constitution.md`](docs/REFERENCE/constitution.md)、[`docs/REFERENCE/iteration-gate.md`](docs/REFERENCE/iteration-gate.md)、[`docs/REFERENCE/guidelines-index.md`](docs/REFERENCE/guidelines-index.md)
-- **跨模組陷阱**：[`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md)
+- **開發憲法與流程**：[`docs/reference/constitution.md`](docs/reference/constitution.md)、[`docs/reference/iteration-gate.md`](docs/reference/iteration-gate.md)、[`docs/reference/guidelines-index.md`](docs/reference/guidelines-index.md)
+- **跨模組陷阱**：[`docs/reference/traps.md`](docs/reference/traps.md)
 - **CI 與編碼守則**：
   - [`.github/instructions/go-core.instructions.md`](.github/instructions/go-core.instructions.md)
   - [`.github/instructions/experiments-guardrails.instructions.md`](.github/instructions/experiments-guardrails.instructions.md)
@@ -43,7 +43,7 @@
 ## 架構與模組入口
 
 - **分層架構**：[`docs/architecture.md`](docs/architecture.md)
-- **參數系統**：[`docs/REFERENCE/parameter-system.md`](docs/REFERENCE/parameter-system.md)
+- **參數系統**：[`docs/reference/parameter-system.md`](docs/reference/parameter-system.md)
 - **數據源憲法**：[`internal/apigateway/CONSTITUTION.md`](internal/apigateway/CONSTITUTION.md)
 - **模組索引**：[`internal/AGENTS_INDEX.md`](internal/AGENTS_INDEX.md)
 - **成熟度對照**：[`internal/MATURITY.md`](internal/MATURITY.md)
@@ -53,15 +53,15 @@
 通用 ACI 規則見全域 `~/.config/opencode/AGENTS.md`。
 
 - **MCP 入口**：[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md)
-- **Tool catalog**：[`docs/REFERENCE/tool-catalog.md`](docs/REFERENCE/tool-catalog.md)
-- **Workflow map**：[`docs/REFERENCE/workflow-map.md`](docs/REFERENCE/workflow-map.md)
-- **Process 標註**：[`docs/REFERENCE/processes.yaml`](docs/REFERENCE/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
+- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)
+- **Workflow map**：[`docs/reference/workflow-map.md`](docs/reference/workflow-map.md)
+- **Process 標註**：[`docs/reference/processes.yaml`](docs/reference/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)
 - **FactorType 變更協議**：[`.claude/skills/atlas-factor-change-protocol/SKILL.md`](.claude/skills/atlas-factor-change-protocol/SKILL.md)
 
 ## 高頻陷阱速查
 
-> 完整列表見 [`docs/REFERENCE/traps.md`](docs/REFERENCE/traps.md)。
+> 完整列表見 [`docs/reference/traps.md`](docs/reference/traps.md)。
 
 | 陷阱 | 一句話 |
 |------|--------|
