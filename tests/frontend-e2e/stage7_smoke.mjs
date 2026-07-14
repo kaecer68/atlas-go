@@ -32,7 +32,11 @@ async function adminModelsSmoke(browser) {
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
-  // Navigate to base admin, wait for SPA init, then route to capital_models
+  // Navigate to base admin, wait for SPA init, then route to capital_models.
+  // Pattern: base URL → wait for modules/switchPage → explicit route. This is
+  // more deterministic than navigating directly to /admin/capital_models
+  // because it doesn't depend on the URL-driven initial-path routing in
+  // admin_web/main.js (which fires before all module chunks have loaded).
   await page.goto(`${BASE_URL}/admin/`, { waitUntil: 'load', timeout: TIMEOUT });
   console.log(`  navigated → ${page.url()}`);
 
