@@ -155,6 +155,68 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 	return report
 }
 
+// computeNarrativeTilt sums (weight × direction_sign) across narrative
+// models whose ActiveThemes intersect with trigger themes derived from
+// today's events. Returns 0 when no model matches. The 0.5 dampener is
+// applied at the call site so narrative models stay a secondary signal.
+func computeNarrativeTilt(models []ModelView, day time.Time) float64 {
+	var tilt float64
+	activeThemes := activeTriggerThemesForDay(day)
+	if len(activeThemes) == 0 {
+		return 0
+	}
+	themeSet := make(map[string]struct{}, len(activeThemes))
+	for _, t := range activeThemes {
+		themeSet[t] = struct{}{}
+	}
+	for _, m := range models {
+		var sign float64
+		switch m.Direction {
+		case "bullish":
+			sign = 1.0
+		case "bearish":
+			sign = -1.0
+		}
+		if sign == 0 {
+			continue
+		}
+		if !themeIntersects(m.ActiveThemes, themeSet) {
+			continue
+		}
+		tilt += sign * m.Weight
+	}
+	return tilt
+}
+
+// activeTriggerThemesForDay returns the union of trigger themes that the
+// EventTypeToTriggerThemes table knows about, for use as the "currently
+// active trigger theme universe" against which narrative model
+// ActiveThemes are matched. We pass nil registry to receive all default
+// themes regardless of whether a DetectorRegistry is wired.
+func activeTriggerThemesForDay(_ time.Time) []string {
+	themes := make(map[string]struct{})
+	for et := range eventTypeToTriggerThemesTable {
+		for _, t := range EventTypeToTriggerThemes(string(et), nil) {
+			themes[t] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(themes))
+	for t := range themes {
+		out = append(out, t)
+	}
+	return out
+}
+
+// themeIntersects reports whether any element of themes appears in set.
+func themeIntersects(themes []string, set map[string]struct{}) bool {
+	for _, t := range themes {
+		if _, ok := set[t]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // predictDay computes the predicted flow for a specific day.
 func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent, cfScore float64) (dir string, conf float64, drivers []string) {
 	var bullishWeight, bearishWeight float64
@@ -182,7 +244,8 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 	bullishWeight += cfScore * 0.3
 	bearishWeight -= cfScore * 0.3
 
-	net := bullishWeight - bearishWeight
+	narrativeTilt := computeNarrativeTilt(p.narrativeModels, day)
+	net := bullishWeight - bearishWeight + narrativeTilt
 	switch {
 	case net > 0.3:
 		dir = "inflow"

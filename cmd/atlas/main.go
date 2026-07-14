@@ -676,6 +676,8 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
+			wireNarrativePipeline(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler))
+			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + narrative models)")
 
 			// Stage 5 PR#4 Stage B: register detector scan routes BEFORE event routes
 			// so the scan store is available for injection.
