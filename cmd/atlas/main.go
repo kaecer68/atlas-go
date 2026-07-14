@@ -30,6 +30,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/dailyreport"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/industry"
