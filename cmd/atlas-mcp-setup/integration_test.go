@@ -6,8 +6,8 @@
 //  2. Build the atlas-mcp binary
 //  3. Start atlas-mcp as a subprocess, pointing at the mock backend
 //  4. Send JSON-RPC initialize + tools/list over stdio
-//  5. Verify the response includes the expected tool count (106-108,
-//     per PR 2+3 adding 17 new tools; PR 1+2+3 cumulative range)
+//  5. Verify the response includes the expected tool count (108-110,
+//     per Phase F adding 2 sector tools)
 //
 // Run with:  go test -tags=integration -count=1 ./cmd/atlas-mcp-setup/
 // Opt-in (not in default `go test ./...`) because it spawns subprocesses.
@@ -63,7 +63,7 @@ func (h *mockBackendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // (initialize → initialized → tools/list) over stdio. Asserts that:
 //
 //   - initialize responds with a `result` containing serverInfo
-//   - tools/list responds with the expected number of tools (106-108)
+//   - tools/list responds with the expected number of tools (108-110)
 //   - the mock backend was hit at least once (proves the subprocess
 //     actually made an outbound call)
 func TestAtlasMCP_EndToEnd(t *testing.T) {
@@ -163,8 +163,8 @@ func TestAtlasMCP_EndToEnd(t *testing.T) {
 
 	// 7. Assert tool count
 	got := len(tools)
-	if got < 106 || got > 108 {
-		t.Errorf("expected 106-108 tools, got %d", got)
+	if got < 108 || got > 110 {
+		t.Errorf("expected 108-110 tools, got %d", got)
 	}
 	t.Logf("atlas-mcp served %d tools over JSON-RPC", got)
 

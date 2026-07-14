@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 // tools_industry_sector.go — FU-7 Phase F: canonical sector resource MCP tools.
