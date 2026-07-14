@@ -140,31 +140,31 @@ func (ct *CycleTracker) NarrativeTheme(industryID string) string {
 // These match the ParametersConfig default values shipped in parameters_defaults.go.
 // If config is unavailable or unpopulated, these ensure the tracker still starts
 // with sensible bootstrap values.
-func defaultSeedMetrics() map[string]IndustryMetrics {
-	return map[string]IndustryMetrics{
-		"semiconductor":             {IndustryID: "semiconductor", RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.30, InventoryTurnover: 5.5, CapacityUtilization: 0.85},
-		"ai_supply_chain":           {IndustryID: "ai_supply_chain", RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 6.0, CapacityUtilization: 0.90},
-		"robotics":                  {IndustryID: "robotics", RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.0, CapacityUtilization: 0.70},
-		"financials":                {IndustryID: "financials", RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 0.0, CapacityUtilization: 0.75},
-		"shipping":                  {IndustryID: "shipping", RevenueGrowthYoY: -0.05, ProfitGrowthYoY: -0.10, InventoryTurnover: 3.0, CapacityUtilization: 0.65},
-		"energy":                    {IndustryID: "energy", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.03, InventoryTurnover: 4.5, CapacityUtilization: 0.70},
-		"electronics":               {IndustryID: "electronics", RevenueGrowthYoY: 0.12, ProfitGrowthYoY: 0.15, InventoryTurnover: 5.0, CapacityUtilization: 0.75},
-		"consumer":                  {IndustryID: "consumer", RevenueGrowthYoY: 0.03, ProfitGrowthYoY: 0.05, InventoryTurnover: 6.0, CapacityUtilization: 0.70},
-		"industrial":                {IndustryID: "industrial", RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.0, CapacityUtilization: 0.68},
-		"foundry":                   {IndustryID: "foundry", RevenueGrowthYoY: 0.22, ProfitGrowthYoY: 0.28, InventoryTurnover: 5.0, CapacityUtilization: 0.88},
-		"server_assembly":           {IndustryID: "server_assembly", RevenueGrowthYoY: 0.40, ProfitGrowthYoY: 0.45, InventoryTurnover: 6.5, CapacityUtilization: 0.85},
-		"cooling":                   {IndustryID: "cooling", RevenueGrowthYoY: 0.20, ProfitGrowthYoY: 0.22, InventoryTurnover: 5.5, CapacityUtilization: 0.80},
-		"leo_satellite":             {IndustryID: "leo_satellite", RevenueGrowthYoY: 0.35, ProfitGrowthYoY: 0.40, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
-		"satellite_rf_components":   {IndustryID: "satellite_rf_components", RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
-		"satellite_pcb":             {IndustryID: "satellite_pcb", RevenueGrowthYoY: 0.30, ProfitGrowthYoY: 0.35, InventoryTurnover: 4.0, CapacityUtilization: 0.78},
-		"ground_equipment":          {IndustryID: "ground_equipment", RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.28, InventoryTurnover: 3.5, CapacityUtilization: 0.72},
-		"laser_communication":       {IndustryID: "laser_communication", RevenueGrowthYoY: 0.50, ProfitGrowthYoY: 0.55, InventoryTurnover: 3.0, CapacityUtilization: 0.70},
-		"mining":                    {IndustryID: "mining", RevenueGrowthYoY: 0.10, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
-		"precious_metals_recycling": {IndustryID: "precious_metals_recycling", RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.18, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
-		"copper_industry":           {IndustryID: "copper_industry", RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 4.0, CapacityUtilization: 0.72},
-		"rare_earth_specialty":      {IndustryID: "rare_earth_specialty", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.06, InventoryTurnover: 3.5, CapacityUtilization: 0.70},
-		"metal_processing":          {IndustryID: "metal_processing", RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.5, CapacityUtilization: 0.73},
-		"etf_rotation":              {IndustryID: "etf_rotation", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.05, InventoryTurnover: 0.0, CapacityUtilization: 0.0},
+func defaultSeedMetrics() map[SectorID]IndustryMetrics {
+	return map[SectorID]IndustryMetrics{
+		SectorSemiconductor:           {IndustryID: string(SectorSemiconductor), RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.30, InventoryTurnover: 5.5, CapacityUtilization: 0.85},
+		SubIndustryAISupplyChain:      {IndustryID: string(SubIndustryAISupplyChain), RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 6.0, CapacityUtilization: 0.90},
+		SubIndustryRobotics:           {IndustryID: string(SubIndustryRobotics), RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.0, CapacityUtilization: 0.70},
+		SectorFinancials:              {IndustryID: string(SectorFinancials), RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 0.0, CapacityUtilization: 0.75},
+		SectorShipping:                {IndustryID: string(SectorShipping), RevenueGrowthYoY: -0.05, ProfitGrowthYoY: -0.10, InventoryTurnover: 3.0, CapacityUtilization: 0.65},
+		SectorEnergy:                  {IndustryID: string(SectorEnergy), RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.03, InventoryTurnover: 4.5, CapacityUtilization: 0.70},
+		SectorElectronics:             {IndustryID: string(SectorElectronics), RevenueGrowthYoY: 0.12, ProfitGrowthYoY: 0.15, InventoryTurnover: 5.0, CapacityUtilization: 0.75},
+		SubIndustryConsumer:           {IndustryID: string(SubIndustryConsumer), RevenueGrowthYoY: 0.03, ProfitGrowthYoY: 0.05, InventoryTurnover: 6.0, CapacityUtilization: 0.70},
+		SubIndustryIndustrial:         {IndustryID: string(SubIndustryIndustrial), RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.0, CapacityUtilization: 0.68},
+		SubIndustryFoundry:            {IndustryID: string(SubIndustryFoundry), RevenueGrowthYoY: 0.22, ProfitGrowthYoY: 0.28, InventoryTurnover: 5.0, CapacityUtilization: 0.88},
+		SubIndustryServerAssembly:     {IndustryID: string(SubIndustryServerAssembly), RevenueGrowthYoY: 0.40, ProfitGrowthYoY: 0.45, InventoryTurnover: 6.5, CapacityUtilization: 0.85},
+		SubIndustryCooling:            {IndustryID: string(SubIndustryCooling), RevenueGrowthYoY: 0.20, ProfitGrowthYoY: 0.22, InventoryTurnover: 5.5, CapacityUtilization: 0.80},
+		SubIndustryLEOSatellite:       {IndustryID: string(SubIndustryLEOSatellite), RevenueGrowthYoY: 0.35, ProfitGrowthYoY: 0.40, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
+		SubIndustrySatelliteRF:        {IndustryID: string(SubIndustrySatelliteRF), RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
+		SubIndustrySatellitePCB:       {IndustryID: string(SubIndustrySatellitePCB), RevenueGrowthYoY: 0.30, ProfitGrowthYoY: 0.35, InventoryTurnover: 4.0, CapacityUtilization: 0.78},
+		SubIndustryGroundEquipment:    {IndustryID: string(SubIndustryGroundEquipment), RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.28, InventoryTurnover: 3.5, CapacityUtilization: 0.72},
+		SubIndustryLaserCommunication: {IndustryID: string(SubIndustryLaserCommunication), RevenueGrowthYoY: 0.50, ProfitGrowthYoY: 0.55, InventoryTurnover: 3.0, CapacityUtilization: 0.70},
+		SubIndustryMining:             {IndustryID: string(SubIndustryMining), RevenueGrowthYoY: 0.10, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
+		SubIndustryPreciousMetals:     {IndustryID: string(SubIndustryPreciousMetals), RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.18, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
+		SubIndustryCopper:             {IndustryID: string(SubIndustryCopper), RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 4.0, CapacityUtilization: 0.72},
+		SubIndustryRareEarth:          {IndustryID: string(SubIndustryRareEarth), RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.06, InventoryTurnover: 3.5, CapacityUtilization: 0.70},
+		SubIndustryMetalProcessing:    {IndustryID: string(SubIndustryMetalProcessing), RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.5, CapacityUtilization: 0.73},
+		SubIndustryETFRotation:        {IndustryID: string(SubIndustryETFRotation), RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.05, InventoryTurnover: 0.0, CapacityUtilization: 0.0},
 	}
 }
 
@@ -189,7 +189,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 
 	defaults := defaultSeedMetrics()
 	for id, metrics := range defaults {
-		ct.UpdatePosition(id, metrics)
+		ct.UpdatePosition(id.String(), metrics)
 	}
 }
 

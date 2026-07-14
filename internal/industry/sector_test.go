@@ -28,14 +28,11 @@ func Test_SectorID_AllConstantsUnique(t *testing.T) {
 	}
 }
 
-func Test_SectorID_AllHaveDisplayLabel(t *testing.T) {
+func Test_SectorID_DisplayZHNeverEmpty(t *testing.T) {
 	for _, id := range AllSectors() {
-		label, ok := DisplayZHTw[id]
-		if !ok {
-			t.Errorf("SectorID %q missing from DisplayZHTw (orphan canonical)", id)
-		}
+		label := DisplayZH(id)
 		if label == "" {
-			t.Errorf("SectorID %q has empty DisplayZH label", id)
+			t.Errorf("DisplayZH(%q) returned empty string for known canonical id", id)
 		}
 	}
 }
@@ -146,8 +143,27 @@ func Test_AllSectors_Sorted(t *testing.T) {
 }
 
 func Test_AllSectors_CanonicalCount(t *testing.T) {
-	if got := len(AllSectors()); got != 20 {
-		t.Errorf("AllSectors length = %d, want 20", got)
+	const want = 38
+	if got := len(AllSectors()); got != want {
+		t.Errorf("AllSectors length = %d, want %d (20 L1 + 18 L2)", got, want)
+	}
+}
+
+func Test_AllSectors_L1L2Breakdown(t *testing.T) {
+	l1, l2 := 0, 0
+	for _, id := range AllSectors() {
+		switch Layer(id) {
+		case "L1":
+			l1++
+		case "L2":
+			l2++
+		}
+	}
+	if l1 != 20 {
+		t.Errorf("L1 sector count = %d, want 20", l1)
+	}
+	if l2 != 18 {
+		t.Errorf("L2 sub-industry count = %d, want 18", l2)
 	}
 }
 
@@ -202,5 +218,66 @@ func Test_ZeroValue_NotRegistered(t *testing.T) {
 	}
 	if got, ok := SectorIDFromString(""); ok || got != "" {
 		t.Errorf("SectorIDFromString(\"\") should return miss; got id=%q ok=%v", got, ok)
+	}
+}
+
+func Test_Layer_L1(t *testing.T) {
+	for _, id := range []SectorID{SectorSemiconductor, SectorFinancials, SectorShipping, SectorEnergy} {
+		if got := id.Layer(); got != "L1" {
+			t.Errorf("SectorID(%q).Layer() = %q, want L1", id, got)
+		}
+	}
+}
+
+func Test_Layer_L2(t *testing.T) {
+	for _, id := range []SectorID{SubIndustryAISupplyChain, SubIndustryFoundry, SubIndustryRobotics, SubIndustryETFRotation} {
+		if got := id.Layer(); got != "L2" {
+			t.Errorf("SubIndustry(%q).Layer() = %q, want L2", id, got)
+		}
+	}
+}
+
+func Test_Layer_Unknown_ReturnsUnknown(t *testing.T) {
+	if got := (SectorID("nonexistent")).Layer(); got != "unknown" {
+		t.Errorf("unknown SectorID.Layer() = %q, want unknown", got)
+	}
+}
+
+func Test_IsL1_L1ReturnsTrue(t *testing.T) {
+	if !SectorSemiconductor.IsL1() {
+		t.Error("SectorSemiconductor.IsL1() should be true")
+	}
+	if !SectorFinancials.IsL1() {
+		t.Error("SectorFinancials.IsL1() should be true")
+	}
+	if !SectorShipping.IsL1() {
+		t.Error("SectorShipping.IsL1() should be true")
+	}
+}
+
+func Test_IsL1_L2ReturnsFalse(t *testing.T) {
+	if SubIndustryAISupplyChain.IsL1() {
+		t.Error("SubIndustryAISupplyChain.IsL1() should be false")
+	}
+}
+
+func Test_IsL2_L2ReturnsTrue(t *testing.T) {
+	if !SubIndustryAISupplyChain.IsL2() {
+		t.Error("SubIndustryAISupplyChain.IsL2() should be true")
+	}
+}
+
+func Test_IsL2_L1ReturnsFalse(t *testing.T) {
+	if SectorSemiconductor.IsL2() {
+		t.Error("SectorSemiconductor.IsL2() should be false")
+	}
+}
+
+func Test_DisplayZH_L2Fallback_SnakeCaseReturned(t *testing.T) {
+	if got := DisplayZH(SubIndustryAISupplyChain); got != string(SubIndustryAISupplyChain) {
+		t.Errorf("DisplayZH(ai_supply_chain) = %q, want %q", got, string(SubIndustryAISupplyChain))
+	}
+	if got := DisplayZH(SubIndustryFoundry); got != string(SubIndustryFoundry) {
+		t.Errorf("DisplayZH(foundry) = %q, want %q", got, string(SubIndustryFoundry))
 	}
 }

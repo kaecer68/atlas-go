@@ -56,6 +56,27 @@ const (
 	SectorEnergy           SectorID = "energy"            // 油電燃氣
 )
 
+const (
+	SubIndustryAISupplyChain      SectorID = "ai_supply_chain"
+	SubIndustryRobotics           SectorID = "robotics"
+	SubIndustryConsumer           SectorID = "consumer"
+	SubIndustryIndustrial         SectorID = "industrial"
+	SubIndustryFoundry            SectorID = "foundry"
+	SubIndustryServerAssembly     SectorID = "server_assembly"
+	SubIndustryCooling            SectorID = "cooling"
+	SubIndustryLEOSatellite       SectorID = "leo_satellite"
+	SubIndustrySatelliteRF        SectorID = "satellite_rf_components"
+	SubIndustrySatellitePCB       SectorID = "satellite_pcb"
+	SubIndustryGroundEquipment    SectorID = "ground_equipment"
+	SubIndustryLaserCommunication SectorID = "laser_communication"
+	SubIndustryMining             SectorID = "mining"
+	SubIndustryPreciousMetals     SectorID = "precious_metals_recycling"
+	SubIndustryCopper             SectorID = "copper_industry"
+	SubIndustryRareEarth          SectorID = "rare_earth_specialty"
+	SubIndustryMetalProcessing    SectorID = "metal_processing"
+	SubIndustryETFRotation        SectorID = "etf_rotation"
+)
+
 // DisplayZHTw maps a canonical SectorID to its full Traditional-Chinese
 // display label. The single source of Chinese labels for new code.
 var DisplayZHTw = map[SectorID]string{
@@ -125,16 +146,57 @@ var DisplayZHAliases = map[string]SectorID{
 	"能源":     SectorEnergy,
 }
 
+// SubIndustryDisplayZHTw maps L2 sub-industry canonical IDs to their
+// preferred display labels. Unlike DisplayZHTw where every L1 has a
+// full Chinese name, most L2 entries intentionally pass through (val == ""):
+// their canonical English snake_case name IS the display label. Override
+// only when a sub-industry has a well-known Chinese alias (rare). Most
+// L2 IDs in cycle.go defaultSeedMetrics don't have localized display
+// labels and use the ID directly via DisplayZH's L2 fallback below.
+var SubIndustryDisplayZHTw = map[SectorID]string{}
+
+// subIndustryIDs is the canonical ID set used by IsValid / AllSectors for
+// O(1) L2 lookups. Declared as a runtime set because Go does not have const
+var subIndustryIDs = func() map[SectorID]struct{} {
+	m := make(map[SectorID]struct{}, 18)
+	for _, id := range []SectorID{
+		SubIndustryAISupplyChain, SubIndustryRobotics, SubIndustryConsumer,
+		SubIndustryIndustrial, SubIndustryFoundry, SubIndustryServerAssembly,
+		SubIndustryCooling, SubIndustryLEOSatellite, SubIndustrySatelliteRF,
+		SubIndustrySatellitePCB, SubIndustryGroundEquipment,
+		SubIndustryLaserCommunication, SubIndustryMining,
+		SubIndustryPreciousMetals, SubIndustryCopper, SubIndustryRareEarth,
+		SubIndustryMetalProcessing, SubIndustryETFRotation,
+	} {
+		m[id] = struct{}{}
+	}
+	return m
+}()
+
 // String implements fmt.Stringer. Returns the canonical snake_case ID.
 func (s SectorID) String() string { return string(s) }
 
-// IsValid reports whether s is a known canonical SectorID with a display
-// label registered in DisplayZHTw. Untyped literals should be normalized
-// via SectorIDFromString before use.
+// IsValid reports whether s is a known canonical SectorID (L1 or L2).
 func (s SectorID) IsValid() bool {
-	_, ok := DisplayZHTw[s]
+	if _, ok := DisplayZHTw[s]; ok {
+		return true
+	}
+	_, ok := subIndustryIDs[s]
 	return ok
 }
+
+func (s SectorID) Layer() string {
+	if _, ok := DisplayZHTw[s]; ok {
+		return "L1"
+	}
+	if _, ok := subIndustryIDs[s]; ok {
+		return "L2"
+	}
+	return "unknown"
+}
+
+func (s SectorID) IsL1() bool { return s.Layer() == "L1" }
+func (s SectorID) IsL2() bool { return s.Layer() == "L2" }
 
 // SectorIDFromString resolves an arbitrary sector string (canonical ID,
 // full Chinese label, legacy Chinese alias) to a canonical SectorID.
@@ -156,18 +218,48 @@ func SectorIDFromString(s string) (SectorID, bool) {
 	return "", false
 }
 
-// AllSectors returns every canonical SectorID, sorted ascending. The
-// returned slice is independent of internal map iteration order.
+// AllSectors returns every canonical SectorID (L1 + L2), sorted ascending.
 func AllSectors() []SectorID {
-	out := make([]SectorID, 0, len(DisplayZHTw))
+	out := make([]SectorID, 0, len(DisplayZHTw)+len(subIndustryIDs))
+	seen := make(map[SectorID]struct{}, len(DisplayZHTw)+len(subIndustryIDs))
 	for id := range DisplayZHTw {
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	for id := range subIndustryIDs {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
 		out = append(out, id)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
 }
 
-// DisplayZH returns the full Traditional-Chinese display label for id,
-// or the empty string if id is not in the canonical taxonomy. Prefer
-// this over indexing DisplayZHTw directly to avoid the !ok check.
-func DisplayZH(id SectorID) string { return DisplayZHTw[id] }
+func Layer(s SectorID) string {
+	if _, ok := DisplayZHTw[s]; ok {
+		return "L1"
+	}
+	if _, ok := subIndustryIDs[s]; ok {
+		return "L2"
+	}
+	return "unknown"
+}
+
+func IsL1(s SectorID) bool { _, ok := DisplayZHTw[s]; return ok }
+
+func IsL2(s SectorID) bool { _, ok := subIndustryIDs[s]; return ok }
+
+func DisplayZH(id SectorID) string {
+	if label, ok := DisplayZHTw[id]; ok {
+		return label
+	}
+	if _, ok := subIndustryIDs[id]; ok {
+		return string(id)
+	}
+	if label, ok := SubIndustryDisplayZHTw[id]; ok && label != "" {
+		return label
+	}
+	return ""
+}
