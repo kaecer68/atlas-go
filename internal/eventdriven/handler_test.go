@@ -1,7 +1,9 @@
 package eventdriven
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -136,4 +138,92 @@ func TestSigmoidBounds(t *testing.T) {
 	if sigmoid(-100) != 0.0 {
 		t.Errorf("sigmoid(-100) = %f, want 0.0", sigmoid(-100))
 	}
+}
+
+func TestRegisterRoutes_RegistersBothExpectedPaths(t *testing.T) {
+	mux := http.NewServeMux()
+	cal := industry.NewEventCalendar()
+	RegisterRoutes(mux, cal)
+
+	h1, _ := mux.Handler(mustNewRequest("GET", "/api/events/prediction", nil))
+	if h1 == nil {
+		t.Error("expected /api/events/prediction route to be registered")
+	}
+	h2, _ := mux.Handler(mustNewRequest("GET", "/api/events/calendar", nil))
+	if h2 == nil {
+		t.Error("expected /api/events/calendar route to be registered")
+	}
+}
+
+func TestRegisterRoutes_UnregisteredPath_Returns404(t *testing.T) {
+	mux := http.NewServeMux()
+	cal := industry.NewEventCalendar()
+	RegisterRoutes(mux, cal)
+
+	req := mustNewRequest("GET", "/api/does-not-exist", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for unregistered path, got %d body=%s",
+			rr.Code, rr.Body.String())
+	}
+}
+
+func TestRegisterRoutes_FullHTTPFlow_Prediction(t *testing.T) {
+	mux := http.NewServeMux()
+	cal := industry.NewEventCalendar()
+	RegisterRoutes(mux, cal)
+
+	req := mustNewRequest("GET", "/api/events/prediction", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var report PredictionReport
+	if err := json.Unmarshal(rr.Body.Bytes(), &report); err != nil {
+		t.Fatalf("response not valid PredictionReport JSON: %v body=%s", err, rr.Body.String())
+	}
+	if len(report.Predictions) != 5 {
+		t.Errorf("expected 5 predictions in response, got %d", len(report.Predictions))
+	}
+	if report.Window != "5-day forward" {
+		t.Errorf("Window = %q, want 5-day forward", report.Window)
+	}
+}
+
+func TestRegisterRoutes_FullHTTPFlow_Calendar(t *testing.T) {
+	mux := http.NewServeMux()
+	cal := industry.NewEventCalendar()
+	RegisterRoutes(mux, cal)
+
+	req := mustNewRequest("GET", "/api/events/calendar", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response not valid JSON: %v body=%s", err, rr.Body.String())
+	}
+	if _, ok := body["events"]; !ok {
+		t.Error("response missing 'events' key")
+	}
+	if _, ok := body["total"]; !ok {
+		t.Error("response missing 'total' key")
+	}
+}
+
+func mustNewRequest(method, target string, body *int) *http.Request {
+	r, err := http.NewRequest(method, target, nil)
+	if err != nil {
+		panic(err)
+	}
+	return r
 }
