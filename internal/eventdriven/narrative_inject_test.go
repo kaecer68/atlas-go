@@ -124,6 +124,69 @@ func TestRegisterRoutesWithNarrative_AppliesModelTilt(t *testing.T) {
 	}
 }
 
+func TestPredictor_NarrativeDrivesDirectionOnEmptyTimeline(t *testing.T) {
+	now := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC)
+	cal := industry.NewEventCalendar()
+
+	p := NewPredictor(cal)
+	p.SetNarrativeProvider(&stubNarrative{models: []ModelView{
+		{ID: "ai_supercycle", Weight: 1.0, Direction: "bullish",
+			ActiveThemes: []string{"AI_capex_surge", "earnings_surprise"}},
+	}})
+
+	report := p.Predict(now)
+	if len(report.Predictions) != 5 {
+		t.Fatalf("expected 5 predictions, got %d", len(report.Predictions))
+	}
+	for _, pred := range report.Predictions {
+		if pred.Direction != "inflow" {
+			t.Errorf("matching AI/earnings theme should drive inflow (got %s on %s)",
+				pred.Direction, pred.Date.Format("2006-01-02"))
+		}
+	}
+}
+
+func TestPredictor_BearishNarrativeFlipsDirection(t *testing.T) {
+	now := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC)
+	cal := industry.NewEventCalendar()
+
+	p := NewPredictor(cal)
+	p.SetNarrativeProvider(&stubNarrative{models: []ModelView{
+		{ID: "hawkish_fed", Weight: 1.0, Direction: "bearish",
+			ActiveThemes: []string{"US_rates_up", "earnings_surprise"}},
+	}})
+
+	report := p.Predict(now)
+	for _, pred := range report.Predictions {
+		if pred.Direction != "outflow" {
+			t.Errorf("matching bearish theme should drive outflow (got %s on %s)",
+				pred.Direction, pred.Date.Format("2006-01-02"))
+		}
+	}
+}
+
+func TestComputeNarrativeTilt_NoMatch(t *testing.T) {
+	got := computeNarrativeTilt([]ModelView{
+		{ID: "x", Weight: 1.0, Direction: "bullish", ActiveThemes: []string{"never_matches_any_event"}},
+	}, time.Now())
+	if got != 0 {
+		t.Errorf("non-matching themes should produce zero tilt, got %v", got)
+	}
+}
+
+func TestComputeNarrativeTilt_MixedDirections(t *testing.T) {
+	now := time.Now()
+	got := computeNarrativeTilt([]ModelView{
+		{ID: "bull", Weight: 1.0, Direction: "bullish", ActiveThemes: []string{"earnings_surprise"}},
+		{ID: "bear", Weight: 0.5, Direction: "bearish", ActiveThemes: []string{"earnings_surprise"}},
+		{ID: "neut", Weight: 2.0, Direction: "neutral", ActiveThemes: []string{"earnings_surprise"}},
+	}, now)
+	want := 1.0*1.0 + 0.5*(-1.0) + 2.0*0
+	if got != want {
+		t.Errorf("mixed-direction tilt: got %v want %v", got, want)
+	}
+}
+
 func TestEventTypeToThemes(t *testing.T) {
 	cases := map[string][]string{
 		string(industry.EventMSCIRebalance):   {"msci_rebalance", "tw50_rebalance", "index_rebalance"},
