@@ -246,10 +246,14 @@ func Test_ForcesForDirection_VariousKeywords(t *testing.T) {
 			want:    []string{"foreign"},
 		},
 		{
-			// English driver not supported — see TODO in forcesForDirection keyword table
 			name:    "monthly_revenue_report_english",
 			drivers: []string{"Monthly Revenue Report"},
-			want:    []string{},
+			want:    []string{"foreign"},
+		},
+		{
+			name:    "quarterly_revenue_english",
+			drivers: []string{"Quarterly Revenue Update"},
+			want:    []string{"foreign"},
 		},
 		{
 			name:    "dealer_and_institutional",

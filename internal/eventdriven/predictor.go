@@ -163,7 +163,8 @@ func forcesForDirection(drivers []string) []string {
 		switch {
 		case strings.Contains(dl, "msci"),
 			strings.Contains(dl, "外資"),
-			strings.Contains(dl, "營收"):
+			strings.Contains(dl, "營收"),
+			strings.Contains(dl, "revenue"):
 			forceSet["foreign"] = true
 		case strings.Contains(dl, "etf"),
 			strings.Contains(dl, "換股"),
