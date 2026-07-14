@@ -100,7 +100,7 @@ cmd/atlas-mcp/server
 
 目前文件數字不一致：
 
-- `docs/reference/tool-catalog.md`：約 83
+- `docs/reference/tool-catalog.md`：108
 - `cmd/atlas-mcp/README.md`：79
 - `cmd/atlas-mcp/server/AGENTS.md`：75 / 79
 - `docs/specs/agent-mcp-server.md`：約 70
