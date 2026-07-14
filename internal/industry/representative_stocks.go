@@ -2,7 +2,7 @@
 // cycle positioning, and supply-chain linkage for Taiwan stock market analysis.
 package industry
 
-// DefaultRepresentativeStocks returns a map of Taiwanese industry names (Chinese)
+// DefaultRepresentativeStocks returns a map of canonical SectorID constants
 // to their representative stock symbols. All symbols are WITHOUT .TW suffix.
 //
 // This data serves as a **fallback** for symbol-to-industry classification when
@@ -10,9 +10,9 @@ package industry
 // truth for industry classification is ParametersConfig.Industry.ClassificationTree.
 //
 // Coverage: 20 sectors, ~96 representative stocks across Taiwan's major industries.
-func DefaultRepresentativeStocks() map[string][]string {
-	return map[string][]string{
-		"半導體": {
+func DefaultRepresentativeStocks() map[SectorID][]string {
+	return map[SectorID][]string{
+		SectorSemiconductor: {
 			"2330", // 台積電
 			"2303", // 聯電
 			"2454", // 聯發科
@@ -26,7 +26,7 @@ func DefaultRepresentativeStocks() map[string][]string {
 			"8081", // 致新
 			"6239", // 力成
 		},
-		"電子零組件": {
+		SectorElectronics: {
 			"2317", // 鴻海
 			"2382", // 廣達
 			"2324", // 仁寶
@@ -38,14 +38,14 @@ func DefaultRepresentativeStocks() map[string][]string {
 			"2308", // 台達電
 			"3037", // 欣興
 		},
-		"光電": {
+		SectorOptoelectronics: {
 			"3008", // 大立光
 			"3406", // 玉晶光
 			"5484", // 慧友
 			"2393", // 億光
 			"6176", // 瑞儀
 		},
-		"金融保險": {
+		SectorFinancials: {
 			"2881", // 富邦金
 			"2882", // 國泰金
 			"2886", // 兆豐金
@@ -57,30 +57,30 @@ func DefaultRepresentativeStocks() map[string][]string {
 			"2883", // 開發金
 			"2887", // 台新金
 		},
-		"水泥": {
+		SectorCement: {
 			"1101", // 台泥
 			"1102", // 亞泥
 			"1103", // 嘉泥
 		},
-		"塑膠": {
+		SectorPlastics: {
 			"1301", // 台塑
 			"1303", // 南亞
 			"1326", // 台化
 			"1304", // 台聚
 		},
-		"紡織": {
+		SectorTextiles: {
 			"1476", // 儒鴻
 			"1402", // 遠東新
 			"1477", // 聚陽
 		},
-		"鋼鐵": {
+		SectorSteel: {
 			"2002", // 中鋼
 			"2015", // 豐興
 			"2027", // 大成鋼
 			"2014", // 中鴻
 			"2006", // 東和鋼鐵
 		},
-		"航運": {
+		SectorShipping: {
 			"2603", // 長榮
 			"2609", // 陽明
 			"2615", // 萬海
@@ -88,81 +88,81 @@ func DefaultRepresentativeStocks() map[string][]string {
 			"2605", // 新興
 			"2637", // 慧洋-KY
 		},
-		"食品": {
+		SectorFood: {
 			"1216", // 統一
 			"1227", // 佳格
 			"1229", // 聯華
 			"1231", // 聯華食
 		},
-		"汽車": {
+		SectorAuto: {
 			"2207", // 和泰車
 			"2201", // 裕隆
 			"2227", // 裕日車
 		},
-		"通信網路": {
+		SectorTelecom: {
 			"2412", // 中華電
 			"3045", // 台灣大
 			"4904", // 遠傳
 		},
-		"化學": {
+		SectorChemicals: {
 			"1707", // 葡萄王
 			"1722", // 台肥
 			"1717", // 長興
 		},
-		"生技醫療": {
+		SectorBiotech: {
 			"4746", // 台耀
 			"1795", // 美時
 			"4123", // 晟德
 			"4162", // 智擎
 			"4142", // 國光生
 		},
-		"營建": {
+		SectorConstruction: {
 			"2505", // 國揚
 			"2545", // 皇翔
 			"2548", // 華固
 			"5522", // 遠雄
 		},
-		"其他電子": {
+		SectorOtherElectronics: {
 			"3533", // 嘉澤
 			"3653", // 健策
 			"2312", // 金寶
 		},
-		"電機機械": {
+		SectorMachinery: {
 			"1503", // 士電
 			"1504", // 東元
 			"1590", // 亞德客-KY
 			"2049", // 上銀
 			"4536", // 拓凱
 		},
-		"觀光": {
+		SectorTourism: {
 			"2707", // 晶華
 			"2723", // 美食-KY
 			"2731", // 雄獅
 		},
-		"百貨": {
+		SectorRetail: {
 			"2912", // 統一超
 			"2915", // 潤泰全
 			"5904", // 寶雅
 		},
-		"油電燃氣": {
+		SectorEnergy: {
 			"6505", // 台塑化
 			"9933", // 中鼎
 		},
 	}
 }
 
-// ClassifyBySymbol returns the industry name for a given stock symbol by
-// consulting DefaultRepresentativeStocks. Returns an empty string if the
+// ClassifyBySymbol returns the canonical SectorID for a given stock symbol by
+// consulting DefaultRepresentativeStocks. Returns an empty SectorID if the
 // symbol is not found.
 //
 // This is intended as a fallback for symbol-to-industry classification
 // when external data sources (e.g., FinMind) are unavailable. The primary
 // classification path is through ClassificationTree.GetSegment().
-func ClassifyBySymbol(symbol string) string {
-	for industry, stocks := range DefaultRepresentativeStocks() {
+func ClassifyBySymbol(symbol string) SectorID {
+	for id, stocks := range DefaultRepresentativeStocks() {
 		for _, s := range stocks {
 			if s == symbol {
-				return industry
+				return id
 			}
 		}
 	}
