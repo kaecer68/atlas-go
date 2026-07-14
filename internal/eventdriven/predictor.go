@@ -1,6 +1,7 @@
 package eventdriven
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -15,6 +16,23 @@ type Predictor struct {
 	calendar        *industry.EventCalendar
 	capitalFlow     CapitalFlowProvider
 	narrativeModels []ModelView
+	scanStore       DetectorScanStore
+}
+
+// ScanResult is a minimal projection of a detector scan row, defined
+// locally to avoid a package dependency cycle — ledger imports narrative,
+// narrative imports eventdriven (type_theme_mapping.go), so any import of
+// ledger from eventdriven would create narrative→ledger→eventdriven→narrative.
+type ScanResult struct {
+	Theme      string
+	Severity   string
+	Confidence float64
+}
+
+// DetectorScanStore is the interface consumed by the predictor for
+// run-time detected theme data.
+type DetectorScanStore interface {
+	LoadRecentScans(ctx context.Context, limit int) ([]ScanResult, error)
 }
 
 // CapitalFlowProvider provides the current capital quality score.
@@ -62,6 +80,12 @@ func NewPredictor(cal *industry.EventCalendar) *Predictor {
 // SetCapitalFlow sets the capital flow provider for scoring.
 func (p *Predictor) SetCapitalFlow(cf CapitalFlowProvider) {
 	p.capitalFlow = cf
+}
+
+// SetScanStore injects a detector scan store. When nil (the default), the
+// predictor continues using the static EventTypeToTriggerThemes mapping.
+func (p *Predictor) SetScanStore(s DetectorScanStore) {
+	p.scanStore = s
 }
 
 // SetNarrativeProvider caches a snapshot of Darwinian-evolved models.

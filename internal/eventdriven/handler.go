@@ -35,6 +35,12 @@ func (h *Handler) SetNarrativeProvider(np NarrativeModelProvider) {
 	h.predictor.SetNarrativeProvider(np)
 }
 
+// SetScanStore injects a detector scan store into the predictor so detected
+// themes are considered alongside event-calendar data.
+func (h *Handler) SetScanStore(ss DetectorScanStore) {
+	h.predictor.SetScanStore(ss)
+}
+
 // RegisterRoutes registers event-driven endpoints using the default static
 // capital flow provider. Preserves v0.0.0.32 API.
 func RegisterRoutes(mux *http.ServeMux, cal *industry.EventCalendar) {
@@ -49,15 +55,24 @@ func RegisterRoutesWithCapitalFlow(mux *http.ServeMux, cal *industry.EventCalend
 }
 
 // RegisterRoutesWithNarrative is the full production wiring: real capital
-// flow + Darwinian narrative models. nil providers fall back to
-// event-only predictions.
+// flow + Darwinian narrative models + detector scan themes. nil providers
+// fall back to event-only predictions.
 func RegisterRoutesWithNarrative(mux *http.ServeMux, cal *industry.EventCalendar, cf CapitalFlowProvider, np NarrativeModelProvider) {
+	RegisterRoutesWithDetectors(mux, cal, cf, np, nil)
+}
+
+// RegisterRoutesWithDetectors extends RegisterRoutesWithNarrative with a
+// detector scan store for run-time detected theme data.
+func RegisterRoutesWithDetectors(mux *http.ServeMux, cal *industry.EventCalendar, cf CapitalFlowProvider, np NarrativeModelProvider, ss DetectorScanStore) {
 	h := NewHandler(cal)
 	if cf != nil {
 		h.SetCapitalFlow(cf)
 	}
 	if np != nil {
 		h.SetNarrativeProvider(np)
+	}
+	if ss != nil {
+		h.SetScanStore(ss)
 	}
 	mux.Handle("GET /api/events/prediction", shared.Adapt(shared.Handler(h.HandlePrediction)))
 	mux.Handle("GET /api/events/calendar", shared.Adapt(shared.Handler(h.HandleCalendar)))
