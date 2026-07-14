@@ -73,6 +73,33 @@ import (
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
 
+// scanStoreAdapter bridges ledger.DetectorScanStore to the local
+// eventdriven.DetectorScanStore interface, avoiding a direct import of
+// ledger (which would create a package dependency cycle through
+// narrative→type_theme_mapping→eventdriven).
+type scanStoreAdapter struct {
+	inner ledger.DetectorScanStore
+}
+
+func (a *scanStoreAdapter) LoadRecentScans(ctx context.Context, limit int) ([]eventdriven.ScanResult, error) {
+	if a == nil || a.inner == nil {
+		return nil, nil
+	}
+	rows, err := a.inner.LoadRecentScans(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]eventdriven.ScanResult, len(rows))
+	for i, r := range rows {
+		out[i] = eventdriven.ScanResult{
+			Theme:      r.Theme,
+			Severity:   string(r.Severity),
+			Confidence: r.Confidence,
+		}
+	}
+	return out, nil
+}
+
 // appDeps is the central dependency-injection struct for run().
 // Construction (defaultAppDeps) lives in bootstrap_helpers.go.
 type appDeps struct {
@@ -649,11 +676,9 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
-			eventdriven.RegisterRoutesWithCapitalFlow(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler))
-			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow)")
 
-			// Stage 5 PR#4 Stage B: register detector scan routes alongside event-driven.
-			// Decoupled from narrativeEngine wiring — only needs the registry + scan store.
+			// Stage 5 PR#4 Stage B: register detector scan routes BEFORE event routes
+			// so the scan store is available for injection.
 			detectorRegistry = narrative.NewDefaultDetectorRegistry()
 			narrativeEngine = narrative.NewNarrativeEngine()
 			if store, storeErr := ledger.NewDetectorScanStore(cfg); storeErr == nil {
@@ -663,6 +688,12 @@ func run(args []string, deps appDeps) error {
 			} else {
 				log.Printf("[TemplateDetector] scan store init failed: %v", storeErr)
 			}
+
+			// Wrap detector scan store in adapter to break the
+			// ledger→narrative→eventdriven import cycle.
+			eventScanStore := &scanStoreAdapter{inner: detectorScanStore}
+			eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), nil, eventScanStore)
+			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + detectors)")
 		}
 
 		subStore, err := subscription.NewStore(cfg.WorkDir)
