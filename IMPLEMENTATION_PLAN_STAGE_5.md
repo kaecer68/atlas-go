@@ -144,7 +144,7 @@ PR#5 (P4)  端到端 unit test + spec 文件更新
    │  → template→model→prediction 鏈路 test
    │  → e2e: synthetic MacroDataSnapshot → 24 detector 並發 → 觸發 template → 計算 prediction
    │  → docs/specs/eventdriven.md (30 行 → 完整 spec)
-   │  → docs/specs/IMPLEMENTATION_PLAN_STAGE_5.md (本檔)
+   │  → `IMPLEMENTATION_PLAN_STAGE_5.md`（本檔）
 ```
 
 **依賴嚴格** — PR#2 需要 PR#1 的 Detector interface；PR#3 需要 PR#2 的 DetectorRegistry 已註冊 24 個 detector；PR#4 需要 PR#3 的 lookup function；PR#5 需要所有前 4 個 PR 完成才能寫 e2e test。
@@ -397,7 +397,7 @@ PR#5 (P4)  端到端 unit test + spec 文件更新
 
 ### 文檔
 - [ ] `docs/specs/eventdriven.md` 已擴展（30 行 → 完整 spec）
-- [ ] `docs/specs/IMPLEMENTATION_PLAN_STAGE_5.md`（本檔）已建立
+- [ ] `IMPLEMENTATION_PLAN_STAGE_5.md`（本檔）已建立
 - [ ] `internal/narrative/AGENTS.md` 新增 Detector 抽象層 pitfalls
 - [ ] `CHANGELOG.md` 新增 Stage 5 entries
 - [ ] `TRAPS.md` 新增 Stage 5 任何 trap

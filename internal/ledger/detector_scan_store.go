@@ -9,7 +9,7 @@
 //   - Type:    DetectorScanStore (interface)
 //   - Table:   detector_scan_log (schema in internal/ledger/sqlite_core.go)
 //   - Columns: scan_id, scan_batch_id, theme, severity, confidence,
-//              detected_at, source, metadata_json
+//     detected_at, source, metadata_json
 //   - Method:  AppendScan(ctx, results []narrative.DetectionResult) (string, error)
 //   - Method:  LoadRecentScans(ctx, limit int) ([]ScanResultRow, error)
 //   - SQLite-only (no JSONL fallback; matches "每 1h 寫到 SQLite" requirement)
@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -34,14 +35,14 @@ import (
 // HTTP / MCP API output. All narrative.* types are aliased (not redefined)
 // so consumers can compare against the canonical types directly.
 type ScanResultRow struct {
-	ScanID      int64             `json:"scan_id"`
-	ScanBatchID string            `json:"scan_batch_id"`
-	Theme       string            `json:"theme"`
+	ScanID      int64              `json:"scan_id"`
+	ScanBatchID string             `json:"scan_batch_id"`
+	Theme       string             `json:"theme"`
 	Severity    narrative.Severity `json:"severity"`
-	Confidence  float64           `json:"confidence"`
-	DetectedAt  time.Time         `json:"detected_at"`
-	Source      narrative.Source  `json:"source"`
-	Metadata    map[string]any    `json:"metadata,omitempty"`
+	Confidence  float64            `json:"confidence"`
+	DetectedAt  time.Time          `json:"detected_at"`
+	Source      narrative.Source   `json:"source"`
+	Metadata    map[string]any     `json:"metadata,omitempty"`
 }
 
 // DetectorScanStore persists detector scan results for later query.
@@ -74,7 +75,7 @@ func NewSQLiteDetectorScanStore(db *sql.DB) *SQLiteDetectorScanStore {
 // AppendScan inserts all results as one transactional batch sharing
 // the same scan_batch_id. Empty results is a no-op returning ("", nil).
 //
-// Per-row metadata is JSON-marshalled; nil/empty metadata maps to NULL.
+// Per-row metadata is JSON-marshaled; nil/empty metadata maps to NULL.
 func (s *SQLiteDetectorScanStore) AppendScan(ctx context.Context, results []narrative.DetectionResult) (string, error) {
 	if len(results) == 0 {
 		return "", nil
@@ -99,7 +100,7 @@ func (s *SQLiteDetectorScanStore) AppendScan(ctx context.Context, results []narr
 	if err != nil {
 		return "", fmt.Errorf("detector_scan: prepare insert: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, r := range results {
 		if r.Theme == "" {
@@ -156,7 +157,7 @@ func (s *SQLiteDetectorScanStore) LoadRecentScans(ctx context.Context, limit int
 	if err != nil {
 		return nil, fmt.Errorf("detector_scan: query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]ScanResultRow, 0, limit)
 	for rows.Next() {

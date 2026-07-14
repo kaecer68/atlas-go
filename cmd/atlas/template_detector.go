@@ -3,8 +3,8 @@
 // Exposes two read-only HTTP endpoints that proxy the Stage 5 detector
 // subsystem to external callers (notably cmd/atlas-mcp):
 //
-//   GET /api/detector/scan/status?limit=N   → recent ScanResultRow from ledger
-//   GET /api/detector/registry/list          → 24 detectors + enable/disable
+//	GET /api/detector/scan/status?limit=N   → recent ScanResultRow from ledger
+//	GET /api/detector/registry/list          → 24 detectors + enable/disable
 //
 // Both endpoints are best-effort and unconditional — they must not block
 // startup if the store or registry cannot be constructed.

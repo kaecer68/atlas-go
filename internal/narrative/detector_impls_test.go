@@ -413,7 +413,7 @@ func TestSeverityFromString(t *testing.T) {
 		{"high", SeverityHigh},
 		{"medium", SeverityMedium},
 		{"low", SeverityLow},
-		{"", SeverityMedium},    // empty defaults to medium (better to flag than miss)
+		{"", SeverityMedium},        // empty defaults to medium (better to flag than miss)
 		{"unknown", SeverityMedium}, // unrecognized input defaults to medium
 	}
 	for _, tc := range tests {

@@ -56,9 +56,9 @@ func (m *mockDetector) Detect(ctx context.Context, in DetectorInput) (*Detection
 // "passes lock by value" warning.
 type emptyThemeDetector struct{}
 
-func (*emptyThemeDetector) Theme() string     { return "" }
-func (*emptyThemeDetector) Enabled() bool     { return false }
-func (*emptyThemeDetector) SetEnabled(bool)   {}
+func (*emptyThemeDetector) Theme() string   { return "" }
+func (*emptyThemeDetector) Enabled() bool   { return false }
+func (*emptyThemeDetector) SetEnabled(bool) {}
 func (*emptyThemeDetector) Detect(context.Context, DetectorInput) (*DetectionResult, error) {
 	return nil, nil
 }
@@ -332,8 +332,8 @@ func TestDetectionResult_ToNarrativeEvent(t *testing.T) {
 		Source:     SourceKB,
 		Metadata: map[string]any{
 			"US10YChangeBps": 25.0,
-			"DXYChangePct":    0.015,
-			"label":           "non-numeric should be dropped",
+			"DXYChangePct":   0.015,
+			"label":          "non-numeric should be dropped",
 		},
 	}
 	evt := res.ToNarrativeEvent()

@@ -7,6 +7,11 @@
       "results": ""
     },
     {
+      "name": "RegisterTemplateDetectorRoutes",
+      "params": "(mux *http.ServeMux, registry *narrative.DetectorRegistry, scanStore ledger.DetectorScanStore)",
+      "results": ""
+    },
+    {
       "name": "WireRecommenderDeps",
       "params": "(in WireDeps)",
       "results": "(recommender.HandlerDeps)"

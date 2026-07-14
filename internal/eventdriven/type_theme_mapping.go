@@ -1,26 +1,28 @@
 // Package eventdriven — Stage 5 PR#3 EventType → TriggerTheme 動態對應
 //
 // Background:
-//   The legacy eventTypeToThemes() in predictor.go maps TaiwanEventType
-//   (industry calendar events) to a set of calendar-specific theme names
-//   (msci_rebalance, monthly_revenue, etc.). Those names do NOT match the
-//   24-template trigger themes in narrative/templates.go (US_rates_up,
-//   earnings_surprise, etc.), so the downstream themeMatchesAny() check
-//   in predictor.Predict never fires — the calendar themes have no
-//   overlap with InvestmentModel.ActiveThemes.
 //
-//   PR#3 fixes this by adding EventTypeToTriggerThemes(), which bridges
-//   the two systems:
-//   - Maps TaiwanEventType → the subset of our 24 trigger themes that
-//     make semantic sense for that calendar event type
-//   - Filters the result by what's actually registered in the given
-//     DetectorRegistry (nil registry = return all defaults)
+//	The legacy eventTypeToThemes() in predictor.go maps TaiwanEventType
+//	(industry calendar events) to a set of calendar-specific theme names
+//	(msci_rebalance, monthly_revenue, etc.). Those names do NOT match the
+//	24-template trigger themes in narrative/templates.go (US_rates_up,
+//	earnings_surprise, etc.), so the downstream themeMatchesAny() check
+//	in predictor.Predict never fires — the calendar themes have no
+//	overlap with InvestmentModel.ActiveThemes.
+//
+//	PR#3 fixes this by adding EventTypeToTriggerThemes(), which bridges
+//	the two systems:
+//	- Maps TaiwanEventType → the subset of our 24 trigger themes that
+//	  make semantic sense for that calendar event type
+//	- Filters the result by what's actually registered in the given
+//	  DetectorRegistry (nil registry = return all defaults)
 //
 // Backward compatibility:
-//   The legacy eventTypeToThemes() is left UNTOUCHED. Existing callers
-//   (narrative_inject_test.go: TestEventTypeToThemes) keep working.
-//   PR#3 is purely additive — the new function is consumed by the
-//   PR#4 scheduler to know which detectors to pre-warm per event type.
+//
+//	The legacy eventTypeToThemes() is left UNTOUCHED. Existing callers
+//	(narrative_inject_test.go: TestEventTypeToThemes) keep working.
+//	PR#3 is purely additive — the new function is consumed by the
+//	PR#4 scheduler to know which detectors to pre-warm per event type.
 package eventdriven
 
 import (

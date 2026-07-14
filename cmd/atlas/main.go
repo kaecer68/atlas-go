@@ -442,10 +442,10 @@ func run(args []string, deps appDeps) error {
 		}
 
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
-	var gateway *apigateway.Gateway
-	var detectorRegistry *narrative.DetectorRegistry
-	var detectorScanStore ledger.DetectorScanStore
-	var gatewayFetcher monitoring.DataFetcher
+		var gateway *apigateway.Gateway
+		var detectorRegistry *narrative.DetectorRegistry
+		var detectorScanStore ledger.DetectorScanStore
+		var gatewayFetcher monitoring.DataFetcher
 		if deps.dataFetcher != nil {
 			// Test override: skip real Gateway initialization, use injected fetcher.
 			gatewayFetcher = deps.dataFetcher
@@ -841,7 +841,7 @@ func run(args []string, deps appDeps) error {
 				autoJudgePromoter: autoJudgePromoter,
 			})
 
-if detectorRegistry != nil && detectorScanStore != nil {
+			if detectorRegistry != nil && detectorScanStore != nil {
 				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore)
 			}
 			registerOperationsTasks(operationsDeps{
