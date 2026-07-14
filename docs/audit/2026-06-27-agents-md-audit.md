@@ -31,7 +31,7 @@
 > 跨模組全域規則 → `AGENTS.md`（本檔）
 > 模組內部陷阱/API/流程 → `internal/<mod>/AGENTS.md`
 > 操作程序 / playbook → `docs/`
-> 憲法級強制規範 → `docs/REFERENCE/constitution.md`、`internal/apigateway/CONSTITUTION.md`
+> 憲法級強制規範 → `docs/reference/constitution.md`、`internal/apigateway/CONSTITUTION.md`
 > 技能 / 子代理指引 → `.claude/skills/`
 
 **問題在於「50 個模組都符合第二條」** — 規則本身沒問題，但實作未考慮「內容是否真的獨特」。
@@ -71,7 +71,7 @@
 | 4 | backtest | 30 | **C** | RollingWindowSplit + valid_start.Year 停止 — **保留** |
 | 5 | baseline | 78 | **C** | Policy lifecycle + Trigger 執行期強制 — **保留** |
 | 6 | bootstrap | 42 | **C** | Init 順序 → **遷移至 `docs/quickstart.md`** |
-| 7 | config | 38 | **B** | `docs/REFERENCE/parameter-system.md` 涵蓋 .env / Magic number |
+| 7 | config | 38 | **B** | `docs/reference/parameter-system.md` 涵蓋 .env / Magic number |
 | 8 | db | 28 | **A** | 合併 DATABASE_URL / migration path → doc.go |
 | 9 | domain | 56 | **C** | Scorecard OOS 同步鏈 4 位置 + CorporateAction — **保留** |
 | 10 | eval | 25 | **A** | 合併 Fin-Skills 編號 → doc.go |
@@ -226,7 +226,7 @@
 | **併入 config** | tax | NHISurcharge 邏輯 — 併入 `internal/config/AGENTS.md` §Tax 章節（config AGENTS.md 將保留，與 apigateway 一樣） |
 | **併入 portfolio** | backtest | WindowRun 契約 — 併入 `portfolio/AGENTS.md` §backtest 章節 |
 | **併入 portfolio** | autobacktest | SignalEngine FullStore — 併入 `portfolio/AGENTS.md` §autobacktest 章節 |
-| **併入 root AGENTS.md** | screener | 永不回傳錯誤契約已在 `docs/REFERENCE/traps.md` 提及 |
+| **併入 root AGENTS.md** | screener | 永不回傳錯誤契約已在 `docs/reference/traps.md` 提及 |
 | **併入 root AGENTS.md** | reporting | 欄位完整性契約屬跨模組 |
 | **併入 root AGENTS.md** | repository | DualWriteRepository 是 generic infra 概念 |
 
@@ -287,7 +287,7 @@
 | tax | 併入 `internal/config/AGENTS.md`（config 將保留，與 apigateway 一樣）|
 | backtest | 併入 portfolio/AGENTS.md §backtest 章節 |
 | autobacktest | 併入 portfolio/AGENTS.md §autobacktest 章節 |
-| screener | 內容已於 `docs/REFERENCE/traps.md` 提及 |
+| screener | 內容已於 `docs/reference/traps.md` 提及 |
 | reporting | 欄位完整性契約屬跨模組內容 |
 | repository | DualWriteRepository 是 generic infra |
 

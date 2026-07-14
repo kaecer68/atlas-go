@@ -14,7 +14,7 @@ target_audience: "developer"
 
 ## 描述（Description）
 
-本技能提供 atlas-mcp 的 80 個 MCP tool 的**任務導向分群導覽**。不重複 [`docs/REFERENCE/tool-catalog.md`](../../../docs/REFERENCE/tool-catalog.md) 的完整 catalog — 本技能聚焦於：
+本技能提供 atlas-mcp 的 80 個 MCP tool 的**任務導向分群導覽**。不重複 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md) 的完整 catalog — 本技能聚焦於：
 1. **入門 tool**：每個任務群組「第一個該呼叫的 tool」
 2. **工具關係**：哪些是 companion（該一起用）、哪些是 alternative（擇一）
 3. **常見組合**：daily briefing、risk review、experiment evaluation 等典型任務的 tool 序列
@@ -68,7 +68,7 @@ target_audience: "developer"
 |------|----------|------|
 | Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（16 個檔案）+ `cmd/atlas-mcp/server/tools.go`（5 個核心 entry-point） | 80 個 tool handler |
 | 自動描述 | `cmd/atlas-mcp/auto-desc.gen.json`（713 行） | descgen 生成的 tool description |
-| Tool catalog | `docs/REFERENCE/tool-catalog.md` | 80 個 tool 的完整清單與決策樹 |
+| Tool catalog | `docs/reference/tool-catalog.md` | 80 個 tool 的完整清單與決策樹 |
 | MCP 規格 | `docs/specs/agent-mcp-server.md` | 設計規格、安全邊界、命名慣例 |
 
 ## 實作位置（Implementation Locations）
@@ -130,7 +130,7 @@ target_audience: "developer"
 | `atlas-macro-narrative` | 宏觀敘事 tool 的金融背景 |
 | `atlas-strategy-evolution` | 策略/實驗 tool 的金融背景 |
 
-> **完整 catalog + 任務→工具反向索引** — 見 [`docs/REFERENCE/tool-catalog.md`](../../../docs/REFERENCE/tool-catalog.md)（80 tools × 16 種典型任務矩陣）。
+> **完整 catalog + 任務→工具反向索引** — 見 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md)（80 tools × 16 種典型任務矩陣）。
 
 ## 版本歷史
 

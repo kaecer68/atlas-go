@@ -24,7 +24,7 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 | [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) | Data source governance — Gateway rules, rate limits, circuit breakers |
 | [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md) | Go coding rules (applies to all `internal/**/*.go`) |
 
-> Full file routing and rule hierarchy → **[AGENTS.md §文件路由](AGENTS.md)** and **[docs/REFERENCE/guidelines-index.md](docs/REFERENCE/guidelines-index.md)**.
+> Full file routing and rule hierarchy → **[AGENTS.md §文件路由](AGENTS.md)** and **[docs/reference/guidelines-index.md](docs/reference/guidelines-index.md)**.
 
 ## ⚙️ Build & Test Quick Reference
 
@@ -56,7 +56,7 @@ go tool cover -func=coverage.out | tail -n 1
 - [docs/iteration-playbook.md](docs/iteration-playbook.md) — Mutation and evolution cycle
 - [docs/evolution-loop.md](docs/evolution-loop.md) — Acceptance gate logic
 - [docs/data-sources.md](docs/data-sources.md) — Market data import, replay format (JSONL)
-- [docs/REFERENCE/parameter-system.md](docs/REFERENCE/parameter-system.md) — Parameter management with provenance tracking
+- [docs/reference/parameter-system.md](docs/reference/parameter-system.md) — Parameter management with provenance tracking
 - `docs/archive/2026-06-15-phase2-implementation.md` ~ `2026-06-15-phase5-architecture.md` — Historical phase decisions
 
 ## 📝 History & Context

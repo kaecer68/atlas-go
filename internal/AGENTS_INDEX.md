@@ -97,7 +97,7 @@
 
 | 檔案位置 | 涵蓋模組 | 關鍵陷阱主題 |
 |---------|---------|-------------|
-| `AGENTS.md`（root） | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/REFERENCE/traps.md` |
+| `AGENTS.md`（root） | 跨模組高頻陷阱 | 前 5 條高頻陷阱速查表；完整列表見 `docs/reference/traps.md` |
 | `internal/apigateway/` | apigateway | Gateway.Fetch、BackgroundTaskManager、CircuitBreaker |
 | `internal/capitalflow/` | capitalflow + eventdriven + recommender + subscription | 資金流/事件日曆/推薦/認證集群 |
 | `internal/fubonproxy/` | fubonproxy | ProcessManager supervisor F1-F9、Stop/backoff |
@@ -138,7 +138,7 @@
 ## 參考
 
 - 完整成熟度對照表：`internal/MATURITY.md`
-- 跨模組陷阱詳細參考：`docs/REFERENCE/traps.md`
+- 跨模組陷阱詳細參考：`docs/reference/traps.md`
 - 根路由與全域規則：`AGENTS.md`
 - 保留 AGENTS.md 模組清單：見下方「15 個保留模組」
 - v0.0.0.32 完整 release notes：`CHANGELOG.md` v0.0.0.32 區段

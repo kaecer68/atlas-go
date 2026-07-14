@@ -29,7 +29,7 @@
 - `internal/monitoring/dashboard_api.go`（SSE 路由註冊）
 - `shared_web/static/js/services/event-source.js`、`admin_web/static/js/event-listeners.js`
 - `internal/monitoring/rules.go`
-- `docs/roadmap.md` Wave 8/9 段落、`docs/REFERENCE/events/`
+- `docs/roadmap.md` Wave 8/9 段落、`docs/reference/events/`
 
 ### ⛔ 不可動
 - `internal/llm/`、`internal/llm_annotator/`、`internal/narrative/`、`internal/spawning/`、`internal/orchestrator/`

@@ -2,7 +2,7 @@
 
 `atlas-mcp` 是 [atlas-go](https://github.com/kaecer68/atlas-go) 的 MCP (Model Context Protocol) 伺服器。讓任何 MCP-compatible AI Agent（Claude Desktop、Cursor、OpenCode、OpenClaw、Hermes 等）透過標準 JSON-RPC 2.0 協議查詢與輕度觸發 atlas-go 的台股投資研究能力。
 
-> **Agent 入門** — 第一次使用？先讀 [`docs/investor/README.md`](../../docs/investor/README.md)（5 分鐘速讀），再看 [`docs/REFERENCE/tool-catalog.md`](../../docs/REFERENCE/tool-catalog.md)（tool 決策樹與完整 catalog，為 tool 數量與清單的權威來源）。
+> **Agent 入門** — 第一次使用？先讀 [`docs/investor/README.md`](../../docs/investor/README.md)（5 分鐘速讀），再看 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)（tool 決策樹與完整 catalog，為 tool 數量與清單的權威來源）。
 > **完整規格** — 設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server.md`](../../docs/specs/agent-mcp-server.md)。
 > **開發者** — 若要在 `cmd/atlas-mcp/server/` 內新增或修改 tool，**必先讀** [`server/AGENTS.md`](./server/AGENTS.md)（模組陷阱文件）。
 
@@ -75,7 +75,7 @@ MCP client config 路徑：
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **108 個 tool**（業務 102 + template_detector 2 + audit 4；sampling/elicitation feature-gated 各 +1；啟動期 assert ∈ [108, 110]，權威清單見 [`docs/REFERENCE/tool-catalog.md`](../../docs/REFERENCE/tool-catalog.md)） |
+| MCP Tools | **108 個 tool**（業務 102 + template_detector 2 + audit 4；sampling/elicitation feature-gated 各 +1；啟動期 assert ∈ [108, 110]，權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
@@ -279,7 +279,7 @@ hermes mcp restart atlas-mcp
 hermes mcp list  # 確認 tool 數量無異常變化（91±2）
 ```
 
-> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（編譯期 `RegisteredToolCount ∈ [89, 91]` assert 強制）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
+> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（啟動期 `RegisteredToolCount ∈ [108, 110]` assert 強制）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
 
 ## License
 

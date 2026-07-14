@@ -87,4 +87,4 @@ feeds: []string{
 - `internal/narrative/taiwan_geopolitical_provider.go`(source code)
 - `internal/narrative/taiwan_geopolitical_provider_test.go`(test code)
 - `docs/operations/loki-deployment.md`(4 條 LogQL rules 覆蓋 RSS 失敗情境)
-- `docs/REFERENCE/traps.md`(Prometheus Metric 命名空間 — 命名規範可類比 RSS URL 命名)
+- `docs/reference/traps.md`(Prometheus Metric 命名空間 — 命名規範可類比 RSS URL 命名)

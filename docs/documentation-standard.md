@@ -278,7 +278,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 - **日期前綴 `YYYY-MM-DD-`**：時序敏感（handoff、investigation、audit、plan）
 - **無日期前綴**：通用 reference（architecture、conventions、QUICKSTART、brief）
 - **slug**：小寫、`-` 分隔、無空格、無大寫
-- **單數 vs 複數**：用單數，例外是已存在的複數目錄（`docs/REFERENCE/events/`）保留不動
+- **單數 vs 複數**：用單數，例外是已存在的複數目錄（`docs/reference/events/`）保留不動
 - **P<n> 編號**：plans 與 evidence 的 P0-1、P0-2 編號可選，但建議用於大型 multi-PR 規劃
 
 ---

@@ -165,7 +165,7 @@ MCP tool 與 HTTP 端點的對應關係（節錄）：
 | `regime_get_history` | `GET /api/dashboard/regime-history` | Free |
 | `report_get_export_link` | `GET /api/reports/{id}/export` | Premium |
 
-完整 108 個 MCP tools 對照見 [`docs/REFERENCE/tool-catalog.md`](../REFERENCE/tool-catalog.md)。
+完整 108 個 MCP tools 對照見 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md)。
 
 ---
 

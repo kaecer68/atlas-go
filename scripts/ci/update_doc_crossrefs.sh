@@ -3,7 +3,7 @@
 # update_doc_crossrefs.sh — 自動更新 docs 移動後的 cross-references
 #
 # 2026-07-10: PR-3 docs architecture 重組.
-# 5 個文件從 docs/ 移到 docs/REFERENCE/:
+# 5 個文件從 docs/ 移到 docs/reference/:
 #   - CONSTITUTION.md          (46 refs)
 #   - traps.md                 (22 refs)
 #   - iteration-gate.md        ( 4 refs)
@@ -31,11 +31,11 @@ if [ "${1:-}" = "--check" ]; then CHECK_MODE=true; fi
 
 # 移動映射 (from -> to)
 declare -A MOVES=(
-    ["docs/REFERENCE/constitution.md"]="docs/REFERENCE/constitution.md"
-    ["docs/REFERENCE/traps.md"]="docs/REFERENCE/traps.md"
-    ["docs/REFERENCE/iteration-gate.md"]="docs/REFERENCE/iteration-gate.md"
-    ["docs/REFERENCE/guidelines-index.md"]="docs/REFERENCE/guidelines-index.md"
-    ["docs/REFERENCE/parameter-system.md"]="docs/REFERENCE/parameter-system.md"
+    ["docs/reference/constitution.md"]="docs/reference/constitution.md"
+    ["docs/reference/traps.md"]="docs/reference/traps.md"
+    ["docs/reference/iteration-gate.md"]="docs/reference/iteration-gate.md"
+    ["docs/reference/guidelines-index.md"]="docs/reference/guidelines-index.md"
+    ["docs/reference/parameter-system.md"]="docs/reference/parameter-system.md"
 )
 
 # 要掃的副檔名
@@ -49,7 +49,7 @@ TOTAL_MATCHES=0
 TOTAL_FILES=0
 
 echo "🔄 docs cross-reference updater (PR-3, 2026-07-10)"
-echo "  5 個文件要從 docs/ 移到 docs/REFERENCE/"
+echo "  5 個文件要從 docs/ 移到 docs/reference/"
 echo "  預期 96 個 cross-references 更新"
 echo ""
 
@@ -81,7 +81,7 @@ for from in "${!MOVES[@]}"; do
 
         for file in $matches; do
             # 排除 REFERENCE 目錄內的新檔案
-            if [[ "$file" == *"/docs/REFERENCE/"* ]]; then
+            if [[ "$file" == *"/docs/reference/"* ]]; then
                 continue
             fi
 
@@ -93,9 +93,9 @@ for from in "${!MOVES[@]}"; do
             if $DRY_RUN || $CHECK_MODE; then
                 echo "    $file: $count refs"
             else
-                # 實際更新: 替換 docs/X.md 為 docs/REFERENCE/X.md
-                # 但要避免重複更新 (如 docs/REFERENCE/constitution.md 內)
-                # 簡化: 用 sed 全文替換 (因為 docs/X.md 字串不會在 REFERENCE/ 內的 X.md 出現)
+                # 實際更新: 替換 docs/X.md 為 docs/reference/X.md
+                # 但要避免重複更新 (如 docs/reference/constitution.md 內)
+                # 簡化: 用 sed 全文替換 (因為 docs/X.md 字串不會在 reference/ 內的 X.md 出現)
                 sed -i '' "s|$from|$to|g" "$file"
                 echo "    ✓ $file: $count refs updated"
             fi

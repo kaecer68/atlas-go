@@ -435,7 +435,7 @@ codebase-memory_get_graph_schema({project: "Users-kaecer-workspace-atlas"})
 
 - `AGENTS.md` — AI 工具使用規則（AI 專用速查表，含「程式碼智慧工具」強制規則）
 - `CLAUDE.md` — Claude Code 專屬設定（Token 效率規則、部署）
-- `docs/REFERENCE/tool-catalog.md` — **atlas-mcp 業務工具**（80 個 MCP tool，市場查詢/風險/策略操作）— 與本文件（程式碼智慧工具）用途不同
+- `docs/reference/tool-catalog.md` — **atlas-mcp 業務工具**（80 個 MCP tool，市場查詢/風險/策略操作）— 與本文件（程式碼智慧工具）用途不同
 - `internal/AGENTS_INDEX.md` — 模組索引與成熟度
 - `docs/architecture.md` — 系統架構詳細說明
 - [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph) — codegraph 官方 repository

@@ -58,13 +58,13 @@
 
 ## Constitution compliance
 
-<!-- 參考 docs/REFERENCE/constitution.md 與 internal/apigateway/CONSTITUTION.md -->
+<!-- 參考 docs/reference/constitution.md 與 internal/apigateway/CONSTITUTION.md -->
 
 - [ ] Does not bypass `BackgroundTaskManager` for long-running ops
 - [ ] Does not bypass `ParametersConfig` validation
 - [ ] Does not bypass `marketdata.Provider` abstraction
 - [ ] Schema changes registered in `configs/agents.json` (if applicable)
-- [ ] Cross-module traps checked (see `docs/REFERENCE/traps.md`)
+- [ ] Cross-module traps checked (see `docs/reference/traps.md`)
 
 ## Pre-merge checklist
 

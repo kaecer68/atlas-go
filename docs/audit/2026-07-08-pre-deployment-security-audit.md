@@ -161,7 +161,7 @@ tar czf audit-$(date +%Y%m%d).tar.gz ~/.config/atlas-go/audit/
 
 - [ ] 7.1 `SECURITY.md` 反映當前狀態（特別是 hash 比較、SafeKey、double-gate）
 - [ ] 7.2 `docs/specs/security-audit.md` 更新（含本 checklist 引用）
-- [ ] 7.3 `docs/REFERENCE/tool-catalog.md` 反映任何 auth_status 等新欄位
+- [ ] 7.3 `docs/reference/tool-catalog.md` 反映任何 auth_status 等新欄位
 - [ ] 7.4 `internal/apigateway/CONSTITUTION.md` 無 obsolete appendices
 - [ ] 7.5 運維團隊已 briefed rotation SOP
 - [ ] 7.6 Incident response playbook 存在（anomaly burst / key compromise / crash recovery）

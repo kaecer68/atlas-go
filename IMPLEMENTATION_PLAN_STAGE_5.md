@@ -507,7 +507,7 @@ DetectorRegistry.RunAll
 | `cmd/atlas-mcp/server/tools_template_detector.go` | 2 個 MCP tool + handler | 需先有 HTTP endpoint |
 | `server.go:174` tool count hard gate | 106-108 → 108-110 | 同上 |
 | `tools_transport_sse_test.go` tool count | 106-108 → 108-110 | 同上 |
-| `docs/REFERENCE/tool-catalog.md` | 新增 2 個 tool 條目 | 同上 |
+| `docs/reference/tool-catalog.md` | 新增 2 個 tool 條目 | 同上 |
 | `go generate ./cmd/atlas-mcp` | 重產 auto-desc.gen.json | 同上 |
 | `cmd/atlas/main.go` 註冊 `RegisterTemplateDetectorScanTasks` | wiring | 同上 |
 

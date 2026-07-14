@@ -47,7 +47,7 @@ target_audience: "developer"
 |------|----------|------|
 | MCP server binary | `cmd/atlas-mcp/main.go` | 入口，flag 解析，transport 啟動 |
 | Tool 實作 | `cmd/atlas-mcp/server/tools_*.go`（16 個檔案）+ `cmd/atlas-mcp/server/tools.go`（5 個核心 entry-point） | 80 個 tool 的 handler |
-| Agent 文件 | `docs/investor/README.md`、`docs/REFERENCE/tool-catalog.md` | 入門 + tool catalog |
+| Agent 文件 | `docs/investor/README.md`、`docs/reference/tool-catalog.md` | 入門 + tool catalog |
 | MCP 規格 | `docs/specs/agent-mcp-server.md` | 設計規格、安全邊界、JSON Schema |
 
 ## 實作位置（Implementation Locations）
@@ -124,7 +124,7 @@ Agent: regime_get_history() + crossmarket_get_status() + narrative_get_bundle()
 | `atlas-pre-change-protocol` | 若需修改 atlas-mcp 程式碼，修改前必跑 |
 | `atlas-risk-management` | 風險相關 tool（`risk_get_*`）的金融背景 |
 
-> **任務→工具對照** — 接入完成後查 [`docs/REFERENCE/tool-catalog.md`](../../../docs/REFERENCE/tool-catalog.md) 末段「任務 → Tool 反向索引」（12 種典型任務 × 首選 tool）。
+> **任務→工具對照** — 接入完成後查 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md) 末段「任務 → Tool 反向索引」（12 種典型任務 × 首選 tool）。
 
 ## 版本歷史
 
