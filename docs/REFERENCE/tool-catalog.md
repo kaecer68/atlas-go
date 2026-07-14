@@ -1,7 +1,7 @@
 # atlas-mcp Tool Catalog
 
-> **108 tools**（預設啟用；sampling/elicitation feature-gated 全開時 110）grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
-> For natural language query examples, see [`docs/INVESTOR/query-examples.md`](../INVESTOR/query-examples.md).
+> **108 tools**（預設啟用；sampling/elicitation feature-gated 全開時 110）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
