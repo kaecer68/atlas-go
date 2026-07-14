@@ -38,7 +38,7 @@ func (s *server) handleSectorList(ctx context.Context, _ *mcp.CallToolRequest, _
 		repr := industry.DefaultRepresentativeStocks()
 		out.Sectors = make([]SectorInfo, 0, len(all))
 		for _, id := range all {
-			syms := repr[string(id)]
+			syms := repr[id]
 			if syms == nil {
 				syms = []string{}
 			}
@@ -81,7 +81,7 @@ func (s *server) handleSectorLookup(ctx context.Context, _ *mcp.CallToolRequest,
 		var secID industry.SectorID
 
 		if in.Symbol != "" {
-			secID = industry.SectorID(industry.ClassifyBySymbol(in.Symbol))
+			secID = industry.ClassifyBySymbol(in.Symbol)
 			if secID == "" {
 				out.Found = false
 				out.Warning = fmt.Sprintf("Symbol %q not found in representative stocks. Use industry_sector_list to see all sectors.", in.Symbol)
@@ -97,7 +97,7 @@ func (s *server) handleSectorLookup(ctx context.Context, _ *mcp.CallToolRequest,
 			}
 		}
 
-		syms := industry.DefaultRepresentativeStocks()[string(secID)]
+		syms := industry.DefaultRepresentativeStocks()[secID]
 		if syms == nil {
 			syms = []string{}
 		}
