@@ -27,6 +27,7 @@ type ScanResult struct {
 	Theme      string
 	Severity   string
 	Confidence float64
+	DetectedAt time.Time
 }
 
 // DetectorScanStore is the interface consumed by the predictor for
@@ -245,7 +246,12 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 	bearishWeight -= cfScore * 0.3
 
 	narrativeTilt := computeNarrativeTilt(p.narrativeModels, day)
-	net := bullishWeight - bearishWeight + narrativeTilt
+	// Apply scan-theme tilt (W4 consumption). Returns 0 when scanStore
+	// is nil or no recent scans pass recency/confidence/severity gates.
+	scanTilt, scanDrivers := p.applyScanThemes(context.Background(), day)
+	drivers = append(drivers, scanDrivers...)
+
+	net := bullishWeight - bearishWeight + narrativeTilt + scanTilt
 	switch {
 	case net > 0.3:
 		dir = "inflow"

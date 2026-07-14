@@ -94,6 +94,7 @@ func (a *scanStoreAdapter) LoadRecentScans(ctx context.Context, limit int) ([]ev
 			Theme:      r.Theme,
 			Severity:   string(r.Severity),
 			Confidence: r.Confidence,
+			DetectedAt: r.DetectedAt,
 		}
 	}
 	return out, nil
