@@ -108,6 +108,8 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/api/llm/health":
 		return true
+	case p == "/api/health/aggregate": // Stage 6 PR#1: 4-tier health aggregation for frontend banner
+		return true
 	case p == "/api/dashboard" || strings.HasPrefix(p, "/api/dashboard/"):
 		return true
 	case p == "/api/taiwan" || strings.HasPrefix(p, "/api/taiwan/"):

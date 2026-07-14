@@ -330,10 +330,26 @@ export async function renderHomeTierSections() {
     var preds = events.predictions.slice(0, 5).map(function (p) {
       var cls = p.direction === 'inflow' ? 'trend-bullish' : p.direction === 'outflow' ? 'trend-bearish' : '';
       var label = p.direction === 'inflow' ? '流入' : p.direction === 'outflow' ? '流出' : '中性';
-      var pct = typeof p.confidence === 'number' ? formatNumber(p.confidence, { decimals: 0, suffix: '%', percent: true }) : '—';
-      return metricCard({ label: label, value: pct, trend: cls, sub: '' });
+      var conf = typeof p.confidence === 'number' ? p.confidence : null;
+      var pct = conf !== null ? Math.round(conf * 100) + '%' : '—';
+      var heat = conf !== null ? ' style="background:linear-gradient(180deg, rgba(255,165,0,' + (conf * 0.45).toFixed(3) + ') 0%, rgba(255,165,0,' + (conf * 0.12).toFixed(3) + ') 100%);border-radius:6px"' : '';
+      var sub = (p.date ? '<div style="font-size:11px;opacity:.7;margin-top:2px">' + escapeHtml(p.date) + '</div>' : '');
+      var card = metricCard({ label: label, value: pct, trend: cls, sub: '' });
+      if (heat) card.setAttribute('style', heat.substring(7, heat.length - 1) + ';border-radius:6px');
+      if (sub) {
+        var subEl = document.createElement('div');
+        subEl.innerHTML = sub;
+        card.appendChild(subEl.firstChild);
+      }
+      return card;
     });
-    root.appendChild(buildTierSection('5 日資金流預測', [buildMetricGrid(5, preds)]));
+    var section = buildTierSection('未來 5 日資金流向預測', [buildMetricGrid(5, preds)]);
+    var hint = document.createElement('p');
+    hint.className = 'home-section__hint';
+    hint.style.cssText = 'font-size:11px;opacity:.65;margin:6px 0 0';
+    hint.textContent = '信心分數熱度圖：數值越高背景漸層越深，方向色條區分流入 / 流出 / 中性。';
+    section.appendChild(hint);
+    root.appendChild(section);
   }
 
   if (eventsCal && Array.isArray(eventsCal.events) && eventsCal.events.length > 0) {

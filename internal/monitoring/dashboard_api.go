@@ -801,6 +801,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		handlers.FubonAddr = fmt.Sprintf("127.0.0.1:%d", a.fubonProxyPort)
 	}
 	handlers.RegisterRoutes(mux)
+	// /api/health/aggregate — Stage 6 PR#1: frontend 單一呼叫即可取得 4-tier 健康聚合。
+	handlers.RegisterAggregateRoute(mux)
 
 	// Channel health summary endpoint for the alerts page dashboard.
 	mux.HandleFunc("/api/dashboard/channel-health", func(w http.ResponseWriter, r *http.Request) {

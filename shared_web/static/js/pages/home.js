@@ -9,7 +9,7 @@ import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
 import { renderTooltip } from '../components/tooltip.js';
-import { renderEventCalendar } from '../components/event-calendar.js';
+import { renderEventCalendar, gatherCalFilterOptions } from '../components/event-calendar.js';
 import {
   riskLevelLabel,
   fmtSafeSigned, fmtSafeNumber, fmtSafeSignedPct, fmtSafePct, fmtSafeDrawdown, fmtSafeCurrency, fmtSafeLargeNumber,
@@ -27,6 +27,7 @@ const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
 
 let homeLoaded = false;
 let calActiveCategories = [];
+let calActiveFilters = { triggerThemes: [], sectors: [] };
 
 function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -69,6 +70,10 @@ export async function renderHomePage(container) {
       <div class="home-today-summary__actions">
         <button class="btn btn--primary" id="home-view-market">查看市場詳情</button>
       </div>
+    </section>
+
+    <section class="home-section" id="home-banner" style="display:none">
+      <div class="home-banner" id="home-banner-content"></div>
     </section>
 
     <section class="home-section" id="home-signal-strip">
@@ -116,6 +121,12 @@ export async function renderHomePage(container) {
         <button class="cal-filter-pill" data-category="除權息">除權息</button>
         <button class="cal-filter-pill" data-category="法說會/財報">法說會</button>
         <button class="cal-filter-pill" data-category="總經事件">總經</button>
+        <select class="cal-filter-select" id="cal-filter-trigger-theme" data-filter-type="trigger_theme" aria-label="依 trigger_theme 篩選">
+          <option value="">所有 trigger_theme</option>
+        </select>
+        <select class="cal-filter-select" id="cal-filter-sector" data-filter-type="sector" aria-label="依 sector 篩選">
+          <option value="">所有 sector</option>
+        </select>
       </div>
       <div id="home-calendar-content">
         <div class="home-loading-card">載入中…</div>
@@ -133,6 +144,8 @@ export async function renderHomePage(container) {
 
   const calContainer = document.getElementById('home-calendar-content');
   const filterBar = document.getElementById('cal-filter-bar');
+  const applyCalFiltersAndRender = () => renderEventCalendar(calContainer, calActiveCategories, calActiveFilters)
+    .catch(err => console.warn('[home] calendar render failed:', err));
   if (filterBar && calContainer) {
     filterBar.addEventListener('click', (e) => {
       const pill = e.target.closest('.cal-filter-pill');
@@ -148,12 +161,20 @@ export async function renderHomePage(container) {
           calActiveCategories.push(category);
         }
       }
-      filterBar.querySelectorAll('.cal-filter-pill').forEach(p => {
+      document.querySelectorAll('#cal-filter-bar .cal-filter-pill').forEach(p => {
         const c = p.dataset.category;
         p.classList.toggle('active', c === '' ? calActiveCategories.length === 0 : calActiveCategories.includes(c));
       });
-      renderEventCalendar(calContainer, calActiveCategories).catch(err =>
-        console.warn('[home] calendar render failed:', err));
+      applyCalFiltersAndRender();
+    });
+
+    document.querySelectorAll('#cal-filter-bar .cal-filter-select').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const key = sel.dataset.filterType === 'trigger_theme' ? 'triggerThemes' : 'sectors';
+        const value = sel.value;
+        calActiveFilters[key] = value ? [value] : [];
+        applyCalFiltersAndRender();
+      });
     });
   }
 
@@ -200,10 +221,14 @@ async function loadHomeData() {
 
       // Event calendar — fetched independently, non-blocking
       const calContainer = document.getElementById('home-calendar-content');
+      const calDataForFilter = calData && Array.isArray(calData.events) ? calData.events : [];
+      populateCalFilterSelects(calDataForFilter);
       if (calContainer) {
-        renderEventCalendar(calContainer, calActiveCategories).catch(err =>
+        renderEventCalendar(calContainer, calActiveCategories, calActiveFilters).catch(err =>
           console.warn('[home] calendar render failed:', err));
       }
+
+      renderHomeBanner(bundle && bundle.events ? bundle.events : []);
     } catch (err) {
       console.warn('[home] failed to load dashboard data:', err);
       renderTodaySummary(null, null, null, [], null);
@@ -219,6 +244,42 @@ async function loadHomeData() {
   } finally {
     renderTrustFooter();
   }
+}
+
+function populateCalFilterSelects(events) {
+  const opts = gatherCalFilterOptions(events);
+  const themeSel = document.getElementById('cal-filter-trigger-theme');
+  const sectorSel = document.getElementById('cal-filter-sector');
+  if (themeSel && opts.triggerThemes.length) {
+    themeSel.innerHTML = '<option value="">所有 trigger_theme</option>' +
+      opts.triggerThemes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  }
+  if (sectorSel && opts.sectors.length) {
+    sectorSel.innerHTML = '<option value="">所有 sector</option>' +
+      opts.sectors.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  }
+}
+
+function renderHomeBanner(events) {
+  const section = document.getElementById('home-banner');
+  const content = document.getElementById('home-banner-content');
+  if (!section || !content) return;
+  const high = (Array.isArray(events) ? events : []).filter(e => typeof e.confidence === 'number' && e.confidence > 0.7);
+  if (high.length === 0) {
+    section.style.display = 'none';
+    content.innerHTML = '';
+    return;
+  }
+  section.style.display = '';
+  const items = high.slice(0, 4).map(e => {
+    const theme = escapeHtml(e.theme || e.name || '事件');
+    const conf = typeof e.confidence === 'number' ? Math.round(e.confidence * 100) + '%' : '—';
+    const inds = Array.isArray(e.affected_industries) && e.affected_industries.length > 0
+      ? e.affected_industries.slice(0, 3).map(s => `<span class="cal-tag">${escapeHtml(s)}</span>`).join(' ')
+      : '';
+    return `<div class="home-banner__item"><strong>${theme}</strong><span class="home-banner__conf">信心 ${conf}</span>${inds ? ' · ' + inds : ''}</div>`;
+  }).join('');
+  content.innerHTML = `<div class="home-banner__label">🚨 重大事件（信心 &gt; 70%）</div>${items}`;
 }
 
 function pickRiskFromStress(stress) {

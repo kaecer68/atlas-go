@@ -63,7 +63,7 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 
 func (s *server) handleResourceConfigParameters(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 	var params map[string]any
-	if err := s.cli.Get(ctx, "/api/admin/parameters", nil, &params); err != nil {
+	if err := s.cli.Get(ctx, "/api/parameters", nil, &params); err != nil {
 		return nil, fmt.Errorf("resource config parameters: %w", err)
 	}
 	return resourceText("atlas://config/parameters", "application/json", mustJSON(map[string]any{
@@ -186,7 +186,7 @@ func (s *server) handleResourceStrategiesActive(ctx context.Context, _ *mcp.Read
 
 func (s *server) handleResourceMarketRegime(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 	var out map[string]any
-	if err := s.cli.Get(ctx, "/api/regime/history?days=1", nil, &out); err != nil {
+	if err := s.cli.Get(ctx, "/api/dashboard/regime-history?limit=1", nil, &out); err != nil {
 		return nil, fmt.Errorf("resource market regime: %w", err)
 	}
 	return resourceText("atlas://market/regime", "application/json", mustJSON(out)), nil

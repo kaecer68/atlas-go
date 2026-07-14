@@ -1,45 +1,100 @@
 import { escapeHtml } from './utils.js';
 
-export async function getJSON(url) {
-  const res = await fetch(url, { credentials: 'include' });
-  if (!res.ok) throw new Error(url + ': ' + res.status);
+// Stage 6 PR#1：統一 fetch 工具加上 timeout + AbortController + 1 retry。
+// 設計：原本 `getJSON(url)` 是 bare fetch，無 timeout、無 retry、無錯誤分類。
+// 改成 `fetchWithRetry(method, url, body, options)` 共用底層，4 個公開 wrapper
+// 各自帶預設設定。silent* 系列仍吞掉錯誤回傳 null（前端 UI 別阻塞）。
+//
+// 預設值：
+//   - 8000ms timeout（足夠撐到 backend 八大主要 endpoint 的 P95）
+//   - 1 retry（總共 2 次 attempt）
+//   - 500ms backoff
+//   - 觸發 retry 的條件：timeout / network error / 5xx / 429
+//
+// 對既有 20+ consumers 完全向後相容：呼叫端沒傳 options 仍能正常用，
+// 只不過自動套上新預設（這正是想要的全域改善）。
+
+export const DEFAULT_TIMEOUT_MS = 8000;
+export const DEFAULT_RETRY = 1;
+export const DEFAULT_RETRY_BACKOFF_MS = 500;
+
+function delay(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+function isRetryable(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError') return true;
+  if (err.name === 'TypeError' && /fetch/i.test(err.message)) return true;
+  if (err.status && err.status >= 500) return true;
+  if (err.status === 429) return true;
+  return false;
+}
+
+async function fetchOnce(method, url, body, signal) {
+  const opts = { method: method, credentials: 'include', signal: signal };
+  if (body !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    const e = new Error(url + ': ' + res.status);
+    e.status = res.status;
+    throw e;
+  }
   return res.json();
 }
 
-export async function silentGetJSON(url) {
+async function fetchWithRetry(method, url, body, options) {
+  const opts = options || {};
+  const timeoutMs = opts.timeoutMs == null ? DEFAULT_TIMEOUT_MS : opts.timeoutMs;
+  const retry = opts.retry == null ? DEFAULT_RETRY : opts.retry;
+  const backoffMs = opts.retryBackoffMs == null ? DEFAULT_RETRY_BACKOFF_MS : opts.retryBackoffMs;
+  let lastErr;
+  for (let attempt = 0; attempt <= retry; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+    try {
+      return await fetchOnce(method, url, body, controller.signal);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retry && isRetryable(err)) {
+        await delay(backoffMs);
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr;
+}
+
+export async function getJSON(url, options) {
+  return fetchWithRetry('GET', url, undefined, options);
+}
+
+export async function silentGetJSON(url, options) {
   try {
-    return await getJSON(url);
+    return await getJSON(url, options);
   } catch (err) {
     console.warn('API ' + url + ': ' + err.message);
     return null;
   }
 }
 
-export async function postJSON(url, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) throw new Error(url + ': ' + res.status);
-  return res.json();
+export async function postJSON(url, body, options) {
+  return fetchWithRetry('POST', url, body, options);
+}
+
+export async function putJSON(url, body, options) {
+  return fetchWithRetry('PUT', url, body, options);
 }
 
 export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + msg); }
 
 export { escapeHtml };
-
-export async function putJSON(url, body) {
-  const res = await fetch(url, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) throw new Error(url + ': ' + res.status);
-  return res.json();
-}
 
 export function formatDate(d) {
   if (!d) return '-';

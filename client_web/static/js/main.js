@@ -28,6 +28,8 @@ const SHELL_LOADERS = {
   crossmarket: () => import('./page-shells/crossmarket.js'),
   industry: () => import('./page-shells/industry.js'),
   strategies: () => import('./page-shells/strategies.js'),
+  capital_predictions: () => import('./pages/capital_predictions.js'),
+  capital_board: () => import('./pages/capital_board.js'),
   login: () => import('./page-shells/login.js'),
   register: () => import('./page-shells/register.js'),
   premium: () => import('./page-shells/premium.js'),
@@ -87,6 +89,7 @@ export async function switchPage(id, silent) {
     pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
     evolution_panel: '策略演化', strategies: '投資心法',
+    capital_predictions: '錢潮預測', capital_board: '錢潮看板',
       login: '登入', register: '註冊', premium: '升級 Premium',
       mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查'
   };
