@@ -25,6 +25,8 @@ func NewHandler(provider marketdata.MacroDataProvider) *Handler {
 	return &Handler{service: NewService(provider, 0)}
 }
 
+func ServiceFromHandler(h *Handler) *Service { return h.service }
+
 func RegisterRoutes(mux *http.ServeMux, provider marketdata.MacroDataProvider) {
 	h := NewHandler(provider)
 	mux.Handle("GET /api/capital-flow/daily", shared.Get(h.HandleDaily))

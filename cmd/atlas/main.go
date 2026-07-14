@@ -644,10 +644,12 @@ func run(args []string, deps appDeps) error {
 
 		if gatewayFetcher != nil {
 			macroProvider := monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
-			capitalflow.RegisterRoutes(mux, macroProvider)
+			cfHandler := capitalflow.NewHandler(macroProvider)
+			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
+			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
-			eventdriven.RegisterRoutes(mux, eventCalendar)
-			log.Printf("[EventDriven] registered /api/events/* routes")
+			eventdriven.RegisterRoutesWithCapitalFlow(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler))
+			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow)")
 
 			// Stage 5 PR#4 Stage B: register detector scan routes alongside event-driven.
 			// Decoupled from narrativeEngine wiring — only needs the registry + scan store.
