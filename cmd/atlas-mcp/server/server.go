@@ -171,8 +171,8 @@ func Run(ctx context.Context, cfg Config) error {
 	// control_pause_agent, control_resume_agent, control_sector_ban), raising the
 	// base from 97 to 102. Write tools use DestructiveHint=true and require
 	// ATLAS_API_KEY (backend enforces auth).
-	if n := RegisteredToolCount; n < 106 || n > 108 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 106-108", n)
+	if n := RegisteredToolCount; n < 108 || n > 110 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 108-110", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for

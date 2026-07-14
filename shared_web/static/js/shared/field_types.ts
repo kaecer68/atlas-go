@@ -867,6 +867,15 @@ export interface DeploymentStatus {
   config: DeploymentConfig;
 }
 
+export interface DetectionResult {
+  theme: string;
+  severity: string;
+  confidence: number;
+  detected_at: string;
+  source: string;
+  metadata?: Record<string, string>;
+}
+
 export interface DividendRecord {
   symbol: string;
   year: number;
