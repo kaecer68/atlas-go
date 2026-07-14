@@ -30,7 +30,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/dailyreport"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
-	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -648,8 +647,8 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
-			eventdriven.RegisterRoutesWithCapitalFlow(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler))
-			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow)")
+			wireNarrativePipeline(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler))
+			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + narrative models)")
 
 			// Stage 5 PR#4 Stage B: register detector scan routes alongside event-driven.
 			// Decoupled from narrativeEngine wiring — only needs the registry + scan store.
