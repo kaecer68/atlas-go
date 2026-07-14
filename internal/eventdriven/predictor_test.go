@@ -1,7 +1,9 @@
 package eventdriven
 
 import (
+	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -669,6 +671,12 @@ func Test_Predict_PredictionDirectionAndConfidenceAreValid(t *testing.T) {
 			t.Errorf("prediction[%d].Confidence = %.4f, want [0, 1]",
 				i, pred.Confidence)
 		}
+		if pred.DrivingEvents == nil {
+			t.Errorf("prediction[%d].DrivingEvents is nil, want empty slice", i)
+		}
+		if pred.PredictedForces == nil {
+			t.Errorf("prediction[%d].PredictedForces is nil, want empty slice", i)
+		}
 	}
 }
 
@@ -681,10 +689,44 @@ func Test_Predict_AuxFieldsAreStableSlicesAndString(t *testing.T) {
 	if len(report.Predictions) != 5 {
 		t.Error("Predictions should have 5 entries")
 	}
+	if report.ActiveEvents == nil {
+		t.Error("ActiveEvents is nil, want slice (may be empty)")
+	}
+	if report.ETFEstimates == nil {
+		t.Error("ETFEstimates is nil, want slice (may be empty)")
+	}
+	if report.RevenueSurprises == nil {
+		t.Error("RevenueSurprises is nil, want slice (may be empty)")
+	}
 	if report.Summary == "" {
 		t.Error("Summary is empty, want non-empty string from buildPredictionSummary")
 	}
 	if _, ok := interface{}(report.Summary).(string); !ok {
 		t.Errorf("Summary type = %T, want string", report.Summary)
+	}
+}
+
+func Test_Predict_JSONMarshalOutput_HasNoNullArrays(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC)
+
+	report := p.Predict(now)
+	jsonBytes, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	js := string(jsonBytes)
+	nullPatterns := []string{
+		`"driving_events":null`,
+		`"predicted_forces":null`,
+		`"active_events":null`,
+		`"etf_estimates":null`,
+		`"revenue_surprises":null`,
+	}
+	for _, np := range nullPatterns {
+		if strings.Contains(js, np) {
+			t.Errorf("Predict() JSON output contains null array: %s\nfull output: %s", np, js)
+		}
 	}
 }

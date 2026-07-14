@@ -80,7 +80,7 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 		}
 	}
 
-	return PredictionReport{
+	report := PredictionReport{
 		GeneratedAt:      now,
 		Window:           "5-day forward",
 		Predictions:      predictions,
@@ -89,12 +89,22 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 		RevenueSurprises: p.buildRevenueSurprises(timeline),
 		Summary:          buildPredictionSummary(predictions, active, cfScore),
 	}
+	if report.ActiveEvents == nil {
+		report.ActiveEvents = []EventCalendarItem{}
+	}
+	if report.ETFEstimates == nil {
+		report.ETFEstimates = []ETFEstimate{}
+	}
+	if report.RevenueSurprises == nil {
+		report.RevenueSurprises = []RevenueSurprise{}
+	}
+	return report
 }
 
 // predictDay computes the predicted flow for a specific day.
 func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent, cfScore float64) (dir string, conf float64, drivers []string) {
 	var bullishWeight, bearishWeight float64
-	var driverNames []string
+	drivers = make([]string, 0)
 
 	for _, e := range timeline {
 		if day.After(e.EndDate) || day.Before(e.StartDate) {
@@ -104,10 +114,10 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 		switch e.Direction {
 		case "bullish":
 			bullishWeight += w
-			driverNames = append(driverNames, e.Name)
+			drivers = append(drivers, e.Name)
 		case "bearish":
 			bearishWeight += w
-			driverNames = append(driverNames, e.Name)
+			drivers = append(drivers, e.Name)
 		case "mixed":
 			bullishWeight += w * 0.3
 			bearishWeight += w * 0.3
@@ -129,10 +139,10 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 	}
 
 	// Confidence: sigmoid of net weight scaled by number of drivers
-	conf = sigmoid(math.Abs(net) * float64(len(driverNames)+1))
+	conf = sigmoid(math.Abs(net) * float64(len(drivers)+1))
 	conf = math.Round(conf*100) / 100
 
-	return dir, conf, driverNames
+	return dir, conf, drivers
 }
 
 // expectedFlow maps event types to their expected capital flow impact.
