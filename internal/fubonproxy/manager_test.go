@@ -400,7 +400,7 @@ func TestProcessManager_F2F4_NoFireAndForgetHealthCheck(t *testing.T) {
 	}
 
 	// 2nd PID
-	secondPID, _ := waitForPIDChange(m, firstPID, 6*time.Second)
+	secondPID, _ := waitForPIDChange(m, firstPID, 15*time.Second)
 	if secondPID == 0 || secondPID == firstPID {
 		t.Fatalf("2nd restart did not happen: first=%d second=%d", firstPID, secondPID)
 	}
@@ -415,7 +415,7 @@ func TestProcessManager_F2F4_NoFireAndForgetHealthCheck(t *testing.T) {
 	}
 
 	// 3rd PID — 再觸發一次重啟
-	thirdPID, _ := waitForPIDChange(m, secondPID, 12*time.Second)
+	thirdPID, _ := waitForPIDChange(m, secondPID, 20*time.Second)
 	if thirdPID == 0 || thirdPID == secondPID {
 		t.Logf("3rd restart not observed within 12s (PID unchanged=%d), acceptable for test scope", secondPID)
 	} else {

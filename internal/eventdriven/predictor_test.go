@@ -628,3 +628,63 @@ func containsStr(s, substr string) bool {
 	}
 	return false
 }
+
+func Test_Predict_ReturnsFiveDayReport_BasicShape(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC)
+
+	report := p.Predict(now)
+
+	if report.Window != "5-day forward" {
+		t.Errorf("Window = %q, want %q", report.Window, "5-day forward")
+	}
+	if !report.GeneratedAt.Equal(now) {
+		t.Errorf("GeneratedAt = %v, want %v", report.GeneratedAt, now)
+	}
+	if len(report.Predictions) != 5 {
+		t.Fatalf("len(Predictions) = %d, want 5", len(report.Predictions))
+	}
+	for i, pred := range report.Predictions {
+		wantDate := now.AddDate(0, 0, i+1)
+		if !pred.Date.Equal(wantDate) {
+			t.Errorf("prediction[%d].Date = %v, want %v (T+%d day)",
+				i, pred.Date, wantDate, i+1)
+		}
+	}
+}
+
+func Test_Predict_PredictionDirectionAndConfidenceAreValid(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC)
+
+	report := p.Predict(now)
+
+	validDirs := map[string]bool{"inflow": true, "outflow": true, "neutral": true}
+	for i, pred := range report.Predictions {
+		if !validDirs[pred.Direction] {
+			t.Errorf("prediction[%d].Direction = %q, want inflow|outflow|neutral",
+				i, pred.Direction)
+		}
+		if pred.Confidence < 0 || pred.Confidence > 1 {
+			t.Errorf("prediction[%d].Confidence = %.4f, want [0, 1]",
+				i, pred.Confidence)
+		}
+	}
+}
+
+func Test_Predict_AuxFieldsAreStableSlicesAndString(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC)
+
+	report := p.Predict(now)
+
+	if len(report.Predictions) != 5 {
+		t.Error("Predictions should have 5 entries")
+	}
+	if report.Summary == "" {
+		t.Error("Summary is empty, want non-empty string from buildPredictionSummary")
+	}
+	if _, ok := interface{}(report.Summary).(string); !ok {
+		t.Errorf("Summary type = %T, want string", report.Summary)
+	}
+}
