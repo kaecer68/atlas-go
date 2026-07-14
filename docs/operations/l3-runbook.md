@@ -109,5 +109,5 @@ wc -l data/ledger/event_flow_predictions.jsonl
   - `internal/ledger/event_flow_prediction_store.go` — ledger (Len() / Size() 用於暖機)
   - `cmd/atlas/stage3_tasks.go` — main.go wiring
 - Config flags: `internal/config/config.go` 的 `Stage3TasksEnabled` / `Stage3AlertsEnabled`
-- Wave 9 命名規約: [`../REFERENCE/TRAPS.md`](../REFERENCE/TRAPS.md) § Prometheus Metric 命名空間
+- Wave 9 命名規約: [`../reference/traps.md`](../reference/traps.md) § Prometheus Metric 命名空間
 - Oncall 通訊: PR #1128 留言 thread + Slack `#atlas-ops`(緊急 alert storm / panic)
