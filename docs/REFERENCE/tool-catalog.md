@@ -1,17 +1,13 @@
-## 工具數量
-
-業務 102 + audit 4 + sampling/elicitation（0-2）+ template_detector 2 = 108-110（**基礎 108**, **+2** sampling/elicitation, 編譯期 assert ∈ [108, 110]）
-
 # atlas-mcp Tool Catalog
 
-> **110 tools** grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
+> **108 tools**（預設啟用；sampling/elicitation feature-gated 全開時 110）grouped by functional area. For investor use cases, see [`docs/INVESTOR/use-cases/`](../INVESTOR/use-cases/).
 > For natural language query examples, see [`docs/INVESTOR/query-examples.md`](../INVESTOR/query-examples.md).
-
-## 完整工具 Catalog（約 110 個 tool，Phase 2+PR 1+2+3 全部上線）
 
 ## 工具數量
 
-業務 102 + audit 4 + template_detector 2 = 108（**基礎 102**, **+6** audit/sampling/elicitation/template_detector, 編譯期 assert ∈ [108, 110]）
+業務 102 + template_detector 2 + audit 4 = 108（**基礎 108**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 110；啟動期 assert ∈ [108, 110]，見 `cmd/atlas-mcp/server/server.go`）
+
+## 完整工具 Catalog（110 個 tool，其中 108 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）

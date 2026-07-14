@@ -11,7 +11,7 @@
 #   1. 權威文件 (cmd/atlas-mcp/README.md + AGENT_QUICKSTART.md + 根 README +
 #      AGENTS.md) 沒有出現錯誤的 env var 名
 #   2. AGENTS.md 行數 ≤ 155 (避免 160 行 reject)
-#   3. 工具數應為 91 (grep "91 tool" 在至少 3 個檔案)
+#   3. 工具數應為 108 (grep "108 tool" 在至少 3 個檔案)
 #
 # 排除:
 #   - docs/environment.md / docs/specs/security-audit.md (backend 用, 非 atlas-mcp)
@@ -54,7 +54,7 @@ AUTHORITATIVE_FILES=(
 # 額外檢查:AGENTS.md 行數 ≤ 155 (避免 160 行 reject)
 AGENTS_MAX_LINES=155
 
-# 額外檢查:91 tool 必須在 3+ 個檔案出現 (防止下次又有人寫 80+)
+# 額外檢查:108 tool 必須在 3+ 個檔案出現 (防止下次又有人寫 80+)
 TOOL_COUNT_MIN=3
 
 FAIL_COUNT=0
@@ -98,20 +98,20 @@ if [ -f "AGENTS.md" ]; then
     fi
 fi
 
-# 3. 檢查 91 tool 散佈在至少 3 個檔案
+# 3. 檢查 108 tool 散佈在至少 3 個檔案
 echo ""
-echo "  → Checking tool count 91 propagates to ≥ $TOOL_COUNT_MIN files..."
-files_with_91=0
+echo "  → Checking tool count 108 propagates to ≥ $TOOL_COUNT_MIN files..."
+files_with_108=0
 for file in "${AUTHORITATIVE_FILES[@]}"; do
-    if [ -f "$file" ] && grep -qE "91 (個 tool|tools|tool |個 tool| tool)" "$file"; then
-        files_with_91=$((files_with_91 + 1))
+    if [ -f "$file" ] && grep -qE "108 (個 tool|tools|tool |個 tool| tool)" "$file"; then
+        files_with_108=$((files_with_108 + 1))
     fi
 done
-if [ "$files_with_91" -lt "$TOOL_COUNT_MIN" ]; then
-    echo "    ❌ '91 tools' only appears in $files_with_91 files (need ≥ $TOOL_COUNT_MIN)"
+if [ "$files_with_108" -lt "$TOOL_COUNT_MIN" ]; then
+    echo "    ❌ '108 tools' only appears in $files_with_108 files (need ≥ $TOOL_COUNT_MIN)"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-    echo "    ✓ '91 tools' appears in $files_with_91 files (≥ $TOOL_COUNT_MIN)"
+    echo "    ✓ '108 tools' appears in $files_with_108 files (≥ $TOOL_COUNT_MIN)"
 fi
 
 # 總結

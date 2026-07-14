@@ -23,7 +23,7 @@ Full setup guide: [`docs/quickstart.md`](docs/quickstart.md)
 
 ## Atlas as MCP Server
 
-atlas-go doubles as a **MCP (Model Context Protocol) server** with **89–91 tools**,
+atlas-go doubles as a **MCP (Model Context Protocol) server** with **108 tools**,
 allowing external AI agents to query Taiwan stock market data, strategies, risks, and more.
 
 ```bash
