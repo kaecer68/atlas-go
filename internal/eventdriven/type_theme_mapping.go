@@ -67,6 +67,13 @@ var eventTypeToTriggerThemesTable = map[industry.TaiwanEventType][]string{
 	industry.EventTaiwanExportRelease: {"taiwan_export_boom"},
 	industry.EventEarningsBlackout:    {"earnings_blackout"},
 	industry.EventTariffAnnouncement:  {"tariff_shock"},
+	industry.EventTSMCRevenueSurge:    {"AI_capex_surge"},
+	industry.EventRSSGeoEvent:         {"geopolitical_risk_spike"},
+	industry.EventUSDTWDVolatility:    {"USD_TWD_volatility"},
+	industry.EventMarginDivergence:    {"retail_institutional_divergence"},
+	industry.EventBDIShippingSpike:    {"shipping_rate_spike"},
+	industry.EventTWSEIndexDrop:       {"semiconductor_downturn"},
+	industry.EventTechConference:      {"tech_peak_season"},
 }
 
 // EventTypeToTriggerThemes maps a TaiwanEventType (as a string) to the

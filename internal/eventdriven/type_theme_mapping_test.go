@@ -47,6 +47,13 @@ func TestEventTypeToTriggerThemes_NilRegistry_ReturnsDefaults(t *testing.T) {
 		{industry.EventTaiwanExportRelease, []string{"taiwan_export_boom"}},
 		{industry.EventEarningsBlackout, []string{"earnings_blackout"}},
 		{industry.EventTariffAnnouncement, []string{"tariff_shock"}},
+		{industry.EventTSMCRevenueSurge, []string{"AI_capex_surge"}},
+		{industry.EventRSSGeoEvent, []string{"geopolitical_risk_spike"}},
+		{industry.EventUSDTWDVolatility, []string{"USD_TWD_volatility"}},
+		{industry.EventMarginDivergence, []string{"retail_institutional_divergence"}},
+		{industry.EventBDIShippingSpike, []string{"shipping_rate_spike"}},
+		{industry.EventTWSEIndexDrop, []string{"semiconductor_downturn"}},
+		{industry.EventTechConference, []string{"tech_peak_season"}},
 	}
 	for _, tc := range cases {
 		got := EventTypeToTriggerThemes(string(tc.eventType), nil)
@@ -158,6 +165,13 @@ func TestEventTypeToTriggerThemes_FullRegistry_ReturnsAllDefaults(t *testing.T) 
 		{industry.EventTaiwanExportRelease, []string{"taiwan_export_boom"}},
 		{industry.EventEarningsBlackout, []string{"earnings_blackout"}},
 		{industry.EventTariffAnnouncement, []string{"tariff_shock"}},
+		{industry.EventTSMCRevenueSurge, []string{"AI_capex_surge"}},
+		{industry.EventRSSGeoEvent, []string{"geopolitical_risk_spike"}},
+		{industry.EventUSDTWDVolatility, []string{"USD_TWD_volatility"}},
+		{industry.EventMarginDivergence, []string{"retail_institutional_divergence"}},
+		{industry.EventBDIShippingSpike, []string{"shipping_rate_spike"}},
+		{industry.EventTWSEIndexDrop, []string{"semiconductor_downturn"}},
+		{industry.EventTechConference, []string{"tech_peak_season"}},
 	}
 	for _, tc := range cases {
 		got := EventTypeToTriggerThemes(string(tc.eventType), full)
@@ -226,6 +240,13 @@ func TestMappedEventTypes(t *testing.T) {
 		industry.EventTaiwanExportRelease: true,
 		industry.EventEarningsBlackout:    true,
 		industry.EventTariffAnnouncement:  true,
+		industry.EventTSMCRevenueSurge:    true,
+		industry.EventRSSGeoEvent:         true,
+		industry.EventUSDTWDVolatility:    true,
+		industry.EventMarginDivergence:    true,
+		industry.EventBDIShippingSpike:    true,
+		industry.EventTWSEIndexDrop:       true,
+		industry.EventTechConference:      true,
 	}
 
 	if len(got) != len(want) {

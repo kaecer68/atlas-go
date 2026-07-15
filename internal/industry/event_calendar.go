@@ -45,6 +45,19 @@ const (
 	EventTaiwanExportRelease TaiwanEventType = "taiwan_export_release"
 	EventEarningsBlackout    TaiwanEventType = "earnings_blackout"
 	EventTariffAnnouncement  TaiwanEventType = "tariff_announcement"
+
+	// G-05 follow-up: market-data-driven event types for the 7 themes
+	// that have no clean calendar event. Each is triggered by a data
+	// threshold rather than a scheduled date. Data-source ingestion
+	// populates these; the events.go ingestion layer maps raw data to
+	// the corresponding trigger.
+	EventTSMCRevenueSurge TaiwanEventType = "tsmc_revenue_surge"
+	EventRSSGeoEvent      TaiwanEventType = "rss_geo_event"
+	EventUSDTWDVolatility TaiwanEventType = "usd_twd_volatility"
+	EventMarginDivergence TaiwanEventType = "margin_divergence"
+	EventBDIShippingSpike TaiwanEventType = "bdi_shipping_spike"
+	EventTWSEIndexDrop    TaiwanEventType = "twse_index_drop"
+	EventTechConference   TaiwanEventType = "tech_conference"
 )
 
 // EventDataSource tracks the provenance of calendar event data.
