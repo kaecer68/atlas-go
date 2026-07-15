@@ -37,6 +37,8 @@ func TestEventTypeToTriggerThemes_NilRegistry_ReturnsDefaults(t *testing.T) {
 		{industry.EventElection, []string{"election_cycle"}},
 		{industry.EventMonthlyRevenue, []string{"earnings_surprise"}},
 		{industry.EventFinancialReport, []string{"earnings_surprise"}},
+		{industry.EventPositionBuilding, []string{"year_end_window_dressing"}},
+		{industry.EventShareholderMeeting, []string{"earnings_blackout"}},
 	}
 	for _, tc := range cases {
 		got := EventTypeToTriggerThemes(string(tc.eventType), nil)
@@ -56,10 +58,8 @@ func TestEventTypeToTriggerThemes_UnknownEventType_ReturnsNil(t *testing.T) {
 		industry.EventMSCIRebalance,     // no template yet
 		industry.EventTaiwan50Rebalance, // no template yet
 		industry.EventFuturesSettlement, // no template yet
-		industry.EventShareholderMeeting,
 		industry.EventInvestorConf,
 		industry.EventLongHoliday,
-		industry.EventPositionBuilding,
 	}
 	for _, et := range cases {
 		got := EventTypeToTriggerThemes(string(et), nil)
@@ -140,6 +140,8 @@ func TestEventTypeToTriggerThemes_FullRegistry_ReturnsAllDefaults(t *testing.T) 
 		{industry.EventElection, []string{"election_cycle"}},
 		{industry.EventMonthlyRevenue, []string{"earnings_surprise"}},
 		{industry.EventFinancialReport, []string{"earnings_surprise"}},
+		{industry.EventPositionBuilding, []string{"year_end_window_dressing"}},
+		{industry.EventShareholderMeeting, []string{"earnings_blackout"}},
 	}
 	for _, tc := range cases {
 		got := EventTypeToTriggerThemes(string(tc.eventType), full)
@@ -191,13 +193,15 @@ func TestMappedEventTypes(t *testing.T) {
 	got := MappedEventTypes()
 
 	want := map[industry.TaiwanEventType]bool{
-		industry.EventSpringFestival:  true,
-		industry.EventExDividend:      true,
-		industry.EventDividendPayout:  true,
-		industry.EventWindowDressing:  true,
-		industry.EventElection:        true,
-		industry.EventMonthlyRevenue:  true,
-		industry.EventFinancialReport: true,
+		industry.EventSpringFestival:     true,
+		industry.EventExDividend:         true,
+		industry.EventDividendPayout:     true,
+		industry.EventWindowDressing:     true,
+		industry.EventElection:           true,
+		industry.EventMonthlyRevenue:     true,
+		industry.EventFinancialReport:    true,
+		industry.EventPositionBuilding:   true,
+		industry.EventShareholderMeeting: true,
 	}
 
 	if len(got) != len(want) {
