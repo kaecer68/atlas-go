@@ -72,15 +72,37 @@ function filterBySectors(events, activeSectors) {
 
 function filterByTriggerThemes(events, activeThemes) {
   if (!activeThemes || activeThemes.length === 0) return events;
-  return events.filter(evt => activeThemes.includes(evt.trigger_theme));
+  return events.filter(evt => activeThemes.includes(evt.trigger_theme || evt.event_type));
 }
 
 function collectTriggerThemes(events) {
   const set = new Set();
   for (const evt of events) {
     if (evt.trigger_theme) set.add(evt.trigger_theme);
+    else if (evt.event_type) set.add(evt.event_type);
   }
   return Array.from(set).sort();
+}
+
+function filterByDateRange(events, range) {
+  if (!range) return events;
+  const start = range.start ? new Date(range.start) : null;
+  const end = range.end ? new Date(range.end) : null;
+  if (start && Number.isNaN(start.getTime())) return events;
+  if (end && Number.isNaN(end.getTime())) return events;
+  return events.filter(evt => {
+    const sd = new Date(evt.start_date);
+    if (Number.isNaN(sd.getTime())) return true;
+    if (start && sd < start) return false;
+    if (end && sd > end) return false;
+    return true;
+  });
+}
+
+function eventConfidence(evt) {
+  if (evt && typeof evt.confidence === 'number') return evt.confidence;
+  if (evt && typeof evt.base_weight === 'number') return evt.base_weight;
+  return null;
 }
 
 function collectSectors(events) {
@@ -137,6 +159,8 @@ function renderEventCard(evt) {
   const icon = DIRECTION_ICONS[direction] || '';
   const typeLabel = EVENT_TYPE_LABELS[evt.event_type] || evt.event_type;
   const activeClass = evt.active ? 'cal-card--active' : '';
+  const conf = eventConfidence(evt);
+  const confLabel = typeof conf === 'number' ? Math.round(conf * 100) + '%' : '';
 
   const industries = Array.isArray(evt.affected_industries) && evt.affected_industries.length > 0
     ? `<div class="cal-card__industries">${evt.affected_industries.slice(0, 3).map(id => `<span class="cal-tag">${id}</span>`).join('')}</div>`
@@ -150,6 +174,7 @@ function renderEventCard(evt) {
       </div>
       <div class="cal-card__name">${evt.name}</div>
       <div class="cal-card__date">${fmtDateRange(evt.start_date, evt.end_date)}</div>
+      ${confLabel ? `<div class="cal-card__confidence"><span class="cal-conf-badge">信心 ${confLabel}</span></div>` : ''}
       ${industries}
     </div>
   `;
@@ -189,12 +214,27 @@ function sortEvents(events) {
   });
 }
 
-export async function renderEventCalendar(container, activeCategories = [], extraFilters = {}) {
+function buildCalendarUrl(range) {
+  const base = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : 'http://localhost';
+  const url = new URL('/api/dashboard/calendar-events', base);
+  if (range && range.start) url.searchParams.set('start', range.start);
+  if (range && range.end) url.searchParams.set('end', range.end);
+  return url.pathname + url.search;
+}
+
+export async function renderEventCalendar(container, activeCategories = [], extraFilters = {}, dateRange = {}, prefetchedData = null) {
   container.innerHTML = '<div class="home-loading-card">載入市場行事曆…</div>';
 
   try {
-    const data = await silentGetJSON('/api/dashboard/calendar-events');
-    const events = data && Array.isArray(data.events) ? data.events : [];
+    let events = [];
+    if (prefetchedData && Array.isArray(prefetchedData.events)) {
+      events = prefetchedData.events;
+    } else {
+      const data = await silentGetJSON(buildCalendarUrl(dateRange));
+      events = data && Array.isArray(data.events) ? data.events : [];
+    }
 
     if (!events.length) {
       container.innerHTML = '<div class="home-signal-empty">目前無近期市場事件</div>';
@@ -203,7 +243,8 @@ export async function renderEventCalendar(container, activeCategories = [], extr
 
     const filtered = filterByCategory(events, activeCategories);
     const byTheme = filterByTriggerThemes(filtered, extraFilters.triggerThemes);
-    const finalEvents = filterBySectors(byTheme, extraFilters.sectors);
+    const byDate = filterByDateRange(byTheme, dateRange);
+    const finalEvents = filterBySectors(byDate, extraFilters.sectors);
     const { visible, hidden } = partitionEvents(finalEvents);
     const sortedVisible = sortByImportance(visible);
 
