@@ -332,3 +332,40 @@ func TestDedupKeyFormat(t *testing.T) {
 		t.Errorf("dedupKey = %q, want %q", got, want)
 	}
 }
+
+func TestValidator_BackfilledEventPassesValidation(t *testing.T) {
+	v := NewValidator(DateRange{}, 0)
+	v.SetClock(fixedNow)
+	e := validRawEvent()
+	e.IsBackfill = true
+	r := v.Validate(e)
+	if !r.Accepted {
+		t.Errorf("backfilled event should pass validation, got rejected: rule=%s reason=%s", r.Rule, r.Reason)
+	}
+	if !r.IsBackfill {
+		t.Error("IsBackfill flag must propagate to ValidationResult for downstream predictors")
+	}
+}
+
+func TestValidationResult_JSONRoundTrip_BackfillFlag(t *testing.T) {
+	r := ValidationResult{
+		EventID:    "ev-001",
+		Accepted:   true,
+		CheckedAt:  fixedNow(),
+		IsBackfill: true,
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Contains(data, []byte(`"is_backfill":true`)) {
+		t.Errorf("expected is_backfill:true in JSON, got %s", data)
+	}
+	var back ValidationResult
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !back.IsBackfill {
+		t.Error("IsBackfill lost across JSON round-trip")
+	}
+}

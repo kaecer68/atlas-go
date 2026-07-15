@@ -30,6 +30,7 @@ type RawEvent struct {
 	Source         string
 	Confidence     float64
 	IngestedAt     time.Time
+	IsBackfill     bool
 }
 
 // dedupKey is the composite (trigger_theme, symbol, date) key used for the
@@ -44,12 +45,13 @@ func (e RawEvent) dedupKey() string {
 // means the event may proceed to the calendar. Accepted=false means the event
 // must be rejected; Rule, Field and Reason describe the first failure.
 type ValidationResult struct {
-	EventID   string    `json:"event_id"`
-	Accepted  bool      `json:"accepted"`
-	Rule      string    `json:"rule,omitempty"`
-	Field     string    `json:"field,omitempty"`
-	Reason    string    `json:"reason,omitempty"`
-	CheckedAt time.Time `json:"checked_at"`
+	EventID    string    `json:"event_id"`
+	Accepted   bool      `json:"accepted"`
+	Rule       string    `json:"rule,omitempty"`
+	Field      string    `json:"field,omitempty"`
+	Reason     string    `json:"reason,omitempty"`
+	CheckedAt  time.Time `json:"checked_at"`
+	IsBackfill bool      `json:"is_backfill,omitempty"`
 }
 
 // EventValidator validates RawEvent instances against the 5 Stage 2 rules.
@@ -128,7 +130,7 @@ func (v *Validator) Validate(event RawEvent) ValidationResult {
 	if r := v.validateDedup(event, now); !r.Accepted {
 		return r
 	}
-	return ValidationResult{EventID: event.EventID, Accepted: true, CheckedAt: now}
+	return ValidationResult{EventID: event.EventID, Accepted: true, CheckedAt: now, IsBackfill: event.IsBackfill}
 }
 
 func (v *Validator) validateRequiredFields(e RawEvent, now time.Time) ValidationResult {
