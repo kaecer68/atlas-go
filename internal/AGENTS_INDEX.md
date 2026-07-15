@@ -61,7 +61,7 @@
 | `strategy` | 策略選擇器與登錄 |
 | `strategy_ranker` | **v0.0.0.32 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
 | `strategy_validator` | **v0.0.0.32 新 / 保留 AGENTS.md** — 策略啟用前驗證器（invariant/constraint 校驗） |
-| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**108 tools**（預設；feature gate 全開 110）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 108–110 |
+| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**110 tools**（預設；sampling/elicitation feature-gated 全開 112）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 110–112 |
 
 > 註：22 個 S-tier + 23 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 
