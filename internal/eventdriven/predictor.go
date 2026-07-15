@@ -9,14 +9,16 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
 // Predictor maps upcoming events to capital flow predictions.
 type Predictor struct {
-	calendar        *industry.EventCalendar
-	capitalFlow     CapitalFlowProvider
-	narrativeModels []ModelView
-	scanStore       DetectorScanStore
+	calendar          *industry.EventCalendar
+	capitalFlow       CapitalFlowProvider
+	narrativeModels   []ModelView
+	scanStore         DetectorScanStore
+	narrativeRegistry *narrative.DetectorRegistry
 }
 
 // ScanResult is a minimal projection of a detector scan row, defined
@@ -70,11 +72,13 @@ type staticCF struct {
 func (s *staticCF) QualityScore() float64 { return s.score }
 func (s *staticCF) QualityLabel() string  { return s.label }
 
-// NewPredictor creates an event-driven flow predictor.
+// NewPredictor wires the default narrative.DetectorRegistry so narrative
+// tilt matches all 24 templates (PR-FIX-04, fixes G-06); override via SetNarrativeRegistry.
 func NewPredictor(cal *industry.EventCalendar) *Predictor {
 	return &Predictor{
-		calendar:    cal,
-		capitalFlow: &staticCF{score: 0, label: "neutral"},
+		calendar:          cal,
+		capitalFlow:       &staticCF{score: 0, label: "neutral"},
+		narrativeRegistry: narrative.NewDefaultDetectorRegistry(),
 	}
 }
 
@@ -97,6 +101,13 @@ func (p *Predictor) SetNarrativeProvider(np NarrativeModelProvider) {
 		return
 	}
 	p.narrativeModels = np.ListModels()
+}
+
+// SetNarrativeRegistry injects the DetectorRegistry whose registered
+// themes define the "active trigger theme universe" used by narrative
+// tilt matching. nil registry falls back to event-only matching.
+func (p *Predictor) SetNarrativeRegistry(reg *narrative.DetectorRegistry) {
+	p.narrativeRegistry = reg
 }
 
 // Predict generates a 5-day capital flow prediction report.
@@ -157,18 +168,15 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 }
 
 // computeNarrativeTilt sums (weight × direction_sign) across narrative
-// models whose ActiveThemes intersect with trigger themes derived from
-// today's events. Returns 0 when no model matches. The 0.5 dampener is
-// applied at the call site so narrative models stay a secondary signal.
-func computeNarrativeTilt(models []ModelView, day time.Time) float64 {
+// models whose ActiveThemes intersect with the supplied theme set.
+// Returns 0 when no model matches or the theme set is empty. The
+// caller (predictDay) computes the theme set from the registered
+// DetectorRegistry so this function stays a pure mapping over
+// (models, themeSet).
+func computeNarrativeTilt(models []ModelView, themeSet map[string]struct{}) float64 {
 	var tilt float64
-	activeThemes := activeTriggerThemesForDay(day)
-	if len(activeThemes) == 0 {
+	if len(themeSet) == 0 {
 		return 0
-	}
-	themeSet := make(map[string]struct{}, len(activeThemes))
-	for _, t := range activeThemes {
-		themeSet[t] = struct{}{}
 	}
 	for _, m := range models {
 		var sign float64
@@ -189,23 +197,16 @@ func computeNarrativeTilt(models []ModelView, day time.Time) float64 {
 	return tilt
 }
 
-// activeTriggerThemesForDay returns the union of trigger themes that the
-// EventTypeToTriggerThemes table knows about, for use as the "currently
-// active trigger theme universe" against which narrative model
-// ActiveThemes are matched. We pass nil registry to receive all default
-// themes regardless of whether a DetectorRegistry is wired.
-func activeTriggerThemesForDay(_ time.Time) []string {
-	themes := make(map[string]struct{})
-	for et := range eventTypeToTriggerThemesTable {
-		for _, t := range EventTypeToTriggerThemes(string(et), nil) {
-			themes[t] = struct{}{}
-		}
+// activeTriggerThemesForDay returns the live set of registered detector
+// themes. With a wired DetectorRegistry this expands the universe to
+// the full 24-template set (replacing the legacy 5-theme subset that
+// came from eventTypeToTriggerThemesTable); a nil registry returns nil
+// so the caller treats the day as event-only.
+func activeTriggerThemesForDay(registry *narrative.DetectorRegistry) []string {
+	if registry == nil {
+		return nil
 	}
-	out := make([]string, 0, len(themes))
-	for t := range themes {
-		out = append(out, t)
-	}
-	return out
+	return registry.Themes()
 }
 
 // themeIntersects reports whether any element of themes appears in set.
@@ -245,7 +246,12 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 	bullishWeight += cfScore * 0.3
 	bearishWeight -= cfScore * 0.3
 
-	narrativeTilt := computeNarrativeTilt(p.narrativeModels, day)
+	narrativeThemes := activeTriggerThemesForDay(p.narrativeRegistry)
+	themeSet := make(map[string]struct{}, len(narrativeThemes))
+	for _, t := range narrativeThemes {
+		themeSet[t] = struct{}{}
+	}
+	narrativeTilt := computeNarrativeTilt(p.narrativeModels, themeSet)
 	// Apply scan-theme tilt (W4 consumption). Returns 0 when scanStore
 	// is nil or no recent scans pass recency/confidence/severity gates.
 	scanTilt, scanDrivers := p.applyScanThemes(context.Background(), day)
