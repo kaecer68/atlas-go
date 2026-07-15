@@ -51,8 +51,7 @@ export function renderCapitalModels(data) {
     const hitDisplay = isNoDataHitRate(hitRate)
       ? '<span class="text-muted">無資料</span>'
       : fmtSafePct(hitRate, 1);
-    const lastSignal = m.last_signal != null ? m.last_signal : m.recent_prediction;
-    const lastSignalDisplay = fmtSafeNumber(lastSignal, { decimals: 3 });
+    const lastSignal = signalLabel(m.recent_prediction);
     const recentError = fmtSafeNumber(m.recent_error, { decimals: 3 });
 
     return (
@@ -104,6 +103,13 @@ export function renderCapitalModels(data) {
       if (detail) detail.classList.toggle('open');
     });
   });
+}
+
+function signalLabel(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  if (value > 0) return '看漲';
+  if (value < 0) return '看跌';
+  return '中性';
 }
 
 function isNoDataHitRate(hitRate) {
