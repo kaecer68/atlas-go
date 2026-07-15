@@ -56,9 +56,9 @@
 
 ### 3.1 MCP Tools 全清單
 
-**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md) 為單一權威來源。啟動期權威計數來自 [`cmd/atlas-mcp/auto-desc.gen.json`](../../cmd/atlas-mcp/auto-desc.gen.json)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [108, 110]`，防止文件↔程式碼漂移）。
+**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md) 為單一權威來源。啟動期權威計數來自 [`cmd/atlas-mcp/auto-desc.gen.json`](../../cmd/atlas-mcp/auto-desc.gen.json)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [110, 112]`，防止文件↔程式碼漂移；110 = 業務 102 + roots 2 + template_detector 2 + audit 4，post-Round-2 dedup 基線；sampling/elicitation feature-gated 各 +1 達 112）。
 
-**當前實際**：**108 個 tool**(102 業務 + 4 audit；sampling / elicitation / roots 在 feature flag 啟用時另計，但**目前已預設掛載**）。本節保留 high-level 群組對照；單一 tool 名稱請以 `auto-desc.gen.json` 為準。
+**當前實際**：**110 個 tool**(業務 102 + template_detector 2 + roots 2 + audit 4；sampling / elicitation feature-gated 各 +1 達 112，但**預設 OFF**)。本節保留 high-level 群組對照；單一 tool 名稱請以 `auto-desc.gen.json` 為準。
 
 | WA | 群組 | Tool 數 | 主要用途 |
 |----|------|---------|---------|
