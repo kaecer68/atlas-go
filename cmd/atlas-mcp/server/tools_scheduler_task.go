@@ -36,26 +36,40 @@ type schedulerTaskBaseOutput struct {
 	Result *map[string]any `json:"result"`
 }
 
+// schedulerStatusOutput decodes the JSON array returned by
+// GET /api/scheduler/status (internal/monitoring/api/scheduler/handlers.go
+// HandleStatus). Items stay as map[string]any to keep MCP schema decoupled
+// from apigateway.TaskStatus.
+type schedulerStatusOutput struct {
+	Tasks []map[string]any `json:"tasks"`
+}
+
+// taskListOutput decodes the JSON array returned by GET /api/tasks
+// (internal/monitoring/api/taskexec/handlers.go HandleListTasks).
+type taskListOutput struct {
+	Tasks []map[string]any `json:"tasks"`
+}
+
 type taskIDInput struct {
 	TaskID string `json:"task_id" jsonschema:"the task id"`
 }
 
-func (s *server) handleSchedulerGetStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, schedulerTaskBaseOutput, error) {
-	var out schedulerTaskBaseOutput
+func (s *server) handleSchedulerGetStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, schedulerStatusOutput, error) {
+	var out schedulerStatusOutput
 	if err := s.withAudit(ctx, "scheduler_get_status", nil, func() error {
-		return s.cli.Get(ctx, "/api/scheduler/status", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/scheduler/status", nil, &out.Tasks)
 	}); err != nil {
-		return nil, schedulerTaskBaseOutput{}, err
+		return nil, schedulerStatusOutput{}, err
 	}
 	return nil, out, nil
 }
 
-func (s *server) handleTaskList(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, schedulerTaskBaseOutput, error) {
-	var out schedulerTaskBaseOutput
+func (s *server) handleTaskList(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, taskListOutput, error) {
+	var out taskListOutput
 	if err := s.withAudit(ctx, "task_list", nil, func() error {
-		return s.cli.Get(ctx, "/api/tasks", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/tasks", nil, &out.Tasks)
 	}); err != nil {
-		return nil, schedulerTaskBaseOutput{}, err
+		return nil, taskListOutput{}, err
 	}
 	return nil, out, nil
 }
