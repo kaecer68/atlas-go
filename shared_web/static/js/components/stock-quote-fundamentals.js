@@ -22,11 +22,9 @@ export function renderFundamentals(state, fundResult) {
   }
 
   const pbDisplay = fmtSafeNumber(data.PB, { decimals: 2 });
-  const psDisplay = data.PS ? fmtSafeNumber(data.PS, { decimals: 2 }) : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
+  const psDisplay = data.PS ? fmtSafeNumber(data.PS, { decimals: 2 }) : '—';
   const divDisplay = data.DividendYield ? fmtSafeNumber(data.DividendYield, { decimals: 2, suffix: '%' }) : '—';
-  const sectorDisplay = data.Sector
-    ? escapeHtml(data.Sector)
-    : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
+  const sectorDisplay = data.Sector ? escapeHtml(data.Sector) : '—';
 
   return `
     <div class="card">
@@ -58,7 +56,7 @@ export function renderFundamentals(state, fundResult) {
         </tbody>
       </table>
       <div style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--spacing-2)">
-        資料日期: T-1 (cron 更新) | 同產業 PE 中位數: 待資料補齊
+        資料日期: T-1
       </div>
     </div>
   `;

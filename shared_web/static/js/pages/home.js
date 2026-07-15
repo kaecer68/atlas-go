@@ -9,13 +9,14 @@ import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
 import { renderTooltip } from '../components/tooltip.js';
-import { renderEventCalendar, gatherCalFilterOptions } from '../components/event-calendar.js';
+import { renderEventCalendar, gatherCalFilterOptions, EVENT_TYPE_LABELS } from '../components/event-calendar.js';
 import {
   riskLevelLabel,
   fmtSafeSigned, fmtSafeNumber, fmtSafeSignedPct, fmtSafePct, fmtSafeDrawdown, fmtSafeCurrency, fmtSafeLargeNumber,
 } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
+import { displayZH as sectorLabel } from '../shared/sector-display.js';
 import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
@@ -145,8 +146,8 @@ export async function renderHomePage(container) {
         <select class="cal-filter-select" id="cal-filter-trigger-theme" data-filter-type="trigger_theme" aria-label="依事件類型篩選">
           <option value="">所有事件類型</option>
         </select>
-        <select class="cal-filter-select" id="cal-filter-sector" data-filter-type="sector" aria-label="依 sector 篩選">
-          <option value="">所有 sector</option>
+        <select class="cal-filter-select" id="cal-filter-sector" data-filter-type="sector" aria-label="依產業篩選">
+          <option value="">所有產業</option>
         </select>
         <label class="cal-filter-date">
           <span>開始</span>
@@ -312,11 +313,11 @@ function populateCalFilterSelects(events) {
   const eventTypes = collectEventTypes(events);
   if (themeSel) {
     themeSel.innerHTML = '<option value="">所有事件類型</option>' +
-      eventTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+      eventTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(EVENT_TYPE_LABELS[t] || t)}</option>`).join('');
   }
   if (sectorSel && opts.sectors.length) {
-    sectorSel.innerHTML = '<option value="">所有 sector</option>' +
-      opts.sectors.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    sectorSel.innerHTML = '<option value="">所有產業</option>' +
+      opts.sectors.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(sectorLabel(s))}</option>`).join('');
   }
 }
 
@@ -328,7 +329,9 @@ function eventConfidence(e) {
 }
 
 function eventName(e) {
-  return e && (e.name || e.theme || '事件');
+  if (!e) return '事件';
+  if (e.theme) return getThemeLabel(e.theme);
+  return e.name || '事件';
 }
 
 function bannerDigest(events) {
@@ -379,7 +382,7 @@ function renderHomeBanner(events) {
     const conf = eventConfidence(e);
     const confLabel = typeof conf === 'number' ? Math.round(conf * 100) + '%' : '—';
     const inds = Array.isArray(e.affected_industries) && e.affected_industries.length > 0
-      ? e.affected_industries.slice(0, 3).map(s => `<span class="cal-tag">${escapeHtml(s)}</span>`).join(' ')
+      ? e.affected_industries.slice(0, 3).map(s => `<span class="cal-tag">${escapeHtml(sectorLabel(s))}</span>`).join(' ')
       : '';
     return `<div class="home-banner__item"><strong>${name}</strong><span class="home-banner__conf">信心 ${confLabel}</span>${inds ? ' · ' + inds : ''}</div>`;
   }).join('');
@@ -890,13 +893,12 @@ function renderRealPortfolio(container, data) {
     : null;
 
   container.innerHTML = `
-    <div class="kpi-grid">
+    <div class="kpi-grid kpi-grid--2">
       ${metricCard({ label: '總市值', value: fmtNTD(total), tone: 'neutral' })}
       ${pnlMetricCard('損益', fmtSafeSignedPct(pnlPct !== null ? pnlPct * 100 : null), pnl)}
-      ${metricCard({ label: '最大回撤', value: fmtSafeDrawdown(drawdown), tone: 'neutral' })}
     </div>
     ${portfolioReassurance(pnl)}
-    <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>
+    <button class="btn btn--secondary" id="home-portfolio-detail">查看完整績效與持倉</button>
   `;
   document.getElementById('home-portfolio-detail').addEventListener('click', () => window.switchPage('portfolio'));
 }
@@ -908,7 +910,7 @@ function fmtNTD(value) {
 function renderDemoPortfolio(container) {
   container.innerHTML = `
     <div class="action-card">
-      <div class="action-card__icon">📋</div>
+      <div class="action-card__icon" aria-hidden="true"></div>
       <h3 class="action-card__title">尚無投資組合資料</h3>
       <p class="action-card__message">您可載入示範組合，快速體驗平台如何呈現持倉、風險與建議。</p>
       <div class="action-card__actions">
@@ -938,7 +940,6 @@ function renderDemoPortfolioWithData(container) {
     <div class="kpi-grid">
       ${metricCard({ label: '示範總市值', value: fmtNTD(totalValue), tone: 'neutral', tooltip: 'DEMO 資料' })}
       ${pnlMetricCard('損益', fmtSafeSignedPct(pnlPct * 100), totalPnl)}
-      ${metricCard({ label: '最大回撤', value: '−8.5%', tone: 'neutral', tooltip: '示範組合歷史最大回撤' })}
       ${metricCard({ label: '夏普比率', value: '1.62', tone: 'neutral', tooltip: '風險調整後報酬' })}
       ${metricCard({ label: '勝率', value: '62%', tone: 'neutral', tooltip: '示範組合交易勝率' })}
     </div>

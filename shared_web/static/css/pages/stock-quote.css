@@ -149,3 +149,32 @@
   border-radius: var(--radius-md);
   text-align: center;
 }
+
+.sq-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-color);
+}
+.sq-empty-state__title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--spacing-2);
+}
+.sq-empty-state__desc {
+  margin-bottom: var(--spacing-6);
+}
+.sq-empty-state__section {
+  display: flex;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+.sq-empty-state__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}

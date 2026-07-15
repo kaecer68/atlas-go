@@ -5,8 +5,12 @@
   gap: var(--space-md);
   align-items: start;
 }
+.kpi-grid--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
 @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 720px) { .kpi-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .kpi-grid--2 { grid-template-columns: 1fr; } }
 
 /* Crossmarket page: 4-column grid for single-row card layout.
    Breakpoint pushed down to 900px so 13" laptops (1280px, 1366px) keep 4 cards.

@@ -76,7 +76,7 @@ export function renderTechnical(state, techResult) {
         </div>
       </div>
       <div style="margin-top:var(--spacing-6);padding:var(--spacing-4);background:var(--bg-tertiary);border-radius:var(--radius-sm);text-align:center;color:var(--text-secondary)">
-        [歷史走勢 sparkline — 需後端擴充 API, 暫以 quote 近似]
+        歷史走勢圖即將上線
       </div>
     </div>
   `;

@@ -498,7 +498,8 @@ if (typeof window !== 'undefined') {
       var pageId = window.location.hash.replace('#page-', '');
       window.location.replace(basePath + '/' + pageId);
     } else if (initialPath && initialPath !== 'home' && initialPath !== 'evolution_panel') {
-      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
+      const query = window.location.search || '';
+      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath + query);
       switchPage(initialPath, true);
     } else if (initialPath === 'evolution_panel') {
       switchPage('evolution_panel', true);

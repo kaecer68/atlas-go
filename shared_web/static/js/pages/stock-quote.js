@@ -27,7 +27,19 @@ function renderContent() {
 
   let contentHtml = '';
   if (state.status === 'idle') {
-    contentHtml = '<div style="text-align:center;padding:40px;color:var(--text-secondary)">請輸入股票代號進行查詢</div>';
+    contentHtml = `
+      <div class="sq-empty-state">
+        <div class="sq-empty-state__title">探索台股市場</div>
+        <p class="sq-empty-state__desc">輸入股票代號，查看即時報價、基本面、籌碼與技術指標。</p>
+        <div class="sq-empty-state__section">
+          <span class="sq-empty-state__label">熱門搜尋：</span>
+          <span class="sq-search-tag" data-symbol="2330">2330 台積電</span>
+          <span class="sq-search-tag" data-symbol="2454">2454 聯發科</span>
+          <span class="sq-search-tag" data-symbol="2317">2317 鴻海</span>
+          <span class="sq-search-tag" data-symbol="0050">0050 台灣50</span>
+        </div>
+      </div>
+    `;
   } else if (state.status === 'error') {
     contentHtml = renderMissingState('股票報價', 'api-error');
   } else {
@@ -44,6 +56,15 @@ function renderContent() {
   }
 
   _contentWrapper.innerHTML = contentHtml;
+
+  // Bind hot tags inside empty state
+  _contentWrapper.querySelectorAll('.sq-empty-state .sq-search-tag').forEach(tag => {
+    tag.addEventListener('click', () => {
+      const sym = tag.getAttribute('data-symbol');
+      if (_searchInput) _searchInput.value = sym;
+      doSearch(sym);
+    });
+  });
 }
 
 async function doSearch(symbol) {
