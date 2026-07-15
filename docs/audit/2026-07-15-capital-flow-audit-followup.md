@@ -30,6 +30,47 @@
 3. **G-11**：staging 環境驗證 RSS / GDELT feed 通暢
 4. **G-05**：剩 7 個 theme（AI_capex_surge, geopolitical_risk_spike, USD_TWD_volatility, retail_institutional_divergence, gold_rally, dollar_surge, shipping_rate_spike, tech_peak_season）需要 KB detector 或 macro snapshot 觸發器
 
+## G-08 真相揭露（2026-07-15 commit 79d87635）
+
+加 6th check 後，發現 **G-08 仍未完全修復**：
+- ✅ MCP tool wrapper 已註冊（PR-FIX-08 commit `f754d014`）
+- ❌ HTTP route `GET /api/detector/scan/status` 帶 auth 仍回 **404**
+
+無 auth 回 401（route exists + 需要 auth），有 auth 回 404（route 找不到）—— 推測是自訂 mux 的 method+path pattern 沒對齊到 `mux.HandleFunc` 的標準 Go 格式。
+
+**Soak test 6th check**：每次 06:00 UTC 自動 fail，release captain 會看到。
+
+**修復需要**：
+1. 讀 `cmd/atlas/template_detector.go` 的 `RegisterTemplateDetectorRoutes` 
+2. 確認 `mux.HandleFunc` vs 自訂 mux 的 `mux.Handle("GET /path", ...)` 對齊
+3. 或者改用 `mux.Handle("GET /api/detector/scan/status", ...)` 形式
+4. 重新 build + deploy
+
+**Day 7 全綠退出條件因此需要修改**：6th check 也要綠才算過。
+
+## 7-day soak Day 1 驗證（2026-07-15 04:02 UTC）
+
+| Check | 結果 |
+|-------|------|
+| health | ✅ |
+| llm_router | ✅ |
+| capital_flow | ✅ |
+| event_prediction | ✅ |
+| scheduler | ✅ |
+| detector_scan (NEW) | ❌ — G-08 route 404 |
+
+**5/6 checks pass**。G-08 問題已顯化到 release captain 的 daily review。
+
+## Production Rollout Runbook
+
+`docs/operations/production-rollout-runbook.md` 涵蓋 Day 8 production deploy 的完整 SOP（pre-flight + deploy + post-deploy + archive + rollback）。對應 Issue #1187 §5。
+
+## 最終驗證條件（Day 8 結束）
+
+- [ ] 6/6 check pass（不是 5/6）
+- [ ] G-08 修好 + detector_scan check 綠
+- [ ] `docs/audit/2026-07-15-capital-flow-audit-followup.md` 標 "verified in staging 2026-07-22"
+
 ## 13 PR 完成清單（10 原 + 3 follow-up）
 
 ### 10 個原始 PR
