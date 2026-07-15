@@ -37,6 +37,8 @@ func TestEventTypeToTriggerThemes_NilRegistry_ReturnsDefaults(t *testing.T) {
 		{industry.EventElection, []string{"election_cycle"}},
 		{industry.EventMonthlyRevenue, []string{"earnings_surprise"}},
 		{industry.EventFinancialReport, []string{"earnings_surprise"}},
+		{industry.EventPositionBuilding, []string{"year_end_window_dressing"}},
+		{industry.EventShareholderMeeting, []string{"earnings_blackout"}},
 		{industry.EventFOMCMeeting, []string{"US_rates_up", "US_rates_down"}},
 		{industry.EventBOJRateDecision, []string{"JPY_carry_unwind"}},
 		{industry.EventOPECMeeting, []string{"oil_price_shock"}},
@@ -64,10 +66,8 @@ func TestEventTypeToTriggerThemes_UnknownEventType_ReturnsNil(t *testing.T) {
 		industry.EventMSCIRebalance,     // no template yet
 		industry.EventTaiwan50Rebalance, // no template yet
 		industry.EventFuturesSettlement, // no template yet
-		industry.EventShareholderMeeting,
 		industry.EventInvestorConf,
 		industry.EventLongHoliday,
-		industry.EventPositionBuilding,
 	}
 	for _, et := range cases {
 		got := EventTypeToTriggerThemes(string(et), nil)
@@ -148,6 +148,8 @@ func TestEventTypeToTriggerThemes_FullRegistry_ReturnsAllDefaults(t *testing.T) 
 		{industry.EventElection, []string{"election_cycle"}},
 		{industry.EventMonthlyRevenue, []string{"earnings_surprise"}},
 		{industry.EventFinancialReport, []string{"earnings_surprise"}},
+		{industry.EventPositionBuilding, []string{"year_end_window_dressing"}},
+		{industry.EventShareholderMeeting, []string{"earnings_blackout"}},
 		{industry.EventFOMCMeeting, []string{"US_rates_up", "US_rates_down"}},
 		{industry.EventBOJRateDecision, []string{"JPY_carry_unwind"}},
 		{industry.EventOPECMeeting, []string{"oil_price_shock"}},
@@ -214,6 +216,8 @@ func TestMappedEventTypes(t *testing.T) {
 		industry.EventElection:            true,
 		industry.EventMonthlyRevenue:      true,
 		industry.EventFinancialReport:     true,
+		industry.EventPositionBuilding:    true,
+		industry.EventShareholderMeeting:  true,
 		industry.EventFOMCMeeting:         true,
 		industry.EventBOJRateDecision:     true,
 		industry.EventOPECMeeting:         true,

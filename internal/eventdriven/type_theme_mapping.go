@@ -57,6 +57,8 @@ var eventTypeToTriggerThemesTable = map[industry.TaiwanEventType][]string{
 	industry.EventElection:            {"election_cycle"},
 	industry.EventMonthlyRevenue:      {"earnings_surprise"},
 	industry.EventFinancialReport:     {"earnings_surprise"},
+	industry.EventPositionBuilding:    {"year_end_window_dressing"},
+	industry.EventShareholderMeeting:  {"earnings_blackout"},
 	industry.EventFOMCMeeting:         {"US_rates_up", "US_rates_down"},
 	industry.EventBOJRateDecision:     {"JPY_carry_unwind"},
 	industry.EventOPECMeeting:         {"oil_price_shock"},
