@@ -94,7 +94,7 @@
   <div class="brand">
     <h1>Atlas-Go</h1>
     <p>Atlas 投資人平台</p>
-    <button class="theme-toggle" title="切換主題">🌓</button>
+    <button class="theme-toggle" title="切換主題"><span class="theme-toggle__label">主題</span></button>
   </div>
   <nav role="navigation" aria-label="主要導航">
     <div class="nav-section">
@@ -130,13 +130,13 @@
 <main id="main" role="main">
   <div id="topbar">
     <div class="flex-center-gap">
-      <button id="menuToggle">☰</button>
+      <button id="menuToggle" aria-label="開啟選單"><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span></button>
       <h2 id="pageTitle">總覽</h2>
     </div>
     <div class="refresh-pill" id="refreshPill">
       <span class="dot"></span>
       <span id="refreshTime">等待更新…</span>
-      <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新">⏸</button>
+      <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新"><span class="refresh-toggle__label">暫停</span></button>
     </div>
     <div class="role-switcher">
       <a href="/client/" class="role-link active">投資人平台</a>
@@ -159,7 +159,7 @@
     <div class="page" id="page-mcp" data-page-src="mcp"></div>
     <div class="page" id="page-errors/404" data-page-src="errors/404"></div>
   </div>
-  <button class="refresh" title="手動重新整理">🔄 重新整理</button>
+  <button class="refresh" title="手動重新整理">重新整理</button>
   <div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
 </main>
 <div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true">

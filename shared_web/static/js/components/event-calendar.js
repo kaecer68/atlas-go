@@ -45,10 +45,10 @@ const EVENT_TYPE_CATEGORIES = {
 const DEFAULT_VISIBLE_LIMIT = 7;
 
 const DIRECTION_ICONS = {
-  bullish: '📈',
-  bearish: '📉',
-  mixed: '⚖️',
-  neutral: '➖',
+  bullish: '偏多',
+  bearish: '偏空',
+  mixed: '中性',
+  neutral: '觀望',
 };
 
 // Default calendar window: ±15 days from today

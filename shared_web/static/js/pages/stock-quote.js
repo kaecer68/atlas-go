@@ -105,8 +105,7 @@ function initPageStructure() {
   const disclaimerWrapper = document.createElement('div');
   disclaimerWrapper.innerHTML = `
     <div class="sq-disclaimer">
-      ⚠️ 本系統資料僅供研究參考,不構成投資建議。<br>
-      投資決策應自行評估風險,並諮詢專業顧問。
+      本系統資料僅供研究參考，不構成投資建議。投資決策應自行評估風險，並諮詢專業顧問。
     </div>
   `;
 

@@ -4,7 +4,7 @@
  * portfolio snapshot, and trust elements.
  */
 
-import { getJSON, silentGetJSON, escapeHtml, renderMissingState } from '../shared/app-utils.js';
+import { getJSON, silentGetJSON, getJSONWithTimeout, escapeHtml, renderMissingState } from '../shared/app-utils.js';
 import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
@@ -79,11 +79,11 @@ export async function renderHomePage(container) {
 
     <section class="home-section home-section--banner" id="home-banner" style="display:none" aria-live="polite">
       <div class="home-banner" id="home-banner-content">
-        <span class="home-banner__icon" aria-hidden="true">🚨</span>
+        <span class="home-banner__icon" aria-hidden="true"></span>
         <div class="home-banner__body" id="home-banner-body"></div>
         <div class="home-banner__actions">
           <a class="home-banner__link" href="#home-event-calendar" id="home-banner-detail">查看詳情</a>
-          <button class="home-banner__dismiss" id="home-banner-dismiss" type="button" aria-label="關閉 banner">✕</button>
+          <button class="home-banner__dismiss" id="home-banner-dismiss" type="button" aria-label="關閉 banner">&times;</button>
         </div>
       </div>
     </section>
@@ -118,7 +118,7 @@ export async function renderHomePage(container) {
       </div>
       <button class="disclosure-toggle" id="market-pulse-toggle" type="button" aria-expanded="false" aria-controls="home-market-grid" aria-label="展開 6 張進階指標">
         <span class="disclosure-toggle__label">展開進階指標</span>
-        <span class="disclosure-toggle__icon" aria-hidden="true">▼</span>
+        <span class="disclosure-toggle__icon disclosure-toggle__icon--down" aria-hidden="true"></span>
       </button>
       <span class="sr-only" id="market-pulse-status" aria-live="polite" aria-atomic="true"></span>
     </section>
@@ -128,9 +128,13 @@ export async function renderHomePage(container) {
         <h2>未來 5 日錢潮預測</h2>
         <span class="home-section__subtitle">事件驅動的資金流向預測</span>
       </div>
-      <div id="home-predictions-content">
+      <div id="home-predictions-content" class="home-predictions__content">
         <div class="home-loading-card">載入中…</div>
       </div>
+      <button class="disclosure-toggle" id="predictions-toggle" type="button" aria-expanded="false" aria-controls="home-predictions-content" aria-label="展開未來 5 日錢潮預測">
+        <span class="disclosure-toggle__label">展開錢潮預測</span>
+        <span class="disclosure-toggle__icon disclosure-toggle__icon--down" aria-hidden="true"></span>
+      </button>
     </section>
 
     <section class="home-section" id="home-event-calendar">
@@ -226,6 +230,8 @@ export async function renderHomePage(container) {
     }
   }
 
+  bindPredictionsDisclosure();
+
   await loadHomeData();
   homeLoaded = true;
   initOnboarding();
@@ -253,13 +259,13 @@ async function loadHomeData() {
 
     try {
       const [health, macro, stress, pipeline, bundle, calData, predictionData] = await Promise.all([
-        silentGetJSON('/api/dashboard/system-health'),
-        silentGetJSON('/api/macro/snapshot/latest'),
-        silentGetJSON('/api/taiwan/stress-index'),
-        silentGetJSON('/api/dashboard/recommendation-pipeline'),
-        silentGetJSON('/api/narrative/bundle'),
-        silentGetJSON('/api/dashboard/calendar-events'),
-        silentGetJSON('/api/events/prediction'),
+        getJSONWithTimeout('/api/dashboard/system-health', 5000),
+        getJSONWithTimeout('/api/macro/snapshot/latest', 5000),
+        getJSONWithTimeout('/api/taiwan/stress-index', 5000),
+        getJSONWithTimeout('/api/dashboard/recommendation-pipeline', 5000),
+        getJSONWithTimeout('/api/narrative/bundle', 5000),
+        getJSONWithTimeout('/api/dashboard/calendar-events', 5000),
+        getJSONWithTimeout('/api/events/prediction', 5000),
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
@@ -535,7 +541,7 @@ function renderTodaySummary(macro, stress, pipeline, events) {
 
   if (indicatorsEl) {
     const dirTone = rec === '偏多' ? 'bullish' : rec === '偏空' ? 'bearish' : 'neutral';
-    const dirLabel = rec === '偏多' ? '↑偏多' : rec === '偏空' ? '↓偏空' : '→觀望';
+    const dirLabel = rec === '偏多' ? '偏多' : rec === '偏空' ? '偏空' : '觀望';
     const stressScoreVal = pointValue(stress, 'score');
     const stressVal = fmtSafeNumber(stressScoreVal, { decimals: 0 });
     const stressLabel = stressVal;
@@ -695,12 +701,12 @@ function bindMarketPulseDisclosure(advancedCardsHTML) {
     const statusEl = document.getElementById('market-pulse-status');
     if (state === 'expanded') {
       if (labelEl) labelEl.textContent = '收合進階指標';
-      if (iconEl) iconEl.textContent = '▲';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--down'); iconEl.classList.add('disclosure-toggle__icon--up'); }
       btn.setAttribute('aria-label', '收合 7 張進階指標');
       if (statusEl) statusEl.textContent = '已展開 7 張進階指標';
     } else {
       if (labelEl) labelEl.textContent = '展開進階指標';
-      if (iconEl) iconEl.textContent = '▼';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--up'); iconEl.classList.add('disclosure-toggle__icon--down'); }
       btn.setAttribute('aria-label', '展開 7 張進階指標');
       if (statusEl) statusEl.textContent = '';
     }
@@ -721,6 +727,42 @@ function bindMarketPulseDisclosure(advancedCardsHTML) {
     } else {
       grid.querySelectorAll('.disclosure-tier-advanced').forEach(el => el.remove());
     }
+  });
+}
+
+let _predictionsDisclosureBound = false;
+
+function bindPredictionsDisclosure() {
+  if (_predictionsDisclosureBound) return;
+  const btn = document.getElementById('predictions-toggle');
+  const content = document.getElementById('home-predictions-content');
+  if (!btn || !content) return;
+  _predictionsDisclosureBound = true;
+
+  content.setAttribute('data-disclosure-state', 'collapsed');
+
+  const updateButton = (state) => {
+    btn.setAttribute('aria-expanded', state === 'expanded' ? 'true' : 'false');
+    const labelEl = btn.querySelector('.disclosure-toggle__label');
+    const iconEl = btn.querySelector('.disclosure-toggle__icon');
+    if (state === 'expanded') {
+      if (labelEl) labelEl.textContent = '收合錢潮預測';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--down'); iconEl.classList.add('disclosure-toggle__icon--up'); }
+      btn.setAttribute('aria-label', '收合未來 5 日錢潮預測');
+    } else {
+      if (labelEl) labelEl.textContent = '展開錢潮預測';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--up'); iconEl.classList.add('disclosure-toggle__icon--down'); }
+      btn.setAttribute('aria-label', '展開未來 5 日錢潮預測');
+    }
+  };
+
+  updateButton('collapsed');
+
+  btn.addEventListener('click', () => {
+    const current = content.getAttribute('data-disclosure-state') || 'collapsed';
+    const next = current === 'expanded' ? 'collapsed' : 'expanded';
+    content.setAttribute('data-disclosure-state', next);
+    updateButton(next);
   });
 }
 
@@ -776,7 +818,7 @@ if (!el) return;
     return `<div class="signal-chip signal-chip--${sent} signal-chip--sev-${sev}"${onclick} title="信心:${conf}|嚴重度:${sev}${marketId?' |點擊查看⇣':''}">
       <div class="signal-chip__row">
         <span class="signal-chip__label">${label}</span>
-        <span class="signal-chip__meta">${sent === 'bullish' ? '↑利多' : '↓利空'} · ${conf}</span>
+        <span class="signal-chip__meta">${sent === 'bullish' ? '利多' : '利空'} · ${conf}</span>
       </div>
       <span class="signal-chip__explain">${explain}</span>
       ${link ? `<span class="signal-chip__link">${link}</span>` : ''}
@@ -855,7 +897,7 @@ function renderRecommendation(pipeline, stress) {
 async function loadPortfolioSnapshot() {
   const container = document.getElementById('home-portfolio-content');
   try {
-    const data = await silentGetJSON('/api/dashboard/portfolio-state');
+    const data = await getJSONWithTimeout('/api/dashboard/portfolio-state', 5000);
     if (!data || !Array.isArray(data.positions) || data.positions.length === 0) {
       renderDemoPortfolio(container);
       return;

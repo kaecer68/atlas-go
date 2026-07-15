@@ -84,6 +84,23 @@ export async function silentGetJSON(url, options) {
   }
 }
 
+/**
+ * Fetch JSON with a hard timeout to prevent a single slow endpoint from
+ * blocking the whole dashboard. Returns null on timeout or error.
+ * @param {string} url
+ * @param {number} [ms=10000]
+ * @returns {Promise<any|null>}
+ */
+export async function getJSONWithTimeout(url, ms) {
+  ms = ms || 10000;
+  return Promise.race([
+    silentGetJSON(url),
+    new Promise(function(resolve) {
+      setTimeout(function() { console.warn('[timeout]', url); resolve(null); }, ms);
+    })
+  ]);
+}
+
 export async function postJSON(url, body, options) {
   return fetchWithRetry('POST', url, body, options);
 }

@@ -30,8 +30,9 @@
   border: none;
   color: var(--accent);
   cursor: pointer;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   padding: 0 2px;
   margin-left: 4px;
 }
 .refresh-pill button:hover { text-decoration: underline; }
+.refresh-toggle__label { font-size: var(--text-xs); }

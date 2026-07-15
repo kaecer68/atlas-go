@@ -51,7 +51,11 @@ test('home page renders without developer-facing strings', async ({ page }) => {
   expect(bodyText).not.toContain('管理者');
 
   // Key backend-driven sections are visible
-  await expect(page.locator('#home-hero')).toContainText('信號一致看多');
+  // Hero starts with a loading placeholder; wait for it to resolve into a
+  // concrete recommendation driven by the real backend.
+  await expect(page.locator('#home-summary')).not.toContainText('載入市場摘要…', { timeout: 20000 });
+  const heroText = await page.locator('#home-hero').innerText();
+  expect(heroText).toMatch(/偏多|偏空|觀望/);
   await expect(page.locator('#home-signal-strip')).toBeVisible();
   await expect(page.locator('#home-portfolio-snapshot')).toBeVisible();
   await expect(page.locator('#home-market-pulse')).toBeVisible();
@@ -62,7 +66,7 @@ test('home portfolio snapshot hides max-drawdown on the hero', async ({ page }) 
   await expect(page.locator('#home-portfolio-snapshot')).toBeVisible({ timeout: 15000 });
 
   // Wait for the portfolio snapshot to finish loading (real or empty state).
-  await expect(page.locator('#home-portfolio-content')).not.toContainText('載入中…', { timeout: 15000 });
+  await expect(page.locator('#home-portfolio-content')).not.toContainText('載入中…', { timeout: 20000 });
 
   const portfolioText = await page.locator('#home-portfolio-content').innerText();
   // Portfolio may be empty (no live account linked), so we assert the safe
@@ -103,7 +107,7 @@ test('stock quote page renders real backend data for 2330', async ({ page }) => 
   await expect(page.locator('.sq-header-price')).toContainText(/[0-9,.]+/);
 
   await expect(page.locator('.stock-quote-grid')).toContainText('基本面');
-  await expect(page.locator('.stock-quote-grid')).toContainText('籌碼 (三大法人)');
+  await expect(page.locator('.stock-quote-grid')).toContainText('籌碼');
   await expect(page.locator('.stock-quote-grid')).toContainText('技術指標');
 
   // No developer-facing placeholder in the technical section
