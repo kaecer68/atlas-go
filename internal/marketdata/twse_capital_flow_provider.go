@@ -81,13 +81,47 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 
 	flowTime, _ := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60))
 	flowTs := flowTime.Unix()
+
+	prev, _ := t.loadPreviousFlow(flow.Date)
+
 	snap := MacroDataSnapshot{
 		RecordedAt: flowTs,
 	}
-	snap.ForeignInvestorNet = MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: flow.ForeignInvestorNet, Timestamp: flowTs}
-	snap.DomesticFundNet = MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: flow.DomesticFundNet, Timestamp: flowTs}
-	snap.DealerNet = MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet, Timestamp: flowTs}
+	snap.ForeignInvestorNet = MacroDataPoint{
+		Symbol: "TAIWAN_FOREIGN", Value: flow.ForeignInvestorNet,
+		ChangePct: percentChange(flow.ForeignInvestorNet, prev.ForeignInvestorNet),
+		Timestamp: flowTs,
+	}
+	snap.DomesticFundNet = MacroDataPoint{
+		Symbol: "TAIWAN_DOMESTIC", Value: flow.DomesticFundNet,
+		ChangePct: percentChange(flow.DomesticFundNet, prev.DomesticFundNet),
+		Timestamp: flowTs,
+	}
+	snap.DealerNet = MacroDataPoint{
+		Symbol: "TAIWAN_DEALER", Value: flow.DealerNet,
+		ChangePct: percentChange(flow.DealerNet, prev.DealerNet),
+		Timestamp: flowTs,
+	}
 	return snap, nil
+}
+
+func (t *TWSECapitalFlowProvider) loadPreviousFlow(currentDate string) (TWSECapitalFlow, error) {
+	current, err := time.ParseInLocation("20060102", currentDate, time.FixedZone("CST", 8*60*60))
+	if err != nil {
+		return TWSECapitalFlow{}, err
+	}
+	for i := 1; i <= 7; i++ {
+		prevDate := current.AddDate(0, 0, -i).Format("20060102")
+		path := filepath.Join(t.storageDir, prevDate+"_capital_flow.json")
+		data, err := os.ReadFile(path)
+		if err == nil {
+			var flow TWSECapitalFlow
+			if err := json.Unmarshal(data, &flow); err == nil {
+				return flow, nil
+			}
+		}
+	}
+	return TWSECapitalFlow{}, fmt.Errorf("no previous flow available in 7 days before %s", currentDate)
 }
 
 // FetchSymbolFlow retrieves institutional investor flow for a single symbol on a given date.
