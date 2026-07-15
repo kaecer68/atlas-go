@@ -657,7 +657,14 @@ func run(args []string, deps appDeps) error {
 		} else {
 			log.Printf("[StockTools] quote store init failed: %v", err)
 		}
+		if historicalStore, err := ledger.NewHistoricalStore(cfg); err == nil {
+			log.Printf("[HistoricalStore] initialized")
+			_ = historicalStore // SystemCore has no HistoricalStore field yet; wiring deferred to follow-up PR
+		} else {
+			log.Printf("[HistoricalStore] init failed: %v", err)
+		}
 		stockDeps.CapitalFlow = marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, constants.StateCapitalFlow))
+
 		stockDeps.TWSEQuote = marketdata.NewTWSEOpenAPIProvider()
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")
