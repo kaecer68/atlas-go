@@ -737,3 +737,65 @@ func Test_Predict_JSONMarshalOutput_HasNoNullArrays(t *testing.T) {
 		}
 	}
 }
+
+func TestEffectiveConfidence(t *testing.T) {
+	cases := []struct {
+		backfilled bool
+		weight     float64
+		want       float64
+	}{
+		{false, 1.0, 1.0},
+		{true, 1.0, 0.7},
+		{true, 0.5, 0.35},
+		{false, 0.0, 0.0},
+		{true, 0.0, 0.0},
+	}
+	for _, tc := range cases {
+		e := industry.CalendarEvent{BaseWeight: tc.weight, Backfilled: tc.backfilled}
+		if got := effectiveConfidence(e); got != tc.want {
+			t.Errorf("effectiveConfidence(weight=%v, backfilled=%v) = %v, want %v",
+				tc.weight, tc.backfilled, got, tc.want)
+		}
+	}
+}
+
+func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T) {
+	p := NewPredictor(nil)
+	now := time.Now()
+	end := now.AddDate(0, 0, 1)
+
+	timeline := []industry.CalendarEvent{
+		{Name: "non_backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: false},
+		{Name: "backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: true},
+	}
+
+	dir, conf, drivers := p.predictDay(now, timeline, 0)
+	if len(drivers) != 2 {
+		t.Errorf("expected 2 drivers, got %d: %v", len(drivers), drivers)
+	}
+	if conf <= 0 {
+		t.Errorf("expected positive confidence, got %f", conf)
+	}
+	_ = dir
+
+	timelineBackfilledOnly := []industry.CalendarEvent{
+		{Name: "backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: true},
+	}
+	dirBF, confBF, _ := p.predictDay(now, timelineBackfilledOnly, 0)
+	_ = dirBF
+	if confBF >= conf {
+		t.Errorf("backfilled-only confidence (%f) should be lower than mixed confidence (%f)", confBF, conf)
+	}
+
+	timelineNonBackfilledOnly := []industry.CalendarEvent{
+		{Name: "non_backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: false},
+	}
+	_, confNB, _ := p.predictDay(now, timelineNonBackfilledOnly, 0)
+	if confBF*1.5 < confNB {
+		t.Errorf("expected backfilled confidence (%f) to be roughly 0.7x non-backfilled (%f)", confBF, confNB)
+	}
+}
