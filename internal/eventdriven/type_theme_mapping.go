@@ -34,34 +34,39 @@ import (
 // industry.TaiwanEventType to our 24-template trigger themes.
 //
 // Theme selection rationale:
-//   - EventSpringFestival     → spring_festival_season (Feb 15 .. Mar 1 window)
-//   - EventExDividend         → dividend_season (Jul-Aug ex-dividend rush)
-//   - EventDividendPayout     → dividend_season (overlaps with ex-dividend)
-//   - EventWindowDressing     → year_end_window_dressing (Dec effect)
-//   - EventElection           → election_cycle (Jan / pre-vote windows)
-//   - EventMonthlyRevenue     → earnings_surprise (data drives surprise)
-//   - EventFinancialReport    → earnings_surprise (quarterly reports)
-//   - EventPositionBuilding   → year_end_window_dressing (institutional year-end)
-//   - EventShareholderMeeting → earnings_blackout (AGM clusters with pre-earnings)
+//   - EventSpringFestival   → spring_festival_season (Feb 15 .. Mar 1 window)
+//   - EventExDividend       → dividend_season (Jul-Aug ex-dividend rush)
+//   - EventDividendPayout   → dividend_season (overlaps with ex-dividend)
+//   - EventWindowDressing   → year_end_window_dressing (Dec effect)
+//   - EventElection         → election_cycle (Jan / pre-vote windows)
+//   - EventMonthlyRevenue   → earnings_surprise (data drives surprise)
+//   - EventFinancialReport  → earnings_surprise (quarterly reports)
 //
-// EventTypes still NOT in this table: EventMSCIRebalance, EventTaiwan50Rebalance,
-// EventFuturesSettlement, EventInvestorConf, EventLongHoliday — informational
-// events with no clean trigger-theme match. The other 17 themes (US_rates_*,
-// JPY_carry_unwind, oil_price_shock, geopolitical_risk_spike, AI_capex_surge,
-// etc.) are NOT TW calendar events — they are triggered by KB detectors /
-// macro snapshots / narrative chains. See G-05 in
-// .omo/plans/2026-07-15-capital-flow-audit-followup/root-cause.md for the
-// source distribution.
+// EventTypes NOT in this table (EventMSCIRebalance, EventTaiwan50Rebalance,
+// EventFuturesSettlement, EventShareholderMeeting, EventInvestorConf,
+// EventLongHoliday, EventPositionBuilding) have no direct trigger theme in
+// the 24 templates — they are informational calendar events that do not
+// match a macro narrative detector. Stage 6+ may add
+// market_structure_change / futures_settlement / shareholder_meeting
+// themes if data sources warrant.
 var eventTypeToTriggerThemesTable = map[industry.TaiwanEventType][]string{
-	industry.EventSpringFestival:     {"spring_festival_season"},
-	industry.EventExDividend:         {"dividend_season"},
-	industry.EventDividendPayout:     {"dividend_season"},
-	industry.EventWindowDressing:     {"year_end_window_dressing"},
-	industry.EventElection:           {"election_cycle"},
-	industry.EventMonthlyRevenue:     {"earnings_surprise"},
-	industry.EventFinancialReport:    {"earnings_surprise"},
-	industry.EventPositionBuilding:   {"year_end_window_dressing"},
-	industry.EventShareholderMeeting: {"earnings_blackout"},
+	industry.EventSpringFestival:      {"spring_festival_season"},
+	industry.EventExDividend:          {"dividend_season"},
+	industry.EventDividendPayout:      {"dividend_season"},
+	industry.EventWindowDressing:      {"year_end_window_dressing"},
+	industry.EventElection:            {"election_cycle"},
+	industry.EventMonthlyRevenue:      {"earnings_surprise"},
+	industry.EventFinancialReport:     {"earnings_surprise"},
+	industry.EventPositionBuilding:    {"year_end_window_dressing"},
+	industry.EventShareholderMeeting:  {"earnings_blackout"},
+	industry.EventFOMCMeeting:         {"US_rates_up", "US_rates_down"},
+	industry.EventBOJRateDecision:     {"JPY_carry_unwind"},
+	industry.EventOPECMeeting:         {"oil_price_shock"},
+	industry.EventCPIRelease:          {"inflation_spike"},
+	industry.EventChinaGDPRelease:     {"china_slowdown"},
+	industry.EventTaiwanExportRelease: {"taiwan_export_boom"},
+	industry.EventEarningsBlackout:    {"earnings_blackout"},
+	industry.EventTariffAnnouncement:  {"tariff_shock"},
 }
 
 // EventTypeToTriggerThemes maps a TaiwanEventType (as a string) to the
