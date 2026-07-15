@@ -243,4 +243,4 @@
 
 > **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-15。
 >
-> **本次更新**：補 `docs/operations/{soak-day-counter,production-rollout-runbook,2026-07-15-staging-soak-test}.md` 索引、`docs/audit/` 數量 15→16。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md`（Stage 7 follow-up）。
+> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、docs/audit/ 數量 15→16。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md`（Stage 7 follow-up）。
