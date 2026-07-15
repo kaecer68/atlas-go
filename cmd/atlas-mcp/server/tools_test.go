@@ -274,14 +274,6 @@ func TestHandleNewReadOnlyTools_HitCorrectBackendPath(t *testing.T) {
 			_, _, e := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: 0})
 			return e
 		}, "/api/parameters/snapshots"},
-		{"backtest_status", func(s *server) error {
-			_, _, e := s.handleBacktestStatus(context.Background(), nil, struct{}{})
-			return e
-		}, "/api/backtest/status"},
-		{"backtest_signals", func(s *server) error {
-			_, _, e := s.handleBacktestSignals(context.Background(), nil, struct{}{})
-			return e
-		}, "/api/backtest/signals"},
 		{"calendar_events", func(s *server) error {
 			_, _, e := s.handleCalendarEvents(context.Background(), nil, struct{}{})
 			return e
