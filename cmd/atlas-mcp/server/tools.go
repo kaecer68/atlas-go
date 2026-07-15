@@ -56,7 +56,8 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerRootsTools(mcpSrv, s)
 	registerElicitationTools(mcpSrv, s)
 	registerBriefingTools(mcpSrv, s)
-	registerParametersBacktestTools(mcpSrv, s)
+	registerParametersTools(mcpSrv, s)
+	registerBacktestTools(mcpSrv, s)
 	registerIndustryExtTools(mcpSrv, s)
 	registerSectorTools(mcpSrv, s)
 
