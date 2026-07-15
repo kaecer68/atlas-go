@@ -74,7 +74,7 @@ export function renderCapitalModels(data) {
       +   '</div>'
       +   '<div class="cm-card__metric">'
       +     '<div class="cm-card__metric-label">最近訊號</div>'
-      +     '<div class="cm-card__metric-value">' + lastSignalDisplay + '</div>'
+      +     '<div class="cm-card__metric-value">' + lastSignal + '</div>'
       +   '</div>'
       + '</div>'
       + '<div class="cm-card__detail" id="cm-detail-' + idx + '">'
