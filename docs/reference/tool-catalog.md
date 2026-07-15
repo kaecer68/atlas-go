@@ -167,7 +167,7 @@
 | Tool | 用途 |
 |------|------|
 | `stock_get_quote` | 個股即時報價（最新價、漲跌、成交量） |
-| `stock_get_fundamentals` | 個股基本面（PE、PB、EPS、殖利率等） |
+| `stock_get_fundamentals` | 個股基本面（PE、PB、PS、殖利率、sector 等） |
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
 

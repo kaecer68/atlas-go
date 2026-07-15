@@ -43,7 +43,7 @@
   },
   "calendar_events": {
     "name": "calendar_events",
-    "description": "Industry / market calendar events (ETF rebalances, MSCI, revenue, holidays, shareholder meetings). 14-day forward window.",
+    "description": "Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.",
     "inputSchema": {
       "type": "object"
     }

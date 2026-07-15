@@ -161,6 +161,7 @@ func TestWithAudit_ConcurrentMix(t *testing.T) {
 			case 0:
 				_, _, _ = s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: 7})
 			case 1:
+				rec.SetResponseBody([]byte(`{"strategies":[]}`))
 				_, _, _ = s.handleStrategyListActive(context.Background(), nil, struct{}{})
 			case 2:
 				rec.SetResponseBody([]byte(`{}`))
