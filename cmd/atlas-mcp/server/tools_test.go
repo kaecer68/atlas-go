@@ -187,6 +187,7 @@ func TestHandleRegimeGetHistory_ForwardsAPIToken(t *testing.T) {
 func TestHandleStrategyListActive_OK(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
+	rec.SetResponseBody([]byte(`{"strategies":[]}`))
 	_, _, err := s.handleStrategyListActive(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)

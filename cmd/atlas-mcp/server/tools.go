@@ -59,7 +59,6 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerParametersBacktestTools(mcpSrv, s)
 	registerIndustryExtTools(mcpSrv, s)
 	registerSectorTools(mcpSrv, s)
-	registerTemplateDetectorTools(mcpSrv, s)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
@@ -223,7 +222,7 @@ func fetchRegimeCompositeScore(ctx context.Context, s *server) (int, bool) {
 func (s *server) handleStrategyListActive(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, StrategyListActiveOutput, error) {
 	var out StrategyListActiveOutput
 	if err := s.withAudit(ctx, "strategy_list_active", nil, func() error {
-		if err := s.cli.Get(ctx, "/api/strategies/active", nil, &out.Strategies); err != nil {
+		if err := s.cli.Get(ctx, "/api/strategies/active", nil, &out); err != nil {
 			return err
 		}
 		return nil
