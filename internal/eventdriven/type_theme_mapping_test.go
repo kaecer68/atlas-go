@@ -37,6 +37,14 @@ func TestEventTypeToTriggerThemes_NilRegistry_ReturnsDefaults(t *testing.T) {
 		{industry.EventElection, []string{"election_cycle"}},
 		{industry.EventMonthlyRevenue, []string{"earnings_surprise"}},
 		{industry.EventFinancialReport, []string{"earnings_surprise"}},
+		{industry.EventFOMCMeeting, []string{"US_rates_up", "US_rates_down"}},
+		{industry.EventBOJRateDecision, []string{"JPY_carry_unwind"}},
+		{industry.EventOPECMeeting, []string{"oil_price_shock"}},
+		{industry.EventCPIRelease, []string{"inflation_spike"}},
+		{industry.EventChinaGDPRelease, []string{"china_slowdown"}},
+		{industry.EventTaiwanExportRelease, []string{"taiwan_export_boom"}},
+		{industry.EventEarningsBlackout, []string{"earnings_blackout"}},
+		{industry.EventTariffAnnouncement, []string{"tariff_shock"}},
 	}
 	for _, tc := range cases {
 		got := EventTypeToTriggerThemes(string(tc.eventType), nil)
@@ -140,6 +148,14 @@ func TestEventTypeToTriggerThemes_FullRegistry_ReturnsAllDefaults(t *testing.T) 
 		{industry.EventElection, []string{"election_cycle"}},
 		{industry.EventMonthlyRevenue, []string{"earnings_surprise"}},
 		{industry.EventFinancialReport, []string{"earnings_surprise"}},
+		{industry.EventFOMCMeeting, []string{"US_rates_up", "US_rates_down"}},
+		{industry.EventBOJRateDecision, []string{"JPY_carry_unwind"}},
+		{industry.EventOPECMeeting, []string{"oil_price_shock"}},
+		{industry.EventCPIRelease, []string{"inflation_spike"}},
+		{industry.EventChinaGDPRelease, []string{"china_slowdown"}},
+		{industry.EventTaiwanExportRelease, []string{"taiwan_export_boom"}},
+		{industry.EventEarningsBlackout, []string{"earnings_blackout"}},
+		{industry.EventTariffAnnouncement, []string{"tariff_shock"}},
 	}
 	for _, tc := range cases {
 		got := EventTypeToTriggerThemes(string(tc.eventType), full)
@@ -191,13 +207,21 @@ func TestMappedEventTypes(t *testing.T) {
 	got := MappedEventTypes()
 
 	want := map[industry.TaiwanEventType]bool{
-		industry.EventSpringFestival:  true,
-		industry.EventExDividend:      true,
-		industry.EventDividendPayout:  true,
-		industry.EventWindowDressing:  true,
-		industry.EventElection:        true,
-		industry.EventMonthlyRevenue:  true,
-		industry.EventFinancialReport: true,
+		industry.EventSpringFestival:      true,
+		industry.EventExDividend:          true,
+		industry.EventDividendPayout:      true,
+		industry.EventWindowDressing:      true,
+		industry.EventElection:            true,
+		industry.EventMonthlyRevenue:      true,
+		industry.EventFinancialReport:     true,
+		industry.EventFOMCMeeting:         true,
+		industry.EventBOJRateDecision:     true,
+		industry.EventOPECMeeting:         true,
+		industry.EventCPIRelease:          true,
+		industry.EventChinaGDPRelease:     true,
+		industry.EventTaiwanExportRelease: true,
+		industry.EventEarningsBlackout:    true,
+		industry.EventTariffAnnouncement:  true,
 	}
 
 	if len(got) != len(want) {

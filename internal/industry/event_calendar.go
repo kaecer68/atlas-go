@@ -31,6 +31,20 @@ const (
 	EventTaiwan50Rebalance  TaiwanEventType = "taiwan50_rebalance"
 	EventFuturesSettlement  TaiwanEventType = "futures_settlement"
 	EventPositionBuilding   TaiwanEventType = "position_building"
+
+	// MacroEventType values (G-05) for themes that are not driven by
+	// Taiwan calendar events. These are scheduled externally (FOMC,
+	// BOJ, OPEC, etc.) and trigger trigger themes via the same
+	// EventTypeToTriggerThemes mapping. Data-source ingestion is a
+	// separate workstream.
+	EventFOMCMeeting         TaiwanEventType = "fomc_meeting"
+	EventBOJRateDecision     TaiwanEventType = "boj_rate_decision"
+	EventOPECMeeting         TaiwanEventType = "opec_meeting"
+	EventCPIRelease          TaiwanEventType = "cpi_release"
+	EventChinaGDPRelease     TaiwanEventType = "china_gdp_release"
+	EventTaiwanExportRelease TaiwanEventType = "taiwan_export_release"
+	EventEarningsBlackout    TaiwanEventType = "earnings_blackout"
+	EventTariffAnnouncement  TaiwanEventType = "tariff_announcement"
 )
 
 // EventDataSource tracks the provenance of calendar event data.

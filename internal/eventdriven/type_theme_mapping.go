@@ -50,13 +50,21 @@ import (
 // market_structure_change / futures_settlement / shareholder_meeting
 // themes if data sources warrant.
 var eventTypeToTriggerThemesTable = map[industry.TaiwanEventType][]string{
-	industry.EventSpringFestival:  {"spring_festival_season"},
-	industry.EventExDividend:      {"dividend_season"},
-	industry.EventDividendPayout:  {"dividend_season"},
-	industry.EventWindowDressing:  {"year_end_window_dressing"},
-	industry.EventElection:        {"election_cycle"},
-	industry.EventMonthlyRevenue:  {"earnings_surprise"},
-	industry.EventFinancialReport: {"earnings_surprise"},
+	industry.EventSpringFestival:      {"spring_festival_season"},
+	industry.EventExDividend:          {"dividend_season"},
+	industry.EventDividendPayout:      {"dividend_season"},
+	industry.EventWindowDressing:      {"year_end_window_dressing"},
+	industry.EventElection:            {"election_cycle"},
+	industry.EventMonthlyRevenue:      {"earnings_surprise"},
+	industry.EventFinancialReport:     {"earnings_surprise"},
+	industry.EventFOMCMeeting:         {"US_rates_up", "US_rates_down"},
+	industry.EventBOJRateDecision:     {"JPY_carry_unwind"},
+	industry.EventOPECMeeting:         {"oil_price_shock"},
+	industry.EventCPIRelease:          {"inflation_spike"},
+	industry.EventChinaGDPRelease:     {"china_slowdown"},
+	industry.EventTaiwanExportRelease: {"taiwan_export_boom"},
+	industry.EventEarningsBlackout:    {"earnings_blackout"},
+	industry.EventTariffAnnouncement:  {"tariff_shock"},
 }
 
 // EventTypeToTriggerThemes maps a TaiwanEventType (as a string) to the
