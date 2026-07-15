@@ -11,7 +11,9 @@
 #   1. 權威文件 (cmd/atlas-mcp/README.md + AGENT_QUICKSTART.md + 根 README +
 #      AGENTS.md) 沒有出現錯誤的 env var 名
 #   2. AGENTS.md 行數 ≤ 155 (避免 160 行 reject)
-#   3. 工具數應為 108 (grep "108 tool" 在至少 3 個檔案)
+#   3. 工具數應為 110 (grep "110 tool" 在至少 3 個檔案; 2026-07-15 Round 2
+#   audit fixes 將 phantom registerTemplateDetectorTools 重複呼叫移除,
+#   registerTools delta 從 108 變 106, +audit 4 = 110 踏 [110,112] 下界)
 #
 # 排除:
 #   - docs/environment.md / docs/specs/security-audit.md (backend 用, 非 atlas-mcp)
@@ -98,20 +100,20 @@ if [ -f "AGENTS.md" ]; then
     fi
 fi
 
-# 3. 檢查 108 tool 散佈在至少 3 個檔案
+# 3. 檢查 110 tool 散佈在至少 3 個檔案(2026-07-15 Round 2 dedup 後由 108 變 110)
 echo ""
-echo "  → Checking tool count 108 propagates to ≥ $TOOL_COUNT_MIN files..."
-files_with_108=0
+echo "  → Checking tool count 110 propagates to ≥ $TOOL_COUNT_MIN files..."
+files_with_110=0
 for file in "${AUTHORITATIVE_FILES[@]}"; do
-    if [ -f "$file" ] && grep -qE "108 (個 tool|tools|tool |個 tool| tool)" "$file"; then
-        files_with_108=$((files_with_108 + 1))
+    if [ -f "$file" ] && grep -qE "110 (個 tool|tools|tool |個 tool| tool)" "$file"; then
+        files_with_110=$((files_with_110 + 1))
     fi
 done
-if [ "$files_with_108" -lt "$TOOL_COUNT_MIN" ]; then
-    echo "    ❌ '108 tools' only appears in $files_with_108 files (need ≥ $TOOL_COUNT_MIN)"
+if [ "$files_with_110" -lt "$TOOL_COUNT_MIN" ]; then
+    echo "    ❌ '110 tools' only appears in $files_with_110 files (need ≥ $TOOL_COUNT_MIN)"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-    echo "    ✓ '108 tools' appears in $files_with_108 files (≥ $TOOL_COUNT_MIN)"
+    echo "    ✓ '110 tools' appears in $files_with_110 files (≥ $TOOL_COUNT_MIN)"
 fi
 
 # 總結
