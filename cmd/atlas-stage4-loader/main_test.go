@@ -204,8 +204,8 @@ func TestRun_EndToEnd_AllTablesPresent(t *testing.T) {
 		// 3 events × 2 IDs each = 6 rows.
 		t.Errorf("stats = %+v, want regime=5 stress=5 events=6", stats)
 	}
-	if stats.PredictionWrit != 0 {
-		t.Errorf("prediction writer count = %d, want 0 (PR#3 territory)", stats.PredictionWrit)
+	if stats.PredictionWritten != 0 {
+		t.Errorf("prediction writer count = %d, want 0 (PR#3 territory)", stats.PredictionWritten)
 	}
 }
 

@@ -115,16 +115,16 @@ type RunOptions struct {
 // RunStats reports per-table counters. Surfaced in CLI output and asserted
 // in tests.
 type RunStats struct {
-	RegimeRead     int
-	RegimeWritten  int
-	StressRead     int
-	StressWritten  int
-	EventRead      int
-	EventWritten   int
-	PredictionRead int
-	PredictionWrit int
-	Malformed      int
-	OutOfRange     int
+	RegimeRead        int
+	RegimeWritten     int
+	StressRead        int
+	StressWritten     int
+	EventRead         int
+	EventWritten      int
+	PredictionRead    int
+	PredictionWritten int
+	Malformed         int
+	OutOfRange        int
 }
 
 // Run executes the loader end-to-end. Tests call Run with a synthesized
@@ -192,7 +192,9 @@ func Run(opts RunOptions) (RunStats, error) {
 		}
 	}
 	if wants["prediction"] && len(rows.prediction) > 0 {
-		upsertPredictions(context.Background(), store, rows.prediction, &stats)
+		if err := upsertPredictions(context.Background(), store, rows.prediction, &stats); err != nil {
+			return stats, fmt.Errorf("upsert prediction: %w", err)
+		}
 	}
 	if opts.DropSynthetic {
 		dropped, err := dropSyntheticRows(context.Background(), db)
@@ -438,17 +440,25 @@ func upsertEvents(ctx context.Context, store ledger.HistoricalStore, rows []load
 	return nil
 }
 
-// upsertPredictions is intentionally a no-op: PR#1's staging file holds
-// realized aggregates, not the predicted-vs-actual pair schema
-// prediction_backtest expects. Writing them would deposit NULL/zero
-// rows in the table — the silent pollution this stage explicitly refuses.
-// PR#3 (cmd/backtest-event-flow) owns prediction_backtest writes; we
-// still parse the file here so the staging format is validated and the
-// read counter stays honest.
-func upsertPredictions(ctx context.Context, store ledger.HistoricalStore, rows []loaderPrediction, stats *RunStats) {
-	stats.PredictionRead = len(rows)
-	_ = ctx
-	_ = store
+func upsertPredictions(ctx context.Context, store ledger.HistoricalStore, rows []loaderPrediction, stats *RunStats) error {
+	for _, r := range rows {
+		err := store.UpsertPredictionBacktest(ctx, ledger.PredictionBacktestRow{
+			Date:                  r.Date,
+			PredictedDirection:    r.PredictedDirection,
+			PredictedConfidence:   r.PredictedConfidence,
+			ActualDirection:       r.ActualDirection,
+			ActualCapitalFlowChan: r.ActualCapitalFlowChan,
+			Hit:                   r.Hit,
+			ModelVersion:          r.ModelVersion,
+			CapturedAt:            r.CapturedAt,
+			IsSynthetic:           r.IsSynthetic,
+		})
+		if err != nil {
+			return err
+		}
+		stats.PredictionWritten++
+	}
+	return nil
 }
 
 var syntheticDropTables = []struct {
@@ -499,7 +509,7 @@ func main() {
 	fmt.Printf("    regime:           %d / %d\n", stats.RegimeRead, stats.RegimeWritten)
 	fmt.Printf("    stress:           %d / %d\n", stats.StressRead, stats.StressWritten)
 	fmt.Printf("    events:           %d / %d\n", stats.EventRead, stats.EventWritten)
-	fmt.Printf("    prediction:       %d / %d\n", stats.PredictionRead, stats.PredictionWrit)
+	fmt.Printf("    prediction:       %d / %d\n", stats.PredictionRead, stats.PredictionWritten)
 	fmt.Printf("  Skipped — malformed: %d\n", stats.Malformed)
 	fmt.Printf("  Skipped — out of range: %d\n", stats.OutOfRange)
 }
