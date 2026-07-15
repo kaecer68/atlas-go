@@ -116,7 +116,7 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 			EndDate:            e.EndDate,
 			AffectedIndustries: e.AffectedIndustries,
 			ExpectedFlowImpact: expectedFlow(e.EventType),
-			Confidence:         e.BaseWeight,
+			Confidence:         effectiveConfidence(e),
 		})
 	}
 
@@ -228,6 +228,9 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 			continue
 		}
 		w := e.BaseWeight
+		if e.Backfilled {
+			w *= backfillDiscountFactor
+		}
 		switch e.Direction {
 		case "bullish":
 			bullishWeight += w
@@ -340,6 +343,15 @@ func forcesForDirection(drivers []string) []string {
 	}
 	sort.Strings(forces)
 	return forces
+}
+
+const backfillDiscountFactor = 0.7
+
+func effectiveConfidence(e industry.CalendarEvent) float64 {
+	if e.Backfilled {
+		return e.BaseWeight * backfillDiscountFactor
+	}
+	return e.BaseWeight
 }
 
 func sigmoid(x float64) float64 {
