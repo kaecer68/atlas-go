@@ -22,6 +22,11 @@ import (
 	"time"
 )
 
+const (
+	FilterSynthetic  = true
+	IncludeSynthetic = false
+)
+
 // ------------------------------------------------------------------
 // Read DTOs (mirror the staging JSONL shapes from cmd/atlas-stage4-backfill).
 // ------------------------------------------------------------------
@@ -84,21 +89,31 @@ type HistoricalStore interface {
 	// Regime
 	UpsertRegime(ctx context.Context, row RegimeRow) error
 	LoadRegimeByDate(ctx context.Context, date string) (RegimeRow, bool, error)
+	LoadRegimeByDateAll(ctx context.Context, date string) (RegimeRow, bool, error)
 	LoadRegimeHistory(ctx context.Context, limit int) ([]RegimeRow, error)
+	LoadRegimeHistoryAll(ctx context.Context, limit int) ([]RegimeRow, error)
 
 	// Stress
 	UpsertStress(ctx context.Context, row StressRow) error
 	LoadStressByDate(ctx context.Context, date string) (StressRow, bool, error)
+	LoadStressByDateAll(ctx context.Context, date string) (StressRow, bool, error)
 	LoadStressHistory(ctx context.Context, limit int) ([]StressRow, error)
+	LoadStressHistoryAll(ctx context.Context, limit int) ([]StressRow, error)
 
 	// Event calendar
 	UpsertEventCalendar(ctx context.Context, row EventCalendarRow) error
 	LoadEventCalendarByDate(ctx context.Context, date string) ([]EventCalendarRow, error)
+	LoadEventCalendarByDateAll(ctx context.Context, date string) ([]EventCalendarRow, error)
 	LoadEventCalendarRange(ctx context.Context, startDate, endDate string, limit int) ([]EventCalendarRow, error)
+	LoadEventCalendarRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]EventCalendarRow, error)
 
 	// Prediction backtest (PR#3 will populate; readers exist now for completeness)
 	UpsertPredictionBacktest(ctx context.Context, row PredictionBacktestRow) error
 	LoadPredictionBacktestRange(ctx context.Context, startDate, endDate string, limit int) ([]PredictionBacktestRow, error)
+	LoadPredictionBacktestRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]PredictionBacktestRow, error)
+
+	// CountSynthetic returns the number of rows with is_synthetic=1 per table.
+	CountSynthetic(ctx context.Context) (map[string]int64, error)
 }
 
 // SQLiteHistoricalStore is the canonical implementation backed by the
@@ -143,12 +158,23 @@ func (s *SQLiteHistoricalStore) UpsertRegime(ctx context.Context, row RegimeRow)
 }
 
 func (s *SQLiteHistoricalStore) LoadRegimeByDate(ctx context.Context, date string) (RegimeRow, bool, error) {
+	return s.loadRegimeByDate(ctx, date, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadRegimeByDateAll(ctx context.Context, date string) (RegimeRow, bool, error) {
+	return s.loadRegimeByDate(ctx, date, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadRegimeByDate(ctx context.Context, date string, filterSynthetic bool) (RegimeRow, bool, error) {
 	var r RegimeRow
 	var srcSID, recordedAtStr, capturedAtStr sql.NullString
+	filter := ""
+	if filterSynthetic {
+		filter = " AND is_synthetic = 0"
+	}
 	err := s.db.QueryRowContext(ctx, `
 		SELECT date, regime, source_session_id, recorded_at, captured_at, is_synthetic
-		FROM regime_history WHERE date = ?
-	`, date).Scan(&r.Date, &r.Regime, &srcSID, &recordedAtStr, &capturedAtStr, &r.IsSynthetic)
+		FROM regime_history WHERE date = ?`+filter, date).Scan(&r.Date, &r.Regime, &srcSID, &recordedAtStr, &capturedAtStr, &r.IsSynthetic)
 	if err == sql.ErrNoRows {
 		return r, false, nil
 	}
@@ -162,13 +188,24 @@ func (s *SQLiteHistoricalStore) LoadRegimeByDate(ctx context.Context, date strin
 }
 
 func (s *SQLiteHistoricalStore) LoadRegimeHistory(ctx context.Context, limit int) ([]RegimeRow, error) {
+	return s.loadRegimeHistory(ctx, limit, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadRegimeHistoryAll(ctx context.Context, limit int) ([]RegimeRow, error) {
+	return s.loadRegimeHistory(ctx, limit, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadRegimeHistory(ctx context.Context, limit int, filterSynthetic bool) ([]RegimeRow, error) {
 	if limit <= 0 {
 		limit = 90
 	}
+	filter := ""
+	if filterSynthetic {
+		filter = " WHERE is_synthetic = 0"
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT date, regime, source_session_id, recorded_at, captured_at, is_synthetic
-		FROM regime_history ORDER BY date DESC LIMIT ?
-	`, limit)
+		FROM regime_history`+filter+` ORDER BY date DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load regime history: %w", err)
 	}
@@ -226,12 +263,23 @@ func (s *SQLiteHistoricalStore) UpsertStress(ctx context.Context, row StressRow)
 }
 
 func (s *SQLiteHistoricalStore) LoadStressByDate(ctx context.Context, date string) (StressRow, bool, error) {
+	return s.loadStressByDate(ctx, date, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadStressByDateAll(ctx context.Context, date string) (StressRow, bool, error) {
+	return s.loadStressByDate(ctx, date, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadStressByDate(ctx context.Context, date string, filterSynthetic bool) (StressRow, bool, error) {
 	var r StressRow
 	var regime, source, compsJSON, capturedAtStr sql.NullString
+	filter := ""
+	if filterSynthetic {
+		filter = " AND is_synthetic = 0"
+	}
 	err := s.db.QueryRowContext(ctx, `
 		SELECT date, score, regime, components_json, source, captured_at, is_synthetic
-		FROM stress_index_history WHERE date = ?
-	`, date).Scan(&r.Date, &r.Score, &regime, &compsJSON, &source, &capturedAtStr, &r.IsSynthetic)
+		FROM stress_index_history WHERE date = ?`+filter, date).Scan(&r.Date, &r.Score, &regime, &compsJSON, &source, &capturedAtStr, &r.IsSynthetic)
 	if err == sql.ErrNoRows {
 		return r, false, nil
 	}
@@ -248,13 +296,24 @@ func (s *SQLiteHistoricalStore) LoadStressByDate(ctx context.Context, date strin
 }
 
 func (s *SQLiteHistoricalStore) LoadStressHistory(ctx context.Context, limit int) ([]StressRow, error) {
+	return s.loadStressHistory(ctx, limit, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadStressHistoryAll(ctx context.Context, limit int) ([]StressRow, error) {
+	return s.loadStressHistory(ctx, limit, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadStressHistory(ctx context.Context, limit int, filterSynthetic bool) ([]StressRow, error) {
 	if limit <= 0 {
 		limit = 90
 	}
+	filter := ""
+	if filterSynthetic {
+		filter = " WHERE is_synthetic = 0"
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT date, score, regime, components_json, source, captured_at, is_synthetic
-		FROM stress_index_history ORDER BY date DESC LIMIT ?
-	`, limit)
+		FROM stress_index_history`+filter+` ORDER BY date DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load stress history: %w", err)
 	}
@@ -305,10 +364,21 @@ func (s *SQLiteHistoricalStore) UpsertEventCalendar(ctx context.Context, row Eve
 }
 
 func (s *SQLiteHistoricalStore) LoadEventCalendarByDate(ctx context.Context, date string) ([]EventCalendarRow, error) {
+	return s.loadEventCalendarByDate(ctx, date, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadEventCalendarByDateAll(ctx context.Context, date string) ([]EventCalendarRow, error) {
+	return s.loadEventCalendarByDate(ctx, date, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadEventCalendarByDate(ctx context.Context, date string, filterSynthetic bool) ([]EventCalendarRow, error) {
+	filter := ""
+	if filterSynthetic {
+		filter = " AND is_synthetic = 0"
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT date, event_id, active_theme, source, captured_at, is_synthetic
-		FROM event_calendar_history WHERE date = ?
-	`, date)
+		FROM event_calendar_history WHERE date = ?`+filter, date)
 	if err != nil {
 		return nil, fmt.Errorf("load event by date %s: %w", date, err)
 	}
@@ -317,13 +387,25 @@ func (s *SQLiteHistoricalStore) LoadEventCalendarByDate(ctx context.Context, dat
 }
 
 func (s *SQLiteHistoricalStore) LoadEventCalendarRange(ctx context.Context, startDate, endDate string, limit int) ([]EventCalendarRow, error) {
+	return s.loadEventCalendarRange(ctx, startDate, endDate, limit, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadEventCalendarRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]EventCalendarRow, error) {
+	return s.loadEventCalendarRange(ctx, startDate, endDate, limit, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadEventCalendarRange(ctx context.Context, startDate, endDate string, limit int, filterSynthetic bool) ([]EventCalendarRow, error) {
 	if limit <= 0 {
 		limit = 500
+	}
+	filter := ""
+	if filterSynthetic {
+		filter = " AND is_synthetic = 0"
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT date, event_id, active_theme, source, captured_at, is_synthetic
 		FROM event_calendar_history
-		WHERE date BETWEEN ? AND ?
+		WHERE date BETWEEN ? AND ?`+filter+`
 		ORDER BY date ASC LIMIT ?
 	`, startDate, endDate, limit)
 	if err != nil {
@@ -386,13 +468,25 @@ func (s *SQLiteHistoricalStore) UpsertPredictionBacktest(ctx context.Context, ro
 }
 
 func (s *SQLiteHistoricalStore) LoadPredictionBacktestRange(ctx context.Context, startDate, endDate string, limit int) ([]PredictionBacktestRow, error) {
+	return s.loadPredictionBacktestRange(ctx, startDate, endDate, limit, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadPredictionBacktestRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]PredictionBacktestRow, error) {
+	return s.loadPredictionBacktestRange(ctx, startDate, endDate, limit, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadPredictionBacktestRange(ctx context.Context, startDate, endDate string, limit int, filterSynthetic bool) ([]PredictionBacktestRow, error) {
 	if limit <= 0 {
 		limit = 500
+	}
+	filter := ""
+	if filterSynthetic {
+		filter = " AND is_synthetic = 0"
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT date, predicted_direction, predicted_confidence, actual_direction, actual_capital_flow_change, hit, model_version, captured_at, is_synthetic
 		FROM prediction_backtest
-		WHERE (? = '' OR date >= ?) AND (? = '' OR date <= ?)
+		WHERE (? = '' OR date >= ?) AND (? = '' OR date <= ?)`+filter+`
 		ORDER BY date ASC LIMIT ?
 	`, startDate, startDate, endDate, endDate, limit)
 	if err != nil {
@@ -481,6 +575,29 @@ func (s *SQLiteHistoricalStore) HasTables(ctx context.Context) (map[string]bool,
 			return nil, fmt.Errorf("check table %s: %w", name, err)
 		}
 		out[name] = n > 0
+	}
+	return out, nil
+}
+
+// CountSynthetic returns the number of rows with is_synthetic=1 in each of the
+// 4 Stage 4 history tables. Useful for ops/debugging and for validating the
+// effect of the --drop-synthetic loader flag.
+func (s *SQLiteHistoricalStore) CountSynthetic(ctx context.Context) (map[string]int64, error) {
+	tables := []string{
+		"regime_history",
+		"stress_index_history",
+		"event_calendar_history",
+		"prediction_backtest",
+	}
+	out := make(map[string]int64, len(tables))
+	for _, name := range tables {
+		var n int64
+		err := s.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM `+name+` WHERE is_synthetic = 1`).Scan(&n)
+		if err != nil {
+			return nil, fmt.Errorf("count synthetic %s: %w", name, err)
+		}
+		out[name] = n
 	}
 	return out, nil
 }
