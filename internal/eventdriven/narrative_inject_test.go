@@ -166,21 +166,22 @@ func TestPredictor_BearishNarrativeFlipsDirection(t *testing.T) {
 }
 
 func TestComputeNarrativeTilt_NoMatch(t *testing.T) {
+	themes := map[string]struct{}{"earnings_surprise": {}}
 	got := computeNarrativeTilt([]ModelView{
 		{ID: "x", Weight: 1.0, Direction: "bullish", ActiveThemes: []string{"never_matches_any_event"}},
-	}, time.Now())
+	}, themes)
 	if got != 0 {
 		t.Errorf("non-matching themes should produce zero tilt, got %v", got)
 	}
 }
 
 func TestComputeNarrativeTilt_MixedDirections(t *testing.T) {
-	now := time.Now()
+	themes := map[string]struct{}{"earnings_surprise": {}}
 	got := computeNarrativeTilt([]ModelView{
 		{ID: "bull", Weight: 1.0, Direction: "bullish", ActiveThemes: []string{"earnings_surprise"}},
 		{ID: "bear", Weight: 0.5, Direction: "bearish", ActiveThemes: []string{"earnings_surprise"}},
 		{ID: "neut", Weight: 2.0, Direction: "neutral", ActiveThemes: []string{"earnings_surprise"}},
-	}, now)
+	}, themes)
 	want := 1.0*1.0 + 0.5*(-1.0) + 2.0*0
 	if got != want {
 		t.Errorf("mixed-direction tilt: got %v want %v", got, want)
