@@ -889,7 +889,11 @@ func run(args []string, deps appDeps) error {
 			})
 
 			if detectorRegistry != nil && detectorScanStore != nil {
-				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore, nil, nil)
+				macroProvider := func() marketdata.MacroDataSnapshot {
+					snap, _ := dashboard.GetLatestMacroSnapshot()
+					return snap
+				}
+				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore, macroProvider, nil)
 			}
 			if narrativeEngine != nil {
 				scheduler.RegisterNarrativeWeightUpdateSchedule(taskMgr, narrativeEngine)
