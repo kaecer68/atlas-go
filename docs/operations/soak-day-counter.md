@@ -48,8 +48,8 @@
 
 ## 成功後動作（Day 7 全綠後）
 
-1. 歸檔本文件到 `docs/operations/archive/2026-07-15-soak-day-counter.md`
-2. 歸檔 `docs/operations/2026-07-15-staging-soak-test.md`
+1. 歸檔本文件（建立 `docs/operations/archive/2026-07-15/` 後把本檔移過去）
+2. 歸檔 staging-soak-test 計畫文件（同一個 archive 目錄）
 3. 改名推廣 `scripts/staging-soak-check.sh` → `scripts/staging-deployment-health-check.sh`
 4. 降頻 cron/launchd：daily → weekly（Monday 06:00 UTC）
 5. 刪除 `.omo/plans/2026-07-15-capital-flow-audit-followup/`

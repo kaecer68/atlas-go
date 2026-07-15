@@ -97,7 +97,7 @@ echo "incident description" > ~/logs/atlas-soak/incidents/$(date -u +%Y-%m-%d)/i
 ## 成功後動作
 
 7-day soak 全綠後：
-1. **歸檔**本文件到 `docs/operations/archive/2026-07-15-staging-soak-test.md`（加「Completed YYYY-MM-DD」標頭）
+1. **歸檔**本文件到 archive 目錄（建立 `docs/operations/archive/2026-07-15/` 後把本檔移過去，加「Completed YYYY-MM-DD」標頭）
 2. **改名推廣** `scripts/staging-soak-check.sh` → `scripts/staging-deployment-health-check.sh`，改為通用 5-check（任何 staging 都跑）
 3. **保留但降頻 cron/launchd**：daily 06:00 → weekly Monday 06:00（cron 改 `0 6 * * 1`；launchd 改 Weekday=1）
 4. **刪除** `.omo/plans/2026-07-15-capital-flow-audit-followup/`（gitignored，純 plan-only，任務已完成）
