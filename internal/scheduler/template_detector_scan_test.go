@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -20,13 +21,15 @@ type stubDetector struct {
 	result *narrative.DetectionResult
 	err    error
 	calls  atomic.Int32
+	lastIn narrative.DetectorInput
 }
 
 func (d *stubDetector) Theme() string   { return d.theme }
 func (d *stubDetector) Enabled() bool   { return true }
 func (d *stubDetector) SetEnabled(bool) {}
-func (d *stubDetector) Detect(_ context.Context, _ narrative.DetectorInput) (*narrative.DetectionResult, error) {
+func (d *stubDetector) Detect(_ context.Context, in narrative.DetectorInput) (*narrative.DetectionResult, error) {
 	d.calls.Add(1)
+	d.lastIn = in
 	return d.result, d.err
 }
 
@@ -57,7 +60,7 @@ func TestRegisterTemplateDetectorScanTasks_WiresTask(t *testing.T) {
 	registry := narrative.NewDetectorRegistry()
 	store := &stubScanStore{batchID: "test-batch"}
 
-	RegisterTemplateDetectorScanTasks(btm, registry, store)
+	RegisterTemplateDetectorScanTasks(btm, registry, store, nil, nil)
 
 	task, ok := btm.Get("template_detector_scan")
 	if !ok {
@@ -82,8 +85,8 @@ func TestRegisterTemplateDetectorScanTasks_DuplicateNameErrorIgnored(t *testing.
 	registry := narrative.NewDetectorRegistry()
 	store := &stubScanStore{batchID: "x"}
 
-	RegisterTemplateDetectorScanTasks(btm, registry, store)
-	RegisterTemplateDetectorScanTasks(btm, registry, store)
+	RegisterTemplateDetectorScanTasks(btm, registry, store, nil, nil)
+	RegisterTemplateDetectorScanTasks(btm, registry, store, nil, nil)
 
 	if _, ok := btm.Get("template_detector_scan"); !ok {
 		t.Fatal("task should still be registered after second call (first wins)")
@@ -95,9 +98,9 @@ func TestRegisterTemplateDetectorScanTasks_NilDeps_NoOp(t *testing.T) {
 	registry := narrative.NewDetectorRegistry()
 	store := &stubScanStore{batchID: "x"}
 
-	RegisterTemplateDetectorScanTasks(nil, registry, store)
-	RegisterTemplateDetectorScanTasks(btm, nil, store)
-	RegisterTemplateDetectorScanTasks(btm, registry, nil)
+	RegisterTemplateDetectorScanTasks(nil, registry, store, nil, nil)
+	RegisterTemplateDetectorScanTasks(btm, nil, store, nil, nil)
+	RegisterTemplateDetectorScanTasks(btm, registry, nil, nil, nil)
 
 	if names := btm.List(); len(names) != 0 {
 		t.Errorf("expected 0 tasks after nil-dep calls, got %v", names)
@@ -121,7 +124,7 @@ func TestRegisterTemplateDetectorScanTasks_TaskBodyWritesResults(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	RegisterTemplateDetectorScanTasks(btm, registry, store)
+	RegisterTemplateDetectorScanTasks(btm, registry, store, nil, nil)
 
 	task, _ := btm.Get("template_detector_scan")
 	if err := task.Task(context.Background()); err != nil {
@@ -149,7 +152,7 @@ func TestRegisterTemplateDetectorScanTasks_TaskBodyNoResultsNoWrite(t *testing.T
 		t.Fatalf("Register: %v", err)
 	}
 
-	RegisterTemplateDetectorScanTasks(btm, registry, store)
+	RegisterTemplateDetectorScanTasks(btm, registry, store, nil, nil)
 
 	task, _ := btm.Get("template_detector_scan")
 	if err := task.Task(context.Background()); err != nil {
@@ -179,7 +182,7 @@ func TestRegisterTemplateDetectorScanTasks_TaskBodyPropagatesStoreError(t *testi
 		t.Fatalf("Register: %v", err)
 	}
 
-	RegisterTemplateDetectorScanTasks(btm, registry, store)
+	RegisterTemplateDetectorScanTasks(btm, registry, store, nil, nil)
 	task, _ := btm.Get("template_detector_scan")
 
 	err := task.Task(context.Background())
@@ -188,5 +191,85 @@ func TestRegisterTemplateDetectorScanTasks_TaskBodyPropagatesStoreError(t *testi
 	}
 	if !strings.Contains(err.Error(), "disk full") {
 		t.Errorf("error = %v, want to contain 'disk full'", err)
+	}
+}
+
+func TestRegisterTemplateDetectorScanTasks_ProvidersInjectedIntoDetectorInput(t *testing.T) {
+	btm := apigateway.NewBackgroundTaskManager(nil)
+	registry := narrative.NewDetectorRegistry()
+	store := &stubScanStore{batchID: "test-batch"}
+	d := &stubDetector{
+		theme:  "test_theme",
+		result: &narrative.DetectionResult{Theme: "test_theme", Severity: narrative.SeverityLow, Confidence: 0.5},
+	}
+	if err := registry.Register(d); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	wantMacro := marketdata.MacroDataSnapshot{DataStatus: "ok"}
+	wantMacro.DXY.Value = 1.5
+	wantMarket := narrative.MarketNarrativeData{US10YChangeBps: 42.0, VIXLevel: 18.5}
+
+	macroProvider := func() marketdata.MacroDataSnapshot { return wantMacro }
+	marketProvider := func() narrative.MarketNarrativeData { return wantMarket }
+
+	RegisterTemplateDetectorScanTasks(btm, registry, store, macroProvider, marketProvider)
+	task, _ := btm.Get("template_detector_scan")
+	if err := task.Task(context.Background()); err != nil {
+		t.Fatalf("task: %v", err)
+	}
+
+	if d.calls.Load() != 1 {
+		t.Fatalf("expected detector called once, got %d", d.calls.Load())
+	}
+	if d.lastIn.MacroSnapshot.DataStatus != wantMacro.DataStatus {
+		t.Errorf("MacroSnapshot.DataStatus = %q, want %q",
+			d.lastIn.MacroSnapshot.DataStatus, wantMacro.DataStatus)
+	}
+	if d.lastIn.MacroSnapshot.DXY.Value != wantMacro.DXY.Value {
+		t.Errorf("MacroSnapshot.DXY.Value = %v, want %v",
+			d.lastIn.MacroSnapshot.DXY.Value, wantMacro.DXY.Value)
+	}
+	if d.lastIn.MarketData.US10YChangeBps != wantMarket.US10YChangeBps {
+		t.Errorf("MarketData.US10YChangeBps = %v, want %v",
+			d.lastIn.MarketData.US10YChangeBps, wantMarket.US10YChangeBps)
+	}
+	if d.lastIn.MarketData.VIXLevel != wantMarket.VIXLevel {
+		t.Errorf("MarketData.VIXLevel = %v, want %v",
+			d.lastIn.MarketData.VIXLevel, wantMarket.VIXLevel)
+	}
+	if d.lastIn.Now.IsZero() {
+		t.Error("Now must remain populated regardless of providers")
+	}
+}
+
+func TestRegisterTemplateDetectorScanTasks_NilProviders_LeavesFieldsZero(t *testing.T) {
+	btm := apigateway.NewBackgroundTaskManager(nil)
+	registry := narrative.NewDetectorRegistry()
+	store := &stubScanStore{batchID: "test-batch"}
+	d := &stubDetector{
+		theme:  "test_theme",
+		result: &narrative.DetectionResult{Theme: "test_theme", Severity: narrative.SeverityLow, Confidence: 0.5},
+	}
+	if err := registry.Register(d); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	RegisterTemplateDetectorScanTasks(btm, registry, store, nil, nil)
+	task, _ := btm.Get("template_detector_scan")
+	if err := task.Task(context.Background()); err != nil {
+		t.Fatalf("task: %v", err)
+	}
+
+	if d.lastIn.Now.IsZero() {
+		t.Error("Now must be populated even when providers are nil")
+	}
+	if d.lastIn.MacroSnapshot.DataStatus != "" {
+		t.Errorf("nil macroProvider should leave MacroSnapshot.DataStatus empty (got %q)",
+			d.lastIn.MacroSnapshot.DataStatus)
+	}
+	if d.lastIn.MarketData.US10YChangeBps != 0 {
+		t.Errorf("nil marketProvider should leave MarketData.US10YChangeBps = 0 (got %v)",
+			d.lastIn.MarketData.US10YChangeBps)
 	}
 }

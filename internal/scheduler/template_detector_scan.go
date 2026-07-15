@@ -15,6 +15,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -25,6 +26,8 @@ func RegisterTemplateDetectorScanTasks(
 	btm *apigateway.BackgroundTaskManager,
 	registry *narrative.DetectorRegistry,
 	store ledger.DetectorScanStore,
+	macroProvider func() marketdata.MacroDataSnapshot,
+	marketProvider func() narrative.MarketNarrativeData,
 ) {
 	if btm == nil || registry == nil || store == nil {
 		return
@@ -36,6 +39,12 @@ func RegisterTemplateDetectorScanTasks(
 		// Jitter 留 0,由 BackgroundTaskManager 合約自動設為 6min。
 		Task: func(ctx context.Context) error {
 			in := narrative.DetectorInput{Now: time.Now().UTC()}
+			if macroProvider != nil {
+				in.MacroSnapshot = macroProvider()
+			}
+			if marketProvider != nil {
+				in.MarketData = marketProvider()
+			}
 			results, errs := registry.RunAll(ctx, in)
 			_ = errs
 			if len(results) == 0 {
