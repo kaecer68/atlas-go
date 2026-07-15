@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
 
 /**
  * Trust & clarity audit for the investor-facing client_web.
@@ -10,6 +11,7 @@ import { test, expect } from '@playwright/test';
  *   - Color semantics and labels are consistent for Taiwanese investors.
  */
 
+test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 test.describe.configure({ mode: 'parallel' });
 
 const FORBIDDEN_UI_STRINGS = [

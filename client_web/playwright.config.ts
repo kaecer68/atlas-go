@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 30000,
   retries: 1,
   webServer: {
-    command: 'python3 -m http.server 8085 --directory dist',
+    command: 'node scripts/ci-spa-server.mjs',
     port: 8085,
     reuseExistingServer: true,
   },
