@@ -28,6 +28,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -99,15 +100,16 @@ type loaderPrediction struct {
 
 // RunOptions groups CLI inputs that govern a loader run.
 type RunOptions struct {
-	StagingDir string
-	DBPath     string
-	Tables     string // csv subset of regime,stress,events,prediction
-	Since      string
-	Until      string
-	Now        time.Time
-	DryRun     bool
-	InitSchema bool
-	Logger     *log.Logger
+	StagingDir    string
+	DBPath        string
+	Tables        string // csv subset of regime,stress,events,prediction
+	Since         string
+	Until         string
+	Now           time.Time
+	DryRun        bool
+	InitSchema    bool
+	DropSynthetic bool
+	Logger        *log.Logger
 }
 
 // RunStats reports per-table counters. Surfaced in CLI output and asserted
@@ -191,6 +193,15 @@ func Run(opts RunOptions) (RunStats, error) {
 	}
 	if wants["prediction"] && len(rows.prediction) > 0 {
 		upsertPredictions(context.Background(), store, rows.prediction, &stats)
+	}
+	if opts.DropSynthetic {
+		dropped, err := dropSyntheticRows(context.Background(), db)
+		if err != nil {
+			return stats, fmt.Errorf("drop synthetic: %w", err)
+		}
+		for _, table := range syntheticDropTables {
+			fmt.Printf("dropped %d synthetic rows from %s\n", dropped[table.table], table.table)
+		}
 	}
 	return stats, nil
 }
@@ -440,6 +451,31 @@ func upsertPredictions(ctx context.Context, store ledger.HistoricalStore, rows [
 	_ = store
 }
 
+var syntheticDropTables = []struct {
+	table string
+	stmt  string
+}{
+	{"regime_history", `DELETE FROM regime_history WHERE is_synthetic = 1`},
+	{"stress_index_history", `DELETE FROM stress_index_history WHERE is_synthetic = 1`},
+	{"event_calendar_history", `DELETE FROM event_calendar_history WHERE is_synthetic = 1`},
+	{"prediction_backtest", `DELETE FROM prediction_backtest WHERE is_synthetic = 1`},
+}
+
+// dropSyntheticRows deletes rows with is_synthetic=1 from each of the 4 Stage 4
+// history tables and returns the number of rows deleted per table.
+func dropSyntheticRows(ctx context.Context, db *sql.DB) (map[string]int64, error) {
+	dropped := make(map[string]int64, len(syntheticDropTables))
+	for _, q := range syntheticDropTables {
+		res, err := db.ExecContext(ctx, q.stmt)
+		if err != nil {
+			return nil, fmt.Errorf("delete synthetic from %s: %w", q.table, err)
+		}
+		n, _ := res.RowsAffected()
+		dropped[q.table] = n
+	}
+	return dropped, nil
+}
+
 // ------------------------------------------------------------------
 // CLI entry.
 // ------------------------------------------------------------------
@@ -477,18 +513,20 @@ func parseFlags(args []string) (RunOptions, error) {
 	until := fs.String("until", "", "filter rows with date <= YYYY-MM-DD")
 	dryRun := fs.Bool("dry-run", false, "parse and report counts, do not write")
 	initSchema := fs.Bool("init-schema", false, "call InitSchema before loading")
+	dropSynthetic := fs.Bool("drop-synthetic", false, "delete synthetic rows after loading")
 	if err := fs.Parse(args); err != nil {
 		return RunOptions{}, err
 	}
 	opts := RunOptions{
-		StagingDir: *staging,
-		DBPath:     *dbPath,
-		Tables:     *tables,
-		Since:      *since,
-		Until:      *until,
-		Now:        time.Now().UTC(),
-		DryRun:     *dryRun,
-		InitSchema: *initSchema,
+		StagingDir:    *staging,
+		DBPath:        *dbPath,
+		Tables:        *tables,
+		Since:         *since,
+		Until:         *until,
+		Now:           time.Now().UTC(),
+		DryRun:        *dryRun,
+		InitSchema:    *initSchema,
+		DropSynthetic: *dropSynthetic,
 	}
 	if err := validateRun(opts); err != nil {
 		return opts, err

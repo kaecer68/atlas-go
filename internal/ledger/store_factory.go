@@ -274,3 +274,21 @@ func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {
 		return nil, fmt.Errorf("detector_scan: backend %q not supported (sqlite-only per Stage 5 PR#4 contract)", cfg.StoreBackend)
 	}
 }
+
+// NewHistoricalStore returns the SQLite-backed Stage 4 PR#2 historical store.
+// Rows carry is_synthetic (1 for staging JSONL fixtures, 0 for real production
+// data). The store is SQLite-only because the MCP history_* tools (history_regime,
+// history_stress, history_event_calendar) run LIMIT + ORDER BY queries that
+// need an indexed relational table.
+func NewHistoricalStore(cfg config.Config) (HistoricalStore, error) {
+	switch cfg.StoreBackend {
+	case "sqlite":
+		db, err := getSharedSQLiteDB(cfg.SQLitePath)
+		if err != nil {
+			return nil, fmt.Errorf("historical: shared sqlite: %w", err)
+		}
+		return NewSQLiteHistoricalStore(db), nil
+	default:
+		return nil, fmt.Errorf("historical: backend %q not supported (sqlite-only per Stage 4 PR#2 contract)", cfg.StoreBackend)
+	}
+}

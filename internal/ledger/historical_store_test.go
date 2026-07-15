@@ -66,7 +66,7 @@ func TestSQLiteHistoricalStore_UpsertRegime_Idempotent(t *testing.T) {
 			t.Fatalf("upsert #%d: %v", i, err)
 		}
 	}
-	got, ok, err := store.LoadRegimeByDate(context.Background(), "2026-04-15")
+	got, ok, err := store.LoadRegimeByDateAll(context.Background(), "2026-04-15")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestSQLiteHistoricalStore_LoadRegimeHistory_OrderedDesc(t *testing.T) {
 			t.Fatalf("upsert %s: %v", d, err)
 		}
 	}
-	got, err := store.LoadRegimeHistory(context.Background(), 10)
+	got, err := store.LoadRegimeHistoryAll(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -134,12 +134,69 @@ func TestSQLiteHistoricalStore_LoadRegimeHistory_Limit(t *testing.T) {
 			t.Fatalf("upsert %s: %v", date, err)
 		}
 	}
-	got, err := store.LoadRegimeHistory(context.Background(), 3)
+}
+
+func TestLoadRegimeHistoryRangeAll_IncludesSynthetic(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	ctx := context.Background()
+	if err := store.UpsertRegime(ctx, RegimeRow{
+		Date:        "2026-04-15",
+		Regime:      "RISK_ON",
+		CapturedAt:  time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		IsSynthetic: 1,
+	}); err != nil {
+		t.Fatalf("upsert synthetic: %v", err)
+	}
+	if err := store.UpsertRegime(ctx, RegimeRow{
+		Date:        "2026-04-16",
+		Regime:      "RISK_OFF",
+		CapturedAt:  time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		IsSynthetic: 0,
+	}); err != nil {
+		t.Fatalf("upsert real: %v", err)
+	}
+	got, err := store.LoadRegimeHistoryAll(ctx, 100)
+	if err != nil {
+		t.Fatalf("load all: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+}
+
+func TestLoadRegimeHistory_FiltersSynthetic(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	ctx := context.Background()
+	if err := store.UpsertRegime(ctx, RegimeRow{
+		Date:        "2026-04-15",
+		Regime:      "RISK_ON",
+		CapturedAt:  time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		IsSynthetic: 1,
+	}); err != nil {
+		t.Fatalf("upsert synthetic: %v", err)
+	}
+	if err := store.UpsertRegime(ctx, RegimeRow{
+		Date:        "2026-04-16",
+		Regime:      "RISK_OFF",
+		CapturedAt:  time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+		IsSynthetic: 0,
+	}); err != nil {
+		t.Fatalf("upsert real: %v", err)
+	}
+	got, err := store.LoadRegimeHistory(ctx, 100)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if len(got) != 3 {
-		t.Errorf("limit=3 → got %d, want 3", len(got))
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Date != "2026-04-16" {
+		t.Errorf("date = %q, want 2026-04-16", got[0].Date)
+	}
+	if got[0].IsSynthetic != 0 {
+		t.Errorf("IsSynthetic = %d, want 0", got[0].IsSynthetic)
 	}
 }
 
@@ -167,7 +224,7 @@ func TestSQLiteHistoricalStore_UpsertStress_RoundTripComponents(t *testing.T) {
 	if err := store.UpsertStress(context.Background(), row); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	got, ok, err := store.LoadStressByDate(context.Background(), "2026-04-15")
+	got, ok, err := store.LoadStressByDateAll(context.Background(), "2026-04-15")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -194,7 +251,7 @@ func TestSQLiteHistoricalStore_LoadStressHistory_Limit(t *testing.T) {
 			t.Fatalf("upsert %s: %v", date, err)
 		}
 	}
-	got, err := store.LoadStressHistory(context.Background(), 2)
+	got, err := store.LoadStressHistoryAll(context.Background(), 2)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -223,7 +280,7 @@ func TestSQLiteHistoricalStore_EventCalendar_CompositePK(t *testing.T) {
 			t.Fatalf("upsert #%d: %v", i, err)
 		}
 	}
-	got, err := store.LoadEventCalendarByDate(context.Background(), "2026-04-15")
+	got, err := store.LoadEventCalendarByDateAll(context.Background(), "2026-04-15")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -252,7 +309,7 @@ func TestSQLiteHistoricalStore_EventCalendar_RangeQuery(t *testing.T) {
 			t.Fatalf("upsert %s: %v", d, err)
 		}
 	}
-	got, err := store.LoadEventCalendarRange(context.Background(), "2026-04-15", "2026-04-16", 100)
+	got, err := store.LoadEventCalendarRangeAll(context.Background(), "2026-04-15", "2026-04-16", 100)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -283,7 +340,7 @@ func TestSQLiteHistoricalStore_PredictionBacktest_RoundTrip(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	got, err := store.LoadPredictionBacktestRange(context.Background(), "2026-04-15", "2026-04-16", 10)
+	got, err := store.LoadPredictionBacktestRangeAll(context.Background(), "2026-04-15", "2026-04-16", 10)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -362,7 +419,7 @@ func TestSQLiteHistoricalStore_ConcurrentUpserts(t *testing.T) {
 	}
 	// Some rows were duplicated across goroutines (same date),
 	// so we expect at most goroutines*perGoroutine distinct dates.
-	got, err := store.LoadRegimeHistory(context.Background(), 0)
+	got, err := store.LoadRegimeHistoryAll(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
