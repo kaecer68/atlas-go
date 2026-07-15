@@ -13,16 +13,19 @@
 - [ ] Wave 1-4 PR 全部 merged
 - [ ] CI on main 全綠（最後 commit）
 
+> **註**：Issue #1187 已於 2026-07-15 標記為 CLOSED（含 6-check + G-08 + Stage 6 + 本 runbook 5 個 comment 完整更新）。本 runbook 是其 §5「成功後動作」的擴充 SOP，執行 trigger 由 soak 完成驅動，不由 issue 重新打開驅動。
+
 ## 1. Pre-flight（merge staging → main 前 1 小時）
 
 ```bash
 # 確認 staging 為最後 green commit
 cd /path/to/atlas-go && git fetch origin
 git log -1 --oneline origin/main
-# 應為 80f66255 或更新（任何 7-day 期間 fix 都要先在 staging 跑過）
+# 應為 9a7da23f（含 G-08 fix）或更新版本（任何 7-day 期間 fix 都要先在 staging 跑過）
 
-# 確認 issue #1187 已標記 "7-day 全綠"
-gh issue view 1187 --json state --jq '.state'  # 應為 "open" 但 comment 有 "all green"
+# 確認 Issue #1187 為 closed + comment thread 完整
+gh issue view 1187 --json state --jq '.state'  # 應為 "CLOSED"
+gh issue view 1187 --json comments  # 應有完整 5 個 comment（6-check + G-08 + Stage 6 + Runbook + 7-day pass）
 ```
 
 ## 2. 部署程序
@@ -145,5 +148,7 @@ gh workflow run release.yml --ref <previous-tag>
 - [ ] 24h 無 critical alert
 - [ ] `/api/events/prediction` 每天都有 5 個 prediction
 - [ ] Document archive 完成
-- [ ] Issue #1187 closed
+- [x] Issue #1187 closed（已於 2026-07-15 因 Day 1 6/6 pass + Stage 6 完成 + Runbook 上線完成）
 - [ ] Slack #atlas-trading 收到 "Production rollout complete"
+
+> **歷史紀錄**：Issue #1187 早於本 runbook 結束前 closed，是因為 follow-up PR 全部合併後 main 已穩定。closed 不代表已完成所有 production rollout 動作；只是 plan stage 結束。第 7 日 6/6 全綠後仍需執行本 runbook §2-§8 才能實際 deploy production image。
