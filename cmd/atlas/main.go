@@ -900,7 +900,10 @@ func run(args []string, deps appDeps) error {
 					snap, _ := dashboard.GetLatestMacroSnapshot()
 					return snap
 				}
-				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore, macroProvider, nil)
+				marketProvider := func() narrative.MarketNarrativeData {
+					return narrativeEngine.MarketNarrativeData()
+				}
+				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore, macroProvider, marketProvider)
 			}
 			if narrativeEngine != nil {
 				scheduler.RegisterNarrativeWeightUpdateSchedule(taskMgr, narrativeEngine)
