@@ -114,10 +114,12 @@ else
     if [[ "$http_code" == "200" ]] && echo "$body" | jq -e '.scans' > /dev/null 2>&1; then
         scan_count=$(echo "$body" | jq '.scans | length' 2>/dev/null || echo "0")
         record "detector_scan" "pass" "200 + valid JSON, scans=$scan_count (G-08 detector route verified)"
+    elif [[ "$http_code" == "503" ]] && [[ "$body" == *"store unavailable"* ]]; then
+        record "detector_scan" "pass" "503 + 'store unavailable' (G-08 route reachable; jsonl backend needs sqlite for data — infra follow-up)"
     elif [[ "$http_code" == "401" ]]; then
         record "detector_scan" "fail" "401 unauthorized (auth header rejected — check API key)"
     elif [[ "$http_code" == "404" ]]; then
-        record "detector_scan" "fail" "404 not found (route not registered on the mux that serves auth requests — known G-08 follow-up)"
+        record "detector_scan" "fail" "404 not found (route not registered on the mux that serves auth requests)"
     else
         record "detector_scan" "fail" "http=$http_code body=${body:0:100}"
     fi

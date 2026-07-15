@@ -32,11 +32,9 @@ func RegisterTemplateDetectorRoutes(
 	if mux == nil {
 		return
 	}
-	if scanStore != nil {
-		mux.HandleFunc("/api/detector/scan/status", handleDetectorScanStatus(scanStore))
-	}
+	mux.Handle("GET /api/detector/scan/status", handleDetectorScanStatus(scanStore))
 	if registry != nil {
-		mux.HandleFunc("/api/detector/registry/list", handleDetectorRegistryList(registry))
+		mux.Handle("GET /api/detector/registry/list", handleDetectorRegistryList(registry))
 	}
 }
 
@@ -46,6 +44,10 @@ func handleDetectorScanStatus(store ledger.DetectorScanStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if store == nil {
+			http.Error(w, "detector scan store unavailable (sqlite backend required, see Stage 5 PR#4 contract)", http.StatusServiceUnavailable)
 			return
 		}
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

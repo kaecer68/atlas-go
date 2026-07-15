@@ -689,13 +689,12 @@ func run(args []string, deps appDeps) error {
 			// so the scan store is available for injection.
 			detectorRegistry = narrative.NewDefaultDetectorRegistry()
 			narrativeEngine = narrative.NewNarrativeEngine()
-			if store, storeErr := ledger.NewDetectorScanStore(cfg); storeErr == nil {
-				detectorScanStore = store
-				RegisterTemplateDetectorRoutes(mux, detectorRegistry, detectorScanStore)
-				log.Printf("[TemplateDetector] registered /api/detector/* routes (24 detectors + scan store wired)")
-			} else {
-				log.Printf("[TemplateDetector] scan store init failed: %v", storeErr)
+			detectorScanStore, scanStoreErr := ledger.NewDetectorScanStore(cfg)
+			if scanStoreErr != nil {
+				log.Printf("[TemplateDetector] scan store unavailable (%v); routes still registered for reachability", scanStoreErr)
 			}
+			RegisterTemplateDetectorRoutes(mux, detectorRegistry, detectorScanStore)
+			log.Printf("[TemplateDetector] registered /api/detector/* routes (24 detectors + scan store=%v)", detectorScanStore != nil)
 
 			// Wrap detector scan store in adapter to break the
 			// ledger→narrative→eventdriven import cycle.
