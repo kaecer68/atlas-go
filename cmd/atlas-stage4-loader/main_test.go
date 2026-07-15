@@ -341,7 +341,7 @@ func TestRun_VerifyIdempotentReRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := ledger.NewSQLiteHistoricalStore(db)
-	got, err := store.LoadRegimeHistory(context.Background(), 100)
+	got, err := store.LoadRegimeHistoryAll(context.Background(), 100)
 	if err != nil {
 		t.Fatal(err)
 	}
