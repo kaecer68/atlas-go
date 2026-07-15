@@ -66,7 +66,7 @@ hermes mcp configure atlas-mcp --enable-all 2>/dev/null || true
 |------|------|------|------|
 | `ATLAS_BASE_URL` | 否 | `http://127.0.0.1:18080` | atlas-go HTTP API 基底 URL |
 | `ATLAS_API_KEY` | 是（admin endpoint） | — | 以 `X-API-Key` header 轉發至 atlas-go |
-| `ATLAS_MCP_TOKEN` | SSE/HTTP 必填 | — | Bearer token；stdio 可選 |
+| `ATLAS_MCP_TOKEN` | — | — | **不使用**：TokenAuth 直接從 `MCPToken` 設定(stdio 為 dev mode,無 env)；admin API 由 `ATLAS_API_KEY` 經 X-API-Key 轉發 |
 | `ATLAS_MCP_AUDIT_LOG` | 否 | `$TMPDIR/atlas-mcp-audit.log` | JSONL audit log |
 
 > 完整 env var 表（30+ 個）見 `cmd/atlas-mcp/README.md` §配置。
@@ -153,7 +153,7 @@ mcp_servers:
 curl -fsS http://127.0.0.1:18080/health
 
 # Step 3: 確認 MCP 連線（從 client 端）
-hermes mcp test atlas-go          # 應列出 108 個 tool
+hermes mcp test atlas-go          # 應列出 110 個 tool
 # 或在 Claude Desktop / Cursor 內嘗試調用任一 tool
 ```
 
@@ -170,7 +170,7 @@ hermes mcp test atlas-go          # 應列出 108 個 tool
 |------|------|------|
 | `command not found` | binary path 錯誤 | 確認 `/absolute/path/to/bin/atlas-mcp` 存在且有執行權限 |
 | 連線 401 | `ATLAS_API_KEY` 錯誤 | 跟管理員確認 admin key |
-| 看不到 108 個 tool | client 還在用舊 config | 編輯 config 後**重啟 client**（Hermes 可用 `/reload-mcp`） |
+| 看不到 110 個 tool | client 還在用舊 config | 編輯 config 後**重啟 client**（Hermes 可用 `/reload-mcp`） |
 | tool 呼叫 timeout | atlas-go backend 沒啟動 | `curl http://127.0.0.1:18080/health` 確認 |
 
 ## 7. 互動式 Wizard（推薦）

@@ -10,11 +10,11 @@ updated: "2026-07-02"
 target_audience: "developer"
 ---
 
-# Atlas MCP Tool Tour — 80 工具分群導覽
+# Atlas MCP Tool Tour — 110 工具分群導覽
 
 ## 描述（Description）
 
-本技能提供 atlas-mcp 的 108 個 MCP tool 的**任務導向分群導覽**。不重複 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md) 的完整 catalog — 本技能聚焦於：
+本技能提供 atlas-mcp 的 110 個 MCP tool 的**任務導向分群導覽**。不重複 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md) 的完整 catalog — 本技能聚焦於：
 1. **入門 tool**：每個任務群組「第一個該呼叫的 tool」
 2. **工具關係**：哪些是 companion（該一起用）、哪些是 alternative（擇一）
 3. **常見組合**：daily briefing、risk review、experiment evaluation 等典型任務的 tool 序列
@@ -23,13 +23,13 @@ target_audience: "developer"
 
 - 當 agent 說「atlas 有哪些 tool」「我能用 atlas 做什麼」「有哪些 MCP tool 可用」
 - 當 agent 接入 atlas-mcp 後，需要快速定位「做 X 任務該用哪個 tool」
-- 當 agent 面對 108 個 tool 不知從何開始、需要導覽
+- 當 agent 面對 110 個 tool 不知從何開始、需要導覽
 - 當 agent 呼叫了一個 tool 但回傳結果不夠、想知道「下一步該用哪個 companion tool」
 
 ## 核心概念（Core Concepts）
 
 ### 任務群組（Task Domain）
-108 個 tool 依任務領域分為 16 個群組（從 16 個 `tools_*.go` 檔案 + 5 個 `tools.go` 核心 entry-point），每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
+110 個 tool 依任務領域分為 16 個群組（從 26 個 `tools_*.go` 檔案 + `tools.go` 核心 entry-point），每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
 
 | 群組 | Tool 數 | 入門 tool | 用途 |
 |------|--------|----------|------|
@@ -47,7 +47,7 @@ target_audience: "developer"
 | 系統健康（System/Health） | 9 | `system_get_health` | 整體健康、LLM router、資料品質、circuit breaker、anomaly 觀測 |
 | 資料源（Data） | 4 | `data_get_channels` | Channel 健康、pipeline 監控 |
 | LLM/Trace | 6 | `llm_get_health` | LLM router 健康、cost、推理追蹤 |
-| PRISM/Swarm | 6 | `swarm_get_status` | 訓練結果、共識、異常、情境 |
+| PRISM | 1 | `prism_get_training_results` | 訓練結果 (PRISM cohort) |
 | 報告/稅務 | 4 | `report_get_daily_summary` | 績效報告、稅務 snapshot |
 
 ### Companion Tool 關係
@@ -66,16 +66,16 @@ target_audience: "developer"
 
 | 數據 | 模組/檔案 | 說明 |
 |------|----------|------|
-| Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（16 個檔案）+ `cmd/atlas-mcp/server/tools.go`（5 個核心 entry-point） | 108 個 tool handler |
-| 自動描述 | `cmd/atlas-mcp/auto-desc.gen.json`（713 行） | descgen 生成的 tool description |
-| Tool catalog | `docs/reference/tool-catalog.md` | 108 個 tool 的完整清單與決策樹 |
+| Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（26 個檔案）+ `cmd/atlas-mcp/server/tools.go`（核心 entry-point） | 110 個 tool handler |
+| 自動描述 | `cmd/atlas-mcp/auto-desc.gen.json`（1146 行） | descgen 生成的 tool description |
+| Tool catalog | `docs/reference/tool-catalog.md` | 110 個 tool 的完整清單與決策樹 |
 | MCP 規格 | `docs/specs/agent-mcp-server.md` | 設計規格、安全邊界、命名慣例 |
 
 ## 實作位置（Implementation Locations）
 
 | 概念 | 檔案路徑 |
 |------|---------|
-| 全部 tool 註冊 | `cmd/atlas-mcp/server/tools.go` → `registerAllTools()` |
+| 全部 tool 註冊 | `cmd/atlas-mcp/server/tools.go` → `registerTools()` |
 | Macro tools | `cmd/atlas-mcp/server/tools_macro.go` |
 | Risk tools | `cmd/atlas-mcp/server/tools_risk_alert.go` |
 | Strategy tools | `cmd/atlas-mcp/server/tools_strategy.go` |
@@ -130,10 +130,11 @@ target_audience: "developer"
 | `atlas-macro-narrative` | 宏觀敘事 tool 的金融背景 |
 | `atlas-strategy-evolution` | 策略/實驗 tool 的金融背景 |
 
-> **完整 catalog + 任務→工具反向索引** — 見 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md)（108 tools × 16 種典型任務矩陣）。
+> **完整 catalog + 任務→工具反向索引** — 見 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md)（110 tools × 16 種典型任務矩陣）。
 
 ## 版本歷史
 
 | 版本 | 日期 | 變更 |
 |------|------|------|
 | 1.0 | 2026-07-02 | 初版 — 16 群組分群（108 tools）、入門 tool、companion 關係、3 個任務組合範例 |
+| 1.1 | 2026-07-15 | 工具數同步 110（PRISM demote swarm）+ auto-desc.gen.json 1146 行 + registerTools() 名稱 + TokenAuth env 路徑;不變呼叫慣例 |
