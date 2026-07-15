@@ -13,23 +13,32 @@
 
 ## 每日檢查
 
-### 5 個可驗證的 HTTP endpoint（修訂自原 6-check 計畫）
+### 6 個可驗證的 HTTP endpoint（5 個 + 1 個 G-08 fix 揭漏後補的）
 
 原計畫假設的 `regime_history` / `prediction_backtest` 表只在 PR-FIX-01 加了 SQLite schema，**實際部署用 PostgreSQL** 且表未 populated。`/api/llm/stress_index/current` 與 `/api/alert/list` 也只有 MCP tool wrapper，無 HTTP route。
 
-可實際驗證的 5 個 endpoint：
+可實際驗證的 6 個 endpoint（5 個原始 + 1 個 G-08 fix 揭漏後補的 detector_scan）：
 
-| Check | Endpoint | 通過條件 |
-|-------|----------|---------|
-| health | `GET /health` | `status: "ok"` |
-| llm_router | `GET /api/llm/health` | ≥ 1 healthy provider |
-| capital_flow | `GET /api/capital-flow/summary` | 有 `resonance_dir`（驗證 G-12 ChangePct fix） |
-| event_prediction | `GET /api/events/prediction` | ≥ 5 個 prediction（驗證 G-06 narrative tilt 5→24 themes） |
-| scheduler | `GET /api/scheduler/status` | ≥ 30 tasks + `macro_ingest` + `auto_capital_flow` 都在 |
+| # | Check | Endpoint | 通過條件 |
+|---|-------|----------|---------|
+| 1 | health | `GET /health` | `status: "ok"` |
+| 2 | llm_router | `GET /api/llm/health` | ≥ 1 healthy provider |
+| 3 | capital_flow | `GET /api/capital-flow/summary` | 有 `resonance_dir`（驗證 G-12 ChangePct fix） |
+| 4 | event_prediction | `GET /api/events/prediction` | ≥ 5 個 prediction（驗證 G-06 narrative tilt 5→24 themes） |
+| 5 | scheduler | `GET /api/scheduler/status` | ≥ 30 tasks + `macro_ingest` + `auto_capital_flow` 都在 |
+| 6 | detector_scan | `GET /api/detector/scan/status?limit=1` | 503 + "store unavailable" 視為 pass（route reachable but jsonl backend needs sqlite for data — see G-08 follow-up） |
+
+### 6th check 的由來（G-08 真相揭露，2026-07-15 commit `79d87635`）
+
+加了 detector_scan check 後，發現 G-08 仍未完全修復：
+- ✅ MCP tool wrapper 已註冊（commit `f754d014`）
+- ❌ HTTP route 帶 auth 回 404（route 沒註冊）
+
+**修復**（commit `9a7da23f`）：移除 if-else gate，總是註冊路由 + nil store 容錯。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 「G-08 真相揭露 + 修復」段。
 
 ### 自動化 runner（macOS launchd 推薦）
 
-`scripts/staging-soak-check.sh` 跑這 5 check，輸出 JSON 到 `~/logs/atlas-soak/$DATE.json`，exit code：
+`scripts/staging-soak-check.sh` 跑這 6 check，輸出 JSON 到 `~/logs/atlas-soak/$DATE.json`，exit code：
 - 0：all pass 或 warn
 - 1：任一 hard fail
 - 2：連不上 staging
@@ -98,7 +107,7 @@ echo "incident description" > ~/logs/atlas-soak/incidents/$(date -u +%Y-%m-%d)/i
 
 7-day soak 全綠後：
 1. **歸檔**本文件到 archive 目錄（建立 `docs/operations/archive/2026-07-15/` 後把本檔移過去，加「Completed YYYY-MM-DD」標頭）
-2. **改名推廣** `scripts/staging-soak-check.sh` → `scripts/staging-deployment-health-check.sh`，改為通用 5-check（任何 staging 都跑）
+2. **改名推廣** `scripts/staging-soak-check.sh` → `scripts/staging-deployment-health-check.sh`，改為通用 6-check（任何 staging 都跑，含 G-08 detector_scan 第 6 check）
 3. **保留但降頻 cron/launchd**：daily 06:00 → weekly Monday 06:00（cron 改 `0 6 * * 1`；launchd 改 Weekday=1）
 4. **刪除** `.omo/plans/2026-07-15-capital-flow-audit-followup/`（gitignored，純 plan-only，任務已完成）
 5. **Production rollout**：merge main → production deploy（per release process）

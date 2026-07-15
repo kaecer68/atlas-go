@@ -1,7 +1,7 @@
 # 文件地圖 (Documentation Map)
 
 > **用途**：本文件為 `docs/` 全部文檔的**結構化目錄索引**。與 [`documentation-standard.md`](documentation-standard.md) 配套使用。
-> **最後驗證**：2026-07-12
+> **最後驗證**：2026-07-15（新增 operations/3 個 staging 7-day soak 相關文件 + audit/ 數量修正至 16）
 > **原則**：每個路徑均為相對於 repo root 的**完整路徑**；檔案必須可被驗證存在。
 
 ---
@@ -105,6 +105,9 @@
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
 | `docs/operations/frontend-refactor-recovery-verification-report.md` | 前端重構恢復驗證報告 | ✅ |
 | `docs/operations/v2-alert-redesign-verification-report.md` | v2 警報重設計驗證報告 | ✅ |
+| `docs/operations/2026-07-15-staging-soak-test.md` | 2026-07-15 staging 7-day soak 計畫文件 | ✅ |
+| `docs/operations/soak-day-counter.md` | Staging 7-Day Soak Day Counter（Day-by-day 進度） | ✅ |
+| `docs/operations/production-rollout-runbook.md` | Production Rollout Runbook（Day 8 起 SOP） | ✅ |
 
 ### 📐 Specs（技術規格）
 
@@ -193,7 +196,7 @@
 
 | 目錄 | 用途 |
 |------|------|
-| `docs/audit/` | 審計報告（15 個檔案） |
+| `docs/audit/` | 審計報告（16 個檔案） |
 | `docs/archive/` | 歷史歸檔（42 個檔案，見 archive/README.md） |
 | `docs/branch-hygiene/` | Branch 清理紀錄（1 個檔案） |
 | `docs/handoff/` | 任務交接（3 個檔案） |
@@ -238,4 +241,6 @@
 
 ---
 
-> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-12。
+> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-15。
+>
+> **本次更新**：補 `docs/operations/{soak-day-counter,production-rollout-runbook,2026-07-15-staging-soak-test}.md` 索引、`docs/audit/` 數量 15→16。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md`（Stage 7 follow-up）。

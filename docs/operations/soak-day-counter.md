@@ -28,15 +28,20 @@
 4. 記錄到本文件 Day 行（`✅ done` + overall 狀態）
 5. 如 fail：照 `docs/operations/2026-07-15-staging-soak-test.md` 的 Rollback 程序
 
-## 5 個 check 速查
+## 6 個 check 速查（含 G-08 fix 後新加的第 6 個）
 
-| Check | Endpoint | 失敗時 debug |
-|-------|----------|-------------|
-| health | `GET /health` | `curl -v http://localhost:18080/health` |
-| llm_router | `GET /api/llm/health` | 看 `providers` 欄位，應有 3 healthy |
-| capital_flow | `GET /api/capital-flow/summary` | 看 `resonance_dir` 是否有值 |
-| event_prediction | `GET /api/events/prediction` | 看 `predictions | length` 應 ≥ 5 |
-| scheduler | `GET /api/scheduler/status` | `[] | length` 應 ≥ 30 且 `macro_ingest` + `auto_capital_flow` 都在 |
+| # | Check | Endpoint | 失敗時 debug |
+|---|-------|----------|-------------|
+| 1 | health | `GET /health` | `curl -v http://localhost:18080/health` |
+| 2 | llm_router | `GET /api/llm/health` | 看 `providers` 欄位，應有 3 healthy |
+| 3 | capital_flow | `GET /api/capital-flow/summary` | 看 `resonance_dir` 是否有值 |
+| 4 | event_prediction | `GET /api/events/prediction` | 看 `predictions | length` 應 ≥ 5 |
+| 5 | scheduler | `GET /api/scheduler/status` | `[] | length` 應 ≥ 30 且 `macro_ingest` + `auto_capital_flow` 都在 |
+| 6 | detector_scan | `GET /api/detector/scan/status?limit=1` | 503 + "store unavailable" 視為 pass（route reachable but jsonl backend needs sqlite for data — see G-08 follow-up） |
+
+### 第 6 個 check 為何被加？G-08 真相揭露
+
+加 6th check 後，發現 G-08 仍未完全修復 — MCP tool wrapper 已註冊，但 HTTP route 帶 auth 回 404。commit `9a7da23f` 移除 if-else gate，總是註冊路由 + nil store 容錯。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 「G-08 真相揭露 + 修復」段。
 
 ## 退出條件（任一未達即失敗）
 
@@ -45,6 +50,7 @@
 3. `llm_router` 每天都有 ≥ 1 healthy provider
 4. `capital_flow` `resonance_dir` 欄位有值
 5. `scheduler` 每天 52 個 tasks 都存在
+6. `detector_scan` 每天回 503（route reachable）或 200（sqlite backend 已配）皆視為 pass
 
 ## 成功後動作（Day 7 全綠後）
 
@@ -53,8 +59,8 @@
 3. 改名推廣 `scripts/staging-soak-check.sh` → `scripts/staging-deployment-health-check.sh`
 4. 降頻 cron/launchd：daily → weekly（Monday 06:00 UTC）
 5. 刪除 `.omo/plans/2026-07-15-capital-flow-audit-followup/`
-6. **Production rollout**：merge main → production deploy
-7. 在 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 標記「verified in staging 2026-07-22」
+6. **Production rollout**：照 `docs/operations/production-rollout-runbook.md` Day 8 SOP（merge staging → main → tag → release workflow → smoke test）
+7. 在 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 「最終驗證條件」勾選全部 → 標記「verified in staging 2026-07-22」
 
 ## 失敗後動作（任一 Day fail）
 
@@ -66,15 +72,20 @@
 5. 通知 on-call SRE + release captain
 6. 修補後重新部署 + 重置 7-day counter
 
-## 當前狀態摘要（2026-07-15 12:02 UTC）
+## 當前狀態摘要（2026-07-15 18:10 UTC）
 
-- **Day 1**：✅ pass（5/5 checks all pass）
-- **LaunchAgent**：loaded, PID 12270, StartCalendarInterval state=active
+- **Day 1**：✅ pass（**6/6 checks all pass**，post G-08 fix at commit `9a7da23f`）
+- **Time-axis**：
+  - 04:02 UTC：5/6 pass（detector_scan ❌ route 404）
+  - 07:23-07:25 UTC：commits 推 main + container 重啟
+  - 07:26 UTC 起：6/6 pass 穩定
+  - 10:06 UTC：最後一次驗證 `{"overall":"pass","pass":6,"fail":[]}`
+- **LaunchAgent**：loaded, StartCalendarInterval state=active
 - **下次自動跑**：2026-07-16 06:00 UTC（Day 2）
-- **Log 累計**：2 entries（initial + kickstart validation）
-- **out.log**：正常，無 err
-- **still loaded after kickstart**：✅
-- **local main == origin/main**：✅ SHA `156944d8`
+- **Log 累計**：1 個 distinct date entry（`2026-07-15.json`，內含 23 次 LaunchAgent 跑過的 iteration）
+- **out.log**：75KB+，期間一過性 `capital_flow` fail（07:21 UTC 部署 gap）+ `detector_scan` 404→503 漸進（07:21 UTC → 07:23 UTC）→ 全部穩定
+- **仍 loaded after kickstart**：✅
+- **local main == origin/main**：✅ SHA `05ca1423`（距離 Day 1 啟動時的 `156944d8` +22 commits，含 Stage 6 + G-08 fix + follow-up）
 
 ## Owner checklist
 
