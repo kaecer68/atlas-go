@@ -85,3 +85,15 @@
 - [ ] Day 5  2026-07-19（Wave 3 驗證）
 - [ ] Day 6  2026-07-20
 - [ ] Day 7  2026-07-21（Wave 4 驗證）
+
+## G-11 觀察記錄（geopolitical component）
+
+2026-07-15 Day 1 soak check 觀察：`macro_get_stress_index_current` 的 `geopolitical` component 持續 = 0。
+**根因**（PR-FIX-07 commit `e7f25dd7` 已分析）：`dashboard.IngestAndUpdateMacro` → `a.geoProvider.FetchScore` → `narrativeEngine.UpdateMacro` 流程完整，但 staging 環境的 RSS feeds（BBC / Al Jazeera）與 GDELT 2.0 API 連線失敗 → `FetchScore` 報錯被 warn+ignore → `geoScore.Intensity` 留 zero。
+
+**修復路徑**：7-day soak 期間每日觀察 `geopolitical` 值。若 Day 2-3 仍 = 0，需：
+1. 確認 staging DNS 能解析 `feeds.bbci.co.uk` 與 `api.gdeltproject.org`
+2. 確認 sandbox egress firewall 沒擋 443/tls
+3. 若都通但仍 fail：可能 GDELT rate limit（PR-FIX-07 提到 GDELT 在 CI 環境 55s+ 慢）
+
+**Owner**：on-call SRE + release captain
