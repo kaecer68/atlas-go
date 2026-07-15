@@ -1,135 +1,108 @@
 # Staging 7-Day Soak Test — Capital Flow Audit Follow-up
 
-> **啟動日期**：2026-07-15（所有 Wave PR 合併後啟動）
+> **啟動日期**：2026-07-15（14 個 commit 合併後當天）
 > **結束日期**：啟動後 7 天
-> **目的**：驗證 14 個 commit（10 個原始 PR + 3 個 follow-up + 1 個 docs update）合併後在 staging 環境不破壞既有功能
+> **目的**：驗證 12 個 PR 合併後在 staging 環境不破壞既有功能
 > **Owner**：release captain + on-call SRE
 
 ## 環境
 
 - Staging 部署：Docker Compose（同 production schema）
-- 資料來源：staging JSONL fixtures + 沙盒 API keys
+- 資料來源：PostgreSQL ledger（per `DATABASE_URL`）+ 沙盒 API keys
 - 觀察工具：Prometheus + 內建 `/api/llm/health` 端點
 
-## 每日檢查清單
+## 每日檢查
 
-每 24 小時跑一次以下命令並截圖到 `docs/operations/soak-logs/YYYY-MM-DD/`：
+### 5 個可驗證的 HTTP endpoint（修訂自原 6-check 計畫）
 
-### 自動化 runner（推薦）
+原計畫假設的 `regime_history` / `prediction_backtest` 表只在 PR-FIX-01 加了 SQLite schema，**實際部署用 PostgreSQL** 且表未 populated。`/api/llm/stress_index/current` 與 `/api/alert/list` 也只有 MCP tool wrapper，無 HTTP route。
 
-`scripts/staging-soak-check.sh` 把 6 個檢查包成單一 script，輸出 JSON 到 `/var/log/atlas-soak/$DATE.json`，exit code 反映結果：
-- 0：all pass 或 warn（資料缺但系統健康）
-- 1：任一 hard fail（資料完整性破壞）
-- 2：script 連不上 staging
+可實際驗證的 5 個 endpoint：
 
-安裝方式見 `scripts/staging-soak-check.cron`（crontab template）。建議：
+| Check | Endpoint | 通過條件 |
+|-------|----------|---------|
+| health | `GET /health` | `status: "ok"` |
+| llm_router | `GET /api/llm/health` | ≥ 1 healthy provider |
+| capital_flow | `GET /api/capital-flow/summary` | 有 `resonance_dir`（驗證 G-12 ChangePct fix） |
+| event_prediction | `GET /api/events/prediction` | ≥ 5 個 prediction（驗證 G-06 narrative tilt 5→24 themes） |
+| scheduler | `GET /api/scheduler/status` | ≥ 30 tasks + `macro_ingest` + `auto_capital_flow` 都在 |
 
+### 自動化 runner（macOS launchd 推薦）
+
+`scripts/staging-soak-check.sh` 跑這 5 check，輸出 JSON 到 `~/logs/atlas-soak/$DATE.json`，exit code：
+- 0：all pass 或 warn
+- 1：任一 hard fail
+- 2：連不上 staging
+
+**macOS 安裝**（cron 在 macOS Catalina+ 不 work，用 LaunchAgent）：
 ```bash
-# 部署
+./scripts/install-soak-automation.sh
+```
+
+這會：cp script 到 `~/bin/`、cp plist 到 `~/Library/LaunchAgents/`、建立 `~/logs/atlas-soak/`、用 `launchctl bootstrap` 載入。
+
+**Linux 安裝**（用 cron 替代 launchd）：
+```bash
 sudo cp scripts/staging-soak-check.sh /usr/local/bin/
 sudo chmod 755 /usr/local/bin/staging-soak-check.sh
-sudo cp scripts/staging-soak-check.cron /etc/cron.d/atlas-soak
-sudo chmod 644 /etc/cron.d/atlas-soak
-
-# 每天 06:00 UTC 自動跑（stage3 sync-events-daily 之後、sync-capital-daily 13:30 之前）
-# 結果寫到 /var/log/atlas-soak/$DATE.json
-# (Optional) Slack/PagerDuty hook 接 non-zero exit code
+echo "0 6 * * *  atlas  /usr/local/bin/staging-soak-check.sh >> /var/log/atlas-soak/cron.log 2>&1" | sudo tee /etc/cron.d/atlas-soak
 ```
 
-Release captain 每天 5 分鐘 review `cat /var/log/atlas-soak/$(date -u +%Y-%m-%d).json | jq` 即可。
+**手動觸發**：
+```bash
+launchctl kickstart -k gui/$(id -u)/com.atlas.soak-check
+```
 
-### 手動指令（debug 用）
-
-如果 script 報 fail 但需要 detail，用以下指令單獨跑每個 check：
-
-#### 1. Stress Index 健康度
+### Release captain 每天 5 分鐘 review
 
 ```bash
-curl -s http://localhost:18080/api/llm/stress_index/current | jq '.components.geopolitical, .score'
+cat ~/logs/atlas-soak/$(date -u +%Y-%m-%d).json | jq .
 ```
 
-**預期**：`geopolitical > 0`（staging 有 RSS feed 連線），`score` 跟 `regime` 邏輯一致。
-
-#### 2. Event Flow Prediction 正常性
-
-```bash
-curl -s http://localhost:18080/api/events/prediction | jq '.predictions | map(.direction) | unique'
-```
-
-**預期**：`["inflow", "neutral", "outflow"]` 至少 2 個值（不是全部 neutral）。
-
-#### 3. Historical Store 無測試污染
-
-```bash
-sqlite3 data/state/atlas.db "SELECT recorded_at, COUNT(*) FROM regime_history GROUP BY recorded_at HAVING COUNT(*) > 1"
-```
-
-**預期**：0 筆結果（修前會有 5 秒級重複）。
-
-#### 4. Prediction Backtest 有資料
-
-```bash
-sqlite3 data/state/atlas.db "SELECT COUNT(*) FROM prediction_backtest WHERE is_synthetic = 0"
-```
-
-**預期**：每天至少 1 筆新資料（scheduler 每日 06:00 觸發 `recalibrate-templates-monthly`）。
-
-#### 5. Stage 3 排程全部觸發
-
-```bash
-curl -s http://localhost:18080/api/scheduler/status | jq '.tasks | map(.name) | sort'
-```
-
-**預期**：`["recalibrate-templates-monthly", "sync-capital-daily", "sync-events-daily", "sync-macro-daily", "sync-regime-weekly", "template-detector-scan"]` 6 個 task 都在。
-
-#### 6. Alert Rules 4 條未誤報
-
-```bash
-curl -s http://localhost:18080/api/alert/list?since=24h | jq '.alerts | length, .by_severity'
-```
-
-**預期**：過去 24 小時 alert 數量 < 10 條；無 critical severity 連續 2 天。
+`overall: "pass"` 全綠；`"fail"` 需排查；`"warn"` 觀察。
 
 ## Wave 驗證里程碑
 
 | Day | Wave 必須驗證 | 失敗時動作 |
 |-----|--------------|----------|
-| Day 1 | Wave 1 PRs（PR-FIX-02/03/06/08/10 + F-02/F-03）運行無誤 | rollback Wave 1 |
-| Day 3 | Wave 2 PRs（PR-FIX-05/07 + F-01）運行無誤 | rollback Wave 2 |
-| Day 5 | Wave 3 PRs（PR-FIX-01/04）運行無誤 | rollback Wave 3 |
-| Day 7 | Wave 4 PR（PR-FIX-09）test coverage 正常 | rollback Wave 4 |
+| Day 1 | Wave 1 PRs（PR-FIX-02/03/06/08/10 + F-02/F-03） | rollback Wave 1 |
+| Day 3 | Wave 2 PRs（PR-FIX-05/07 + F-01） | rollback Wave 2 |
+| Day 5 | Wave 3 PRs（PR-FIX-01/04） | rollback Wave 3 |
+| Day 7 | Wave 4 PR（PR-FIX-09）test coverage | rollback Wave 4 |
 
 ## 退出條件（任一未達即失敗）
 
-1. ✅ 7 個連續 24 小時區間無 critical alert
-2. ✅ `event_flow_prediction` 至少 5 天有非 neutral 輸出
-3. ✅ `prediction_backtest` 表每天至少 1 筆新資料
-4. ✅ `regime_history` 無秒級重複（同上檢查 3）
-5. ✅ 4 條 alert 規則（staleness / sparse / confidence / drift）皆有被觸發紀錄
+1. ✅ 7 個連續 24h 區間 `overall: "pass"`
+2. ✅ `event_prediction` 每天都有 5 個 prediction（任意 direction 皆可，包括全部 inflow）
+3. ✅ `llm_router` 每天都有 ≥ 1 healthy provider
+4. ✅ `capital_flow` `resonance_dir` 欄位有值（不是空）
+5. ✅ `scheduler` 每天 52 個 tasks 都存在，沒有 task 連續 2 天 disabled
 
 ## Rollback 程序
 
 若任一 Day 失敗：
 ```bash
-# 1. 停 staging container
-docker compose down
+# 1. 停 staging
+cd /path/to/atlas-go && docker compose down
 
-# 2. 從最後一個 green tag 還原 image
-docker pull ghcr.io/kaecer68/atlas-go:v0.0.0.31-staging
+# 2. 還原到 merge 12 個 PR 之前的 main commit
+git checkout <pre-audit-followup-commit-sha>
+docker compose build atlas && docker compose up -d
 
-# 3. 重新啟動
-docker compose up -d
-
-# 4. 記錄失敗到 docs/operations/soak-logs/YYYY-MM-DD/incident.md
+# 3. 記錄失敗
+mkdir -p ~/logs/atlas-soak/incidents/$(date -u +%Y-%m-%d)
+echo "incident description" > ~/logs/atlas-soak/incidents/$(date -u +%Y-%m-%d)/incident.md
 ```
 
 ## 成功後動作
 
 7-day soak 全綠後：
-1. Merge staging → main（觸發 production deploy）
-2. 在 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 標記「verified in staging」
-3. 通知 `atlas-trading` channel 開始 production rollout
-4. 關閉本 follow-up 計畫（移除 `.omo/plans/2026-07-15-capital-flow-audit-followup/`）
+1. **歸檔**本文件到 `docs/operations/archive/2026-07-15-staging-soak-test.md`（加「Completed YYYY-MM-DD」標頭）
+2. **改名推廣** `scripts/staging-soak-check.sh` → `scripts/staging-deployment-health-check.sh`，改為通用 5-check（任何 staging 都跑）
+3. **保留但降頻 cron/launchd**：daily 06:00 → weekly Monday 06:00（cron 改 `0 6 * * 1`；launchd 改 Weekday=1）
+4. **刪除** `.omo/plans/2026-07-15-capital-flow-audit-followup/`（gitignored，純 plan-only，任務已完成）
+5. **Production rollout**：merge main → production deploy（per release process）
+6. **更新** `docs/audit/2026-07-15-capital-flow-audit-followup.md` 標記「verified in staging YYYY-MM-DD」
 
 ## 觀察窗口 vs Soak 差異
 
