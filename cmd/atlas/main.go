@@ -889,7 +889,7 @@ func run(args []string, deps appDeps) error {
 			})
 
 			if detectorRegistry != nil && detectorScanStore != nil {
-				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore)
+				scheduler.RegisterTemplateDetectorScanTasks(taskMgr, detectorRegistry, detectorScanStore, nil, nil)
 			}
 			if narrativeEngine != nil {
 				scheduler.RegisterNarrativeWeightUpdateSchedule(taskMgr, narrativeEngine)
