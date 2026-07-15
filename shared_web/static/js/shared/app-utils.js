@@ -132,6 +132,21 @@ export function renderMissingState(label, reason) {
   </div>`;
 }
 
+/**
+ * 統一錯誤狀態元件，附帶重試按鈕。Stage 6 錢潮頁面使用。
+ * @param {string} label 欄位或區塊名稱
+ * @param {string} retryId 用於 querySelector 綁定重試事件的唯一標識
+ * @returns {string}
+ */
+export function renderErrorState(label, retryId) {
+  return `<div class="missing-state missing-state--error" style="padding:16px;text-align:center;border-radius:6px;background:color-mix(in srgb,var(--bg) 90%,transparent);border:1px dashed var(--border);color:var(--muted)">
+    <div style="font-size:18px;margin-bottom:4px">⚠️</div>
+    ${label ? `<div style="font-weight:600;color:var(--text);margin-bottom:2px">${escapeHtml(label)}</div>` : ''}
+    <div style="font-size:12px;margin-bottom:10px">資料暫時無法載入</div>
+    <button class="btn btn--secondary retry-btn" data-retry="${escapeHtml(retryId || '')}" type="button">重試</button>
+  </div>`;
+}
+
 // Sort narrative events by composite strength (|sentiment| * confidence * hit_rate).
 // Higher values indicate more significant events.  Mutates the input array.
 export function sortNarrativeEvents(events) {
