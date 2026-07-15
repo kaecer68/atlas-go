@@ -335,7 +335,7 @@ func TestRun_E2E_WithSampleData(t *testing.T) {
 	}
 
 	store := openStore(t, dbPath)
-	rows, err := store.LoadPredictionBacktestRange(context.Background(), "", "", 100)
+	rows, err := store.LoadPredictionBacktestRangeAll(context.Background(), "", "", 100)
 	if err != nil {
 		t.Fatalf("LoadPredictionBacktestRange: %v", err)
 	}
