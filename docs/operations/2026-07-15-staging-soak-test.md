@@ -15,7 +15,34 @@
 
 每 24 小時跑一次以下命令並截圖到 `docs/operations/soak-logs/YYYY-MM-DD/`：
 
-### 1. Stress Index 健康度
+### 自動化 runner（推薦）
+
+`scripts/staging-soak-check.sh` 把 6 個檢查包成單一 script，輸出 JSON 到 `/var/log/atlas-soak/$DATE.json`，exit code 反映結果：
+- 0：all pass 或 warn（資料缺但系統健康）
+- 1：任一 hard fail（資料完整性破壞）
+- 2：script 連不上 staging
+
+安裝方式見 `scripts/staging-soak-check.cron`（crontab template）。建議：
+
+```bash
+# 部署
+sudo cp scripts/staging-soak-check.sh /usr/local/bin/
+sudo chmod 755 /usr/local/bin/staging-soak-check.sh
+sudo cp scripts/staging-soak-check.cron /etc/cron.d/atlas-soak
+sudo chmod 644 /etc/cron.d/atlas-soak
+
+# 每天 06:00 UTC 自動跑（stage3 sync-events-daily 之後、sync-capital-daily 13:30 之前）
+# 結果寫到 /var/log/atlas-soak/$DATE.json
+# (Optional) Slack/PagerDuty hook 接 non-zero exit code
+```
+
+Release captain 每天 5 分鐘 review `cat /var/log/atlas-soak/$(date -u +%Y-%m-%d).json | jq` 即可。
+
+### 手動指令（debug 用）
+
+如果 script 報 fail 但需要 detail，用以下指令單獨跑每個 check：
+
+#### 1. Stress Index 健康度
 
 ```bash
 curl -s http://localhost:18080/api/llm/stress_index/current | jq '.components.geopolitical, .score'
@@ -23,7 +50,7 @@ curl -s http://localhost:18080/api/llm/stress_index/current | jq '.components.ge
 
 **預期**：`geopolitical > 0`（staging 有 RSS feed 連線），`score` 跟 `regime` 邏輯一致。
 
-### 2. Event Flow Prediction 正常性
+#### 2. Event Flow Prediction 正常性
 
 ```bash
 curl -s http://localhost:18080/api/events/prediction | jq '.predictions | map(.direction) | unique'
@@ -31,7 +58,7 @@ curl -s http://localhost:18080/api/events/prediction | jq '.predictions | map(.d
 
 **預期**：`["inflow", "neutral", "outflow"]` 至少 2 個值（不是全部 neutral）。
 
-### 3. Historical Store 無測試污染
+#### 3. Historical Store 無測試污染
 
 ```bash
 sqlite3 data/state/atlas.db "SELECT recorded_at, COUNT(*) FROM regime_history GROUP BY recorded_at HAVING COUNT(*) > 1"
@@ -39,7 +66,7 @@ sqlite3 data/state/atlas.db "SELECT recorded_at, COUNT(*) FROM regime_history GR
 
 **預期**：0 筆結果（修前會有 5 秒級重複）。
 
-### 4. Prediction Backtest 有資料
+#### 4. Prediction Backtest 有資料
 
 ```bash
 sqlite3 data/state/atlas.db "SELECT COUNT(*) FROM prediction_backtest WHERE is_synthetic = 0"
@@ -47,7 +74,7 @@ sqlite3 data/state/atlas.db "SELECT COUNT(*) FROM prediction_backtest WHERE is_s
 
 **預期**：每天至少 1 筆新資料（scheduler 每日 06:00 觸發 `recalibrate-templates-monthly`）。
 
-### 5. Stage 3 排程全部觸發
+#### 5. Stage 3 排程全部觸發
 
 ```bash
 curl -s http://localhost:18080/api/scheduler/status | jq '.tasks | map(.name) | sort'
@@ -55,7 +82,7 @@ curl -s http://localhost:18080/api/scheduler/status | jq '.tasks | map(.name) | 
 
 **預期**：`["recalibrate-templates-monthly", "sync-capital-daily", "sync-events-daily", "sync-macro-daily", "sync-regime-weekly", "template-detector-scan"]` 6 個 task 都在。
 
-### 6. Alert Rules 4 條未誤報
+#### 6. Alert Rules 4 條未誤報
 
 ```bash
 curl -s http://localhost:18080/api/alert/list?since=24h | jq '.alerts | length, .by_severity'
