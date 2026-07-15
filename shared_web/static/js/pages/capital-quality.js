@@ -2,76 +2,238 @@
 //
 // Stage 6 PR#2：admin_web「資料品質」頁。
 // 來源：
-//   - GET /api/health/aggregate   ：4-tier 健康聚合（PR#1 新增）
-//   - GET /api/dashboard/data-channels：每個 channel 的最後更新狀態
-// 顯示 tier 卡片 + 各通道健康狀態表。
+//   - GET /api/health/aggregate   ：4-tier 健康聚合（可選，失敗不阻塞）
+//   - GET /api/dashboard/data-channels：各通道狀態與最近更新時間
+//   - GET /api/alerts             ：嚴重警報整合
+// 顯示：摘要卡片 + 通道表格（依新鮮度著色）+ 錯誤展開 + critical alerts。
 
-import { silentGetJSON, escapeHtml, renderEmptyState } from '../shared/app-utils.js';
+import { silentGetJSON, escapeHtml, renderEmptyState, renderMissingState, renderErrorState, formatDate } from '../shared/app-utils.js';
+import { fmtSafeNumber } from '../shared/format-metric.js';
+
+const STALE_WARNING_MS = 2 * 60 * 60 * 1000;
+const STALE_CRITICAL_MS = 6 * 60 * 60 * 1000;
+const RETRY_ID = 'capital-quality';
 
 export async function loadCapitalQuality() {
-  await Promise.all([loadHealthAggregate(), loadDataChannelsHealth()]);
-}
-
-export async function loadHealthAggregate() {
-  const data = await silentGetJSON('/api/health/aggregate');
-  renderHealthTiers(data);
-}
-
-export function renderHealthTiers(data) {
-  const el = document.getElementById('capitalHealthTiersContent');
+  const el = document.getElementById('capitalQualityContent');
   if (!el) return;
-  if (!data || !data.tiers) {
+  el.classList.remove('loading');
+  el.innerHTML = renderMissingState('資料品質', 'loading');
+
+  try {
+    const [healthAgg, channelsData, alertsData] = await Promise.all([
+      silentGetJSON('/api/health/aggregate').catch(function () { return null; }),
+      silentGetJSON('/api/dashboard/data-channels').catch(function () { return null; }),
+      silentGetJSON('/api/alerts').catch(function () { return null; }),
+    ]);
+    renderCapitalQuality({ healthAgg, channelsData, alertsData });
+  } catch (err) {
+    console.error('[capital-quality] load failed', err);
     el.classList.remove('loading');
-    el.innerHTML = renderEmptyState('健康聚合回傳為空');
+    el.innerHTML = renderErrorState('資料品質', RETRY_ID);
+    const btn = el.querySelector('[data-retry="' + RETRY_ID + '"]');
+    if (btn) btn.addEventListener('click', loadCapitalQuality);
+  }
+}
+
+export function renderCapitalQuality(payload) {
+  const el = document.getElementById('capitalQualityContent');
+  if (!el) return;
+
+  const channels = payload && payload.channelsData && Array.isArray(payload.channelsData.channels)
+    ? payload.channelsData.channels
+    : [];
+  const channelAlerts = payload && payload.channelsData && Array.isArray(payload.channelsData.alerts)
+    ? payload.channelsData.alerts
+    : [];
+  const alerts = payload && payload.alertsData && Array.isArray(payload.alertsData.alerts)
+    ? payload.alertsData.alerts
+    : channelAlerts;
+  const healthAgg = payload && payload.healthAgg ? payload.healthAgg : null;
+
+  if (channels.length === 0 && !healthAgg) {
+    el.classList.remove('loading');
+    el.innerHTML = renderErrorState('資料品質', RETRY_ID);
+    const btn = el.querySelector('[data-retry="' + RETRY_ID + '"]');
+    if (btn) btn.addEventListener('click', loadCapitalQuality);
     return;
   }
-  var tierCards = Object.keys(data.tiers).map(function (name) {
-    var tier = data.tiers[name] || {};
-    var cls = tier.ok ? 'tier-badge tier-badge--bullish' : 'tier-badge tier-badge--bearish';
-    var status = tier.ok ? '✓ 健康' : '⚠ 異常';
-    var latency = typeof tier.latency_ms === 'number' ? tier.latency_ms + ' ms' : '—';
-    var reason = tier.reason ? '<div class="tier-reason">' + escapeHtml(tier.reason) + '</div>' : '';
-    return '<div class="tier-card ' + cls + '">'
-      + '<h4>' + escapeHtml(name) + '</h4>'
-      + '<div class="tier-status">' + status + '</div>'
-      + '<div class="tier-latency">' + latency + '</div>'
-      + reason
-      + '</div>';
+
+  const now = Date.now();
+  const rows = channels.map(function (c, idx) {
+    const freshness = computeFreshness(c.updated_at || c.last_fetch_at, now);
+    const errorText = c.last_error || c.error || '';
+    const statusClass = errorText ? 'critical' : freshness.className;
+    const displayName = humanizeChannelId(c.channel_id || c.id || c.source_id || 'unknown');
+    const platform = c.platform || displayName;
+    const lastUpdate = formatChannelTime(c.updated_at || c.last_fetch_at);
+
+    return (
+      '<tr class="cq-row ' + statusClass + '" data-idx="' + idx + '">'
+      + '<td>'
+      +   '<div><strong>' + escapeHtml(platform) + '</strong></div>'
+      +   '<div class="text-muted text-xs">' + escapeHtml(displayName) + ' · ' + escapeHtml(c.country || '-') + '</div>'
+      + '</td>'
+      + '<td>' + escapeHtml(c.status_text || c.status || '-') + '</td>'
+      + '<td>' + escapeHtml(lastUpdate) + '</td>'
+      + '<td><span class="badge ' + (statusClass === 'ok' ? 'ok' : statusClass === 'warn' ? 'warn' : 'err') + '">' + freshness.label + '</span></td>'
+      + '</tr>'
+      + (errorText
+        ? '<tr class="cq-error" id="cq-error-' + idx + '"><td colspan="4">'
+          + '<strong>錯誤詳情</strong><br>' + escapeHtml(errorText)
+          + '</td></tr>'
+        : '')
+    );
   }).join('');
+
+  const criticalAlerts = alerts.filter(function (a) {
+    return a && (a.severity === 'CRITICAL' || a.severity === 'ERROR' || a.severity === 'HIGH');
+  }).slice(0, 10);
+
+  const summary = buildSummary(channels, criticalAlerts);
+
   el.classList.remove('loading');
-  var overallCls = data.overall && data.overall.ok ? 'ok' : 'fail';
-  var overallLabel = data.overall && data.overall.ok ? '整體：健康' : '整體：異常';
-  el.innerHTML = '<div class="tier-grid">' + tierCards + '</div>'
-    + '<div class="health-overall"><span class="' + overallCls + '">' + escapeHtml(overallLabel) + '</span></div>';
+  el.innerHTML = (
+    summary
+    + '<div class="cq-stale-legend">'
+    +   '<span><span class="cq-dot ok"></span> 新鮮 (&lt;2h)</span>'
+    +   '<span><span class="cq-dot warn"></span> 待更新 (2h–6h)</span>'
+    +   '<span><span class="cq-dot critical"></span> 過期 (&gt;6h) 或異常</span>'
+    + '</div>'
+    + '<div class="cq-table table-scroll">'
+    +   '<table class="ranker-table">'
+    +     '<thead><tr><th>通道</th><th>狀態</th><th>最後更新</th><th>新鮮度</th></tr></thead>'
+    +     '<tbody>' + (rows || '<tr><td colspan="4" class="text-muted">尚無通道</td></tr>') + '</tbody>'
+    +   '</table>'
+    + '</div>'
+    + renderCriticalAlerts(criticalAlerts)
+  );
+
+  el.querySelectorAll('.cq-row').forEach(function (row) {
+    row.addEventListener('click', function () {
+      const idx = row.getAttribute('data-idx');
+      const errorRow = document.getElementById('cq-error-' + idx);
+      if (errorRow) errorRow.classList.toggle('open');
+    });
+  });
 }
 
-export async function loadDataChannelsHealth() {
-  var data = await silentGetJSON('/api/dashboard/data-channels');
-  renderDataChannelsHealth(data);
+function buildSummary(channels, criticalAlerts) {
+  const now = Date.now();
+  let ok = 0, warn = 0, critical = 0;
+  channels.forEach(function (c) {
+    const errorText = c.last_error || c.error || '';
+    if (errorText) {
+      critical++;
+    } else {
+      const fresh = computeFreshness(c.updated_at || c.last_fetch_at, now);
+      if (fresh.className === 'ok') ok++;
+      else if (fresh.className === 'warn') warn++;
+      else critical++;
+    }
+  });
+
+  return (
+    '<div class="cq-summary">'
+    + '<div class="cq-summary__card ok">'
+    +   '<div class="cq-summary__label">正常通道</div>'
+    +   '<div class="cq-summary__value" style="color:var(--color-success)">' + ok + '</div>'
+    + '</div>'
+    + '<div class="cq-summary__card warn">'
+    +   '<div class="cq-summary__label">待更新通道</div>'
+    +   '<div class="cq-summary__value" style="color:var(--warn)">' + warn + '</div>'
+    + '</div>'
+    + '<div class="cq-summary__card critical">'
+    +   '<div class="cq-summary__label">異常 / 過期</div>'
+    +   '<div class="cq-summary__value" style="color:var(--color-danger)">' + critical + '</div>'
+    + '</div>'
+    + '<div class="cq-summary__card">'
+    +   '<div class="cq-summary__label">嚴重警報</div>'
+    +   '<div class="cq-summary__value" style="color:var(--color-danger)">' + criticalAlerts.length + '</div>'
+    + '</div>'
+    + '</div>'
+  );
 }
 
-export function renderDataChannelsHealth(data) {
-  var el = document.getElementById('capitalDataChannelsContent');
-  if (!el) return;
-  var channels = data && Array.isArray(data.channels) ? data.channels : [];
-  if (channels.length === 0) {
-    el.classList.remove('loading');
-    el.innerHTML = renderEmptyState('尚無資料通道');
-    return;
+function renderCriticalAlerts(alerts) {
+  if (!alerts.length) {
+    return '<div class="cq-alerts"><div class="text-muted text-sm">目前無嚴重警報</div></div>';
   }
-  var rows = channels.map(function (c) {
-    var ok = c.healthy === true || c.status === 'healthy' || c.status === 'fresh';
-    return '<tr>'
-      + '<td><code>' + escapeHtml(c.name || c.id || c.source_id || '-') + '</code></td>'
-      + '<td>' + escapeHtml(c.last_fetch_at || c.updated_at || '-') + '</td>'
-      + '<td><span class="' + (ok ? 'ok' : 'fail') + '">' + (ok ? '✓' : '⚠') + '</span></td>'
-      + '</tr>';
+  const rows = alerts.map(function (a) {
+    return (
+      '<div class="cq-alert">'
+      + '<span class="cq-alert__severity ' + (a.severity === 'CRITICAL' ? 'text-danger' : 'text-warn') + '">' + escapeHtml(a.severity) + '</span>'
+      + '<span class="cq-alert__message">' + escapeHtml(a.message || a.rule || '-') + '</span>'
+      + '<span class="cq-alert__time">' + escapeHtml(formatAlertTime(a.timestamp)) + '</span>'
+      + '</div>'
+    );
   }).join('');
-  el.classList.remove('loading');
-  el.innerHTML = '<div class="table-scroll mt-sm">'
-    + '<table class="ranker-table">'
-    +   '<thead><tr><th>通道</th><th>最後更新</th><th>狀態</th></tr></thead>'
-    +   '<tbody>' + rows + '</tbody>'
-    + '</table>'
-    + '</div>';
+  return (
+    '<div class="cq-alerts panel wide">'
+    + '<h3 class="m-0" style="font-size:14px;margin-bottom:10px">🔥 嚴重警報（最近 ' + alerts.length + ' 筆）</h3>'
+    + rows
+    + '</div>'
+  );
+}
+
+function computeFreshness(value, now) {
+  const ts = parseTimestamp(value);
+  if (!ts) {
+    return { className: 'critical', label: '未知' };
+  }
+  const age = now - ts;
+  if (age < STALE_WARNING_MS) return { className: 'ok', label: '新鮮' };
+  if (age < STALE_CRITICAL_MS) return { className: 'warn', label: '待更新' };
+  return { className: 'critical', label: '過期' };
+}
+
+function parseTimestamp(value) {
+  if (!value || typeof value !== 'string') return null;
+  const d = new Date(value);
+  if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return d.getTime();
+  return null;
+}
+
+function formatChannelTime(value) {
+  if (!value || typeof value !== 'string') return '—';
+  if (value.startsWith('上次失敗:')) return value;
+  const d = new Date(value);
+  if (isNaN(d.getTime()) || d.getFullYear() < 2000) return value;
+  return d.toLocaleString('zh-TW');
+}
+
+function formatAlertTime(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleString('zh-TW');
+}
+
+function humanizeChannelId(id) {
+  if (!id) return '未知';
+  const map = {
+    us_yahoo: 'Yahoo Finance 美國',
+    us_spx: 'S&P 500',
+    us_ndx: 'NASDAQ 100',
+    us_dji: '道瓊工業指數',
+    sox_index: '費城半導體指數',
+    us_nvda: 'NVIDIA',
+    us_aapl: 'Apple',
+    us_msft: 'Microsoft',
+    tsm_adr: '台積電 ADR',
+    finmind: 'FinMind',
+    fugle: 'Fugle 富果',
+    fubon: '富邦證券',
+    tej: 'TEJ 台灣經濟新報',
+    twse_replay: 'TWSE 回放',
+    twse_capital_flow: 'TWSE 三大法人',
+    twse_margin: 'TWSE 融資融券',
+    export_statistics: '海關進出口統計',
+    tsmc_revenue: '台積電月營收',
+    geopolitical: '地緣政治風險',
+    geopolitical_taiwan: '台灣地緣政治',
+    frankfurter_fx: 'Frankfurter 匯率',
+    janus_regime: 'JANUS 盤勢偵測',
+  };
+  return map[id] || id.replace(/_/g, ' ');
 }

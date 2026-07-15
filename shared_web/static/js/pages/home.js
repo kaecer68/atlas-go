@@ -4,7 +4,7 @@
  * portfolio snapshot, and trust elements.
  */
 
-import { getJSON, silentGetJSON, escapeHtml } from '../shared/app-utils.js';
+import { getJSON, silentGetJSON, escapeHtml, renderMissingState } from '../shared/app-utils.js';
 import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
@@ -28,6 +28,10 @@ const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
 let homeLoaded = false;
 let calActiveCategories = [];
 let calActiveFilters = { triggerThemes: [], sectors: [] };
+let calDateRange = { start: '', end: '' };
+let lastCalendarEvents = [];
+const BANNER_DISMISS_KEY = 'atlas:home-banner-dismissed';
+const BANNER_DISMISS_TTL_MS = 1000 * 60 * 60 * 24; // 24h
 
 function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -72,8 +76,15 @@ export async function renderHomePage(container) {
       </div>
     </section>
 
-    <section class="home-section" id="home-banner" style="display:none">
-      <div class="home-banner" id="home-banner-content"></div>
+    <section class="home-section home-section--banner" id="home-banner" style="display:none" aria-live="polite">
+      <div class="home-banner" id="home-banner-content">
+        <span class="home-banner__icon" aria-hidden="true">🚨</span>
+        <div class="home-banner__body" id="home-banner-body"></div>
+        <div class="home-banner__actions">
+          <a class="home-banner__link" href="#home-event-calendar" id="home-banner-detail">查看詳情</a>
+          <button class="home-banner__dismiss" id="home-banner-dismiss" type="button" aria-label="關閉 banner">✕</button>
+        </div>
+      </div>
     </section>
 
     <section class="home-section" id="home-signal-strip">
@@ -111,6 +122,16 @@ export async function renderHomePage(container) {
       <span class="sr-only" id="market-pulse-status" aria-live="polite" aria-atomic="true"></span>
     </section>
 
+    <section class="home-section" id="home-predictions">
+      <div class="home-section__header">
+        <h2>未來 5 日錢潮預測</h2>
+        <span class="home-section__subtitle">事件驅動的資金流向預測</span>
+      </div>
+      <div id="home-predictions-content">
+        <div class="home-loading-card">載入中…</div>
+      </div>
+    </section>
+
     <section class="home-section" id="home-event-calendar">
       <div class="home-section__header">
         <h2>市場行事曆</h2>
@@ -121,12 +142,20 @@ export async function renderHomePage(container) {
         <button class="cal-filter-pill" data-category="除權息">除權息</button>
         <button class="cal-filter-pill" data-category="法說會/財報">法說會</button>
         <button class="cal-filter-pill" data-category="總經事件">總經</button>
-        <select class="cal-filter-select" id="cal-filter-trigger-theme" data-filter-type="trigger_theme" aria-label="依 trigger_theme 篩選">
-          <option value="">所有 trigger_theme</option>
+        <select class="cal-filter-select" id="cal-filter-trigger-theme" data-filter-type="trigger_theme" aria-label="依事件類型篩選">
+          <option value="">所有事件類型</option>
         </select>
         <select class="cal-filter-select" id="cal-filter-sector" data-filter-type="sector" aria-label="依 sector 篩選">
           <option value="">所有 sector</option>
         </select>
+        <label class="cal-filter-date">
+          <span>開始</span>
+          <input type="date" id="cal-filter-start" aria-label="開始日期">
+        </label>
+        <label class="cal-filter-date">
+          <span>結束</span>
+          <input type="date" id="cal-filter-end" aria-label="結束日期">
+        </label>
       </div>
       <div id="home-calendar-content">
         <div class="home-loading-card">載入中…</div>
@@ -144,8 +173,11 @@ export async function renderHomePage(container) {
 
   const calContainer = document.getElementById('home-calendar-content');
   const filterBar = document.getElementById('cal-filter-bar');
-  const applyCalFiltersAndRender = () => renderEventCalendar(calContainer, calActiveCategories, calActiveFilters)
-    .catch(err => console.warn('[home] calendar render failed:', err));
+  const applyCalFiltersAndRender = () => {
+    if (!calContainer) return;
+    renderEventCalendar(calContainer, calActiveCategories, calActiveFilters, calDateRange, lastCalendarEvents)
+      .catch(err => console.warn('[home] calendar render failed:', err));
+  };
   if (filterBar && calContainer) {
     filterBar.addEventListener('click', (e) => {
       const pill = e.target.closest('.cal-filter-pill');
@@ -176,6 +208,21 @@ export async function renderHomePage(container) {
         applyCalFiltersAndRender();
       });
     });
+
+    const startInput = document.getElementById('cal-filter-start');
+    const endInput = document.getElementById('cal-filter-end');
+    if (startInput) {
+      startInput.addEventListener('change', () => {
+        calDateRange.start = startInput.value;
+        applyCalFiltersAndRender();
+      });
+    }
+    if (endInput) {
+      endInput.addEventListener('change', () => {
+        calDateRange.end = endInput.value;
+        applyCalFiltersAndRender();
+      });
+    }
   }
 
   await loadHomeData();
@@ -204,13 +251,14 @@ async function loadHomeData() {
     }
 
     try {
-      const [health, macro, stress, pipeline, bundle, calData] = await Promise.all([
+      const [health, macro, stress, pipeline, bundle, calData, predictionData] = await Promise.all([
         silentGetJSON('/api/dashboard/system-health'),
         silentGetJSON('/api/macro/snapshot/latest'),
         silentGetJSON('/api/taiwan/stress-index'),
         silentGetJSON('/api/dashboard/recommendation-pipeline'),
         silentGetJSON('/api/narrative/bundle'),
         silentGetJSON('/api/dashboard/calendar-events'),
+        silentGetJSON('/api/events/prediction'),
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
@@ -218,23 +266,26 @@ async function loadHomeData() {
       renderSignalStrip(events);
       renderMarketPulse(macro, stress);
       renderRecommendation(pipeline, stress);
+      renderPredictionsCard(predictionData);
 
-      // Event calendar — fetched independently, non-blocking
+      // Event calendar — fetched once and shared with banner + filters
       const calContainer = document.getElementById('home-calendar-content');
-      const calDataForFilter = calData && Array.isArray(calData.events) ? calData.events : [];
-      populateCalFilterSelects(calDataForFilter);
+      lastCalendarEvents = calData && Array.isArray(calData.events) ? calData.events : [];
+      populateCalFilterSelects(lastCalendarEvents);
       if (calContainer) {
-        renderEventCalendar(calContainer, calActiveCategories, calActiveFilters).catch(err =>
+        renderEventCalendar(calContainer, calActiveCategories, calActiveFilters, calDateRange, lastCalendarEvents).catch(err =>
           console.warn('[home] calendar render failed:', err));
       }
 
-      renderHomeBanner(bundle && bundle.events ? bundle.events : []);
+      renderHomeBanner(lastCalendarEvents);
     } catch (err) {
       console.warn('[home] failed to load dashboard data:', err);
       renderTodaySummary(null, null, null, [], null);
       renderSignalStrip([]);
       renderMarketPulse(null, null, null);
       renderRecommendation(null, null);
+      renderPredictionsCard(null);
+      renderHomeBanner([]);
     }
 
     // Portfolio snapshot is loaded independently; it may be empty/demo.
@@ -246,13 +297,22 @@ async function loadHomeData() {
   }
 }
 
+function collectEventTypes(events) {
+  const set = new Set();
+  for (const evt of events) {
+    if (evt.event_type) set.add(evt.event_type);
+  }
+  return Array.from(set).sort();
+}
+
 function populateCalFilterSelects(events) {
   const opts = gatherCalFilterOptions(events);
   const themeSel = document.getElementById('cal-filter-trigger-theme');
   const sectorSel = document.getElementById('cal-filter-sector');
-  if (themeSel && opts.triggerThemes.length) {
-    themeSel.innerHTML = '<option value="">所有 trigger_theme</option>' +
-      opts.triggerThemes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  const eventTypes = collectEventTypes(events);
+  if (themeSel) {
+    themeSel.innerHTML = '<option value="">所有事件類型</option>' +
+      eventTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
   }
   if (sectorSel && opts.sectors.length) {
     sectorSel.innerHTML = '<option value="">所有 sector</option>' +
@@ -260,26 +320,140 @@ function populateCalFilterSelects(events) {
   }
 }
 
+function eventConfidence(e) {
+  // /api/dashboard/calendar-events returns base_weight; treat it as confidence.
+  if (e && typeof e.confidence === 'number') return e.confidence;
+  if (e && typeof e.base_weight === 'number') return e.base_weight;
+  return null;
+}
+
+function eventName(e) {
+  return e && (e.name || e.theme || '事件');
+}
+
+function bannerDigest(events) {
+  return events.map(e => e.id || e.name || '').join('|');
+}
+
+function isBannerDismissed(currentEvents) {
+  try {
+    const raw = localStorage.getItem(BANNER_DISMISS_KEY);
+    if (!raw) return false;
+    const { until, digest } = JSON.parse(raw);
+    if (Date.now() > until) return false;
+    return digest === bannerDigest(currentEvents);
+  } catch (_e) {
+    return false;
+  }
+}
+
+function dismissBanner(events) {
+  try {
+    localStorage.setItem(BANNER_DISMISS_KEY, JSON.stringify({
+      until: Date.now() + BANNER_DISMISS_TTL_MS,
+      digest: bannerDigest(events),
+    }));
+  } catch (_e) {}
+}
+
 function renderHomeBanner(events) {
   const section = document.getElementById('home-banner');
-  const content = document.getElementById('home-banner-content');
-  if (!section || !content) return;
-  const high = (Array.isArray(events) ? events : []).filter(e => typeof e.confidence === 'number' && e.confidence > 0.7);
-  if (high.length === 0) {
+  const body = document.getElementById('home-banner-body');
+  if (!section || !body) return;
+  const high = (Array.isArray(events) ? events : [])
+    .filter(e => {
+      const c = eventConfidence(e);
+      return typeof c === 'number' && c > 0.7;
+    })
+    .slice(0, 3);
+
+  if (high.length === 0 || isBannerDismissed(high)) {
     section.style.display = 'none';
-    content.innerHTML = '';
+    body.innerHTML = '';
     return;
   }
+
   section.style.display = '';
-  const items = high.slice(0, 4).map(e => {
-    const theme = escapeHtml(e.theme || e.name || '事件');
-    const conf = typeof e.confidence === 'number' ? Math.round(e.confidence * 100) + '%' : '—';
+  const items = high.map(e => {
+    const name = escapeHtml(eventName(e));
+    const conf = eventConfidence(e);
+    const confLabel = typeof conf === 'number' ? Math.round(conf * 100) + '%' : '—';
     const inds = Array.isArray(e.affected_industries) && e.affected_industries.length > 0
       ? e.affected_industries.slice(0, 3).map(s => `<span class="cal-tag">${escapeHtml(s)}</span>`).join(' ')
       : '';
-    return `<div class="home-banner__item"><strong>${theme}</strong><span class="home-banner__conf">信心 ${conf}</span>${inds ? ' · ' + inds : ''}</div>`;
+    return `<div class="home-banner__item"><strong>${name}</strong><span class="home-banner__conf">信心 ${confLabel}</span>${inds ? ' · ' + inds : ''}</div>`;
   }).join('');
-  content.innerHTML = `<div class="home-banner__label">🚨 重大事件（信心 &gt; 70%）</div>${items}`;
+  body.innerHTML = `<div class="home-banner__label">重大事件（信心 &gt; 70%）</div>${items}`;
+
+  const dismissBtn = document.getElementById('home-banner-dismiss');
+  if (dismissBtn) {
+    dismissBtn.onclick = () => {
+      dismissBanner(high);
+      section.style.display = 'none';
+      body.innerHTML = '';
+    };
+  }
+  const detailLink = document.getElementById('home-banner-detail');
+  if (detailLink) {
+    detailLink.onclick = (ev) => {
+      ev.preventDefault();
+      const calSection = document.getElementById('home-event-calendar');
+      if (calSection) calSection.scrollIntoView({ behavior: 'smooth' });
+    };
+  }
+}
+
+function predictionDirectionLabel(dir) {
+  if (dir === 'inflow') return '資金流入';
+  if (dir === 'outflow') return '資金流出';
+  return '中性觀望';
+}
+
+function predictionDirectionClass(dir) {
+  if (dir === 'inflow') return 'positive';
+  if (dir === 'outflow') return 'negative';
+  return 'neutral';
+}
+
+function fmtPredictionDate(d) {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function renderPredictionsCard(data) {
+  const container = document.getElementById('home-predictions-content');
+  if (!container) return;
+
+  const predictions = data && Array.isArray(data.predictions) ? data.predictions : [];
+  if (!predictions.length) {
+    container.innerHTML = renderMissingState('未來 5 日錢潮預測', 'no-data');
+    return;
+  }
+
+  const rows = predictions.slice(0, 5).map((p, idx) => {
+    const conf = typeof p.confidence === 'number' ? p.confidence : 0;
+    const dir = p.direction || 'neutral';
+    const width = Math.round(Math.min(1, Math.max(0, conf)) * 100);
+    const drivers = Array.isArray(p.driving_events) ? p.driving_events : [];
+    const driverText = drivers.length ? drivers.slice(0, 2).map(e => escapeHtml(e)).join('、') : '無顯著事件';
+    return `
+      <div class="pred-row" data-index="${idx}">
+        <div class="pred-row__meta">
+          <span class="pred-row__date">${escapeHtml(fmtPredictionDate(p.date))}</span>
+          <span class="pred-row__dir ${predictionDirectionClass(dir)}">${escapeHtml(predictionDirectionLabel(dir))}</span>
+          <span class="pred-row__conf">${width}%</span>
+        </div>
+        <div class="pred-row__bar" aria-hidden="true">
+          <div class="pred-row__bar-fill pred-row__bar-fill--${dir}" style="width:${width}%"></div>
+        </div>
+        <div class="pred-row__drivers">${driverText}</div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `<div class="pred-card">${rows}</div>`;
 }
 
 function pickRiskFromStress(stress) {

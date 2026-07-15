@@ -5,50 +5,194 @@
  * @media (max-width: 768px) 切到垂直堆疊。
  */
 
-/* ==== 錢潮預測 — heatmap ==== */
+/* ==== 共用小元件 ==== */
 
-.cp-heatmap {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-top: 16px;
+.cp-section-title,
+.cb-board__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 20px 0 10px;
+  color: var(--text);
 }
 
-.cp-cell {
+.text-muted {
+  color: var(--muted);
+}
+
+.chip-list {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 16px 12px;
-  border-radius: 6px;
-  color: var(--text, #fff);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--panel-l3, rgba(255, 255, 255, 0.08));
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* ==== 錢潮預測 — 狀態列 ==== */
+
+.cp-summary {
+  margin-top: 8px;
+}
+
+/* ==== 錢潮預測 — 5 日預測卡 ==== */
+
+.cp-predictions {
+  margin-top: 12px;
+}
+
+.cp-predictions__list {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.cp-prediction {
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 12px;
   cursor: pointer;
-  min-height: 80px;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.cp-cell:hover {
+.cp-prediction:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.cp-cell__day {
-  font-size: 14px;
+.cp-prediction__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.cp-prediction__day {
   font-weight: 600;
-  margin-bottom: 4px;
+  color: var(--text);
 }
 
-.cp-cell__dir {
-  font-size: 12px;
-  opacity: 0.92;
-  margin-bottom: 4px;
+.cp-prediction__dir {
+  font-weight: 600;
 }
 
-.cp-cell__conf {
-  font-size: 18px;
+.cp-prediction__conf {
+  margin-left: auto;
   font-weight: 700;
+  color: var(--text);
 }
+
+.cp-prediction__bar {
+  height: 8px;
+  background: var(--panel-l3, rgba(255, 255, 255, 0.06));
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.cp-prediction__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.cp-prediction__events {
+  font-size: 12px;
+}
+
+/* ==== 錢潮預測 — 板塊熱度圖 ==== */
+
+.cp-sector-heatmap {
+  margin-top: 12px;
+}
+
+.cp-heatmap-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+}
+
+.cp-heatmap__header,
+.cp-heatmap__row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+}
+
+.cp-heatmap__header {
+  background: var(--panel-l2, rgba(255, 255, 255, 0.06));
+  font-weight: 600;
+  font-size: 12px;
+  padding: 10px 0;
+}
+
+.cp-heatmap__label,
+.cp-heatmap__rowhead {
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cp-heatmap__cols,
+.cp-heatmap__cells {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.cp-heatmap__colhead,
+.cp-heatmap__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  text-align: center;
+  font-size: 12px;
+  border-left: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.cp-heatmap__cell {
+  cursor: default;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.cp-heatmap__cell.is-active {
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.cp-heatmap__cell.is-active:hover {
+  filter: brightness(1.15);
+  transform: scale(1.02);
+  z-index: 1;
+}
+
+.cp-heatmap__pct {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.cp-heatmap__row:not(:last-child) .cp-heatmap__cell,
+.cp-heatmap__row:not(:last-child) .cp-heatmap__rowhead {
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+/* ==== 錢潮預測 — detail panel ==== */
 
 .cp-detail {
   margin-top: 16px;
@@ -80,17 +224,102 @@
 }
 
 .cp-detail__sectors .chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   margin-top: 8px;
 }
 
-.cp-detail__sectors .chip {
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: var(--bg-elev, rgba(255, 255, 255, 0.08));
+/* ==== 錢潮看板 — summary counts ==== */
+
+.cb-summary {
+  margin-top: 8px;
+}
+
+.cb-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.cb-summary__card {
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+}
+
+.cb-summary__card--bullish {
+  border-top: 3px solid var(--trend-bullish);
+}
+
+.cb-summary__card--bearish {
+  border-top: 3px solid var(--trend-bearish);
+}
+
+.cb-summary__card--neutral {
+  border-top: 3px solid var(--muted);
+}
+
+.cb-summary__card--total {
+  border-top: 3px solid var(--accent);
+}
+
+.cb-summary__num {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.cb-summary__label {
   font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.cb-summary__weight {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ==== 錢潮看板 — pie chart ==== */
+
+.cb-chart {
+  margin-top: 12px;
+}
+
+.cb-chart__wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.cb-chart__svg {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.cb-chart__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cb-chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cb-chart__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
 /* ==== 錢潮看板 — sector board ==== */
@@ -203,24 +432,39 @@
 /* ==== Mobile responsive (≤768px) ==== */
 
 @media (max-width: 768px) {
-  .cp-heatmap {
+  .cp-predictions__list {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: 8px;
   }
 
-  .cp-cell {
-    min-height: 56px;
-    padding: 12px 10px;
-    flex-direction: row;
-    justify-content: space-between;
+  .cp-heatmap__header,
+  .cp-heatmap__row {
+    grid-template-columns: 80px 1fr;
   }
 
-  .cp-cell__conf {
-    font-size: 14px;
+  .cp-heatmap__label,
+  .cp-heatmap__rowhead {
+    padding: 0 8px;
+    font-size: 11px;
   }
 
-  .cp-cell__day {
-    font-size: 13px;
+  .cp-heatmap__colhead,
+  .cp-heatmap__cell {
+    min-height: 40px;
+    font-size: 11px;
+  }
+
+  .cp-heatmap__pct {
+    display: none;
+  }
+
+  .cb-summary__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cb-chart__wrap {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .cb-sector-row {
@@ -240,11 +484,19 @@
 }
 
 @media (max-width: 480px) {
-  .cp-cell {
-    padding: 10px 8px;
+  .cp-prediction {
+    padding: 10px;
   }
 
-  .cp-cell__dir {
+  .cp-prediction__meta {
+    font-size: 12px;
+  }
+
+  .cp-prediction__events .chip {
     font-size: 11px;
+  }
+
+  .cb-summary__grid {
+    grid-template-columns: 1fr;
   }
 }

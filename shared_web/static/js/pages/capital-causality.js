@@ -1,41 +1,136 @@
 // shared_web/static/js/pages/capital-causality.js
 //
 // Stage 6 PR#2：admin_web「錢潮因果」頁。
-// 從 GET /api/narrative/templates 讀 24 個因果模板，
-// 用 <details>/<summary> 展開每個 template 的因果鏈步驟。
+// 從 GET /api/narrative/templates 讀因果模板，依 trigger_theme 篩選，
+// 以 <details> 展開每個 template 的因果步驟。
 
-import { silentGetJSON, escapeHtml, renderEmptyState } from '../shared/app-utils.js';
+import { silentGetJSON, escapeHtml, renderEmptyState, renderErrorState } from '../shared/app-utils.js';
+import { templateName } from '../names.js';
+import { narrativeThemeLabel } from '../shared/constants.js';
+import { fmtSafePct } from '../shared/format-metric.js';
+
+let _allTemplates = [];
+let _activeTheme = 'all';
+const RETRY_ID = 'capital-causality';
 
 export async function loadCapitalCausality() {
-  const data = await silentGetJSON('/api/narrative/templates');
-  renderCapitalCausality(data);
+  const el = document.getElementById('capitalCausalityContent');
+  if (!el) return;
+  try {
+    const data = await silentGetJSON('/api/narrative/templates');
+    if (data === null) {
+      el.classList.remove('loading');
+      el.innerHTML = renderErrorState('錢潮因果', RETRY_ID);
+      const btn = el.querySelector('[data-retry="' + RETRY_ID + '"]');
+      if (btn) btn.addEventListener('click', loadCapitalCausality);
+      return;
+    }
+    renderCapitalCausality(data);
+  } catch (err) {
+    console.error('[capital-causality] load failed', err);
+    el.classList.remove('loading');
+    el.innerHTML = renderErrorState('錢潮因果', RETRY_ID);
+    const btn = el.querySelector('[data-retry="' + RETRY_ID + '"]');
+    if (btn) btn.addEventListener('click', loadCapitalCausality);
+  }
 }
 
 export function renderCapitalCausality(data) {
   const el = document.getElementById('capitalCausalityContent');
   if (!el) return;
-  const templates = data && Array.isArray(data.templates) ? data.templates : [];
-  if (templates.length === 0) {
+  _allTemplates = data && Array.isArray(data.templates) ? data.templates : [];
+  if (_allTemplates.length === 0) {
     el.classList.remove('loading');
     el.innerHTML = renderEmptyState('尚無因果模板');
     return;
   }
-  const items = templates.map(function (t) {
+
+  const themes = collectThemes(_allTemplates);
+  const filterHtml = buildThemeFilter(themes, _activeTheme);
+
+  el.classList.remove('loading');
+  el.innerHTML = filterHtml + '<div id="cc-list" class="cc-list"></div>';
+  renderTemplateList();
+
+  const select = el.querySelector('#cc-theme-filter');
+  if (select) {
+    select.addEventListener('change', function () {
+      _activeTheme = select.value;
+      renderTemplateList();
+    });
+  }
+}
+
+function collectThemes(templates) {
+  const set = new Set();
+  templates.forEach(function (t) {
+    if (t.trigger_theme) set.add(t.trigger_theme);
+  });
+  return Array.from(set).sort();
+}
+
+function buildThemeFilter(themes, active) {
+  const options = themes.map(function (theme) {
+    return '<option value="' + escapeHtml(theme) + '"' + (theme === active ? ' selected' : '') + '>'
+      + escapeHtml(narrativeThemeLabel(theme)) + '</option>';
+  }).join('');
+  return (
+    '<div class="cc-filter">'
+    + '<label for="cc-theme-filter">主題篩選</label>'
+    + '<select id="cc-theme-filter">'
+    +   '<option value="all"' + (active === 'all' ? ' selected' : '') + '>全部</option>'
+    +   options
+    + '</select>'
+    + '<span class="text-muted text-sm">共 ' + _allTemplates.length + ' 個模板</span>'
+    + '</div>'
+  );
+}
+
+function renderTemplateList() {
+  const list = document.getElementById('cc-list');
+  if (!list) return;
+
+  const filtered = _activeTheme === 'all'
+    ? _allTemplates
+    : _allTemplates.filter(function (t) { return t.trigger_theme === _activeTheme; });
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="cc-empty">此主題尚無模板</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(function (t) {
+    const hitRate = t.hit_rate != null ? t.hit_rate : t.historical_hit_rate;
     const steps = Array.isArray(t.steps) && t.steps.length > 0
-      ? t.steps.map(function (s, i) {
-          var label = typeof s === 'string' ? s : (s.label || s.text || JSON.stringify(s));
-          return '<li>' + escapeHtml(label) + '</li>';
+      ? t.steps.map(function (s) {
+          const label = typeof s === 'string'
+            ? s
+            : escapeHtml(s.description || s.label || s.text || JSON.stringify(s));
+          const affected = Array.isArray(s.affected) && s.affected.length
+            ? ' <span class="text-muted">→ ' + s.affected.map(function (a) { return escapeHtml(a); }).join('、') + '</span>'
+            : '';
+          return '<li>' + label + affected + '</li>';
         }).join('')
       : '<li>（未定義步驟）</li>';
-    var hitRate = typeof t.hit_rate === 'number'
-      ? (t.hit_rate * 100).toFixed(1) + '%'
-      : '—';
-    return '<details class="causality-item">'
-      + '<summary><code>' + escapeHtml(t.trigger_theme || t.id || t.name || '-') + '</code>'
-      + '<span class="hit-rate">命中率 ' + hitRate + '</span></summary>'
-      + '<ol>' + steps + '</ol>'
-      + '</details>';
+    return (
+      '<details class="cc-item">'
+      + '<summary class="cc-item__summary">'
+      +   '<span>' + escapeHtml(templateName(t.name || t.id || '-')) + '</span>'
+      +   '<span class="badge info">命中率 ' + fmtSafePct(hitRate, 1) + '</span>'
+      + '</summary>'
+      + '<div class="cc-item__body">'
+      +   '<div class="text-muted">' + escapeHtml(t.rationale || '尚無說明') + '</div>'
+      +   '<h4 style="margin:12px 0 4px;font-size:12px;color:var(--muted)">因果步驟</h4>'
+      +   '<ol class="cc-item__steps">' + steps + '</ol>'
+      +   '<div class="cc-item__meta">'
+      +     (t.trigger_theme ? '<span class="badge muted">' + escapeHtml(narrativeThemeLabel(t.trigger_theme)) + '</span>' : '')
+      +     (t.required_region ? '<span class="badge muted">地區：' + escapeHtml(t.required_region) + '</span>' : '')
+      +     (Array.isArray(t.source_references) && t.source_references.length
+            ? '<span class="badge muted">來源：' + escapeHtml(t.source_references.join('、')) + '</span>'
+            : '')
+      +   '</div>'
+      + '</div>'
+      + '</details>'
+    );
   }).join('');
-  el.classList.remove('loading');
-  el.innerHTML = '<div class="causality-list">' + items + '</div>';
 }

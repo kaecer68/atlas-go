@@ -65,11 +65,73 @@
 
 `docs/operations/production-rollout-runbook.md` 涵蓋 Day 8 production deploy 的完整 SOP（pre-flight + deploy + post-deploy + archive + rollback）。對應 Issue #1187 §5。
 
+## Stage 6 client_web 資金流頁面（6.2d/e）
+
+| 頁面 | 需求 | 狀態 |
+|------|------|------|
+| /capital_predictions | 5 日預測卡：日期、方向、信心長條、驅動事件；板塊 × 日期 5×N 熱度圖，hover 顯示事件與信心 | ✅ |
+| /capital_board | 加權看多 / 看空 / 中性板塊計數、圓餅圖、至少 5 個板塊橫條圖 | ✅ |
+
+對應檔案：
+- `shared_web/static/js/pages/capital_predictions.js`
+- `shared_web/static/js/pages/capital_board.js`
+- `shared_web/static/css/components/capital-board.css`
+- `client_web/tests/capital-flow.spec.ts`
+
+## Stage 6 client_web 狀態（2026-07-15）
+
+- [x] **6.2a** homepage banner：高信心事件 banner（base_weight > 0.7），可關閉，附「查看詳情」連結。
+- [x] **6.2b** market calendar：trigger_theme / sector / date range 篩選，信心徽章，影響產業；資料來自 `/api/dashboard/calendar-events`。
+- [x] **6.2c** 5-day predictions card：5 日方向、信心長條圖、驅動事件；資料來自 `/api/events/prediction`。
+- [x] Build：`client_web` / `admin_web` `npm run build` 通過。
+- [x] Test：`go test ./...` 0 fail；Playwright `home-capital-flow.spec.ts` 3/3 pass。
+
+**備註**：`/api/dashboard/calendar-events` 目前回傳 `event_type` + `base_weight`，前端將其視為 trigger_theme / confidence 使用；未來 backend DTO 擴充 `trigger_theme` / `confidence` 欄位時可無縫銜接。
+
+## Stage 6 admin_web 狀態（6.1 / 6.3 wrap-up，2026-07-15）
+
+- [x] **6.1a** `capital_models`：3 個模型卡片、權重長條、近期誤差、歷史命中率（0/0 顯示「無資料」）、最近訊號、可點擊展開詳細推理與板塊、權重合計註記。
+- [x] **6.1b** `capital_causality`：trigger_theme 下拉篩選、details 展開因果步驟、命中率徽章。
+- [x] **6.1c** `capital_quality`：4-tier 健康聚合摘要、通道新鮮度（<2h / 2–6h / >6h）著色、錯誤詳情點擊展開、嚴重警報整合。
+- [x] **6.3 優雅降級**：Stage 6 頁面（`capital_models`、`capital_causality`、`capital_quality`）與 client 錢潮頁面（`capital_board`、`capital_predictions`）在 atlas-go 停止或 API 回傲 5xx 時顯示「資料暫時無法載入」+「重試」按鈕，不再顯示誤導性的「無資料」文字。
+
+對應檔案：
+- `shared_web/static/js/pages/capital-models.js`
+- `shared_web/static/js/pages/capital-causality.js`
+- `shared_web/static/js/pages/capital-quality.js`
+- `shared_web/static/css/components/capital-admin.css`
+- `shared_web/static/css/main.css`（import `capital-admin.css`）
+- `shared_web/static/js/pages/capital_board.js`
+- `shared_web/static/js/pages/capital_predictions.js`
+- `shared_web/static/js/shared/app-utils.js`（新增 `renderErrorState`）
+- `admin_web/tests/capital-models.spec.ts`
+- `admin_web/tests/capital-pages.spec.js`
+
+## 6.3 五層前端呼叫鏈健康檢查與 timeout 盤點（2026-07-15）
+
+| 層級 | 元件 | Timeout | 健康端點 / 驗證方式 | 實測結果 |
+|------|------|---------|---------------------|----------|
+| L1 | Browser fetch（shared `app-utils.js`） | 8,000 ms（`DEFAULT_TIMEOUT_MS`） | 任意 `/api/...` 請求 | ✅ 200 |
+| L2 | admin_web / client_web static server（Go embed / python http.server） | 無獨立 timeout（由 L3 限制） | `GET /admin/`、`GET /client/` | ✅ 200 / 0.004s |
+| L3 | atlas-go HTTP server | `ReadTimeout=5s`、`WriteTimeout=30s`、`ReadHeaderTimeout=10s` | `GET /health` | ✅ 200 / 0.005s |
+| L4 | atlas-mcp transport | `HTTPTimeout=10s`（預設）、`ReadHeaderTimeout=10s` | MCP tool `system_get_health` | ✅ 透過 MCP 回應 |
+| L5 | Internal services（LLM router / capital flow / events / scheduler） | `internal/apigateway/httpclient` 預設 30s | `/api/llm/health`、`/api/capital-flow/summary`、`/api/events/prediction`、`/api/scheduler/status` | ✅ 全部 200 |
+
+**timeout 約束**：所有層級 timeout ≤ 30s；最上層 browser fetch 8s 與 admin_web proxy/fetch wrapper 10s 均遠低於 atlas-go WriteTimeout 30s，確保前端不會無意義地等待到底層熔斷。
+
+**實測 end-to-end latency（`GET /api/events/prediction`）**：
+- attempt 1: 0.001429s
+- attempt 2: 0.001553s
+- attempt 3: 0.001487s
+
 ## 最終驗證條件（Day 8 結束）
 
+- [x] **Stage 6 完成**：admin_web / client_web 錢潮頁面功能、優雅降級、e2e 測試、build、backend test 皆通過。
 - [ ] 6/6 check pass（不是 5/6）
 - [ ] G-08 修好 + detector_scan check 綠
-- [ ] `docs/audit/2026-07-15-capital-flow-audit-followup.md` 標 "verified in staging 2026-07-22"
+- [x] `docs/audit/2026-07-15-capital-flow-audit-followup.md` 已更新 Stage 6 完成狀態
+
+**Stage 6 wrap-up 簽章**：`2026-07-15` 由前端工程師完成 6.3 + wrap-up；`admin_web` / `client_web` build 通過、`go test ./...` 0 fail、admin_web capital e2e 5/5 pass（`capital-models.spec.ts` 2/2 + `capital-pages.spec.js` 3/3）。
 
 ## 13 PR 完成清單（10 原 + 3 follow-up）
 

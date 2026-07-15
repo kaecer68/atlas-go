@@ -562,6 +562,189 @@
   margin-top: var(--space-lg);
 }
 
+.home-section--banner {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.home-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: color-mix(in srgb, var(--editorial-bearish) 10%, var(--editorial-surface));
+  border: 1px solid color-mix(in srgb, var(--editorial-bearish) 25%, var(--editorial-border));
+  border-radius: var(--editorial-radius-md);
+  color: var(--editorial-ink);
+}
+
+.home-banner__icon {
+  font-size: var(--text-xl);
+  flex: none;
+}
+
+.home-banner__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-banner__label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--space-xs);
+  color: var(--editorial-bearish);
+}
+
+.home-banner__item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+  margin-right: var(--space-lg);
+  font-size: var(--text-sm);
+}
+
+.home-banner__conf {
+  font-family: var(--font-mono);
+  color: var(--editorial-muted);
+}
+
+.home-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex: none;
+}
+
+.home-banner__link {
+  font-size: var(--text-sm);
+  color: var(--editorial-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.home-banner__link:hover {
+  text-decoration: underline;
+}
+
+.home-banner__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--editorial-border);
+  border-radius: 50%;
+  color: var(--editorial-muted);
+  cursor: pointer;
+  flex: none;
+}
+
+.home-banner__dismiss:hover {
+  background: var(--editorial-panel);
+  color: var(--editorial-ink);
+}
+
+/* 5-day prediction card */
+.pred-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.pred-row {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--editorial-surface);
+  border: 1px solid var(--editorial-border);
+  border-radius: var(--editorial-radius-md);
+}
+
+.pred-row__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.pred-row__date {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--editorial-muted);
+  min-width: 3.5rem;
+}
+
+.pred-row__dir {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
+}
+
+.pred-row__conf {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--editorial-ink);
+}
+
+.pred-row__bar {
+  height: 8px;
+  background: var(--editorial-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: var(--space-xs);
+}
+
+.pred-row__bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.pred-row__bar-fill--inflow { background: var(--editorial-bullish); }
+.pred-row__bar-fill--outflow { background: var(--editorial-bearish); }
+.pred-row__bar-fill--neutral { background: var(--editorial-muted); }
+
+.pred-row__drivers {
+  font-size: var(--text-xs);
+  color: var(--editorial-muted);
+}
+
+/* Calendar confidence badge */
+.cal-card__confidence {
+  margin-bottom: var(--space-sm);
+}
+
+.cal-conf-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--editorial-ink);
+  background: color-mix(in srgb, var(--editorial-accent) 12%, transparent);
+  border-radius: var(--editorial-radius-sm);
+}
+
+.cal-filter-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--editorial-muted);
+}
+
+.cal-filter-date input {
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+  background: var(--editorial-surface);
+  border: 1px solid var(--editorial-border);
+  border-radius: var(--editorial-radius-sm);
+  color: var(--editorial-ink);
+}
+
 /* event card list */
 .event-list {
   display: flex;
