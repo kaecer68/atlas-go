@@ -13,6 +13,7 @@ set -euo pipefail
 
 STAGING_URL="${STAGING_URL:-http://localhost:18080}"
 LOG_DIR="${LOG_DIR:-$HOME/logs/atlas-soak}"
+STAGING_ENV_FILE="${STAGING_ENV_FILE:-$HOME/.config/atlas-go/.env}"
 DATE=$(date -u +%Y-%m-%d)
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -99,6 +100,28 @@ else
     else
         record "scheduler" "fail" "count=$count macro_ingest=$has_macro_ingest auto_capital=$has_auto_capital"
     fi
+fi
+
+API_KEY=""
+if [[ -f "$STAGING_ENV_FILE" ]]; then
+    API_KEY=$(grep "ATLAS_API_KEY" "$STAGING_ENV_FILE" | cut -d= -f2 | tr -d '"' | tr -d "'")
+fi
+if [[ -z "$API_KEY" ]]; then
+    record "detector_scan" "warn" "ATLAS_API_KEY not found in $STAGING_ENV_FILE (cannot test auth endpoint)"
+else
+    http_code=$(curl -s -o /tmp/detector_scan_body -w "%{http_code}" --max-time 5 -H "Authorization: Bearer $API_KEY" "$STAGING_URL/api/detector/scan/status?limit=1" 2>/dev/null || echo "000")
+    body=$(cat /tmp/detector_scan_body 2>/dev/null)
+    if [[ "$http_code" == "200" ]] && echo "$body" | jq -e '.scans' > /dev/null 2>&1; then
+        scan_count=$(echo "$body" | jq '.scans | length' 2>/dev/null || echo "0")
+        record "detector_scan" "pass" "200 + valid JSON, scans=$scan_count (G-08 detector route verified)"
+    elif [[ "$http_code" == "401" ]]; then
+        record "detector_scan" "fail" "401 unauthorized (auth header rejected — check API key)"
+    elif [[ "$http_code" == "404" ]]; then
+        record "detector_scan" "fail" "404 not found (route not registered on the mux that serves auth requests — known G-08 follow-up)"
+    else
+        record "detector_scan" "fail" "http=$http_code body=${body:0:100}"
+    fi
+    rm -f /tmp/detector_scan_body
 fi
 
 (IFS=,; printf '%s' "{\"date\":\"$DATE\",\"ts\":\"$TS\",\"overall\":\"$overall\",\"checks\":[${results[*]}]}" > "$REPORT")
