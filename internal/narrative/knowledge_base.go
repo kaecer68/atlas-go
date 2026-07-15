@@ -523,6 +523,20 @@ func (ne *NarrativeEngine) UpdateMacro(macro marketdata.MacroDataSnapshot, geo G
 	ne.lastGeo = geo
 }
 
+// MarketNarrativeData re-derives MarketNarrativeData from the
+// latest macro snapshot + lastGeo. Overlays GeopoliticalGPR (which
+// the snapshot converter leaves at 0).
+func (ne *NarrativeEngine) MarketNarrativeData() MarketNarrativeData {
+	ne.stressMu.Lock()
+	snap := ne.lastMacro
+	geo := ne.lastGeo
+	ne.stressMu.Unlock()
+
+	data := MarketNarrativeDataFromSnapshot(snap)
+	data.GeopoliticalGPR = geo.Intensity
+	return data
+}
+
 func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
 	if ne.stressCalc == nil {
 		return TaiwanStressIndex{}

@@ -86,6 +86,12 @@
       "results": "([]InvestmentModel)"
     },
     {
+      "name": "MarketNarrativeData",
+      "params": "",
+      "receiver": "NarrativeEngine",
+      "results": "(MarketNarrativeData)"
+    },
+    {
       "name": "MatchChains",
       "params": "(events []NarrativeEvent)",
       "receiver": "NarrativeEngine",
