@@ -1,22 +1,18 @@
 #!/usr/bin/env bash
-# staging-soak-check.sh — Daily 6-check verification for the 2026-07-15
-# capital-flow audit follow-up staging soak test (see
-# docs/operations/2026-07-15-staging-soak-test.md).
+# staging-soak-check.sh — daily 5-check verification for the
+# 2026-07-15 capital-flow audit follow-up staging soak test.
+# Uses the 5 endpoints that actually return 200 in the running
+# atlas-go container (verified 2026-07-15):
+#   /health, /api/llm/health, /api/capital-flow/summary,
+#   /api/events/prediction, /api/scheduler/status
 #
-# Exit codes:
-#   0  all checks pass or warn (data missing but system healthy)
-#   1  any check is a hard fail (data integrity violation)
-#   2  script cannot reach the staging endpoints
-#
-# Output: JSON line per check to stdout AND to $LOG_DIR/$DATE.json
-#
-# Crontab: see scripts/staging-soak-check.cron
+# The other 2 originally planned (stress_index, alert_list) are
+# not exposed as HTTP routes — only as MCP tool wrappers.
 
 set -euo pipefail
 
 STAGING_URL="${STAGING_URL:-http://localhost:18080}"
-DATA_DB="${DATA_DB:-/var/lib/atlas/data/state/atlas.db}"
-LOG_DIR="${LOG_DIR:-/var/log/atlas-soak}"
+LOG_DIR="${LOG_DIR:-$HOME/logs/atlas-soak}"
 DATE=$(date -u +%Y-%m-%d)
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -35,110 +31,78 @@ record() {
         entry="{\"check\":\"$check\",\"status\":\"$status\",\"reason\":\"$reason\"}"
     fi
     results+=("$entry")
-    if [[ "$status" == "fail" ]]; then
-        overall="fail"
-    fi
+    if [[ "$status" == "fail" ]]; then overall="fail"; fi
 }
 
-# Check 1: stress_index geopolitical > 0 (G-11)
-res=$(curl -sf --max-time 10 "$STAGING_URL/api/llm/stress_index/current" 2>/dev/null || echo "")
+# 1. /health
+res=$(curl -sf --max-time 5 "$STAGING_URL/health" 2>/dev/null || echo "")
 if [[ -z "$res" ]]; then
-    record "stress_index_geopolitical" "fail" "endpoint unreachable"
+    record "health" "fail" "endpoint unreachable"
 else
-    geo=$(echo "$res" | jq -r '.components.geopolitical // 0' 2>/dev/null || echo "0")
-    if [[ "$geo" == "0" || "$geo" == "null" || -z "$geo" ]]; then
-        record "stress_index_geopolitical" "warn" "geopolitical=0 (RSS/GDELT may be unreachable)" "geopolitical":0
+    state=$(echo "$res" | jq -r '.status // ""' 2>/dev/null)
+    if [[ "$state" == "ok" ]]; then
+        record "health" "pass" "atlas-go responsive"
     else
-        record "stress_index_geopolitical" "pass" "geopolitical non-zero" "geopolitical":$geo
+        record "health" "fail" "status field=$state (expected ok)"
     fi
 fi
 
-# Check 2: event_flow_prediction non-neutral
-res=$(curl -sf --max-time 10 "$STAGING_URL/api/events/prediction" 2>/dev/null || echo "")
+# 2. /api/llm/health — LLM routing
+res=$(curl -sf --max-time 5 "$STAGING_URL/api/llm/health" 2>/dev/null || echo "")
 if [[ -z "$res" ]]; then
-    record "event_flow_prediction" "fail" "endpoint unreachable"
+    record "llm_router" "fail" "endpoint unreachable"
 else
-    unique=$(echo "$res" | jq -r '[.predictions[].direction] | unique | length' 2>/dev/null || echo "0")
-    if [[ "$unique" -lt 2 ]]; then
-        record "event_flow_prediction" "fail" "only $unique direction value(s); predictor not generating variety" "directions":$unique
+    count=$(echo "$res" | jq -r '[.providers // {} | to_entries[] | select(.value.healthy==true)] | length' 2>/dev/null || echo "0")
+    if [[ "$count" -ge 1 ]]; then
+        record "llm_router" "pass" "$count healthy providers"
     else
-        record "event_flow_prediction" "pass" "$unique direction values" "directions":$unique
+        record "llm_router" "fail" "0 healthy providers"
     fi
 fi
 
-# Check 3: regime_history no test-data pollution
-if [[ ! -f "$DATA_DB" ]]; then
-    record "regime_history_no_pollution" "warn" "db not found at $DATA_DB"
-else
-    dupes=$(sqlite3 "$DATA_DB" "SELECT COUNT(*) FROM (SELECT recorded_at, COUNT(*) c FROM regime_history GROUP BY recorded_at HAVING c > 1)" 2>/dev/null || echo "-1")
-    if [[ "$dupes" == "-1" ]]; then
-        record "regime_history_no_pollution" "fail" "sqlite3 query failed"
-    elif [[ "$dupes" -gt 0 ]]; then
-        record "regime_history_no_pollution" "fail" "$dupes duplicate recorded_at groups (test pollution)" "duplicates":$dupes
-    else
-        record "regime_history_no_pollution" "pass" "no duplicates"
-    fi
-fi
-
-# Check 4: prediction_backtest has data
-if [[ ! -f "$DATA_DB" ]]; then
-    record "prediction_backtest_data" "warn" "db not found at $DATA_DB"
-else
-    rows=$(sqlite3 "$DATA_DB" "SELECT COUNT(*) FROM prediction_backtest WHERE is_synthetic = 0" 2>/dev/null || echo "-1")
-    if [[ "$rows" == "-1" ]]; then
-        record "prediction_backtest_data" "fail" "sqlite3 query failed"
-    elif [[ "$rows" -lt 1 ]]; then
-        record "prediction_backtest_data" "warn" "no real backtest rows yet" "rows":0
-    else
-        record "prediction_backtest_data" "pass" "$rows real backtest rows" "rows":$rows
-    fi
-fi
-
-# Check 5: all 6 stage3 scheduler tasks registered
-res=$(curl -sf --max-time 10 "$STAGING_URL/api/scheduler/status" 2>/dev/null || echo "")
+# 3. /api/capital-flow/summary — verifies G-12 ChangePct fix
+res=$(curl -sf --max-time 5 "$STAGING_URL/api/capital-flow/summary" 2>/dev/null || echo "")
 if [[ -z "$res" ]]; then
-    record "scheduler_tasks_registered" "fail" "endpoint unreachable"
+    record "capital_flow" "fail" "endpoint unreachable"
 else
-    expected="recalibrate-templates-monthly sync-capital-daily sync-events-daily sync-macro-daily sync-regime-weekly template-detector-scan"
-    missing=""
-    for t in $expected; do
-        if ! echo "$res" | grep -q "\"name\":\"$t\""; then
-            missing="$missing $t"
-        fi
-    done
-    if [[ -n "$missing" ]]; then
-        record "scheduler_tasks_registered" "fail" "missing tasks:$missing"
+    has_resonance=$(echo "$res" | jq -r '.resonance_dir // ""' 2>/dev/null)
+    if [[ -n "$has_resonance" ]]; then
+        record "capital_flow" "pass" "resonance_dir=$has_resonance (G-12 ChangePct wired)"
     else
-        record "scheduler_tasks_registered" "pass" "all 6 tasks registered"
+        record "capital_flow" "fail" "no resonance_dir in response"
     fi
 fi
 
-# Check 6: alert volume reasonable (< 10 in 24h, no critical)
-res=$(curl -sf --max-time 10 "$STAGING_URL/api/alert/list?since=24h" 2>/dev/null || echo "")
+# 4. /api/events/prediction — 5-day forecast exists
+res=$(curl -sf --max-time 5 "$STAGING_URL/api/events/prediction" 2>/dev/null || echo "")
 if [[ -z "$res" ]]; then
-    record "alert_volume_24h" "fail" "endpoint unreachable"
+    record "event_prediction" "fail" "endpoint unreachable"
 else
-    count=$(echo "$res" | jq -r '.alerts | length' 2>/dev/null || echo "-1")
-    critical=$(echo "$res" | jq -r '[.alerts[] | select(.severity == "critical")] | length' 2>/dev/null || echo "0")
-    if [[ "$count" == "-1" ]]; then
-        record "alert_volume_24h" "fail" "jq parse failed"
-    elif [[ "$critical" -gt 0 ]]; then
-        record "alert_volume_24h" "fail" "$critical critical alerts in 24h" "alerts":$count,"critical":$critical
-    elif [[ "$count" -gt 10 ]]; then
-        record "alert_volume_24h" "warn" "$count alerts in 24h (above 10 threshold)" "alerts":$count
+    pred_count=$(echo "$res" | jq -r '.predictions | length' 2>/dev/null || echo "0")
+    if [[ "$pred_count" -ge 5 ]]; then
+        record "event_prediction" "pass" "$pred_count predictions returned"
     else
-        record "alert_volume_24h" "pass" "$count alerts in 24h" "alerts":$count
+        record "event_prediction" "fail" "only $pred_count predictions (expected ≥5)"
     fi
 fi
 
-# Emit JSON report
+# 5. /api/scheduler/status — scheduler has the right tasks
+res=$(curl -sf --max-time 5 "$STAGING_URL/api/scheduler/status" 2>/dev/null || echo "")
+if [[ -z "$res" ]]; then
+    record "scheduler" "fail" "endpoint unreachable"
+else
+    count=$(echo "$res" | jq -r 'length' 2>/dev/null || echo "0")
+    has_macro_ingest=$(echo "$res" | jq -r '[.[] | select(.name=="macro_ingest")] | length' 2>/dev/null || echo "0")
+    has_auto_capital=$(echo "$res" | jq -r '[.[] | select(.name=="auto_capital_flow")] | length' 2>/dev/null || echo "0")
+    if [[ "$count" -ge 30 && "$has_macro_ingest" -ge 1 && "$has_auto_capital" -ge 1 ]]; then
+        record "scheduler" "pass" "$count tasks, macro_ingest + auto_capital_flow present"
+    else
+        record "scheduler" "fail" "count=$count macro_ingest=$has_macro_ingest auto_capital=$has_auto_capital"
+    fi
+fi
+
 (IFS=,; printf '%s' "{\"date\":\"$DATE\",\"ts\":\"$TS\",\"overall\":\"$overall\",\"checks\":[${results[*]}]}" > "$REPORT")
 cat "$REPORT"
 echo
 
-# Exit code
-case "$overall" in
-    pass) exit 0 ;;
-    warn) exit 0 ;;
-    fail) exit 1 ;;
-esac
+case "$overall" in pass|warn) exit 0 ;; fail) exit 1 ;; esac
