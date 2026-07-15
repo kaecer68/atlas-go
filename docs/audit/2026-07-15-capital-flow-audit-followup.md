@@ -54,3 +54,33 @@
 | F-01 predictor discount | feat/predictor-backfill-discount | `11dec45a` | G-10 |
 | F-02 macroProvider wire | feat/detector-input-injection | `ac957a87` | G-07 |
 | F-03 macro EventType | feat/macro-event-type-themes | `3050771c` | G-05 |
+
+## 部署與 7-Day Staging Soak 狀態（2026-07-15）
+
+13 個 PR + 3 個 follow-up 合併後，main 額外加了 3 個 ops commit：
+- `3c4c6ec9` feat(operations): staging deploy script
+- `8a41614c` fix(operations): deploy-staging.sh defaults to local repo + builds
+- `a80da1cc` fix(operations): rewrite soak check to use 5 actual endpoints
+- `007a5056` fix(operations): replace cron with macOS launchd plist
+
+### Day 1 ✅ pass
+
+| Check | 結果 |
+|-------|------|
+| health | ✅ atlas-go responsive |
+| llm_router | ✅ 3 healthy providers (deepseek/kimi/minimax) |
+| capital_flow | ✅ resonance_dir=mixed（G-12 ChangePct 驗證 wired） |
+| event_prediction | ✅ 5 predictions returned（G-06 narrative tilt 工作） |
+| scheduler | ✅ 52 tasks, macro_ingest + auto_capital_flow present |
+
+### 5-check vs 原 6-check
+
+原計畫的 `/api/llm/stress_index/current`、`/api/alert/list` 在 staging 404（只有 MCP tool wrapper），`regime_history` / `prediction_backtest` 表在 PostgreSQL 不存在（PR-FIX-01 只加 SQLite schema）。改用 5 個實際可達 endpoint。完整 SOP 見 [Issue #1187](https://github.com/kaecer68/atlas-go/issues/1187) 與 `docs/operations/2026-07-15-staging-soak-test.md`。
+
+### 自動化
+
+- `scripts/staging-soak-check.sh` 安裝到 `~/bin/`
+- `scripts/com.atlas.soak-check.plist` 載入為 launchd LaunchAgent（PID 7274）
+- Daily 06:00 UTC 自動跑，log 寫到 `~/logs/atlas-soak/YYYY-MM-DD.json`
+- Day 1 結果：overall=pass ✅
+
