@@ -1,6 +1,7 @@
-import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
-test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 import { test, expect } from '@playwright/test';
+import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
+
+test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 
 test('narrative event card renders explanation and sentiment_explanation', async ({ page }) => {
   await page.route('**/api/system/status', route => route.fulfill({ json: { status: "ok" } }));

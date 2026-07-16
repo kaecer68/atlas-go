@@ -2,3 +2,16 @@
 .refresh-pill.sse-connected .dot { background: var(--color-success); box-shadow: 0 0 4px var(--color-success); animation: pulseDot 2s ease-in-out infinite; }
 .refresh-pill.sse-connecting .dot { background: var(--color-warning); box-shadow: 0 0 4px var(--color-warning); animation: pulseDot 1s ease-in-out infinite; }
 .refresh-pill.sse-error .dot { background: var(--color-danger); box-shadow: 0 0 4px var(--color-danger); animation: none; }
+
+.sse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.sse-dot--success { background: var(--color-success); }
+.sse-dot--warning { background: var(--color-warning); }
+.sse-dot--danger { background: var(--color-danger); }
+.sse-dot--idle { background: var(--text-tertiary); opacity: 0.5; }

@@ -3,7 +3,7 @@ import { fmtSafeNumber } from '../shared/format-metric.js';
 
 export function renderFundamentals(state, fundResult) {
   if (state === 'loading') {
-    return `<div>${renderSkeleton(4)}</div>`;
+    return `<div class="sq-card"><h3 class="sq-card__title">基本面</h3>${renderSkeleton(4)}</div>`;
   }
   if (state === 'error' || fundResult.status === 'error') {
     return `<div class="sq-error-box">基本面資料暫時無法取得</div>`;
@@ -13,7 +13,7 @@ export function renderFundamentals(state, fundResult) {
   }
 
   const data = fundResult.data;
-  
+
   let peDisplay = '—';
   if (data.PE === 0) {
     peDisplay = '<span class="sq-price-down" title="公司目前為虧損狀態">虧損</span>';
@@ -22,29 +22,25 @@ export function renderFundamentals(state, fundResult) {
   }
 
   const pbDisplay = fmtSafeNumber(data.PB, { decimals: 2 });
-  const psDisplay = data.PS ? fmtSafeNumber(data.PS, { decimals: 2 }) : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
+  const psDisplay = data.PS ? fmtSafeNumber(data.PS, { decimals: 2 }) : '—';
   const divDisplay = data.DividendYield ? fmtSafeNumber(data.DividendYield, { decimals: 2, suffix: '%' }) : '—';
-  const sectorDisplay = data.Sector
-    ? escapeHtml(data.Sector)
-    : '<span style="color:var(--text-tertiary)">資料待補齊</span>';
+  const sectorDisplay = data.Sector ? escapeHtml(data.Sector) : '—';
 
   return `
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title">基本面</h3>
-      </div>
+    <div class="sq-card">
+      <h3 class="sq-card__title">基本面</h3>
       <table class="sq-table">
         <tbody>
           <tr>
-            <th>PE (本益比)</th>
+            <th>PE（本益比）</th>
             <td>${peDisplay}</td>
           </tr>
           <tr>
-            <th>PB (股價淨值比)</th>
+            <th>PB（股價淨值比）</th>
             <td>${pbDisplay}</td>
           </tr>
           <tr>
-            <th>PS (市銷率)</th>
+            <th>PS（市銷率）</th>
             <td>${psDisplay}</td>
           </tr>
           <tr>
@@ -57,9 +53,7 @@ export function renderFundamentals(state, fundResult) {
           </tr>
         </tbody>
       </table>
-      <div style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--spacing-2)">
-        資料日期: T-1 (cron 更新) | 同產業 PE 中位數: 待資料補齊
-      </div>
+      <div class="sq-card__source">資料日期：T-1</div>
     </div>
   `;
 }

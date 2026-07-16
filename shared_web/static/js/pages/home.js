@@ -4,18 +4,19 @@
  * portfolio snapshot, and trust elements.
  */
 
-import { getJSON, silentGetJSON, escapeHtml, renderMissingState } from '../shared/app-utils.js';
+import { getJSON, silentGetJSON, getJSONWithTimeout, escapeHtml, renderMissingState } from '../shared/app-utils.js';
 import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 import { renderRiskBadge } from '../components/risk-badge.js';
 import { renderTooltip } from '../components/tooltip.js';
-import { renderEventCalendar, gatherCalFilterOptions } from '../components/event-calendar.js';
+import { renderEventCalendar, gatherCalFilterOptions, EVENT_TYPE_LABELS } from '../components/event-calendar.js';
 import {
   riskLevelLabel,
   fmtSafeSigned, fmtSafeNumber, fmtSafeSignedPct, fmtSafePct, fmtSafeDrawdown, fmtSafeCurrency, fmtSafeLargeNumber,
 } from '../shared/format-metric.js';
 import { getDemoPortfolio } from '../services/demo-data.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
+import { displayZH as sectorLabel } from '../shared/sector-display.js';
 import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
@@ -78,11 +79,11 @@ export async function renderHomePage(container) {
 
     <section class="home-section home-section--banner" id="home-banner" style="display:none" aria-live="polite">
       <div class="home-banner" id="home-banner-content">
-        <span class="home-banner__icon" aria-hidden="true">🚨</span>
+        <span class="home-banner__icon" aria-hidden="true"></span>
         <div class="home-banner__body" id="home-banner-body"></div>
         <div class="home-banner__actions">
           <a class="home-banner__link" href="#home-event-calendar" id="home-banner-detail">查看詳情</a>
-          <button class="home-banner__dismiss" id="home-banner-dismiss" type="button" aria-label="關閉 banner">✕</button>
+          <button class="home-banner__dismiss" id="home-banner-dismiss" type="button" aria-label="關閉 banner">&times;</button>
         </div>
       </div>
     </section>
@@ -117,7 +118,7 @@ export async function renderHomePage(container) {
       </div>
       <button class="disclosure-toggle" id="market-pulse-toggle" type="button" aria-expanded="false" aria-controls="home-market-grid" aria-label="展開 6 張進階指標">
         <span class="disclosure-toggle__label">展開進階指標</span>
-        <span class="disclosure-toggle__icon" aria-hidden="true">▼</span>
+        <span class="disclosure-toggle__icon disclosure-toggle__icon--down" aria-hidden="true"></span>
       </button>
       <span class="sr-only" id="market-pulse-status" aria-live="polite" aria-atomic="true"></span>
     </section>
@@ -127,9 +128,13 @@ export async function renderHomePage(container) {
         <h2>未來 5 日錢潮預測</h2>
         <span class="home-section__subtitle">事件驅動的資金流向預測</span>
       </div>
-      <div id="home-predictions-content">
+      <div id="home-predictions-content" class="home-predictions__content">
         <div class="home-loading-card">載入中…</div>
       </div>
+      <button class="disclosure-toggle" id="predictions-toggle" type="button" aria-expanded="false" aria-controls="home-predictions-content" aria-label="展開未來 5 日錢潮預測">
+        <span class="disclosure-toggle__label">展開錢潮預測</span>
+        <span class="disclosure-toggle__icon disclosure-toggle__icon--down" aria-hidden="true"></span>
+      </button>
     </section>
 
     <section class="home-section" id="home-event-calendar">
@@ -145,8 +150,8 @@ export async function renderHomePage(container) {
         <select class="cal-filter-select" id="cal-filter-trigger-theme" data-filter-type="trigger_theme" aria-label="依事件類型篩選">
           <option value="">所有事件類型</option>
         </select>
-        <select class="cal-filter-select" id="cal-filter-sector" data-filter-type="sector" aria-label="依 sector 篩選">
-          <option value="">所有 sector</option>
+        <select class="cal-filter-select" id="cal-filter-sector" data-filter-type="sector" aria-label="依產業篩選">
+          <option value="">所有產業</option>
         </select>
         <label class="cal-filter-date">
           <span>開始</span>
@@ -225,6 +230,8 @@ export async function renderHomePage(container) {
     }
   }
 
+  bindPredictionsDisclosure();
+
   await loadHomeData();
   homeLoaded = true;
   initOnboarding();
@@ -252,13 +259,13 @@ async function loadHomeData() {
 
     try {
       const [health, macro, stress, pipeline, bundle, calData, predictionData] = await Promise.all([
-        silentGetJSON('/api/dashboard/system-health'),
-        silentGetJSON('/api/macro/snapshot/latest'),
-        silentGetJSON('/api/taiwan/stress-index'),
-        silentGetJSON('/api/dashboard/recommendation-pipeline'),
-        silentGetJSON('/api/narrative/bundle'),
-        silentGetJSON('/api/dashboard/calendar-events'),
-        silentGetJSON('/api/events/prediction'),
+        getJSONWithTimeout('/api/dashboard/system-health', 5000),
+        getJSONWithTimeout('/api/macro/snapshot/latest', 5000),
+        getJSONWithTimeout('/api/taiwan/stress-index', 5000),
+        getJSONWithTimeout('/api/dashboard/recommendation-pipeline', 5000),
+        getJSONWithTimeout('/api/narrative/bundle', 5000),
+        getJSONWithTimeout('/api/dashboard/calendar-events', 5000),
+        getJSONWithTimeout('/api/events/prediction', 5000),
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
@@ -312,11 +319,11 @@ function populateCalFilterSelects(events) {
   const eventTypes = collectEventTypes(events);
   if (themeSel) {
     themeSel.innerHTML = '<option value="">所有事件類型</option>' +
-      eventTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+      eventTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(EVENT_TYPE_LABELS[t] || t)}</option>`).join('');
   }
   if (sectorSel && opts.sectors.length) {
-    sectorSel.innerHTML = '<option value="">所有 sector</option>' +
-      opts.sectors.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    sectorSel.innerHTML = '<option value="">所有產業</option>' +
+      opts.sectors.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(sectorLabel(s))}</option>`).join('');
   }
 }
 
@@ -328,7 +335,9 @@ function eventConfidence(e) {
 }
 
 function eventName(e) {
-  return e && (e.name || e.theme || '事件');
+  if (!e) return '事件';
+  if (e.theme) return getThemeLabel(e.theme);
+  return e.name || '事件';
 }
 
 function bannerDigest(events) {
@@ -379,7 +388,7 @@ function renderHomeBanner(events) {
     const conf = eventConfidence(e);
     const confLabel = typeof conf === 'number' ? Math.round(conf * 100) + '%' : '—';
     const inds = Array.isArray(e.affected_industries) && e.affected_industries.length > 0
-      ? e.affected_industries.slice(0, 3).map(s => `<span class="cal-tag">${escapeHtml(s)}</span>`).join(' ')
+      ? e.affected_industries.slice(0, 3).map(s => `<span class="cal-tag">${escapeHtml(sectorLabel(s))}</span>`).join(' ')
       : '';
     return `<div class="home-banner__item"><strong>${name}</strong><span class="home-banner__conf">信心 ${confLabel}</span>${inds ? ' · ' + inds : ''}</div>`;
   }).join('');
@@ -532,7 +541,7 @@ function renderTodaySummary(macro, stress, pipeline, events) {
 
   if (indicatorsEl) {
     const dirTone = rec === '偏多' ? 'bullish' : rec === '偏空' ? 'bearish' : 'neutral';
-    const dirLabel = rec === '偏多' ? '↑偏多' : rec === '偏空' ? '↓偏空' : '→觀望';
+    const dirLabel = rec === '偏多' ? '偏多' : rec === '偏空' ? '偏空' : '觀望';
     const stressScoreVal = pointValue(stress, 'score');
     const stressVal = fmtSafeNumber(stressScoreVal, { decimals: 0 });
     const stressLabel = stressVal;
@@ -692,12 +701,12 @@ function bindMarketPulseDisclosure(advancedCardsHTML) {
     const statusEl = document.getElementById('market-pulse-status');
     if (state === 'expanded') {
       if (labelEl) labelEl.textContent = '收合進階指標';
-      if (iconEl) iconEl.textContent = '▲';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--down'); iconEl.classList.add('disclosure-toggle__icon--up'); }
       btn.setAttribute('aria-label', '收合 7 張進階指標');
       if (statusEl) statusEl.textContent = '已展開 7 張進階指標';
     } else {
       if (labelEl) labelEl.textContent = '展開進階指標';
-      if (iconEl) iconEl.textContent = '▼';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--up'); iconEl.classList.add('disclosure-toggle__icon--down'); }
       btn.setAttribute('aria-label', '展開 7 張進階指標');
       if (statusEl) statusEl.textContent = '';
     }
@@ -718,6 +727,42 @@ function bindMarketPulseDisclosure(advancedCardsHTML) {
     } else {
       grid.querySelectorAll('.disclosure-tier-advanced').forEach(el => el.remove());
     }
+  });
+}
+
+let _predictionsDisclosureBound = false;
+
+function bindPredictionsDisclosure() {
+  if (_predictionsDisclosureBound) return;
+  const btn = document.getElementById('predictions-toggle');
+  const content = document.getElementById('home-predictions-content');
+  if (!btn || !content) return;
+  _predictionsDisclosureBound = true;
+
+  content.setAttribute('data-disclosure-state', 'collapsed');
+
+  const updateButton = (state) => {
+    btn.setAttribute('aria-expanded', state === 'expanded' ? 'true' : 'false');
+    const labelEl = btn.querySelector('.disclosure-toggle__label');
+    const iconEl = btn.querySelector('.disclosure-toggle__icon');
+    if (state === 'expanded') {
+      if (labelEl) labelEl.textContent = '收合錢潮預測';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--down'); iconEl.classList.add('disclosure-toggle__icon--up'); }
+      btn.setAttribute('aria-label', '收合未來 5 日錢潮預測');
+    } else {
+      if (labelEl) labelEl.textContent = '展開錢潮預測';
+      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--up'); iconEl.classList.add('disclosure-toggle__icon--down'); }
+      btn.setAttribute('aria-label', '展開未來 5 日錢潮預測');
+    }
+  };
+
+  updateButton('collapsed');
+
+  btn.addEventListener('click', () => {
+    const current = content.getAttribute('data-disclosure-state') || 'collapsed';
+    const next = current === 'expanded' ? 'collapsed' : 'expanded';
+    content.setAttribute('data-disclosure-state', next);
+    updateButton(next);
   });
 }
 
@@ -773,7 +818,7 @@ if (!el) return;
     return `<div class="signal-chip signal-chip--${sent} signal-chip--sev-${sev}"${onclick} title="信心:${conf}|嚴重度:${sev}${marketId?' |點擊查看⇣':''}">
       <div class="signal-chip__row">
         <span class="signal-chip__label">${label}</span>
-        <span class="signal-chip__meta">${sent === 'bullish' ? '↑利多' : '↓利空'} · ${conf}</span>
+        <span class="signal-chip__meta">${sent === 'bullish' ? '利多' : '利空'} · ${conf}</span>
       </div>
       <span class="signal-chip__explain">${explain}</span>
       ${link ? `<span class="signal-chip__link">${link}</span>` : ''}
@@ -852,7 +897,7 @@ function renderRecommendation(pipeline, stress) {
 async function loadPortfolioSnapshot() {
   const container = document.getElementById('home-portfolio-content');
   try {
-    const data = await silentGetJSON('/api/dashboard/portfolio-state');
+    const data = await getJSONWithTimeout('/api/dashboard/portfolio-state', 5000);
     if (!data || !Array.isArray(data.positions) || data.positions.length === 0) {
       renderDemoPortfolio(container);
       return;
@@ -890,13 +935,12 @@ function renderRealPortfolio(container, data) {
     : null;
 
   container.innerHTML = `
-    <div class="kpi-grid">
+    <div class="kpi-grid kpi-grid--2">
       ${metricCard({ label: '總市值', value: fmtNTD(total), tone: 'neutral' })}
       ${pnlMetricCard('損益', fmtSafeSignedPct(pnlPct !== null ? pnlPct * 100 : null), pnl)}
-      ${metricCard({ label: '最大回撤', value: fmtSafeDrawdown(drawdown), tone: 'neutral' })}
     </div>
     ${portfolioReassurance(pnl)}
-    <button class="btn btn--secondary" id="home-portfolio-detail">查看完整持倉</button>
+    <button class="btn btn--secondary" id="home-portfolio-detail">查看完整績效與持倉</button>
   `;
   document.getElementById('home-portfolio-detail').addEventListener('click', () => window.switchPage('portfolio'));
 }
@@ -908,7 +952,7 @@ function fmtNTD(value) {
 function renderDemoPortfolio(container) {
   container.innerHTML = `
     <div class="action-card">
-      <div class="action-card__icon">📋</div>
+      <div class="action-card__icon" aria-hidden="true"></div>
       <h3 class="action-card__title">尚無投資組合資料</h3>
       <p class="action-card__message">您可載入示範組合，快速體驗平台如何呈現持倉、風險與建議。</p>
       <div class="action-card__actions">
@@ -938,7 +982,6 @@ function renderDemoPortfolioWithData(container) {
     <div class="kpi-grid">
       ${metricCard({ label: '示範總市值', value: fmtNTD(totalValue), tone: 'neutral', tooltip: 'DEMO 資料' })}
       ${pnlMetricCard('損益', fmtSafeSignedPct(pnlPct * 100), totalPnl)}
-      ${metricCard({ label: '最大回撤', value: '−8.5%', tone: 'neutral', tooltip: '示範組合歷史最大回撤' })}
       ${metricCard({ label: '夏普比率', value: '1.62', tone: 'neutral', tooltip: '風險調整後報酬' })}
       ${metricCard({ label: '勝率', value: '62%', tone: 'neutral', tooltip: '示範組合交易勝率' })}
     </div>

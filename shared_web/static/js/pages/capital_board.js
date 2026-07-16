@@ -7,7 +7,7 @@
 
 import { silentGetJSON, renderMissingState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
-import { financialColor } from '../shared/color-tokens.js';
+import { financialColor, hexToRgba } from '../shared/color-tokens.js';
 
 const SECTOR_ALIAS = {
   '半導體業': '半導體',
@@ -201,21 +201,30 @@ function renderPieChart(agg) {
   );
 }
 
+const MODEL_RATIONALE_MAX_LEN = 120;
+
+function truncateRationale(text, maxLen) {
+  if (!text || text.length <= maxLen) return { text: text || '', truncated: false };
+  return { text: text.slice(0, maxLen).replace(/\s+\S*$/, '') + '…', truncated: true };
+}
+
 function renderWeights(models) {
-  return models.map(function (m) {
+  return models.map(function (m, idx) {
     const w = typeof m.weight === 'number' ? m.weight : 0;
     const pct = Math.round(w * 100);
     const reason = m.rationale ? String(m.rationale) : '';
+    const { text: summary, truncated } = truncateRationale(reason, MODEL_RATIONALE_MAX_LEN);
+    const modelId = 'cb-model-' + idx;
     return (
-      '<div class="cb-model">' +
+      '<div class="cb-model" id="' + modelId + '">' +
       '<div class="cb-model__head">' +
       '<span class="cb-model__name">' + escapeHtml(m.name || m.id || '未命名') + '</span>' +
       '<span class="cb-model__weight">權重 ' + pct + '%</span>' +
       '</div>' +
       '<div class="cb-model__bar" aria-hidden="true">' +
-      '<div class="cb-model__bar-fill" style="width:' + pct + '%;background:' + financialColor(w >= 1 ? 1 : 0, 'flow') + '"></div>' +
+      '<div class="cb-model__bar-fill" style="width:' + pct + '%;background:' + financialColor(w >= 1 ? 1 : 0, 'trend') + '"></div>' +
       '</div>' +
-      (reason ? '<div class="cb-model__rationale text-muted">' + escapeHtml(reason) + '</div>' : '') +
+      (reason ? '<div class="cb-model__rationale text-muted" data-full="' + escapeHtml(reason) + '" data-summary="' + escapeHtml(summary) + '">' + escapeHtml(summary) + (truncated ? ' <button type="button" class="cb-model__expand" data-model="' + modelId + '">展開</button>' : '') + '</div>' : '') +
       '</div>'
     );
   }).join('');
@@ -231,13 +240,17 @@ function renderSectors(entries) {
     entries.map(function (e) {
       const verdict = e.verdict;
       const verdictLabel = verdict === 'bullish' ? '看好' : verdict === 'bearish' ? '看壞' : '中性';
-      const verdictColor = financialColor(verdict === 'bullish' ? 1 : verdict === 'bearish' ? -1 : 0, 'flow');
+      const verdictColor = financialColor(verdict === 'bullish' ? 1 : verdict === 'bearish' ? -1 : 0, 'trend');
+      const favoredPct = e.total > 0 ? (e.favored / e.total * 100).toFixed(1) : '0.0';
+      const avoidedPct = e.total > 0 ? (e.avoided / e.total * 100).toFixed(1) : '0.0';
+      const favoredWidth = e.favored > 0 ? (e.favored / e.total * 100).toFixed(1) : '0.0';
+      const avoidedWidth = e.avoided > 0 ? (e.avoided / e.total * 100).toFixed(1) : '0.0';
       return (
-        '<div class="cb-sector-row" data-verdict="' + verdict + '">' +
+        '<div class="cb-sector-row" data-verdict="' + verdict + '" title="看好權重 ' + favoredPct + '% / 看壞權重 ' + avoidedPct + '%">' +
         '<span class="cb-sector-row__name">' + escapeHtml(e.label) + '</span>' +
         '<span class="cb-sector-row__bar" aria-hidden="true">' +
-        (e.favored > 0 ? '<span style="width:' + (e.favored / e.total * 100).toFixed(1) + '%;background:rgba(239,68,68,0.45)"></span>' : '') +
-        (e.avoided > 0 ? '<span style="width:' + (e.avoided / e.total * 100).toFixed(1) + '%;background:rgba(16,185,129,0.45)"></span>' : '') +
+        (e.favored > 0 ? '<span style="width:' + favoredWidth + '%;background:color-mix(in srgb, var(--trend-bullish) 45%, transparent)"></span>' : '') +
+        (e.avoided > 0 ? '<span style="width:' + avoidedWidth + '%;background:color-mix(in srgb, var(--trend-bearish) 45%, transparent)"></span>' : '') +
         '</span>' +
         '<span class="cb-sector-row__verdict" style="color:' + verdictColor + '">' + verdictLabel + '</span>' +
         '</div>'
@@ -281,6 +294,26 @@ async function loadModels() {
     '<h3 class="cb-board__title">板塊看好 / 看壞彙總（' + agg.entries.length + ' 個）</h3>' +
     renderSectors(agg.entries)
   );
+
+  // Bind expand/collapse for model rationales
+  grid.querySelectorAll('.cb-model__expand').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const modelId = btn.getAttribute('data-model');
+      const rationaleEl = document.querySelector('#' + modelId + ' .cb-model__rationale');
+      if (!rationaleEl) return;
+      const isExpanded = btn.textContent === '收起';
+      const full = rationaleEl.getAttribute('data-full');
+      const summary = rationaleEl.getAttribute('data-summary');
+      if (isExpanded) {
+        rationaleEl.textContent = summary;
+        btn.textContent = '展開';
+      } else {
+        rationaleEl.textContent = full;
+        btn.textContent = '收起';
+      }
+      rationaleEl.appendChild(btn);
+    });
+  });
 }
 
 export async function init() {

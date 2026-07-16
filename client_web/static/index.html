@@ -94,54 +94,52 @@
   <div class="brand">
     <h1>Atlas-Go</h1>
     <p>Atlas 投資人平台</p>
-    <button class="theme-toggle" title="切換主題">🌓</button>
+    <button class="theme-toggle" title="切換主題"><span class="theme-toggle__label">主題</span></button>
   </div>
   <nav role="navigation" aria-label="主要導航">
     <div class="nav-section">
       <span class="nav-group-label">市場</span>
-      <a data-page="home" class="active">🏠 市場總覽</a>
-      <a data-page="capital_predictions">📈 錢潮預測</a>
-      <a data-page="capital_board">🧭 錢潮看板</a>
-      <a data-page="stock-quote">🔍 個股快查</a>
-      <a data-page="narrative">🌍 宏觀視野</a>
-      <a data-page="crossmarket">🇺🇸 美台連動</a>
-      <a data-page="industry">🏭 產業地圖</a>
+      <a data-page="home" class="active">市場總覽</a>
+      <a data-page="capital_predictions">錢潮預測</a>
+      <a data-page="capital_board">錢潮看板</a>
+      <a data-page="stock-quote">個股快查</a>
+      <a data-page="narrative">宏觀視野</a>
+      <a data-page="crossmarket">美台連動</a>
+      <a data-page="industry">產業地圖</a>
     </div>
     <div class="nav-section">
       <span class="nav-group-label">策略</span>
-      <a data-page="pipeline">📋 投資管線</a>
-      <a data-page="portfolio">📂 組合持倉</a>
+      <a data-page="pipeline">投資管線</a>
+      <a data-page="portfolio">組合持倉</a>
     </div>
     <div class="nav-section">
       <span class="nav-group-label">更多</span>
-      <a data-page="strategies">🧠 投資心法</a>
+      <a data-page="strategies">投資心法</a>
     </div>
     <div class="nav-section" id="navAccountSection">
       <span class="nav-group-label">帳戶</span>
-      <a data-page="login" class="nav-auth-item nav-guest">🔑 登入</a>
-      <a data-page="register" class="nav-auth-item nav-guest">📝 註冊</a>
-      <a data-page="home" class="nav-auth-item nav-user hidden">👤 個人檔案</a>
-      <a data-page="premium" class="nav-auth-item nav-user hidden">⭐ 升級 <span id="navTierBadge" class="tier-badge tier-free">免費</span></a>
-      <button type="button" id="navLogoutBtn" class="nav-auth-item nav-user hidden">🚪 登出</button>
+      <a data-page="login" class="nav-auth-item nav-guest">登入</a>
+      <a data-page="register" class="nav-auth-item nav-guest">註冊</a>
+      <a data-page="home" class="nav-auth-item nav-user hidden">個人檔案</a>
+      <a data-page="premium" class="nav-auth-item nav-user hidden">升級 <span id="navTierBadge" class="tier-badge tier-free">免費</span></a>
+      <button type="button" id="navLogoutBtn" class="nav-auth-item nav-user hidden">登出</button>
     </div>
   </nav>
-  <div class="foot"><span class="text-muted">v8 · 統一介面</span><span id="navTierLabel" class="tier-label hidden"></span></div>
+  <div class="foot"><span id="navTierLabel" class="tier-label hidden"></span></div>
 </aside>
 <main id="main" role="main">
   <div id="topbar">
     <div class="flex-center-gap">
-      <button id="menuToggle">☰</button>
+      <button id="menuToggle" aria-label="開啟選單"><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span></button>
       <h2 id="pageTitle">總覽</h2>
     </div>
     <div class="refresh-pill" id="refreshPill">
       <span class="dot"></span>
       <span id="refreshTime">等待更新…</span>
-      <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新">⏸</button>
+      <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新"><span class="refresh-toggle__label">暫停</span></button>
     </div>
     <div class="role-switcher">
-      <a href="/admin/" class="role-link">管理者</a>
-      <span class="role-divider">|</span>
-      <a href="/client/" class="role-link active">投資人</a>
+      <a href="/client/" class="role-link active">投資人平台</a>
     </div>
   </div>
   <div id="content" role="main">
@@ -161,7 +159,7 @@
     <div class="page" id="page-mcp" data-page-src="mcp"></div>
     <div class="page" id="page-errors/404" data-page-src="errors/404"></div>
   </div>
-  <button class="refresh" title="手動重新整理">🔄 重新整理</button>
+  <button class="refresh" title="手動重新整理">重新整理</button>
   <div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
 </main>
 <div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true">

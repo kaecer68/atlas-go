@@ -378,6 +378,19 @@
   margin-top: 6px;
   line-height: 1.5;
 }
+.cb-model__expand {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  margin-left: 4px;
+  text-decoration: underline;
+}
+.cb-model__expand:hover {
+  color: var(--text);
+}
 
 .cb-board__title {
   margin-top: 8px;

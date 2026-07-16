@@ -5,8 +5,9 @@
 
 import { silentGetJSON } from '../shared/app-utils.js';
 import { financialColor } from '../shared/color-tokens.js';
+import { displayZH as sectorLabel } from '../shared/sector-display.js';
 
-const EVENT_TYPE_LABELS = {
+export const EVENT_TYPE_LABELS = {
   ex_dividend: '除權息',
   shareholder_meeting: '股東會',
   spring_festival: '春節',
@@ -44,10 +45,10 @@ const EVENT_TYPE_CATEGORIES = {
 const DEFAULT_VISIBLE_LIMIT = 7;
 
 const DIRECTION_ICONS = {
-  bullish: '📈',
-  bearish: '📉',
-  mixed: '⚖️',
-  neutral: '➖',
+  bullish: '偏多',
+  bearish: '偏空',
+  mixed: '中性',
+  neutral: '觀望',
 };
 
 // Default calendar window: ±15 days from today
@@ -163,7 +164,7 @@ function renderEventCard(evt) {
   const confLabel = typeof conf === 'number' ? Math.round(conf * 100) + '%' : '';
 
   const industries = Array.isArray(evt.affected_industries) && evt.affected_industries.length > 0
-    ? `<div class="cal-card__industries">${evt.affected_industries.slice(0, 3).map(id => `<span class="cal-tag">${id}</span>`).join('')}</div>`
+    ? `<div class="cal-card__industries">${evt.affected_industries.slice(0, 3).map(id => `<span class="cal-tag">${sectorLabel(id)}</span>`).join('')}</div>`
     : '';
 
   return `

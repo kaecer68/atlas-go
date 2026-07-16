@@ -62,6 +62,21 @@ export const SECTOR_DISPLAY_ZH = Object.freeze({
 	tourism:            '觀光',
 });
 
+// Sub-industry → 中文 display labels for investor-facing UI.
+// Mirrors Go's SubIndustryDisplayZHTw; L2 IDs not listed here pass through.
+export const SUB_INDUSTRY_DISPLAY_ZH = Object.freeze({
+	ai_supply_chain:      'AI 供應鏈',
+	consumer:             '消費',
+	cooling:              '散熱',
+	foundry:              '晶圓代工',
+	ground_equipment:     '地面設備',
+	industrial:           '工業',
+	leo_satellite:        '低軌衛星',
+	mining:               '礦業',
+	robotics:             '機器人',
+	server_assembly:      '伺服器組裝',
+});
+
 // DisplayZH returns the Traditional-Chinese label for canonical id, or the
 // raw input if unknown. Forward-compatible: passing a legacy Chinese string
 // (e.g. "金融" instead of "financials") falls through unchanged for now;
@@ -70,6 +85,9 @@ export function displayZH(input) {
 	if (!input) return '';
 	if (Object.prototype.hasOwnProperty.call(SECTOR_DISPLAY_ZH, input)) {
 		return SECTOR_DISPLAY_ZH[input];
+	}
+	if (Object.prototype.hasOwnProperty.call(SUB_INDUSTRY_DISPLAY_ZH, input)) {
+		return SUB_INDUSTRY_DISPLAY_ZH[input];
 	}
 	return input;
 }

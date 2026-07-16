@@ -113,7 +113,7 @@ function stopAutoRefresh() { clearInterval(autoRefreshTimer); autoRefreshTimer =
 function showErrorBanner() {
   let b = document.getElementById('errorBanner');
   if (!b) { b = document.createElement('div'); b.id = 'errorBanner'; b.className = 'error-banner'; (document.getElementById('content') || document.body).insertBefore(b, document.getElementById('content').firstChild); }
-  b.innerHTML = '<span>⚠ 連續 ' + consecutiveFailures + ' 次更新失敗</span><button class="retry-btn" onclick="retryLoad()">重試</button>';
+  b.innerHTML = '<span>連續 ' + consecutiveFailures + ' 次更新失敗</span><button class="retry-btn" onclick="retryLoad()">重試</button>';
   b.style.display = 'flex';
 }
 
@@ -457,12 +457,14 @@ window.toggleAutoRefresh = function() {
     stopAutoRefresh();
     autoRefreshEnabled = false;
     var btn = document.getElementById('refreshToggle');
-    if (btn) btn.textContent = '▶';
+    var label = btn && btn.querySelector('.refresh-toggle__label');
+    if (label) label.textContent = '繼續';
   } else {
     autoRefreshEnabled = true;
     startAutoRefresh();
     var btn = document.getElementById('refreshToggle');
-    if (btn) btn.textContent = '⏸';
+    var label = btn && btn.querySelector('.refresh-toggle__label');
+    if (label) label.textContent = '暫停';
   }
 };
 
@@ -498,7 +500,8 @@ if (typeof window !== 'undefined') {
       var pageId = window.location.hash.replace('#page-', '');
       window.location.replace(basePath + '/' + pageId);
     } else if (initialPath && initialPath !== 'home' && initialPath !== 'evolution_panel') {
-      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
+      const query = window.location.search || '';
+      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath + query);
       switchPage(initialPath, true);
     } else if (initialPath === 'evolution_panel') {
       switchPage('evolution_panel', true);
@@ -534,19 +537,19 @@ const maxEvents = 20;
     const now = new Date().toLocaleTimeString('zh-TW');
     
     if (status === 'connecting') {
-      hintEl.innerHTML = `🟡 連接中... <span style="opacity:0.6">${now}</span>`;
+      hintEl.innerHTML = `<span class="sse-dot sse-dot--warning"></span>連接中… <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--warn)';
     } else if (status === 'error') {
-      hintEl.innerHTML = `🔴 連線中斷 <span style="opacity:0.6">${now}</span>`;
+      hintEl.innerHTML = `<span class="sse-dot sse-dot--danger"></span>連線中斷 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--color-danger)';
     } else if (status === 'connected' && eventCount === 0) {
-      hintEl.innerHTML = `🟢 已連線 · 等待事件 <span style="opacity:0.6">${now}</span>`;
+      hintEl.innerHTML = `<span class="sse-dot sse-dot--success"></span>已連線 · 等待事件 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--color-success)';
     } else if (status === 'connected') {
-      hintEl.innerHTML = `🟢 已連線 · ${eventCount} 個事件 <span style="opacity:0.6">${now}</span>`;
+      hintEl.innerHTML = `<span class="sse-dot sse-dot--success"></span>已連線 · ${eventCount} 個事件 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--color-success)';
     } else {
-      hintEl.innerHTML = `⚪ 未連線 <span style="opacity:0.6">${now}</span>`;
+      hintEl.innerHTML = `<span class="sse-dot sse-dot--idle"></span>未連線 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--muted)';
     }
   }
