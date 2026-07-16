@@ -10,9 +10,9 @@
 
 ## Invariant Tracker
 
-| ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Notes |
-|----|---------|----------------------|-----------------|---------------------|--------|-------|
-| A01 | <short description> | <hypothesis, not conclusion> | <exact file paths> | <how to verify> | pending | <link to evidence> |
+| ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
+|----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
+| A01 | <short description> | <hypothesis, not conclusion> | <exact file paths> | <how to verify> | pending | none / plan-delete / promote-to-docs / new-doc | <link to evidence> |
 
 ---
 
@@ -47,6 +47,9 @@
 | Update manifest status | - | pending | - |
 | Push branch / open PR | - | pending | <PR #> |
 | Run CI / verify | - | pending | <CI link> |
+| Delete `.omo/plans/` files for this audit | - | pending | `ls .omo/plans/` |
+| Promote stable `.omo/briefs/` content to `docs/` | - | pending | <target doc path> |
+| Verify no new unauthorized `.omo/` directories | - | pending | `ls .omo/` vs whitelist |
 
 ---
 
