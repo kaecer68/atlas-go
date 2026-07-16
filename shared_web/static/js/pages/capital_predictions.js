@@ -46,7 +46,7 @@ function sectorLabel(name) {
 
 export const template = `
 <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-  <p>上方「5 日預測卡」列出每日資金方向與信心分數；下方「板塊熱度圖」把同樣的 5 日預測按受影響板塊展開，顏色深淺代表信心高低，hover 可看到驅動事件。</p>
+  <p>上方「5 日預測卡」列出每日整體資金方向與信心分數；下方「板塊熱度圖」只顯示板塊受影響的方向（▲ 流入 / ▼ 流出），信心分數為每日整體預測，非單一板塊精準值。</p>
 </details>
 <section id="cp-summary" class="cp-summary" aria-live="polite"></section>
 <section class="filter-bar" aria-label="方向篩選">
@@ -273,11 +273,12 @@ function renderSectorHeatmap() {
         : escapeHtml(dayLabel(p, allIdx) + ' · 無顯著驅動事件');
       return (
         '<div class="cp-heatmap__cell' + (active ? ' is-active' : '') + '" ' +
-        'style="background:' + bg + ';color:' + color + '" ' +
         'title="' + title + '" ' +
         'data-idx="' + allIdx + '" ' +
-        'data-sector="' + escapeHtml(sector) + '">' +
-        (active ? directionSign(dir) + '<span class="cp-heatmap__pct">' + Math.round(conf * 100) + '%</span>' : '—') +
+        'data-sector="' + escapeHtml(sector) + '" ' +
+        'style="background:' + bg + ';color:' + color + '"' +
+        '>' +
+        (active ? directionSign(dir) : '—') +
         '</div>'
       );
     }).join('');
