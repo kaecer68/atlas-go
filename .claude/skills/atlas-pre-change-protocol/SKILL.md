@@ -362,6 +362,28 @@ Read relevant internal/<module>/AGENTS.md for module-specific traps
 
 ---
 
+## Mid-Session Re-focus Checkpoint
+
+Long implementation sessions drift. Use this checkpoint after every unexpected error, debug detour, or roughly every 5 turns of active coding.
+
+```
+1. Re-read the active manifest / TODO list / plan file.
+2. Ask:
+   □ What is the current issue ID?
+   □ Does this edit serve that ID?
+   □ Am I still on the recorded branch/worktree?
+   □ Have I touched files outside the manifest scope?
+3. If scope has drifted:
+   □ STOP the current edit.
+   □ Add the new finding to the manifest Backlog.
+   □ Ask the user whether to expand scope or return to the original ID.
+4. Only resume after the user confirms the next action.
+```
+
+**Why this matters**: debugging is a trap. Agents fix the immediate compiler/test error and forget the original architectural goal, producing half-finished or unrelated changes.
+
+---
+
 ## Session-End Cleanup
 
 Before ending any implementation session:
