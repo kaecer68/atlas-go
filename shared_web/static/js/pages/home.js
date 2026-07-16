@@ -20,7 +20,9 @@ import { displayZH as sectorLabel } from '../shared/sector-display.js';
 import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
+import { dataQualityBadge, buildChannelMap } from '../components/data-quality-badge.js';
 import { renderSevenForceBoard } from '../components/seven-force-board.js';
+import { renderCapitalBattleCard } from '../components/capital-battle-card.js';
 
 window.scrollToSection = scrollToSection;
 
@@ -174,6 +176,7 @@ export async function renderHomePage(container) {
         <span class="home-section__subtitle">外資 / 投信 / 自營商 / 散戶 / 政府 / 期貨 / TSM ADR</span>
         <span class="home-section__data-badge" id="seven-force-data-badge"></span>
       </div>
+      <div id="home-capital-battle-content"></div>
       <div id="home-seven-force-content">
         <div class="home-loading-card">載入中…</div>
       </div>
@@ -321,6 +324,7 @@ async function loadHomeData() {
       renderMarketPulse(macro, stress);
       renderRecommendation(pipeline, stress);
       renderPredictionsCard(predictionData);
+      renderCapitalBattleCard(document.getElementById('home-capital-battle-content'), capitalFlowSummary);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), capitalFlowSummary);
 
       // Event calendar — fetched once and shared with banner + filters
@@ -340,6 +344,7 @@ async function loadHomeData() {
       renderMarketPulse(null, null, null);
       renderRecommendation(null, null);
       renderPredictionsCard(null);
+      renderCapitalBattleCard(document.getElementById('home-capital-battle-content'), null);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), null);
       renderHomeBanner([]);
     }

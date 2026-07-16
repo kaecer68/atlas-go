@@ -902,6 +902,44 @@
 .force-card__direction--positive { color: var(--trend-bullish); }
 .force-card__direction--negative { color: var(--trend-bearish); }
 .force-card__direction--neutral { color: var(--editorial-muted); }
+
+/* Capital battle story card */
+.capital-battle__card {
+  background: var(--panel-l1);
+  border: 1px solid var(--border);
+  border-radius: var(--editorial-radius);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.capital-battle__title {
+  font-weight: var(--font-bold);
+  font-size: var(--text-lg);
+  color: var(--editorial-text);
+  margin-bottom: var(--space-xs);
+}
+.capital-battle__narrative {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text);
+  margin-bottom: var(--space-md);
+}
+.capital-battle__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-sm);
+}
+.capital-battle__row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--editorial-radius);
+  background: var(--panel-l2);
+}
+.capital-battle__row--positive { color: var(--trend-bullish); }
+.capital-battle__row--negative { color: var(--trend-bearish); }
+.capital-battle__row--neutral { color: var(--editorial-muted); }
+.capital-battle__force { font-weight: var(--font-bold); }
+.capital-battle__direction { font-weight: var(--font-bold); }
 .force-card__value {
   font-size: var(--text-lg);
   color: var(--text);
