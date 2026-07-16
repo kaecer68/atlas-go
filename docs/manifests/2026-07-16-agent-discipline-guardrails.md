@@ -60,7 +60,7 @@
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
 | Update manifest status | all | done | this update |
-| Push branch / open PR | all | pending | PR # |
+| Push branch / open PR | all | done | PR #1208 |
 | Run CI / verify | all | pending | CI link |
 | Delete `.omo/plans/` files for this audit | all | done | no `.omo/plans/` file created for this audit |
 | Promote stable `.omo/briefs/` content to `docs/` | all | done | n/a for this audit |
