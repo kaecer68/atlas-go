@@ -961,3 +961,23 @@
   font-size: var(--text-xs);
   color: var(--muted);
 }
+
+/* Prediction distribution stacked bar */
+.pred-row__dist {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: var(--space-xs);
+}
+.pred-row__dist-segment { height: 100%; }
+.pred-row__dist-segment--inflow { background: var(--trend-bullish); }
+.pred-row__dist-segment--neutral { background: var(--editorial-muted); }
+.pred-row__dist-segment--outflow { background: var(--trend-bearish); }
+.pred-row__dist-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: 2px;
+}

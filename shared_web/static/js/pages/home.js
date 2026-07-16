@@ -541,6 +541,7 @@ function renderPredictionsCard(data) {
     const width = Math.round(Math.min(1, Math.max(0, conf)) * 100);
     const drivers = Array.isArray(p.driving_events) ? p.driving_events : [];
     const driverText = drivers.length ? drivers.slice(0, 2).map(e => escapeHtml(e)).join('、') : '無顯著事件';
+    const dist = p.distribution && typeof p.distribution === 'object' ? p.distribution : {};
     return `
       <div class="pred-row" data-index="${idx}">
         <div class="pred-row__meta">
@@ -550,6 +551,16 @@ function renderPredictionsCard(data) {
         </div>
         <div class="pred-row__bar" aria-hidden="true">
           <div class="pred-row__bar-fill pred-row__bar-fill--${dir}" style="width:${width}%"></div>
+        </div>
+        <div class="pred-row__dist" aria-hidden="true">
+          <div class="pred-row__dist-segment pred-row__dist-segment--inflow" style="width:${Math.round((dist.inflow || 0) * 100)}%"></div>
+          <div class="pred-row__dist-segment pred-row__dist-segment--neutral" style="width:${Math.round((dist.neutral || 0) * 100)}%"></div>
+          <div class="pred-row__dist-segment pred-row__dist-segment--outflow" style="width:${Math.round((dist.outflow || 0) * 100)}%"></div>
+        </div>
+        <div class="pred-row__dist-label">
+          <span>流入 ${Math.round((dist.inflow || 0) * 100)}%</span>
+          <span>觀望 ${Math.round((dist.neutral || 0) * 100)}%</span>
+          <span>流出 ${Math.round((dist.outflow || 0) * 100)}%</span>
         </div>
         <div class="pred-row__drivers">${driverText}</div>
       </div>

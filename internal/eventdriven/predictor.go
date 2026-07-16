@@ -141,6 +141,7 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 			Date:            day,
 			Direction:       dir,
 			Confidence:      conf,
+			Distribution:    computeDistribution(dir, conf),
 			DrivingEvents:   drivers,
 			PredictedForces: forcesForDirection(drivers),
 		}
@@ -434,6 +435,41 @@ func (p *Predictor) buildETFEstimates(timeline []industry.CalendarEvent) []ETFEs
 		}
 	}
 	return estimates
+}
+
+// computeDistribution turns a direction/confidence pair into a probability
+// mass over the three possible capital-flow directions. It preserves the
+// chosen direction as the dominant mass and splits the remaining probability
+// between the other two outcomes.
+func computeDistribution(dir string, conf float64) PredictionDistribution {
+	conf = math.Max(0, math.Min(1, conf))
+	switch dir {
+	case "inflow":
+		out := (1 - conf) * 0.5
+		return PredictionDistribution{
+			Inflow:  roundProb(conf),
+			Outflow: roundProb(out),
+			Neutral: roundProb(1 - conf - out),
+		}
+	case "outflow":
+		in := (1 - conf) * 0.5
+		return PredictionDistribution{
+			Inflow:  roundProb(in),
+			Outflow: roundProb(conf),
+			Neutral: roundProb(1 - conf - in),
+		}
+	default:
+		rem := (1 - conf) * 0.5
+		return PredictionDistribution{
+			Inflow:  roundProb(rem),
+			Outflow: roundProb(rem),
+			Neutral: roundProb(conf),
+		}
+	}
+}
+
+func roundProb(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // etfRebalanceEstimates returns estimated flow for a known ETF rebalance event.
