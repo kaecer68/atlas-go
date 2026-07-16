@@ -528,6 +528,34 @@ function fmtPredictionDate(d) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
+/**
+ * 渲染單一預測列的「方向機率分佈」3-bar stack + 3 個 label。
+ * 對應 C03 修復後新增的 inflow / neutral / outflow 三段進度條。
+ *
+ * @param {{inflow?: number, neutral?: number, outflow?: number}|null|undefined} distribution
+ * @returns {string} 內含 pred-row__dist + pred-row__dist-label 兩個區塊的 HTML 字串
+ */
+export function renderDistributionSegments(distribution) {
+  const dist = distribution && typeof distribution === 'object' ? distribution : {};
+  const inflow = typeof dist.inflow === 'number' && dist.inflow >= 0 ? dist.inflow : 0;
+  const neutral = typeof dist.neutral === 'number' && dist.neutral >= 0 ? dist.neutral : 0;
+  const outflow = typeof dist.outflow === 'number' && dist.outflow >= 0 ? dist.outflow : 0;
+  const inflowPct = Math.round(inflow * 100);
+  const neutralPct = Math.round(neutral * 100);
+  const outflowPct = Math.round(outflow * 100);
+  return `
+        <div class="pred-row__dist" aria-hidden="true">
+          <div class="pred-row__dist-segment pred-row__dist-segment--inflow" style="width:${inflowPct}%"></div>
+          <div class="pred-row__dist-segment pred-row__dist-segment--neutral" style="width:${neutralPct}%"></div>
+          <div class="pred-row__dist-segment pred-row__dist-segment--outflow" style="width:${outflowPct}%"></div>
+        </div>
+        <div class="pred-row__dist-label">
+          <span>流入 ${inflowPct}%</span>
+          <span>觀望 ${neutralPct}%</span>
+          <span>流出 ${outflowPct}%</span>
+        </div>`;
+}
+
 function renderPredictionsCard(data) {
   const container = document.getElementById('home-predictions-content');
   if (!container) return;
@@ -555,16 +583,7 @@ function renderPredictionsCard(data) {
         <div class="pred-row__bar" aria-hidden="true">
           <div class="pred-row__bar-fill pred-row__bar-fill--${dir}" style="width:${width}%"></div>
         </div>
-        <div class="pred-row__dist" aria-hidden="true">
-          <div class="pred-row__dist-segment pred-row__dist-segment--inflow" style="width:${Math.round((dist.inflow || 0) * 100)}%"></div>
-          <div class="pred-row__dist-segment pred-row__dist-segment--neutral" style="width:${Math.round((dist.neutral || 0) * 100)}%"></div>
-          <div class="pred-row__dist-segment pred-row__dist-segment--outflow" style="width:${Math.round((dist.outflow || 0) * 100)}%"></div>
-        </div>
-        <div class="pred-row__dist-label">
-          <span>流入 ${Math.round((dist.inflow || 0) * 100)}%</span>
-          <span>觀望 ${Math.round((dist.neutral || 0) * 100)}%</span>
-          <span>流出 ${Math.round((dist.outflow || 0) * 100)}%</span>
-        </div>
+        ${renderDistributionSegments(dist)}
         <div class="pred-row__drivers">${driverText}</div>
       </div>
     `;
