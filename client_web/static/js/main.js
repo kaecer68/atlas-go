@@ -223,12 +223,11 @@ async function loadAll() {
       getJSONWithTimeout('/api/macro/snapshot/latest'),
       getJSONWithTimeout('/api/taiwan/stress-index'),
       getJSONWithTimeout('/api/narrative/bundle'),
-      getJSONWithTimeout('/api/dashboard/retail-sentiment'),
       getJSONWithTimeout('/api/dashboard/regime-history'),
     ]);
 
     var health = results[0], snapshot = results[1], stress = results[2], bundle = results[3],
-        retailSentiment = results[4], regimeHistory = results[5];
+        regimeHistory = results[4];
 
     // Unwrap narrative bundle
     var events = bundle && bundle.events ? { events: bundle.events } : null;
@@ -248,7 +247,7 @@ async function loadAll() {
     await loadModules();
     var m = modules;
     if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(events, stress, models, chains);
-    if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
+    if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, null, seasonal);
   } catch (e) {
     console.error(e);
     consecutiveFailures++;
@@ -274,10 +273,15 @@ async function loadPageData(pageId) {
         getJSONWithTimeout('/api/narrative/chains'),
         getJSONWithTimeout('/api/narrative/models'),
         getJSONWithTimeout('/api/narrative/templates'),
-        getJSONWithTimeout('/api/dashboard/retail-sentiment'),
         getJSONWithTimeout('/api/narrative/seasonal'),
       ]);
-      if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], results[6], results[7]);
+      if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], null, results[6]);
+
+      getJSONWithTimeout('/api/dashboard/retail-sentiment', 3000).then(function(rs) {
+        if (m.narr.renderNarrativePage && rs) {
+          m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], rs, results[6]);
+        }
+      }).catch(function(e) { console.warn('[retail-sentiment] background load failed:', e); });
     } catch(e) { console.warn(e); }
   }
   else if (pageId === 'pipeline') {
