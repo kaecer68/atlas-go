@@ -54,21 +54,38 @@
 - **Driver quality**: top-2 driver 是否真的引用 `MacroDataSnapshot` / event / cycle 任一資訊
 - **JSD 警示**: 任意 sector prediction 帶 `consistency_warning=true` 都應 log 警示並 spot-check 模型輸入
 
-### 2.3 Log 範本
+### 2.3 自動化工具（推薦）
+
+以下兩個 CLI 工具把 §2.1 指標收集與 §3 驗收評估自動化，operator 只需設定 cron 即可：
+
+| 工具 | 用途 | 執行頻率 |
+|------|------|---------|
+| `cmd/experimental/c07-obs-collector` | 拉 `/api/events/prediction`，計算 JSD alert rate / latency / confidence violations，附加到 obs log，超標時 fire alert | 每日收盤後 |
+| `cmd/experimental/c07-day-evaluator` | 讀 obs log，評估 Day 7 / Day 14 acceptance criteria，產出 pass/fail report | Day 7 / Day 14 |
+
+**Cron 設定範例**（staging）：
+
+```cron
+# 每日 15:30 收盤後跑 collector（台股收盤 13:30，留 2h buffer）
+30 15 * * 1-5  cd /path/to/atlas && go run ./cmd/experimental/c07-obs-collector --url http://localhost:18080
+
+# Day 7 與 Day 14 早上 09:00 跑 evaluator
+0 9 * * 1-5  cd /path/to/atlas && go run ./cmd/experimental/c07-day-evaluator --day 7 --output docs/operations/sector-prediction-eval-day7.md
+0 9 * * 1-5  cd /path/to/atlas && go run ./cmd/experimental/c07-day-evaluator --day 14 --output docs/operations/sector-prediction-eval-day14.md
+```
+
+**注意事項**：
+- Collector 在 flag 未開啟時會記錄 `flag off` 並 exit 0（不視為失敗）。
+- Collector 會自動 fire alert 到 `data/state/alerts`（透過 `monitoring.AlertStore`），可在 `/api/alerts` 查詢。
+- Evaluator 在任一 MUST criterion 失敗時 exit 1，可接 cron 的 `MAILTO` 或 Slack webhook 通知。
+- `spot_check_count` 與 `panic_count` 仍需人工確認（collector 無法自動取得）。
+
+### 2.4 Log 範本（人工補充用）
+
+若需人工補充（例如 spot-check 結果），使用下列範本附加到 obs log：
 
 ```markdown
-### YYYY-MM-DD — Day N
-
-- Total requests: N
-- jsd.p95: 0.XXX
-- jsd.alert_rate: X.X% (N cases)
-- prediction.latency_p50/p95: Xms / Xms
-- confidence.floor_violations: 0 (invariant I7)
-- sector.count_per_day: 20 (invariant I2)
-- event.coverage_rate: XX.X%
-- spot-check: N recs, consistent=XX, JSD alerts=N
-- 異常: ...
-- 決策: 繼續觀察 / 進入 promotion 評估 / 觸發 rollback
+| YYYY-MM-DD | 20 | 0.0% | 145 | 0 | 0 | 15 | auto-collected + manual spot-check |
 ```
 
 ## 3. Acceptance Criteria
