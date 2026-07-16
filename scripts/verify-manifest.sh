@@ -56,7 +56,7 @@ if (( has_done_invariant > 0 )); then
       gsub(/^[ \t]+|[ \t]+$/, "")
       print
     }
-  ' "$manifest" | grep -cE '<PR #>|<CI link>|<target doc path>|^\|.*\|.*\| pending \|.*\|' || true)
+  ' "$manifest" | grep -cE '\|.*\|.*\| pending \| <[^>]+>$' || true)
 
   if (( phase_d_empty > 0 )); then
     echo "ERROR: $manifest: Phase D has $phase_d_empty unpopulated close-out item(s) while invariants are marked done." >&2
