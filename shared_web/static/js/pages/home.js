@@ -20,7 +20,7 @@ import { displayZH as sectorLabel } from '../shared/sector-display.js';
 import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
-import { dataQualityBadge, buildChannelMap } from '../components/data-quality-badge.js';
+import { renderSevenForceBoard } from '../components/seven-force-board.js';
 
 window.scrollToSection = scrollToSection;
 
@@ -32,6 +32,7 @@ const CHANNELS_BY_SECTION = {
   signalStrip: ['geopolitical', 'us_yahoo'],
   marketPulse: ['us_yahoo', 'us_spx', 'us_ndx', 'us_dji', 'sox_index', 'us_nvda', 'us_aapl', 'us_msft', 'tsm_adr', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'export_statistics', 'twse_capital_flow'],
   predictions: ['twse_capital_flow', 'geopolitical', 'tsmc_revenue'],
+  sevenForce: ['twse_capital_flow', 'frankfurter_fx', 'us_yahoo', 'tsm_adr'],
   calendar: ['twse_replay', 'us_yahoo', 'tsmc_revenue'],
 };
 
@@ -47,6 +48,7 @@ function renderDataBadges() {
   set('signal-strip-data-badge', CHANNELS_BY_SECTION.signalStrip);
   set('market-pulse-data-badge', CHANNELS_BY_SECTION.marketPulse);
   set('predictions-data-badge', CHANNELS_BY_SECTION.predictions);
+  set('seven-force-data-badge', CHANNELS_BY_SECTION.sevenForce);
   set('calendar-data-badge', CHANNELS_BY_SECTION.calendar);
 }
 
@@ -164,6 +166,17 @@ export async function renderHomePage(container) {
         <span class="disclosure-toggle__label">展開錢潮預測</span>
         <span class="disclosure-toggle__icon disclosure-toggle__icon--down" aria-hidden="true"></span>
       </button>
+    </section>
+
+    <section class="home-section" id="home-seven-force">
+      <div class="home-section__header">
+        <h2>7-Force 錢潮看板</h2>
+        <span class="home-section__subtitle">外資 / 投信 / 自營商 / 散戶 / 政府 / 期貨 / TSM ADR</span>
+        <span class="home-section__data-badge" id="seven-force-data-badge"></span>
+      </div>
+      <div id="home-seven-force-content">
+        <div class="home-loading-card">載入中…</div>
+      </div>
     </section>
 
     <section class="home-section" id="home-event-calendar">
@@ -288,7 +301,7 @@ async function loadHomeData() {
     }
 
     try {
-      const [health, macro, stress, pipeline, bundle, calData, predictionData] = await Promise.all([
+      const [health, macro, stress, pipeline, bundle, calData, predictionData, capitalFlowSummary] = await Promise.all([
         getJSONWithTimeout('/api/dashboard/system-health', 5000),
         getJSONWithTimeout('/api/macro/snapshot/latest', 5000),
         getJSONWithTimeout('/api/taiwan/stress-index', 5000),
@@ -296,6 +309,7 @@ async function loadHomeData() {
         getJSONWithTimeout('/api/narrative/bundle', 5000),
         getJSONWithTimeout('/api/dashboard/calendar-events', 5000),
         getJSONWithTimeout('/api/events/prediction', 5000),
+        getJSONWithTimeout('/api/capital-flow/summary', 5000),
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
@@ -307,6 +321,7 @@ async function loadHomeData() {
       renderMarketPulse(macro, stress);
       renderRecommendation(pipeline, stress);
       renderPredictionsCard(predictionData);
+      renderSevenForceBoard(document.getElementById('home-seven-force-content'), capitalFlowSummary);
 
       // Event calendar — fetched once and shared with banner + filters
       const calContainer = document.getElementById('home-calendar-content');
@@ -325,6 +340,7 @@ async function loadHomeData() {
       renderMarketPulse(null, null, null);
       renderRecommendation(null, null);
       renderPredictionsCard(null);
+      renderSevenForceBoard(document.getElementById('home-seven-force-content'), null);
       renderHomeBanner([]);
     }
 
