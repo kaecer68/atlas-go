@@ -31,7 +31,8 @@ If the investigation is **purely read-only** with no expected changes, use `atla
 Phase A — Audit (read-only)
   ├─ Load systematic-debugging + gitnexus-debugging
   ├─ Load atlas-pre-change-protocol Investigation Mode
-  └─ Record findings in a manifest with per-issue IDs
+  ├─ Record findings in a manifest with per-issue IDs
+  └─ Every hypothesis must have evidence BEFORE it is marked accepted
 
 Phase B — Plan (before code)
   ├─ Load writing-plans
@@ -64,7 +65,7 @@ Minimum required sections:
 | Section | Purpose |
 |---------|---------|
 | Goal | What this audit is trying to answer/fix |
-| Invariant table | ID / problem / root-cause hypothesis / files / acceptance / status |
+| Invariant table | ID / problem / root-cause hypothesis / files / acceptance / status / evidence link |
 | Phase tracker | Logical groupings of work with evidence |
 | Backlog | New issues found but not in scope |
 | Commit discipline | How each commit maps to IDs |
@@ -76,6 +77,7 @@ Minimum required sections:
 
 Catch yourself thinking any of these? STOP.
 
+- "I have a hypothesis" → Record it, then find evidence. A hypothesis without evidence is a guess.
 - "I see the problem, let me fix it" → Seeing a symptom is not root cause. Document it first.
 - "This is just a small fix" → Every fix gets an ID and a test.
 - "I'll add multiple changes and run tests" → One ID per commit.
@@ -86,6 +88,7 @@ Catch yourself thinking any of these? STOP.
 - "I'll push to main to save time" → Always open a PR.
 - "This session is too short for a manifest" → A short manifest is still a manifest.
 - "The user didn't ask for a manifest" → This skill is mandatory for debugging/audit tasks.
+- "I created a new `.omo/<dir>/` without checking the whitelist" → STOP. Read `docs/documentation-standard.md` § `.omo/` whitelist. New directories are forbidden unless the standard is updated in the same PR.
 
 ---
 
@@ -112,6 +115,18 @@ Before ending any session that used this protocol:
 □ Backlog populated with any new issues found
 □ Branch pushed or PR opened (if any code was changed)
 □ If session must pause with uncommitted code: run context-save
+```
+
+### Documentation Governance (Close-Out)
+
+Every audit that produces ephemeral working files must reconcile them with `docs/documentation-standard.md` before the PR is considered complete:
+
+```
+□ If `.omo/plans/` files were created for this audit: delete them after merge
+□ If `.omo/briefs/` content stabilized during the audit: promote to `docs/specs/` or `docs/guides/`, then delete the `.omo/` copy
+□ If new long-term runbook/spec knowledge emerged: place it under `docs/` using the归属 table in `docs/documentation-standard.md`
+□ No new `.omo/` subdirectories were created unless `documentation-standard.md` whitelist was updated in the same PR
+□ Any standalone `.md` files created directly under `.omo/` were moved or deleted
 ```
 
 If you cannot check all boxes, do not claim the work is done. Tell the user what is left and where the manifest lives.

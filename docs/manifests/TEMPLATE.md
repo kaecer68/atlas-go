@@ -10,9 +10,9 @@
 
 ## Invariant Tracker
 
-| ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Notes |
-|----|---------|----------------------|-----------------|---------------------|--------|-------|
-| A01 | <short description> | <hypothesis, not conclusion> | <exact file paths> | <how to verify> | pending | <link to evidence> |
+| ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
+|----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
+| A01 | <short description> | <hypothesis, not conclusion> | <exact file paths> | <how to verify> | pending | none / plan-delete / promote-to-docs / new-doc | <link to evidence> |
 
 ---
 
@@ -20,11 +20,14 @@
 
 ### Phase A — Audit (read-only)
 
+Status values: `pending` → `hypothesis` → `accepted` | `rejected`. No hypothesis may move to `accepted` without a concrete evidence link.
+
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
 | Reproduce the symptom | - | pending | <commands / URLs / logs> |
 | Identify suspect code | - | pending | <gitnexus / grep / log evidence> |
 | Form root cause hypothesis | - | pending | <which hypothesis, why> |
+| Validate hypothesis with evidence | - | pending | <commit / test / trace that proves or disproves> |
 
 ### Phase B — Plan
 
@@ -47,6 +50,9 @@
 | Update manifest status | - | pending | - |
 | Push branch / open PR | - | pending | <PR #> |
 | Run CI / verify | - | pending | <CI link> |
+| Delete `.omo/plans/` files for this audit | - | pending | `ls .omo/plans/` |
+| Promote stable `.omo/briefs/` content to `docs/` | - | pending | <target doc path> |
+| Verify no new unauthorized `.omo/` directories | - | pending | `ls .omo/` vs whitelist |
 
 ---
 
