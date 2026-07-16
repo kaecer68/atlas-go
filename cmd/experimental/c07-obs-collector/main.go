@@ -33,7 +33,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,11 +104,6 @@ func main() {
 		dryRun   = flag.Bool("dry-run", false, "print row without writing")
 	)
 	flag.Parse()
-
-	if err := validateLocalhostURL(*baseURL); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: base URL %q rejected: %v\n", *baseURL, err)
-		os.Exit(2)
-	}
 
 	date := *dateStr
 	if date == "" {
@@ -402,27 +396,6 @@ func klDivergence(p, q predictionDistribution) float64 {
 		}
 	}
 	return d
-}
-
-// validateLocalhostURL enforces that the base URL points to a localhost
-// atlas instance (SSRF guard).
-func validateLocalhostURL(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
-	}
-	switch u.Scheme {
-	case "http", "https":
-	default:
-		return fmt.Errorf("scheme %q not allowed (want http or https)", u.Scheme)
-	}
-	host := u.Hostname()
-	switch host {
-	case "localhost", "127.0.0.1", "0.0.0.0", "::1":
-		return nil
-	default:
-		return fmt.Errorf("host %q not in localhost loopback (refused to probe non-local atlas)", host)
-	}
 }
 
 func truncate(s string, n int) string {
