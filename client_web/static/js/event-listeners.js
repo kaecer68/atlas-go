@@ -7,7 +7,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // === Sidebar Navigation (22 pages) ===
   document.querySelectorAll('#sidebar nav a[data-page]').forEach(a => {
-    a.addEventListener('click', () => window.switchPage(a.dataset.page));
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.switchPage(a.dataset.page);
+    });
   });
 
   // === Sidebar Logout ===
