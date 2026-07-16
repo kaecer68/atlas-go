@@ -615,6 +615,14 @@
   color: var(--editorial-muted);
 }
 
+.home-banner__date {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  color: var(--editorial-muted);
+  font-size: var(--text-xs);
+}
+
 .home-banner__actions {
   display: flex;
   align-items: center;

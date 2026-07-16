@@ -344,6 +344,44 @@ function bannerDigest(events) {
   return events.map(e => e.id || e.name || '').join('|');
 }
 
+function eventDate(e) {
+  if (e.peak_date) return e.peak_date;
+  if (e.start_date) return e.start_date;
+  if (e.end_date) return e.end_date;
+  return null;
+}
+
+function isUpcomingEvent(e, today) {
+  const d = eventDate(e);
+  if (!d) return true;
+  const date = new Date(d);
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const eventPastLookbackDays = 7;
+  return date.getTime() >= today.getTime() - eventPastLookbackDays * msPerDay;
+}
+
+function deduplicateByEventType(events) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const groups = {};
+  for (const e of events) {
+    if (!isUpcomingEvent(e, today)) continue;
+    const type = e.event_type || 'unknown';
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(e);
+  }
+  const result = [];
+  for (const type in groups) {
+    const sorted = groups[type].sort((a, b) => {
+      const da = new Date(eventDate(a) || '9999-12-31');
+      const db = new Date(eventDate(b) || '9999-12-31');
+      return da - db;
+    });
+    result.push(sorted[0]);
+  }
+  return result;
+}
+
 function isBannerDismissed(currentEvents) {
   try {
     const raw = localStorage.getItem(BANNER_DISMISS_KEY);
@@ -369,7 +407,7 @@ function renderHomeBanner(events) {
   const section = document.getElementById('home-banner');
   const body = document.getElementById('home-banner-body');
   if (!section || !body) return;
-  const high = (Array.isArray(events) ? events : [])
+  const high = deduplicateByEventType(Array.isArray(events) ? events : [])
     .filter(e => {
       const c = eventConfidence(e);
       return typeof c === 'number' && c > 0.7;
@@ -387,10 +425,12 @@ function renderHomeBanner(events) {
     const name = escapeHtml(eventName(e));
     const conf = eventConfidence(e);
     const confLabel = typeof conf === 'number' ? Math.round(conf * 100) + '%' : '—';
+    const date = fmtPredictionDate(eventDate(e));
+    const dateLabel = date !== '—' ? `<span class="home-banner__date">${date}</span>` : '';
     const inds = Array.isArray(e.affected_industries) && e.affected_industries.length > 0
       ? e.affected_industries.slice(0, 3).map(s => `<span class="cal-tag">${escapeHtml(sectorLabel(s))}</span>`).join(' ')
       : '';
-    return `<div class="home-banner__item"><strong>${name}</strong><span class="home-banner__conf">信心 ${confLabel}</span>${inds ? ' · ' + inds : ''}</div>`;
+    return `<div class="home-banner__item"><strong>${name}</strong>${dateLabel}<span class="home-banner__conf">信心 ${confLabel}</span>${inds ? ' · ' + inds : ''}</div>`;
   }).join('');
   body.innerHTML = `<div class="home-banner__label">重大事件（信心 &gt; 70%）</div>${items}`;
 
