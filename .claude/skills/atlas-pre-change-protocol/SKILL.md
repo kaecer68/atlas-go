@@ -23,17 +23,27 @@ Before running Steps 1-7, record the session boundary. This prevents agents from
    □ In-scope IDs:  <issue IDs from the manifest or user request>
    □ ATLAS_ENV:     development / staging / production
 
-2. If branch is main AND this is an implementation task (not a read-only investigation):
+2. Environment Isolation Checkpoint (must run):
+   echo "ATLAS_ENV=${ATLAS_ENV:-development}"
+   □ If ATLAS_ENV=production:
+     → Verify worktree is isolated (not the dev worktree and not on branch main).
+     → Verify no dev/experiment commands will be issued this session.
+     → If uncertain, STOP and ask the user before proceeding.
+   □ If ATLAS_ENV is unset or development:
+     → Safe for dev/experiment commands ONLY in the current dev worktree.
+     → Do not switch ATLAS_ENV to production within the same session.
+
+3. If branch is main AND this is an implementation task (not a read-only investigation):
    → STOP. Load using-git-worktrees skill.
    → git worktree add -b feat/<short-name> ../atlas-<short-name> main
    → Continue this protocol inside the new worktree.
 
-3. If asked to modify files outside the recorded in-scope IDs:
+4. If asked to modify files outside the recorded in-scope IDs:
    → WARN the user.
    → Either update the manifest scope or stop before touching unrelated files.
    → Never silently poach work from another CLI session or manifest.
 
-4. Run git stash list and record any pre-existing stashes with their messages.
+5. Run git stash list and record any pre-existing stashes with their messages.
    → New stashes created this session must be labeled with the task/ID.
 ```
 
@@ -300,6 +310,8 @@ Before modifying or removing code, understand WHY it exists:
 □ "Another CLI was working on this, I'll finish it" → No poaching. Stay bound to your branch/manifest.
 □ "I'm in Plan/Audit mode but this fix is tiny" → STOP. Switch to Execute mode or add it to Backlog.
 □ "The user said 'look into it' but I see the fix" → You are in Audit mode. Document hypothesis and evidence first.
+□ "ATLAS_ENV doesn't matter for this command" → It does. Verify env before state-changing commands.
+□ "I'll just switch ATLAS_ENV to production to test" → STOP. Production env must use an isolated worktree.
 ```
 
 ---

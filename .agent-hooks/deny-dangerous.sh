@@ -120,11 +120,24 @@ if [[ "$normalized" =~ (\-allow-live-broker|--allow-live-broker) ]]; then
   fi
 fi
 
-# 8. Cross-environment operations: running dev-only experiment commands in production worktree.
+# 8. Cross-environment operations: running dev-only commands in production worktree.
 if [[ "${ATLAS_ENV:-development}" == "production" ]]; then
-  if [[ "$normalized" =~ (go[[:space:]]+run[[:space:]]+./cmd/(run-experiment|judge-experiment|promote-baseline|backtest-window)|run-experiment|judge-experiment|promote-baseline) ]]; then
-    block "Dev/experiment CLI commands are prohibited when ATLAS_ENV=production."
+  # Dev-only Go commands.
+  if [[ "$normalized" =~ (^|[[:space:]])go[[:space:]]+run([[:space:]]|$) ]]; then
+    block "'go run' is prohibited when ATLAS_ENV=production. Use a built binary or deployment artifact."
   fi
+  if [[ "$normalized" =~ (^|[[:space:]])go[[:space:]]+test([[:space:]]|$) ]]; then
+    block "'go test' is prohibited when ATLAS_ENV=production. Run tests in development/staging worktrees."
+  fi
+  # Dev-only experiment / backfill / backtest commands.
+  if [[ "$normalized" =~ (go[[:space:]]+run[[:space:]]+./cmd/(run-experiment|judge-experiment|promote-baseline|backtest-window|backfill-[a-z0-9-]+)|run-experiment|judge-experiment|promote-baseline|backtest-window) ]]; then
+    block "Dev/experiment/backfill CLI commands are prohibited when ATLAS_ENV=production."
+  fi
+  # Dev-only Makefile targets.
+  if [[ "$normalized" =~ (^|[[:space:]])make[[:space:]]+(dev|dev-stop|dev-status|dev-logs|watch-frontend|smoke|setup-mcp|setup-mcp-agent|verify-mcp-setup|test|test-frontend|test-backend|install-frontend|clean)([[:space:]]|$) ]]; then
+    block "Dev-only Makefile targets are prohibited when ATLAS_ENV=production."
+  fi
+  # Local docker compose build/up in a prod worktree.
   if [[ "$normalized" =~ (docker[[:space:]]+compose[[:space:]]+build|docker[[:space:]]+compose[[:space:]]+up) ]]; then
     block "docker compose build/up in a production worktree is prohibited; use deployment-specific runbooks."
   fi

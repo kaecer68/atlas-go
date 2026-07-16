@@ -4,7 +4,7 @@
 > **Goal**: Add deterministic guardrails, agent memory, mode-aware gates, and environment isolation so agents cannot accidentally break atlas-go or confuse contexts.
 > **Scope**: Harness engineering only. No deployment infrastructure, no cloud topology, no new features.
 > **Created**: 2026-07-16
-> **Status**: in-progress
+> **Status**: in-progress (Phase 5 complete, Phase 6 pending)
 
 ---
 
@@ -12,16 +12,16 @@
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| H01 | Agent can accidentally run destructive commands (`rm -rf`, `git push`, DB truncate). | No deterministic pre-action hooks; only soft instructions in skills. | `.githooks/pre-commit`, `.agent-hooks/deny-dangerous.sh`, `AGENTS.md` | Running blocked commands in a controlled test fails with a clear error. | pending | promote-to-docs | Add hook runbook to `docs/operations/` |
-| H02 | Agent reads `.env`, secrets, or `.p12` certificates without authorization. | No file-access guardrails beyond convention. | `.agent-hooks/`, `atlas-pre-change-protocol` skill | A test attempt to read `.env` inside an agent session is blocked or logged. | pending | promote-to-docs | Security hardening |
-| H03 | Agent confuses dev/prod/staging environments. | Environment is inferred from context, not enforced by worktree/secrets isolation. | `docs/environment.md`, `atlas-pre-change-protocol` skill, `.env` layout convention | Each environment has a distinct worktree + env file path; cross-env commands are blocked. | pending | promote-to-docs | Core lesson from GCP incident |
-| H04 | Agent starts live trading by mistake. | Live broker opt-in is instruction-based, not hook-enforced. | `.agent-hooks/`, `internal/live/` AGENTS.md | `-allow-live-broker` requires explicit env + CLI + hook confirmation. | pending | none | Already double-gated; harden with hook |
-| H05 | Agent edits code while in planning/audit mode. | No mode-aware gate; plan mode is convention only. | `atlas-pre-change-protocol` skill, `.agent-hooks/` | Plan mode refuses file writes; execute mode requires manifest ID binding. | pending | promote-to-docs | Deuk-style APC |
-| H06 | Same mistakes recur across sessions. | No persistent footguns/lessons/decisions repository. | `.agent-memory/footguns/`, `.agent-memory/lessons/`, `.agent-memory/decisions/` | Every blocked action or significant mistake produces a footgun or lesson entry. | pending | promote-to-docs | goat-flow style memory |
-| H07 | Agent claims work is done without running verification. | Verification commands are scattered; no one-command verify. | `scripts/verify-atlas.sh` (new), `docs/manifests/README.md` | `./scripts/verify-atlas.sh` runs format, vet, test, staticcheck, manifest verify, drift check. | pending | new-doc | Long-term tooling reference |
-| H08 | Agent asks questions whose answers are already in code/docs. | MCP tools exist but agent does not have a "check first" discipline. | `atlas-pre-change-protocol` skill, MCP tool usage prompts | Skill mandates querying MCP / gitnexus before asking project-specific questions. | pending | none | Prevents "Fubon already done" type errors |
-| H09 | Agent scope drifts to unrelated files. | Scope lock is instruction-based, not enforced. | `atlas-pre-change-protocol` skill, `.agent-hooks/` | Execute mode rejects edits outside declared manifest IDs. | pending | none | Extension of existing scope lock |
-| H10 | Atlas-MCP lacks hard rate limiting and auth defaults for external agents. | Rate limit defaults to 0; stdio mode has no token enforcement. | `cmd/atlas-mcp/main.go`, `cmd/atlas-mcp/server/ratelimit.go` | HTTP/SSE mode has non-zero default rate limit; stdio mode documents auth requirement. | pending | none | Hardening for external Hermes/OpenClaw |
+| H01 | Agent can accidentally run destructive commands (`rm -rf`, `git push`, DB truncate). | No deterministic pre-action hooks; only soft instructions in skills. | `.githooks/pre-commit`, `.agent-hooks/deny-dangerous.sh`, `AGENTS.md` | Running blocked commands in a controlled test fails with a clear error. | done | promote-to-docs | Phase 1: deny-dangerous hooks |
+| H02 | Agent reads `.env`, secrets, or `.p12` certificates without authorization. | No file-access guardrails beyond convention. | `.agent-hooks/`, `atlas-pre-change-protocol` skill | A test attempt to read `.env` inside an agent session is blocked or logged. | done | promote-to-docs | Phase 1: deny-dangerous hooks |
+| H03 | Agent confuses dev/prod/staging environments. | Environment is inferred from context, not enforced by worktree/secrets isolation. | `docs/environment.md`, `atlas-pre-change-protocol` skill, `.env` layout convention | Each environment has a distinct worktree + env file path; cross-env commands are blocked. | done | promote-to-docs | Phase 5: Environment Isolation Contract + hook rules |
+| H04 | Agent starts live trading by mistake. | Live broker opt-in is instruction-based, not hook-enforced. | `.agent-hooks/`, `internal/live/` AGENTS.md | `-allow-live-broker` requires explicit env + CLI + hook confirmation. | done | none | Phase 1: deny-dangerous hook gates live broker |
+| H05 | Agent edits code while in planning/audit mode. | No mode-aware gate; plan mode is convention only. | `atlas-pre-change-protocol` skill, `.agent-hooks/` | Plan mode refuses file writes; execute mode requires manifest ID binding. | done | promote-to-docs | Phase 3: mode-aware gates |
+| H06 | Same mistakes recur across sessions. | No persistent footguns/lessons/decisions repository. | `.agent-memory/footguns/`, `.agent-memory/lessons/`, `.agent-memory/decisions/` | Every blocked action or significant mistake produces a footgun or lesson entry. | done | promote-to-docs | Phase 2: agent-memory repository |
+| H07 | Agent claims work is done without running verification. | Verification commands are scattered; no one-command verify. | `scripts/verify-atlas.sh` (new), `docs/manifests/README.md` | `./scripts/verify-atlas.sh` runs format, vet, test, staticcheck, manifest verify, drift check. | done | new-doc | Phase 4: one-command verification |
+| H08 | Agent asks questions whose answers are already in code/docs. | MCP tools exist but agent does not have a "check first" discipline. | `atlas-pre-change-protocol` skill, MCP tool usage prompts | Skill mandates querying MCP / gitnexus before asking project-specific questions. | done | none | Phase 3: mode-aware gates + "check first" prompts |
+| H09 | Agent scope drifts to unrelated files. | Scope lock is instruction-based, not enforced. | `atlas-pre-change-protocol` skill, `.agent-hooks/` | Execute mode rejects edits outside declared manifest IDs. | done | none | Phase 3: scope-lock in session start + red flags |
+| H10 | Atlas-MCP lacks hard rate limiting and auth defaults for external agents. | Rate limit defaults to 0; stdio mode has no token enforcement. | `cmd/atlas-mcp/main.go`, `cmd/atlas-mcp/server/ratelimit.go` | HTTP/SSE mode has non-zero default rate limit; stdio mode documents auth requirement. | pending | none | Phase 6: harden atlas-mcp defaults |
 
 ---
 
@@ -39,21 +39,22 @@
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Design hook architecture | H01-H04 | pending | Plan file |
-| Design agent-memory layout | H06 | pending | Plan file |
-| Design verify-atlas.sh | H07 | pending | Plan file |
-| Define mode-aware gate states | H05, H09 | pending | Plan file |
+| Design hook architecture | H01-H04 | done | Plan file |
+| Design agent-memory layout | H06 | done | Plan file |
+| Design verify-atlas.sh | H07 | done | Plan file |
+| Define mode-aware gate states | H05, H09 | done | Plan file |
+| Define environment isolation contract | H03 | done | Plan file |
 
 ### Phase C — Implement
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Add deny-dangerous hooks | H01, H02, H04 | pending | commit hash |
-| Add environment isolation rules | H03 | pending | commit hash |
-| Add mode-aware gates | H05, H09 | pending | commit hash |
-| Create agent-memory repository | H06 | pending | commit hash |
-| Create verify-atlas.sh | H07 | pending | commit hash + test run |
-| Strengthen "check first" discipline | H08 | pending | commit hash |
+| Add deny-dangerous hooks | H01, H02, H04 | done | `4c6bbb1d` |
+| Create agent-memory repository | H06 | done | `273fb366` |
+| Add mode-aware gates | H05, H09 | done | `64386eaa` |
+| Create verify-atlas.sh | H07 | done | `0cebb5eb` |
+| Strengthen "check first" discipline | H08 | done | `64386eaa` |
+| Add environment isolation rules | H03 | in_progress | This commit |
 | Harden atlas-mcp rate limit defaults | H10 | pending | commit hash |
 
 ### Phase D — Close Out
@@ -92,12 +93,12 @@
 
 ## Session-End State
 
-- **Done this session**: Phase A audit complete; manifest created; worktree opened.
-- **Remaining**: Phase B plan + Phase C implementation of H01-H10.
-- **Next action**: Enter plan mode and write detailed implementation plan.
-- **Uncommitted code**: no
+- **Done this session**: Phases 1-5 complete (deny-dangerous hooks, agent-memory, mode-aware gates, one-command verification, environment isolation rules).
+- **Remaining**: Phase 6 (atlas-mcp rate limit defaults) + Phase 7 (close out / push / PR).
+- **Next action**: Implement Phase 6 atlas-mcp rate limit hardening.
+- **Uncommitted code**: Phase 5 changes staged
 - **Branch / PR**: `feat/atlas-hardening-harness` / not yet
-- **Paused because**: waiting for plan-mode approval before editing files.
+- **Paused because**: commit Phase 5 before continuing
 
 ---
 

@@ -34,6 +34,54 @@ the user first. These were carefully configured.**
 
 ---
 
+## Environment Isolation Contract
+
+> **IRON RULE:** `ATLAS_ENV=production` must only exist in a dedicated, isolated
+> worktree or deployment target. Never mix production configuration with the same
+> worktree used for development, experiments, backtests, or `go run` debugging.
+
+### `ATLAS_ENV` semantics
+
+| Value | Meaning | Worktree type |
+|---|---|---|
+| `development` (default) | Local dev, safe to `go run`, experiment, debug | Any feature/dev worktree |
+| `staging` | Pre-production validation, may touch real data but read-only or sandboxed | Dedicated staging worktree |
+| `production` | Live deployment, real accounts, real money / real market impact | **Isolated production worktree ONLY** |
+
+### Agent contract
+
+When working in this repo:
+
+1. **Verify `ATLAS_ENV` before any state-changing command.**
+   ```bash
+   echo "ATLAS_ENV=${ATLAS_ENV:-development}"
+   ```
+2. **If `ATLAS_ENV=production`:**
+   - Do NOT run `go run`, `go test`, `make dev`, `make test`, `make watch-frontend`,
+     `make setup-mcp*`, or any experiment/backfill CLI (`run-experiment`,
+     `judge-experiment`, `promote-baseline`, `backtest-window`, etc.).
+   - Do NOT run `docker compose build/up` from a local worktree.
+   - Do NOT edit `.env` files directly; use the deployment runbook.
+   - Production commands are limited to built artifacts and deployment-specific
+     scripts documented in `docs/deployment/`.
+3. **If the current branch is `main` and `ATLAS_ENV=production`:**
+   - STOP. Production deploys must come from a tagged release or deployment
+     pipeline, not a local `main` checkout.
+4. **Cross-environment confusion is a known failure mode.** Agents must not assume
+   that a command safe in `development` is safe in `production`. The deny-dangerous
+   hook (`.agent-hooks/deny-dangerous.sh`) enforces these rules when
+   `ATLAS_ENV=production`.
+
+### Why this matters
+
+Historical incidents include agents switching between "dev" and "production"
+contexts within the same CLI session, running dev-only experiment commands
+against production credentials, and pushing local `.env` overrides to production
+worktrees. This contract exists to make the environment boundary explicit and
+machine-enforceable.
+
+---
+
 ## Fubon SDK (the recurring question)
 
 **Path**: `~/.config/atlas-go/.fubon-env/`
@@ -318,5 +366,7 @@ prevents the recurring "AI assumes it's not there" issue.
 - `README.md` — overview + Fubon proxy architecture
 - `internal/apigateway/CONSTITUTION.md` — data source governance
 - `.claude/skills/atlas-data-visibility/SKILL.md` — silent failure detection
+- `.claude/skills/atlas-pre-change-protocol/SKILL.md` — session-start env recording
+- `.agent-hooks/deny-dangerous.sh` — machine-enforced env isolation rules
 - `docs/investigations/2026-06-28-boot-loop-multi-service.md` — 2026-06 啟動崩潰連環事件完整根因分析(含 fubon-neo PyPI 404 + wheel 平台限制 + 跨平台 deploy 限制)
 - `docs/reference/traps.md` § Deploy/Docker — 跨模組部署陷阱(ENTRYPOINT 衝突、env_file precedence、hardcoded healthcheck)
