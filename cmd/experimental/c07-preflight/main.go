@@ -231,33 +231,26 @@ func checkMacroSnapshot(baseURL string) checkResult {
 			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, truncate(resp.Body, 200)),
 		}
 	}
-	// Decode response: outer { "result": {... MacroDataSnapshot ...} }
-	var envelope struct {
-		Result struct {
-			Data struct {
-				DXY                map[string]any `json:"dxy"`
-				ForeignInvestorNet map[string]any `json:"foreign_investor_net"`
-				NVDA               map[string]any `json:"nvda"`
-				TSMADR             map[string]any `json:"tsm_adr"`
-			} `json:"data"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(resp.Body), &envelope); err != nil {
+	// Decode response: API returns MacroDataSnapshot fields at top level
+	// (e.g. recorded_at, dxy, foreign_investor_net, nvda, tsm_adr, ...).
+	var snapshot map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(resp.Body), &snapshot); err != nil {
 		return checkResult{
 			Name:    "/api/macro/snapshot/latest JSON parseable",
 			OK:      false,
 			Message: fmt.Sprintf("JSON parse failed: %v", err),
 		}
 	}
-	indicators := map[string]map[string]any{
-		"foreign_investor_net": envelope.Result.Data.ForeignInvestorNet,
-		"tsm_adr":              envelope.Result.Data.TSMADR,
-		"nvda":                 envelope.Result.Data.NVDA,
-		"dxy":                  envelope.Result.Data.DXY,
-	}
+	required := []string{"dxy", "foreign_investor_net", "nvda", "tsm_adr"}
 	missing := []string{}
-	for name, ind := range indicators {
-		if len(ind) == 0 {
+	for _, name := range required {
+		raw, ok := snapshot[name]
+		if !ok {
+			missing = append(missing, name)
+			continue
+		}
+		var obj map[string]any
+		if err := json.Unmarshal(raw, &obj); err != nil || len(obj) == 0 {
 			missing = append(missing, name)
 		}
 	}
@@ -330,7 +323,7 @@ func checkEventsPredictionShape(baseURL string) checkResult {
 	return checkResult{
 		Name:    "sector_predictions field present",
 		OK:      true,
-		Message: fmt.Sprintf("(data array length = %d once flag flipped, verified via manual check)", expectedSectorCount),
+		Message: "(forecast array present; 20 sectors/day verified post-flip via manual check)",
 	}
 }
 

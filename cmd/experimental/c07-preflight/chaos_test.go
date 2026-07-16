@@ -99,11 +99,7 @@ func TestChaosPreflight(t *testing.T) {
 					}
 				case "/api/macro/snapshot/latest":
 					w.WriteHeader(200)
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
-						"result": map[string]interface{}{
-							"data": tt.macroResponse,
-						},
-					})
+					_ = json.NewEncoder(w).Encode(tt.macroResponse)
 				case "/api/events/prediction":
 					w.WriteHeader(200)
 					_ = json.NewEncoder(w).Encode(tt.eventsResponse)
