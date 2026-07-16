@@ -39,6 +39,36 @@ Before running Steps 1-7, record the session boundary. This prevents agents from
 
 ---
 
+## Agent Safety Hooks — Hard Boundaries
+
+Before executing ANY shell command that modifies state, reads secrets, or touches production, run the deny-dangerous hook:
+
+```bash
+./agent-guard --check "<command>"
+# or
+.agent-hooks/deny-dangerous.sh --check "<command>"
+```
+
+If the hook blocks the command, do not bypass it unless the user explicitly approves. If bypassing, document the reason in the manifest.
+
+MUST check with the hook:
+- `git push` (any branch)
+- `rm`, `rm -rf`
+- Commands reading `.env`, `*.p12`, `*secret*`, `*password*`, `*credential*`
+- `eval`, `bash -c` with piped downloads
+- Commands with `ATLAS_ENV=production`
+- Commands enabling live broker (`-allow-live-broker`)
+- Destructive SQL (`DROP TABLE`, `TRUNCATE`)
+
+Install hooks once per worktree:
+```bash
+bash .agent-hooks/install.sh
+```
+
+**Why this matters**: skills and prompts are suggestions that models sometimes ignore. Hooks are deterministic guards that block dangerous actions before they run.
+
+---
+
 ## When to Use
 
 Load this skill when the user requests ANY of these:
