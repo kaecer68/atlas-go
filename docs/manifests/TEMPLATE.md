@@ -20,11 +20,14 @@
 
 ### Phase A — Audit (read-only)
 
+Status values: `pending` → `hypothesis` → `accepted` | `rejected`. No hypothesis may move to `accepted` without a concrete evidence link.
+
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
 | Reproduce the symptom | - | pending | <commands / URLs / logs> |
 | Identify suspect code | - | pending | <gitnexus / grep / log evidence> |
 | Form root cause hypothesis | - | pending | <which hypothesis, why> |
+| Validate hypothesis with evidence | - | pending | <commit / test / trace that proves or disproves> |
 
 ### Phase B — Plan
 
