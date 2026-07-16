@@ -57,6 +57,7 @@
 - **Workflow map**：[`docs/reference/workflow-map.md`](docs/reference/workflow-map.md)
 - **Process 標註**：[`docs/reference/processes.yaml`](docs/reference/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)
+- **除錯 / 審計 / 修復 workflow**：[`.claude/skills/atlas-audit-manifest-protocol/SKILL.md`](.claude/skills/atlas-audit-manifest-protocol/SKILL.md)（審計 → manifest → invariant tracker → commit → PR）
 - **FactorType 變更協議**：[`.claude/skills/atlas-factor-change-protocol/SKILL.md`](.claude/skills/atlas-factor-change-protocol/SKILL.md)
 - **Multi-CLI 與合併後清理**：[`docs/multi-cli-protocol.md`](docs/multi-cli-protocol.md)（worktree 隔離、PR merge 後自動刪除分支、planning artifacts 清理）
 

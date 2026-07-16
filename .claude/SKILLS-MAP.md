@@ -10,14 +10,14 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| 🔧 除錯維護迭代 | 3 | 修改前必用、資料可見性防護、Fubon supervisor 不變式 |
+| 🔧 除錯維護迭代 | 4 | 修改前必用、審計修復 workflow、資料可見性防護、Fubon supervisor 不變式 |
 | 📊 邏輯計算 | 8 | 策略、風控、宏觀、因子、權重 |
 | 🚀 功能拓展 | 2 | LLM Provider / Capability 新增 SOP、Factor Change Protocol |
 | 🌐 外部 Agent 整合 | 2 | 外部 AI Agent 接入 atlas-mcp 與 tool 導覽 |
 | 🤖 機器人溝通 | 4 | OpenClaw/Hermes Agent 投資人互動 |
 | 🔗 第三方工具 | 6 | GitNexus 程式碼智慧 |
 
-**總計: 25 技能**（15 手寫 + 6 GitNexus + 4 機器人溝通）
+**總計: 26 技能**（16 手寫 + 6 GitNexus + 4 機器人溝通）
 
 > ⚠️ **Token 節省提示**: 程式碼導航請優先使用 GitNexus 工具或 `internal/<mod>/AGENTS.md`，不再維護自動生成技能索引。
 
@@ -32,6 +32,7 @@
 │
 ├── 🔧 除錯維護迭代
 │   ├── atlas-pre-change-protocol/        # 修改前 7 步驟強制檢查清單
+│   ├── atlas-audit-manifest-protocol/    # 除錯 / 審計 / 修復：審計 → manifest → commit → PR
 │   ├── atlas-data-visibility/            # 四層資料可見性防護（亦屬 🛡️）
 │   └── atlas-fubon-supervisor-invariants/# Fubon proxy ProcessManager 監督器不變式（F1~F9）
 │
@@ -77,6 +78,7 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 | 技能 | 用途 | 觸發條件 | 版本 |
 |------|------|---------|------|
 | `atlas-pre-change-protocol` | 7 步驟修改前檢查：blast radius → 模組陷阱 → 數據溯源 → 憲法檢查 → 模式匹配 → GitNexus 架構 → 代碼意圖 | **修改任何程式碼前強制執行** | v1.0 |
+| `atlas-audit-manifest-protocol` | 除錯 / 審計 / 修復 workflow：根因調查 → invariant manifest → 實作規劃 → commit → PR | debugging、bug fixing、design review 跟進 | v1.0 |
 | `atlas-data-visibility` | 四層資料可見性防護：Gateway/Adapter/Service/Frontend，防止零值掩蓋通道靜默失敗 | 資料流修改、通道新增、前端 data_status 欄位變更時 | v2.0 |
 | `atlas-fubon-supervisor-invariants` | Fubon proxy ProcessManager 監督器不變式（F1~F9）：防 orphan process、goroutine 堆積、Stop 阻塞、EADDRINUSE backoff loop | 修改 `internal/fubonproxy` supervisor / Start / Stop / 測試時 | v1.0 |
 
@@ -159,6 +161,9 @@ GitNexus 程式碼智慧工具技能。
 開始任何程式碼修改
   └── 🔴 atlas-pre-change-protocol（強制，不可跳過）
 
+除錯 / 審計 / 修復
+  └── 🟠 atlas-audit-manifest-protocol（審計 → manifest → commit → PR）
+
 依任務類型選擇技能：
   ├── 資料流/通道變更
   │   └── 🟡 atlas-data-visibility
@@ -233,6 +238,7 @@ GitNexus 程式碼智慧工具技能。
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| 5.2 | 2026-07-16 | 新增 `atlas-audit-manifest-protocol` skill，歸屬 🔧 除錯維護迭代；總數 25 → 26；更新 AGENTS.md、AGENTS_INDEX.md、traps.md 與 SKILLS-MAP.md 索引 |
 | 5.1 | 2026-06-26 | 新增 🚀 功能拓展分類與 `atlas-llm-provider-capability`、`atlas-factor-change-protocol` skill；新增 `atlas-fubon-supervisor-invariants` skill 歸屬 🔧；總數 20 → 23；更新相關流程與載入規則 |
 | 5.0 | 2026-06-25 | 移除全數 `generated/*` 技能；總數 43 → 20；程式碼導航改由 GitNexus 與 `internal/<mod>/AGENTS.md` 負責 |
 | 4.2 | 2026-06-25 | 加入 `internal/llm/` generated 技能（LLM 路由器、12 capability handlers）；總數 42 → 43 |

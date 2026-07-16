@@ -135,6 +135,14 @@
 | 新增 | `subscription` | JWT tier 認證 |
 | 升級 | `cmd/atlas-mcp/server` | 工具數 84 → **91**（+4 audit + 2 anomaly + 2 elicitation/roots） |
 
+## AI 操作 workflow 索引
+
+| 入口 | 用途 |
+|------|------|
+| `atlas-pre-change-protocol` | 修改任何程式碼前的 7 步強制檢查 |
+| `atlas-audit-manifest-protocol` | 除錯 / 審計 / 修復：從根因調查到 manifest → commit → PR 的完整 workflow |
+| `docs/manifests/TEMPLATE.md` | 審計 manifest 模板 |
+
 ## 參考
 
 - 完整成熟度對照表：`internal/MATURITY.md`
