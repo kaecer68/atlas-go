@@ -65,7 +65,11 @@ Install hooks once per worktree:
 bash .agent-hooks/install.sh
 ```
 
-**Why this matters**: skills and prompts are suggestions that models sometimes ignore. Hooks are deterministic guards that block dangerous actions before they run.
+### Read Agent Memory First
+
+Before starting work, skim `.claude/agent-memory/footguns/`. If your task matches a known footgun, follow the prevention steps instead of repeating the mistake.
+
+**Why this matters**: skills and prompts are suggestions that models sometimes ignore. Hooks are deterministic guards that block dangerous actions before they run. Agent memory prevents the same mistake from recurring across sessions.
 
 ---
 
