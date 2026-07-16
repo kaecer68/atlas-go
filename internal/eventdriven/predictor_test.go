@@ -799,3 +799,67 @@ func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T)
 		t.Errorf("expected backfilled confidence (%f) to be roughly 0.7x non-backfilled (%f)", confBF, confNB)
 	}
 }
+
+// C06: 確保 API 輸出總是包含 etf_estimates 與 revenue_surprises 欄位
+// （移除 omitempty）,即使無資料也序列化為 [] 而非缺欄位或 null。
+func Test_Predict_JSONMarshal_C06_ETFEstimatesAndRevenueSurprisesAlwaysPresent(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC)
+
+	report := p.Predict(now)
+	js, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	out := string(js)
+
+	wantKeys := []string{`"etf_estimates"`, `"revenue_surprises"`}
+	for _, k := range wantKeys {
+		if !strings.Contains(out, k) {
+			t.Errorf("Predict() JSON missing required key %s\nfull output: %s", k, out)
+		}
+	}
+
+	// 無資料時為 [] 而不是 null
+	for _, nullPattern := range []string{`"etf_estimates":null`, `"revenue_surprises":null`} {
+		if strings.Contains(out, nullPattern) {
+			t.Errorf("Predict() JSON contains %s, want [] instead\nfull output: %s", nullPattern, out)
+		}
+	}
+}
+
+// C06: 當有 ETF rebalance event 時,etf_estimates 應該序列化為 array of objects,每筆
+// 包含 etf_name/stock_symbol/direction/est_flow 等欄位（驗證 round-trip）。
+func Test_Predict_JSONMarshal_C06_ETFEstimatesPopulatedRoundTrip(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC)
+
+	timeline := []industry.CalendarEvent{
+		{
+			Name: "元大台灣50 季配", EventType: "etf_rebalance", Direction: "neutral",
+			StartDate: now.AddDate(0, 0, 1), EndDate: now.AddDate(0, 0, 1),
+			BaseWeight: 1.0, AffectedIndustries: []string{"2330"},
+		},
+	}
+
+	report := p.Predict(now)
+	// 直接呼叫 buildETFEstimates 觀察 round-trip,不依賴 Predict 中的 timeline 注入。
+	estimates := p.buildETFEstimates(timeline)
+	report.ETFEstimates = estimates
+
+	js, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	out := string(js)
+
+	if !strings.Contains(out, `"etf_estimates":[`) {
+		t.Errorf("expected etf_estimates to be a non-empty array, got: %s", out)
+	}
+	if !strings.Contains(out, `"etf_name"`) {
+		t.Errorf("expected nested etf_name field, got: %s", out)
+	}
+	if !strings.Contains(out, `"stock_symbol"`) {
+		t.Errorf("expected nested stock_symbol field, got: %s", out)
+	}
+}
