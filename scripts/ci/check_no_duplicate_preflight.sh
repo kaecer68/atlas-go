@@ -28,6 +28,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # comment explaining the rationale.
 ALLOW_LIST=(
     "cmd/experimental/l2-4-preflight"            # L2.4 manual preflight (PR #1027)
+    "cmd/experimental/c07-preflight"             # C07 sector prediction manual preflight (PR #1200+, Wave 11 C07 follow-up)
     "internal/scheduler/l2_4_auto_cron.go"       # L2.4 auto-cron gate (PR #1029)
 )
 

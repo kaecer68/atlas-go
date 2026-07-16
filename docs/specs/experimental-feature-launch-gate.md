@@ -2,13 +2,13 @@
 
 > **Status**: SHIPPED (in production via PR #1027 preflight + PR #1029 auto-cron, both Wave 11 L2.4 series)
 > **Owner**: agent platform team
-> **Last updated**: 2026-07-09
+> **Last updated**: 2026-07-16 (added C07 sector prediction instance)
 
 ## 目的
 
 本文件定義「**experimental feature launch gate**」(以下簡稱 **launch gate**)的 canonical pattern,讓 L2.4 observation 啟動這個**目前唯一的** launch gate 變成**未來可重用**的設計模板,避免「每次有實驗性功能上線就造一個 ad-hoc 閘門」的碎片化。
 
-L2.4 preflight 是這個 pattern 的**第一個 instance**,也是目前**唯一**的 instance。
+L2.4 preflight 是這個 pattern 的**第一個 instance**,目前已有 **2 個 instances** (L2.4 + C07 sector prediction, 後者為 follow-up 擴張)。
 
 ## 為什麼需要「唯一」
 
@@ -138,6 +138,7 @@ func main() {
 | Feature | Preflight | Auto-cron | Doc |
 |---------|-----------|-----------|-----|
 | **L2.4 sector agents** | `cmd/experimental/l2-4-preflight/main.go` (PR #1027) | `internal/scheduler/l2_4_auto_cron.go` (PR #1029) | `docs/operations/l2-4-runbook.md` + `l2-4-observation-spec.md` |
+| **C07 sector direction predictions** (rule-based) | `cmd/experimental/c07-preflight/main.go` (PR #1200+ follow-up) | (no auto-cron — request-time computation, no scheduler trigger) | `docs/operations/sector-prediction-runbook.md` + `docs/specs/sector-dimension-prediction.md` |
 
 未來新增 launch gate 時,在此表加入 row。
 

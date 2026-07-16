@@ -14,7 +14,9 @@
 
 啟用 `SECTOR_PREDICTION_ENABLED` 前,逐項確認:
 
-- [ ] **環境選擇**: staging 或專用 L2.4 harness,**不可在 production 直接啟用**。
+> **推薦路徑**:先跑 `go run ./cmd/experimental/c07-preflight [http://localhost:18080]`(per [`docs/specs/experimental-feature-launch-gate.md`](../specs/experimental-feature-launch-gate.md) L2.4-style launch gate pattern)。本節手動清單與 c07-preflight automatable checks 一致;manual checks 仍需 operator 自行確認。
+
+- [ ] **環境選擇**: staging 或專用 L2.4 harness,**不可在 production 直接啟用**(c07-preflight 會擋非 staging URL)。
 - [ ] **資料源檢查**: `internal/marketdata/macro_provider.go:MacroDataSnapshot` 在 staging 可取得完整 `ForeignInvestorNet` / `TsmADRDelta` / `NVDA` / `DXY` 4 個 leading indicator。如果任一欄位為 0,先查 channel health(`/api/data/channels`)。
 - [ ] **Feature flag flip**:
   - 方法 A：環境變數 `SECTOR_PREDICTION_ENABLED=true`(由 `internal/config/config.go` 的 `SectorPredictionEnabled` 載入,在 `cmd/atlas/main.go` 消費,見 I11)
