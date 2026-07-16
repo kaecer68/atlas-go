@@ -251,6 +251,16 @@ func IsL1(s SectorID) bool { _, ok := DisplayZHTw[s]; return ok }
 
 func IsL2(s SectorID) bool { _, ok := subIndustryIDs[s]; return ok }
 
+// L1Sectors returns the 20 canonical L1 sector IDs in fixed sorted order.
+func L1Sectors() []SectorID {
+	ids := make([]SectorID, 0, len(DisplayZHTw))
+	for id := range DisplayZHTw {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
 func DisplayZH(id SectorID) string {
 	if label, ok := DisplayZHTw[id]; ok {
 		return label

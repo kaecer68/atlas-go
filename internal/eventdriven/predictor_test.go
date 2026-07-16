@@ -863,3 +863,31 @@ func Test_Predict_JSONMarshal_C06_ETFEstimatesPopulatedRoundTrip(t *testing.T) {
 		t.Errorf("expected nested stock_symbol field, got: %s", out)
 	}
 }
+
+func Test_Predict_SectorPredictionsAlwaysPresent(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 17, 9, 0, 0, 0, time.UTC)
+	report := p.Predict(now)
+
+	if report.SectorPredictions == nil {
+		t.Fatal("SectorPredictions must not be nil (always present, no omitempty)")
+	}
+	// Without SectorPredictor wired, the field should be empty.
+	if len(report.SectorPredictions) != 0 {
+		t.Errorf("expected empty SectorPredictions, got %d entries", len(report.SectorPredictions))
+	}
+}
+
+func Test_Predict_JSONHasSectorPredictions(t *testing.T) {
+	p := testPredictor()
+	now := time.Date(2026, 7, 17, 9, 0, 0, 0, time.UTC)
+	report := p.Predict(now)
+
+	b, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `"sector_predictions"`) {
+		t.Error("JSON output must contain 'sector_predictions' key")
+	}
+}

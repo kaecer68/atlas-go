@@ -1,11 +1,13 @@
 # C07 — 板塊維度預測（Per-Sector Direction Prediction）
 
-> **狀態**：v1.0 — 專家決策版，已過 owner 回饋，可直接進入 Phase 0
+> **狀態**：v1.1 — 因 Phase 0 發現歷史板塊日報酬無法回填，改採 rule-based / heuristic 實作，保留統計模型升級空間
 > **作者**：atlas-dev（agent-driven, Sisyphus pattern）
 > **建立日期**：2026-07-16
+> **最後更新**：2026-07-16
 > **優先級**：P2
 > **對應 manifest 條目**：docs/manifests/sector-dimension-prediction-invariant-manifest.md
 > **相依**：C06（`/api/events/prediction` 已穩定 expose `etf_estimates` / `revenue_surprises`）
+> **Phase 0 決策**：原始「3 年歷史板塊回報 backfill」不可行；改以 `MacroDataSnapshot` + `CycleTracker` + 事件 `affected_industries` 作為輸入，實作可解釋的 rule-based 預測器。詳見 §9 與 manifest §6。
 
 ---
 
@@ -206,38 +208,119 @@ type PredictionReport struct {
 - 每個 `SectorDayPrediction.Sectors` 必須包含全部 20 個 L1 sectors（排序固定）。
 - `sector_id` 必須是 canonical L1 ID（由 `industry.NormalizeSectorID` 檢查）。
 
-### 4.2 演算法（Hybrid Probability Model）
+### 4.2 演算法（Rule-Based / Heuristic Model）
 
-對每個板塊 S 與預測日 D：
+因 Phase 0 確認歷史板塊日報酬無法回填，C07 v1.1 改採可解釋的 rule-based 模型。所有權重與門檻由參數系統（`ParametersConfig`）管理，預設值採用下表，未來有歷史資料時可平滑替換為統計模型。
+
+對每個板塊 S（canonical L1 sector ID）與預測日 D：
 
 ```text
-P_base = empirical probability vector from event_type × sector hit table
-         (with Bayesian shrinkage when N < floor)
+score_inflow, score_outflow, score_neutral = 0, 0, 0
 
-P_macro = macro_exposure_adjustment(S, current macro snapshot)
-          = softmax( [dxy_beta, us10y_beta, tsm_adr_beta, nvda_beta,
-                       foreign_net_beta, bdi_beta] · current_changes )
+# 1. 整體方向基線（overall baseline）
+if P_overall.direction == "inflow":
+    score_inflow  += sector_weight(S) * overall_confidence
+elif P_overall.direction == "outflow":
+    score_outflow += sector_weight(S) * overall_confidence
+else:
+    score_neutral   += sector_weight(S) * overall_confidence
 
-P_cycle = cycle_shift(S, current_cycle_position)
-          = lookup table: cycle phase × sector → {inflow, neutral, outflow} bias
+# 2. 事件板塊標籤調整（event affected_industries）
+for e in active_events where S in e.affected_industries:
+    w = e.base_weight * (1.0 if not e.backfilled else 0.7)
+    if e.direction == "bullish":
+        score_inflow  += w
+    elif e.direction == "bearish":
+        score_outflow += w
+    elif e.direction == "mixed":
+        score_inflow  += w * 0.3
+        score_outflow += w * 0.3
 
-score_raw = 0.60 * logit(P_base) + 0.25 * logit(P_macro) + 0.15 * logit(P_cycle)
-P_final = softmax(score_raw)
+# 3. 宏觀驅動調整（macro drivers，使用 MacroDataSnapshot.ChangePct）
+for (driver, relevance) in sector_macro_map(S):
+    if driver is missing or ChangePct == 0: continue
+    sign = driver_direction_logic(driver, ChangePct)  # +1 bullish, -1 bearish
+    magnitude = clamp(|ChangePct| / typical_move, 0, 1)
+    if sign > 0:
+        score_inflow  += relevance * magnitude
+    elif sign < 0:
+        score_outflow += relevance * magnitude
 
-direction = argmax(P_final)
-confidence = 1 - normalized_entropy(P_final)
+# 4. 週期位置調整（CycleTracker）
+cycle_score = GetContinuousPhaseScore(S)  # -1..1
+sector_cycle_sensitivity = cycle_sensitivity(S)  # e.g. cyclical 1.0, defensive 0.5
+if cycle_score > 0:
+    score_inflow  += cycle_score * sector_cycle_sensitivity
+elif cycle_score < 0:
+    score_outflow += -cycle_score * sector_cycle_sensitivity
+else:
+    score_neutral += 0.2
 
-consistency = JSD(P_final_weighted, P_overall)
-if consistency > 0.25:
+# 5. 轉為概率分布
+P_raw = softmax(score_inflow, score_neutral, score_outflow)
+
+# 6. 方向與信心
+direction = argmax(P_raw)
+confidence = 1 - normalized_entropy(P_raw)
+confidence = max(confidence, 0.40)
+
+# 7. 一致性檢查（JSD vs 整體預測）
+if JSD(P_raw, P_overall) > 0.25:
     confidence *= 0.85
-    drivers = append(drivers, "板塊加總與整體信心存在分歧")
+    drivers.append("板塊加總與整體信心存在分歧")
+
+# 8. drivers（貢獻最大的 2 個因子，不含一致性 warning）
+drivers = top_k_contributors(S, P_raw, top=2)
 ```
 
-**說明**：
-- `logit` 與 `softmax` 將概率向量映射到可線性組合的 log-odds 空間。
-- `P_macro` 使用 macro beta（對每個 driver 的敏感度）與當日變化率相乘，不是硬規則。
-- `P_cycle` 使用既有 `internal/industry/cycle.go` 的周期位置，避免重造 cycle 模型。
-- `confidence` 用熵的補數：分布越集中，confidence 越高；越接近 uniform，confidence 越低。
+#### 4.2.1 板塊權重（sector_weight）
+
+以板塊對台灣加權指數的近似影響力為基礎：
+
+| 板塊 | 預設權重 | 理由 |
+|---|---|---|
+| semiconductor | 0.30 | 台股權重最大 |
+| electronics | 0.15 | 電子零組件出口鏈 |
+| financials | 0.12 | 金融保險 |
+| ai_supply_chain | 0.10 | 新增 narrative 主題 |
+| shipping | 0.08 | 高 Beta 週期 |
+| 其他 15 個 L1 | 0.25 均分 | 合計 0.25 |
+
+權重總和為 1.0。未來可用實際市值權重替換。
+
+#### 4.2.2 宏觀驅動映射（sector_macro_map）
+
+| Driver | 主要影響板塊 | 方向邏輯 |
+|---|---|---|
+| `dxy` | electronics, semiconductor, shipping, steel | ChangePct > 0 → 出口計價壓力 → 偏空 |
+| `us10y` | financials, construction | ChangePct > 0 → 淨息差擴大 / 營建成本承壓 → 金融偏多、營建偏空 |
+| `tsm_adr` | semiconductor, ai_supply_chain | ChangePct > 0 → 偏多 |
+| `nvda` | semiconductor, ai_supply_chain | ChangePct > 0 → 偏多 |
+| `foreign_investor_net` | semiconductor, financials | ChangePct > 0 → 外資買超 → 權值板塊偏多 |
+| `bdi` | shipping, steel | ChangePct > 0 → 景氣偏多 |
+| `sox_index` | semiconductor | ChangePct > 0 → 偏多 |
+| `taiex` | 全部 | ChangePct > 0 → 偏多 |
+
+每個 driver 的 magnitude 以該 driver 的「典型單日變動」進行標準化。典型值由參數管理，預設：
+- DXY: 0.5%, US10Y: 5bps, TSM ADR: 2%, NVDA: 3%, BDI: 2%, SOX: 2%, ForeignInvestorNet: 1%, TAIEX: 1%
+
+#### 4.2.3 週期敏感度（cycle_sensitivity）
+
+| 板塊類型 | 敏感度 | 例子 |
+|---|---|---|
+| 高週期 | 1.0 | semiconductor, shipping, steel, electronics, auto, construction, machinery, chemicals, plastics, cement |
+| 中週期 | 0.7 | optoelectronics, other_electronics, telecom, biotech, energy, retail, food, textiles, tourism |
+| 低週期/防禦 | 0.4 | financials |
+
+#### 4.2.4 一致性與信心衰減
+
+- `confidence` 計算後強制 ≥ 0.40（I7）。
+- JSD 與整體預測超過 0.25 時乘以 0.85 並顯示 warning（I5）。
+- 若 `MacroDataSnapshot.DataStatus` 為 `stale` 或 `degraded`，所有板塊 confidence 再乘以 0.90。
+
+#### 4.2.5 與原始統計模型的關係
+
+本 rule-based 模型保留與原始統計模型相同的資料模型（`SectorPrediction`、`SectorDayPrediction`）與 invariants（I1-I11）。原始「3 年回溯 + 事件命中表 + Bayesian shrinkage」路徑標記為 **deferred**，在歷史板塊資料可取得後可無縫替換 `SectorPredictor` 內部實作，而不改 API contract 與前端。
 
 ### 4.3 API 契約
 

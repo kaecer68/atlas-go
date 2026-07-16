@@ -19,6 +19,7 @@ type Predictor struct {
 	narrativeModels   []ModelView
 	scanStore         DetectorScanStore
 	narrativeRegistry *narrative.DetectorRegistry
+	sectorPredictor   *SectorPredictor
 }
 
 // ScanResult is a minimal projection of a detector scan row, defined
@@ -110,6 +111,12 @@ func (p *Predictor) SetNarrativeRegistry(reg *narrative.DetectorRegistry) {
 	p.narrativeRegistry = reg
 }
 
+// SetSectorPredictor injects a SectorPredictor for per-sector direction
+// predictions. nil disables sector predictions (default).
+func (p *Predictor) SetSectorPredictor(sp *SectorPredictor) {
+	p.sectorPredictor = sp
+}
+
 // Predict generates a 5-day capital flow prediction report.
 func (p *Predictor) Predict(now time.Time) PredictionReport {
 	// Get upcoming events
@@ -156,6 +163,9 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 		RevenueSurprises: p.buildRevenueSurprises(timeline),
 		Summary:          buildPredictionSummary(predictions, active, cfScore),
 	}
+	if p.sectorPredictor != nil {
+		report.SectorPredictions = p.sectorPredictor.Predict(predictions, items)
+	}
 	if report.ActiveEvents == nil {
 		report.ActiveEvents = []EventCalendarItem{}
 	}
@@ -164,6 +174,9 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 	}
 	if report.RevenueSurprises == nil {
 		report.RevenueSurprises = []RevenueSurprise{}
+	}
+	if report.SectorPredictions == nil {
+		report.SectorPredictions = []SectorDayPrediction{}
 	}
 	return report
 }

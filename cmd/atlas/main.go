@@ -704,7 +704,13 @@ func run(args []string, deps appDeps) error {
 			// below this line — duplicate mux.Handle will panic on startup.
 			// See PR #1173 (commit 7d93e754) for the bug this comment prevents.
 			// All event/* routes are owned by RegisterRoutesWithDetectors.
-			eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
+			edHandler := eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
+			if os.Getenv("SECTOR_PREDICTION_ENABLED") == "true" {
+				edHandler.SetMacroProvider(macroProvider)
+				log.Printf("[EventDriven] sector predictions enabled with macro provider")
+			} else {
+				log.Printf("[EventDriven] sector predictions disabled (set SECTOR_PREDICTION_ENABLED=true to enable)")
+			}
 			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + narrative models + detector scans)")
 			log.Printf("[Narrative] wired %d InvestmentModels into predictor", len(narrativeAdapter.ListModels()))
 		}

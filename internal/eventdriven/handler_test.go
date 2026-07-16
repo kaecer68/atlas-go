@@ -190,6 +190,9 @@ func TestRegisterRoutes_FullHTTPFlow_Prediction(t *testing.T) {
 	if len(report.Predictions) != 5 {
 		t.Errorf("expected 5 predictions in response, got %d", len(report.Predictions))
 	}
+	if report.SectorPredictions == nil {
+		t.Error("SectorPredictions must not be nil in JSON response (always present)")
+	}
 	if report.Window != "5-day forward" {
 		t.Errorf("Window = %q, want 5-day forward", report.Window)
 	}
