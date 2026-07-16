@@ -15,6 +15,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-financial
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-institutional-investors ./cmd/backfill-institutional-investors
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o cron-quote-backfill ./cmd/cron-quote-backfill
 
+# C07 sector prediction observation window (PR #1201)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o c07-obs-collector ./cmd/experimental/c07-obs-collector
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o c07-day-evaluator ./cmd/experimental/c07-day-evaluator
+
 FROM alpine:latest
 
 # Install runtime deps (bash for cron-entrypoint.sh shell scheduler, curl for health checks)
@@ -38,6 +42,10 @@ COPY --from=builder /build/backfill-month-revenue /app/
 COPY --from=builder /build/backfill-financial-statements /app/
 COPY --from=builder /build/backfill-institutional-investors /app/
 COPY --from=builder /build/cron-quote-backfill /app/
+
+# C07 sector prediction observation window binaries (PR #1201)
+COPY --from=builder /build/c07-obs-collector /app/
+COPY --from=builder /build/c07-day-evaluator /app/
 
 # Copy SQL migrations (used by CLI tools when DB pool is initialized)
 COPY --from=builder /build/sql /app/sql
