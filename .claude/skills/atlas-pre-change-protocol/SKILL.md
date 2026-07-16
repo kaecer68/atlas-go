@@ -362,6 +362,25 @@ Read relevant internal/<module>/AGENTS.md for module-specific traps
 
 ---
 
+## Session-End Cleanup
+
+Before ending any implementation session:
+
+```
+□ All changed files are committed or explicitly reverted
+□ No uncommitted implementation code remains in the working tree
+□ git stash list reviewed:
+  ├─ Stashes created this session: apply + commit + push, OR drop with user confirmation
+  ├─ Pre-existing stashes: leave untouched unless user asked to clean them
+  └─ All remaining stashes have descriptive messages (no "WIP" or unnamed stashes)
+□ Manifest/TODO status updated if one exists
+□ If work is incomplete: document next action before pausing
+```
+
+**Why this matters**: unnamed or abandoned stashes create ambiguity about what is "done" and pollute future sessions.
+
+---
+
 ## Post-Merge Cleanup（Exit Criteria）
 
 **AI 在每次 PR merge 後必須自動執行以下 4 步**（不要等使用者指示）：
