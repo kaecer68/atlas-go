@@ -17,7 +17,7 @@
 - [ ] **環境選擇**: staging 或專用 L2.4 harness,**不可在 production 直接啟用**。
 - [ ] **資料源檢查**: `internal/marketdata/macro_provider.go:MacroDataSnapshot` 在 staging 可取得完整 `ForeignInvestorNet` / `TsmADRDelta` / `NVDA` / `DXY` 4 個 leading indicator。如果任一欄位為 0,先查 channel health(`/api/data/channels`)。
 - [ ] **Feature flag flip**:
-  - 方法 A：環境變數 `SECTOR_PREDICTION_ENABLED=true`(由 `cmd/atlas/main.go` 讀取,見 I11)
+  - 方法 A：環境變數 `SECTOR_PREDICTION_ENABLED=true`(由 `internal/config/config.go` 的 `SectorPredictionEnabled` 載入,在 `cmd/atlas/main.go` 消費,見 I11)
   - 方法 B：JSON 旗標 `orchestrator.sector_prediction_enabled.value = true`(若尚未從 env 遷移,參考 I11)
   - **兩者僅能擇一**,預設走 env。
 - [ ] **重啟服務**: flag 在啟動時讀取,無 hot-reload。執行 `docker compose restart atlas` 確認新行程載入配置。

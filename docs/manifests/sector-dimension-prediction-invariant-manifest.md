@@ -22,7 +22,7 @@
 | I8 | Frontend 預設 **摺疊**；展開後顯示 5 必須看板塊，可切換全部 20；必須記憶 localStorage | client_web | `__tests__/sector_predictions.test.mjs` | 🟢 done | UX invariant |
 | I9 | Frontend 對 missing/empty `sector_predictions` 必須顯示 empty state，不可 crash | client_web | `__tests__/sector_predictions.test.mjs` | 🟢 done | defensive invariant |
 | I10 | 新增計算後 `/api/events/prediction` p95 latency < 200ms | eventdriven | benchmark in integration test | 🟡 pending | 待 L2.4 觀察窗口測量 |
-| I11 | Feature flag `SECTOR_PREDICTION_ENABLED` 預設 **false**；開啟前須通過 L2.4 observation window | config | `cmd/atlas/main.go` + `docs/reference/parameter-system.md` | 🟢 done | rollout safety |
+| I11 | Feature flag `SECTOR_PREDICTION_ENABLED` 預設 **false**；開啟前須通過 L2.4 observation window | config | `internal/config/config.go` (`SectorPredictionEnabled bool`) + `cmd/atlas/main.go` consumer | 🟢 done | rollout safety |
 | I12 | Out-of-sample Brier score ≤ 0.20；hit-rate ≥ 0.55 | data-science | `cmd/run-experiment` backtest | ⚪ deferred | 需歷史板塊報酬才能計算；標記為未來升級條件 |
 
 ---

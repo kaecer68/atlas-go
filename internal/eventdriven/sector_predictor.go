@@ -51,8 +51,8 @@ func (sp *SectorPredictor) Predict(predictions []FlowPrediction, activeEvents []
 			Sectors: make([]SectorPrediction, 0, len(l1s)),
 		}
 		for _, sid := range l1s {
-			spred := sp.predictSector(sid, fp, activeEvents)
-			sdp.Sectors = append(sdp.Sectors, spred)
+			spread := sp.predictSector(sid, fp, activeEvents)
+			sdp.Sectors = append(sdp.Sectors, spread)
 		}
 		out = append(out, sdp)
 	}

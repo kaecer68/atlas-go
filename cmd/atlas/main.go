@@ -705,7 +705,7 @@ func run(args []string, deps appDeps) error {
 			// See PR #1173 (commit 7d93e754) for the bug this comment prevents.
 			// All event/* routes are owned by RegisterRoutesWithDetectors.
 			edHandler := eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
-			if os.Getenv("SECTOR_PREDICTION_ENABLED") == "true" {
+			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
 				log.Printf("[EventDriven] sector predictions enabled with macro provider")
 			} else {
