@@ -37,6 +37,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"us_spx":              false,
 		"us_ndx":              false,
 		"us_dji":              false,
+		"taiex_index":         false,
 		"us_nvda":             false,
 		"us_aapl":             false,
 		"us_msft":             false,

@@ -90,6 +90,9 @@ var (
 	// yahooTechLimiter covers the 4 US tech stock + ADR channels
 	// (us_nvda, us_aapl, us_msft, tsm_adr).
 	yahooTechLimiter = rate.NewLimiter(YahooTechRate, YahooTechBurst)
+
+	// taiexIndexLimiter covers the Taiwan weighted index channel (taiex_index).
+	taiexIndexLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 )
 
 // RateLimitManager manages all channel rate limiters.
@@ -126,15 +129,16 @@ func NewRateLimitManager() *RateLimitManager {
 			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_etf":            rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
 			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
-			// (see yahooIndexLimiter / yahooTechLimiter above) so the 8-channel
+			// (see yahooIndexLimiter / yahooTechLimiter / taiexIndexLimiter above) so the 9-channel
 			// us_market_refresh batch does not serialize at 1 req/s.
-			"us_spx":  yahooIndexLimiter,
-			"us_ndx":  yahooIndexLimiter,
-			"us_dji":  yahooIndexLimiter,
-			"us_nvda": yahooTechLimiter,
-			"us_aapl": yahooTechLimiter,
-			"us_msft": yahooTechLimiter,
-			"tsm_adr": yahooTechLimiter,
+			"us_spx":      yahooIndexLimiter,
+			"us_ndx":      yahooIndexLimiter,
+			"us_dji":      yahooIndexLimiter,
+			"taiex_index": taiexIndexLimiter,
+			"us_nvda":     yahooTechLimiter,
+			"us_aapl":     yahooTechLimiter,
+			"us_msft":     yahooTechLimiter,
+			"tsm_adr":     yahooTechLimiter,
 		},
 	}
 }

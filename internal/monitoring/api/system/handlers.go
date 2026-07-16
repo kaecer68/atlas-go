@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
@@ -180,77 +182,127 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 
 	var dayTradingRatio *float64
 	var dtStats *retail.DayTradingStats
-	fetcherStatus := FetcherStatus{DayTrading: "not_available", Taifex: "not_available", OddLot: "not_available", ETF: "not_available", GeopoliticalRisk: "not_available"}
-	if h.DayTradingFetcher != nil {
-		if stats, err := h.DayTradingFetcher(r.Context()); err == nil {
-			ratio := stats.VolumeRatio
-			dayTradingRatio = &ratio
-			dtStats = &retail.DayTradingStats{
-				Volume:      float64(stats.DayTradingVolume),
-				VolumeRatio: stats.VolumeRatio,
-			}
-			fetcherStatus.DayTrading = "ok"
-		} else {
-			fetcherStatus.DayTrading = "error"
-		}
-	}
-
 	var pcrData *marketdata.PCRStats
 	var futuresOIData *marketdata.RetailFuturesOI
 	var oddLotData *marketdata.OddLotStats
 	var etfData *marketdata.ETFStats
 	var retailFuturesOI *float64
 	var etfNetSubscription *float64
+	fetcherStatus := FetcherStatus{DayTrading: "not_available", Taifex: "not_available", OddLot: "not_available", ETF: "not_available", GeopoliticalRisk: "not_available"}
 
-	if h.TaifexFetcher != nil {
-		if pcr, futures, err := h.TaifexFetcher(r.Context()); err == nil {
-			pcrData = pcr
-			futuresOIData = futures
-			if futuresOIData != nil {
-				foi := futuresOIData.RetailLongPct - futuresOIData.RetailShortPct
-				retailFuturesOI = &foi
+	fetchCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	if h.DayTradingFetcher != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if stats, err := h.DayTradingFetcher(fetchCtx); err == nil {
+				ratio := stats.VolumeRatio
+				dtStatsLocal := &retail.DayTradingStats{
+					Volume:      float64(stats.DayTradingVolume),
+					VolumeRatio: stats.VolumeRatio,
+				}
+				mu.Lock()
+				dayTradingRatio = &ratio
+				dtStats = dtStatsLocal
+				fetcherStatus.DayTrading = "ok"
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				fetcherStatus.DayTrading = "error"
+				mu.Unlock()
 			}
-			fetcherStatus.Taifex = "ok"
-		} else {
-			fetcherStatus.Taifex = "error"
-		}
+		}()
+	}
+	if h.TaifexFetcher != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if pcr, futures, err := h.TaifexFetcher(fetchCtx); err == nil {
+				var foi *float64
+				if futures != nil {
+					v := futures.RetailLongPct - futures.RetailShortPct
+					foi = &v
+				}
+				mu.Lock()
+				pcrData = pcr
+				futuresOIData = futures
+				retailFuturesOI = foi
+				fetcherStatus.Taifex = "ok"
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				fetcherStatus.Taifex = "error"
+				mu.Unlock()
+			}
+		}()
 	}
 	if h.OddLotFetcher != nil {
-		if data, err := h.OddLotFetcher(r.Context()); err == nil {
-			oddLotData = data
-			fetcherStatus.OddLot = "ok"
-		} else {
-			fetcherStatus.OddLot = "error"
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if data, err := h.OddLotFetcher(fetchCtx); err == nil {
+				mu.Lock()
+				oddLotData = data
+				fetcherStatus.OddLot = "ok"
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				fetcherStatus.OddLot = "error"
+				mu.Unlock()
+			}
+		}()
 	}
 	if h.ETFFetcher != nil {
-		if data, err := h.ETFFetcher(r.Context()); err == nil {
-			etfData = data
-			if etfData != nil {
-				sub := float64(etfData.NetSubscription)
-				etfNetSubscription = &sub
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if data, err := h.ETFFetcher(fetchCtx); err == nil {
+				var sub *float64
+				if data != nil {
+					v := float64(data.NetSubscription)
+					sub = &v
+				}
+				mu.Lock()
+				etfData = data
+				etfNetSubscription = sub
+				fetcherStatus.ETF = "ok"
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				fetcherStatus.ETF = "error"
+				mu.Unlock()
 			}
-			fetcherStatus.ETF = "ok"
-		} else {
-			fetcherStatus.ETF = "error"
-		}
+		}()
 	}
 
-	calc := retail.GetCalculator()
-	calc.SetParams(config.GetParametersConfig().RSITw)
-
-	// Geopolitical risk: use live provider if available, fallback to 0 (defense-first).
 	geoRisk := 0.0
 	if h.GeopoliticalRiskFetcher != nil {
-		geoRisk = h.GeopoliticalRiskFetcher(r.Context())
-		if geoRisk > 0 {
-			fetcherStatus.GeopoliticalRisk = "ok"
-		} else {
-			fetcherStatus.GeopoliticalRisk = "no_data"
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			g := h.GeopoliticalRiskFetcher(fetchCtx)
+			mu.Lock()
+			geoRisk = g
+			if geoRisk > 0 {
+				fetcherStatus.GeopoliticalRisk = "ok"
+			} else {
+				fetcherStatus.GeopoliticalRisk = "no_data"
+			}
+			mu.Unlock()
+		}()
 	} else {
 		fetcherStatus.GeopoliticalRisk = "not_available"
 	}
+
+	wg.Wait()
+
+	calc := retail.GetCalculator()
+	calc.SetParams(config.GetParametersConfig().RSITw)
 
 	rsiInput := retail.RSITwInput{
 		MarginBalance:      snap.RetailMarginBalance.Value,

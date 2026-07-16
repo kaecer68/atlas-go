@@ -615,6 +615,14 @@
   color: var(--editorial-muted);
 }
 
+.home-banner__date {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  color: var(--editorial-muted);
+  font-size: var(--text-xs);
+}
+
 .home-banner__actions {
   display: flex;
   align-items: center;
@@ -828,3 +836,34 @@
 .rec-card__signal--bullish { color: var(--trend-bullish); }
 .rec-card__signal--bearish { color: var(--trend-bearish); }
 .rec-card__signal--neutral { color: var(--editorial-muted); }
+
+/* Data quality badge — appears in section headers when a channel is degraded */
+.data-quality-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--editorial-radius-sm, 4px);
+  background: var(--color-danger-bg, rgba(239, 68, 68, 0.12));
+  color: var(--color-danger, #ef4444);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.data-quality-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.home-section__header .data-quality-badge {
+  margin-left: auto;
+}
+
+.home-today-summary__top .data-quality-badge {
+  margin-left: 8px;
+}

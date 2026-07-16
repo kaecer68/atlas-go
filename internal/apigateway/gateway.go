@@ -194,6 +194,7 @@ func channelIDs() []string {
 		"us_spx",
 		"us_ndx",
 		"us_dji",
+		"taiex_index",
 		"us_nvda",
 		"us_aapl",
 		"us_msft",

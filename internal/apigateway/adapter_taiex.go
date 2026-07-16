@@ -21,7 +21,7 @@ type TAIEXIndexChannelAdapter struct {
 func NewTAIEXIndexChannelAdapter(p *marketdata.TAIEXIndexProvider) *TAIEXIndexChannelAdapter {
 	return &TAIEXIndexChannelAdapter{
 		provider: p,
-		limiter:  rate.NewLimiter(rate.Every(5*time.Second), 1),
+		limiter:  taiexIndexLimiter,
 	}
 }
 
