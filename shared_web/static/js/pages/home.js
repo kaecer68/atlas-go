@@ -22,6 +22,7 @@ import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
 import { dataQualityBadge, buildChannelMap } from '../components/data-quality-badge.js';
 import { renderSevenForceBoard } from '../components/seven-force-board.js';
+import { renderSevenForceInterpretations } from '../components/seven-force-interpretations.js';
 import { renderCapitalBattleCard } from '../components/capital-battle-card.js';
 
 window.scrollToSection = scrollToSection;
@@ -180,6 +181,7 @@ export async function renderHomePage(container) {
       <div id="home-seven-force-content">
         <div class="home-loading-card">載入中…</div>
       </div>
+      <div id="home-seven-force-interpretations"></div>
     </section>
 
     <section class="home-section" id="home-event-calendar">
@@ -326,6 +328,7 @@ async function loadHomeData() {
       renderPredictionsCard(predictionData);
       renderCapitalBattleCard(document.getElementById('home-capital-battle-content'), capitalFlowSummary);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), capitalFlowSummary);
+      renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), capitalFlowSummary);
 
       // Event calendar — fetched once and shared with banner + filters
       const calContainer = document.getElementById('home-calendar-content');
@@ -346,7 +349,7 @@ async function loadHomeData() {
       renderPredictionsCard(null);
       renderCapitalBattleCard(document.getElementById('home-capital-battle-content'), null);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), null);
-      renderHomeBanner([]);
+      renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), null);
     }
 
     // Portfolio snapshot is loaded independently; it may be empty/demo.
