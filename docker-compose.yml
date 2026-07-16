@@ -321,7 +321,7 @@ services:
   # fires alerts to monitoring.AlertStore on threshold breach.
   # Obs log is stored on the shared ./docs bind; alert dir on shared
   # ./data/state/alerts so it joins the main atlas-go process's store.
-  cron-c07-collect:
+  atlas-cron-c07-collect:
     build:
       context: .
       dockerfile: Dockerfile.cron
@@ -350,7 +350,7 @@ services:
   # from the earliest record date in the obs log and only fires the formal
   # acceptance report on those days (no-op otherwise). Exit code 1 on
   # MUST-criterion failure → alert/notify path via atlas AlertStore + audit log.
-  cron-c07-evaluate:
+  atlas-cron-c07-evaluate:
     build:
       context: .
       dockerfile: Dockerfile.cron

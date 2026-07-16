@@ -53,14 +53,28 @@ fi
 
 # Day N: calendar-day difference + 1 (Day 1 = start_date itself).
 # Cross-platform date-to-epoch: GNU date uses -d, BSD/macOS date uses -j -f.
-START_EPOCH="$(
-    START_DATE="${START_DATE}" python3 -c 'import os, sys, calendar, datetime; print(int(datetime.datetime.strptime(os.environ["START_DATE"], "%Y-%m-%d").timestamp()))' 2>/dev/null
-)"
-TODAY_EPOCH="$(python3 -c 'import calendar, datetime; print(int(datetime.datetime.strptime("'"${TODAY}"'", "%Y-%m-%d").timestamp()))' 2>/dev/null)"
-if [ -z "${START_EPOCH}" ] || [ -z "${TODAY_EPOCH}" ]; then
-    echo "[c07-evaluate ${TODAY}] date parse failed (start=${START_DATE}, today=${TODAY})" >&2
+to_epoch() {
+    # Portable YYYY-MM-DD → epoch: GNU/busybox → BSD/macOS → python3 fallback.
+    # BusyBox's `date -d "YYYY-MM-DD"` works in the Dockerfile.cron alpine image
+    # (GNU date in most distros also accepts the same form). BSD's `date -j -f`
+    # is the equivalent on macOS dev hosts. Python is the last-resort catch-all
+    # for whatever exotic env we end up running on.
+    local d="$1"
+    local out
+    out="$(date -d "${d}" +%s 2>/dev/null)" && [ -n "${out}" ] && echo "${out}" && return 0
+    out="$(date -j -f "%Y-%m-%d" "${d}" +%s 2>/dev/null)" && [ -n "${out}" ] && echo "${out}" && return 0
+    out="$(python3 -c "import datetime, sys; sys.stdout.write(str(int(datetime.datetime.strptime(sys.argv[1], '%Y-%m-%d').timestamp())))" "${d}" 2>/dev/null)" && [ -n "${out}" ] && echo "${out}" && return 0
+    return 1
+}
+
+START_EPOCH="$(to_epoch "${START_DATE}")" || {
+    echo "[c07-evaluate ${TODAY}] date parse failed for start=${START_DATE}" >&2
     exit 2
-fi
+}
+TODAY_EPOCH="$(to_epoch "${TODAY}")" || {
+    echo "[c07-evaluate ${TODAY}] date parse failed for today=${TODAY}" >&2
+    exit 2
+}
 
 DAY_NUMBER="$(( (TODAY_EPOCH - START_EPOCH) / 86400 + 1 ))"
 
