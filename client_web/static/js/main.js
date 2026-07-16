@@ -277,7 +277,7 @@ async function loadPageData(pageId) {
       ]);
       if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], null, results[6]);
 
-      getJSONWithTimeout('/api/dashboard/retail-sentiment', 3000).then(function(rs) {
+      getJSONWithTimeout('/api/dashboard/retail-sentiment', 8000).then(function(rs) {
         if (m.narr.renderNarrativePage && rs) {
           m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], rs, results[6]);
         }
