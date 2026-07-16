@@ -20,11 +20,36 @@ import { displayZH as sectorLabel } from '../shared/sector-display.js';
 import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
+import { dataQualityBadge, buildChannelMap } from '../components/data-quality-badge.js';
 
 window.scrollToSection = scrollToSection;
 
 const DASHBOARD_VERSION = 'v0.0.0.24';
 const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
+
+const CHANNELS_BY_SECTION = {
+  hero: ['us_yahoo', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'export_statistics', 'twse_capital_flow'],
+  signalStrip: ['geopolitical', 'us_yahoo'],
+  marketPulse: ['us_yahoo', 'us_spx', 'us_ndx', 'us_dji', 'sox_index', 'us_nvda', 'us_aapl', 'us_msft', 'tsm_adr', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'export_statistics', 'twse_capital_flow'],
+  predictions: ['twse_capital_flow', 'geopolitical', 'tsmc_revenue'],
+  calendar: ['twse_replay', 'us_yahoo', 'tsmc_revenue'],
+};
+
+let _homeChannelMap = {};
+
+function renderDataBadges() {
+  const set = (id, channelIds) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = dataQualityBadge(_homeChannelMap, channelIds);
+  };
+  set('home-data-badge', CHANNELS_BY_SECTION.hero);
+  set('signal-strip-data-badge', CHANNELS_BY_SECTION.signalStrip);
+  set('market-pulse-data-badge', CHANNELS_BY_SECTION.marketPulse);
+  set('predictions-data-badge', CHANNELS_BY_SECTION.predictions);
+  set('calendar-data-badge', CHANNELS_BY_SECTION.calendar);
+}
+
 
 let homeLoaded = false;
 let calActiveCategories = [];
@@ -66,6 +91,7 @@ export async function renderHomePage(container) {
         <h1 class="home-today-summary__title" id="home-summary">載入市場摘要…</h1>
         <span class="home-today-summary__help" data-tip="建議方向基於 AI 資本支出、外資流向、壓力指數、與多個市場信號的一致性計算。分數越高，信號一致性越好。若資料不足或信號互相矛盾，會顯示觀望。"></span>
         <span id="home-risk-badge"></span>
+        <span id="home-data-badge"></span>
         <span class="home-today-summary__update" id="home-last-update">最後更新：--</span>
       </div>
       <p class="home-today-summary__reason" id="home-summary-reason"></p>
@@ -92,6 +118,7 @@ export async function renderHomePage(container) {
       <div class="home-section__header">
         <h2>今日信號</h2>
         <span class="home-section__subtitle">主動偵測的市場事件</span>
+        <span class="home-section__data-badge" id="signal-strip-data-badge"></span>
       </div>
       <div class="home-signal-strip" id="home-signal-strip-content">
         <div class="home-loading-card">載入中…</div>
@@ -112,6 +139,7 @@ export async function renderHomePage(container) {
       <div class="home-section__header">
         <h2>市場脈動</h2>
         <span class="home-section__subtitle">核心觀察指標</span>
+        <span class="home-section__data-badge" id="market-pulse-data-badge"></span>
       </div>
       <div class="home-grid home-grid--4" id="home-market-grid" data-disclosure-section="market-pulse" data-disclosure-state="collapsed">
         <div class="home-loading-card">載入中…</div>
@@ -127,6 +155,7 @@ export async function renderHomePage(container) {
       <div class="home-section__header">
         <h2>未來 5 日錢潮預測</h2>
         <span class="home-section__subtitle">事件驅動的資金流向預測</span>
+        <span class="home-section__data-badge" id="predictions-data-badge"></span>
       </div>
       <div id="home-predictions-content" class="home-predictions__content">
         <div class="home-loading-card">載入中…</div>
@@ -141,6 +170,7 @@ export async function renderHomePage(container) {
       <div class="home-section__header">
         <h2>市場行事曆</h2>
         <span class="home-section__subtitle">近期除權息、法說會、財報等重要事件</span>
+        <span class="home-section__data-badge" id="calendar-data-badge"></span>
       </div>
       <div class="cal-filter-bar" id="cal-filter-bar">
         <button class="cal-filter-pill active" data-category="">全部</button>
@@ -269,6 +299,9 @@ async function loadHomeData() {
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
+      _homeChannelMap = buildChannelMap(health && Array.isArray(health.data_channels) ? health.data_channels : null);
+      renderDataBadges();
+
       renderTodaySummary(macro, stress, pipeline, events);
       renderSignalStrip(events);
       renderMarketPulse(macro, stress);
