@@ -65,7 +65,7 @@
 | Run CI / verify | all | done | `./scripts/verify-atlas.sh --skip-frontend` passed |
 | Delete `.omo/plans/` files | all | done | `.omo/` does not exist |
 | Verify no unauthorized `.omo/` dirs | all | done | `.omo/` does not exist |
-| Push branch / open PR | all | in_progress | PR # |
+| Push branch / open PR | all | done | PR #1209 https://github.com/kaecer68/atlas-go/pull/1209 |
 
 ---
 
@@ -96,8 +96,8 @@
 - **Remaining**: PR review + merge; post-merge cleanup per `docs/multi-cli-protocol.md`.
 - **Next action**: Monitor PR CI and merge on green.
 - **Uncommitted code**: no
-- **Branch / PR**: `feat/atlas-hardening-harness` / see PR body
-- **Paused because**: waiting for PR merge
+- **Branch / PR**: `feat/atlas-hardening-harness` / PR #1209
+- **Paused because**: waiting for PR #1209 CI to finish and merge
 
 ---
 
