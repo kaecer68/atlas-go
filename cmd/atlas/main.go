@@ -731,6 +731,13 @@ func run(args []string, deps appDeps) error {
 		}
 
 		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
+		dailyRptGen.SetRegimeProvider(func() domain.Regime {
+			summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)
+			if summary != nil {
+				return summary.Regime
+			}
+			return domain.RegimeNeutral
+		})
 		dailyreport.RegisterRoutes(mux, dailyRptGen)
 		log.Printf("[DailyReport] registered /api/reports/* routes")
 
