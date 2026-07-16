@@ -2643,8 +2643,8 @@ export interface PredictionReport {
   window: string;
   predictions: FlowPrediction[];
   active_events: EventCalendarItem[];
-  etf_estimates?: ETFEstimate[];
-  revenue_surprises?: RevenueSurprise[];
+  etf_estimates: ETFEstimate[];
+  revenue_surprises: RevenueSurprise[];
   summary: string;
 }
 

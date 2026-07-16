@@ -56,12 +56,16 @@ type RevenueSurprise struct {
 }
 
 // PredictionReport is the complete 5-day event-driven prediction.
+//
+// C06：etf_estimates 與 revenue_surprises 移除 omitempty，保證欄位總是出現
+// （無資料時為 []，前端可穩定依欄位是否存在判斷渲染）。這與 ATLAS-Go
+// 其他 event 列表（如 active_events / predictions）一致。
 type PredictionReport struct {
 	GeneratedAt      time.Time           `json:"generated_at"`
 	Window           string              `json:"window"` // "5-day forward"
 	Predictions      []FlowPrediction    `json:"predictions"`
 	ActiveEvents     []EventCalendarItem `json:"active_events"`
-	ETFEstimates     []ETFEstimate       `json:"etf_estimates,omitempty"`
-	RevenueSurprises []RevenueSurprise   `json:"revenue_surprises,omitempty"`
+	ETFEstimates     []ETFEstimate       `json:"etf_estimates"`
+	RevenueSurprises []RevenueSurprise   `json:"revenue_surprises"`
 	Summary          string              `json:"summary"`
 }

@@ -46,7 +46,7 @@ function sectorLabel(name) {
 
 export const template = `
 <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-  <p>上方「5 日預測卡」列出每日整體資金方向與信心分數；下方「板塊熱度圖」只顯示板塊受影響的方向（▲ 流入 / ▼ 流出），信心分數為每日整體預測，非單一板塊精準值。</p>
+  <p>上方「5 日預測卡」列出每日整體資金方向與信心分數；下方「板塊熱度圖」只顯示板塊受影響的方向（▲ 流入 / ▼ 流出），信心分數為每日整體預測，非單一板塊精準值。「ETF 換股估計」列出未來 ETF rebalance 預估加碼/減碼標的與預估金額。</p>
 </details>
 <section id="cp-summary" class="cp-summary" aria-live="polite"></section>
 <section class="filter-bar" aria-label="方向篩選">
@@ -57,8 +57,8 @@ export const template = `
 </section>
 <section id="cp-predictions" class="cp-predictions" aria-live="polite">載入中…</section>
 <section id="cp-heatmap" class="cp-sector-heatmap" aria-live="polite"></section>
-<section id="cp-detail" class="cp-detail" hidden></section>
-`;
+<section id="cp-etf-estimates" class="cp-etf-estimates" aria-live="polite"></section>
+<section id="cp-detail" class="cp-detail" hidden></section>`;
 
 /**
  * @param {object|null|undefined} prediction backend FlowPrediction
@@ -91,6 +91,7 @@ const DAY_LABELS = ['明', '二', '三', '四', '五'];
 
 let _allPredictions = [];
 let _activeEvents = [];
+let _etfEstimates = [];
 let _activeDir = 'all';
 let _lastError = false;
 
@@ -341,10 +342,86 @@ function renderDetail(prediction) {
     '</div>';
 }
 
+/**
+ * 為 C06 新增：純函式版本，將 etf_estimates 陣列渲染為 HTML 字串。
+ * 不接觸 DOM,讓單元測試可不依賴 jsdom 直接呼叫。
+ *
+ * @param {Array<{etf_name?: string, stock_symbol?: string, stock_name?: string, direction?: string, est_weight?: number, etf_aum?: number, est_flow?: number}>} estimates
+ * @returns {string} HTML,空陣列回傳空字串
+ */
+export function renderETFEstimatesTable(estimates) {
+  if (!Array.isArray(estimates) || estimates.length === 0) return '';
+
+  const sorted = estimates.slice().sort(function (a, b) {
+    const ea = (a && a.etf_name) || '';
+    const eb = (b && b.etf_name) || '';
+    if (ea !== eb) return ea.localeCompare(eb, 'zh-Hant');
+    return (Number(b.est_flow) || 0) - (Number(a.est_flow) || 0);
+  });
+
+  const rows = sorted.map(function (e) {
+    const dir = (e && e.direction === 'add') ? '加碼' : (e && e.direction === 'remove') ? '減碼' : '—';
+    const dirClass = (e && e.direction === 'add') ? 'cp-etf__row--add' : (e && e.direction === 'remove') ? 'cp-etf__row--remove' : '';
+    const symbol = (e && e.stock_symbol) ? escapeHtml(e.stock_symbol) : '—';
+    const name = (e && e.stock_name) ? ' ' + escapeHtml(e.stock_name) : '';
+    const etf = (e && e.etf_name) ? escapeHtml(e.etf_name) : '—';
+    const weightPct = (typeof e.est_weight === 'number') ? (e.est_weight * 100).toFixed(1) + '%' : '—';
+    const aumStr = (typeof e.etf_aum === 'number') ? formatAUM(e.etf_aum) : '—';
+    const flowStr = (typeof e.est_flow === 'number') ? formatNTDMillions(e.est_flow) : '—';
+    return (
+      '<tr class="' + dirClass + '">' +
+      '<td>' + etf + '</td>' +
+      '<td class="cp-etf__sym">' + symbol + '<span class="cp-etf__name">' + name + '</span></td>' +
+      '<td>' + dir + '</td>' +
+      '<td class="cp-etf__num">' + weightPct + '</td>' +
+      '<td class="cp-etf__num">' + aumStr + '</td>' +
+      '<td class="cp-etf__num">' + flowStr + '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  return (
+    '<h3 class="cp-section-title">ETF 換股估計</h3>' +
+    '<p class="cp-section-help">未來 14 日內 ETF 季配/年中/年底 rebalance 預估加碼/減碼標的與預估淨流量（NT$ 百萬 × AUM 兆權重）。</p>' +
+    '<div class="cp-etf__table-wrap"><table class="cp-etf__table">' +
+    '<thead><tr>' +
+    '<th>ETF</th><th>標的</th><th>方向</th><th>估計權重</th><th>AUM</th><th>預估淨流量' +
+    '</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '</table></div>'
+  );
+}
+
+function formatAUM(billion) {
+  if (billion >= 1000) return (billion / 1000).toFixed(1) + ' 兆';
+  if (billion >= 1) return billion.toFixed(0) + ' 億';
+  return (billion * 100).toFixed(0) + ' 百萬';
+}
+
+function formatNTDMillions(million) {
+  const abs = Math.abs(million);
+  if (abs >= 1000) return (million / 1000).toFixed(2) + ' 億';
+  return million.toFixed(0) + ' 百萬';
+}
+
+function renderETFEstimates() {
+  const host = document.getElementById('cp-etf-estimates');
+  if (!host) return;
+
+  if (_lastError) {
+    host.innerHTML = renderMissingState('ETF 換股估計', 'api-error');
+    return;
+  }
+
+  const html = renderETFEstimatesTable(_etfEstimates);
+  host.innerHTML = html;
+}
+
 function renderAll() {
   renderStatus();
   renderPredictionsCard();
   renderSectorHeatmap();
+  renderETFEstimates();
 }
 
 function wireFilter() {
@@ -363,6 +440,7 @@ async function loadPredictions() {
   _lastError = data === null;
   _allPredictions = (data && Array.isArray(data.predictions)) ? data.predictions : [];
   _activeEvents = (data && Array.isArray(data.active_events)) ? data.active_events : [];
+  _etfEstimates = (data && Array.isArray(data.etf_estimates)) ? data.etf_estimates : [];
   renderAll();
 }
 
