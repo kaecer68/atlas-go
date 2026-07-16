@@ -2645,6 +2645,7 @@ export interface PredictionReport {
   active_events: EventCalendarItem[];
   etf_estimates: ETFEstimate[];
   revenue_surprises: RevenueSurprise[];
+  sector_predictions: SectorDayPrediction[];
   summary: string;
 }
 
@@ -3274,6 +3275,11 @@ export interface SectorAttribution {
   avg_return: number;
 }
 
+export interface SectorDayPrediction {
+  date: string;
+  sectors: SectorPrediction[];
+}
+
 export interface SectorExecutorParameters {
   leo_satellite?: LEOSatelliteExecutorParameters;
   financials?: FinancialsExecutorParameters;
@@ -3297,6 +3303,15 @@ export interface SectorIndexData {
   industry: string;
   index: number;
   return_pct: number;
+}
+
+export interface SectorPrediction {
+  sector_id: string;
+  sector_name: string;
+  direction: string;
+  confidence: number;
+  distribution: PredictionDistribution;
+  drivers: string[];
 }
 
 export interface SectorRotationConfig {

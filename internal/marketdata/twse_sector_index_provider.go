@@ -69,7 +69,21 @@ func (p *TWSESectorIndexProvider) Name() string {
 
 // FetchSectorIndices fetches historical industry index data for the given date range.
 // Returns a map of industry ID -> sorted daily index data.
+// This method uses the legacy correlation-calibration mapping; for canonical L1
+// sector data use FetchL1SectorIndices.
 func (p *TWSESectorIndexProvider) FetchSectorIndices(ctx context.Context, startDate, endDate time.Time) (map[string][]SectorIndexData, error) {
+	return p.fetchWithMapper(ctx, startDate, endDate, p.mapIndustryName)
+}
+
+// FetchL1SectorIndices is like FetchSectorIndices but maps TWSE industry names to
+// the canonical L1 SectorID set defined in internal/industry/sector.go. Use this
+// for C07 per-sector direction prediction and any other consumer that needs a
+// stable 20-sector universe.
+func (p *TWSESectorIndexProvider) FetchL1SectorIndices(ctx context.Context, startDate, endDate time.Time) (map[string][]SectorIndexData, error) {
+	return p.fetchWithMapper(ctx, startDate, endDate, p.canonicalL1SectorID)
+}
+
+func (p *TWSESectorIndexProvider) fetchWithMapper(ctx context.Context, startDate, endDate time.Time, mapper func(string) string) (map[string][]SectorIndexData, error) {
 	if p.cacheDir != "" {
 		if cached, err := p.loadFromCache(startDate, endDate); err == nil && len(cached) > 0 {
 			logging.Info("marketdata", "sector_index_cache_hit",
@@ -86,7 +100,7 @@ func (p *TWSESectorIndexProvider) FetchSectorIndices(ctx context.Context, startD
 			return nil, fmt.Errorf("rate limit wait: %w", err)
 		}
 
-		dailyData, err := p.fetchSingleDay(ctx, current)
+		dailyData, err := p.fetchSingleDay(ctx, current, mapper)
 		if err != nil {
 			logging.Warn("marketdata", "sector_index_fetch_failed",
 				logging.FStr("date", current.Format("2006-01-02")),
@@ -120,7 +134,7 @@ type twseIndexItem struct {
 }
 
 // fetchSingleDay fetches industry index data for a single trading day.
-func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.Time) (map[string]SectorIndexData, error) {
+func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.Time, mapper func(string) string) (map[string]SectorIndexData, error) {
 	dateStr := date.Format("20060102")
 	endpoint := fmt.Sprintf("%s/exchangeReport/MI_INDEX?date=%s&type=MS&response=json", p.baseURL, dateStr)
 
@@ -163,7 +177,7 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 			continue
 		}
 
-		industryID := p.mapIndustryName(industryName)
+		industryID := mapper(industryName)
 		if industryID == "" {
 			continue
 		}
@@ -183,6 +197,8 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 }
 
 // mapIndustryName maps TWSE OpenAPI v1 industry names (Chinese) to canonical SectorID strings.
+// This mapping is preserved for backward compatibility with the original correlation-calibration
+// consumer that expected IDs such as "ai_supply_chain" and "robotics".
 func (p *TWSESectorIndexProvider) mapIndustryName(twseName string) string {
 	mapping := map[string]string{
 		"半導體類指數":     "semiconductor",
@@ -193,6 +209,41 @@ func (p *TWSESectorIndexProvider) mapIndustryName(twseName string) string {
 		"金融保險類指數":    "financials",
 		"油電燃氣類指數":    "energy",
 		"電機機械類指數":    "robotics",
+	}
+
+	if id, ok := mapping[twseName]; ok {
+		return id
+	}
+	return ""
+}
+
+// canonicalL1SectorID maps TWSE OpenAPI v1 industry names to the canonical L1 SectorID
+// set defined in internal/industry/sector.go. This is the stable 20-sector universe used
+// by C07 per-sector direction prediction. Unrecognized TWSE names are dropped.
+func (p *TWSESectorIndexProvider) canonicalL1SectorID(twseName string) string {
+	mapping := map[string]string{
+		"半導體類指數":     "semiconductor",
+		"電腦及週邊設備類指數": "electronics",
+		"電子零組件類指數":   "electronics",
+		"其他電子類指數":    "other_electronics",
+		"光電類指數":      "optoelectronics",
+		"通信網路類指數":    "telecom",
+		"航運類指數":      "shipping",
+		"金融保險類指數":    "financials",
+		"油電燃氣類指數":    "energy",
+		"電機機械類指數":    "machinery",
+		"電器電纜類指數":    "machinery",
+		"水泥類指數":      "cement",
+		"食品類指數":      "food",
+		"塑膠類指數":      "plastics",
+		"紡織纖維類指數":    "textiles",
+		"鋼鐵類指數":      "steel",
+		"汽車類指數":      "auto",
+		"化學工業類指數":    "chemicals",
+		"生技醫療類指數":    "biotech",
+		"建材營造類指數":    "construction",
+		"觀光類指數":      "tourism",
+		"貿易百貨類指數":    "retail",
 	}
 
 	if id, ok := mapping[twseName]; ok {

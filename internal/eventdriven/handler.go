@@ -1,18 +1,21 @@
 package eventdriven
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
 // Handler serves event-driven prediction endpoints.
 type Handler struct {
-	eventCal  *industry.EventCalendar
-	predictor *Predictor
+	eventCal      *industry.EventCalendar
+	predictor     *Predictor
+	macroProvider marketdata.MacroDataProvider
 }
 
 // NewHandler creates an event-driven flow prediction handler.
@@ -33,6 +36,19 @@ func (h *Handler) SetCapitalFlow(cf CapitalFlowProvider) {
 // typically *narrative.NarrativeEngine via a thin adapter.
 func (h *Handler) SetNarrativeProvider(np NarrativeModelProvider) {
 	h.predictor.SetNarrativeProvider(np)
+}
+
+// SetMacroProvider wires a macro data provider so sector predictions use
+// fresh macro snapshots on each request. nil disables macro-driven sector
+// adjustments.
+func (h *Handler) SetMacroProvider(mp marketdata.MacroDataProvider) {
+	h.macroProvider = mp
+}
+
+// SetSectorPredictor wires a custom sector predictor. nil disables sector
+// predictions (the API still returns an empty slice).
+func (h *Handler) SetSectorPredictor(sp *SectorPredictor) {
+	h.predictor.SetSectorPredictor(sp)
 }
 
 // SetScanStore injects a detector scan store into the predictor so detected
@@ -63,7 +79,7 @@ func RegisterRoutesWithNarrative(mux *http.ServeMux, cal *industry.EventCalendar
 
 // RegisterRoutesWithDetectors extends RegisterRoutesWithNarrative with a
 // detector scan store for run-time detected theme data.
-func RegisterRoutesWithDetectors(mux *http.ServeMux, cal *industry.EventCalendar, cf CapitalFlowProvider, np NarrativeModelProvider, ss DetectorScanStore) {
+func RegisterRoutesWithDetectors(mux *http.ServeMux, cal *industry.EventCalendar, cf CapitalFlowProvider, np NarrativeModelProvider, ss DetectorScanStore) *Handler {
 	h := NewHandler(cal)
 	if cf != nil {
 		h.SetCapitalFlow(cf)
@@ -76,6 +92,7 @@ func RegisterRoutesWithDetectors(mux *http.ServeMux, cal *industry.EventCalendar
 	}
 	mux.Handle("GET /api/events/prediction", shared.Adapt(shared.Handler(h.HandlePrediction)))
 	mux.Handle("GET /api/events/calendar", shared.Adapt(shared.Handler(h.HandleCalendar)))
+	return h
 }
 
 // HandleCalendar returns the upcoming event timeline.
@@ -109,6 +126,16 @@ func (h *Handler) HandleCalendar(r *http.Request) (int, any) {
 // HandlePrediction returns the 5-day event-driven capital flow prediction.
 func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
 	now := time.Now()
+
+	if h.macroProvider != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		snap, err := h.macroProvider.FetchSnapshot(ctx)
+		if err == nil {
+			h.predictor.SetSectorPredictor(NewSectorPredictor(&snap, nil))
+		}
+	}
+
 	report := h.predictor.Predict(now)
 
 	logging.Info("eventdriven", "prediction_generated",

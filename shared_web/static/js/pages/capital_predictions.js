@@ -38,6 +38,22 @@ const SECTOR_LABEL = {
   '外銷產業': '外銷',
   '傳產股': '傳產',
   '傳統產業': '傳產',
+  steel: '鋼鐵',
+  shipping: '航運',
+  cement: '水泥',
+  food: '食品',
+  plastics: '塑膠',
+  textiles: '紡織',
+  machinery: '電機機械',
+  chemicals: '化學',
+  biotech: '生技醫療',
+  construction: '建材營造',
+  retail: '貿易百貨',
+  energy: '油電燃氣',
+  auto: '汽車',
+  optoelectronics: '光電',
+  telecom: '通信網路',
+  other_electronics: '其他電子',
 };
 
 function sectorLabel(name) {
@@ -58,6 +74,7 @@ export const template = `
 <section id="cp-predictions" class="cp-predictions" aria-live="polite">載入中…</section>
 <section id="cp-heatmap" class="cp-sector-heatmap" aria-live="polite"></section>
 <section id="cp-etf-estimates" class="cp-etf-estimates" aria-live="polite"></section>
+<section id="cp-sector-predictions" class="cp-sector-predictions" aria-live="polite"></section>
 <section id="cp-detail" class="cp-detail" hidden></section>`;
 
 /**
@@ -92,8 +109,15 @@ const DAY_LABELS = ['明', '二', '三', '四', '五'];
 let _allPredictions = [];
 let _activeEvents = [];
 let _etfEstimates = [];
+let _sectorPredictions = [];
 let _activeDir = 'all';
 let _lastError = false;
+
+let _sectorPredictionsExpanded = false;
+let _showAllSectors = false;
+try {
+  _sectorPredictionsExpanded = localStorage.getItem('cp_sector_predictions_expanded') === 'true';
+} catch (e) {}
 
 function dayLabel(prediction, idx) {
   if (prediction && typeof prediction.date === 'string') {
@@ -417,11 +441,230 @@ function renderETFEstimates() {
   host.innerHTML = html;
 }
 
+function renderSectorDetail(dateStr, cellData) {
+  const host = document.getElementById('cp-detail');
+  if (!cellData) {
+    host.hidden = true;
+    host.innerHTML = '';
+    return;
+  }
+  host.hidden = false;
+  const conf = typeof cellData.confidence === 'number' ? cellData.confidence : 0;
+  const dir = cellData.direction || 'neutral';
+  const dirLabelText = dirLabel(dir);
+  const color = directionColor(dir);
+  const date = dateStr ? dateStr.slice(0, 10) : '—';
+  const name = cellData.sector_name || sectorLabel(cellData.sector_id);
+  const drivers = Array.isArray(cellData.drivers) ? cellData.drivers : [];
+
+  let distHtml = '';
+  if (cellData.distribution) {
+      const inflowPct = Math.round((cellData.distribution.inflow || 0) * 100);
+      const neutralPct = Math.round((cellData.distribution.neutral || 0) * 100);
+      const outflowPct = Math.round((cellData.distribution.outflow || 0) * 100);
+      distHtml = '<div class="cp-detail__distribution">分佈：流入 ' + inflowPct + '% / 觀望 ' + neutralPct + '% / 流出 ' + outflowPct + '%</div>';
+  }
+
+  host.innerHTML =
+    '<div class="cp-detail__card">' +
+    '<div class="cp-detail__date">日期：' + escapeHtml(date) + '</div>' +
+    '<div class="cp-detail__sector-name">板塊：' + escapeHtml(name) + '</div>' +
+    '<div class="cp-detail__dir" style="color:' + color + '">方向：' + escapeHtml(dirLabelText) + '（信心 ' + Math.round(conf * 100) + '%）</div>' +
+    distHtml +
+    (drivers.length
+      ? '<div class="cp-detail__reasons cp-detail__drivers-title"><strong>驅動因子</strong><ul class="cp-detail__drivers-list">' +
+        drivers.map(function (r) { return '<li>' + escapeHtml(typeof r === 'string' ? r : JSON.stringify(r)) + '</li>'; }).join('') +
+        '</ul></div>'
+      : '<div class="cp-detail__reasons text-muted cp-detail__no-drivers">無驅動因子</div>') +
+    '</div>';
+
+  host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+export const MUST_WATCH_SECTORS = ['semiconductor', 'electronics', 'financials', 'shipping', 'steel'];
+
+export function _setStateForTest(allPreds, actEvents, secPreds, lastErr, showAll, expanded) {
+  _allPredictions = allPreds;
+  _activeEvents = actEvents;
+  _sectorPredictions = secPreds;
+  _lastError = lastErr;
+  _showAllSectors = showAll;
+  _sectorPredictionsExpanded = expanded;
+}
+
+export function renderSectorPredictions() {
+  const host = document.getElementById('cp-sector-predictions');
+  if (!host) return;
+
+  if (_lastError) {
+    host.innerHTML = renderMissingState('板塊方向預測', 'api-error');
+    return;
+  }
+  if (!_sectorPredictions.length) {
+    host.innerHTML = '<div class="cp-sp-empty"><div class="state-missing__text text-muted">尚無板塊預測資料</div></div>';
+    return;
+  }
+
+  const day1 = _sectorPredictions[0];
+  let bullish = 0, bearish = 0, neutral = 0;
+  if (day1 && Array.isArray(day1.sectors)) {
+    for (const sec of day1.sectors) {
+      if (MUST_WATCH_SECTORS.indexOf(sec.sector_id) !== -1) {
+        if (sec.direction === 'inflow') bullish++;
+        else if (sec.direction === 'outflow') bearish++;
+        else neutral++;
+      }
+    }
+  }
+
+  const badgeText = '5 個必須看板塊中 ' + bullish + ' 個偏多 / ' + bearish + ' 個偏空 / ' + neutral + ' 個觀望';
+
+  const allSectorIds = new Set();
+  for (const day of _sectorPredictions) {
+    if (Array.isArray(day.sectors)) {
+      for (const s of day.sectors) {
+        allSectorIds.add(s.sector_id);
+      }
+    }
+  }
+
+  const sortedSectors = [];
+  for (const id of MUST_WATCH_SECTORS) {
+    if (allSectorIds.has(id)) {
+      sortedSectors.push(id);
+      allSectorIds.delete(id);
+    }
+  }
+  const rest = Array.from(allSectorIds).sort();
+
+  const sectorsToRender = _showAllSectors ? sortedSectors.concat(rest) : sortedSectors;
+
+  const headerCells = _sectorPredictions.slice(0, 5).map(function (p, idx) {
+    return '<div class="cp-heatmap__colhead">' + escapeHtml(dayLabel(p, idx)) + '</div>';
+  }).join('');
+
+  const getSectorCell = function(dayData, sectorId) {
+     if (!dayData || !Array.isArray(dayData.sectors)) return null;
+     for (let i = 0; i < dayData.sectors.length; i++) {
+        if (dayData.sectors[i].sector_id === sectorId) return dayData.sectors[i];
+     }
+     return null;
+  };
+
+  const rows = sectorsToRender.map(function (sectorId) {
+    const firstMatch = getSectorCell(day1, sectorId);
+    const label = firstMatch && firstMatch.sector_name ? firstMatch.sector_name : sectorLabel(sectorId);
+
+    const cells = _sectorPredictions.slice(0, 5).map(function (p, colIdx) {
+      const cellData = getSectorCell(p, sectorId);
+      if (!cellData) {
+        return '<div class="cp-heatmap__cell" style="color:var(--muted)">—</div>';
+      }
+
+      const dir = cellData.direction || 'neutral';
+      const conf = typeof cellData.confidence === 'number' ? cellData.confidence : 0;
+      const confPct = Math.round(conf * 100);
+      const color = directionColor(dir);
+
+      const drivers = Array.isArray(cellData.drivers) ? cellData.drivers : [];
+      let tooltipText = dirLabel(dir) + ' ' + confPct + '%';
+      if (drivers.length > 0) {
+        tooltipText += '\n' + drivers.slice(0, 2).map(function(s) { return escapeHtml(s); }).join('、');
+      }
+
+      return (
+        '<div class="cp-heatmap__cell is-active sector-cell" ' +
+        'title="' + tooltipText + '" ' +
+        'data-dayidx="' + colIdx + '" ' +
+        'data-sectorid="' + escapeHtml(sectorId) + '" ' +
+        'style="color:' + color + '"' +
+        '>' +
+        directionSign(dir) + ' <span class="cp-heatmap__pct">' + confPct + '%</span>' +
+        '</div>'
+      );
+    }).join('');
+
+    return (
+      '<div class="cp-heatmap__row">' +
+      '<div class="cp-heatmap__rowhead" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>' +
+      '<div class="cp-heatmap__cells">' + cells + '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  const contentDisplay = _sectorPredictionsExpanded ? 'block' : 'none';
+  const toggleIcon = _sectorPredictionsExpanded ? '▼' : '▶';
+  const switchChecked = _showAllSectors ? 'checked' : '';
+
+  host.innerHTML =
+    '<div class="cp-sp-header" style="display:' + (contentDisplay === 'block' ? 'flex' : 'flex') + '">' +
+      '<div class="cp-sp-header__title-wrap">' +
+        '<span class="cp-sp-toggle-icon">' + toggleIcon + '</span>' +
+        '<strong class="cp-sp-title">板塊方向預測</strong>' +
+        '<span class="chip">' + escapeHtml(badgeText) + '</span>' +
+      '</div>' +
+      '<div class="cp-sp-switch-container" style="display:' + contentDisplay + ';">' +
+        '<label class="cp-sp-switch-label">' +
+          '<input type="checkbox" id="cp-sp-show-all" ' + switchChecked + '>' +
+          '顯示全部 20 板塊' +
+        '</label>' +
+      '</div>' +
+    '</div>' +
+    '<div class="cp-sp-content" style="display:' + contentDisplay + ';">' +
+      '<div class="cp-heatmap-table">' +
+        '<div class="cp-heatmap__header">' +
+          '<div class="cp-heatmap__label">板塊 / 日期</div>' +
+          '<div class="cp-heatmap__cols">' + headerCells + '</div>' +
+        '</div>' +
+        '<div class="cp-heatmap__body">' + rows + '</div>' +
+      '</div>' +
+    '</div>';
+
+  const headerEl = host.querySelector('.cp-sp-header');
+  if (headerEl) {
+    headerEl.addEventListener('click', function() {
+      _sectorPredictionsExpanded = !_sectorPredictionsExpanded;
+      try { localStorage.setItem('cp_sector_predictions_expanded', String(_sectorPredictionsExpanded)); } catch(e) {}
+      renderSectorPredictions();
+    });
+  }
+
+  const switchContainer = host.querySelector('.cp-sp-switch-container');
+  if (switchContainer) {
+    switchContainer.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+  }
+
+  const showAllEl = host.querySelector('#cp-sp-show-all');
+  if (showAllEl) {
+    showAllEl.addEventListener('change', function(e) {
+      _showAllSectors = e.target.checked;
+      renderSectorPredictions();
+    });
+    showAllEl.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+  }
+
+  host.querySelectorAll('.sector-cell').forEach(function(cell) {
+    cell.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const dayIdx = parseInt(cell.getAttribute('data-dayidx'), 10);
+      const sectorId = cell.getAttribute('data-sectorid');
+      const dayData = _sectorPredictions[dayIdx];
+      const cellData = getSectorCell(dayData, sectorId);
+      renderSectorDetail(dayData.date, cellData);
+    });
+  });
+}
+
 function renderAll() {
   renderStatus();
   renderPredictionsCard();
   renderSectorHeatmap();
   renderETFEstimates();
+  renderSectorPredictions();
 }
 
 function wireFilter() {
@@ -441,6 +684,7 @@ async function loadPredictions() {
   _allPredictions = (data && Array.isArray(data.predictions)) ? data.predictions : [];
   _activeEvents = (data && Array.isArray(data.active_events)) ? data.active_events : [];
   _etfEstimates = (data && Array.isArray(data.etf_estimates)) ? data.etf_estimates : [];
+  _sectorPredictions = (data && Array.isArray(data.sector_predictions)) ? data.sector_predictions : [];
   renderAll();
 }
 

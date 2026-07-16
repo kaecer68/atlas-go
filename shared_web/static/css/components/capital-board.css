@@ -227,7 +227,94 @@
   margin-top: 8px;
 }
 
-/* ==== 錢潮看板 — summary counts ==== */
+.cp-detail__distribution {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.cp-detail__drivers-title {
+  margin-top: 8px;
+}
+
+.cp-detail__drivers-list {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.cp-detail__no-drivers {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.cp-detail__sector-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* ==== 錢潮預測 — 板塊方向預測 ==== */
+
+.cp-sector-predictions {
+  margin-top: 16px;
+}
+
+.cp-sp-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--panel-l2, rgba(255, 255, 255, 0.06));
+  border-radius: 6px;
+  margin-top: 16px;
+}
+
+.cp-sp-header__title-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.cp-sp-toggle-icon {
+  margin-right: 8px;
+  font-size: 12px;
+  width: 12px;
+  text-align: center;
+}
+
+.cp-sp-title {
+  font-size: 14px;
+  margin-right: 12px;
+  white-space: nowrap;
+}
+
+.cp-sp-switch-container {
+  display: flex;
+  align-items: center;
+}
+
+.cp-sp-switch-label {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.cp-sp-content {
+  margin-top: 12px;
+}
+
+.cp-sp-empty {
+  text-align: center;
+  padding: 32px 16px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+  margin-top: 16px;
+}
+ */
 
 .cb-summary {
   margin-top: 8px;
