@@ -829,7 +829,7 @@ function bindPredictionsDisclosure() {
   if (!btn || !content) return;
   _predictionsDisclosureBound = true;
 
-  content.setAttribute('data-disclosure-state', 'collapsed');
+  content.setAttribute('data-disclosure-state', 'expanded');
 
   const updateButton = (state) => {
     btn.setAttribute('aria-expanded', state === 'expanded' ? 'true' : 'false');
@@ -846,7 +846,7 @@ function bindPredictionsDisclosure() {
     }
   };
 
-  updateButton('collapsed');
+  updateButton('expanded');
 
   btn.addEventListener('click', () => {
     const current = content.getAttribute('data-disclosure-state') || 'collapsed';
