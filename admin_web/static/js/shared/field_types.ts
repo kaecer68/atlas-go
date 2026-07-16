@@ -1377,6 +1377,7 @@ export interface ForceScore {
   raw_value: number;
   z_score: number;
   trend: string;
+  weight: number;
 }
 
 export interface ForecastVsRealityItem {

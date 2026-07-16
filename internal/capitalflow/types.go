@@ -28,6 +28,7 @@ type ForceScore struct {
 	RawValue float64   `json:"raw_value"` // 原始值（e.g., 買賣超金額 in 億）
 	ZScore   float64   `json:"z_score"`   // 60-day rolling Z-score
 	Trend    string    `json:"trend"`     // "bullish", "bearish", "neutral"
+	Weight   float64   `json:"weight"`    // dynamic weight derived from relative magnitude
 }
 
 // ---------------------------------------------------------------------------

@@ -22,12 +22,14 @@ function forceCard(force) {
   const trend = (force.trend || force.Trend || 'neutral').toLowerCase();
   const zScore = typeof force.z_score === 'number' ? force.z_score : (typeof force.ZScore === 'number' ? force.ZScore : null);
   const rawValue = typeof force.raw_value === 'number' ? force.raw_value : (typeof force.RawValue === 'number' ? force.RawValue : null);
+  const weight = typeof force.weight === 'number' ? force.weight : (typeof force.Weight === 'number' ? force.Weight : null);
   const tone = TONE_MAP[trend] || 'neutral';
   const directionText = trend === 'bullish' ? '偏多' : trend === 'bearish' ? '偏空' : '觀望';
   const strength = zScore !== null ? Math.min(Math.abs(zScore) / 3, 1) : 0;
   const strengthPct = Math.round(strength * 100);
   const valueText = rawValue !== null ? fmtSafeSigned(rawValue, { decimals: 1, suffix: ' 億', forceSign: true }) : '—';
   const zText = zScore !== null ? fmtSafeNumber(zScore, { decimals: 2 }) : '—';
+  const weightText = weight !== null ? `${Math.round(weight * 100)}%` : '—';
   const label = FORCE_LABELS[name] || name;
 
   return `
@@ -40,7 +42,7 @@ function forceCard(force) {
       <div class="force-card__strength">
         <div class="force-card__strength-bar" style="width: ${strengthPct}%" aria-label="強度 ${strengthPct}%"></div>
       </div>
-      <div class="force-card__meta">Z-score ${zText}</div>
+      <div class="force-card__meta">Z-score ${zText} · 權重 ${weightText}</div>
     </div>
   `;
 }
