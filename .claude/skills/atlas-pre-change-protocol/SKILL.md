@@ -16,26 +16,72 @@ Before running Steps 1-7, record the session boundary. This prevents agents from
 
 ```
 1. Record current state:
+   □ Mode:          Plan / Audit / Execute
    □ Branch:        git branch --show-current
    □ Worktree:      pwd && git worktree list
    □ Manifest:      <path to docs/manifests/YYYY-MM-DD-*.md or "none">
    □ In-scope IDs:  <issue IDs from the manifest or user request>
+   □ ATLAS_ENV:     development / staging / production
 
-2. If branch is main AND this is an implementation task (not a read-only investigation):
+2. Environment Isolation Checkpoint (must run):
+   echo "ATLAS_ENV=${ATLAS_ENV:-development}"
+   □ If ATLAS_ENV=production:
+     → Verify worktree is isolated (not the dev worktree and not on branch main).
+     → Verify no dev/experiment commands will be issued this session.
+     → If uncertain, STOP and ask the user before proceeding.
+   □ If ATLAS_ENV is unset or development:
+     → Safe for dev/experiment commands ONLY in the current dev worktree.
+     → Do not switch ATLAS_ENV to production within the same session.
+
+3. If branch is main AND this is an implementation task (not a read-only investigation):
    → STOP. Load using-git-worktrees skill.
    → git worktree add -b feat/<short-name> ../atlas-<short-name> main
    → Continue this protocol inside the new worktree.
 
-3. If asked to modify files outside the recorded in-scope IDs:
+4. If asked to modify files outside the recorded in-scope IDs:
    → WARN the user.
    → Either update the manifest scope or stop before touching unrelated files.
    → Never silently poach work from another CLI session or manifest.
 
-4. Run git stash list and record any pre-existing stashes with their messages.
+5. Run git stash list and record any pre-existing stashes with their messages.
    → New stashes created this session must be labeled with the task/ID.
 ```
 
 **Why this matters**: `main` is not a workspace. Multi-CLI parallelism is only safe when each CLI is bound to its own branch/worktree and manifest.
+
+---
+
+## Agent Safety Hooks — Hard Boundaries
+
+Before executing ANY shell command that modifies state, reads secrets, or touches production, run the deny-dangerous hook:
+
+```bash
+./agent-guard --check "<command>"
+# or
+.agent-hooks/deny-dangerous.sh --check "<command>"
+```
+
+If the hook blocks the command, do not bypass it unless the user explicitly approves. If bypassing, document the reason in the manifest.
+
+MUST check with the hook:
+- `git push` (any branch)
+- `rm`, `rm -rf`
+- Commands reading `.env`, `*.p12`, `*secret*`, `*password*`, `*credential*`
+- `eval`, `bash -c` with piped downloads
+- Commands with `ATLAS_ENV=production`
+- Commands enabling live broker (`-allow-live-broker`)
+- Destructive SQL (`DROP TABLE`, `TRUNCATE`)
+
+Install hooks once per worktree:
+```bash
+bash .agent-hooks/install.sh
+```
+
+### Read Agent Memory First
+
+Before starting work, skim `.claude/agent-memory/footguns/`. If your task matches a known footgun, follow the prevention steps instead of repeating the mistake.
+
+**Why this matters**: skills and prompts are suggestions that models sometimes ignore. Hooks are deterministic guards that block dangerous actions before they run. Agent memory prevents the same mistake from recurring across sessions.
 
 ---
 
@@ -51,9 +97,20 @@ Load this skill when the user requests ANY of these:
 | File changes | Any edit in `internal/` or `cmd/` |
 | "Simple" fixes | "just add a field", "quick rename", "one-line change" |
 
-**Two modes based on task type:**
-- **Write mode** (modifications): Full 7-step protocol → Steps 1-7
-- **Investigation mode** (read-only inquiries): Lightweight protocol → Steps 1, 2, 3, 6
+**Three execution modes:**
+
+| Mode | Purpose | Can Edit Code? | Required Binding |
+|------|---------|---------------|------------------|
+| **Plan Mode** | Design / architecture / write implementation plan | ❌ NO | `docs/manifests/YYYY-MM-DD-*.md` or `.omo/plans/` |
+| **Audit Mode** | Read-only debugging / investigation | ❌ NO | Symptom / scope statement |
+| **Execute Mode** | Implement approved plan | ✅ YES, scoped | Manifest file + in-scope IDs + feature branch/worktree |
+
+**Mode rules:**
+- You cannot edit `internal/`, `cmd/`, `configs/`, frontend code, or any tracked production file in Plan or Audit mode.
+- In Plan/Audit mode you may only: read code, write to `.omo/plans/`, `docs/manifests/`, `.claude/agent-memory/`, and update hypothesis/evidence tables.
+- Switching to Execute mode requires a clear verbal transition: "I am switching from plan to execute mode for IDs X-Y on branch feat/Z."
+- If the user asks you to "look into", "audit", "investigate", or "plan", start in Audit/Plan mode.
+- If the user asks you to "fix", "implement", "add", or "change", you must be in Execute mode with a manifest binding.
 
 **If the request involves `internal/` or `cmd/` directories, this protocol is MANDATORY.**
 
@@ -251,6 +308,10 @@ Before modifying or removing code, understand WHY it exists:
 □ "I'm on main but it's just a small edit" → STOP. Open a worktree + feature branch.
 □ "This file looks related, let me touch it too" → Is it in the manifest scope? If not, ask first.
 □ "Another CLI was working on this, I'll finish it" → No poaching. Stay bound to your branch/manifest.
+□ "I'm in Plan/Audit mode but this fix is tiny" → STOP. Switch to Execute mode or add it to Backlog.
+□ "The user said 'look into it' but I see the fix" → You are in Audit mode. Document hypothesis and evidence first.
+□ "ATLAS_ENV doesn't matter for this command" → It does. Verify env before state-changing commands.
+□ "I'll just switch ATLAS_ENV to production to test" → STOP. Production env must use an isolated worktree.
 ```
 
 ---

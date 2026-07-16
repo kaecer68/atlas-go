@@ -73,3 +73,4 @@
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
 | db migration 路徑 | `runMigrations()` 使用 `file://` + 絕對路徑 |
 | PR merge 後留分支 | 每次 merge 後必讀 `docs/multi-cli-protocol.md` §Post-merge cleanup，自動刪除遠端與本地 branch |
+| Agent 危險操作 | 執行任何改狀態/讀密碼/觸及 production 的指令前，必須先跑 `./agent-guard --check '<command>'` |

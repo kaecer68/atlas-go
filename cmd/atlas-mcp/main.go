@@ -21,7 +21,7 @@
 //	ATLAS_API_KEY                   admin API key (passed through when invoking atlas HTTP API)
 //	ATLAS_MCP_AUDIT_LOG             JSONL audit-log path (default: $TMPDIR/atlas-mcp-audit.log)
 //	ATLAS_MCP_AUDIT_RETENTION_DAYS  prune audit entries older than N days (default 30, 0 = disabled)
-//	ATLAS_MCP_RATE_LIMIT_PER_MINUTE per-(tool, tenant) requests per minute (default 0 = disabled)
+//	ATLAS_MCP_RATE_LIMIT_PER_MINUTE per-(tool, tenant) requests per minute (default 120; 0 = disabled)
 //	ATLAS_MCP_RATE_LIMIT_BURST     burst capacity (default = per minute)
 //	ATLAS_MCP_TOKEN                 env-var fallback token (unused when DB token store is active)
 //	ATLAS_MCP_ADMIN_TOKEN           admin API token for token management API (empty = disabled)
@@ -75,7 +75,7 @@ func main() {
 		APIToken:           os.Getenv("ATLAS_API_KEY"),
 		AuditLogPath:       envOr("ATLAS_MCP_AUDIT_LOG", defaultAuditLogPath()),
 		AuditRetentionDays: envIntOr("ATLAS_MCP_AUDIT_RETENTION_DAYS", 30),
-		RateLimitPerMinute: envIntOr("ATLAS_MCP_RATE_LIMIT_PER_MINUTE", 0),
+		RateLimitPerMinute: envIntOr("ATLAS_MCP_RATE_LIMIT_PER_MINUTE", 120),
 		RateLimitBurst:     envIntOr("ATLAS_MCP_RATE_LIMIT_BURST", 0),
 		MCPToken:           os.Getenv("ATLAS_MCP_TOKEN"),
 		AdminAddr:          adminAddr,

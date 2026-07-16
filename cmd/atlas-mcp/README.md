@@ -160,8 +160,10 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 
 | 變數 | 預設值 | 用途 |
 |------|--------|------|
-| `ATLAS_MCP_RATE_LIMIT_PER_MINUTE` | `0`（停用） | 每 `(tool, tenant)` 每分鐘允許的請求數；`0` = 不限流 |
+| `ATLAS_MCP_RATE_LIMIT_PER_MINUTE` | `120` | 每 `(tool, tenant)` 每分鐘允許的請求數；`0` = 不限流 |
 | `ATLAS_MCP_RATE_LIMIT_BURST` | = `RATE_LIMIT_PER_MINUTE` | 瞬間允許的 burst 量 |
+
+> **Phase 6 hardening**: 預設從 `0` 改為 `120`，防止外部 agent（Hermes / OpenClaw / HTTP transport）發生 runaway loop 時壓垮 atlas-go。stdio 模式同樣適用此預設；本機 Claude Desktop / Cursor / OpenCode 若需更高頻率，可顯式設 `ATLAS_MCP_RATE_LIMIT_PER_MINUTE=0`（僅限本機開發）。HTTP/SSE transport 在 production 部署中**不應**關閉限流。
 
 ### 擴充協議開關（Phase 4 B）
 
@@ -174,7 +176,7 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 | `ATLAS_MCP_ROOTS_ALLOW_UNSAFE` | `0` | escape hatch（不建議）：`1` = 跳過 root path 驗證（僅限 dev） |
 | `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE` | `false` | client 宣告的 roots 變動時是否 alert |
 
-> **stdio 安全模型**：stdio 模式不強制 Bearer token（process isolation 即安全邊界），但仍接受 token 標頭作為多租戶 routing。SSE / streamable-HTTP 模式 `Authorization: Bearer <token>` **必填**，未帶或錯誤回傳 401。
+> **stdio 安全模型**：stdio 模式預設不強制 Bearer token（process isolation 是本機單用戶場景的安全邊界），但仍接受 token 標頭作為多租戶 routing。**若 atlas-mcp 被多個 agent / 多個使用者共用，或運行在共享主機上，請務必設定 `ATLAS_MCP_TOKEN`**，否則任何能啟動 process 的程式都能呼叫全部 110+ 個 tool。SSE / streamable-HTTP 模式 `Authorization: Bearer <token>` **必填**，未帶或錯誤回傳 401。
 
 ## MCP Client 配置範例
 
