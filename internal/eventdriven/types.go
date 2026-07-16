@@ -2,13 +2,22 @@ package eventdriven
 
 import "time"
 
+// PredictionDistribution is the probability mass across the three possible
+// capital-flow directions for a single day.
+type PredictionDistribution struct {
+	Inflow  float64 `json:"inflow"`
+	Outflow float64 `json:"outflow"`
+	Neutral float64 `json:"neutral"`
+}
+
 // FlowPrediction is a single day's predicted capital flow direction.
 type FlowPrediction struct {
-	Date            time.Time `json:"date"`
-	Direction       string    `json:"direction"`        // "inflow", "outflow", "neutral"
-	Confidence      float64   `json:"confidence"`       // 0-1
-	DrivingEvents   []string  `json:"driving_events"`   // event names driving this prediction
-	PredictedForces []string  `json:"predicted_forces"` // which forces likely to move
+	Date            time.Time              `json:"date"`
+	Direction       string                 `json:"direction"`        // "inflow", "outflow", "neutral"
+	Confidence      float64                `json:"confidence"`       // 0-1
+	Distribution    PredictionDistribution `json:"distribution"`     // probability mass across directions
+	DrivingEvents   []string               `json:"driving_events"`   // event names driving this prediction
+	PredictedForces []string               `json:"predicted_forces"` // which forces likely to move
 }
 
 // EventCalendarItem is a simplified view of an upcoming event.

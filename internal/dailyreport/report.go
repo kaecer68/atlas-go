@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // Report is a daily market report.
@@ -73,11 +75,12 @@ type DataProvider interface {
 
 // Generator produces daily reports.
 type Generator struct {
-	mu       sync.RWMutex
-	latest   *Report
-	archive  map[string]*Report
-	workDir  string
-	provider DataProvider
+	mu           sync.RWMutex
+	latest       *Report
+	archive      map[string]*Report
+	workDir      string
+	provider     DataProvider
+	regimeGetter func() domain.Regime
 }
 
 // NewGenerator creates a daily report generator.
@@ -94,12 +97,29 @@ func (g *Generator) SetProvider(p DataProvider) {
 	g.provider = p
 }
 
+// SetRegimeProvider sets a callback that returns the current market regime.
+// When set, the report's global.Status is overridden with this value so that
+// daily_report and system health agree on the same JANUS/local regime.
+func (g *Generator) SetRegimeProvider(fn func() domain.Regime) {
+	g.regimeGetter = fn
+}
+
+func (g *Generator) resolveRegime() domain.Regime {
+	if g.regimeGetter != nil {
+		if r := g.regimeGetter(); r != "" {
+			return r
+		}
+	}
+	return domain.RegimeNeutral
+}
+
 // Generate creates the day's report.
 func (g *Generator) Generate() *Report {
 	now := time.Now()
 	date := now.Format("2006-01-02")
 
 	global, _ := g.provider.FetchMacro()
+	global.Status = string(g.resolveRegime())
 	capital, _ := g.provider.FetchCapital()
 	events, _ := g.provider.FetchEvents(now)
 
@@ -180,7 +200,7 @@ type defaultProvider struct{}
 func (d *defaultProvider) FetchMacro() (GlobalOverview, error) {
 	return GlobalOverview{
 		BondYield: "4.25%", USDIndex: "104.5", JPY: "150.2", VIX: "14.3",
-		Status: "RISK_ON", Summary: "全球資金環境偏寬鬆，有利風險資產",
+		Status: "", Summary: "全球資金環境偏寬鬆，有利風險資產",
 	}, nil
 }
 

@@ -21,6 +21,9 @@ import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
 import { dataQualityBadge, buildChannelMap } from '../components/data-quality-badge.js';
+import { renderSevenForceBoard } from '../components/seven-force-board.js';
+import { renderSevenForceInterpretations } from '../components/seven-force-interpretations.js';
+import { renderCapitalBattleCard } from '../components/capital-battle-card.js';
 
 window.scrollToSection = scrollToSection;
 
@@ -32,6 +35,7 @@ const CHANNELS_BY_SECTION = {
   signalStrip: ['geopolitical', 'us_yahoo'],
   marketPulse: ['us_yahoo', 'us_spx', 'us_ndx', 'us_dji', 'sox_index', 'us_nvda', 'us_aapl', 'us_msft', 'tsm_adr', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'export_statistics', 'twse_capital_flow'],
   predictions: ['twse_capital_flow', 'geopolitical', 'tsmc_revenue'],
+  sevenForce: ['twse_capital_flow', 'frankfurter_fx', 'us_yahoo', 'tsm_adr'],
   calendar: ['twse_replay', 'us_yahoo', 'tsmc_revenue'],
 };
 
@@ -47,6 +51,7 @@ function renderDataBadges() {
   set('signal-strip-data-badge', CHANNELS_BY_SECTION.signalStrip);
   set('market-pulse-data-badge', CHANNELS_BY_SECTION.marketPulse);
   set('predictions-data-badge', CHANNELS_BY_SECTION.predictions);
+  set('seven-force-data-badge', CHANNELS_BY_SECTION.sevenForce);
   set('calendar-data-badge', CHANNELS_BY_SECTION.calendar);
 }
 
@@ -164,6 +169,19 @@ export async function renderHomePage(container) {
         <span class="disclosure-toggle__label">展開錢潮預測</span>
         <span class="disclosure-toggle__icon disclosure-toggle__icon--down" aria-hidden="true"></span>
       </button>
+    </section>
+
+    <section class="home-section" id="home-seven-force">
+      <div class="home-section__header">
+        <h2>7-Force 錢潮看板</h2>
+        <span class="home-section__subtitle">外資 / 投信 / 自營商 / 散戶 / 政府 / 期貨 / TSM ADR</span>
+        <span class="home-section__data-badge" id="seven-force-data-badge"></span>
+      </div>
+      <div id="home-capital-battle-content"></div>
+      <div id="home-seven-force-content">
+        <div class="home-loading-card">載入中…</div>
+      </div>
+      <div id="home-seven-force-interpretations"></div>
     </section>
 
     <section class="home-section" id="home-event-calendar">
@@ -288,7 +306,7 @@ async function loadHomeData() {
     }
 
     try {
-      const [health, macro, stress, pipeline, bundle, calData, predictionData] = await Promise.all([
+      const [health, macro, stress, pipeline, bundle, calData, predictionData, capitalFlowSummary] = await Promise.all([
         getJSONWithTimeout('/api/dashboard/system-health', 5000),
         getJSONWithTimeout('/api/macro/snapshot/latest', 5000),
         getJSONWithTimeout('/api/taiwan/stress-index', 5000),
@@ -296,17 +314,21 @@ async function loadHomeData() {
         getJSONWithTimeout('/api/narrative/bundle', 5000),
         getJSONWithTimeout('/api/dashboard/calendar-events', 5000),
         getJSONWithTimeout('/api/events/prediction', 5000),
+        getJSONWithTimeout('/api/capital-flow/summary', 5000),
       ]);
 
       const events = bundle && bundle.events ? bundle.events : [];
       _homeChannelMap = buildChannelMap(health && Array.isArray(health.data_channels) ? health.data_channels : null);
       renderDataBadges();
 
-      renderTodaySummary(macro, stress, pipeline, events);
+      renderTodaySummary(macro, stress, pipeline, events, health && health.regime ? health.regime : null);
       renderSignalStrip(events);
       renderMarketPulse(macro, stress);
       renderRecommendation(pipeline, stress);
       renderPredictionsCard(predictionData);
+      renderCapitalBattleCard(document.getElementById('home-capital-battle-content'), capitalFlowSummary);
+      renderSevenForceBoard(document.getElementById('home-seven-force-content'), capitalFlowSummary);
+      renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), capitalFlowSummary);
 
       // Event calendar — fetched once and shared with banner + filters
       const calContainer = document.getElementById('home-calendar-content');
@@ -325,7 +347,9 @@ async function loadHomeData() {
       renderMarketPulse(null, null, null);
       renderRecommendation(null, null);
       renderPredictionsCard(null);
-      renderHomeBanner([]);
+      renderCapitalBattleCard(document.getElementById('home-capital-battle-content'), null);
+      renderSevenForceBoard(document.getElementById('home-seven-force-content'), null);
+      renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), null);
     }
 
     // Portfolio snapshot is loaded independently; it may be empty/demo.
@@ -520,6 +544,7 @@ function renderPredictionsCard(data) {
     const width = Math.round(Math.min(1, Math.max(0, conf)) * 100);
     const drivers = Array.isArray(p.driving_events) ? p.driving_events : [];
     const driverText = drivers.length ? drivers.slice(0, 2).map(e => escapeHtml(e)).join('、') : '無顯著事件';
+    const dist = p.distribution && typeof p.distribution === 'object' ? p.distribution : {};
     return `
       <div class="pred-row" data-index="${idx}">
         <div class="pred-row__meta">
@@ -529,6 +554,16 @@ function renderPredictionsCard(data) {
         </div>
         <div class="pred-row__bar" aria-hidden="true">
           <div class="pred-row__bar-fill pred-row__bar-fill--${dir}" style="width:${width}%"></div>
+        </div>
+        <div class="pred-row__dist" aria-hidden="true">
+          <div class="pred-row__dist-segment pred-row__dist-segment--inflow" style="width:${Math.round((dist.inflow || 0) * 100)}%"></div>
+          <div class="pred-row__dist-segment pred-row__dist-segment--neutral" style="width:${Math.round((dist.neutral || 0) * 100)}%"></div>
+          <div class="pred-row__dist-segment pred-row__dist-segment--outflow" style="width:${Math.round((dist.outflow || 0) * 100)}%"></div>
+        </div>
+        <div class="pred-row__dist-label">
+          <span>流入 ${Math.round((dist.inflow || 0) * 100)}%</span>
+          <span>觀望 ${Math.round((dist.neutral || 0) * 100)}%</span>
+          <span>流出 ${Math.round((dist.outflow || 0) * 100)}%</span>
         </div>
         <div class="pred-row__drivers">${driverText}</div>
       </div>
@@ -600,7 +635,7 @@ function heroRecommendation(stress, pipeline, events) {
   return { rec: '觀望', reason: '資料已載入，等待明確信號', risk: stressRisk, hasRec: false };
 }
 
-function renderTodaySummary(macro, stress, pipeline, events) {
+function renderTodaySummary(macro, stress, pipeline, events, regime) {
   const summaryEl = document.getElementById('home-summary');
   const reasonEl = document.getElementById('home-summary-reason');
   const badgeEl = document.getElementById('home-risk-badge');
@@ -623,8 +658,25 @@ function renderTodaySummary(macro, stress, pipeline, events) {
     const taiexVal = macro ? pointValue(macro, 'taiex') : null;
     const taiexLabel = fmtSafeNumber(taiexVal);
 
+    const REGIME_LABELS = {
+      RISK_ON: '偏多 regime',
+      RISK_OFF: '偏空 regime',
+      NEUTRAL: '觀望 regime',
+    };
+    const REGIME_TONES = {
+      RISK_ON: 'bullish',
+      RISK_OFF: 'bearish',
+      NEUTRAL: 'neutral',
+    };
+    const regimeLabel = REGIME_LABELS[regime] || (regime ? `regime: ${regime}` : '');
+    const regimeTone = REGIME_TONES[regime] || 'neutral';
+    const regimeHtml = regimeLabel
+      ? `<div class="home-today-indicator home-today-indicator--${regimeTone}" title="市場 regime（與 system health 一致）">${regimeLabel}</div>`
+      : '';
+
     indicatorsEl.innerHTML = [
       `<div class="home-today-indicator home-today-indicator--${dirTone}" title="今日建議方向">${dirLabel}</div>`,
+      regimeHtml,
       `<div class="home-today-indicator" title="壓力指數">壓力 ${stressLabel}</div>`,
       `<div class="home-today-indicator" title="外資買賣超">外資 ${foreignLabel}</div>`,
       `<div class="home-today-indicator" title="加權指數">加權 ${taiexLabel}</div>`,
@@ -812,7 +864,7 @@ function bindPredictionsDisclosure() {
   if (!btn || !content) return;
   _predictionsDisclosureBound = true;
 
-  content.setAttribute('data-disclosure-state', 'collapsed');
+  content.setAttribute('data-disclosure-state', 'expanded');
 
   const updateButton = (state) => {
     btn.setAttribute('aria-expanded', state === 'expanded' ? 'true' : 'false');
@@ -829,7 +881,7 @@ function bindPredictionsDisclosure() {
     }
   };
 
-  updateButton('collapsed');
+  updateButton('expanded');
 
   btn.addEventListener('click', () => {
     const current = content.getAttribute('data-disclosure-state') || 'collapsed';

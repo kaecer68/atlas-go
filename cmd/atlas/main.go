@@ -731,6 +731,13 @@ func run(args []string, deps appDeps) error {
 		}
 
 		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
+		dailyRptGen.SetRegimeProvider(func() domain.Regime {
+			summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)
+			if summary != nil {
+				return summary.Regime
+			}
+			return domain.RegimeNeutral
+		})
 		dailyreport.RegisterRoutes(mux, dailyRptGen)
 		log.Printf("[DailyReport] registered /api/reports/* routes")
 
@@ -1531,6 +1538,24 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[RealTime] adapter started (cadence=%dms)", paramsCfg.Realtime.UpdateIntervalMs.Value)
 			}
 
+			var btRunner *autobacktest.Runner
+			if dashboard.GetEventBus() != nil {
+				btRunner = autobacktest.NewRunnerWithEventBus(cfg, dashboard.GetEventBus())
+				log.Printf("[AutoBacktest] connected to Dashboard EventBus for SSE streaming")
+			} else {
+				btRunner = autobacktest.NewRunner(cfg)
+				log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
+			}
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "autobacktest_daily",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					return autobacktest.RunScheduledBacktest(ctx, btRunner)
+				},
+			})
+			log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
+
 			registerCalibrationTasks(calibrationDeps{
 				TaskMgr:         taskMgr,
 				Cfg:             cfg,
@@ -1558,24 +1583,6 @@ func run(args []string, deps appDeps) error {
 			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
 			log.Printf("[Gateway] scheduler API routes registered")
 		}
-
-		var btRunner *autobacktest.Runner
-		if dashboard.GetEventBus() != nil {
-			btRunner = autobacktest.NewRunnerWithEventBus(cfg, dashboard.GetEventBus())
-			log.Printf("[AutoBacktest] connected to Dashboard EventBus for SSE streaming")
-		} else {
-			btRunner = autobacktest.NewRunner(cfg)
-			log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
-		}
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
-			Name:     "autobacktest_daily",
-			Interval: 1 * time.Hour,
-			Enabled:  true,
-			Task: func(ctx context.Context) error {
-				return autobacktest.RunScheduledBacktest(ctx, btRunner)
-			},
-		})
-		log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 

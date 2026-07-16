@@ -1367,6 +1367,7 @@ export interface FlowPrediction {
   date: string;
   direction: string;
   confidence: number;
+  distribution: PredictionDistribution;
   driving_events: string[];
   predicted_forces: string[];
 }
@@ -1376,6 +1377,7 @@ export interface ForceScore {
   raw_value: number;
   z_score: number;
   trend: string;
+  weight: number;
 }
 
 export interface ForecastVsRealityItem {
@@ -2628,6 +2630,12 @@ export interface PreciousMetalsParameters {
   india_gold_imports_yoy: string;
   china_gold_imports_yoy: string;
   comex_default_net_long: string;
+}
+
+export interface PredictionDistribution {
+  inflow: number;
+  outflow: number;
+  neutral: number;
 }
 
 export interface PredictionReport {

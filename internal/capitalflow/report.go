@@ -1,6 +1,7 @@
 package capitalflow
 
 import (
+	"math"
 	"strings"
 	"time"
 )
@@ -31,7 +32,7 @@ func GenerateDailyReport(date time.Time, forces []ForceScore, resonance Resonanc
 
 	return DailyReport{
 		Date:         date,
-		Forces:       forces,
+		Forces:       applyForceWeights(forces),
 		Resonance:    resonance,
 		QualityScore: round(quality, 2),
 		QualityLabel: label,
@@ -63,7 +64,7 @@ func GenerateSummaryReport(date time.Time, forces []ForceScore, resonance Resona
 		QualityLabel:  label,
 		ResonanceDir:  resonance.Direction,
 		DominantForce: dominant,
-		Forces:        forces,
+		Forces:        applyForceWeights(forces),
 		Summary:       buildShortSummary(label, resonance, dominant),
 	}
 }
@@ -158,4 +159,22 @@ func buildShortSummary(label string, resonance ResonanceResult, dominant ForceNa
 	}
 
 	return strings.Join(parts, "，") + "。"
+}
+
+// applyForceWeights computes a dynamic positive weight for each force from its
+// absolute raw value relative to the total absolute raw value across forces.
+// The returned slice is a copy so callers do not mutate the original scores.
+func applyForceWeights(forces []ForceScore) []ForceScore {
+	total := 0.0
+	for _, f := range forces {
+		total += math.Abs(f.RawValue)
+	}
+	out := make([]ForceScore, len(forces))
+	for i, f := range forces {
+		if total > 0 {
+			f.Weight = math.Round((math.Abs(f.RawValue)/total)*100) / 100
+		}
+		out[i] = f
+	}
+	return out
 }
