@@ -433,7 +433,7 @@ drivers = top_k_contributors(S, P_raw, top=2)
 - [ ] Frontend unit test ≥ 15 cases PASS
 - [ ] Offline hit-rate ≥ 0.55（2026-Q2 hold-out）
 - [ ] Brier score ≤ 0.20
-- [ ] Feature flag `SECTOR_PREDICTION_ENABLED` 文件化於 `docs/reference/parameters.md`
+- [ ] Feature flag `SECTOR_PREDICTION_ENABLED` 文件化於 `docs/reference/parameter-system.md`
 - [ ] Runbook 寫進 `docs/operations/sector-prediction-runbook.md`
 - [ ] L2.4-style observation window 進入 standby，退出條件明確
 
