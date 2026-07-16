@@ -16,10 +16,12 @@ Before running Steps 1-7, record the session boundary. This prevents agents from
 
 ```
 1. Record current state:
+   □ Mode:          Plan / Audit / Execute
    □ Branch:        git branch --show-current
    □ Worktree:      pwd && git worktree list
    □ Manifest:      <path to docs/manifests/YYYY-MM-DD-*.md or "none">
    □ In-scope IDs:  <issue IDs from the manifest or user request>
+   □ ATLAS_ENV:     development / staging / production
 
 2. If branch is main AND this is an implementation task (not a read-only investigation):
    → STOP. Load using-git-worktrees skill.
@@ -85,9 +87,20 @@ Load this skill when the user requests ANY of these:
 | File changes | Any edit in `internal/` or `cmd/` |
 | "Simple" fixes | "just add a field", "quick rename", "one-line change" |
 
-**Two modes based on task type:**
-- **Write mode** (modifications): Full 7-step protocol → Steps 1-7
-- **Investigation mode** (read-only inquiries): Lightweight protocol → Steps 1, 2, 3, 6
+**Three execution modes:**
+
+| Mode | Purpose | Can Edit Code? | Required Binding |
+|------|---------|---------------|------------------|
+| **Plan Mode** | Design / architecture / write implementation plan | ❌ NO | `docs/manifests/YYYY-MM-DD-*.md` or `.omo/plans/` |
+| **Audit Mode** | Read-only debugging / investigation | ❌ NO | Symptom / scope statement |
+| **Execute Mode** | Implement approved plan | ✅ YES, scoped | Manifest file + in-scope IDs + feature branch/worktree |
+
+**Mode rules:**
+- You cannot edit `internal/`, `cmd/`, `configs/`, frontend code, or any tracked production file in Plan or Audit mode.
+- In Plan/Audit mode you may only: read code, write to `.omo/plans/`, `docs/manifests/`, `.claude/agent-memory/`, and update hypothesis/evidence tables.
+- Switching to Execute mode requires a clear verbal transition: "I am switching from plan to execute mode for IDs X-Y on branch feat/Z."
+- If the user asks you to "look into", "audit", "investigate", or "plan", start in Audit/Plan mode.
+- If the user asks you to "fix", "implement", "add", or "change", you must be in Execute mode with a manifest binding.
 
 **If the request involves `internal/` or `cmd/` directories, this protocol is MANDATORY.**
 
@@ -285,6 +298,8 @@ Before modifying or removing code, understand WHY it exists:
 □ "I'm on main but it's just a small edit" → STOP. Open a worktree + feature branch.
 □ "This file looks related, let me touch it too" → Is it in the manifest scope? If not, ask first.
 □ "Another CLI was working on this, I'll finish it" → No poaching. Stay bound to your branch/manifest.
+□ "I'm in Plan/Audit mode but this fix is tiny" → STOP. Switch to Execute mode or add it to Backlog.
+□ "The user said 'look into it' but I see the fix" → You are in Audit mode. Document hypothesis and evidence first.
 ```
 
 ---
