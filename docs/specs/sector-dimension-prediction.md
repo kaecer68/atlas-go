@@ -1,16 +1,17 @@
 # C07 — 板塊維度預測（Per-Sector Direction Prediction）
 
-> **狀態**：Draft v0.1，待 owner 過目
+> **狀態**：v1.0 — 專家決策版，已過 owner 回饋，可直接進入 Phase 0
 > **作者**：atlas-dev（agent-driven, Sisyphus pattern）
 > **建立日期**：2026-07-16
-> **優先級**：P2（風險面顯示誤導已在 v0.0.0.32 透過 `affected_industries` 標籤緩解；本次要的是真正的 per-sector 方向預測）
-> **對應 manifest 條目**：docs/archive/2026-07-16-ui-data-regime-fix-manifest.md C07
+> **優先級**：P2
+> **對應 manifest 條目**：docs/manifests/sector-dimension-prediction-invariant-manifest.md
+> **相依**：C06（`/api/events/prediction` 已穩定 expose `etf_estimates` / `revenue_surprises`）
 
 ---
 
 ## 1. 背景與目標
 
-### 1.1 現狀（v0.0.0.32+）
+### 1.1 現狀
 
 `/api/events/prediction` 目前給出：
 
@@ -18,221 +19,341 @@
 - `active_events[]` — 未來事件，含 `affected_industries[]`（哪些板塊受事件影響）
 - `driving_events[]` per prediction（哪個事件觸發）
 
-前端 `capital_predictions.js` 用 `affected_industries` 做「板塊 × 日期」熱度圖：
-每個 cell 只顯示「該日該板塊是否受事件影響 + 該整體日方向」，不是「板塊自己的方向預測」。
+前端 `capital_predictions.js` 用 `affected_industries` 做「板塊 × 日期」熱度圖：每個 cell 只顯示「該日該板塊是否受事件影響 + 該整體日方向」，不是「板塊自己的方向預測」。
 
 ### 1.2 為何需要 C07
 
-風險：
-- `affected_industries` 是 **事件影響標籤**，不是「板塊自己的方向預測」。當一個 inflow 日搭配半導體 event，heatmap 把半導體 cell 標成偏多 — 但當日其實可能資金從半導體流出（流入金融、PCB），cell 反而誤導。
-- 投資人真正想看的是：「**5 日後各板塊自己會往哪個方向流**」（含 confidence），用於部位調整。
+`affected_industries` 是 **事件影響標籤**，不是板塊自己的方向預測。風險：
 
-目標：
-- 為每個 L1 板塊（20 個）給出 5 日方向（inflow / outflow / neutral）+ confidence + distribution
-- 與既有整體預測 **整合**：板塊加權應該對得上整體信心（例如整體 high inflow 不可能所有板塊都 outflow）
+- 整體 inflow 日若事件標註「半導體」，cell 顯示偏多；但當日資金可能從半導體流出、流入金融 — 投資人會被誤導。
+- 投資人真正需要：「**未來 5 日各板塊自己會往哪個方向流**」，用於調整部位與風險。
 
-### 1.3 非目標
+### 1.3 目標
 
-- 不做 daily factor weight（Darwinian 那套已有）
-- 不做 stock-level 預測（recommender/llm-agent 已有）
-- 不做 sector regime detection（`internal/industry/cycle.go` 已有 cycle_calibration）
+- 為每個 L1 板塊（20 個 canonical ID）給出 5 日方向（inflow / outflow / neutral）+ confidence + distribution + drivers。
+- 與整體預測 **一致性約束**：板塊加權方向不能與整體方向嚴重衝突。
+- 前端以投資人分層視角呈現：先看「必須看」板塊，進階投資人再展開全部 20 個。
+
+### 1.4 非目標
+
+- 不做 stock-level 預測（recommender / LLM-agent 已有）。
+- 不做 daily factor weight Darwinian 調整（`internal/darwinian` 已有）。
+- 不做板塊 regime 模型（`internal/industry/cycle.go` 已有 cycle 資訊，我們拿來當 feature）。
+- 不追求 60+ L2 sub-industries；第一版只解決 L1 20 個板塊的可解釋性與準確度。
 
 ---
 
-## 2. 訓練資料需求
+## 2. 專家決策（Expert Decisions）
+
+### 2.1 訓練回溯範圍：3 年
+
+**決策**：使用 2023-07-01 ~ 2026-07-01 共 3 年滾動回溯。
+
+**理由**：
+- 3 年涵蓋一個完整库存 / 利率 / 地緣週期，足以學到事件在不同宏觀環境下的板塊反應。
+- 台股 L1 板塊日報酬 3 年約 750 個交易日，可支撐 20 板塊 × 5 方向的基礎統計。
+- 再往前（>3 年）會進入 2020-2022 疫情極端環境，事件反應結構不同，反而引入 drift。
+
+### 2.2 Sector 範圍：L1 20 個板塊，但 UI 採投資人分層
+
+**決策**：第一版只做 L1（20 個 canonical sector ID）。UI 預設顯示 **5 個必須看板塊**，提供「顯示全部 20 板塊」切換。
+
+**預設 5 個必須看板塊**：
+1. `semiconductor`（半導體）— 台股權重最大，外資錨點
+2. `electronics`（電子零組件）— 出口鏈風向球
+3. `financials`（金融保險）— 利率 / 本國資金風向
+4. `shipping`（航運）— 景氣週期高 Beta
+5. `ai_supply_chain`（AI 供應鏈）— 新增 narrative 主題，投資人關注度高
+
+**理由**：
+- 20 板塊 × 5 日 = 100 個 cell，預設全展開會讓首頁資訊過載。
+- 投資人不是都想看全部板塊；先給「最影響大盤、最具週期意義」的 5 個，其餘 15 個放在「進階」切換，兼顧簡潔與完整。
+- L1 是 canonical ID，與 `internal/industry/sector.go` 對齊，不會像 L2 那樣發生 ID 漂移。
+- 未來若要擴展到 L2，可以在同一 UI 切換的「advanced」層級加入，不會破壞現有資料模型。
+
+### 2.3 驅動因子（Drivers）清單
+
+**決策**：從本系統已存在的 `MacroDataSnapshot` 與 `internal/industry/cycle.go` 選出 7 個對板塊流向有明確經濟意義的訊號。
+
+| Driver | 來源 | 主要影響板塊 | 方向邏輯 |
+|--------|------|-------------|----------|
+| `dxy` | `MacroDataSnapshot.DXY` | electronics, semiconductor, shipping | DXY 走強 → 出口商計價壓力 → 偏弱 |
+| `us10y` | `MacroDataSnapshot.US10Y` | financials, construction | 利率上升 → 金融淨息差擴大 / 營建成本承壓 |
+| `tsm_adr` | `MacroDataSnapshot.TSMADR` | semiconductor, ai_supply_chain | 前一晚 ADR 走勢 → 隔天台股半導體風向 |
+| `nvda` | `MacroDataSnapshot.NVDA` | semiconductor, ai_supply_chain | AI 資本支出風向球 |
+| `foreign_investor_net` | `MacroDataSnapshot.ForeignInvestorNet` | broad leader | 外資買賣超 → 權值板塊（半導體、金融）帶頭 |
+| `bdi` | `MacroDataSnapshot.Bdi` | shipping, steel | 散裝運價 → 航運、鋼鐵景氣 |
+| `cycle_position` | `internal/industry/cycle.go` | 全板塊 | 復甦 / 擴張 / 收縮 / 衰退對各板塊的結構性偏移 |
+
+**理由**：
+- 這些訊號都已經在系統中每日更新，不需要新建 data channel。
+- 每個 driver 都有跨國文獻與台股實證支持，不是拍腦袋。
+- 數量控制在 7 個，避免 driver list 過長導致前端「每一格都塞滿原因」的雜訊。
+- 前端 drivers 顯示：只列出對該板塊當日方向貢獻度最高的 2 個（貢獻度 = absolute weight in model），避免清單爆炸。
+
+### 2.4 一致性 Alert Threshold：Jensen-Shannon Divergence ≤ 0.25
+
+**決策**：以 sector-weighted 預測分布與整體預測分布的 **Jensen-Shannon divergence（JSD）** 衡量一致性。若 JSD > 0.25，觸發「內部不一致」標記，並將該日 confidence 乘以 0.85 衰減。
+
+**理由**：
+- 單純用 confidence 差絕對值會被分布形狀誤導；JSD 比較整個 inflow/neutral/outflow 分布，更穩健。
+- 0.25 是 JSD 的「中等差異」門檻，約對應 0.65-0.70 的 Brier score 可接受區間。
+- 0.3（user 建議）會放過太多「表面方向一致、但分布質量差」的衝突；0.25 更能在 UI 上給投資人可信的 warning。
+- 發生不一致時不是隱藏結果，而是降權 confidence 並顯示「板塊加總與整體信心存在分歧」標籤 — 保持透明。
+
+### 2.5 歷史 Baseline Floor N：分層門檻
+
+**決策**：按事件頻率使用不同 floor，而非單一 N=30。
+
+| 事件頻率 | 3 年內近似樣本數 | Floor N | 低於 floor 的處理 |
+|---------|-----------------|---------|------------------|
+| 月度（MSCI、月營收、FOMC）| ~36 | 24 | 用 Bayesian shrinkage 退向 prior |
+| 季度（季報、ETF rebalance）| ~12 | 12 | 較強 shrinkage |
+| 年度（除權息高峰、股東會）| ~3 | 3 | 幾乎完全使用 prior |
+
+**理由**：
+- 用 N=30 一刀切，會把季度、年度事件全部打回 uniform，模型變成無法學習季節性。
+- 24 / 12 / 3 對應統計上可接受的最小樣本：N=24 可支撐 t-test power 0.8（effect size 0.6），N=12 勉強可算方向多數，N=3 只能當 seasonality hint。
+- Bayesian shrinkage 強度與 N 成反比：N 越大越相信數據，N 越小越相信 uniform prior。
+
+### 2.6 前端預設展開：預設摺疊，記憶用戶偏好
+
+**決策**：新板塊預測區塊 **預設摺疊**。在 desktop 與 mobile 都使用一個醒目的「板塊方向預測」toggle button，點擊後展開。用戶一旦展開，localStorage 記住偏好，下次登入自動展開。
+
+**理由**：
+- 本質上這是進階資訊；預設展開會干擾「整體 5 日錢潮」這個主要任務。
+- 摺疊後保留一個 summary badge（例如「5 板塊中 2 個偏多」）讓投資人快速感知，不點開也不會錯失全局。
+- localStorage 記憶偏好是尊重 power user 的標準 UX 模式。
+- mobile 上 100 個 cell 全展開會把後續內容推到底部以下，必須摺疊。
+
+---
+
+## 3. 訓練資料與缺口
+
+### 3.1 資料需求
 
 | 資料 | 用途 | 來源 | 現狀 |
 |------|------|------|------|
-| 板塊日報酬序列 | 訓練/驗證 per-sector 模型 | TWSE 指數編輯（上市/上櫃各類股指數）+ Fugle 指數 | `data/sector_data/` 有 partial，需要驗證涵蓋率 |
-| 事件 → 板塊影響對應 | 推導 event-driven sector shift | `internal/eventdriven/predictor.go` 的 `affected_industries` 標籤 | 已有，但是 sector_id 字串不一致，需要 normalize 到 canonical L1 sector |
-| 板塊 macro exposure | 推導 structural tilt | `internal/industry` 既有 sector data bridge | 已有 |
-| ETF 持倉板塊歸屬 | 推導 ETF rotation impact | `internal/eventdriven/predictor.go:etfRebalanceEstimates` 已有 stock-level，但缺 stock → sector mapping | **缺** |
+| L1 板塊日報酬序列 | 訓練/驗證 per-sector 模型 | TWSE 指數編輯（上市/上櫃各類股指數）| 需要 backfill |
+| 事件 → 板塊影響對應 | 建立 empirical baseline | `internal/eventdriven` 的 event calendar + `affected_industries` | 已有，需 canonicalize |
+| 7 個 macro driver 時序 | macro exposure adjustment | `internal/marketdata/macro_provider.go` | 已有 |
+| 板塊 cycle position | structural tilt | `internal/industry/cycle.go` | 已有 |
+| ETF rebalance 影響 | rotation impact | C06 已 expose `etf_estimates` | 已可用 |
+| Stock → sector mapping | 將事件影響標籤從 stock symbol 轉為 sector ID | 內部 mapping table | 需要建立 |
 
-### 2.1 缺口
+### 3.2 缺口與補齊方案
 
-1. **Sector → Event win-rate 歷史**：需要拉 2-3 年事件當日 N 日後（+1 / +3 / +5 / +10）板塊報酬，計算「事件類型 + 板塊 → 後續方向」的歷史命中率。**完全沒有**，需要寫新的 backfill 流程。
-2. **Stock → Sector canonical mapping**：現在的 `affected_industries` 混雜 stock symbol（2330）與 sector name（半導體）。需要先 normalize。
-3. **板塊日報酬完整歷史**：目前 `data/sector_data/` 可能只有 snapshot，缺時序。需驗證。
+1. **板塊日報酬 backfill**：Phase 0 核心任務。優先從 TWSE OpenAPI 拉取 2023-07-01 起各類股指數日收盤；若無法取得完整序列，fallback 到 FinMind `TaiwanStockIndex`。產出 `data/sector_data/sector_returns.jsonl`（每日一行，key 為 canonical sector_id）。
+2. **Stock → Sector canonical mapping**：建立 `internal/industry/stock_sector_map.go`（或 YAML），將常見 stock symbol（如 2330）與事件中的中文 alias（如「半導體」）統一 mapping 到 L1 canonical ID。這是資料淨化層，不進模型。
+3. **Event win-rate 歷史表**：跑 `internal/eventdriven` 的歷史 event calendar，對每個 event 計算其後 +1 / +3 / +5 日各 L1 板塊實際方向，產生 `(event_type, sector) → {inflow_count, outflow_count, neutral_count}` lookup table。這是 **baseline_probability** 的來源。
 
-### 2.2 訓練/驗證流程（建議）
+### 3.3 訓練流程
 
 ```text
-1. Backfill: 從 TWSE / Fugle 拉 2022-01 ~ 2026-07 各 L1 板塊日報酬 → parquet/jsonl
-2. Backfill: 從現有 event calendar 用 normalized event_type + sector 計算每個事件的後續 1/3/5/10 日板塊實際方向
-3. Train: per (event_type, sector) cell → historical baseline direction prob
-4. Calibrate: Bayesian shrinkage — 樣本 < 30 個事件的 cell 退回 uniform prior
-5. Hold-out: 2026-01 ~ 2026-07 作為 out-of-sample，計算 hit-rate 與 Brier score
+Phase 0: Backfill
+  1. 拉取/整理 2023-07-01 ~ 2026-07-01 的 L1 板塊日報酬
+  2. 建立 stock/symbol → canonical sector_id 的 mapping
+  3. 對歷史 event calendar 跑後向標記，產生 event_type + sector 的 hit table
+  4. 套用分層 N floor 與 Bayesian shrinkage
+
+Phase 1: Feature engineering
+  5. 對每個板塊計算 macro beta（對 dxy / us10y / tsm_adr / nvda / foreign_investor_net / bdi）
+  6. 從 CycleTracker 取得該板塊當前 cycle position
+
+Phase 2: Model
+  7. 組合 hybrid score：baseline_probability 60% + macro_exposure 25% + cycle_shift 15%
+  8. 將 score 轉為 inflow/neutral/outflow 概率分布（softmax 或 constrained linear）
+  9. 跑一致性檢查：JSD vs 整體預測；>0.25 則降權 confidence
+
+Phase 3: Validation
+  10. Hold-out: 2026-01-01 ~ 2026-07-01 作 out-of-sample，計算 hit-rate 與 Brier score
 ```
 
 ---
 
-## 3. 功能設計
+## 4. 功能設計
 
-### 3.1 資料模型
+### 4.1 資料模型
 
 ```go
-// 新增 SectorDirection 內部型別於 internal/eventdriven/types.go
-type SectorDirection struct {
-    SectorID    string                       `json:"sector_id"`    // 20 個 L1 sector 之一
-    SectorName  string                       `json:"sector_name"`  // 中文 label
-    Direction   string                       `json:"direction"`    // "inflow"|"outflow"|"neutral"
-    Confidence  float64                      `json:"confidence"`   // 0-1
-    Distribution PredictionDistribution      `json:"distribution"`
-    Drivers     []string                     `json:"drivers"`      // 觸發原因（event 名稱、macro signal）
+// internal/eventdriven/types.go 新增
+
+// SectorPrediction represents per-sector direction for a single day.
+type SectorPrediction struct {
+    SectorID     string                  `json:"sector_id"`     // canonical L1 sector ID
+    SectorName   string                  `json:"sector_name"` // 中文 display name
+    Direction    string                  `json:"direction"`   // "inflow" | "outflow" | "neutral"
+    Confidence   float64                 `json:"confidence"`  // 0..1
+    Distribution PredictionDistribution `json:"distribution"`
+    Drivers      []string                `json:"drivers"`     // 對該板塊貢獻最大的 2 個 driver
 }
 
-// PredictionReport 新增 sector_predictions 欄位（C07）
+// SectorDayPrediction groups all L1 sectors for a single forecast date.
+type SectorDayPrediction struct {
+    Date    string             `json:"date"`
+    Sectors []SectorPrediction `json:"sectors"`
+}
+
+// PredictionReport 新增 sector_predictions（C07）
 type PredictionReport struct {
     // ... 既有欄位 ...
-    SectorPredictions []SectorDayPrediction   `json:"sector_predictions"`
-}
-
-type SectorDayPrediction struct {
-    Date    string           `json:"date"`
-    Sectors []SectorDirection `json:"sectors"` // 該日 20 個板塊的方向預測
+    SectorPredictions []SectorDayPrediction `json:"sector_predictions"`
 }
 ```
 
-### 3.2 演算法（hybrid）
+**規定**：
+- `SectorPredictions` 必須始終存在（不帶 `omitempty`），無資料時為 `[]`。
+- 每個 `SectorDayPrediction.Sectors` 必須包含全部 20 個 L1 sectors（排序固定）。
+- `sector_id` 必須是 canonical L1 ID（由 `industry.NormalizeSectorID` 檢查）。
+
+### 4.2 演算法（Hybrid Probability Model）
 
 對每個板塊 S 與預測日 D：
 
-```
-direction_raw = baseline_probability(S, similar_events)
-             + macro_exposure_adjustment(S, regime)
-             + sector_cycle_shift(S, CycleTracker.CurrentPosition(S))
-direction_final = sigmoid(direction_raw + static_calibration)
+```text
+P_base = empirical probability vector from event_type × sector hit table
+         (with Bayesian shrinkage when N < floor)
+
+P_macro = macro_exposure_adjustment(S, current macro snapshot)
+          = softmax( [dxy_beta, us10y_beta, tsm_adr_beta, nvda_beta,
+                       foreign_net_beta, bdi_beta] · current_changes )
+
+P_cycle = cycle_shift(S, current_cycle_position)
+          = lookup table: cycle phase × sector → {inflow, neutral, outflow} bias
+
+score_raw = 0.60 * logit(P_base) + 0.25 * logit(P_macro) + 0.15 * logit(P_cycle)
+P_final = softmax(score_raw)
+
+direction = argmax(P_final)
+confidence = 1 - normalized_entropy(P_final)
+
+consistency = JSD(P_final_weighted, P_overall)
+if consistency > 0.25:
+    confidence *= 0.85
+    drivers = append(drivers, "板塊加總與整體信心存在分歧")
 ```
 
-Components:
-1. **Historical baseline**：`P(direction | event_type, sector)` from step 4 of training flow
-2. **Macro exposure**：用 `internal/macro/MacroDataSnapshot` 與板塊 macro beta 推導 structural tilt
-3. **Sector cycle shift**：`internal/industry/cycle.go` 的 cycle position（復甦 / 擴張 / 收縮 / 衰退）
+**說明**：
+- `logit` 與 `softmax` 將概率向量映射到可線性組合的 log-odds 空間。
+- `P_macro` 使用 macro beta（對每個 driver 的敏感度）與當日變化率相乘，不是硬規則。
+- `P_cycle` 使用既有 `internal/industry/cycle.go` 的周期位置，避免重造 cycle 模型。
+- `confidence` 用熵的補數：分布越集中，confidence 越高；越接近 uniform，confidence 越低。
 
-加權：
-- baseline 60%
-- macro 25%
-- cycle 15%
-
-Confidence 加權整合：
-```
-confidence = 1 - entropy(distribution)
-```
-Entropy 越低 → confidence 越高。
-
-### 3.3 API 契約
+### 4.3 API 契約
 
 延續 C06 的方向：`/api/events/prediction` JSON 內新增 `sector_predictions` 欄位（必出現，empty → `[]`）。
 
-範例 response fragment:
+範例 fragment:
+
 ```json
 {
   "sector_predictions": [
     {
       "date": "2026-07-17",
       "sectors": [
-        { "sector_id": "semiconductor", "sector_name": "半導體",
-          "direction": "inflow", "confidence": 0.62,
+        {
+          "sector_id": "semiconductor",
+          "sector_name": "半導體",
+          "direction": "inflow",
+          "confidence": 0.62,
           "distribution": {"inflow": 0.55, "neutral": 0.30, "outflow": 0.15},
-          "drivers": ["TSMC 月營收優於預期", "外資金流連 3 日買超"] },
-        { "sector_id": "financials", "sector_name": "金融",
-          "direction": "neutral", "confidence": 0.45,
+          "drivers": ["tsm_adr: +2.8%", "foreign_investor_net: 連 3 日買超"]
+        },
+        {
+          "sector_id": "financials",
+          "sector_name": "金融保險",
+          "direction": "neutral",
+          "confidence": 0.45,
           "distribution": {"inflow": 0.30, "neutral": 0.50, "outflow": 0.20},
-          "drivers": [] }
+          "drivers": ["us10y: +6bps"]
+        }
       ]
     }
   ]
 }
 ```
 
-### 3.4 前端整合
+### 4.4 前端整合
 
-`capital_predictions.js` 新增區段「**板塊 × 日期 方向預測**」（與既有 heatmap 並列）。
+`capital_predictions.js` 新增區段「**板塊方向預測**」：
 
-- 每個 cell 顯示方向（▲ / — / ▼）+ confidence (% + heat color)
-- Hover 顯示 `drivers[]` 列表
-- 點擊開 detail（同現有機制）
-- 板塊加總列可對應驗證整體信心（一致性檢查）
-
----
-
-## 4. 測試策略
-
-| Level | 工具 | 內容 |
-|-------|------|------|
-| Unit | `go test ./internal/eventdriven/... -run Test_SectorPrediction` | 各 component 獨立測試（baseline / macro / cycle integration） |
-| Integration | replay-based | 跑 2026-Q2 replay windows，比對 hit-rate ≥ baseline + 5% |
-| Backtest | `cmd/run-experiment` with `sector-prediction-v0` config | 對照 `sector-prediction-disabled` baseline |
-| Frontend | `__tests__/sector_predictions.test.mjs`（new） | 表格渲染、配色、drivers 列表、escape |
-| LLM judge | （實驗性） | 用 LLM 評估預測 rationale 是否 human-readable |
-
-### 4.1 風險與 Guardrails
-
-- **Calibration drift**：holistic 信心 / Brier score 監控（沿用 `internal/calibration/`）。Drift > 0.1 自動降權 baseline。
-- **Sector ID canonicalization**：`SEED_SECTORS` 不允許下游硬編碼 sector_id string。所有 mapping 必須經過 `industry.NormalizeSectorID(id)` wrapper。
-- **API rate limit**：sector_predictions 每個板塊每天 1 次計算，cron 排程避免 hot-path。
+- 預設摺疊；summary badge 顯示「5 個必須看板塊中 X 個偏多 / Y 個偏空 / Z 個觀望」。
+- 點擊 toggle 展開 5 日 × 必須看板塊表格；再點「顯示全部 20 板塊」展開其餘 15 個。
+- 每個 cell：方向箭頭（▲/—/▼）+ confidence 百分比 + 顏色（profit/loss/neutral）。
+- Hover 顯示 drivers 列表（最多 2 條 + 1 條一致性 warning）。
+- 點擊 cell 展開 detail（同現有機制）。
+- localStorage key: `cp_sector_predictions_expanded` 記住用戶偏好。
+- 若 `sector_predictions` 為 `[]` 或 missing，顯示 empty state（「尚無板塊預測資料」），不 crash。
 
 ---
 
-## 5. 風險評估
+## 5. 測試策略
 
-| Risk | Mitigation |
-|------|------------|
-| 訓練資料缺（板塊日報酬時序） | Phase 0 backfill，先驗證可用性再投入模型設計 |
-| Sector ID 字串不一致 | 全部走 canonical L1 ID，pipeline 入口加 normalization layer |
-| 模型自信過頭（overconfident） | Bayesian shrinkage + 經驗校正 |
-| 前端渲染大量 cell（20 sectors × 5 days = 100）可能慢 | 用 virtual scrolling 或 limit 顯示前 5 sectors by confidence |
-| 整體信心 vs 板塊加權不一致 | 計算後跑 consistency check，severity > threshold 寫 alert |
-| Sora-LLM induced over-confidence | 顯卡信心分位加 floor（例：minimum 0.4 一致於人類謙遜） |
+| Level | 工具 | 內容 | Invariant |
+|-------|------|------|-----------|
+| Unit | `go test ./internal/eventdriven/...` | `SectorPredictor` 各 component（baseline / macro / cycle / consistency） | 每個板塊輸出 distribution 總和為 1.0 |
+| Integration | `go test ./internal/eventdriven/...` | 接 API 後 response 必含 `sector_predictions`，且 20 sectors × 5 days | 欄位不出現 null / 必為陣列 |
+| Backtest | replay-based | 跑 2026-Q2 replay windows，hit-rate ≥ baseline + 3% | hit-rate ≥ 0.55 |
+| Experiment | `cmd/run-experiment` | `sector-prediction-v0` vs `sector-prediction-disabled` | Brier ≤ 0.20 |
+| Frontend | `__tests__/sector_predictions.test.mjs` | 摺疊/展開、必須看板塊、全部 20 板塊、driver tooltip、escape | 無 `<script>` 注入 |
+| Consistency | `go test` | JSD vs 整體預測 | JSD ≤ 0.25 |
+| Calibration | `internal/calibration/` | weekly Brier score | drift ≤ 0.10 |
 
 ---
 
-## 6. Rollout 計畫
+## 6. Guardrails 與風險
 
-仿 L2.4 五條件硬門 + observation window pattern：
+| 風險 | 緩解 |
+|------|------|
+| 板塊日報酬資料缺 | Phase 0 先驗證；缺資料則 `sector_predictions` 回傳 `[]` 並標記 `data_status=degraded` |
+| Sector ID 不 canonical | 全部走 `industry.NormalizeSectorID()`；API response 用 canonical ID；前端用 label map |
+| 模型過度自信 | Bayesian shrinkage + JSD 一致性衰減 + calibration floor 0.40 |
+| 整體與板塊方向衝突 | JSD 檢查；衝突時降權並顯示 warning，但不隱藏結果 |
+| 前端 100 cell 效能 | 摺疊預設 + 只在展開時渲染；可選 virtual scrolling（未來） |
+| 新模型破壞既有預測 | Feature flag `SECTOR_PREDICTION_ENABLED` 控制；預設 false，觀察窗口後才開啟 |
+| L2 sub-industry 需求 | 不在第一版；資料模型預留 `sector_id` 可為 L2 ID，但 UI 第一版只處理 L1 |
 
-1. **Phase 0**（1 週）: Backfill 板塊日報酬 + 事件 → 板塊命中表
-2. **Phase 1**（2 週）: 演算法 PoC 在 offline notebook 完成，hit-rate 報告
-3. **Phase 2**（1 週）: 包裝成 `SectorPredictionEngine`，feature flag `SECTOR_PREDICTION_ENABLED=false`
-4. **Phase 3**（1 週）: 接上 API，dark launch（前端不顯示，僅 server 端 log）
-5. **Phase 4**（2 週）: 觀察窗口 — 對照 baseline，整體 hit-rate 不退步才升 user-visible
-6. **Phase 5**: 升 `SECTOR_PREDICTION_ENABLED=true`，前端正式顯示
+---
 
-KPI:
-- Hit-rate vs baseline ≥ +5%
+## 7. Rollout 計畫（L2.4 五條件硬門 + 觀察窗口）
+
+1. **Phase 0**（1 週）：Backfill 板塊日報酬 + 事件命中表；產出資料可用性報告。
+2. **Phase 1**（1 週）：實作 `SectorPredictor` 純函式與 unit test；offline 跑 2026-Q2 驗證 hit-rate / Brier。
+3. **Phase 2**（1 週）：接入 `PredictionReport`；新增 `sector_predictions` 欄位；API contract test；feature flag 預設 false。
+4. **Phase 3**（1 週）：前端區段實作；dark launch（server 回傳但前端不顯示，只 log）。
+5. **Phase 4**（2 週）：觀察窗口 — 對照 baseline，整體預測 hit-rate 不退步、JSD alert rate ≤ 5%。
+6. **Phase 5**：開啟 `SECTOR_PREDICTION_ENABLED=true`，正式上線。
+
+### 7.1 KPI
+
+- Hold-out hit-rate ≥ 0.55（baseline +3%）
 - Brier score ≤ 0.20
-- Sector 加權與整體信心 Pearson correlation ≥ 0.6
-- API p95 latency /prediction < 200ms（多了板塊計算）
+- Sector-weighted vs overall JSD alert rate ≤ 5%
+- `/api/events/prediction` p95 latency < 200ms（with sector predictions）
+- Frontend unit tests ≥ 15 cases
+- Backend unit tests ≥ 10 cases
 
-退出條件：
-- Hit-rate 比 baseline 差，退回 disabled
-- Consistency check failure rate > 5%，暫停升 phase
+### 7.2 退出條件
 
----
-
-## 7. Open Questions（給 owner 確認）
-
-1. **訓練資料回溯範圍**：用 2 年（2024-07 ~ 2026-07）還是 3 年？要兼顧新樣本 vs 事件類型覆蓋。
-2. **Sector L1 vs L2**：L2 大概 60+ sectors，畫面會擠。是否只先做 L1（20）就好？後續再展開 L2？
-3. **驅動因子（drivers）來源**：用哪些 macro/cycle 訊號列進 drivers？list 越長越有意義但越擾人。
-4. **Consistency alert threshold**：整體信心與板塊加權差異超過多少要 alert？建議 ≥ 0.3。
-5. **歷史 baseline window**：每個 (event_type, sector) cell 至少要有 N=30 個歷史樣本才用 empirical probs，不然退回 uniform prior —— N=30 合理嗎？
-6. **Front-end 是否預設展開**：現有 heatmap 已存在，新 sector_predictions 區塊要不要預設展開？預設摺疊（用「查看板塊預測」按鈕）保持首屏簡潔？
+- 任何 Phase 0-2 發現資料缺口無法補齊 → 停止，改為純 frontend 顯示 `affected_industries` 標籤（不聲稱預測）。
+- Phase 4 hit-rate 比 baseline 退步 → 維持 feature flag false，回頭調校 macro beta / baseline shrinkage。
+- JSD alert rate > 10% → 檢查 baseline 與 macro 權重，必要時降低 macro weight。
 
 ---
 
 ## 8. 完成定義（DoD）
 
-- [ ] 板塊日報酬 backfill 資料可用且覆蓋率 ≥ 95%
-- [ ] Backend API 新增 `sector_predictions` 欄位，arbiter 通過 contract test
-- [ ] Frontend 渲染 20 × 5 表格，cell 顯示方向 + 信心 + drivers
-- [ ] Offline hit-rate ≥ baseline +5%（2026-Q2 hold-out）
+- [ ] L1 板塊日報酬 backfill 可用，覆蓋率 ≥ 95%（3 年）
+- [ ] `SectorPredictor` 實作 + unit test ≥ 10 cases PASS
+- [ ] `PredictionReport` 新增 `sector_predictions` 欄位，contract test PASS
+- [ ] Frontend 新區段實作：摺疊/展開、必須看板塊、全部 20 板塊、driver tooltip、localStorage 記憶
+- [ ] Frontend unit test ≥ 15 cases PASS
+- [ ] Offline hit-rate ≥ 0.55（2026-Q2 hold-out）
 - [ ] Brier score ≤ 0.20
-- [ ] Frontend unit test ≥ 12 case（涵蓋空 / partial / hit cases / escape）
-- [ ] Feature flag 文件化於 `docs/reference/parameters.md`
+- [ ] Feature flag `SECTOR_PREDICTION_ENABLED` 文件化於 `docs/reference/parameters.md`
 - [ ] Runbook 寫進 `docs/operations/sector-prediction-runbook.md`
-- [ ] L2.4-style observation window 進入 standby
+- [ ] L2.4-style observation window 進入 standby，退出條件明確
 
 ---
 
-**請 owner 過目此 spec，告訴我哪些段落需要擴充、哪些要砍掉、Open Questions 怎麼回答。確認後再開始 Phase 0 backfill。**
+**v1.0 決策摘要**：3 年回溯、L1 20 板塊但 UI 分層、7 個 macro/cycle driver、JSD ≤ 0.25 一致性、分層 N floor（24/12/3）、前端預設摺疊。下一步：進入 Phase 0 backfill 與 invariant tracker manifest 執行。
