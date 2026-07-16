@@ -10,6 +10,35 @@ This protocol overrides the default AI impulse to edit immediately. Every step e
 
 ---
 
+## Session Start — Lock Scope Before Any Edit
+
+Before running Steps 1-7, record the session boundary. This prevents agents from drifting into other CLI sessions, editing on `main`, or losing track of the original task.
+
+```
+1. Record current state:
+   □ Branch:        git branch --show-current
+   □ Worktree:      pwd && git worktree list
+   □ Manifest:      <path to docs/manifests/YYYY-MM-DD-*.md or "none">
+   □ In-scope IDs:  <issue IDs from the manifest or user request>
+
+2. If branch is main AND this is an implementation task (not a read-only investigation):
+   → STOP. Load using-git-worktrees skill.
+   → git worktree add -b feat/<short-name> ../atlas-<short-name> main
+   → Continue this protocol inside the new worktree.
+
+3. If asked to modify files outside the recorded in-scope IDs:
+   → WARN the user.
+   → Either update the manifest scope or stop before touching unrelated files.
+   → Never silently poach work from another CLI session or manifest.
+
+4. Run git stash list and record any pre-existing stashes with their messages.
+   → New stashes created this session must be labeled with the task/ID.
+```
+
+**Why this matters**: `main` is not a workspace. Multi-CLI parallelism is only safe when each CLI is bound to its own branch/worktree and manifest.
+
+---
+
 ## When to Use
 
 Load this skill when the user requests ANY of these:
@@ -219,6 +248,9 @@ Before modifying or removing code, understand WHY it exists:
 □ "No callers = dead code, delete it"   → Classify first: incomplete? superseded? accidentally disconnected? config-driven?
 □ "This is new, can't overlap"          → codebase-memory semantic_query before declaring novelty.
 □ "I'll fix it the simple way"         → Simple ≠ correct. Match the architecture.
+□ "I'm on main but it's just a small edit" → STOP. Open a worktree + feature branch.
+□ "This file looks related, let me touch it too" → Is it in the manifest scope? If not, ask first.
+□ "Another CLI was working on this, I'll finish it" → No poaching. Stay bound to your branch/manifest.
 ```
 
 ---
