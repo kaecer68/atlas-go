@@ -82,6 +82,8 @@
 - `listenHTTP` graceful shutdown 用 5s timeout 處理 ctx cancellation，確保 in-flight request 結束後才退出。
 - 設定 `Config.Transport` 為空字串時 fallback 至 `TransportStdio`（向後相容舊部署）。
 - HTTP transport 不修改 audit 的 `transport` 欄位邏輯（v2 schema 已預留欄位，目前由 `withAudit` 從 ctx 取值，stdio 為 `"stdio"`，HTTP 路徑在 audit 中標為 `"http"`）。
+- **Rate limit 預設 120 req/min**（Phase 6 hardening）：`Config.RateLimitPerMinute` 預設 `120`，`Burst` 預設等於 `PerMinute`。HTTP/SSE 部署不應關閉；stdio 開發若需無限流可設 `ATLAS_MCP_RATE_LIMIT_PER_MINUTE=0`。
+- **stdio auth 要求**：stdio 模式雖不強制 Bearer token，但若 process 可被多個 agent / 多個使用者觸發，必須設定 `ATLAS_MCP_TOKEN` 並在 MCP client config 中帶入，否則等同無認證暴露全部 tool。
 
 ## 測試陷阱
 

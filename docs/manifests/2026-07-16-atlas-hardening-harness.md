@@ -4,7 +4,7 @@
 > **Goal**: Add deterministic guardrails, agent memory, mode-aware gates, and environment isolation so agents cannot accidentally break atlas-go or confuse contexts.
 > **Scope**: Harness engineering only. No deployment infrastructure, no cloud topology, no new features.
 > **Created**: 2026-07-16
-> **Status**: in-progress (Phase 5 complete, Phase 6 pending)
+> **Status**: in-progress (Phase 6 complete, Phase 7 close-out pending)
 
 ---
 
@@ -21,7 +21,7 @@
 | H07 | Agent claims work is done without running verification. | Verification commands are scattered; no one-command verify. | `scripts/verify-atlas.sh` (new), `docs/manifests/README.md` | `./scripts/verify-atlas.sh` runs format, vet, test, staticcheck, manifest verify, drift check. | done | new-doc | Phase 4: one-command verification |
 | H08 | Agent asks questions whose answers are already in code/docs. | MCP tools exist but agent does not have a "check first" discipline. | `atlas-pre-change-protocol` skill, MCP tool usage prompts | Skill mandates querying MCP / gitnexus before asking project-specific questions. | done | none | Phase 3: mode-aware gates + "check first" prompts |
 | H09 | Agent scope drifts to unrelated files. | Scope lock is instruction-based, not enforced. | `atlas-pre-change-protocol` skill, `.agent-hooks/` | Execute mode rejects edits outside declared manifest IDs. | done | none | Phase 3: scope-lock in session start + red flags |
-| H10 | Atlas-MCP lacks hard rate limiting and auth defaults for external agents. | Rate limit defaults to 0; stdio mode has no token enforcement. | `cmd/atlas-mcp/main.go`, `cmd/atlas-mcp/server/ratelimit.go` | HTTP/SSE mode has non-zero default rate limit; stdio mode documents auth requirement. | pending | none | Phase 6: harden atlas-mcp defaults |
+| H10 | Atlas-MCP lacks hard rate limiting and auth defaults for external agents. | Rate limit defaults to 0; stdio mode has no token enforcement. | `cmd/atlas-mcp/main.go`, `cmd/atlas-mcp/server/ratelimit.go` | HTTP/SSE mode has non-zero default rate limit; stdio mode documents auth requirement. | done | none | Phase 6: default 120 req/min + stdio auth docs |
 
 ---
 
@@ -54,8 +54,8 @@
 | Add mode-aware gates | H05, H09 | done | `64386eaa` |
 | Create verify-atlas.sh | H07 | done | `0cebb5eb` |
 | Strengthen "check first" discipline | H08 | done | `64386eaa` |
-| Add environment isolation rules | H03 | in_progress | This commit |
-| Harden atlas-mcp rate limit defaults | H10 | pending | commit hash |
+| Add environment isolation rules | H03 | done | `46b2387f` |
+| Harden atlas-mcp rate limit defaults | H10 | done | This commit |
 
 ### Phase D — Close Out
 
@@ -93,12 +93,12 @@
 
 ## Session-End State
 
-- **Done this session**: Phases 1-5 complete (deny-dangerous hooks, agent-memory, mode-aware gates, one-command verification, environment isolation rules).
-- **Remaining**: Phase 6 (atlas-mcp rate limit defaults) + Phase 7 (close out / push / PR).
-- **Next action**: Implement Phase 6 atlas-mcp rate limit hardening.
-- **Uncommitted code**: Phase 5 changes staged
+- **Done this session**: Phases 1-6 complete (deny-dangerous hooks, agent-memory, mode-aware gates, one-command verification, environment isolation rules, atlas-mcp defaults).
+- **Remaining**: Phase 7 (close out / push / PR).
+- **Next action**: Push branch and open PR.
+- **Uncommitted code**: Phase 6 changes staged
 - **Branch / PR**: `feat/atlas-hardening-harness` / not yet
-- **Paused because**: commit Phase 5 before continuing
+- **Paused because**: commit Phase 6 before continuing
 
 ---
 

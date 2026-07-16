@@ -174,7 +174,7 @@ opencode mcp debug atlas-mcp
 | `ATLAS_API_KEY` | 看 tier | 空 | admin API key（premium tier 需要） |
 | `ATLAS_MCP_TOKEN` | stdio 選填 | 空 | stdio 模式的 token fallback |
 | `ATLAS_MCP_AUDIT_LOG` | 否 | `$TMPDIR/atlas-mcp-audit.log` | JSONL audit log |
-| `ATLAS_MCP_RATE_LIMIT_PER_MINUTE` | 否 | 0 = 停用 | per-tool 限流 |
+| `ATLAS_MCP_RATE_LIMIT_PER_MINUTE` | 否 | `120` | per-tool 限流；`0` = 停用 |
 
 **已廢棄**（不要再用）：`ATLAS_WORK_DIR` / `ATLAS_DATABASE_URL` / `ATLAS_REDIS_URL` / `ATLAS_API_TOKEN`。
 

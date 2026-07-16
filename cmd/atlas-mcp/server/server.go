@@ -22,7 +22,7 @@ type Config struct {
 	AuditLogPath       string        // JSONL audit log file path
 	HTTPTimeout        time.Duration // per-call timeout to atlas HTTP (default 10s)
 	AuditRetentionDays int           // 0 = disabled; >0 = remove entries older than N days (default 30)
-	RateLimitPerMinute int           // per-(tool, tenant) requests per minute; 0 = disabled
+	RateLimitPerMinute int           // per-(tool, tenant) requests per minute; default 120; 0 = disabled
 	RateLimitBurst     int           // burst capacity; 0 = defaults to PerMinute
 	MCPToken           string        // env-var fallback token (ATLAS_MCP_TOKEN)
 	TokenStore         TokenStore    // optional DB-backed token store (nil = env-only)
@@ -78,6 +78,14 @@ func Run(ctx context.Context, cfg Config) error {
 		Burst:     cfg.RateLimitBurst,
 	})
 	limiter.Run(ctx)
+	if cfg.RateLimitPerMinute > 0 {
+		burst := cfg.RateLimitBurst
+		if burst == 0 {
+			burst = cfg.RateLimitPerMinute
+		}
+		fmt.Fprintf(os.Stderr, "atlas-mcp: rate limit active: %d/min burst=%d transport=%s\n",
+			cfg.RateLimitPerMinute, burst, cfg.Transport)
+	}
 
 	auth := NewTokenAuth(cfg.MCPToken)
 	if cfg.TokenStore != nil {
