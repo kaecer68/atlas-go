@@ -302,7 +302,7 @@ async function loadHomeData() {
       _homeChannelMap = buildChannelMap(health && Array.isArray(health.data_channels) ? health.data_channels : null);
       renderDataBadges();
 
-      renderTodaySummary(macro, stress, pipeline, events);
+      renderTodaySummary(macro, stress, pipeline, events, health && health.regime ? health.regime : null);
       renderSignalStrip(events);
       renderMarketPulse(macro, stress);
       renderRecommendation(pipeline, stress);
@@ -600,7 +600,7 @@ function heroRecommendation(stress, pipeline, events) {
   return { rec: '觀望', reason: '資料已載入，等待明確信號', risk: stressRisk, hasRec: false };
 }
 
-function renderTodaySummary(macro, stress, pipeline, events) {
+function renderTodaySummary(macro, stress, pipeline, events, regime) {
   const summaryEl = document.getElementById('home-summary');
   const reasonEl = document.getElementById('home-summary-reason');
   const badgeEl = document.getElementById('home-risk-badge');
@@ -623,8 +623,25 @@ function renderTodaySummary(macro, stress, pipeline, events) {
     const taiexVal = macro ? pointValue(macro, 'taiex') : null;
     const taiexLabel = fmtSafeNumber(taiexVal);
 
+    const REGIME_LABELS = {
+      RISK_ON: '偏多 regime',
+      RISK_OFF: '偏空 regime',
+      NEUTRAL: '觀望 regime',
+    };
+    const REGIME_TONES = {
+      RISK_ON: 'bullish',
+      RISK_OFF: 'bearish',
+      NEUTRAL: 'neutral',
+    };
+    const regimeLabel = REGIME_LABELS[regime] || (regime ? `regime: ${regime}` : '');
+    const regimeTone = REGIME_TONES[regime] || 'neutral';
+    const regimeHtml = regimeLabel
+      ? `<div class="home-today-indicator home-today-indicator--${regimeTone}" title="市場 regime（與 system health 一致）">${regimeLabel}</div>`
+      : '';
+
     indicatorsEl.innerHTML = [
       `<div class="home-today-indicator home-today-indicator--${dirTone}" title="今日建議方向">${dirLabel}</div>`,
+      regimeHtml,
       `<div class="home-today-indicator" title="壓力指數">壓力 ${stressLabel}</div>`,
       `<div class="home-today-indicator" title="外資買賣超">外資 ${foreignLabel}</div>`,
       `<div class="home-today-indicator" title="加權指數">加權 ${taiexLabel}</div>`,
