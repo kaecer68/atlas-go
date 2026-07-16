@@ -19,6 +19,11 @@ func NewCircuitBreakerService(workDir string) *CircuitBreakerService {
 	statePath := filepath.Join(workDir, livestore.DefaultCircuitBreakerStatePath)
 	logPath := filepath.Join(workDir, "data/state/circuit_breaker_log.jsonl")
 	cb := live.NewCircuitBreaker(logPath, statePath)
+	// If the circuit breaker has never been initialized on disk, write a normal
+	// state file so the admin dashboard no longer reports "未初始化".
+	if _, err := os.Stat(statePath); os.IsNotExist(err) {
+		_ = cb.Reset("initial_state")
+	}
 	return &CircuitBreakerService{
 		workDir: workDir,
 		cb:      cb,
