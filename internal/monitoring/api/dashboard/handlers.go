@@ -35,6 +35,9 @@ type Handlers struct {
 	TaiwanGeoProvider narrative.GeopoliticalRiskProvider
 	JanusEngine       *janus.Engine
 	DrawdownProvider  DrawdownProvider
+	// RegisteredChannelIDs, when set, makes the data-channels page list every
+	// ID from the ChannelRegistry (manifest #G05). May be nil in tests.
+	RegisteredChannelIDs []string
 
 	// channel state management — initialized by LoadChannelStates
 	channelStates   map[string]channelState

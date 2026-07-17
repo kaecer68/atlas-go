@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"path/filepath"
+	"time"
+
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -44,12 +49,34 @@ func WireRecommenderDeps(in WireDeps) recommender.HandlerDeps {
 	}
 
 	// 3. narrative: no external deps; always wire (NewNarrativeEngine + NewReportGenerator are no-arg).
+	// NOTE: a fresh NarrativeEngine has no stressCalc, so its
+	// GetCurrentStressIndex() always returns zero. When a macro provider is
+	// available, compute the stress index through the same
+	// TaiwanStressCalculator path that backs /api/taiwan/stress-index.
 	narrativeEng := narrative.NewNarrativeEngine()
 	reportGen := narrative.NewReportGenerator()
 	narrativeSvc := monitoringservice.NewNarrativeService(in.WorkDir, narrativeEng, reportGen)
+	getStress := func() narrative.TaiwanStressIndex { return narrative.TaiwanStressIndex{} }
+	if in.MacroProvider != nil {
+		stressCalc := narrative.NewTaiwanStressCalculator(nil, in.WorkDir)
+		geoStore := narrative.NewGeopoliticalStore(filepath.Join(in.WorkDir, constants.StateGeopolitical))
+		getStress = func() narrative.TaiwanStressIndex {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			snap, err := in.MacroProvider.FetchSnapshot(ctx)
+			if err != nil {
+				return narrative.TaiwanStressIndex{}
+			}
+			idx, err := stressCalc.CalculateFromSnapshotWithStore(ctx, snap, marketdata.MacroDataSnapshot{}, geoStore)
+			if err != nil {
+				return narrative.TaiwanStressIndex{}
+			}
+			return idx
+		}
+	}
 	if narrativeSvc != nil {
 		deps.Narrative = recommender.NewNarrativeAdapterFunc(
-			narrativeSvc.GetCurrentStressIndex,
+			getStress,
 			narrativeSvc.BuildMarketNarrativeData,
 		)
 	}

@@ -271,8 +271,15 @@ func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolReque
 		if err := s.cli.Get(ctx, "/api/dashboard/system-health", nil, &raw); err != nil {
 			return err
 		}
-		out.Status, _ = raw["status"].(string)
-		delete(raw, "status")
+		if st, _ := raw["status"].(string); st != "" {
+			// Legacy contract: backend provided an explicit status.
+			out.Status = st
+			delete(raw, "status")
+		} else {
+			// Production SystemHealthResponse has no status field
+			// (internal/monitoring/service/system.go) — derive it.
+			out.Status = deriveSystemHealthStatus(raw)
+		}
 		if len(raw) > 0 {
 			out.Info = raw
 		}
@@ -281,6 +288,31 @@ func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolReque
 		return nil, SystemHealthOutput{}, err
 	}
 	return nil, out, nil
+}
+
+// deriveSystemHealthStatus computes an overall status from the
+// SystemHealthResponse payload: any failed integrity check or non-ok data
+// channel degrades the status; otherwise "ok".
+func deriveSystemHealthStatus(raw map[string]any) string {
+	info, _ := raw["info"].(map[string]any)
+	if info == nil {
+		info = raw // tolerate a flattened payload
+	}
+	if v, ok := info["replay_data_path_ok"].(bool); ok && !v {
+		return "degraded"
+	}
+	if v, ok := info["cycle_stale"].(bool); ok && v {
+		return "degraded"
+	}
+	if channels, ok := info["data_channels"].([]any); ok {
+		for _, ch := range channels {
+			m, _ := ch.(map[string]any)
+			if st, _ := m["status"].(string); st != "" && st != "ok" {
+				return "degraded"
+			}
+		}
+	}
+	return "ok"
 }
 
 // withAudit is the standard wrapper for tool handlers: it measures latency,

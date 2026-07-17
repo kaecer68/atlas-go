@@ -85,7 +85,8 @@ func TestAtlasMCP_EndToEnd(t *testing.T) {
 	// 3. Start atlas-mcp as subprocess, pointing at the mock backend
 	auditLog := filepath.Join(binDir, "audit.log")
 	proc := exec.Command(binPath)
-	proc.Env = append(os.Environ(),
+	proc.Env = append(
+		os.Environ(),
 		"ATLAS_BASE_URL="+backend.URL,
 		"ATLAS_MCP_AUDIT_LOG="+auditLog,
 	)

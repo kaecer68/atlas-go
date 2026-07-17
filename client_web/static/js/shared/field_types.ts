@@ -1374,10 +1374,15 @@ export interface FlowPrediction {
 
 export interface ForceScore {
   force: string;
+  role?: string;
+  deprecated?: boolean;
   raw_value: number;
   z_score: number;
   trend: string;
   weight: number;
+  leading_z?: number;
+  leading_trend?: string;
+  data_available?: boolean;
 }
 
 export interface ForecastVsRealityItem {
@@ -1477,6 +1482,13 @@ export interface GeopoliticalRiskScore {
   shipping_impact: number;
   sources: string[];
   timestamp: string;
+}
+
+export interface GovernmentFlowReading {
+  date: string;
+  total_net: number;
+  source: string;
+  raw_url?: string;
 }
 
 export interface GraphEdge {
@@ -1759,6 +1771,13 @@ export interface IndustrySegmentConfig {
   description?: string;
 }
 
+export interface InstitutionalFuturesDaily {
+  date: string;
+  foreign: TraderSide;
+  investment_trust: TraderSide;
+  dealer: TraderSide;
+}
+
 export interface IntegrityCheck {
   name: string;
   status: string;
@@ -1963,6 +1982,8 @@ export interface MacroDataSnapshot {
   foreign_investor_net: MacroDataPoint;
   domestic_fund_net: MacroDataPoint;
   dealer_net: MacroDataPoint;
+  foreign_futures_oi_net: MacroDataPoint;
+  government_net: MacroDataPoint;
   export_electronics: MacroDataPoint;
   retail_margin_balance: MacroDataPoint;
   retail_short_balance: MacroDataPoint;
@@ -2897,6 +2918,15 @@ export interface RecommendationPipelineResponse {
   status_message?: string;
 }
 
+export interface Record {
+  strategy_id: string;
+  total_tests: number;
+  total_hits: number;
+  hit_rate: number;
+  status: string;
+  updated_at: string;
+}
+
 export interface RegimeBreakdown {
   regimes: Record<string, RegimePerformance>;
 }
@@ -3673,6 +3703,7 @@ export interface SystemHealthResponse {
   data_channels?: DataChannelInfo[];
   degraded_channels?: string[];
   cycle_stale: boolean;
+  backtest_stale?: boolean;
 }
 
 export interface TAIFEXFutures {
@@ -3876,6 +3907,15 @@ export interface TradeRecord {
   amount: number;
   reason?: string;
   timestamp: string;
+}
+
+export interface TraderSide {
+  trade_long: number;
+  trade_short: number;
+  trade_net: number;
+  oi_long: number;
+  oi_short: number;
+  oi_net: number;
 }
 
 export interface TrendPoint {
@@ -4105,6 +4145,18 @@ export interface raw5SecIndexResponse {
   data: raw5SecIndexBar[];
 }
 
+export interface rawInstitutionalTrader {
+  Date: string;
+  ContractCode: string;
+  Item: string;
+  TradingVolume(Long): string;
+  TradingVolume(Short): string;
+  TradingVolume(Net): string;
+  OpenInterest(Long): string;
+  OpenInterest(Short): string;
+  OpenInterest(Net): string;
+}
+
 export interface rawOutcome {
   agent_id: string;
   symbol: string;
@@ -4281,6 +4333,12 @@ export interface twseOddLotTable {
 export interface twseT86Response {
   stat: string;
   data: string[][];
+}
+
+export interface waitlistEntry {
+  email: string;
+  source: string;
+  created_at: string;
 }
 
 export interface yahooChartError {

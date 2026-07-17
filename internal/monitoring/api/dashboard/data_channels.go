@@ -38,6 +38,7 @@ func (h *Handlers) HandleDataChannels(r *http.Request) (int, any) {
 		finmindKey,
 		tejKey,
 	)
+	channelSvc.RegisteredChannelIDs = h.RegisteredChannelIDs
 	channels, err := channelSvc.GetAllChannelStatuses(r.Context())
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{
@@ -88,6 +89,7 @@ func (h *Handlers) HandleDataChannelDetail(r *http.Request) (int, any) {
 		finmindKey,
 		tejKey,
 	)
+	channelSvc.RegisteredChannelIDs = h.RegisteredChannelIDs
 
 	channel, err := channelSvc.GetChannelStatus(r.Context(), name)
 	if err != nil {

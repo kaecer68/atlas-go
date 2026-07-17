@@ -96,7 +96,7 @@
 ### Experiment（5 個：1 Phase 1 + 2 Phase 2.2 + 2 PR 3）
 | Tool | 用途 |
 |------|------|
-| `experiment_judge` | 觸發 LLM judge 評分（Phase 1，destructiveHint=true）|
+| `experiment_judge` | 觸發統計式 replay judge：對比 baseline vs candidate 並跑 17 種統計 gate（Welch t-test、Sharpe 穩定性、回撤保護、OOS 驗證等；非 LLM 評審）（Phase 1，destructiveHint=true）|
 | `experiment_diff` | 候選 vs baseline 差異 |
 | `experiment_history` | 歷史實驗清單 |
 | `experiment_promote` | 候選實驗 promote 為 baseline（PR 3，destructiveHint=true，需 ATLAS_API_KEY）|

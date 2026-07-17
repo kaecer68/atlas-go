@@ -30,6 +30,8 @@ type MacroDataSnapshot struct {
 	ForeignInvestorNet   MacroDataPoint `json:"foreign_investor_net"`
 	DomesticFundNet      MacroDataPoint `json:"domestic_fund_net"`
 	DealerNet            MacroDataPoint `json:"dealer_net"`
+	ForeignFuturesOINet  MacroDataPoint `json:"foreign_futures_oi_net"`
+	GovernmentNet        MacroDataPoint `json:"government_net"`
 	ExportElectronics    MacroDataPoint `json:"export_electronics"`
 	RetailMarginBalance  MacroDataPoint `json:"retail_margin_balance"`
 	RetailShortBalance   MacroDataPoint `json:"retail_short_balance"`
@@ -83,6 +85,8 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 		ForeignInvestorNet   *MacroDataPoint `json:"foreign_investor_net,omitempty"`
 		DomesticFundNet      *MacroDataPoint `json:"domestic_fund_net,omitempty"`
 		DealerNet            *MacroDataPoint `json:"dealer_net,omitempty"`
+		ForeignFuturesOINet  *MacroDataPoint `json:"foreign_futures_oi_net,omitempty"`
+		GovernmentNet        *MacroDataPoint `json:"government_net,omitempty"`
 		ExportElectronics    *MacroDataPoint `json:"export_electronics,omitempty"`
 		RetailMarginBalance  *MacroDataPoint `json:"retail_margin_balance,omitempty"`
 		RetailShortBalance   *MacroDataPoint `json:"retail_short_balance,omitempty"`
@@ -138,6 +142,12 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 	}
 	if s.DealerNet.Symbol != "" {
 		aux.DealerNet = &s.DealerNet
+	}
+	if s.ForeignFuturesOINet.Symbol != "" {
+		aux.ForeignFuturesOINet = &s.ForeignFuturesOINet
+	}
+	if s.GovernmentNet.Symbol != "" {
+		aux.GovernmentNet = &s.GovernmentNet
 	}
 	if s.ExportElectronics.Symbol != "" {
 		aux.ExportElectronics = &s.ExportElectronics
@@ -258,7 +268,8 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		case <-time.After(providerTimeout):
 			errs = append(errs, fmt.Errorf("%s: timed out after %v", p.Name(), providerTimeout))
 			failedChannels = append(failedChannels, p.Name())
-			logging.Warn("marketdata", "provider_timeout",
+			logging.Warn(
+				"marketdata", "provider_timeout",
 				"provider", p.Name(),
 				"timeout", providerTimeout.String(),
 			)
@@ -267,7 +278,8 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 			if r.err != nil {
 				errs = append(errs, r.err)
 				failedChannels = append(failedChannels, p.Name())
-				logging.Warn("marketdata", "provider_fetch_failed",
+				logging.Warn(
+					"marketdata", "provider_fetch_failed",
 					"provider", p.Name(),
 					"err", r.err.Error(),
 				)
@@ -322,6 +334,12 @@ func mergeSnapshot(dst *MacroDataSnapshot, src MacroDataSnapshot) {
 	}
 	if src.DealerNet.Symbol != "" {
 		dst.DealerNet = src.DealerNet
+	}
+	if src.ForeignFuturesOINet.Symbol != "" {
+		dst.ForeignFuturesOINet = src.ForeignFuturesOINet
+	}
+	if src.GovernmentNet.Symbol != "" {
+		dst.GovernmentNet = src.GovernmentNet
 	}
 	if src.ExportElectronics.Symbol != "" {
 		dst.ExportElectronics = src.ExportElectronics

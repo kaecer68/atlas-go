@@ -92,7 +92,15 @@ func BuildMutationBrief(windowID string, candidate *Candidate) *MutationBrief {
 	if candidate == nil {
 		return nil
 	}
-	return &MutationBrief{ContractVersion: MutationBriefContractVersion, ProposalID: pidf(candidate.Experiment), WindowID: windowID, TargetAgentID: candidate.Agent.ID, TargetSkill: candidate.Agent.Skill, TargetLayer: candidate.Agent.Layer, PromptFile: candidate.Agent.PromptFile, MutationType: candidate.Experiment.MutationType, FailurePattern: "Repeated negative outcomes.", Hypothesis: candidate.Experiment.Hypothesis, AcceptanceMetric: candidate.Experiment.AcceptanceMetric, AcceptanceGates: candidate.Experiment.AcceptanceGates, ForbiddenActions: candidate.Agent.ForbiddenActions, RequiredSkills: candidate.Agent.RequiredSkills, ObservedWindowCount: candidate.Scorecard.WindowCount, MaturityLevel: cml(candidate.Scorecard.WindowCount), IterationGuidance: cig(candidate.Agent.Layer, candidate.Scorecard.WindowCount), RecommendedWindow: crw(candidate.Scorecard.WindowCount), GeneratedAt: time.Now()}
+	gates := candidate.Experiment.AcceptanceGates
+	if len(gates) == 0 {
+		// Scorecard-generated candidates (NextExperimentCandidate) carry no
+		// gates; the experiment contract requires at least one. Fall back to
+		// the standard gate set (same as the promote_spawned path) so the
+		// auto-experiment brief passes validation (fix manifest #B09).
+		gates = []string{"maintain_sharpe_like", "no_drawdown_spike", "factor_quality"}
+	}
+	return &MutationBrief{ContractVersion: MutationBriefContractVersion, ProposalID: pidf(candidate.Experiment), WindowID: windowID, TargetAgentID: candidate.Agent.ID, TargetSkill: candidate.Agent.Skill, TargetLayer: candidate.Agent.Layer, PromptFile: candidate.Agent.PromptFile, MutationType: candidate.Experiment.MutationType, FailurePattern: "Repeated negative outcomes.", Hypothesis: candidate.Experiment.Hypothesis, AcceptanceMetric: candidate.Experiment.AcceptanceMetric, AcceptanceGates: gates, ForbiddenActions: candidate.Agent.ForbiddenActions, RequiredSkills: candidate.Agent.RequiredSkills, ObservedWindowCount: candidate.Scorecard.WindowCount, MaturityLevel: cml(candidate.Scorecard.WindowCount), IterationGuidance: cig(candidate.Agent.Layer, candidate.Scorecard.WindowCount), RecommendedWindow: crw(candidate.Scorecard.WindowCount), GeneratedAt: time.Now()}
 }
 
 func pidf(exp ExperimentRecord) string {

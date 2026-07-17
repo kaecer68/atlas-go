@@ -48,7 +48,8 @@ func renderConfig(target RenderTarget) (RenderResult, error) {
 			entryJSON, _ := json.MarshalIndent(entry, "", "  ")
 			return RenderResult{}, fmt.Errorf(
 				"existing config at %s is not JSON; please merge manually:\n%s",
-				path, entryJSON)
+				path, entryJSON,
+			)
 		}
 		if err := json.Unmarshal(data, &existing); err != nil {
 			return RenderResult{}, fmt.Errorf("parse existing config %s: %w", path, err)

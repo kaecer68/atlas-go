@@ -210,12 +210,15 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	s.Sim().lastQuotes = quotes
 	s.updateCapitalMetrics(s.Sim().ctx, result)
 
-	if s.Port().darwinian != nil {
+	// Skip weight evolution entirely on replay-gap days (no real outcomes):
+	// adjusting over a stale window would drift weights on non-trading days.
+	if s.Port().darwinian != nil && len(outcomes) > 0 {
 		for _, outcome := range outcomes {
 			s.Port().darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
 		_, clampingEvents := s.Port().darwinian.PerformDailyAdjustment()
 		_ = s.Port().darwinian.Save()
+		_ = s.Port().darwinian.AppendSnapshot()
 		if len(clampingEvents) > 0 && s.Risk().eventBus != nil {
 			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
 			for i, e := range clampingEvents {

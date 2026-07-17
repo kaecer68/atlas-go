@@ -237,7 +237,7 @@ func (e *ExchangeRateProvider) saveDailyCache() {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(e.cachePath, data, 0644); err != nil {
+	if err := os.WriteFile(e.cachePath, data, 0o644); err != nil {
 		logging.Warn("exchangerate_provider", "cache_save_failed",
 			"path", e.cachePath, "err", err.Error())
 	}

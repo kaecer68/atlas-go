@@ -190,9 +190,13 @@ func TestTWSEETFChannelAdapter_Fetch_ContextCancelled(t *testing.T) {
 	a := NewTWSEETFChannelAdapter()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := a.Fetch(ctx)
-	if err == nil {
-		t.Error("Fetch with cancelled context should return error")
+	res, err := a.Fetch(ctx)
+	// Post-BK-10: the rate-limiter wait is decoupled from the caller's ctx,
+	// so cancellation is best-effort honored. The contract is "Fetch must
+	// not return a fresh result under a canceled context": either an error
+	// or a stale/fallback FetchResult is acceptable.
+	if err == nil && res != nil && !res.Stale && !res.Fallback {
+		t.Error("Fetch with cancelled context must not return a fresh result")
 	}
 }
 
@@ -200,9 +204,9 @@ func TestTWSEOddLotChannelAdapter_Fetch_ContextCancelled(t *testing.T) {
 	a := NewTWSEOddLotChannelAdapter()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := a.Fetch(ctx)
-	if err == nil {
-		t.Error("Fetch with cancelled context should return error")
+	res, err := a.Fetch(ctx)
+	if err == nil && res != nil && !res.Stale && !res.Fallback {
+		t.Error("Fetch with cancelled context must not return a fresh result")
 	}
 }
 

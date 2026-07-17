@@ -28,6 +28,7 @@ const SHELL_LOADERS = {
   crossmarket: () => import('./page-shells/crossmarket.js'),
   industry: () => import('./page-shells/industry.js'),
   strategies: () => import('./page-shells/strategies.js'),
+  'decision-chain': () => import('./page-shells/decision-chain.js'),
   capital_predictions: () => import('./pages/capital_predictions.js'),
   capital_board: () => import('./pages/capital_board.js'),
   login: () => import('./page-shells/login.js'),
@@ -286,7 +287,17 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'pipeline') {
     try {
-      var p = await silentGetJSON('/api/dashboard/recommendation-pipeline');
+      // Fetch the session list explicitly: renderPipeline's session dropdown
+      // reads window.pipelineSessions, which nothing else populates on this page.
+      var pipelineResults = await Promise.all([
+        silentGetJSON('/api/dashboard/recommendation-pipeline'),
+        silentGetJSON('/api/dashboard/sessions'),
+      ]);
+      var p = pipelineResults[0];
+      var sessResp = pipelineResults[1];
+      if (sessResp && Array.isArray(sessResp.sessions)) {
+        window.pipelineSessions = sessResp.sessions;
+      }
       if (m.pipe.renderPipeline) m.pipe.renderPipeline(p, false, '');
     } catch(e) { console.warn(e); }
   }

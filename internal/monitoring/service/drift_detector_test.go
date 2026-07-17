@@ -20,9 +20,11 @@ func (b *driftRecordingBus) Publish(ev eventbus.BusEvent) {
 	defer b.mu.Unlock()
 	b.events = append(b.events, ev)
 }
+
 func (b *driftRecordingBus) Subscribe(eventbus.EventType, eventbus.EventHandler) eventbus.Subscription {
 	return eventbus.Subscription{Cancel: func() {}}
 }
+
 func (b *driftRecordingBus) SubscribeAll(eventbus.EventHandler) eventbus.Subscription {
 	return eventbus.Subscription{Cancel: func() {}}
 }

@@ -286,7 +286,8 @@ func TestLoadSessions_OrphanSession_EmptyOutcomesKeepsZero(t *testing.T) {
 func TestLoadSessions_SummaryAuthoritativeNotOverriddenByOutcomes(t *testing.T) {
 	baseDir := t.TempDir()
 	sessionID := "session-20260616-daily"
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: time.Date(2026, 6, 16, 4, 0, 0, 0, time.UTC), OutcomeCount: 10},
 		domain.RecommendationOutcome{AgentID: "agent-1", Symbol: "2330.TW", RecordedAt: time.Date(2026, 6, 16, 4, 0, 0, 0, time.UTC)},
 	)
@@ -355,7 +356,7 @@ func TestLoadDarwinianHistory_ReadsAndLimits(t *testing.T) {
 		`{"timestamp":"2026-04-21T04:00:00Z","weights":{"agent-a":{"weight":0.95,"rolling_sharpe":1.1,"hit_rate":0.55},"agent-b":{"weight":1.0,"rolling_sharpe":0.8,"hit_rate":0.45}}}`,
 		`{"timestamp":"2026-04-22T04:00:00Z","weights":{"agent-b":{"weight":1.1,"rolling_sharpe":0.9,"hit_rate":0.5}}}`,
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"),
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_history.jsonl"),
 		[]byte(lines[0]+"\n"+lines[1]+"\n"+lines[2]+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +394,7 @@ func TestLoadDarwinianHistory_LimitRespected(t *testing.T) {
 	for _, l := range lines {
 		content += l + "\n"
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -417,7 +418,7 @@ func TestLoadDarwinianHistory_CorruptedLinesSkipped(t *testing.T) {
 {"timestamp":"2026-04-22T04:00:00Z","weights":{"agent-a":{"weight":1.0,"rolling_sharpe":1.0,"hit_rate":0.5}}}
 also not valid
 `
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -473,7 +474,7 @@ func TestLoadDarwinianStatus_Valid(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(payload)
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_weights.json"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -524,7 +525,7 @@ func TestLoadDarwinianStatus_MalformedJSON(t *testing.T) {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"),
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_weights.json"),
 		[]byte("not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -585,7 +586,7 @@ func TestLoadDarwinianStatus_StatusLabels(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(weights)
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_weights.json"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -625,30 +626,39 @@ type mockOutcomeStore struct {
 func (m *mockOutcomeStore) RecordOutcomes(_ []domain.RecommendationOutcome) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) RecordSessionOutcomes(_ domain.ReplaySession, _ []domain.RecommendationOutcome) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) LoadSessionOutcomes(_ string) ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) RecordSessionScreeningRejects(_ string, _ []domain.ScreeningReject) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadSessionScreeningRejects(_ string) ([]domain.ScreeningReject, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) RecordSessionTrades(_ string, _ []domain.TradeRecord) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadSessionTrades(_ string) ([]domain.TradeRecord, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
 	return nil, nil
 }
@@ -656,12 +666,15 @@ func (m *mockOutcomeStore) RecordExperiment(_ domain.ExperimentRecord) error { r
 func (m *mockOutcomeStore) RecordSessionExperiment(_ domain.ReplaySession, _ domain.ExperimentRecord) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) RecordSessionSummary(_ domain.ReplaySession, _ domain.SessionSummary) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
 	return m.summaries, m.err
 }
+
 func (m *mockOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
 	return nil, nil, nil
 }
@@ -758,8 +771,10 @@ func TestLoadRegimeHistory_TimestampsAreUTC(t *testing.T) {
 	recordedAt := time.Date(2026, 4, 22, 12, 0, 0, 0, cst)
 	summaries := []domain.SessionSummary{
 		{SessionID: "session-cst", Regime: domain.RegimeRiskOn, RecordedAt: recordedAt},
-		{SessionID: "session-utc", Regime: domain.RegimeRiskOff,
-			RecordedAt: time.Date(2026, 4, 23, 4, 0, 0, 0, time.UTC)},
+		{
+			SessionID: "session-utc", Regime: domain.RegimeRiskOff,
+			RecordedAt: time.Date(2026, 4, 23, 4, 0, 0, 0, time.UTC),
+		},
 	}
 	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{summaries: summaries})
 	data, err := svc.LoadRegimeHistory(10)

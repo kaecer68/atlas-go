@@ -116,6 +116,8 @@ cmd/run-experiment/data/state/parameter-snapshots/
 
 # Data files (generated)
 cmd/backtest-window/data/state/darwinian_weights.json
+internal/orchestrator/darwinian_weights.json
+data/reports/
 
 # OpenCode config (local development)
 opencode.json

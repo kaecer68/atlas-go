@@ -40,7 +40,8 @@ func (h *Handlers) HandleAPIKeyUpdate(r *http.Request) (int, any) {
 		return http.StatusInternalServerError, map[string]string{"error": "setenv failed", "provider": req.Provider}
 	}
 
-	logging.Info("security", "api_key_updated",
+	logging.Info(
+		"security", "api_key_updated",
 		logging.FStr("provider", req.Provider),
 		logging.FStr("operator", r.RemoteAddr),
 	)

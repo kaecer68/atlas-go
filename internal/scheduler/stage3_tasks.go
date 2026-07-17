@@ -217,7 +217,8 @@ func logTaskAudit(taskID string, scheduledAt time.Time, err error, retryCount in
 		status = "failed"
 		errMsg = err.Error()
 	}
-	logging.Info("stage3_task_audit", "task_executed",
+	logging.Info(
+		"stage3_task_audit", "task_executed",
 		"task_id", taskID,
 		"scheduled_at", scheduledAt.Format(time.RFC3339),
 		"executed_at", timeNow().Format(time.RFC3339),

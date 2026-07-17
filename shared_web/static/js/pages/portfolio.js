@@ -13,12 +13,17 @@ function isValidNumber(v) {
 }
 
 function renderActionEmptyState(title, description, pageId, buttonText) {
+  // Use data-page so the global click delegation in both app shells handles
+  // navigation. Fall back to the strategies page when the preferred target
+  // does not exist in the current shell (evolution_panel is admin-only).
+  const target = document.getElementById('page-' + pageId) ? pageId : 'strategies';
+  const label = target === pageId ? buttonText : '查看投資心法';
   return `
     <div class="action-empty-state">
       <div class="action-empty-state-icon">📂</div>
       <div class="action-empty-state-title">${title}</div>
       <div class="action-empty-state-description">${description}</div>
-      <button class="action-empty-state-button" data-nav="${pageId}" type="button">${buttonText}</button>
+      <a class="action-empty-state-button" data-page="${target}" href="#">${label}</a>
     </div>
   `;
 }

@@ -53,7 +53,8 @@ func (s *PGTokenStore) Lookup(ctx context.Context, rawToken string) (*TokenInfo,
 		return nil, ErrExpired
 	}
 	now := time.Now()
-	_, _ = s.pool.Exec(ctx,
+	_, _ = s.pool.Exec(
+		ctx,
 		`UPDATE atlas_mcp_tokens SET last_used_at = $1 WHERE token_id = $2`,
 		now, info.TokenID,
 	)
@@ -79,7 +80,8 @@ func (s *PGTokenStore) Register(ctx context.Context, reg TokenRegistration) (*To
 		return nil, "", fmt.Errorf("register: encode scopes: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx,
+	_, err = s.pool.Exec(
+		ctx,
 		`INSERT INTO atlas_mcp_tokens
 		 (token_id, token_hash, tenant_id, agent_id, scopes, rate_limit_per_min, created_at, expires_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -103,7 +105,8 @@ func (s *PGTokenStore) Register(ctx context.Context, reg TokenRegistration) (*To
 }
 
 func (s *PGTokenStore) Revoke(ctx context.Context, id uuid.UUID) error {
-	tag, err := s.pool.Exec(ctx,
+	tag, err := s.pool.Exec(
+		ctx,
 		`UPDATE atlas_mcp_tokens SET revoked_at = now() WHERE token_id = $1 AND revoked_at IS NULL`,
 		id,
 	)
@@ -123,7 +126,8 @@ func (s *PGTokenStore) Rotate(ctx context.Context, id uuid.UUID) (*TokenInfo, st
 	}
 	h := hashTokenRaw(raw)
 
-	tag, err := s.pool.Exec(ctx,
+	tag, err := s.pool.Exec(
+		ctx,
 		`UPDATE atlas_mcp_tokens
 		 SET token_hash = $1 WHERE token_id = $2 AND revoked_at IS NULL`,
 		h, id,
@@ -133,7 +137,8 @@ func (s *PGTokenStore) Rotate(ctx context.Context, id uuid.UUID) (*TokenInfo, st
 	}
 	if tag.RowsAffected() == 0 {
 		var revoked bool
-		err2 := s.pool.QueryRow(ctx,
+		err2 := s.pool.QueryRow(
+			ctx,
 			`SELECT revoked_at IS NOT NULL FROM atlas_mcp_tokens WHERE token_id = $1`, id,
 		).Scan(&revoked)
 		if err2 != nil {
@@ -147,7 +152,8 @@ func (s *PGTokenStore) Rotate(ctx context.Context, id uuid.UUID) (*TokenInfo, st
 
 	var info TokenInfo
 	var scopesRaw []byte
-	err = s.pool.QueryRow(ctx,
+	err = s.pool.QueryRow(
+		ctx,
 		`SELECT token_id, token_hash, tenant_id, agent_id, scopes,
 		        rate_limit_per_min, created_at, expires_at, revoked_at, last_used_at
 		 FROM atlas_mcp_tokens WHERE token_id = $1`, id,
@@ -165,7 +171,8 @@ func (s *PGTokenStore) Rotate(ctx context.Context, id uuid.UUID) (*TokenInfo, st
 }
 
 func (s *PGTokenStore) List(ctx context.Context) ([]TokenInfo, error) {
-	rows, err := s.pool.Query(ctx,
+	rows, err := s.pool.Query(
+		ctx,
 		`SELECT token_id, token_hash, tenant_id, agent_id, scopes,
 		        rate_limit_per_min, created_at, expires_at, revoked_at, last_used_at
 		 FROM atlas_mcp_tokens WHERE revoked_at IS NULL ORDER BY created_at DESC`,

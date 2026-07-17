@@ -19,6 +19,7 @@ type stubSeasonal struct{ v float64 }
 func (s stubSeasonal) GetSeasonalMultiplier(_ context.Context, _ string, _ time.Time) (float64, error) {
 	return s.v, nil
 }
+
 func (s stubSeasonal) GetActivePatternNames(_ context.Context, _ string, _ time.Time) []string {
 	return nil
 }

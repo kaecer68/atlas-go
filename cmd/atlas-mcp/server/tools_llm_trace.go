@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -68,12 +71,19 @@ func (s *server) handleLLMGetHealth(ctx context.Context, _ *mcp.CallToolRequest,
 	return nil, out, nil
 }
 
-func (s *server) handleTraceGetSimLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
-	var out llmTraceBaseOutput
+// traceSimLatestOutput decodes the JSON array returned by
+// GET /api/traces/sim-latest. Items stay as map[string]any to keep MCP
+// schema decoupled from the trace record type.
+type traceSimLatestOutput struct {
+	Traces []map[string]any `json:"traces"`
+}
+
+func (s *server) handleTraceGetSimLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, traceSimLatestOutput, error) {
+	var out traceSimLatestOutput
 	if err := s.withAudit(ctx, "trace_get_sim_latest", nil, func() error {
-		return s.cli.Get(ctx, "/api/traces/sim-latest", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/traces/sim-latest", nil, &out.Traces)
 	}); err != nil {
-		return nil, llmTraceBaseOutput{}, err
+		return nil, traceSimLatestOutput{}, err
 	}
 	return nil, out, nil
 }
@@ -98,10 +108,35 @@ func (s *server) handleTraceGetDecisionChain(ctx context.Context, _ *mcp.CallToo
 	return nil, out, nil
 }
 
-func (s *server) handleTraceGetReasoning(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
+// traceReasoningInput accepts an optional session_id. When omitted, the
+// handler resolves the most recent session via GET /api/dashboard/sessions
+// (which is sorted by trading date descending) so the tool never fails with
+// a bare 400 for callers that do not track session ids.
+type traceReasoningInput struct {
+	SessionID string `json:"session_id,omitempty" jsonschema:"optional session id; defaults to the most recent session"`
+}
+
+func (s *server) handleTraceGetReasoning(ctx context.Context, _ *mcp.CallToolRequest, in traceReasoningInput) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
+	sessionID := strings.TrimSpace(in.SessionID)
+	if sessionID == "" {
+		var sess struct {
+			Sessions []map[string]any `json:"sessions"`
+		}
+		if err := s.cli.Get(ctx, "/api/dashboard/sessions", nil, &sess); err != nil {
+			return nil, llmTraceBaseOutput{}, fmt.Errorf("list sessions for default reasoning trace: %w", err)
+		}
+		if len(sess.Sessions) == 0 {
+			return nil, llmTraceBaseOutput{}, fmt.Errorf("no sessions available for default reasoning trace")
+		}
+		sessionID, _ = sess.Sessions[0]["session_id"].(string)
+		if sessionID == "" {
+			return nil, llmTraceBaseOutput{}, fmt.Errorf("latest session has empty session_id")
+		}
+	}
+	q := url.Values{"session_id": {sessionID}}
 	var out llmTraceBaseOutput
-	if err := s.withAudit(ctx, "trace_get_reasoning", nil, func() error {
-		return s.cli.Get(ctx, "/api/dashboard/reasoning-trace", nil, &out.Result)
+	if err := s.withAudit(ctx, "trace_get_reasoning", []string{"session_id"}, func() error {
+		return s.cli.Get(ctx, "/api/dashboard/reasoning-trace", q, &out.Result)
 	}); err != nil {
 		return nil, llmTraceBaseOutput{}, err
 	}

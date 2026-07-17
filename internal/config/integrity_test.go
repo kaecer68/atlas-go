@@ -144,7 +144,8 @@ func TestRequiredParamsKeysMatchStructFields(t *testing.T) {
 	sort.Strings(extra)
 
 	if len(missing) > 0 || len(extra) > 0 || len(requiredParamsKeys) != len(actualKeys) {
-		t.Errorf("requiredParamsKeys missing fields: [%s]; extra fields: [%s]; struct fields: [%s]",
+		t.Errorf(
+			"requiredParamsKeys missing fields: [%s]; extra fields: [%s]; struct fields: [%s]",
 			strings.Join(missing, ", "),
 			strings.Join(extra, ", "),
 			strings.Join(alwaysSerializedFields, ", "),

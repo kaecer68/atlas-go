@@ -88,12 +88,19 @@ func (s *server) handleReportGetExportLink(ctx context.Context, _ *mcp.CallToolR
 	return nil, out, nil
 }
 
-func (s *server) handlePrismGetTrainingResults(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, reportPrismBaseOutput, error) {
-	var out reportPrismBaseOutput
+// prismTrainingResultsOutput decodes the JSON array returned by
+// GET /api/prism/training-results. Items stay as map[string]any to keep
+// MCP schema decoupled from the cohort result type.
+type prismTrainingResultsOutput struct {
+	Results []map[string]any `json:"results"`
+}
+
+func (s *server) handlePrismGetTrainingResults(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, prismTrainingResultsOutput, error) {
+	var out prismTrainingResultsOutput
 	if err := s.withAudit(ctx, "prism_get_training_results", nil, func() error {
-		return s.cli.Get(ctx, "/api/prism/training-results", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/prism/training-results", nil, &out.Results)
 	}); err != nil {
-		return nil, reportPrismBaseOutput{}, err
+		return nil, prismTrainingResultsOutput{}, err
 	}
 	return nil, out, nil
 }

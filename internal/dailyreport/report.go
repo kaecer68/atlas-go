@@ -113,6 +113,19 @@ func (g *Generator) resolveRegime() domain.Regime {
 	return domain.RegimeNeutral
 }
 
+// summarizeGlobalStatus derives the one-line global summary from the regime
+// status so the two fields can never diverge (fix manifest #B06).
+func summarizeGlobalStatus(status string) string {
+	switch domain.Regime(status) {
+	case domain.RegimeRiskOn:
+		return "盤勢偏多（RISK_ON）：風險偏好回升，留意外資動向與量價配合"
+	case domain.RegimeRiskOff:
+		return "盤勢偏空（RISK_OFF）：避險情緒升溫，留意外資流出壓力與波動加劇"
+	default:
+		return "盤勢中性（NEUTRAL）：方向不明，建議觀望並等待訊號一致"
+	}
+}
+
 // Generate creates the day's report.
 func (g *Generator) Generate() *Report {
 	now := time.Now()
@@ -120,6 +133,9 @@ func (g *Generator) Generate() *Report {
 
 	global, _ := g.provider.FetchMacro()
 	global.Status = string(g.resolveRegime())
+	// Summary is derived from Status so the report can never contradict
+	// itself (previously a hardcoded "偏寬鬆" line sat next to RISK_OFF).
+	global.Summary = summarizeGlobalStatus(global.Status)
 	capital, _ := g.provider.FetchCapital()
 	events, _ := g.provider.FetchEvents(now)
 

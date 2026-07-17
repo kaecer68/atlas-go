@@ -23,6 +23,24 @@
       "results": ""
     },
     {
+      "name": "FetchCapital",
+      "params": "",
+      "receiver": "liveDailyReportProvider",
+      "results": "(dailyreport.CapitalSection, error)"
+    },
+    {
+      "name": "FetchEvents",
+      "params": "(now time.Time)",
+      "receiver": "liveDailyReportProvider",
+      "results": "(dailyreport.EventsSection, error)"
+    },
+    {
+      "name": "FetchMacro",
+      "params": "",
+      "receiver": "liveDailyReportProvider",
+      "results": "(dailyreport.GlobalOverview, error)"
+    },
+    {
       "name": "LoadRecentScans",
       "params": "(ctx context.Context, limit int)",
       "receiver": "scanStoreAdapter",

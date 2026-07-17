@@ -22,13 +22,17 @@ type Handlers struct {
 	registry       *strategy_techniques.Registry
 	annotator      llm_annotator.Annotator
 	summaryHandler *llmcapabilities.StrategySummaryHandler
+	// FeedbackStore persists validate-API results so hit_rate accumulates
+	// across backtest runs (manifest #F07).
+	FeedbackStore *FeedbackStore
 }
 
 // NewHandlers builds a new Handlers backed by the given Registry.
 // Passing a nil registry is allowed; handlers will respond 503 until
-// a registry is wired in.
-func NewHandlers(r *strategy_techniques.Registry) *Handlers {
-	return &Handlers{registry: r}
+// a registry is wired in. An optional FeedbackStore wires the validate
+// API to a persistent state directory (manifest #F07).
+func NewHandlers(r *strategy_techniques.Registry, fb *FeedbackStore) *Handlers {
+	return &Handlers{registry: r, FeedbackStore: fb}
 }
 
 // SetRegistry replaces the underlying registry. Used by main.go to wire
@@ -230,27 +234,55 @@ func (h *Handlers) validateStrategy(r *http.Request) (int, any) {
 		return http.StatusBadRequest, map[string]string{"error": "total_hits out of range"}
 	}
 	hitRate := float64(req.TotalHits) / float64(req.TotalTests)
-	var newStatus strategy_techniques.Status
-	var message string
-	switch {
-	case req.TotalTests < 10:
-		newStatus = strategy_techniques.StatusDegraded
-		message = "insufficient sample size"
-	case hitRate < 0.4:
-		newStatus = strategy_techniques.StatusDegraded
-		message = "hit rate below 0.4"
-	case hitRate >= 0.6:
-		newStatus = strategy_techniques.StatusActive
-		message = "strategy reactivated"
-	default:
-		newStatus = f.Status
-		message = "strategy stable"
+	// Record persists (manifest #F07) — accumulate rather than overwrite so
+	// multi-batch backtests see their hit-rate improve over time. If no
+	// FeedbackStore is wired (older wiring), we fall back to the legacy
+	// read-only response.
+	if h.FeedbackStore != nil {
+		newStatus, message := applyValidation(req, hitRate, *f)
+		if err := h.FeedbackStore.Write(Record{
+			StrategyID: f.ID,
+			TotalTests: req.TotalTests,
+			TotalHits:  req.TotalHits,
+			Status:     string(newStatus),
+		}); err != nil {
+			return http.StatusInternalServerError, map[string]string{"error": "persist feedback: " + err.Error()}
+		}
+		// Reflect the cumulative record in the response so the client does
+		// not need a follow-up GET to see the new totals.
+		prev, _, _ := h.FeedbackStore.Load(f.ID)
+		hitRate = prev.HitRate
+		req.TotalTests = prev.TotalTests
+		req.TotalHits = prev.TotalHits
+		return http.StatusOK, ValidateResponse{
+			ID:      f.ID,
+			Status:  string(newStatus),
+			HitRate: hitRate,
+			Message: message,
+		}
 	}
+	newStatus, message := applyValidation(req, hitRate, *f)
 	return http.StatusOK, ValidateResponse{
 		ID:      f.ID,
 		Status:  string(newStatus),
 		HitRate: hitRate,
 		Message: message,
+	}
+}
+
+// applyValidation decides the new status from a single validation event.
+// Status transitions are documented at strategy_techniques.Status; the same
+// rules apply to both legacy read-only and persistent feedback paths.
+func applyValidation(req ValidateRequest, hitRate float64, f strategy_techniques.StrategyFrame) (strategy_techniques.Status, string) {
+	switch {
+	case req.TotalTests < 10:
+		return strategy_techniques.StatusDegraded, "insufficient sample size"
+	case hitRate < 0.4:
+		return strategy_techniques.StatusDegraded, "hit rate below 0.4"
+	case hitRate >= 0.6:
+		return strategy_techniques.StatusActive, "strategy reactivated"
+	default:
+		return f.Status, "strategy stable"
 	}
 }
 

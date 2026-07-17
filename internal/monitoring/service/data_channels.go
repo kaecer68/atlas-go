@@ -126,6 +126,10 @@ type DataChannelService struct {
 	FinMindAPIKey     string
 	TejAPIKey         string
 	healthStore       *ChannelHealthStoreAdapter
+	// RegisteredChannelIDs, when set, makes the admin channel page dynamic:
+	// any ID not in the static list below appears as a fallback "channel"
+	// entry so operators see every registered channel (manifest #G05).
+	RegisteredChannelIDs []string
 }
 
 // getHealthFromStore returns channel health status from the Gateway-managed health store.
@@ -350,10 +354,34 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 		mergeEnabled(s.buildJanusRegimeChannel(now)),
 		mergeEnabled(s.buildTEJChannel()),
 	}
-
 	channels = append(channels, s.buildUSMacroChannels(now, s.latestMacroSnapshotOrZero())...)
 	for i, c := range channels {
 		channels[i] = mergeEnabled(c)
+	}
+
+	// Manifest #G05: append a fallback entry for every registered channel ID
+	// not already covered by a static builder (incl. US macro group), so the
+	// admin page reflects the full ChannelRegistry instead of a hand-maintained
+	// subset. The minimal fallback carries no status; the health probe fills
+	// it on next refresh.
+	seen := make(map[string]bool, len(channels))
+	for _, c := range channels {
+		seen[c.ChannelID] = true
+	}
+	for _, id := range s.RegisteredChannelIDs {
+		if seen[id] {
+			continue
+		}
+		c := DataChannel{
+			ChannelID: id,
+			Country:   "台灣",
+			Platform:  "registered channel",
+			APIFormat: "unknown",
+			Path:      "(see ChannelRegistry)",
+			Status:    "unknown",
+			Enabled:   true,
+		}
+		channels = append(channels, mergeEnabled(c))
 	}
 
 	return channels, nil

@@ -450,6 +450,53 @@ func TestHandleSystemGetHealth_ParsesStatus(t *testing.T) {
 	}
 }
 
+func TestDeriveSystemHealthStatus(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  map[string]any
+		want string
+	}{
+		{
+			name: "production shape all ok",
+			raw: map[string]any{"info": map[string]any{
+				"replay_data_path_ok": true,
+				"cycle_stale":         false,
+				"data_channels":       []any{map[string]any{"status": "ok"}},
+			}},
+			want: "ok",
+		},
+		{
+			name: "replay path broken",
+			raw:  map[string]any{"info": map[string]any{"replay_data_path_ok": false}},
+			want: "degraded",
+		},
+		{
+			name: "channel not ok",
+			raw: map[string]any{"info": map[string]any{
+				"data_channels": []any{map[string]any{"status": "ok"}, map[string]any{"status": "error"}},
+			}},
+			want: "degraded",
+		},
+		{
+			name: "flattened payload tolerated",
+			raw:  map[string]any{"cycle_stale": true},
+			want: "degraded",
+		},
+		{
+			name: "empty payload defaults ok",
+			raw:  map[string]any{},
+			want: "ok",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := deriveSystemHealthStatus(c.raw); got != c.want {
+				t.Fatalf("deriveSystemHealthStatus = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 // --- error path surfaced from HttpClient -------------------------------------
 
 func TestHandle_AtlasErrorSurfacesAsMCPError(t *testing.T) {

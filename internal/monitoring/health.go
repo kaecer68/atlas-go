@@ -67,7 +67,8 @@ func (h *HealthChecker) checkGateway() {
 		return
 	}
 	summary := h.gateway.Summary()
-	logging.Info("health", "channel_health_summary",
+	logging.Info(
+		"health", "channel_health_summary",
 		"channels", summary,
 	)
 	if h.collector == nil {

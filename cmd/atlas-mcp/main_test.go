@@ -11,8 +11,8 @@ import (
 // and the public surface (server.Config, server.Run) is reachable.
 func TestPackageCompiles(t *testing.T) {
 	// Bare type and function references keep the test stable across implementations.
-	var _ = server.Config{}
-	var _ = server.Run
+	_ = server.Config{}
+	_ = server.Run
 	_, cancel := context.WithCancel(context.Background())
 	cancel()
 }

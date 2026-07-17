@@ -1,9 +1,8 @@
 package builtin
 
 import (
-	"testing"
-
 	"math"
+	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/acceptance"
 	"github.com/kaecer68/atlas-go/internal/domain"

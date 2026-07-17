@@ -37,41 +37,53 @@ func (m *mockCtrlOutcomeStore) LoadHumanInterventions() ([]domain.HumanIntervent
 func (m *mockCtrlOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 	return nil
 }
+
 func (m *mockCtrlOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
 	return nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockCtrlOutcomeStore) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
 	return nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
 	return nil, nil
 }
+
 func (m *mockCtrlOutcomeStore) RecordSessionTrades(sessionID string, trades []domain.TradeRecord) error {
 	return nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error) {
 	return nil, nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error)   { return nil, nil }
 func (m *mockCtrlOutcomeStore) RecordExperiment(record domain.ExperimentRecord) error { return nil }
 func (m *mockCtrlOutcomeStore) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
 	return nil
 }
+
 func (m *mockCtrlOutcomeStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
 	return nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
 	return nil, nil
 }
+
 func (m *mockCtrlOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
 	return nil, nil, nil
 }
@@ -284,7 +296,6 @@ func TestControlService_GetAgentHealth_NilHealthManager(t *testing.T) {
 	svc := NewControlService("/tmp/work", "/tmp/ledger", nil, store)
 
 	agents, mutedCount, err := svc.GetAgentHealth()
-
 	if err != nil {
 		t.Fatalf("GetAgentHealth error = %v", err)
 	}

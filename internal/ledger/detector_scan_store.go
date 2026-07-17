@@ -118,7 +118,8 @@ func (s *SQLiteDetectorScanStore) AppendScan(ctx context.Context, results []narr
 			metaJSON = sql.NullString{String: string(b), Valid: true}
 		}
 
-		if _, execErr := stmt.ExecContext(ctx,
+		if _, execErr := stmt.ExecContext(
+			ctx,
 			batchID,
 			r.Theme,
 			string(r.Severity),

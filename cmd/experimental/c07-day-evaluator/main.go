@@ -191,7 +191,8 @@ func evaluate(rows []obsRow, day int, baseline float64) *evalResult {
 	latest := rows[len(rows)-1]
 
 	// Day 7 criteria (must all pass).
-	result.Criteria = append(result.Criteria,
+	result.Criteria = append(
+		result.Criteria,
 		criterionResult{
 			Name:     "jsd.alert_rate < 5%",
 			Passed:   latest.JSDAlertRate < 0.05,
@@ -247,7 +248,8 @@ func evaluate(rows []obsRow, day int, baseline float64) *evalResult {
 		// Hit-rate comparison (requires baseline).
 		// Note: This is a placeholder — actual hit-rate computation requires
 		// historical outcome data which is deferred per PR #1200.
-		result.Criteria = append(result.Criteria,
+		result.Criteria = append(
+			result.Criteria,
 			criterionResult{
 				Name:     "hit-rate >= baseline (Δ >= -3%)",
 				Passed:   true, // deferred — no historical data yet

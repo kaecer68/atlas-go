@@ -187,11 +187,15 @@ func TestStage3AlertEvaluator_PredictionDrift(t *testing.T) {
 	now := time.Date(2026, 7, 13, 13, 45, 0, 0, time.UTC)
 	deps := Stage3AlertDeps{
 		RecentEventFlowPredictions: func(days int) []float64 {
-			// Small variance around 0.5 so std is non-zero.
+			// Small variance so std is non-zero (metadata only now).
 			return []float64{0.45, 0.55, 0.48, 0.52, 0.49, 0.51, 0.46, 0.54, 0.47, 0.53}
 		},
-		LatestCapitalFlowPrediction: func() (float64, bool) { return 0.5, true },
-		LatestCapitalFlowActual:     func() (float64, bool) { return 10.0, true },
+		LatestCapitalFlowPrediction: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "neutral", Value: 0.5}, true
+		},
+		LatestCapitalFlowActual: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "bullish", Value: 10.0}, true
+		},
 	}
 	eval := NewStage3AlertEvaluator(monitor, deps)
 	eval.now = func() time.Time { return now }
@@ -199,29 +203,41 @@ func TestStage3AlertEvaluator_PredictionDrift(t *testing.T) {
 	eval.EvaluateMarketClose()
 	alerts := captureHistory(monitor)
 	if len(alerts) != 1 {
-		t.Fatalf("expected 1 drift alert, got %d", len(alerts))
+		t.Fatalf("expected 1 drift alert (direction mismatch), got %d", len(alerts))
 	}
 	if alerts[0].Level != AlertLevelInfo {
 		t.Fatalf("expected info level, got %v", alerts[0].Level)
 	}
+	// Metadata must carry the normalized labels so on-call can debug
+	// without re-deriving thresholds from raw values.
+	if got := alerts[0].Metadata["predicted_direction"]; got != "neutral" {
+		t.Errorf("metadata predicted_direction=%v", got)
+	}
+	if got := alerts[0].Metadata["actual_direction"]; got != "bullish" {
+		t.Errorf("metadata actual_direction=%v", got)
+	}
 }
 
-func TestStage3AlertEvaluator_PredictionDrift_SkipsIfWithinSigma(t *testing.T) {
+func TestStage3AlertEvaluator_PredictionDrift_NoAlertOnDirectionMatch(t *testing.T) {
 	monitor := newStage3TestMonitor(t)
 	now := time.Date(2026, 7, 13, 13, 45, 0, 0, time.UTC)
 	deps := Stage3AlertDeps{
 		RecentEventFlowPredictions: func(days int) []float64 {
 			return []float64{0.5, 0.6, 0.4, 0.5, 0.6, 0.4, 0.5, 0.6, 0.4, 0.5}
 		},
-		LatestCapitalFlowPrediction: func() (float64, bool) { return 0.5, true },
-		LatestCapitalFlowActual:     func() (float64, bool) { return 0.6, true },
+		LatestCapitalFlowPrediction: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "neutral", Value: 0.5}, true
+		},
+		LatestCapitalFlowActual: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "neutral", Value: 0.6}, true
+		},
 	}
 	eval := NewStage3AlertEvaluator(monitor, deps)
 	eval.now = func() time.Time { return now }
 
 	eval.EvaluateMarketClose()
 	if len(captureHistory(monitor)) != 0 {
-		t.Fatalf("expected no drift alert within 2σ, got %d", len(captureHistory(monitor)))
+		t.Fatalf("expected no drift alert when directions match, got %d", len(captureHistory(monitor)))
 	}
 }
 
@@ -233,8 +249,12 @@ func TestStage3AlertEvaluator_PredictionDrift_InsufficientHistoryAlert(t *testin
 			return []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5}
 		},
 		RecentEventFlowPredictionsActualCount: func(days int) int { return 2 },
-		LatestCapitalFlowPrediction:           func() (float64, bool) { return 0.5, true },
-		LatestCapitalFlowActual:               func() (float64, bool) { return 10.0, true },
+		LatestCapitalFlowPrediction: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "neutral", Value: 0.5}, true
+		},
+		LatestCapitalFlowActual: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "bullish", Value: 10.0}, true
+		},
 	}
 	eval := NewStage3AlertEvaluator(monitor, deps)
 	eval.now = func() time.Time { return now }
@@ -257,8 +277,12 @@ func TestStage3AlertEvaluator_PredictionDrift_NilActualCountCallbackUsesLegacy(t
 			return []float64{0.45, 0.55, 0.48, 0.52, 0.49, 0.51, 0.46, 0.54, 0.47, 0.53}
 		},
 		RecentEventFlowPredictionsActualCount: nil,
-		LatestCapitalFlowPrediction:           func() (float64, bool) { return 0.5, true },
-		LatestCapitalFlowActual:               func() (float64, bool) { return 10.0, true },
+		LatestCapitalFlowPrediction: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "neutral", Value: 0.5}, true
+		},
+		LatestCapitalFlowActual: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "bullish", Value: 10.0}, true
+		},
 	}
 	eval := NewStage3AlertEvaluator(monitor, deps)
 	eval.now = func() time.Time { return now }

@@ -179,17 +179,20 @@ func TestRunWithSampleData(t *testing.T) {
 	out := t.TempDir()
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
-	writeSession(t, src, "session-20260515-daily",
+	writeSession(
+		t, src, "session-20260515-daily",
 		`{"session_id":"session-20260515-daily","regime":"RISK_ON","recorded_at":"2026-05-15T00:00:00Z"}`,
 		`{"forward_return":0.05,"hit":true,"conviction":70,"side":"BUY","supporting_events":["evt-tech-peak-100"],"regime":"RISK_ON"}`+"\n"+
 			`{"forward_return":-0.01,"hit":false,"conviction":60,"side":"BUY","supporting_events":["evt-dividend-200"],"regime":"RISK_ON"}`+"\n",
 	)
-	writeSession(t, src, "session-20260516-daily",
+	writeSession(
+		t, src, "session-20260516-daily",
 		`{"session_id":"session-20260516-daily","regime":"RISK_OFF","recorded_at":"2026-05-16T00:00:00Z"}`,
 		`{"forward_return":0.02,"hit":true,"conviction":55,"side":"SELL","supporting_events":["evt-election-300"],"regime":"RISK_OFF"}`+"\n",
 	)
 	// Out-of-window session: should NOT be in output.
-	writeSession(t, src, "session-20260101-daily",
+	writeSession(
+		t, src, "session-20260101-daily",
 		`{"session_id":"session-20260101-daily","regime":"NEUTRAL","recorded_at":"2026-01-01T00:00:00Z"}`,
 		`{"forward_return":0.99,"hit":true,"conviction":100,"side":"BUY","supporting_events":["evt-old"],"regime":"NEUTRAL"}`+"\n",
 	)
@@ -309,7 +312,8 @@ func TestRunWithSampleData(t *testing.T) {
 func TestRunDryRun(t *testing.T) {
 	src := t.TempDir()
 	out := t.TempDir()
-	writeSession(t, src, "session-20260515-daily",
+	writeSession(
+		t, src, "session-20260515-daily",
 		`{"session_id":"session-20260515-daily","regime":"RISK_ON","recorded_at":"2026-05-15T00:00:00Z"}`,
 		`{"forward_return":0.05,"hit":true,"conviction":70,"side":"BUY","supporting_events":["evt-x"],"regime":"RISK_ON"}`+"\n",
 	)
@@ -342,7 +346,8 @@ func TestRunDryRun(t *testing.T) {
 func TestRunHandlesMalformedJSONL(t *testing.T) {
 	src := t.TempDir()
 	out := t.TempDir()
-	writeSession(t, src, "session-20260515-daily",
+	writeSession(
+		t, src, "session-20260515-daily",
 		`{"session_id":"session-20260515-daily","regime":"RISK_ON","recorded_at":"2026-05-15T00:00:00Z"}`,
 		`THIS IS NOT JSON`+"\n"+
 			`{"forward_return":0.05,"hit":true,"conviction":70,"side":"BUY","supporting_events":["evt-good"],"regime":"RISK_ON"}`+"\n",

@@ -107,12 +107,17 @@ type DashboardAPI struct {
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
-	strategiesAnnotator        llm_annotator.Annotator
-	kimiClient                 *llm_annotator.KimiClient // concrete handle for cost/health endpoints; nil if strategiesAnnotator is not a KimiClient
-	calibrationTask            *narrative.CalibrationTask
-	crisisModeSetter           func(active bool) // callback: VIX>=35 → optimizer crisis mode
-	correlationSetter          func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
-	crossMarketSvc             *service.CrossMarketService
+
+	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
+	// so the admin page lists every registered channel rather than a
+	// hand-maintained subset (manifest #G05).
+	RegisteredChannelIDs []string
+	strategiesAnnotator  llm_annotator.Annotator
+	kimiClient           *llm_annotator.KimiClient // concrete handle for cost/health endpoints; nil if strategiesAnnotator is not a KimiClient
+	calibrationTask      *narrative.CalibrationTask
+	crisisModeSetter     func(active bool) // callback: VIX>=35 → optimizer crisis mode
+	correlationSetter    func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
+	crossMarketSvc       *service.CrossMarketService
 }
 
 // NewDashboardAPI creates a DashboardAPI backed by CompositeMacroProvider.
@@ -904,6 +909,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	// Dashboard management center handlers (data-channels, data-pipeline,
 	// drawdown, sim-trace, channel toggle, api-keys, etc.)
 	dashboardHandlers := apidashboard.NewHandlers(a.workDir, a.ledgerDir)
+	dashboardHandlers.RegisteredChannelIDs = a.RegisteredChannelIDs
 	if a.pool != nil {
 		dashboardHandlers.Pool = a.pool
 	}
@@ -1036,8 +1042,8 @@ func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
 		a.metricsCollector.RecordCounter(name, value, labelMap)
 	})
 	a.crossMarketSvc.SetDegradedMetrics(dm)
-	mux.HandleFunc("/degraded", metrics.HandleDegraded(dm))
-	mux.HandleFunc("/llm_annotator/cost", metrics.HandleCost(a.kimiClient, 0.001))
+	mux.HandleFunc("/api/degraded", metrics.HandleDegraded(dm))
+	mux.HandleFunc("/api/llm_annotator/cost", metrics.HandleCost(a.kimiClient, 0.001))
 	handlers := &apicrossmarket.Handlers{
 		Svc: a.crossMarketSvc,
 	}

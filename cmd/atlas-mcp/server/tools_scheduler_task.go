@@ -87,7 +87,9 @@ func (s *server) handleTaskGet(ctx context.Context, _ *mcp.CallToolRequest, in t
 func (s *server) handleTaskGetEvents(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, schedulerTaskBaseOutput, error) {
 	var out schedulerTaskBaseOutput
 	if err := s.withAudit(ctx, "task_get_events", []string{"task_id"}, func() error {
-		return s.cli.Get(ctx, "/api/tasks/"+in.TaskID+"/events", nil, &out.Result)
+		// /events is a text/event-stream (SSE) endpoint which this HTTP
+		// client cannot decode; /events/snapshot is its JSON variant.
+		return s.cli.Get(ctx, "/api/tasks/"+in.TaskID+"/events/snapshot", nil, &out.Result)
 	}); err != nil {
 		return nil, schedulerTaskBaseOutput{}, err
 	}

@@ -211,7 +211,7 @@ func TestPublish_BufferFull_Drop(t *testing.T) {
 	bus := NewChannelEventBus(0)
 
 	// Hold the dispatcher by adding a slow subscriber.
-	var blockCh = make(chan struct{})
+	blockCh := make(chan struct{})
 	bus.SubscribeAll(func(ctx context.Context, event BusEvent) error {
 		<-blockCh
 		return nil

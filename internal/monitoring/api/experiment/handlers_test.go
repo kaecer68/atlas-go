@@ -20,7 +20,7 @@ func newTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	dir := t.TempDir()
 	ledgerDir := filepath.Join(dir, "ledger")
-	if err := os.MkdirAll(filepath.Join(ledgerDir, "experiments"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(ledgerDir, "experiments"), 0o755); err != nil {
 		t.Fatalf("mkdir experiments: %v", err)
 	}
 
@@ -30,16 +30,16 @@ func newTestHandlers(t *testing.T) *Handlers {
 	if err != nil {
 		t.Fatalf("marshal default policy: %v", err)
 	}
-	if err := os.WriteFile(baselineFile, policyBytes, 0644); err != nil {
+	if err := os.WriteFile(baselineFile, policyBytes, 0o644); err != nil {
 		t.Fatalf("write baseline: %v", err)
 	}
 
 	// Also create a prompt file to serve as baseline source
 	promptDir := filepath.Join(dir, "prompts")
-	if err := os.MkdirAll(promptDir, 0755); err != nil {
+	if err := os.MkdirAll(promptDir, 0o755); err != nil {
 		t.Fatalf("mkdir prompts: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(promptDir, "growth.prompt.md"), []byte("volume_floor: 500"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(promptDir, "growth.prompt.md"), []byte("volume_floor: 500"), 0o644); err != nil {
 		t.Fatalf("write prompt: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func writeExperimentResult(t *testing.T, dir string, id string, status domain.Ex
 		t.Fatalf("marshal result: %v", err)
 	}
 	path := filepath.Join(dir, id+".json")
-	if err := os.WriteFile(path, b, 0644); err != nil {
+	if err := os.WriteFile(path, b, 0o644); err != nil {
 		t.Fatalf("write experiment result: %v", err)
 	}
 	return path
@@ -154,7 +154,7 @@ func TestHandlePromote_Success(t *testing.T) {
 	h := newTestHandlers(t)
 	// Create a candidate prompt file that exists on disk
 	candidatePrompt := filepath.Join(h.WorkDir, "prompts", "candidate.prompt.md")
-	if err := os.WriteFile(candidatePrompt, []byte("volume_floor: 1000"), 0644); err != nil {
+	if err := os.WriteFile(candidatePrompt, []byte("volume_floor: 1000"), 0o644); err != nil {
 		t.Fatalf("write candidate prompt: %v", err)
 	}
 	// Create experiment result file
@@ -312,7 +312,7 @@ func TestHandleDiff_Success(t *testing.T) {
 	h := newTestHandlers(t)
 	// Create candidate prompt file that exists
 	candidatePrompt := filepath.Join(h.WorkDir, "prompts", "candidate.prompt.md")
-	if err := os.WriteFile(candidatePrompt, []byte("volume_floor: 1000"), 0644); err != nil {
+	if err := os.WriteFile(candidatePrompt, []byte("volume_floor: 1000"), 0o644); err != nil {
 		t.Fatalf("write candidate prompt: %v", err)
 	}
 	// Create experiment result with a valid prompt_file reference
@@ -370,7 +370,7 @@ func TestHandleInbox_WithExperiments(t *testing.T) {
 	experimentsDir := filepath.Join(h.LedgerDir, "experiments")
 
 	candidatePrompt := filepath.Join(h.WorkDir, "prompts", "candidate.prompt.md")
-	os.WriteFile(candidatePrompt, []byte("dummy"), 0644)
+	os.WriteFile(candidatePrompt, []byte("dummy"), 0o644)
 
 	// Create running experiment (should go to pending_judges)
 	writeExperimentResult(t, experimentsDir, "exp-running", domain.ExperimentRunning, candidatePrompt)
@@ -391,7 +391,7 @@ func TestHandleInbox_NoExperimentsDir(t *testing.T) {
 	baselineFile := filepath.Join(dir, "baseline_policy.json")
 	policy := baseline.DefaultPolicy()
 	policyBytes, _ := json.Marshal(policy)
-	os.WriteFile(baselineFile, policyBytes, 0644)
+	os.WriteFile(baselineFile, policyBytes, 0o644)
 
 	h := &Handlers{
 		BaselinePath: baselineFile,
@@ -406,7 +406,7 @@ func TestHandleInbox_NoExperimentsDir(t *testing.T) {
 
 func TestHandleInbox_NoBaselineFile(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, "experiments"), 0755)
+	os.MkdirAll(filepath.Join(dir, "experiments"), 0o755)
 
 	h := &Handlers{
 		BaselinePath: filepath.Join(dir, "nonexistent_policy.json"),
@@ -516,7 +516,7 @@ func TestLoadLedgerExperiments_NoFile(t *testing.T) {
 func TestLoadLedgerExperiments_EmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "empty.jsonl")
-	if err := os.WriteFile(path, []byte{}, 0644); err != nil {
+	if err := os.WriteFile(path, []byte{}, 0o644); err != nil {
 		t.Fatalf("write empty file: %v", err)
 	}
 	items := loadLedgerExperiments(path)
@@ -536,7 +536,7 @@ func TestLoadLedgerExperiments_ValidRecords(t *testing.T) {
 	for _, line := range lines {
 		content += line + "\n"
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write jsonl: %v", err)
 	}
 	items := loadLedgerExperiments(path)

@@ -529,6 +529,13 @@ func run(args []string, deps appDeps) error {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
 		dashboard.SetPool(pool)
+		// Manifest #G05: feed the full ChannelRegistry into the admin data-channels
+		// page so it lists every registered adapter (not just the hand-maintained
+		// subset). The list is queried at request time so new adapters picked up
+		// after startup appear on the next refresh.
+		if gateway != nil {
+			dashboard.RegisteredChannelIDs = gateway.ChannelIDs()
+		}
 		agentHealthMgr := portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams)
 		dashboard.SetHealthManager(agentHealthMgr)
 		prismMgr := prism.NewPRISMManager(prism.DefaultPRISMConfig())
@@ -678,12 +685,17 @@ func run(args []string, deps appDeps) error {
 			alertAPI.RegisterRoutes(mux)
 		}
 
+		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
+		var macroProvider marketdata.MacroDataProvider
+
 		if gatewayFetcher != nil {
-			macroProvider := monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
+			macroProvider = monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
 			cfHandler := capitalflow.NewHandler(macroProvider)
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
+			// Wire the daily report to the same live sources (fix manifest #B06).
+			dailyRptGen.SetProvider(newLiveDailyReportProvider(macroProvider, capitalflow.ServiceFromHandler(cfHandler), eventCalendar))
 
 			// Stage 5 PR#4 Stage B: register detector scan routes BEFORE event routes
 			// so the scan store is available for injection.
@@ -724,19 +736,19 @@ func run(args []string, deps appDeps) error {
 				jwtSecret = "atlas-dev-secret-change-in-prod"
 			}
 			jwtMgr := subscription.NewJWTManager(jwtSecret)
-			subHandler := subscription.NewHandler(subStore, jwtMgr)
+			subHandler := subscription.NewHandler(subStore, jwtMgr).
+				WithWaitlist(filepath.Join(cfg.LedgerDir, "waitlist.jsonl"))
 			// ATLAS_REQUIRE_USER_AUTH=true forces JWT; default is guest TierFree.
 			allowGuest := config.GetSecret("ATLAS_REQUIRE_USER_AUTH") != "true"
 			subHandler.RegisterRoutes(mux, allowGuest)
 			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
 			devMode := config.GetSecret("ATLAS_DEV_MODE") == "true"
-			deps := WireRecommenderDeps(WireDeps{WorkDir: cfg.WorkDir})
+			deps := WireRecommenderDeps(WireDeps{WorkDir: cfg.WorkDir, MacroProvider: macroProvider, EventCalendar: eventCalendar})
 			recommender.RegisterRoutesWithDeps(mux, *subStore, jwtMgr, deps, devMode)
 			log.Printf("[Recommender] registered /api/recommendations route (real services: %v)",
 				anyDepsWired(deps))
 		}
 
-		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
 		dailyRptGen.SetRegimeProvider(func() domain.Regime {
 			summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)
 			if summary != nil {
@@ -932,6 +944,31 @@ func run(args []string, deps appDeps) error {
 				repo:            repo,
 				collector:       collector,
 			})
+
+			// Schedule daily report generation after market close (14:00–14:59
+			// Taipei), once per day; other ticks skip via ErrTaskSkipped so the
+			// failure counter is untouched (fix manifest #B10).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "daily_report_generate",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					taipei, tzErr := time.LoadLocation("Asia/Taipei")
+					if tzErr != nil {
+						taipei = time.FixedZone("CST", 8*3600)
+					}
+					now := time.Now().In(taipei)
+					if now.Hour() != 14 {
+						return apigateway.ErrTaskSkipped
+					}
+					if dailyRptGen.GetByDate(now.Format("2006-01-02")) != nil {
+						return apigateway.ErrTaskSkipped
+					}
+					dailyRptGen.Generate()
+					return nil
+				},
+			})
+			log.Printf("[DailyReport] registered daily_report_generate background task (1h interval, gated 14:00 Taipei)")
 
 			// Register auto_daily_simulation — runs daily simulation at market close.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
@@ -1133,6 +1170,49 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_experiment background task (7-day interval)")
 
+			// Register auto_propose — degradation-triggered experiment proposals
+			// (fix manifest #D02: AutoProposer existed but was never wired).
+			autoProposer := experiment.NewAutoProposer(dwMgr, agentHealthMgr)
+			if maturityTracker != nil {
+				autoProposer.WithMaturityTracker(maturityTracker)
+			}
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_propose",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					// Backlog gate: don't pile proposals onto a full queue (#D01 cap).
+					if n := ledger.CountUnresolvedPlanned(cfg.LedgerDir); n >= 100 {
+						logging.Info("auto_propose", "backlog_full_skip", "unresolved", n)
+						return nil
+					}
+					// Reload weights so proposals use fresh rolling metrics.
+					_ = dwMgr.Load()
+					proposals, err := autoProposer.CheckAndPropose(ctx)
+					if err != nil {
+						return err
+					}
+					store := ledger.NewStore(cfg.LedgerDir)
+					for _, p := range proposals {
+						if err := store.RecordExperiment(domain.ExperimentRecord{
+							ID:            fmt.Sprintf("auto-propose-%s-%d", p.AgentID, time.Now().Unix()),
+							TargetAgentID: p.AgentID,
+							Skill:         p.Brief.TargetSkill,
+							MutationType:  p.MutationType,
+							Status:        domain.ExperimentPlanned,
+							Hypothesis:    p.TriggerReason,
+						}); err != nil {
+							return fmt.Errorf("record proposal: %w", err)
+						}
+					}
+					if len(proposals) > 0 {
+						logging.Info("auto_propose", "proposals_recorded", "count", len(proposals))
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_propose background task (24h interval)")
+
 			// Register window_backtest — periodic 20-day scoring window (7-day interval, offset 3d).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "window_backtest",
@@ -1325,7 +1405,10 @@ func run(args []string, deps appDeps) error {
 			stSeedsPath = filepath.Join(cfg.WorkDir, "data/seeds/strategy_techniques.json")
 			if stReg, err := strategy_techniques.LoadFromFile(stSeedsPath); err == nil {
 				stRegistry = stReg
-				stHandlers := apistrategies.NewHandlers(stRegistry)
+				// Manifest #F07: persist validate-API results so hit_rate
+				// accumulates across backtest runs.
+				stHandlers := apistrategies.NewHandlers(stRegistry,
+					apistrategies.NewFeedbackStore(filepath.Join(cfg.LedgerDir, "strategy_feedback")))
 				dashboard.SetStrategiesHandlers(stHandlers)
 				// Re-register: RegisterAllRoutes ran before SetStrategiesHandlers,
 				// so the original call encountered a nil handler. nil-safe.
@@ -1557,7 +1640,21 @@ func run(args []string, deps appDeps) error {
 				Interval: 1 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					return autobacktest.RunScheduledBacktest(ctx, btRunner)
+					err := autobacktest.RunScheduledBacktest(ctx, btRunner)
+					if errors.Is(err, autobacktest.ErrNotInWindow) {
+						return apigateway.ErrTaskSkipped
+					}
+					if err != nil {
+						return err
+					}
+					// Manifest #F08: consume the autobacktest CIRCUIT_BREAKER
+					// signal (previously orphan). Only fires when the daily
+					// backtest actually ran, so SignalEngine has fresh
+					// outcomes to evaluate against.
+					if signalErr := autobacktest.SignalApply(ctx, cfg.LedgerDir, gateway); signalErr != nil {
+						logging.Warn("autobacktest", "signal_apply_failed", "err", signalErr)
+					}
+					return nil
 				},
 			})
 			log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")

@@ -25,19 +25,28 @@ func registerBriefingTools(mcpSrv *mcp.Server, s *server) {
 func (s *server) handleMCPQuickstart(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
 	var out map[string]any
 	if err := s.withAudit(ctx, "mcp_quickstart", nil, func() error {
-		var macro, regHistory, stress, events, strategies map[string]any
-		_ = s.cli.Get(ctx, "/api/macro/snapshot/latest", nil, &macro)
-		_ = s.cli.Get(ctx, "/api/narrative/stress-index/current", nil, &stress)
-		_ = s.cli.Get(ctx, "/api/events/calendar", nil, &events)
-		_ = s.cli.Get(ctx, "/api/strategies/active", nil, &strategies)
-		_ = s.cli.Get(ctx, "/api/regime/history?days=5", nil, &regHistory)
+		// Each section is fetched independently: a partial failure must be
+		// visible to the calling agent (degraded marker + error), not
+		// silently returned as an empty/null block.
+		degraded := []string{}
+		fetch := func(name, path string) any {
+			var m map[string]any
+			if err := s.cli.Get(ctx, path, nil, &m); err != nil {
+				degraded = append(degraded, name)
+				return map[string]any{"degraded": true, "error": err.Error()}
+			}
+			return m
+		}
 		out = map[string]any{
-			"macro_snapshot":       macro,
-			"stress_index":         stress,
-			"events":               events,
-			"active_strategies":    strategies,
-			"recent_regime_5_days": regHistory,
+			"macro_snapshot":       fetch("macro_snapshot", "/api/macro/snapshot/latest"),
+			"stress_index":         fetch("stress_index", "/api/narrative/stress-index/current"),
+			"events":               fetch("events", "/api/events/calendar"),
+			"active_strategies":    fetch("active_strategies", "/api/strategies/active"),
+			"recent_regime_5_days": fetch("recent_regime_5_days", "/api/regime/history?days=5"),
 			"next_steps":           "使用 strategy_list_active 取得活躍策略、capital_flow_summary 查看資金流向摘要、event_flow_prediction 取得未來 5 日資金預測",
+		}
+		if len(degraded) > 0 {
+			out["degraded_sections"] = degraded
 		}
 		return nil
 	}); err != nil {

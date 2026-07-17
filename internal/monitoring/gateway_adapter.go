@@ -82,6 +82,8 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "us_msft", apply: a.applyUSMSFT},
 		{channelID: "tsm_adr", apply: a.applyTSMADR},
 		{channelID: "taiex_index", apply: a.applyTAIEX},
+		{channelID: "taifex_institutional", apply: a.applyTaifexInstitutional},
+		{channelID: "government_flow", apply: a.applyGovernmentFlow},
 	}
 
 	var (
@@ -387,6 +389,49 @@ func (a *macroDataGatewayAdapter) applyTAIEX(snap *marketdata.MacroDataSnapshot,
 	}
 	if s.TAIEX.Symbol != "" {
 		snap.TAIEX = s.TAIEX
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyTaifexInstitutional(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var inst marketdata.InstitutionalFuturesDaily
+	if err := json.Unmarshal(data, &inst); err != nil {
+		return
+	}
+	if inst.Date == "" {
+		return
+	}
+	// Best-effort: foreign OI net is the leading indicator for foreign
+	// direction. ChangePct is left zero (we only have one observation; the
+	// ForceExtractor rolling window rebuilds Z-scores from daily history
+	// persisted in capital_flow state).
+	ts, _ := time.Parse("20060102", inst.Date)
+	snap.ForeignFuturesOINet = marketdata.MacroDataPoint{
+		Symbol:    "TX_FOREIGN_OI_NET",
+		Value:     float64(inst.Foreign.OINet),
+		Timestamp: ts.Unix(),
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var payload struct {
+		Available bool                              `json:"available"`
+		Reading   *marketdata.GovernmentFlowReading `json:"reading"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+	if !payload.Available || payload.Reading == nil || payload.Reading.Date == "" {
+		return
+	}
+	ts, _ := time.Parse("20060102", payload.Reading.Date)
+	// TWD value is large; convert to 億元 (1e8) so the Z-score window stays
+	// in a sane numeric range alongside the other forces (which are
+	// typically expressed in billions NTD or percentage points).
+	v := float64(payload.Reading.TotalNet) / 1e8
+	snap.GovernmentNet = marketdata.MacroDataPoint{
+		Symbol:    "GOV_FLOW_NET",
+		Value:     v,
+		Timestamp: ts.Unix(),
 	}
 }
 

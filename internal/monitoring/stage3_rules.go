@@ -39,12 +39,37 @@ type Stage3AlertDeps struct {
 	OnAlertFired func(ruleID string, level AlertLevel, metadata map[string]any)
 
 	// LatestCapitalFlowPrediction returns the most recent capital-flow
-	// prediction value. The bool is false if no prediction is available.
-	LatestCapitalFlowPrediction func() (float64, bool)
+	// prediction as a normalized direction label (manifest #F01: both sides
+	// of the drift comparison are now unit-agnostic). The Value carries the
+	// raw confidence in [0,1] for diagnostics.
+	LatestCapitalFlowPrediction func() (CapitalFlowSignal, bool)
 
 	// LatestCapitalFlowActual returns the most recent capital-flow actual
-	// value. The bool is false if no actual value is available.
-	LatestCapitalFlowActual func() (float64, bool)
+	// outcome as a normalized direction label. The Value carries the raw
+	// QualityScore in [-3,3] for diagnostics.
+	LatestCapitalFlowActual func() (CapitalFlowSignal, bool)
+}
+
+// CapitalFlowSignal normalizes a prediction or actual outcome into a
+// direction label so the drift comparison (#F01) no longer mixes units.
+type CapitalFlowSignal struct {
+	Direction string  // "bullish" | "bearish" | "neutral"
+	Value     float64 // raw value preserved for diagnostics
+}
+
+// ClassifyDirection maps a scalar to a direction label using symmetric
+// thresholds. Conventions: positive = bullish, negative = bearish, near
+// zero = neutral. Callers pass thresholds appropriate to the input range
+// (e.g. [0.4, 0.6] for [0,1] confidence, [-0.5, 0.5] for [-3,3] QualityScore).
+func ClassifyDirection(value, bullishThreshold, bearishThreshold float64) string {
+	switch {
+	case value > bullishThreshold:
+		return "bullish"
+	case value < bearishThreshold:
+		return "bearish"
+	default:
+		return "neutral"
+	}
 }
 
 // Stage3AlertEvaluator evaluates the Stage 3 data-quality alert rules and
@@ -224,18 +249,23 @@ func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 		}
 	}
 
+	// Manifest #F01: drift is now a *direction* comparison (unit-agnostic).
+	// The 2σ-on-raw-delta check is replaced by a single-day direction hit.
+	// Windowed hit-rate analysis belongs to F03 (auto-calibrate) territory.
 	_, std := meanStd(recent)
-	if std <= 0 {
-		return
-	}
-	diff := math.Abs(actual - pred)
-	if diff <= 2*std {
+	_ = std // retained for diagnostic metadata; no longer gates emission
+	if pred.Direction == actual.Direction {
 		return
 	}
 	if e.checkCooldown("prediction-drift", 24*time.Hour) {
 		e.emitAndTrack("prediction-drift", AlertLevelInfo, "stage3_prediction_drift",
-			fmt.Sprintf("capital flow actual %.2f vs prediction %.2f exceeds 2σ (σ=%.2f)", actual, pred, std),
-			map[string]any{"actual": actual, "prediction": pred, "std": std, "diff": diff})
+			fmt.Sprintf("capital flow direction mismatch: predicted=%s (%.2f) actual=%s (%.2f)",
+				pred.Direction, pred.Value, actual.Direction, actual.Value),
+			map[string]any{
+				"predicted_direction": pred.Direction, "predicted_value": pred.Value,
+				"actual_direction": actual.Direction, "actual_value": actual.Value,
+				"recent_std": std,
+			})
 	}
 }
 

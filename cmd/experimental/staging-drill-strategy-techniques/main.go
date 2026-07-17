@@ -57,7 +57,8 @@ func run() (*strategy_techniques.Registry, error) {
 	}
 
 	// Emit the boot log line that dashboards / Phase 1 assertions match on.
-	logging.Default().Info("strategy_techniques_loaded",
+	logging.Default().Info(
+		"strategy_techniques_loaded",
 		slog.String("path", tempSeedPath),
 		slog.Int("count", reg.Count()),
 	)
@@ -138,13 +139,15 @@ func runPhase4And5WithEndpoint(reg *strategy_techniques.Registry, frameID, baseU
 	apiKey := config.GetSecret("LLM_ANNOTATOR_API_KEY")
 
 	if apiKey == "" {
-		logging.Default().Info("staging_drill_phase4_dummy",
+		logging.Default().Info(
+			"staging_drill_phase4_dummy",
 			slog.String("reason", "LLM_ANNOTATOR_API_KEY unset"),
 		)
 		return nil
 	}
 	if baseURL == "" {
-		logging.Default().Info("staging_drill_phase4_dummy",
+		logging.Default().Info(
+			"staging_drill_phase4_dummy",
 			slog.String("reason", annotateEndpointEnvVar+" unset"),
 		)
 		return nil
@@ -167,7 +170,8 @@ func runPhase4And5WithEndpoint(reg *strategy_techniques.Registry, frameID, baseU
 		return fmt.Errorf("phase4 /annotate returned %d, expected 200", resp.StatusCode)
 	}
 
-	logging.Default().Info("staging_drill_phase4_annotated",
+	logging.Default().Info(
+		"staging_drill_phase4_annotated",
 		slog.String("url", url),
 		slog.Int("status", resp.StatusCode),
 	)

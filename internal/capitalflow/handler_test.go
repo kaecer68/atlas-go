@@ -67,10 +67,10 @@ func TestForceExtract(t *testing.T) {
 func TestResonanceAligned(t *testing.T) {
 	// All three major forces bullish
 	forces := []ForceScore{
-		{Force: ForceForeign, ZScore: 2.0, Trend: "bullish"},
-		{Force: ForceInstitutional, ZScore: 1.5, Trend: "bullish"},
-		{Force: ForceGovernment, ZScore: 0.8, Trend: "bullish"},
-		{Force: ForceRetail, ZScore: -0.5, Trend: "neutral"},
+		{Force: ForceForeign, Role: ForceRoleSubject, ZScore: 2.0, Trend: "bullish"},
+		{Force: ForceInstitutional, Role: ForceRoleSubject, ZScore: 1.5, Trend: "bullish"},
+		{Force: ForceGovernment, Role: ForceRoleSubject, ZScore: 0.8, Trend: "bullish"},
+		{Force: ForceRetail, Role: ForceRoleSubject, ZScore: -0.5, Trend: "neutral"},
 	}
 
 	r := ComputeResonance(forces)
@@ -85,9 +85,9 @@ func TestResonanceAligned(t *testing.T) {
 func TestResonanceAdversarial(t *testing.T) {
 	// Foreign bullish, government bearish
 	forces := []ForceScore{
-		{Force: ForceForeign, ZScore: 2.0, Trend: "bullish"},
-		{Force: ForceInstitutional, ZScore: 0.2, Trend: "neutral"},
-		{Force: ForceGovernment, ZScore: -1.5, Trend: "bearish"},
+		{Force: ForceForeign, Role: ForceRoleSubject, ZScore: 2.0, Trend: "bullish"},
+		{Force: ForceInstitutional, Role: ForceRoleSubject, ZScore: 0.2, Trend: "neutral"},
+		{Force: ForceGovernment, Role: ForceRoleSubject, ZScore: -1.5, Trend: "bearish"},
 	}
 
 	r := ComputeResonance(forces)

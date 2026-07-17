@@ -250,7 +250,7 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	sys := &System{
 		SystemCore: &SystemCore{
 			sim:             simCore,
-			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
+			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine, cfg.LedgerDir),
 			strat:           buildStrategyLayer(thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus, macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider),
 			plugins:         plugins,
@@ -528,9 +528,13 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	tw.Record(7, "ledger_write", "START", nil)
 	// Use replay-based forward returns when dataset is available (real data).
-	// Falls back to synthetic when replay is nil.
+	// Falls back to synthetic when replay is nil. Synthetic outcomes are
+	// recorded to the ledger for audit, but must NOT drive Darwinian weight
+	// evolution (fake data would pollute the learning signal); on such gap
+	// days the weights are left unchanged.
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.Sim().replay)
-	if len(outcomes) == 0 {
+	syntheticOutcomes := len(outcomes) == 0
+	if syntheticOutcomes {
 		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime))
 	}
 	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
@@ -547,7 +551,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.Sim().lastOutcomes = outcomes
 	tw.Record(7, "ledger_write", "OK", map[string]any{"outcomes": len(outcomes)})
 
-	if s.Port().darwinian != nil {
+	if s.Port().darwinian != nil && !syntheticOutcomes {
 		for _, outcome := range outcomes {
 			s.Port().darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
@@ -637,6 +641,10 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 
 	// New agent onboarding: create experiments for agents with outcomes but no
 	// prior experiment records. Reads experiments.jsonl directly to check.
+	// Backlog cap: stop adding when too many planned experiments remain
+	// undigested (fix manifest #D01 — backlog grew to 628 with no cap).
+	const maxUnresolvedPlanned = 100
+	backlogFull := ledger.CountUnresolvedPlanned(s.Sim().cfg.LedgerDir) >= maxUnresolvedPlanned
 	existingIDs := make(map[string]bool)
 	if expData, err := os.ReadFile(filepath.Join(s.Sim().cfg.LedgerDir, "experiments.jsonl")); err == nil {
 		for _, line := range strings.Split(string(expData), "\n") {
@@ -650,6 +658,9 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 		}
 	}
 	for _, sc := range scorecards {
+		if backlogFull {
+			break
+		}
 		if sc.WindowCount == 0 || existingIDs[sc.AgentID] {
 			continue
 		}

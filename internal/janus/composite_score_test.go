@@ -188,5 +188,7 @@ func absDiff(a, b float64) float64 {
 
 // reference prism import keeps the test file compiling even if not used
 // directly when individual subtests are skipped via -run flags.
-var _ = prism.RegimeRiskOn
-var _ = time.Second
+var (
+	_ = prism.RegimeRiskOn
+	_ = time.Second
+)

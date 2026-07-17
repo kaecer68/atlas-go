@@ -33,6 +33,14 @@ export const template = `
           <li>優先客服支援</li>
         </ul>
         <button class="btn btn-primary btn-full" id="upgradeBtn">立即升級</button>
+        <div class="waitlist-form" id="waitlistForm" hidden>
+          <p class="waitlist-note">Premium 即將推出。留下您的 Email，開放時優先通知您。</p>
+          <div class="waitlist-row">
+            <input type="email" id="waitlistEmail" placeholder="you@example.com" autocomplete="email" />
+            <button class="btn btn-primary" id="waitlistSubmit">通知我</button>
+          </div>
+          <p class="waitlist-msg" id="waitlistMsg" role="status"></p>
+        </div>
       </div>
     </div>
     <div class="premium-mcp panel">
@@ -42,6 +50,32 @@ export const template = `
     </div>
   </div>
 `;
+
+async function submitWaitlist() {
+  var input = document.getElementById('waitlistEmail');
+  var msg = document.getElementById('waitlistMsg');
+  var submit = document.getElementById('waitlistSubmit');
+  if (!input || !msg || !submit) return;
+  var email = (input.value || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    msg.textContent = '請輸入有效的 Email 格式。';
+    msg.className = 'waitlist-msg waitlist-error';
+    input.focus();
+    return;
+  }
+  submit.disabled = true;
+  try {
+    const { postJSON } = await import('../shared/app-utils.js');
+    await postJSON('/api/waitlist', { email: email, source: 'premium' });
+    msg.textContent = '已登記！Premium 開放時將優先通知您。';
+    msg.className = 'waitlist-msg waitlist-ok';
+    input.disabled = true;
+  } catch (e) {
+    msg.textContent = '登記失敗，請稍後再試。';
+    msg.className = 'waitlist-msg waitlist-error';
+    submit.disabled = false;
+  }
+}
 
 export async function init() {
   const { getTier } = await import('../services/auth.js');
@@ -58,8 +92,23 @@ export async function init() {
       btn.disabled = true;
     }
   } else if (btn) {
+    // C05: 金流未上就緒前，升級鈕改為「即將推出 + 留 Email」等候名單。
     btn.addEventListener('click', function() {
-      alert('Premium 升級功能開發中，敬請期待！');
+      var form = document.getElementById('waitlistForm');
+      if (form) {
+        form.hidden = false;
+        btn.hidden = true;
+        var input = document.getElementById('waitlistEmail');
+        if (input) input.focus();
+      }
     });
+    var submit = document.getElementById('waitlistSubmit');
+    if (submit) submit.addEventListener('click', submitWaitlist);
+    var emailInput = document.getElementById('waitlistEmail');
+    if (emailInput) {
+      emailInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') submitWaitlist();
+      });
+    }
   }
 }

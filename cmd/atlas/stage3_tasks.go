@@ -213,14 +213,14 @@ func registerStage3AlertTasks(d stage3Deps) {
 			}
 			return n
 		},
-		LatestCapitalFlowPrediction: func() (float64, bool) {
+		LatestCapitalFlowPrediction: func() (monitoring.CapitalFlowSignal, bool) {
 			if d.eventCalendar == nil {
-				return 0, false
+				return monitoring.CapitalFlowSignal{}, false
 			}
 			predictor := eventdriven.NewPredictor(d.eventCalendar)
 			report := predictor.Predict(time.Now())
 			if len(report.Predictions) == 0 {
-				return 0, false
+				return monitoring.CapitalFlowSignal{}, false
 			}
 			pred := report.Predictions[0]
 			if d.predictionLedger != nil {
@@ -231,18 +231,24 @@ func registerStage3AlertTasks(d stage3Deps) {
 					Direction:     pred.Direction,
 				})
 			}
-			return pred.Confidence, true
+			return monitoring.CapitalFlowSignal{
+				Direction: monitoring.ClassifyDirection(pred.Confidence, 0.6, 0.4),
+				Value:     pred.Confidence,
+			}, true
 		},
-		LatestCapitalFlowActual: func() (float64, bool) {
+		LatestCapitalFlowActual: func() (monitoring.CapitalFlowSignal, bool) {
 			if d.macroProvider == nil {
-				return 0, false
+				return monitoring.CapitalFlowSignal{}, false
 			}
 			svc := capitalflow.NewService(d.macroProvider, 0)
 			report, err := svc.LatestDaily(context.Background())
 			if err != nil {
-				return 0, false
+				return monitoring.CapitalFlowSignal{}, false
 			}
-			return report.QualityScore, true
+			return monitoring.CapitalFlowSignal{
+				Direction: monitoring.ClassifyDirection(report.QualityScore, 0.5, -0.5),
+				Value:     report.QualityScore,
+			}, true
 		},
 	}
 

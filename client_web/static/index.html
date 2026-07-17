@@ -156,30 +156,13 @@
     <div class="page" id="page-login" data-page-src="login"></div>
     <div class="page" id="page-register" data-page-src="register"></div>
     <div class="page" id="page-premium" data-page-src="premium"></div>
+    <div class="page" id="page-decision-chain" data-page-src="decision-chain"></div>
     <div class="page" id="page-mcp" data-page-src="mcp"></div>
     <div class="page" id="page-errors/404" data-page-src="errors/404"></div>
   </div>
   <button class="refresh" title="手動重新整理">重新整理</button>
   <div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
 </main>
-<div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true">
-  <div class="modal">
-    <h3>提示詞差異比對</h3>
-    <div class="diff" id="diffContent">
-      <div><strong>基線</strong><pre id="diffBaseline"></pre></div>
-      <div><strong>候選</strong><pre id="diffCandidate"></pre></div>
-    </div>
-    <div class="control-group mt-10 justify-end"><button>關閉</button></div>
-  </div>
-</div>
-<div class="modal-overlay" id="promoteModal" role="dialog" aria-modal="true">
-  <div class="modal modal--narrow">
-    <h3>確認晉升 Baseline Policy</h3>
-    <p class="text-muted-md">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
-    <div id="promotePreview" class="text-12-muted mt-10 mb-10"></div>
-    <div class="control-group justify-end"><button>取消</button><button class="primary">確認晉升</button></div>
-  </div>
-</div>
 <div class="modal-overlay" id="infoModal" role="dialog" aria-modal="true">
   <div class="modal modal--medium">
     <h3 id="infoTitle">說明</h3>

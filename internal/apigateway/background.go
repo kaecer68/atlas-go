@@ -2,6 +2,7 @@ package apigateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"runtime/debug"
@@ -10,6 +11,12 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
+
+// ErrTaskSkipped is returned by a task to indicate "nothing to do this tick"
+// (e.g. outside its daily window). A skip is neither success nor failure:
+// consecutiveFailures is left untouched so a real failure is not washed away
+// by subsequent no-op ticks (fix manifest #B01).
+var ErrTaskSkipped = errors.New("background task: skipped")
 
 // BackgroundTaskFunc is the function signature for background tasks.
 type BackgroundTaskFunc func(ctx context.Context) error
@@ -27,6 +34,8 @@ type ScheduledTask struct {
 	lastRunMu           sync.RWMutex
 	consecutiveFailures int
 	failuresMu          sync.Mutex
+	lastError           string
+	lastErrorMu         sync.RWMutex
 }
 
 // IsEnabled returns whether the task is enabled.
@@ -64,11 +73,14 @@ func (t *ScheduledTask) Failures() int {
 	return t.consecutiveFailures
 }
 
-// RecordSuccess resets failure count.
+// RecordSuccess resets failure count and clears the last error.
 func (t *ScheduledTask) RecordSuccess() {
 	t.failuresMu.Lock()
-	defer t.failuresMu.Unlock()
 	t.consecutiveFailures = 0
+	t.failuresMu.Unlock()
+	t.lastErrorMu.Lock()
+	t.lastError = ""
+	t.lastErrorMu.Unlock()
 }
 
 // RecordFailure increments failure count.
@@ -76,6 +88,24 @@ func (t *ScheduledTask) RecordFailure() {
 	t.failuresMu.Lock()
 	defer t.failuresMu.Unlock()
 	t.consecutiveFailures++
+}
+
+// SetLastError records the most recent failure message for status reporting.
+func (t *ScheduledTask) SetLastError(err error) {
+	t.lastErrorMu.Lock()
+	defer t.lastErrorMu.Unlock()
+	if err == nil {
+		t.lastError = ""
+		return
+	}
+	t.lastError = err.Error()
+}
+
+// LastError returns the most recent failure message (empty if none).
+func (t *ScheduledTask) LastError() string {
+	t.lastErrorMu.RLock()
+	defer t.lastErrorMu.RUnlock()
+	return t.lastError
 }
 
 // TaskFailureHandler is called when a task fails, receiving the task name and error.
@@ -273,8 +303,11 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 		return
 	}
 
-	// Check if previous run is still executing (mutual exclusion)
-	if !task.LastRun().IsZero() && time.Since(task.LastRun()) < task.Interval {
+	// Debounce ticks that fire significantly earlier than the configured
+	// interval (phase shift after a long run). A tolerance absorbs
+	// millisecond-level scheduling jitter that used to kill legitimate
+	// ticks (fix manifest #B02).
+	if !task.LastRun().IsZero() && time.Since(task.LastRun()) < task.Interval-overlapTolerance(task.Interval) {
 		logging.Warn("background_task", "task_skipped_overlap", "name", task.Name)
 		return
 	}
@@ -295,8 +328,14 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 		}()
 		return task.Task(ctx)
 	}()
+	if errors.Is(err, ErrTaskSkipped) {
+		// No-op tick: not a success (failure count must survive), not a failure.
+		logging.Info("background_task", "task_skipped", "name", task.Name)
+		return
+	}
 	if err != nil {
 		task.RecordFailure()
+		task.SetLastError(err)
 		logging.Error(
 			"background_task", "task_failed",
 			"name", task.Name,
@@ -313,6 +352,16 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 	}
 }
 
+// overlapTolerance returns how much earlier than the full interval a tick
+// may fire before it is treated as an overlap: max(1s, interval/20).
+func overlapTolerance(interval time.Duration) time.Duration {
+	tol := interval / 20
+	if tol < time.Second {
+		tol = time.Second
+	}
+	return tol
+}
+
 // TaskStatus represents the runtime status of a task.
 type TaskStatus struct {
 	Name                string        `json:"name"`
@@ -322,6 +371,7 @@ type TaskStatus struct {
 	LastRun             time.Time     `json:"last_run"`
 	NextRun             time.Time     `json:"next_run"` // Zero = task never ran; past time = missed schedule (overlap or extended runtime); future time = upcoming scheduled execution
 	ConsecutiveFailures int           `json:"consecutive_failures"`
+	LastError           string        `json:"last_error,omitempty"`
 }
 
 // Status returns runtime status for all tasks.
@@ -343,6 +393,7 @@ func (m *BackgroundTaskManager) Status() []TaskStatus {
 			LastRun:             t.LastRun(),
 			NextRun:             nextRun,
 			ConsecutiveFailures: t.Failures(),
+			LastError:           t.LastError(),
 		})
 	}
 	return result

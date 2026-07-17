@@ -73,7 +73,8 @@ func TestInit_ReturnsShutdown(t *testing.T) {
 
 func TestStartSpan_CreatesSpanWithAttributes(t *testing.T) {
 	ctx := context.Background()
-	_, span := StartSpan(ctx, "test.span",
+	_, span := StartSpan(
+		ctx, "test.span",
 		attribute.String("test.key", "test.value"),
 		attribute.Int("test.count", 42),
 	)

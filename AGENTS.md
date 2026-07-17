@@ -32,6 +32,7 @@
 
 ## 規範與治理
 
+- **產品定位（最高仲裁）**：[`docs/reference/product-positioning.md`](docs/reference/product-positioning.md)（散戶定位、機器自動優先、網頁優先/MCP 為輔、台灣市場前提、資金勢力分類學）
 - **開發憲法與流程**：[`docs/reference/constitution.md`](docs/reference/constitution.md)、[`docs/reference/iteration-gate.md`](docs/reference/iteration-gate.md)、[`docs/reference/guidelines-index.md`](docs/reference/guidelines-index.md)
 - **跨模組陷阱**：[`docs/reference/traps.md`](docs/reference/traps.md)
 - **CI 與編碼守則**：

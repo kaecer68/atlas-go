@@ -8,7 +8,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
-
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )

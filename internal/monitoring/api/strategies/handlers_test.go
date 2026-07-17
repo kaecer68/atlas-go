@@ -44,7 +44,7 @@ func newTestRegistry(t *testing.T) *strategy_techniques.Registry {
 
 func newTestMux(reg *strategy_techniques.Registry) *http.ServeMux {
 	mux := http.NewServeMux()
-	h := NewHandlers(reg)
+	h := NewHandlers(reg, nil)
 	h.RegisterRoutes(mux)
 	return mux
 }
@@ -78,7 +78,7 @@ func doPOST(t *testing.T, mux http.Handler, path string, payload any) (int, map[
 }
 
 func TestNewHandlers_NilRegistrySafe(t *testing.T) {
-	h := NewHandlers(nil)
+	h := NewHandlers(nil, nil)
 	if h == nil {
 		t.Fatal("NewHandlers returned nil")
 	}

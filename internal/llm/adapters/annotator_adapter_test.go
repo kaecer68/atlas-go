@@ -154,7 +154,6 @@ func TestAnnotatorAdapter_Call_Success(t *testing.T) {
 	// When: Call is invoked
 	ctx := context.Background()
 	resp, err := adapter.Call(ctx, req)
-
 	// Then: no error, output matches, provider is Kimi
 	if err != nil {
 		t.Fatalf("Call() unexpected error: %v", err)
@@ -282,7 +281,6 @@ func TestAnnotatorAdapter_Call_LatencyIsSet(t *testing.T) {
 	start := time.Now()
 	ctx := context.Background()
 	resp, err := adapter.Call(ctx, req)
-
 	// Then: response has a non-negative Latency within reasonable bounds
 	if err != nil {
 		t.Fatalf("Call() unexpected error: %v", err)

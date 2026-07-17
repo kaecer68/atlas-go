@@ -80,7 +80,8 @@ func initStdoutExporter() (func(context.Context) error, error) {
 }
 
 func setupTracerProvider(ctx context.Context, exporter sdktrace.SpanExporter) (func(context.Context) error, error) {
-	res, err := resource.New(ctx,
+	res, err := resource.New(
+		ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("atlas-go"),
 			semconv.ServiceVersion("0.0.0"),
@@ -90,7 +91,8 @@ func setupTracerProvider(ctx context.Context, exporter sdktrace.SpanExporter) (f
 		return nil, fmt.Errorf("otel: create resource: %w", err)
 	}
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter,
+		sdktrace.WithBatcher(
+			exporter,
 			sdktrace.WithMaxQueueSize(maxExportQueueSize),
 			sdktrace.WithMaxExportBatchSize(maxExportBatchSize),
 			sdktrace.WithBatchTimeout(exportBatchTimeout),

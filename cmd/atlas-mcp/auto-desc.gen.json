@@ -1120,6 +1120,12 @@
     "name": "trace_get_reasoning",
     "description": "Reasoning trace (RAG/CoT steps) for a recent recommendation.",
     "inputSchema": {
+      "properties": {
+        "session_id": {
+          "description": "optional session id; defaults to the most recent session",
+          "type": "string"
+        }
+      },
       "type": "object"
     }
   },

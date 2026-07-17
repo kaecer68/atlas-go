@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
@@ -68,6 +69,7 @@ type SystemHealthResponse struct {
 	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
 	DegradedChannels      []string          `json:"degraded_channels,omitempty"`
 	CycleStale            bool              `json:"cycle_stale"`
+	BacktestStale         bool              `json:"backtest_stale,omitempty"`
 }
 
 // DataChannelInfo represents a single data channel status.
@@ -97,6 +99,21 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	if err != nil {
 		replayOK = false
 		warnings = append(warnings, "replay 資料無法讀取："+err.Error())
+	}
+
+	// Backtest staleness: warn when the latest auto-backtest snapshot is
+	// missing or lags the replay data by more than ~2 trading days
+	// (fix manifest #B03 — previously silent via snapshot_exists_skip).
+	backtestStale := false
+	if replayOK && latestReplayDate != "" {
+		snaps, snapErr := autobacktest.NewHistory(s.LedgerDir).LatestN(1)
+		if snapErr != nil || len(snaps) == 0 {
+			warnings = append(warnings, "自動回測尚無快照（replay 最新 "+latestReplayDate+"）")
+			backtestStale = true
+		} else if replayDate, parseErr := time.Parse("2006-01-02", latestReplayDate); parseErr == nil && replayDate.Sub(snaps[0].Date) > 3*24*time.Hour {
+			warnings = append(warnings, fmt.Sprintf("自動回測快照過舊：最新 %s（replay 已達 %s）", snaps[0].Date.Format("2006-01-02"), latestReplayDate))
+			backtestStale = true
+		}
 	}
 
 	lastWindow := ""
@@ -196,6 +213,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		DataChannels:          channels,
 		DegradedChannels:      degradedFrom(channels),
 		CycleStale:            s.checkCycleStale(),
+		BacktestStale:         backtestStale,
 	}, nil
 }
 

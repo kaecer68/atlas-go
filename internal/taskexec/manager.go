@@ -266,6 +266,13 @@ func (m *Manager) List(ctx context.Context, filter domain.ExecutionFilter) ([]do
 	return m.store.ListExecutions(ctx, filter)
 }
 
+// ListEvents returns the persisted lifecycle events of one execution in
+// sequence order. It is the request/response counterpart to Subscribe's
+// live stream and backs the JSON snapshot endpoint.
+func (m *Manager) ListEvents(ctx context.Context, executionID string) ([]domain.TaskExecutionEvent, error) {
+	return m.store.ListEventsAfter(ctx, executionID, 0)
+}
+
 func (m *Manager) Cancel(ctx context.Context, id string) error {
 	m.mu.RLock()
 	ar, ok := m.active[id]

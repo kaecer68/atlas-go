@@ -29,6 +29,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/tasks/{id}/retry", shared.Post(h.HandleRetryTask))
 	mux.Handle("POST /api/tasks/{id}/confirm", shared.Post(h.HandleConfirmTask))
 	mux.Handle("GET /api/tasks/{id}/events", shared.GetRaw(h.HandleTaskEvents))
+	mux.Handle("GET /api/tasks/{id}/events/snapshot", shared.Get(h.HandleTaskEventsSnapshot))
 }
 
 type submitTaskRequest struct {
@@ -158,6 +159,21 @@ func (h *Handlers) HandleConfirmTask(r *http.Request) (int, any) {
 		ID:     newExec.ID,
 		Status: string(newExec.Status),
 	}
+}
+
+func (h *Handlers) HandleTaskEventsSnapshot(r *http.Request) (int, any) {
+	id := r.PathValue("id")
+	if id == "" {
+		return http.StatusBadRequest, map[string]string{"error": "task id required"}
+	}
+	events, err := h.manager.ListEvents(r.Context(), id)
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("list events: %v", err)}
+	}
+	if events == nil {
+		events = []domain.TaskExecutionEvent{}
+	}
+	return http.StatusOK, map[string]any{"events": events}
 }
 
 func (h *Handlers) HandleTaskEvents(w http.ResponseWriter, r *http.Request) (int, any) {

@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/alerting"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaecer68/atlas-go/internal/alerting"
 )
 
 type recordingPublisher struct {

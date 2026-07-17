@@ -70,14 +70,26 @@ func main() {
 		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "error", err.Error(), pool)
 		monitoring.RecordChannelFetchWithPool(stateDir, "frankfurter_fx", "error", err.Error(), pool)
 	} else {
-		// At least one provider succeeded. Individual provider failures are masked here;
-		// the health store records "ok" for both channels even if one failed.
-		// [INTENTIONAL STUB] TODO: Implement per-provider status tracking so partial failures surface
-		// Audit 2026-07-06: currently only composite ok/error is recorded;
-		// individual provider failures are masked.
-		// as "warn" instead of "ok" on the data channels dashboard.
-		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "ok", "", pool)
-		monitoring.RecordChannelFetchWithPool(stateDir, "frankfurter_fx", "ok", "", pool)
+		// Per-provider status: the composite snapshot already records which
+		// sub-providers failed (FailedChannels). Surface partial failures as
+		// "degraded" for the affected channel instead of masking both as "ok"
+		// (fix manifest #B08).
+		failed := make(map[string]bool, len(snap.FailedChannels))
+		for _, name := range snap.FailedChannels {
+			failed[name] = true
+		}
+		recordChannel := func(channelID, providerName string) {
+			if failed[providerName] {
+				monitoring.RecordChannelFetchWithPool(stateDir, channelID, "degraded", "provider fetch failed (partial composite failure)", pool)
+			} else {
+				monitoring.RecordChannelFetchWithPool(stateDir, channelID, "ok", "", pool)
+			}
+		}
+		recordChannel("us_yahoo", "yahoo_finance")
+		recordChannel("frankfurter_fx", "frankfurter_fx")
+		if len(snap.FailedChannels) > 0 {
+			log.Printf("[MacroIngest] partial failure: providers failed=%v", snap.FailedChannels)
+		}
 	}
 	log.Printf("[MacroIngest] Ingested %d events, snapshot recorded_at=%d", len(events), snap.RecordedAt)
 }

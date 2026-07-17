@@ -233,9 +233,12 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 }
 
 // buildPortfolioManager constructs the portfolio management subsystem.
-func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry domain.AgentRegistry, eventBus *eventbus.ChannelEventBus, factorEngine *portfolio.FactorEngine) PortfolioManager {
-	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json").
-		WithHistoryPath("data/state/darwinian_history.jsonl").
+// Darwinian weight/history paths are anchored to ledgerDir (the injected
+// state dir, ATLAS_LEDGER_DIR) instead of CWD-relative literals so the
+// writer and the monitoring readers always resolve the same files.
+func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry domain.AgentRegistry, eventBus *eventbus.ChannelEventBus, factorEngine *portfolio.FactorEngine, ledgerDir string) PortfolioManager {
+	darwinian := portfolio.NewDarwinianWeightManager(filepath.Join(ledgerDir, "darwinian_weights.json")).
+		WithHistoryPath(filepath.Join(ledgerDir, "darwinian_history.jsonl")).
 		WithParameters(runtimeParams)
 	_ = darwinian.Load()
 	darwinian.InitializeFromRegistry(registry)

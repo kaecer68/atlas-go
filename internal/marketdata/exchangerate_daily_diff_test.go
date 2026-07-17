@@ -23,7 +23,7 @@ func TestExchangeRateProvider_DailyDiffViaPersistedCache(t *testing.T) {
 		"date": "2026-07-11",
 		"usd_twd": 32.00,
 		"usd_jpy": 161.50
-	}`), 0644); err != nil {
+	}`), 0o644); err != nil {
 		t.Fatalf("seed cache: %v", err)
 	}
 

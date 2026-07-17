@@ -284,7 +284,7 @@ func TestCircuitBreaker_WithNowFunc(t *testing.T) {
 
 	// Pin the clock to a known instant.
 	frozen := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
-	var nowValue = frozen
+	nowValue := frozen
 	cb.WithNowFunc(func() time.Time { return nowValue })
 
 	// Drive 3 failures with the frozen clock — lastFailure should be

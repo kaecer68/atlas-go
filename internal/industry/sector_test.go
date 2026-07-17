@@ -55,10 +55,10 @@ func Test_SectorID_IsValid(t *testing.T) {
 			t.Errorf("AllSectors entry %q should be valid", id)
 		}
 	}
-	if (SectorID("not_a_real_sector")).IsValid() {
+	if SectorID("not_a_real_sector").IsValid() {
 		t.Error("fabricated SectorID should not be valid")
 	}
-	if (SectorID("")).IsValid() {
+	if SectorID("").IsValid() {
 		t.Error("empty SectorID should not be valid")
 	}
 }
@@ -238,7 +238,7 @@ func Test_Layer_L2(t *testing.T) {
 }
 
 func Test_Layer_Unknown_ReturnsUnknown(t *testing.T) {
-	if got := (SectorID("nonexistent")).Layer(); got != "unknown" {
+	if got := SectorID("nonexistent").Layer(); got != "unknown" {
 		t.Errorf("unknown SectorID.Layer() = %q, want unknown", got)
 	}
 }

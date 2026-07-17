@@ -125,7 +125,6 @@ func TestHybridProvider_UseTWSE_UseFugle(t *testing.T) {
 	if !fubonPrimary && p.Name() != "hybrid-fugle" {
 		t.Fatalf("after UseFugle: Name() = %q, want hybrid-fugle (Fubon proxy not reachable)", p.Name())
 	}
-
 }
 
 func TestHybridProvider_hasInvalidQuotes(t *testing.T) {

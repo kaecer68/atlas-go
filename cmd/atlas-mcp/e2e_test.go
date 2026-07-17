@@ -45,7 +45,8 @@ func TestStdioJSONRPC_HappyPath(t *testing.T) {
 	repoRoot := mustRepoRoot(t)
 	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/atlas-mcp")
 	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"ATLAS_BASE_URL="+mockAtlas.URL,
 		"ATLAS_MCP_AUDIT_LOG="+auditPath,
 	)
