@@ -1162,6 +1162,49 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_experiment background task (7-day interval)")
 
+			// Register auto_propose — degradation-triggered experiment proposals
+			// (fix manifest #D02: AutoProposer existed but was never wired).
+			autoProposer := experiment.NewAutoProposer(dwMgr, agentHealthMgr)
+			if maturityTracker != nil {
+				autoProposer.WithMaturityTracker(maturityTracker)
+			}
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_propose",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					// Backlog gate: don't pile proposals onto a full queue (#D01 cap).
+					if n := ledger.CountUnresolvedPlanned(cfg.LedgerDir); n >= 100 {
+						logging.Info("auto_propose", "backlog_full_skip", "unresolved", n)
+						return nil
+					}
+					// Reload weights so proposals use fresh rolling metrics.
+					_ = dwMgr.Load()
+					proposals, err := autoProposer.CheckAndPropose(ctx)
+					if err != nil {
+						return err
+					}
+					store := ledger.NewStore(cfg.LedgerDir)
+					for _, p := range proposals {
+						if err := store.RecordExperiment(domain.ExperimentRecord{
+							ID:            fmt.Sprintf("auto-propose-%s-%d", p.AgentID, time.Now().Unix()),
+							TargetAgentID: p.AgentID,
+							Skill:         p.Brief.TargetSkill,
+							MutationType:  p.MutationType,
+							Status:        domain.ExperimentPlanned,
+							Hypothesis:    p.TriggerReason,
+						}); err != nil {
+							return fmt.Errorf("record proposal: %w", err)
+						}
+					}
+					if len(proposals) > 0 {
+						logging.Info("auto_propose", "proposals_recorded", "count", len(proposals))
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_propose background task (24h interval)")
+
 			// Register window_backtest — periodic 20-day scoring window (7-day interval, offset 3d).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "window_backtest",
