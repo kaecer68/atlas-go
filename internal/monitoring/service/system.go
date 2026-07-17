@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/buildinfo"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -58,6 +59,13 @@ func (s *SystemService) LoadPhase3Status() (orchestrator.Phase3Metrics, error) {
 }
 
 // SystemHealthResponse mirrors the dashboard API response structure.
+//
+// Runtime surfaces the linker-injected buildinfo (version / commit /
+// build_time / go_version) so dashboards and the atlas-mcp tools can audit a
+// deployed binary against the source commit (CF-INV-12,
+// docs/specs/capital-flow-seven-dimension-spec.md §11.4). It is a pointer so
+// callers can distinguish "block omitted" from "block present with all-empty
+// fields"; LoadSystemHealth always populates it.
 type SystemHealthResponse struct {
 	BaselineVersion       string            `json:"baseline_version"`
 	ReplayDataLatestDate  string            `json:"replay_data_latest_date"`
@@ -70,6 +78,7 @@ type SystemHealthResponse struct {
 	DegradedChannels      []string          `json:"degraded_channels,omitempty"`
 	CycleStale            bool              `json:"cycle_stale"`
 	BacktestStale         bool              `json:"backtest_stale,omitempty"`
+	Runtime               *buildinfo.Info   `json:"runtime,omitempty"`
 }
 
 // DataChannelInfo represents a single data channel status.
@@ -202,6 +211,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		})
 	}
 
+	runtimeInfo := buildinfo.Current()
 	return SystemHealthResponse{
 		BaselineVersion:       baselineVersion,
 		ReplayDataLatestDate:  latestReplayDate,
@@ -214,6 +224,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		DegradedChannels:      degradedFrom(channels),
 		CycleStale:            s.checkCycleStale(),
 		BacktestStale:         backtestStale,
+		Runtime:               &runtimeInfo,
 	}, nil
 }
 

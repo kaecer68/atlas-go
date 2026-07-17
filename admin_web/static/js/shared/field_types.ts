@@ -3748,6 +3748,7 @@ export interface SystemHealthResponse {
   degraded_channels?: string[];
   cycle_stale: boolean;
   backtest_stale?: boolean;
+  runtime?: string | null;
 }
 
 export interface TAIFEXFutures {

@@ -1423,6 +1423,7 @@
   "rule_engine_cooldown_sec",
   "rule_engine_interval_sec",
   "running",
+  "runtime",
   "sample_count",
   "sampled_at",
   "samples",
