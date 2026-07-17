@@ -74,7 +74,7 @@ func wireForTest(in WireDeps) (recommender.HandlerDeps, *capitalflow.Service) {
 		} else {
 			cfsvc = capitalflow.NewService(in.MacroProvider, 0)
 		}
-		deps.CapitalFlow = recommender.NewCapitalFlowFunc(cfsvc.LatestDaily, cfsvc.Summary)
+		deps.CapitalFlow = recommender.NewCapitalFlowFunc(cfsvc.LatestDaily, cfsvc.Summary, cfsvc.LatestAssessment)
 	}
 
 	// 2. event-driven Predictor: needs event calendar.

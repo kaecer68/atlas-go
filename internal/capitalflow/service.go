@@ -94,6 +94,13 @@ func (s *Service) Store() RollingSampleStore { return s.store }
 // Returns 0 if no successful resonance has been observed yet.
 // Auto-refreshes when the cache is older than QualityCacheTTL.
 //
+// E07 note: this is the legacy resonance-derived compatibility score,
+// distinct from DailyReport.QualityScore's F+Inst-Retail Z composite.
+// While the assessment's CalibrationStatus is "calibrating" or
+// "degraded", this value MUST NOT be fed into automation — callers
+// must gate on Service.LatestAssessment().EligibleForAutomation().
+// See spec §9.5 / CF-INV-13.
+//
 // Note: refreshIfStale runs Score with an empty history today, so
 // until Refresh has populated the store, QualityScore reflects
 // "today's snapshot with zero prior samples" (Z=raw for non-zero
@@ -298,6 +305,27 @@ func (s *Service) Summary(ctx context.Context) (SummaryReport, error) {
 		return SummaryReport{}, fmt.Errorf("capitalflow: build summary from latest daily: %w", err)
 	}
 	return GenerateSummaryReport(daily.Date, daily.Forces, daily.Resonance), nil
+}
+
+// LatestAssessment is the E07 automation face (spec §9.5 /
+// CF-INV-08 / CF-INV-13). It returns the E07 4-layer assessment
+// for the latest trading day by reusing the LatestDaily pipeline
+// (no extra provider fetch, no extra score pass).
+//
+// On a fresh service the assessment is always
+// CalibrationStatus="calibrating" because no rolling history has
+// been written yet (Refresh has not run); automation consumers
+// MUST gate on EligibleForAutomation() and stay neutral while
+// the gate is closed. Once Refresh has been called the assessment
+// still reports "calibrating" until H-CF-02 is validated — that
+// flip lives in the per-source calibration pipeline that Task 8
+// will wire.
+func (s *Service) LatestAssessment(ctx context.Context) (CapitalFlowAssessment, error) {
+	daily, err := s.LatestDaily(ctx)
+	if err != nil {
+		return CapitalFlowAssessment{}, fmt.Errorf("capitalflow: build latest assessment: %w", err)
+	}
+	return daily.Assessment, nil
 }
 
 // dimensionSource returns the (unit, source_id) tuple to attach to

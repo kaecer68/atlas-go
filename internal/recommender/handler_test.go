@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -147,24 +148,76 @@ func TestHandleRecommendations_NarrativeIntegration_PopulatesStressIndex(t *test
 }
 
 type mockCapitalFlow struct {
-	summary string
+	summary         string
+	assessment      capitalflow.CapitalFlowAssessment
+	dailyCalls      int
+	summaryCalls    int
+	assessmentCalls int
 }
 
 func (m *mockCapitalFlow) LatestDaily(ctx context.Context) (capitalflow.DailyReport, error) {
+	m.dailyCalls++
 	return capitalflow.DailyReport{
-		Date:    time.Now(),
-		Summary: m.summary,
+		Date:          time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC),
+		Summary:       m.summary,
+		QualityScore:  0.75,
+		QualityLabel:  "inflow",
+		Resonance:     capitalflow.ResonanceResult{Direction: "aligned"},
+		Assessment:    m.assessment,
+		DominantActor: capitalflow.ForceForeign,
 	}, nil
 }
 
 func (m *mockCapitalFlow) Summary(ctx context.Context) (capitalflow.SummaryReport, error) {
+	m.summaryCalls++
 	return capitalflow.SummaryReport{
-		Date:          time.Now(),
+		Date:          time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC),
 		Summary:       m.summary,
 		DominantForce: capitalflow.ForceForeign,
 		QualityLabel:  "inflow",
 		ResonanceDir:  "aligned",
 	}, nil
+}
+
+// LatestAssessment exposes the E07 assessment contract for direct adapter
+// consumers. HandleRecommendations derives the same assessment from its one
+// DailyReport fetch and must not invoke this method separately.
+func (m *mockCapitalFlow) LatestAssessment(ctx context.Context) (capitalflow.CapitalFlowAssessment, error) {
+	m.assessmentCalls++
+	return m.assessment, nil
+}
+
+func TestHandleRecommendations_CapitalFlowUsesOneDailyFetchAndWarnsWhileCalibrating(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-test-capital-flow-fetch")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+	cf := &mockCapitalFlow{
+		summary: "法人資金偏多，校準中",
+		assessment: capitalflow.CapitalFlowAssessment{
+			CalibrationStatus: capitalflow.CalibrationCalibrating,
+		},
+	}
+	h := NewHandlerWithServices(*store, nil, nil, cf, nil, nil)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	code, data := h.HandleRecommendations(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	rec := data.(TierRecommendation)
+	if cf.dailyCalls != 1 {
+		t.Errorf("LatestDaily calls = %d, want 1", cf.dailyCalls)
+	}
+	if cf.summaryCalls != 0 {
+		t.Errorf("Summary calls = %d, want 0 (detail must derive from DailyReport)", cf.summaryCalls)
+	}
+	if cf.assessmentCalls != 0 {
+		t.Errorf("LatestAssessment calls = %d, want 0 (assessment must derive from DailyReport)", cf.assessmentCalls)
+	}
+	wantWarning := "regime_unavailable; stress_index_unavailable; capital_flow_assessment_calibrating"
+	if rec.Warning != wantWarning {
+		t.Errorf("Warning = %q, want %q", rec.Warning, wantWarning)
+	}
 }
 
 type mockEventPredictor struct {
@@ -377,4 +430,97 @@ func TestHandleRecommendations_RegimeChange_ConcurrentSafety(t *testing.T) {
 	if count != 1 {
 		t.Errorf("listener fired %d times, want 1 (race condition)", count)
 	}
+}
+
+// TestHandlerRecommendations_AssessmentUnchanged — spec §9.5 / CF-INV-08.
+//
+// The recommender handler must remain stable across consecutive capital-flow
+// reads. HandleRecommendations derives the assessment from each DailyReport
+// and must produce deeply equal responses for identical provider data. The
+// direct LatestAssessment call below only verifies the provider contract; the
+// handler itself must not call LatestAssessment separately.
+func TestHandlerRecommendations_AssessmentUnchanged(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-test-assessment")
+	defer os.RemoveAll(dir)
+
+	store, _ := subscription.NewStore(dir)
+	cf := &mockCapitalFlow{summary: "外資連三買超 800 億"}
+	h := NewHandlerWithServices(*store, nil, nil, cf, nil, nil).WithDevMode(true)
+
+	// Sanity: the mock's direct assessment path returns the Go zero value,
+	// whose empty CalibrationStatus keeps EligibleForAutomation closed.
+	assessment, err := cf.LatestAssessment(t.Context())
+	if err != nil {
+		t.Fatalf("LatestAssessment: %v", err)
+	}
+	if !reflect.DeepEqual(assessment, capitalflow.CapitalFlowAssessment{}) {
+		t.Errorf("LatestAssessment returned non-zero assessment %+v; stub contract is zero-value", assessment)
+	}
+
+	// Two handler calls must be deeply equal — neither must regress
+	// because assessment status changed between calls.
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	_, first := h.HandleRecommendations(req)
+	_, second := h.HandleRecommendations(req)
+
+	firstRec, ok := first.(TierRecommendation)
+	if !ok {
+		t.Fatalf("first: expected TierRecommendation, got %T", first)
+	}
+	secondRec, ok := second.(TierRecommendation)
+	if !ok {
+		t.Fatalf("second: expected TierRecommendation, got %T", second)
+	}
+	if !recommendationsDeepEqual(firstRec, secondRec) {
+		t.Errorf("recommendation drifted between two consecutive reads (CF-INV-08):\n  first=%+v\n  second=%+v",
+			firstRec, secondRec)
+	}
+}
+
+// recommendationsDeepEqual compares the recommendation-shaped fields
+// that the recommender handler emits. We avoid reflect.DeepEqual on the
+// whole struct because TierRecommendation embeds an `any` Signals
+// field which may carry non-comparable types across call paths; this
+// helper keeps the assertion scope to the CF-INV-08 contract.
+func recommendationsDeepEqual(a, b TierRecommendation) bool {
+	if a.Tier != b.Tier || a.Warning != b.Warning {
+		return false
+	}
+	if a.Market.Regime != b.Market.Regime ||
+		a.Market.RegimeLabel != b.Market.RegimeLabel ||
+		a.Market.StressIndex != b.Market.StressIndex ||
+		a.Market.CapitalFlow != b.Market.CapitalFlow {
+		return false
+	}
+	if (a.Market.CapitalFlowDetail == nil) != (b.Market.CapitalFlowDetail == nil) {
+		return false
+	}
+	if a.Market.CapitalFlowDetail != nil && b.Market.CapitalFlowDetail != nil {
+		if a.Market.CapitalFlowDetail.QualityLabel != b.Market.CapitalFlowDetail.QualityLabel ||
+			a.Market.CapitalFlowDetail.QualityScore != b.Market.CapitalFlowDetail.QualityScore ||
+			a.Market.CapitalFlowDetail.ResonanceDir != b.Market.CapitalFlowDetail.ResonanceDir ||
+			a.Market.CapitalFlowDetail.DominantForce != b.Market.CapitalFlowDetail.DominantForce ||
+			a.Market.CapitalFlowDetail.Date != b.Market.CapitalFlowDetail.Date {
+			return false
+		}
+	}
+	if len(a.Market.EventsToday) != len(b.Market.EventsToday) {
+		return false
+	}
+	for i := range a.Market.EventsToday {
+		if a.Market.EventsToday[i] != b.Market.EventsToday[i] {
+			return false
+		}
+	}
+	if (a.Strategies == nil) != (b.Strategies == nil) {
+		return false
+	}
+	if a.Strategies != nil && b.Strategies != nil {
+		if a.Strategies.Active != b.Strategies.Active ||
+			a.Strategies.EntrySignal != b.Strategies.EntrySignal ||
+			a.Strategies.StopLoss != b.Strategies.StopLoss {
+			return false
+		}
+	}
+	return true
 }

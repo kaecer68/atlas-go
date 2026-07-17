@@ -3,6 +3,7 @@ package recommender
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestNewNarrativeAdapterFunc_NilNil_EmptyReturn(t *testing.T) {
 }
 
 func TestNewCapitalFlowFunc_NilNil_Graceful(t *testing.T) {
-	a := NewCapitalFlowFunc(nil, nil)
+	a := NewCapitalFlowFunc(nil, nil, nil)
 	if a == nil {
 		t.Fatal("adapter must not be nil")
 	}
@@ -48,23 +49,42 @@ func TestNewCapitalFlowFunc_NilNil_Graceful(t *testing.T) {
 	if summary.DominantForce != "" || summary.QualityLabel != "" {
 		t.Errorf("expected zero-value SummaryReport, got %+v", summary)
 	}
+	assessment, err := a.LatestAssessment(context.Background())
+	if err != nil {
+		t.Errorf("nil-func LatestAssessment should be graceful, got %v", err)
+	}
+	if !reflect.DeepEqual(assessment, capitalflow.CapitalFlowAssessment{}) {
+		t.Errorf("expected zero-value CapitalFlowAssessment, got %+v", assessment)
+	}
 }
 
 func TestNewCapitalFlowFunc_PassThrough(t *testing.T) {
+	wantAssessment := capitalflow.CapitalFlowAssessment{
+		AsOfTradingDate:   "2026-07-08",
+		CalibrationStatus: capitalflow.CalibrationEligible,
+		Institutional: capitalflow.DirectionalAssessment{
+			Available: true,
+			Direction: "bullish",
+			Aligned:   []capitalflow.ForceName{capitalflow.ForceForeign},
+		},
+	}
 	wantDaily := capitalflow.DailyReport{
 		Date:         time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
 		QualityLabel: "inflow",
 		Summary:      "test pass-through",
+		Assessment:   wantAssessment,
 	}
 	wantSummary := capitalflow.SummaryReport{
 		Date:          wantDaily.Date,
 		QualityLabel:  "inflow",
 		DominantForce: capitalflow.ForceForeign,
 		Summary:       "foreign-led inflow",
+		Assessment:    wantAssessment,
 	}
 	a := NewCapitalFlowFunc(
 		func(ctx context.Context) (capitalflow.DailyReport, error) { return wantDaily, nil },
 		func(ctx context.Context) (capitalflow.SummaryReport, error) { return wantSummary, nil },
+		func(ctx context.Context) (capitalflow.CapitalFlowAssessment, error) { return wantAssessment, nil },
 	)
 	gotDaily, err := a.LatestDaily(context.Background())
 	if err != nil {
@@ -80,6 +100,13 @@ func TestNewCapitalFlowFunc_PassThrough(t *testing.T) {
 	if gotSummary.DominantForce != wantSummary.DominantForce {
 		t.Errorf("SummaryReport.DominantForce = %q, want %q", gotSummary.DominantForce, wantSummary.DominantForce)
 	}
+	gotAssessment, err := a.LatestAssessment(context.Background())
+	if err != nil {
+		t.Fatalf("LatestAssessment: %v", err)
+	}
+	if !reflect.DeepEqual(gotAssessment, wantAssessment) {
+		t.Errorf("LatestAssessment = %+v, want %+v", gotAssessment, wantAssessment)
+	}
 }
 
 func TestNewCapitalFlowFunc_LatestOnlyOptIn(t *testing.T) {
@@ -89,6 +116,7 @@ func TestNewCapitalFlowFunc_LatestOnlyOptIn(t *testing.T) {
 	}
 	a := NewCapitalFlowFunc(
 		func(ctx context.Context) (capitalflow.DailyReport, error) { return wantDaily, nil },
+		nil,
 		nil,
 	)
 	got, err := a.LatestDaily(context.Background())
@@ -126,14 +154,25 @@ func TestNewCapitalFlowAdapter_NilProvider_Graceful(t *testing.T) {
 	if summary.DominantForce != "" {
 		t.Errorf("expected zero-value SummaryReport, got %+v", summary)
 	}
+	assessment, err := a.LatestAssessment(context.Background())
+	if err != nil {
+		t.Errorf("nil provider LatestAssessment should be graceful, got %v", err)
+	}
+	if !reflect.DeepEqual(assessment, capitalflow.CapitalFlowAssessment{}) {
+		t.Errorf("expected zero-value CapitalFlowAssessment, got %+v", assessment)
+	}
 }
 
-func TestNewCapitalFlowAdapter_SummaryPassThrough(t *testing.T) {
+func TestNewCapitalFlowAdapter_SummaryAndAssessmentPassThrough(t *testing.T) {
 	p := &fakeCapitalFlowProvider{
 		summary: capitalflow.SummaryReport{
 			Date:          time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
 			QualityLabel:  "strong_inflow",
 			DominantForce: capitalflow.ForceForeign,
+		},
+		assessment: capitalflow.CapitalFlowAssessment{
+			CalibrationStatus: capitalflow.CalibrationEligible,
+			Reasons:           []string{"validated"},
 		},
 	}
 	a := NewCapitalFlowAdapter(p)
@@ -146,6 +185,13 @@ func TestNewCapitalFlowAdapter_SummaryPassThrough(t *testing.T) {
 	}
 	if got.QualityLabel != p.summary.QualityLabel {
 		t.Errorf("QualityLabel = %q, want %q", got.QualityLabel, p.summary.QualityLabel)
+	}
+	assessment, err := a.LatestAssessment(context.Background())
+	if err != nil {
+		t.Fatalf("LatestAssessment: %v", err)
+	}
+	if !reflect.DeepEqual(assessment, p.assessment) {
+		t.Errorf("LatestAssessment = %+v, want %+v", assessment, p.assessment)
 	}
 }
 
@@ -224,10 +270,12 @@ func TestNewComparisonEngineAdapter_PassThrough(t *testing.T) {
 // --- fakes ---
 
 type fakeCapitalFlowProvider struct {
-	daily      capitalflow.DailyReport
-	dailyErr   error
-	summary    capitalflow.SummaryReport
-	summaryErr error
+	daily         capitalflow.DailyReport
+	dailyErr      error
+	summary       capitalflow.SummaryReport
+	summaryErr    error
+	assessment    capitalflow.CapitalFlowAssessment
+	assessmentErr error
 }
 
 func (f *fakeCapitalFlowProvider) LatestDaily(context.Context) (capitalflow.DailyReport, error) {
@@ -236,6 +284,10 @@ func (f *fakeCapitalFlowProvider) LatestDaily(context.Context) (capitalflow.Dail
 
 func (f *fakeCapitalFlowProvider) Summary(context.Context) (capitalflow.SummaryReport, error) {
 	return f.summary, f.summaryErr
+}
+
+func (f *fakeCapitalFlowProvider) LatestAssessment(context.Context) (capitalflow.CapitalFlowAssessment, error) {
+	return f.assessment, f.assessmentErr
 }
 
 type fakePredictor struct {

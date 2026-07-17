@@ -313,6 +313,17 @@ export interface CapexCycleThresholdConfig {
   maintenance_revenue_min: number;
 }
 
+export interface CapitalFlowAssessment {
+  as_of_trading_date: string;
+  calibration_status: string;
+  institutional: DirectionalAssessment;
+  behavioral: DirectionalAssessment;
+  foreign_positioning: DirectionalAssessment;
+  cross_market: DirectionalAssessment;
+  primary_flow?: string;
+  reasons?: string[];
+}
+
 export interface CapitalFlowDetail {
   date: string;
   quality_label: string;
@@ -704,6 +715,10 @@ export interface DailyReport {
   quality_score: number;
   quality_label: string;
   summary: string;
+  assessment: CapitalFlowAssessment;
+  legacy_quality: boolean;
+  dominant_actor?: string;
+  dominant_signal?: string;
 }
 
 export interface DailySummaryReport {
@@ -876,6 +891,14 @@ export interface DetectionResult {
   detected_at: string;
   source: string;
   metadata?: Record<string, string>;
+}
+
+export interface DirectionalAssessment {
+  available: boolean;
+  direction?: string;
+  aligned?: string[];
+  opposing?: string[];
+  reasons?: string[];
 }
 
 export interface DividendRecord {
@@ -1376,10 +1399,19 @@ export interface ForceScore {
   force: string;
   role?: string;
   deprecated?: boolean;
+  dimension_role: string;
+  evidence_class?: string;
+  source_id?: string;
+  unit?: string;
+  as_of_trading_date?: string;
+  sample_count?: number;
+  calibration_status?: string;
+  participates_in_actor_consensus?: boolean;
   raw_value: number;
   z_score: number;
   trend: string;
-  weight: number;
+  weight?: number;
+  weight_deprecated?: boolean;
   leading_z?: number;
   leading_trend?: string;
   data_available?: boolean;
@@ -3660,6 +3692,10 @@ export interface SummaryReport {
   dominant_force: string;
   forces: ForceScore[];
   summary: string;
+  assessment: CapitalFlowAssessment;
+  legacy_quality: boolean;
+  dominant_actor?: string;
+  dominant_signal?: string;
 }
 
 export interface SupplyChainNode {

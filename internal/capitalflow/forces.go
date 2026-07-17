@@ -48,23 +48,57 @@ func NewForceExtractor() *ForceExtractor {
 // spec §8.3 / CF-INV-06 (no zero-valued samples in the rolling
 // store, no "neutral" interpretation of missing data).
 //
-// tradingDate is reserved for future audit hooks (per spec §7's
-// `as_of_trading_date` field); the extractor itself does not branch
-// on it today — callers pass the trading date through so the
-// ForceScore pipeline can carry it without growing the signature.
+// tradingDate is the as-of trading day (YYYY-MM-DD); it is threaded
+// into every ForceScore.AsOfTradingDate so the E07 assessment can
+// carry an explicit timestamp without growing any caller signature.
 func (e *ForceExtractor) Score(
 	snap marketdata.MacroDataSnapshot,
 	tradingDate string,
 	history map[ForceName][]RollingSample,
 ) []ForceScore {
-	forces := make([]ForceScore, 0, 7)
-	forces = append(forces, e.scoreForeign(snap, history))
-	forces = append(forces, e.scoreFuturesDeprecated(snap, history))
-	forces = append(forces, e.scoreTSMADR(snap, history))
-	forces = append(forces, e.scoreInstitutional(snap, history))
-	forces = append(forces, e.scoreDealer(snap, history))
-	forces = append(forces, e.scoreGovernment(snap, history))
-	forces = append(forces, e.scoreRetail(snap, history))
+	raw := []ForceScore{
+		e.scoreForeign(snap, history),
+		e.scoreFuturesDeprecated(snap, history),
+		e.scoreTSMADR(snap, history),
+		e.scoreInstitutional(snap, history),
+		e.scoreDealer(snap, history),
+		e.scoreGovernment(snap, history),
+		e.scoreRetail(snap, history),
+	}
+	forces := make([]ForceScore, 0, len(raw))
+	for _, f := range raw {
+		prov := ComputeForceProvenance(f.Force)
+		f.DimensionRole = prov.DimensionRole
+		f.SourceID = prov.SourceID
+		f.Unit = prov.Unit
+		f.ParticipatesInActorConsensus = prov.ParticipatesInActorConsensus
+		f.AsOfTradingDate = tradingDate
+		f.SampleCount = len(history[f.Force])
+		// E07 / spec §7.2 / CF-INV-07: the legacy cross-unit weight
+		// is suppressed. We set Weight=0 and WeightDeprecated=true
+		// here (in addition to applyForceWeights) so callers that
+		// read ForceScore directly — bypassing the report
+		// generator, e.g. Score() tests — still see the suppressed
+		// shape rather than an uninitialised Weight.
+		f.Weight = 0
+		f.WeightDeprecated = true
+		// E07 / spec §7 — every fresh reading reports
+		// CalibrationStatus="calibrating" until H-CF-02 is validated.
+		f.CalibrationStatus = CalibrationCalibrating
+		switch f.Force {
+		case ForceForeign, ForceInstitutional, ForceDealer:
+			f.EvidenceClass = EvidenceOfficial
+		case ForceGovernment:
+			f.EvidenceClass = EvidenceProxy
+		case ForceRetail:
+			f.EvidenceClass = EvidenceOfficialDerived
+		case ForceFutures:
+			f.EvidenceClass = EvidenceOfficial
+		case ForceTSMADR:
+			f.EvidenceClass = EvidenceCrossMarket
+		}
+		forces = append(forces, f)
+	}
 	return forces
 }
 
@@ -276,6 +310,64 @@ func (e *ForceExtractor) scoreRetail(snap marketdata.MacroDataSnapshot, history 
 		Trend:         trendFor(z),
 		DataAvailable: true,
 	}
+}
+
+// ComputeForceProvenance is a thin lookup helper that returns the
+// 4-field provenance row for a given dimension (spec §6 / §7 /
+// CF-INV-01). Score() calls it once per dimension to populate the
+// matching ForceScore fields; tests call it directly to anchor the
+// 7×4 provenance matrix without going through a full Extract run.
+//
+// Values are static per the spec — the source registry
+// (rolling_store.go) and the E07 dimension-role constants
+// (types.go) are the source of truth. Behavioral proxy dimensions
+// (government / retail) report ParticipatesInActorConsensus=false
+// so the actor consensus filter (CF-INV-09) excludes them from
+// Aligned/Opposing — the test contract is that only the three
+// official_actor dimensions vote in actor consensus, and a
+// behavioral_proxy dimension's "true" reading still does not.
+//
+// Unknown dimensions get the zero-value row so an unrecognised
+// caller cannot trigger a panic.
+func ComputeForceProvenance(force ForceName) ForceProvenance {
+	switch force {
+	case ForceForeign, ForceInstitutional, ForceDealer:
+		return ForceProvenance{
+			DimensionRole:                DimensionRoleOfficialActor,
+			SourceID:                     SourceTWSET86,
+			Unit:                         "hundred_million_shares",
+			ParticipatesInActorConsensus: true,
+		}
+	case ForceGovernment:
+		return ForceProvenance{
+			DimensionRole:                DimensionRoleBehavioralProxy,
+			SourceID:                     SourceGovernmentOperator,
+			Unit:                         "twd",
+			ParticipatesInActorConsensus: false,
+		}
+	case ForceRetail:
+		return ForceProvenance{
+			DimensionRole:                DimensionRoleBehavioralProxy,
+			SourceID:                     SourceTWSEODDLOT,
+			Unit:                         "pct_composite",
+			ParticipatesInActorConsensus: false,
+		}
+	case ForceFutures:
+		return ForceProvenance{
+			DimensionRole:                DimensionRolePositioningIndicator,
+			SourceID:                     SourceTAIFEXInst,
+			Unit:                         "contracts",
+			ParticipatesInActorConsensus: false,
+		}
+	case ForceTSMADR:
+		return ForceProvenance{
+			DimensionRole:                DimensionRoleCrossMarketSignal,
+			SourceID:                     SourceSECTSMC,
+			Unit:                         "pct",
+			ParticipatesInActorConsensus: false,
+		}
+	}
+	return ForceProvenance{}
 }
 
 // zScoreFromSamples computes (raw - mean) / stddev across the given

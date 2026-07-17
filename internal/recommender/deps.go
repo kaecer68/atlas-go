@@ -29,6 +29,10 @@ type NarrativeProvider interface {
 // CapitalFlowProvider 供 recommender 查詢當日七大資金勢力 summary。
 // 對應 producer: capitalflow.Service (added in commit 661f2dc7; Summary added
 // in commit b081f2f5 / PR #1002).
+//
+// Automating callers MUST gate assessment-derived decisions on
+// CapitalFlowAssessment.EligibleForAutomation(); calibrating/degraded
+// assessments are explanation-only and must not affect automated actions.
 type CapitalFlowProvider interface {
 	// LatestDaily returns the full DailyReport (forces + resonance + quality).
 	// Recommender reads the Summary field for response.market.capital_flow.
@@ -43,6 +47,10 @@ type CapitalFlowProvider interface {
 	// than erroring — see adapters.go and capitalFlowFromCapitalFlow for the
 	// graceful-degradation contract.
 	Summary(ctx context.Context) (capitalflow.SummaryReport, error)
+	// LatestAssessment returns the structured E07 assessment for direct
+	// consumers. Handler request paths derive Assessment from LatestDaily so
+	// they do not trigger an additional macro snapshot fetch.
+	LatestAssessment(ctx context.Context) (capitalflow.CapitalFlowAssessment, error)
 }
 
 // EventPredictor 供 recommender 查詢當日事件 + 短期預測。

@@ -129,3 +129,17 @@ func TestWireRecommenderDeps_FileStoreAcceptanceProductionPath(t *testing.T) {
 		t.Fatalf("wired Service.Store() = %p, want provided file store %p", got, store)
 	}
 }
+
+func TestWireRecommenderDeps_ExposesLatestAssessment(t *testing.T) {
+	deps := WireRecommenderDeps(WireDeps{
+		WorkDir:       t.TempDir(),
+		MacroProvider: stubMacroProvider{},
+	})
+	assessment, err := deps.CapitalFlow.LatestAssessment(t.Context())
+	if err != nil {
+		t.Fatalf("LatestAssessment: %v", err)
+	}
+	if assessment.CalibrationStatus != capitalflow.CalibrationCalibrating {
+		t.Errorf("CalibrationStatus = %q, want %q", assessment.CalibrationStatus, capitalflow.CalibrationCalibrating)
+	}
+}

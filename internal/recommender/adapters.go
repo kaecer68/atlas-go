@@ -58,24 +58,26 @@ func (a *narrativeAdapter) BuildMarketNarrativeData(ctx context.Context) (narrat
 type capitalFlowServiceProvider interface {
 	LatestDaily(ctx context.Context) (capitalflow.DailyReport, error)
 	Summary(ctx context.Context) (capitalflow.SummaryReport, error)
+	LatestAssessment(ctx context.Context) (capitalflow.CapitalFlowAssessment, error)
 }
 
 // NewCapitalFlowAdapter wires a *capitalflow.Service into
 // CapitalFlowProvider. The provider may be nil; in that case the
-// adapter degrades to the "資金流向均衡" fallback for both reports.
+// adapter degrades to the "資金流向均衡" fallback for all reports.
 func NewCapitalFlowAdapter(provider capitalFlowServiceProvider) CapitalFlowProvider {
 	if provider == nil {
-		return NewCapitalFlowFunc(nil, nil)
+		return NewCapitalFlowFunc(nil, nil, nil)
 	}
-	return NewCapitalFlowFunc(provider.LatestDaily, provider.Summary)
+	return NewCapitalFlowFunc(provider.LatestDaily, provider.Summary, provider.LatestAssessment)
 }
 
-// NewCapitalFlowFunc wraps LatestDaily and Summary functions. Either
-// may be nil — the adapter substitutes zero-value fallbacks so callers
-// can opt into one report without wiring the other.
+// NewCapitalFlowFunc wraps LatestDaily, Summary, and LatestAssessment
+// functions. Any function may be nil — the adapter substitutes zero-value
+// fallbacks so callers can opt into one report without wiring the others.
 func NewCapitalFlowFunc(
 	latestDaily func(context.Context) (capitalflow.DailyReport, error),
 	summary func(context.Context) (capitalflow.SummaryReport, error),
+	latestAssessment func(context.Context) (capitalflow.CapitalFlowAssessment, error),
 ) CapitalFlowProvider {
 	if latestDaily == nil {
 		latestDaily = func(context.Context) (capitalflow.DailyReport, error) {
@@ -87,12 +89,22 @@ func NewCapitalFlowFunc(
 			return capitalflow.SummaryReport{}, nil
 		}
 	}
-	return &capitalFlowAdapter{latestDaily: latestDaily, summary: summary}
+	if latestAssessment == nil {
+		latestAssessment = func(context.Context) (capitalflow.CapitalFlowAssessment, error) {
+			return capitalflow.CapitalFlowAssessment{}, nil
+		}
+	}
+	return &capitalFlowAdapter{
+		latestDaily:      latestDaily,
+		summary:          summary,
+		latestAssessment: latestAssessment,
+	}
 }
 
 type capitalFlowAdapter struct {
-	latestDaily func(context.Context) (capitalflow.DailyReport, error)
-	summary     func(context.Context) (capitalflow.SummaryReport, error)
+	latestDaily      func(context.Context) (capitalflow.DailyReport, error)
+	summary          func(context.Context) (capitalflow.SummaryReport, error)
+	latestAssessment func(context.Context) (capitalflow.CapitalFlowAssessment, error)
 }
 
 func (a *capitalFlowAdapter) LatestDaily(ctx context.Context) (capitalflow.DailyReport, error) {
@@ -101,6 +113,10 @@ func (a *capitalFlowAdapter) LatestDaily(ctx context.Context) (capitalflow.Daily
 
 func (a *capitalFlowAdapter) Summary(ctx context.Context) (capitalflow.SummaryReport, error) {
 	return a.summary(ctx)
+}
+
+func (a *capitalFlowAdapter) LatestAssessment(ctx context.Context) (capitalflow.CapitalFlowAssessment, error) {
+	return a.latestAssessment(ctx)
 }
 
 // =====================================================================

@@ -1,7 +1,6 @@
 package capitalflow
 
 import (
-	"math"
 	"strings"
 	"time"
 )
@@ -14,29 +13,23 @@ import (
 func GenerateDailyReport(date time.Time, forces []ForceScore, resonance ResonanceResult) DailyReport {
 	quality := computeQualityScore(forces)
 	label := qualityLabel(quality)
-
-	// Find dominant force (highest absolute Z-score)
-	dominant := ForceRetail
-	maxAbsZ := 0.0
-	for _, f := range forces {
-		absZ := f.ZScore
-		if absZ < 0 {
-			absZ = -absZ
-		}
-		if absZ > maxAbsZ {
-			maxAbsZ = absZ
-			dominant = f.Force
-		}
+	assessment := ComputeCapitalFlowAssessment(forces)
+	if assessment.AsOfTradingDate == "" && !date.IsZero() {
+		assessment.AsOfTradingDate = date.Format("2006-01-02")
 	}
-	_ = dominant // used later in summary context
+	dominantActor, dominantSignal := dominantActorAndSignal(forces)
 
 	return DailyReport{
-		Date:         date,
-		Forces:       applyForceWeights(forces),
-		Resonance:    resonance,
-		QualityScore: round(quality, 2),
-		QualityLabel: label,
-		Summary:      buildSummary(resonance, quality, label),
+		Date:           date,
+		Forces:         applyForceWeights(forces),
+		Resonance:      resonance,
+		QualityScore:   round(quality, 2),
+		QualityLabel:   label,
+		Summary:        buildSummary(resonance, quality, label, assessment),
+		Assessment:     assessment,
+		LegacyQuality:  true,
+		DominantActor:  dominantActor,
+		DominantSignal: dominantSignal,
 	}
 }
 
@@ -44,28 +37,31 @@ func GenerateDailyReport(date time.Time, forces []ForceScore, resonance Resonanc
 func GenerateSummaryReport(date time.Time, forces []ForceScore, resonance ResonanceResult) SummaryReport {
 	quality := computeQualityScore(forces)
 	label := qualityLabel(quality)
-
-	dominant := ForceRetail
-	maxAbsZ := 0.0
-	for _, f := range forces {
-		absZ := f.ZScore
-		if absZ < 0 {
-			absZ = -absZ
-		}
-		if absZ > maxAbsZ {
-			maxAbsZ = absZ
-			dominant = f.Force
-		}
+	assessment := ComputeCapitalFlowAssessment(forces)
+	if assessment.AsOfTradingDate == "" && !date.IsZero() {
+		assessment.AsOfTradingDate = date.Format("2006-01-02")
+	}
+	dominantActor, dominantSignal := dominantActorAndSignal(forces)
+	dominant := dominantActor
+	if dominant == "" {
+		dominant = dominantSignal
+	}
+	if dominant == "" {
+		dominant = ForceRetail
 	}
 
 	return SummaryReport{
-		Date:          date,
-		QualityScore:  round(quality, 2),
-		QualityLabel:  label,
-		ResonanceDir:  resonance.Direction,
-		DominantForce: dominant,
-		Forces:        applyForceWeights(forces),
-		Summary:       buildShortSummary(label, resonance, dominant),
+		Date:           date,
+		QualityScore:   round(quality, 2),
+		QualityLabel:   label,
+		ResonanceDir:   resonance.Direction,
+		DominantForce:  dominant,
+		Forces:         applyForceWeights(forces),
+		Summary:        buildShortSummary(label, resonance, dominant, assessment),
+		Assessment:     assessment,
+		LegacyQuality:  true,
+		DominantActor:  dominantActor,
+		DominantSignal: dominantSignal,
 	}
 }
 
@@ -100,7 +96,7 @@ func qualityLabel(score float64) string {
 	}
 }
 
-func buildSummary(resonance ResonanceResult, quality float64, label string) string {
+func buildSummary(resonance ResonanceResult, quality float64, label string, assessment CapitalFlowAssessment) string {
 	var parts []string
 
 	// Quality
@@ -132,11 +128,17 @@ func buildSummary(resonance ResonanceResult, quality float64, label string) stri
 		parts = append(parts, "偏空格局")
 	}
 
+	// E07 calibration gate — surface the "calibrating" status
+	// so the home-page renderer can show the spec §9.5 pill.
+	if assessment.CalibrationStatus == CalibrationCalibrating {
+		parts = append(parts, "校準中")
+	}
+
 	_ = quality
 	return strings.Join(parts, "，") + "。"
 }
 
-func buildShortSummary(label string, resonance ResonanceResult, dominant ForceName) string {
+func buildShortSummary(label string, resonance ResonanceResult, dominant ForceName, assessment CapitalFlowAssessment) string {
 	_ = dominant
 	var parts []string
 	switch label {
@@ -158,22 +160,57 @@ func buildShortSummary(label string, resonance ResonanceResult, dominant ForceNa
 		parts = append(parts, "勢力對抗")
 	}
 
+	// E07 calibration gate (spec §9.5 / CF-INV-13).
+	if assessment.CalibrationStatus == CalibrationCalibrating {
+		parts = append(parts, "校準中")
+	}
+
 	return strings.Join(parts, "，") + "。"
 }
 
-// applyForceWeights computes a dynamic positive weight for each force from its
-// absolute raw value relative to the total absolute raw value across forces.
-// The returned slice is a copy so callers do not mutate the original scores.
-func applyForceWeights(forces []ForceScore) []ForceScore {
-	total := 0.0
+// dominantActorAndSignal picks the highest-|Z| official_actor
+// dimension (DominantActor) and the highest-|Z| signal dimension
+// (positioning_indicator / cross_market_signal) separately, per
+// spec §7 / CF-INV-10. The two fields are independently
+// addressable; a strong TSM ADR must NOT win the actor slot.
+func dominantActorAndSignal(forces []ForceScore) (actor ForceName, signal ForceName) {
+	var actorMaxAbs, signalMaxAbs float64
 	for _, f := range forces {
-		total += math.Abs(f.RawValue)
+		absZ := f.ZScore
+		if absZ < 0 {
+			absZ = -absZ
+		}
+		switch f.DimensionRole {
+		case DimensionRoleOfficialActor:
+			if absZ > actorMaxAbs {
+				actorMaxAbs = absZ
+				actor = f.Force
+			}
+		case DimensionRolePositioningIndicator, DimensionRoleCrossMarketSignal:
+			if absZ > signalMaxAbs {
+				signalMaxAbs = absZ
+				signal = f.Force
+			}
+		}
 	}
+	return actor, signal
+}
+
+// applyForceWeights returns a deep copy of forces with every
+// Weight forced to 0 and WeightDeprecated set to true. Per spec
+// §7.2 / CF-INV-07 the legacy cross-unit weight is suppressed
+// because it cannot meaningfully aggregate different unit scales
+// (TWD vs shares vs contracts); new consumers must read the
+// DominantActor / DominantSignal / Assessment fields instead.
+//
+// Note: the input slice is not mutated; a fresh slice is
+// returned. This mirrors the old semantics (a copy was always
+// returned) so existing callers that ignore Weight keep working.
+func applyForceWeights(forces []ForceScore) []ForceScore {
 	out := make([]ForceScore, len(forces))
 	for i, f := range forces {
-		if total > 0 {
-			f.Weight = math.Round((math.Abs(f.RawValue)/total)*100) / 100
-		}
+		f.Weight = 0
+		f.WeightDeprecated = true
 		out[i] = f
 	}
 	return out

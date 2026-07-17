@@ -1,7 +1,6 @@
 package recommender
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
@@ -42,8 +42,9 @@ type MarketLight struct {
 }
 
 // CapitalFlowDetail is the structured counterpart to CapitalFlow string.
-// Sourced from capitalflow.SummaryReport. New consumers should prefer
-// this when present; the string field is kept for backward compatibility.
+// Derived from the same capitalflow.DailyReport used for the summary string,
+// avoiding a second provider snapshot fetch. New consumers should prefer this
+// when present; the string field is kept for backward compatibility.
 type CapitalFlowDetail struct {
 	Date          string  `json:"date"`
 	QualityLabel  string  `json:"quality_label"`
@@ -134,16 +135,31 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 		}
 	}
 
+	var capitalFlowReport *capitalflow.DailyReport
+	var capitalFlowErr error
+	if h.capitalFlow != nil {
+		report, err := h.capitalFlow.LatestDaily(r.Context())
+		capitalFlowErr = err
+		if err == nil {
+			capitalFlowReport = &report
+		}
+	}
+	assessmentCalibrating := capitalFlowReport != nil &&
+		capitalFlowReport.Assessment.CalibrationStatus == capitalflow.CalibrationCalibrating
+
 	rec := TierRecommendation{
 		Tier: string(tier),
 		Market: MarketLight{
 			Regime:            regimeFromNarrative(h.narrative, &warnings),
 			RegimeLabel:       "盤勢中性",
 			StressIndex:       stressIndexFromNarrative(h.narrative, &warnings),
-			CapitalFlow:       capitalFlowFromCapitalFlow(h.capitalFlow, &warnings),
-			CapitalFlowDetail: capitalFlowDetailFromCapitalFlow(h.capitalFlow, &warnings),
+			CapitalFlow:       capitalFlowFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
+			CapitalFlowDetail: capitalFlowDetailFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
 			EventsToday:       eventsFromPredictor(h.eventPredictor, &warnings),
 		},
+	}
+	if assessmentCalibrating {
+		warnings = append(warnings, "capital_flow_assessment_calibrating")
 	}
 
 	h.detectRegimeChange(rec.Market.Regime)
@@ -259,40 +275,43 @@ func stressIndexFromNarrative(p NarrativeProvider, w *[]string) float64 {
 	return tcsi.Score
 }
 
-// capitalFlowFromCapitalFlow reads CapitalFlowProvider.LatestDaily() and
-// returns the Summary string, or fallback.
-func capitalFlowFromCapitalFlow(p CapitalFlowProvider, w *[]string) string {
-	if p == nil {
-		*w = append(*w, "capital_flow_unavailable")
-		return "資金流向均衡"
-	}
-	report, err := p.LatestDaily(context.Background())
-	if err != nil || report.Summary == "" {
+// capitalFlowFromCapitalFlow derives the legacy summary string from the one
+// DailyReport fetched by HandleRecommendations. It never calls the provider.
+func capitalFlowFromCapitalFlow(report *capitalflow.DailyReport, fetchErr error, w *[]string) string {
+	if report == nil || fetchErr != nil || report.Summary == "" {
 		*w = append(*w, "capital_flow_unavailable")
 		return "資金流向均衡"
 	}
 	return report.Summary
 }
 
-// capitalFlowDetailFromCapitalFlow reads CapitalFlowProvider.Summary() and
-// returns a structured CapitalFlowDetail, or nil if unavailable. Independent
-// of capitalFlowFromCapitalFlow so callers can opt in to the new shape
-// without forcing both fields to be populated by the same fallback path.
-func capitalFlowDetailFromCapitalFlow(p CapitalFlowProvider, w *[]string) *CapitalFlowDetail {
-	if p == nil {
+// capitalFlowDetailFromCapitalFlow derives the structured legacy detail from
+// the same DailyReport used for CapitalFlow. It never calls Summary or
+// LatestAssessment, so one recommendation request consumes one macro snapshot.
+func capitalFlowDetailFromCapitalFlow(report *capitalflow.DailyReport, fetchErr error, w *[]string) *CapitalFlowDetail {
+	if report == nil {
+		if fetchErr != nil {
+			*w = append(*w, "capital_flow_detail_unavailable")
+		}
 		return nil
 	}
-	report, err := p.Summary(context.Background())
-	if err != nil || report.QualityLabel == "" {
+	if fetchErr != nil || report.QualityLabel == "" {
 		*w = append(*w, "capital_flow_detail_unavailable")
 		return nil
+	}
+	dominant := report.DominantActor
+	if dominant == "" {
+		dominant = report.DominantSignal
+	}
+	if dominant == "" {
+		dominant = capitalflow.ForceRetail
 	}
 	return &CapitalFlowDetail{
 		Date:          report.Date.Format("2006-01-02"),
 		QualityLabel:  report.QualityLabel,
 		QualityScore:  report.QualityScore,
-		ResonanceDir:  report.ResonanceDir,
-		DominantForce: string(report.DominantForce),
+		ResonanceDir:  report.Resonance.Direction,
+		DominantForce: string(dominant),
 	}
 }
 

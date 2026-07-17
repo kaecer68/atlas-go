@@ -1,6 +1,7 @@
 package eventdriven
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,16 +9,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 type stubCF struct {
-	score float64
-	label string
+	score  float64
+	label  string
+	status string
 }
 
 func (s *stubCF) QualityScore() float64 { return s.score }
 func (s *stubCF) QualityLabel() string  { return s.label }
+func (s *stubCF) LatestAssessment(context.Context) (capitalflow.CapitalFlowAssessment, error) {
+	status := s.status
+	if status == "" {
+		status = capitalflow.CalibrationEligible
+	}
+	return capitalflow.CapitalFlowAssessment{CalibrationStatus: status}, nil
+}
 
 func newTestHandler() *Handler {
 	cal := industry.NewEventCalendar()

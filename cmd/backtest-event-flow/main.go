@@ -47,6 +47,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -497,6 +498,13 @@ type staticCF struct {
 
 func (s *staticCF) QualityScore() float64 { return s.score }
 func (s *staticCF) QualityLabel() string  { return s.label }
+func (s *staticCF) LatestAssessment(context.Context) (capitalflow.CapitalFlowAssessment, error) {
+	// Backtest scores are explicit replay inputs rather than live, uncalibrated
+	// observations; mark the fixture eligible to preserve historical behavior.
+	return capitalflow.CapitalFlowAssessment{
+		CalibrationStatus: capitalflow.CalibrationEligible,
+	}, nil
+}
 
 // ------------------------------------------------------------------
 // CLI parsing and entry.
