@@ -12,8 +12,9 @@ import (
 
 // Handler serves subscription and auth endpoints.
 type Handler struct {
-	store *Store
-	jwt   *JWTManager
+	store    *Store
+	jwt      *JWTManager
+	waitlist *WaitlistStore
 }
 
 // NewHandler creates a subscription HTTP handler.
@@ -38,6 +39,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, allowGuest bool) {
 	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
 	mux.Handle("GET /api/user/profile", mid.Wrap(http.HandlerFunc(h.handleProfile)))
 	mux.Handle("GET /api/user/subscription", mid.Wrap(http.HandlerFunc(h.handleSubscription)))
+	if h.waitlist != nil {
+		mux.HandleFunc("POST /api/waitlist", h.handleWaitlist)
+	}
 }
 
 // setAuthCookie writes the HttpOnly token cookie. Shared by /register

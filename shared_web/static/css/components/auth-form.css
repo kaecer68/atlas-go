@@ -267,3 +267,41 @@
   justify-content: center;
   gap: var(--space-md);
 }
+
+/* waitlist (C05 — premium coming-soon email capture) */
+.waitlist-form {
+  margin-top: 12px;
+  text-align: center;
+}
+.waitlist-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.waitlist-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.waitlist-row input {
+  flex: 1;
+  max-width: 200px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  background: var(--bg-card);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.waitlist-msg {
+  font-size: 0.82rem;
+  margin-top: 8px;
+  min-height: 1em;
+}
+.waitlist-ok {
+  color: var(--color-success);
+}
+.waitlist-error {
+  color: var(--color-danger);
+}

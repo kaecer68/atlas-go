@@ -729,7 +729,8 @@ func run(args []string, deps appDeps) error {
 				jwtSecret = "atlas-dev-secret-change-in-prod"
 			}
 			jwtMgr := subscription.NewJWTManager(jwtSecret)
-			subHandler := subscription.NewHandler(subStore, jwtMgr)
+			subHandler := subscription.NewHandler(subStore, jwtMgr).
+				WithWaitlist(filepath.Join(cfg.LedgerDir, "waitlist.jsonl"))
 			// ATLAS_REQUIRE_USER_AUTH=true forces JWT; default is guest TierFree.
 			allowGuest := config.GetSecret("ATLAS_REQUIRE_USER_AUTH") != "true"
 			subHandler.RegisterRoutes(mux, allowGuest)

@@ -4284,6 +4284,12 @@ export interface twseT86Response {
   data: string[][];
 }
 
+export interface waitlistEntry {
+  email: string;
+  source: string;
+  created_at: string;
+}
+
 export interface yahooChartError {
   code: string;
   description: string;
