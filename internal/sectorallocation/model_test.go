@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 // MockWeightEngine implements WeightEngine for testing.
@@ -27,6 +29,23 @@ func (m *MockWeightEngine) ComputeWeight(ctx context.Context, industryID string,
 		}
 	}
 	return nil, nil
+}
+
+func (m *MockWeightEngine) ComputeProjectedTarget(ctx context.Context, drivers DriverInputs) (ProjectedTarget, error) {
+	if m.err != nil {
+		return ProjectedTarget{}, m.err
+	}
+	// 測試用：mock 不跑 Projector，直接把現有 weights 轉成 ProjectedTarget.Target。
+	// 既有 mock 行為不變；新增 method 是 SA04 介面相容要求。
+	out := ProjectedTarget{
+		AsOfTradingDate: drivers.AsOfTradingDate,
+		ModelVersion:    "mock",
+		Target:          make(map[industry.SectorID]float64, len(m.weights)),
+	}
+	for _, w := range m.weights {
+		out.Target[industry.SectorID(w.ID)] = w.AdjustedWeight
+	}
+	return out, nil
 }
 
 // MockCycleInputProvider implements CycleInputProvider for testing.
