@@ -3135,6 +3135,14 @@ export interface RiskSnapshot {
   max_drawdown_pct: number;
 }
 
+export interface RollingSample {
+  trading_date: string;
+  dimension: string;
+  raw_value: number;
+  unit: string;
+  source_id: string;
+}
+
 export interface RuleSummary {
   id: string;
   pattern: string;
@@ -4176,6 +4184,11 @@ export interface revenueRecord {
   revenue: number;
   revenue_month: number;
   revenue_year: number;
+}
+
+export interface rollingStateFile {
+  version: number;
+  samples: Record<string, RollingSample[]>;
 }
 
 export interface sectorDataJSON {

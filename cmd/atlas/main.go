@@ -687,15 +687,48 @@ func run(args []string, deps appDeps) error {
 
 		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
 		var macroProvider marketdata.MacroDataProvider
+		// BK-15: capitalFlowStore is the production-side handle for the
+		// date-keyed rolling sample store (spec §8.5). Construction is
+		// infallible today (NewFileRollingSampleStore only returns the
+		// store, no error path); the underlying persistLocked call may
+		// still fail at write time, which is why we keep a memory
+		// fallback available if cfg.LedgerDir becomes read-only.
+		var capitalFlowStore capitalflow.RollingSampleStore
+		// BK-15: capitalFlowService is the shared *capitalflow.Service
+		// wired inside the `gatewayFetcher != nil` block below and
+		// passed to registerOperationsTasks so the capital_flow_refresh
+		// closure can call Refresh(ctx, tradingDate) — the only writer
+		// to the shared rolling sample store. Stays nil when the
+		// gateway is unavailable; operations_tasks gates the refresh
+		// task registration on this being non-nil.
+		var capitalFlowService *capitalflow.Service
 
 		if gatewayFetcher != nil {
 			macroProvider = monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
-			cfHandler := capitalflow.NewHandler(macroProvider)
+			// BK-15: build one shared rolling sample store for the
+			// capitalflow subsystem. The file store survives process
+			// restart (spec §8.5) and is the only writer through
+			// Service.Refresh. Construction is currently infallible
+			// (NewFileRollingSampleStore takes path + capacity only);
+			// if cfg.LedgerDir becomes read-only at runtime the
+			// Refresh path will log the UpsertDay failure and the
+			// next 5-minute tick will retry. The store is reused by
+			// the HTTP handler, the eventdriven adapter, the
+			// recommender HandlerDeps, and the operations_tasks
+			// refresh closure so the date-keyed window is identical
+			// across all consumers.
+			capitalFlowStore = capitalflow.NewFileRollingSampleStore(filepath.Join(cfg.LedgerDir, "capital_flow_rolling.json"), 60)
+			cfHandler := capitalflow.NewHandlerWithStore(macroProvider, capitalFlowStore)
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
+			// BK-15: hoist the capitalflow.Service handle so the
+			// operations_tasks capital_flow_refresh closure can call
+			// Service.Refresh(ctx, tradingDate) — which is the only
+			// writer to the shared rolling store.
+			capitalFlowService = capitalflow.ServiceFromHandler(cfHandler)
 			// Wire the daily report to the same live sources (fix manifest #B06).
-			dailyRptGen.SetProvider(newLiveDailyReportProvider(macroProvider, capitalflow.ServiceFromHandler(cfHandler), eventCalendar))
+			dailyRptGen.SetProvider(newLiveDailyReportProvider(macroProvider, capitalFlowService, eventCalendar))
 
 			// Stage 5 PR#4 Stage B: register detector scan routes BEFORE event routes
 			// so the scan store is available for injection.
@@ -743,7 +776,12 @@ func run(args []string, deps appDeps) error {
 			subHandler.RegisterRoutes(mux, allowGuest)
 			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
 			devMode := config.GetSecret("ATLAS_DEV_MODE") == "true"
-			deps := WireRecommenderDeps(WireDeps{WorkDir: cfg.WorkDir, MacroProvider: macroProvider, EventCalendar: eventCalendar})
+			deps := WireRecommenderDeps(WireDeps{
+				WorkDir:          cfg.WorkDir,
+				MacroProvider:    macroProvider,
+				EventCalendar:    eventCalendar,
+				CapitalFlowStore: capitalFlowStore,
+			})
 			recommender.RegisterRoutesWithDeps(mux, *subStore, jwtMgr, deps, devMode)
 			log.Printf("[Recommender] registered /api/recommendations route (real services: %v)",
 				anyDepsWired(deps))
@@ -943,6 +981,11 @@ func run(args []string, deps appDeps) error {
 				realtimeAdapter: realtimeAdapter,
 				repo:            repo,
 				collector:       collector,
+				// BK-15: plumb the shared capitalflow.Service so the
+				// 5-minute capital_flow_refresh closure can call
+				// Refresh(ctx, tradingDate) against the persisted
+				// rolling store built above.
+				capitalFlow: capitalFlowService,
 			})
 
 			// Schedule daily report generation after market close (14:00–14:59

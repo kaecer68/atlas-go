@@ -53,7 +53,8 @@
       "fields": [
         "WorkDir string",
         "MacroProvider marketdata.MacroDataProvider",
-        "EventCalendar *industry.EventCalendar"
+        "EventCalendar *industry.EventCalendar",
+        "CapitalFlowStore capitalflow.RollingSampleStore"
       ],
       "kind": "struct",
       "name": "WireDeps"

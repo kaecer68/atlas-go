@@ -1,6 +1,7 @@
 package capitalflow
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -8,6 +9,12 @@ import (
 
 // TestExtractForeignLeadingSignal verifies the foreign ForceScore carries
 // the leading Z from the TAIFEX futures OI series (manifest #E01 + #E05).
+//
+// BK-15 makes Score history-driven, so the test supplies the prior
+// futures OI samples via the history map instead of poking the
+// (now-removed) ext.foreignFuturesWindow.push. The behavioral
+// assertion — LeadingZ is non-zero when the futures series has
+// variance — is unchanged.
 func TestExtractForeignLeadingSignal(t *testing.T) {
 	ext := NewForceExtractor()
 	snap := marketdata.MacroDataSnapshot{
@@ -15,11 +22,16 @@ func TestExtractForeignLeadingSignal(t *testing.T) {
 		ForeignFuturesOINet: marketdata.MacroDataPoint{Symbol: "TX_FOREIGN_OI_NET", Value: -84000},
 		RecordedAt:          1704067200,
 	}
-	// Push a few values to make LeadingZ non-zero (window needs variance).
-	for i := 0; i < 5; i++ {
-		ext.foreignFuturesWindow.push(float64(-50000 - i*10000))
+	history := map[ForceName][]RollingSample{
+		ForceFutures: {
+			{RawValue: -50000},
+			{RawValue: -60000},
+			{RawValue: -70000},
+			{RawValue: -80000},
+			{RawValue: -90000},
+		},
 	}
-	forces := ext.Extract(snap)
+	forces := ext.Score(snap, "", history)
 	var foreign ForceScore
 	for _, f := range forces {
 		if f.Force == ForceForeign {
@@ -131,5 +143,71 @@ func TestResonanceIgnoresDeprecated(t *testing.T) {
 	}
 	if r.Coefficient != 1.0 {
 		t.Errorf("coefficient=%f, want 1.0 (deprecated forces must not raise max bound)", r.Coefficient)
+	}
+}
+
+// TestExtract_NoDataDoesNotPush verifies spec §8.3 / CF-INV-06: a
+// ForceScore that reports DataAvailable=false (e.g. government
+// Symbol empty) must never be persisted as a zero-valued
+// RollingSample. The test mirrors the production Refresh writer
+// contract — only forces with DataAvailable=true become samples —
+// and asserts the unavailable dimension is absent from the store.
+//
+// Production Refresh wiring (Task 4) will reuse this same filter;
+// until then the test is RED because RollingSample / SourceTWSET86
+// do not exist.
+func TestExtract_NoDataDoesNotPush(t *testing.T) {
+	ext := NewForceExtractor()
+	snap := marketdata.MacroDataSnapshot{
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "FOREIGN_NET", Value: 50},
+		// GovernmentNet.Symbol intentionally empty.
+		RecordedAt: 1704067200,
+	}
+	forces := ext.Extract(snap)
+
+	// Sanity: the government ForceScore must report
+	// DataAvailable=false so the writer knows to skip it.
+	var gov ForceScore
+	govFound := false
+	for _, f := range forces {
+		if f.Force == ForceGovernment {
+			gov = f
+			govFound = true
+		}
+	}
+	if !govFound {
+		t.Fatalf("government ForceScore missing from Extract output")
+	}
+	if gov.DataAvailable {
+		t.Fatalf("government DataAvailable=true with empty Symbol; expected false")
+	}
+
+	// Mirrors the production writer: convert each available force
+	// into a RollingSample and UpsertDay once for the trading date.
+	store := &stubRollingStore{}
+	var samples []RollingSample
+	for _, f := range forces {
+		if !f.DataAvailable {
+			continue
+		}
+		samples = append(samples, RollingSample{
+			TradingDate: "2026-07-17",
+			Dimension:   f.Force,
+			RawValue:    f.RawValue,
+			Unit:        "hundred_million_shares",
+			SourceID:    SourceTWSET86,
+		})
+	}
+	if err := store.UpsertDay(context.Background(), "2026-07-17", samples); err != nil {
+		t.Fatalf("UpsertDay: %v", err)
+	}
+
+	for _, s := range store.samples {
+		if s.Dimension == ForceGovernment {
+			t.Errorf("government RollingSample written despite DataAvailable=false (CF-INV-06 / spec §8.3)")
+		}
+		if s.RawValue == 0 {
+			t.Errorf("zero-valued sample persisted for dimension %q (CF-INV-06)", s.Dimension)
+		}
 	}
 }

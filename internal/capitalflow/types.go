@@ -163,3 +163,24 @@ func (w *rollingWindow) zScore(v float64) float64 {
 	}
 	return (v - w.mean()) / s
 }
+
+// ---------------------------------------------------------------------------
+// Rolling-window persistence sample (BK-15 / spec §8.5)
+// ---------------------------------------------------------------------------
+
+// RollingSample is one persisted (dimension, trading_date) observation
+// of a capital force. Samples are the only input to the rolling Z-score
+// reference window after a process restart, and must therefore carry
+// enough provenance (raw value, unit, source id) to be reproducible.
+//
+// Spec anchors:
+//   - §8.2 (CF-INV-05): at most one sample per (dimension, trading_date).
+//   - §8.5: persistence must round-trip across restart.
+//   - §5: source_id must trace back to the first-party source registry.
+type RollingSample struct {
+	TradingDate string    `json:"trading_date"`
+	Dimension   ForceName `json:"dimension"`
+	RawValue    float64   `json:"raw_value"`
+	Unit        string    `json:"unit"`
+	SourceID    string    `json:"source_id"`
+}
