@@ -147,6 +147,32 @@ func registerCapitalTasks(d capitalDeps) {
 	})
 	log.Printf("[Gateway] registered auto_export background task (12h interval)")
 
+	// Register auto_taifex_institutional — daily pull of 三大法人 期貨 OI
+	// after TAIFEX publishes (15:30 Taipei). 1h interval is a safety net;
+	// Gateway.Fetch's cache keeps it idempotent within the same date.
+	// 90-day backfill is NOT provided by TAIFEX OpenAPI; backlog BK-12.
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_taifex_institutional",
+		ChannelID: "taifex_institutional",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task: func(ctx context.Context) error {
+			now := time.Now()
+			if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+				now = now.In(tz)
+			}
+			if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+				return nil
+			}
+			if now.Hour() < 15 {
+				return nil
+			}
+			_, err := d.gateway.Fetch(ctx, "taifex_institutional")
+			return err
+		},
+	})
+	log.Printf("[Gateway] registered auto_taifex_institutional background task (1h interval, 15:00+ Taipei)")
+
 	// Register auto_geopolitical via Gateway.
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_geopolitical",

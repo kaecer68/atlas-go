@@ -246,6 +246,11 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("taifex_daily", taifexAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "taifex_daily")
 
+	// --- TAIFEX Institutional (三大法人 期貨 OI — no API key required) ---
+	taifexInstAdapter := NewTaifexInstitutionalAdapter()
+	g.registry.Register("taifex_institutional", taifexInstAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "taifex_institutional")
+
 	// --- TWSE Odd-Lot Trading (no API key required) ---
 	oddlotAdapter := NewTWSEOddLotChannelAdapter()
 	g.registry.Register("twse_oddlot", oddlotAdapter)

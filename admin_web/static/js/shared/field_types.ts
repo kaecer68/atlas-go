@@ -1759,6 +1759,13 @@ export interface IndustrySegmentConfig {
   description?: string;
 }
 
+export interface InstitutionalFuturesDaily {
+  date: string;
+  foreign: TraderSide;
+  investment_trust: TraderSide;
+  dealer: TraderSide;
+}
+
 export interface IntegrityCheck {
   name: string;
   status: string;
@@ -1963,6 +1970,7 @@ export interface MacroDataSnapshot {
   foreign_investor_net: MacroDataPoint;
   domestic_fund_net: MacroDataPoint;
   dealer_net: MacroDataPoint;
+  foreign_futures_oi_net: MacroDataPoint;
   export_electronics: MacroDataPoint;
   retail_margin_balance: MacroDataPoint;
   retail_short_balance: MacroDataPoint;
@@ -3879,6 +3887,15 @@ export interface TradeRecord {
   timestamp: string;
 }
 
+export interface TraderSide {
+  trade_long: number;
+  trade_short: number;
+  trade_net: number;
+  oi_long: number;
+  oi_short: number;
+  oi_net: number;
+}
+
 export interface TrendPoint {
   timestamp: string;
   value: number;
@@ -4104,6 +4121,18 @@ export interface raw5SecIndexResponse {
   msg: string;
   status: number;
   data: raw5SecIndexBar[];
+}
+
+export interface rawInstitutionalTrader {
+  Date: string;
+  ContractCode: string;
+  Item: string;
+  TradingVolume(Long): string;
+  TradingVolume(Short): string;
+  TradingVolume(Net): string;
+  OpenInterest(Long): string;
+  OpenInterest(Short): string;
+  OpenInterest(Net): string;
 }
 
 export interface rawOutcome {

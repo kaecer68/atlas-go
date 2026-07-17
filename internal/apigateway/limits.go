@@ -126,6 +126,7 @@ func NewRateLimitManager() *RateLimitManager {
 			"dram_spot_price":     rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_sector_index":   rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"taifex_daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"taifex_institutional": rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_etf":            rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
 			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter

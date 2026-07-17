@@ -82,6 +82,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "us_msft", apply: a.applyUSMSFT},
 		{channelID: "tsm_adr", apply: a.applyTSMADR},
 		{channelID: "taiex_index", apply: a.applyTAIEX},
+		{channelID: "taifex_institutional", apply: a.applyTaifexInstitutional},
 	}
 
 	var (
@@ -387,6 +388,26 @@ func (a *macroDataGatewayAdapter) applyTAIEX(snap *marketdata.MacroDataSnapshot,
 	}
 	if s.TAIEX.Symbol != "" {
 		snap.TAIEX = s.TAIEX
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyTaifexInstitutional(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var inst marketdata.InstitutionalFuturesDaily
+	if err := json.Unmarshal(data, &inst); err != nil {
+		return
+	}
+	if inst.Date == "" {
+		return
+	}
+	// Best-effort: foreign OI net is the leading indicator for foreign
+	// direction. ChangePct is left zero (we only have one observation; the
+	// ForceExtractor rolling window rebuilds Z-scores from daily history
+	// persisted in capital_flow state).
+	ts, _ := time.Parse("20060102", inst.Date)
+	snap.ForeignFuturesOINet = marketdata.MacroDataPoint{
+		Symbol:    "TX_FOREIGN_OI_NET",
+		Value:     float64(inst.Foreign.OINet),
+		Timestamp: ts.Unix(),
 	}
 }
 

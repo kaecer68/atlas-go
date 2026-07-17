@@ -32,6 +32,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"day_trading":         false,
 		"twse_etf":            false,
 		"taifex_daily":        false,
+		"taifex_institutional": false,
 		"twse_oddlot":         false,
 		"bdi":                 false,
 		"us_spx":              false,

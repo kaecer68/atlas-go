@@ -30,6 +30,7 @@ type MacroDataSnapshot struct {
 	ForeignInvestorNet   MacroDataPoint `json:"foreign_investor_net"`
 	DomesticFundNet      MacroDataPoint `json:"domestic_fund_net"`
 	DealerNet            MacroDataPoint `json:"dealer_net"`
+	ForeignFuturesOINet  MacroDataPoint `json:"foreign_futures_oi_net"`
 	ExportElectronics    MacroDataPoint `json:"export_electronics"`
 	RetailMarginBalance  MacroDataPoint `json:"retail_margin_balance"`
 	RetailShortBalance   MacroDataPoint `json:"retail_short_balance"`
@@ -83,6 +84,7 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 		ForeignInvestorNet   *MacroDataPoint `json:"foreign_investor_net,omitempty"`
 		DomesticFundNet      *MacroDataPoint `json:"domestic_fund_net,omitempty"`
 		DealerNet            *MacroDataPoint `json:"dealer_net,omitempty"`
+		ForeignFuturesOINet  *MacroDataPoint `json:"foreign_futures_oi_net,omitempty"`
 		ExportElectronics    *MacroDataPoint `json:"export_electronics,omitempty"`
 		RetailMarginBalance  *MacroDataPoint `json:"retail_margin_balance,omitempty"`
 		RetailShortBalance   *MacroDataPoint `json:"retail_short_balance,omitempty"`
@@ -138,6 +140,9 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 	}
 	if s.DealerNet.Symbol != "" {
 		aux.DealerNet = &s.DealerNet
+	}
+	if s.ForeignFuturesOINet.Symbol != "" {
+		aux.ForeignFuturesOINet = &s.ForeignFuturesOINet
 	}
 	if s.ExportElectronics.Symbol != "" {
 		aux.ExportElectronics = &s.ExportElectronics
@@ -322,6 +327,9 @@ func mergeSnapshot(dst *MacroDataSnapshot, src MacroDataSnapshot) {
 	}
 	if src.DealerNet.Symbol != "" {
 		dst.DealerNet = src.DealerNet
+	}
+	if src.ForeignFuturesOINet.Symbol != "" {
+		dst.ForeignFuturesOINet = src.ForeignFuturesOINet
 	}
 	if src.ExportElectronics.Symbol != "" {
 		dst.ExportElectronics = src.ExportElectronics
