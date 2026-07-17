@@ -1374,10 +1374,15 @@ export interface FlowPrediction {
 
 export interface ForceScore {
   force: string;
+  role?: string;
+  deprecated?: boolean;
   raw_value: number;
   z_score: number;
   trend: string;
   weight: number;
+  leading_z?: number;
+  leading_trend?: string;
+  data_available?: boolean;
 }
 
 export interface ForecastVsRealityItem {

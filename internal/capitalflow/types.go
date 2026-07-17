@@ -23,13 +23,37 @@ const (
 )
 
 // ForceScore is a standardized score for a single capital force.
+//
+// Role categorizes the force in the §7 taxonomy (manifest #E05):
+//
+//   - "subject"          — one of the 5 main bodies (foreign, institutional,
+//                          dealer, government, retail); participates in resonance.
+//   - "leading_indicator" — non-body input feeding a subject's leading Z
+//                          (e.g. foreign futures OI -> foreign.LeadingZ).
+//   - "sentiment"         — non-body feature input (e.g. TSM ADR); never
+//                          influences resonance.
+//
+// Deprecated=true marks forces kept in the API shape for backward
+// compatibility but no longer driving resonance (futures + tsm_adr after #E05).
 type ForceScore struct {
-	Force    ForceName `json:"force"`
-	RawValue float64   `json:"raw_value"` // 原始值（e.g., 買賣超金額 in 億）
-	ZScore   float64   `json:"z_score"`   // 60-day rolling Z-score
-	Trend    string    `json:"trend"`     // "bullish", "bearish", "neutral"
-	Weight   float64   `json:"weight"`    // dynamic weight derived from relative magnitude
+	Force         ForceName `json:"force"`
+	Role          string    `json:"role,omitempty"`           // "subject" | "leading_indicator" | "sentiment"
+	Deprecated    bool      `json:"deprecated,omitempty"`
+	RawValue      float64   `json:"raw_value"`                // 原始值
+	ZScore        float64   `json:"z_score"`                  // 60-day rolling Z-score
+	Trend         string    `json:"trend"`                    // "bullish", "bearish", "neutral"
+	Weight        float64   `json:"weight"`                   // dynamic weight derived from relative magnitude
+	LeadingZ      float64   `json:"leading_z,omitempty"`      // foreign-only: Z of the leading indicator series (futures OI)
+	LeadingTrend  string    `json:"leading_trend,omitempty"`  // foreign-only: trend from LeadingZ
+	DataAvailable bool      `json:"data_available,omitempty"` // false when the source channel was empty (e.g. no government file)
 }
+
+// Force roles — manifest #E05 §7 taxonomy.
+const (
+	ForceRoleSubject         = "subject"
+	ForceRoleLeadingIndicator = "leading_indicator"
+	ForceRoleSentiment        = "sentiment"
+)
 
 // ---------------------------------------------------------------------------
 // Resonance — how forces align
