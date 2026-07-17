@@ -26,9 +26,10 @@ type NarrativeProvider interface {
 	BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error)
 }
 
-// CapitalFlowProvider 供 recommender 查詢當日七大資金勢力 summary。
+// CapitalFlowProvider 供 recommender 查詢當日七維錢潮雷達（3+2+2 分層）summary。
 // 對應 producer: capitalflow.Service (added in commit 661f2dc7; Summary added
-// in commit b081f2f5 / PR #1002).
+// in commit b081f2f5 / PR #1002; 3+2+2 assessment layers added in #E07 commit
+// ccd4e721; UI/MCP/runtime alignment in #E08).
 //
 // Automating callers MUST gate assessment-derived decisions on
 // CapitalFlowAssessment.EligibleForAutomation(); calibrating/degraded

@@ -50,14 +50,14 @@
   },
   "capital_flow_daily": {
     "name": "capital_flow_daily",
-    "description": "Full daily Taiwan stock market capital flow report: foreign, proprietary, public bank, retail and other forces with resonance score and direction.",
+    "description": "Full daily Taiwan stock market capital flow report: 七維錢潮雷達（3+2+2 分層）— three official actor forces (foreign / institutional / dealer, T86 first-party), two behavioural proxies (government / retail) and two leading / cross-market signals (foreign futures OI / TSM ADR). Each dimension carries role, source, unit and availability flags; the resonance model only votes on the official_actor tier.",
     "inputSchema": {
       "type": "object"
     }
   },
   "capital_flow_summary": {
     "name": "capital_flow_summary",
-    "description": "Condensed capital flow summary suitable for a quick Taiwan market briefing.",
+    "description": "Condensed 七維錢潮雷達（3+2+2 分層） summary suitable for a quick Taiwan market briefing; actor consensus is derived from the three official actor dimensions only.",
     "inputSchema": {
       "type": "object"
     }
@@ -197,7 +197,7 @@
   },
   "daily_report": {
     "name": "daily_report",
-    "description": "回傳最新每日市場報告 JSON，含全球資金總開關、台股七大資金勢力分解與共振、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。",
+    "description": "回傳最新每日市場報告 JSON，含全球資金總開關、台股七維錢潮雷達（3+2+2 分層）分解、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。",
     "inputSchema": {
       "type": "object"
     }

@@ -6,13 +6,20 @@
 
 ## capitalflow（資金流）
 
-模組職責：台股七大資金勢力日內流量 + 共振強度計算 + API 輸出。
+模組職責：台股 **七維錢潮雷達（3+2+2 分層）** 日內流量 + 共振強度計算 + API 輸出。
+
+> **分類語意權威**：`docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 / §6。
+>  - 官方法人 `official_actor`：外資 / 投信 / 自營商（T86 第一方）。
+>  - 行為代理 `behavioral_proxy`：官股 / 散戶（proxy）。
+>  - 領先／跨市場訊號 `positioning_indicator` + `cross_market_signal`：期貨 / TSM ADR。
+>  - actor 共識只計算官方actor；行為代理與訊號層不影響機構共識敘事。
+>  - `weight_deprecated=true` 為 0；不進入 UI / 不影響自動化。
 
 | 陷阱 | 說明 |
 |------|------|
-| **共振計算公式變更** | `ComputeResonance`（`resonance.go`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準。 |
+| **共振計算公式變更** | `ComputeResonance`（`resonance.go`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準；actor 共識只計入官方actor 三項。 |
 | **TWSE 假日不發布** | 週末/假日無資料；前端應 fallback 至上週五資料。 |
-| **PublicBank 欄位歷史較短** | 公股行庫資料 TWSE 約 2018+ 才完整；早期資料空值。 |
+| **PublicBank 欄位歷史較短** | 公股行庫資料 TWSE 約 2018+ 才完整；早期資料空值（data_available=false），**不補 0**。 |
 | **Service 為 pipeline 入口** | `Service.LatestDaily` / `Service.Summary` 可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler` 需 `*http.Request` 的限制。 |
 
 ---
@@ -67,7 +74,7 @@
 
 ## 測試
 
-- `capitalflow`：HandleDaily / HandleSummary 回應格式、七大勢力 completeness、共振範圍 `[0.5, 1.5]`。
+- `capitalflow`：HandleDaily / HandleSummary 回應格式、`dimension_role` 完整性（官方actor / 行為代理 / 訊號）、共振範圍 `[0.5, 1.5]`。
 - `eventdriven`：事件 → flow 映射、confidence 範圍、calendar edge cases。
 - `recommender`：handler_test.go（13 tests）、e2e_test.go、adapters_test.go（nil-safety）。
 - `subscription`：handler_test.go（Register/Login/ExtractToken/Verify）、trial expiry tests。

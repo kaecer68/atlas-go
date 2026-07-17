@@ -72,7 +72,7 @@ Canvas 繪圖色彩用 `getThemeColor()` + `hexToRgba()` 橋接。
 ## API 端點
 
 統一路由前綴 `/api/...`。v0.0.0.31 新增端點：
-- `/api/capital-flow/{daily,summary}` — 七大資金勢力 + 共振強度
+- `/api/capital-flow/{daily,summary}` — 七維錢潮雷達（3+2+2 分層）Z-score + 共振：見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04
 - `/api/events/{calendar,prediction}` — 事件日曆 + 5 日預測
 - `/api/recommendations` — tier-gated 推薦（需 JWT）
 - `/api/reports/{latest,archive,subscribe}` — 每日報告

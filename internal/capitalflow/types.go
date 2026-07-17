@@ -6,7 +6,10 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Force types — the seven capital forces tracked
+// Force types — the seven dimensions tracked by 七維錢潮雷達（3+2+2 分層）。
+// See docs/specs/capital-flow-seven-dimension-spec.md §4 D-CF-04 for the
+// canonical role taxonomy (official_actor / behavioral_proxy / positioning_indicator
+// / cross_market_signal).
 // ---------------------------------------------------------------------------
 
 // ForceName identifies a capital force.

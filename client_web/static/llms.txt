@@ -2,7 +2,7 @@
 # LLMs: this file describes the site structure for AI crawlers and agents.
 
 ## Site Map
-- /client/home — 市場總覽：建議方向、7-Force 錢潮看板、未來 5 日錢潮預測、市場脈動
+- /client/home — 市場總覽：建議方向、七維錢潮雷達（3+2+2 分層）看板、未來 5 日錢潮預測、市場脈動
 - /client/capital_predictions — 錢潮預測：5 日資金流向與板塊熱度圖
 - /client/capital_board — 錢潮看板：板塊多空彙總與模型權重
 - /client/stock-quote — 個股快查：報價、基本面、籌碼、技術面
@@ -16,7 +16,7 @@
 
 ## API Reference
 - /api/macro/snapshot/latest — Latest macro data snapshot (TAIEX, TSM ADR, VIX, etc.)
-- /api/capital-flow/summary — 七大資金勢力 Z-score 與共振摘要
+- /api/capital-flow/summary — 七維錢潮雷達（3+2+2 分層）Z-score 與共振摘要（官方法人 / 行為代理 / 領先＋跨市場訊號；actor 共識只看官方actor）
 - /api/events/prediction — 未來 5 日資金流向預測與板塊預測
 - /api/taiwan/stress-index — Taiwan market stress index
 - /api/dashboard/system-health — System health and channel status

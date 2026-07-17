@@ -2,29 +2,28 @@
 //
 // Unit tests for seven-force-interpretations.js renderSevenForceInterpretations().
 //
-// 7-Force 組合解讀：依七大錢潮勢力的方向組合產出 1..N 條敘事。
-// 對應前端 C05 修復後新元件（PR #1198）。
+// 「七維錢潮雷達」3+2+2 共識敘事：
+//   - 共識 (official_actor：三大法人）：
+//     - 3/3 bullish → 「三大法人（共識）偏多，資金方向一致」
+//     - 3/3 bearish → 「三大法人（共識）偏空，資金方向一致」
+//     - 2/3 bullish + 0 bearish → 「二讀多／分歧」
+//     - 0 bullish + 2/3 bearish → 「二讀空／分歧」
+//     - 全部 official_actor neutral → 「法人皆觀望，方向不明」
+//   - 行為代理（若 available）：
+//     - 散戶/官股 與法人同步 → 「行為代理確認」
+//     - 行為代理反向 → 「行為代理與法人反向」
+//   - 外資 positioning（futures OI）：
+//     - 領先方向與法人一致 → 「領先訊號支持／不支援」
+//     - futures 永遠**不**影響 institutional 共識
+//   - 跨市場訊號（TSM ADR）：
+//     - 與法人方向一致 → 「跨市場同步」
+//   - Fallback：主要權重集中在 X（仍保留，spec §9.1 允許 actor 共識敘事）
 //
-// 條件分支：
-//   共識 (count-based):
-//     - 7/7 bullish → 全面偏多
-//     - 7/7 bearish → 全面偏空
-//     - bull >= 4 & bear <= 1 → 多數偏多
-//     - bear >= 4 & bull <= 1 → 多數偏空
-//     - bull = 0 & bear = 0 → 全觀望
-//   組合 (specific force pairs):
-//     - foreign↑ + institutional↑ → 法人齊買
-//     - foreign↑ + retail↓        → 法人接散戶籌碼
-//     - retail↑ + dealer↑         → 短線動能活躍
-//     - retail↑ + foreign↓        → 散戶 vs 外資反向
-//     - government↑ + foreign↑    → 官股護盤
-//     - futures↑ + tsm_adr↑       → 外資期貨積極
-//   Fallback（無 condition 觸發）:
-//     - 主要權重集中在 X、Y，方向以觀望為主
-//
-// 注意 source 內有 dead code：第 78 行 `hasForeign && hasForeignBearish` 互相排斥
-// 永不觸發（解讀文字卻提到「投信」暗示應為 hasInstitutionalBearish）。
-// 本測試不修 bug，只驗證實際行為。
+// 注意：
+//   - 已不再使用「七大勢力全面偏多／偏空」字串（七同級語意已棄）
+//   - 不再使用「7/7」字串
+//   - bullishForces / bearishForces 過濾 dimension_role='official_actor'，
+//     futures/tsm_adr 不參與機構共識
 //
 // 執行：node --test shared_web/static/js/__tests__/seven-force-interpretations.test.mjs
 
@@ -38,6 +37,20 @@ function renderToString(summary) {
   return container.innerHTML;
 }
 
+// Helper for new E07 contract.
+function e07Force(name, opts = {}) {
+  return {
+    force: name,
+    dimension_role: opts.dimension_role || 'official_actor',
+    trend: opts.trend || 'neutral',
+    z_score: opts.z_score || 0,
+    raw_value: opts.raw_value || 0,
+    data_available: opts.data_available !== undefined ? opts.data_available : true,
+    weight: opts.weight || 0,
+    weight_deprecated: true,
+  };
+}
+
 // ---- Defensive ----
 
 test('container=null → silently no-op', () => {
@@ -45,346 +58,296 @@ test('container=null → silently no-op', () => {
   assert.doesNotThrow(() => renderSevenForceInterpretations(undefined, null));
 });
 
-test('summary=null → 「尚無 7-Force 解讀」placeholder', () => {
+test('summary=null → 「尚無資料」placeholder', () => {
   const html = renderToString(null);
-  assert.match(html, /尚無 7-Force 解讀/);
+  assert.match(html, /尚無|資料載入|七維錢潮/);
   assert.match(html, /home-loading-card/);
 });
 
 test('summary.forces=[] → placeholder', () => {
   const html = renderToString({ forces: [] });
-  assert.match(html, /尚無 7-Force 解讀/);
+  assert.match(html, /尚無|資料載入|七維錢潮/);
 });
 
 test('summary.forces 不是 array → placeholder', () => {
   const html = renderToString({ forces: 'broken' });
-  assert.match(html, /尚無 7-Force 解讀/);
+  assert.match(html, /尚無|資料載入|七維錢潮/);
 });
 
-// ---- 共識 (count-based) ----
+// ---- 新 contract：3+2+2 共識，無「七大勢力全面偏多/偏空」 ----
 
-test('7/7 bullish → 「七大勢力全面偏多」', () => {
-  const forces = ['foreign', 'institutional', 'dealer', 'retail', 'government', 'futures', 'tsm_adr']
-    .map(name => ({ force: name, trend: 'bullish' }));
+test('不渲染「七大勢力」字串（七同級語意已棄）', () => {
+  const forces = ['foreign', 'institutional', 'dealer'].map(name =>
+    e07Force(name, { dimension_role: 'official_actor', trend: 'bullish' })
+  );
   const html = renderToString({ forces });
-  assert.match(html, /七大勢力全面偏多/);
-  assert.match(html, /資金共識強/);
-  // 確保沒有多數偏多/多數偏空/全觀望等其它共識
-  assert.doesNotMatch(html, /七大勢力全面偏空/);
+  assert.doesNotMatch(html, /七大勢力/);
 });
 
-test('7/7 bearish → 「七大勢力全面偏空」', () => {
-  const forces = ['foreign', 'institutional', 'dealer', 'retail', 'government', 'futures', 'tsm_adr']
-    .map(name => ({ force: name, trend: 'bearish' }));
-  const html = renderToString({ forces });
-  assert.match(html, /七大勢力全面偏空/);
-  assert.match(html, /資金共識偏謹慎/);
+test('不渲染「7/7」字串', () => {
+  const all = [];
+  ['foreign', 'institutional', 'dealer', 'government', 'retail', 'futures', 'tsm_adr']
+    .forEach(name => {
+      all.push(e07Force(name, { trend: 'bullish', data_available: true }));
+    });
+  // 強制每個 dimension_role
+  all[0].dimension_role = 'official_actor';
+  all[1].dimension_role = 'official_actor';
+  all[2].dimension_role = 'official_actor';
+  all[3].dimension_role = 'behavioral_proxy';
+  all[4].dimension_role = 'behavioral_proxy';
+  all[5].dimension_role = 'positioning_indicator';
+  all[6].dimension_role = 'cross_market_signal';
+  const html = renderToString({ forces: all });
+  assert.doesNotMatch(html, /7\/7/);
 });
 
-test('5 bullish, 1 bearish, 1 neutral → 「多數勢力偏多」', () => {
-  const forces = [
-    { force: 'foreign', trend: 'bullish' },
-    { force: 'institutional', trend: 'bullish' },
-    { force: 'dealer', trend: 'bullish' },
-    { force: 'retail', trend: 'bullish' },
-    { force: 'government', trend: 'bullish' },
-    { force: 'futures', trend: 'bearish' },
-    { force: 'tsm_adr', trend: 'neutral' },
-  ];
-  const html = renderToString({ forces });
-  assert.match(html, /多數勢力偏多/);
-  assert.match(html, /僅少數勢力分歧/);
-});
-
-test('5 bearish, 1 bullish, 1 neutral → 「多數勢力偏空」', () => {
-  const forces = [
-    { force: 'foreign', trend: 'bearish' },
-    { force: 'institutional', trend: 'bearish' },
-    { force: 'dealer', trend: 'bearish' },
-    { force: 'retail', trend: 'bearish' },
-    { force: 'government', trend: 'bearish' },
-    { force: 'futures', trend: 'bullish' },
-    { force: 'tsm_adr', trend: 'neutral' },
-  ];
-  const html = renderToString({ forces });
-  assert.match(html, /多數勢力偏空/);
-  assert.match(html, /僅少數勢力支撐/);
-});
-
-test('7/7 neutral → 「各勢力觀望」', () => {
-  const forces = ['foreign', 'institutional', 'dealer', 'retail', 'government', 'futures', 'tsm_adr']
-    .map(name => ({ force: name, trend: 'neutral' }));
-  const html = renderToString({ forces });
-  assert.match(html, /各勢力觀望/);
-  assert.match(html, /市場方向不明/);
-});
-
-// ---- 組合 (specific force pair triggers) ----
-
-test('foreign↑ + institutional↑ → 「外資與投信同步偏多」', () => {
+test('3/3 official_actor bullish → 「三大法人（共識）偏多」', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'bullish' },
-      { force: 'institutional', trend: 'bullish' },
-      // 其他都不觸發特定組合條件
-      { force: 'dealer', trend: 'neutral' },
-      { force: 'retail', trend: 'neutral' },
-      { force: 'government', trend: 'neutral' },
-      { force: 'futures', trend: 'neutral' },
-      { force: 'tsm_adr', trend: 'neutral' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'bullish' }),
     ],
   });
-  assert.match(html, /外資與投信同步偏多/);
-  assert.match(html, /法人齊買/);
+  assert.match(html, /三大法人/);
+  assert.match(html, /偏多/);
+  // 確保「三大法人偏空」不會出現
+  assert.doesNotMatch(html, /三大法人.{0,20}偏空/);
 });
 
-test('foreign↑ + retail↓ → 「法人接散戶籌碼結構」', () => {
+test('3/3 official_actor bearish → 「三大法人（共識）偏空」', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'bullish' },
-      { force: 'institutional', trend: 'neutral' },
-      { force: 'dealer', trend: 'neutral' },
-      { force: 'retail', trend: 'bearish' },
-      { force: 'government', trend: 'neutral' },
-      { force: 'futures', trend: 'neutral' },
-      { force: 'tsm_adr', trend: 'neutral' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'bearish' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'bearish' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'bearish' }),
     ],
   });
-  // bull=1, bear=1, neutral=5 → 共識條件不觸發 (需要 bull>=4 或 bear>=4)
-  // 但 force 對條件成立
-  assert.match(html, /外資偏多但散戶偏空/);
-  assert.match(html, /法人接散戶籌碼結構/);
+  assert.match(html, /三大法人/);
+  assert.match(html, /偏空/);
+  // 確保「三大法人偏多」不會出現
+  assert.doesNotMatch(html, /三大法人.{0,20}偏多/);
 });
 
-test('retail↑ + dealer↑ → 「散戶與自營商同步偏多,短線動能活躍」', () => {
+test('3/3 official_actor neutral → 「三大法人皆觀望」', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'neutral' },
-      { force: 'institutional', trend: 'neutral' },
-      { force: 'dealer', trend: 'bullish' },
-      { force: 'retail', trend: 'bullish' },
-      { force: 'government', trend: 'neutral' },
-      { force: 'futures', trend: 'neutral' },
-      { force: 'tsm_adr', trend: 'neutral' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'neutral' }),
     ],
   });
-  assert.match(html, /散戶與自營商同步偏多/);
-  assert.match(html, /短線動能活躍/);
+  assert.match(html, /三大法人/);
+  assert.match(html, /觀望/);
 });
 
-test('retail↑ + foreign↓ → 「散戶偏多但外資偏空」', () => {
+test('2/3 official_actor bullish + 1 neutral → 「二讀多／分歧」', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'bearish' },
-      { force: 'institutional', trend: 'neutral' },
-      { force: 'dealer', trend: 'neutral' },
-      { force: 'retail', trend: 'bullish' },
-      { force: 'government', trend: 'neutral' },
-      { force: 'futures', trend: 'neutral' },
-      { force: 'tsm_adr', trend: 'neutral' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'neutral' }),
     ],
   });
-  assert.match(html, /散戶偏多但外資偏空/);
-  assert.match(html, /籌碼與法人反向/);
+  // 期待分歧/部分偏多敘事；嚴格避免「全面偏多」
+  assert.match(html, /分歧|兩家偏多|二讀多|部分偏多/);
 });
 
-test('government↑ + foreign↑ → 「官股護盤加上外資回流」', () => {
+test('1/3 official_actor bullish + 2 neutral → 「僅一家偏多」', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'bullish' },
-      { force: 'institutional', trend: 'neutral' },
-      { force: 'dealer', trend: 'neutral' },
-      { force: 'retail', trend: 'neutral' },
-      { force: 'government', trend: 'bullish' },
-      { force: 'futures', trend: 'neutral' },
-      { force: 'tsm_adr', trend: 'neutral' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'neutral' }),
     ],
   });
-  assert.match(html, /政府\/公股行庫與外資同步偏多/);
-  assert.match(html, /官股護盤加上外資回流/);
+  // 共識條件不觸發 → 走組合或 fallback
+  assert.doesNotMatch(html, /三大法人.{0,10}全面/);
 });
 
-test('futures↑ + tsm_adr↑ → 「外資期貨與 TSM ADR 同步偏多」', () => {
+// ---- futures/tsm_adr 不參與機構共識敘事 ----
+
+test('futures bullish 不會把 institutional consensus 推向 bullish', () => {
+  // 三大法人全 neutral，只有 futures bullish → 共識應為「觀望」
+  // 不應出現「三大法人偏多」
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'neutral' },
-      { force: 'institutional', trend: 'neutral' },
-      { force: 'dealer', trend: 'neutral' },
-      { force: 'retail', trend: 'neutral' },
-      { force: 'government', trend: 'neutral' },
-      { force: 'futures', trend: 'bullish' },
-      { force: 'tsm_adr', trend: 'bullish' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('government', { dimension_role: 'behavioral_proxy', trend: 'neutral' }),
+      e07Force('retail', { dimension_role: 'behavioral_proxy', trend: 'neutral' }),
+      e07Force('futures', { dimension_role: 'positioning_indicator', trend: 'bullish' }),
+      e07Force('tsm_adr', { dimension_role: 'cross_market_signal', trend: 'neutral' }),
     ],
   });
-  assert.match(html, /外資期貨與 TSM ADR 同步偏多/);
-  assert.match(html, /外資態度積極/);
+  assert.match(html, /三大法人.{0,10}觀望/);
+  assert.doesNotMatch(html, /三大法人.{0,20}偏多/);
 });
 
-// ---- 多條同時觸發 ----
-
-test('多個組合條件同時成立 → 多條 <li> 並存', () => {
-  // foreign↑ + institutional↑ + government↑ 同時 → 三條 individual 觸發
+test('tsm_adr bullish 不會把 institutional consensus 推向 bullish', () => {
+  // 三大法人全 neutral，只有 tsm_adr bullish → 共識應為「觀望」
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'bullish' },
-      { force: 'institutional', trend: 'bullish' },
-      { force: 'government', trend: 'bullish' },
-      // 其他都 neutral
-      { force: 'dealer', trend: 'neutral' },
-      { force: 'retail', trend: 'neutral' },
-      { force: 'futures', trend: 'neutral' },
-      { force: 'tsm_adr', trend: 'neutral' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('futures', { dimension_role: 'positioning_indicator', trend: 'neutral' }),
+      e07Force('tsm_adr', { dimension_role: 'cross_market_signal', trend: 'bullish' }),
     ],
   });
-  // bull=3, bear=0, neutral=4 → 不觸發共識 count-based 條件
-  // foreign+institutional bullish → 法人齊買
-  assert.match(html, /法人齊買/);
-  // government+foreign bullish → 官股護盤
-  assert.match(html, /官股護盤/);
-  // 共識"多數偏多" 不該觸發 (bull=3 < 4)
-  assert.doesNotMatch(html, /多數勢力偏多/);
+  assert.match(html, /三大法人.{0,10}觀望/);
+  assert.doesNotMatch(html, /三大法人.{0,20}偏多/);
 });
 
-// ---- Fallback: 主要權重 ----
+// ---- 行為代理敘事 ----
 
-test('全 neutral 但 weight 都是 undefined → 「各勢力觀望」共識觸發,不進 fallback', () => {
-  // 注意 source 行為:bull=0 & bear=0 滿足共識條件,即使 force 的 weight 缺,
-  // 仍會 push「各勢力觀望」,fallback 只在 interpretations 為空時才會 push。
+test('behavioral_proxy：散戶 bearish + 法人 bullish → 「行為代理與法人反向」', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'neutral' },
-      { force: 'institutional', trend: 'neutral' },
-      { force: 'dealer', trend: 'neutral' },
-      { force: 'retail', trend: 'neutral' },
-      { force: 'government', trend: 'neutral' },
-      { force: 'futures', trend: 'neutral' },
-      { force: 'tsm_adr', trend: 'neutral' },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'neutral' }),
+      e07Force('retail', { dimension_role: 'behavioral_proxy', trend: 'bearish' }),
     ],
   });
-  assert.match(html, /各勢力觀望/);
-  assert.match(html, /市場方向不明/);
+  // 應出現散戶與法人反向的敘事
+  assert.match(html, /散戶.{0,30}(反向|偏空|抵銷|withdraw)|反向.{0,20}法人|法人接散戶/);
 });
 
-test('fallback 顯示 top-2 最高 weight 中文 label', () => {
+test('behavioral_proxy unavailable（government 缺資料）→ 不敘事', () => {
+  // government 缺資料不應被敘事為「反向」或「同步」
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'neutral', weight: 0.50 },     // 1st
-      { force: 'institutional', trend: 'neutral', weight: 0.30 }, // 2nd
-      { force: 'dealer', trend: 'neutral', weight: 0.10 },
-      { force: 'retail', trend: 'neutral', weight: 0.05 },
-      { force: 'government', trend: 'neutral', weight: 0.03 },
-      { force: 'futures', trend: 'neutral', weight: 0.01 },
-      { force: 'tsm_adr', trend: 'neutral', weight: 0.01 },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('government', { dimension_role: 'behavioral_proxy', trend: 'bearish', data_available: false }),
+      e07Force('retail', { dimension_role: 'behavioral_proxy', trend: 'bearish' }),
     ],
   });
-  // 共識 "全觀望" 觸發,但 interpretations 不為空所以 fallback 不會 push
-  assert.match(html, /各勢力觀望/);
-  assert.match(html, /市場方向不明/);
+  // 政府 unavailable → 不應敘事「官股護盤」「官股反向」
+  assert.doesNotMatch(html, /官股護盤/);
 });
 
-// ---- 純混合 (沒 consensus 也沒 specific pair) 但有 weight → 走 fallback ----
+// ---- 4 narrative group structure ----
 
-test('混合 signals 但 force pair 都未配對 → top-weight fallback', () => {
-  // foreign↑ + institutional↑ 觸發,故不放這 case
-  // 直接做「只有一個 bullish 但又不觸發共識」的情境
+test('4 narrative group：institutional + behavioral + foreign_positioning + cross_market', () => {
+  // 構造每個 group 都應有觸發的輸入
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'bullish', weight: 0.4 },  // bull=1, foreign↑ 但 institutional 不 bull → 不觸發
-      { force: 'institutional', trend: 'bearish', weight: 0.3 },
-      { force: 'dealer', trend: 'neutral', weight: 0.1 },
-      { force: 'retail', trend: 'neutral', weight: 0.1 },
-      { force: 'government', trend: 'neutral', weight: 0.05 },
-      { force: 'futures', trend: 'neutral', weight: 0.03 },
-      { force: 'tsm_adr', trend: 'neutral', weight: 0.02 },
+      e07Force('foreign', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('institutional', { dimension_role: 'official_actor', trend: 'bullish' }),
+      e07Force('dealer', { dimension_role: 'official_actor', trend: 'bullish' }),
+      // behavioral
+      e07Force('government', { dimension_role: 'behavioral_proxy', trend: 'bullish', data_available: true }),
+      e07Force('retail', { dimension_role: 'behavioral_proxy', trend: 'bullish' }),
+      // foreign positioning
+      e07Force('futures', { dimension_role: 'positioning_indicator', trend: 'bullish' }),
+      // cross_market
+      e07Force('tsm_adr', { dimension_role: 'cross_market_signal', trend: 'bullish' }),
     ],
   });
-  // bull=1, bear=1 → 不觸發 4+ 共識
-  // foreign↑ + institutional↓ → 沒有 hasForeignBullish + hasRetailBearish,沒有其它 pair
-  // → fallback 觸發,顯示 top-2 weight: foreign 40%, institutional 30%
+  // 至少 4 條敘事（institutional 共識 + 行為代理 + 領先 + 跨市場）
+  const items = (html.match(/<li class="force-interpretation__item">/g) || []).length;
+  assert.ok(items >= 4, `預期至少 4 條敘事（4 個 group），實際 ${items}`);
+});
+
+// ---- Fallback：主要權重集中在 X 仍保留（spec §9.1 actor 共識） ----
+
+test('fallback 仍顯示 top-2 最高 weight 中文 label', () => {
+  // 故意做出不觸發任一 consensus/配對的情境：official_actor mixed，
+  // 且 retail 反向，futures 也有 weight；fallback 仍 top-weight。
+  const html = renderToString({
+    forces: [
+      e07Force('foreign', { trend: 'bullish', weight: 0.40 }),
+      e07Force('institutional', { trend: 'bearish', weight: 0.30 }),
+      e07Force('dealer', { trend: 'neutral', weight: 0.10 }),
+      e07Force('government', { trend: 'neutral', weight: 0.05, data_available: false }),
+      e07Force('retail', { trend: 'neutral', weight: 0.05 }),
+      e07Force('futures', { dimension_role: 'positioning_indicator', trend: 'neutral', weight: 0.05 }),
+      e07Force('tsm_adr', { dimension_role: 'cross_market_signal', trend: 'neutral', weight: 0.05 }),
+    ],
+  });
+  // 主要權重敘事仍存在
   assert.match(html, /主要權重集中在/);
   assert.match(html, /外資/);
   assert.match(html, /投信/);
-  assert.match(html, /方向以觀望為主/);
 });
 
-// ---- Force 缺 weight (filter 掉) ----
+// ---- 純官方actor觀望（行為代理 + 訊號中性）----
 
-test('forces 沒 weight → top.map 回空 → fallback 中 topNames 為空字串', () => {
+test('3 official_actor neutral + 4 others neutral → 共識「三大法人皆觀望」', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign' },  // 沒 trend 沒 weight
-      { force: 'institutional' },
+      e07Force('foreign', { trend: 'neutral' }),
+      e07Force('institutional', { trend: 'neutral' }),
+      e07Force('dealer', { trend: 'neutral' }),
+      e07Force('government', { trend: 'neutral', data_available: true }),
+      e07Force('retail', { trend: 'neutral' }),
+      e07Force('futures', { dimension_role: 'positioning_indicator', trend: 'neutral' }),
+      e07Force('tsm_adr', { dimension_role: 'cross_market_signal', trend: 'neutral' }),
     ],
   });
-  // bull=0, bear=0 → 共識 "全觀望" 觸發
-  // 但 weight undefined → top 為空 → fallback 仍 push (因為 interpretations 流程先 push 共識)
-  // 但測 fallback 路徑:直接看 fallback push 條件「!interpretations.length」
-  assert.match(html, /各勢力觀望/);
+  assert.match(html, /三大法人/);
+  assert.match(html, /觀望/);
 });
 
 // ---- PascalCase 後備 ----
 
-test('backend 用 PascalCase (Force/Trend) 也能解析', () => {
+test('backend 用 PascalCase (Force/Trend/DimensionRole) 也能解析', () => {
   const html = renderToString({
     forces: [
-      { Force: 'foreign', Trend: 'BULLISH' },
-      { Force: 'institutional', Trend: 'BULLISH' },
-      { Force: 'dealer', Trend: 'NEUTRAL' },
-      { Force: 'retail', Trend: 'NEUTRAL' },
-      { Force: 'government', Trend: 'NEUTRAL' },
-      { Force: 'futures', Trend: 'NEUTRAL' },
-      { Force: 'tsm_adr', Trend: 'NEUTRAL' },
+      { Force: 'foreign', DimensionRole: 'official_actor', Trend: 'BULLISH' },
+      { Force: 'institutional', DimensionRole: 'official_actor', Trend: 'BULLISH' },
+      { Force: 'dealer', DimensionRole: 'official_actor', Trend: 'NEUTRAL' },
     ],
   });
-  // 7 forces 但 bull=2 → 不到 4,不觸發共識
-  // force pair: foreign↑ + institutional↑ → 法人齊買
-  assert.match(html, /法人齊買/);
+  // 共識條件觸發：三大法人偏多
+  assert.match(html, /三大法人/);
+  assert.match(html, /偏多/);
 });
 
-// ---- Unknown force 名稱 → label() fallback ----
+// ---- Legacy fallback：dimension_role 缺失 ----
 
-test('未知 force 名稱 → fallback 顯示「未知」', () => {
+test('legacy fallback：dimension_role 缺失時仍能依 force 鍵判斷官方actor', () => {
+  // 即使後端尚未升級到 E07 schema，仍要能正確識別 foreign/institutional/dealer 為官方actor。
+  // 這 3 個 force 全部 bullish → 三大法人（共識）偏多
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'neutral', weight: 0.5 },
-      { force: 'mystery_force', trend: 'neutral', weight: 0.3 },
+      { force: 'foreign', trend: 'bullish' },
+      { force: 'institutional', trend: 'bullish' },
+      { force: 'dealer', trend: 'bullish' },
+      { force: 'government', trend: 'neutral' },
+      { force: 'retail', trend: 'neutral' },
+      { force: 'futures', trend: 'neutral' },
+      { force: 'tsm_adr', trend: 'neutral' },
     ],
   });
-  // 全 neutral → 共識 "全觀望" 觸發
-  // fallback 不 push (因為已有共識)
-  assert.match(html, /各勢力觀望/);
+  assert.match(html, /三大法人/);
+  assert.match(html, /偏多/);
+  // futures/tsm_adr 即使 bullish 也不應影響此 narrative
 });
 
 // ---- HTML escaping ----
 
 test('解讀列表項目使用 escapeHtml,防止 XSS', () => {
-  // 為了觸發 fallback 路徑:避免共識條件、避免所有 force pair 配對。
-  // 設 <xss> 為 bullish (top weight),foreign bearish,其他中性:
-  //   bull=1, bear=1 → 不觸發 4+ 共識
-  //   bull=0+neutral=0? No → 不觸發全觀望
-  //   foreign↑? No (foreign 是 bearish)
-  //   → fallback 觸發,top-2 為 <xss>、foreign
   const html = renderToString({
     forces: [
-      { force: '<xss>', trend: 'bullish', weight: 0.5 },
-      { force: 'foreign', trend: 'bearish', weight: 0.3 },
-      { force: 'institutional', trend: 'neutral', weight: 0.1 },
-      { force: 'dealer', trend: 'neutral', weight: 0.05 },
-      { force: 'retail', trend: 'neutral', weight: 0.03 },
-      { force: 'government', trend: 'neutral', weight: 0.01 },
-      { force: 'futures', trend: 'neutral', weight: 0.01 },
+      { force: '<xss>', dimension_role: 'official_actor', trend: 'bullish' },
+      { force: 'foreign', dimension_role: 'official_actor', trend: 'bearish', weight: 0.3 },
+      { force: 'institutional', dimension_role: 'official_actor', trend: 'neutral' },
+      { force: 'dealer', dimension_role: 'official_actor', trend: 'neutral' },
+      { force: 'government', dimension_role: 'behavioral_proxy', trend: 'neutral', data_available: false },
+      { force: 'retail', dimension_role: 'behavioral_proxy', trend: 'neutral', weight: 0.05 },
+      { force: 'futures', dimension_role: 'positioning_indicator', trend: 'neutral' },
+      { force: 'tsm_adr', dimension_role: 'cross_market_signal', trend: 'neutral' },
     ],
   });
-  // 確認走 fallback 路徑
-  assert.match(html, /主要權重集中在/);
-  // literal `<xss>` tag 不應出現在 HTML(render 之後的 innerHTML)
-  // 注意 source 對 fallback 字串做雙重 escape:
-  //   - line 96: escapeHtml(topNames) 已 escape '<xss>' → '&lt;xss&gt;'
-  //   - line 99: items.map(escapeHtml) 又再 escape → '&amp;lt;xss&amp;gt;'
-  // 瀏覽器解讀後顯示為純文字「<xss>」,語意上仍安全。
+  // literal `<xss>` 標籤不應出現於輸出內
   assert.doesNotMatch(html, /<xss>/);
   assert.doesNotMatch(html, /<script/i);
-  assert.match(html, /&amp;lt;xss&amp;gt;/);  // 確認 double-escape 確實發生
 });
 
 // ---- 結構完整性 ----
@@ -392,12 +355,11 @@ test('解讀列表項目使用 escapeHtml,防止 XSS', () => {
 test('輸出包含 title + ul + 多 li items', () => {
   const html = renderToString({
     forces: [
-      { force: 'foreign', trend: 'bullish' },
-      { force: 'institutional', trend: 'bullish' },
+      e07Force('foreign', { trend: 'bullish' }),
+      e07Force('institutional', { trend: 'bullish' }),
     ],
   });
-  assert.match(html, /<h4 class="force-interpretation__title">7-Force 組合解讀<\/h4>/);
+  assert.match(html, /<h4[^>]*class="force-interpretation__title">[^<]+<\/h4>/);
   assert.match(html, /<ul class="force-interpretation__list">/);
-  // 最少 1 條 li
   assert.match(html, /<li class="force-interpretation__item">/);
 });

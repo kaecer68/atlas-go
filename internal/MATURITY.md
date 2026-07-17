@@ -107,7 +107,7 @@
 | `strategy_validator` | 策略歷史回測驗證 — Sharpe/最大回撤/勝率/TAIEX 相關係數、排名與分層 | `Validator`, `StrategyReport`, `BatchReport` | Wave 11 新增；消費 backtest + strategy；產出供 strategy_ranker 使用 |
 | `strategy_ranker` | 策略排名與分層 — 依 backtest 績效對 5 策略排名並分配 public/paid tier | `Ranker`, `RankedStrategy` | Wave 11 新增；消費 strategy_validator；產出供 recommender 使用 |
 | `stocktools` | 個股級查詢端點 — quote、fundamentals、chips、technical | `QuoteHandler`, `FundamentalsHandler`, `ChipsHandler`, `TechnicalHandler` | Wave 11 新增；API: /api/stock/*；供 atlas-mcp stock_* tools 使用 |
-| `capitalflow` | 七大資金勢力分解與共振分析 — 外資/投信/公股/散戶/期貨/ADR Z-score、共振係數、品質分數 | `ForceExtractor`, `ResonanceEngine`, `CapitalFlowReport` | Wave 11 新增；API: /api/capital-flow/daily + /summary |
+| `capitalflow` | 七維錢潮雷達（3+2+2 分層）分解與共振分析 — 官方actor（外資/投信/自營商）T86 + 行為代理（官股/散戶）proxy + 領先／跨市場訊號（期貨 OI / TSM ADR）Z-score、共振係數、品質分數；`docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 | `ForceExtractor`, `ResonanceEngine`, `CapitalFlowReport`, `CapitalFlowAssessment` | Wave 11 新增；E06/E07/E08 完成 3+2+2 與 runtime 對齊；API: /api/capital-flow/daily + /summary |
 | `eventdriven` | 事件驅動資金流預測 — 事件日曆→資金流方向 + ETF 規模×權重預估 + 營收驚喜 | `Predictor`, `FlowPrediction`, `ETFEstimate`, `RevenueSurprise` | Wave 11 新增；消費 industry.EventCalendar + capitalflow；API: /api/events/prediction + /calendar |
 | `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | Wave 11 新增；僅供 recommender + MCP token auth 內部消費 |
 | `recommender` | 投資推薦分層系統 — 依 user tier 返回不同層級推薦內容（public/registered/premium） | `Handler`, `TierRecommendation` | Wave 11 新增；消費 subscription + strategy_ranker |
