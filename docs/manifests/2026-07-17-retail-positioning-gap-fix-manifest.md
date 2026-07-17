@@ -59,7 +59,7 @@
 | C02 | portfolio 空狀態按鈕無效 | **accepted**：`data-nav` vs 事件委託只認 `a[data-page]`；且目標頁 client 不存在 | `shared_web/static/js/pages/portfolio.js:21`、`event-listeners.js:29` | 按鈕可導航到有效頁（或移除）；Playwright 回歸 | done | none | Agent E §7 |
 | C03 | 散戶版 HTML 殘留 admin modal（提示詞比對/晉升 Baseline） | **accepted**：`client_web/static/index.html:166-181` 複製遺留 | `client_web/static/index.html` | 移除；grep client_web 無 baseline_policy/prompt-diff 殘留 | done | none | 審計 §P0-9 |
 | C04 | pipeline 場次下拉永遠「載入場次中…」 | **accepted**：`window.pipelineSessions` 只有 client 無處觸發的 reasoning-trace.js 會寫 | `shared_web/static/js/pages/pipeline.js`、`components/reasoning-trace.js` | pipeline 頁自行 fetch 場次清單；下拉顯示真實場次 | done | none | Agent E §7 |
-| C05 | premium「立即升級」只跳 alert('開發中') | — | `shared_web/static/js/page-shells/premium.js:62` | ⚠️**需業主決策**：接金流 vs 「即將推出+留 Email」；決策後實作 | pending | none | 營收斷點 |
+| C05 | premium「立即升級」只跳 alert('開發中') | — | `shared_web/static/js/page-shells/premium.js:62` | 業主裁決：「即將推出 + 留 Email」等候名單 | done | none | c29e50e8；POST /api/waitlist + WaitlistStore（JSONL） |
 | C06 | `llms.txt` 過時（79-81 vs 實際 110 tools） | **accepted**：手寫未同步 | `client_web/static/llms.txt` | 更新至 110；長期改由註冊表生成（Backlog） | done | none | Agent E §6 |
 | C07 | tool-catalog 稱 experiment_judge 為 LLM 評審（實為統計式 replay judge） | **accepted**：文件失真 | `docs/reference/tool-catalog.md:99` | 描述改為統計式 17-gate judge；與 `internal/experiment/judge.go` 一致 | done | 文件修正 | Agent D §B11 |
 
@@ -75,11 +75,11 @@
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| E01 | 外資台指期未平倉零覆蓋（外資最領先公開訊號） | — | 新增 `internal/marketdata/taifex_oi_provider.go`、`internal/apigateway/register_adapters.go`、排程（收盤後 15:30）、歷史回填 | 每日盤後自動抓外資/投信/自營台指期淨多空；90 天回填；channel health 可觀測；`data_get_channels` 可見 | pending | data-sources.md 更新 | 審計 §P1-1；TAIFEX 每日盤後公布 |
-| E02 | Futures force 是回傳 0 的 placeholder | **accepted**：`forces.go:44-50` 註解自承未接線 | `internal/capitalflow/forces.go` | futures force 產生真實 Z-score 與 trend；單測模擬外資+投信+官股同向時共振 1.5 可觸發 | pending | none | 依賴 E01 |
-| E03 | 「外部因子→外資」傳導模型不存在（因果鏈第一哩） | — | 擴展 `internal/narrative/weight_calibration.go` 或新增 `internal/capitalflow/foreign_forecast.go`；寫 ledger | 每日產出外資次日方向+機率預估；預測 vs 實際追蹤表；90 天回測命中率 >55% 才啟用展示（否則標「校準中」） | pending | 新 spec（設計文件先行） | 依賴 E01 回填；先計分卡/logistic 簡模型，拒絕過度數學化 |
-| E04 | Government force 恆 0 且方法論未定義 | — | 設計文件 + 依決策實作（公股行庫代理：分點推估/事件標記/或維持 0 但明示） | ⚠️**需業主決策**方法論；若維持無源，UI/API 標「無資料來源」而非假 neutral | pending | 設計文件 | 審計 §P1-9 |
-| E05 | 七大勢力分類混雜主體與代理（TSM ADR 拿 30% 權重、外資 0%） | **accepted**：動態權重依 \|raw\| 占比，ADR 與外資共線 | `internal/capitalflow/types.go`、`forces.go`、`report.go`、UI 7-force 組件、MCP 輸出 | ⚠️**需業主決策**（API 形狀變更）：主體 5 類 + 外資維度（現貨/期貨）+ 情緒特徵（ADR）；向後相容或版本化；I01 文件裁決後執行 | pending | I01 定位文件 | 審計 §三方法論評語 1 |
+| E01 | 外資台指期未平倉零覆蓋（外資最領先公開訊號） | — | 新增 `internal/marketdata/taifex_oi_provider.go`、`internal/apigateway/register_adapters.go`、排程（收盤後 15:30）、歷史回填 | 每日盤後自動抓外資/投信/自營台指期淨多空；channel health 可觀測；`data_get_channels` 可見 | done | data-sources.md 更新（待補） | bc35701e；端點 MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate，篩 ContractCode=臺股期貨；90 天回填列 BK-12 |
+| E02 | Futures force 是回傳 0 的 placeholder | **accepted**：依 E05 §7 重構降維 | `internal/capitalflow/forces.go`（§7 後不再為獨立 force，改掛在 foreign.LeadingZ/LeadingTrend） | foreign score 必帶 futures OI 領先訊號；共振係數規則不變 | done | none | 844ba81f（與 E05 同 commit） |
+| E03 | 「外部因子→外資」傳導模型不存在（因果鏈第一哩） | — | 新增 `internal/forecast/foreign_forecast.go`（scorecard + ledger + 校準門檻）；spec 文件 | 設計文件 + 透明加權 scorecard（7 特徵）；Ledger 寫讀；§6 門檻（≥90 日 + ≥55% 命中率）；未達回「校準中」 | done | 新 spec | 9f71933e；拒黑盒 ML，遵守 §8 |
+| E04 | Government force 恆 0 且方法論未定義 | — | 設計文件 + v1 檔案型 provider + channel | docs/specs/government-force-proxy.md；v1 採「操作員匯入」誠實模式；缺檔時 force 仍存在但 DataAvailable=false | done | 新設計文件 | 7e228cb1；分點加總自動化列 BK-13 |
+| E05 | 七大勢力分類混雜主體與代理（TSM ADR 拿 30% 權重、外資 0%） | **accepted**：依 §7 重構 | `internal/capitalflow/types.go`、`forces.go`、`resonance.go` | 5 subject + 1 leading_indicator（futures, deprecated）+ 1 sentiment（tsm_adr, deprecated）；共振只認 subject；force 帶 Role/Deprecated 旗標；government 帶 DataAvailable 旗標；foreign 帶 LeadingZ/LeadingTrend | done | I01 定位文件 | 844ba81f；向後相容（API 仍回 7 筆） |
 
 ### 線 F：預測閉環與策略層接通
 
@@ -172,8 +172,12 @@
 | BK-07 | llms.txt 由工具註冊表自動生成 | 2026-07-17 | C06 完成後 |
 | BK-08 | 背景任務自動 backoff retry（目前只記 failure 等下個 interval） | 2026-07-17 | 線 B 完成後 |
 | BK-09 | main.go 的 dwMgr 啟動後不 reload → auto_rollback / D03 的即時 Sharpe 用陳舊資料（auto_propose 已自行 Load，auto_rollback 未改） | 2026-07-17 | 線 B 後續 |
-| BK-10 | taifex_daily / twse_etf / twse_oddlot 三通道即時 error（docker logs 觀測）；taifex_daily 與 E01 相關，需查 provider 失效原因 | 2026-07-17 | 線 E 前處理 |
+| BK-10 | taifex_daily / twse_etf / twse_oddlot 三通道反覆「rate limit wait: context canceled」自我窒息 | done | 30b902ac；rate-limiter Wait 改 context.WithoutCancel + 15s 上限脫鉤等待；HTTP 仍走呼叫端 ctx |
 | BK-11 | dailyreport 的 Strategy / Risk section 仍硬編碼（B06 只修 macro/capital/events/summary） | 2026-07-17 | 線 B 後續 |
+| BK-12 | E01 TAIFEX OI 缺 90 天回填（OpenAPI 只回最新日）。需 FinMind `TaiwanFuturesInstitutionalTraders` 或向 TAIFEX 申請歷史資料 API | 2026-07-17 | E03 上線後才能進入 90 日校準 |
+| BK-13 | E04 v1 官股行庫代理採「操作員匯入」模式；分點加總自動化（讀證交所每日分點 → 篩官股券商 → 加總）尚未實作 | 2026-07-17 | E04 後續 |
+| BK-14 | E04 評估購買第三方整理資料（CMoney/Goodinfo「八大行庫買賣超」）的商業授權與口徑一致性 | 2026-07-17 | E04 評估 |
+| BK-15 | ForceExtractor 滾動視窗是 process-local（60 日視窗記憶體 in-memory）；重啟即清空，Z-score 與 §6 校準命中率會跳動 | 2026-07-17 | §8 校準哲學持久化前置 |
 
 > **Rule**: 每個 session 最多從 Backlog 拉 1 項進 scope，且須在當前 ID 全 done/paused 後。
 
@@ -204,22 +208,19 @@
 
 ## Session-End State
 
-- **Done so far**: Phase A 審計 + Phase B manifest + 第〇輪（I01/I02）+ 第一輪（線 A 全、線 C 除 C05、B04-B07）+ 第二輪（線 B 全、線 D 全）
-- **第二輪實作重點**：
-  - B01/B02：`ErrTaskSkipped` 哨兵（空轉不再洗掉 failures）+ `last_error` 欄位 + overlap 容忍區間（max(1s, interval/20)）
-  - B03：system health 新增 backtest 快照陳舊告警 + `backtest_stale` 欄位
-  - B08：macro-ingest 依 composite `FailedChannels` 記 per-channel degraded
-  - B09：auto_cycle_update 改全滅才報錯；auto_experiment brief 補預設 acceptance_gates；移除 container 內必敗的 `go run` seasonal_calibrate（binary 已加入 Dockerfile 啟用 guarded 版）；calibration_cycle 確認為 config 刻意停用
-  - B10：daily_report 每日 14:00（台北）排程生成一次；archive-state 文件化為人工操作
-  - D01：experiments.jsonl 改 last-write-wins 折叠（`ledger.CountUnresolvedPlanned`）、`ExpireStalePlanned`（>30 天）於 auto_experiment 每次執行前先跑、onboarding/AutoPropose 加 100 筆上限
-  - D02：AutoProposer 接線為 `auto_propose` 每日任務（含 backlog gate + dwMgr reload）
-  - D03：AutoRollback.RecordPromotion 改用即時 computeSystemSharpe（不再信傳入的 0.0）
-- **Remaining**: C05（待業主決策）、線 E-I、11 個 Backlog
-- **Next action**: 第三輪線 E（外資期貨 OI 通道 E01 → E02 → E03）
-- **Uncommitted code**: 兩輪程式修改均未 commit（等使用者確認 branch/commit 策略）
-- **Branch / PR**: 尚未建立
-- **Paused because**: 等使用者指示（git 策略、C05、E04/E05 簽核）
-- **待驗證（需重啟服務）**: 第一輪 6 個 MCP 工具活體呼叫、darwinian trend 恢復寫入、daily_report 一致性、recommendations free tier、autobacktest 13:30 真跑（Dockerfile 需重新 build 才有 calibrate-seasonal）、auto_experiment 下週執行時 backlog 降至 <50
+- **Done so far**: 第〇輪+第一輪+第二輪（27 IDs）+ 第三輪 C05 + BK-10 + 線 E（E01-E05）+ 第四輪 E03 共 33 IDs done
+- **第三輪重點（線 E）**：
+  - BK-10：rate-limiter 等待脫鉤 deadline（修復 taifex_daily/twse_etf/twse_oddlot 三通道自我窒息）
+  - E01：taifex_institutional 三大法人期貨 OI 通道（端點 MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate，篩 ContractCode=臺股期貨）
+  - E02（隨 E05 重構）：futures 從獨立 force 降為 foreign 的 LeadingZ/LeadingTrend
+  - E03：外資方向推估 v1 scorecard + ledger + 校準門檻（拒黑盒 ML，遵守 §8）
+  - E04：官股行庫方法論 + v1「操作員匯入」誠實模式（缺檔 DataAvailable=false）
+  - E05：七大勢力依 §7 重構（5 subject + leading_indicator + sentiment），共振只認 subject
+  - C05（業主裁決「即將推出+留 Email」）：POST /api/waitlist + WaitlistStore JSONL
+- **Remaining**: 線 F、線 G、線 H + 4 個新增 Backlog（BK-12~BK-15）
+- **Next action**: 第四輪線 F 預測閉環接通策略層、線 G 集保/借券/選舉校準
+- **Branch / PR**: `fix/retail-positioning-gap-r1-r2` → PR #1210（含本輪全部 commits）
+- **待驗證（需重啟服務）**: E01 排程 15:30 後實際抓取、E03 上線後 ≥90 個交易日才能驗證校準、Dockerfile 重新 build 啟用 calibrate-seasonal、auto_experiment 下週執行時 backlog 降至 <50
 
 ---
 
@@ -230,3 +231,4 @@
 | 2026-07-17 | 1.0 | Initial manifest（47 IDs + 8 backlog，承接審計報告） | Kimi Code |
 | 2026-07-17 | 1.1 | 第〇輪+第一輪完成：16 IDs done（A01-A06、C01-C04/C06/C07、B04-B07） | Kimi Code |
 | 2026-07-17 | 1.2 | 第二輪完成：9 IDs done（B01-B03/B08-B10、D01-D03）；新增 Backlog BK-09~BK-11 | Kimi Code |
+| 2026-07-17 | 1.3 | 第三輪+收尾：C05（業主裁決 Email 留資）+ BK-10（rate-limit 脫鉤）+ 線 E 全（E01-E05）+ E03；新增 Backlog BK-12~BK-15；branch `fix/retail-positioning-gap-r1-r2` 33 commits 推送，PR #1210 開啟 | Kimi Code |
