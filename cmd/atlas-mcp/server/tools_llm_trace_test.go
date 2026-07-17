@@ -40,7 +40,8 @@ func TestHandleLLMGetHealth_OK(t *testing.T) {
 func TestHandleTraceGetSimLatest_OK(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
-	rec.responseBody = []byte(`{}`)
+	// Backend returns a bare JSON array.
+	rec.responseBody = []byte(`[{"agent":"ai-desk-01","action":"buy"}]`)
 	_, out, err := s.handleTraceGetSimLatest(context.Background(), nil, struct{}{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -48,8 +49,8 @@ func TestHandleTraceGetSimLatest_OK(t *testing.T) {
 	if rec.path != "/api/traces/sim-latest" {
 		t.Fatalf("path=%s", rec.path)
 	}
-	if out.Result == nil {
-		t.Fatal("expected Result non-nil")
+	if len(out.Traces) != 1 {
+		t.Fatalf("expected 1 trace, got %d", len(out.Traces))
 	}
 }
 

@@ -68,12 +68,19 @@ func (s *server) handleLLMGetHealth(ctx context.Context, _ *mcp.CallToolRequest,
 	return nil, out, nil
 }
 
-func (s *server) handleTraceGetSimLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, llmTraceBaseOutput, error) {
-	var out llmTraceBaseOutput
+// traceSimLatestOutput decodes the JSON array returned by
+// GET /api/traces/sim-latest. Items stay as map[string]any to keep MCP
+// schema decoupled from the trace record type.
+type traceSimLatestOutput struct {
+	Traces []map[string]any `json:"traces"`
+}
+
+func (s *server) handleTraceGetSimLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, traceSimLatestOutput, error) {
+	var out traceSimLatestOutput
 	if err := s.withAudit(ctx, "trace_get_sim_latest", nil, func() error {
-		return s.cli.Get(ctx, "/api/traces/sim-latest", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/traces/sim-latest", nil, &out.Traces)
 	}); err != nil {
-		return nil, llmTraceBaseOutput{}, err
+		return nil, traceSimLatestOutput{}, err
 	}
 	return nil, out, nil
 }
