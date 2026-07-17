@@ -66,6 +66,12 @@ func (r *AutoRollback) WithEventBus(eb *eventbus.ChannelEventBus) *AutoRollback 
 // RecordPromotion should be called whenever an experiment is promoted.
 // It snapshots the pre-promotion system Sharpe for later comparison.
 func (r *AutoRollback) RecordPromotion(experimentID string, prePromotionSharpe float64) {
+	// Prefer a live measurement over the caller-provided value: the auto
+	// promoter historically passed 0.0 (its TODO), which silently disabled
+	// the >20% degradation check (fix manifest #D03).
+	if r.dwManager != nil {
+		prePromotionSharpe = r.computeSystemSharpe()
+	}
 	r.promotedSnapshot[experimentID] = prePromotionSharpe
 	logging.Info("auto_rollback", "promotion_recorded",
 		"experiment_id", experimentID,
