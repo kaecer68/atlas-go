@@ -528,9 +528,13 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	tw.Record(7, "ledger_write", "START", nil)
 	// Use replay-based forward returns when dataset is available (real data).
-	// Falls back to synthetic when replay is nil.
+	// Falls back to synthetic when replay is nil. Synthetic outcomes are
+	// recorded to the ledger for audit, but must NOT drive Darwinian weight
+	// evolution (fake data would pollute the learning signal); on such gap
+	// days the weights are left unchanged.
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.Sim().replay)
-	if len(outcomes) == 0 {
+	syntheticOutcomes := len(outcomes) == 0
+	if syntheticOutcomes {
 		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime))
 	}
 	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
@@ -547,7 +551,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.Sim().lastOutcomes = outcomes
 	tw.Record(7, "ledger_write", "OK", map[string]any{"outcomes": len(outcomes)})
 
-	if s.Port().darwinian != nil {
+	if s.Port().darwinian != nil && !syntheticOutcomes {
 		for _, outcome := range outcomes {
 			s.Port().darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
