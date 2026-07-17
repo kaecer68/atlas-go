@@ -19,11 +19,14 @@ package main
 //   11. macro_risk_calibrate              — engine MacroRisk thresholds (24h)
 //   12. structural_trend_calibrate        — engine StructuralTrend thresholds (24h)
 //   13. narrative_calibrate               — narrative event detection thresholds (24h)
-//   14. seasonal_calibrate                — runs cmd/calibrate-seasonal (24h)
-//   15. linkage_calibrate                 — recession shock amplifier (24h)
-//   16. factor_weight_strategy_calibrate  — strategy deltas (conservative/aggressive/risk-on/risk-off) (24h)
-//   17. auto_calibrate                    — Darwinian parameters (7d)
-//   18. rsi_tw_calibrate                  — RSI-TW autonomous calibration (24h)
+//   14. linkage_calibrate                 — recession shock amplifier (24h)
+//   15. factor_weight_strategy_calibrate  — strategy deltas (conservative/aggressive/risk-on/risk-off) (24h)
+//   16. auto_calibrate                    — Darwinian parameters (7d)
+//   17. rsi_tw_calibrate                  — RSI-TW autonomous calibration (24h)
+//
+// Removed: seasonal_calibrate (go-run variant) — it exec'd `go run` which
+// cannot work in the container (no Go toolchain) and duplicated the
+// binary-guarded `seasonal_calibration` task in data_sync_health_tasks.go.
 //
 // Out of scope (PR10c): auto_swarm_simulation, autobacktest_daily, and other
 // experiment/simulation/capital tasks.
@@ -85,7 +88,6 @@ func registerCalibrationTasks(d calibrationDeps) {
 	d.registerMacroRiskCalibrate()
 	d.registerStructuralTrendCalibrate()
 	d.registerNarrativeCalibrate()
-	d.registerSeasonalCalibrate()
 	d.registerLinkageCalibrate()
 	d.registerFactorWeightStrategyCalibrate()
 	d.registerAutoCalibrate()
@@ -445,26 +447,11 @@ func (d calibrationDeps) registerNarrativeCalibrate() {
 	log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
 }
 
-func (d calibrationDeps) registerSeasonalCalibrate() {
-	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
-		Name:     "seasonal_calibrate",
-		Interval: 24 * time.Hour,
-		Enabled:  true,
-		Task: func(ctx context.Context) error {
-			cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-seasonal",
-				"--replay", "data/replay/finmind_2020_2024.jsonl",
-				"--start", "2020", "--end", "2024", "--update", "--update-threshold", "1")
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				logging.Error("seasonal_calibrate", "failed", "err", err.Error(), "output", string(output))
-				return err
-			}
-			logging.Info("seasonal_calibrate", "completed", "output", string(output))
-			return nil
-		},
-	})
-	log.Printf("[Gateway] registered seasonal_calibrate background task (24h interval)")
-}
+// registerSeasonalCalibrate was removed: it exec'd `go run
+// ./cmd/calibrate-seasonal`, which can never work in the container (no Go
+// toolchain) and failed daily. The binary-guarded `seasonal_calibration`
+// task (data_sync_health_tasks.go) is the supported mechanism; the
+// calibrate-seasonal binary is now built into the image (fix manifest #B09).
 
 func (d calibrationDeps) registerLinkageCalibrate() {
 	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{

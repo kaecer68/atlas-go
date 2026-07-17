@@ -46,17 +46,27 @@ func (a *DataAggregator) AggregateAllIndustries(ctx context.Context) error {
 	}
 
 	var aggregateErr error
+	succeeded := 0
+	attempted := 0
 	for _, seg := range industries {
 		if len(seg.RepresentativeStocks) == 0 {
 			continue
 		}
+		attempted++
 		if err := a.AggregateIndustry(ctx, seg.ID); err != nil {
 			logging.Warn("data_aggregator", "industry_aggregate_failed",
 				"industry", seg.ID, "err", err)
 			aggregateErr = err
+			continue
 		}
+		succeeded++
 	}
-	return aggregateErr
+	// Partial failure (e.g. FinMind quota exhausted for some symbols) must not
+	// fail the whole scheduled task; only a total failure is an error.
+	if attempted > 0 && succeeded == 0 {
+		return aggregateErr
+	}
+	return nil
 }
 
 // AggregateIndustry fetches financial data for a single industry's

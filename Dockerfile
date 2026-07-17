@@ -54,6 +54,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o daily-replay-sync ./cmd/daily-replay-sync
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-replay ./cmd/backfill-replay
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o atlas-mcp ./cmd/atlas-mcp
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o calibrate-seasonal ./cmd/calibrate-seasonal
 
 # Final stage
 FROM alpine:latest
@@ -73,6 +74,7 @@ COPY --from=builder /build/atlas-go /app/
 COPY --from=builder /build/daily-replay-sync /app/
 COPY --from=builder /build/backfill-replay /app/
 COPY --from=builder /build/atlas-mcp /app/
+COPY --from=builder /build/calibrate-seasonal /app/
 
 # Copy configuration files
 COPY --from=builder /build/configs /app/configs
