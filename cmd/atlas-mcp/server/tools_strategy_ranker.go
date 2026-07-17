@@ -14,12 +14,20 @@ func registerStrategyRankerTools(mcpSrv *mcp.Server, s *server) {
 	}, s.handleStrategyRanker)
 }
 
-func (s *server) handleStrategyRanker(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, strategyBaseOutput, error) {
-	var out strategyBaseOutput
+// strategyRankerOutput decodes the JSON array returned by
+// GET /api/strategy-ranker/rank (internal/strategy_ranker/handler.go
+// HandleRank). Items stay as map[string]any to keep MCP schema decoupled
+// from strategy_validator.RankedReport.
+type strategyRankerOutput struct {
+	Strategies []map[string]any `json:"strategies"`
+}
+
+func (s *server) handleStrategyRanker(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, strategyRankerOutput, error) {
+	var out strategyRankerOutput
 	if err := s.withAudit(ctx, "strategy_ranker", nil, func() error {
-		return s.cli.Get(ctx, "/api/strategy-ranker/rank", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/strategy-ranker/rank", nil, &out.Strategies)
 	}); err != nil {
-		return nil, strategyBaseOutput{}, err
+		return nil, strategyRankerOutput{}, err
 	}
 	return nil, out, nil
 }
