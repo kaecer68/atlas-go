@@ -1,21 +1,28 @@
-# Atlas-Go: Taiwan Stock AI Investment Platform
+# Atlas-Go: Taiwan Stock AI Investment Platform（台灣散戶模擬交易暨策略觀測平台）
 # LLMs: this file describes the site structure for AI crawlers and agents.
 
 ## Site Map
-- /client/home — Daily market summary with AI investment signals
-- /client/portfolio — AI strategy performance and demo portfolio
-- /client/crossmarket — Cross-market correlation matrix (Taiwan vs US)
-- /client/industry — Sector ecosystem and supply chain analysis
-- /client/narrative — Macro narrative events and sentiment analysis
-- /client/strategies — Investment principles and active strategy library
+- /client/home — 市場總覽：建議方向、7-Force 錢潮看板、未來 5 日錢潮預測、市場脈動
+- /client/capital_predictions — 錢潮預測：5 日資金流向與板塊熱度圖
+- /client/capital_board — 錢潮看板：板塊多空彙總與模型權重
+- /client/stock-quote — 個股快查：報價、基本面、籌碼、技術面
+- /client/narrative — 宏觀視野：總經快照、散戶情緒、敘事事件與因果鏈
+- /client/crossmarket — 美台連動：危機信號、美股指數、相關性矩陣
+- /client/industry — 產業地圖：產業權重、週期羅盤、供應鏈連動
+- /client/pipeline — 投資管線：AI 推薦 → 篩選 → 控制 → 模擬投組全流程
+- /client/portfolio — 組合持倉：AI 示範組合淨值、持倉與風險（唯讀）
+- /client/strategies — 投資心法：L1-L5 框架與策略排名表
+- /client/premium — 方案比較（免費 vs 升級）
 
 ## API Reference
 - /api/macro/snapshot/latest — Latest macro data snapshot (TAIEX, TSM ADR, VIX, etc.)
-- /api/dashboard/us-indices — US market indices and tech stocks
+- /api/capital-flow/summary — 七大資金勢力 Z-score 與共振摘要
+- /api/events/prediction — 未來 5 日資金流向預測與板塊預測
 - /api/taiwan/stress-index — Taiwan market stress index
-- /api/dashboard/portfolio-state — Portfolio performance and positions
 - /api/dashboard/system-health — System health and channel status
 
 ## Agent Access
-- MCP server available at port 18080 (see cmd/atlas-mcp/README.md)
-- 79–81 tools (depending on feature flags) for market data, risk analysis, strategy operations, and monitoring
+- MCP server (atlas-mcp): 110 tools covering market data, capital flow, narrative,
+  strategy, risk, scheduler, and observability (see cmd/atlas-mcp/README.md and
+  docs/reference/tool-catalog.md)
+- MCP is the Agent Support layer complementing the web-first dashboard
