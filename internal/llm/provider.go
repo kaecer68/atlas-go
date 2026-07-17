@@ -259,7 +259,8 @@ func SafeInvokeHandler(ctx context.Context, t *Tool, args json.RawMessage) (resu
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
-			slog.Error("tool handler panic recovered",
+			slog.Error(
+				"tool handler panic recovered",
 				"tool", t.Name,
 				"panic", fmt.Sprintf("%v", r),
 				"stack", string(stack),

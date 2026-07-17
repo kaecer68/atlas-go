@@ -38,21 +38,21 @@ const MinHitRateForCalibration = 0.55
 // Input carries the daily normalized features the scorecard consumes.
 // All numeric features are in their raw units; scaling happens inside Score.
 type Input struct {
-	ForeignFuturesOIZ float64 // 60-day Z-score of TAIFEX foreign futures OI net
+	ForeignFuturesOIZ  float64 // 60-day Z-score of TAIFEX foreign futures OI net
 	ForeignSpot5DSlope float64 // 過去 5 個交易日外資現貨淨額的線性回歸斜率 (億/日)
-	TSMADRChangePct float64
-	SPXChangePct float64
-	NDXChangePct float64
-	USDTWDChangePct float64 // 正 = 台幣升值
-	VIX float64
+	TSMADRChangePct    float64
+	SPXChangePct       float64
+	NDXChangePct       float64
+	USDTWDChangePct    float64 // 正 = 台幣升值
+	VIX                float64
 }
 
 // Result is the prediction produced by Score.
 type Result struct {
-	Date string
-	Direction ForeignDirection
+	Date        string
+	Direction   ForeignDirection
 	Probability float64 // 0..1
-	Score float64 // raw pre-squash score in [-1, 1]
+	Score       float64 // raw pre-squash score in [-1, 1]
 }
 
 // Score computes the v1 weighted scorecard. Returns direction + probability.
@@ -100,14 +100,14 @@ func clamp(v, lo, hi float64) float64 {
 
 // Record is one row in data/state/foreign_forecast/YYYYMMDD.json.
 type Record struct {
-	Date string `json:"date"`
-	Direction ForeignDirection `json:"predicted_direction"`
-	Probability float64 `json:"probability"`
-	Score float64 `json:"score"`
+	Date        string           `json:"date"`
+	Direction   ForeignDirection `json:"predicted_direction"`
+	Probability float64          `json:"probability"`
+	Score       float64          `json:"score"`
 	// Filled in on T+1:
 	ActualOutcome ForeignDirection `json:"actual_outcome,omitempty"`
-	ActualNet int64 `json:"actual_net,omitempty"`
-	Correct *bool `json:"correct,omitempty"` // nil = pending
+	ActualNet     int64            `json:"actual_net,omitempty"`
+	Correct       *bool            `json:"correct,omitempty"` // nil = pending
 }
 
 // Ledger stores daily prediction records as YYYYMMDD.json files in dir.
@@ -183,12 +183,12 @@ func (l *Ledger) List(n int) ([]Record, error) {
 // Calibration gate
 // ---------------------------------------------------------------------------
 
-// CalibrationStatus summarises the §6 gate for external exposure.
+// CalibrationStatus summarizes the §6 gate for external exposure.
 type CalibrationStatus struct {
 	Calibrated bool
-	Samples int
-	HitRate float64
-	Reason string
+	Samples    int
+	HitRate    float64
+	Reason     string
 }
 
 // Calibrate evaluates the §6 gate from the ledger history.
@@ -230,7 +230,7 @@ func Calibrate(records []Record) CalibrationStatus {
 }
 
 // Judge updates a previous day's record with the actual outcome of T+1.
-// `actualNetTWD` is the realised foreign spot net (positive=buy, negative=sell).
+// `actualNetTWD` is the realized foreign spot net (positive=buy, negative=sell).
 // Returns the updated record.
 func Judge(prev Record, actualNetTWD int64) Record {
 	actual := ForeignDirectionNeutral

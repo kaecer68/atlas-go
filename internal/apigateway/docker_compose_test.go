@@ -75,9 +75,10 @@ func TestDockerCompose_HasHostDockerInternalAlias(t *testing.T) {
 	}
 
 	if !foundInAtlas {
-		t.Errorf("'host.docker.internal' not found within atlas service section\n\n" +
-			"原因：atlas 容器需要 host.docker.internal extra_hosts 條目作為 host gateway fallback。" +
-			"（PR #941 後 fubon-proxy 主要走 Docker DNS fubon-proxy。）",
+		t.Errorf(
+			"'host.docker.internal' not found within atlas service section\n\n" +
+				"原因：atlas 容器需要 host.docker.internal extra_hosts 條目作為 host gateway fallback。" +
+				"（PR #941 後 fubon-proxy 主要走 Docker DNS fubon-proxy。）",
 		)
 	}
 }

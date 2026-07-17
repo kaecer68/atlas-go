@@ -65,7 +65,6 @@ func TestDefaultRouter_PrimarySuccess(t *testing.T) {
 		DataClass:  DataClassUnmarked,
 	}
 	resp, err := router.Call(context.Background(), req)
-
 	// Then: the call succeeds with primary output
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -119,7 +118,6 @@ func TestDefaultRouter_PrimaryFail_Backup1Success(t *testing.T) {
 		DataClass:  DataClassUnmarked,
 	}
 	resp, err := router.Call(context.Background(), req)
-
 	// Then: Backup1 succeeds, and both Primary and Backup1 appear in AttemptedProviders
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -178,7 +176,6 @@ func TestDefaultRouter_AllFail_LastResort(t *testing.T) {
 		DataClass:  DataClassUnmarked,
 	}
 	resp, err := router.Call(context.Background(), req)
-
 	// Then: Last resort returns a deterministic fallback with ProviderMock
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -249,7 +246,6 @@ func TestDefaultRouter_DataClassGate(t *testing.T) {
 		DataClass:  DataClassRegulated,
 	}
 	resp, err := router.Call(context.Background(), req)
-
 	// Then: MiniMax should be skipped, DeepSeek should be used
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -303,7 +299,6 @@ func TestDefaultRouter_ForceProvider(t *testing.T) {
 		},
 	}
 	resp, err := router.Call(context.Background(), req)
-
 	// Then: Kimi is used directly
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -361,7 +356,6 @@ func TestNewDefaultRouter_NoAdapters(t *testing.T) {
 		DataClass:  DataClassUnmarked,
 	}
 	resp, err := router.Call(context.Background(), req)
-
 	// Then: the last-resort handler is invoked, since no providers can fulfill
 	if err != nil {
 		t.Fatalf("expected last-resort response, got error: %v", err)
@@ -437,7 +431,6 @@ func TestDefaultRouter_AttemptedProviders_OnSuccess(t *testing.T) {
 		DataClass:  DataClassUnmarked,
 	}
 	resp, err := router.Call(context.Background(), req)
-
 	// Then: AttemptedProviders contains the provider
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

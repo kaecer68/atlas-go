@@ -33,7 +33,7 @@ func tempObservationLog(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "l2-4-observation-log.md")
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write temp log: %v", err)
 	}
 	return path

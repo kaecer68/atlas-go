@@ -8,13 +8,13 @@ import (
 
 func TestScore_BullishAligned(t *testing.T) {
 	r := Score("20260716", Input{
-		ForeignFuturesOIZ:   2.0,
-		ForeignSpot5DSlope:  10.0,
-		TSMADRChangePct:     1.5,
-		SPXChangePct:        1.0,
-		NDXChangePct:        1.5,
-		USDTWDChangePct:     -0.3,
-		VIX:                 15,
+		ForeignFuturesOIZ:  2.0,
+		ForeignSpot5DSlope: 10.0,
+		TSMADRChangePct:    1.5,
+		SPXChangePct:       1.0,
+		NDXChangePct:       1.5,
+		USDTWDChangePct:    -0.3,
+		VIX:                15,
 	})
 	if r.Direction != ForeignDirectionBullish {
 		t.Errorf("expected bullish, got %s (prob=%.3f, score=%.3f)", r.Direction, r.Probability, r.Score)
@@ -26,13 +26,13 @@ func TestScore_BullishAligned(t *testing.T) {
 
 func TestScore_BearishAligned(t *testing.T) {
 	r := Score("20260716", Input{
-		ForeignFuturesOIZ:   -2.5,
-		ForeignSpot5DSlope:  -12.0,
-		TSMADRChangePct:     -2.0,
-		SPXChangePct:        -2.0,
-		NDXChangePct:        -2.5,
-		USDTWDChangePct:     0.8,
-		VIX:                 30,
+		ForeignFuturesOIZ:  -2.5,
+		ForeignSpot5DSlope: -12.0,
+		TSMADRChangePct:    -2.0,
+		SPXChangePct:       -2.0,
+		NDXChangePct:       -2.5,
+		USDTWDChangePct:    0.8,
+		VIX:                30,
 	})
 	if r.Direction != ForeignDirectionBearish {
 		t.Errorf("expected bearish, got %s (prob=%.3f)", r.Direction, r.Probability)

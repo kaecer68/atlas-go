@@ -156,15 +156,20 @@ func (tx *fakeTx) Rollback(context.Context) error        { return nil }
 func (tx *fakeTx) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
 	return 0, errors.New("not implemented")
 }
+
 func (tx *fakeTx) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults { return &fakeBatchResults{} }
-func (tx *fakeTx) LargeObjects() pgx.LargeObjects                         { return pgx.LargeObjects{} }
+
+func (tx *fakeTx) LargeObjects() pgx.LargeObjects { return pgx.LargeObjects{} }
+
 func (tx *fakeTx) Prepare(context.Context, string, string) (*pgconn.StatementDescription, error) {
 	return nil, errors.New("not implemented")
 }
+
 func (tx *fakeTx) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
 	tx.execSQL = append(tx.execSQL, sql)
 	return pgconn.NewCommandTag("INSERT 0 1"), tx.err
 }
+
 func (tx *fakeTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	return &fakeRows{}, tx.err
 }

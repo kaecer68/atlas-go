@@ -112,12 +112,12 @@ type DashboardAPI struct {
 	// so the admin page lists every registered channel rather than a
 	// hand-maintained subset (manifest #G05).
 	RegisteredChannelIDs []string
-	strategiesAnnotator        llm_annotator.Annotator
-	kimiClient                 *llm_annotator.KimiClient // concrete handle for cost/health endpoints; nil if strategiesAnnotator is not a KimiClient
-	calibrationTask            *narrative.CalibrationTask
-	crisisModeSetter           func(active bool) // callback: VIX>=35 → optimizer crisis mode
-	correlationSetter          func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
-	crossMarketSvc             *service.CrossMarketService
+	strategiesAnnotator  llm_annotator.Annotator
+	kimiClient           *llm_annotator.KimiClient // concrete handle for cost/health endpoints; nil if strategiesAnnotator is not a KimiClient
+	calibrationTask      *narrative.CalibrationTask
+	crisisModeSetter     func(active bool) // callback: VIX>=35 → optimizer crisis mode
+	correlationSetter    func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
+	crossMarketSvc       *service.CrossMarketService
 }
 
 // NewDashboardAPI creates a DashboardAPI backed by CompositeMacroProvider.

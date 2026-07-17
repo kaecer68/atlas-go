@@ -26,7 +26,8 @@ func writeExpRecords(t *testing.T, dir string, recs ...domain.ExperimentRecord) 
 
 func TestLoadOldestPendingExperiment_SkipsResolved(t *testing.T) {
 	dir := t.TempDir()
-	writeExpRecords(t, dir,
+	writeExpRecords(
+		t, dir,
 		domain.ExperimentRecord{ID: "exp-a-1700000001", TargetAgentID: "agent-a", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: "exp-b-1700000002", TargetAgentID: "agent-b", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: "exp-a-1700000001", TargetAgentID: "agent-a", Status: domain.ExperimentRejected},
@@ -42,7 +43,8 @@ func TestLoadOldestPendingExperiment_SkipsResolved(t *testing.T) {
 
 func TestLoadOldestPendingExperiment_AllResolved(t *testing.T) {
 	dir := t.TempDir()
-	writeExpRecords(t, dir,
+	writeExpRecords(
+		t, dir,
 		domain.ExperimentRecord{ID: "exp-a-1700000001", TargetAgentID: "agent-a", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: "exp-a-1700000001", TargetAgentID: "agent-a", Status: domain.ExperimentAccepted},
 	)
@@ -55,7 +57,8 @@ func TestExpireStalePlanned(t *testing.T) {
 	dir := t.TempDir()
 	old := time.Now().Add(-60 * 24 * time.Hour).Unix()
 	fresh := time.Now().Unix()
-	writeExpRecords(t, dir,
+	writeExpRecords(
+		t, dir,
 		domain.ExperimentRecord{ID: fmt.Sprintf("exp-old-%d", old), TargetAgentID: "a", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: fmt.Sprintf("exp-fresh-%d", fresh), TargetAgentID: "b", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: "exp-resolved-1700000003", TargetAgentID: "c", Status: domain.ExperimentPlanned},
@@ -79,7 +82,8 @@ func TestExpireStalePlanned(t *testing.T) {
 
 func TestCountUnresolvedPlannedFoldsDuplicates(t *testing.T) {
 	dir := t.TempDir()
-	writeExpRecords(t, dir,
+	writeExpRecords(
+		t, dir,
 		domain.ExperimentRecord{ID: "x-1", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: "x-1", Status: domain.ExperimentPlanned}, // duplicate planned
 		domain.ExperimentRecord{ID: "y-1", Status: domain.ExperimentPlanned},

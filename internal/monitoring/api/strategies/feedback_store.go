@@ -27,12 +27,12 @@ func NewFeedbackStore(root string) *FeedbackStore {
 
 // Record is the persisted shape of a validation event.
 type Record struct {
-	StrategyID  string    `json:"strategy_id"`
-	TotalTests  int       `json:"total_tests"`
-	TotalHits   int       `json:"total_hits"`
-	HitRate     float64   `json:"hit_rate"`
-	Status      string    `json:"status"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	StrategyID string    `json:"strategy_id"`
+	TotalTests int       `json:"total_tests"`
+	TotalHits  int       `json:"total_hits"`
+	HitRate    float64   `json:"hit_rate"`
+	Status     string    `json:"status"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Load returns the latest feedback for a strategy, or (Record{}, false, nil)
@@ -99,7 +99,7 @@ func (s *FeedbackStore) readLocked(strategyID string) (Record, bool, error) {
 }
 
 func (s *FeedbackStore) path(strategyID string) string {
-	// Defence-in-depth: the caller already validated the path component via
+	// Defense-in-depth: the caller already validated the path component via
 	// shared.ValidatePathComponent, but a stray "../" must never escape the
 	// store root.
 	safe := strings.ReplaceAll(strategyID, "/", "_")

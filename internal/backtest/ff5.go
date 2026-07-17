@@ -160,7 +160,7 @@ func ComputeFF5Alpha(portfolioReturns []float64, factorReturns map[string][]floa
 	if ssTot > 0 {
 		r2 = 1.0 - ssRes/ssTot
 	}
-	adjR2 := 1.0 - (1.0-r2)*(float64(n-1))/dof
+	adjR2 := 1.0 - (1.0-r2)*float64(n-1)/dof
 
 	// --- build result ---
 	intercept := beta.AtVec(0)

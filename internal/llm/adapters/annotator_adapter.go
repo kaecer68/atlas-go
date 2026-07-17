@@ -74,7 +74,8 @@ func (a *AnnotatorAdapter) Call(ctx context.Context, req llm.Request) (llm.Respo
 	fc, ok := req.Payload.(llm_annotator.FailureContext)
 	if !ok {
 		return llm.Response{}, fmt.Errorf(
-			"annotator adapter: expected llm_annotator.FailureContext, got %T", req.Payload)
+			"annotator adapter: expected llm_annotator.FailureContext, got %T", req.Payload,
+		)
 	}
 
 	start := time.Now()

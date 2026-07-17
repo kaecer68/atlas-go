@@ -254,5 +254,7 @@ func sharedPost(handler func(r *http.Request) (int, any)) http.Handler {
 }
 
 // stub to keep imports (eventbus is referenced in comments only)
-var _ = eventbus.BusEvent{}
-var _ = context.Background
+var (
+	_ = eventbus.BusEvent{}
+	_ = context.Background
+)

@@ -70,7 +70,8 @@ func (p *TWSECalendarProvider) FetchEvents(ctx context.Context, year int) ([]Cal
 		return nil, fmt.Errorf("twse_calendar: all fetches failed: %s", strings.Join(errs, "; "))
 	}
 	if len(errs) > 0 {
-		logging.Warn("twse_calendar", "partial_failure",
+		logging.Warn(
+			"twse_calendar", "partial_failure",
 			logging.FStr("errors", strings.Join(errs, "; ")),
 		)
 	}
@@ -164,7 +165,8 @@ func (p *TWSECalendarProvider) fetchExDividendMonth(ctx context.Context, dateStr
 	// TWSE calendar API deprecation (2026-06): exRight endpoint 回 HTML body
 	// (302 → /page-not-found.html)。偵測 HTML 並優雅降級回空 events。
 	if isHTMLContentType(resp.Header.Get("Content-Type")) {
-		logging.Warn("twse_calendar", "endpoint_html_response_deprecated",
+		logging.Warn(
+			"twse_calendar", "endpoint_html_response_deprecated",
 			logging.FStr("endpoint", "exRight"),
 			logging.FStr("date", dateStr),
 		)
@@ -276,7 +278,8 @@ func (p *TWSECalendarProvider) fetchMeetingMonth(ctx context.Context, dateStr st
 
 	// TWSE calendar API deprecation (2026-06): meeting endpoint 同樣 deprecated。
 	if isHTMLContentType(resp.Header.Get("Content-Type")) {
-		logging.Warn("twse_calendar", "endpoint_html_response_deprecated",
+		logging.Warn(
+			"twse_calendar", "endpoint_html_response_deprecated",
 			logging.FStr("endpoint", "meeting"),
 			logging.FStr("date", dateStr),
 		)

@@ -264,7 +264,7 @@ func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 			map[string]any{
 				"predicted_direction": pred.Direction, "predicted_value": pred.Value,
 				"actual_direction": actual.Direction, "actual_value": actual.Value,
-				"recent_std":         std,
+				"recent_std": std,
 			})
 	}
 }

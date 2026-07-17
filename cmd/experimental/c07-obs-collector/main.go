@@ -226,7 +226,8 @@ func formatRow(m *metrics) string {
 		return fmt.Sprintf("| %s | - | - | %d | - | - | - | %s |",
 			m.Date, m.LatencyP95Ms, m.Notes)
 	}
-	return fmt.Sprintf("| %s | %d | %.1f%% | %d | %d | %d | %d | %s |",
+	return fmt.Sprintf(
+		"| %s | %d | %.1f%% | %d | %d | %d | %d | %s |",
 		m.Date,
 		m.SectorCount,
 		m.JSDAlertRate*100,

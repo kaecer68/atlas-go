@@ -85,7 +85,8 @@ func (t *Trigger) onPositionUpdate(ctx context.Context, event eventbus.BusEvent)
 
 	violations := t.evaluate(payload, policy)
 	for _, v := range violations {
-		t.logger.WarnContext(ctx, "baseline_violation",
+		t.logger.WarnContext(
+			ctx, "baseline_violation",
 			"symbol", v.Symbol,
 			"field", v.Field,
 			"actual", v.Actual,

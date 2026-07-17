@@ -238,7 +238,7 @@ const stalePlannedTTL = 30 * 24 * time.Hour
 func ExpireStalePlanned(ledgerDir string, maxAge time.Duration) (int, error) {
 	records := ledger.ExperimentsJSONL(ledgerDir)
 	latest := ledger.LatestExperimentStatusByID(records)
-	var firstRec = make(map[string]domain.ExperimentRecord)
+	firstRec := make(map[string]domain.ExperimentRecord)
 	for _, rec := range records {
 		if rec.ID == "" {
 			continue

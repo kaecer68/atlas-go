@@ -24,23 +24,23 @@ type TraderSide struct {
 // raw contract counts (口數); can be negative for net short positions.
 // Source: TAIFEX OpenAPI MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate.
 type InstitutionalFuturesDaily struct {
-	Date             string     `json:"date"`
-	Foreign          TraderSide `json:"foreign"`           // 外資及陸資
-	InvestmentTrust  TraderSide `json:"investment_trust"`  // 投信
-	Dealer           TraderSide `json:"dealer"`            // 自營商
+	Date            string     `json:"date"`
+	Foreign         TraderSide `json:"foreign"`          // 外資及陸資
+	InvestmentTrust TraderSide `json:"investment_trust"` // 投信
+	Dealer          TraderSide `json:"dealer"`           // 自營商
 }
 
 // rawInstitutionalTrader mirrors the TAIFEX OpenAPI JSON shape for one row.
 type rawInstitutionalTrader struct {
-	Date                              string `json:"Date"`
-	ContractCode                      string `json:"ContractCode"`
-	Item                              string `json:"Item"`
-	TradingVolumeLong                 string `json:"TradingVolume(Long)"`
-	TradingVolumeShort                string `json:"TradingVolume(Short)"`
-	TradingVolumeNet                  string `json:"TradingVolume(Net)"`
-	OpenInterestLong                  string `json:"OpenInterest(Long)"`
-	OpenInterestShort                 string `json:"OpenInterest(Short)"`
-	OpenInterestNet                   string `json:"OpenInterest(Net)"`
+	Date               string `json:"Date"`
+	ContractCode       string `json:"ContractCode"`
+	Item               string `json:"Item"`
+	TradingVolumeLong  string `json:"TradingVolume(Long)"`
+	TradingVolumeShort string `json:"TradingVolume(Short)"`
+	TradingVolumeNet   string `json:"TradingVolume(Net)"`
+	OpenInterestLong   string `json:"OpenInterest(Long)"`
+	OpenInterestShort  string `json:"OpenInterest(Short)"`
+	OpenInterestNet    string `json:"OpenInterest(Net)"`
 }
 
 // FetchInstitutionalFuturesDaily retrieves 三大法人 期貨 OI for the 臺股期貨

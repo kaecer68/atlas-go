@@ -134,7 +134,8 @@ type (
 func TestPreflight_AllowZombieKill_ZombieCase(t *testing.T) {
 	var killed []int
 	var probeCalls int
-	withStubProbes(t,
+	withStubProbes(
+		t,
 		func(addr string) (portprobe.State, portprobe.Occupant, error) {
 			probeCalls++
 			if probeCalls == 1 {
@@ -170,7 +171,8 @@ func TestPreflight_AllowZombieKill_ZombieCase(t *testing.T) {
 // actionable error and identify the foreign process.
 func TestPreflight_AllowZombieKill_NonZombieForeign(t *testing.T) {
 	var killed []int
-	withStubProbes(t,
+	withStubProbes(
+		t,
 		func(addr string) (portprobe.State, portprobe.Occupant, error) {
 			return portprobe.StateForeign, portprobe.Occupant{PID: 5866, Command: "com.docker.backend"}, nil
 		},
@@ -203,7 +205,8 @@ func TestPreflight_AllowZombieKill_NonZombieForeign(t *testing.T) {
 // actionable error and killFn is NEVER called regardless of zombie match.
 func TestPreflight_NoAllowZombieKill_ForeignError(t *testing.T) {
 	var killed []int
-	withStubProbes(t,
+	withStubProbes(
+		t,
 		func(addr string) (portprobe.State, portprobe.Occupant, error) {
 			return portprobe.StateForeign, portprobe.Occupant{PID: 4096, Command: "python-looking"}, nil
 		},
@@ -234,7 +237,8 @@ func TestPreflight_NoAllowZombieKill_ForeignError(t *testing.T) {
 // foreign is a sign to skip the spawn (handled later by fubonproxy.Start).
 func TestPreflight_HealthyExternallyManaged_NoError(t *testing.T) {
 	var killed []int
-	withStubProbes(t,
+	withStubProbes(
+		t,
 		func(addr string) (portprobe.State, portprobe.Occupant, error) {
 			return portprobe.StateHealthy, portprobe.Occupant{PID: 7000, Command: "uvicorn fubon_proxy.main:app"}, nil
 		},
@@ -257,7 +261,8 @@ func TestPreflight_HealthyExternallyManaged_NoError(t *testing.T) {
 
 func TestPreflight_ExclusiveHealthy_Errors(t *testing.T) {
 	var killed []int
-	withStubProbes(t,
+	withStubProbes(
+		t,
 		func(addr string) (portprobe.State, portprobe.Occupant, error) {
 			return portprobe.StateHealthy, portprobe.Occupant{PID: 71689, Command: "com.docker.backend"}, nil
 		},
@@ -293,7 +298,8 @@ func TestPreflight_ExclusiveHealthy_Errors(t *testing.T) {
 }
 
 func TestPreflight_ExclusiveHealthy_NativeHint(t *testing.T) {
-	withStubProbes(t,
+	withStubProbes(
+		t,
 		func(addr string) (portprobe.State, portprobe.Occupant, error) {
 			return portprobe.StateHealthy, portprobe.Occupant{PID: 44141, Command: "atlas"}, nil
 		},

@@ -226,8 +226,10 @@ func TestHandleSimLatest_HappyPath(t *testing.T) {
 	ts2 := time.Date(2026, 6, 19, 9, 5, 0, 0, time.UTC)
 	records := []orchestrator.SimTraceRecord{
 		{Step: 1, Layer: "data", Status: "OK", TS: ts1, SessionID: "20260619"},
-		{Step: 2, Layer: "signal", Status: "OK", TS: ts2, SessionID: "20260619",
-			Metadata: map[string]any{"symbol": "2330.TW"}},
+		{
+			Step: 2, Layer: "signal", Status: "OK", TS: ts2, SessionID: "20260619",
+			Metadata: map[string]any{"symbol": "2330.TW"},
+		},
 	}
 	path := filepath.Join(tracesDir, "sim-20260619.jsonl")
 	f, err := os.Create(path)

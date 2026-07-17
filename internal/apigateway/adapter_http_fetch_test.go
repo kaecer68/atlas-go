@@ -192,15 +192,17 @@ func twseTableResponder(payload map[string]any) func(http.ResponseWriter, *http.
 	return jsonResponder(payload)
 }
 
-var _ DataProvider = (*DayTradingChannelAdapter)(nil)
-var _ DataProvider = (*ExchangeRateChannelAdapter)(nil)
-var _ DataProvider = (*FrankfurterFXChannelAdapter)(nil)
-var _ DataProvider = (*TEJChannelAdapter)(nil)
-var _ DataProvider = (*TWSECapitalFlowChannelAdapter)(nil)
-var _ DataProvider = (*TWSEMarginChannelAdapter)(nil)
-var _ DataProvider = (*TWSEETFChannelAdapter)(nil)
-var _ DataProvider = (*TWSEOddLotChannelAdapter)(nil)
-var _ DataProvider = (*TWSESectorIndexChannelAdapter)(nil)
+var (
+	_ DataProvider = (*DayTradingChannelAdapter)(nil)
+	_ DataProvider = (*ExchangeRateChannelAdapter)(nil)
+	_ DataProvider = (*FrankfurterFXChannelAdapter)(nil)
+	_ DataProvider = (*TEJChannelAdapter)(nil)
+	_ DataProvider = (*TWSECapitalFlowChannelAdapter)(nil)
+	_ DataProvider = (*TWSEMarginChannelAdapter)(nil)
+	_ DataProvider = (*TWSEETFChannelAdapter)(nil)
+	_ DataProvider = (*TWSEOddLotChannelAdapter)(nil)
+	_ DataProvider = (*TWSESectorIndexChannelAdapter)(nil)
+)
 
 func TestTaifexChannelAdapterHealthCheckUsesInjectedHTTPClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(jsonResponder([]map[string]string{{

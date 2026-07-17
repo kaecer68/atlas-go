@@ -79,7 +79,8 @@ func defaultBackoff(attempt int) time.Duration {
 // errors fail immediately. Returns the raw response, the consumed body
 // bytes, and any error encountered.
 func (b *BaseClient) DoRequest(ctx context.Context, method, url string, headers map[string]string, body []byte) (*http.Response, []byte, error) {
-	ctx, span := obsotel.StartSpan(ctx, "llm.http.request",
+	ctx, span := obsotel.StartSpan(
+		ctx, "llm.http.request",
 		attribute.String("http.method", method),
 		attribute.String("http.url", url),
 		attribute.Int("http.payload_size", len(body)),

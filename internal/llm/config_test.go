@@ -22,7 +22,7 @@ routing_chains:
     backup2: opencode_go
     last_resort: mock
 `
-	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -57,7 +57,7 @@ func TestLoadRouterConfig_MissingFile(t *testing.T) {
 func TestLoadRouterConfig_MalformedYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.yaml")
-	if err := os.WriteFile(path, []byte("{{{not yaml"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("{{{not yaml"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -78,7 +78,7 @@ routing_chains:
     backup2: opencode_go
     last_resort: mock
 `
-	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,7 +99,7 @@ routing_chains:
     backup2: opencode_go
     last_resort: mock
 `
-	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -120,7 +120,7 @@ routing_chains:
     backup2: opencode_go
     last_resort: mock
 `
-	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -133,7 +133,7 @@ routing_chains:
 func TestLoadRouterConfig_EmptyChains(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "empty_chains.yaml")
-	if err := os.WriteFile(path, []byte("routing_chains: {}\n"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("routing_chains: {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,7 +166,7 @@ routing_chains:
     backup2: opencode_go
     last_resort: mock
 `
-	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -287,7 +287,7 @@ routing_chains:
     backup2: ""
     last_resort: mock
 `
-	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

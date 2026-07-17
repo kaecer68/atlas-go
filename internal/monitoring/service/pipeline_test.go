@@ -286,7 +286,8 @@ func TestLoadSessions_OrphanSession_EmptyOutcomesKeepsZero(t *testing.T) {
 func TestLoadSessions_SummaryAuthoritativeNotOverriddenByOutcomes(t *testing.T) {
 	baseDir := t.TempDir()
 	sessionID := "session-20260616-daily"
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: time.Date(2026, 6, 16, 4, 0, 0, 0, time.UTC), OutcomeCount: 10},
 		domain.RecommendationOutcome{AgentID: "agent-1", Symbol: "2330.TW", RecordedAt: time.Date(2026, 6, 16, 4, 0, 0, 0, time.UTC)},
 	)
@@ -625,30 +626,39 @@ type mockOutcomeStore struct {
 func (m *mockOutcomeStore) RecordOutcomes(_ []domain.RecommendationOutcome) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) RecordSessionOutcomes(_ domain.ReplaySession, _ []domain.RecommendationOutcome) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) LoadSessionOutcomes(_ string) ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) RecordSessionScreeningRejects(_ string, _ []domain.ScreeningReject) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadSessionScreeningRejects(_ string) ([]domain.ScreeningReject, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) RecordSessionTrades(_ string, _ []domain.TradeRecord) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadSessionTrades(_ string) ([]domain.TradeRecord, error) {
 	return nil, nil
 }
+
 func (m *mockOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
 	return nil, nil
 }
@@ -656,12 +666,15 @@ func (m *mockOutcomeStore) RecordExperiment(_ domain.ExperimentRecord) error { r
 func (m *mockOutcomeStore) RecordSessionExperiment(_ domain.ReplaySession, _ domain.ExperimentRecord) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) RecordSessionSummary(_ domain.ReplaySession, _ domain.SessionSummary) error {
 	return nil
 }
+
 func (m *mockOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
 	return m.summaries, m.err
 }
+
 func (m *mockOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
 	return nil, nil, nil
 }
@@ -758,8 +771,10 @@ func TestLoadRegimeHistory_TimestampsAreUTC(t *testing.T) {
 	recordedAt := time.Date(2026, 4, 22, 12, 0, 0, 0, cst)
 	summaries := []domain.SessionSummary{
 		{SessionID: "session-cst", Regime: domain.RegimeRiskOn, RecordedAt: recordedAt},
-		{SessionID: "session-utc", Regime: domain.RegimeRiskOff,
-			RecordedAt: time.Date(2026, 4, 23, 4, 0, 0, 0, time.UTC)},
+		{
+			SessionID: "session-utc", Regime: domain.RegimeRiskOff,
+			RecordedAt: time.Date(2026, 4, 23, 4, 0, 0, 0, time.UTC),
+		},
 	}
 	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{summaries: summaries})
 	data, err := svc.LoadRegimeHistory(10)

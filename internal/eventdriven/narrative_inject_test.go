@@ -60,8 +60,10 @@ func TestPredictor_MatchingThemeBoostsWeight(t *testing.T) {
 	nowPlus3 := now.AddDate(0, 0, 3)
 	p := NewPredictor(cal)
 	p.SetNarrativeProvider(&stubNarrative{models: []ModelView{
-		{ID: "msci_bull", Name: "MSCI bull", Weight: 0.4, Direction: "bullish",
-			ActiveThemes: []string{"msci_rebalance", "index_rebalance"}},
+		{
+			ID: "msci_bull", Name: "MSCI bull", Weight: 0.4, Direction: "bullish",
+			ActiveThemes: []string{"msci_rebalance", "index_rebalance"},
+		},
 	}})
 
 	report := p.Predict(now)
@@ -88,8 +90,10 @@ func TestPredictor_NonMatchingThemeIgnored(t *testing.T) {
 	cal.RefreshEvents(now)
 	p := NewPredictor(cal)
 	p.SetNarrativeProvider(&stubNarrative{models: []ModelView{
-		{ID: "unrelated", Weight: 1.0, Direction: "bullish",
-			ActiveThemes: []string{"never_matches_any_event"}},
+		{
+			ID: "unrelated", Weight: 1.0, Direction: "bullish",
+			ActiveThemes: []string{"never_matches_any_event"},
+		},
 	}})
 
 	report := p.Predict(now)
@@ -107,8 +111,10 @@ func TestRegisterRoutesWithNarrative_AppliesModelTilt(t *testing.T) {
 	cal.RefreshEvents(time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC))
 
 	strongBull := &stubNarrative{models: []ModelView{
-		{ID: "msci_strong", Weight: 1.0, Direction: "bullish",
-			ActiveThemes: []string{"msci_rebalance", "index_rebalance"}},
+		{
+			ID: "msci_strong", Weight: 1.0, Direction: "bullish",
+			ActiveThemes: []string{"msci_rebalance", "index_rebalance"},
+		},
 	}}
 	RegisterRoutesWithNarrative(mux, cal, nil, strongBull)
 
@@ -130,8 +136,10 @@ func TestPredictor_NarrativeDrivesDirectionOnEmptyTimeline(t *testing.T) {
 
 	p := NewPredictor(cal)
 	p.SetNarrativeProvider(&stubNarrative{models: []ModelView{
-		{ID: "ai_supercycle", Weight: 1.0, Direction: "bullish",
-			ActiveThemes: []string{"AI_capex_surge", "earnings_surprise"}},
+		{
+			ID: "ai_supercycle", Weight: 1.0, Direction: "bullish",
+			ActiveThemes: []string{"AI_capex_surge", "earnings_surprise"},
+		},
 	}})
 
 	report := p.Predict(now)
@@ -152,8 +160,10 @@ func TestPredictor_BearishNarrativeFlipsDirection(t *testing.T) {
 
 	p := NewPredictor(cal)
 	p.SetNarrativeProvider(&stubNarrative{models: []ModelView{
-		{ID: "hawkish_fed", Weight: 1.0, Direction: "bearish",
-			ActiveThemes: []string{"US_rates_up", "earnings_surprise"}},
+		{
+			ID: "hawkish_fed", Weight: 1.0, Direction: "bearish",
+			ActiveThemes: []string{"US_rates_up", "earnings_surprise"},
+		},
 	}})
 
 	report := p.Predict(now)

@@ -21,7 +21,7 @@ func TestSectorDataProvider_ChangePctFromCache(t *testing.T) {
 		"capex_growth": 50,
 		"semiconductor_index": 5000,
 		"updated_at": "2026-07-12T00:00:00Z"
-	}`), 0644); err != nil {
+	}`), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -46,7 +46,7 @@ func TestSectorDataProvider_ChangePctFromCache(t *testing.T) {
 		"capex_growth": 55,
 		"semiconductor_index": 5250,
 		"updated_at": "2026-07-13T00:00:00Z"
-	}`), 0644); err != nil {
+	}`), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 

@@ -95,14 +95,16 @@ func (r *PostgresRepository) SaveExportStats(ctx context.Context, year, month in
 	//nolint:errcheck
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx,
+	if _, err := tx.Exec(
+		ctx,
 		`DELETE FROM export_statistics WHERE year = $1 AND month = $2`,
 		year, month,
 	); err != nil {
 		return fmt.Errorf("delete export stats: %w", err)
 	}
 
-	if _, err := tx.Exec(ctx,
+	if _, err := tx.Exec(
+		ctx,
 		`INSERT INTO export_statistics (time, year, month, export_total, import_total, trade_balance)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		ts, year, month, exportTotal, importTotal, tradeBalance,

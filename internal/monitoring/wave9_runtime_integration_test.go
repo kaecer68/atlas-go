@@ -109,7 +109,8 @@ func TestWave9Integration_AllFiveDetectorsWired(t *testing.T) {
 	bus := eventbus.NewChannelEventBus(256)
 	defer func() { _ = bus.Close() }()
 
-	w, err := NewWave9Observability(bus,
+	w, err := NewWave9Observability(
+		bus,
 		WithWeightProvider(&wave9StaticWeightProvider{}),
 		WithChannelHealthProvider(&wave9StaticChannelHealthProvider{}),
 		WithIngestionLagProvider(&wave9StaticIngestionLagProvider{p99: 1.0}),
@@ -161,7 +162,8 @@ func TestWave9Integration_StartStopNoLeak(t *testing.T) {
 	bus := eventbus.NewChannelEventBus(256)
 	defer func() { _ = bus.Close() }()
 
-	w, err := NewWave9Observability(bus,
+	w, err := NewWave9Observability(
+		bus,
 		WithWeightProvider(&wave9StaticWeightProvider{}),
 		WithChannelHealthProvider(&wave9StaticChannelHealthProvider{}),
 		WithIngestionLagProvider(&wave9StaticIngestionLagProvider{p99: 1.0}),
@@ -207,7 +209,8 @@ func TestWave9Integration_Wave9ObservabilityEndToEnd(t *testing.T) {
 		},
 	}
 
-	w, err := NewWave9Observability(bus,
+	w, err := NewWave9Observability(
+		bus,
 		WithWeightProvider(weightProvider),
 		WithChannelHealthProvider(&wave9StaticChannelHealthProvider{errors: map[string]string{"twse": "timeout"}}),
 		WithIngestionLagProvider(&wave9StaticIngestionLagProvider{p99: 10.0}),

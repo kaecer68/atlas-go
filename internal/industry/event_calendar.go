@@ -114,7 +114,8 @@ type CalendarEvent struct {
 
 // String returns a human-readable summary of the event.
 func (e CalendarEvent) String() string {
-	return fmt.Sprintf("%s (%s): %s, Direction=%s, Weight=%.2f, Active=%v",
+	return fmt.Sprintf(
+		"%s (%s): %s, Direction=%s, Weight=%.2f, Active=%v",
 		e.Name, e.NameEN,
 		e.PeakDate.Format("2006-01-02"),
 		e.Direction, e.BaseWeight, e.Active,
@@ -204,7 +205,8 @@ func (tec *EventCalendar) gateEvent(raw eventquality.RawEvent) (bool, string) {
 	}
 	if tec.qualityLog != nil {
 		if err := tec.qualityLog.Record(res); err != nil {
-			logging.Warn("event_calendar", "quality_log_write_failed",
+			logging.Warn(
+				"event_calendar", "quality_log_write_failed",
 				logging.FStr("event_id", res.EventID),
 				logging.Err(err),
 			)
@@ -1276,7 +1278,8 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 	}
 	events, err := provider.FetchEvents(ctx, year)
 	if err != nil {
-		logging.Warn("event_calendar", "provider_fetch_failed",
+		logging.Warn(
+			"event_calendar", "provider_fetch_failed",
 			logging.FStr("provider", provider.Name()),
 			logging.Err(err),
 		)
@@ -1298,7 +1301,8 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 	for _, pd := range events {
 		startDate, err := time.Parse("2006-01-02", pd.Date)
 		if err != nil {
-			logging.Warn("event_calendar", "parse_date_failed",
+			logging.Warn(
+				"event_calendar", "parse_date_failed",
 				logging.FStr("provider", provider.Name()),
 				logging.FStr("date", pd.Date),
 				logging.Err(err),
@@ -1339,7 +1343,8 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 	}
 	accepted := tec.filterByQualityGate(newEvents)
 	tec.events = append(tec.events, accepted...)
-	logging.Info("event_calendar", "provider_events_added",
+	logging.Info(
+		"event_calendar", "provider_events_added",
 		logging.FStr("provider", provider.Name()),
 		logging.FInt("added_events", len(events)),
 		logging.FInt("accepted_events", len(accepted)),

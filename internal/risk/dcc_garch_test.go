@@ -6,8 +6,10 @@ import (
 	"testing"
 )
 
-const dccTestSeed = 0xDCCB1A7E
-const dccTestTolerance = 0.20
+const (
+	dccTestSeed      = 0xDCCB1A7E
+	dccTestTolerance = 0.20
+)
 
 func makeCorrelatedNormals(n int, rho float64, seed int64) ([]float64, []float64) {
 	rng := rand.New(rand.NewSource(seed))

@@ -575,8 +575,11 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 		{
 			name: "dominant_inflow_with_events_and_positive_cf",
 			predictions: []FlowPrediction{
-				{Direction: "inflow"}, {Direction: "inflow"}, {Direction: "inflow"},
-				{Direction: "outflow"}, {Direction: "neutral"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "outflow"},
+				{Direction: "neutral"},
 			},
 			active:    []industry.CalendarEvent{{Name: "MSCI調整"}},
 			cfScore:   0.6,
@@ -585,8 +588,11 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 		{
 			name: "dominant_outflow_with_events_and_negative_cf",
 			predictions: []FlowPrediction{
-				{Direction: "outflow"}, {Direction: "outflow"}, {Direction: "outflow"},
-				{Direction: "inflow"}, {Direction: "neutral"},
+				{Direction: "outflow"},
+				{Direction: "outflow"},
+				{Direction: "outflow"},
+				{Direction: "inflow"},
+				{Direction: "neutral"},
 			},
 			active:    []industry.CalendarEvent{{Name: "外資賣超"}},
 			cfScore:   -0.6,
@@ -595,8 +601,11 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 		{
 			name: "divergence_no_dominant",
 			predictions: []FlowPrediction{
-				{Direction: "inflow"}, {Direction: "outflow"},
-				{Direction: "neutral"}, {Direction: "inflow"}, {Direction: "outflow"},
+				{Direction: "inflow"},
+				{Direction: "outflow"},
+				{Direction: "neutral"},
+				{Direction: "inflow"},
+				{Direction: "outflow"},
 			},
 			active:    nil,
 			cfScore:   0,
@@ -605,8 +614,11 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 		{
 			name: "neutral_cf_no_quality_statement",
 			predictions: []FlowPrediction{
-				{Direction: "inflow"}, {Direction: "inflow"}, {Direction: "inflow"},
-				{Direction: "inflow"}, {Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
 			},
 			active:    nil,
 			cfScore:   0,
@@ -765,10 +777,14 @@ func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T)
 	end := now.AddDate(0, 0, 1)
 
 	timeline := []industry.CalendarEvent{
-		{Name: "non_backfilled", Direction: "bullish", BaseWeight: 1.0,
-			StartDate: now, EndDate: end, Backfilled: false},
-		{Name: "backfilled", Direction: "bullish", BaseWeight: 1.0,
-			StartDate: now, EndDate: end, Backfilled: true},
+		{
+			Name: "non_backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: false,
+		},
+		{
+			Name: "backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: true,
+		},
 	}
 
 	dir, conf, drivers := p.predictDay(now, timeline, 0)
@@ -781,8 +797,10 @@ func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T)
 	_ = dir
 
 	timelineBackfilledOnly := []industry.CalendarEvent{
-		{Name: "backfilled", Direction: "bullish", BaseWeight: 1.0,
-			StartDate: now, EndDate: end, Backfilled: true},
+		{
+			Name: "backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: true,
+		},
 	}
 	dirBF, confBF, _ := p.predictDay(now, timelineBackfilledOnly, 0)
 	_ = dirBF
@@ -791,8 +809,10 @@ func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T)
 	}
 
 	timelineNonBackfilledOnly := []industry.CalendarEvent{
-		{Name: "non_backfilled", Direction: "bullish", BaseWeight: 1.0,
-			StartDate: now, EndDate: end, Backfilled: false},
+		{
+			Name: "non_backfilled", Direction: "bullish", BaseWeight: 1.0,
+			StartDate: now, EndDate: end, Backfilled: false,
+		},
 	}
 	_, confNB, _ := p.predictDay(now, timelineNonBackfilledOnly, 0)
 	if confBF*1.5 < confNB {

@@ -75,7 +75,8 @@ func StrategyEvolutionTaskFunc(deps StrategyEvolutionDeps) func(context.Context)
 		if deps.MaturityTracker != nil {
 			m := deps.MaturityTracker.Current()
 			if m == domain.MaturityBurnIn {
-				logging.Info("strategy_evolution", "burn_in_skip",
+				logging.Info(
+					"strategy_evolution", "burn_in_skip",
 					"maturity", string(m),
 				)
 				return nil
@@ -114,13 +115,15 @@ func StrategyEvolutionTaskFunc(deps StrategyEvolutionDeps) func(context.Context)
 		//    與 currentState 一致),不視為錯誤。
 		evolution := evolver.Evaluate(macroAssessment, structuralAssessment, drawdownDecision)
 		if evolution == nil {
-			logging.Info("strategy_evolution", "no_change",
+			logging.Info(
+				"strategy_evolution", "no_change",
 				"state", evolver.GetCurrentState().String(),
 			)
 			return nil
 		}
 
-		logging.Info("strategy_evolution", "evolved",
+		logging.Info(
+			"strategy_evolution", "evolved",
 			"from", evolution.FromState.String(),
 			"to", evolution.ToState.String(),
 			"reason", evolution.Reason,

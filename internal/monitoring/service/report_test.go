@@ -37,7 +37,7 @@ func TestReportService_LoadAllWindowSummaries_WindowsDirNotExist(t *testing.T) {
 func TestReportService_LoadAllWindowSummaries_SkipsMutationBrief(t *testing.T) {
 	tmp := t.TempDir()
 	windowsDir := filepath.Join(tmp, "windows")
-	if err := os.MkdirAll(windowsDir, 0755); err != nil {
+	if err := os.MkdirAll(windowsDir, 0o755); err != nil {
 		t.Fatalf("failed to create windows dir: %v", err)
 	}
 	summary := domain.BacktestWindowSummary{
@@ -46,10 +46,10 @@ func TestReportService_LoadAllWindowSummaries_SkipsMutationBrief(t *testing.T) {
 		SessionCount: 5,
 	}
 	data, _ := json.Marshal(summary)
-	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_test-window.json"), data, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_test-window.json"), data, 0o644); err != nil {
 		t.Fatalf("failed to write summary: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_test-window-mutation-brief.json"), data, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_test-window-mutation-brief.json"), data, 0o644); err != nil {
 		t.Fatalf("failed to write mutation brief: %v", err)
 	}
 
@@ -66,7 +66,7 @@ func TestReportService_LoadAllWindowSummaries_SkipsMutationBrief(t *testing.T) {
 func TestReportService_LoadAllWindowSummaries_SkipsCorrupted(t *testing.T) {
 	tmp := t.TempDir()
 	windowsDir := filepath.Join(tmp, "windows")
-	if err := os.MkdirAll(windowsDir, 0755); err != nil {
+	if err := os.MkdirAll(windowsDir, 0o755); err != nil {
 		t.Fatalf("failed to create windows dir: %v", err)
 	}
 	summary := domain.BacktestWindowSummary{
@@ -75,10 +75,10 @@ func TestReportService_LoadAllWindowSummaries_SkipsCorrupted(t *testing.T) {
 		SessionCount: 5,
 	}
 	goodData, _ := json.Marshal(summary)
-	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_good-window.json"), goodData, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_good-window.json"), goodData, 0o644); err != nil {
 		t.Fatalf("failed to write summary: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_bad-window.json"), []byte("not valid json"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(windowsDir, "backtest_bad-window.json"), []byte("not valid json"), 0o644); err != nil {
 		t.Fatalf("failed to write bad json: %v", err)
 	}
 
@@ -104,7 +104,7 @@ func TestReportService_LoadLatestWindowSummary_NoWindows(t *testing.T) {
 func TestReportService_LoadLatestWindowSummary_SelectsNewest(t *testing.T) {
 	tmp := t.TempDir()
 	windowsDir := filepath.Join(tmp, "windows")
-	if err := os.MkdirAll(windowsDir, 0755); err != nil {
+	if err := os.MkdirAll(windowsDir, 0o755); err != nil {
 		t.Fatalf("failed to create windows dir: %v", err)
 	}
 	older := domain.BacktestWindowSummary{
@@ -119,8 +119,8 @@ func TestReportService_LoadLatestWindowSummary_SelectsNewest(t *testing.T) {
 	}
 	olderData, _ := json.Marshal(older)
 	newerData, _ := json.Marshal(newer)
-	os.WriteFile(filepath.Join(windowsDir, "backtest_older.json"), olderData, 0644)
-	os.WriteFile(filepath.Join(windowsDir, "backtest_newer.json"), newerData, 0644)
+	os.WriteFile(filepath.Join(windowsDir, "backtest_older.json"), olderData, 0o644)
+	os.WriteFile(filepath.Join(windowsDir, "backtest_newer.json"), newerData, 0o644)
 
 	svc := NewReportService(tmp, tmp, nil)
 	latest, err := svc.loadLatestWindowSummary()

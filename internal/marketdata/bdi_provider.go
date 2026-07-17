@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
-	"golang.org/x/time/rate"
 )
 
 var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)

@@ -49,7 +49,6 @@ func TestRouterAnnotator_Success(t *testing.T) {
 	}
 	ctx := context.Background()
 	got, err := ra.Annotate(ctx, fc)
-
 	if err != nil {
 		t.Fatalf("Annotate() unexpected error: %v", err)
 	}
@@ -85,7 +84,6 @@ func TestRouterAnnotator_EmptyResponse(t *testing.T) {
 	fc := llm_annotator.FailureContext{FrameID: "f1"}
 	ctx := context.Background()
 	got, err := ra.Annotate(ctx, fc)
-
 	if err != nil {
 		t.Fatalf("Annotate() unexpected error: %v", err)
 	}
@@ -101,7 +99,6 @@ func TestRouterAnnotator_NilRouter(t *testing.T) {
 	fc := llm_annotator.FailureContext{FrameID: "f1"}
 	ctx := context.Background()
 	got, err := ra.Annotate(ctx, fc)
-
 	if err != nil {
 		t.Fatalf("Annotate() unexpected error with nil router: %v", err)
 	}

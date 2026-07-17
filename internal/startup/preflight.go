@@ -104,7 +104,8 @@ func checkClaim(claim PortClaim) error {
 		// opted in (mirrors fubonproxy.Start() lines 233-242).
 		return actionableForeignError(claim, occupant)
 	}
-	logging.Warn("startup", "preflight_zombie_detected",
+	logging.Warn(
+		"startup", "preflight_zombie_detected",
 		"component", claim.Component,
 		"pid", occupant.PID,
 		"cmd", occupant.Command,
@@ -114,14 +115,16 @@ func checkClaim(claim PortClaim) error {
 		return fmt.Errorf("%s address %s held by zombie process (pid=%d cmd=%q); auto-kill failed: %v; stop it manually with `kill %d`",
 			claim.Component, claim.Addr, occupant.PID, occupant.Command, killErr, occupant.PID)
 	}
-	logging.Info("startup", "preflight_zombie_killed",
+	logging.Info(
+		"startup", "preflight_zombie_killed",
 		"component", claim.Component,
 		"pid", occupant.PID,
 		"message", "re-probing "+claim.Addr+" after zombie kill",
 	)
 	if port := portFromAddr(claim.Addr); port > 0 {
 		if !portprobe.WaitForPortFree(port, 5*time.Second) {
-			logging.Warn("startup", "preflight_zombie_port_still_held",
+			logging.Warn(
+				"startup", "preflight_zombie_port_still_held",
 				"component", claim.Component,
 				"addr", claim.Addr,
 				"message", "port not free after zombie kill; proceeding with re-probe",

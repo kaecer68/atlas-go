@@ -80,7 +80,8 @@ func newWave9CleanupFactory(channelHealthStartErr error) *spyFactory {
 
 func newWave9ForTest(t *testing.T, bus eventbus.EventBus, factory detectorFactory) *Wave9Observability {
 	t.Helper()
-	w, err := NewWave9Observability(bus,
+	w, err := NewWave9Observability(
+		bus,
 		WithWeightProvider(&wave9StaticWeightProvider{}),
 		WithChannelHealthProvider(&wave9StaticChannelHealthProvider{}),
 		WithIngestionLagProvider(&wave9StaticIngestionLagProvider{p99: 1.0}),

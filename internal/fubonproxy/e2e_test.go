@@ -263,7 +263,8 @@ func launchAtlas(t *testing.T, bin string, args ...string) *exec.Cmd {
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = e2eRepoRoot
 	fakePython := setupFakeFubonProxyPython(t)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"FUBON_PROXY_PORT="+lastFlagValue(args, "-fubon-port"),
 		"FUBON_API_KEY=atlas-e2e-dummy",
 		"FUBON_PROXY_PYTHON="+fakePython,
@@ -310,7 +311,8 @@ func TestE2E_BinaryStartupHealthShape_SIGTERMReleasesPorts(t *testing.T) {
 	apiPort := freePort(t)
 	fubonPort := freePort(t)
 
-	cmd := launchAtlas(t, bin,
+	cmd := launchAtlas(
+		t, bin,
 		"-api",
 		"-addr", "127.0.0.1:"+strconv.Itoa(apiPort),
 		"-fubon-port", strconv.Itoa(fubonPort),
@@ -367,7 +369,8 @@ func TestE2E_PythonZombieOrphanReclaimed(t *testing.T) {
 		"-c", fmt.Sprintf(
 			"import socket, time; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); "+
 				"s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); "+
-				"s.bind(('0.0.0.0', %d)); s.listen(8); time.sleep(60)", zombiePort))
+				"s.bind(('0.0.0.0', %d)); s.listen(8); time.sleep(60)", zombiePort,
+		))
 	zombieCmd.Stdout = io.Discard
 	zombieCmd.Stderr = io.Discard
 	if err := zombieCmd.Start(); err != nil {
@@ -389,7 +392,8 @@ func TestE2E_PythonZombieOrphanReclaimed(t *testing.T) {
 	// should observe StateForeign + IsFubonZombie==true and auto-reclaim
 	// (PortProbe.Probe → IsFubonZombie(KillOccupant) per PR #820 + #821).
 	apiPort := freePort(t)
-	atlas := launchAtlas(t, bin,
+	atlas := launchAtlas(
+		t, bin,
 		"-api",
 		"-addr", "127.0.0.1:"+strconv.Itoa(apiPort),
 		"-fubon-port", strconv.Itoa(zombiePort),
@@ -480,13 +484,15 @@ func TestE2E_NonZombieForeignHolder_AtlasErrors(t *testing.T) {
 	// (atlas exits non-zero with an actionable error mentioning the foreign
 	// PID). Oracle F10 authorises this; alt-port fallback (future work) would
 	// instead auto-pick a free port and serve.
-	atlas := exec.Command(bin,
+	atlas := exec.Command(
+		bin,
 		"-api",
 		"-addr", "127.0.0.1:"+strconv.Itoa(freePort(t)),
 		"-fubon-port", strconv.Itoa(foreignPort),
 	)
 	fakePython := setupFakeFubonProxyPython(t)
-	atlas.Env = append(os.Environ(),
+	atlas.Env = append(
+		os.Environ(),
 		"FUBON_API_KEY=atlas-e2e-dummy",
 		"FUBON_PROXY_PYTHON="+fakePython,
 		"ATLAS_YAHOO_ENABLED=false",
@@ -524,7 +530,8 @@ func TestE2E_RapidCycle2x(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		apiPort := freePort(t)
 		fubonPort := freePort(t)
-		cmd := launchAtlas(t, bin,
+		cmd := launchAtlas(
+			t, bin,
 			"-api",
 			"-addr", "127.0.0.1:"+strconv.Itoa(apiPort),
 			"-fubon-port", strconv.Itoa(fubonPort),

@@ -153,7 +153,8 @@ func newWave9WithSpyFactory(t *testing.T) (*Wave9Observability, *wave9SpyFactory
 	bus := &wave9RecordingBus{}
 	stub := wave9StubProvider{}
 	spy := newWave9SpyFactory()
-	w, err := NewWave9Observability(bus,
+	w, err := NewWave9Observability(
+		bus,
 		WithWeightProvider(stub),
 		WithChannelHealthProvider(stub),
 		WithIngestionLagProvider(stub),
@@ -257,7 +258,8 @@ func TestWave9Observability_NilWeightProvider(t *testing.T) {
 	stub := wave9StubProvider{}
 	spy := newWave9SpyFactory()
 
-	w, err := NewWave9Observability(bus,
+	w, err := NewWave9Observability(
+		bus,
 		WithChannelHealthProvider(stub),
 		WithIngestionLagProvider(stub),
 		withDetectorFactory(spy),
@@ -270,7 +272,8 @@ func TestWave9Observability_NilWeightProvider(t *testing.T) {
 
 func TestWave9Observability_NilBus(t *testing.T) {
 	stub := wave9StubProvider{}
-	_, err := NewWave9Observability(nil,
+	_, err := NewWave9Observability(
+		nil,
 		WithWeightProvider(stub),
 		WithChannelHealthProvider(stub),
 		WithIngestionLagProvider(stub),
@@ -283,7 +286,8 @@ func TestWave9Observability_TargetWeightsProviderOptional(t *testing.T) {
 	bus := &wave9RecordingBus{}
 	stub := wave9StubProvider{}
 	spy := newWave9SpyFactory()
-	w, err := NewWave9Observability(bus,
+	w, err := NewWave9Observability(
+		bus,
 		WithWeightProvider(stub),
 		WithChannelHealthProvider(stub),
 		WithIngestionLagProvider(stub),

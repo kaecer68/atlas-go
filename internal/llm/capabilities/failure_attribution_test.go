@@ -65,7 +65,6 @@ func TestFailureAttributionHandler_Success_StringOutput(t *testing.T) {
 
 	// When: Handle is invoked
 	resp, err := handler.Handle(context.Background(), payload)
-
 	// Then: no error, Annotation matches the raw string, Confidence is 0
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
@@ -108,7 +107,6 @@ func TestFailureAttributionHandler_Success_StructuredOutput(t *testing.T) {
 
 	// When: Handle is invoked
 	resp, err := handler.Handle(context.Background(), payload)
-
 	// Then: no error, response is parsed from JSON
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
@@ -140,7 +138,6 @@ func TestFailureAttributionHandler_AllProvidersFailed_Fallback(t *testing.T) {
 
 	// When: Handle is invoked
 	resp, err := handler.Handle(context.Background(), payload)
-
 	// Then: no error (fallback is not an error), response is rule-based fallback
 	if err != nil {
 		t.Fatalf("Handle() unexpected error on fallback: %v", err)

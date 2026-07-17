@@ -166,7 +166,7 @@ func TestDailyQuotaTracker_LoadSkipsOldState(t *testing.T) {
 	// Create a tracker and write old day state directly
 	stateFile := filepath.Join(tmpDir, provider+"_daily_quota.json")
 	oldState := `{"calls_today": 80, "last_reset": "2020-01-01T00:00:00Z"}`
-	if err := os.WriteFile(stateFile, []byte(oldState), 0644); err != nil {
+	if err := os.WriteFile(stateFile, []byte(oldState), 0o644); err != nil {
 		t.Fatalf("failed to write old state: %v", err)
 	}
 

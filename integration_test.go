@@ -253,7 +253,6 @@ func TestPhase3Integration(t *testing.T) {
 
 		t.Logf("✓ Reflexivity engine operational")
 	})
-
 }
 
 // TestEndToEndWorkflow validates complete system workflow
@@ -382,7 +381,6 @@ func TestPerformance(t *testing.T) {
 			t.Logf("⚠ Weight application took longer than expected: %v", duration)
 		}
 	})
-
 }
 
 // BenchmarkDarwinianAdjustment benchmarks weight adjustment calculations

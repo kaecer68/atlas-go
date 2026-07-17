@@ -48,9 +48,11 @@ func (b *factorRecordingBus) Publish(ev eventbus.BusEvent) {
 	defer b.mu.Unlock()
 	b.events = append(b.events, ev)
 }
+
 func (b *factorRecordingBus) Subscribe(eventbus.EventType, eventbus.EventHandler) eventbus.Subscription {
 	return eventbus.Subscription{Cancel: func() {}}
 }
+
 func (b *factorRecordingBus) SubscribeAll(eventbus.EventHandler) eventbus.Subscription {
 	return eventbus.Subscription{Cancel: func() {}}
 }

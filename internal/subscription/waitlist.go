@@ -44,7 +44,7 @@ func (s *WaitlistStore) Add(email, source string) (already bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() //nolint:errcheck // best-effort flush on read-only appender
 	rec := waitlistEntry{Email: email, Source: source, CreatedAt: time.Now().UTC()}
 	if err := json.NewEncoder(f).Encode(rec); err != nil {
 		return false, err
@@ -76,7 +76,7 @@ func (s *WaitlistStore) scan(fn func(waitlistEntry)) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() //nolint:errcheck // read-only — close error is non-actionable
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {

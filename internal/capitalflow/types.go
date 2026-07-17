@@ -27,17 +27,17 @@ const (
 // Role categorizes the force in the §7 taxonomy (manifest #E05):
 //
 //   - "subject"          — one of the 5 main bodies (foreign, institutional,
-//                          dealer, government, retail); participates in resonance.
+//     dealer, government, retail); participates in resonance.
 //   - "leading_indicator" — non-body input feeding a subject's leading Z
-//                          (e.g. foreign futures OI -> foreign.LeadingZ).
+//     (e.g. foreign futures OI -> foreign.LeadingZ).
 //   - "sentiment"         — non-body feature input (e.g. TSM ADR); never
-//                          influences resonance.
+//     influences resonance.
 //
 // Deprecated=true marks forces kept in the API shape for backward
 // compatibility but no longer driving resonance (futures + tsm_adr after #E05).
 type ForceScore struct {
 	Force         ForceName `json:"force"`
-	Role          string    `json:"role,omitempty"`           // "subject" | "leading_indicator" | "sentiment"
+	Role          string    `json:"role,omitempty"` // "subject" | "leading_indicator" | "sentiment"
 	Deprecated    bool      `json:"deprecated,omitempty"`
 	RawValue      float64   `json:"raw_value"`                // 原始值
 	ZScore        float64   `json:"z_score"`                  // 60-day rolling Z-score
@@ -50,7 +50,7 @@ type ForceScore struct {
 
 // Force roles — manifest #E05 §7 taxonomy.
 const (
-	ForceRoleSubject         = "subject"
+	ForceRoleSubject          = "subject"
 	ForceRoleLeadingIndicator = "leading_indicator"
 	ForceRoleSentiment        = "sentiment"
 )

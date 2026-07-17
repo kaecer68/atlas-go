@@ -14,7 +14,7 @@ import (
 // - 第一次 fetch：cache 為 0 → ChangePct=0（cold start）
 // - 第二次 fetch：cache = 上次的 rate → ChangePct = (new-old)/old*100
 func TestExchangeRateProvider_ChangePctFromCache(t *testing.T) {
-	var currentRates = map[string]float64{
+	currentRates := map[string]float64{
 		"TWD": 31.5,
 		"JPY": 150.0,
 	}

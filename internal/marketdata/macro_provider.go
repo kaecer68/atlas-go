@@ -268,7 +268,8 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		case <-time.After(providerTimeout):
 			errs = append(errs, fmt.Errorf("%s: timed out after %v", p.Name(), providerTimeout))
 			failedChannels = append(failedChannels, p.Name())
-			logging.Warn("marketdata", "provider_timeout",
+			logging.Warn(
+				"marketdata", "provider_timeout",
 				"provider", p.Name(),
 				"timeout", providerTimeout.String(),
 			)
@@ -277,7 +278,8 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 			if r.err != nil {
 				errs = append(errs, r.err)
 				failedChannels = append(failedChannels, p.Name())
-				logging.Warn("marketdata", "provider_fetch_failed",
+				logging.Warn(
+					"marketdata", "provider_fetch_failed",
 					"provider", p.Name(),
 					"err", r.err.Error(),
 				)

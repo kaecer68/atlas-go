@@ -43,7 +43,8 @@ func Test_Metrics_declares_all_five_required_metrics(t *testing.T) {
 	m.IncTokenUsage("tenant-a")
 	m.SetAnomalyScore("tenant-a", "burst", 1.5)
 
-	out, err := testutil.CollectAndFormat(m.Registry(), expfmt.TypeTextPlain,
+	out, err := testutil.CollectAndFormat(
+		m.Registry(), expfmt.TypeTextPlain,
 		"mcp_calls_total",
 		"mcp_call_duration_seconds",
 		"mcp_active_sessions",

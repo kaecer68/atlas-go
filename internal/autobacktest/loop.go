@@ -144,7 +144,8 @@ func SignalApply(ctx context.Context, ledgerDir string, gw LiveChannelOpener) er
 			logging.Warn("autobacktest", "circuit_breaker_force_open_failed", "channel", ch, "err", err)
 			continue
 		}
-		logging.Info("autobacktest", "circuit_breaker_force_open",
+		logging.Info(
+			"autobacktest", "circuit_breaker_force_open",
 			"channel", ch,
 			"drawdown_pct", sigs.DrawdownPct,
 			"var95", sigs.VaR95,

@@ -19,9 +19,11 @@ func (b *lagRecordingBus) Publish(ev eventbus.BusEvent) {
 	defer b.mu.Unlock()
 	b.events = append(b.events, ev)
 }
+
 func (b *lagRecordingBus) Subscribe(eventbus.EventType, eventbus.EventHandler) eventbus.Subscription {
 	return eventbus.Subscription{Cancel: func() {}}
 }
+
 func (b *lagRecordingBus) SubscribeAll(eventbus.EventHandler) eventbus.Subscription {
 	return eventbus.Subscription{Cancel: func() {}}
 }

@@ -188,7 +188,8 @@ func isHealthy(url string) bool {
 func lookupOccupantByPort(port int) (Occupant, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), lsofTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, lsofPath,
+	out, err := exec.CommandContext(
+		ctx, lsofPath,
 		"-nP",
 		fmt.Sprintf("-iTCP:%d", port),
 		"-sTCP:LISTEN",
