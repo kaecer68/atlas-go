@@ -159,6 +159,7 @@
   "avoided_sectors",
   "backfilled",
   "backtest_return",
+  "backtest_stale",
   "bad_news_threshold",
   "balance_sheet_penalty",
   "base",
