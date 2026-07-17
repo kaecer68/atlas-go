@@ -355,7 +355,7 @@ func TestLoadDarwinianHistory_ReadsAndLimits(t *testing.T) {
 		`{"timestamp":"2026-04-21T04:00:00Z","weights":{"agent-a":{"weight":0.95,"rolling_sharpe":1.1,"hit_rate":0.55},"agent-b":{"weight":1.0,"rolling_sharpe":0.8,"hit_rate":0.45}}}`,
 		`{"timestamp":"2026-04-22T04:00:00Z","weights":{"agent-b":{"weight":1.1,"rolling_sharpe":0.9,"hit_rate":0.5}}}`,
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"),
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_history.jsonl"),
 		[]byte(lines[0]+"\n"+lines[1]+"\n"+lines[2]+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestLoadDarwinianHistory_LimitRespected(t *testing.T) {
 	for _, l := range lines {
 		content += l + "\n"
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -417,7 +417,7 @@ func TestLoadDarwinianHistory_CorruptedLinesSkipped(t *testing.T) {
 {"timestamp":"2026-04-22T04:00:00Z","weights":{"agent-a":{"weight":1.0,"rolling_sharpe":1.0,"hit_rate":0.5}}}
 also not valid
 `
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_history.jsonl"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -473,7 +473,7 @@ func TestLoadDarwinianStatus_Valid(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(payload)
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_weights.json"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -524,7 +524,7 @@ func TestLoadDarwinianStatus_MalformedJSON(t *testing.T) {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"),
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_weights.json"),
 		[]byte("not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -585,7 +585,7 @@ func TestLoadDarwinianStatus_StatusLabels(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(weights)
-	if err := os.WriteFile(filepath.Join(stateDir, "darwinian_weights.json"), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "darwinian_weights.json"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

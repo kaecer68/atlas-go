@@ -250,7 +250,7 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	sys := &System{
 		SystemCore: &SystemCore{
 			sim:             simCore,
-			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
+			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine, cfg.LedgerDir),
 			strat:           buildStrategyLayer(thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus, macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider),
 			plugins:         plugins,

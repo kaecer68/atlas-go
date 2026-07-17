@@ -216,6 +216,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		}
 		_, clampingEvents := s.Port().darwinian.PerformDailyAdjustment()
 		_ = s.Port().darwinian.Save()
+		_ = s.Port().darwinian.AppendSnapshot()
 		if len(clampingEvents) > 0 && s.Risk().eventBus != nil {
 			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
 			for i, e := range clampingEvents {

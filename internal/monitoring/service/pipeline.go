@@ -911,7 +911,7 @@ type DarwinianAgentInfo struct {
 
 // LoadDarwinianStatus loads the current Darwinian weight state from disk.
 func (s *PipelineService) LoadDarwinianHistory(limit int) ([]DarwinianHistoryPoint, error) {
-	historyPath := filepath.Join(s.WorkDir, "data/state/darwinian_history.jsonl")
+	historyPath := filepath.Join(s.LedgerDir, "darwinian_history.jsonl")
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -966,7 +966,7 @@ func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
 		return nil, fmt.Errorf("load registered agent list: %w", err)
 	}
 
-	weightsPath := filepath.Join(s.WorkDir, "data/state/darwinian_weights.json")
+	weightsPath := filepath.Join(s.LedgerDir, "darwinian_weights.json")
 	data, err := os.ReadFile(weightsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
