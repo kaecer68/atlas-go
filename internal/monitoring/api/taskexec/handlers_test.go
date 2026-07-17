@@ -656,3 +656,55 @@ func TestTaskEvents_SSEHeadersAndData(t *testing.T) {
 		t.Errorf("body = %q, want contains '\"running\"'", body)
 	}
 }
+
+// ──── Task Events Snapshot (JSON variant of the SSE stream) ────
+
+func TestHandleTaskEventsSnapshot(t *testing.T) {
+	_, _, store, mux := setup(t)
+	seedExecution(t, store, newExec("task-ev-1", domain.TaskTypeRunExperiment, domain.TaskStatusRunning))
+	if err := store.AppendEvent(context.Background(), domain.TaskExecutionEvent{
+		ExecutionID: "task-ev-1",
+		Sequence:    1,
+		EventType:   domain.TaskEventStatus,
+		Stream:      "system",
+		Message:     "started",
+	}); err != nil {
+		t.Fatalf("AppendEvent: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/tasks/task-ev-1/events/snapshot", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", w.Code, http.StatusOK, w.Body.String())
+	}
+	var resp struct {
+		Events []map[string]any `json:"events"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(resp.Events))
+	}
+	if resp.Events[0]["message"] != "started" {
+		t.Errorf("unexpected event payload: %v", resp.Events[0])
+	}
+}
+
+func TestHandleTaskEventsSnapshotEmpty(t *testing.T) {
+	_, _, store, mux := setup(t)
+	seedExecution(t, store, newExec("task-ev-2", domain.TaskTypeRunExperiment, domain.TaskStatusQueued))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/tasks/task-ev-2/events/snapshot", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"events":[]`) {
+		t.Errorf("expected empty events array, got %s", w.Body.String())
+	}
+}

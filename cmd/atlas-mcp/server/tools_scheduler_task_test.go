@@ -78,12 +78,12 @@ func TestHandleTaskGet_OK(t *testing.T) {
 func TestHandleTaskGetEvents_OK(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
-	rec.responseBody = []byte(`{}`)
+	rec.responseBody = []byte(`{"events":[{"seq":1,"type":"started"}]}`)
 	_, out, err := s.handleTaskGetEvents(context.Background(), nil, taskIDInput{TaskID: "task-42"})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if rec.path != "/api/tasks/task-42/events" {
+	if rec.path != "/api/tasks/task-42/events/snapshot" {
 		t.Fatalf("path=%s", rec.path)
 	}
 	if out.Result == nil {
