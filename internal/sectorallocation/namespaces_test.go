@@ -29,7 +29,7 @@ func TestNamespaceKind_OnlyFourCanonical(t *testing.T) {
 func TestL1FinalTarget_RejectsNonCanonicalKeys(t *testing.T) {
 	bad := sectorallocation.L1FinalTarget{
 		Weights: map[industry.SectorID]float64{
-			industry.SectorSemiconductor: 0.5,
+			industry.SectorSemiconductor:   0.5,
 			industry.SubIndustryIndustrial: 0.5,
 		},
 	}

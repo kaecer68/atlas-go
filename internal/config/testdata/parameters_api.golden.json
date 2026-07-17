@@ -519,7 +519,8 @@
         "BaseAllocations ParameterMetadata[map[string]float64]",
         "MinAllocation ParameterMetadata[float64]",
         "MaxAllocation ParameterMetadata[float64]",
-        "RebalanceThreshold ParameterMetadata[float64]"
+        "RebalanceThreshold ParameterMetadata[float64]",
+        "StrategicPrior EngineStrategicPriorParameters"
       ],
       "kind": "struct",
       "name": "EngineSectorRotationParameters"
@@ -530,6 +531,17 @@
       ],
       "kind": "struct",
       "name": "EngineSimulationParameters"
+    },
+    {
+      "fields": [
+        "Weights ParameterMetadata[map[string]float64]",
+        "Source ParameterMetadata[string]",
+        "ModelVersion ParameterMetadata[string]",
+        "CalibrationStatus ParameterMetadata[string]",
+        "AsOfDate ParameterMetadata[string]"
+      ],
+      "kind": "struct",
+      "name": "EngineStrategicPriorParameters"
     },
     {
       "fields": [

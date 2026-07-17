@@ -1044,10 +1044,19 @@ export interface EngineSectorRotationParameters {
   min_allocation: string;
   max_allocation: string;
   rebalance_threshold: string;
+  strategic_prior: EngineStrategicPriorParameters;
 }
 
 export interface EngineSimulationParameters {
   neutral_regime_sizing_factor: string;
+}
+
+export interface EngineStrategicPriorParameters {
+  weights: string;
+  source: string;
+  model_version: string;
+  calibration_status: string;
+  as_of_date: string;
 }
 
 export interface EngineStrategyEvolutionParameters {
