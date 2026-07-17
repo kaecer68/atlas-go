@@ -222,7 +222,7 @@ func firstFrameID(t *testing.T, reg *strategy_techniques.Registry) string {
 // closed via t.Cleanup.
 func startAnnotateServer(t *testing.T, reg *strategy_techniques.Registry, annotator llm_annotator.Annotator) *httptest.Server {
 	t.Helper()
-	h := strategies.NewHandlers(reg)
+	h := strategies.NewHandlers(reg, nil)
 	if annotator != nil {
 		h.SetAnnotator(annotator)
 	}
