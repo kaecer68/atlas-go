@@ -678,12 +678,17 @@ func run(args []string, deps appDeps) error {
 			alertAPI.RegisterRoutes(mux)
 		}
 
+		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
+		var macroProvider marketdata.MacroDataProvider
+
 		if gatewayFetcher != nil {
-			macroProvider := monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
+			macroProvider = monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
 			cfHandler := capitalflow.NewHandler(macroProvider)
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
+			// Wire the daily report to the same live sources (fix manifest #B06).
+			dailyRptGen.SetProvider(newLiveDailyReportProvider(macroProvider, capitalflow.ServiceFromHandler(cfHandler), eventCalendar))
 
 			// Stage 5 PR#4 Stage B: register detector scan routes BEFORE event routes
 			// so the scan store is available for injection.
@@ -730,13 +735,12 @@ func run(args []string, deps appDeps) error {
 			subHandler.RegisterRoutes(mux, allowGuest)
 			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
 			devMode := config.GetSecret("ATLAS_DEV_MODE") == "true"
-			deps := WireRecommenderDeps(WireDeps{WorkDir: cfg.WorkDir})
+			deps := WireRecommenderDeps(WireDeps{WorkDir: cfg.WorkDir, MacroProvider: macroProvider, EventCalendar: eventCalendar})
 			recommender.RegisterRoutesWithDeps(mux, *subStore, jwtMgr, deps, devMode)
 			log.Printf("[Recommender] registered /api/recommendations route (real services: %v)",
 				anyDepsWired(deps))
 		}
 
-		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
 		dailyRptGen.SetRegimeProvider(func() domain.Regime {
 			summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)
 			if summary != nil {
