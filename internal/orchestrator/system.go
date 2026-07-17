@@ -641,6 +641,10 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 
 	// New agent onboarding: create experiments for agents with outcomes but no
 	// prior experiment records. Reads experiments.jsonl directly to check.
+	// Backlog cap: stop adding when too many planned experiments remain
+	// undigested (fix manifest #D01 — backlog grew to 628 with no cap).
+	const maxUnresolvedPlanned = 100
+	backlogFull := ledger.CountUnresolvedPlanned(s.Sim().cfg.LedgerDir) >= maxUnresolvedPlanned
 	existingIDs := make(map[string]bool)
 	if expData, err := os.ReadFile(filepath.Join(s.Sim().cfg.LedgerDir, "experiments.jsonl")); err == nil {
 		for _, line := range strings.Split(string(expData), "\n") {
@@ -654,6 +658,9 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 		}
 	}
 	for _, sc := range scorecards {
+		if backlogFull {
+			break
+		}
 		if sc.WindowCount == 0 || existingIDs[sc.AgentID] {
 			continue
 		}

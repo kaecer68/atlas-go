@@ -1,12 +1,13 @@
 package experiment
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -32,6 +33,15 @@ type AutoExperimentConfig struct {
 func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 	if cfg.System == nil {
 		return fmt.Errorf("AutoExperiment: System must not be nil")
+	}
+
+	// Drain hygiene: expire stale planned records before picking a candidate.
+	// The ledger is append-only and historically never marked digested items,
+	// so the backlog grew unbounded (fix manifest #D01).
+	if expired, err := ExpireStalePlanned(cfg.Config.LedgerDir, stalePlannedTTL); err != nil {
+		logging.Warn("experiment", "expire_stale_failed", logging.Err(err))
+	} else if expired > 0 {
+		logging.Info("experiment", "stale_planned_expired", "count", expired)
 	}
 
 	// First, check if there are pending experiments from the daily pipeline that
@@ -218,41 +228,91 @@ func (p *pendingExperiment) toCandidate(registry domain.AgentRegistry) *domain.C
 	return nil
 }
 
-// loadOldestPendingExperiment reads the experiments ledger to find the oldest
-// planned experiment that hasn't been tested yet.
-func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
-	path := filepath.Join(ledgerDir, "experiments.jsonl")
-	f, err := os.Open(path)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = f.Close() }()
+// stalePlannedTTL bounds how long a planned experiment may sit undigested
+// before ExpireStalePlanned marks it expired.
+const stalePlannedTTL = 30 * 24 * time.Hour
 
-	var oldest *pendingExperiment
-	scanner := bufio.NewScanner(f)
-	buf := make([]byte, 1024*1024)
-	scanner.Buffer(buf, 1024*1024)
-	for scanner.Scan() {
-		var rec domain.ExperimentRecord
-		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+// ExpireStalePlanned appends an "expired" record for every planned
+// experiment whose oldest record is older than maxAge. Append-only semantics
+// are preserved (no rewrite); readers folding by ID see the new status.
+func ExpireStalePlanned(ledgerDir string, maxAge time.Duration) (int, error) {
+	records := ledger.ExperimentsJSONL(ledgerDir)
+	latest := ledger.LatestExperimentStatusByID(records)
+	var firstRec = make(map[string]domain.ExperimentRecord)
+	for _, rec := range records {
+		if rec.ID == "" {
 			continue
 		}
+		if _, ok := firstRec[rec.ID]; !ok {
+			firstRec[rec.ID] = rec
+		}
+	}
+	cutoff := time.Now().Add(-maxAge)
+	var toExpire []domain.ExperimentRecord
+	for id, st := range latest {
+		if st != domain.ExperimentPlanned {
+			continue
+		}
+		rec := firstRec[id]
+		// Records carry no explicit timestamp field; fall back to ID-embedded
+		// unix suffix when present, else expire conservatively (treat as old).
+		if !experimentRecordIsOld(rec, cutoff) {
+			continue
+		}
+		toExpire = append(toExpire, domain.ExperimentRecord{
+			ID:            rec.ID,
+			TargetAgentID: rec.TargetAgentID,
+			Skill:         rec.Skill,
+			MutationType:  rec.MutationType,
+			Status:        domain.ExperimentExpired,
+		})
+	}
+	if len(toExpire) == 0 {
+		return 0, nil
+	}
+	store := ledger.NewStore(ledgerDir)
+	for _, rec := range toExpire {
+		if err := store.RecordExperiment(rec); err != nil {
+			return 0, fmt.Errorf("expire %s: %w", rec.ID, err)
+		}
+	}
+	return len(toExpire), nil
+}
+
+// experimentRecordIsOld reports whether the record predates cutoff. Since
+// ExperimentRecord has no timestamp, age is inferred from a unix-timestamp
+// suffix in the ID when present; otherwise the record is treated as old.
+func experimentRecordIsOld(rec domain.ExperimentRecord, cutoff time.Time) bool {
+	if i := strings.LastIndex(rec.ID, "-"); i >= 0 && i+1 < len(rec.ID) {
+		if ts, err := strconv.ParseInt(rec.ID[i+1:], 10, 64); err == nil && ts > 1_000_000_000 {
+			return time.Unix(ts, 0).Before(cutoff)
+		}
+	}
+	return true
+}
+
+// loadOldestPendingExperiment reads the experiments ledger to find the oldest
+// planned experiment that hasn't been tested yet. Resolution is last-write-wins
+// per experiment ID, so digested items are never re-picked (fix manifest #D01).
+func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
+	records := ledger.ExperimentsJSONL(ledgerDir)
+	latest := ledger.LatestExperimentStatusByID(records)
+	for _, rec := range records {
 		if rec.Status != domain.ExperimentPlanned || rec.TargetAgentID == "" {
 			continue
 		}
-		// Only pick the FIRST matching record (oldest, since file is chronological)
-		if oldest == nil {
-			oldest = &pendingExperiment{
-				ID:            rec.ID,
-				TargetAgentID: rec.TargetAgentID,
-				Skill:         rec.Skill,
-				MutationType:  rec.MutationType,
-				BaselineValue: rec.BaselineValue,
-			}
-			break
+		if latest[rec.ID] != domain.ExperimentPlanned {
+			continue // resolved by a later record
+		}
+		return &pendingExperiment{
+			ID:            rec.ID,
+			TargetAgentID: rec.TargetAgentID,
+			Skill:         rec.Skill,
+			MutationType:  rec.MutationType,
+			BaselineValue: rec.BaselineValue,
 		}
 	}
-	return oldest
+	return nil
 }
 
 // LoadPendingExperiments returns all pending experiment results from the
