@@ -28,7 +28,7 @@ func NewTWSEOddLotChannelAdapter() *TWSEOddLotChannelAdapter {
 
 func (a *TWSEOddLotChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
-	if err := a.limiter.Wait(ctx); err != nil {
+	if err := waitForLimiter(ctx, a.limiter); err != nil {
 		return nil, fmt.Errorf("rate limit: %w", err)
 	}
 	stats, err := a.provider.FetchLatest(ctx)

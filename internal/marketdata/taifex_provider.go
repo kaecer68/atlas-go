@@ -72,7 +72,7 @@ func (t *TAIFEXProvider) Name() string {
 
 // FetchPCR retrieves the most recent available put/call ratio data.
 func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
-	if err := t.rateLimiter.Wait(ctx); err != nil {
+	if err := WaitForLimiter(ctx, t.rateLimiter); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", err)
 	}
 
@@ -127,7 +127,7 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 //
 //	retail = total market OI - top10 large trader OI
 func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFuturesOI, error) {
-	if err := t.rateLimiter.Wait(ctx); err != nil {
+	if err := WaitForLimiter(ctx, t.rateLimiter); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", err)
 	}
 
@@ -282,7 +282,7 @@ type TAIFEXFutures struct {
 
 // FetchFutures retrieves the most recent TX futures daily data.
 func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, error) {
-	if err := t.rateLimiter.Wait(ctx); err != nil {
+	if err := WaitForLimiter(ctx, t.rateLimiter); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", err)
 	}
 
