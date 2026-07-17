@@ -173,8 +173,8 @@ export async function renderHomePage(container) {
 
     <section class="home-section" id="home-seven-force">
       <div class="home-section__header">
-        <h2>7-Force 錢潮看板</h2>
-        <span class="home-section__subtitle">外資 / 投信 / 自營商 / 散戶 / 政府 / 期貨 / TSM ADR</span>
+        <h2>七維錢潮雷達（3+2+2 分層）</h2>
+        <span class="home-section__subtitle">官方法人 / 行為代理 / 領先＋跨市場訊號；語意見 <code>docs/specs/capital-flow-seven-dimension-spec.md</code> §4 D-CF-04</span>
         <span class="home-section__data-badge" id="seven-force-data-badge"></span>
       </div>
       <div id="home-capital-battle-content"></div>
