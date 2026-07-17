@@ -1479,6 +1479,13 @@ export interface GeopoliticalRiskScore {
   timestamp: string;
 }
 
+export interface GovernmentFlowReading {
+  date: string;
+  total_net: number;
+  source: string;
+  raw_url?: string;
+}
+
 export interface GraphEdge {
   source: string;
   target: string;
@@ -1971,6 +1978,7 @@ export interface MacroDataSnapshot {
   domestic_fund_net: MacroDataPoint;
   dealer_net: MacroDataPoint;
   foreign_futures_oi_net: MacroDataPoint;
+  government_net: MacroDataPoint;
   export_electronics: MacroDataPoint;
   retail_margin_balance: MacroDataPoint;
   retail_short_balance: MacroDataPoint;

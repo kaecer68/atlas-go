@@ -83,6 +83,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "tsm_adr", apply: a.applyTSMADR},
 		{channelID: "taiex_index", apply: a.applyTAIEX},
 		{channelID: "taifex_institutional", apply: a.applyTaifexInstitutional},
+		{channelID: "government_flow", apply: a.applyGovernmentFlow},
 	}
 
 	var (
@@ -407,6 +408,29 @@ func (a *macroDataGatewayAdapter) applyTaifexInstitutional(snap *marketdata.Macr
 	snap.ForeignFuturesOINet = marketdata.MacroDataPoint{
 		Symbol:    "TX_FOREIGN_OI_NET",
 		Value:     float64(inst.Foreign.OINet),
+		Timestamp: ts.Unix(),
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var payload struct {
+		Available bool                              `json:"available"`
+		Reading   *marketdata.GovernmentFlowReading `json:"reading"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+	if !payload.Available || payload.Reading == nil || payload.Reading.Date == "" {
+		return
+	}
+	ts, _ := time.Parse("20060102", payload.Reading.Date)
+	// TWD value is large; convert to 億元 (1e8) so the Z-score window stays
+	// in a sane numeric range alongside the other forces (which are
+	// typically expressed in billions NTD or percentage points).
+	v := float64(payload.Reading.TotalNet) / 1e8
+	snap.GovernmentNet = marketdata.MacroDataPoint{
+		Symbol:    "GOV_FLOW_NET",
+		Value:     v,
 		Timestamp: ts.Unix(),
 	}
 }

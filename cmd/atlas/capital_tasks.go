@@ -173,6 +173,22 @@ func registerCapitalTasks(d capitalDeps) {
 	})
 	log.Printf("[Gateway] registered auto_taifex_institutional background task (1h interval, 15:00+ Taipei)")
 
+	// Register auto_government_flow — daily refresh of operator-imported
+	// 官股行庫 readings (manifest #E04). No upstream HTTP — just reads the
+	// state directory, so 1h tick is plenty; weekend gate removed (operator
+	// may backfill on Saturday).
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_government_flow",
+		ChannelID: "government_flow",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task: func(ctx context.Context) error {
+			_, err := d.gateway.Fetch(ctx, "government_flow")
+			return err
+		},
+	})
+	log.Printf("[Gateway] registered auto_government_flow background task (1h interval)")
+
 	// Register auto_geopolitical via Gateway.
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_geopolitical",

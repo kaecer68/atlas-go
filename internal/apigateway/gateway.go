@@ -191,6 +191,7 @@ func channelIDs() []string {
 		"taifex_daily",
 		"taifex_institutional",
 		"twse_oddlot",
+		"government_flow",
 		"twse_etf",
 		"us_spx",
 		"us_ndx",

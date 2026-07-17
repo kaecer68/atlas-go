@@ -251,6 +251,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("taifex_institutional", taifexInstAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "taifex_institutional")
 
+	// --- Government (官股行庫 readings — operator-imported state files; #E04) ---
+	govProvider := marketdata.NewGovernmentFlowProvider(filepath.Join(workDir, "data/state/government_flow"))
+	govAdapter := NewGovernmentFlowAdapter(govProvider)
+	g.registry.Register("government_flow", govAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "government_flow")
+
 	// --- TWSE Odd-Lot Trading (no API key required) ---
 	oddlotAdapter := NewTWSEOddLotChannelAdapter()
 	g.registry.Register("twse_oddlot", oddlotAdapter)
