@@ -1530,3 +1530,46 @@ func TestExecuteTask_LastErrorRecordedAndCleared(t *testing.T) {
 		t.Fatalf("LastError after success = %q, want empty", got)
 	}
 }
+
+func TestExecuteTask_OverlapToleranceAbsorbsJitter(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	ran := false
+	task := &ScheduledTask{
+		Name:     "jittered-tick",
+		Interval: 1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			ran = true
+			return nil
+		},
+	}
+	task.SetEnabled(true)
+	// Tick fires 500ms "early" relative to the last run start — within the
+	// overlap tolerance, so it must execute (old code skipped it).
+	task.SetLastRun(time.Now().Add(-1*time.Hour + 500*time.Millisecond))
+
+	m.executeTask(context.Background(), task)
+	if !ran {
+		t.Fatal("tick within overlap tolerance was skipped; want executed")
+	}
+}
+
+func TestExecuteTask_TrueOverlapStillSkipped(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	ran := false
+	task := &ScheduledTask{
+		Name:     "true-overlap",
+		Interval: 1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			ran = true
+			return nil
+		},
+	}
+	task.SetEnabled(true)
+	// Half an interval early — well beyond the tolerance, must be debounced.
+	task.SetLastRun(time.Now().Add(-30 * time.Minute))
+
+	m.executeTask(context.Background(), task)
+	if ran {
+		t.Fatal("tick at half-interval executed; want skipped")
+	}
+}

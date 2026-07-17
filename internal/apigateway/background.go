@@ -303,8 +303,11 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 		return
 	}
 
-	// Check if previous run is still executing (mutual exclusion)
-	if !task.LastRun().IsZero() && time.Since(task.LastRun()) < task.Interval {
+	// Debounce ticks that fire significantly earlier than the configured
+	// interval (phase shift after a long run). A tolerance absorbs
+	// millisecond-level scheduling jitter that used to kill legitimate
+	// ticks (fix manifest #B02).
+	if !task.LastRun().IsZero() && time.Since(task.LastRun()) < task.Interval-overlapTolerance(task.Interval) {
 		logging.Warn("background_task", "task_skipped_overlap", "name", task.Name)
 		return
 	}
@@ -347,6 +350,16 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 			m.recoveryHandler(task.Name, prev)
 		}
 	}
+}
+
+// overlapTolerance returns how much earlier than the full interval a tick
+// may fire before it is treated as an overlap: max(1s, interval/20).
+func overlapTolerance(interval time.Duration) time.Duration {
+	tol := interval / 20
+	if tol < time.Second {
+		tol = time.Second
+	}
+	return tol
 }
 
 // TaskStatus represents the runtime status of a task.
