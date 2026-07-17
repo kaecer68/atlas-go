@@ -1468,3 +1468,65 @@ func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T)
 			latest.Sub(startTime), maxAllowed)
 	}
 }
+
+// =========================================================================
+// executeTask — skip sentinel / last_error / overlap tolerance (fix B01/B02)
+// =========================================================================
+
+func TestExecuteTask_SkippedPreservesFailures(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	calls := 0
+	task := &ScheduledTask{
+		Name:     "fail-then-skip",
+		Interval: 1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			calls++
+			if calls == 1 {
+				return errors.New("boom")
+			}
+			return ErrTaskSkipped
+		},
+	}
+	task.SetEnabled(true)
+
+	m.executeTask(context.Background(), task)
+	if got := task.Failures(); got != 1 {
+		t.Fatalf("after failure: Failures = %d, want 1", got)
+	}
+	// No-op ticks must NOT wash the failure away.
+	for i := 0; i < 3; i++ {
+		task.SetLastRun(time.Now().Add(-2 * time.Hour))
+		m.executeTask(context.Background(), task)
+	}
+	if got := task.Failures(); got != 1 {
+		t.Fatalf("after skips: Failures = %d, want 1 (skip is not success)", got)
+	}
+}
+
+func TestExecuteTask_LastErrorRecordedAndCleared(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	fail := true
+	task := &ScheduledTask{
+		Name:     "last-error-task",
+		Interval: 1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			if fail {
+				return errors.New("db timeout")
+			}
+			return nil
+		},
+	}
+	task.SetEnabled(true)
+
+	m.executeTask(context.Background(), task)
+	if got := task.LastError(); got != "db timeout" {
+		t.Fatalf("LastError = %q, want %q", got, "db timeout")
+	}
+
+	fail = false
+	task.SetLastRun(time.Now().Add(-2 * time.Hour))
+	m.executeTask(context.Background(), task)
+	if got := task.LastError(); got != "" {
+		t.Fatalf("LastError after success = %q, want empty", got)
+	}
+}

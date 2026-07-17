@@ -1557,7 +1557,11 @@ func run(args []string, deps appDeps) error {
 				Interval: 1 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					return autobacktest.RunScheduledBacktest(ctx, btRunner)
+					err := autobacktest.RunScheduledBacktest(ctx, btRunner)
+					if errors.Is(err, autobacktest.ErrNotInWindow) {
+						return apigateway.ErrTaskSkipped
+					}
+					return err
 				},
 			})
 			log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")

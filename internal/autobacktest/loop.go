@@ -2,11 +2,17 @@ package autobacktest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
+
+// ErrNotInWindow marks a scheduled-backtest tick that falls outside the
+// 13:30±30m Taipei window (or on a weekend). The task wrapper maps it to
+// apigateway.ErrTaskSkipped so no-op ticks do not reset failure counters.
+var ErrNotInWindow = errors.New("autobacktest: outside scheduled window")
 
 func StartDailyLoop(ctx context.Context, runner *Runner) {
 	go func() {
@@ -79,12 +85,12 @@ func RunScheduledBacktest(ctx context.Context, runner *Runner) error {
 	}
 	now := time.Now().In(taipei)
 	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-		return nil
+		return ErrNotInWindow
 	}
 	scheduled := time.Date(now.Year(), now.Month(), now.Day(), 13, 30, 0, 0, taipei)
 	diff := now.Sub(scheduled)
 	if diff < -30*time.Minute || diff > 30*time.Minute {
-		return nil
+		return ErrNotInWindow
 	}
 	logging.Info("autobacktest", "triggering_scheduled_backtest")
 	if err := runner.RunAndStore(); err != nil {
