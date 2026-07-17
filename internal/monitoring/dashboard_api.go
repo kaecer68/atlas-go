@@ -1036,8 +1036,8 @@ func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
 		a.metricsCollector.RecordCounter(name, value, labelMap)
 	})
 	a.crossMarketSvc.SetDegradedMetrics(dm)
-	mux.HandleFunc("/degraded", metrics.HandleDegraded(dm))
-	mux.HandleFunc("/llm_annotator/cost", metrics.HandleCost(a.kimiClient, 0.001))
+	mux.HandleFunc("/api/degraded", metrics.HandleDegraded(dm))
+	mux.HandleFunc("/api/llm_annotator/cost", metrics.HandleCost(a.kimiClient, 0.001))
 	handlers := &apicrossmarket.Handlers{
 		Svc: a.crossMarketSvc,
 	}

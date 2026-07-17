@@ -892,12 +892,12 @@ func TestRegisterCrossMarketRoutes_DegradedEndpointRegistered(t *testing.T) {
 	mux := http.NewServeMux()
 	d.RegisterCrossMarketRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/degraded", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/degraded", nil)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected /degraded status 200, got %d (body: %s)", rr.Code, rr.Body.String())
+		t.Fatalf("expected /api/degraded status 200, got %d (body: %s)", rr.Code, rr.Body.String())
 	}
 	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("expected Content-Type application/json, got %q", ct)
