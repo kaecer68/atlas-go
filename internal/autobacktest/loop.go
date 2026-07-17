@@ -99,3 +99,58 @@ func RunScheduledBacktest(ctx context.Context, runner *Runner) error {
 	logging.Info("autobacktest", "scheduled_backtest_completed")
 	return nil
 }
+
+// LiveChannelOpener is the minimal Gateway surface SignalApply needs to
+// translate an autobacktest CIRCUIT_BREAKER signal into a runtime action
+// (manifest #F08). The existing *apigateway.Gateway satisfies it.
+type LiveChannelOpener interface {
+	ForceOpenChannel(channelID string) error
+}
+
+// SignalApply evaluates backtest signals and, when CIRCUIT_BREAKER is active,
+// force-opens the same live channels the VIX-crisis path uses. It is a
+// downstream consumer of the previously orphan SignalEngine (manifest #F08).
+//
+// The function is exported so production wiring can call it after
+// RunScheduledBacktest succeeds; tests can drive it without scheduling.
+func SignalApply(ctx context.Context, ledgerDir string, gw LiveChannelOpener) error {
+	if gw == nil {
+		return nil
+	}
+	engine, err := NewSignalEngine(ledgerDir)
+	if err != nil {
+		return fmt.Errorf("autobacktest signal engine: %w", err)
+	}
+	sigs, err := engine.Evaluate()
+	if err != nil {
+		return fmt.Errorf("autobacktest signal evaluate: %w", err)
+	}
+	if len(sigs.Active) == 0 {
+		return nil
+	}
+	circuitBroken := false
+	for _, s := range sigs.Active {
+		if s == SignalCircuitBreaker {
+			circuitBroken = true
+			break
+		}
+	}
+	if !circuitBroken {
+		return nil
+	}
+	liveChannels := []string{"fugle", "fubon", "finmind"}
+	for _, ch := range liveChannels {
+		if err := gw.ForceOpenChannel(ch); err != nil {
+			logging.Warn("autobacktest", "circuit_breaker_force_open_failed", "channel", ch, "err", err)
+			continue
+		}
+		logging.Info("autobacktest", "circuit_breaker_force_open",
+			"channel", ch,
+			"drawdown_pct", sigs.DrawdownPct,
+			"var95", sigs.VaR95,
+			"sharpe_short", sigs.SharpeShort,
+			"sharpe_long", sigs.SharpeLong,
+		)
+	}
+	return nil
+}
