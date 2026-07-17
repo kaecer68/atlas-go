@@ -2918,6 +2918,15 @@ export interface RecommendationPipelineResponse {
   status_message?: string;
 }
 
+export interface Record {
+  strategy_id: string;
+  total_tests: number;
+  total_hits: number;
+  hit_rate: number;
+  status: string;
+  updated_at: string;
+}
+
 export interface RegimeBreakdown {
   regimes: Record<string, RegimePerformance>;
 }
