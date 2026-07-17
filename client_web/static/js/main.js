@@ -28,6 +28,7 @@ const SHELL_LOADERS = {
   crossmarket: () => import('./page-shells/crossmarket.js'),
   industry: () => import('./page-shells/industry.js'),
   strategies: () => import('./page-shells/strategies.js'),
+  'decision-chain': () => import('./page-shells/decision-chain.js'),
   capital_predictions: () => import('./pages/capital_predictions.js'),
   capital_board: () => import('./pages/capital_board.js'),
   login: () => import('./page-shells/login.js'),
