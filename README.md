@@ -4,6 +4,8 @@
 It orchestrates layered research agents, replays market data, runs bounded simulations,
 and evaluates mutations with explicit acceptance gates.
 
+**For Taiwan retail investors (散戶)**: the web dashboard (`/client/`) is the primary interface — plain-language capital-flow observation, money-tide prediction and strategy comparison, no setup needed. AI agents (Hermes / OpenClaw) act as a supplementary layer via atlas-mcp for anything the web UI cannot explain well. See [`docs/reference/product-positioning.md`](docs/reference/product-positioning.md).
+
 ## Quick Start
 
 ```bash
@@ -23,8 +25,10 @@ Full setup guide: [`docs/quickstart.md`](docs/quickstart.md)
 
 ## Atlas as MCP Server
 
-atlas-go doubles as a **MCP (Model Context Protocol) server** with **108 tools**,
+atlas-go doubles as a **MCP (Model Context Protocol) server** with **110 tools**,
 allowing external AI agents to query Taiwan stock market data, strategies, risks, and more.
+MCP is the **Agent Support** layer that complements the web-first dashboard — the web UI
+comes first; agents explain what the UI cannot.
 
 ```bash
 # One-line installer (no Go toolchain needed)
@@ -72,6 +76,7 @@ Focused: `go test ./internal/experiment/... ./internal/orchestrator/... ./intern
 
 | You are... | Start here |
 |------------|-----------|
+| Retail investor (散戶) | Open `/client/` web dashboard, then [`docs/investor/README.md`](docs/investor/README.md) |
 | External AI agent connecting to atlas | [`docs/investor/README.md`](docs/investor/README.md) (5-min overview) |
 | Developer modifying code | `AGENTS.md` (cross-tool AI guide) + [`docs/reference/traps.md`](docs/reference/traps.md) |
 | Debugging or troubleshooting | [`CLAUDE.md`](CLAUDE.md) (deploy, frontend, token rules) |

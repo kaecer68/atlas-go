@@ -1,21 +1,36 @@
-# atlas-go for Investors
+# atlas-go for Investors（散戶入口）
 
-atlas-go is a Taiwan stock investment research system. Through **atlas-mcp** (Model Context Protocol), AI agents like Hermes / OpenClaw can answer your investment questions by querying 110 tools that cover quotes, fundamentals, market regime, portfolio risk, and strategy performance.
+atlas-go 是給**台灣散戶**的模擬交易暨投資策略觀測輔助平台。產品定位全文：[`reference/product-positioning.md`](../reference/product-positioning.md)。
+
+兩種使用方式，建議順序：
+
+1. **網頁（先用，免設定）**——打開 `/client/` 儀表板：市場總覽、7-Force 錢潮看板、未來 5 日錢潮預測、產業地圖、投資心法與策略排名，全部白話呈現。
+2. **AI agent（進階）**——把 **atlas-mcp** 接進 Hermes / OpenClaw / Claude Desktop，讓 agent 用 110 個工具回答網頁上說不清楚的問題（例如「今天為什麼跌」「外資最近連買幾天」）。
 
 ## 8 Use Cases — Pick Yours
 
-| # | Use Case | Primary Question | Tier |
-|---|----------|-------------------|------|
-| 1 | [個股研究](use-cases/01-stock-research.md) | "2330 現在能不能買?" | 待 [#1068](https://github.com/kaecer68/atlas-go/issues/1068) |
-| 2 | [市場全景](use-cases/02-market-overview.md) | "現在大盤怎樣?" | 待 #1068 |
-| 3 | [個股深度](use-cases/03-stock-deep-dive.md) | "為什麼 2330 漲/跌?" | 待 #1068 |
-| 4 | [持倉健康](use-cases/04-portfolio-health.md) | "我的倉穩嗎?" | 待 #1068 |
-| 5 | [策略排名](use-cases/05-strategy-ranking.md) | "哪個策略最好?" | 待 #1068 |
-| 6 | [資金流向](use-cases/06-capital-flow.md) | "主力在買什麼?" | 待 #1068 |
-| 7 | [每日晨報](use-cases/07-daily-briefing.md) | "今天要關注什麼?" | 待 #1068 |
-| 8 | [稅務規劃](use-cases/08-tax-planning.md) | "報稅怎麼算?" | 待 #1068 |
+| # | Use Case | Primary Question | 網頁對應 | MCP |
+|---|----------|-------------------|------|-----|
+| 1 | [個股研究](use-cases/01-stock-research.md) | "2330 現在能不能買?" | 個股快查 | 待 [#1068](https://github.com/kaecer68/atlas-go/issues/1068) |
+| 2 | [市場全景](use-cases/02-market-overview.md) | "現在大盤怎樣?" | 市場總覽首頁 | 待 #1068 |
+| 3 | [個股深度](use-cases/03-stock-deep-dive.md) | "為什麼 2330 漲/跌?" | 個股快查 | 待 #1068 |
+| 4 | [持倉健康](use-cases/04-portfolio-health.md) | "我的倉穩嗎?" | 組合持倉 | 待 #1068 |
+| 5 | [策略排名](use-cases/05-strategy-ranking.md) | "哪個策略最好?" | 投資心法 | 待 #1068 |
+| 6 | [資金流向](use-cases/06-capital-flow.md) | "主力在買什麼?" | 錢潮看板 | 待 #1068 |
+| 7 | [每日晨報](use-cases/07-daily-briefing.md) | "今天要關注什麼?" | 市場總覽首頁 | 待 #1068 |
+| 8 | [稅務規劃](use-cases/08-tax-planning.md) | "報稅怎麼算?" | 組合持倉稅務區塊 | 待 #1068 |
 
-## Get Started
+## Get Started：網頁
+
+啟動 atlas 後打開瀏覽器：
+
+```
+http://localhost:8080/client/
+```
+
+首頁即市場總覽（建議方向、7-Force 錢潮、未來 5 日預測）；左側選單可進錢潮預測、產業地圖、投資心法、投資管線與組合持倉。註冊帳號後依 tier 解鎖更多區塊。
+
+## Get Started：AI agent（進階）
 
 告訴你的 AI agent：
 
