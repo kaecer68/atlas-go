@@ -937,6 +937,31 @@ func run(args []string, deps appDeps) error {
 				collector:       collector,
 			})
 
+			// Schedule daily report generation after market close (14:00–14:59
+			// Taipei), once per day; other ticks skip via ErrTaskSkipped so the
+			// failure counter is untouched (fix manifest #B10).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "daily_report_generate",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					taipei, tzErr := time.LoadLocation("Asia/Taipei")
+					if tzErr != nil {
+						taipei = time.FixedZone("CST", 8*3600)
+					}
+					now := time.Now().In(taipei)
+					if now.Hour() != 14 {
+						return apigateway.ErrTaskSkipped
+					}
+					if dailyRptGen.GetByDate(now.Format("2006-01-02")) != nil {
+						return apigateway.ErrTaskSkipped
+					}
+					dailyRptGen.Generate()
+					return nil
+				},
+			})
+			log.Printf("[DailyReport] registered daily_report_generate background task (1h interval, gated 14:00 Taipei)")
+
 			// Register auto_daily_simulation — runs daily simulation at market close.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_daily_simulation",

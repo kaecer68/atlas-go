@@ -1,3 +1,10 @@
+// Command archive-state snapshots the state directory into the archive base.
+//
+// 本命令刻意維持「人工操作」：狀態歸檔屬於維運決策（何時快照、保留多久）
+// 而非例行自動任務，故不納入背景排程（fix manifest #B10 — alternative
+// acceptance: 明確文件化為人工操作）。如需定期歸檔，請以外部 cron 呼叫：
+//
+//	0 3 * * 0  /path/to/archive-state -src data/state -dst-base data/state-archive
 package main
 
 import (
