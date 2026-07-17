@@ -375,7 +375,7 @@ func TestDashboardAPI_RegisterStrategiesRoutes(t *testing.T) {
 		t.Errorf("expected 404 when handlers not set, got %d", w.Code)
 	}
 
-	d.SetStrategiesHandlers(apistrategies.NewHandlers(nil))
+	d.SetStrategiesHandlers(apistrategies.NewHandlers(nil, nil))
 	mux2 := http.NewServeMux()
 	d.RegisterStrategiesRoutes(mux2)
 	req2 := httptest.NewRequest(http.MethodGet, "/api/strategies", nil)

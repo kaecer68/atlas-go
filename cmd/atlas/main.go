@@ -529,6 +529,13 @@ func run(args []string, deps appDeps) error {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
 		dashboard.SetPool(pool)
+		// Manifest #G05: feed the full ChannelRegistry into the admin data-channels
+		// page so it lists every registered adapter (not just the hand-maintained
+		// subset). The list is queried at request time so new adapters picked up
+		// after startup appear on the next refresh.
+		if gateway != nil {
+			dashboard.RegisteredChannelIDs = gateway.ChannelIDs()
+		}
 		agentHealthMgr := portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams)
 		dashboard.SetHealthManager(agentHealthMgr)
 		prismMgr := prism.NewPRISMManager(prism.DefaultPRISMConfig())
@@ -1398,7 +1405,10 @@ func run(args []string, deps appDeps) error {
 			stSeedsPath = filepath.Join(cfg.WorkDir, "data/seeds/strategy_techniques.json")
 			if stReg, err := strategy_techniques.LoadFromFile(stSeedsPath); err == nil {
 				stRegistry = stReg
-				stHandlers := apistrategies.NewHandlers(stRegistry)
+				// Manifest #F07: persist validate-API results so hit_rate
+				// accumulates across backtest runs.
+				stHandlers := apistrategies.NewHandlers(stRegistry,
+					apistrategies.NewFeedbackStore(filepath.Join(cfg.LedgerDir, "strategy_feedback")))
 				dashboard.SetStrategiesHandlers(stHandlers)
 				// Re-register: RegisterAllRoutes ran before SetStrategiesHandlers,
 				// so the original call encountered a nil handler. nil-safe.
@@ -1634,7 +1644,17 @@ func run(args []string, deps appDeps) error {
 					if errors.Is(err, autobacktest.ErrNotInWindow) {
 						return apigateway.ErrTaskSkipped
 					}
-					return err
+					if err != nil {
+						return err
+					}
+					// Manifest #F08: consume the autobacktest CIRCUIT_BREAKER
+					// signal (previously orphan). Only fires when the daily
+					// backtest actually ran, so SignalEngine has fresh
+					// outcomes to evaluate against.
+					if signalErr := autobacktest.SignalApply(ctx, cfg.LedgerDir, gateway); signalErr != nil {
+						logging.Warn("autobacktest", "signal_apply_failed", "err", signalErr)
+					}
+					return nil
 				},
 			})
 			log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")

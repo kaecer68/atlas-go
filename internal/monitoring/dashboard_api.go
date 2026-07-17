@@ -107,6 +107,11 @@ type DashboardAPI struct {
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
+
+	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
+	// so the admin page lists every registered channel rather than a
+	// hand-maintained subset (manifest #G05).
+	RegisteredChannelIDs []string
 	strategiesAnnotator        llm_annotator.Annotator
 	kimiClient                 *llm_annotator.KimiClient // concrete handle for cost/health endpoints; nil if strategiesAnnotator is not a KimiClient
 	calibrationTask            *narrative.CalibrationTask
@@ -904,6 +909,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	// Dashboard management center handlers (data-channels, data-pipeline,
 	// drawdown, sim-trace, channel toggle, api-keys, etc.)
 	dashboardHandlers := apidashboard.NewHandlers(a.workDir, a.ledgerDir)
+	dashboardHandlers.RegisteredChannelIDs = a.RegisteredChannelIDs
 	if a.pool != nil {
 		dashboardHandlers.Pool = a.pool
 	}
