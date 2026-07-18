@@ -98,7 +98,7 @@ func registerIndustryExtTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "sector_allocation_plan",
-		Description: autoDescOr("sector_allocation_plan", "Current sector allocation plan with adjusted weights and derivation factors per industry."),
+		Description: autoDescOr("sector_allocation_plan", "Latest persisted simulation sector-allocation snapshot, including target/current/delta, provenance, fallback status, mutation receipt, and next-session consumption evidence."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSectorAllocationPlan)
 

@@ -292,9 +292,8 @@ func TestHandleCalendarEvents_Happy(t *testing.T) {
 // =====================================================================
 
 // SectorAllocator is nil → 503.
-func TestHandleSectorAllocationPlan_EngineNotConfigured(t *testing.T) {
+func TestHandleSectorAllocationPlan_SnapshotNotFound(t *testing.T) {
 	h := setupIndustryHandlers()
-	h.SectorAllocator = nil
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/sector-allocation-plan", nil)
 
 	status, body := h.HandleSectorAllocationPlan(req)
@@ -305,8 +304,11 @@ func TestHandleSectorAllocationPlan_EngineNotConfigured(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected map, got %T", body)
 	}
-	if resp["error"] != "sector_allocation_engine_not_configured" {
-		t.Errorf("expected error code sector_allocation_engine_not_configured, got %v", resp["error"])
+	if resp["error"] != "snapshot_unavailable" {
+		t.Errorf("expected error code snapshot_unavailable, got %v", resp["error"])
+	}
+	if resp["fallback_reason"] != "snapshot_unavailable" {
+		t.Errorf("expected fallback_reason=snapshot_unavailable, got %v", resp["fallback_reason"])
 	}
 }
 
