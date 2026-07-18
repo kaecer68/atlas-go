@@ -2357,8 +2357,7 @@ bash scripts/verify-sector-allocation-closure.sh docs/manifests/sector-allocatio
 **Step 5: File sync**
 
 - `docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md` F05 改 `done`、BK-16 改 `done`、Change Log v1.10。
-- `docs/operations/sector-allocation-closure-verification-report.md`（新檔，SA12.D 建立）：依觀察期證據填入 9 個 check 結果。（forward reference；link checker 待 SA12.D 完成後消失）
-- `docs/operations/sector-allocation-closure-runbook.md`（SA12.D 補章節）。（forward reference；link checker 待 SA12.D完成後消失）
+- SA12.D runbook 與 verification report 由 B 建立（見 handoff 2026-07-18-sector-allocation-closure-progress.md）。
 - `docs/documentation-map.md`、`docs/reference/guidelines-index.md`：加入 SA11/SA12 entry。
 
 **Step 6: Commit boundaries**
