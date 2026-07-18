@@ -827,7 +827,7 @@
   },
   "sector_allocation_plan": {
     "name": "sector_allocation_plan",
-    "description": "Current sector allocation plan with adjusted weights and derivation factors per industry.",
+    "description": "Latest persisted simulation sector-allocation snapshot, including target/current/delta, provenance, fallback status, mutation receipt, and next-session consumption evidence.",
     "inputSchema": {
       "type": "object"
     }

@@ -708,6 +708,12 @@ export interface DailyBar {
   source: string;
 }
 
+export interface DailyBenchmark {
+  date: string;
+  close: number;
+  return: number;
+}
+
 export interface DailyReport {
   date: string;
   forces: ForceScore[];

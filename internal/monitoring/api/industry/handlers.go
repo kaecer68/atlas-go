@@ -488,15 +488,15 @@ func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
 	snap, err := h.Svc.GetLatestSectorAllocation(r.Context())
 	if err != nil {
 		return http.StatusServiceUnavailable, map[string]any{
-			"error":          "snapshot_unavailable",
-			"message":        err.Error(),
+			"error":           "snapshot_unavailable",
+			"message":         err.Error(),
 			"fallback_reason": "snapshot_unavailable",
 		}
 	}
 	if snap == nil {
 		return http.StatusServiceUnavailable, map[string]any{
-			"error":          "snapshot_unavailable",
-			"message":        "no sector allocation snapshot available",
+			"error":           "snapshot_unavailable",
+			"message":         "no sector allocation snapshot available",
 			"fallback_reason": "snapshot_unavailable",
 		}
 	}

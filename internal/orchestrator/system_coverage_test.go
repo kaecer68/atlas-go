@@ -38,7 +38,7 @@ func newTestSystemFull(t *testing.T) *System {
 			},
 			strat: StrategyLayer{
 				strategyRegistry:  strategy.NewRegistryWithDefaults(),
-				strategySelector:  strategy.NewSelector(strategy.NewRegistryWithDefaults(), strategy.NewComparisonEngine(20)),
+				strategySelector:  strategy.NewSelector(strategy.NewRegistryWithDefaults(), strategy.NewComparisonEngine(20, nil)),
 				strategyAllocator: strategy.NewStrategyAllocator(strategy.NewRegistryWithDefaults()),
 				thresholdEngine:   sim.NewDynamicThresholdEngine(),
 				strategyEvolver:   nil,

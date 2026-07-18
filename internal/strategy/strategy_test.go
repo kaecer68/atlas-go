@@ -149,7 +149,7 @@ func TestNewRegistryWithDefaults(t *testing.T) {
 }
 
 func TestNewComparisonEngine(t *testing.T) {
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	if e == nil {
 		t.Fatal("NewComparisonEngine returned nil")
 	}
@@ -162,7 +162,7 @@ func TestNewComparisonEngine(t *testing.T) {
 }
 
 func TestComparisonEngineRecord(t *testing.T) {
-	e := NewComparisonEngine(30)
+	e := NewComparisonEngine(30, nil)
 
 	trades := []*Trade{
 		{StrategyID: "test", Date: time.Now(), Return: 0.05},
@@ -176,7 +176,7 @@ func TestComparisonEngineRecord(t *testing.T) {
 }
 
 func TestComparisonEngineRecordEmptyTrades(t *testing.T) {
-	e := NewComparisonEngine(30)
+	e := NewComparisonEngine(30, nil)
 	e.Record([]*Trade{}, 0.02)
 
 	if len(e.trades) != 0 {
@@ -185,7 +185,7 @@ func TestComparisonEngineRecordEmptyTrades(t *testing.T) {
 }
 
 func TestComparisonEnginePruneOldTrades(t *testing.T) {
-	e := NewComparisonEngine(7)
+	e := NewComparisonEngine(7, nil)
 	now := time.Now()
 
 	e.trades["recent"] = []*Trade{
@@ -206,7 +206,7 @@ func TestComparisonEnginePruneOldTrades(t *testing.T) {
 }
 
 func TestComparisonEngineBestStrategy(t *testing.T) {
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 
 	best, err := e.BestStrategy("return")
 	if err != nil {
@@ -218,7 +218,7 @@ func TestComparisonEngineBestStrategy(t *testing.T) {
 }
 
 func TestComparisonEngineBestStrategyInvalid(t *testing.T) {
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 
 	e.history = append(e.history, &ComparisonResult{})
 
@@ -229,7 +229,7 @@ func TestComparisonEngineBestStrategyInvalid(t *testing.T) {
 }
 
 func TestComparisonEngineGetScore(t *testing.T) {
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 
 	e.history = append(e.history, &ComparisonResult{
 		Date: "2026-04-28",
@@ -248,7 +248,7 @@ func TestComparisonEngineGetScore(t *testing.T) {
 }
 
 func TestComparisonEngineGetScoreNoHistory(t *testing.T) {
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 
 	score, err := e.GetScore("test", 10)
 	if err != nil {
@@ -261,7 +261,7 @@ func TestComparisonEngineGetScoreNoHistory(t *testing.T) {
 
 func TestNewSelector(t *testing.T) {
 	r := NewRegistry()
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	s := NewSelector(r, e)
 
 	if s == nil {
@@ -285,7 +285,7 @@ func TestNewSelector(t *testing.T) {
 
 func TestSelectorSelect(t *testing.T) {
 	r := NewRegistryWithDefaults()
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	s := NewSelector(r, e)
 
 	ctx := context.Background()
@@ -305,7 +305,7 @@ func TestSelectorSelectFallback(t *testing.T) {
 		RegimePrefs: []domain.Regime{domain.RegimeRiskOff},
 		Enabled:     true,
 	})
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	s := NewSelector(r, e)
 
 	ctx := context.Background()
@@ -324,7 +324,7 @@ func TestSelectorSelectFallback(t *testing.T) {
 
 func TestSelectorGetCurrentStrategy(t *testing.T) {
 	r := NewRegistryWithDefaults()
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	s := NewSelector(r, e)
 
 	current := s.GetCurrentStrategy()
@@ -343,7 +343,7 @@ func TestSelectorGetCurrentStrategy(t *testing.T) {
 
 func TestSelectorShouldSwitch(t *testing.T) {
 	r := NewRegistryWithDefaults()
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	s := NewSelector(r, e)
 
 	old := &Strategy{ID: "old", Priority: 10}
@@ -369,7 +369,7 @@ func TestSelectorShouldSwitch(t *testing.T) {
 
 func TestSelectorStickiness(t *testing.T) {
 	r := NewRegistryWithDefaults()
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	s := NewSelector(r, e)
 
 	ctx := context.Background()
@@ -386,7 +386,7 @@ func TestSelectorStickiness(t *testing.T) {
 }
 
 func TestComparisonEngineGetResult(t *testing.T) {
-	e := NewComparisonEngine(20)
+	e := NewComparisonEngine(20, nil)
 	now := time.Now()
 
 	e.history = append(e.history, &ComparisonResult{
