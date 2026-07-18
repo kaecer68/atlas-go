@@ -528,6 +528,9 @@ func parseFlags(args []string) (RunOptions, error) {
 	if err := fs.Parse(args); err != nil {
 		return RunOptions{}, err
 	}
+	if *isSynth > 1 {
+		return RunOptions{}, fmt.Errorf("-is-synthetic must be 0 or 1, got %d", *isSynth)
+	}
 	return RunOptions{
 		StagingDir:  *staging,
 		DBPath:      *db,
