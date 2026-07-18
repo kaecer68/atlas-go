@@ -43,6 +43,8 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"us_aapl":              false,
 		"us_msft":              false,
 		"tsm_adr":              false,
+		"twse_sbl":               false, // G02
+		"tdcc_equity_dispersion": false, // G01
 	}
 
 	for id := range m.limiters {
