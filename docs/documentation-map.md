@@ -1,7 +1,7 @@
 # 文件地圖 (Documentation Map)
 
 > **用途**：本文件為 `docs/` 全部文檔的**結構化目錄索引**。與 [`documentation-standard.md`](documentation-standard.md) 配套使用。
-> **最後驗證**：2026-07-15（新增 operations/3 個 staging 7-day soak 相關文件 + audit/ 數量修正至 16）
+> **最後驗證**：2026-07-18（新增 sector-allocation simulation-closure canonical spec 索引）
 > **原則**：每個路徑均為相對於 repo root 的**完整路徑**；檔案必須可被驗證存在。
 
 ---
@@ -140,6 +140,7 @@
 | `docs/specs/mcp-sdk-api-surface.md` | MCP SDK API surface | ✅ |
 | `docs/specs/atlas-mcp-stock-capitalflow-ranker-design.md` | atlas-mcp stock/capitalflow/ranker 設計 | ✅ |
 | `docs/specs/dashboard-api-contract.md` | Dashboard API 合約 | ✅ |
+| `docs/specs/sector-allocation-simulation-closure-spec.md` | Canonical sector allocation、legacy 遷移、simulation application 與 F06 close-out 契約 | ✅ |
 | `docs/specs/guest-mode.md` | Guest mode 規格 | ✅ |
 
 ### 📋 數據標準
@@ -202,6 +203,7 @@
 | `docs/handoff/` | 任務交接（3 個檔案） |
 | `docs/investigations/` | 根因調查（5 個檔案） |
 | `docs/incidents/` | 事故記錄（2 個檔案） |
+| `docs/manifests/` | Invariant tracker manifests；產業配置模擬閉環由 `sector-allocation-simulation-closure-manifest.md` 管理 |
 | `docs/investor/` | 投資人入口 + use cases（10 個檔案） |
 | `docs/observations/` | 觀察記錄（0 個檔案；內容已移至 `.omo/handoffs/`） |
 | `docs/research/` | 研究文件（1 個檔案） |
