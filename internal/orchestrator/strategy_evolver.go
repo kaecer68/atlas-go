@@ -1,13 +1,16 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/risk"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
 // StrategyState represents the current state of the investment strategy
@@ -52,6 +55,13 @@ type StrategyEvolver struct {
 	currentState      StrategyState
 	lastEvolutionTime time.Time
 	cooldownPeriod    time.Duration
+
+	// SA08: persistent sector allocation policy storage.
+	// When non-nil, ApplySectorRotation writes real snapshots
+	// instead of returning a no-op true.
+	closureStore    sectorallocation.ClosureStore
+	sessionResolver TradingSessionResolver
+	weightEngine    sectorallocation.WeightEngine
 }
 
 // NewStrategyEvolver creates a new strategy evolver
@@ -66,6 +76,24 @@ func NewStrategyEvolverWithConfig(cfg config.StrategyEvolutionConfig) *StrategyE
 		currentState:   StrategyNormal,
 		cooldownPeriod: cfg.GetCooldownDuration(),
 	}
+}
+
+// WithClosureStore sets the persistent policy store for SA08.
+func (e *StrategyEvolver) WithClosureStore(store sectorallocation.ClosureStore) *StrategyEvolver {
+	e.closureStore = store
+	return e
+}
+
+// WithSessionResolver sets the trading session resolver for SA08.
+func (e *StrategyEvolver) WithSessionResolver(resolver TradingSessionResolver) *StrategyEvolver {
+	e.sessionResolver = resolver
+	return e
+}
+
+// WithSectorWeightEngine sets the WeightEngine for computing projected targets (SA08).
+func (e *StrategyEvolver) WithSectorWeightEngine(engine sectorallocation.WeightEngine) *StrategyEvolver {
+	e.weightEngine = engine
+	return e
 }
 
 // Evaluate determines if strategy should evolve based on current conditions
@@ -274,20 +302,105 @@ func (e *StrategyEvolver) GetPositionSizeLimit() float64 {
 	return e.GetStrategyConfig().MaxPositionSize
 }
 
-// ApplySectorRotation applies sector rotation plan to strategy
+// ApplySectorRotation persists a sector allocation snapshot for
+// consumption by the next trading session.
+//
+// When the closure store, session resolver, and weight engine are
+// wired (SA08), this method:
+//
+//  1. Computes the projected target via WeightEngine (SA04 single source)
+//  2. Resolves the next effective session via TradingSessionResolver
+//  3. Builds and persists a SectorAllocationSnapshot via ClosureStore
+//  4. Returns the MutationReceipt on success
+//
+// When dependencies are nil (not yet wired or non-replay path), the
+// method falls back to the SA06-safe no-op: returns nil receipt with
+// "closure not wired" reason — no false "applied" is reported.
 func (e *StrategyEvolver) ApplySectorRotation(
 	plan *portfolio.SectorRotationPlan,
-) (modified bool, rationale string) {
+	asOf time.Time,
+	currentAllocs map[string]float64,
+) (receipt *sectorallocation.MutationReceipt, applied bool, reason string) {
 	if e.currentState == StrategySuspended {
-		return false, "Strategy suspended - sector rotation blocked"
+		return nil, false, "Strategy suspended - sector rotation blocked"
 	}
 
 	if e.currentState == StrategyDefensive && plan.PrimaryFlow != "risk_off" {
-		// In defensive mode, only allow defensive rotations
-		return false, "Defensive mode - only risk-off rotations allowed"
+		return nil, false, "Defensive mode - only risk-off rotations allowed"
 	}
 
-	return true, fmt.Sprintf("Sector rotation applied for %s flow", plan.PrimaryFlow)
+	// SA08 fallback: without closure store we cannot persist.
+	if e.closureStore == nil {
+		return nil, false, "closure not wired — store is nil"
+	}
+	if e.sessionResolver == nil {
+		return nil, false, "closure not wired — resolver is nil"
+	}
+
+	// Resolve next effective session (fail-closed: no lookahead without
+	// a replay dataset).
+	effectiveFrom, err := e.sessionResolver.NextTradingSession(asOf)
+	if err != nil {
+		return nil, false, fmt.Sprintf("no next session: %v", err)
+	}
+
+	snap := sectorallocation.SectorAllocationSnapshot{
+		AsOfTradingDate:   asOf.Format("2006-01-02"),
+		EffectiveFrom:     effectiveFrom.Format("2006-01-02"),
+		ModelVersion:      "1.0.0",
+		CalibrationStatus: "calibrating",
+		WeightSource:      "heuristic",
+		Applied:           false,
+		Current:           convertStringMapToSectorIDs(currentAllocs),
+	}
+
+	// Compute projected target from WeightEngine (SA04 single source).
+	if e.weightEngine != nil {
+		drivers := sectorallocation.DriverInputs{
+			CapitalFlowAction: sectorallocation.CapitalFlowAction(plan.PrimaryFlow),
+		}
+		target, cerr := e.weightEngine.ComputeProjectedTarget(context.TODO(), drivers)
+		if cerr != nil {
+			snap.FallbackReason = fmt.Sprintf("projection failed: %v", cerr)
+		} else {
+			snap.Target = target.Target
+		}
+	} else {
+		snap.FallbackReason = "no weight engine"
+		// Degraded: use plan allocations as target.
+		snap.Target = make(map[industry.SectorID]float64, len(plan.Allocations))
+		for _, a := range plan.Allocations {
+			snap.Target[industry.SectorID(a.Sector)] = a.TargetPct
+		}
+	}
+
+	// Derive delta = target - current.
+	snap.Delta = make(map[industry.SectorID]float64, len(snap.Target))
+	for sector, tgt := range snap.Target {
+		cur := snap.Current[sector]
+		snap.Delta[sector] = tgt - cur
+	}
+
+	// Persist the snapshot.
+	storedReceipt, err := e.closureStore.Store(snap)
+	if err != nil {
+		return nil, false, fmt.Sprintf("store failed: %v", err)
+	}
+
+	return storedReceipt, true, "applied"
+}
+
+// convertStringMapToSectorIDs converts map[string]float64 to
+// map[industry.SectorID]float64.
+func convertStringMapToSectorIDs(m map[string]float64) map[industry.SectorID]float64 {
+	if m == nil {
+		return nil
+	}
+	out := make(map[industry.SectorID]float64, len(m))
+	for k, v := range m {
+		out[industry.SectorID(k)] = v
+	}
+	return out
 }
 
 // Reset resets the evolver to initial state (for testing)

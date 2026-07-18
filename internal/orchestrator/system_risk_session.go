@@ -217,10 +217,15 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 			sessionDate := domain.SessionDateFromID(s.Sim().session.ID)
 			currentAllocs := s.currentSectorAllocations(result.Positions, s.Sim().lastQuotes, sessionDate)
 			plan := rotator.GeneratePlan(macroAssessment, currentAllocs)
-			if modified, rationale := s.strat.strategyEvolver.ApplySectorRotation(plan); modified {
+			receipt, applied, rationale := s.strat.strategyEvolver.ApplySectorRotation(plan, sessionDate, currentAllocs)
+			if applied {
 				logging.Info("sector_rotation", "applied",
 					logging.FStr("primary_flow", plan.PrimaryFlow),
-					logging.FStr("rationale", rationale))
+					logging.FStr("rationale", rationale),
+					logging.FStr("receipt", receipt.ReceiptID))
+			} else {
+				logging.Info("sector_rotation", "not_applied",
+					logging.FStr("reason", rationale))
 			}
 		}
 	}

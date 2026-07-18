@@ -44,6 +44,7 @@
 | `ATLAS_PARAMETERS_CONFIG` | 參數配置路徑（別名） | `configs/parameters.json` |
 | `ATLAS_ENGINE_CONFIG` | 引擎配置路徑 | `engine.json` |
 | `ATLAS_YAHOO_ENABLED` | Yahoo Finance 功能開關 | `false` |
+| `ATLAS_SECTOR_ALLOCATION_CLOSURE_ENABLED` | 產業配置 closure 功能開關（SA08—啟用時 CLI simulation 不寫入 live store） | 空（未設定時使用 legacy live-store sync） |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP HTTP exporter endpoint（功能開關：未設定時 fallback stdout） | 空（未設定時使用 stdout） |
 | `ATLAS_API_KEY` | API 認證金鑰（非資料源） | 空（未設定時停用認證） |
 | `ATLAS_ADMIN_KEY` | 管理員認證金鑰（admin-only 操作） | 空（未設定時停用 admin 驗證） |
