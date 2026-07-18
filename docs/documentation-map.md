@@ -102,6 +102,10 @@
 | `docs/operations/tier-boundary.md` | Tier 邊界定義 | ✅ |
 | `docs/operations/stock-mcp-query-templates.md` | 個股 MCP 查詢範本 | ✅ |
 | `docs/operations/sprint3-rollout-runbook.md` | Sprint 3 部署手冊 | ✅ |
+| `docs/operations/sector-allocation-closure-verification-report.md` | Sector Allocation Closure 驗證報告（SA12.D） | ✅ |
+| `docs/operations/sector-allocation-closure-runbook.md` | Sector Allocation Closure 操作手冊 | ✅ |
+| `docs/operations/sector-allocation-closure-observation-log.md` | Sector Allocation Closure 觀察日誌 | ✅ |
+| `docs/operations/sector-allocation-closure-rollback-drills.md` | Sector Allocation Closure Rollback Drills | ✅ |
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
 | `docs/operations/frontend-refactor-recovery-verification-report.md` | 前端重構恢復驗證報告 | ✅ |
 | `docs/operations/v2-alert-redesign-verification-report.md` | v2 警報重設計驗證報告 | ✅ |
