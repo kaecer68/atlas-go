@@ -610,7 +610,7 @@
           "value": "calibrating"
         },
         "model_version": {
-          "rationale": "Semver 2.0 (MAJOR.MINOR.PATCH-prerelease); mirrors pre-SA02 C07 _sectorWeights hardcoded prior",
+          "rationale": "Semver 2.0 (MAJOR.MINOR.PATCH-prerelease); single source of truth via StrategicPrior (SA02/SA04)",
           "source": "heuristic",
           "value": "v0.0.0-c07-heuristic"
         },
