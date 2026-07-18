@@ -34,9 +34,10 @@ func TestHandleSectorAllocationPlan_SnapshotUnavailable(t *testing.T) {
 	}
 }
 
-// TestNewIndustryService_PopulatesWeightEngine ensures the service constructor
-// sets WeightEngine so the wiring in RegisterIndustryRoutes can succeed.
-func TestNewIndustryService_PopulatesWeightEngine(t *testing.T) {
+// TestNewIndustryService_WeightEngineInjected ensures the service constructor
+// no longer creates a partial engine (SA06). WeightEngine is nil by design
+// and must be injected by the caller (dashboard wiring or composition root).
+func TestNewIndustryService_WeightEngineInjected(t *testing.T) {
 	svc := service.NewIndustryService(
 		industry.DefaultClassification(),
 		industry.NewSeasonalEngine(),
@@ -49,7 +50,7 @@ func TestNewIndustryService_PopulatesWeightEngine(t *testing.T) {
 		nil, // dataAggregator
 		"",  // paramsPath
 	)
-	if svc.WeightEngine == nil {
-		t.Fatal("NewIndustryService did not set WeightEngine — production wiring would fail")
+	if svc.WeightEngine != nil {
+		t.Fatal("NewIndustryService should NOT create a WeightEngine — SA06 removed partial engine; callers must inject")
 	}
 }
