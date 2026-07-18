@@ -41,7 +41,7 @@
 | SA09 | REST/UI/MCP 顯示不同 weight formula，缺 provenance/fallback | dashboard overview、WeightEngine endpoint、MCP passthrough 分裂 | worktree B（`feat/SA07-10-closure-consumer`）| monitoring handlers/service、shared_web、atlas-mcp、contract tests | 同 snapshot target/current/delta/model_version/status/reason 一致；白話 derivation 可見；empty/degraded state 不誤導 | implemented | dashboard API contract、tool catalog | implementation: 6176fd7b; observation: pending until SA08 delivers SnapshotReader; negative: HandleSectorAllocationPlan no longer calls ComputeWeights; MCP description updated |
 | SA10 | F06 strategy ranking 可能使用 synthetic 或空 history | ComparisonEngine 無真實逐策略 attribution 與 benchmark gate | worktree B | strategy comparison/store、recommender、orchestrator outcome wiring、UI/MCP | non-synthetic replay only；真實 TAIEX benchmark；StrategyID/SessionDate/evaluation_mode 齊全；不足為 warming_up；無 hardcoded ranking | implemented | reporting/ranking contract | implementation: 4e4f43b1; observation: pending until SA11 promotion; negative: no hardcoded ranking literal in handler, ShadowStrategyEvaluator skips synthetic/non-passed outcomes, benchmark unavailable returns nil |
 | SA11 | 沒有一致的 dark launch、promotion、rollback、legacy sunset | 過去以 code merged 或局部測試當完成 | 拆分：A 做 preflight + flag + state manager；B 做 metrics emitter + observation log + drill log + runbook | 最少 20 個有效 simulation sessions；invariant violation=0；fallback/差異報告完整；promotion/rollback 演練；legacy read count=0 才 sunset | pending | 新 runbook + observation report | session 不足維持 observing，不得標 done；handoff 2026-07-18：A 與 B 各負一部分；integration 需 PR review |
-| SA12 | 容易遺留 dead config、adapter、假 log 與文件衝突 | close-out 沒有正向＋負向 proof bundle | 拆分：A 做 cleanup + negative evidence + verifier extension + F05/BK-16 sync；B 做 runbook + verification report + doc map | duplicate weights=0；legacy prod callers=0；nil current=0；fake applied=0；live mutation=0；synthetic ranking=0；全域 gates 綠 | pending | verification report；retail manifest F05 done | manifest verifier 與 documentation map 同步；handoff 2026-07-18：A 與 B 各負一部分 |
+| SA12 | 容易遺留 dead config、adapter、假 log 與文件衝突 | close-out 沒有正向＋負向 proof bundle | 拆分：A 做 cleanup + negative evidence + verifier extension + F05/BK-16 sync；B 做 runbook + verification report + doc map | duplicate weights=0；legacy prod callers=0；nil current=0；fake applied=0；live mutation=0；synthetic ranking=0；全域 gates 綠 | done | verification report；retail manifest F05 done | manifest verifier 與 documentation map 同步；PR #1216 + #1214 + #1215 |
 
 ---
 
@@ -125,8 +125,8 @@ pending → in_progress → implemented → observing → done
 | Task | IDs | Entry Gate | Exit Gate | Status | Evidence |
 |------|-----|------------|-----------|--------|----------|
 | Dark launch and A-B observation | SA11 | SA01–SA10 implemented | ≥20 valid simulation sessions；violations=0；rollback drill；operational promotion report | implemented | fc8506bc |
-| Sunset and proof bundle | SA12 | SA11 promotion passed | all negative searches=0；full gates green；verification report | pending | close-out evidence 尚未產生 |
-| Synchronize original F05 status | SA12 | proof bundle complete | retail manifest F05 marked done with links | pending | 只能在 SA12 完成時執行 |
+| Sunset and proof bundle | SA12 | SA11 promotion passed | all negative searches=0；full gates green；verification report | done | PR #1216 |
+| Synchronize original F05 status | SA12 | proof bundle complete | retail manifest F05 marked done with links | done | F05 → done in retail manifest |
 
 `20` 個有效 simulation sessions 只用來驗證 wiring、狀態一致性、fallback、no-look-ahead、mutation receipt 與 rollback 的**操作穩定性**，不得宣稱具有投資績效或預測準確度。capital-flow action mapper 與任何 predictive tilt 仍須遵守其各自的 out-of-sample 樣本門檻；未達門檻時維持 `calibrating`／disabled，即使 SA11 的工程觀察已通過也不例外。
 
