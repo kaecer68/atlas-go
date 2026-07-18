@@ -1901,7 +1901,7 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 		// artifacts; they must not contaminate live state.
 		// The closure policy file is the authoritative source of truth
 		// for next-session sector allocation.
-		if os.Getenv("SECTOR_ALLOCATION_CLOSURE_ENABLED") == "" {
+		if os.Getenv("ATLAS_SECTOR_ALLOCATION_CLOSURE_ENABLED") == "" {
 			stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
 			if err := stateStore.Load(); err != nil {
 				logging.Warn("main", "load_live_state_failed", "err", err.Error())
