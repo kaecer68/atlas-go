@@ -327,7 +327,7 @@ func (e *ForceExtractor) scoreRetail(snap marketdata.MacroDataSnapshot, history 
 // official_actor dimensions vote in actor consensus, and a
 // behavioral_proxy dimension's "true" reading still does not.
 //
-// Unknown dimensions get the zero-value row so an unrecognised
+// Unknown dimensions get the zero-value row so an unrecognized
 // caller cannot trigger a panic.
 func ComputeForceProvenance(force ForceName) ForceProvenance {
 	switch force {
