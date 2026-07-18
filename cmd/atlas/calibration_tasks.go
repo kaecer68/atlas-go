@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/calibration"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -88,6 +89,7 @@ func registerCalibrationTasks(d calibrationDeps) {
 	d.registerMacroRiskCalibrate()
 	d.registerStructuralTrendCalibrate()
 	d.registerNarrativeCalibrate()
+	d.registerPredictorCalibrate()
 	d.registerLinkageCalibrate()
 	d.registerFactorWeightStrategyCalibrate()
 	d.registerAutoCalibrate()
@@ -445,6 +447,36 @@ func (d calibrationDeps) registerNarrativeCalibrate() {
 		},
 	})
 	log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
+}
+
+func (d calibrationDeps) registerPredictorCalibrate() {
+	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "predictor_calibrate",
+		Interval: 24 * time.Hour,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			dbPath := filepath.Join(d.Cfg.LedgerDir, "atlas.db")
+			result, err := calibration.CalibratePredictor(ctx, dbPath)
+			if err != nil {
+				logging.Error("predictor_calibrate", "failed", "err", err.Error())
+				return err
+			}
+			logging.Info("predictor_calibrate", "completed",
+				"verdict", result.Verdict,
+				"changes", len(result.Changes),
+				"summary", result.Summary)
+			for _, ch := range result.Changes {
+				logging.Info("predictor_calibrate", "param_change",
+					"param", ch.ParamName,
+					"before", ch.Before,
+					"after", ch.After,
+					"delta", ch.DeltaPct,
+					"confidence", ch.Confidence)
+			}
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered predictor_calibrate background task (24h interval)")
 }
 
 // registerSeasonalCalibrate was removed: it exec'd `go run
