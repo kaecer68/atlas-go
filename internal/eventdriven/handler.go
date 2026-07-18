@@ -57,6 +57,11 @@ func (h *Handler) SetScanStore(ss DetectorScanStore) {
 	h.predictor.SetScanStore(ss)
 }
 
+// Predictor returns the underlying Predictor for external wiring (F04).
+func (h *Handler) Predictor() *Predictor {
+	return h.predictor
+}
+
 // RegisterRoutes registers event-driven endpoints using the default static
 // capital flow provider. Preserves v0.0.0.32 API.
 func RegisterRoutes(mux *http.ServeMux, cal *industry.EventCalendar) {

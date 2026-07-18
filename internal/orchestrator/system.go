@@ -130,6 +130,9 @@ type System struct {
 
 	sectorL1Mapper portfolio.L1SymbolResolver
 	sectorCalc     *portfolio.SectorExposureCalculator
+
+	// F04: event-driven prediction for simulation tilt.
+	eventPredictor EventFlowPredictor
 }
 
 // Phase3Controller returns the Phase 3 optimization controller, if attached.
@@ -158,6 +161,22 @@ func (s *System) WithSectorL1Mapper(m portfolio.L1SymbolResolver) *System {
 // by currentSectorAllocations.
 func (s *System) WithSectorExposureCalculator(c *portfolio.SectorExposureCalculator) *System {
 	s.sectorCalc = c
+	return s
+}
+
+// EventFlowPredictor is the interface consumed by the orchestrator to apply
+// event-driven capital flow predictions as simulation tilts (F04).
+// Implementations must be safe for concurrent use during simulation runs.
+type EventFlowPredictor interface {
+	// PredictToday returns the first day prediction (direction + confidence).
+	PredictToday() (direction string, confidence float64)
+}
+
+// WithEventPredictor injects an event-driven flow predictor for F04
+// simulation tilt. When nil or when ATLAS_EVENT_PREDICTION_ENABLED is
+// false, prediction tilt is skipped.
+func (s *System) WithEventPredictor(p EventFlowPredictor) *System {
+	s.eventPredictor = p
 	return s
 }
 
