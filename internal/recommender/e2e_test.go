@@ -61,7 +61,7 @@ func TestE2E_RecommendationsEndpoint(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantTier:   "premium",
 			wantRegime: "RISK_OFF",
-			wantSignal: "Score=0.85 — 等回測支撐區間",
+			wantSignal: "Score=0.85 — 排名第1",
 		},
 	}
 

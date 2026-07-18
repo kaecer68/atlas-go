@@ -96,6 +96,7 @@ type SystemCore struct {
 func (sc *SystemCore) Sim() *SimulationCore    { return &sc.sim }
 func (sc *SystemCore) Port() *PortfolioManager { return &sc.port }
 func (sc *SystemCore) Risk() *RiskOps          { return &sc.risk }
+func (sc *SystemCore) Strat() *StrategyLayer   { return &sc.strat }
 
 // ServiceRegistry interface implementation for SystemCore
 func (s *SystemCore) Replay() *replay.Dataset                         { return s.Sim().replay }
@@ -287,7 +288,7 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 		SystemCore: &SystemCore{
 			sim:             simCore,
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine, cfg.LedgerDir),
-			strat:           buildStrategyLayer(thresholdEngine),
+			strat:           buildStrategyLayer(cfg.LedgerDir, thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus, macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider),
 			plugins:         plugins,
 			narrativeEngine: narrative.NewNarrativeEngine(),
@@ -585,6 +586,46 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		s.Risk().metricsCollector.RecordScreening(int64(len(rawRecs)), int64(len(rejects)))
 	}
 	s.Sim().lastOutcomes = outcomes
+
+	// F06: feed non-synthetic outcomes into comparison engine for real strategy rankings.
+	if s.Strat().comparisonEngine != nil && !syntheticOutcomes {
+		// Dereference pointers for the evaluator.
+		strats := s.Strat().strategyRegistry.List()
+		vals := make([]strategy.Strategy, len(strats))
+		for i, sp := range strats {
+			vals[i] = *sp
+		}
+		eval := strategy.NewShadowStrategyEvaluator(vals)
+		// Convert domain outcomes to strategy package's local type.
+		stratOutcomes := make([]strategy.RecommendationOutcome, len(outcomes))
+		for i, o := range outcomes {
+			stratOutcomes[i] = strategy.RecommendationOutcome{
+				AgentID: o.AgentID, Skill: o.Skill, Symbol: o.Symbol,
+				Conviction: o.Conviction, ForwardReturn: o.ForwardReturn,
+				IsSynthetic: o.IsSynthetic, PassedGuards: o.PassedGuards,
+			}
+		}
+		benchmarkReturn := 0.0
+		if s.macroSnapshot != nil {
+			benchmarkReturn = s.macroSnapshot.TAIEX.ChangePct / 100 // convert % to decimal
+		}
+		benchmark := strategy.BenchmarkObservation{
+			TradingDate: asOf.Format("2006-01-02"),
+			SourceID:    "TAIEX",
+			Return:      benchmarkReturn,
+			Available:   s.macroSnapshot != nil,
+		}
+		obs := eval.Evaluate(stratOutcomes, asOf, benchmark)
+		if len(obs) > 0 {
+			day := strategy.ComparisonDay{
+				TradingDate:  asOf.Format("2006-01-02"),
+				Benchmark:    benchmark,
+				Observations: obs,
+			}
+			_ = s.Strat().comparisonEngine.RecordShadowDay(day)
+		}
+	}
+
 	tw.Record(7, "ledger_write", "OK", map[string]any{"outcomes": len(outcomes)})
 
 	if s.Port().darwinian != nil && !syntheticOutcomes {

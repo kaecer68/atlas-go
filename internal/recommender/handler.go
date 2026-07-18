@@ -345,20 +345,28 @@ func buildPremiumStrategy(e ComparisonEngine, w *[]string) *StrategyRecommendati
 			StopLoss:    "-5%",
 		}
 	}
-	score, err := e.GetScore("growth")
-	if err != nil {
-		*w = append(*w, "entry_signal_unavailable")
+	// F06: use real shadow ranking when available.
+	ranked, err := e.RankedStrategies()
+	if err != nil || len(ranked) == 0 {
+		*w = append(*w, "ranking_warming_up")
+		// Fallback to score-based for active strategy.
+		score, _ := e.GetScore("growth")
 		return &StrategyRecommendation{
 			Active:      "growth",
 			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
-			EntrySignal: "等待回測支撐區間",
-			StopLoss:    fmt.Sprintf("-%.1f%%", 5.0),
+			EntrySignal: fmt.Sprintf("排名暖機中 (%.2f)", score),
+			StopLoss:    "-5%",
 		}
 	}
+	active := ranked[0]
+	if len(ranked) > 5 {
+		ranked = ranked[:5]
+	}
+	score, _ := e.GetScore(active)
 	return &StrategyRecommendation{
-		Active:      "growth",
-		Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
-		EntrySignal: fmt.Sprintf("Score=%.2f — 等回測支撐區間", score),
+		Active:      active,
+		Ranked:      ranked,
+		EntrySignal: fmt.Sprintf("Score=%.2f — 排名第1", score),
 		StopLoss:    "-5%",
 	}
 }

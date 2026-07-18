@@ -90,3 +90,17 @@ func (e *ComparisonEngine) RankingSnapshot(asOf time.Time) RankingSnapshot {
 		Benchmark:       benchmark,
 	}
 }
+
+// RankedIDs returns a simplified ranked list of strategy IDs from the shadow
+// comparison engine (F06). Returns nil when warming up.
+func (e *ComparisonEngine) RankedIDs() ([]string, error) {
+	snap := e.RankingSnapshot(time.Now())
+	if snap.WarmingUp.Status != "eligible" {
+		return nil, nil
+	}
+	ids := make([]string, len(snap.Ranked))
+	for i, r := range snap.Ranked {
+		ids[i] = r.StrategyID
+	}
+	return ids, nil
+}

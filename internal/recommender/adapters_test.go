@@ -308,6 +308,10 @@ func (f fakeProvider) GetScore(string, int) (float64, error) {
 	return f.score, f.err
 }
 
+func (f fakeProvider) RankedIDs() ([]string, error) {
+	return []string{"growth", "momentum"}, nil
+}
+
 var (
 	_ narrative.TaiwanStressIndex // doc-only reference to ensure import path stays
 	_ = errors.New                // doc-only reference
