@@ -124,7 +124,7 @@ pending → in_progress → implemented → observing → done
 
 | Task | IDs | Entry Gate | Exit Gate | Status | Evidence |
 |------|-----|------------|-----------|--------|----------|
-| Dark launch and A-B observation | SA11 | SA01–SA10 implemented | ≥20 valid simulation sessions；violations=0；rollback drill；operational promotion report | pending | runtime evidence 尚未產生 |
+| Dark launch and A-B observation | SA11 | SA01–SA10 implemented | ≥20 valid simulation sessions；violations=0；rollback drill；operational promotion report | implemented | fc8506bc |
 | Sunset and proof bundle | SA12 | SA11 promotion passed | all negative searches=0；full gates green；verification report | pending | close-out evidence 尚未產生 |
 | Synchronize original F05 status | SA12 | proof bundle complete | retail manifest F05 marked done with links | pending | 只能在 SA12 完成時執行 |
 
