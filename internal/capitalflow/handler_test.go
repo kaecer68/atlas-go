@@ -336,3 +336,47 @@ func TestHandleSummary_ResponseContainsNewAssessmentFields(t *testing.T) {
 	// round-trip (CF-INV-08).
 	mustContainKey(t, doc, "assessment")
 }
+
+func TestHandleHistory(t *testing.T) {
+	h := NewHandler(&mockProvider{snap: testSnapshot()})
+
+	// Default (60 days) — store is empty, expect empty slices.
+	req := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history", nil)
+	code, data := h.HandleHistory(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+
+	result, ok := data.(map[ForceName][]RollingSample)
+	if !ok {
+		t.Fatalf("expected map[ForceName][]RollingSample, got %T", data)
+	}
+
+	// All 7 dimensions must be present, even if empty.
+	for _, dim := range []ForceName{
+		ForceForeign, ForceFutures, ForceTSMADR,
+		ForceInstitutional, ForceDealer, ForceGovernment, ForceRetail,
+	} {
+		samples, exists := result[dim]
+		if !exists {
+			t.Errorf("missing dimension %q in response", dim)
+		}
+		if samples == nil {
+			t.Errorf("dimension %q should be non-nil slice (got nil)", dim)
+		}
+	}
+
+	// Query with days=0 returns 400.
+	reqBad := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history?days=0", nil)
+	codeBad, _ := h.HandleHistory(reqBad)
+	if codeBad != http.StatusBadRequest {
+		t.Errorf("expected 400 for days=0, got %d", codeBad)
+	}
+
+	// Query with days=999 caps to 60.
+	reqCap := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history?days=999", nil)
+	codeCap, _ := h.HandleHistory(reqCap)
+	if codeCap != http.StatusOK {
+		t.Errorf("expected 200 for days=999 (capped), got %d", codeCap)
+	}
+}

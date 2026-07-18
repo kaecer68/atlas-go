@@ -168,21 +168,13 @@ func Run(ctx context.Context, cfg Config) error {
 	registerPrompts(mcpSrv)
 
 	// Verify tool count matches expected range.
-	// registerTools (called just above): 102 business tools (incl. roots 2) +
+	// registerTools (called just above): 103 business tools (incl. roots 2) +
 	// template_detector 2 + sector (industry_sector_list + industry_sector_lookup) 2 +
-	// 0-2 sampling/elicitation (feature-gated, default off) = 106..108 tools.
+	// 0-2 sampling/elicitation (feature-gated, default off) = 107..109 tools.
 	// registerAuditTools: +4 (separate, not in registerTools).
-	// Total at this point: 110 (both gates off, the default) to 112 (both on).
-	// PR 2 (2026-07-12) added 12 read-only tools (parameters_*, backtest_*,
-	// calendar_events, sector_allocation_plan, channel_health, taiwan_stress_index,
-	// risk_exposure), raising the base from 85 to 97.
-	// PR 3 (2026-07-12) added 5 write tools (experiment_promote, experiment_revert,
-	// control_pause_agent, control_resume_agent, control_sector_ban), raising the
-	// base from 97 to 102. Write tools use DestructiveHint=true and require
-	// ATLAS_API_KEY (backend enforces auth).
-	// FU-7 Phase F (2026-07-14): +2 sector tools (industry_sector_list, industry_sector_lookup).
-	if n := RegisteredToolCount; n < 110 || n > 112 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 110-112", n)
+	// Total at this point: 111 (both gates off, the default) to 113 (both on).
+	if n := RegisteredToolCount; n < 111 || n > 113 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 111-113", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for
