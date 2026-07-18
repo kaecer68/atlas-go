@@ -80,7 +80,7 @@ func readManifestRows(path string) ([]ManifestRow, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open manifest: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	rows := []ManifestRow{}
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {

@@ -447,7 +447,7 @@ func registerOperationsTasks(d operationsDeps) {
 // argument to capitalflow.Service.Refresh, since the scheduler hands
 // the task a bare context.Context with no trading-date payload.
 //
-// Behaviour:
+// Behavior:
 //   - On a weekday before 15:30 Taipei, returns the previous weekday's
 //     date (the last fully settled trading day).
 //   - On a weekday at/after 15:30 Taipei, returns today's date.
