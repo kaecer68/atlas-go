@@ -217,6 +217,15 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 			sessionDate := domain.SessionDateFromID(s.Sim().session.ID)
 			currentAllocs := s.currentSectorAllocations(result.Positions, s.Sim().lastQuotes, sessionDate)
 			plan := rotator.GeneratePlan(macroAssessment, currentAllocs)
+
+			// F04: apply event-driven prediction tilt when enabled and predictor is wired.
+			if s.eventPredictor != nil {
+				dir, conf := s.eventPredictor.PredictToday()
+				if dir != "" && dir != "neutral" && conf > 0 {
+					plan = applyPredictionTilt(plan, dir, conf)
+				}
+			}
+
 			receipt, applied, rationale := s.strat.strategyEvolver.ApplySectorRotation(plan, sessionDate, currentAllocs)
 			if applied {
 				logging.Info("sector_rotation", "applied",
@@ -337,4 +346,45 @@ func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.A
 		}
 	}
 	return false
+}
+
+// applyPredictionTilt adjusts a SectorRotationPlan based on event-driven
+// capital flow predictions (F04). The tilt scales with confidence, capped
+// at ±5% per sector allocation.
+func applyPredictionTilt(plan *portfolio.SectorRotationPlan, direction string, confidence float64) *portfolio.SectorRotationPlan {
+	const maxTilt = 0.05
+
+	defensive := map[string]bool{
+		"utilities": true, "healthcare": true, "consumer_staples": true,
+	}
+
+	tilt := confidence * maxTilt
+	if direction == "outflow" {
+		tilt = -tilt
+	}
+
+	for i := range plan.Allocations {
+		sec := plan.Allocations[i].Sector
+		if defensive[sec] {
+			plan.Allocations[i].TargetPct -= tilt
+		} else {
+			plan.Allocations[i].TargetPct += tilt
+		}
+		if plan.Allocations[i].TargetPct < 0 {
+			plan.Allocations[i].TargetPct = 0
+		}
+	}
+
+	// Re-normalize to sum=1.
+	var sum float64
+	for _, a := range plan.Allocations {
+		sum += a.TargetPct
+	}
+	if sum > 0 {
+		for i := range plan.Allocations {
+			plan.Allocations[i].TargetPct /= sum
+		}
+	}
+
+	return plan
 }

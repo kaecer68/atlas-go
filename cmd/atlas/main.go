@@ -698,6 +698,7 @@ func run(args []string, deps appDeps) error {
 
 		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
 		var macroProvider marketdata.MacroDataProvider
+		var eventPredictor orchestrator.EventFlowPredictor // F04
 		// BK-15: capitalFlowStore is the production-side handle for the
 		// date-keyed rolling sample store (spec §8.5). Construction is
 		// infallible today (NewFileRollingSampleStore only returns the
@@ -773,6 +774,19 @@ func run(args []string, deps appDeps) error {
 			}
 			log.Printf("[EventDriven] registered /api/events/* routes (wired with capital flow + narrative models + detector scans)")
 			log.Printf("[Narrative] wired %d InvestmentModels into predictor", len(narrativeAdapter.ListModels()))
+
+			// F04: wire event-driven prediction into orchestrator simulation tilt.
+			if cfg.EventPredictionEnabled {
+				eventPredictor = orchestrator.NewEventFlowAdapter(func() (string, float64) {
+					report := edHandler.Predictor().Predict(time.Now())
+					if len(report.Predictions) == 0 {
+						return "neutral", 0
+					}
+					p := report.Predictions[0]
+					return p.Direction, p.Confidence
+				})
+				log.Printf("[EventDriven] prediction tilt enabled for orchestrator simulation (F04)")
+			}
 		}
 
 		subStore, err := subscription.NewStore(cfg.WorkDir)
@@ -829,7 +843,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine)
+			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine, eventPredictor)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -1048,7 +1062,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine, eventPredictor)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1166,7 +1180,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine, eventPredictor)
 					if err != nil {
 						return fmt.Errorf("create system for stress test: %w", err)
 					}
@@ -1204,7 +1218,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine, eventPredictor)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -2273,9 +2287,20 @@ func buildSystemOrFallback(
 	cfg config.Config,
 	eventBus *eventbus.ChannelEventBus,
 	janusEngine *janus.Engine,
+	eventPredictor orchestrator.EventFlowPredictor, // F04
 ) (*orchestrator.System, error) {
+	var sys *orchestrator.System
+	var err error
 	if root != nil {
-		return root.BuildSystem(path, eventBus, janusEngine)
+		sys, err = root.BuildSystem(path, eventBus, janusEngine)
+	} else {
+		sys, err = orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, janusEngine)
 	}
-	return orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, janusEngine)
+	if err != nil {
+		return nil, err
+	}
+	if eventPredictor != nil {
+		sys.WithEventPredictor(eventPredictor)
+	}
+	return sys, nil
 }

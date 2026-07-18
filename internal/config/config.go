@@ -68,6 +68,7 @@ type Config struct {
 	LLMConfidenceCommentaryEnabled bool // LLM_CONFIDENCE_COMMENTARY_ENABLED — W5: confidence_hook.go confidence commentary hook
 	LLMSectorAgentsEnabled         bool // LLM_SECTOR_AGENTS_ENABLED — W6: sector_agent_llm.go wired plugin hook (Issue #719, Wave 11 L2.1)
 	SectorPredictionEnabled        bool // SECTOR_PREDICTION_ENABLED — gates eventdriven.SetMacroProvider() sector direction predictions (Wave 11+ C07)
+	EventPredictionEnabled         bool // ATLAS_EVENT_PREDICTION_ENABLED — gates event-driven prediction consumption in orchestrator (F04)
 	AllowLiveBroker                bool // ATLAS_ALLOW_LIVE_BROKER — cmd/atlas/main.go:211 live broker double-gate env
 	AllowHTTPBroker                bool // ATLAS_ALLOW_HTTP_BROKER — cmd/atlas/main.go:214 HTTP broker adapter double-gate env
 	AllowRealSigner                bool // ATLAS_ALLOW_REAL_SIGNER — cmd/atlas/main.go:217 real signer double-gate env
@@ -136,6 +137,7 @@ func Load() Config {
 		LLMConfidenceCommentaryEnabled: envOrBool("LLM_CONFIDENCE_COMMENTARY_ENABLED", false),
 		LLMSectorAgentsEnabled:         envOrBool("LLM_SECTOR_AGENTS_ENABLED", false),
 		SectorPredictionEnabled:        envOrBool("SECTOR_PREDICTION_ENABLED", false),
+		EventPredictionEnabled:         envOrBool("ATLAS_EVENT_PREDICTION_ENABLED", false),
 		AllowLiveBroker:                envOrBool("ATLAS_ALLOW_LIVE_BROKER", false),
 		AllowHTTPBroker:                envOrBool("ATLAS_ALLOW_HTTP_BROKER", false),
 		AllowRealSigner:                envOrBool("ATLAS_ALLOW_REAL_SIGNER", false),
