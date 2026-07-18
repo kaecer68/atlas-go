@@ -173,6 +173,25 @@ func registerCapitalTasks(d capitalDeps) {
 	})
 	log.Printf("[Gateway] registered auto_taifex_institutional background task (1h interval, 15:00+ Taipei)")
 
+	// Register auto_twse_sbl — daily fetch of TWSE SBL (借券賣出餘額) data (G02).
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_twse_sbl",
+		ChannelID: "twse_sbl",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task: func(ctx context.Context) error {
+			// Only fetch on weekdays after market close (15:00+).
+			if now := time.Now(); now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+				return nil
+			} else if now.Hour() < 15 {
+				return nil
+			}
+			_, err := d.gateway.Fetch(ctx, "twse_sbl")
+			return err
+		},
+	})
+	log.Printf("[Gateway] registered auto_twse_sbl background task (1h interval, 15:00+ Taipei, G02)")
+
 	// Register auto_government_flow — daily refresh of operator-imported
 	// 官股行庫 readings (manifest #E04). No upstream HTTP — just reads the
 	// state directory, so 1h tick is plenty; weekend gate removed (operator

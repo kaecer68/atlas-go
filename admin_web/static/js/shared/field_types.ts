@@ -1089,6 +1089,15 @@ export interface EquityCurvePoint {
   tax_paid?: number;
 }
 
+export interface EquityDispersionRecord {
+  date: string;
+  symbol: string;
+  tier: string;
+  holders: number;
+  shares_held: number;
+  pct_held: number;
+}
+
 export interface EventBlock {
   today: NarrativeEvent[];
   recent: NarrativeEvent[];
@@ -3197,6 +3206,15 @@ export interface RuleSummary {
   affected_sectors: string[];
   direction: string;
   status: string;
+}
+
+export interface SBLStats {
+  date: string;
+  symbol: string;
+  sbl_short_balance: number;
+  sbl_short_volume: number;
+  sbl_return_volume: number;
+  sbl_borrow_balance: number;
 }
 
 export interface Scorecard {
