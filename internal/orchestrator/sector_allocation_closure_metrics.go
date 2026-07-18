@@ -9,22 +9,6 @@ import (
 	"log/slog"
 )
 
-const sacFeature = "sector_allocation_closure"
-
-func sacAttr(field string, value any) slog.Attr {
-	return slog.Any(field, value)
-}
-
-func emitSAC(log *slog.Logger, event string, attrs ...slog.Attr) {
-	base := []slog.Attr{
-		slog.String("feature", sacFeature),
-		slog.String("version", "sa.0.1"),
-	}
-	log.Info(event, "feature", sacFeature, "version", "sa.0.1")
-	_ = base
-	_ = attrs
-}
-
 // SACMetrics exposes the 11 SAC observation-window events.
 type SACMetrics struct{ log *slog.Logger }
 
