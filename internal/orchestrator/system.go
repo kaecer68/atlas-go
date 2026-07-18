@@ -127,6 +127,9 @@ type System struct {
 	phase3Ctrl       *Phase3Controller
 
 	maturityTracker *domain.MaturityTracker
+
+	sectorL1Mapper portfolio.L1SymbolResolver
+	sectorCalc     *portfolio.SectorExposureCalculator
 }
 
 // Phase3Controller returns the Phase 3 optimization controller, if attached.
@@ -141,6 +144,20 @@ func (s *System) MaturityTracker() *domain.MaturityTracker { return s.maturityTr
 // WithMaturityTracker attaches a maturity tracker to the system.
 func (s *System) WithMaturityTracker(mt *domain.MaturityTracker) *System {
 	s.maturityTracker = mt
+	return s
+}
+
+// WithSectorL1Mapper injects the symbol→L1-sector resolver used by
+// currentSectorAllocations for computing real simulation-closing exposure.
+func (s *System) WithSectorL1Mapper(m portfolio.L1SymbolResolver) *System {
+	s.sectorL1Mapper = m
+	return s
+}
+
+// WithSectorExposureCalculator injects the SectorExposureCalculator used
+// by currentSectorAllocations.
+func (s *System) WithSectorExposureCalculator(c *portfolio.SectorExposureCalculator) *System {
+	s.sectorCalc = c
 	return s
 }
 
@@ -965,8 +982,18 @@ func vixFromQuotes(quotes []domain.Quote) float64 {
 	return 20.0
 }
 
-func (s *System) currentSectorAllocations() map[string]float64 {
-	return nil
+func (s *System) currentSectorAllocations(positions []domain.Position, quotes []domain.Quote, asOf time.Time) map[string]float64 {
+	if s.sectorCalc == nil || s.sectorL1Mapper == nil {
+		return nil
+	}
+	exp := s.sectorCalc.Calculate(positions, quotes, asOf, s.sectorL1Mapper)
+	// Normalize from map[industry.SectorID]float64 to map[string]float64 for
+	// backward compatibility with callers that consume string-keyed maps.
+	out := make(map[string]float64, len(exp.Weights))
+	for id, w := range exp.Weights {
+		out[string(id)] = w
+	}
+	return out
 }
 
 // RunDailyStressTests executes all built-in stress scenarios against the current
