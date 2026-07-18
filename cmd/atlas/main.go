@@ -1896,35 +1896,45 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 			return
 		}
 
-		stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
-		if err := stateStore.Load(); err != nil {
-			logging.Warn("main", "load_live_state_failed", "err", err.Error())
-		}
-		for symbol := range stateStore.GetPositions() {
-			stateStore.RemovePosition(symbol)
-		}
-		var totalExposure, totalUnrealizedPnL float64
-		for _, pos := range result.Positions {
-			totalExposure += pos.MarketValue
-			totalUnrealizedPnL += pos.UnrealizedPnL
-			stateStore.UpdatePosition(pos)
-		}
-		stateStore.UpdatePortfolio(livestore.PortfolioState{
-			Cash:          result.EndingCash,
-			TotalExposure: totalExposure,
-			AvailableCash: result.EndingCash,
-			DayPnL:        result.BeforeTaxPnL,
-			UnrealizedPnL: totalUnrealizedPnL,
-			LastUpdated:   time.Now(),
-		})
-		stateStore.UpdateRegime(result.Regime, 0.5, "simulation")
-		if err := stateStore.Save(); err != nil {
-			logging.Warn("main", "sync_live_state_failed", "err", err.Error())
+		// SA08: When sector allocation closure is enabled, skip the
+		// legacy live-store sync. Simulation positions are simulation
+		// artifacts; they must not contaminate live state.
+		// The closure policy file is the authoritative source of truth
+		// for next-session sector allocation.
+		if os.Getenv("SECTOR_ALLOCATION_CLOSURE_ENABLED") == "" {
+			stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
+			if err := stateStore.Load(); err != nil {
+				logging.Warn("main", "load_live_state_failed", "err", err.Error())
+			}
+			for symbol := range stateStore.GetPositions() {
+				stateStore.RemovePosition(symbol)
+			}
+			var totalExposure, totalUnrealizedPnL float64
+			for _, pos := range result.Positions {
+				totalExposure += pos.MarketValue
+				totalUnrealizedPnL += pos.UnrealizedPnL
+				stateStore.UpdatePosition(pos)
+			}
+			stateStore.UpdatePortfolio(livestore.PortfolioState{
+				Cash:          result.EndingCash,
+				TotalExposure: totalExposure,
+				AvailableCash: result.EndingCash,
+				DayPnL:        result.BeforeTaxPnL,
+				UnrealizedPnL: totalUnrealizedPnL,
+				LastUpdated:   time.Now(),
+			})
+			stateStore.UpdateRegime(result.Regime, 0.5, "simulation")
+			if err := stateStore.Save(); err != nil {
+				logging.Warn("main", "sync_live_state_failed", "err", err.Error())
+			} else {
+				logging.Info("main", "synced_simulation_to_live_store",
+					"positions", len(result.Positions),
+					"exposure", totalExposure,
+					"cash", result.EndingCash)
+			}
 		} else {
-			logging.Info("main", "synced_simulation_to_live_store",
-				"positions", len(result.Positions),
-				"exposure", totalExposure,
-				"cash", result.EndingCash)
+			logging.Info("main", "live_state_sync_skipped",
+				"reason", "sector_allocation_closure_enabled")
 		}
 
 		done <- nil
