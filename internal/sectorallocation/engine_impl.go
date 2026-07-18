@@ -325,7 +325,7 @@ func (e *defaultEngine) ComputeProjectedTarget(ctx context.Context, drivers Driv
 }
 
 // collectCycleDeltas 把 cycle multiplier 轉成 additive delta：multiplier-1 對每個 L1 sector。
-func collectCycleDeltas(ctx context.Context, p CycleInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
+func collectCycleDeltas(_ context.Context, p CycleInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
 	if p == nil {
 		return in
 	}

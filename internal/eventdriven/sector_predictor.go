@@ -177,13 +177,12 @@ func sectorInAffected(sid industry.SectorID, affected []string) bool {
 	return false
 }
 
-// sectorWeight 已由 PriorWeight 取代；保留 stub 避免外部編譯錯誤。
-// 任何殘留呼叫應該 refactor 到 SetStrategicPrior + PriorWeight。
+// sectorWeight 已由 PriorWeight 取代；SA12 close-out 將徹底刪除。
 func sectorWeight(sid industry.SectorID) float64 {
 	return 0
 }
 
-var _sectorWeights = map[industry.SectorID]float64{} // SA02 起 deprecated；先保留 map 避免破壞外部 test fixture，再 SA12 close-out 徹底刪除。
+var _sectorWeights = map[industry.SectorID]float64{} // SA02 起 deprecated；SA12 close-out 將徹底刪除。
 
 // applyMacroDrivers adjusts scores based on macro driver change percentages.
 func (sp *SectorPredictor) applyMacroDrivers(sid industry.SectorID, scoreIn, scoreOut *float64, contrib map[string]float64) {

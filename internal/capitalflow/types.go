@@ -57,7 +57,7 @@ type ForceScore struct {
 	// EvidenceClass tags whether the reading is directly reported
 	// by a first-party source ("official"), derived from a
 	// first-party source by formula ("official_derived"), inferred
-	// from a behavioural proxy ("proxy"), or imported from a
+	// from a behavioral proxy ("proxy"), or imported from a
 	// cross-market channel ("cross_market"). Spec §7 / CF-INV-02.
 	EvidenceClass string `json:"evidence_class,omitempty"`
 	// SourceID is the canonical first-party source registry key
@@ -114,7 +114,7 @@ const (
 	// DimensionRoleBehavioralProxy covers government + retail, the
 	// two non-T86 dimensions whose readings are inferred rather than
 	// directly reported. They are excluded from actor consensus but
-	// still surface in the behavioural sub-assessment.
+	// still surface in the behavioral sub-assessment.
 	DimensionRoleBehavioralProxy = "behavioral_proxy"
 	// DimensionRolePositioningIndicator covers foreign futures OI, a
 	// positioning signal that does not enter actor consensus.
@@ -127,7 +127,7 @@ const (
 // EvidenceClass values — spec §7 / CF-INV-02. EvidenceClass tags
 // whether the reading is directly reported by a first-party source,
 // derived from a first-party source by formula, inferred from a
-// behavioural proxy, or imported from a cross-market channel.
+// behavioral proxy, or imported from a cross-market channel.
 const (
 	EvidenceOfficial        = "official"
 	EvidenceOfficialDerived = "official_derived"
