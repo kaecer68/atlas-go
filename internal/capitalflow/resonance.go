@@ -21,7 +21,7 @@ import (
 // Aligned / Opposing (CF-INV-09): the rebuild at the bottom of this
 // function filters forces by both the legacy Role=="subject" and
 // the new E07 DimensionRole=="official_actor" classifications. The
-// OR keeps government/retail (legacy subjects, but behavioural
+// OR keeps government/retail (legacy subjects, but behavioral
 // proxies) in the Aligned/Opposing list when their Trend matches
 // the foreign direction; the AND-NOT pattern excludes the two
 // non-subject signals (futures + tsm_adr) so a strongly bullish
@@ -166,7 +166,7 @@ func computeInstitutionalConsensus(forces []ForceScore) DirectionalAssessment {
 	return out
 }
 
-// computeBehavioralConfirmation reads the two behavioural_proxy
+// computeBehavioralConfirmation reads the two behavioral_proxy
 // dimensions (government + retail). It is Available only when
 // BOTH dimensions have data; either missing means the layer
 // declines to speak. It does NOT participate in actor consensus

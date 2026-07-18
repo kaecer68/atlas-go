@@ -9,7 +9,7 @@ import (
 func registerCapitalFlowTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "capital_flow_daily",
-		Description: autoDescOr("capital_flow_daily", "Full daily Taiwan stock market capital flow report: 七維錢潮雷達（3+2+2 分層）— three official actor forces (foreign / institutional / dealer, T86 first-party), two behavioural proxies (government / retail) and two leading / cross-market signals (foreign futures OI / TSM ADR). Each dimension carries role, source, unit and availability flags; the resonance model only votes on the official_actor tier."),
+		Description: autoDescOr("capital_flow_daily", "Full daily Taiwan stock market capital flow report: 七維錢潮雷達（3+2+2 分層）— three official actor forces (foreign / institutional / dealer, T86 first-party), two behavioral proxies (government / retail) and two leading / cross-market signals (foreign futures OI / TSM ADR). Each dimension carries role, source, unit and availability flags; the resonance model only votes on the official_actor tier."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleCapitalFlowDaily)
 

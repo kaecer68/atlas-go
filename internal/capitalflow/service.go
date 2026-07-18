@@ -269,7 +269,7 @@ func (s *Service) LatestDaily(ctx context.Context) (DailyReport, error) {
 // When s.store is nil (a defensive path — NewService always wires
 // a MemoryRollingSampleStore), every dimension gets an empty
 // history and Score returns Z=raw for non-zero values. This
-// matches the pre-BK-15 "fresh process" behaviour for processes
+// matches the pre-BK-15 "fresh process" behavior for processes
 // that have not called Refresh at all.
 func (s *Service) extractAsOf(ctx context.Context, snap marketdata.MacroDataSnapshot, derivedDate string) ([]ForceScore, error) {
 	history := make(map[ForceName][]RollingSample, 7)
