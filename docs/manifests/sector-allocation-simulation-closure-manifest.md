@@ -1,7 +1,7 @@
 # Sector Allocation Simulation Closure Manifest
 
 > **Goal**：完成 canonical 產業配置、動態權重、真實 current exposure、simulation allocator、投資人呈現與 F06 shadow ranking 的可驗證閉環；不得以 wiring、log 或局部綠燈冒充完成。
-> **Canonical Spec**：[../specs/sector-allocation-simulation-closure-spec.md](../specs/sector-allocation-simulation-closure-spec.md)
+> **Canonical Spec**：見 [../specs/sector-allocation-simulation-closure-spec.md](../specs/sector-allocation-simulation-closure-spec.md)
 > **Created**：2026-07-18
 > **Branch**：`fix/round5-capital-flow-foundation`
 > **Overall Status**：in_progress — SA00 done；SA01 pending；舊 F05 implementation plan frozen。
