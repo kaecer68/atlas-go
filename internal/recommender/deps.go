@@ -66,6 +66,9 @@ type EventPredictor interface {
 // returns float64 only; EntrySignal/StopLoss 由 RISK layer 推導 (見 risk_signal.go)。
 type ComparisonEngine interface {
 	GetScore(strategyID string) (float64, error)
+	// RankedStrategies returns strategy IDs ordered by score, highest first (F06).
+	// Returns nil when warming up (insufficient shadow days).
+	RankedStrategies() ([]string, error)
 }
 
 // =====================================================================

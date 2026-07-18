@@ -169,31 +169,45 @@ func (a *eventPredictorAdapter) NextNDays(n int) ([]eventdriven.FlowPrediction, 
 // to decouple from the real producer's package import.
 type comparisonEngineProvider interface {
 	GetScore(strategyID string, days int) (float64, error)
+	RankedIDs() ([]string, error)
 }
 
 func NewComparisonEngineAdapter(provider comparisonEngineProvider) ComparisonEngine {
 	if provider == nil {
-		return NewComparisonEngineFunc(nil)
+		return NewComparisonEngineFunc(nil, nil)
 	}
-	return NewComparisonEngineFunc(func(strategyID string) (float64, error) {
-		return provider.GetScore(strategyID, 30) // default 30-day window
-	})
+	return NewComparisonEngineFunc(
+		func(strategyID string) (float64, error) {
+			return provider.GetScore(strategyID, 30)
+		},
+		func() ([]string, error) {
+			return provider.RankedIDs()
+		},
+	)
 }
 
-// NewComparisonEngineFunc wraps a single-arg GetScore function.
-func NewComparisonEngineFunc(getScore func(string) (float64, error)) ComparisonEngine {
+// NewComparisonEngineFunc wraps GetScore and RankedIDs functions.
+func NewComparisonEngineFunc(getScore func(string) (float64, error), rankedIDs func() ([]string, error)) ComparisonEngine {
 	if getScore == nil {
 		getScore = func(string) (float64, error) { return 0, nil }
 	}
-	return &comparisonEngineAdapter{getScore: getScore}
+	if rankedIDs == nil {
+		rankedIDs = func() ([]string, error) { return nil, nil }
+	}
+	return &comparisonEngineAdapter{getScore: getScore, rankedIDs: rankedIDs}
 }
 
 type comparisonEngineAdapter struct {
-	getScore func(string) (float64, error)
+	getScore  func(string) (float64, error)
+	rankedIDs func() ([]string, error)
 }
 
 func (a *comparisonEngineAdapter) GetScore(strategyID string) (float64, error) {
 	return a.getScore(strategyID)
+}
+
+func (a *comparisonEngineAdapter) RankedStrategies() ([]string, error) {
+	return a.rankedIDs()
 }
 
 // =====================================================================

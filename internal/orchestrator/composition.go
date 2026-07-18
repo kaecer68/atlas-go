@@ -284,9 +284,10 @@ func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry 
 }
 
 // buildStrategyLayer constructs the strategy subsystem.
-func buildStrategyLayer(thresholdEngine *sim.DynamicThresholdEngine) StrategyLayer {
+func buildStrategyLayer(ledgerDir string, thresholdEngine *sim.DynamicThresholdEngine) StrategyLayer {
 	strategyRegistry := strategy.NewRegistryWithDefaults()
-	comparisonEngine := strategy.NewComparisonEngine(20, nil)
+	store := strategy.NewFileComparisonStore(filepath.Join(ledgerDir, "comparison_days.json"), 60)
+	comparisonEngine := strategy.NewComparisonEngine(20, store)
 	strategySelector := strategy.NewSelector(strategyRegistry, comparisonEngine)
 	strategyAllocator := strategy.NewStrategyAllocator(strategyRegistry)
 

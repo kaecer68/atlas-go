@@ -116,8 +116,9 @@ func wireForTest(in WireDeps) (recommender.HandlerDeps, *capitalflow.Service) {
 		)
 	}
 
-	// 4. comparison engine: keep instance alive across requests; use 30-day window.
-	cmpEng := strategy.NewComparisonEngine(30, nil)
+	// 4. comparison engine: use file-backed store for persistence across restarts (F06).
+	store := strategy.NewFileComparisonStore(filepath.Join(in.WorkDir, "data", "state", "comparison_days.json"), 60)
+	cmpEng := strategy.NewComparisonEngine(30, store)
 	if cmpEng != nil {
 		deps.StrategyComp = recommender.NewComparisonEngineAdapter(cmpEng)
 	}

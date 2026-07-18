@@ -1,6 +1,9 @@
 package strategy
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // EvaluationModeShadow marks every observation produced by the shadow evaluator.
 const EvaluationModeShadow = "shadow"
@@ -63,8 +66,8 @@ type ComparisonDay struct {
 
 // ComparisonStore persists and retrieves ComparisonDay entries.
 type ComparisonStore interface {
-	Load(ctx interface{}) ([]ComparisonDay, error)
-	Upsert(ctx interface{}, day ComparisonDay) error
+	Load(ctx context.Context) ([]ComparisonDay, error)
+	Upsert(ctx context.Context, day ComparisonDay) error
 }
 
 // ShadowRankingProvider exposes the latest ranking snapshot to consumers.

@@ -306,6 +306,10 @@ func (m *mockComparisonEngine) GetScore(strategyID string) (float64, error) {
 	return m.score, nil
 }
 
+func (m *mockComparisonEngine) RankedStrategies() ([]string, error) {
+	return []string{"growth", "momentum", "all_weather"}, nil
+}
+
 func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
 	t.Setenv("ATLAS_DEV_MODE", "true")
 	dir, _ := os.MkdirTemp("", "rec-test")
@@ -325,8 +329,8 @@ func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
 	if rec.Strategies == nil {
 		t.Fatal("premium tier should have strategy recommendations")
 	}
-	if rec.Strategies.EntrySignal != "Score=0.85 — 等回測支撐區間" {
-		t.Errorf("EntrySignal = %q, want hardcoded 'Score=0.85 — 等回測支撐區間'", rec.Strategies.EntrySignal)
+	if rec.Strategies.EntrySignal != "Score=0.85 — 排名第1" {
+		t.Errorf("EntrySignal = %q, want real (F06) 'Score=0.85 — 排名第1'", rec.Strategies.EntrySignal)
 	}
 	if rec.Strategies.StopLoss != "-5%" {
 		t.Errorf("StopLoss = %q, want hardcoded '-5%%'", rec.Strategies.StopLoss)
