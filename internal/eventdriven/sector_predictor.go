@@ -43,7 +43,7 @@ func (sp *SectorPredictor) SetMacroSnapshot(m *marketdata.MacroDataSnapshot) { s
 func (sp *SectorPredictor) SetCycleProvider(c cycleScoreProvider) { sp.cycle = c }
 
 // SetStrategicPrior injects the typed strategic prior (SA02 SA-INV-05).
-// 取代舊 _sectorWeights hardcoded map；單一 source of truth。
+// （已由 StrategicSectorPrior 取代；單一 source of truth——參見 SA02/SA04）
 // nil prior 會讓 predictSector 對 prior baseline = 0（spec §4.1: nil prior 不得回 fallback）。
 func (sp *SectorPredictor) SetStrategicPrior(p *sectorallocation.StrategicSectorPrior) { sp.prior = p }
 

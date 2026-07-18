@@ -922,7 +922,7 @@ func defaultEngineParameters() EngineParameters {
 				},
 				ModelVersion: ParameterMetadata[string]{
 					Value:     "v0.0.0-c07-heuristic",
-					Rationale: "Semver 2.0 (MAJOR.MINOR.PATCH-prerelease); mirrors pre-SA02 C07 _sectorWeights hardcoded prior",
+					Rationale: "Semver 2.0 (MAJOR.MINOR.PATCH-prerelease); single source of truth via StrategicPrior (SA02/SA04)",
 					Source:    SourceHeuristic,
 				},
 				CalibrationStatus: ParameterMetadata[string]{
