@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- Canonical spec：`docs/specs/sector-allocation-simulation-closure-spec.md` v1.0。
-- 專屬 manifest：`docs/manifests/sector-allocation-simulation-closure-manifest.md` v1.0（SA00–SA12 + SA-INV-01–20 + Completion Contract）。
+- Canonical spec：`../../specs/sector-allocation-simulation-closure-spec.md` v1.0。
+- 專屬 manifest：`../manifests/sector-allocation-simulation-closure-manifest.md` v1.0（SA00–SA12 + SA-INV-01–20 + Completion Contract）。
 - 20 個 binding invariants 必須同時成立；任一違規 → 該 ID 不得升 `done`。
 - `source=heuristic` 與 `calibration_status=calibrating` 為唯一可被 SA11 promotion 翻動的值；**不得**升 `empirical`。
 - 6 個 `cmd/atlas/main.go` constructor callsite 必須全列入 wiring matrix；只有 admin/auto_daily/stress_daily/cli_sim 四條 simulation path 可進入 sector application gate；auto_experiment 與 live 必須 negative。
