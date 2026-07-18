@@ -35,5 +35,6 @@ find . \
     -not -path '*/docs/investigations/*' \
     -not -path '*/docs/audit/*' \
     -not -path '*/.claude/*' \
+    -not -path '*/.superpowers/*' \
     -print0 |
     xargs -0 -n 200 python3 "${SCRIPT_DIR}/check_markdown_links.py"

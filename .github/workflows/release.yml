@@ -96,7 +96,13 @@ jobs:
         if [ "${{ matrix.goos }}" = "windows" ]; then
           output_name="${output_name}.exe"
         fi
-        go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o ${output_name} ./cmd/atlas
+        # main.version 保持向後相容;internal/buildinfo.* 為 §11.4 runtime
+        # parity 主來源(CF-INV-12)。切勿移除 main.version。
+        go build -ldflags="-s -w -X main.version=${{ github.ref_name }} \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${{ github.ref_name }} \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${{ github.sha }} \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          -o ${output_name} ./cmd/atlas
         tar czvf "${output_name}.tar.gz" ${output_name}
 
     - name: Upload Release Asset
@@ -141,7 +147,13 @@ jobs:
             output="${output}.exe"
           fi
           echo "  building ${platform} -> ${output}.tar.gz"
-          GOOS="$goos" GOARCH="$goarch" go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o "$output" ./cmd/atlas-mcp
+          # main.version 保持向後相容;internal/buildinfo.* 為 §11.4 runtime
+          # parity 主來源(CF-INV-12)。切勿移除 main.version。
+          GOOS="$goos" GOARCH="$goarch" go build -ldflags="-s -w -X main.version=${{ github.ref_name }} \
+            -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${{ github.ref_name }} \
+            -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${{ github.sha }} \
+            -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "$output" ./cmd/atlas-mcp
           tar czvf "${output}.tar.gz" "$output"
           rm -f "$output"
         done

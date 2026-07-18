@@ -28,8 +28,8 @@
 ### Capital Flow（2 個）
 | Tool | 用途 |
 |------|------|
-| `capital_flow_daily` | 台股每日七大資金勢力分解 + 共振強度 |
-| `capital_flow_summary` | 資金流向摘要（適合晨報） |
+| `capital_flow_daily` | 台股每日七維錢潮雷達（3+2+2 分層）分解 + 共振強度：官方法人（外資 / 投信 / 自營商）+ 行為代理（官股 / 散戶）+ 領先／跨市場訊號（期貨 / TSM ADR）。actor 共識僅計入官方actor 層；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
+| `capital_flow_summary` | 資金流向摘要（適合晨報）；摘要敘事來自 official_actor 共識＋行為／訊號層支援 |
 
 ### Crossmarket（3 個）
 | Tool | 用途 |

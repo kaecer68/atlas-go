@@ -2,8 +2,8 @@
 //
 // Unit tests for capital-battle-card.js renderCapitalBattleCard().
 //
-// 法人 vs 散戶對殺卡：依 7-Force 數據算出 institutional vs retail 的方向對比，
-// 渲染成敘事 + 4 列(外資/投信/自營商/散戶)的視覺對比卡片。
+// 法人 vs 散戶對殺卡：依七維錢潮雷達（3+2+2 分層）數據算出 institutional vs retail 的方向對比，
+// 渲染成敘事 + 4 列(外資/投信/自營商/散戶)的視覺對比卡片；行為代理與官方法人依 role 區分。
 // 對應前端 B04 修復後新元件（PR #1198）。
 //
 // Narrative mapping:

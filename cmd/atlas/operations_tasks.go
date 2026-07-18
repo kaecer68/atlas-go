@@ -364,9 +364,20 @@ func registerOperationsTasks(d operationsDeps) {
 			Name:     "capital_flow_refresh",
 			Interval: 5 * time.Minute,
 			Enabled:  true,
-			Task: func(_ context.Context) error {
-				d.capitalFlow.QualityScore()
-				d.capitalFlow.QualityLabel()
+			Task: func(ctx context.Context) error {
+				// BK-15: call Refresh(ctx, tradingDate) — the only
+				// writer to the shared RollingSampleStore. The
+				// scheduler hands us a bare context (no trading
+				// date), so derive the current trading date here
+				// from Asia/Taipei and roll back across weekends
+				// and before the post-close cutoff. Tasks running
+				// after 15:30 Taipei attribute the snapshot to
+				// today's date; earlier ticks attribute to the
+				// previous weekday's settled close.
+				tradingDate := currentTaipeiTradingDate(time.Now())
+				if err := d.capitalFlow.Refresh(ctx, tradingDate); err != nil {
+					return fmt.Errorf("capital_flow_refresh: %w", err)
+				}
 				return nil
 			},
 		})
@@ -427,4 +438,47 @@ func registerOperationsTasks(d operationsDeps) {
 		})
 		log.Printf("[Gateway] registered prism_training background task (6h interval)")
 	}
+}
+
+// currentTaipeiTradingDate returns the trading-day boundary as of now,
+// computed in Asia/Taipei with weekend rollback and a 15:30 cutoff
+// (after TWSE close at 13:30 + 2h settlement). Used by the
+// capital_flow_refresh background task to derive the tradingDate
+// argument to capitalflow.Service.Refresh, since the scheduler hands
+// the task a bare context.Context with no trading-date payload.
+//
+// Behaviour:
+//   - On a weekday before 15:30 Taipei, returns the previous weekday's
+//     date (the last fully settled trading day).
+//   - On a weekday at/after 15:30 Taipei, returns today's date.
+//   - On Saturday/Sunday, rolls back to the preceding Friday.
+//
+// The function never returns zero time and never panics on missing
+// tzdata (falls back to UTC, which still produces a valid date).
+//
+// Order of operations matters: pre-close cutoff is applied first so
+// that weekend rollbacks don't double-subtract when the original day
+// is already a non-trading day.
+func currentTaipeiTradingDate(now time.Time) time.Time {
+	taipei, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		taipei = time.UTC
+	}
+	local := now.In(taipei)
+	d := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, taipei)
+	// Pre-close cutoff: 15:30 Taipei (TWSE close 13:30 + 2h settlement).
+	// Before this, today's data has not settled, so attribute the
+	// snapshot to the previous day. Applied first so the weekend
+	// rollback below does not double-subtract on Sat/Sun.
+	if local.Hour() < 15 || (local.Hour() == 15 && local.Minute() < 30) {
+		d = d.AddDate(0, 0, -1)
+	}
+	// Weekend rollback: Saturday → Friday, Sunday → Friday.
+	switch d.Weekday() {
+	case time.Saturday:
+		d = d.AddDate(0, 0, -1)
+	case time.Sunday:
+		d = d.AddDate(0, 0, -2)
+	}
+	return d
 }

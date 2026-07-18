@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -39,10 +40,13 @@ type DetectorScanStore interface {
 	LoadRecentScans(ctx context.Context, limit int) ([]ScanResult, error)
 }
 
-// CapitalFlowProvider provides the current capital quality score.
+// CapitalFlowProvider exposes the legacy quality view plus the structured E07
+// assessment gate. Predict must not consume QualityScore while the assessment
+// is calibrating or degraded.
 type CapitalFlowProvider interface {
 	QualityScore() float64
 	QualityLabel() string
+	LatestAssessment(ctx context.Context) (capitalflow.CapitalFlowAssessment, error)
 }
 
 // ModelView is a flat projection of narrative.InvestmentModel.
@@ -72,6 +76,11 @@ type staticCF struct {
 
 func (s *staticCF) QualityScore() float64 { return s.score }
 func (s *staticCF) QualityLabel() string  { return s.label }
+func (s *staticCF) LatestAssessment(context.Context) (capitalflow.CapitalFlowAssessment, error) {
+	return capitalflow.CapitalFlowAssessment{
+		CalibrationStatus: capitalflow.CalibrationCalibrating,
+	}, nil
+}
 
 // NewPredictor wires the default narrative.DetectorRegistry so narrative
 // tilt matches all 24 templates (PR-FIX-04, fixes G-06); override via SetNarrativeRegistry.
@@ -138,8 +147,14 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 		})
 	}
 
-	// Generate day-by-day predictions over 5 days
-	cfScore := p.capitalFlow.QualityScore()
+	// E07 deliberately has no uncalibrated overall score (spec §9.5).
+	// Keep the legacy QualityScore as a compatibility fallback, but only
+	// behind the canonical assessment gate; calibrating/degraded/error paths
+	// contribute zero tilt and never invoke QualityScore.
+	cfScore := 0.0
+	if assessment, err := p.capitalFlow.LatestAssessment(context.Background()); err == nil && assessment.EligibleForAutomation() {
+		cfScore = p.capitalFlow.QualityScore()
+	}
 	predictions := make([]FlowPrediction, 5)
 	for i := 0; i < 5; i++ {
 		day := now.AddDate(0, 0, i+1)

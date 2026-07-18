@@ -41,7 +41,7 @@
 |------|---------|
 | `autobacktest` | 自動回測定時任務 |
 | `backtest` | 視窗回測 Window.Run() |
-| `capitalflow` | **v0.0.0.32 新** — 七大資金勢力分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源） |
+| `capitalflow` | **v0.0.0.32 新** — 七維錢潮雷達（3+2+2 分層）分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源）；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `dailyreport` | **v0.0.0.32 新** — 每日市場報告 JSON 組裝（`daily_report` MCP tool 來源，agent morning briefing 入口） |
 | `eval` | 模型評估指標、可解釋性工具（SK-12~15） |
 | `eventdriven` | **v0.0.0.32 新** — 事件日曆 + 5 日事件驅動資金流預測（`event_calendar` / `event_flow_prediction` MCP tool 來源） |
@@ -126,7 +126,7 @@
 
 | 變更 | 模組 | 說明 |
 |------|------|------|
-| 新增 | `capitalflow` | 七大資金勢力共振分析 |
+| 新增 | `capitalflow` | 七維錢潮雷達（3+2+2 分層）共振分析 |
 | 新增 | `eventdriven` | 事件日曆 + 5 日預測 |
 | 新增 | `recommender` | tier-gated 投資組合推薦 |
 | 新增 | `dailyreport` | 每日報告 JSON |

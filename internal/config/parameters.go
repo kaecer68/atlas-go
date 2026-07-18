@@ -1516,6 +1516,18 @@ type EngineSectorRotationParameters struct {
 	MinAllocation      ParameterMetadata[float64]            `json:"min_allocation"`
 	MaxAllocation      ParameterMetadata[float64]            `json:"max_allocation"`
 	RebalanceThreshold ParameterMetadata[float64]            `json:"rebalance_threshold"`
+	StrategicPrior     EngineStrategicPriorParameters        `json:"strategic_prior"`
+}
+
+// EngineStrategicPriorParameters 是 strategic sector prior 的 schema 載體。
+// spec §4.1 + SA-INV-05：Source 鎖死 "heuristic"、CalibrationStatus 鎖死 "calibrating"；
+// 升 empirical / calibrated 不在 plan scope。
+type EngineStrategicPriorParameters struct {
+	Weights           ParameterMetadata[map[string]float64] `json:"weights"`
+	Source            ParameterMetadata[string]             `json:"source"`
+	ModelVersion      ParameterMetadata[string]             `json:"model_version"`
+	CalibrationStatus ParameterMetadata[string]             `json:"calibration_status"`
+	AsOfDate          ParameterMetadata[string]             `json:"as_of_date"`
 }
 
 func (p EngineSectorRotationParameters) ToConfig() SectorRotationConfig {

@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -430,12 +432,19 @@ func TestSectorPredictor_JSD_Divergent(t *testing.T) {
 }
 
 func TestSectorPredictor_SectorWeightsSumToOne(t *testing.T) {
+	// SA02: 驗證 inject 的 StrategicSectorPrior 在 sector_predictor 內的 baseline sum=1。
+	sp := NewSectorPredictor(nil, nil)
+	prior, err := sectorallocation.LoadStrategicPrior(config.GetParametersConfig())
+	if err != nil {
+		t.Fatalf("LoadStrategicPrior failed: %v", err)
+	}
+	sp.SetStrategicPrior(prior)
 	var sum float64
 	for _, sid := range industry.L1Sectors() {
-		sum += sectorWeight(sid)
+		sum += sp.PriorWeight(sid)
 	}
 	if math.Abs(sum-1.0) > 1e-6 {
-		t.Errorf("sector weights sum to %.6f, want 1.0", sum)
+		t.Errorf("prior weights sum to %.6f, want 1.0", sum)
 	}
 }
 

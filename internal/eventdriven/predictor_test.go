@@ -1,17 +1,87 @@
 package eventdriven
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 func testPredictor() *Predictor {
 	return NewPredictor(industry.NewEventCalendar())
+}
+
+type assessmentCapitalFlow struct {
+	score           float64
+	assessment      capitalflow.CapitalFlowAssessment
+	assessmentErr   error
+	qualityCalls    int
+	assessmentCalls int
+}
+
+func (c *assessmentCapitalFlow) QualityScore() float64 {
+	c.qualityCalls++
+	return c.score
+}
+
+func (c *assessmentCapitalFlow) QualityLabel() string { return "legacy" }
+
+func (c *assessmentCapitalFlow) LatestAssessment(context.Context) (capitalflow.CapitalFlowAssessment, error) {
+	c.assessmentCalls++
+	return c.assessment, c.assessmentErr
+}
+
+func TestPredict_CapitalFlowAssessmentGatesLegacyQualityScore(t *testing.T) {
+	now := time.Date(2026, 7, 17, 9, 0, 0, 0, time.UTC)
+
+	t.Run("calibrating ignores non-zero legacy score", func(t *testing.T) {
+		cf := &assessmentCapitalFlow{
+			score: 1,
+			assessment: capitalflow.CapitalFlowAssessment{
+				CalibrationStatus: capitalflow.CalibrationCalibrating,
+			},
+		}
+		p := testPredictor()
+		p.SetCapitalFlow(cf)
+		report := p.Predict(now)
+
+		if cf.assessmentCalls != 1 {
+			t.Errorf("LatestAssessment calls = %d, want 1", cf.assessmentCalls)
+		}
+		if cf.qualityCalls != 0 {
+			t.Errorf("QualityScore calls = %d, want 0 while assessment is calibrating", cf.qualityCalls)
+		}
+		if strings.Contains(report.Summary, "當前資金品質偏多") {
+			t.Errorf("calibrating legacy score leaked into prediction summary: %q", report.Summary)
+		}
+	})
+
+	t.Run("eligible assessment permits legacy fallback score", func(t *testing.T) {
+		cf := &assessmentCapitalFlow{
+			score: 1,
+			assessment: capitalflow.CapitalFlowAssessment{
+				CalibrationStatus: capitalflow.CalibrationEligible,
+			},
+		}
+		p := testPredictor()
+		p.SetCapitalFlow(cf)
+		report := p.Predict(now)
+
+		if cf.assessmentCalls != 1 {
+			t.Errorf("LatestAssessment calls = %d, want 1", cf.assessmentCalls)
+		}
+		if cf.qualityCalls != 1 {
+			t.Errorf("QualityScore calls = %d, want 1 after assessment becomes eligible", cf.qualityCalls)
+		}
+		if !strings.Contains(report.Summary, "當前資金品質偏多") {
+			t.Errorf("eligible legacy fallback score missing from prediction summary: %q", report.Summary)
+		}
+	})
 }
 
 func Test_PredictDay_BullishDrivers_ReturnsInflow(t *testing.T) {

@@ -80,6 +80,10 @@
 | E03 | 「外部因子→外資」傳導模型不存在（因果鏈第一哩） | — | 新增 `internal/forecast/foreign_forecast.go`（scorecard + ledger + 校準門檻）；spec 文件 | 設計文件 + 透明加權 scorecard（7 特徵）；Ledger 寫讀；§6 門檻（≥90 日 + ≥55% 命中率）；未達回「校準中」 | done | 新 spec | 9f71933e；拒黑盒 ML，遵守 §8 |
 | E04 | Government force 恆 0 且方法論未定義 | — | 設計文件 + v1 檔案型 provider + channel | docs/specs/government-force-proxy.md；v1 採「操作員匯入」誠實模式；缺檔時 force 仍存在但 DataAvailable=false | done | 新設計文件 | 7e228cb1；分點加總自動化列 BK-13 |
 | E05 | 七大勢力分類混雜主體與代理（TSM ADR 拿 30% 權重、外資 0%） | **accepted**：依 §7 重構 | `internal/capitalflow/types.go`、`forces.go`、`resonance.go` | 5 subject + 1 leading_indicator（futures, deprecated）+ 1 sentiment（tsm_adr, deprecated）；共振只認 subject；force 帶 Role/Deprecated 旗標；government 帶 DataAvailable 旗標；foreign 帶 LeadingZ/LeadingTrend | done | I01 定位文件 | 844ba81f；向後相容（API 仍回 7 筆） |
+| E06 | 七維錢潮分類研究與唯一正本缺失 | accepted：七項資料必須採 3+2+2 分層，不能平權也不能刪訊號 | `docs/specs/capital-flow-seven-dimension-spec.md` | 第一方來源、repository evidence、資料字典、研究衝突規則與 CF-INV 完整 | done | canonical spec | 79277a53 |
+| E07 | 七維 backend 仍缺 provenance、分層 assessment，legacy weight/quality 語意不一致 | accepted：E05 只加 role/deprecated，report/service/UI 尚未完整遷移 | `internal/capitalflow/{types,forces,resonance,report,service,assessment}.go` | 3+2+2 assessment；七筆相容；無跨單位權重；automation 僅吃 eligible assessment | done | canonical spec link | commit ccd4e721 |
+| E08 | 網頁/MCP/活躍文件與 runtime binary 無法對齊 main 語意 | accepted：活體缺 role 且 aligned 含 ADR；system health 無 commit | UI、MCP descriptions、system health、build flags、active docs | UI 分層；MCP/docs 同義；runtime commit 可查並與部署對帳 | done | active docs sync | commit 2603710b |
+| BK-15 | ForceExtractor rolling window process-local，API 讀取會重複 push 同日資料 | accepted：Extract 每次呼叫都 push，daily/summary 同 snapshot 分數不同 | `internal/capitalflow/{rolling_store,forces,service}.go`、production wiring | 交易日去重持久化；restart 恢復；read-only API；missing 不補 0 | done | canonical spec §8 | 本輪拉入，依 backlog rule 僅拉此一項；commit 4eae84e9 |
 
 ### 線 F：預測閉環與策略層接通
 
@@ -177,7 +181,6 @@
 | BK-12 | E01 TAIFEX OI 缺 90 天回填（OpenAPI 只回最新日）。需 FinMind `TaiwanFuturesInstitutionalTraders` 或向 TAIFEX 申請歷史資料 API | 2026-07-17 | E03 上線後才能進入 90 日校準 |
 | BK-13 | E04 v1 官股行庫代理採「操作員匯入」模式；分點加總自動化（讀證交所每日分點 → 篩官股券商 → 加總）尚未實作 | 2026-07-17 | E04 後續 |
 | BK-14 | E04 評估購買第三方整理資料（CMoney/Goodinfo「八大行庫買賣超」）的商業授權與口徑一致性 | 2026-07-17 | E04 評估 |
-| BK-15 | ForceExtractor 滾動視窗是 process-local（60 日視窗記憶體 in-memory）；重啟即清空，Z-score 與 §6 校準命中率會跳動 | 2026-07-17 | §8 校準哲學持久化前置 |
 
 > **Rule**: 每個 session 最多從 Backlog 拉 1 項進 scope，且須在當前 ID 全 done/paused 後。
 
@@ -230,3 +233,7 @@
 | 2026-07-17 | 1.2 | 第二輪完成：9 IDs done（B01-B03/B08-B10、D01-D03）；新增 Backlog BK-09~BK-11 | Kimi Code |
 | 2026-07-17 | 1.3 | 第三輪+收尾：C05（業主裁決 Email 留資）+ BK-10（rate-limit 脫鉤）+ 線 E 全（E01-E05）+ E03；新增 Backlog BK-12~BK-15；branch `fix/retail-positioning-gap-r1-r2` 33 commits 推送，PR #1210 開啟 | Kimi Code |
 | 2026-07-17 | 1.4 | 第四輪（線 F+G 低風險子集）：F01 drift alert 單位統一、F07 FeedbackStore 持久化、F08 CIRCUIT_BREAKER 訊號接 live channel force-open、G05 admin 通道頁動態從 registry 產生；branch 累計 41 commits 推送，PR #1210 更新 | Kimi Code |
+| 2026-07-17 | 1.5 | 第五輪前置（E06 foundation 註冊）：E06 七維錢潮唯一正本 done（canonical spec commit 79277a53）；註冊 E07（backend 3+2+2 assessment）與 E08（UI/MCP/runtime 對齊）為 pending；自 Backlog 拉入 BK-15（ForceExtractor 交易日去重持久化）為 pending；本版本不 commit，待 BK-15 commit 一併送出 | Kimi Code |
+| 2026-07-17 | 1.6 | 第五輪第一段（#BK-15 done）：production 端持久化交易日滾動狀態 — `internal/capitalflow/{rolling_store,forces,service}.go` 單一 file store + `cmd/atlas/{main,wire_recommender,operations_tasks}.go` 共用單一 file store（`cfg.LedgerDir/capital_flow_rolling.json`、capacity 60）；`capital_flow_refresh` 排程改走 `Service.Refresh(ctx, tradingDate)`，tradingDate 由 `currentTaipeiTradingDate` helper 推導（Asia/Taipei、15:30 cutoff、週末 rollback）；focused + full + build + gofmt + manifest + markdown-link 全綠；commit 4eae84e9 | Kimi Code |
+| 2026-07-17 | 1.7 | 第五輪第二段（#E07 done）：七維 backend 完成 3+2+2 provenance、四層 `CapitalFlowAssessment`、legacy weight/quality 分流；recommender 每 request 單次 daily fetch，eventdriven 僅在 `EligibleForAutomation()` 通過後使用 legacy score；focused race + full + gofmt + vet + build 全綠；commit ccd4e721 | Kimi Code |
+| 2026-07-17 | 1.8 | 第五輪第三段（#E08 done）：UI/MCP/活躍文件/runtime 對齊 — `shared_web/static/js/components/{seven-force-board.js,seven-force-interpretations.js}` 改為 3+2+2 分層（官方法人 / 行為代理 / 領先＋跨市場訊號），刪除「權重 X%」字串、政府 unavailable 顯示「資料不足」；MCP `capital_flow_daily` / `capital_flow_summary` / `daily_report` 描述同步；active docs（product-positioning、architecture、frontend-architecture、agent-mcp-server、tool-catalog、investor README、llms.txt、capitalflow AGENTS、AGENTS_INDEX、MATURITY、recommender deps、capitalflow types）改為「七維錢潮雷達（3+2+2 分層）」摘要並連回 canonical spec；`bash scripts/ci/check_atlas_mcp_docs_consistency.sh` + `check_markdown_links.sh` 全綠；commit 2603710b | Kimi Code |

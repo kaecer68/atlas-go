@@ -8,6 +8,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
 // SectorPredictor generates per-sector capital-flow direction predictions
@@ -21,6 +22,7 @@ import (
 type SectorPredictor struct {
 	macro *marketdata.MacroDataSnapshot
 	cycle cycleScoreProvider
+	prior *sectorallocation.StrategicSectorPrior
 }
 
 // cycleScoreProvider abstracts CycleTracker.GetContinuousPhaseScore.
@@ -39,6 +41,23 @@ func (sp *SectorPredictor) SetMacroSnapshot(m *marketdata.MacroDataSnapshot) { s
 
 // SetCycleProvider updates the cycle provider.
 func (sp *SectorPredictor) SetCycleProvider(c cycleScoreProvider) { sp.cycle = c }
+
+// SetStrategicPrior injects the typed strategic prior (SA02 SA-INV-05).
+// 取代舊 _sectorWeights hardcoded map；單一 source of truth。
+// nil prior 會讓 predictSector 對 prior baseline = 0（spec §4.1: nil prior 不得回 fallback）。
+func (sp *SectorPredictor) SetStrategicPrior(p *sectorallocation.StrategicSectorPrior) { sp.prior = p }
+
+// PriorWeight returns the strategic prior weight for sid; 0 if no prior set.
+func (sp *SectorPredictor) PriorWeight(sid industry.SectorID) float64 {
+	if sp.prior == nil {
+		return 0
+	}
+	w, ok := sp.prior.Weights[sid]
+	if !ok {
+		return 0
+	}
+	return w
+}
 
 // Predict generates SectorDayPrediction for each forecast day.
 // predictions must be exactly 5 days; activeEvents supplies event→sector mapping.
@@ -69,7 +88,7 @@ func (sp *SectorPredictor) predictSector(
 	contrib := make(map[string]float64)
 
 	// ── 1. Overall baseline ──────────────────────────────────────────
-	sw := sectorWeight(sid)
+	sw := sp.PriorWeight(sid)
 	switch overall.Direction {
 	case "inflow":
 		scoreIn += sw * overall.Confidence
@@ -158,38 +177,12 @@ func sectorInAffected(sid industry.SectorID, affected []string) bool {
 	return false
 }
 
-// sectorWeight returns the approximate Taiwan index weight for a sector.
-// Defaults from spec §4.2.1; redistributed to cover only L1 sectors.
+// sectorWeight 已由 PriorWeight 取代；SA12 close-out 將徹底刪除。
 func sectorWeight(sid industry.SectorID) float64 {
-	w, ok := _sectorWeights[sid]
-	if !ok {
-		return 0.0125 // 0.25 / 20 as fallback for unknown sectors
-	}
-	return w
+	return 0
 }
 
-var _sectorWeights = map[industry.SectorID]float64{
-	industry.SectorSemiconductor:    0.33,
-	industry.SectorElectronics:      0.16,
-	industry.SectorFinancials:       0.13,
-	industry.SectorShipping:         0.08,
-	industry.SectorOptoelectronics:  0.01875,
-	industry.SectorCement:           0.01875,
-	industry.SectorPlastics:         0.01875,
-	industry.SectorTextiles:         0.01875,
-	industry.SectorSteel:            0.01875,
-	industry.SectorFood:             0.01875,
-	industry.SectorAuto:             0.01875,
-	industry.SectorTelecom:          0.01875,
-	industry.SectorChemicals:        0.01875,
-	industry.SectorBiotech:          0.01875,
-	industry.SectorConstruction:     0.01875,
-	industry.SectorOtherElectronics: 0.01875,
-	industry.SectorMachinery:        0.01875,
-	industry.SectorTourism:          0.01875,
-	industry.SectorRetail:           0.01875,
-	industry.SectorEnergy:           0.01875,
-}
+var _sectorWeights = map[industry.SectorID]float64{} // SA02 起 deprecated；SA12 close-out 將徹底刪除。
 
 // applyMacroDrivers adjusts scores based on macro driver change percentages.
 func (sp *SectorPredictor) applyMacroDrivers(sid industry.SectorID, scoreIn, scoreOut *float64, contrib map[string]float64) {

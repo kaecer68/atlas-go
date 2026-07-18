@@ -597,6 +597,54 @@
         "rationale": "1% rebalance threshold avoids excessive trading; sector weight deviation must exceed 1% to trigger rebalance",
         "source": "heuristic",
         "value": 0.01
+      },
+      "strategic_prior": {
+        "as_of_date": {
+          "rationale": "SA02 implementation date; informational only",
+          "source": "heuristic",
+          "value": "2026-07-17"
+        },
+        "calibration_status": {
+          "rationale": "Permanent lock during observation window; PromotionGate()=false until source=calibrated and status=calibrated (out of plan scope)",
+          "source": "heuristic",
+          "value": "calibrating"
+        },
+        "model_version": {
+          "rationale": "Semver 2.0 (MAJOR.MINOR.PATCH-prerelease); mirrors pre-SA02 C07 _sectorWeights hardcoded prior",
+          "source": "heuristic",
+          "value": "v0.0.0-c07-heuristic"
+        },
+        "source": {
+          "rationale": "Permanent lock: empirical upgrade out of SA02 plan scope (spec §4.1 + capital-flow CF-INV-13 require walk-forward validation, not in scope)",
+          "source": "heuristic",
+          "value": "heuristic"
+        },
+        "weights": {
+          "rationale": "C07 heuristic seed (event-driven sector predictor prior); 20 canonical L1 IDs aligned with industry.L1Sectors(); SA02 SA-INV-05 single source of truth; sum = 1.0",
+          "source": "heuristic",
+          "value": {
+            "auto": 0.01875,
+            "biotech": 0.01875,
+            "cement": 0.01875,
+            "chemicals": 0.01875,
+            "construction": 0.01875,
+            "electronics": 0.16,
+            "energy": 0.01875,
+            "financials": 0.13,
+            "food": 0.01875,
+            "machinery": 0.01875,
+            "optoelectronics": 0.01875,
+            "other_electronics": 0.01875,
+            "plastics": 0.01875,
+            "retail": 0.01875,
+            "semiconductor": 0.33,
+            "shipping": 0.08,
+            "steel": 0.01875,
+            "telecom": 0.01875,
+            "textiles": 0.01875,
+            "tourism": 0.01875
+          }
+        }
       }
     },
     "simulation": {

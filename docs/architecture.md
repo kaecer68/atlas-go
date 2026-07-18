@@ -308,7 +308,7 @@ Multi-phase industry cycle tracking:
 
 | Path | Module | 用途 |
 |------|--------|------|
-| `GET /api/capital-flow/daily` | `capitalflow` | 七大資金勢力 Z-score + 共振 |
+| `GET /api/capital-flow/daily` | `capitalflow` | 七維錢潮雷達（3+2+2 分層）：官方法人 / 行為代理 / 領先＋跨市場訊號；actor 共識只看官方actor 層 — `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `GET /api/capital-flow/summary` | `capitalflow` | 摘要（品質分數 + 主力方向）|
 | `GET /api/events/calendar` | `eventdriven` | 未來 14 天事件 + 預估方向 |
 | `GET /api/events/prediction` | `eventdriven` | 5 日 forward 預測 + ETF 預估 |

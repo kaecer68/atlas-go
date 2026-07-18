@@ -2,6 +2,7 @@ package capitalflow
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -240,4 +241,98 @@ func TestZScoreRollingWindow(t *testing.T) {
 	if z < 1.5 || z > 2.5 {
 		t.Errorf("expected z around 1.89, got %.4f", z)
 	}
+}
+
+// mustContainKey fails the test if key k is missing from map m. Mirrors the
+// helper style used in internal/recommender/e2e_wired_test.go — stdlib
+// only, no testify dependency.
+func mustContainKey(t *testing.T, m map[string]any, k string) {
+	t.Helper()
+	if _, ok := m[k]; !ok {
+		t.Errorf("response JSON missing key %q (existing keys: %v)", k, keysOf(m))
+	}
+}
+
+func keysOf(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// TestHandleDaily_ResponseContainsNewAssessmentFields asserts the JSON wire
+// of /api/capital-flow/daily carries the permanent E07 assessment and
+// provenance contract (spec §9.5 / CF-INV-08 / CF-INV-11). Optional
+// DominantActor and DominantSignal fields may be omitted while empty.
+func TestHandleDaily_ResponseContainsNewAssessmentFields(t *testing.T) {
+	h := NewHandler(&mockProvider{snap: testSnapshot()})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/capital-flow/daily", nil)
+	code, data := h.HandleDaily(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	assessment, ok := doc["assessment"].(map[string]any)
+	if !ok {
+		t.Fatalf("response JSON missing 'assessment' object (spec §9.5 / CF-INV-08)")
+	}
+	mustContainKey(t, assessment, "calibration_status")
+	mustContainKey(t, assessment, "as_of_trading_date")
+
+	// Per-force provenance fields (spec §7).
+	forces, ok := doc["forces"].([]any)
+	if !ok {
+		t.Fatalf("response JSON missing 'forces' array (got %T)", doc["forces"])
+	}
+	if len(forces) != 7 {
+		t.Fatalf("forces len = %d, want 7 (CF-INV-01)", len(forces))
+	}
+	for i, raw := range forces {
+		f, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("forces[%d] not a JSON object (got %T)", i, raw)
+		}
+		mustContainKey(t, f, "dimension_role")
+		mustContainKey(t, f, "source_id")
+		mustContainKey(t, f, "unit")
+	}
+}
+
+// TestHandleSummary_ResponseContainsNewAssessmentFields mirrors the daily
+// check for the /api/capital-flow/summary endpoint. Summary reuses the
+// daily assessment under spec §9.5 / CF-INV-08, so the same JSON keys
+// must appear.
+func TestHandleSummary_ResponseContainsNewAssessmentFields(t *testing.T) {
+	h := NewHandler(&mockProvider{snap: testSnapshot()})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/capital-flow/summary", nil)
+	code, data := h.HandleSummary(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// Summary keeps the DailyReport.Assessment flat in the response so
+	// the home-page renderer can show calibration status without a second
+	// round-trip (CF-INV-08).
+	mustContainKey(t, doc, "assessment")
 }

@@ -179,7 +179,7 @@ e.g.   regime_get_history
 
 | Tool 名稱 | 用途 | 對應 API |
 |---------|------|---------|
-| `capital_flow_daily` | 全市場七大資金勢力共振分析 | `/api/capital-flow/daily` |
+| `capital_flow_daily` | 全市場七維錢潮雷達（3+2+2 分層）共振分析：官方法人 / 行為代理 / 領先＋跨市場訊號 — 詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 | `/api/capital-flow/daily` |
 | `capital_flow_summary` | 資金流摘要（給 morning briefing） | `/api/capital-flow/summary` |
 | `strategy_ranker` | 策略排名（依勝率 + tier 標 free/registered/premium） | `/api/strategy-ranker/rank` |
 | `get_recommendations` | tier-gated 投資組合推薦（**需 JWT**） | `/api/recommendations` |

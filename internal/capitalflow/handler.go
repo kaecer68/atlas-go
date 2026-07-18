@@ -20,9 +20,23 @@ type Handler struct {
 	service *Service
 }
 
-// NewHandler creates a capital flow HTTP handler.
+// NewHandler creates a capital flow HTTP handler backed by a
+// Service with an in-memory rolling store (capacity
+// defaultHistoryLimit). Callers that need a persistent rolling
+// store should use NewHandlerWithStore directly; that is the
+// wiring Task 5 will adopt in cmd/atlas/main.go.
 func NewHandler(provider marketdata.MacroDataProvider) *Handler {
 	return &Handler{service: NewService(provider, 0)}
+}
+
+// NewHandlerWithStore wires a custom rolling sample store into
+// the Service underlying this handler. The store is what Refresh
+// writes to and what LatestDaily / Summary read from for the
+// rolling-history Z-score window. Production callers (Task 5
+// wiring in cmd/atlas/main.go) pass a FileRollingSampleStore
+// here so the window survives process restart (spec §8.5).
+func NewHandlerWithStore(provider marketdata.MacroDataProvider, store RollingSampleStore) *Handler {
+	return &Handler{service: NewServiceWithStore(provider, 0, store)}
 }
 
 func ServiceFromHandler(h *Handler) *Service { return h.service }

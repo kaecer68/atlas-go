@@ -701,3 +701,50 @@ func TestNoToolWithoutDescription(t *testing.T) {
 		t.Errorf("auto-desc map has %d tools, want >= 60", len(autoDescMap))
 	}
 }
+
+// --- system_get_health: runtime build info preservation ---------------------
+//
+// Spec: docs/specs/capital-flow-seven-dimension-spec.md §11.4 — the upstream
+// /api/dashboard/system-health payload must surface `runtime.commit` (and
+// `version`, `build_time`, `go_version`) so atlas-mcp callers can audit a
+// deployment's binary against the buildinfo manifest. This test pins the
+// handler's contract that runtime.* keys are preserved verbatim into Info.
+
+// TestHandleSystemGetHealth_PreservesRuntimeCommit feeds a mock payload
+// containing a runtime block and asserts the block flows through Info
+// without being stripped or reshaped.
+func TestHandleSystemGetHealth_PreservesRuntimeCommit(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.SetResponseBody([]byte(`{
+		"replay_data_path_ok": true,
+		"cycle_stale": false,
+		"data_channels": [{"channel_id":"tsm_adr","status":"ok"}],
+		"runtime": {
+			"version": "v0.0.0.32",
+			"commit": "abc1234",
+			"build_time": "2026-07-17T10:00:00Z",
+			"go_version": "go1.26"
+		}
+	}`))
+	_, out, err := s.handleSystemGetHealth(context.Background(), nil, struct{}{})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/dashboard/system-health" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if out.Status != "ok" {
+		t.Errorf("expected status=ok, got %q", out.Status)
+	}
+	rt, ok := out.Info["runtime"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected runtime block in Info, got %T (%v)", out.Info["runtime"], out.Info["runtime"])
+	}
+	if rt["commit"] != "abc1234" {
+		t.Errorf("runtime.commit: want %q, got %v", "abc1234", rt["commit"])
+	}
+	if rt["version"] != "v0.0.0.32" {
+		t.Errorf("runtime.version: want %q, got %v", "v0.0.0.32", rt["version"])
+	}
+}

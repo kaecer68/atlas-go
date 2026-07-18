@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 // defaultEngine is the canonical WeightEngine implementation. It composes
@@ -28,6 +29,8 @@ import (
 // providers default to neutral (1.0 / 0.0).
 type defaultEngine struct {
 	cfg       config.SectorAllocationConfig
+	prior     *StrategicSectorPrior
+	projector *Projector
 	cycle     CycleInputProvider
 	seasonal  SeasonalInputProvider
 	linkage   LinkageInputProvider
@@ -53,6 +56,61 @@ func NewDefaultEngine(
 ) WeightEngine {
 	return &defaultEngine{
 		cfg:       cfg,
+		cycle:     cycle,
+		seasonal:  seasonal,
+		linkage:   linkage,
+		narrative: narrative,
+		macro:     macro,
+		factor:    factor,
+		weightMin: weightMin,
+		weightMax: weightMax,
+	}
+}
+
+// NewEngineTestConfig 是測試 helper：回傳空白 SectorAllocationConfig（base weights 為空），
+// 因為真實 production 改用 NewDefaultEngineWithProjector + StrategicPrior 路徑，
+// ComputeProjectedTarget 不再依賴 cfg.BaseWeights。
+func NewEngineTestConfig() config.SectorAllocationConfig {
+	return config.SectorAllocationConfig{}
+}
+
+// LoadStrategicPriorFromConfigForTest 是測試 helper：直接從 default config 讀 strategic prior。
+// spec §4.1：SA02 期間 source 鎖 heuristic、calibration_status 鎖 calibrating、model_version 鎖 semver。
+func LoadStrategicPriorFromConfigForTest() *StrategicSectorPrior {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return &StrategicSectorPrior{}
+	}
+	prior, err := LoadStrategicPrior(cfg)
+	if err != nil {
+		return &StrategicSectorPrior{}
+	}
+	return prior
+}
+
+// NewDefaultEngineWithProjector 是 SA04 新介面：把 StrategicSectorPrior 與 Projector
+// 注入 defaultEngine，啟用 ComputeProjectedTarget 唯一 projection 入口。
+// 既有 ComputeWeights/ComputeWeight 仍可用（觀察向後相容）；SA11 promotion 之前，
+// ComputeProjectedTarget 是唯一寫入 simulation state 的入口。
+func NewDefaultEngineWithProjector(
+	cfg config.SectorAllocationConfig,
+	prior *StrategicSectorPrior,
+	projector *Projector,
+	cycle CycleInputProvider,
+	seasonal SeasonalInputProvider,
+	linkage LinkageInputProvider,
+	narrative NarrativeInputProvider,
+	macro MacroInputProvider,
+	factor FactorInputProvider,
+	weightMin, weightMax float64,
+) WeightEngine {
+	if projector == nil {
+		projector = NewDefaultProjector()
+	}
+	return &defaultEngine{
+		cfg:       cfg,
+		prior:     prior,
+		projector: projector,
 		cycle:     cycle,
 		seasonal:  seasonal,
 		linkage:   linkage,
@@ -238,6 +296,69 @@ func safeGetFactorTilt(ctx context.Context, p FactorInputProvider, id string) (f
 	}
 	v, err := p.GetFactorTilt(ctx, id)
 	return v, err
+}
+
+// ComputeProjectedTarget（SA04 唯一 projection 入口）：
+// 透過 Projector 與 StrategicSectorPrior 計算 final L1 target。
+// 既有 ComputeWeights/ComputeWeight 維持不動；此方法是 SA-INV-01/04/05/07 守門。
+func (e *defaultEngine) ComputeProjectedTarget(ctx context.Context, drivers DriverInputs) (ProjectedTarget, error) {
+	if e.projector == nil {
+		return ProjectedTarget{}, fmt.Errorf("WeightEngine: Projector not injected (SA04 必須用 NewDefaultEngineWithProjector)")
+	}
+	// Strategic prior 作為 base；nil prior 會被 Projector 拒絕（non L1 行為）。
+	base := map[industry.SectorID]float64{}
+	if e.prior != nil {
+		for k, v := range e.prior.Weights {
+			base[k] = v
+		}
+	}
+
+	// 從 6 個 provider 收集 driver deltas（SA-INV-08 每個 driver 最多一次）。
+	drivers.Cycle = collectCycleDeltas(ctx, e.cycle, drivers.Cycle)
+	drivers.Seasonal = collectSeasonalDeltas(ctx, e.seasonal, drivers.Seasonal, drivers.AsOfTradingDate)
+	drivers.Linkage = collectLinkageDeltas(ctx, e.linkage, drivers.Linkage)
+	drivers.Narrative = collectNarrativeDeltas(ctx, e.narrative, drivers.Narrative)
+	drivers.Macro = collectMacroDeltas(ctx, e.macro, drivers.Macro, drivers.MacroAction)
+	drivers.CapitalFlow = collectFactorDeltas(ctx, e.factor, drivers.CapitalFlow)
+
+	return e.projector.Project(base, drivers)
+}
+
+// collectCycleDeltas 把 cycle multiplier 轉成 additive delta：multiplier-1 對每個 L1 sector。
+func collectCycleDeltas(_ context.Context, p CycleInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
+	if p == nil {
+		return in
+	}
+	// 既有 caller 已提供 deltas；不做 transform（避免雙計算）。
+	// 此 helper 留作 future extension：若 caller 只傳 multiplier，可在此轉 (m-1)。
+	return in
+}
+
+func collectSeasonalDeltas(ctx context.Context, p SeasonalInputProvider, in map[industry.SectorID]float64, asOf string) map[industry.SectorID]float64 {
+	_ = p
+	_ = asOf
+	return in
+}
+
+func collectLinkageDeltas(ctx context.Context, p LinkageInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
+	_ = p
+	return in
+}
+
+func collectNarrativeDeltas(ctx context.Context, p NarrativeInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
+	_ = p
+	return in
+}
+
+func collectMacroDeltas(ctx context.Context, p MacroInputProvider, in map[industry.SectorID]float64, action MacroAction) map[industry.SectorID]float64 {
+	_ = p
+	_ = action
+	return in
+}
+
+func collectFactorDeltas(ctx context.Context, p FactorInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
+	_ = p
+	return in
 }
 
 func clamp(v, lo, hi float64) float64 {

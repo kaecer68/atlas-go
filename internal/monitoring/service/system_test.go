@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/buildinfo"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -458,6 +459,78 @@ func TestCheckMacroPointHealth(t *testing.T) {
 			t.Errorf("expected threshold message, got %s", updated)
 		}
 	})
+}
+
+// =============================================================================
+// Runtime BuildInfo Block (E08 — system health runtime version reconciliation)
+// =============================================================================
+//
+// Spec: docs/specs/capital-flow-seven-dimension-spec.md §11.4 + Task 9 brief.
+// Production must populate SystemHealthResponse.Runtime from the buildinfo
+// package so a deployed binary's commit/version can be audited from the health
+// endpoint, not by reading git log.
+
+// TestSystemHealth_RuntimeBlockFromBuildinfo verifies that LoadSystemHealth
+// populates the new Runtime block from internal/buildinfo, surfacing the
+// injected Version and Commit.
+//
+// RED state today: SystemHealthResponse has no Runtime field → compile fail.
+// GREEN state in Task 11: field exists, populated via buildinfo.Current().
+// We mutate buildinfo.Version/Commit/BuildTime directly with a t.Cleanup so
+// no leakage across tests in this binary.
+func TestSystemHealth_RuntimeBlockFromBuildinfo(t *testing.T) {
+	originalVer := buildinfo.Version
+	originalCommit := buildinfo.Commit
+	originalBuildTime := buildinfo.BuildTime
+	t.Cleanup(func() {
+		buildinfo.Version = originalVer
+		buildinfo.Commit = originalCommit
+		buildinfo.BuildTime = originalBuildTime
+	})
+
+	buildinfo.Version = "v0.0.0.32-test"
+	buildinfo.Commit = "deadbeef1234"
+	buildinfo.BuildTime = "2026-07-17T00:00:00Z"
+
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+	health, err := svc.LoadSystemHealth()
+	if err != nil {
+		t.Fatalf("LoadSystemHealth: %v", err)
+	}
+	if health.Runtime == nil {
+		t.Fatal("expected SystemHealthResponse.Runtime to be populated")
+	}
+	if health.Runtime.Commit == "" {
+		t.Error("expected Runtime.Commit to be non-empty (buildinfo default or injected)")
+	}
+	if health.Runtime.Version != "v0.0.0.32-test" {
+		t.Errorf("Runtime.Version: want %q, got %q", "v0.0.0.32-test", health.Runtime.Version)
+	}
+	if health.Runtime.GoVersion == "" {
+		t.Error("expected Runtime.GoVersion to be non-empty")
+	}
+}
+
+// TestSystemHealth_RuntimeBlockStableForUninjectedBuild pins the default-value
+// contract when no -ldflags injection happens (i.e. plain `go test`).
+// Guards against the "Runtime.Version = \"\"" regression: empty string must
+// be replaced with the spec'd "unknown" sentinel.
+func TestSystemHealth_RuntimeBlockStableForUninjectedBuild(t *testing.T) {
+	// No mutation: relies on the package-default "unknown" sentinels.
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+	health, err := svc.LoadSystemHealth()
+	if err != nil {
+		t.Fatalf("LoadSystemHealth: %v", err)
+	}
+	if health.Runtime == nil {
+		t.Fatal("expected Runtime to be populated even without injection")
+	}
+	if health.Runtime.Version == "" {
+		t.Error("expected Runtime.Version to never be empty (use 'unknown' sentinel)")
+	}
+	if health.Runtime.GoVersion == "" {
+		t.Error("expected Runtime.GoVersion to be auto-filled, never empty")
+	}
 }
 
 func TestLoadSystemHealth_YahooChannels(t *testing.T) {

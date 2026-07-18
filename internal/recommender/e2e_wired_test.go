@@ -71,7 +71,7 @@ func realWiredDeps(t *testing.T) (NarrativeProvider, CapitalFlowProvider, EventP
 
 	// 1. capitalflow: real service backed by canned macro provider.
 	cfsvc := capitalflow.NewService(mp, 0)
-	capflowAdapter := NewCapitalFlowFunc(cfsvc.LatestDaily, cfsvc.Summary)
+	capflowAdapter := NewCapitalFlowFunc(cfsvc.LatestDaily, cfsvc.Summary, cfsvc.LatestAssessment)
 
 	// 2. event-driven: real predictor with the standard event calendar.
 	// RefreshEvents evaluates the built-in rule set. Custom event injection

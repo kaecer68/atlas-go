@@ -34,6 +34,18 @@ GO_PKGS   := ./cmd/... ./internal/...
 VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]' || echo dev)
 LDFLAGS_VERSION := -X main.Version=$(VERSION)
 
+# ---- Buildinfo linker-injected runtime parity (E08)----
+# internal/buildinfo exposes Version/Commit/BuildTime package vars intended to
+# be overridden via -ldflags -X. These values are surfaced by
+# SystemHealthResponse.Runtime so dashboards can audit a deployed binary
+# against its source commit (CF-INV-12). When not running inside a git
+# checkout (e.g. a release tarball), Commit falls back to "unknown".
+GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS_RUNTIME := -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=$(VERSION) \
+                   -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=$(GIT_COMMIT) \
+                   -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(BUILD_TIME)
+
 .PHONY: version sync-version bump-version
 
 version:
@@ -135,7 +147,7 @@ watch-frontend-%:
 
 build-backend:
 	@echo "🔨 Building Go backend (cmd/atlas)..."
-	go build -ldflags "$(LDFLAGS_VERSION)" -o bin/atlas ./cmd/atlas
+	go build -ldflags "$(LDFLAGS_VERSION) $(LDFLAGS_RUNTIME)" -o bin/atlas ./cmd/atlas
 
 # ---- MCP server (atlas-mcp) management ----
 # 給外部 AI agent (Hermes/OpenClaw/Claude Desktop/Cursor/OpenCode) 用的 binary。
@@ -153,7 +165,7 @@ build-backend:
 build-mcp:
 	@echo "🔨 Building atlas-mcp binary..."
 	@mkdir -p bin
-	go build -ldflags "$(LDFLAGS_VERSION)" -o bin/atlas-mcp ./cmd/atlas-mcp
+	go build -ldflags "$(LDFLAGS_VERSION) $(LDFLAGS_RUNTIME)" -o bin/atlas-mcp ./cmd/atlas-mcp
 
 install-mcp: build-mcp
 	@echo "📦 Installing atlas-mcp to $(HOME)/.local/bin/..."

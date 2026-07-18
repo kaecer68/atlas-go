@@ -17,7 +17,7 @@ func registerBriefingTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name: "daily_report",
 		Description: autoDescOr("daily_report",
-			"回傳最新每日市場報告 JSON，含全球資金總開關、台股七大資金勢力分解與共振、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。"),
+			"回傳最新每日市場報告 JSON，含全球資金總開關、台股七維錢潮雷達（3+2+2 分層）分解、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。"),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleDailyReport)
 }
