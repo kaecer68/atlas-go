@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 依 `docs/specs/sector-allocation-simulation-closure-spec.md` v1.0 與 `docs/manifests/sector-allocation-simulation-closure-manifest.md` v1.0 完成 SA00–SA12，把散戶定位審計 P1-4 升級為可驗證的模擬閉環；SA11 觀察期僅驗證工程穩定性，**永不**宣稱金融準確或預測命中率。
+**Goal:** 依 `../../specs/sector-allocation-simulation-closure-spec.md` v1.0 與 `../manifests/sector-allocation-simulation-closure-manifest.md` v1.0 完成 SA00–SA12，把散戶定位審計 P1-4 升級為可驗證的模擬閉環；SA11 觀察期僅驗證工程穩定性，**永不**宣稱金融準確或預測命中率。
 
 **Architecture:** 先以 `SA01` 的 closure verifier 鎖住狀態機與依賴，再依 Phase A/B/C 落地 namespace、prior、legacy split、canonical WeightEngine、capital-flow anti-corruption、composition-root wiring；Phase C 真實 current exposure、next-session policy、allocator consumption、cross-interface parity、F06 shadow ranking；Phase D 觀察與 close-out。每一個 ID 採 RED → impl → focused gate → implementation commit → evidence commit 五段式，狀態最多到 `implemented`，`observing`/`done` 必須在 runtime 證據完成後才能升級。
 
@@ -2357,8 +2357,8 @@ bash scripts/verify-sector-allocation-closure.sh docs/manifests/sector-allocatio
 **Step 5: File sync**
 
 - `docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md` F05 改 `done`、BK-16 改 `done`、Change Log v1.10。
-- `docs/operations/sector-allocation-closure-verification-report.md`（新檔，SA12.D 建立）：依觀察期證據填入 9 個 check 結果。
-- `docs/operations/sector-allocation-closure-runbook.md`（SA12.D 補章節）。
+- `docs/operations/sector-allocation-closure-verification-report.md`（新檔，SA12.D 建立）：依觀察期證據填入 9 個 check 結果。（forward reference；link checker 待 SA12.D 完成後消失）
+- `docs/operations/sector-allocation-closure-runbook.md`（SA12.D 補章節）。（forward reference；link checker 待 SA12.D完成後消失）
 - `docs/documentation-map.md`、`docs/reference/guidelines-index.md`：加入 SA11/SA12 entry。
 
 **Step 6: Commit boundaries**
