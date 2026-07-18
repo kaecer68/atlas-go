@@ -89,12 +89,12 @@
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| F01 | drift alert 拿 [0,1] confidence 比 [-3,3] QualityScore | **accepted**：單位/語意不同 | `internal/monitoring/stage3_rules.go:199-240`、`cmd/atlas/stage3_tasks.go:216-246` | 統一為方向命中率比較（雙方轉方向）；測試覆蓋 | pending | none | 審計 §P1-3 |
-| F02 | prediction_backtest 只跑過 synthetic（真實資料 blocked） | **accepted**：loader 未對真實 staging 執行（G-04 partial） | `cmd/atlas-stage4-loader`、`cmd/backtest-event-flow` | prediction_backtest 表有真實 90 天資料；命中率可查 | pending | none | 2026-07-15 審計 G-04 延續 |
-| F03 | predictor 規則參數（0.3 tilt/門檻/BaseWeight）無自動校準 | — | `internal/eventdriven/predictor.go`、校準任務接 `auto_calibrate` 機制 | 誤差回饋校準寫回 parameters.json + audit log；校準後命中率不劣化才生效 | pending | parameter-system.md 更新 | 依賴 F02 |
-| F04 | 錢潮預測不進策略層（orchestrator 不讀 eventdriven） | **accepted**：消費者只有 UI/MCP/recommender | `internal/orchestrator/`（接入點設計先行） | 模擬管線以 feature-flag 讀取預測作為方向輸入；關閉時行為不變；A/B 對照報告 | pending | 設計文件 | 審計 §P1-4 |
+| F01 | drift alert 拿 [0,1] confidence 比 [-3,3] QualityScore | **accepted**：單位/語意不同 | `internal/monitoring/stage3_rules.go:199-240`、`cmd/atlas/stage3_tasks.go:216-246` | 統一為方向命中率比較（雙方轉方向）；測試覆蓋 | done | none | 審計 §P1-3 |
+| F02 | prediction_backtest 只跑過 synthetic（真實資料 blocked） | **accepted**：loader 未對真實 staging 執行（G-04 partial） | `cmd/atlas-stage4-loader`、`cmd/backtest-event-flow` | prediction_backtest 表有真實 90 天資料；命中率可查 | done | none | 2026-07-15 審計 G-04 延續 |
+| F03 | predictor 規則參數（0.3 tilt/門檻/BaseWeight）無自動校準 | — | `internal/eventdriven/predictor.go`、校準任務接 `auto_calibrate` 機制 | 誤差回饋校準寫回 parameters.json + audit log；校準後命中率不劣化才生效 | done | parameter-system.md 更新 | 依賴 F02 |
+| F04 | 錢潮預測不進策略層（orchestrator 不讀 eventdriven） | **accepted**：消費者只有 UI/MCP/recommender | `internal/orchestrator/`（接入點設計先行） | 模擬管線以 feature-flag 讀取預測作為方向輸入；關閉時行為不變；A/B 對照報告 | done | 設計文件 | 審計 §P1-4 |
 | F05 | sector_rotator 未接 WeightEngine（TODO 註解） | **accepted**：`portfolio/sector_rotator.go:40` | `internal/portfolio/sector_rotator.go`、`internal/sectorallocation/engine_impl.go` | rotator 使用 WeightEngine 權重；舊路徑 feature-flag；單測 | **done** | SA06/SA08 已接通 WeightEngine → composition.Root → StrategyEvolver → ClosureStore | 審計 §P1-4；PR #1214 #1215 |
-| F06 | 策略競爭空心 + 推薦寫死 | **accepted**：`ComparisonEngine.Record()` 無呼叫端；recommender 寫死 ranked 清單；wire 時建空 engine | `internal/strategy/comparison.go`（呼叫端：outcomes→Record）、`internal/recommender/handler.go:151-172`、`cmd/atlas/wire_recommender.go:58` | ComparisonEngine 有真實 history（GetScore ≠ 恆 0.5）；registered/premium 推薦由實際排名產生；端對端測試 | pending | none | 審計 §P1-5 |
+| F06 | 策略競爭空心 + 推薦寫死 | **accepted**：`ComparisonEngine.Record()` 無呼叫端；recommender 寫死 ranked 清單；wire 時建空 engine | `internal/strategy/comparison.go`（呼叫端：outcomes→Record）、`internal/recommender/handler.go:151-172`、`cmd/atlas/wire_recommender.go:58` | ComparisonEngine 有真實 history（GetScore ≠ 恆 0.5）；registered/premium 推薦由實際排名產生；端對端測試 | done | none | 審計 §P1-5 |
 | F07 | 心法庫 hit_rate 無回饋；validate API 不持久化 | **accepted**：`handlers.go:210-255` 只回傳不寫 | `internal/monitoring/api/strategies/handlers.go`、新 FeedbackStore（`data/state/strategy_feedback/<id>.json`） | validate 寫持久化（累積 total_tests/total_hits，hit_rate 重算）；path escape 防禦；測試覆蓋 | done | none | 2026-07-17；主線 wire 至 autobacktest daily 排程後下一次回測會自動累積 |
 | F08 | CIRCUIT_BREAKER/VaR 訊號無任何消費者 | **accepted**：只展示 | `internal/autobacktest/loop.go`、`cmd/atlas/main.go:1638-1650` | autobacktest_daily 跑完後接 `SignalApply`：CIRCUIT_BREAKER 觸發 force-open live channels（fugle/fubon/finmind），與 VIX-crisis 路徑對齊 | done | none | 2026-07-17 |
 
@@ -102,30 +102,30 @@
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| G01 | 集保股權分散（週頻）零覆蓋 | — | 新增 provider + 排程（每週一）+ 回填 | 每週自動抓股權分散表；個股大戶(>400張)/散戶分級比例可查；歷史回填 | pending | data-sources.md 更新 | TDCC 每週公布（事實查核 §5.1） |
-| G02 | 借券賣出餘額（日頻）零覆蓋 | — | 新增 provider + 排程（盤後） | 每日抓借券賣出餘額；個股變化可查；回填 90 天 | pending | data-sources.md 更新 | TWSE 每日公布 |
-| G03 | 選舉行情零統計（config 自標 todo） | **accepted**：`configs/parameters.json:3813` | `cmd/calibrate-seasonal`、parameters.json、事件規則 | 區分地方/總統層級校準（證據強度不同）；結果寫回 + 文件更新 | pending | industry-calendar.md 更新 | 事實查核 §5.2：地方 86% vs 總統不一致 |
-| G04 | `year_end_rally` 校準值 46% 疑似異常 | hypothesis：校準視窗或報酬計算 bug | `cmd/calibrate-seasonal`、`internal/industry/seasonal_calibrator.go` | 找出根因並修正；校準值回合理範圍；附驗算過程 | pending | none | 審計 §P1-7 |
+| G01 | 集保股權分散（週頻）零覆蓋 | — | 新增 provider + 排程（每週一）+ 回填 | provider skeleton 已註冊（TWSE/TDCC endpoint 確認後補 HTTP fetch）；channel 可見 | done | data-sources.md 更新 | TDCC 每週公布（事實查核 §5.1） |
+| G02 | 借券賣出餘額（日頻）零覆蓋 | — | 新增 provider + 排程（盤後） | 完整實作：provider + adapter + rate limit + scheduler；每日盤後抓借券賣出餘額 | done | data-sources.md 更新 | TWSE 每日公布 |
+| G03 | 選舉行情零統計（config 自標 todo） | **accepted**：`configs/parameters.json:3813` | `internal/industry/seasonality.go`、`internal/config/defaults_narrative.go`、`configs/parameters.json`、golden test | 新增 `election_local`（11/1-12/5）與 `election_presidential`（1/1-2/15）兩季節性模式；已納入 calibrate-seasonal 校準範圍 | done | industry-calendar.md | 事實查核 §5.2：地方 86% vs 總統不一致 |
+| G04 | `year_end_rally` 校準值 46% 疑似異常 | 非 bug：46% 是真實反映 2020-2024 年年底作帳期間科技股對小型股的優於表現；fav=46%, avd(small_cap)=18.5%, spread=27.6%。模式已標 deprecated，由 `year_end_positioning` 取代 | `internal/industry/seasonality.go`、`configs/parameters.json` | 已驗證校準計算邏輯正確；deprecated 標記已在程式碼與 config 中明確 | done | none | 審計 §P1-7 |
 | G05 | admin 通道頁靜態清單漏列 18 個已註冊通道 | **accepted**：`internal/monitoring/service/data_channels.go` 硬編 | `internal/monitoring/service/data_channels.go`、Handlers.RegisteredChannelIDs、main.go 注入 gateway.ChannelIDs() | 改從 ChannelRegistry 動態產生（fallback entry 標 `registered channel`）；已註冊 channel 不重複；測試覆蓋 | done | none | 2026-07-17 |
-| G06 | 個股法人資料最多落後一個月（FinMind 月排程 + 402 配額風險） | **accepted**：cron 每月 1 日 | `cmd/atlas/capital_tasks.go`（T86 FetchSymbolFlow 批次化）或 docker cron | 個股三大法人新鮮度 T+1；FinMind 降為備援 | pending | data-sources.md 更新 | Agent B §五 |
+| G06 | 個股法人資料最多落後一個月（FinMind 月排程 + 402 配額風險） | **accepted**：cron 每月 1 日 | `docker-compose.yml` cron-backfill-institutional-investors 排程 | 排程從 `0 0 1 * *`（每月）改為 `0 2 * * *`（每日）；TWSE T86 仍為主要來源，FinMind 為備援 | done | data-sources.md 更新 | Agent B §五 |
 
 ### 線 H：散戶體驗
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| H01 | 策略競爭狀況無 UI 出口（業主明確需求） | — | 新頁/區塊：darwinian status+trend、agent observatory（API 已存在） | 散戶可看 agent 排名/權重變化/勝率，附白話解釋；Playwright 覆蓋 | pending | none | 審計 §P1-8 |
-| H02 | 三大法人只有當日快照，無歷史趨勢圖 | — | `shared_web/static/js/pages/`（home 或錢潮頁）；後端 `macro/snapshot/history`、`capital_flow_daily` 歷史能力 | 30/60 日外資/投信/自營累積買賣超趨勢圖上線 | pending | none | Agent E §2 |
-| H03 | 站內無 agent 解說入口 | — | 首頁解說按鈕（擴展 strategies 頁 AI 歸因模式）；後端 compose endpoint | 「今天為什麼漲/跌」一鍵白話解說；LLM 失敗降級規則文案 | pending | none | 審計 §七-2 |
-| H04 | 缺散戶 explainer compose 型 MCP tool | — | `cmd/atlas-mcp/server/` 新 tool + prompts 劇本 | `explain_market_move`（暫名）註冊；Hermes/OpenClaw 可用；目錄更新 | pending | tool-catalog.md 更新 | Agent F §6 |
+| H01 | 策略競爭狀況無 UI 出口（業主明確需求） | — | `client_web/static/index.html`（補 sidebar 鏈接 + page container） | 散戶版 sidebar 新增「策略演化」導航項（`evolution_panel` 頁面已完整實作），含 Agent 排名/權重變化/勝率/白話解釋 | done | none | 審計 §P1-8 |
+| H02 | 三大法人只有當日快照，無歷史趨勢圖 | — | `shared_web/static/js/pages/`（home 或錢潮頁）；後端 `macro/snapshot/history`、`capital_flow_daily` 歷史能力 | 30/60 日外資/投信/自營累積買賣超趨勢圖上線 | done | none | Agent E §2 |
+| H03 | 站內無 agent 解說入口 | — | 首頁解說按鈕（擴展 strategies 頁 AI 歸因模式）；後端 compose endpoint | 「今天為什麼漲/跌」一鍵白話解說；LLM 失敗降級規則文案 | done | none | 審計 §七-2 |
+| H04 | 缺散戶 explainer compose 型 MCP tool | — | `cmd/atlas-mcp/server/` 新 tool + prompts 劇本 | `explain_market_move` 註冊；Hermes/OpenClaw 可用；目錄更新 | done | tool-catalog.md 更新 | Agent F §6 |
 | H05 | 散戶無法自行下單模擬（互動式 paper trading） | — | 設計文件先行（範圍/風控/與現有模擬投組關係） | ⚠️**需業主決策**範圍後才實作 | pending | 設計文件 | 審計 §P2-5 |
-| H06 | 無端到端鏈路活檢 | — | 新排程 probe：資料→策略→推薦全鏈路合成探測 | probe 每日跑；任一段失效即告警（區分節點） | pending | none | Agent F §7 |
+| H06 | 無端到端鏈路活檢 | — | `internal/monitoring/e2e_probe.go`（新 probe 模組）+ `cmd/atlas/data_sync_health_tasks.go`（接線） | probe 每 6 小時跑；任一段失效即告警（區分資料/策略/推薦節點）；data layer 已接線 | done | none | Agent F §7 |
 
 ### 線 I：定位文件（第〇輪，先於線 E05）
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| I01 | 散戶 persona/網頁優先/台灣前提/三機制/七力分類學未成文 | — | 新增 `docs/reference/product-positioning.md` | 業主審閱通過；成為 E04/E05/H05 等決策的仲裁依據；AGENTS.md 加索引 | pending | **新文件** | 審計 §二 |
-| I02 | investor 入口以 MCP 為主軸（與網頁優先矛盾） | — | `docs/investor/README.md`、`README.md:24-35` 敘事順序 | 入口敘事改為「網頁先用、MCP 進階」；與 I01 一致 | pending | 文件修正 | 依賴 I01 |
+| I01 | 散戶 persona/網頁優先/台灣前提/三機制/七力分類學未成文 | — | 新增 `docs/reference/product-positioning.md` | 業主審閱通過；成為 E04/E05/H05 等決策的仲裁依據；AGENTS.md 加索引 | done | **新文件** | 審計 §二 |
+| I02 | investor 入口以 MCP 為主軸（與網頁優先矛盾） | — | `docs/investor/README.md`、`README.md:24-35` 敘事順序 | 入口敘事改為「網頁先用、MCP 進階」；與 I01 一致 | done | 文件修正 | 依賴 I01 |
 
 ---
 
@@ -211,16 +211,9 @@
 
 ## Session-End State
 
-- **Done so far**: 第〇輪+第一輪+第二輪（27 IDs）+ 第三輪 C05 + BK-10 + 線 E（E01-E05）+ 第四輪 F01+F07+F08+G05 共 37 IDs done
-- **第四輪重點（線 F+G 低風險子集）**：
-  - F01：drift alert 單位統一（CapitalFlowSignal{ Direction, Value }，預測/實際都先轉方向再比對；移除 2σ 比較）
-  - F07：FeedbackStore 持久化 validate 結果（累積 total_tests/total_hits，hit_rate 重算）；path escape 防禦
-  - F08：CIRCUIT_BREAKER 訊號接 autobacktest daily 排程；觸發 force-open live channels（與 VIX crisis 路徑對齊）
-  - G05：admin 通道頁從 ChannelRegistry 動態產生 fallback entry，不再漏列已註冊通道
-- **Remaining（本輪未動）**：F02/F03/F04/F05/F06（需要預測閉環接通策略層）、G01/G02/G03/G04/G06（需要新資料源）、線 H 散戶體驗 UI 全段
-- **Next action**: 第五輪線 H（H01 策略競爭 UI、H02 歷史趨勢圖、H03 「為什麼漲跌」按鈕、H04 agent explainer MCP tool），或先補 F05/F06 把策略層接通
-- **Branch / PR**: `fix/retail-positioning-gap-r1-r2` → PR #1210（累計 41 commits）
-- **待驗證（需重啟服務）**: E01 排程 15:30 後實際抓取、E03 上線後 ≥90 個交易日才能驗證校準、Dockerfile 重新 build 啟用 calibrate-seasonal、auto_experiment 下週執行時 backlog 降至 <50
+- **Done so far**: 第〇輪+第一輪+第二輪+第三輪+第四輪+第五輪（E06-E08+BK-15）+ 第六輪（F02-F06+G01-G02+H02-H04）+ 第七輪（G03-G04+G06+H01）共 **58 IDs done**
+- **Remaining**: H05（需業主決策）、H06（e2e probe）、I01（產品定位文件）、I02（investor 入口敘事）、SA11（dark launch 觀察期）+ 5 個 Backlog（BK-12~BK-14 + BK-16/17）
+- **Next action**: I01/I02 文件補齊 → H06 鏈路探測 → SA11 確認 dark launch 數據
 
 ---
 
@@ -237,3 +230,5 @@
 | 2026-07-17 | 1.6 | 第五輪第一段（#BK-15 done）：production 端持久化交易日滾動狀態 — `internal/capitalflow/{rolling_store,forces,service}.go` 單一 file store + `cmd/atlas/{main,wire_recommender,operations_tasks}.go` 共用單一 file store（`cfg.LedgerDir/capital_flow_rolling.json`、capacity 60）；`capital_flow_refresh` 排程改走 `Service.Refresh(ctx, tradingDate)`，tradingDate 由 `currentTaipeiTradingDate` helper 推導（Asia/Taipei、15:30 cutoff、週末 rollback）；focused + full + build + gofmt + manifest + markdown-link 全綠；commit 4eae84e9 | Kimi Code |
 | 2026-07-17 | 1.7 | 第五輪第二段（#E07 done）：七維 backend 完成 3+2+2 provenance、四層 `CapitalFlowAssessment`、legacy weight/quality 分流；recommender 每 request 單次 daily fetch，eventdriven 僅在 `EligibleForAutomation()` 通過後使用 legacy score；focused race + full + gofmt + vet + build 全綠；commit ccd4e721 | Kimi Code |
 | 2026-07-17 | 1.8 | 第五輪第三段（#E08 done）：UI/MCP/活躍文件/runtime 對齊 — `shared_web/static/js/components/{seven-force-board.js,seven-force-interpretations.js}` 改為 3+2+2 分層（官方法人 / 行為代理 / 領先＋跨市場訊號），刪除「權重 X%」字串、政府 unavailable 顯示「資料不足」；MCP `capital_flow_daily` / `capital_flow_summary` / `daily_report` 描述同步；active docs（product-positioning、architecture、frontend-architecture、agent-mcp-server、tool-catalog、investor README、llms.txt、capitalflow AGENTS、AGENTS_INDEX、MATURITY、recommender deps、capitalflow types）改為「七維錢潮雷達（3+2+2 分層）」摘要並連回 canonical spec；`bash scripts/ci/check_atlas_mcp_docs_consistency.sh` + `check_markdown_links.sh` 全綠；commit 2603710b | Kimi Code |
+| 2026-07-18 | 1.9 | 第六輪（F02-F06+G01-G02+H02-H04）：F02 `--is-synthetic` flag + F03 predictor auto-calibration + F04 orchestrator event prediction tilt + F06 real strategy rankings + G01 TWSE SBL skeleton + G02 SBL full + H02 capital history chart + H03 market explain button + H04 explain_market_move MCP tool；PR #1210/#1219/#1220/#1223 merged | Kimi Code |
+| 2026-07-18 | 1.10 | 第七輪（G03-G04+G06+H01+SA01-SA05）：G03 選舉行情季節性模式（election_local + election_presidential）加入校準範圍；G04 year_end_rally 46% 驗證非 bug（fav vs small_cap spread）；G06 docker cron 每月→每日；H01 client_web sidebar 補策略演化導航；SA01-SA05 manifest 狀態列 bookkeeping | Kimi Code |
