@@ -2283,7 +2283,7 @@ git commit -m "chore(manifest): #SA11 observing → done (source=heuristic 不�
 
 **Files:**
 - Create: `scripts/ci/sa12-negative-evidence.sh`
-- Modify: `internal/eventdriven/sector_predictor.go`（刪除 `_sectorWeights` 與 `sectorWeight` fallback）、`internal/portfolio/sector_rotator.go`（移除 `defaultMacroAdjustments` / `defaultFlowAdjustments` legacy mixed-key support，移除 `normalizeAllocations`）、`internal/config/parameters.go`、`internal/config/defaults_engine.go`、`configs/parameters.json`（移除 `sector_allocation.base_weights` 非 canonical 12 keys）、`internal/orchestrator/system.go`（`currentSectorAllocations()` 必須 non-nil；為 SA07 維護入口）、`internal/orchestrator/strategy_evolver.go`（保留 receipted 行為；不再 fake true）、`docs/manifests/sector-allocation-simulation-closure-manifest.md`（verifier Check 12-17）、`docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md`（F05 + BK-16 → done）、`docs/operations/sector-allocation-closure-verification-report.md`（新檔）、`docs/operations/sector-allocation-closure-runbook.md`（依觀察期證據補章節）、`docs/documentation-map.md`、`docs/reference/guidelines-index.md`
+- Modify: `internal/eventdriven/sector_predictor.go`（刪除 `_sectorWeights` 與 `sectorWeight` fallback）、`internal/portfolio/sector_rotator.go`（移除 `defaultMacroAdjustments` / `defaultFlowAdjustments` legacy mixed-key support，移除 `normalizeAllocations`）、`internal/config/parameters.go`、`internal/config/defaults_engine.go`、`configs/parameters.json`（移除 `sector_allocation.base_weights` 非 canonical 12 keys）、`internal/orchestrator/system.go`（`currentSectorAllocations()` 必須 non-nil；為 SA07 維護入口）、`internal/orchestrator/strategy_evolver.go`（保留 receipted 行為；不再 fake true）、`docs/manifests/sector-allocation-simulation-closure-manifest.md`（verifier Check 12-17）、`docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md`（F05 + BK-16 → done）、SA12.D runbook 與 verification report（將於 SA12.D 建立）、`docs/documentation-map.md`、`docs/reference/guidelines-index.md`
 
 **Step 1: Write RED**
 
@@ -2357,7 +2357,7 @@ bash scripts/verify-sector-allocation-closure.sh docs/manifests/sector-allocatio
 **Step 5: File sync**
 
 - `docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md` F05 改 `done`、BK-16 改 `done`、Change Log v1.10。
-- `docs/operations/sector-allocation-closure-verification-report.md`：依觀察期證據填入 9 個 check 結果。
+- `docs/operations/sector-allocation-closure-verification-report.md`（新檔，SA12.D 建立）：依觀察期證據填入 9 個 check 結果。
 - `docs/operations/sector-allocation-closure-runbook.md`：依觀察期實際狀況補章節。
 - `docs/documentation-map.md`、`docs/reference/guidelines-index.md`：加入 SA11/SA12 entry。
 
@@ -2383,7 +2383,7 @@ git commit -m "feat(manifest): #SA12.C verifier Check 12-17 extension"
 
 # 7. docs
 git add docs/operations/sector-allocation-closure-runbook.md \
-  docs/operations/sector-allocation-closure-verification-report.md \
+  docs/operations/sector-allocation-closure-verification-report.md（將於 SA12.D 建立） \
   docs/manifests/sector-allocation-simulation-closure-manifest.md \
   docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md \
   docs/documentation-map.md docs/reference/guidelines-index.md
