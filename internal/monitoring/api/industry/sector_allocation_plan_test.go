@@ -9,35 +9,29 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
-// TestHandleSectorAllocationPlan_ProductionWiring proves the wiring path
-// from Svc.WeightEngine to SectorAllocator used in production
-// (DashboardAPI.RegisterIndustryRoutes) makes HandleSectorAllocationPlan
-// return 200 with a populated industries slice, instead of 503.
-func TestHandleSectorAllocationPlan_ProductionWiring(t *testing.T) {
+// TestHandleSectorAllocationPlan_SnapshotUnavailable proves that without a
+// SnapshotReader, the handler returns 503 with snapshot_unavailable reason
+// (SA09 contract: no in-memory WeightEngine compute path).
+func TestHandleSectorAllocationPlan_SnapshotUnavailable(t *testing.T) {
 	h := setupIndustryHandlers()
 
-	if h.SectorAllocator == nil {
-		t.Fatal("SectorAllocator not wired — RegisterIndustryRoutes must set it from Svc.WeightEngine")
+	if h.Svc == nil {
+		t.Fatal("Svc not wired")
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/sector-allocation-plan", nil)
 	status, body := h.HandleSectorAllocationPlan(req)
 
-	if status != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %v", status, body)
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %v", status, body)
 	}
 	resp, ok := body.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map response, got %T", body)
 	}
-	raw, present := resp["industries"]
-	if !present {
-		t.Fatal("response missing 'industries' key")
+	if resp["fallback_reason"] != "snapshot_unavailable" {
+		t.Fatalf("expected fallback_reason=snapshot_unavailable, got %v", resp["fallback_reason"])
 	}
-	if raw == nil {
-		t.Fatal("response.industries is nil")
-	}
-	t.Logf("industries runtime type: %T, sample: %+v", raw, raw)
 }
 
 // TestNewIndustryService_PopulatesWeightEngine ensures the service constructor

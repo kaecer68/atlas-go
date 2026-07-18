@@ -485,25 +485,20 @@ func (h *Handlers) HandleCorrelationLoader(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
-	if h.SectorAllocator == nil {
-		return http.StatusServiceUnavailable, map[string]any{
-			"error":   "sector_allocation_engine_not_configured",
-			"message": "sectorallocation.WeightEngine is not wired into the handler",
-		}
-	}
-	ctx := r.Context()
-	now := time.Now()
-	weights, err := h.SectorAllocator.ComputeWeights(ctx, now)
+	snap, err := h.Svc.GetLatestSectorAllocation(r.Context())
 	if err != nil {
-		return http.StatusInternalServerError, map[string]any{
-			"error":   "compute_weights_failed",
-			"message": err.Error(),
+		return http.StatusServiceUnavailable, map[string]any{
+			"error":           "snapshot_unavailable",
+			"message":         err.Error(),
+			"fallback_reason": "snapshot_unavailable",
 		}
 	}
-	return http.StatusOK, map[string]any{
-		"industries":    weights,
-		"count":         len(weights),
-		"updated_at":    now,
-		"config_source": "parameters.json#sector_allocation",
+	if snap == nil {
+		return http.StatusServiceUnavailable, map[string]any{
+			"error":           "snapshot_unavailable",
+			"message":         "no sector allocation snapshot available",
+			"fallback_reason": "snapshot_unavailable",
+		}
 	}
+	return http.StatusOK, snap
 }

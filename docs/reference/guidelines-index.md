@@ -155,6 +155,8 @@
 | `docs/*.md` | 參考文件 | 10+ |
 | `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 31 |
 | `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 8 |
+| `docs/operations/*.md` | 操作手冊 | 10+ |
+| `docs/manifests/*.md` | Implementation manifest | 1 |
 | `.claude/skills/robot-communication/*/SKILL.md` | 機器人溝通技能 | 4 |
 | `.claude/skills/gitnexus/*/SKILL.md` | GitNexus 工具技能 | 6 |
 

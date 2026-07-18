@@ -98,7 +98,7 @@ func realWiredDeps(t *testing.T) (NarrativeProvider, CapitalFlowProvider, EventP
 	// 4. comparison engine: real instance, 30-day window. No recorded trades
 	// → GetScore returns 0. This exercises the nil-safe fallback for strategy
 	// while still verifying the adapter wire works.
-	cmpEng := strategy.NewComparisonEngine(30)
+	cmpEng := strategy.NewComparisonEngine(30, nil)
 	strategyAdapter := NewComparisonEngineAdapter(cmpEng)
 
 	return narrativeAdapter, capflowAdapter, eventAdapter, strategyAdapter

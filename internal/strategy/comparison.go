@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -17,20 +18,53 @@ type Trade struct {
 }
 
 type ComparisonEngine struct {
-	mu      sync.RWMutex
-	window  int
-	history []*ComparisonResult
-	trades  map[string][]*Trade
+	mu          sync.RWMutex
+	window      int
+	history     []*ComparisonResult
+	trades      map[string][]*Trade
+	shadowDays  []ComparisonDay
+	shadowStore ComparisonStore
 }
 
-func NewComparisonEngine(window int) *ComparisonEngine {
+func NewComparisonEngine(window int, store ComparisonStore) *ComparisonEngine {
 	if window <= 0 {
 		window = config.GetParametersConfig().Strategy.ScoreLookbackDays.Value
 	}
 	return &ComparisonEngine{
-		window: window,
-		trades: make(map[string][]*Trade),
+		window:      window,
+		trades:      make(map[string][]*Trade),
+		shadowStore: store,
 	}
+}
+
+// RecordShadowDay persists a ComparisonDay entry to the shadow store.
+// Benchmark must be Available or the entry is silently skipped.
+func (e *ComparisonEngine) RecordShadowDay(day ComparisonDay) error {
+	if !day.Benchmark.Available {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	replaced := false
+	for i, d := range e.shadowDays {
+		if d.TradingDate == day.TradingDate {
+			e.shadowDays[i] = day
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		e.shadowDays = append(e.shadowDays, day)
+	}
+	sort.Slice(e.shadowDays, func(i, j int) bool {
+		return e.shadowDays[i].TradingDate < e.shadowDays[j].TradingDate
+	})
+
+	if e.shadowStore != nil {
+		return e.shadowStore.Upsert(context.Background(), day)
+	}
+	return nil
 }
 
 func (e *ComparisonEngine) Record(trades []*Trade, benchmarkReturn float64) {

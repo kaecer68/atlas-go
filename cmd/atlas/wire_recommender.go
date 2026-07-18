@@ -40,7 +40,7 @@ type WireDeps struct {
 	// CapitalFlowStore is the date-keyed rolling sample store (BK-15).
 	// Production wiring passes a FileRollingSampleStore rooted under
 	// cfg.LedgerDir; tests may pass a MemoryRollingSampleStore to assert
-	// wired-path behaviour, or nil to exercise the in-memory fallback
+	// wired-path behavior, or nil to exercise the in-memory fallback
 	// used by older harness code that never needs persistence.
 	CapitalFlowStore capitalflow.RollingSampleStore
 }
@@ -117,7 +117,7 @@ func wireForTest(in WireDeps) (recommender.HandlerDeps, *capitalflow.Service) {
 	}
 
 	// 4. comparison engine: keep instance alive across requests; use 30-day window.
-	cmpEng := strategy.NewComparisonEngine(30)
+	cmpEng := strategy.NewComparisonEngine(30, nil)
 	if cmpEng != nil {
 		deps.StrategyComp = recommender.NewComparisonEngineAdapter(cmpEng)
 	}

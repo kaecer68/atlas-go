@@ -30,6 +30,10 @@ type IndustryService struct {
 	// WeightEngine is the authoritative sector allocation engine for detail
 	// weight derivation. Production wiring may override it after NewIndustryService.
 	WeightEngine sectorallocation.WeightEngine
+
+	// snapshotReader provides persisted simulation-closing snapshot (SA08).
+	// nil means snapshot-based sector allocation is unavailable.
+	snapshotReader sectorallocation.SnapshotReader
 }
 
 func NewIndustryService(
@@ -541,6 +545,21 @@ func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview 
 	}
 
 	return industries
+}
+
+// GetLatestSectorAllocation returns the latest persisted simulation-closing
+// snapshot. Returns nil, error when the snapshot reader is unavailable or no
+// snapshot has been persisted yet (SA08 contract).
+func (s *IndustryService) GetLatestSectorAllocation(ctx context.Context) (*sectorallocation.SectorAllocationSnapshot, error) {
+	if s.snapshotReader == nil {
+		return nil, fmt.Errorf("snapshot reader not configured")
+	}
+	return s.snapshotReader.LatestSnapshot(), nil
+}
+
+// WithSnapshotReader injects a snapshot reader for sector allocation queries.
+func (s *IndustryService) WithSnapshotReader(r sectorallocation.SnapshotReader) {
+	s.snapshotReader = r
 }
 
 // IndustryRecommendation provides actionable recommendation for an industry
