@@ -104,31 +104,33 @@ type RateLimitManager struct {
 func NewRateLimitManager() *RateLimitManager {
 	return &RateLimitManager{
 		limiters: map[string]*rate.Limiter{
-			"us_yahoo":             yahooMacroLimiter,
-			"frankfurter_fx":       rate.NewLimiter(FrankfurterFXRate, FrankfurterFXBurst),
-			"twse_replay":          rate.NewLimiter(rate.Inf, 0), // no limit for file-based
-			"twse_capital_flow":    rate.NewLimiter(TWSECapitalFlowRate, TWSECapitalFlowBurst),
-			"fugle":                rate.NewLimiter(FugleBasicRate, FugleBasicBurst),
-			"fubon":                rate.NewLimiter(FugleBasicRate, FugleBasicBurst), // same tier
-			"finmind":              rate.NewLimiter(FinMindFreeRate, FinMindFreeBurst),
-			"geopolitical":         rate.NewLimiter(GeopoliticalRate, GeopoliticalBurst),
-			"geopolitical_taiwan":  rate.NewLimiter(GeopoliticalRate, GeopoliticalBurst),
-			"twse_margin":          rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst),
-			"export_statistics":    rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"tsmc_revenue":         rate.NewLimiter(rate.Every(2*time.Minute), 1), // TSMC monthly revenue
-			"janus_regime":         rate.NewLimiter(rate.Inf, 0),                  // no limit for compute
-			"tej":                  rate.NewLimiter(TEJRate, TEJBurst),
-			"exchange_rate":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"sox_index":            rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"sector_data":          rate.NewLimiter(rate.Inf, 0),
-			"day_trading":          rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin
-			"bdi":                  rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"dram_spot_price":      rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"twse_sector_index":    rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"taifex_daily":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"taifex_institutional": rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"twse_oddlot":          rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"twse_etf":             rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
+			"us_yahoo":               yahooMacroLimiter,
+			"frankfurter_fx":         rate.NewLimiter(FrankfurterFXRate, FrankfurterFXBurst),
+			"twse_replay":            rate.NewLimiter(rate.Inf, 0), // no limit for file-based
+			"twse_capital_flow":      rate.NewLimiter(TWSECapitalFlowRate, TWSECapitalFlowBurst),
+			"fugle":                  rate.NewLimiter(FugleBasicRate, FugleBasicBurst),
+			"fubon":                  rate.NewLimiter(FugleBasicRate, FugleBasicBurst), // same tier
+			"finmind":                rate.NewLimiter(FinMindFreeRate, FinMindFreeBurst),
+			"geopolitical":           rate.NewLimiter(GeopoliticalRate, GeopoliticalBurst),
+			"geopolitical_taiwan":    rate.NewLimiter(GeopoliticalRate, GeopoliticalBurst),
+			"twse_margin":            rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst),
+			"export_statistics":      rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"tsmc_revenue":           rate.NewLimiter(rate.Every(2*time.Minute), 1), // TSMC monthly revenue
+			"janus_regime":           rate.NewLimiter(rate.Inf, 0),                  // no limit for compute
+			"tej":                    rate.NewLimiter(TEJRate, TEJBurst),
+			"exchange_rate":          rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"sox_index":              rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"sector_data":            rate.NewLimiter(rate.Inf, 0),
+			"day_trading":            rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin
+			"bdi":                    rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"dram_spot_price":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"twse_sector_index":      rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"taifex_daily":           rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"taifex_institutional":   rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"twse_oddlot":            rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"twse_etf":               rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
+			"twse_sbl":               rate.NewLimiter(rate.Every(2*time.Second), 1), // G02: TWSE SBL daily
+			"tdcc_equity_dispersion": rate.NewLimiter(rate.Every(5*time.Second), 1), // G01: TDCC weekly
 			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
 			// (see yahooIndexLimiter / yahooTechLimiter / taiexIndexLimiter above) so the 9-channel
 			// us_market_refresh batch does not serialize at 1 req/s.

@@ -267,6 +267,18 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("twse_etf", etfAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_etf")
 
+	// --- TWSE SBL (Securities Borrowing & Lending) — G02 ---
+	sblAdapter := NewTWSESBLChannelAdapter()
+	g.registry.Register("twse_sbl", sblAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_sbl")
+
+	// --- TDCC Equity Dispersion (集保股權分散) — G01 ---
+	// NOTE: Auto-fetch not scheduled until TDCC API access is confirmed.
+	// Channel is registered so it appears in the monitoring dashboard.
+	tdccAdapter := NewTDCClientChannelAdapter()
+	g.registry.Register("tdcc_equity_dispersion", tdccAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "tdcc_equity_dispersion")
+
 	// --- JANUS Regime (internal computed engine, optional) ---
 	if janusEngine != nil {
 		janusAdapter := NewJANUSRegimeChannelAdapter(janusEngine)
