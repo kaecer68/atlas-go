@@ -281,7 +281,7 @@ hermes mcp restart atlas-mcp
 hermes mcp list  # 確認 tool 數量無異常變化（91±2）
 ```
 
-> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（啟動期 `RegisteredToolCount ∈ [110, 112]` assert 強制；目前 **110 tools** 預設啟用，sampling/elicitation feature-gated 全開才 +2 達 112）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
+> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（啟動期 `RegisteredToolCount ∈ [111, 113]` assert 強制；目前 **111 tools** 預設啟用，sampling/elicitation feature-gated 全開才 +2 達 113）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
 
 ## License
 
