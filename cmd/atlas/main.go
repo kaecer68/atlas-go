@@ -58,6 +58,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	obsotel "github.com/kaecer68/atlas-go/internal/observability/otel"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
+	"github.com/kaecer68/atlas-go/internal/orchestrator/composition"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/realtime"
@@ -528,6 +529,15 @@ func run(args []string, deps appDeps) error {
 		} else {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
+
+		// SA06: composition root for shared dependency wiring.
+		// Created once, shared across dashboard and all simulation paths.
+		compositionRoot, err := composition.NewRoot(cfg)
+		if err != nil {
+			log.Printf("[Composition] failed to create root: %v", err)
+		} else {
+			dashboard.SetCompositionRoot(compositionRoot)
+		}
 		dashboard.SetPool(pool)
 		// Manifest #G05: feed the full ChannelRegistry into the admin data-channels
 		// page so it lists every registered adapter (not just the hand-maintained
@@ -814,7 +824,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
+			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -1033,7 +1043,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1151,7 +1161,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for stress test: %w", err)
 					}
@@ -1189,7 +1199,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -2237,4 +2247,20 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	}
 
 	return nil
+}
+
+// buildSystemOrFallback creates a System through the composition root when
+// available (six-path matrix), falling back to the legacy production factory
+// when the root is nil (e.g. SA06 not yet wired or pre-bootstrap paths).
+func buildSystemOrFallback(
+	root *composition.Root,
+	path composition.CompositionPath,
+	cfg config.Config,
+	eventBus *eventbus.ChannelEventBus,
+	janusEngine *janus.Engine,
+) (*orchestrator.System, error) {
+	if root != nil {
+		return root.BuildSystem(path, eventBus, janusEngine)
+	}
+	return orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, janusEngine)
 }

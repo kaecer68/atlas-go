@@ -49,6 +49,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/orchestrator/composition"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/repository"
@@ -118,6 +119,17 @@ type DashboardAPI struct {
 	crisisModeSetter     func(active bool) // callback: VIX>=35 → optimizer crisis mode
 	correlationSetter    func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
 	crossMarketSvc       *service.CrossMarketService
+}
+
+// SetCompositionRoot wires the dashboard's shared WeightEngine into the
+// composition root so that simulation paths (SA08+) can consume the same engine.
+func (d *DashboardAPI) SetCompositionRoot(root *composition.Root) {
+	if d.industryService == nil || root == nil {
+		return
+	}
+	if d.industryService.WeightEngine != nil {
+		root.WithWeightEngine(d.industryService.WeightEngine)
+	}
 }
 
 // NewDashboardAPI creates a DashboardAPI backed by CompositeMacroProvider.

@@ -54,6 +54,9 @@ func NewIndustryService(
 	cardBuilder := industry.NewCycleStatusCardBuilder(
 		siliconTracker, cycleTracker, seasonalEngine, eventCalendar, linkageAnalyzer,
 	)
+	// SA06: WeightEngine is injected by the caller (composition root or
+	// dashboard) after construction. IndustryService no longer creates a
+	// nil-provider partial engine.
 	return &IndustryService{
 		Classifier:      classifier,
 		SeasonalEngine:  seasonalEngine,
@@ -66,12 +69,6 @@ func NewIndustryService(
 		ODMChannel:      odmChannel,
 		DataAggregator:  dataAggregator,
 		ParamsPath:      paramsPath,
-		WeightEngine: sectorallocation.NewDefaultEngine(
-			config.GetParametersConfig().SectorAllocation,
-			nil, nil, nil, nil, nil, nil,
-			config.GetParametersConfig().Darwinian.WeightMin.Value,
-			config.GetParametersConfig().Darwinian.WeightMax.Value,
-		),
 	}
 }
 
