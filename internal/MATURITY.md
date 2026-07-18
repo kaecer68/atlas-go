@@ -112,6 +112,7 @@
 | `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | Wave 11 新增；僅供 recommender + MCP token auth 內部消費 |
 | `recommender` | 投資推薦分層系統 — 依 user tier 返回不同層級推薦內容（public/registered/premium） | `Handler`, `TierRecommendation` | Wave 11 新增；消費 subscription + strategy_ranker |
 | `dailyreport` | 每日市場報告自動化 — 模板化報告生成（JSON + Markdown）、歷史 archive、郵件訂閱 | `Generator`, `Handler`, `DataProvider` | Wave 11 新增；API: /api/reports/latest + /archive + /subscribe |
+| `marketexplain` | 「為什麼漲跌」散戶市場解說 — 規則式 compose endpoint，彙整 TAIEX、資金流向、國際環境、風險提示 | `Handler`, `Explanation` | H03 新增；API: /api/market/explain |
 
 ---
 

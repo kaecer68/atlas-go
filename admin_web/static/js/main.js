@@ -39,7 +39,7 @@ export function switchPage(id, silent) {
   evolution_panel: '策略演化', experiments: '模擬交易',
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測',
-  capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質',
+  capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質', capital_history: '歷史趨勢',
   metrics: '指標監控', config: '部署配置'
 };
   document.getElementById('pageTitle').textContent = titles[id] || id;
@@ -204,9 +204,10 @@ async function loadModules() {
     import('./pages/capital-models.js'),
     import('./pages/capital-causality.js'),
     import('./pages/capital-quality.js'),
+    import('./pages/capital-history.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'evolution_panel', 'capitalModels', 'capitalCausality', 'capitalQuality'];
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'evolution_panel', 'capitalModels', 'capitalCausality', 'capitalQuality', 'capitalHistory'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -449,6 +450,9 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'capital_quality') {
     try { if (m.capitalQuality && m.capitalQuality.loadCapitalQuality) m.capitalQuality.loadCapitalQuality(); } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'capital_history') {
+    try { if (m.capitalHistory && m.capitalHistory.loadCapitalHistory) m.capitalHistory.loadCapitalHistory(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'alerts') {
     try { if (m.alerts.loadAlerts) m.alerts.loadAlerts(); } catch(e) { console.error(e); }

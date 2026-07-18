@@ -323,6 +323,53 @@ export async function renderHomeTierSections() {
       }
     });
     flowSection.appendChild(expandBtn);
+
+    // H03: "為什麼漲跌？" button — fetches /api/market/explain.
+    var explainBtn = document.createElement('button');
+    explainBtn.type = 'button';
+    explainBtn.className = 'btn btn--ghost btn--sm';
+    explainBtn.style.marginLeft = '8px';
+    explainBtn.textContent = '💡 為什麼漲跌？';
+    explainBtn.addEventListener('click', function () {
+      var explainHost = flowSection.querySelector('.market-explain');
+      if (explainHost) {
+        explainHost.style.display = explainHost.style.display === 'none' ? '' : 'none';
+        return;
+      }
+      explainHost = document.createElement('div');
+      explainHost.className = 'market-explain panel';
+      explainHost.style.cssText = 'margin-top:12px;padding:16px;line-height:1.7;';
+      explainHost.innerHTML = '<div class="loading-spinner"></div><p style="text-align:center;color:var(--muted);margin-top:8px">正在分析市場…</p>';
+      flowSection.appendChild(explainHost);
+      explainBtn.disabled = true;
+      explainBtn.textContent = '⏳ 分析中…';
+      fetch('/api/market/explain', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (exp) {
+          var html = '';
+          if (exp.headline) {
+            html += '<p style="font-size:1.1rem;font-weight:600;margin-bottom:12px">' + escapeHtml(exp.headline) + '</p>';
+          }
+          if (exp.detail) {
+            html += '<p style="white-space:pre-wrap;margin-bottom:12px">' + escapeHtml(exp.detail) + '</p>';
+          }
+          if (Array.isArray(exp.sections)) {
+            exp.sections.forEach(function (sec) {
+              html += '<details style="margin-bottom:8px" open><summary style="font-weight:600;cursor:pointer">' + escapeHtml(sec.title) + '</summary><p style="margin-top:4px;white-space:pre-wrap">' + escapeHtml(sec.body) + '</p></details>';
+            });
+          }
+          html += '<p style="font-size:11px;color:var(--muted);margin-top:8px">來源：' + escapeHtml(exp.source || 'rule_based') + '｜' + escapeHtml(exp.generated_at || '') + '</p>';
+          explainHost.innerHTML = html;
+          explainBtn.disabled = false;
+          explainBtn.textContent = '💡 為什麼漲跌？';
+        })
+        .catch(function (err) {
+          explainHost.innerHTML = '<p style="color:var(--trend-bearish)">⚠ 分析失敗：' + escapeHtml(err.message || String(err)) + '</p>';
+          explainBtn.disabled = false;
+          explainBtn.textContent = '🔄 重試';
+        });
+    });
+    flowSection.appendChild(explainBtn);
     root.appendChild(flowSection);
   }
 

@@ -1,13 +1,13 @@
 # atlas-mcp Tool Catalog
 
-> **110 tools**（預設啟用；sampling/elicitation feature-gated 全開時 112）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **111 tools**（預設啟用；sampling/elicitation feature-gated 全開時 113）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 104 + template_detector 2 + audit 4 = 110（**基礎 110**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 112；啟動期 assert ∈ [110, 112]，見 `cmd/atlas-mcp/server/server.go`）
+業務 105 + template_detector 2 + audit 4 = 111（**基礎 111**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 113；啟動期 assert ∈ [111, 113]，見 `cmd/atlas-mcp/server/server.go`）
 
-## 完整工具 Catalog（112 個 tool，其中 110 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
+## 完整工具 Catalog（113 個 tool，其中 111 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）
@@ -25,11 +25,12 @@
 | `macro_get_capital_flow_latest` | 外資/法人/散戶資金流 snapshot |
 | `macro_get_ingest_status` | 通道 ingest 狀態 |
 
-### Capital Flow（2 個）
+### Capital Flow（3 個）
 | Tool | 用途 |
 |------|------|
 | `capital_flow_daily` | 台股每日七維錢潮雷達（3+2+2 分層）分解 + 共振強度：官方法人（外資 / 投信 / 自營商）+ 行為代理（官股 / 散戶）+ 領先／跨市場訊號（期貨 / TSM ADR）。actor 共識僅計入官方actor 層；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `capital_flow_summary` | 資金流向摘要（適合晨報）；摘要敘事來自 official_actor 共識＋行為／訊號層支援 |
+| `explain_market_move` | 「為什麼漲跌」市場解說（繁體中文）。回傳大盤表現、資金面、國際環境與風險提示，適合散戶快速理解市場變動。Hermes/OpenClaw 可用此工具生成白話市場解讀 |
 
 ### Crossmarket（3 個）
 | Tool | 用途 |

@@ -102,18 +102,18 @@ fi
 
 # 3. 檢查 110 tool 散佈在至少 3 個檔案(2026-07-15 Round 2 dedup 後由 108 變 110)
 echo ""
-echo "  → Checking tool count 110 propagates to ≥ $TOOL_COUNT_MIN files..."
+echo "  → Checking tool count 111 propagates to ≥ $TOOL_COUNT_MIN files..."
 files_with_110=0
 for file in "${AUTHORITATIVE_FILES[@]}"; do
-    if [ -f "$file" ] && grep -qE "110 (個 tool|tools|tool |個 tool| tool)" "$file"; then
+    if [ -f "$file" ] && grep -qE "111 (個 tool|tools|tool |個 tool| tool)" "$file"; then
         files_with_110=$((files_with_110 + 1))
     fi
 done
 if [ "$files_with_110" -lt "$TOOL_COUNT_MIN" ]; then
-    echo "    ❌ '110 tools' only appears in $files_with_110 files (need ≥ $TOOL_COUNT_MIN)"
+    echo "    ❌ '111 tools' only appears in $files_with_110 files (need ≥ $TOOL_COUNT_MIN)"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-    echo "    ✓ '110 tools' appears in $files_with_110 files (≥ $TOOL_COUNT_MIN)"
+    echo "    ✓ '111 tools' appears in $files_with_110 files (≥ $TOOL_COUNT_MIN)"
 fi
 
 # 總結

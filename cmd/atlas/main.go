@@ -46,6 +46,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/marketexplain"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	llmHealth "github.com/kaecer68/atlas-go/internal/monitoring/api/llm"
@@ -731,6 +732,10 @@ func run(args []string, deps appDeps) error {
 			cfHandler := capitalflow.NewHandlerWithStore(macroProvider, capitalFlowStore)
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
+			mux.Handle("GET /api/capital-flow/history", apishared.Get(cfHandler.HandleHistory))
+			// H03: market explain endpoint for retail "為什麼漲跌" button.
+			explainHandler := marketexplain.NewHandler(macroProvider, capitalFlowService)
+			mux.Handle("GET /api/market/explain", apishared.Get(explainHandler.HandleExplain))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
 			// BK-15: hoist the capitalflow.Service handle so the
 			// operations_tasks capital_flow_refresh closure can call
