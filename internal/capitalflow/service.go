@@ -20,13 +20,12 @@ const QualityCacheTTL = 60 * time.Second
 
 // defaultHistoryLimit bounds how many historical samples
 // LatestDaily pulls per dimension when building the scoring
-// history. 60 matches the legacy in-memory rolling window
-// capacity. The store enforces its own capacity (typically ≥60);
-// this number is only the upper bound we ask for. Spec §10
-// H-CF-05 requires ≥252 for production calibration — that gate
-// belongs to a config-driven value once Task 5 wires the store
-// capacity surface (Capacity()) into the constructor.
-const defaultHistoryLimit = 60
+// history. Raised from 60 to 252 (one trading year) per spec §10
+// H-CF-05 walk-forward calibration gate (docs/manifests/2026-07-20-cl5-capital-flow-handlehistory.md
+// A01). The store enforces its own capacity (production main.go
+// also passes 252); this number is only the upper bound we ask
+// for and stays in sync via CF-INV-15.
+const defaultHistoryLimit = 252
 
 // Service exposes capital-flow aggregation as a callable interface
 // so downstream consumers (e.g. internal/recommender,

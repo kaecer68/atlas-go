@@ -373,10 +373,10 @@ func TestHandleHistory(t *testing.T) {
 		t.Errorf("expected 400 for days=0, got %d", codeBad)
 	}
 
-	// Query with days=999 caps to 60.
+	// Query with days=999 caps to defaultHistoryLimit (252 since A01).
 	reqCap := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history?days=999", nil)
 	codeCap, _ := h.HandleHistory(reqCap)
 	if codeCap != http.StatusOK {
-		t.Errorf("expected 200 for days=999 (capped), got %d", codeCap)
+		t.Errorf("expected 200 for days=999 (capped to %d), got %d", defaultHistoryLimit, codeCap)
 	}
 }

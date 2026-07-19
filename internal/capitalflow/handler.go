@@ -83,9 +83,11 @@ func (h *Handler) HandleSummary(r *http.Request) (int, any) {
 }
 
 // HandleHistory returns multi-day rolling samples for each capital force
-// dimension. Accepts optional `days` query param (default 60, max 60).
+// dimension. Accepts optional `days` query param (default 252, max 252;
+// raised from 60 per spec §10 H-CF-05 — A01 in
+// docs/manifests/2026-07-20-cl5-capital-flow-handlehistory.md).
 //
-//	GET /api/capital-flow/history?days=60
+//	GET /api/capital-flow/history?days=252
 //
 // Response shape:
 //
@@ -99,7 +101,7 @@ func (h *Handler) HandleSummary(r *http.Request) (int, any) {
 //	  "tsm_adr":        [...]
 //	}
 func (h *Handler) HandleHistory(r *http.Request) (int, any) {
-	days := 60
+	days := defaultHistoryLimit
 	if d := r.URL.Query().Get("days"); d != "" {
 		n, err := strconv.Atoi(d)
 		if err != nil || n <= 0 {
@@ -107,8 +109,8 @@ func (h *Handler) HandleHistory(r *http.Request) (int, any) {
 				"error": "days must be a positive integer",
 			}
 		}
-		if n > 60 {
-			n = 60
+		if n > defaultHistoryLimit {
+			n = defaultHistoryLimit
 		}
 		if n < days {
 			days = n
