@@ -192,7 +192,7 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 func fetchRegimeScore(ctx context.Context, s *server) (int, bool, bool) {
 	var raw struct {
 		Score       float64 `json:"score"`
-		IsSynthetic bool     `json:"is_synthetic"`
+		IsSynthetic bool    `json:"is_synthetic"`
 	}
 	if err := s.cli.Get(ctx, "/api/janus/regime-score", nil, &raw); err != nil {
 		return 0, false, false

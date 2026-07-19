@@ -87,16 +87,16 @@
 
 | ID | Problem | Root Cause | Files | Acceptance | Status | Docs Impact | Notes |
 |----|---------|-----------|-------|------------|--------|-------------|-------|
-| **A01** | `PipelineService.LoadRegimeHistory` 讀 filesystem sessions 而非 SQLite regime_history | `service.go:1073` 用 `store.LoadSessionSummaries()`；service 沒有 HistoricalStore 注入 | `internal/monitoring/service/pipeline.go`：PipelineService struct 加 `historicalStore ledger.HistoricalStore` field；加 `WithHistoricalStore(hs) *PipelineService` builder；`LoadRegimeHistory` 改為優先用 `historicalStore.LoadRegimeHistory(limit)`，若 hs==nil fallback 到 `LoadSessionSummaries`（向後相容） | (1) `go build ./...` 全綠；(2) 既有 `TestLoadRegimeHistory_*` 全綠（向後相容 hs=nil 路徑）；(3) 新增 `TestLoadRegimeHistory_HistoricalStore_OK` PASS；(4) `go vet ./internal/monitoring/service/...` clean | pending | spec §18.6 新章節「Historical Regime Observation Store wiring」 | nil-safe fallback 保證既有 43 個 test 不破壞 |
-| **A02** | 既有 prod callers 不傳 HistoricalStore | `cmd/atlas/stage3_tasks.go:51` + `internal/monitoring/dashboard_api.go:637` | chain `.WithHistoricalStore(historicalStore)` | (1) `go build ./...` 全綠；(2) 既有 handler 測試 PASS；(3) integration: GET `/api/dashboard/regime-history?limit=30` 回 sessions 真實 regime（不是 simulation session metadata） | pending | 無 | 2 個 prod caller 修改 |
-| **A03** | `cmd/atlas/main.go:678-680` HistoricalStore 沒注入 SystemCore / PipelineService | main.go 已 init HistoricalStore 但丟棄（`_ = historicalStore`） | `cmd/atlas/main.go`：找到 `PipelineService` 的 wire 點，傳入 historicalStore | (1) main.go build OK；(2) 不再有 `_ = historicalStore` 丟棄 pattern | pending | 無 | 同一 PR 內順手補 |
+| **A01** | `PipelineService.LoadRegimeHistory` 讀 filesystem sessions 而非 SQLite regime_history | `service.go:1073` 用 `store.LoadSessionSummaries()`；service 沒有 HistoricalStore 注入 | `internal/monitoring/service/pipeline.go`：PipelineService struct 加 `historicalStore ledger.HistoricalStore` field；加 `WithHistoricalStore(hs) *PipelineService` builder；`LoadRegimeHistory` 改為優先用 `historicalStore.LoadRegimeHistory(limit)`，若 hs==nil fallback 到 `LoadSessionSummaries`（向後相容） | (1) `go build ./...` 全綠；(2) 既有 `TestLoadRegimeHistory_*` 全綠（向後相容 hs=nil 路徑）；(3) 新增 `TestLoadRegimeHistory_HistoricalStore_OK` PASS；(4) `go vet ./internal/monitoring/service/...` clean | done | spec §18.6 新章節「Historical Regime Observation Store wiring」 | nil-safe fallback 保證既有 43 個 test 不破壞 | commit `5727bba2` |
+| **A02** | 既有 prod callers 不傳 HistoricalStore | `cmd/atlas/stage3_tasks.go:51` + `internal/monitoring/dashboard_api.go:637` | chain `.WithHistoricalStore(historicalStore)` | (1) `go build ./...` 全綠；(2) 既有 handler 測試 PASS；(3) integration: GET `/api/dashboard/regime-history?limit=30` 回 sessions 真實 regime（不是 simulation session metadata） | done | 無 | 2 個 prod caller 修改 | commit `8c01a43b` |
+| **A03** | `cmd/atlas/main.go:678-680` HistoricalStore 沒注入 SystemCore / PipelineService | main.go 已 init HistoricalStore 但丟棄（`_ = historicalStore`） | `cmd/atlas/main.go`：找到 `PipelineService` 的 wire 點，傳入 historicalStore | (1) main.go build OK；(2) 不再有 `_ = historicalStore` 丟棄 pattern | done | 無 | 同一 PR 內順手補 | commit `8c01a43b` |
 
 ### 線 B：新增 `/api/janus/regime-score` endpoint + 修 MCP wrapper
 
 | ID | Problem | Root Cause | Files | Acceptance | Status | Docs Impact | Notes |
 |----|---------|-----------|-------|------------|--------|-------------|-------|
-| **B01** | `/api/janus/regime-score` endpoint 不存在；`fetchRegimeRealScore` 永遠 404 fallback | janus engine 純 in-memory，沒 HTTP handler framework；MCP wrapper 假設存在 | `cmd/atlas/main.go`：加 inline handler 呼叫 `janusEngine.GetCurrentRegimeScore()` 回 `{score, is_synthetic}`；route 註冊 `/api/janus/regime-score` | (1) `go build ./...` 全綠；(2) `curl /api/janus/regime-score` 回 200 + JSON；(3) `is_synthetic=true` 當 PRISM training 沒 populate；(4) `cmd/atlas-mcp` 測試全綠 | pending | spec §18.6 加新 sub-section `/api/janus/regime-score` 契約 | main.go ad-hoc handler，與既有 janus wiring 風格一致 |
-| **B02** | MCP `fetchRegimeCompositeScore` 公式 `/5` 與 janus canonical `/5e9` 不一致 | tools.go:225 hardcoded `/5` | `cmd/atlas-mcp/server/tools.go`：刪除 `fetchRegimeCompositeScore`（公式錯誤 + 與 janus 重複實作）；`fetchRegimeRealScore` 改 URL 驗證 + `is_synthetic` field 帶入 | (1) `go build ./...` 全綠；(2) `TestHandleMacroGetRegimeHistory_*` 改 mock response 含 `is_synthetic` 後仍 PASS；(3) score 與 janus engine 一致 | pending | spec §18.6 加公式一致性 note | 刪除重複實作，避免日後 drift |
+| **B01** | `/api/janus/regime-score` endpoint 不存在；`fetchRegimeRealScore` 永遠 404 fallback | janus engine 純 in-memory，沒 HTTP handler framework；MCP wrapper 假設存在 | `cmd/atlas/main.go`：加 inline handler 呼叫 `janusEngine.GetCurrentRegimeScore()` 回 `{score, is_synthetic}`；route 註冊 `/api/janus/regime-score` | (1) `go build ./...` 全綠；(2) `curl /api/janus/regime-score` 回 200 + JSON；(3) `is_synthetic=true` 當 PRISM training 沒 populate；(4) `cmd/atlas-mcp` 測試全綠 | done | spec §18.6 加新 sub-section `/api/janus/regime-score` 契約 | main.go ad-hoc handler，與既有 janus wiring 風格一致 | commit `c0fa44eb` |
+| **B02** | MCP `fetchRegimeCompositeScore` 公式 `/5` 與 janus canonical `/5e9` 不一致 | tools.go:225 hardcoded `/5` | `cmd/atlas-mcp/server/tools.go`：刪除 `fetchRegimeCompositeScore`（公式錯誤 + 與 janus 重複實作）；`fetchRegimeRealScore` 改 URL 驗證 + `is_synthetic` field 帶入 | (1) `go build ./...` 全綠；(2) `TestHandleMacroGetRegimeHistory_*` 改 mock response 含 `is_synthetic` 後仍 PASS；(3) score 與 janus engine 一致 | done | spec §18.6 加公式一致性 note | 刪除重複實作，避免日後 drift | commit `06a11466` |
 
 ### 線 C：Stage4 backfill → runtime writer（**不做**，入 Backlog）
 
@@ -192,12 +192,14 @@ PR body 必須引用：`See docs/manifests/2026-07-20-cl3-regime-history.md`
 
 - **Done this session**:
   - Phase A 真相盤查（wiki-vs-reality 揭露）
-  - Phase B manifest 撰寫（本文件）
+  - Phase B manifest 撰寫（commit `9f203573`）
+  - Phase C 程式實作（A01 commit `5727bba2` + A02+A03 commit `8c01a43b` + B01 commit `c0fa44eb` + B02 commit `06a11466`）
+  - Pre-change protocol Step 0-7（CRITICAL blast radius via WithHistoricalStore builder pattern 緩解）
+  - gofmt + go vet + 9 個 TestRegimeGetHistory 全綠 + LoadRegimeHistory 100% coverage
 - **Remaining**:
-  1. Spec 擴充 §18.6
-  2. Phase C 程式實作（A01-A03 + B01-B02）
-  3. Phase D close out
-- **Branch / PR**: `feat/cl3-regime-history` / 未開 PR
+  1. Phase D close out（push + PR + CI 綠 + merge + cleanup）
+- **Uncommitted code**: none
+- **Branch / PR**: `feat/cl3-regime-history` / 未開 PR（5 commits ahead of main）
 - **Worktree**: `.worktrees/feat-cl3-regime-history`（965dd399 base）
 
 ---
