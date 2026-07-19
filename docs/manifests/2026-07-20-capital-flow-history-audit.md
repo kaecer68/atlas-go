@@ -137,7 +137,7 @@ PR body 必須引用：`See docs/manifests/2026-07-20-capital-flow-history-audit
 
 | ID | Problem | Discovery Time | Proposed Round |
 |----|---------|----------------|----------------|
-| **BL-CL2** | `/api/macro/snapshot/history` 只有 `?date=` 單日查詢；底層 `data/state/macro/` 有 80+ dated snapshot 但無時序 API | 2026-07-20 | 下一輪（需先建 spec `docs/specs/macro-snapshot-history-spec.md`） |
+| **BL-CL2** | `/api/macro/snapshot/history` 只有 `?date=` 單日查詢；底層 `data/state/macro/` 有 80+ dated snapshot 但無時序 API | 2026-07-20 | 下一輪（需先建對應 spec 檔） |
 | **BL-CL3** | `regime_get_history` 回 simulation session 摘要 + 複製當下 score，非時序；缺 `RegimeObservationStore` infra | 2026-07-20 | 待 JANUS 6h 排程與新 store infra 評估 |
 | **BL-CL4** | `universe_get_sessions` 只回 session metadata，不含 per-strategy 5 主體力值 | 2026-07-20 | 評估 drill-down session endpoint 是否值得建 |
 | **BL-CL5** | HandleHistory 對缺失 dimension（如 government 早期資料）目前 silent omission；spec §14 + CF-INV-17 已寫，**程式實作**待補 | 2026-07-20 | A01+A03 後下一輪 |
