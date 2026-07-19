@@ -80,6 +80,7 @@ func TestMacroHandlers_SnapshotAndFlowEndpoints(t *testing.T) {
 	}{
 		{"latest", "/api/macro/snapshot/latest", h.HandleMacroSnapshotLatest},
 		{"history", "/api/macro/snapshot/history?date=2026-06-14", h.HandleMacroSnapshotHistory},
+		{"timeline", "/api/macro/snapshot/timeline?days=30", h.HandleMacroSnapshotTimeline},
 		{"capital_flow", "/api/macro/capital-flow/latest", h.HandleCapitalFlowLatest},
 		{"stress", "/api/taiwan/stress-index", h.HandleTaiwanStressIndex},
 		{"health", "/api/dashboard/macro-data-health", h.HandleMacroDataHealth},
@@ -113,6 +114,57 @@ func TestHandleMacroSnapshotHistory_ValidationErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			status, body := h.HandleMacroSnapshotHistory(req)
+			if status != tc.want {
+				t.Fatalf("status = %d, want %d (body=%v)", status, tc.want, body)
+			}
+		})
+	}
+}
+
+func TestHandleMacroSnapshotTimeline_OK(t *testing.T) {
+	h := &Handlers{Service: newMacroServiceWithSnapshot(t, testMacroSnapshot())}
+	req := httptest.NewRequest(http.MethodGet, "/api/macro/snapshot/timeline?from=2026-06-01&to=2026-06-30", nil)
+	status, body := h.HandleMacroSnapshotTimeline(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%v)", status, body)
+	}
+	resp, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map response, got %T", body)
+	}
+	for _, key := range []string{"snapshots", "range", "capacity_limit_hit", "missing_dates", "stats"} {
+		if _, exists := resp[key]; !exists {
+			t.Errorf("response missing key %q", key)
+		}
+	}
+	snapshots, ok := resp["snapshots"].([]service.TimelineEntry)
+	if !ok {
+		t.Fatalf("expected []TimelineEntry, got %T", resp["snapshots"])
+	}
+	if len(snapshots) != 1 {
+		t.Errorf("expected 1 snapshot from helper fixture, got %d", len(snapshots))
+	}
+}
+
+func TestHandleMacroSnapshotTimeline_BadDateParams(t *testing.T) {
+	h := &Handlers{Service: newMacroServiceWithSnapshot(t, testMacroSnapshot())}
+	cases := []struct {
+		name string
+		path string
+		want int
+	}{
+		{"days_zero", "/api/macro/snapshot/timeline?days=0", http.StatusBadRequest},
+		{"days_negative", "/api/macro/snapshot/timeline?days=-5", http.StatusBadRequest},
+		{"days_too_large", "/api/macro/snapshot/timeline?days=400", http.StatusBadRequest},
+		{"days_non_int", "/api/macro/snapshot/timeline?days=abc", http.StatusBadRequest},
+		{"from_days_mutual_excl", "/api/macro/snapshot/timeline?from=2026-04-21&days=10", http.StatusBadRequest},
+		{"from_after_to", "/api/macro/snapshot/timeline?from=2026-07-20&to=2026-04-21", http.StatusBadRequest},
+		{"from_invalid_format", "/api/macro/snapshot/timeline?from=20260421", http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			status, body := h.HandleMacroSnapshotTimeline(req)
 			if status != tc.want {
 				t.Fatalf("status = %d, want %d (body=%v)", status, tc.want, body)
 			}

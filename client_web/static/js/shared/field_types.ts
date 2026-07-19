@@ -3962,6 +3962,13 @@ export interface TierRecommendation {
   warning?: string;
 }
 
+export interface TimelineEntry {
+  trading_date: string;
+  recorded_at: number;
+  snapshot: MacroDataSnapshot | null;
+  source_status: string;
+}
+
 export interface TimelineEvent {
   at: string;
   kind: string;

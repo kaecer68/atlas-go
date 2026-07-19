@@ -79,7 +79,7 @@ func (s *server) handleMacroGetSnapshotHistory(ctx context.Context, _ *mcp.CallT
 	q := url.Values{"days": {fmt.Sprintf("%d", days)}}
 	var out macroBaseOutput
 	if err := s.withAudit(ctx, "macro_get_snapshot_history", []string{"days"}, func() error {
-		return s.cli.Get(ctx, "/api/macro/snapshot/history", q, &out.Result)
+		return s.cli.Get(ctx, "/api/macro/snapshot/timeline", q, &out.Result)
 	}); err != nil {
 		return nil, macroBaseOutput{}, err
 	}
