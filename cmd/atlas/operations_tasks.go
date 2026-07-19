@@ -365,17 +365,8 @@ func registerOperationsTasks(d operationsDeps) {
 			Interval: 5 * time.Minute,
 			Enabled:  true,
 			Task: func(ctx context.Context) error {
-				// BK-15: call Refresh(ctx, tradingDate) — the only
-				// writer to the shared RollingSampleStore. The
-				// scheduler hands us a bare context (no trading
-				// date), so derive the current trading date here
-				// from Asia/Taipei and roll back across weekends
-				// and before the post-close cutoff. Tasks running
-				// after 15:30 Taipei attribute the snapshot to
-				// today's date; earlier ticks attribute to the
-				// previous weekday's settled close.
-				tradingDate := currentTaipeiTradingDate(time.Now())
-				if err := d.capitalFlow.Refresh(ctx, tradingDate); err != nil {
+				// Refresh derives its trading-date key from snap.RecordedAt (CF-INV-15).
+				if err := d.capitalFlow.Refresh(ctx); err != nil {
 					return fmt.Errorf("capital_flow_refresh: %w", err)
 				}
 				return nil

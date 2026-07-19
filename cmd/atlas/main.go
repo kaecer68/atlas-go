@@ -730,7 +730,7 @@ func run(args []string, deps appDeps) error {
 			// refresh closure so the date-keyed window is identical
 			// across all consumers.
 			capitalFlowStore = capitalflow.NewFileRollingSampleStore(filepath.Join(cfg.LedgerDir, "capital_flow_rolling.json"), 60)
-			cfHandler := capitalflow.NewHandlerWithStore(macroProvider, capitalFlowStore)
+			cfHandler := capitalflow.NewHandlerWithStore(macroProvider, capitalFlowStore, eventCalendar)
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			mux.Handle("GET /api/capital-flow/history", apishared.Get(cfHandler.HandleHistory))

@@ -352,6 +352,9 @@ main branch 的 E05 欄位存在但活體未輸出。E06 驗收必須記錄 runt
 | `CF-INV-12` | runtime binary version 必須可與部署 commit 對帳 | health endpoint / deployment check |
 | `CF-INV-13` | 未驗證假設只能標示 calibrating，不影響自動策略 | orchestrator feature-gate test |
 | `CF-INV-14` | F05 只消費穩定 `CapitalFlowAssessment`，不直接解讀七筆 raw force | dependency / integration test |
+| `CF-INV-15` | rolling sample 的 `TradingDate` 必須由 snapshot 自身 `RecordedAt` 推導（Asia/Taipei YYYY-MM-DD），不得由 caller wall-clock 推導；避免 cutoff + last-write-wins 覆寫陷阱 | unit test: stub RecordedAt 強制驗證 key |
+| `CF-INV-16` | 非交易日（週末／國定假日）Refresh 必須 skip-and-log，不寫入空樣本、不拋 error；nil calendar 視為交易日但記 warn | unit test: Saturday + IsTaiwanTradingDay → 0 samples |
+| `CF-INV-17` | 歷史時間序列 API（如 `/api/capital-flow/historical-snapshot/{date}`）必須對未涵蓋日期回傳 `status: missing` 或 HTTP 404，不得補 0 假資料 | contract test + 端對端 probe |
 
 ---
 
@@ -436,3 +439,44 @@ main branch 的 E05 欄位存在但活體未輸出。E06 驗收必須記錄 runt
 - 歷史文件、活體輸出與規範文件的權威層級已明定。
 - 官股名單矛盾被明確隔離，未猜測填補。
 - E06、F05、F06 的依賴順序與 invariant 可直接轉成 implementation plan。
+
+---
+
+## 18. Historical Timeline & Recording Semantics
+
+本章補齊 CL-1（cutoff 覆寫 bug）與 CL-6（recorded_at 語意）對應的契約，作為後續 `/api/capital-flow/historical-snapshot/*` 與 `/api/macro/snapshot/history?days=N` 的設計基礎。
+
+### 18.1 Trading-Date Key 必須 data-driven（CF-INV-15）
+
+`RollingSample.TradingDate` 欄位的決定者為 snapshot 自身的 `RecordedAt`（converted to Asia/Taipei `YYYY-MM-DD`），不得由呼叫端的 wall-clock 或排程時間推導。
+
+理由：caller-driven keying 與 `applyUpsert` last-write-wins 互動時，會形成「cutoff 之前的所有 tick 把同一個 slot 重寫 N 次」的陷阱（已於 2026-07-19 立案 CL-1 證實）。data-driven keying 保證冪等性：同一天資料的任何次數呼叫，最終只留下一筆。
+
+### 18.2 非交易日 Skip-and-Log（CF-INV-16）
+
+Refresh 在寫入前必須檢查 `eventCalendar.IsTaiwanTradingDay(recordTime)`：
+
+- **是交易日**：走原 UpsertDay 流程。
+- **非交易日**：log info 等級的 `skip_non_trading_day` 訊息後 `return nil`。不寫入空樣本（CF-INV-06），不拋 error（避免吵雜 retry）。
+- **nil calendar**：log warn 等級的 `refresh_no_calendar` 訊息後視為交易日繼續寫入。Nil calendar 不會 panic，目的是讓測試環境與錯誤 wiring 不會阻斷 hot path，但 observability 必須暴露這個退化。
+
+### 18.3 Historical Snapshot API 契約（CF-INV-17，未實作）
+
+未來 `/api/capital-flow/historical-snapshot/{trading_date}` 端點必須遵守：
+
+- **Response 結構**：`{trading_date, status, dimensions: {<force>: {raw_value, unit, source_id, data_available} | null}, missing_reason?: string}`
+- **`status` 枚舉**：`"complete"`（七維度全有）｜`"partial"`（部分維度有資料）｜`"missing"`（當日無資料或非交易日）
+- **HTTP 狀態碼**：`200` 不論 status（status 在 body 內）；未來實作時禁止用 404 偽裝 missing。
+- **缺資料語意**：對 `data_available=false` 的維度（如 government 早期 2018 前資料）回 `null` + `"data_available": false`，禁止補 0。
+
+### 18.4 RecordedAt vs filename date 語意分離（CL-6 對應）
+
+兩個欄位**不應混用**：
+
+- **`filename date`**（如 `data/state/macro/2026-07-15.json`）：provider 命名 snapshot 時的「資料所屬日期」。
+- **`recorded_at`**（Unix int64）：provider 真正拉到資料的時間戳，可能晚於 filename date（cache 回填、batch ingest 補資料）。
+
+前端與 agent 必須明確知道：
+- 「今天的收盤資料」對應 `filename date = today, recorded_at = today 14:30+`。
+- 「昨天的歷史回填」對應 `filename date = yesterday, recorded_at = today`。
+- 任何 T+1 retrospective 必須以 `filename date` 對齊到該日的結論，不可僅依賴 `recorded_at`。

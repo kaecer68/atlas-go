@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -25,19 +26,23 @@ type Handler struct {
 // Service with an in-memory rolling store (capacity
 // defaultHistoryLimit). Callers that need a persistent rolling
 // store should use NewHandlerWithStore directly; that is the
-// wiring Task 5 will adopt in cmd/atlas/main.go.
+// wiring Task 5 will adopt in cmd/atlas/main.go. The calendar
+// is nil here — handler-only test paths do not invoke Refresh.
 func NewHandler(provider marketdata.MacroDataProvider) *Handler {
-	return &Handler{service: NewService(provider, 0)}
+	return &Handler{service: NewService(provider, 0, nil)}
 }
 
-// NewHandlerWithStore wires a custom rolling sample store into
-// the Service underlying this handler. The store is what Refresh
-// writes to and what LatestDaily / Summary read from for the
-// rolling-history Z-score window. Production callers (Task 5
-// wiring in cmd/atlas/main.go) pass a FileRollingSampleStore
-// here so the window survives process restart (spec §8.5).
-func NewHandlerWithStore(provider marketdata.MacroDataProvider, store RollingSampleStore) *Handler {
-	return &Handler{service: NewServiceWithStore(provider, 0, store)}
+// NewHandlerWithStore wires a custom rolling sample store and
+// the shared trading-day calendar into the Service underlying
+// this handler. The store is what Refresh writes to and what
+// LatestDaily / Summary read from for the rolling-history Z-score
+// window. Production callers (cmd/atlas/main.go:733) pass a
+// FileRollingSampleStore and the shared *industry.EventCalendar
+// instance so the window survives process restart (spec §8.5)
+// and Refresh's non-trading-day skip-and-log guard (CF-INV-16)
+// is active.
+func NewHandlerWithStore(provider marketdata.MacroDataProvider, store RollingSampleStore, cal *industry.EventCalendar) *Handler {
+	return &Handler{service: NewServiceWithStore(provider, 0, store, cal)}
 }
 
 func ServiceFromHandler(h *Handler) *Service { return h.service }
