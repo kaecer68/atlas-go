@@ -32,8 +32,8 @@ func TestHandleMacroGetSnapshotHistory_DefaultDays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if rec.path != "/api/macro/snapshot/history" {
-		t.Fatalf("path=%s", rec.path)
+	if rec.path != "/api/macro/snapshot/timeline" {
+		t.Fatalf("path=%s, want /api/macro/snapshot/timeline (A02 fix: wrapper must point to timeline endpoint, not history)", rec.path)
 	}
 	if rec.query.Get("days") != "30" {
 		t.Fatalf("expected days=30 default, got %q", rec.query.Get("days"))
@@ -47,6 +47,9 @@ func TestHandleMacroGetSnapshotHistory_ClampedTo365(t *testing.T) {
 	_, _, err := s.handleMacroGetSnapshotHistory(context.Background(), nil, macroSnapshotHistoryInput{Days: 9999})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/macro/snapshot/timeline" {
+		t.Fatalf("path=%s, want /api/macro/snapshot/timeline", rec.path)
 	}
 	if got := rec.query.Get("days"); got != "365" {
 		t.Fatalf("expected days=365 clamp, got %q", got)

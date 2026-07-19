@@ -7,6 +7,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,6 +81,120 @@ func (s *MacroService) GetSnapshotByDate(date string) (*marketdata.MacroDataSnap
 		return nil, err
 	}
 	return &snap, nil
+}
+
+// TimelineEntry is one slot in a macro snapshot timeline response.
+//
+// Per CF-MS-01 / CF-MS-04:
+//   - TradingDate is the snapshot filename date (data's date).
+//   - Snapshot is nil when the file is missing/corrupt (NOT zero-patched).
+//   - RecordedAt is the provider's recorded_at (Unix seconds; may lag
+//     TradingDate by 1-3 days for weekend/holiday ingestion).
+//   - SourceStatus reflects whether Snapshot is usable.
+type TimelineEntry struct {
+	TradingDate  string                        `json:"trading_date"`
+	RecordedAt   int64                         `json:"recorded_at"`
+	Snapshot     *marketdata.MacroDataSnapshot `json:"snapshot"`
+	SourceStatus string                        `json:"source_status"`
+}
+
+// datedSnapshotPattern matches YYYY-MM-DD.json files (excludes latest.json,
+// previous.json, _metadata.json and any non-date JSON files).
+var datedSnapshotPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}\.json$`)
+
+// ListSnapshotsInRange reads dated snapshot files from SnapshotDir()
+// between `from` and `to` (inclusive, YYYY-MM-DD format). Returns snapshots
+// in trading_date ascending order.
+//
+// Behavior (per CF-MS-01/02/03/04):
+//   - Missing/corrupt files are skipped (NOT patched with zero values);
+//     their dates are reported in MissingDates.
+//   - `limit` caps the response size; if the requested range exceeds limit,
+//     capacityLimitHit=true and the response includes only the most recent
+//     `limit` snapshots.
+//   - limit <= 0 → default 30. limit > 365 → cap at 365 (CF-MS-02).
+//   - Empty from/to: from ""  → no lower bound; to ""  → today (UTC).
+//   - Only returns error on SnapshotDir unreadable; per-file errors are
+//     swallowed per CF-MS-03.
+//   - latest.json / previous.json / _metadata.json are NEVER included
+//     even if their names were to match the pattern (defense in depth).
+func (s *MacroService) ListSnapshotsInRange(
+	ctx context.Context, from, to string, limit int,
+) (snapshots []TimelineEntry, missingDates []string, capacityLimitHit bool, err error) {
+	if limit <= 0 {
+		limit = 30
+	}
+	if limit > 365 {
+		limit = 365
+	}
+
+	snapDir := s.MacroIngestor.SnapshotDir()
+	entries, err := os.ReadDir(snapDir)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("read snapshot dir %q: %w", snapDir, err)
+	}
+
+	// Default `to` to today (UTC) if empty
+	if to == "" {
+		to = time.Now().UTC().Format("2006-01-02")
+	}
+
+	var datedFiles []string
+	for _, e := range entries {
+		name := e.Name()
+		if !datedSnapshotPattern.MatchString(name) {
+			continue
+		}
+		date := strings.TrimSuffix(name, ".json")
+		if from != "" && date < from {
+			continue
+		}
+		if date > to {
+			continue
+		}
+		datedFiles = append(datedFiles, name)
+	}
+	sort.Strings(datedFiles)
+
+	// CF-MS-02: capacity clamp keeps the most recent `limit` files
+	if len(datedFiles) > limit {
+		datedFiles = datedFiles[len(datedFiles)-limit:]
+		capacityLimitHit = true
+	}
+
+	for _, name := range datedFiles {
+		date := strings.TrimSuffix(name, ".json")
+		path := filepath.Join(snapDir, name)
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			missingDates = append(missingDates, date)
+			continue
+		}
+		var snap marketdata.MacroDataSnapshot
+		if unmarshalErr := json.Unmarshal(data, &snap); unmarshalErr != nil {
+			missingDates = append(missingDates, date)
+			continue
+		}
+		if snap.RecordedAt == 0 {
+			// CF-MS-01: corrupt/missing data must NOT be patched with zero values
+			missingDates = append(missingDates, date)
+			snapshots = append(snapshots, TimelineEntry{
+				TradingDate:  date,
+				RecordedAt:   0,
+				Snapshot:     nil,
+				SourceStatus: "missing",
+			})
+			continue
+		}
+		snapshots = append(snapshots, TimelineEntry{
+			TradingDate:  date,
+			RecordedAt:   snap.RecordedAt,
+			Snapshot:     &snap,
+			SourceStatus: "complete",
+		})
+	}
+
+	return snapshots, missingDates, capacityLimitHit, nil
 }
 
 func (s *MacroService) GetCapitalFlow() (*marketdata.MacroDataSnapshot, error) {
