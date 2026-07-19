@@ -76,23 +76,23 @@
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance | Status | Docs Impact | Notes |
 |----|---------|----------------------|-----------------|-------------|--------|-------------|-------|
-| **A1** | `HandleSessions` 只回 4 個 metadata fields，缺 per-strategy 摘要 | `internal/monitoring/api/pipeline/handlers.go:386-389` 過度精簡 handler map | `internal/monitoring/service/pipeline.go`：新增 `LoadSessionsWithTopStrategies(limit, topN int) ([]SessionMeta, error)` 呼叫 `LoadSessions` + 對每個 session 呼叫 `LoadSessionOutcomes` 排序取 top N + `internal/monitoring/api/pipeline/handlers.go`：`HandleSessions` map 加 `top_strategies` 欄位 | (1) `go build ./...` 全綠；(2) 既有 `LoadSessions` caller 不破壞（4 fields 仍回）；(3) 新增 `TestLoadSessionsWithTopStrategies_IncludesTopPerSession` PASS；(4) 新增 `TestHandleSessions_IncludesTopStrategies` PASS；(5) live atlas-mcp MCP call 仍 work | pending | spec §18.7 新章節 | nil-safe via `TopStrategies []RecommendationOutcome` field on SessionMeta |
-| **A2** | SessionMeta 沒 `TopStrategies` 欄位 | struct 設計時未含 per-strategy aggregation | `internal/monitoring/service/pipeline.go`：SessionMeta struct 加 `TopStrategies []domain.RecommendationOutcome` 欄位（nil when not requested） | (1) compile 通過；(2) 既有 `LoadSessions` 不傳值 → nil → 既有 caller 不受影響 | pending | 無 | nil-safe via 既有 caller 不寫此欄位 |
+| **A1** | `HandleSessions` 只回 4 個 metadata fields，缺 per-strategy 摘要 | `internal/monitoring/api/pipeline/handlers.go:386-389` 過度精簡 handler map | `internal/monitoring/service/pipeline.go`：新增 `LoadSessionsWithTopStrategies(limit, topN int) ([]SessionMeta, error)` 呼叫 `LoadSessions` + 對每個 session 呼叫 `LoadSessionOutcomes` 排序取 top N + `internal/monitoring/api/pipeline/handlers.go`：`HandleSessions` map 加 `top_strategies` 欄位 | (1) `go build ./...` 全綠；(2) 既有 `LoadSessions` caller 不破壞（4 fields 仍回）；(3) 新增 `TestLoadSessionsWithTopStrategies_IncludesTopPerSession` PASS；(4) 新增 `TestHandleSessions_IncludesTopStrategies` PASS；(5) live atlas-mcp MCP call 仍 work | done | spec §18.7 新章節 | nil-safe via `TopStrategies []RecommendationOutcome` field on SessionMeta | commit `A1+A2` |
+| **A2** | SessionMeta 沒 `TopStrategies` 欄位 | struct 設計時未含 per-strategy aggregation | `internal/monitoring/service/pipeline.go`：SessionMeta struct 加 `TopStrategies []domain.RecommendationOutcome` 欄位（nil when not requested） | (1) compile 通過；(2) 既有 `LoadSessions` 不傳值 → nil → 既有 caller 不受影響 | done | 無 | nil-safe via 既有 caller 不寫此欄位 | commit `A1+A2` |
 
 ### 線 B：drill-down endpoint + MCP tool
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance | Status | Docs Impact | Notes |
 |----|---------|----------------------|-----------------|-------------|--------|-------------|-------|
-| **B1** | 沒有 `/api/dashboard/sessions/{id}` HTTP endpoint | `HandleSessionDetail` handler 從未寫 | `internal/monitoring/api/pipeline/handlers.go`：新增 `HandleSessionDetail(r *http.Request) (int, any)` + `RegisterRoutes` 加 `mux.Handle("GET /api/dashboard/sessions/{id}", shared.Get(h.HandleSessionDetail))` | (1) compile 全綠；(2) `TestHandleSessionDetail_OK` PASS（mock LoadSessionOutcomes 回 fixed outcomes）；(3) `TestHandleSessionDetail_NotFound` PASS（sessionID 不存在 → 404）；(4) `isPublicPath` 加 `/api/dashboard/sessions/{` prefix case + `authFreePrefixPaths` 加 `/api/dashboard/sessions/` | pending | spec §18.7 B sub-section | 既有 `LoadSessionOutcomes` 直接呼叫（不重複） |
-| **B2** | MCP 無 per-session detail tool | wrapper 沒寫 | `cmd/atlas-mcp/server/tools_data_universe.go`：新增 `handleUniverseGetSessionDetail(ctx, req, input)` + `UniverseGetSessionDetailInput{SessionID string}` + 在 `registerDataUniverseTools` 加 `countedAddTool("universe_get_session_detail", ...)` | (1) compile 全綠；(2) `TestHandleUniverseGetSessionDetail_OK` PASS；(3) MCP tool count 不破壞（AGENTS.md 108-110 assert 仍通過） | pending | spec §18.7 B sub-section | 同 file 新增 handler + tool 註冊，2 sub-50 lines each |
+| **B1** | 沒有 `/api/dashboard/sessions/{id}` HTTP endpoint | `HandleSessionDetail` handler 從未寫 | `internal/monitoring/api/pipeline/handlers.go`：新增 `HandleSessionDetail(r *http.Request) (int, any)` + `RegisterRoutes` 加 `mux.Handle("GET /api/dashboard/sessions/{id}", shared.Get(h.HandleSessionDetail))` | (1) compile 全綠；(2) `TestHandleSessionDetail_OK` PASS（mock LoadSessionOutcomes 回 fixed outcomes）；(3) `TestHandleSessionDetail_NotFound` PASS（sessionID 不存在 → 404）；(4) `isPublicPath` 加 `/api/dashboard/sessions/{` prefix case + `authFreePrefixPaths` 加 `/api/dashboard/sessions/` | done | spec §18.7 B sub-section | 既有 `LoadSessionOutcomes` 直接呼叫（不重複） | commit `B1` |
+| **B2** | MCP 無 per-session detail tool | wrapper 沒寫 | `cmd/atlas-mcp/server/tools_data_universe.go`：新增 `handleUniverseGetSessionDetail(ctx, req, input)` + `UniverseGetSessionDetailInput{SessionID string}` + 在 `registerDataUniverseTools` 加 `countedAddTool("universe_get_session_detail", ...)` | (1) compile 全綠；(2) `TestHandleUniverseGetSessionDetail_OK` PASS；(3) MCP tool count 不破壞（AGENTS.md 108-110 assert 仍通過） | done | spec §18.7 B sub-section | 同 file 新增 handler + tool 註冊，2 sub-50 lines each | commit `B2` |
 
 ### 線 C：Test + docs（合約驗證）
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance | Status | Docs Impact | Notes |
 |----|---------|----------------------|-----------------|-------------|--------|-------------|-------|
-| **C1** | 既有 `TestHandleSessions` 不存在 | 從未寫 | `internal/monitoring/api/pipeline/handlers_test.go`：新增 `TestHandleSessions_OK`（驗 4 個既有 fields + 5th `top_strategies` 欄位）+ `TestHandleSessions_EmptyStore` | (1) test PASS；(2) 確認既有用法（MCP wrapper 從 response 讀 4 個 fields）仍 work | pending | 無 | 補既有測試缺口 |
-| **C2** | 既有 `TestHandleUniverseGetSessions_OK` 只驗 path | mock 過於鬆散 | `cmd/atlas-mcp/server/tools_data_universe_test.go`：增強 mock response 含 `top_strategies` 欄位 | (1) test PASS；(2) MCP path assertion 仍 work | pending | 無 | optional enhancement |
-| **C3** | spec §18.7 缺 Session List + Detail 契約 | 缺 | `docs/specs/capital-flow-seven-dimension-spec.md` §18.7 新章節 | markdown link check PASS | pending | 無 | spec 擴充（與 CL-5/CL-3 一致 pattern） |
+| **C1** | 既有 `TestHandleSessions` 不存在 | 從未寫 | `internal/monitoring/api/pipeline/handlers_test.go`：新增 `TestHandleSessions_OK`（驗 4 個既有 fields + 5th `top_strategies` 欄位）+ `TestHandleSessions_EmptyStore` | (1) test PASS；(2) 確認既有用法（MCP wrapper 從 response 讀 4 個 fields）仍 work | done | 無 | 補既有測試缺口 | commit `C1+C2`（合 1 commit with C2） |
+| **C2** | 既有 `TestHandleUniverseGetSessions_OK` 只驗 path | mock 過於鬆散 | `cmd/atlas-mcp/server/tools_data_universe_test.go`：增強 mock response 含 `top_strategies` 欄位 | (1) test PASS；(2) MCP path assertion 仍 work | done | 無 | optional enhancement → 新增 TestHandleUniverseGetSessionDetail_OK | commit `C1+C2`（合 1 commit with C1） |
+| **C3** | spec §18.7 缺 Session List + Detail 契約 | 缺 | `docs/specs/capital-flow-seven-dimension-spec.md` §18.7 新章節 | markdown link check PASS | done | 無 | spec 擴充（與 CL-5/CL-3 一致 pattern） | commit 1 (spec + manifest) |
 
 ---
 
@@ -180,13 +180,13 @@ PR body 必須引用：`See docs/manifests/2026-07-20-cl4-sessions-drilldown.md`
 - **Done this session**:
   - Phase A 真實 audit（atlas-mcp live call + 6 層獨立證據）
   - Phase B 設計拍板 + manifest 撰寫
+  - Phase C 程式實作（A1+A2 service + B1 handler + B2 MCP wrapper + C1+C2 tests + C3 spec）
 - **Remaining**:
-  1. Phase C 程式實作（A1-A2 + B1-B2 + C1-C2）
-  2. Phase D close out
-- **Uncommitted code**: none（純 manifest 文件）
+  1. Phase D close out（push + PR + CI 綠 + merge + cleanup）
+- **Uncommitted code**: 待提交（service + handler + tests + MCP + spec）
 - **Branch / PR**: `feat/cl4-sessions-drilldown` / 未開 PR
 - **Worktree**: `.worktrees/feat-cl4-sessions-drilldown`（14721301 base）
-- **Paused because**: 等業主 review manifest
+- **Paused because**: 待 push + merge
 
 ---
 
@@ -195,6 +195,7 @@ PR body 必須引用：`See docs/manifests/2026-07-20-cl4-sessions-drilldown.md`
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-07-20 | 1.0 | Initial manifest（7 IDs A1-A2 + B1-B2 + C1-C3; wiki-vs-reality + scope Option C） | OpenCode CLI Agent (Sisyphus) |
+| 2026-07-20 | 1.1 | Phase C 全部完成：4 commits（spec+manifest / service A1+A2 / handler B1 / MCP B2 / tests C1+C2）；status 全部 → done；coverage 69.4%；MCP tool count 7 仍通過 AGENTS.md 108-110 assert；C3 spec 與 commit 1 同步 | OpenCode CLI Agent (Sisyphus) |
 
 ---
 
