@@ -123,6 +123,28 @@ func main() {
 // parsing) represent the "prism worker" subcommand. This is the only
 // subcommand supported by the atlas CLI; all other entry points are
 // flag-based (-api, -live, -simulate, -build-universe).
+// handleJanusRegimeScore returns the current janus engine composite score
+// along with is_synthetic flag (true when macro-synthesized, false when
+// derived from real PRISM training data). See spec §18.6.3.
+// Used by MCP wrapper to attach a score to each regime point in
+// /api/dashboard/regime-history. Formula:
+//
+//	score = tanh(foreignFlow/5e9) * 30 - max(0, VIX-20) * 1.5
+//
+// (per internal/janus/calculator.go::synthesizeCompositeScore)
+func handleJanusRegimeScore(_ *http.Request) (int, any) {
+	if janusEngine == nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": "janus engine not initialized",
+		}
+	}
+	score, isSynthetic := janusEngine.GetCurrentRegimeScore()
+	return http.StatusOK, map[string]any{
+		"score":        int(score),
+		"is_synthetic": isSynthetic,
+	}
+}
+
 func isPrismWorkerCmd(args []string) bool {
 	return len(args) >= 2 && args[0] == "prism" && args[1] == "worker"
 }
@@ -177,6 +199,8 @@ func isPublicPath(p string) bool {
 	case p == "/api/strategies" || strings.HasPrefix(p, "/api/strategies/"):
 		return true
 	case p == "/api/risk" || strings.HasPrefix(p, "/api/risk/"):
+		return true
+	case p == "/api/janus" || strings.HasPrefix(p, "/api/janus/"):
 		return true
 	case p == "/api/regime" || strings.HasPrefix(p, "/api/regime/"):
 		return true
@@ -740,6 +764,11 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			mux.Handle("GET /api/capital-flow/history", apishared.Get(cfHandler.HandleHistory))
+			// CL-3 B01: /api/janus/regime-score exposes the janus engine's
+			// composite score (macro-synthesized when PRISM training has
+			// not populated engine.lastScores). Formula must stay in
+			// sync with internal/janus/calculator.go::synthesizeCompositeScore.
+			mux.Handle("GET /api/janus/regime-score", apishared.Get(handleJanusRegimeScore))
 			// H03: market explain endpoint for retail "為什麼漲跌" button.
 			explainHandler := marketexplain.NewHandler(macroProvider, capitalFlowService)
 			mux.Handle("GET /api/market/explain", apishared.Get(explainHandler.HandleExplain))
