@@ -94,7 +94,7 @@
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
 | **A01** | `/api/macro/snapshot/history` 沒有時序語意（point-in-time only），底層 80+ dated snapshot 無法以 range 查詢 | **accepted**：handler/service/URL 三層綁死 `?date=` 單日，無 range helper | `docs/specs/macro-snapshot-history-spec.md`（新增 §1-§4）+ `internal/monitoring/service/macro.go`（新增 `ListSnapshotsInRange` + `parseSnapshotDate` helper）+ `internal/monitoring/api/macro/handlers.go`（新增 `HandleMacroSnapshotTimeline` + 註冊 `GET /api/macro/snapshot/timeline`）+ `cmd/atlas-mcp/server/tools_macro.go`（`handleMacroGetSnapshotHistory` 改指向 `/api/macro/snapshot/timeline` + 新增對應 test） | (1) `go build ./...` 全綠；(2) 新增 6 個 unit test 全 PASS：`TestListSnapshotsInRange_FullRange`、`TestListSnapshotsInRange_MissingDates`、`TestListSnapshotsInRange_CapacityClamp`、`TestListSnapshotsInRange_DateParseError`、`TestHandleMacroSnapshotTimeline_OK`、`TestHandleMacroSnapshotTimeline_BadDateParams`；(3) 既有 `TestHandleMacroGetSnapshotHistory_*` 改 path 驗證後仍 PASS；(4) 既有 `TestService_*` 全綠；(5) `bash scripts/ci/check_atlas_mcp_docs_consistency.sh` 全綠 | pending | **CF-MS-01/02/03** 寫入 spec §3 invariants | 影響：~70 行新程式碼 + 60 行 spec + 80 行 test；新 endpoint 1 個 |
 | **A02** | MCP wrapper `macro_get_snapshot_history` 送 `?days=N` 給只接 `?date=` 的 handler → 每次呼叫必然 400（silent bug，無 log、無 alert） | **accepted**：wrapper 與 handler query contract 不一致；test 只驗 query 構造未驗 handler 解析 | （隨 A01 一起解：wrapper 改指向新 timeline endpoint，handler 真的支援 `?days=N`） | (1) A01 完成後，MCP `macro_get_snapshot_history` tool 在本地以 `days=30` 呼叫能回 200 + array；(2) test `TestHandleMacroGetSnapshotHistory_DefaultDays` 改 path 驗證後仍 PASS；(3) `cmd/atlas-mcp` 套件測試全綠 | pending | （無 spec 變更；MCP tool behavior 改進屬於 bug fix） | 屬於 A01 連帶效益；獨立驗收點 |
-| **A03** | spec 缺乏「historical macro snapshot timeline」語意契約，且缺 invariants 守護 CL-2 的修法不再次退化 | **accepted**：macro 域目前沒有 timeline API 的 spec 文件；只有 `macro-category-spec.md`（不同主題） | `docs/specs/macro-snapshot-history-spec.md`（新檔案，4 個章節：query 參數 / response shape / invariants / 與既有 endpoint 關係） | (1) §3 含 3 條 invariants：CF-MS-01（不補假資料）、CF-MS-02（capacity 限制 ≤365 trading days）、CF-MS-03（無資料日 skip + 進 `missing_dates`）；(2) §2 含 response 完整 JSON shape 含 `trading_date` / `recorded_at` / `source_status` / `missing_dates`；(3) §4 引用既有 `data/state/macro/` 目錄契約與 `internal/monitoring/AGENTS.md` 「公開端點需同步加白名單」（已 public，不適用）；(4) `bash scripts/ci/check_markdown_links.sh` 全綠 | pending | **spec 新檔**：`macro-snapshot-history-spec.md` | 純文件；無 code 變更 |
+| **A03** | spec 缺乏「historical macro snapshot timeline」語意契約，且缺 invariants 守護 CL-2 的修法不再次退化 | **accepted**：macro 域目前沒有 timeline API 的 spec 文件；只有 `macro-category-spec.md`（不同主題） | `docs/specs/macro-snapshot-history-spec.md`（新檔案，4 個章節：query 參數 / response shape / invariants / 與既有 endpoint 關係） | (1) §3 含 3 條 invariants：CF-MS-01（不補假資料）、CF-MS-02（capacity 限制 ≤365 trading days）、CF-MS-03（無資料日 skip + 進 `missing_dates`）；(2) §2 含 response 完整 JSON shape 含 `trading_date` / `recorded_at` / `source_status` / `missing_dates`；(3) §4 引用既有 `data/state/macro/` 目錄契約與 `internal/monitoring/AGENTS.md` 「公開端點需同步加白名單」（已 public，不適用）；(4) `bash scripts/ci/check_markdown_links.sh` 全綠 | done | **spec 新檔**：`macro-snapshot-history-spec.md` | 純文件；無 code 變更 | commit `eed3d2d0`（CF-MS-04 新增：trading_date 為主鍵不混用 recorded_at） |
 
 ---
 
@@ -122,10 +122,10 @@
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Spec 新檔 macro-snapshot-history-spec.md | A03 | pending | 待 commit |
-| Service `ListSnapshotsInRange` + helper + tests | A01 | pending | 待 commit |
-| Handler `HandleMacroSnapshotTimeline` + route + tests | A01 | pending | 待 commit |
-| MCP wrapper 改 path + 新增解析測試 | A01+A02 | pending | 待 commit |
+| Spec 新檔 macro-snapshot-history-spec.md | A03 | done | commit `eed3d2d0` |
+| Service `ListSnapshotsInRange` + helper + tests | A01 | pending | 等 B4 驗證後啟動 |
+| Handler `HandleMacroSnapshotTimeline` + route + tests | A01 | pending | 等 B4 驗證後啟動 |
+| MCP wrapper 改 path + 新增解析測試 | A01+A02 | pending | 等 B4 驗證後啟動 |
 
 ### Phase D — Close Out（pending）
 
@@ -296,17 +296,19 @@ PR body 必須引用：`See docs/manifests/2026-07-20-cl2-macro-snapshot-history
 
 ## Session-End State
 
-- **Done this session**: Phase A 真相盤查（沿用 wiki §2）+ Phase B manifest 撰寫 + Phase A0 spec outline（本文件 §設計細節）
+- **Done this session**: 
+  - Phase A 真相盤查（沿用 wiki §2）
+  - Phase B manifest 撰寫 + commit `99969de8`
+  - Phase C A03 spec 撰寫 + commit `eed3d2d0`（CF-MS-01/02/03/04）
+  - markdown link check + MCP docs consistency check 全綠
 - **Remaining**: 
-  1. 寫 `docs/specs/macro-snapshot-history-spec.md`（A03 — 下一步立即可做）
-  2. 跑 B4 驗證（2026-07-20 15:30 CST 後檢查 `data/state/capital_flow_rolling.json` 是否開始累積 7/20 樣本）
-  3. Phase C 程式實作（A01 + A02）— 等 B4 通過後啟動
-  4. Phase D close out（開 PR + CI 綠 + merge + cleanup）
-- **Uncommitted code**: none（本 manifest 為純設計文件）
-- **Branch / PR**: `feat/cl2-macro-snapshot-history` / 未開 PR（尚無 code）
+  1. 跑 B4 驗證（2026-07-20 15:30 CST 後檢查 `data/state/capital_flow_rolling.json` 是否開始累積 7/20 樣本）
+  2. Phase C 程式實作（A01 + A02）— 等 B4 通過後啟動
+  3. Phase D close out（開 PR + CI 綠 + merge + cleanup）
+- **Uncommitted code**: none（純 spec/manifest 文件）
+- **Branch / PR**: `feat/cl2-macro-snapshot-history` / 未開 PR（A03 done；A01+A02 code 等 B4）
 - **Worktree**: `.worktrees/feat-cl2-macro-snapshot-history`（d1ebe39a base）
-- **Paused because**: 等 B4 實測驗證 A01 + 等業主 review manifest §設計細節
-- **Uncommitted spec**: `docs/specs/macro-snapshot-history-spec.md`（待 A03 commit）
+- **Paused because**: 等 B4 實測驗證 A01（2026-07-20 15:30 CST 後才能驗）+ 等業主 review spec §7 Open Questions（Q1-Q3）
 
 ---
 
@@ -324,6 +326,7 @@ PR body 必須引用：`See docs/manifests/2026-07-20-cl2-macro-snapshot-history
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-07-20 | 1.0 | Initial manifest（3 IDs A01-A03，承接 wiki §2 + 真相盤查） | OpenCode CLI Agent (Sisyphus) |
+| 2026-07-20 | 1.1 | Phase A03 完成：spec commit `eed3d2d0`；新增 CF-MS-04（trading_date 為主鍵不混用 recorded_at）；Status / Phase Tracker / Session-End 全部更新 | OpenCode CLI Agent (Sisyphus) |
 
 ---
 
