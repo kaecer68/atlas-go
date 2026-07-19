@@ -460,14 +460,72 @@ Refresh 在寫入前必須檢查 `eventCalendar.IsTaiwanTradingDay(recordTime)`�
 - **非交易日**：log info 等級的 `skip_non_trading_day` 訊息後 `return nil`。不寫入空樣本（CF-INV-06），不拋 error（避免吵雜 retry）。
 - **nil calendar**：log warn 等級的 `refresh_no_calendar` 訊息後視為交易日繼續寫入。Nil calendar 不會 panic，目的是讓測試環境與錯誤 wiring 不會阻斷 hot path，但 observability 必須暴露這個退化。
 
-### 18.3 Historical Snapshot API 契約（CF-INV-17，未實作）
+### 18.3 Historical Snapshot API 契約（CF-INV-17）
+
+CF-INV-17 規範「歷史時間序列 API 必須對未涵蓋日期回傳 `status: missing` 或 HTTP 404，不得補 0 假資料」。實作分兩個 sub-section：
+
+#### 18.3.1 `HandleHistory` 的 opt-in meta 模式（已實作 — docs/manifests/2026-07-20-cl5-capital-flow-handlehistory.md）
+
+既有 `/api/capital-flow/history` handler 採 **opt-in** 設計：保留既有 flat shape `{foreign: [...], government: [...]}` 向後相容 H02 frontend，新增 `?include_meta=true` 開關暴露 status。
+
+**預設行為**（不傳 `include_meta`）：
+```json
+{
+  "foreign":       [{"trading_date":"2026-07-17","raw_value":...,"unit":"億股","source_id":"..."}, ...],
+  "institutional": [...],
+  "dealer":        [...],
+  "government":    [],
+  "retail":        [],
+  "futures":       [...],
+  "tsm_adr":       [...]
+}
+```
+- 既有 H02 frontend `shared_web/static/js/pages/capital-history.js`（commit 04622ab1）以 `currentData[d.key]` 讀取 array，**不受影響**。
+
+**開啟 `?include_meta=true`**：
+```json
+{
+  "samples": {
+    "foreign":       [...],
+    "institutional": [...],
+    "dealer":        [...],
+    "government":    [],
+    "retail":        [],
+    "futures":       [...],
+    "tsm_adr":       [...]
+  },
+  "meta": {
+    "status": "partial",
+    "missing_dimensions": ["government", "retail"],
+    "days_requested": 60,
+    "days_returned": 60,
+    "data_status": {
+      "government": {"data_available": false, "missing_reason": "pre_2018_or_no_provider"},
+      "retail":     {"data_available": false, "missing_reason": "..."},
+      "foreign":    {"data_available": true}
+    }
+  }
+}
+```
+
+**`meta.status` 枚舉**（與 §18.3 point-in-time 共用）：
+- `"complete"`：七個官方+代理+指標維度全有資料
+- `"partial"`：部分維度有資料（至少 1 個 missing_dimension）
+- `"missing"`：所有維度都沒資料（store 完全空）
+
+**`missing_dimensions`**：列出 `samples` map 內對應值為空 slice `[]` 的 dimension key（force 名）。
+
+**`data_status`**：每個 dimension 的 `data_available` 旗標 + 缺失原因（per AGENTS.md「PublicBank 欄位歷史較短」警告，公股行庫 TWSE 約 2018+ 才完整）。
+
+#### 18.3.2 Point-in-time snapshot endpoint（未實作 — BL-CL5b）
 
 未來 `/api/capital-flow/historical-snapshot/{trading_date}` 端點必須遵守：
 
 - **Response 結構**：`{trading_date, status, dimensions: {<force>: {raw_value, unit, source_id, data_available} | null}, missing_reason?: string}`
 - **`status` 枚舉**：`"complete"`（七維度全有）｜`"partial"`（部分維度有資料）｜`"missing"`（當日無資料或非交易日）
-- **HTTP 狀態碼**：`200` 不論 status（status 在 body 內）；未來實作時禁止用 404 偽裝 missing。
+- **HTTP 狀態碼**：`200` 不論 status（status 在 body 內）；禁止用 404 偽裝 missing。
 - **缺資料語意**：對 `data_available=false` 的維度（如 government 早期 2018 前資料）回 `null` + `"data_available": false`，禁止補 0。
+- **預計實作時間**：下下輪（需先補 B4 store 歷史資料 + backfill — BL-CF-01 才能驗證）。
 
 ### 18.4 RecordedAt vs filename date 語意分離（CL-6 對應）
 
@@ -480,3 +538,19 @@ Refresh 在寫入前必須檢查 `eventCalendar.IsTaiwanTradingDay(recordTime)`�
 - 「今天的收盤資料」對應 `filename date = today, recorded_at = today 14:30+`。
 - 「昨天的歷史回填」對應 `filename date = yesterday, recorded_at = today`。
 - 任何 T+1 retrospective 必須以 `filename date` 對齊到該日的結論，不可僅依賴 `recorded_at`。
+
+### 18.5 Capacity Gate（CF-INV-15 補強）
+
+Rolling sample store 的 capacity 對齊 spec §10 `H-CF-05` gate：
+
+| 位置 | 值 | 變更時間 |
+|------|------|---------|
+| `cmd/atlas/main.go`：`NewFileRollingSampleStore(..., 252)` | **252** | docs/manifests/2026-07-20-cl5-capital-flow-handlehistory.md A01 |
+| `internal/capitalflow/service.go`：`const defaultHistoryLimit = 252` | **252** | 同上 |
+| `internal/capitalflow/handler.go`：`days := 252` + cap `n > 252` | **252** | 同上 |
+
+**為何 252**：spec §10 `H-CF-05` 要求「分層模型優於七項平權模型」需 ≥252 交易日 walk-forward 對照；252 = 一年 trading days（扣假日）。
+
+**Cap 行為**：`?days=999` 自動 clamp 至 252；不會回 error。
+
+**Backlog 警告**：capacity 提升僅是上限，不會自動回填歷史資料。當前 store 內只有 `2026-07-17` 一筆（post-A01 但 15:30 CST cutoff 前）。歷史 backfill 入 **BL-CF-01**（需 Provider 提供歷史 API 或 replay 機制）。
