@@ -70,7 +70,7 @@ func realWiredDeps(t *testing.T) (NarrativeProvider, CapitalFlowProvider, EventP
 	mp := &cannedMacroProvider{snap: buildRISKOFFSnapshot(time.Now().Unix())}
 
 	// 1. capitalflow: real service backed by canned macro provider.
-	cfsvc := capitalflow.NewService(mp, 0)
+	cfsvc := capitalflow.NewService(mp, 0, nil)
 	capflowAdapter := NewCapitalFlowFunc(cfsvc.LatestDaily, cfsvc.Summary, cfsvc.LatestAssessment)
 
 	// 2. event-driven: real predictor with the standard event calendar.

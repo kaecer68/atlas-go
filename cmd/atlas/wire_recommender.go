@@ -70,9 +70,14 @@ func wireForTest(in WireDeps) (recommender.HandlerDeps, *capitalflow.Service) {
 		// restarts. Nil falls back to the legacy in-memory store so
 		// harness / older wiring paths still work.
 		if in.CapitalFlowStore != nil {
-			cfsvc = capitalflow.NewServiceWithStore(in.MacroProvider, 0, in.CapitalFlowStore)
+			// Production path: pass nil calendar because wireForTest is
+			// only invoked via WireRecommenderDeps (test harness), not
+			// from the live process. The live Refresh path uses
+			// main.go:733 NewHandlerWithStore which passes the real
+			// eventCalendar instance.
+			cfsvc = capitalflow.NewServiceWithStore(in.MacroProvider, 0, in.CapitalFlowStore, nil)
 		} else {
-			cfsvc = capitalflow.NewService(in.MacroProvider, 0)
+			cfsvc = capitalflow.NewService(in.MacroProvider, 0, nil)
 		}
 		deps.CapitalFlow = recommender.NewCapitalFlowFunc(cfsvc.LatestDaily, cfsvc.Summary, cfsvc.LatestAssessment)
 	}

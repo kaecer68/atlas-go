@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -36,11 +37,21 @@ const defaultHistoryLimit = 60
 // Refresh is the only writer to the rolling sample store; the
 // read path (LatestDaily, Summary, QualityScore, refreshIfStale)
 // never calls UpsertDay (BK-15 / spec §8.1 / CF-INV-04).
+//
+// eventCalendar (added in CL-1 fix, spec CF-INV-16) is the
+// Taiwan trading-day calendar used by Refresh to skip non-trading
+// days. Production wiring (cmd/atlas/main.go) passes the shared
+// *industry.EventCalendar instance created at main.go:427.
+// Tests that do not call Refresh may pass nil; Refresh itself
+// performs a defensive nil-check (logs warning, treats as
+// trading day) so a missing calendar never panics in production
+// due to wiring bugs — it just stops filtering weekend data.
 type Service struct {
-	provider  marketdata.MacroDataProvider
-	extractor *ForceExtractor
-	timeout   time.Duration
-	store     RollingSampleStore
+	provider      marketdata.MacroDataProvider
+	extractor     *ForceExtractor
+	timeout       time.Duration
+	store         RollingSampleStore
+	eventCalendar *industry.EventCalendar
 
 	mu              sync.RWMutex
 	cachedResonance ResonanceResult
@@ -51,26 +62,30 @@ type Service struct {
 // provider and an in-memory rolling sample store (capacity
 // defaultHistoryLimit). Pass timeout=0 to use the default 15s
 // context timeout. Callers that need persistence should use
-// NewServiceWithStore directly.
-func NewService(p marketdata.MacroDataProvider, timeout time.Duration) *Service {
-	return NewServiceWithStore(p, timeout, NewMemoryRollingSampleStore(defaultHistoryLimit))
+// NewServiceWithStore directly. Pass nil for cal when the
+// caller never invokes Refresh (e.g. handler-only test paths).
+func NewService(p marketdata.MacroDataProvider, timeout time.Duration, cal *industry.EventCalendar) *Service {
+	return NewServiceWithStore(p, timeout, NewMemoryRollingSampleStore(defaultHistoryLimit), cal)
 }
 
-// NewServiceWithStore wires a custom rolling sample store into
-// the Service. LatestDaily reads through store.History; Refresh
-// writes through store.UpsertDay (exactly once per call). Passing
-// a nil store is allowed for tests that exercise only the
-// provider → Score pipeline, but Refresh and the history-based
-// Z-score path will return errors in that configuration.
-func NewServiceWithStore(p marketdata.MacroDataProvider, timeout time.Duration, store RollingSampleStore) *Service {
+// NewServiceWithStore wires a custom rolling sample store and
+// trading-day calendar into the Service. LatestDaily reads
+// through store.History; Refresh writes through store.UpsertDay
+// (exactly once per call). Passing a nil store is allowed for
+// tests that exercise only the provider → Score pipeline, but
+// Refresh and the history-based Z-score path will return errors
+// in that configuration. Passing a nil cal disables the
+// non-trading-day skip-and-log guard (see Service struct doc).
+func NewServiceWithStore(p marketdata.MacroDataProvider, timeout time.Duration, store RollingSampleStore, cal *industry.EventCalendar) *Service {
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
 	return &Service{
-		provider:  p,
-		extractor: NewForceExtractor(),
-		timeout:   timeout,
-		store:     store,
+		provider:      p,
+		extractor:     NewForceExtractor(),
+		timeout:       timeout,
+		store:         store,
+		eventCalendar: cal,
 	}
 }
 

@@ -73,7 +73,7 @@ func TestResonanceToScore_MixedReturnsZero(t *testing.T) {
 
 func TestService_QualityScore_CacheReducesFetchCalls(t *testing.T) {
 	provider := &stubSnapshotProvider{snap: neutralSnapshot()}
-	svc := NewService(provider, time.Second)
+	svc := NewService(provider, time.Second, nil)
 
 	_ = svc.QualityScore()
 	if got := atomic.LoadInt32(&provider.calls); got != 1 {
@@ -90,7 +90,7 @@ func TestService_QualityScore_CacheReducesFetchCalls(t *testing.T) {
 
 func TestService_QualityLabel_CacheReducesFetchCalls(t *testing.T) {
 	provider := &stubSnapshotProvider{snap: neutralSnapshot()}
-	svc := NewService(provider, time.Second)
+	svc := NewService(provider, time.Second, nil)
 
 	_ = svc.QualityLabel()
 	_ = svc.QualityLabel()
@@ -102,7 +102,7 @@ func TestService_QualityLabel_CacheReducesFetchCalls(t *testing.T) {
 }
 
 func TestService_QualityScore_ProviderErrorReturnsZeroInitially(t *testing.T) {
-	svc := NewService(&stubSnapshotProvider{err: errors.New("boom")}, time.Second)
+	svc := NewService(&stubSnapshotProvider{err: errors.New("boom")}, time.Second, nil)
 	if got := svc.QualityScore(); got != 0 {
 		t.Errorf("fresh cache + provider error: want 0, got %v", got)
 	}
@@ -113,7 +113,7 @@ func TestService_QualityScore_ProviderErrorReturnsZeroInitially(t *testing.T) {
 
 func TestService_QualityScore_FailedRefreshKeepsStaleCache(t *testing.T) {
 	provider := &stubSnapshotProvider{snap: neutralSnapshot()}
-	svc := NewService(provider, time.Second)
+	svc := NewService(provider, time.Second, nil)
 	first := svc.QualityScore()
 	firstLabel := svc.QualityLabel()
 

@@ -240,7 +240,7 @@ func registerStage3AlertTasks(d stage3Deps) {
 			if d.macroProvider == nil {
 				return monitoring.CapitalFlowSignal{}, false
 			}
-			svc := capitalflow.NewService(d.macroProvider, 0)
+			svc := capitalflow.NewService(d.macroProvider, 0, nil)
 			report, err := svc.LatestDaily(context.Background())
 			if err != nil {
 				return monitoring.CapitalFlowSignal{}, false

@@ -29,7 +29,7 @@ func TestService_LatestDaily_AssemblesReport(t *testing.T) {
 		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
 		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
 	}}
-	svc := NewService(provider, 0)
+	svc := NewService(provider, 0, nil)
 	report, err := svc.LatestDaily(context.Background())
 	if err != nil {
 		t.Fatalf("LatestDaily: %v", err)
@@ -47,7 +47,7 @@ func TestService_LatestDaily_AssemblesReport(t *testing.T) {
 
 func TestService_LatestDaily_ProviderError(t *testing.T) {
 	provider := &stubProvider{err: context.DeadlineExceeded}
-	svc := NewService(provider, 0)
+	svc := NewService(provider, 0, nil)
 	if _, err := svc.LatestDaily(context.Background()); err == nil {
 		t.Errorf("expected error from provider")
 	}
@@ -61,7 +61,7 @@ func TestService_Summary_DerivesFromLatestDaily(t *testing.T) {
 		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
 		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
 	}}
-	svc := NewService(provider, 0)
+	svc := NewService(provider, 0, nil)
 	summary, err := svc.Summary(context.Background())
 	if err != nil {
 		t.Fatalf("Summary: %v", err)
@@ -82,7 +82,7 @@ func TestService_Summary_DerivesFromLatestDaily(t *testing.T) {
 
 func TestService_Summary_PropagatesProviderError(t *testing.T) {
 	provider := &stubProvider{err: context.DeadlineExceeded}
-	svc := NewService(provider, 0)
+	svc := NewService(provider, 0, nil)
 	_, err := svc.Summary(context.Background())
 	if err == nil {
 		t.Fatal("expected error from provider, got nil")
@@ -100,7 +100,7 @@ func TestService_Summary_SharesForcesWithDailyReport(t *testing.T) {
 		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -100},
 		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 50},
 	}}
-	svc := NewService(provider, 0)
+	svc := NewService(provider, 0, nil)
 	daily, err := svc.LatestDaily(context.Background())
 	if err != nil {
 		t.Fatalf("LatestDaily: %v", err)
@@ -139,7 +139,7 @@ func TestService_LatestDailyIsIdempotent(t *testing.T) {
 		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
 	}}
 	store := &stubRollingStore{}
-	svc := NewServiceWithStore(provider, 0, store)
+	svc := NewServiceWithStore(provider, 0, store, nil)
 
 	first, err := svc.LatestDaily(context.Background())
 	if err != nil {
@@ -183,7 +183,7 @@ func TestService_RefreshSameDayDoesNotGrowWindow(t *testing.T) {
 		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
 	}}
 	store := NewMemoryRollingSampleStore(60)
-	svc := NewServiceWithStore(provider, 0, store)
+	svc := NewServiceWithStore(provider, 0, store, nil)
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
