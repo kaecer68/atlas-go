@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -802,6 +803,135 @@ func TestLoadRegimeHistory_TimestampsAreUTC(t *testing.T) {
 					i, parsed.Location().String(), tr.Timestamp)
 			}
 		}
+	}
+}
+
+// =============================================================================
+// LoadRegimeHistory: HistoricalStore path (CL-3 A01)
+// =============================================================================
+
+// mockHistoricalStore implements ledger.HistoricalStore minimally for the
+// LoadRegimeHistory SQLite-path test. Other methods panic if invoked — they
+// are intentionally not used by the code under test.
+type mockHistoricalStore struct {
+	rows []ledger.RegimeRow
+	err  error
+}
+
+func (m *mockHistoricalStore) UpsertRegime(_ context.Context, _ ledger.RegimeRow) error {
+	panic("mockHistoricalStore: UpsertRegime not implemented")
+}
+func (m *mockHistoricalStore) LoadRegimeByDate(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	panic("mockHistoricalStore: LoadRegimeByDate not implemented")
+}
+func (m *mockHistoricalStore) LoadRegimeByDateAll(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	panic("mockHistoricalStore: LoadRegimeByDateAll not implemented")
+}
+func (m *mockHistoricalStore) LoadRegimeHistory(_ context.Context, limit int) ([]ledger.RegimeRow, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if limit > 0 && len(m.rows) > limit {
+		return m.rows[:limit], nil
+	}
+	return m.rows, nil
+}
+func (m *mockHistoricalStore) LoadRegimeHistoryAll(_ context.Context, limit int) ([]ledger.RegimeRow, error) {
+	panic("mockHistoricalStore: LoadRegimeHistoryAll not implemented")
+}
+func (m *mockHistoricalStore) UpsertStress(_ context.Context, _ ledger.StressRow) error {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadStressByDate(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadStressByDateAll(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadStressHistory(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadStressHistoryAll(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) UpsertEventCalendar(_ context.Context, _ ledger.EventCalendarRow) error {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadEventCalendarByDate(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadEventCalendarByDateAll(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadEventCalendarRange(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadEventCalendarRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) UpsertPredictionBacktest(_ context.Context, _ ledger.PredictionBacktestRow) error {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadPredictionBacktestRange(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadPredictionBacktestRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) CountSynthetic(_ context.Context) (map[string]int64, error) {
+	return map[string]int64{}, nil
+}
+func (m *mockHistoricalStore) Close() error {
+	return nil
+}
+
+func TestLoadRegimeHistory_HistoricalStore_OK(t *testing.T) {
+	rows := []ledger.RegimeRow{
+		{Date: "2026-06-29", Regime: "RISK_OFF", RecordedAt: time.Date(2026, 6, 29, 6, 0, 0, 0, time.UTC)},
+		{Date: "2026-06-28", Regime: "NEUTRAL", RecordedAt: time.Date(2026, 6, 28, 6, 0, 0, 0, time.UTC)},
+		{Date: "2026-06-27", Regime: "TRANSITIONAL", RecordedAt: time.Date(2026, 6, 27, 6, 0, 0, 0, time.UTC)},
+	}
+	svc := NewPipelineService("/tmp", "/tmp", nil).
+		WithHistoricalStore(&mockHistoricalStore{rows: rows})
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if len(data.Sessions) != 3 {
+		t.Fatalf("Sessions len = %d, want 3", len(data.Sessions))
+	}
+	if data.Current != "RISK_OFF" {
+		t.Errorf("Current = %q, want RISK_OFF (latest by RecordedAt)", data.Current)
+	}
+	if len(data.Transitions) != 2 {
+		t.Errorf("Transitions len = %d, want 2 (NEUTRAL->TRANSITIONAL, TRANSITIONAL->RISK_OFF)", len(data.Transitions))
+	}
+}
+
+func TestLoadRegimeHistory_HistoricalStore_StoreError(t *testing.T) {
+	svc := NewPipelineService("/tmp", "/tmp", nil).
+		WithHistoricalStore(&mockHistoricalStore{err: errors.New("sqlite unavailable")})
+	_, err := svc.LoadRegimeHistory(10)
+	if err == nil {
+		t.Fatal("expected error from HistoricalStore, got nil")
+	}
+}
+
+func TestLoadRegimeHistory_HistoricalStore_Empty(t *testing.T) {
+	svc := NewPipelineService("/tmp", "/tmp", nil).
+		WithHistoricalStore(&mockHistoricalStore{})
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected non-nil data")
+	}
+	if len(data.Sessions) != 0 {
+		t.Errorf("Sessions len = %d, want 0", len(data.Sessions))
+	}
+	if data.Current != "" {
+		t.Errorf("Current should be empty, got %q", data.Current)
 	}
 }
 
