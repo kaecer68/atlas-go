@@ -123,6 +123,15 @@ func main() {
 // parsing) represent the "prism worker" subcommand. This is the only
 // subcommand supported by the atlas CLI; all other entry points are
 // flag-based (-api, -live, -simulate, -build-universe).
+func isPrismWorkerCmd(args []string) bool {
+	return len(args) >= 2 && args[0] == "prism" && args[1] == "worker"
+}
+
+// janusEngine is the global janus.Engine instance, populated by run() when
+// -api mode is enabled. Hoisted to file-level so the package-level
+// handleJanusRegimeScore handler can read it.
+var janusEngine *janus.Engine
+
 // handleJanusRegimeScore returns the current janus engine composite score
 // along with is_synthetic flag (true when macro-synthesized, false when
 // derived from real PRISM training data). See spec §18.6.3.
@@ -143,10 +152,6 @@ func handleJanusRegimeScore(_ *http.Request) (int, any) {
 		"score":        int(score),
 		"is_synthetic": isSynthetic,
 	}
-}
-
-func isPrismWorkerCmd(args []string) bool {
-	return len(args) >= 2 && args[0] == "prism" && args[1] == "worker"
 }
 
 // isPublicPath determines whether a request bypasses the API-key
@@ -426,7 +431,6 @@ func run(args []string, deps appDeps) error {
 		}
 	}
 
-	var janusEngine *janus.Engine
 	baselineMgr := baseline.NewManager(cfg.BaselinePolicyPath)
 
 	// Handle --simulate mode: run one-shot daily simulation and exit
