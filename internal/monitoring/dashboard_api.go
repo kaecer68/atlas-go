@@ -108,6 +108,7 @@ type DashboardAPI struct {
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
+	historicalStore            ledger.HistoricalStore
 
 	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
 	// so the admin page lists every registered channel rather than a
@@ -609,6 +610,15 @@ func (a *DashboardAPI) SetContext(ctx context.Context) {
 	}
 }
 
+// WithHistoricalStore injects the regime_history SQLite store into the
+// dashboard API so /api/dashboard/regime-history reads true regime time
+// series instead of simulation session metadata. Builder pattern preserves
+// nil-default behavior (see CL-3 A03 docs/manifests/2026-07-20-cl3-regime-history.md).
+func (a *DashboardAPI) WithHistoricalStore(hs ledger.HistoricalStore) *DashboardAPI {
+	a.historicalStore = hs
+	return a
+}
+
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
@@ -635,6 +645,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	}
 
 	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore).
+		WithHistoricalStore(a.historicalStore).
 		WithNarrativeProvider(func(eventIDs []string) *service.NarrativeContextData {
 			if a.narrativeEngine == nil {
 				return nil

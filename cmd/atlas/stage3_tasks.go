@@ -32,6 +32,7 @@ type stage3Deps struct {
 	macroProvider    marketdata.MacroDataProvider
 	predictionLedger ledger.EventFlowPredictionStore
 	metricsCollector *monitoring.MetricsCollector
+	historicalStore  ledger.HistoricalStore
 }
 
 // registerStage3Tasks wires the 5 Stage 3 scheduled tasks into BTM.
@@ -48,7 +49,8 @@ func registerStage3Tasks(d stage3Deps) {
 		tz = time.UTC
 	}
 
-	pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir))
+	pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir)).
+		WithHistoricalStore(d.historicalStore)
 
 	oncestore, oncestoreErr := scheduler.NewFileOncestampStore(d.cfg.LedgerDir)
 	if oncestoreErr != nil {

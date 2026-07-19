@@ -677,7 +677,13 @@ func run(args []string, deps appDeps) error {
 		}
 		if historicalStore, err := ledger.NewHistoricalStore(cfg); err == nil {
 			log.Printf("[HistoricalStore] initialized")
-			_ = historicalStore // SystemCore has no HistoricalStore field yet; wiring deferred to follow-up PR
+			// CL-3 A03: wire into DashboardAPI so /api/dashboard/regime-history
+			// reads the regime_history SQLite table (true time-series) instead
+			// of simulation session summaries. Late-binding after stocktools
+			// registration because the store is opened here.
+			if dashboard != nil {
+				dashboard.WithHistoricalStore(historicalStore)
+			}
 		} else {
 			log.Printf("[HistoricalStore] init failed: %v", err)
 		}
