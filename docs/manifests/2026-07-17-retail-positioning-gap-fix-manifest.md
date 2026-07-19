@@ -152,14 +152,14 @@
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| （尚未開始）第一輪從線 A 逐 ID 進行，每 ID 遵循 atlas-pre-change-protocol | - | pending | - |
+| 第〇～七輪完整實作 | 60 IDs | done | PR #1210, #1214, #1215, #1216, #1217, #1219, #1220, #1223, #1224, #1225 |
 
 ### Phase D — Close Out
 
 | Task | Status | Evidence |
-|------|----|--------|
-| 每輪結束更新狀態欄 + PR 引用本 manifest | pending | - |
-| 全部完成後將本 manifest 移至 `docs/archive/` | pending | - |
+|------|--------|----------|
+| 每輪結束更新狀態欄 + PR 引用本 manifest | done | v1.0~v1.11 changelog |
+| 全部完成後將本 manifest 移至 `docs/archive/` | done | 60 IDs done；H05 保留為業主決策項；SA11 pending（等待 ≥20 sessions） |
 
 ---
 
@@ -231,4 +231,5 @@
 | 2026-07-17 | 1.7 | 第五輪第二段（#E07 done）：七維 backend 完成 3+2+2 provenance、四層 `CapitalFlowAssessment`、legacy weight/quality 分流；recommender 每 request 單次 daily fetch，eventdriven 僅在 `EligibleForAutomation()` 通過後使用 legacy score；focused race + full + gofmt + vet + build 全綠；commit ccd4e721 | Kimi Code |
 | 2026-07-17 | 1.8 | 第五輪第三段（#E08 done）：UI/MCP/活躍文件/runtime 對齊 — `shared_web/static/js/components/{seven-force-board.js,seven-force-interpretations.js}` 改為 3+2+2 分層（官方法人 / 行為代理 / 領先＋跨市場訊號），刪除「權重 X%」字串、政府 unavailable 顯示「資料不足」；MCP `capital_flow_daily` / `capital_flow_summary` / `daily_report` 描述同步；active docs（product-positioning、architecture、frontend-architecture、agent-mcp-server、tool-catalog、investor README、llms.txt、capitalflow AGENTS、AGENTS_INDEX、MATURITY、recommender deps、capitalflow types）改為「七維錢潮雷達（3+2+2 分層）」摘要並連回 canonical spec；`bash scripts/ci/check_atlas_mcp_docs_consistency.sh` + `check_markdown_links.sh` 全綠；commit 2603710b | Kimi Code |
 | 2026-07-18 | 1.9 | 第六輪（F02-F06+G01-G02+H02-H04）：F02 `--is-synthetic` flag + F03 predictor auto-calibration + F04 orchestrator event prediction tilt + F06 real strategy rankings + G01 TWSE SBL skeleton + G02 SBL full + H02 capital history chart + H03 market explain button + H04 explain_market_move MCP tool；PR #1210/#1219/#1220/#1223 merged | Kimi Code |
-| 2026-07-18 | 1.10 | 第七輪（G03-G04+G06+H01+SA01-SA05）：G03 選舉行情季節性模式（election_local + election_presidential）加入校準範圍；G04 year_end_rally 46% 驗證非 bug（fav vs small_cap spread）；G06 docker cron 每月→每日；H01 client_web sidebar 補策略演化導航；SA01-SA05 manifest 狀態列 bookkeeping | Kimi Code |
+| 2026-07-19 | 1.11 | 第八輪（background health + BK-12/BK-14）：auto_cycle_update 漸進式 fallback（月營收/季報）、seasonal_calibrate --replay 參數修復、BK-12 新 backfill-taifex-oi 命令、BK-14 八大行庫第三方資料評估報告；manifest Phase C/D close-out；stale branches cleanup | Kimi Code |
+| 2026-07-19 | 1.11 | **CLOSE-OUT**：60 IDs done。剩餘 H05（業主決策）、SA11（等待 ≥20 sessions）。manifest 歸檔就緒。 | Kimi Code |
