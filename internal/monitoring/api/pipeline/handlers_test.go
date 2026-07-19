@@ -14,6 +14,183 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
+// TestHandleSessions_IncludesTopStrategies exercises the CL-4 List endpoint
+// (§18.7.2): the response must keep the original 4 metadata fields and add
+// a fifth `top_strategies` array with the top-3 strategies ranked by
+// Conviction DESC.
+func TestHandleSessions_IncludesTopStrategies(t *testing.T) {
+	ledgerDir := t.TempDir()
+	sessionID := "session-20260101-daily"
+	sessionDir := filepath.Join(ledgerDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	recordedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	summary := domain.SessionSummary{
+		SessionID:    sessionID,
+		Regime:       "RISK_ON",
+		OutcomeCount: 3,
+		RecordedAt:   recordedAt,
+	}
+	summaryData, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryData, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	store := ledger.NewStore(ledgerDir)
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-low", Symbol: "3008.TW", Side: "BUY", Conviction: 50},
+		{AgentID: "agent-high", Symbol: "2330.TW", Side: "BUY", Conviction: 90},
+		{AgentID: "agent-mid", Symbol: "2317.TW", Side: "BUY", Conviction: 70},
+	}
+	if err := store.RecordSessionOutcomes(domain.ReplaySession{ID: sessionID}, outcomes); err != nil {
+		t.Fatalf("RecordSessionOutcomes: %v", err)
+	}
+
+	h := NewHandlers(service.NewPipelineService(ledgerDir, ledgerDir, store))
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/sessions", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rr.Code, rr.Body.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	sessions, _ := doc["sessions"].([]any)
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	entry := sessions[0].(map[string]any)
+	for _, key := range []string{"session_id", "recorded_at", "regime", "outcome_count"} {
+		if _, ok := entry[key]; !ok {
+			t.Errorf("legacy field %q missing from response", key)
+		}
+	}
+	if entry["session_id"] != sessionID {
+		t.Errorf("session_id = %v, want %v", entry["session_id"], sessionID)
+	}
+	strategies, ok := entry["top_strategies"].([]any)
+	if !ok {
+		t.Fatalf("top_strategies missing or wrong type: %T", entry["top_strategies"])
+	}
+	if len(strategies) != 3 {
+		t.Fatalf("expected 3 top_strategies, got %d", len(strategies))
+	}
+	first := strategies[0].(map[string]any)
+	if first["agent_id"] != "agent-high" || first["conviction"].(float64) != 90 {
+		t.Errorf("top[0] = %v, want agent-high/90", first)
+	}
+	last := strategies[2].(map[string]any)
+	if last["agent_id"] != "agent-low" || last["conviction"].(float64) != 50 {
+		t.Errorf("top[2] = %v, want agent-low/50", last)
+	}
+}
+
+// TestHandleSessionDetail_OK exercises the CL-4 Detail endpoint (§18.7.3):
+// 200 with session_id, summary, outcomes, outcome_count when the session
+// exists. Outcomes are sorted by Conviction DESC by the service layer;
+// the handler just proxies the result.
+func TestHandleSessionDetail_OK(t *testing.T) {
+	ledgerDir := t.TempDir()
+	sessionID := "session-20260101-daily"
+	sessionDir := filepath.Join(ledgerDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	recordedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	summary := domain.SessionSummary{
+		SessionID:    sessionID,
+		Regime:       "RISK_ON",
+		OutcomeCount: 2,
+		RecordedAt:   recordedAt,
+		EndingCash:   100.5,
+	}
+	summaryData, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryData, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	store := ledger.NewStore(ledgerDir)
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-1", Symbol: "2330.TW", Side: "BUY", Conviction: 88},
+		{AgentID: "agent-2", Symbol: "2317.TW", Side: "SELL", Conviction: 72},
+	}
+	if err := store.RecordSessionOutcomes(domain.ReplaySession{ID: sessionID}, outcomes); err != nil {
+		t.Fatalf("RecordSessionOutcomes: %v", err)
+	}
+
+	h := NewHandlers(service.NewPipelineService(ledgerDir, ledgerDir, store))
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/sessions/"+sessionID, nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rr.Code, rr.Body.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if doc["session_id"] != sessionID {
+		t.Errorf("session_id = %v, want %v", doc["session_id"], sessionID)
+	}
+	summaryMap, ok := doc["summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("summary missing or wrong type: %T", doc["summary"])
+	}
+	if summaryMap["ending_cash"].(float64) != 100.5 {
+		t.Errorf("summary.ending_cash = %v, want 100.5", summaryMap["ending_cash"])
+	}
+	gotOutcomes, ok := doc["outcomes"].([]any)
+	if !ok {
+		t.Fatalf("outcomes missing or wrong type: %T", doc["outcomes"])
+	}
+	if len(gotOutcomes) != 2 {
+		t.Errorf("outcomes len = %d, want 2", len(gotOutcomes))
+	}
+	if doc["outcome_count"].(float64) != 2 {
+		t.Errorf("outcome_count = %v, want 2", doc["outcome_count"])
+	}
+}
+
+// TestHandleSessionDetail_NotFound verifies the 404 path: sessionID is
+// unknown (no summary.json on disk) and the handler must distinguish
+// "not found" from "system error".
+func TestHandleSessionDetail_NotFound(t *testing.T) {
+	ledgerDir := t.TempDir()
+	store := ledger.NewStore(ledgerDir)
+	h := NewHandlers(service.NewPipelineService(ledgerDir, ledgerDir, store))
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/sessions/does-not-exist", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (body=%s)", rr.Code, rr.Body.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if doc["error"] == nil {
+		t.Errorf("expected error message in 404 body, got %v", doc)
+	}
+	if doc["session_id"] != "does-not-exist" {
+		t.Errorf("session_id in body = %v, want does-not-exist", doc["session_id"])
+	}
+}
+
 // TestPipelineItem_MetricsOmittedWhenEmpty proves that the Metrics field
 // is properly omitted from JSON when empty (omitempty behavior).
 func TestPipelineItem_MetricsOmittedWhenEmpty(t *testing.T) {
