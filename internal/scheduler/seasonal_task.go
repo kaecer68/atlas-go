@@ -71,15 +71,29 @@ func NewSeasonalCalibrationTask(binaryPath string, interval time.Duration, minMa
 }
 
 func runSeasonalCalibration(ctx context.Context, binaryPath string) error {
+	return runSeasonalCalibrationWithReplay(ctx, binaryPath, "")
+}
+
+// runSeasonalCalibrationWithReplay exec's calibrate-seasonal -update with an
+// optional --replay path. When replayPath is empty, calibrate-seasonal will
+// refuse --update (it requires real data) and the task will fail — this is
+// the expected behavior until a replay dataset is provided at registration.
+func runSeasonalCalibrationWithReplay(ctx context.Context, binaryPath, replayPath string) error {
 	if binaryPath == "" {
 		return fmt.Errorf("seasonal calibration: binary path is empty")
 	}
 
-	cmd := exec.CommandContext(ctx, binaryPath, "-update")
+	args := []string{"-update"}
+	if replayPath != "" {
+		args = append(args, "--replay", replayPath)
+	}
+
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		logging.Error("seasonal_calibration", "exec_failed",
 			"binary", binaryPath,
+			"args", args,
 			"output_len", len(output),
 			"err", err)
 		return fmt.Errorf("calibrate-seasonal -update: %w", err)
@@ -98,5 +112,16 @@ func runSeasonalCalibration(ctx context.Context, binaryPath string) error {
 func SeasonalCalibrationTaskFunc(binaryPath string) func(context.Context) error {
 	return func(ctx context.Context) error {
 		return runSeasonalCalibration(ctx, binaryPath)
+	}
+}
+
+// SeasonalCalibrationTaskFuncWithReplay is like SeasonalCalibrationTaskFunc
+// but passes --replay <replayPath> to the calibrate-seasonal binary.
+// The replay path should point to a replay JSONL/CSV file (e.g.
+// data/replay/finmind_2020_2024.jsonl). When replayPath is empty, the task
+// will run without --replay (same as SeasonalCalibrationTaskFunc).
+func SeasonalCalibrationTaskFuncWithReplay(binaryPath, replayPath string) func(context.Context) error {
+	return func(ctx context.Context) error {
+		return runSeasonalCalibrationWithReplay(ctx, binaryPath, replayPath)
 	}
 }

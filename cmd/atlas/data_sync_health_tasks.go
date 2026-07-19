@@ -90,12 +90,16 @@ func registerDataSyncAndHealthTasks(
 	if exeErr == nil {
 		seasonalBin := filepath.Join(filepath.Dir(exePath), "calibrate-seasonal")
 		if _, statErr := os.Stat(seasonalBin); statErr == nil {
+			replayPath := filepath.Join(cfg.WorkDir, "data", "replay", "finmind_2020_2024.jsonl")
+			if _, rpErr := os.Stat(replayPath); rpErr != nil {
+				replayPath = ""
+			}
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "seasonal_calibration",
 				Interval: scheduler.SeasonalCalibrationDefaults.Interval,
 				Jitter:   30 * time.Minute,
 				Enabled:  true,
-				Task:     scheduler.SeasonalCalibrationTaskFunc(seasonalBin),
+				Task:     scheduler.SeasonalCalibrationTaskFuncWithReplay(seasonalBin, replayPath),
 			})
 			log.Printf("[Gateway] registered seasonal_calibration background task (7d interval)")
 		} else {

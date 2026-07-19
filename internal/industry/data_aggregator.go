@@ -137,57 +137,106 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	return nil
 }
 
+// fetchRevenueYoY tries to compute YoY revenue growth from the most recent
+// available monthly data. It starts with the current month and falls back up to
+// 3 months to handle the publication lag (TWSE monthly revenue typically
+// published by the 10th of the following month).
 func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now time.Time) (float64, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	current, err := a.finmind.GetMonthRevenue(ctx, symbol, now.Year(), int(now.Month()))
-	if err != nil {
-		return 0, fmt.Errorf("finmind: %w", err)
+	year := now.Year()
+	month := int(now.Month())
+
+	for attempt := 0; attempt < 3; attempt++ {
+		current, err := a.finmind.GetMonthRevenue(ctx, symbol, year, month)
+		if err != nil {
+			// Try previous month
+			month--
+			if month == 0 {
+				month = 12
+				year--
+			}
+			continue
+		}
+
+		prevYear := year - 1
+		prev, err := a.finmind.GetMonthRevenue(ctx, symbol, prevYear, month)
+		if err != nil {
+			month--
+			if month == 0 {
+				month = 12
+				year--
+			}
+			continue
+		}
+
+		if prev == 0 {
+			month--
+			if month == 0 {
+				month = 12
+				year--
+			}
+			continue
+		}
+
+		growth := (current - prev) / math.Abs(prev)
+		return clampGrowth(growth), nil
 	}
 
-	prevYear := now.Year() - 1
-	prev, err := a.finmind.GetMonthRevenue(ctx, symbol, prevYear, int(now.Month()))
-	if err != nil {
-		return 0, fmt.Errorf("finmind prior year: %w", err)
-	}
-
-	if prev == 0 {
-		return 0, fmt.Errorf("prior year revenue is zero for %s", symbol)
-	}
-
-	growth := (current - prev) / math.Abs(prev)
-	return clampGrowth(growth), nil
+	return 0, fmt.Errorf("finmind revenue: no data for %s in last 3 months", symbol)
 }
 
+// fetchProfitYoY tries to compute YoY profit growth from the most recent
+// available quarterly financial statements. It starts with the current quarter
+// and falls back up to 3 quarters to handle the publication lag (Taiwan
+// financial statements filed 45 days after quarter end).
 func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now time.Time) (float64, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
+	// Q1=(1,2,3), Q2=(4,5,6), Q3=(7,8,9), Q4=(10,11,12)
 	quarter := ((int(now.Month()) - 1) / 3) + 1
-	if quarter == 1 {
-		quarter = 4
+	year := now.Year()
+
+	for attempt := 0; attempt < 3; attempt++ {
+		currentData, err := a.finmind.GetFinancialStatements(ctx, symbol, year, quarter)
+		if err != nil {
+			quarter--
+			if quarter == 0 {
+				quarter = 4
+				year--
+			}
+			continue
+		}
+
+		currentProfit := extractProfit(currentData)
+
+		prevData, err := a.finmind.GetFinancialStatements(ctx, symbol, year-1, quarter)
+		if err != nil {
+			quarter--
+			if quarter == 0 {
+				quarter = 4
+				year--
+			}
+			continue
+		}
+
+		prevProfit := extractProfit(prevData)
+		if prevProfit == 0 {
+			quarter--
+			if quarter == 0 {
+				quarter = 4
+				year--
+			}
+			continue
+		}
+
+		growth := (currentProfit - prevProfit) / math.Abs(prevProfit)
+		return clampGrowth(growth), nil
 	}
 
-	currentData, err := a.finmind.GetFinancialStatements(ctx, symbol, now.Year(), quarter)
-	if err != nil {
-		return 0, fmt.Errorf("finmind financial statements: %w", err)
-	}
-
-	currentProfit := extractProfit(currentData)
-
-	prevData, err := a.finmind.GetFinancialStatements(ctx, symbol, now.Year()-1, quarter)
-	if err != nil {
-		return 0, fmt.Errorf("finmind prior year financials: %w", err)
-	}
-
-	prevProfit := extractProfit(prevData)
-	if prevProfit == 0 {
-		return 0, fmt.Errorf("prior year profit is zero for %s", symbol)
-	}
-
-	growth := (currentProfit - prevProfit) / math.Abs(prevProfit)
-	return clampGrowth(growth), nil
+	return 0, fmt.Errorf("finmind profit: no data for %s in last 3 quarters", symbol)
 }
 
 func clampGrowth(v float64) float64 {
