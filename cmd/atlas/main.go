@@ -128,31 +128,11 @@ func isPrismWorkerCmd(args []string) bool {
 }
 
 // janusEngine is the global janus.Engine instance, populated by run() when
-// -api mode is enabled. Hoisted to file-level so the package-level
-// handleJanusRegimeScore handler can read it.
+// -api mode is enabled, then injected into dashboard via SetJanusEngine.
+// The /api/janus/regime-score endpoint is served by the existing
+// dashboard.Handlers.HandleJanusRegimeScore handler (see
+// internal/monitoring/api/dashboard/handlers.go:116).
 var janusEngine *janus.Engine
-
-// handleJanusRegimeScore returns the current janus engine composite score
-// along with is_synthetic flag (true when macro-synthesized, false when
-// derived from real PRISM training data). See spec §18.6.3.
-// Used by MCP wrapper to attach a score to each regime point in
-// /api/dashboard/regime-history. Formula:
-//
-//	score = tanh(foreignFlow/5e9) * 30 - max(0, VIX-20) * 1.5
-//
-// (per internal/janus/calculator.go::synthesizeCompositeScore)
-func handleJanusRegimeScore(_ *http.Request) (int, any) {
-	if janusEngine == nil {
-		return http.StatusServiceUnavailable, map[string]string{
-			"error": "janus engine not initialized",
-		}
-	}
-	score, isSynthetic := janusEngine.GetCurrentRegimeScore()
-	return http.StatusOK, map[string]any{
-		"score":        int(score),
-		"is_synthetic": isSynthetic,
-	}
-}
 
 // isPublicPath determines whether a request bypasses the API-key
 // AuthMiddleware. Web UI pages and their static assets under /admin/
@@ -768,11 +748,12 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			mux.Handle("GET /api/capital-flow/history", apishared.Get(cfHandler.HandleHistory))
-			// CL-3 B01: /api/janus/regime-score exposes the janus engine's
-			// composite score (macro-synthesized when PRISM training has
-			// not populated engine.lastScores). Formula must stay in
-			// sync with internal/janus/calculator.go::synthesizeCompositeScore.
-			mux.Handle("GET /api/janus/regime-score", apishared.Get(handleJanusRegimeScore))
+			// CL-3 B01 (deprecated duplicate): /api/janus/regime-score is
+			// already registered by dashboard.RegisterAllRoutes via the
+			// dashboard.Handlers.HandleJanusRegimeScore handler (see
+			// internal/monitoring/api/dashboard/handlers.go:116). B01 was
+			// originally implemented as a main.go inline handler before
+			// the audit revealed the existing implementation.
 			// H03: market explain endpoint for retail "為什麼漲跌" button.
 			explainHandler := marketexplain.NewHandler(macroProvider, capitalFlowService)
 			mux.Handle("GET /api/market/explain", apishared.Get(explainHandler.HandleExplain))
