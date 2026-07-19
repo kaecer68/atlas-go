@@ -11,6 +11,8 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
+var _ = industry.EventCalendar{} // silence unused-import when eventCalendar is nil
+
 // Handler serves capital flow analysis endpoints.
 //
 // Handler is a thin HTTP layer over Service: HandleDaily and HandleSummary
@@ -53,6 +55,89 @@ func RegisterRoutes(mux *http.ServeMux, provider marketdata.MacroDataProvider) {
 	mux.Handle("GET /api/capital-flow/daily", shared.Get(h.HandleDaily))
 	mux.Handle("GET /api/capital-flow/summary", shared.Get(h.HandleSummary))
 	mux.Handle("GET /api/capital-flow/history", shared.Get(h.HandleHistory))
+	mux.Handle("GET /api/capital-flow/historical-snapshot/{trading_date}", shared.Get(h.HandleHistoricalSnapshot))
+}
+
+// HandleHistoricalSnapshot returns the capital flow snapshot for a specific
+// trading date (per spec §18.3.2 / BL-CL5b). Reads per-dimension samples
+// from the rolling store and returns a structured response with per-force
+// status:
+//
+//	GET /api/capital-flow/historical-snapshot/2026-07-17
+//
+// Response 200:
+//
+//	{
+//	  "trading_date": "2026-07-17",
+//	  "status": "complete" | "partial" | "missing",
+//	  "dimensions": {
+//	    "foreign": {"raw_value": -12.72, "unit": "億股", "source_id": "twse_t86", "data_available": true},
+//	    "government": {"data_available": false, "missing_reason": "無資料"}
+//	  }
+//	}
+//
+// Response 400 when trading_date is missing or invalid format.
+func (h *Handler) HandleHistoricalSnapshot(r *http.Request) (int, any) {
+	tradingDate := strings.TrimSpace(r.PathValue("trading_date"))
+	if tradingDate == "" {
+		return http.StatusBadRequest, map[string]string{"error": "trading_date path param is required"}
+	}
+	if err := shared.ValidateDateParam(tradingDate); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": err.Error()}
+	}
+
+	store := h.service.Store()
+	if store == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "rolling store not available"}
+	}
+
+	const sentinel = "2099-12-31"
+	result := make(map[ForceName]map[string]any, 7)
+	missingCount := 0
+
+	for _, dim := range []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	} {
+		samples, err := store.History(r.Context(), dim, sentinel, defaultHistoryLimit)
+		if err != nil {
+			logging.Warn("capitalflow", "snapshot_history_failed", "dim", string(dim), logging.Err(err))
+			result[dim] = map[string]any{"data_available": false, "missing_reason": "store_error"}
+			missingCount++
+			continue
+		}
+		found := false
+		for _, s := range samples {
+			if s.TradingDate == tradingDate {
+				result[dim] = map[string]any{
+					"raw_value":      s.RawValue,
+					"unit":           s.Unit,
+					"source_id":      s.SourceID,
+					"data_available": true,
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			result[dim] = map[string]any{"data_available": false, "missing_reason": "無資料"}
+			missingCount++
+		}
+	}
+
+	status := "complete"
+	switch {
+	case missingCount == 7:
+		status = "missing"
+	case missingCount > 0:
+		status = "partial"
+	}
+
+	return http.StatusOK, map[string]any{
+		"trading_date": tradingDate,
+		"status":       status,
+		"dimensions":   result,
+	}
 }
 
 // HandleDaily returns the full daily capital flow report.
