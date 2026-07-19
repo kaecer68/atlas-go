@@ -75,9 +75,9 @@
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| **A01** | `Service.Refresh` 在 15:30 cutoff 前不斷覆寫前一交易日的 slot，導致 store 永遠只有 1 天資料 | **accepted**：以 `currentTaipeiTradingDate(time.Now())` 推導 tradingDate，與 `applyUpsert` last-write-wins 結合形成永久覆寫效應 | `internal/capitalflow/service.go`（Refresh 重寫：data-driven keying + non-trading day skip-and-log + signature 變更為 `Refresh(ctx)` 移除 tradingDate 參數） | (1) `go build ./...` 全綠；(2) 新增 4 個 test 全 PASS：`TestRefresh_KeyMatchesRecordedAt`、`TestRefresh_SkipOnWeekend`、`TestRefresh_IdempotentSameDay`、`TestRefresh_TimezoneOffset`；(3) 既有 `TestService_RefreshSameDayDoesNotGrowWindow` 仍 PASS；(4) `TestRegisterOperationsTasks_CapitalFlowRefreshSkippedWhenNil` 仍 PASS | pending | **CF-INV-15**（Refresh keying data-driven）+ **CF-INV-16**（non-trading day skip-and-log）寫入 spec | gitnexus impact LOW；test caller 1 處；spec §14 一併 |
-| **A02** | capitalflow.Service 沒有 trading day calendar 依賴，無法判定「資料所屬日期是否為台股交易日」 | **accepted**：Service struct 沒有 calendar 欄位；industry.EventCalendar 已存在並被 eventdriven / recommender 既有使用（pattern 一致：直接傳具體型別 `*industry.EventCalendar`，無自訂介面） | `internal/capitalflow/service.go`（Service struct 新增 `eventCalendar *industry.EventCalendar` 欄位；`NewServiceWithStore` 新增第 4 參數；`NewService` 委派呼叫更新）+ `cmd/atlas/main.go:733`（傳入 eventCalendar）+ `cmd/atlas/wire_recommender.go:73`（傳入 nil calendar — 該路徑用於測試，生產路徑走 main.go）+ `internal/capitalflow/handler.go`（`NewHandlerWithStore` 委派呼叫更新）+ 7 個 test 檔的 `NewService(...)` 呼叫加 `nil` | (1) `NewServiceWithStore` 接受 non-nil calendar 時可正常呼叫 Refresh；(2) 既有 handler/service tests 全綠（calendar=nil 路徑不破壞既有行為）；(3) gitnexus impact CRITICAL 但所有 caller 在 atlas-go codebase 內，更新可控 | pending | 與 A01 同期落地的準備步驟；無 spec 變更（pattern 沿用既有） | gitnexus CRITICAL：3 direct caller + 5 modules；需 1 PR 內全部更新 |
-| **A03** | 既有 spec 缺乏「historical timeline」語意契約，且缺 invariants 守護 CL-1 的修法不再次退化 | **accepted**：capital-flow-seven-dimension-spec.md 現有 §12 Invariant Tracker 止於 CF-INV-14；無 Refresh keying 與 non-trading day 語意 | `docs/specs/capital-flow-seven-dimension-spec.md`（新增 §14 Historical Timeline API 章節 + §12 增列 CF-INV-15/16/17） | (1) §14 含 query params、response shape、capacity 限制；(2) §12 新增 3 條 invariants：CF-INV-15（Refresh data-driven keying）、CF-INV-16（non-trading day skip-and-log）、CF-INV-17（HandleHistory 對缺失 dimension 回傳 `status: missing` 而非 silent omission — 為未來 CL-5 鋪路）；(3) `bash scripts/ci/check_atlas_mcp_docs_consistency.sh` + `check_markdown_links.sh` 全綠 | pending | **spec 擴充**：§14 + 3 invariants | 無 code 變更；純文件 |
+| **A01** | `Service.Refresh` 在 15:30 cutoff 前不斷覆寫前一交易日的 slot，導致 store 永遠只有 1 天資料 | **accepted**：以 `currentTaipeiTradingDate(time.Now())` 推導 tradingDate，與 `applyUpsert` last-write-wins 結合形成永久覆寫效應 | `internal/capitalflow/service.go`（Refresh 重寫：data-driven keying + non-trading day skip-and-log + signature 變更為 `Refresh(ctx)` 移除 tradingDate 參數） | (1) `go build ./...` 全綠；(2) 新增 4 個 test 全 PASS：`TestRefresh_KeyMatchesRecordedAt`、`TestRefresh_SkipOnWeekend`、`TestRefresh_IdempotentSameDay`、`TestRefresh_TimezoneOffset`；(3) 既有 `TestService_RefreshSameDayDoesNotGrowWindow` 仍 PASS；(4) `TestRegisterOperationsTasks_CapitalFlowRefreshSkippedWhenNil` 仍 PASS | done | **CF-INV-15**（Refresh keying data-driven）+ **CF-INV-16**（non-trading day skip-and-log）寫入 spec | gitnexus impact LOW；test caller 1 處；spec §14 一併 |
+| **A02** | capitalflow.Service 沒有 trading day calendar 依賴，無法判定「資料所屬日期是否為台股交易日」 | **accepted**：Service struct 沒有 calendar 欄位；industry.EventCalendar 已存在並被 eventdriven / recommender 既有使用（pattern 一致：直接傳具體型別 `*industry.EventCalendar`，無自訂介面） | `internal/capitalflow/service.go`（Service struct 新增 `eventCalendar *industry.EventCalendar` 欄位；`NewServiceWithStore` 新增第 4 參數；`NewService` 委派呼叫更新）+ `cmd/atlas/main.go:733`（傳入 eventCalendar）+ `cmd/atlas/wire_recommender.go:73`（傳入 nil calendar — 該路徑用於測試，生產路徑走 main.go）+ `internal/capitalflow/handler.go`（`NewHandlerWithStore` 委派呼叫更新）+ 7 個 test 檔的 `NewService(...)` 呼叫加 `nil` | (1) `NewServiceWithStore` 接受 non-nil calendar 時可正常呼叫 Refresh；(2) 既有 handler/service tests 全綠（calendar=nil 路徑不破壞既有行為）；(3) gitnexus impact CRITICAL 但所有 caller 在 atlas-go codebase 內，更新可控 | done | 與 A01 同期落地的準備步驟；無 spec 變更（pattern 沿用既有） | gitnexus CRITICAL：3 direct caller + 5 modules；需 1 PR 內全部更新 |
+| **A03** | 既有 spec 缺乏「historical timeline」語意契約，且缺 invariants 守護 CL-1 的修法不再次退化 | **accepted**：capital-flow-seven-dimension-spec.md 現有 §12 Invariant Tracker 止於 CF-INV-14；無 Refresh keying 與 non-trading day 語意 | `docs/specs/capital-flow-seven-dimension-spec.md`（新增 §14 Historical Timeline API 章節 + §12 增列 CF-INV-15/16/17） | (1) §14 含 query params、response shape、capacity 限制；(2) §12 新增 3 條 invariants：CF-INV-15（Refresh data-driven keying）、CF-INV-16（non-trading day skip-and-log）、CF-INV-17（HandleHistory 對缺失 dimension 回傳 `status: missing` 而非 silent omission — 為未來 CL-5 鋪路）；(3) `bash scripts/ci/check_atlas_mcp_docs_consistency.sh` + `check_markdown_links.sh` 全綠 | done | **spec 擴充**：§14 + 3 invariants | 無 code 變更；純文件 |
 
 ---
 
@@ -104,11 +104,11 @@
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Service struct 加 eventCalendar 欄位 + NewServiceWithStore 加第 4 參數 | A02 | pending | commit hash |
-| Refresh 改寫為 data-driven keying + non-trading day skip + signature 變更 | A01 | pending | commit hash |
-| 7 個 test caller + 3 個 prod caller 全部更新 | A01+A02 | pending | commit hash |
-| 新增 4 個 test（Oracle 列的 acceptance） | A01 | pending | commit hash |
-| Spec 擴充 §14 + CF-INV-15/16/17 | A03 | pending | commit hash |
+| Service struct 加 eventCalendar 欄位 + NewServiceWithStore 加第 4 參數 | A02 | done | `981c5d0f` |
+| Refresh 改寫為 data-driven keying + non-trading day skip + signature 變更 | A01 | done | `b55eecbf` |
+| 7 個 test caller + 3 個 prod caller 全部更新 | A01+A02 | done | `981c5d0f` + `b55eecbf` |
+| 新增 4 個 test（Oracle 列的 acceptance） | A01 | done | `b55eecbf` |
+| Spec 擴充 §14 + CF-INV-15/16/17 | A03 | done | `9da51b59` |
 
 ### Phase D — Close Out（pending）
 
@@ -192,14 +192,28 @@ PR body 必須引用：`See docs/manifests/2026-07-20-capital-flow-history-audit
 
 ---
 
-## Session-End State（待 Phase C 後補）
+## Session-End State
 
-- **Done this session**: Phase A 完成 + Phase B manifest draft
-- **Remaining**: 等業主 review manifest → Phase C 3 commits → Phase D close out
-- **Next action**: kaecer review 本 manifest；同意後我用 `using-git-worktrees` 建隔離 worktree 並開始 A02 commit
-- **Uncommitted code**: none（僅本 manifest 為新建文件）
-- **Branch / PR**: 待 Phase C 開始時建立
-- **Paused because**: 等業主 review
+- **Done this session**: Phase A 真相盤查 wiki + Phase B manifest 撰寫 + Phase C 3 commits（A02/A01/A03）+ Phase D 狀態更新；go test ./... 全綠；markdown links 全綠
+- **Remaining**: 開 PR 等 CI 綠 → merge 後依 `docs/multi-cli-protocol.md` 清理 worktree 分支
+- **Next action**: 等業主確認是否開 PR；Post-Step 3 工作（盤查未解決問題的 wiki page）見下方
+- **Uncommitted code**: none（本 manifest 已記錄最終 commit hashes）
+- **Branch / PR**: `feat/capital-flow-history-fix` / 待開 PR（含 3 commits 981c5d0f + b55eecbf + 9da51b59）
+- **Paused because**: 等業主決定開 PR 時機
+
+---
+
+## Post-Step 3 工作交接（給下一個 session）
+
+依用戶指示「做完後盤查尚未解決的問題，作為下一個 session 的工作」，產出位置：
+- `atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md`
+
+需涵蓋：
+1. CL-2/CL-3/CL-4/CL-5(程式實作)/CL-6 各自根因與未修復範圍
+2. BL-CL2 macro snapshot 時序 API 的 spec outline 草稿
+3. BL-CL3 regime 時序 store infra 設計草稿
+4. 任何新發現的邊界問題
+5. 對 hermes 三大研究需求的解除狀態盤點
 
 ---
 
@@ -208,6 +222,7 @@ PR body 必須引用：`See docs/manifests/2026-07-20-capital-flow-history-audit
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-07-20 | 1.0 | Initial manifest（3 IDs A01-A03，承接 hermes 立案 + 真相盤查報告） | OpenCode CLI Agent (Sisyphus) |
+| 2026-07-20 | 1.1 | Phase C 全部完成：3 commits（981c5d0f + b55eecbf + 9da51b59）；狀態欄、A01-A03 → done；Session-End 補齊；新增 Post-Step 3 交接區塊 | OpenCode CLI Agent (Sisyphus) |
 
 ---
 
