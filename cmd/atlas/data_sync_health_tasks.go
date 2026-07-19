@@ -235,4 +235,35 @@ func registerDataSyncAndHealthTasks(
 		Task:     monitoring.E2EProbeTaskFunc(probeDeps),
 	})
 	log.Printf("[Gateway] registered e2e_chain_probe background task (6h interval)")
+	// SA11: Dark launch observation — daily count of simulation sessions
+	// since the F06 real-strategy-rankings deployment (2026-07-12).
+	// Logs progress; when ≥20 sessions are accumulated, prints a
+	// prominent milestone log so the operator knows it's time to
+	// evaluate real-world prediction hit rates.
+	sessionsDir := filepath.Join(cfg.WorkDir, "data", "state", "sessions")
+	sa11Cutoff := "session-20260712"
+	_ = taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "sa11_dark_launch_check",
+		Interval: 24 * time.Hour,
+		Enabled:  true,
+		Task: func(_ context.Context) error {
+			entries, err := os.ReadDir(sessionsDir)
+			if err != nil {
+				return fmt.Errorf("sa11: read sessions dir: %w", err)
+			}
+			count := 0
+			for _, e := range entries {
+				if e.IsDir() && e.Name() >= sa11Cutoff {
+					count++
+				}
+			}
+			if count >= 20 {
+				log.Printf("[SA11] DARK LAUNCH MILESTONE: %d/20 sessions. Evaluate hit rates and decide on Predicted Trade Cycle.", count)
+			} else {
+				log.Printf("[SA11] dark launch progress: %d/20 sessions (need %d more)", count, 20-count)
+			}
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered sa11_dark_launch_check background task (24h interval)")
 }
