@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -187,7 +188,7 @@ func TestService_RefreshSameDayDoesNotGrowWindow(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
-		if err := svc.Refresh(ctx, tradingDate); err != nil {
+		if err := svc.Refresh(ctx); err != nil {
 			t.Fatalf("refresh %d: %v", i, err)
 		}
 	}
@@ -201,5 +202,101 @@ func TestService_RefreshSameDayDoesNotGrowWindow(t *testing.T) {
 		if len(got) != 1 {
 			t.Errorf("%s window has %d samples after 3 Refresh calls, want 1 (CF-INV-05 last-write-wins)", dim, len(got))
 		}
+	}
+}
+
+func TestRefresh_KeyMatchesRecordedAt(t *testing.T) {
+	recordedAt := time.Date(2026, 7, 15, 9, 0, 0, 0, time.UTC).Unix()
+	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
+		RecordedAt:         recordedAt,
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
+		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
+		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
+	}}
+	store := NewMemoryRollingSampleStore(60)
+	svc := NewServiceWithStore(provider, 0, store, nil)
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	want := time.Unix(recordedAt, 0).In(time.FixedZone("Asia/Taipei", 8*3600)).Format("2006-01-02")
+	got, err := store.History(context.Background(), ForceForeign, "2099-12-31", 10)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(got) != 1 || got[0].TradingDate != want {
+		t.Errorf("sample date = %v, want %v (data-driven keying CF-INV-15)", got, want)
+	}
+}
+
+func TestRefresh_SkipOnWeekend(t *testing.T) {
+	saturday := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
+	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
+		RecordedAt:         saturday.Unix(),
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
+		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
+		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
+	}}
+	store := NewMemoryRollingSampleStore(60)
+	cal := industry.NewEventCalendarWithProvider(nil)
+	svc := NewServiceWithStore(provider, 0, store, cal)
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh on Saturday should skip-and-log, got err: %v", err)
+	}
+	got, err := store.History(context.Background(), ForceForeign, "2099-12-31", 10)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected no samples on weekend, got %d (CF-INV-16)", len(got))
+	}
+}
+
+func TestRefresh_IdempotentSameDay(t *testing.T) {
+	recordedAt := time.Date(2026, 7, 15, 9, 0, 0, 0, time.UTC).Unix()
+	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
+		RecordedAt:         recordedAt,
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
+		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
+		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
+	}}
+	store := NewMemoryRollingSampleStore(60)
+	svc := NewServiceWithStore(provider, 0, store, nil)
+	for i := 0; i < 3; i++ {
+		if err := svc.Refresh(context.Background()); err != nil {
+			t.Fatalf("refresh %d: %v", i, err)
+		}
+	}
+	nextDay := time.Unix(recordedAt, 0).AddDate(0, 0, 1).Format("2006-01-02")
+	for _, dim := range []ForceName{ForceForeign, ForceInstitutional, ForceDealer} {
+		got, err := store.History(context.Background(), dim, nextDay, 60)
+		if err != nil {
+			t.Fatalf("History %s: %v", dim, err)
+		}
+		if len(got) != 1 {
+			t.Errorf("%s window has %d samples after 3 Refresh, want 1 (CF-INV-05)", dim, len(got))
+		}
+	}
+}
+
+func TestRefresh_TimezoneOffset(t *testing.T) {
+	recordedAt := time.Date(2026, 7, 15, 16, 0, 0, 0, time.UTC).Unix()
+	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
+		RecordedAt:         recordedAt,
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
+		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
+		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
+	}}
+	store := NewMemoryRollingSampleStore(60)
+	svc := NewServiceWithStore(provider, 0, store, nil)
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	want := "2026-07-16"
+	got, err := store.History(context.Background(), ForceForeign, "2099-12-31", 10)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(got) != 1 || got[0].TradingDate != want {
+		t.Errorf("UTC 16:00 should map to Taipei next day: got %v, want %s", got, want)
 	}
 }

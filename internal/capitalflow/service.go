@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -188,19 +189,28 @@ func (s *Service) refreshIfStale() ResonanceResult {
 }
 
 // Refresh fetches a fresh snapshot and persists the available
-// dimensions as RollingSamples for tradingDate, exactly once. It
-// is the only writer to s.store (BK-15 / spec §8.5): LatestDaily,
-// Summary, QualityScore, and refreshIfStale never call UpsertDay.
+// dimensions as RollingSamples for the snapshot's own trading
+// date, exactly once. It is the only writer to s.store (BK-15 /
+// spec §8.5): LatestDaily, Summary, QualityScore, and
+// refreshIfStale never call UpsertDay.
 //
-// tradingDate is the canonical trading day; the caller is
-// responsible for choosing it (Asia/Taipei convention in
-// production). It is converted to "YYYY-MM-DD" once and threaded
-// through every persisted sample so the rolling store can enforce
-// CF-INV-05 (one sample per dimension per trading date).
+// Data-driven keying (CF-INV-15): the trading-date key is
+// derived from snap.RecordedAt (converted to Asia/Taipei
+// YYYY-MM-DD), not from the caller's wall clock. This decouples
+// the write key from cron execution time, which previously caused
+// a cutoff+last-write-wins overwrite trap (see docs/manifests/
+// 2026-07-20-capital-flow-history-audit.md §證據鏈摘要).
+//
+// Non-trading-day skip (CF-INV-16): if the snapshot's date is
+// not a Taiwan trading day per s.eventCalendar.IsTaiwanTradingDay,
+// Refresh returns nil after a skip-and-log — no empty sample is
+// written (CF-INV-06) and no error is raised (avoids noisy
+// retries). A nil eventCalendar degrades to "treat as trading
+// day" with a warning log so a missing-wiring bug surfaces in
+// observability without breaking the hot path.
 //
 // Errors (wrapped with %w for errors.Is / errors.As):
 //   - nil store: the wiring is incomplete for the write path;
-//   - zero trading date: the caller did not pick a valid day;
 //   - provider fetch failure: propagated so callers can retry;
 //   - empty snapshot (every source channel was empty): returning a
 //     wrapped error makes the missing-day condition visible
@@ -208,18 +218,29 @@ func (s *Service) refreshIfStale() ResonanceResult {
 //     (spec §8.3 / CF-INV-06);
 //   - store.UpsertDay failure: propagated so callers can decide
 //     whether to retry the same trading date.
-func (s *Service) Refresh(ctx context.Context, tradingDate time.Time) error {
+func (s *Service) Refresh(ctx context.Context) error {
 	if s.store == nil {
 		return fmt.Errorf("capitalflow: Refresh called with nil rolling store")
-	}
-	if tradingDate.IsZero() {
-		return fmt.Errorf("capitalflow: Refresh called with zero trading date")
 	}
 	snap, err := s.provider.FetchSnapshot(ctx)
 	if err != nil {
 		return fmt.Errorf("capitalflow: Refresh fetch snapshot: %w", err)
 	}
-	currentDate := tradingDate.Format("2006-01-02")
+
+	taipei := time.FixedZone("Asia/Taipei", 8*3600)
+	recordTime := time.Unix(snap.RecordedAt, 0).In(taipei)
+	currentDate := recordTime.Format("2006-01-02")
+
+	if s.eventCalendar == nil {
+		logging.Warn("capitalflow", "refresh_no_calendar",
+			logging.FStr("date", currentDate))
+	} else if !s.eventCalendar.IsTaiwanTradingDay(recordTime) {
+		logging.Info("capitalflow", "skip_non_trading_day",
+			logging.FStr("date", currentDate),
+			logging.FInt("recorded_at", int(snap.RecordedAt)))
+		return nil
+	}
+
 	forces := s.extractor.Score(snap, currentDate, nil)
 	var samples []RollingSample
 	for _, f := range forces {
