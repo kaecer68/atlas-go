@@ -266,5 +266,4 @@ func registerDataSyncAndHealthTasks(
 		},
 	})
 	log.Printf("[Gateway] registered sa11_dark_launch_check background task (24h interval)")
-
 }
