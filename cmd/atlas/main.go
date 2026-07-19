@@ -127,6 +127,13 @@ func isPrismWorkerCmd(args []string) bool {
 	return len(args) >= 2 && args[0] == "prism" && args[1] == "worker"
 }
 
+// janusEngine is the global janus.Engine instance, populated by run() when
+// -api mode is enabled, then injected into dashboard via SetJanusEngine.
+// The /api/janus/regime-score endpoint is served by the existing
+// dashboard.Handlers.HandleJanusRegimeScore handler (see
+// internal/monitoring/api/dashboard/handlers.go:116).
+var janusEngine *janus.Engine
+
 // isPublicPath determines whether a request bypasses the API-key
 // AuthMiddleware. Web UI pages and their static assets under /admin/
 // and /client/, plus probing endpoints, are loaded by the browser
@@ -177,6 +184,8 @@ func isPublicPath(p string) bool {
 	case p == "/api/strategies" || strings.HasPrefix(p, "/api/strategies/"):
 		return true
 	case p == "/api/risk" || strings.HasPrefix(p, "/api/risk/"):
+		return true
+	case p == "/api/janus" || strings.HasPrefix(p, "/api/janus/"):
 		return true
 	case p == "/api/regime" || strings.HasPrefix(p, "/api/regime/"):
 		return true
@@ -402,7 +411,6 @@ func run(args []string, deps appDeps) error {
 		}
 	}
 
-	var janusEngine *janus.Engine
 	baselineMgr := baseline.NewManager(cfg.BaselinePolicyPath)
 
 	// Handle --simulate mode: run one-shot daily simulation and exit
@@ -677,7 +685,13 @@ func run(args []string, deps appDeps) error {
 		}
 		if historicalStore, err := ledger.NewHistoricalStore(cfg); err == nil {
 			log.Printf("[HistoricalStore] initialized")
-			_ = historicalStore // SystemCore has no HistoricalStore field yet; wiring deferred to follow-up PR
+			// CL-3 A03: wire into DashboardAPI so /api/dashboard/regime-history
+			// reads the regime_history SQLite table (true time-series) instead
+			// of simulation session summaries. Late-binding after stocktools
+			// registration because the store is opened here.
+			if dashboard != nil {
+				dashboard.WithHistoricalStore(historicalStore)
+			}
 		} else {
 			log.Printf("[HistoricalStore] init failed: %v", err)
 		}
@@ -734,6 +748,12 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			mux.Handle("GET /api/capital-flow/history", apishared.Get(cfHandler.HandleHistory))
+			// CL-3 B01 (deprecated duplicate): /api/janus/regime-score is
+			// already registered by dashboard.RegisterAllRoutes via the
+			// dashboard.Handlers.HandleJanusRegimeScore handler (see
+			// internal/monitoring/api/dashboard/handlers.go:116). B01 was
+			// originally implemented as a main.go inline handler before
+			// the audit revealed the existing implementation.
 			// H03: market explain endpoint for retail "為什麼漲跌" button.
 			explainHandler := marketexplain.NewHandler(macroProvider, capitalFlowService)
 			mux.Handle("GET /api/market/explain", apishared.Get(explainHandler.HandleExplain))

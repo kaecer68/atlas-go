@@ -2,6 +2,7 @@ package service
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,6 +29,7 @@ type PipelineService struct {
 	cycleProvider     CycleProviderFunc
 	cardProvider      CycleCardProviderFunc
 	store             ledger.OutcomeStore
+	historicalStore   ledger.HistoricalStore
 }
 
 type NarrativeContextData struct {
@@ -51,6 +53,16 @@ func NewPipelineService(workDir, ledgerDir string, store ledger.OutcomeStore) *P
 		LedgerDir: ledgerDir,
 		store:     store,
 	}
+}
+
+// WithHistoricalStore injects the HistoricalStore (regime_history SQLite
+// table) so LoadRegimeHistory can serve true regime time-series instead of
+// simulation session metadata. Builder pattern preserves backward compat:
+// existing 43 NewPipelineService test callers (nil 3rd arg) keep working.
+// See docs/manifests/2026-07-20-cl3-regime-history.md A01.
+func (s *PipelineService) WithHistoricalStore(hs ledger.HistoricalStore) *PipelineService {
+	s.historicalStore = hs
+	return s
 }
 
 // PipelineLoadStatus indicates the health of the loaded recommendation pipeline data.
@@ -1071,6 +1083,54 @@ type RegimeTransition struct {
 }
 
 func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
+	if s.historicalStore != nil {
+		return s.loadRegimeHistoryFromStore(limit)
+	}
+	return s.loadRegimeHistoryFromSessions(limit)
+}
+
+// loadRegimeHistoryFromStore reads the regime_history SQLite table via
+// HistoricalStore and projects RegimeRow into the existing RegimeSessionEntry
+// shape. This is the canonical time-series path (see spec §18.6.2).
+func (s *PipelineService) loadRegimeHistoryFromStore(limit int) (*RegimeHistoryData, error) {
+	rows, err := s.historicalStore.LoadRegimeHistory(context.Background(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("load regime history: %w", err)
+	}
+	sessions := make([]RegimeSessionEntry, len(rows))
+	var transitions []RegimeTransition
+	var prevRegime string
+	for i, row := range rows {
+		sessions[i] = RegimeSessionEntry{
+			SessionID:  row.Date,
+			Regime:     row.Regime,
+			RecordedAt: row.RecordedAt.UTC().Format(time.RFC3339),
+		}
+		if i > 0 && row.Regime != prevRegime {
+			transitions = append(transitions, RegimeTransition{
+				From:      prevRegime,
+				To:        row.Regime,
+				Timestamp: row.RecordedAt.UTC().Format(time.RFC3339),
+			})
+		}
+		prevRegime = row.Regime
+	}
+	current := ""
+	if len(rows) > 0 {
+		current = rows[0].Regime
+	}
+	return &RegimeHistoryData{
+		Sessions:    sessions,
+		Transitions: transitions,
+		Current:     current,
+	}, nil
+}
+
+// loadRegimeHistoryFromSessions is the legacy fallback that reads simulation
+// session summaries from the filesystem. Preserved for backward compatibility
+// with the 43 test callers that don't inject HistoricalStore; production
+// paths go through loadRegimeHistoryFromStore (see spec §18.6.2).
+func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHistoryData, error) {
 	store := s.store
 	summaries, err := store.LoadSessionSummaries()
 	if err != nil {

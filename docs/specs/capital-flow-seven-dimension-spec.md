@@ -554,3 +554,97 @@ Rolling sample store 的 capacity 對齊 spec §10 `H-CF-05` gate：
 **Cap 行為**：`?days=999` 自動 clamp 至 252；不會回 error。
 
 **Backlog 警告**：capacity 提升僅是上限，不會自動回填歷史資料。當前 store 內只有 `2026-07-17` 一筆（post-A01 但 15:30 CST cutoff 前）。歷史 backfill 入 **BL-CF-01**（需 Provider 提供歷史 API 或 replay 機制）。
+
+### 18.6 Historical Regime Observation Store（Wiring Gap 修正 — docs/manifests/2026-07-20-cl3-regime-history.md）
+
+#### 18.6.1 Wiki-vs-Reality 揭露（必讀）
+
+`atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 + §4 CL-3 描述**已過時**（wiki 寫於 2026-07-19，當前 codebase 2026-07-20 已部分 ship）。**本 §18.6 為準**：
+
+| 維度 | Wiki 描述（過時） | 當前現實（2026-07-20） |
+|------|------------------|----------------------|
+| 時序存儲 | 「沒有每個交易日一個 regime score 的時序存儲」 | **`regime_history` SQLite 表已有 90 筆真實資料**（4-01 到 6-29） |
+| Store 介面 | 「需新建 `RegimeObservationStore`」 | **`HistoricalStore` interface + SQLite impl 已 ship**（`internal/ledger/historical_store.go`） |
+| 寫入路徑 | 「JANUS 6h 排程要每天寫」 | **`stage4-loader` 已 backfill**（`cmd/atlas-stage4-loader/main.go:380`）；runtime writer 待 BL-CL3b |
+| 真實 score endpoint | `/api/janus/regime-score` | **route 不存在**（本 PR §18.6.3 新增） |
+
+#### 18.6.2 `PipelineService.LoadRegimeHistory` 讀對 store
+
+**Before**（service.go:1073，`InternalMonitoringService.LoadRegimeHistory` 讀 `LoadSessionSummaries` 是 simulation session metadata）：
+```go
+func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
+    summaries, err := s.store.LoadSessionSummaries()  // ❌ filesystem sessions
+    ...
+}
+```
+
+**After**（本 PR A01，`WithHistoricalStore` builder pattern + nil-safe fallback）：
+```go
+type PipelineService struct {
+    WorkDir           string
+    LedgerDir         string
+    store             ledger.OutcomeStore
+    historicalStore   ledger.HistoricalStore  // 新欄位
+    ...
+}
+
+func (s *PipelineService) WithHistoricalStore(hs ledger.HistoricalStore) *PipelineService {
+    s.historicalStore = hs
+    return s
+}
+
+func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
+    if s.historicalStore != nil {
+        return s.loadFromRegimeHistory(s.historicalStore, limit)  // ✅ 真實時序
+    }
+    // fallback: 既有 LoadSessionSummaries 路徑（向後相容 43 個 test caller）
+    return s.loadFromSessionSummaries(s.store, limit)
+}
+```
+
+**`loadFromRegimeHistory`** 把 `RegimeRow` 轉成 `RegimeSessionEntry`：map `trading_date → date`, `regime → regime`, `source_session_id → session_id`。保留 `current_regime` + `transitions` 計算邏輯。
+
+**Acceptance**：
+- 既有 `TestLoadRegimeHistory_*` 全綠（nil-safe fallback 路徑）
+- 新增 `TestLoadRegimeHistory_HistoricalStore_OK` PASS
+
+#### 18.6.3 `/api/janus/regime-score` HTTP Endpoint（本 PR B01 新增）
+
+**Endpoint**：`GET /api/janus/regime-score`
+
+**Response 200**：
+```json
+{
+  "score": -21.26,
+  "is_synthetic": true
+}
+```
+
+**`is_synthetic=true`**：當前實作；macro snapshot synthesize composite score（per `janus.Engine.GetCurrentRegimeScore`）。
+**`is_synthetic=false`**：PRISM training populated 後回傳真實 Sharpe average（BL-CL3b 範圍）。
+
+**Formula**（canonical，per `internal/janus/composite_score_test.go:18`）：
+```
+score = tanh(foreignFlow/5e9) * 30 - max(0, VIX-20) * 1.5
+```
+
+**公式一致性守則**：MCP wrapper 與 janus engine **必須**使用同一公式。**任何第三方實作都不允許**（per AGENTS.md「同一件事不可有三種算法」陷阱）。本 PR B02 刪除 MCP wrapper `fetchRegimeCompositeScore` 重複實作（原本用 `/5` 而非 `/5e9`，公式錯誤）。
+
+#### 18.6.4 MCP `regime_get_history` 整合（修法後行為）
+
+**修法後流程**：
+1. MCP 工具 `regime_get_history(days=N)` 呼叫 `/api/dashboard/regime-history?limit=N`
+2. **修法後** 該 endpoint 透過 `PipelineService.LoadRegimeHistory` 讀 `regime_history` SQLite 表，回 `RegimeSessionEntry[]` 真實時序
+3. MCP wrapper 對每個 regime 點呼叫 `/api/janus/regime-score` 拿 score（**修法後**該 endpoint 真的存在）
+4. 組裝 `RegimePoint{Date, Regime, Score}` 回傳
+5. `RegimePoint.Score *int` 用 omitempty — 若 `/api/janus/regime-score` 失敗，Score 欄位 omitted（honest unknown），不報 0
+
+**Before（hermes 觀察的 bug）**：
+- `/api/dashboard/regime-history` 回 simulation sessions（不是 regime 時序）
+- `/api/janus/regime-score` 永遠 404 → fallback `fetchRegimeCompositeScore` 公式錯誤
+- 結果：散亂 events + score=0
+
+**After（本 PR fix）**：
+- `/api/dashboard/regime-history` 回 regime_history 表真實時序（90 筆資料）
+- `/api/janus/regime-score` 真的存在，回 macro-derived composite score
+- 結果：每天 regime label（NEUTRAL/RISK_ON/RISK_OFF/TRANSITIONAL）+ 對應 score
