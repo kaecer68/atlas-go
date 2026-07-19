@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -32,6 +33,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/forecast-vs-reality", shared.Get(h.HandleForecastVsReality))
 	mux.Handle("GET /api/dashboard/recommendation-pipeline", shared.Get(h.HandleRecommendationPipeline))
 	mux.Handle("GET /api/dashboard/sessions", shared.Get(h.HandleSessions))
+	mux.Handle("GET /api/dashboard/sessions/{id}", shared.Get(h.HandleSessionDetail))
 	mux.Handle("GET /api/dashboard/universe-overlap", shared.Get(h.HandleUniverseOverlap))
 	mux.Handle("GET /api/dashboard/reasoning-trace", shared.Get(h.ReasoningHandler.HandleReasoningTrace))
 	mux.Handle("GET /api/synergy/darwinian/status", shared.Get(h.HandleDarwinianStatus))
@@ -376,8 +378,13 @@ type RecommendationPipelineResponse struct {
 }
 
 // HandleSessions handles GET /api/dashboard/sessions.
+//
+// Per CL-4 §18.7.2, each session object now includes a `top_strategies`
+// field containing the top-3 strategies from that session ranked by
+// Conviction DESC. This is additive — existing clients that only read
+// the original 4 fields are unaffected.
 func (h *Handlers) HandleSessions(r *http.Request) (int, any) {
-	sessions, err := h.Svc.LoadSessions()
+	sessions, err := h.Svc.LoadSessionsWithTopStrategies(3)
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load sessions: %v", err)}
 	}
@@ -387,14 +394,72 @@ func (h *Handlers) HandleSessions(r *http.Request) (int, any) {
 
 	result := make([]map[string]any, len(sessions))
 	for i, s := range sessions {
-		result[i] = map[string]any{
+		entry := map[string]any{
 			"session_id":    s.SessionID,
 			"recorded_at":   s.RecordedAt,
 			"regime":        s.Regime,
 			"outcome_count": s.OutcomeCount,
 		}
+		// Only include top_strategies when the enrichment populated them.
+		// Keep nil/missing to avoid changing the response shape for sessions
+		// that never went through LoadSessionsWithTopStrategies.
+		if s.TopStrategies != nil {
+			entry["top_strategies"] = strategyEntriesForResponse(s.TopStrategies)
+		}
+		result[i] = entry
 	}
 	return http.StatusOK, map[string]any{"sessions": result}
+}
+
+// strategyEntriesForResponse projects RecommendationOutcome into the
+// per-strategy shape that frontends and MCP consumers expect from
+// /api/dashboard/sessions. Keeping this projection in the handler layer
+// keeps the domain type clean and lets us evolve the public shape without
+// touching internal/domain.
+func strategyEntriesForResponse(outcomes []domain.RecommendationOutcome) []map[string]any {
+	result := make([]map[string]any, len(outcomes))
+	for i, o := range outcomes {
+		result[i] = map[string]any{
+			"agent_id":      o.AgentID,
+			"symbol":        o.Symbol,
+			"side":          string(o.Side),
+			"conviction":    o.Conviction,
+			"passed_guards": o.PassedGuards,
+			"target_price":  o.TargetPrice,
+			"stop_loss":     o.StopLossPrice,
+		}
+	}
+	return result
+}
+
+// HandleSessionDetail handles GET /api/dashboard/sessions/{id}.
+//
+// Per CL-4 §18.7.3, returns the full session summary plus all
+// recommendation outcomes (one record per strategy execution in the
+// session). The summary is read from the filesystem; the outcomes come
+// from the SQLite ledger store via LoadSessionOutcomes.
+//
+// 404 (not 500) when the sessionID is unknown — distinguishes "missing
+// data" from "system error" and matches REST conventions.
+func (h *Handlers) HandleSessionDetail(r *http.Request) (int, any) {
+	sessionID := strings.TrimSpace(r.PathValue("id"))
+	if sessionID == "" {
+		return http.StatusBadRequest, map[string]string{"error": "session id is required"}
+	}
+
+	detail, err := h.Svc.LoadSessionDetail(sessionID)
+	if errors.Is(err, service.ErrSessionNotFound) {
+		return http.StatusNotFound, map[string]string{
+			"error":      "session not found",
+			"session_id": sessionID,
+		}
+	}
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("load session detail: %v", err),
+		}
+	}
+	return http.StatusOK, detail
 }
 
 func (h *Handlers) HandleUniverseOverlap(r *http.Request) (int, any) {
