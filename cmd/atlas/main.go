@@ -750,6 +750,8 @@ func run(args []string, deps appDeps) error {
 			mux.Handle("GET /api/capital-flow/daily", apishared.Get(cfHandler.HandleDaily))
 			mux.Handle("GET /api/capital-flow/summary", apishared.Get(cfHandler.HandleSummary))
 			mux.Handle("GET /api/capital-flow/history", apishared.Get(cfHandler.HandleHistory))
+			// BL-CL5b (spec §18.3.2): point-in-time snapshot by trading date.
+			mux.Handle("GET /api/capital-flow/historical-snapshot/{trading_date}", apishared.Get(cfHandler.HandleHistoricalSnapshot))
 			// CL-3 B01 (deprecated duplicate): /api/janus/regime-score is
 			// already registered by dashboard.RegisterAllRoutes via the
 			// dashboard.Handlers.HandleJanusRegimeScore handler (see
