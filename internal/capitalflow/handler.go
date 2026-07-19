@@ -3,6 +3,7 @@ package capitalflow
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -89,7 +90,7 @@ func (h *Handler) HandleSummary(r *http.Request) (int, any) {
 //
 //	GET /api/capital-flow/history?days=252
 //
-// Response shape:
+// Response shape (default — backward compatible with H02 frontend):
 //
 //	{
 //	  "foreign":        [{"trading_date":"...","raw_value":...},...],
@@ -99,6 +100,23 @@ func (h *Handler) HandleSummary(r *http.Request) (int, any) {
 //	  "retail":         [...],
 //	  "futures":        [...],
 //	  "tsm_adr":        [...]
+//	}
+//
+// Response shape with ?include_meta=true (opt-in, A02):
+//
+//	{
+//	  "samples": { ...same 7 keys as above... },
+//	  "meta": {
+//	    "status": "complete" | "partial" | "missing",
+//	    "missing_dimensions": ["government", ...],
+//	    "days_requested": 60,
+//	    "days_returned": 60,
+//	    "data_status": {
+//	      "government": {"data_available": false},
+//	      "foreign":    {"data_available": true},
+//	      ...
+//	    }
+//	  }
 //	}
 func (h *Handler) HandleHistory(r *http.Request) (int, any) {
 	days := defaultHistoryLimit
@@ -146,5 +164,63 @@ func (h *Handler) HandleHistory(r *http.Request) (int, any) {
 		}
 		result[dim] = samples
 	}
-	return http.StatusOK, result
+
+	if !shouldIncludeMeta(r) {
+		return http.StatusOK, result
+	}
+	return http.StatusOK, buildHistoryWithMeta(result, days)
+}
+
+// shouldIncludeMeta parses the opt-in ?include_meta=true query param.
+// Per A02 spec §18.3.1: default behavior is the legacy flat shape; the
+// wrapper with status / missing_dimensions / data_status is opt-in to
+// preserve H02 frontend compatibility.
+func shouldIncludeMeta(r *http.Request) bool {
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("include_meta"))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+// buildHistoryWithMeta wraps the legacy result map with CF-INV-17 metadata.
+// status is "missing" if all 7 dims are empty, "complete" if none are empty,
+// "partial" otherwise. data_status reports per-dimension data_available flag
+// (no missing_reason inference — per AGENTS.md "PublicBank 欄位歷史較短"
+// we do not guess at provider-side reasons).
+func buildHistoryWithMeta(result map[ForceName][]RollingSample, daysRequested int) map[string]any {
+	const totalDims = 7
+	missing := make([]any, 0, totalDims)
+	dataStatus := make(map[string]any, totalDims)
+	emptyCount := 0
+	for _, dim := range []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	} {
+		samples := result[dim]
+		available := len(samples) > 0
+		dataStatus[string(dim)] = map[string]any{"data_available": available}
+		if !available {
+			missing = append(missing, string(dim))
+			emptyCount++
+		}
+	}
+	status := "complete"
+	switch {
+	case emptyCount == totalDims:
+		status = "missing"
+	case emptyCount > 0:
+		status = "partial"
+	}
+	return map[string]any{
+		"samples": result,
+		"meta": map[string]any{
+			"status":             status,
+			"missing_dimensions": missing,
+			"days_requested":     daysRequested,
+			"days_returned":      len(result[ForceForeign]),
+			"data_status":        dataStatus,
+		},
+	}
 }

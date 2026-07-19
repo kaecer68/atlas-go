@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -379,4 +380,233 @@ func TestHandleHistory(t *testing.T) {
 	if codeCap != http.StatusOK {
 		t.Errorf("expected 200 for days=999 (capped to %d), got %d", defaultHistoryLimit, codeCap)
 	}
+}
+
+// TestHandleHistory_BackwardCompat_NoMeta verifies A02 backward compatibility:
+// when ?include_meta is NOT set, the response shape must remain the legacy
+// flat map[ForceName][]RollingSample so H02 frontend (commit 04622ab1,
+// shared_web/static/js/pages/capital-history.js) keeps working untouched.
+func TestHandleHistory_BackwardCompat_NoMeta(t *testing.T) {
+	h := NewHandler(&mockProvider{snap: testSnapshot()})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history", nil)
+	code, data := h.HandleHistory(req)
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+
+	result, ok := data.(map[ForceName][]RollingSample)
+	if !ok {
+		t.Fatalf("expected map[ForceName][]RollingSample (legacy flat shape), got %T", data)
+	}
+	for _, dim := range []ForceName{
+		ForceForeign, ForceFutures, ForceTSMADR,
+		ForceInstitutional, ForceDealer, ForceGovernment, ForceRetail,
+	} {
+		if _, exists := result[dim]; !exists {
+			t.Errorf("legacy flat shape missing dimension %q", dim)
+		}
+	}
+}
+
+// TestHandleHistory_IncludeMeta_OK verifies the opt-in wrapper with all 7
+// dimensions populated. status should be "complete" (no missing).
+func TestHandleHistory_IncludeMeta_OK(t *testing.T) {
+	h := newHandlerWithPopulatedStore(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history?include_meta=true", nil)
+	code, data := h.HandleHistory(req)
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+
+	// JSON round-trip normalizes typed map[ForceName][]RollingSample to
+	// map[string]any for assertion ergonomics.
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	samples, ok := doc["samples"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected samples map, got %T", doc["samples"])
+	}
+	meta, ok := doc["meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected meta map, got %T", doc["meta"])
+	}
+
+	for _, dim := range []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	} {
+		if _, exists := samples[string(dim)]; !exists {
+			t.Errorf("samples wrapper missing dimension %q", dim)
+		}
+	}
+
+	status, _ := meta["status"].(string)
+	if status != "complete" {
+		t.Errorf("status = %q, want complete (all 7 dims populated)", status)
+	}
+	if missing, _ := meta["missing_dimensions"].([]any); len(missing) != 0 {
+		t.Errorf("missing_dimensions should be empty, got %v", missing)
+	}
+	if daysRequested, _ := meta["days_requested"].(float64); int(daysRequested) != defaultHistoryLimit {
+		t.Errorf("days_requested = %v, want %d", daysRequested, defaultHistoryLimit)
+	}
+
+	dataStatus, ok := meta["data_status"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected data_status map, got %T", meta["data_status"])
+	}
+	for _, dim := range []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	} {
+		ds, ok := dataStatus[string(dim)].(map[string]any)
+		if !ok {
+			t.Errorf("data_status[%q] not a map", dim)
+			continue
+		}
+		if available, _ := ds["data_available"].(bool); !available {
+			t.Errorf("data_status[%q].data_available = false, want true", dim)
+		}
+	}
+}
+
+// TestHandleHistory_IncludeMeta_Partial verifies status enum derivation when
+// some dimensions have data and others do not. Mirrors the production
+// scenario where `government` (PublicBank 早於 2018) has no data but
+// `foreign` / `institutional` / `dealer` are populated.
+func TestHandleHistory_IncludeMeta_Partial(t *testing.T) {
+	h := newHandlerWithSelectiveStore(t, []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history?include_meta=true", nil)
+	code, data := h.HandleHistory(req)
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+
+	doc, ok := data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected wrapper map, got %T", data)
+	}
+	meta := doc["meta"].(map[string]any)
+
+	status, _ := meta["status"].(string)
+	if status != "partial" {
+		t.Errorf("status = %q, want partial", status)
+	}
+
+	missing, ok := meta["missing_dimensions"].([]any)
+	if !ok {
+		t.Fatalf("expected missing_dimensions []any, got %T", meta["missing_dimensions"])
+	}
+	if len(missing) == 0 {
+		t.Fatal("expected missing_dimensions non-empty, got []")
+	}
+	missingSet := make(map[string]bool, len(missing))
+	for _, m := range missing {
+		missingSet[m.(string)] = true
+	}
+	for _, expected := range []ForceName{
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	} {
+		if !missingSet[string(expected)] {
+			t.Errorf("missing_dimensions should include %q, got %v", expected, missing)
+		}
+	}
+
+	dataStatus := meta["data_status"].(map[string]any)
+	for _, dim := range []ForceName{ForceForeign, ForceInstitutional, ForceDealer} {
+		ds := dataStatus[string(dim)].(map[string]any)
+		if available, _ := ds["data_available"].(bool); !available {
+			t.Errorf("data_status[%q].data_available should be true", dim)
+		}
+	}
+	for _, dim := range []ForceName{ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR} {
+		ds := dataStatus[string(dim)].(map[string]any)
+		if available, _ := ds["data_available"].(bool); available {
+			t.Errorf("data_status[%q].data_available should be false", dim)
+		}
+	}
+}
+
+// TestHandleHistory_IncludeMeta_Missing verifies status="missing" when the
+// store is completely empty (all 7 dimensions report data_available=false).
+func TestHandleHistory_IncludeMeta_Missing(t *testing.T) {
+	h := NewHandler(&mockProvider{snap: testSnapshot()})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/capital-flow/history?include_meta=true", nil)
+	code, data := h.HandleHistory(req)
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+
+	doc, ok := data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected wrapper map, got %T", data)
+	}
+	meta := doc["meta"].(map[string]any)
+
+	status, _ := meta["status"].(string)
+	if status != "missing" {
+		t.Errorf("status = %q, want missing (empty store)", status)
+	}
+	missing, _ := meta["missing_dimensions"].([]any)
+	if len(missing) != 7 {
+		t.Errorf("missing_dimensions should list all 7 dims when status=missing, got %d", len(missing))
+	}
+}
+
+// newHandlerWithPopulatedStore creates a Handler backed by an in-memory
+// rolling sample store pre-populated with 1 sample per dimension for the
+// current day. Used by IncludeMeta tests to exercise the "complete" status.
+func newHandlerWithPopulatedStore(t *testing.T) *Handler {
+	t.Helper()
+	store := NewMemoryRollingSampleStore(defaultHistoryLimit)
+	now := time.Now().UTC().Format("2006-01-02")
+	for _, dim := range []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	} {
+		if err := store.UpsertDay(context.Background(), now, []RollingSample{{
+			TradingDate: now,
+			Dimension:   dim,
+			RawValue:    100,
+			Unit:        "億股",
+			SourceID:    "test",
+		}}); err != nil {
+			t.Fatalf("upsert %s: %v", dim, err)
+		}
+	}
+	return NewHandlerWithStore(&mockProvider{snap: testSnapshot()}, store, nil)
+}
+
+// newHandlerWithSelectiveStore creates a Handler backed by an in-memory
+// store populated only for the given dimensions. Used by IncludeMeta
+// partial-status test to mirror the production PublicBank scenario.
+func newHandlerWithSelectiveStore(t *testing.T, populated []ForceName) *Handler {
+	t.Helper()
+	store := NewMemoryRollingSampleStore(defaultHistoryLimit)
+	now := time.Now().UTC().Format("2006-01-02")
+	for _, dim := range populated {
+		if err := store.UpsertDay(context.Background(), now, []RollingSample{{
+			TradingDate: now,
+			Dimension:   dim,
+			RawValue:    50,
+			Unit:        "億股",
+			SourceID:    "test",
+		}}); err != nil {
+			t.Fatalf("upsert %s: %v", dim, err)
+		}
+	}
+	return NewHandlerWithStore(&mockProvider{snap: testSnapshot()}, store, nil)
 }
