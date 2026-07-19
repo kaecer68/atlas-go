@@ -1146,6 +1146,7 @@
   "orders",
   "out_of_range_count",
   "outcome_count",
+  "outcomes",
   "outflow",
   "outflow_prob_base",
   "outflow_prob_max",

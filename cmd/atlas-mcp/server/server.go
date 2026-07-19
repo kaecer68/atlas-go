@@ -172,9 +172,9 @@ func Run(ctx context.Context, cfg Config) error {
 	// template_detector 2 + sector (industry_sector_list + industry_sector_lookup) 2 +
 	// 0-2 sampling/elicitation (feature-gated, default off) = 107..109 tools.
 	// registerAuditTools: +4 (separate, not in registerTools).
-	// Total at this point: 111 (both gates off, the default) to 113 (both on).
-	if n := RegisteredToolCount; n < 111 || n > 113 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 111-113", n)
+	// Total at this point: 111 (both gates off, the default) to 114 (both on, post-CL-4).
+	if n := RegisteredToolCount; n < 111 || n > 114 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 111-114", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for

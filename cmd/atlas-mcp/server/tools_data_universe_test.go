@@ -85,6 +85,22 @@ func TestHandleUniverseGetSessions_OK(t *testing.T) {
 	}
 }
 
+func TestHandleUniverseGetSessionDetail_OK(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"session_id":"session-20260101-daily","outcomes":[]}`)
+	_, out, err := s.handleUniverseGetSessionDetail(context.Background(), nil, sessionIDInput{SessionID: "session-20260101-daily"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/dashboard/sessions/session-20260101-daily" {
+		t.Fatalf("path=%s, want /api/dashboard/sessions/session-20260101-daily", rec.path)
+	}
+	if out.Result == nil {
+		t.Fatal("expected Result non-nil")
+	}
+}
+
 func TestHandleUniverseGetUniverseOverlap_OK(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()

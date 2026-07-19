@@ -3429,6 +3429,15 @@ export interface SentimentBounds {
   max: number;
 }
 
+export interface SessionDetail {
+  session_id: string;
+  recorded_at: string;
+  regime: string;
+  outcome_count: number;
+  summary: SessionSummary;
+  outcomes: RecommendationOutcome[];
+}
+
 export interface SessionSummary {
   session_id: string;
   regime: string;

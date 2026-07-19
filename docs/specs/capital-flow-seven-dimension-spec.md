@@ -555,6 +555,119 @@ Rolling sample store 的 capacity 對齊 spec §10 `H-CF-05` gate：
 
 **Backlog 警告**：capacity 提升僅是上限，不會自動回填歷史資料。當前 store 內只有 `2026-07-17` 一筆（post-A01 但 15:30 CST cutoff 前）。歷史 backfill 入 **BL-CF-01**（需 Provider 提供歷史 API 或 replay 機制）。
 
+### 18.7 Session List + Detail API（CL-4 — docs/manifests/2026-07-20-cl4-sessions-drilldown.md）
+
+#### 18.7.1 背景
+
+MCP `universe_get_sessions` 工具（→ `GET /api/dashboard/sessions`）當前只回 4 個 metadata fields（`session_id / recorded_at / regime / outcome_count`），per-hermes 觀察缺 per-strategy data。
+
+深入 audit 揭露：per-strategy outcome data **已存在** 在 SQLite `outcomes` table（欄位：`agent_id / symbol / action / weight / target_price / stop_loss / conviction / regime / timestamp / passed_guards / guard_reason / factor_scores_json / conviction_breakdown_json`），但 `HandleSessions` handler 沒 expose。本節補兩個改進：
+
+- **A1+A2 (List 端)**：每個 session object 加 `top_strategies` 聚合欄位（top N by conviction）
+- **B1+B2 (Detail 端)**：新 endpoint `GET /api/dashboard/sessions/{id}` + 新 MCP tool `universe_get_session_detail` 拿完整 per-strategy outcomes
+
+#### 18.7.2 `GET /api/dashboard/sessions` 增強版 response
+
+**Before**（4 fields）：
+```json
+{
+  "sessions": [
+    {
+      "session_id": "session-20260101-daily",
+      "recorded_at": "2026-01-01T...",
+      "regime": "RISK_ON",
+      "outcome_count": 27
+    }
+  ]
+}
+```
+
+**After**（5th field `top_strategies`，向後相容 — 既有 client 讀 4 個 fields 不受影響）：
+```json
+{
+  "sessions": [
+    {
+      "session_id": "session-20260101-daily",
+      "recorded_at": "2026-01-01T...",
+      "regime": "RISK_ON",
+      "outcome_count": 27,
+      "top_strategies": [
+        {"agent_id": "earnings-quality-01", "symbol": "3008.TW", "action": "BUY", "conviction": 79.0, "passed_guards": 1},
+        {"agent_id": "value-yield-01",      "symbol": "2891.TW", "action": "BUY", "conviction": 75.0, "passed_guards": 1},
+        {"agent_id": "financials-desk-01",  "symbol": "2891.TW", "action": "BUY", "conviction": 73.0, "passed_guards": 0}
+      ]
+    }
+  ]
+}
+```
+
+**Top N 預設**：3 個（per session, by `conviction DESC`）。
+**Nil-safe**：若 session 沒 outcomes，`top_strategies = []`（非 null）。
+
+#### 18.7.3 `GET /api/dashboard/sessions/{id}` 新 endpoint
+
+**Request**：`GET /api/dashboard/sessions/session-20260101-daily`
+
+**Response 200**（calls existing `LoadSessionOutcomes(sessionID)`）：
+```json
+{
+  "session_id": "session-20260101-daily",
+  "recorded_at": "2026-01-01T...",
+  "regime": "RISK_ON",
+  "outcome_count": 27,
+  "summary": { ... SessionSummary 全部 20+ fields ... },
+  "outcomes": [
+    {
+      "symbol": "3008.TW",
+      "agent_id": "earnings-quality-01",
+      "action": "BUY",
+      "target_price": 250.0,
+      "stop_loss": 240.0,
+      "conviction": 79.0,
+      "regime": "official_actor",
+      "timestamp": "2026-01-01T...",
+      "passed_guards": 1,
+      "guard_reason": "...",
+      "factor_scores": {...},
+      "conviction_breakdown": {...}
+    }
+  ]
+}
+```
+
+**Response 404**：sessionID 不存在。
+**Response 503**：ledger store 不可用（既有 `LoadSessions` 503 語意）。
+
+#### 18.7.4 MCP wrapper 對應
+
+| MCP tool | 對應 HTTP | 用途 |
+|----------|------------|------|
+| `universe_get_sessions` | `GET /api/dashboard/sessions` | list all sessions（**現有**，加 `top_strategies` 摘要） |
+| `universe_get_session_detail` | `GET /api/dashboard/sessions/{id}` | **新**：per-session drill-down（完整 outcomes） |
+
+**input schema**：
+```go
+type UniverseGetSessionDetailInput struct {
+    SessionID string `json:"session_id" jsonschema:"the session_id from universe_get_sessions"`
+}
+```
+
+**output schema**：同 §18.7.3 response。
+
+#### 18.7.5 Whitelist 同步
+
+- `cmd/atlas/main.go isPublicPath` 加 `/api/dashboard/sessions/{` prefix case
+- `internal/monitoring/api/shared/handler.go authFreePrefixPaths` 加 `/api/dashboard/sessions/` prefix
+
+（`/api/dashboard` 全 prefix 已 public，新子路徑自動繼承。但 `isPublicPath` 需顯式 case 對應 mux — 對齊既有 pattern。）
+
+#### 18.7.6 設計決策
+
+- **N+1 query**（不單一 window function SQL）：session 數量 bounded (~100)，N+1 perf 足夠；不需新加 `OutcomeStore` interface method
+- **SessionMeta 加 `TopStrategies` 欄位**（nil when not requested）：Go 結構 field 向後相容；既有 `LoadSessions` caller 拿 nil 不 panic
+- **drill-down 直接呼叫既有 `LoadSessionOutcomes`**（不重複 SQL query）：AGENTS.md「同一件事不可有三種算法」守則
+- **404 vs 500**：sessionID 不存在回 404（找不到語意），非 500（系統錯誤語意）
+
 ### 18.6 Historical Regime Observation Store（Wiring Gap 修正 — docs/manifests/2026-07-20-cl3-regime-history.md）
 
 #### 18.6.1 Wiki-vs-Reality 揭露（必讀）

@@ -74,6 +74,7 @@ var authFreePrefixPaths = []string{
 	"/api/parameters/",
 	"/api/backtest/",
 	"/api/janus/",
+	"/api/dashboard/sessions/",
 }
 
 func isAuthFreePath(p string) bool {

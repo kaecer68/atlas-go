@@ -33,9 +33,15 @@ func registerDataUniverseTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "universe_get_sessions",
-		Description: autoDescOr("universe_get_sessions", "Recent simulation sessions (id, date, status)."),
+		Description: autoDescOr("universe_get_sessions", "Recent simulation sessions (id, date, status, top_strategies)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleUniverseGetSessions)
+
+	countedAddTool(mcpSrv, &mcp.Tool{
+		Name:        "universe_get_session_detail",
+		Description: autoDescOr("universe_get_session_detail", "Per-strategy drill-down for one session (full recommendation outcomes + summary)."),
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleUniverseGetSessionDetail)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "universe_get_universe_overlap",
@@ -96,6 +102,20 @@ func (s *server) handleUniverseGetSessions(ctx context.Context, _ *mcp.CallToolR
 	var out dataUniverseBaseOutput
 	if err := s.withAudit(ctx, "universe_get_sessions", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/sessions", nil, &out.Result)
+	}); err != nil {
+		return nil, dataUniverseBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+type sessionIDInput struct {
+	SessionID string `json:"session_id" jsonschema:"the session_id from universe_get_sessions"`
+}
+
+func (s *server) handleUniverseGetSessionDetail(ctx context.Context, _ *mcp.CallToolRequest, in sessionIDInput) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
+	var out dataUniverseBaseOutput
+	if err := s.withAudit(ctx, "universe_get_session_detail", []string{"session_id"}, func() error {
+		return s.cli.Get(ctx, "/api/dashboard/sessions/"+in.SessionID, nil, &out.Result)
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err
 	}

@@ -1143,9 +1143,25 @@
       "type": "object"
     }
   },
+  "universe_get_session_detail": {
+    "name": "universe_get_session_detail",
+    "description": "Per-strategy drill-down for one session (full recommendation outcomes + summary).",
+    "inputSchema": {
+      "properties": {
+        "session_id": {
+          "description": "the session_id from universe_get_sessions",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    }
+  },
   "universe_get_sessions": {
     "name": "universe_get_sessions",
-    "description": "Recent simulation sessions (id, date, status).",
+    "description": "Recent simulation sessions (id, date, status, top_strategies).",
     "inputSchema": {
       "type": "object"
     }

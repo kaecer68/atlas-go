@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -783,12 +784,151 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 	return sessions, nil
 }
 
+// LoadSessionsWithTopStrategies loads all session metadata AND enriches each
+// session with its top N strategies ranked by conviction DESC.
+//
+// The enrichment performs one extra LoadSessionOutcomes call per session
+// (N+1 pattern, acceptable since the session count is bounded ~100). Sessions
+// that fail to enrich (no outcomes in SQLite, store error) get an empty
+// TopStrategies slice rather than failing the entire list — the metadata
+// layer is the primary deliverable.
+//
+// topN must be positive; values <=0 are clamped to 3.
+func (s *PipelineService) LoadSessionsWithTopStrategies(topN int) ([]SessionMeta, error) {
+	if topN <= 0 {
+		topN = 3
+	}
+
+	sessions, err := s.LoadSessions()
+	if err != nil {
+		return nil, fmt.Errorf("load sessions: %w", err)
+	}
+	if s.store == nil {
+		return sessions, nil
+	}
+
+	for i := range sessions {
+		outcomes, oerr := s.store.LoadSessionOutcomes(sessions[i].SessionID)
+		if oerr != nil {
+			// Skip enrichment for this session; metadata layer still useful.
+			logging.Warn("pipeline_service", "load_session_outcomes_failed",
+				logging.FStr("session_id", sessions[i].SessionID),
+				logging.Err(oerr))
+			sessions[i].TopStrategies = []domain.RecommendationOutcome{}
+			continue
+		}
+		if len(outcomes) == 0 {
+			sessions[i].TopStrategies = []domain.RecommendationOutcome{}
+			continue
+		}
+		// Sort by Conviction DESC, then Symbol ASC as stable tiebreaker.
+		slices.SortFunc(outcomes, func(a, b domain.RecommendationOutcome) int {
+			if a.Conviction != b.Conviction {
+				return b.Conviction - a.Conviction
+			}
+			if a.Symbol != b.Symbol {
+				if a.Symbol < b.Symbol {
+					return -1
+				}
+				return 1
+			}
+			return 0
+		})
+		if len(outcomes) > topN {
+			outcomes = outcomes[:topN]
+		}
+		sessions[i].TopStrategies = outcomes
+	}
+	return sessions, nil
+}
+
+// SessionDetail combines a session's summary metadata with its per-strategy
+// recommendation outcomes. This is the response shape for the
+// /api/dashboard/sessions/{id} drill-down endpoint (CL-4 §18.7.3).
+type SessionDetail struct {
+	SessionID    string                         `json:"session_id"`
+	RecordedAt   time.Time                      `json:"recorded_at"`
+	Regime       string                         `json:"regime"`
+	OutcomeCount int                            `json:"outcome_count"`
+	Summary      domain.SessionSummary          `json:"summary"`
+	Outcomes     []domain.RecommendationOutcome `json:"outcomes"`
+}
+
+// ErrSessionNotFound is returned by LoadSessionDetail when the requested
+// sessionID has no summary.json on disk. Distinguishes "no data" from
+// "system error" so the handler can map to HTTP 404.
+var ErrSessionNotFound = errors.New("session not found")
+
+// LoadSessionDetail loads the full detail for a single session: metadata +
+// summary (from filesystem summary.json) + per-strategy outcomes (from the
+// ledger store). Returns ErrSessionNotFound when the sessionID has no
+// summary on disk; any other error is treated as a system error.
+func (s *PipelineService) LoadSessionDetail(sessionID string) (*SessionDetail, error) {
+	// First, verify the session exists by scanning LoadSessions.
+	sessions, err := s.LoadSessions()
+	if err != nil {
+		return nil, fmt.Errorf("load sessions: %w", err)
+	}
+	var found *SessionMeta
+	for i := range sessions {
+		if sessions[i].SessionID == sessionID {
+			found = &sessions[i]
+			break
+		}
+	}
+	if found == nil {
+		return nil, ErrSessionNotFound
+	}
+
+	detail := &SessionDetail{
+		SessionID:    found.SessionID,
+		RecordedAt:   found.RecordedAt,
+		Regime:       found.Regime,
+		OutcomeCount: found.OutcomeCount,
+	}
+
+	// Read the full summary.json (may be stale or missing — best-effort).
+	summaryPath := filepath.Join(s.LedgerDir, "sessions", sessionID, "summary.json")
+	if data, rerr := os.ReadFile(summaryPath); rerr == nil {
+		if uerr := json.Unmarshal(data, &detail.Summary); uerr != nil {
+			logging.Warn("pipeline_service", "parse_session_summary_failed",
+				logging.FStr("session_id", sessionID),
+				logging.Err(uerr))
+		}
+	} else if !os.IsNotExist(rerr) {
+		logging.Warn("pipeline_service", "read_session_summary_failed",
+			logging.FStr("session_id", sessionID),
+			logging.Err(rerr))
+	}
+
+	// Per-strategy outcomes from the ledger store. Empty slice (not nil)
+	// when the session has no outcomes yet.
+	detail.Outcomes = []domain.RecommendationOutcome{}
+	if s.store != nil {
+		outcomes, oerr := s.store.LoadSessionOutcomes(sessionID)
+		if oerr != nil {
+			return nil, fmt.Errorf("load session outcomes: %w", oerr)
+		}
+		if len(outcomes) > 0 {
+			detail.Outcomes = outcomes
+		}
+	}
+
+	return detail, nil
+}
+
 // SessionMeta represents session metadata.
+//
+// TopStrategies is nil when populated by LoadSessions (preserves backward
+// compatibility for existing callers). It is populated by
+// LoadSessionsWithTopStrategies via per-session SQL queries against the
+// outcomes table, then sorted by Conviction DESC and truncated to topN.
 type SessionMeta struct {
-	SessionID    string
-	RecordedAt   time.Time
-	Regime       string
-	OutcomeCount int
+	SessionID     string
+	RecordedAt    time.Time
+	Regime        string
+	OutcomeCount  int
+	TopStrategies []domain.RecommendationOutcome
 }
 
 // LoadUniverseOverlap loads agent universe overlap data.
