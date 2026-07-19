@@ -2467,7 +2467,7 @@
       }
     },
     "seasonal_patterns": {
-      "rationale": "7 canonical Taiwan seasonal patterns from DefaultSeasonalPatterns(); values read from config by NewSeasonalEngine()",
+      "rationale": "9 canonical Taiwan seasonal patterns (7 core + 2 election) from DefaultSeasonalPatterns(); values read from config by NewSeasonalEngine()",
       "source": "heuristic",
       "value": [
         {
@@ -2615,6 +2615,50 @@
           "name_en": "Summer Electricity Peak",
           "start_day": 1,
           "start_month": 6
+        },
+        {
+          "adjustment_factor": 1.1,
+          "avg_market_return": 0.02,
+          "avoided_industries": [
+            "semiconductor",
+            "electronics"
+          ],
+          "description": "地方選舉選前政策護盤，金融營建內需股受惠；科技股相對觀望。證據強度：地方選舉選前 40-20 日上漲機率 86%（富邦研究）",
+          "end_day": 5,
+          "end_month": 12,
+          "favored_industries": [
+            "financials",
+            "construction",
+            "consumer"
+          ],
+          "historical_accuracy": 0.6,
+          "id": "election_local",
+          "name": "地方選舉行情",
+          "name_en": "Local Election Rally",
+          "start_day": 1,
+          "start_month": 11
+        },
+        {
+          "adjustment_factor": 1.08,
+          "avg_market_return": 0.015,
+          "avoided_industries": [
+            "semiconductor",
+            "electronics"
+          ],
+          "description": "總統大選前後政策不確定性，內需防禦型受追捧；科技出口股觀望。證據強度：總統大選前後報酬不一致（MacroMicro），國際情勢影響大於選舉本身",
+          "end_day": 15,
+          "end_month": 2,
+          "favored_industries": [
+            "financials",
+            "consumer",
+            "defensive"
+          ],
+          "historical_accuracy": 0.55,
+          "id": "election_presidential",
+          "name": "總統大選行情",
+          "name_en": "Presidential Election Rally",
+          "start_day": 1,
+          "start_month": 1
         }
       ]
     },

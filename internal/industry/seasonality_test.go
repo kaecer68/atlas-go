@@ -9,8 +9,8 @@ import (
 
 func TestDefaultSeasonalPatterns(t *testing.T) {
 	patterns := DefaultSeasonalPatterns()
-	if len(patterns) != 7 {
-		t.Errorf("expected 7 seasonal patterns, got %d", len(patterns))
+	if len(patterns) != 9 {
+		t.Errorf("expected 9 seasonal patterns (7 canonical + 2 election), got %d", len(patterns))
 	}
 
 	// Check specific pattern
@@ -40,14 +40,21 @@ func TestDefaultSeasonalPatterns(t *testing.T) {
 func TestDetectCurrentPatterns(t *testing.T) {
 	engine := NewSeasonalEngine()
 
-	// Test spring festival (Jan 20)
+	// Test spring festival (Jan 20) — overlaps with election_presidential
 	springDate := time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC)
 	patterns := engine.DetectCurrentPatterns(springDate)
-	if len(patterns) != 1 {
-		t.Errorf("expected 1 active pattern on Jan 20, got %d", len(patterns))
+	if len(patterns) != 2 {
+		t.Errorf("expected 2 active patterns on Jan 20 (spring_festival + election_presidential), got %d", len(patterns))
 	}
-	if len(patterns) > 0 && patterns[0].ID != "spring_festival" {
-		t.Errorf("expected spring_festival, got %s", patterns[0].ID)
+	var foundSpring bool
+	for _, p := range patterns {
+		if p.ID == "spring_festival" {
+			foundSpring = true
+			break
+		}
+	}
+	if !foundSpring {
+		t.Error("expected spring_festival in active patterns")
 	}
 
 	// Test tech peak season (Aug 1) - overlaps with summer_electricity
@@ -151,11 +158,12 @@ func TestGetPatternByID(t *testing.T) {
 func TestGetHistoricalAccuracy(t *testing.T) {
 	engine := NewSeasonalEngine()
 
-	// Test during spring festival
+	// Test during spring festival (Jan 20 now has spring_festival + election_presidential)
 	springDate := time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC)
 	accuracy := engine.GetHistoricalAccuracy(springDate)
-	if accuracy != 0.70 {
-		t.Errorf("expected accuracy 0.70 during spring festival, got %f", accuracy)
+	expected := (0.70 + 0.55) / 2.0
+	if accuracy != expected {
+		t.Errorf("expected accuracy %f during spring festival+election, got %f", expected, accuracy)
 	}
 
 	// Test during no pattern
@@ -174,8 +182,8 @@ func TestGenerateCalendar(t *testing.T) {
 		t.Errorf("expected year 2024, got %d", calendar.Year)
 	}
 
-	if len(calendar.Patterns) != 7 {
-		t.Errorf("expected 7 patterns, got %d", len(calendar.Patterns))
+	if len(calendar.Patterns) != 9 {
+		t.Errorf("expected 9 patterns, got %d", len(calendar.Patterns))
 	}
 
 	// Check January has patterns

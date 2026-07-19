@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -198,4 +199,36 @@ func registerDataSyncAndHealthTasks(
 		})
 		log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
 	}
+
+	// H06: Register e2e_chain_probe — daily data-freshness probe.
+	dataCheck := func(ctx context.Context) error {
+		rec := gateway.Health().Get("twse_capital_flow")
+		if rec == nil {
+			return fmt.Errorf("channel twse_capital_flow not found")
+		}
+		ts := rec.LastSuccessAt
+		if ts == "" {
+			ts = rec.LastFetchAt
+		}
+		if ts == "" {
+			return fmt.Errorf("channel twse_capital_flow never fetched")
+		}
+		t, err := time.Parse(time.RFC3339, ts)
+		if err != nil {
+			return fmt.Errorf("channel twse_capital_flow bad timestamp: %w", err)
+		}
+		if time.Since(t) > 2*time.Hour {
+			return fmt.Errorf("channel twse_capital_flow stale: %s ago",
+				time.Since(t).Round(time.Minute))
+		}
+		return nil
+	}
+	probeDeps := monitoring.E2EProbeDeps{DataLayerCheck: dataCheck}
+	_ = taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "e2e_chain_probe",
+		Interval: 6 * time.Hour,
+		Enabled:  true,
+		Task:     monitoring.E2EProbeTaskFunc(probeDeps),
+	})
+	log.Printf("[Gateway] registered e2e_chain_probe background task (6h interval)")
 }

@@ -419,7 +419,7 @@ services:
     healthcheck:
       disable: true
 
-  # Monthly cron job for institutional investors backfill (1st of each month)
+  # Daily cron job for institutional investors backfill (nightly 2am)
   cron-backfill-institutional-investors:
     build:
       context: .
@@ -427,7 +427,7 @@ services:
     container_name: atlas-cron-backfill-institutional-investors
     restart: unless-stopped
     environment:
-      - CRON_SCHEDULE=0 0 1 * *
+      - CRON_SCHEDULE=0 2 * * *
       - CRON_COMMAND=/app/backfill-institutional-investors -date $$(date -d 'yesterday' +%Y-%m-%d)
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
     volumes:

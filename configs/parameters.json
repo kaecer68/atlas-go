@@ -4756,6 +4756,50 @@
           "historical_accuracy": 1,
           "avg_market_return": 0.0022324430826447224,
           "description": "11-12月小型股與科技股領漲，消費防禦類相對弱勢"
+        },
+        {
+          "id": "election_local",
+          "name": "地方選舉行情",
+          "name_en": "Local Election Rally",
+          "start_month": 11,
+          "start_day": 1,
+          "end_month": 12,
+          "end_day": 5,
+          "favored_industries": [
+            "financials",
+            "construction",
+            "consumer"
+          ],
+          "avoided_industries": [
+            "semiconductor",
+            "electronics"
+          ],
+          "adjustment_factor": 1.10,
+          "historical_accuracy": 0.60,
+          "avg_market_return": 0.020,
+          "description": "地方選舉選前政策護盤，金融營建內需股受惠；科技股相對觀望。證據強度：地方選舉選前 40-20 日上漲機率 86%（富邦研究）"
+        },
+        {
+          "id": "election_presidential",
+          "name": "總統大選行情",
+          "name_en": "Presidential Election Rally",
+          "start_month": 1,
+          "start_day": 1,
+          "end_month": 2,
+          "end_day": 15,
+          "favored_industries": [
+            "financials",
+            "consumer",
+            "defensive"
+          ],
+          "avoided_industries": [
+            "semiconductor",
+            "electronics"
+          ],
+          "adjustment_factor": 1.08,
+          "historical_accuracy": 0.55,
+          "avg_market_return": 0.015,
+          "description": "總統大選前後政策不確定性，內需防禦型受追捧；科技出口股觀望。證據強度：總統大選前後報酬不一致（MacroMicro），國際情勢影響大於選舉本身"
         }
       ],
       "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
