@@ -541,14 +541,19 @@ func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
 	if ne.stressCalc == nil {
 		return TaiwanStressIndex{}
 	}
-	idx := ne.stressCalc.Calculate(ne.lastMacro, ne.prevMacro, ne.lastGeo)
+	return ne.stressCalc.Calculate(ne.lastMacro, ne.prevMacro, ne.lastGeo)
+}
+
+// RecordStressIndex appends an index value to the in-memory ring buffer.
+// Callers that want to grow stressHistory explicitly (e.g. tests or a future
+// persistence adapter) use this after computing the index with GetCurrentStressIndex.
+func (ne *NarrativeEngine) RecordStressIndex(idx TaiwanStressIndex) {
 	ne.stressMu.Lock()
+	defer ne.stressMu.Unlock()
 	ne.stressHistory = append(ne.stressHistory, idx)
 	if len(ne.stressHistory) > 365 {
 		ne.stressHistory = ne.stressHistory[len(ne.stressHistory)-365:]
 	}
-	ne.stressMu.Unlock()
-	return idx
 }
 
 func (ne *NarrativeEngine) GetStressIndexHistory(days int) []TaiwanStressIndex {

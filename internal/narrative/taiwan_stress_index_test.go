@@ -216,7 +216,7 @@ func TestGetStressIndexHistory(t *testing.T) {
 			RecordedAt:         baseTime + i,
 		}
 		eng.UpdateMacro(snap, GeopoliticalRiskScore{Intensity: 30})
-		eng.GetCurrentStressIndex()
+		eng.RecordStressIndex(eng.GetCurrentStressIndex())
 	}
 
 	t.Run("returns exact limit", func(t *testing.T) {
