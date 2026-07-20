@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -1009,6 +1010,82 @@ func (m *mockStressStore) CountSynthetic(ctx context.Context) (map[string]int64,
 	return nil, nil
 }
 
+type mockGeopoliticalStore struct {
+	upserted  []ledger.GeopoliticalRow
+	returnErr error
+}
+
+func (m *mockGeopoliticalStore) UpsertGeopolitical(_ context.Context, row ledger.GeopoliticalRow) error {
+	m.upserted = append(m.upserted, row)
+	return m.returnErr
+}
+func (m *mockGeopoliticalStore) LoadGeopoliticalByDate(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	return ledger.GeopoliticalRow{}, false, nil
+}
+func (m *mockGeopoliticalStore) LoadGeopoliticalByDateAll(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	return ledger.GeopoliticalRow{}, false, nil
+}
+func (m *mockGeopoliticalStore) LoadGeopoliticalHistory(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) LoadGeopoliticalHistoryAll(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	return nil, nil
+}
+
+func (m *mockGeopoliticalStore) UpsertRegime(_ context.Context, _ ledger.RegimeRow) error { return nil }
+func (m *mockGeopoliticalStore) LoadRegimeByDate(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	return ledger.RegimeRow{}, false, nil
+}
+func (m *mockGeopoliticalStore) LoadRegimeByDateAll(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	return ledger.RegimeRow{}, false, nil
+}
+func (m *mockGeopoliticalStore) LoadRegimeHistory(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) LoadRegimeHistoryAll(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) UpsertStress(_ context.Context, _ ledger.StressRow) error { return nil }
+func (m *mockGeopoliticalStore) LoadStressByDate(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	return ledger.StressRow{}, false, nil
+}
+func (m *mockGeopoliticalStore) LoadStressByDateAll(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	return ledger.StressRow{}, false, nil
+}
+func (m *mockGeopoliticalStore) LoadStressHistory(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) LoadStressHistoryAll(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) UpsertEventCalendar(_ context.Context, _ ledger.EventCalendarRow) error {
+	return nil
+}
+func (m *mockGeopoliticalStore) LoadEventCalendarByDate(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) LoadEventCalendarByDateAll(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) LoadEventCalendarRange(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) LoadEventCalendarRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) UpsertPredictionBacktest(_ context.Context, _ ledger.PredictionBacktestRow) error {
+	return nil
+}
+func (m *mockGeopoliticalStore) LoadPredictionBacktestRange(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) LoadPredictionBacktestRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	return nil, nil
+}
+func (m *mockGeopoliticalStore) CountSynthetic(_ context.Context) (map[string]int64, error) {
+	return nil, nil
+}
+
 func validStressMacroSnapshot() marketdata.MacroDataSnapshot {
 	return marketdata.MacroDataSnapshot{
 		DXY:                marketdata.MacroDataPoint{ChangePct: 8.5},
@@ -1089,6 +1166,69 @@ func TestDashboardAPI_PersistStressIndex_UpsertError(t *testing.T) {
 	snap := validStressMacroSnapshot()
 	d.NarrativeEngine().UpdateMacro(snap, narrative.GeopoliticalRiskScore{Intensity: 30})
 	d.persistStressIndex(context.Background())
+	if len(store.upserted) != 1 {
+		t.Errorf("expected 1 upsert attempt even on error, got %d", len(store.upserted))
+	}
+}
+
+func TestDashboardAPI_PersistGeopolitical_HappyPath(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockGeopoliticalStore{}
+	d.WithHistoricalStore(store)
+
+	geo := narrative.GeopoliticalRiskScore{
+		Intensity: 42.5,
+		Sources:   []string{"gdelt", "fugle"},
+		Timestamp: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC),
+	}
+	d.persistGeopolitical(context.Background(), geo)
+
+	if len(store.upserted) != 1 {
+		t.Fatalf("expected 1 upsert, got %d", len(store.upserted))
+	}
+	row := store.upserted[0]
+	if row.Date != "2026-07-20" {
+		t.Errorf("Date = %q, want 2026-07-20", row.Date)
+	}
+	if row.Intensity != 42.5 {
+		t.Errorf("Intensity = %v, want 42.5", row.Intensity)
+	}
+	if row.Source != "macro_ingest" {
+		t.Errorf("Source = %q, want macro_ingest", row.Source)
+	}
+	if row.IsSynthetic != 0 {
+		t.Errorf("IsSynthetic = %v, want 0", row.IsSynthetic)
+	}
+}
+
+func TestDashboardAPI_PersistGeopolitical_NilStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	geo := narrative.GeopoliticalRiskScore{
+		Intensity: 10,
+		Timestamp: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC),
+	}
+	d.persistGeopolitical(context.Background(), geo)
+}
+
+func TestDashboardAPI_PersistGeopolitical_ZeroTimestamp(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockGeopoliticalStore{}
+	d.WithHistoricalStore(store)
+	d.persistGeopolitical(context.Background(), narrative.GeopoliticalRiskScore{Intensity: 5})
+	if len(store.upserted) != 0 {
+		t.Errorf("expected no upsert when timestamp is zero, got %d", len(store.upserted))
+	}
+}
+
+func TestDashboardAPI_PersistGeopolitical_UpsertError(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockGeopoliticalStore{returnErr: fmt.Errorf("db down")}
+	d.WithHistoricalStore(store)
+	geo := narrative.GeopoliticalRiskScore{
+		Intensity: 10,
+		Timestamp: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC),
+	}
+	d.persistGeopolitical(context.Background(), geo)
 	if len(store.upserted) != 1 {
 		t.Errorf("expected 1 upsert attempt even on error, got %d", len(store.upserted))
 	}
