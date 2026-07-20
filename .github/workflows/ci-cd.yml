@@ -271,6 +271,7 @@ jobs:
       run: |
         echo "version=${{ github.ref_name }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
         echo "buildtime=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+        echo "gitcommit=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
     - name: Build and push Docker image
       uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
@@ -282,6 +283,7 @@ jobs:
         build-args: |
           VERSION=${{ steps.build_meta.outputs.version }}
           BUILDTIME=${{ steps.build_meta.outputs.buildtime }}
+          GIT_COMMIT=${{ steps.build_meta.outputs.gitcommit }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64,linux/arm64
