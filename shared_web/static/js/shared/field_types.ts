@@ -3027,6 +3027,7 @@ export interface RegimeSessionEntry {
   session_id: string;
   regime: string;
   recorded_at: string;
+  source?: string;
 }
 
 export interface RegimeTransition {

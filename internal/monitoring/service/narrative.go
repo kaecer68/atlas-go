@@ -131,7 +131,7 @@ func stressRowsToIndex(rows []ledger.StressRow) []narrative.TaiwanStressIndex {
 		r := rows[i]
 		idx := narrative.TaiwanStressIndex{
 			Score:     r.Score,
-			Regime:    r.Regime,
+			Regime:    narrative.NormalizeRegime(r.Regime),
 			Timestamp: r.CapturedAt.Unix(),
 			Date:      r.Date,
 			Source:    r.Source,
