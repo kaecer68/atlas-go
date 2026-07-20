@@ -292,7 +292,6 @@ func (f *fakeCapitalFlowProvider) LatestAssessment(context.Context) (capitalflow
 
 type fakePredictor struct {
 	report eventdriven.PredictionReport
-	err    error
 }
 
 func (f *fakePredictor) Predict(time.Time) eventdriven.PredictionReport {

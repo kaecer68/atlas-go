@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestGetAllChannelStatuses_IncludesRegisteredFallback(t *testing.T) {
 		"twse_replay",          // static builder covers; must NOT be duplicated
 		"us_spx",               // covered by buildUSMacroChannels
 	}
-	channels, err := svc.GetAllChannelStatuses(nil)
+	channels, err := svc.GetAllChannelStatuses(context.TODO())
 	if err != nil {
 		t.Fatalf("list channels: %v", err)
 	}
