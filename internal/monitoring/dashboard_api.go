@@ -514,6 +514,15 @@ func (a *DashboardAPI) GetEventLifecycleManager() *narrative.EventLifecycleManag
 
 // IngestAndUpdateMacro performs macro ingestion and updates the narrative engine state.
 // This ensures GetCurrentStressIndex() has valid data instead of zero values.
+//
+// D08 fix: on the error-fallback path (when macroIngestor.Ingest returns
+// error but a disk snapshot is available), we previously only fed
+// narrativeEngine with the snapshot and skipped ledger persistence.
+// That left stress_index_history.captured_at frozen at the first
+// successful tick's timestamp — subsequent ticks that happened to hit
+// transient upstream errors never advanced the row. Both branches now
+// route through applyMacroUpdate so the ledger row refreshes on every
+// tick, success or fallback.
 func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
 	events, snap, err := a.macroIngestor.Ingest(ctx)
 	geoScore := a.fetchGeoScore(ctx)
@@ -521,9 +530,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 		// On ingest failure, also feed silicon tracker from the on-disk snapshot
 		// (regression: otherwise the 矽循環時鐘 panel renders all zeros).
 		if diskSnap, ok := a.GetLatestMacroSnapshot(); ok {
-			if a.narrativeEngine != nil {
-				a.narrativeEngine.UpdateMacro(diskSnap, geoScore)
-			}
+			a.applyMacroUpdate(ctx, diskSnap, geoScore)
 			if a.industryService != nil && a.industryService.SiliconTracker != nil {
 				indicators := industry.ExtractSiliconIndicators(diskSnap)
 				a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
@@ -531,11 +538,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 		}
 		return events, snap, err
 	}
-	if a.narrativeEngine != nil {
-		a.narrativeEngine.UpdateMacro(snap, geoScore)
-		a.persistStressIndex(ctx)
-		a.persistGeopolitical(ctx, geoScore)
-	}
+	a.applyMacroUpdate(ctx, snap, geoScore)
 	// Also update the industry seasonal engine's dynamic environment (oil, DXY, BDI)
 	// so that seasonal adjustments reflect real-time macro conditions.
 	if a.industryService != nil && a.industryService.SeasonalEngine != nil {
@@ -549,6 +552,18 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 		a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
 	}
 	return events, snap, err
+}
+
+// applyMacroUpdate routes the snapshot through narrativeEngine + both
+// ledgers in lockstep; shared by success and error-fallback paths so
+// stress_index_history.captured_at advances on every tick.
+func (a *DashboardAPI) applyMacroUpdate(ctx context.Context, snap marketdata.MacroDataSnapshot, geoScore narrative.GeopoliticalRiskScore) {
+	if a.narrativeEngine == nil {
+		return
+	}
+	a.narrativeEngine.UpdateMacro(snap, geoScore)
+	a.persistStressIndex(ctx)
+	a.persistGeopolitical(ctx, geoScore)
 }
 
 // persistStressIndex writes the current TaiwanStressIndex to the historical
