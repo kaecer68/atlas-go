@@ -8,6 +8,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -48,6 +49,93 @@ func mustOpenStore(t *testing.T) (HistoricalStore, *SQLiteHistoricalStore, strin
 // ------------------------------------------------------------------
 // Regime
 // ------------------------------------------------------------------
+
+// TestParseTimeColumn_Layouts exercises parseTimeColumn across every layout
+// we accept for historical TEXT columns. The Go-native time.Time.String()
+// layout (e.g. "2026-06-29 06:00:00 +0000 UTC") is the format that the
+// modernc.org/sqlite driver writes for sql.NullTime values whose underlying
+// time.Time is UTC-stripped, so without that layout the column would parse
+// to a zero time and the API surface would emit "0001-01-01T00:00:00Z"
+// (see manifest 2026-07-21-historical-store-time-and-limit-fixes.md, B01).
+func TestParseTimeColumn_Layouts(t *testing.T) {
+	cases := []struct {
+		name   string
+		input  sql.NullString
+		wantOK bool
+	}{
+		{"null", sql.NullString{}, false},
+		{"empty", sql.NullString{String: "", Valid: true}, false},
+		{"rfc3339nano", sql.NullString{String: "2026-06-29T06:00:00.123456789Z", Valid: true}, true},
+		{"rfc3339", sql.NullString{String: "2026-06-29T06:00:00Z", Valid: true}, true},
+		{"no_frac_tz_z", sql.NullString{String: "2026-06-29T06:00:00.000Z", Valid: true}, true},
+		{"no_frac_z", sql.NullString{String: "2026-06-29T06:00:00Z", Valid: true}, true},
+		// Legacy / driver-default format (this is the BUG-1 case).
+		{"go_native_no_frac", sql.NullString{String: "2026-06-29 06:00:00 +0000 UTC", Valid: true}, true},
+		{"go_native_nano", sql.NullString{String: "2026-07-20 16:14:01.734248004 +0000 UTC", Valid: true}, true},
+		{"go_native_micro", sql.NullString{String: "2026-07-20 16:14:01.734248 +0000 UTC", Valid: true}, true},
+		{"unparseable", sql.NullString{String: "not a time", Valid: true}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseTimeColumn(tc.input)
+			if tc.wantOK && got.IsZero() {
+				t.Fatalf("parseTimeColumn(%q) returned zero time, want non-zero", tc.input.String)
+			}
+			if !tc.wantOK && !got.IsZero() {
+				t.Fatalf("parseTimeColumn(%q) = %v, want zero time", tc.input.String, got)
+			}
+		})
+	}
+}
+
+// TestSQLiteHistoricalStore_GoNativeTimeFormat_RoundTrip guards the BUG-1
+// regression: a row whose captured_at was written via nullTime() (driver
+// default Go-native format) must round-trip back to a non-zero RFC3339
+// string via LoadRegimeHistory.
+func TestSQLiteHistoricalStore_GoNativeTimeFormat_RoundTrip(t *testing.T) {
+	_, store, _, cleanup := mustOpenStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	capturedAt := time.Date(2026, 6, 29, 6, 0, 0, 0, time.UTC)
+	if err := store.UpsertRegime(ctx, RegimeRow{
+		Date:        "2026-06-29",
+		Regime:      "RISK_OFF",
+		RecordedAt:  capturedAt,
+		CapturedAt:  capturedAt,
+		IsSynthetic: 0,
+	}); err != nil {
+		t.Fatalf("UpsertRegime: %v", err)
+	}
+
+	// Read the raw text the driver wrote.
+	var raw string
+	if err := store.db.QueryRowContext(ctx,
+		`SELECT captured_at FROM regime_history WHERE date = ?`, "2026-06-29").Scan(&raw); err != nil {
+		t.Fatalf("read raw captured_at: %v", err)
+	}
+	// Sanity-check: confirm we are exercising the Go-native format that
+	// BUG-1 was about. If the driver ever switches to RFC3339Nano, this
+	// test still passes (parseTimeColumn accepts both).
+	if raw == "" {
+		t.Fatalf("captured_at is empty; cannot validate round-trip")
+	}
+
+	rows, err := store.LoadRegimeHistory(ctx, 5)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if rows[0].CapturedAt.IsZero() {
+		t.Fatalf("CapturedAt round-tripped to zero time; raw=%q", raw)
+	}
+	if !rows[0].CapturedAt.Equal(capturedAt) {
+		t.Fatalf("CapturedAt round-trip mismatch: got %v want %v (raw=%q)",
+			rows[0].CapturedAt, capturedAt, raw)
+	}
+}
 
 func TestSQLiteHistoricalStore_UpsertRegime_Idempotent(t *testing.T) {
 	store, _, _, done := mustOpenStore(t)
