@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.0.0.37] - 2026-07-20
+
+### Fixed
+- **cron 排程補登**：`cmd/atlas/operations_tasks.go` 註冊 `tej_refresh` 與 `janus_regime_refresh` 兩個 ScheduledTask（先前沒在 register loop，PR fix）
+- **CI quality gate 補強**：test/cl7 coverage sweep — strategy 83.2%, dailyreport 90.9%, retail 91.1%, autobacktest 60.1%, taskexec 62.1%
+- **gofmt cleanup**：`internal/portfolio/rsi_tw_calculator_test` + `internal/portfolio/directional_trade_layer_test` 排版修正
+- **frontend getComputedStyle 取代**：sparkline + evolution_panel 改用 `getThemeColor`（一致性，CL-7 frontend 整理）
+
+### Documentation
+- capitalflow post-merge 文件同步：`docs/reference/tool-catalog.md`、`docs/reference/workflow-map.md`、`internal/capitalflow/AGENTS.md`
+- **Document Drift Audit**：建立 `docs/manifests/2026-07-20-document-drift-audit.md`（盤查 4 個文件漂移 + production drift）
+
+## [0.0.0.36] - 2026-07-20
+
+### Added
+**CL-X 修復群**（5 個 PR，資本流 / 制度 / 推薦 / 排程完整時序化）：
+- **PR #1228（CL-1 根因修復）**：`internal/capitalflow/service.go::Refresh` 改為 data-driven keying（`snap.RecordedAt` 推導 trading date 跳掉 cutoff 覆寫陷阱）+ non-trading day skip-and-log + signature 變 `Refresh(ctx)`。A02 calendar 注入 + 3 個 caller 同步更新 + 4 個 test。`docs/specs/capital-flow-seven-dimension-spec.md` §12 新增 CF-INV-15/16/17 + §18 新章 Historical Timeline。
+- **PR #1229（CL-2 macro snapshot history）**：新增 `HandleMacroSnapshotTimeline` (handler.go:75) 對應 `/api/macro/snapshot/timeline?days=N&from=&to=` 端點，從 `Service.ListSnapshotsInRange` 拉時序快照。`docs/specs/macro-snapshot-history-spec.md` 新建（28 sections）。
+- **PR #1230（CL-5 HandleHistory A01+A02）**：capacity 60→252（spec §10 H-CF-05 gate 對齊）+ `?include_meta=true` opt-in wrapper（CF-INV-17）。`handleHistory` 多回 `samples` + `meta` 兩個 top-level key。
+- **PR #1231（CL-3 regime history）**：`PipelineService.LoadRegimeHistory` 改讀 `regime_history` SQLite 表（90 筆真實資料 from stage4 backfill）+ 新增 `/api/janus/regime-score` 端點（macro-derived composite score）。
+- **PR #1232（CL-4 sessions drilldown）**：`/api/dashboard/sessions` 加 `top_strategies` 摘要 + 新增 `GET /api/dashboard/sessions/{id}` drill-down 端點 + 新 MCP tool `universe_get_session_detail`。
+- **PR #1233（CL-5b point-in-time）**：`HandleHistoricalSnapshot` (handler.go:80) 對應 `/api/capital-flow/historical-snapshot/{trading_date}`，含 status enum（complete/partial/missing）+ HTTP 200 always。
+
+### Changed
+- `internal/capitalflow/handler.go` `HandleHistoricalSnapshot` 新增（PR #1233）
+- `internal/capitalflow/handler.go` `HandleHistory` 新增 `shouldIncludeMeta` + `buildHistoryWithMeta`（PR #1230 A02）
+- `internal/capitalflow/service.go` `Refresh` signature: `Refresh(ctx, tradingDate)` → `Refresh(ctx)`（PR #1228 A01）
+
+### Fixed
+- **CL-1**：capital-flow Refresh 不再被 15:30 cutoff 永久覆寫前一交易日 slot（4 個獨立證據齊全：handler / service / store / cutoff 邏輯）
+- **CL-3**：`regime_get_history` 不再回 score=0（omitted when janus endpoint 失敗）+ 真正從 `regime_history` 表讀時序
+- **CL-4**：`universe_get_sessions` 不再只有 4 fields（含 `top_strategies` 聚合）
+- **CL-5b**：`/api/capital-flow/historical-snapshot/{trading_date}` 不再 404
+
+### Tests
+- `internal/capitalflow/handler_test.go` 5 new `HandleHistory*` tests（OK / Partial / Missing / BackwardCompat）
+- `internal/capitalflow/service_test.go` 4 new `Refresh*` tests（KeyMatchesRecordedAt / SkipOnWeekend / IdempotentSameDay / TimezoneOffset）
+- CL-4 sessions drill-down 測試
+- CL-5b point-in-time 測試
+
+### Backlog（明確不做）
+- BL-CF-01：capital-flow 歷史資料 backfill pipeline（需 Provider 歷史 API 或 replay；當 store 只有 post-fix 寫入的日期）
+- BL-MH-01：macro snapshot 自動 backfill 跨假日（CL-2 已能查現有 snapshot，但缺跨假日復原）
+
 ## [0.0.0.35] - 2026-07-14
 
 ### Added

@@ -1,6 +1,8 @@
 # Audit Manifest: CL-3 regime_get_history 端點 — Wiki-vs-Reality 修正
 
-> **Audit source**: [[atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19]] §6.4 + §4 CL-3（過時，需以本 manifest 為準）
+> **Audit source**: hermes 私域 `~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 + §4 CL-3（過時，需以本 manifest 為準）
+
+> **路徑備註**：本文所有 `[[atlas-wiki/queries/...]]` 形式 wikilink 為 hermes 私域 Obsidian-style 寫法。實體在 `~/workspace/atlas-wiki/queries/...`（hermes agent 工作目錄），不在本 repo 內。
 > **Goal**: 修正 `regime_get_history` MCP 工具的回傳資料：當前是 simulation session 摘要（沒時序）+ 永遠 score=0；修正後是 regime_history 表真實時序 + janus composite score（含 is_synthetic 旗標）
 > **Scope**: MEDIUM — service 修法（3 個 wire 點 + builder pattern）+ 新增 `/api/janus/regime-score` HTTP endpoint + 修 MCP wrapper formula 不一致
 > **Created**: 2026-07-20
@@ -116,7 +118,7 @@
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| 真相盤查 wiki §6.4 + §4 CL-3 | done | atlass-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md §6.4 + §4 |
+| 真相盤查 wiki §6.4 + §4 CL-3 | done | hermes 私域 `~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 + §4 |
 | Wiki-vs-reality 差距揭露 | done | DB query 確認 90 筆資料 + 程式碼 audit |
 | 設計 scope 拍板 | done | Option B（A + 加 `/api/janus/regime-score`），1-2 天 |
 

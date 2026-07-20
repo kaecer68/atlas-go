@@ -517,15 +517,15 @@ CF-INV-17 規範「歷史時間序列 API 必須對未涵蓋日期回傳 `status
 
 **`data_status`**：每個 dimension 的 `data_available` 旗標 + 缺失原因（per AGENTS.md「PublicBank 欄位歷史較短」警告，公股行庫 TWSE 約 2018+ 才完整）。
 
-#### 18.3.2 Point-in-time snapshot endpoint（未實作 — BL-CL5b）
+#### 18.3.2 Point-in-time snapshot endpoint（**已實作** — CL-5b / PR #1233, commit `92fe3f74`, 2026-07-20）
 
-未來 `/api/capital-flow/historical-snapshot/{trading_date}` 端點必須遵守：
+`/api/capital-flow/historical-snapshot/{trading_date}` 端點契約如下（由 `internal/capitalflow/handler.go:80` `HandleHistoricalSnapshot` 實作，由 `cmd/atlas/main.go:754` 掛載於 mux）：
 
 - **Response 結構**：`{trading_date, status, dimensions: {<force>: {raw_value, unit, source_id, data_available} | null}, missing_reason?: string}`
 - **`status` 枚舉**：`"complete"`（七維度全有）｜`"partial"`（部分維度有資料）｜`"missing"`（當日無資料或非交易日）
 - **HTTP 狀態碼**：`200` 不論 status（status 在 body 內）；禁止用 404 偽裝 missing。
 - **缺資料語意**：對 `data_available=false` 的維度（如 government 早期 2018 前資料）回 `null` + `"data_available": false`，禁止補 0。
-- **預計實作時間**：下下輪（需先補 B4 store 歷史資料 + backfill — BL-CF-01 才能驗證）。
+- **Backlog note**：BL-CF-01（store 歷史資料 backfill）仍未 ship — 端點已能用，但目前只能查已 Refresh 寫入 store 的交易日（單日 / 近期）。要看任意過去 252 個交易日仍需 backfill pipeline。
 
 ### 18.4 RecordedAt vs filename date 語意分離（CL-6 對應）
 
@@ -672,7 +672,7 @@ type UniverseGetSessionDetailInput struct {
 
 #### 18.6.1 Wiki-vs-Reality 揭露（必讀）
 
-`atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 + §4 CL-3 描述**已過時**（wiki 寫於 2026-07-19，當前 codebase 2026-07-20 已部分 ship）。**本 §18.6 為準**：
+`atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 + §4 CL-3 描述**已過時**（wiki 寫於 2026-07-19，當前 codebase 2026-07-20 已部分 ship；此檔案位於 hermes 私域 `~/workspace/atlas-wiki/queries/...`，**不在本 repo 內**）。**本 §18.6 為準**：
 
 | 維度 | Wiki 描述（過時） | 當前現實（2026-07-20） |
 |------|------------------|----------------------|

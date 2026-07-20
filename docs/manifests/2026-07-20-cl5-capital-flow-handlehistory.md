@@ -1,6 +1,8 @@
 # Audit Manifest: CL-5 capital-flow/history 缺 status 報告 + capacity 60→252 — 設計與實作
 
-> **Audit source**: [[atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19]] §6.4 CL-5 + [[atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20]] §2 BL-CL5
+> **Audit source**: hermes 私域 `~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 CL-5 + `~/workspace/atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md` §2 BL-CL5
+
+> **路徑備註**：本文所有 `[[atlas-wiki/queries/...]]` 形式 wikilink 為 hermes 私域 Obsidian-style 寫法。實體在 `~/workspace/atlas-wiki/queries/...`（hermes agent 工作目錄），不在本 repo 內。
 > **承接**: docs/manifests/2026-07-20-capital-flow-history-audit.md（CL-1 修復後未解決）+ docs/manifests/2026-07-20-cl2-macro-snapshot-history.md（前輪 CL-2 已 ship）
 > **Goal**: 補齊 `/api/capital-flow/history` 對缺失 dimension 的 silent omission（CF-INV-17 程式實作）+ 把 production capacity 從 60 提升到 252（spec H-CF-05 gate）
 > **Scope**: MEDIUM — handler 行為擴充（opt-in `?include_meta=true` 向後相容 H02 frontend）+ 3 處 capacity 常數提升 + 既有 `TestHandleHistory` 確保不破壞。明確不做：spec §18.3 描述的 point-in-time endpoint `/api/capital-flow/historical-snapshot/{trading_date}`（入 Backlog）；production store 歷史資料 backfill（無 Provider 資料源；需另立 manifest）。
@@ -93,8 +95,8 @@ CL-5 在 wiki 不同段落有兩個 scope 描述：
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| Wiki §6.4 CL-5 真相盤查 | done | atlass-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md §6.4 |
-| Wiki §2 BL-CL5 確認 | done | atlass-wiki/queries/capital-flow-history-unresolved-2026-07-20.md §2 |
+| Wiki §6.4 CL-5 真相盤查 | done | hermes 私域 `~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 |
+| Wiki §2 BL-CL5 確認 | done | hermes 私域 `~/workspace/atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md` §2（該檔在 hermes 私域，**未被建立**，但 spec §14 + CF-INV-17 已在 atlas-go repo 內完整落地） |
 | spec §18.3 CF-INV-17 確認 | done | docs/specs/capital-flow-seven-dimension-spec.md:463-471 |
 | H02 frontend blast radius 確認 | done | shared_web/static/js/pages/capital-history.js:128 |
 | AGENTS.md silent omission 警告對齊 | done | internal/capitalflow/AGENTS.md「PublicBank 欄位歷史較短」 |

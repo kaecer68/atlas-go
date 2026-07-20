@@ -1,6 +1,8 @@
 # Audit Manifest: CL-2 macro/snapshot/history 缺時序 API — 設計與實作
 
-> **Audit source**: [[atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19]] + [[atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20]] §2
+> **Audit source**: hermes 私域 `~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` + `~/workspace/atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md` §2（**兩者皆不在本 repo 內**）
+
+> **路徑備註**：本文所有 `[[atlas-wiki/queries/...]]` 形式 wikilink 為 hermes 私域 Obsidian-style 寫法。實體在 `~/workspace/atlas-wiki/queries/...`（hermes agent 工作目錄）。
 > **承接**: docs/manifests/2026-07-20-capital-flow-history-audit.md（CL-1 修復後未解決的 BL-CL2 範圍）
 > **Goal**: 補齊 `/api/macro/snapshot/history` 的時序端點，讓 hermes 可對 80+ 已存在的 macro snapshot 做時序分析（regime score 替代、跨日 macro 對齊、T+N retrospective 對齊）
 > **Scope**: MEDIUM — 新增 1 個 endpoint + 1 個 service method + MCP wrapper 修正（既有 silent bug 一起解）+ spec 新章節。明確不做：snapshot 資料層補建（已有 80+ 檔）、CL-3 regime store、CL-5 HandleHistory 程式實作 — 一律入 Backlog。
