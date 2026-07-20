@@ -280,6 +280,7 @@
   "capital_limits",
   "capital_reduction_ratio",
   "capitalflow",
+  "captured_at",
   "carry_trade_unwind_threshold",
   "cash",
   "cash_dividend",

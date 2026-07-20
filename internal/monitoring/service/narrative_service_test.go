@@ -247,6 +247,21 @@ func (m *mockStressHistoricalStore) LoadPredictionBacktestRange(_ context.Contex
 func (m *mockStressHistoricalStore) LoadPredictionBacktestRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
 	return nil, nil
 }
+func (m *mockStressHistoricalStore) UpsertGeopolitical(_ context.Context, _ ledger.GeopoliticalRow) error {
+	return nil
+}
+func (m *mockStressHistoricalStore) LoadGeopoliticalByDate(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	return ledger.GeopoliticalRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadGeopoliticalByDateAll(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	return ledger.GeopoliticalRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadGeopoliticalHistory(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) LoadGeopoliticalHistoryAll(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	return nil, nil
+}
 func (m *mockStressHistoricalStore) CountSynthetic(_ context.Context) (map[string]int64, error) {
 	return nil, nil
 }
@@ -318,5 +333,164 @@ func TestNarrativeService_GetStressIndexHistory_WithComponents(t *testing.T) {
 	}
 	if _, ok := idx.Components["bad"]; ok {
 		t.Errorf("non-float component should be skipped")
+	}
+}
+
+// mockGeoHistoricalStore is a focused stub of ledger.HistoricalStore that
+// satisfies only LoadGeopoliticalHistory for the GetGeopoliticalHistory test.
+// All other methods panic if invoked — they are intentionally unused.
+type mockGeoHistoricalStore struct {
+	rows []ledger.GeopoliticalRow
+	err  error
+}
+
+func (m *mockGeoHistoricalStore) UpsertRegime(_ context.Context, _ ledger.RegimeRow) error {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadRegimeByDate(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadRegimeByDateAll(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadRegimeHistory(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadRegimeHistoryAll(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) UpsertStress(_ context.Context, _ ledger.StressRow) error {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadStressByDate(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadStressByDateAll(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadStressHistory(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadStressHistoryAll(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) UpsertGeopolitical(_ context.Context, _ ledger.GeopoliticalRow) error {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadGeopoliticalByDate(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadGeopoliticalByDateAll(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadGeopoliticalHistory(_ context.Context, limit int) ([]ledger.GeopoliticalRow, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if limit > 0 && len(m.rows) > limit {
+		return m.rows[:limit], nil
+	}
+	return m.rows, nil
+}
+func (m *mockGeoHistoricalStore) LoadGeopoliticalHistoryAll(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) UpsertEventCalendar(_ context.Context, _ ledger.EventCalendarRow) error {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadEventCalendarByDate(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadEventCalendarByDateAll(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadEventCalendarRange(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadEventCalendarRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) UpsertPredictionBacktest(_ context.Context, _ ledger.PredictionBacktestRow) error {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadPredictionBacktestRange(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) LoadPredictionBacktestRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	panic("not implemented")
+}
+func (m *mockGeoHistoricalStore) CountSynthetic(_ context.Context) (map[string]int64, error) {
+	panic("not implemented")
+}
+
+func TestNarrativeService_GetGeopoliticalHistory_NilStore(t *testing.T) {
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
+	got := svc.GetGeopoliticalHistory(30)
+	if got != nil {
+		t.Errorf("expected nil without historicalStore, got %+v", got)
+	}
+}
+
+func TestNarrativeService_GetGeopoliticalHistory_DaysBounds(t *testing.T) {
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
+	store := &mockGeoHistoricalStore{rows: []ledger.GeopoliticalRow{}}
+	svc.WithHistoricalStore(store)
+	for _, days := range []int{0, -5, 9999} {
+		got := svc.GetGeopoliticalHistory(days)
+		if got != nil {
+			t.Errorf("days=%d: expected nil (empty store), got %+v", days, got)
+		}
+	}
+}
+
+func TestNarrativeService_GetGeopoliticalHistory_FromStore(t *testing.T) {
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
+	captured := time.Date(2026, 4, 15, 6, 0, 0, 0, time.UTC)
+	store := &mockGeoHistoricalStore{rows: []ledger.GeopoliticalRow{
+		{Date: "2026-04-15", Intensity: 42.5, Sources: []string{"rss", "gdelt"}, Source: "macro_ingest", CapturedAt: captured},
+		{Date: "2026-04-14", Intensity: 30.0, Source: "macro_ingest", CapturedAt: captured.AddDate(0, 0, -1)},
+	}}
+	svc.WithHistoricalStore(store)
+
+	got := svc.GetGeopoliticalHistory(30)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 points, got %d", len(got))
+	}
+	if got[0].Date != "2026-04-15" {
+		t.Errorf("first date = %q, want 2026-04-15", got[0].Date)
+	}
+	if got[0].Intensity != 42.5 {
+		t.Errorf("first intensity = %v, want 42.5", got[0].Intensity)
+	}
+	if got[0].Source != "macro_ingest" {
+		t.Errorf("first source = %q, want macro_ingest", got[0].Source)
+	}
+	if got[0].CapturedAt != captured.UTC().Format(time.RFC3339) {
+		t.Errorf("first captured_at = %q, want %q", got[0].CapturedAt, captured.UTC().Format(time.RFC3339))
+	}
+	if len(got[0].Sources) != 2 || got[0].Sources[0] != "rss" || got[0].Sources[1] != "gdelt" {
+		t.Errorf("first sources = %v, want [rss gdelt]", got[0].Sources)
+	}
+}
+
+func TestNarrativeService_GetGeopoliticalHistory_StoreError(t *testing.T) {
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
+	store := &mockGeoHistoricalStore{err: context.DeadlineExceeded}
+	svc.WithHistoricalStore(store)
+	got := svc.GetGeopoliticalHistory(30)
+	if got != nil {
+		t.Errorf("expected nil on store error, got %+v", got)
+	}
+}
+
+func TestNarrativeService_WithHistoricalStore_ChainsReturnSameService(t *testing.T) {
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
+	store := &mockGeoHistoricalStore{}
+	out := svc.WithHistoricalStore(store)
+	if out != svc {
+		t.Errorf("WithHistoricalStore must return the same service for fluent chaining")
+	}
+	if svc.historicalStore == nil {
+		t.Error("historicalStore not set after WithHistoricalStore")
 	}
 }

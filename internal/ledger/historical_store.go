@@ -52,6 +52,16 @@ type StressRow struct {
 	IsSynthetic uint8                  `json:"is_synthetic"`
 }
 
+// GeopoliticalRow is one row from geopolitical_history.
+type GeopoliticalRow struct {
+	Date        string    `json:"date"`
+	Intensity   float64   `json:"intensity"`
+	Sources     []string  `json:"sources,omitempty"`
+	Source      string    `json:"source"`
+	CapturedAt  time.Time `json:"captured_at"`
+	IsSynthetic uint8     `json:"is_synthetic"`
+}
+
 // EventCalendarRow is one row from event_calendar_history.
 // (date, event_id) is the composite primary key, so the same date can
 // have many EventCalendarRow entries — one per event.
@@ -99,6 +109,13 @@ type HistoricalStore interface {
 	LoadStressByDateAll(ctx context.Context, date string) (StressRow, bool, error)
 	LoadStressHistory(ctx context.Context, limit int) ([]StressRow, error)
 	LoadStressHistoryAll(ctx context.Context, limit int) ([]StressRow, error)
+
+	// Geopolitical
+	UpsertGeopolitical(ctx context.Context, row GeopoliticalRow) error
+	LoadGeopoliticalByDate(ctx context.Context, date string) (GeopoliticalRow, bool, error)
+	LoadGeopoliticalByDateAll(ctx context.Context, date string) (GeopoliticalRow, bool, error)
+	LoadGeopoliticalHistory(ctx context.Context, limit int) ([]GeopoliticalRow, error)
+	LoadGeopoliticalHistoryAll(ctx context.Context, limit int) ([]GeopoliticalRow, error)
 
 	// Event calendar
 	UpsertEventCalendar(ctx context.Context, row EventCalendarRow) error
@@ -340,6 +357,114 @@ func (s *SQLiteHistoricalStore) loadStressHistory(ctx context.Context, limit int
 }
 
 // ------------------------------------------------------------------
+// Geopolitical
+// ------------------------------------------------------------------
+
+func (s *SQLiteHistoricalStore) UpsertGeopolitical(ctx context.Context, row GeopoliticalRow) error {
+	if row.Date == "" {
+		return fmt.Errorf("geopolitical date is empty")
+	}
+	sourcesJSON := ""
+	if row.Sources != nil {
+		b, err := json.Marshal(row.Sources)
+		if err != nil {
+			return fmt.Errorf("marshal geopolitical sources: %w", err)
+		}
+		sourcesJSON = string(b)
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO geopolitical_history (date, intensity, sources_json, source, captured_at, is_synthetic)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(date) DO UPDATE SET
+			intensity = excluded.intensity,
+			sources_json = excluded.sources_json,
+			source = excluded.source,
+			captured_at = excluded.captured_at,
+			is_synthetic = excluded.is_synthetic
+	`, row.Date, row.Intensity, sourcesJSON,
+		nullString(row.Source), nullTime(row.CapturedAt), row.IsSynthetic)
+	if err != nil {
+		return fmt.Errorf("upsert geopolitical %s: %w", row.Date, err)
+	}
+	return nil
+}
+
+func (s *SQLiteHistoricalStore) LoadGeopoliticalByDate(ctx context.Context, date string) (GeopoliticalRow, bool, error) {
+	return s.loadGeopoliticalByDate(ctx, date, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadGeopoliticalByDateAll(ctx context.Context, date string) (GeopoliticalRow, bool, error) {
+	return s.loadGeopoliticalByDate(ctx, date, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadGeopoliticalByDate(ctx context.Context, date string, filterSynthetic bool) (GeopoliticalRow, bool, error) {
+	var r GeopoliticalRow
+	var source, sourcesJSON, capturedAtStr sql.NullString
+	filter := ""
+	if filterSynthetic {
+		filter = " AND is_synthetic = 0"
+	}
+	err := s.db.QueryRowContext(ctx, `
+		SELECT date, intensity, sources_json, source, captured_at, is_synthetic
+		FROM geopolitical_history WHERE date = ?`+filter, date).Scan(&r.Date, &r.Intensity, &sourcesJSON, &source, &capturedAtStr, &r.IsSynthetic)
+	if err == sql.ErrNoRows {
+		return r, false, nil
+	}
+	if err != nil {
+		return r, false, fmt.Errorf("load geopolitical %s: %w", date, err)
+	}
+	r.Source = source.String
+	r.CapturedAt = parseTimeColumn(capturedAtStr)
+	if sourcesJSON.Valid && sourcesJSON.String != "" {
+		_ = json.Unmarshal([]byte(sourcesJSON.String), &r.Sources)
+	}
+	return r, true, nil
+}
+
+func (s *SQLiteHistoricalStore) LoadGeopoliticalHistory(ctx context.Context, limit int) ([]GeopoliticalRow, error) {
+	return s.loadGeopoliticalHistory(ctx, limit, FilterSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) LoadGeopoliticalHistoryAll(ctx context.Context, limit int) ([]GeopoliticalRow, error) {
+	return s.loadGeopoliticalHistory(ctx, limit, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadGeopoliticalHistory(ctx context.Context, limit int, filterSynthetic bool) ([]GeopoliticalRow, error) {
+	if limit <= 0 {
+		limit = 90
+	}
+	filter := ""
+	if filterSynthetic {
+		filter = " WHERE is_synthetic = 0"
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT date, intensity, sources_json, source, captured_at, is_synthetic
+		FROM geopolitical_history`+filter+` ORDER BY date DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("load geopolitical history: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []GeopoliticalRow
+	for rows.Next() {
+		var r GeopoliticalRow
+		var source, sourcesJSON, capturedAtStr sql.NullString
+		if err := rows.Scan(&r.Date, &r.Intensity, &sourcesJSON, &source, &capturedAtStr, &r.IsSynthetic); err != nil {
+			return nil, fmt.Errorf("scan geopolitical row: %w", err)
+		}
+		r.Source = source.String
+		r.CapturedAt = parseTimeColumn(capturedAtStr)
+		if sourcesJSON.Valid && sourcesJSON.String != "" {
+			_ = json.Unmarshal([]byte(sourcesJSON.String), &r.Sources)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("geopolitical rows: %w", err)
+	}
+	return out, nil
+}
+
+// ------------------------------------------------------------------
 // Event calendar
 // ------------------------------------------------------------------
 
@@ -556,13 +681,14 @@ var timeLayouts = []string{
 	"2006-01-02T15:04:05Z",
 }
 
-// HasTables reports whether each of the 4 Stage 4 history tables exists
+// HasTables reports whether each of the Stage 4 history tables exists
 // in the open SQLite database. Used by the loader CLI to fail fast when
 // InitSchema has not been run.
 func (s *SQLiteHistoricalStore) HasTables(ctx context.Context) (map[string]bool, error) {
 	want := []string{
 		"regime_history",
 		"stress_index_history",
+		"geopolitical_history",
 		"event_calendar_history",
 		"prediction_backtest",
 	}
@@ -580,12 +706,13 @@ func (s *SQLiteHistoricalStore) HasTables(ctx context.Context) (map[string]bool,
 }
 
 // CountSynthetic returns the number of rows with is_synthetic=1 in each of the
-// 4 Stage 4 history tables. Useful for ops/debugging and for validating the
+// Stage 4 history tables. Useful for ops/debugging and for validating the
 // effect of the --drop-synthetic loader flag.
 func (s *SQLiteHistoricalStore) CountSynthetic(ctx context.Context) (map[string]int64, error) {
 	tables := []string{
 		"regime_history",
 		"stress_index_history",
+		"geopolitical_history",
 		"event_calendar_history",
 		"prediction_backtest",
 	}

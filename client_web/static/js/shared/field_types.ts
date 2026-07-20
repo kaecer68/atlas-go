@@ -1529,6 +1529,14 @@ export interface GARCHParameters {
   weekly_rebalance_days: string;
 }
 
+export interface GeopoliticalPoint {
+  date: string;
+  intensity: number;
+  sources?: string[];
+  source: string;
+  captured_at: string;
+}
+
 export interface GeopoliticalRiskScore {
   region: string;
   intensity: number;

@@ -36,7 +36,7 @@ func mustOpenStore(t *testing.T) (HistoricalStore, *SQLiteHistoricalStore, strin
 		cleanup()
 		t.Fatalf("has tables: %v", err)
 	}
-	for _, k := range []string{"regime_history", "stress_index_history", "event_calendar_history", "prediction_backtest"} {
+	for _, k := range []string{"regime_history", "stress_index_history", "geopolitical_history", "event_calendar_history", "prediction_backtest"} {
 		if !has[k] {
 			cleanup()
 			t.Fatalf("missing table %s after InitSchema; tables=%v", k, has)
@@ -456,11 +456,141 @@ func TestSchemaConstants_Recognised(t *testing.T) {
 		}
 	}
 	sort.Strings(got)
-	want := []string{"event_calendar_history", "prediction_backtest", "regime_history", "stress_index_history"}
+	want := []string{"event_calendar_history", "geopolitical_history", "prediction_backtest", "regime_history", "stress_index_history"}
 	for i, name := range want {
 		if i >= len(got) || got[i] != name {
 			t.Errorf("HasTables = %v, want %v", got, want)
 			break
 		}
+	}
+}
+
+// ------------------------------------------------------------------
+// Geopolitical
+// ------------------------------------------------------------------
+
+func TestSQLiteHistoricalStore_UpsertGeopolitical_Idempotent(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+
+	row := GeopoliticalRow{
+		Date:        "2026-04-15",
+		Intensity:   42.5,
+		Sources:     []string{"rss", "gdelt"},
+		Source:      "macro_ingest",
+		CapturedAt:  time.Date(2026, 4, 15, 6, 0, 0, 0, time.UTC),
+		IsSynthetic: 0,
+	}
+	if err := store.UpsertGeopolitical(context.Background(), row); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	row.Intensity = 43.0
+	if err := store.UpsertGeopolitical(context.Background(), row); err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	got, ok, err := store.LoadGeopoliticalByDate(context.Background(), row.Date)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected row for %s", row.Date)
+	}
+	if got.Intensity != 43.0 {
+		t.Errorf("intensity = %v, want 43.0", got.Intensity)
+	}
+	if len(got.Sources) != 2 || got.Sources[0] != "rss" || got.Sources[1] != "gdelt" {
+		t.Errorf("sources = %v, want [rss gdelt]", got.Sources)
+	}
+}
+
+func TestSQLiteHistoricalStore_UpsertGeopolitical_RequiresDate(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	if err := store.UpsertGeopolitical(context.Background(), GeopoliticalRow{}); err == nil {
+		t.Error("expected error for empty date")
+	}
+}
+
+func TestSQLiteHistoricalStore_LoadGeopoliticalHistory_OrderedDesc(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	rows := []GeopoliticalRow{
+		{Date: "2026-04-15", Intensity: 10, CapturedAt: time.Date(2026, 4, 15, 6, 0, 0, 0, time.UTC), IsSynthetic: 0},
+		{Date: "2026-04-14", Intensity: 20, CapturedAt: time.Date(2026, 4, 14, 6, 0, 0, 0, time.UTC), IsSynthetic: 0},
+		{Date: "2026-04-13", Intensity: 30, CapturedAt: time.Date(2026, 4, 13, 6, 0, 0, 0, time.UTC), IsSynthetic: 0},
+	}
+	for _, r := range rows {
+		if err := store.UpsertGeopolitical(context.Background(), r); err != nil {
+			t.Fatalf("upsert: %v", err)
+		}
+	}
+	got, err := store.LoadGeopoliticalHistory(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(got))
+	}
+	if got[0].Date != "2026-04-15" {
+		t.Errorf("first row date = %q, want 2026-04-15", got[0].Date)
+	}
+	if got[2].Date != "2026-04-13" {
+		t.Errorf("last row date = %q, want 2026-04-13", got[2].Date)
+	}
+}
+
+func TestSQLiteHistoricalStore_LoadGeopoliticalHistory_Limit(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	for _, d := range []string{"2026-04-15", "2026-04-14", "2026-04-13"} {
+		if err := store.UpsertGeopolitical(context.Background(), GeopoliticalRow{
+			Date:       d,
+			Intensity:  10,
+			CapturedAt: time.Date(2026, 4, 15, 6, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("upsert: %v", err)
+		}
+	}
+	got, err := store.LoadGeopoliticalHistory(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(got))
+	}
+}
+
+func TestSQLiteHistoricalStore_LoadGeopoliticalHistory_FiltersSynthetic(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+	if err := store.UpsertGeopolitical(context.Background(), GeopoliticalRow{
+		Date:        "2026-04-15",
+		Intensity:   10,
+		CapturedAt:  time.Date(2026, 4, 15, 6, 0, 0, 0, time.UTC),
+		IsSynthetic: 1,
+	}); err != nil {
+		t.Fatalf("upsert synthetic: %v", err)
+	}
+	if err := store.UpsertGeopolitical(context.Background(), GeopoliticalRow{
+		Date:        "2026-04-15",
+		Intensity:   20,
+		CapturedAt:  time.Date(2026, 4, 15, 6, 0, 0, 0, time.UTC),
+		IsSynthetic: 0,
+	}); err != nil {
+		t.Fatalf("upsert real: %v", err)
+	}
+	got, err := store.LoadGeopoliticalHistory(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 1 || got[0].Intensity != 20 {
+		t.Errorf("expected 1 real row with intensity 20, got %+v", got)
+	}
+	all, err := store.LoadGeopoliticalHistoryAll(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("load all: %v", err)
+	}
+	if len(all) != 1 || all[0].Intensity != 20 {
+		t.Errorf("all should also return the winning non-synthetic row, got %+v", all)
 	}
 }

@@ -990,6 +990,21 @@ func (m *mockStressStore) LoadPredictionBacktestRange(ctx context.Context, start
 func (m *mockStressStore) LoadPredictionBacktestRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]ledger.PredictionBacktestRow, error) {
 	return nil, nil
 }
+func (m *mockStressStore) UpsertGeopolitical(ctx context.Context, row ledger.GeopoliticalRow) error {
+	return nil
+}
+func (m *mockStressStore) LoadGeopoliticalByDate(ctx context.Context, date string) (ledger.GeopoliticalRow, bool, error) {
+	return ledger.GeopoliticalRow{}, false, nil
+}
+func (m *mockStressStore) LoadGeopoliticalByDateAll(ctx context.Context, date string) (ledger.GeopoliticalRow, bool, error) {
+	return ledger.GeopoliticalRow{}, false, nil
+}
+func (m *mockStressStore) LoadGeopoliticalHistory(ctx context.Context, limit int) ([]ledger.GeopoliticalRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) LoadGeopoliticalHistoryAll(ctx context.Context, limit int) ([]ledger.GeopoliticalRow, error) {
+	return nil, nil
+}
 func (m *mockStressStore) CountSynthetic(ctx context.Context) (map[string]int64, error) {
 	return nil, nil
 }

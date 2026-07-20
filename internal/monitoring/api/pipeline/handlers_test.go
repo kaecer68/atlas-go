@@ -368,3 +368,50 @@ func TestHandleRecommendationPipeline_StatusPropagatesToResponse(t *testing.T) {
 		t.Error("expected non-empty status_message in response body")
 	}
 }
+
+// TestHandleRegimeHistory_CanonicalPath verifies A04: GET /api/regime/history
+// is registered as an alias for /api/dashboard/regime-history and returns the
+// same session-based regime history data.
+func TestHandleRegimeHistory_CanonicalPath(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260101-daily"
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	recordedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	summary := domain.SessionSummary{
+		SessionID:    sessionID,
+		Regime:       "RISK_ON",
+		OutcomeCount: 1,
+		RecordedAt:   recordedAt,
+	}
+	summaryData, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryData, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	svc := service.NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	h := NewHandlers(svc)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	for _, path := range []string{"/api/dashboard/regime-history", "/api/regime/history"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want 200 (body=%s)", path, rr.Code, rr.Body.String())
+		}
+		var data service.RegimeHistoryData
+		if err := json.Unmarshal(rr.Body.Bytes(), &data); err != nil {
+			t.Fatalf("%s unmarshal: %v", path, err)
+		}
+		if len(data.Sessions) != 1 {
+			t.Fatalf("%s expected 1 session, got %d", path, len(data.Sessions))
+		}
+		if data.Sessions[0].Regime != "RISK_ON" {
+			t.Errorf("%s regime = %q, want RISK_ON", path, data.Sessions[0].Regime)
+		}
+	}
+}

@@ -163,6 +163,15 @@ func InitSchema(db *sql.DB) error {
 		is_synthetic INTEGER NOT NULL
 	);
 
+	CREATE TABLE IF NOT EXISTS geopolitical_history (
+		date TEXT PRIMARY KEY,
+		intensity REAL NOT NULL,
+		sources_json TEXT,
+		source TEXT,
+		captured_at TEXT NOT NULL,
+		is_synthetic INTEGER NOT NULL
+	);
+
 	CREATE TABLE IF NOT EXISTS event_calendar_history (
 		date TEXT NOT NULL,
 		event_id TEXT NOT NULL,
@@ -212,6 +221,7 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_mutation_briefs_window_id ON mutation_briefs(window_id);
 	CREATE INDEX IF NOT EXISTS idx_regime_history_captured_at ON regime_history(captured_at);
 	CREATE INDEX IF NOT EXISTS idx_stress_index_history_captured_at ON stress_index_history(captured_at);
+	CREATE INDEX IF NOT EXISTS idx_geopolitical_history_captured_at ON geopolitical_history(captured_at);
 	CREATE INDEX IF NOT EXISTS idx_event_calendar_history_date ON event_calendar_history(date);
 	CREATE INDEX IF NOT EXISTS idx_prediction_backtest_captured_at ON prediction_backtest(captured_at);
 	CREATE INDEX IF NOT EXISTS idx_detector_scan_log_batch ON detector_scan_log(scan_batch_id);

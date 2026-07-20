@@ -30,20 +30,19 @@ func NewNarrativeService(workDir string, narrativeEngine *narrative.NarrativeEng
 	}
 }
 
+// WithHistoricalStore injects the SQLite ledger so the service can read/write
+// historical time-series (stress index, geopolitical risk, etc.).
+func (s *NarrativeService) WithHistoricalStore(hs ledger.HistoricalStore) *NarrativeService {
+	s.historicalStore = hs
+	return s
+}
+
 func (s *NarrativeService) SetMacroProvider(p marketdata.MacroDataProvider) {
 	s.macroProvider = p
 }
 
 func (s *NarrativeService) SetGeoProvider(p narrative.GeopoliticalRiskProvider) {
 	s.geoProvider = p
-}
-
-// WithHistoricalStore injects the SQLite-backed historical store so that
-// GetStressIndexHistory can read from the persistent ledger instead of the
-// process-local in-memory ring buffer. Safe to call with nil (keeps fallback).
-func (s *NarrativeService) WithHistoricalStore(hs ledger.HistoricalStore) *NarrativeService {
-	s.historicalStore = hs
-	return s
 }
 
 // BuildMarketNarrativeData fetches the latest macro snapshot and converts it
@@ -150,4 +149,45 @@ func stressRowsToIndex(rows []ledger.StressRow) []narrative.TaiwanStressIndex {
 
 func (s *NarrativeService) GetStressIndexThresholds() narrative.StressIndexThresholds {
 	return s.NarrativeEngine.GetStressIndexThresholds()
+}
+
+// GeopoliticalPoint is one date-stamped geopolitical risk reading for API
+// consumers.
+type GeopoliticalPoint struct {
+	Date       string   `json:"date"`
+	Intensity  float64  `json:"intensity"`
+	Sources    []string `json:"sources,omitempty"`
+	Source     string   `json:"source"`
+	CapturedAt string   `json:"captured_at"`
+}
+
+// GetGeopoliticalHistory reads historical geopolitical risk scores from the
+// ledger when available, falling back to the current in-memory score as a
+// single-point history.
+func (s *NarrativeService) GetGeopoliticalHistory(days int) []GeopoliticalPoint {
+	if days <= 0 {
+		days = 30
+	}
+	if days > 365 {
+		days = 365
+	}
+	if s.historicalStore != nil {
+		rows, err := s.historicalStore.LoadGeopoliticalHistory(context.Background(), days)
+		if err != nil {
+			logging.Warn("narrative_service", "load_geopolitical_history_failed", logging.Err(err))
+		} else if len(rows) > 0 {
+			out := make([]GeopoliticalPoint, len(rows))
+			for i, r := range rows {
+				out[i] = GeopoliticalPoint{
+					Date:       r.Date,
+					Intensity:  r.Intensity,
+					Sources:    r.Sources,
+					Source:     r.Source,
+					CapturedAt: r.CapturedAt.UTC().Format(time.RFC3339),
+				}
+			}
+			return out
+		}
+	}
+	return nil
 }

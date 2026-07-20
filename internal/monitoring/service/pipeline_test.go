@@ -854,6 +854,21 @@ func (m *mockHistoricalStore) LoadStressHistory(_ context.Context, _ int) ([]led
 func (m *mockHistoricalStore) LoadStressHistoryAll(_ context.Context, _ int) ([]ledger.StressRow, error) {
 	panic("not implemented")
 }
+func (m *mockHistoricalStore) UpsertGeopolitical(_ context.Context, _ ledger.GeopoliticalRow) error {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadGeopoliticalByDate(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadGeopoliticalByDateAll(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadGeopoliticalHistory(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	panic("not implemented")
+}
+func (m *mockHistoricalStore) LoadGeopoliticalHistoryAll(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	panic("not implemented")
+}
 func (m *mockHistoricalStore) UpsertEventCalendar(_ context.Context, _ ledger.EventCalendarRow) error {
 	panic("not implemented")
 }
