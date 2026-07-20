@@ -385,6 +385,184 @@ func TestSelectorStickiness(t *testing.T) {
 	}
 }
 
+func TestComparisonEngineNewWithStore(t *testing.T) {
+	store := NewFileComparisonStore("", 0)
+	e := NewComparisonEngine(20, store)
+	if e == nil {
+		t.Fatal("NewComparisonEngine with store returned nil")
+	}
+	if e.shadowStore != store {
+		t.Error("shadowStore not set")
+	}
+}
+
+func TestComparisonEngineRecordShadowDay(t *testing.T) {
+	e := NewComparisonEngine(100, nil)
+
+	day := ComparisonDay{
+		TradingDate: "2026-07-20",
+		Benchmark: BenchmarkObservation{
+			TradingDate: "2026-07-20",
+			SourceID:    "TAIEX",
+			ReasonCode:  "test",
+			Return:      0.01,
+			Available:   true,
+		},
+		Observations: []StrategyDailyObservation{
+			{StrategyID: "growth", DailyReturn: 0.02, Outperformance: 0.01},
+			{StrategyID: "value", DailyReturn: -0.01, Outperformance: -0.02},
+		},
+	}
+
+	if err := e.RecordShadowDay(day); err != nil {
+		t.Fatalf("RecordShadowDay failed: %v", err)
+	}
+
+	if len(e.shadowDays) != 1 {
+		t.Fatalf("shadowDays = %d, want 1", len(e.shadowDays))
+	}
+	if e.shadowDays[0].TradingDate != "2026-07-20" {
+		t.Errorf("TradingDate = %s, want 2026-07-20", e.shadowDays[0].TradingDate)
+	}
+}
+
+func TestComparisonEngineRecordShadowDayUnavailableBenchmark(t *testing.T) {
+	e := NewComparisonEngine(100, nil)
+
+	day := ComparisonDay{
+		TradingDate: "2026-07-20",
+		Benchmark: BenchmarkObservation{
+			Available: false,
+		},
+	}
+
+	if err := e.RecordShadowDay(day); err != nil {
+		t.Fatalf("RecordShadowDay should not error on unavailable benchmark: %v", err)
+	}
+	if len(e.shadowDays) != 0 {
+		t.Error("shadowDays should be empty when benchmark unavailable")
+	}
+}
+
+func TestComparisonEngineRecordShadowDayReplace(t *testing.T) {
+	e := NewComparisonEngine(100, nil)
+
+	e.RecordShadowDay(ComparisonDay{
+		TradingDate: "2026-07-20",
+		Benchmark:   BenchmarkObservation{Available: true},
+		Observations: []StrategyDailyObservation{
+			{StrategyID: "old", DailyReturn: 0.01},
+		},
+	})
+
+	e.RecordShadowDay(ComparisonDay{
+		TradingDate: "2026-07-20",
+		Benchmark:   BenchmarkObservation{Available: true},
+		Observations: []StrategyDailyObservation{
+			{StrategyID: "new", DailyReturn: 0.02},
+		},
+	})
+
+	if len(e.shadowDays) != 1 {
+		t.Fatalf("shadowDays = %d, want 1 after replace", len(e.shadowDays))
+	}
+	if len(e.shadowDays[0].Observations) != 1 || e.shadowDays[0].Observations[0].StrategyID != "new" {
+		t.Error("RecordShadowDay did not replace existing entry")
+	}
+}
+
+func TestRankingSnapshot_WarmingUp(t *testing.T) {
+	e := NewComparisonEngine(100, nil)
+
+	snap := e.RankingSnapshot(time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC))
+	if snap.WarmingUp.Status != "warming_up" {
+		t.Errorf("Status = %s, want warming_up", snap.WarmingUp.Status)
+	}
+	if snap.WarmingUp.ReasonCode != "no_history" {
+		t.Errorf("ReasonCode = %s, want no_history", snap.WarmingUp.ReasonCode)
+	}
+	if len(snap.Ranked) != 0 {
+		t.Errorf("len(Ranked) = %d, want 0", len(snap.Ranked))
+	}
+}
+
+func TestRankingSnapshot_WithData(t *testing.T) {
+	e := NewComparisonEngine(100, nil)
+
+	dates := []string{
+		"2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05",
+		"2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10",
+		"2026-07-11", "2026-07-12", "2026-07-13", "2026-07-14", "2026-07-15",
+		"2026-07-16", "2026-07-17", "2026-07-18", "2026-07-19", "2026-07-20",
+	}
+	for _, d := range dates {
+		e.shadowDays = append(e.shadowDays, ComparisonDay{
+			TradingDate: d,
+			Benchmark:   BenchmarkObservation{Available: true},
+			Observations: []StrategyDailyObservation{
+				{StrategyID: "growth", EvaluationMode: EvaluationModeShadow, DailyReturn: 0.02, Outperformance: 0.01},
+				{StrategyID: "value", EvaluationMode: EvaluationModeShadow, DailyReturn: 0.01, Outperformance: 0.005},
+			},
+			DeployedMix: map[string]float64{"growth": 0.6, "value": 0.4},
+		})
+	}
+
+	snap := e.RankingSnapshot(time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC))
+
+	if snap.WarmingUp.Status != "eligible" {
+		t.Errorf("Status = %s, want eligible", snap.WarmingUp.Status)
+	}
+	if len(snap.Ranked) != 2 {
+		t.Fatalf("len(Ranked) = %d, want 2", len(snap.Ranked))
+	}
+	if snap.Ranked[0].Score < snap.Ranked[1].Score {
+		t.Error("Ranked should be sorted by Score descending")
+	}
+	if len(snap.DeployedMix) != 2 {
+		t.Errorf("len(DeployedMix) = %d, want 2", len(snap.DeployedMix))
+	}
+}
+
+func TestRankedIDs_WarmingUp(t *testing.T) {
+	e := NewComparisonEngine(100, nil)
+
+	ids, err := e.RankedIDs()
+	if err != nil {
+		t.Fatalf("RankedIDs: %v", err)
+	}
+	if ids != nil {
+		t.Errorf("ids = %v, want nil when warming up", ids)
+	}
+}
+
+func TestRankedIDs_Eligible(t *testing.T) {
+	e := NewComparisonEngine(20, nil)
+
+	for _, d := range []string{
+		"2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05",
+		"2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10",
+		"2026-07-11", "2026-07-12", "2026-07-13", "2026-07-14", "2026-07-15",
+		"2026-07-16", "2026-07-17", "2026-07-18", "2026-07-19", "2026-07-20",
+	} {
+		e.shadowDays = append(e.shadowDays, ComparisonDay{
+			TradingDate: d,
+			Benchmark:   BenchmarkObservation{Available: true},
+			Observations: []StrategyDailyObservation{
+				{StrategyID: "growth", EvaluationMode: EvaluationModeShadow, DailyReturn: 0.02, Outperformance: 0.01},
+				{StrategyID: "value", EvaluationMode: EvaluationModeShadow, DailyReturn: 0.01, Outperformance: 0.005},
+			},
+		})
+	}
+
+	ids, err := e.RankedIDs()
+	if err != nil {
+		t.Fatalf("RankedIDs: %v", err)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("len(ids) = %d, want 2", len(ids))
+	}
+}
+
 func TestComparisonEngineGetResult(t *testing.T) {
 	e := NewComparisonEngine(20, nil)
 	now := time.Now()

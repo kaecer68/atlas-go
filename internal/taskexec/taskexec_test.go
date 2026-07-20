@@ -413,6 +413,128 @@ func TestInMemoryStore_Metrics_QueryFilterBySeriesKey(t *testing.T) {
 	}
 }
 
+// --- localSink (EventSink) ---
+
+func TestLocalSink_ExecutionID(t *testing.T) {
+	mgr := NewManager(NewInMemoryStore())
+	mgr.RegisterRunner("test", &testRunner{name: "test", runFn: func(_ context.Context, _ SubmitRequest, sink EventSink) error {
+		if id := sink.ExecutionID(); id == "" {
+			t.Error("ExecutionID should not be empty")
+		}
+		return nil
+	}})
+	exec, err := mgr.Submit(context.Background(), SubmitRequest{TaskType: "test"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	_ = exec
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestLocalSink_RecordLineage(t *testing.T) {
+	mgr := NewManager(NewInMemoryStore())
+	mgr.RegisterRunner("test", &testRunner{name: "test", runFn: func(_ context.Context, _ SubmitRequest, sink EventSink) error {
+		return sink.RecordLineage(domain.ExperimentLineageRecord{
+			ExperimentID: "exp-recordlineage",
+			ExecutionID:  sink.ExecutionID(),
+			Status:       "accepted",
+			RecordedAt:   time.Now(),
+		})
+	}})
+	exec, err := mgr.Submit(context.Background(), SubmitRequest{TaskType: "test"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	lin, err := mgr.store.GetLineage(context.Background(), "exp-recordlineage")
+	if err != nil {
+		t.Fatalf("get lineage: %v", err)
+	}
+	if lin.ExperimentID != "exp-recordlineage" || lin.ExecutionID != exec.ID {
+		t.Errorf("lineage: %+v", lin)
+	}
+}
+
+func TestLocalSink_RecordBaselineHistory(t *testing.T) {
+	mgr := NewManager(NewInMemoryStore())
+	mgr.RegisterRunner("test", &testRunner{name: "test", runFn: func(_ context.Context, _ SubmitRequest, sink EventSink) error {
+		return sink.RecordBaselineHistory(domain.BaselineHistoryRecord{
+			ID: "bh-sink-test", VersionBefore: 1, VersionAfter: 2, PromotedBy: "test", PromotedAt: time.Now(),
+		})
+	}})
+	_, err := mgr.Submit(context.Background(), SubmitRequest{TaskType: "test"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	records, err := mgr.store.ListBaselineHistory(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	found := false
+	for _, r := range records {
+		if r.ID == "bh-sink-test" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("RecordBaselineHistory did not persist the record")
+	}
+}
+
+func TestLocalSink_RecordMetrics(t *testing.T) {
+	mgr := NewManager(NewInMemoryStore())
+	mgr.RegisterRunner("test", &testRunner{name: "test", runFn: func(_ context.Context, _ SubmitRequest, sink EventSink) error {
+		return sink.RecordMetrics([]domain.MetricTrendPoint{
+			{ID: "metric-sink-test", ExecutionID: sink.ExecutionID(), SeriesKey: "test", MetricName: "test_metric", MetricValue: 1.0, SampledAt: time.Now()},
+		})
+	}})
+	_, err := mgr.Submit(context.Background(), SubmitRequest{TaskType: "test"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	points, err := mgr.store.QueryMetricTrends(context.Background(), domain.MetricTrendFilter{})
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	found := false
+	for _, p := range points {
+		if p.ID == "metric-sink-test" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("RecordMetrics did not persist the metric point")
+	}
+}
+
+func TestManager_ListEvents(t *testing.T) {
+	mgr := NewManager(NewInMemoryStore())
+	mgr.RegisterRunner("test", &testRunner{name: "test", runFn: func(_ context.Context, _ SubmitRequest, sink EventSink) error {
+		sink.Emit(domain.TaskExecutionEvent{EventType: domain.TaskEventStatus, Message: "event1"})
+		return nil
+	}})
+	exec, err := mgr.Submit(context.Background(), SubmitRequest{TaskType: "test"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	events, err := mgr.ListEvents(context.Background(), exec.ID)
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	if len(events) == 0 {
+		t.Error("expected at least 1 event, got 0")
+	}
+}
+
 // --- Manager: SetContext + localSink ---
 
 func TestManager_SetContext(t *testing.T) {

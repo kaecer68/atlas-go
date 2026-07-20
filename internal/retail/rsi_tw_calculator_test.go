@@ -1,8 +1,13 @@
 package retail
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 )
@@ -498,6 +503,184 @@ func TestCalculatorSingleton(t *testing.T) {
 	c2 := GetCalculator()
 	if c1 != c2 {
 		t.Error("GetCalculator should return the same instance")
+	}
+}
+
+func TestLastScore_Initial(t *testing.T) {
+	c := NewCalculator()
+	if c.LastScore() != 0 {
+		t.Errorf("initial LastScore = %f, want 0", c.LastScore())
+	}
+}
+
+func TestLastScore_AfterCompute(t *testing.T) {
+	c := NewCalculator()
+	c.UpdateHistory(RSITwInput{MarginBalance: 5000})
+	c.UpdateHistory(RSITwInput{MarginBalance: 5100})
+
+	input := RSITwInput{
+		MarginBalance:      5200,
+		MarginPercentile:   0.5,
+		VIXLevel:           22,
+		ForeignInvestorNet: 1_000_000_000,
+		DomesticFundNet:    500_000_000,
+	}
+	result := c.ComputeFinal(input)
+	last := c.LastScore()
+	if math.Abs(result.Score-last) > 1e-6 {
+		t.Errorf("LastScore = %f, want %f (from ComputeFinal)", last, result.Score)
+	}
+}
+
+func TestFactorD3_CreditTightening(t *testing.T) {
+	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+
+	subs := make(map[string]RSISubIndicator)
+	data := RSITwInput{CreditTightening: true}
+	factor := c.factorD3(data, subs, &params)
+
+	expectedMultiplier := params.DCreditTighteningMultiplier.Value
+	if factor != expectedMultiplier {
+		t.Errorf("factorD3 with CreditTightening = %f, want %f", factor, expectedMultiplier)
+	}
+	si := subs["d3_credit_control"]
+	if !si.IsFallback {
+		t.Error("factorD3 credit control should be marked fallback")
+	}
+}
+
+func TestFactorD3_NoCreditTightening(t *testing.T) {
+	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+
+	subs := make(map[string]RSISubIndicator)
+	data := RSITwInput{CreditTightening: false}
+	factor := c.factorD3(data, subs, &params)
+
+	if factor != 1.0 {
+		t.Errorf("factorD3 without CreditTightening = %f, want 1.0", factor)
+	}
+}
+
+func TestAvgScore(t *testing.T) {
+	results := []calibrationResult{
+		{Score: 0.6}, {Score: 0.4}, {Score: 0.2},
+	}
+	avg := avgScore(results)
+	if math.Abs(avg-0.4) > 1e-6 {
+		t.Errorf("avgScore = %f, want 0.4", avg)
+	}
+}
+
+func TestAvgScore_Empty(t *testing.T) {
+	if avgScore(nil) != 0 {
+		t.Error("avgScore(nil) should return 0")
+	}
+}
+
+func TestApplyChange(t *testing.T) {
+	params := config.DefaultParametersConfig().RSITw
+	original := params.A1Weight.Value
+
+	applyChange(&params, CalibrationMetadata{
+		Parameter: "a1_weight",
+		After:     original * 1.1,
+	})
+
+	if params.A1Weight.Value != original*1.1 {
+		t.Errorf("A1Weight = %f, want %f", params.A1Weight.Value, original*1.1)
+	}
+}
+
+func TestApplyChange_UnknownParameter(t *testing.T) {
+	params := config.DefaultParametersConfig().RSITw
+	applyChange(&params, CalibrationMetadata{Parameter: "unknown", After: 999})
+}
+
+func TestCalibrateRSITw_InsufficientData(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rsi-cal-test")
+	defer os.RemoveAll(dir)
+
+	report, err := CalibrateRSITw(dir)
+	if err != nil {
+		t.Fatalf("CalibrateRSITw with empty dir: %v", err)
+	}
+	if report.Verdict != "insufficient_data" {
+		t.Errorf("Verdict = %s, want insufficient_data", report.Verdict)
+	}
+	if report.SampleCount != 0 {
+		t.Errorf("SampleCount = %d, want 0", report.SampleCount)
+	}
+}
+
+func TestCalibrateRSITw_WithData(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rsi-cal-test2")
+	defer os.RemoveAll(dir)
+
+	macroDir := filepath.Join(dir, "data", "state", "macro")
+	os.MkdirAll(macroDir, 0o755)
+
+	for i := 0; i < 15; i++ {
+		ts := time.Date(2026, 7, 1+i, 8, 0, 0, 0, time.UTC)
+		data := map[string]interface{}{
+			"recorded_at":            ts.Format(time.RFC3339),
+			"retail_margin_balance":  map[string]interface{}{"value": 5000.0 + float64(i)*100},
+			"vix":                    map[string]interface{}{"value": 22.0 + float64(i%5)},
+			"foreign_investor_net":   map[string]interface{}{"value": 1_000_000_000.0},
+			"domestic_fund_net":      map[string]interface{}{"value": 500_000_000.0},
+		}
+		fname := fmt.Sprintf("2026-07-%02d.json", 1+i)
+		raw, _ := json.Marshal(data)
+		os.WriteFile(filepath.Join(macroDir, fname), raw, 0o644)
+	}
+	os.WriteFile(filepath.Join(macroDir, "latest.json"), []byte("{}"), 0o644)
+
+	report, err := CalibrateRSITw(dir)
+	if err != nil {
+		t.Fatalf("CalibrateRSITw with data: %v", err)
+	}
+	if report.Verdict == "insufficient_data" || report.Verdict == "" {
+		t.Errorf("Verdict = %s, want no_improvement or calibrated", report.Verdict)
+	}
+	if report.SampleCount < 10 {
+		t.Errorf("SampleCount = %d, want >= 10", report.SampleCount)
+	}
+}
+
+func TestLoadLastCalibrationReport_NotFound(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rsi-cal-load")
+	defer os.RemoveAll(dir)
+
+	_, err := LoadLastCalibrationReport(dir)
+	if err == nil {
+		t.Error("LoadLastCalibrationReport should error when no report exists")
+	}
+}
+
+func TestLoadLastCalibrationReport_Success(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rsi-cal-load2")
+	defer os.RemoveAll(dir)
+
+	os.MkdirAll(filepath.Join(dir, "data", "state"), 0o755)
+
+	report := &CalibrationReport{
+		Timestamp: time.Now(),
+		Verdict:   "calibrated",
+		Score:     0.75,
+		Changes:   []CalibrationMetadata{},
+	}
+	saveCalibrationReport(dir, report)
+
+	loaded, err := LoadLastCalibrationReport(dir)
+	if err != nil {
+		t.Fatalf("LoadLastCalibrationReport: %v", err)
+	}
+	if loaded.Verdict != "calibrated" {
+		t.Errorf("Verdict = %s, want calibrated", loaded.Verdict)
+	}
+	if loaded.Score != 0.75 {
+		t.Errorf("Score = %f, want 0.75", loaded.Score)
 	}
 }
 

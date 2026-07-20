@@ -13,6 +13,17 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
+func TestNewRunnerWithEventBus(t *testing.T) {
+	cfg := config.Config{LedgerDir: t.TempDir()}
+	runner := NewRunnerWithEventBus(cfg, nil)
+	if runner == nil {
+		t.Fatal("NewRunnerWithEventBus returned nil")
+	}
+	if runner.cfg.LedgerDir != cfg.LedgerDir {
+		t.Error("LedgerDir not set correctly")
+	}
+}
+
 func TestRunnerRecordSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	store := ledger.NewStore(dir).(*ledger.Store)

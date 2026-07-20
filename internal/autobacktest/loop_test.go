@@ -1,9 +1,27 @@
 package autobacktest
 
 import (
+	"context"
 	"testing"
 	"time"
 )
+
+func TestStartDailyLoop_CancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	StartDailyLoop(ctx, nil)
+}
+
+func TestRunScheduledBacktest_CancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := RunScheduledBacktest(ctx, nil)
+	if err == nil {
+		t.Error("RunScheduledBacktest with cancelled ctx should return error")
+	}
+}
 
 func TestNext13_30Weekday(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Taipei")

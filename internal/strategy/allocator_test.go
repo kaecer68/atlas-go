@@ -168,6 +168,72 @@ func TestRiskParity_EmptyRegistry(t *testing.T) {
 	}
 }
 
+func TestEqualMix(t *testing.T) {
+	candidates := []*Strategy{
+		{ID: "a"}, {ID: "b"}, {ID: "c"}, {ID: "d"},
+	}
+	mix := equalMix(candidates)
+	if len(mix) != 4 {
+		t.Fatalf("len(mix) = %d, want 4", len(mix))
+	}
+	if !mix.Validate() {
+		t.Error("equal mix should validate")
+	}
+	expectedW := 0.25
+	for _, id := range []string{"a", "b", "c", "d"} {
+		if mix[id] != expectedW {
+			t.Errorf("mix[%s] = %f, want %f", id, mix[id], expectedW)
+		}
+	}
+}
+
+func TestEqualMix_Empty(t *testing.T) {
+	mix := equalMix(nil)
+	if mix == nil {
+		t.Error("equalMix(nil) should return non-nil map")
+	}
+	if len(mix) != 0 {
+		t.Errorf("len(mix) = %d, want 0", len(mix))
+	}
+}
+
+func TestVolatilities_Empty(t *testing.T) {
+	reg := NewRegistry()
+	sa := NewStrategyAllocator(reg)
+
+	vols := sa.Volatilities()
+	if len(vols) != 0 {
+		t.Errorf("len(Volatilities) = %d, want 0 for empty registry", len(vols))
+	}
+}
+
+func TestVolatilities_WithReturns(t *testing.T) {
+	reg := syntheticRegistry([]*Strategy{
+		makeTestStrategy("growth", domain.RegimeRiskOn),
+		makeTestStrategy("defensive", domain.RegimeRiskOn),
+	})
+	sa := NewStrategyAllocator(reg)
+
+	sa.UpdateShadowReturns(map[string]float64{
+		"growth":    0.01,
+		"defensive": 0.005,
+	})
+	sa.UpdateShadowReturns(map[string]float64{
+		"growth":    -0.005,
+		"defensive": 0.003,
+	})
+
+	vols := sa.Volatilities()
+	if len(vols) != 2 {
+		t.Fatalf("len(Volatilities) = %d, want 2", len(vols))
+	}
+	for id, v := range vols {
+		if v <= 0 {
+			t.Errorf("%s volatility = %f, want > 0", id, v)
+		}
+	}
+}
+
 func TestStrategyMix_Validate(t *testing.T) {
 	valid := StrategyMix{"a": 0.6, "b": 0.4}
 	if !valid.Validate() {
