@@ -35,9 +35,9 @@ A docs drift also exists in the A04 manifest: it writes `?days=5` in the accepta
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| B01 | `recorded_at`, `captured_at`, `timestamp` JSON fields render Go zero-time for every historical row | `parseTimeColumn` lacks Go-native `time.Time.String()` layout (`"2006-01-02 15:04:05.999999999 -0700 MST"`); SQLite TEXT columns store that format because `sql.NullTime` driver falls back to default `String()` | `internal/ledger/historical_store.go` (add layout to `timeLayouts` slice) | New unit test passes; live API returns real RFC3339 strings (no `"0001-01-01T00:00:00Z"` or `-62135596800`) | pending | none | Pre-existing data + new writes are both affected |
-| B02 | `/api/regime/history?days=5` ignored — handler reads `limit` only, defaulting to 30 | `parseLimit` does not consult `days` query param | `internal/monitoring/api/pipeline/handlers.go` (add `days` fallback chain) | New unit test passes; live API `?days=5` returns ≤5 entries (within DB count) | pending | none | Also serves any future callers using either name |
-| B03 | A04 manifest acceptance text says `?days=5` but handler reads `limit` — reviewer will repeat the same mistake | Documentation drift in `docs/manifests/2026-07-20-regime-geo-ledger-persistence.md` | `docs/manifests/2026-07-20-regime-geo-ledger-persistence.md` (acceptance criteria text) | Manifest text matches handler reality; `grep "?days=" docs/manifests/2026-07-20-*.md` shows no surviving `?days=` references | pending | plan-edit | Single-doc edit; not a behaviour change |
+| B01 | `recorded_at`, `captured_at`, `timestamp` JSON fields render Go zero-time for every historical row | `parseTimeColumn` lacks Go-native `time.Time.String()` layout (`"2006-01-02 15:04:05.999999999 -0700 MST"`); SQLite TEXT columns store that format because `sql.NullTime` driver falls back to default `String()` | `internal/ledger/historical_store.go` (add layout to `timeLayouts` slice) | New unit test passes; live API returns real RFC3339 strings (no `"0001-01-01T00:00:00Z"` or `-62135596800`) | done | none | Pre-existing data + new writes are both affected |
+| B02 | `/api/regime/history?days=5` ignored — handler reads `limit` only, defaulting to 30 | `parseLimit` does not consult `days` query param | `internal/monitoring/api/pipeline/handlers.go` (add `days` fallback chain) | New unit test passes; live API `?days=5` returns ≤5 entries (within DB count) | done | none | Also serves any future callers using either name |
+| B03 | A04 manifest acceptance text says `?days=5` but handler reads `limit` — reviewer will repeat the same mistake | Documentation drift in `docs/manifests/2026-07-20-regime-geo-ledger-persistence.md` | `docs/manifests/2026-07-20-regime-geo-ledger-persistence.md` (acceptance criteria text) | Manifest text matches handler reality; `grep "?days=" docs/manifests/2026-07-20-*.md` shows no surviving `?days=` references | done | plan-edit | Single-doc edit; not a behaviour change |
 
 ---
 
@@ -64,27 +64,44 @@ A docs drift also exists in the A04 manifest: it writes `?days=5` in the accepta
 | Define acceptance criteria | B01, B02, B03 | done | "Acceptance Criteria" column above |
 | Review blast radius | - | done | Both fixes are in pure-function helpers; blast radius = the three handlers that call `parseTimeColumn` indirectly via `LoadRegimeHistory` / `LoadStressHistory` / `LoadGeopoliticalHistory`, plus `parseLimit` callers (`HandleRegimeHistory`, `HandleSessions`, `HandleMacroRadar`, etc.). d=1 callers in `internal/monitoring/api/pipeline/handlers.go` and `internal/monitoring/api/narrative/handlers.go` are stable — adding layout or alias only widens accepted inputs, does not change accepted outputs. |
 
-### Phase C — Implement (pending)
+### Phase C — Implement (done)
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Add Go-native time layout to `timeLayouts` | B01 | pending | <commit hash> |
-| Add `days` alias to `parseLimit` | B02 | pending | <commit hash> |
-| Add `TestParseTimeColumn_GoNativeFormat` and `TestParseLimit_DaysAlias` | B01, B02 | pending | <commit hash> |
-| Update A04 manifest text | B03 | pending | <commit hash> |
-| Run focused tests + lsp_diagnostics | - | pending | <test output> |
-| Commit + push branch + open PR | - | pending | <PR URL> |
+| Add Go-native time layout to `timeLayouts` | B01 | done | commit `cb66a6a2` |
+| Add `days` alias to `parseLimit` | B02 | done | commit `8d17a2e8` |
+| Add `TestParseTimeColumn_GoNativeFormat` and `TestParseLimit_DaysAlias` | B01, B02 | done | commits `cb66a6a2`, `8d17a2e8` |
+| Update A04 manifest text | B03 | done | commit `94f55d8f` |
+| Run focused tests + lsp_diagnostics | - | done | 32 packages OK; gofmt clean; go vet clean |
+| Commit + push branch + open PR | - | done | branch `fix/historical-store-time-and-limit-params`; PR https://github.com/kaecer68/atlas-go/pull/1245 |
 
-### Phase D — Close Out (pending)
+### Phase D — Close Out (done)
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Update manifest status | - | pending | - |
-| Rebuild Docker image from worktree | - | pending | <new image digest> |
-| Restart `atlas-go` container | - | pending | <docker ps> |
-| Re-run 3 endpoints + verify zero-time is gone | - | pending | <curl outputs> |
-| Re-run `?days=5` and verify ≤5 entries | - | pending | <curl output> |
-| Final verification report | - | pending | <report> |
+| Update manifest status | - | done | this file's Invariant Tracker updated |
+| Rebuild Docker image from worktree | - | done | image digest `9a676edb781b` tagged as `atlas-atlas:latest` |
+| Restart `atlas-go` container | - | done | container `atlas-go` Up About a minute (healthy), `[HistoricalStore] initialized` log |
+| Re-run 3 endpoints + verify zero-time is gone | - | done | see §Verification Report below |
+| Re-run `?days=5` and verify ≤5 entries | - | done | see §Verification Report below |
+| Final verification report | - | done | see §Verification Report below |
+
+---
+
+## Verification Report (2026-07-21, container atlas-go image digest `9a676edb781b`)
+
+| Check | Result |
+|-------|--------|
+| `[HistoricalStore] initialized` log appears in docker logs | ✓ PASS |
+| `/api/regime/history?limit=5` returns 5 sessions, `recorded_at` is RFC3339 (e.g. `"2026-06-29T06:00:00Z"`) — NOT `"0001-01-01T00:00:00Z"` | ✓ PASS |
+| `/api/regime/history?limit=90` returns 90 sessions, 67 transitions, `current_regime: RISK_OFF`, **0 / 90 zero-time** | ✓ PASS |
+| `/api/regime/history?days=5` returns exactly 5 sessions (was 30 before B02 fix) | ✓ PASS |
+| `/api/regime/history?days=1` returns exactly 1 session | ✓ PASS |
+| `/api/narrative/stress-index/history?days=90` returns 90 entries, **0 / 90 zero-epoch timestamps** (was `-62135596800` before B01 fix) | ✓ PASS |
+| `/api/geopolitical/history` returns 1 entry with `captured_at: "2026-07-20T16:28:20Z"` (was `"0001-01-01T00:00:00Z"` before B01 fix) | ✓ PASS |
+| `ATLAS_STORE_BACKEND=sqlite` confirmed in container env | ✓ PASS |
+
+**Coverage**: aggregate of changed packages (`internal/ledger`, `internal/monitoring/api/pipeline`) ≥ 60% (existing baseline; B01/B02 unit tests add ~50 LoC of coverage).
 
 ---
 
@@ -120,11 +137,11 @@ A docs drift also exists in the A04 manifest: it writes `?days=5` in the accepta
 
 ## Session-End State
 
-- **Done this session**: Phase A (audit) + Phase B (plan)
-- **Remaining**: B01, B02, B03 implementation + image rebuild + end-to-end re-verification
-- **Next action**: edit `internal/ledger/historical_store.go` to add Go-native layout
+- **Done this session**: B01, B02, B03 implementation + image rebuild (`9a676edb781b`) + end-to-end re-verification (all 7 checks PASS)
+- **Remaining**: B04 (24h observation window) — operational, documented in §Follow-up
+- **Next action**: monitor PR #1245 CI; merge after approval; delete worktree per `docs/multi-cli-protocol.md`
 - **Uncommitted code**: no
-- **Branch / PR**: `fix/historical-store-time-and-limit-params` (worktree `/Users/kaecer/workspace/atlas-fixes-2026-07-21`) / not yet opened
+- **Branch / PR**: `fix/historical-store-time-and-limit-params` (worktree `/Users/kaecer/workspace/atlas-fixes-2026-07-21`) / PR https://github.com/kaecer68/atlas-go/pull/1245
 - **Paused because**: not paused
 
 ---
@@ -134,3 +151,4 @@ A docs drift also exists in the A04 manifest: it writes `?days=5` in the accepta
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-07-21 | 1.0 | Initial manifest with B01/B02/B03 from A04/A05 drill | Sisyphus |
+| 2026-07-21 | 1.1 | Phase C+D closed: commits `cb66a6a2` / `8d17a2e8` / `94f55d8f`; image `9a676edb781b`; PR #1245; verification 7/7 PASS | Sisyphus |
