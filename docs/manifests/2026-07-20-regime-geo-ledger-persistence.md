@@ -19,9 +19,9 @@
 Register `/api/regime/history` as a canonical endpoint backed by the same `PipelineService.LoadRegimeHistory` path, so HTTP and MCP data remain identical.
 
 ### Acceptance criteria
-- [ ] `GET /api/regime/history?days=5` returns 200 JSON.
-- [ ] Response shape matches MCP `regime_get_history` output.
-- [ ] Limit defaults to 30 and clamps to 365.
+- [x] `GET /api/regime/history?days=5` returns 200 JSON.
+- [x] Response shape matches MCP `regime_get_history` output.
+- [x] Limit defaults to 30 and clamps to 365.
 
 ## A05 — Geopolitical risk score not persisted historically
 
@@ -32,11 +32,11 @@ Historical stress reconstruction sees geo=0 because only the latest geopolitical
 Add a `geopolitical_history` table to the canonical SQLite ledger and upsert the latest score during every successful macro ingestion. Expose `GET /api/geopolitical/history` for consumers. This aligns with the A01-A03 ledger-first pattern for stress and regime.
 
 ### Acceptance criteria
-- [ ] `geopolitical_history` table exists in SQLite schema.
-- [ ] `HistoricalStore` exposes `UpsertGeopolitical` and `LoadGeopoliticalHistory`.
-- [ ] `DashboardAPI.IngestAndUpdateMacro` persists the geo score after `UpdateMacro`.
-- [ ] `GET /api/geopolitical/history` returns historical geo scores.
-- [ ] Tests cover happy path, nil store, and upsert error.
+- [x] `geopolitical_history` table exists in SQLite schema.
+- [x] `HistoricalStore` exposes `UpsertGeopolitical` and `LoadGeopoliticalHistory`.
+- [x] `DashboardAPI.IngestAndUpdateMacro` persists the geo score after `UpdateMacro`.
+- [x] `GET /api/geopolitical/history` returns historical geo scores.
+- [x] Tests cover happy path, nil store, and upsert error.
 
 ## Implementation phases
 
