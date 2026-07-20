@@ -415,3 +415,84 @@ func TestHandleRegimeHistory_CanonicalPath(t *testing.T) {
 		}
 	}
 }
+
+// TestParseLimit_DaysAlias covers BUG-2 (manifest 2026-07-21-historical-store-time-and-limit-fixes.md).
+// parseLimit must accept the `days` query parameter as an alias for `limit`
+// so the MCP briefing tool's call to /api/regime/history?days=5 returns
+// at most 5 entries rather than the default 30. `limit` retains priority
+// when both are present.
+func TestParseLimit_DaysAlias(t *testing.T) {
+	cases := []struct {
+		name    string
+		query   string
+		def     int
+		max     int
+		want    int
+		wantErr bool
+	}{
+		{"no_param_returns_default", "", 30, 365, 30, false},
+		{"limit_only", "limit=5", 30, 365, 5, false},
+		{"days_only", "days=5", 30, 365, 5, false},
+		{"both_limit_wins", "limit=7&days=99", 30, 365, 7, false},
+		{"days_clamped_to_max", "days=999", 30, 100, 100, false},
+		{"limit_clamped_to_max", "limit=999", 30, 100, 100, false},
+		{"days_zero_errors", "days=0", 30, 365, 0, true},
+		{"days_negative_errors", "days=-5", 30, 365, 0, true},
+		{"days_non_integer_errors", "days=abc", 30, 365, 0, true},
+		{"days_one_returns_one", "days=1", 30, 365, 1, false},
+		{"days_with_whitespace_trimmed", "days=%20%205%20%20", 30, 365, 5, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/regime/history?"+tc.query, nil)
+			got, err := parseLimit(req, tc.def, tc.max)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
+			}
+			if !tc.wantErr && got != tc.want {
+				t.Fatalf("parseLimit(%q)=%d want %d", tc.query, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHandleRegimeHistory_DaysQueryParam is an end-to-end guard for BUG-2:
+// /api/regime/history?days=5 must surface ≤5 sessions even though the
+// handler reads via parseLimit (which now honours `days`).
+func TestHandleRegimeHistory_DaysQueryParam(t *testing.T) {
+	baseDir := t.TempDir()
+	sessionID := "session-20260101-daily"
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	summary := domain.SessionSummary{
+		SessionID:    sessionID,
+		Regime:       "RISK_ON",
+		OutcomeCount: 1,
+		RecordedAt:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	summaryData, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryData, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	svc := service.NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	h := NewHandlers(svc)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/regime/history?days=1", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rr.Code, rr.Body.String())
+	}
+	var data service.RegimeHistoryData
+	if err := json.Unmarshal(rr.Body.Bytes(), &data); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(data.Sessions) > 1 {
+		t.Fatalf("?days=1 returned %d sessions, want ≤1", len(data.Sessions))
+	}
+}

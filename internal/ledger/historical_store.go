@@ -658,10 +658,16 @@ func nullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{Time: t.UTC(), Valid: true}
 }
 
-// parseTimeColumn converts a TEXT column (RFC3339Nano) into time.Time.
+// parseTimeColumn converts a TEXT column into time.Time.
 // modernc.org/sqlite does not support scanning a TEXT column into a
 // sql.NullTime target, so we route through sql.NullString + manual parse.
-// Returns the zero time when the column is NULL or empty.
+// Accepts both RFC3339 family strings and the Go-native time.Time.String()
+// format (e.g. "2026-06-29 06:00:00 +0000 UTC" or
+// "2026-07-20 16:14:01.734248004 +0000 UTC"), the latter being what the
+// modernc sqlite driver writes when serializing sql.NullTime values whose
+// underlying time.Time has its monotonic clock stripped (i.e. UTC times
+// produced by `t.UTC()`). Returns the zero time when the column is NULL
+// or empty, or when no layout matches the stored format.
 func parseTimeColumn(ns sql.NullString) time.Time {
 	if !ns.Valid || ns.String == "" {
 		return time.Time{}
@@ -679,6 +685,9 @@ var timeLayouts = []string{
 	time.RFC3339,
 	"2006-01-02T15:04:05.000Z",
 	"2006-01-02T15:04:05Z",
+	// Go-native time.Time.String() format — handles both zero-fractional
+	// and nanosecond-precision representations via the .999... token.
+	"2006-01-02 15:04:05.999999999 -0700 MST",
 }
 
 // HasTables reports whether each of the Stage 4 history tables exists

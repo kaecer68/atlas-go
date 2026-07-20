@@ -43,8 +43,19 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/baseline-info", shared.Get(h.HandleBaselineInfo))
 }
 
+// parseLimit extracts an integer limit from the query string.
+//
+// Accepts both `limit` and `days` parameter names so that callers — most
+// notably the MCP briefing tool which calls /api/regime/history?days=5 —
+// can use either convention. `limit` wins when both are present (more
+// explicit / canonical). The returned value is clamped to (0, maxValue].
+// Returns defaultValue when neither parameter is set.
 func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
-	raw := strings.TrimSpace(r.URL.Query().Get("limit"))
+	q := r.URL.Query()
+	raw := strings.TrimSpace(q.Get("limit"))
+	if raw == "" {
+		raw = strings.TrimSpace(q.Get("days"))
+	}
 	if raw == "" {
 		return defaultValue, nil
 	}

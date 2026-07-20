@@ -19,7 +19,7 @@
 Register `/api/regime/history` as a canonical endpoint backed by the same `PipelineService.LoadRegimeHistory` path, so HTTP and MCP data remain identical.
 
 ### Acceptance criteria
-- [x] `GET /api/regime/history?days=5` returns 200 JSON.
+- [x] `GET /api/regime/history` (query params: `limit` or `days`, both honoured since 2026-07-21; see manifest `2026-07-21-historical-store-time-and-limit-fixes.md`) returns 200 JSON.
 - [x] Response shape matches MCP `regime_get_history` output.
 - [x] Limit defaults to 30 and clamps to 365.
 
