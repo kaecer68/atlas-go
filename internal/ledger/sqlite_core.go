@@ -144,13 +144,18 @@ func InitSchema(db *sql.DB) error {
 	-- Stage 4 PR#2 — historical backfill tables. Each row carries is_synthetic
 	-- (always 1 for these tables because they are populated from the
 	-- Stage 4 CLI's staging JSONLs, NOT from live runtime emitters).
+	-- PR #1247 (manifest 2026-07-21-regime-history-source-and-vocab-normalize.md D01):
+	-- added 'source' column. Existing rows from older binaries have 'source'
+	-- backfilled to 'synthetic' via the migration below; new rows written by
+	-- the live ingest pipeline populate source='macro_ingest'.
 	CREATE TABLE IF NOT EXISTS regime_history (
 		date TEXT PRIMARY KEY,
 		regime TEXT NOT NULL,
 		source_session_id TEXT,
 		recorded_at TEXT,
 		captured_at TEXT NOT NULL,
-		is_synthetic INTEGER NOT NULL
+		is_synthetic INTEGER NOT NULL,
+		source TEXT NOT NULL DEFAULT 'synthetic'
 	);
 
 	CREATE TABLE IF NOT EXISTS stress_index_history (
@@ -232,5 +237,55 @@ func InitSchema(db *sql.DB) error {
 		return fmt.Errorf("init schema: %w", err)
 	}
 
+	// Apply additive column migrations that predate CREATE TABLE IF NOT EXISTS
+	// supporting newer columns. Each migration is idempotent: PRAGMA table_info
+	// gates the ALTER so re-running InitSchema on a fresh DB (or on an
+	// already-migrated DB) is a no-op. Each migration's intent is captured
+	// here so future operators reading the file can trace the schema delta.
+	additiveMigrations := []func(*sql.DB) error{
+		addRegimeHistorySourceColumn, // PR #1247 (D01)
+	}
+	for _, m := range additiveMigrations {
+		if err := m(db); err != nil {
+			return fmt.Errorf("apply additive migration: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// addRegimeHistorySourceColumn adds `source TEXT NOT NULL DEFAULT 'synthetic'`
+// to regime_history if the column is missing. Existing rows inherit the
+// DEFAULT value (backfill to 'synthetic'); new writes from live ingest
+// (cmd/atlas/operations_tasks.go::macro_ingest → DashboardAPI.IngestAndUpdateMacro
+// → persistRegime if present, or the StressRow-equivalent for regime) populate
+// `source='macro_ingest'`. This migration is idempotent because ALTER TABLE
+// ADD COLUMN with a DEFAULT is a no-op when the column already exists (we
+// gate it explicitly with PRAGMA table_info for clarity + testability).
+func addRegimeHistorySourceColumn(db *sql.DB) error {
+	const table = "regime_history"
+	const column = "source"
+
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return fmt.Errorf("pragma table_info %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("scan pragma row: %w", err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+
+	if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` TEXT NOT NULL DEFAULT 'synthetic'`); err != nil {
+		return fmt.Errorf("alter %s add %s: %w", table, column, err)
+	}
 	return nil
 }
