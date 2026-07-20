@@ -66,3 +66,5 @@ Add a `geopolitical_history` table to the canonical SQLite ledger and upsert the
 
 ## Next action
 Push branch and create PR for A04/A05.
+
+- PR: https://github.com/kaecer68/atlas-go/pull/1244
