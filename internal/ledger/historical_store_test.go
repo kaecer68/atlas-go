@@ -682,3 +682,178 @@ func TestSQLiteHistoricalStore_LoadGeopoliticalHistory_FiltersSynthetic(t *testi
 		t.Errorf("all should also return the winning non-synthetic row, got %+v", all)
 	}
 }
+
+// TestInitSchema_AddsRegimeHistorySourceColumn covers D01: a fresh database
+// initialized via InitSchema must include the new 'source' column on
+// regime_history. This guards against future schema edits silently dropping
+// the column or changing its DEFAULT.
+func TestInitSchema_AddsRegimeHistorySourceColumn(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSQLiteDB(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+
+	rows, err := db.Query(`PRAGMA table_info(regime_history)`)
+	if err != nil {
+		t.Fatalf("pragma table_info: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var cid, notnull, pk int
+	var name, ctype string
+	var dflt sql.NullString
+	var foundSource bool
+	for rows.Next() {
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			t.Fatalf("scan pragma row: %v", err)
+		}
+		if name == "source" {
+			foundSource = true
+			if !dflt.Valid || dflt.String != "'synthetic'" {
+				t.Errorf("regime_history.source default = %v, want 'synthetic'", dflt)
+			}
+			if notnull != 1 {
+				t.Errorf("regime_history.source NOT NULL = %d, want 1", notnull)
+			}
+		}
+	}
+	if !foundSource {
+		t.Error("regime_history.source column missing after InitSchema")
+	}
+}
+
+// TestInitSchema_RegimeHistorySourceBackfill_PreExistingSchema covers D01
+// against the realistic upgrade path: a database that was created before
+// PR #1247 (no source column) must be migrated forward without losing
+// existing rows, and the migrated source column must default to 'synthetic'
+// for the legacy rows.
+func TestInitSchema_RegimeHistorySourceBackfill_PreExistingSchema(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := OpenSQLiteDB(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Simulate a pre-existing DB: schema is missing source column and
+	// contains 2 legacy rows written by an older binary.
+	if _, err := db.Exec(`
+		CREATE TABLE regime_history (
+			date TEXT PRIMARY KEY,
+			regime TEXT NOT NULL,
+			source_session_id TEXT,
+			recorded_at TEXT,
+			captured_at TEXT NOT NULL,
+			is_synthetic INTEGER NOT NULL
+		)`); err != nil {
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	for _, date := range []string{"2026-01-01", "2026-01-02"} {
+		if _, err := db.Exec(`INSERT INTO regime_history (date, regime, captured_at, is_synthetic) VALUES (?, 'RISK_ON', ?, 0)`,
+			date, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			t.Fatalf("insert legacy row: %v", err)
+		}
+	}
+
+	// Run InitSchema — should add source column with DEFAULT 'synthetic'.
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("init schema (upgrade): %v", err)
+	}
+
+	// Verify the new column exists and existing rows were backfilled.
+	rows, err := db.Query(`SELECT date, source FROM regime_history ORDER BY date`)
+	if err != nil {
+		t.Fatalf("select: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var got []string
+	for rows.Next() {
+		var d, s string
+		if err := rows.Scan(&d, &s); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, d+":"+s)
+	}
+	want := []string{"2026-01-01:synthetic", "2026-01-02:synthetic"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("after migration got %v, want %v", got, want)
+	}
+}
+
+// TestInitSchema_RegimeHistorySourceMigration_Idempotent covers D01:
+// running InitSchema twice on the same DB must not error (the second
+// call should detect the column already exists and skip the ALTER).
+func TestInitSchema_RegimeHistorySourceMigration_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSQLiteDB(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("first init: %v", err)
+	}
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("second init (idempotent): %v", err)
+	}
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("third init (idempotent): %v", err)
+	}
+}
+
+// TestSQLiteHistoricalStore_UpsertRegime_RoundTripSource covers D02:
+// UpsertRegime must persist Source and LoadRegimeHistory / LoadRegimeByDate
+// must return it. Backfill 'synthetic' default applies to rows written
+// before the migration; live 'macro_ingest' rows populate explicitly.
+func TestSQLiteHistoricalStore_UpsertRegime_RoundTripSource(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+
+	cases := []struct {
+		date   string
+		regime string
+		source string
+	}{
+		{"2026-06-01", "RISK_ON", "synthetic"},
+		{"2026-06-02", "RISK_OFF", "macro_ingest"},
+		{"2026-06-03", "NEUTRAL", ""}, // empty → nullString → NULL → backfill default
+	}
+	now := time.Now().UTC()
+	for _, c := range cases {
+		row := RegimeRow{
+			Date:        c.date,
+			Regime:      c.regime,
+			Source:      c.source,
+			IsSynthetic: 0,
+			CapturedAt:  now,
+			RecordedAt:  now,
+		}
+		if err := store.UpsertRegime(context.Background(), row); err != nil {
+			t.Fatalf("upsert %s: %v", c.date, err)
+		}
+	}
+
+	rows, err := store.LoadRegimeHistory(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	byDate := map[string]string{}
+	for _, r := range rows {
+		byDate[r.Date] = r.Source
+	}
+	if byDate["2026-06-01"] != "synthetic" {
+		t.Errorf("2026-06-01 source = %q, want synthetic", byDate["2026-06-01"])
+	}
+	if byDate["2026-06-02"] != "macro_ingest" {
+		t.Errorf("2026-06-02 source = %q, want macro_ingest", byDate["2026-06-02"])
+	}
+	if byDate["2026-06-03"] != "synthetic" {
+		t.Errorf("2026-06-03 source = %q, want synthetic (empty→default substitution)", byDate["2026-06-03"])
+	}
+}
