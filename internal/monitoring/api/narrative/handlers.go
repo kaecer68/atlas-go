@@ -34,6 +34,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	// Deprecated: covered by /api/taiwan/stress-index. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/narrative/stress-index/thresholds", shared.Get(h.HandleStressIndexThresholds))
 	mux.Handle("GET /api/geopolitical/history", shared.Get(h.HandleGeopoliticalHistory))
+	mux.Handle("GET /api/narrative/regime-mapping", shared.Get(h.HandleRegimeMapping))
 }
 
 func parseFloatQuery(r *http.Request, key string) float64 {
@@ -323,4 +324,37 @@ func (h *Handlers) HandleGeopoliticalHistory(r *http.Request) (int, any) {
 	}
 	history := h.Svc.GetGeopoliticalHistory(days)
 	return http.StatusOK, map[string]any{"history": history}
+}
+
+// HandleRegimeMapping serves GET /api/narrative/regime-mapping. It exposes the
+// cross-walk between the two regime vocabularies that have ended up sharing the
+// stress_index_history.regime and regime_history.regime SQLite columns
+// (TaiwanStressCalculator "low/alert/high/crisis" vs Janus engine
+// "RISK_ON/RISK_OFF/NEUTRAL/TRANSITIONAL"). See internal/narrative/regime_mapping.go
+// and docs/manifests/2026-07-21-stress-history-and-regime-gaps.md (C03).
+//
+// The mapping table is bidirectional: each entry maps one stress-vocabulary
+// token to a regime-vocabulary token and vice versa. Consumers can use it as
+// a lookup without needing to call NormalizeRegime from Go.
+func (h *Handlers) HandleRegimeMapping(r *http.Request) (int, any) {
+	stressToRegime := make(map[string]string, len(narrative.StressVocabulary))
+	for _, k := range narrative.StressVocabulary {
+		if v, ok := narrative.RegimeVocabularyMapping[k]; ok {
+			stressToRegime[k] = v
+		}
+	}
+	regimeToStress := make(map[string]string, len(narrative.RegimeVocabulary))
+	for _, k := range narrative.RegimeVocabulary {
+		if v, ok := narrative.RegimeVocabularyMapping[k]; ok {
+			regimeToStress[k] = v
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"stress_to_regime":      stressToRegime,
+		"regime_to_stress":      regimeToStress,
+		"stress_vocabulary":     narrative.StressVocabulary,
+		"regime_vocabulary":     narrative.RegimeVocabulary,
+		"warning":               "the two systems measure different things; the mapping is approximate",
+		"see_also_source_field": "TaiwanStressIndex.Source and RegimeRow.Source disambiguate origin per row",
+	}
 }

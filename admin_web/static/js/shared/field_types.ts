@@ -3868,6 +3868,8 @@ export interface TaiwanStressIndex {
   regime: string;
   components: Record<string, number>;
   timestamp: number;
+  date?: string;
+  source?: string;
 }
 
 export interface TaskExecution {
