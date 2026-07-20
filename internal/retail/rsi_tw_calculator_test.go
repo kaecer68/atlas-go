@@ -624,11 +624,11 @@ func TestCalibrateRSITw_WithData(t *testing.T) {
 	for i := 0; i < 15; i++ {
 		ts := time.Date(2026, 7, 1+i, 8, 0, 0, 0, time.UTC)
 		data := map[string]interface{}{
-			"recorded_at":            ts.Format(time.RFC3339),
-			"retail_margin_balance":  map[string]interface{}{"value": 5000.0 + float64(i)*100},
-			"vix":                    map[string]interface{}{"value": 22.0 + float64(i%5)},
-			"foreign_investor_net":   map[string]interface{}{"value": 1_000_000_000.0},
-			"domestic_fund_net":      map[string]interface{}{"value": 500_000_000.0},
+			"recorded_at":           ts.Format(time.RFC3339),
+			"retail_margin_balance": map[string]interface{}{"value": 5000.0 + float64(i)*100},
+			"vix":                   map[string]interface{}{"value": 22.0 + float64(i%5)},
+			"foreign_investor_net":  map[string]interface{}{"value": 1_000_000_000.0},
+			"domestic_fund_net":     map[string]interface{}{"value": 500_000_000.0},
 		}
 		fname := fmt.Sprintf("2026-07-%02d.json", 1+i)
 		raw, _ := json.Marshal(data)

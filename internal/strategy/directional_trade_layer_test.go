@@ -65,10 +65,10 @@ func TestDirectionalTradeLayer_ConcurrentSafety(t *testing.T) {
 	l := NewDirectionalTradeLayer()
 
 	done := make(chan bool, 2)
-		go func() {
-			for i := 0; i < 100; i++ {
-				l.ApplySignal(forecast.TradeSignal{Symbol: "2330.TW", WeightMultiplier: 1.0})
-			}
+	go func() {
+		for i := 0; i < 100; i++ {
+			l.ApplySignal(forecast.TradeSignal{Symbol: "2330.TW", WeightMultiplier: 1.0})
+		}
 		done <- true
 	}()
 	go func() {
