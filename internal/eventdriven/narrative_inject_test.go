@@ -16,16 +16,6 @@ type stubNarrative struct {
 
 func (s *stubNarrative) ListModels() []ModelView { return s.models }
 
-func narrativeTestHandler(now time.Time, models []ModelView) *Handler {
-	cal := industry.NewEventCalendar()
-	cal.RefreshEvents(now)
-	h := NewHandler(cal)
-	if models != nil {
-		h.SetNarrativeProvider(&stubNarrative{models: models})
-	}
-	return h
-}
-
 func TestSetNarrativeProvider_CachesSnapshot(t *testing.T) {
 	models := []ModelView{
 		{ID: "x", Name: "test", Weight: 0.5, Direction: "bullish", ActiveThemes: []string{"earnings_surprise"}},

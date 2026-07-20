@@ -77,6 +77,42 @@ jobs:
         version: v2.12.2
         args: --timeout=5m
 
+  # Standalone staticcheck — golangci-lint's staticcheck linter is a subset
+  # of upstream rules. The validation drill on 2026-07-20 found 5 SA/U warnings
+  # (SA1019 deprecation, U1000 unused, SA1012 nil context) that golangci-lint
+  # missed. This step closes the gap.
+  staticcheck:
+    needs: frontend-build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Run staticcheck
+      run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
   # File naming convention
   naming:
     runs-on: ubuntu-latest

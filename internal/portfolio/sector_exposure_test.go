@@ -19,14 +19,6 @@ func (r *mockL1Resolver) ResolveL1(symbol string) (industry.SectorID, bool) {
 	return id, ok
 }
 
-func makeAll20L1WeightsZero() map[industry.SectorID]float64 {
-	w := make(map[industry.SectorID]float64, 20)
-	for _, id := range industry.L1Sectors() {
-		w[id] = 0
-	}
-	return w
-}
-
 func TestSectorExposure_UsesQuantityTimesLast(t *testing.T) {
 	cal := portfolio.SectorExposureCalculator{}
 	// SA-INV-10: current exposure must be quantity × T-close, NOT AverageCost

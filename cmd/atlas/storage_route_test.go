@@ -12,7 +12,7 @@ import (
 // TestStorageRouteRegistration verifies that /api/metrics/storage is registered
 // when SetStorageReporter is called before RegisterRoutes.
 func TestStorageRouteRegistration(t *testing.T) {
-	d := monitoring.NewDashboardAPI("", "", nil)
+	d := monitoring.NewDashboardAPI("", "", nil) //lint:ignore SA1019 test stub doesn't need DataFetcher wiring
 	mgr := storage.NewLifecycleManager(t.TempDir())
 	d.SetStorageReporter(mgr)
 
