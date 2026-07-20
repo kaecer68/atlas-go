@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -18,6 +19,7 @@ type NarrativeService struct {
 	ReportGenerator *narrative.ReportGenerator
 	macroProvider   marketdata.MacroDataProvider
 	geoProvider     narrative.GeopoliticalRiskProvider
+	historicalStore ledger.HistoricalStore
 }
 
 func NewNarrativeService(workDir string, narrativeEngine *narrative.NarrativeEngine, reportGenerator *narrative.ReportGenerator) *NarrativeService {
@@ -34,6 +36,14 @@ func (s *NarrativeService) SetMacroProvider(p marketdata.MacroDataProvider) {
 
 func (s *NarrativeService) SetGeoProvider(p narrative.GeopoliticalRiskProvider) {
 	s.geoProvider = p
+}
+
+// WithHistoricalStore injects the SQLite-backed historical store so that
+// GetStressIndexHistory can read from the persistent ledger instead of the
+// process-local in-memory ring buffer. Safe to call with nil (keeps fallback).
+func (s *NarrativeService) WithHistoricalStore(hs ledger.HistoricalStore) *NarrativeService {
+	s.historicalStore = hs
+	return s
 }
 
 // BuildMarketNarrativeData fetches the latest macro snapshot and converts it
@@ -95,7 +105,47 @@ func (s *NarrativeService) GetCurrentStressIndex() narrative.TaiwanStressIndex {
 }
 
 func (s *NarrativeService) GetStressIndexHistory(days int) []narrative.TaiwanStressIndex {
+	if days <= 0 {
+		days = 30
+	}
+	if days > 365 {
+		days = 365
+	}
+
+	if s.historicalStore != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		rows, err := s.historicalStore.LoadStressHistory(ctx, days)
+		if err != nil {
+			logging.Warn("narrative_service", "load_stress_history_failed", logging.Err(err))
+		} else if len(rows) > 0 {
+			return stressRowsToIndex(rows)
+		}
+	}
+
 	return s.NarrativeEngine.GetStressIndexHistory(days)
+}
+
+func stressRowsToIndex(rows []ledger.StressRow) []narrative.TaiwanStressIndex {
+	out := make([]narrative.TaiwanStressIndex, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- {
+		r := rows[i]
+		idx := narrative.TaiwanStressIndex{
+			Score:     r.Score,
+			Regime:    r.Regime,
+			Timestamp: r.CapturedAt.Unix(),
+		}
+		if r.Components != nil {
+			idx.Components = make(map[string]float64, len(r.Components))
+			for k, v := range r.Components {
+				if f, ok := v.(float64); ok {
+					idx.Components[k] = f
+				}
+			}
+		}
+		out = append(out, idx)
+	}
+	return out
 }
 
 func (s *NarrativeService) GetStressIndexThresholds() narrative.StressIndexThresholds {
