@@ -550,6 +550,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 			}
 		}
 		a.narrativeEngine.UpdateMacro(snap, geoScore)
+		a.persistStressIndex(ctx, snap)
 	}
 	// Also update the industry seasonal engine's dynamic environment (oil, DXY, BDI)
 	// so that seasonal adjustments reflect real-time macro conditions.
@@ -564,6 +565,46 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 		a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
 	}
 	return events, snap, err
+}
+
+// persistStressIndex writes the current TaiwanStressIndex to the historical
+// ledger so that /api/narrative/stress-index/history can serve persistent data
+// instead of the process-local ring buffer. It is called after every successful
+// macro ingestion; the SQLite ON CONFLICT(date) upsert makes repeated calls
+// idempotent for the same trading day.
+func (a *DashboardAPI) persistStressIndex(ctx context.Context, snap marketdata.MacroDataSnapshot) {
+	if a.historicalStore == nil || a.narrativeEngine == nil {
+		return
+	}
+	idx := a.narrativeEngine.GetCurrentStressIndex()
+	if idx.Timestamp == 0 {
+		return
+	}
+	row := ledger.StressRow{
+		Date:        time.Unix(idx.Timestamp, 0).UTC().Format("2006-01-02"),
+		Score:       idx.Score,
+		Regime:      idx.Regime,
+		Components:  stressComponentsToMap(idx.Components),
+		Source:      "macro_ingest",
+		CapturedAt:  time.Unix(idx.Timestamp, 0).UTC(),
+		IsSynthetic: 0,
+	}
+	if err := a.historicalStore.UpsertStress(ctx, row); err != nil {
+		logging.Warn("dashboard_api", "persist_stress_failed",
+			logging.FStr("date", row.Date),
+			logging.Err(err))
+	}
+}
+
+func stressComponentsToMap(comps map[string]float64) map[string]interface{} {
+	if comps == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(comps))
+	for k, v := range comps {
+		out[k] = v
+	}
+	return out
 }
 
 // CalibrateNarrative evaluates model performance against replay data and updates
@@ -1012,7 +1053,8 @@ func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
-	svc := service.NewNarrativeService(a.workDir, a.narrativeEngine, a.reportGenerator)
+	svc := service.NewNarrativeService(a.workDir, a.narrativeEngine, a.reportGenerator).
+		WithHistoricalStore(a.historicalStore)
 	svc.SetMacroProvider(a.macroProvider)
 	svc.SetGeoProvider(a.geoProvider)
 	handlers := &apinarrative.Handlers{
