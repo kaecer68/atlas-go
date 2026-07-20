@@ -129,10 +129,57 @@ Rollback 不應影響整體預測:因 sector predictions 為純附加欄位,hand
 
 Day 14 acceptance 全部通過後,執行下列步驟(每步獨立 PR):
 
-1. **Source 升級(v0.0.0.XX)**: `internal/config/parameters.go` 新增常數化的 `SectorPredictionEnabled` 參數 + `ParameterMetadata`(若需從 `cmd/parameters_api` 治理 JSON 旗標)。
-2. **翻 default 為 true(獨立 PR)**: 將 `SECTOR_PREDICTION_ENABLED` 從「必須顯式啟用」改為「預設啟用」(或不變,僅調整文件化位置)。**這是獨立 PR**,不在本次 runbook PR 範圍。
-3. **更新 robot-communication**: 在 `atlas-daily-briefing` 與 `atlas-strategy-explain` skill 加上對「板塊方向預測」欄位的措辭,讓機器人對用戶解釋新欄位時不會出錯。
-4. **Tag 版本**: 上述變更合併後,標記 `v0.0.0.XX`(具體版本號依當時累積變更決定,參考 `CHANGELOG.md`)。
+### 5.1 Day 14 Promotion Checklist
+
+- [ ] **§3 Day 14 criteria 全部 pass**: `jsd.alert_rate < 5%`, `prediction.latency_p95 < 200ms`, `confidence.floor_violations = 0`, `sector.count_per_day = 20`, spot-check ≥ 20 recs, 0 unhandled panic
+- [ ] **Top-tier hit rate Δ ≥ -3%**: 對比觀察窗口內每日 top-tier sector 方向命中率 vs 上個月 baseline。使用 `c07-day-evaluator --day 14` 確認 exit code = 0
+- [ ] **Driver 可解釋性**: 累計 spot-check ≥ 20 筆,每筆至少引用 1 個 macro/cycle/event 來源
+- [ ] **Rollback 驗證通過**: 至少一次手動測試 (見 §5.2)
+- [ ] **邀請至少一位 team member 審閱觀察記錄** (`docs/operations/sector-prediction-observation-log.md`),確認無遺漏 edge case
+- [ ] **Invariant 確認**: 運行 `docs/manifests/sector-dimension-prediction-invariant-manifest.md` 中所有 automated checks
+
+### 5.2 Rollback Verification Procedure
+
+翻 `SECTOR_PREDICTION_ENABLED` → false → 重啟後確認:
+
+```bash
+# 1. 停用 flag
+export SECTOR_PREDICTION_ENABLED=false
+
+# 2. 重啟
+docker compose restart atlas
+
+# 3. 驗證 sector_predictions 已消失
+curl -fsS http://localhost:18080/api/events/prediction | jq '.sector_predictions | length == 0'
+
+# 4. 確認剩餘 prediction report 不受影響
+curl -fsS http://localhost:18080/api/events/prediction | jq '.direction != null'
+
+# 5. 恢復 flag
+export SECTOR_PREDICTION_ENABLED=true
+docker compose restart atlas
+
+# 6. 確認 sector_predictions 恢復
+curl -fsS http://localhost:18080/api/events/prediction | jq '.sector_predictions | length == 20'
+```
+
+整個流程應在 1 cycle (5min) 內完成切換,不影響其他 prediction report 欄位。
+
+### 5.3 Promotion PR Content
+
+Promotion PR 應包含:
+
+- `internal/config/parameters.go`: 新增常數化參數 (若需 JSON 治理)
+- `cmd/atlas/main.go`: 翻 `SECTOR_PREDICTION_ENABLED` default 為 true (獨立 PR)
+- `docs/operations/sector-prediction-runbook.md`: 更新 Pre-flight flag 說明為「預設啟用」
+- `docs/operations/sector-prediction-observation-log.md`: 附上完整觀察記錄總結
+- `shared_web/static/js/...`: 如有關閉 sector predictions 的 frontend fallback 變更
+
+> Step 1 與 Step 2 為**獨立 PR**,不可合併在同一個 commit。這確保 rollback 時可以精確控制只回退 flag 翻轉而不影響參數定義。
+
+### 5.4 Tag 版本
+
+上述變更合併後,標記 `v0.0.0.XX`(具體版本號依當時累積變更決定,參考 `CHANGELOG.md`)。
 
 > 設計保持簡單:promotion 流程不引入新 calculation 路徑,僅翻 default + 文件化對齊。
 

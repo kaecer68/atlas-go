@@ -281,10 +281,6 @@ function renderAllocationGuidance(ps) {
   `;
 }
 
-function getCssVar(name, fallback) {
-  const val = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return val || fallback;
-}
 
 function showTooltip(e, html) {
   let tooltip = document.getElementById('sparkline-tooltip');
@@ -293,8 +289,8 @@ function showTooltip(e, html) {
     tooltip.id = 'sparkline-tooltip';
     tooltip.style.position = 'absolute';
     tooltip.style.pointerEvents = 'none';
-    tooltip.style.background = getCssVar('--bg', '#13161c');
-    tooltip.style.border = `1px solid ${getCssVar('--border', '#2d333b')}`;
+    tooltip.style.background = getThemeColor('--bg', '#13161c');
+    tooltip.style.border = `1px solid ${getThemeColor('--border', '#2d333b')}`;
     tooltip.style.color = '#fff';
     tooltip.style.padding = '8px 12px';
     tooltip.style.borderRadius = '6px';
@@ -359,7 +355,7 @@ export function renderComparisonChart(containerId, datasets, options = {}) {
   });
 
   if (maxLen < 2 || allValues.length === 0) {
-     ctx.fillStyle = getCssVar('--muted', '#6b7280');
+     ctx.fillStyle = getThemeColor('--muted', '#6b7280');
      ctx.font = '12px system-ui';
      ctx.textAlign = 'center';
      ctx.fillText('Not enough data', W/2, H/2);
@@ -539,7 +535,7 @@ export function renderRadarChart(containerId, metrics, labels) {
   }
   
   // Draw labels
-  ctx.fillStyle = getCssVar('--muted', '#6b7280');
+  ctx.fillStyle = getThemeColor('--muted', '#6b7280');
   ctx.font = '10px system-ui';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -551,7 +547,7 @@ export function renderRadarChart(containerId, metrics, labels) {
   }
   
   // Draw Data Polygon
-  const accent = getCssVar('--accent', '#4fc1ff');
+  const accent = getThemeColor('--accent', '#4fc1ff');
   ctx.beginPath();
   for (let i = 0; i < numAxis; i++) {
     const a = i * angleStep - Math.PI / 2;
@@ -631,7 +627,9 @@ export function renderRegimeVolumeChart(containerId, sessions, volumes = []) {
   
   sessions.forEach((s, i) => {
     const x = pad.left + i * barW;
-    const c = getCssVar(regimeColor(s.regime), getCssVar('--muted', '#6b7280'));
+    const rc = regimeColor(s.regime);
+    const cName = rc.startsWith('var(') ? rc.slice(4, -1) : rc;
+    const c = getThemeColor(cName, getThemeColor('--muted', '#6b7280'));
     
     // Volume bar
     let vol = volumes[i] || 0.5; // fallback 0.5

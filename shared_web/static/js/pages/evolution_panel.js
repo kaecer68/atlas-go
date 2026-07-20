@@ -492,7 +492,7 @@ function renderScatterPlot(scorecards) {
   ctx.scale(dpr, dpr);
 
   if (!scorecards || !scorecards.length) {
-    var mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#9ca3af';
+    var mutedColor = getThemeColor('--muted', '#9ca3af');
     ctx.fillStyle = mutedColor;
     ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
     ctx.textAlign = 'center';
@@ -510,23 +510,23 @@ function renderScatterPlot(scorecards) {
   function toX(v) { return pad.left + ((v - xMin) / (xMax - xMin)) * plotW; }
   function toY(v) { return pad.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH; }
 
-  const cs = getComputedStyle(document.documentElement);
+  
   const layerColors = {
-    sector: cs.getPropertyValue('--layer-1').trim() || '#3b82f6',
-    style: cs.getPropertyValue('--layer-2').trim() || '#8b5cf6',
-    superinvestor: cs.getPropertyValue('--layer-3').trim() || '#10b981',
-    context: cs.getPropertyValue('--layer-4').trim() || '#f59e0b',
-    control: cs.getPropertyValue('--layer-5').trim() || '#ef4444',
-    unknown: cs.getPropertyValue('--muted').trim() || '#9ca3af',
+    sector: getThemeColor('--layer-1', '#3b82f6'),
+    style: getThemeColor('--layer-2', '#8b5cf6'),
+    superinvestor: getThemeColor('--layer-3', '#10b981'),
+    context: getThemeColor('--layer-4', '#f59e0b'),
+    control: getThemeColor('--layer-5', '#ef4444'),
+    unknown: getThemeColor('--muted', '#9ca3af'),
   };
 
-  ctx.fillStyle = cs.getPropertyValue('--bg').trim() || '#0b0d11';
+  ctx.fillStyle = getThemeColor('--bg', '#0b0d11');
   ctx.fillRect(0, 0, W, H);
 
-  ctx.strokeStyle = cs.getPropertyValue('--border').trim() || '#242a33';
+  ctx.strokeStyle = getThemeColor('--border', '#242a33');
   ctx.lineWidth = 0.5;
   ctx.font = '10px monospace';
-  ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#b8c4d0';
+  ctx.fillStyle = getThemeColor('--muted', '#b8c4d0');
   ctx.textAlign = 'center';
   for (let v = 0; v <= 1; v += 0.25) {
     const x = toX(v);
@@ -540,7 +540,7 @@ function renderScatterPlot(scorecards) {
     ctx.fillText(fmtSafeNumber(v, { decimals: 0 }), pad.left - 6, y + 4);
   }
 
-  ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#b8c4d0';
+  ctx.fillStyle = getThemeColor('--muted', '#b8c4d0');
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('命中率', pad.left + plotW / 2, H - 4);
@@ -550,25 +550,25 @@ function renderScatterPlot(scorecards) {
   ctx.fillText('Sharpe Ratio', 0, 0);
   ctx.restore();
 
-  ctx.strokeStyle = cs.getPropertyValue('--color-warning').trim() || '#f59e0b';
+  ctx.strokeStyle = getThemeColor('--color-warning', '#f59e0b');
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
   const y0 = toY(0);
   ctx.beginPath(); ctx.moveTo(pad.left, y0); ctx.lineTo(pad.left + plotW, y0); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = cs.getPropertyValue('--color-warning').trim() || '#f59e0b';
+  ctx.fillStyle = getThemeColor('--color-warning', '#f59e0b');
   ctx.textAlign = 'left';
   ctx.font = '9px sans-serif';
   ctx.fillText('Sharpe = 0', pad.left + plotW - 50, y0 - 5);
 
   // Vertical reference line at 60% hit rate
-  ctx.strokeStyle = cs.getPropertyValue('--muted').trim() || '#9ca3af';
+  ctx.strokeStyle = getThemeColor('--muted', '#9ca3af');
   ctx.lineWidth = 0.5;
   ctx.setLineDash([3, 5]);
   const x60 = toX(0.6);
   ctx.beginPath(); ctx.moveTo(x60, pad.top); ctx.lineTo(x60, pad.top + plotH); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#9ca3af';
+  ctx.fillStyle = getThemeColor('--muted', '#9ca3af');
   ctx.textAlign = 'left';
   ctx.font = '8px sans-serif';
   ctx.fillText('60%', x60 + 2, pad.top + 10);
@@ -599,7 +599,7 @@ function renderScatterPlot(scorecards) {
     ctx.arc(x, y, 5, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.strokeStyle = cs.getPropertyValue('--panel').trim() || '#13161c';
+    ctx.strokeStyle = getThemeColor('--panel', '#13161c');
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -637,7 +637,7 @@ function renderScatterPlot(scorecards) {
   for (const item of legendItems) {
     ctx.fillStyle = item.color;
     ctx.fillRect(legendX - 30, legendY - 5, 8, 8);
-    ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#b8c4d0';
+    ctx.fillStyle = getThemeColor('--muted', '#b8c4d0');
     ctx.fillText(item.label, legendX - 2, legendY + 2);
     legendY += 14;
   }
