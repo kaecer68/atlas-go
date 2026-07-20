@@ -5,19 +5,28 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG TARGETARCH
+ARG VERSION
+ARG BUILDTIME
+ARG GIT_COMMIT
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o daily-replay-sync ./cmd/daily-replay-sync
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-replay ./cmd/backfill-replay
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o macro-ingest ./cmd/macro-ingest
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o geo-ingest ./cmd/geo-ingest
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-month-revenue ./cmd/backfill-month-revenue
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-financial-statements ./cmd/backfill-financial-statements
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-institutional-investors ./cmd/backfill-institutional-investors
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o cron-quote-backfill ./cmd/cron-quote-backfill
+# LDFLAGS injects internal/buildinfo so cron binaries expose the same
+# runtime metadata as the main atlas binary (validation drill F4, 2026-07-20).
+ENV LDFLAGS="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o daily-replay-sync ./cmd/daily-replay-sync
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o backfill-replay ./cmd/backfill-replay
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o macro-ingest ./cmd/macro-ingest
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o geo-ingest ./cmd/geo-ingest
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o backfill-month-revenue ./cmd/backfill-month-revenue
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o backfill-financial-statements ./cmd/backfill-financial-statements
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o backfill-institutional-investors ./cmd/backfill-institutional-investors
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o cron-quote-backfill ./cmd/cron-quote-backfill
 
 # C07 sector prediction observation window (PR #1201)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o c07-obs-collector ./cmd/experimental/c07-obs-collector
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o c07-day-evaluator ./cmd/experimental/c07-day-evaluator
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o c07-obs-collector ./cmd/experimental/c07-obs-collector
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="$LDFLAGS" -o c07-day-evaluator ./cmd/experimental/c07-day-evaluator
 
 FROM alpine:latest
 
