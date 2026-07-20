@@ -1466,6 +1466,55 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered universe_coverage_check background task (1m interval, 06:00 TW trigger)")
 
+			// Register tej_refresh — daily TEJ data refresh after market close (15:00 TW).
+			// Issue #1086: TEJ channel data was stale for 66 days because no periodic fetch existed.
+			// Fires every hour but only executes at 15:00 TW to avoid daily API quota exhaustion.
+			// Reference: daily_report_generate pattern (lines ~1047) for time-gated ErrTaskSkipped.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "tej_refresh",
+				ChannelID: "tej",
+				Interval:  1 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					taipei, err := time.LoadLocation("Asia/Taipei")
+					if err != nil {
+						taipei = time.FixedZone("CST", 8*3600)
+					}
+					now := time.Now().In(taipei)
+					// Only fetch at 15:00 TW to avoid quota exhaustion.
+					if now.Hour() != 15 {
+						return apigateway.ErrTaskSkipped
+					}
+					_, fetchErr := gateway.Fetch(ctx, "tej")
+					if fetchErr != nil {
+						return fmt.Errorf("tej_refresh fetch: %w", fetchErr)
+					}
+					logging.Info("tej_refresh", "completed", "channel", "tej")
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered tej_refresh background task (1h interval, 15:00 TW trigger)")
+
+			// Register janus_regime_refresh — periodic JANUS regime data refresh (6h interval).
+			// Issue #1086: janus_regime channel data was stale because no periodic fetch existed.
+			// JANUS engine.Update() early-returns if no new PRISM snapshot exists (internal/janus/engine.go ~L71),
+			// so no TW time gating is needed. 6h interval allows max 4 fetches/day without excessive load.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "janus_regime_refresh",
+				ChannelID: "janus_regime",
+				Interval:  6 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					_, fetchErr := gateway.Fetch(ctx, "janus_regime")
+					if fetchErr != nil {
+						return fmt.Errorf("janus_regime_refresh fetch: %w", fetchErr)
+					}
+					logging.Info("janus_regime_refresh", "completed", "channel", "janus_regime")
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered janus_regime_refresh background task (6h interval)")
+
 			mux.HandleFunc("/universe/metrics", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(um.Snapshot())
