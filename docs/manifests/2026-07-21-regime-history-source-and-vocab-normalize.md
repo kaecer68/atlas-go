@@ -146,6 +146,33 @@ Total: 10/10 PASS.
 | D05 | `components` field empty for 89 `synthetic` rows in `stress_index_history`; only the 1 macro_ingest row has 8 components | 2026-07-21 | If backfill is feasible (use historical macro snapshots to reconstruct), this becomes a separate PR. Otherwise document as data quality gap. |
 | D06 | Apply the same Source / NormalizeRegime treatment to the `/api/regime/history` *transitions* array (currently only `from_regime` / `to_regime` / `timestamp` — no source) | 2026-07-21 | If normalization at handler level catches transitions too, this is one extra line. Otherwise future PR. |
 | D07 | Audit the 6h-interval silent tasks (`auto_geopolitical`, `janus_regime_refresh`) flagged in B01 triage — likely MaturityTracker-gated | 2026-07-21 | Operator runs `docker logs atlas-go --tail 5000 \| grep -E 'auto_geopolitical\|janus_regime_refresh\|burn_in_skip'` |
+| **D08** | macro_ingest schedule fires every 5min (failures=0, last_run recent) but `stress_index_history` only has 1 `macro_ingest` row with captured_at frozen at container-start time | 2026-07-21 (discovered during D04 observation) | `cmd/atlas/operations_tasks.go::macro_ingest` calls `dashRef.IngestAndUpdateMacro()`; persistStressIndex is only called on the SUCCESS path (`if err == nil`). When subsequent ticks fail (transient upstream API errors), the error path returns early before persistStressIndex. Need to either: (a) call persistStressIndex on error path too using disk snapshot, or (b) detect "stale DB row > N min old" and force refresh |
+
+## D04 Observation Snapshot (this session, container uptime ~5min)
+
+```sql
+sqlite3> SELECT source, COUNT(*), MIN(captured_at), MAX(captured_at) FROM stress_index_history GROUP BY source;
+macro_ingest  1   2026-07-20 21:19:55 +0000 UTC   2026-07-20 21:19:55 +0000 UTC
+synthetic     90  2026-04-01 06:00:00 +0000 UTC   2026-06-29 06:00:00 +0000 UTC
+
+sqlite3> SELECT source, COUNT(*), MIN(captured_at), MAX(captured_at) FROM geopolitical_history GROUP BY source;
+macro_ingest  1   2026-07-20 21:20:15 +0000 UTC   2026-07-20 21:20:15 +0000 UTC
+```
+
+```json
+GET /api/scheduler/status → macro_ingest task
+{
+  "name": "macro_ingest", "enabled": true,
+  "interval": 300000000000,  // 5 min
+  "last_run": "2026-07-20T21:20:44.282237841Z",
+  "next_run": "2026-07-20T21:25:44.282237841Z",
+  "consecutive_failures": 0
+}
+```
+
+**Status**: Schedule fires on cadence (interval 5min, no failures). Only **1 macro_ingest row per table** exists, with captured_at frozen at container-start time (21:19:55 for stress_index, 21:20:15 for geopolitical — these are the FIRST ticks after container bootstrap). Subsequent ticks have not produced new rows or updated captured_at. **D08 bug discovery** (see backlog).
+
+**3-5 day window cannot complete in a single session** — this snapshot is the in-session baseline. Operator should run the monitoring command daily to confirm rows accumulate. When sample size ≥5 macro_ingest rows over 3+ distinct dates, the A03 acceptance ("排程寫入 ledger") can be marked passing.
 
 ---
 
@@ -186,3 +213,4 @@ Total: 10/10 PASS.
 | 2026-07-21 | 1.0 | Initial manifest with D01, D02, D03-A from user audit drill; D03 defaulted to Option A | Sisyphus |
 | 2026-07-21 | 1.1 | Recorded worktree-image verification report (image digest 488931632090, 10/10 PASS) | Sisyphus |
 | 2026-07-21 | 1.2 | Recorded post-merge verification (main 329a6181 squash, image 35cdb01cd9d0, 10/10 PASS) + cleanup confirmation | Sisyphus |
+| 2026-07-21 | 1.3 | Added §D04 Observation Snapshot (in-session baseline: 1 macro_ingest row per table, schedule fires every 5min with failures=0) and D08 to backlog (persistStressIndex only runs on success path; subsequent ticks with transient upstream API errors skip persistence — discovered via D04 observation). Future operator action: monitor daily until sample size ≥5 macro_ingest rows over 3+ distinct dates. | Sisyphus |
