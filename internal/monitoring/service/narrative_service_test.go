@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -179,5 +180,143 @@ func TestNarrativeService_GetStressIndexHistory(t *testing.T) {
 	}
 	if len(history) != 0 {
 		t.Errorf("expected empty history for fresh engine, got %d entries", len(history))
+	}
+}
+
+type mockStressHistoricalStore struct {
+	rows []ledger.StressRow
+}
+
+func (m *mockStressHistoricalStore) UpsertRegime(_ context.Context, _ ledger.RegimeRow) error {
+	return nil
+}
+func (m *mockStressHistoricalStore) LoadRegimeByDate(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	return ledger.RegimeRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadRegimeByDateAll(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	return ledger.RegimeRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadRegimeHistory(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) LoadRegimeHistoryAll(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) UpsertStress(_ context.Context, _ ledger.StressRow) error {
+	return nil
+}
+func (m *mockStressHistoricalStore) LoadStressByDate(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	return ledger.StressRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadStressByDateAll(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	return ledger.StressRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadStressHistory(_ context.Context, limit int) ([]ledger.StressRow, error) {
+	if limit > len(m.rows) {
+		limit = len(m.rows)
+	}
+	return m.rows[:limit], nil
+}
+func (m *mockStressHistoricalStore) LoadStressHistoryAll(_ context.Context, limit int) ([]ledger.StressRow, error) {
+	if limit > len(m.rows) {
+		limit = len(m.rows)
+	}
+	return m.rows[:limit], nil
+}
+func (m *mockStressHistoricalStore) UpsertEventCalendar(_ context.Context, _ ledger.EventCalendarRow) error {
+	return nil
+}
+func (m *mockStressHistoricalStore) LoadEventCalendarByDate(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) LoadEventCalendarByDateAll(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) LoadEventCalendarRange(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) LoadEventCalendarRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) UpsertPredictionBacktest(_ context.Context, _ ledger.PredictionBacktestRow) error {
+	return nil
+}
+func (m *mockStressHistoricalStore) LoadPredictionBacktestRange(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) LoadPredictionBacktestRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) CountSynthetic(_ context.Context) (map[string]int64, error) {
+	return nil, nil
+}
+
+func TestNarrativeService_GetStressIndexHistory_FromLedger(t *testing.T) {
+	store := &mockStressHistoricalStore{
+		rows: []ledger.StressRow{
+			{Date: "2026-07-20", Score: 12.0, Regime: "low"},
+			{Date: "2026-07-19", Score: 15.0, Regime: "low"},
+			{Date: "2026-07-18", Score: 30.0, Regime: "alert"},
+		},
+	}
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator()).
+		WithHistoricalStore(store)
+
+	history := svc.GetStressIndexHistory(30)
+	if len(history) != 3 {
+		t.Fatalf("expected 3 entries from ledger, got %d", len(history))
+	}
+	if history[0].Score != 30.0 || history[2].Score != 12.0 {
+		t.Errorf("expected ascending order [alert 30, low 15, low 12], got %v", history)
+	}
+}
+
+func TestNarrativeService_GetStressIndexHistory_DaysClamping(t *testing.T) {
+	store := &mockStressHistoricalStore{
+		rows: []ledger.StressRow{
+			{Date: "2026-07-20", Score: 12.0, Regime: "low"},
+		},
+	}
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator()).
+		WithHistoricalStore(store)
+
+	if got := svc.GetStressIndexHistory(0); len(got) != 1 {
+		t.Errorf("days=0 should default to 30 and return 1 row, got %d", len(got))
+	}
+	if got := svc.GetStressIndexHistory(500); len(got) != 1 {
+		t.Errorf("days>365 should clamp to 365 and return 1 row, got %d", len(got))
+	}
+	if got := svc.GetStressIndexHistory(-5); len(got) != 1 {
+		t.Errorf("days<0 should default to 30 and return 1 row, got %d", len(got))
+	}
+}
+
+func TestNarrativeService_GetStressIndexHistory_WithComponents(t *testing.T) {
+	store := &mockStressHistoricalStore{
+		rows: []ledger.StressRow{
+			{
+				Date:       "2026-07-20",
+				Score:      25.0,
+				Regime:     "alert",
+				Components: map[string]interface{}{"dxy": 1.5, "vix": 20.0, "bad": "not-a-number"},
+			},
+		},
+	}
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator()).
+		WithHistoricalStore(store)
+
+	history := svc.GetStressIndexHistory(30)
+	if len(history) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(history))
+	}
+	idx := history[0]
+	if idx.Components["dxy"] != 1.5 {
+		t.Errorf("dxy component = %v, want 1.5", idx.Components["dxy"])
+	}
+	if idx.Components["vix"] != 20.0 {
+		t.Errorf("vix component = %v, want 20.0", idx.Components["vix"])
+	}
+	if _, ok := idx.Components["bad"]; ok {
+		t.Errorf("non-float component should be skipped")
 	}
 }
