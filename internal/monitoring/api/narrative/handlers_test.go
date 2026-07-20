@@ -377,3 +377,63 @@ func TestHandleNarrativeBundle_EventsOnlySnapshotPath(t *testing.T) {
 		t.Fatalf("body is not JSON encodable: %v", err)
 	}
 }
+
+func TestHandleGeopoliticalHistory_NoStore(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/geopolitical/history", nil)
+	status, body := h.HandleGeopoliticalHistory(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%v)", status, body)
+	}
+	resp, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("body type = %T, want map[string]any", body)
+	}
+	if _, hasKey := resp["history"]; !hasKey {
+		t.Error("expected 'history' key in response")
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("response is not JSON encodable: %v", err)
+	}
+	if len(encoded) == 0 {
+		t.Error("encoded response is empty")
+	}
+}
+
+func TestHandleGeopoliticalHistory_InvalidDaysParamFallsBackToDefault(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/geopolitical/history?days=notanumber", nil)
+	status, body := h.HandleGeopoliticalHistory(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%v)", status, body)
+	}
+	if _, err := json.Marshal(body); err != nil {
+		t.Fatalf("response is not JSON encodable: %v", err)
+	}
+}
+
+func TestHandleGeopoliticalHistory_RouteRegistered(t *testing.T) {
+	h := newTestNarrativeHandlers(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	req := httptest.NewRequest(http.MethodGet, "/api/geopolitical/history", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rr.Code, rr.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := resp["history"]; !ok {
+		t.Error("expected 'history' key in registered route response")
+	}
+}

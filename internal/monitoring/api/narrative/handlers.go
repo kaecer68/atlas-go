@@ -33,6 +33,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/narrative/stress-index/history", shared.Get(h.HandleStressIndexHistory))
 	// Deprecated: covered by /api/taiwan/stress-index. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/narrative/stress-index/thresholds", shared.Get(h.HandleStressIndexThresholds))
+	mux.Handle("GET /api/geopolitical/history", shared.Get(h.HandleGeopoliticalHistory))
 }
 
 func parseFloatQuery(r *http.Request, key string) float64 {
@@ -310,4 +311,16 @@ func (h *Handlers) HandleStressIndexThresholds(r *http.Request) (int, any) {
 		"high":   thresholds.High,
 		"alert":  thresholds.Alert,
 	}
+}
+
+// HandleGeopoliticalHistory serves GET /api/geopolitical/history.
+func (h *Handlers) HandleGeopoliticalHistory(r *http.Request) (int, any) {
+	days := 30
+	if d := r.URL.Query().Get("days"); d != "" {
+		if n, err := fmt.Sscanf(d, "%d", &days); err != nil || n != 1 {
+			days = 30
+		}
+	}
+	history := h.Svc.GetGeopoliticalHistory(days)
+	return http.StatusOK, map[string]any{"history": history}
 }

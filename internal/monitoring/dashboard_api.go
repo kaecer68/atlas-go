@@ -516,19 +516,12 @@ func (a *DashboardAPI) GetEventLifecycleManager() *narrative.EventLifecycleManag
 // This ensures GetCurrentStressIndex() has valid data instead of zero values.
 func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
 	events, snap, err := a.macroIngestor.Ingest(ctx)
+	geoScore := a.fetchGeoScore(ctx)
 	if err != nil {
 		// On ingest failure, also feed silicon tracker from the on-disk snapshot
 		// (regression: otherwise the 矽循環時鐘 panel renders all zeros).
 		if diskSnap, ok := a.GetLatestMacroSnapshot(); ok {
 			if a.narrativeEngine != nil {
-				geoScore := narrative.GeopoliticalRiskScore{}
-				if a.geoProvider != nil {
-					geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
-					defer geoCancel()
-					if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
-						geoScore = score
-					}
-				}
 				a.narrativeEngine.UpdateMacro(diskSnap, geoScore)
 			}
 			if a.industryService != nil && a.industryService.SiliconTracker != nil {
@@ -539,18 +532,9 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 		return events, snap, err
 	}
 	if a.narrativeEngine != nil {
-		geoScore := narrative.GeopoliticalRiskScore{}
-		if a.geoProvider != nil {
-			// Use a separate short timeout for geo fetch to avoid blocking startup
-			// when GDELT RSS feeds are slow (can take 55s+ in CI).
-			geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer geoCancel()
-			if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
-				geoScore = score
-			}
-		}
 		a.narrativeEngine.UpdateMacro(snap, geoScore)
 		a.persistStressIndex(ctx)
+		a.persistGeopolitical(ctx, geoScore)
 	}
 	// Also update the industry seasonal engine's dynamic environment (oil, DXY, BDI)
 	// so that seasonal adjustments reflect real-time macro conditions.
@@ -591,6 +575,43 @@ func (a *DashboardAPI) persistStressIndex(ctx context.Context) {
 	}
 	if err := a.historicalStore.UpsertStress(ctx, row); err != nil {
 		logging.Warn("dashboard_api", "persist_stress_failed",
+			logging.FStr("date", row.Date),
+			logging.Err(err))
+	}
+}
+
+// fetchGeoScore returns the latest geopolitical risk score, using a short
+// timeout so slow GDELT RSS feeds do not block macro ingestion. The
+// timeout is derived from ctx so the caller's deadline still applies.
+func (a *DashboardAPI) fetchGeoScore(ctx context.Context) narrative.GeopoliticalRiskScore {
+	if a.geoProvider == nil {
+		return narrative.GeopoliticalRiskScore{}
+	}
+	geoCtx, geoCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer geoCancel()
+	if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
+		return score
+	}
+	return narrative.GeopoliticalRiskScore{}
+}
+
+// persistGeopolitical writes the latest geopolitical risk score to the ledger
+// so historical reconstruction can read real geo values instead of defaulting
+// to zero. The SQLite ON CONFLICT(date) upsert makes repeated calls idempotent.
+func (a *DashboardAPI) persistGeopolitical(ctx context.Context, geo narrative.GeopoliticalRiskScore) {
+	if a.historicalStore == nil || geo.Timestamp.IsZero() {
+		return
+	}
+	row := ledger.GeopoliticalRow{
+		Date:        geo.Timestamp.UTC().Format("2006-01-02"),
+		Intensity:   geo.Intensity,
+		Sources:     geo.Sources,
+		Source:      "macro_ingest",
+		CapturedAt:  geo.Timestamp.UTC(),
+		IsSynthetic: 0,
+	}
+	if err := a.historicalStore.UpsertGeopolitical(ctx, row); err != nil {
+		logging.Warn("dashboard_api", "persist_geopolitical_failed",
 			logging.FStr("date", row.Date),
 			logging.Err(err))
 	}

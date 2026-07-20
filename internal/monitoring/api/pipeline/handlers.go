@@ -39,6 +39,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/synergy/darwinian/status", shared.Get(h.HandleDarwinianStatus))
 	mux.Handle("GET /api/synergy/darwinian/trend", shared.Get(h.HandleDarwinianTrend))
 	mux.Handle("GET /api/dashboard/regime-history", shared.Get(h.HandleRegimeHistory))
+	mux.Handle("GET /api/regime/history", shared.Get(h.HandleRegimeHistory))
 	mux.Handle("GET /api/dashboard/baseline-info", shared.Get(h.HandleBaselineInfo))
 }
 
@@ -547,7 +548,7 @@ func (h *Handlers) HandleBaselineInfo(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleRegimeHistory(r *http.Request) (int, any) {
-	limit, err := parseLimit(r, 30, 100)
+	limit, err := parseLimit(r, 30, 365)
 	if err != nil {
 		return http.StatusBadRequest, map[string]string{"error": err.Error()}
 	}
