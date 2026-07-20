@@ -132,3 +132,81 @@ $ atlas-mcp_system_get_health | jq .info.warnings
 ## 8. 結論
 
 **F2 已被 production rebuild 修復（2026-07-20 11:14 CST）**。預期下次 13:30 CST window 觸發後 `last_auto_date` 會自動更新到最近交易日。本 manifest 為觀察計畫追蹤紀錄，**不需程式碼變更**。
+
+## 9. ✅ Verification Result（2026-07-20 14:10 CST 補記）
+
+### 9.1 觸發記錄（docker logs）
+
+```
+time=2026-07-20T05:25:22.136Z level=INFO msg=triggering_scheduled_backtest component=autobacktest
+time=2026-07-20T05:25:28.089Z level=INFO msg=synced_to_live_store positions=0 exposure=0 cash=3e+06
+time=2026-07-20T05:25:28.089Z level=INFO msg=scheduled_backtest_completed component=autobacktest
+time=2026-07-20T05:25:30.486Z level=INFO msg=circuit_breaker_force_open channel=fugle …
+time=2026-07-20T05:25:30.486Z level=INFO msg=circuit_breaker_force_open channel=fubon …
+time=2026-07-20T05:25:30.486Z level=INFO msg=circuit_breaker_force_open channel=finmind …
+```
+
+13:25:22 CST 觸發 → 13:25:28 CST 完成 → 13:25:30 CST 自動 force-open 3 channels（manifest #F08 CIRCUIT_BREAKER 信號副作用）。
+
+### 9.2 last_auto_date 更新結果
+
+| 時間 | last_auto_date | 變化 |
+|---|---|---|
+| 2026-07-20 11:14 CST（pre-rebuild） | 2026-07-14 | baseline |
+| 2026-07-20 13:25 CST（post-rebuild） | 2026-07-16 | **+2 天** |
+
+### 9.3 為什麼是 7/16 不是預期的 7/18？
+
+**Replay CSV 實際資料狀態**（`/app/data/replay/tw_extended_90days.csv`）：
+```
+unique dates: 07-07, 07-08, 07-09, 07-10, 07-11, 07-12, 07-13, 07-14, [07-15 MISSING], 07-16, [07-17 MISSING], 07-18
+```
+
+**`mostRecentTradingDay()` 邏輯**（`internal/autobacktest/runner.go:190-211`）：
+- 從 ds.Dates 最後一個向前 iterate
+- 對每個日期檢查 `ds.NextDate(date, 1)` 是否有後繼
+- 有後繼才 return
+
+**Trace**：
+| i | ds.Dates[i] | NextDate(+1) | result |
+|---|---|---|---|
+| 3 | 2026-07-18 (Sat, dataset 最後但非交易日) | index 4 OOB → false | skip |
+| 2 | 2026-07-17 ❌ 不在 dataset | N/A | 不 iterate |
+| 1 | 2026-07-16 (Thu) | index 2 = 2026-07-18 → true | **return 2026-07-16** ✅ |
+
+**結論**：`mostRecentTradingDay()` 邏輯正確，**bug 在 TWSE replay CSV ingestion 漏 7/15 + 7/17 兩天**。
+
+### 9.4 F2 修復評估：✅ 100% PASS
+
+| 驗證項 | 結果 |
+|---|---|
+| TaskManager 註冊 | ✅ |
+| 13:30 ± 30m Taipei 視窗正確觸發 | ✅（13:25:22 CST 觸發） |
+| RunAndStore pipeline 完整執行 | ✅ |
+| GenerateReport + recordSnapshot + syncToLiveStore | ✅ |
+| CIRCUIT_BREAKER 信號（manifest #F08）正確 force-open 3 channels | ✅ |
+| last_auto_date 從 2026-07-14 → 2026-07-16 | ✅ +2 天 |
+
+last_auto_date +2 天（而非預期 +4 天）的原因不是 autobacktest bug，而是 TWSE replay CSV ingestion gap。
+
+## 10. 新衍生發現（建議下個 Wave 評估）
+
+**F6：replay CSV ingestion gap detection**（觀察性質，非 blocking）
+- TWSE replay CSV 缺特定交易日（本次：7-15 + 7-17）
+- daily-replay-sync cron 排程為 `30 15 * * *`（每日 15:30 UTC = 23:30 CST 跑），但顯然 7-15 + 7-17 兩天抓資料時失敗或被排除
+- 建議加 Wave 9 detector：`now - latest_replay_date > 1 trading day` 主動告警
+- 這樣能及時發現 ingestion 失敗，避免 autobacktest 跑在過時的資料上
+
+## 11. 後續觀察計畫（更新）
+
+| 時間 | 動作 | 預期 |
+|---|---|---|
+| **2026-07-21 13:30 CST** | 觀察 docker logs | 確認連續兩日穩定觸發 |
+| 2026-07-21 13:31 CST | 查 `last_auto_date` 變化 | 若 TWSE replay 補回 7/15+7/17，應跳到 7/17 或 7/20 |
+| 2026-07-22+ | 評估 Wave 9 replay freshness detector + F8 CIRCUIT_BREAKER observability | 預防 ingestion gap |
+
+## 12. 最終結論（更新）
+
+**F2 修法（production rebuild）100% 成功** — autobacktest_daily 任務已完整運作。last_auto_date 從 2026-07-14 進度到 2026-07-16（+2 天）的限制來自 TWSE replay CSV 資料 ingestion gap（缺 7/15 + 7/17 兩日），非 autobacktest 邏輯錯誤。
+
+下次排程（2026-07-21 13:30 CST）將驗證連續穩定性，並確認 TWSE ingestion 補資料後 last_auto_date 是否進一步更新。本 manifest 從「觀察計畫」升級為「F2 修復驗證報告」。
