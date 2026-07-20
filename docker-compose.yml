@@ -9,9 +9,10 @@ services:
         # and git commit (validation drill F4, 2026-07-20). Defaults keep
         # the image buildable without any extra env vars; override ATLAS_VERSION
         # / ATLAS_BUILDTIME / ATLAS_GIT_COMMIT before running docker compose build.
+        # For local dev: `ATLAS_GIT_COMMIT=$(git rev-parse HEAD) docker compose build`
         VERSION: ${ATLAS_VERSION:-dev}
         BUILDTIME: ${ATLAS_BUILDTIME:-}
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-$(git -C . rev-parse HEAD 2>/dev/null || echo unknown)}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-go
     restart: unless-stopped
     command: ["-api", "-live", "-addr", ":18080", "-fubon-port", "18081"]  
