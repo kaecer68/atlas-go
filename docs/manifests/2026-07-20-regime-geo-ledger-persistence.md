@@ -46,5 +46,23 @@ Add a `geopolitical_history` table to the canonical SQLite ledger and upsert the
 | C | A05 | Add `geopolitical_history` ledger table + methods; persist in `IngestAndUpdateMacro`; add HTTP endpoint | `go test ./internal/ledger/... ./internal/monitoring/...`, coverage ≥ 60% |
 | D | — | Update manifest + create PR | PR open, CI pending |
 
+## Done
+
+- A04: `GET /api/regime/history` registered as canonical alias for `/api/dashboard/regime-history`; `parseLimit` max bumped to 365; `TestHandleRegimeHistory_CanonicalPath` covers both paths.
+- A05:
+  - Ledger: `GeopoliticalRow`, `UpsertGeopolitical`, `LoadGeopoliticalByDate{,All}`, `LoadGeopoliticalHistory{,All}` on `HistoricalStore`; `geopolitical_history` SQLite table + `idx_geopolitical_history_captured_at`.
+  - Persistence: `DashboardAPI.IngestAndUpdateMacro` calls `persistGeopolitical` after `UpdateMacro` (idempotent ON CONFLICT(date)).
+  - Read path: `NarrativeService.GetGeopoliticalHistory` reads ledger with days clamping (≤0 → 30, >365 → 365).
+  - HTTP: `GET /api/geopolitical/history` via `apinarrative.Handlers.HandleGeopoliticalHistory`.
+  - Whitelist: `/api/regime/` + `/api/geopolitical/` added to `cmd/atlas/main.go` `isPublicPath` and `internal/monitoring/api/shared/handler.go` `authFreePrefixPaths`.
+  - Tests: `TestDashboardAPI_PersistGeopolitical_{HappyPath,NilStore,ZeroTimestamp,UpsertError}`; `TestSQLiteHistoricalStore_*_Geopolitical`; handler test exists; `GetGeopoliticalHistory` covered via `TestNarrativeService_*`.
+
+## Verification
+
+- `go test ./internal/monitoring/... ./internal/narrative/... ./internal/ledger/...` — all pass.
+- `gofmt -l .` — clean.
+- Aggregate coverage on changed packages: 74.6% (≥60% threshold).
+- `persistGeopolitical` 100%, `HandleGeopoliticalHistory` 100%, `GetGeopoliticalHistory` 100%, `UpsertGeopolitical` 83.3%.
+
 ## Next action
-Run pre-change protocol (blast radius) then implement A04/A05.
+Push branch and create PR for A04/A05.
