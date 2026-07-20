@@ -12,11 +12,20 @@ import (
 )
 
 // TaiwanStressIndex represents a composite market pressure score for Taiwan.
+//
+// Date and Source are populated when the row is read from the ledger
+// (stress_index_history SQLite table via StressRow.Date / StressRow.Source);
+// they are zero values when the row is computed in-memory by Calculate().
+// Consumers that need to join rows to trading dates should use Date, not
+// Timestamp (which is captured_at in epoch seconds and may fall on a
+// weekend / holiday even when the row is backfill for a trading day).
 type TaiwanStressIndex struct {
 	Score      float64            `json:"score"`  // 0 - 100
-	Regime     string             `json:"regime"` // low / alert / high / crisis
+	Regime     string             `json:"regime"` // low / alert / high / crisis (or legacy RISK_ON/.../TRANSITIONAL — see Source)
 	Components map[string]float64 `json:"components"`
-	Timestamp  int64              `json:"timestamp"`
+	Timestamp  int64              `json:"timestamp"`        // captured_at in epoch seconds (may not equal Date)
+	Date       string             `json:"date,omitempty"`   // YYYY-MM-DD; empty for in-memory Calculate() rows
+	Source     string             `json:"source,omitempty"` // "macro_ingest" for live rows, "backfill" for legacy rows; empty for in-memory Calculate() rows
 }
 
 // --- 外資出逃壓力指數 六因子權重常數 ---

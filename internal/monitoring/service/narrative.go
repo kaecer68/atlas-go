@@ -133,6 +133,8 @@ func stressRowsToIndex(rows []ledger.StressRow) []narrative.TaiwanStressIndex {
 			Score:     r.Score,
 			Regime:    r.Regime,
 			Timestamp: r.CapturedAt.Unix(),
+			Date:      r.Date,
+			Source:    r.Source,
 		}
 		if r.Components != nil {
 			idx.Components = make(map[string]float64, len(r.Components))
