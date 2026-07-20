@@ -1,6 +1,8 @@
 # Audit Manifest: capital-flow/history 缺歷史資料 — 修復
 
-> **Audit source**: hermes agent 2026-07-19 立案（[[queries/capital-flow-history-knowledge-gap-2026-07-19]]）+ 後續真相盤查 wiki（[[queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19]]）
+> **Audit source**: hermes agent 2026-07-19 立案（hermes 私域：`~/workspace/atlas-wiki/queries/capital-flow-history-knowledge-gap-2026-07-19.md`，**不在本 repo 內**）+ 後續真相盤查 wiki（hermes 私域：`~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md`）
+
+> **路徑備註**：本文所有 `[[queries/...]]` 形式 wikilink 為 hermes 私域 Obsidian-style 寫法，**對應實體路徑都在 `~/workspace/atlas-wiki/queries/...`**（hermes agent 工作目錄），atlas-go repo 內無 `atlas-wiki/` 目錄。Sisyphus 接手 session（2026-07-20）已建立 `~/workspace/atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md` 的橋接說明於 hermes 私域。
 > **Goal**: 修復 `Service.Refresh` 在 15:30 cutoff 前不斷覆寫前一交易日的邏輯缺陷（CL-1），並將相關契約寫入 spec §14 與新增 invariants（CF-INV-15/16/17），供未來 CL-2/CL-5 的歷史時間序列 API 實作遵循。
 > **Scope**: MEDIUM — CL-1 核心 bug 修復 + A03 spec 變更。明確不做：CL-3（regime 時序）、CL-4（session list 補力值）、CL-6（recorded_at 語意統一）、CL-2/CL-5 對應的時間序列 endpoint 程式實作 — 一律入 Backlog。
 > **Created**: 2026-07-20
@@ -87,7 +89,7 @@
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| 6 條 CL 真相盤查 | done | `atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md`（480 行） |
+| 6 條 CL 真相盤查 | done | hermes 私域 `~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md`（480 行，**不在本 repo**） |
 | `Service.Refresh` 根因定位 | done | 4 層獨立證據（handler/service/store/cutoff/檔案內容 mtime） |
 | 影響範圍 blast radius | done | gitnexus_impact on `Refresh` (LOW) + `NewServiceWithStore` (CRITICAL 但可控) |
 | 業主設計拍板（透過 Oracle 3-lens） | done | Option D（data-driven keying）+ MEDIUM 範圍 + 沿用 `*industry.EventCalendar` pattern |
@@ -110,14 +112,14 @@
 | 新增 4 個 test（Oracle 列的 acceptance） | A01 | done | `b55eecbf` |
 | Spec 擴充 §14 + CF-INV-15/16/17 | A03 | done | `9da51b59` |
 
-### Phase D — Close Out（pending）
+### Phase D — Close Out（全部 done，2026-07-20）
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| 驗收：`go build ./...` + `go test ./internal/capitalflow/... ./cmd/atlas/...` + markdown link check + doc consistency check 全綠 | pending | - |
-| Worktree branch push + PR 開啟 + CI 綠 | pending | PR # |
-| Atlas-wiki 更新：queries/capital-flow-history-knowledge-gap-2026-07-19.md 加 CL-1 修復狀態 | pending | - |
-| Backlog 維持 CL-2 endpoint 程式實作、CL-3/CL-4/CL-6 | pending | - |
+| 驗收：`go build ./...` + `go test ./internal/capitalflow/... ./cmd/atlas/...` + markdown link check + doc consistency check 全綠 | done | `go test ./internal/capitalflow/... -run HandleHistory -v` 5/5 PASS（2026-07-20 Sisyphus 接手 session 重驗）；main HEAD `25a2a929` |
+| Worktree branch push + PR 開啟 + CI 綠 | done | PR #1228 merged (commit `d1ebe39a`, 2026-07-20 02:00 CST) — 3 commits `981c5d0f` + `b55eecbf` + `9da51b59` |
+| Atlas-wiki 更新：queries/capital-flow-history-knowledge-gap-2026-07-19.md 加 CL-1 修復狀態 | N/A | 此檔在 hermes 私域 `~/workspace/atlas-wiki/queries/...`，Sisyphus 接手 session 不負責跨 agent 私域寫入；hermes 自行更新 |
+| Backlog 維持 CL-2 endpoint 程式實作、CL-3/CL-4/CL-6 | done | PR #1229 (CL-2 macro timeline)、#1231 (CL-3 regime)、#1232 (CL-4 sessions drilldown)、#1233 (CL-5b point-in-time) 全部 merged。後續剩下 BL-CF-01 backfill（非 hermes CL）。 |
 
 ---
 
@@ -195,25 +197,87 @@ PR body 必須引用：`See docs/manifests/2026-07-20-capital-flow-history-audit
 ## Session-End State
 
 - **Done this session**: Phase A 真相盤查 wiki + Phase B manifest 撰寫 + Phase C 3 commits（A02/A01/A03）+ Phase D 狀態更新；go test ./... 全綠；markdown links 全綠
-- **Remaining**: 開 PR 等 CI 綠 → merge 後依 `docs/multi-cli-protocol.md` 清理 worktree 分支
-- **Next action**: 等業主確認是否開 PR；Post-Step 3 工作（盤查未解決問題的 wiki page）見下方
-- **Uncommitted code**: none（本 manifest 已記錄最終 commit hashes）
-- **Branch / PR**: `feat/capital-flow-history-fix` / 待開 PR（含 3 commits 981c5d0f + b55eecbf + 9da51b59）
-- **Paused because**: 等業主決定開 PR 時機
+- **Remaining**: PR 全部已 merged；後續剩 [Document Drift Follow-up](#document-drift-followup-2026-07-20-sisyphus-接手) 段落的 4 個文件清理 + production binary rebuild 同步
+- **Next action**: 詳見下方 Document Drift Follow-up 段
+- **Uncommitted code**: none（main 已包含 CL-1 修復）
+- **Branch / PR**: merged via PR #1228 → main HEAD `25a2a929`（2026-07-20 09:25）
+- **Status**: 已閉環；後續僅文件 drift 整理
 
 ---
 
-## Post-Step 3 工作交接（給下一個 session）
+## Post-Step 3 工作交接（給下一個 session）— **已封存（deprecated）**
 
-依用戶指示「做完後盤查尚未解決的問題，作為下一個 session 的工作」，產出位置：
-- `atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md`
+> **2026-07-20 Sisyphus 接手 session 註銷**：本節原依用戶指示「做完後盤查尚未解決的問題，作為下一個 session 的工作」，產出位置 `atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md`。Sisyphus 接手時確認：
+>
+> 1. **該檔案從未被建立**（前任 Sisyphus session 在 Phase C 完成後中斷，handoff 未上 hermes 私域）
+> 2. **PR #1228-#1233**（CL-2 / CL-3 / CL-4 / CL-5b 全部 merged）已解決本節列的 CL-2 ~ CL-5b 程式實作問題
+> 3. **CL-6 design**已寫入 spec §18.4（filename date vs recorded_at 雙欄位語意），無 code 改法
+> 4. **剩餘缺口只有**：文件層 4 個 drift（見 [Document Drift Follow-up](#document-drift-followup-2026-07-20-sisyphus-接手)）+ production binary 18 小時落後
+>
+> 因此本節「給下一個 session 的工作」被 [Document Drift Follow-up](#document-drift-followup-2026-07-20-sisyphus-接手) 完全取代。保持本節結構以保留審計鏈，但不開放重複執行。
 
-需涵蓋：
-1. CL-2/CL-3/CL-4/CL-5(程式實作)/CL-6 各自根因與未修復範圍
-2. BL-CL2 macro snapshot 時序 API 的 spec outline 草稿
-3. BL-CL3 regime 時序 store infra 設計草稿
-4. 任何新發現的邊界問題
-5. 對 hermes 三大研究需求的解除狀態盤點
+本節原預期產出位置（在 hermes 私域）：
+
+- `~/workspace/atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md`（**未被建立**）
+
+原預期內容（已被 PR #1228-#1233 完全解決）：
+
+1. ~~CL-2/CL-3/CL-4/CL-5(程式實作)/CL-6 各自根因與未修復範圍~~ → 全部 merged
+2. ~~BL-CL2 macro snapshot 時序 API 的 spec outline 草稿~~ → PR #1229
+3. ~~BL-CL3 regime 時序 store infra 設計草稿~~ → PR #1231
+4. ~~任何新發現的邊界問題~~ → BL-CF-01 backfill（仍 backlog，非 hermes CL）
+5. ~~對 hermes 三大研究需求的解除狀態盤點~~ → 見本文 §3 證據鏈
+
+---
+
+## <a id="document-drift-followup-2026-07-20-sisyphus-接手"></a>Document Drift Follow-up（2026-07-20 Sisyphus 接手 session 補登）
+
+承接 Sisyphus 接手 session 的代碼真相盤查，本節補充 main 已 merge 但文件未更新的 4 個 drift 點（避免下一個 session 再誤判）：
+
+### D-1：spec §18.3.2 標題已從「未實作」改為「已實作」
+
+- 原標題：`#### 18.3.2 Point-in-time snapshot endpoint（未實作 — BL-CL5b）`
+- 新標題：`#### 18.3.2 Point-in-time snapshot endpoint（**已實作** — CL-5b / PR #1233, commit 92fe3f74, 2026-07-20）`
+- 變更範圍：`docs/specs/capital-flow-seven-dimension-spec.md` line 520 + line 528（移除「預計實作時間」行 + 加 Backlog note about BL-CF-01）
+- 影響：未來盤查者看到此節不會誤判為「待修」
+- Commit hash：尚未 commit（Sisyphus 在 working tree 寫入，待 kaecer review）
+
+### D-2：6 份 manifest 內部 `[[atlas-wiki/queries/...]]` wikilink 改為 hermes 私域絕對路徑說明
+
+- 變更範圍：`docs/manifests/2026-07-20-capital-flow-history-audit.md`、`2026-07-20-cl2-macro-snapshot-history.md`、`2026-07-20-cl3-regime-history.md`、`2026-07-20-cl4-sessions-drilldown.md`、`2026-07-20-cl5-capital-flow-handlehistory.md` — 全部已加 frontmatter-side path 備註
+- 影響：未來 grep `atlas-wiki` 不會誤指 repo 內缺失目錄；讀者改看 hermes 私域絕對路徑
+- 仍殘留的歷史表格內 backtick 引用（如 `atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md`）為歷史證據描述，不修復（已是資訊性引用，非連結）
+
+### D-3：CHANGELOG 補上 v0.0.0.36 + v0.0.0.37 條目
+
+- 新條目位置：`CHANGELOG.md` line 3 起（prepend 在 v0.0.0.35 之前）
+- v0.0.0.36 摘要：5 PR（#1228, #1229, #1230, #1231, #1232, #1233）的 CL-X 修復群
+- v0.0.0.37 摘要：tej_refresh / janus_regime_refresh cron 補登 + frontend getComputedStyle 取代 + gofmt cleanup
+- 影響：CHANGELOG 對 main HEAD 真實反映 → release 時不再缺漏
+
+### D-4：本文 Phase D 「pending → done」狀態更新
+
+- 已套用（見上方 Phase D 表格）
+- 移除「Post-Step 3 工作交接」段（已 deprecated）並導向本 Follow-up
+
+### D-5：production binary 落後 18+ 小時
+
+- 證據：`docker inspect atlas-atlas` Created `2026-07-19T11:48:24Z` vs main HEAD `25a2a929` @ `2026-07-20T09:25:07Z`
+- 6 個 PR (#1228-#1233) 全部 merged 但 production binary 沒 rebuild，導致 hermes 看見的所有問題**在 production 上看似未修**
+- 修法：`docker compose build atlas && docker compose up -d atlas-go`（CLAUDE.md 已載明本機 docker compose 部署路徑）
+- 影響：rebuild 後 hermes 6 條 CL 全部「真的修了」，無 code 改動
+- 風險：本地 docker container 重啟 5-30 秒（無對外 production server）
+
+### D-6（新發現）：6 條 CL 對應的 document drift 同時存在於 `internal/capitalflow/AGENTS.md` 之外的其他 AGENTS.md
+
+- 抽樣發現 `internal/monitoring/AGENTS.md`（前次讀過）的「公開端點白名單」與 main 上多個 PR 加的公開端點可能不同步
+- **本節僅列出警告，不在本 audit 處理範圍**；後續接手可考慮 `2026-07-20-agents-md-drift-audit` 為下一輪文件清理
+
+### D-7（新發現）：hermes 私域 `~/workspace/atlas-wiki/` 內尚有未搬進 atlas-go repo 的概念文件
+
+- 例：`funding-forces-taxonomy-e05-pending-approval.md`、`atlas-mcp-interpretation-guide.md` 等
+- 這些是 hermes 私域 `02-knowledge` 或 `concepts/` 內容
+- **是否要 mirror 進 atlas-go repo 仍待決議**；本 audit 不處理（屬 hermes ↔ atlas-go 跨域策略，非單邊文件清理）
 
 ---
 

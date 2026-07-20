@@ -1,6 +1,8 @@
 # Audit Manifest: CL-4 universe_get_sessions per-strategy force — Session List + Detail API
 
-> **Audit source**: [[atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19]] §6.4 CL-4 + [[atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20]] §2 BL-CL4
+> **Audit source**: hermes 私域 `~/workspace/atlas-wiki/queries/atlas-mcp-capital-flow-history-truth-seeking-2026-07-19.md` §6.4 CL-4 + `~/workspace/atlas-wiki/queries/capital-flow-history-unresolved-2026-07-20.md` §2 BL-CL4
+
+> **路徑備註**：本文所有 `[[atlas-wiki/queries/...]]` 形式 wikilink 為 hermes 私域 Obsidian-style 寫法。實體在 `~/workspace/atlas-wiki/queries/...`（hermes agent 工作目錄），不在本 repo 內。
 > **Goal**: 補齊 MCP `universe_get_sessions` 對 per-strategy data 的暴露（List 帶 top_strategies 摘要 + Detail 端點拿完整 per-strategy outcomes）
 > **Scope**: MEDIUM — 擴充 `HandleSessions` 加 `top_strategies` 聚合欄位 + 新增 `HandleSessionDetail` endpoint 呼叫既有 `LoadSessionOutcomes(sessionID)` Go function
 > **Created**: 2026-07-20
