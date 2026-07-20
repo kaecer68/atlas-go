@@ -934,8 +934,9 @@ func TestDashboardAPI_NarrativeEngine(t *testing.T) {
 }
 
 type mockStressStore struct {
-	upserted  []ledger.StressRow
-	returnErr error
+	upserted    []ledger.StressRow
+	upsertedGeo []ledger.GeopoliticalRow
+	returnErr   error
 }
 
 func (m *mockStressStore) UpsertRegime(ctx context.Context, row ledger.RegimeRow) error { return nil }
@@ -992,6 +993,7 @@ func (m *mockStressStore) LoadPredictionBacktestRangeAll(ctx context.Context, st
 	return nil, nil
 }
 func (m *mockStressStore) UpsertGeopolitical(ctx context.Context, row ledger.GeopoliticalRow) error {
+	m.upsertedGeo = append(m.upsertedGeo, row)
 	return nil
 }
 func (m *mockStressStore) LoadGeopoliticalByDate(ctx context.Context, date string) (ledger.GeopoliticalRow, bool, error) {
@@ -1248,5 +1250,69 @@ func TestDashboardAPI_StressComponentsToMap(t *testing.T) {
 	}
 	if got["vix"] != 20.0 {
 		t.Errorf("vix = %v, want 20.0", got["vix"])
+	}
+}
+
+// TestDashboardAPI_ApplyMacroUpdate_HappyPath covers D08: the helper must
+// persist both stress_index_history AND geopolitical_history in lockstep
+// whenever it runs. This guards the fix's core invariant — the error
+// fallback path of IngestAndUpdateMacro routes through this helper, so
+// a successful call here proves both ledgers refresh on every tick.
+func TestDashboardAPI_ApplyMacroUpdate_HappyPath(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{}
+	d.WithHistoricalStore(store)
+
+	snap := validStressMacroSnapshot()
+	geo := narrative.GeopoliticalRiskScore{
+		Intensity: 42,
+		Timestamp: time.Date(2026, 7, 20, 14, 0, 0, 0, time.UTC),
+	}
+	d.applyMacroUpdate(context.Background(), snap, geo)
+
+	if len(store.upserted) != 1 {
+		t.Fatalf("stress upserts = %d, want 1", len(store.upserted))
+	}
+	if len(store.upsertedGeo) != 1 {
+		t.Fatalf("geo upserts = %d, want 1", len(store.upsertedGeo))
+	}
+	stressRow := store.upserted[0]
+	if stressRow.Source != "macro_ingest" {
+		t.Errorf("stress Source = %q, want macro_ingest", stressRow.Source)
+	}
+	if stressRow.IsSynthetic != 0 {
+		t.Errorf("stress IsSynthetic = %d, want 0", stressRow.IsSynthetic)
+	}
+	geoRow := store.upsertedGeo[0]
+	if geoRow.Intensity != 42 {
+		t.Errorf("geo Intensity = %v, want 42", geoRow.Intensity)
+	}
+	if geoRow.Date != "2026-07-20" {
+		t.Errorf("geo Date = %q, want 2026-07-20", geoRow.Date)
+	}
+	if geoRow.Source != "macro_ingest" {
+		t.Errorf("geo Source = %q, want macro_ingest", geoRow.Source)
+	}
+}
+
+// TestDashboardAPI_ApplyMacroUpdate_NilNarrativeEngine covers D08: the
+// helper must no-op when narrativeEngine is nil (defensive guard — the
+// existing persistStressIndex/persistGeopolitical both also check
+// a.narrativeEngine separately, but having the guard at the helper layer
+// means a future caller can rely on "helper is safe to call").
+func TestDashboardAPI_ApplyMacroUpdate_NilNarrativeEngine(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{}
+	d.WithHistoricalStore(store)
+
+	d.narrativeEngine = nil
+
+	snap := validStressMacroSnapshot()
+	geo := narrative.GeopoliticalRiskScore{Intensity: 1}
+	d.applyMacroUpdate(context.Background(), snap, geo)
+
+	if len(store.upserted) != 0 || len(store.upsertedGeo) != 0 {
+		t.Errorf("helper should no-op when narrativeEngine nil; got stress=%d geo=%d",
+			len(store.upserted), len(store.upsertedGeo))
 	}
 }
