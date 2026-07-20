@@ -270,3 +270,53 @@ func TestNarrativeService_GetStressIndexHistory_FromLedger(t *testing.T) {
 		t.Errorf("expected ascending order [alert 30, low 15, low 12], got %v", history)
 	}
 }
+
+func TestNarrativeService_GetStressIndexHistory_DaysClamping(t *testing.T) {
+	store := &mockStressHistoricalStore{
+		rows: []ledger.StressRow{
+			{Date: "2026-07-20", Score: 12.0, Regime: "low"},
+		},
+	}
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator()).
+		WithHistoricalStore(store)
+
+	if got := svc.GetStressIndexHistory(0); len(got) != 1 {
+		t.Errorf("days=0 should default to 30 and return 1 row, got %d", len(got))
+	}
+	if got := svc.GetStressIndexHistory(500); len(got) != 1 {
+		t.Errorf("days>365 should clamp to 365 and return 1 row, got %d", len(got))
+	}
+	if got := svc.GetStressIndexHistory(-5); len(got) != 1 {
+		t.Errorf("days<0 should default to 30 and return 1 row, got %d", len(got))
+	}
+}
+
+func TestNarrativeService_GetStressIndexHistory_WithComponents(t *testing.T) {
+	store := &mockStressHistoricalStore{
+		rows: []ledger.StressRow{
+			{
+				Date:       "2026-07-20",
+				Score:      25.0,
+				Regime:     "alert",
+				Components: map[string]interface{}{"dxy": 1.5, "vix": 20.0, "bad": "not-a-number"},
+			},
+		},
+	}
+	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator()).
+		WithHistoricalStore(store)
+
+	history := svc.GetStressIndexHistory(30)
+	if len(history) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(history))
+	}
+	idx := history[0]
+	if idx.Components["dxy"] != 1.5 {
+		t.Errorf("dxy component = %v, want 1.5", idx.Components["dxy"])
+	}
+	if idx.Components["vix"] != 20.0 {
+		t.Errorf("vix component = %v, want 20.0", idx.Components["vix"])
+	}
+	if _, ok := idx.Components["bad"]; ok {
+		t.Errorf("non-float component should be skipped")
+	}
+}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -928,5 +929,169 @@ func TestDashboardAPI_NarrativeEngine(t *testing.T) {
 		// Same pointer should be returned (cacheable, no new instance per call).
 	} else {
 		t.Errorf("expected stable pointer across calls")
+	}
+}
+
+type mockStressStore struct {
+	upserted  []ledger.StressRow
+	returnErr error
+}
+
+func (m *mockStressStore) UpsertRegime(ctx context.Context, row ledger.RegimeRow) error { return nil }
+func (m *mockStressStore) LoadRegimeByDate(ctx context.Context, date string) (ledger.RegimeRow, bool, error) {
+	return ledger.RegimeRow{}, false, nil
+}
+func (m *mockStressStore) LoadRegimeByDateAll(ctx context.Context, date string) (ledger.RegimeRow, bool, error) {
+	return ledger.RegimeRow{}, false, nil
+}
+func (m *mockStressStore) LoadRegimeHistory(ctx context.Context, limit int) ([]ledger.RegimeRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) LoadRegimeHistoryAll(ctx context.Context, limit int) ([]ledger.RegimeRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) UpsertStress(ctx context.Context, row ledger.StressRow) error {
+	m.upserted = append(m.upserted, row)
+	return m.returnErr
+}
+func (m *mockStressStore) LoadStressByDate(ctx context.Context, date string) (ledger.StressRow, bool, error) {
+	return ledger.StressRow{}, false, nil
+}
+func (m *mockStressStore) LoadStressByDateAll(ctx context.Context, date string) (ledger.StressRow, bool, error) {
+	return ledger.StressRow{}, false, nil
+}
+func (m *mockStressStore) LoadStressHistory(ctx context.Context, limit int) ([]ledger.StressRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) LoadStressHistoryAll(ctx context.Context, limit int) ([]ledger.StressRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) UpsertEventCalendar(ctx context.Context, row ledger.EventCalendarRow) error {
+	return nil
+}
+func (m *mockStressStore) LoadEventCalendarByDate(ctx context.Context, date string) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) LoadEventCalendarByDateAll(ctx context.Context, date string) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) LoadEventCalendarRange(ctx context.Context, startDate, endDate string, limit int) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) LoadEventCalendarRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]ledger.EventCalendarRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) UpsertPredictionBacktest(ctx context.Context, row ledger.PredictionBacktestRow) error {
+	return nil
+}
+func (m *mockStressStore) LoadPredictionBacktestRange(ctx context.Context, startDate, endDate string, limit int) ([]ledger.PredictionBacktestRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) LoadPredictionBacktestRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]ledger.PredictionBacktestRow, error) {
+	return nil, nil
+}
+func (m *mockStressStore) CountSynthetic(ctx context.Context) (map[string]int64, error) {
+	return nil, nil
+}
+
+func validStressMacroSnapshot() marketdata.MacroDataSnapshot {
+	return marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{ChangePct: 8.5},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
+		RecordedAt:         1713000000,
+	}
+}
+
+func TestDashboardAPI_WithHistoricalStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{}
+	got := d.WithHistoricalStore(store)
+	if got != d {
+		t.Errorf("WithHistoricalStore must return same DashboardAPI for chaining")
+	}
+	if d.historicalStore != store {
+		t.Errorf("historicalStore not set")
+	}
+}
+
+func TestDashboardAPI_PersistStressIndex_HappyPath(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{}
+	d.WithHistoricalStore(store)
+
+	snap := validStressMacroSnapshot()
+	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
+	d.NarrativeEngine().UpdateMacro(snap, geo)
+	d.persistStressIndex(context.Background(), snap)
+
+	if len(store.upserted) != 1 {
+		t.Fatalf("expected 1 upsert, got %d", len(store.upserted))
+	}
+	row := store.upserted[0]
+	if row.Date != "2024-04-13" {
+		t.Errorf("Date = %q, want 2024-04-13", row.Date)
+	}
+	if row.Score <= 0 {
+		t.Errorf("expected positive score, got %v", row.Score)
+	}
+	if row.Regime == "" {
+		t.Errorf("expected non-empty regime")
+	}
+	if row.Source != "macro_ingest" {
+		t.Errorf("Source = %q, want macro_ingest", row.Source)
+	}
+	if row.IsSynthetic != 0 {
+		t.Errorf("IsSynthetic = %v, want 0", row.IsSynthetic)
+	}
+	if len(row.Components) == 0 {
+		t.Errorf("expected Components copied from stress index")
+	}
+}
+
+func TestDashboardAPI_PersistStressIndex_NilStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	snap := validStressMacroSnapshot()
+	d.NarrativeEngine().UpdateMacro(snap, narrative.GeopoliticalRiskScore{Intensity: 30})
+	d.persistStressIndex(context.Background(), snap)
+}
+
+func TestDashboardAPI_PersistStressIndex_ZeroTimestamp(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{}
+	d.WithHistoricalStore(store)
+	d.persistStressIndex(context.Background(), marketdata.MacroDataSnapshot{})
+	if len(store.upserted) != 0 {
+		t.Errorf("expected no upsert when timestamp is zero, got %d", len(store.upserted))
+	}
+}
+
+func TestDashboardAPI_PersistStressIndex_UpsertError(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{returnErr: fmt.Errorf("db down")}
+	d.WithHistoricalStore(store)
+	snap := validStressMacroSnapshot()
+	d.NarrativeEngine().UpdateMacro(snap, narrative.GeopoliticalRiskScore{Intensity: 30})
+	d.persistStressIndex(context.Background(), snap)
+	if len(store.upserted) != 1 {
+		t.Errorf("expected 1 upsert attempt even on error, got %d", len(store.upserted))
+	}
+}
+
+func TestDashboardAPI_StressComponentsToMap(t *testing.T) {
+	if got := stressComponentsToMap(nil); got != nil {
+		t.Errorf("nil input should return nil, got %v", got)
+	}
+	in := map[string]float64{"dxy": 1.5, "vix": 20}
+	got := stressComponentsToMap(in)
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if got["dxy"] != 1.5 {
+		t.Errorf("dxy = %v, want 1.5", got["dxy"])
+	}
+	if got["vix"] != 20.0 {
+		t.Errorf("vix = %v, want 20.0", got["vix"])
 	}
 }
