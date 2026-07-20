@@ -137,11 +137,11 @@ A docs drift also exists in the A04 manifest: it writes `?days=5` in the accepta
 
 ## Session-End State
 
-- **Done this session**: B01, B02, B03 implementation + image rebuild (`9a676edb781b`) + end-to-end re-verification (all 7 checks PASS)
+- **Done this session**: B01, B02, B03 implementation + image rebuild (`84d232953789` from post-merge main HEAD `9e47c52a`) + end-to-end re-verification (all 7 checks PASS) + PR #1245 merged + worktree/branch cleanup + 1.1 GB dangling-image reclaim
 - **Remaining**: B04 (24h observation window) — operational, documented in §Follow-up
-- **Next action**: monitor PR #1245 CI; merge after approval; delete worktree per `docs/multi-cli-protocol.md`
+- **Next action**: monitor `geopolitical_history` accumulation over next 24h; delete backup files after 2026-07-28
 - **Uncommitted code**: no
-- **Branch / PR**: `fix/historical-store-time-and-limit-params` (worktree `/Users/kaecer/workspace/atlas-fixes-2026-07-21`) / PR https://github.com/kaecer68/atlas-go/pull/1245
+- **Branch / PR**: PR https://github.com/kaecer68/atlas-go/pull/1245 MERGED into `main` at `9e47c52a`; local + remote `fix/historical-store-time-and-limit-params` branches deleted; worktree removed
 - **Paused because**: not paused
 
 ---
@@ -152,3 +152,4 @@ A docs drift also exists in the A04 manifest: it writes `?days=5` in the accepta
 |------|---------|--------|--------|
 | 2026-07-21 | 1.0 | Initial manifest with B01/B02/B03 from A04/A05 drill | Sisyphus |
 | 2026-07-21 | 1.1 | Phase C+D closed: commits `cb66a6a2` / `8d17a2e8` / `94f55d8f`; image `9a676edb781b`; PR #1245; verification 7/7 PASS | Sisyphus |
+| 2026-07-21 | 1.2 | PR #1245 MERGED into main (`9e47c52a`); image rebuilt `84d232953789` from post-merge main; post-merge re-verification 7/7 PASS; worktree/branch cleanup; dangling-image reclaim 1.1 GB | Sisyphus |
