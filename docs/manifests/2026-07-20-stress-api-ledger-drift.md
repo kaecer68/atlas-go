@@ -58,6 +58,7 @@
 - `go vet ./internal/monitoring/... ./internal/narrative/...`：無錯誤
 - `gofmt -l .`：乾淨
 - A04/A05 保留在 backlog，不在本次 scope
+- PR：https://github.com/kaecer68/atlas-go/pull/1243
 
 ---
 
@@ -86,4 +87,4 @@
 
 - **Done**：Phase A 審計完成；P0（A01+A02+A03）實作完成並通過測試；stress backtest mission 實證完成（見 `.omo/plans/2026-07-20-stress-backtest-mission.md`，7 假設 4 支持 2 拒絕 1 無法判定）
 - **Left**：A04 HTTP path 404、A05 geopolitical 未持久化 — 保留在 backlog
-- **Next action**：建立 PR 並 merge；清理 worktree
+- **Next action**：等待 CI/review 後 merge PR；合併後依 `docs/multi-cli-protocol.md` 清理 worktree
