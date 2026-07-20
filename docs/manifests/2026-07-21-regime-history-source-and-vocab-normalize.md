@@ -100,6 +100,8 @@ User fact-check on 2026-07-21:
 | Restart container | done | atlas-go Up ~50s, healthy, image digest `488931632090`, buildinfo.Commit=`0030b2f7` |
 | Re-run verification (7 baseline + 3 C-checks + 3 new D-checks) | done | 10/10 PASS (see §Verification Report below) |
 | Final close-out commit + push | done | commit on branch `fix/regime-history-source-and-vocab-normalize`, push pending |
+| Post-merge rebuild from main HEAD `329a6181` | done | image digest `35cdb01cd9d0`, container healthy, 10/10 verification PASS post-merge |
+| Post-merge worktree + branch + image cleanup | done | worktree removed, local + remote branch deleted, tracking ref pruned, 10.71 KB dangling image storage reclaimed |
 
 ### Verification Report (post-D01-D03-A, image digest `488931632090`)
 
@@ -182,3 +184,5 @@ Total: 10/10 PASS.
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-07-21 | 1.0 | Initial manifest with D01, D02, D03-A from user audit drill; D03 defaulted to Option A | Sisyphus |
+| 2026-07-21 | 1.1 | Recorded worktree-image verification report (image digest 488931632090, 10/10 PASS) | Sisyphus |
+| 2026-07-21 | 1.2 | Recorded post-merge verification (main 329a6181 squash, image 35cdb01cd9d0, 10/10 PASS) + cleanup confirmation | Sisyphus |
