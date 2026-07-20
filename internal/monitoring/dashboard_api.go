@@ -550,7 +550,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 			}
 		}
 		a.narrativeEngine.UpdateMacro(snap, geoScore)
-		a.persistStressIndex(ctx, snap)
+		a.persistStressIndex(ctx)
 	}
 	// Also update the industry seasonal engine's dynamic environment (oil, DXY, BDI)
 	// so that seasonal adjustments reflect real-time macro conditions.
@@ -572,7 +572,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 // instead of the process-local ring buffer. It is called after every successful
 // macro ingestion; the SQLite ON CONFLICT(date) upsert makes repeated calls
 // idempotent for the same trading day.
-func (a *DashboardAPI) persistStressIndex(ctx context.Context, snap marketdata.MacroDataSnapshot) {
+func (a *DashboardAPI) persistStressIndex(ctx context.Context) {
 	if a.historicalStore == nil || a.narrativeEngine == nil {
 		return
 	}
