@@ -1214,6 +1214,7 @@ type RegimeSessionEntry struct {
 	SessionID  string `json:"session_id"`
 	Regime     string `json:"regime"`
 	RecordedAt string `json:"recorded_at"`
+	Source     string `json:"source,omitempty"`
 }
 
 type RegimeTransition struct {
@@ -1245,6 +1246,7 @@ func (s *PipelineService) loadRegimeHistoryFromStore(limit int) (*RegimeHistoryD
 			SessionID:  row.Date,
 			Regime:     row.Regime,
 			RecordedAt: row.RecordedAt.UTC().Format(time.RFC3339),
+			Source:     row.Source,
 		}
 		if i > 0 && row.Regime != prevRegime {
 			transitions = append(transitions, RegimeTransition{

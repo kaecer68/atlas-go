@@ -39,6 +39,7 @@ type RegimeRow struct {
 	RecordedAt      time.Time `json:"recorded_at"`
 	CapturedAt      time.Time `json:"captured_at"`
 	IsSynthetic     uint8     `json:"is_synthetic"`
+	Source          string    `json:"source"`
 }
 
 // StressRow is one row from stress_index_history.
@@ -158,20 +159,31 @@ func (s *SQLiteHistoricalStore) UpsertRegime(ctx context.Context, row RegimeRow)
 		return fmt.Errorf("regime date is empty")
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO regime_history (date, regime, source_session_id, recorded_at, captured_at, is_synthetic)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO regime_history (date, regime, source_session_id, recorded_at, captured_at, is_synthetic, source)
+		VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, 'synthetic'))
 		ON CONFLICT(date) DO UPDATE SET
 			regime = excluded.regime,
 			source_session_id = excluded.source_session_id,
 			recorded_at = excluded.recorded_at,
 			captured_at = excluded.captured_at,
-			is_synthetic = excluded.is_synthetic
+			is_synthetic = excluded.is_synthetic,
+			source = excluded.source
 	`, row.Date, row.Regime, nullString(row.SourceSessionID),
-		nullTime(row.RecordedAt), nullTime(row.CapturedAt), row.IsSynthetic)
+		nullTime(row.RecordedAt), nullTime(row.CapturedAt), row.IsSynthetic,
+		emptyAsNil(row.Source))
 	if err != nil {
 		return fmt.Errorf("upsert regime %s: %w", row.Date, err)
 	}
 	return nil
+}
+
+// emptyAsNil converts "" to nil so SQLite's COALESCE picks up the schema
+// DEFAULT instead of failing the NOT NULL constraint with an empty string.
+func emptyAsNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func (s *SQLiteHistoricalStore) LoadRegimeByDate(ctx context.Context, date string) (RegimeRow, bool, error) {
@@ -184,14 +196,14 @@ func (s *SQLiteHistoricalStore) LoadRegimeByDateAll(ctx context.Context, date st
 
 func (s *SQLiteHistoricalStore) loadRegimeByDate(ctx context.Context, date string, filterSynthetic bool) (RegimeRow, bool, error) {
 	var r RegimeRow
-	var srcSID, recordedAtStr, capturedAtStr sql.NullString
+	var srcSID, sourceVal, recordedAtStr, capturedAtStr sql.NullString
 	filter := ""
 	if filterSynthetic {
 		filter = " AND is_synthetic = 0"
 	}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT date, regime, source_session_id, recorded_at, captured_at, is_synthetic
-		FROM regime_history WHERE date = ?`+filter, date).Scan(&r.Date, &r.Regime, &srcSID, &recordedAtStr, &capturedAtStr, &r.IsSynthetic)
+		SELECT date, regime, source_session_id, source, recorded_at, captured_at, is_synthetic
+		FROM regime_history WHERE date = ?`+filter, date).Scan(&r.Date, &r.Regime, &srcSID, &sourceVal, &recordedAtStr, &capturedAtStr, &r.IsSynthetic)
 	if err == sql.ErrNoRows {
 		return r, false, nil
 	}
@@ -199,6 +211,7 @@ func (s *SQLiteHistoricalStore) loadRegimeByDate(ctx context.Context, date strin
 		return r, false, fmt.Errorf("load regime %s: %w", date, err)
 	}
 	r.SourceSessionID = srcSID.String
+	r.Source = sourceVal.String
 	r.RecordedAt = parseTimeColumn(recordedAtStr)
 	r.CapturedAt = parseTimeColumn(capturedAtStr)
 	return r, true, nil
@@ -221,7 +234,7 @@ func (s *SQLiteHistoricalStore) loadRegimeHistory(ctx context.Context, limit int
 		filter = " WHERE is_synthetic = 0"
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT date, regime, source_session_id, recorded_at, captured_at, is_synthetic
+		SELECT date, regime, source_session_id, source, recorded_at, captured_at, is_synthetic
 		FROM regime_history`+filter+` ORDER BY date DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load regime history: %w", err)
@@ -230,11 +243,12 @@ func (s *SQLiteHistoricalStore) loadRegimeHistory(ctx context.Context, limit int
 	var out []RegimeRow
 	for rows.Next() {
 		var r RegimeRow
-		var srcSID, recordedAtStr, capturedAtStr sql.NullString
-		if err := rows.Scan(&r.Date, &r.Regime, &srcSID, &recordedAtStr, &capturedAtStr, &r.IsSynthetic); err != nil {
+		var srcSID, sourceVal, recordedAtStr, capturedAtStr sql.NullString
+		if err := rows.Scan(&r.Date, &r.Regime, &srcSID, &sourceVal, &recordedAtStr, &capturedAtStr, &r.IsSynthetic); err != nil {
 			return nil, fmt.Errorf("scan regime row: %w", err)
 		}
 		r.SourceSessionID = srcSID.String
+		r.Source = sourceVal.String
 		r.RecordedAt = parseTimeColumn(recordedAtStr)
 		r.CapturedAt = parseTimeColumn(capturedAtStr)
 		out = append(out, r)
