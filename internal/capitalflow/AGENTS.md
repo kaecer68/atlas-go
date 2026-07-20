@@ -18,7 +18,7 @@
 | 陷阱 | 說明 |
 |------|------|
 | **共振計算公式變更** | `ComputeResonance`（`resonance.go`）若改，需同步 `parameters.json` 並呼叫 SelfCalibrate 重新校準；actor 共識只計入官方actor 三項。 |
-| **TWSE 假日不發布** | 週末/假日無資料；前端應 fallback 至上週五資料。 |
+| **TWSE 假日不發布** | 週末/假日無資料；`Service.Refresh` 已內建 `IsTaiwanTradingDay` guard（skip-and-log，CF-INV-16），不會在非交易日寫入樣本；前端如有獨立補圖邏輯，仍應 fallback 至上週五資料。上週五若也無資料（e.g. 伺服器初次啟動），handler 回 `data_available: false`（不補 0）。 |
 | **PublicBank 欄位歷史較短** | 公股行庫資料 TWSE 約 2018+ 才完整；早期資料空值（data_available=false），**不補 0**。 |
 | **Service 為 pipeline 入口** | `Service.LatestDaily` / `Service.Summary` 可直接被 `internal/recommender` adapter 呼叫，繞過 `Handler` 需 `*http.Request` 的限制。 |
 
