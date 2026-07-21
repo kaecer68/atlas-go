@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.1.0] - 2026-07-21
+
+### Fixed
+- **Live stress index endpoints now expose `source` and `date`**：`/api/taiwan/stress-index` and `/api/narrative/stress-index/current` previously returned only `score`/`regime`/`components`/`timestamp`. They now include `source: "taiwan_calculator"` and `date: "YYYY-MM-DD"`, matching the provenance fields already available in `/api/narrative/stress-index/history` and letting clients join live readings to ledger rows without extra lookups.
+
 ## [0.0.0.37] - 2026-07-20
 
 ### Fixed

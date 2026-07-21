@@ -120,6 +120,15 @@ func TestHandleStressIndexCurrent(t *testing.T) {
 	if _, ok := m["timestamp"]; !ok {
 		t.Error("expected 'timestamp' field")
 	}
+	if _, ok := m["date"]; !ok {
+		t.Error("expected 'date' field")
+	}
+	if _, ok := m["source"]; !ok {
+		t.Error("expected 'source' field")
+	}
+	if src, _ := m["source"].(string); src != "taiwan_calculator" {
+		t.Errorf("expected source='taiwan_calculator', got %q", src)
+	}
 }
 
 func TestHandleStressIndexHistory(t *testing.T) {

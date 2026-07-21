@@ -266,3 +266,24 @@ func (okProvider) FetchSnapshot(_ context.Context) (marketdata.MacroDataSnapshot
 		RecordedAt: now,
 	}, nil
 }
+
+func TestHandleTaiwanStressIndex_SourceAndDate(t *testing.T) {
+	snap := testMacroSnapshot()
+	h := &Handlers{Service: newMacroServiceWithSnapshot(t, snap)}
+	req := httptest.NewRequest(http.MethodGet, "/api/taiwan/stress-index", nil)
+	status, body := h.HandleTaiwanStressIndex(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%v)", status, body)
+	}
+	idx, ok := body.(narrative.TaiwanStressIndex)
+	if !ok {
+		t.Fatalf("expected TaiwanStressIndex body, got %T", body)
+	}
+	if idx.Source != "taiwan_calculator" {
+		t.Errorf("source = %q, want %q", idx.Source, "taiwan_calculator")
+	}
+	wantDate := time.Unix(snap.RecordedAt, 0).UTC().Format("2006-01-02")
+	if idx.Date != wantDate {
+		t.Errorf("date = %q, want %q", idx.Date, wantDate)
+	}
+}
