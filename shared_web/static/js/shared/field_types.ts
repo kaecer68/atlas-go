@@ -3025,6 +3025,7 @@ export interface RegimePerformance {
 
 export interface RegimeSessionEntry {
   session_id: string;
+  date: string;
   regime: string;
   recorded_at: string;
   source?: string;

@@ -559,11 +559,37 @@ func (h *Handlers) HandleBaselineInfo(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleRegimeHistory(r *http.Request) (int, any) {
-	limit, err := parseLimit(r, 30, 365)
-	if err != nil {
-		return http.StatusBadRequest, map[string]string{"error": err.Error()}
+	q := r.URL.Query()
+	// `limit` keeps the legacy row-limit semantics; `days` is interpreted as a
+	// calendar window (today-days+1 .. today). This aligns the endpoint with
+	// /api/narrative/stress-index/history and /api/geopolitical/history.
+	if rawLimit := strings.TrimSpace(q.Get("limit")); rawLimit != "" {
+		limit, err := strconv.Atoi(rawLimit)
+		if err != nil || limit <= 0 {
+			return http.StatusBadRequest, map[string]string{"error": "invalid limit: must be positive integer"}
+		}
+		if limit > 365 {
+			limit = 365
+		}
+		data, err := h.Svc.LoadRegimeHistory(limit)
+		if err != nil {
+			return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load regime history: %v", err)}
+		}
+		return http.StatusOK, data
 	}
-	data, err := h.Svc.LoadRegimeHistory(limit)
+
+	days := 30
+	if rawDays := strings.TrimSpace(q.Get("days")); rawDays != "" {
+		v, err := strconv.Atoi(rawDays)
+		if err != nil || v <= 0 {
+			return http.StatusBadRequest, map[string]string{"error": "invalid days: must be positive integer"}
+		}
+		if v > 365 {
+			v = 365
+		}
+		days = v
+	}
+	data, err := h.Svc.LoadRegimeHistoryDays(days)
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load regime history: %v", err)}
 	}

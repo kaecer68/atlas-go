@@ -1212,6 +1212,7 @@ type RegimeHistoryData struct {
 
 type RegimeSessionEntry struct {
 	SessionID  string `json:"session_id"`
+	Date       string `json:"date"`
 	Regime     string `json:"regime"`
 	RecordedAt string `json:"recorded_at"`
 	Source     string `json:"source,omitempty"`
@@ -1230,6 +1231,22 @@ func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, erro
 	return s.loadRegimeHistoryFromSessions(limit)
 }
 
+// LoadRegimeHistoryDays returns regime history entries whose date falls within
+// the last N calendar days (UTC), ending today. It uses the HistoricalStore
+// when available and falls back to the legacy session-summary path otherwise.
+func (s *PipelineService) LoadRegimeHistoryDays(days int) (*RegimeHistoryData, error) {
+	if days <= 0 {
+		days = 30
+	}
+	if days > 365 {
+		days = 365
+	}
+	if s.historicalStore != nil {
+		return s.loadRegimeHistoryFromStoreDays(days)
+	}
+	return s.loadRegimeHistoryFromSessions(days)
+}
+
 // loadRegimeHistoryFromStore reads the regime_history SQLite table via
 // HistoricalStore and projects RegimeRow into the existing RegimeSessionEntry
 // shape. This is the canonical time-series path (see spec §18.6.2).
@@ -1238,12 +1255,40 @@ func (s *PipelineService) loadRegimeHistoryFromStore(limit int) (*RegimeHistoryD
 	if err != nil {
 		return nil, fmt.Errorf("load regime history: %w", err)
 	}
+	return buildRegimeHistoryData(rows), nil
+}
+
+// loadRegimeHistoryFromStoreDays is the calendar-window variant of
+// loadRegimeHistoryFromStore: it loads a generous row limit and then filters to
+// rows whose date is within the last N days. This makes `?days=N` on the
+// HTTP endpoint mean a date window, not a row limit.
+func (s *PipelineService) loadRegimeHistoryFromStoreDays(days int) (*RegimeHistoryData, error) {
+	limit := days * 2
+	if limit < 90 {
+		limit = 90
+	}
+	rows, err := s.historicalStore.LoadRegimeHistory(context.Background(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("load regime history: %w", err)
+	}
+	minDate := time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02")
+	filtered := make([]ledger.RegimeRow, 0, len(rows))
+	for _, r := range rows {
+		if r.Date >= minDate {
+			filtered = append(filtered, r)
+		}
+	}
+	return buildRegimeHistoryData(filtered), nil
+}
+
+func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 	sessions := make([]RegimeSessionEntry, len(rows))
 	var transitions []RegimeTransition
 	var prevRegime string
 	for i, row := range rows {
 		sessions[i] = RegimeSessionEntry{
 			SessionID:  row.Date,
+			Date:       row.Date,
 			Regime:     row.Regime,
 			RecordedAt: row.RecordedAt.UTC().Format(time.RFC3339),
 			Source:     row.Source,
@@ -1265,7 +1310,7 @@ func (s *PipelineService) loadRegimeHistoryFromStore(limit int) (*RegimeHistoryD
 		Sessions:    sessions,
 		Transitions: transitions,
 		Current:     current,
-	}, nil
+	}
 }
 
 // loadRegimeHistoryFromSessions is the legacy fallback that reads simulation
@@ -1287,6 +1332,7 @@ func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHisto
 	for i, sum := range summaries {
 		sessions[i] = RegimeSessionEntry{
 			SessionID:  sum.SessionID,
+			Date:       sum.RecordedAt.UTC().Format("2006-01-02"),
 			Regime:     string(sum.Regime),
 			RecordedAt: sum.RecordedAt.UTC().Format(time.RFC3339),
 		}
