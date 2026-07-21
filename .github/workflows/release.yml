@@ -13,12 +13,44 @@ jobs:
   # 2026-07-10: 加上 permissions: contents: write — softprops/action-gh-release
   # 需要寫權限才能建立 release。前一版沒寫, 在新 repo 預設 GITHUB_TOKEN
   # 是 contents: read, 會 silently fail。詳見 PR #1067 (hermes onboarding)。
+  # 2026-07-22: release body 不再 hardcode, 改用 scripts/ci/render_release_body.sh
+  # 從 CHANGELOG.md 抽出對應版本的段落, CHANGELOG 變動會自動反映在 release 說明。
   create-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Render release body from CHANGELOG
+      id: render
+      run: |
+        set -euo pipefail
+        # Strip leading 'v' from the tag (e.g. v0.0.2.0 -> 0.0.2.0).
+        VERSION="${GITHUB_REF_NAME#v}"
+        if ! CHANGELOG_BODY="$(bash scripts/ci/render_release_body.sh "$VERSION")"; then
+          echo "::warning::render_release_body failed for [$VERSION] — falling back to minimal body"
+          CHANGELOG_BODY="## [${VERSION}]"
+        fi
+        # Wrap in a heredoc so softprops/action-gh-release reads the full body
+        # from a file (avoids YAML literal-block escaping issues with long Chinese
+        # bullets and special characters).
+        {
+          echo "## Atlas-Go Release ${GITHUB_REF}"
+          echo ""
+          echo "$CHANGELOG_BODY"
+          echo ""
+          echo "### Installation"
+          echo '```bash'
+          echo "docker pull ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME}"
+          echo '```'
+          echo ""
+          echo "### atlas-mcp (for AI agents like Hermes / OpenClaw / Claude Desktop)"
+          echo '```bash'
+          echo "curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/scripts/install-atlas-mcp-from-release.sh | bash"
+          echo '```'
+        } > release_body.md
+        echo "body_chars=$(wc -c < release_body.md)"
 
     - name: Create Release
       uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
@@ -29,26 +61,7 @@ jobs:
         name: Release ${{ github.ref }}
         draft: false
         prerelease: false
-        body: |
-          ## Atlas-Go Release ${{ github.ref }}
-
-          ### Features
-          - Phase 2: Darwinian Weights, Superinvestor Layer
-          - Phase 3: Agent Spawning, PRISM, Soros Reflexivity
-          - Phase 4: Meta-Learning, Adversarial Training, Global Markets, Real-Time Adaptation
-
-          ### Installation
-          ```bash
-          docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          ```
-
-          ### atlas-mcp (for AI agents like Hermes / OpenClaw / Claude Desktop)
-          ```bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install-atlas-mcp-from-release.sh | bash
-          ```
-
-          ### Changelog
-          See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
+        body_path: release_body.md
 
   # Build atlas (main server) binaries
   # 2026-07-10: rename from build-binaries (加上 atlas 前綴, 與新加的
