@@ -63,7 +63,7 @@
 | ID | Problem | Discovery Time | Proposed Round |
 |----|---------|---------------|----------------|
 | B01 | `TaiwanStressCalculator` 5-minute cache can keep `/api/taiwan/stress-index` stale after a macro tick writes a new geo score | 2026-07-22 | Future tuning if dashboard freshness becomes an issue; out of scope for this fix |
-| B02 | PR #1252 manifest `docs/manifests/2026-07-21-taiwan-stress-source-date.md` was moved to `.omo/manifests` during the docs governance overhaul; file tracking gap noted by Hermes | 2026-07-22 | Ops / docs governance follow-up, not a code defect |
+| B02 | PR #1252 manifest `.omo/manifests/2026-07-21-stress-history-and-regime-gaps.md` (original filename was renamed by the docs governance overhaul); file tracking gap noted by Hermes | 2026-07-22 | Ops / docs governance follow-up, not a code defect |
 
 ---
 
