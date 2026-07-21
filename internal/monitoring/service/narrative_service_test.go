@@ -445,10 +445,12 @@ func TestNarrativeService_GetGeopoliticalHistory_DaysBounds(t *testing.T) {
 
 func TestNarrativeService_GetGeopoliticalHistory_FromStore(t *testing.T) {
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
-	captured := time.Date(2026, 4, 15, 6, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+	captured := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, time.UTC)
+	date := func(offset int) string { return now.AddDate(0, 0, offset).Format("2006-01-02") }
 	store := &mockGeoHistoricalStore{rows: []ledger.GeopoliticalRow{
-		{Date: "2026-04-15", Intensity: 42.5, Sources: []string{"rss", "gdelt"}, Source: "macro_ingest", CapturedAt: captured},
-		{Date: "2026-04-14", Intensity: 30.0, Source: "macro_ingest", CapturedAt: captured.AddDate(0, 0, -1)},
+		{Date: date(0), Intensity: 42.5, Sources: []string{"rss", "gdelt"}, Source: "macro_ingest", CapturedAt: captured},
+		{Date: date(-1), Intensity: 30.0, Source: "macro_ingest", CapturedAt: captured.AddDate(0, 0, -1)},
 	}}
 	svc.WithHistoricalStore(store)
 
@@ -456,8 +458,8 @@ func TestNarrativeService_GetGeopoliticalHistory_FromStore(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 points, got %d", len(got))
 	}
-	if got[0].Date != "2026-04-15" {
-		t.Errorf("first date = %q, want 2026-04-15", got[0].Date)
+	if got[0].Date != date(0) {
+		t.Errorf("first date = %q, want %q", got[0].Date, date(0))
 	}
 	if got[0].Intensity != 42.5 {
 		t.Errorf("first intensity = %v, want 42.5", got[0].Intensity)

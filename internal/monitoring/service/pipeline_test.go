@@ -836,8 +836,11 @@ func (m *mockHistoricalStore) LoadRegimeHistory(_ context.Context, limit int) ([
 	}
 	return m.rows, nil
 }
-func (m *mockHistoricalStore) LoadRegimeHistoryAll(_ context.Context, limit int) ([]ledger.RegimeRow, error) {
-	panic("mockHistoricalStore: LoadRegimeHistoryAll not implemented")
+func (m *mockHistoricalStore) LoadRegimeHistoryAll(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.rows, nil
 }
 func (m *mockHistoricalStore) UpsertStress(_ context.Context, _ ledger.StressRow) error {
 	panic("not implemented")
@@ -947,6 +950,41 @@ func TestLoadRegimeHistory_HistoricalStore_Empty(t *testing.T) {
 	}
 	if data.Current != "" {
 		t.Errorf("Current should be empty, got %q", data.Current)
+	}
+}
+
+// TestLoadRegimeHistoryDays_CalendarWindow covers E6: the `days` parameter
+// must be interpreted as a calendar window (today-days+1 .. today), not a
+// row limit. Rows outside the window are excluded even if the store returns
+// more rows.
+func TestLoadRegimeHistoryDays_CalendarWindow(t *testing.T) {
+	now := time.Now().UTC()
+	date := func(offset int) string { return now.AddDate(0, 0, offset).Format("2006-01-02") }
+	rows := []ledger.RegimeRow{
+		{Date: date(0), Regime: "RISK_OFF", RecordedAt: now},
+		{Date: date(-2), Regime: "NEUTRAL", RecordedAt: now.AddDate(0, 0, -2)},
+		{Date: date(-10), Regime: "RISK_ON", RecordedAt: now.AddDate(0, 0, -10)},
+	}
+	svc := NewPipelineService("/tmp", "/tmp", nil).
+		WithHistoricalStore(&mockHistoricalStore{rows: rows})
+	data, err := svc.LoadRegimeHistoryDays(5)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistoryDays: %v", err)
+	}
+	if len(data.Sessions) != 2 {
+		t.Fatalf("Sessions len = %d, want 2 (rows within 5-day window)", len(data.Sessions))
+	}
+	if data.Sessions[0].Date != date(0) || data.Sessions[1].Date != date(-2) {
+		t.Errorf("unexpected session dates: got %+v", data.Sessions)
+	}
+	if data.Sessions[0].Regime != "RISK_OFF" || data.Sessions[1].Regime != "NEUTRAL" {
+		t.Errorf("unexpected regime order: got %+v", data.Sessions)
+	}
+	if data.Current != "RISK_OFF" {
+		t.Errorf("Current = %q, want RISK_OFF", data.Current)
+	}
+	if len(data.Transitions) != 1 {
+		t.Errorf("Transitions len = %d, want 1", len(data.Transitions))
 	}
 }
 

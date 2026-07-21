@@ -134,12 +134,17 @@ func TestNarrativeService_GetStressIndexHistory_NormalizesRegime(t *testing.T) {
 	store := ledger.NewSQLiteHistoricalStore(db)
 
 	now := time.Now().UTC()
+	// Use dates within the last 10 days so the calendar-window semantics of
+	// GetStressIndexHistory include them regardless of when the test runs.
+	day := func(offset int) string {
+		return now.AddDate(0, 0, offset).Format("2006-01-02")
+	}
 	mixedRows := []ledger.StressRow{
-		{Date: "2026-06-01", Score: 10, Regime: "RISK_ON", Source: "synthetic", IsSynthetic: 0, CapturedAt: now},
-		{Date: "2026-06-02", Score: 10, Regime: "low", Source: "macro_ingest", IsSynthetic: 0, CapturedAt: now},
-		{Date: "2026-06-03", Score: 10, Regime: "alert", Source: "macro_ingest", IsSynthetic: 0, CapturedAt: now},
-		{Date: "2026-06-04", Score: 10, Regime: "high", Source: "macro_ingest", IsSynthetic: 0, CapturedAt: now},
-		{Date: "2026-06-05", Score: 10, Regime: "RISK_OFF", Source: "synthetic", IsSynthetic: 0, CapturedAt: now},
+		{Date: day(-4), Score: 10, Regime: "RISK_ON", Source: "synthetic", IsSynthetic: 0, CapturedAt: now},
+		{Date: day(-3), Score: 10, Regime: "low", Source: "macro_ingest", IsSynthetic: 0, CapturedAt: now},
+		{Date: day(-2), Score: 10, Regime: "alert", Source: "macro_ingest", IsSynthetic: 0, CapturedAt: now},
+		{Date: day(-1), Score: 10, Regime: "high", Source: "macro_ingest", IsSynthetic: 0, CapturedAt: now},
+		{Date: day(0), Score: 10, Regime: "RISK_OFF", Source: "synthetic", IsSynthetic: 0, CapturedAt: now},
 	}
 	for _, r := range mixedRows {
 		if err := store.UpsertStress(context.Background(), r); err != nil {
@@ -155,19 +160,16 @@ func TestNarrativeService_GetStressIndexHistory_NormalizesRegime(t *testing.T) {
 		t.Fatalf("len = %d, want 5", len(hist))
 	}
 
-	// ASC date order (oldest first). The pipeline that wires historicalStore
-	// into the service reverses this in stressRowsToIndex, but here we call
-	// UpsertStress → LoadStressHistory directly, which returns ASC.
 	want := []struct {
 		date   string
 		regime string
 		source string
 	}{
-		{"2026-06-01", "RISK_ON", "synthetic"},
-		{"2026-06-02", "RISK_ON", "macro_ingest"},  // low → RISK_ON
-		{"2026-06-03", "NEUTRAL", "macro_ingest"},  // alert → NEUTRAL
-		{"2026-06-04", "RISK_OFF", "macro_ingest"}, // high → RISK_OFF
-		{"2026-06-05", "RISK_OFF", "synthetic"},
+		{day(-4), "RISK_ON", "synthetic"},
+		{day(-3), "RISK_ON", "macro_ingest"},  // low → RISK_ON
+		{day(-2), "NEUTRAL", "macro_ingest"},  // alert → NEUTRAL
+		{day(-1), "RISK_OFF", "macro_ingest"}, // high → RISK_OFF
+		{day(0), "RISK_OFF", "synthetic"},
 	}
 	for i, w := range want {
 		got := hist[i]

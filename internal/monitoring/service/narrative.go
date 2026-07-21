@@ -114,11 +114,20 @@ func (s *NarrativeService) GetStressIndexHistory(days int) []narrative.TaiwanStr
 	if s.historicalStore != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		rows, err := s.historicalStore.LoadStressHistory(ctx, days)
+		// Load enough rows to cover the requested calendar window, then filter by
+		// date so `days=N` means "last N calendar days" rather than "last N rows".
+		limit := days * 2
+		if limit < 90 {
+			limit = 90
+		}
+		rows, err := s.historicalStore.LoadStressHistory(ctx, limit)
 		if err != nil {
 			logging.Warn("narrative_service", "load_stress_history_failed", logging.Err(err))
-		} else if len(rows) > 0 {
-			return stressRowsToIndex(rows)
+		} else {
+			rows = filterStressRowsByMinDate(rows, dateNDaysAgo(days))
+			if len(rows) > 0 {
+				return stressRowsToIndex(rows)
+			}
 		}
 	}
 
@@ -165,7 +174,8 @@ type GeopoliticalPoint struct {
 
 // GetGeopoliticalHistory reads historical geopolitical risk scores from the
 // ledger when available, falling back to the current in-memory score as a
-// single-point history.
+// single-point history. The `days` parameter is interpreted as a calendar
+// window (today-days+1 through today).
 func (s *NarrativeService) GetGeopoliticalHistory(days int) []GeopoliticalPoint {
 	if days <= 0 {
 		days = 30
@@ -174,22 +184,55 @@ func (s *NarrativeService) GetGeopoliticalHistory(days int) []GeopoliticalPoint 
 		days = 365
 	}
 	if s.historicalStore != nil {
-		rows, err := s.historicalStore.LoadGeopoliticalHistory(context.Background(), days)
+		limit := days * 2
+		if limit < 90 {
+			limit = 90
+		}
+		rows, err := s.historicalStore.LoadGeopoliticalHistory(context.Background(), limit)
 		if err != nil {
 			logging.Warn("narrative_service", "load_geopolitical_history_failed", logging.Err(err))
-		} else if len(rows) > 0 {
-			out := make([]GeopoliticalPoint, len(rows))
-			for i, r := range rows {
-				out[i] = GeopoliticalPoint{
-					Date:       r.Date,
-					Intensity:  r.Intensity,
-					Sources:    r.Sources,
-					Source:     r.Source,
-					CapturedAt: r.CapturedAt.UTC().Format(time.RFC3339),
+		} else {
+			rows = filterGeopoliticalRowsByMinDate(rows, dateNDaysAgo(days))
+			if len(rows) > 0 {
+				out := make([]GeopoliticalPoint, len(rows))
+				for i, r := range rows {
+					out[i] = GeopoliticalPoint{
+						Date:       r.Date,
+						Intensity:  r.Intensity,
+						Sources:    r.Sources,
+						Source:     r.Source,
+						CapturedAt: r.CapturedAt.UTC().Format(time.RFC3339),
+					}
 				}
+				return out
 			}
-			return out
 		}
 	}
 	return nil
+}
+
+// dateNDaysAgo returns the inclusive start date (UTC) for a window of N days
+// ending today. For days=5 the window is today-4 .. today.
+func dateNDaysAgo(days int) string {
+	return time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02")
+}
+
+func filterStressRowsByMinDate(rows []ledger.StressRow, minDate string) []ledger.StressRow {
+	out := make([]ledger.StressRow, 0, len(rows))
+	for _, r := range rows {
+		if r.Date >= minDate {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func filterGeopoliticalRowsByMinDate(rows []ledger.GeopoliticalRow, minDate string) []ledger.GeopoliticalRow {
+	out := make([]ledger.GeopoliticalRow, 0, len(rows))
+	for _, r := range rows {
+		if r.Date >= minDate {
+			out = append(out, r)
+		}
+	}
+	return out
 }
