@@ -17,6 +17,7 @@
 - capitalflow post-merge 文件同步：`docs/reference/tool-catalog.md`、`docs/reference/workflow-map.md`、`internal/capitalflow/AGENTS.md`
 - **Document Drift Audit**：建立 `docs/manifests/2026-07-20-document-drift-audit.md`（盤查 4 個文件漂移 + production drift）
 - **Document Drift Fix 2026-07-21**：批次修正全 repo 過時 MCP tool 數（110/111 → 112）、workflow 數（21 → 42）、版本號與專案規模引用、AGENTS_INDEX 成熟度不一致、根目錄違規 IMPLEMENTATION_PLAN*.md 移至 `docs/archive/` 並更新所有引用。
+- **Document Drift Follow-up**：以 `docs/reference/tool-catalog.md` 為權威來源，統一 `cmd/atlas-mcp/README.md` 的 MCP tool 分類明細與 assert 範圍（[111, 114]）。
 
 ## [0.0.0.36] - 2026-07-20
 
