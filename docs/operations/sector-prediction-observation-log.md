@@ -2,7 +2,7 @@
 
 > **對應 runbook**：`docs/operations/sector-prediction-runbook.md`
 > **對應 spec**：[`docs/specs/sector-dimension-prediction-spec.md`](#)
-> **對應 invariant manifest**：[``.omo/manifests/sector-dimension-prediction-invariant-manifest.md`（內部，gitignored）`](../manifests/sector-dimension-prediction-invariant-manifest.md)
+> **對應 invariant manifest**：[\`.omo/manifests/sector-dimension-prediction-invariant-manifest.md\`（內部，gitignored）](../manifests/sector-dimension-prediction-invariant-manifest.md)
 
 L2.4-style 觀察窗口的逐日記錄表。每個交易日填寫一次，欄位說明見 runbook §「Daily Check-in」。
 

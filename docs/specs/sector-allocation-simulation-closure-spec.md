@@ -5,7 +5,7 @@
 > **版本**：1.0
 > **日期**：2026-07-18
 > **產品邊界**：simulation-first；live broker 與實盤下單不在本規格範圍。
-> **治理文件**：[`../manifests/sector-allocation-simulation-closure-manifest.md`](../manifests/sector-allocation-simulation-closure-manifest.md)
+> **治理文件**：[（`.omo/manifests/`，內部）
 > **上游正本**：[`../reference/product-positioning.md`](../reference/product-positioning.md)、[`capital-flow-seven-dimension-spec.md`](capital-flow-seven-dimension-spec.md)、[`../guides/fu-7-sector-norm.md`](../guides/fu-7-sector-norm.md)
 
 ---

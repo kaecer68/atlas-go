@@ -180,7 +180,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 | 跨模組陷阱完整版 | [`docs/reference/traps.md`](../reference/traps.md) |
 | 環境變數管理 | [`docs/environment.md`](../environment.md) |
 | 參數管理系統 | [`docs/reference/parameter-system.md`](../reference/parameter-system.md) |
-| LLM 路由規格 | [`docs/specs/llm-routing-spec.md`](llm-routing.md) |
+| LLM 路由規格 | [`docs/specs/llm-routing-spec.md`](llm-routing-spec.md) |
 | 數據可見性四層防護 | [`.claude/skills/atlas-data-visibility/SKILL.md`](../../.claude/skills/atlas-data-visibility/SKILL.md) |
 | CI/CD 安全掃描 (gosec) | [`.github/workflows/ci-cd.yml`](../../.github/workflows/ci-cd.yml) § security job |
 | CI 憲法檢查 | [`.github/workflows/constitution.yml`](../../.github/workflows/constitution.yml) |

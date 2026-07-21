@@ -36,7 +36,7 @@ calculator := tax.NewTaiwanTaxCalculator(cfg)
 | `true`（預設） | `0.28` | 28% 已內含 2.11% 二代健保補充保費 |
 | `false` | `0.2589` | 28% − 2.11% = 25.89%，用於非居住民帳戶、雇主配息、情境分析等場景 |
 
-實作：`taiwan_tax.go:NHISurchargeRate` (const 0.0211) 與 `effectiveDividendTaxRate()` helper；`CalculateDividendTax` 與 `TaxSnapshot` 計算皆透過此 helper。詳見 [`docs/specs/taiwan-tax-spec.md`](../specs/taiwan-tax.md)（Wave 11 從原 tax 模組的 AGENTS.md 抽離）。
+實作：`taiwan_tax.go:NHISurchargeRate` (const 0.0211) 與 `effectiveDividendTaxRate()` helper；`CalculateDividendTax` 與 `TaxSnapshot` 計算皆透過此 helper。詳見 [`docs/specs/taiwan-tax-spec.md`](../specs/taiwan-tax-spec.md)（Wave 11 從原 tax 模組的 AGENTS.md 抽離）。
 
 ## 使用方法
 

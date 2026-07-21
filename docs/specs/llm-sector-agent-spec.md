@@ -117,6 +117,6 @@ Operational procedures (pre-flight / daily check-in / acceptance / rollback) liv
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711)
 - Issue: [#711](https://github.com/kaecer68/atlas-go/issues/711)
 - PRs: #724 (PR1), #725 (PR2/v0.0.0.20a), #726 (PR3), #729 (PR4), #732 (PR5a), #733 (PR5b/v0.0.0.21), #739 (L3 wiring: `RunToolCall` → `SafeInvokeHandler`)
-- Cross-references: [`agent-loop-state-machine.md`](agent-loop-state-machine.md), [`../guides/adding-sector-agents.md`](../guides/adding-sector-agents.md)
+- Cross-references: [`agent-loop-state-machine.md`](agent-loop-state-machine-spec.md), [`../guides/adding-sector-agents.md`](../guides/adding-sector-agents.md)
 - L2.4 follow-up: [`./l2-4-observation-spec.md`](./l2-4-observation-spec.md) (metrics spec), [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md) (ops manual), [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md) (future work)
 - Design authority: [`docs/llm-integration-strategy-framework.md`](../llm-integration-strategy-framework.md)

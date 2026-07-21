@@ -40,7 +40,7 @@
 
 **關鍵決策**：
 - **語言**：Go native（atlas-go 是 Go，避免語言生態污染）
-- **MCP SDK**：✅ **Spike 完成（[（內部 spike，`.omo/spikes/`）](../spikes/mcp-go-sdk-spike.md)）— 採用 OFFICIAL [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) v1.6.1**
+- **MCP SDK**：✅ **Spike 完成（[（內部 spike，`.omo/spikes/`）（`.omo/spikes/`，內部））— 採用 OFFICIAL [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) v1.6.1**
   - **理由**：(1) Go 1.25.0 為下限（atlas-go 正式版為 1.26，OFFICIAL SDK 涵蓋升級後環境）— mark3labs 需要 1.25.5；(2) 已 v1.x stable，API locked；(3) 官方 + Google 合作，前向相容 MCP 2026-07-28 spec；(4) 上游 Apache-2.0（獨立第三方授權，與 atlas-go AGPL v3 並存；僅作相依評估，不影響 atlas-go 本體授權）；(5) 內建 `auth`/`oauthex` 套件便於未來擴充
   - **Trade-off**：star 數比 mark3labs 少（4.7k vs 8.9k）但官方 SDK 受 spec 維護組織認可
 - **併入**：作為 `cmd/atlas-mcp/main.go` 子命令，可與現有 `cmd/atlas` 共用內部套件

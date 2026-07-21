@@ -19,7 +19,7 @@
 > **v2.1.1 結構抽離**（2026-06）：§4.2-4.5、§6 路由策略、§8 遷移路徑、§10 決策紀錄抽離至獨立文件以降低本檔行數（1770 → 972）：
 > - §4.2-4.5 → [`docs/specs/llm-interface-contract-spec.md`](specs/llm-interface-contract-spec.md)（356 行）
 > - §6 → [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md)（161 行）
-> - §8 → [`docs/archive/2026-06-27-llm-migration-roadmap-resolved.md`](archive/2026-06-27-llm-migration-roadmap-resolved.md)（RESOLVED，164 行）
+> - §8 → [L2 LLM migration 規劃（已併入 specs/llm-routing-spec.md）](specs/llm-routing-spec.md)（RESOLVED，164 行）
 > - §10 → [`docs/llm-adr-log.md`](llm-adr-log.md)（142 行）
 >
 > §4.2-4.5/6/8/10 內 cross-reference 章節仍可在原檔被引用，引用位置改為「見 `specs/llm-interface-contract.md` §X」、「見 `specs/llm-routing.md` §X」等格式。
@@ -45,7 +45,7 @@
 - [五、成熟度與依賴地圖（Maturity & Dependency Map）](#五成熟度與依賴地圖maturity--dependency-map)
 - **六、Provider 路由策略** → [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md)
 - [七、資料流與審計軌跡（Data Flow & Audit Trail）](#七資料流與審計軌跡data-flow--audit-trail)
-- **八、遷移路徑** → [`docs/archive/2026-06-27-llm-migration-roadmap-resolved.md`](archive/2026-06-27-llm-migration-roadmap-resolved.md)
+- **八、遷移路徑** → [L2 LLM migration 規劃（已併入 specs/llm-routing-spec.md）](specs/llm-routing-spec.md)
 - [九、風險與緩解（Risks & Mitigations）](#九風險與緩解risks--mitigations)
 - **十、決策紀錄** → [`docs/llm-adr-log.md`](llm-adr-log.md)
 
@@ -779,7 +779,7 @@ groups:
 
 ## 八、遷移路徑
 
-> **📦 已歸檔（RESOLVED）**：本節完整內容移至 [`docs/archive/2026-06-27-llm-migration-roadmap-resolved.md`](archive/2026-06-27-llm-migration-roadmap-resolved.md)。
+> **📦 已歸檔（RESOLVED）**：本節完整內容移至 [L2 LLM migration 規劃（已併入 specs/llm-routing-spec.md）](specs/llm-routing-spec.md)。
 
 **完成狀態**：Phase 1-3 全部完成（v0.0.0.21 verified）；Phase 4+ 持續進行（OpenCode-Zen 整合、self-host M3 評估）。
 

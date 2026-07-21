@@ -3,7 +3,7 @@
 > **對應 runbook**：`docs/operations/l2-4-runbook.md`
 > **對應 spec**：`docs/specs/l2-4-observation-spec.md`
 > **對應 followup**：`docs/operations/l2-4-followup.md`
-> **演化自**（已完成 cycle）：`docs/archive/2026-06-26-wave-10-observation-log.md`（Wave 10 L2.3 `SectorAgentLLM`）
+> **演化自**（已完成 cycle）：`內部觀察日誌（已刪除）`（Wave 10 L2.3 `SectorAgentLLM`）
 > **範圍**：Wave 11 L2.4 — `SemiconductorLLMAgent` 啟用後 14-28 天觀察期
 > **啟動日期**：（TBD，觀察期啟動時填寫）
 > **觀察對象**：`SemiconductorLLMAgent.Recommend()` LLM-driven path vs 確定性 `SemiconductorExecutor` baseline
@@ -196,6 +196,6 @@
 - **Runbook**：`docs/operations/l2-4-runbook.md`
 - **Spec**：`docs/specs/l2-4-observation-spec.md`
 - **Followup**：`docs/operations/l2-4-followup.md`
-- **前例（已完成 cycle）**：`docs/archive/2026-06-26-wave-10-observation-log.md`
+- **前例（已完成 cycle）**：`內部觀察日誌（已刪除）`
 - **PR #746**（metrics ship）：`fix(orchestrator): align SemiconductorLLMAgent metrics to Issue #740 spec`（commit `eff0db79`，2026-06-25）
 - **PR #821**（scheduling + admin panel ship）：`feat(L2.4): observation scheduling API + admin panel for LLM-driven sector agent`（2026-06-29）

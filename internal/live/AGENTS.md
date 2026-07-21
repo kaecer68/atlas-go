@@ -31,4 +31,4 @@
 
 ## EventPositionUpdate
 
-`orchestrator.go` 向 `BaselineTrigger` 與 `DriftDetector` 發布 `EventPositionUpdate`（目前只發 `"updated"`）。歷史設計詳見 `docs/handoff/2026-06-26-wave9-event-position-update.md`（Wave 9 遺留命名）。
+`orchestrator.go` 向 `BaselineTrigger` 與 `DriftDetector` 發布 `EventPositionUpdate`（目前只發 `"updated"`）。歷史設計詳見 `內部交接（.omo/handoffs/）`（Wave 9 遺留命名）。

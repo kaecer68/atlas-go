@@ -55,7 +55,7 @@ data/
 | 問題 | 狀態 | 追蹤 |
 |------|------|------|
 | 全域 outcomes 14.7x 大於 per-session 總和 | 已知，待調查 | P0.1 C.3 |
-| atlas.db 冗餘（PostgreSQL 重疊） | 決策：移除 | `docs/audit/2026-06-02-atlas-db-resolution.md` |
+| atlas.db 冗餘（PostgreSQL 重疊） | 決策：移除 | `內部審計（.omo/audit/）` |
 | 7 個空歸檔目錄 | 待清理 | P2.2 |
 | backup 檔案 orphaned | 待清理 | P2.2 |
 | 平面檔案混雜於子目錄 | 獨立分支處理 | P3.0 (`feat/data-restructure`) |

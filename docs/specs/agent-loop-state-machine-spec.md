@@ -3,7 +3,7 @@
 > **Audience**: developers extending the `SectorAgentLLM` loop or debugging state transitions.
 > **Implementation**: `internal/orchestrator/agent_loop.go`
 > **Tests**: `internal/orchestrator/agent_loop_test.go` (9 tests)
-> **Related**: [`llm-sector-agent.md`](llm-sector-agent.md)
+> **Related**: [`llm-sector-agent.md`](llm-sector-agent-spec.md)
 
 ## Phase Diagram
 

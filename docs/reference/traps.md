@@ -88,7 +88,7 @@
 
 5 個服務(prism-worker、grafana、alertmanager、otel-collector、atlas-go 的 `/health`)同時 crash loop 的完整根因分析見:
 
-**[`docs/../investigations/2026-06-28-boot-loop-multi-service.md`](../investigations/2026-06-28-boot-loop-multi-service.md)**
+**[`.omo/investigations/2026-06-28-boot-loop-multi-service.md`]（內部，`.omo/investigations/`）**
 
 涵蓋:docker-compose `command` 跟 ENTRYPOINT 衝突、`env_file` vs `environment` precedence、Dockerfile 硬編碼 healthcheck 繼承、PRISM system 實作但不完整、fubon-neo PyPI 404、兩個 .env 模板 stale orphan。
 
