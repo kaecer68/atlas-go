@@ -231,6 +231,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-geo-ingest
     restart: unless-stopped
     environment:
@@ -254,6 +256,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-macro-ingest
     restart: unless-stopped
     environment:
@@ -277,6 +281,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-replay-sync
     restart: unless-stopped
     environment:
@@ -300,6 +306,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-darwinian
     restart: unless-stopped
     environment:
@@ -328,6 +336,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-c07-collect
     restart: unless-stopped
     environment:
@@ -357,6 +367,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-c07-evaluate
     restart: unless-stopped
     environment:
@@ -381,6 +393,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-backfill-month-revenue
     restart: unless-stopped
     environment:
@@ -404,6 +418,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-backfill-financial-statements
     restart: unless-stopped
     environment:
@@ -427,6 +443,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-backfill-institutional-investors
     restart: unless-stopped
     environment:
@@ -450,6 +468,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
     container_name: atlas-cron-quote-backfill
     restart: unless-stopped
     environment:

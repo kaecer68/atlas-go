@@ -115,6 +115,9 @@ Before ending any session that used this protocol:
 □ Backlog populated with any new issues found
 □ Branch pushed or PR opened (if any code was changed)
 □ If session must pause with uncommitted code: run context-save
+□ Run ./scripts/check-binary-freshness.sh — exit 0 REQUIRED (or run make rebuild-all first)
+  This prevents the recurring "rewrote code but docker still has old binary" trap.
+  See ~/.config/opencode/AGENTS.md "Binary freshness gate" section for full procedure.
 ```
 
 ### Documentation Governance (Close-Out)

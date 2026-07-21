@@ -491,3 +491,86 @@ status:
 			printf "  127.0.0.1:%-13s %-8s %s\n" "$$p" "(free)" ""; \
 		fi; \
 	done
+# ============================================================================
+# Binary freshness (added 2026-07-21, manifest 2026-07-21-binary-freshness-protocol.md)
+# ============================================================================
+#
+# Why: PR cycle #1244-#1248 showed that "fixed code but docker still runs old
+# binary" caused hours of repeated debugging and risk of AI hallucination
+# reverting working code. These targets ensure every binary tracks HEAD.
+#
+# Refresh strategy:
+#   - All Docker builds use build-arg GIT_COMMIT and inject via internal/buildinfo ldflags
+#   - On sandbox environments without proxy.golang.org, use Dockerfile.cron.local /
+#     Dockerfile.atlas.local (host-built binaries via `go build`)
+#   - On CI / dev boxes, native Dockerfile / Dockerfile.cron
+#
+# Every make rebuild-* target must be invoked during closing-time check if
+# check-binaries fails (see ~/.config/opencode/AGENTS.md "Binary freshness gate").
+
+.PHONY: rebuild-all rebuild-cron rebuild-atlas rebuild-host-bin check-binaries
+
+HOST_GO       := $(shell which go 2>/dev/null || echo /opt/homebrew/bin/go)
+GIT_COMMIT    := $(shell git rev-parse HEAD 2>/dev/null)
+BUILDTIME     := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+GOENV_LINUX   := GOOS=linux GOARCH=arm64
+
+LDFLAGS_BF := -w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
+              -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=$(GIT_COMMIT) \
+              -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(BUILDTIME)
+
+# Verify every deployed binary's buildinfo.Commit matches HEAD.
+# Exit 0 = fresh, exit 1 = at least one stale.
+check-binaries:
+	@./scripts/check-binary-freshness.sh
+
+# Rebuild host bin/atlas-mcp only.
+rebuild-host-bin:
+	@echo "  building host bin/atlas-mcp (commit=$(GIT_COMMIT))"
+	@$(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o bin/atlas-mcp ./cmd/atlas-mcp
+
+# Rebuild the 5 atlas-atlas binaries on host (for sandbox use with Dockerfile.atlas.local).
+# .build-atlas/ is gitignored. atlas-go/atlas-mcp/daily-replay-sync/backfill-replay/calibrate-seasonal.
+.build-atlas: ; @mkdir -p $@
+rebuild-atlas-bins: | .build-atlas
+	@echo "  building 5 atlas-atlas binaries on host"
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/atlas-go ./cmd/atlas
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/backfill-replay ./cmd/backfill-replay
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
+
+# Rebuild atlas-atlas image from host-built binaries + restart container.
+rebuild-atlas: rebuild-atlas-bins
+	@docker build -t atlas-atlas:local -f Dockerfile.atlas.local .
+	@docker tag atlas-atlas:local atlas-atlas:latest
+	@docker compose up -d atlas
+
+# Rebuild the 10 cron binaries on host.
+# daily-replay-sync/backfill-replay/macro-ingest/geo-ingest/backfill-month-revenue/
+# backfill-financial-statements/backfill-institutional-investors/cron-quote-backfill/
+# c07-obs-collector/c07-day-evaluator.
+.build-cron: ; @mkdir -p $@
+rebuild-cron-bins: | .build-cron
+	@echo "  building 10 cron binaries on host"
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/daily-replay-sync ./cmd/daily-replay-sync
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-replay ./cmd/backfill-replay
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/macro-ingest ./cmd/macro-ingest
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/geo-ingest ./cmd/geo-ingest
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-month-revenue ./cmd/backfill-month-revenue
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-financial-statements ./cmd/backfill-financial-statements
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-institutional-investors ./cmd/backfill-institutional-investors
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/cron-quote-backfill ./cmd/cron-quote-backfill
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/c07-obs-collector ./cmd/experimental/c07-obs-collector
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/c07-day-evaluator ./cmd/experimental/c07-day-evaluator
+
+# Rebuild cron image + force-recreate all 10 cron containers.
+rebuild-cron: rebuild-cron-bins
+	@docker build -t atlas-cron-rebuilt:local -f Dockerfile.cron.local .
+	@bash -c 'declare -a t=(atlas-cron-quote-backfill:latest atlas-cron-backfill-month-revenue:latest atlas-cron-geo-ingest:latest atlas-atlas-cron-c07-collect:latest atlas-cron-replay-sync:latest atlas-cron-backfill-institutional-investors:latest atlas-atlas-cron-c07-evaluate:latest atlas-cron-darwinian:latest atlas-cron-backfill-financial-statements:latest atlas-cron-macro-ingest:latest); for x in "$${t[@]}"; do docker tag atlas-cron-rebuilt:local "$$x"; done'
+	@docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-backfill-financial-statements cron-backfill-month-revenue cron-darwinian cron-geo-ingest atlas-cron-c07-collect cron-backfill-institutional-investors
+
+# Full rebuild: host bin + atlas image + cron images.
+rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
+	@echo "✓ rebuilt all binaries"
+	@$(MAKE) check-binaries
