@@ -75,14 +75,14 @@ MCP client config 路徑：
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **112 個 tool**（業務 106 + template_detector 2 + audit 4；sampling/elicitation feature-gated 各 +1 達 114；啟動期 assert ∈ [111, 113]，post-Round-2 dedup 基線，權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
+| MCP Tools | **112 個 tool**（預設啟用；sampling/elicitation feature-gated 全開時 114；啟動期 assert ∈ [111, 114]；權威清單與分類見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
 | Audit | v2 schema（retention、cleanup、ArgsHash、SessionID、Transport，`audit_v2.go`；v1 `audit.go` 為向後相容 shim） |
 | 擴充協議 | Resources（`resources.go`）、Prompts（`prompts.go`）、Elicitation（`elicitation.go`）、Sampling（`sampling.go`）、Roots（`roots.go`） |
 | 觀測 | Rate limiting（`ratelimit.go`）、Metrics（`metrics.go`）、Anomaly detection（`tools_anomaly.go`） |
-| 工具分類 | Macro（6）、Crossmarket（3）、Regime（1）、Narrative（7）、Risk（5）、Alert（4）、Strategy（6）、Recommendation（1）、Experiment（3）、Synergy（3）、Control（4）、Scheduler/Task（4）、System/Health（7）、Data（4）、Universe（2）、LLM（2）、Trace（4）、PRISM（1）、Report（4）、Stock（4）、Capital Flow（2）、Events（2）、Daily Briefing（2）、Protocol Extensions（4）、Audit（4）、Anomaly（2） |
+| 工具分類 | Regime（1）、Macro（6）、Capital Flow（4）、Crossmarket（3）、Narrative（7）、Events（2）、Risk（5）、Alert（4）、Strategy（6）、Recommendation（1）、Experiment（5）、Synergy（3）、Control（7）、Scheduler/Task（4）、System（7）、LLM（2）、Trace（4）、Data（4）、Stock（4）、Parameters（5）、Backtest（2）、Industry Extension（5）、Sector Canonical（2）、Universe（2）、Report（4）、Briefing（2）、Protocol Extensions（4，其中 2 個 feature-gated 預設關閉）、MCP Audit / Observability（6）、Prism（1）、Template Detector（2） |
 
 ## 快速啟動
 
