@@ -60,10 +60,25 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
     -o atlas-go \
     ./cmd/atlas
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o daily-replay-sync ./cmd/daily-replay-sync
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.buildTime=${BUILDTIME:-$(date -u +%Y%m%d%H%M%S)} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
+    -o daily-replay-sync ./cmd/daily-replay-sync
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-replay ./cmd/backfill-replay
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o atlas-mcp ./cmd/atlas-mcp
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o calibrate-seasonal ./cmd/calibrate-seasonal
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.buildTime=${BUILDTIME:-$(date -u +%Y%m%d%H%M%S)} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
+    -o atlas-mcp ./cmd/atlas-mcp
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.buildTime=${BUILDTIME:-$(date -u +%Y%m%d%H%M%S)} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
+    -o calibrate-seasonal ./cmd/calibrate-seasonal
 
 # Final stage
 FROM alpine:latest
