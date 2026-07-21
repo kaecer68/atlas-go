@@ -101,7 +101,13 @@ cmd_status() {
     
     # Check for prompt files
     log_info "Spawned agent prompts:"
-    ls -1 "${PROJECT_ROOT}/prompts/agents/" | grep "^spawn_" 2>/dev/null | wc -l | xargs -I {} echo "  {} prompt files"
+    # SC2010: count spawn_* prompt files via glob, not `ls | grep`.
+    local spawn_count=0
+    for f in "${PROJECT_ROOT}/prompts/agents/"spawn_*; do
+        [[ -e "$f" ]] || continue
+        spawn_count=$((spawn_count + 1))
+    done
+    echo "  ${spawn_count} prompt files"
     
     log_success "Status check complete"
 }
@@ -318,7 +324,12 @@ cmd_report() {
 EOF
 
     # Count spawned agents
-    local total_spawned=$(ls -1 "${PROJECT_ROOT}/prompts/agents/" 2>/dev/null | grep "^spawn_" | wc -l)
+    # SC2010: count spawn_* prompts via glob, not `ls | grep`.
+    local total_spawned=0
+    for _f in "${PROJECT_ROOT}/prompts/agents/"spawn_*; do
+        [[ -e "$_f" ]] || continue
+        total_spawned=$((total_spawned + 1))
+    done
     local active_spawned=$(grep -c '"spawn_' "${CONFIG_DIR}/agents.json" 2>/dev/null || echo "0")
     
     cat >> "${report_file}" << EOF

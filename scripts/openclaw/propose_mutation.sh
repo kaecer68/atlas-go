@@ -84,7 +84,15 @@ check_prerequisites() {
     fi
 
     local latest_window
-    latest_window=$(ls -t data/state/windows/window-[0-9]*-[0-9]*.json 2>/dev/null | grep -v -- "-mutation-brief.json" | head -1)
+    # SC2010: pick the most recent matching window via glob + mtime sort,
+# instead of `ls -t | grep -v` (broken on non-alpha filenames).
+    latest_window=$(
+        for f in data/state/windows/window-[0-9]*-[0-9]*.json; do
+            [[ "$f" == *-mutation-brief.json ]] && continue
+            [[ ! -e "$f" ]] && continue
+            echo "$f"
+        done | xargs ls -t 2>/dev/null | head -1
+    )
     if [ -z "$latest_window" ]; then
         echo -e "${RED}Error: No backtest window summary found.${NC}"
         echo "Run backtest first:"
@@ -161,7 +169,14 @@ find_weakest_agent() {
 
 latest_window_id() {
     local latest_window
-    latest_window=$(ls -t data/state/windows/window-[0-9]*-[0-9]*.json 2>/dev/null | grep -v -- "-mutation-brief.json" | head -1)
+    # SC2010: pick the most recent matching window via glob + mtime sort.
+    latest_window=$(
+        for f in data/state/windows/window-[0-9]*-[0-9]*.json; do
+            [[ "$f" == *-mutation-brief.json ]] && continue
+            [[ ! -e "$f" ]] && continue
+            echo "$f"
+        done | xargs ls -t 2>/dev/null | head -1
+    )
     if [ -z "$latest_window" ]; then
         echo ""
         return

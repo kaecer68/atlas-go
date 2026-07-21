@@ -385,7 +385,8 @@ cmd_reset() {
     cmd_stop 2>/dev/null || true
     
     # Clear data
-    rm -rf "${DATA_DIR}"/*
+    # SC2115: guard against empty DATA_DIR expanding to /*.
+    rm -rf "${DATA_DIR:?}"/*
     
     log_success "Swarm reset complete"
     log_info "Run 'init' to reinitialize"

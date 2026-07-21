@@ -68,12 +68,13 @@ for from in "${!MOVES[@]}"; do
 
     for ext in "${EXTS[@]}"; do
         # 找引用 $from 的所有檔案 (排除 excluded paths)
+        # SC2038: use -print0 + xargs -0 to handle non-alphanumeric filenames.
         matches=$(find . -type f -name "$ext" \
             -not -path "./.git/*" \
             -not -path "./.omo/*" \
             -not -path "./node_modules/*" \
             -not -path "./.worktrees/*" \
-            2>/dev/null | xargs grep -l "$from" 2>/dev/null || true)
+            -print0 2>/dev/null | xargs -0 grep -l "$from" 2>/dev/null || true)
 
         if [ -z "$matches" ]; then
             continue

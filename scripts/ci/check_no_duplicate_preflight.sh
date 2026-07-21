@@ -42,8 +42,7 @@ MATCH_PATTERNS=(
     "*_gate.go"
 )
 
-cd "${REPO_ROOT}"
-
+cd "${REPO_ROOT}" || exit 1
 # Scan canonical pattern locations only:
 #   1. cmd/experimental/*-preflight/ directories (manual preflight)
 #   2. internal/scheduler/*_auto_cron.go files (auto-cron gate)

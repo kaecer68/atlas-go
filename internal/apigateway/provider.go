@@ -65,6 +65,14 @@ type ChannelMetadata struct {
 	Path       string `json:"path"`
 	Storage    string `json:"storage"`
 	HasLimiter bool   `json:"has_limiter"`
+
+	// Stub marks a channel whose data fetcher is not yet implemented
+	// (e.g. waiting on an external API key or endpoint confirmation).
+	// Stub channels are still registered (so the dashboard shows them
+	// explicitly as "not yet live") but their HealthCheck returns
+	// Status="inactive" so the alerting path in
+	// monitoring/service/data_channels.go can skip them.
+	Stub bool `json:"stub,omitempty"`
 }
 
 // HTTPProvider implements DataProvider for HTTP-based channels.

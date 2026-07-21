@@ -221,7 +221,7 @@ cmd_balance() {
         if [[ -f "${queue_file}" ]]; then
             count=$(grep -c '"task_id"' "${queue_file}" 2>/dev/null || echo "0")
         fi
-        counts+=(${count})
+        counts+=("${count}")
         total=$((total + count))
     done
     
@@ -262,7 +262,7 @@ cmd_clear() {
         for regime in "${REGIMES[@]}"; do
             local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
             if [[ -f "${queue_file}" ]]; then
-                echo '{"regime": "'${regime}'", "tasks": [], "cleared_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > "${queue_file}"
+                echo '{"regime": "'${regime}'", "tasks": [], "cleared_at": ""$(date -u +%Y-%m-%dT%H:%M:%SZ)""}' > "${queue_file}"
             fi
         done
         log_success "All queues cleared"
@@ -272,7 +272,7 @@ cmd_clear() {
         local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
         
         if [[ -f "${queue_file}" ]]; then
-            echo '{"regime": "'${regime}'", "tasks": [], "cleared_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > "${queue_file}"
+            echo '{"regime": "'${regime}'", "tasks": [], "cleared_at": ""$(date -u +%Y-%m-%dT%H:%M:%SZ)""}' > "${queue_file}"
             log_success "Queue cleared: ${regime}"
         else
             log_warning "Queue not found: ${regime}"
