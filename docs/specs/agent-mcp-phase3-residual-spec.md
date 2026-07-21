@@ -4,7 +4,7 @@
 > **狀態**：🟡 DRAFT（2026-06-30，等待 user review）
 > **範圍決策**：PR #842 (`feat/atlas-mcp-phase3`, 9428ef40) 已完成 Phase 3 上半 (audit retention + Phase 3B rate-limiting + Resources + Prompts + 2 errcheck fixes)。殘餘工作對齊 agent-interface-roadmap.md §3 原 4 項中扣除 Resources/Prompts 後的剩餘 3 項(roadmap snapshot 詳見 PR #876)。
 > **關聯文件**：
-> - [`agent-mcp-server.md`](./agent-mcp-server.md)（核心 spec，含 §11 Phase 2.2 Status）
+> - [`agent-mcp-server.md`](./agent-mcp-server-spec.md)（核心 spec，含 §11 Phase 2.2 Status）
 > - 對齊 agent-interface-roadmap.md roadmap §3 Phase 3 原 4 項規劃(snapshot 詳見 PR #876)
 > - [`docs/operations/mcp-deploy.md`](../operations/mcp-deploy.md)（部署守則）
 > - PR #842: <https://github.com/kaecer68/atlas-go/pull/842>
@@ -23,10 +23,10 @@
 
 ## 2. 不做 (Out of Scope)
 
-- **新增業務 tool**：74 tools 已達 [`agent-mcp-server.md` §3.1](./agent-mcp-server.md#3-mcp-tools-清單) 候選上限 (70)，不再開新業務 endpoint。meta-tool（如 `mcp_get_call_stats`/`mcp_get_session_topology`）屬 system-level 觀測，豁免此限制。
+- **新增業務 tool**：74 tools 已達 [`agent-mcp-server.md` §3.1](./agent-mcp-server-spec.md#3-mcp-tools-清單) 候選上限 (70)，不再開新業務 endpoint。meta-tool（如 `mcp_get_call_stats`/`mcp_get_session_topology`）屬 system-level 觀測，豁免此限制。
 - **新增 transport**：stdio / SSE / streamable-HTTP 三種已足夠覆蓋當前 agent 客戶端（Cursor / Claude Desktop / OpenCode）。
 - **新增 LLM hook**：已有 `llm_*` tool 統一入口，`DefaultRouter` 已集中（見 [`CLAUDE.md`](../../CLAUDE.md) §LLM 路由）。
-- **Multi-instance federation**：留給 Phase 4 評估（見 [`agent-mcp-phase4.md`](./agent-mcp-phase4.md) §3.3）。
+- **Multi-instance federation**：留給 Phase 4 評估（見 [`agent-mcp-phase4.md`](./agent-mcp-phase4-spec.md) §3.3）。
 - **動態 tool 註冊**：留給 Phase 4。
 
 ## 3. 殘餘任務
@@ -102,7 +102,7 @@
 }
 ```
 
-**新 tool**（在 [`agent-mcp-server.md` §3.1](./agent-mcp-server.md#3-mcp-tools-清單) `WA-606 系統健康` 加入）：
+**新 tool**（在 [`agent-mcp-server.md` §3.1](./agent-mcp-server-spec.md#3-mcp-tools-清單) `WA-606 系統健康` 加入）：
 - `mcp_get_call_stats` — 回傳近 N 分鐘 call count / p50 latency / error rate
 - `mcp_get_session_topology` — 回傳 agent_id ↔ tool call matrix（用於行為 audit）
 
@@ -128,7 +128,7 @@
 
 #### 3.3.1 問題
 
-當前 Bearer token 機制（見 [`agent-mcp-server.md` §2.1 transport_auth.go](./agent-mcp-server.md)）是「one global token」模式：
+當前 Bearer token 機制（見 [`agent-mcp-server.md` §2.1 transport_auth.go](./agent-mcp-server-spec.md)）是「one global token」模式：
 
 - `ATLAS_MCP_TOKEN` 環境變數一進程只有一個
 - 多個 agent 共享單一 atlas-mcp 進程時無法區隔（誰做了什麼）
@@ -213,7 +213,7 @@ Roadmap §3 原列 4 項，其中 Resources/Prompts (3d) 已在 PR #842 提前�
 每個 Item 都必須遵守：
 
 - **測試覆蓋率**：每個新功能 `*_test.go` 涵蓋，CI 60% 門檻（見根 `AGENTS.md`）
-- **文件同步**：[`mcp-deploy.md`](../operations/mcp-deploy.md) 與 [`agent-mcp-server.md`](./agent-mcp-server.md) §11 status block 同步更新
+- **文件同步**：[`mcp-deploy.md`](../operations/mcp-deploy.md) 與 [`agent-mcp-server.md`](./agent-mcp-server-spec.md) §11 status block 同步更新
 - **事件一致性**：新事件統一通過 `eventbus.Publish()`，監聽端已存在於 `internal/orchestrator/eventbus.go`
 - **權限邊界**：不繞過 `internal/apigateway/CONSTITUTION.md`（數據源治理 6 條文 + 3 附錄）
 - **JSON tag snake_case**：所有 API parsing struct 對齊 `domain.*` 的 snake_case tag（見根 `AGENTS.md` §高頻陷阱速查）
@@ -254,7 +254,7 @@ PR #842 + Phase 3 殘餘 3-item 全數完成後：
 
 | 文件 | 路徑 |
 |------|------|
-| Phase 2.2 Status | [`agent-mcp-server.md` §11](./agent-mcp-server.md) |
+| Phase 2.2 Status | [`agent-mcp-server.md` §11](./agent-mcp-server-spec.md) |
 | Phase 3 roadmap 原規劃 | 詳見 `docs/specs/agent-mcp-server-spec.md` §11 |
 | Phase 3 PR (上半) | [#842](https://github.com/kaecer68/atlas-go/pull/842) |
 | Phase 2.1 transports PR | [#834](https://github.com/kaecer68/atlas-go/pull/834) |

@@ -2,7 +2,7 @@
 
 > **Scope**: Spike output for Phase 4 T2.1. Documents the `go-mcp-sdk` v1.6.1 API surface for the three MCP 2026-07-28 protocol primitives so that T2.2–T2.4 production handlers can be designed without re-grepping the SDK source.
 > **Status**: Spike (temporary; this doc may be merged into `agent-mcp-phase4.md` §6.2 when Direction B is approved).
-> **Related**: [`agent-mcp-phase4.md`](./agent-mcp-phase4.md), [`agent-mcp-server.md`](./agent-mcp-server.md), [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md).
+> **Related**: [`agent-mcp-phase4.md`](./agent-mcp-phase4-spec.md), [`agent-mcp-server.md`](./agent-mcp-server-spec.md), internal/apigateway/CONSTITUTION-spec.md.)
 
 ---
 

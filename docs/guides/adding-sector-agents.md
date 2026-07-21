@@ -1,7 +1,7 @@
 # Semiconductor Executor — Concrete Sector Agent Example
 
 > **Audience**: developers adding new sector agents to the orchestrator.
-> **Related**: [`../specs/agent-loop-state-machine.md`](../specs/agent-loop-state-machine.md), [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent.md)
+> **Related**: [`../specs/agent-loop-state-machine.md`](../specs/agent-loop-state-machine-spec.md), [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent-spec.md)
 
 ## Two Implementations
 
@@ -143,6 +143,6 @@ agent := &SemiconductorLLMAgent{
 - Deterministic: `SemiconductorExecutor` in `internal/orchestrator/plugin_sector.go`
 - LLM-driven: `SemiconductorLLMAgent` in `internal/orchestrator/semiconductor_llm_agent.go`
 - Test helper: `MockLLMDriver` in `internal/orchestrator/sector_agent_llm_test_helpers.go`
-- State machine: [`../specs/agent-loop-state-machine.md`](../specs/agent-loop-state-machine.md)
-- L2.3 design: [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent.md)
+- State machine: [`../specs/agent-loop-state-machine.md`](../specs/agent-loop-state-machine-spec.md)
+- L2.3 design: [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent-spec.md)
 - RunToolCall wiring (L3): [PR #739](https://github.com/kaecer68/atlas-go/pull/739) (`SectorAgentLLM.RunToolCall` → `llm.SafeInvokeHandler`)

@@ -4,8 +4,8 @@
 > **狀態**：🔴 PROPOSAL（2026-06-30，待 user 從 §3 方向候選中選定）
 > **範圍決策**：Phase 3 完工後的下一步。Roadmap 沒列；本 spec 由 (i) Phase 2.2 status 趨勢 (ii) Phase 3 上半 prune (iii) MCP 2026-07-28 spec 演進 (iv) 開源 ecosystem 觀察共同推導。
 > **關聯文件**：
-> - [`agent-mcp-server.md`](./agent-mcp-server.md)（核心 spec，含 §11 Phase 2.2 Status）
-> - [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual.md)（先決）
+> - [`agent-mcp-server.md`](./agent-mcp-server-spec.md)（核心 spec，含 §11 Phase 2.2 Status）
+> - [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual-spec.md)（先決）
 > - 對齊 agent-interface-roadmap.md roadmap;本 Phase 4 為推導新增(未列於 roadmap,roadmap snapshot 詳見 PR #876)
 > - MCP 2026-07-28 spec: <https://modelcontextprotocol.io/specification/2026-07-28>
 
@@ -15,7 +15,7 @@
 
 Phase 3 結束時，atlas-mcp 將達到：
 
-- **74 tools**（per [`agent-mcp-server.md` §3.1](./agent-mcp-server.md#3-mcp-tools-清單) 候選清單）
+- **74 tools**（per [`agent-mcp-server.md` §3.1](./agent-mcp-server-spec.md#3-mcp-tools-清單) 候選清單）
 - **3 transports**（stdio / SSE / streamable-HTTP）+ **Bearer auth** + **per-tool rate-limit** + **audit retention**
 - **auto-gen description / behavior analysis / multi-tenant token**
 
@@ -212,8 +212,8 @@ Reasoning：sandbox 涉及 OS-level 隔離（gVisor / nsjail / bwrap），工作
 
 | 文件 | 路徑 |
 |------|------|
-| Phase 2.2 Status | [`agent-mcp-server.md` §11](./agent-mcp-server.md) |
-| Phase 3 殘餘 | [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual.md) |
+| Phase 2.2 Status | [`agent-mcp-server.md` §11](./agent-mcp-server-spec.md) |
+| Phase 3 殘餘 | [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual-spec.md) |
 | Phase 3 PR (上半) | [#842](https://github.com/kaecer68/atlas-go/pull/842) |
 | Phase 2.1 transports PR | [#834](https://github.com/kaecer68/atlas-go/pull/834) |
 | MCP 2026-07-28 spec | <https://modelcontextprotocol.io/specification/2026-07-28> |

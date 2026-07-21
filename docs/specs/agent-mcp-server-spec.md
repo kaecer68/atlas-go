@@ -6,7 +6,7 @@
 > **關聯文件**：
 > - [`workflow-map.md`](../reference/workflow-map.md)（workflow 總覽）
 > - [`AGENTS.md`](../../AGENTS.md)（跨工具 AI 共用指引）
-> - [`agent-loop-state-machine.md`](./agent-loop-state-machine.md)（AgentLoop 細節）
+> - [`agent-loop-state-machine.md`](./agent-loop-state-machine-spec.md)（AgentLoop 細節）
 
 ---
 

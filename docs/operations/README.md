@@ -15,7 +15,7 @@
 | [v2-alert-redesign-verification-report.md](v2-alert-redesign-verification-report.md) | V2 警報改版驗證報告 | — |
 | [frontend-refactor-recovery-verification-report.md](frontend-refactor-recovery-verification-report.md) | 前端 refactor 後 recovery 驗證報告 | — |
 
-> 已搬移的 audit：[`docs/audit/2026-07-08-frontend-backend.md`](../audit/2026-07-08-frontend-backend.md)、[`docs/audit/2026-07-08-l2-4-llmdriver-usage.md`](../audit/2026-07-08-l2-4-llmdriver-usage.md)、[`docs/audit/2026-07-08-pre-deployment-security-audit.md`](../audit/2026-07-08-pre-deployment-security-audit.md)。
+> 稽核報告為內部文件（.omo/audit/，gitignored）。
 
 ## Runbook（操作手冊）
 

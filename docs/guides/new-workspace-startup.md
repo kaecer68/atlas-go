@@ -190,7 +190,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 ### 1. AI 創建了 `audit/` 子目錄
 
 **症狀**：`ls .omo/` 出現 `audit/` 但白名單沒有
-**原因**：AI 看 `docs/audit/` 結構後想在 `.omo/` 開類似目錄
+**原因**：AI 看歷史 `docs/audit/` 結構（已移除）後想在 `.omo/` 開類似目錄
 **修正**：用 `evidence/` 或 `briefs/` 替代，不要開新子目錄
 
 ### 2. AI 創建了 `evidence/decision-chain-v2/` 子目錄

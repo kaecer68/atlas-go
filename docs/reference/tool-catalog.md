@@ -173,7 +173,7 @@
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
 
-> **API Contract**：[`../specs/stock-api-contract.md`](../specs/stock-api-contract.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
+> **API Contract**：[`../specs/stock-api-contract.md`](../specs/stock-api-contract-spec.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
 > **Frontend 狀態**：client_web「個股快查」頁面（Issue #1038）已 ship — 後端 normalize（PR-A #1044）+ 前端 14 檔（PR-B #1045）+ 文件同步（PR-C #1046）+ RSI pre-existing bug fix（PR #1047）。頁面路徑 `/client/quote?symbol=<4-6 digit symbol>`。剩餘 follow-up 見 `.omo/plans/2026-07-09-stock-quote-followup.md`。
 
 ### Parameters（5 個 — PR 2 新增）
@@ -237,7 +237,7 @@
 | `mcp_elicit_user` | 向使用者請求結構化輸入（schema validate） | 預設 OFF，`ATLAS_MCP_ELICITATION_ENABLED=true` |
 | `mcp_sample_llm` | 透過 atlas LLM router 抽樣（讓 server 呼叫 LLM 完成 model-assisted 工具） | 預設 OFF，`ATLAS_MCP_SAMPLING_ENABLED=true` |
 
-> 安全邊界：`mcp_roots_read_file` 強制 O_RDONLY、TOCTOU 防護、size cap、AllowedRoots 檢查；詳見 [spec Phase 4 B](../specs/agent-mcp-server.md)。
+> 安全邊界：`mcp_roots_read_file` 強制 O_RDONLY、TOCTOU 防護、size cap、AllowedRoots 檢查；詳見 [spec Phase 4 B](../specs/agent-mcp-server-spec.md)。
 
 ### MCP Audit / Observability（6 個 — agent 自我觀測）
 

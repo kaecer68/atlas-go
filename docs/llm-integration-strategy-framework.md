@@ -7,7 +7,7 @@
 > **Wave 11 交叉引用** (Issue #711 + v0.0.0.21):
 > - `Tool.Handler` 的 trust boundary 在 PR1 已明確化 — 「LLM validation 是 hint,handler 必須自行驗證」。建議透過 `SafeInvokeHandler` 呼叫(支援 panic recovery)。詳見 `internal/llm/provider.go` 的 `Tool.Handler` docstring。
 > - `Request.Validate()` 在 PR3 新增,統一驗證 `ToolChoice`(reserved keywords 或 registered tool names)。Provider adapter 在 dispatch 前必須呼叫,trust valid input。詳見 `internal/llm/provider.go` 的 `Request.Validate()` docstring。
-> - L2.3 PoC(`SemiconductorLLMAgent` + `DriverAdapter`)是本框架的**第一個 sector agent consumer**,驗證了 end-to-end flow。詳見 [`docs/specs/llm-sector-agent-spec.md`](specs/llm-sector-agent.md)。
+> - L2.3 PoC(`SemiconductorLLMAgent` + `DriverAdapter`)是本框架的**第一個 sector agent consumer**,驗證了 end-to-end flow。詳見 [`docs/specs/llm-sector-agent-spec.md`](specs/llm-sector-agent-spec.md)。
 > 維護者：core architecture
 > 版本：v2.1（與 `internal/MATURITY.md` 對齊於 2026-06）
 >
@@ -17,8 +17,8 @@
 > 3. 明確邊界：台灣市場特徵是 capability 輸出評估框架，不影響 Provider 介面/路由/模型選擇。
 >
 > **v2.1.1 結構抽離**（2026-06）：§4.2-4.5、§6 路由策略、§8 遷移路徑、§10 決策紀錄抽離至獨立文件以降低本檔行數（1770 → 972）：
-> - §4.2-4.5 → [`docs/specs/llm-interface-contract-spec.md`](specs/llm-interface-contract.md)（356 行）
-> - §6 → [`docs/specs/llm-routing-spec.md`](specs/llm-routing.md)（161 行）
+> - §4.2-4.5 → [`docs/specs/llm-interface-contract-spec.md`](specs/llm-interface-contract-spec.md)（356 行）
+> - §6 → [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md)（161 行）
 > - §8 → [`docs/archive/2026-06-27-llm-migration-roadmap-resolved.md`](archive/2026-06-27-llm-migration-roadmap-resolved.md)（RESOLVED，164 行）
 > - §10 → [`docs/llm-adr-log.md`](llm-adr-log.md)（142 行）
 >
@@ -43,7 +43,7 @@
 - [三、能力分類學（Capability Taxonomy）](#三能力分類學capability-taxonomy)
 - [四、統一介面合約（Unified Interface Contract）](#四統一介面合約unified-interface-contract)
 - [五、成熟度與依賴地圖（Maturity & Dependency Map）](#五成熟度與依賴地圖maturity--dependency-map)
-- **六、Provider 路由策略** → [`docs/specs/llm-routing-spec.md`](specs/llm-routing.md)
+- **六、Provider 路由策略** → [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md)
 - [七、資料流與審計軌跡（Data Flow & Audit Trail）](#七資料流與審計軌跡data-flow--audit-trail)
 - **八、遷移路徑** → [`docs/archive/2026-06-27-llm-migration-roadmap-resolved.md`](archive/2026-06-27-llm-migration-roadmap-resolved.md)
 - [九、風險與緩解（Risks & Mitigations）](#九風險與緩解risks--mitigations)
@@ -447,7 +447,7 @@ Concrete Client（DeepSeekV4Client / MiniMaxM3Client / KimiClient / OpenCodeGoCl
 
 ### 4.2 介面定義（提案）
 
-> **📦 已抽離**：本節完整內容（含 Go 介面程式碼）移至 [`docs/specs/llm-interface-contract-spec.md`](specs/llm-interface-contract.md) §4.2。
+> **📦 已抽離**：本節完整內容（含 Go 介面程式碼）移至 [`docs/specs/llm-interface-contract-spec.md`](specs/llm-interface-contract-spec.md) §4.2。
 
 **核心概念速查**：`ProviderImpl`（4 個 method：`Name` / `Supports` / `Call` / `Health`）、`Router`（`Call` + `Health`）、`Capability` / `DataClass` / `Provider` 三類字串常數、`Request` / `Response` 結構。
 ### 4.6 架構對比（Before / After）
@@ -629,7 +629,7 @@ S               ✗      ✗      ✗      ✓   ← narrative, orchestrator, ri
 
 ## 六、Provider 路由策略
 
-> **📦 已抽離**：本節完整內容移至 [`docs/specs/llm-routing-spec.md`](specs/llm-routing.md)（§6 路由表、§6.1-6.5 備援策略）。
+> **📦 已抽離**：本節完整內容移至 [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md)（§6 路由表、§6.1-6.5 備援策略）。
 
 **核心概念速查**：atlas-go 採用 3 個主力 provider（DeepSeek V4-Pro/V4-Flash、MiniMax M3、Kimi K2.6/K2.7）+ 2 個備援通道（OpenCode-Go、OpenCode-Zen），每個 capability 都有四級 fallback 鏈。
 

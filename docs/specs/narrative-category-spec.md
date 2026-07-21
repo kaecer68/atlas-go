@@ -23,7 +23,7 @@
 
 ## 3. 規格重點
 
-- **Engine**: `internal/narrative/`,詳見 [`docs/specs/agent-mcp-server-spec.md`](../specs/agent-mcp-server.md) §3
+- **Engine**: `internal/narrative/`,詳見 [`docs/specs/agent-mcp-server-spec.md`](../specs/agent-mcp-server-spec.md) §3
 - **Briefing bundle** 與 `mcp_quickstart` 互補(後者放在 briefing.go,動機來源同)
 - **Stress index thresholds**:見 `internal/narrative/stress_thresholds.go`
 

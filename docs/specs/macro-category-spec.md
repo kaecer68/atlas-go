@@ -23,7 +23,7 @@
 ## 3. 規格重點
 
 - **Snapshot 來源**:`internal/monitoring/service/crossmarket.go::FetchSnapshot` 包 internal/apigateway(`apigateway.FetchResult`)
-- **Stress index**:`internal/narrative/trj.go`,詳見 [`docs/specs/janus-regime-detection-spec.md`](../specs/janus-regime-detection.md)
+- **Stress index**:`internal/narrative/trj.go`,詳見 [`docs/specs/janus-regime-detection-spec.md`](../specs/janus-regime-detection-spec.md)
 - **資本流 snapshot**:見 [`internal/capitalflow/`](../reference/tool-catalog.md) (cross-reference `capital_flow_daily` / `capital_flow_summary`)
 - **Ingest 狀態**:`internal/macro/ingestor.go`
 

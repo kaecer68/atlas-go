@@ -130,7 +130,7 @@ go test -count=1 -race ./cmd/atlas-mcp/...   # 99 tests, -race 綠
 
 **告警整合**：當 `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE=true`（預設），server 端的 `RootsListChangedHandler` 會透過 `internal/alerting.Publisher` 發出 `security_roots_changed` 事件（成功為 `SeverityInfo`、失敗為 `SeverityWarning`），下游 Alertmanager 或 webhook 訂閱者可即時收到 roots 變動通知。
 
-**完整規格**：[`docs/specs/agent-mcp-phase4-spec.md` §6.2.B](../specs/agent-mcp-phase4.md)、[`internal/apigateway/CONSTITUTION.md` 附錄 D](../../internal/apigateway/CONSTITUTION.md)
+**完整規格**：[`docs/specs/agent-mcp-phase4-spec.md` §6.2.B](../specs/agent-mcp-phase4-spec.md)、[`internal/apigateway/CONSTITUTION.md` 附錄 D](../../internal/apigateway/CONSTITUTION.md)
 
 ### 註冊狀態
 
@@ -460,9 +460,9 @@ groups:
 ## 12. 對應的文件
 
 - 完整 tool catalog（112 tools）：[`docs/reference/tool-catalog.md`](../reference/tool-catalog.md)
-- 設計規格（Phase 2.2 狀態）：[`docs/specs/agent-mcp-server-spec.md`](../specs/agent-mcp-server.md)
+- 設計規格（Phase 2.2 狀態）：[`docs/specs/agent-mcp-server-spec.md`](#)
 - 系統 workflow 對應（WA-XXX）：[`docs/reference/workflow-map.md`](../reference/workflow-map.md)
-- 計劃藍圖： [`docs/specs/agent-mcp-server-spec.md`](../specs/agent-mcp-server.md)（canonical spec,roadmap v2 snapshot 詳見 PR #876 `feat/atlas-mcp` 歷史 commit;CI 不追蹤 `.omo/` 內路徑故不列入連結）
+- 計劃藍圖： [`docs/specs/agent-mcp-server-spec.md`](#)（canonical spec,roadmap v2 snapshot 詳見 PR #876 `feat/atlas-mcp` 歷史 commit;CI 不追蹤 `.omo/` 內路徑故不列入連結）
 - Go core coding rules： [`.github/instructions/go-core.instructions.md`](../../.github/instructions/go-core.instructions.md)
 - Live trading guardrails： [`.github/instructions/live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md)
 - Constitution： [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md)

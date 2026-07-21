@@ -110,7 +110,7 @@ L2.4 observation metrics spec and implementation were shipped together via PR #8
 - `internal/monitoring/api/pipeline/l2_4_state.go` — schedule state
 - `cmd/atlas/main.go` — `l24Mgr.SetConfig` boot seed
 
-Operational procedures (pre-flight / daily check-in / acceptance / rollback) live in [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md). Future work (auto-cron / promotion) tracked in [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md).
+Operational procedures (pre-flight / daily check-in / acceptance / rollback) live in ../operations/l2-4-runbook-spec.md.) Future work (auto-cron / promotion) tracked in ../operations/l2-4-followup-spec.md.)
 
 ## References
 

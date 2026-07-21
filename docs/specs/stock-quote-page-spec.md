@@ -1,7 +1,7 @@
 # Stock Quote Page — Wireframe + Component Tree
 
 > **對應 issue**: #1038 client_web 新增「個股快查」功能
-> **對應契約**: [`stock-api-contract.md`](./stock-api-contract.md)
+> **對應契約**: [`stock-api-contract.md`](./stock-api-contract-spec.md)
 > **狀態**: 設計稿 v1.0(待使用者審閱)
 > **最後更新**: 2026-07-09
 

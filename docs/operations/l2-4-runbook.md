@@ -4,7 +4,7 @@
 > **對象**: ops / on-call engineering
 > **範圍**: Wave 11 L2.4 — `UseLLMSectorAgents` 啟用後 7-14 天觀察期
 > **Issue**: [#742](https://github.com/kaecer68/atlas-go/issues/742)
-> **觀察指標權威**: [`../specs/l2-4-observation-spec.md`](../specs/l2-4-observation-spec.md) §Metrics
+> **觀察指標權威**: [`../specs/l2-4-observation-spec.md`](../specs/l2-4-observation-spec.md-spec) §Metrics
 > **Log 範本**: `docs/operations/l2-4-observation-log.md`
 > **Flag 函式**: `config.GetUseLLMSectorAgents()`（`internal/config/parameters.go`）+ `config.GetL2_4Schedule()` (新加,L2.4 scheduling)
 > **Metric 來源**: PR #821 (commits `1d82c8a5` + `78fd2b4b` + `1491ab93` + `f2c37c61`) — `SemiconductorLLMAgent.Recommend()` 內 6 個 `slog.Info` events
@@ -40,7 +40,7 @@
 | `reflect.continue_rate` | `agent_loop.reflect` (continue=true) | 比例應 < 50% |
 | `conviction.distribution` | `agent_loop.reflect.continue=false` 的 `conviction` | 直方圖 |
 
-詳細 schema 見 [`../specs/l2-4-observation-spec.md`](../specs/l2-4-observation-spec.md) §Metrics。
+詳細 schema 見 [`../specs/l2-4-observation-spec.md`](../specs/l2-4-observation-spec.md-spec) §Metrics。
 
 ### 2.2 Spot-check(每日 3-5 筆)
 
@@ -132,8 +132,8 @@ Day 14 acceptance 全部通過後,依序執行(每步獨立 PR):
 ## 7. References
 
 - Issue: [#742](https://github.com/kaecer68/atlas-go/issues/742)
-- 指標定義: [`../specs/l2-4-observation-spec.md`](../specs/l2-4-observation-spec.md) §Metrics
-- L2.3 架構: [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent.md)
+- 指標定義: [`../specs/l2-4-observation-spec.md`](../specs/l2-4-observation-spec.md-spec) §Metrics
+- L2.3 架構: [`../specs/llm-sector-agent-spec.md`](../specs/llm-sector-agent-spec.md-spec)
 - L2.4 follow-up plan: [`./l2-4-followup.md`](./l2-4-followup.md) — auto-cron / CLI flag / promotion procedure
 - Flag 函式: `config.GetUseLLMSectorAgents()` + `config.GetL2_4Schedule()` (`internal/config/parameters.go`)
 - Metric 實作: PR #821 — `internal/orchestrator/semiconductor_llm_agent.go` + `internal/monitoring/api/pipeline/l2_4_*.go`

@@ -42,7 +42,7 @@
 | `component-init.js` | 共用 component 初始化(circuit-breaker、sim-health、performance-report) |
 | `event-listeners.js` | DOM event 綁定(sidebar nav、evView 按鈕、shock sim 互動、modal 關閉) |
 | `pages/*.js` | 每個頁面的 render 函式,由 `main.js` 動態 import |
-| `pages/stock-quote.js` + `services/stock-api-client.js` | v0.0.0.32 個股快查(Issue #1038 / PR #1045)：4 API 並發 + 報價/基本面/籌碼/技術 4 section;Contract 見 [`docs/specs/stock-api-contract.md`](docs/specs/stock-api-contract.md) |
+| `pages/stock-quote.js` + `services/stock-api-client.js` | v0.0.0.32 個股快查(Issue #1038 / PR #1045)：4 API 並發 + 報價/基本面/籌碼/技術 4 section;Contract 見 [`docs/specs/stock-api-contract-spec.md`](docs/specs/stock-api-contract-spec.md) |
 | `page-shells/{login,register,premium,mcp,errors/404}.js` | v0.0.0.31 Phase A0/C 新增的 page shell（tier 認證 + MCP 頁 + 404 fallback）|
 | `services/auth.js` | v0.0.0.31 Phase A0 新增：JWT + tier 解析、`initAuth`/`isLoggedIn`/`getTier`/`renderNavState` |
 | `components/home-tier-sections.js` | v0.0.0.31 Phase B 新增：tier-gated home dashboard 渲染（capital flow + event prediction + event calendar + recommendations + daily report）|

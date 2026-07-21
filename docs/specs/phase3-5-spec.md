@@ -23,12 +23,12 @@
 
 ## 2. 不做 (Out of Scope)
 
-- **新增 LLM provider**:已 ship MiniMax/DeepSeek 雙 provider,LLM 路由見 [`llm-routing.md`](./llm-routing.md)
+- **新增 LLM provider**:已 ship MiniMax/DeepSeek 雙 provider,LLM 路由見 [`llm-routing.md`](./llm-routing-spec.md)
 - **L2 sector agent 推廣**:L2.3 PoC 觀察中(`UseLLMSectorAgents` flag off — 見 [`l2-4-observation-spec.md`](./l2-4-observation-spec.md))
 - **live trading 真正下單**:仍維持 replay / simulation 預設,live 旗標不啟用(見 [`live-trading.guardrails.instructions.md`](../../.github/instructions/live-trading.guardrails.instructions.md))
 - **Constitution L0 appendix 改寫**:留給 Phase 4.B(16d,內含 Constitution +2d)
 - **參數自動 tuning (Phase 4.A)**:7d 留到 Phase 4,不在本 spec 範圍
-- **Multi-instance MCP federation**:見 [`agent-mcp-phase4.md`](./agent-mcp-phase4.md) §3.3
+- **Multi-instance MCP federation**:見 [`agent-mcp-phase4.md`](./agent-mcp-phase4-spec.md) §3.3
 
 ---
 
@@ -399,7 +399,7 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 - **Phase 4.A — 參數自動 tuning**(7d):基於 M3 macro flow + M4 forecast bridge 的 sortino 資料,訓練 LLM / statistical 模型調整 6 維 macro 權重(本 spec 未涵蓋,見 reassessment §6)
 - **Phase 4.B — L0/L1/L2 Constitution appendix**(16d):把 M1-M4 對應的「live / macro / forecast / trade」規則正式寫進 `docs/reference/constitution.md`,對應 reassessment §5 + §6 規劃
-- **Multi-instance MCP federation**:見 [`agent-mcp-phase4.md`](./agent-mcp-phase4.md) §3.3
+- **Multi-instance MCP federation**:見 [`agent-mcp-phase4.md`](./agent-mcp-phase4-spec.md) §3.3
 - **Promotion 至 production**:見 [`l2-4-observation-spec.md`](./l2-4-observation-spec.md) §「Future work」模式
 
 ---
@@ -410,14 +410,14 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 - 起點 spec:本 spec 自身(起點論述合併於 §1/§3/§5)
 - 既存相關 spec:
-  - [`agent-mcp-server.md`](./agent-mcp-server.md)
-  - [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual.md)
-  - [`agent-mcp-phase4.md`](./agent-mcp-phase4.md)
+  - [`agent-mcp-server.md`](./agent-mcp-server-spec.md)
+  - [`agent-mcp-phase3-residual.md`](./agent-mcp-phase3-residual-spec.md)
+  - [`agent-mcp-phase4.md`](./agent-mcp-phase4-spec.md)
   - [`l2-4-observation-spec.md`](./l2-4-observation-spec.md)
-  - [`llm-sector-agent.md`](./llm-sector-agent.md)
-  - [`llm-routing.md`](./llm-routing.md)
-  - [`llm-interface-contract.md`](./llm-interface-contract.md)
-  - [`real-time-regime-detection.md`](./real-time-regime-detection.md)
+  - [`llm-sector-agent.md`](./llm-sector-agent-spec.md)
+  - [`llm-routing.md`](./llm-routing-spec.md)
+  - [`llm-interface-contract.md`](./llm-interface-contract-spec.md)
+  - [`real-time-regime-detection.md`](./real-time-regime-detection-spec.md)
 - 技能(skills):
   - [`atlas-event-driven-weights`](../../.claude/skills/atlas-event-driven-weights/SKILL.md)(M2/M3 直接受益)
   - [`atlas-taiwan-leading-indicators`](../../.claude/skills/atlas-taiwan-leading-indicators/SKILL.md)(M3 MacroDataSnapshot 來源)

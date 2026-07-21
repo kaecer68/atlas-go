@@ -327,4 +327,4 @@ grep -E "(\.omo|\.opencode)" .gitignore
 
 ## 動作紀錄
 
-完整當前地圖見 `docs/documentation-map.md`。清理 SOP 模式見 `docs/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。
+完整當前地圖見 `docs/documentation-map.md`。清理 SOP 模式見 `.omo/branch-hygiene/2026-06-26-cleanup.md`（同樣的 SOP 模式可套用到其他清理任務）。

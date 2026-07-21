@@ -1,7 +1,7 @@
 # L2.4 Observation Window — Spec
 
 > **Status**: Metrics implementation shipped (PR #821, merge commit `f69b3551`, 2026-06-29).
-> **Predecessor**: [`./llm-sector-agent.md`](./llm-sector-agent.md) (L2.3 PoC design)
+> **Predecessor**: [`./llm-sector-agent.md`](./llm-sector-agent-spec.md) (L2.3 PoC design)
 > **Operational guide**: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
 > **Linked log**: `docs/operations/l2-4-observation-log.md`
 > **Future work**: [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md) §3
@@ -99,7 +99,7 @@ The full promotion procedure (4 steps: Source upgrade → Default flip → LLMDr
 
 ## References
 
-- Predecessor: [`./llm-sector-agent.md`](./llm-sector-agent.md) (L2.3 PoC design)
+- Predecessor: [`./llm-sector-agent.md`](./llm-sector-agent-spec.md) (L2.3 PoC design)
 - Operational guide: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
 - Future work: [`../operations/l2-4-followup.md`](../operations/l2-4-followup.md) (auto-cron / CLI flag / promotion)
 - Existing log: `docs/operations/l2-4-observation-log.md`
