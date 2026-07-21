@@ -1,9 +1,14 @@
 {
   "patterns": [
     {
-      "pattern": "^$",
-      "reason": "Placeholder: all known issues resolved (last one was HandleRiskMetrics makeslice panic, fixed in PR #392)",
-      "ticket": "atlas-go#392"
+      "pattern": "http://localhost:18080/api/dashboard/sector-allocation-plan",
+      "reason": "sector-allocation-plan returns 503 when no simulation session has been run; expected in dev env with no session data.",
+      "ticket": "smoke-dev-no-session"
+    },
+    {
+      "pattern": "http://localhost:18080/api/strategies",
+      "reason": "/api/strategies returns 401 when not authenticated; smoke runs unauthenticated.",
+      "ticket": "smoke-unauthenticated"
     }
   ]
 }

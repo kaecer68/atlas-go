@@ -29,12 +29,15 @@ const SHELL_LOADERS = {
   industry: () => import('./page-shells/industry.js'),
   strategies: () => import('./page-shells/strategies.js'),
   'decision-chain': () => import('./page-shells/decision-chain.js'),
-  capital_predictions: () => import('./pages/capital_predictions.js'),
-  capital_board: () => import('./pages/capital_board.js'),
+  capital_predictions: () => import('./page-shells/capital_predictions.js'),
+  capital_board: () => import('./page-shells/capital_board.js'),
   login: () => import('./page-shells/login.js'),
   register: () => import('./page-shells/register.js'),
   premium: () => import('./page-shells/premium.js'),
   mcp: () => import('./page-shells/mcp.js'),
+  evolution_panel: () => import('./page-shells/evolution_panel.js'),
+  'stock-quote': () => import('./page-shells/stock-quote.js'),
+  'performance-report': () => import('./page-shells/performance-report.js'),
   'errors/404': () => import('./page-shells/errors/404.js')
 };
 const _shellsLoaded = new Set();
@@ -514,12 +517,10 @@ if (typeof window !== 'undefined') {
     if (window.location.hash && window.location.hash.startsWith('#page-')) {
       var pageId = window.location.hash.replace('#page-', '');
       window.location.replace(basePath + '/' + pageId);
-    } else if (initialPath && initialPath !== 'home' && initialPath !== 'evolution_panel') {
+    } else if (initialPath && initialPath !== 'home') {
       const query = window.location.search || '';
       history.replaceState({page: initialPath}, '', basePath + '/' + initialPath + query);
       switchPage(initialPath, true);
-    } else if (initialPath === 'evolution_panel') {
-      switchPage('evolution_panel', true);
     }
   })();
   });
