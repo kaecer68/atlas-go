@@ -22,7 +22,7 @@
 - /api/dashboard/system-health — System health and channel status
 
 ## Agent Access
-- MCP server (atlas-mcp): 111 tools covering market data, capital flow, narrative,
+- MCP server (atlas-mcp): 112 tools covering market data, capital flow, narrative,
   strategy, risk, scheduler, and observability (see cmd/atlas-mcp/README.md and
   docs/reference/tool-catalog.md)
 - MCP is the Agent Support layer complementing the web-first dashboard

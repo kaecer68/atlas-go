@@ -11,6 +11,7 @@
 ### Documentation
 - capitalflow post-merge 文件同步：`docs/reference/tool-catalog.md`、`docs/reference/workflow-map.md`、`internal/capitalflow/AGENTS.md`
 - **Document Drift Audit**：建立 `docs/manifests/2026-07-20-document-drift-audit.md`（盤查 4 個文件漂移 + production drift）
+- **Document Drift Fix 2026-07-21**：批次修正全 repo 過時 MCP tool 數（110/111 → 112）、workflow 數（21 → 42）、版本號與專案規模引用、AGENTS_INDEX 成熟度不一致、根目錄違規 IMPLEMENTATION_PLAN*.md 移至 `docs/archive/` 並更新所有引用。
 
 ## [0.0.0.36] - 2026-07-20
 
@@ -56,7 +57,7 @@
 
 ### Compliance
 - 全程遵守 atlas-pre-change-protocol 8 步 + 紅線（既有 detect 函式 50+ 個不動 / template trigger_theme 字串不變 / 對外 API 介面相容）。
-- 4 個 Stage 5 決策已在 `IMPLEMENTATION_PLAN_STAGE_5.md` §十一記錄（含 Status + Deferred）。
+- 4 個 Stage 5 決策已在 `docs/archive/2026-07-14-atlas-stage5-detector-plan.md` §十一記錄（含 Status + Deferred）。
 - Real-only investigation：3 個並行 explore agents 完整盤查 eventdriven / narrative / MCP tool chain 才開工。
 
 ### Known limitations / Deferred

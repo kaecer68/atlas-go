@@ -21,14 +21,14 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://tools/catalog",
 		Name:        "atlas-mcp Tool Catalog",
-		Description: "74 read-only MCP tools grouped by area. Source: docs/reference/tool-catalog.md on disk. Use to enumerate capabilities without tools/list round-trip.",
+		Description: "112 read-only MCP tools grouped by area. Source: docs/reference/tool-catalog.md on disk. Use to enumerate capabilities without tools/list round-trip.",
 		MIMEType:    "text/markdown",
 	}, s.handleResourceToolsCatalog)
 
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://workflows/catalog",
 		Name:        "atlas-go Workflow Catalog",
-		Description: "21 WA-XXX workflows in 7 layers. Source: docs/workflow-map.md on disk. Helps an agent decide which Tool maps to a given intent.",
+		Description: "42 WA-XXX workflows in 7 layers. Source: docs/workflow-map.md on disk. Helps an agent decide which Tool maps to a given intent.",
 		MIMEType:    "text/markdown",
 	}, s.handleResourceWorkflowsCatalog)
 

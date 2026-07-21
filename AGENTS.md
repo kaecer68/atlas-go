@@ -9,7 +9,7 @@
 
 - **Wave**：Wave 11+ + Phase 0-7 UX Redesign
 - **最後更新**：2026-07-12
-- **對應版本**：v0.0.0.32+
+- **對應版本**：v0.0.0.37+
 - **語言**：繁體中文（參照全域 `AGENTS.md`）
 - **技術棧**：Go 1.26，**DB**：PostgreSQL 15 + Redis 8
 - **CI 強制**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
@@ -54,7 +54,7 @@
 通用 ACI 規則見全域 `~/.config/opencode/AGENTS.md`。
 
 - **MCP 入口**：[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md)
-- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)（**111 tools**，預設啟用）
+- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)（**112 tools**，預設啟用）
 - **Workflow map**：[`docs/reference/workflow-map.md`](docs/reference/workflow-map.md)
 - **Process 標註**：[`docs/reference/processes.yaml`](docs/reference/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)

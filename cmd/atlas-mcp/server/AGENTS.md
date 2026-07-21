@@ -29,7 +29,7 @@
 
 - 目前 `registerTools()` 內掛載的業務 tool handler 數量為 **106 個**（sampling / elicitation 兩個 feature-gated tool 關閉時）；`SamplingEnabled` / `ElicitationEnabled` 各再 +1，最高 **108 個**。
 - `registerAuditTools()` 另外掛載 **4 個**自我觀測 tool，不計入 `registerTools()` 的範圍。
-- `server.Run()` 在所有 tool 註冊完成後 assert `RegisteredToolCount` 在 **111–114** 範圍內；**若不在範圍內直接 return error 阻止啟動**，防止文件↔程式碼漂移。此範圍對應 `docs/reference/tool-catalog.md` 所列對 agent 暴露的 tool 總數。
+- `server.Run()` 在所有 tool 註冊完成後 assert `RegisteredToolCount` 在 **112–114** 範圍內；**若不在範圍內直接 return error 阻止啟動**，防止文件↔程式碼漂移。此範圍對應 `docs/reference/tool-catalog.md` 所列對 agent 暴露的 tool 總數。
 - `countedAddTool[In, Out any]()` 是 `mcp.AddTool` 的泛型包裝，自動累加 `RegisteredToolCount`；所有 tool 註冊都必須經過它。
 - 新增 tool 時：`countedAddTool()` 會自動遞增計數器，但仍應同步更新 `server.go` 與 `tools_transport_sse_test.go` 的上下界，並確認 `docs/reference/tool-catalog.md` 已納入新 tool。
 - `registerTokenAdminTools`（admin.go）不計入，因為它用獨立的 `mcp.Server` 實例。

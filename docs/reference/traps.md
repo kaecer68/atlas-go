@@ -38,7 +38,7 @@
 | **繞過 ParametersConfig 硬編碼參數** | config | 所有可調整參數必須透過 `internal/config/parameters.go` 管理，禁止 magic number。參數必須包含 `Rationale`、`Source`、`Todo`。 |
 | **建立獨立資料抓取通道** | marketdata | 所有外部資料抓取必須通過已註冊的 `marketdata.Provider`，禁止直接建立 HTTP client。參見 `internal/apigateway/CONSTITUTION.md` 第一條。 |
 | **新增 internal/ 模組未標記成熟度** | 跨模組 | 每個 `internal/*/` Go package **必須**有 `doc.go` 含 `// Maturity: <tier>`。同時更新 `internal/MATURITY.md`。CI 強制。 |
-| **新增/刪除/改名 FactorType** | portfolio | 因子變更必須同步更新 **7 個位置**。CI `factor-integrity` job 強制。 |
+| **新增/刪除/改名 FactorType** | portfolio | 因子變更必須同步更新 **8 個位置**。CI `factor-integrity` job 強制。 |
 | **Save() 吃掉校準時間戳** | config | `ParametersConfig.Save()` 會覆寫整個 `parameters.json`，導致 raw JSON 欄位靜默遺失。所有校準器必須同時寫入 `last_calibrated`（Go struct）和 `calibration_timestamp`（raw JSON）。 |
 
 ### Config / Agent 治理

@@ -40,12 +40,12 @@ http://localhost:18080/client/
 
 ```bash
 make setup-mcp-agent   # 自動安裝 + 設定 + 共用 dev key
-make verify-mcp-setup  # 驗證 110 tools 連線成功
+make verify-mcp-setup  # 驗證 112 tools 連線成功
 ```
 
 （詳見 [`cmd/atlas-mcp/README.md`](../../cmd/atlas-mcp/README.md)）
 
 ## Full Reference
 
-- [`reference/tool-catalog.md`](../reference/tool-catalog.md) — 110 tool 完整 catalog
+- [`reference/tool-catalog.md`](../reference/tool-catalog.md) — 112 tool 完整 catalog
 - [`query-examples.md`](query-examples.md) — 自然語言 → tool 對照 (~25 高頻範本)

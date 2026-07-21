@@ -62,7 +62,7 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 
 ### 2.1 第一次標註（一次性 sweep）
 
-1. **盤查所有 entry-points**：對照 [`workflow-map.md`](./reference/workflow-map.md) §3 的 21 條 workflow
+1. **盤查所有 entry-points**：對照 [`workflow-map.md`](./reference/workflow-map.md) §3 的 42 條 workflow
 2. **為每個 entry 加 A 方案 tag**（每個 5-15 分鐘，視依賴複雜度）
 3. **同步建立 `docs/reference/processes.yaml`** 作為單一真相來源
 4. **驗證**：GitNexus 跑 `npx gitnexus analyze --processes-metadata docs/reference/processes.yaml`（需 GitNexus 支援，未來 PR）
@@ -95,7 +95,7 @@ func PlanStepRunner(ctx context.Context, ...) (...)
 
 ## 4. 驗收標準
 
-- [ ] 21 條 workflow 全部有 `WA-XXX` 標籤
+- [ ] 42 條 workflow 全部有 `WA-XXX` 標籤
 - [ ] 至少 80% 的 entry-point 有 Phase A tag
 - [ ] `docs/reference/processes.yaml` 與 Phase A tag 同步
 - [ ] CI 檢查「改 entry 必改 yaml」運作

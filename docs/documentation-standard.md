@@ -34,23 +34,23 @@
 
 ```
 docs/
-├── constitution.md              # 深度開發憲法（8 條文）
-├── iteration-gate.md            # 5 Gate 自我檢查
-├── quickstart.md                # 5 分鐘入門（單一權威）
-├── guidelines-index.md          # 規範階層
-├── maturity.md                  # 模組成熟度
-├── architecture.md              # 分層架構
-├── traps.md                     # 跨模組陷阱
-├── conventions-checklist.md     # 慣例檢查表
-├── parameter-system.md          # 參數管理
-├── json-schema-standard.md      # JSON schema 規範
-├── operations-playbook.md       # 操作 playbook
-├── iteration-playbook.md        # 迭代 playbook
-├── evolution-loop.md            # 演化循環
-├── data-sources.md              # 資料源說明
-├── environment.md               # 外部依賴與環境
-├── tools.md                     # 工具清單
-├── AUDIT_TRAIL.md               # 稽核軌跡
+├── reference/constitution.md     # 深度開發憲法（8 條文）
+├── reference/iteration-gate.md   # 5 Gate 自我檢查
+├── quickstart.md                 # 5 分鐘入門（單一權威）
+├── reference/guidelines-index.md # 規範階層
+├── maturity.md                   # 模組成熟度
+├── architecture.md               # 分層架構
+├── reference/traps.md            # 跨模組陷阱
+├── conventions-checklist.md      # 慣例檢查表
+├── reference/parameter-system.md # 參數管理
+├── json-schema-standard.md       # JSON schema 規範
+├── operations-playbook.md        # 操作 playbook
+├── iteration-playbook.md         # 迭代 playbook
+├── evolution-loop.md             # 演化循環
+├── data-sources.md               # 資料源說明
+├── environment.md                # 外部依賴與環境
+├── tools.md                      # 工具清單
+├── audit-trail.md                # 稽核軌跡
 ├── branch-hygiene/              # branch 維護紀錄（PR #748 模式）
 ├── audit/                       # 審計報告（YYYY-MM-DD-slug.md）
 ├── handoff/                     # 任務交接（YYYY-MM-DD-topic.md）

@@ -259,7 +259,7 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 
 // NewDetectorScanStore returns the SQLite-backed Stage 5 PR#4
 // detector_scan_log store. Unlike other stores, DetectorScanStore has NO
-// JSONL fallback — the plan contract (IMPLEMENTATION_PLAN_STAGE_5.md §PR#4)
+// JSONL fallback — the plan contract (../../docs/archive/2026-07-14-atlas-stage5-detector-plan.md §PR#4)
 // explicitly mandates SQLite so the MCP `template_detector_status` tool
 // can query scan history with efficient LIMIT + ORDER BY.
 func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {

@@ -17,7 +17,7 @@ L2.3 introduces an opt-in LLM-driven sector agent that drives a `plan → tool_c
 
 **Documentation**: [`docs/specs/llm-sector-agent.md`](specs/llm-sector-agent.md) (moved from `wave-11/L2_3_PLAN_REFLECT.md`), [`docs/guides/adding-sector-agents.md`](guides/adding-sector-agents.md) (moved from `wave-11/SEMICONDUCTOR_EXECUTOR.md`), [`docs/specs/agent-loop-state-machine.md`](specs/agent-loop-state-machine.md) (moved from `wave-11/AGENT_LOOP_STATE_MACHINE.md`). L2.4 觀察期文件見 [`docs/operations/l2-4-runbook.md`](operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](specs/l2-4-observation-spec.md)（PR #821 / PR #824 永久化）。
 
-**Tag**: `v0.0.0.21` (PR5b). Plan: `.omo/plans/wave10-l2.3-execution.md`.
+**Tag**: `v0.0.0.37` (PR5b). Plan: `.omo/plans/wave10-l2.3-execution.md`.
 
 ## Core Principles
 
@@ -81,7 +81,7 @@ Decision agents:
 - 投資長
 - Research Auditor
 
-## Wave 11 投資核心框架（v0.0.0.31）
+## Wave 11 投資核心框架（v0.0.0.37）
 
 Layer 1-Layer 4 的決策鏈之上，Wave 11 引入 7 個新模組，圍繞「全球資金流向決定方向，資金勢力共鳴決定強度，事件驅動資金流決定節奏」的投資邏輯：
 
@@ -132,7 +132,7 @@ Layer 1-Layer 4 的決策鏈之上，Wave 11 引入 7 個新模組，圍繞「�
               └──────────────────────────────────────────────────┘
 ```
 
-**API 端點**（v0.0.0.31 新增）：
+**API 端點**（v0.0.0.37 新增）：
 - `/api/capital-flow/{daily,summary}` — `capitalflow`
 - `/api/events/{calendar,prediction}` — `eventdriven`
 - `/api/recommendations` — `recommender`（需 JWT）
@@ -290,7 +290,7 @@ Multi-phase industry cycle tracking:
 
 ---
 
-## Wave 11 投資核心框架（v0.0.0.31 PR #972）
+## Wave 11 投資核心框架（v0.0.0.37 PR #972）
 
 在 L1-L4 決策鏈之上新增**「資金流向 → 事件 → 推薦」**三層投資邏輯框架。設計哲學：
 

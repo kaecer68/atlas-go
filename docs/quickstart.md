@@ -90,7 +90,7 @@ rm .omo/plans/*.md .omo/research/*.md .omo/handoff/*.md
 
 ---
 
-## v0.0.0.31 新增路由快速驗證
+## v0.0.0.37 新增路由快速驗證
 
 啟動後可立即 curl 驗證 7 個 Wave 11 投資核心框架 endpoint（不需要認證）：
 

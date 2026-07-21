@@ -2,13 +2,13 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：59 個模組（22 S / 23 E / 9 X / 5 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：59 個模組（24 S / 18 E / 12 X / 5 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 >
 > **與 MATURITY.md 的差異**：AGENTS_INDEX 計算頂層模組（59 個）；`internal/MATURITY.md` 計算所有 Go packages（含 sub-packages 如 `domain/shared`、`llm/clients`，約 80 個）。兩者 scope 不同，數字差異是正常的。
 
 ## 索引（按成熟度分組）
 
-### S · Stable（穩定生產，22 個）
+### S · Stable（穩定生產，24 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -26,22 +26,23 @@
 | `monitoring` | Dashboard API、監控、人工干預入口 |
 | `narrative` | 宏觀敘事、因果鏈、台灣壓力指數 |
 | `orchestrator` | 三層 executor 路由、GuardOutcomes 對齊、PluginHost |
+| `portprobe` | Stateless TCP port 探測 helper（`Probe`/`LookupOccupant`/`IsFubonZombie`/`KillOccupant`）— Maturity: stable |
 | `repository` | PostgreSQL 持久化、DualWriteRepository |
 | `risk` | RiskManager、VaR、宏觀回撤 |
 | `screener` | 宣告式個股篩選 |
 | `sim` | 模擬引擎、部位狀態轉換、JSONL replay |
 | `spawning` | Agent 生成管理 |
+| `startup` | 一次性啟動期 preflight 檢查（`Preflight(claims)`，`portprobe` 上層 consumer）— Maturity: stable |
 | `storage` | 檔案儲存抽象、原子寫入 |
 | `strategy_techniques` | 投資心法庫 — 5 層框架 + 4 核心指標 + 自我修正 |
 | `tax` | 台灣稅務計算 |
 
-### E · Evolving（演進中，23 個）
+### E · Evolving（演進中，18 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
 | `autobacktest` | 自動回測定時任務 |
 | `backtest` | 視窗回測 Window.Run() |
-| `capitalflow` | **v0.0.0.32 新** — 七維錢潮雷達（3+2+2 分層）分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源）；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `dailyreport` | **v0.0.0.32 新** — 每日市場報告 JSON 組裝（`daily_report` MCP tool 來源，agent morning briefing 入口） |
 | `eval` | 模型評估指標、可解釋性工具（SK-12~15） |
 | `eventdriven` | **v0.0.0.32 新** — 事件日曆 + 5 日事件驅動資金流預測（`event_calendar` / `event_flow_prediction` MCP tool 來源） |
@@ -52,32 +53,31 @@
 | `metalearning` | 元學習協調器、策略選擇優化 |
 | `ml` | 監督式學習模型 OLS/ElasticNet/PCR/PLS |
 | `portfolio` | Darwinian 權重、FactorEngine、FactorType 變更流程 |
-| `portprobe` | Stateless TCP port 探測 helper（`Probe`/`LookupOccupant`/`IsFubonZombie`/`KillOccupant`）— S-tier（Maturity: stable） |
 | `prism` | Regime-specific 訓練佇列 |
 | `realtime` | 即時資料轉接器 |
 | `recommender` | **v0.0.0.32 新** — tier-gated 投資組合推薦（`get_recommendations` MCP tool 來源，需 JWT） |
 | `scheduler` | ML 模型重訓排程 |
-| `startup` | 一次性啟動期 preflight 檢查（`Preflight(claims)`，`portprobe` 上層 consumer）— S-tier（Maturity: stable） |
 | `strategy` | 策略選擇器與登錄 |
-| `strategy_ranker` | **v0.0.0.32 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
-| `strategy_validator` | **v0.0.0.32 新 / 保留 AGENTS.md** — 策略啟用前驗證器（invariant/constraint 校驗） |
-| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**110 tools**（預設；sampling/elicitation feature-gated 全開 112）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 110–112 |
+| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**112 tools**（預設；sampling/elicitation feature-gated 全開 114）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 112–114 |
 
-> 註：22 個 S-tier + 23 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
+> 註：24 個 S-tier + 18 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 
-### X · Experimental（實驗中，9 個）
+### X · Experimental（實驗中，12 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
 | `adversarial` | 對抗性訓練、BattleResult |
-| `reflexivity` | 自反性價格動態引擎 |
-| `retail` | RSI-tw 散戶情緒指數 |
-| `robustness` | 穩健性與敏感度測試（SK-20~22） |
-| `stress` | 壓力測試場景 |
+| `capitalflow` | **v0.0.0.32 新** — 七維錢潮雷達（3+2+2 分層）分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源）；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `forecast` | 個股方向性預測 — per-symbol directional forecasts（Phase 3.5 M4 PoC）|
 | `forecast_bridge` | Forecast → TradeSignal 轉換層（Phase 3.5 M4 PoC）|
 | `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A）|
-| `swarm` | Swarm 狀態容器（模擬引擎已降級為 pass-through，PR #963；非 v0.0.0.32 重點）|
+| `reflexivity` | 自反性價格動態引擎 |
+| `retail` | RSI-tw 散戶情緒指數 |
+| `robustness` | 穩健性與敏感度測試（SK-20~22） |
+| `strategy_ranker` | **v0.0.0.32 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
+| `strategy_validator` | **v0.0.0.32 新 / 保留 AGENTS.md** — 策略啟用前驗證器（invariant/constraint 校驗） |
+| `stress` | 壓力測試場景 |
+| `swarm` | Swarm 狀態容器（模擬引擎已降級為 pass-through，PR #963；非 v0.0.0.37 重點）|
 
 ### U · Utility（輔助工具，5 個）
 
@@ -122,7 +122,7 @@
 - `experimental` — 功能未完全穩定，不應被其他模組依賴
 - `utility` — CLI 工具、測試輔助或非 runtime 一部分
 
-## v0.0.0.32 變更摘要
+## v0.0.0.37 變更摘要
 
 | 變更 | 模組 | 說明 |
 |------|------|------|
@@ -133,7 +133,7 @@
 | 新增 | `strategy_ranker` | 策略排名 + tier 標籤 |
 | 新增 | `strategy_validator` | 啟用前驗證（保留 AGENTS.md 模組之一） |
 | 新增 | `subscription` | JWT tier 認證 |
-| 升級 | `cmd/atlas-mcp/server` | 工具數 84 → **91**（+4 audit + 2 anomaly + 2 elicitation/roots） |
+| 升級 | `cmd/atlas-mcp/server` | 工具數 84 → **112**（+28 資金流/推薦/報告等 Wave 11 工具） |
 
 ## AI 操作 workflow 索引
 

@@ -121,7 +121,7 @@
 | _（shipped via PR #828,merged 2026-06-29）_ | L2.4 CLI flag 實作：`--use-llm-sector-agents`（plan 內容已併入 `docs/operations/l2-4-followup.md`）|
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema 規格（per-reco + aggregate metrics） |
 | `docs/tools.md` | ACI 工具（GitNexus / codebase-memory / CodeGraph / atlas-mcp）路由決策樹 |
-| `docs/reference/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（110 tools,供外部 AI agent；post-Round-2 dedup 基線） |
+| `docs/reference/tool-catalog.md` | atlas-mcp tool 決策樹與完整 catalog（112 tools,供外部 AI agent；post-Round-2 dedup 基線） |
 
 ---
 
@@ -133,7 +133,7 @@
 |---------|---------|---------|
 | **修改程式碼前** | `atlas-pre-change-protocol/SKILL.md` | `go-core.instructions.md`，對應模組的 `AGENTS.md` |
 | **新增/修改 Go 程式碼** | `go-core.instructions.md` | 對應模組的 `AGENTS.md`，`constitution.md`（若涉及資料源） |
-| **新增資料源/API 調用** | `constitution.md`（全部 6 條） | `marketdata/AGENTS.md` |
+| **新增資料源/API 調用** | `constitution.md`（全部 8 條） | `marketdata/AGENTS.md` |
 | **執行實驗** | `experiments-guardrails.instructions.md` | `experiment/AGENTS.md`，`baseline/AGENTS.md` |
 | **Live Trading** | `live-trading.guardrails.instructions.md` | `constitution.md`，`live/AGENTS.md` |
 | **新增參數** | `docs/reference/parameter-system.md` | `go-core.instructions.md` |
@@ -148,13 +148,13 @@
 
 | 目錄 | 存放內容 | 數量 |
 |------|---------|------|
-| `internal/*/constitution.md` | 憲法（最高權威） | 1 |
+| `docs/reference/constitution.md` | 憲法（最高權威） | 1 |
 | `.github/instructions/*.md` | 領域守則 | 3 |
 | `.claude/skills/*/SKILL.md` | 手寫技能文件 | 20 |
 | `internal/*/AGENTS.md` | 模組指南（經 2026-07-11 精簡） | 15 |
 | `docs/*.md` | 參考文件 | 10+ |
-| `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 31 |
-| `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 8 |
+| `docs/specs/*.md` | 模組規格（從 AGENTS.md 遷移） | 47 |
+| `docs/guides/*.md` | 領域指南（從 AGENTS.md 遷移） | 9 |
 | `docs/operations/*.md` | 操作手冊 | 10+ |
 | `docs/manifests/*.md` | Implementation manifest | 1 |
 | `.claude/skills/robot-communication/*/SKILL.md` | 機器人溝通技能 | 4 |

@@ -25,7 +25,7 @@ Full setup guide: [`docs/quickstart.md`](docs/quickstart.md)
 
 ## Atlas as MCP Server
 
-atlas-go doubles as a **MCP (Model Context Protocol) server** with **111 tools**,
+atlas-go doubles as a **MCP (Model Context Protocol) server** with **112 tools**,
 allowing external AI agents to query Taiwan stock market data, strategies, risks, and more.
 MCP is the **Agent Support** layer that complements the web-first dashboard — the web UI
 comes first; agents explain what the UI cannot.
@@ -89,7 +89,7 @@ Focused: `go test ./internal/experiment/... ./internal/orchestrator/... ./intern
 ```text
 .
 ├── cmd/                    # CLI entrypoints (atlas, atlas-mcp, run-experiment, …)
-├── internal/               # ~70 Go packages (domain, orchestrator, sim, risk, llm, …)
+├── internal/               # 80 Go packages (domain, orchestrator, sim, risk, llm, …)
 ├── configs/                # Agent config, LLM routing table
 ├── admin_web/ client_web/ shared_web/  # Frontend SPAs
 ├── docs/                   # Architecture, specs, playbooks, audit trails

@@ -23,13 +23,13 @@ target_audience: "developer"
 
 - 當 agent 說「atlas 有哪些 tool」「我能用 atlas 做什麼」「有哪些 MCP tool 可用」
 - 當 agent 接入 atlas-mcp 後，需要快速定位「做 X 任務該用哪個 tool」
-- 當 agent 面對 110 個 tool 不知從何開始、需要導覽
+- 當 agent 面對 112 個 tool 不知從何開始、需要導覽
 - 當 agent 呼叫了一個 tool 但回傳結果不夠、想知道「下一步該用哪個 companion tool」
 
 ## 核心概念（Core Concepts）
 
 ### 任務群組（Task Domain）
-110 個 tool 依任務領域分為 16 個群組（從 26 個 `tools_*.go` 檔案 + `tools.go` 核心 entry-point），每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
+112 個 tool 依任務領域分為 16 個群組（從 26 個 `tools_*.go` 檔案 + `tools.go` 核心 entry-point），每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
 
 | 群組 | Tool 數 | 入門 tool | 用途 |
 |------|--------|----------|------|
@@ -66,9 +66,9 @@ target_audience: "developer"
 
 | 數據 | 模組/檔案 | 說明 |
 |------|----------|------|
-| Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（26 個檔案）+ `cmd/atlas-mcp/server/tools.go`（核心 entry-point） | 110 個 tool handler |
+| Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（26 個檔案）+ `cmd/atlas-mcp/server/tools.go`（核心 entry-point） | 112 個 tool handler |
 | 自動描述 | `cmd/atlas-mcp/auto-desc.gen.json`（1146 行） | descgen 生成的 tool description |
-| Tool catalog | `docs/reference/tool-catalog.md` | 110 個 tool 的完整清單與決策樹 |
+| Tool catalog | `docs/reference/tool-catalog.md` | 112 個 tool 的完整清單與決策樹 |
 | MCP 規格 | `docs/specs/agent-mcp-server.md` | 設計規格、安全邊界、命名慣例 |
 
 ## 實作位置（Implementation Locations）
@@ -130,7 +130,7 @@ target_audience: "developer"
 | `atlas-macro-narrative` | 宏觀敘事 tool 的金融背景 |
 | `atlas-strategy-evolution` | 策略/實驗 tool 的金融背景 |
 
-> **完整 catalog + 任務→工具反向索引** — 見 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md)（110 tools × 16 種典型任務矩陣）。
+> **完整 catalog + 任務→工具反向索引** — 見 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md)（112 tools × 16 種典型任務矩陣）。
 
 ## 版本歷史
 

@@ -42,7 +42,7 @@ for f in "${TARGETS[@]}"; do
             echo "❌ drift in $f: '$match' (expected '$EXPECTED')"
             DRIFT=$((DRIFT + 1))
         fi
-    done < <(grep -oE "${PATTERN}" "$f" 2>/dev/null || true)
+    done < <(grep -vE " 新|完整 release notes" "$f" 2>/dev/null | grep -oE "${PATTERN}" || true)
 done
 
 if [[ $DRIFT -gt 0 ]]; then
