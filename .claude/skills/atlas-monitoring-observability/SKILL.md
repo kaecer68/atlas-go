@@ -18,8 +18,8 @@ atlas-go 啟動流程曾有兩個系統性盲點:
 
 ### 設計文件(spec)
 
-- `docs/specs/wave9-observability.md` — **5 偵測器架構 + PR-926 metric 索引 + PR-931 auth 規則**(本 skill 對應的設計規格)
-- `docs/specs/llm-routing.md` — LLM router 設計(`/api/llm/health` 由此暴露)
+- `docs/specs/wave9-observability-spec.md` — **5 偵測器架構 + PR-926 metric 索引 + PR-931 auth 規則**(本 skill 對應的設計規格)
+- `docs/specs/llm-routing-spec.md` — LLM router 設計(`/api/llm/health` 由此暴露)
 - `docs/operations/loki-deployment.md` — 集中式 log 部署(4 條 LogQL rules 對應 5 偵測器失敗模式)
 
 ### 操作手冊(runbook)
@@ -127,7 +127,7 @@ func isPublicPath(p string) bool {
 1. 在 `internal/monitoring/startup_metrics.go` 加 const:`const MetricXxx = "atlas_<feature>_<measurement>_total"`
 2. 寫 helper 函式(nil collector 安全)
 3. 在業務邏輯端呼叫 helper
-4. 在 `docs/specs/wave9-observability.md` §5.1 補索引條目
+4. 在 `docs/specs/wave9-observability-spec.md` §5.1 補索引條目
 5. 在 `monitoring/rules/*.yml` 加 alert rule(若需告警)
 6. 跑 `docker compose build atlas && docker compose up -d atlas` 驗證
 

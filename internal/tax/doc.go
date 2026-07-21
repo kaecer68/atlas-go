@@ -2,7 +2,7 @@
 // for post-trade settlement in the capital allocator integration.
 //
 // TaiwanTaxCalculator implements the tax rules defined in
-// docs/specs/taiwan-tax.md (證券交易稅 + 健保補充費 for dividend income).
+// docs/specs/taiwan-tax-spec.md (證券交易稅 + 健保補充費 for dividend income).
 // It is invoked from internal/portfolio/capital_allocator.go after each
 // trade execution to compute net-of-tax returns.
 //

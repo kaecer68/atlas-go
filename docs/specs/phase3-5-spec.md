@@ -245,7 +245,7 @@ MacroDataSnapshot → determineRiskLevel() → RiskLevel + 6維 score
 
 #### 3.4.1 問題
 
-forecast engine(`internal/forecast/engine.go`)已存在 `MacroRiskAssessmentEngine.determineRiskLevel`(macro_assessment.go:158)與四檔驗證案例(見 reassessment §1 與 `docs/specs/real-time-regime-detection.md`)。**但 forecast 結果只用在 monitor layer 的 regime display,沒有 bridge 到 directional trade layer 的具體 trade direction**。
+forecast engine(`internal/forecast/engine.go`)已存在 `MacroRiskAssessmentEngine.determineRiskLevel`(macro_assessment.go:158)與四檔驗證案例(見 reassessment §1 與 `docs/specs/real-time-regime-detection-spec.md`)。**但 forecast 結果只用在 monitor layer 的 regime display,沒有 bridge 到 directional trade layer 的具體 trade direction**。
 
 oracle verdict 把 M4 升 rank 3 因為「補強 trade direction 信心」可拉 sortino(本 spec 優先排序依據)。
 

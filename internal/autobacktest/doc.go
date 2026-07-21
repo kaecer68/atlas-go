@@ -16,7 +16,7 @@
 //	  → emit EventDriftDetected if Sharpe delta > threshold
 //
 // Drift alerts are consumed by monitoring.DriftDetector v2
-// (see docs/specs/sim-engine.md for the integration contract).
+// (see docs/specs/sim-engine-spec.md for the integration contract).
 //
 // Maturity: evolving
 package autobacktest

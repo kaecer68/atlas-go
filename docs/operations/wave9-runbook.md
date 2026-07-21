@@ -1,6 +1,6 @@
 # Wave 9 Observability — 操作手冊
 
-> **對應規格**: `docs/specs/wave9-observability.md`
+> **對應規格**: `docs/specs/wave9-observability-spec.md`
 > **適用對象**: Operator、On-call SRE
 > **環境**: live mode(`ATLAS_ENV` ≠ `replay`)
 
@@ -230,7 +230,7 @@ docker logs atlas-go --since 10m > /tmp/atlas-incident.log
 
 ## 9. 相關文件
 
-- `docs/specs/wave9-observability.md` — 設計規格(姊妹文件)
+- `docs/specs/wave9-observability-spec.md` — 設計規格(姊妹文件)
 - `docs/operations/loki-deployment.md` — 集中式 log
 - `docs/reference/traps.md` — `/api/llm/health` 401 防回歸
 - `internal/monitoring/AGENTS.md` — 模組 hot-path

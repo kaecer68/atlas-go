@@ -195,7 +195,7 @@ SA04、SA05、SA06、SA08、SA11.A、SA12.A/B 與 SA12.C 由另一個 worktree A
   exit codes: 0/1/2
 - 新增 docs/operations/sector-allocation-closure-{runbook,observation-log,rollback-drills}.md
 - 改 scripts/ci/check_no_duplicate_preflight.sh: ALLOW_LIST 加入 cmd/experimental/sector-allocation-closure-preflight
-- 改 docs/specs/experimental-feature-launch-gate.md: §Reference Implementations 加 SA11 row
+- 改 docs/specs/experimental-feature-launch-gate-spec.md: §Reference Implementations 加 SA11 row
 - 改 docs/documentation-map.md: 加 SA11/SA12 entry
 
 你的 Task 12.D 細節（runbook + verification report）:

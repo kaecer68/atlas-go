@@ -2,7 +2,7 @@
 
 > 取代 AGENTS.md §「內容歸屬規則」中模糊部分。明定每種文件的歸屬位置、命名規範與生命週期。
 > 維護者：見 `docs/documentation-map.md` 「動作紀錄」段。
-> 最後更新：2026-06-26（PR #756 重構，補上 `.omo/` 完整紀律與機制）
+> 最後更新：2026-07-21（manifests/ 治理：加入 docs/manifests/ 治理專節 + .omo/manifests/ 白名單 + 判斷流程更新）
 
 ## 三層結構原則
 
@@ -52,6 +52,7 @@ docs/
 ├── tools.md                      # 工具清單
 ├── audit-trail.md                # 稽核軌跡
 ├── branch-hygiene/              # branch 維護紀錄（PR #748 模式）
+├── manifests/                    # invariant tracker 治理模板（僅 README.md + TEMPLATE.md；個別 manifest 請放 .omo/manifests/）
 ├── audit/                       # 審計報告（YYYY-MM-DD-slug.md）
 ├── handoff/                     # 任務交接（YYYY-MM-DD-topic.md）
 ├── investigations/              # 根因調查（YYYY-MM-DD-symptom.md）
@@ -80,6 +81,47 @@ docs/
 
 - 是 → 進 archive
 - 否 → 刪除（git reflog 仍可恢復）
+
+
+### `docs/manifests/` 治理（**2026-07-21 新增**）
+
+`docs/manifests/` 目錄**僅保留兩個永久治理文件**：
+
+- `README.md` — manifest 機制說明、建立流程、驗證工具使用方式
+- `TEMPLATE.md` — invariant tracker 標準模板（Phase A/B/C/D + Backlog + Commit Discipline）
+
+**個別 manifest（審計/修復追蹤文件）不應放在 `docs/manifests/`**。它們是 transient investigation artifacts，應放在 `.omo/manifests/`（見下方 `.omo/` 白名單）。
+
+#### Manifest 生命週期
+
+| 階段 | 位置 | 動作 |
+|------|------|------|
+| **建立** | `.omo/manifests/YYYY-MM-DD-slug.md` | 從 `docs/manifests/TEMPLATE.md` 複製 |
+| **進行中** | `.omo/manifests/` | 正常編輯、commit、PR |
+| **完成** | 判斷後處理 | 見下方 promotion 路徑 |
+| **PR merge** | 自動清理 | `scripts/verify-manifest.sh` 檢查；完成後決定歸檔或刪除 |
+
+#### Manifest 完成後 Promotion 路徑
+
+```
+Manifest done →
+  ├─ 含 stable spec-level invariant → promote 到 docs/specs/<topic>-spec.md（提取 invariants，非直接搬移）
+  ├─ 有 6 個月教學價值（重大 bug 的根因分析、架構決策教訓）→ docs/archive/YYYY-MM-DD-slug.md
+  └─ 無長期價值（單純修復追蹤）→ 刪除（git reflog 可恢復）
+```
+
+#### 自動化檢查
+
+```bash
+# 檢查 .omo/manifests/ 內是否有 7 天以上未更新的 done manifest
+./scripts/cleanup-manifests.sh --stale-days 7
+```
+
+**禁止**：
+
+- ❌ 在 `docs/manifests/` 存放個別審計 manifest（應放 `.omo/manifests/`）
+- ❌ 已完成 manifest 無限期留在 `.omo/manifests/`（7 天後提示清理）
+- ❌ 把 manifest 當 spec 用（應 extract invariant 到 `docs/specs/`）
 
 **archive 內禁止新增子目錄**（`archive/superpowers/`、`archive/plans/` 都已撤銷）。所有歸檔檔案直接放 `archive/YYYY-MM-DD-<slug>.md`。
 
@@ -115,6 +157,7 @@ docs/
 | `phaseN/`, `wave-N/` | 進行中的 phase/wave 工作目錄 | `phase<N>/<slug>.md` | merged 後刪 |
 | `boulder.json` | 執行追蹤器 | — | 任務完成即清 |
 | `maps/` | 自動產生的架構快照 | `<topic>-map.md` | 重新生成時覆蓋舊檔 |
+| `manifests/` | **短壽** invariant tracker（審計/修復追蹤 manifest） | `YYYY-MM-DD-<slug>.md` | 完成後 promote/archive/delete；7 天 stale 提示清理 |
 
 ### **禁止的子目錄**（歷史教訓）
 
@@ -201,6 +244,9 @@ Wave 完成 → 文件分類 →
 ├─ 短期的 PR 待辦、驗證報告？
 │   └─ 是 → 進 .omo/plans/ 或 .omo/evidence/（短壽）
 │
+├─ 審計/修復追蹤 manifest（invariant tracker）？
+│   └─ 是 → 進 .omo/manifests/（短壽；完成後 promote/archive/delete）
+│
 ├─ sim 執行追蹤 JSONL？
 │   └─ 是 → 進 data/state/traces/（由 `LifecycleManager` 管理保留）
 │
@@ -267,6 +313,8 @@ grep -E "(\.omo|\.opencode)" .gitignore
 | 歸檔（教學價值） | `docs/archive/` | `YYYY-MM-DD-<slug>.md` |
 | **長壽 brief（跨 session 規劃）** | `.omo/briefs/` | `<topic>-brief.md` 或 `<topic>.md` |
 | **短期 PR 待辦 / 修復計畫** | `.omo/plans/` | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
+| Manifest 治理模板 | `docs/manifests/` | `README.md` + `TEMPLATE.md` |
+| Invariant tracker manifest（個別審計/修復） | `.omo/manifests/` | `YYYY-MM-DD-<slug>.md` |
 | 驗證報告 | `.omo/evidence/` | `f<n>-<topic>.md` 或 `task-<n>-<topic>.md` |
 | sim 輸出 | `data/state/traces/` | `sim-YYYYMMDD.jsonl` |
 | session 交接 | `.omo/handoffs/` | `YYYY-MM-DD-<topic>.md` |

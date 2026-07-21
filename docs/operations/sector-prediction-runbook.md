@@ -1,6 +1,6 @@
 # C07 Sector Prediction — Operations Runbook
 
-> **對應 spec**：`docs/specs/sector-dimension-prediction.md` v1.1
+> **對應 spec**：`docs/specs/sector-dimension-prediction-spec.md` v1.1
 > **對應 invariant tracker**：`docs/manifests/sector-dimension-prediction-invariant-manifest.md`
 > **對應觀察記錄**：`docs/operations/sector-prediction-observation-log.md`
 > **範圍**：Wave 11 C07 — `/api/events/prediction` 新增 `sector_predictions`（L1 板塊 5 日方向預測）上線後 2 週觀察期
@@ -14,7 +14,7 @@
 
 啟用 `SECTOR_PREDICTION_ENABLED` 前,逐項確認:
 
-> **推薦路徑**:先跑 `go run ./cmd/experimental/c07-preflight [http://localhost:18080]`(per [`docs/specs/experimental-feature-launch-gate.md`](../specs/experimental-feature-launch-gate.md) L2.4-style launch gate pattern)。本節手動清單與 c07-preflight automatable checks 一致;manual checks 仍需 operator 自行確認。
+> **推薦路徑**:先跑 `go run ./cmd/experimental/c07-preflight [http://localhost:18080]`(per [`docs/specs/experimental-feature-launch-gate-spec.md`](../specs/experimental-feature-launch-gate.md) L2.4-style launch gate pattern)。本節手動清單與 c07-preflight automatable checks 一致;manual checks 仍需 operator 自行確認。
 
 - [ ] **環境選擇**: staging 或專用 L2.4 harness,**不可在 production 直接啟用**(c07-preflight 會擋非 staging URL)。
 - [ ] **資料源檢查**: `internal/marketdata/macro_provider.go:MacroDataSnapshot` 在 staging 可取得完整 `ForeignInvestorNet` / `TsmADRDelta` / `NVDA` / `DXY` 4 個 leading indicator。如果任一欄位為 0,先查 channel health(`/api/data/channels`)。
@@ -205,7 +205,7 @@ Promotion PR 應包含:
 
 ## 7. References
 
-- Spec: `docs/specs/sector-dimension-prediction.md`
+- Spec: `docs/specs/sector-dimension-prediction-spec.md`
 - Invariant Tracker: `docs/manifests/sector-dimension-prediction-invariant-manifest.md`
 - 觀察記錄: `docs/operations/sector-prediction-observation-log.md`
 - 實作:

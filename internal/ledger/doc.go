@@ -34,7 +34,7 @@
 // When extending Scorecard fields, all four linked points must update
 // together: domain.Scorecard, BuildScorecards(), window_splitter.go,
 // sharpeTrendSlope(). The OOS contract is defined in
-// docs/specs/domain-types.md §4.
+// docs/specs/domain-types-spec.md §4.
 //
 // Critical invariants:
 //   - JSONL is one JSON object per line — never a JSON array

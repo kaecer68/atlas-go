@@ -217,7 +217,7 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
 - 新索引紀錄:
   - `docs/reference/guidelines-index.md` 加 L2.4 條目
   - `docs/documentation-map.md` 加 L2.4 文件地圖條目
-- `docs/specs/llm-sector-agent.md` 加 L2.4 follow-up cross-link
+- `docs/specs/llm-sector-agent-spec.md` 加 L2.4 follow-up cross-link
 - 刪除 `.omo/wave-11-l2-4/*.md`(內容已永久化)
 
 > **Note**: 觀察日誌 scaffold 未列入本 PR 範圍,將於後續獨立 PR 處理,避免把半成品 observation log 與 migration 混在同一 commit。
@@ -263,7 +263,7 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
 
 - `docs/operations/l2-4-runbook.md` — 觀察期操作手冊(本 PR 永久化)
 - `docs/specs/l2-4-observation-spec.md` — 觀察指標 schema spec(本 PR 永久化)
-- `docs/specs/llm-sector-agent.md` — L2.3 LLM-driven sector agent 設計
+- `docs/specs/llm-sector-agent-spec.md` — L2.3 LLM-driven sector agent 設計
 - Issue #711 — Wave 10 L2.3 plan
 - Issue #740 — L2.4 observation metrics
 - Issue #742 — L2.4 runbook tracking

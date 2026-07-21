@@ -12,7 +12,7 @@
 // manual checks.
 //
 // Clones the canonical L2.4 preflight pattern from
-// docs/specs/experimental-feature-launch-gate.md. C07 is instance-level
+// docs/specs/experimental-feature-launch-gate-spec.md. C07 is instance-level
 // and does not import L2.4 code (no shared library — pattern only).
 package main
 

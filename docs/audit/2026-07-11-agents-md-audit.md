@@ -72,7 +72,7 @@
 | `internal/marketdata/AGENTS.md` | **187** | 60% | TWSE charset/deprecation RCA、ETF NAV 調查、Fubon proxy 長背景 → 移到 docs/ | `docs/investigations/`、`docs/REFERENCE/TRAPS.md` |
 | `scripts/openclaw/AGENTS.md` | 112 | 15% | 90% 為操作指南（script 目錄概述、常用指令、skill 整合）→ 移到 docs/ | `docs/operations/openclaw-governance.md` |
 | `cmd/experimental/AGENTS.md` | 50 | 55% | CLI 目錄清單、常用指令 → 移到 docs/ | `docs/QUICKSTART.md`、`docs/script_usage_guide.md` |
-| `internal/strategy_techniques/AGENTS.md` | 52 | **25%** | 五層框架表、4 核心指標表、自我修正機制 → 移到 docs/specs/ | `docs/specs/strategy-techniques.md` |
+| `internal/strategy_techniques/AGENTS.md` | 52 | **25%** | 五層框架表、4 核心指標表、自我修正機制 → 移到 docs/specs/ | `docs/specs/strategy-techniques-spec.md` |
 
 ### 需精簡的部分段落
 

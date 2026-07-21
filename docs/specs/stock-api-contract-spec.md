@@ -2,7 +2,7 @@
 
 > **文件角色**：定義 `/api/stock/*` 5 個 endpoint 的 HTTP contract（路徑、查詢、回應、錯誤、單位、Source-of-truth），供 client_web 與 atlas-mcp 共用。
 > **狀態**：v1.3（2026-07-12 P2-3 更新：新增 `/api/stock/sector-median-pe`、統一缺失資料語義、修正認證說明）
-> **關聯**：[`docs/specs/stock-quote-page.md`](stock-quote-page.md) — 前端個股頁 wireframe
+> **關聯**：[`docs/specs/stock-quote-page-spec.md`](stock-quote-page.md) — 前端個股頁 wireframe
 > **Source-of-truth**：handler 源碼 `internal/stocktools/handler.go` + 各資料源 struct
 
 ---

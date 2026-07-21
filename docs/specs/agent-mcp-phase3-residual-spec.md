@@ -255,7 +255,7 @@ PR #842 + Phase 3 殘餘 3-item 全數完成後：
 | 文件 | 路徑 |
 |------|------|
 | Phase 2.2 Status | [`agent-mcp-server.md` §11](./agent-mcp-server.md) |
-| Phase 3 roadmap 原規劃 | 詳見 `docs/specs/agent-mcp-server.md` §11 |
+| Phase 3 roadmap 原規劃 | 詳見 `docs/specs/agent-mcp-server-spec.md` §11 |
 | Phase 3 PR (上半) | [#842](https://github.com/kaecer68/atlas-go/pull/842) |
 | Phase 2.1 transports PR | [#834](https://github.com/kaecer68/atlas-go/pull/834) |
 | Apigateway 數據源憲法 | [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md) |

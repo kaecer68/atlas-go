@@ -11,7 +11,7 @@ import (
 
 // GovernmentFlowReading is a single daily reading of aggregated 官股行庫 net
 // buy/sell in TWD. Source identifies the provenance per the methodology in
-// docs/specs/government-force-proxy.md.
+// docs/specs/government-force-proxy-spec.md.
 type GovernmentFlowReading struct {
 	Date     string `json:"date"`
 	TotalNet int64  `json:"total_net"` // TWD, positive = net buy, negative = net sell

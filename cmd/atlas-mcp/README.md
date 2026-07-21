@@ -3,7 +3,7 @@
 `atlas-mcp` 是 [atlas-go](https://github.com/kaecer68/atlas-go) 的 MCP (Model Context Protocol) 伺服器。讓任何 MCP-compatible AI Agent（Claude Desktop、Cursor、OpenCode、OpenClaw、Hermes 等）透過標準 JSON-RPC 2.0 協議查詢與輕度觸發 atlas-go 的台股投資研究能力。
 
 > **Agent 入門** — 第一次使用？先讀 [`docs/investor/README.md`](../../docs/investor/README.md)（5 分鐘速讀），再看 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)（tool 決策樹與完整 catalog，為 tool 數量與清單的權威來源）。
-> **完整規格** — 設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server.md`](../../docs/specs/agent-mcp-server.md)。
+> **完整規格** — 設計文件、安全邊界、JSON Schema 模板見 [`docs/specs/agent-mcp-server-spec.md`](../../docs/specs/agent-mcp-server-spec.md)。
 > **開發者** — 若要在 `cmd/atlas-mcp/server/` 內新增或修改 tool，**必先讀** [`server/AGENTS.md`](./server/AGENTS.md)（模組陷阱文件）。
 
 ## For AI Agent Operators（Hermes / OpenClaw / Claude Desktop / Cursor / OpenCode）

@@ -5,7 +5,7 @@
 > **建立日期**：2026-07-16
 > **最後更新**：2026-07-16
 > **優先級**：P2
-> **對應 manifest 條目**：docs/manifests/sector-dimension-prediction-invariant-manifest.md
+> **對應 manifest 條目**：`docs/archive/2026-07-16-sector-dimension-prediction-invariant-manifest.md`
 > **相依**：C06（`/api/events/prediction` 已穩定 expose `etf_estimates` / `revenue_surprises`）
 > **Phase 0 決策**：原始「3 年歷史板塊回報 backfill」不可行；改以 `MacroDataSnapshot` + `CycleTracker` + 事件 `affected_industries` 作為輸入，實作可解釋的 rule-based 預測器。詳見 §9 與 manifest §6。
 

@@ -245,3 +245,4 @@ GitNexus 程式碼智慧工具技能。
 | 4.1 | 2026-06-25 | 加入 `docs/environment.md` 引用；更新日期以反映 PR #700 |
 | 4.0 | 2026-06-17 | 全面重寫：建立 6 大分類體系、補齊 3 缺失技能（strategy-techniques, taiwan-leading-indicators, data-visibility）、新增機器人溝通分類（4 個新技能）、加入 Token 節省規範、修正不存在技能引用、更新總數為 42 |
 | 3.0 | 2026-06-03 | 加入 generated/ 和 gitnexus/ 目錄 |
+- **atlas-doc-governance**: 文件治理守門員 — 建立/移動 docs/ 檔案前強制歸屬檢查

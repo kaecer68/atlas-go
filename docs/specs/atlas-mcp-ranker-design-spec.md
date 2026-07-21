@@ -103,7 +103,7 @@ cmd/atlas-mcp/server
 - `docs/reference/tool-catalog.md`：108
 - `cmd/atlas-mcp/README.md`：79
 - `cmd/atlas-mcp/server/AGENTS.md`：75 / 79
-- `docs/specs/agent-mcp-server.md`：約 70
+- `docs/specs/agent-mcp-server-spec.md`：約 70
 
 **決議**：
 
@@ -130,7 +130,7 @@ cmd/atlas-mcp/server
 - `docs/reference/tool-catalog.md`（新增 catalog 區塊、更新總數）
 - `cmd/atlas-mcp/README.md`（移除重複數字，指向 reference/tool-catalog.md）
 - `cmd/atlas-mcp/server/AGENTS.md`（更新 assertion 範圍與說明）
-- `docs/specs/agent-mcp-server.md`（調整總數描述，指向 reference/tool-catalog.md）
+- `docs/specs/agent-mcp-server-spec.md`（調整總數描述，指向 reference/tool-catalog.md）
 
 ---
 

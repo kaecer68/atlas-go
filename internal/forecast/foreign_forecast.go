@@ -1,6 +1,6 @@
 // Package forecast provides transparent, rule-based forward-looking signal
 // scoring for capital flow movements (manifest #E03). All weights, scales,
-// and gates are documented in docs/specs/foreign-flow-forecast.md and
+// and gates are documented in docs/specs/foreign-flow-forecast-spec.md and
 // follow the §8 calibration philosophy: no black-box ML, every coefficient
 // must be explainable to a retail user.
 package forecast
@@ -26,7 +26,7 @@ const (
 )
 
 // SignificanceThresholdTWD: |actual net| must exceed this for a non-neutral
-// outcome (30 億台幣 — see docs/specs/foreign-flow-forecast.md §5).
+// outcome (30 億台幣 — see docs/specs/foreign-flow-forecast-spec.md §5).
 const SignificanceThresholdTWD int64 = 3_000_000_000
 
 // MinSamplesForCalibration: 90-day rolling window per §6 gate.

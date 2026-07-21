@@ -77,7 +77,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 - [ ] DataClass 閘門邏輯正確:Regulated data class 透過 `LLM_MINIMAX_API_KEY` (coding plan key) 時被閘門 skip。
 - [ ] `/api/llm/health` endpoint 正常回傳所有 provider 狀態。
 - [ ] router 版本字串(`router_version`)隨每次 routing table 變更遞增。
-- [ ] LLM Provider 變更 PR 同時更新 `docs/specs/llm-routing.md` 與 capability 常數表。
+- [ ] LLM Provider 變更 PR 同時更新 `docs/specs/llm-routing-spec.md` 與 capability 常數表。
 
 ### 5. Static analysis and linting
 
@@ -124,7 +124,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 - [ ] `internal/apigateway/CONSTITUTION.md` 版本號(v1.0+)與「修訂歷史」附錄 C 一致。
 - [ ] AGENTS.md 高頻陷阱表含「資安設定」一列,指向 SECURITY.md 與 apigateway/constitution.md(PR #817 新增;若未合併則此項標 N/A)。
 - [ ] `docs/reference/traps.md` 包含 live trading 安全旗標陷阱與 apigateway 憲法違反陷阱。
-- [ ] 本文件(`docs/specs/security-audit.md`)的引用路徑與實際 canonical 檔案位置一致。
+- [ ] 本文件(`docs/specs/security-audit-spec.md`)的引用路徑與實際 canonical 檔案位置一致。
 - [ ] 30 天以上未引用的文件已評估是否移至 `docs/archive/`(依 `documentation-standard.md` 生命週期)。
 
 ## Audit Output
@@ -180,7 +180,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 | 跨模組陷阱完整版 | [`docs/reference/traps.md`](../reference/traps.md) |
 | 環境變數管理 | [`docs/environment.md`](../environment.md) |
 | 參數管理系統 | [`docs/reference/parameter-system.md`](../reference/parameter-system.md) |
-| LLM 路由規格 | [`docs/specs/llm-routing.md`](llm-routing.md) |
+| LLM 路由規格 | [`docs/specs/llm-routing-spec.md`](llm-routing.md) |
 | 數據可見性四層防護 | [`.claude/skills/atlas-data-visibility/SKILL.md`](../../.claude/skills/atlas-data-visibility/SKILL.md) |
 | CI/CD 安全掃描 (gosec) | [`.github/workflows/ci-cd.yml`](../../.github/workflows/ci-cd.yml) § security job |
 | CI 憲法檢查 | [`.github/workflows/constitution.yml`](../../.github/workflows/constitution.yml) |

@@ -6,7 +6,7 @@
 > **相關文件**：
 > - [`SECURITY.md`](../../SECURITY.md) — 通用安全政策
 > - [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md) — 數據源憲法（6 條）
-> - [`docs/specs/security-audit.md`](../specs/security-audit.md) — 細項安全檢查
+> - [`docs/specs/security-audit-spec.md`](../specs/security-audit.md) — 細項安全檢查
 > - [`docs/operations/l2-4-runbook.md`](../operations/l2-4-runbook.md) — L2.4 操作 SOP（live trading 範本）
 > - [`docs/operations/mcp-deploy.md`](../operations/mcp-deploy.md) — atlas-mcp 部署細節
 
@@ -160,7 +160,7 @@ tar czf audit-$(date +%Y%m%d).tar.gz ~/.config/atlas-go/audit/
 ## Section 7：Documentation 與 Sign-off
 
 - [ ] 7.1 `SECURITY.md` 反映當前狀態（特別是 hash 比較、SafeKey、double-gate）
-- [ ] 7.2 `docs/specs/security-audit.md` 更新（含本 checklist 引用）
+- [ ] 7.2 `docs/specs/security-audit-spec.md` 更新（含本 checklist 引用）
 - [ ] 7.3 `docs/reference/tool-catalog.md` 反映任何 auth_status 等新欄位
 - [ ] 7.4 `internal/apigateway/CONSTITUTION.md` 無 obsolete appendices
 - [ ] 7.5 運維團隊已 briefed rotation SOP

@@ -145,11 +145,11 @@ atlas 保留：外資、投信、自營商、官股行庫、散戶、外資期�
 | `EVD-CF-REPORT` | `internal/capitalflow/report.go:13-85,164-179` | `GenerateDailyReport`、`computeQualityScore`、`applyForceWeights` | dominant 遍歷全部七筆、quality 只用三項、weight 跨 raw 單位 |
 | `EVD-CF-SERVICE` | `internal/capitalflow/service.go:44-79,114-145` | `QualityScore`、`LatestDaily`、`Summary` | service quality 與 report quality 不是同一公式；API 讀取重跑 Extract |
 | `EVD-TWSE-MAP` | `internal/marketdata/twse_capital_flow_provider.go:176-198` | `TWSECapitalFlowProvider.fetchDate` | T86 欄位是股數，現行聚合為除以 `1e8` 的億股 proxy |
-| `EVD-GOV-SPEC` | `docs/specs/government-force-proxy.md:8-89` | 官股代理方法論 | 無官方彙總；現行操作員匯入與既有名單矛盾 |
-| `EVD-FORECAST-SPEC` | `docs/specs/foreign-flow-forecast.md:20-59,84-89` | v1 features、校準門檻、局限 | 期貨／ADR 是預測特徵；領先性與固定門檻尚未實證 |
+| `EVD-GOV-SPEC` | `docs/specs/government-force-proxy-spec.md:8-89` | 官股代理方法論 | 無官方彙總；現行操作員匯入與既有名單矛盾 |
+| `EVD-FORECAST-SPEC` | `docs/specs/foreign-flow-forecast-spec.md:20-59,84-89` | v1 features、校準門檻、局限 | 期貨／ADR 是預測特徵；領先性與固定門檻尚未實證 |
 | `EVD-UI-BOARD` | `shared_web/static/js/components/seven-force-board.js:4-57` | `renderSevenForceBoard` | 七筆目前同級卡片顯示且呈現 legacy weight |
 | `EVD-UI-INTERPRET` | `shared_web/static/js/components/seven-force-interpretations.js:22-102` | `renderSevenForceInterpretations` | 七筆目前共同參與全面偏多／偏空敘事 |
-| `EVD-E05-MANIFEST` | `docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md:78-83` | E05 | E05 的完成宣告、相容策略與預期角色 |
+| `EVD-E05-MANIFEST` | `.omo/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md`（進行中） | E05 | E05 的完成宣告、相容策略與預期角色 |
 
 ---
 
@@ -410,8 +410,8 @@ main branch 的 E05 欄位存在但活體未輸出。E06 驗收必須記錄 runt
 本文件為分類學與計算語意唯一正本。其他文件只能摘要並連回本文件：
 
 - `docs/reference/product-positioning.md` §7：保留產品摘要與本文件連結。
-- `docs/specs/government-force-proxy.md`：只維護官股代理來源與口徑。
-- `docs/specs/foreign-flow-forecast.md`：只維護外資預測 target、features 與校準。
+- `docs/specs/government-force-proxy-spec.md`：只維護官股代理來源與口徑。
+- `docs/specs/foreign-flow-forecast-spec.md`：只維護外資預測 target、features 與校準。
 - `internal/capitalflow/AGENTS.md`：只列高頻陷阱並連回本文件。
 - `docs/reference/tool-catalog.md`、MCP descriptions、investor docs：使用「七維錢潮雷達／3+2+2」摘要。
 - audit、manifest、CHANGELOG、archive：保留歷史原文，必要時註明 superseded-by。
@@ -464,7 +464,7 @@ Refresh 在寫入前必須檢查 `eventCalendar.IsTaiwanTradingDay(recordTime)`�
 
 CF-INV-17 規範「歷史時間序列 API 必須對未涵蓋日期回傳 `status: missing` 或 HTTP 404，不得補 0 假資料」。實作分兩個 sub-section：
 
-#### 18.3.1 `HandleHistory` 的 opt-in meta 模式（已實作 — docs/manifests/2026-07-20-cl5-capital-flow-handlehistory.md）
+#### 18.3.1 `HandleHistory` 的 opt-in meta 模式（已實作 — `.omo/manifests/2026-07-20-cl5-capital-flow-handlehistory.md`）
 
 既有 `/api/capital-flow/history` handler 採 **opt-in** 設計：保留既有 flat shape `{foreign: [...], government: [...]}` 向後相容 H02 frontend，新增 `?include_meta=true` 開關暴露 status。
 
@@ -545,7 +545,7 @@ Rolling sample store 的 capacity 對齊 spec §10 `H-CF-05` gate：
 
 | 位置 | 值 | 變更時間 |
 |------|------|---------|
-| `cmd/atlas/main.go`：`NewFileRollingSampleStore(..., 252)` | **252** | docs/manifests/2026-07-20-cl5-capital-flow-handlehistory.md A01 |
+| `cmd/atlas/main.go`：`NewFileRollingSampleStore(..., 252)` | **252** | `.omo/manifests/2026-07-20-cl5-capital-flow-handlehistory.md` A01 |
 | `internal/capitalflow/service.go`：`const defaultHistoryLimit = 252` | **252** | 同上 |
 | `internal/capitalflow/handler.go`：`days := 252` + cap `n > 252` | **252** | 同上 |
 
@@ -555,7 +555,7 @@ Rolling sample store 的 capacity 對齊 spec §10 `H-CF-05` gate：
 
 **Backlog 警告**：capacity 提升僅是上限，不會自動回填歷史資料。當前 store 內只有 `2026-07-17` 一筆（post-A01 但 15:30 CST cutoff 前）。歷史 backfill 入 **BL-CF-01**（需 Provider 提供歷史 API 或 replay 機制）。
 
-### 18.7 Session List + Detail API（CL-4 — docs/manifests/2026-07-20-cl4-sessions-drilldown.md）
+### 18.7 Session List + Detail API（CL-4 — `.omo/manifests/2026-07-20-cl4-sessions-drilldown.md`）
 
 #### 18.7.1 背景
 
@@ -668,7 +668,7 @@ type UniverseGetSessionDetailInput struct {
 - **drill-down 直接呼叫既有 `LoadSessionOutcomes`**（不重複 SQL query）：AGENTS.md「同一件事不可有三種算法」守則
 - **404 vs 500**：sessionID 不存在回 404（找不到語意），非 500（系統錯誤語意）
 
-### 18.6 Historical Regime Observation Store（Wiring Gap 修正 — docs/manifests/2026-07-20-cl3-regime-history.md）
+### 18.6 Historical Regime Observation Store（Wiring Gap 修正 — `.omo/manifests/2026-07-20-cl3-regime-history.md`）
 
 #### 18.6.1 Wiki-vs-Reality 揭露（必讀）
 

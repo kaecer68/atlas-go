@@ -3,7 +3,7 @@
 > **評估日期**：2026-07-19
 > **評估對象**：CMoney、Goodinfo（及替代方案）
 > **目的**：評估購買「八大行庫買賣超」第三方整理資料的商業可行性
-> **關聯**：`docs/specs/government-force-proxy.md` §2 選項 B
+> **關聯**：`docs/specs/government-force-proxy-spec.md` §2 選項 B
 
 ---
 

@@ -81,7 +81,7 @@
 | **B1 Data Access Layer** | grep `DataAccess\|data_access` 0 results → **真的未實作** |
 | **B2 Backtest-Live Consistency** | grep `backtest.*live\|paper_trading` 7 hits including `internal/autobacktest/runner.go` → **部分實作**(深度待評估,是否涵蓋 paper trading vs live trading 一致性待查)|
 | **B3 HITL Regime** | grep `HITL\|HumanInTheLoop` 0 results → **真的未實作**(roadmap v2 提到的只是概念性註記) |
-| **B4 Tax/Liquidity Sizing** | grep `tax.*siz\|liquidity.*siz` 3 hits including `internal/tax/tax_aware_sizing.go` + `internal/config/defaults_portfolio.go` + `docs/specs/taiwan-tax.md` → **有實作**(深度待評估)|
+| **B4 Tax/Liquidity Sizing** | grep `tax.*siz\|liquidity.*siz` 3 hits including `internal/tax/tax_aware_sizing.go` + `internal/config/defaults_portfolio.go` + `docs/specs/taiwan-tax-spec.md` → **有實作**(深度待評估)|
 
 需各自獨立設計 + 評估 + 排程。B1 尤其關鍵(影響所有下游 Backtest/Live/HITL/Tax work),應優先單獨評估。B2 與 B4 因有部分實作,評估範圍可縮小(只需確認現有實作是否涵蓋 roadmap v2 的目標)。
 

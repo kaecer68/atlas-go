@@ -332,8 +332,8 @@ async function fetchStockBundle(symbol) {
 - [ ] 同產業 PE 中位數(等後端擴充,目前允許空)
 
 ### 8.5 文件
-- [ ] `docs/specs/stock-api-contract.md` 已完成(已 ship)
-- [ ] `docs/specs/stock-quote-page.md`(本文件)完成
+- [ ] `docs/specs/stock-api-contract-spec.md` 已完成(已 ship)
+- [ ] `docs/specs/stock-quote-page-spec.md`(本文件)完成
 - [ ] PR 描述引用 stock-api-contract.md
 
 ---

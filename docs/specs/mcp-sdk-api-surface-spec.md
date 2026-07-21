@@ -351,5 +351,5 @@ These map to the questions in `agent-mcp-phase4.md` §9:
 
 - `go-mcp-sdk` v1.6.1 source: `$(go env GOPATH)/pkg/mod/github.com/modelcontextprotocol/go-sdk@v1.6.1/mcp/`
 - MCP 2026-07-28 spec: <https://modelcontextprotocol.io/specification/2026-07-28>
-- `docs/specs/agent-mcp-phase4.md` §4.2, §6.2, §7, §8, §9
+- `docs/specs/agent-mcp-phase4-spec.md` §4.2, §6.2, §7, §8, §9
 - `internal/apigateway/CONSTITUTION.md` (filesystem / data-source governance)

@@ -23,8 +23,8 @@
 
 **新檔案**：
 
-- `docs/specs/stock-api-contract.md`
-- `docs/specs/dashboard-api-contract.md`
+- `docs/specs/stock-api-contract-spec.md`
+- `docs/specs/dashboard-api-contract-spec.md`
 
 **內容**：
 

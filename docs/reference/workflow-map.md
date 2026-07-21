@@ -189,7 +189,7 @@ PostSimulation(...)           // 每輪 simulation 結束
 
 ### 4.5 AgentLoop State Machine
 
-已完整文件於 `docs/specs/agent-loop-state-machine.md`：
+已完整文件於 `docs/specs/agent-loop-state-machine-spec.md`：
 
 ```
 Initial → Plan → ToolCall → Reflect
@@ -300,7 +300,7 @@ Broker config 旗標（10 個）：`-broker-mode`、`-broker-adapter`、`-broker
 
 | Wave | 狀態 | 對應文件 |
 |------|------|---------|
-| Wave 11（L2.3 / L2.4） | L2.3 shipped, L2.4 觀察期 active via PR #821 | `docs/specs/llm-sector-agent.md`、`docs/operations/l2-4-runbook.md` |
+| Wave 11（L2.3 / L2.4） | L2.3 shipped, L2.4 觀察期 active via PR #821 | `docs/specs/llm-sector-agent-spec.md`、`docs/operations/l2-4-runbook.md` |
 | Wave 11 L2.4 followup | 未來工作 | `docs/operations/l2-4-followup.md` |
 | Phase A3（gateway alert cleanup） | shipped | main.go:233 註解 |
 | Orchestrator plugin 進化 | active（janus/prism/phase3/spawning） | `internal/orchestrator/system_plugins.go` |
@@ -318,7 +318,7 @@ Broker config 旗標（10 個）：`-broker-mode`、`-broker-adapter`、`-broker
 5. ❌ **不要直接呼叫 `clients/*Provider`** 跳過 LLM DefaultRouter
 6. ❌ **不要修改 security 相關配置**前不看 `SECURITY.md` 與 `internal/apigateway/CONSTITUTION.md`
 7. ❌ **改 FactorType** 須走 8 步驟 protocol（見 `.claude/skills/atlas-factor-change-protocol`）
-8. ❌ **改 AgentLoop state machine** 須更新 `docs/specs/agent-loop-state-machine.md`
+8. ❌ **改 AgentLoop state machine** 須更新 `docs/specs/agent-loop-state-machine-spec.md`
 9. ❌ **JSON tag** 必須對齊 snake_case `domain.*` 格式
 
 ---
