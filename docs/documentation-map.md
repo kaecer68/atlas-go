@@ -201,17 +201,9 @@
 
 | 目錄 | 用途 |
 |------|------|
-| `docs/audit/` | 審計報告（18 個檔案） |
 | `docs/archive/` | 歷史歸檔（20 個檔案，見 archive/README.md） |
-| `docs/branch-hygiene/` | Branch 清理紀錄（1 個檔案） |
-| `docs/handoff/` | 任務交接（1 個檔案） |
-| `docs/investigations/` | 根因調查（5 個檔案） |
-| `docs/incidents/` | 事故記錄（2 個檔案） |
 | `docs/manifests/` | Manifest 治理模板（README.md + TEMPLATE.md）；個別 manifest 已移至 .omo/manifests/
 | `docs/investor/` | 投資人入口 + use cases（10 個檔案） |
-| `docs/observations/` | 觀察記錄（0 個檔案；內容已移至 `.omo/handoffs/`） |
-| `docs/research/` | 研究文件（1 個檔案） |
-| `docs/spikes/` | 技術 spike（1 個檔案） |
 
 ---
 

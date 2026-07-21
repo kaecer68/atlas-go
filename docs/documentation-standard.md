@@ -51,15 +51,8 @@ docs/
 ├── environment.md                # 外部依賴與環境
 ├── tools.md                      # 工具清單
 ├── audit-trail.md                # 稽核軌跡
-├── branch-hygiene/              # branch 維護紀錄（PR #748 模式）
 ├── manifests/                    # invariant tracker 治理模板（僅 README.md + TEMPLATE.md；個別 manifest 請放 .omo/manifests/）
-├── audit/                       # 審計報告（YYYY-MM-DD-slug.md）
-├── handoff/                     # 任務交接（YYYY-MM-DD-topic.md）
-├── investigations/              # 根因調查（YYYY-MM-DD-symptom.md）
-├── incidents/                   # 線上事件紀錄（YYYY-MM-<short-name>.md）
 ├── modules/                     # 模組操作手冊（穩定後的 module runbook）
-├── research/                    # 技術研究報告（有長期參考價值的研究產出）
-├── spikes/                      # spike / PoC 報告（已完成並有教學價值）
 ├── specs/                       # 規格（topic-spec.md）
 # 注意：docs/plans/ 已移除。所有具體修復/執行計畫請放 .omo/plans/（短期，merge 後刪）。
 ├── guides/                      # 指南（topic-guide.md）
@@ -302,13 +295,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 | 架構 / 領域知識 | `docs/` | 無日期前綴 |
 | 規格 (spec) | `docs/specs/` | `<topic>-spec.md` |
 | 開發者指南 | `docs/guides/` | `<topic>-guide.md` |
-| 審計報告 | `docs/audit/` | `YYYY-MM-DD-<slug>.md` |
-| 任務交接（穩定版） | `docs/handoff/` | `YYYY-MM-DD-<topic>.md` |
-| 根因調查 | `docs/investigations/` | `YYYY-MM-DD-<symptom>.md` |
-| 線上事件紀錄 | `docs/incidents/` | `YYYY-MM-<short-name>.md` |
 | 模組操作手冊 | `docs/modules/` | `<module>.md` + `README.md` |
-| 技術研究報告 | `docs/research/` | `<topic>.md` |
-| spike / PoC 報告 | `docs/spikes/` | `<topic>-spike.md` |
 | 操作 runbook / 驗證報告 | `docs/operations/` | `<topic>-runbook.md` / `<topic>-verification-report.md` |
 | 歸檔（教學價值） | `docs/archive/` | `YYYY-MM-DD-<slug>.md` |
 | **長壽 brief（跨 session 規劃）** | `.omo/briefs/` | `<topic>-brief.md` 或 `<topic>.md` |
