@@ -164,7 +164,7 @@ Manifest done →
 以下子目錄名稱**禁止使用**（過去 AI 自由生成導致的污染）：
 
 - ❌ `archive/`（應刪除內容，不該再「歸檔」）
-- ❌ `audits/`（複數，與 `docs/audit/` 衝突；放 `evidence/`）
+- ❌ `audits/`（複數，與 `.omo/audit/` 衝突；放 `evidence/`）
 - ❌ `client_ui/`、`drafts/`、`investor-ui/`（無命名規範，內容混亂）
 - ❌ `live-mode-macro-boundary.md`（獨立檔案，應放 `briefs/`）
 - ❌ `session-summary-YYYY-MM-DD.md`（應放 `handoffs/` 或 `notepads/`）

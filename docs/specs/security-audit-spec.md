@@ -142,7 +142,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 
 ### Tier 4(季度)與 Tier 5(發布前)
 
-於 `.omo/audit/YYYY-MM-DD-<slug>.md` 建立完整報告,例如 `.omo/audit/<YYYY-MM-DD>-quarterly-security.md` 或 `docs/audit/<YYYY-MM-DD>-<version>-release-pre-audit.md`)。報告結構建議:
+於 `.omo/audit/YYYY-MM-DD-<slug>.md` 建立完整報告,例如 `.omo/audit/<YYYY-MM-DD>-quarterly-security.md` 或 `.omo/audit/<YYYY-MM-DD>-<version>-release-pre-audit.md`)。報告結構建議:
 
 ```markdown
 # Security Audit Report: <tier 與期間>
