@@ -48,9 +48,14 @@ func (a *TDCClientChannelAdapter) Fetch(ctx context.Context) (*FetchResult, erro
 }
 
 func (a *TDCClientChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	// Stub: TDCC API access not yet configured (G01). HealthCheck
+	// returns "inactive" so the alerting path in
+	// monitoring/service/data_channels.go skips this channel; the
+	// dashboard renders it as "not yet live" via Metadata().Stub.
 	return HealthStatus{
-		Status:    "ok",
+		Status:    "inactive",
 		CheckType: "liveness",
+		LastError: "stub: TDCC API access not yet configured (G01) — see internal/marketdata/tdcc_provider.go",
 		UpdatedAt: time.Now().Format(time.RFC3339),
 	}, nil
 }
@@ -65,5 +70,9 @@ func (a *TDCClientChannelAdapter) Metadata() ChannelMetadata {
 		APIFormat:  "JSON",
 		Path:       "/v1/equity-dispersion",
 		HasLimiter: true,
+		// Stub: channel is registered so the dashboard can show
+		// "not yet live" explicitly. Real implementation is gated
+		// on G01 (TDCC API access).
+		Stub: true,
 	}
 }

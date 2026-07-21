@@ -268,16 +268,24 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_etf")
 
 	// --- TWSE SBL (Securities Borrowing & Lending) — G02 ---
+	// STUB: provider returns "endpoint not yet confirmed" (see
+	// internal/marketdata/twse_sbl_provider.go). The channel is
+	// registered so the dashboard can show "not yet live" via
+	// Metadata().Stub, but HealthCheck returns "inactive" so the
+	// alerting path in monitoring/service/data_channels.go skips it.
 	sblAdapter := NewTWSESBLChannelAdapter()
 	g.registry.Register("twse_sbl", sblAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "twse_sbl")
+	logging.Warn("apigateway", "stub_adapter_registered", "channel", "twse_sbl", "gate", "G02")
 
 	// --- TDCC Equity Dispersion (集保股權分散) — G01 ---
-	// NOTE: Auto-fetch not scheduled until TDCC API access is confirmed.
-	// Channel is registered so it appears in the monitoring dashboard.
+	// STUB: provider returns "API access not yet configured" (see
+	// internal/marketdata/tdcc_provider.go). Auto-fetch is not
+	// scheduled; the channel is registered so the dashboard shows
+	// it as "not yet live" via Metadata().Stub. HealthCheck returns
+	// "inactive" so the alerting path skips it.
 	tdccAdapter := NewTDCClientChannelAdapter()
 	g.registry.Register("tdcc_equity_dispersion", tdccAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "tdcc_equity_dispersion")
+	logging.Warn("apigateway", "stub_adapter_registered", "channel", "tdcc_equity_dispersion", "gate", "G01")
 
 	// --- JANUS Regime (internal computed engine, optional) ---
 	if janusEngine != nil {

@@ -48,9 +48,14 @@ func (a *TWSESBLChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 }
 
 func (a *TWSESBLChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	// Stub: TWSE SBL endpoint not yet confirmed (G02). HealthCheck
+	// returns "inactive" so the alerting path in
+	// monitoring/service/data_channels.go skips this channel; the
+	// dashboard renders it as "not yet live" via Metadata().Stub.
 	return HealthStatus{
-		Status:    "ok",
+		Status:    "inactive",
 		CheckType: "liveness",
+		LastError: "stub: TWSE SBL endpoint not yet confirmed (G02) — see internal/marketdata/twse_sbl_provider.go",
 		UpdatedAt: time.Now().Format(time.RFC3339),
 	}, nil
 }
@@ -65,5 +70,9 @@ func (a *TWSESBLChannelAdapter) Metadata() ChannelMetadata {
 		APIFormat:  "JSON",
 		Path:       "/rwd/zh/lending/TWT93U",
 		HasLimiter: true,
+		// Stub: channel is registered so the dashboard can show
+		// "not yet live" explicitly. Real implementation is gated
+		// on G02 (TWSE SBL endpoint confirmation).
+		Stub: true,
 	}
 }
