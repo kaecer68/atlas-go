@@ -525,7 +525,7 @@ func (a *DashboardAPI) GetEventLifecycleManager() *narrative.EventLifecycleManag
 // tick, success or fallback.
 func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
 	events, snap, err := a.macroIngestor.Ingest(ctx)
-	geoScore := a.fetchGeoScore(ctx)
+	geoScore := a.resolveGeoScore(ctx)
 	if err != nil {
 		// On ingest failure, also feed silicon tracker from the on-disk snapshot
 		// (regression: otherwise the 矽循環時鐘 panel renders all zeros).
@@ -564,6 +564,7 @@ func (a *DashboardAPI) applyMacroUpdate(ctx context.Context, snap marketdata.Mac
 	a.narrativeEngine.UpdateMacro(snap, geoScore)
 	a.persistStressIndex(ctx)
 	a.persistGeopolitical(ctx, geoScore)
+	a.persistRegimeHistory(ctx)
 }
 
 // persistStressIndex writes the current TaiwanStressIndex to the historical
@@ -595,17 +596,35 @@ func (a *DashboardAPI) persistStressIndex(ctx context.Context) {
 	}
 }
 
-// fetchGeoScore returns the latest geopolitical risk score, using a short
-// timeout so slow GDELT RSS feeds do not block macro ingestion. The
-// timeout is derived from ctx so the caller's deadline still applies.
-func (a *DashboardAPI) fetchGeoScore(ctx context.Context) narrative.GeopoliticalRiskScore {
-	if a.geoProvider == nil {
-		return narrative.GeopoliticalRiskScore{}
+// resolveGeoScore returns the best available geopolitical risk score for the
+// current macro tick. It prefers a live fetch from the configured geo provider,
+// falls back to the most recent non-zero row in the historical ledger, and
+// finally to the on-disk geopolitical store. This prevents a transient live
+// fetch failure from producing a zero stress component while a stale-but-valid
+// historical score is available.
+func (a *DashboardAPI) resolveGeoScore(ctx context.Context) narrative.GeopoliticalRiskScore {
+	if a.geoProvider != nil {
+		geoCtx, geoCancel := context.WithTimeout(ctx, 15*time.Second)
+		defer geoCancel()
+		if score, err := a.geoProvider.FetchScore(geoCtx); err == nil && score.Intensity != 0 && !score.Timestamp.IsZero() {
+			return score
+		}
 	}
-	geoCtx, geoCancel := context.WithTimeout(ctx, 15*time.Second)
-	defer geoCancel()
-	if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
-		return score
+
+	if a.historicalStore != nil {
+		rows, err := a.historicalStore.LoadGeopoliticalHistoryAll(ctx, 1)
+		if err == nil && len(rows) > 0 && rows[0].Intensity != 0 && !rows[0].CapturedAt.IsZero() {
+			return narrative.GeopoliticalRiskScore{
+				Intensity: rows[0].Intensity,
+				Timestamp: rows[0].CapturedAt,
+				Sources:   rows[0].Sources,
+			}
+		}
+	}
+
+	store := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
+	if fallback, err := store.Load(); err == nil && fallback.Intensity != 0 && !fallback.Timestamp.IsZero() {
+		return fallback
 	}
 	return narrative.GeopoliticalRiskScore{}
 }
@@ -613,6 +632,9 @@ func (a *DashboardAPI) fetchGeoScore(ctx context.Context) narrative.Geopolitical
 // persistGeopolitical writes the latest geopolitical risk score to the ledger
 // so historical reconstruction can read real geo values instead of defaulting
 // to zero. The SQLite ON CONFLICT(date) upsert makes repeated calls idempotent.
+// It also mirrors the score to the on-disk geopolitical store so that the
+// on-demand /api/taiwan/stress-index calculator and the macro-ingest path use
+// the same fallback source.
 func (a *DashboardAPI) persistGeopolitical(ctx context.Context, geo narrative.GeopoliticalRiskScore) {
 	if a.historicalStore == nil || geo.Timestamp.IsZero() {
 		return
@@ -627,6 +649,44 @@ func (a *DashboardAPI) persistGeopolitical(ctx context.Context, geo narrative.Ge
 	}
 	if err := a.historicalStore.UpsertGeopolitical(ctx, row); err != nil {
 		logging.Warn("dashboard_api", "persist_geopolitical_failed",
+			logging.FStr("date", row.Date),
+			logging.Err(err))
+		return
+	}
+
+	store := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
+	if err := store.Save(geo); err != nil {
+		logging.Warn("dashboard_api", "mirror_geopolitical_store_failed",
+			logging.FStr("date", row.Date),
+			logging.Err(err))
+	}
+}
+
+// persistRegimeHistory derives a canonical regime row from the current stress
+// index and upserts it into regime_history. This closes the live-pipeline gap
+// where stress and geo were persisted but regime_history only contained stage-4
+// synthetic backfill rows. The mapping is the same bidirectional mapping used
+// by /api/narrative/regime-mapping and is intentionally approximate.
+func (a *DashboardAPI) persistRegimeHistory(ctx context.Context) {
+	if a.historicalStore == nil || a.narrativeEngine == nil {
+		return
+	}
+	idx := a.narrativeEngine.GetCurrentStressIndex()
+	if idx.Timestamp == 0 {
+		return
+	}
+	date := time.Unix(idx.Timestamp, 0).UTC().Format("2006-01-02")
+	row := ledger.RegimeRow{
+		Date:            date,
+		Regime:          narrative.NormalizeRegime(idx.Regime),
+		Source:          "macro_ingest",
+		RecordedAt:      time.Unix(idx.Timestamp, 0).UTC(),
+		CapturedAt:      time.Unix(idx.Timestamp, 0).UTC(),
+		IsSynthetic:     0,
+		SourceSessionID: "macro_ingest:" + date,
+	}
+	if err := a.historicalStore.UpsertRegime(ctx, row); err != nil {
+		logging.Warn("dashboard_api", "persist_regime_history_failed",
 			logging.FStr("date", row.Date),
 			logging.Err(err))
 	}
@@ -1125,7 +1185,9 @@ func (a *DashboardAPI) RegisterControlRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
-	svc := service.NewMacroService(a.workDir, a.macroIngestor, a.taiwanStressCalc)
+	svc := service.NewMacroService(a.workDir, a.macroIngestor, a.taiwanStressCalc).
+		WithGeoProvider(a.geoProvider).
+		WithHistoricalStore(a.historicalStore)
 	handlers := &apimacro.Handlers{
 		Service: svc,
 	}

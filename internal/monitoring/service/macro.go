@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/constants"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -40,6 +41,8 @@ type MacroService struct {
 	WorkDir          string
 	MacroIngestor    *narrative.MacroIngestor
 	TaiwanStressCalc *narrative.TaiwanStressCalculator
+	GeoProvider      narrative.GeopoliticalRiskProvider
+	HistoricalStore  ledger.HistoricalStore
 }
 
 func NewMacroService(workDir string, macroIngestor *narrative.MacroIngestor, taiwanStressCalc *narrative.TaiwanStressCalculator) *MacroService {
@@ -48,6 +51,50 @@ func NewMacroService(workDir string, macroIngestor *narrative.MacroIngestor, tai
 		MacroIngestor:    macroIngestor,
 		TaiwanStressCalc: taiwanStressCalc,
 	}
+}
+
+// WithGeoProvider injects a geopolitical risk provider so the on-demand stress
+// index can resolve live geo scores.
+func (s *MacroService) WithGeoProvider(p narrative.GeopoliticalRiskProvider) *MacroService {
+	s.GeoProvider = p
+	return s
+}
+
+// WithHistoricalStore injects the historical ledger so the on-demand stress
+// index can fall back to persisted geo scores when the live fetch fails.
+func (s *MacroService) WithHistoricalStore(hs ledger.HistoricalStore) *MacroService {
+	s.HistoricalStore = hs
+	return s
+}
+
+// resolveGeoScore returns the best available geopolitical score for the live
+// stress index. It mirrors the fallback chain in DashboardAPI.resolveGeoScore so
+// the on-demand calculator and the macro-ingest pipeline use the same geo source.
+func (s *MacroService) resolveGeoScore(ctx context.Context) narrative.GeopoliticalRiskScore {
+	if s.GeoProvider != nil {
+		geoCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		if score, err := s.GeoProvider.FetchScore(geoCtx); err == nil && score.Intensity != 0 && !score.Timestamp.IsZero() {
+			return score
+		}
+	}
+
+	if s.HistoricalStore != nil {
+		rows, err := s.HistoricalStore.LoadGeopoliticalHistoryAll(ctx, 1)
+		if err == nil && len(rows) > 0 && rows[0].Intensity != 0 && !rows[0].CapturedAt.IsZero() {
+			return narrative.GeopoliticalRiskScore{
+				Intensity: rows[0].Intensity,
+				Timestamp: rows[0].CapturedAt,
+				Sources:   rows[0].Sources,
+			}
+		}
+	}
+
+	store := narrative.NewGeopoliticalStore(filepath.Join(s.WorkDir, constants.StateGeopolitical))
+	if fallback, err := store.Load(); err == nil && fallback.Intensity != 0 && !fallback.Timestamp.IsZero() {
+		return fallback
+	}
+	return narrative.GeopoliticalRiskScore{}
 }
 
 func (s *MacroService) Ingest(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
@@ -259,11 +306,8 @@ func (s *MacroService) CalculateStressIndex(ctx context.Context) (narrative.Taiw
 		}
 	}
 
-	geoStore := narrative.NewGeopoliticalStore(filepath.Join(s.WorkDir, constants.StateGeopolitical))
-	index, err := s.TaiwanStressCalc.CalculateFromSnapshotWithStore(ctx, snap, prev, geoStore)
-	if err != nil {
-		return narrative.TaiwanStressIndex{}, err
-	}
+	geoScore := s.resolveGeoScore(ctx)
+	index := s.TaiwanStressCalc.Calculate(snap, prev, geoScore)
 	return index, nil
 }
 

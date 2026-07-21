@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -934,12 +935,20 @@ func TestDashboardAPI_NarrativeEngine(t *testing.T) {
 }
 
 type mockStressStore struct {
-	upserted    []ledger.StressRow
-	upsertedGeo []ledger.GeopoliticalRow
-	returnErr   error
+	upserted       []ledger.StressRow
+	upsertedGeo    []ledger.GeopoliticalRow
+	upsertedRegime []ledger.RegimeRow
+	geoRows        []ledger.GeopoliticalRow
+	returnErr      error
 }
 
-func (m *mockStressStore) UpsertRegime(ctx context.Context, row ledger.RegimeRow) error { return nil }
+func (m *mockStressStore) UpsertRegime(ctx context.Context, row ledger.RegimeRow) error {
+	if m.returnErr != nil {
+		return m.returnErr
+	}
+	m.upsertedRegime = append(m.upsertedRegime, row)
+	return nil
+}
 func (m *mockStressStore) LoadRegimeByDate(ctx context.Context, date string) (ledger.RegimeRow, bool, error) {
 	return ledger.RegimeRow{}, false, nil
 }
@@ -1006,7 +1015,7 @@ func (m *mockStressStore) LoadGeopoliticalHistory(ctx context.Context, limit int
 	return nil, nil
 }
 func (m *mockStressStore) LoadGeopoliticalHistoryAll(ctx context.Context, limit int) ([]ledger.GeopoliticalRow, error) {
-	return nil, nil
+	return m.geoRows, nil
 }
 func (m *mockStressStore) CountSynthetic(ctx context.Context) (map[string]int64, error) {
 	return nil, nil
@@ -1141,6 +1150,60 @@ func TestDashboardAPI_PersistStressIndex_HappyPath(t *testing.T) {
 	}
 	if len(row.Components) == 0 {
 		t.Errorf("expected Components copied from stress index")
+	}
+}
+
+// TestDashboardAPI_PersistRegimeHistory_HappyPath covers E8: every live macro
+// tick must persist a canonical regime row derived from the current stress
+// index so /api/regime/history can serve recent dates.
+func TestDashboardAPI_PersistRegimeHistory_HappyPath(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{}
+	d.WithHistoricalStore(store)
+
+	snap := validStressMacroSnapshot()
+	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
+	d.NarrativeEngine().UpdateMacro(snap, geo)
+	d.persistRegimeHistory(context.Background())
+
+	if len(store.upsertedRegime) != 1 {
+		t.Fatalf("expected 1 regime upsert, got %d", len(store.upsertedRegime))
+	}
+	row := store.upsertedRegime[0]
+	if row.Date != "2024-04-13" {
+		t.Errorf("Date = %q, want 2024-04-13", row.Date)
+	}
+	if row.Regime == "" {
+		t.Errorf("expected non-empty canonical regime")
+	}
+	if row.Source != "macro_ingest" {
+		t.Errorf("Source = %q, want macro_ingest", row.Source)
+	}
+	if row.IsSynthetic != 0 {
+		t.Errorf("IsSynthetic = %v, want 0", row.IsSynthetic)
+	}
+	if row.RecordedAt.IsZero() {
+		t.Errorf("RecordedAt should be set from stress index timestamp")
+	}
+	if row.CapturedAt.IsZero() {
+		t.Errorf("CapturedAt should be set")
+	}
+}
+
+func TestDashboardAPI_PersistRegimeHistory_NilStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	snap := validStressMacroSnapshot()
+	d.NarrativeEngine().UpdateMacro(snap, narrative.GeopoliticalRiskScore{Intensity: 30})
+	d.persistRegimeHistory(context.Background())
+}
+
+func TestDashboardAPI_PersistRegimeHistory_ZeroTimestamp(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{}
+	d.WithHistoricalStore(store)
+	d.persistRegimeHistory(context.Background())
+	if len(store.upsertedRegime) != 0 {
+		t.Errorf("expected no regime upsert when timestamp is zero, got %d", len(store.upsertedRegime))
 	}
 }
 
@@ -1311,8 +1374,76 @@ func TestDashboardAPI_ApplyMacroUpdate_NilNarrativeEngine(t *testing.T) {
 	geo := narrative.GeopoliticalRiskScore{Intensity: 1}
 	d.applyMacroUpdate(context.Background(), snap, geo)
 
-	if len(store.upserted) != 0 || len(store.upsertedGeo) != 0 {
-		t.Errorf("helper should no-op when narrativeEngine nil; got stress=%d geo=%d",
-			len(store.upserted), len(store.upsertedGeo))
+	if len(store.upserted) != 0 || len(store.upsertedGeo) != 0 || len(store.upsertedRegime) != 0 {
+		t.Errorf("helper should no-op when narrativeEngine nil; got stress=%d geo=%d regime=%d",
+			len(store.upserted), len(store.upsertedGeo), len(store.upsertedRegime))
+	}
+}
+
+// errGeoProvider is a GeopoliticalRiskProvider that always fails.
+type errGeoProvider struct{ err error }
+
+func (p *errGeoProvider) Name() string { return "errGeoProvider" }
+
+func (p *errGeoProvider) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
+	return narrative.GeopoliticalRiskScore{}, p.err
+}
+
+// TestDashboardAPI_ResolveGeoScore_FallsBackToHistoricalStore covers E5:
+// when the live geo provider fails, resolveGeoScore must return the latest
+// persisted intensity from the historical ledger instead of zero.
+func TestDashboardAPI_ResolveGeoScore_FallsBackToHistoricalStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	store := &mockStressStore{
+		geoRows: []ledger.GeopoliticalRow{
+			{
+				Date:        "2026-07-21",
+				Intensity:   39.0,
+				Source:      "macro_ingest",
+				CapturedAt:  time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+				Sources:     []string{"gdelt"},
+				IsSynthetic: 0,
+			},
+		},
+	}
+	d.WithHistoricalStore(store)
+	d.geoProvider = &errGeoProvider{err: context.DeadlineExceeded}
+
+	score := d.resolveGeoScore(context.Background())
+	if score.Intensity != 39.0 {
+		t.Errorf("Intensity = %v, want 39.0 (fallback from historical store)", score.Intensity)
+	}
+	if len(score.Sources) != 1 || score.Sources[0] != "gdelt" {
+		t.Errorf("Sources = %v, want [gdelt]", score.Sources)
+	}
+	if score.Timestamp.IsZero() {
+		t.Errorf("Timestamp should be set from historical row")
+	}
+}
+
+// TestDashboardAPI_ResolveGeoScore_FallsBackToFileStore covers E5: when both
+// the live provider and the historical store are unavailable, resolveGeoScore
+// should fall back to the on-disk geopolitical file store if it has a
+// non-zero intensity.
+func TestDashboardAPI_ResolveGeoScore_FallsBackToFileStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	d.geoProvider = &errGeoProvider{err: context.DeadlineExceeded}
+
+	geoFile := filepath.Join(d.workDir, constants.StateGeopolitical, "latest.json")
+	if err := os.MkdirAll(filepath.Dir(geoFile), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	score := narrative.GeopoliticalRiskScore{
+		Intensity: 25.0,
+		Timestamp: time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+	}
+	data, _ := json.Marshal(score)
+	if err := os.WriteFile(geoFile, data, 0o644); err != nil {
+		t.Fatalf("write geo file: %v", err)
+	}
+
+	got := d.resolveGeoScore(context.Background())
+	if got.Intensity != 25.0 {
+		t.Errorf("Intensity = %v, want 25.0 (file fallback)", got.Intensity)
 	}
 }
