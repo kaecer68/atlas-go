@@ -5,7 +5,7 @@
 > **Goal**: (1) One-shot align all current binaries (Docker + host) with current HEAD. (2) Build a closing-time check + Makefile rebuild entry so future code changes automatically trigger binary rebuild.
 >
 > **Created**: 2026-07-21
-> **Status**: in-progress
+> **Status**: completed (PR #1249 merged into main 54b8beb8; post-merge 'make check-binaries' shows ALL BINARIES FRESH)
 
 ## Background
 
@@ -77,7 +77,7 @@ Concrete symptoms from this session:
 
 ---
 
-## Phase D — Close Out (in progress)
+## Phase D — Close Out (completed 2026-07-21)
 
 ### Verification Report
 
@@ -164,4 +164,5 @@ Phase C/D live rebuild actions (D04) are filesystem operations, not commits — 
 
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
+| 2026-07-21 | 1.1 | PR #1249 merged (squash → 54b8beb8). Post-merge make check-binaries: ALL BINARIES FRESH (atlas-atlas image + atlas-cron-rebuilt:local + host bin/atlas-mcp all carry Commit=54b8beb8 = HEAD). Protocol verified end-to-end in production. Status → completed. | Sisyphus |
 | 2026-07-21 | 1.0 | Initial manifest with D01 / D02 / D03 / D04 from user binary-freshness instruction; opens PR #1249 with 4 commits (D01/D02/D03/skill) | Sisyphus |
