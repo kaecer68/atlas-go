@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.2.0] - 2026-07-22
+
+### Fixed
+- **Geopolitical drift between stress index and ledger**：`/api/taiwan/stress-index` and the on-demand Taiwan stress calculator now share a single `resolveGeoScore` fallback chain (live provider → SQLite `geopolitical_history` → on-disk `data/state/geopolitical/latest.json`). The macro-ingest path also mirrors each successful geo fetch to the file store, so a transient live fetch failure no longer leaves the stress component at zero while a valid historical score is available.
+- **`?days=N` semantics now mean "last N calendar days" across all history endpoints**：`/api/regime/history`, `/api/narrative/stress-index/history`, and `/api/geopolitical/history` now all return rows whose `date` falls within `today-N+1..today` instead of treating `N` as a row limit. `/api/regime/history?limit=N` retains the legacy row-limit behavior. The regime response also gained a `date` field on every session, so clients no longer need to parse the date out of `recorded_at`.
+- **Live macro ingestion now writes `regime_history`**：`DashboardAPI.applyMacroUpdate` calls a new `persistRegimeHistory` that derives a canonical regime from the current stress index via `narrative.NormalizeRegime` and upserts it with `source=macro_ingest`. After the next macro tick, `/api/regime/history?days=N` will surface the same date window the calendar fix enables, and the existing stage-4 synthetic backfill rows remain untouched.
+
 ## [0.0.1.0] - 2026-07-21
 
 ### Fixed
