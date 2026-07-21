@@ -9,7 +9,30 @@
 > - OUT: `/api/narrative/stress-index/history` (already has `source`/`date` via `stressRowsToIndex`)
 > - OUT: `/api/taiwan/stress-index` components/score/regime semantics
 > **Created**: 2026-07-21
-> **Status**: in-progress
+> **Status**: completed
+
+---
+
+## Verification Report
+
+| Check | Result |
+|-------|--------|
+| `go test ./internal/monitoring/api/macro/... ./internal/monitoring/api/narrative/...` | PASS |
+| `gofmt` / `go vet` | PASS |
+| `/api/taiwan/stress-index` returns `date` + `source: "taiwan_calculator"` | PASS |
+| `/api/narrative/stress-index/current` returns `date` + `source: "taiwan_calculator"` | PASS |
+| `make check-binaries` from worktree (HEAD `f02c694c`) | ALL FRESH |
+| `macro_ingest` schedule still fires on 5m cadence after container recreate | PASS |
+
+Example response:
+
+```json
+GET /api/taiwan/stress-index
+{"score":15.83,"regime":"low","components":{...},"timestamp":1784614946,"date":"2026-07-21","source":"taiwan_calculator"}
+
+GET /api/narrative/stress-index/current
+{"components":{...},"date":"2026-07-21","regime":"low","score":13.56,"source":"taiwan_calculator","timestamp":1784614946}
+```
 
 ---
 
@@ -39,8 +62,8 @@ Adding `source` and `date` to the live endpoints makes the surface uniform and l
 
 | ID | Problem | Root Cause | Files to Change | Acceptance Criteria | Status |
 |----|---------|------------|-----------------|---------------------|--------|
-| E1 | `/api/taiwan/stress-index` response lacks `source` and `date` | Handler returns `TaiwanStressIndex` directly without populating provenance fields | `internal/monitoring/api/macro/handlers.go` | Response contains `source: "taiwan_calculator"` and `date: "YYYY-MM-DD"` | pending |
-| E2 | `/api/narrative/stress-index/current` response lacks `source` and `date` | Handler constructs a new map and drops `Source`/`Date` | `internal/monitoring/api/narrative/handlers.go` | Response contains `source: "taiwan_calculator"` and `date: "YYYY-MM-DD"` | pending |
+| E1 | `/api/taiwan/stress-index` response lacks `source` and `date` | Handler returns `TaiwanStressIndex` directly without populating provenance fields | `internal/monitoring/api/macro/handlers.go` | Response contains `source: "taiwan_calculator"` and `date: "YYYY-MM-DD"` | done |
+| E2 | `/api/narrative/stress-index/current` response lacks `source` and `date` | Handler constructs a new map and drops `Source`/`Date` | `internal/monitoring/api/narrative/handlers.go` | Response contains `source: "taiwan_calculator"` and `date: "YYYY-MM-DD"` | done |
 
 ---
 
@@ -62,24 +85,24 @@ Adding `source` and `date` to the live endpoints makes the surface uniform and l
 | Define acceptance criteria | done | Above |
 | Review blast radius | done | Two handlers only; additive JSON fields, backward-compatible |
 
-### Phase C — Implement (in progress)
+### Phase C — Implement (done)
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Populate `source`/`date` in `HandleTaiwanStressIndex` | E1 | pending | |
-| Populate `source`/`date` in `HandleStressIndexCurrent` | E2 | pending | |
-| Add/update tests | E1, E2 | pending | |
-| Run focused tests + gofmt + go vet | - | pending | |
-| Commit + push | - | pending | |
+| Populate `source`/`date` in `HandleTaiwanStressIndex` | E1 | done | commit `f02c694c` |
+| Populate `source`/`date` in `HandleStressIndexCurrent` | E2 | done | commit `f02c694c` |
+| Add/update tests | E1, E2 | done | `TestHandleTaiwanStressIndex_SourceAndDate`, `TestHandleStressIndexCurrent` |
+| Run focused tests + gofmt + go vet | - | done | 2 packages OK |
+| Commit + push | - | done | `f02c694c` |
 
-### Phase D — Close Out (pending)
+### Phase D — Close Out (done)
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| Rebuild Docker image | pending | `make rebuild-all` |
-| Restart atlas-go container | pending | `docker compose up -d atlas-go` |
-| Verify endpoints | pending | `curl` returns `source`/`date` |
-| Update manifest status | pending | |
+| Rebuild Docker image | done | image `atlas-atlas:local` digest `a53cdc43fbf4`, commit `f02c694c` |
+| Restart atlas-go container | done | `docker compose up -d --no-build atlas` |
+| Verify endpoints | done | curl returns `source`/`date` |
+| Update manifest status | done | this file |
 
 ---
 
