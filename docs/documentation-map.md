@@ -11,7 +11,7 @@
 | 檔案 | 用途 |
 |------|------|
 | `README.md` | 專案快速入口（~100 行 gateway） |
-| `AGENTS.md` | 跨工具 AI 共用指引（72 行，≤ 155 行警告線） |
+| `AGENTS.md` | 跨工具 AI 共用指引（77 行，≤ 155 行警告線） |
 | `CLAUDE.md` | Claude Code 專屬設定（前端架構、部署、token 效率） |
 | `CHANGELOG.md` | 版本變更記錄 |
 | `LICENSE`, `NOTICE` | 法務文件 |
@@ -41,8 +41,8 @@
 | `docs/documentation-standard.md` | 文件存放規範 | ✅ |
 | `docs/documentation-map.md` | 本文件 | ✅ |
 | `docs/conventions-checklist.md` | 慣例檢查清單 | ✅ |
-| `docs/reference/workflow-map.md` | 21 條 workflow 盤查（WA-001–WA-701） | ✅ |
-| `docs/reference/tool-catalog.md` | atlas-mcp 110 tools 完整 catalog | ✅ |
+| `docs/reference/workflow-map.md` | 42 條 workflow 盤查（WA-001–WA-701） | ✅ |
+| `docs/reference/tool-catalog.md` | atlas-mcp 112 tools 完整 catalog | ✅ |
 
 ### 🏗️ 架構 / 領域知識
 
@@ -201,7 +201,7 @@
 
 | 目錄 | 用途 |
 |------|------|
-| `docs/audit/` | 審計報告（16 個檔案） |
+| `docs/audit/` | 審計報告（18 個檔案） |
 | `docs/archive/` | 歷史歸檔（42 個檔案，見 archive/README.md） |
 | `docs/branch-hygiene/` | Branch 清理紀錄（1 個檔案） |
 | `docs/handoff/` | 任務交接（3 個檔案） |
@@ -237,8 +237,8 @@
 
 | 檔案 | 用途 |
 |------|------|
-| `docs/reference/workflow-map.md` | 21 條 workflow 盤查（WA-001–WA-701） |
-| `docs/reference/tool-catalog.md` | atlas-mcp 110 tools 完整 catalog |
+| `docs/reference/workflow-map.md` | 42 條 workflow 盤查（WA-001–WA-701） |
+| `docs/reference/tool-catalog.md` | atlas-mcp 112 tools 完整 catalog |
 | `docs/reference/processes.yaml` | 結構化 workflow metadata |
 | `cmd/atlas-mcp/README.md` | MCP 給 agent 的唯一入口 |
 | `docs/investor/README.md` | 投資人 5 分鐘入門 |
@@ -249,4 +249,4 @@
 
 > **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-15。
 >
-> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、docs/audit/ 數量 15→16。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md`（Stage 7 follow-up）。
+> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、docs/audit/ 數量 16→18、docs/specs 31→47、docs/guides 8→9、AGENTS.md 72 行→77 行。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md`（Stage 7 follow-up）。

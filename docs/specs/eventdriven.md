@@ -1,6 +1,6 @@
 # eventdriven 事件驅動資金流預測規格
 
-> 本文件為 `internal/eventdriven` 的技術規格補充；模組陷阱見 `internal/narrative/AGENTS.md`（Stage 5 起 detector 抽象層的關鍵設計都在 narrative 側）。Stage 5 規劃見 `IMPLEMENTATION_PLAN_STAGE_5.md`。
+> 本文件為 `internal/eventdriven` 的技術規格補充；模組陷阱見 `internal/narrative/AGENTS.md`（Stage 5 起 detector 抽象層的關鍵設計都在 narrative 側）。Stage 5 規劃見 `../archive/2026-07-14-atlas-stage5-detector-plan.md`。
 
 ## 一、模組定位
 
@@ -138,7 +138,7 @@ CREATE TABLE detector_scan_log (
 
 ## 十一、相關文件
 
-- [`IMPLEMENTATION_PLAN_STAGE_5.md`](../../IMPLEMENTATION_PLAN_STAGE_5.md) — Stage 5 完整規劃
+- [`2026-07-14-atlas-stage5-detector-plan.md`](../archive/2026-07-14-atlas-stage5-detector-plan.md) — Stage 5 完整規劃
 - [`internal/narrative/AGENTS.md`](../../internal/narrative/AGENTS.md) — narrative 模組陷阱 + Detector 抽象層設計
 - [`internal/ledger/AGENTS.md`](../../internal/ledger/AGENTS.md) — （Stage 5 尚未建立，TODO）
 - [`internal/scheduler/AGENTS.md`](../../internal/scheduler/AGENTS.md) — （Stage 5 尚未建立，TODO）

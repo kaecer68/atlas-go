@@ -75,7 +75,7 @@ MCP client config 路徑：
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **111 個 tool**（業務 103 + template_detector 2 + roots 2 + audit 4；sampling/elicitation feature-gated 各 +1 達 113；啟動期 assert ∈ [111, 113]，post-Round-2 dedup 基線，權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
+| MCP Tools | **112 個 tool**（業務 106 + template_detector 2 + audit 4；sampling/elicitation feature-gated 各 +1 達 114；啟動期 assert ∈ [111, 113]，post-Round-2 dedup 基線，權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
@@ -281,7 +281,7 @@ hermes mcp restart atlas-mcp
 hermes mcp list  # 確認 tool 數量無異常變化（91±2）
 ```
 
-> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（啟動期 `RegisteredToolCount ∈ [111, 113]` assert 強制；目前 **111 tools** 預設啟用，sampling/elicitation feature-gated 全開才 +2 達 113）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
+> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（啟動期 `RegisteredToolCount ∈ [112, 114]` assert 強制；目前 **112 tools** 預設啟用，sampling/elicitation feature-gated 全開才 +2 達 114）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
 
 ## License
 

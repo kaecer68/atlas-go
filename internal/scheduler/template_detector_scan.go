@@ -1,6 +1,6 @@
 // Package scheduler — Stage 5 PR#4 template_detector_scan BackgroundTask.
 //
-// Stage 1 IMPLEMENTATION_PLAN.md PR#4 規劃了每 1h 掃描 trigger 條件的
+// Stage 1 ../../docs/archive/2026-07-12-atlas-event-flow-gap-plan.md PR#4 規劃了每 1h 掃描 trigger 條件的
 // template_detector_scan 排程但從未實作。本檔落地：每 1h 呼叫
 // narrative.DetectorRegistry.RunAll(),結果寫到 ledger.DetectorScanStore
 // (不發 bus event 以避免污染 eventdriven 既有路徑)。

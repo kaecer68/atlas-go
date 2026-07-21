@@ -150,4 +150,4 @@ w_max	0.15	現有 constraints.MaxPositionPct
    - Step 3：若為校準結果 → 提交；若為快照備份 → 忽略/刪除
    - **禁止猜測、禁止未經確認直接刪除、禁止 stash/checkout 掩蓋問題**
 
-4. **跨 agent 一致性**：`docs/tools.md` §「本地修改標準作業」與 `AGENTS.md` §「快速對照表」互為備援，確保不同 model/tool 的 agent 都能找到正確判斷依據。
+4. **跨 agent 一致性**：`docs/operations/version-bumping.md` 與 `AGENTS.md` §「高頻陷阱速查」互為備援，確保不同 model/tool 的 agent 都能找到正確判斷依據。

@@ -38,7 +38,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 
 ---
 
-## 3. Workflow 候選清單（21 條）
+## 3. Workflow 候選清單（42 條）
 
 下列由 `internal/eventbus` 的 subscribe 點 + `internal/orchestrator/` 的 plugin chain + `internal/scheduler/` 的 **6 個 task（13 個 .go 檔含測試 + doc.go）** + `internal/marketdata/` 的 channel adapter 推導。每條列出已確認的入口與**已標記的缺口**（給 Stage 2 補完）。
 
@@ -46,7 +46,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 
 | ID | 工作流程 | 入口位置 | 觸發條件 | 主要產出 | 缺口 |
 |----|---------|---------|---------|---------|------|
-| **WA-100** | Market Data Ingestion | `internal/marketdata/provider.go` + **56 個 provider 檔**（marketdata/ 目錄共 97 個 .go 檔） | cron + Gateway channel adapter 啟動時 | 各 channel snapshot（TWSE/TPEX/Fugle/Yahoo/Fubon 等）→ Redis cache + PostgreSQL | 各 provider 的更新頻率、限流策略 |
+| **WA-100** | Market Data Ingestion | `internal/marketdata/provider.go` + **56 個 provider 檔**（marketdata/ 目錄共 121 個 .go 檔） | cron + Gateway channel adapter 啟動時 | 各 channel snapshot（TWSE/TPEX/Fugle/Yahoo/Fubon 等）→ Redis cache + PostgreSQL | 各 provider 的更新頻率、限流策略 |
 | **WA-101** | Realtime Regime Detection | `internal/marketdata/realtime/`（realtime flag） | websocket 推播（需要 `-allow-realtime` flag） | 即時 regime 訊號 | ⚠️ flag 預設關閉 |
 | **WA-102** | US Market Refresh | `internal/apigateway/us_market_refresh.go:NewUSMarketRefreshTask` | BackgroundTaskFunc 排程 | 美股指數 / 個股資料刷新 | 排程頻率未明 |
 | **WA-103** | Ingestion Lag Monitor | `NewIngestionLagMonitor`（訂閱 eventbus） | event-driven（每個 ingestion event） | 落後指標 event | threshold / debounce 邏輯 |
@@ -248,7 +248,7 @@ Broker config 旗標（10 個）：`-broker-mode`、`-broker-adapter`、`-broker
 
 ## 7. 資料來源（Provider）清單
 
-`internal/marketdata/` 共 97 檔，分為：
+`internal/marketdata/` 共 121 檔，分為：
 
 | 類型 | 範例 provider |
 |------|--------------|

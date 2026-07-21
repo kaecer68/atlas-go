@@ -40,7 +40,7 @@ UPDATED=0
 for f in "${TARGETS[@]}"; do
     [[ -f "$f" ]] || continue
     if grep -qE "${PATTERN}" "$f"; then
-        perl -i -pe "s/${PATTERN}/v${VERSION}\$1/g" "$f"
+        perl -i -pe "next if / 新|完整 release notes/; s/${PATTERN}/v${VERSION}\$1/g" "$f"
         echo "  ✓ $f"
         UPDATED=$((UPDATED + 1))
     fi

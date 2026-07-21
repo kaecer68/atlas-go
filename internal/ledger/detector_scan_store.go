@@ -4,7 +4,7 @@
 // template_detector_scan BackgroundTask (see internal/scheduler/
 // template_detector_scan.go) into the shared atlas.db SQLite database.
 //
-// Contract (pre-committed in IMPLEMENTATION_PLAN_STAGE_5.md §PR#4):
+// Contract (pre-committed in ../../docs/archive/2026-07-14-atlas-stage5-detector-plan.md §PR#4):
 //   - File:    internal/ledger/detector_scan_store.go
 //   - Type:    DetectorScanStore (interface)
 //   - Table:   detector_scan_log (schema in internal/ledger/sqlite_core.go)
