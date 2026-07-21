@@ -140,6 +140,6 @@ CREATE TABLE detector_scan_log (
 
 - [`2026-07-14-atlas-stage5-detector-plan.md`（內部 plan，已併入架構） — Stage 5 完整規劃
 - [`internal/narrative/AGENTS.md`](../../internal/narrative/AGENTS.md) — narrative 模組陷阱 + Detector 抽象層設計
-- [`internal/ledger/AGENTS.md`](../../internal/ledger/AGENTS.md) — （Stage 5 尚未建立，TODO）
-- [`internal/scheduler/AGENTS.md`](../../internal/scheduler/AGENTS.md) — （Stage 5 尚未建立，TODO）
+- [`internal/ledger/AGENTS.md`](../../internal/ledger/AGENTS.md) — （Stage 5 預計新增，目前以 narrative 模組 AGENTS.md 為主入口）
+- [`internal/scheduler/AGENTS.md`](../../internal/scheduler/AGENTS.md) — （Stage 5 預計新增，目前以 narrative 模組 AGENTS.md 為主入口）
 - [`internal/apigateway/CONSTITUTION.md`](../../internal/apigateway/CONSTITUTION.md) — Art.4 BackgroundTaskManager 強制
