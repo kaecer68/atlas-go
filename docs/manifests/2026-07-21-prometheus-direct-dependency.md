@@ -11,7 +11,7 @@
 
 | ID | Problem | Root Cause Hypothesis | Files to Change | Acceptance Criteria | Status | Documentation Impact | Notes |
 |----|---------|----------------------|-----------------|---------------------|--------|----------------------|-------|
-| DEP01 | `github.com/prometheus/client_golang` is uncommitted as direct while `github.com/prometheus/common` remains indirect | Prometheus imports were added by merged MCP observability code, but dependency classification was not fully normalized | `go.mod` | Both directly imported modules are direct requirements; `go mod tidy -diff` reports no `go.mod`/`go.sum` drift; MCP server tests and build pass | accepted | none | Evidence: `a858b586`, direct imports in `cmd/atlas-mcp/server/metrics.go` and tests, `go mod tidy -diff` |
+| DEP01 | `github.com/prometheus/client_golang` is uncommitted as direct while `github.com/prometheus/common` remains indirect | Prometheus imports were added by merged MCP observability code, but dependency classification was not fully normalized | `go.mod` | Both directly imported modules are direct requirements; `go mod tidy -diff` reports no `go.mod`/`go.sum` drift; MCP server tests and build pass | accepted | none | Evidence: `a858b586` (from PR #1157), direct imports in `cmd/atlas-mcp/server/metrics.go` and tests, `go mod tidy -diff` |
 
 ---
 
@@ -44,8 +44,8 @@
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| Update manifest status | DEP01 | done | version 1.1 |
-| Push branch / open PR | DEP01 | pending | branch ready for merge |
+| Update manifest status | DEP01 | done | version 1.2 |
+| Push branch / open PR | DEP01 | done | branch pushed; PR #1251 opened at `https://github.com/kaecer68/atlas-go/pull/1251` |
 | Run CI / verify | DEP01 | done | `go mod tidy -diff`, `go test ./cmd/atlas-mcp/server`, `go build ./cmd/atlas-mcp/...` |
 
 
@@ -61,12 +61,13 @@
 
 ## Session-End State
 
-- **Done this session**: confirmed the original diff was uncommitted but functionally valid; classified both direct Prometheus imports and added missing checksums
-- **Remaining**: merge branch through the normal PR workflow
-- **Next action**: open/merge PR `fix/prometheus-direct-dependency`
+
+- **Done this session**: confirmed the original diff was uncommitted but functionally valid; classified both direct Prometheus imports and added missing checksums; pushed branch and opened PR #1251
+- **Remaining**: PR #1251 review and merge through the normal workflow
+- **Next action**: address review findings (P3 documentation consistency only), then merge PR #1251
 - **Uncommitted code**: no
-- **Branch / PR**: `fix/prometheus-direct-dependency` / pending
-- **Paused because**: no runtime conflict found
+- **Branch / PR**: `fix/prometheus-direct-dependency` / https://github.com/kaecer68/atlas-go/pull/1251
+- **Paused because**: awaiting review on PR #1251
 
 ---
 
@@ -74,4 +75,5 @@
 
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
+| 2026-07-21 | 1.2 | Synced manifest to PR #1251 state: Phase D "Push branch / open PR" flipped to done, Session-End updated with PR URL, Invariant Tracker now cites PR #1157 as regression source. | OpenCode |
 | 2026-07-21 | 1.1 | Classified `client_golang` and `common` as direct dependencies; `go mod tidy`, MCP server tests, and MCP build pass. | OpenCode |
