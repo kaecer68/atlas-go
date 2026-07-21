@@ -64,6 +64,10 @@ else
   echo -e "${YELLOW}⚠️  staticcheck not installed, skipping${NC}"
 fi
 
+# shellcheck: gate 真實風險 (rm -rf 變數空字串、未加引號的 word-split、cd 未檢查 等)
+# 風格類 (SC2155, SC2034) 列印但不擋。沒裝 shellcheck 時 graceful skip。
+run_check "shellcheck" bash scripts/ci/check_shellcheck.sh
+
 run_check "case-conflict filenames" bash scripts/ci/check_case_conflicts.sh --strict
 
 # ── Tests ──

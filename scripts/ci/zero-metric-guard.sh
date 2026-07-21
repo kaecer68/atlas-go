@@ -37,7 +37,7 @@ for file in $(find "${SEARCH_DIR}/pages" "${SEARCH_DIR}/components" -maxdepth 2 
 
   skip=false
   for pat in "${EXCLUDE_FILES[@]}"; do
-    if [[ "${rel}" == ${pat} ]]; then
+    if [[ "${rel}" == "${pat}" ]]; then
       skip=true
       break
     fi

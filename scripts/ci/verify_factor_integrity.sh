@@ -9,7 +9,14 @@ fail() { echo "  [FAIL] $1 — $2"; PASS=false; CHECKS_RUN=$((CHECKS_RUN+1)); }
 warn() { echo "  [WARN] $1 — $2"; CHECKS_RUN=$((CHECKS_RUN+1)); }
 
 FACTOR_TYPE_FILE="internal/portfolio/optimizer.go"
-FACTOR_TYPE_FILES=$(ls internal/portfolio/optimizer*.go 2>/dev/null | grep -v _test.go | sort -u)
+# SC2010: avoid ls|grep — use a glob + a filter loop to handle non-alpha filenames.
+FACTOR_TYPE_FILES=$(
+    for f in internal/portfolio/optimizer*.go; do
+        [[ "$f" == *_test.go ]] && continue
+        [[ ! -e "$f" ]] && continue
+        echo "$f"
+    done | sort -u
+)
 WEIGHT_ENGINE_FILE="internal/portfolio/factor_weight_engine.go"
 BREAKDOWN_FILE="internal/domain/shared/shared.go"
 FRONTEND_TS="shared_web/static/js/shared/field_types.ts"

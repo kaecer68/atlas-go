@@ -27,7 +27,8 @@ passes=0
 check() {
     local desc="$1"; shift
     local result
-    result=$(eval "$@" 2>&1)
+    # SC2294: drop eval so we preserve whitespace/symbols correctly.
+    result=$("$@" 2>&1)
     local rc=$?
     if [[ $rc -eq 0 ]]; then
         printf "PASS  %s\n" "$desc"
