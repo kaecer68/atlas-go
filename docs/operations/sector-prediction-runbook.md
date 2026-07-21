@@ -1,7 +1,7 @@
 # C07 Sector Prediction — Operations Runbook
 
-> **對應 spec**：`docs/specs/sector-dimension-prediction.md` v1.1
-> **對應 invariant tracker**：`docs/manifests/sector-dimension-prediction-invariant-manifest.md`
+> **對應 spec**：`docs/specs/sector-dimension-prediction-spec.md` v1.1
+> **對應 invariant tracker**：``.omo/manifests/sector-dimension-prediction-invariant-manifest.md`（內部，gitignored）`
 > **對應觀察記錄**：`docs/operations/sector-prediction-observation-log.md`
 > **範圍**：Wave 11 C07 — `/api/events/prediction` 新增 `sector_predictions`（L1 板塊 5 日方向預測）上線後 2 週觀察期
 > **Issue**: PR #1200 + Issue #1193
@@ -14,7 +14,7 @@
 
 啟用 `SECTOR_PREDICTION_ENABLED` 前,逐項確認:
 
-> **推薦路徑**:先跑 `go run ./cmd/experimental/c07-preflight [http://localhost:18080]`(per [`docs/specs/experimental-feature-launch-gate.md`](../specs/experimental-feature-launch-gate.md) L2.4-style launch gate pattern)。本節手動清單與 c07-preflight automatable checks 一致;manual checks 仍需 operator 自行確認。
+> **推薦路徑**:先跑 `go run ./cmd/experimental/c07-preflight [http://localhost:18080]`(per [`docs/specs/experimental-feature-launch-gate-spec.md`](#) L2.4-style launch gate pattern)。本節手動清單與 c07-preflight automatable checks 一致;manual checks 仍需 operator 自行確認。
 
 - [ ] **環境選擇**: staging 或專用 L2.4 harness,**不可在 production 直接啟用**(c07-preflight 會擋非 staging URL)。
 - [ ] **資料源檢查**: `internal/marketdata/macro_provider.go:MacroDataSnapshot` 在 staging 可取得完整 `ForeignInvestorNet` / `TsmADRDelta` / `NVDA` / `DXY` 4 個 leading indicator。如果任一欄位為 0,先查 channel health(`/api/data/channels`)。
@@ -136,7 +136,7 @@ Day 14 acceptance 全部通過後,執行下列步驟(每步獨立 PR):
 - [ ] **Driver 可解釋性**: 累計 spot-check ≥ 20 筆,每筆至少引用 1 個 macro/cycle/event 來源
 - [ ] **Rollback 驗證通過**: 至少一次手動測試 (見 §5.2)
 - [ ] **邀請至少一位 team member 審閱觀察記錄** (`docs/operations/sector-prediction-observation-log.md`),確認無遺漏 edge case
-- [ ] **Invariant 確認**: 運行 `docs/manifests/sector-dimension-prediction-invariant-manifest.md` 中所有 automated checks
+- [ ] **Invariant 確認**: 運行 ``.omo/manifests/sector-dimension-prediction-invariant-manifest.md`（內部，gitignored）` 中所有 automated checks
 
 ### 5.2 Rollback Verification Procedure
 
@@ -205,8 +205,8 @@ Promotion PR 應包含:
 
 ## 7. References
 
-- Spec: `docs/specs/sector-dimension-prediction.md`
-- Invariant Tracker: `docs/manifests/sector-dimension-prediction-invariant-manifest.md`
+- Spec: `docs/specs/sector-dimension-prediction-spec.md`
+- Invariant Tracker: ``.omo/manifests/sector-dimension-prediction-invariant-manifest.md`（內部，gitignored）`
 - 觀察記錄: `docs/operations/sector-prediction-observation-log.md`
 - 實作:
   - Backend: `internal/eventdriven/sector_predictor.go` + `predictor.go` + `handler.go` + `types.go`

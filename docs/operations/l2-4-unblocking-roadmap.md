@@ -200,6 +200,6 @@ When picking up this work next session, **start at Step 1 (T15 user decision)**.
 - `docs/operations/l2-4-runbook.md` §1, §2, §3 (manual flow)
 - `docs/operations/l2-4-observation-log.md` (Week 0-4 template)
 - `l2-4-fault-tolerance-design.md` (PR #1023, in docs/operations/)
-- `docs/audit/2026-07-08-l2-4-llmdriver-usage.md` (PR #1024)
+- （內部審計，`.omo/audit/`）(PR #1024)
 - `internal/orchestrator/sector_agent_llm.go:76-83` (LLMDriver definition, target of T14-3c)
 - Issue #825 (auto-cron), Issue #826 (promotion), Issue #828 (CLI flag — DONE)

@@ -6,7 +6,7 @@
 
 ## strategy_techniques（心法庫）
 
-`strategy_techniques` 提供以 `StrategyFrame` 為核心的規則引擎，作為台股投資心法看板與系統決策依據。五層框架與 4 核心短線指標的完整對應表見 [`docs/specs/strategy-techniques.md`](../../docs/specs/strategy-techniques.md)。
+`strategy_techniques` 提供以 `StrategyFrame` 為核心的規則引擎，作為台股投資心法看板與系統決策依據。五層框架與 4 核心短線指標的完整對應表見 [`docs/specs/strategy-techniques-spec.md`](../../docs/specs/strategy-techniques-spec.md)。
 
 ### 關鍵陷阱
 

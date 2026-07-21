@@ -30,7 +30,7 @@ The canonical pattern for experimental feature launch gates in atlas-go. Establi
 
 Read these in order before designing any new launch gate:
 
-1. **`docs/specs/experimental-feature-launch-gate.md`** — Canonical pattern spec (this skill's source of truth)
+1. **`docs/specs/experimental-feature-launch-gate-spec.md`** — Canonical pattern spec (this skill's source of truth)
 2. **`cmd/experimental/l2-4-preflight/main.go`** — Manual path (operator runs before flipping flag)
 3. **`internal/scheduler/l2_4_auto_cron.go`** — Automated path (scheduler gates cron trigger)
 4. **`docs/operations/l2-4-runbook.md`** — Operator-facing procedure
@@ -131,7 +131,7 @@ Add the new preflight/auto-cron to `scripts/ci/check_no_duplicate_preflight.sh` 
 
 ### Step 5: Update Spec
 
-Add a row to the "Reference Implementations" table in `docs/specs/experimental-feature-launch-gate.md`. This keeps the pattern's audit trail complete.
+Add a row to the "Reference Implementations" table in `docs/specs/experimental-feature-launch-gate-spec.md`. This keeps the pattern's audit trail complete.
 
 ### Step 6: Cross-link Docs
 

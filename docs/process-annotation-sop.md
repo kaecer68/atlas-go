@@ -15,7 +15,7 @@
 ```go
 // atlas:process WA-301-llm-loop
 // atlas:description 透過 LLM router 對單一標的執行 Plan → ToolCall → Reflect loop，
-//                  直到 LLM 發出最終 conviction（見 docs/specs/agent-loop-state-machine.md）
+//                  直到 LLM 發出最終 conviction（見 docs/specs/agent-loop-state-machine-spec.md）
 // atlas:triggers
 //   - event: SectorAgentLLM.PlanReflectRunner.PlanStep
 //   - cron: -

@@ -69,7 +69,7 @@ target_audience: "developer"
 | Tool 全量定義 | `cmd/atlas-mcp/server/tools_*.go`（26 個檔案）+ `cmd/atlas-mcp/server/tools.go`（核心 entry-point） | 112 個 tool handler |
 | 自動描述 | `cmd/atlas-mcp/auto-desc.gen.json`（1146 行） | descgen 生成的 tool description |
 | Tool catalog | `docs/reference/tool-catalog.md` | 112 個 tool 的完整清單與決策樹 |
-| MCP 規格 | `docs/specs/agent-mcp-server.md` | 設計規格、安全邊界、命名慣例 |
+| MCP 規格 | `docs/specs/agent-mcp-server-spec.md` | 設計規格、安全邊界、命名慣例 |
 
 ## 實作位置（Implementation Locations）
 

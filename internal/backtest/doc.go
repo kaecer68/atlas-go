@@ -13,7 +13,7 @@
 // stride for cross-fold validation.
 //
 // Results feed into ledger.BuildScorecards() for Sharpe / OOS ratio
-// computation. See docs/specs/backtest-pipeline.md for the canonical flow.
+// computation. See docs/specs/backtest-pipeline-spec.md for the canonical flow.
 //
 // Maturity: evolving
 package backtest

@@ -34,7 +34,7 @@
 - ✅ MCP tool wrapper 已註冊（commit `f754d014`）
 - ❌ HTTP route 帶 auth 回 404（route 沒註冊）
 
-**修復**（commit `9a7da23f`）：移除 if-else gate，總是註冊路由 + nil store 容錯。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 「G-08 真相揭露 + 修復」段。
+**修復**（commit `9a7da23f`）：移除 if-else gate，總是註冊路由 + nil store 容錯。詳見 `.omo/audit/2026-07-15-capital-flow-audit-followup.md`（內部） 「G-08 真相揭露 + 修復」段。
 
 ### 自動化 runner（macOS launchd 推薦）
 
@@ -111,7 +111,7 @@ echo "incident description" > ~/logs/atlas-soak/incidents/$(date -u +%Y-%m-%d)/i
 3. **保留但降頻 cron/launchd**：daily 06:00 → weekly Monday 06:00（cron 改 `0 6 * * 1`；launchd 改 Weekday=1）
 4. **刪除** `.omo/plans/2026-07-15-capital-flow-audit-followup/`（gitignored，純 plan-only，任務已完成）
 5. **Production rollout**：merge main → production deploy（per release process）
-6. **更新** `docs/audit/2026-07-15-capital-flow-audit-followup.md` 標記「verified in staging YYYY-MM-DD」
+6. **更新** `.omo/audit/2026-07-15-capital-flow-audit-followup.md`（內部） 標記「verified in staging YYYY-MM-DD」
 
 ## 觀察窗口 vs Soak 差異
 

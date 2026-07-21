@@ -23,7 +23,7 @@ PR 經 GitHub UI merge 後，**AI 必須自行執行以下 5 步**，不要等�
 5. **Planning artifacts 清理**：`rm .omo/plans/*.md .omo/research/*.md .omo/handoff/*.md`（若該 PR 對應的規劃 .md 已 ship）。**有長期保存價值的內容不要留整份 .md** — 先萃取到 `docs/specs/`、`docs/operations/` 等正式位置,或歸檔到 `docs/archive/<feature>-<date>.md`。`.omo/` 是 gitignored working area,不是 archive。
 
 完整 SOP 見 `docs/quickstart.md` § Git 工作流 §4。批次清理（超過 5 個
-stale branch）見 `docs/branch-hygiene/`。
+stale branch）見 `.omo/branch-hygiene/`（內部，gitignored）。
 
 ## 工具鏈（2026-06 修訂）
 

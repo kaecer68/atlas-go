@@ -1,7 +1,7 @@
 # Spec: macro snapshot timeline API
 
 > **Spec owner**: OpenCode CLI Agent (Sisyphus)
-> **Audit source**: docs/manifests/2026-07-20-cl2-macro-snapshot-history.md
+> **Audit source**: `.omo/manifests/2026-07-20-cl2-macro-snapshot-history.md`
 > **承接**: docs/specs/macro-category-spec.md（不同主題；本 spec 為 macro 域 timeline 端點專屬）
 > **Created**: 2026-07-20
 > **Status**: Phase B 草案（待 review + Phase C 實作）
@@ -333,13 +333,13 @@ type TimelineEntry struct {
 
 - [ ] 本 spec §3 4 條 invariants 與 manifest §Invariant Tracker 對齊
 - [ ] 本 spec §4 與 manifest §設計細節 一致
-- [ ] PR body 引用 `See docs/manifests/2026-07-20-cl2-macro-snapshot-history.md`
+- [ ] PR body 引用 `See `.omo/manifests/2026-07-20-cl2-macro-snapshot-history.md``
 
 ---
 
 ## 9. References
 
-- docs/manifests/2026-07-20-cl2-macro-snapshot-history.md（本 spec 的 audit manifest）
+- `.omo/manifests/2026-07-20-cl2-macro-snapshot-history.md`（本 spec 的 audit manifest）
 - docs/specs/macro-category-spec.md（macro 域既有 spec；本 spec 為 timeline 端點專屬補充）
 - docs/specs/capital-flow-seven-dimension-spec.md §14 + CF-INV-15/16/17（CL-5 鋪路參考）
 - internal/monitoring/AGENTS.md（module-level 慣例）

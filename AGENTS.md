@@ -39,7 +39,7 @@
   - [`.github/instructions/go-core.instructions.md`](.github/instructions/go-core.instructions.md)
   - [`.github/instructions/experiments-guardrails.instructions.md`](.github/instructions/experiments-guardrails.instructions.md)
   - [`.github/instructions/live-trading.guardrails.instructions.md`](.github/instructions/live-trading.guardrails.instructions.md)
-- **文件治理**：[`docs/documentation-standard.md`](docs/documentation-standard.md)、[`docs/documentation-map.md`](docs/documentation-map.md)
+- **文件治理：docs/documentation-standard.md、docs/documentation-map.md、.claude/skills/atlas-doc-governance/SKILL.md
 
 ## 架構與模組入口
 

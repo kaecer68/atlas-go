@@ -48,7 +48,7 @@
 git ls-files --others --exclude-standard .opencode/prompts/
 
 # 列出所有引用過時工具的 prompt（依當前工具鏈調整 pattern）
-grep -rln "graphify\|sven1103" .opencode/prompts/ docs/audit/
+grep -rln "graphify|sven1103" .opencode/prompts/ .omo/audit/\|grep -rln "graphify|sven1103" .opencode/prompts/ .omo/audit/
 ```
 
 ## 違規情境處理

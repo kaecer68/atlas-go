@@ -22,7 +22,7 @@
 
 ### JSON 慣例
 
-讀 JSONL（`recommendation_outcomes.jsonl`）時，**部分 legacy 欄位使用 PascalCase**（如 `AgentID`, `Skill`），Unmarshal 結構必須精確對應。前端用 snake_case。詳見 `docs/audit/2026-05-07-monitoring-pascalcase-snakecase-incident.md`。
+讀 JSONL（`recommendation_outcomes.jsonl`）時，**部分 legacy 欄位使用 PascalCase**（如 `AgentID`, `Skill`），Unmarshal 結構必須精確對應。前端用 snake_case。詳見 `內部審計（.omo/audit/）`。
 
 ---
 
@@ -78,7 +78,7 @@
 
 ## Live 偵測器協調器
 
-Live 偵測器協調器（原始檔案仍保留 `wave9` 命名）在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。歷史設計詳見 `docs/handoff/2026-06-26-wave9-observability-coordinator.md`。
+Live 偵測器協調器（原始檔案仍保留 `wave9` 命名）在 live mode 統一啟動/協調/關閉 5 個偵測器（RegimeDebouncer、FactorWeightRegressionDetector、DriftDetector v2、ChannelHealthSynthesizer、IngestionLagMonitor）。歷史設計詳見 `內部交接（.omo/handoffs/）`。
 
 ---
 

@@ -117,35 +117,35 @@
 
 | 檔案 | 用途 | 驗證 |
 |------|------|------|
-| `docs/specs/agent-mcp-server.md` | MCP server 規格（canonical spec） | ✅ |
-| `docs/specs/agent-mcp-phase3-residual.md` | MCP Phase 3 殘留項目 | ✅ |
-| `docs/specs/agent-mcp-phase4.md` | MCP Phase 4 規格 | ✅ |
-| `docs/specs/agent-loop-state-machine.md` | AgentLoop 狀態機規格 | ✅ |
-| `docs/specs/llm-sector-agent.md` | L2.3 LLM-driven sector agent 設計 | ✅ |
-| `docs/specs/llm-routing.md` | LLM Provider 路由策略 | ✅ |
-| `docs/specs/llm-interface-contract.md` | LLM 統一介面合約 | ✅ |
-| `docs/specs/domain-types.md` | Domain Canonical Types 規格 | ✅ |
-| `docs/specs/wave9-observability.md` | Wave 9 Observability 設計規格 | ✅ |
+| `docs/specs/agent-mcp-server-spec.md` | MCP server 規格（canonical spec） | ✅ |
+| `docs/specs/agent-mcp-phase3-residual-spec.md` | MCP Phase 3 殘留項目 | ✅ |
+| `docs/specs/agent-mcp-phase4-spec.md` | MCP Phase 4 規格 | ✅ |
+| `docs/specs/agent-loop-state-machine-spec.md` | AgentLoop 狀態機規格 | ✅ |
+| `docs/specs/llm-sector-agent-spec.md` | L2.3 LLM-driven sector agent 設計 | ✅ |
+| `docs/specs/llm-routing-spec.md` | LLM Provider 路由策略 | ✅ |
+| `docs/specs/llm-interface-contract-spec.md` | LLM 統一介面合約 | ✅ |
+| `docs/specs/domain-types-spec.md` | Domain Canonical Types 規格 | ✅ |
+| `docs/specs/wave9-observability-spec.md` | Wave 9 Observability 設計規格 | ✅ |
 | `docs/specs/l2-4-observation-spec.md` | L2.4 觀察指標 slog schema | ✅ |
-| `docs/specs/sim-engine.md` | 模擬引擎 7 步執行序 | ✅ |
-| `docs/specs/janus-regime-detection.md` | JANUS meta-layer + Risk Gate | ✅ |
-| `docs/specs/prism-cohort-training.md` | PRISM 5-Regime queue | ✅ |
-| `docs/specs/reporting-contract.md` | Markdown Reporting Render Contract | ✅ |
-| `docs/specs/screener-contract.md` | Screener 篩選管線契約 | ✅ |
-| `docs/specs/backtest-pipeline.md` | 歷史回測執行規格 | ✅ |
-| `docs/specs/repository-dual-write.md` | PG + JSONL 雙寫持久化規格 | ✅ |
-| `docs/specs/taiwan-tax.md` | 台灣稅務計算規格 | ✅ |
-| `docs/specs/real-time-regime-detection.md` | 即時 regime 偵測規格 | ✅ |
-| `docs/specs/security-audit.md` | 資安審計規格 | ✅ |
-| `docs/specs/stock-api-contract.md` | 個股 API 合約 | ✅ |
-| `docs/specs/stock-quote-page.md` | 個股快查頁面規格 | ✅ |
-| `docs/specs/experimental-feature-launch-gate.md` | 實驗性功能啟動閘門 | ✅ |
+| `docs/specs/sim-engine-spec.md` | 模擬引擎 7 步執行序 | ✅ |
+| `docs/specs/janus-regime-detection-spec.md` | JANUS meta-layer + Risk Gate | ✅ |
+| `docs/specs/prism-cohort-training-spec.md` | PRISM 5-Regime queue | ✅ |
+| `docs/specs/reporting-contract-spec.md` | Markdown Reporting Render Contract | ✅ |
+| `docs/specs/screener-contract-spec.md` | Screener 篩選管線契約 | ✅ |
+| `docs/specs/backtest-pipeline-spec.md` | 歷史回測執行規格 | ✅ |
+| `docs/specs/repository-dual-write-spec.md` | PG + JSONL 雙寫持久化規格 | ✅ |
+| `docs/specs/taiwan-tax-spec.md` | 台灣稅務計算規格 | ✅ |
+| `docs/specs/real-time-regime-detection-spec.md` | 即時 regime 偵測規格 | ✅ |
+| `docs/specs/security-audit-spec.md` | 資安審計規格 | ✅ |
+| `docs/specs/stock-api-contract-spec.md` | 個股 API 合約 | ✅ |
+| `docs/specs/stock-quote-page-spec.md` | 個股快查頁面規格 | ✅ |
+| `docs/specs/experimental-feature-launch-gate-spec.md` | 實驗性功能啟動閘門 | ✅ |
 | `docs/specs/phase3-5-spec.md` | Phase 3.5 規格 | ✅ |
-| `docs/specs/mcp-sdk-api-surface.md` | MCP SDK API surface | ✅ |
-| `docs/specs/atlas-mcp-stock-capitalflow-ranker-design.md` | atlas-mcp stock/capitalflow/ranker 設計 | ✅ |
-| `docs/specs/dashboard-api-contract.md` | Dashboard API 合約 | ✅ |
+| `docs/specs/mcp-sdk-api-surface-spec.md` | MCP SDK API surface | ✅ |
+| `docs/specs/atlas-mcp-ranker-design-spec.md` | atlas-mcp stock/capitalflow/ranker 設計 | ✅ |
+| `docs/specs/dashboard-api-contract-spec.md` | Dashboard API 合約 | ✅ |
 | `docs/specs/sector-allocation-simulation-closure-spec.md` | Canonical sector allocation、legacy 遷移、simulation application 與 F06 close-out 契約 | ✅ |
-| `docs/specs/guest-mode.md` | Guest mode 規格 | ✅ |
+| `docs/specs/guest-mode-spec.md` | Guest mode 規格 | ✅ |
 
 ### 📋 數據標準
 
@@ -201,17 +201,9 @@
 
 | 目錄 | 用途 |
 |------|------|
-| `docs/audit/` | 審計報告（18 個檔案） |
-| `docs/archive/` | 歷史歸檔（42 個檔案，見 archive/README.md） |
-| `docs/branch-hygiene/` | Branch 清理紀錄（1 個檔案） |
-| `docs/handoff/` | 任務交接（3 個檔案） |
-| `docs/investigations/` | 根因調查（5 個檔案） |
-| `docs/incidents/` | 事故記錄（2 個檔案） |
-| `docs/manifests/` | Invariant tracker manifests；產業配置模擬閉環由 `sector-allocation-simulation-closure-manifest.md` 管理 |
+| `docs/archive/` | 歷史歸檔（20 個檔案，見 archive/README.md） |
+| `docs/manifests/` | Manifest 治理模板（README.md + TEMPLATE.md）；個別 manifest 已移至 .omo/manifests/
 | `docs/investor/` | 投資人入口 + use cases（10 個檔案） |
-| `docs/observations/` | 觀察記錄（0 個檔案；內容已移至 `.omo/handoffs/`） |
-| `docs/research/` | 研究文件（1 個檔案） |
-| `docs/spikes/` | 技術 spike（1 個檔案） |
 
 ---
 
@@ -247,6 +239,6 @@
 
 ---
 
-> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-15。
+> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-21。
 >
-> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、docs/audit/ 數量 16→18、docs/specs 31→47、docs/guides 8→9、AGENTS.md 72 行→77 行。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md`（Stage 7 follow-up）。
+> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、.omo/audit/（gitignored）、docs/specs 31→47、docs/guides 8→9、AGENTS.md 72 行→77 行。詳見 `.omo/audit/2026-07-15-capital-flow-audit-followup.md（內部文件）`（Stage 7 follow-up）。

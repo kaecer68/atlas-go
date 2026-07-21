@@ -255,4 +255,4 @@ P0.1 審計發現：
 | `docs/data-directory-standard.md` | 定義哪些目錄需要 `_metadata.json` |
 | `docs/data-catalog.md` | 資料目錄（`maturity` 欄位與 `_metadata.json` 保持一致） |
 | `docs/json-schema-standard.md` | `schema_ref` 欄位指向的 schema 定義 |
-| `docs/audit/2026-06-02-p0-2-root-cause-analysis.md` | 根因分析（FG-1: 無規範） |
+| `.omo/audit/2026-06-02-p0-2-root-cause-analysis.md`（內部）| 根因分析（FG-1: 無規範）| 根因分析（FG-1: 無規範） |

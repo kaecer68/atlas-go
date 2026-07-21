@@ -41,7 +41,7 @@
 
 ### 第 6 個 check 為何被加？G-08 真相揭露
 
-加 6th check 後，發現 G-08 仍未完全修復 — MCP tool wrapper 已註冊，但 HTTP route 帶 auth 回 404。commit `9a7da23f` 移除 if-else gate，總是註冊路由 + nil store 容錯。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 「G-08 真相揭露 + 修復」段。
+加 6th check 後，發現 G-08 仍未完全修復 — MCP tool wrapper 已註冊，但 HTTP route 帶 auth 回 404。commit `9a7da23f` 移除 if-else gate，總是註冊路由 + nil store 容錯。詳見 `.omo/audit/2026-07-15-capital-flow-audit-followup.md`（內部） 「G-08 真相揭露 + 修復」段。
 
 ## 退出條件（任一未達即失敗）
 
@@ -60,7 +60,7 @@
 4. 降頻 cron/launchd：daily → weekly（Monday 06:00 UTC）
 5. 刪除 `.omo/plans/2026-07-15-capital-flow-audit-followup/`
 6. **Production rollout**：照 `docs/operations/production-rollout-runbook.md` Day 8 SOP（merge staging → main → tag → release workflow → smoke test）
-7. 在 `docs/audit/2026-07-15-capital-flow-audit-followup.md` 「最終驗證條件」勾選全部 → 標記「verified in staging 2026-07-22」
+7. 在 `.omo/audit/2026-07-15-capital-flow-audit-followup.md`（內部） 「最終驗證條件」勾選全部 → 標記「verified in staging 2026-07-22」
 
 ## 失敗後動作（任一 Day fail）
 

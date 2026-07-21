@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-> **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.0.21。L2.3 設計見 [`docs/specs/llm-sector-agent.md`](docs/specs/llm-sector-agent.md)、[`docs/specs/agent-loop-state-machine.md`](docs/specs/agent-loop-state-machine.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 已 ship(PR #821 merged 2026-06-29),文件永久化於 [`docs/operations/l2-4-runbook.md`](docs/operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](docs/specs/l2-4-observation-spec.md) + [`docs/operations/l2-4-followup.md`](docs/operations/l2-4-followup.md)(後續工作報告)。`UseLLMSectorAgents` flag 預設 off。
+> **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.0.21。L2.3 設計見 [`docs/specs/llm-sector-agent-spec.md`](docs/specs/llm-sector-agent-spec.md)、[`docs/specs/agent-loop-state-machine-spec.md`](docs/specs/agent-loop-state-machine-spec.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 已 ship(PR #821 merged 2026-06-29),文件永久化於 [`docs/operations/l2-4-runbook.md`](docs/operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](docs/specs/l2-4-observation-spec.md) + [`docs/operations/l2-4-followup.md`](docs/operations/l2-4-followup.md)(後續工作報告)。`UseLLMSectorAgents` flag 預設 off。
 
 ## 🌐 語言強制規範
 
@@ -42,7 +42,7 @@
 | `component-init.js` | 共用 component 初始化(circuit-breaker、sim-health、performance-report) |
 | `event-listeners.js` | DOM event 綁定(sidebar nav、evView 按鈕、shock sim 互動、modal 關閉) |
 | `pages/*.js` | 每個頁面的 render 函式,由 `main.js` 動態 import |
-| `pages/stock-quote.js` + `services/stock-api-client.js` | v0.0.0.32 個股快查(Issue #1038 / PR #1045)：4 API 並發 + 報價/基本面/籌碼/技術 4 section;Contract 見 [`docs/specs/stock-api-contract.md`](docs/specs/stock-api-contract.md) |
+| `pages/stock-quote.js` + `services/stock-api-client.js` | v0.0.0.32 個股快查(Issue #1038 / PR #1045)：4 API 並發 + 報價/基本面/籌碼/技術 4 section;Contract 見 [`docs/specs/stock-api-contract-spec.md`](docs/specs/stock-api-contract-spec.md) |
 | `page-shells/{login,register,premium,mcp,errors/404}.js` | v0.0.0.31 Phase A0/C 新增的 page shell（tier 認證 + MCP 頁 + 404 fallback）|
 | `services/auth.js` | v0.0.0.31 Phase A0 新增：JWT + tier 解析、`initAuth`/`isLoggedIn`/`getTier`/`renderNavState` |
 | `components/home-tier-sections.js` | v0.0.0.31 Phase B 新增：tier-gated home dashboard 渲染（capital flow + event prediction + event calendar + recommendations + daily report）|

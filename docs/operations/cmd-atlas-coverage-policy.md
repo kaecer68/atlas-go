@@ -87,5 +87,5 @@ go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
 - `cmd/atlas/main_test.go` line 194/281/346（3 個 live-broker 測試）
 - `cmd/atlas/live_mode_test.go`（TestLiveModeAcceptsDryRunBroker）
 - `cmd/atlas/` 其他 8 個 `_test.go`（api_routes / main_api / load_calibration_orders / run_live / run_simulation / run_simulation_mode / simulation_mode / storage_route）
-- `docs/audit/2026-06-15-pr-525-coverage.md`（PR #525 coverage push 595-line audit，**不衝突**，是事後檢視）
+- （內部審計，`.omo/audit/`）
 - `docs/silicon-indicators-coverage.md`（矽循環指標，**不衝突**，主題不同）

@@ -52,6 +52,8 @@ Status values: `pending` → `hypothesis` → `accepted` | `rejected`. No hypoth
 | Run CI / verify | - | pending | <CI link> |
 | Delete `.omo/plans/` files for this audit | - | pending | `ls .omo/plans/` |
 | Promote stable `.omo/briefs/` content to `docs/` | - | pending | <target doc path> |
+| Run `scripts/cleanup-manifests.sh` to check stale manifests | - | pending | <output> |
+| **Decide manifest fate**: archive (teaching value), promote (spec-level invariants), or delete | - | pending | see `docs/documentation-standard.md` §Manifest 完成後 Promotion 路徑 |
 | Verify no new unauthorized `.omo/` directories | - | pending | `ls .omo/` vs whitelist |
 
 ---

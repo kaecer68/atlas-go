@@ -33,7 +33,7 @@
 | **假日效應 lag** | 假日前/後一日的特殊流動模式需要 historical window ≥ 3 年才穩定，目前可能未達。 |
 | **MSCI pre-positioning** | 公告當日才反映，但 smart money 通常前一週就 position；可考慮加上 pre-window。 |
 | **月營收解盲差** | 電子/傳產/金融的營收截止日不同，需用 calendar 區分產業別。 |
-| **Confidence 範圍** | 預測信心度為 `(0.5, 1.0]`；計算細節見 [`docs/specs/eventdriven.md`](../../docs/specs/eventdriven.md)。 |
+| **Confidence 範圍** | 預測信心度為 `(0.5, 1.0]`；計算細節見 [`docs/specs/eventdriven-spec.md`](../../docs/specs/eventdriven-spec.md)。 |
 
 ---
 

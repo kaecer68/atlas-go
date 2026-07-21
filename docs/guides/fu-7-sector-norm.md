@@ -357,4 +357,4 @@ L2 sub-industries 是 **research / strategy 內部語意** (例如 `ai_supply_ch
 ### 同主題相關文件
 
 - [`adding-sector-agents.md`](adding-sector-agents.md) - 新增 sector agent 的做法 (Layer 2 結構)
-- [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent.md) - L2.3 PoC LLM-driven sector agent spec
+- [`../specs/llm-sector-agent.md`](../specs/llm-sector-agent-spec.md) - L2.3 PoC LLM-driven sector agent spec
