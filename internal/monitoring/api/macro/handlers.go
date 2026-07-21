@@ -165,6 +165,10 @@ func (h *Handlers) HandleTaiwanStressIndex(r *http.Request) (int, any) {
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("calculate stress index: %v", err)}
 	}
+	if index.Timestamp != 0 {
+		index.Date = time.Unix(index.Timestamp, 0).UTC().Format("2006-01-02")
+	}
+	index.Source = "taiwan_calculator"
 	return http.StatusOK, index
 }
 

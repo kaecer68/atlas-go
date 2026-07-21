@@ -286,11 +286,17 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 
 func (h *Handlers) HandleStressIndexCurrent(r *http.Request) (int, any) {
 	idx := h.Svc.GetCurrentStressIndex()
+	date := ""
+	if idx.Timestamp != 0 {
+		date = time.Unix(idx.Timestamp, 0).UTC().Format("2006-01-02")
+	}
 	return http.StatusOK, map[string]any{
 		"score":      idx.Score,
 		"regime":     idx.Regime,
 		"components": idx.Components,
 		"timestamp":  idx.Timestamp,
+		"date":       date,
+		"source":     "taiwan_calculator",
 	}
 }
 
