@@ -4,6 +4,13 @@
 > 維護者：見 `docs/documentation-map.md` 「動作紀錄」段。
 > 最後更新：2026-07-21（manifests/ 治理：加入 docs/manifests/ 治理專節 + .omo/manifests/ 白名單 + 判斷流程更新）
 
+## 黃金規則（一票否決）
+
+> **公開 = docs/ · 內部 = .omo/ · 兩者永不混淆**
+>
+> docs/ 放給終端使用者的內容（規格、指南、架構）。開發過程產物（審計、調查、交接、manifest）一律進 .omo/（gitignored）。
+> 不確定？先放 .omo/，永遠可以事後 promote。
+
 ## 三層結構原則
 
 | 層級 | 用途 | Git 追蹤 | 新 clone 可見 | 對象 |
@@ -270,7 +277,7 @@ ls -la .omo/
 
 ```bash
 # 1. 讀規範（精簡版必讀）
-cat docs/documentation-standard.md | head -100
+cat docs/documentation-standard.md | head -180
 cat docs/documentation-map.md | head -80
 
 # 2. 確認 .omo/ 結構合規
