@@ -5,7 +5,7 @@
 **狀態**: 權威標準（authoritative）  
 **適用範圍**: `data/` 目錄下所有檔案與目錄  
 **強制性**: CI 強制檢查（`scripts/ci/validate_data_naming.sh`，P0.4a 實現）  
-**相關文檔**: `docs/developer-guide.md`（Go 代碼命名） · `docs/data-architecture.md`（資料架構） · `docs/audit/2026-06-02-p0-2-root-cause-analysis.md`（根因分析）
+**相關文檔**: `docs/developer-guide.md`（Go 代碼命名） · `docs/data-architecture.md`（資料架構） · `.omo/audit/2026-06-02-p0-2-root-cause-analysis.md`（內部）
 
 ---
 
@@ -757,4 +757,4 @@ CI 腳本支援 `.data_naming_exceptions` 檔案（位於 `data/` 根目錄）�
 *文件版本: 1.0*  
 *最後更新: 2026-06-02*  
 *維護者: Atlas-Go 資料治理工作組*  
-*參考: docs/audit/2026-06-02-p0-2-root-cause-analysis.md FG-1, FG-2*
+*參考: .omo/audit/2026-06-02-p0-2-root-cause-analysis.md（內部）FG-1, FG-2*

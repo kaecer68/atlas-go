@@ -15,8 +15,8 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 | 1 | 每 PR | `pull_request` 事件 | CI 自動 | gosec、golangci-lint、apigateway 憲法檢查、constitution 違規掃描 | PR check 結果 |
 | 2 | 每周 | 排程(`vuln-scan.yml` 預定於 PR #818 新增) | CI 自動 | govulncheck Go module CVE 掃描 | SARIF 報告 + workflow artifact |
 | 3 | 每月 | 月初第一個工作天 | 維護者人工 | 新增 dependency、新增 env var、新增 LLM provider/能力 | 短期稽核紀錄(PR comment 或 issue) |
-| 4 | 每季 | 季度初 | 維護者人工 | 本文件九大範疇全項檢查 | `docs/audit/<YYYY-MM-DD>-quarterly-security.md` |
-| 5 | 每版本 | 版本標記(`v*` tag push)觸發;維護者於 release 前手動執行 | 維護者人工 | go.mod 變更、env var 變更、apigateway 憲法合規、live flag 預設值 | 發布公告 + `docs/audit/<YYYY-MM-DD>-release-pre-audit.md` |
+| 4 | 每季 | 季度初 | 維護者人工 | 本文件九大範疇全項檢查 | `.omo/audit/<YYYY-MM-DD>-quarterly-security.md` |
+| 5 | 每版本 | 版本標記(`v*` tag push)觸發;維護者於 release 前手動執行 | 維護者人工 | go.mod 變更、env var 變更、apigateway 憲法合規、live flag 預設值 | 發布公告 + `.omo/audit/<YYYY-MM-DD>-release-pre-audit.md` |
 
 > Tier 1 與 Tier 2 屬自動化控制,失敗即阻擋合併或標記告警;Tier 3 至 Tier 5 屬人工稽核(包含 Tier 5 雖由 release 事件觸發但仍由維護者手動執行),產出可追溯的稽核紀錄。Tier 5 目前無自動化 release-time audit step(僅有 release event trigger,需待 release job 啟用後整合),執行方式為維護者於版本標記前手動套用本 checklist。
 
@@ -142,7 +142,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 
 ### Tier 4(季度)與 Tier 5(發布前)
 
-於 `docs/audit/YYYY-MM-DD-<slug>.md` 建立完整報告(沿用 `docs/audit/` 既有命名規範,例如 `docs/audit/<YYYY-MM-DD>-quarterly-security.md` 或 `docs/audit/<YYYY-MM-DD>-<version>-release-pre-audit.md`)。報告結構建議:
+於 `.omo/audit/YYYY-MM-DD-<slug>.md` 建立完整報告,例如 `.omo/audit/<YYYY-MM-DD>-quarterly-security.md` 或 `docs/audit/<YYYY-MM-DD>-<version>-release-pre-audit.md`)。報告結構建議:
 
 ```markdown
 # Security Audit Report: <tier 與期間>

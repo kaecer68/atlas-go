@@ -3,7 +3,7 @@
 > **版本**：v0.1（2026-07-19）
 > **狀態**：設計草案，等待 SA11 dark launch ≥20 sessions 後進入實作
 > **前提條件**：真實策略命中率 >55%（SA11 驗證後確認）
-> **關聯**：`docs/audit/2026-07-17-retail-positioning-gap-audit.md` §P2、`internal/sim/engine.go`、`internal/domain/recommendation.go`
+> **關聯**：（內部審計，`.omo/audit/`）§P2、`internal/sim/engine.go`、`internal/domain/recommendation.go`
 
 ---
 

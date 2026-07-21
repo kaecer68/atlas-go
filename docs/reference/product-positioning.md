@@ -3,7 +3,7 @@
 > **版本**：v1.0（2026-07-17）
 > **狀態**：草案，§8 資金勢力分類學需業主簽核後生效（對應 manifest E05）
 > **效力**：本文件是 atlas-go 產品與技術決策的最高仲裁依據。當設計取捨與本文件衝突時，以本文件為準；修改本文件需業主明確同意。
-> **關聯**：`docs/audit/2026-07-17-retail-positioning-gap-audit.md`、`docs/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md`
+> **關聯**：`.omo/audit/2026-07-17-retail-positioning-gap-audit.md`、`.omo/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md`（內部）
 
 ---
 

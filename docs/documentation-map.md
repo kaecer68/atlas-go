@@ -241,4 +241,4 @@
 
 > **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-21。
 >
-> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、docs/audit/ 數量 16→18、docs/specs 31→47、docs/guides 8→9、AGENTS.md 72 行→77 行。詳見 `docs/audit/2026-07-15-capital-flow-audit-followup.md`（Stage 7 follow-up）。
+> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、.omo/audit/（gitignored）、docs/specs 31→47、docs/guides 8→9、AGENTS.md 72 行→77 行。詳見 `.omo/audit/2026-07-15-capital-flow-audit-followup.md（內部文件）`（Stage 7 follow-up）。

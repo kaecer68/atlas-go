@@ -187,7 +187,7 @@ Loki 上線後,operator 可從 log 快速定位 5 個偵測器哪個出問題。
 - `internal/monitoring/wave9_runtime.go` — coordinator 實作
 - `internal/monitoring/startup_metrics.go` — metric emission helper
 - `internal/monitoring/service/drift_detector.go` — DriftDetector v1/v2
-- `docs/handoff/2026-06-26-wave9-observability-coordinator.md` — 設計演進
+- （內部交接，`.omo/handoffs/`）— 設計演進
 - `docs/operations/wave9-runbook.md` — 操作手冊(姊妹文件)
 - `docs/operations/loki-deployment.md` — 集中式 log 設計
 - `docs/reference/traps.md` — `/api/llm/health` 401 防回歸 entry

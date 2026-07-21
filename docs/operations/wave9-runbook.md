@@ -118,7 +118,7 @@ curl -s -H "X-API-Key: $ATLAS_API_KEY" http://localhost:18080/api/dashboard/cros
 #    重新部署
 ```
 
-**已知問題**:us_yahoo 是 PR #926 後已確認的高錯誤通道(196 → 1 errors 之間);**長期需評估替代源**(見 `docs/audit/2026-...` 與 T10 us_yahoo 替代源評估)。
+**已知問題**:us_yahoo 是 PR #926 後已確認的高錯誤通道(196 → 1 errors 之間);**長期需評估替代源**(見 `.omo/audit/`（內部）)。
 
 ### 3.4 LLM health 回 401
 

@@ -1,12 +1,12 @@
 # docs/operations/ — 操作文件索引
 
-本目錄收錄 atlas-go 的 **操作 runbook 與事件後續追蹤文件**；稽核報告請見 [`docs/audit/`](../audit/)。規範性 / 設計文件請見 [`docs/`](../) 根目錄；模組技術規格見 [`docs/specs/`](../specs/)。
+本目錄收錄 atlas-go 的 **操作 runbook 與事件後續追蹤文件**；稽核報告為內部文件（`.omo/audit/`，gitignored）。規範性 / 設計文件請見 [`docs/`](../) 根目錄；模組技術規格見 [`docs/specs/`](../specs/)。
 
 ---
 
 ## 稽核與盤查報告 (Audits)
 
-操作相關稽核報告已統一收錄於 [`docs/audit/`](../audit/)。本目錄保留操作 runbook 與事件追蹤文件：
+稽核報告為內部文件（`.omo/audit/`）。本目錄保留操作 runbook 與事件追蹤文件：
 
 | 檔案 | 主題 | 對應 PR |
 |------|------|---------|

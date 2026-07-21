@@ -368,5 +368,5 @@ prevents the recurring "AI assumes it's not there" issue.
 - `.claude/skills/atlas-data-visibility/SKILL.md` — silent failure detection
 - `.claude/skills/atlas-pre-change-protocol/SKILL.md` — session-start env recording
 - `.agent-hooks/deny-dangerous.sh` — machine-enforced env isolation rules
-- `docs/investigations/2026-06-28-boot-loop-multi-service.md` — 2026-06 啟動崩潰連環事件完整根因分析(含 fubon-neo PyPI 404 + wheel 平台限制 + 跨平台 deploy 限制)
+- 內部根因調查（`.omo/investigations/`，gitignored）
 - `docs/reference/traps.md` § Deploy/Docker — 跨模組部署陷阱(ENTRYPOINT 衝突、env_file precedence、hardcoded healthcheck)
