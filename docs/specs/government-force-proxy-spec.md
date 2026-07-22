@@ -1,6 +1,6 @@
 # 官股行庫資金勢力代理（Government Force Proxy）
 
-> **文件角色**：產品定位 §7「資金勢力分類學」中**官股**主體的代理方法論（manifest #E04）。
+> **文件角色**：產品定位 §7「資金勢力分類學」中**官股**主體的代理方法論（manifest #E04）。BK-13 已實作（2026-07-22，commit `734c2d48`）。
 > **對齊**：[`docs/reference/product-positioning.md`](../reference/product-positioning.md) §7、§8。
 
 ---
@@ -38,10 +38,12 @@
 - **缺點**：極罕見，不能作為日常代理。
 - **狀態**：本文件不額外建通道；由 `narrative` 的 `geopolitical_taiwan` 事件訊號覆蓋。
 
-## 3. v1 實作策略（manifest #E04）
+## 3. v1 實作策略（manifest #E04）— ✅ BK-13 SHIPPED
 
-**現實**：無自動資料源 → 不能寫自動抓取。**v1 採誠實的「操作員匯入」模式**：
-
+**已實作**：`GovernmentBrokerAggregator`（`internal/marketdata/government_broker_aggregator.go`）。
+自動從 TWSE bsr.twse.com.tw 抓取券商分點資料，篩選 5 家核心行庫總公司，聚合寫入
+`data/state/government_flow/YYYYMMDD.json`。排程任務（28h interval）註冊於
+`cmd/atlas/operations_tasks.go` → `government_flow_aggregate`。
 1. **資料流**：操作員把每日官股行庫買賣超（任何來源彙整皆可，但須註明 source）寫入
    ```
    data/state/government_flow/YYYYMMDD.json
