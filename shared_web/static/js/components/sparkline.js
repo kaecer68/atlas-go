@@ -291,7 +291,7 @@ function showTooltip(e, html) {
     tooltip.style.pointerEvents = 'none';
     tooltip.style.background = getThemeColor('--bg', '#13161c');
     tooltip.style.border = `1px solid ${getThemeColor('--border', '#2d333b')}`;
-    tooltip.style.color = '#fff';
+    tooltip.style.color = getThemeColor('--text', '#fff');
     tooltip.style.padding = '8px 12px';
     tooltip.style.borderRadius = '6px';
     tooltip.style.fontSize = '12px';
