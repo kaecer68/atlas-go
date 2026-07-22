@@ -2,20 +2,20 @@ package server
 
 //go:generate go run ../descgen -out ../auto-desc.gen.json -pkgdir .
 
+
 import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
 // RegisteredToolCount is incremented by countedAddTool for every successfully
 // registered MCP tool. It is used by server.go to assert the tool inventory
 // has not drifted at startup.
 var RegisteredToolCount int
-
 // countedAddTool is a thin wrapper around mcp.AddTool that tracks the total
 // tool count for startup assertions. It MUST be used instead of calling
 // mcp.AddTool directly in all tool registration functions.
@@ -358,10 +358,10 @@ func (s *server) withAuditExtra(ctx context.Context, tool string, argKeys []stri
 		entry.Extra = extraFn()
 	}
 	if wErr := s.audit.Write(entry); wErr != nil {
-		// audit failure must not mask the original error.
-		if err == nil {
-			return fmt.Errorf("audit: %w", wErr)
-		}
+		// Audit is best-effort: a write failure must never poison
+		// the tool result (#1267). Log to stderr so operators can
+		// detect a poisoned AuditWriter without blocking callers.
+		fmt.Fprintf(os.Stderr, "atlas-mcp: audit write failed for tool %q: %v\n", tool, wErr)
 	}
 	return err
 }
