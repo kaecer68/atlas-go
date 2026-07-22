@@ -22,7 +22,7 @@
 
 ```bash
 # 每日檢查最新 simulation session 數量
-curl -s http://localhost:18080/api/universe/sessions | jq '[.sessions[] | select(.session_id >= "session-20260712")] | length'
+curl -s http://localhost:18080/api/dashboard/sessions | jq '[.sessions[] | select(.session_id >= "session-20260712")] | length'
 ```
 
 ## 達標後分析項目
