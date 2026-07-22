@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func newTestHealthStore(t *testing.T) *UnifiedHealthStore {
@@ -188,6 +189,69 @@ func TestUnifiedHealthStore_StatusSummary_AfterRecord(t *testing.T) {
 		if hs.Status != "ok" {
 			t.Errorf("us_yahoo status = %q, want ok", hs.Status)
 		}
+	}
+}
+
+// TestUnifiedHealthStore_StatusSummary_FreshnessStale verifies that a channel
+// whose Status is "ok" but whose LastFetchAt is older than StaleDataThreshold
+// is downgraded to "stale" in the summary. This is the silent-failure fix for
+// Issue #1086.
+func TestUnifiedHealthStore_StatusSummary_FreshnessStale(t *testing.T) {
+	s := newTestHealthStore(t)
+	// Inject a backdated record directly into the store (ChannelHealthStore.Get
+	// returns a copy, so mutating the returned pointer doesn't stick).
+	s.store.data["tej"] = &ChannelHealthRecord{
+		Status:      "ok",
+		LastFetchAt: time.Now().Add(-66 * 24 * time.Hour).Format(time.RFC3339),
+	}
+
+	summary := s.StatusSummary()
+	hs, ok := summary["tej"]
+	if !ok {
+		t.Fatal("tej missing from summary")
+	}
+	if hs.Status != "stale" {
+		t.Errorf("tej status = %q, want stale (66-day-old LastFetchAt should downgrade ok)", hs.Status)
+	}
+}
+
+// TestUnifiedHealthStore_StatusSummary_FreshnessRecent verifies that a channel
+// whose LastFetchAt is within StaleDataThreshold keeps its "ok" status.
+func TestUnifiedHealthStore_StatusSummary_FreshnessRecent(t *testing.T) {
+	s := newTestHealthStore(t)
+	s.store.data["twse_capital_flow"] = &ChannelHealthRecord{
+		Status:      "ok",
+		LastFetchAt: time.Now().Format(time.RFC3339),
+	}
+
+	summary := s.StatusSummary()
+	hs, ok := summary["twse_capital_flow"]
+	if !ok {
+		t.Fatal("twse_capital_flow missing from summary")
+	}
+	if hs.Status != "ok" {
+		t.Errorf("twse_capital_flow status = %q, want ok (just-recorded channel should stay ok)", hs.Status)
+	}
+}
+
+// TestUnifiedHealthStore_StatusSummary_FreshnessErrorPassthrough verifies that
+// non-ok statuses (error, warn, inactive) pass through unchanged — the
+// freshness check only downgrades "ok", not already-failing channels.
+func TestUnifiedHealthStore_StatusSummary_FreshnessErrorPassthrough(t *testing.T) {
+	s := newTestHealthStore(t)
+	s.store.data["fugle"] = &ChannelHealthRecord{
+		Status:      "error",
+		LastFetchAt: time.Now().Add(-10 * 24 * time.Hour).Format(time.RFC3339),
+		LastError:   "connection refused",
+	}
+
+	summary := s.StatusSummary()
+	hs, ok := summary["fugle"]
+	if !ok {
+		t.Fatal("fugle missing from summary")
+	}
+	if hs.Status != "error" {
+		t.Errorf("fugle status = %q, want error (non-ok status must not be downgraded)", hs.Status)
 	}
 }
 
