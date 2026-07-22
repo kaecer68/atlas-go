@@ -290,3 +290,56 @@ func (s RetailSentimentSnapshot) ExtremeReading() string {
 	}
 	return "neutral"
 }
+
+// DataQuality carries per-response metadata about data freshness,
+// provenance, and trustworthiness (#1265 unified metadata envelope).
+// When Available=false, the response value is a semantic zero —
+// the consumer MUST NOT interpret it as a real measurement.
+type DataQuality struct {
+	Available      bool      `json:"available"`
+	Source         string    `json:"source,omitempty"`
+	AsOf           time.Time `json:"as_of,omitempty"`
+	SampleCount    int       `json:"sample_count"`
+	SampleUnit     string    `json:"sample_unit,omitempty"`
+	IsFallback     bool      `json:"is_fallback"`
+	FallbackReason string    `json:"fallback_reason,omitempty"`
+	Provenance     string    `json:"provenance,omitempty"`
+}
+
+func (d DataQuality) DataStatus() string {
+	if !d.Available {
+		return "unavailable"
+	}
+	if d.IsFallback {
+		return "degraded"
+	}
+	return "ok"
+}
+
+func (d DataQuality) ToMap() map[string]any {
+	m := map[string]any{
+		"available": d.Available,
+	}
+	if d.Source != "" {
+		m["source"] = d.Source
+	}
+	if !d.AsOf.IsZero() {
+		m["as_of"] = d.AsOf.Format(time.RFC3339)
+	}
+	if d.SampleCount > 0 {
+		m["sample_count"] = d.SampleCount
+	}
+	if d.SampleUnit != "" {
+		m["sample_unit"] = d.SampleUnit
+	}
+	if d.IsFallback {
+		m["is_fallback"] = true
+	}
+	if d.FallbackReason != "" {
+		m["fallback_reason"] = d.FallbackReason
+	}
+	if d.Provenance != "" {
+		m["provenance"] = d.Provenance
+	}
+	return m
+}
