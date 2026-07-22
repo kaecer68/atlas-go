@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // RegisteredToolCount is incremented by countedAddTool for every successfully
@@ -115,11 +113,10 @@ type RegimePoint struct {
 }
 
 type RegimeGetHistoryOutput struct {
-	Regimes               []RegimePoint       `json:"regimes"`
-	CurrentRegimeScore    *float64            `json:"current_regime_score,omitempty"`
-	CurrentScoreSource    string              `json:"current_score_source,omitempty"`
-	CurrentScoreSynthetic bool                `json:"current_score_synthetic,omitempty"`
-	DataQuality           *domain.DataQuality `json:"data_quality,omitempty"`
+	Regimes               []RegimePoint `json:"regimes"`
+	CurrentRegimeScore    *float64      `json:"current_regime_score,omitempty"`
+	CurrentScoreSource    string        `json:"current_score_source,omitempty"`    // "janus_composite" or ""
+	CurrentScoreSynthetic bool          `json:"current_score_synthetic,omitempty"` // true when score is macro-derived, not from PRISM training
 }
 
 type StrategyListActiveOutput struct {
@@ -187,16 +184,6 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 			out.CurrentScoreSource = "janus_composite"
 			out.CurrentScoreSynthetic = isSynthetic
 		}
-
-		// Data quality envelope (#1265).
-		out.DataQuality = &domain.DataQuality{
-			Available:   true,
-			Source:      "regime_get_history",
-			Provenance:  "live",
-			SampleCount: in.Days,
-			SampleUnit:  "days",
-		}
-
 		return nil
 	}); err != nil {
 		return nil, RegimeGetHistoryOutput{}, err

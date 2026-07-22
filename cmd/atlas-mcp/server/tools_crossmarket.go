@@ -42,15 +42,10 @@ func (s *server) handleCrossmarketGetStatus(ctx context.Context, _ *mcp.CallTool
 
 func (s *server) handleCrossmarketGetCorrelation(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, crossmarketBaseOutput, error) {
 	var out crossmarketBaseOutput
-	var fetchErr error
 	if err := s.withAudit(ctx, "crossmarket_get_correlation", nil, func() error {
-		fetchErr = s.cli.Get(ctx, "/api/cross-market/correlation", nil, &out.Result)
-		return fetchErr
+		return s.cli.Get(ctx, "/api/cross-market/correlation", nil, &out.Result)
 	}); err != nil {
 		return nil, crossmarketBaseOutput{}, err
-	}
-	if out.Result != nil {
-		injectDataQuality(*out.Result, "crossmarket_get_correlation", fetchErr)
 	}
 	return nil, out, nil
 }

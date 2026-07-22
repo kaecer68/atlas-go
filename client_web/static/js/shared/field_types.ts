@@ -831,17 +831,6 @@ export interface DataIntegrityResponse {
   warnings: string[];
 }
 
-export interface DataQuality {
-  available: boolean;
-  source?: string;
-  as_of?: string;
-  sample_count: number;
-  sample_unit?: string;
-  is_fallback: boolean;
-  fallback_reason?: string;
-  provenance?: string;
-}
-
 export interface DataQualityCheck {
   name: string;
   status: string;
