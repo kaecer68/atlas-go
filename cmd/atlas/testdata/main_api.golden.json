@@ -45,6 +45,12 @@
       "params": "(ctx context.Context, limit int)",
       "receiver": "scanStoreAdapter",
       "results": "([]eventdriven.ScanResult, error)"
+    },
+    {
+      "name": "Write",
+      "params": "(r autobacktest.AttributionRecord)",
+      "receiver": "strategyAttributionAdapter",
+      "results": "(error)"
     }
   ],
   "package": "main",
