@@ -80,6 +80,53 @@ Fetches TWSE industry index data for 8 sectors (semiconductor, ai_supply_chain, 
 
 Reads from `data/sector_data/sector_data.json`. Provides TSMC revenue, CoWoS utilization, SOX index, capex growth. Gracefully degrades to zeros if file missing.
 
+### TWSE SBL — 借券賣出餘額（`twse_sbl`，STUB G02）
+
+| Attribute | Detail |
+|-----------|--------|
+| Source | TWSE（endpoint 待確認） |
+| Status | **STUB (G02)** — `HealthCheck` 回傳 `inactive`；`register_adapters.go:277` 已 stub 註冊，限流已就位但 fetch 邏輯尚未實作 |
+| Rate Limit | 1 req / 2s, burst 1（`limits.go:132`） |
+| Channel ID | `twse_sbl` |
+| Gateway Adapter | `internal/apigateway/adapter_twse_sbl.go` |
+| Scheduled Task | `auto_twse_sbl`（待啟用） |
+
+### TDCC Equity Dispersion — 集保股權分散（`tdcc_equity_dispersion`，STUB G01）
+
+| Attribute | Detail |
+|-----------|--------|
+| Source | TDCC（OpenData） |
+| Status | **STUB (G01)** — `HealthCheck` 回傳 `inactive`；`register_adapters.go:287` 已 stub 註冊 |
+| Rate Limit | 1 req / 5s, burst 1（`limits.go:133`） |
+| Channel ID | `tdcc_equity_dispersion` |
+| Gateway Adapter | `internal/apigateway/adapter_tdcc_equity.go` |
+| Scheduled Task | `auto_tdcc_equity_dispersion`（待啟用） |
+
+### JANUS Regime — 內部 regime 偵測引擎（`janus_regime`）
+
+| Attribute | Detail |
+|-----------|--------|
+| Source | In-process（PRISM / JANUS engine，非上游 HTTP） |
+| Method | `internal/janus.Engine` 提供 RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL |
+| Frequency | 6h refresh via `janus_regime_refresh` scheduled task |
+| Rate Limit | 無限流（`rate.Inf`，`limits.go:119`，內部計算無上游 quota） |
+| Channel ID | `janus_regime` |
+| Gateway Adapter | `internal/apigateway/adapter_janus_regime.go` |
+| Used By | `/api/regime/score`, `PipelineService.LoadRegimeHistory` |
+| Optional | 是 — `janusEngine == nil` 時 `register_adapters.go:293` 不註冊 |
+
+### DRAM Spot Price — MU DRAM 現貨價代理（`dram_spot_price`）
+
+| Attribute | Detail |
+|-----------|--------|
+| Source | Yahoo Finance — MU (Micron) 股價作為 DRAM 現貨價代理（與 DRAMeXchange/InSpectrum 約 85% 相關） |
+| Ticker | `MU` |
+| Rate Limit | 1 req / 5s, burst 1（與其他 Yahoo 共享 `yahooSharedLimiter`；`limits.go:126`） |
+| Channel ID | `dram_spot_price` |
+| Gateway Adapter | `internal/apigateway/adapter_dram_spot_price.go` |
+| Used By | `MacroDataSnapshot.DRAMSpotPrice` → narrative detectors |
+| Note | MU 為全球最大 DRAM 製造商之一，與現貨價高度同步；無官方 DRAMeXchange channel 替代品 |
+
 ## Provider Roles
 
 ### TWSE
@@ -177,7 +224,7 @@ FinMind API returns **HTTP 402** with message `"Requests reach the upper limit"`
 | 原始來源 | TWSE `bsr.twse.com.tw` — 券商分點買賣超日報表（公開資料，非 API） |
 | 取得方式 | HTTP GET → HTML parse / CSV fallback |
 | 頻率 | 每日 T+1（盤後公布，次日排程抓取） |
-| 速率限制 | 2 秒/請求（自訂 limiter，TWSE 無官方 rate limit 公告） |
+| 速率限制 | **Gateway channel：無**（`adapter_government_flow.go:87` `RateLimit() *rate.Limiter { return nil }`，`HasLimiter=false`；檔案型 provider 不發出 HTTP）。**TWSE 網頁爬蟲：2 秒/請求**（由 `GovernmentBrokerAggregator` 端自訂，影響 Producer 排程，非 gateway 層 limiter） |
 | 範圍 | TW50 成份股（50 檔權值股） |
 | Channel ID | `government_flow` |
 | Provider | `GovernmentFlowProvider`（唯讀消費端） |
