@@ -63,7 +63,7 @@ func (r *Runner) WithAttribution(fb AttributionWriter, src StrategySource) *Runn
 // WithConditionEvaluator wires the strategy condition evaluator. When
 // set, writeAttributionMarkers computes per-strategy hit_rate from
 // actual condition evaluation (Phase 2). nil disables evaluation —
-// the Phase 1 zero-writer behaviour is preserved as fallback.
+// the Phase 1 zero-writer behavior is preserved as fallback.
 func (r *Runner) WithConditionEvaluator(evaluator ConditionEvaluator) *Runner {
 	r.evaluator = evaluator
 	return r
