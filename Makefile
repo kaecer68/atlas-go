@@ -285,10 +285,13 @@ check-routes:
 hermes-smoke:
 	@bash scripts/hermes-smoke.sh
 
+canary:
+	@python3 scripts/canary-check.py
 
 check-contracts:
 	@python3 scripts/gen-contracts.py --validate
 
+.PHONY: check-routes hermes-smoke gate check-contracts canary
 gate:
 	@echo "🔐 Running contract gate (check-routes + hermes-smoke)..."
 	@bash scripts/check-routes.sh || (echo "❌ Route check failed" && exit 1)

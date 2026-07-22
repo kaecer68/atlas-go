@@ -78,13 +78,24 @@ def build_contract():
     routes = parse_canary_routes(CANARY_FILE)
     shapes = parse_smoke_shapes(SMOKE_FILE)
 
+    # Load existing contract to preserve manual fields (auth, canary_skip)
+    existing = {}
+    contract_path = os.path.join(PROJECT_ROOT, "docs/contracts/mcp-tools.contract.json")
+    if os.path.exists(contract_path):
+        with open(contract_path) as f:
+            existing = json.load(f).get("tools", {})
+
     tools = {}
     for name, info in sorted(routes.items()):
         entry = {
             "method": info["method"],
             "path": info["path"],
-            "auth": "optional",
+            "auth": existing.get(name, {}).get("auth", "optional"),
         }
+        # Preserve canary_skip flag
+        if existing.get(name, {}).get("canary_skip"):
+            entry["canary_skip"] = True
+            entry["canary_skip_reason"] = existing[name].get("canary_skip_reason", "")
         # Attach shape if we have one
         for label, canonical in LABEL_TO_NAME.items():
             if canonical == name and label in shapes:

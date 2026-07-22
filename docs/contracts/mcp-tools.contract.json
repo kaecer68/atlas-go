@@ -28,7 +28,9 @@
     "backtest_signals": {
       "method": "GET",
       "path": "/api/backtest/signals",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "timeout — heavy computation"
     },
     "backtest_status": {
       "method": "GET",
@@ -118,7 +120,9 @@
     "experiment_diff": {
       "method": "GET",
       "path": "/api/experiment/diff",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "needs experiment_id param"
     },
     "experiment_history": {
       "method": "GET",
@@ -144,17 +148,19 @@
     "industry_sector_list": {
       "method": "GET",
       "path": "/api/industry/sectors",
-      "auth": "optional"
+      "auth": "required"
     },
     "industry_sector_lookup": {
       "method": "GET",
       "path": "/api/industry/lookup?symbol=2330",
-      "auth": "optional"
+      "auth": "required"
     },
     "llm_get_cost": {
       "method": "GET",
       "path": "/api/llm_annotator/cost",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "backend 503 — llm_annotator not initialized"
     },
     "llm_get_health": {
       "method": "GET",
@@ -264,27 +270,27 @@
     "parameters_get": {
       "method": "GET",
       "path": "/api/parameters",
-      "auth": "optional"
+      "auth": "required"
     },
     "parameters_get_audit_log": {
       "method": "GET",
       "path": "/api/parameters/audit-log",
-      "auth": "optional"
+      "auth": "required"
     },
     "parameters_get_categories": {
       "method": "GET",
       "path": "/api/parameters/categories",
-      "auth": "optional"
+      "auth": "required"
     },
     "parameters_get_metadata": {
       "method": "GET",
       "path": "/api/parameters/metadata",
-      "auth": "optional"
+      "auth": "required"
     },
     "parameters_get_snapshots": {
       "method": "GET",
       "path": "/api/parameters/snapshots",
-      "auth": "optional"
+      "auth": "required"
     },
     "prism_get_training_results": {
       "method": "GET",
@@ -358,7 +364,9 @@
     "sector_allocation_plan": {
       "method": "GET",
       "path": "/api/dashboard/sector-allocation-plan",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "backend 503 — snapshot not configured"
     },
     "stock_get_chips": {
       "method": "GET",
@@ -373,12 +381,16 @@
     "stock_get_quote": {
       "method": "GET",
       "path": "/api/stock/quote?symbol=2330",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "timeout — fugle API latency"
     },
     "stock_get_technical": {
       "method": "GET",
       "path": "/api/stock/technical?symbol=2330&days=10",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "backend 503 — computation timeout"
     },
     "strategy_get": {
       "method": "GET",
@@ -502,17 +514,23 @@
     "universe_get_session_detail": {
       "method": "GET",
       "path": "/api/universe/sessions/latest",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "404 — endpoint not registered"
     },
     "universe_get_sessions": {
       "method": "GET",
       "path": "/api/universe/sessions",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "404 — endpoint not registered"
     },
     "universe_get_universe_overlap": {
       "method": "GET",
       "path": "/api/universe/overlap",
-      "auth": "optional"
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "404 — endpoint not registered"
     }
   }
 }
