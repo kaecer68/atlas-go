@@ -1,5 +1,3 @@
-import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
-test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';

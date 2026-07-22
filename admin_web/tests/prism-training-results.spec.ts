@@ -1,5 +1,3 @@
-import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
-test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 import { test, expect } from '@playwright/test';
 
 test('prism training results page renders table with regime badges and explanation', async ({ page }) => {

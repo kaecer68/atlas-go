@@ -107,7 +107,7 @@ test('capital board renders translated sector labels and no snake_case', async (
   await expect(page.locator('#cb-grid')).toBeAttached();
 });
 
-test.skip('stock quote page renders backend data for 2330', async ({ page }) => {
+test('stock quote page renders backend data for 2330', async ({ page }) => {
   // The /api/stock/quote call originates from the in-page script, not the
   // page object. page.route() intercepts both, so this works without a real
   // backend.
@@ -128,9 +128,9 @@ test.skip('stock quote page renders backend data for 2330', async ({ page }) => 
       prev_close: 575.0,
     }),
   }));
-  await page.route('**/api/stock/fundamentals?*', r => r.fulfill({ json: {} }));
-  await page.route('**/api/stock/chips?*', r => r.fulfill({ json: {} }));
-  await page.route('**/api/stock/technical?*', r => r.fulfill({ json: {} }));
+  await page.route('**/api/stock/fundamentals?*', r => r.fulfill({ json: { pe: 15.2, pb: 4.1, ps: 3.5, dividend_yield: 2.3, sector: 'semiconductor' } }));
+  await page.route('**/api/stock/chips?*', r => r.fulfill({ json: { name: '台積電', foreign_net: 1234, dealer_net: 567, investment_trust_net: 890 } }));
+  await page.route('**/api/stock/technical?*', r => r.fulfill({ json: { sma20: 570, sma50: 560, rsi14: 55 } }));
 
   await page.goto('/client/stock-quote?symbol=2330');
   await expect(page.locator('#page-stock-quote')).toBeVisible({ timeout: 15000 });

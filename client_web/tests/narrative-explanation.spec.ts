@@ -43,10 +43,17 @@ test('narrative event card renders explanation and sentiment_explanation', async
   await page.route('**/api/dashboard/retail-sentiment', route => route.fulfill({ json: {} }));
   await page.route('**/api/narrative/seasonal', route => route.fulfill({ json: { expectations: [] } }));
 
-  await page.goto('/');
+  await page.goto('/client/narrative');
 
-  // Click the narrative tab
-  await page.click('a[data-page="narrative"]');
+  // Wait for the onboarding overlay, then dismiss it. The overlay
+  // intercepts all pointer events so we must remove it before clicking.
+  const obOverlay = page.locator('.onboard-overlay');
+  await obOverlay.waitFor({ state: 'attached', timeout: 10000 }).catch(() => {});
+  if (await obOverlay.isVisible().catch(() => false)) {
+    await page.keyboard.press('Escape');
+    await obOverlay.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  }
+
 
   const eventsContainer = page.locator('#narrativeEvents');
   await expect(eventsContainer).toBeVisible({ timeout: 5000 });
