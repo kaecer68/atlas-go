@@ -68,7 +68,7 @@ const pageLoadStatus = {};
 const APP_VERSION = '20260512';
 
 const basePath = (typeof window !== 'undefined')
-  ? window.location.pathname.replace(/\/[^/]*$/, '') || ''
+  ? (window.location.pathname.match(/^\/(?:client|admin)/)?.[0] || '')
   : '';
 
 export async function switchPage(id, silent) {
@@ -81,9 +81,10 @@ export async function switchPage(id, silent) {
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }
   await _ensureShellLoaded(id);
-  if (pageEl.classList.contains('active') && !silent) return;
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + id).classList.add('active');
+  const wasActive = pageEl.classList.contains('active');
+  document.querySelectorAll('.page').forEach(p => { if (p !== pageEl) p.classList.remove('active'); });
+  pageEl.classList.add('active');
+  if (wasActive && !silent) return;
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
   const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
   if (btn) btn.classList.add('active');
@@ -512,15 +513,15 @@ if (typeof window !== 'undefined') {
       switchPage('home', true);
     } else if (initialPath === 'home') {
       switchPage('home', true);
+    } else if (initialPath) {
+      const query = window.location.search || '';
+      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath + query);
+      switchPage(initialPath, true);
     }
     // Redirect old hash URLs to clean URLs
     if (window.location.hash && window.location.hash.startsWith('#page-')) {
       var pageId = window.location.hash.replace('#page-', '');
       window.location.replace(basePath + '/' + pageId);
-    } else if (initialPath && initialPath !== 'home') {
-      const query = window.location.search || '';
-      history.replaceState({page: initialPath}, '', basePath + '/' + initialPath + query);
-      switchPage(initialPath, true);
     }
   })();
   });
