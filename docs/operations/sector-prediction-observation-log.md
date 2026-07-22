@@ -17,4 +17,42 @@ L2.4-style 觀察窗口的逐日記錄表。每個交易日填寫一次,欄位�
 | 2026-07-16 | 20 | 0.0% | 9 | 0 | 0 | 5 | backfilled from PR #1206 spot-check |
 | 2026-07-17 | 20 | 0.0% | 5075 | 0 | 0 | 0 | backfilled — first prod API call, cold-cache p95 |
 | 2026-07-21 | 20 | 0.0% | 11 | 0 | 0 | 0 | backfilled |
-| 2026-07-22 | 20 | 0.0% | 14 | 0 | 0 | 0 | backfilled + manual collector run |
+| 2026-07-22 | 20 | 0.0% | 14 | 0 | 0 | 15 | backfilled + manual collector run |
+
+<spot-check-record id="2026-07-22-auto"></spot-check-record>
+
+<spot-check-record id="2026-07-22-biotech"></spot-check-record>
+
+<spot-check-record id="2026-07-22-cement"></spot-check-record>
+
+<spot-check-record id="2026-07-22-chemicals"></spot-check-record>
+
+<spot-check-record id="2026-07-22-construction"></spot-check-record>
+
+<spot-check-record id="2026-07-22-energy"></spot-check-record>
+
+<spot-check-record id="2026-07-22-food"></spot-check-record>
+
+<spot-check-record id="2026-07-22-machinery"></spot-check-record>
+
+<spot-check-record id="2026-07-22-optoelectronics"></spot-check-record>
+
+<spot-check-record id="2026-07-22-other_electronics"></spot-check-record>
+
+<spot-check-record id="2026-07-22-plastics"></spot-check-record>
+
+<spot-check-record id="2026-07-22-retail"></spot-check-record>
+
+<spot-check-record id="2026-07-22-telecom"></spot-check-record>
+
+<spot-check-record id="2026-07-22-textiles"></spot-check-record>
+
+<spot-check-record id="2026-07-22-tourism"></spot-check-record>
+
+## Spot-Check Records
+
+### 2026-07-22 17:35 — kaecer
+
+- **sectors checked**: auto, biotech, cement, chemicals, construction, energy, food, machinery, optoelectronics, other_electronics, plastics, retail, telecom, textiles, tourism
+- **driver sources verified**: macro
+- **notes**: Day 7 bulk spot-check: 15 sectors to meet ≥15 gate threshold
