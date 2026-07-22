@@ -82,6 +82,39 @@ export function pnlLossColor()   { return 'var(--pnl-loss)'; }
 export function inflowColor()    { return 'var(--capital-inflow)'; }
 export function outflowColor()   { return 'var(--capital-outflow)'; }
 
+// --- Chart palette helpers (added in Phase 2b-A, see docs/operations/color-token-audit-2026-07-22.md) ---
+// These wrap the existing CSS variables in shared_web/static/css/base/variables.css
+// so JS callers can reference semantic names instead of hardcoded hex.
+
+/** chartAxisColor — chart axis / gridline / minor label color */
+export function chartAxisColor()      { return 'var(--muted)'; }
+
+/** chartBackgroundColor — chart panel background (dark theme) */
+export function chartBackgroundColor() { return 'var(--panel)'; }
+
+/** chartTextColor — chart text / legend / tooltip */
+export function chartTextColor()      { return 'var(--text)'; }
+
+/** mutedTextColor — secondary / de-emphasized text */
+export function mutedTextColor()       { return 'var(--status-unknown)'; }
+
+/** accentBlueColor — primary accent blue (replaces #4fc1ff / #3b82f6 / #3498db) */
+export function accentBlueColor()      { return 'var(--accent)'; }
+
+/** accentPurpleColor — secondary accent purple (replaces #a855f7 / #8b5cf6 / #9b59b6) */
+export function accentPurpleColor()    { return 'var(--accent-secondary)'; }
+
+/** accentTealColor — tertiary teal (replaces #1abc9c; uses --accent-tertiary = #10b981 as fallback) */
+export function accentTealColor()      { return 'var(--accent-tertiary)'; }
+
+/** neutralTextColor — neutral gray (replaces #6b7280) */
+export function neutralTextColor()     { return 'var(--status-unknown)'; }
+
+/** overlayColor — overlay/shadow base (uses --bg = #0b0d11 as the deepest dark token) */
+export function overlayColor()         { return 'var(--bg)'; }
+
+// --- End Phase 2b-A additions ---
+
 /**
  * hexToRgba — 將 hex 顏色轉為 rgba 字串（Canvas 繪圖用）
  * 集中於 color-tokens.js，取代各頁面重複定義的本地版本。
