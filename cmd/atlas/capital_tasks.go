@@ -178,7 +178,7 @@ func registerCapitalTasks(d capitalDeps) {
 		Name:      "auto_twse_sbl",
 		ChannelID: "twse_sbl",
 		Interval:  1 * time.Hour,
-		Enabled:   true,
+		Enabled:   false, // G02: stub adapter, channel not yet active
 		Task: func(ctx context.Context) error {
 			// Only fetch on weekdays after market close (15:00+).
 			if now := time.Now(); now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
